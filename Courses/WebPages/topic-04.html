@@ -832,7 +832,7 @@ body.figonly section h3{margin-top:34px}
 <p><em>流程的顺序是：前向 →&nbsp;反向 →&nbsp;更新。
   但那个顺序会让最大的那一块<b>最后才出场</b>，而它恰恰是决定一切的那一块。</em></p>
 <p>⭐⭐ <em>所以这一讲的每一节只回答同一个问题：
-  <b>这一项有多大，能不能省，省它要拿什么去换。</b></em></p></div>
+  这一项有多大，能不能省，省它要拿什么去换。</em></p></div>
 
 </div></section>
 
@@ -1012,7 +1012,7 @@ body.figonly section h3{margin-top:34px}
 <p>反过来想才知道这有多可怕：
   <em>如果你非要写出「loss 对第一层某个权重」的<b>解析式</b>，
   那个式子要穿过 <b>61 层</b>展开 ——&nbsp;<b>项数是天文数字，写不出来。</b></em></p>
-<p class="landing">⭐⭐ <b>链式法则真正的意思是：<u>你永远不用把它展开。</u></b>
+<p class="landing">⭐⭐ 链式法则真正的意思是：<u>你永远不用把它展开。</u>
   <em>你只要把 61 个<b>局部的小导数</b>，按顺序乘起来。</em></p>
 
 <h3 id="s1-5">1.5　⭐⭐ 最深的一条：为什么是<u>从后往前</u></h3>
@@ -1190,7 +1190,7 @@ body.figonly section h3{margin-top:34px}
 <p><em>9 ＝ 被激活的 8 个路由专家 ＋ 1 个共享专家。
   <b>每个 token 的那份激活被复制了九遍</b> ——&nbsp;进去一次、出来一次，
   光这两项就 <b>31.5 GiB</b>。</em></p>
-<p>⛔ <b>而它在专题一那张参数量的表上<u>完全看不出来</u>。</b>
+<p>⛔ 而它在专题一那张参数量的表上<u>完全看不出来</u>。
   <em>——&nbsp;MoE 在参数账上很划算（只激活一小部分），
   <b>可在激活账上，它要付九份的复制费。</b></em></p></div>
 
@@ -1229,23 +1229,23 @@ body.figonly section h3{margin-top:34px}
 <div class="note"><p>📌 <b>一个梯度从出生到消失，完整是这样：</b></p>
 <ol>
   <li><b>算出来</b> ——&nbsp;<em>反向走到哪一层，那一层的梯度就出来了
-    （<b>注意：是从后往前陆续出来的，不是最后一起出来</b>）。</em></li>
+    （注意：是从后往前陆续出来的，不是最后一起出来）。</em></li>
   <li><b>跨卡汇总</b> ——&nbsp;<em>每张卡看到的是不同的数据，
     所以各自算出的梯度<b>必须取平均</b>，否则每张卡会朝不同方向走。</em></li>
   <li><b>裁剪</b> ——&nbsp;<em>按全局范数，超了就整体等比例缩回去。</em></li>
   <li><b>（可选）累积</b> ——&nbsp;<em>几个 micro-batch 的梯度先加起来，再更新一次。</em></li>
   <li><b>交给优化器，然后扔掉</b> ——&nbsp;<em>更新完这一份就没用了，
-    下一步重新算 ——&nbsp;<b>这正是 <a href="#s三">3.2</a> 说它可以用 bf16 的原因。</b></em></li>
+    下一步重新算 ——&nbsp;这正是 <a href="#s三">3.2</a> 说它可以用 bf16 的原因。</em></li>
 </ol></div>
 
 <h4>⭐⭐ 第 ② 步那笔通信，有个很反直觉的性质</h4>
 
 <p><em>纯数据并行下，每一步要把<b>整份梯度</b>在所有卡之间汇总一遍。
   量级很好算：<b>参数量 × 每参数字节数</b>。</em></p>
-<p class="landing">⭐⭐⭐ <b>关键在这儿：这笔通信量<u>跟 batch 完全无关</u>。</b>
+<p class="landing">⭐⭐⭐ 关键在这儿：这笔通信量<u>跟 batch 完全无关</u>。
   <em>——&nbsp;参数有多少就传多少，你喂一条序列和喂一千条，<b>传的是同样多的字节</b>。</em></p>
 
-<div class="note ok"><p>⭐⭐ <b>而计算量是随 batch 线性涨的。所以：</b></p>
+<div class="note ok"><p>⭐⭐ 而计算量是随 batch 线性涨的。所以：</p>
 <p><em><b>batch 越大，这笔通信被摊得越薄。</b></em></p>
 <p>⭐ <em>这一下就解释了两件原本看着不相干的事：</em></p>
 <ul>
@@ -1261,18 +1261,18 @@ body.figonly section h3{margin-top:34px}
 <p><em>注意第 ① 步那句：<b>梯度是从后往前陆续出来的。</b>
   所以最后几层的梯度<b>早就算好了</b>，而前面几层还在算
   ——&nbsp;<b>这段时间正好可以拿来传。</b></em></p>
-<p class="landing">⭐ <b>于是「算」和「传」可以叠在一起，通信被藏进计算里。</b>
-  <em>——&nbsp;<b>这是训练里最重要的一类优化，而推理侧没有对应物</b>
+<p class="landing">⭐ 于是「算」和「传」可以叠在一起，通信被藏进计算里。
+  <em>——&nbsp;这是训练里最重要的一类优化，而推理侧没有对应物
   （推理没有反向，也就没有这条可以边算边传的长尾巴）。</em></p>
 
-<div class="note danger"><p>⛔ <b>但第 ③ 步藏不进去 ——&nbsp;而且原因很具体。</b></p>
+<div class="note danger"><p>⛔ 但第 ③ 步藏不进去 ——&nbsp;而且原因很具体。</p>
 <p><em><b>「全局范数」是一个跨全部参数的标量。</b>
   你必须先把每一块的平方和都算出来、汇总成一个数、开根号，
   <b>才知道要不要缩、缩多少。</b></em></p>
 <p>⭐ <em>好在这一步汇总的<b>只是一个数</b>，通信量可以忽略。
   ⛔ <b>真正的代价是它<u>强制了一次同步</u></b> ——&nbsp;
   <b>所有卡、所有层都得到齐</b>，这一步才能开始。</em></p>
-<p class="landing">⭐⭐ <b>所以梯度裁剪是「一步一次」的，不能逐层做。</b>
+<p class="landing">⭐⭐ 所以梯度裁剪是「一步一次」的，不能逐层做。
   <em>——&nbsp;逐层裁出来的东西<b>不是同一个量</b>：
   它保的是每层各自的范数，而不是整个模型这一步迈多大。</em></p></div>
 
@@ -1289,7 +1289,7 @@ body.figonly section h3{margin-top:34px}
 
 <div class="note"><p>⭐ <b>这一节的边界要说清楚：</b>
   <em>上面只讲了「这一步存在、它有多大、能不能藏起来」。
-  <b>至于在不同的切法下它究竟是 all-reduce 还是别的形态、量各自差多少</b>
+  至于在不同的切法下它究竟是 all-reduce 还是别的形态、量各自差多少
   ——&nbsp;那是<b>专题五</b>整讲的事。</em></p>
 <p><span class="sub">⚠️ 通信量那个「参数量 × 每参数字节」是<b>量级口径</b>：
   真实的环形汇总要来回搬，<b>实际搬运量大约是它的两倍</b>；
@@ -1305,7 +1305,7 @@ body.figonly section h3{margin-top:34px}
 
 <h3 id="s2-2">2.2　全量重算：这笔交易到底划不划算</h3>
 
-<p class="lead">⭐ <b>先把量级说清楚 ——&nbsp;这才是要记住的东西。</b></p>
+<p class="lead">⭐ 先把量级说清楚 ——&nbsp;这才是要记住的东西。</p>
 <ul>
   <li><b>省下什么：</b><em>激活那一大块 ——&nbsp;显存里<b>随 batch × 序列长度增长</b>的部分。
     V3 在 128K 上具体是 4.15 TiB →&nbsp;106.75 GiB，约 40 倍。</em></li>
@@ -1404,7 +1404,7 @@ body.figonly section h3{margin-top:34px}
     <b>是个好的重算对象</b>。</em></li>
   <li><b>长于 ~5.7K</b> ——&nbsp;<em>它一路变成最贵的那个，<b>而且线性地越来越贵</b>。</em></li>
 </ul>
-<p><span class="sub">⚠️ <b>5,734 是个粗略交叉点，不是工程阈值。</b>
+<p><span class="sub">⚠️ 5,734 是个粗略交叉点，不是工程阈值。
   它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
   ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
 
@@ -1690,7 +1690,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="1246" fill="#0d652d" style="font-size:15.0px">价于换成离它最近的半正交矩阵，也就是把奇异值都拉到 1）。</text>
 <text class="svgsm" x="20" y="1270" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">Adam 是逐元素缩放步长，Muon 是整个矩阵一起做谱归一化</tspan> ——&#160;不让某几个方向独大。⛔ 代价：作者自己写明 <tspan font-weight="700">Muon 每一步的墙钟时间比 AdamW 慢</tspan>，它赚的是<tspan font-weight="700">样本效率</tspan>（同样</text>
 <text class="svgsm" x="20" y="1294" fill="#0d652d" style="font-size:15.0px">的 loss 用更少步数）。</text>
-</svg><figcaption>⭐⭐ <b>Ⓐ 的形状是这张图的全部</b> ——&nbsp;<em>三十年一路往上加，<b>2024 年有人往回走了一步</b>。</em><span class="capmore"><br>⭐ <em>而 Ⓑ 把「最大的一块是优化器状态」翻译成了一根尺子：<b>权重只占 2 B，优化器那边占 12 B。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Adam：Kingma & Ba，<b>arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a></b>（ICLR 2015）；AdamW：Loshchilov & Hutter，<b>arXiv <a href="https://arxiv.org/abs/1711.05101" target="_blank" rel="noopener">1711.05101</a></b>（ICLR 2019）——&#160;Ⓐ 那条带子里的说法是它摘要的转述</p>
+</svg><figcaption>⭐⭐ <b>Ⓐ 的形状是这张图的全部</b> ——&nbsp;<em>三十年一路往上加，<b>2024 年有人往回走了一步</b>。</em><span class="capmore"><br>⭐ <em>而 Ⓑ 把「最大的一块是优化器状态」翻译成了一根尺子：权重只占 2 B，优化器那边占 12 B。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Adam：Kingma & Ba，<b>arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a></b>（ICLR 2015）；AdamW：Loshchilov & Hutter，<b>arXiv <a href="https://arxiv.org/abs/1711.05101" target="_blank" rel="noopener">1711.05101</a></b>（ICLR 2019）——&#160;Ⓐ 那条带子里的说法是它摘要的转述</p>
 <p>Muon：Keller Jordan 等 2024，作者 writeup kellerjordan.github.io/posts/muon。「只用于 2D 参数」「标量 / 向量 / 输入输出层仍用 AdamW」「per-step wallclock 比 AdamW 慢」<b>三条都是原文</b></p>
 <p>动量：Polyak 1964（heavy ball）／Nesterov 1983；AdaGrad：Duchi, Hazan, Singer, JMLR 2011（无 arXiv）；RMSProp：Hinton 2012 Coursera 第 6 讲 ——&#160;<b>从未正式发表</b>，这一条本身值得一提</p>
 <p>另有三条省状态的岔路本图没画：Adafactor（<b>arXiv <a href="https://arxiv.org/abs/1804.04235" target="_blank" rel="noopener">1804.04235</a></b>，把 v 分解成一行加一列）、Lion（<b>arXiv <a href="https://arxiv.org/abs/2302.06675" target="_blank" rel="noopener">2302.06675</a></b>，只用梯度符号、单动量）、8-bit Adam（状态量化，不改算法）</p>
@@ -1711,7 +1711,7 @@ body.figonly section h3{margin-top:34px}
      ⛔ 判据（元级）：**一条只解释得了一个例子的规则，多半不是规则，
        是那个例子的复述。** -->
 <p class="lead">图上那五格，为什么有三格是 fp32、两格是 bf16？
-  <em>⭐ <b>不用一格一格记 ——&nbsp;它们服从同一条判据。</b></em></p>
+  <em>⭐ 不用一格一格记 ——&nbsp;它们服从同一条判据。</em></p>
 
 <p><b>要不要高精度，看这个量<u>累不累加</u>。</b></p>
 <ul>
@@ -1788,7 +1788,7 @@ body.figonly section h3{margin-top:34px}
   <em>反推一下它的单位：<b>参数² ÷ loss</b>。</em></p>
 <p class="landing">⭐⭐⭐ <b>所以学习率<u>不是一个纯数字</u>。</b>
   <em>它跟你的 loss 有多大、你的权重有多大，<b>全绑在一起</b>
-  ——&nbsp;这就是为什么<b>换个模型、换个 batch，学习率就得重调</b>。
+  ——&nbsp;这就是为什么换个模型、换个 batch，学习率就得重调。
   它压根不是个通用常数。</em></p></div>
 
 <h4>这个量纲问题一暴露，SGD 的根本毛病也就出来了</h4>
@@ -1815,8 +1815,8 @@ body.figonly section h3{margin-top:34px}
 <div class="note ok"><p>⭐⭐⭐ 现在关键的一步：Adam 的更新量大约是
   「动量 ÷ 二阶矩的根号」——&nbsp;<u>分子分母的量纲互相抵消</u>。</p>
 <p><em>也就是说，<b>Adam 把梯度的量纲给除掉了</b>，这一步的大小<b>大概就在 1 附近</b>。</em></p>
-<p class="landing">⭐⭐ <b>所以学习率在 Adam 里的身份<u>变了</u> ——&nbsp;
-  它不再是个折算系数，它近乎直接就是「这一步每个参数挪多远」的上限。</b></p>
+<p class="landing">⭐⭐ 所以学习率在 Adam 里的身份<u>变了</u> ——&nbsp;
+  它不再是个折算系数，它近乎直接就是「这一步每个参数挪多远」的上限。</p>
 <p>⭐ <em>这就是为什么 <b>Adam 的学习率那么好调、那么通用</b>
   ——&nbsp;而 <b>SGD 的学习率得一个模型一个模型地精调</b>。
   <b>这不是玄学，是量纲被消掉了。</b></em></p></div>
@@ -1908,9 +1908,65 @@ body.figonly section h3{margin-top:34px}
 <p><span class="sub">⭐ 顺带一句跟上一讲连起来：DeepSeek-V4 就是用 Muon 训的
   ——&nbsp;论文摘要里列的三大升级之一。</span></p></div>
 
-</div></section>
 
 
+
+
+<h4>⭐ 省状态的三条岔路 ——&nbsp;它们各砍掉了那 16 字节里的不同部分</h4>
+
+<!-- ⭐⭐ 2026-09-16 补。原来这三条只写在 fig4-optimizers 的出处栏里，
+     正文一个字都没有 —— 而「每参数几字节」正是这一讲的主轴。
+     ⛔ 判据：**图的出处栏是给人查的，不是给人读的。**
+       一件事只写在那儿，等于没写。 -->
+
+<p>⭐ 都是在动那 16 字节里的某一格，但动的格子不一样
+  ——&nbsp;<em>下面的字节数按 3.1 那套口径当场算：</em></p>
+
+<table>
+<thead><tr><th>做法</th><th>动了哪一格</th><th>每参数字节</th><th>代价</th></tr></thead>
+<tbody>
+<tr><td><b>AdamW</b>（基准）</td><td>——</td><td>2＋2＋4＋4＋4 ＝ <b>16</b></td><td>——</td></tr>
+<tr><td><b>Muon</b></td><td>把<b>二阶矩</b>整份拿掉</td><td>2＋2＋4＋4 ＝ <b>12</b></td>
+    <td>只管二维参数；改用正交化补回来</td></tr>
+<tr><td><b>Lion</b></td><td>同样只留一份动量</td><td>2＋2＋4＋4 ＝ <b>12</b></td>
+    <td>更新只用<b>梯度的符号</b></td></tr>
+<tr><td><b>Adafactor</b></td><td>把二阶矩<b>分解成一行 ＋ 一列</b></td>
+    <td>那一份 ≈ <b>0</b>；不带动量时总共 <b>8</b></td>
+    <td>丢掉了 v 的逐元素信息</td></tr>
+<tr><td><b>8-bit Adam</b></td><td>两份状态<b>各量化到 1 字节</b></td>
+    <td>2＋2＋4＋1＋1 ＝ <b>10</b></td>
+    <td>算法不变，换的是存法</td></tr>
+</tbody></table>
+
+<p class="landing">⭐⭐ <b>注意这三条走的是<u>三个不同的思路</u>：</b>
+  <em>Muon 和 Lion 是<b>不要那一份</b>；Adafactor 是<b>换个更省的表示</b>；
+  8-bit 是<b>同一份东西存得更小</b>。
+  ——&nbsp;<b>所以它们可以叠加</b>，而前两者互斥。</em></p>
+
+<div class="note"><p>📌 8-bit Adam 那条值得多说一句，因为它的做法很干净。</p>
+<p><em>它把状态张量<b>切成小块、逐块独立量化</b>，
+  再加上一种<b>对大值小值都精确</b>的非线性量化。
+  论文报告：在一系列任务上保持 32 位的效果，而且不用改任何优化器超参
+  ——&nbsp;<b>两行代码的 drop-in 替换。</b></em></p>
+<p><span class="sub">📌 Dettmers 等，<b>arXiv <a href="https://arxiv.org/abs/2110.02861" target="_blank" rel="noopener">2110.02861</a></b>（ICLR 2022 spotlight）。
+  ⭐ <b>它是这五行里唯一「不改算法只改存法」的</b> ——&nbsp;
+  所以风险最低，也最该先试。</span></p></div>
+
+<h4>⚠️ Muon 要在大模型上真跑起来，还得补两样</h4>
+<p><em>3.3 那段讲的是 Muon 的<b>想法</b>。
+  可想法好用不等于能直接上规模 ——&nbsp;
+  2025 年有一篇专门做这件事的论文，识别出两条必需的补丁：</em></p>
+<ul>
+  <li><b>① 得加 weight decay。</b><em>原版没有。</em></li>
+  <li><b>② 得仔细调每个参数的<u>更新幅度</u>。</b>
+    <em>——&nbsp;正交化之后各方向尺度是齐了，<b>但整体该迈多大还得单独定。</b></em></li>
+</ul>
+<p class="landing">⭐ 补上这两样之后，它才能「开箱即用」地跑大规模训练。
+  <em>论文的规模律实验报告：在算力最优的设定下，Muon 的计算效率约为 AdamW 的两倍。</em></p>
+<p><span class="sub">📌 <b>arXiv <a href="https://arxiv.org/abs/2502.16982" target="_blank" rel="noopener">2502.16982</a></b>（Moonlight，3B/16B MoE，5.7T token）。
+  ⚠️ 「两倍计算效率」是论文自己的规模律结论，不是我们的实测 ——&nbsp;
+  <em>而且回想 <a href="#s二">2.6</a> 那条判据：<b>这类结论换规模要重验。</b></em>
+  ⛔ <b>至今仍未核实的一条</b>：Muon 下主权重是否仍需 fp32。</span></p>
 
 <h3 id="s3-5">3.5　⭐ 学习率：那条曲线到底怎么画</h3>
 
@@ -1998,7 +2054,7 @@ body.figonly section h3{margin-top:34px}
 <div class="note ok"><ul>
   <li><b>① 别从零猜。</b><em>找一个<b>规模和架构都接近</b>的公开配置抄过来当起点
     ——&nbsp;上面那张表和 V3 的报告都是公开的，<b>这是免费的先验</b>。</em></li>
-  <li><b>② 跨规模不能直接照抄。</b><em>回到 <a href="#s三">3.3</a> 那条：
+  <li><b>② 跨规模不能直接照抄。</b><em>回到 3.3 那条：
     <b>学习率带量纲</b>。小规模上扫出来的值，要么用可迁移的参数化，
     <b>要么在目标规模上小步重验</b>。</em></li>
   <li><b>③ 判据看两条曲线。</b><em>loss 炸了、或者 grad norm 出突刺 ——&nbsp;<b>太大</b>；
@@ -2092,6 +2148,114 @@ body.figonly section h3{margin-top:34px}
 <p>⭐ warmup 的真实机制（<b>不是「样本太少估不准」</b>）：arXiv <b><a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）——&#160;主要好处是让网络能承受更大的目标学习率。这个形状的系统分析：arXiv <b><a href="https://arxiv.org/abs/2410.05192" target="_blank" rel="noopener">2410.05192</a></b></p>
 <p>⛔ 本图<b>不含绝对学习率</b>（两者峰值差 3.7 倍，叠在一起就看不出形状了）——&#160;七档规模的峰值对照表写在正文里</p></details></figure>
 
+
+<h3 id="s3-6">3.6　⭐⭐ 另外那两个超参：β₁ 和 β₂ 到底在干什么</h3>
+
+<!-- ⭐⭐⭐ 2026-09-16 补。核 PaLM 的超参段时撞到一条特别好的东西，
+     而且它**顺手接上了 3.2 和 3.5 两处**：
+       · β₂ 决定「老的贡献能活多久」—— 正是 3.2 那条判据的量化版
+       · PaLM 的 parameter scaling 把 GPT-3 手调的那张表**自动化了** —— 接 3.5
+     ⛔ 判据：**核一条超参的原文，常常会捡到两条别处的接口。**
+       只查数字就会把这两条都错过。 -->
+
+<p class="lead">学习率讲完了，<b>可 Adam 还有两个数没讲</b>：<em>β₁ 和 β₂。</em>
+  <em>⭐ 它们通常被当成「用默认值就行」的东西
+  ——&nbsp;<b>但它们的含义其实特别清楚。</b></em></p>
+
+<div class="note ok"><p>⭐⭐ <b>一句话：β 决定「老的贡献能活多久」。</b></p>
+<p><em>滑动平均每步乘一个 β 再掺新值，所以<b>有效窗口大约是 <code>1/(1−β)</code> 步</b>。</em></p>
+<ul>
+  <li><b>β₁ ＝ 0.9</b> →&nbsp;<em>动量的窗口约 <b>10 步</b>。<b>它只负责把方向抖动抹平。</b></em></li>
+  <li><b>β₂ ＝ 0.95</b> →&nbsp;<em>约 <b>20 步</b>；<b>β₂ ＝ 0.99</b> →&nbsp;约 <b>100 步</b>。</em></li>
+</ul>
+<p class="landing">⭐ 所以 β₂ 调大 ＝ 分母更平稳但反应更慢；调小 ＝ 跟得紧但噪声大。
+  <em>——&nbsp;这不是玄学，<b>就是一个「记多久」的旋钮</b>。</em></p></div>
+
+<h4>⭐⭐⭐ 而 PaLM 在这里做了一件反常的事：<u>让 β₂ 随步数变</u></h4>
+
+<p><em>它用的是 <code>β₂ ＝ 1 − k<sup>−0.8</sup></code>，<b>k 是当前步数</b>。</em></p>
+<p><b>代几个数进去看看它在干嘛：</b></p>
+<ul>
+  <li><em>第 100 步：β₂ ≈ <b>0.984</b>，窗口约 40 步。</em></li>
+  <li><em>第 1 万步：β₂ ≈ <b>0.9994</b>，窗口约 1,600 步。</em></li>
+  <li><em>第 10 万步：β₂ ≈ <b>0.9999</b>，窗口约 1 万步。</em></li>
+</ul>
+<p class="landing">⭐⭐ 也就是说，<u>窗口是跟着训练一起长的</u>（大约按 <code>k<sup>0.8</sup></code>）。
+  <em>而固定的 β₂ ＝ 0.99，意味着<b>从头到尾都只记 100 步</b>。</em></p>
+
+<div class="note"><p>❓ 为什么要这么做？论文给的理由很具体，而且很好懂。</p>
+<p><em>因为<b>罕见的 embedding token</b> ——&nbsp;
+  一个生僻字可能几千步才出现一次。在一个 100 步的窗口里，
+  它的二阶矩估计基本是垃圾：大部分时候是 0，偶尔来一个大值。</em></p>
+<p class="landing">⭐ 而窗口跟着训练一起长，这个问题就自己消失了。
+  <em>论文原话：「我们发现这比标准的 β₂ ＝ 0.99 更稳定」。</em></p>
+<p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a></b> 的超参段。同段还有：
+  <b>β₁ ＝ 0.9</b>、学习率前 1 万步固定 10⁻²、之后按 <code>1/√k</code> 衰减。</span></p></div>
+
+<div class="note danger"><p>⚠️ 这里有个顺带推出来的结论，而它跟 3.2 那条判据打架 ——&nbsp;
+  值得说清楚。</p>
+<p><em>3.2 说：动量和二阶矩是滑动平均，老的贡献会被衰减掉，所以 bf16 扛得住。<br>
+  可如果 β₂ 一路涨到 0.9999，<b>那个「衰减」就慢得快要不衰减了</b>
+  ——&nbsp;<b>v 越来越像一个真的累加器。</b></em></p>
+<p class="landing">⭐⭐ 所以那条判据要带上前提：它成立的条件是「β 不随步数趋近 1」。
+  <em>⛔ 这一条是<b>我们自己推的</b>，不是论文说的
+  ——&nbsp;PaLM 用的是 Adafactor 系、也没报精度配置，
+  能不能真观察到这个影响，<b>没有证据。当猜想看。</b></em></p></div>
+
+<h4>⭐ 还捡到一条：PaLM 把 GPT-3 手调的那张表<u>自动化了</u></h4>
+<p><em>PaLM 用的其实是 <b>Adafactor，但关掉了分解</b>
+  ——&nbsp;论文说这<b>等价于「带参数缩放的 Adam」</b>：
+  <b>按参数矩阵的均方根去缩放学习率。</b></em></p>
+<p class="landing">⭐⭐⭐ 而论文自己点破了这跟 3.5 那张表的关系：
+  <em>「这么做的效果，类似于 GPT-3 那样手工把学习率随规模调小」。</em></p>
+<p><span class="sub">⭐ 换句话说：3.5 那张七档表是<u>手动</u>解法，参数缩放是<u>自动</u>解法。
+  <em>而且论文说自动那版还多一个好处 ——&nbsp;
+  尺度本来就不同的那些参数（embedding、layer norm 的缩放）
+  不会被按同一个比例一起压下去。</em></span></p>
+
+<h3 id="s3-7">3.7　⭐ checkpoint 要存的，正好就是那 12 字节</h3>
+
+<p class="lead">⭐ 这一节能用 3.1 那张账单直接推出来，
+  不用查任何文档。</p>
+
+<p>那 16 字节里，<b>哪些必须进 checkpoint？</b><em>一格一格问「丢了能不能重建」：</em></p>
+<ul>
+  <li><b>bf16 权重（2 B）</b> ——&nbsp;<em>⛔ <b>不用存</b>：它是 fp32 主权重的投影，<b>转一下就有</b>。</em></li>
+  <li><b>bf16 梯度（2 B）</b> ——&nbsp;<em>⛔ <b>不用存</b>：下一步重新算一份。</em></li>
+  <li><b>fp32 主权重（4 B）</b> ——&nbsp;<em>⭐ <b>必须存</b>，而且<b>不能只存 bf16 版</b>
+    ——&nbsp;存成 bf16 再读回来，<b>等于把训练到现在累出来的低位全扔了。</b></em></li>
+  <li><b>动量 m、二阶矩 v（各 4 B）</b> ——&nbsp;<em>⭐ <b>必须存</b>：
+    它们是<b>历史</b>，丢了就只能从零重新积累。</em></li>
+</ul>
+
+<div class="note ok"><p>⭐⭐⭐ 所以 checkpoint 的大小 ＝ 那 12 字节 × 参数量。
+  <em>对 671B：<b>约 7.3 TiB 一份。</b></em></p>
+<p>⭐ <em>这一下解释了两件工程上的事：</em></p>
+<ul>
+  <li>为什么 checkpoint 这么大、存这么慢。
+    <em>——&nbsp;它存的<b>不是模型，是优化器</b>。模型本身只占其中的三分之一。</em></li>
+  <li>为什么「发布的模型权重」比 checkpoint 小得多。
+    <em>——&nbsp;发布只要那 2 字节的推理权重，<b>剩下的十四分之十二全是训练用的。</b></em></li>
+</ul></div>
+
+<div class="note danger"><p>⛔⛔ 但只存这 12 字节还不够 ——&nbsp;还有三样，漏一样都会让「恢复」变成「重来」。</p>
+<ul>
+  <li><b>① 步数</b> ——&nbsp;<em>因为学习率、β₂、weight decay <b>都可能是步数的函数</b>（见 3.5、3.6）。</em></li>
+  <li><b>② 数据读到哪儿了</b> ——&nbsp;<em>⭐ <b>这一条最容易漏，而且漏了最隐蔽</b>：
+    恢复之后又把同一批数据重训一遍，<b>loss 曲线看着完全正常</b>。</em></li>
+  <li><b>③ 随机数状态</b> ——&nbsp;<em>dropout、数据打散都要用。</em></li>
+</ul>
+<p class="landing">⭐⭐ 而 <a href="#s六">§6.2</a> 那个「回滚 ＋ 跳数据」的救火办法，前提正是 ①②。
+  <em>——&nbsp;数据位置说不清，你连「跳掉哪几批」都没法讲。</em></p></div>
+
+<p><span class="sub">⭐ <b>顺带一个真实的省法</b>：优化器那部分<b>不一定要留在加速器上</b>。
+  <em>DeepSeek-V3 就把权重的<b>指数滑动平均放在 CPU 内存里</b>、每步异步更新
+  ——&nbsp;<b>既不占显存也不占训练时间</b>，用途是提前估计「学习率衰减之后会有多好」。
+  📌 arXiv <b><a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s3-2">§3.2</a>.3。</em></span></p>
+
+</div></section>
+
+
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账单直接决定了并行策略长什么样</h2></div>
 
 <p class="lead">这一节是通向<b>专题五</b>的桥。
@@ -2130,7 +2294,7 @@ body.figonly section h3{margin-top:34px}
     ——&nbsp;切了几乎<b>不增加通信</b>。<b>先切它，性价比最高。</b></em></li>
   <li><b>ZeRO-2 再切梯度。</b><em>次大，而且<b>反向结束时才需要完整的一份</b>
     ——&nbsp;在那之前它可以是散着的。</em></li>
-  <li><b>ZeRO-3（≈ FSDP）最后才切参数。</b><em>因为<b>每一层前向都要用它</b>
+  <li>ZeRO-3（≈ FSDP）最后才切参数。<em>因为<b>每一层前向都要用它</b>
     ——&nbsp;一切开，每层都得先 all-gather 把它拼回来。
     <b>通信代价是三级里最高的。</b></em></li>
 </ul>
@@ -2546,7 +2710,7 @@ body.figonly section h3{margin-top:34px}
 <p class="landing">⭐ 治法也很直接：在做点积之前，给 Q 和 K 各做一次 LayerNorm。
   <em>——&nbsp;这就是今天很多大模型标配的 QK-norm 的来历。</em></p>
 <p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2302.05442" target="_blank" rel="noopener">2302.05442</a></b>（ViT-22B）§2。
-  ⭐ <b>注意这又是一次「只在大规模上才出现」的故障</b> ——&nbsp;
+  ⭐ 注意这又是一次「只在大规模上才出现」的故障 ——&nbsp;
   跟 6.1 那条是同一个模式。</span></p>
 
 <h4>初始化 ——&nbsp;一句话带过，但别漏</h4>
@@ -2594,15 +2758,15 @@ body.figonly section h3{margin-top:34px}
 <p class="lead">这一讲报了几十个数字。<em><b>但真正想留下的不是那些数。</b></em></p>
 
 <div class="note ok"><ul>
-  <li><b>① 要不要高精度，看那一项「老的贡献走不走」。</b>
+  <li>① 要不要高精度，看那一项「老的贡献走不走」。
     <em>滑动平均有遗忘，bf16 扛得住；主权重跨十万步累加，必须 fp32。（<a href="#s三">3.2</a>）</em></li>
-  <li><b>② 该不该重算，看「每省一字节要付多少 FLOPs」。</b>
+  <li>② 该不该重算，看「每省一字节要付多少 FLOPs」。
     <em>线性层的这个数恰好等于输入宽度；attention 的随序列长度线性上升
     ——&nbsp;<b>两条斜率不同，必然相交。</b>（<a href="#s二">2.3</a>）</em></li>
-  <li><b>③ 凡是会改变数据分片形状的参数，都不能跨规模照抄。</b>
+  <li>③ 凡是会改变数据分片形状的参数，都不能跨规模照抄。
     <em>⭐ 这条在本讲出现了<b>三次</b>：序列长度（2.5）、模型规模（6.1）、
     以及同一个开关换规模收益变号（2.6）。<b>出现三次的，不是巧合。</b></em></li>
-  <li><b>④ 评价任何一个稳定性手段，要同时看「稳没稳」和「质量掉没掉」。</b>
+  <li>④ 评价任何一个稳定性手段，要同时看「稳没稳」和「质量掉没掉」。
     <em>只看前者的话，把学习率设成零是最优解。（本节 6.3）</em></li>
 </ul>
 <p class="landing">⭐ <b>数字会过期，这四条不会。</b></p></div>
@@ -2622,7 +2786,7 @@ body.figonly section h3{margin-top:34px}
      ⭐ 判据（CLAUDE.md 第一原则的落地）：
        **推出来的必须写清推导链；查来的必须给得到出处。两类不能长得一样。** -->
 
-<p class="lead">⭐⭐ <b>这一讲报了几十个数字。它们<u>不是同一种东西</u>。</b>
+<p class="lead">⭐⭐ 这一讲报了几十个数字。它们<u>不是同一种东西</u>。
   <em>有的能查到论文原文，有的是我们自己按算子推的
   ——&nbsp;<b>后者可能差一倍，前者不会。</b></em></p>
 
@@ -2659,7 +2823,7 @@ body.figonly section h3{margin-top:34px}
     <td>按算子逐项推（<a href="#s一">1.7</a> 那两张表）。输入只有 V3 的 config
         ＋ 官方参考实现的 MLA 前向</td>
     <td>框架的算子融合程度、MoE 派发是否真的物化九份</td></tr>
-<tr><td><b>attention 占一层算力 82.1%</b></td>
+<tr><td>attention 占一层算力 82.1%</td>
     <td>按 causal 折半口径算。<b>专题一独立算出 81.8%，两边对上了</b></td>
     <td>口径（折没折半）；换头维度就变</td></tr>
 <tr><td>交叉点 <b>S ≈ 5,734</b></td>
