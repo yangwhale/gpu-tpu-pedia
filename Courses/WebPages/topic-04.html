@@ -901,6 +901,101 @@ body.figonly section h3{margin-top:34px}
 <p class="landing">⭐ 这两件事各是一次矩阵乘。前向一次、反向两次
   ——&nbsp;<u>三倍算力就是从这儿来的</u>，不是估的，是数出来的。</p></div>
 
+<figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 1238" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的敏感度。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">三倍算力是<tspan font-weight="700">数出来的</tspan>　——　前向一次矩阵乘，反向两次</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 这一格不讲链式法则，只数<tspan font-weight="700">乘法做了几次</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">前向 1 次</text>
+<rect x="112" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="133" y="74" fill="#5f6368" style="font-size:14.0px">反向 2 次</text>
+<rect x="224" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="245" y="74" fill="#5f6368" style="font-size:14.0px">合计 3 次</text>
+<rect x="0" y="102" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 把一层摊开 ——　<tspan font-weight="700">总共只有三次矩阵乘，一次向前、两次向后</tspan></tspan></text>
+<text class="svgsm" x="652" y="122" fill="#5f6368" style="font-size:11.0px">⚠️ 只数矩阵乘：norm / 激活 / 偏置在这笔账里可以忽略</text>
+<rect x="48" y="166" width="416" height="254" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="48" y="166" width="416" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="256" y="202" fill="#174ea6" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">① 前向</tspan></text>
+<text class="svgsm" x="256" y="230" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">算这一层的输出</tspan></text>
+<rect x="68" y="252" width="376" height="62" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="256" y="280" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">一次矩阵乘</tspan></text>
+<text class="svgsm" x="256" y="344" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">用：这一层的输入 × 这一层的权重</text>
+<text class="svgsm" x="256" y="382" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">→ 输出，交给下一层</tspan></text>
+<rect x="488" y="166" width="416" height="254" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="488" y="166" width="416" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="696" y="202" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">② 反向 · 权重梯度</tspan></text>
+<text class="svgsm" x="696" y="230" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">算「我这块权重该怎么改」</tspan></text>
+<rect x="508" y="252" width="376" height="62" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="696" y="280" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">一次矩阵乘</tspan></text>
+<text class="svgsm" x="696" y="344" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">用：上游传来的敏感度 × 前向存下来的输入</text>
+<text class="svgsm" x="696" y="382" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">→ 这块权重的梯度</tspan></text>
+<text class="svgsm" x="476" y="294" fill="#80868b" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">＋</tspan></text>
+<rect x="928" y="166" width="416" height="254" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="928" y="166" width="416" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1136" y="202" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">③ 反向 · 传给下游</tspan></text>
+<text class="svgsm" x="1136" y="230" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">算「上游该收到什么」</tspan></text>
+<rect x="948" y="252" width="376" height="62" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1136" y="280" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">一次矩阵乘</tspan></text>
+<text class="svgsm" x="1136" y="344" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">用：上游传来的敏感度 × 这一层的权重</text>
+<text class="svgsm" x="1136" y="382" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">→ 敏感度，交给前一层</tspan></text>
+<text class="svgsm" x="916" y="294" fill="#80868b" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">＋</tspan></text>
+<rect x="0" y="510" width="1400" height="246" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="510" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="512" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="540" x2="1400" y2="540" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="530" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐ 全图的钥匙：<tspan font-weight="700">反向之所以是两次，因为它要回答两个不同的问题</tspan></tspan></text>
+<text class="svgsm" x="682" y="530" fill="#5f6368" style="font-size:11.0px">⛔ 不是「反向比较慢」这种含糊说法 ——　<tspan font-weight="700">是两个问题，所以两次</tspan></text>
+<rect x="64" y="574" width="620" height="154" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="88" y="608" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">问题一</tspan></text>
+<text class="svgsm" x="88" y="642" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">我这块权重该怎么改？</tspan></text>
+<text class="svgsm" x="88" y="674" fill="#5f6368" style="font-size:14.0px">→ 这是这一步真正要的东西</text>
+<text class="svgsm" x="88" y="706" fill="#a50e0e" style="font-size:14.0px"><tspan font-weight="700">⭐ 答案留下来，交给优化器</tspan></text>
+<rect x="716" y="574" width="620" height="154" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="740" y="608" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">问题二</tspan></text>
+<text class="svgsm" x="740" y="642" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">我前面那一层该收到什么？</tspan></text>
+<text class="svgsm" x="740" y="674" fill="#5f6368" style="font-size:14.0px">→ 这是让链条能继续往回走</text>
+<text class="svgsm" x="740" y="706" fill="#a50e0e" style="font-size:14.0px"><tspan font-weight="700">⭐ 答案传下去，这一层就算完了</tspan></text>
+<text class="svgsm" x="700" y="754" fill="#5f6368" text-anchor="middle" style="font-size:14.5px">⛔ 两个问题都要用到「上游传来的那个敏感度」，但<tspan font-weight="700">另一边乘的东西不一样</tspan> ——　所以省不掉其中任何一次</text>
+<rect x="0" y="808" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="808" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="810" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="838" x2="1400" y2="838" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="828" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓒ 于是这笔账就封口了</tspan></text>
+<text class="svgsm" x="300" y="900" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">推理　只有前向</tspan></text>
+<rect x="320" y="874" width="210" height="38" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="425" y="899" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="546" y="900" fill="#174ea6" style="font-size:19.0px"><tspan font-weight="700">＝ 1×</tspan></text>
+<text class="svgsm" x="300" y="954" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">训练　前向 ＋ 反向</tspan></text>
+<rect x="320" y="928" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="425" y="953" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<rect x="540" y="928" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="645" y="953" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<rect x="760" y="928" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="865" y="953" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="986" y="954" fill="#0d652d" style="font-size:19.0px"><tspan font-weight="700">＝ 3×</tspan></text>
+<text class="svgsm" x="300" y="1008" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">训练 ＋ 全量重算</tspan></text>
+<rect x="320" y="982" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="425" y="1007" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<rect x="540" y="982" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="645" y="1007" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<rect x="760" y="982" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="865" y="1007" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<rect x="980" y="982" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1085" y="1007" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="1206" y="1008" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">＝ 4×</tspan></text>
+<text class="svgsm" x="320" y="1046" fill="#5f6368" style="font-size:14.5px">⭐ 「一遍」＝ 一次走完整个网络的矩阵乘量。<tspan font-weight="700">推理只买一遍，训练要买三遍</tspan></text>
+<rect x="0" y="1110" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1110" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1110" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1137" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 这张图顺带回答了另外两个常见疑问</tspan></text>
+<text class="svgsm" x="20" y="1168" fill="#0d652d" style="font-size:15.0px">❓ <tspan font-weight="700">「为什么训练比推理贵这么多」</tspan> ——&#160;算力上就是这个 3 倍；⛔ 但真正拉开差距的不是它，而是<tspan font-weight="700">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。</text>
+<text class="svgsm" x="20" y="1192" fill="#0d652d" style="font-size:15.0px">❓ <tspan font-weight="700">「反向能不能只算一次」</tspan> ——&#160;能，如果你<tspan font-weight="700">不打算继续往前传</tspan>（比如只微调最后一层）。⭐ 那种情况下第 ③ 次确实可以省掉 ——&#160;<tspan font-weight="700">冻结层为什么便宜，原因就在这儿。</tspan></text>
+</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的钥匙</b> ——&nbsp;<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><span class="capmore"><br>⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;<b>激活扔不掉、以及下一节那笔交易，全挂在这一句上。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 「3 倍」是<b>矩阵乘口径</b>的常用近似：只数 matmul，忽略 norm / 激活 / 偏置 / 通信。真实 step 里这些占比不大，但<b>不是零</b></p>
+<p>⛔ 图上第 ② 步那句「用前向存下来的输入」是<b>整个专题的枢纽</b> ——&#160;激活扔不掉、以及下一节那笔重算交易，全都挂在这一句上</p></details></figure>
+
 <h3 id="s1-4">1.4　⭐ 为什么偏导数一出现，这件事就变容易了</h3>
 
 <p class="lead">⭐⭐⭐ <b>因为偏导数是<u>局部</u>的。</b></p>
@@ -956,15 +1051,90 @@ body.figonly section h3{margin-top:34px}
   显存里多出<b>一整条从头挂到尾的激活</b>。</em>
   <b>而下一节要做的，就是拿第一样去换第二样。</b></p>
 
-<div class="note"><p>📌 <b>激活这笔账有多大（量级，不是准数）：</b>
-  <em>一条 <b>128K</b> 序列、V3 那个规模，不开重算的激活约 <b>4.15 TiB</b>；
-  <b>即使开了重算，也还要 106.75 GiB。</b></em></p>
-<p><span class="sub">⚠️ 这两个数是<b>自己按算子推的</b>（输入是 V3 的 config
-  ＋ 官方参考实现的 MLA 前向），<b>没有第三方背书 ——&nbsp;当量级看，别当准数。</b>
-  <em>但就算差一倍，结论也不变：<b>这个规模上，装不下。</b></em></span></p></div>
+<div class="note"><p>📌 <b>图 Ⓑ 那两张卡片的读法：</b>
+  <em>它们是<b>同一条序列的两种配置</b>，不是两个模型。</em></p>
+<p><span class="sub">⚠️ 两个数都是<b>自己按算子推的</b>（输入是 V3 的 config
+  ＋ 官方参考实现的 MLA 前向），<b>没有第三方背书</b>。
+  <em>⭐ 但就算差一倍，结论也不变：<b>这个规模上，装不下。</b></em></span></p></div>
 
-<!-- ⛔ 还欠两张图：fig4-3x（前向一次 matmul / 反向两次，3× 从哪来）、
-     fig4-act-bill（那条从头挂到尾的激活）。 -->
+<figure class="fbox fwide" id="fig-act-bill"><svg viewBox="0 0 1400 1026" width="100%" role="img" aria-label="把显存占用按时间画出来，它是一座山：前向从第一层到第六十一层一路堆高，堆到 loss 那一刻达到峰值，反向一层一层往回走才逐步释放。峰值不在训练的某个阶段，而在前向刚结束的那一瞬间"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">激活是一座山　——　<tspan font-weight="700">前向一路堆，山顶在 loss 那一刻</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 横轴是<tspan font-weight="700">时间</tspan>，不是层号　·　⛔ 权重和优化器状态没画 ——&#160;它们是<tspan font-weight="700">水平的</tspan>，会把山形压扁</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">前向 · 堆</text>
+<rect x="118" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="139" y="74" fill="#5f6368" style="font-size:14.0px">峰值</text>
+<rect x="193" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="214" y="74" fill="#5f6368" style="font-size:14.0px">反向 · 拆</text>
+<rect x="0" y="102" width="1400" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 每前进一层，就多挂一份中间结果 ——　<tspan font-weight="700">而且一份都不能提前扔</tspan></tspan></text>
+<text class="svgsm" x="665" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 为什么不能扔：反向算权重梯度时<tspan font-weight="700">要用前向那一刻的输入</tspan></text>
+<line x1="130" y1="452" x2="1330" y2="452" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="130" y1="452" x2="130" y2="170" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="116" y="160" fill="#5f6368" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">显存里的激活</tspan></text>
+<rect x="130.0" y="429.6666666666667" width="49.583333333333336" height="22.333333333333332" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="179.58333333333334" y="407.3333333333333" width="49.583333333333336" height="44.666666666666664" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="229.16666666666669" y="385.0" width="49.583333333333336" height="67.0" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="278.75" y="362.6666666666667" width="49.583333333333336" height="89.33333333333333" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="328.33333333333337" y="340.3333333333333" width="49.583333333333336" height="111.66666666666667" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="377.9166666666667" y="318.0" width="49.583333333333336" height="134.0" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="427.5" y="295.66666666666663" width="49.583333333333336" height="156.33333333333334" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="477.08333333333337" y="273.33333333333337" width="49.583333333333336" height="178.66666666666666" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="526.6666666666667" y="251.0" width="49.583333333333336" height="201.0" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="576.25" y="228.66666666666666" width="49.583333333333336" height="223.33333333333334" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="625.8333333333334" y="206.33333333333334" width="49.583333333333336" height="245.66666666666666" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="675.4166666666667" y="184.0" width="49.583333333333336" height="268.0" rx="0" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<rect x="725.0" y="184.0" width="49.583333333333336" height="268.0" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="774.5833333333334" y="206.33333333333334" width="49.583333333333336" height="245.66666666666666" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="824.1666666666666" y="228.66666666666666" width="49.583333333333336" height="223.33333333333334" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="873.75" y="251.0" width="49.583333333333336" height="201.0" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="923.3333333333334" y="273.33333333333337" width="49.583333333333336" height="178.66666666666666" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="972.9166666666667" y="295.66666666666663" width="49.583333333333336" height="156.33333333333334" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="1022.5" y="318.0" width="49.583333333333336" height="134.0" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="1072.0833333333335" y="340.3333333333333" width="49.583333333333336" height="111.66666666666667" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="1121.6666666666667" y="362.6666666666667" width="49.583333333333336" height="89.33333333333333" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="1171.25" y="385.0" width="49.583333333333336" height="67.0" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="1220.8333333333335" y="407.3333333333333" width="49.583333333333336" height="44.666666666666664" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<rect x="1270.4166666666667" y="429.6666666666667" width="49.583333333333336" height="22.333333333333332" rx="0" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text class="svgsm" x="427" y="480" fill="#174ea6" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">前向：第 1 层 →　第 61 层</tspan></text>
+<text class="svgsm" x="1022" y="480" fill="#0d652d" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">反向：第 61 层 →　第 1 层</tspan></text>
+<text class="svgsm" x="427" y="504" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">每过一层，多挂一份</text>
+<text class="svgsm" x="1022" y="504" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">每走回一层，释放一份</text>
+<line x1="725.0" y1="176" x2="725.0" y2="452" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="5 4"/>
+<rect x="557.0" y="138" width="336" height="56" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="725" y="162" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">⭐⭐ 峰值在这一刻</tspan></text>
+<text class="svgsm" x="725" y="186" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">前向刚算完、反向还没开始</text>
+<rect x="0" y="574" width="1400" height="272" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="574" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="576" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="604" x2="1400" y2="604" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="594" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 这座山有多高 ——　<tspan font-weight="700">一条 128K 序列，V3 那个规模</tspan></tspan></text>
+<text class="svgsm" x="599" y="594" fill="#5f6368" style="font-size:11.0px">⚠️ 自己按算子推的估算，<tspan font-weight="700">当量级看，别当准数</tspan></text>
+<rect x="120" y="638" width="540" height="168" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="120" y="638" width="540" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="390" y="674" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">不开重算</tspan></text>
+<text class="svgsm" x="390" y="722" fill="#a50e0e" text-anchor="middle" style="font-size:34.0px"><tspan font-weight="700">4.15 TiB</tspan></text>
+<text class="svgsm" x="390" y="756" fill="#202124" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⛔ 一整条全挂着</tspan></text>
+<text class="svgsm" x="390" y="786" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">光这一项就已经装不下</text>
+<rect x="740" y="638" width="540" height="168" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="740" y="638" width="540" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1010" y="674" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">开了全量重算</tspan></text>
+<text class="svgsm" x="1010" y="722" fill="#0d652d" text-anchor="middle" style="font-size:34.0px"><tspan font-weight="700">106.75 GiB</tspan></text>
+<text class="svgsm" x="1010" y="756" fill="#202124" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⭐ 每层只留入口那一份</tspan></text>
+<text class="svgsm" x="1010" y="786" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">约 40 倍的差距</text>
+<text class="svgsm" x="700" y="834" fill="#5f6368" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⭐ 下一节整节都在讲这两栏之间那个箭头</tspan></text>
+<rect x="0" y="898" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="898" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="898" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="925" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 这张图顺带把两件事一起讲了</tspan></text>
+<text class="svgsm" x="20" y="956" fill="#174ea6" style="font-size:15.0px">⭐ <tspan font-weight="700">「为什么训练比推理贵」</tspan>：算力只贵 3 倍，可推理<tspan font-weight="700">根本没有这座山</tspan> ——&#160;它算完一层就把中间结果扔了，只留 KV cache。<tspan font-weight="700">真正拉开差距的是显存，不是算力。</tspan></text>
+<text class="svgsm" x="20" y="980" fill="#174ea6" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">「峰值出现在哪一刻」</tspan>：就是山顶那一竖 ——&#160;前向刚结束、反向还没开始。⛔ 到<tspan font-weight="700">第五节</tspan>会把权重和优化器状态那两条<tspan font-weight="700">水平带</tspan>叠上来，山形不变，只是整体抬高。</text>
+</svg><figcaption>⭐⭐⭐ <b>横轴是时间，不是层号</b> ——&nbsp;<em>换成层号，「什么时候最挤」这个问题就提不出来了。</em><span class="capmore"><br>⭐ <em>山顶那一竖同时回答了第五节要问的「峰值在哪一刻」：<b>前向刚算完、反向还没开始。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 台阶画了 12 级只是为了看得清 ——&#160;<b>真实是 61 层</b>，而且每层内部还有若干个中间张量，山坡比图上细密得多</p>
+<p>⛔ 山形画成<b>直上直下</b>是简化：真实曲线会因为 MoE 派发、attention 那几个大中间量而有凸起，<b>但「顶点在前向末尾」这个结论不受影响</b></p>
+<p>⚠️ 4.15 TiB 与 106.75 GiB 两个数是<b>自己按算子推的</b>（输入：V3 的 config ＋ 官方参考实现的 MLA 前向），<b>没有第三方背书</b></p></details></figure>
 
 </div></section>
 
@@ -992,10 +1162,65 @@ body.figonly section h3{margin-top:34px}
     也就是<b>多三分之一</b>。</em></li>
 </ul>
 
-<div class="note ok"><p>⭐⭐⭐ 一句话：用三分之一的算力，换掉四十分之三十九的激活显存。</p>
-<p><em>这个兑换比例<b>夸张到不像是个「权衡」</b>。所以在大模型训练里，
-  <b>默认就是开着的</b> ——&nbsp;值得讨论的从来不是开不开，<b>而是开到哪一档</b>。</em></p>
-<p>⛔ <em>反过来说：显存本来就宽裕的时候（小模型、短序列），它就是纯亏。</em></p></div>
+<div class="note ok"><p>⭐⭐⭐ 这个兑换比例，<b>夸张到不像是个「权衡」</b>。</p>
+<p><em>所以在大模型训练里，它<b>默认就是开着的</b> ——&nbsp;
+  值得讨论的从来不是开不开，<b>而是开到哪一档</b>（图 Ⓑ 那三档）。</em></p></div>
+
+<figure class="fbox fwide" id="fig-recompute"><svg viewBox="0 0 1400 892" width="100%" role="img" aria-label="全量重算这笔交易的两边：算力从三倍变四倍，只多付三分之一；而激活显存从四点一五 TiB 掉到一百零六 GiB，只剩原来的百分之二点五。付出那边几乎没变，省下那边几乎归零 —— 所以在大模型训练里它默认就是开着的"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">全量重算　——　<tspan font-weight="700">用三分之一的算力，换掉四十分之三十九的显存</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 两边都归一到「原来 ＝ 100%」　·　⛔ 否则一边 TiB 一边 TFLOPs，<tspan font-weight="700">两根条没法比</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">付出：算力</text>
+<rect x="117" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="138" y="74" fill="#5f6368" style="font-size:14.0px">省下：显存</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 这笔交易的两边 ——　<tspan font-weight="700">形状不对称到不像是个权衡</tspan></tspan></text>
+<text class="svgsm" x="584" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 条长代表「相对原来剩多少 / 涨多少」</text>
+<text class="svgsm" x="284" y="166" fill="#b06000" text-anchor="end" style="font-size:19.0px"><tspan font-weight="700">付出　算力</tspan></text>
+<rect x="300" y="144" width="580.8000000000001" height="44" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="590" y="172" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">原来：3×（前向 1 ＋ 反向 2）</tspan></text>
+<rect x="300" y="200" width="774.4" height="44" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<rect x="880.8000000000001" y="200" width="193.6" height="44" rx="6" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="590" y="228" fill="#fff" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">现在：4×（多跑一遍前向）</tspan></text>
+<text class="svgsm" x="1088" y="228" fill="#b06000" style="font-size:22.0px"><tspan font-weight="700">＋33%</tspan></text>
+<text class="svgsm" x="314" y="268" fill="#5f6368" style="font-size:13.5px">⭐ 多出来的那一小截，就是「再跑一遍前向」</text>
+<text class="svgsm" x="284" y="342" fill="#0d652d" text-anchor="end" style="font-size:19.0px"><tspan font-weight="700">省下　显存</tspan></text>
+<rect x="300" y="320" width="880" height="44" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="740" y="348" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">原来：4.15 TiB 激活</tspan></text>
+<rect x="300" y="376" width="880" height="44" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="300" y="376" width="22.105609939759034" height="44" rx="6" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="336" y="404" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">现在：106.75 GiB　——　只剩 2.5%</tspan></text>
+<text class="svgsm" x="314" y="444" fill="#5f6368" style="font-size:13.5px">⛔ 这根条短到几乎看不见 ——　<tspan font-weight="700">那正是这张图要说的事</tspan></text>
+<rect x="0" y="554" width="1400" height="256" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="554" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="556" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="584" x2="1400" y2="584" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="574" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 所以值得讨论的从来不是「开不开」</tspan></text>
+<text class="svgsm" x="264" y="574" fill="#5f6368" style="font-size:11.0px">⭐ 而是<tspan font-weight="700">开到哪一档</tspan></text>
+<rect x="64" y="618" width="416" height="148" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<rect x="64" y="618" width="416" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="272" y="654" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">不开</tspan></text>
+<text class="svgsm" x="272" y="684" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">全留</tspan></text>
+<text class="svgsm" x="272" y="724" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">只在显存宽裕时才合理</text>
+<rect x="504" y="618" width="416" height="148" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="504" y="618" width="416" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="712" y="654" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">选择性</tspan></text>
+<text class="svgsm" x="712" y="684" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">按比值挑着扔</tspan></text>
+<text class="svgsm" x="712" y="724" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">⭐ 约 6% 算力换约 77% 显存 ——　性价比最高</text>
+<line x1="484" y1="692" x2="500" y2="692" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="944" y="618" width="416" height="148" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="944" y="618" width="416" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1152" y="654" fill="#0d652d" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">全量</tspan></text>
+<text class="svgsm" x="1152" y="684" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">每层只留入口那一份</tspan></text>
+<text class="svgsm" x="1152" y="724" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">33% 算力换 97% ——　显存实在不够时</text>
+<line x1="924" y1="692" x2="940" y2="692" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="700" y="798" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⛔ 显存本来就宽裕的时候（小模型、短序列），<tspan font-weight="700">重算就是纯亏</tspan></tspan></text>
+</svg><figcaption>⭐⭐ <b>要看的是两根条的<u>不对称</u></b> ——&nbsp;<em>付出那边只多出一小截，省下那边短到几乎看不见。</em><span class="capmore"><br>⚠️ <em>两根条<b>都归一化了</b>，所以可以直接并排看 ——&nbsp;<b>单位不同的量并排放，读者第一反应是去比长度，而那个比较没有意义。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 4.15 TiB / 106.75 GiB 是<b>自己按算子推的估算</b>（V3 的 config ＋ 官方参考实现的 MLA 前向），<b>当量级看</b>；就算差一倍，「不对称」这个结论也不变</p>
+<p>⭐ 「3× →&#160;4×」是矩阵乘口径：重算等于把前向那一遍再买一次，所以多出来的正好是 <b>1/3</b></p>
+<p>📌 Ⓑ 里「选择性」那一档的 6% / 77%，推导过程与名次表见<b>下一张图与本节正文</b>；DeepSeek-V3 报告（<b>arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b>）明写他们重算全部 RMSNorm 与 MLA 上投影 ——&#160;正是那一档</p></details></figure>
 
 <h3 id="s2-3">2.3　⭐ 选择性重算：判据只有<u>一个数</u></h3>
 
@@ -1057,6 +1282,76 @@ body.figonly section h3{margin-top:34px}
   ——&nbsp;这比多算一遍更有说服力。</em></p>
 <p><span class="sub">📌 出处：arXiv <b><a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s3-2">§3.2</a>.3。</span></p></div>
 
+<figure class="fbox fwide" id="fig-per-byte"><svg viewBox="0 0 1400 826" width="100%" role="img" aria-label="双对数坐标上，线性层的每字节重算代价是一条水平线（等于它的输入宽度），而 attention 的是一条随序列长度上升的斜线。两条斜率不同，所以必然相交：对 V3 交点在约 5,734。GPT-3 的 2,048 落在交点左边，所以 2022 年那篇论文选 attention 是对的；V3 的 131,072 落在右边很远，所以 attention 变成最不该重算的那一个"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">为什么同一条判据会给出<tspan font-weight="700">相反</tspan>的答案　——　<tspan font-weight="700">两条斜率不同的线，必然相交</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 纵轴：<tspan font-weight="700">扔掉它、再算回来 ——&#160;一个字节的代价</tspan>　·　⚠️ 双对数坐标 ——&#160;<tspan font-weight="700">常数在这里是水平线，正比于 S 的是直线</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">便宜 → 该扔</text>
+<rect x="132" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="153" y="74" fill="#5f6368" style="font-size:14.0px">贵 → 该留</text>
+<rect x="250" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="271" y="74" fill="#5f6368" style="font-size:14.0px">attention</text>
+<rect x="0" y="102" width="1400" height="520" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 横轴是序列长度 ——　<tspan font-weight="700">整张图只有这一个变量在动</tspan></tspan></text>
+<text class="svgsm" x="584" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 线性层那几条是<tspan font-weight="700">水平的</tspan>：它们的代价跟序列长度<tspan font-weight="700">无关</tspan></text>
+<line x1="150" y1="548" x2="1330" y2="548" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="150" y1="548" x2="150" y2="166" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="150.0" y1="548" x2="150.0" y2="554" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="150" y="574" fill="#80868b" text-anchor="middle" style="font-size:12.5px">1K</text>
+<line x1="442.5" y1="548" x2="442.5" y2="554" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="442" y="574" fill="#80868b" text-anchor="middle" style="font-size:12.5px">4K</text>
+<line x1="735.0" y1="548" x2="735.0" y2="554" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="735" y="574" fill="#80868b" text-anchor="middle" style="font-size:12.5px">16K</text>
+<line x1="1027.5" y1="548" x2="1027.5" y2="554" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1027" y="574" fill="#80868b" text-anchor="middle" style="font-size:12.5px">64K</text>
+<line x1="1320.0" y1="548" x2="1320.0" y2="554" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1320" y="574" fill="#80868b" text-anchor="middle" style="font-size:12.5px">256K</text>
+<text class="svgsm" x="735" y="602" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">序列长度（token）</tspan></text>
+<line x1="144" y1="498.4" x2="1320" y2="498.4" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round" stroke-dasharray="3 6"/>
+<text class="svgsm" x="136" y="503" fill="#80868b" text-anchor="end" style="font-size:12.0px">1K</text>
+<line x1="144" y1="374.4" x2="1320" y2="374.4" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round" stroke-dasharray="3 6"/>
+<text class="svgsm" x="136" y="379" fill="#80868b" text-anchor="end" style="font-size:12.0px">10K</text>
+<line x1="144" y1="250.39999999999998" x2="1320" y2="250.39999999999998" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round" stroke-dasharray="3 6"/>
+<text class="svgsm" x="136" y="255" fill="#80868b" text-anchor="end" style="font-size:12.0px">100K</text>
+<text class="svgsm" x="136" y="154" fill="#5f6368" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">FLOPs／字节</tspan></text>
+<line x1="150" y1="534.450524838997" x2="1320" y2="534.450524838997" stroke="#1e8e3e" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="1312" y="524" fill="#0d652d" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">K/V 解压（输入宽 512）</tspan></text>
+<line x1="150" y1="475.28748925375885" x2="1320" y2="475.28748925375885" stroke="#1e8e3e" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="160" y="495" fill="#0d652d" text-anchor="start" style="font-size:13.5px"><tspan font-weight="700">Q 展开（输入宽 1,536）</tspan></text>
+<line x1="150" y1="459.7950859143296" x2="1320" y2="459.7950859143296" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="1312" y="449" fill="#b06000" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">专家输出（输入宽 2,048）</tspan></text>
+<line x1="150" y1="392.33064841489545" x2="1320" y2="392.33064841489545" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="1312" y="382" fill="#a50e0e" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">gate / up / 路由（输入宽 7,168）</tspan></text>
+<path d="M 150.0 485.1 L 1320.0 186.5" fill="none" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
+<text class="svgsm" x="832" y="292" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">attention　＝　1.25 × 序列长度</tspan></text>
+<rect x="506.49367347364796" y="385.33064841489545" width="14" height="14" rx="7" fill="#fff" stroke="#202124" stroke-width="2.4"/>
+<line x1="513.493673473648" y1="402.33064841489545" x2="513.493673473648" y2="548" stroke="#202124" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="4 4"/>
+<rect x="401.49367347364796" y="308.33064841489545" width="224" height="62" rx="8" fill="#fff" stroke="#202124" stroke-width="1.6"/>
+<text class="svgsm" x="513" y="332" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐⭐ 交点　S ≈ 5,734</tspan></text>
+<text class="svgsm" x="513" y="354" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">左边 attention 最便宜，右边最贵</text>
+<line x1="296.25" y1="548" x2="296.25" y2="172" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="6 4"/>
+<rect x="290.25" y="441.77824430133063" width="12" height="12" rx="6" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="286" y="190" fill="#b06000" text-anchor="end" style="font-size:14.5px"><tspan font-weight="700">GPT-3　2,048</tspan></text>
+<text class="svgsm" x="286" y="210" fill="#b06000" text-anchor="end" style="font-size:12.5px">→ 2,560 FLOPs／字节</text>
+<line x1="1173.75" y1="548" x2="1173.75" y2="172" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="6 4"/>
+<rect x="1167.75" y="217.81192752732863" width="12" height="12" rx="6" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1163" y="190" fill="#a50e0e" text-anchor="end" style="font-size:14.5px"><tspan font-weight="700">V3　131,072</tspan></text>
+<text class="svgsm" x="1163" y="210" fill="#a50e0e" text-anchor="end" style="font-size:12.5px">→ 163,840 FLOPs／字节</text>
+<rect x="0" y="674" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="674" width="4" height="122" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="674" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="701" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 同一条判据，结论翻转 ——　变的只有那一根竖线</tspan></text>
+<text class="svgsm" x="20" y="732" fill="#a50e0e" style="font-size:15.0px">⭐ 2022 年那篇（<tspan font-weight="700">arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank"><tspan text-decoration="underline">2205.05198</tspan></a></tspan>）说：挑「占显存不少、但重算起来不贵」的扔。<tspan font-weight="700">它选中了 attention</tspan> ——&#160;因为在 2,048 上，attention 只要 2,560，<tspan font-weight="700">比图上每一条线性层</tspan></text>
+<text class="svgsm" x="20" y="756" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">都低</tspan>。论文没错。</text>
+<text class="svgsm" x="20" y="780" fill="#a50e0e" style="font-size:15.0px">⛔ 到 131,072，同一条斜线爬到 <tspan font-weight="700">163,840</tspan> ——&#160;比最贵的那条线性层还高 <tspan font-weight="700">23 倍</tspan>。于是<tspan font-weight="700">它从最该扔的变成最该留的</tspan>。⭐⭐ <tspan font-weight="700">判据一个字没改，翻转的是前提。</tspan></text>
+</svg><figcaption>⭐⭐⭐ <b>全专题最值钱的一张</b> ——&nbsp;<em>「两条斜率不同的线必然相交」这句话，图讲一秒，字讲一段。</em><span class="capmore"><br>⭐ <em>双对数不是为了好看：<b>只有在这个坐标上，「常数」才是水平线、「正比于 S」才是直线</b>。</em><br>⛔ <em>两根竖线就是那场翻转的全部原因 ——&nbsp;<b>判据一个字没改，变的只有序列长度。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 线性层那条闭式解：<b>一个 [S,k]×[k,n] 的矩阵乘，每字节代价 ＝ k</b>（重算 2·S·k·n FLOPs ÷ 产出 S·n·2 字节，S 和 n 全约掉）——&#160;所以它在图上必然是水平线</p>
+<p>⚠️ attention 那条斜率 1.25 依赖 <b>V3 的头维度（qk 192 / v 128）与 causal 折半的口径</b>；换个模型斜率会变，<b>但「它是斜的」不会变</b> ——&#160;这才是要记的东西</p>
+<p>⛔ 交点 5,734 <b>不是工程阈值</b>，它还取决于你拿哪条线性层做对照（图上四条给的交点各不相同）</p>
+<p>📌 2022 那篇的收益数字（GPT-3 省 70% 付 2.7%）用的是<b>未折半的 Megatron 口径</b>；换成本图统一的 causal 口径，GPT-3 的 attention 占比是 1.37%</p></details></figure>
+
 <h3 id="s2-5">2.5　⭐⭐ 同一条判据，2022 年给出的是<u>相反</u>的答案</h3>
 
 <p>「选择性重算」这个概念出自
@@ -1106,10 +1401,7 @@ body.figonly section h3{margin-top:34px}
 <p>⭐ <em>这顺带解释了一个常见困惑 ——&nbsp;<b>为什么 MFU 看起来那么低</b>：
   分母里有一大块被重算吃了，它做了功，但不算进「有效算力」。</em></p></div>
 
-<!-- ⛔ 还欠两张图：fig4-recompute（全量重算那笔兑换）、
-     fig4-per-byte（每字节代价那条常数线 × attention 那条斜线，画出交叉点）。
-     ⭐ 第二张是这一节的核心 —— 「两条斜率不同的线必然相交」这句话
-       用图讲一秒就懂，用字讲要一段。 -->
+
 
 </div></section>
 
@@ -1476,15 +1768,14 @@ body.figonly section h3{margin-top:34px}
   它把网络推到 loss 曲面上<b>条件更好</b>的区域去。
   而「样本太少估不准」这个说法，他们直接反驳了：
   真正的问题是预条件曲率一开始就很高，大 batch 也一样高。</em></p>
-<p class="landing">⭐⭐ 还有一条反直觉的结论：目标学习率固定的话，warmup 拉长基本没收益。
-  <em>决定最终效果的是<b>峰值本身</b>；warmup 的价值是<b>让你敢把峰值设高</b>，
-  顺带让这个超参更好调。</em></p>
+<p class="landing">⭐⭐ 所以 warmup 真正的价值是<b>让你敢把峰值设高</b>
+  ——&nbsp;<em>顺带让这个超参<b>更好调</b>（可选区间更宽）。</em></p>
 <p><span class="sub">📌 出处：Why Warmup the Learning Rate? Underlying
   Mechanisms and Improvements，arXiv <b><a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）。</span></p></div>
 
 <p><b>实际用多长？</b><em>GPT-3 是<b>头 3.75 亿个 token</b> 线性升上去
   ——&nbsp;总训练量 3000 亿，占 <b>0.125%</b>。DeepSeek-V3 是<b>头 2000 步</b>。</em></p>
-<p class="landing">⭐ 所以 warmup 的量级就是「总量的千分之几」，不是需要精调的东西。</p>
+<p class="landing">⭐ 换句话说，<b>这一段短到可以不当成超参看</b>。</p>
 
 <h4>第二段 · 峰值设多少 ——&nbsp;有一张现成的表可以抄</h4>
 
@@ -1531,18 +1822,11 @@ body.figonly section h3{margin-top:34px}
   batch 从 3072 爬到 15360（头 469B token）后保持。
   这个形状的系统分析见 arXiv <b><a href="https://arxiv.org/abs/2410.05192" target="_blank" rel="noopener">2410.05192</a></b>。</span></p></div>
 
-<p class="landing">⭐⭐⭐ WSD 这两年流行起来的理由特别实在：
-  cosine 要求你<u>一开始就知道总共要训多少步</u> ——&nbsp;
-  <em>因为那条曲线的形状依赖终点，中途改主意就得重来。</em></p>
-<p>⭐ <em>而 WSD 的恒定段<b>可以随时截断</b>，接一小段快速衰减就能出一个能用的
-  checkpoint；想加数据接着训，<b>从恒定段续上就行</b>。
-  <b>它把「训多久」这个决定，从开局推迟到了随时。</b></em></p>
+<p class="landing">⭐⭐⭐ 两派的差别<b>不在「哪个收敛更好」</b>，
+  而在<u>它们各自要求你什么时候做决定</u> ——&nbsp;<em>图 Ⓑ 那两栏讲的就是这件事。</em></p>
 
-<div class="note ok"><p>⭐⭐ 一个值得注意的重合：两派的终点都落在峰值的十分之一附近。</p>
-<p><em>GPT-3 明写「降到 10%」；V3 是 2.2×10⁻⁴ →&nbsp;2.2×10⁻⁵，<b>也正好十分之一</b>
-  （最后那一小段再往下到 7.3×10⁻⁶，约 3.3%）。</em></p>
-<p><span class="sub">⚠️ 两个样本不构成定律 ——&nbsp;<b>但它足以说明「降到零」不是默认做法</b>，
-  这一点跟很多人的印象相反。</span></p></div>
+<p class="landing">⭐⭐ 而两派的<b>终点</b>撞在同一个数上 ——&nbsp;
+  <em>图里那条横贯全场的虚线。</em></p>
 
 <h4>⭐ 落点：怎么调，三条就够</h4>
 
@@ -1565,9 +1849,83 @@ body.figonly section h3{margin-top:34px}
   ——&nbsp;<b>换掉其中任何一个，这个数就不再适用。</b>
   ⭐ 上面那两套配置之所以能抄，正是因为它们<b>四样都写全了</b>。</em></p></div>
 
-<!-- ⛔ 还欠一张图：fig4-lr-curve —— 两条曲线叠在一张图上
-     （cosine 的平滑下滑 vs WSD 的长平台＋断崖），横轴标 token 数，
-     纵轴标峰值的百分比，把「终点都在 10%」那条水平线画出来。 -->
+<figure class="fbox fwide" id="fig-lr-curve"><svg viewBox="0 0 1400 1134" width="100%" role="img" aria-label="两条学习率曲线叠在一起比形状。GPT-3 是经典余弦：很短的 warmup 之后一路下滑，在总量的百分之八十七处降到峰值的十分之一，之后保持不变。DeepSeek-V3 是 warmup 加长平台加末段衰减：升到峰值后一直恒定到总量的三分之二，才开始降。两条曲线的落点都在峰值的十分之一附近"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">两种学习率曲线　——　<tspan font-weight="700">形状差很多，落点却撞在同一个数上</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 纵轴是<tspan font-weight="700">占峰值的百分比</tspan>，不是绝对学习率　·　⚠️ warmup 那一小段<tspan font-weight="700">按真实比例画就是一条竖线</tspan>，图上放宽了</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">GPT-3 · 余弦</text>
+<rect x="143" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="164" y="74" fill="#5f6368" style="font-size:14.0px">V3 · 平台＋衰减</text>
+<rect x="304" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="325" y="74" fill="#5f6368" style="font-size:14.0px">峰值的 10%</text>
+<rect x="0" y="102" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 横轴是<tspan font-weight="700">训练进度</tspan>（占总 token 数的比例）</tspan></text>
+<text class="svgsm" x="534" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 两条都归一化了，所以可以直接叠在一起比</text>
+<line x1="150" y1="468" x2="1330" y2="468" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="150" y1="468" x2="150" y2="166" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="150" y1="468" x2="150" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="150" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">0%</text>
+<line x1="442.5" y1="468" x2="442.5" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="442" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">25%</text>
+<line x1="735.0" y1="468" x2="735.0" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="735" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">50%</text>
+<line x1="1027.5" y1="468" x2="1027.5" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1027" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">75%</text>
+<line x1="1320.0" y1="468" x2="1320.0" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1320" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">100%</text>
+<text class="svgsm" x="735" y="522" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">训练进度（已消耗的 token 占总量的比例）</tspan></text>
+<text class="svgsm" x="136" y="194" fill="#80868b" text-anchor="end" style="font-size:12.0px">100%</text>
+<text class="svgsm" x="136" y="333" fill="#80868b" text-anchor="end" style="font-size:12.0px">50%</text>
+<text class="svgsm" x="136" y="445" fill="#80868b" text-anchor="end" style="font-size:12.0px">10%</text>
+<text class="svgsm" x="136" y="154" fill="#5f6368" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">占峰值</tspan></text>
+<line x1="150" y1="440.1904761904762" x2="1320" y2="440.1904761904762" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 5"/>
+<text class="svgsm" x="1314" y="428" fill="#80868b" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">峰值的 10%</tspan></text>
+<path d="M 150.0 468.0 L 190.9 189.9 L 215.3 190.3 L 239.6 191.4 L 263.9 193.4 L 288.3 196.0 L 312.6 199.4 L 336.9 203.5 L 361.2 208.3 L 385.6 213.8 L 409.9 219.9 L 434.2 226.6 L 458.5 233.8 L 482.9 241.5 L 507.2 249.7 L 531.5 258.2 L 555.8 267.2 L 580.2 276.4 L 604.5 285.8 L 628.8 295.5 L 653.1 305.2 L 677.5 315.0 L 701.8 324.9 L 726.1 334.6 L 750.5 344.3 L 774.8 353.7 L 799.1 362.9 L 823.4 371.9 L 847.8 380.4 L 872.1 388.6 L 896.4 396.3 L 920.7 403.5 L 945.1 410.2 L 969.4 416.3 L 993.7 421.7 L 1018.0 426.6 L 1042.4 430.7 L 1066.7 434.1 L 1091.0 436.7 L 1115.3 438.6 L 1139.7 439.8 L 1164.0 440.2 L 1320.0 440.2" fill="none" stroke="#1a73e8" stroke-width="3.0" stroke-linecap="round"/>
+<text class="svgsm" x="664" y="326" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">GPT-3　余弦</tspan></text>
+<line x1="1164.0" y1="440.1904761904762" x2="1164.0" y2="468" stroke="#1a73e8" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="1164" y="544" fill="#174ea6" text-anchor="middle" style="font-size:12.5px">2,600 亿 token 处降到 10%</text>
+<path d="M 150.0 468.0 L 190.9 189.9 L 940.5 189.9 L 954.7 191.0 L 968.9 194.2 L 983.0 199.4 L 997.2 206.7 L 1011.4 215.8 L 1025.5 226.6 L 1039.7 238.9 L 1053.9 252.5 L 1068.0 267.2 L 1082.2 282.7 L 1096.3 298.7 L 1110.5 315.0 L 1124.7 331.4 L 1138.8 347.4 L 1153.0 362.9 L 1167.2 377.6 L 1181.3 391.2 L 1195.5 403.5 L 1209.7 414.3 L 1223.8 423.4 L 1238.0 430.7 L 1252.1 435.9 L 1266.3 439.1 L 1280.5 440.2 L 1306.8 440.2 L 1306.8 458.8 L 1320.0 458.8" fill="none" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
+<text class="svgsm" x="547" y="173" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">DeepSeek-V3　长平台</tspan></text>
+<line x1="940.5405405405405" y1="189.90476190476193" x2="940.5405405405405" y2="468" stroke="#d93025" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="940" y="568" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px">10T token 才开始降</text>
+<rect x="454.2" y="384.57142857142856" width="268" height="56" rx="8" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="470" y="408" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">⚠️ warmup 画宽了</tspan></text>
+<text class="svgsm" x="470" y="430" fill="#80868b" style="font-size:12.5px">GPT-3 真实只占 0.125%</text>
+<line x1="454.2" y1="402.57142857142856" x2="196.95" y2="306.7047619047619" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-80868b)"/>
+<rect x="0" y="624" width="1400" height="282" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="624" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="626" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="654" x2="1400" y2="654" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="644" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐ WSD 这两年流行起来的理由特别实在</tspan></text>
+<text class="svgsm" x="299" y="644" fill="#5f6368" style="font-size:11.0px">⛔ 不是「它收敛更好」——　<tspan font-weight="700">是它把一个决定往后推了</tspan></text>
+<rect x="88" y="688" width="592" height="176" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="88" y="688" width="592" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="384" y="724" fill="#174ea6" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">余弦的硬约束</tspan></text>
+<text class="svgsm" x="384" y="758" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">曲线形状<tspan font-weight="700">依赖终点</tspan></tspan></text>
+<text class="svgsm" x="384" y="796" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⛔ 所以你必须一开始就知道总共训多少步</text>
+<text class="svgsm" x="384" y="830" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">中途想多训一段，整条曲线都得重来</text>
+<rect x="720" y="688" width="592" height="176" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="720" y="688" width="592" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1016" y="724" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">平台段的自由</tspan></text>
+<text class="svgsm" x="1016" y="758" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">恒定段<tspan font-weight="700">可以随时截断</tspan></tspan></text>
+<text class="svgsm" x="1016" y="796" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⭐ 接一小段快速衰减，就能出一个能用的 checkpoint</text>
+<text class="svgsm" x="1016" y="830" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">想加数据接着训，从平台段续上就行</text>
+<text class="svgsm" x="700" y="894" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐⭐ 一句话：<tspan font-weight="700">它把「训多久」这个决定，从开局推迟到了随时</tspan></tspan></text>
+<rect x="0" y="958" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="958" width="4" height="146" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="958" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="985" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 两个落点，一个巧合</tspan></text>
+<text class="svgsm" x="20" y="1016" fill="#0d652d" style="font-size:15.0px">⭐ <tspan font-weight="700">warmup 的量级是「总量的千分之几」</tspan>，不是需要精调的东西 ——&#160;GPT-3 占 0.125%，V3 是头 2,000 步。⛔ 而且有论文实测：<tspan font-weight="700">目标学习率固定的话，warmup 拉长基本没收益</tspan>，</text>
+<text class="svgsm" x="20" y="1040" fill="#0d652d" style="font-size:15.0px">决定效果的是峰值本身。</text>
+<text class="svgsm" x="20" y="1064" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">两条曲线的落点都在峰值的十分之一附近</tspan> ——&#160;GPT-3 明写「降到 10%」；V3 是 2.2e-4 →&#160;2.2e-5，也正好十分之一（最后一小段再往下到 7.3e-6，约 3.3%）。⚠️ 两个样</text>
+<text class="svgsm" x="20" y="1088" fill="#0d652d" style="font-size:15.0px">本不构成定律，<tspan font-weight="700">但足以说明「降到零」不是默认做法</tspan>。</text>
+</svg><figcaption>⭐⭐ <b>这张图比的是形状，不是高度</b> ——&nbsp;<em>两个模型的峰值差 3.7 倍，<b>不归一化根本叠不到一起</b>。峰值的绝对值另有一份七档对照，在正文里。</em><span class="capmore"><br>⭐ <em>看两件事：<b>V3 那条长平台</b>，以及<b>两条曲线都落在同一根「10%」虚线上</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>GPT-3：<b>arXiv <a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">2005.14165</a></b> <a href="#s2-3">§2.3</a> ——&#160;「头 3.75 亿 token 线性 warmup」「2,600 亿 token 内余弦降到 10%，之后继续以 10% 训练」；总量 3,000 亿 token</p>
+<p>DeepSeek-V3：<b>arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s4-2">§4.2</a> ——&#160;2,000 步线性升到 2.2e-4 →&#160;恒定到 10T →&#160;4.3T 内余弦降到 2.2e-5 →&#160;末 500B 里前 333B 保持、后 167B 换 7.3e-6；梯度裁剪范数 1.0</p>
+<p>⭐ warmup 的真实机制（<b>不是「样本太少估不准」</b>）：arXiv <b><a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）——&#160;主要好处是让网络能承受更大的目标学习率。这个形状的系统分析：arXiv <b><a href="https://arxiv.org/abs/2410.05192" target="_blank" rel="noopener">2410.05192</a></b></p>
+<p>⛔ 本图<b>不含绝对学习率</b>（两者峰值差 3.7 倍，叠在一起就看不出形状了）——&#160;七档规模的峰值对照表写在正文里</p></details></figure>
 
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账单直接决定了并行策略长什么样</h2></div>
 

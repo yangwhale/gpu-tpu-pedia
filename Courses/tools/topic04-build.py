@@ -150,6 +150,8 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 <p class="landing">⭐ 这两件事各是一次矩阵乘。前向一次、反向两次
   ——&nbsp;<u>三倍算力就是从这儿来的</u>，不是估的，是数出来的。</p></div>
 
+__FIG_3X__
+
 <h3>1.4　⭐ 为什么偏导数一出现，这件事就变容易了</h3>
 
 <p class="lead">⭐⭐⭐ <b>因为偏导数是<u>局部</u>的。</b></p>
@@ -205,15 +207,13 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
   显存里多出<b>一整条从头挂到尾的激活</b>。</em>
   <b>而下一节要做的，就是拿第一样去换第二样。</b></p>
 
-<div class="note"><p>📌 <b>激活这笔账有多大（量级，不是准数）：</b>
-  <em>一条 <b>128K</b> 序列、V3 那个规模，不开重算的激活约 <b>4.15 TiB</b>；
-  <b>即使开了重算，也还要 106.75 GiB。</b></em></p>
-<p><span class="sub">⚠️ 这两个数是<b>自己按算子推的</b>（输入是 V3 的 config
-  ＋ 官方参考实现的 MLA 前向），<b>没有第三方背书 ——&nbsp;当量级看，别当准数。</b>
-  <em>但就算差一倍，结论也不变：<b>这个规模上，装不下。</b></em></span></p></div>
+<div class="note"><p>📌 <b>图 Ⓑ 那两张卡片的读法：</b>
+  <em>它们是<b>同一条序列的两种配置</b>，不是两个模型。</em></p>
+<p><span class="sub">⚠️ 两个数都是<b>自己按算子推的</b>（输入是 V3 的 config
+  ＋ 官方参考实现的 MLA 前向），<b>没有第三方背书</b>。
+  <em>⭐ 但就算差一倍，结论也不变：<b>这个规模上，装不下。</b></em></span></p></div>
 
-<!-- ⛔ 还欠两张图：fig4-3x（前向一次 matmul / 反向两次，3× 从哪来）、
-     fig4-act-bill（那条从头挂到尾的激活）。 -->
+__FIG_ACT_BILL__
 
 </div></section>
 
@@ -241,10 +241,11 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
     也就是<b>多三分之一</b>。</em></li>
 </ul>
 
-<div class="note ok"><p>⭐⭐⭐ 一句话：用三分之一的算力，换掉四十分之三十九的激活显存。</p>
-<p><em>这个兑换比例<b>夸张到不像是个「权衡」</b>。所以在大模型训练里，
-  <b>默认就是开着的</b> ——&nbsp;值得讨论的从来不是开不开，<b>而是开到哪一档</b>。</em></p>
-<p>⛔ <em>反过来说：显存本来就宽裕的时候（小模型、短序列），它就是纯亏。</em></p></div>
+<div class="note ok"><p>⭐⭐⭐ 这个兑换比例，<b>夸张到不像是个「权衡」</b>。</p>
+<p><em>所以在大模型训练里，它<b>默认就是开着的</b> ——&nbsp;
+  值得讨论的从来不是开不开，<b>而是开到哪一档</b>（图 Ⓑ 那三档）。</em></p></div>
+
+__FIG_RECOMPUTE__
 
 <h3>2.3　⭐ 选择性重算：判据只有<u>一个数</u></h3>
 
@@ -306,6 +307,8 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
   ——&nbsp;这比多算一遍更有说服力。</em></p>
 <p><span class="sub">📌 出处：arXiv <b>2412.19437</b> §3.2.3。</span></p></div>
 
+__FIG_PER_BYTE__
+
 <h3>2.5　⭐⭐ 同一条判据，2022 年给出的是<u>相反</u>的答案</h3>
 
 <p>「选择性重算」这个概念出自
@@ -355,10 +358,7 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 <p>⭐ <em>这顺带解释了一个常见困惑 ——&nbsp;<b>为什么 MFU 看起来那么低</b>：
   分母里有一大块被重算吃了，它做了功，但不算进「有效算力」。</em></p></div>
 
-<!-- ⛔ 还欠两张图：fig4-recompute（全量重算那笔兑换）、
-     fig4-per-byte（每字节代价那条常数线 × attention 那条斜线，画出交叉点）。
-     ⭐ 第二张是这一节的核心 —— 「两条斜率不同的线必然相交」这句话
-       用图讲一秒就懂，用字讲要一段。 -->
+
 
 </div></section>
 
@@ -612,15 +612,14 @@ __FIG_OPTIMIZERS__
   它把网络推到 loss 曲面上<b>条件更好</b>的区域去。
   而「样本太少估不准」这个说法，他们直接反驳了：
   真正的问题是预条件曲率一开始就很高，大 batch 也一样高。</em></p>
-<p class="landing">⭐⭐ 还有一条反直觉的结论：目标学习率固定的话，warmup 拉长基本没收益。
-  <em>决定最终效果的是<b>峰值本身</b>；warmup 的价值是<b>让你敢把峰值设高</b>，
-  顺带让这个超参更好调。</em></p>
+<p class="landing">⭐⭐ 所以 warmup 真正的价值是<b>让你敢把峰值设高</b>
+  ——&nbsp;<em>顺带让这个超参<b>更好调</b>（可选区间更宽）。</em></p>
 <p><span class="sub">📌 出处：Why Warmup the Learning Rate? Underlying
   Mechanisms and Improvements，arXiv <b>2406.09405</b>（NeurIPS 2024）。</span></p></div>
 
 <p><b>实际用多长？</b><em>GPT-3 是<b>头 3.75 亿个 token</b> 线性升上去
   ——&nbsp;总训练量 3000 亿，占 <b>0.125%</b>。DeepSeek-V3 是<b>头 2000 步</b>。</em></p>
-<p class="landing">⭐ 所以 warmup 的量级就是「总量的千分之几」，不是需要精调的东西。</p>
+<p class="landing">⭐ 换句话说，<b>这一段短到可以不当成超参看</b>。</p>
 
 <h4>第二段 · 峰值设多少 ——&nbsp;有一张现成的表可以抄</h4>
 
@@ -667,18 +666,11 @@ __FIG_OPTIMIZERS__
   batch 从 3072 爬到 15360（头 469B token）后保持。
   这个形状的系统分析见 arXiv <b>2410.05192</b>。</span></p></div>
 
-<p class="landing">⭐⭐⭐ WSD 这两年流行起来的理由特别实在：
-  cosine 要求你<u>一开始就知道总共要训多少步</u> ——&nbsp;
-  <em>因为那条曲线的形状依赖终点，中途改主意就得重来。</em></p>
-<p>⭐ <em>而 WSD 的恒定段<b>可以随时截断</b>，接一小段快速衰减就能出一个能用的
-  checkpoint；想加数据接着训，<b>从恒定段续上就行</b>。
-  <b>它把「训多久」这个决定，从开局推迟到了随时。</b></em></p>
+<p class="landing">⭐⭐⭐ 两派的差别<b>不在「哪个收敛更好」</b>，
+  而在<u>它们各自要求你什么时候做决定</u> ——&nbsp;<em>图 Ⓑ 那两栏讲的就是这件事。</em></p>
 
-<div class="note ok"><p>⭐⭐ 一个值得注意的重合：两派的终点都落在峰值的十分之一附近。</p>
-<p><em>GPT-3 明写「降到 10%」；V3 是 2.2×10⁻⁴ →&nbsp;2.2×10⁻⁵，<b>也正好十分之一</b>
-  （最后那一小段再往下到 7.3×10⁻⁶，约 3.3%）。</em></p>
-<p><span class="sub">⚠️ 两个样本不构成定律 ——&nbsp;<b>但它足以说明「降到零」不是默认做法</b>，
-  这一点跟很多人的印象相反。</span></p></div>
+<p class="landing">⭐⭐ 而两派的<b>终点</b>撞在同一个数上 ——&nbsp;
+  <em>图里那条横贯全场的虚线。</em></p>
 
 <h4>⭐ 落点：怎么调，三条就够</h4>
 
@@ -701,9 +693,7 @@ __FIG_OPTIMIZERS__
   ——&nbsp;<b>换掉其中任何一个，这个数就不再适用。</b>
   ⭐ 上面那两套配置之所以能抄，正是因为它们<b>四样都写全了</b>。</em></p></div>
 
-<!-- ⛔ 还欠一张图：fig4-lr-curve —— 两条曲线叠在一张图上
-     （cosine 的平滑下滑 vs WSD 的长平台＋断崖），横轴标 token 数，
-     纵轴标峰值的百分比，把「终点都在 10%」那条水平线画出来。 -->
+__FIG_LR_CURVE__
 
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账单直接决定了并行策略长什么样</h2></div>
 
@@ -848,6 +838,39 @@ FOOT = '''
 </body></html>'''
 
 FIGS = {
+    "__FIG_3X__": ("fig-3x", "fig4-3x.svg", 'topic04-fig-3x.py',
+        '⭐⭐ <b>Ⓑ 是这张图的钥匙</b> ——&nbsp;'
+        '<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：'
+        '我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><br>'
+        '⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;'
+        '<b>激活扔不掉、以及下一节那笔交易，全挂在这一句上。</b></em>'),
+    "__FIG_ACT_BILL__": ("fig-act-bill", "fig4-act-bill.svg",
+        'topic04-fig-act-bill.py',
+        '⭐⭐⭐ <b>横轴是时间，不是层号</b> ——&nbsp;'
+        '<em>换成层号，「什么时候最挤」这个问题就提不出来了。</em><br>'
+        '⭐ <em>山顶那一竖同时回答了第五节要问的「峰值在哪一刻」：'
+        '<b>前向刚算完、反向还没开始。</b></em>'),
+    "__FIG_RECOMPUTE__": ("fig-recompute", "fig4-recompute.svg",
+        'topic04-fig-recompute.py',
+        '⭐⭐ <b>要看的是两根条的<u>不对称</u></b> ——&nbsp;'
+        '<em>付出那边只多出一小截，省下那边短到几乎看不见。</em><br>'
+        '⚠️ <em>两根条<b>都归一化了</b>，所以可以直接并排看 ——&nbsp;'
+        '<b>单位不同的量并排放，读者第一反应是去比长度，而那个比较没有意义。</b></em>'),
+    "__FIG_PER_BYTE__": ("fig-per-byte", "fig4-per-byte.svg",
+        'topic04-fig-per-byte.py',
+        '⭐⭐⭐ <b>全专题最值钱的一张</b> ——&nbsp;'
+        '<em>「两条斜率不同的线必然相交」这句话，图讲一秒，字讲一段。</em><br>'
+        '⭐ <em>双对数不是为了好看：<b>只有在这个坐标上，'
+        '「常数」才是水平线、「正比于 S」才是直线</b>。</em><br>'
+        '⛔ <em>两根竖线就是那场翻转的全部原因 ——&nbsp;'
+        '<b>判据一个字没改，变的只有序列长度。</b></em>'),
+    "__FIG_LR_CURVE__": ("fig-lr-curve", "fig4-lr-curve.svg",
+        'topic04-fig-lr-curve.py',
+        '⭐⭐ <b>这张图比的是形状，不是高度</b> ——&nbsp;'
+        '<em>两个模型的峰值差 3.7 倍，<b>不归一化根本叠不到一起</b>。'
+        '峰值的绝对值另有一份七档对照，在正文里。</em><br>'
+        '⭐ <em>看两件事：<b>V3 那条长平台</b>，'
+        '以及<b>两条曲线都落在同一根「10%」虚线上</b>。</em>'),
     "__FIG_OPTIMIZERS__": ("fig-optimizers", "fig4-optimizers.svg",
         'topic04-fig-optimizers.py',
         '⭐⭐ <b>Ⓐ 的形状是这张图的全部</b> ——&nbsp;'
