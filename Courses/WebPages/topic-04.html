@@ -1024,15 +1024,116 @@ body.figonly section h3{margin-top:34px}
 
 <h3 id="s1-5">1.5　⭐⭐ 最深的一条：为什么是<u>从后往前</u></h3>
 
-<p>数学上<b>两个方向都成立</b>。<em>区别在这儿：</em></p>
-<ul>
-  <li><b>从前往后</b>（forward mode）——&nbsp;<em>你得<b>对每一个输入参数各走一遍</b>。
-    三千亿个参数，就是三千亿遍。</em></li>
-  <li><b>从后往前</b>（reverse mode，也就是反向传播）——&nbsp;
-    <em>你从 <b>loss 那一端</b>起步。而 loss 只有一个数。
-    所以你一路传的始终是<b>一个东西</b>，
-    永远不需要把那些巨大的中间雅可比<b>物化</b>出来 ——&nbsp;一遍就够。</em></li>
-</ul>
+<p>数学上<b>两个方向都成立</b>，算出来的结果<b>一模一样</b>。
+  <em>⭐ 区别只有一个 ——&nbsp;<b>你得把整条链走多少遍。</b></em></p>
+
+<figure class="fbox fwide" id="fig-reverse"><svg viewBox="0 0 1400 1166" width="100%" role="img" aria-label="把正向模式和反向模式画在同一条计算链上。正向模式的扰动种子插在输入端，有多少个参数就要重跑多少遍；反向模式的种子插在输出端，而输出只有一个数，所以一遍就够，而且一路往回走的时候每个参数的梯度顺手就拿到了。判据是从窄的那一头起步 —— 如果反过来是少输入多输出，那就该用正向模式"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">为什么是<tspan font-weight="700">从后往前</tspan>　——　<tspan font-weight="700">因为那一头只有一个数</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⛔ 这里的关键<tspan font-weight="700">不是链式法则怎么乘</tspan>（乘法从哪头开始都一样）——&#160;是<tspan font-weight="700">你得重复几遍</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">正向：插在输入端</text>
+<rect x="159" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="180" y="74" fill="#5f6368" style="font-size:14.0px">反向：插在输出端</text>
+<rect x="0" y="102" width="1400" height="296" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 正向模式　——　<tspan font-weight="700">种子插在左边，有几个参数就要插几次</tspan></tspan></text>
+<text class="svgsm" x="617" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 每插一次，就要把<tspan font-weight="700">整条链从头走到尾</tspan>一遍</text>
+<rect x="232" y="210" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="306" y="242" fill="#202124" text-anchor="middle" style="font-size:13.0px">嵌入</text>
+<rect x="406" y="210" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="480" y="242" fill="#202124" text-anchor="middle" style="font-size:13.0px">第 1 层</text>
+<rect x="580" y="210" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="654" y="242" fill="#202124" text-anchor="middle" style="font-size:13.0px">第 2 层</text>
+<rect x="754" y="210" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="828" y="242" fill="#202124" text-anchor="middle" style="font-size:13.0px">…</text>
+<rect x="928" y="210" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="1002" y="242" fill="#202124" text-anchor="middle" style="font-size:13.0px">最后一层</text>
+<rect x="1102" y="210" width="148" height="52" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="1176" y="242" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">loss</tspan></text>
+<rect x="66" y="177" width="96" height="30" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="114" y="197" fill="#b06000" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">第 1 遍</tspan></text>
+<line x1="164" y1="192" x2="226" y2="236" stroke="#e8710a" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="66" y="221" width="96" height="30" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="114" y="241" fill="#b06000" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">第 2 遍</tspan></text>
+<line x1="164" y1="236" x2="226" y2="236" stroke="#e8710a" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="66" y="265" width="96" height="30" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="114" y="285" fill="#b06000" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">第 3 遍</tspan></text>
+<line x1="164" y1="280" x2="226" y2="236" stroke="#e8710a" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="114" y="306" fill="#b06000" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">⋮</tspan></text>
+<text class="svgsm" x="114" y="336" fill="#b06000" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">共 <tspan font-weight="700">3000 亿</tspan> 遍</tspan></text>
+<line x1="383" y1="236" x2="403" y2="236" stroke="#e8710a" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="557" y1="236" x2="577" y2="236" stroke="#e8710a" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="731" y1="236" x2="751" y2="236" stroke="#e8710a" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="905" y1="236" x2="925" y2="236" stroke="#e8710a" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="1079" y1="236" x2="1099" y2="236" stroke="#e8710a" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="232" y="302" fill="#5f6368" style="font-size:13.0px">⭐ 每一遍走完，只拿到<tspan font-weight="700">一个</tspan>参数的梯度 ——　因为你这一遍只扰动了它一个</text>
+<text class="svgsm" x="232" y="328" fill="#a50e0e" style="font-size:13.0px">⛔ 所以它的代价跟<tspan font-weight="700">参数个数</tspan>成正比。三千亿个参数，就是三千亿遍整条链。</text>
+<text class="svgsm" x="232" y="354" fill="#80868b" style="font-size:12.0px">⚠️ 画成从最左边插只是为了整齐 ——　参数分布在每一层，种子就插在它所在的那一层。<tspan font-weight="700">不变的是「一个参数一遍」。</tspan></text>
+<rect x="0" y="448" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="448" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="450" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="478" x2="1400" y2="478" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="468" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 反向模式　——　<tspan font-weight="700">种子插在右边，而右边只有一个数</tspan></tspan></text>
+<text class="svgsm" x="590" y="468" fill="#5f6368" style="font-size:11.0px">⭐⭐⭐ <tspan font-weight="700">所以只插一次，而且回来的路上每个参数的梯度顺手就到手了</tspan></text>
+<rect x="232" y="556" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="306" y="588" fill="#202124" text-anchor="middle" style="font-size:13.0px">嵌入</text>
+<rect x="406" y="556" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="480" y="588" fill="#202124" text-anchor="middle" style="font-size:13.0px">第 1 层</text>
+<rect x="580" y="556" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="654" y="588" fill="#202124" text-anchor="middle" style="font-size:13.0px">第 2 层</text>
+<rect x="754" y="556" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="828" y="588" fill="#202124" text-anchor="middle" style="font-size:13.0px">…</text>
+<rect x="928" y="556" width="148" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="1002" y="588" fill="#202124" text-anchor="middle" style="font-size:13.0px">最后一层</text>
+<rect x="1102" y="556" width="148" height="52" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="1176" y="588" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">loss</tspan></text>
+<rect x="1268" y="567" width="96" height="30" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1316" y="587" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">种子 ＝ 1</tspan></text>
+<text class="svgsm" x="1316" y="618" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">只有这一个</tspan></text>
+<line x1="1099" y1="582" x2="1079" y2="582" stroke="#1e8e3e" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="925" y1="582" x2="905" y2="582" stroke="#1e8e3e" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="751" y1="582" x2="731" y2="582" stroke="#1e8e3e" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="577" y1="582" x2="557" y2="582" stroke="#1e8e3e" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="403" y1="582" x2="383" y2="582" stroke="#1e8e3e" stroke-width="1.5" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="306" y="632" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">✓</tspan></text>
+<text class="svgsm" x="306" y="652" fill="#0d652d" text-anchor="middle" style="font-size:11.5px">梯度到手</text>
+<text class="svgsm" x="480" y="632" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">✓</tspan></text>
+<text class="svgsm" x="480" y="652" fill="#0d652d" text-anchor="middle" style="font-size:11.5px">梯度到手</text>
+<text class="svgsm" x="654" y="632" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">✓</tspan></text>
+<text class="svgsm" x="654" y="652" fill="#0d652d" text-anchor="middle" style="font-size:11.5px">梯度到手</text>
+<text class="svgsm" x="828" y="632" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">✓</tspan></text>
+<text class="svgsm" x="828" y="652" fill="#0d652d" text-anchor="middle" style="font-size:11.5px">梯度到手</text>
+<text class="svgsm" x="1002" y="632" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">✓</tspan></text>
+<text class="svgsm" x="1002" y="652" fill="#0d652d" text-anchor="middle" style="font-size:11.5px">梯度到手</text>
+<text class="svgsm" x="232" y="688" fill="#202124" style="font-size:14.0px">⭐⭐⭐ 走到最左边的时候，<tspan font-weight="700">三千亿个梯度已经全部在手里了</tspan>　——　而你只走了<tspan font-weight="700">一遍</tspan>。</text>
+<text class="svgsm" x="232" y="714" fill="#5f6368" style="font-size:13.0px">⭐ 一路上传的始终是<tspan font-weight="700">一个东西</tspan>（那个种子沿途被改写），所以那些巨大的中间雅可比<tspan font-weight="700">从来不用真的算出来</tspan>。</text>
+<rect x="0" y="766" width="1400" height="222" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="766" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="768" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="796" x2="1400" y2="796" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="786" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">Ⓒ ⭐⭐ 所以规则只有一条，而且它<tspan font-weight="700">跟神经网络没关系</tspan></tspan></text>
+<text class="svgsm" x="591" y="786" fill="#5f6368" style="font-size:11.0px">⛔ 别把它记成「反向传播永远更好」——&#160;<tspan font-weight="700">换个形状它就反过来</tspan></text>
+<text class="svgsm" x="700" y="858" fill="#681da8" text-anchor="middle" style="font-size:24.0px"><tspan font-weight="700"><tspan font-weight="700">从窄的那一头起步。</tspan></tspan></text>
+<rect x="96" y="880" width="580" height="118" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="386" y="908" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">三千亿个参数 →　1 个 loss</tspan></text>
+<text class="svgsm" x="386" y="934" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">输入多、输出少</text>
+<text class="svgsm" x="386" y="962" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">→　<tspan font-weight="700">从后往前</tspan>（就是反向传播）</tspan></text>
+<text class="svgsm" x="386" y="988" fill="#0d652d" text-anchor="middle" style="font-size:12.5px">⭐ 这就是我们的情况</text>
+<rect x="724" y="880" width="580" height="118" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1014" y="908" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">10 个参数 →　100 万维输出</tspan></text>
+<text class="svgsm" x="1014" y="934" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">输入少、输出多</text>
+<text class="svgsm" x="1014" y="962" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">→　<tspan font-weight="700">从前往后</tspan></tspan></text>
+<text class="svgsm" x="1014" y="988" fill="#b06000" text-anchor="middle" style="font-size:12.5px">⛔ 这时候反向传播反而亏</text>
+<rect x="0" y="1038" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1038" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1038" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1065" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 判据：看到任何一个「要求一大堆偏导」的问题，先数输入多还是输出多</tspan></text>
+<text class="svgsm" x="20" y="1096" fill="#0d652d" style="font-size:15.0px">⭐ 它决定的不是「算得对不对」——&#160;<tspan font-weight="700">两个方向算出来的结果一模一样</tspan>，决定的是<tspan font-weight="700">你要把整条链走多少遍</tspan>。</text>
+<text class="svgsm" x="20" y="1120" fill="#0d652d" style="font-size:15.0px">⛔ 而这正是<tspan font-weight="700">推理里没有的那一半</tspan>：推理只有一遍前向，压根不存在「往回走」这个动作，也就不存在「沿途把梯度收下来」这件事。</text>
+</svg><figcaption>⭐⭐⭐ <b>两排只差一件事：<u>种子插在哪一头</u></b> ——&nbsp;<em>而这一件事，就把代价从「三千亿遍」压到「一遍」。</em><span class="capmore"><br>⭐⭐ <em>Ⓑ 里每个算子底下那个 ✓ 是关键：<b>回来的路上顺手就收下了</b> ——&nbsp;不是走完再统一算。</em><br>⛔ <em>Ⓒ 的反例一定要看：<b>「反向传播更好」是条件成立的</b>，条件就是输入多输出少。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 这一格是结构，不是数据 ——　图上唯一的量是「三千亿」，那是模型规模，前面已经立过。</p>
+<p>📌 「正向模式 / 反向模式」是自动微分的标准术语；反向传播是反向模式用在神经网络上的那个特例。</p></details></figure>
 
 <div class="note ok"><p>⭐⭐⭐ 所以反向传播成立的<u>全部理由</u>就一句话：
   参数有几千亿个，而 loss 只有一个。</p>
@@ -1040,8 +1141,7 @@ body.figonly section h3{margin-top:34px}
   ⛔ 如果 loss 不是一个数、而是一百万维的输出，<b>这套就不划算了</b>
   ——&nbsp;那时候反倒该用从前往后。</em></p>
 <p class="landing">⭐⭐⭐ 所以 1.1 那个问题的答案是：那三千亿次前向，
-  <b>压成的是<u>一次反向</u></b>。
-  <em>反向走到第一层的时候，三千亿个梯度<b>已经全部在手里了</b>。</em></p>
+  <b>压成的是<u>一次反向</u></b>。</p>
 
 <p><span class="sub">⭐ <b>这条判据可以直接迁移</b>：
   看到任何一个「求一大堆偏导」的问题，先数一下<b>输入多、还是输出多</b>
