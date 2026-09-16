@@ -81,7 +81,10 @@ import re
 import sys
 
 W = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "WebPages")
-POINT = re.compile(r'(滚到|指\s*下|指\s*最后|停在|翻到|翻回|移到|指着)')
+# ⛔ 2026-09-17：这张表漏了「切到 / 先放大 / 只放 / 整张投」四类，于是专题四 15 条提示里有 7 条从没被检查过。
+#   ⭐ 加动词之前先想：**讲义里真实出现过的说法，都在这张表里吗？**
+POINT = re.compile(r'(滚到|切到|指\s*下|指\s*最后|停在|翻到|翻回|移到|指着'
+                   r'|放大|只放|整张投|平移)')
 QUOTE = re.compile(r'[「『]([^」』]{4,32})[」』]')
 FIGID = re.compile(r'(?:s012-)?(?:fig|ms-)[a-z0-9-]+')
 

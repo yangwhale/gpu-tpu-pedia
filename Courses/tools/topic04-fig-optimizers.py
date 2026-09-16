@@ -169,7 +169,7 @@ def main():
         " ——&#160;不让某几个方向独大。"
         "⛔ 代价：作者自己写明 <tspan font-weight=\"700\">Muon 每一步的墙钟时间比 AdamW 慢</tspan>，"
         "它赚的是<tspan font-weight=\"700\">样本效率</tspan>（同样的 loss 用更少步数）。",
-    ], keep=True)
+    ], fold=True)
 
     yy = f.src(yy + 24,
                "Adam：Kingma & Ba，<tspan font-weight=\"700\">arXiv 1412.6980</tspan>"

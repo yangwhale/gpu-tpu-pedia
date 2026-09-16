@@ -200,7 +200,7 @@ def main():
         "<tspan font-weight=\"700\">切开的几块得先把梯度汇聚起来</tspan>。"
         "⚠️ 而且不用并行也会踩：多头注意力常常是<tspan font-weight=\"700\">一个大矩阵 reshape 出多个头</tspan>，"
         "参数里只有一个矩阵，本质上却是多个小矩阵。",
-    ], keep=True)
+    ], fold=True)
 
     yy = f.src(yy + 24,
                "⭐ <tspan font-weight=\"700\">讲法来源</tspan>：苏剑林《Muon 优化器赏析："

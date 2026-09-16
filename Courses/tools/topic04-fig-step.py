@@ -31,6 +31,9 @@ TIB = 1024.0 ** 4
 GIB = 1024.0 ** 3
 ACT_ONE_SEQ_GIB = 106.75            # 一条 128K 序列、开了全量重算
 
+PX_PER_TIB = 22.0          # ⭐ 唯一的换算常数：四项全按它算，下面有 assert 盯着
+INSET_ZOOM = 20            # 上面那条窄带的放大倍数（梯度与激活实在太薄）
+
 RESIDENT_TIB = N_PARAM * (B_W + B_G + B_OPT) / TIB
 W_TIB = N_PARAM * B_W / TIB
 OPT_TIB = N_PARAM * B_OPT / TIB
@@ -59,21 +62,34 @@ def main():
          (BL, "激活 · 前向堆"), (OR, "梯度 · 反向堆")])
 
     # ══════════ Ⓐ 四条带子叠在同一条时间轴上 ═════════════════════
-    # ⛔ 2026-09-16：第一版用 f.path() 画那两块面积 —— 基元当时只描边不填色，
-    #   于是渲染出来是两根莫名其妙的斜线，SVG 还完全合法。
-    #   ⭐ 已给 topic03_draw.path() 加了 fill 参数。判据（第二次）：
-    #     **产物合法 ≠ 产物正确 —— 图必须渲出来看一眼。**
-    PH = 500
+    # ⛔⛔ 2026-09-17 逐图审抓到的真错：四个高度原来是**各挑各的**，
+    #   于是同一个量（权重和梯度都是 1.22 TiB）画成了 26px 和 96px，
+    #   而最大的优化器反被画得比梯度还矮 —— **图直接否掉了自己框里那句
+    #   「四项里最大的一块」**。
+    #   ⭐ 判据：**同一张图里代表同一种量的长度，必须共用一个换算常数，并且 assert。**
+    #     「按真实比例」写在注释里不算数 —— 注释不会在构建时报错。
+    #   ⭐⭐ 修完之后梯度和激活薄到看不见，那正是 Ⓑ 要说的事；
+    #     两个峰改用一条**标明了倍数的放大带**来展示 ——
+    #     ⛔ 比例失真换来的「看得见」是拿正确性买的，放大插图不是。
+    PH = 580
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 两条不动的，加两条形状<tspan font-weight=\"700\">正好相反</tspan>的", BL,
-                 sub="⚠️ 上面两块按 <tspan font-weight=\"700\">global batch ＝ 1 条</tspan>"
-                     "的真实比例画 ——&#160;<tspan font-weight=\"700\">"
-                     "batch 一变，形状就变（见 Ⓑ）</tspan>")
+                 sub="⭐ 下面那四层<tspan font-weight=\"700\">按真实比例画</tspan>"
+                     "（global batch ＝ 1 条）——&#160;"
+                     "<tspan font-weight=\"700\">所以优化器那一块最厚</tspan>")
 
     X0, X1 = 150, 1320
-    BOT, TOP = py + 360, py + 44
+    TOP = py + 44
+    ZTOP, ZBOT = py + 128, py + 228          # 放大带
+    BOT = py + 486
     FWD_END, BWD_END = 0.48, 0.92
-    H_W, H_OPT, H_G, H_A = 26, 78, 96, 34   # ⭐ 按 batch=1 的真实比例
+
+    H_W = W_TIB * PX_PER_TIB
+    H_OPT = OPT_TIB * PX_PER_TIB
+    H_G = W_TIB * PX_PER_TIB                 # 梯度跟权重同为 bf16，同一个量
+    H_A = ACT_ONE_SEQ_GIB / 1024.0 * PX_PER_TIB
+    assert abs(H_W - H_G) < 1e-9, "权重和梯度是同一个量，高度必须相等"
+    assert H_OPT > 5 * H_G, "优化器是最大的一块，画出来也必须最高"
 
     def X(t):
         return X0 + t * (X1 - X0)
@@ -83,19 +99,18 @@ def main():
                   (BWD_END, "反向结束"), (1.0, "更新完")):
         f.line(X(t), BOT, X(t), BOT + 6, GY2, 1.2, arrow=False)
         f.t(X(t), BOT + 26, nm, GY2, size=12.5, anchor="middle")
-    f.t((X0 + X1) / 2.0, BOT + 74, "一个 step 的时间轴", GY, True, 14, "middle")
+    f.t((X0 + X1) / 2.0, BOT + 60, "一个 step 的时间轴", GY, True, 14, "middle")
 
-    # ── 两条不动的（自下而上）
+    # ── 两条不动的（自下而上，真实比例）
     f.box(X0, BOT - H_W, X1 - X0, H_W, "#f1f3f4", GY2, 0, 1.0)
-    f.t(X0 + 14, BOT - 8, "权重　%.2f TiB　——　全程不动" % W_TIB, GY, True, 13.5)
+    f.t(X0 + 14, BOT - 9, "权重　%.2f TiB" % W_TIB, GY, True, 13.5)
     ob = BOT - H_W
     f.box(X0, ob - H_OPT, X1 - X0, H_OPT, "#fce8e6", RD, 0, 1.0)
-    f.t(X0 + 14, ob - H_OPT + 28, "优化器状态　%.2f TiB" % OPT_TIB, RD, True, 17)
-    f.t(X0 + 14, ob - H_OPT + 54, "⭐ 也全程不动 ——　四项里最大的一块，"
-                                  "却只在最后那一瞬间被用一次", GY, size=13.5)
+    f.t(X0 + 14, ob - H_OPT + 34, "优化器状态　%.2f TiB" % OPT_TIB, RD, True, 19)
+    f.t(X0 + 14, ob - H_OPT + 62, "⭐ 全程不动，而且是四项里最大的一块 ——　"
+                                  "却只在最后那一瞬间被用一次", GY, size=14)
     base = ob - H_OPT
 
-    # ── 两条会变的：梯度（反向长起来）＋ 激活（前向长起来），堆叠面积
     def g_of(t):
         if t <= FWD_END:
             return 0.0
@@ -115,20 +130,28 @@ def main():
             + [(X(t), base - g_of(t)) for t in reversed(TS)])
     act = ([(X(t), base - g_of(t)) for t in TS]
            + [(X(t), base - g_of(t) - a_of(t)) for t in reversed(TS)])
-    f.path(act, BL, 1.4, arrow=False, fill="#e8f0fe")
-    f.path(grad, OR, 1.4, arrow=False, fill="#fef7e0")
+    f.path(act, BL, 1.0, arrow=False, fill="#e8f0fe")
+    f.path(grad, OR, 1.0, arrow=False, fill="#fef7e0")
+    f.t(X0 + 14, base - 16, "梯度 %.2f TiB　＋　激活 %.2f GiB　——　"
+                            "<tspan font-weight=\"700\">薄成这样是真的</tspan>"
+        % (W_TIB, ACT_ONE_SEQ_GIB), GY, size=13.5)
 
-    f.t(X(0.30), base - H_A - 16, "激活　每条 128K 序列 %.2f GiB" % ACT_ONE_SEQ_GIB,
-        BL, True, 15, "middle")
-    f.t(X(0.74), base - g_of(0.74) * 0.5 + 6, "梯度　%.2f TiB" % W_TIB,
-        OR, True, 15, "middle")
-
+    # ── 放大带：把上面那两层放大，两个峰才看得见
+    f.box(X0, ZTOP, X1 - X0, ZBOT - ZTOP, "#fafafa", LINE2, 6, 1.0)
+    f.t(X0 + 12, ZTOP + 18, "↑ 上面那两层<tspan font-weight=\"700\">放大 %d 倍</tspan>"
+                            " ——　真实比例下它们太薄，两个峰看不出来" % INSET_ZOOM,
+        GY2, size=12.5)
+    zb = ZBOT - 8
+    zg = ([(X(t), zb) for t in TS]
+          + [(X(t), zb - g_of(t) * INSET_ZOOM / 8.0) for t in reversed(TS)])
+    za = ([(X(t), zb - g_of(t) * INSET_ZOOM / 8.0) for t in TS]
+          + [(X(t), zb - (g_of(t) + a_of(t)) * INSET_ZOOM / 8.0) for t in reversed(TS)])
+    f.path(za, BL, 1.2, arrow=False, fill="#e8f0fe")
+    f.path(zg, OR, 1.2, arrow=False, fill="#fef7e0")
 
     # ── 两个峰
-    f.line(X(FWD_END), base - H_A - 10, X(FWD_END), BOT, BL, 1.8, dash="5 4",
-           arrow=False)
-    f.line(X(BWD_END), base - H_G - 10, X(BWD_END), BOT, OR, 1.8, dash="5 4",
-           arrow=False)
+    f.line(X(FWD_END), ZTOP, X(FWD_END), BOT, BL, 1.8, dash="5 4", arrow=False)
+    f.line(X(BWD_END), ZTOP, X(BWD_END), BOT, OR, 1.8, dash="5 4", arrow=False)
     f.box(X(FWD_END) - 148, TOP + 6, 296, 54, "#e8f0fe", BL, 8)
     f.t(X(FWD_END), TOP + 30, "⭐ 激活的峰", BL, True, 16, "middle")
     f.t(X(FWD_END), TOP + 50, "前向刚结束，反向还没开始", GY, size=12.5, anchor="middle")
@@ -137,12 +160,7 @@ def main():
     f.t(X(BWD_END) - 96, TOP + 50, "反向刚结束，还没更新", GY, size=12.5, anchor="middle")
     f.t(X0 + 6, TOP + 28, "⛔⛔ 两个峰<tspan font-weight=\"700\">不在同一时刻</tspan>",
         RD, True, 16)
-    f.t(X0 + 6, TOP + 52, "所以问「峰值在哪」之前，先问「哪一项的峰」",
-        GY, size=13)
-    f.t(X0 + 6, TOP + 78, "⭐ 蓝的这块在 batch＝1 时很小 ——　但它是四项里唯一",
-        BL, size=13)
-    f.t(X0 + 6, TOP + 98, "<tspan font-weight=\"700\">跟着 batch 一起涨</tspan>的",
-        BL, size=13)
+    f.t(X0 + 6, TOP + 52, "先问「哪一项的峰」，再问「在哪一刻」", GY, size=13)
     f._pan = None
 
     # ══════════ Ⓑ 哪一项更大？看 global batch ════════════════════

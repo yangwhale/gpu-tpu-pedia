@@ -28,9 +28,18 @@ from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, LINE2)
 W = 1400
 
 # ⭐ 全部常数集中在这儿。改图先改这里，别在文字里手写第二遍。
-HEAD_QK, HEAD_V = 192, 128          # V3 的头维度
-ATT_SLOPE = (HEAD_QK + HEAD_V) / (HEAD_V * 2.0)   # causal 已折半 → 1.25
+# ⛔⛔ 2026-09-17 红队抓到：原来只有一个 ATT_SLOPE = 1.25，那是 **V3 的**头维度算的，
+#   却被拿去标 GPT-3 —— 而 GPT-3 是 qk = v = 128，斜率是 1.00，在 2,048 处是 2,048 不是 2,560。
+#   ⭐ 而且对照的线性层也不该共用：V3 最宽 7,168，GPT-3 最宽 12,288。
+#   ⭐⭐ 判据：**同一张图里出现两个模型时，每个模型的每一条线都要用它自己的常数。**
+#     修完结论反而更强 —— 翻转靠的是斜率不同，不靠某一组具体数值。
+V3_QK, V3_V = 192, 128              # DeepSeek-V3（MLA）
+G3_QK, G3_V = 128, 128              # GPT-3 175B（标准 MHA，d_head = 128）
+V3_SLOPE = (V3_QK + V3_V) / (V3_V * 2.0)     # causal 已折半 → 1.25
+G3_SLOPE = (G3_QK + G3_V) / (G3_V * 2.0)     #              → 1.00
+ATT_SLOPE = V3_SLOPE
 S_GPT3, S_V3 = 2048, 131072
+V3_WIDEST, G3_WIDEST = 7168, 12288           # 各自最宽的线性层（＝ d_model）
 
 # （输入宽度, 名字, 颜色）——&#160;每字节代价就等于输入宽度本身
 # 第四项是标签靠哪边：1 右，-1 左（1,536 与 2,048 在对数轴上只差 15px，必须分开）
@@ -40,12 +49,14 @@ LINEARS = (
     (2048, "专家输出（输入宽 2,048）",      OR, 1),
     (7168, "gate / up / 路由（输入宽 7,168）", RD, 1),
 )
-CROSS = 7168 / ATT_SLOPE            # 跟最贵那条线性层的交点
+CROSS = V3_WIDEST / V3_SLOPE
+G3_CROSS = G3_WIDEST / G3_SLOPE
 
-assert abs(ATT_SLOPE - 1.25) < 1e-9
-assert abs(CROSS - 5734.4) < 0.1
-assert abs(ATT_SLOPE * S_GPT3 - 2560) < 1e-6
-assert abs(ATT_SLOPE * S_V3 - 163840) < 1e-6
+assert abs(V3_SLOPE - 1.25) < 1e-9 and abs(G3_SLOPE - 1.00) < 1e-9
+assert abs(CROSS - 5734.4) < 0.1 and abs(G3_CROSS - 12288) < 1e-6
+assert abs(G3_SLOPE * S_GPT3 - 2048) < 1e-6      # ⛔ 不是 2560
+assert abs(V3_SLOPE * S_V3 - 163840) < 1e-6
+assert S_GPT3 < G3_CROSS and S_V3 > CROSS        # 各自落在自己交点的两侧
 
 # 画布内的坐标系（双对数）
 X0, X1 = 150, 1320
@@ -108,8 +119,19 @@ def main():
     f.path("M %.1f %.1f L %.1f %.1f" % (X(1024), Y(ATT_SLOPE * 1024),
                                         X(262144), Y(ATT_SLOPE * 262144)),
            PU, 3.2, arrow=False)
-    f.t(X(26000), Y(ATT_SLOPE * 26000) - 18,
-        "attention　＝　1.25 × 序列长度", PU, True, 15, "middle")
+    f.t(X(26000), Y(V3_SLOPE * 26000) - 18,
+        "V3 的 attention　＝　1.25 × 序列长度", PU, True, 15, "middle")
+
+    f.path("M %.1f %.1f L %.1f %.1f" % (X(1024), Y(G3_SLOPE * 1024),
+                                        X(262144), Y(G3_SLOPE * 262144)),
+           OR, 2.2, arrow=False, dash="7 5")
+    f.t(X(4600), Y(G3_SLOPE * 4600) + 24,
+        "GPT-3 的 attention　＝　1.00 × 序列长度", OR, True, 14, "middle")
+    f.line(X0, Y(G3_WIDEST), X1, Y(G3_WIDEST), OR, 1.6, dash="4 6", arrow=False)
+    f.t(X0 + 10, Y(G3_WIDEST) - 10, "GPT-3 最宽的线性层（12,288）", OR, True, 13)
+    gx, gy = X(G3_CROSS), Y(G3_WIDEST)
+    f.box(gx - 6, gy - 6, 12, 12, "#fff", OR, 6, 2.0)
+    f.t(gx, gy + 28, "GPT-3 自己的交点　12,288", OR, True, 13.5, "middle")
 
     # ── 交点
     cx, cy = X(CROSS), Y(7168)
@@ -120,10 +142,10 @@ def main():
     f.t(cx, cy - 38, "左边 attention 最便宜，右边最贵", GY, size=12.5, anchor="middle")
 
     # ── 两个真实模型的竖线
-    for s, nm, col, side in ((S_GPT3, "GPT-3　2,048", OR, -1),
-                             (S_V3, "V3　131,072", RD, -1)):
+    for s, nm, col, side, slope in ((S_GPT3, "GPT-3　2,048", OR, -1, G3_SLOPE),
+                                    (S_V3, "V3　131,072", RD, -1, V3_SLOPE)):
         x = X(s)
-        v = ATT_SLOPE * s
+        v = slope * s
         f.line(x, BOT, x, TOP - 4, col, 1.8, dash="6 4", arrow=False)
         f.box(x - 6, Y(v) - 6, 12, 12, col, col, 6)
         f.t(x + side * 10, TOP + 14, nm, col, True, 14.5,
@@ -132,23 +154,27 @@ def main():
             col, size=12.5, anchor="start" if side > 0 else "end")
     f._pan = None
 
-    yy = f.band(py + PH + 22, "bad", "同一条判据，结论翻转 ——　变的只有那一根竖线", [
+    yy = f.band(py + PH + 22, "bad", "同一条判据，结论翻转 ——　而两个模型的线<tspan text-decoration=\"underline\">都不一样</tspan>", [
         "⭐ 2022 年那篇（<tspan font-weight=\"700\">arXiv 2205.05198</tspan>）说："
-        "挑「占显存不少、但重算起来不贵」的扔。"
-        "<tspan font-weight=\"700\">它选中了 attention</tspan> ——&#160;"
-        "因为在 2,048 上，attention 只要 2,560，"
-        "<tspan font-weight=\"700\">比图上每一条线性层都低</tspan>。论文没错。",
-        "⛔ 到 131,072，同一条斜线爬到 <tspan font-weight=\"700\">163,840</tspan> ——&#160;"
-        "比最贵的那条线性层还高 <tspan font-weight=\"700\">23 倍</tspan>。"
-        "于是<tspan font-weight=\"700\">它从最该扔的变成最该留的</tspan>。"
-        "⭐⭐ <tspan font-weight=\"700\">判据一个字没改，翻转的是前提。</tspan>",
+        "挑「占显存不少、但重算起来不贵」的扔，<tspan font-weight=\"700\">它选中了 attention</tspan>。"
+        "⛔ 看橙色那一组：GPT-3 在 2,048 处只要 <tspan font-weight=\"700\">2,048</tspan>，"
+        "而它自己的交点在 <tspan font-weight=\"700\">12,288</tspan> ——&#160;"
+        "<tspan font-weight=\"700\">远在左边，attention 确实最便宜。论文没错。</tspan>",
+        "⛔ 再看紫色那一组：V3 在 131,072 处是 <tspan font-weight=\"700\">163,840</tspan>，"
+        "而它自己的交点在 <tspan font-weight=\"700\">5,734</tspan> ——&#160;"
+        "<tspan font-weight=\"700\">远在右边，attention 成了最该留的那一个</tspan>。"
+        "⭐⭐ 判据一个字没改 ——&#160;<tspan font-weight=\"700\">"
+        "而且注意：两个模型的斜率和对照宽度<tspan text-decoration=\"underline\">都不一样</tspan>，"
+        "翻转靠的是「斜率不同必然相交」这件事本身，不靠任何一组具体数值。</tspan>",
     ], keep=True)
 
     yy = f.src(yy + 24,
                "⭐ 线性层那条闭式解：<tspan font-weight=\"700\">一个 [S,k]×[k,n] 的矩阵乘，"
                "每字节代价 ＝ k</tspan>（重算 2·S·k·n FLOPs ÷ 产出 S·n·2 字节，"
                "S 和 n 全约掉）——&#160;所以它在图上必然是水平线",
-               "⚠️ attention 那条斜率 1.25 依赖 <tspan font-weight=\"700\">V3 的头维度"
+               "⚠️ 两条斜率分别是 <tspan font-weight=\"700\">V3 的 1.25（qk 192 / v 128）"
+               "与 GPT-3 的 1.00（qk ＝ v ＝ 128）</tspan>；口径都是 causal 折半。"
+               "⛔ <tspan font-weight=\"700\">换个模型就得重画它自己那两条线"
                "（qk 192 / v 128）与 causal 折半的口径</tspan>；"
                "换个模型斜率会变，<tspan font-weight=\"700\">但「它是斜的」不会变</tspan>"
                " ——&#160;这才是要记的东西",

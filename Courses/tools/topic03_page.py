@@ -601,7 +601,9 @@ FIGONLY_HTML = """
 </div>
 <script>
 (function(){
-  var KEY = "t3-figonly";
+  // ⛔ 2026-09-17：原来写死成 "t3-figonly" —— 于是专题三和专题四**共用同一个开关**，
+  //   在一边收起来，另一边打开就也是收的。⭐ 按页面名分开。
+  var KEY = "figonly:" + location.pathname.split("/").pop();
   var btn  = document.getElementById("figonly-btn");
   var hint = document.getElementById("figonly-hint");
   // ⭐ 折叠了多少段，是**数出来的**，不写死 ——&#160;正文一改它自动跟着变。
@@ -617,7 +619,10 @@ FIGONLY_HTML = """
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
   }
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
-  set(saved === null ? true : saved === "1");        // ⭐ 默认折叠
+  // ⛔ 默认**展开**。2026-09-17 麻瓜审：默认折叠会让第一次点进来的人
+  //   看到一份被挖空的教材（整节正文不见、九张图的图注全不见）。
+  //   ⭐ 投屏的人按一下 T 就行，而第一次来的人没有第二次机会。
+  set(saved === null ? false : saved === "1");
   btn.addEventListener("click", function(){
     set(!document.body.classList.contains("figonly"));
   });

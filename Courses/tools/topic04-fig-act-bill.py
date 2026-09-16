@@ -85,7 +85,7 @@ def main():
     f._pan = None
 
     # ══════════ Ⓑ 这座山有多高 ═══════════════════════════════════
-    PH2 = 272
+    PH2 = 344
     py2 = f.panel(0, py + PH + 22, W, PH2,
                   "Ⓑ 这座山有多高 ——　<tspan font-weight=\"700\">"
                   "一条 128K 序列，V3 那个规模</tspan>", RD,
@@ -98,14 +98,27 @@ def main():
         (GR, "#e6f4ea", "开了全量重算", "%.2f GiB" % ACT_REMAT_GIB,
          "⭐ 每层只留入口那一份", "约 %d 倍的差距" % round(RATIO)),
     )
+    # ⛔ 逐图审抓到：原来两个框画成一样大，「约 40 倍」只活在文字里 ——
+    #   那一格是表不是图。⭐ 改成**按 40:1 画高度**，不看数字也知道差多少。
+    HI, LO = 172.0, 172.0 / RATIO
     for i, (col, fill, nm, num, a, b) in enumerate(CARDS):
         x = 120 + i * 620
-        f.box(x, py2 + 34, 540, 168, fill, col, 8)
-        f.box(x, py2 + 34, 540, 4, col, col, 2)
-        f.t(x + 270, py2 + 70, nm, col, True, 18, "middle")
-        f.t(x + 270, py2 + 118, num, col, True, 34, "middle")
-        f.t(x + 270, py2 + 152, a, INK, True, 14.5, "middle")
-        f.t(x + 270, py2 + 182, b, GY, size=13.5, anchor="middle")
+        h = HI if i == 0 else LO
+        top = py2 + 34 + (HI - h)
+        f.box(x, top, 540, h, fill, col, 8)
+        f.box(x, top, 540, 4, col, col, 2)
+        f.t(x + 270, py2 + 18, nm, col, True, 18, "middle")
+        if i == 0:
+            f.t(x + 270, top + 62, num, col, True, 34, "middle")
+            f.t(x + 270, top + 98, a, INK, True, 14.5, "middle")
+            f.t(x + 270, top + 132, b, GY, size=13.5, anchor="middle")
+        else:
+            f.t(x + 270, top - 12, num, col, True, 26, "middle")
+            f.t(x + 270, top + h + 30, a, INK, True, 14.5, "middle")
+            f.t(x + 270, top + h + 58, b, GY, size=13.5, anchor="middle")
+    f.t(700, py2 + 34 + HI + 96,
+        "⭐ 两个框的<tspan font-weight=\"700\">高度是按真实比例画的</tspan> ——　"
+        "右边那条薄片就是重算之后剩下的厚度", GY, size=14, anchor="middle")
     f.t(700, py2 + 230, "⭐ 下一节整节都在讲这两栏之间那个箭头",
         GY, True, 14.5, "middle")
     f._pan = None
