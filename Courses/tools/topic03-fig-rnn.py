@@ -143,7 +143,7 @@ def fig_unroll():
 
     # ── 右：展开 ────────────────────────────────────────────────
     QX = 420
-    QT = f.panel(QX, y, W - QX, 322, "② 展开着看",
+    QT = f.panel(QX, y, W - QX, 344, "② 展开着看",
                  sub="它其实就是一条链，每一格都得等前一格算完")
     n, step, x0 = 5, 182, QX + 40
     # ⛔ 上一版 t 标签画在 QT+24，而 y 盒子从 QT+12 起 —— **标签被盒子盖住了**。
@@ -164,16 +164,72 @@ def fig_unroll():
         if i and i < n - 1:
             f.line(x - step + 114, QT + 119, x - 6, QT + 119, RD, 2.1)
     f.t(x0 + 126, QT + 112, "上一步的 h", RD, True, _sz(11))
-    f.t(QX + 16, QT + 236,
+    # ⭐⭐⭐ 2026-09-16 现场：「y 难道不该用一根线接回去变成 x 吗？
+    #   ——&#160;不过这也分场景：自回归是这样，翻译那种交叉注意力就不是。」
+    #   ⛔ 直觉对，而且**那个「分场景」才是重点** ——&#160;
+    #     所以这里只画一段虚线并写死条件，完整的三种位置放进 ③。
+    f.path("M %d %d L %d %d L %d %d L %d %d"
+           % (x0 + 114, QT + 52, x0 + 150, QT + 52,
+              x0 + 150, QT + 192, x0 + step, QT + 192), OR, 1.6, "5 4")
+    # ⛔ 这行原来是整句条件，**横穿 x3 x4 两个盒子**（渲染才看见）。
+    #   ⭐ 缩成一句，完整条件交给 ③ ——&#160;判据：**标注宁可短到要跳转，
+    #     也不要长到压别人身上。**
+    f.t(x0 + 150, QT + 230, "⚠️ 不是总有　——　见 ③", OR, True, _sz(13))
+    f.t(QX + 16, QT + 256,
         '⛔ <tspan font-weight="700">红底那一行就是全部问题的根源</tspan>：'
         'h3 要用 h2，h2 要用 h1 ——&#160;一百万步就得排一百万轮。', GY, size=_sz(15))
-    f.t(QX + 16, QT + 258,
+    f.t(QX + 16, QT + 278,
         '⭐ 而<tspan font-weight="700">竖着的绿、蓝箭头彼此不相干</tspan>'
         '——&#160;能并行的方向一直都在，'
         '<tspan font-weight="700">被卡住的只有横着这一个。</tspan>', GY, size=_sz(15))
 
-    yy = y + 322 + 16
-    yy = f.band(yy, "info", "拆开一格看：里面就是两个矩阵乘、一个加法、一个非线性", [
+    yy = y + 344 + 16
+
+    # ══════════ ③ 那条线在不在，看它站在哪个位置 ═══════════════════
+    PH3 = 292
+    p3 = f.panel(0, yy, W, PH3,
+                 "③ 那 y 到底要不要接回去当 x　——　"
+                 "<tspan font-weight=\"700\">看这条 RNN 站在哪个位置上</tspan>", OR,
+                 sub="⭐ 所以「自回归」<tspan font-weight=\"700\">不是 RNN 的性质，"
+                     "是<tspan text-decoration=\"underline\">用法</tspan>的性质</tspan>")
+    CW = (W - 80) // 3
+    CASES = (
+        ("语言模型（只有解码器）", GR, "有",
+         ("吐一个字，接回去当下一个输入。",
+          "⛔ 但只在<tspan font-weight=\"700\">生成</tspan>时有 ——　训练时喂的是",
+          "真实的下一个词（teacher forcing）。")),
+        ("翻译　·　编码器那一侧", RD, "没有",
+         ("它只管把源句读成一个状态。",
+          "⛔ <tspan font-weight=\"700\">逐步的 y 根本不用</tspan> ——　",
+          "要的只是读完之后那个 h。")),
+        ("翻译　·　解码器那一侧", BL, "有，而且还多一条",
+         ("① 自己吐的接回去当下一个输入；",
+          "② <tspan font-weight=\"700\">还要去看编码器</tspan> ——　早期是一个",
+          "context 向量，后来就是交叉注意力。")),
+    )
+    for i, (name, col, has, lines) in enumerate(CASES):
+        x = 30 + i * (CW + 10)
+        f.box(x, p3 + 26, CW, 214, "#fff", col, 8)
+        f.box(x, p3 + 26, CW, 4, col, col, 2)
+        f.t(x + CW / 2.0, p3 + 58, name, col, True, 16, "middle")
+        f.box(x + CW / 2.0 - 78, p3 + 76, 156, 34, "#f8f9fa", col, 17)
+        f.t(x + CW / 2.0, p3 + 99, "y → 下一个 x：%s" % has, col, True, 14, "middle")
+        for j, ln in enumerate(lines):
+            f.t(x + 18, p3 + 138 + j * 24, ln, GY, size=13.5)
+    f._pan = None
+    yy = yy + PH3 + 18
+
+    yy = f.band(yy, "ok", "所以这一张图画的是「一条 RNN」，不是「一个模型」", [
+        "⭐⭐ <tspan font-weight=\"700\">同一个 RNN 单元，摆在编码器就不自回归，"
+        "摆在解码器就自回归。</tspan>"
+        "上面 ② 那条链是它<tspan font-weight=\"700\">共有</tspan>的部分；"
+        "y 接不接回去，是<tspan font-weight=\"700\">外面怎么用它</tspan>决定的。",
+        "⛔ 而这也说明 ② 那个「排一百万轮」的痛是<tspan font-weight=\"700\">跑不掉的</tspan>："
+        "<tspan font-weight=\"700\">它来自红色那条横线（状态），不是来自 y 那条虚线</tspan> ——&#160;"
+        "哪怕你根本不自回归（编码器那一侧），这条链照样得一格一格排。",
+    ])
+
+    yy = f.band(yy + 14, "info", "拆开一格看：里面就是两个矩阵乘、一个加法、一个非线性", [
         'h<tspan baseline-shift="sub" font-size="10">t</tspan> ＝ '
         'f( W<tspan baseline-shift="sub" font-size="10">h</tspan> · '
         'h<tspan baseline-shift="sub" font-size="10">t−1</tspan> ＋ '
