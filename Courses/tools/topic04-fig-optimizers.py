@@ -121,7 +121,7 @@ def main():
     ])
 
     # ══════════ Ⓑ 那 16 字节到底是哪五样 ═════════════════════════
-    PH2 = 340
+    PH2 = 404
     py2 = f.panel(0, yy + 26, W, PH2,
                   "Ⓑ 所以「每参数 16 字节」是哪五样 ——　"
                   "<tspan font-weight=\"700\">其中 12 字节是 fp32 的那三份</tspan>", RD,
@@ -145,16 +145,38 @@ def main():
         x += w
     f.t(BX + BW + 12, py2 + 82, "＝ %d B" % ADAMW_TOTAL, INK, True, 19)
 
-    f.t(92, py2 + 190, "⭐ 而这一讲那句「最大的一块是优化器状态」，"
+    # ── 分组括号 ─────────────────────────────────────────────────
+    # ⭐⭐⭐ 2026-09-17 加。这根条原来是五段并排，读者看到的是「五样东西」，
+    #   而这一讲真正要他记住的是**一刀两段**：
+    #     2 B 推理也要 ｜ 14 B 训练才要。
+    #   ⛔ 那句话本来写在下面的正文里 ——&#160;**而条就在眼前，字却要另外去读**。
+    #   ⭐ 判据：**一根条上如果有一刀是全讲的主轴，那一刀就该画在条上，不是写在条下。**
+    def bracket(x0, x1, y, col, label, sub_=None):
+        """向下开口的分组括号。"""
+        f.line(x0, y, x0, y + 9, col, 1.4, arrow=False)
+        f.line(x0, y + 9, x1, y + 9, col, 1.4, arrow=False)
+        f.line(x1, y, x1, y + 9, col, 1.4, arrow=False)
+        f.t((x0 + x1) / 2.0, y + 30, label, col, True, 14.5, "middle")
+        if sub_:
+            f.t((x0 + x1) / 2.0, y + 52, sub_, GY, size=12.5, anchor="middle")
+
+    _cut = BX + BW * W_BF16 / float(ADAMW_TOTAL)
+    bracket(BX, _cut, py2 + 152, GY2, "%d B　推理也要" % W_BF16,
+            "就是你下载到的那份权重")
+    bracket(_cut, BX + BW, py2 + 152, RD,
+            "%d B　<tspan font-weight=\"700\">训练才要</tspan>" % (ADAMW_TOTAL - W_BF16),
+            "⭐ 这一讲讲的，全是这一段")
+
+    f.t(92, py2 + 254, "⭐ 而这一讲那句「最大的一块是优化器状态」，"
                        "落到数上就是这么来的：", INK, True, 17)
-    f.t(92, py2 + 218, "<tspan font-weight=\"700\">权重只占 2 B，"
+    f.t(92, py2 + 282, "<tspan font-weight=\"700\">权重只占 2 B，"
                        "优化器那边（主权重 ＋ m ＋ v）占 %d B</tspan>"
                        " ——　<tspan font-weight=\"700\">六倍</tspan>。"
                        % FP32_SHARE, GY, size=15.5)
-    f.t(92, py2 + 252, "⛔ 而换成 Muon：二阶矩那一份没了 ——　"
+    f.t(92, py2 + 316, "⛔ 而换成 Muon：二阶矩那一份没了 ——　"
                        "<tspan font-weight=\"700\">%d B 变成 %d B</tspan>，少四分之一。"
                        % (ADAMW_TOTAL, MUON_TOTAL), GR, True, 16)
-    f.t(92, py2 + 282, "⚠️ 但它<tspan font-weight=\"700\">只管二维参数</tspan> ——　"
+    f.t(92, py2 + 346, "⚠️ 但它<tspan font-weight=\"700\">只管二维参数</tspan> ——　"
                        "embedding 和输出头仍然走 AdamW，所以整模型省不到四分之一。",
         GY, size=14.5)
     f._pan = None

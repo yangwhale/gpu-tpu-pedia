@@ -1852,7 +1852,7 @@ body.figonly section h3{margin-top:34px}
 <p>混合精度训练下，<b>每一个参数身上挂着五样东西</b> ——&nbsp;
   <em>而其中只有第一样是「模型本身」。</em></p>
 
-<figure class="fbox fwide" id="fig-optimizers"><svg viewBox="0 0 1400 1194" width="100%" role="img" aria-label="优化器谱系按「每个参数挂几份状态」排：SGD 零份，加动量一份，AdaGrad 和 RMSProp 各一份，Adam 与 AdamW 两份，而 2024 年的 Muon 只留一份动量、对更新矩阵做正交化，把二阶矩那一整份去掉了"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-optimizers"><svg viewBox="0 0 1400 1258" width="100%" role="img" aria-label="优化器谱系按「每个参数挂几份状态」排：SGD 零份，加动量一份，AdaGrad 和 RMSProp 各一份，Adam 与 AdamW 两份，而 2024 年的 Muon 只留一份动量、对更新矩阵做正交化，把二阶矩那一整份去掉了"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">优化器谱系 ——　<tspan font-weight="700">每一代往每个参数身上挂了几份状态</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⛔ 这张图<tspan font-weight="700">不按算法怎么算排，按账单排</tspan>　·　⚠️ 横轴只表示先后，<tspan font-weight="700">不是线性年份</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
@@ -1922,7 +1922,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="682" fill="#b06000" style="font-size:15.0px">⭐ 论文摘要原话：<tspan font-weight="700">L2 正则和 weight decay 对普通 SGD 是等价的，但对 Adam 这种自适应方法<tspan text-decoration="underline">不等价</tspan></tspan>。⛔ 因为 L2 那一项是<tspan font-weight="700">混在梯度里</tspan>进去的，再被二阶矩的分母一除 ——&#160;<tspan font-weight="700">梯度</tspan></text>
 <text class="svgsm" x="20" y="706" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">大的参数，它的 weight decay 被稀释掉了</tspan>。</text>
 <text class="svgsm" x="20" y="730" fill="#b06000" style="font-size:15.0px">⭐⭐ 所以 AdamW 的修法是把 weight decay <tspan font-weight="700">从梯度里解耦出来</tspan>，更新参数时单独减一下。<tspan font-weight="700">那个 W 就是 decoupled 的意思。</tspan></text>
-<rect x="0" y="772" width="1400" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="772" width="1400" height="404" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="772" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <rect x="0" y="774" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="802" x2="1400" y2="802" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
@@ -1949,10 +1949,20 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1156" y="898" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">4 B</tspan></text>
 <text class="svgsm" x="1156" y="936" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">⭐ Muon 去掉的就是它</text>
 <text class="svgsm" x="1320" y="884" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">＝ 16 B</tspan></text>
-<text class="svgsm" x="92" y="992" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">⭐ 而这一讲那句「最大的一块是优化器状态」，落到数上就是这么来的：</tspan></text>
-<text class="svgsm" x="92" y="1020" fill="#5f6368" style="font-size:15.5px"><tspan font-weight="700">权重只占 2 B，优化器那边（主权重 ＋ m ＋ v）占 12 B</tspan> ——　<tspan font-weight="700">六倍</tspan>。</text>
-<text class="svgsm" x="92" y="1054" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">⛔ 而换成 Muon：二阶矩那一份没了 ——　<tspan font-weight="700">16 B 变成 12 B</tspan>，少四分之一。</tspan></text>
-<text class="svgsm" x="92" y="1084" fill="#5f6368" style="font-size:14.5px">⚠️ 但它<tspan font-weight="700">只管二维参数</tspan> ——　embedding 和输出头仍然走 AdamW，所以整模型省不到四分之一。</text>
+<line x1="92" y1="954" x2="92" y2="963" stroke="#80868b" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="92" y1="963" x2="244.0" y2="963" stroke="#80868b" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="244.0" y1="954" x2="244.0" y2="963" stroke="#80868b" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="168" y="984" fill="#80868b" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">2 B　推理也要</tspan></text>
+<text class="svgsm" x="168" y="1006" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">就是你下载到的那份权重</text>
+<line x1="244.0" y1="954" x2="244.0" y2="963" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="244.0" y1="963" x2="1308" y2="963" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="1308" y1="954" x2="1308" y2="963" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="776" y="984" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">14 B　<tspan font-weight="700">训练才要</tspan></tspan></text>
+<text class="svgsm" x="776" y="1006" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">⭐ 这一讲讲的，全是这一段</text>
+<text class="svgsm" x="92" y="1056" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">⭐ 而这一讲那句「最大的一块是优化器状态」，落到数上就是这么来的：</tspan></text>
+<text class="svgsm" x="92" y="1084" fill="#5f6368" style="font-size:15.5px"><tspan font-weight="700">权重只占 2 B，优化器那边（主权重 ＋ m ＋ v）占 12 B</tspan> ——　<tspan font-weight="700">六倍</tspan>。</text>
+<text class="svgsm" x="92" y="1118" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">⛔ 而换成 Muon：二阶矩那一份没了 ——　<tspan font-weight="700">16 B 变成 12 B</tspan>，少四分之一。</tspan></text>
+<text class="svgsm" x="92" y="1148" fill="#5f6368" style="font-size:14.5px">⚠️ 但它<tspan font-weight="700">只管二维参数</tspan> ——　embedding 和输出头仍然走 AdamW，所以整模型省不到四分之一。</text>
 </svg><figcaption>⭐⭐ <b>Ⓐ 的形状是这张图的全部</b> ——&nbsp;<em>三十年一路往上加，<b>2024 年有人往回走了一步</b>。</em><span class="capmore"><br>⭐ <em>而 Ⓑ 把「最大的一块是优化器状态」翻译成了一根尺子：权重只占 2 B，优化器那边占 12 B。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Adam：Kingma & Ba，<b>arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a></b>（ICLR 2015）；AdamW：Loshchilov & Hutter，<b>arXiv <a href="https://arxiv.org/abs/1711.05101" target="_blank" rel="noopener">1711.05101</a></b>（ICLR 2019）——&#160;Ⓐ 那条带子里的说法是它摘要的转述</p>
 <p>Muon：Keller Jordan 等 2024，作者 writeup kellerjordan.github.io/posts/muon。「只用于 2D 参数」「标量 / 向量 / 输入输出层仍用 AdamW」「per-step wallclock 比 AdamW 慢」<b>三条都是原文</b></p>
 <p>动量：Polyak 1964（heavy ball）／Nesterov 1983；AdaGrad：Duchi, Hazan, Singer, JMLR 2011（无 arXiv）；RMSProp：Hinton 2012 Coursera 第 6 讲 ——&#160;<b>从未正式发表</b>，这一条本身值得一提</p>
