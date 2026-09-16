@@ -160,6 +160,8 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 
 __FIG_3X__
 
+__FIG_CIRCUIT__
+
 <h3>1.4　⭐ 为什么偏导数一出现，这件事就变容易了</h3>
 
 <p class="lead">⭐⭐⭐ 因为偏导数是<u>局部</u>的。</p>
@@ -2064,6 +2066,15 @@ FIGS = {
         '优化器状态最大、又只在更新那一瞬间用 ——&nbsp;所以它先被切。</em><br>'
         '⭐ <em><b>能算的就别抄</b> ——&nbsp;抄来的数对不上时，'
         '你不知道是自己抄错了还是人家印错了；算出来的对不上，当场就报错。</em>'),
+    "__FIG_CIRCUIT__": ("fig-circuit", "fig4-circuit.svg",
+        'topic04-fig-circuit.py',
+        '⭐⭐⭐ <b>这是整讲唯一一处「小到能用眼睛跟着数走」的地方</b> ——&nbsp;'
+        '<em>同一条线上两个数：黑的是前向，红的是反向。</em><br>'
+        '⭐⭐ <em>Ⓑ 那三个门不用背：<b>加法是分发器、乘法是交换器、max 是路由器</b>。'
+        '记住脾气就能手推任何一张电路。</em><br>'
+        '⛔ <em><b>Ⓒ 别跳过</b> ——&nbsp;乘法门反向要用前向的值，'
+        '<b>而这就是整讲那张激活账单的源头</b>：'
+        '激活不是框架顺手缓存的东西，是反向的数学要求它在场。</em>'),
     "__FIG_REVERSE__": ("fig-reverse", "fig4-reverse.svg",
         'topic04-fig-reverse.py',
         '⭐⭐⭐ <b>两排只差一件事：<u>种子插在哪一头</u></b> ——&nbsp;'
