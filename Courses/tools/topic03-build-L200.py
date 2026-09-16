@@ -1355,71 +1355,64 @@ __FIG_DEEPSEEK_SPARSE__
   ⭐ <b>这才是那条滑窗支路非挂不可的真正理由</b> ——&nbsp;
   不挂它，连刚说完的上一句都是一团摘要，模型接不上话。</em></p></div>
 
-<!-- ⭐⭐⭐ 2026-09-16 下午加。上面那两条答完，现场追问「那到底存下来的是什么」，
-     于是把 MaxText 的公开实现整个扒了一遍。⛔ 结果是**三个想当然全被推翻**，
-     包括我自己刚写进上一块的那句「两条支路加起来」。
-     ⭐ 判据（CLAUDE.md 第一原则的又一次应验）：**听起来像常识的架构关系最危险** ——
-       「三条支路 → 门控融合」在 NSA 上成立，套到 V4 上就是错的；
-       「DeepSeek ＝ MLA」在 V3 上成立，套到 V4 上也是错的。
-     ⛔ 本块全部结论都能在公开源码里逐条指出来，出处写在最后一段，不要删。 -->
-<div class="note ok"><p>⭐⭐⭐ <b>📌 把源码扒开之后 ——&nbsp;三个「想当然」全被推翻了。</b>
-  <em>（这一块是<b>加餐</b>，当堂只讲 ❶ 和 ❹ 两条，其余留给课后。）</em></p>
+<h3>6.4c　把 V4 的一条 KV 拆开看 —— 它跟 MLA 到底差在哪</h3>
 
-<p>❶ <b>DeepSeek-V4 根本没用 MLA。</b><em>配置里写着
-  <code>num_query_heads: 64</code>、<code>num_kv_heads: 1</code>、<code>head_dim: 512</code>、
-  <code>attention_type: "compressed"</code> ——&nbsp;<b>整份配置里没有
-  <code>kv_lora_rank</code> 这一项。</b>它是 <b>MQA</b>，不是 MLA。</em></p>
-<p><em>⭐⭐ 而且还狠一层：<b>K 和 V 是同一条向量。</b>KV 投影把同一个张量返回两遍，
-  调注意力时也是 <code>attention_op(q, kv, kv, …)</code>。<br>
-  →&nbsp;<b>每个 token 每层只存 512 个数，K 和 V 共用这一条。</b>
-  对照 <a href="#s五">§五</a> 的 MLA：512 潜向量 ＋ 64 RoPE ＝ 576。</em></p>
-<p><em>⛔ 所以<b>「先压序列、再套 MLA」这条路在 V4 上不成立 ——&nbsp;它没有 MLA 可叠。</b>
-  <span class="sub">（代价：V 跟着 K 一起被 RoPE 转过，所以输出侧要再做一次
-  <b>反向 RoPE</b>，把 V 那份旋转撤掉。）</span></em></p>
+<!-- ⭐⭐⭐ 2026-09-16 下午重写。第一版是**只读 MaxText 代码**写的，讲拧了三处：
+     ① 说「两条支路的结果加起来」—— 其实是**拼接**（已在 6.4b 改掉）；
+     ② 把它说成「简单 MQA、跟 MLA 没关系」—— **现场的直觉才是对的**：
+        论文的正式名字是 Shared Key-Value Multi-Query Attention，
+        它确实是「所有头共用一条压缩体」。错的是我把差别说成了「有没有压缩体」。
+     ③ 完全没交代那 64 维 RoPE 去哪了。
+     ⛔ 判据（第三次应验）：**读实现只能告诉你「怎么做的」，说不清「为什么这么做」。**
+       口径与命名要回论文和官方文档，代码只做交叉验证。
+     ⛔ 本节全部结论都带出处，写在图的「出处与口径」里，不要删。 -->
+<p class="lead">上一节那四个名字讲完，最常被追问的是同一句：
+  <b>「那它一条 KV 里到底存的是什么？跟 MLA 到底差在哪？」</b>
+  <em>⭐ 这一节把 <b>DeepSeek-V4-Pro</b> 的一条 KV 整个拆开。</em></p>
 
-<p>❷ <b>压缩器不是对现成的 K/V 做池化。</b><em>它是<b>另一条独立的投影</b> ——&nbsp;
-  从 embedding 直接投出 <code>kv_proj</code> 和 <code>gate_proj</code> 两路，
-  窗口内做 <b>softmax 门控加权求和</b>，<b>不是求平均</b>。</em></p>
-<p><em>⭐ 而且 CSA 不是「四个一组」那么朴素：它是 <b>stride 4 / window 8 的重叠窗口</b> ——&nbsp;
-  每条摘要 ＝ <b>上一个窗口的后 4 个 ＋ 这个窗口的前 4 个</b>。
-  <b>压缩率是 4，可每条摘要看的是 8 个 token。</b></em></p>
+__FIG_V4_ARCH__
 
-<p>❸ <b>那到底存下来的是什么？</b><em>压缩块的 cache <b>只有 1 个头</b>，
-  条数 ＝ 序列长度 ÷ 压缩比：</em></p>
+<div class="note ok"><p>⭐⭐ <b>先说那个最自然的误会 —— 而它有一半是对的。</b></p>
+<p><em>「看上去跟 MLA 一样，所有头最后变成一条 512 的压缩体」</em>
+  —— <b>这个直觉是对的。</b><em>论文给它的正式名字就是
+  <b>Shared Key-Value Multi-Query Attention</b>：<code>num_key_value_heads = 1</code>，
+  128 个查询头<b>共读同一条</b>。</em></p>
+<!-- ⛔ 这里原来把图 Ⓐ 最底下那句结论**原样抄了一遍**（查重 2 → 7）。
+     判据⑩：挨着图的那一处赢。正文换一个图上没有的比方，别复述。 -->
+<p>⛔ <em>差别用一个比方最清楚：<b><a href="#s五">§五</a> 的 MLA 存的是<u>原料</u>，
+  V4 存的是<u>成品</u>。</b>原料下锅前得先加工一道，成品端上来就能吃。<br>
+  ⭐ <b>「吸收」那一手，本质上是把那道加工工序提前折进别的矩阵里；
+  而 V4 这边，<u>那道工序压根不存在</u>。</b></em></p></div>
+
+<div class="note"><p>❓ <b>那 64 维的 RoPE 去哪了？</b>
+  <em>—— <b>它没被挪走，它长在那 512 里面。</b></em></p>
 <ul>
-  <li><b>HCA</b>（压缩比 128）——&nbsp;<em><b>N/128 条，每条 512 宽</b>。</em></li>
-  <li><b>CSA</b>（压缩比 4）——&nbsp;<em><b>N/4 条，每条 1024 宽</b>
-    （重叠窗口要把两半都留着）；<b>另外还挂一份 indexer cache：N/4 条 × 256 宽</b>。</em></li>
-  <li><b>滑窗里那 128 个 token</b> ——&nbsp;<em>⭐ <b>既不是 MLA，也不是多头 K/V</b>，
-    就是主路径那条 <b>1 头 × 512 宽、K 和 V 共用</b>的。<b>滑窗只决定「这一段不合并」。</b></em></li>
+  <li><b>V3.2 的 MLA</b>：<em>512 的潜向量 <b>＋</b> 64 的 RoPE 分量，
+    <b>两块分开存</b> ＝ <b>576</b>。</em></li>
+  <li><b>V4</b>：<em>一共就 <b>512</b>。<b>partial RoPE</b> 只旋转每个头
+    <b>末尾的 64 个通道</b>，前面 448 个不带位置。<b>RoPE 不额外占地方。</b></em></li>
 </ul>
+<p>⭐⭐ <em>一句话记住：<b>V3.2 的 64 是加在 512 外面的，V4 的 64 是长在 512 里面的。</b></em></p></div>
 
-<p>❹ <b>DSA 那个 top-2048，确实是选在 MLA 上的。</b><em>V3.2 的配置：
-  <code>attention_type: "mla"</code>、<code>kv_lora_rank: 512</code>、
-  <code>indexer_topk: 2048</code>。</em></p>
-<p><em>顺序是：<b>MLA 的全量潜向量照存不误</b> →&nbsp;indexer <b>另存一份自己的小索引 key</b>
-  →&nbsp;对<b>全部</b> token 打分 →&nbsp;挑出 top-2048 →&nbsp;生成 mask
-  →&nbsp;<b>在 MLA 的全量 KV 上按这个 mask 做注意力</b>。</em></p>
-<!-- ⛔ 这一句原来把上面 fig-dsa-why 里那条判据<u>原样抄了一遍</u>（查重当场 2 → 3）。
-     判据⑩：挨着图的那一处赢。这里只留图给不了的东西 ——&#160;它在源码里长什么样。 -->
-<p><em>⭐⭐ 而上面 <a href="#fig-dsa-why">那张图</a>里的退化判据，
-  <b>在源码里就是一行 <code>if</code></b>：<code>k.shape[1] &lt;= indexer_topk</code>
-  时直接全选。<b>不是推论，是能指着代码说的。</b></em></p>
+<div class="note danger"><p>⛔⛔ <b>K 和 V 共用一条，是要还债的。</b></p>
+<p><em>既然 K 和 V 是同一个张量，那 <b>V 也跟着被 RoPE 转过了</b> —— 
+  而 V 本来不该带位置。</em></p>
+<p>⭐ <em>所以算完注意力之后，<b>输出的 rope 那 64 维要用位置 <code>−i</code>
+  再反向转一次</b>（论文 §2.3.3 式 26）。转回来之后，
+  <b>每条 KV 的贡献才只跟它到查询的「相对距离」有关。</b></em></p>
+<p><span class="sub">⚠️ <b>这一步很容易被漏掉</b>，但它是「存一条当两条用」这笔买卖的
+  全部代价 —— <em>省了一半显存，多了一次逐元素的旋转。</em></span></p></div>
 
-<p>❺ <b>顺带一份 V4-Flash 的层配比</b>（43 层）：<em><code>[0, 0, 4, 128, 4, 128, …]</code>
-  ——&nbsp;前 3 层是 0/0/4，之后 <b>4 与 128 交替</b>。<code>compress_ratio = 0</code>
-  就是<b>纯滑窗层</b>，窗口 128。<b>V4 的 <code>indexer_topk</code> 是 512，
-  而且它挑的是「压缩块」，不是原始 token。</b></em></p>
+<div class="note"><p>⭐ <b>最后两个数，图上都有，但它们放在一起才有意思。</b></p>
+<p><em>① <b>CSA 的 <code>index_topk</code> 是 1024，而 V3.2 的 DSA 是 2048</b>
+  ——&nbsp;<b>挑得更少了。</b>不是因为变胆小了，是因为
+  <b>池子已经先被压过一道</b> ——&nbsp;挑 1024 条摘要，
+  背后是 4096 个 token。</em></p>
+<p><em>② <b>61 层里只有最后 1 层是纯滑窗</b>（图 Ⓑ 有完整层表）
+  ——&nbsp;<em>也就是说，<b>压缩不是“可选项”，是这个模型的常态。</b></em></em></p>
+<p>⛔ <em>而图 Ⓑ 底下那段说清楚了滑窗为什么非挂不可。
+  请把结论记住：<b>它不是精度选项，是可用性底线。</b></em></p></div>
 
-<p>⛔⛔ <em><b>这三个「想当然」栽在同一个形状上：都是把上一代成立的架构关系，
-  顺手套到了下一代身上。</b>「三条支路 → 门控融合」在 NSA 上对，在 V4 上错；
-  「DeepSeek ＝ MLA」在 V3 上对，在 V4 上错。</em></p>
-<p><span class="sub">📌 <b>出处。</b>以上全部取自 <b>MaxText 的公开实现</b>（Apache-2.0）：
-  <code>src/maxtext/layers/attention_compressed.py</code>、
-  <code>src/maxtext/layers/attention_mla.py</code>，配置
-  <code>src/maxtext/configs/models/deepseek4-284b.yml</code>（对应公开模型
-  DeepSeek-V4-Flash 284B）与 <code>deepseek3.2-671b.yml</code>。
-  <em>⛔ <b>仍然没有任何性能数字</b> ——&nbsp;这里核到的是结构，不是速度。</em></span></p></div>
 
 <div class="note danger"><p>⛔ <b>为什么值得把这四步连起来看：它是本讲那条判据的又一次应验。</b></p>
 <p><em>这四步不是「四种不同的稀疏」，是<b>同一个动作被一步步往前挪</b> ——&nbsp;
@@ -2311,6 +2304,15 @@ FIGS = {
         '<em>十四个模型的层类型逐个拉下来，一行一行摆出来。</em><br>'
         '⭐⭐ <em>而数完之后会发现，<b>两派都真实存在</b> ——&nbsp;'
         '所以「守恒的是比值」这句常见说法，只说对了一半。</em>'),
+
+    "__FIG_V4_ARCH__": ("fig-v4-arch", "fig3-v4-arch.svg",
+        'topic03-fig-v4-arch.py',
+        '⭐ <b>Ⓐ 那两条色带是这张图的全部</b> ——&nbsp;'
+        '<em>V3.2 的 64 挂在 512 <b>外面</b>，V4 的 64 长在 512 <b>里面</b>。'
+        '一眼就看出「576 变 512」省在哪。</em><br>'
+        '⭐⭐ <em>而 Ⓓ 那个 ④ 是最容易漏掉的一步：'
+        '<b>K 和 V 共用一条，所以 V 也被转过了，得按负位置转回来。</b>'
+        '——&nbsp;省下来的那一半，代价就写在这一步上。</em>'),
 
     "__FIG_NOPE__": ("fig-nope", "fig3-nope.svg", 'topic03-fig-nope.py',
         '⭐ <b>看①和②的对照就够了：同一件事，谁来负责。</b><br>'
