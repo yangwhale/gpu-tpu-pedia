@@ -95,7 +95,7 @@ def main():
     LEVELS = (
         (GY2, "#f1f3f4", "不开", "全留", "只在显存宽裕时才合理"),
         (BL, "#e8f0fe", "选择性", "按比值挑着扔",
-         "⭐ 约 6% 算力换约 77% 显存 ——　性价比最高"),
+         "⭐ 约 1.9% 算力换约 77% 显存 ——　性价比最高"),
         (GR, "#e6f4ea", "全量", "每层只留入口那一份",
          "33% 算力换 97% ——　显存实在不够时"),
     )
@@ -113,7 +113,67 @@ def main():
         RD, True, 15, "middle")
     f._pan = None
 
-    yy = f.band(py2 + PH2 + 22, "warn", "但这笔账不能照抄别人的", [
+
+    # ══════════ Ⓒ 跨层的存档点密度 ═══════════════════════════════════
+    # ⭐⭐⭐ 2026-09-17 新增。Ⓑ 讲的是**一层之内留哪些张量**，
+    #   而这里讲的是**隔几层留一个存档点** ——&#160;两个完全不同的轴，
+    #   原来图上只有前一个。
+    # ⛔ 这一格的落点是个反直觉的事实：**存得越少不是越省。**
+    #   因为重算一段的时候，那一段的中间结果得**同时在场**。
+    #   所以有一个最优点，而它在 √L。
+    # 📌 ZeRO 论文 §3.2 原话：activation checkpointing「把激活显存降到
+    #   大约总量的平方根，代价是 33% 的重算开销」——&#160;那个「平方根」就是这一格。
+    L_DEMO = 16
+    def _cost(k):
+        """隔 k 层存一个：存档点 L/k 份 ＋ 重算时一段 k 层同时在场。"""
+        return L_DEMO / k + k
+    assert min(range(1, L_DEMO + 1), key=_cost) == 4 == int(L_DEMO ** .5), \
+        "最优密度应该落在 √L 上"
+    assert abs(_cost(1) - _cost(L_DEMO)) < 1e-9, \
+        "两头要一样高 ——　「全存」和「只存首尾」同样贵，这是这一格的全部意思"
+
+    PH3 = 332
+    py3 = f.panel(0, py2 + PH2 + 22, W, PH3,
+                  "Ⓒ ⭐⭐⭐ 换一个轴：<tspan font-weight=\"700\">"
+                  "隔几层留一个存档点</tspan>", PU,
+                  sub="⛔ 注意这跟 Ⓑ <tspan font-weight=\"700\">不是同一件事</tspan>"
+                      "　——　Ⓑ 是一层之内留哪些，这里是隔几层留一个")
+
+    SX, SW = 300, 800
+    CELL = SW / float(L_DEMO)
+    ROWS = (
+        (1,  GY2, "全存",        "每一层都留"),
+        (4,  GR,  "隔 4 层留一个", "⭐ L ＝ 16，而 √16 ＝ 4"),
+        (16, RD,  "只存开头那一个", "重算时整条 16 层都得在场"),
+    )
+    for i, (k, col, nm, how) in enumerate(ROWS):
+        ry = py3 + 56 + i * 76
+        f.t(24, ry + 16, nm, col, True, 15)
+        f.t(24, ry + 38, how, GY2, size=11.5)
+        for j in range(L_DEMO):
+            x = SX + j * CELL
+            keep = (j % k == 0)
+            f.box(x + 1, ry, CELL - 2, 34,
+                  "#fff", col if keep else LINE, 3, sw=1.6 if keep else 1)
+            if keep:
+                f.t(x + CELL / 2, ry + 23, "💾", col, True, 13, "middle")
+        c = _cost(k)
+        f.t(SX + SW + 26, ry + 14, "存 %d 份" % (L_DEMO // k), INK, True, 13)
+        f.t(SX + SW + 26, ry + 34, "＋ 段内 %d 层" % k, GY, size=12)
+        f.t(SX + SW + 190, ry + 24, "＝ %d" % c,
+            col, True, 19)
+
+    f.t(SX + SW + 190, py3 + 40, "同时在场", GY, True, 12)
+    f.t(SX, py3 + 40, "⭐ 一个方块 ＝ 一层。"
+        "<tspan font-weight=\"700\">💾 就是留下来的存档点</tspan>", GY2, size=12)
+
+    f.t(700, py3 + 296, "⭐⭐⭐ 两头一样高　——　"
+        "<tspan font-weight=\"700\">存得越少，并不是越省</tspan>。"
+        "少存一个存档点，就要多扛一段重算时的中间结果。",
+        INK, True, 15, "middle")
+    f._pan = None
+
+    yy = f.band(py3 + PH3 + 22, "warn", "但这笔账不能照抄别人的", [
         "⛔⛔ <tspan font-weight=\"700\">同一个模型、同一个开关，换一个规模，"
         "收益可能从正的变成负的。</tspan>"
         "原因不神秘：<tspan font-weight=\"700\">重算改变的是计算与访存的配比</tspan>，"
@@ -130,8 +190,16 @@ def main():
                "就算差一倍，「不对称」这个结论也不变"
                % (ACT_RAW_TIB, ACT_REMAT_GIB),
                "⭐ 「3× →&#160;4×」是矩阵乘口径：重算等于把前向那一遍再买一次，"
-               "所以多出来的正好是 <tspan font-weight=\"700\">1/3</tspan>",
-               "📌 Ⓑ 里「选择性」那一档的 6% / 77%，"
+               "所以多出来的正好是 <tspan font-weight=\"700\">1/3</tspan>"
+               "　——　ZeRO 论文原话也是这个数（33% re-computation overhead）",
+               "⭐ Ⓒ 那三个「同时在场」由 L/k ＋ k 当场算出，"
+               "脚本内 assert 最优点落在 √L、且两头等高　——　"
+               "<tspan font-weight=\"700\">这一格的全部意思就是那个等高</tspan>",
+               "⛔ Ⓑ 里那两个百分比<tspan font-weight=\"700\">都按「一个 step」做分母</tspan>"
+               "（前向 ＋ 反向 ＝ 3 遍）。"
+               "<tspan font-weight=\"700\">早先「选择性」那一档写的是 6%，那是拿一遍前向当分母的旧口径</tspan>"
+               "——&#160;并排摆着不能比，已统一。",
+               "📌 Ⓑ 里「选择性」那一档的 1.9% / 77%，"
                "推导过程与名次表见<tspan font-weight=\"700\">下一张图与本节正文</tspan>；"
                "DeepSeek-V3 报告（<tspan font-weight=\"700\">arXiv 2412.19437</tspan>）"
                "明写他们重算全部 RMSNorm 与 MLA 上投影 ——&#160;正是那一档")
