@@ -120,7 +120,105 @@ def main():
     #   **不是 softmax 注意力**。「chunk 开满就变回 Transformer」是错的 ——
     #   整条轴上从头到尾都没有 softmax。调研报告里那句
     #   「C=n 退化成并行注意力」在中文里有歧义，这里说清楚。
-    y2 = y1 + PH2 + 18
+    # ══════════ ②b 块内到底怎么算 ═══════════════════════════════
+    # ⭐⭐⭐ 2026-09-16 现场：「chunk 化到底具体是怎么做的？GDN、KDA 怎么在硬件上
+    #   加速并行？」——&#160;⛔ 原图只给了**比喻**（排队、交接单），
+    #   **一个字都没说块内是怎么算的**。而那恰恰是全部机密所在。
+    # ⭐ 判据：**比喻负责让人愿意听下去，机制负责让人真的懂。缺后者，图只是好看。**
+    y1b = y1 + PH2 + 18
+    PH2B = 330
+    py2b = f.panel(0, y1b, W, PH2B,
+                   "②b 块内到底怎么算 ——　<tspan font-weight=\"700\">"
+                   "同一个和式，按「块外 ／ 块内」劈成两截</tspan>", GR,
+                   sub="⛔ 这不是近似 ——　<tspan font-weight=\"700\">"
+                       "两截加起来，跟一个一个跑出来的结果一模一样</tspan>")
+
+    def half(x, w_, col, tag, title, l1, l2, shape):
+        f.box(x, py2b + 30, w_, 208, "#fff", col, 8)
+        f.box(x, py2b + 30, w_, 4, col, col, 2)
+        f.t(x + 18, py2b + 62, tag, col, True, 15)
+        f.t(x + 18, py2b + 90, title, INK, True, 17)
+        f.t(x + 18, py2b + 120, l1, GY, size=14.5)
+        f.t(x + 18, py2b + 144, l2, GY, size=14.5)
+        f.box(x + 18, py2b + 164, w_ - 36, 56, "#f8f9fa", LINE, 6)
+        f.t(x + 32, py2b + 198, shape, col, True, 15, mono=True)
+
+    half(60, 620, BL, "第一截　块<tspan font-weight=\"700\">外</tspan>",
+         "前面所有块，早压成了一张交接单",
+         "这一块里每个 query，拿它去问那张单子就行 ——",
+         "前面有多少个 token，跟这一步的代价无关。",
+         "Q(C×d) × S(d×d)　→　一次矩阵乘")
+
+    half(720, 620, OR, "第二截　块<tspan font-weight=\"700\">内</tspan>",
+         "只剩「本块里、我前面的那几个」",
+         "这一截躲不掉，但它只有 C 个人 ——",
+         "⭐ 于是它退化成一个 C×C 的小全注意力。",
+         "Tril(Q Kᵀ)(C×C) × V(C×d)　→　又一次矩阵乘")
+
+    f.t(700, py2b + 268,
+         "＋　然后在块末更新一次交接单：<tspan font-weight=\"700\">"
+         "S ← S ＋ Kᵀ V</tspan>　——　还是一次矩阵乘",
+         INK, True, 16, "middle")
+    f.t(700, py2b + 296,
+         "⭐⭐ 三件事全是矩阵乘 ——　<tspan font-weight=\"700\">"
+         "这正是 Tensor Core ／ MXU 要的形状</tspan>", GR, True, 16, "middle")
+    f._pan = None
+
+    yy_b = f.band(y1b + PH2B + 20, "info",
+                  "为什么这一改就快了 ——　答案在第一章那句话里", [
+        "⛔ 第一章说过：RNN 在硬件上的病<tspan font-weight=\"700\">不是算不动</tspan>，"
+        "是每一步都只是<tspan font-weight=\"700\">「一个维度等于 1 的矩阵乘」</tspan> ——&#160;"
+        "几千个算力单元，一次只喂得上一个。",
+        "⭐⭐⭐ <tspan font-weight=\"700\">chunkwise 做的事，一句话："
+        "把那个 1 变成了 C。</tspan>"
+        "串行步数从 L 步降到 L÷C 步，而每一步都变成了一把胖矩阵乘。"
+        "⭐ 论文原话是「块间递归、块内并行，以<tspan font-weight=\"700\">"
+        "最大化矩阵乘吞吐</tspan>，从而吃满 Tensor Core」。",
+    ])
+
+    # ══════════ ②c delta rule 多的那一步 ═════════════════════════
+    y1c = yy_b + 22
+    PH2C = 300
+    py2c = f.panel(0, y1c, W, PH2C,
+                   "②c 可 GDN ／ KDA 还多一步 ——　"
+                   "<tspan font-weight=\"700\">因为块内那些人互相有依赖</tspan>", PU,
+                   sub="⭐ 这一步就是那几家「自研 kernel」真正在解的东西")
+
+    f.box(60, py2c + 30, 620, 190, "#fff", GY2, 8)
+    f.t(78, py2c + 62, "朴素线性注意力：块内大家各写各的", INK, True, 17)
+    for i, ln in enumerate((
+            "每个 token 只是往板子上<tspan font-weight=\"700\">加</tspan>一张卡片，",
+            "谁也不看别人写了什么。",
+            "⭐ 所以块内<tspan font-weight=\"700\">直接能并行</tspan>，",
+            "就是上面那个 C×C 的小注意力。",
+    )):
+        f.t(78, py2c + 96 + i * 26, ln, GY, size=14.5)
+
+    f.box(720, py2c + 30, 620, 190, "#fff", PU, 8)
+    f.box(720, py2c + 30, 620, 4, PU, PU, 2)
+    f.t(738, py2c + 62, "delta rule：后面的人要看前面的人擦了什么", PU, True, 17)
+    for i, ln in enumerate((
+            "⛔ 第 r 个 token 擦掉的东西，会改变第 r＋1 个读到的 ——",
+            "块内<tspan font-weight=\"700\">不能直接并行</tspan>。",
+            "⭐⭐ 解法：把块内这一串依赖<tspan font-weight=\"700\">折成一个 C×C 的下三角矩阵</tspan>，",
+            "<tspan font-weight=\"700\">求一次它的逆</tspan> ——　整块就能一次算完。",
+    )):
+        f.t(738, py2c + 96 + i * 26, ln, GY, size=14.5)
+    f.t(738, py2c + 202,
+        "⭐ 论文说这个逆用<tspan font-weight=\"700\">高斯消元的逐行前代</tspan>算，很便宜",
+        PU, True, 14)
+    f._pan = None
+
+    yy_c = f.band(y1c + PH2C + 20, "ok", "所以那句「自研 kernel」，具体是在自研什么", [
+        "⭐ <tspan font-weight=\"700\">Kimi 那篇说它做了一个 DPLR 的「特化版本」</tspan> ——&#160;"
+        "特化的地方就在这儿：<tspan font-weight=\"700\">通用写法要解的那个三角系统更贵，"
+        "而 delta rule 这个特例可以写得更省</tspan>。",
+        "⛔ <tspan font-weight=\"700\">所以「线性注意力更快」这句话是有前提的</tspan>："
+        "它快在<tspan font-weight=\"700\">有人替它把块内那一串依赖解开了</tspan>。"
+        "<tspan font-weight=\"700\">没有这个 kernel，它在硬件上还是那条又细又长的链。</tspan>",
+    ])
+
+    y2 = yy_c + 22
     PHX = 382   # ⚠️ 两条落点原来压在最后一行 C＝24 的条上，实测才看见
     pyx = f.panel(0, y2, W, PHX,
                   "③ 那 C 到底是什么 ——&#160;<tspan font-weight=\"700\">"
