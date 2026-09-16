@@ -786,7 +786,7 @@ body.figonly section h3{margin-top:34px}
 </head>
 <body>
 <div class="progress"><i></i></div>
-<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 前向只是半张账单">前向只是半张账单</a><a href="#s一" title="第 一 节 · 反向要付什么">反向要付什么</a><a href="#s二" title="第 二 节 · 第一个真正的「决策」">第一个真正的「决策」</a><a href="#s三" title="第 三 节 · 优化器">优化器</a><a href="#s四" title="第 四 节 · 这张账单直接决定了并行策略长什么样">这张账单直接决定了并行策略长什么</a><a href="#s五" title="第 五 节 · 一个完整 step 的总账">一个完整 step 的总账</a></div></nav>
+<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 前向只是半张账单">前向只是半张账单</a><a href="#s一" title="第 一 节 · 反向要付什么">反向要付什么</a><a href="#s二" title="第 二 节 · 第一个真正的「决策」">第一个真正的「决策」</a><a href="#s三" title="第 三 节 · 优化器">优化器</a><a href="#s四" title="第 四 节 · 这张账单直接决定了并行策略长什么样">这张账单直接决定了并行策略长什么</a><a href="#s五" title="第 五 节 · 一个完整 step 的总账">一个完整 step 的总账</a><a href="#s六" title="第 六 节 · 训不崩">训不崩</a></div></nav>
 
 
 <!-- ⛔ 这个文件由 Courses/tools/topic04-build.py 生成。
@@ -857,7 +857,7 @@ body.figonly section h3{margin-top:34px}
   <em>这里难的是：要求<b>快三千亿个</b>导数，而且<b>每一步都要重求一遍</b>。</em></p>
 
 <p>先看看笨办法长什么样 ——&nbsp;<em>这一步不能跳过，
-  <b>不知道笨办法有多笨，就不会觉得反向传播有多神</b>。</em></p>
+  不知道笨办法有多笨，就不会觉得反向传播有多神。</em></p>
 <div class="note danger"><p>⛔ <b>笨办法（有限差分）：</b>
   我想知道某个参数对 loss 有多大影响，就把它动一丁点，
   整个网络重跑一遍前向，看 loss 变了多少。</p>
@@ -1339,7 +1339,7 @@ body.figonly section h3{margin-top:34px}
 <tr><td><b>attention 输出</b></td><td><b>4.00 GiB</b></td><td><b>703.69 TFLOP</b></td><td><b>175.92</b></td><td><b>绝不</b></td></tr>
 </tbody></table>
 
-<p><span class="sub">⭐ <b>这张表不用背，它是<u>上面那条闭式解直接排出来的</u></b> ——&nbsp;
+<p><span class="sub">⭐ 这张表不用背，它是<u>上面那条闭式解直接排出来的</u> ——&nbsp;
   前六行的「每 GiB 付」就是各自的输入宽度换了个单位，
   <b>你拿 config 自己也能排一遍。</b></span></p>
 
@@ -1490,7 +1490,7 @@ body.figonly section h3{margin-top:34px}
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>优化器 ——&nbsp;最大的一块显存，和最难调的那个数</h2></div>
 
 <p class="lead">前面两节都在跟激活较劲。<em>可把账摊开一看 ——&nbsp;
-  <b>那个从头到尾一言不发的角色，才是最大的一块。</b></em></p>
+  那个从头到尾一言不发的角色，才是最大的一块。</em></p>
 
 <h3 id="s3-1">3.1　一个参数到底要占多少字节</h3>
 
@@ -1732,7 +1732,7 @@ body.figonly section h3{margin-top:34px}
   「动量 ÷ 二阶矩的根号」——&nbsp;<u>分子分母的量纲互相抵消</u>。</p>
 <p><em>也就是说，<b>Adam 把梯度的量纲给除掉了</b>，这一步的大小<b>大概就在 1 附近</b>。</em></p>
 <p class="landing">⭐⭐ <b>所以学习率在 Adam 里的身份<u>变了</u> ——&nbsp;
-  它不再是个折算系数，<b>它近乎直接就是「这一步每个参数挪多远」的上限</b>。</b></p>
+  它不再是个折算系数，它近乎直接就是「这一步每个参数挪多远」的上限。</b></p>
 <p>⭐ <em>这就是为什么 <b>Adam 的学习率那么好调、那么通用</b>
   ——&nbsp;而 <b>SGD 的学习率得一个模型一个模型地精调</b>。
   <b>这不是玄学，是量纲被消掉了。</b></em></p></div>
@@ -1749,7 +1749,7 @@ body.figonly section h3{margin-top:34px}
 <h4>Muon 更激进一层</h4>
 
 <p><em>Adam 是<b>逐个元素</b>地把尺度除掉。
-  ⭐ 可 Muon 说：<b>对一个矩阵参数来说，逐元素这个视角本身就不对</b>
+  ⭐ 可 Muon 说：对一个矩阵参数来说，逐元素这个视角本身就不对
   ——&nbsp;应该看<b>整个矩阵的形状</b>，
   用迭代把更新矩阵<b>近似正交化</b>，让它在各个方向上尺度一致。</em></p>
 <p>⛔ <em>代价是<b>它挑食</b> ——&nbsp;网络里凡是不成矩阵的那些参数它处理不了，
@@ -1877,7 +1877,7 @@ body.figonly section h3{margin-top:34px}
   <em>而且幅度很温和 ——&nbsp;<b>500 倍的规模差，学习率只差 5 倍。</b></em></p>
 <p>⭐ <em>论文自己的话是：「更大的模型通常能用更大的 batch，
   <b>但需要更小的学习率</b>」。他们用<b>梯度噪声尺度</b>来定 batch。</em></p>
-<p><span class="sub">⛔ <b>注意这张表里 batch 和学习率是<u>一起</u>变的</b> ——&nbsp;
+<p><span class="sub">⛔ 注意这张表里 batch 和学习率是<u>一起</u>变的 ——&nbsp;
   这是最容易漏的一条：你不能只调学习率不看 batch，它俩绑在一起。
   GPT-3 还额外把 batch 从 32K token 线性爬到目标值（头 40–120 亿 token 内）。
   📌 出处：arXiv <b><a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">2005.14165</a></b> 表 2.1 与 <a href="#s2-3">§2.3</a>。</span></p></div>
@@ -2047,7 +2047,7 @@ body.figonly section h3{margin-top:34px}
   <li><b>ZeRO-2 再切梯度。</b><em>次大，而且<b>反向结束时才需要完整的一份</b>
     ——&nbsp;在那之前它可以是散着的。</em></li>
   <li><b>ZeRO-3（≈ FSDP）最后才切参数。</b><em>因为<b>每一层前向都要用它</b>
-    ——&nbsp;一切开，<b>每层都得先 all-gather 把它拼回来</b>。
+    ——&nbsp;一切开，每层都得先 all-gather 把它拼回来。
     <b>通信代价是三级里最高的。</b></em></li>
 </ul>
 <p class="landing">⭐⭐⭐ 所以顺序不是随意的，也不是历史巧合 ——&nbsp;
@@ -2193,7 +2193,7 @@ body.figonly section h3{margin-top:34px}
   <em>每个参数、每个 token，大约 <b>6 次浮点运算</b>（前向 2、反向 4
   ——&nbsp;正好对上<a href="#s一">第一节</a>那个 1＋2）。</em></p>
 
-<p><b>代进去（MoE 要用<u>激活</u>参数，不是总参数）：</b>
+<p>代进去（MoE 要用<u>激活</u>参数，不是总参数）：
   <em><code>6 × 37e9 × 131,072 ≈ <b>29.1 PFLOP</b></code>，一条 128K 序列。</em></p>
 
 <div class="note danger"><p>⛔⛔ 但这个数在 128K 上是错的 ——&nbsp;而且错得很多。</p>
@@ -2232,7 +2232,7 @@ body.figonly section h3{margin-top:34px}
   <em>激活大就开重算 / 上 CP；优化器状态大就上 ZeRO ——&nbsp;
   <b>这两条路走反了，一点用都没有。</b></em></span></p>
 
-<h3 id="s5-4">5.4　⭐ 全课落点：这张账单交给下一讲的是什么</h3>
+<h3 id="s5-4">5.4　这张账单交给下一讲的是什么</h3>
 
 <p class="lead">专题一算完前向，结论是<b>「装不下」</b>。
   <em>这一讲把账补全之后，那句话变得<b>具体</b>了 ——&nbsp;
@@ -2248,15 +2248,297 @@ body.figonly section h3{margin-top:34px}
 <p class="landing">⭐⭐⭐ <b>你会注意到四条里有三条写着同一个字：<u>切</u>。</b>
   <em>——&nbsp;那就是<b>专题五</b>整讲要做的事：<b>切这件事本身，也是要算账的。</b></em></p></div>
 
-<p><span class="sub">⭐ 而这一讲真正想留下的，不是那几个数，是三条判据：<br>
-  ① <b>要不要高精度，看那一项「老的贡献走不走」</b>（3.2）；<br>
-  ② 该不该重算，看「每省一字节要付多少 FLOPs」（2.3）；<br>
-  ③ 凡是会改变数据分片形状的参数，都不能跨规模照抄（2.6）。<br>
-  <em>数字会过期，这三条不会。</em></span></p>
+<p><span class="sub">📌 <b>还有一节。</b>
+  <em>账算完了，可账算得再清楚，也回答不了训练现场最常问的那一句
+  ——&nbsp;<b>「loss 飞了怎么办」</b>。那是<a href="#s六">第六节</a>。</em></span></p>
 
 </div></section>
 
-<section id="s六"><div class="wrap"><div class="stn"><span class="badge">附　录</span><h2>这一讲的数是怎么核的</h2></div>
+<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>训不崩 ——&nbsp;<u>loss 飞了怎么办，以及怎么让它别飞</u></h2></div>
+
+<!-- ⭐⭐⭐ 2026-09-16 加。这一节是**扫完十四份大纲之后补的**：
+     「loss spike」「z-loss」「scaling law」三个关键词在整套课程里**零命中**，
+     而前两样是真训练时最痛的东西。
+     ⛔ 判据（这次盘点本身的方法）：**别凭印象说「还缺什么」——
+       把关键词扫一遍，零命中的那几个才是真洞。**
+       扫之前我以为最大的洞是数据，扫完发现数值稳定性比它更干净地缺着。
+     ⭐ 本节**一个自己的实测都没有**，四条全部来自公开论文并逐条核过原文 ——
+       理由见 §七：这一讲已经有太多「自己推的」数了。 -->
+
+<p class="lead">前面整整一讲都在算<b>账</b>。<em>可账算得再清楚，也回答不了训练现场最常见的那一句：
+  <b>「loss 突然飞上去了，怎么办？」</b></em></p>
+
+<figure class="fbox fwide" id="fig-stability"><svg viewBox="0 0 1400 1250" width="100%" role="img" aria-label="训练稳定性的三类治法各在治链条上的不同位置：结构层面是归一化放哪儿和 QK-norm，数值层面是 z-loss 和梯度裁剪，现场层面是回滚 checkpoint 加跳数据。而 ST-MoE 那张对照表说明：让训练稳住很容易，难的是稳住而不牺牲质量 —— 收紧 update clipping 三次全稳，可质量从负一点七五掉到负四点二"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">训不崩　——　<tspan font-weight="700">三类治法，治的是链条上三个不同的位置</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⛔ 这一节最容易写成一张技巧清单 ——&#160;<tspan font-weight="700">列完了还是不知道该先动哪个</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">治结构</text>
+<rect x="89" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="110" y="74" fill="#5f6368" style="font-size:14.0px">治数值</text>
+<rect x="178" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="199" y="74" fill="#5f6368" style="font-size:14.0px">治现场</text>
+<rect x="0" y="102" width="1400" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 同一个症状（loss 飞了），<tspan font-weight="700">可以从三个位置下手</tspan></tspan></text>
+<text class="svgsm" x="569" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 从左往右：<tspan font-weight="700">越左越治本，越右越应急</tspan></text>
+<rect x="40" y="166" width="418" height="288" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="40" y="166" width="418" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="249" y="202" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">① 治结构</tspan></text>
+<text class="svgsm" x="249" y="230" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">改网络本身，让它天生不容易飞</tspan></text>
+<text class="svgsm" x="62" y="272" fill="#174ea6" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="80" y="272" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">归一化放进残差块里</tspan>（Pre-LN）</text>
+<text class="svgsm" x="62" y="310" fill="#174ea6" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="80" y="310" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">QK-norm</tspan> ——　别让注意力分数长疯</text>
+<text class="svgsm" x="62" y="348" fill="#174ea6" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="80" y="348" fill="#5f6368" style="font-size:13.5px">初始化按深度缩一下</text>
+<text class="svgsm" x="249" y="432" fill="#174ea6" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⭐ 一次性，改完就不用管</tspan></text>
+<rect x="482" y="166" width="418" height="288" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<rect x="482" y="166" width="418" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="691" y="202" fill="#b06000" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">② 治数值</tspan></text>
+<text class="svgsm" x="691" y="230" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">让某些量不许长太大</tspan></text>
+<text class="svgsm" x="504" y="272" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="522" y="272" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">z-loss</tspan> ——　摁住 softmax 前的 logits</text>
+<text class="svgsm" x="504" y="310" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="522" y="310" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">梯度裁剪</tspan> ——　按全局范数，常设 1.0</text>
+<text class="svgsm" x="504" y="348" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="522" y="348" fill="#5f6368" style="font-size:13.5px">关键处用高精度算</text>
+<text class="svgsm" x="691" y="432" fill="#b06000" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⭐ 便宜，而且大多不伤质量</tspan></text>
+<text class="svgsm" x="470" y="310" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="924" y="166" width="418" height="288" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="924" y="166" width="418" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1133" y="202" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">③ 治现场</tspan></text>
+<text class="svgsm" x="1133" y="230" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">已经飞了，怎么把这一次救回来</tspan></text>
+<text class="svgsm" x="946" y="272" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="964" y="272" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">回滚到 spike 之前的 checkpoint</tspan></text>
+<text class="svgsm" x="946" y="310" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="964" y="310" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">跳掉那一段数据</tspan>，再往下跑</text>
+<text class="svgsm" x="946" y="348" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
+<text class="svgsm" x="964" y="348" fill="#5f6368" style="font-size:13.5px">把 spike 的时间点和数据位置记下来</text>
+<text class="svgsm" x="1133" y="432" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⛔ 不是修好了，是绕过去了</tspan></text>
+<text class="svgsm" x="912" y="310" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="0" y="534" width="1400" height="260" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="534" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="536" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="564" x2="1400" y2="564" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="554" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐⭐⭐ PaLM 做过一个消融，结论跟所有人的第一反应相反</tspan></text>
+<text class="svgsm" x="419" y="554" fill="#5f6368" style="font-size:11.0px">⭐ 这个消融<tspan font-weight="700">只花了一次重训</tspan>，却把一整类猜测排除掉了</text>
+<rect x="70" y="598" width="600" height="186" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="370" y="634" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">拿「坏数据」这个假设验一验</tspan></text>
+<text class="svgsm" x="370" y="682" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">同一批数据　＋　<tspan font-weight="700">换一个时刻</tspan></tspan></text>
+<text class="svgsm" x="370" y="716" fill="#80868b" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">↓</tspan></text>
+<text class="svgsm" x="370" y="754" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">⛔ 结果：不飞。</tspan></text>
+<line x1="690" y1="692" x2="726" y2="692" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="740" y="598" width="600" height="186" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1040" y="634" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">所以不是数据坏</tspan></text>
+<text class="svgsm" x="1040" y="686" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">两个条件<tspan font-weight="700">同时满足</tspan>才出事</tspan></text>
+<text class="svgsm" x="1040" y="716" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">缺一样都不会飞</text>
+<text class="svgsm" x="1040" y="754" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐⭐ 这解释了为什么回滚 ＋ 跳数据管用</tspan></text>
+<rect x="0" y="846" width="1400" height="322" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="846" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="848" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="876" x2="1400" y2="876" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="866" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓒ ⭐⭐ 这一节真正的难点：<tspan font-weight="700">让它稳住很容易，难的是稳住而不牺牲质量</tspan></tspan></text>
+<text class="svgsm" x="699" y="866" fill="#5f6368" style="font-size:11.0px">📌 ST-MoE 论文 Table 4 的原数 ——　三种做法，三次独立训练</text>
+<text class="svgsm" x="410" y="946" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">基线</tspan></text>
+<rect x="430" y="920" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="920" width="585.6785714285714" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="1064" y="947" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">-1.755</tspan></text>
+<text class="svgsm" x="1146" y="947" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 4/6</tspan></text>
+<text class="svgsm" x="442" y="982" fill="#5f6368" style="font-size:13.0px">⚠️ 六次跑崩两次</text>
+<text class="svgsm" x="410" y="1020" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">收紧 update clipping</tspan></text>
+<rect x="430" y="994" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="994" width="42.95714285714284" height="40" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1064" y="1021" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">-4.206</tspan></text>
+<text class="svgsm" x="1146" y="1021" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 3/3</tspan></text>
+<text class="svgsm" x="442" y="1056" fill="#5f6368" style="font-size:13.0px">⛔ 条短了一大截 ——　看这里</text>
+<text class="svgsm" x="410" y="1094" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">router z-loss</tspan></text>
+<rect x="430" y="1068" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="1068" width="588.7785714285715" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1064" y="1095" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">-1.741</tspan></text>
+<text class="svgsm" x="1146" y="1095" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 3/3</tspan></text>
+<text class="svgsm" x="442" y="1130" fill="#5f6368" style="font-size:13.0px">⭐ 条最长，而且一次没崩</text>
+<text class="svgsm" x="430" y="1156" fill="#5f6368" style="font-size:14.5px">⭐ 横条越长质量越好（这是个越大越好的指标）。<tspan font-weight="700">中间那根「稳定 3/3」看着完美，可它把质量打穿了。</tspan></text>
+</svg><figcaption>⭐⭐ Ⓐ 按「治在链条的哪一步」排，不按「有哪些技巧」排 ——&nbsp;<em>技巧清单列完了，读者还是不知道<b>该先动哪个</b>。</em><span class="capmore"><br>⭐⭐⭐ <em>Ⓑ 是 PaLM 那个消融：同一批数据换个时刻喂就不飞，所以 spike 是数据和参数状态撞出来的，不是数据本身坏。</em><br>⛔ <em>Ⓒ 中间那根条看着完美（稳定 3/3），<b>可它把质量打穿了</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>PaLM 540B 的 spike 与消融：<b>arXiv <a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a></b> <a href="#s5-1">§5.1</a> ——&#160;「大约 20 次」「回滚约 100 步」「跳 200–500 批」「<b>不认为是数据本身坏</b>」都是原文</p>
+<p>router z-loss 与 Ⓒ 那张表：<b>arXiv <a href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener">2202.08906</a></b>（ST-MoE）。⭐ 论文自己的小标题就是「<b>很多方法能稳住稀疏模型，但代价是质量变差</b>」</p>
+<p>QK-norm：<b>arXiv <a href="https://arxiv.org/abs/2302.05442" target="_blank" rel="noopener">2302.05442</a></b>（ViT-22B）§2 ——&#160;在<b>约 80 亿参数</b>处观察到训练发散，根因是注意力 logits 变得极大、注意力权重塌成几乎 one-hot（熵接近 0）</p>
+<p>归一化的位置：<b>arXiv <a href="https://arxiv.org/abs/2002.04745" target="_blank" rel="noopener">2002.04745</a></b>（ICML 2020）——&#160;证明 Post-LN 在初始化时<b>靠近输出层的梯度很大</b>，所以必须靠 warmup 压住；换成 Pre-LN 则初始化时梯度就是良态的</p>
+<p>⛔ 本图<b>不含任何我们自己的实测</b> ——&#160;四条全部来自公开论文，Ⓒ 那三个数是照抄 Table 4</p></details></figure>
+
+<h3 id="s6-1">6.1　先看一个真实的画面</h3>
+
+<div class="note danger"><p>⛔⛔ PaLM 训 540B 的时候，loss 飞了<u>大约 20 次</u>。</p>
+<p><em>而且 ——&nbsp;<b>梯度裁剪是开着的</b>。
+  这些 spike 出现在<b>极不规则</b>的时刻，有时候训到很晚才来；
+  <b>而更小的模型上根本没观察到。</b></em></p>
+<p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a></b> <a href="#s5-1">§5.1</a>。
+  「大约 20 次」「尽管梯度裁剪是开着的」都是论文原话。</span></p></div>
+
+<p class="landing">⭐ 先记住这个规模效应：<u>小模型上训得好好的，不代表大模型上不会飞</u>。
+  <em>——&nbsp;这跟 <a href="#s二">2.6</a> 那条「不能跨规模照抄」是同一件事，
+  只不过这次翻车的不是收益，<b>是训练本身。</b></em></p>
+
+<h3 id="s6-2">6.2　⭐⭐⭐ 那个最反直觉的消融：<u>不是数据坏</u></h3>
+
+<p>第一反应都一样：<b>肯定是那批数据有问题。</b>
+  <em>PaLM 团队去验了这件事，做法很干净：</em></p>
+<p><em>把 spike 前后那几批数据<b>单独拎出来</b>，从<b>另一个更早的 checkpoint</b>
+  重新喂一遍 ——&nbsp;<b>结果不飞。</b></em></p>
+
+<div class="note ok"><p>⭐⭐⭐ 所以 spike 不是「坏数据」造成的，
+  是<u>这批数据</u> 和 <u>当时那个参数状态</u> 撞在一起才出的事。</p>
+<p><em>换个时刻喂同样的数据，什么都不会发生。</em></p>
+<p class="landing">⭐ 这一下就解释了他们那个看起来很土的办法为什么管用：
+  <em>回滚到 spike 之前约 100 步的 checkpoint，跳掉那 200–500 批数据，继续跑
+  ——&nbsp;之后同一个点就不再飞了。</em></p>
+<p><span class="sub">⛔ <b>注意这不是「修好了」，是「绕过去了」。</b>
+  <em>论文自己也写着：由于训练成本太高，他们没能找到一个有原则的缓解办法。
+  ⭐ 这句坦白值得原样转述 ——&nbsp;<b>这一行至今仍是开放问题。</b></em></span></p></div>
+
+<h3 id="s6-3">6.3　⭐⭐ 这一节真正的难点：<u>稳住很容易，难的是稳住而不掉质量</u></h3>
+
+<p><em>「让它别飞」有一堆办法：学习率调到极小、裁剪收到极紧……
+  <b>都能稳，代价是模型变差。</b></em></p>
+<p>⭐ <b>ST-MoE 那篇论文把这件事量出来了</b>
+  ——&nbsp;<em>同一个配置跑三次，看几次能跑完、以及跑完的质量：</em></p>
+
+<table>
+<thead><tr><th>做法</th><th>稳定性</th><th>质量（越大越好）</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td>基线</td><td>4 / 6</td><td>−1.755</td><td>六次里两次训崩</td></tr>
+<tr><td>收紧 update clipping（0.1）</td><td><b>3 / 3</b></td><td><b>−4.206</b></td>
+    <td>⛔ <b>稳了，可质量被打穿了</b></td></tr>
+<tr><td><b>router z-loss</b></td><td><b>3 / 3</b></td><td><b>−1.741</b></td>
+    <td>⭐ <b>稳了，质量还略好一点</b></td></tr>
+</tbody></table>
+
+<p class="landing">⭐⭐⭐ 中间那一行是这张表的全部价值：
+  「稳定 3/3」看着完美，可它是拿质量换来的。
+  <em>——&nbsp;<b>评价一个稳定性手段，必须同时看这两栏。</b></em></p>
+<p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener">2202.08906</a></b>（ST-MoE）Table 4。
+  论文自己的小标题就是「<b>很多方法能稳住稀疏模型，但代价是质量变差</b>」。</span></p>
+
+<h3 id="s6-4">6.4　治法一 · 治数值：<u>不让某些量长太大</u></h3>
+
+<h4>z-loss ——&nbsp;摁住 softmax 前面那个 logits</h4>
+<p><em>做法出人意料地简单：在总 loss 上加一项，惩罚 softmax 归一化因子的对数的平方。
+  ——&nbsp;它逼着那个 <code>log Z</code> 待在 0 附近，<b>也就是不让 logits 长得太大</b>。</em></p>
+<p>⭐ <b>两个地方都能加，而且都有人用：</b></p>
+<ul>
+  <li><b>输出 softmax 上</b> ——&nbsp;<em>PaLM 用的是 <code>10⁻⁴ · log²Z</code>，
+    论文说它<b>提高了训练稳定性</b>。</em></li>
+  <li><b>MoE 路由器上</b> ——&nbsp;<em>就是上面那个 router z-loss。
+    ⭐ <b>MoE 训练几乎必配</b>：路由器那一步也是个 softmax，而它的 logits 一旦爆掉，
+    <b>路由结果会剧烈抖动。</b></em></li>
+</ul>
+<p><span class="sub">⭐ <b>为什么 z-loss 特别划算</b>：ST-MoE 的解释是 ——&nbsp;
+  logits 后面接的是指数函数，而指数对输入误差极度敏感。
+  <em>把输入范围压小，等于直接降低了这一步的数值风险，
+  <b>而模型并不真的需要那么大的动态范围。</b></em></span></p>
+
+<h4>梯度裁剪 ——&nbsp;它是安全带，不是调参手段</h4>
+<p><em>按<b>全局范数</b>裁：把所有参数的梯度当成一个大向量，
+  范数超过阈值就整体等比例缩回去。<b>常见设 1.0</b>（PaLM、DeepSeek-V3 都是 1.0）。</em></p>
+<p>⛔ 但 6.1 那句话要记住：PaLM 开着裁剪，照样飞了 20 次。
+  <em>——&nbsp;裁剪拦得住单步的爆炸，拦不住「参数状态已经走到了一个坏地方」。</em></p>
+
+<h3 id="s6-5">6.5　治法二 · 治结构：<u>让它天生不容易飞</u></h3>
+
+<h4>⭐⭐ 归一化放在哪儿 ——&nbsp;这件事顺带回答了 3.5 那个悬案</h4>
+<p><em>原始 Transformer 把 LayerNorm 放在<b>残差块之间</b>（Post-LN）。
+  后来大家改成放在<b>残差块里面</b>（Pre-LN）。</em>
+  <b>这不是风格问题。</b></p>
+
+<div class="note ok"><p>⭐⭐⭐ 2020 年有一篇论文用理论证明了这件事，
+  而它的结论直接接上了<a href="#s三">3.5</a>：</p>
+<p><em>Post-LN 在初始化的那一刻，靠近输出层的梯度就很大 ——&nbsp;
+  这时候用大学习率必然不稳。而 warmup 正是在实践中压住这个问题的办法。<br>
+  反过来，<b>Pre-LN 在初始化时梯度就是良态的</b> ——&nbsp;
+  所以论文说：Pre-LN 可以把 warmup 那一段去掉。</em></p>
+<p class="landing">⭐⭐ 所以「为什么要 warmup」这个问题，历史上有过两个答案：
+  <em>2020 年那篇说<b>是被 Post-LN 逼的</b>；
+  <a href="#s三">3.5</a> 引的 2024 年那篇说<b>它让网络能承受更大的峰值学习率</b>。
+  ⭐ <b>两个都对，而且不矛盾</b> ——&nbsp;
+  前者解释了「为什么当年非要不可」，后者解释了「为什么今天还留着」。</em></p>
+<p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2002.04745" target="_blank" rel="noopener">2002.04745</a></b>（ICML 2020），用平均场理论证的。</span></p></div>
+
+<h4>QK-norm ——&nbsp;注意力分数长疯了</h4>
+<p><em>ViT 往上做到<b>约 80 亿参数</b>的时候，训了几千步就发散。
+  根因查出来很具体：注意力 logits 变得极大，
+  于是 softmax 之后的注意力权重<b>塌成几乎 one-hot</b>（熵接近 0）。</em></p>
+<p class="landing">⭐ 治法也很直接：在做点积之前，给 Q 和 K 各做一次 LayerNorm。
+  <em>——&nbsp;这就是今天很多大模型标配的 QK-norm 的来历。</em></p>
+<p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2302.05442" target="_blank" rel="noopener">2302.05442</a></b>（ViT-22B）§2。
+  ⭐ <b>注意这又是一次「只在大规模上才出现」的故障</b> ——&nbsp;
+  跟 6.1 那条是同一个模式。</span></p>
+
+<h4>初始化 ——&nbsp;一句话带过，但别漏</h4>
+<p><em>深网络里，如果每一层的残差分支都按同样的尺度初始化，
+  <b>信号会随层数累积放大</b>。常规做法是<b>按深度把残差分支的初始化缩一下</b>
+  ——&nbsp;它不解决 spike，但它决定了你从一个多好的起点出发。</em></p>
+
+<h3 id="s6-6">6.6　顺带清掉两个常见误解</h3>
+
+<div class="note"><p>❓ 「bf16 是不是也要 loss scaling？」——&nbsp;不用。</p>
+<p><em>loss scaling 是 <b>fp16 时代</b>的必需品：fp16 的<b>指数位只有 5 位</b>，
+  小梯度会直接下溢成 0，所以要先把 loss 放大若干倍再算、更新前再缩回去。<br>
+  ⭐ 而 bf16 的指数位跟 fp32 一样是 8 位 ——&nbsp;
+  <b>动态范围没缩，缩的是尾数精度。</b>所以它不下溢，也就不需要 loss scaling。</em></p>
+<p class="landing">⭐ 这跟 <a href="#s三">3.2</a> 那条判据是配套的：
+  bf16 换来的是「范围够、精度差」，所以怕的是<u>累加</u>，不是<u>下溢</u>。</p></div>
+
+<div class="note"><p>❓ 「训练是不是应该做到可复现？」——&nbsp;能做到，而且很值。</p>
+<p><em>PaLM 做到了<b>逐比特可复现</b>：从任何一个 checkpoint 重启，
+  后续每一步的结果<b>跟原来那次一模一样</b>。</em></p>
+<p>⭐ <em>靠的是两件事：<b>确定性的计算框架</b>，
+  以及<b>确定性的数据管线</b> ——&nbsp;
+  后者的关键是<b>「第几批数据」只由步数决定</b>，跟进程数、恢复次数都无关。</em></p>
+<p class="landing">⛔ 而 6.2 那个「回滚 ＋ 跳数据」的办法，前提就是这个。
+  <em>——&nbsp;数据管线不确定，你连「跳掉哪几批」都说不清。</em></p>
+<p><span class="sub">📌 同样出自 arXiv <b><a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a></b>。</span></p></div>
+
+<h3 id="s6-7">6.7　本章落点</h3>
+
+<div class="note ok"><p>⭐⭐⭐ <b>那三类不是并列的选项 ——&nbsp;它们有先后。</b></p>
+<ul>
+  <li><b>先治结构</b>（Pre-LN / QK-norm / 初始化）——&nbsp;
+    <em>一次性，改完不用管，而且<b>基本不花运行时的钱</b>。</em></li>
+  <li><b>再治数值</b>（z-loss / 裁剪）——&nbsp;
+    <em>便宜，而且好的那种<b>不伤质量</b>。</em></li>
+  <li><b>最后才是治现场</b>（回滚 ＋ 跳数据）——&nbsp;
+    <em>⛔ <b>它不是修复，是绕行。</b>需要它的次数多了，说明前两层没做好。</em></li>
+</ul>
+<p class="landing">⭐⭐ 而贯穿这一节的那条判据是：<u>评价任何一个稳定性手段，
+  都要同时看「稳没稳」和「质量掉没掉」。</u>
+  <em>——&nbsp;只看前者的话，「把学习率设成零」是最稳的方案。</em></p></div>
+
+<h3 id="s6-8">6.8　⭐⭐⭐ 全课落点：四条判据</h3>
+
+<p class="lead">这一讲报了几十个数字。<em><b>但真正想留下的不是那些数。</b></em></p>
+
+<div class="note ok"><ul>
+  <li><b>① 要不要高精度，看那一项「老的贡献走不走」。</b>
+    <em>滑动平均有遗忘，bf16 扛得住；主权重跨十万步累加，必须 fp32。（<a href="#s三">3.2</a>）</em></li>
+  <li><b>② 该不该重算，看「每省一字节要付多少 FLOPs」。</b>
+    <em>线性层的这个数恰好等于输入宽度；attention 的随序列长度线性上升
+    ——&nbsp;<b>两条斜率不同，必然相交。</b>（<a href="#s二">2.3</a>）</em></li>
+  <li><b>③ 凡是会改变数据分片形状的参数，都不能跨规模照抄。</b>
+    <em>⭐ 这条在本讲出现了<b>三次</b>：序列长度（2.5）、模型规模（6.1）、
+    以及同一个开关换规模收益变号（2.6）。<b>出现三次的，不是巧合。</b></em></li>
+  <li><b>④ 评价任何一个稳定性手段，要同时看「稳没稳」和「质量掉没掉」。</b>
+    <em>只看前者的话，把学习率设成零是最优解。（本节 6.3）</em></li>
+</ul>
+<p class="landing">⭐ <b>数字会过期，这四条不会。</b></p></div>
+
+<p><span class="sub">⛔ <b>这一节刻意<u>一个我们自己的实测都没有</u></b> ——&nbsp;
+  四条全部来自公开论文并逐条核过原文。
+  <em>理由写在 <a href="#s七">§七</a>：这一讲已经有太多「自己推的」数了，
+  <b>稳定性这一块不该再加。</b></em></span></p>
+
+</div></section>
+
+<section id="s七"><div class="wrap"><div class="stn"><span class="badge">附　录</span><h2>这一讲的数是怎么核的</h2></div>
 
 <!-- ⭐⭐⭐ 2026-09-16 加。这一节是**给这一讲上保险**用的。
      ⛔ 这一讲报了几十个数字，其中相当一部分是自己推的。
@@ -2268,7 +2550,7 @@ body.figonly section h3{margin-top:34px}
   <em>有的能查到论文原文，有的是我们自己按算子推的
   ——&nbsp;<b>后者可能差一倍，前者不会。</b></em></p>
 
-<h3 id="s6-1">6.1　查得到出处的（放心抄）</h3>
+<h3 id="s7-1">7.1　查得到出处的（放心抄）</h3>
 <table>
 <thead><tr><th>数字 / 说法</th><th>出处</th></tr></thead>
 <tbody>
@@ -2293,7 +2575,7 @@ body.figonly section h3{margin-top:34px}
     <td>作者 writeup（<b>三条都是原文</b>）</td></tr>
 </tbody></table>
 
-<h3 id="s6-2">6.2　⚠️ 自己推的（当量级看，别当阈值）</h3>
+<h3 id="s7-2">7.2　⚠️ 自己推的（当量级看，别当阈值）</h3>
 <table>
 <thead><tr><th>数字</th><th>推导链</th><th>它可能错在哪</th></tr></thead>
 <tbody>

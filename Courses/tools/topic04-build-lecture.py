@@ -472,6 +472,70 @@ GPT-3 那个两千零四十八，attention 只占百分之一点几，漏掉完�
 ⚠️ <b>「五到六倍」那个反推数，报的时候要说清它是从 82% 推的，而 82% 是自己算的。</b>
 <em>这一讲从头到尾都在守这条规矩，最后一节别破功。</em>
 """),
+# ── 六 ─────────────────────────────────────────────────────────────
+("第六节　训不崩：loss 飞了怎么办（10′）", "s六", "fig-stability", """
+<p>🎯 <b>这一节留一条：评价任何稳定性手段，都要同时看「稳没稳」和「质量掉没掉」。</b></p>
+
+<p>⭐⭐ <b>这一节的位置很特别 ——&nbsp;它是<u>唯一一节讲「出事了怎么办」的</b>。
+<em>前面六节都在算账，可账算得再清楚，也回答不了训练现场最常问的那一句。</em></p>
+
+<p class="say">「前面我们把账算完了。<br>
+但真到了机器上，最常听见的一句话不是「显存不够」，而是 ——&nbsp;
+<b>「哎，loss 飞了。」</b>」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-stability</code>，<b>先放大 Ⓑ</b>。
+<em>⛔ 不要从 Ⓐ 开始 ——&nbsp;先讲那个反直觉的实验，台下才会认真听后面的分类。</em></p>
+
+<p class="say">「PaLM 训 540B 的时候，loss 飞了<b>大约二十次</b>。<br>
+而且注意 ——&nbsp;<b>梯度裁剪是开着的。</b><br>
+这些 spike 出现在极不规则的时刻，有时候训到很晚才来。<b>而更小的模型上根本没出现过。</b>」</p>
+
+<p>⭐⭐⭐ <b>然后是这一节的钩子。讲之前停一拍，让台下先给出第一反应。</b></p>
+<p class="say">「第一反应是什么？<b>肯定是那批数据有问题。</b><br>
+他们去验了。做法很干净：<b>把 spike 前后那几批数据单拎出来，
+从另一个更早的 checkpoint 重新喂一遍。</b><br>
+……<b>不飞。</b>」</p>
+<p class="say">「⭐ 所以 spike <b>不是坏数据造成的</b>。<br>
+是<b>这批数据</b>，和<b>当时那个参数状态</b>，两样撞在一起才出的事。<br>
+<b>缺一样，都不会飞。</b>」</p>
+<p class="say">「这一下就解释了他们那个看起来很土的办法为什么管用 ——&nbsp;
+<b>回滚到 spike 之前大约一百步，跳掉那两三百批数据，接着跑。</b>
+之后同一个点就不再飞了。<br>
+⛔ 但要说清楚：<b>这不是修好了，是绕过去了。</b>
+论文自己也写着：由于训练成本太高，<b>他们没能找到一个有原则的办法</b>。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：平移到 <b>Ⓐ</b>。</p>
+<p class="say">「知道了这一点，再看治法就有框架了。<b>三类，治的是三个不同的位置。</b><br>
+<b>治结构</b> ——&nbsp;改网络本身，让它天生不容易飞：归一化放进残差块里、QK-norm、初始化。<br>
+<b>治数值</b> ——&nbsp;不让某些量长太大：z-loss、梯度裁剪。<br>
+<b>治现场</b> ——&nbsp;已经飞了怎么救：回滚加跳数据。<br>
+⭐ <b>越左越治本，越右越应急。</b>所以「先动哪个」是有顺序的。」</p>
+
+<p>⭐ <b>然后是本节的落点，也是全节最该带走的一句。</b></p>
+<p class="board"><b>🖥 屏幕</b>：平移到 <b>Ⓒ</b>。</p>
+<p class="say">「不过这一节真正的难点<b>不是「怎么让它稳」</b>。<br>
+让它稳太容易了 ——&nbsp;学习率设成零，保证不飞。<br>
+<b>难的是：稳住，而且不掉质量。</b>」</p>
+<p class="say">「ST-MoE 那篇论文把这件事量出来了。同一个配置跑三次：<br>
+基线，六次里崩两次，质量负一点七五五。<br>
+收紧 update clipping ——&nbsp;<b>三次全稳</b>，质量<b>负四点二零六</b>。<br>
+router z-loss ——&nbsp;<b>也是三次全稳，质量负一点七四一，还略好一点。</b><br>
+⭐⭐ <b>中间那一行是这张表的全部价值：「稳定 3/3」看着完美，可它是拿质量换来的。</b>」</p>
+
+<p>⭐ <b>最后给一句可迁移的：</b></p>
+<p class="say">「所以记住这条 ——&nbsp;
+<b>评价任何一个稳定性手段，都要同时看两栏：稳没稳，以及质量掉没掉。</b><br>
+只看前一栏的话，<b>「把学习率设成零」是最优解。</b>」</p>
+""", """
+⛔ <b>不要展开讲 z-loss 的公式。</b><em>「惩罚 softmax 前那个归一化因子的对数的平方」
+口头说一遍就够；台下真要用，课件 6.4 里有。</em><br>
+⛔ <b>不要在这里讲 Pre-LN 的证明。</b><em>课件 6.5 有，而且它顺带回答了 3.5 的 warmup 悬案
+——&nbsp;<b>如果第三节讲得顺、时间还够，才回头补那一句</b>；时间紧就跳。</em><br>
+⚠️ <b>「小模型上没出现过」这句不要滑过去。</b>
+<em>它是这一节跟 2.6 那条判据的接点 ——&nbsp;<b>这一讲里「不能跨规模照抄」已经是第三次出现了</b>。</em><br>
+⚠️ <b>这一节没有任何我们自己的实测，全部来自公开论文。</b>
+<em>被追问的时候可以直说 ——&nbsp;这是有意为之。</em>
+"""),
 ]
 
 
@@ -541,7 +605,7 @@ p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
 </div>
 
 <div class="plan">
-  <h2>⏱ 时间：主线 70′</h2>
+  <h2>⏱ 时间：主线 80′</h2>
   <p>⭐⭐ <b>这一讲跟专题三不一样：它<u>可以跳着讲</u>。</b>
   <em>专题三是一条故事线，跳一章下一章就没来处；这一讲是<b>一张账单</b>，
   每一节回答的都是同一个问题的不同栏目。</em></p>
@@ -554,8 +618,9 @@ p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
 <tr><td><b>二　拿算力换显存</b></td><td><b>15</b></td><td>可压到 10</td><td>⭐ 砍就砍名次表，<b>交叉点那张图不能砍</b></td></tr>
 <tr><td><b>三　优化器</b></td><td><b>20</b></td><td>可独立成课</td><td>⭐⭐⭐ 最长。学习率那一段是台下最想听的</td></tr>
 <tr><td>四　并行策略的来处</td><td>8</td><td>可压到 4</td><td>只保「倒过来读」那个动作</td></tr>
-<tr><td>五　总账 ＋ 收尾</td><td>12</td><td><b>收尾不能砍</b></td><td>⛔ 最后那三条判据是全讲的落点</td></tr>
-<tr><td><b>合计</b></td><td><b>70</b></td><td></td><td></td></tr>
+<tr><td>五　总账</td><td>12</td><td>可压到 8</td><td>⭐ 那个「6ND 会骗你」的段落别砍</td></tr>
+<tr><td><b>六　训不崩 ＋ 收尾</b></td><td><b>10</b></td><td><b>收尾不能砍</b></td><td>⛔ 最后那四条判据是全讲的落点</td></tr>
+<tr><td><b>合计</b></td><td><b>80</b></td><td></td><td></td></tr>
 </tbody></table>
   <p style="margin-top:10px">⛔⛔ <b>上面那张表是<u>愿望</u>，下面这张是<u>地板</u>。</b>
   <em>「地板」＝ 把这一节的讲稿一个字不落地念完、再加切图滚动的时间，
@@ -567,7 +632,7 @@ p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
 <p><b>讲稿台词 @@SAY@@ 汉字</b>（按 200 字/分 ＝ <b>@@SAYMIN@@ 分钟</b>）
 ＋ <b>@@CUTS@@ 次切图</b>（每次滚动定位按 15 秒 ＝ <b>@@CUTMIN@@ 分钟</b>）
 ——&nbsp;<b>合计 @@TOTAL@@ 分钟</b>，<em>而这里面还没算任何讲图、互动、答问的时间。</em></p>
-<p>⭐ <b>70′ 版</b>：剩 <b>@@BUF70@@ 分钟</b>给讲图和现场发挥。</p></div>
+<p>⭐ <b>80′ 版</b>：剩 <b>@@BUF70@@ 分钟</b>给讲图和现场发挥。</p></div>
 
 <h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
 <div class="say">
@@ -643,11 +708,11 @@ _smin, _cmin = _n / 200.0, _cuts * 15 / 60.0
 _tot = _smin + _cmin
 
 _secs = [(m.start(), re.sub(r"<[^>]+>", "", m.group(1)))
-         for m in re.finditer(r'<h3 class="sec"[^>]*>(第[零一二三四五]节.*?)</h3>', html)]
-assert len(_secs) == 6, "节标题只找到 %d 个" % len(_secs)
+         for m in re.finditer(r'<h3 class="sec"[^>]*>(第[零一二三四五六]节.*?)</h3>', html)]
+assert len(_secs) == 7, "节标题只找到 %d 个" % len(_secs)
 _secs.append((html.index("🚧 这份讲义还薄"), ""))
 _rows, _floor = [], 0.0
-for _i in range(6):
+for _i in range(7):
     _t = html[_secs[_i][0]:_secs[_i + 1][0]]
     _cn = len(re.findall(r"[一-鿿]", "".join(
         re.sub(r"<[^>]+>", "", x)
@@ -662,17 +727,17 @@ for _i in range(6):
                  "<td%s>%.1f′</td><td>%d′</td></tr>"
                  % (_secs[_i][1].split("（")[0], format(_cn, ","), _cc, _bad, _f, _plan))
 _floorhtml = ('<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th>'
-              '<th>地板</th><th>70′ 版给的</th></tr></thead><tbody>'
+              '<th>地板</th><th>80′ 版给的</th></tr></thead><tbody>'
               + "".join(_rows)
-              + '<tr><td><b>六节合计</b></td><td colspan="2"></td>'
-                '<td><b>%.0f′</b></td><td><b>70′</b></td></tr>' % _floor
+              + '<tr><td><b>七节合计</b></td><td colspan="2"></td>'
+                '<td><b>%.0f′</b></td><td><b>80′</b></td></tr>' % _floor
               + "</tbody></table>")
 html = html.replace("@@FLOOR@@", _floorhtml)
 assert _n > 3000 and _cuts > 8, "时间账数出来不对劲：%d 字 / %d 切图" % (_n, _cuts)
 for _k, _v in (("@@SAY@@", format(_n, ",")), ("@@SAYMIN@@", "%.0f" % _smin),
                ("@@CUTS@@", str(_cuts)), ("@@CUTMIN@@", "%.1f" % _cmin),
                ("@@TOTAL@@", "%.0f" % _tot),
-               ("@@BUF70@@", "%.0f" % (70 - _tot))):
+               ("@@BUF70@@", "%.0f" % (80 - _tot))):
     assert _k in html, "时间账占位符 %s 不在文里了" % _k
     html = html.replace(_k, _v)
 
