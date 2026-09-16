@@ -99,6 +99,15 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-build-lecture.py
   python3 topic03-build-L300-lecture.py
 
+# ── 专题四 · 反向与优化器 ──────────────────────────────────────────
+#   ⭐ 脚手架复用 topic03_page.py，画法基元复用 topic03_draw.py ——
+#     ⛔ 别另起一套（专题二 / 三 / 二x 已经共用同一份）。
+#   ⚠️ 目前是**骨架**：五个内容节都还挂着「🚧 本章待写」块。
+#     写完一章就把 topic04-build.py 里 PLAN 的那一行连同正文占位符一起删。
+echo ""
+echo "▸ 专题四 教材"
+python3 topic04-build.py
+
   step "专题八 教材"
   python3 topic08-build.py
 

@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题四 · 反向与优化器</title>
+<!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
+     用自己的 emoji 字体现画：Mac 上是 Apple 那只红螃蟹，别处是各自的版本。
+     烤成 PNG 反而会把某一家的字形固定下来，在别的系统上看着别扭。
+     不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+<meta property="og:title" content="反向与优化器 · 把账补全，最大的一块是优化器状态">
+<meta property="og:description" content="训练一步到底要付什么：反向的 3 倍算力、不能扔的激活、以及那个多数人都低估了的大头 —— 每参数 16 字节的优化器状态。补完这张账，ZeRO 的三级分法就不用背了。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-04.html">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1a73e8">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6;
+  --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea;
+  --purple:#9334e6; --cyan:#12b5cb; --orange:#e8710a;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --tokmul:"";              /* batch≠1 时由 render() 写入，如 "128K × 64 条" */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{background:var(--bg);color:var(--ink);
+  font:400 16px/1.75 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:31px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+h3{font-size:20px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:22px 0 8px}
+p{margin-bottom:14px}
+.lead{color:var(--gray);font-size:17px;margin-bottom:28px}
+b,strong{font-weight:600;color:var(--ink)}
+a{color:var(--blue)}
+code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
+        border-radius:4px;color:var(--blue-d);white-space:nowrap}
+.num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── batch ≠ 1 的防误读标记 ───────────────
+   「token 总数」= 序列长度 × batch。batch=1 时两者相等，看不出区别；
+   一旦 batch>1，这个数就不再是序列长度了，最容易被当成「输入变长了」。
+   下面两条规则在 batch=1 时完全不匹配 —— 默认口径下页面一个字都不会多。 */
+body.batched [data-v="tokens"]::after{
+  content:" (" var(--tokmul) ")";
+  font:600 .78em/1.4 var(--mono);color:var(--orange);letter-spacing:0}
+.ctrl.hot output{color:var(--orange);background:var(--yellow-l);
+  box-shadow:0 0 0 1px var(--yellow) inset}
+.ctrl.hot label{color:var(--orange);font-weight:600}
+
+/* ── 旅程进度条 ─────────────────────── */
+.journey{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 18px;margin:0 0 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.jsteps{display:flex;align-items:center;gap:0;flex:1;min-width:280px}
+.jstep{flex:1;height:6px;background:var(--line);position:relative;border-radius:3px;margin-right:3px}
+.jstep.done{background:var(--blue)}
+.jstep.now{background:var(--red)}
+.jstep span{position:absolute;top:-19px;left:0;font:600 10px var(--mono);color:var(--gray2)}
+.jstep.now span{color:var(--red)}
+.jstep.done span{color:var(--blue)}
+.jmeter{display:flex;gap:18px;font-size:13px;white-space:nowrap}
+.jmeter b{font-family:var(--mono);color:var(--blue-d)}
+.jmeter i{font-style:normal;color:var(--gray);margin-right:5px}
+
+/* ── 猜一猜 ───────────────────────────── */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:var(--blue-l)}
+.guess button.right{border-color:var(--green);background:var(--green-l)}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.75}
+.guess .rev.on{display:block}
+.guess .rev>p>b{color:var(--red)}          /* 只有直属段落的粗体标红，表格和说明框不受影响 */
+.guess .qs{font-size:15px;line-height:1.7;color:var(--gray)}
+.guess .qs b{color:var(--ink)}
+.guess .qs em{font-style:normal;color:var(--gray2);font-size:14px}
+.guess .rvt{font-size:14px;margin:4px 0 14px}
+.guess .rvt b{color:var(--ink)}
+
+/* ── 章节插画带 ───────────────────────── */
+/* 插画是浅底扁平矢量（Google 四色），所以 :after 的洗白层是「白→透明」，
+   跟深色版正好相反。换图但不换这层，标题会变成白底白字。 */
+.band{position:relative;height:210px;border-radius:16px;overflow:hidden;margin:0 0 26px;
+      display:flex;align-items:flex-end;background:var(--bg2);border:1px solid var(--line2)}
+.band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.band:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,.93) 40%,
+                 rgba(255,255,255,.55) 72%,rgba(255,255,255,.10) 100%)}
+.band .cap{position:relative;z-index:2;padding:0 32px 24px;color:var(--ink);max-width:660px}
+.band .cap .bn{font:700 11px/1 var(--mono);letter-spacing:.14em;color:var(--blue);
+      text-transform:uppercase;display:block;margin-bottom:8px}
+.band .cap .bt{font-size:27px;font-weight:700;letter-spacing:-.02em;display:block;margin-bottom:6px}
+.band .cap .bs{font-size:14.5px;color:var(--gray);line-height:1.6}
+
+/* ── 步号标记 ─────────────────────────── */
+.stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
+            border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.stn.big .badge{background:var(--red)}
+.stn h2{margin:0}
+
+/* ── hero ─────────────────────────────── */
+/* 浅色 hero，与 index.html 同一套：blue-l → 白 的竖向底 + 低透明度插画 + 横向洗白层 */
+.hero{position:relative;padding:96px 0 64px;overflow:hidden;
+      background:linear-gradient(180deg,var(--blue-l) 0%,#fff 100%)}
+.hero:before{content:"";position:absolute;inset:0;opacity:.5;
+      background:url(img/hero-token-journey.webp) center/cover no-repeat}
+.hero:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(95deg,rgba(255,255,255,.94) 0%,rgba(255,255,255,.86) 38%,
+                 rgba(255,255,255,.46) 68%,rgba(255,255,255,.12) 100%)}
+.hero .wrap{position:relative;z-index:2}
+.hero h1,.hero .en,.hook{color:var(--ink)}
+.hero .crumb{color:var(--gray)}
+.hero .crumb a{color:var(--blue)}
+.lecbtn{display:inline-block;margin-left:14px;font-size:13px;padding:4px 12px;border-radius:14px;
+        background:#fff;border:1px solid var(--line);color:var(--blue);
+        text-decoration:none}
+.lecbtn:hover{background:var(--blue-l);border-color:var(--blue)}
+.hero .en{color:var(--gray)}
+.hook{border-left-color:var(--blue)}
+.hook em{color:var(--blue-d)}
+.hero p{color:var(--gray)}
+.hero p b{color:var(--ink)}
+.hero .chip{background:#fff;border-color:var(--line);color:var(--gray)}
+.hero .chip b{color:var(--blue-d)}
+.crumb{font-size:14px;color:var(--gray);margin-bottom:20px}
+.crumb a{text-decoration:none}
+.hero h1{font-size:50px;font-weight:700;letter-spacing:-.035em;line-height:1.12;margin-bottom:6px}
+.hero .en{font:italic 400 19px/1 var(--mono);color:var(--gray);letter-spacing:.02em;margin-bottom:26px}
+.hook{font-size:21px;line-height:1.6;font-weight:500;border-left:4px solid var(--blue);
+      padding-left:20px;max-width:800px;margin-bottom:22px}
+.hook em{font-style:normal;color:var(--blue-d);font-weight:600}
+/* 署名行。hero 里单独给色 —— .hero .author（0,2,0）压得过 .hero p（0,1,1） */
+.author{font-size:14.5px;margin-top:20px;line-height:1.7}
+.author b{font-weight:600}
+.author .sep{color:var(--line);margin:0 10px}
+.hero .author{color:var(--gray2)}
+.hero .author b{color:var(--ink)}
+.hero .author .sep{color:var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{font-size:13px;background:#fff;border:1px solid var(--line);border-radius:20px;
+      padding:5px 14px;color:var(--gray)}
+.chip b{color:var(--blue-d)}
+
+/* ── sticky 控制台 ─────────────────────── */
+.console{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);
+         backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+         box-shadow:0 1px 8px rgba(0,0,0,.05)}
+/* 单行布局：它是 sticky 的，每多一行就永久吃掉一条屏幕。
+   所有控件都保留，靠「滑块可压缩、其余固定」把宽度挤出来。 */
+.console .inner{max-width:1080px;margin:0 auto;padding:7px 24px;
+                display:flex;align-items:center;gap:13px;flex-wrap:nowrap}
+.console .tag{font:700 10px/1 var(--mono);letter-spacing:.08em;color:var(--blue);
+              text-transform:uppercase;flex:0 0 auto}
+.ctrl{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--gray);
+      flex:0 1 auto;min-width:0}
+.ctrl label{white-space:nowrap;font-weight:500}
+/* 唯一允许被压缩的东西 —— 窗口变窄时先短滑轨，不动文字和按钮 */
+.ctrl input[type=range]{flex:1 1 96px;min-width:50px;max-width:112px;accent-color:var(--blue)}
+.ctrl output{font:600 12.5px/1 var(--mono);color:var(--blue-d);min-width:44px;
+             background:var(--blue-l);padding:4px 6px;border-radius:5px;text-align:center;
+             flex:0 0 auto}
+.ctrl select{font:500 12.5px/1 inherit;padding:4px 6px;border:1px solid var(--line);
+             border-radius:5px;background:#fff;color:var(--ink);flex:0 0 auto}
+.presets{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;
+         color:var(--gray);flex:0 0 auto}
+.presets span{margin-right:1px}
+.presets button{font:500 11.5px/1 inherit;color:var(--gray);background:#fff;
+                border:1px solid var(--line);border-radius:13px;padding:5px 10px;
+                cursor:pointer;white-space:nowrap}
+.presets button:hover{border-color:var(--blue);color:var(--blue)}
+.presets button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.live{background:var(--yellow-l);box-shadow:0 0 0 3px var(--yellow-l);
+      border-radius:3px;transition:background .45s,box-shadow .45s}
+
+/* ── 卡片 / 表格 ───────────────────────── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;background:#fff}
+.card.tint{background:var(--bg2)}
+.card h4{font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.08em;
+         text-transform:uppercase;margin:0 0 8px}
+.stat{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:4px}
+.stat.blue{color:var(--blue-d)}.stat.red{color:var(--red)}
+.stat.green{color:var(--green)}.stat.orange{color:var(--orange)}
+.sub{font-size:.92em;color:var(--gray)}
+.card .sub{font-size:13.5px;color:var(--gray);line-height:1.55}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.06em;
+   text-transform:uppercase;padding:10px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.6}
+td.n{font-family:var(--mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tr.sum td{border-top:2px solid var(--line);font-weight:700;background:var(--blue-l)}
+tr.sum td.n{color:var(--blue-d)}
+.tbl-wrap{overflow-x:auto}
+.tbl-note{font-size:13px;color:var(--gray);margin:8px 2px 0;line-height:1.7}
+
+/* ── 提示块 ───────────────────────────── */
+.note{border-radius:var(--radius);padding:16px 20px;font-size:15px;line-height:1.7;margin:20px 0}
+/* ⛔⛔ 2026-09-08 全书去彩底：提示块**不填背景**，白底 ＋ 细灰框 ＋ 左侧 4px 彩条。
+   原话：「不要背景填充，好丑」「现代化的文档风格是不是不用这个背景填充？
+   就是外圈有颜色，加上字有颜色，我觉得就挺好」。
+   ⭐ 这是全书唯一一份 note 样式源，专题二/三/八都从这里继承 ——&nbsp;
+     ⛔ 不要在某一课里再写一份局部覆盖，那样两边迟早漂开且不报错。
+   ⚠️ 还有第五种 `.note.q`（提问框），它的定义在 topic02-port-microscope.py
+     注入的那段 CSS 里，不在这个文件 —— 已一并去底。 */
+.note{background:#fff;border:1px solid var(--line);border-left-width:4px}
+.note.info{border-left-color:var(--blue)}
+.note.warn{border-left-color:var(--yellow)}
+.note.danger{border-left-color:var(--red)}
+.note.ok{border-left-color:var(--green)}
+.note .t{display:block;font-weight:700;margin-bottom:5px}
+/* 两级强调块：.punch 实心蓝（最强），.punch.soft 浅蓝底（次一级）。
+   原来次一级是近黑底 —— 跟 index.html 的浅色基调不搭，已换成同色系的浅底。 */
+.punch{font-size:20px;font-weight:600;line-height:1.6;text-align:center;padding:26px 30px;
+       background:var(--blue);color:#fff;border-radius:14px;margin:28px 0}
+.punch.soft{background:var(--blue-l);color:var(--ink);border:1px solid #d2e3fc}
+.punch small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
+.punch.soft small{opacity:1;color:var(--gray)}
+
+/* ── 默认收起的详情块 ─────────────────── */
+details.more{border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2);
+             margin:18px 0;overflow:hidden}
+details.more>summary{list-style:none;cursor:pointer;padding:11px 18px;font-size:14.5px;
+                     font-weight:600;color:var(--blue-d);user-select:none;
+                     display:flex;align-items:baseline;gap:9px;transition:background .15s}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";display:inline-block;font-size:11px;color:var(--gray2);
+                             transition:transform .18s;flex:none}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary:hover{background:var(--line2)}
+details.more[open]>summary{border-bottom:1px solid var(--line2)}
+details.more>summary .why{font-weight:400;color:var(--gray);font-size:13px}
+details.more .body{padding:2px 20px 14px}
+details.more .body>:first-child{margin-top:14px}
+details.more .body>:last-child{margin-bottom:0}
+details.more .body .note{margin:14px 0}
+
+/* ── 图 ───────────────────────────────── */
+figure{margin:26px 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:15px;color:#3c4043;margin-top:11px;line-height:1.65;text-align:left;max-width:none;margin-left:0;margin-right:0}
+.fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
+/* ⚠️ fill 用 :not([fill]) 兜底：SVG 的 fill= 呈现属性优先级低于 class 选择器，
+   直接写 .svgsm{fill:...} 会把元素上显式写的颜色全部盖掉（本文件曾有 398 处被静默盖成灰色）。
+   拆成「没写 fill 才给默认色」，写了 fill= 的就让它生效 —— 也自动覆盖 JS 后生成的节点。 */
+.svgtxt{font:500 13px var(--mono)}   .svgtxt:not([fill]){fill:var(--ink)}
+.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif}   .svglbl:not([fill]){fill:var(--gray)}
+.svgnum{font:700 14px var(--mono)}   .svgnum:not([fill]){fill:var(--ink)}
+.svgsm{font:500 10.5px var(--mono)}   .svgsm:not([fill]){fill:var(--gray2)}
+
+/* ── 公式 ─────────────────────────────── */
+.eq{font-family:var(--mono);font-size:14.5px;background:var(--bg2);border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0;overflow-x:auto;line-height:1.9;
+    white-space:pre-wrap;tab-size:2}
+.eq .c{color:var(--gray)}
+.eq .r{color:var(--blue-d);font-weight:700}
+
+/* ── 阅读进度 + 回顶 ─────────────────── */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:transparent;
+          pointer-events:none}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#1a73e8,#9334e6);
+            transition:width .1s linear}
+.totop{position:fixed;right:22px;bottom:22px;width:44px;height:44px;border-radius:50%;
+       background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:19px;z-index:55;
+       opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 16px rgba(0,0,0,.24)}
+.totop.on{opacity:.88;pointer-events:auto}
+.totop:hover{opacity:1}
+
+/* ── 术语 tooltip ─────────────────────── */
+.gl{border-bottom:1px dashed var(--blue);cursor:help;position:relative;
+    text-decoration:none;color:inherit}
+/* ⚠️ 气泡默认必须 display:none，不能只靠 opacity:0。
+   它是 290px 宽的绝对定位盒子，opacity:0 时照样占布局 —— 靠右的词会把整页
+   scrollWidth 顶出两三百像素，在 940 / 360 这类窗口下出现横向滚动条。
+   实测：关掉这两个伪元素，940px 下 scrollWidth 从 1211 直接回到 940。
+   代价是没有淡入动画，换来的是彻底不参与布局。 */
+/* ⚠️ 气泡必须 position:fixed，不能用 absolute。
+   absolute 时它会被任何一个「overflow 不是 visible」的祖先裁掉 ——
+   本页 10 个术语里有 6 个躺在 .tbl-wrap（overflow-x:auto）或 .more（hidden）里面。
+   注意 overflow-x:auto 会把 overflow-y 从 visible 提升成 auto，
+   所以横向滚动的表格同样会**纵向**裁切，气泡顶上那一截就这么没的。
+   fixed 之后坐标由 JS 在 mouseenter / focus 时写进 --tx/--ty，见下方 glossary()。 */
+.gl:after{content:attr(data-t);display:none;position:fixed;
+   left:var(--tx,-9999px);top:var(--ty,-9999px);
+   background:var(--ink);color:#fff;
+   font:400 13.5px/1.6 "Noto Sans CJK SC",sans-serif;padding:11px 15px;border-radius:9px;
+   width:290px;pointer-events:none;
+   box-shadow:0 6px 22px rgba(0,0,0,.22);z-index:80;text-align:left;white-space:normal}
+.gl:before{content:"";display:none;position:fixed;
+   left:var(--ax,-9999px);top:var(--ay,-9999px);
+   transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink);
+   z-index:81;pointer-events:none}
+/* 上方放不下时整个翻到词的下方，箭头也要跟着掉个头 */
+.gl.below:before{border-top-color:transparent;border-bottom-color:var(--ink)}
+.gl:hover:after,.gl:focus:after{display:block}
+.gl:hover:before,.gl:focus:before{display:block}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ── 打印 ─────────────────────────────── */
+@media print{
+  .console,.progress,.totop,.presets{display:none !important}
+  .hero:before{opacity:.28}
+  section{padding:22px 0;break-inside:avoid}
+  .band{height:150px;break-inside:avoid}
+  figure,.card,.note,.topic,.punch{break-inside:avoid}
+  details.more{border-color:#ccc;background:#fff}
+  details.more>summary{color:#000}
+  a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
+  body{font-size:12px}
+  .punch{background:#eee !important;color:#000 !important}
+  .punch.soft{background:#f1f3f4 !important;color:#000 !important}
+}
+
+@media(max-width:860px){.gl:after{width:220px;font-size:12.5px}}
+
+/* ── 目录 ─────────────────────────────── */
+.toc{background:var(--bg2);border-radius:var(--radius);padding:22px 26px;margin:24px 0}
+.toc ol{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);
+        gap:2px 28px}
+.toc li{padding:6px 0;font-size:15px;display:flex;gap:10px}
+.toc li i{font:700 11px/1.6 var(--mono);color:#fff;background:var(--blue);border-radius:10px;
+          padding:2px 7px;flex:0 0 auto;font-style:normal;letter-spacing:.04em}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--blue)}
+
+footer{padding:44px 0 60px;color:var(--gray);font-size:14px;line-height:1.8;
+       border-top:1px solid var(--line)}
+footer a{text-decoration:none}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ⭐⭐ 2026-09-04 投影版式（现场反馈：「要投到屏幕上去，以画图为主。
+        文字不要搞那么小的字，也不要搞那么密集的信息。」）
+   ⛔ 这里**只动字号与留白，不动版心宽度** —— 版心是按图的宽度定的，
+      改宽了 38 张图全要重画。
+   把正文 16 → 17.5、note 15 → 16.5、行距一起放开；
+   段间距和框间距加大，让每一屏的信息块数量降下来。
+   ⚠️ 窄屏那条 12px 的规则保持不动（手机上不是投影场景）。
+   ══════════════════════════════════════════════════════════════════ */
+body{font-size:17.5px;line-height:1.85}
+p{margin-bottom:18px}
+.note{font-size:16.5px;line-height:1.8;padding:20px 24px;margin:26px 0}
+.note .t{margin-bottom:8px;font-size:1.02em}
+.sub{font-size:.9em;line-height:1.7}
+li{padding:8px 0}
+h3{font-size:23px;margin:44px 0 16px}
+figcaption{line-height:1.8}
+details.aside > summary,details > summary{font-size:16px;padding:10px 0}
+/* 图和正文之间多留一口气 —— 投影时这一条比字号还管用。
+   ⛔⛔ 只准写 margin-top／margin-bottom，**不许写简写 `margin:30px 0`**。
+   2026-09-04 这里写过一次简写，后果是：简写把 margin-left 也设成了 0，
+   而 `figure.fbox`（元素＋类，特异度 0,1,1）压过下面 .fwide（0,1,0）——
+   于是所有宽图的 `margin-left:50%` 失效，只剩 translateX(-50%) 生效，
+   **整张图往左平移 720px，在 1900px 宽的窗口里左边缘跑到 x = −286**。
+   ⭐ 阴险在于：溢出探针查的是 scrollWidth > clientWidth，
+   而「跑到视口左边外面」根本不产生溢出，也不产生滚动条 —— 查不出来，
+   只有人眼看到「图被裁掉一块」。判据已加进 topic02-lint-readability.py。 */
+/* ⭐ 2026-09-04 节尾那一句。第二轮全局审的判据：**一节的最后一句话，
+   必须是这一节要留下的那句** —— 而当时有三节的结尾分别是一句版面交代、
+   一条图注、一段版本说明。补了落点之后给它一点视觉重量，
+   让读者合上一节时知道「这句是要带走的」。⛔ 不要做成大色块，
+   全篇提示框已经够多了；一条左边线 + 稍大的字就够。 */
+/* ⭐ 2026-09-04 引原文用。**逐字引用必须看得出是引用** ——&nbsp;
+   这门课到处在要求「每个数都能回查」，自己引论文时更不能把原文和转述混在一起。
+   等宽 ＋ 灰底 ＋ 左边线，一眼就知道这一段不是作者写的。 */
+b.fno{display:inline-block;font:600 11px/1.5 var(--sans);color:#5f6368;
+  background:var(--bg2);border:1px solid #dadce0;border-radius:4px;
+  padding:1px 7px;vertical-align:1px;letter-spacing:.02em}
+blockquote{margin:14px 0;padding:12px 18px;background:var(--bg2);
+  border-left:3px solid var(--gray);border-radius:0 8px 8px 0;
+  font:400 15px/1.75 var(--sans);color:var(--ink)}
+blockquote b{font-weight:700}
+
+p.landing{border-left:3px solid var(--blue);padding:2px 0 2px 16px;
+  margin:26px 0 10px;font-size:1.03em;color:var(--ink)}
+
+figure.fbox{margin-top:30px;margin-bottom:30px}
+/* ⭐ 2026-09-04 窄图也放大一档：§0–§2 那批是按 1000 px 画的，
+   塞进 1032 px 的版心等于原生比例 1.0 —— 图里 10.5 px 的字投影上还是 10.5 px。
+   突破到 1240 就等比放大 1.24 倍，跟宽图那条（1400 → 1760，1.26 倍）配成一对。
+   ⚠️ 版心本身**不许动**（38 张图的排版都吊在 1080 上），动的只有 figure。
+   ⚠️ 同时挂 fbox＋fwide 的元素由后面 figure.fwide 覆盖（同特异度、后写赢）。 */
+figure.fbox{width:min(1240px,calc(100vw - 32px));max-width:none;
+  margin-left:50%;transform:translateX(-50%)}
+figure.fbox > figcaption{max-width:1080px;margin-left:0}
+
+/* ⛔ 2026-09-04：上面那条 code 的 white-space:nowrap 是给**行内**代码的，
+   但它会一路继承进 <pre> —— nowrap 把换行折成空格，于是多行代码块
+   全挤成一行，而且不报错、只是难看。专题二 3.4 那个矩阵例子就这么废过一次。
+   ⭐ 所以块级代码必须单独把它扳回来，顺便去掉行内那层底色和内边距。
+   （这条写在 L300 的 CSS 里，因为 L200／专题三／专题八都从这儿抄 head。） */
+pre{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;overflow-x:auto;margin:14px 0;
+    font:500 13px/1.65 var(--mono);color:var(--ink)}
+pre code,pre .k{white-space:pre;background:none;padding:0;border-radius:0;
+                color:inherit;font-size:inherit;font-weight:inherit}
+
+/* 超窄屏：code 默认 nowrap，长的行内代码会把页面撑出横向滚动条 */
+@media(max-width:420px){
+  code,.k{white-space:normal;word-break:break-word}
+}
+
+/* 中等窗口：还想保住一行，就先把「场景」两个字和按钮内边距让出来 */
+@media(max-width:1020px){
+  .console .inner{gap:10px}
+  .presets span{display:none}
+  .presets button{padding:5px 8px;font-size:11px}
+  .ctrl label{font-size:12px}
+}
+
+@media(max-width:860px){
+  .hero h1{font-size:34px}.hook{font-size:18px}
+  .console .inner{flex-wrap:wrap}       /* 小屏放弃单行，否则会横向溢出 */
+  .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
+  .toc ol{grid-auto-flow:row;grid-template-rows:none}
+  .console .inner{gap:10px;padding:9px 16px}
+  .ctrl input[type=range]{width:84px}
+  .presets{margin-left:0;flex-wrap:wrap;gap:5px}
+  .presets span{display:none}
+  .presets button{padding:5px 10px;font-size:11.5px}
+  .console .adv{display:none}            /* 小屏只留序列长度滑块 + 场景预设 */
+  .console .tag{font-size:10px}
+  .ctrl label{font-size:12px}
+  .jmeter{flex-wrap:wrap;gap:6px 14px;font-size:12px;width:100%}
+  .journey{padding:12px 14px;gap:12px}
+  h2{font-size:25px}.punch{font-size:17px;padding:20px 22px}
+  .guess button{padding:11px 16px;font-size:14px}
+  .band{height:160px}.band .cap{padding:0 20px 18px}.band .cap .bt{font-size:21px}
+  .hero:before{opacity:.4}
+  .figpair{grid-template-columns:1fr !important}
+  .eq{font-size:12.5px;padding:12px 14px}
+}
+/* ── 支线小节（整个 h3 折起来）─────────────────────────────
+   跟 details.aside 的区别：aside 装一段旁白，branch 装**一整个小节**
+   （标题 ＋ 正文 ＋ 图）。判据是故事线：说不出「这段在旅程的哪一站」就折。
+
+   ⚠️ 展开后的内容区**不能有水平 padding、不能有边框背景**。里面的图是
+   .fwide（margin-left:50% ＋ translateX(-50%)，突破 1080 版心到 1440），
+   它按父容器算中心 —— 一旦 .body 有 padding，图就整体偏移；有边框的话
+   图还会从框里溢出去，很怪。所以只有 summary 那条灰条带样式。
+
+   ⚠️ 这几条也必须留在下面 CSS_MARK 之前，理由同上面故事线那段。 */
+details.branch{margin:26px 0}
+details.branch > summary{cursor:pointer;list-style:none;user-select:none;
+  padding:13px 18px;background:var(--bg2);border:1px solid var(--line);
+  border-left:3px solid var(--gray2);border-radius:0 10px 10px 0;
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-size:16px;font-weight:600;color:var(--ink)}
+details.branch > summary::-webkit-details-marker{display:none}
+details.branch > summary::before{content:"▸";color:var(--gray2);font-weight:400}
+details.branch[open] > summary::before{content:"▾"}
+details.branch > summary:hover{border-left-color:var(--blue)}
+details.branch .tag{font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;
+  background:var(--gray2);border-radius:10px;padding:2px 9px;white-space:nowrap}
+details.branch summary em{font-style:normal;font-weight:400;font-size:13.5px;
+  color:var(--gray)}
+details.branch > .body{padding:20px 0 4px}
+/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
+/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。
+
+   ⭐ 2026-09-04 上限 1440 → 1760。1440 只是「不缩小」，图里 10.5 px 的字
+   投到屏幕上还是 10.5 px，后排看不清。放到 1760，整张图等比放大 1.26 倍，
+   字跟着到 13 px 上下。**一个坐标都不用改、不可能撞车** ——
+   比逐张调字号安全得多（SVG 的 <text> 不换行，调字号会压到隔壁）。
+   窄屏由 calc(100vw - 32px) 兜底，行为不变。
+
+   ⛔⛔ 特异度写成 `figure.fwide`（0,1,1），不要写 `.fwide`（0,1,0）。
+   2026-09-04 页面主 CSS 里有一条 `figure.fbox{margin:30px 0}`（0,1,1），
+   简写把 margin-left 一起设成 0，**压过这里的 margin-left:50%** ——
+   于是只剩 translateX(-50%) 生效，整张宽图往左平移 720 px，
+   在 1900 px 宽的窗口里左边缘落到 x = −286，左边一截被裁掉。
+   ⭐ 而「往左跑」既不产生滚动条、也不让 scrollWidth 变大，
+   原来那个查横向溢出的探针对它恒为 0 —— 判据已加进 topic02-lint-layout.py。 */
+figure.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1760px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+.fwide svg{display:block}
+/* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
+   figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
+   看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
+   fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
+   **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
+.fwide figcaption{max-width:1080px;margin-left:0}
+/* ⛔⛔ 2026-09-08：note.q 是第五种提示框，跟 info/warn/danger/ok 一样**去彩底**。
+   上一轮按名字挨个改那四种，**漏了它** —— 它不在那四个名字里，
+   而且它的定义还不在 topic-02-L300.html 里，是**这里注入进去的**。
+   ⭐ 两条判据：
+     ① 改一族样式要按「渲染后还有谁带底色」验收，不能按「我记得有几种」；
+     ② 先确认那个文件是不是生成物 —— 直接改 L300 会被下一次 build 原样盖掉，
+        而且**盖掉不报错**，只是下次渲染又变回来。 */
+.note.q{background:#fff;border:1px solid var(--line);
+        border-left:4px solid var(--purple)}
+/* ---- 开场热身选择题（.guess）----
+   样式从专题一原样搬（topic-01.html），两课同一个观感 ——&nbsp;
+   学员一眼认得出「又是那个先猜一猜」。改这里要顺手看一眼那边有没有跟着变。
+   ⚠️ 只有 L200 用到；L300 里这几条是死规则，留着无害，别为了「干净」删掉 ——
+      两版共用同一份 CSS，删了下次 L300 若要加就得再抄一遍。 */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px;line-height:1.7}
+.guess .q .qs{font-size:15px}
+.guess .oplab{font-size:15px;color:var(--ink);font-weight:600;margin:14px 0 8px}
+.guess .oplab:first-of-type{margin-top:0}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:#e8f0fe}
+.guess button.right{border-color:var(--green);background:#e6f4ea}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.8}
+.guess .rev .qs{font-size:15px;color:var(--gray)}
+.guess .rev.on{display:block}
+/* 「↺ 重来」按钮：由 JS 生成后塞进答案区顶部。放在答案区里面是有意的 ——
+   答案区没展开时它跟着一起隐藏，天然实现「答过了才出现」，不需要额外的状态类。 */
+.guess .rst{float:right;margin:-2px 0 8px 14px}
+.guess .rst button{font:600 13px/1 inherit;padding:8px 15px;border:1.5px solid var(--line);
+  background:#fff;border-radius:8px;cursor:pointer;color:var(--gray);
+  transition:border-color .15s,color .15s}
+.guess .rst button:hover{border-color:var(--gray);color:var(--ink)}
+/* ---- 收尾节的 take-away 大字块 ----
+   ⛔ 2026-09-05 读到 §9：「那么多字，抓不住重点，字还那么小。
+      是不是给他少整几句 take-away highlight 就行了？」
+   ⭐ 病根是**收尾节用了正文的字号和密度**。正文 14 px 靠信息量取胜，
+      收尾节靠的是「就这三句，记住」——&nbsp;两者需要相反的排版。
+      所以这里不是把字调大一点，是**换一种块**：标题 19 px、留白翻倍、
+      每条一个序号圆点，一屏之内最多三条。
+   ⚠️ 别在这个块里塞第四条。它一旦超过三条就退化成又一段正文。
+   ⛔ 更硬的一条（2026-09-05 二次收时立的）：**只写图上没有的那一样。**
+      收尾节最容易「想强调，于是重复」——&nbsp;§9 为此返工过三次。 */
+/* ---- 引导思考块 ----
+   ⭐ 2026-09-05 现场反馈：「详情写到讲义里，引导部分就放到教材的引导思考部分。」
+   ⭐ 它跟 .note 的区别不是颜色，是**语法**：note 是陈述句，think 是**疑问句**，
+      而且**问完要留白**，让读者先自己答一遍再往下读。
+   ⛔ 里面只许放问题和「先想一下」，**不许把答案也塞进来** ——&nbsp;
+      塞了它就退化成又一个 note，而且是更花哨的那种。 */
+.think{margin:22px 0;padding:20px 24px 20px 26px;border-radius:12px;
+  background:#f3f6fb;border-left:5px solid var(--purple)}
+.think .qk{display:block;font-size:12.5px;font-weight:700;letter-spacing:.06em;
+  color:var(--purple);margin-bottom:8px}
+.think .qq{display:block;font-size:18px;line-height:1.6;color:var(--ink);font-weight:700}
+.think .qh{display:block;margin-top:9px;font-size:14px;color:var(--gray);font-style:italic}
+.tkaway{margin:26px 0;display:grid;gap:14px}
+.tkaway .tk{display:grid;grid-template-columns:30px 1fr;gap:16px;align-items:start;
+  padding:20px 24px;border-radius:12px;background:var(--bg2);
+  border:1px solid var(--line);border-left:5px solid var(--blue)}
+.tkaway .tk.solo{grid-template-columns:1fr}
+.tkaway .tk .n{width:28px;height:28px;border-radius:50%;background:var(--blue);
+  color:#fff;font-weight:700;font-size:15px;line-height:28px;text-align:center}
+.tkaway .tk b{display:block;font-size:19px;line-height:1.5;color:var(--ink);
+  font-weight:700;margin-bottom:7px}
+.tkaway .tk .d{display:block;font-size:15px;line-height:1.75;color:var(--gray)}
+.tkaway .tk .d b{display:inline;font-size:inherit;color:var(--ink);margin:0}
+@media(max-width:700px){.tkaway .tk{grid-template-columns:1fr}}
+/* ---- 旁白折叠块 ----
+   有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
+   但作为方法论又值得留着。折起来：想看的人点开，讲课时直接跳过。
+   注意 open 属性一个都不要加，默认全收。 */
+details.aside{margin:18px 0;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--bg2);font-size:14px;color:var(--gray)}
+details.aside > summary{cursor:pointer;padding:11px 16px;list-style:none;
+  font-size:13.5px;color:var(--gray);user-select:none}
+details.aside > summary::-webkit-details-marker{display:none}
+details.aside > summary::before{content:"▸ ";color:var(--gray)}
+details.aside[open] > summary::before{content:"▾ "}
+details.aside > summary:hover{color:var(--ink)}
+details.aside[open] > summary{border-bottom:1px solid var(--line)}
+details.aside .body{padding:14px 16px 16px;line-height:1.75}
+details.aside b{color:var(--ink);font-weight:600}
+.msfrom{color:var(--gray);font-size:12.5px}
+.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
+.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
+  color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
+.mscard > b{display:block;font-size:16px;margin-bottom:6px}
+.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+
+/* ══ 「课前勿点」那个折叠块（专题二 L200 开篇的两道热身题）══
+   ⭐ 跟普通的 details.more 分开配色：普通折叠是「想深挖再点」，
+   这个是**明确劝阻**。用红而不是蓝，让「别点」这层意思在扫视时就成立 ——&nbsp;
+   ⛔ 只靠 summary 里的文字挡不住手快的人。 */
+/* ⭐ 2026-09-12：揭晓规则改成「全对才开」，全选但没全对时用它报分。
+   判据：新造的类名落地前先确认它真有样式（09-09 栽过一次）。 */
+.guess .hint{display:none;margin-top:14px;padding:11px 16px;border-radius:10px;
+  background:#fce8e6;border:1px solid #f3c0bb;color:#a50e0e;font-weight:700;font-size:15px}
+.guess .hint.on{display:block}
+details.more.preclass{border-color:#f3c0bb;background:#fef7f6}
+details.more.preclass[open]{background:#fff}
+details.more.preclass>summary{color:#a50e0e}
+details.more.preclass>summary:hover{background:#fce8e6}
+details.more.preclass>summary::before{color:#d93025}
+details.more.preclass[open]>summary{border-bottom-color:#f3c0bb}
+details.more.preclass>summary .why{color:#b06000}
+
+/* ══ 外传两页的节号 chip ══
+   ⛔ `.secno` 这个类是我在建外传时随手写的，**从来没有对应的 CSS** ——&nbsp;
+   于是节号跟标题挤成一团：「开场这一讲要回答的两件事」「一同一把尺子」。
+   页面照常构建、版面探针也不报（它查的是溢出和撞车，不查「读起来断不断句」）。
+   ⭐ 判据：**自己新造的类名，落地前要去确认它真有样式** ——&nbsp;
+   没有样式的 class 在 HTML 里是完全合法的，它只是安静地什么都不做。
+   ⚠️ 主线 L200/L300 的 h2 不带节号（纯文本标题），所以这条只影响外传两页。 */
+h2 .secno{display:inline-block;min-width:2.1em;margin-right:.52em;
+  padding:.1em .52em;border-radius:7px;background:#e8f0fe;color:#174ea6;
+  font-size:.6em;font-weight:700;letter-spacing:0;vertical-align:.24em;
+  text-align:center}
+
+/* ══ 专题二一家四页的互跳导航（定义在 tools/topic02_family.py）══
+   ⭐ 样式只写这一处：另外三页的 <head> 是从本文件整块切下去的。
+   ⛔ 别在各页自己的 <style> 里再写一份。 */
+nav.famnav{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;
+  margin:0 0 24px;font-size:13px}
+nav.famnav .famlab{align-self:center;color:var(--gray2,#80868b);
+  margin-right:2px;white-space:nowrap}
+nav.famnav a,nav.famnav .here{display:block;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--line,#dadce0);background:#fff;text-decoration:none;
+  line-height:1.45;transition:border-color .12s,background .12s}
+nav.famnav a{color:var(--blue,#1a73e8)}
+nav.famnav a:hover{border-color:var(--blue,#1a73e8);background:#f8fbff}
+/* ⭐ 当前页渲染成不可点的高亮块 ——&nbsp;它同时充当「你在这里」的指示，
+   所以不需要再单独放一个面包屑说明当前在哪一版。 */
+nav.famnav .here{color:var(--ink,#202124);font-weight:700;
+  border-color:var(--blue,#1a73e8);background:#e8f0fe;cursor:default}
+nav.famnav em{display:block;font-style:normal;font-weight:400;font-size:11.5px;
+  color:var(--gray2,#80868b);margin-top:2px}
+nav.famnav .here em{color:#174ea6}
+@media(max-width:760px){nav.famnav em{display:none}
+  nav.famnav a,nav.famnav .here{padding:6px 10px}}
+</style>
+<style>
+ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
+/* ⭐ pre / pre code 的样式**已经修在 L300 的 CSS 源里**了（2026-09-04），
+   这里不再重复一份 —— 重复的 CSS 跟重复的正文是同一类问题。 */
+h4 { margin:18px 0 6px; font-size:15px }
+
+/* ⭐ 2026-09-08：提示框去彩底那段**已经改到共用 CSS 源里了**
+   （topic-01.html 与 topic-02-L300.html），本讲不再单独覆盖 ——
+   ⛔ 同一条规则留两份，迟早只改一份。 */
+
+/* ── 图下面折起来的「出处与口径」（2026-09-14）────────────────
+   ⭐ 收起来的时候只是一行灰字，跟图注拉开一档；展开才是那一堆脚注。
+   ⛔ 宽度跟着 figure 走（figure 是 .fwide，最宽 1760px），但**正文限宽在
+     1080px** —— 出处是拿来读的散文，不是图，所以这里自己收回版心，
+     否则一行会拉到一米八长，眼睛跟不回来。 */
+.figsrc{max-width:1080px;margin:6px auto 0;border-top:1px dashed var(--line);
+        font-size:13.5px;color:var(--gray)}
+/* ⭐ 跟 details.aside 用同一套三角记号，不另发明一种 —— 同一页里两种折叠
+   长两个样子，读者要分别学一次。 */
+.figsrc>summary{cursor:pointer;list-style:none;padding:8px 2px;
+                font:600 12.5px/1.4 var(--mono);color:#9aa0a6;
+                letter-spacing:.02em}
+.figsrc>summary::-webkit-details-marker{display:none}
+.figsrc>summary::before{content:"▸ "}
+.figsrc[open]>summary::before{content:"▾ "}
+.figsrc>summary:hover{color:var(--ink)}
+.figsrc p{margin:0 0 7px;line-height:1.7}
+.figsrc p:first-of-type{margin-top:4px}
+.figsrc b{color:var(--ink);font-weight:600}
+@media print{.figsrc{font-size:11px}}
+/* ⭐⭐⭐ 2026-09-16 现场：「这一部分给我折叠起来，我光看后边那个有模型名称
+   和年份的编年史就够了。」——&nbsp;说的是 §0 那张横轴时间线。
+   ⛔ 折叠 ≠ 删掉：它是首尾呼应用的，第九章还要请读者滚回来看。
+   ⭐ 跟 .figsrc 共用三角记号，同一页里不发明第二种折叠长相。 */
+.foldfig{margin:18px auto;border:1px solid var(--line);border-radius:10px;
+         background:#fafbfc;padding:2px 14px}
+.foldfig>summary{cursor:pointer;list-style:none;padding:10px 2px;
+                 font:600 14px/1.5 var(--sans);color:var(--gray)}
+.foldfig>summary::-webkit-details-marker{display:none}
+.foldfig>summary::before{content:"▸ "}
+.foldfig[open]>summary::before{content:"▾ "}
+.foldfig>summary:hover{color:var(--ink)}
+.foldfig>summary b{color:var(--ink)}
+.foldfig>summary .why{font-weight:400;color:#9aa0a6;font-size:13px}
+@media print{.foldfig{border:none;background:none}
+             .foldfig>summary{display:none}}
+</style>
+
+<style id="figonly-css">
+.figbar{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;gap:8px;
+  align-items:center;font:600 14px/1.4 system-ui,-apple-system,"Noto Sans CJK SC",sans-serif}
+.figbar button{cursor:pointer;border:1px solid #dadce0;background:#fff;color:#1a73e8;
+  border-radius:999px;padding:9px 18px;box-shadow:0 2px 10px rgba(0,0,0,.14);
+  font:inherit}
+.figbar button:hover{background:#f8f9fa}
+.figbar .hint{color:#80868b;font-weight:400;background:#fff;border-radius:999px;
+  padding:6px 12px;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+body.figonly section p:not(.lead):not(.landing),
+body.figonly section ul,
+body.figonly section ol,
+body.figonly section pre,
+body.figonly section .note{display:none}
+/* ⛔ 防守：这两类里的 p 都不该被上面那条误伤 */
+body.figonly section figure p{display:revert}
+/* ⛔⛔ 2026-09-16：题目的题干是 <p class="q">，会被上面那条连题一起藏掉 ——&#160;
+   点开「课前勿点」只剩选项、没有问题。⭐ 这个 bug 只有**把两道题搬进来之后**
+   才存在：折叠规则是先写的，题是后搬的。
+   判据：**加了新的内容类型，要回去看一遍既有的全局规则会不会误伤它。** */
+body.figonly .guess p{display:revert}
+/* ⛔⛔ 2026-09-16 现场截图抓到的：折叠模式下 <blockquote> 里的 <p> 被上面那条
+   规则藏掉，**外壳还在** ——&#160;于是页面上出现两条空的灰条，看着像坏了。
+   ⭐ 原设计说「原话引文保留」，但那从来没生效过（一生效就是空壳）。
+   ⛔ 这次顺势改判：**折叠模式下整块隐掉**。理由不是省地方 ——&#160;
+     引文是「故事」，不是「主线」，而折叠模式的定义就是只留主线。
+   ⭐ 判据（上一次是 .guess p，这次反过来）：**一条写得太宽的全局规则，
+     既会误伤该留的，也会留下该走的空壳 ——&#160;而空壳是静默的，更难发现。** */
+body.figonly section blockquote{display:none}
+/* ⭐⭐ 2026-09-16：图注是折叠模式下最大的一块字（48 条共 4960 字，占露出来
+   的六成四）。⛔ 但图注不能整条藏 ——&#160;它是「看图该看什么」的指路。
+   ⭐ 折中：**只留第一个 <br> 之前那一段**，后面的收起来。
+     实测 43/48 条带 <br>，切完省 53%。切法在 place_figs 里。 */
+/* ⛔⛔ 2026-09-16 第二轮：只藏 .capmore 还不够 ——&#160;现场原话
+   「你的那个开关……它没收全吧？把一些该收起来的小字也接着都收进去。」
+   ⭐ 图注整条藏掉。折叠模式的定义就此收敛成一句：**只留图。**
+   ⚠️ 上一轮留图注的理由是「它是看图该看什么的指路」——&#160;那条理由没错，
+     但它跟「投屏时小字看不见」这条冲突，而讲课场景优先。
+     展开模式下图注一个字没少。 */
+body.figonly figcaption{display:none}
+body.figonly section h3{margin-top:34px}
+</style>
+<style>
+/* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
+   那条规则之前是空转的（顶上什么都没有，点内链只是白空一截）。 */
+.tocbar{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
+     backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid #e8eaed;
+     overflow-x:auto;scrollbar-width:none}
+.tocbar::-webkit-scrollbar{display:none}
+.tocbar-in{display:flex;gap:6px;align-items:center;white-space:nowrap;
+        max-width:1760px;margin:0 auto;padding:8px 16px}
+.tocbar-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:6px;flex:none}
+/* ⭐ 2026-09-14 每个条目给一个真的框。原来只有 padding ＋ 悬停底色 ——
+   不悬停的时候它就是一排裸字，看不出「这是可以点的东西」，
+   条目之间也只靠 2px 间距分隔，读起来是一长串。
+   ⛔ 框要用 1px 实线 ＋ 胶囊圆角，不要用阴影：吸顶条只有 40 多像素高，
+     阴影在这个尺度上只会糊成一片灰。 */
+.tocbar a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
+       padding:5px 11px;border:1px solid #dadce0;border-radius:999px;
+       background:#fff;flex:none;transition:background .12s,border-color .12s}
+.tocbar a:hover{background:#f1f3f4;border-color:#bdc1c6;color:#202124}
+.tocbar a.on{background:#e8f0fe;border-color:#aecbfa;color:#174ea6;font-weight:600}
+@media print{.tocbar{display:none}}
+</style>
+</head>
+<body>
+<div class="progress"><i></i></div>
+<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 前向只是半张账单">前向只是半张账单</a><a href="#s一" title="第 一 节 · 反向要付什么">反向要付什么</a><a href="#s二" title="第 二 节 · 第一个真正的「决策」">第一个真正的「决策」</a><a href="#s三" title="第 三 节 · 真正的大头">真正的大头</a><a href="#s四" title="第 四 节 · 这张账单直接决定了并行策略长什么样">这张账单直接决定了并行策略长什么</a><a href="#s五" title="第 五 节 · 一个完整 step 的总账">一个完整 step 的总账</a></div></nav>
+
+
+<!-- ⛔ 这个文件由 Courses/tools/topic04-build.py 生成。
+     **正文写在那个脚本的 BODY 常量里** ——&nbsp;改内容改那里，别改这个产物。 -->
+
+<div class="hero"><div class="wrap">
+  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题四
+    ／ <b>反向与优化器</b></div>
+  <h1>反向与优化器</h1>
+  <div class="en">Completing the Bill: Backward, Recompute, and the Optimizer</div>
+  <div class="hook">
+    专题一算完前向，结论是「装不下」。<br>
+    <em>——&nbsp;可那只是<b>半张账单</b>。而剩下那半张里最大的一块，
+    既不是权重也不是激活。</em>
+  </div>
+  <p style="max-width:820px;color:var(--gray)">
+    这一讲把训练一步的账<b>补全</b>：反向要付的三倍算力、
+    那些不能算完就扔的中间激活、以及<b>每参数 16 字节的优化器状态</b>。
+    <em>补完之后，ZeRO 那三级分法就不用背了 ——&nbsp;它是从这张账单里长出来的。</em>
+  </p>
+  <div class="chips">
+    <span class="chip">前置 <b>专题一</b></span>
+    <span class="chip">后续 <b>专题五 · 并行策略</b></span>
+    <span class="chip">读法 <b>按「谁最大」读，不按流程读</b></span>
+  </div>
+  <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
+    AI Infra 架构师</p>
+</div></div>
+
+<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>前向只是半张账单</h2></div>
+
+<p class="lead">专题一跟着一个 token 走完了前向，最后算出一句话：<b>装不进任何一块卡。</b>
+  <em>⛔ 可那只是账单的<b>一小半</b>。</em></p>
+
+<p>真正训练一步，显存里是<b>同时</b>压着四样东西的：<b>权重</b>、<b>梯度</b>、
+  <b>优化器状态</b>，外加一大堆<b>不能算完就扔的中间激活</b>。
+  <em>这一讲把这张账单补全。</em></p>
+
+<p class="landing">⭐⭐⭐ <b>而补完之后会发现一件多数人想不到的事：
+  最大的那一块，既不是权重，也不是激活 ——&nbsp;<u>是优化器状态。</u></b></p>
+
+<div class="note ok"><p>⭐ <b>这一讲按「谁最大」的顺序讲，而不是按「训练流程」的顺序。</b></p>
+<p><em>流程的顺序是：前向 →&nbsp;反向 →&nbsp;更新。
+  但那个顺序会让最大的那一块<b>最后才出场</b>，而它恰恰是决定一切的那一块。</em></p>
+<p>⭐⭐ <em>所以这一讲的每一节只回答同一个问题：
+  <b>这一项有多大，能不能省，省它要拿什么去换。</b></em></p></div>
+
+</div></section>
+
+
+<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>反向要付什么 ——&nbsp;三倍算力，外加一堆扔不掉的中间结果</h2></div>
+
+<p class="lead">反向传播不是「再跑一遍」。<em>它要付两样东西：
+  <b>大约两倍于前向的算力</b>，以及 ——&nbsp;更要命的 ——&nbsp;
+  <b>一路累加、不能提前扔掉的中间激活</b>。</em></p>
+
+<div class="note warn"><p>🚧 <b>本章待写 ——&nbsp;三倍算力 · 激活为什么必须留着 · 梯度通信</b></p><p><b>这一章在故事里干什么：</b>立住两笔账：算力的 3× 从哪来；以及专题一那个 106.75 GiB 其实<b>已经是打过折的</b> —— 原始账单要大得多。⛔ 顺序很重要：<b>先看到原始账单，第二节那个决策才有分量。</b></p><p><b>打算用的图：</b><code>fig4-3x</code> · <code>fig4-act-bill</code></p></div>
+
+</div></section>
+
+
+<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>第一个真正的「决策」——&nbsp;拿算力换显存，换多少算划算</h2></div>
+
+<p class="lead">这是全课第一次出现<b>真正的取舍</b>：
+  <em>不是「有没有更好的办法」，而是<b>两样东西只能选一样，你选哪个</b>。</em></p>
+
+<div class="note warn"><p>🚧 <b>本章待写 ——&nbsp;全量重算 · 每字节付多少 FLOPs · 同一判据在 2022 年给出相反答案</b></p><p><b>这一章在故事里干什么：</b>全课第一个「决策」：三分之一算力换掉四十分之三十九的显存。⭐ 选择性重算的判据<b>只有一个数</b>：每省一字节要付多少 FLOPs。⛔ 而同一条判据在 2022 年给出的是<b>相反</b>的答案 —— 这一条比结论本身值钱。</p><p><b>打算用的图：</b><code>fig4-recompute</code> · <code>fig4-per-byte</code></p></div>
+
+</div></section>
+
+
+<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>真正的大头：优化器状态</h2></div>
+
+<p class="lead">前面两节都在跟激活较劲。<em>可把账摊开一看 ——&nbsp;
+  <b>那个从头到尾一言不发的角色，才是最大的一块。</b></em></p>
+
+<div class="note warn"><p>🚧 <b>本章待写 ——&nbsp;每参数 16 字节 · 其中 12 字节是 fp32 · 切一刀之后账完全变了</b></p><p><b>这一章在故事里干什么：</b>本讲的落点。⭐ 但要讲清楚一件事：那 16 字节是<b>「每张卡都有全套」</b>的账，<b>切一刀就完全变了</b>；而 ZeRO-3 下 bf16 权重<b>根本不常驻，它是流动的</b>。</p><p><b>打算用的图：</b><code>fig4-optstate</code> · <code>fig4-zero-split</code></p></div>
+
+</div></section>
+
+
+<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账单直接决定了并行策略长什么样</h2></div>
+
+<p class="lead">这一节是通向<b>专题五</b>的桥。
+  <em>⭐ 把上面几项按大小排一遍，你会发现 ——&nbsp;
+  <b>ZeRO 那三级，正是照着这个顺序来的。</b></em></p>
+
+<div class="note warn"><p>🚧 <b>本章待写 ——&nbsp;按大小排序 → ZeRO 三级 · 重算 / offload / CP 各针对哪一项</b></p><p><b>这一章在故事里干什么：</b>通向专题五的桥。⭐ 落点一句话：<b>谁最大、谁最少被用到，就先切谁</b> —— 理解了这张账单，ZeRO 的分级就不用背。</p><p><b>打算用的图：</b><code>fig4-ladder</code></p></div>
+
+</div></section>
+
+
+<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>一个完整 step 的总账 ——&nbsp;以及峰值出现在哪一刻</h2></div>
+
+<p class="lead">把前向（专题一）＋ 反向 ＋ 更新合成一张表。
+  <em>⭐ 而其中最有用的一问不是「总共多少」，是
+  <b>「峰值出现在哪一个时刻」</b>。</em></p>
+
+<div class="note warn"><p>🚧 <b>本章待写 ——&nbsp;总账表 · 峰值在哪一刻 · 梯度累积改的是时间线不是总量</b></p><p><b>这一章在故事里干什么：</b>收尾。⭐ 要回答三问：一个 step 总共多少 FLOPs；<b>峰值出现在哪个时刻</b>（这一问比「总共多少」有用）；全部加起来要多少 device。</p><p><b>打算用的图：</b><code>fig4-step</code></p></div>
+
+</div></section>
+
+<div class="wrap" style="padding:32px 0 64px">
+  <p style="color:var(--gray)">
+    ← 回 <a href="index.html">课程总纲</a>　·
+    前向那半张账在 <a href="topic-01.html">专题一 · 一个 Token 的一生</a>　·
+    这张账怎么切，在 <b>专题五 · 并行策略</b>（未上线）<br>
+    本页由 <code>Courses/tools/topic04-build.py</code> 生成 ——&nbsp;
+    <b>正文写在那个脚本里</b>。
+  </p>
+</div>
+
+
+<div class="figbar">
+  <span class="hint" id="figonly-hint"></span>
+  <button id="figonly-btn" type="button"></button>
+</div>
+<script>
+(function(){
+  var KEY = "t3-figonly";
+  var btn  = document.getElementById("figonly-btn");
+  var hint = document.getElementById("figonly-hint");
+  // ⭐ 折叠了多少段，是**数出来的**，不写死 ——&#160;正文一改它自动跟着变。
+  var n = document.querySelectorAll(
+      "section p:not(.lead):not(.landing), section ul, section ol, "
+    + "section pre, section .note, section blockquote, "
+    + "figcaption .capmore").length;
+  function set(on){
+    document.body.classList.toggle("figonly", on);
+    btn.textContent = on ? "展开讲解" : "折叠讲解";
+    hint.textContent = on ? ("已折叠 " + n + " 段讲解　·　按 T 切换")
+                          : ("讲解全展开　·　按 T 切换");
+    try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
+  }
+  var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
+  set(saved === null ? true : saved === "1");        // ⭐ 默认折叠
+  btn.addEventListener("click", function(){
+    set(!document.body.classList.contains("figonly"));
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key === "t" || e.key === "T"){
+      if (/^(INPUT|TEXTAREA)$/.test((e.target||{}).tagName||"")) return;
+      set(!document.body.classList.contains("figonly"));
+    }
+  });
+})();
+</script>
+<button class="totop" id="totop" title="回到顶部" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+<script>(function(){
+ var bar=document.querySelector(".progress i"), btn=document.getElementById("totop"), toc=document.getElementById("tocbar"), ls=[].slice.call(toc.querySelectorAll("a"));
+ function tick(){
+  var h=document.documentElement,  p=h.scrollTop/(h.scrollHeight-h.clientHeight||1);
+  bar.style.width=(p*100).toFixed(1)+"%";
+  btn.className="totop"+(h.scrollTop>600?" on":"");
+  var cur=null;
+  ls.forEach(function(a){var e=document.querySelector(a.getAttribute("href"));
+    if(e&&e.getBoundingClientRect().top<140)cur=a;});
+  ls.forEach(function(a){a.className=(a===cur?"on":"");});
+  if(cur&&cur.offsetLeft-toc.scrollLeft>toc.clientWidth-220)
+    toc.scrollLeft=cur.offsetLeft-120;
+ }
+ addEventListener("scroll",tick,{passive:true});tick();
+ var SR=".figsrc";
+ addEventListener("beforeprint",function(){
+  document.querySelectorAll(SR).forEach(function(d){
+   d.dataset.wasopen=d.open?"1":"";d.open=true;});});
+ addEventListener("afterprint",function(){
+  document.querySelectorAll(SR).forEach(function(d){
+   d.open=d.dataset.wasopen==="1";});});
+})();</script>
+</body></html>
