@@ -718,8 +718,13 @@ body.figonly section ul,
 body.figonly section ol,
 body.figonly section pre,
 body.figonly section .note{display:none}
-/* ⛔ 防守：图自己那一块里的任何 p 都不该被上面那条误伤 */
+/* ⛔ 防守：这两类里的 p 都不该被上面那条误伤 */
 body.figonly section figure p{display:revert}
+/* ⛔⛔ 2026-09-16：题目的题干是 <p class="q">，会被上面那条连题一起藏掉 ——&#160;
+   点开「课前勿点」只剩选项、没有问题。⭐ 这个 bug 只有**把两道题搬进来之后**
+   才存在：折叠规则是先写的，题是后搬的。
+   判据：**加了新的内容类型，要回去看一遍既有的全局规则会不会误伤它。** */
+body.figonly .guess p{display:revert}
 body.figonly section h3{margin-top:34px}
 </style>
 <style>
@@ -796,6 +801,145 @@ body.figonly section h3{margin-top:34px}
   模型每吐一个字都要回看前面所有字，于是把每个字算出来的 K、V 存着不重算，
   存下来的这一堆就叫 <b>KV cache</b>，它跟着上下文线性长。<br>
   ⭐ 所以这六年注意力的全部演化，只在做一件事：<b>让「记得住」这件事付得起。</b></p></div>
+
+<!-- ⭐⭐⭐ 2026-09-16 现场：「我们之前准备了两道题，怎么给搞丢了？」
+     ⭐ 查下来**没丢也没被删** ——&#160;它们一直在 L300 里；是
+       `67f3626`「原稿降格为 L300、新起 L200 骨架」那次，**新骨架是空白起的，
+       没把这两道题带过来**。现在原样搬回主线。
+     ⛔ 判据（值得单记）：**改架构时最容易丢的不是代码，是那些不在主线叙事里、
+       却单独有价值的小块。** git 里按那个 CSS 类名做 -S 搜索只命中一个 commit ——
+       就是那次拆分。重起炉灶之前，先列一遍「旧稿里有什么是新骨架接不住的」。
+     ⛔⛔ **位置必须在那张模型表「之前」** ——&#160;
+       表里有 KV cache 那一列，摆在题前面等于直接把第一题的答案送出去。
+     ⚠️ 两道题＋绑定脚本一起搬（脚本在 <details> 里照常执行）；
+       .guess/.opts/.rev 的样式来自共用样式表，不用另加。
+     📌 揭晓规则：**全对才开**；全选但没全对 → 报「N 对 M 错」，不揭晓；
+       答案区里有「↺ 重来」。这三条的来由见脚本内注释。 -->
+<details class="more preclass">
+  <summary>⛔ 课前勿点 ——&nbsp;开讲前的两道热身题<span class="why">现场会一起做；提前看答案＝自己剧透，这两道题就废了</span></summary>
+  <div class="body">
+
+  <div class="guess">
+    <h3>第一题 · 一个用户的 KV cache，到底有多大</h3>
+    <p class="q"><b>DeepSeek V3</b>（671B，61 层，128 个注意力头，head_dim 128），
+      <b>128K 上下文、单个用户、bf16 存</b>。<br>
+      <span class="qs">同样这个形状，换四种注意力，KV cache 各是多大？
+      <b>四行分开选，各选各的。</b></span></p>
+
+    <div class="oplab">(a) 最朴素的 <b>MHA</b>（128 个 KV 头）</div>
+    <div class="opts">
+      <button data-g="0">61 GiB</button>
+      <button data-g="1">122 GiB</button>
+      <button data-g="2" data-right>488 GiB</button>
+      <button data-g="3">976 GiB</button>
+    </div>
+
+    <div class="oplab">(b) <b>GQA-8</b>（KV 头砍到 8）</div>
+    <div class="opts">
+      <button data-g="0">3.8 GiB</button>
+      <button data-g="1">8.6 GiB</button>
+      <button data-g="2" data-right>30.5 GiB</button>
+      <button data-g="3">61 GiB</button>
+    </div>
+
+    <div class="oplab">(c) <b>MQA</b>（KV 头砍到 1）</div>
+    <div class="opts">
+      <button data-g="0" data-right>3.8 GiB</button>
+      <button data-g="1">8.6 GiB</button>
+      <button data-g="2">15.3 GiB</button>
+      <button data-g="3">30.5 GiB</button>
+    </div>
+
+    <div class="oplab">(d) <b>MLA</b>（V3 真实用的方案）</div>
+    <div class="opts">
+      <button data-g="0">3.8 GiB</button>
+      <button data-g="1" data-right>8.6 GiB</button>
+      <button data-g="2">30.5 GiB</button>
+      <button data-g="3">61 GiB</button>
+    </div>
+
+    <div class="rev">
+      <p><b>488　/　30.5　/　3.8　/　8.6　GiB。</b><br>
+        <span class="qs">算法就一条：<b>每 token 每层要留下几个数</b>，
+        乘 61 层、乘 2 字节、乘 131,072 个 token。<br>
+        MHA ＝ 2×128×128 ＝ 32,768 →&nbsp;<b>488 GiB</b>；
+        GQA-8 ＝ 2×8×128 ＝ 2,048 →&nbsp;<b>30.5</b>（16×）；
+        MQA ＝ 2×1×128 ＝ 256 →&nbsp;<b>3.8</b>（128×）；
+        MLA ＝ 压缩维 512 ＋ RoPE 64 ＝ 576 →&nbsp;<b>8.6</b>（56.9×）。<br>
+        ⭐⭐ <b>488 GiB 到底是多大？</b>换算成机器就有感觉了：按专题二推的
+        可分配口径（<b>94.74 GiB／device</b>）算，488 ÷ 94.74 ＝
+        <b>5.2 个 device</b>，也就是<b>约 2.6 块 v7 芯片</b>。<br>
+        <b>一个用户、一段输入，就要把两块半芯片的 HBM 整个拿来放 KV
+        ——&nbsp;而模型权重还一个字节都没放进去。</b><br>
+        📌 <b>RoPE</b>（旋转位置编码）后面会反复出现，这里先把它的职责摆正：
+        <b>「谁在前谁在后」并不归它管。</b>那件事是<b>因果掩码</b>白送的
+        ——&nbsp;每个位置只看得见自己左边，多堆几层就能数出自己前面有几个人
+        （<b>NoPE</b>，arXiv <a href="https://arxiv.org/abs/2305.19466" target="_blank" rel="noopener">2305.19466</a>，NeurIPS 2023 ——&nbsp;
+        直接证明了 decoder-only 不加任何显式位置编码也学得会顺序）。<br>
+        ⭐ RoPE 真正加进来的是另一样东西：<b>「我跟它差几格」</b>。
+        给每个位置的 Q 和 K <b>按它的位置转一个角度</b>，点积时两个绝对角度相减，
+        <b>相对距离就直接出现在打分里</b>——&nbsp;零参数，而且每一层都能用，
+        不必靠堆层去数。
+        ⭐ 它只改 Q/K，不改 V。<b>后面 §五会讲它给 MLA 惹的麻烦</b>——&nbsp;
+        上面那 64 维的成本，买的就是这一件事。</span></p>
+      <p>⭐⭐ 这道题真正的题眼在 <b>(c) 和 (d) 的大小关系</b>：
+        <span class="qs">MQA 只要 3.8 GiB，比 MLA 的 8.6 还小 2.25 倍。
+        <b>MLA 并不是最省的那个。</b><br>
+        ⭐ 所以这一支的目标从来不是「谁存得最少」——&nbsp;
+        MQA 早在 2019 年就把它压到头了，代价是<b>质量掉得厉害</b>。
+        真正要比的是「同样一份字节，换回多少能力」。
+        <em>这正是第五节要讲的那条线。</em></span></p>
+      <p style="margin-bottom:0"><b>⚠️ 还有一个口径要说清：</b>
+        <span class="qs">488 GiB 是「假如 V3 用 MHA」的<b>反事实</b>数字，
+        不是 V3 的实测值 ——&nbsp;V3 从第一天就是 MLA。
+        而且这里沿用了 V3 论文比较表的口径（K、V 都按 head_dim=128 算）；
+        V3 真实的 K 每头是 128+64＝192 维，严格算这个基线还会更大一点。</span></p>
+    </div>
+  </div>
+
+  <div class="guess" style="margin-top:22px">
+    <h3>第二题 · 那条「算得过来还是搬得过来」的线</h3>
+    <p class="q">上一讲那把尺子：<b>算力 ÷ 带宽</b> ——&nbsp;
+      每从内存搬一个字节，这台机器配套能算多少次。<br>
+      <span class="qs">在 <b>TPU v7</b> 上，<b>两层各是多少？两行分开选。</b></span></p>
+
+    <div class="oplab">(a) 对 <b>HBM</b>（片外）</div>
+    <div class="opts">
+      <button data-g="0">78</button>
+      <button data-g="1">156</button>
+      <button data-g="2" data-right>约 313</button>
+      <button data-g="3">约 626</button>
+    </div>
+
+    <div class="oplab">(b) 对 <b>VMEM</b>（片上）</div>
+    <div class="opts">
+      <button data-g="0">跟 HBM 一样，约 313</button>
+      <button data-g="1">比 HBM <b>高</b>，约 3,000</button>
+      <button data-g="2" data-right>比 HBM <b>低</b>一个量级 ——&nbsp;几十这一档</button>
+      <button data-g="3">片上没有「屋脊点」这回事</button>
+    </div>
+
+    <div class="rev">
+      <p><b>(a) 约 313。(b) 比 HBM 低一个量级，落在几十这一档。</b><br>
+        <span class="qs">(a) ＝ 2,307 TFLOP/s ÷ 7.37 TB/s。
+        这个数不是本讲新造的，它就是<a href="topic-02.html">专题二</a>整整一节在立的那条屋脊线。</span></p>
+      <p><b>⭐ (b) 最容易选反，而选反的人通常是把「快」和「门槛高」搞混了：</b>
+        <span class="qs">片上更快，所以<b>分母变大</b> ——&nbsp;
+        同一个分子除以更大的分母，<b>商只会更小</b>。
+        <b>越靠近计算，这条线越低。</b>
+        <em>门槛低意味着：同一个算子挪到片上以后，更容易变成算力受限。</em></span></p>
+      <p style="margin-bottom:0">⛔ 而 (b) 为什么只给量级、不给数 ——&nbsp;<b>这才是这道题最想教的一件事</b>：
+        <span class="qs"><b>VMEM 的带宽官方没有公开。</b>
+        而屋脊点乘以算力就等于带宽 ——&nbsp;给出一个精确的屋脊点，
+        等于把那个没公开的数反推出来。所以我们到「几十这一档」为止，<b>不往下猜</b>。<br>
+        ⭐ 这正是<a href="topic-02.html">专题二</a>第 6 节那四句问法里的一句：
+        先问这个数的出处和口径，再用它。
+        <em>而那四句不是拿来审别人材料的 ——&nbsp;是先拿来审自己的。</em></span></p>
+    </div>
+  </div>
+
+  </div>
+</details>
 
 <!-- ⭐⭐ 2026-09-14 R12 现场要求：「那个注意力编年史能给我放在开篇的位置吗？」
      ⭐ 顺手做成**首尾呼应**：开篇摊开它（此刻看不懂是正常的），
@@ -942,6 +1086,237 @@ body.figonly section h3{margin-top:34px}
 <p><span class="sub">⭐ <em>这一节<b>没有新知识</b>，它只是一张地图 ——&nbsp;
   所以它不编到正课里，叫<b>第零节</b>。
   <b>它唯一的作用，是让你在最后那一章有一个<u>回得去的地方</u>。</b></em></span></p></div>
+
+<!-- ⭐⭐⭐ 2026-09-16 现场：「我说的注意力编年史不是横着那张时间线，
+     是**按模型来捋的、所有著名开源模型按年代排的那个巨大表格**，
+     还能切 highlight 和全量两种模式的那个。」——&#160;表从 8.6 挪到这里。
+     ⭐ 两样东西并不重复，它们是**同一段历史的两种分辨率**：
+       上面那张时间线看的是**四条支线各修各的毛病**（形状）；
+       下面这张表看的是**每一个具体型号到底选了什么**（账）。
+     ⛔ 开篇读不懂是正常的，而且是故意的 ——&#160;第八章末尾会请读者回来。 -->
+<p class="landing">⭐ <b>再看一眼具体的账 ——&nbsp;这些名字你多半都听过。</b>
+  <em>同样<b>现在不用看懂</b>：先看清<b>列</b>就行 ——&nbsp;
+  一个循环里几层便宜的、上下文多长、KV cache 多大。
+  <b>这一讲结束时，你会一行一行读下来。</b></em></p>
+
+<div class="wrap">
+<style>
+/* ⛔ 这张表天然 ~1400px 宽，而版心只有 1032 —— 直接放会溢出 390px。
+   ⚠️ 而版面 lint **抓不到这一条**：它只查 overflow 不是 visible 的容器
+      （它自己注释里写明了这个盲区）。溢出是我量出来的，不是它报的。
+   ⭐ 所以这里自带一条破版心规则。两个坑都躲开：
+     ① 宽度取 min(1400, 视口-40)，窄屏不会撑破右边；
+     ② margin-left 由宽度反算，**不写死** —— 写死了窄屏会往左跑出视口，
+        而「往左跑」既不产生滚动条也不撑大 scrollWidth，探针恒报 0。 */
+.tblwrap{overflow-x:auto}
+/* ⛔ 第一版用 min(1400px, 100vw-40px) 反算 margin，在 1200/1440 上都溢出了 4px
+      —— 因为 **100vw 是含滚动条的**，而可用宽度不含。差那几像素就撑出页面。
+   ⭐ 改成「只在够宽的屏上破版心」：1500px 以上才破（那时 1400 一定放得下），
+      窄屏就老老实实待在版心里横向滚动。**不跟 vw 的边界情况较劲。** */
+/* 表的实测自然宽是 1618（62+288+360+110+416+382）。壳比它小就会出内部滚动条，
+   所以壳取 1620、破版心的门槛取 1720（那时 1620 一定放得下）。
+   ⛔ 这两个数是**量出来的**，改了列宽就要重量一次。 */
+@media (min-width:1720px){
+  .tblwrap{width:1620px;margin-left:calc((1080px - 1620px) / 2 - 24px)}
+}
+.tbltip{color:#5f6368;font-size:12.5px;margin:0 0 8px}
+.land{margin:14px 0 0;padding:14px 18px;background:#e8f0fe;border:1px solid #1a73e8;
+  border-radius:8px;color:#174ea6;font-size:12.5px;line-height:1.7}
+.land .lh{margin:0 0 6px;font-weight:700}
+.land ol{margin:0;padding-left:22px}
+.land li{margin:3px 0}
+#mtbl{width:100%;border-collapse:collapse;font-size:12.5px;line-height:1.45}
+#mtbl th{text-align:left;padding:6px 8px;border-bottom:2px solid #dadce0;color:#5f6368;
+  font-weight:700;white-space:nowrap}
+#mtbl th.s{cursor:pointer;user-select:none}
+#mtbl th.s:hover{color:#1a73e8;background:#f1f3f4}
+#mtbl th.s::after{content:"\2195";opacity:.35;margin-left:4px;font-weight:400}
+#mtbl th.s.up::after{content:"\2191";opacity:1;color:#1a73e8}
+#mtbl th.s.dn::after{content:"\2193";opacity:1;color:#1a73e8}
+#mtbl td{padding:5px 8px;border-bottom:1px solid #f1f3f4;vertical-align:middle}
+#mtbl td.tm{color:#5f6368;white-space:nowrap;font-variant-numeric:tabular-nums}
+#mtbl td.ctx{white-space:nowrap;font-weight:700;color:#5f6368}
+/* ⭐ 备注**一行一句，不换行**。现场：「保持一行是一行」——
+   折行会把行高撑起来，信息密度直接掉一半。
+   ⛔ 前提是备注本身已经压到 ≤ 375px（见 topic03_models.py 里 ROWS 的注释）：
+     光设 nowrap 而不压内容，只会把表撑到 1700+，等于把问题挪个地方。 */
+#mtbl td.nt{color:#5f6368;white-space:nowrap}
+#mtbl .chip{display:inline-block;padding:2px 9px;border-radius:6px;border:1px solid;
+  font-weight:700;white-space:nowrap}
+#mtbl .cy{white-space:nowrap}
+#mtbl .cy i{display:inline-block;width:40px;text-align:center;color:#fff;font-style:normal;
+  font-size:9px;font-weight:700;padding:3px 0;border-radius:3px;margin-right:3px}
+#mtbl .uni{display:inline-block;padding:3px 10px;border-radius:4px;color:#fff;
+  font-size:10px;font-weight:700;white-space:nowrap}
+#mtbl .kvw{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px;max-width:470px}
+#mtbl .kv .bar{display:block;height:7px;border-radius:2px;flex:0 0 auto}
+#mtbl .kv em{font-style:normal;font-weight:700;font-size:11px;margin-left:6px;white-space:nowrap}
+#mtbl .kv .fold{font-weight:400;opacity:.75}
+#mtbl .unk{color:#9aa0a6;font-size:10px;border:1px solid #dadce0;border-radius:3px;padding:2px 7px}
+#mtbl .hint{font-weight:400;color:#9aa0a6;font-size:11px}
+
+/* ── Highlight ／ Boom 两态开关 ────────────────────────────────────
+   ⭐ 只藏行、不动数据：隐藏是 CSS 干的，排序 JS 照常按 data-* 重排全部 39 行，
+     两个功能互不知道对方存在 ——&nbsp;所以「先排序再切模式」和「先切模式再排序」
+     结果一样。⛔ 别改成 JS 里 removeChild，那样一切模式排序状态就丢了。 */
+.hlbar{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.hlbtns{display:inline-flex;border:1px solid #dadce0;border-radius:999px;overflow:hidden}
+.hlbtns button{border:0;background:#fff;color:#5f6368;font:inherit;font-size:12.5px;
+  font-weight:700;padding:5px 16px;cursor:pointer;line-height:1.4}
+.hlbtns button+button{border-left:1px solid #dadce0}
+.hlbtns button:hover{background:#f1f3f4;color:#1a73e8}
+.hlbtns button[aria-pressed="true"]{background:#1a73e8;color:#fff}
+.hlbtns button[aria-pressed="true"]:hover{background:#1a73e8;color:#fff}
+.hlnote{color:#5f6368;font-size:12px}
+/* 默认（Boom）：全部 39 行，备注给这一行独有的那句 */
+#mtbl .n-hl{display:none}
+/* Highlight：非入选行整行不出现，备注换成「它凭什么在这条线上」 */
+#mtbl.hl tbody tr:not([data-hl]){display:none}
+#mtbl.hl .n-all{display:none}
+#mtbl.hl .n-hl{display:inline;color:#174ea6}
+</style>
+<div class="note warn"><p>📌 <b>这张表的取数规则（⭐ 2026-09-13 补 ——&nbsp;由表长出来的结论全靠这条规则撑着）</b></p><ul><li><b>层配比 / 层数 / 头数 / 维度</b>：一律读<b>公开 config</b>（HF 上那份 <code>config.json</code>）。</li><li><b>上下文</b>：取 config 的 <code>max_position_embeddings</code>。⚠️ <b>它是容量不是能力</b> ——&nbsp;声明 10M 不等于 10M 上都好用。</li><li><b>KV cache</b>：一律按 <b>@128K · bf16 · batch 1</b> 由形状当场算出，<b>不取厂商自报值</b>。⚠️ 滑窗模型给的是<b>窗口封顶后</b>的量。</li><li>⛔ <b>三处例外，各自标了</b>：混元 Hy3 那一行读自我们自己的仓库；Ling 一族读自模型卡；两处声明与实测口径不一致的（MiniMax-01 的 4M / config 10M）在备注里写了。</li></ul><p>⚠️ <b>凡是上下文 &lt; 128K 的行，那一格的 KV 是反事实值</b>（把它的形状放到 128K 上算）——&nbsp;<b>包括「846 倍」的分子 GPT-3</b>，它的实际上下文只有 2K。<em>这个倍数是用来看量级的，不是用来引用的。</em></p></div><div class="tblwrap"><div class="hlbar"><span class="hlbtns"><button type="button" data-m="hl" aria-pressed="true">⭐ Highlight</button><button type="button" data-m="all" aria-pressed="false">Boom ——&#160;全部</button></span><span class="hlnote"></span></div><p class="tbltip">⭐ <b>点表头可以排序</b>——&#160;时间 / 厂商 / 便宜层占比 / 上下文 / KV 大小，再点一次反向。<b>默认按时间。</b>两种模式下排序都作用在全部 44 行上。</p><table id="mtbl"><thead><tr><th class="s" data-k="t">时间</th><th class="s" data-k="v">模型 <span class="hint">按厂商</span></th><th class="s" data-k="c">一个循环 <span class="hint">一格＝一层</span></th><th class="s" data-k="x">上下文 <span class="hint">声明值</span></th><th class="s" data-k="k">KV cache＠128K</th><th>备注</th></tr></thead><tbody>
+<tr data-t="2020-05" data-v="OpenAI|2020-05" data-c="0.000000" data-x="2048" data-k="576.000000" data-hl="1"><td class="tm">2020-05</td><td><span class="chip" style="color:#5f6368;background:#f1f3f4;border-color:#5f6368">GPT-3　175B 稠密 · 96 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MHA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:240px"></b><em style="color:#7f0000">576 GiB<span class="fold">（10 条才画得下）</span></em></span></td><td class="nt"><span class="n-all"><b>基线：KV 按头数线性长，没有任何省法</b></span><span class="n-hl">起点。576 GiB 这把尺，后面所有省下来的都拿它比</span></td></tr>
+<tr data-t="2022-04" data-v="Google|2022-04" data-c="0.000000" data-x="2048" data-k="14.750000" data-hl="1"><td class="tm">2022-04</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">PaLM　540B 稠密 · 118 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MQA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:98px"></b><em style="color:#d93025">15 GiB</em></span></td><td class="nt"><span class="n-all">48 头共用 1 组 KV —— <b>第一次大规模砍 KV</b></span><span class="n-hl">MQA —— 第一次把 KV 砍到只剩 1 组</span></td></tr>
+<tr data-t="2023-02" data-v="Meta|2023-02" data-c="0.000000" data-x="2048" data-k="320.000000"><td class="tm">2023-02</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 1　65B 稠密 · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MHA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:133px"></b><em style="color:#7f0000">320 GiB<span class="fold">（6 条才画得下）</span></em></span></td><td class="nt"><span class="n-all">一代还是纯 MHA，<b>下一代才上 GQA</b></span></td></tr>
+<tr data-t="2023-07" data-v="Meta|2023-07" data-c="0.000000" data-x="4096" data-k="40.000000" data-hl="1"><td class="tm">2023-07</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 2　70B 稠密 · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">4K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:267px"></b><em style="color:#b31412">40 GiB</em></span></td><td class="nt"><span class="n-all">MQA 砍太狠掉质量，GQA 是折中（arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>）</span><span class="n-hl">GQA —— 砍到 1 组太狠，折中版成了此后十年的默认</span></td></tr>
+<tr data-t="2023-09" data-v="Mistral|2023-09" data-c="1.000000" data-x="32768" data-k="0.500000" data-hl="1"><td class="tm">2023-09</td><td><span class="chip" style="color:#c2410c;background:#fff1e6;border-color:#c2410c">Mistral 7B　7B 稠密 · 32 层</span></td><td class="cy"><span class="uni" style="background:#00838f">SWA —— 每一层都是这个</span></td><td class="ctx">32K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:3px"></b><em style="color:#1e8e3e">512 MiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>SWA 进主流的第一枪</b>，窗口 4096</span><span class="n-hl">SWA —— 「不看全部」这个想法的起点，窗口 4096</span></td></tr>
+<tr data-t="2024-03" data-v="AI21|2024-03" data-c="0.875000" data-x="262144" data-k="2.000000" data-hl="1"><td class="tm">2024-03</td><td><span class="chip" style="color:#7b1fa2;background:#f6e9fb;border-color:#7b1fa2">Jamba　52B/12B · 32 层</span></td><td class="cy"><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#f9ab00">GQA</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#f9ab00;width:13px"></b><em style="color:#f9ab00">2.0 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>层间混合的开源起点</b>，比 MiniMax-01 早十个月</span><span class="n-hl">层间混合的开源起点，7:1 —— 比 MiniMax-01 早十个月</span></td></tr>
+<tr data-t="2024-05" data-v="DeepSeek|2024-05" data-c="0.000000" data-x="131072" data-k="8.437500" data-hl="1"><td class="tm">2024-05</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V2　236B/21B · 60 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:56px"></b><em style="color:#e8710a">8.4 GiB</em></span></td><td class="nt"><span class="n-all">低秩压缩。<b>KV 降 93.3%</b>＝只剩 2.25 组 GQA</span><span class="n-hl">MLA 首发。换了个思路：不砍头数，改存压缩过的隐向量</span></td></tr>
+<tr data-t="2024-06" data-v="Google|2024-06" data-c="0.500000" data-x="8192" data-k="23.718750"><td class="tm">2024-06</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">Gemma 2 27B　27B 稠密 · 46 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">8K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:158px"></b><em style="color:#d93025">24 GiB</em></span></td><td class="nt"><span class="n-all">⭐ 谷歌开始交替：<b>1:1，窗口 4096</b></span></td></tr>
+<tr data-t="2024-07" data-v="Meta|2024-07" data-c="0.000000" data-x="131072" data-k="63.000000"><td class="tm">2024-07</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 3.1　405B 稠密 · 126 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:400px"></b><b class="bar" style="background:#b31412;width:20px"></b><em style="color:#b31412">63 GiB<span class="fold">（2 条才画得下）</span></em></span></td><td class="nt"><span class="n-all">⛔ <b>不上花招硬推 128K 的代价</b>：比 Llama 2 还多</span></td></tr>
+<tr data-t="2024-11" data-v="腾讯 混元|2024-11" data-c="0.000000" data-x="131072" data-k="10.000000"><td class="tm">2024-11</td><td><span class="chip" style="color:#d84315;background:#fbe9e7;border-color:#d84315">混元 Hunyuan-Large　389B/52B · 64 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:67px"></b><em style="color:#d93025">10 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>CLA：每 2 层共享一份 KV</b> —— 旋钮①的第三招</span></td></tr>
+<tr data-t="2024-12" data-v="DeepSeek|2024-12" data-c="0.000000" data-x="163840" data-k="8.578125" data-hl="1"><td class="tm">2024-12</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V3　671B/37B · 61 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">160K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>专题一的锚点</b>。跟 V2 只差 1 层，KV 几乎相同</span><span class="n-hl">跟 V2 同机制，但参数大 2.8 倍而 KV 只差 1.7% —— KV 脱钩的证据</span></td></tr>
+<tr data-t="2025-01" data-v="MiniMax|2025-01" data-c="0.875000" data-x="4194304" data-k="5.000000" data-hl="1"><td class="tm">2025-01</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax-01　456B/45.9B · 80 层</span></td><td class="cy"><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#f9ab00">GQA</i></td><td class="ctx">4M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:33px"></b><em style="color:#e8710a">5.0 GiB</em></span></td><td class="nt"><span class="n-all">⭐ 线性首次上旗舰。<b>训练 1M、外推 4M</b>（config 的 10M 是容量）</span><span class="n-hl">线性第一次上到几百 B 的规模，同样是 7:1</span></td></tr>
+<tr data-t="2025-03" data-v="Google|2025-03" data-c="0.833333" data-x="131072" data-k="10.406250" data-hl="1"><td class="tm">2025-03</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">Gemma 3 27B　27B 稠密 · 62 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:69px"></b><em style="color:#d93025">10 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>5:1、窗口 1024</b> —— 小米那个 5:1 不是首创</span><span class="n-hl">滑窗混合定型：5 层窗口配 1 层全局，窗口反而收到 1024</span></td></tr>
+<tr data-t="2025-03" data-v="RWKV|2025-03" data-c="1.000000" data-x="1099511627776" data-k="0.000000" data-hl="1"><td class="tm">2025-03</td><td><span class="chip" style="color:#00695c;background:#e0f2f1;border-color:#00695c">RWKV-7 Goose　0.19B–2.9B · 纯 RNN</span></td><td class="cy"><span class="uni" style="background:#00695c">RWKV —— 每一层都是这个</span></td><td class="ctx">无限（理论）</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:6px"></b><em style="color:#1e8e3e">0（无 KV）</em></span></td><td class="nt"><span class="n-all">⭐ <b>全表唯一 KV 为零</b>：常数内存、常数单 token 时间</span><span class="n-hl">另一头的极端：纯 RNN，KV cache literally 是 0</span></td></tr>
+<tr data-t="2025-04" data-v="Meta|2025-04" data-c="0.750000" data-x="10485760" data-k="7.125000"><td class="tm">2025-04</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 4 Scout　109B/17B · 48 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">10M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:48px"></b><em style="color:#e8710a">7.1 GiB</em></span></td><td class="nt"><span class="n-all">块状局部 8192 ＋ NoPE 全局。⚠️ <b>声称 10M，又一个报容量的</b></span></td></tr>
+<tr data-t="2025-04" data-v="阿里 千问|2025-04" data-c="0.000000" data-x="40960" data-k="23.500000"><td class="tm">2025-04</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3-235B-A22B　235B/22B · 94 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">40K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:157px"></b><em style="color:#d93025">24 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>千问转线性之前的那一代</b>：纯 GQA-4</span></td></tr>
+<tr data-t="2025-07" data-v="月之暗面|2025-07" data-c="0.000000" data-x="131072" data-k="8.578125"><td class="tm">2025-07</td><td><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi K2　1T/32B · 61 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>Kimi 上 KDA 之前</b>：纯 MLA，架构名就是 DeepseekV3</span></td></tr>
+<tr data-t="2025-07" data-v="智谱|2025-07" data-c="0.000000" data-x="131072" data-k="46.000000"><td class="tm">2025-07</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-4.5　355B/32B · 92 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:307px"></b><em style="color:#b31412">46 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>智谱上 DSA 之前</b>：46 GiB → GLM-5 的 11，降 4 倍</span></td></tr>
+<tr data-t="2025-08" data-v="OpenAI|2025-08" data-c="0.500000" data-x="131072" data-k="4.504395"><td class="tm">2025-08</td><td><span class="chip" style="color:#5f6368;background:#f1f3f4;border-color:#5f6368">gpt-oss-120b　117B/5.1B · 36 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:30px"></b><em style="color:#e8710a">4.5 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>OpenAI 首个开放权重</b>：1:1 交替、窗口 128 ＋ sink</span></td></tr>
+<tr data-t="2025-09" data-v="DeepSeek|2025-09" data-c="0.000000" data-x="163840" data-k="8.578125" data-hl="1"><td class="tm">2025-09</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V3.2-Exp　671B/37B · 61 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">160K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>稀疏的起点</b>：V3 ＋ Lightning Indexer。⛔ KV 跟 V3 一样</span><span class="n-hl">DSA —— 层内稀疏起点：不是少几层，是每层只挑一部分 token 看</span></td></tr>
+<tr data-t="2025-09" data-v="阿里 千问|2025-09" data-c="0.750000" data-x="262144" data-k="3.000000" data-hl="1"><td class="tm">2025-09</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3-Next　80B/3B · 48 层</span></td><td class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:20px"></b><em style="color:#e8710a">3.0 GiB</em></span></td><td class="nt"><span class="n-all">36 线性 ＋ 12 全注意力（GQA-2，头维 256）</span><span class="n-hl">GDN —— Mamba 那一支的直系后代第一次进主流大模型</span></td></tr>
+<tr data-t="2025-10" data-v="蚂蚁 百灵|2025-10" data-c="0.000000" data-x="32768" data-k="40.000000"><td class="tm">2025-10</td><td><span class="chip" style="color:#0288d1;background:#e1f5fe;border-color:#0288d1">Ling-1T（Ling 2.0）　1T/50B · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">32K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:267px"></b><em style="color:#b31412">40 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>Ling 2.6 就是从它改造的</b>：40 GiB → 1.4 GiB</span></td></tr>
+<tr data-t="2025-10" data-v="MiniMax|2025-10" data-c="0.000000" data-x="196608" data-k="31.000000" data-hl="1"><td class="tm">2025-10</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax M2　230B/10B · 62 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">192K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:207px"></b><em style="color:#b31412">31 GiB</em></span></td><td class="nt"><span class="n-all">⛔ <b>「退回全注意力」≠ 什么都没做</b>：GQA-8 ＋ partial RoPE</span><span class="n-hl">反例：退回全注意力。证明「全注意力」说的是旋钮③，不是①</span></td></tr>
+<tr data-t="2025-10" data-v="月之暗面|2025-10" data-c="0.750000" data-x="1048576" data-k="0.984375" data-hl="1"><td class="tm">2025-10</td><td><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi Linear　48B/3B · 27 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">MLA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:7px"></b><em style="color:#1e8e3e">1008 MiB</em></span></td><td class="nt"><span class="n-all">20 KDA ＋ 7 MLA（<b>末层强制 full</b>）。已用 NoPE</span><span class="n-hl">KDA —— 线性的新一代，配 NoPE 的 MLA</span></td></tr>
+<tr data-t="2025-12" data-v="DeepSeek|2025-12" data-c="0.000000" data-x="163840" data-k="8.578125" data-hl="1"><td class="tm">2025-12</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V3.2　671B/37B · 61 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">160K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">Exp 转正。<b>index_topk 512 → 2048</b>，KV 与 V3 一样</span><span class="n-hl">Exp 转正：稀疏从实验走进生产，top-k 512 → 2048</span></td></tr>
+<tr data-t="2025-12" data-v="Mistral|2025-12" data-c="0.000000" data-x="294912" data-k="8.578125" data-hl="1"><td class="tm">2025-12</td><td><span class="chip" style="color:#c2410c;background:#fff1e6;border-color:#c2410c">Mistral Large 3　675B/41B · 61 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">288K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>MLA 超参跟 V3 逐字段一样</b>；参数读自 params.json</span><span class="n-hl">MLA 扩散到了西方：欧洲最大开源旗舰逐字段照抄 V3 的 MLA 超参</span></td></tr>
+<tr data-t="2026-01" data-v="小米|2026-01" data-c="0.833333" data-x="262144" data-k="5.012207"><td class="tm">2026-01</td><td><span class="chip" style="color:#f9ab00;background:#f9fbe7;border-color:#f9ab00">小米 MiMo-V2-Flash　309B/15B · 48 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:33px"></b><em style="color:#e8710a">5.0 GiB</em></span></td><td class="nt"><span class="n-all">窗口 128。卡上自称 <b>KV 省近 6×</b>，48÷8 正好对上</span></td></tr>
+<tr data-t="2026-02" data-v="智谱|2026-02" data-c="0.000000" data-x="202752" data-k="10.968750"><td class="tm">2026-02</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-5　744B/40B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">198K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">MLA ＋ DSA。<b>GLM-5.1 同架构</b>，只有后训练不同</span></td></tr>
+<tr data-t="2026-02" data-v="MiniMax|2026-02" data-c="0.000000" data-x="196608" data-k="31.000000"><td class="tm">2026-02</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax M2.5　230B/10B · 62 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">192K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:207px"></b><em style="color:#b31412">31 GiB</em></span></td><td class="nt"><span class="n-all">⚠️ <b>架构与 M2 逐字段相同</b>，稀疏要等 M3</span></td></tr>
+<tr data-t="2026-03" data-v="阿里 千问|2026-03" data-c="0.750000" data-x="262144" data-k="3.750000" data-hl="1"><td class="tm">2026-03</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3.5　397B/17B · 60 层</span></td><td class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:25px"></b><em style="color:#e8710a">3.8 GiB</em></span></td><td class="nt"><span class="n-all">45 线性 ＋ 15 全（config: full_attention_interval 4）</span><span class="n-hl">千问把混合注意力从旁支 Qwen3-Next 收进了主线</span></td></tr>
+<tr data-t="2026-04" data-v="小米|2026-04" data-c="0.857143" data-x="1048576" data-k="6.286621"><td class="tm">2026-04</td><td><span class="chip" style="color:#f9ab00;background:#f9fbe7;border-color:#f9ab00">小米 MiMo-V2.5-Pro　1.02T/42B · 70 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:42px"></b><em style="color:#e8710a">6.3 GiB</em></span></td><td class="nt"><span class="n-all">60 SWA ＋ 10 全，窗口 128 —— <b>1M 那档最省的</b></span></td></tr>
+<tr data-t="2026-04" data-v="DeepSeek|2026-04" data-c="0.000000" data-x="1048576" data-k="0.975220"><td class="tm">2026-04</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V4-Pro　1.6T/49B · 61 层</span></td><td class="cy"><i style="background:#a50e0e">HCA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:7px"></b><em style="color:#1e8e3e">999 MiB</em></span></td><td class="nt"><span class="n-all">⛔ 跟 Flash 不同：<b>前两层是 HCA</b>。1.6T 而 KV 不到 1 GiB</span></td></tr>
+<tr data-t="2026-04" data-v="蚂蚁 百灵|2026-04" data-c="0.875000" data-x="262144" data-k="1.406250"><td class="tm">2026-04</td><td><span class="chip" style="color:#0288d1;background:#e1f5fe;border-color:#0288d1">Ling 2.6-1T　1T/63B · 80 层</span></td><td class="cy"><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#e8710a">MLA</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#f9ab00;width:9px"></b><em style="color:#f9ab00">1.4 GiB</em></span></td><td class="nt"><span class="n-all">⛔ <b>不是 KDA</b>；思考版 Ring-2.6-1T 架构逐字段相同</span></td></tr>
+<tr data-t="2026-04" data-v="Google|2026-04" data-c="0.833333" data-x="262144" data-k="10.781250" data-hl="1"><td class="tm">2026-04</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">Gemma 4 31B　31B 稠密 · 60 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:72px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">⭐ 全局层 <b>K 维加倍 ＋ K=V 共享</b>，窗口 1024</span><span class="n-hl">旋钮①又出新招：全局层 K 维加倍再让 K=V 共享一份</span></td></tr>
+<tr data-t="2026-05" data-v="DeepSeek|2026-05" data-c="0.333333" data-x="1048576" data-k="0.681030" data-hl="1"><td class="tm">2026-05</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V4-Flash　284B/13B · 43 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:5px"></b><em style="color:#1e8e3e">697 MiB</em></span></td><td class="nt"><span class="n-all">⭐ 2 层 SWA 引导，CSA／HCA 交替。<b>MLA 换成 shared-KV MQA</b></span><span class="n-hl">终点。697 MiB，比 GPT-3 小 846 倍，而且 MLA 被整个换掉了</span></td></tr>
+<tr data-t="2026-06" data-v="智谱|2026-06" data-c="0.000000" data-x="1048576" data-k="10.968750" data-hl="1"><td class="tm">2026-06</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-5.2　744B/40B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">⭐ ＋IndexShare：四层共用一个 indexer。<b>198K → 1M 靠这步</b></span><span class="n-hl">IndexShare —— 稀疏的第二阶段：索引本身变成了新的开销</span></td></tr>
+<tr data-t="2026-06" data-v="MiniMax|2026-06" data-c="0.000000" data-x="1048576" data-k="15.000000"><td class="tm">2026-06</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax M3　428B/23B · 60 层</span></td><td class="cy"><span class="uni" style="background:#d93025">MSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:100px"></b><em style="color:#d93025">15 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ GQA-4 ＋ 稀疏。<b>KV 比走 MLA 的 GLM-5.2 还大</b></span></td></tr>
+<tr data-t="2026-07" data-v="月之暗面|2026-07" data-c="0.750000" data-x="1048576" data-k="3.375000"><td class="tm">2026-07</td><td><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi K3　2.8T/104B · 93 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">gMLA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:22px"></b><em style="color:#e8710a">3.4 GiB</em></span></td><td class="nt"><span class="n-all">69 KDA ＋ 24 Gated MLA（<b>末层 92、93 连着两层 full</b>）</span></td></tr>
+<tr data-t="2026-07" data-v="腾讯 混元|2026-07" data-c="0.000000" data-x="262144" data-k="40.000000"><td class="tm">2026-07</td><td><span class="chip" style="color:#d84315;background:#fbe9e7;border-color:#d84315">混元 Hy3　295B/21B · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:267px"></b><em style="color:#b31412">40 GiB</em></span></td><td class="nt"><span class="n-all">⛔ <b>80 层全 GQA-8</b> —— 线性一层都没上</span></td></tr>
+<tr data-t="2026-07" data-v="蚂蚁 百灵|2026-07" data-c="0.833333" data-x="262144" data-k="0.984375"><td class="tm">2026-07</td><td><span class="chip" style="color:#0288d1;background:#e1f5fe;border-color:#0288d1">Ling-3.0-flash　124B/5.1B · 42 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">gMLA</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:7px"></b><em style="color:#1e8e3e">1008 MiB</em></span></td><td class="nt"><span class="n-all">跟 2.6 换了一支。<b>同代 tiny 用 3:1，它用 5:1</b>；3.0 无 1T</span></td></tr>
+<tr data-t="2026-08" data-v="智谱|2026-08" data-c="0.000000" data-x="1048576" data-k="10.968750"><td class="tm">2026-08</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-5.3　744B/40B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">⚠️ <b>跟 5.2 同一个 base</b>，纯后训练，架构没动</span></td></tr>
+<tr data-t="2026-08" data-v="腾讯 混元|2026-08" data-c="0.000000" data-x="1048576" data-k="10.968750" data-hl="1"><td class="tm">2026-08</td><td><span class="chip" style="color:#d84315;background:#fbe9e7;border-color:#d84315">混元 Hy4-preview　770B/49B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">gDSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">78 层全稀疏 ＋ <b>IndexCache</b>（每 4 层 1 层算索引）</span><span class="n-hl">跳过线性那一支，从纯 GQA 直接跳进全层稀疏</span></td></tr>
+<tr data-t="2026-08" data-v="智谱|2026-08" data-c="0.750000" data-x="1048576" data-k="1.546875" data-hl="1"><td class="tm">2026-08</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">⭐ GLM-5.3-Flash　320B/18B · 45 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#d93025">DSA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#f9ab00;width:10px"></b><em style="color:#f9ab00">1.5 GiB</em></span></td><td class="nt"><span class="n-all">34 KDA ＋ 11 稀疏 MLA —— <b>GLM 首次线性＋稀疏同锅</b></span><span class="n-hl">唯一一个把②和③同锅：34 层 KDA ＋ 11 层稀疏 MLA</span></td></tr>
+<tr data-t="2026-08" data-v="阿里 千问|2026-08" data-c="0.750000" data-x="262144" data-k="3.000000"><td class="tm">2026-08</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3.8-Flash-Next　125B/6B · 48 层</span></td><td class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:20px"></b><em style="color:#e8710a">3.0 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>Qwen4 架构预览</b>；新东西在 51B 的 n-gram 嵌入表</span></td></tr>
+</tbody></table><p class="tbltip">⭐ 这张表的一句话落点：同一个 128K 长度，
+从 GPT-3 的 <b>576 GiB</b> 到 DeepSeek-V4-Flash 的 <b>697 MiB</b>，六年 <b>846 倍</b>
+——&#160;而这不是一个旋钮拧出来的，<b>三个旋钮各贡献了一段</b>。</p>
+<details class="aside"><summary>⭐ 这张表还能一眼看出<b>八件事</b>
+<em>（含上面那条的完整推导，以及一条表自己长出来的结论）</em></summary>
+<div class="land"><p class="lh">⭐ 这张表一眼能看出八件事
+<span style="font-weight:400;color:#5f6368">（以下统计恒按全部 44 行算，切到 Highlight 也不变
+——&#160;不然「有几家怎么样」这种话会跟着显示模式变，那就不是结论了）</span></p>
+<ol>
+<li>表里 <b>44</b> 家：<b>17</b> 家是「便宜的层 ＋ 一层贵的」，<b>25</b> 家每层同构，
+2 家是别的混法。那 17 家混合的，配比落在 <b>1:1 ～ 7:1</b> ——
+而拆成两族看更有意思：线性混合 <b>3:1、5:1、7:1</b>、滑窗混合 <b>1:1、3:1、5:1、6:1</b>，
+<b>两族重叠在 3:1 ～ 6:1</b>。⭐ 两类看起来毫不相干的混合落进同一段区间，
+这件事本身就是一条证据。<br>
+⚠️ <b>但别说成「无一例外」</b>：<b>Mistral 7B、RWKV-7 Goose</b> 就是纯便宜层、一层贵的都没有的反例。
+⭐ 而这个反例恰恰值得讲 ——&nbsp;纯滑窗真的上过生产、用了两年，
+它正好说明<b>那条 L2M 条件</b>是<b>渐近</b>命题，
+管不了 32K 这个尺度。</li>
+<li>前几行是基线，也是一条完整的小史：MHA → MQA（砍到 1 组）→ GQA（折中）→ MLA（改压缩）
+→ <b>CLA（跨层共享）</b>——<b>全都只在动「每个 token 存多少」这一个旋钮</b>。</li>
+<li>⭐ 扫一眼颜色搭配：混合的那 17 家里 <b>16 家是「冷色 ＋ 黄橙」</b>（便宜的层配一层全注意力）。
+只有 <b>GLM-5.3-Flash</b> 是「蓝 ＋ 红」——&nbsp;它配的那层「贵的」，本身已经是稀疏的了。</li>
+<li>⭐⭐ 把<b>上下文</b>那一列排一下：做到 <b>1M 以上的 12 家，无一例外都动了旋钮②或③</b>；
+纯全注意力那一档最高只到 288K（Mistral Large 3）。最硬的对照来自 MiniMax 自己：
+<b>01 用 7:1 线性外推到 4M，M2 退回纯全注意力只剩 192K</b>——同一家、同一批人，差二十倍。</li>
+<li>⭐⭐ 把 <b>KV cache</b> 排一下：<b>576 GiB</b>（GPT-3）到 <b>697 MiB</b>（DeepSeek-V4-Flash），整整 <b>846 倍</b>
+<span style="color:#5f6368">——&#160;两端都取 <b>100B 以上</b>的，不然「最小」会落到 Mistral 7B 头上，
+那比的是模型大小不是机制</span>。
+而这不是一个旋钮拧出来的——MHA→GQA 砍头数、MLA 改压缩、<b>CLA 跨层共享</b>是旋钮①；
+线性把大部分层的 KV <b>直接删成零</b>是旋钮③；CSA／HCA 存压缩池是旋钮②。
+<b>三个旋钮各贡献了一段。</b>⭐ 而 <b>RWKV 那一行干脆是 0</b>——纯 RNN 没有 KV cache 这个东西。</li>
+<li>⛔⛔ <b>「上下文」这一列报的是<u>声明</u>，不是<u>能用</u>。</b>
+数来自各家 config 的 max_position_embeddings，而这个字段各家含义并不一样——
+MiniMax-01 那格 config 写着 <b>10,240,000</b>，官方只声称训练 1M、外推 4M；
+Llama 4 Scout 声称 <b>10M</b> 也是同一回事。
+声明和能用之间还隔着一整个 benchmark 的落差：小米自己的模型卡就写着
+MiMo-V2.5-Pro「到 1M 时塌到 0.00」。⭐ 看到「支持 N 万上下文」，<b>先问是谁、在什么任务上、测出多少分</b>。</li>
+<li>⭐⭐ <b>最反直觉的一条：MLA 之后，KV cache 跟「模型多大」<u>脱钩</u>了。</b>
+DeepSeek-V2 是 236B、V3 是 671B，<b>参数差 2.8 倍，KV 却只差 1.7%</b>（8.4 GiB vs 8.6 GiB）。
+因为 MLA 的 KV 只跟「层数 × (kv_lora_rank ＋ rope 维)」走——
+跟专家多少、hidden 多宽、总参多大一点关系都没有。
+MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断了</b>。</li>
+<li>⭐⭐ 最后一条是<b>这张表自己长出来的</b>，不是我们想说的。
+把 <b>2025-11 ～ 2026-03</b> 这五个月单独看：6 个模型发布，用到 7 种层类型
+（DSA、FULL、GDN、GQA、MLA、SWA、gAT）——&nbsp;<b>而其中在这个窗口里才首次出现的，只有 0 种</b>。<br>
+换句话说，那五个月发布很密，<b>密的是模型，不是机制</b>：全是既有招式的重新组合与规模化。
+⭐ 这是一段「消化期」——&nbsp;新机制在 2025 年秋天集中冒出来（DSA、GDN、KDA），
+然后各家花了一个冬天把它们搬进自己的旗舰。
+下一波新东西要等到 2026 春天（Gemma 4 的 K=V 共享、V4 的 CSA／HCA）。<br>
+⛔ 而这条结论是被 Highlight 视图逼出来的：全量 44 行里那段看着只是「少几行」，
+一筛成机制主线，空白立刻刺眼。<b>筛选不只是省地方，它还是一种体检。</b></li>
+</ol></div></details></div>
+<script>
+(function(){
+ var t=document.getElementById('mtbl'); if(!t) return;
+ var tb=t.tBodies[0], cur={k:'t',d:1};
+ function num(v){return parseFloat(v);}
+ t.querySelectorAll('th.s').forEach(function(th){
+  th.addEventListener('click',function(){
+   var k=th.dataset.k;
+   // 同一列再点一次就反向；换列时用该列"最有信息量"的默认方向：
+   // 时间/模型 升序，配比/上下文/KV 降序（大的先看）
+   var def = (k==='t'||k==='v') ? 1 : -1;
+   cur = (cur.k===k) ? {k:k,d:-cur.d} : {k:k,d:def};
+   var rs=[].slice.call(tb.rows);
+   rs.sort(function(a,b){
+    var x=a.dataset[k], y=b.dataset[k], r;
+    r = (k==='t'||k==='v') ? (x<y?-1:x>y?1:0) : (num(x)-num(y));
+    return r*cur.d;
+   });
+   rs.forEach(function(r){tb.appendChild(r);});
+   t.querySelectorAll('th.s').forEach(function(o){o.classList.remove('up','dn');});
+   th.classList.add(cur.d>0?'up':'dn');
+  });
+ });
+ var f=t.querySelector('th.s[data-k="t"]'); if(f) f.classList.add('up');
+
+ // ── Highlight ／ Boom ──────────────────────────────────────────
+ // ⛔ 只切 class，不碰 DOM 顺序、不碰任何数值。
+ var bs=document.querySelectorAll('.hlbtns button'), nt=document.querySelector('.hlnote');
+ function setMode(hl){
+  t.classList.toggle('hl', hl);
+  bs.forEach(function(b){b.setAttribute('aria-pressed', String(b.dataset.m===(hl?'hl':'all')));});
+  if(nt) nt.textContent = hl
+    ? '只看撑起这段历史的 22 行 —— 备注换成「它凭什么在这条线上」'
+    : '全部 44 行。备注是这一行独有的那句话';
+ }
+ bs.forEach(function(b){b.addEventListener('click',function(){setMode(b.dataset.m==='hl');});});
+ setMode(true);          // ⭐ 默认 Highlight：39 行是参照物，18 行才是一条读得下来的线
+})();
+</script>
+</div>
+
+<div class="note info"><p>⭐ <em><b>这张表有两种读法，右上角可以切：</b>
+  <b>Highlight</b>（默认）只留撑起这段历史的那些行，备注写的是「它凭什么在这条线上」；
+  <b>全部</b>是完整参照表，备注是这一行独有的那句话。<br>
+  ⭐⭐ <b>表头还能点</b> ——&nbsp;按时间、厂商、配比、上下文、KV cache 排序。</em></p></div>
 
 <p class="landing">⭐ 这一讲按时间顺序讲，一步一步走。
   每一步只回答两个问题：<b>上一步欠下了什么，这一步拿什么来还。</b>
@@ -9528,224 +9903,19 @@ body.figonly section h3{margin-top:34px}
   ⛔ 前提也很硬 ——&nbsp;<b>得有一类天然带时序的层，而且要摆在全注意力层下面</b>，
   位置才来得及被揉进去。</em></span></p></div>
 
-<h3 id="s8-6">8.6　对号入座：今天这些模型，各站在哪儿</h3>
+<h3 id="s8-6">8.6　对号入座：现在回第零节那张表，你能一行一行读下来了</h3>
 
-<p>名词讲完了。<b>下面这张表，是把它们放回现实。</b>
-  <em>每一行都标了出处，多数可以在公开配置里当场核。</em></p>
-
-<div class="wrap">
-<style>
-/* ⛔ 这张表天然 ~1400px 宽，而版心只有 1032 —— 直接放会溢出 390px。
-   ⚠️ 而版面 lint **抓不到这一条**：它只查 overflow 不是 visible 的容器
-      （它自己注释里写明了这个盲区）。溢出是我量出来的，不是它报的。
-   ⭐ 所以这里自带一条破版心规则。两个坑都躲开：
-     ① 宽度取 min(1400, 视口-40)，窄屏不会撑破右边；
-     ② margin-left 由宽度反算，**不写死** —— 写死了窄屏会往左跑出视口，
-        而「往左跑」既不产生滚动条也不撑大 scrollWidth，探针恒报 0。 */
-.tblwrap{overflow-x:auto}
-/* ⛔ 第一版用 min(1400px, 100vw-40px) 反算 margin，在 1200/1440 上都溢出了 4px
-      —— 因为 **100vw 是含滚动条的**，而可用宽度不含。差那几像素就撑出页面。
-   ⭐ 改成「只在够宽的屏上破版心」：1500px 以上才破（那时 1400 一定放得下），
-      窄屏就老老实实待在版心里横向滚动。**不跟 vw 的边界情况较劲。** */
-/* 表的实测自然宽是 1618（62+288+360+110+416+382）。壳比它小就会出内部滚动条，
-   所以壳取 1620、破版心的门槛取 1720（那时 1620 一定放得下）。
-   ⛔ 这两个数是**量出来的**，改了列宽就要重量一次。 */
-@media (min-width:1720px){
-  .tblwrap{width:1620px;margin-left:calc((1080px - 1620px) / 2 - 24px)}
-}
-.tbltip{color:#5f6368;font-size:12.5px;margin:0 0 8px}
-.land{margin:14px 0 0;padding:14px 18px;background:#e8f0fe;border:1px solid #1a73e8;
-  border-radius:8px;color:#174ea6;font-size:12.5px;line-height:1.7}
-.land .lh{margin:0 0 6px;font-weight:700}
-.land ol{margin:0;padding-left:22px}
-.land li{margin:3px 0}
-#mtbl{width:100%;border-collapse:collapse;font-size:12.5px;line-height:1.45}
-#mtbl th{text-align:left;padding:6px 8px;border-bottom:2px solid #dadce0;color:#5f6368;
-  font-weight:700;white-space:nowrap}
-#mtbl th.s{cursor:pointer;user-select:none}
-#mtbl th.s:hover{color:#1a73e8;background:#f1f3f4}
-#mtbl th.s::after{content:"\2195";opacity:.35;margin-left:4px;font-weight:400}
-#mtbl th.s.up::after{content:"\2191";opacity:1;color:#1a73e8}
-#mtbl th.s.dn::after{content:"\2193";opacity:1;color:#1a73e8}
-#mtbl td{padding:5px 8px;border-bottom:1px solid #f1f3f4;vertical-align:middle}
-#mtbl td.tm{color:#5f6368;white-space:nowrap;font-variant-numeric:tabular-nums}
-#mtbl td.ctx{white-space:nowrap;font-weight:700;color:#5f6368}
-/* ⭐ 备注**一行一句，不换行**。现场：「保持一行是一行」——
-   折行会把行高撑起来，信息密度直接掉一半。
-   ⛔ 前提是备注本身已经压到 ≤ 375px（见 topic03_models.py 里 ROWS 的注释）：
-     光设 nowrap 而不压内容，只会把表撑到 1700+，等于把问题挪个地方。 */
-#mtbl td.nt{color:#5f6368;white-space:nowrap}
-#mtbl .chip{display:inline-block;padding:2px 9px;border-radius:6px;border:1px solid;
-  font-weight:700;white-space:nowrap}
-#mtbl .cy{white-space:nowrap}
-#mtbl .cy i{display:inline-block;width:40px;text-align:center;color:#fff;font-style:normal;
-  font-size:9px;font-weight:700;padding:3px 0;border-radius:3px;margin-right:3px}
-#mtbl .uni{display:inline-block;padding:3px 10px;border-radius:4px;color:#fff;
-  font-size:10px;font-weight:700;white-space:nowrap}
-#mtbl .kvw{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px;max-width:470px}
-#mtbl .kv .bar{display:block;height:7px;border-radius:2px;flex:0 0 auto}
-#mtbl .kv em{font-style:normal;font-weight:700;font-size:11px;margin-left:6px;white-space:nowrap}
-#mtbl .kv .fold{font-weight:400;opacity:.75}
-#mtbl .unk{color:#9aa0a6;font-size:10px;border:1px solid #dadce0;border-radius:3px;padding:2px 7px}
-#mtbl .hint{font-weight:400;color:#9aa0a6;font-size:11px}
-
-/* ── Highlight ／ Boom 两态开关 ────────────────────────────────────
-   ⭐ 只藏行、不动数据：隐藏是 CSS 干的，排序 JS 照常按 data-* 重排全部 39 行，
-     两个功能互不知道对方存在 ——&nbsp;所以「先排序再切模式」和「先切模式再排序」
-     结果一样。⛔ 别改成 JS 里 removeChild，那样一切模式排序状态就丢了。 */
-.hlbar{display:flex;align-items:center;gap:10px;margin:0 0 10px}
-.hlbtns{display:inline-flex;border:1px solid #dadce0;border-radius:999px;overflow:hidden}
-.hlbtns button{border:0;background:#fff;color:#5f6368;font:inherit;font-size:12.5px;
-  font-weight:700;padding:5px 16px;cursor:pointer;line-height:1.4}
-.hlbtns button+button{border-left:1px solid #dadce0}
-.hlbtns button:hover{background:#f1f3f4;color:#1a73e8}
-.hlbtns button[aria-pressed="true"]{background:#1a73e8;color:#fff}
-.hlbtns button[aria-pressed="true"]:hover{background:#1a73e8;color:#fff}
-.hlnote{color:#5f6368;font-size:12px}
-/* 默认（Boom）：全部 39 行，备注给这一行独有的那句 */
-#mtbl .n-hl{display:none}
-/* Highlight：非入选行整行不出现，备注换成「它凭什么在这条线上」 */
-#mtbl.hl tbody tr:not([data-hl]){display:none}
-#mtbl.hl .n-all{display:none}
-#mtbl.hl .n-hl{display:inline;color:#174ea6}
-</style>
-<div class="note warn"><p>📌 <b>这张表的取数规则（⭐ 2026-09-13 补 ——&nbsp;由表长出来的结论全靠这条规则撑着）</b></p><ul><li><b>层配比 / 层数 / 头数 / 维度</b>：一律读<b>公开 config</b>（HF 上那份 <code>config.json</code>）。</li><li><b>上下文</b>：取 config 的 <code>max_position_embeddings</code>。⚠️ <b>它是容量不是能力</b> ——&nbsp;声明 10M 不等于 10M 上都好用。</li><li><b>KV cache</b>：一律按 <b>@128K · bf16 · batch 1</b> 由形状当场算出，<b>不取厂商自报值</b>。⚠️ 滑窗模型给的是<b>窗口封顶后</b>的量。</li><li>⛔ <b>三处例外，各自标了</b>：混元 Hy3 那一行读自我们自己的仓库；Ling 一族读自模型卡；两处声明与实测口径不一致的（MiniMax-01 的 4M / config 10M）在备注里写了。</li></ul><p>⚠️ <b>凡是上下文 &lt; 128K 的行，那一格的 KV 是反事实值</b>（把它的形状放到 128K 上算）——&nbsp;<b>包括「846 倍」的分子 GPT-3</b>，它的实际上下文只有 2K。<em>这个倍数是用来看量级的，不是用来引用的。</em></p></div><div class="tblwrap"><div class="hlbar"><span class="hlbtns"><button type="button" data-m="hl" aria-pressed="true">⭐ Highlight</button><button type="button" data-m="all" aria-pressed="false">Boom ——&#160;全部</button></span><span class="hlnote"></span></div><p class="tbltip">⭐ <b>点表头可以排序</b>——&#160;时间 / 厂商 / 便宜层占比 / 上下文 / KV 大小，再点一次反向。<b>默认按时间。</b>两种模式下排序都作用在全部 44 行上。</p><table id="mtbl"><thead><tr><th class="s" data-k="t">时间</th><th class="s" data-k="v">模型 <span class="hint">按厂商</span></th><th class="s" data-k="c">一个循环 <span class="hint">一格＝一层</span></th><th class="s" data-k="x">上下文 <span class="hint">声明值</span></th><th class="s" data-k="k">KV cache＠128K</th><th>备注</th></tr></thead><tbody>
-<tr data-t="2020-05" data-v="OpenAI|2020-05" data-c="0.000000" data-x="2048" data-k="576.000000" data-hl="1"><td class="tm">2020-05</td><td><span class="chip" style="color:#5f6368;background:#f1f3f4;border-color:#5f6368">GPT-3　175B 稠密 · 96 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MHA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:240px"></b><em style="color:#7f0000">576 GiB<span class="fold">（10 条才画得下）</span></em></span></td><td class="nt"><span class="n-all"><b>基线：KV 按头数线性长，没有任何省法</b></span><span class="n-hl">起点。576 GiB 这把尺，后面所有省下来的都拿它比</span></td></tr>
-<tr data-t="2022-04" data-v="Google|2022-04" data-c="0.000000" data-x="2048" data-k="14.750000" data-hl="1"><td class="tm">2022-04</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">PaLM　540B 稠密 · 118 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MQA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:98px"></b><em style="color:#d93025">15 GiB</em></span></td><td class="nt"><span class="n-all">48 头共用 1 组 KV —— <b>第一次大规模砍 KV</b></span><span class="n-hl">MQA —— 第一次把 KV 砍到只剩 1 组</span></td></tr>
-<tr data-t="2023-02" data-v="Meta|2023-02" data-c="0.000000" data-x="2048" data-k="320.000000"><td class="tm">2023-02</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 1　65B 稠密 · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MHA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:400px"></b><b class="bar" style="background:#7f0000;width:133px"></b><em style="color:#7f0000">320 GiB<span class="fold">（6 条才画得下）</span></em></span></td><td class="nt"><span class="n-all">一代还是纯 MHA，<b>下一代才上 GQA</b></span></td></tr>
-<tr data-t="2023-07" data-v="Meta|2023-07" data-c="0.000000" data-x="4096" data-k="40.000000" data-hl="1"><td class="tm">2023-07</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 2　70B 稠密 · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">4K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:267px"></b><em style="color:#b31412">40 GiB</em></span></td><td class="nt"><span class="n-all">MQA 砍太狠掉质量，GQA 是折中（arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>）</span><span class="n-hl">GQA —— 砍到 1 组太狠，折中版成了此后十年的默认</span></td></tr>
-<tr data-t="2023-09" data-v="Mistral|2023-09" data-c="1.000000" data-x="32768" data-k="0.500000" data-hl="1"><td class="tm">2023-09</td><td><span class="chip" style="color:#c2410c;background:#fff1e6;border-color:#c2410c">Mistral 7B　7B 稠密 · 32 层</span></td><td class="cy"><span class="uni" style="background:#00838f">SWA —— 每一层都是这个</span></td><td class="ctx">32K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:3px"></b><em style="color:#1e8e3e">512 MiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>SWA 进主流的第一枪</b>，窗口 4096</span><span class="n-hl">SWA —— 「不看全部」这个想法的起点，窗口 4096</span></td></tr>
-<tr data-t="2024-03" data-v="AI21|2024-03" data-c="0.875000" data-x="262144" data-k="2.000000" data-hl="1"><td class="tm">2024-03</td><td><span class="chip" style="color:#7b1fa2;background:#f6e9fb;border-color:#7b1fa2">Jamba　52B/12B · 32 层</span></td><td class="cy"><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#3949ab">Mamba</i><i style="background:#f9ab00">GQA</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#f9ab00;width:13px"></b><em style="color:#f9ab00">2.0 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>层间混合的开源起点</b>，比 MiniMax-01 早十个月</span><span class="n-hl">层间混合的开源起点，7:1 —— 比 MiniMax-01 早十个月</span></td></tr>
-<tr data-t="2024-05" data-v="DeepSeek|2024-05" data-c="0.000000" data-x="131072" data-k="8.437500" data-hl="1"><td class="tm">2024-05</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V2　236B/21B · 60 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:56px"></b><em style="color:#e8710a">8.4 GiB</em></span></td><td class="nt"><span class="n-all">低秩压缩。<b>KV 降 93.3%</b>＝只剩 2.25 组 GQA</span><span class="n-hl">MLA 首发。换了个思路：不砍头数，改存压缩过的隐向量</span></td></tr>
-<tr data-t="2024-06" data-v="Google|2024-06" data-c="0.500000" data-x="8192" data-k="23.718750"><td class="tm">2024-06</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">Gemma 2 27B　27B 稠密 · 46 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">8K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:158px"></b><em style="color:#d93025">24 GiB</em></span></td><td class="nt"><span class="n-all">⭐ 谷歌开始交替：<b>1:1，窗口 4096</b></span></td></tr>
-<tr data-t="2024-07" data-v="Meta|2024-07" data-c="0.000000" data-x="131072" data-k="63.000000"><td class="tm">2024-07</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 3.1　405B 稠密 · 126 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:400px"></b><b class="bar" style="background:#b31412;width:20px"></b><em style="color:#b31412">63 GiB<span class="fold">（2 条才画得下）</span></em></span></td><td class="nt"><span class="n-all">⛔ <b>不上花招硬推 128K 的代价</b>：比 Llama 2 还多</span></td></tr>
-<tr data-t="2024-11" data-v="腾讯 混元|2024-11" data-c="0.000000" data-x="131072" data-k="10.000000"><td class="tm">2024-11</td><td><span class="chip" style="color:#d84315;background:#fbe9e7;border-color:#d84315">混元 Hunyuan-Large　389B/52B · 64 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:67px"></b><em style="color:#d93025">10 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>CLA：每 2 层共享一份 KV</b> —— 旋钮①的第三招</span></td></tr>
-<tr data-t="2024-12" data-v="DeepSeek|2024-12" data-c="0.000000" data-x="163840" data-k="8.578125" data-hl="1"><td class="tm">2024-12</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V3　671B/37B · 61 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">160K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>专题一的锚点</b>。跟 V2 只差 1 层，KV 几乎相同</span><span class="n-hl">跟 V2 同机制，但参数大 2.8 倍而 KV 只差 1.7% —— KV 脱钩的证据</span></td></tr>
-<tr data-t="2025-01" data-v="MiniMax|2025-01" data-c="0.875000" data-x="4194304" data-k="5.000000" data-hl="1"><td class="tm">2025-01</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax-01　456B/45.9B · 80 层</span></td><td class="cy"><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#f9ab00">GQA</i></td><td class="ctx">4M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:33px"></b><em style="color:#e8710a">5.0 GiB</em></span></td><td class="nt"><span class="n-all">⭐ 线性首次上旗舰。<b>训练 1M、外推 4M</b>（config 的 10M 是容量）</span><span class="n-hl">线性第一次上到几百 B 的规模，同样是 7:1</span></td></tr>
-<tr data-t="2025-03" data-v="Google|2025-03" data-c="0.833333" data-x="131072" data-k="10.406250" data-hl="1"><td class="tm">2025-03</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">Gemma 3 27B　27B 稠密 · 62 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:69px"></b><em style="color:#d93025">10 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>5:1、窗口 1024</b> —— 小米那个 5:1 不是首创</span><span class="n-hl">滑窗混合定型：5 层窗口配 1 层全局，窗口反而收到 1024</span></td></tr>
-<tr data-t="2025-03" data-v="RWKV|2025-03" data-c="1.000000" data-x="1099511627776" data-k="0.000000" data-hl="1"><td class="tm">2025-03</td><td><span class="chip" style="color:#00695c;background:#e0f2f1;border-color:#00695c">RWKV-7 Goose　0.19B–2.9B · 纯 RNN</span></td><td class="cy"><span class="uni" style="background:#00695c">RWKV —— 每一层都是这个</span></td><td class="ctx">无限（理论）</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:6px"></b><em style="color:#1e8e3e">0（无 KV）</em></span></td><td class="nt"><span class="n-all">⭐ <b>全表唯一 KV 为零</b>：常数内存、常数单 token 时间</span><span class="n-hl">另一头的极端：纯 RNN，KV cache literally 是 0</span></td></tr>
-<tr data-t="2025-04" data-v="Meta|2025-04" data-c="0.750000" data-x="10485760" data-k="7.125000"><td class="tm">2025-04</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 4 Scout　109B/17B · 48 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">10M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:48px"></b><em style="color:#e8710a">7.1 GiB</em></span></td><td class="nt"><span class="n-all">块状局部 8192 ＋ NoPE 全局。⚠️ <b>声称 10M，又一个报容量的</b></span></td></tr>
-<tr data-t="2025-04" data-v="阿里 千问|2025-04" data-c="0.000000" data-x="40960" data-k="23.500000"><td class="tm">2025-04</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3-235B-A22B　235B/22B · 94 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">40K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:157px"></b><em style="color:#d93025">24 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>千问转线性之前的那一代</b>：纯 GQA-4</span></td></tr>
-<tr data-t="2025-07" data-v="月之暗面|2025-07" data-c="0.000000" data-x="131072" data-k="8.578125"><td class="tm">2025-07</td><td><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi K2　1T/32B · 61 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>Kimi 上 KDA 之前</b>：纯 MLA，架构名就是 DeepseekV3</span></td></tr>
-<tr data-t="2025-07" data-v="智谱|2025-07" data-c="0.000000" data-x="131072" data-k="46.000000"><td class="tm">2025-07</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-4.5　355B/32B · 92 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:307px"></b><em style="color:#b31412">46 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>智谱上 DSA 之前</b>：46 GiB → GLM-5 的 11，降 4 倍</span></td></tr>
-<tr data-t="2025-08" data-v="OpenAI|2025-08" data-c="0.500000" data-x="131072" data-k="4.504395"><td class="tm">2025-08</td><td><span class="chip" style="color:#5f6368;background:#f1f3f4;border-color:#5f6368">gpt-oss-120b　117B/5.1B · 36 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">128K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:30px"></b><em style="color:#e8710a">4.5 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>OpenAI 首个开放权重</b>：1:1 交替、窗口 128 ＋ sink</span></td></tr>
-<tr data-t="2025-09" data-v="DeepSeek|2025-09" data-c="0.000000" data-x="163840" data-k="8.578125" data-hl="1"><td class="tm">2025-09</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V3.2-Exp　671B/37B · 61 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">160K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>稀疏的起点</b>：V3 ＋ Lightning Indexer。⛔ KV 跟 V3 一样</span><span class="n-hl">DSA —— 层内稀疏起点：不是少几层，是每层只挑一部分 token 看</span></td></tr>
-<tr data-t="2025-09" data-v="阿里 千问|2025-09" data-c="0.750000" data-x="262144" data-k="3.000000" data-hl="1"><td class="tm">2025-09</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3-Next　80B/3B · 48 层</span></td><td class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:20px"></b><em style="color:#e8710a">3.0 GiB</em></span></td><td class="nt"><span class="n-all">36 线性 ＋ 12 全注意力（GQA-2，头维 256）</span><span class="n-hl">GDN —— Mamba 那一支的直系后代第一次进主流大模型</span></td></tr>
-<tr data-t="2025-10" data-v="蚂蚁 百灵|2025-10" data-c="0.000000" data-x="32768" data-k="40.000000"><td class="tm">2025-10</td><td><span class="chip" style="color:#0288d1;background:#e1f5fe;border-color:#0288d1">Ling-1T（Ling 2.0）　1T/50B · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">32K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:267px"></b><em style="color:#b31412">40 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ <b>Ling 2.6 就是从它改造的</b>：40 GiB → 1.4 GiB</span></td></tr>
-<tr data-t="2025-10" data-v="MiniMax|2025-10" data-c="0.000000" data-x="196608" data-k="31.000000" data-hl="1"><td class="tm">2025-10</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax M2　230B/10B · 62 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">192K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:207px"></b><em style="color:#b31412">31 GiB</em></span></td><td class="nt"><span class="n-all">⛔ <b>「退回全注意力」≠ 什么都没做</b>：GQA-8 ＋ partial RoPE</span><span class="n-hl">反例：退回全注意力。证明「全注意力」说的是旋钮③，不是①</span></td></tr>
-<tr data-t="2025-10" data-v="月之暗面|2025-10" data-c="0.750000" data-x="1048576" data-k="0.984375" data-hl="1"><td class="tm">2025-10</td><td><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi Linear　48B/3B · 27 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">MLA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:7px"></b><em style="color:#1e8e3e">1008 MiB</em></span></td><td class="nt"><span class="n-all">20 KDA ＋ 7 MLA（<b>末层强制 full</b>）。已用 NoPE</span><span class="n-hl">KDA —— 线性的新一代，配 NoPE 的 MLA</span></td></tr>
-<tr data-t="2025-12" data-v="DeepSeek|2025-12" data-c="0.000000" data-x="163840" data-k="8.578125" data-hl="1"><td class="tm">2025-12</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V3.2　671B/37B · 61 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">160K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">Exp 转正。<b>index_topk 512 → 2048</b>，KV 与 V3 一样</span><span class="n-hl">Exp 转正：稀疏从实验走进生产，top-k 512 → 2048</span></td></tr>
-<tr data-t="2025-12" data-v="Mistral|2025-12" data-c="0.000000" data-x="294912" data-k="8.578125" data-hl="1"><td class="tm">2025-12</td><td><span class="chip" style="color:#c2410c;background:#fff1e6;border-color:#c2410c">Mistral Large 3　675B/41B · 61 层</span></td><td class="cy"><span class="uni" style="background:#e8710a">MLA —— 每一层都是这个</span></td><td class="ctx">288K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:57px"></b><em style="color:#e8710a">8.6 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>MLA 超参跟 V3 逐字段一样</b>；参数读自 params.json</span><span class="n-hl">MLA 扩散到了西方：欧洲最大开源旗舰逐字段照抄 V3 的 MLA 超参</span></td></tr>
-<tr data-t="2026-01" data-v="小米|2026-01" data-c="0.833333" data-x="262144" data-k="5.012207"><td class="tm">2026-01</td><td><span class="chip" style="color:#f9ab00;background:#f9fbe7;border-color:#f9ab00">小米 MiMo-V2-Flash　309B/15B · 48 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:33px"></b><em style="color:#e8710a">5.0 GiB</em></span></td><td class="nt"><span class="n-all">窗口 128。卡上自称 <b>KV 省近 6×</b>，48÷8 正好对上</span></td></tr>
-<tr data-t="2026-02" data-v="智谱|2026-02" data-c="0.000000" data-x="202752" data-k="10.968750"><td class="tm">2026-02</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-5　744B/40B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">198K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">MLA ＋ DSA。<b>GLM-5.1 同架构</b>，只有后训练不同</span></td></tr>
-<tr data-t="2026-02" data-v="MiniMax|2026-02" data-c="0.000000" data-x="196608" data-k="31.000000"><td class="tm">2026-02</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax M2.5　230B/10B · 62 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">192K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:207px"></b><em style="color:#b31412">31 GiB</em></span></td><td class="nt"><span class="n-all">⚠️ <b>架构与 M2 逐字段相同</b>，稀疏要等 M3</span></td></tr>
-<tr data-t="2026-03" data-v="阿里 千问|2026-03" data-c="0.750000" data-x="262144" data-k="3.750000" data-hl="1"><td class="tm">2026-03</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3.5　397B/17B · 60 层</span></td><td class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:25px"></b><em style="color:#e8710a">3.8 GiB</em></span></td><td class="nt"><span class="n-all">45 线性 ＋ 15 全（config: full_attention_interval 4）</span><span class="n-hl">千问把混合注意力从旁支 Qwen3-Next 收进了主线</span></td></tr>
-<tr data-t="2026-04" data-v="小米|2026-04" data-c="0.857143" data-x="1048576" data-k="6.286621"><td class="tm">2026-04</td><td><span class="chip" style="color:#f9ab00;background:#f9fbe7;border-color:#f9ab00">小米 MiMo-V2.5-Pro　1.02T/42B · 70 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:42px"></b><em style="color:#e8710a">6.3 GiB</em></span></td><td class="nt"><span class="n-all">60 SWA ＋ 10 全，窗口 128 —— <b>1M 那档最省的</b></span></td></tr>
-<tr data-t="2026-04" data-v="DeepSeek|2026-04" data-c="0.000000" data-x="1048576" data-k="0.975220"><td class="tm">2026-04</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V4-Pro　1.6T/49B · 61 层</span></td><td class="cy"><i style="background:#a50e0e">HCA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:7px"></b><em style="color:#1e8e3e">999 MiB</em></span></td><td class="nt"><span class="n-all">⛔ 跟 Flash 不同：<b>前两层是 HCA</b>。1.6T 而 KV 不到 1 GiB</span></td></tr>
-<tr data-t="2026-04" data-v="蚂蚁 百灵|2026-04" data-c="0.875000" data-x="262144" data-k="1.406250"><td class="tm">2026-04</td><td><span class="chip" style="color:#0288d1;background:#e1f5fe;border-color:#0288d1">Ling 2.6-1T　1T/63B · 80 层</span></td><td class="cy"><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#8430ce">LTN</i><i style="background:#e8710a">MLA</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#f9ab00;width:9px"></b><em style="color:#f9ab00">1.4 GiB</em></span></td><td class="nt"><span class="n-all">⛔ <b>不是 KDA</b>；思考版 Ring-2.6-1T 架构逐字段相同</span></td></tr>
-<tr data-t="2026-04" data-v="Google|2026-04" data-c="0.833333" data-x="262144" data-k="10.781250" data-hl="1"><td class="tm">2026-04</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">Gemma 4 31B　31B 稠密 · 60 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:72px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">⭐ 全局层 <b>K 维加倍 ＋ K=V 共享</b>，窗口 1024</span><span class="n-hl">旋钮①又出新招：全局层 K 维加倍再让 K=V 共享一份</span></td></tr>
-<tr data-t="2026-05" data-v="DeepSeek|2026-05" data-c="0.333333" data-x="1048576" data-k="0.681030" data-hl="1"><td class="tm">2026-05</td><td><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V4-Flash　284B/13B · 43 层</span></td><td class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:5px"></b><em style="color:#1e8e3e">697 MiB</em></span></td><td class="nt"><span class="n-all">⭐ 2 层 SWA 引导，CSA／HCA 交替。<b>MLA 换成 shared-KV MQA</b></span><span class="n-hl">终点。697 MiB，比 GPT-3 小 846 倍，而且 MLA 被整个换掉了</span></td></tr>
-<tr data-t="2026-06" data-v="智谱|2026-06" data-c="0.000000" data-x="1048576" data-k="10.968750" data-hl="1"><td class="tm">2026-06</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-5.2　744B/40B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">⭐ ＋IndexShare：四层共用一个 indexer。<b>198K → 1M 靠这步</b></span><span class="n-hl">IndexShare —— 稀疏的第二阶段：索引本身变成了新的开销</span></td></tr>
-<tr data-t="2026-06" data-v="MiniMax|2026-06" data-c="0.000000" data-x="1048576" data-k="15.000000"><td class="tm">2026-06</td><td><span class="chip" style="color:#c2185b;background:#fce4ec;border-color:#c2185b">MiniMax M3　428B/23B · 60 层</span></td><td class="cy"><span class="uni" style="background:#d93025">MSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:100px"></b><em style="color:#d93025">15 GiB</em></span></td><td class="nt"><span class="n-all">⭐⭐ GQA-4 ＋ 稀疏。<b>KV 比走 MLA 的 GLM-5.2 还大</b></span></td></tr>
-<tr data-t="2026-07" data-v="月之暗面|2026-07" data-c="0.750000" data-x="1048576" data-k="3.375000"><td class="tm">2026-07</td><td><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi K3　2.8T/104B · 93 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">gMLA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:22px"></b><em style="color:#e8710a">3.4 GiB</em></span></td><td class="nt"><span class="n-all">69 KDA ＋ 24 Gated MLA（<b>末层 92、93 连着两层 full</b>）</span></td></tr>
-<tr data-t="2026-07" data-v="腾讯 混元|2026-07" data-c="0.000000" data-x="262144" data-k="40.000000"><td class="tm">2026-07</td><td><span class="chip" style="color:#d84315;background:#fbe9e7;border-color:#d84315">混元 Hy3　295B/21B · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">GQA —— 每一层都是这个</span></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#b31412;width:267px"></b><em style="color:#b31412">40 GiB</em></span></td><td class="nt"><span class="n-all">⛔ <b>80 层全 GQA-8</b> —— 线性一层都没上</span></td></tr>
-<tr data-t="2026-07" data-v="蚂蚁 百灵|2026-07" data-c="0.833333" data-x="262144" data-k="0.984375"><td class="tm">2026-07</td><td><span class="chip" style="color:#0288d1;background:#e1f5fe;border-color:#0288d1">Ling-3.0-flash　124B/5.1B · 42 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">gMLA</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#1e8e3e;width:7px"></b><em style="color:#1e8e3e">1008 MiB</em></span></td><td class="nt"><span class="n-all">跟 2.6 换了一支。<b>同代 tiny 用 3:1，它用 5:1</b>；3.0 无 1T</span></td></tr>
-<tr data-t="2026-08" data-v="智谱|2026-08" data-c="0.000000" data-x="1048576" data-k="10.968750"><td class="tm">2026-08</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-5.3　744B/40B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">⚠️ <b>跟 5.2 同一个 base</b>，纯后训练，架构没动</span></td></tr>
-<tr data-t="2026-08" data-v="腾讯 混元|2026-08" data-c="0.000000" data-x="1048576" data-k="10.968750" data-hl="1"><td class="tm">2026-08</td><td><span class="chip" style="color:#d84315;background:#fbe9e7;border-color:#d84315">混元 Hy4-preview　770B/49B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">gDSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">78 层全稀疏 ＋ <b>IndexCache</b>（每 4 层 1 层算索引）</span><span class="n-hl">跳过线性那一支，从纯 GQA 直接跳进全层稀疏</span></td></tr>
-<tr data-t="2026-08" data-v="智谱|2026-08" data-c="0.750000" data-x="1048576" data-k="1.546875" data-hl="1"><td class="tm">2026-08</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">⭐ GLM-5.3-Flash　320B/18B · 45 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#d93025">DSA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#f9ab00;width:10px"></b><em style="color:#f9ab00">1.5 GiB</em></span></td><td class="nt"><span class="n-all">34 KDA ＋ 11 稀疏 MLA —— <b>GLM 首次线性＋稀疏同锅</b></span><span class="n-hl">唯一一个把②和③同锅：34 层 KDA ＋ 11 层稀疏 MLA</span></td></tr>
-<tr data-t="2026-08" data-v="阿里 千问|2026-08" data-c="0.750000" data-x="262144" data-k="3.000000"><td class="tm">2026-08</td><td><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3.8-Flash-Next　125B/6B · 48 层</span></td><td class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></td><td class="ctx">256K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#e8710a;width:20px"></b><em style="color:#e8710a">3.0 GiB</em></span></td><td class="nt"><span class="n-all">⭐ <b>Qwen4 架构预览</b>；新东西在 51B 的 n-gram 嵌入表</span></td></tr>
-</tbody></table><p class="tbltip">⭐ 这张表的一句话落点：同一个 128K 长度，
-从 GPT-3 的 <b>576 GiB</b> 到 DeepSeek-V4-Flash 的 <b>697 MiB</b>，六年 <b>846 倍</b>
-——&#160;而这不是一个旋钮拧出来的，<b>三个旋钮各贡献了一段</b>。</p>
-<details class="aside"><summary>⭐ 这张表还能一眼看出<b>八件事</b>
-<em>（含上面那条的完整推导，以及一条表自己长出来的结论）</em></summary>
-<div class="land"><p class="lh">⭐ 这张表一眼能看出八件事
-<span style="font-weight:400;color:#5f6368">（以下统计恒按全部 44 行算，切到 Highlight 也不变
-——&#160;不然「有几家怎么样」这种话会跟着显示模式变，那就不是结论了）</span></p>
-<ol>
-<li>表里 <b>44</b> 家：<b>17</b> 家是「便宜的层 ＋ 一层贵的」，<b>25</b> 家每层同构，
-2 家是别的混法。那 17 家混合的，配比落在 <b>1:1 ～ 7:1</b> ——
-而拆成两族看更有意思：线性混合 <b>3:1、5:1、7:1</b>、滑窗混合 <b>1:1、3:1、5:1、6:1</b>，
-<b>两族重叠在 3:1 ～ 6:1</b>。⭐ 两类看起来毫不相干的混合落进同一段区间，
-这件事本身就是一条证据。<br>
-⚠️ <b>但别说成「无一例外」</b>：<b>Mistral 7B、RWKV-7 Goose</b> 就是纯便宜层、一层贵的都没有的反例。
-⭐ 而这个反例恰恰值得讲 ——&nbsp;纯滑窗真的上过生产、用了两年，
-它正好说明<b>那条 L2M 条件</b>是<b>渐近</b>命题，
-管不了 32K 这个尺度。</li>
-<li>前几行是基线，也是一条完整的小史：MHA → MQA（砍到 1 组）→ GQA（折中）→ MLA（改压缩）
-→ <b>CLA（跨层共享）</b>——<b>全都只在动「每个 token 存多少」这一个旋钮</b>。</li>
-<li>⭐ 扫一眼颜色搭配：混合的那 17 家里 <b>16 家是「冷色 ＋ 黄橙」</b>（便宜的层配一层全注意力）。
-只有 <b>GLM-5.3-Flash</b> 是「蓝 ＋ 红」——&nbsp;它配的那层「贵的」，本身已经是稀疏的了。</li>
-<li>⭐⭐ 把<b>上下文</b>那一列排一下：做到 <b>1M 以上的 12 家，无一例外都动了旋钮②或③</b>；
-纯全注意力那一档最高只到 288K（Mistral Large 3）。最硬的对照来自 MiniMax 自己：
-<b>01 用 7:1 线性外推到 4M，M2 退回纯全注意力只剩 192K</b>——同一家、同一批人，差二十倍。</li>
-<li>⭐⭐ 把 <b>KV cache</b> 排一下：<b>576 GiB</b>（GPT-3）到 <b>697 MiB</b>（DeepSeek-V4-Flash），整整 <b>846 倍</b>
-<span style="color:#5f6368">——&#160;两端都取 <b>100B 以上</b>的，不然「最小」会落到 Mistral 7B 头上，
-那比的是模型大小不是机制</span>。
-而这不是一个旋钮拧出来的——MHA→GQA 砍头数、MLA 改压缩、<b>CLA 跨层共享</b>是旋钮①；
-线性把大部分层的 KV <b>直接删成零</b>是旋钮③；CSA／HCA 存压缩池是旋钮②。
-<b>三个旋钮各贡献了一段。</b>⭐ 而 <b>RWKV 那一行干脆是 0</b>——纯 RNN 没有 KV cache 这个东西。</li>
-<li>⛔⛔ <b>「上下文」这一列报的是<u>声明</u>，不是<u>能用</u>。</b>
-数来自各家 config 的 max_position_embeddings，而这个字段各家含义并不一样——
-MiniMax-01 那格 config 写着 <b>10,240,000</b>，官方只声称训练 1M、外推 4M；
-Llama 4 Scout 声称 <b>10M</b> 也是同一回事。
-声明和能用之间还隔着一整个 benchmark 的落差：小米自己的模型卡就写着
-MiMo-V2.5-Pro「到 1M 时塌到 0.00」。⭐ 看到「支持 N 万上下文」，<b>先问是谁、在什么任务上、测出多少分</b>。</li>
-<li>⭐⭐ <b>最反直觉的一条：MLA 之后，KV cache 跟「模型多大」<u>脱钩</u>了。</b>
-DeepSeek-V2 是 236B、V3 是 671B，<b>参数差 2.8 倍，KV 却只差 1.7%</b>（8.4 GiB vs 8.6 GiB）。
-因为 MLA 的 KV 只跟「层数 × (kv_lora_rank ＋ rope 维)」走——
-跟专家多少、hidden 多宽、总参多大一点关系都没有。
-MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断了</b>。</li>
-<li>⭐⭐ 最后一条是<b>这张表自己长出来的</b>，不是我们想说的。
-把 <b>2025-11 ～ 2026-03</b> 这五个月单独看：6 个模型发布，用到 7 种层类型
-（DSA、FULL、GDN、GQA、MLA、SWA、gAT）——&nbsp;<b>而其中在这个窗口里才首次出现的，只有 0 种</b>。<br>
-换句话说，那五个月发布很密，<b>密的是模型，不是机制</b>：全是既有招式的重新组合与规模化。
-⭐ 这是一段「消化期」——&nbsp;新机制在 2025 年秋天集中冒出来（DSA、GDN、KDA），
-然后各家花了一个冬天把它们搬进自己的旗舰。
-下一波新东西要等到 2026 春天（Gemma 4 的 K=V 共享、V4 的 CSA／HCA）。<br>
-⛔ 而这条结论是被 Highlight 视图逼出来的：全量 44 行里那段看着只是「少几行」，
-一筛成机制主线，空白立刻刺眼。<b>筛选不只是省地方，它还是一种体检。</b></li>
-</ol></div></details></div>
-<script>
-(function(){
- var t=document.getElementById('mtbl'); if(!t) return;
- var tb=t.tBodies[0], cur={k:'t',d:1};
- function num(v){return parseFloat(v);}
- t.querySelectorAll('th.s').forEach(function(th){
-  th.addEventListener('click',function(){
-   var k=th.dataset.k;
-   // 同一列再点一次就反向；换列时用该列"最有信息量"的默认方向：
-   // 时间/模型 升序，配比/上下文/KV 降序（大的先看）
-   var def = (k==='t'||k==='v') ? 1 : -1;
-   cur = (cur.k===k) ? {k:k,d:-cur.d} : {k:k,d:def};
-   var rs=[].slice.call(tb.rows);
-   rs.sort(function(a,b){
-    var x=a.dataset[k], y=b.dataset[k], r;
-    r = (k==='t'||k==='v') ? (x<y?-1:x>y?1:0) : (num(x)-num(y));
-    return r*cur.d;
-   });
-   rs.forEach(function(r){tb.appendChild(r);});
-   t.querySelectorAll('th.s').forEach(function(o){o.classList.remove('up','dn');});
-   th.classList.add(cur.d>0?'up':'dn');
-  });
- });
- var f=t.querySelector('th.s[data-k="t"]'); if(f) f.classList.add('up');
-
- // ── Highlight ／ Boom ──────────────────────────────────────────
- // ⛔ 只切 class，不碰 DOM 顺序、不碰任何数值。
- var bs=document.querySelectorAll('.hlbtns button'), nt=document.querySelector('.hlnote');
- function setMode(hl){
-  t.classList.toggle('hl', hl);
-  bs.forEach(function(b){b.setAttribute('aria-pressed', String(b.dataset.m===(hl?'hl':'all')));});
-  if(nt) nt.textContent = hl
-    ? '只看撑起这段历史的 22 行 —— 备注换成「它凭什么在这条线上」'
-    : '全部 44 行。备注是这一行独有的那句话';
- }
- bs.forEach(function(b){b.addEventListener('click',function(){setMode(b.dataset.m==='hl');});});
- setMode(true);          // ⭐ 默认 Highlight：39 行是参照物，18 行才是一条读得下来的线
-})();
-</script>
-</div>
+<!-- ⭐⭐⭐ 2026-09-16 现场纠正：之前说「把注意力编年史挪到第零节」，
+     指的是**这张按模型排的大表**，不是那张横向四支线时间线。表已挪到第零节。
+     ⛔ 这里**不要再放一遍表** ——&#160;判据跟 fig3-chronicle 那次一样：
+       **同一样东西放在开头和结尾，价值不一样**。开头它是「领土」，
+       结尾它是「你现在读得懂了」。所以东西只放一次，第二次用一句话把人送回去。 -->
+<p class="landing">📌 <b>名词讲完了。现在请回到<a href="#s零">第零节</a>那张表。</b>
+  <em>——&nbsp;<b>开篇看它的时候，它是一墙陌生的型号；现在它每一列你都认得：
+  一个循环里几层便宜的、上下文多长、KV cache 多大、以及它凭什么在这条线上。</b></em></p>
+<p><span class="sub">⭐ <em>那张表默认开在 <b>Highlight</b> 模式（撑起这段历史的那些行）；
+  <b>切到「全部」</b>就是完整的参照表 ——&nbsp;每一行都标了出处，
+  多数可以在公开配置里当场核。<b>表头可以点，按时间／厂商／配比／上下文／KV 排序。</b></em></span></p>
 
 <div class="note ok"><p><b>这一章的两句话。</b></p>
 <p><b>换来的</b>：<em>同时拿到两种记忆 ——&nbsp;一个能精确翻查，一个能长久兜住。

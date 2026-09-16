@@ -526,8 +526,13 @@ body.figonly section ul,
 body.figonly section ol,
 body.figonly section pre,
 body.figonly section .note{display:none}
-/* ⛔ 防守：图自己那一块里的任何 p 都不该被上面那条误伤 */
+/* ⛔ 防守：这两类里的 p 都不该被上面那条误伤 */
 body.figonly section figure p{display:revert}
+/* ⛔⛔ 2026-09-16：题目的题干是 <p class="q">，会被上面那条连题一起藏掉 ——&#160;
+   点开「课前勿点」只剩选项、没有问题。⭐ 这个 bug 只有**把两道题搬进来之后**
+   才存在：折叠规则是先写的，题是后搬的。
+   判据：**加了新的内容类型，要回去看一遍既有的全局规则会不会误伤它。** */
+body.figonly .guess p{display:revert}
 body.figonly section h3{margin-top:34px}
 </style>
 """

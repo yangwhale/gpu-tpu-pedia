@@ -128,6 +128,145 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
   存下来的这一堆就叫 <b>KV cache</b>，它跟着上下文线性长。<br>
   ⭐ 所以这六年注意力的全部演化，只在做一件事：<b>让「记得住」这件事付得起。</b></p></div>
 
+<!-- ⭐⭐⭐ 2026-09-16 现场：「我们之前准备了两道题，怎么给搞丢了？」
+     ⭐ 查下来**没丢也没被删** ——&#160;它们一直在 L300 里；是
+       `67f3626`「原稿降格为 L300、新起 L200 骨架」那次，**新骨架是空白起的，
+       没把这两道题带过来**。现在原样搬回主线。
+     ⛔ 判据（值得单记）：**改架构时最容易丢的不是代码，是那些不在主线叙事里、
+       却单独有价值的小块。** git 里按那个 CSS 类名做 -S 搜索只命中一个 commit ——
+       就是那次拆分。重起炉灶之前，先列一遍「旧稿里有什么是新骨架接不住的」。
+     ⛔⛔ **位置必须在那张模型表「之前」** ——&#160;
+       表里有 KV cache 那一列，摆在题前面等于直接把第一题的答案送出去。
+     ⚠️ 两道题＋绑定脚本一起搬（脚本在 <details> 里照常执行）；
+       .guess/.opts/.rev 的样式来自共用样式表，不用另加。
+     📌 揭晓规则：**全对才开**；全选但没全对 → 报「N 对 M 错」，不揭晓；
+       答案区里有「↺ 重来」。这三条的来由见脚本内注释。 -->
+<details class="more preclass">
+  <summary>⛔ 课前勿点 ——&nbsp;开讲前的两道热身题<span class="why">现场会一起做；提前看答案＝自己剧透，这两道题就废了</span></summary>
+  <div class="body">
+
+  <div class="guess">
+    <h3>第一题 · 一个用户的 KV cache，到底有多大</h3>
+    <p class="q"><b>DeepSeek V3</b>（671B，61 层，128 个注意力头，head_dim 128），
+      <b>128K 上下文、单个用户、bf16 存</b>。<br>
+      <span class="qs">同样这个形状，换四种注意力，KV cache 各是多大？
+      <b>四行分开选，各选各的。</b></span></p>
+
+    <div class="oplab">(a) 最朴素的 <b>MHA</b>（128 个 KV 头）</div>
+    <div class="opts">
+      <button data-g="0">61 GiB</button>
+      <button data-g="1">122 GiB</button>
+      <button data-g="2" data-right>488 GiB</button>
+      <button data-g="3">976 GiB</button>
+    </div>
+
+    <div class="oplab">(b) <b>GQA-8</b>（KV 头砍到 8）</div>
+    <div class="opts">
+      <button data-g="0">3.8 GiB</button>
+      <button data-g="1">8.6 GiB</button>
+      <button data-g="2" data-right>30.5 GiB</button>
+      <button data-g="3">61 GiB</button>
+    </div>
+
+    <div class="oplab">(c) <b>MQA</b>（KV 头砍到 1）</div>
+    <div class="opts">
+      <button data-g="0" data-right>3.8 GiB</button>
+      <button data-g="1">8.6 GiB</button>
+      <button data-g="2">15.3 GiB</button>
+      <button data-g="3">30.5 GiB</button>
+    </div>
+
+    <div class="oplab">(d) <b>MLA</b>（V3 真实用的方案）</div>
+    <div class="opts">
+      <button data-g="0">3.8 GiB</button>
+      <button data-g="1" data-right>8.6 GiB</button>
+      <button data-g="2">30.5 GiB</button>
+      <button data-g="3">61 GiB</button>
+    </div>
+
+    <div class="rev">
+      <p><b>488　/　30.5　/　3.8　/　8.6　GiB。</b><br>
+        <span class="qs">算法就一条：<b>每 token 每层要留下几个数</b>，
+        乘 61 层、乘 2 字节、乘 131,072 个 token。<br>
+        MHA ＝ 2×128×128 ＝ 32,768 →&nbsp;<b>488 GiB</b>；
+        GQA-8 ＝ 2×8×128 ＝ 2,048 →&nbsp;<b>30.5</b>（16×）；
+        MQA ＝ 2×1×128 ＝ 256 →&nbsp;<b>3.8</b>（128×）；
+        MLA ＝ 压缩维 512 ＋ RoPE 64 ＝ 576 →&nbsp;<b>8.6</b>（56.9×）。<br>
+        ⭐⭐ <b>488 GiB 到底是多大？</b>换算成机器就有感觉了：按专题二推的
+        可分配口径（<b>94.74 GiB／device</b>）算，488 ÷ 94.74 ＝
+        <b>5.2 个 device</b>，也就是<b>约 2.6 块 v7 芯片</b>。<br>
+        <b>一个用户、一段输入，就要把两块半芯片的 HBM 整个拿来放 KV
+        ——&nbsp;而模型权重还一个字节都没放进去。</b><br>
+        📌 <b>RoPE</b>（旋转位置编码）后面会反复出现，这里先把它的职责摆正：
+        <b>「谁在前谁在后」并不归它管。</b>那件事是<b>因果掩码</b>白送的
+        ——&nbsp;每个位置只看得见自己左边，多堆几层就能数出自己前面有几个人
+        （<b>NoPE</b>，arXiv 2305.19466，NeurIPS 2023 ——&nbsp;
+        直接证明了 decoder-only 不加任何显式位置编码也学得会顺序）。<br>
+        ⭐ RoPE 真正加进来的是另一样东西：<b>「我跟它差几格」</b>。
+        给每个位置的 Q 和 K <b>按它的位置转一个角度</b>，点积时两个绝对角度相减，
+        <b>相对距离就直接出现在打分里</b>——&nbsp;零参数，而且每一层都能用，
+        不必靠堆层去数。
+        ⭐ 它只改 Q/K，不改 V。<b>后面 §五会讲它给 MLA 惹的麻烦</b>——&nbsp;
+        上面那 64 维的成本，买的就是这一件事。</span></p>
+      <p>⭐⭐ 这道题真正的题眼在 <b>(c) 和 (d) 的大小关系</b>：
+        <span class="qs">MQA 只要 3.8 GiB，比 MLA 的 8.6 还小 2.25 倍。
+        <b>MLA 并不是最省的那个。</b><br>
+        ⭐ 所以这一支的目标从来不是「谁存得最少」——&nbsp;
+        MQA 早在 2019 年就把它压到头了，代价是<b>质量掉得厉害</b>。
+        真正要比的是「同样一份字节，换回多少能力」。
+        <em>这正是第五节要讲的那条线。</em></span></p>
+      <p style="margin-bottom:0"><b>⚠️ 还有一个口径要说清：</b>
+        <span class="qs">488 GiB 是「假如 V3 用 MHA」的<b>反事实</b>数字，
+        不是 V3 的实测值 ——&nbsp;V3 从第一天就是 MLA。
+        而且这里沿用了 V3 论文比较表的口径（K、V 都按 head_dim=128 算）；
+        V3 真实的 K 每头是 128+64＝192 维，严格算这个基线还会更大一点。</span></p>
+    </div>
+  </div>
+
+  <div class="guess" style="margin-top:22px">
+    <h3>第二题 · 那条「算得过来还是搬得过来」的线</h3>
+    <p class="q">上一讲那把尺子：<b>算力 ÷ 带宽</b> ——&nbsp;
+      每从内存搬一个字节，这台机器配套能算多少次。<br>
+      <span class="qs">在 <b>TPU v7</b> 上，<b>两层各是多少？两行分开选。</b></span></p>
+
+    <div class="oplab">(a) 对 <b>HBM</b>（片外）</div>
+    <div class="opts">
+      <button data-g="0">78</button>
+      <button data-g="1">156</button>
+      <button data-g="2" data-right>约 313</button>
+      <button data-g="3">约 626</button>
+    </div>
+
+    <div class="oplab">(b) 对 <b>VMEM</b>（片上）</div>
+    <div class="opts">
+      <button data-g="0">跟 HBM 一样，约 313</button>
+      <button data-g="1">比 HBM <b>高</b>，约 3,000</button>
+      <button data-g="2" data-right>比 HBM <b>低</b>一个量级 ——&nbsp;几十这一档</button>
+      <button data-g="3">片上没有「屋脊点」这回事</button>
+    </div>
+
+    <div class="rev">
+      <p><b>(a) 约 313。(b) 比 HBM 低一个量级，落在几十这一档。</b><br>
+        <span class="qs">(a) ＝ 2,307 TFLOP/s ÷ 7.37 TB/s。
+        这个数不是本讲新造的，它就是<a href="topic-02.html">专题二</a>整整一节在立的那条屋脊线。</span></p>
+      <p><b>⭐ (b) 最容易选反，而选反的人通常是把「快」和「门槛高」搞混了：</b>
+        <span class="qs">片上更快，所以<b>分母变大</b> ——&nbsp;
+        同一个分子除以更大的分母，<b>商只会更小</b>。
+        <b>越靠近计算，这条线越低。</b>
+        <em>门槛低意味着：同一个算子挪到片上以后，更容易变成算力受限。</em></span></p>
+      <p style="margin-bottom:0">⛔ 而 (b) 为什么只给量级、不给数 ——&nbsp;<b>这才是这道题最想教的一件事</b>：
+        <span class="qs"><b>VMEM 的带宽官方没有公开。</b>
+        而屋脊点乘以算力就等于带宽 ——&nbsp;给出一个精确的屋脊点，
+        等于把那个没公开的数反推出来。所以我们到「几十这一档」为止，<b>不往下猜</b>。<br>
+        ⭐ 这正是<a href="topic-02.html">专题二</a>第 6 节那四句问法里的一句：
+        先问这个数的出处和口径，再用它。
+        <em>而那四句不是拿来审别人材料的 ——&nbsp;是先拿来审自己的。</em></span></p>
+    </div>
+  </div>
+
+  </div>
+</details>
+
 <!-- ⭐⭐ 2026-09-14 R12 现场要求：「那个注意力编年史能给我放在开篇的位置吗？」
      ⭐ 顺手做成**首尾呼应**：开篇摊开它（此刻看不懂是正常的），
        第九章收尾请读者滚回来再看一眼。
@@ -151,6 +290,25 @@ __FIG_CHRONICLE__
 <p><span class="sub">⭐ <em>这一节<b>没有新知识</b>，它只是一张地图 ——&nbsp;
   所以它不编到正课里，叫<b>第零节</b>。
   <b>它唯一的作用，是让你在最后那一章有一个<u>回得去的地方</u>。</b></em></span></p></div>
+
+<!-- ⭐⭐⭐ 2026-09-16 现场：「我说的注意力编年史不是横着那张时间线，
+     是**按模型来捋的、所有著名开源模型按年代排的那个巨大表格**，
+     还能切 highlight 和全量两种模式的那个。」——&#160;表从 8.6 挪到这里。
+     ⭐ 两样东西并不重复，它们是**同一段历史的两种分辨率**：
+       上面那张时间线看的是**四条支线各修各的毛病**（形状）；
+       下面这张表看的是**每一个具体型号到底选了什么**（账）。
+     ⛔ 开篇读不懂是正常的，而且是故意的 ——&#160;第八章末尾会请读者回来。 -->
+<p class="landing">⭐ <b>再看一眼具体的账 ——&nbsp;这些名字你多半都听过。</b>
+  <em>同样<b>现在不用看懂</b>：先看清<b>列</b>就行 ——&nbsp;
+  一个循环里几层便宜的、上下文多长、KV cache 多大。
+  <b>这一讲结束时，你会一行一行读下来。</b></em></p>
+
+__TABLE_MODELS__
+
+<div class="note info"><p>⭐ <em><b>这张表有两种读法，右上角可以切：</b>
+  <b>Highlight</b>（默认）只留撑起这段历史的那些行，备注写的是「它凭什么在这条线上」；
+  <b>全部</b>是完整参照表，备注是这一行独有的那句话。<br>
+  ⭐⭐ <b>表头还能点</b> ——&nbsp;按时间、厂商、配比、上下文、KV cache 排序。</em></p></div>
 
 <p class="landing">⭐ 这一讲按时间顺序讲，一步一步走。
   每一步只回答两个问题：<b>上一步欠下了什么，这一步拿什么来还。</b>
@@ -1528,12 +1686,19 @@ __FIG_NOPE__
   ⛔ 前提也很硬 ——&nbsp;<b>得有一类天然带时序的层，而且要摆在全注意力层下面</b>，
   位置才来得及被揉进去。</em></span></p></div>
 
-<h3>8.6　对号入座：今天这些模型，各站在哪儿</h3>
+<h3>8.6　对号入座：现在回第零节那张表，你能一行一行读下来了</h3>
 
-<p>名词讲完了。<b>下面这张表，是把它们放回现实。</b>
-  <em>每一行都标了出处，多数可以在公开配置里当场核。</em></p>
-
-__TABLE_MODELS__
+<!-- ⭐⭐⭐ 2026-09-16 现场纠正：之前说「把注意力编年史挪到第零节」，
+     指的是**这张按模型排的大表**，不是那张横向四支线时间线。表已挪到第零节。
+     ⛔ 这里**不要再放一遍表** ——&#160;判据跟 fig3-chronicle 那次一样：
+       **同一样东西放在开头和结尾，价值不一样**。开头它是「领土」，
+       结尾它是「你现在读得懂了」。所以东西只放一次，第二次用一句话把人送回去。 -->
+<p class="landing">📌 <b>名词讲完了。现在请回到<a href="#s零">第零节</a>那张表。</b>
+  <em>——&nbsp;<b>开篇看它的时候，它是一墙陌生的型号；现在它每一列你都认得：
+  一个循环里几层便宜的、上下文多长、KV cache 多大、以及它凭什么在这条线上。</b></em></p>
+<p><span class="sub">⭐ <em>那张表默认开在 <b>Highlight</b> 模式（撑起这段历史的那些行）；
+  <b>切到「全部」</b>就是完整的参照表 ——&nbsp;每一行都标了出处，
+  多数可以在公开配置里当场核。<b>表头可以点，按时间／厂商／配比／上下文／KV 排序。</b></em></span></p>
 
 <div class="note ok"><p><b>这一章的两句话。</b></p>
 <p><b>换来的</b>：<em>同时拿到两种记忆 ——&nbsp;一个能精确翻查，一个能长久兜住。
