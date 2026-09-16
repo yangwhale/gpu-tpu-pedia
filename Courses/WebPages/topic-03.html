@@ -3237,8 +3237,163 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <h3 id="s2-6">2.6　本章落点：KV cache 就是在这里出生的</h3>
 
-<p>前面讲的都是想法。<b>把形状标上去，这笔账就能用眼睛读了</b> ——&nbsp;
-  <em>只要在图里找那个会越变越长的维度。</em></p>
+<!-- ⛔ 这句改过两版了：第一版抄了图的 header sub，第二版抄了 Ⓑ 的标题。
+     判据⑩：挨着图的那一处赢 ——&#160;正文只留**图上没有的那个动作**（去图里找）。 -->
+<p>前面讲的都是想法。<b>下面这张图只要你做一件事</b> ——&nbsp;
+  <em>看完 Ⓑ 那三堆，回答：<b>哪一堆会跟着对话一直变大？</b></em></p>
+
+<figure class="fbox fwide" id="fig-kv-born"><svg viewBox="0 0 1400 1398" width="100%" role="img" aria-label="幼儿版：一个字进来先变出问题、钥匙、内容三样东西；拿自己的问题去跟所有人的钥匙比一比，谁像就多看谁，再按这个比例把大家的内容拌到一起。这一层算完，桌上分三堆：权重是常驻设备，中间量是草稿纸算完就扔，只有钥匙和内容要锁进柜子留到下一个字 —— 而每来一个字就多一格，这就是 KV cache 的出生"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px"><tspan font-weight="700">KV cache 是在哪一步出生的</tspan>　——　一个字母都不用认的版本</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 这一格只送出一句话：<tspan font-weight="700">这一层算完，只有两样东西必须留到下一个字</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">问题</text>
+<rect x="75" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="96" y="74" fill="#5f6368" style="font-size:14.0px">钥匙 · 内容</text>
+<rect x="207" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="228" y="74" fill="#5f6368" style="font-size:14.0px">会一直变长</text>
+<rect x="0" y="102" width="1400" height="396" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 一个字进来 ——　<tspan font-weight="700">先变出三样东西，再拿它们互相问一遍</tspan></tspan></text>
+<text class="svgsm" x="625" y="122" fill="#5f6368" style="font-size:11.0px">⛔ 这一格一个记号都没有，看画就行</text>
+<rect x="64" y="210" width="116" height="64" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="122" y="248" fill="#202124" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">一个字</tspan></text>
+<text class="svgsm" x="122" y="290" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">比如「猫」</text>
+<line x1="184" y1="242" x2="246" y2="202" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="246" y="172" width="232" height="60" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="362" y="200" fill="#174ea6" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">问题</tspan></text>
+<text class="svgsm" x="362" y="220" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">我想找什么</text>
+<line x1="184" y1="242" x2="246" y2="276" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="246" y="246" width="232" height="60" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="362" y="274" fill="#681da8" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">钥匙</tspan></text>
+<text class="svgsm" x="362" y="294" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">我能回答什么</text>
+<line x1="184" y1="242" x2="246" y2="350" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="246" y="320" width="232" height="60" rx="8" fill="#faf5ff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="362" y="348" fill="#681da8" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">内容</tspan></text>
+<text class="svgsm" x="362" y="368" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">找到我，我给什么</text>
+<text class="svgsm" x="362" y="422" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">⭐ 三样都是<tspan font-weight="700">同一个字变出来的</tspan> ——　各管各的用途</text>
+<rect x="534" y="162" width="810" height="300" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="534" y="162" width="810" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="939" y="194" fill="#174ea6" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">然后这一步只做两个动作</tspan></text>
+<rect x="566" y="220" width="746" height="92" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="590" y="252" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">① 拿<tspan font-weight="700">我的问题</tspan>，去跟<tspan font-weight="700">前面每一个字的钥匙</tspan>比一比</tspan></text>
+<text class="svgsm" x="590" y="284" fill="#5f6368" style="font-size:14.5px">——　<tspan font-weight="700">谁的钥匙跟我的问题越像，我就越多看谁一眼</tspan></text>
+<rect x="566" y="328" width="746" height="92" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="590" y="360" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">② 按刚才比出来的比例，把<tspan font-weight="700">大家的内容拌到一起</tspan></tspan></text>
+<text class="svgsm" x="590" y="392" fill="#5f6368" style="font-size:14.5px">——　拌出来的这一份，就是<tspan font-weight="700">这个字这一步的输出</tspan></text>
+<text class="svgsm" x="939" y="446" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⛔ 注意：<tspan font-weight="700">①要用到前面每一个字的钥匙，②要用到前面每一个字的内容</tspan></tspan></text>
+<rect x="0" y="550" width="1400" height="296" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="550" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="552" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="580" x2="1400" y2="580" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="570" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 这一层算完，<tspan font-weight="700">桌上的东西分三堆</tspan> ——　只有一堆必须留着</tspan></text>
+<text class="svgsm" x="625" y="570" fill="#5f6368" style="font-size:11.0px">⭐ 判断标准只有一个：<tspan font-weight="700">下一个字还用不用得上它</tspan></text>
+<rect x="56" y="610" width="412" height="220" rx="8" fill="#f1f3f4" stroke="#1a73e8" stroke-width="1"/>
+<rect x="56" y="610" width="412" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="262" y="644" fill="#174ea6" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">常驻的设备</tspan></text>
+<text class="svgsm" x="262" y="672" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">模型的权重</tspan></text>
+<text class="svgsm" x="262" y="706" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">所有字共用同一套</text>
+<text class="svgsm" x="262" y="732" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">不随对话变</text>
+<text class="svgsm" x="262" y="794" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⭐ 留 ——　但它本来就在那儿</tspan></text>
+<rect x="492" y="610" width="412" height="220" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="492" y="610" width="412" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="698" y="644" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">草稿纸</tspan></text>
+<text class="svgsm" x="698" y="672" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">中间算出来的那些量</tspan></text>
+<text class="svgsm" x="698" y="706" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">比出来的那些「像不像」</text>
+<text class="svgsm" x="698" y="732" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">拌完就没用了</text>
+<text class="svgsm" x="698" y="794" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⭐ 扔 ——　算完就扔</tspan></text>
+<rect x="928" y="610" width="412" height="220" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="928" y="610" width="412" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1134" y="644" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">锁进柜子的</tspan></text>
+<text class="svgsm" x="1134" y="672" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">钥匙 和 内容</tspan></text>
+<text class="svgsm" x="1134" y="706" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">下一个字还要拿它们比、拿它们拌</text>
+<text class="svgsm" x="1134" y="732" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">所以必须留着</text>
+<text class="svgsm" x="1134" y="794" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⛔ 留 ——　而且每来一个字就多一格</tspan></text>
+<rect x="0" y="898" width="1400" height="320" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="898" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="900" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="928" x2="1400" y2="928" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="918" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓒ 于是那第三堆<tspan font-weight="700">越堆越高</tspan> ——　<tspan font-weight="700">KV cache 就是这么出生的</tspan></tspan></text>
+<text class="svgsm" x="857" y="918" fill="#5f6368" style="font-size:11.0px">⭐ 别的两堆都不随对话变，<tspan font-weight="700">只有这一堆一直长</tspan></text>
+<text class="svgsm" x="176" y="980" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 1 个字</text>
+<rect x="120" y="994" width="112" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="176" y="1021" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">今</tspan></text>
+<line x1="176" y1="1038" x2="176" y2="1056" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="126" y="1056" width="48" height="54" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="150" y="1080" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="150" y="1100" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="178" y="1056" width="48" height="54" rx="5" fill="#faf5ff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="202" y="1089" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">内容</tspan></text>
+<text class="svgsm" x="344" y="980" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 2 个字</text>
+<rect x="288" y="994" width="112" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="344" y="1021" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">天</tspan></text>
+<line x1="344" y1="1038" x2="344" y2="1056" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="294" y="1056" width="48" height="54" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="318" y="1080" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="318" y="1100" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="346" y="1056" width="48" height="54" rx="5" fill="#faf5ff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="370" y="1089" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">内容</tspan></text>
+<text class="svgsm" x="512" y="980" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 3 个字</text>
+<rect x="456" y="994" width="112" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="512" y="1021" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">天</tspan></text>
+<line x1="512" y1="1038" x2="512" y2="1056" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="462" y="1056" width="48" height="54" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="486" y="1080" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="486" y="1100" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="514" y="1056" width="48" height="54" rx="5" fill="#faf5ff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="538" y="1089" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">内容</tspan></text>
+<text class="svgsm" x="680" y="980" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 4 个字</text>
+<rect x="624" y="994" width="112" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="680" y="1021" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">气</tspan></text>
+<line x1="680" y1="1038" x2="680" y2="1056" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="630" y="1056" width="48" height="54" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="654" y="1080" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="654" y="1100" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="682" y="1056" width="48" height="54" rx="5" fill="#faf5ff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="706" y="1089" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">内容</tspan></text>
+<text class="svgsm" x="848" y="980" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 5 个字</text>
+<rect x="792" y="994" width="112" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="848" y="1021" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">真</tspan></text>
+<line x1="848" y1="1038" x2="848" y2="1056" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="798" y="1056" width="48" height="54" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="822" y="1080" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="822" y="1100" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="850" y="1056" width="48" height="54" rx="5" fill="#faf5ff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="874" y="1089" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">内容</tspan></text>
+<text class="svgsm" x="1016" y="980" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 6 个字</text>
+<rect x="960" y="994" width="112" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="1016" y="1021" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">好</tspan></text>
+<line x1="1016" y1="1038" x2="1016" y2="1056" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="966" y="1056" width="48" height="54" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="990" y="1080" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="990" y="1100" fill="#681da8" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="1018" y="1056" width="48" height="54" rx="5" fill="#faf5ff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1042" y="1089" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">内容</tspan></text>
+<rect x="104" y="1050" width="1028" height="66" rx="8" fill="none" stroke="#d93025" stroke-width="2.0"/>
+<text class="svgsm" x="104" y="1140" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 这一整条<tspan font-weight="700">就是 KV cache</tspan> ——　每来一个字，右边就多一格，<tspan font-weight="700">而且一格都不能扔</tspan>（下一个字还要用）</tspan></text>
+<text class="svgsm" x="104" y="1170" fill="#5f6368" style="font-size:15.0px">⭐ 一万个字的对话，这里就是一万格；十万个字，就是十万格。<tspan font-weight="700">它跟着对话一直长下去。</tspan></text>
+<text class="svgsm" x="104" y="1200" fill="#202124" style="font-size:15.5px"><tspan font-weight="700">⭐⭐ 而第一堆（权重）从头到尾一样大 ——　<tspan font-weight="700">所以对话越长，账单里越是这一堆说了算。</tspan></tspan></text>
+<rect x="0" y="1270" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1270" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1270" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1297" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以这一章的落点就一句话</tspan></text>
+<text class="svgsm" x="20" y="1328" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">1990 年那个盒子，换成了一条会一直变长的格子。</tspan>⭐ 盒子的好处是<tspan font-weight="700">永远那么大</tspan>，坏处是<tspan font-weight="700">只能一个一个来</tspan>；格子正好反过来 ——&#160;<tspan font-weight="700">能一次算完，但会一直长。</tspan></text>
+<text class="svgsm" x="20" y="1352" fill="#0d652d" style="font-size:15.0px">⛔ <tspan font-weight="700">后面七章，全是在想办法拿这条格子开刀</tspan> ——&#160;有人让每一格变小，有人让每步少看几格，还有人干脆想把它换回那个盒子。</text>
+</svg><figcaption>⭐⭐ <b>Ⓑ 那三堆是这张图的全部</b> ——&nbsp;<em>权重本来就在那儿，中间量算完就扔 ——&nbsp;<b>三堆里只有一堆过不了这一关。</b></em><br>⭐ <em>而 Ⓒ 把「必须留」翻译成了画面：<b>每来一个字就多一格，一格都不能扔。</b>——&nbsp;<b>后面七章全在拿这条格子开刀。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⛔ <b>这张图刻意不画多头、不画残差与 MLP、不写任何张量形状</b> ——&#160;完整的那张（沿用 How to Scale Your Model 的记号）就在本节里折着，点开即可；后面几章还会把它重画并点亮被改动的那一处</p>
+<p>⚠️ Ⓐ 里「问题 / 钥匙 / 内容」是 Q / K / V 的中文说法，本课从头到尾用这一套；⛔ <b>「拌到一起」指的是按权重加权求和</b>，不是把内容搅混 ——&#160;这一点跟第一章那个「叠上去不是搅匀」是同一件事</p>
+<p>⚠️ Ⓒ 里那六个字只是<b>画面</b>，真实的一格里装的是两条向量，不是两个汉字</p></details></figure>
+
+<!-- ⭐⭐⭐ 2026-09-16 现场：「这个小结里画的那个图是 Scaling Book 里的专家版，
+     信息量太大了，我怕同学们理解不了，能不能画一个幼儿版的，简单点。」
+     ⭐ 于是新画了 fig3-kv-born 顶上来，专家版**折起来、不删**。
+     ⛔ 为什么不删：<b>它是全专题的主线图</b> ——&#160;后面好几章都要把它重画一遍、
+       点亮被改动的那一处。删了后面接不上。
+     ⭐ 判据（本页第三处折叠）：**看不懂 ≠ 没价值 ——&#160;收起来，不是删掉。** -->
+<details class="foldfig"><summary><b>同一件事的专家版：一层 Transformer 的完整张量图</b>
+  <span class="why">——&nbsp;沿用 How to Scale Your Model 的记号（BTD / BSKH …）。
+  <b>第一次读可以完全跳过</b>；<b>但后面几章会反复回到它</b>，
+  每讲一个新方案就把它重画一遍、只点亮被改动的那一处。</span></summary>
 
 <figure class="fbox fwide" id="fig-tx-base"><svg viewBox="0 0 1400 1388" width="100%" role="img" aria-label="主线图 · 一层 Transformer，每一步的张量形状">
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:19px">主线图 · 一层 Transformer，每一步的张量形状</text>
@@ -3369,6 +3524,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="1330" width="1400" height="48" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="16" y="1360" fill="#174ea6" style="font-size:15px">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。</text>
 </svg><figcaption>⭐ <b>别急着看懂整张 ——&nbsp;现在只做一件事</b>：<em>在这一堆字母里，把那个<b>会随对话越变越长</b>的找出来。</em><br>⭐⭐ 找到它，你就找到了后面<b>所有招数共同的靶子</b> ——&nbsp;<em>剩下七章，全是在想办法拿它开刀。</em></figcaption></figure>
+
+</details>
 
 <div class="note ok"><p>⭐⭐ <b>给它起个名字：这一讲的主角，就是那个 <code>S</code>。</b></p>
 <p><em>后面每一章你其实只要盯着它问一句：这一招是让 S 前面的系数变小、
