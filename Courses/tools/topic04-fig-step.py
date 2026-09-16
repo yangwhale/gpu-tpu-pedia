@@ -187,7 +187,7 @@ def main():
         "<tspan font-weight=\"700\">总 FLOPs 也一点没少</tspan> ——&#160;还是那么多要算。"
         "⚠️ 而且它会把梯度那一栏<tspan font-weight=\"700\">逼成 fp32</tspan>"
         "（见 3.2）——&#160;那一栏反而从 2 B 变成 4 B。",
-    ], keep=True)
+    ], fold=True)
 
     yy = f.src(yy + 24,
                "⭐ Ⓑ 三行都是<tspan font-weight=\"700\">当场算的</tspan>："
