@@ -150,7 +150,68 @@ def main():
         BL, True, 15)
     f._pan = None
 
-    yy = f.band(py + PH + 22, "info", "那时候的「词向量」是什么样 ——　原文写得很死", [
+    # ══════════ Ⓐb 一步接一步：两条回线 ═══════════════════════════
+    # ⭐⭐⭐ 2026-09-16 现场：「你新生成的 Y 是不是应该画一圈，作为下一次的 X，
+    #   这样才能把序列连起来？」——&#160;直觉完全对，**但必须画成两条**：
+    #   ⛔ 状态回线训练推理都有；自回归回线**只有生成时才有**
+    #     （训练时喂的是真实的下一个词，即 teacher forcing）。
+    #   ⭐⭐ 画成两条之后，它顺手解释了全书最大的一处反差：
+    #     Transformer **只解开了第一条**，所以训练能并行、吐字仍然是一条链。
+    PHB = 366
+    pyb = f.panel(0, py + PH + 22, W, PHB,
+                  "Ⓐb 一步接一步 ——　<tspan font-weight=\"700\">"
+                  "把序列连起来的，其实是两条回线</tspan>", BL,
+                  sub="⛔ 它们<tspan font-weight=\"700\">不是一回事</tspan>："
+                      "一条训练推理都有，另一条只有生成时才有")
+
+    BY = pyb + 96
+    for i in range(3):
+        cx = 220 + i * 330
+        f.t(cx, BY - 46, "第 %d 步" % (i + 1), GY, True, 14, "middle")
+        f.box(cx - 30, BY - 30, 60, 26, "#f3e8fd", PU, 5)
+        f.t(cx, BY - 11, "x%d" % (i + 1), PU, True, 14, "middle", mono=True)
+        f.line(cx, BY - 2, cx, BY + 16, GY2, 1.4)
+        f.box(cx - 56, BY + 16, 112, 54, "#e8f0fe", BL, 6)
+        f.t(cx, BY + 50, "盒子", BL, True, 16, "middle")
+        f.line(cx, BY + 70, cx, BY + 88, GY2, 1.4)
+        f.box(cx - 30, BY + 88, 60, 26, "#fef7e0", OR, 5)
+        f.t(cx, BY + 107, "y%d" % (i + 1), OR, True, 14, "middle", mono=True)
+        if i < 2:
+            # ① 状态回线：实线，横着走
+            f.line(cx + 56, BY + 43, cx + 274, BY + 43, BL, 2.0)
+            f.t(cx + 165, BY + 32, "① 状态", BL, True, 13, "middle")
+            # ② 自回归回线：虚线，从 y 绕到下一个 x
+            f.path("M %d %d L %d %d L %d %d L %d %d"
+                   % (cx + 30, BY + 101, cx + 165, BY + 101,
+                      cx + 165, BY - 17, cx + 300, BY - 17), OR, 1.8, "5 4")
+            f.t(cx + 165, BY + 124, "② 自回归", OR, True, 13, "middle")
+
+    f.box(60, BY + 168, 620, 96, "#e8f0fe", BL, 6)
+    f.t(78, BY + 194, "① 状态回线　——　训练、推理<tspan font-weight=\"700\">都有</tspan>",
+        BL, True, 16)
+    f.t(78, BY + 218, "盒子传给下一步。<tspan font-weight=\"700\">它造成的是「不能并行」</tspan>", GY,
+        size=14)
+    f.t(78, BY + 242, "⭐ 这一条，2017 年那一刀解开了。", GR, True, 14)
+
+    f.box(720, BY + 168, 620, 96, "#fef7e0", OR, 6)
+    f.t(738, BY + 194,
+        "② 自回归回线　——　<tspan font-weight=\"700\">只有生成时才有</tspan>", OR, True, 16)
+    f.t(738, BY + 218,
+        "⛔ 训练时这里喂的是<tspan font-weight=\"700\">真实的下一个词</tspan>，不是模型吐的那个", GY,
+        size=14)
+    f.t(738, BY + 242, "⛔ 这一条，到今天也没人解开。", RD, True, 14)
+    f._pan = None
+
+    yy = f.band(pyb + PHB + 22, "ok", "两条回线，两个痛 ——　而只有一条被解开了", [
+        "⭐⭐⭐ <tspan font-weight=\"700\">Transformer 解开的是第①条</tspan>：训练时"
+        "所有位置同时算，因为那时候<tspan font-weight=\"700\">每一步的输入你本来就全知道</tspan>。",
+        "⛔ 可<tspan font-weight=\"700\">第②条谁也解不开</tspan> ——&#160;"
+        "生成的时候，<tspan font-weight=\"700\">下一个输入得等这一个输出吐出来</tspan>。"
+        "⭐ 所以才有那句话：<tspan font-weight=\"700\">你今天用的每一个大模型，"
+        "在往外吐字的时候，都退回成了 1990 年那条链。</tspan>",
+    ])
+
+    yy = f.band(yy + 14, "info", "那时候的「词向量」是什么样 ——　原文写得很死", [
         "⭐ Elman 给每个词分配一个 <tspan font-weight=\"700\">31 位的向量，"
         "每个词占其中一个 bit</tspan>（另外留了 2 位给后续实验，"
         "所以真实词表是 <tspan font-weight=\"700\">29 个词</tspan>）。"
