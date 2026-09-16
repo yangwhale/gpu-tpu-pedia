@@ -1362,6 +1362,244 @@ h4 { margin:18px 0 6px; font-size:15px }
   <b>原样回来</b>。<br>
   <em>要绕完那一整圈，我们才会发现：当年扔掉的东西里，有一样是宝贝。</em></p></div>
 
+<h3 id="s1-1b">1.1b　把盒子打开：「搅一搅」到底是什么，KV 又是从哪来的</h3>
+
+<!-- ⭐⭐⭐ 2026-09-16 新增。现场三连问：「到底通过什么原理搅进去？」
+     「为什么搅一下不是把原有信息搞乱？」「KV 是不是这时候发明的？」
+     ⛔ 三问在本课里**一个都没有答案** ——&#160;1.1 通篇在用「搅一搅」，
+       **却从来没打开过那个盒子**，于是它听起来真的像「搅匀」。
+     ⭐ 判据：**一个用来降低门槛的比喻，如果它本身会引出错误的物理直觉，
+       那它就欠一张图。** -->
+<p class="lead">上一节那个「搅一搅」，是为了好懂用的比喻。
+  <em>⛔ 可它容易让人想成<b>搅匀</b> ——&nbsp;<b>而搅匀是会把东西毁掉的。</b>
+  所以这一节把盒子打开看一眼：<b>它其实不是搅匀。</b></em></p>
+
+<figure class="fbox fwide" id="fig-rnn-inside"><svg viewBox="0 0 1400 2282" width="100%" role="img" aria-label="把 RNN 的盒子打开：一步之内是「老状态转个向、新字映到同一个空间、两个相加、再压一压」，不是搅匀。叠加之所以不毁掉旧信息，是因为高维空间里随便两个方向几乎垂直 —— 1024 维里夹角实测 88.6 度。而每一步都要再乘一次，正是「传远了会淡」的根源。盒子里只有一个状态，没有钥匙和内容这两样东西，KV 要等到 2017 年"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">把盒子打开：<tspan font-weight="700">「搅一搅」到底是什么</tspan>，以及它凭什么<tspan font-weight="700">不把旧的搅烂</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 「搅」这个字容易让人想到搅匀 ——　<tspan font-weight="700">而搅匀是会把东西毁掉的。它其实不是搅匀。</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">一步之内</text>
+<rect x="103" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="124" y="74" fill="#5f6368" style="font-size:14.0px">为什么不糊</text>
+<rect x="220" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="241" y="74" fill="#5f6368" style="font-size:14.0px">为什么会淡</text>
+<rect x="0" y="102" width="1400" height="452" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 一步之内，其实只有四个动作 ——　<tspan font-weight="700">转一下 · 映过来 · 叠上去 · 压一压</tspan></tspan></text>
+<text class="svgsm" x="750" y="122" fill="#5f6368" style="font-size:11.0px">⛔ 没有任何一步在「搅匀」　·　<tspan font-weight="700">每一步都是可以倒着想回去的</tspan></text>
+<rect x="66" y="224" width="52" height="104" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<line x1="66" y1="250.0" x2="118" y2="250.0" stroke="#1a73e8" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="66" y1="276.0" x2="118" y2="276.0" stroke="#1a73e8" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="66" y1="302.0" x2="118" y2="302.0" stroke="#1a73e8" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="92" y="212" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">上一步的盒子</tspan></text>
+<text class="svgsm" x="92" y="350" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">一条 d 维的向量</text>
+<line x1="126" y1="276" x2="176" y2="276" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="176" y="245" width="150" height="62" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="251" y="271" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">① 转一下</tspan></text>
+<text class="svgsm" x="251" y="293" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">乘一个学出来的矩阵</text>
+<line x1="332" y1="276" x2="386" y2="276" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="66" y="410" width="52" height="68" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.6"/>
+<line x1="66" y1="427.0" x2="118" y2="427.0" stroke="#9334e6" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="66" y1="444.0" x2="118" y2="444.0" stroke="#9334e6" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="66" y1="461.0" x2="118" y2="461.0" stroke="#9334e6" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="92" y="398" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">这一个新字</tspan></text>
+<text class="svgsm" x="92" y="500" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">也是一条向量</text>
+<line x1="126" y1="444" x2="176" y2="444" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="176" y="413" width="150" height="62" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="251" y="439" fill="#681da8" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">② 映过来</tspan></text>
+<text class="svgsm" x="251" y="461" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">乘另一个矩阵，进同一个空间</text>
+<line x1="332" y1="444" x2="386" y2="444" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="386" y="316" width="78" height="78" rx="39" fill="#fff" stroke="#202124" stroke-width="2.0"/>
+<text class="svgsm" x="425" y="366" fill="#202124" text-anchor="middle" style="font-size:40.0px"><tspan font-weight="700">＋</tspan></text>
+<text class="svgsm" x="425" y="420" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">③ 叠上去</tspan></text>
+<text class="svgsm" x="425" y="442" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">就是普通的向量相加</text>
+<line x1="425" y1="276" x2="425" y2="312" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="425" y1="444" x2="425" y2="398" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="468" y1="355" x2="528" y2="355" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="528" y="324" width="150" height="62" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="603" y="350" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">④ 压一压</tspan></text>
+<text class="svgsm" x="603" y="372" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">过一次非线性，收回到一个范围里</text>
+<line x1="684" y1="355" x2="740" y2="355" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="740" y="303" width="52" height="104" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<line x1="740" y1="329.0" x2="792" y2="329.0" stroke="#1a73e8" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="740" y1="355.0" x2="792" y2="355.0" stroke="#1a73e8" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="740" y1="381.0" x2="792" y2="381.0" stroke="#1a73e8" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="766" y="291" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">新的盒子</tspan></text>
+<text class="svgsm" x="766" y="429" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">还是一条 d 维向量</text>
+<path d="M 766 451 L 766 524 L 92 524 L 92 358" fill="none" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="430" y="546" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⭐ 写回去 ——　下一个字来的时候，它就是「上一步的盒子」</tspan></text>
+<rect x="880" y="200" width="460" height="250" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="900" y="228" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">⭐ 这四步里，最要紧的是 ③</tspan></text>
+<text class="svgsm" x="900" y="262" fill="#5f6368" style="font-size:14.5px">「搅」这个字是我们为了好懂用的比喻，</text>
+<text class="svgsm" x="900" y="288" fill="#5f6368" style="font-size:14.5px">可它容易让人想成<tspan font-weight="700">搅匀</tspan> ——　那是会毁东西的。</text>
+<text class="svgsm" x="900" y="340" fill="#5f6368" style="font-size:14.5px">真实动作是<tspan font-weight="700">相加</tspan>：</text>
+<text class="svgsm" x="900" y="366" fill="#5f6368" style="font-size:14.5px">新的<tspan font-weight="700">叠</tspan>在老的上面，老的<tspan font-weight="700">一点没被抹掉</tspan>。</text>
+<text class="svgsm" x="900" y="418" fill="#5f6368" style="font-size:14.5px">⛔ 那紧接着的问题就是 ——　</text>
+<text class="svgsm" x="900" y="444" fill="#5f6368" style="font-size:14.5px">叠了一万次之后，还分得开吗？</text>
+<rect x="0" y="606" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="606" width="4" height="74" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="606" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="633" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 先把那个词换掉</tspan></text>
+<text class="svgsm" x="20" y="664" fill="#b06000" style="font-size:15.0px">⛔ <tspan font-weight="700">它不是「搅匀」，是「叠上去」。</tspan>搅匀之后你取不回任何一样东西；而<tspan font-weight="700">叠加之后能不能取回，是个可以算的问题</tspan> ——&#160;下一格就算给你看。</text>
+<rect x="0" y="706" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="706" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="708" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="736" x2="1400" y2="736" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="726" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 叠了一万次为什么还分得开 ——　<tspan font-weight="700">因为维度一高，随便两个方向几乎总是垂直的</tspan></tspan></text>
+<text class="svgsm" x="760" y="726" fill="#5f6368" style="font-size:11.0px">⭐ 这不是个说法，是个<tspan font-weight="700">能算出来的数</tspan></text>
+<rect x="182" y="732" width="236" height="316" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="300" y="758" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">在 2 维里</tspan></text>
+<line x1="300" y1="926" x2="392" y2="926" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="300" y1="926" x2="358.2636" y2="854.8006115543118" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="334" y="906" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">51°</tspan></text>
+<text class="svgsm" x="300" y="962" fill="#202124" text-anchor="middle" style="font-size:14.5px">两个方向的夹角　典型只有 51°</text>
+<text class="svgsm" x="300" y="984" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">叠上去就糊成一团 ——　互相严重干扰</text>
+<text class="svgsm" x="300" y="1008" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">⛔ 取不回来</tspan></text>
+<rect x="642" y="732" width="236" height="316" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="760" y="758" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">在 1024 维里</tspan></text>
+<line x1="760" y1="926" x2="852" y2="926" stroke="#1e8e3e" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="760" y1="926" x2="762.2816" y2="834.0282961914916" stroke="#1e8e3e" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="794" y="906" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">89°</tspan></text>
+<text class="svgsm" x="760" y="962" fill="#202124" text-anchor="middle" style="font-size:14.5px">两个方向的夹角　典型是 88.6°</text>
+<text class="svgsm" x="760" y="984" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">几乎垂直 ——　叠上去互不打扰</text>
+<text class="svgsm" x="760" y="1008" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">⭐ 各取各的</tspan></text>
+<rect x="1010" y="762" width="340" height="286" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1030" y="792" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 所以那句话是：</tspan></text>
+<text class="svgsm" x="1030" y="826" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">叠加之所以能还原，</tspan></text>
+<text class="svgsm" x="1030" y="850" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">是维度买来的。</tspan></text>
+<text class="svgsm" x="1030" y="898" fill="#5f6368" style="font-size:14.0px">d 维里两个随机方向的余弦，</text>
+<text class="svgsm" x="1030" y="922" fill="#5f6368" style="font-size:14.0px">典型大小约 1 除以根号 d ——</text>
+<text class="svgsm" x="1030" y="946" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">d 越大，越垂直。</tspan></text>
+<text class="svgsm" x="1030" y="994" fill="#5f6368" style="font-size:14.0px">⛔ 但它<tspan font-weight="700">不是无限的</tspan>：</text>
+<text class="svgsm" x="1030" y="1018" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">真正互不打扰的方向，最多 d 个。</tspan></text>
+<text class="svgsm" x="1030" y="1042" fill="#5f6368" style="font-size:14.0px">叠过了头，照样糊。</text>
+<rect x="0" y="1158" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1158" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1158" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1185" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 这一格把第一章和后面缝上了</tspan></text>
+<text class="svgsm" x="20" y="1216" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">「最多 d 个互不打扰的方向」这句话，后面还会再出现一次</tspan> ——&#160;到那时它解释的是<tspan font-weight="700">另一块板子为什么会写满</tspan>。</text>
+<text class="svgsm" x="20" y="1240" fill="#0d652d" style="font-size:15.0px">⭐ <tspan font-weight="700">1990 年那个盒子，和今天那块板子，连「为什么不糊」的理由都是同一个。</tspan></text>
+<rect x="0" y="1282" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1282" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="1284" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1312" x2="1400" y2="1312" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1302" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">Ⓒ 那为什么还是会「传远了会淡」——　<tspan font-weight="700">因为它每走一步，都要再乘一次</tspan></tspan></text>
+<rect x="86" y="1372" width="96" height="60" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="134" y="1408" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">盒子</tspan></text>
+<text class="svgsm" x="134" y="1360" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 1 步</text>
+<line x1="182" y1="1402" x2="282" y2="1402" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="232" y="1388" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">× 转一下</text>
+<rect x="282" y="1372" width="96" height="60" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="330" y="1408" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">盒子</tspan></text>
+<text class="svgsm" x="330" y="1360" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 2 步</text>
+<line x1="378" y1="1402" x2="478" y2="1402" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="428" y="1388" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">× 转一下</text>
+<rect x="478" y="1372" width="96" height="60" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="526" y="1408" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">盒子</tspan></text>
+<text class="svgsm" x="526" y="1360" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 3 步</text>
+<line x1="574" y1="1402" x2="674" y2="1402" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="624" y="1388" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">× 转一下</text>
+<rect x="674" y="1372" width="96" height="60" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="722" y="1408" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">盒子</tspan></text>
+<text class="svgsm" x="722" y="1360" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 4 步</text>
+<line x1="770" y1="1402" x2="870" y2="1402" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="820" y="1388" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">× 转一下</text>
+<rect x="870" y="1372" width="96" height="60" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="918" y="1408" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">盒子</tspan></text>
+<text class="svgsm" x="918" y="1360" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 5 步</text>
+<line x1="966" y1="1402" x2="1066" y2="1402" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1016" y="1388" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">× 转一下</text>
+<rect x="1066" y="1372" width="96" height="60" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="1114" y="1408" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">盒子</tspan></text>
+<text class="svgsm" x="1114" y="1360" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">第 6 步</text>
+<text class="svgsm" x="86" y="1480" fill="#202124" style="font-size:15.5px">⭐ 一条消息从第 1 步传到第 100 步，就被<tspan font-weight="700">连乘了 99 次、也被压了 99 次</tspan>。</text>
+<text class="svgsm" x="86" y="1508" fill="#5f6368" style="font-size:15.0px">⛔ 那个矩阵的「劲道」略小于 1 ——　连乘一百次就<tspan font-weight="700">指数级地趋近于零</tspan>；略大于 1 ——　就<tspan font-weight="700">指数级地炸掉</tspan>。</text>
+<text class="svgsm" x="86" y="1536" fill="#b06000" style="font-size:15.5px"><tspan font-weight="700">⭐⭐ 这就是「传远了会淡」的全部机制 ——　<tspan font-weight="700">它不是被时间冲淡的，是被反复相乘压没的。</tspan></tspan></text>
+<rect x="0" y="1634" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1634" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1634" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1661" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 这个毛病，三十年后被做成了功能</tspan></text>
+<text class="svgsm" x="20" y="1692" fill="#174ea6" style="font-size:15.0px">⭐⭐⭐ <tspan font-weight="700">「每一步都乘一个小于 1 的数」——&#160;在 1990 年是这条路的致命伤；今天这一支<tspan text-decoration="underline">主动</tspan>把它放了回去。</tspan></text>
+<text class="svgsm" x="20" y="1716" fill="#174ea6" style="font-size:15.0px">⭐ 区别只有一处：<tspan font-weight="700">当年那个衰减是不受控的副作用，今天那个是学出来的、而且每个通道各有一个</tspan>。<tspan font-weight="700">同一条性质，一次是病，一次是药。</tspan></text>
+<rect x="0" y="1758" width="1400" height="320" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1758" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="1760" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1788" x2="1400" y2="1788" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1778" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓓ 那 KV 是不是这时候发明的？——　<tspan font-weight="700">不是。盒子里根本没有那两样东西</tspan></tspan></text>
+<text class="svgsm" x="696" y="1778" fill="#5f6368" style="font-size:11.0px">⛔ 这个区别不是名词之争，<tspan font-weight="700">它是这整本书的骨架</tspan></text>
+<rect x="70" y="1818" width="600" height="212" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="70" y="1818" width="600" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="370" y="1852" fill="#174ea6" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">1990　盒子里</tspan></text>
+<rect x="310" y="1878" width="120" height="62" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="370" y="1916" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">一个状态</tspan></text>
+<text class="svgsm" x="370" y="1966" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">就这一条向量。<tspan font-weight="700">没有钥匙，也没有内容</tspan>。</text>
+<text class="svgsm" x="370" y="1994" fill="#174ea6" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">它是<tspan font-weight="700">全部历史压成的一团</tspan></tspan></text>
+<rect x="730" y="1818" width="600" height="212" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="730" y="1818" width="600" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1030" y="1852" fill="#681da8" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">2017　注意力带来的</tspan></text>
+<rect x="812" y="1878" width="34" height="62" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="829" y="1904" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="829" y="1926" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="850" y="1878" width="34" height="62" rx="5" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="867" y="1915" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">值</tspan></text>
+<rect x="900" y="1878" width="34" height="62" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="917" y="1904" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="917" y="1926" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="938" y="1878" width="34" height="62" rx="5" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="955" y="1915" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">值</tspan></text>
+<rect x="988" y="1878" width="34" height="62" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1005" y="1904" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="1005" y="1926" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="1026" y="1878" width="34" height="62" rx="5" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1043" y="1915" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">值</tspan></text>
+<rect x="1076" y="1878" width="34" height="62" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1093" y="1904" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="1093" y="1926" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="1114" y="1878" width="34" height="62" rx="5" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1131" y="1915" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">值</tspan></text>
+<rect x="1164" y="1878" width="34" height="62" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1181" y="1904" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">钥</tspan></text>
+<text class="svgsm" x="1181" y="1926" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">匙</tspan></text>
+<rect x="1202" y="1878" width="34" height="62" rx="5" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1219" y="1915" fill="#681da8" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">值</tspan></text>
+<text class="svgsm" x="1030" y="1966" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">每一个字都留一对，<tspan font-weight="700">一个都不合并</tspan>。</text>
+<text class="svgsm" x="1030" y="1994" fill="#681da8" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">它是<tspan font-weight="700">全部历史原样留着</tspan></tspan></text>
+<rect x="0" y="2130" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="2130" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="2130" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="2157" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以这两样东西的关系，正好是本书要讲的那件事</tspan></text>
+<text class="svgsm" x="20" y="2188" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">RNN 的状态 ＝ 把全部历史压成一团；KV cache ＝ 把全部历史原样留着。</tspan>⭐ 一个压到不能再压，一个一点都不压 ——&#160;<tspan font-weight="700">它们是同一件事的两个极端。</tspan></text>
+<text class="svgsm" x="20" y="2212" fill="#0d652d" style="font-size:15.0px">⛔ 所以 <tspan font-weight="700">KV 不是 1990 年发明的</tspan>，它要等到注意力出现、而且要等到<tspan font-weight="700">自回归生成</tspan>把「每一步都要重算一遍历史」变成一笔真金白银的账，才会被「缓存」起来。<tspan font-weight="700">这本书剩下的章节，讲</tspan></text>
+<text class="svgsm" x="20" y="2236" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">的就是这两个极端之间的全部空间。</tspan></text>
+</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的重心</b> ——&nbsp;<em>「叠加为什么不毁掉信息」不是个说法，<b>是个能算的数</b>：2 维里两个随机方向只差 50 度，1024 维里差 88.6 度。<b>叠加能还原，是维度买来的。</b></em><br>⭐ <em>Ⓓ 那一格回答「KV 是不是这时候发明的」——&nbsp;<b>不是，而且这个「不是」正是全书的骨架。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Ⓑ 那两个角度是<b>现场采样算的</b>（各 4000 次随机向量对）：d=2 时 E|cosθ| ≈ 0.63（夹角约 51°，精确值是 2/π）；d=1024 时 E|cosθ| ≈ 0.0248（夹角约 88.6°）。大 d 的渐近式 sqrt(2/(π·d)) 与实测在 d≥64 时吻合到三位小数</p>
+<p>⛔ Ⓐ <b>刻意不写出那个式子</b> ——&#160;本节面向还没见过它的人，公式会把该看见的画面挡住。图上只画动作：转一下 → 映过来 → 叠上去 → 压一压</p>
+<p>⛔ Ⓒ <b>不画具体的衰减曲线</b> ——&#160;衰减快慢取决于那个矩阵的谱，<b>没有一条「通用曲线」</b>，画出来就是编。只画「反复相乘」这个结构</p>
+<p>⚠️ Ⓓ 的「2017」指的是 <b>Q/K/V 这套命名和 KV cache 这笔账</b>；「拿一个查询去跟一串历史比相似度再加权平均」这件事本身，2014 年的注意力就已经在做了</p></details></figure>
+
+<div class="note ok"><p>⭐⭐ <b>三个问题，三句回答。</b></p>
+<ul>
+  <li><b>怎么进去的？</b>——&nbsp;<em>不是搅匀，是<b>叠上去</b>：
+    老状态转个向，新字映到同一个空间，两个<b>相加</b>，再压一压。</em></li>
+  <li><b>为什么不糊？</b>——&nbsp;<em>因为<b>维度高</b>。
+    高维空间里随便两个方向<b>几乎总是垂直</b>的，
+    叠在一起也能各取各的。<b>这是个能算出来的数，不是说法。</b></em></li>
+  <li><b>KV 是这时候发明的吗？</b>——&nbsp;<em><b>不是。</b>
+    盒子里<b>只有一个状态</b>，没有「钥匙」和「内容」这两样东西。</em></li>
+</ul></div>
+
+<!-- ⛔ 这一格原来把图最后那条落点带**整段抄了一遍**（查重 2 → 5）。
+     判据⑩：挨着图的那一处赢。正文只留图给不了的那一样 ——&#160;
+     **这个区别为什么决定了后面八章的读法**。 -->
+<div class="note danger"><p>⛔⛔ <b>上面最后那条落点带值得停一下，因为它是<u>这整本书的骨架</u>。</b></p>
+<p><em>两个极端一旦立住，<b>后面每一章都可以按「它站在哪儿」来读</b>：<br>
+  <b>第四、第五章</b>在往「压一点」的方向挪；
+  <b>第七章</b>直接跳到最压的那一端；
+  <b>第八章</b>说的是 ——&nbsp;<b>两端各留一些，掺着用。</b></em></p>
+<p>⭐ <em>所以这一节不是背景介绍。<b>它是给后面八章立了一把尺子。</b></em></p></div>
+
+
 <h3 id="s1-2">1.2　第一个痛：盒子只有一个，所以只能一步一步来</h3>
 
 <p>这个设计有一个今天看来仍然极其诱人的好处：<b>不管这段话多长，
