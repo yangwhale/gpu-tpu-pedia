@@ -3129,7 +3129,99 @@ body.figonly section h3{margin-top:34px}
   <em>激活大就开重算 / 上 CP；优化器状态大就上 ZeRO ——&nbsp;
   这两条路走反了，一点用都没有。</em></span></p>
 
-<h3 id="s5-4">5.4　这张账单交给下一讲的是什么</h3>
+<h3 id="s5-4">5.4　⭐⭐⭐ 同一张账，缩到<u>一台你摸得到的机器</u>上</h3>
+
+<!-- ⭐⭐⭐ 2026-09-17 补。麻瓜审的第一条意见：
+     **全讲从头到尾都是 6710 亿参数、TiB 级的数，没有一个能自己算一遍的例子。**
+     ⛔ 那些数没错，但它们对没跑过训练的人是**没有分母的** ——
+       听完只记住「很大」，记不住「怎么来的」。
+     ⭐ 判据：**一讲里至少要有一个小到能手算、而且结论还成立的例子。**
+       它不是为了简单，是为了**让人能自己验一遍**。
+     ⭐ 挑 125M 是因为：它是 GPT-3 论文表 2.1 的第一行（所以学习率有出处），
+       而且这个尺寸真的能在一张普通卡上跑起来。 -->
+
+<p class="lead">⭐ 前面那些 TiB 级的数字<b>都是对的，但它们没有分母</b>。
+  <em>——&nbsp;所以这一小节把同一张账，缩到一个<b>你能自己算一遍</b>的模型上。</em></p>
+
+<div class="note"><p>📌 <b>设定：一个 1.25 亿参数的模型，一张卡，batch 8 × 序列 1,024。</b></p>
+<p><em>12 层、宽度 768、MLP 宽 3,072 ——&nbsp;
+  <b>这就是 GPT-3 论文表 2.1 的第一行</b>（<a href="#s三">3.5</a> 那张八档表最上面那档）。</em></p></div>
+
+<h4>第一步 · 常驻那一块</h4>
+<p><em>照搬 <a href="#s三">3.1</a> 那个 16 字节：</em></p>
+<table>
+<thead><tr><th>项</th><th>每参数</th><th>1.25 亿参数</th></tr></thead>
+<tbody>
+<tr><td>bf16 权重</td><td>2 B</td><td>0.23 GiB</td></tr>
+<tr><td>bf16 梯度</td><td>2 B</td><td>0.23 GiB</td></tr>
+<tr><td><b>优化器状态</b>（fp32 主权重 ＋ m ＋ v）</td><td><b>12 B</b></td><td><b>1.40 GiB</b></td></tr>
+<tr><td><b>小计</b></td><td><b>16 B</b></td><td><b>1.86 GiB</b></td></tr>
+</tbody></table>
+<p class="landing">⭐ <b>第一个可以自己验的结论</b>：
+  <em>这个模型的权重只有 0.23 GiB，<b>而它要占掉 1.86 GiB</b> ——&nbsp;
+  <u>八倍</u>。多出来的全是训练才要的。</em></p>
+
+<h4>第二步 · 激活那一块</h4>
+<p>一层里每个 token 留下的东西，<b>一项一项数</b>（宽度 768）：</p>
+<table>
+<thead><tr><th>留下的张量</th><th>宽度</th></tr></thead>
+<tbody>
+<tr><td>两个 norm 的输出</td><td>2 × 768 ＝ 1,536</td></tr>
+<tr><td>Q / K / V</td><td>3 × 768 ＝ 2,304</td></tr>
+<tr><td>attention 输出</td><td>768</td></tr>
+<tr><td>MLP 第一层输出</td><td>3,072</td></tr>
+<tr><td>激活函数的输出</td><td>3,072</td></tr>
+<tr><td>MLP 第二层输出</td><td>768</td></tr>
+<tr><td><b>一层合计</b></td><td><b>11,520 个数 ＝ 22.5 KiB</b>（bf16）</td></tr>
+</tbody></table>
+<p><em>× 12 层 ＝ 每个 token <b>270 KiB</b>。
+  × 8,192 个 token ＝ <b>2.11 GiB</b>。</em></p>
+
+<div class="note danger"><p>⛔⛔ <b>停一下 ——&nbsp;这里出了一件值得吃惊的事。</b></p>
+<p class="landing">⭐⭐⭐ <b>激活 2.11 GiB ＞ 常驻 1.86 GiB。</b>
+  <em>一个<u>只有 1.25 亿参数</u>的小模型，
+  <b>激活已经比权重、梯度、优化器状态加起来还大了。</b></em></p>
+<p><em>⭐ 而它<b>不需要长上下文</b>，序列才 1,024，光是 batch 开到 8 就够了。
+  ——&nbsp;<b>所以重算不是大模型的专利。</b></em></p></div>
+
+<h4>第三步 · 开了重算之后</h4>
+<p><em>照 <a href="#s二">2.2</a> 那一档：每层只留入口那一份（768 宽），
+  外加<b>当前正在重算的那一层</b>的完整一份。</em></p>
+<p class="landing">⭐ <b>0.32 GiB</b> ——&nbsp;<em>2.11 掉到 0.32，<b>省了 6.7 倍</b>，
+  代价是总算力从 3× 变 4×。</em></p>
+
+<table>
+<thead><tr><th></th><th>不开重算</th><th>开了重算</th></tr></thead>
+<tbody>
+<tr><td>常驻</td><td>1.86 GiB</td><td>1.86 GiB</td></tr>
+<tr><td>激活</td><td>2.11 GiB</td><td><b>0.32 GiB</b></td></tr>
+<tr><td><b>合计</b></td><td><b>3.97 GiB</b></td><td><b>2.18 GiB</b></td></tr>
+<tr><td>算力</td><td>3×</td><td>4×（＋33%）</td></tr>
+</tbody></table>
+
+<div class="note ok"><p>⭐⭐ <b>这张小表，把这一讲的三条主线全串上了。</b></p>
+<ul>
+  <li><b>16 字节那张账</b>（<a href="#s三">3.1</a>）——&nbsp;<em>1.86 GiB 是这么来的。</em></li>
+  <li><b>激活随 token 总数长</b>（5.1，就在本节）——&nbsp;
+    <em>2.11 GiB 里唯一的变量就是那 8,192 个 token。</em></li>
+  <li><b>拿算力换显存</b>（<a href="#s二">2.2</a>）——&nbsp;
+    <em>多付 33%，省 6.7 倍。<b>比例跟 671B 上那笔几乎一样。</b></em></li>
+</ul>
+<p class="landing">⭐⭐⭐ 而最后这一句才是这一小节存在的理由：
+  <em>换了 5,000 倍的规模，<b>那些<u>比例</u>基本没变</b>，变的只是绝对值。
+  ——&nbsp;<b>所以这一讲教的是比例，不是那些数。</b></em></p></div>
+
+<div class="note"><p>⚠️ <b>三条边界，跟 1.2 那张表同一套。</b></p>
+<ul>
+  <li><em>这些数是<b>按算子逐项推的</b>，不是从哪份报告抄的
+    ——&nbsp;框架的算子融合会让它小一些。<b>当量级看。</b></em></li>
+  <li><em>没算注意力分数矩阵（假设用了 FlashAttention），
+    也没算<b>临时缓冲、碎片、通信缓冲</b> ——&nbsp;真跑起来还要留富余。</em></li>
+  <li><em>「开了重算 0.32 GiB」假设<b>每层都设了存档点</b>
+    ——&nbsp;<a href="#s二">2.2</a> 那张图的 Ⓒ 说了，这不一定是最省的密度。</em></li>
+</ul></div>
+
+<h3 id="s5-5">5.5　这张账单交给下一讲的是什么</h3>
 
 <p class="lead">专题一算完前向，结论是<b>「装不下」</b>。
   <em>这一讲把账补全之后，那句话变得<b>具体</b>了 ——&nbsp;
@@ -3518,6 +3610,74 @@ body.figonly section h3{margin-top:34px}
 <p class="lead">⭐⭐ 这一讲报了几十个数字。它们<u>不是同一种东西</u>。
   <em>有的能查到论文原文，有的是我们自己按算子推的
   ——&nbsp;后者可能差一倍，前者不会。</em></p>
+
+<h3 id="s7-0">7.0　⭐⭐ 这些东西在框架里<u>叫什么</u></h3>
+
+<!-- ⭐⭐⭐ 2026-09-17 补。麻瓜审的另一条：
+     **全讲讲了一堆概念，可没有一处告诉你「这东西在代码里叫什么」。**
+     ⛔ 后果很具体：听完了，回去打开框架，**不知道该搜哪个词**。
+     ⭐ 判据：**一个概念要么给它在真实工具里的名字，要么承认这一讲不管落地。**
+       含含糊糊地讲概念、不给名字，等于把最后一公里留给读者自己撞。
+     ⚠️⚠️ 这张表最容易腐坏 —— 名字会改。所以：
+       **每一行都标了是从哪个文件 grep 出来的**，读者可以自己再验一遍。
+       表里每一个名字都是 2026-09 主干上**当场 grep 到的**，不是凭记忆写的。 -->
+
+<p class="lead">⭐ 这一讲讲了一堆概念。<b>可回去打开框架，该搜哪个词？</b></p>
+
+<table>
+<thead><tr><th>这一讲里的说法</th><th>在框架里叫什么</th><th>核的地方</th></tr></thead>
+<tbody>
+<tr><td><b>全量重算</b>（<a href="#s二">2.2</a>）</td>
+    <td><code>--recompute-granularity full</code></td>
+    <td rowspan="3">Megatron-LM<br><code>training/arguments.py</code><br>
+        <code>core/transformer/transformer_config.py</code></td></tr>
+<tr><td><b>选择性重算</b>（<a href="#s二">2.3</a>）</td>
+    <td><code>--recompute-granularity selective</code> ＋
+        <code>--recompute-modules</code><br>
+        <span class="sub">候选项：<code>core_attn</code>（<b>默认</b>）/ <code>layernorm</code> /
+        <code>moe_act</code> / <code>mla_up_proj</code> / <code>mlp</code> …</span></td></tr>
+<tr><td><b>梯度裁剪</b>（<a href="#s一">1.8</a>）</td>
+    <td><code>--clip-grad</code>（默认 <b>1.0</b>，正好是 V3 用的那个值）</td></tr>
+<tr><td><b>重算</b>，手写的那种</td>
+    <td><code>torch.utils.checkpoint.checkpoint(...)</code></td>
+    <td rowspan="2">PyTorch<br><code>torch/utils/checkpoint.py</code></td></tr>
+<tr><td><b>选择性重算</b>，按张量挑</td>
+    <td><code>create_selective_checkpoint_contexts</code> ＋ <code>CheckpointPolicy</code><br>
+        <span class="sub">⭐ 这就是 2.3 那条判据在 PyTorch 里的落点：
+        <b>你自己写规则决定哪个算子存、哪个重算</b></span></td></tr>
+<tr><td><b>重算</b>（JAX 那边）</td>
+    <td><code>jax.checkpoint</code>（别名 <code>jax.remat</code>）</td>
+    <td rowspan="2">JAX<br><code>jax/_src/ad_checkpoint.py</code></td></tr>
+<tr><td><b>选择性重算</b>的现成策略</td>
+    <td><code>jax.checkpoint_policies.dots_with_no_batch_dims_saveable</code><br>
+        <span class="sub">⭐ 名字直接说出了判据：<b>「矩阵乘的结果留着」</b>
+        ——&nbsp;正是 2.3 那张表最贵的那几行</span></td></tr>
+<tr><td><b>ZeRO 的三级</b>（<a href="#s四">4.2</a>）</td>
+    <td>配置里的 <code>zero_optimization.stage</code> ＝ <b>1 / 2 / 3</b></td>
+    <td>DeepSpeed<br><code>runtime/zero/config.py</code></td></tr>
+<tr><td><b>8-bit 优化器</b>（<a href="#s三">3.4</a>）</td>
+    <td><code>bitsandbytes.optim.Adam8bit</code> / <code>AdamW8bit</code></td>
+    <td>bitsandbytes<br><code>optim/__init__.py</code></td></tr>
+</tbody></table>
+
+<div class="note ok"><p>⭐⭐ <b>这张表里有两行值得单独看一眼 ——&nbsp;它们是这一讲的判据<u>被写进 API 名字里</u>了。</b></p>
+<ul>
+  <li><code>dots_with_no_batch_dims_saveable</code> ——&nbsp;
+    <em>「矩阵乘的结果<b>存下来</b>」。<b>为什么是矩阵乘？</b>
+    因为它每省一字节要付的 FLOPs 最多 ——&nbsp;正是 <a href="#s二">2.3</a> 那条闭式解。</em></li>
+  <li><code>core_attn</code> 是 Megatron 的<b>默认</b> ——&nbsp;
+    <em>而按 <a href="#s二">2.4</a>，长上下文下它恰恰是<b>最不该重算</b>的那一个。
+    ⭐ <b>默认值是有年代的</b>，这条在 <a href="#s二">2.6</a> 展开过。</em></li>
+</ul>
+<p class="landing">⭐ 所以这张表不只是「查词表」，<b>它是个反向检查</b> ——&nbsp;
+  <em>如果你理解的判据跟框架提供的选项对不上，
+  <b>多半是你的判据错了，或者那个默认过期了。</b></em></p></div>
+
+<div class="note danger"><p>⚠️ <b>这张表<u>最容易过期</u>，所以用法要说清楚。</b></p>
+<p><em>上面每一个名字都是 <b>2026 年 9 月</b>在各自主干上<b>当场 grep 到的</b>，
+  不是凭印象写的 ——&nbsp;<b>而框架改名是常事。</b></em></p>
+<p class="landing">⛔ <b>判据：给了名字，就得给「在哪个文件里能查到」。</b>
+  <em>——&nbsp;否则名字一改，这张表就从「帮忙」变成「误导」，而且<u>不会有任何东西报错</u>。</em></p></div>
 
 <h3 id="s7-1">7.1　查得到出处的（放心抄）</h3>
 <table>
