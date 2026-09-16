@@ -1999,7 +1999,179 @@ body.figonly section h3{margin-top:34px}
   <em>⭐ 而其中最有用的一问不是「总共多少」，是
   <b>「峰值出现在哪一个时刻」</b>。</em></p>
 
-<div class="note warn"><p>🚧 <b>本章待写 ——&nbsp;总账表 · 峰值在哪一刻 · 梯度累积改的是时间线不是总量</b></p><p><b>这一章在故事里干什么：</b>收尾。⭐ 要回答三问：一个 step 总共多少 FLOPs；<b>峰值出现在哪个时刻</b>（这一问比「总共多少」有用）；全部加起来要多少 device。</p><p><b>打算用的图：</b><code>fig4-step</code></p></div>
+<figure class="fbox fwide" id="fig-step"><svg viewBox="0 0 1400 1212" width="100%" role="img" aria-label="把四项显存摆到同一条时间轴上：权重和优化器状态是两条不动的水平带，激活在前向一路堆高、反向逐步释放，梯度则相反 —— 反向开始才出现，反向结束时最全。所以激活的峰在前向末尾，梯度的峰在反向末尾，两个峰不在同一时刻。而哪一项更大取决于 global batch：对 671B 的模型，要约九十四条 128K 序列，激活才追平常驻那一块"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">一个 step 的总账　——　<tspan font-weight="700">「峰值在哪一刻」要先问「哪一项的峰」</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 这里算的是<tspan font-weight="700">全局总量</tspan>，不是单卡　·　⚠️ 横轴只标阶段，<tspan font-weight="700">不是真实时长比例</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">权重 · 不动</text>
+<rect x="132" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="153" y="74" fill="#5f6368" style="font-size:14.0px">优化器 · 不动</text>
+<rect x="278" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="299" y="74" fill="#5f6368" style="font-size:14.0px">激活 · 前向堆</text>
+<rect x="424" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="445" y="74" fill="#5f6368" style="font-size:14.0px">梯度 · 反向堆</text>
+<rect x="0" y="102" width="1400" height="500" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 两条不动的，加两条形状<tspan font-weight="700">正好相反</tspan>的</tspan></text>
+<text class="svgsm" x="496" y="122" fill="#5f6368" style="font-size:11.0px">⚠️ 上面两块按 <tspan font-weight="700">global batch ＝ 1 条</tspan>的真实比例画 ——&#160;<tspan font-weight="700">batch 一变，形状就变（见 Ⓑ）</tspan></text>
+<line x1="150" y1="492" x2="1330" y2="492" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="150.0" y1="492" x2="150.0" y2="498" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="150" y="518" fill="#80868b" text-anchor="middle" style="font-size:12.5px">开始</text>
+<line x1="711.6" y1="492" x2="711.6" y2="498" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="711" y="518" fill="#80868b" text-anchor="middle" style="font-size:12.5px">前向结束</text>
+<line x1="1226.4" y1="492" x2="1226.4" y2="498" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1226" y="518" fill="#80868b" text-anchor="middle" style="font-size:12.5px">反向结束</text>
+<line x1="1320.0" y1="492" x2="1320.0" y2="498" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1320" y="518" fill="#80868b" text-anchor="middle" style="font-size:12.5px">更新完</text>
+<text class="svgsm" x="735" y="566" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">一个 step 的时间轴</tspan></text>
+<rect x="150" y="466" width="1170" height="26" rx="0" fill="#f1f3f4" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="164" y="484" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">权重　1.22 TiB　——　全程不动</tspan></text>
+<rect x="150" y="388" width="1170" height="78" rx="0" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="164" y="416" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">优化器状态　7.32 TiB</tspan></text>
+<text class="svgsm" x="164" y="442" fill="#5f6368" style="font-size:13.5px">⭐ 也全程不动 ——　四项里最大的一块，却只在最后那一瞬间被用一次</text>
+<path d="M 150.00 388.00 L 164.62 388.00 L 179.25 388.00 L 193.88 388.00 L 208.50 388.00 L 223.12 388.00 L 237.75 388.00 L 252.38 388.00 L 267.00 388.00 L 281.62 388.00 L 296.25 388.00 L 310.88 388.00 L 325.50 388.00 L 340.12 388.00 L 354.75 388.00 L 369.38 388.00 L 384.00 388.00 L 398.62 388.00 L 413.25 388.00 L 427.88 388.00 L 442.50 388.00 L 457.12 388.00 L 471.75 388.00 L 486.38 388.00 L 501.00 388.00 L 515.62 388.00 L 530.25 388.00 L 544.88 388.00 L 559.50 388.00 L 574.12 388.00 L 588.75 388.00 L 603.38 388.00 L 618.00 388.00 L 632.62 388.00 L 647.25 388.00 L 661.88 388.00 L 676.50 388.00 L 691.12 388.00 L 705.75 388.00 L 720.38 386.36 L 735.00 383.64 L 749.62 380.91 L 764.25 378.18 L 778.88 375.45 L 793.50 372.73 L 808.12 370.00 L 822.75 367.27 L 837.38 364.55 L 852.00 361.82 L 866.62 359.09 L 881.25 356.36 L 895.88 353.64 L 910.50 350.91 L 925.12 348.18 L 939.75 345.45 L 954.38 342.73 L 969.00 340.00 L 983.62 337.27 L 998.25 334.55 L 1012.88 331.82 L 1027.50 329.09 L 1042.12 326.36 L 1056.75 323.64 L 1071.38 320.91 L 1086.00 318.18 L 1100.62 315.45 L 1115.25 312.73 L 1129.88 310.00 L 1144.50 307.27 L 1159.12 304.55 L 1173.75 301.82 L 1188.38 299.09 L 1203.00 296.36 L 1217.62 293.64 L 1232.25 292.00 L 1246.88 292.00 L 1261.50 292.00 L 1276.12 292.00 L 1290.75 292.00 L 1305.38 292.00 L 1320.00 292.00 L 1320.00 292.00 L 1305.38 292.00 L 1290.75 292.00 L 1276.12 292.00 L 1261.50 292.00 L 1246.88 292.00 L 1232.25 292.00 L 1217.62 293.06 L 1203.00 294.82 L 1188.38 296.58 L 1173.75 298.34 L 1159.12 300.10 L 1144.50 301.86 L 1129.88 303.62 L 1115.25 305.39 L 1100.62 307.15 L 1086.00 308.91 L 1071.38 310.67 L 1056.75 312.43 L 1042.12 314.19 L 1027.50 315.95 L 1012.88 317.72 L 998.25 319.48 L 983.62 321.24 L 969.00 323.00 L 954.38 324.76 L 939.75 326.52 L 925.12 328.28 L 910.50 330.05 L 895.88 331.81 L 881.25 333.57 L 866.62 335.33 L 852.00 337.09 L 837.38 338.85 L 822.75 340.61 L 808.12 342.38 L 793.50 344.14 L 778.88 345.90 L 764.25 347.66 L 749.62 349.42 L 735.00 351.18 L 720.38 352.94 L 705.75 354.35 L 691.12 355.24 L 676.50 356.12 L 661.88 357.01 L 647.25 357.90 L 632.62 358.78 L 618.00 359.67 L 603.38 360.55 L 588.75 361.44 L 574.12 362.32 L 559.50 363.21 L 544.88 364.09 L 530.25 364.98 L 515.62 365.86 L 501.00 366.75 L 486.38 367.64 L 471.75 368.52 L 457.12 369.41 L 442.50 370.29 L 427.88 371.18 L 413.25 372.06 L 398.62 372.95 L 384.00 373.83 L 369.38 374.72 L 354.75 375.60 L 340.12 376.49 L 325.50 377.38 L 310.88 378.26 L 296.25 379.15 L 281.62 380.03 L 267.00 380.92 L 252.38 381.80 L 237.75 382.69 L 223.12 383.57 L 208.50 384.46 L 193.88 385.34 L 179.25 386.23 L 164.62 387.11 L 150.00 388.00" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4" stroke-linecap="round"/>
+<path d="M 150.00 388.00 L 164.62 388.00 L 179.25 388.00 L 193.88 388.00 L 208.50 388.00 L 223.12 388.00 L 237.75 388.00 L 252.38 388.00 L 267.00 388.00 L 281.62 388.00 L 296.25 388.00 L 310.88 388.00 L 325.50 388.00 L 340.12 388.00 L 354.75 388.00 L 369.38 388.00 L 384.00 388.00 L 398.62 388.00 L 413.25 388.00 L 427.88 388.00 L 442.50 388.00 L 457.12 388.00 L 471.75 388.00 L 486.38 388.00 L 501.00 388.00 L 515.62 388.00 L 530.25 388.00 L 544.88 388.00 L 559.50 388.00 L 574.12 388.00 L 588.75 388.00 L 603.38 388.00 L 618.00 388.00 L 632.62 388.00 L 647.25 388.00 L 661.88 388.00 L 676.50 388.00 L 691.12 388.00 L 705.75 388.00 L 720.38 388.00 L 735.00 388.00 L 749.62 388.00 L 764.25 388.00 L 778.88 388.00 L 793.50 388.00 L 808.12 388.00 L 822.75 388.00 L 837.38 388.00 L 852.00 388.00 L 866.62 388.00 L 881.25 388.00 L 895.88 388.00 L 910.50 388.00 L 925.12 388.00 L 939.75 388.00 L 954.38 388.00 L 969.00 388.00 L 983.62 388.00 L 998.25 388.00 L 1012.88 388.00 L 1027.50 388.00 L 1042.12 388.00 L 1056.75 388.00 L 1071.38 388.00 L 1086.00 388.00 L 1100.62 388.00 L 1115.25 388.00 L 1129.88 388.00 L 1144.50 388.00 L 1159.12 388.00 L 1173.75 388.00 L 1188.38 388.00 L 1203.00 388.00 L 1217.62 388.00 L 1232.25 388.00 L 1246.88 388.00 L 1261.50 388.00 L 1276.12 388.00 L 1290.75 388.00 L 1305.38 388.00 L 1320.00 388.00 L 1320.00 292.00 L 1305.38 292.00 L 1290.75 292.00 L 1276.12 292.00 L 1261.50 292.00 L 1246.88 292.00 L 1232.25 292.00 L 1217.62 293.64 L 1203.00 296.36 L 1188.38 299.09 L 1173.75 301.82 L 1159.12 304.55 L 1144.50 307.27 L 1129.88 310.00 L 1115.25 312.73 L 1100.62 315.45 L 1086.00 318.18 L 1071.38 320.91 L 1056.75 323.64 L 1042.12 326.36 L 1027.50 329.09 L 1012.88 331.82 L 998.25 334.55 L 983.62 337.27 L 969.00 340.00 L 954.38 342.73 L 939.75 345.45 L 925.12 348.18 L 910.50 350.91 L 895.88 353.64 L 881.25 356.36 L 866.62 359.09 L 852.00 361.82 L 837.38 364.55 L 822.75 367.27 L 808.12 370.00 L 793.50 372.73 L 778.88 375.45 L 764.25 378.18 L 749.62 380.91 L 735.00 383.64 L 720.38 386.36 L 705.75 388.00 L 691.12 388.00 L 676.50 388.00 L 661.88 388.00 L 647.25 388.00 L 632.62 388.00 L 618.00 388.00 L 603.38 388.00 L 588.75 388.00 L 574.12 388.00 L 559.50 388.00 L 544.88 388.00 L 530.25 388.00 L 515.62 388.00 L 501.00 388.00 L 486.38 388.00 L 471.75 388.00 L 457.12 388.00 L 442.50 388.00 L 427.88 388.00 L 413.25 388.00 L 398.62 388.00 L 384.00 388.00 L 369.38 388.00 L 354.75 388.00 L 340.12 388.00 L 325.50 388.00 L 310.88 388.00 L 296.25 388.00 L 281.62 388.00 L 267.00 388.00 L 252.38 388.00 L 237.75 388.00 L 223.12 388.00 L 208.50 388.00 L 193.88 388.00 L 179.25 388.00 L 164.62 388.00 L 150.00 388.00" fill="#fef7e0" stroke="#e8710a" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="501" y="338" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">激活　每条 128K 序列 106.75 GiB</tspan></text>
+<text class="svgsm" x="1015" y="365" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">梯度　1.22 TiB</tspan></text>
+<line x1="711.6" y1="344" x2="711.6" y2="492" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="5 4"/>
+<line x1="1226.4" y1="282" x2="1226.4" y2="492" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="5 4"/>
+<rect x="563.6" y="182" width="296" height="54" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="711" y="206" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐ 激活的峰</tspan></text>
+<text class="svgsm" x="711" y="226" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">前向刚结束，反向还没开始</text>
+<rect x="982.4000000000001" y="182" width="296" height="54" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1130" y="206" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐ 梯度的峰</tspan></text>
+<text class="svgsm" x="1130" y="226" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">反向刚结束，还没更新</text>
+<text class="svgsm" x="156" y="204" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">⛔⛔ 两个峰<tspan font-weight="700">不在同一时刻</tspan></tspan></text>
+<text class="svgsm" x="156" y="228" fill="#5f6368" style="font-size:13.0px">所以问「峰值在哪」之前，先问「哪一项的峰」</text>
+<text class="svgsm" x="156" y="254" fill="#174ea6" style="font-size:13.0px">⭐ 蓝的这块在 batch＝1 时很小 ——　但它是四项里唯一</text>
+<text class="svgsm" x="156" y="274" fill="#174ea6" style="font-size:13.0px"><tspan font-weight="700">跟着 batch 一起涨</tspan>的</text>
+<rect x="0" y="654" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="654" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="656" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="684" x2="1400" y2="684" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="674" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐⭐ 「激活大还是优化器状态大」——　<tspan font-weight="700">这个问题没有固定答案</tspan></tspan></text>
+<text class="svgsm" x="672" y="674" fill="#5f6368" style="font-size:11.0px">⭐ 因为常驻那块<tspan font-weight="700">不随 batch 变</tspan>，而激活<tspan font-weight="700">线性地随 batch 涨</tspan></text>
+<text class="svgsm" x="284" y="750" fill="#202124" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">常驻那一块（不随 batch 变）</tspan></text>
+<rect x="300" y="724" width="880" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="300" y="724" width="880.0" height="40" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1194" y="751" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">9.76 TiB</tspan></text>
+<text class="svgsm" x="312" y="786" fill="#5f6368" style="font-size:13.0px">权重 2 ＋ 梯度 2 ＋ 优化器 12 ＝ 16 B／参数，× 671B</text>
+<text class="svgsm" x="284" y="834" fill="#202124" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">激活 · global batch ＝ 1 条</tspan></text>
+<rect x="300" y="808" width="880" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="300" y="808" width="9.395240959999999" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1194" y="835" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">0.10 TiB</tspan></text>
+<text class="svgsm" x="312" y="870" fill="#5f6368" style="font-size:13.0px">开了全量重算的 128K 序列</text>
+<text class="svgsm" x="284" y="918" fill="#202124" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">激活 · global batch ＝ 94 条</tspan></text>
+<rect x="300" y="892" width="880" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="300" y="892" width="880.0" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1194" y="919" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">9.76 TiB</tspan></text>
+<text class="svgsm" x="312" y="954" fill="#5f6368" style="font-size:13.0px">⭐ 到这里才追平 ——　这个数就是分水岭</text>
+<text class="svgsm" x="284" y="980" fill="#a50e0e" text-anchor="end" style="font-size:18.0px"><tspan font-weight="700">⭐⭐⭐</tspan></text>
+<text class="svgsm" x="300" y="980" fill="#202124" style="font-size:15.5px"><tspan font-weight="700">所以 <tspan font-weight="700">「谁最大」不是模型的属性，是<tspan text-decoration="underline">这次训练配置</tspan>的属性</tspan> ——　换个 global batch，答案就换了。</tspan></text>
+<rect x="0" y="1036" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1036" width="4" height="146" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1036" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1063" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 顺带回答一个常被问反的问题：梯度累积省的是什么</tspan></text>
+<text class="svgsm" x="20" y="1094" fill="#174ea6" style="font-size:15.0px">⭐ <tspan font-weight="700">梯度累积改的是时间线，不是总量。</tspan>它把一个大 batch 拆成几个 micro-batch 顺序跑 ——&#160;于是<tspan font-weight="700">同时在场的激活只剩一个 micro-batch 的份</tspan>，也就是把 Ⓐ 里那座蓝色的山削矮</text>
+<text class="svgsm" x="20" y="1118" fill="#174ea6" style="font-size:15.0px">了。</text>
+<text class="svgsm" x="20" y="1142" fill="#174ea6" style="font-size:15.0px">⛔ 但它<tspan font-weight="700">一个字节都不省常驻那块</tspan>（权重 / 梯度 / 优化器状态照旧），<tspan font-weight="700">总 FLOPs 也一点没少</tspan> ——&#160;还是那么多要算。⚠️ 而且它会把梯度那一栏<tspan font-weight="700">逼成 fp32</tspan>（见 3.2）——&#160;那一栏反</text>
+<text class="svgsm" x="20" y="1166" fill="#174ea6" style="font-size:15.0px">而从 2 B 变成 4 B。</text>
+</svg><figcaption>⭐⭐⭐ <b>全专题的收口图</b> ——&nbsp;<em>前面四节各自那一块，第一次摆到<b>同一条时间轴</b>上。</em><span class="capmore"><br>⭐ <em>Ⓐ 要看的是<b>两条形状相反的带子</b>：蓝的前向堆、橙的反向堆 ——&nbsp;<b>它们的高点差了大半个 step</b>。</em><br>⭐⭐ <em>Ⓑ 三根条<b>全是当场算的</b>，脚本里带 assert ——&nbsp;<b>改任何一个输入，对不上会自己报错。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ Ⓑ 三行都是<b>当场算的</b>：671e9 × 16 B ÷ 1024⁴ ＝ 9.76 TiB；9.76 TiB × 1024 ÷ 106.75 GiB ＝ 93.7 条 ——&#160;<b>脚本里有 assert，改数会自己报错</b></p>
+<p>⚠️ 16 B／参数是 <b>ZeRO 论文的经典口径</b>（arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a>）；DeepSeek-V3 实际把一二阶矩放成了 bf16，<b>它的每参数账跟这个数不一样</b>（见 3.2）</p>
+<p>⚠️ 激活那 106.75 GiB 是<b>自己按算子推的估算</b>，没有第三方背书 ——&#160;所以那个「94 条」也是量级，不是阈值</p>
+<p>⛔ 全图算的是<b>全局总量</b>，没有任何并行切分 ——&#160;怎么把它摊到多少张卡上，是<b>专题五</b>整讲的事</p></details></figure>
+
+<h3 id="s5-1">5.1　显存：四项加起来是多少</h3>
+
+<p class="lead">⭐ 前面四节各算各的，<b>现在把它们摆到一起</b>。
+  <em>这一节全部按<b>全局总量</b>算 ——&nbsp;不分卡，怎么切是下一讲的事。</em></p>
+
+<div class="note"><p>📌 <b>常驻那一块的算式，短到可以口算：</b></p>
+<p><em><b>671e9 参数 × 16 字节 ÷ 1024⁴ ＝ 9.76 TiB。</b>
+  拆开是：权重 1.22 ＋ 梯度 1.22 ＋ 优化器状态 <b>7.32</b>。</em></p>
+<p>⭐ <em>换算一下就知道这是个什么量级 ——&nbsp;
+  <b>按每张卡 80 GiB 算，光这一块就要 125 张</b>，还没算激活、没算任何冗余。</em>
+  <span class="sub">（80 GiB 是这里<b>随手设的换算基准</b>，不是在说某款具体的卡。）</span></p></div>
+
+<p class="landing">⭐⭐ <b>注意这三项里，只有优化器状态那 7.32 TiB 是<u>纯开销</u></b>
+  ——&nbsp;<em>它既不参与前向，也不参与反向，
+  <b>只在每一步的最后那一瞬间被用一次。</b></em></p>
+
+<h3 id="s5-2">5.2　算力：那个人人都在用的 <code>6ND</code>，在长上下文下<u>严重低估</u></h3>
+
+<!-- ⭐⭐⭐ 2026-09-16。这一小节是写 §5 的时候自己撞出来的：
+     本来只想「把 6ND 代进去报个数」，代完发现它跟 <a href="#s2-3">§2.3</a> 那个 82.1% 直接打架。
+     ⭐ 判据：**一份材料里两个独立算出来的数对不上，不是麻烦，是线索。**
+       这里对不上的原因很干净 —— 6ND 数的是「跟权重相乘」那部分，
+       而 attention 的 S² 项里没有权重，它根本不在 6ND 的账里。
+     ⛔ 所以这一节的价值不在那个数，在**那个公式什么时候会骗你**。 -->
+
+<p>估训练算力最常用的一条是 <b><code>6ND</code></b>：
+  <em>每个参数、每个 token，大约 <b>6 次浮点运算</b>（前向 2、反向 4
+  ——&nbsp;正好对上<a href="#s一">第一节</a>那个 1＋2）。</em></p>
+
+<p><b>代进去（MoE 要用<u>激活</u>参数，不是总参数）：</b>
+  <em><code>6 × 37e9 × 131,072 ≈ <b>29.1 PFLOP</b></code>，一条 128K 序列。</em></p>
+
+<div class="note danger"><p>⛔⛔ <b>但这个数在 128K 上是错的 ——&nbsp;而且错得很多。</b></p>
+<p><em><code>6ND</code> 数的是<b>「跟权重相乘」</b>那部分。
+  而 attention 里 QKᵀ 和 AV 这两步<b>没有权重参与</b>
+  ——&nbsp;<b>它们根本不在这个公式的账里。</b></em></p>
+<p>⭐ <em>而<a href="#s二">第二节</a>算过：在 128K 上，
+  <b>attention 占一层前向算力的 82.1%</b>。
+  也就是说 <code>6ND</code> 数到的只是剩下那 <b>17.9%</b>。</em></p>
+<p class="landing">⭐⭐⭐ <b>反推一下：真实算力大约是 <code>6ND</code> 的
+  <u>五到六倍</u></b> ——&nbsp;<em>29.1 PFLOP 实际接近 <b>160 PFLOP</b>。</em></p>
+<p><span class="sub">⚠️ 这个倍数是<b>由 82.1% 反推的</b>（1 ÷ 0.179），
+  而 82.1% 本身是自己按算子推的 ——&nbsp;<b>当量级看</b>。
+  ⭐ 要记的不是这个倍数，是<b>那个公式什么时候会骗你：序列一长就会</b>。</span></p></div>
+
+<p class="landing">⭐ <b>反过来说，<code>6ND</code> 在短序列上是很好用的</b>
+  ——&nbsp;<em>GPT-3 那个 2,048，attention 只占百分之一点几，
+  漏掉它完全无所谓。<b>又是同一件事：不是公式错了，是前提变了。</b></em></p>
+
+<h3 id="s5-3">5.3　峰值：<u>先问「哪一项的峰」</u></h3>
+
+<p>⛔ <em><a href="#s一">第一节</a>那张山形图给过一个答案：<b>峰值在前向末尾</b>。
+  <b>那句话只在谈激活的时候成立。</b></em></p>
+<p>把四项一起画到时间轴上（就是上面那张图），
+  <em>会看到一件当时看不出来的事：<b>不同的项，峰在不同的时刻。</b></em></p>
+
+<div class="note ok"><p>⭐⭐⭐ <b>推广出去，这是一条到处能用的判据：</b></p>
+<p><em>把几条<b>形状不同</b>的曲线叠起来之后，
+  <b>总和的峰，未必落在任何一条单独的峰上。</b>
+  ——&nbsp;所以「什么时候最挤」这个问题，
+  <b>必须连着「挤的是哪一项」一起问。</b></em></p></div>
+
+<p><span class="sub">📌 <b>工程上的直接后果：</b>
+  你去查 OOM，<b>光知道「峰值 xx GiB」没用</b> ——&nbsp;
+  要知道<b>是哪一项在那一刻最大</b>，才知道该去动哪个开关。
+  <em>激活大就开重算 / 上 CP；优化器状态大就上 ZeRO ——&nbsp;
+  <b>这两条路走反了，一点用都没有。</b></em></span></p>
+
+<h3 id="s5-4">5.4　⭐ 全课落点：这张账单交给下一讲的是什么</h3>
+
+<p class="lead">专题一算完前向，结论是<b>「装不下」</b>。
+  <em>这一讲把账补全之后，那句话变得<b>具体</b>了 ——&nbsp;
+  <b>不是「装不下」，是「四项各自装不下，而且各有各的治法」。</b></em></p>
+
+<div class="note ok"><p>⭐⭐ <b>四项 ＋ 四种对策，一一对上：</b></p>
+<ul>
+  <li><b>优化器状态</b>（最大，最少被用到）→&nbsp;<em><b>切</b>（ZeRO-1）</em></li>
+  <li><b>梯度</b>（次大，反向结束才要完整的）→&nbsp;<em><b>切</b>（ZeRO-2）</em></li>
+  <li><b>权重</b>（每层都要用）→&nbsp;<em><b>最后才切</b>（ZeRO-3／FSDP），因为通信最贵</em></li>
+  <li><b>激活</b>（随 batch × 序列长度涨）→&nbsp;<em><b>重算</b>，或者按序列<b>切</b>（CP）</em></li>
+</ul>
+<p class="landing">⭐⭐⭐ <b>你会注意到四条里有三条写着同一个字：<u>切</u>。</b>
+  <em>——&nbsp;那就是<b>专题五</b>整讲要做的事：<b>切这件事本身，也是要算账的。</b></em></p></div>
+
+<p><span class="sub">⭐ <b>而这一讲真正想留下的，不是那几个数，是三条判据：</b><br>
+  ① <b>要不要高精度，看那一项「老的贡献走不走」</b>（3.2）；<br>
+  ② <b>该不该重算，看「每省一字节要付多少 FLOPs」</b>（2.3）；<br>
+  ③ <b>凡是会改变数据分片形状的参数，都不能跨规模照抄</b>（2.6）。<br>
+  <em>数字会过期，这三条不会。</em></span></p>
 
 </div></section>
 

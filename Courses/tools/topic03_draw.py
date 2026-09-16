@@ -473,7 +473,7 @@ class Fig(object):
         self.p.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%s"/>'
                       % (d, fill, stroke, sw))
 
-    def path(self, d, col=GY2, sw=1.3, dash=None, arrow=True):
+    def path(self, d, col=GY2, sw=1.3, dash=None, arrow=True, fill="none"):
         # ⛔⛔ 2026-09-13 审图抓到的最重一条：有 4 个调用方直接传**点列表**
         #   （fig3-info-law 那两条曲线、dsa-why 的「鸡生蛋」回环、swa-why 和
         #   attn-invented 各一根箭头）。于是 d="[(120.0, 184.0), …]" ——
@@ -486,9 +486,9 @@ class Fig(object):
             d = "M " + " L ".join("%.2f %.2f" % (x, y) for x, y in d)
         assert isinstance(d, str) and d[:1] in "Mm", \
             "path() 的 d 必须是 SVG 路径串或点列表，收到：%r" % (d,)
-        self.p.append('<path d="%s" fill="none" stroke="%s" stroke-width="%s" '
+        self.p.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%s" '
                       'stroke-linecap="round"%s%s/>'
-                      % (d, col, sw,
+                      % (d, fill, col, sw,
                          ' stroke-dasharray="%s"' % dash if dash else '',
                          ' marker-end="url(#ah-%s)"' % col.lstrip("#") if arrow else ''))
         if arrow:

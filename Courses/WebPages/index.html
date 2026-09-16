@@ -480,16 +480,19 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic main" id="t4">
-    <div class="head"><span class="num">04</span><span class="name"><a href="topic-04.html">反向与优化器</a></span><span class="en">Completing the Bill</span><span class="pre">前置 01</span><span class="rdy">🚧 骨架已立 · 六节已排 · 五章待写</span></div>
+    <div class="head"><span class="num">04</span><span class="name"><a href="topic-04.html">反向与优化器</a></span><span class="en">Completing the Bill</span><span class="pre">前置 01</span><span class="rdy">✅ 六节全写完 · 7 图 · 70′ · 讲义已配</span></div>
     <div class="quote">第一课只算了前向。真实要付的比那多得多 —— 而最大的一块，既不是权重，也不是激活。</div>
     <dl>
       <dt>讲什么</dt><dd>反向要多少算力（答案：让总量变成三倍）。激活为什么不能算完就扔。以及那个出人意料的答案：<b>显存里最大的一块是优化器状态</b>，模型本身反而最小。</dd>
       <dt>为什么在这</dt><dd>前向的账是干净的事实，适合开场；反向牵扯到策略选择，放在读者已经会算之后再讲。</dd>
       <dt>垫了什么</dt><dd>一张完整的账单 —— 并行策略要切的就是它。而且看完这张账单，ZeRO 那套分级设计就不用背了。</dd>
-      <dt>怎么排的</dt><dd>⭐ 这一讲<b>按「谁最大」讲，不按训练流程讲</b>。流程的顺序是前向 → 反向 → 更新，可那个顺序会让<b>最大的那一块最后才出场</b> —— 而它恰恰是决定一切的那一块。六节：前向只是半张账单 · 反向要付什么 · 第一个真正的「决策」· 真正的大头：优化器状态 · 这张账单决定了并行策略长什么样 · 一个完整 step 的总账。</dd>
+      <dt>怎么排的</dt><dd>⭐ 这一讲<b>按「谁最大」讲，不按训练流程讲</b>。流程的顺序是前向 → 反向 → 更新，可那个顺序会让<b>最大的那一块最后才出场</b> —— 而它恰恰是决定一切的那一块。六节：前向只是半张账单 · 反向要付什么 · 第一个真正的「决策」· 优化器 · 这张账单决定了并行策略长什么样 · 一个完整 step 的总账。<br>
+        ⭐ 跟专题三不同，<b>这一讲可以跳着讲</b>（它是账单不是故事线）—— 只有一处顺序不能倒：「激活为什么扔不掉」必须在那笔重算交易之前立住。</dd>
+      <dt>三条判据</dt><dd>数字会过期，这三条不会：① <b>要不要高精度，看那一项「老的贡献走不走」</b>（滑动平均有遗忘，所以 bf16 扛得住；主权重跨十万步累加，必须 fp32）；② <b>该不该重算，看「每省一字节要付多少 FLOPs」</b> —— 线性层的这个数恰好等于输入宽度，而 attention 的随序列长度线性上升，两条必然相交；③ <b>凡是会改变数据分片形状的参数，都不能跨规模照抄</b>，序列长度也在这个名单里。</dd>
     </dl>
     <div class="docs">
-      <a class="pri" href="topic-04.html">课件 · 骨架 →</a>
+      <a class="pri" href="topic-04.html">课件 →</a>
+      <a href="topic-04-lecture.html">讲义（授课稿）</a>
     </div>
   </div>
 

@@ -110,6 +110,11 @@ echo "▸ 专题四 教材"
 for s in topic04-fig-*.py; do python3 "$s"; done
 python3 topic04-build.py
 
+echo ""
+echo "▸ 专题四 讲义"
+# ⛔ 必须排在教材之后 —— 讲义的 board cue 要跟成品 topic-04.html 对账。
+python3 topic04-build-lecture.py
+
   step "专题八 教材"
   python3 topic08-build.py
 
