@@ -648,8 +648,49 @@ def add_figonly_toggle(html):
     return html
 
 
+def lint_headings_inside_sections(html, label):
+    """每一个 <h3> 都必须落在某个 <section> 里面。
+
+    ⛔⛔ 2026-09-17：这个形状**今晚栽了第三次**。
+      往正文里插一小节，锚点选在 `<section id="s四">` 前面 ——&nbsp;
+      看着是「插在第四节之前」，实际插在了**上一节的 `</section>` 之后**，
+      于是那一整节浮在所有 section 外面：
+      标签配平、查重、版面体检**全部照常通过**，
+      浏览器里它也照样显示（只是丢了 section 的样式和折叠规则）。
+
+    ⭐⭐⭐ 判据：**小节标题不是容器边界，section 才是。**
+      往 HTML 里插内容，锚点必须选「同一个容器内」的元素。
+
+    ⭐ 前两次都是靠肉眼发现的 ——&nbsp;而肉眼只在「恰好去看了」的时候有效。
+      所以这次做成硬失败：**它是结构错误，不是观感问题。**
+    """
+    # ⛔⛔ 必须先把**注释 / script / style** 整块挖掉，否则里面写着的标签会被当真。
+    #   实测：专题三有一段注释正文是「中间只隔一个 </section>，读者只走了一屏」——
+    #   那个字面量让计数器变成负的，于是那一页 32 个 <h3> 全被误报成「在 section 外」。
+    #   ⭐⭐⭐ 这是**今晚第三个**栽在同一件事上的检查器
+    #     （前两个：readability 的段落墙、xref 的计数标记）。
+    #     判据：**任何按标签扫 HTML 的检查器，第一行都得是「先挖掉不渲染的部分」。**
+    #     它不是可选的预处理，它是这类检查器的**前提条件**。
+    clean = re.sub(r'<!--.*?-->', '', html, flags=re.S)
+    clean = re.sub(r'<(script|style)\b.*?</\1>', '', clean, flags=re.S)
+    depth, bad = 0, []
+    for m in re.finditer(r'<section\b|</section>|<h3\b[^>]*>(.{0,40})', clean, re.S):
+        t = m.group(0)
+        if t.startswith('</section'):
+            depth -= 1
+        elif t.startswith('<section'):
+            depth += 1
+        elif depth <= 0:
+            bad.append(re.sub(r'<[^>]+>', '', m.group(1) or '')[:30])
+    assert not bad, (
+        "%s：有 %d 个 <h3> 掉在所有 <section> 外面 —— %s\n"
+        "   ⭐ 往 HTML 里插内容，锚点要选**同一个容器内**的元素；"
+        "小节标题不是容器边界，section 才是。" % (label, len(bad), bad[:3]))
+
+
 def finish(html, out_path, sections, label):
     """锚点 → 吸顶目录 → arXiv 自动链接 → 写盘 → 打一行回执。"""
+    lint_headings_inside_sections(html, label)
     html = anchorize(html)
     html = build_nav(html)
     import course_links as _CL
