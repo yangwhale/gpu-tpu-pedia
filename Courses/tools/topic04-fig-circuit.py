@@ -195,30 +195,64 @@ def main():
     f._pan = None
 
     # ══════════ Ⓒ 这张图跟这一讲的关系 ══════════════════════════════
-    PH3 = 222
+    PH3 = 296
     py3 = f.panel(0, py2 + PH2 + 20, W, PH3,
                   "Ⓒ ⭐⭐⭐ 而中间那个门，"
                   "<tspan font-weight=\"700\">正是这一整讲的账单的源头</tspan>", RD,
                   sub="⛔ 别跳过这一格 ——&#160;"
                       "<tspan font-weight=\"700\">后面所有关于「激活」的话都从这儿来</tspan>")
 
-    f.box(70, py3 + 40, 560, 158, "#fef7e0", OR, 8)
-    f.t(350, py3 + 76, "乘法门反向的时候", OR, True, 18, "middle")
-    f.t(350, py3 + 110, "<tspan font-weight=\"700\">要用到前向那两个输入的值</tspan>",
-        INK, True, 17, "middle")
-    f.t(350, py3 + 146, "c 的梯度 ＝ q，而 q 是前向算出来的", GY, size=13.5, anchor="middle")
-    f.t(350, py3 + 176, "⛔ 所以 q <tspan font-weight=\"700\">不能扔</tspan>",
-        RD, True, 16, "middle")
+    # ⭐⭐⭐ 2026-09-18 重画。旧版是两个文字框：「乘法门反向要用前向值」
+    #   →「乘以几百亿次 ＝ 激活账单」。ink 全 0，把字删掉什么都不剩。
+    #   ⭐⭐ 而这一格讲的是一个 **scale-up**：一个门 → 复制很多份 → 一大片。
+    #     「一大片」这件事只能靠**真的画一大片** ——&#160;
+    #     写「几百亿次」是一个数字，不是一个画面。
+    #   ⭐⭐⭐ 判据：**当论点是「这东西多得吓人」时，
+    #     唯一能传达它的是「多到一眼看不完」的画面本身**，不是那个数字。
+    #   ⭐ 而且左边那一个方块和右边那一片里的每一个**用同一组尺寸** ——&#160;
+    #     同一把尺子量出来的「1 个」和「一大片」，那个比例才是真的。
+    #     （跟 fig4-slider Ⓐ 两把尺共用一种格子是同一条判据。）
+    BW, BH = 20.0, 13.0          # ⭐ 左右两边共用这一组 ——&#160;别各写各的
+    GAPX, GAPY = 23.0, 17.0
+    COLS, ROWS = 25, 7
+    RX, RY = 748.0, py3 + 62
+    assert RX + COLS * GAPX < W - 20, "那一片排不下，会撞到右边缘"
 
-    f.t(670, py3 + 118, "→", GY2, True, 22, "middle")
+    # ── 左：就那一个乘法门（骨架跟 Ⓑ 那三格一致） ─────────────────
+    gx, gy = 268, py3 + 96
+    for dy in (-34, 34):
+        f.line(128, gy + dy, gx - 34, gy + dy * 0.45, GY2, 1.3)
+    f.box(gx - 30, gy - 30, 60, 60, "#fff", OR, 30, sw=2)
+    f.t(gx, gy + 8, "×", OR, True, 20, "middle")
+    f.line(gx + 34, gy, gx + 96, gy, GY2, 1.3)
 
-    f.box(710, py3 + 40, 630, 158, "#fce8e6", RD, 8)
-    f.t(1025, py3 + 76, "把这一个门乘以几百亿次", RD, True, 18, "middle")
-    f.t(1025, py3 + 112, "<tspan font-weight=\"700\">就是那张「激活」的账单</tspan>",
-        INK, True, 18, "middle")
-    f.t(1025, py3 + 150, "⭐ 激活不是「框架顺手缓存的东西」", GY, size=13.5, anchor="middle")
-    f.t(1025, py3 + 176, "它是<tspan font-weight=\"700\">反向的数学要求它在场</tspan>",
-        RD, True, 15, "middle")
+    # 门底下挂着那个**扔不掉的**前向值
+    f.line(gx, gy + 34, gx, gy + 62, RD, 1.3, dash="4 4", arrow=False)
+    f.box(gx - BW / 2, gy + 62, BW, BH, "#fce8e6", RD, 3, sw=1.6)
+    f.t(gx, gy + 100, "反向要乘它", RD, True, 14, "middle")
+    f.t(gx, gy + 122, "<tspan font-weight=\"700\">所以扔不掉</tspan>",
+        INK, size=13.5, anchor="middle")
+    f.t(gx, py3 + 46, "就这<tspan font-weight=\"700\">一个</tspan>门",
+        OR, True, 15, "middle")
+
+    # ── 中：× 每一层每一步 ────────────────────────────────────────
+    f.line(560, gy + 30, 700, gy + 30, GY2, 2.0)
+    f.t(630, gy + 16, "每一层", GY, True, 13.5, "middle")
+    f.t(630, gy + 64, "每一步", GY, True, 13.5, "middle")
+
+    # ── 右：一大片。数量本身就是论点 ──────────────────────────────
+    for r in range(ROWS):
+        for c in range(COLS):
+            f.box(RX + c * GAPX, RY + r * GAPY, BW, BH, "#fce8e6", RD, 3, sw=0.8)
+    f.t(RX, py3 + 46, "……于是变成<tspan font-weight=\"700\">这么一片</tspan>",
+        RD, True, 15)
+    f.t(RX + COLS * GAPX / 2.0, RY + ROWS * GAPY + 24,
+        "⭐ 每一个小方块都是<tspan font-weight=\"700\">同样一件事</tspan>"
+        "　——　某一层某一步存下来的那个前向值", GY, size=13, anchor="middle")
+    f.t(RX + COLS * GAPX / 2.0, RY + ROWS * GAPY + 50,
+        "⛔ 所以激活<tspan font-weight=\"700\">不是「框架顺手缓存的东西」</tspan>"
+        "　——　是<tspan font-weight=\"700\">反向的数学要求它在场</tspan>",
+        RD, True, 14.5, "middle")
     f._pan = None
 
     yb = f.band(py3 + PH3 + 20, "ok",

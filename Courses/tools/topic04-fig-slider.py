@@ -87,12 +87,65 @@ def main():
 
     f.t(430, KY + 116, "→", GY2, True, 26, "middle")
 
-    f.box(490, py + 66, 300, 190, "#fff", GY2, 8)
-    f.t(640, py + 104, "读数（loss）", GY, True, 15, "middle")
-    f.t(640, py + 152, "5.00", GY2, size=22, anchor="middle", mono=True)
-    f.t(640, py + 182, "↓", GY2, True, 18, "middle")
-    f.t(640, py + 214, "5.03", INK, True, 24, "middle", mono=True)
-    f.t(640, py + 242, "变了 ＋%.2f" % D_OUT, BL, True, 13.5, "middle")
+    # ⭐⭐⭐ 2026-09-18 加料。这儿原来是个纯文字框（5.00 ↓ 5.03），ink 只有 1。
+    #   ⛔ 而「动一格，它动三格」这句话**本身就是一个长度比** ——&#160;
+    #     长度比就该用两段真的长度画出来，不是写两个数让读者去减。
+    #   ⛔ 先试过李宏毅那张「小人站曲线上、脚下一条切线」的装置（见素材库 🅑①），
+    #     放弃的原因很具体：**斜率 3 要求纵轴的像素比例尺是横轴的 3 倍**，
+    #     否则读者用眼睛量出来是 0.63 不是 3 ——&#160;而面板是宽扁的，放不下。
+    #     ⭐⭐ 判据：**一张请读者「用眼睛量比例」的图，两个轴的比例尺必须相同；
+    #       做不到就别用坐标系，换一个不需要两个轴的画法。**
+    #   ⭐ 于是换成两把**共用同一种格子**的竖尺：一格都代表 0.01，
+    #     参数那把走 1 格，loss 那把走 3 格 ——&#160;比例就是格数，不用换算。
+    GRID = 24.0
+    NG = 8                            # 尺子一共几格
+    UNIT = D_KNOB                     # 两把尺的一格都是这个
+    SX_P, SX_L = 560, 742
+    STOP = py + 72
+    N_P = int(round(D_KNOB / UNIT))   # 参数走几格
+    N_L = int(round(D_OUT / UNIT))    # loss 走几格
+    # ⭐⭐ 这一格的立论：两段粗条的**像素长度之比**必须正好是那个兑换率
+    assert abs((N_L * GRID) / (N_P * GRID) - RATE_A) < 1e-9, \
+        "两根条的长度比对不上导数 —— 那这张图就在撒谎"
+    assert N_L <= NG and N_P >= 1, "格数超出尺子范围了"
+
+    def ruler(x, name, col, n_move, y_end_grid):
+        """一把十格的竖尺。⭐ 两把用同一个 GRID，「1 格 vs 3 格」才可比。"""
+        f.box(x - 5, STOP, 10, NG * GRID, "#f1f3f4", GY2, 5)
+        for i in range(NG + 1):
+            f.line(x - 15, STOP + i * GRID, x - 7, STOP + i * GRID,
+                   GY2, 0.9, arrow=False)
+        # ⛔ 终点定在从下数第 k 格，起点就在它下方 n 格 ——&#160;
+        #   所以必须 k ≥ n，否则起点会**跑出尺子底部**。
+        #   ⭐ 第一版把两根都定在第 2 格，红条走 3 格，直接戳穿了尺底。
+        #     判据：**凡是「从某点往回退 n 步」的画法，都要先问退得出去吗。**
+        assert y_end_grid >= n_move, \
+            "终点太靠下，往回退 %d 格会戳出尺子" % n_move
+        y_end = STOP + (NG - y_end_grid) * GRID
+        y_beg = y_end + n_move * GRID
+        # 起点空心、终点实心 ——&#160;中间那根粗条就是「动了多少」
+        f.box(x - 17, y_beg - 2.5, 34, 5, "#fff", GY2, 2)
+        f.box(x - 7, y_end, 14, n_move * GRID, col, col, 3)
+        f.box(x - 20, y_end - 3, 40, 6, col, col, 3)
+        f.t(x, STOP - 14, name, col, True, 14.5, "middle")
+        # ⚠️ 一格那根太短，标签贴上去会跟「终点同高」那条虚线挤在一起 ——
+        #    短的挪到条的**下方**，长的才放右侧正中
+        if n_move <= 1:
+            f.t(x + 20, y_beg + 20, "%d 格" % n_move, col, True, 14.5)
+        else:
+            f.t(x + 26, y_end + n_move * GRID / 2.0 + 5,
+                "%d 格" % n_move, col, True, 14.5)
+        return y_end
+
+    END_G = 4                         # 两根条的终点都落在从下数第 4 格
+    ruler(SX_P, "这个参数", BL, N_P, END_G)
+    ruler(SX_L, "loss", RD, N_L, END_G)
+    # 两把尺的终点画在同一高度，眼睛才好比那两根条
+    f.line(SX_P + 20, STOP + (NG - END_G) * GRID, SX_L - 22, STOP + (NG - END_G) * GRID,
+           GY2, 0.9, dash="4 4", arrow=False)
+    f.t((SX_P + SX_L) / 2.0, STOP - 34,
+        "两把尺<tspan font-weight=\"700\">一格都是 %.2f</tspan>" % UNIT,
+        GY2, size=12.5, anchor="middle")
 
     f.box(850, py + 66, 500, 190, "#e8f0fe", BL, 8)
     f.t(1100, py + 104, "那这个旋钮的<tspan font-weight=\"700\">导数</tspan>就是",
