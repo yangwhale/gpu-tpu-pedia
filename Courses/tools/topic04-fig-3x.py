@@ -42,32 +42,84 @@ def main():
         [(BL, "前向 1 次"), (RD, "反向 2 次"), (GR, "合计 3 次")])
 
     # ══════════ Ⓐ 一层里的三次矩阵乘 ═════════════════════════════
-    PH = 356
+    PH = 620
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 把一层摊开 ——　<tspan font-weight=\"700\">"
                  "总共只有三次矩阵乘，一次向前、两次向后</tspan>", BL,
                  sub="⚠️ 只数矩阵乘：norm / 激活 / 偏置在这笔账里可以忽略")
 
-    STEPS = (
-        (BL, "#e8f0fe", "① 前向", "算这一层的输出",
-         "用：这一层的输入 × 这一层的权重", "→ 输出，交给下一层"),
-        (RD, "#fce8e6", "② 反向 · 权重梯度", "算「我这块权重该怎么改」",
-         "用：上游传来的敏感度 × 前向存下来的输入", "→ 这块权重的梯度"),
-        (RD, "#fce8e6", "③ 反向 · 传给下游", "算「上游该收到什么」",
-         "用：上游传来的敏感度 × 这一层的权重", "→ 敏感度，交给前一层"),
+    # ⛔⛔ 2026-09-18 R10 重画。原来这一格是**三张卡片**，
+    #   每张卡里画个白框、框里写「一次矩阵乘」——&#160;
+    #   ⭐ 一格在**数矩阵乘**，却一个矩阵都没画，字写着「一次矩阵乘」。
+    #   这正是那条判据要抓的东西：**把文字删掉，这一格什么都不剩。**
+    # ⭐⭐ 现在改成画**三次真的矩阵乘**，而且三个形状**按真实维度成比例**。
+    #   于是两件事一眼就看出来了：
+    #     ① 三次乘法长得不一样，可**每次的乘加次数完全相同**（都是 T·d·d）
+    #        ——&#160;「1 ＋ 2 ＝ 3」不再是算术，是**三块等面积的积**。
+    #     ② 第 ② 次那个操作数是**前向存下来的输入** ——&#160;
+    #        用虚线框 ＋ 一根指回上一行的箭头画出来。
+    #        **激活为什么扔不掉，这根箭头就是全部答案。**
+    T_PX, D_PX = 118.0, 78.0          # token 维 / 特征维，各占多少像素
+
+    # ⭐ 三次乘法的形状（行 × 列，单位就是上面那两个尺度）
+    #   FLOPs 都 ∝ 行 × 内维 × 列 ——&#160;脚本当场验它们真的相等
+    MULS = (
+        (BL, "① 前向", "算这一层的输出",
+         ("输入 X", T_PX, D_PX, False), ("权重 W", D_PX, D_PX, False),
+         ("输出 Y", T_PX, D_PX, False), "→ 交给下一层"),
+        (RD, "② 反向 · 权重梯度", "算「我这块权重该怎么改」",
+         ("输入 Xᵀ", D_PX, T_PX, True), ("上游敏感度 dY", T_PX, D_PX, False),
+         ("权重梯度 dW", D_PX, D_PX, False), "→ 交给优化器"),
+        (RD, "③ 反向 · 传给下游", "算「前一层该收到什么」",
+         ("上游敏感度 dY", T_PX, D_PX, False), ("权重 Wᵀ", D_PX, D_PX, False),
+         ("新敏感度 dX", T_PX, D_PX, False), "→ 交给前一层"),
     )
-    for i, (col, fill, tag, what, use, out) in enumerate(STEPS):
-        x = 48 + i * 440
-        f.box(x, py + 34, 416, 254, fill, col, 8)
-        f.box(x, py + 34, 416, 4, col, col, 2)
-        f.t(x + 208, py + 70, tag, col, True, 19, "middle")
-        f.t(x + 208, py + 98, what, INK, True, 15.5, "middle")
-        f.box(x + 20, py + 120, 376, 62, "#fff", col, 6)
-        f.t(x + 208, py + 148, "一次矩阵乘", col, True, 16, "middle")
-        f.t(x + 208, py + 212, use, GY, size=13, anchor="middle")
-        f.t(x + 208, py + 250, out, col, True, 14, "middle")
-        if i:
-            f.t(x - 12, py + 162, "＋", GY2, True, 22, "middle")
+    # ⭐ 三次的乘加次数必须真的相等 ——&#160;这是「1＋2＝3」成立的全部前提
+    _flops = [a[1] * a[2] * b_[2] for _, _, _, a, b_, _c, _n in MULS]
+    assert len(set(round(v) for v in _flops)) == 1, \
+        "三次乘法的乘加次数必须相等，现在是 %s" % _flops
+
+    LX, MX0, ROW = 40, 300, 168
+    for i, (col, tag, what, A, B, C, out) in enumerate(MULS):
+        cy = py + 78 + i * ROW
+        f.t(LX, cy + 6, tag, col, True, 17)
+        f.t(LX, cy + 30, what, GY, size=12.5)
+
+        x = MX0
+        for k, (name, h, w, borrowed) in enumerate((A, B, C)):
+            top = cy + 18 - h / 2.0
+            # ⭐ 真的画一个矩形，而且**高宽按维度成比例**
+            f.box(x, top, w, h, "#fff" if not borrowed else "#fef7e0",
+                  OR if borrowed else col, 4,
+                  sw=2.2 if borrowed else 1.4, dash="5 3" if borrowed else None)
+            # 里面拉几道网格线，让它看起来像个矩阵而不是个方块
+            for g in range(1, 4):
+                f.line(x, top + h * g / 4.0, x + w, top + h * g / 4.0,
+                       GY2, 0.6, arrow=False)
+                f.line(x + w * g / 4.0, top, x + w * g / 4.0, top + h,
+                       GY2, 0.6, arrow=False)
+            f.t(x + w / 2.0, top + h + 18, name,
+                OR if borrowed else col, True, 12.5, "middle")
+            x += w
+            if k < 2:
+                f.t(x + 22, cy + 24, "×" if k == 0 else "＝", GY2, True, 20, "middle")
+                x += 44
+        f.t(x + 24, cy + 24, out, col, size=13)
+
+        if i == 1:      # ⭐⭐⭐ 那根把激活账单钉死的箭头
+            bx = MX0 + T_PX / 2.0
+            f.line(bx, cy - 48, bx, cy - ROW + 62, OR, 2.0)
+            f.t(bx + 14, cy - 34,
+                "⭐ 这一块<tspan font-weight=\"700\">不是新算的</tspan>"
+                "　——　是 ① 里那个输入<tspan font-weight=\"700\">被存下来了</tspan>",
+                OR, True, 13.5)
+
+    f.t(700, py + 78 + 3 * ROW - 24,
+        "⭐⭐⭐ 三块积的<tspan font-weight=\"700\">面积一样大</tspan>"
+        "　——　所以 <tspan font-weight=\"700\">1 ＋ 2 ＝ 3</tspan> 不是个比喻，"
+        "是<tspan font-weight=\"700\">数出来的</tspan>。"
+        "⛔ 而 ② 那块虚线的，就是<tspan font-weight=\"700\">激活扔不掉的全部原因</tspan>。",
+        INK, size=15, anchor="middle")
     f._pan = None
 
     # ══════════ Ⓑ 岔路：一进两出 ═════════════════════════════════
