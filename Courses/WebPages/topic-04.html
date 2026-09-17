@@ -2789,9 +2789,107 @@ body.figonly section h3{margin-top:34px}
 
 <h4>这个量纲问题一暴露，SGD 的根本毛病也就出来了</h4>
 
-<p>全网络共用一个学习率，可不同参数的梯度尺度可能差好几个数量级。
-  <em>结果就是：梯度大的那些被一步走过头，梯度小的那些几乎不动。
-  ⛔ 你调学习率，其实是在这两头之间找一个<b>都不太满意的折中</b>。</em></p>
+<p class="lead">全网络共用<b>一个</b>学习率，可不同参数的梯度尺度能差好几个数量级。
+  <em>——&nbsp;<b>下面两条轨迹用的是同一个谷、同一套规则，只改了学习率。</b></em></p>
+
+<figure class="fbox fwide" id="fig-onelr"><svg viewBox="0 0 1400 1110" width="100%" role="img" aria-label="把两个参数放在一起看：一个方向陡、一个方向平。用同一个学习率，大 5% 那条在陡的方向上来回弹、越弹越大，直接冲出画面；小 5% 那条弹幅在收，可它也是一路锯齿着蹭过去的，每一步大半的位移花在左右横跳上，真正朝谷底去的只有一点点。两条轨迹的学习率只差一成，你能下手的区间就这么窄。更要紧的是中间也没有好的：在不发散的前提下能用的最大学习率，让平方向走完一半要零点三七乘以陡峭比那么多步 —— 图上这个谷是九步，真实模型上是三百多步。这不是调参没调好，是谷的形状决定的"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">一个学习率<tspan font-weight="700">伺候不了所有参数</tspan>　——　而中间那个「折中」也不存在</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 同一个谷、同一套规则，只改学习率 ——&#160;<tspan font-weight="700">两条轨迹都是真跑出来的</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">大 5%：炸</text>
+<rect x="117" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="138" y="74" fill="#5f6368" style="font-size:14.0px">小 5%：慢</text>
+<rect x="234" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="255" y="74" fill="#5f6368" style="font-size:14.0px">中间：也不行</text>
+<rect x="0" y="102" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 这个谷<tspan font-weight="700">一个方向陡、一个方向平</tspan>　——　陡峭程度差 <tspan font-weight="700">25 倍</tspan></tspan></text>
+<text class="svgsm" x="865" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 竖着弹的是陡的那个参数，横着爬的是平的那个</text>
+<ellipse cx="1080.0" cy="344.0" rx="159.3" ry="45.7" fill="none" stroke="#80868b" stroke-width="1" stroke-dasharray="3 4"/>
+<ellipse cx="1080.0" cy="344.0" rx="290.9" ry="83.5" fill="none" stroke="#80868b" stroke-width="1" stroke-dasharray="3 4"/>
+<ellipse cx="1080.0" cy="344.0" rx="436.4" ry="125.2" fill="none" stroke="#80868b" stroke-width="1" stroke-dasharray="3 4"/>
+<ellipse cx="1080.0" cy="344.0" rx="581.9" ry="167.0" fill="none" stroke="#80868b" stroke-width="1" stroke-dasharray="3 4"/>
+<line x1="180" y1="344" x2="1352" y2="344" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<rect x="1075" y="339" width="10" height="10" rx="5" fill="#202124" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="1094" y="366" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">谷底</tspan></text>
+<path d="M 712.0 245.0 L 740.0 433.1 L 765.8 263.8 L 789.7 416.2 L 811.8 279.0 L 832.1 402.5 L 851.0 291.4 L 868.4 391.4 L 884.5 301.4 L 899.3 382.4 L 913.1 309.5 L 925.7 375.1 L 937.5 316.0 L 948.3 369.2 L 958.3 321.4 L 967.6 364.4 L 976.1 325.7 L 984.0 360.5 L 991.3 329.1 L 998.0 357.4 L 1004.3 332.0 L 1010.0 354.8 L 1015.3 334.3" fill="none" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="708.5" y="241.5" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="736.468" y="429.59999999999997" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="762.310432" y="260.31000000000006" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="786.188839168" y="412.67099999999994" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="808.252487391232" y="275.5461" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="828.6392983494984" y="398.95850999999993" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="847.4767116749365" y="287.88734100000005" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="864.8824815876412" y="387.85139309999994" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="880.9654129869806" y="297.88374621" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="895.82604159997" y="378.85462841099996" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="909.5572624383723" y="305.98083443010006" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="922.2449104930561" y="371.56724901290994" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="933.9682972955837" y="312.53947588838105" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="944.8007067011195" y="365.66447170045706" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="954.8098529918343" y="317.85197546958864" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="964.058304164455" y="360.8832220773702" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="972.6038730479563" y="322.1551001303668" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="980.4999786963117" y="357.0104098826699" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="987.795980315392" y="325.6406311055971" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="994.5374858114221" y="353.8734320049626" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="1000.7666368897541" y="328.4639111955337" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="1006.5223724861328" y="351.3324799240197" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="1011.8406721771867" y="330.7507680683823" width="7" height="7" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<path d="M 712.0 245.0 L 742.9 452.9 L 771.2 224.2 L 797.2 475.8 L 820.9 199.1 L 842.7 503.4" fill="none" stroke="#d93025" stroke-width="2.4" stroke-linecap="round"/>
+<rect x="708.5" y="241.5" width="7" height="7" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="739.412" y="449.40000000000003" width="7" height="7" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="767.727392" y="220.70999999999998" width="7" height="7" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="793.664291072" y="472.269" width="7" height="7" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="817.422490621952" y="195.55409999999995" width="7" height="7" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="839.185001409708" y="499.94049000000007" width="7" height="7" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<line x1="842.685001409708" y1="503.44049000000007" x2="816.685001409708" y2="532.0" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="806" y="528" fill="#a50e0e" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">⛔ 出画面了</tspan></text>
+<rect x="705.0" y="238.0" width="14" height="14" rx="7" fill="#fff" stroke="#202124" stroke-width="1.8"/>
+<text class="svgsm" x="728" y="235" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">起点</tspan></text>
+<text class="svgsm" x="80" y="194" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">⛔ 红：学习率只<tspan font-weight="700">大 5%</tspan></tspan></text>
+<text class="svgsm" x="80" y="216" fill="#5f6368" style="font-size:12.5px">每弹一次幅度更大 ——　收不住</text>
+<text class="svgsm" x="80" y="328" fill="#80868b" style="font-size:12.0px">↑ 竖直 ＝ 陡的那个参数</text>
+<text class="svgsm" x="80" y="358" fill="#80868b" style="font-size:12.0px">→ 横向 ＝ 平的那个参数</text>
+<text class="svgsm" x="80" y="462" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">✅ 蓝：学习率只<tspan font-weight="700">小 5%</tspan></tspan></text>
+<text class="svgsm" x="80" y="484" fill="#5f6368" style="font-size:12.5px">不炸了 ——　可你看那串锯齿：</text>
+<text class="svgsm" x="80" y="504" fill="#5f6368" style="font-size:12.5px"><tspan font-weight="700">每一步大半的力气花在左右横跳上</tspan></text>
+<text class="svgsm" x="80" y="524" fill="#5f6368" style="font-size:12.5px">真正朝谷底去的只有那一丁点横向位移</text>
+<text class="svgsm" x="700" y="564" fill="#202124" text-anchor="middle" style="font-size:15.0px">⭐⭐⭐ 两条轨迹的学习率<tspan font-weight="700">只差一成</tspan>　——　一条炸了，一条慢得让人着急。<tspan font-weight="700">你能下手的区间就这么窄。</tspan></text>
+<rect x="0" y="622" width="1400" height="310" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="622" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="624" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="652" x2="1400" y2="652" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="642" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐⭐⭐ 那<tspan font-weight="700">取中间那个值</tspan>呢　——　问题就在这儿：<tspan font-weight="700">中间也没有好的</tspan></tspan></text>
+<text class="svgsm" x="921" y="642" fill="#5f6368" style="font-size:11.0px">⭐ 下面三行不是估的，是<tspan font-weight="700">算出来的</tspan></text>
+<rect x="50" y="696" width="1300" height="56" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="50" y="696" width="5" height="56" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="86" y="731" fill="#a50e0e" style="font-size:15.5px"><tspan font-weight="700">再大 5%</tspan></text>
+<text class="svgsm" x="340" y="731" fill="#202124" style="font-size:15.0px"><tspan font-weight="700">陡的方向直接发散</tspan></text>
+<text class="svgsm" x="700" y="731" fill="#5f6368" style="font-size:13.0px">门槛卡死在 <tspan font-weight="700">2 ÷ 陡峭程度</tspan>　——　跟你想不想快无关</text>
+<rect x="50" y="764" width="1300" height="56" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="50" y="764" width="5" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="86" y="799" fill="#174ea6" style="font-size:15.5px"><tspan font-weight="700">就取最大的安全值</tspan></text>
+<text class="svgsm" x="340" y="799" fill="#202124" style="font-size:15.0px"><tspan font-weight="700">平的方向走完<tspan font-weight="700">一半</tspan></tspan></text>
+<text class="svgsm" x="700" y="799" fill="#5f6368" style="font-size:13.0px">要 <tspan font-weight="700">0.37 × 陡峭比</tspan> 步　——　图上这个谷（比 25）＝ <tspan font-weight="700">9 步</tspan></text>
+<rect x="50" y="832" width="1300" height="56" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.8"/>
+<rect x="50" y="832" width="5" height="56" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="86" y="867" fill="#681da8" style="font-size:15.5px"><tspan font-weight="700">⭐ 而真实模型呢</tspan></text>
+<text class="svgsm" x="340" y="867" fill="#202124" style="font-size:15.0px"><tspan font-weight="700">梯度尺度差几个数量级</tspan></text>
+<text class="svgsm" x="700" y="867" fill="#5f6368" style="font-size:13.0px">比值按 <tspan font-weight="700">1000</tspan> 算，同一条公式给出 <tspan font-weight="700">364 步</tspan>　——　而这<tspan font-weight="700">已经是最快的了</tspan></text>
+<text class="svgsm" x="700" y="924" fill="#202124" text-anchor="middle" style="font-size:15.0px">⭐⭐⭐ 所以这不是<tspan font-weight="700">「参数没调好」</tspan>　——　<tspan font-weight="700">是这个谷的形状决定的，而形状是模型给你的，不是你能选的。</tspan></text>
+<rect x="0" y="982" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="982" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="982" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1009" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 出路只有一条：别再找那个「最好的全局学习率」了，它不存在</tspan></text>
+<text class="svgsm" x="20" y="1040" fill="#b06000" style="font-size:15.0px">⭐⭐⭐ <tspan font-weight="700">给每个参数配它自己的那一个。</tspan>——&#160;而「它自己的」该是多少？下一格给标准答案（<tspan font-weight="700">一阶导 ÷ 二阶导</tspan>），再往后讲为什么真实训练里只能<tspan font-weight="700">估</tspan>它。</text>
+<text class="svgsm" x="20" y="1064" fill="#b06000" style="font-size:15.0px">⛔ 代价也在这儿：<tspan font-weight="700">「每个参数一个」意味着要为每个参数存东西</tspan>　——&#160;这一讲开头那笔 12 字节的优化器状态，根子就是这张图逼出来的。</text>
+</svg><figcaption>⭐⭐⭐ <b>这张图替掉的是一句纯文字的断言</b> ——&nbsp;<em>「梯度尺度差好几个数量级」听着像句套话，<b>画出来就是红色那条弹着弹着飞出了画面。</b></em><span class="capmore"><br>⭐⭐ <em>Ⓑ 才是重点：<b>中间那个「折中」根本不存在。</b>在不发散的前提下能用的<b>最大</b>学习率，让平的那个方向走完一半也要几百步 ——&nbsp;<b>这不是调参没调好，是谷的形状决定的。</b></em><br>⭐ <em>两条轨迹都是<b>真跑出来的</b>，三个数都有 assert 盯着。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 「同一个学习率，大了第二次更新就飞出地图之外、小了更新一百次还走不到谷底，所以不同参数应该有不同的 learning rate」这个两难取自 <b>李宏毅</b>《Training Tip》投影片（2025 秋 GenAI-ML 课程）。</p>
+<p>⛔ 但<b>他那两个具体数字我们没照抄</b> ——&#160;抄一个别人挑出来的学习率，等于把别人的地形当成自己的。这里自己搭了谷、自己跑了两遍，每条轨迹都有 assert 盯着。</p>
+<p>⚠️ <b>画面用的陡峭比是 25，不是正文说的「几个数量级」。</b>第一版按 1,000 画，物理没错但画面废了：平方向几十步只挪几十像素，锯齿退化成一根竖线。⭐ 判据：<b>要让人「看见」某个动态，参数按「看得见」选，真实量级交给公式外推。</b>Ⓑ 第三行就是那条外推。</p>
+<p>⭐ Ⓑ 那两个步数是<b>闭式算的</b>：平方向每步收缩 (1 −&#160;1.9 ÷ 陡峭比)，走到一半就是 log½ ÷ log(那个收缩率)。<b>脚本里拿真跑一遍的结果对过账</b>，差不超过 1 步。</p></details></figure>
 
 <h4>⭐ 自适应那条线，核心想法只有一句</h4>
 
