@@ -868,6 +868,8 @@ __FIG_OPTIMIZERS__
   <em>论文标题里那个 <b>decoupled</b>，说的就是这件事
   ——&nbsp;整篇论文主要就干了这一件事。</em></p>
 
+__FIG_DESCENT__
+
 __FIG_BESTSTEP__
 
 <h4>⭐ 而 0.2 这个常数，顺手解决了「换优化器要不要重调学习率」</h4>
@@ -2077,6 +2079,14 @@ FIGS = {
         '最后 Ⓒ 看通信那条<b>为什么不长这样</b>。</em><br>'
         '⚠️ <em>这张图<b>一个实测数字都没有</b>，只画形状 ——&nbsp;'
         '<b>拐点落在哪，取决于你的模型、卡和并行配置，得自己量。</b></em>'),
+    "__FIG_DESCENT__": ("fig-descent", "fig4-descent.svg",
+        'topic04-fig-descent.py',
+        '⭐⭐⭐ <b>这是全讲的本源那一格</b> ——&nbsp;'
+        '<em>前面讲了梯度<b>怎么算出来</b>，这里讲<b>为什么顺着它走就能变好</b>。</em><br>'
+        '⭐⭐ <em>Ⓐ 那两串球<b>是真跑了一遍梯度下降算出来的</b>，不是摆上去的：'
+        '步子一步比一步小 ——&nbsp;<b>没人让它慢，是坡自己变平了</b>。</em><br>'
+        '⛔ <em>而 A 那一串<b>落进了更浅的谷</b> ——&nbsp;'
+        '<b>只因为它从左边出发。</b>看图时先比两个落点的高低，再回头看起点。</em>'),
     "__FIG_BESTSTEP__": ("fig-beststep", "fig4-beststep.svg",
         'topic04-fig-beststep.py',
         '⭐⭐⭐ <b>这张图回答的是「<u>为什么要除</u>」</b> ——&nbsp;'
