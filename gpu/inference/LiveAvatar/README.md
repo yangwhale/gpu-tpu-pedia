@@ -1,8 +1,12 @@
 # LiveAvatar on B200 — 实时音频驱动数字人
 
-阿里 Quark 开源的 **LiveAvatar**（ECCV 2026 Spotlight）在 **8×B200** 上的完整跑通记录：
-可复现的安装与运行步骤、五个必踩的坑、kernel 级性能分解，以及一个已验证有效的优化
-（VAE 解码 **2.51×**）。
+阿里 Quark 开源的 **LiveAvatar**（ECCV 2026 Spotlight）在 **B200** 上的完整跑通与调优记录。
+
+> 🚀 **结论先行：单卡 1×B200 已跑到 1.28× 实时**（384×256），比起点快 **5.5×**。
+> **8 张卡 = 8 路并发 live avatar。**
+>
+> 📓 **完整优化过程、消融表、踩坑记录：[`OPTIMIZATION-JOURNAL.md`](OPTIMIZATION-JOURNAL.md)**
+> —— 包括走错的路和被证伪的假设。
 
 > **同名陷阱**：LiveKit 官方插件库里有个叫 `LiveAvatar` 的插件，那是 **HeyGen 的商业产品**
 > （需要 `LIVEAVATAR_API_KEY`），跟本文的阿里开源项目**同名但毫无关系**。
@@ -14,7 +18,8 @@
 - [安装](#安装)
 - [运行](#运行)
 - [五个坑](#五个坑)
-- [性能实测](#性能实测)
+- [单卡配置（推荐，服务用）](#单卡配置推荐服务用)
+- [性能实测（5 卡 TPP 路径）](#性能实测5-卡-tpp-路径)
 - [优化：channels_last_3d](#优化channels_last_3d)
 - [试过但无效的三条](#试过但无效的三条)
 - [还没走的路](#还没走的路)
@@ -186,7 +191,34 @@ profile 证实：热路径是 `cudnn_generated_fort_native_sdpa_sm100_flash_fpro
 
 **Blackwell 上 cuDNN 比 FA2 快 2.8×** —— FA2 没有 sm_100 原生 kernel，cuDNN 9.x 有。
 
-## 性能实测
+## 单卡配置（推荐，服务用）
+
+产品场景是手机上 LiveKit 的一个小方块，不需要 704×384。两刀下去单卡就能跑 live：
+
+| 阶段 | 配置 | 生成 1 s 视频 | 实时倍数 |
+|---|---|---|---|
+| 官方默认 | 1×B200，704×384 | 4.303 s | 0.232× |
+| ① 降分辨率 | **384×256** | 1.694 s | 0.590× |
+| ② 裁历史帧 | ＋`LA_TRIM_K=16` | 0.868 s | 1.152× |
+| ③ 再裁 | ＋`LA_TRIM_K=8` | **0.781 s** | **1.28×** ✅ |
+
+`LA_TRIM_K` 是给单卡路径打的补丁：原代码每轮 `decode` 出 413 帧却只留 48 帧，
+裁短喂进去的历史 latent 后解码从 1.786 s 降到 0.337 s。
+
+```python
+_k = int(os.environ.get('LA_TRIM_K', '0'))
+_hist = motion_latents[:, :, -_k:] if _k > 0 else motion_latents
+decode_latents = torch.cat([_hist, clip_output.unsqueeze(0)], dim=2)
+```
+
+⚠️ **不要改成 `stream_decode` 增量解码** —— 实测慢 3.7×（逐块因果解码延迟受限，
+批量解码 GPU 利用率高得多，多算 9 倍反而更快）。详见优化实录第四阶段。
+
+⚠️ **单卡路径关不掉 `--offload_model`** —— 设 False 会崩
+（`Input type (CUDABFloat16Type) and weight type (CPUBFloat16Type)`），
+代码写死了假设 offload 开着。**B200 的 183 GB 在这条路上没有出口。**
+
+## 性能实测（5 卡 TPP 路径）
 
 ⚠️ **下列全是纯视频生成时间，启动/加载/编译一概不计。**
 数字人是常驻服务，那笔只在部署时付一次 —— 没人会为了出一段实时视频去等启动。
@@ -313,5 +345,6 @@ skipping cudagraphs due to cpu device (arg0_1 / view_6)
 
 ## 相关
 
+- 📓 **[优化实录](OPTIMIZATION-JOURNAL.md)** —— 全过程、消融表、五条测量坑
 - TPU 侧移植准备：[`../../../tpu/LiveAvatar/`](../../../tpu/LiveAvatar/)
 - 上游：<https://github.com/Alibaba-Quark/LiveAvatar> · 官方样片：<https://liveavatar.github.io/>
