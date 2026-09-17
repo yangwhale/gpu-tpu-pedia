@@ -4833,6 +4833,16 @@ body.figonly section h3{margin-top:34px}
     <td><code>jax.checkpoint_policies.dots_with_no_batch_dims_saveable</code><br>
         <span class="sub">⭐ 名字直接说出了判据：<b>「矩阵乘的结果留着」</b>
         ——&nbsp;正是 2.3 那张表最贵的那几行</span></td></tr>
+<tr><td><b>梯度累积</b>（<a href="#s一">1.8</a> 第 ④ 道）</td>
+    <td><code>ddp.no_sync()</code>　——&nbsp;上下文管理器<br>
+        <span class="sub">进去之后梯度<b>只在本地累加、不跨卡同步</b>；
+        <b>退出后的第一次 forward-backward 才同步一次</b>（原文档语）</span></td>
+    <td rowspan="2">PyTorch<br><code>torch/nn/parallel/distributed.py</code></td></tr>
+<tr><td><b>「跨卡汇总能藏进计算里」</b>（<a href="#s一">1.8</a> 第 ② 道）</td>
+    <td><code>bucket_cap_mb</code>（默认 <b>25 MiB</b>）<br>
+        <span class="sub">⭐ 梯度<b>攒够一桶就发一次</b> ——&nbsp;
+        所以前面的层还在算，后面的桶已经在路上了。
+        <b>那一道「✅ 能藏」，藏在这个桶里</b></span></td></tr>
 <tr><td><b>ZeRO 的三级</b>（<a href="#s四">4.2</a>）</td>
     <td>配置里的 <code>zero_optimization.stage</code> ＝ <b>1 / 2 / 3</b></td>
     <td>DeepSpeed<br><code>runtime/zero/config.py</code></td></tr>
@@ -4846,10 +4856,26 @@ body.figonly section h3{margin-top:34px}
   <li><code>dots_with_no_batch_dims_saveable</code> ——&nbsp;
     <em>「矩阵乘的结果<b>存下来</b>」。<b>为什么是矩阵乘？</b>
     因为它每省一字节要付的 FLOPs 最多 ——&nbsp;正是 <a href="#s二">2.3</a> 那条闭式解。</em></li>
+  <li><code>ddp.no_sync()</code> ——&nbsp;
+    <em>⭐⭐ 把这两行放一起看就清楚了：<b><code>no_sync()</code> 干的事，
+    正是把第 ② 道整个关掉。</b>
+    累积期间一次不通信，攒完再一次性同步 ——&nbsp;
+    <b>所以「梯度累积顺带省通信」不是副作用，它就是这个 API 的用途。</b></em></li>
   <li><code>core_attn</code> 是 Megatron 的<b>默认</b> ——&nbsp;
     <em>而按 <a href="#s二">2.4</a>，长上下文下它恰恰是<b>最不该重算</b>的那一个。
     ⭐ <b>默认值是有年代的</b>，这条在 <a href="#s二">2.6</a> 展开过。</em></li>
 </ul>
+<p><span class="sub">⚠️ <b>顺带承认这一讲少讲了一档。</b>
+  <em>PyTorch 的 <code>CheckpointPolicy</code> 其实有<b>六个</b>枚举值，
+  不是两个：<code>{MUST,PREFER}_SAVE</code>、<code>{MUST,PREFER}_RECOMPUTE</code>、
+  还有 <code>{MUST,PREFER}_CPU_OFFLOAD</code>。<br>
+  ⭐ 也就是说，框架眼里「这块激活怎么办」是<b>三选一</b>：
+  <b>存在显存里 / 扔了重算 / 卸到 CPU 再搬回来</b> ——&nbsp;
+  <b>而本讲只讲了前两个</b>。第三条是拿 PCIe 带宽换显存，
+  跟本讲那条「拿算力换显存」是同一个形状、不同的货币。<br>
+  ⛔ 至于 <code>MUST</code> 和 <code>PREFER</code> 的区别，文档写得很直接：
+  <b><code>MUST_*</code> 表示这条不许被 <code>torch.compile</code> 那类子系统覆盖</b>。</em></span></p>
+
 <p class="landing">⭐ 所以这张表不只是「查词表」，<b>它是个反向检查</b> ——&nbsp;
   <em>如果你理解的判据跟框架提供的选项对不上，
   <b>多半是你的判据错了，或者那个默认过期了。</b></em></p></div>
