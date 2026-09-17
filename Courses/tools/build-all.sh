@@ -184,6 +184,7 @@ python3 topic02-lint-cues.py
 step "跨节指针体检（「§X.Y」那一节真的存在吗）"
 python3 topic02-lint-xref.py
 python3 topic02-lint-figpos.py
+python3 topic02-lint-figink.py
 
 # ⭐ 第五条体检：**讲义覆盖**。跟第三条是一对 ——
 # 第三条查「讲义指的那个东西还在不在」，这条查「教材有的东西讲义讲了没有」。
