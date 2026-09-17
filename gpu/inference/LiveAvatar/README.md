@@ -1,5 +1,8 @@
 # LiveAvatar on B200 — 实时音频驱动数字人
 
+**照着做一次跑通 → [RUNBOOK.md](RUNBOOK.md)**　｜　过程与弯路 → [OPTIMIZATION-JOURNAL.md](OPTIMIZATION-JOURNAL.md)
+
+
 阿里 Quark 开源的 **LiveAvatar**（ECCV 2026 Spotlight）在 **B200** 上的完整跑通与调优记录。
 
 > 🚀 **结论先行：单卡 1×B200 跑到 1.357× 实时**（384×256，`TRIM_K=4`），比起点快 **5.8×**。
