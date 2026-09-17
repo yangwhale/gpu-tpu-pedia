@@ -374,6 +374,8 @@ skipping cudagraphs due to cpu device (arg0_1 / view_6)
 
 ## 相关
 
+- 🔌 **[LiveAvatar Gateway](gateway/)** —— 把它包成 LiveKit 眼里的第 9 家数字人供应商。
+  控制面在 CPU、worker 在 GPU，pull 模型。P0 控制面已完成（28 单测 + 端到端冒烟 + 8/8 变异测试）
 - 📓 **[优化实录](OPTIMIZATION-JOURNAL.md)** —— 全过程、消融表、五条测量坑
 - TPU 侧移植准备：[`../../../tpu/LiveAvatar/`](../../../tpu/LiveAvatar/)
 - 上游：<https://github.com/Alibaba-Quark/LiveAvatar> · 官方样片：<https://liveavatar.github.io/>
