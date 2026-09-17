@@ -21,10 +21,13 @@ r"""专题四 · §6.1「先看一个真实的画面」——&#160;loss spike �
   **保险开着还是飞了** —— 这才是这一节存在的理由。
   ⛔ 而且这里**不能给解释** —— 论文自己写着没找到有原则的缓解办法。
     图上要把「这是开放问题」当成结论画出来，不是当成缺陷藏起来。
+  ⭐ 2026-09-18 重画成两条对齐的曲线，理由与判据见下方「Ⓑ 的计算层」。
 
 📌 出处：arXiv 2204.02311（PaLM）§5.1。「大约 20 次」「尽管梯度裁剪是开着的」
   「更小的模型上没有观察到」均为论文原话的转述。
 """
+import math
+
 from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE)
 
 W = 1400
@@ -58,11 +61,75 @@ def _loss_y(t, top, bot):
 assert _loss_y(0.0, 100.0, 300.0) < _loss_y(1.0, 100.0, 300.0), "曲线画反了"
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Ⓑ 的计算层 ——&#160;「裁剪确实生效了」这件事不靠嘴说，靠算
+# ═══════════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 2026-09-18 重画 Ⓑ。旧版是三个并排的文字框：
+#   「裁剪开着」→「还是飞了 20 次」→「论文说不知道」。
+#   ⛔ 两个毛病：
+#     ① 把三个框里的字删掉，**只剩三个空方框和一个箭头** ——&#160;写字板子。
+#     ② 更要命的是它**陈述了矛盾却没有化解矛盾**。「保险开着还是飞了」
+#        读起来像个悖论，于是读者要么觉得裁剪没用，要么觉得自己没看懂。
+#   ⭐⭐⭐ 而它一点都不悖：**裁剪摁住的是「梯度范数」，飞掉的是「loss」。**
+#        保险装在 A 上，事故发生在 B 上 ——&#160;这是两个量，不是一件事。
+#   ⭐⭐ 判据：**当一句话听起来像悖论时，图的任务不是复述它，
+#        是把那两个被读者当成同一个的量分开画。**
+#
+# ⭐ 这一格的输入曲线仍是示意（论文没给梯度范数曲线），
+#   **但「裁剪」这一步是真算的** ——&#160;clipped = min(raw, 阈值) 是裁剪的*定义*，
+#   不是实测数据。所以下面那条 assert 是有牙齿的。
+#   ⛔ 判据：**示意图里也能有硬骨头 ——&#160;
+#     把「按定义必然成立」的那一段真算出来，别连它一起手画。**
+
+T0, T1 = 0.58, 0.86          # Ⓑ 是把 Ⓐ 中段放大，不是另起一张
+WIN = tuple(s for s in SPIKES if T0 < s < T1)
+assert len(WIN) == 6, "放大窗口里要有六个尖峰，太多会挤成一片、太少看不出规律"
+
+THRESH = 1.0                 # 裁剪阈值（PaLM 用的 global-norm clipping 取 1.0）
+BASE = 0.25                  # 平时的梯度范数，远低于阈值
+PEAKS = (2.6, 1.7, 4.4, 1.5, 3.1, 2.1)   # 固定值，不用随机数
+BW = 0.008                   # 尖峰包的半宽
+assert len(PEAKS) == len(WIN)
+assert min(PEAKS) > THRESH, "每个尖峰都得冲过阈值，否则「被削平」无从谈起"
+
+
+def raw_norm(t):
+    """裁剪**之前**的梯度范数（示意）。"""
+    v = BASE
+    for s, h in zip(WIN, PEAKS):
+        v += h * math.exp(-((t - s) / BW) ** 2)
+    return v
+
+
+def clipped_norm(t):
+    """裁剪**之后**。这一行就是 global-norm clipping 的全部内容。"""
+    return min(raw_norm(t), THRESH)
+
+
+_TS = [T0 + (T1 - T0) * i / 900.0 for i in range(901)]
+# ⭐⭐ 这一格的立论：裁剪之后，**没有任何一步**超过阈值 ——&#160;保险 100% 生效。
+assert max(clipped_norm(t) for t in _TS) <= THRESH + 1e-9, \
+    "裁剪后还有超限的点 —— 那这张图就在撒谎"
+# 而裁剪之前冲得有多高，决定了「削平」看不看得出来
+_OVER = max(raw_norm(t) for t in _TS) / THRESH
+assert _OVER > 3.0, "原始峰不够高，看不出「冲过去了」"
+
+# 对数纵轴 ——&#160;梯度范数跨了一个量级以上，线性轴会把基线和阈值压成一条
+NLO, NHI = -1.05, 0.85       # log10 上下界
+assert NLO < math.log10(BASE) < math.log10(THRESH) < math.log10(max(PEAKS)) < NHI, \
+    "对数轴装不下这四个值，基线/阈值/峰顶会贴边"
+
+
 def main():
-    f = Fig(W, "训练 loss 曲线的示意图：主干一路向下，中间插着大约二十个"
+    f = Fig(W, "上半张是训练 loss 曲线的示意图：主干一路向下，中间插着大约二十个"
                "向上的尖峰，出现的时刻毫无规律；下面那条小模型的曲线是平滑的，"
-               "一个尖峰都没有。右边说明梯度裁剪当时是开着的，"
-               "而它并没有拦住这些尖峰，论文自己也说没有找到有原则的解释")
+               "一个尖峰都没有。下半张把中段放大，上下并排画两条对齐同一批时刻的"
+               "曲线：上面是梯度范数，虚线是裁剪之前、会冲过那条橙色阈值线，"
+               "红色实线是裁剪之后、每个尖峰的顶都被削平贴着阈值，一次都没越过；"
+               "下面是同一时间段的 loss，六个尖峰一个不落照样飞出去。"
+               "右栏说明这并不矛盾：保险装在「这一步迈多大」上，"
+               "事故发生在 loss 上，是两个量；至于为什么会飞，"
+               "论文说没有找到有原则的解释")
 
     y0 = f.header(
         "loss spike　——　<tspan font-weight=\"700\">"
@@ -132,40 +199,122 @@ def main():
         f.t(X0 + 6 + i * 428, py + 378, s, c, size=12.5)
     f._pan = None
 
-    # ══════════ Ⓑ 那句最刺耳的话 ════════════════════════════════════
-    PH2 = 250
+    # ══════════ Ⓑ 保险确实在工作，只是它保的不是这件事 ═══════════════
+    PH2 = 440
     py2 = f.panel(0, py + PH + 22, W, PH2,
-                  "Ⓑ ⭐⭐⭐ 而这一节真正刺耳的，"
-                  "<tspan font-weight=\"700\">是括号里那半句话</tspan>", OR,
-                  sub="⛔ 它很容易被一扫而过 ——&#160;"
-                      "<tspan font-weight=\"700\">而它是整节存在的理由</tspan>")
+                  "Ⓑ ⭐⭐⭐ 「保险开着还是飞了」听着像悖论　——　"
+                  "<tspan font-weight=\"700\">其实是两个量</tspan>", OR,
+                  sub="⭐ 把上面那段放大来看："
+                      "<tspan font-weight=\"700\">裁剪摁住的那条被削平了，"
+                      "飞掉的那条照样飞</tspan>")
 
-    f.box(60, py2 + 34, 392, 178, "#fef7e0", OR, 8)
-    f.t(256, py2 + 68, "梯度裁剪", OR, True, 20, "middle")
-    f.t(256, py2 + 96, "是<tspan font-weight=\"700\">开着</tspan>的", INK, True, 17, "middle")
-    f.t(256, py2 + 136, "它摁住的是", GY, size=13, anchor="middle")
-    f.t(256, py2 + 160, "「这一步最多迈多大」", INK, True, 14.5, "middle")
-    f.t(256, py2 + 192, "——　所有人心里的那道保险", GY2, size=12.5, anchor="middle")
+    # ⛔ BX1 要给右端的「裁剪阈值」四个字留位置 ——&#160;右栏从 1076 起。
+    #   ⭐ 判据（**第二次栽在同一处**，fig4-saddle 记过一模一样的）：
+    #     **右侧文字落笔前先算「起点 ＋ 字数 × 字号」**，别等截图才发现被切了。
+    BX0, BX1 = 104, 1000
+    assert BX1 + 12 + 4 * 13 < 1076, "右端标签会被右栏盖住"
+    GT, GB = py2 + 84, py2 + 224          # 梯度范数区
+    LT, LB = py2 + 296, py2 + 380         # loss 区
+    # ⭐ 两块之间必须留出 ①「红线没越过」那句说明的地方 ——
+    #   第一版只隔了 4px，lint 立刻报撞车 7px。
 
-    f.t(478, py2 + 124, "然而", GY2, True, 16, "middle")
-    f.line(462, py2 + 146, 496, py2 + 146, GY2, 1.6)
+    def _x(t):
+        return BX0 + (BX1 - BX0) * (t - T0) / (T1 - T0)
 
-    f.box(516, py2 + 34, 392, 178, "#fce8e6", RD, 8)
-    f.t(712, py2 + 74, "还是飞了 20 次", RD, True, 21, "middle")
-    f.t(712, py2 + 120, "所以问题<tspan font-weight=\"700\">不是</tspan>", INK,
-        True, 16, "middle")
-    f.t(712, py2 + 148, "「某一步迈太大」这么简单", GY, size=14.5, anchor="middle")
-    f.t(712, py2 + 188, "⛔ 保险生效了，事故照样发生", RD, size=12.5, anchor="middle")
+    def _ny(v):
+        r = (math.log10(max(v, 1e-6)) - NLO) / (NHI - NLO)
+        return GB - (GB - GT) * r
 
-    f.t(934, py2 + 124, "→", GY2, True, 20, "middle")
+    # ── 竖直对齐线：让读者自己把上下两条对上时刻 ──────────────────
+    # ⭐ 判据：**要让人比较两条曲线，先把「同一个时刻」画出来** ——
+    #   否则他得用眼睛在两张图之间来回找，那份力气就不在内容上了。
+    for s in WIN:
+        f.line(_x(s), GT - 6, _x(s), LB, "#dadce0", 0.9, dash="3 4", arrow=False)
 
-    f.box(966, py2 + 34, 374, 178, "#f1f3f4", GY2, 8)
-    f.t(1153, py2 + 74, "那到底为什么？", INK, True, 19, "middle")
-    f.t(1153, py2 + 120, "<tspan font-weight=\"700\">论文自己说：不知道。</tspan>",
-        GY, True, 16, "middle")
-    f.t(1153, py2 + 152, "「训练成本太高，没能找到", GY2, size=13, anchor="middle")
-    f.t(1153, py2 + 174, "有原则的缓解办法」", GY2, size=13, anchor="middle")
-    f.t(1153, py2 + 198, "⭐ 这是开放问题，不是我们没讲", PU, size=12, anchor="middle")
+    # ── ① 梯度范数：裁剪管的是这个 ────────────────────────────────
+    f.t(BX0, GT - 22, "① 裁剪<tspan font-weight=\"700\">管的</tspan>是这个量："
+        "<tspan font-weight=\"700\">梯度范数</tspan>"
+        "　（纵轴为对数，跨了一个量级）", INK, size=13)
+
+    f.line(BX0, GB + 2, BX1 + 14, GB + 2, GY2, 1.2, arrow=False)
+    f.line(BX0, GB + 2, BX0, GT - 10, GY2, 1.2, arrow=False)
+
+    # 阈值线 —— 这张图的主角
+    yth = _ny(THRESH)
+    f.line(BX0, yth, BX1 + 6, yth, OR, 1.6, dash="7 5", arrow=False)
+    f.t(BX1 + 12, yth + 4, "裁剪阈值", OR, True, 13)
+
+    N = 620
+    pts = [(T0 + (T1 - T0) * i / N) for i in range(N + 1)]
+    d_raw = "M %.1f %.1f" % (_x(pts[0]), _ny(raw_norm(pts[0])))
+    d_clp = "M %.1f %.1f" % (_x(pts[0]), _ny(clipped_norm(pts[0])))
+    for t in pts[1:]:
+        d_raw += " L %.1f %.1f" % (_x(t), _ny(raw_norm(t)))
+        d_clp += " L %.1f %.1f" % (_x(t), _ny(clipped_norm(t)))
+    f.path(d_raw, GY2, 1.3, dash="5 4", arrow=False)
+    f.path(d_clp, RD, 2.6, arrow=False)
+
+    # 在最高那个峰上，把「砍掉的那一截」标出来
+    _k = PEAKS.index(max(PEAKS))
+    xc, y_raw = _x(WIN[_k]), _ny(raw_norm(WIN[_k]))
+    f.line(xc, y_raw + 4, xc, yth - 3, GY, 1.1, dash="4 4", arrow=False)
+    f.t(xc + 12, (y_raw + yth) / 2 + 4, "这一截被砍掉", GY, size=12)
+    f.t(xc + 12, y_raw + 2, "原本要迈这么大", GY2, size=12)
+    f.t(_x(WIN[0]), yth - 11, "削平的顶", RD, True, 12.5, "middle")
+
+    f.t(BX0 + 4, GB + 24, "⭐ 红线<tspan font-weight=\"700\">每一处都贴着阈值、"
+        "没有一处越过去</tspan>　——　保险 100% 生效了，一次都没漏", RD, size=13)
+
+    # ── ② loss：飞掉的是这个 ──────────────────────────────────────
+    f.t(BX0, LT - 22, "② 可是<tspan font-weight=\"700\">飞掉的</tspan>是另一个量："
+        "<tspan font-weight=\"700\">loss</tspan>"
+        "　（同一段时间、同一批时刻；⚠️ 纵轴也按这一段放大了）", INK, size=13)
+
+    f.line(BX0, LB + 2, BX1 + 14, LB + 2, GY2, 1.2, arrow=False)
+    f.line(BX0, LB + 2, BX0, LT - 10, GY2, 1.2, arrow=False)
+
+    # ⛔ 第一版直接套 Ⓐ 的整段纵轴，结果这一小段的主干**几乎是平的** ——
+    #   看着像「一条直线插几根刺」，反而把「它在飞」讲弱了。
+    #   ⭐ 判据：**放大一段来看时，纵轴也要跟着放大** ——&#160;
+    #     不然横轴放大了、纵轴没放大，那一段只会比原来更平。
+    #   （Ⓐ 里「另起一根纵轴」用的是同一招，这里补上同样的提示。）
+    _lv = lambda t: 0.12 + 0.88 * (1.0 - t) ** 1.7
+    L_HI, L_LO = _lv(T0), _lv(T1)
+    assert L_HI > L_LO * 1.8, "这一段 loss 降得太少，局部轴也救不回来 —— 换窗口"
+
+    def _ly(t):
+        r = (_lv(t) - L_LO) / (L_HI - L_LO)      # T0 处 1 → T1 处 0
+        return (LB - 8) - ((LB - 8) - (LT + 56)) * r
+
+    dl = ""
+    for i, t in enumerate(pts):
+        x, y = _x(t), _ly(t)
+        dl += ("M %.1f %.1f" if i == 0 else " L %.1f %.1f") % (x, y)
+        for s in WIN:
+            if t - (T1 - T0) / N < s <= t:
+                dl += " L %.1f %.1f L %.1f %.1f" % (x, y - 50, x + 4, y - 13)
+        if i:
+            dl += " L %.1f %.1f" % (x, y)
+    f.path(dl, RD, 1.9, arrow=False)
+    f.t(BX0 + 4, LB + 24, "⛔ 六个时刻，<tspan font-weight=\"700\">一次不落</tspan>"
+        "　——　摁住了「迈多大」，没摁住 loss", RD, size=13)
+
+    # ── 右栏：所以它不矛盾 ────────────────────────────────────────
+    f.box(1076, py2 + 56, 276, 324, "#fef7e0", OR, 8)
+    f.t(1214, py2 + 92, "所以这不矛盾", INK, True, 18, "middle")
+    f.t(1214, py2 + 130, "保险装在", GY, size=13, anchor="middle")
+    f.t(1214, py2 + 154, "「这一步迈多大」上", OR, True, 15, "middle")
+    f.t(1214, py2 + 186, "事故发生在", GY, size=13, anchor="middle")
+    f.t(1214, py2 + 210, "「loss」上", RD, True, 15, "middle")
+    f.line(1112, py2 + 234, 1316, py2 + 234, "#e0c98a", 1.1, arrow=False)
+    f.t(1214, py2 + 262, "它<tspan font-weight=\"700\">不是</tspan>失效了，",
+        INK, size=13.5, anchor="middle")
+    f.t(1214, py2 + 284, "是<tspan font-weight=\"700\">保的不是这件事</tspan>",
+        INK, size=13.5, anchor="middle")
+    f.line(1112, py2 + 306, 1316, py2 + 306, "#e0c98a", 1.1, arrow=False)
+    f.t(1214, py2 + 332, "⛔ 那到底为什么会飞？", GY, size=12.5, anchor="middle")
+    f.t(1214, py2 + 356, "<tspan font-weight=\"700\">论文说：没找到</tspan>",
+        PU, size=12.5, anchor="middle")
     f._pan = None
 
     yb = f.band(py2 + PH2 + 22, "warn",
