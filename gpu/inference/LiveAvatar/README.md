@@ -374,8 +374,11 @@ skipping cudagraphs due to cpu device (arg0_1 / view_6)
 
 ## 相关
 
-- 🔌 **[LiveAvatar Gateway](gateway/)** —— 把它包成 LiveKit 眼里的第 9 家数字人供应商。
-  控制面在 CPU、worker 在 GPU，pull 模型。P0 控制面已完成（28 单测 + 端到端冒烟 + 8/8 变异测试）
+- 🔌 **[liveavatar-gateway](https://github.com/yangwhale/liveavatar-gateway)** —— 独立仓库。
+  把它包成 LiveKit 眼里的第 9 家数字人供应商：控制面在 CPU、GPU worker 主动拉活。
+  P0 已完成（28 单测 ＋ 端到端冒烟 ＋ 8/8 变异测试）
+- 🍴 **[yangwhale/LiveAvatar](https://github.com/yangwhale/LiveAvatar/tree/b200-realtime)** ——
+  上游 fork，分支 `b200-realtime` 带两处必要的性能补丁
 - 📓 **[优化实录](OPTIMIZATION-JOURNAL.md)** —— 全过程、消融表、五条测量坑
 - TPU 侧移植准备：[`../../../tpu/LiveAvatar/`](../../../tpu/LiveAvatar/)
 - 上游：<https://github.com/Alibaba-Quark/LiveAvatar> · 官方样片：<https://liveavatar.github.io/>
