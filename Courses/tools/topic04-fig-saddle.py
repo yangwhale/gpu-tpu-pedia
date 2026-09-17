@@ -124,21 +124,62 @@ def main():
                   "　——　而只要有<tspan font-weight=\"700\">一个</tspan>朝下，就还能走", GR,
                   sub="⛔ 一维图上<tspan font-weight=\"700\">只有两个方向可选</tspan>")
 
+    # ⭐⭐⭐ 2026-09-18 R21 重画。旧版是三个等高的框，每框四段文字 ——&#160;
+    #   把字删掉只剩三个一样的框。
+    #   ⭐⭐ 而这一格要讲的是一个**合取条件**：
+    #     「方向数从 2 涨到几千亿，而要求是**全都**朝上」。
+    #   ⭐⭐⭐ 合取条件的形状，就是**一排箭头**：
+    #     箭头越多，「全都朝上」越难；而**只要有一个朝下，就有路**。
+    #   ⛔ 三行用**同样的箭头大小和同样的间距** ——&#160;
+    #     这样行的**长度**就等于方向的**个数**，比例是诚实的。
+    #     （若各行用不同间距，读者会把「密度」误当成「数量」。）
+    #   ⚠️ 但真实的数远画不下，所以每行都标出「图上画了几个」，
+    #     最后一行直接画到边缘再加省略号 ——&#160;**画不下这件事本身就是论点**。
+    AGAP, AH, AX = 9.0, 20.0, 132         # 箭头间距／高度／起点
+    # ⛔ 左边那两行标签是 anchor="end"，AX 太小它们会顶出画布左缘。
+    #   ⭐ 这是 fig4-saddle 那轮记的「右侧文字先算起点＋字数×字号」的**镜像版**
+    #     ——&#160;左对齐的反面是右对齐，两头都要算。（第一版 AX＝96 就切掉了两个字。）
+    assert AX - 14 - 7 * 15.5 > 8, "左边标签会顶出画布"
+    ROOM = int((1290 - AX) / AGAP)        # 一行最多塞几个
     ROWS = (
-        ("一维图上", "2 个方向", "两个都朝上就行", "⛔ 很容易凑齐 ——　所以图上坑一个接一个", RD),
-        ("一个小模型", "几万个方向", "几万个全都得朝上", "⚠️ 已经很苛刻了", OR),
-        ("我们在谈的规模", "几千亿个方向", "几千亿个<tspan font-weight=\"700\">全都</tspan>得朝上",
-         "✅ 只要漏掉一个，它就只是个垭口 ——　接着走", GR),
+        (RD, "一维图上", "2 个方向", 2, None,
+         "⛔ 两个都朝上很容易凑齐 ——　所以那种图上坑一个接一个"),
+        (OR, "一个小模型", "几万个方向", 40, None,
+         "⚠️ 四十个全朝上已经很苛刻了　——　何况几万个"),
+        (GR, "我们在谈的规模", "几千亿个方向", ROOM, 73,
+         "✅ 只要漏掉一个，它就只是个垭口 ——　接着走"),
     )
-    for i, (who, dirs, need, verdict, col) in enumerate(ROWS):
-        ry = py2 + 46 + i * 84
-        f.box(50, ry, 1300, 70, "#fff", col if i == 2 else GY2, 8,
-              sw=1.8 if i == 2 else 1.0)
-        f.box(50, ry, 5, 70, col, col, 2)
-        f.t(84, ry + 42, who, GY, size=13.5)
-        f.t(330, ry + 42, dirs, col, True, 17)
-        f.t(560, ry + 42, need, INK, True, 15)
-        f.t(900, ry + 42, verdict, col if i == 2 else GY, size=13.5)
+    assert ROWS[2][3] > 100, "最后一行要真的画满，不然「画不下」这句就没画面"
+
+    for i, (col, who, dirs, n, down_at, verdict) in enumerate(ROWS):
+        ry = py2 + 52 + i * 96
+        f.t(AX - 14, ry + 6, who, GY, size=13, anchor="end")
+        f.t(AX - 14, ry + 26, dirs, col, True, 15.5, "end")
+        for k in range(n):
+            x = AX + k * AGAP
+            if down_at is not None and k == down_at:
+                # ⭐ 那唯一一个朝下的 ——&#160;这一格的落点全在它身上
+                f.line(x, ry - 4, x, ry + AH + 6, RD, 2.4)
+            else:
+                f.line(x, ry + AH, x, ry, col, 1.3)
+        xe = AX + n * AGAP
+        if i == 2:
+            f.t(xe + 6, ry + AH, "…", col, True, 18)
+            f.t(AX, ry + AH + 30,
+                "⛔ <tspan font-weight=\"700\">画到这儿就到头了</tspan>"
+                "　——　真实的数再乘十亿倍，这一行根本画不下", GY2, size=12.5)
+            f.line(AX + down_at * AGAP, ry - 22, AX + down_at * AGAP - 44, ry - 34,
+                   RD, 1.4)
+            f.t(AX + down_at * AGAP - 50, ry - 30,
+                "<tspan font-weight=\"700\">只要有这一个</tspan>", RD, True, 13.5, "end")
+        else:
+            f.t(xe + 14, ry + AH - 2, "（图上画了 %d 个）" % n, GY2, size=12)
+        if i == 2:
+            # 跟「画到这儿就到头了」并排放右边 ——&#160;
+            # 底下 py2+316 那句「这是定义层面的话」是原来就有的，不能压
+            f.t(660, ry + AH + 30, verdict, col, size=13.5)
+        else:
+            f.t(AX, ry + AH + 28, verdict, GY, size=13.5)
 
     f.t(700, py2 + 316,
         "⚠️ 这是<tspan font-weight=\"700\">定义层面的话，不是概率论证</tspan>"
