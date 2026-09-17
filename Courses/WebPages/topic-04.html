@@ -5872,6 +5872,83 @@ body.figonly section h3{margin-top:34px}
   小梯度会直接下溢成 0，所以要先把 loss 放大若干倍再算、更新前再缩回去。<br>
   ⭐ 而 bf16 的指数位跟 fp32 一样是 8 位 ——&nbsp;
   动态范围没缩，缩的是尾数精度。所以它不下溢，也就不需要 loss scaling。</em></p>
+
+<figure class="fbox fwide" id="fig-underflow"><svg viewBox="0 0 1400 1022" width="100%" role="img" aria-label="一根从十的负四十次方到 1 的对数数轴，上面标着三条边界线。最右边橙色那条是 fp16 的最小正规数，六点一乘十的负五次方；紧挨着左边红色那条是 fp16 的最小次正规数，五点九六乘十的负八次方，再往左的数在 fp16 里会被直接舍成零。而绿色那条 bf16 的下界远在左边，一点一八乘十的负三十八次方 —— 两者之间隔着三十三个数量级的空白，那一整段都是 bf16 存得下、fp16 存不下的范围。下半张画的是 loss scaling 在干什么：把一个会被舍成零的梯度乘上一千零二十四，在这根对数轴上就是整体向右平移三格，于是它跨过红线活了下来"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">fp16 的毛病不是<tspan font-weight="700">「不够细」</tspan>，是<tspan font-weight="700">「下不去」</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 这一格只有<tspan font-weight="700">一根真数轴和几条真边界</tspan>　——　每个数都是从 IEEE 754 的位模式当场算的</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">fp16 正规数下界</text>
+<rect x="153" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="174" y="74" fill="#5f6368" style="font-size:14.0px">fp16 归零线</text>
+<rect x="278" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="299" y="74" fill="#5f6368" style="font-size:14.0px">bf16 下界</text>
+<rect x="0" y="102" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 同一根对数轴上，<tspan font-weight="700">两种 16 位格式的下界差了 33 个数量级</tspan></tspan></text>
+<text class="svgsm" x="636" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 轴上越往左数越小；<tspan font-weight="700">过了红线，那个数在 fp16 里就是 0</tspan></text>
+<rect x="181.07150611698188" y="254" width="905.7992569529194" height="108" rx="4" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1"/>
+<text class="svgsm" x="633" y="286" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">这一整段：<tspan font-weight="700">bf16 存得下，fp16 存不下</tspan></tspan></text>
+<text class="svgsm" x="633" y="310" fill="#0d652d" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700"><tspan font-weight="700">33 个数量级</tspan></tspan></text>
+<line x1="110" y1="348" x2="1320" y2="348" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="120.0" y1="348" x2="120.0" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="120" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻40</text>
+<line x1="267.5" y1="348" x2="267.5" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="267" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻35</text>
+<line x1="415.0" y1="348" x2="415.0" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="415" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻30</text>
+<line x1="562.5" y1="348" x2="562.5" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="562" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻25</text>
+<line x1="710.0" y1="348" x2="710.0" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="710" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻20</text>
+<line x1="857.5" y1="348" x2="857.5" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="857" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻15</text>
+<line x1="1005.0" y1="348" x2="1005.0" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1005" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻10</text>
+<line x1="1152.5" y1="348" x2="1152.5" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1152" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁻5</text>
+<line x1="1300.0" y1="348" x2="1300.0" y2="355" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1300" y="374" fill="#80868b" text-anchor="middle" style="font-size:11.5px">10⁰</text>
+<text class="svgsm" x="1326" y="352" fill="#80868b" style="font-size:12.0px">大 →</text>
+<line x1="181.07150611698188" y1="348" x2="181.07150611698188" y2="232" stroke="#1e8e3e" stroke-width="2.2" stroke-linecap="round"/>
+<text class="svgsm" x="181" y="216" fill="#0d652d" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">bf16</tspan></text>
+<text class="svgsm" x="181" y="236" fill="#0d652d" text-anchor="middle" style="font-size:11.5px">1.18e-38</text>
+<line x1="1086.8707630699014" y1="348" x2="1086.8707630699014" y2="232" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<text class="svgsm" x="1086" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">fp16 归零线</tspan></text>
+<text class="svgsm" x="1086" y="236" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px">5.96e-08</text>
+<line x1="1175.6746117907758" y1="348" x2="1175.6746117907758" y2="196" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<text class="svgsm" x="1175" y="180" fill="#b06000" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">fp16 正规数下界</tspan></text>
+<text class="svgsm" x="1175" y="200" fill="#b06000" text-anchor="middle" style="font-size:11.5px">6.10e-05</text>
+<text class="svgsm" x="700" y="438" fill="#202124" text-anchor="middle" style="font-size:14.5px">⭐⭐⭐ 所以 fp16 的问题从来不是<tspan font-weight="700">「16 位不够细」</tspan>　——　<tspan font-weight="700">bf16 也是 16 位，而且尾数比它还少</tspan>。问题是它的<tspan font-weight="700">指数位只有 5 位，下界抬得太高</tspan>。</text>
+<rect x="0" y="508" width="1400" height="336" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="508" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="510" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="538" x2="1400" y2="538" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="528" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐⭐ 那 loss scaling 在干什么　——　<tspan font-weight="700">就是把整条分布在这根轴上往右推</tspan></tspan></text>
+<text class="svgsm" x="736" y="528" fill="#5f6368" style="font-size:11.0px">⭐ 乘 1024 ＝ 在对数轴上<tspan font-weight="700">平移 3.01 格</tspan>　——　够不够，看它跨没跨过红线</text>
+<line x1="110" y1="688" x2="1320" y2="688" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="1086.8707630699014" y1="592" x2="1086.8707630699014" y2="698" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<line x1="1175.6746117907758" y1="592" x2="1175.6746117907758" y2="698" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<rect x="1065.8803848720875" y="666" width="14" height="14" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="1072" y="714" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">一个梯度 2e-08</tspan></text>
+<text class="svgsm" x="1072" y="734" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">fp16 存 → 0</tspan></text>
+<line x1="1082.8803848720875" y1="646" x2="1155.6842335929618" y2="646" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="1117" y="636" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">× 1024</tspan></text>
+<rect x="1154.6842335929618" y="666" width="14" height="14" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="1227" y="714" fill="#174ea6" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">变成 2.05e-05</tspan></text>
+<text class="svgsm" x="1227" y="734" fill="#174ea6" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">活下来了</tspan></text>
+<text class="svgsm" x="700" y="776" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⚠️ 诚实一句：放大之后它落在 fp16 的<tspan font-weight="700">次正规区</tspan>（红线右、橙线左）——&#160;<tspan font-weight="700">存得下了，但精度打折</tspan>。要进正规区得用更大的 scale。</text>
+<text class="svgsm" x="700" y="814" fill="#202124" text-anchor="middle" style="font-size:14.5px">⭐⭐⭐ 而 bf16 <tspan font-weight="700">根本不用做这件事</tspan>　——　它的下界在左边 33 个数量级之外，<tspan font-weight="700">那些梯度本来就在范围内</tspan>。</text>
+<rect x="0" y="894" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="894" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="894" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="921" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以「bf16 要不要 loss scaling」这个问题，答案在<tspan font-weight="700">指数位</tspan>上，不在位数上</tspan></text>
+<text class="svgsm" x="20" y="952" fill="#0d652d" style="font-size:15.0px">⭐ bf16 和 fp16 <tspan font-weight="700">都是 16 位</tspan>，可 bf16 把位数分给了<tspan font-weight="700">指数</tspan>（8 位，跟 fp32 一样），fp16 分给了<tspan font-weight="700">尾数</tspan>（10 位）。⛔ 于是 bf16 <tspan font-weight="700">更粗但更宽</tspan>。</text>
+<text class="svgsm" x="20" y="976" fill="#0d652d" style="font-size:15.0px">⭐⭐ 判据：<tspan font-weight="700">「精度不够」是个形容词，「这条线左边全没了」是可数的损失。</tspan>　——&#160;把一个笼统的担心换成一根能指的线，误解自己就散了。</text>
+</svg><figcaption>⭐⭐⭐ <b>fp16 的毛病不是「不够细」，是「下不去」。</b><span class="capmore"><br>⭐⭐ <em>Ⓐ 一根对数轴上三条真边界：fp16 正规数下界 <b>6.10e−5</b>、fp16 归零线 <b>5.96e−8</b>（再往左就真是 0）、bf16 下界 <b>1.18e−38</b>。中间那一大片绿 ——&nbsp;<b>33 个数量级</b>，全是 bf16 存得下、fp16 存不下的。</em><br>⭐ <em>Ⓑ loss scaling 就是<b>在这根轴上整体右移</b>：×1024 ＝ 平移 3.01 格，一个本来归零的梯度就跨过红线活了。</em><br>⛔ <em>每个边界都是从 <code>numpy.float16</code> 的位模式当场算的，「归零」也是<b>真舍了一遍</b>验的；<b>没有直方图</b>——&nbsp;那份数据我们没有，不编。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 图上每个边界都是从 <code>numpy.float16</code> 的位模式当场算的：最小正规数 0x0400 ＝ 2⁻¹⁴，最小次正规数 0x0001 ＝ 2⁻²⁴；bf16 与 fp32 同为 8 位指数，下界 2⁻¹²⁶。「低于红线会被舍成 0」是<b>真舍了一遍</b>验出来的。</p>
+<p>⭐ 这张图的<b>讲法</b>取自混合精度那篇经典图（梯度直方图 ＋ 一条 FP16 下界竖线，见 Narang &amp; Micikevicius et al., 2018）　——　⛔ <b>但我们没有那份直方图数据，所以这里不画直方图</b>，只画真边界。</p></details></figure>
+
 <p class="landing">⭐ 这跟 <a href="#s三">3.2</a> 那条判据是配套的：
   bf16 换来的是「范围够、精度差」，所以怕的是<u>累加</u>，不是<u>下溢</u>。</p></div>
 
