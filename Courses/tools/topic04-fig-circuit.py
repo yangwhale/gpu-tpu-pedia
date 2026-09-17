@@ -106,33 +106,92 @@ def main():
     f._pan = None
 
     # ══════════ Ⓑ 三个门 ════════════════════════════════════════════
-    PH2 = 292
+    # ⭐⭐⭐ 2026-09-18 重画。旧版是三张卡片，每张写「像一个分发器 / 交换器 /
+    #   路由器」＋ 两行规则 ——&#160;把字删掉只剩三个空框，figink 判它写字板子。
+    #   ⭐⭐ 而这三个门的差别**本来就是线的形状**：
+    #     · 分发 ＝ 一进两出，两条一样粗
+    #     · 交换 ＝ 两条交叉，各自拿对方的值
+    #     · 路由 ＝ 一条走通，一条断掉
+    #   ⭐⭐⭐ 判据：**当三样东西的差别可以画成三种连线形状时，
+    #     写成三段文字就是把图形信息翻译成文字、再让读者翻译回去。**
+    #   ⭐ 取法 Olah《Understanding LSTM Networks》：一张底图重复四次，
+    #     每次只移动高亮。读者只需读一次骨架，之后注意力全给差异 ——&#160;
+    #     **而且这是降成本的画法：一套骨架用三遍，比画三张卡片还省事。**
+    PH2 = 326
     py2 = f.panel(0, py + PH + 20, W, PH2,
                   "Ⓑ ⭐⭐ 常见的门只有三种脾气　——　"
-                  "<tspan font-weight=\"700\">记住这三个，你就能手推任何一张电路</tspan>",
-                  GR, sub="⛔ 不用背公式，它们各自像一样东西")
+                  "<tspan font-weight=\"700\">而这三种脾气就是三种连线的形状</tspan>",
+                  GR, sub="⛔ 不用背公式 ——&#160;"
+                          "<tspan font-weight=\"700\">线越粗梯度越大，虚线表示负的</tspan>"
+                          "，三张图的骨架完全一样，只看红线怎么走")
 
+    # 线宽直接编码梯度大小 ——&#160;数值不用写在旁边也看得出谁大谁小
+    _GMAX = 4.0
+
+    def _lw(g):
+        return 1.8 + 4.8 * abs(g) / _GMAX
+
+    assert _lw(4.0) / _lw(1.0) > 1.9, "粗细差不够，看不出梯度大小的差别"
+    assert max(A, B) == A, "这三格默认 a 是 max 的赢家，换数要同步改图"
+
+    # (颜色, 底色, 符号, 名字, 像什么, a 拿到的, b 拿到的, 上游, 一句话)
     GATES = (
-        (BL, "#e8f0fe", "＋", "加法门", "分发器",
-         "上游给多少，<tspan font-weight=\"700\">两个输入原样各拿一份</tspan>",
-         "图里：上游 %g　→　a 和 b 都是 %g" % (dQ, dA)),
-        (OR, "#fef7e0", "×", "乘法门", "交换器",
-         "<tspan font-weight=\"700\">各自拿对方的前向值</tspan>当系数",
-         "图里：q 的梯度 ＝ c ＝ %g；c 的梯度 ＝ q ＝ %g" % (dQ, dC)),
-        (PU, "#f3e8fd", "max", "max 门", "路由器",
-         "<tspan font-weight=\"700\">全给赢的那个</tspan>，输的拿 0",
-         "若是 max(a, b) ＝ %g　→　a 全拿，b 拿 0" % max(A, B)),
+        (BL, "#e8f0fe", "＋", "加法门", "分发器", dA, dB, dQ,
+         "两条<tspan font-weight=\"700\">一样粗</tspan>　——　原样各拿一份"),
+        (OR, "#fef7e0", "×", "乘法门", "交换器", dQ, dC, dF,
+         "两条<tspan font-weight=\"700\">交叉</tspan>　——　各自拿对方的前向值"),
+        (PU, "#f3e8fd", "max", "max 门", "路由器", dQ, 0.0, dQ,
+         "一条<tspan font-weight=\"700\">断了</tspan>　——　全给赢的那个"),
     )
-    for i, (col, fill, sym, name, like, rule, ex) in enumerate(GATES):
+    for i, (col, fill, sym, name, like, g_up_a, g_up_b, gin, one) in enumerate(GATES):
         x = 40 + i * 442
-        f.box(x, py2 + 36, 418, 216, fill, col, 8)
-        f.box(x, py2 + 36, 418, 4, col, col, 2)
-        f.t(x + 62, py2 + 96, sym, col, True, 26, "middle")
-        f.t(x + 240, py2 + 84, name, INK, True, 18, "middle")
-        f.t(x + 240, py2 + 110, "像一个<tspan font-weight=\"700\">%s</tspan>" % like,
-            col, True, 16, "middle")
-        f.t(x + 209, py2 + 158, rule, GY, size=13.5, anchor="middle")
-        f.t(x + 209, py2 + 208, ex, col, size=12.5, anchor="middle")
+        f.box(x, py2 + 40, 418, 250, fill, col, 8)
+        f.box(x, py2 + 40, 418, 4, col, col, 2)
+        # ⚠️ max 的符号本身就是「max」，再加一次名字会变成「max max 门」
+        _head = name if sym == "max" else "%s　%s" % (sym, name)
+        f.t(x + 209, py2 + 76, "<tspan font-weight=\"700\">%s</tspan>"
+            "　像一个<tspan font-weight=\"700\">%s</tspan>" % (_head, like),
+            col, True, 17, "middle")
+
+        # ── 骨架：两个输入在左，门在中，上游在右。三格完全一致 ──────
+        ax, ay = x + 40, py2 + 142        # 上面那个输入
+        by = py2 + 218                    # 下面那个
+        gx, gy = x + 196, py2 + 180       # 门
+        ux = x + 336                      # 上游
+
+        for yy, nm in ((ay, "a"), (by, "b")):
+            f.box(ax - 26, yy - 19, 52, 38, "#fff", GY2, 6)
+            f.t(ax, yy + 6, nm, INK, True, 16, "middle")
+        f.box(gx - 30, gy - 30, 60, 60, "#fff", col, 30, sw=2)
+        f.t(gx, gy + 8, sym, col, True, 20 if sym != "max" else 15, "middle")
+        f.box(ux - 4, gy - 19, 66, 38, "#fff", col, 6)
+        f.t(ux + 29, gy + 6, "上游", col, True, 14, "middle")
+
+        # ── 红线：从右往左，这是三格唯一不同的地方 ────────────────
+        f.line(ux - 8, gy, gx + 34, gy, RD, _lw(gin), arrow=True)
+        f.t((ux + gx) / 2 + 16, gy - 12, "%g" % gin, RD, True, 13.5, "middle")
+
+        for yy, g in ((ay, g_up_a), (by, g_up_b)):
+            if g == 0:
+                # 路由器：这一条**真的断掉** ——&#160;不是画细，是画断
+                f.line(gx - 34, gy, gx - 70, yy, GY2, 1.4, dash="4 4", arrow=False)
+                f.t(gx - 88, yy + 5, "✕ 0", GY2, True, 14, "middle")
+                continue
+            f.line(gx - 34, gy, ax + 30, yy, RD, _lw(g),
+                   dash="7 4" if g < 0 else None, arrow=True)
+            f.t((gx + ax) / 2 + 4, yy + (-12 if yy == ay else 22), "%g" % g,
+                RD, True, 13.5, "middle")
+
+        # 乘法门：把「交换」真的画成一个 ✕
+        if sym == "×":
+            f.line(ax + 26, ay + 12, gx - 46, by - 16, GY, 1.1,
+                   dash="3 3", arrow=False)
+            f.line(ax + 26, by - 12, gx - 46, ay + 16, GY, 1.1,
+                   dash="3 3", arrow=False)
+            f.box(x + 95, py2 + 166, 28, 24, fill, fill, 4)
+            f.t(x + 109, py2 + 184, "换", GY, True, 12.5, "middle")
+
+        f.t(x + 209, py2 + 272, one, col, size=13, anchor="middle")
     f._pan = None
 
     # ══════════ Ⓒ 这张图跟这一讲的关系 ══════════════════════════════
