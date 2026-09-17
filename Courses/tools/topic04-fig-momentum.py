@@ -102,6 +102,15 @@ B_ADAM = 0.9
 WIN = 1.0 / (1.0 - B_ADAM)
 assert abs(WIN - 10.0) < 1e-9
 
+# ⭐⭐⭐ 一条「历史校验」：Polyak 1964 原文给的经验区间是 ρ ＝ 0.8 – 0.99。
+#   图上用的 β 和 Adam 今天的默认 β₁，**都得落在这个六十年前的区间里** ——&#160;
+#   落不进去说明我哪儿搞错了。（这条不是装饰，它真的能抓错。）
+POLYAK_LO, POLYAK_HI = 0.8, 0.99
+for _b, _who in ((BETA, "图上这条轨迹用的 β"), (B_ADAM, "Adam 的默认 β₁")):
+    assert POLYAK_LO <= _b <= POLYAK_HI, \
+        "%s ＝ %.2f 掉出了 Polyak 1964 给的 %.2f–%.2f" % (
+            _who, _b, POLYAK_LO, POLYAK_HI)
+
 
 def main():
     f = Fig(W, "上一格说梯度下降在垭口附近卡不住但走得很慢，这一格给第一个答案：动量。"
@@ -280,6 +289,29 @@ def main():
                "⭐ Ⓑ 特意挑的是绿轨迹<tspan font-weight=\"700\">正穿过浅坑</tspan>的那一步，"
                "并 assert 了「这一步的梯度近乎为 0，而移动量仍然很大」"
                "　——　<tspan font-weight=\"700\">这一条不成立的话，这张图就没什么可讲的了</tspan>。",
+               "📌 <tspan font-weight=\"700\">这个主意有多老：1964 年。</tspan>"
+               "Polyak《Some methods of speeding up the convergence of iteration "
+               "methods》——&#160;<tspan font-weight=\"700\">比反向传播那篇 Nature 还早 22 年</tspan>。"
+               "⭐ 他给这个方法起的名字是「<tspan font-weight=\"700\">小重球法</tspan>」"
+               "（the method of a small heavy sphere）——&#160;"
+               "<tspan font-weight=\"700\">我们上面画的那个球，名字就是从这儿来的。</tspan>",
+               "⭐⭐⭐ 而 Ⓑ 那个「梯度往回拉、惯性把它带走」的画面，"
+               "<tspan font-weight=\"700\">原文逐字说过</tspan>："
+               "「The motion proceeds <tspan font-weight=\"700\">not in the direction of "
+               "the force (i.e. antigradient) because of the presence of inertia</tspan>」"
+               "——&#160;运动不沿着力（也就是负梯度）的方向走，<tspan font-weight=\"700\">因为有惯性</tspan>。"
+               "他还说那一项会让它「沿着<tspan font-weight=\"700\">谷底</tspan>走」。",
+               "⭐⭐ 最有意思的一条：Polyak 在 1964 年给的经验取值是 "
+               "<tspan font-weight=\"700\">ρ ＝ 0.8 – 0.99</tspan>，"
+               "而今天 Adam 的默认 β₁ ＝ 0.9 ——&#160;"
+               "<tspan font-weight=\"700\">六十年过去，还在这个区间里。</tspan>"
+               "（脚本里拿这个区间 assert 了图上用的两个 β。）"
+               "⭐ 他连调参顺序都写了：<tspan font-weight=\"700\">先把 ρ 设成 0 调好学习率，"
+               "等收敛慢下来再把动量加上</tspan>；并报告实测「多数情况下比梯度法快，最多十倍」。",
+               "⛔ 有一条我<tspan font-weight=\"700\">没能核实，所以不写</tspan>："
+               "常有人说 1986 年那篇反向传播的 Nature 论文里就带了动量项。"
+               "<tspan font-weight=\"700\">这一轮没拿到原文</tspan>（链接 404），"
+               "所以本讲不提这一条 ——&#160;等拿到原文再说。",
                "📌 讲法取自<tspan font-weight=\"700\">李宏毅</tspan>"
                "《类神经网络训练不起来怎么办（一）》：他把动量写成"
                "「<tspan font-weight=\"700\">Movement ＝ 上一步的移动 −&#160;当前的梯度</tspan>」"

@@ -3269,6 +3269,10 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="1500" fill="#0d652d" style="font-size:15.0px">⛔ 但<tspan font-weight="700">别把它讲成「能找到全局最优」</tspan>。图上那条能出来，是因为那个坑<tspan font-weight="700">够浅</tspan>；换个更深的坑它一样出不来。<tspan font-weight="700">它降低的是「起点决定一切」的程度，不是消除它。</tspan></text>
 </svg><figcaption>⭐⭐⭐ <b>同一条 loss、同一个起点，只多给它一点惯性。</b><em>灰的那条滚进半路那个浅坑就停了（<b>梯度真的归零，动不了</b>）；绿的那条冲过去，落进了后面更深的谷。<b>两条都是真滚出来的。</b></em><span class="capmore"><br>⭐⭐ <em>Ⓑ 是机关所在，而且比预想的更狠：在它刚越过坑底那一刻，<b>梯度其实是在把它往回拉</b> ——&nbsp;<b>是惯性以十几倍的优势把它带出去的。</b>箭头长度和方向都按真实数值画。</em><br>⛔ <em>但别读成「能找到全局最优」——&nbsp;<b>它冲得过去是因为那个坑够浅</b>。它降低的是「起点决定一切」的程度，不是消除它。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ Ⓐ 两条轨迹、Ⓑ 三个箭头的长度、Ⓒ 那排柱子，<b>全是脚本算的</b>。loss 是自己造的一维函数 L(x) ＝ 0.015x² ＋ 0.45cos(1.1x)，造它的唯一要求是「路上正好一个浅坑、一个深谷」——&#160;<b>坑在哪、多深，是让脚本自己找出来的，不是我标上去的</b>。四条 assert 盯着：没动量那条必须停在浅坑且梯度归零、有动量那条必须落进深谷、两者落点要拉开。</p>
 <p>⭐ Ⓑ 特意挑的是绿轨迹<b>正穿过浅坑</b>的那一步，并 assert 了「这一步的梯度近乎为 0，而移动量仍然很大」　——　<b>这一条不成立的话，这张图就没什么可讲的了</b>。</p>
+<p>📌 <b>这个主意有多老：1964 年。</b>Polyak《Some methods of speeding up the convergence of iteration methods》——&#160;<b>比反向传播那篇 Nature 还早 22 年</b>。⭐ 他给这个方法起的名字是「<b>小重球法</b>」（the method of a small heavy sphere）——&#160;<b>我们上面画的那个球，名字就是从这儿来的。</b></p>
+<p>⭐⭐⭐ 而 Ⓑ 那个「梯度往回拉、惯性把它带走」的画面，<b>原文逐字说过</b>：「The motion proceeds <b>not in the direction of the force (i.e. antigradient) because of the presence of inertia</b>」——&#160;运动不沿着力（也就是负梯度）的方向走，<b>因为有惯性</b>。他还说那一项会让它「沿着<b>谷底</b>走」。</p>
+<p>⭐⭐ 最有意思的一条：Polyak 在 1964 年给的经验取值是 <b>ρ ＝ 0.8 – 0.99</b>，而今天 Adam 的默认 β₁ ＝ 0.9 ——&#160;<b>六十年过去，还在这个区间里。</b>（脚本里拿这个区间 assert 了图上用的两个 β。）⭐ 他连调参顺序都写了：<b>先把 ρ 设成 0 调好学习率，等收敛慢下来再把动量加上</b>；并报告实测「多数情况下比梯度法快，最多十倍」。</p>
+<p>⛔ 有一条我<b>没能核实，所以不写</b>：常有人说 1986 年那篇反向传播的 Nature 论文里就带了动量项。<b>这一轮没拿到原文</b>（链接 404），所以本讲不提这一条 ——&#160;等拿到原文再说。</p>
 <p>📌 讲法取自<b>李宏毅</b>《类神经网络训练不起来怎么办（一）》：他把动量写成「<b>Movement ＝ 上一步的移动 −&#160;当前的梯度</b>」（不只看梯度，还看上一步怎么动的），并在收尾写明 <b>「smaller batch size and momentum help escape critical points」</b>。⛔ 图是我们自己重画的，曲线和数都是自己跑的。</p></details></figure>
 
 <p class="lead">⭐ 这三张图把<b>方向</b>说完了 ——&nbsp;顺着负梯度走 loss 就在降，维度一多基本卡不死，平地上还能靠惯性滑过去。
