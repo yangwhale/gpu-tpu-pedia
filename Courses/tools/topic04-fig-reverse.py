@@ -131,10 +131,61 @@ def main():
         GY, size=13)
     f._pan = None
 
-    # ══════════ Ⓒ 判据 ＋ 反例 ══════════════════════════════════════
+    # ══════════ Ⓒ 反向是「同一张网倒着走」 ═══════════════════════
+    # ⭐⭐⭐ 2026-09-17 新增。取自**李宏毅**（台大）那套讲法：
+    #   他在投影片上把 backward pass 画成**另一张 neural network** ——
+    #   同样的拓扑、边反过来、权重转置，而每个「神经元」的动作
+    #   从「套一个非线性」换成了 **multiply a constant**（原文用词），
+    #   那个常数是 σ′(z)，**在前向就被定死了**。
+    # ⭐⭐ 为什么这一格值得单画：前面 Ⓐ Ⓑ 回答的是「往哪边走、走几遍」，
+    #   而这一格回答的是**「反向那一遍长什么样」** ——&#160;
+    #   答案是「跟前向一模一样，只是三处换了」。
+    #   ⛔ 这比「链式法则一层层往回乘」好懂得多，因为它给了一个**形状**。
+    # ⭐⭐⭐ 而第三行那个「常数在前向就定下来了」，
+    #   是这一讲「激活扔不掉」的**第三次**出现（前两次：1.6 的闭环、小电路的乘法门）
+    #   ——&#160;三条路殊途同归，这正是它该被反复说的理由。
+    # 📌 出处：李宏毅《Backpropagation》课程投影片（台大）——&#160;
+    #   投影片上写着 "new type of neuron / multiply a constant" 与 (W^{l+1})ᵀ。
+    #   ⛔ 图是我们自己重画的。
+    PH_M = 322
+    pym = f.panel(0, py2 + PH2 + 20, W, PH_M,
+                  "Ⓒ ⭐⭐⭐ 换个看法：<tspan font-weight=\"700\">"
+                  "反向那一遍，其实就是同一张网倒着走</tspan>", BL,
+                  sub="⭐ 不是「另一套算法」——&#160;"
+                      "<tspan font-weight=\"700\">同样的形状，只有三处换了</tspan>")
+
+    ROWS = (
+        ("走的方向", "左 →　右", "右 →　左", GY2,
+         "⭐ 就是 Ⓐ Ⓑ 那件事"),
+        ("每条边上乘的", "这一层的权重 W",
+         "<tspan font-weight=\"700\">同一个 W，转置过来</tspan>", GR,
+         "⭐ 没有新参数 ——　用的还是那一份"),
+        ("每个节点做的", "套一个激活函数（非线性）",
+         "<tspan font-weight=\"700\">乘一个常数</tspan>", RD,
+         "⛔ <tspan font-weight=\"700\">它在前向就定死了</tspan>"),
+    )
+    CX = (250, 620, 1010)
+    f.t(CX[1], pym + 54, "前向", INK, True, 16, "middle")
+    f.t(CX[2], pym + 54, "反向", INK, True, 16, "middle")
+    for i, (what, fwd, bwd, col, note) in enumerate(ROWS):
+        ry = pym + 92 + i * 62
+        f.t(CX[0], ry, what, INK, True, 14.5, "end")
+        f.t(CX[1], ry, fwd, GY, size=14, anchor="middle")
+        f.t(CX[2], ry, bwd, col, True, 14.5, "middle")
+        f.t(1180, ry, note, col, size=12.5)
+        if i:
+            f.line(70, ry - 30, W - 60, ry - 30, LINE, 1, arrow=False)
+
+    f.t(700, pym + 288, "⭐⭐⭐ 第三行是这一格的落点："
+        "<tspan font-weight=\"700\">那个常数在前向就定下来了</tspan>"
+        "　——　所以前向算出来的东西<tspan font-weight=\"700\">必须留在场上</tspan>，"
+        "反向才有东西可乘。", INK, size=14.5, anchor="middle")
+    f._pan = None
+
+    # ══════════ Ⓓ 判据 ＋ 反例 ══════════════════════════════════════
     PH3 = 222
-    py3 = f.panel(0, py2 + PH2 + 20, W, PH3,
-                  "Ⓒ ⭐⭐ 所以规则只有一条，而且它<tspan font-weight=\"700\">"
+    py3 = f.panel(0, pym + PH_M + 20, W, PH3,
+                  "Ⓓ ⭐⭐ 所以规则只有一条，而且它<tspan font-weight=\"700\">"
                   "跟神经网络没关系</tspan>", PU,
                   sub="⛔ 别把它记成「反向传播永远更好」——&#160;"
                       "<tspan font-weight=\"700\">换个形状它就反过来</tspan>")
