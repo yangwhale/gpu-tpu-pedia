@@ -3543,98 +3543,92 @@ body.figonly section h3{margin-top:34px}
 <p class="lead">前面整整一讲都在算<b>账</b>。<em>可账算得再清楚，也回答不了训练现场最常见的那一句：
   「loss 突然飞上去了，怎么办？」</em></p>
 
-<figure class="fbox fwide" id="fig-stability"><svg viewBox="0 0 1400 1250" width="100%" role="img" aria-label="训练稳定性的三类治法各在治链条上的不同位置：结构层面是归一化放哪儿和 QK-norm，数值层面是 z-loss 和梯度裁剪，现场层面是回滚 checkpoint 加跳数据。而 ST-MoE 那张对照表说明：让训练稳住很容易，难的是稳住而不牺牲质量 —— 收紧 update clipping 三次全稳，可质量从负一点七五掉到负四点二"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">训不崩　——　<tspan font-weight="700">三类治法，治的是链条上三个不同的位置</tspan></text>
+<figure class="fbox fwide" id="fig-stability"><svg viewBox="0 0 1400 1316" width="100%" role="img" aria-label="把训练稳定性的三类治法画成一条河：上游改河道、中游装闸门、下游捞船。对应到技术上，结构层面是归一化放哪儿和 QK-norm，数值层面是 z-loss 和梯度裁剪，现场层面是回滚 checkpoint 加跳数据。而 ST-MoE 那张对照表说明：让训练稳住很容易，难的是稳住而不牺牲质量 —— 收紧 update clipping 三次全稳，可质量从负一点七五掉到负四点二"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">训不崩　——　<tspan font-weight="700">把它当成一条河，三段各治各的</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⛔ 这一节最容易写成一张技巧清单 ——&#160;<tspan font-weight="700">列完了还是不知道该先动哪个</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">治结构</text>
-<rect x="89" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="110" y="74" fill="#5f6368" style="font-size:14.0px">治数值</text>
-<rect x="178" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="199" y="74" fill="#5f6368" style="font-size:14.0px">治现场</text>
-<rect x="0" y="102" width="1400" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">上游 · 改河道</text>
+<rect x="146" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="167" y="74" fill="#5f6368" style="font-size:14.0px">中游 · 装闸门</text>
+<rect x="292" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="313" y="74" fill="#5f6368" style="font-size:14.0px">下游 · 捞船</text>
+<rect x="0" y="102" width="1400" height="446" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 同一个症状（loss 飞了），<tspan font-weight="700">可以从三个位置下手</tspan></tspan></text>
-<text class="svgsm" x="569" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 从左往右：<tspan font-weight="700">越左越治本，越右越应急</tspan></text>
-<rect x="40" y="166" width="418" height="288" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
-<rect x="40" y="166" width="418" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="249" y="202" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">① 治结构</tspan></text>
-<text class="svgsm" x="249" y="230" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">改网络本身，让它天生不容易飞</tspan></text>
-<text class="svgsm" x="62" y="272" fill="#174ea6" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="80" y="272" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">归一化放进残差块里</tspan>（Pre-LN）</text>
-<text class="svgsm" x="62" y="310" fill="#174ea6" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="80" y="310" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">QK-norm</tspan> ——　别让注意力分数长疯</text>
-<text class="svgsm" x="62" y="348" fill="#174ea6" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="80" y="348" fill="#5f6368" style="font-size:13.5px">初始化按深度缩一下</text>
-<text class="svgsm" x="249" y="432" fill="#174ea6" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⭐ 一次性，改完就不用管</tspan></text>
-<rect x="482" y="166" width="418" height="288" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
-<rect x="482" y="166" width="418" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="691" y="202" fill="#b06000" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">② 治数值</tspan></text>
-<text class="svgsm" x="691" y="230" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">让某些量不许长太大</tspan></text>
-<text class="svgsm" x="504" y="272" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="522" y="272" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">z-loss</tspan> ——　摁住 softmax 前的 logits</text>
-<text class="svgsm" x="504" y="310" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="522" y="310" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">梯度裁剪</tspan> ——　按全局范数，常设 1.0</text>
-<text class="svgsm" x="504" y="348" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="522" y="348" fill="#5f6368" style="font-size:13.5px">关键处用高精度算</text>
-<text class="svgsm" x="691" y="432" fill="#b06000" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⭐ 便宜，而且大多不伤质量</tspan></text>
-<text class="svgsm" x="470" y="310" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
-<rect x="924" y="166" width="418" height="288" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
-<rect x="924" y="166" width="418" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="1133" y="202" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">③ 治现场</tspan></text>
-<text class="svgsm" x="1133" y="230" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">已经飞了，怎么把这一次救回来</tspan></text>
-<text class="svgsm" x="946" y="272" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="964" y="272" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">回滚到 spike 之前的 checkpoint</tspan></text>
-<text class="svgsm" x="946" y="310" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="964" y="310" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">跳掉那一段数据</tspan>，再往下跑</text>
-<text class="svgsm" x="946" y="348" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">·</tspan></text>
-<text class="svgsm" x="964" y="348" fill="#5f6368" style="font-size:13.5px">把 spike 的时间点和数据位置记下来</text>
-<text class="svgsm" x="1133" y="432" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⛔ 不是修好了，是绕过去了</tspan></text>
-<text class="svgsm" x="912" y="310" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
-<rect x="0" y="534" width="1400" height="260" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="534" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="0" y="536" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="564" x2="1400" y2="564" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="554" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐⭐⭐ PaLM 做过一个消融，结论跟所有人的第一反应相反</tspan></text>
-<text class="svgsm" x="419" y="554" fill="#5f6368" style="font-size:11.0px">⭐ 这个消融<tspan font-weight="700">只花了一次重训</tspan>，却把一整类猜测排除掉了</text>
-<rect x="70" y="598" width="600" height="186" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="370" y="634" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">拿「坏数据」这个假设验一验</tspan></text>
-<text class="svgsm" x="370" y="682" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">同一批数据　＋　<tspan font-weight="700">换一个时刻</tspan></tspan></text>
-<text class="svgsm" x="370" y="716" fill="#80868b" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">↓</tspan></text>
-<text class="svgsm" x="370" y="754" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">⛔ 结果：不飞。</tspan></text>
-<line x1="690" y1="692" x2="726" y2="692" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<rect x="740" y="598" width="600" height="186" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="1040" y="634" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">所以不是数据坏</tspan></text>
-<text class="svgsm" x="1040" y="686" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">两个条件<tspan font-weight="700">同时满足</tspan>才出事</tspan></text>
-<text class="svgsm" x="1040" y="716" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">缺一样都不会飞</text>
-<text class="svgsm" x="1040" y="754" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐⭐ 这解释了为什么回滚 ＋ 跳数据管用</tspan></text>
-<rect x="0" y="846" width="1400" height="322" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="846" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="0" y="848" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="876" x2="1400" y2="876" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="866" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓒ ⭐⭐ 这一节真正的难点：<tspan font-weight="700">让它稳住很容易，难的是稳住而不牺牲质量</tspan></tspan></text>
-<text class="svgsm" x="699" y="866" fill="#5f6368" style="font-size:11.0px">📌 ST-MoE 论文 Table 4 的原数 ——　三种做法，三次独立训练</text>
-<text class="svgsm" x="410" y="946" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">基线</tspan></text>
-<rect x="430" y="920" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
-<rect x="430" y="920" width="585.6785714285714" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="1064" y="947" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">-1.755</tspan></text>
-<text class="svgsm" x="1146" y="947" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 4/6</tspan></text>
-<text class="svgsm" x="442" y="982" fill="#5f6368" style="font-size:13.0px">⚠️ 六次跑崩两次</text>
-<text class="svgsm" x="410" y="1020" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">收紧 update clipping</tspan></text>
-<rect x="430" y="994" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
-<rect x="430" y="994" width="42.95714285714284" height="40" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="1064" y="1021" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">-4.206</tspan></text>
-<text class="svgsm" x="1146" y="1021" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 3/3</tspan></text>
-<text class="svgsm" x="442" y="1056" fill="#5f6368" style="font-size:13.0px">⛔ 条短了一大截 ——　看这里</text>
-<text class="svgsm" x="410" y="1094" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">router z-loss</tspan></text>
-<rect x="430" y="1068" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
-<rect x="430" y="1068" width="588.7785714285715" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="1064" y="1095" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">-1.741</tspan></text>
-<text class="svgsm" x="1146" y="1095" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 3/3</tspan></text>
-<text class="svgsm" x="442" y="1130" fill="#5f6368" style="font-size:13.0px">⭐ 条最长，而且一次没崩</text>
-<text class="svgsm" x="430" y="1156" fill="#5f6368" style="font-size:14.5px">⭐ 横条越长质量越好（这是个越大越好的指标）。<tspan font-weight="700">中间那根「稳定 3/3」看着完美，可它把质量打穿了。</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 把它想成<tspan font-weight="700">一条河</tspan>　——　<tspan font-weight="700">同一场水患，三个位置都能下手</tspan></tspan></text>
+<text class="svgsm" x="849" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 从上游到下游：<tspan font-weight="700">越靠上越治本，越靠下越应急</tspan></text>
+<path d="M 40.0 282.0 L 480.0 276.0 L 480.0 376.0 L 40.0 368.0 Z" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="260" y="324" fill="#174ea6" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">上游</tspan></text>
+<text class="svgsm" x="260" y="354" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">改河道</tspan></text>
+<text class="svgsm" x="260" y="248" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">把河挖宽、挖直　——　水本来就不容易漫出来</text>
+<text class="svgsm" x="260" y="410" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· 归一化放进残差块里（Pre-LN）</text>
+<text class="svgsm" x="260" y="436" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· QK-norm　——　别让注意力分数长疯</text>
+<text class="svgsm" x="260" y="462" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· 初始化按深度缩一下</text>
+<text class="svgsm" x="260" y="512" fill="#174ea6" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">⭐ 一次性：开工前做完，之后不用管</tspan></text>
+<path d="M 480.0 276.0 L 920.0 270.0 L 920.0 384.0 L 480.0 376.0 Z" fill="#fef7e0" stroke="#e8710a" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="700" y="324" fill="#b06000" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">中游</tspan></text>
+<text class="svgsm" x="700" y="354" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">装闸门</tspan></text>
+<text class="svgsm" x="700" y="248" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">水位一高就关闸　——　不让它冲下去</text>
+<text class="svgsm" x="700" y="410" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· z-loss　——　摁住 softmax 前的 logits</text>
+<text class="svgsm" x="700" y="436" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· 梯度裁剪　——　按全局范数，常设 1.0</text>
+<text class="svgsm" x="700" y="462" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· 关键处用高精度算</text>
+<text class="svgsm" x="700" y="512" fill="#b06000" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">⭐ 常驻：一直开着，便宜，多数不伤质量</tspan></text>
+<line x1="480.0" y1="256" x2="480.0" y2="402" stroke="#80868b" stroke-width="1" stroke-linecap="round" stroke-dasharray="4 4"/>
+<path d="M 920.0 270.0 L 1360.0 264.0 L 1360.0 392.0 L 920.0 384.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="1140" y="324" fill="#a50e0e" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">下游</tspan></text>
+<text class="svgsm" x="1140" y="354" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">捞船</tspan></text>
+<text class="svgsm" x="1140" y="248" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">已经翻了　——&#160;把船捞回来重新开</text>
+<text class="svgsm" x="1140" y="410" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· 回滚到 spike 之前的 checkpoint</text>
+<text class="svgsm" x="1140" y="436" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· 跳掉那一段数据，再往下跑</text>
+<text class="svgsm" x="1140" y="462" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">· 把出事的时间点和数据位置记下来</text>
+<text class="svgsm" x="1140" y="512" fill="#a50e0e" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">⛔ 每出一次事就得干一次　——　而且没修好</tspan></text>
+<line x1="920.0" y1="256" x2="920.0" y2="402" stroke="#80868b" stroke-width="1" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="44" y="208" fill="#174ea6" style="font-size:14.0px"><tspan font-weight="700">水往这边流　→</tspan></text>
+<text class="svgsm" x="1356" y="208" fill="#a50e0e" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">loss 飞了</tspan></text>
+<text class="svgsm" x="700" y="544" fill="#202124" text-anchor="middle" style="font-size:14.5px">⭐⭐⭐ <tspan font-weight="700">越往下游，越是在救火</tspan>　——　而上游那几样<tspan font-weight="700">开工前做一次就完了</tspan>，下游那几样<tspan font-weight="700">每出一次事就得再干一次</tspan>。</text>
+<rect x="0" y="600" width="1400" height="260" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="600" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="602" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="630" x2="1400" y2="630" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="620" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐⭐⭐ PaLM 做过一个消融，结论跟所有人的第一反应相反</tspan></text>
+<text class="svgsm" x="419" y="620" fill="#5f6368" style="font-size:11.0px">⭐ 这个消融<tspan font-weight="700">只花了一次重训</tspan>，却把一整类猜测排除掉了</text>
+<rect x="70" y="664" width="600" height="186" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="370" y="700" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">拿「坏数据」这个假设验一验</tspan></text>
+<text class="svgsm" x="370" y="748" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">同一批数据　＋　<tspan font-weight="700">换一个时刻</tspan></tspan></text>
+<text class="svgsm" x="370" y="782" fill="#80868b" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">↓</tspan></text>
+<text class="svgsm" x="370" y="820" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">⛔ 结果：不飞。</tspan></text>
+<line x1="690" y1="758" x2="726" y2="758" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="740" y="664" width="600" height="186" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1040" y="700" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">所以不是数据坏</tspan></text>
+<text class="svgsm" x="1040" y="752" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">两个条件<tspan font-weight="700">同时满足</tspan>才出事</tspan></text>
+<text class="svgsm" x="1040" y="782" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">缺一样都不会飞</text>
+<text class="svgsm" x="1040" y="820" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐⭐ 这解释了为什么回滚 ＋ 跳数据管用</tspan></text>
+<rect x="0" y="912" width="1400" height="322" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="912" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="914" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="942" x2="1400" y2="942" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="932" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓒ ⭐⭐ 这一节真正的难点：<tspan font-weight="700">让它稳住很容易，难的是稳住而不牺牲质量</tspan></tspan></text>
+<text class="svgsm" x="699" y="932" fill="#5f6368" style="font-size:11.0px">📌 ST-MoE 论文 Table 4 的原数 ——　三种做法，三次独立训练</text>
+<text class="svgsm" x="410" y="1012" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">基线</tspan></text>
+<rect x="430" y="986" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="986" width="585.6785714285714" height="40" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="1064" y="1013" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">-1.755</tspan></text>
+<text class="svgsm" x="1146" y="1013" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 4/6</tspan></text>
+<text class="svgsm" x="442" y="1048" fill="#5f6368" style="font-size:13.0px">⚠️ 六次跑崩两次</text>
+<text class="svgsm" x="410" y="1086" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">收紧 update clipping</tspan></text>
+<rect x="430" y="1060" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="1060" width="42.95714285714284" height="40" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1064" y="1087" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">-4.206</tspan></text>
+<text class="svgsm" x="1146" y="1087" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 3/3</tspan></text>
+<text class="svgsm" x="442" y="1122" fill="#5f6368" style="font-size:13.0px">⛔ 条短了一大截 ——　看这里</text>
+<text class="svgsm" x="410" y="1160" fill="#202124" text-anchor="end" style="font-size:15.5px"><tspan font-weight="700">router z-loss</tspan></text>
+<rect x="430" y="1134" width="620" height="40" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="1134" width="588.7785714285715" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1064" y="1161" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">-1.741</tspan></text>
+<text class="svgsm" x="1146" y="1161" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">稳定 3/3</tspan></text>
+<text class="svgsm" x="442" y="1196" fill="#5f6368" style="font-size:13.0px">⭐ 条最长，而且一次没崩</text>
+<text class="svgsm" x="430" y="1222" fill="#5f6368" style="font-size:14.5px">⭐ 横条越长质量越好（这是个越大越好的指标）。<tspan font-weight="700">中间那根「稳定 3/3」看着完美，可它把质量打穿了。</tspan></text>
 </svg><figcaption>⭐⭐ Ⓐ 按「治在链条的哪一步」排，不按「有哪些技巧」排 ——&nbsp;<em>技巧清单列完了，读者还是不知道<b>该先动哪个</b>。</em><span class="capmore"><br>⭐⭐⭐ <em>Ⓑ 是 PaLM 那个消融：同一批数据换个时刻喂就不飞，所以 spike 是数据和参数状态撞出来的，不是数据本身坏。</em><br>⛔ <em>Ⓒ 中间那根条看着完美（稳定 3/3），<b>可它把质量打穿了</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>PaLM 540B 的 spike 与消融：<b>arXiv <a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a></b> <a href="#s5-1">§5.1</a> ——&#160;「大约 20 次」「回滚约 100 步」「跳 200–500 批」「<b>不认为是数据本身坏</b>」都是原文</p>
 <p>router z-loss 与 Ⓒ 那张表：<b>arXiv <a href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener">2202.08906</a></b>（ST-MoE）。⭐ 论文自己的小标题就是「<b>很多方法能稳住稀疏模型，但代价是质量变差</b>」</p>
 <p>QK-norm：<b>arXiv <a href="https://arxiv.org/abs/2302.05442" target="_blank" rel="noopener">2302.05442</a></b>（ViT-22B）§2 ——&#160;在<b>约 80 亿参数</b>处观察到训练发散，根因是注意力 logits 变得极大、注意力权重塌成几乎 one-hot（熵接近 0）</p>

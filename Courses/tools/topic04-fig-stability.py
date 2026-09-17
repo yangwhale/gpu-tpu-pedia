@@ -35,7 +35,8 @@ assert STMOE[1][2] < STMOE[0][2] < STMOE[2][2]   # 「稳 ≠ 好」这件事得
 
 
 def main():
-    f = Fig(W, "训练稳定性的三类治法各在治链条上的不同位置："
+    f = Fig(W, "把训练稳定性的三类治法画成一条河：上游改河道、中游装闸门、"
+               "下游捞船。对应到技术上，"
                "结构层面是归一化放哪儿和 QK-norm，数值层面是 z-loss 和梯度裁剪，"
                "现场层面是回滚 checkpoint 加跳数据。"
                "而 ST-MoE 那张对照表说明：让训练稳住很容易，"
@@ -44,47 +45,79 @@ def main():
 
     y0 = f.header(
         "训不崩　——　<tspan font-weight=\"700\">"
-        "三类治法，治的是链条上三个不同的位置</tspan>",
+        "把它当成一条河，三段各治各的</tspan>",
         "⛔ 这一节最容易写成一张技巧清单 ——&#160;<tspan font-weight=\"700\">"
         "列完了还是不知道该先动哪个</tspan>",
-        [(BL, "治结构"), (OR, "治数值"), (RD, "治现场")])
+        [(BL, "上游 · 改河道"), (OR, "中游 · 装闸门"), (RD, "下游 · 捞船")])
 
-    # ══════════ Ⓐ 三类治法 ═══════════════════════════════════════
-    PH = 380
+    # ══════════ Ⓐ 一条河 ══════════════════════════════════════════
+    # ⭐⭐⭐ 2026-09-17 重画。原来是**三张并排的卡片**，每张列三条技巧。
+    #   ⛔ 它的毛病不是不对，是**没有画面**：三张卡并排，
+    #     读者记住的是「有九个技巧」，而不是「它们各治一段」。
+    # ⭐ 换成一条河之后，「上游 / 中游 / 下游」这三个词自己就把分工说完了：
+    #     · 上游 **改河道** ——&#160;把河挖宽挖直，水本来就不容易漫出来（治结构）
+    #     · 中游 **装闸门** ——&#160;水位一高就关闸，不让它冲下去（治数值）
+    #     · 下游 **捞船**   ——&#160;已经翻了，把船捞回来重新开（治现场）
+    #   ⭐⭐ 而这个比喻还顺带带出了一件卡片版讲不出来的事：
+    #     **上游的活是一次性的，下游的活每出一次事就得干一次。**
+    # 📌 现场原话：「跟实际生活中的事情结合起来」——&#160;这一格是那条要求的落点。
+    PH = 446
     py = f.panel(0, y0, W, PH,
-                 "Ⓐ 同一个症状（loss 飞了），"
-                 "<tspan font-weight=\"700\">可以从三个位置下手</tspan>", BL,
-                 sub="⭐ 从左往右：<tspan font-weight=\"700\">越左越治本，越右越应急</tspan>")
+                 "Ⓐ 把它想成<tspan font-weight=\"700\">一条河</tspan>　——　"
+                 "<tspan font-weight=\"700\">同一场水患，三个位置都能下手</tspan>", BL,
+                 sub="⭐ 从上游到下游：<tspan font-weight=\"700\">"
+                     "越靠上越治本，越靠下越应急</tspan>")
 
-    CURES = (
-        (BL, "#e8f0fe", "① 治结构", "改网络本身，让它天生不容易飞",
-         ("<tspan font-weight=\"700\">归一化放进残差块里</tspan>（Pre-LN）",
-          "<tspan font-weight=\"700\">QK-norm</tspan> ——　别让注意力分数长疯",
+    RX0, RX1 = 40, W - 40
+    RTOP, RBOT = py + 150, py + 236          # 河面上下沿
+    SEG = (RX1 - RX0) / 3.0
+
+    # 河 —— 一条从左到右、略微变宽的蓝带（三段各自着色）
+    RIVER = (
+        (BL, "#e8f0fe", "上游", "改河道",
+         "把河挖宽、挖直　——　水本来就不容易漫出来",
+         ("归一化放进残差块里（Pre-LN）",
+          "QK-norm　——　别让注意力分数长疯",
           "初始化按深度缩一下"),
-         "⭐ 一次性，改完就不用管"),
-        (OR, "#fef7e0", "② 治数值", "让某些量不许长太大",
-         ("<tspan font-weight=\"700\">z-loss</tspan> ——　摁住 softmax 前的 logits",
-          "<tspan font-weight=\"700\">梯度裁剪</tspan> ——　按全局范数，常设 1.0",
+         "⭐ 一次性：开工前做完，之后不用管"),
+        (OR, "#fef7e0", "中游", "装闸门",
+         "水位一高就关闸　——　不让它冲下去",
+         ("z-loss　——　摁住 softmax 前的 logits",
+          "梯度裁剪　——　按全局范数，常设 1.0",
           "关键处用高精度算"),
-         "⭐ 便宜，而且大多不伤质量"),
-        (RD, "#fce8e6", "③ 治现场", "已经飞了，怎么把这一次救回来",
-         ("<tspan font-weight=\"700\">回滚到 spike 之前的 checkpoint</tspan>",
-          "<tspan font-weight=\"700\">跳掉那一段数据</tspan>，再往下跑",
-          "把 spike 的时间点和数据位置记下来"),
-         "⛔ 不是修好了，是绕过去了"),
+         "⭐ 常驻：一直开着，便宜，多数不伤质量"),
+        (RD, "#fce8e6", "下游", "捞船",
+         "已经翻了　——&#160;把船捞回来重新开",
+         ("回滚到 spike 之前的 checkpoint",
+          "跳掉那一段数据，再往下跑",
+          "把出事的时间点和数据位置记下来"),
+         "⛔ 每出一次事就得干一次　——　而且没修好"),
     )
-    for i, (col, fill, tag, what, items, note) in enumerate(CURES):
-        x = 40 + i * 442
-        f.box(x, py + 34, 418, 288, fill, col, 8)
-        f.box(x, py + 34, 418, 4, col, col, 2)
-        f.t(x + 209, py + 70, tag, col, True, 20, "middle")
-        f.t(x + 209, py + 98, what, INK, True, 15, "middle")
+    for i, (col, fill, where, act, why, items, note) in enumerate(RIVER):
+        x0 = RX0 + i * SEG
+        # 河段：上沿平、下沿随着往下游走略微加宽（水越来越急）
+        d = ("M %.1f %.1f L %.1f %.1f L %.1f %.1f L %.1f %.1f Z"
+             % (x0, RTOP - i * 6, x0 + SEG, RTOP - (i + 1) * 6,
+                x0 + SEG, RBOT + (i + 1) * 8, x0, RBOT + i * 8))
+        f.path(d, col, 1.4, fill=fill, arrow=False)
+        cx = x0 + SEG / 2.0
+        f.t(cx, RTOP + 42, where, col, True, 26, "middle")
+        f.t(cx, RTOP + 72, act, INK, True, 19, "middle")
+        f.t(cx, py + 116, why, GY, size=13.5, anchor="middle")
         for k, it in enumerate(items):
-            f.t(x + 22, py + 140 + k * 38, "·", col, True, 16)
-            f.t(x + 40, py + 140 + k * 38, it, GY, size=13.5)
-        f.t(x + 209, py + 300, note, col, True, 14.5, "middle")
+            f.t(cx, py + 278 + k * 26, "· " + it, GY, size=13, anchor="middle")
+        f.t(cx, py + 380, note, col, True, 13.5, "middle")
         if i:
-            f.t(x - 12, py + 178, "→", GY2, True, 20, "middle")
+            f.line(x0, RTOP - 26, x0, RBOT + 34, GY2, 1, dash="4 4", arrow=False)
+
+    # 水流方向
+    f.t(RX0 + 4, py + 76, "水往这边流　→", BL, True, 14)
+    f.t(RX1 - 4, py + 76, "loss 飞了", RD, True, 15, "end")
+
+    f.t(700, py + 412, "⭐⭐⭐ <tspan font-weight=\"700\">越往下游，越是在救火</tspan>"
+        "　——　而上游那几样<tspan font-weight=\"700\">开工前做一次就完了</tspan>，"
+        "下游那几样<tspan font-weight=\"700\">每出一次事就得再干一次</tspan>。",
+        INK, size=14.5, anchor="middle")
     f._pan = None
 
     # ══════════ Ⓑ 那个最反直觉的实验 ═════════════════════════════
