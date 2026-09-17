@@ -1456,7 +1456,7 @@ body.figonly section h3{margin-top:34px}
 </ul></div>
 
 
-<h3 id="s1-8">1.8　⭐ 梯度的一生 ——&nbsp;<u>从算出来到被扔掉，中间要过五道</u></h3>
+<h3 id="s1-8">1.8　⭐ 梯度算出来之后，<u>还没完</u></h3>
 
 <!-- ⭐⭐⭐ 2026-09-16 补。现场把这一讲的范围收紧了：
      「我们主要是想讲**反向计算**，跟所有**优化器**相关的东西。
@@ -1470,17 +1470,90 @@ body.figonly section h3{margin-top:34px}
   <em>可它离「被用掉」还隔着好几道 ——&nbsp;
   而这几道每一道都是推理里不存在的。</em></p>
 
-<div class="note"><p>📌 一个梯度从出生到消失，完整是这样：</p>
-<ol>
-  <li><b>算出来</b> ——&nbsp;<em>反向走到哪一层，那一层的梯度就出来了
-    （注意：是从后往前陆续出来的，不是最后一起出来）。</em></li>
-  <li><b>跨卡汇总</b> ——&nbsp;<em>每张卡看到的是不同的数据，
-    所以各自算出的梯度<b>必须取平均</b>，否则每张卡会朝不同方向走。</em></li>
-  <li><b>裁剪</b> ——&nbsp;<em>按全局范数，超了就整体等比例缩回去。</em></li>
-  <li><b>（可选）累积</b> ——&nbsp;<em>几个 micro-batch 的梯度先加起来，再更新一次。</em></li>
-  <li>交给优化器，然后扔掉 ——&nbsp;<em>更新完这一份就没用了，
-    下一步重新算 ——&nbsp;这正是 <a href="#s三">3.2</a> 说它可以用 bf16 的原因。</em></li>
-</ol></div>
+<figure class="fbox fwide" id="fig-gradlife"><svg viewBox="0 0 1400 732" width="100%" role="img" aria-label="一个梯度从出生到消失要过五道：算出来、跨卡汇总、裁剪、可选的累积、交给优化器然后扔掉。中间那条泳道标出哪一步能藏进计算里 —— 汇总可以，裁剪不行，因为它要等所有卡所有层都到齐。最下面那条泳道是这张图的落点：这五步，推理里一步都没有"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">梯度的一生　——　<tspan font-weight="700">从算出来到被扔掉，中间要过五道</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 看三条泳道：<tspan font-weight="700">做什么</tspan>、<tspan font-weight="700">能不能藏</tspan>、<tspan font-weight="700">推理里有没有</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">能藏进计算里</text>
+<rect x="131" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="152" y="74" fill="#5f6368" style="font-size:14.0px">藏不了</text>
+<rect x="220" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="241" y="74" fill="#5f6368" style="font-size:14.0px">推理里都没有</text>
+<rect x="0" y="102" width="1400" height="452" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 五道<tspan font-weight="700">依次</tspan>走完，而其中只有一道<tspan font-weight="700">能跟计算叠在一起</tspan></tspan></text>
+<text class="svgsm" x="808" y="122" fill="#5f6368" style="font-size:11.0px">⛔ 也只有一道<tspan font-weight="700">会把所有卡钉在一起等</tspan></text>
+<rect x="36" y="178" width="248" height="118" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="36" y="178" width="248" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="58" y="220" fill="#174ea6" style="font-size:22.0px"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="174" y="220" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">算出来</tspan></text>
+<text class="svgsm" x="160" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">反向走到哪层，哪层的梯度就</text>
+<text class="svgsm" x="160" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">出来</text>
+<text class="svgsm" x="294" y="238" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="36" y="328" width="248" height="34" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="160" y="351" fill="#80868b" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">—</tspan></text>
+<text class="svgsm" x="160" y="386" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">⭐ 从后往前<tspan font-weight="700">陆续</tspan>出来，不是最后一起出</text>
+<rect x="36" y="446" width="248" height="34" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="160" y="469" fill="#681da8" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">推理里：没有</tspan></text>
+<rect x="304" y="178" width="248" height="118" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="304" y="178" width="248" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="326" y="220" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="442" y="220" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">跨卡汇总</tspan></text>
+<text class="svgsm" x="428" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">每张卡看的数据不同，得取平</text>
+<text class="svgsm" x="428" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">均</text>
+<text class="svgsm" x="562" y="238" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="304" y="328" width="248" height="34" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="428" y="351" fill="#0d652d" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">✅ 能藏</tspan></text>
+<text class="svgsm" x="428" y="386" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">⭐ 前面几层还在算，后面的梯度</text>
+<text class="svgsm" x="428" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">已经能传了</text>
+<rect x="304" y="446" width="248" height="34" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="428" y="469" fill="#681da8" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">推理里：没有</tspan></text>
+<rect x="572" y="178" width="248" height="118" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<rect x="572" y="178" width="248" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="594" y="220" fill="#a50e0e" style="font-size:22.0px"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="710" y="220" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">裁剪</tspan></text>
+<text class="svgsm" x="696" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">按全局范数，超了整体缩回去</text>
+<text class="svgsm" x="830" y="238" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="572" y="328" width="248" height="34" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="696" y="351" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">⛔ 藏不了</tspan></text>
+<text class="svgsm" x="696" y="386" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">⛔ 要等<tspan font-weight="700">所有卡所有层</tspan>都到齐，强制一次同步</text>
+<rect x="572" y="446" width="248" height="34" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="696" y="469" fill="#681da8" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">推理里：没有</tspan></text>
+<rect x="840" y="178" width="248" height="118" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<rect x="840" y="178" width="248" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="862" y="220" fill="#80868b" style="font-size:22.0px"><tspan font-weight="700">④</tspan></text>
+<text class="svgsm" x="978" y="220" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">累积</tspan></text>
+<text class="svgsm" x="964" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">几个 micro-batc</text>
+<text class="svgsm" x="964" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">h 先加起来（可选）</text>
+<text class="svgsm" x="1098" y="238" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="840" y="328" width="248" height="34" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="964" y="351" fill="#80868b" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">—</tspan></text>
+<text class="svgsm" x="964" y="386" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">⭐ 它改的是<tspan font-weight="700">时间线</tspan>，不是总量</text>
+<rect x="840" y="446" width="248" height="34" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="964" y="469" fill="#681da8" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">推理里：没有</tspan></text>
+<rect x="1108" y="178" width="248" height="118" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<rect x="1108" y="178" width="248" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1130" y="220" fill="#681da8" style="font-size:22.0px"><tspan font-weight="700">⑤</tspan></text>
+<text class="svgsm" x="1246" y="220" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">用掉就扔</tspan></text>
+<text class="svgsm" x="1232" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">交给优化器，这一份就没用了</text>
+<rect x="1108" y="328" width="248" height="34" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="1232" y="351" fill="#80868b" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">—</tspan></text>
+<text class="svgsm" x="1232" y="386" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">⭐ 正因为用完就扔，它才敢用 </text>
+<text class="svgsm" x="1232" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">bf16 存</text>
+<rect x="1108" y="446" width="248" height="34" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1232" y="469" fill="#681da8" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">推理里：没有</tspan></text>
+<text class="svgsm" x="700" y="514" fill="#202124" text-anchor="middle" style="font-size:15.0px">⭐⭐⭐ 第三条泳道是这张图的落点：<tspan font-weight="700">这五道，推理里一道都没有</tspan>　——　它们整条都是训练才有的东西。</text>
+<text class="svgsm" x="700" y="544" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⛔ 而这也是为什么「训练比推理贵」不只是「多跑一遍」　——　多出来的是<tspan font-weight="700">一整条流水线</tspan>。</text>
+<rect x="0" y="604" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="604" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="604" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="631" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 只有第 ③ 道会把所有卡钉在一起等 ——　而它传的其实只是一个数</tspan></text>
+<text class="svgsm" x="20" y="662" fill="#b06000" style="font-size:15.0px">⭐ 「全局范数」是跨<tspan font-weight="700">全部参数</tspan>的一个标量：得先把每一块的平方和都算出来、汇总成一个数、开根号，才知道要不要缩、缩多少。<tspan font-weight="700">通信量可以忽略，代价是那一次同步。</tspan></text>
+<text class="svgsm" x="20" y="686" fill="#b06000" style="font-size:15.0px">⚠️ 所以<tspan font-weight="700">按全局范数裁剪天然是「一步一次」</tspan>。⛔ 但别读成「逐层裁剪不存在」——　它存在，只是保的不是同一个量：逐层保的是每层各自的范数，全局保的是这一步总共迈多大。</text>
+</svg><figcaption>⭐⭐ <b>看三条泳道，别只看第一条</b> ——&nbsp;<em>第一条是「做什么」，第二条是「<b>能不能跟计算叠在一起</b>」，第三条才是落点。</em><span class="capmore"><br>⭐⭐⭐ <em>第三条泳道<b>全是紫的</b> ——&nbsp;这一格是现场那条界（<b>推理里没有的那些东西</b>）最直观的一次落地。</em><br>⛔ <em>而五道里<b>只有裁剪那一道会把所有卡钉在一起等</b>，偏偏它传的只是一个数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 图上<b>不含任何量</b>　——　通信到底多大、能藏掉多少，是 fig-batch 和专题五的事。</p>
+<p>⭐ 第 ⑤ 道那句「用完就扔」是本讲另一处的伏笔：正因为它一次性，它才敢用 bf16 存　——　而一旦要做累积，它就变成累加量，得升回 fp32。</p></details></figure>
 
 <h4>⭐⭐ 第 ② 步那笔通信，有个很反直觉的性质</h4>
 
@@ -1576,28 +1649,14 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption>⭐⭐⭐ <b>先看那条线是<u>折的</u></b> ——&nbsp;<em>整张图的全部信息就在那个拐点上。</em><span class="capmore"><br>⭐ <em>看图的顺序建议：<b>先 Ⓐ 找到拐点，再 Ⓑ 对照两边各自成立什么</b>，最后 Ⓒ 看通信那条<b>为什么不长这样</b>。</em><br>⚠️ <em>这张图<b>一个实测数字都没有</b>，只画形状 ——&nbsp;<b>拐点落在哪，取决于你的模型、卡和并行配置，得自己量。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 「有平行运算时，大小 batch 跑一次的时间差别不大；而一个 epoch 反过来」出自<b>李宏毅</b>2021 年《类神经网络训练不起来怎么办（二）：批次与动量》。⛔ 图是我们自己重画的。</p>
 <p>⚠️ 图上<b>不含任何实测数字</b>　——　只画两段的形状。拐点落在哪，取决于模型、卡、并行配置，<b>得自己在目标配置上量</b>。</p></details></figure>
 
-<h4>⭐ 这笔通信可以「藏起来」，但不是全部</h4>
-<p><em>注意第 ① 步那句：梯度是从后往前陆续出来的。
-  所以最后几层的梯度<b>早就算好了</b>，而前面几层还在算
-  ——&nbsp;这段时间正好可以拿来传。</em></p>
-<p class="landing">⭐ 于是「算」和「传」可以叠在一起，通信被藏进计算里。
-  <em>——&nbsp;这是训练里最重要的一类优化，而推理侧没有对应物
-  （推理没有反向，也就没有这条可以边算边传的长尾巴）。</em></p>
+<h4>⭐ 那条「能藏」的泳道，值得单独说一句</h4>
+<p class="landing">⭐⭐ 「算」和「传」能叠在一起，<b>是训练里最重要的一类优化</b>
+  ——&nbsp;<em>而推理侧<b>没有对应物</b>：它没有反向，
+  也就没有这条可以边算边传的长尾巴。</em></p>
 
-<div class="note danger"><p>⛔ 但第 ③ 步藏不进去 ——&nbsp;而且原因很具体。</p>
-<p><em>「全局范数」是一个跨全部参数的标量。
-  你必须先把每一块的平方和都算出来、汇总成一个数、开根号，
-  才知道要不要缩、缩多少。</em></p>
-<p>⭐ <em>好在这一步汇总的只是一个数，通信量可以忽略。
-  ⛔ 真正的代价是它<b><u>强制了一次同步</u></b> ——&nbsp;
-  所有卡、所有层都得到齐，这一步才能开始。</em></p>
-<p class="landing">⭐⭐ 所以<b>按全局范数</b>裁剪，天然是「一步一次」的。</p>
-<div class="note"><p>⚠️ <b>但不要因此以为「逐层裁剪不存在」——&nbsp;它存在，而且有人用。</b></p>
-<p><em>可以给每一层各自定一个上限、各自裁各自的，<b>那就不需要全局同步</b>。
-  ⛔ <b>区别不在能不能做，在于<u>你保住的是哪个量</u></b>：
-  逐层保的是每层各自的范数，全局保的是<b>整个模型这一步总共迈多大</b>。</em></p>
-<p><span class="sub">⭐ 这一节讲的是后者 ——&nbsp;
-  <em>因为「这一步迈多大」才是跟 3.3 那个折算系数直接对话的量。</em></span></p></div></div>
+<p><span class="sub">⭐ 裁剪那一道为什么藏不了、以及「逐层裁剪」为什么是另一件事，
+  <em>图下面的落点带写了。这一节只留一句：
+  <b>「这一步总共迈多大」才是跟 3.3 对话的那个量。</b></em></span></p>
 
 <h4>📌 顺带把 ④ 说清楚：梯度累积到底省什么</h4>
 <ul>
