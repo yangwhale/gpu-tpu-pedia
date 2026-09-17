@@ -1221,6 +1221,56 @@ __FIG_LR_CURVE__
   GPT-3 还额外把 batch 从 32K token 线性爬到目标值（头 40–120 亿 token 内）。
   📌 出处：arXiv <b>2005.14165</b> 表 2.1 与 §2.3。</span></p></div>
 
+<!-- ⭐⭐⭐ 2026-09-18 R17：batch 与学习率的关系不是单调的。
+     ⛔ 这一条**刻意不画图**，理由值得记：它是一条「取决于 β_noise、不一定出现」
+       的规律，而图天然会把它画成一条确定的曲线 ——
+       ⭐ 判据：**一条带条件的规律画成图，条件就掉了。**
+       文字反而能承载「什么时候出现、什么时候不出现」。
+     ⚠️ subagent 的转述是「超过 B_noise 后最优学习率反而要降」，
+       而原文明确加了限制，而且苏剑林还批评了原论文把它说成几乎总会出现。
+       这是本批第二次自核救回一条被过度概括的结论（第一次是 R15 的 warmup）。 -->
+<p>⛔⛔ <b>而「batch 越大、学习率就越能调大」这句，还有一层<u>很多人不知道的天花板</u>。</b></p>
+
+<div class="note"><p>⭐ 先把常见的那两条摆出来：</p>
+<ul>
+<li><b>平方根缩放</b>：batch 扩大 n 倍、学习率扩大 √n 倍。
+  <em>——&nbsp;推导的出发点是<b>让更新量的噪声强度保持不变</b>
+  （增量协方差 ∝ η²/B，要它不变就得 η ∝ √B）。</em></li>
+<li><b>OpenAI 用梯度噪声尺度</b> B<sub>noise</sub> 给出
+  <code>η* ≈ η<sub>max</sub> /(1 ＋ B<sub>noise</sub>/B)</code>
+  <em>——&nbsp;注意这个形式是<b>单调递增且有上界</b>的：
+  batch 再大，学习率也只能逼近 η<sub>max</sub>，不会一直涨。</em></li>
+</ul>
+<p class="landing">⭐⭐ 光这一条就够破一个想当然了：
+  <b>「batch 翻倍，学习率就该翻倍」是错的</b>
+  ——&nbsp;<em>它有上界，而且越往后收益越小。</em></p></div>
+
+<p>⛔⛔⛔ <b>但在 Adam 底下，还可能更反直觉一点：</b>
+  <em>超过某个 batch 之后，<b>最优学习率不升反降</b>
+  ——&nbsp;这就是所谓的 <b>Surge 现象</b>。</em></p>
+
+<div class="note danger"><p>⭐⭐⭐ <b>为什么会这样？</b>
+  <em>直观的说法是：<b>这本质上是「自适应学习率」本身次优的体现。</b></em></p>
+<p><em>把 Adam 粗略看成 <code>sign(g)</code>：batch 越大，估出来的
+  <code>sign(g̃)</code> 就越接近真的 <code>sign(g)</code>。
+  ⛔ <b>可 sign(g) 就是最好的更新方向吗？——&nbsp;不一定</b>，
+  尤其到了训练后期。<br>
+  ⭐ 于是 batch 取中等的时候，<b>那点噪声反而在替你修正这种次优</b>；
+  batch 再大，噪声没了，<b>修正的机会也没了</b>，
+  所以只好更谨慎地把学习率降下来。</em></p>
+<p>⛔⛔ <b>但这条<u>有前提，而且原作者自己特意收了一格</u>：</b></p>
+<blockquote><em>「（当然这里还有一个限制，β 是始终小于 1 的，
+  <b>如果 β<sub>noise</sub> ≥ 1，那么最优学习率与 Batch Size 的关系依旧是单调递增的。</b>）」</em></blockquote>
+<p class="landing">⭐ 苏剑林还<b>顺手批评了那篇原论文</b>：
+  <em>原论文在一个较强的近似下得出「Surge 几乎总会出现」，他认为<b>不大科学</b>；
+  他自己换了个更合理的近似，结论是
+  <b>「即使 Hessian 的非对角元不可忽略，Surge 现象也不一定会出现」</b>。</em></p>
+<p><span class="sub">📌 苏剑林《当 Batch Size 增大时，学习率该如何随之变化？》
+  <a href="https://kexue.fm/archives/10542">kexue.fm/archives/10542</a>；
+  所评论的原论文为《Surge Phenomenon in Optimal Learning Rate and Batch Size Scaling》。
+  ⚠️ 引号里为原文原话。<b>这是作者本人的分析，不是同行评议结论</b>
+  ——&nbsp;<b>我们收的是「别想当然地外推」这条警告，不是一个可以照抄的公式。</b></span></p></div>
+
 <p>一个现代参考值，它看着完全不合上面那条规律：
   <em>DeepSeek-V3 是 <b>671B</b> 的 MoE，峰值 <b>2.2×10⁻⁴</b>
   ——&nbsp;比 GPT-3 的 175B 大得多，<b>学习率却高出近四倍</b>。</em></p>

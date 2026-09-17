@@ -112,6 +112,47 @@ for _b, _who in ((BETA, "图上这条轨迹用的 β"), (B_ADAM, "Adam 的默认
             _who, _b, POLYAK_LO, POLYAK_HI)
 
 
+# ══════════════════════════════════════════════════════════════════
+# Ⓓ：β 和 η 不是两个独立的旋钮（2026-09-18 新增，R17）
+# ══════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 苏剑林从「蛙跳积分」的角度给出：
+#     β ＝ (1−λγ/2)/(1+λγ/2)，　α ＝ γ²/(1+λγ/2)
+#   ——&#160;**λ 才是摩擦系数（那个物理量），β 只是 λ 和步长的一个组合。**
+#   ⭐ 原文给的近似 `1 − λ√α ＝ β` 可以反解出 λ。
+#   ⭐⭐⭐ 于是那条调参建议就有了根：
+#     **你只把学习率调小、不动 β，等于偷偷把摩擦力拧大了。**
+#   原文的建议逐字是：
+#     「在使用 SGD+Momentum 时，如果降低学习率，那么应当轻微提升 β。
+#       **当学习率从 α 降到 rα 时，β 可以考虑提升到 1−(1−β)√r。**」
+#   📌 kexue.fm/archives/5655。⚠️ 作者本人的推导，不是同行评议论文。
+R_DECAY = 0.1                    # 学习率砍到十分之一 ——&#160;很常见的一次 decay
+
+
+def _lam(beta, alpha):
+    """由 1 − λ√α ＝ β 反解摩擦系数 λ（原文给的近似式）。"""
+    return (1.0 - beta) / math.sqrt(alpha)
+
+
+def _win(beta):
+    return 1.0 / (1.0 - beta)
+
+
+LAM0 = _lam(BETA, LR)                              # 原来的摩擦系数
+LAM_KEEP = _lam(BETA, LR * R_DECAY)                # 降了 η、β 没动
+BETA_FIX = 1.0 - (1.0 - BETA) * math.sqrt(R_DECAY)  # 按原文那条公式调完的 β
+LAM_FIX = _lam(BETA_FIX, LR * R_DECAY)
+
+# ⭐⭐ 这一格的立论，三条都得成立：
+assert abs(LAM_FIX - LAM0) < 1e-12, "按原文公式调完，摩擦系数应当纹丝不动"
+BLOWUP = LAM_KEEP / LAM0
+assert abs(BLOWUP - 1.0 / math.sqrt(R_DECAY)) < 1e-12, \
+    "不调 β 的话摩擦涨的倍数应当正好是 1/√r"
+assert abs(_win(BETA_FIX) / _win(BETA) - 1.0 / math.sqrt(R_DECAY)) < 1e-9, \
+    "记忆窗口拉长的倍数也应当正好是 1/√r"
+assert POLYAK_LO <= BETA_FIX <= POLYAK_HI, \
+    "调完的 β ＝ %.3f 掉出了 Polyak 那个区间" % BETA_FIX
+
+
 def main():
     f = Fig(W, "上一格说梯度下降在垭口附近卡不住但走得很慢，这一格给第一个答案：动量。"
                "同一条 loss 曲线、同一个起点，只加一样东西 —— 惯性。"
@@ -264,7 +305,46 @@ def main():
         % (B_ADAM, int(WIN)), INK, size=15, anchor="middle")
     f._pan = None
 
-    yb = f.band(py3 + PH3 + 20, "ok",
+    # ══════════ Ⓓ β 和 η 不是两个独立的旋钮 ══════════════════════════
+    PH4 = 318
+    py4 = f.panel(0, py3 + PH3 + 20, W, PH4,
+                  "Ⓓ ⭐⭐⭐ 最后一件容易漏的："
+                  "<tspan font-weight=\"700\">你降学习率的时候，"
+                  "其实顺手把摩擦力拧大了</tspan>", OR,
+                  sub="⭐ 条的长度 ＝ <tspan font-weight=\"700\">摩擦系数 λ</tspan>"
+                      "　——　那才是物理量，β 只是它和步长凑出来的一个数")
+
+    RX0, RMAX = 386, 560
+    _lmax = max(LAM0, LAM_KEEP, LAM_FIX)
+    ROWS4 = (
+        (GY2, "原来", "η ＝ %.2g　β ＝ %.2f" % (LR, BETA), LAM0, _win(BETA), ""),
+        (RD, "⛔ 只把 η 降到 1/%d" % int(round(1 / R_DECAY)),
+         "η ＝ %.3g　β ＝ %.2f（没动）" % (LR * R_DECAY, BETA), LAM_KEEP,
+         _win(BETA), "摩擦悄悄涨了 %.2f 倍" % BLOWUP),
+        (GR, "✅ 同时把 β 提到 %.3f" % BETA_FIX,
+         "β ← 1−(1−β)√r", LAM_FIX, _win(BETA_FIX), "摩擦纹丝不动"),
+    )
+    for i, (col, head, sub, lam, win, note) in enumerate(ROWS4):
+        yy = py4 + 76 + i * 64
+        f.t(RX0 - 16, yy + 5, head, col, True, 14.5, "end")
+        f.t(RX0 - 16, yy + 26, sub, GY2, size=12, anchor="end")
+        f.box(RX0, yy - 12, RMAX * lam / _lmax, 26, col, col, 4)
+        f.t(RX0 + RMAX * lam / _lmax + 12, yy + 6,
+            "λ ＝ %.3f" % lam, col, True, 13.5)
+        if note:
+            f.t(RX0 + RMAX + 108, yy + 6, note, col, True, 13.5)
+        f.t(RX0 + RMAX + 108, yy + 26, "记忆窗口 %.0f 步" % win,
+            GY2, size=12)
+
+    f.t(700, py4 + 282,
+        "⭐⭐⭐ <tspan font-weight=\"700\">摩擦系数本该是个常数</tspan>"
+        "　——　可 β 不动、只动 η，它就跟着变了。"
+        "调完之后记忆窗口从 <tspan font-weight=\"700\">%.0f 步拉到 %.0f 步</tspan>"
+        "（正好 1／√r 倍）。" % (_win(BETA), _win(BETA_FIX)),
+        INK, size=14.5, anchor="middle")
+    f._pan = None
+
+    yb = f.band(py4 + PH4 + 20, "ok",
                 "动量补上了上一格欠的那半句 ——　但它补的是「慢」，不是「最优」",
                 ("✅ 上一格说<tspan font-weight=\"700\">「卡不住，但走得慢」</tspan>，"
                  "动量正是治那个「慢」的第一招："
