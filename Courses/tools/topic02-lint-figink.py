@@ -31,6 +31,8 @@ r"""figink ——&#160;量一张图「删掉所有文字之后还剩多少东西
   · **柱子** ＝ 一组**同宽但高度各异**（或同高异宽）的 `<rect>`，至少 5 个
     ——&#160;⭐ 同宽**同高**的一排是表格 / 卡片，**不算**。
     分类要抓「它为什么在那儿」，不是「它多大」。
+  · **连线图** ＝ 一格里有 ≥ 3 个 `marker-end`（箭头）
+    ——&#160;⭐ **表格的格子之间没有箭头，连线图全靠箭头。**
   · **数据点** ＝ 边长 ≤ 20 px 的 `<rect>`（本仓库用小方块当点）
   · **斜线** ＝ `<line>` 里 x1≠x2 且 y1≠y2 的那些（轴线和分隔线都是正的）
   · **容器** ＝ 宽 > 120 且 高 > 40 的 `<rect>`，一律不计
@@ -137,12 +139,26 @@ def _panels(svg):
 
 
 def _ink_of(tags, rects):
-    n_curve = 0
+    # ⛔⛔ 第四个 bug，是 R09 真去看那张图才发现的：
+    #   `fig4-stability` Ⓐ **画了河**（三个填充的梯形 path），
+    #   可每段只有三个 L 命令，被 CURVE_CMDS ≥ 8 的门槛整个漏掉，判成了写字板子。
+    #   ⭐ 判据：**「填了色的 path」是一个形状，跟它有几个命令无关** ——&#160;
+    #     命令数量只能判「线画得细不细」，判不了「是不是画了个东西」。
+    #   ⭐⭐ 元级：**一把新尺子，要拿几个你已经知道答案的样本回归一遍** ——&#160;
+    #     R08 拿的样本全是「我知道它好」的，所以没抓到这种「我知道它好、它却判坏」的。
+    n_curve = n_fill = 0
     for tag in tags:
         m = re.search(r'\bd="([^"]*)"', tag)
-        if m and len(re.findall(r"[LCQAlcqa]", m.group(1))) >= CURVE_CMDS:
+        if not m:
+            continue
+        if len(re.findall(r"[LCQAlcqa]", m.group(1))) >= CURVE_CMDS:
             n_curve += 1
-    n_shape = sum(1 for t in tags if re.match(r"<(ellipse|circle|polyline|polygon)\b", t))
+        else:
+            fm = re.search(r'\bfill="([^"]*)"', tag)
+            if fm and fm.group(1) not in ("none", "", "transparent"):
+                n_fill += 1
+    n_shape = n_fill + sum(1 for t in tags
+                           if re.match(r"<(ellipse|circle|polyline|polygon)\b", t))
     n_dot = sum(1 for w, h in rects if w <= DOT_MAX and h <= DOT_MAX)
     n_bar = _bar_groups([r for r in rects if not (r[0] <= DOT_MAX and r[1] <= DOT_MAX)])
     # ⛔ 第二个假阴性：**横平竖直但长度各异**的线也是数据
@@ -164,13 +180,22 @@ def _ink_of(tags, rects):
             hor.append(dx)
         elif dx <= 1 and dy > 8:
             ver.append(dy)
+    # ⛔⛔ 第五个 ——&#160;也是 R09 真去看图才发现的：
+    #   `fig4-reverse` Ⓑ 是**一张连线图**（一条链上的方框 ＋ 反着走的箭头），
+    #   而我的指标把「同宽同高的节点」判成了表格，整格算 0。
+    #   ⭐ 连线图跟表格的区别**不在方框，在箭头** ——&#160;
+    #     表格的格子之间没有箭头，连线图全靠箭头。
+    #   ⭐⭐ 所以数 `marker-end`：≥ 3 个就说明这一格在**画关系**，不是在列条目。
+    n_arrow = sum(1 for t in tags if "marker-end" in t)
+
     n_vec = 0
     for grp in (hor, ver):
         if len(grp) >= VEC_MIN and len(set(round(v / 8.0) for v in grp)) >= VEC_MIN:
             n_vec += len(grp)
-    ink = n_curve * 6 + n_shape * 3 + n_bar * 2 + n_vec * 2 + n_dot + n_slant * 2
+    ink = (n_curve * 6 + n_shape * 3 + n_bar * 2 + n_vec * 2
+           + (n_arrow * 2 if n_arrow >= 3 else 0) + n_dot + n_slant * 2)
     return dict(curve=n_curve, shape=n_shape, bar=n_bar, vec=n_vec,
-                dot=n_dot, slant=n_slant, ink=ink)
+                arrow=n_arrow, dot=n_dot, slant=n_slant, ink=ink)
 
 
 def scan(path):
@@ -214,7 +239,8 @@ def scan(path):
 def verdict(r):
     """⛔ 只给三档，而且最重的一档要求很严 ——&#160;宁可漏报，不要让人不看它。"""
     if (r["curve"] == 0 and r["shape"] == 0 and r["bar"] == 0
-            and r["vec"] == 0 and r["dot"] < 6 and r["slant"] < 4):
+            and r["vec"] == 0 and r["arrow"] < 3
+            and r["dot"] < 6 and r["slant"] < 4):
         return "❌ 写字板子"
     if r["curve"] == 0 and r["ink"] < 15:
         return "⚠️ 偏板子"
@@ -237,7 +263,7 @@ def main():
 
     print("\n\033[1m▸ 图的「墨水」体检 ——　删掉所有文字之后，还剩多少东西\033[0m")
     print("   %-24s %4s %5s %4s %4s %4s %4s %4s %5s  %s"
-          % ("图", "格数", "最差格", "文字", "曲线", "柱子", "向量", "点", "墨水", "判"))
+          % ("图", "格数", "最差格", "文字", "曲线", "柱子", "箭头", "点", "墨水", "判"))
     bad = 0
     for r in rows:
         v = verdict(r)
@@ -246,7 +272,7 @@ def main():
         print("   %-24s %4d %5s %4d %4d %4d %4d %4d %5d  %s"
               % (r["name"], r["panels"], "Ⓐ Ⓑ Ⓒ Ⓓ Ⓔ Ⓕ".split()[r["worst"] - 1]
                  if r["worst"] <= 6 else str(r["worst"]),
-                 r["text"], r["curve"], r["bar"], r["vec"], r["dot"],
+                 r["text"], r["curve"], r["bar"], r["arrow"], r["dot"],
                  r["ink"], v))
 
     print("\n   ⭐ 判据：**把文字全删掉，剩下的能不能让人猜出这格在讲什么。**")
