@@ -28,6 +28,7 @@ r"""专题四 · §3.2「哪些量必须高精度」——&#160;根子上只有�
 📌 「AdamW 的一阶矩二阶矩用 bf16 无可观察退化，而主权重与用于累积的梯度仍保 fp32」
   出自 DeepSeek-V3 技术报告 arXiv 2412.19437 §3.3.3（正文已引，这里只复述结论）。
 """
+import math
 import struct
 
 from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE)
@@ -201,37 +202,88 @@ def main():
     f._pan = None
 
     # ══════════ Ⓒ 三类量，三种命运 ═════════════════════════════════
-    PH3 = 336
+    PH3 = 356
     py3 = f.panel(0, py2 + PH2 + 20, W, PH3,
                   "Ⓒ ⭐⭐ 那谁必须 fp32？判据一句话："
                   "<tspan font-weight=\"700\">老的贡献会不会永远不走</tspan>", PU,
                   sub="⛔ 不是「累不累加」——&#160;那个说法太粗，"
                       "<tspan font-weight=\"700\">被 DeepSeek-V3 一条实测打中过</tspan>")
 
-    KINDS = (
-        (RD, "主权重", "跨十万步不断加进微小增量", "老的贡献<tspan font-weight=\"700\">一直在里面</tspan>",
-         "⛔ 必须 fp32　4 字节"),
-        (GR, "动量 m / 二阶矩 v", "滑动平均：每步乘个小于 1 的系数",
-         "老的贡献<tspan font-weight=\"700\">会被衰减掉</tspan>",
-         "✅ bf16 扛得住（V3 实测）"),
-        (BL, "梯度 / 激活", "算出来 → 用掉 → 扔掉",
-         "<tspan font-weight=\"700\">根本没有「老的」</tspan>",
-         "✅ bf16 够　⚠️ 但一做梯度累积就升回 fp32"),
-    )
-    for i, (col, who, what, why, verdict) in enumerate(KINDS):
-        x = 40 + i * 440
-        f.box(x, py3 + 44, 420, 212, "#fff", col, 8, sw=1.6)
-        f.box(x, py3 + 44, 420, 4, col, col, 2)
-        f.t(x + 210, py3 + 84, who, col, True, 18, "middle")
-        f.t(x + 210, py3 + 122, what, GY, size=13, anchor="middle")
-        f.t(x + 210, py3 + 166, why, INK, True, 14.5, "middle")
-        f.t(x + 210, py3 + 222, verdict, col, True, 14, "middle")
+    # ⭐⭐⭐ 2026-09-18 R20 重画。旧版是三张卡片，每张四行字 ——&#160;
+    #   把字删掉只剩三个一样的空框，跟 R13 那个 `fig-circuit` Ⓑ 一模一样的病。
+    #   ⭐⭐⭐ 而这一格的判据「**老的贡献会不会永远不走**」
+    #   **本身就是一条衰减曲线的形状**：
+    #     · 主权重：一直加进去，**永远不走** ——&#160;水平线
+    #     · 动量 m（β₁）／二阶矩 v（β₂）：滑动平均，**指数衰减**
+    #     · 梯度／激活：算完就扔，**一步就没**
+    #   ⭐ 而 β 的半衰期是**可以算的**，所以这三条线不是示意，是真函数。
+    #   ⛔ 横轴必须用**对数**：β₂ ＝ 0.999 的半衰期接近七百步，
+    #     线性轴上它跟主权重看着一样平 ——&#160;那就把论点画没了。
+    B1, B2 = 0.9, 0.999            # Adam 的两个默认值
+    HL_M = math.log(0.5) / math.log(B1)
+    HL_V = math.log(0.5) / math.log(B2)
+    TRAIN_STEPS = 100000           # 一次十万步的训练
+    assert HL_V / HL_M > 100, "两个半衰期要差出两个量级，否则画在一起没意义"
+    # ⭐⭐ 这一格的落点：十万步之后，连记得最久的 v 也早忘光了，只有主权重还在
+    assert B2 ** TRAIN_STEPS < 1e-40, "十万步后 v 应当已经彻底忘光"
 
-    f.t(700, py3 + 300,
-        "⭐⭐⭐ 12 个 fp32 字节装的正好是「老的贡献不走」的那几个，"
-        "2 个 bf16 字节装的正好是「用完就扔」的 ——&#160;"
-        "<tspan font-weight=\"700\">这条线不是拍出来的，是这条判据画出来的。</tspan>",
+    KX0, KX1 = 150, 1180
+    KT, KB = py3 + 56, py3 + 232
+    LX0, LX1 = 0.0, math.log10(TRAIN_STEPS)
+
+    def kx(k):
+        return KX0 + (KX1 - KX0) * (math.log10(max(k, 1.0)) - LX0) / (LX1 - LX0)
+
+    def ky(v):
+        return KB - (KB - KT) * v
+
+    f.line(KX0, KB, KX1 + 20, KB, GY2, 1.2, arrow=False)
+    f.line(KX0, KB, KX0, KT - 8, GY2, 1.2, arrow=False)
+    for e in range(0, 6):
+        xx = kx(10.0 ** e)
+        f.line(xx, KB, xx, KB + 6, GY2, 1, arrow=False)
+        f.t(xx, KB + 24, "10%s" % ("⁰" if e == 0 else "%d" % e).replace("0", "⁰")
+            if e == 0 else "10%s" % "¹²³⁴⁵"[e - 1], GY2, size=11.5, anchor="middle")
+    f.t(KX1 + 26, KB + 6, "步", GY2, size=12)
+    f.t(KX0, KT - 20, "这一步的贡献，到现在还剩多少", GY2, size=12)
+    # 半衰期那条参考线
+    f.line(KX0, ky(0.5), KX1, ky(0.5), "#dadce0", 1.0, dash="5 4", arrow=False)
+    f.t(KX0 - 8, ky(0.5) + 4, "一半", GY2, size=11, anchor="end")
+
+    N = 300
+    for decay, col, nm, note in (
+            (None, RD, "主权重", "⛔ 必须 fp32"),
+            (B2, GR, "二阶矩 v（β₂＝%.3f）" % B2, "✅ bf16 扛得住"),
+            (B1, GR, "动量 m（β₁＝%.1f）" % B1, "✅ bf16 扛得住"),
+            (0.0, BL, "梯度／激活", "✅ bf16 够")):
+        d = None
+        for i in range(N + 1):
+            k = 10.0 ** (LX0 + (LX1 - LX0) * i / N)
+            v = 1.0 if decay is None else (decay ** k if decay > 0 else
+                                           (1.0 if k < 1.5 else 0.0))
+            pt = "%.1f %.1f" % (kx(k), ky(v))
+            d = ("M " + pt) if d is None else d + " L " + pt
+        f.path(d, col, 2.6 if decay is None else 2.0,
+               dash=None if decay is None else ("4 3" if decay == B1 else None),
+               arrow=False)
+
+    # 标注放在各自「掉下去」的地方，不堆在一起
+    f.t(kx(TRAIN_STEPS) + 14, ky(1.0) + 5, "主权重", RD, True, 14)
+    f.t(kx(TRAIN_STEPS) + 14, ky(1.0) + 25, "⛔ 必须 fp32", RD, size=12)
+    f.t(kx(HL_V) + 10, ky(0.5) - 12, "v：半衰期 %.0f 步" % HL_V, GR, True, 13)
+    f.t(kx(HL_M) + 8, ky(0.5) - 34, "m：%.1f 步" % HL_M, GR, True, 13)
+    f.t(kx(1.6) + 6, ky(0.18), "梯度／激活：下一步就没了", BL, True, 13)
+
+    f.t(700, py3 + 288,
+        "⭐⭐⭐ 只有<tspan font-weight=\"700\">那条一直平着的</tspan>必须 fp32"
+        "　——　它装的是<tspan font-weight=\"700\">十万步前那一点点增量，而那一点现在还在里面</tspan>。"
+        "其余三条都会被忘掉，<tspan font-weight=\"700\">忘得掉的就存得粗。</tspan>",
         INK, size=14.5, anchor="middle")
+    f.t(700, py3 + 320,
+        "⭐ 所以 12 个 fp32 字节装的正好是「不走的」，2 个 bf16 字节装的正好是「会走的」"
+        "　——　<tspan font-weight=\"700\">这条线不是拍出来的，是这条曲线画出来的。</tspan>"
+        "　⚠️ 梯度一做累积就又变成「要留一阵子」，于是升回 fp32。",
+        GY, size=13.5, anchor="middle")
     f._pan = None
 
     yb = f.band(py3 + PH3 + 20, "ok",
