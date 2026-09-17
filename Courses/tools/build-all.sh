@@ -183,6 +183,7 @@ python3 topic02-lint-cues.py
 # 「这根轴第 2.8 节还会回来一次」—— 而这一版根本没有 2.8，那根轴再没回来过。
 step "跨节指针体检（「§X.Y」那一节真的存在吗）"
 python3 topic02-lint-xref.py
+python3 topic02-lint-figpos.py
 
 # ⭐ 第五条体检：**讲义覆盖**。跟第三条是一对 ——
 # 第三条查「讲义指的那个东西还在不在」，这条查「教材有的东西讲义讲了没有」。

@@ -1819,78 +1819,13 @@ body.figonly section h3{margin-top:34px}
 
 <h3 id="s2-4">2.4　但 attention 不服从这条 ——&nbsp;而且它<u>必然</u>会跟线性层交叉</h3>
 
+<!-- ⛔ 2026-09-17：这张图原来排在本节 850 字之后，而**它就是这一节的全部画面**。
+     ⭐ 判据（今天第三次用）：**一节的核心画面要先出来，字是给它做注脚的。**
+       量了一遍全书的图位置才发现只有这一处真错，其余末尾的图都是
+       「讲完再看」的收束 ——&#160;所以这条判据要**按图的作用判**，不能只看位置。 -->
+
 <p><em>attention 不是线性层：代价随 S² 涨，产出只随 S 涨。
-  一除，<b>每字节代价随序列长度<u>线性上升</u></b>
-  ——&nbsp;对 V3 那套头维度，这个数大约是 <code>1.25 · S</code>。</em></p>
-
-<div class="note"><p>⭐⭐⭐ 一条是常数（输入宽度），一条在往上爬
-  ——&nbsp;<u>那它们必然相交</u>。</p>
-<p><em>对 V3：<code>1.25·S = 7168</code> →&nbsp;<b>S ≈ 5,734</b>。</em></p>
-<ul>
-  <li><b>短于 ~5.7K</b> ——&nbsp;<em>attention 比大多数线性层还便宜，
-    <b>是个好的重算对象</b>。</em></li>
-  <li><b>长于 ~5.7K</b> ——&nbsp;<em>它一路变成最贵的那个，<b>而且线性地越来越贵</b>。</em></li>
-</ul>
-<p><span class="sub">⚠️ 5,734 是个粗略交叉点，不是工程阈值。
-  它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
-  ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
-
-<p>把 V3 在 128K 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
-
-<table>
-<thead><tr><th>张量</th><th>省显存</th><th>重算代价</th><th>每 GiB 付</th><th>结论</th></tr></thead>
-<tbody>
-<tr><td>MoE 派发（复制成 9 份）</td><td>15.75 GiB</td><td>~0</td><td><b>0</b></td><td>白捡</td></tr>
-<tr><td>RMSNorm 输出（每层 2 个）</td><td>3.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
-<tr><td>SwiGLU 乘积 9 份（逐元素）</td><td>4.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
-<tr><td>K/V 解压（输入宽 512）</td><td>8.00 GiB</td><td>4.40 TFLOP</td><td><b>0.55</b></td><td>划算</td></tr>
-<tr><td>Q 展开（输入宽 1,536）</td><td>6.00 GiB</td><td>9.90 TFLOP</td><td><b>1.65</b></td><td>划算</td></tr>
-<tr><td>专家输出 9 份（输入宽 2,048）</td><td>15.75 GiB</td><td>34.63 TFLOP</td><td><b>2.20</b></td><td>划算</td></tr>
-<tr><td>gate / up / 路由 / 降维（输入宽 7,168）</td><td>9.14 GiB</td><td>70.35 TFLOP</td><td><b>7.70</b></td><td>边际</td></tr>
-<tr><td><b>attention 输出</b></td><td><b>4.00 GiB</b></td><td><b>703.69 TFLOP</b></td><td><b>175.92</b></td><td><b>绝不</b></td></tr>
-</tbody></table>
-
-<p><span class="sub">⭐ 这张表不用背，它是<u>上面那条闭式解直接排出来的</u> ——&nbsp;
-  前六行的「每 GiB 付」就是各自的输入宽度换了个单位，
-  你拿 config 自己也能排一遍。
-  <em>⛔ 顺带自曝：这张表早先有<b>一行</b>是手填的，
-  「省显存 9.14 × 每 GiB 7.70」算出来是 70 TFLOP，那一栏却写着 39.08。
-  <b>而这张表的卖点正是「你自己也能排一遍」</b> ——&nbsp;
-  照着排的人会正好撞上它。<b>现在整张表由闭式解生成，手改不了。</b></em></span></p>
-
-<div class="note danger"><p>⭐⭐ 回答那个直觉问题：「有没有占显存很小、算力却很大的东西？」
-  ——&nbsp;<em>有，就是 attention，而且极端。
-  它比排在前一档的贵 <b>23 倍</b>。</em></p>
-<p>⛔ 但结论是反过来的：正因为如此，它是最该<u>留着</u>的那一个，不是最该重算的。
-  <em>判据只有一条比值 ——&nbsp;比值高的留，比值低的扔。</em></p></div>
-
-<div class="note"><p>❓ <b>「小于 3」这个 3 是哪来的？——&nbsp;<u>我定的，不是算出来的。</u></b></p>
-<p><em>它在表上的位置很清楚：专家输出那一行是 2.20，下一行 gate/up 是 7.70
-  ——&nbsp;<b>3 就落在这两行中间那个空当里</b>，放 2.5 或者 5 结果完全一样。</em></p>
-<p class="landing">⭐⭐⭐ 而真正定这条线的东西<b>不在这张表上</b>：
-  <em>它是你现在的<b>兑换率</b> ——&nbsp;<u>一 GiB 显存对你值多少 TFLOP</u>。<br>
-  显存快爆了就往右挪（多扔几项，多付点算力），算力是瓶颈就往左挪。</em></p>
-<p><span class="sub">⛔ 所以别把 3 记成阈值 ——&nbsp;
-  <em>要记的是「表是按比值排的，<b>你只需要决定在哪儿切一刀</b>」。
-  ⭐ 排序是客观的，切在哪是你的配置说了算。</em></span></p></div>
-
-<p class="landing">⭐⭐ 照这条线切（把比值小于 3 的全收下来）：一层省 53.5 GiB，付 48.9 TFLOP。
-  <em>换算到<b>一个 step</b>（前向 ＋ 反向 ＝ 3 遍 ≈ 2,571 TFLOP）：
-  <u>只多付 1.9% 的算力，换掉约 77% 的激活显存</u>。</em></p>
-<p><em>对比全量重算 ——&nbsp;同一个 step 口径下是「多付 33%，换掉 97%」。
-  ⭐ <b>选择性重算的性价比高一个数量级</b>，这就是它值得单独配的原因。</em></p>
-<p><span class="sub">⚠️ <b>这两个百分比早先分母不一样</b>（一个除一遍前向、一个除整个 step），
-  并排比是不能比的 ——&nbsp;<em>而这一讲自己在 2.5 就写着「跨文献比这类比例前，
-  先确认对方折没折半」。<b>已统一到 step 口径。</b></em></span></p>
-
-<div class="note ok"><p>⭐⭐ 一条第一方证据：这张排序表不是我们自己推着玩的。</p>
-<p><em>DeepSeek-V3 的报告里写得很直白 ——&nbsp;他们
-  「重算全部 RMSNorm 运算和 MLA 上投影」，
-  理由是「开销很小，却显著降低了存激活的显存需求」。</em></p>
-<p class="landing">⭐ 这正好落在上面那张表最便宜的那几行里。
-  <em>判据是我们自己推的，但<b>推出来的名单跟人家实际配的对上了</b>
-  ——&nbsp;这比多算一遍更有说服力。</em></p>
-<p><span class="sub">📌 出处：arXiv <b><a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s3-2">§3.2</a>.3。</span></p></div>
+  一除，<b>每字节代价随序列长度<u>线性上升</u></b>。</em></p>
 
 <figure class="fbox fwide" id="fig-per-byte"><svg viewBox="0 0 1400 850" width="100%" role="img" aria-label="双对数坐标上，线性层的每字节重算代价是一条水平线（等于它的输入宽度），而 attention 的是一条随序列长度上升的斜线。两条斜率不同，所以必然相交：对 V3 交点在约 5,734。GPT-3 的 2,048 落在交点左边，所以 2022 年那篇论文选 attention 是对的；V3 的 131,072 落在右边很远，所以 attention 变成最不该重算的那一个"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">为什么同一条判据会给出<tspan font-weight="700">相反</tspan>的答案　——　<tspan font-weight="700">两条斜率不同的线，必然相交</tspan></text>
@@ -1968,6 +1903,79 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 两条斜率分别是 <b>V3 的 1.25（qk 192 / v 128）与 GPT-3 的 1.00（qk ＝ v ＝ 128）</b>；口径都是 causal 折半。⛔ <b>换个模型就得重画它自己那两条线（qk 192 / v 128）与 causal 折半的口径</b>；换个模型斜率会变，<b>但「它是斜的」不会变</b> ——&#160;这才是要记的东西</p>
 <p>⛔ 交点 5,734 <b>不是工程阈值</b>，它还取决于你拿哪条线性层做对照（图上四条给的交点各不相同）</p>
 <p>📌 2022 那篇的收益数字（GPT-3 省 70% 付 2.7%）用的是<b>未折半的 Megatron 口径</b>；换成本图统一的 causal 口径，GPT-3 的 attention 占比是 1.37%</p></details></figure>
+
+<p class="landing">⭐⭐⭐ 图上那两条<b>斜率不同</b>的线，就是这一节的全部内容
+  ——&nbsp;<em>一条平的（线性层，代价 ＝ 输入宽度），一条在爬的（attention）。
+  <b>斜率不同，就必然相交。</b></em></p>
+
+<div class="note"><p>⭐⭐⭐ 一条是常数（输入宽度），一条在往上爬
+  ——&nbsp;<u>那它们必然相交</u>。</p>
+<p><em>对 V3：<code>1.25·S = 7168</code> →&nbsp;<b>S ≈ 5,734</b>。</em></p>
+<ul>
+  <li><b>短于 ~5.7K</b> ——&nbsp;<em>attention 比大多数线性层还便宜，
+    <b>是个好的重算对象</b>。</em></li>
+  <li><b>长于 ~5.7K</b> ——&nbsp;<em>它一路变成最贵的那个，<b>而且线性地越来越贵</b>。</em></li>
+</ul>
+<p><span class="sub">⚠️ 5,734 是个粗略交叉点，不是工程阈值。
+  它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
+  ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
+
+<p>把 V3 在 128K 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
+
+<table>
+<thead><tr><th>张量</th><th>省显存</th><th>重算代价</th><th>每 GiB 付</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td>MoE 派发（复制成 9 份）</td><td>15.75 GiB</td><td>~0</td><td><b>0</b></td><td>白捡</td></tr>
+<tr><td>RMSNorm 输出（每层 2 个）</td><td>3.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
+<tr><td>SwiGLU 乘积 9 份（逐元素）</td><td>4.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
+<tr><td>K/V 解压（输入宽 512）</td><td>8.00 GiB</td><td>4.40 TFLOP</td><td><b>0.55</b></td><td>划算</td></tr>
+<tr><td>Q 展开（输入宽 1,536）</td><td>6.00 GiB</td><td>9.90 TFLOP</td><td><b>1.65</b></td><td>划算</td></tr>
+<tr><td>专家输出 9 份（输入宽 2,048）</td><td>15.75 GiB</td><td>34.63 TFLOP</td><td><b>2.20</b></td><td>划算</td></tr>
+<tr><td>gate / up / 路由 / 降维（输入宽 7,168）</td><td>9.14 GiB</td><td>70.35 TFLOP</td><td><b>7.70</b></td><td>边际</td></tr>
+<tr><td><b>attention 输出</b></td><td><b>4.00 GiB</b></td><td><b>703.69 TFLOP</b></td><td><b>175.92</b></td><td><b>绝不</b></td></tr>
+</tbody></table>
+
+<p><span class="sub">⭐ 这张表不用背，它是<u>上面那条闭式解直接排出来的</u> ——&nbsp;
+  前六行的「每 GiB 付」就是各自的输入宽度换了个单位，
+  你拿 config 自己也能排一遍。
+  <em>⛔ 顺带自曝：这张表早先有<b>一行</b>是手填的，
+  「省显存 9.14 × 每 GiB 7.70」算出来是 70 TFLOP，那一栏却写着 39.08。
+  <b>而这张表的卖点正是「你自己也能排一遍」</b> ——&nbsp;
+  照着排的人会正好撞上它。<b>现在整张表由闭式解生成，手改不了。</b></em></span></p>
+
+<div class="note danger"><p>⭐⭐ 回答那个直觉问题：「有没有占显存很小、算力却很大的东西？」
+  ——&nbsp;<em>有，就是 attention，而且极端。
+  它比排在前一档的贵 <b>23 倍</b>。</em></p>
+<p>⛔ 但结论是反过来的：正因为如此，它是最该<u>留着</u>的那一个，不是最该重算的。
+  <em>判据只有一条比值 ——&nbsp;比值高的留，比值低的扔。</em></p></div>
+
+<div class="note"><p>❓ <b>「小于 3」这个 3 是哪来的？——&nbsp;<u>我定的，不是算出来的。</u></b></p>
+<p><em>它在表上的位置很清楚：专家输出那一行是 2.20，下一行 gate/up 是 7.70
+  ——&nbsp;<b>3 就落在这两行中间那个空当里</b>，放 2.5 或者 5 结果完全一样。</em></p>
+<p class="landing">⭐⭐⭐ 而真正定这条线的东西<b>不在这张表上</b>：
+  <em>它是你现在的<b>兑换率</b> ——&nbsp;<u>一 GiB 显存对你值多少 TFLOP</u>。<br>
+  显存快爆了就往右挪（多扔几项，多付点算力），算力是瓶颈就往左挪。</em></p>
+<p><span class="sub">⛔ 所以别把 3 记成阈值 ——&nbsp;
+  <em>要记的是「表是按比值排的，<b>你只需要决定在哪儿切一刀</b>」。
+  ⭐ 排序是客观的，切在哪是你的配置说了算。</em></span></p></div>
+
+<p class="landing">⭐⭐ 照这条线切（把比值小于 3 的全收下来）：一层省 53.5 GiB，付 48.9 TFLOP。
+  <em>换算到<b>一个 step</b>（前向 ＋ 反向 ＝ 3 遍 ≈ 2,571 TFLOP）：
+  <u>只多付 1.9% 的算力，换掉约 77% 的激活显存</u>。</em></p>
+<p><em>对比全量重算 ——&nbsp;同一个 step 口径下是「多付 33%，换掉 97%」。
+  ⭐ <b>选择性重算的性价比高一个数量级</b>，这就是它值得单独配的原因。</em></p>
+<p><span class="sub">⚠️ <b>这两个百分比早先分母不一样</b>（一个除一遍前向、一个除整个 step），
+  并排比是不能比的 ——&nbsp;<em>而这一讲自己在 2.5 就写着「跨文献比这类比例前，
+  先确认对方折没折半」。<b>已统一到 step 口径。</b></em></span></p>
+
+<div class="note ok"><p>⭐⭐ 一条第一方证据：这张排序表不是我们自己推着玩的。</p>
+<p><em>DeepSeek-V3 的报告里写得很直白 ——&nbsp;他们
+  「重算全部 RMSNorm 运算和 MLA 上投影」，
+  理由是「开销很小，却显著降低了存激活的显存需求」。</em></p>
+<p class="landing">⭐ 这正好落在上面那张表最便宜的那几行里。
+  <em>判据是我们自己推的，但<b>推出来的名单跟人家实际配的对上了</b>
+  ——&nbsp;这比多算一遍更有说服力。</em></p>
+<p><span class="sub">📌 出处：arXiv <b><a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s3-2">§3.2</a>.3。</span></p></div>
 
 <h3 id="s2-5">2.5　⭐⭐ 同一条判据，2022 年给出的是<u>相反</u>的答案</h3>
 
@@ -2950,8 +2958,92 @@ body.figonly section h3{margin-top:34px}
      ⛔ 判据：**「高深的手艺」往往只是「没人把公开配置列在一起」。**
        列出来之后，规律是肉眼可见的。 -->
 
-<p class="lead">⭐ 整条学习率曲线只有三段：<b>升上去、稳住、降下来</b>。
-  <em>三段各有各的道理，<b>而且都有公开配置可以抄 ——&nbsp;不用猜</b>。</em></p>
+<!-- ⛔ 2026-09-17：这张图原来也在**全节 1700 多字之后**，跟 3.3 那两张一个毛病。
+     ⭐ 同一条判据：**先给整体，再拆局部。**
+       曲线的形状是这一节的骨架，骨架要先立住，后面三段才有地方挂。 -->
+
+<p class="lead">⭐ 整条学习率曲线只有三段：<b>升上去、稳住、降下来</b>。</p>
+
+<figure class="fbox fwide" id="fig-lr-curve"><svg viewBox="0 0 1400 1134" width="100%" role="img" aria-label="两条学习率曲线叠在一起比形状。GPT-3 是经典余弦：很短的 warmup 之后一路下滑，在总量的百分之八十七处降到峰值的十分之一，之后保持不变。DeepSeek-V3 是 warmup 加长平台加末段衰减：升到峰值后一直恒定到总量的三分之二，才开始降。两条曲线的落点都在峰值的十分之一附近"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">两种学习率曲线　——　<tspan font-weight="700">形状差很多，落点却撞在同一个数上</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 纵轴是<tspan font-weight="700">占峰值的百分比</tspan>，不是绝对学习率　·　⚠️ warmup 那一小段<tspan font-weight="700">按真实比例画就是一条竖线</tspan>，图上放宽了</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">GPT-3 · 余弦</text>
+<rect x="143" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="164" y="74" fill="#5f6368" style="font-size:14.0px">V3 · 平台＋衰减</text>
+<rect x="304" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="325" y="74" fill="#5f6368" style="font-size:14.0px">峰值的 10%</text>
+<rect x="0" y="102" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 横轴是<tspan font-weight="700">训练进度</tspan>（占总 token 数的比例）</tspan></text>
+<text class="svgsm" x="534" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 两条都归一化了，所以可以直接叠在一起比</text>
+<line x1="150" y1="468" x2="1330" y2="468" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="150" y1="468" x2="150" y2="166" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="150" y1="468" x2="150" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="150" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">0%</text>
+<line x1="442.5" y1="468" x2="442.5" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="442" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">25%</text>
+<line x1="735.0" y1="468" x2="735.0" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="735" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">50%</text>
+<line x1="1027.5" y1="468" x2="1027.5" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1027" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">75%</text>
+<line x1="1320.0" y1="468" x2="1320.0" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="1320" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">100%</text>
+<text class="svgsm" x="735" y="522" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">训练进度（已消耗的 token 占总量的比例）</tspan></text>
+<text class="svgsm" x="136" y="194" fill="#80868b" text-anchor="end" style="font-size:12.0px">100%</text>
+<text class="svgsm" x="136" y="333" fill="#80868b" text-anchor="end" style="font-size:12.0px">50%</text>
+<text class="svgsm" x="136" y="445" fill="#80868b" text-anchor="end" style="font-size:12.0px">10%</text>
+<text class="svgsm" x="136" y="154" fill="#5f6368" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">占峰值</tspan></text>
+<line x1="150" y1="440.1904761904762" x2="1320" y2="440.1904761904762" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 5"/>
+<text class="svgsm" x="1314" y="428" fill="#80868b" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">峰值的 10%</tspan></text>
+<path d="M 150.0 468.0 L 190.9 189.9 L 215.3 190.3 L 239.6 191.4 L 263.9 193.4 L 288.3 196.0 L 312.6 199.4 L 336.9 203.5 L 361.2 208.3 L 385.6 213.8 L 409.9 219.9 L 434.2 226.6 L 458.5 233.8 L 482.9 241.5 L 507.2 249.7 L 531.5 258.2 L 555.8 267.2 L 580.2 276.4 L 604.5 285.8 L 628.8 295.5 L 653.1 305.2 L 677.5 315.0 L 701.8 324.9 L 726.1 334.6 L 750.5 344.3 L 774.8 353.7 L 799.1 362.9 L 823.4 371.9 L 847.8 380.4 L 872.1 388.6 L 896.4 396.3 L 920.7 403.5 L 945.1 410.2 L 969.4 416.3 L 993.7 421.7 L 1018.0 426.6 L 1042.4 430.7 L 1066.7 434.1 L 1091.0 436.7 L 1115.3 438.6 L 1139.7 439.8 L 1164.0 440.2 L 1320.0 440.2" fill="none" stroke="#1a73e8" stroke-width="3.0" stroke-linecap="round"/>
+<text class="svgsm" x="664" y="326" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">GPT-3　余弦</tspan></text>
+<line x1="1164.0" y1="440.1904761904762" x2="1164.0" y2="468" stroke="#1a73e8" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="1164" y="544" fill="#174ea6" text-anchor="middle" style="font-size:12.5px">2,600 亿 token 处降到 10%</text>
+<path d="M 150.0 468.0 L 190.9 189.9 L 940.5 189.9 L 954.7 191.0 L 968.9 194.2 L 983.0 199.4 L 997.2 206.7 L 1011.4 215.8 L 1025.5 226.6 L 1039.7 238.9 L 1053.9 252.5 L 1068.0 267.2 L 1082.2 282.7 L 1096.3 298.7 L 1110.5 315.0 L 1124.7 331.4 L 1138.8 347.4 L 1153.0 362.9 L 1167.2 377.6 L 1181.3 391.2 L 1195.5 403.5 L 1209.7 414.3 L 1223.8 423.4 L 1238.0 430.7 L 1252.1 435.9 L 1266.3 439.1 L 1280.5 440.2 L 1306.8 440.2 L 1306.8 458.8 L 1320.0 458.8" fill="none" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
+<text class="svgsm" x="547" y="173" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">DeepSeek-V3　长平台</tspan></text>
+<line x1="940.5405405405405" y1="189.90476190476193" x2="940.5405405405405" y2="468" stroke="#d93025" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="940" y="568" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px">10T token 才开始降</text>
+<rect x="454.2" y="384.57142857142856" width="268" height="56" rx="8" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="470" y="408" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">⚠️ warmup 画宽了</tspan></text>
+<text class="svgsm" x="470" y="430" fill="#80868b" style="font-size:12.5px">GPT-3 真实只占 0.125%</text>
+<line x1="454.2" y1="402.57142857142856" x2="196.95" y2="306.7047619047619" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-80868b)"/>
+<rect x="0" y="624" width="1400" height="282" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="624" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="626" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="654" x2="1400" y2="654" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="644" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐ WSD 这两年流行起来的理由特别实在</tspan></text>
+<text class="svgsm" x="299" y="644" fill="#5f6368" style="font-size:11.0px">⛔ 不是「它收敛更好」——　<tspan font-weight="700">是它把一个决定往后推了</tspan></text>
+<rect x="88" y="688" width="592" height="176" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="88" y="688" width="592" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="384" y="724" fill="#174ea6" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">余弦的硬约束</tspan></text>
+<text class="svgsm" x="384" y="758" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">曲线形状<tspan font-weight="700">依赖终点</tspan></tspan></text>
+<text class="svgsm" x="384" y="796" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⛔ 所以你必须一开始就知道总共训多少步</text>
+<text class="svgsm" x="384" y="830" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">中途想多训一段，整条曲线都得重来</text>
+<rect x="720" y="688" width="592" height="176" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="720" y="688" width="592" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1016" y="724" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">平台段的自由</tspan></text>
+<text class="svgsm" x="1016" y="758" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">恒定段<tspan font-weight="700">可以随时截断</tspan></tspan></text>
+<text class="svgsm" x="1016" y="796" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⭐ 接一小段快速衰减，就能出一个能用的 checkpoint</text>
+<text class="svgsm" x="1016" y="830" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">想加数据接着训，从平台段续上就行</text>
+<text class="svgsm" x="700" y="894" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐⭐ 一句话：<tspan font-weight="700">它把「训多久」这个决定，从开局推迟到了随时</tspan></tspan></text>
+<rect x="0" y="958" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="958" width="4" height="146" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="958" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="985" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 两个落点，一个巧合</tspan></text>
+<text class="svgsm" x="20" y="1016" fill="#0d652d" style="font-size:15.0px">⭐ <tspan font-weight="700">warmup 的量级是「总量的千分之几」</tspan>，不是需要精调的东西 ——&#160;GPT-3 占 0.125%，V3 是头 2,000 步。⛔ 而且有论文实测：<tspan font-weight="700">目标学习率固定的话，warmup 拉长基本没收益</tspan>，</text>
+<text class="svgsm" x="20" y="1040" fill="#0d652d" style="font-size:15.0px">决定效果的是峰值本身。</text>
+<text class="svgsm" x="20" y="1064" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">两条曲线的落点都在峰值的十分之一附近</tspan> ——&#160;GPT-3 明写「降到 10%」；V3 是 2.2e-4 →&#160;2.2e-5，也正好十分之一（最后一小段再往下到 7.3e-6，约 3.3%）。⚠️ 两个样</text>
+<text class="svgsm" x="20" y="1088" fill="#0d652d" style="font-size:15.0px">本不构成定律，<tspan font-weight="700">但足以说明「降到零」不是默认做法</tspan>。</text>
+</svg><figcaption>⭐⭐ 这张图比的是形状，不是高度 ——&nbsp;<em>两个模型的峰值差 3.7 倍，<b>不归一化根本叠不到一起</b>。峰值的绝对值另有一份七档对照，在正文里。</em><span class="capmore"><br>⭐ <em>看两件事：<b>V3 那条长平台</b>，以及<b>两条曲线都落在同一根「10%」虚线上</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>GPT-3：<b>arXiv <a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">2005.14165</a></b> <a href="#s2-3">§2.3</a> ——&#160;「头 3.75 亿 token 线性 warmup」「2,600 亿 token 内余弦降到 10%，之后继续以 10% 训练」；总量 3,000 亿 token</p>
+<p>DeepSeek-V3：<b>arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s4-2">§4.2</a> ——&#160;2,000 步线性升到 2.2e-4 →&#160;恒定到 10T →&#160;4.3T 内余弦降到 2.2e-5 →&#160;末 500B 里前 333B 保持、后 167B 换 7.3e-6；梯度裁剪范数 1.0</p>
+<p>⭐ warmup 的真实机制（<b>不是「样本太少估不准」</b>）：arXiv <b><a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）——&#160;主要好处是让网络能承受更大的目标学习率。这个形状的系统分析：arXiv <b><a href="https://arxiv.org/abs/2410.05192" target="_blank" rel="noopener">2410.05192</a></b></p>
+<p>⛔ 本图<b>不含绝对学习率</b>（两者峰值差 3.7 倍，叠在一起就看不出形状了）——&#160;七档规模的峰值对照表写在正文里</p></details></figure>
+
+<p class="landing">⭐ 形状就这样。<em>下面把三段拆开 ——&nbsp;
+  <b>每一段都有公开配置可以抄，不用猜。</b></em></p>
 
 <h4>第一段 · warmup ——&nbsp;流行的那个解释是错的</h4>
 
@@ -2967,10 +3059,9 @@ body.figonly section h3{margin-top:34px}
 <p><span class="sub">📌 出处：Why Warmup the Learning Rate? Underlying
   Mechanisms and Improvements，arXiv <b><a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）。</span></p>
 
-<p>⛔⛔ <b>但上面那句「明确说这不是主因」<u>说得太满了</u>，得往回收一格。</b></p>
-<p><em>那篇论文的 Limitations 一节<b>自己写着</b>：
-  「我们的实验是在<b>相对小规模</b>的数据集和模型上做的，
-  能否推广到更大规模<b>还需要进一步研究</b>。」</em></p>
+<p>⛔⛔ <b>但「明确说这不是主因」这句<u>说得太满</u>，得收一格。</b>
+  <em>那篇论文的 Limitations 自己写着：实验是在
+  <b>相对小规模</b>的数据集和模型上做的，能否推广到更大规模还需进一步研究。</em></p>
 <p><em>⚠️ 具体有多小：<b>Transformer 只有 4 层、上下文长度 64</b>，
   另一组是 CIFAR-10 上的 WRN。<b>——&nbsp;这跟我们整讲在谈的尺度差着好几个数量级。</b></em></p>
 <p class="landing">⭐⭐⭐ <b>所以准确的说法是</b>：
@@ -3082,85 +3173,6 @@ body.figonly section h3{margin-top:34px}
 <p><em>它必须连着 batch、schedule 形状、总 token 数 一起报
   ——&nbsp;换掉其中任何一个，这个数就不再适用。
   ⭐ 上面那两套配置之所以能抄，正是因为它们<b>四样都写全了</b>。</em></p></div>
-
-<figure class="fbox fwide" id="fig-lr-curve"><svg viewBox="0 0 1400 1134" width="100%" role="img" aria-label="两条学习率曲线叠在一起比形状。GPT-3 是经典余弦：很短的 warmup 之后一路下滑，在总量的百分之八十七处降到峰值的十分之一，之后保持不变。DeepSeek-V3 是 warmup 加长平台加末段衰减：升到峰值后一直恒定到总量的三分之二，才开始降。两条曲线的落点都在峰值的十分之一附近"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">两种学习率曲线　——　<tspan font-weight="700">形状差很多，落点却撞在同一个数上</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 纵轴是<tspan font-weight="700">占峰值的百分比</tspan>，不是绝对学习率　·　⚠️ warmup 那一小段<tspan font-weight="700">按真实比例画就是一条竖线</tspan>，图上放宽了</text>
-<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">GPT-3 · 余弦</text>
-<rect x="143" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="164" y="74" fill="#5f6368" style="font-size:14.0px">V3 · 平台＋衰减</text>
-<rect x="304" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="325" y="74" fill="#5f6368" style="font-size:14.0px">峰值的 10%</text>
-<rect x="0" y="102" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 横轴是<tspan font-weight="700">训练进度</tspan>（占总 token 数的比例）</tspan></text>
-<text class="svgsm" x="534" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 两条都归一化了，所以可以直接叠在一起比</text>
-<line x1="150" y1="468" x2="1330" y2="468" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
-<line x1="150" y1="468" x2="150" y2="166" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
-<line x1="150" y1="468" x2="150" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
-<text class="svgsm" x="150" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">0%</text>
-<line x1="442.5" y1="468" x2="442.5" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
-<text class="svgsm" x="442" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">25%</text>
-<line x1="735.0" y1="468" x2="735.0" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
-<text class="svgsm" x="735" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">50%</text>
-<line x1="1027.5" y1="468" x2="1027.5" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
-<text class="svgsm" x="1027" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">75%</text>
-<line x1="1320.0" y1="468" x2="1320.0" y2="474" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
-<text class="svgsm" x="1320" y="494" fill="#80868b" text-anchor="middle" style="font-size:12.5px">100%</text>
-<text class="svgsm" x="735" y="522" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">训练进度（已消耗的 token 占总量的比例）</tspan></text>
-<text class="svgsm" x="136" y="194" fill="#80868b" text-anchor="end" style="font-size:12.0px">100%</text>
-<text class="svgsm" x="136" y="333" fill="#80868b" text-anchor="end" style="font-size:12.0px">50%</text>
-<text class="svgsm" x="136" y="445" fill="#80868b" text-anchor="end" style="font-size:12.0px">10%</text>
-<text class="svgsm" x="136" y="154" fill="#5f6368" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">占峰值</tspan></text>
-<line x1="150" y1="440.1904761904762" x2="1320" y2="440.1904761904762" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 5"/>
-<text class="svgsm" x="1314" y="428" fill="#80868b" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">峰值的 10%</tspan></text>
-<path d="M 150.0 468.0 L 190.9 189.9 L 215.3 190.3 L 239.6 191.4 L 263.9 193.4 L 288.3 196.0 L 312.6 199.4 L 336.9 203.5 L 361.2 208.3 L 385.6 213.8 L 409.9 219.9 L 434.2 226.6 L 458.5 233.8 L 482.9 241.5 L 507.2 249.7 L 531.5 258.2 L 555.8 267.2 L 580.2 276.4 L 604.5 285.8 L 628.8 295.5 L 653.1 305.2 L 677.5 315.0 L 701.8 324.9 L 726.1 334.6 L 750.5 344.3 L 774.8 353.7 L 799.1 362.9 L 823.4 371.9 L 847.8 380.4 L 872.1 388.6 L 896.4 396.3 L 920.7 403.5 L 945.1 410.2 L 969.4 416.3 L 993.7 421.7 L 1018.0 426.6 L 1042.4 430.7 L 1066.7 434.1 L 1091.0 436.7 L 1115.3 438.6 L 1139.7 439.8 L 1164.0 440.2 L 1320.0 440.2" fill="none" stroke="#1a73e8" stroke-width="3.0" stroke-linecap="round"/>
-<text class="svgsm" x="664" y="326" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">GPT-3　余弦</tspan></text>
-<line x1="1164.0" y1="440.1904761904762" x2="1164.0" y2="468" stroke="#1a73e8" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
-<text class="svgsm" x="1164" y="544" fill="#174ea6" text-anchor="middle" style="font-size:12.5px">2,600 亿 token 处降到 10%</text>
-<path d="M 150.0 468.0 L 190.9 189.9 L 940.5 189.9 L 954.7 191.0 L 968.9 194.2 L 983.0 199.4 L 997.2 206.7 L 1011.4 215.8 L 1025.5 226.6 L 1039.7 238.9 L 1053.9 252.5 L 1068.0 267.2 L 1082.2 282.7 L 1096.3 298.7 L 1110.5 315.0 L 1124.7 331.4 L 1138.8 347.4 L 1153.0 362.9 L 1167.2 377.6 L 1181.3 391.2 L 1195.5 403.5 L 1209.7 414.3 L 1223.8 423.4 L 1238.0 430.7 L 1252.1 435.9 L 1266.3 439.1 L 1280.5 440.2 L 1306.8 440.2 L 1306.8 458.8 L 1320.0 458.8" fill="none" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
-<text class="svgsm" x="547" y="173" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">DeepSeek-V3　长平台</tspan></text>
-<line x1="940.5405405405405" y1="189.90476190476193" x2="940.5405405405405" y2="468" stroke="#d93025" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
-<text class="svgsm" x="940" y="568" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px">10T token 才开始降</text>
-<rect x="454.2" y="384.57142857142856" width="268" height="56" rx="8" fill="#fff" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="470" y="408" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">⚠️ warmup 画宽了</tspan></text>
-<text class="svgsm" x="470" y="430" fill="#80868b" style="font-size:12.5px">GPT-3 真实只占 0.125%</text>
-<line x1="454.2" y1="402.57142857142856" x2="196.95" y2="306.7047619047619" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-80868b)"/>
-<rect x="0" y="624" width="1400" height="282" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="624" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="0" y="626" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="654" x2="1400" y2="654" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="644" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐ WSD 这两年流行起来的理由特别实在</tspan></text>
-<text class="svgsm" x="299" y="644" fill="#5f6368" style="font-size:11.0px">⛔ 不是「它收敛更好」——　<tspan font-weight="700">是它把一个决定往后推了</tspan></text>
-<rect x="88" y="688" width="592" height="176" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
-<rect x="88" y="688" width="592" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="384" y="724" fill="#174ea6" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">余弦的硬约束</tspan></text>
-<text class="svgsm" x="384" y="758" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">曲线形状<tspan font-weight="700">依赖终点</tspan></tspan></text>
-<text class="svgsm" x="384" y="796" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⛔ 所以你必须一开始就知道总共训多少步</text>
-<text class="svgsm" x="384" y="830" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">中途想多训一段，整条曲线都得重来</text>
-<rect x="720" y="688" width="592" height="176" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
-<rect x="720" y="688" width="592" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="1016" y="724" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">平台段的自由</tspan></text>
-<text class="svgsm" x="1016" y="758" fill="#202124" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">恒定段<tspan font-weight="700">可以随时截断</tspan></tspan></text>
-<text class="svgsm" x="1016" y="796" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⭐ 接一小段快速衰减，就能出一个能用的 checkpoint</text>
-<text class="svgsm" x="1016" y="830" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">想加数据接着训，从平台段续上就行</text>
-<text class="svgsm" x="700" y="894" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐⭐ 一句话：<tspan font-weight="700">它把「训多久」这个决定，从开局推迟到了随时</tspan></tspan></text>
-<rect x="0" y="958" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="958" width="4" height="146" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="958" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="985" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 两个落点，一个巧合</tspan></text>
-<text class="svgsm" x="20" y="1016" fill="#0d652d" style="font-size:15.0px">⭐ <tspan font-weight="700">warmup 的量级是「总量的千分之几」</tspan>，不是需要精调的东西 ——&#160;GPT-3 占 0.125%，V3 是头 2,000 步。⛔ 而且有论文实测：<tspan font-weight="700">目标学习率固定的话，warmup 拉长基本没收益</tspan>，</text>
-<text class="svgsm" x="20" y="1040" fill="#0d652d" style="font-size:15.0px">决定效果的是峰值本身。</text>
-<text class="svgsm" x="20" y="1064" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">两条曲线的落点都在峰值的十分之一附近</tspan> ——&#160;GPT-3 明写「降到 10%」；V3 是 2.2e-4 →&#160;2.2e-5，也正好十分之一（最后一小段再往下到 7.3e-6，约 3.3%）。⚠️ 两个样</text>
-<text class="svgsm" x="20" y="1088" fill="#0d652d" style="font-size:15.0px">本不构成定律，<tspan font-weight="700">但足以说明「降到零」不是默认做法</tspan>。</text>
-</svg><figcaption>⭐⭐ 这张图比的是形状，不是高度 ——&nbsp;<em>两个模型的峰值差 3.7 倍，<b>不归一化根本叠不到一起</b>。峰值的绝对值另有一份七档对照，在正文里。</em><span class="capmore"><br>⭐ <em>看两件事：<b>V3 那条长平台</b>，以及<b>两条曲线都落在同一根「10%」虚线上</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>GPT-3：<b>arXiv <a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">2005.14165</a></b> <a href="#s2-3">§2.3</a> ——&#160;「头 3.75 亿 token 线性 warmup」「2,600 亿 token 内余弦降到 10%，之后继续以 10% 训练」；总量 3,000 亿 token</p>
-<p>DeepSeek-V3：<b>arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s4-2">§4.2</a> ——&#160;2,000 步线性升到 2.2e-4 →&#160;恒定到 10T →&#160;4.3T 内余弦降到 2.2e-5 →&#160;末 500B 里前 333B 保持、后 167B 换 7.3e-6；梯度裁剪范数 1.0</p>
-<p>⭐ warmup 的真实机制（<b>不是「样本太少估不准」</b>）：arXiv <b><a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）——&#160;主要好处是让网络能承受更大的目标学习率。这个形状的系统分析：arXiv <b><a href="https://arxiv.org/abs/2410.05192" target="_blank" rel="noopener">2410.05192</a></b></p>
-<p>⛔ 本图<b>不含绝对学习率</b>（两者峰值差 3.7 倍，叠在一起就看不出形状了）——&#160;七档规模的峰值对照表写在正文里</p></details></figure>
-
 
 <h3 id="s3-6">3.6　⭐⭐ 另外那两个超参：β₁ 和 β₂ 到底在干什么</h3>
 
