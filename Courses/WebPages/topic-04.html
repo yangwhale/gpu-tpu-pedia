@@ -5652,6 +5652,126 @@ body.figonly section h3{margin-top:34px}
   前者解释了「为什么当年非要不可」，后者解释了「为什么今天还留着」。</em></p>
 <p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2002.04745" target="_blank" rel="noopener">2002.04745</a></b>（ICML 2020），用平均场理论证的。</span></p></div>
 
+<!-- ⭐⭐⭐ 2026-09-18 R16：上面那篇给的是**现象**（Post-LN 初始化时靠近输出梯度大），
+     ⛔ 没讲机制，也没讲「那为什么还留着它」。下面这段补的就是这两块。
+     ⛔⛔ 一个必须避开的陷阱：原文公式给的是 x₀ 在第 l 层输出里的系数 2^(−l/2)，
+       那是**前向**的残差通道被削，**不等于「梯度每层乘 1/√2」** ——
+       两者相关但不是一回事，混起来就是「听起来像常识的架构关系」。
+       所以图上画的、算的全是前向直通项，「因此梯度消失」这一步由正文说。 -->
+<p>⛔⛔ <b>不过上面那段只说了「Post-LN 的梯度不好」，没说<u>为什么</u>。</b>
+  <em>而机制其实一句话就能讲完，讲完之后还能顺手回答一个更扎人的问题：
+  <b>既然它不好，那为什么不干脆去掉？</b></em></p>
+
+<div class="note danger"><p>⭐⭐⭐ Post-LN 是
+  <code>x<sub>t+1</sub> ＝ Norm(x<sub>t</sub> ＋ F<sub>t</sub>(x<sub>t</sub>))</code>。</p>
+<p><em>初始化那一刻，<b>x 和 F(x) 可以看成两个独立随机向量</b>，
+  各自方差是 1，加起来方差就是 2 ——&nbsp;而 Norm 要把方差拉回 1，
+  <b>所以它在这一刻相当于「除以 √2」。</b></em></p>
+<p class="landing">⭐⭐ 一层一层递归下去：
+  <b>最初那个输入 x₀，在第 l 层输出里的系数就是 <code>2<sup>−l/2</sup></code>。</b>
+  <em>——&nbsp;<b>残差那条「直通路」被指数地削掉了，越靠近输入削得越狠。</b></em></p>
+<p><em>⭐ 所以苏剑林那句话说得很重，但它有依据：
+  <b>「在 Post Norm 的 BERT 模型中，LN 不仅不能缓解梯度消失，
+  它还是梯度消失的『元凶』之一。」</b></em></p></div>
+
+<figure class="fbox fwide" id="fig-prepost"><svg viewBox="0 0 1400 782" width="100%" role="img" aria-label="一张曲线图画了两遍，左右完全一样，只有下面的结论框不同。横轴是层号，从最靠输入的第零层到第二十四层；纵轴是对数，表示最初那个输入在这一层的输出里还剩多少比重。绿色那条是 Pre-LN，一直是 1，横平；红色那条是 Post-LN，按二的负 l 除以二次方一路指数下滑，到第二十四层只剩四千零九十六分之一。左边的结论是：预训练的时候这叫残差名存实亡，前面的层收不到信号；右边的结论是：微调的时候这正好是想要的，它替你按住了靠近输入的那些层。同一条曲线，两种价值"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">Post-LN 里，<tspan font-weight="700">归一化本身就是梯度消失的元凶之一</tspan>　——　<tspan font-weight="700">可它还留着，而且有道理</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⚠️ 下面画的是<tspan font-weight="700">前向</tspan>的残差直通项　——　<tspan font-weight="700">「所以梯度也消失」那一步由正文交代，图上不冒充</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">Pre-LN：平权</text>
+<rect x="133" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="154" y="74" fill="#5f6368" style="font-size:14.0px">Post-LN：2^(−l/2)</text>
+<rect x="295" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="316" y="74" fill="#5f6368" style="font-size:14.0px">同一条曲线，两种价值</text>
+<rect x="0" y="102" width="1400" height="502" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">⭐⭐⭐ 左右两边是<tspan font-weight="700">同一张图</tspan>　——　变的只有底下那个结论</tspan></text>
+<text class="svgsm" x="628" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 横轴层号，纵轴（对数）＝ <tspan font-weight="700">最初那个输入，在这一层的输出里还剩多少</tspan></text>
+<line x1="54" y1="428" x2="610" y2="428" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="54" y1="428" x2="54" y2="200" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="54" y="190" fill="#80868b" style="font-size:11.5px">还剩多少</text>
+<text class="svgsm" x="614" y="444" fill="#80868b" style="font-size:11.5px">层 →</text>
+<line x1="49" y1="229.29032258064515" x2="600" y2="229.29032258064515" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="45" y="233" fill="#80868b" text-anchor="end" style="font-size:11.0px">1</text>
+<line x1="49" y1="276.60215053763443" x2="600" y2="276.60215053763443" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="45" y="280" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻1</text>
+<line x1="49" y1="323.9139784946236" x2="600" y2="323.9139784946236" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="45" y="327" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻2</text>
+<line x1="49" y1="371.2258064516129" x2="600" y2="371.2258064516129" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="45" y="375" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻3</text>
+<line x1="49" y1="418.5376344086021" x2="600" y2="418.5376344086021" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="45" y="422" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻4</text>
+<path d="M 54.0 229.3 L 76.8 229.3 L 99.5 229.3 L 122.2 229.3 L 145.0 229.3 L 167.8 229.3 L 190.5 229.3 L 213.2 229.3 L 236.0 229.3 L 258.8 229.3 L 281.5 229.3 L 304.2 229.3 L 327.0 229.3 L 349.8 229.3 L 372.5 229.3 L 395.2 229.3 L 418.0 229.3 L 440.8 229.3 L 463.5 229.3 L 486.2 229.3 L 509.0 229.3 L 531.8 229.3 L 554.5 229.3 L 577.2 229.3 L 600.0 229.3" fill="none" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M 54.0 229.3 L 76.8 236.4 L 99.5 243.5 L 122.2 250.7 L 145.0 257.8 L 167.8 264.9 L 190.5 272.0 L 213.2 279.1 L 236.0 286.3 L 258.8 293.4 L 281.5 300.5 L 304.2 307.6 L 327.0 314.7 L 349.8 321.9 L 372.5 329.0 L 395.2 336.1 L 418.0 343.2 L 440.8 350.3 L 463.5 357.5 L 486.2 364.6 L 509.0 371.7 L 531.8 378.8 L 554.5 386.0 L 577.2 393.1 L 600.0 400.2" fill="none" stroke="#d93025" stroke-width="2.6" stroke-linecap="round"/>
+<text class="svgsm" x="596" y="217" fill="#0d652d" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">Pre-LN</tspan></text>
+<text class="svgsm" x="606" y="405" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Post-LN</tspan></text>
+<text class="svgsm" x="320" y="178" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">Ⓐ 预训练的时候</tspan></text>
+<rect x="40" y="462" width="564" height="104" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="320" y="494" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⛔ 残差「名存实亡」</tspan></text>
+<text class="svgsm" x="320" y="520" fill="#202124" text-anchor="middle" style="font-size:13.5px">越靠近输入，信号被削得越狠</text>
+<text class="svgsm" x="320" y="546" fill="#202124" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">前面的层几乎学不到东西</tspan></text>
+<line x1="734" y1="428" x2="1290" y2="428" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="734" y1="428" x2="734" y2="200" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="734" y="190" fill="#80868b" style="font-size:11.5px">还剩多少</text>
+<text class="svgsm" x="1294" y="444" fill="#80868b" style="font-size:11.5px">层 →</text>
+<line x1="729" y1="229.29032258064515" x2="1280" y2="229.29032258064515" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="725" y="233" fill="#80868b" text-anchor="end" style="font-size:11.0px">1</text>
+<line x1="729" y1="276.60215053763443" x2="1280" y2="276.60215053763443" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="725" y="280" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻1</text>
+<line x1="729" y1="323.9139784946236" x2="1280" y2="323.9139784946236" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="725" y="327" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻2</text>
+<line x1="729" y1="371.2258064516129" x2="1280" y2="371.2258064516129" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="725" y="375" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻3</text>
+<line x1="729" y1="418.5376344086021" x2="1280" y2="418.5376344086021" stroke="#edeff1" stroke-width="0.9" stroke-linecap="round"/>
+<text class="svgsm" x="725" y="422" fill="#80868b" text-anchor="end" style="font-size:11.0px">10⁻4</text>
+<path d="M 734.0 229.3 L 756.8 229.3 L 779.5 229.3 L 802.2 229.3 L 825.0 229.3 L 847.8 229.3 L 870.5 229.3 L 893.2 229.3 L 916.0 229.3 L 938.8 229.3 L 961.5 229.3 L 984.2 229.3 L 1007.0 229.3 L 1029.8 229.3 L 1052.5 229.3 L 1075.2 229.3 L 1098.0 229.3 L 1120.8 229.3 L 1143.5 229.3 L 1166.2 229.3 L 1189.0 229.3 L 1211.8 229.3 L 1234.5 229.3 L 1257.2 229.3 L 1280.0 229.3" fill="none" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M 734.0 229.3 L 756.8 236.4 L 779.5 243.5 L 802.2 250.7 L 825.0 257.8 L 847.8 264.9 L 870.5 272.0 L 893.2 279.1 L 916.0 286.3 L 938.8 293.4 L 961.5 300.5 L 984.2 307.6 L 1007.0 314.7 L 1029.8 321.9 L 1052.5 329.0 L 1075.2 336.1 L 1098.0 343.2 L 1120.8 350.3 L 1143.5 357.5 L 1166.2 364.6 L 1189.0 371.7 L 1211.8 378.8 L 1234.5 386.0 L 1257.2 393.1 L 1280.0 400.2" fill="none" stroke="#d93025" stroke-width="2.6" stroke-linecap="round"/>
+<text class="svgsm" x="1276" y="217" fill="#0d652d" text-anchor="end" style="font-size:13.5px"><tspan font-weight="700">Pre-LN</tspan></text>
+<text class="svgsm" x="1286" y="405" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Post-LN</tspan></text>
+<text class="svgsm" x="1000" y="178" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">Ⓑ 而拿去微调的时候</tspan></text>
+<rect x="720" y="462" width="564" height="104" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1000" y="494" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">✅ 这正好是你要的</tspan></text>
+<text class="svgsm" x="1000" y="520" fill="#202124" text-anchor="middle" style="font-size:13.5px">微调只想动靠近输出的那几层</text>
+<text class="svgsm" x="1000" y="546" fill="#202124" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">它替你把前面的层按住了</tspan></text>
+<line x1="660" y1="192" x2="660" y2="576" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 5"/>
+<text class="svgsm" x="700" y="602" fill="#202124" text-anchor="middle" style="font-size:14.5px">⭐⭐⭐ 曲线一模一样，<tspan font-weight="700">连坐标都没动</tspan>　——　换的只是「你拿它来干什么」。到第 24 层，Post-LN 的直通项只剩 Pre-LN 的 <tspan font-weight="700">1／4096</tspan>。</text>
+<rect x="0" y="654" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="654" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="654" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="681" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 那为什么不干脆把 LN 去掉？　——　因为方差会一路涨上去</tspan></text>
+<text class="svgsm" x="20" y="712" fill="#b06000" style="font-size:15.0px">⭐ 去掉之后 <tspan font-weight="700">x ＋ F(x)</tspan> 的方差就是 2，残差越多方差越大，所以<tspan font-weight="700">还是得加一个 Norm</tspan>　——　问题从来不是「加不加」，是<tspan font-weight="700">加在哪儿</tspan>。</text>
+<text class="svgsm" x="20" y="736" fill="#b06000" style="font-size:15.0px">⭐⭐ Pre-LN 的加法是 <tspan font-weight="700">x ＋ F(Norm(x))</tspan>，最后总输出再加一个 Norm ——&#160;这样每个残差分支<tspan font-weight="700">是平权的</tspan>，就没有上面那条指数衰减了。</text>
+</svg><figcaption>⭐⭐⭐ <b>左右两边是同一张图 ——&nbsp;连坐标都没动。</b><em>变的只有底下那个结论框。</em><span class="capmore"><br>⭐⭐ <em>红线是 Post-LN：最初那个输入在第 l 层输出里只剩 <b>2<sup>−l/2</sup></b>，到第 24 层是 <b>1／4096</b>；绿线是 Pre-LN，一直是 1。</em><br>⭐ <em>Ⓐ 说这叫「残差名存实亡」，Ⓑ 说这正好替你按住了前面的层——&nbsp;<b>同一条曲线，预训练时是毛病，微调时是功能。</b></em><br>⛔ <em>画的是<b>前向</b>的残差直通项，<b>不是梯度倍率</b>——&nbsp;两者相关，但不是一回事。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 苏剑林《模型优化漫谈：BERT 的初始标准差为什么是 0.02？》kexue.fm/archives/8747　——　「在 Post Norm 的 BERT 模型中，LN 不仅不能缓解梯度消失，它还是梯度消失的『元凶』之一」为原文原话，2^(−l/2) 出自该文公式的递归展开。</p>
+<p>⚠️ 这是<b>作者本人的分析文章</b>，不是同行评议论文。⛔ 图上画的是<b>前向的残差直通项</b>，不是梯度倍率　——　两者相关，但<b>不是一回事</b>。</p></details></figure>
+
+<p>⛔⛔⛔ <b>那为什么不去掉它？</b>
+  <em>——&nbsp;因为去掉之后 <b>x ＋ F(x) 的方差就是 2</b>，残差越多方差越大。
+  <b>问题从来不是「加不加 Norm」，是「加在哪儿」</b>：
+  Pre-LN 改成 <code>x ＋ F(Norm(x))</code>、最后总输出再加一个 Norm，
+  这样每个残差分支<b>是平权的</b>，就没有那条指数衰减了。</em></p>
+
+<div class="note ok"><p>⭐⭐⭐ 而最反直觉的一条是：
+  <b>这个「毛病」，换个场合就变成了功能。</b></p>
+<p><em>Finetune 的时候，我们<b>本来就希望优先调靠近输出的参数</b>，
+  不要过度动靠近输入的 ——&nbsp;免得把预训练学到的东西破坏掉。
+  而梯度消失的意思恰恰是「越靠近输入，它对最终输出的影响越弱」，
+  <b>这正好是 finetune 想要的。</b></em></p>
+<p class="landing">⭐⭐ 所以预训练好的 Post-LN 模型，
+  <b>往往比 Pre-LN 有更好的 finetune 效果</b>。
+  <em>⛔ 同一条曲线，预训练时是毛病，微调时是功能
+  ——&nbsp;<b>这就是上面那张图左右两半在说的事。</b></em></p>
+<p><span class="sub">📌 出处：苏剑林《模型优化漫谈：BERT 的初始标准差为什么是 0.02？》
+  <a href="https://kexue.fm/archives/8747">kexue.fm/archives/8747</a>。
+  ⚠️ 这是<b>作者本人的分析文章</b>，不是同行评议论文
+  ——&nbsp;我们按「一个讲得通的机制解释」收下，不当定论。</span></p></div>
+
+<p>⭐ <em>顺带把 <a href="#s三">3.5</a> 那三个 warmup 解释的<b>前提</b>坐实了：
+  第三条说「压住后面的层、等前面的层跟上」，
+  <b>它要的正是这里这条指数衰减</b> ——&nbsp;
+  Pre-LN 没有这条线，所以那一条对它也就不适用。</em></p>
+
 <h4>QK-norm ——&nbsp;注意力分数长疯了</h4>
 <p><em>ViT 往上做到<b>约 80 亿参数</b>的时候，训了几千步就发散。
   根因查出来很具体：注意力 logits 变得极大，
