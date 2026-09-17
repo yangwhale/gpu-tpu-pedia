@@ -147,36 +147,107 @@ def main():
     # 📌 出处：李宏毅《Backpropagation》课程投影片（台大）——&#160;
     #   投影片上写着 "new type of neuron / multiply a constant" 与 (W^{l+1})ᵀ。
     #   ⛔ 图是我们自己重画的。
-    PH_M = 322
+    PH_M = 432
     pym = f.panel(0, py2 + PH2 + 20, W, PH_M,
                   "Ⓒ ⭐⭐⭐ 换个看法：<tspan font-weight=\"700\">"
                   "反向那一遍，其实就是同一张网倒着走</tspan>", BL,
                   sub="⭐ 不是「另一套算法」——&#160;"
                       "<tspan font-weight=\"700\">同样的形状，只有三处换了</tspan>")
 
-    ROWS = (
-        ("走的方向", "左 →　右", "右 →　左", GY2,
-         "⭐ 就是 Ⓐ Ⓑ 那件事"),
-        ("每条边上乘的", "这一层的权重 W",
-         "<tspan font-weight=\"700\">同一个 W，转置过来</tspan>", GR,
-         "⭐ 没有新参数 ——　用的还是那一份"),
-        ("每个节点做的", "套一个激活函数（非线性）",
-         "<tspan font-weight=\"700\">乘一个常数</tspan>", RD,
-         "⛔ <tspan font-weight=\"700\">它在前向就定死了</tspan>"),
-    )
-    CX = (250, 620, 1010)
-    f.t(CX[1], pym + 54, "前向", INK, True, 16, "middle")
-    f.t(CX[2], pym + 54, "反向", INK, True, 16, "middle")
-    for i, (what, fwd, bwd, col, note) in enumerate(ROWS):
-        ry = pym + 92 + i * 62
-        f.t(CX[0], ry, what, INK, True, 14.5, "end")
-        f.t(CX[1], ry, fwd, GY, size=14, anchor="middle")
-        f.t(CX[2], ry, bwd, col, True, 14.5, "middle")
-        f.t(1180, ry, note, col, size=12.5)
-        if i:
-            f.line(70, ry - 30, W - 60, ry - 30, LINE, 1, arrow=False)
+    # ⭐⭐⭐ 2026-09-18 重画。旧版是三行对照表（走的方向 / 每条边乘的 /
+    #   每个节点做的）——&#160;ink 全 0，把字删掉什么都不剩。
+    #   ⛔ 而这一格的命题是「**同一张网倒着走**」——&#160;
+    #     它本来就是一张**网络图**，写成三行表格等于把形状描述成文字、
+    #     再让读者翻译回形状。
+    #   ⭐⭐⭐ 判据：**「两样东西的骨架一样、只有几处不同」这种话，
+    #     必须画成两张骨架真的一样的图** ——&#160;
+    #     「一样」是看出来的，列成表反而把它拆散了。
+    #   ⭐ 又一次用上 Olah 那招（见素材库 🅒）：同一张底图画两遍，只移动高亮。
 
-    f.t(700, pym + 288, "⭐⭐⭐ 第三行是这一格的落点："
+    # 一张 2–3–2 的小网。两边**用同一组坐标**，这是「同一张网」的全部意思
+    LAYERS = ((2, 120), (3, 100), (2, 120))      # (节点数, 首节点相对 y)
+    GAPY, DX = 66, 132
+
+    def _nodes(x0, base_y):
+        out = []
+        for li, (n, y0_) in enumerate(LAYERS):
+            out.append([(x0 + li * DX, base_y + y0_ + k * GAPY) for k in range(n)])
+        return out
+
+    NY = pym + 40
+    FWD = _nodes(196, NY)
+    BWD = _nodes(846, NY)
+    # ⭐ 这条 assert 就是这一格的命题本身：两张网的形状必须逐点相同
+    assert [[(x - 196, y) for x, y in L] for L in FWD] == \
+           [[(x - 846, y) for x, y in L] for L in BWD], \
+        "两边骨架对不上 —— 那就讲不成「同一张网」了"
+
+    def draw_net(NS, back):
+        """back=False 前向，True 反向。**除了下面这三处，两边一模一样。**"""
+        ecol = GR if back else GY2
+        for li in range(len(NS) - 1):
+            for (x1, y1) in NS[li]:
+                for (x2, y2) in NS[li + 1]:
+                    # ① 方向：反向就是把每条边的箭头掉个头
+                    a, b = ((x2, y2), (x1, y1)) if back else ((x1, y1), (x2, y2))
+                    f.line(a[0] + (14 if back else 14), a[1],
+                           b[0] - (14 if back else 14), b[1],
+                           ecol, 1.0, arrow=False)
+            mx = (NS[li][0][0] + NS[li + 1][0][0]) / 2.0
+            ax0, ax1 = (mx + 22, mx - 22) if back else (mx - 22, mx + 22)
+            f.line(ax0, NY + 264, ax1, NY + 264, ecol, 2.4)
+            # ② 边上乘的：同一个 W，反向是它的转置
+            f.t(mx, NY + 252, "Wᵀ" if back else "W", ecol, True, 14, "middle")
+
+        for li, layer in enumerate(NS):
+            for (x, y) in layer:
+                if back:
+                    # ③ 节点做的：从「套一个非线性」换成「乘一个常数」——
+                    #    画成放大器那个三角，跟圆形的视觉差别一眼可见
+                    # ⛔ 尖端必须朝**左** ——&#160;放大器那个三角的尖，
+                    #   指的就是信号往哪儿流，而这一遍是往回走的。
+                    #   ⭐ 第一版画成朝右了。方向这东西，
+                    #     在「我知道它该往哪走」的脑子里最容易翻面。
+                    f.path("M %.1f %.1f L %.1f %.1f L %.1f %.1f Z"
+                           % (x + 12, y - 14, x + 12, y + 14, x - 15, y),
+                           RD, 2.0, arrow=False, fill="#fce8e6")
+                else:
+                    f.box(x - 15, y - 15, 30, 30, "#fff", BL, 15, sw=2)
+                    # 圆里那道小 S 就是激活函数本人
+                    f.path("M %.1f %.1f C %.1f %.1f %.1f %.1f %.1f %.1f"
+                           % (x - 7, y + 5, x - 2, y + 5, x + 2, y - 5, x + 7, y - 5),
+                           BL, 1.6, arrow=False)
+
+    draw_net(FWD, False)
+    draw_net(BWD, True)
+
+    f.t(196 + DX, NY + 66, "前向", BL, True, 17, "middle")
+    f.t(846 + DX, NY + 66, "反向", RD, True, 17, "middle")
+
+    # 中间那句话：骨架是一样的
+    f.t(700, NY + 168, "同一张网", GY, True, 16, "middle")
+    f.t(700, NY + 196, "只有三处换了", GY2, size=13, anchor="middle")
+    f.line(700, NY + 120, 700, NY + 150, GY2, 1.1, dash="4 4", arrow=False)
+    f.line(700, NY + 214, 700, NY + 250, GY2, 1.1, dash="4 4", arrow=False)
+
+    # ⭐⭐⭐ 这一格真正的落点：那个常数是**从前向那边拿的**。
+    #   ⭐ 标签就贴在它说的那个三角形旁边 ——&#160;
+    #     判据：**横跨半张图的箭头既压别人的位置，又让读者去追它指向哪儿。**
+    _bx, _by = BWD[2][0]
+    f.line(_bx + 18, _by, _bx + 58, _by, OR, 1.2, dash="3 3", arrow=False)
+    f.box(_bx + 58, _by - 32, 208, 62, "#fef7e0", OR, 6)
+    f.t(_bx + 162, _by - 10, "这个常数是 σ′(z)", OR, True, 13.5, "middle")
+    f.t(_bx + 162, _by + 14, "<tspan font-weight=\"700\">前向那一遍算好的</tspan>",
+        INK, size=13, anchor="middle")
+
+    # 三处不同，编号标在各自发生的地方
+    for i, (_s, col, tx, ty) in enumerate((
+            ("① 每条边的箭头掉了个头", GR, 700, NY + 306),
+            ("② 同一个 W，转置过来　——　没有新参数", GR, 196 + DX, NY + 306),
+            ("③ 节点从「套非线性」换成「乘一个常数」", RD, 846 + DX, NY + 306))):
+        f.t(tx, ty, _s, col, True, 13, "middle")
+
+    f.t(700, NY + 352, "⭐⭐⭐ 落点在第 ③ 处："
         "<tspan font-weight=\"700\">那个常数在前向就定下来了</tspan>"
         "　——　所以前向算出来的东西<tspan font-weight=\"700\">必须留在场上</tspan>，"
         "反向才有东西可乘。", INK, size=14.5, anchor="middle")
