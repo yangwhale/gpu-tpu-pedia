@@ -21,6 +21,8 @@ r"""专题四 · §4.2「ZeRO 的三级」——&#160;四行条，一眼看完
   · 每参数 16 字节（2Ψ ＋ 2Ψ ＋ 12Ψ）与 Figure 1 的四个数 —— §3
   · 通信量：基线 DP 与 Pos / Pos+g 都是 2Ψ；Pos+g+p 是 3Ψ，即 1.5 倍 —— §7.2
 """
+import math
+
 from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE)
 
 W = 1400
@@ -109,31 +111,93 @@ def main():
     f._pan = None
 
     # ══════════ Ⓑ 为什么是这个顺序 ══════════════════════════════════
-    PH2 = 258
+    PH2 = 366
     py2 = f.panel(0, py + PH + 20, W, PH2,
                   "Ⓑ ⭐⭐ 顺序不是历史巧合　——　"
                   "<tspan font-weight=\"700\">是「多大」和「多久用一次」排出来的</tspan>", BL,
                   sub="⛔ 所以这三级<tspan font-weight=\"700\">不能换顺序</tspan>"
                       "，也不用背")
 
-    WHY = (
-        (RD, "#fce8e6", "优化器状态", "12 字节", "每一步只用<tspan font-weight=\"700\">一次</tspan>",
-         "就在更新那一瞬间", "⭐ 最大 ＋ 最少用 →　先切它，几乎不加通信"),
-        (BL, "#e8f0fe", "梯度", "2 字节", "反向<tspan font-weight=\"700\">结束时</tspan>汇总一次",
-         "在那之前可以散着放", "⭐ 次之 —— 通信量还是跟基线一样"),
-        (PU, "#f3e8fd", "权重", "2 字节", "<tspan font-weight=\"700\">每一层</tspan>前向都要用",
-         "还有反向时再要一次", "⛔ 最后才切 —— 通信涨到 1.5 倍"),
+    # ⛔⛔ 2026-09-18 R11 重画。原来是**三张并排的卡片**，每张列
+    #   「占多少字节 / 多久用一次 / 所以第几个切」。
+    #   ⭐ 可这一格的论证本来就是**二维的**：一个轴是「多大」，
+    #     另一个轴是「多久用一次」——&#160;三样东西落在这个平面上的**位置**，
+    #     自己就把顺序排出来了。卡片把二维压成了三段文字，白扔掉一个维度。
+    # ⭐⭐ 判据：**当一件事是「按两个指标排序」时，它就该是一张二维图，
+    #   而不是三张卡** ——&#160;卡片只能告诉你结论，位置能让你自己看出结论。
+    ITEMS = (
+        (RD, "优化器状态", 12.0, 1.0, "每步只用一次", "更新那一瞬间", "通信不变"),
+        (BL, "梯度", 2.0, 1.0, "反向结束汇总一次", "在那之前可以散着放", "通信不变"),
+        (PU, "权重", 2.0, 122.0, "每层前向都要", "反向还要再来一次", "⛔ 通信 ×1.5"),
     )
-    for i, (col, fill, what, size_, freq, freq2, note) in enumerate(WHY):
-        x = 40 + i * 442
-        f.box(x, py2 + 36, 418, 196, fill, col, 8)
-        f.t(x + 209, py2 + 70, what, col, True, 19, "middle")
-        f.t(x + 209, py2 + 100, "占 " + size_ + " / 参数", INK, True, 14, "middle")
-        f.t(x + 209, py2 + 136, freq, INK, True, 14.5, "middle")
-        f.t(x + 209, py2 + 158, freq2, GY, size=12.5, anchor="middle")
-        f.t(x + 209, py2 + 202, note, col, size=12.5, anchor="middle")
-        if i:
-            f.t(x - 14, py2 + 134, "→", GY2, True, 20, "middle")
+    # ⭐ 权重那个 122 ＝ 61 层 × 前向后向各一次 ——&#160;不是随手写的
+    assert ITEMS[2][3] == 2 * 61, "权重每步的取用次数应当是 61 层 × 2"
+    # ⭐⭐ 这一格的全部论证：**按「先大后忙」排出来的顺序，正好就是 ZeRO 的三级**
+    _order = sorted(range(3), key=lambda i: (ITEMS[i][3], -ITEMS[i][2]))
+    assert _order == [0, 1, 2], "先切又大又闲的 ——　排出来必须正好是 ZeRO 的顺序"
+
+    OX, OY = 330, py2 + 252
+    AW, AH = 690, 178
+    f.line(OX, OY, OX + AW + 40, OY, GY2, 1.2, arrow=False)
+    f.line(OX, OY, OX, OY - AH - 26, GY2, 1.2, arrow=False)
+    f.t(OX + AW + 46, OY + 5, "每步用几次 →", GY2, size=12.5)
+    f.t(OX + 6, OY - AH - 32, "↑ 每参数几字节", GY2, size=12.5)
+
+    def sx(n):
+        return OX + AW * math.log10(n) / math.log10(200.0)
+
+    def sy(b):
+        return OY - AH * b / 14.0
+
+    for n, lab in ((1, "1 次"), (10, "10"), (100, "100")):
+        f.line(sx(n), OY - 5, sx(n), OY + 5, GY2, 1, arrow=False)
+        f.t(sx(n), OY + 24, lab, GY2, size=12, anchor="middle")
+    for bb in (2, 12):
+        f.line(OX - 5, sy(bb), OX + 5, sy(bb), GY2, 1, arrow=False)
+        f.t(OX - 14, sy(bb) - 12, "%d B" % bb, GY2, size=12, anchor="end")
+
+    pts = []
+    for col, name, byt, freq, when, when2, comm in ITEMS:
+        x, yy = sx(freq), sy(byt)
+        r = 9 + 3.4 * math.sqrt(byt)          # ⭐ 泡泡大小也按字节数，重复编码「多大」
+        f.box(x - r, yy - r, 2 * r, 2 * r, "#fff", col, int(r), sw=2.4)
+        pts.append((x, yy, col, name, when, comm))
+
+    # ⭐⭐⭐ 切的顺序 ＝ 沿着这条折线走：先往下（按大小），再往右（按频率）
+    for k in range(len(pts) - 1):
+        x0, y0, _, _, _, _ = pts[k]
+        x1, y1, _, _, _, _ = pts[k + 1]
+        f.line(x0, y0 + 26, x1, y1 - 26, GY2, 1.6, dash="5 3")
+
+    # ⛔ 第一版三个泡泡的注释都上下摆，结果全撞上了轴标题和落点句。
+    #   ⭐ 判据：**散点图的标签，各自朝「自己这一侧最空」的方向放** ——&#160;
+    #     统一朝上或统一朝下，一定会撞到轴。
+    PLACE = (("right", 0), ("left", 0), ("up", -76))
+    for k, (x, yy, col, name, when, comm) in enumerate(pts):
+        side, dy = PLACE[k]
+        if side == "up":
+            ax, base, anc = x, yy + dy, "middle"
+            rows = ((name_ := "%d｜%s" % (k + 1, name), 0), (when, 22), (comm, 42))
+        else:
+            sgn = 1 if side == "right" else -1
+            ax, base, anc = x + sgn * 34, yy - 16, ("start" if sgn > 0 else "end")
+            rows = (("%d｜%s" % (k + 1, name), 0), (when, 22), (comm, 42))
+        for txt, off in rows:
+            bold = txt.startswith("⛔") or off == 0
+            f.t(ax, base + off, txt,
+                col if (off == 0 or txt.startswith("⛔")) else GY,
+                bold, 15.5 if off == 0 else 12, anc)
+
+    f.box(OX + AW - 240, OY - AH - 18, 248, 46, "#fef7e0", OR, 6)
+    f.t(OX + AW - 116, OY - AH + 12, "⛔ 这一角是空的：又大又忙的东西",
+        OR, True, 13, "middle")
+
+    f.t(700, py2 + 322,
+        "⭐⭐⭐ 顺序不用背 ——&#160;<tspan font-weight=\"700\">"
+        "沿着「先大后忙」这条线走一遍，排出来的就是 ZeRO 的三级。</tspan>"
+        "⛔ 而这条判据出了 ZeRO 还能用："
+        "<tspan font-weight=\"700\">先动又大又闲的那一项，最后才碰又小又忙的。</tspan>",
+        INK, size=14.5, anchor="middle")
     f._pan = None
 
     yb = f.band(py2 + PH2 + 20, "ok",
