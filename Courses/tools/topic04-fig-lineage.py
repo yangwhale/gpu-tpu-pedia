@@ -292,6 +292,27 @@ def main():
                "⛔ 本讲按原版画，因为「有效学习率单调衰减」这个病"
                "<tspan font-weight=\"700\">只在原版（累加不除 t）上成立</tspan> ——&#160;"
                "这个区别值得知道，不然两边对不上会以为自己算错了。",
+               "📌 <tspan font-weight=\"700\">三则出处，放在一起看很有意思</tspan>"
+               "（完整的故事在讲义里）：<tspan font-weight=\"700\">AdaGrad</tspan> 是"
+               "正经的 JMLR 长文（Duchi / Hazan / Singer，"
+               "<tspan font-weight=\"700\">12(61):2121–2159, 2011</tspan>，整整 39 页），"
+               "⭐ 而且题目是《Adaptive Subgradient Methods for "
+               "<tspan font-weight=\"700\">Online Learning</tspan> and Stochastic Optimization》"
+               "——&#160;<tspan font-weight=\"700\">它根本不是为深度学习写的</tspan>。",
+               "⭐⭐⭐ <tspan font-weight=\"700\">RMSProp 没有论文。</tspan>"
+               "它唯一的「出版物」是 Hinton 那门 Coursera 网课的一页 slide，"
+               "标准引用写作 <tspan font-weight=\"700\">Tieleman &amp; Hinton (2012), "
+               "Lecture 6.5-rmsprop</tspan>。"
+               "⭐ 而那页 slide 的副标题<tspan font-weight=\"700\">本身就是算法的完整定义</tspan>："
+               "「<tspan font-weight=\"700\">Divide the gradient by a running average of "
+               "its recent magnitude</tspan>」——&#160;把梯度除以它近期幅度的滑动平均。"
+               "一句话，一页片子，成了这条链的中间一环。",
+               "⭐⭐ <tspan font-weight=\"700\">Adam</tspan> 那篇（ICLR 2015）有两处特别好玩，都在论文里："
+               "首页脚注写着「<tspan font-weight=\"700\">Author ordering determined by "
+               "coin flip over a Google Hangout</tspan>」——&#160;作者顺序是在 Hangout 上掷硬币定的；"
+               "致谢里写着「<tspan font-weight=\"700\">special thanks to Ivo Danihelka, "
+               "and Tom Schaul for coining the name Adam</tspan>」"
+               "——&#160;<tspan font-weight=\"700\">Adam 这个名字不是作者自己起的。</tspan>",
                "⭐ 图上的 %.1f%%、%.0f 倍、%.1f 倍三个数都是脚本算的，五条 assert 盯着："
                "AdaGrad 必须单调衰减、跑到第 %d 步必须掉到很小、"
                "不校正时第一步必须被放大很多倍、"
