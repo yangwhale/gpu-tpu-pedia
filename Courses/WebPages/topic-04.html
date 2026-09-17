@@ -1471,7 +1471,9 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="1460" fill="#b06000" style="font-size:15.0px">⛔ 而两头的<tspan font-weight="700">症状完全不同</tspan>：消失是<tspan font-weight="700">静悄悄的</tspan>（loss 就是不降，前面几层跟没训一样，没有任何报错）；爆炸是<tspan font-weight="700">吵闹的</tspan>（loss 直接飞掉或者变 NaN）。⭐ 所以爆炸好查，消失难查。</text>
 </svg><figcaption>⭐⭐⭐ <b>链式法则是连乘，而连乘是指数的。</b><em>同一个 60 层网络，每层兑换率 0.8 还是 1.2 ——&nbsp;<b>只差两成，最靠输入那层拿到的梯度差了 10 个数量级。</b></em><span class="capmore"><br>⭐⭐ <em>Ⓐ 那条贴在轴上的红线<b>不是画漏了</b>，是真的小到画不出来；Ⓑ 得换一根对数轴才装得下这两头。</em><br>⭐ <em>Ⓒ 是这一格唯一能<b>当场算清楚</b>的那截原因：sigmoid 的导数最大只有 <b>0.25</b>（σ(1−σ) 的闭式最大值），<b>光这一下每层就先乘了个 ≤ ¼ 的数</b> ——&nbsp;而 ReLU 正半轴恒为 1。<b>深网络忽然训得动，就是这么来的。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ Ⓐ 三条曲线、Ⓑ 那两个端点值、Ⓒ 那个 0.25，<b>全是脚本算的，没有一个是抄来的</b>：0.8 的 59 次方 ≈ 1.9e-06、1.2 的 59 次方 ≈ 46956，两者相差 <b>10 个数量级</b>；0.25 是 σ(1−σ) 的闭式最大值，脚本里还用一万个采样点复核了一遍。</p>
 <p>⚠️ <b>Ⓒ 只挑了激活函数这一截</b> ——&#160;每层真正的兑换率还要乘上权重矩阵那一下（以及归一化那一下）。选它是因为它是这一格里<b>唯一能当场算清楚的</b>，⛔ 不是因为它是唯一的原因。</p>
-<p>📌 历史留到讲义里讲，这里只记一句：这件事<b>1991 年就被正式指出了</b>　——　而且出处是一篇<b>德文硕士论文</b>，从没在英文期刊上发表过。⚠️ 这条的归属至今仍有争议，所以本讲只说「1991 年那篇论文正式指出」，不卷进优先权之争。</p></details></figure>
+<p>📌 <b>出处与年份</b>（完整的故事在讲义里）：这件事 <b>1991 年</b>就被正式指出了 ——&#160;Hochreiter 的硕士论文《Untersuchungen zu dynamischen neuronalen Netzen》（慕尼黑工业大学）。⭐ 它是<b>德文写的，从没在英文期刊上发表过</b>。三年后 Bengio、Simard、Frasconi 在 IEEE Trans. Neural Networks 5(2):157–166 发表《Learning long-term dependencies with gradient descent is difficult》——&#160;<b>标题就是结论</b>。</p>
+<p>⚠️ <b>这条的归属至今仍有争议</b>，本讲只说「1991 年那篇论文正式指出」，<b>不卷进优先权之争</b>。⭐ 而有意思的是结局：2001 年 <b>Hochreiter、Bengio、Frasconi、Schmidhuber 四个人合写了一章</b>《Gradient flow in recurrent nets》——&#160;<b>当年分头发现同一件事的两拨人，十年后坐到一起把它总结了。</b></p>
+<p>⚠️ 还有一条口径要说清：这个问题<b>最早是在循环网络上发现的</b>，不是在我们这一格画的前馈网络上。⭐ 但它们是同一件事 ——&#160;循环网络按时间展开之后，<b>就是一个「层数 ＝ 序列长度」的超深网络</b>。那篇综述里报的实验跨度是 <b>1000 步</b>，换算过来就是一千层。</p></details></figure>
 
 <h3 id="s1-5">1.5　⭐⭐ 最深的一条：为什么是<u>从后往前</u></h3>
 

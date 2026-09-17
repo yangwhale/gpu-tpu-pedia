@@ -287,11 +287,27 @@ def main():
                "每层真正的兑换率还要乘上权重矩阵那一下（以及归一化那一下）。"
                "选它是因为它是这一格里<tspan font-weight=\"700\">唯一能当场算清楚的</tspan>，"
                "⛔ 不是因为它是唯一的原因。",
-               "📌 历史留到讲义里讲，这里只记一句：这件事"
-               "<tspan font-weight=\"700\">1991 年就被正式指出了</tspan>"
-               "　——　而且出处是一篇<tspan font-weight=\"700\">德文硕士论文</tspan>，"
-               "从没在英文期刊上发表过。⚠️ 这条的归属至今仍有争议，"
-               "所以本讲只说「1991 年那篇论文正式指出」，不卷进优先权之争。")
+               "📌 <tspan font-weight=\"700\">出处与年份</tspan>（完整的故事在讲义里）："
+               "这件事 <tspan font-weight=\"700\">1991 年</tspan>就被正式指出了 ——&#160;"
+               "Hochreiter 的硕士论文《Untersuchungen zu dynamischen neuronalen Netzen》"
+               "（慕尼黑工业大学）。⭐ 它是<tspan font-weight=\"700\">德文写的，"
+               "从没在英文期刊上发表过</tspan>。"
+               "三年后 Bengio、Simard、Frasconi 在 IEEE Trans. Neural Networks 5(2):157–166 "
+               "发表《Learning long-term dependencies with gradient descent is difficult》"
+               "——&#160;<tspan font-weight=\"700\">标题就是结论</tspan>。",
+               "⚠️ <tspan font-weight=\"700\">这条的归属至今仍有争议</tspan>，"
+               "本讲只说「1991 年那篇论文正式指出」，"
+               "<tspan font-weight=\"700\">不卷进优先权之争</tspan>。"
+               "⭐ 而有意思的是结局：2001 年 "
+               "<tspan font-weight=\"700\">Hochreiter、Bengio、Frasconi、Schmidhuber 四个人合写了一章</tspan>"
+               "《Gradient flow in recurrent nets》——&#160;"
+               "<tspan font-weight=\"700\">当年分头发现同一件事的两拨人，十年后坐到一起把它总结了。</tspan>",
+               "⚠️ 还有一条口径要说清：这个问题<tspan font-weight=\"700\">最早是在循环网络上发现的</tspan>，"
+               "不是在我们这一格画的前馈网络上。"
+               "⭐ 但它们是同一件事 ——&#160;循环网络按时间展开之后，"
+               "<tspan font-weight=\"700\">就是一个「层数 ＝ 序列长度」的超深网络</tspan>。"
+               "那篇综述里报的实验跨度是 <tspan font-weight=\"700\">1000 步</tspan>，"
+               "换算过来就是一千层。")
 
     f.save("fig4-vanish.svg", yb + 14)
 
