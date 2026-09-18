@@ -156,7 +156,10 @@ class Descend(Scene):
             return always_redraw(mk)
 
         act1 = VGroup(curve)
-        self.add(act1, ball(TRJ_A, RD_), ball(TRJ_B, BL_))
+        # ⭐ 留着引用 ——&#160;末尾复位时要按**同样的顺序**再 add 一遍来恢复 z 序，
+        #   见文件末尾。`always_redraw` 的返回值不留引用就再也拿不到了。
+        ball_a, ball_b = ball(TRJ_A, RD_), ball(TRJ_B, BL_)
+        self.add(act1, ball_a, ball_b)
 
         # ═══ 幕二：等高线 ＋ 一条真轨迹 ═════════════════════════
         CS = 0.80
@@ -233,7 +236,34 @@ class Descend(Scene):
         self.play(rings.animate.set_opacity(0), run_time=0.5)
         self.play(t.animate.set_value(T1 + T2 + T3), run_time=T3 - 0.5,
                   rate_func=linear)
-        # 复位：让最后一帧回到第一帧，loop 才不跳
-        self.play(FadeIn(act1), run_time=0.4)
-        self.play(t.animate.set_value(0.0), run_time=0.01, rate_func=linear)
-        self.wait(0.4)
+        # ── 复位：让最后一帧＝第一帧 ─────────────────────────────
+        # ⛔ 第一版写成「先 FadeIn(act1)，再把 t 归零」——&#160;
+        #   于是曲线淡回来的那 0.4 秒里，**第三幕那列条还挂在上面**，
+        #   最后一帧是「曲线 ＋ 一列条」，跟第一帧对不上，loop 当场跳。
+        # ⭐ 判据：**「首尾同一帧」要检查的是<最后一帧的全部内容>，
+        #   不是「我有没有写复位这一步」** ——&#160;复位漏掉一个图层，它就不成立。
+        # ⛔ 第二版写成「t.set_value(0) ＋ act1.set_opacity(1) ＋ wait(0.5)」——&#160;
+        #   量出来**一点没变**：末帧还是那一列条。两个症状各对应一个 bug：
+        #   ① 末帧**多**了条 ——&#160;`self.wait()` 没有驱动 `always_redraw` 的 updater，
+        #      所以 t 归零了、画面还停在旧帧。**只有 play 一定会走一遍 updater。**
+        #   ② 末帧**少**了曲线 ——&#160;`FadeOut(act1)` 把 act1 **移出了 scene**，
+        #      `set_opacity(1)` 只改属性不改归属，得 `self.add` 加回来。
+        # ⭐⭐ 判据：**首尾一致要量「差异像素占比」，不能量「平均像素差」** ——&#160;
+        #   这张画面 98.5% 是白底，平均差被稀释到 1.26，看着像零，其实差着整整一幕。
+        #   稀疏画面上任何按全图取平均的指标都没有判别力。
+        # ⛔ 第三版写 `self.add(act1)`，量出来还剩 25.3% ——&#160;内容对了，
+        #   但**末帧的球被曲线盖住了一半**。`Scene.add` 是追加到显示列表尾部
+        #   ＝画在最上层；而首帧时球是在曲线之后 add 的、本来在曲线之上。
+        # ⭐ 判据：**「把东西加回 scene」和「加回它原来的图层」是两件事。**
+        # ⛔ 这个版本的 `Scene` 没有 `add_to_back`（当场 AttributeError 崩掉）。
+        # ⭐⭐ 不用去找那个 API ——&#160;`Scene.add` 会**先把重复的摘掉、再追加**，
+        #   所以**按最初那一行同样的顺序重新 add 一遍**就恢复了原本的 z 序。
+        #   这么写还不依赖 manim 版本。
+        t.set_value(0.0)
+        act1.set_opacity(1)
+        self.add(act1, ball_a, ball_b)
+        # ⭐ 恒等动画：t 已经是 0，这一步只为**强制走一遍 updater**。
+        #   这么写对「wait 到底驱不驱动 updater」这个我没验过的机制是鲁棒的 ——&#160;
+        #   两种情况都能得到正确的末帧。
+        self.play(t.animate.set_value(0.0), run_time=1 / 30)
+        self.wait(0.5)

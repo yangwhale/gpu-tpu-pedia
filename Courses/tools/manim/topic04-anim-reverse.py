@@ -23,10 +23,15 @@ r"""专题四 · 正向模式 vs 反向模式 ——&#160;`fig-reverse` 配的�
   ② **两排同时开跑。** 这是全部论点所在 ——&#160;
      ⛔ 分成两段先后播就什么都没了，因为对比的是**同一段时间里各自走到哪**。
   ③ **配色跟 `fig-reverse` 对齐**：红 ＝ 正向模式，绿 ＝ 反向模式。
-  ④ **首尾都是全灭**，中间留一段「全亮保持」再复位 ——&#160;
-     所以页面里 `loop` 不会看到跳帧。
+  ④ 中间留一段「全亮保持」，末尾**把时钟拨回 0**，所以 `loop` 不跳帧。
      ⭐ 判据：**循环动画的第一帧和最后一帧必须长得一样**，
        否则「结束时全亮、开头全灭」每一轮都会闪一下。
+     ⛔ 这里原本写的是「首尾都是全灭」——&#160;**那句话是错的，而且错了很久**：
+       第一帧并不空，它有一个正在跑的亮节点、两个球、两排各一块计数。
+       正因为把首帧想成「全灭」，复位才被写成「末尾全部关掉」，
+       于是首末永远对不上（实测 32.7%）。
+       ⭐⭐ 教训：**「复位」的目标不是「空」，是「第一帧」** ——&#160;
+         这两个只有在第一帧真的是空的时候才重合。
 
 📌 渲染（需要 `~/.venvs/manim`）：
     ~/.venvs/manim/bin/manim --format=mp4 -qh --media_dir /tmp/manim-out \
@@ -74,6 +79,19 @@ class Reverse(Scene):
         self.camera.background_color = WHITE
         tr = ValueTracker(0.0)
 
+        # ⭐⭐ 2026-09-18：这支片子**首尾对不上**，量出来 32.7%。
+        #   根因不是漏写复位 ——&#160;复位写了，但**是在每个绘制函数里各写一份
+        #   `if t >= T_END - 0.6` 分支**，四份里漏了两份（两个球、两排计数块），
+        #   于是末帧比首帧少两个球、少两块计数。
+        # ⭐ 判据：**同一条不变量复制 N 份，N 越大越必然漏。**
+        #   改成在**时间轴上做一次映射** ——&#160;复位段直接把时钟拨回 0，
+        #   于是「末帧 ≡ 首帧」不是靠 N 个分支凑出来的，是按定义成立的。
+        T_RESET = T_END - 0.6
+
+        def clock():
+            t = tr.get_value()
+            return 0.0 if t >= T_RESET else t
+
         def rail(y):
             """两排共用的骨架 ——&#160;一条链 ＋ 末端一个方块。"""
             g = VGroup()
@@ -92,7 +110,7 @@ class Reverse(Scene):
               而「一趟只能拿一个参数的梯度」正是正向模式贵在哪儿。
             """
             def mk():
-                st = st_fn(tr.get_value(), i)
+                st = st_fn(clock(), i)
                 c = Circle(radius=0.145,
                            stroke_color=GY_ if st == 0 else col,
                            stroke_width=3.2 if st != 1 else 4.6,
@@ -102,8 +120,7 @@ class Reverse(Scene):
 
         # ── 上排：正向模式。第 k 趟只点亮第 k 个 ─────────────────────
         def fwd_lit(t, i):
-            if t >= T_END - 0.6:          # 复位段：全灭，跟第一帧对上
-                return 0
+            # ⭐ 不再自己判复位 —— clock() 已经把复位段拨回 t=0
             if t >= (i + 1) * T_ROUND:
                 return 2                  # 这一趟跑完了，梯度拿到了
             if t >= i * T_ROUND:
@@ -112,8 +129,6 @@ class Reverse(Scene):
 
         # ── 下排：反向模式。一趟走过去，沿途全点亮 ───────────────────
         def bwd_lit(t, i):
-            if t >= T_END - 0.6:
-                return 0
             if t >= T_BWD:
                 return 2
             # 球从 loss 往左走，走过了就点亮 ——&#160;一趟之内全都拿到
@@ -126,7 +141,7 @@ class Reverse(Scene):
 
         # ── 两个跑动的小球 ──────────────────────────────────────────
         def fwd_ball():
-            t = tr.get_value()
+            t = clock()
             if t >= T_FWD:
                 return Dot(radius=0.001, fill_opacity=0.0).move_to(ORIGIN)
             k = min(N - 1, int(t / T_ROUND))
@@ -135,7 +150,7 @@ class Reverse(Scene):
                 [_lerp(PX[k], LOSS_X, s), Y_FWD, 0])
 
         def bwd_ball():
-            t = tr.get_value()
+            t = clock()
             if t >= T_BWD:
                 return Dot(radius=0.001, fill_opacity=0.0).move_to(ORIGIN)
             return Dot(radius=0.125, color=GR_).move_to(
@@ -146,14 +161,13 @@ class Reverse(Scene):
         # ── 右边的计数：跑一趟堆一块。这是「重复几遍」的无字说法 ─────
         def tally(y, col, n_fn):
             def mk():
-                t = tr.get_value()
+                t = clock()
                 g = VGroup()
-                if t < T_END - 0.6:
-                    for j in range(n_fn(t)):
-                        g.add(Square(side_length=0.26, stroke_color=col,
-                                     stroke_width=2, fill_color=col,
-                                     fill_opacity=0.8)
-                              .move_to([TALLY_X + j * TALLY_W, y, 0]))
+                for j in range(n_fn(t)):
+                    g.add(Square(side_length=0.26, stroke_color=col,
+                                 stroke_width=2, fill_color=col,
+                                 fill_opacity=0.8)
+                          .move_to([TALLY_X + j * TALLY_W, y, 0]))
                 return g
             return always_redraw(mk)
 

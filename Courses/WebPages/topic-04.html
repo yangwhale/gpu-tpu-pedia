@@ -3362,6 +3362,30 @@ body.figonly section h3{margin-top:34px}
 <p>📌 「球滚下山」「步长 ∝ 斜率所以不会冲过头」「落在哪个谷取决于起点」「高维时看那一列数的正负与相对大小」四个讲法，取自 <b>3Blue1Brown</b>《Gradient descent, how neural networks learn》官方讲义　——　<b>已逐条核过原文，图是我们自己重画的</b>。</p>
 <p>⭐ Ⓒ 那一整列负梯度，<b>正是反向传播一遍算出来的那一份</b>　——　所以这一讲的第一节和第三节，接头就在这儿。</p></details></figure>
 
+<!-- ⭐⭐⭐ 2026-09-18：这一段的**骨架**是从 3Blue1Brown 那一集的类名序列读出来的
+     （`3b1b/videos` 的 `_2017/nn/part2.py`，61 个 Scene 排下来就是一条叙事线）：
+       SingleVariableCostFunction → TwoVariableInputSpace/CostSurface
+       → ConfusedAboutHighDimension → NonSpatialGradientIntuition
+     即「先一维讲通 → 升二维看形状 → **主动承认高维想不出来** → 不再画空间」。
+     ⛔ 那个仓库是 CC BY-NC-SA 4.0，所以**一行代码、一个画面都没有复制** ——
+       借的是这条思路；曲线、等高线、分量条全是我们自己算的。
+     ⭐ 第三幕最值得学：高维不画成空间，画成**一列条**，颜色＝符号、长度＝大小。 -->
+<figure class="fbox fwide" id="anim-descend">
+<video src="media/topic04-descend.mp4" autoplay loop muted playsinline
+  style="width:100%;max-width:900px;display:block;margin:0 auto;border-radius:10px"
+  aria-label="动画分三幕。第一幕是一条一维的 loss 曲线，红蓝两个小球从曲线两端各自往下滚，最后落进两个深浅不同的谷 —— 同一条曲线、同一个规则，落点却不同。第二幕换成二维的等高线俯视图，一条绿色轨迹从外圈一路绕进中心的最低处。第三幕连等高线也撤掉，画面中间出现一根竖轴和十四条横向的色条，蓝色向右表示正、红色向左表示负，长度表示大小；随着训练推进，这些条一根根地缩短 —— 这是把高维参数画成一列数，而不是画成空间。"></video>
+<figcaption>⭐⭐⭐ <b>一维 → 二维 → 不再画空间。</b>
+  <em>第一幕：同一条曲线、同一个规则，<b>两个球落进了不同的谷</b>。<br>
+  第二幕：升到二维，换成等高线俯视 ——&nbsp;形状还看得见。<br>
+  ⭐ 第三幕是关键：<b>三千亿维想象不出来，所以干脆不画空间了</b>
+  ——&nbsp;把参数画成<b>一列条</b>，颜色是符号、长度是大小，
+  <b>它们一根根缩短，就是在下降。</b><br>
+  <span class="sub">（15 秒无声循环，Manim 渲染。骨架取自 3Blue1Brown 神经网络系列的
+  叙事结构（<a href="https://github.com/3b1b/videos/tree/master/_2017/nn">源码</a>，
+  CC BY-NC-SA 4.0）——&nbsp;<b>只借思路，画面与数据全部自算</b>。
+  脚本在 <code>tools/manim/</code>。）</span></em></figcaption>
+</figure>
+
 <p class="lead">⛔ 那张图末尾留了一句不太好听的话：<b>落在哪个谷，取决于你从哪儿出发。</b>
   <em>一维的图上这件事看着很吓人 ——&nbsp;满眼都是坑，随便掉哪个都出不来。
   <b>下面这张就是来拆这个画面的。</b></em></p>
@@ -5539,7 +5563,7 @@ body.figonly section h3{margin-top:34px}
   <em>⭐⭐ 盯住那根竖线：<b>最高点出现在前向刚走完、反向还没开始的那一刻</b>
   ——&nbsp;<b>不是训练的某个阶段，是一个瞬间。</b>
   <span class="sub">（三条带的高度按真实字节数算，跟上面那张图同一套口径。
-  12.8 秒无声循环，Manim 渲染，脚本在 <code>tools/manim/</code>。）</span></em></figcaption>
+  14.6 秒无声循环，Manim 渲染，脚本在 <code>tools/manim/</code>。）</span></em></figcaption>
 </figure>
 
 <h3 id="s5-1">5.1　显存：四项加起来是多少</h3>

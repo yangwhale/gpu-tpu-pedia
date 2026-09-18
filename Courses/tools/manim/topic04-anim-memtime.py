@@ -43,10 +43,18 @@ assert abs(GRAD_TIB - 1.22) < 0.02, GRAD_TIB
 # ⭐⭐ 这一条是整段动画的落点：**激活的峰比常驻的一半还高**
 assert ACT_TIB > RESIDENT_TIB * 0.4, "激活峰不够高就看不出「山」"
 
-T_FWD, T_BWD, T_UPD, T_HOLD = 1.0, 1.0, 0.34, 0.50   # ⭐ 末尾多停一会儿：
-#   画完的那座山要留在屏幕上看一眼，loop 才读成「画一遍 → 看一眼 → 重来」，
-#   而不是「画到一半突然跳回去」。
-T_END = T_FWD + T_BWD + T_UPD + T_HOLD
+T_FWD, T_BWD, T_UPD, T_HOLD, T_REW = 1.0, 1.0, 0.34, 0.35, 0.55
+# ⭐ T_HOLD：画完的那座山留在屏幕上看一眼。
+# ⭐⭐ T_REW 是 2026-09-18 补的 —— 在此之前这支片子**根本没有复位段**：
+#   首帧是一条空灰带、末帧是画满的三角，`loop` 每一轮硬跳一次（实测 18.2%）。
+#   ⛔ 而它的内容是**累积**的，所以「末尾清零」只是把那一跳从接缝挪进片内。
+#   ⭐ 改成**倒着走回去**：让时钟在最后这段里从 T_RESET 线性退回 0，
+#     观众看到那座山退潮、扫描线滑回左边 —— 接缝读成
+#     「画一遍 → 看一眼 → 退回去 → 重画」，而首末帧是**同一帧**。
+T_RESET = T_FWD + T_BWD + T_UPD + T_HOLD      # 到这儿内容画完并停够了
+T_END = T_RESET + T_REW
+assert T_REW > 0, "没有回退段，首末帧对不上，loop 会跳"
+
 
 
 def act_at(t):
@@ -75,8 +83,16 @@ class MemTime(Scene):
         SY = 0.30                      # 每 TiB 多少个单位高
         tt = ValueTracker(0.0)
 
+        # ⛔ 这里必须除 T_RESET 不是 T_END —— 横轴要在内容画完时**正好铺满**。
+        #   除 T_END 的话，回退段那 0.55 也会分走一截宽度，图就缩在左边了。
         def px(t):
-            return X0 + (X1 - X0) * t / T_END
+            return X0 + (X1 - X0) * t / T_RESET
+
+        def clock():
+            t = tt.get_value()
+            if t <= T_RESET:
+                return t
+            return T_RESET * (1.0 - (t - T_RESET) / T_REW)
 
         # 基座：不动的那 14 字节
         base = Rectangle(width=X1 - X0, height=RESIDENT_TIB * SY,
@@ -86,7 +102,7 @@ class MemTime(Scene):
         def band(fn, col, below):
             """把一条随时间变的带，按**已经走过的那段**画成填充多边形。"""
             def make():
-                t_now = tt.get_value()
+                t_now = clock()
                 n = max(2, int(120 * t_now / T_END) + 2)
                 ts = np.linspace(0, t_now, n)
                 top = [np.array([px(s), Y0 + (below(s) + fn(s)) * SY, 0]) for s in ts]
@@ -103,8 +119,8 @@ class MemTime(Scene):
 
         # ⭐ 现在走到哪儿：一根扫过去的竖线 ＋ 层轴上的滑块（**不放字**）
         sweep = always_redraw(lambda: Line(
-            np.array([px(tt.get_value()), Y0 - 0.25, 0]),
-            np.array([px(tt.get_value()), Y0 + 3.25, 0]),
+            np.array([px(clock()), Y0 - 0.25, 0]),
+            np.array([px(clock()), Y0 + 3.25, 0]),
             color=INK_, stroke_width=2.5))
 
         # 层轴：61 个小格，前向从左往右点亮、反向从右往左熄掉
@@ -117,7 +133,7 @@ class MemTime(Scene):
             for i in range(LN)])
 
         def lit():
-            t_now = tt.get_value()
+            t_now = clock()
             if t_now <= T_FWD:
                 k, col = int(LN * t_now / T_FWD), BL_
             elif t_now <= T_FWD + T_BWD:
