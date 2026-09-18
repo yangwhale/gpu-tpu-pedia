@@ -786,7 +786,7 @@ body.figonly section h3{margin-top:34px}
 </head>
 <body>
 <div class="progress"><i></i></div>
-<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 一个数，和三千亿个参数">一个数，和三千亿个参数</a><a href="#s一" title="第 一 节 · 反向要付什么">反向要付什么</a><a href="#s二" title="第 二 节 · 第一个真正的「决策」">第一个真正的「决策」</a><a href="#s三" title="第 三 节 · 优化器">优化器</a><a href="#s四" title="第 四 节 · 这张账单直接决定了并行策略长什么样">这张账单直接决定了并行策略长什么</a><a href="#s五" title="第 五 节 · 一个完整 step 的总账">一个完整 step 的总账</a><a href="#s六" title="第 六 节 · 训不崩">训不崩</a></div></nav>
+<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 一个数，和三千亿个参数">一个数，和三千亿个参数</a><a href="#s一" title="第 一 节 · 反向要付什么">反向要付什么</a><a href="#s二" title="第 二 节 · 第一个真正的「决策」">第一个真正的「决策」</a><a href="#s三" title="第 三 节 · 优化器">优化器</a><a href="#s四" title="第 四 节 · 这张账单直接决定了并行策略长什么样">这张账单直接决定了并行策略长什么</a><a href="#s五" title="第 五 节 · 把这三件事，放到一台你摸得到的机器上">把这三件事，放到一台你摸得到的机</a><a href="#s六" title="第 六 节 · 训不崩">训不崩</a></div></nav>
 
 
 <!-- ⛔ 这个文件由 Courses/tools/topic04-build.py 生成。
@@ -5821,6 +5821,22 @@ body.figonly section h3{margin-top:34px}
   <em>⭐ 把上面几项按大小排一遍，你会发现 ——&nbsp;
   ZeRO 那三级，正是照着这个顺序来的。</em></p>
 
+<p class="lead">⛔ <b>这一节是<u>专题五的预习</u>，不是本讲那三件事的一部分。</b>
+  <em>——&nbsp;三句话说完，细的都收在下面那个折叠块里。</em></p>
+
+<div class="note ok"><p>⭐ <b>训练要用的东西，按大小排下来是这个顺序：</b></p>
+<p class="landing"><b>优化器状态（12 字节／参数）　＞　权重 ＝ 梯度（各 2 字节）　＞　激活（看 batch）</b></p>
+<ul>
+  <li><em>卡装不下的时候，<b>就按这个顺序往外切</b> ——&nbsp;先切最大的、而且最少被用到的。</em></li>
+  <li><em>这正好就是 <b>ZeRO 那三级</b>的顺序：先优化器状态，再梯度，最后权重。</em></li>
+  <li><em>⛔ 但「怎么切、切给谁、切完通信涨多少」<b>整个是
+    <a href="index.html">专题五</a> 的事</b>。</em></li>
+</ul>
+<p><span class="sub">⭐ 这里只要你带走一句：<b>并行策略不是凭空设计出来的，
+  它是被这张账的大小顺序逼出来的。</b>
+  ——&nbsp;至于账本身怎么算，本讲第二节那个折叠块和下面这个折叠块里都有。</span></p></div>
+
+<details class="foldfig"><summary><b>这张账本身：四项各多大、ZeRO 三级怎么从它推出来、其它几招各在切哪一项</b>　<span class="why">⭐ 专题五的预习 —— 本讲不要求</span></summary>
 <h3 id="s4-1">4.1　先把账按大小排一遍</h3>
 
 <p>把前面三节的东西摆在一起，<b>按占多少排个序</b> ——&nbsp;
@@ -6002,10 +6018,14 @@ body.figonly section h3{margin-top:34px}
   是<u>同一张账单上的四个不同栏目各自的对策</u>。
   <em>——&nbsp;而<a href="#s五">专题五</a>整讲要做的，就是把「切」这件事本身摊开算。</em></p>
 
+</details>
 </div></section>
 
 
-<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>一个完整 step 的总账 ——&nbsp;以及峰值出现在哪一刻</h2></div>
+<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>把这三件事，放到一台你摸得到的机器上</h2></div>
+
+<p class="lead">前面讲的都对，<b>但全是 6,710 亿参数、TiB 级的数</b>。
+  <em>——&nbsp;它们没有分母。这一节把同一件事缩到<b>一个你能自己算一遍的模型</b>上。</em></p>
 
 <p class="lead"><b>⛔ 这一节是<u>专题五的预习</u>，不是本讲那三件事的一部分</b>
   ——&nbsp;<em>顺手给个量级就走，<b>跳过去不影响前面任何一节</b>。</em><br>
@@ -6114,6 +6134,7 @@ body.figonly section h3{margin-top:34px}
   14.6 秒无声循环，Manim 渲染，脚本在 <code>tools/manim/</code>。）</span></em></figcaption>
 </figure>
 
+<details class="foldfig"><summary><b>完整的一步总账：四项加起来多少、6ND 为什么低估、峰值出现在哪一刻</b>　<span class="why">⭐ 全是「装不装得下」—— 专题五的预习，本讲不要求</span></summary>
 <h3 id="s5-1">5.1　显存：四项加起来是多少</h3>
 
 <p class="lead">⭐ 前面四节各算各的，<b>现在把它们摆到一起</b>。
@@ -6236,7 +6257,8 @@ body.figonly section h3{margin-top:34px}
   <em>激活大就开重算 / 上 CP；优化器状态大就上 ZeRO ——&nbsp;
   这两条路走反了，一点用都没有。</em></span></p>
 
-<h3 id="s5-4">5.4　⭐⭐⭐ 同一张账，缩到<u>一台你摸得到的机器</u>上</h3>
+</details>
+<h3 id="s5-4">5.4　⭐⭐⭐ 一个 <u>1.25 亿参数</u>的模型，一步里发生了什么</h3>
 
 <!-- ⭐⭐⭐ 2026-09-17 补。麻瓜审的第一条意见：
      **全讲从头到尾都是 6710 亿参数、TiB 级的数，没有一个能自己算一遍的例子。**
@@ -6247,8 +6269,17 @@ body.figonly section h3{margin-top:34px}
      ⭐ 挑 125M 是因为：它是 GPT-3 论文表 2.1 的第一行（所以学习率有出处），
        而且这个尺寸真的能在一张普通卡上跑起来。 -->
 
-<p class="lead">⭐ 前面那些 TiB 级的数字<b>都是对的，但它们没有分母</b>。
-  <em>——&nbsp;所以这一小节把同一张账，缩到一个<b>你能自己算一遍</b>的模型上。</em></p>
+<div class="note ok"><p>⭐⭐ <b>先把这一讲那三件事，在这台机器上各落一句：</b></p>
+<ul>
+  <li><b>① loss 怎么算</b>：<em>8,192 个位置，<u>每个位置一个 <code>−ln p</code></u>，取平均。
+    刚初始化时它是 <code>ln(词表)</code>，跟 <a href="#s1-0">1.0</a> 那把尺一模一样
+    ——&nbsp;<b>只是词表小一点，所以起点低一点</b>。</em></li>
+  <li><b>② 一个数变成多少个导数</b>：<em><b>1.25 亿个</b>。
+    而代价是「多跑两遍前向」，不是 1.25 亿遍（<a href="#s1-1">1.1</a>）。</em></li>
+  <li><b>③ 那一步该迈多大</b>：<em>Adam 要为<u>每一个</u>参数记两个滑动平均
+    ——&nbsp;<b>这就是下面那 12 字节的全部来历</b>（<a href="#s3-3">3.3</a>）。</em></li>
+</ul>
+<p class="landing">⭐ <b>下面这张账之所以值得算一遍，是因为它能把③那句话变成一个你能验的数。</b></p></div>
 
 <div class="note"><p>📌 <b>设定：一个 1.25 亿参数的模型，一张卡，batch 8 × 序列 1,024。</b></p>
 <p><em>12 层、宽度 768、MLP 宽 3,072 ——&nbsp;
@@ -6319,7 +6350,7 @@ body.figonly section h3{margin-top:34px}
 <tr><td>算力</td><td>3×</td><td>4×（＋33%）</td></tr>
 </tbody></table>
 
-<div class="note ok"><p>⭐⭐ <b>这张小表，把这一讲的三条主线全串上了。</b></p>
+<div class="note ok"><p>⭐⭐ <b>这张小表值得停一下 ——&nbsp;它就是你笔记本上那个训练循环。</b></p>
 <ul>
   <li><b>16 字节那张账</b>（<a href="#s三">3.1</a>）——&nbsp;<em>1.86 GiB 是这么来的。</em></li>
   <li><b>激活随 token 总数长</b>（5.1，就在本节）——&nbsp;
@@ -6374,6 +6405,7 @@ body.figonly section h3{margin-top:34px}
     ——&nbsp;<a href="#s二">2.2</a> 那张图的 Ⓒ 说了，这不一定是最省的密度。</em></li>
 </ul></div>
 
+<details class="foldfig"><summary><b>这张账交给专题五的是什么</b>　<span class="why">⭐ 交棒段，属于并行</span></summary>
 <h3 id="s5-5">5.5　这张账单交给下一讲的是什么</h3>
 
 <p class="lead">专题一算完前向，结论是<b>「装不下」</b>。
@@ -6392,6 +6424,7 @@ body.figonly section h3{margin-top:34px}
 
 
 
+</details>
 </div></section>
 
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>训不崩 ——&nbsp;<u>loss 飞了怎么办，以及怎么让它别飞</u></h2></div>
