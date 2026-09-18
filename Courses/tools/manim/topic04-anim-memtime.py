@@ -14,22 +14,67 @@ r"""专题四 · 显存随时间 ——&#160;`fig-step` / `fig-act-bill` 配的�
     →&#160;更新（梯度清零）→&#160;回到起点
   ⭐ 首尾同状态，所以 `loop` 起来是一个**真的循环**，不是一段被硬接起来的片子。
 
-⛔ 三条规矩（跟 `tools/manim/README.md` 一致）：
-  ① **一个字都不放** ——&#160;位置用一个沿层轴走的滑块表示，不用「第 37 层」这种字。
+═══ 2026-09-18 下午 · S5：房规松绑后回来加解释性文字 ═══════════════
+
+⭐⭐⭐ **先判一句：这一段缺的是「解释」，不是「铺陈」。**
+  理由：**画面本身一秒都不缺** ——&#160;山怎么堆、怎么塌、红带什么时候长出来，
+  全都看得见；缺的是**这些颜色各自是什么、三段各自叫什么名字**，
+  以及那个落点「峰值就在前向结束那一刻」**画面上一个字都没点破**。
+  ⭐ 观众看到的是「几块颜色在动」——&#160;那是解释缺位，不是时间不够。
+  ⛔ 所以 **`T_*` 一个都不改、时长不动、`loop` 不动**，只加字。
+    判据（房规）：**「不够 fancy」的解药是信息密度，不是时长。**
+
+⭐⭐ 字幕怎么挂：**幕间显式 `add` / `remove`**，不给 Text 挂每帧改 opacity 的
+  updater ——&#160;那条在 `descend` 上实测把 -qh 从 28 it/s 拖到 0.47 it/s。
+  判据：**幕与幕之间是离散事件，别做成每帧都要问一次的连续量。**
+  ⭐ 代价是原来那一条 `self.play` 被切成五段；每段 `run_time` 仍然
+    ＝ Δt × `SPEED`，rate_func 全是 linear，**所以画面速度逐帧不变**。
+  ⭐ 末尾多一个 1/30 秒的恒等 `play`：把字幕拨回第一幕之后**强制走一遍
+    updater**（`wait()` 不保证驱动 `always_redraw`），这样末帧才真的 ≡ 首帧。
+
+⭐ 峰值标注的寿命：**前向结束时出现，回退段开始时撤掉**。
+  这正好等于「那座山的顶停留在画面上的时间」——&#160;band 画的是**累积**历史，
+  所以山顶从前向末尾一直挂到回退开始，标注没有一帧在指空地（traps §2.5）。
+
+⛔ 沿用的规矩（①已于 2026-09-18 松绑，以 skill 的房规为准）：
+  ① ~~一个字都不放~~ →&#160;**文字为讲解服务，不为装饰**；
+     ⛔ 硬义务：页面 `<video>` 的 `aria-label` 必须把画面里出现过的
+       **每一句话都复述一遍**（这一段的字幕见下面 `CAPS` / `SUBS` / 峰值标注）。
   ② 静态图排在视频上面兜底。
-  ③ 配色跟 `topic03_draw` 对齐。
+  ③ 短循环片 →&#160;首尾必须同帧。
+  ④ 数据全部当场算。
+  ⑤ 配色跟 `topic03_draw` 对齐。
 
 ⭐⭐⭐ 三条带的高度**按真实字节数算**，跟 `fig-step` 同一套口径，脚本里 assert 了：
     · 权重 2 B ＋ 优化器状态 12 B ＝ **14 B/参数** → 不动的基座
     · 梯度 **2 B/参数** → 反向才长出来，反向结束时最全
     · 激活（不开重算、一条 128K 序列）→ 前向堆高、反向释放
+  ⚠️ 跟 `fig-step` 的分组不同、口径相同：那张图把梯度并进「常驻」算 16 B/参数
+    （因为它要讲「不随 batch 变的那一块」），这里把梯度单独拆出来
+    （因为它**随时间变**，是这段动画的主角之一）。8.54 ＋ 1.22 ＝ **9.76**，
+    跟它的 9.76 一个字节不差 ——&#160;这就是「口径一致」的外部锚点。
+
+⚠️⚠️ 落点那句话的**适用范围**（`fig-step` §5 特意强调过）：
+  「峰值在哪」必须先问「**哪一项**的峰」——&#160;激活的峰在前向末尾，
+  梯度的峰在反向末尾，两个峰不在同一时刻。
+  ⭐ 这里敢把**总量**的峰也说成「前向结束那一刻」，是因为
+    **激活 4.15 TiB 比梯度 1.22 TiB 大得多**，反向段每放掉一份激活、
+    只换回小得多的一份梯度，总量单调下降。
+    ⛔ 这不是常识，是这组数字的性质 ——&#160;所以下面**当场扫一遍求 argmax** 验证。
+
+📌 渲染：
+    bash ~/.claude/skills/manim-teaching-figures/scripts/render.sh \
+        tools/manim/topic04-anim-memtime.py MemTime \
+        WebPages/media/topic04-memtime.mp4
 """
 import numpy as np
-from manim import (Scene, ValueTracker, Polygon, Rectangle, Line, Dot,
-                   VGroup, always_redraw, WHITE, rate_functions, config)
+from manim import (Scene, ValueTracker, Polygon, Rectangle, Line, DashedLine,
+                   Dot, VGroup, Text, MathTex, always_redraw, WHITE, RIGHT,
+                   DOWN, LEFT, rate_functions, config)
 
 BL_, RD_, GY_, INK_ = "#4285f4", "#d93025", "#9aa0a6", "#202124"
 GR_ = "#1e8e3e"
+GY2_ = "#80868b"                           # 次级文字（说明行、轴注）
 
 N_PARAM = 671e9
 TIB = 1024.0 ** 4
@@ -55,6 +100,7 @@ T_RESET = T_FWD + T_BWD + T_UPD + T_HOLD      # 到这儿内容画完并停够�
 T_END = T_RESET + T_REW
 assert T_REW > 0, "没有回退段，首末帧对不上，loop 会跳"
 
+SPEED = 4.5                                   # 时钟 1 个单位 ＝ 屏幕 4.5 秒
 
 
 def act_at(t):
@@ -75,6 +121,39 @@ def grad_at(t):
     return 0.0
 
 
+def total_at(t):
+    """此刻显存里的总量 ——&#160;画面上那条上沿就是它。"""
+    return RESIDENT_TIB + act_at(t) + grad_at(t)
+
+
+# ⭐⭐⭐ 落点当场验一遍：**总量的峰确实落在前向结束那一刻**，不是我顺口说的。
+#   ⛔ 别用「激活的峰在这儿」来代替 ——&#160;那是另一个命题（见上面 ⚠️⚠️）。
+#   扫一遍求 argmax，落点必须就是 T_FWD。
+# ⛔ 第一版只扫 `linspace(0, T_RESET, 2001)`，下一条断言当场挂了：
+#   峰量成 12.6918 而不是 12.6937。⭐ 挡下来的不是「阈值太严」——&#160;
+#   是**采样网格里根本没有 T_FWD 这个点**（2.69/2000 除不尽 1.0，最近的差 0.0007）。
+#   总量是**分段线性**的，它的极值只可能落在折点上，所以折点必须在采样集合里。
+_TS = np.union1d(np.linspace(0.0, T_RESET, 2001),
+                 [T_FWD, T_FWD + T_BWD, T_FWD + T_BWD + T_UPD, T_RESET])
+_TOT = np.array([total_at(s) for s in _TS])
+PEAK_TIB = float(_TOT.max())
+PEAK_T = float(_TS[int(_TOT.argmax())])
+assert abs(PEAK_T - T_FWD) < 1e-2, "总量的峰没落在前向末尾，落点那句话就不成立：%r" % PEAK_T
+assert abs(PEAK_TIB - (RESIDENT_TIB + ACT_TIB)) < 1e-6, PEAK_TIB
+# ⭐ 峰之所以在这儿，机制是这一条：反向段每放掉一份激活只换回更小的一份梯度。
+#   ⛔ 这条不成立（比如开了重算、激活缩到比梯度还小）的话，峰就跑到反向末尾去了。
+assert ACT_TIB > GRAD_TIB, "激活不比梯度大的话，总量的峰会跑到反向末尾"
+# ⭐ 反向末尾那个「梯度最全」的时刻，仍然明显低于峰 ——&#160;画面上那条峰值虚线要看得出差距
+BWD_END_TIB = total_at(T_FWD + T_BWD)
+assert PEAK_TIB > BWD_END_TIB + 2.0, (PEAK_TIB, BWD_END_TIB)
+
+# ⭐ 复位只能定义在一个地方（traps §1.3）：所有绘制函数一律读 clock()。
+#   ⛔ 这条断言兜住「某个绘制函数偷偷直接读 tracker」——&#160;拼接时不要写成
+#     连续的字面量，否则它会数到自己头上。
+_SRC = open(__file__, encoding="utf-8").read()
+assert _SRC.count("tt.get_" + "value()") == 1, "有绘制函数绕过了 clock()"
+
+
 class MemTime(Scene):
     def construct(self):
         self.camera.background_color = WHITE
@@ -87,6 +166,9 @@ class MemTime(Scene):
         #   除 T_END 的话，回退段那 0.55 也会分走一截宽度，图就缩在左边了。
         def px(t):
             return X0 + (X1 - X0) * t / T_RESET
+
+        def py(tib):
+            return Y0 + tib * SY
 
         def clock():
             t = tt.get_value()
@@ -117,10 +199,14 @@ class MemTime(Scene):
         act_band = band(act_at, BL_, lambda s: RESIDENT_TIB)
         grad_band = band(grad_at, RD_, lambda s: RESIDENT_TIB + act_at(s))
 
-        # ⭐ 现在走到哪儿：一根扫过去的竖线 ＋ 层轴上的滑块（**不放字**）
+        # ⭐ 现在走到哪儿：一根扫过去的竖线 ＋ 层轴上的滑块
+        # ⛔ 竖线原来的顶端写死在 Y0+3.25 ＝ 0.35，**比山顶（0.91）还矮** ——
+        #   前向后半段它整个埋在蓝色里，看着像画漏了。
+        #   ⭐ 改成从峰值高度算出来：永远比山顶高一点点，不多不少。
+        SWEEP_TOP = py(PEAK_TIB) + 0.14
         sweep = always_redraw(lambda: Line(
             np.array([px(clock()), Y0 - 0.25, 0]),
-            np.array([px(clock()), Y0 + 3.25, 0]),
+            np.array([px(clock()), SWEEP_TOP, 0]),
             color=INK_, stroke_width=2.5))
 
         # 层轴：61 个小格，前向从左往右点亮、反向从右往左熄掉
@@ -149,5 +235,106 @@ class MemTime(Scene):
         self.add(base, act_band, grad_band, cells, always_redraw(lit), sweep)
         self.add(Dot(np.array([X0, Y0 + RESIDENT_TIB * SY, 0]), radius=0.001))
 
+        # ══════════════════════════════════════════════════════════════
+        # 解释层 ——&#160;以下全是「一直在场」的字，不随幕变
+        # ══════════════════════════════════════════════════════════════
+
+        # ① 图例：三块颜色各自叫什么。
+        #   ⭐ 放图例而不是就地贴标签 ——&#160;蓝和红是**长出来的**，
+        #     贴在它们身上的标签在它们还没出现时会指着一块空地（traps §2.5）。
+        legend = VGroup()
+        for col, op, name in ((GY_, 0.45, "常驻 · 权重＋优化器"),
+                              (BL_, 0.80, "激活 · 前向堆、反向放"),
+                              (RD_, 0.80, "梯度 · 反向才长出来")):
+            chip = Rectangle(width=0.30, height=0.22, stroke_width=0,
+                             fill_color=col, fill_opacity=op)
+            legend.add(VGroup(chip, Text(name, font_size=21, color=INK_))
+                       .arrange(RIGHT, buff=0.15))
+        legend.arrange(RIGHT, buff=0.62).move_to(np.array([0, 2.26, 0]))
+
+        # ② 灰带里的那笔账 ——&#160;它为什么这么厚、厚多少。
+        #   ⭐ 写在带子**里面**：这块从第一帧到最后一帧都在，不会指空。
+        resident_lab = VGroup(
+            Text("常驻：一个 step 从头到尾都不动", font_size=25, color=INK_),
+            Text("权重 2 ＋ 优化器状态 12 ＝ 14 字节/参数　→　%.2f TiB" % RESIDENT_TIB,
+                 font_size=21, color=GY2_),
+        ).arrange(DOWN, buff=0.16).move_to(np.array([0, -1.55, 0]))
+
+        # ③ 两条轴各自是什么 ——&#160;横轴是**时间**不是层号（fig-act-bill 也强调过这条）
+        axis_note = Text(
+            "横轴 ＝ 一个 step 的时间　·　下面 61 格 ＝ 61 层，亮着的是此刻还挂着激活的层",
+            font_size=20, color=GY2_).move_to(np.array([0, -3.26, 0]))
+
+        self.add(legend, resident_lab, axis_note)
+
+        # ══════════════════════════════════════════════════════════════
+        # 幕：三段各自的名字 ＋ 一句为什么
+        # ⛔ 用幕间 add/remove，**不给 Text 挂每帧改 opacity 的 updater**。
+        # ══════════════════════════════════════════════════════════════
+        CAPS = ("前向：激活一层层攒起来",
+                "反向：激活逐层放掉，梯度一份份长出来",
+                "更新完：梯度也清空，只剩常驻那一块",
+                "下一个 step，从头再来一遍")
+        SUBS = ("每过一层就多挂一份中间结果　——　一份都不能提前扔，反向还要用它",
+                "红的在长，可它比蓝的小得多　——　所以总量从峰值那一刻起只降不升",
+                "回到 %.2f TiB　——　下一个 step 从这条灰带上重新堆" % RESIDENT_TIB,
+                "训练就是把这座山堆起来、再拆掉　——　重复几十万次")
+        caps = [Text(s, font_size=30, color=INK_).move_to(np.array([0, 3.46, 0]))
+                for s in CAPS]
+        subs = [Text(s, font_size=23, color=GY2_).move_to(np.array([0, 2.90, 0]))
+                for s in SUBS]
+
+        # ④ 落点：**峰值就在前向结束那一刻**。
+        #   ⭐ 两条虚线合起来才是论点：竖的说「是这一刻」，
+        #     横的说「此后谁也没再碰到它」——&#160;只画竖的，观众看不出后面更低。
+        peak_x, peak_y = px(T_FWD), py(PEAK_TIB)
+        peak_v = DashedLine(np.array([peak_x, py(RESIDENT_TIB), 0]),
+                            np.array([peak_x, peak_y + 1.05, 0]),
+                            color=RD_, stroke_width=2.2, dash_length=0.10)
+        peak_h = DashedLine(np.array([X0, peak_y, 0]),
+                            np.array([X1, peak_y, 0]),
+                            color=RD_, stroke_width=1.8, dash_length=0.10)
+        peak_txt = VGroup(
+            Text("峰值就在这一刻　——　前向刚结束", font_size=26, color=RD_),
+            MathTex(r"%.2f + %.2f = %.2f\;\mathrm{TiB}"
+                    % (RESIDENT_TIB, ACT_TIB, PEAK_TIB), color=RD_).scale(0.72),
+        ).arrange(DOWN, buff=0.15, aligned_edge=LEFT)
+        # ⛔ 第一版放在 peak_y+1.28 ＝ 2.19，**正好压在图例那一行上**（图例在 2.26）。
+        #   ⭐ 判据跟 descend 那次一样：**标注要贴着它指的那个东西，不是往空白处放**。
+        #     峰顶 0.91、图例底边 2.10，这块字只能落在中间那一段。
+        peak_txt.move_to(np.array([peak_x + 0.28 + peak_txt.width / 2,
+                                   peak_y + 0.61, 0]))
+        peak = VGroup(peak_h, peak_v, peak_txt)
+
+        # ══════════════════════════════════════════════════════════════
+        # 播：切成五段只为在幕间换字，run_time 仍是 Δt × SPEED，速度逐帧不变
+        # ══════════════════════════════════════════════════════════════
+        LIN = rate_functions.linear
+        self.add(caps[0], subs[0])
+        self.play(tt.animate.set_value(T_FWD),
+                  run_time=T_FWD * SPEED, rate_func=LIN)
+
+        # 前向结束 ——&#160;峰值标注在这一刻出现，和它指的那个山顶同时诞生
+        self.remove(caps[0], subs[0])
+        self.add(caps[1], subs[1], peak)
+        self.play(tt.animate.set_value(T_FWD + T_BWD),
+                  run_time=T_BWD * SPEED, rate_func=LIN)
+
+        self.remove(caps[1], subs[1])
+        self.add(caps[2], subs[2])
+        self.play(tt.animate.set_value(T_RESET),
+                  run_time=(T_UPD + T_HOLD) * SPEED, rate_func=LIN)
+
+        # ⭐ 峰值标注在这里撤 ——&#160;山马上要退潮了，它不能比山顶活得久（traps §2.5）
+        self.remove(caps[2], subs[2], peak)
+        self.add(caps[3], subs[3])
         self.play(tt.animate.set_value(T_END),
-                  run_time=T_END * 4.5, rate_func=rate_functions.linear)
+                  run_time=T_REW * SPEED, rate_func=LIN)
+
+        # ⭐⭐ 复位：此刻 clock() 已经是 0，图形部分自动等于首帧；
+        #   **字幕也是首帧的一部分**，所以要一并拨回第一幕（traps §1.2）。
+        #   ⭐ 末尾这个恒等 play 只为强制走一遍 updater ——&#160;`wait()` 不保证驱动
+        #     `always_redraw`（traps §2.3），少了它末帧可能停在旧的一帧。
+        self.remove(caps[3], subs[3])
+        self.add(caps[0], subs[0])
+        self.play(tt.animate.set_value(T_END), run_time=1 / 30)

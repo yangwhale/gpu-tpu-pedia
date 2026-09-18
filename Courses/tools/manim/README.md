@@ -22,14 +22,30 @@
 - 候选：学习率锯齿「越弹越大」、动量冲过浅坑 ——&nbsp;都是**时间现象**
 - ❌ 不值得：任何静态图已经说清楚的东西。**多一段视频就多一份维护。**
 
-## 规矩
+## 规矩 ——&nbsp;⛔ 不在这里，在 skill 里
 
-1. **视频里一个字都不放。** 文字由页面图注和静态图承担 ——&nbsp;
-   视频里的字既不能选中也不能被读屏。
-2. **静态图必须排在视频上面**，视频加载不出来也要能读懂。
-3. `<video>` 一定要带 `aria-label`，把画面里发生的事写清楚。
-4. **转满整圈**（或首尾同帧），这样 `loop` 起来看不见接缝。
-5. 配色跟 `topic03_draw` 的主色对齐。
+**房规的唯一出处是 `manim-teaching-figures` 这个 skill 的 `SKILL.md`。**
+这里**不再复述**，只留一个指针。
+
+> ⛔⛔ **为什么改成指针：** 这一段原本抄了一份「五条规矩」。
+> 2026-09-18 房规松绑（第①条从「一个字都不放」改成「文字为讲解服务」）之后，
+> 我改了 skill，却**漏了这一份和另外八处 docstring** ——&nbsp;
+> 于是派出去的 agent 读到这里，理直气壮地按旧规矩拒绝执行，**而且它是对的**。
+>
+> ⭐⭐⭐ 判据：**一条规矩被复制 N 份，就等于有 N 份会过期。**
+> 正确形状是**一份权威 ＋ N 个指针**。这跟绘图里
+> 「复位只能定义在一个地方」是同一条道理，只是换到了文档上。
+
+⭐ 仍然属于**本仓库特有**、skill 里没有的两条，留在这儿：
+
+1. **静态图必须排在视频上面**（本仓库的 figure 结构），视频加载不出来也要能读懂。
+2. 配色跟 `topic03_draw` 的主色对齐（`BL / RD / GR / OR / PU / GY / INK`）。
+
+其余（文字能不能进画面、长度与循环怎么选、aria-label 的义务、
+首尾同帧怎么验）一律以 skill 为准。
+
+⚠️ **改 skill 之后记得重新部署**：源在 `~/CloseCrab/skills/`，
+跑着的 agent 读的是 `~/.claude/skills/` 下的拷贝，不 `cp -a` 过去就不生效。
 
 ## 怎么渲
 
@@ -48,5 +64,16 @@ ffmpeg -y -i /tmp/manim-out/videos/topic04-anim-saddle/1080p60/Saddle.mp4 \
     WebPages/media/topic04-saddle.mp4
 ```
 
-⚠️ 渲染要 **2 分半**（1080p60 / 8 秒 / 3D 曲面），不在 `build-all.sh` 里 ——&nbsp;
-**产物直接进仓库**，改脚本才需要手动重渲。
+⭐ 现在有更省事的一条命令（渲染 → 压缩 → 查首尾接缝一步走完）：
+
+```bash
+LOOP_BASELINE=$PWD/tools/manim/loop-baseline.json \
+  bash ~/.claude/skills/manim-teaching-figures/scripts/render.sh \
+  tools/manim/topic04-anim-saddle.py Saddle WebPages/media/topic04-saddle.mp4
+# 加 --draft 出 480p 草稿，迭代阶段一律用它
+```
+
+⚠️ 渲染耗时看**同时在场的 mobject 数量**，不看时长：
+简单场景 1080p 要 2–5 分钟，重场景（几百个 mobject）**连 480p 草稿都要三分半**。
+⛔ 渲染**不在 `build-all.sh` 里**，产物直接进仓库，改脚本才需要手动重渲；
+但 `build-all.sh` 会跑 `check-loop.py` 查已进仓库的 mp4 首尾接不接得上。
