@@ -113,28 +113,65 @@ def main():
     f._pan = None
 
     # ══════════ Ⓑ 矩阵凭什么不能拍平 ═════════════════════════════
-    PH2 = 230
+    PH2 = 268
     py2 = f.panel(0, py + PH + 22, W, PH2,
                   "Ⓑ ⭐⭐⭐ 「矩阵和向量不都是一堆数字吗」——　"
                   "<tspan font-weight=\"700\">一个例子就能说清</tspan>", PU,
                   sub="⛔ 拍平成向量，抹掉的正是这件事")
 
-    f.box(70, py2 + 34, 560, 158, "#f3e8fd", PU, 8)
-    f.t(350, py2 + 68, "矩阵有「迹」——　对角线元素之和", PU, True, 17, "middle")
-    f.t(96, py2 + 104, "⭐ 它不是瞎定义的：<tspan font-weight=\"700\">相似变换下保持不变</tspan>，",
-        GY, size=14.5)
-    f.t(96, py2 + 130, "而且<tspan font-weight=\"700\">等于所有特征值之和</tspan>。", GY, size=14.5)
-    f.t(350, py2 + 172, "⭐⭐ 也就是说：对角线和非对角线，<tspan font-weight=\"700\">地位不对等</tspan>",
-        INK, True, 15, "middle")
+    # ⭐⭐⭐ 2026-09-18 R22b 重画。旧版是两个文字框。
+    #   ⭐⭐ 而「拍平」这件事**本身就是一个形状动作**：
+    #     方阵里对角线和非对角线**地位不对等**（迹、特征值都只认对角）；
+    #     拍平成一条之后**所有格子长得一模一样**，
+    #     优化器再也认不出谁本来在对角线上。
+    #   ⭐⭐⭐ 判据：**当一个操作会「丢掉结构」时，
+    #     最好的画法是把「丢之前」和「丢之后」用同一批格子画两遍。**
+    #   ⛔ 两边**格子数相同、格子大小相同**（有 assert）——&#160;
+    #     否则读者看到的会是「大小变了」，而不是「结构没了」。
+    NMAT = 6
+    CELL, CGAP2 = 22.0, 3.0
+    MX0, MY0 = 96, py2 + 44
+    FX0, FY0 = 456, py2 + 92
+    assert MX0 + NMAT * (CELL + CGAP2) < FX0 - 60, "左边那个方阵会撞到箭头"
+    assert FX0 + NMAT * NMAT * (CELL + CGAP2) < W - 20, "拍平那一条排不下"
 
-    f.line(650, py2 + 112, 690, py2 + 112, GY2, 1.8)
+    # ── 左：一个方阵，对角线是特殊的 ──────────────────────────────
+    for r in range(NMAT):
+        for c in range(NMAT):
+            on = (r == c)
+            f.box(MX0 + c * (CELL + CGAP2), MY0 + r * (CELL + CGAP2), CELL, CELL,
+                  "#e9d5ff" if on else "#f6f7f8", PU if on else "#dadce0", 3)
+    f.t(MX0, MY0 - 14, "一个矩阵", PU, True, 15)
+    f.t(MX0, MY0 + NMAT * (CELL + CGAP2) + 22,
+        "⭐ 对角线那几个是<tspan font-weight=\"700\">特殊的</tspan>"
+        "　——　迹就是它们的和，", GY, size=13)
+    f.t(MX0, MY0 + NMAT * (CELL + CGAP2) + 44,
+        "而迹<tspan font-weight=\"700\">在相似变换下不变</tspan>，"
+        "还<tspan font-weight=\"700\">等于所有特征值之和</tspan>。", GY, size=13)
 
-    f.box(710, py2 + 34, 630, 158, "#fce8e6", RD, 8)
-    f.t(1025, py2 + 68, "而「拍平成一个大向量」做的事", RD, True, 17, "middle")
-    f.t(1025, py2 + 106, "就是宣布：所有位置一律平等", INK, True, 17, "middle")
-    f.t(1025, py2 + 146, "⛔ SGD / Adam 都是这么干的 ——　它们是逐元素的",
-        GY, size=14, anchor="middle")
-    f.t(1025, py2 + 172, "⭐ 而 Muon 拒绝拍平", RD, True, 15, "middle")
+    f.line(MX0 + NMAT * (CELL + CGAP2) + 18, MY0 + 60,
+           FX0 - 20, MY0 + 60, RD, 2.2)
+    f.t((MX0 + NMAT * (CELL + CGAP2) + FX0) / 2 - 2, MY0 + 46,
+        "拍平", RD, True, 15, "middle")
+
+    # ── 右：同样 36 个格子，排成一条 ——&#160;全都一样了 ─────────────
+    for k in range(NMAT * NMAT):
+        f.box(FX0 + k * (CELL + CGAP2), FY0, CELL, CELL,
+              "#fce8e6", "#f0b8b2", 3)
+    # 淡淡标出「原来在对角线上的那六个」——&#160;结构还在，只是没人认得出来了
+    for r in range(NMAT):
+        x = FX0 + (r * NMAT + r) * (CELL + CGAP2)
+        f.line(x + CELL / 2, FY0 + CELL + 5, x + CELL / 2, FY0 + CELL + 18,
+               "#c9a0dc", 1.4, arrow=False)
+    f.t(FX0, FY0 - 14, "拍平成一个大向量之后", RD, True, 15)
+    f.t(FX0, FY0 + CELL + 40,
+        "⛔ <tspan font-weight=\"700\">所有位置长得一模一样</tspan>"
+        "　——　淡紫小竖线标的是原来在对角线上的那六个，"
+        "<tspan font-weight=\"700\">优化器已经看不出来了</tspan>。", GY, size=13)
+    f.t(FX0, FY0 + CELL + 64,
+        "⛔ SGD / Adam 都是这么干的（<tspan font-weight=\"700\">逐元素</tspan>）"
+        "　——　⭐ <tspan font-weight=\"700\">而 Muon 拒绝拍平。</tspan>",
+        RD, True, 14)
     f._pan = None
 
     # ══════════ Ⓒ 范数视角：两个约束区域，形状不同 ═══════════════
