@@ -38,7 +38,7 @@ W = 1400
 # ⭐ 全部常数集中在这儿。改图先改这里，别在文字里手写第二遍。
 # ⛔⛔ 2026-09-17 红队抓到：原来只有一个 ATT_SLOPE = 1.25，那是 **V3 的**头维度算的，
 #   却被拿去标 GPT-3 —— 而 GPT-3 是 qk = v = 128，斜率是 1.00，在 2,048 处是 2,048 不是 2,560。
-#   ⭐ 而且对照的线性层也不该共用：V3 最宽 7,168，GPT-3 最宽 12,288。
+#   ⭐ 而且对照的线性层也不该共用：V3 最宽 7,168，GPT-3 最宽 49,152（＝ 4h，见下）。
 #   ⭐⭐ 判据：**同一张图里出现两个模型时，每个模型的每一条线都要用它自己的常数。**
 #     修完结论反而更强 —— 翻转靠的是斜率不同，不靠某一组具体数值。
 V3_QK, V3_V = 192, 128              # DeepSeek-V3（MLA）
@@ -50,7 +50,15 @@ S_GPT3 = 2048
 S_V3_BASE = 4096        # ⭐ V3 预训练的真实长度 ——&#160;本讲基准，落在交点**左边**
 S_V3_LONG = 131072      # 长上下文扩训 ——&#160;落在交点**右边**很远
 S_V3 = S_V3_BASE        # 图上的「工作点」
-V3_WIDEST, G3_WIDEST = 7168, 12288           # 各自最宽的线性层（＝ d_model）
+V3_WIDEST = 7168             # V3：gate/up 的输入宽 ＝ d_model（MoE 专家很窄）
+# ⛔⛔ 2026-09-19 T09 修：GPT-3 这个原来写的是 12,288，注释还写着「＝ d_model」——
+#   而本图的判据是**产生该张量的那个矩阵乘的输入宽度**。
+#   GPT-3 的 MLP 降维层输入宽是 4h ＝ 49,152，比 d_model 大四倍。
+#   ⭐⭐ 这正是「老常识套新架构」那一类：「最宽的线性层 ＝ d_model」在 MoE 上
+#     碰巧成立（专家内部宽 2,048 < 7,168），在稠密 FFN 上不成立。
+#   ⛔ 而它偏偏出现在这张教读者「每个模型要用自己的常数」的图上。
+#   结论方向不变（2,048 离交点更远了），但那个数和那条线画错了。
+G3_WIDEST = 4 * 12288        # ＝ 49,152，GPT-3 MLP 降维层的输入宽
 
 # （输入宽度, 名字, 颜色）——&#160;每字节代价就等于输入宽度本身
 # 第四项是标签靠哪边：1 右，-1 左（1,536 与 2,048 在对数轴上只差 15px，必须分开）
@@ -64,7 +72,7 @@ CROSS = V3_WIDEST / V3_SLOPE
 G3_CROSS = G3_WIDEST / G3_SLOPE
 
 assert abs(V3_SLOPE - 1.25) < 1e-9 and abs(G3_SLOPE - 1.00) < 1e-9
-assert abs(CROSS - 5734.4) < 0.1 and abs(G3_CROSS - 12288) < 1e-6
+assert abs(CROSS - 5734.4) < 0.1 and abs(G3_CROSS - 49152) < 1e-6
 assert abs(G3_SLOPE * S_GPT3 - 2048) < 1e-6      # ⛔ 不是 2560
 assert abs(V3_SLOPE * S_V3_LONG - 163840) < 1e-6
 assert abs(V3_SLOPE * S_V3_BASE - 5120) < 1e-6
@@ -144,10 +152,10 @@ def main():
     f.t(X(4600), Y(G3_SLOPE * 4600) + 24,
         "GPT-3 的 attention　＝　1.00 × 序列长度", OR, True, 14, "middle")
     f.line(X0, Y(G3_WIDEST), X1, Y(G3_WIDEST), OR, 1.6, dash="4 6", arrow=False)
-    f.t(X0 + 10, Y(G3_WIDEST) - 10, "GPT-3 最宽的线性层（12,288）", OR, True, 13)
+    f.t(X0 + 10, Y(G3_WIDEST) - 10, "GPT-3 最宽的线性层（49,152 ＝ 4h）", OR, True, 13)
     gx, gy = X(G3_CROSS), Y(G3_WIDEST)
     f.box(gx - 6, gy - 6, 12, 12, "#fff", OR, 6, 2.0)
-    f.t(gx, gy + 28, "GPT-3 自己的交点　12,288", OR, True, 13.5, "middle")
+    f.t(gx, gy + 28, "GPT-3 自己的交点　49,152", OR, True, 13.5, "middle")
 
     # ── 交点
     cx, cy = X(CROSS), Y(7168)
@@ -184,7 +192,7 @@ def main():
         "⭐ 2022 年那篇（<tspan font-weight=\"700\">arXiv 2205.05198</tspan>）说："
         "挑「占显存不少、但重算起来不贵」的扔，<tspan font-weight=\"700\">它选中了 attention</tspan>。"
         "⛔ 看橙色那一组：GPT-3 在 2,048 处只要 <tspan font-weight=\"700\">2,048</tspan>，"
-        "而它自己的交点在 <tspan font-weight=\"700\">12,288</tspan> ——&#160;"
+        "而它自己的交点在 <tspan font-weight=\"700\">49,152</tspan> ——&#160;"
         "<tspan font-weight=\"700\">远在左边，attention 确实最便宜。论文没错。</tspan>",
         "⭐⭐⭐ 而真正值得记的是<tspan font-weight=\"700\">红色那一组自己走的这段路</tspan>："
         "V3 <tspan font-weight=\"700\">预训练在 4,096</tspan>，每字节 "

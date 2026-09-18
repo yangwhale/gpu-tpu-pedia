@@ -686,12 +686,12 @@ __TBL_PER_BYTE__
 
 <p class="landing">⭐⭐ 照这条线切（把比值小于 3 的全收下来）：一层省 <b>__CHEAP_GIB__</b>，付 <b>__CHEAP_TF__</b>。
   <em>换算到<b>一个 step</b>（一层，前向 ＋ 反向 ＝ 3 遍 ＝ <b>__STEP_TF__</b>）：
-  <u>多付 __SEL_PCT__ 的算力，换掉约 77% 的激活显存</u>。</em></p>
+  <u>多付 __SEL_PCT__ 的算力，换掉可重算池的 <b>__SEL_SAVE__</b></u>。</em></p>
 <p><em>对比全量重算 ——&nbsp;同一个 step 口径下是「多付 33%，换掉 97%」。
   ⭐ <b>选择性重算的性价比还是高 __EDGE__ 倍</b>，这就是它值得单独配的原因。</em></p>
 
 <div class="note"><p>⚠️ <b>这两个数在 128K 上长得很不一样，而漂亮的是那一档。</b></p>
-<p><em>128K 上同样切法是「<b>只多付 1.9%</b> 换 77%」，性价比高 <b>13.9 倍</b>
+<p><em>128K 上同样切法是「<b>只多付 1.9%</b> 换 __SEL_SAVE__」，性价比高 <b>14.5 倍</b>
   ——&nbsp;确实够得上「一个数量级」。</em></p>
 <p class="landing">⭐ <b>为什么差这么多：分子（重算代价）∝ S，
   分母（一个 step）在 128K 上被 S² 的 attention 撑着。</b>
@@ -729,13 +729,18 @@ __TBL_PER_BYTE__
 <p><em>⛔ 但要用 <b>GPT-3 自己的斜率</b>算。它是标准 MHA，<b>qk ＝ v ＝ 128</b>，
   所以斜率是 <b>1.00</b>，不是 V3 那个 1.25 ——&nbsp;
   代进去是 <code>1.00 × 2048 = 2,048</code>。
-  而 <b>GPT-3 自己最宽的线性层是 12,288</b>（V3 是 7,168）。</em></p>
-<p class="landing">⭐ <b>2,048 远小于 12,288 ——&nbsp;它落在自己交点的左边很远处。
+  而 <b>GPT-3 自己最宽的线性层是 49,152</b>（＝ 4h，MLP 降维的输入宽；V3 是 7,168）。</em></p>
+<p class="landing">⭐ <b>2,048 远小于 49,152 ——&nbsp;它落在自己交点的左边很远处。
   在 2K 上，attention 真的是最划算的重算对象。论文没错。</b></p>
 
 <div class="note ok"><p>⭐⭐⭐ <b>判据一个字没改，结论却翻转了。但有一句要说准：</b></p>
 <p>⛔ <em><b>变的不只是序列长度。</b>两个模型的斜率不同（1.00 vs 1.25）、
-  对照的线性层也不同（12,288 vs 7,168）——&nbsp;<b>两条线都得重画。</b></em></p>
+  对照的线性层也不同（49,152 vs 7,168）——&nbsp;<b>两条线都得重画。</b></em></p>
+<p><span class="sub">⛔ <b>而那个 49,152 我自己就写错过</b>：原来写的是 12,288，
+  也就是 GPT-3 的 <code>d_model</code>。可这条判据要的是
+  <u>产生那个张量的矩阵乘的<b>输入宽度</b></u> ——&nbsp;MLP 降维层的输入是 <b>4h</b>。
+  ⭐⭐ 「最宽的线性层 ＝ d_model」在 V3 上<b>碰巧成立</b>（MoE 专家内部只有 2,048），
+  在稠密 FFN 上不成立。<b>这正是这一格自己在讲的那件事，我照样踩了一遍。</b></span></p>
 <p class="landing">⭐⭐ 换句话说：能迁移的是<b><u>那个形状</u></b>，不是那些数。
   <em>——&nbsp;换个模型，你要<b>重画两条线</b>，而不是重记一组数字。</em></p>
 <p><span class="sub">⛔ 顺带自曝一处：这张图早先把 V3 的 1.25 直接套在 GPT-3 上，
@@ -1838,7 +1843,7 @@ __FIG_LR_CURVE__
   按参数矩阵的均方根去缩放学习率。</em></p>
 <p class="landing">⭐⭐⭐ 而论文自己点破了这跟 3.5 那张表的关系：
   <em>「这么做的效果，类似于 GPT-3 那样手工把学习率随规模调小」。</em></p>
-<p><span class="sub">⭐ 换句话说：3.5 那张七档表是<u>手动</u>解法，参数缩放是<u>自动</u>解法。
+<p><span class="sub">⭐ 换句话说：3.5 那八档配置是<u>手动</u>解法，参数缩放是<u>自动</u>解法。
   <em>而且论文说自动那版还多一个好处 ——&nbsp;
   尺度本来就不同的那些参数（embedding、layer norm 的缩放）
   不会被按同一个比例一起压下去。</em></span></p>
@@ -2604,7 +2609,11 @@ __FIG_UNDERFLOW__
 <div class="note ok"><ul>
   <li>① 要不要高精度，比的是<b>两个数</b>：
     <em>「这一项<u>每一步挪动的相对幅度</u>」，对上「<u>尾数能分辨的最小格</u>」
-    ——&nbsp;bf16 那一格约是 <b>1/256</b>。<br>
+    ——&nbsp;bf16 相邻两个数差 <b>1/128</b>（尾数 7 位，2⁻⁷），
+    <u>所以「加上去还是被舍掉」的门槛是它的一半，约 <b>1/256</b></u>。<br>
+    <span class="sub">⛔ 这两个数都对，但<b>不是同一个量</b>：
+    1/128 是<b>格宽</b>（`fig-precision` Ⓑ 画的 0.0078125 就是它），
+    1/256 是<b>舍入门槛</b>（差得比半格还小就原地不动）。当判据用的时候看后者。</span><br>
     滑动平均每步都在遗忘，挪得动；主权重跨十万步累加、单步只挪千分之几，<b>挪不动</b>。
     （<a href="#s三">3.2</a>）</em></li>
   <li>② 该不该重算，看「每省一字节要付多少 FLOPs」。
@@ -2741,7 +2750,7 @@ __FIG_UNDERFLOW__
 <tbody>
 <tr><td>每参数 <b>16 字节</b>（2＋2＋12）的经典口径；ZeRO 三级的切法</td>
     <td>Rajbhandari 等，<b>arXiv 1910.02054</b></td></tr>
-<tr><td>GPT-3 七档<b>峰值学习率与 batch</b>；375M token 线性 warmup；
+<tr><td>GPT-3 <b>八档</b>峰值学习率与 batch；375M token 线性 warmup；
     2,600 亿 token 内余弦降到 <b>10%</b>；weight decay 0.1；上下文 2,048</td>
     <td><b>arXiv 2005.14165</b> 表 2.1 与 §2.3</td></tr>
 <tr><td>DeepSeek-V3 的 <b>完整 LR schedule</b>（2K 步 →&nbsp;10T 恒定 →&nbsp;4.3T 余弦
@@ -3100,7 +3109,7 @@ FIGS = {
         'topic04-fig-lr-curve.py',
         '⭐⭐ 这张图比的是形状，不是高度 ——&nbsp;'
         '<em>两个模型的峰值差 3.7 倍，<b>不归一化根本叠不到一起</b>。'
-        '峰值的绝对值另有一份七档对照，在正文里。</em><br>'
+        '峰值的绝对值另有一份八档对照，在正文里。</em><br>'
         '⭐ <em>看两件事：<b>V3 那条长平台</b>，'
         '以及<b>两条曲线都落在同一根「10%」虚线上</b>。</em>'),
     "__FIG_PRECISION__": ("fig-precision", "fig4-precision.svg",
@@ -3132,6 +3141,7 @@ FIGS = {
 #    手填的表里，「大部分行能对上」不构成任何保证 —— 错的那行长得跟对的一样。
 # ══════════════════════════════════════════════════════════════════
 GIB_F = 2 ** 30 / 1e12        # FLOPs/字节 → TFLOP/GiB
+DTYPE_B = 2                   # bf16
 S_BASE = 4096                 # ⭐ 本讲基准：V3 预训练真实序列长度（14.8T token 全在这档）
 S_LONG = 131072               # 长上下文扩训（预训练之后各一千步）
 S_RATIO = S_LONG // S_BASE    # ＝ 32，激活线性缩放的倍数
@@ -3163,26 +3173,39 @@ def _att_share(S):
 # ⛔ GiB 一列原来是**手填的 128K 常量**，而这一段正文的卖点是「你拿 config 自己也能排一遍」。
 #    现在按基准缩放；每字节代价里只有 attention 带 S，其余是输入宽度、与 S 无关。
 # ⭐⭐ 而这正是翻转的全部机制：**七行不动，一行在动。**
-PER_BYTE_ROWS_128K = [
-    ("MoE 派发（复制成 9 份）",                 15.75, 0.0),
-    ("RMSNorm 输出（每层 2 个）",                3.50, 2.0),
-    ("SwiGLU 乘积 9 份（逐元素）",               4.50, 2.0),
-    ("K/V 解压（输入宽 512）",                   8.00, 512.0),
-    ("Q 展开（输入宽 1,536）",                   6.00, 1536.0),
-    ("专家输出 9 份（输入宽 2,048）",            15.75, 2048.0),
-    ("gate / up / 路由 / 降维（输入宽 7,168）",   9.14, float(D_V3)),
-    ("attention 输出",                           4.00, None),   # None ＝ 1.25·S，跟着基准走
+# ⛔⛔ 2026-09-19 T09：这张表原来**加起来对不上一层**。
+#   八行合计 66.64 GiB，而一层 MoE 块是 71.14 ——&#160;缺 4.50。
+#   评审报的是「9.14 那一行应该是 10.08」，但改完仍差 3.56 ——&#160;**缺的不止一行**。
+#   ⭐ 根因：这张表原来是**手写的**，没有跟 §1.7 那张宽度表对过账。
+#     漏掉的是 MLA 的两个 norm 输出和 Q 降维那一份 layernorm 输出（都是逐元素、pb≈2）。
+#   ⭐⭐ 重导之后总和自动闭合：候选池 284,224 ＋ 入口 7,168 ＝ 291,392 ＝ 一层。
+#     而候选池在 128K 上正好 69.39 GiB ——&#160;**跟正文早就写着的「可重算池 69.4」对上了**，
+#     说明分母一直是对的，只是表少列了几行。
+#   ⛔ 判据：**一张「把某个整体拆开」的表，必须断言它加回去等于那个整体。**
+#
+# (名字, 等效宽度, 每字节代价 ＝ 产生它的那个算子的输入宽度)
+PER_BYTE_W = [
+    ("MoE 派发（复制成 9 份）",                  64512, 0.0),
+    ("logsumexp（attention 副产物，fp32）",        256, 0.0),
+    ("RMSNorm 输出（MLA ＋ MoE，共 4 份）",       23040, 2.0),
+    ("SwiGLU 乘积 9 份（逐元素）",                18432, 2.0),
+    ("K/V 解压（输入宽 512）",                    32768, 512.0),
+    ("Q 展开（输入宽 1,536）",                    24576, 1536.0),
+    ("专家输出 9 份（输入宽 2,048）",              64512, 2048.0),
+    ("gate / up / 路由 / 降维（输入宽 7,168）",    39744, float(D_V3)),
+    ("attention 输出",                           16384, None),   # None ＝ 1.25·S
 ]
+ENTRY_W = 7168          # 入口那一份 ——&#160;重算模式下留的就是它，不在候选池里
+_pool_w = sum(w for _, w, _ in PER_BYTE_W)
+assert _pool_w + ENTRY_W == 291392, \
+    "候选池 %d ＋ 入口 %d 加不回一层 MoE 块的 291,392" % (_pool_w, ENTRY_W)
 CUT = 3.0        # 「比值小于 3 全收下」——&#160;正文里说清了这是我定的，不是算出来的
 
 
 def _per_byte(S):
     """按序列长度 S 排一遍。⭐ 返回已按「每 GiB 付」升序排好的行。"""
-    out = []
-    for nm, gib128, pb in PER_BYTE_ROWS_128K:
-        out.append((nm, gib128 * S / S_LONG,
-                    1.25 * S if pb is None else pb))
-    return sorted(out, key=lambda r: r[2])
+    return sorted([(nm, w * DTYPE_B * S / 2 ** 30, 1.25 * S if pb is None else pb)
+                   for nm, w, pb in PER_BYTE_W], key=lambda r: r[2])
 
 
 def _verdict(ratio):
@@ -3194,6 +3217,7 @@ def _verdict(ratio):
     return "绝不"
 
 
+_POOL_B = _pool_w * DTYPE_B * S_BASE
 _ROWS_BASE = _per_byte(S_BASE)
 _ROWS_LONG = _per_byte(S_LONG)
 
@@ -3235,7 +3259,8 @@ _CROSS = D_V3 / 1.25
 # ⭐ 选择性 vs 全量：两个百分比与它们的性价比之比，全部由基准算出来。
 _STEP_TF   = _step_tf(S_BASE)
 _SEL_PCT   = 100.0 * _CHEAP_TF / _STEP_TF          # 选择性重算多付百分之几
-_FULL_PCT, _FULL_SAVE, _SEL_SAVE = 100.0 / 3.0, 97.0, 77.0
+_FULL_PCT, _FULL_SAVE = 100.0 / 3.0, 97.0
+_SEL_SAVE = 100.0 * _CHEAP_GIB / (_POOL_B / 2 ** 30)   # 选择性换掉了池子的百分之几
 _EDGE      = (_SEL_SAVE / _SEL_PCT) / (_FULL_SAVE / _FULL_PCT)   # 性价比之比
 # attention 跟它前一档的倍数 —— 128K 上是 23 倍（最贵），4K 上它已经不在最后
 _TIMES_LONG = _ROWS_LONG[-1][2] / _ROWS_LONG[-2][2]
@@ -3244,7 +3269,7 @@ _ATT_VS_WIDEST = _att_base[2] / float(D_V3)        # 4K 上 attention ÷ 最宽�
 for _nm, _got, _want in (("128K 的 23 倍", _TIMES_LONG, 22.857),
                          ("4K attention ÷ gate/up", _ATT_VS_WIDEST, 0.714),
                          ("4K 选择性占比", _SEL_PCT, 9.30),
-                         ("性价比之比", _EDGE, 2.85),
+                         ("性价比之比", _EDGE, 2.965),
                          ("一层一步 TFLOP", _STEP_TF, 16.45),
                          ("4K attention 占前向", 100 * _att_share(S_BASE), 12.53),
                          ("128K attention 占前向", 100 * _att_share(S_LONG), 82.11)):
@@ -3258,7 +3283,6 @@ for _nm, _got, _want in (("128K 的 23 倍", _TIMES_LONG, 22.857),
 #    那正是「改一处忘三处」的产地。
 # ⭐ 判据：**一个数如果是算出来的，就让它在构建时算，不要让它在正文里躺着。**
 #    改成这样之后，切基准只动 S_BASE 一个数，而 128K 的旧值成了回归锚点。
-DTYPE_B = 2                   # bf16
 
 # (说明, 宽度怎么来的, 等效宽度, 每元素字节)
 _MLA_ROWS = [
@@ -3446,6 +3470,7 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__CHEAP_TF__",    "%.2f TFLOP" % _CHEAP_TF),
                   ("__STEP_TF__",     "%.1f TFLOP" % _STEP_TF),
                   ("__SEL_PCT__",     "%.1f%%" % _SEL_PCT),
+                  ("__SEL_SAVE__",    "%.0f%%" % _SEL_SAVE),
                   ("__EDGE__",        "%.1f" % _EDGE)):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
@@ -3480,9 +3505,12 @@ for _ph, _val in (
 
 assert "<b>S ≈ 5,734</b>" in _html, "交叉点那句被改过了"
 assert abs(_CROSS - 5734) < 1, "交叉点变了：%.0f" % _CROSS
-# ⛔ 128K 的旧值当回归锚点：×32 必须回到发布过的 53.5 GiB / 48.9 TFLOP
-assert abs(_CHEAP_GIB * S_RATIO - 53.5) < 0.05 and abs(_CHEAP_TF * S_RATIO - 48.9) < 0.1, \
-    "「比值小于 3 全收下」对不上 128K 旧值：%.2f / %.2f" % (_CHEAP_GIB * S_RATIO, _CHEAP_TF * S_RATIO)
+# ⛔ 128K 锚点。⚠️ 省显存那个数 T09 从 53.50 变成 55.69 ——&#160;**这是修正不是漂移**：
+#   旧表漏了 MLA 的两个 norm 输出和 Q 降维那份 layernorm 输出（都是 pb≈2 的白捡项）。
+#   ⭐ 算力代价 48.95 TFLOP **一点没变**，因为补上的几行每字节代价几乎为零。
+assert abs(_CHEAP_GIB * S_RATIO - 55.69) < 0.05 and abs(_CHEAP_TF * S_RATIO - 48.95) < 0.1, \
+    "「比值小于 3 全收下」对不上 128K 锚点：%.2f / %.2f" % (_CHEAP_GIB * S_RATIO, _CHEAP_TF * S_RATIO)
+assert abs(_SEL_SAVE - 80.3) < 0.1, "选择性换掉池子的比例变了：%.1f%%" % _SEL_SAVE
 
 # ⭐ §4.1 那张表跟散在正文里的那几个数必须对得上。
 #   ⛔ 它们分处两节、相隔三千行 —— 正是「改了一处忘了另一处」的经典产地，

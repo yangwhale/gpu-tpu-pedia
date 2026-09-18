@@ -46,8 +46,15 @@ assert abs(math.log2(FP16_MIN_NORMAL) + 14) < 1e-9
 assert abs(math.log2(FP16_MIN_SUB) + 24) < 1e-9
 
 # ⭐⭐ 这一格的主角：两个下界之间差了多少个数量级
-DECADES = math.log10(FP16_MIN_NORMAL / BF16_MIN_NORMAL)
-assert DECADES > 30, "两条下界要差出三十个数量级以上，现在 %.1f" % DECADES
+# ⛔⛔ 2026-09-19 T09 修：原来用 FP16_MIN_NORMAL 量，得 33.7 ——&#160;
+#   可这一格自己下面就画着 fp16 的**次正规数**能到 5.96e−8。
+#   「bf16 存得下、fp16 存不下」的那条带，下端应该取 fp16 真正归零的地方。
+#   ⭐ 判据：**同一张图里，标注用的端点必须就是图上画的那个端点。**
+#     旧的 assert 写的是 > 30，33.7 和 30.7 **都能通过**，所以它没拦住。
+DECADES = math.log10(FP16_MIN_SUB / BF16_MIN_NORMAL)
+DECADES_NORMAL = math.log10(FP16_MIN_NORMAL / BF16_MIN_NORMAL)   # 33.7，只作对照
+assert abs(DECADES - 30.7) < 0.05, "带宽变了：%.2f" % DECADES
+assert abs(DECADES_NORMAL - 33.7) < 0.05
 
 # ⭐ 真的舍一遍 ——&#160;「低于这个就没了」不是说说而已
 GRAD = 2.0e-8                          # 一个不算离谱的小梯度
