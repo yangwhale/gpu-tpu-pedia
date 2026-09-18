@@ -116,7 +116,11 @@ def check_captions():
             # ⭐ 判据：**锚点要选语义短语，别选标点** ——&#160;标点的位置随排版漂，
             #   「秒无声循环」这五个字才是这句话真正的身份。
             real = dur[m.group(1)]
-            for said in re.findall(r"([0-9.]+)\s*秒无声循环", fig):
+            # ⛔ 锚点第二次放宽（2026-09-18 下午）：房规松绑后有了**不循环的长片**，
+            #   它们的图注不会写「无声循环」四个字，于是这条 lint 对新片子**静默失效**。
+            #   ⭐ 判据仍是「锚在语义短语上」，只是那个短语换成了两处都有的
+            #     「…秒…Manim」——&#160;即「这段时长在描述一个 Manim 产物」。
+            for said in re.findall(r"([0-9.]+)\s*秒[^）)]{0,24}Manim", fig):
                 if abs(real - float(said)) > 0.6:
                     bad.append("%s 的图注说 %s 秒，实测 %.1f 秒"
                                % (m.group(1), said, real))
@@ -140,6 +144,15 @@ def main(argv):
         key = os.path.basename(p)[:-4]
         bad, ia, iz = measure(p)
         rec = base.get(key)
+        # ⭐⭐ 2026-09-18：房规松绑后有了**不循环的长片**（>20 秒、带叙事、
+        #   页面上给 controls 不给 loop）。它们首尾本来就不该一样 ——&#160;
+        #   强行要求首尾同帧会逼着长片在结尾把内容全撤掉，那是削足适履。
+        #   ⭐ 判据：**守卫要守的是「承诺」，不是「形状」** ——&#160;
+        #     片子承诺了 loop 才查首尾；baseline 里写 "loop": false 就跳过。
+        if rec is not None and rec.get("loop") is False:
+            print("   ➖ %-22s 不循环（%s），跳过首尾检查"
+                  % (key, rec.get("note", "")))
+            continue
         if rec is None:
             print("   ⛔ %-22s 不一致度 %5.1f%%   \033[1m没有基线\033[0m —— "
                   "去看 /tmp/loopdiff-%s.png，判过了再 --update" % (key, bad, key))
