@@ -127,7 +127,14 @@ def check_captions():
         out = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
              "-of", "csv=p=0", p], capture_output=True, text=True)
-        dur[os.path.basename(p)] = float(out.stdout.strip())
+        # ⛔ 这一步会扫**整个 media 目录**。拿 /tmp 当草稿输出目录时，
+        #   它会去 ffprobe 别人留在那儿的垃圾 mp4，拿到空串直接 ValueError 崩掉 ——
+        #   而接缝那一步其实已经跑完并打印了结论，只是被 traceback 盖住。
+        # ⭐ 判据：**顺带扫到的文件不该有能力让主流程失败**（跟读 .html 那处同一条）。
+        try:
+            dur[os.path.basename(p)] = float(out.stdout.strip())
+        except ValueError:
+            continue
     bad = []
     for page in pages:
         # ⛔ 这里会扫到旁边目录里任何 .html —— 包括不是 UTF-8 的（实测撞上过
@@ -181,6 +188,16 @@ def main(argv):
     BASE = os.path.abspath(_opt(argv, "--baseline",
                                 os.path.join(MEDIA, "loop-baseline.json")))
     files = argv or sorted(glob.glob(os.path.join(MEDIA, "*.mp4")))
+    # ⛔⛔ 2026-09-19：**空集合绝不能当成通过。**
+    #   把通用版直接覆盖到项目里之后，默认目录从 `WebPages/media` 变成了 `cwd`，
+    #   而 build 是在 `tools/` 下调它的 —— 扫不到任何 mp4，`fail` 保持 0，
+    #   于是**守卫连着好几轮报绿，其实一支片子都没查**。
+    #   ⭐ 判据：**「没找到要检查的东西」是配置错，不是检查通过。**
+    if not files:
+        print("   ⛔ 在 %s 下一个 mp4 都没找到 —— 这是路径配错了，不是通过。"
+              % MEDIA)
+        print("      用 --media 指到放 mp4 的目录。")
+        return 1
     base = json.load(open(BASE, encoding="utf-8")) if os.path.exists(BASE) else {}
 
     print("\n\033[1m▸ 动画首尾一致性\033[0m   基线回归：只问「有没有比记录的更糟」")

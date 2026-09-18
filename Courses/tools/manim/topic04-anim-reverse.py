@@ -76,14 +76,30 @@ S1（2026-09-18 下午）：房规松绑后回来加解释性文字
 """
 import numpy as np
 from manim import (Scene, Circle, Square, Line, Dot, VGroup, ValueTracker,
-                   always_redraw, MathTex, Text, WHITE, LEFT, RIGHT, UP,
-                   ORIGIN, linear, config)
+                   always_redraw, MathTex, Text, LEFT, RIGHT, UP,
+                   ORIGIN, config)
 
-RD_ = "#d93025"          # 正向模式
-GR_ = "#1e8e3e"          # 反向模式
-GY_ = "#9aa0a6"          # 还没拿到
-GY2_ = "#80868b"         # 图例 / 说明文字
-INK_ = "#202124"
+# ⭐⭐⭐ 2026-09-19 房规②b：**配色用 manim 自带的原生那套，不要自己配。**
+#   原来这支是白底 ＋ 一整套自选的品牌色，三处都在覆盖作者的默认，
+#   而且每处都覆盖成更差的那个：
+#       背景  #000000  → 曾设成白
+#       缓动  smooth   → 曾显式传 rate_func=linear（匀速＝机器感的主要来源）
+#       线宽  4        → 曾用 3
+#   实证：扒 3b1b 神经网络系列那三个源文件，`background_color` 出现 0 次。
+# ⛔ 换色时**语义编码一个字不动**：红 ＝ 正向模式、绿 ＝ 反向模式，
+#   跟静态图 `fig-reverse` 仍然对齐。黄是强调色不是语义色，**没有引进来**。
+# ⛔ 引入新名字前先 grep 它在本文件出现过没有 ——&#160;同讲的 descend 那支
+#   把 WHITE 别名成 `_W`，撞上文件里已有的 14 维参数向量 `_W`，
+#   报「颜色不接受长度 14」。下划线开头的短名尤其危险。
+from manim import RED, GREEN, WHITE, GREY, GREY_B
+
+RD_ = RED                # #FC6255 ——&#160;正向模式
+GR_ = GREEN              # #83C167 ——&#160;反向模式
+# ⛔ 别取 GREY_D(#444444)：黑底上几乎看不见，骨架和「还没拿到」的空心圈整幕消失。
+#   ⭐ 黑底的辅助线要比白底**亮**，不是暗 ——&#160;对比度是相对背景的，不是绝对的。
+GY_ = GREY               # #888888 ——&#160;还没拿到 / 骨架
+GY2_ = GREY_B            # #BBBBBB ——&#160;图例 / 说明文字
+INK_ = WHITE             # 正文字改白（原 #202124 在黑底上等于没画）
 
 N = 8                    # 参数个数 ——&#160;正向模式要跑这么多趟
 X0, X1 = -5.4, 0.2       # 参数点从哪到哪
@@ -177,7 +193,7 @@ def _lerp(a, b, s):
 
 class Reverse(Scene):
     def construct(self):
-        self.camera.background_color = WHITE
+        # ⛔ 不写 background_color ——&#160;默认就是 #000000，这正是作者的用法
         tr = ValueTracker(0.0)
 
         # ⭐⭐ 2026-09-18：这支片子**首尾对不上**，量出来 32.7%。
@@ -194,9 +210,10 @@ class Reverse(Scene):
         def rail(y):
             """两排共用的骨架 ——&#160;一条链 ＋ 末端一个方块。"""
             g = VGroup()
+            # ⭐ 房规②b：主干线宽不低于 4（原来是 3，覆盖了作者的默认）
             g.add(Line([X0 - 0.35, y, 0], [LOSS_X - 0.32, y, 0],
-                       stroke_color=GY_, stroke_width=3))
-            g.add(Square(side_length=0.46, stroke_color=INK_, stroke_width=3,
+                       stroke_color=GY_, stroke_width=4))
+            g.add(Square(side_length=0.46, stroke_color=INK_, stroke_width=4,
                          fill_color=INK_, fill_opacity=0.10).move_to([LOSS_X, y, 0]))
             # ⭐ S1：给末端那个方块一个名字。整段的枢纽就是「这一头是 L」——&#160;
             #   不写出来，「从 loss 出发」这句字幕就没有落点。
@@ -217,7 +234,7 @@ class Reverse(Scene):
                 st = st_fn(clock(), i)
                 c = Circle(radius=0.145,
                            stroke_color=GY_ if st == 0 else col,
-                           stroke_width=3.2 if st != 1 else 4.6,
+                           stroke_width=4.0 if st != 1 else 5.6,
                            fill_color=col, fill_opacity=1.0 if st == 2 else 0.0)
                 return c.move_to([PX[i], y, 0])
             return always_redraw(mk)
@@ -350,9 +367,12 @@ class Reverse(Scene):
         #   **末帧按定义 ≡ 首帧**，不用在结尾补恒等 play 去刷帧。
         # ⛔ 顺带避开 traps §2.3 那个坑（wait 不一定驱动 updater）——&#160;
         #   这里最后一段本来就是 play，updater 一定会走。
+        # ⛔ 房规②b：**不要显式传 `rate_func=linear`** ——&#160;默认 `smooth` 就是
+        #   作者的用法，匀速是「机器感」的主要来源。时长与幕界一秒不动：
+        #   每段 `run_time` 仍等于时钟增量，只是段内快慢不匀。
         def _seg(to_t, drop, show):
             self.play(tr.animate.set_value(to_t),
-                      run_time=to_t - _seg.at, rate_func=linear)
+                      run_time=to_t - _seg.at)
             _seg.at = to_t
             if drop is not None:
                 self.remove(drop)

@@ -61,10 +61,24 @@ r"""专题四 · 一路乘下去 ——&#160;`fig-vanish` 配的那段动画（�
 import math
 
 import numpy as np
+# ⭐⭐⭐ 2026-09-19 转成 manim 原生深色配色（房规②b，正本在 skill 里，这里不抄第二份）。
+#   旧版是白底 ＋ Google 配色；现在不写 background_color，走作者默认的 #000000。
+# ⛔ 别名不要用下划线开头的短名：别处出过 `WHITE as _W` 撞上已有的 14 维参数向量，
+#   `stroke_color` 拿到 numpy 数组，报「颜色不接受长度 14」。
+#   这里直接用 manim 的原名导入，本文件没有同名符号（已 grep 过）。
 from manim import (Scene, VGroup, Dot, Line, Text, MathTex, ValueTracker,
-                   always_redraw, WHITE, linear)
+                   always_redraw, BLUE, RED, WHITE, GREY, GREY_B, BLACK, linear)
 
-RD_, BL_, GY_, GY2_, INK_ = "#d93025", "#4285f4", "#c3c7cb", "#80868b", "#202124"
+# ⛔ 灰的两个用途在换底之后**相对亮度要对调**：
+#   白底时网格线(#c3c7cb)比 1.0 那条链(#80868b)**浅**；黑底上必须反过来 ——
+#   网格线 GREY(#888888) 压在底下，1.0 那条链 GREY_B(#BBBBBB) 浮在上面。
+#   ⭐ 对比度是**相对背景**的，不是绝对的。照抄旧的明暗关系会让这两者互换角色。
+#   ⛔ 变量名照旧（GY_ ＝ 网格线，GY2_ ＝ 1.0 那条链），只换值 ——&#160;
+#     换底时顺手改名字，最容易把两个灰接反。
+RD_, BL_ = RED, BLUE                     # #FC6255 / #58C4DD
+GY_ = GREY                               # #888888 —— 网格线 / 地面 / 画框上沿（底稿）
+GY2_ = GREY_B                            # #BBBBBB —— r=1.0 那条链（它是数据，得压过底稿）
+INK_ = WHITE                             # 正文字 ＋ 扫描线
 
 L = 60                                   # 层数，跟静态图同一个口径
 CASES = ((0.8, RD_), (1.0, GY2_), (1.2, BL_))
@@ -133,7 +147,7 @@ def vat(vals, x):
 
 class Vanish(Scene):
     def construct(self):
-        self.camera.background_color = WHITE
+        # ⛔ 不写 background_color ——&#160;默认就是 #000000，这正是作者的用法
         tt = ValueTracker(0.0)
 
         def clock():
@@ -148,18 +162,24 @@ class Vanish(Scene):
             return max(1, int(clock() / T_SWEEP * (L - 1)))
 
         # ── 底稿 ──────────────────────────────────────────────────
+        # ⛔⛔ 换黑底最先死的就是这批网格线：旧的浅灰 #c3c7cb ＋ 线宽 1.0
+        #   在黑底上等于没有（抽帧确认过整片消失）。⭐ 两项一起抬：
+        #   颜色 → GREY #888888，线宽 1.0 → 2.0（d=0 那条主线 2.0 → 3.0）。
+        # ⭐ 底稿**不跟着抬到 4** ——&#160;房规说的「线宽默认 4 别往下调」管的是
+        #   画面主体（三条链）；底稿抬到跟数据一样粗，网格会盖过论点。
+        #   已转好的 `topic04-anim-descend.py` 也是这么分层的（主曲线 4 / 等高线 2）。
         base = VGroup()
         d = math.ceil(LO / 2.0) * 2                      # 上轨：每两个数量级一条
         while d <= HI:
             base.add(Line(np.array([XL - 0.25, pya(d), 0]),
                           np.array([XR + 0.25, pya(d), 0]),
                           stroke_color=GY_,
-                          stroke_width=2.0 if abs(d) < 1e-9 else 1.0))
+                          stroke_width=3.0 if abs(d) < 1e-9 else 2.0))
             d += 2
         # 下轨：一条地面、一条「原始幅度＝1」的参考线、一条**画框上沿**
         # ⭐ 上沿那条是这一轨的关键 ——&#160;蓝线越过它＝出框，
         #   没有这条线，「顶出去」就只是「画到头了」。
-        for y, w in ((B_BOT, 2.0), (pyb(1.0), 1.4), (B_TOP, 2.0)):
+        for y, w in ((B_BOT, 3.0), (pyb(1.0), 2.4), (B_TOP, 3.0)):
             base.add(Line(np.array([XL - 0.25, y, 0]), np.array([XR + 0.25, y, 0]),
                           stroke_color=GY_, stroke_width=w))
         self.add(base)
@@ -176,7 +196,7 @@ class Vanish(Scene):
                     if clip and vals[i] > VMAX:
                         break
                     g.add(Line(np.array([px(i), y0, 0]), np.array([px(i + 1), y1, 0]),
-                               stroke_color=col, stroke_width=3.6))
+                               stroke_color=col, stroke_width=4.0))
                 if not (clip and vals[k] > VMAX):
                     g.add(Dot(np.array([px(k), fy(vals[k]), 0]),
                               radius=0.095, color=col))
@@ -189,10 +209,14 @@ class Vanish(Scene):
 
         # ⭐ 一根贯穿两轨的扫描线 ——&#160;它是「同一层」这件事的唯一证据。
         #   两轨的反差全靠它成立，所以它不是装饰。
+        # ⛔ 它在白底上是**深色细线**（#202124 / 1.8）：高对比但不抢戏。
+        #   换黑底后 INK_ 变成白 ——&#160;白是黑底上对比度最高的颜色，
+        #   照抄「主体线宽 4」会得到一根贯穿全屏的白色粗棒，比三条链还显眼。
+        #   ⭐ 抽帧对比 2.4 / 4.0 两版后取 2.4：它要的是「看得见」，不是「压过数据」。
         self.add(always_redraw(lambda: Line(
             np.array([px(cur_k()), B_BOT - 0.28, 0]),
             np.array([px(cur_k()), pya(HI) + 0.28, 0]),
-            stroke_color=INK_, stroke_width=1.8)))
+            stroke_color=INK_, stroke_width=2.4)))
 
         # ── 坐标系标识 ───────────────────────────────────────────────
         # ⭐⭐ 画面里**只有**这四处字，全是「观看当下」才有用的东西：
@@ -245,9 +269,16 @@ class Vanish(Scene):
         def tag(s, col, size, math=False):
             m = MathTex(s, color=col, font_size=size) if math else \
                 Text(s, color=col, font_size=size)
-            # ⭐ 垫一层白底：上轨每两个数量级有一条灰网格线，横穿整幅。
+            # ⭐ 垫一层**背景色**底板：上轨每两个数量级有一条灰网格线，横穿整幅。
             #   不垫的话，要么字被线划掉，要么为了躲线把字顶到画框边上。
-            m.add_background_rectangle(color=WHITE, opacity=1.0, buff=0.06)
+            # ⛔⛔ 换黑底这一轮最大的坑就在这一行：原来写死 `color=WHITE`，
+            #   白底上它跟背景同色所以隐形；黑底上它会变成**四块刺眼的白斑**，
+            #   而且比字本身还大（buff=0.06 四周外扩）。
+            #   ⭐ 判据：**这块板的语义从来就是「背景色」，不是「白色」** ——&#160;
+            #     它存在的理由是遮网格线，不是画一个白方块。
+            #     所以跟着背景走用 BLACK，不改几何（buff 不动 → place() 的
+            #     m.height 不变 → MIN_GAP 那几条断言的输入原样）。
+            m.add_background_rectangle(color=BLACK, opacity=1.0, buff=0.06)
             return m
 
         def up_obst(x0, x1):
@@ -281,5 +312,18 @@ class Vanish(Scene):
                            up_obst(CX - m.width / 2, CX + m.width / 2),
                            "%.1f^k" % r))
 
+        # ⭐⭐⭐ `rate_func=linear` 在这里**是对的，别删**（2026-09-19 一度删过又加回来）。
+        #   房规②b 那条「不要显式传 linear」说的是**动一个物体**的 play；
+        #   这一句动的是**一个时钟**（`ValueTracker` ＋ 下面全挂 `always_redraw`）。
+        #   ⛔ 判据：**问这个 play 在动什么 ——&#160;物体，还是时间本身。**
+        #     | 动物体（`mob.animate.shift`、`FadeIn`…） | 用默认 smooth |
+        #     | 动时钟（`ValueTracker.animate.set_value`） | **必须 linear** |
+        #   非匀速的时钟会把缓动加到**时间**上：段界速度归零 → 画面一顿一顿，
+        #   段中被压缩成一闪而过。本文件还多一层理由 ——&#160;`clock()` 的复位是
+        #   **线性倒放**，时钟一旦非匀速，回退段和正放段的速度曲线就不再对称，
+        #   「退回去」会变成一段莫名其妙的慢动作。
+        #   ⭐ 这不是推的，是量的：真渲了一版 smooth，逐帧跟踪扫描线的 x ——&#160;
+        #     名义 0.9 秒（×1.9 ＝ 1.71 秒）的回退段被拉成 **4.20 秒**，
+        #     而 1.1 秒的 hold 反被压到 1.33 秒。缓动加在时钟上就是这个后果。
         self.play(tt.animate.set_value(T_END), run_time=T_END * 1.9,
                   rate_func=linear)

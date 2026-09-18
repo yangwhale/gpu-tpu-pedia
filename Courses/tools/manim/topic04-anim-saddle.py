@@ -52,7 +52,11 @@ r"""专题四 · 鞍点的 3D 曲面 ——&#160;`fig-saddle` Ⓐ 配的那段 8
     所以下面那组 SAFE_* 是**量出来的**，不是估的 ——&#160;见它们的注释。
 
 ⛔ 三条刻意的取舍：
-  ① **配色跟 `fig-saddle` 对齐**：红 ＝ 往上（走不了），绿 ＝ 往下（能走出去）。
+  ① **配色沿用「红 ＝ 往上（走不了）／绿 ＝ 往下（能走出去）」这条语义编码**，
+     ⭐ 2026-09-19 起**取值换成 manim 原生那套**（房规②b）：黑底 ＋ 命名色，
+       不再跟 `fig-saddle` 的 Google 配色对齐 ——&#160;
+       静态 SVG 嵌在亮底页面里，动画是一块独立的深色画布，两边本来就不同介质。
+       **语义没动，只动色值**；句子里「谷」染绿、「峰」染红这条绑定原样保留。
      ⭐ 两条剖面曲线是**真画在曲面上**的，不是贴上去的；曲面本身是
        `z(u, v)` 当场算出来的参数曲面。
   ② **图例用色块，不用指向箭头。** 相机转满一圈，红线一会儿在左、一会儿在右 ——
@@ -77,15 +81,33 @@ import inspect
 
 import numpy as np
 from manim import (ThreeDScene, Surface, Dot3D, ParametricFunction, VGroup,
-                   Line, Text, MathTex, WHITE, DEGREES, UP, DOWN, LEFT, RIGHT,
+                   Line, Text, MathTex, DEGREES, UP, DOWN, LEFT, RIGHT,
                    ORIGIN, config)
+# ⭐⭐⭐ 2026-09-19：配色改成 **manim 自带的原生那套**（房规②b）——
+#   背景不再写 `background_color = WHITE`，走作者的默认 #000000；
+#   颜色一律用命名色，不再自配十六进制。
+# ⛔ 导入别名不要用下划线开头的短名（`WHITE as _W` 那类）——
+#   本项目已经有人因为撞上同名变量吃过「颜色不接受长度 14」。
+#   这里直接用 manim 的原名，只在下面做一层语义别名。
+from manim import (BLUE_D, BLUE_E, RED, GREEN, WHITE, GREY, GREY_B, BLACK)
 
-# ⭐ 跟 topic03_draw 的主色对齐（那边 RD / GR 就是这两个值）
-RD_ = "#d93025"          # 往上 ——&#160;走不了
-GR_ = "#1e8e3e"          # 往下 ——&#160;还能走
-BL_ = "#4285f4"
-INK_ = "#202124"
-GY_ = "#5f6368"
+# ⭐ 语义不变，只换取值：红 ＝ 往上（走不了），绿 ＝ 往下（还能走）
+RD_ = RED                # #FC6255 ——&#160;往上，走不了
+GR_ = GREEN              # #83C167 ——&#160;往下，还能走
+# ⭐⭐ 棋盘格是这张图的**质感来源**，黑底上要重挑一对。
+#   ⛔ 原来那对是 #4285f4 / #a8c7fa ——&#160;白底上的浅蓝，挪到黑底上
+#     亮那格几乎贴着白、暗那格化进背景，整张糊成一片。
+#   ⭐ 现在用 **BLUE_D #29ABCA / BLUE_E #236B8E** 这个中深蓝对比对：
+#     抽帧对照过 (D,E) / (C,E) / (B,D) 三对 ×（0.62 / 0.85 / 1.0）三档不透明度，
+#     判据是「暗格跟背景分得开、亮格不抢红绿两条剖面」——&#160;(D,E) ＠0.85 两头都满足。
+CHK_ = [BLUE_D, BLUE_E]
+INK_ = WHITE             # 正文字改白
+GY_ = GREY_B             # #BBBBBB ——&#160;次要文字（黑底上 #5f6368 直接消失）
+MESH_ = GREY             # #888888 ——&#160;曲面上那层网格线
+# ⛔ 黑点**不能跟着正文一起改白**：画面上那句话点名叫它「黑点」，
+#   而本轮的规矩是**一个字都不改**。⭐ 它压在蓝色曲面正中央、不压黑底，
+#   所以留黑反而对比更足 ——&#160;抽帧放大确认过它清清楚楚。
+DOT_ = BLACK
 
 SPAN = 2.0               # 曲面在 u / v 上的范围
 K = 0.35                 # z ＝ K(u² − v²)
@@ -114,6 +136,9 @@ assert abs(z(0, 0)) < 1e-12, "鞍点本身的高度应当是 0"
 #   得靠手动屏蔽几个矩形 ——&#160;而屏蔽框本身又可能切掉真正的曲面边缘。
 #   ⭐ 判据：**要量 A 就按 A 的固有属性选，别按「不是 B」选。**
 #     曲面的固有属性是「它是蓝的」，按颜色一句话就分干净了。
+# ⭐ 2026-09-19 换配色后这四个数**不用重量**：它们是曲面转一圈扫过的
+#   **屏幕几何**，只跟 z()、相机角度、zoom 有关，跟填什么颜色无关。
+#   （上面那句「蓝 − 红 > 12 且 蓝 > 120」是当时的取样办法，不是现在的色值。）
 _FW, _FH = config.frame_width, config.frame_height
 SAFE_L = -_FW / 2 + 0.2681 * _FW      # 文字右缘不得越过这条线
 SAFE_R = _FW / 2 - 0.2705 * _FW       # 文字左缘不得越过这条线
@@ -166,14 +191,16 @@ ARIA_HINT = (
 
 class Saddle(ThreeDScene):
     def construct(self):
-        self.camera.background_color = WHITE
+        # ⛔ 不写 background_color —— 默认就是 #000000，这正是作者的用法
 
         surf = Surface(
             lambda u, v: np.array([u, v, z(u, v)]),
             u_range=[-SPAN, SPAN], v_range=[-SPAN, SPAN],
-            resolution=(28, 28), fill_opacity=0.62,
-            checkerboard_colors=[BL_, "#a8c7fa"],
-            stroke_width=0.35, stroke_color="#5f6368",
+            # ⛔ 不透明度从 0.62 抬到 0.85：黑底上 0.62 会把暗那格压到 #154255,
+            #   曲面轮廓在暗格处直接化进背景，边缘看着是毛的。
+            resolution=(28, 28), fill_opacity=0.85,
+            checkerboard_colors=CHK_,
+            stroke_width=0.35, stroke_color=MESH_,
         )
 
         # ⭐ 两条**真画在曲面上**的剖面：红的往上翘，绿的往下沉
@@ -189,7 +216,7 @@ class Saddle(ThreeDScene):
         #   ⭐ 现在底下那行字点名说「黑点」，**它就必须一眼看得见**。
         #   判据：**加了一句指认某个元素的话，就等于给那个元素追加了可见性要求。**
         #   抬高一点 z，让它压在两条剖面之上（Cairo 的 3D 是按深度排序画的）。
-        ball = Dot3D(np.array([0.0, 0.0, 0.12]), color=INK_, radius=0.15)
+        ball = Dot3D(np.array([0.0, 0.0, 0.12]), color=DOT_, radius=0.15)
 
         # ── 解释性文字（全部固定在画面上，不随相机也不随时间变）────────
         # ⭐⭐ 这一句是整段的论点，所以给它最大的字号，并且让「谷」「峰」

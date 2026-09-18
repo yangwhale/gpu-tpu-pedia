@@ -29,6 +29,10 @@ r"""专题四 · 显存随时间 ——&#160;`fig-step` / `fig-act-bill` 配的�
   判据：**幕与幕之间是离散事件，别做成每帧都要问一次的连续量。**
   ⭐ 代价是原来那一条 `self.play` 被切成五段；每段 `run_time` 仍然
     ＝ Δt × `SPEED`，rate_func 全是 linear，**所以画面速度逐帧不变**。
+    ⛔⛔ 2026-09-19 这条**被误删过一次又加回来了** ——&#160;房规 ②b 那句
+      「别显式传 linear」说的是 **play 在动一个物体**的时候；这里的 play
+      动的是**时钟**（`ValueTracker` ＋ `always_redraw`），`smooth` 会让
+      **时间本身**在五个段界各停一下。判据写在 construct 末尾那段注释里。
   ⭐ 末尾多一个 1/30 秒的恒等 `play`：把字幕拨回第一幕之后**强制走一遍
     updater**（`wait()` 不保证驱动 `always_redraw`），这样末帧才真的 ≡ 首帧。
 
@@ -43,7 +47,11 @@ r"""专题四 · 显存随时间 ——&#160;`fig-step` / `fig-act-bill` 配的�
   ② 静态图排在视频上面兜底。
   ③ 短循环片 →&#160;首尾必须同帧。
   ④ 数据全部当场算。
-  ⑤ 配色跟 `topic03_draw` 对齐。
+  ⑤ ~~配色跟 `topic03_draw` 对齐~~ →&#160;**2026-09-19 改成 manim 原生深色那套**
+     （房规 ②b）：黑底 ＋ BLUE/RED/GREEN/WHITE/GREY，默认 smooth，线宽 4。
+     ⚠️ 这一段是七段里**面积最大**的，所以「白 → 黑」不是把颜色查表换一遍就完 ——
+       白底上的「淡灰大面积」翻到黑底是**脏**，白底上的「细灰线」翻到黑底是**没有**。
+       两处判断分别记在 `base` 和 `cells` 的注释里。
 
 ⭐⭐⭐ 三条带的高度**按真实字节数算**，跟 `fig-step` 同一套口径，脚本里 assert 了：
     · 权重 2 B ＋ 优化器状态 12 B ＝ **14 B/参数** → 不动的基座
@@ -69,12 +77,27 @@ r"""专题四 · 显存随时间 ——&#160;`fig-step` / `fig-act-bill` 配的�
 """
 import numpy as np
 from manim import (Scene, ValueTracker, Polygon, Rectangle, Line, DashedLine,
-                   Dot, VGroup, Text, MathTex, always_redraw, WHITE, RIGHT,
+                   Dot, VGroup, Text, MathTex, always_redraw, RIGHT,
                    DOWN, LEFT, rate_functions, config)
+# ⭐⭐⭐ 2026-09-19：配色改成 **manim 自带的原生那套**（skill 房规 ②b）。
+#   原来是「白底 ＋ Google 配色」，三处主动覆盖了作者的默认，每处都覆盖成更差的：
+#       背景  #000000  → 白        线宽  4 → 2 / 0.8        色板 → Google 那套
+#   ⚠️ 房规里还有第三条「别显式传 rate_func=linear」——&#160;**这一条对本文件不适用**，
+#     因为这里的 play 动的是时钟不是物体，见 construct 末尾。
+#   ⛔ 别名不要用下划线开头的短名（`_W` 那类）——&#160;撞上已有变量之后
+#     `stroke_color=` 会拿到一个数组，报「颜色不接受长度 14」。
+#   ⭐ 这里沿用本文件原有的**后缀**下划线名（`BL_` / `RD_` / …），只换取值：
+#     好处是**下面三百行一个字都不用动**，diff 就是「配色」这一件事。
+from manim import (BLUE, RED, GREEN, WHITE, GREY, GREY_B, GREY_D)
 
-BL_, RD_, GY_, INK_ = "#4285f4", "#d93025", "#9aa0a6", "#202124"
-GR_ = "#1e8e3e"
-GY2_ = "#80868b"                           # 次级文字（说明行、轴注）
+BL_, RD_ = BLUE, RED                       # #58C4DD / #FC6255
+GR_ = GREEN                                # #83C167
+# ⛔ GY_ 在白底版身兼两职：**辅助线**和**大面积填充**。黑底上这两件事要分开 ——
+#   同一个灰，够亮的线放大成一整块就是「脏」，够暗的块缩成一条线就是「没有」。
+GY_ = GREY                                 # #888888 —— 线、描边（黑底要亮）
+FILL_ = GREY_D                             # #444444 —— 大面积填充（黑底要暗）
+INK_ = WHITE                               # 正文字
+GY2_ = GREY_B                              # #BBBBBB —— 次级文字（说明行、轴注）
 
 N_PARAM = 671e9
 TIB = 1024.0 ** 4
@@ -156,8 +179,7 @@ assert _SRC.count("tt.get_" + "value()") == 1, "有绘制函数绕过了 clock()
 
 class MemTime(Scene):
     def construct(self):
-        self.camera.background_color = WHITE
-        cfg = dict(stroke_width=0)
+        # ⛔ 不写 self.camera.background_color —— 默认 #000000 就是作者的用法
         X0, X1, Y0 = -6.0, 6.0, -2.9
         SY = 0.30                      # 每 TiB 多少个单位高
         tt = ValueTracker(0.0)
@@ -177,8 +199,20 @@ class MemTime(Scene):
             return T_RESET * (1.0 - (t - T_RESET) / T_REW)
 
         # 基座：不动的那 14 字节
+        # ⛔⛔ 本轮最大的一处设计判断。白底版是 `GY_(#9aa0a6) @ 0.45` ——&#160;
+        #   在白底上是「一层淡淡的底」，**直接搬到黑底就是整屏下半部一大块脏灰**：
+        #   它有 12 × 2.56 个单位，占画面约 24%，是全片面积最大的东西。
+        # ⭐⭐ 判据：**它要表达的是「厚」，不是「亮」。**
+        #   厚度已经由它的高度说完了（8.54 TiB × SY），填充只需要
+        #   「这块地是有东西的」这一点点信号；真正该被看见的是它的**上沿** ——
+        #   因为蓝色的山正是从那条线上长起来的。
+        # ⭐ 所以改成**暗填充 ＋ 亮描边**：FILL_(#444444) 压到 0.55（合成 ≈ #252525，
+        #   读作「有东西但不抢戏」），外圈给 GY2_(#BBBBBB) 线宽 4 把边界钉住。
+        #   ⛔ 试过「只留描边不填充」——&#160;那样这块变成纯黑，跟画面外的黑连成一片，
+        #     「常驻占掉一大块显存」这个体量感当场没了，而那是这一幕的前提。
         base = Rectangle(width=X1 - X0, height=RESIDENT_TIB * SY,
-                         fill_color=GY_, fill_opacity=0.45, **cfg)
+                         fill_color=FILL_, fill_opacity=0.55,
+                         stroke_color=GY2_, stroke_width=4)
         base.move_to(np.array([(X0 + X1) / 2, Y0 + RESIDENT_TIB * SY / 2, 0]))
 
         def band(fn, col, below):
@@ -192,8 +226,11 @@ class MemTime(Scene):
                 pts = top + bot
                 if len(pts) < 3:
                     pts = pts + [pts[-1] + np.array([1e-3, 0, 0])]
-                return Polygon(*pts, fill_color=col, fill_opacity=0.80,
-                               stroke_color=col, stroke_width=2)
+                # ⭐ 线宽 2 → 4（房规：默认就是 4，别往下调）。
+                #   黑底上这条描边还多一份活：它是山的**轮廓线**，
+                #   填充压到 0.72 之后全靠它把形状咬住。
+                return Polygon(*pts, fill_color=col, fill_opacity=0.72,
+                               stroke_color=col, stroke_width=4)
             return always_redraw(make)
 
         act_band = band(act_at, BL_, lambda s: RESIDENT_TIB)
@@ -207,14 +244,24 @@ class MemTime(Scene):
         sweep = always_redraw(lambda: Line(
             np.array([px(clock()), Y0 - 0.25, 0]),
             np.array([px(clock()), SWEEP_TOP, 0]),
-            color=INK_, stroke_width=2.5))
+            color=INK_, stroke_width=4))
 
         # 层轴：61 个小格，前向从左往右点亮、反向从右往左熄掉
+        # ⛔ 白底版未点亮的格子是 `GY_ @ 0.12 ＋ 0.8 的描边`——&#160;搬到黑底，
+        #   填充合成 #141414、描边 0.8 个单位约 1 px，**整排 61 格当场消失**，
+        #   于是「点亮到第几层」失去了参照系：看得见亮的，看不见还剩多少没亮。
+        # ⭐ 判据：**它是一把尺子，刻度必须先存在，才谈得上指到哪一格。**
+        # ⭐⭐ 改成 FILL_(#444444) **实心不透明、干脆不要描边**。
+        #   ① #444444 作为 21×23 px 的**色块**在黑底上清清楚楚 ——&#160;
+        #      skill 里「GREY_D 在黑底上消失」说的是**细线**，面积不一样结论不一样；
+        #   ② 去掉描边顺带绕开「线宽不低于 4」：一格才 21 px 宽，
+        #      4 px 的边框会把它吃掉一大半，**这里正确的做法是没有线，不是细线**。
+        #   格子之间本来就留了 22% 的缝（0.78 因子），不靠描边也分得开。
         LN, LY = 61, Y0 - 0.72
         cells = VGroup(*[
             Rectangle(width=(X1 - X0) / LN * 0.78, height=0.17,
-                      stroke_color=GY_, stroke_width=0.8,
-                      fill_color=GY_, fill_opacity=0.12)
+                      stroke_width=0,
+                      fill_color=FILL_, fill_opacity=1.0)
             .move_to(np.array([X0 + (X1 - X0) * (i + 0.5) / LN, LY, 0]))
             for i in range(LN)])
 
@@ -228,11 +275,18 @@ class MemTime(Scene):
                 k, col = 0, GR_
             g = VGroup()
             for i in range(min(k, LN)):
-                g.add(cells[i].copy().set_fill(col, opacity=0.85)
-                      .set_stroke(col, 0.8))
+                g.add(cells[i].copy().set_fill(col, opacity=1.0)
+                      .set_stroke(col, 0))
             return g
 
-        self.add(base, act_band, grad_band, cells, always_redraw(lit), sweep)
+# ⛔ 前向段 grad_at 恒为 0，`grad_band` 退化成一条线 ——&#160;但**零高度的
+#   Polygon 照样会描边**，于是一条红边贴着蓝色山的斜边跑，看着像
+#   「前向时梯度已经存在」。这是旧版就有的，而 2026-09-19 把带子描边
+#   从 2 加到 4 之后它**响了一倍** —— 自己的改动放大了别人的旧缺陷，
+#   那就归自己修。
+# ⭐ 最小修法：把 grad 放到 act **底下**。前向段那条红边被蓝色描边盖住；
+#   反向段两条带本来就上下分开，z 序无所谓；首末帧状态相同，不影响 loop。
+        self.add(base, grad_band, act_band, cells, always_redraw(lit), sweep)
         self.add(Dot(np.array([X0, Y0 + RESIDENT_TIB * SY, 0]), radius=0.001))
 
         # ══════════════════════════════════════════════════════════════
@@ -242,11 +296,15 @@ class MemTime(Scene):
         # ① 图例：三块颜色各自叫什么。
         #   ⭐ 放图例而不是就地贴标签 ——&#160;蓝和红是**长出来的**，
         #     贴在它们身上的标签在它们还没出现时会指着一块空地（traps §2.5）。
+        #   ⛔ 图例的色块必须跟它指代的那块**长得一样** ——&#160;基座改成
+        #     「暗填充 ＋ 亮描边」之后，这里的 chip 也得照改，否则图例上是一块灰、
+        #     画面上是一个框，观众对不上号。描边按面积等比缩到 2（那块是 4）。
         legend = VGroup()
-        for col, op, name in ((GY_, 0.45, "常驻 · 权重＋优化器"),
-                              (BL_, 0.80, "激活 · 前向堆、反向放"),
-                              (RD_, 0.80, "梯度 · 反向才长出来")):
-            chip = Rectangle(width=0.30, height=0.22, stroke_width=0,
+        for col, op, edge, name in ((FILL_, 0.55, GY2_, "常驻 · 权重＋优化器"),
+                                    (BL_, 0.72, BL_, "激活 · 前向堆、反向放"),
+                                    (RD_, 0.72, RD_, "梯度 · 反向才长出来")):
+            chip = Rectangle(width=0.30, height=0.22,
+                             stroke_color=edge, stroke_width=2,
                              fill_color=col, fill_opacity=op)
             legend.add(VGroup(chip, Text(name, font_size=21, color=INK_))
                        .arrange(RIGHT, buff=0.15))
@@ -288,12 +346,17 @@ class MemTime(Scene):
         #   ⭐ 两条虚线合起来才是论点：竖的说「是这一刻」，
         #     横的说「此后谁也没再碰到它」——&#160;只画竖的，观众看不出后面更低。
         peak_x, peak_y = px(T_FWD), py(PEAK_TIB)
+        #   ⛔ 白底版这两条是 2.2 / 1.8 的细虚线 ——&#160;那是在白底上「不要太吵」的取舍。
+        #     黑底上反过来：RD_(#FC6255) 本身够亮，但**虚线的每一段都短**，
+        #     线宽不够时整条读成一串浮尘。⭐ 两条都提到 4（房规下限），
+        #     并把 dash_length 从 0.10 放到 0.16 ——&#160;不然宽 4 长 0.10 的段
+        #     接近正方形，看着是点阵不是虚线。
         peak_v = DashedLine(np.array([peak_x, py(RESIDENT_TIB), 0]),
                             np.array([peak_x, peak_y + 1.05, 0]),
-                            color=RD_, stroke_width=2.2, dash_length=0.10)
+                            color=RD_, stroke_width=4, dash_length=0.16)
         peak_h = DashedLine(np.array([X0, peak_y, 0]),
                             np.array([X1, peak_y, 0]),
-                            color=RD_, stroke_width=1.8, dash_length=0.10)
+                            color=RD_, stroke_width=4, dash_length=0.16)
         peak_txt = VGroup(
             Text("峰值就在这一刻　——　前向刚结束", font_size=26, color=RD_),
             MathTex(r"%.2f + %.2f = %.2f\;\mathrm{TiB}"
@@ -308,6 +371,19 @@ class MemTime(Scene):
 
         # ══════════════════════════════════════════════════════════════
         # 播：切成五段只为在幕间换字，run_time 仍是 Δt × SPEED，速度逐帧不变
+        # ⛔⛔ 2026-09-19 这里**改错过一版，又改回来了**，值得留档：
+        #   当时按房规 ②b「不要显式 rate_func=linear」把这五段的 linear 全删了。
+        #   ⭐⭐ 判据错在哪：房规那条说的是**动一个物体**时别用匀速
+        #     （匀速＝机器感）。可这里的 `play` 动的**不是物体，是时钟** ——
+        #     `tt` 后面挂着一串 `always_redraw`，`rate_func` 作用在**时间轴**上。
+        #   ⛔ `smooth` 两端速度归零，于是**时间本身**在每个幕界停顿一下：
+        #     扫描线在四个段界各顿一次、段中反而狂飙（并行那位在 `anim-reverse`
+        #     上实测段界位移近乎 0、段中峰值快 40 倍）。
+        #   ⛔ 对这一段还额外坏一层：复位是 `clock()` **倒着走回去**，
+        #     非匀速会让「退潮」的速度跟「涨潮」不对称，看着像两段不同的片子。
+        # ⭐ 规矩写清楚，免得下次又删一遍：
+        #     play 动**物体** → smooth（默认，别写 linear）
+        #     play 动**时钟**（ValueTracker + always_redraw）→ **必须显式 linear**
         # ══════════════════════════════════════════════════════════════
         LIN = rate_functions.linear
         self.add(caps[0], subs[0])
@@ -337,4 +413,4 @@ class MemTime(Scene):
         #     `always_redraw`（traps §2.3），少了它末帧可能停在旧的一帧。
         self.remove(caps[3], subs[3])
         self.add(caps[0], subs[0])
-        self.play(tt.animate.set_value(T_END), run_time=1 / 30)
+        self.play(tt.animate.set_value(T_END), run_time=1 / 30, rate_func=LIN)

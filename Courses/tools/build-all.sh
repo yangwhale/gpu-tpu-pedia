@@ -265,7 +265,11 @@ PY
 #   从来没覆盖过产物的**时间维度**，只覆盖了单帧的几何和文字。
 # ⛔ 这一步是**基线回归**不是阈值判定，原因写在 check-loop.py 的头注里：
 #   一个标量分不开「末帧是另一幕」和「末帧偏了一个像素」。
-python3 manim/check-loop.py || exit 1
+# ⛔ 必须显式给目录和基线：这个脚本是从 skill 拷过来的**通用版**，
+#   它的默认目录是 cwd，而这里的 cwd 是 tools/ —— 不给参数就扫不到 mp4。
+#   ⭐ 2026-09-19 就是这么静默失效过一轮：守卫连着报绿，其实一支片子都没查。
+python3 manim/check-loop.py --media ../WebPages/media \
+        --baseline manim/loop-baseline.json || exit 1
 
 for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \
          topic-02x-L200.html \

@@ -297,15 +297,17 @@ class Descend(Scene):
             legend.add(m)          # ⭐ 第三幕开始时才 add，见下面的幕间切换
 
         # ── 幕与幕之间的切换：真的换画面，不是叠加 ──────────────
-        self.play(t.animate.set_value(T1), run_time=T1)
+        self.play(t.animate.set_value(T1), run_time=T1, rate_func=linear)
         self.remove(caps[0], rule)
         self.add(caps[1])
         self.play(FadeOut(act1), rings.animate.set_opacity(1), run_time=0.5)
-        self.play(t.animate.set_value(T1 + T2), run_time=T2 - 0.5)
+        self.play(t.animate.set_value(T1 + T2), run_time=T2 - 0.5,
+                  rate_func=linear)
         self.remove(caps[1])
         self.add(caps[2], legend)
         self.play(rings.animate.set_opacity(0), run_time=0.5)
-        self.play(t.animate.set_value(T1 + T2 + T3), run_time=T3 - 0.5)
+        self.play(t.animate.set_value(T1 + T2 + T3), run_time=T3 - 0.5,
+                  rate_func=linear)
         # ⭐ 复位也要把字幕拨回第一幕 ——&#160;它跟曲线、球一样是「第一帧的一部分」。
         self.remove(caps[2], legend)
         # ── 复位：让最后一帧＝第一帧 ─────────────────────────────
@@ -332,10 +334,17 @@ class Descend(Scene):
         #   所以**按最初那一行同样的顺序重新 add 一遍**就恢复了原本的 z 序。
         #   这么写还不依赖 manim 版本。
         t.set_value(0.0)
-        act1.set_opacity(1)
+        # ⛔⛔ 这里原来是 `act1.set_opacity(1)` —— **`set_opacity` 同时设
+        #   fill 和 stroke**，而曲线只该有描边。白底上「白色填充」完全隐形，
+        #   所以这个 bug 从第一次修复位起就在；**换黑底当场现形**：
+        #   末帧整条曲线下方被填成一大块白，接缝度 16% → 93.5%。
+        # ⭐⭐ 判据：**白底上隐形的东西不是不存在，只是没人看得见。**
+        #   跟 `add_background_rectangle(color=WHITE)` 是同一族的定时炸弹。
+        act1.set_stroke(opacity=1)
+        act1.set_fill(opacity=0)
         self.add(act1, ball_a, ball_b, caps[0], rule)
         # ⭐ 恒等动画：t 已经是 0，这一步只为**强制走一遍 updater**。
         #   这么写对「wait 到底驱不驱动 updater」这个我没验过的机制是鲁棒的 ——&#160;
         #   两种情况都能得到正确的末帧。
-        self.play(t.animate.set_value(0.0), run_time=1 / 30)
+        self.play(t.animate.set_value(0.0), run_time=1 / 30, rate_func=linear)
         self.wait(0.5)

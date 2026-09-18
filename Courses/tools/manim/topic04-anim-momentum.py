@@ -21,7 +21,10 @@ r"""专题四 · 动量：把上一步的速度留下来 ——&#160;`fig-moment
   ⭐ 所以 `aria-label` 必须把画面里出现过的每一句话都复述一遍 ——&#160;
     否则等于给用读屏的人留了一段空白。这条写进 skill 了。
 
-⛔ 这一段**不循环**（26 秒、有起承转合），页面上给 `controls` 不给 `loop`，
+⛔ 这一段**不循环**（23 秒、有起承转合）
+  ⚠️ 这里原本写的是「26 秒」，实测 23.0 —— 又一个 traps §3.3：
+    **注释里的数也是一种断言**。图注那边有 lint 盯着，docstring 这边没有，
+    所以它一声不响地过期了整整一天。，页面上给 `controls` 不给 `loop`，
   `loop-baseline.json` 里标 `"loop": false` 让守卫跳过首尾检查。
   ⭐ 判据：**守卫要守的是「承诺」，不是「形状」。**
 
@@ -35,9 +38,33 @@ import numpy as np
 from manim import (MovingCameraScene, VGroup, Dot, Line, Arrow, MathTex, Text,
                    ParametricFunction, ValueTracker, always_redraw, Write,
                    FadeIn, FadeOut, Indicate, TransformMatchingTex,
-                   WHITE, UP, DOWN, ORIGIN, linear, smooth)
+                   UP, DOWN, ORIGIN, linear)
+# ⭐⭐⭐ 2026-09-19：配色改成 **manim 自带的原生那套**（房规②b）——
+# ⛔⛔ 但 `rate_func=linear` **不能一刀切删掉**，要看这个 play 在动什么：
+#     · 动**一个物体**（`FadeIn` / `Indicate` / `Write` / `TransformMatchingTex` /
+#       `camera.frame.animate.scale`）→ 走默认 `smooth`，匀速才是「机器感」的来源；
+#     · 驱动**一个时钟**（`ValueTracker.animate.set_value`，后面挂 `always_redraw`）
+#       → ⭐ **必须显式 `linear`**。`smooth` 会让每段 play 的两端速度归零，
+#         于是**时间本身**在每个段界停顿 ——&#160;球走走停停，
+#         而「冲过浅坑」那一下本来就是靠慢放铺出来的，时钟一非匀速当场毁掉。
+#   ⭐ 判据：**`rate_func` 修饰的是「这段 play 的进度曲线」，
+#     而当进度就是时间时，任何缓动都是在篡改物理。**
+#   不写 `background_color`（默认 #000000 就是作者的用法），色板一律用命名色。
+# ⛔ 导入别名不要用下划线开头的短名（`WHITE as _W` 那类会跟本文件已有变量撞名，
+#   撞上之后拿到的是个数组，报「颜色不接受长度 N」）。这里用原名再做语义别名。
+from manim import WHITE, BLUE, RED, GREY, GREY_B
 
-INK_, BL_, RD_, GY_, GY2_ = "#202124", "#4285f4", "#d93025", "#c3c7cb", "#80868b"
+INK_ = WHITE             # #FFFFFF ——&#160;公式与正文，黑底上改白
+BL_ = BLUE               # #58C4DD ——&#160;带动量那颗球 ＋ 它的字幕
+RD_ = RED                # #FC6255 ——&#160;「卡住 / 冲过了头」的警示
+# ⛔ 地形曲线原来是 #c3c7cb（白底上的浅灰），黑底上它比球还亮，喧宾夺主。
+#   ⭐ 现在 **曲线 GREY #888888 ＜ 灰球 GREY_B #BBBBBB**：
+#     地形是背景、球才是主角，亮度顺序要跟这个层级一致。
+GY_ = GREY               # #888888 ——&#160;地形曲线
+# ⛔⛔ 灰球（无动量那颗）原来是 #80868b ——&#160;黑底上这块灰几乎沉进背景，
+#   而「灰球卡在浅坑里」正是整段的对照主角，看不见就没有对照。
+#   ⭐ 抬到 GREY_B #BBBBBB，抽帧确认过它在浅坑里清清楚楚。
+GY2_ = GREY_B            # #BBBBBB ——&#160;无动量那颗球 ＋ 它的字幕
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -124,7 +151,7 @@ def P(x):
 
 class Momentum(MovingCameraScene):
     def construct(self):
-        self.camera.background_color = WHITE
+        # ⛔ 不写 background_color —— 默认就是 #000000，这正是作者的用法
         curve = ParametricFunction(P, t_range=[XL, XR, 0.04],
                                    stroke_color=GY_, stroke_width=4)
         self.add(curve)

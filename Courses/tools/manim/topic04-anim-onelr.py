@@ -49,6 +49,26 @@ r"""专题四 · 一个学习率伺候不了所有参数 ——&#160;`fig-onelr`
     而且 η 扫描的轨迹**每一帧形状都不一样**，肉眼只能看到其中一帧。
 
 ════════════════════════════════════════════════════════════════════
+⭐⭐⭐ 2026-09-19：白底 Google 配色 → **manim 原生深色配色**（房规②b）。
+
+⭐ 这一段有个别处没有的难点：**颜色在这里是语义的。**
+  `phase_of(eta)` 一个函数喂三个地方 ——&#160;轨迹线、标尺滑块、分段字幕，
+  都从 `PH_COL` 取色。所以换色只在 `RD_/BL_/GR_` 那三行换，三处自动同步；
+  ⛔ 语义映射本身一个字没动（绿＝还在蹭、蓝＝横跳但收敛、红＝已发散），
+    也**没有引入 YELLOW** ——&#160;黄是强调色不是语义色，塞进来会毁掉这条编码。
+
+⛔⛔ 转黑底真正会翻车的地方是**标尺上那三根挨得很近的竖线**：
+  门槛红线 ＋ 两条 ±5% 细灰线。白底那套 `#c3c7cb` / 线宽 1.6 在黑底上
+  **整幕消失**，而「±5% 两条线挨得多近」是本段的论点之一 ——&#160;看不见 ＝ 论点没了。
+  ⭐ 判据：**对比度是相对背景的**。白底上「更浅＝更弱」，黑底上正好反过来，
+    所以不能按原亮度映射，要按「谁该更弱」重新指派：
+    等高线拿 `GREY #888888`（弱），±5% 细线拿 `GREY_B #BBBBBB` ＋ 线宽 4（强）。
+  实测抽帧放大看过：三根线在黑底上界限分明，中间红、两侧亮灰。
+
+⛔ 时间轴一个数没动（`T_UP` / `SPEED` / `MARKS` 全同），
+  复位仍然靠三角波自带；`rate_func=linear` **保留**，理由见文件末尾。
+
+════════════════════════════════════════════════════════════════════
 ⛔ 房规（见 skill `manim-teaching-figures`，2026-09-18 松绑过一次）：
   ① **文字为讲解服务，不为装饰** ——&#160;可以放 MathTex 与中文 Text；
      ⛔ 但多一条硬义务：页面的 `aria-label` 必须把画面里每一句话都复述一遍
@@ -64,11 +84,17 @@ r"""专题四 · 一个学习率伺候不了所有参数 ——&#160;`fig-onelr`
     ~/.claude/skills/manim-teaching-figures/scripts/render.sh \
         tools/manim/topic04-anim-onelr.py OneLR WebPages/media/topic04-onelr.mp4
 
-📌 实测成本（cc-tw，2026-09-18，给下次「是不是变慢了」一个可比的数）：
+📌 实测成本（cc-tw，给下次「是不是变慢了」一个可比的数）：
     加字前 `--draft` 7.3 秒；加字后 `--draft` 13.1 秒、`-qh` 26 秒 / 188 KB。
-    片长 14.60 秒（加字前 14.57）——&#160;**时长没动**，图注那句「15 秒」仍然对。
+    2026-09-19 转黑底后 `-qh` 28 秒 / 212 KB（线宽从 1.2~3.2 提到 4~6.5，
+    墨水多了所以 crf30 压不下去那么多；渲染时间基本没变）。
+    片长一直是 14.60 秒 ——&#160;**三轮都没动时间轴**，图注那句「15 秒」仍然对。
 
-📌 首末一致度 16.0% → **26.4%，这是变好了不是变糟**。判据不是感觉，是分布：
+📌 首末一致度：白底加字那轮 16.0% → 26.4%；2026-09-19 转黑底后 **23.5%**。
+    ⛔ 这个下降**不能当成「画面变好了」**：同一轮里底色、线宽、check-loop
+    的「墨水」口径（自测背景色）全变了，几件事一起发生，功劳记不清。
+    人眼判定照旧：拼接图上首末两帧连字带线完全重合（都是绿色「蹭」那一端、
+    滑块最左、三根刻度位置一致）。下面这段是**白底那轮**的分布分析，留作对照：
     加字后画面墨水 5172 → 28460 px（多了一堆抗锯齿的字边），
     而**每个差异像素的幅度反而更小**（中位 23→17、90 分位 65→30、最大 196→130），
     把判据阈值从 12 抬到 30，旧版 6.4%、新版 2.6%。
@@ -80,10 +106,31 @@ import math
 
 import numpy as np
 from manim import (Scene, VGroup, Dot, Line, Text, MathTex, ValueTracker,
-                   always_redraw, WHITE, DOWN, RIGHT, LEFT, linear)
+                   always_redraw, DOWN, RIGHT, LEFT, linear)
+# ⭐⭐⭐ 2026-09-19：配色换成 **manim 自带的原生那套**（skill 房规②b）。
+#   原来是白底 ＋ Google 品牌色，那是**主动覆盖了作者的默认**：
+#       背景  #000000 → 白        线宽 4 → 1.2~3.2
+#   这两样回到默认。`descend` 那一段已经转完，本段照同一套口径。
+# ⛔ **第三样「显式 rate_func=linear」不在此列，别跟着删** ——&#160;
+#   房规②b 那条针对的是「动一个物体」的 play；这里的 play 动的是**时钟**
+#   （`ValueTracker` ＋ `always_redraw`），smooth 会让时间在段界停顿。
+#   理由写在文件末尾那五段 play 的旁边。
+# ⛔ 别名不要用下划线开头的短名（`_W` 那类）——&#160;撞上文件里已有的数组之后
+#   `stroke_color=` 会拿到 numpy 数组，报「颜色不接受长度 14」。
+#   这里沿用本文件原有的六个名字，不引入任何新名字。
+from manim import BLUE, RED, GREEN, WHITE, GREY, GREY_B
 
-RD_, BL_, GR_, GY_, GY2_, INK_ = ("#d93025", "#4285f4", "#1e8e3e",
-                                  "#c3c7cb", "#80868b", "#202124")
+# ⭐⭐ 颜色在这一段里是**语义**的，三处（轨迹线／标尺滑块／字幕）同源于
+#   `phase_of(eta)` → `PH_COL`，所以换色只能在这一行换，换完三处自动一致。
+#       绿＝还在蹭（单调缩）   蓝＝已横跳但仍收敛   红＝越过门槛、发散
+#   ⛔ 不引入 YELLOW ——&#160;黄是**强调色**不是语义色，塞进这条三段编码会毁掉它。
+RD_, BL_, GR_ = RED, BLUE, GREEN          # #FC6255 / #58C4DD / #83C167
+# ⛔ 灰的明暗关系在换底色时会**整个翻过来**：白底上「更浅＝更弱」，
+#   黑底上「更浅＝更强」。原来 GY_(#c3c7cb) 比 GY2_(#80868b) 浅、是更弱的那个；
+#   照搬亮度会让等高线压过标尺。所以这里按「谁该更弱」重新指派，不是按原亮度映射。
+GY_ = GREY                                # #888888 —— 等高线（黑底辅助线要比白底亮）
+GY2_ = GREY_B                             # #BBBBBB —— 次要文字 ＋ 标尺 ＋ ±5% 细线
+INK_ = WHITE                              # 正文字
 
 # ── 谷的形状：跟静态图同一套口径 ──────────────────────────────────
 A1, A2 = 25.0, 1.0                # A1 ＝ 陡方向，A2 ＝ 平方向
@@ -152,6 +199,16 @@ DOT_R = 0.055
 RULE_Y = -2.85                    # η 标尺的高度
 RX0, RX1 = -5.0, 5.0
 LEVELS = (4.0, 16.0, 36.0, 64.0)  # 等高线取的几个值
+
+# ⭐ 线宽：manim 的默认就是 4，房规②b 说**别往下调**。
+#   原来这份是白底上的 1.2 / 1.6 / 2.2 / 3.0 / 3.2 ——&#160;黑底上细线会直接消失。
+#   ⛔ 三档必须拉开层次，否则等高线会跟主角轨迹一样重：
+#     辅助线取底线 4，轨迹再压一档，门槛红线是全片唯一的阈值、最重。
+LW_THIN = 4.0                     # 等高线 ＋ 标尺 ＋ ±5% 两条刻度
+LW_TRAJ = 5.0                     # 当前 η 那条轨迹（主角）
+LW_THR = 6.5                      # 门槛红线
+assert LW_THIN >= 4 and LW_TRAJ > LW_THIN and LW_THR > LW_TRAJ, \
+    "线宽不许低于 manim 默认的 4，而且辅助线 < 轨迹 < 门槛这个层次不能塌"
 
 T_UP = 5.6
 T_END = T_UP * 2                  # ⭐ 三角波：上去再回来，首末天然同帧
@@ -294,7 +351,7 @@ assert LGD_ROWS[0][1] == r"A_1=%g" % A1 and LGD_ROWS[1][1] == r"A_2=%g" % A2, \
 
 class OneLR(Scene):
     def construct(self):
-        self.camera.background_color = WHITE
+        # ⛔ 不写 `self.camera.background_color` ——&#160;默认 #000000 就是作者的用法。
         tt = ValueTracker(0.0)
 
         def eta_now():
@@ -305,23 +362,40 @@ class OneLR(Scene):
         for c in LEVELS:
             pts = _ring_pts(c)          # A1·w1² + A2·w2² = c 的参数式
             for u, v in zip(pts, pts[1:]):
-                base.add(Line(u, v, stroke_color=GY_, stroke_width=1.2))
+                base.add(Line(u, v, stroke_color=GY_, stroke_width=LW_THIN))
         base.add(Dot(pt(0, 0), radius=0.06, color=GY2_))        # 谷底
         base.add(Line(np.array([RX0 - 0.2, RULE_Y, 0]),
                       np.array([RX1 + 0.2, RULE_Y, 0]),
-                      stroke_color=GY2_, stroke_width=2.2))
+                      stroke_color=GY2_, stroke_width=LW_THIN))
         # ⭐⭐ 门槛那条红线是全片唯一的「阈值」视觉 ——&#160;它是算出来的（2/A₁），
         #   不是我挑的位置。滑块越过它，上面的轨迹当场翻脸。
         base.add(Line(np.array([rule_x(ETA_MAX), RULE_Y - 0.30, 0]),
                       np.array([rule_x(ETA_MAX), RULE_Y + 0.30, 0]),
-                      stroke_color=RD_, stroke_width=3.0))
+                      stroke_color=RD_, stroke_width=LW_THR))
         # ⭐⭐ 门槛 ±5% 两条细线：它们之间只有标尺的一成宽，
         #   而滑块从左边那条走到右边那条，上面的轨迹就从收敛变成发散。
         #   **「差一成就翻脸」这句话的全部画面就是这两条线有多近。**
+        #   ⛔⛔ 转黑底最容易在这儿翻车：白底那套浅灰（#c3c7cb / 线宽 1.6）
+        #     在黑底上**整幕消失**，而这两条线看不见 ＝ 本段论点之一没了。
+        #     所以它们既换了亮灰（#BBBBBB）又加粗到 4 ——&#160;
+        #     ⭐ 判据：对比度是**相对背景**的，不是绝对的。
+        #   ⭐ 加粗不会让它们糊成一条 ——&#160;这条当场算，不靠眼睛：
+        # ⛔ 第一版把间距换算成**像素**再跟 `LW_THIN` 这个裸数比大小，
+        #   结果 `--draft`（854 宽）算出 31 px 就报警，`-qh` 又能过 ——
+        #   ⭐ 判据：**断言要断在同一个坐标系里的量上**（traps §3.5）。
+        #     manim 的线宽是**分辨率无关**的：`camera.cairo_line_width_multiple`
+        #     ＝ 0.01，所以 stroke_width w 就是 0.01·w 个场景单位。两边都用场景单位。
+        _GAP_U = rule_x(ETA_BAD) - rule_x(ETA_MAX)      # 门槛线到 +5% 线
+        _LW_U = LW_THIN * 0.01
+        # ⛔ 这句话里的 `±5%` 要写成 `%%` ——&#160;否则 `%` 会被当成格式符，
+        #   报一个跟本意毫无关系的 `unsupported format character`。
+        assert _GAP_U > 6 * _LW_U, \
+            "±5%% 两条线跟门槛线只隔 %.3f 个场景单位，撑不住 %.3f 的线宽，会糊成一条" \
+            % (_GAP_U, _LW_U)
         for e in (ETA_OK, ETA_BAD):
             base.add(Line(np.array([rule_x(e), RULE_Y - 0.19, 0]),
                           np.array([rule_x(e), RULE_Y + 0.19, 0]),
-                          stroke_color=GY2_, stroke_width=1.6))
+                          stroke_color=GY2_, stroke_width=LW_THIN))
         self.add(base)
 
         # ── 常驻的字：标题 ＋ 左上角图例 ＋ 标尺名字 ＋ 两处刻度说明 ──
@@ -378,7 +452,8 @@ class OneLR(Scene):
             g, prev = VGroup(), None
             for q in _traj_pts(eta):           # ⭐ 飞出画面就断掉，读成「炸了」
                 if prev is not None:
-                    g.add(Line(prev, q, stroke_color=col, stroke_width=3.2))
+                    g.add(Line(prev, q, stroke_color=col,
+                               stroke_width=LW_TRAJ))
                 g.add(Dot(q, radius=DOT_R, color=col))
                 prev = q
             return g
@@ -417,6 +492,17 @@ class OneLR(Scene):
                     self.remove(caps[cur])
                 self.add(caps[ph])
                 cur = ph
+            # ⛔⛔ `rate_func=linear` 在这里**必须显式写**，2026-09-19 转黑底
+            #   那一轮差点被当成「房规②b 要删的那个 linear」删掉。
+            # ⭐⭐⭐ 判据：**看这个 `play` 在动什么。**
+            #     | 动的是**一个物体**（`mob.animate.*` / FadeIn / Indicate） → 默认 smooth
+            #     | 动的是**一个时钟**（`ValueTracker` ＋ `always_redraw`）  → 必须 linear
+            #   `smooth` 让每段 play 两端速度归零 ——&#160;动物体时那是缓动，
+            #   动时钟时那是**时间本身在段界停顿**（并行那位在 `anim-reverse`
+            #   上实测：段界位移近乎 0、段中峰值快 40 倍）。
+            # ⚠️ 这一段尤其不能动：η 是被切成 5 段播的（绿→蓝→红→蓝→绿），
+            #   换 smooth 就是**五次顿挫**；而「滑块匀速扫过门槛」正是本段的戏眼，
+            #   三角波的对称也建立在时钟匀速上。
             self.play(tt.animate.set_value(b), run_time=(b - a) * SPEED,
                       rate_func=linear)
         assert cur == 0, "⭐ 末段必须回到第一段字幕 ——&#160;这就是「首末同帧」本身"
