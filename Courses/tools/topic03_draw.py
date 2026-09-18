@@ -103,6 +103,43 @@ MINSZ = 11
 _DECOR = ("⭐", "⛔", "⚠️", "⚠", "✅", "❗", "🆕", "📌", "💡", "🔬", "❓", "🎯")
 
 
+# ⭐ 这几个浅色只当过「卡片底」用 ——&#160;从全站填充统计里挑出来的。
+_TINTS = frozenset(("#fce8e6", "#e8f0fe", "#e6f4ea", "#f3e8fd",
+                    "#fef7e0", "#f1f3f4", "#f6f7f8", "#edeff1"))
+
+
+def _flatten(w, h, fill, stroke):
+    """大面积的**卡片底色**改成白 ——&#160;分组交给边框和留白，别靠一块色。
+
+    ⛔⛔ **填充色在好几张图里是数据，不能一刀切**：
+      · `fig4-underflow` Ⓐ 的绿色区间带 ＝ 33 个数量级的**范围**
+      · `fig4-circuit` Ⓒ 的 175 个粉方块 ＝ **数量**
+      · `fig4-muon` Ⓑ 对角线那几格 ＝ **位置**
+    ⭐ 区分判据（两条都要满足才当装饰）：
+      ① **面积够大**（w ≥ 200 且 h ≥ 60）——&#160;小块多半是数据标记；
+      ② **边框跟填充不同色** ——&#160;区间带那种是 `fill == stroke`，
+         它压根没有「框」，只是一片染色区域。
+    ⭐⭐ 判据（RQ3 那轮立的，这里第二次用上）：
+      **改一个视觉属性之前，先问它在哪些地方承载着语义。**
+    """
+    if fill not in _TINTS:
+        return fill
+    if str(stroke).lower() == str(fill).lower():
+        return fill                      # 染色区域，不是卡片
+    # ⭐ 中性灰底一律转白，**不看尺寸**：灰不承载正／负，它只可能是装饰。
+    #   （第一版按 h ≥ 60 卡，漏掉了 `fig4-circuit` 那几个 104×52 的灰底输入框
+    #    ——&#160;而那恰恰是诊断里点名「像表单输入框」的那一类。）
+    #   ⛔ 语义色（红／绿／蓝／紫／黄）的小块才可能是数据，那些仍按尺寸判。
+    if fill in ("#f1f3f4", "#f6f7f8", "#edeff1"):
+        return "#fff"
+    try:
+        if float(w) < 200 or float(h) < 60:
+            return fill                  # 小块 ＝ 数据标记
+    except (TypeError, ValueError):
+        return fill
+    return "#fff"
+
+
 def _hair(sw):
     """⭐⭐ 把**辅助线**的线宽吸附到两档，让主干和背景拉开层次。
 
@@ -489,7 +526,8 @@ class Fig(object):
 
     def box(self, x, y, w, h, fill="#fff", stroke=LINE, r=6, sw=1, dash=None,
             shadow=False):
-        sw = _hair(sw)
+        # ⭐ 线宽不在这儿吸附 ——&#160;序列化出口统一做（见 save() 里那段）。
+        fill = _flatten(w, h, fill, stroke)
         # 📌 stroke 默认就是 #dadce0 ——&nbsp;跟专题一的主力描边一致（那边 ×287）。
         #   ⛔ 别把默认改深；要强调就显式传主色，不要靠加重灰线。
         self.p.append('<rect x="%s" y="%s" width="%s" height="%s" rx="%d" fill="%s" '
