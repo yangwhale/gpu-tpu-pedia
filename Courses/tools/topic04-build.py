@@ -300,7 +300,7 @@ __FIG_ACT_BILL__
 <h3>1.7　把那张原始账单摊开 ——&nbsp;<u>一层里到底挂了些什么</u></h3>
 
 <!-- ⭐⭐ 2026-09-16 补。这一小节是**给要自己算的人**看的，讲课时可以整段跳过。
-     ⛔ 但它不能不写：上面那两个数（4.15 TiB / 106.75 GiB）如果只给结论不给拆解，
+     ⛔ 但它不能不写：上面那两个数（原始激活 / 重算后峰值）如果只给结论不给拆解，
        它们就是两个**没法被质疑**的数字 —— 而这一讲从头到尾都在要求「说清是查的还是推的」。
      ⭐ 判据：**一个自己推出来的数，必须连着推导一起给，否则它冒充的是事实。** -->
 
@@ -356,8 +356,11 @@ __TBL_ACT_MOE__
       加起来才 __ACT_LAYER__ ——&nbsp;<b>这一项自己就比那一整层还大</b>。
       在 128K 上它是压倒性的，在 4K 上它<u>依然是单个最大的张量</u>。
       ⛔ 这条论点没有因为换基准而失效，只是从「吓人」变成「仍然第一」。</p></li>
-  <li>那个 106.75 GiB（<b>128K 口径</b>，4K 上 ÷32）是「已经做过一次交易之后」的账。
-    <em>它假设每层只留入口那一份 ——&nbsp;而那恰恰就是<b>开了重算之后的样子</b>。
+  <li>那个 <b>__PEAK__</b> 的峰值是「已经做过一次交易之后」的账。
+    <em>它假设每层只留入口那一份，<b>再加上当前正在重算的那一层的完整激活</b>
+      （__CKPT__ ＋ __INFLIGHT__）——&nbsp;而那恰恰就是<b>开了重算之后的样子</b>。
+      ⛔ <b>后面那一项很容易漏</b>：漏掉它，峰值会低估 __UNDER__，
+      照着配显存会少配三分之二。</em><em>
     ⭐ 所以先看原始账单、再看下一节，<b>顺序不能颠倒</b>。</em></li>
 </ul></div>
 
@@ -450,7 +453,10 @@ __FIG_BATCH__
 <p class="lead">⭐ 先把量级说清楚 ——&nbsp;这才是要记住的东西。</p>
 <ul>
   <li><b>省下什么：</b><em>激活那一大块 ——&nbsp;显存里<b>随 batch × 序列长度增长</b>的部分。
-    V3 在 128K 上具体是 4.15 TiB →&nbsp;106.75 GiB，约 40 倍。</em></li>
+    V3 在基准的 4K 上具体是 <b>__ACT_TOTAL__</b> →&nbsp;<b>__PEAK__</b>，
+    约 <b>__RECOMP_X__ 倍</b>。</em>
+    <span class="sub">⭐ 这个倍数<b>跟序列长度无关</b>（分子分母同比例缩），
+    128K 上也是 __RECOMP_X__ 倍 ——&nbsp;4.15 TiB →&nbsp;177.89 GiB。</span></li>
   <li><b>付出什么：</b><em>多跑一次前向，总算力 <b>3× →&nbsp;4×</b>，
     也就是<b>多三分之一</b>。</em></li>
 </ul>
@@ -1799,9 +1805,9 @@ __FIG_STEP__
      ⛔ 动手前先验了一下，**这张图不该画**：
        ① 激活账里**没有 S² 项**（1.7 那三条边界的第二条写着：
           注意力分数矩阵不落显存，FlashAttention 不写它）。
-          所以激活是**随 token 总数线性**的 —— 两条线在 1,230 万 token
+          所以激活是**随 token 总数线性**的 —— 两条线在约 737 万 token
           才相交，那不是任何人会遇到的配置。
-       ② 而**有意义的那个交点，fig-step 的 Ⓑ 已经画了** —— 沿 batch 轴，94 条。
+       ② 而**有意义的那个交点，fig-step 的 Ⓑ 已经画了** —— 沿 batch 轴。
           再画一张沿 S 轴的，画的是同一个点。
      ⭐⭐ 但这次核查本身翻出了一件更值钱的事，就是下面这一格：
        **显存只认 token 总数，算力不只认 token 总数。** 写成正文。
@@ -1811,16 +1817,16 @@ __FIG_STEP__
 <div class="note ok"><p>⭐⭐⭐ <b>顺着这个数往下问一句，会撞上一件反直觉的事。</b></p>
 <p><em>常驻那 9.76 TiB 是<b>定值</b> ——&nbsp;跟你喂多长、喂多少条都无关。
   那激活要涨到多大才追得上它？</em></p>
-<p class="landing">⭐ <b>答案是 <u>约 1,230 万 token</u></b>
-  ——&nbsp;<em>按本讲的 4K 基准，就是 <b>3,000 条序列</b>。</em>
-  <span class="sub">（一条 4K 序列开了重算之后约 3.34 GiB；换成扩训那一档，
-  一条 128K 是 106.75 GiB，<b>94 条</b>，token 总数一模一样。）</span></p>
+<p class="landing">⭐ <b>答案是 <u>约 __WS_TOK__ token</u></b>
+  ——&nbsp;<em>按本讲的 4K 基准，就是 <b>约 __WS_SEQ__ 条序列</b>。</em>
+  <span class="sub">（一条 4K 序列开了全量重算之后峰值 __PEAK__；换成扩训那一档，
+  一条 128K 是 177.89 GiB，<b>约 56 条</b>，token 总数一模一样。）</span></p>
 
 <div class="note danger"><p>⛔⛔ <b>停一下 ——&nbsp;把 V3 自己的 batch 代进去看看。</b></p>
 <p><em>§3.5 会讲到，V3 的 global batch 从 <b>3,072 条 4K</b> 起步
   （＝ <b>1,258 万 token</b>），后期爬到 <b>15,360 条</b>（＝ 6,291 万 token）。</em></p>
-<p class="landing">⭐⭐⭐ <b>而分水岭是 1,230 万 —— 它<u>从第一步起就坐在线上</u>，
-  训到后期越过 5 倍。</b></p>
+<p class="landing">⭐⭐⭐ <b>而分水岭是 __WS_TOK__ —— V3 <u>从第一步起就已经越过它 1.7 倍</u>，
+  训到后期越过 8.5 倍。</b></p>
 <p><em>也就是说：<b>§零那个「最大的一块是优化器状态」的答案，
   在这个模型自己的真实训练配置上并不成立</b> ——&nbsp;
   激活从一开始就追平了它，而且这还是<u>开了全量重算之后</u>的账。</em></p>
@@ -1828,9 +1834,9 @@ __FIG_STEP__
   <b>「谁最大」不是模型的属性，是这次训练配置的属性。</b>
   ⛔ 连本讲的第一个答案都服从它。</p></div>
 
-<p>⭐⭐ <b>还有个容易被跳过的前提：<u>那 1,230 万 token 怎么凑出来的，显存不在乎。</u></b></p>
+<p>⭐⭐ <b>还有个容易被跳过的前提：<u>那 __WS_TOK__ token 怎么凑出来的，显存不在乎。</u></b></p>
 <ul>
-  <li><b>3,000 条 4K</b>，还是 <b>94 条 128K</b> ——&nbsp;
+  <li><b>约 1,800 条 4K</b>，还是 <b>约 56 条 128K</b> ——&nbsp;
     <em>对显存<b>是同一件事</b>。</em></li>
   <li><b>为什么</b>：<em>激活账里<b>没有随 S² 涨的项</b>
     ——&nbsp;注意力分数矩阵根本不落显存（<a href="#s1-7">1.7</a> 那三条边界的第二条）。
@@ -1838,7 +1844,7 @@ __FIG_STEP__
 </ul>
 
 <div class="note danger"><p>⛔ <b>但算力<u>不是</u>这样。</b></p>
-<p><em>同样 1,230 万 token，<b>拆成长序列</b>和<b>拆成短序列</b>，
+<p><em>同样 __WS_TOK__ token，<b>拆成长序列</b>和<b>拆成短序列</b>，
   要算的浮点数<u>差很多</u> ——&nbsp;因为 attention 那部分随 <b>S²</b> 涨，
   而它<b>不在显存账上、却在算力账上</b>。</em></p>
 <p class="landing">⭐⭐⭐ 所以序列长度这个旋钮，<b>在两本账上的行为不一样</b>：
@@ -2399,7 +2405,7 @@ __FIG_UNDERFLOW__
 <table>
 <thead><tr><th>数字</th><th>推导链</th><th>它可能错在哪</th></tr></thead>
 <tbody>
-<tr><td><b>4.15 TiB</b> / <b>106.75 GiB</b> 激活</td>
+<tr><td>激活 <b>__ACT_TOTAL__</b> → 重算后峰值 <b>__PEAK__</b>（4K）</td>
     <td>按算子逐项推（<a href="#s一">1.7</a> 那两张表）。输入只有 V3 的 config
         ＋ 官方参考实现的 MLA 前向</td>
     <td>框架的算子融合程度、MoE 派发是否真的物化九份</td></tr>
@@ -2412,8 +2418,10 @@ __FIG_UNDERFLOW__
 <tr><td><b>6ND 低估五到六倍</b></td>
     <td>由上面那个 82.1% 反推（1 ÷ 0.179）</td>
     <td>它继承了 82.1% 的全部不确定性；<b>目前没有第三方实测佐证</b></td></tr>
-<tr><td><b>9.76 TiB</b> 常驻块 · <b>约 94 条</b>序列的分水岭</td>
-    <td>671e9 × 16 B ÷ 1024⁴；再除以 106.75 GiB。<b>图脚本里带 assert</b></td>
+<tr><td><b>9.76 TiB</b> 常驻块 · <b>约 __WS_SEQ__ 条</b> 4K 序列的分水岭</td>
+    <td>671e9 × 16 B ÷ 1024⁴；再除以重算后峰值 __PEAK__。
+        ⛔ <b>那个峰值必须含「正在重算的那一层」</b> ——&nbsp;
+        只算存档点会把分水岭报成 __WS_SEQ_OLD__ 条，偏高 67%。<b>构建时带 assert</b></td>
     <td>16 B 是经典口径 ——&nbsp;<b>V3 自己就不是这么配的</b>（见 3.2）</td></tr>
 <tr><td>「按每张卡 80 GiB 算要 125 张」</td>
     <td>9.76 TiB ÷ 80 GiB</td>
@@ -2953,6 +2961,29 @@ for _nm, _got, _want in (
 
 # 注意力分数矩阵是 S² 项，**不跟着 token 总数走** —— 它是唯一一个换基准时
 # 要按平方缩的量。⭐ 这正是 §1.7 边界②该讲清楚的地方。
+# ⛔⛔ 全量重算的峰值 ＝ 存档点 ＋ **当前正在重算的那一层的完整激活**。
+#   原来只算了存档点（61 × 入口那一份 ＝ 106.75 GiB@128K），漏掉后面那一项 ——
+#   而 §5.4 的 125M 例子和 §2.2 图 Ⓒ 用的都是**正确**口径，只有 671B 这个头号数字没做。
+#   ⭐ 三位评审各自算出同一批数。这是全篇唯一一个**照抄会把集群配小 67%** 的数。
+_CKPT_B     = (N_MOE_L + N_DENSE_L) * 7168 * DTYPE_B * S_BASE   # 每层只留入口那一份
+_INFLIGHT_B = _LAYER_B                       # 在算的那一层，取 MoE 块（最坏情况）
+_PEAK_B     = _CKPT_B + _INFLIGHT_B
+_RECOMP_X   = _TOTAL_B / _PEAK_B             # 全量重算省多少倍
+_PEAK_PCT   = 100.0 * _PEAK_B / _TOTAL_B
+RESIDENT_B  = 671e9 * 16                     # 常驻块（每参数 16 字节）
+_WS_SEQ     = RESIDENT_B / _PEAK_B           # 激活追平常驻需要多少条序列
+_WS_TOK     = _WS_SEQ * S_BASE
+
+for _nm, _got, _want in (("存档点@128K",  _CKPT_B * S_RATIO / 2 ** 30,     106.75),
+                         ("在算层@128K",  _INFLIGHT_B * S_RATIO / 2 ** 30,  71.14),
+                         ("峰值@128K",    _PEAK_B * S_RATIO / 2 ** 30,     177.89),
+                         ("省多少倍",     _RECOMP_X,                        23.86),
+                         ("峰值占比",     _PEAK_PCT,                         4.19),
+                         ("分水岭条数",   _WS_SEQ,                        1798.6),
+                         ("分水岭 token", _WS_TOK / 1e6,                     7.37)):
+    assert abs(_got - _want) < max(0.02, abs(_want) * 0.001), \
+        "%s 算出 %.3f，期望 %.3f" % (_nm, _got, _want)
+
 _ATTN_SCORE_B = 128 * S_BASE ** 2 * DTYPE_B
 _ATTN_SCORE_LONG = 128 * S_LONG ** 2 * DTYPE_B
 
@@ -3009,6 +3040,16 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
+for _ph, _val in (("__PEAK__",        _sz(_PEAK_B)),
+                  ("__CKPT__",        _sz(_CKPT_B)),
+                  ("__INFLIGHT__",    _sz(_INFLIGHT_B)),
+                  ("__RECOMP_X__",    "%.1f" % _RECOMP_X),
+                  ("__UNDER__",       "%.0f%%" % (100 * (1 - _CKPT_B / _PEAK_B))),
+                  ("__WS_SEQ_OLD__",  "%.0f" % (RESIDENT_B / _CKPT_B)),
+                  ("__WS_SEQ__",      "%.0f" % _WS_SEQ),
+                  ("__WS_TOK__",      "%.0f 万" % (_WS_TOK / 1e4))):
+    assert _ph in _html, "正文里没有 %s" % _ph
+    _html = _html.replace(_ph, _val)
 _html = _html.replace("__TBL_ACT_MLA__",
                       _act_tbl(_MLA_ROWS, S_BASE, "宽度", "小计"))
 _html = _html.replace("__TBL_ACT_MOE__",

@@ -23,10 +23,16 @@ from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, LINE2)
 W = 1400
 
 N_LAYER = 61                      # V3 的层数
+# ⛔⛔ 2026-09-19 T04：峰值 ＝ 存档点 ＋ **当前正在重算的那一层**。
+#   原来只算存档点（106.75），漏掉在算的那一层（71.14）——&#160;低估 67%。
+#   ⭐ 这一讲自己在 §5.4 的小例子和 §2.2 图 Ⓒ 用的都是正确口径，只有这个头号数字没做。
 ACT_RAW_TIB = 4.15                # 不开重算，一条 128K 序列
-ACT_REMAT_GIB = 106.75            # 开了全量重算
+ACT_CKPT_GIB = 106.75             # 61 个存档点
+ACT_INFLIGHT_GIB = 71.14          # 当前正在重算的那一层（MoE 块，最坏情况）
+ACT_REMAT_GIB = ACT_CKPT_GIB + ACT_INFLIGHT_GIB       # ＝ 177.89
 RATIO = ACT_RAW_TIB * 1024 / ACT_REMAT_GIB
-assert 39 < RATIO < 41            # 「约 40 倍」是算出来的，不是说顺口的
+assert abs(ACT_REMAT_GIB - 177.89) < 0.01
+assert 23 < RATIO < 25            # 「约 24 倍」是算出来的，不是说顺口的
 
 
 def main():

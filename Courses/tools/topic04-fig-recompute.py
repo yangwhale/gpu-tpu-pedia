@@ -21,12 +21,16 @@ from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, LINE2)
 
 W = 1400
 
-ACT_RAW_TIB, ACT_REMAT_GIB = 4.15, 106.75
+# ⛔⛔ 2026-09-19 T04：峰值 ＝ 存档点 ＋ **当前正在重算的那一层**。
+#   原来只算存档点（106.75），漏掉在算的那一层（71.14）——&#160;低估 67%。
+#   ⭐ 这一讲自己在 §5.4 的小例子和 §2.2 图 Ⓒ 用的都是正确口径，只有这个头号数字没做。
+ACT_RAW_TIB = 4.15
+ACT_REMAT_GIB = 106.75 + 71.14       # 存档点 ＋ 在算的那一层 ＝ 177.89
 FWD_BWD, WITH_REMAT = 3, 4
 
 MEM_KEPT = ACT_REMAT_GIB / (ACT_RAW_TIB * 1024) * 100      # 省完还剩百分之几
 COMP_MORE = (WITH_REMAT - FWD_BWD) / float(FWD_BWD) * 100  # 算力多付百分之几
-assert 2.4 < MEM_KEPT < 2.6          # ≈ 2.5% ——&#160;也就是「省掉 40 分之 39」
+assert 4.1 < MEM_KEPT < 4.3          # ≈ 4.2% ——&#160;也就是「省掉 24 分之 23」
 assert abs(COMP_MORE - 100.0 / 3) < 1e-6
 
 
