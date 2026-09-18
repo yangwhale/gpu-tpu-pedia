@@ -1126,6 +1126,15 @@ body.figonly section h3{margin-top:34px}
 <div class="note ok"><p>⭐⭐ 第一个梯度 ＝ 你猜的，减去正确答案。</p>
 <p><em>猜高了的地方是正数，该高没高的地方是负数。
   就这么简单。这个差，就是整条反向链的<b>种子</b>。</em></p>
+<p class="landing">⭐⭐⭐ <b>而它不是凑巧长这样 ——&nbsp;它是 <a href="#s1-0">1.0</a>
+  那个 <code>−ln p</code> 求一次导的结果。</b></p>
+<p><em>对 logits 求导（不是对概率求导），
+  <code>−ln p</code> 那一串恰好约化成 <b>p − y</b>
+  ——&nbsp;<u>模型给的概率，减去那个只有一格是 1 的正确答案</u>。</em></p>
+<p><span class="sub">⭐ 这是交叉熵 ＋ softmax 这对搭档最好的一个性质：
+  <b>两个看着都不简单的东西凑在一起，导数简单到不能再简单。</b>
+  ⛔ 而这也是为什么框架里它们总是<u>融合成一个算子</u> ——&nbsp;
+  分开算要先出概率再求导，合起来一步就到。</span></p>
 <p><span class="sub">📌 这是 softmax ＋ 交叉熵这一对的经典结果 ——&nbsp;
   它们凑在一起，导数会漂亮地约化成「预测减真值」。
   <em>不是所有 loss 都这么好看，但这一对是今天的默认组合。</em></span></p>
@@ -2297,6 +2306,29 @@ body.figonly section h3{margin-top:34px}
       照着配显存会少配三分之二。</em><em>
     ⭐ 所以先看原始账单、再看下一节，<b>顺序不能颠倒</b>。</em></li>
 </ul></div>
+
+<div class="note danger"><p>⛔⛔ <b>还有一项，它不在上面两张表里 ——&nbsp;因为它不属于任何一层。</b></p>
+<p><em>最后那个投影把 hidden 变成<b>词表上的分数</b>（logits），形状是
+  <code>[序列长度, 词表]</code>。V3 的词表是 <b>129,280</b>：</em></p>
+<p class="landing"><code>4,096 × 129,280 × 2 B</code> ＝ <b>1010 MiB</b>　
+  <em>（一条 4K 序列）</em></p>
+<div class="note"><p>⭐ <b>把它跟上面那两张表放一起比一下：</b></p>
+<ul>
+  <li><em>表里最大的单个张量是「K/V 解压后」，<b>256 MiB</b>。</em></li>
+  <li><em>logits 是 <b>1010 MiB</b> ——&nbsp;<u>差不多是它的四倍</u>。</em></li>
+  <li><em>而整整一层 MLA 子层加起来才 <b>722.5 MiB</b>
+    ——&nbsp;<b>logits 一项就比一个完整的 MLA 子层还大。</b></em></li>
+</ul>
+<p class="landing">⛔ <b>它是整个模型里最大的单个张量</b>，
+  <em>而且 softmax 通常还要升到 fp32 去做 ——&nbsp;<u>那就再翻一倍</u>。</em></p></div>
+<p><em>⭐⭐ <b>所以真实实现几乎都不会把它整个物化出来</b>：
+  把序列切成若干块，<u>算一块的 loss、回一块的梯度，再算下一块</u>。
+  ——&nbsp;这跟 <a href="#s二">2</a> 那节的重算是同一个思路，
+  <b>只是换到了词表这一维上。</b></em></p>
+<p><span class="sub">⚠️ 正因为主流实现都分块，<b>它没有被算进上面的总账</b>
+  ——&nbsp;这是个口径选择，不是忘了。但你要是自己写训练循环、
+  又老老实实一次性算完整个 logits，<b>这一块会突然出现在你的显存里</b>。
+  ⭐ 扩训到 128K 那一档它是 <b>31.6 GiB</b>，届时它<u>不分块就根本跑不动</u>。</span></p></div>
 
 
 <h3 id="s1-8">1.8　⭐ 梯度算出来之后，<u>还没完</u></h3>
@@ -4102,10 +4134,17 @@ body.figonly section h3{margin-top:34px}
 
 <div class="note"><p>⭐⭐ 两边的单位对不上。</p>
 <p><em>梯度的含义是「这个参数变一点，loss 变多少」——&nbsp;
-  <b>单位是 loss ÷ 参数</b>。
+  <b>单位是 loss ÷ 参数</b>
+  <span class="sub">（<a href="#s1-0">1.0</a> 说过，loss 的单位是 <b>nats/token</b>
+  ——&nbsp;所以这里是 nats/token ÷ 参数，<b>它真的有单位，不是打比方</b>）</span>。
   可你要的是「参数该挪多少」——&nbsp;<b>单位是参数本身</b>。</em></p>
 <p>⛔ 所以中间<u>必须</u>乘一个东西把它折过来 ——&nbsp;那就是学习率。
-  <em>反推一下它的单位：<b>参数² ÷ loss</b>。</em></p>
+  <em>反推一下它的单位：<b>参数² ÷ loss</b>，
+  也就是 <b>参数² · token / nat</b>。</em></p>
+<p><span class="sub">⭐ 把这个单位念出来就明白它为什么不能跨模型抄了：
+  <b>它里面同时含着「你的参数有多大」和「你的 loss 有多大」</b>
+  ——&nbsp;而 loss 的尺度<u>跟词表大小有关</u>（<a href="#s1-0">1.0</a> 那把尺的上端就是 ln V）。
+  换个词表，连它都动。</span></p>
 <p class="landing">⭐⭐⭐ 所以学习率<u>不是一个纯数字</u>。
   <em>它跟你的 loss 有多大、你的权重有多大，<b>全绑在一起</b>
   ——&nbsp;这就是为什么换个模型、换个 batch，学习率就得重调。
@@ -5293,7 +5332,10 @@ body.figonly section h3{margin-top:34px}
     <b>学习率带量纲</b>。小规模上扫出来的值，要么用可迁移的参数化，
     <b>要么在目标规模上小步重验</b>。</em></li>
   <li>③ 判据看两条曲线。<em>loss 炸了、或者 grad norm 出突刺 ——&nbsp;<b>太大</b>；
-    loss 下得慢、grad norm 一直贴着地板 ——&nbsp;<b>太小</b>。</em></li>
+    loss 下得慢、grad norm 一直贴着地板 ——&nbsp;<b>太小</b>。
+    <br>⭐ <b>「慢」有绝对刻度可参照</b>（<a href="#s1-0">1.0</a> 那把尺）：
+    <u>从 11.8 一路往下掉是正常开局</u>；
+    <b>掉到 2 附近之后，每 0.01 都很贵</b>。</em></li>
 </ul>
 <p class="landing">⛔ 梯度裁剪是安全带，不是调参手段。
   <em>V3 设的是 <b>1.0</b>。靠调裁剪阈值来压住一个太大的学习率，
@@ -6133,6 +6175,19 @@ body.figonly section h3{margin-top:34px}
 <p class="landing">⭐ <b>0.32 GiB</b> ——&nbsp;<em>2.11 掉到 0.32，<b>省了 6.7 倍</b>，
   代价是总算力从 3× 变 4×。</em></p>
 
+<div class="note danger"><p>⛔ <b>⚠️ 这个 0.32 GiB 有一个<u>故意的省略</u>，照着验的人会撞上它。</b></p>
+<p><em>它只算了 12 层里的激活 ——&nbsp;<b>没算最后那个 logits</b>。
+  GPT-3 那一代沿用 GPT-2 的 BPE 词表，<b>约 5.03 万</b>：</em></p>
+<p class="landing"><code>8,192 token × 50,257 × 2 B</code> ＝ <b>0.77 GiB</b>
+  ——&nbsp;<em><u>是那 0.32 GiB 的两倍半还多</u>。</em></p>
+<p><em>⭐ 也就是说：<b>如果你一次性把整个 logits 算出来，这台机器上最大的一块
+  既不是权重也不是激活 ——&nbsp;是那张「词表上的分数表」。</b></em></p>
+<p class="landing">⛔ <b>而这一小节的卖点正是「你能自己算一遍」</b>
+  ——&nbsp;<em>所以这一条必须写出来。上面那 <a href="#s1-7">1.7</a> 的注解说了，
+  真实实现<b>分块算 loss</b>，所以它不进总账；但<u>这是个口径选择，不是它不存在</u>。</em></p>
+<p><span class="sub">⚠️ 5.03 万这个词表大小我是按「GPT-3 沿用 GPT-2 的 BPE」写的，
+  <b>没有在这一轮回原文核过</b> ——&nbsp;换成 3 万或 6 万，结论（它比激活总量还大）不变。</span></p></div>
+
 <table>
 <thead><tr><th></th><th>不开重算</th><th>开了重算</th></tr></thead>
 <tbody>
@@ -6325,6 +6380,18 @@ body.figonly section h3{margin-top:34px}
 
 <h3 id="s6-1">6.1　先看一个真实的画面</h3>
 
+<div class="note"><p>📏 <b>动手之前，先把 <a href="#s1-0">1.0</a> 那把尺拿出来。</b></p>
+<p><em>「飞了」是个感觉词，而这一节要讲的是判断。<b>换成数就清楚了：</b></em></p>
+<ul>
+  <li><em>预训练中后期 loss 在 <b>2 上下</b>晃 ——&nbsp;正常。</em></li>
+  <li><em>突然跳到 <b>6</b>：困惑度从 7 变成 400
+    ——&nbsp;<b>模型退回到「只会字频」那一档</b>，但还认得字。</em></li>
+  <li>⛔ <em>跳回 <b>11.8</b>：那是 <code>ln 129,280</code>
+    ——&nbsp;<b>它把学过的东西<u>全忘光了</u>，退回到瞎猜。</b></em></li>
+</ul>
+<p class="landing">⭐⭐ <b>所以「飞多高」不是修辞，它直接告诉你还救不救得回来。</b>
+  <em>——&nbsp;跳到 6 通常回滚几十步就能过去；<u>跳回 ln V 基本就是这一段白跑了</u>。</em></p></div>
+
 <div class="note danger"><p>⛔⛔ PaLM 训 540B 的时候，loss 飞了<u>大约 20 次</u>。</p>
 <p><em>而且 ——&nbsp;<b>梯度裁剪是开着的</b>。
   这些 spike 出现在<b>极不规则</b>的时刻，有时候训到很晚才来；
@@ -6444,6 +6511,10 @@ body.figonly section h3{margin-top:34px}
 <thead><tr><th>做法</th><th>稳定性</th><th>质量（越大越好）</th><th>结论</th></tr></thead>
 <tbody>
 <tr><td>基线</td><td>4 / 6</td><td>−1.755</td><td>六次里两次训崩</td></tr>
+<tr><td colspan="4"><span class="sub">⚠️ <b>这一列是<u>对数似然</u>，不是 loss</b>
+  ——&nbsp;所以它是负的，而且<b>越大越好</b>（−1.755 好过 −4.206）。
+  ⭐ 换成 <a href="#s1-0">1.0</a> 那把尺就是：loss ＝ 1.755 与 4.206，
+  <u>困惑度 5.8 对 67</u>。<b>别把这两栏当成同一个量读。</b></span></td></tr>
 <tr><td>收紧 update clipping（0.1）</td><td><b>3 / 3</b></td><td><b>−4.206</b></td>
     <td>⛔ 稳了，可质量被打穿了</td></tr>
 <tr><td><b>router z-loss</b></td><td><b>3 / 3</b></td><td><b>−1.741</b></td>
