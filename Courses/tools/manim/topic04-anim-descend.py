@@ -57,8 +57,30 @@ from manim import (Scene, VGroup, Dot, Line, Rectangle, ParametricFunction,
                    ValueTracker, always_redraw, FadeIn, FadeOut, MathTex, Text,
                    WHITE, ORIGIN, UP, DOWN, LEFT, RIGHT, linear, config)
 
-RD_, GR_, BL_, GY_, INK_ = "#d93025", "#1e8e3e", "#4285f4", "#c3c7cb", "#202124"
-GY2_ = "#80868b"
+# ⭐⭐⭐ 2026-09-19：「参照画图工具作者的用法来。」
+#   去查了 manim 自带的默认值 —— 结果是**我在三处都主动覆盖了作者的默认，
+#   而且每处都覆盖成更差的那个**：
+#       背景  #000000  → 我设成了白
+#       缓动  smooth   → 我**显式传了 rate_func=linear**
+#       线宽  4        → 我用 3
+#   再去扒 3b1b 神经网络系列那三个源文件：`background_color` **出现 0 次**
+#   （全走默认黑底）；用色频率 YELLOW 103 / WHITE 101 / BLUE 78 / RED 70 / GREEN 44。
+#   ⭐⭐⭐ 最硬的一条：**黄是他的第一主色，而白底上黄几乎不可见** ——
+#     所以白底不是「也行」，它直接封杀了他最常用的那个颜色。
+# ⛔ 但**黄不能拿来当正负号**：他讲分量符号那一幕用的也是蓝/红，
+#   黄是**强调色**不是语义色。乱用会把「颜色＝符号」这条编码毁掉。
+# ⛔ 别名别用 `_W` —— 本文件下面已经有一个 `_W`（14 维参数向量），
+#   撞上之后 `stroke_color=_W` 会拿到 numpy 数组，报「颜色不接受长度 14」。
+#   ⭐ 判据：**引入新名字前先 grep 它在本文件出现过没有**，
+#     下划线开头的短名尤其危险 —— 它正是最可能已经被占用的那一类。
+from manim import BLUE, RED, GREEN, YELLOW, WHITE as WHITE_, GREY, GREY_B
+
+RD_, GR_, BL_ = RED, GREEN, BLUE        # #FC6255 / #83C167 / #58C4DD
+# ⛔ 第一版取 GREY_D(#444444)：在黑底上几乎看不见，等高线整幕消失。
+#   ⭐ 黑底的辅助线要比白底**亮**，不是暗 —— 对比度是相对背景的，不是绝对的。
+GY_ = GREY                              # #888888 —— 黑底上的辅助线
+INK_ = WHITE_                               # 正文字改白
+GY2_ = GREY_B                           # #BBBBBB —— 次要文字
 
 # ── 幕一：一条自己造的一维 loss，两个深浅不同的谷 ──────────────────
 def f1(x):
@@ -144,7 +166,7 @@ TEND = T1 + T2 + T3 + 0.8           # 末尾留一点复位
 
 class Descend(Scene):
     def construct(self):
-        self.camera.background_color = WHITE
+        # ⛔ 不写 background_color —— 默认就是 #000000，这正是作者的用法
         t = ValueTracker(0.0)
 
         # ═══ 幕一 ═══════════════════════════════════════════════
@@ -155,7 +177,7 @@ class Descend(Scene):
             return np.array([x * SX, Y0 + f1(x) * SY, 0])
 
         curve = ParametricFunction(p1, t_range=[XL, XR, 0.05],
-                                   stroke_color=GY_, stroke_width=3)
+                                   stroke_color=GREY_B, stroke_width=4)
 
         def ball(trj, col):
             def mk():
@@ -163,7 +185,7 @@ class Descend(Scene):
                 if s > T1:
                     return Dot(radius=0.001, fill_opacity=0)
                 k = min(len(trj) - 1, int(s / T1 * (len(trj) - 1)))
-                return Dot(radius=0.11, color=col).move_to(p1(trj[k]))
+                return Dot(radius=0.13, color=col).move_to(p1(trj[k]))
             return always_redraw(mk)
 
         act1 = VGroup(curve)
@@ -216,7 +238,7 @@ class Descend(Scene):
                     pts.append(p2(r * math.cos(th), r * math.sin(th)))
                 ring = VGroup()
                 for u, v in zip(pts, pts[1:]):
-                    ring.add(Line(u, v, stroke_color=GY_, stroke_width=1.6))
+                    ring.add(Line(u, v, stroke_color=GY_, stroke_width=2))
                 rings.add(ring)
         rings.set_opacity(0)
         self.add(rings)
@@ -255,7 +277,7 @@ class Descend(Scene):
                 g.add(r)
             g.add(Line(np.array([0, y0 + 0.45, 0]),
                        np.array([0, y0 - NDIM * (BW + BGAP) - 0.1, 0]),
-                       stroke_color=INK_, stroke_width=1.6))
+                       stroke_color=WHITE_, stroke_width=2))
             return g
 
         self.add(always_redraw(bars))
@@ -275,17 +297,15 @@ class Descend(Scene):
             legend.add(m)          # ⭐ 第三幕开始时才 add，见下面的幕间切换
 
         # ── 幕与幕之间的切换：真的换画面，不是叠加 ──────────────
-        self.play(t.animate.set_value(T1), run_time=T1, rate_func=linear)
+        self.play(t.animate.set_value(T1), run_time=T1)
         self.remove(caps[0], rule)
         self.add(caps[1])
         self.play(FadeOut(act1), rings.animate.set_opacity(1), run_time=0.5)
-        self.play(t.animate.set_value(T1 + T2), run_time=T2 - 0.5,
-                  rate_func=linear)
+        self.play(t.animate.set_value(T1 + T2), run_time=T2 - 0.5)
         self.remove(caps[1])
         self.add(caps[2], legend)
         self.play(rings.animate.set_opacity(0), run_time=0.5)
-        self.play(t.animate.set_value(T1 + T2 + T3), run_time=T3 - 0.5,
-                  rate_func=linear)
+        self.play(t.animate.set_value(T1 + T2 + T3), run_time=T3 - 0.5)
         # ⭐ 复位也要把字幕拨回第一幕 ——&#160;它跟曲线、球一样是「第一帧的一部分」。
         self.remove(caps[2], legend)
         # ── 复位：让最后一帧＝第一帧 ─────────────────────────────

@@ -45,9 +45,14 @@ import tempfile
 import numpy as np
 from PIL import Image
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-MEDIA = os.path.normpath(os.path.join(HERE, "..", "..", "WebPages", "media"))
-BASE = os.path.join(HERE, "loop-baseline.json")
+# ⭐ 通用版：目录靠参数给，不写死项目结构。
+#   `--media <目录>` 扫哪儿的 mp4（默认当前目录）
+#   `--baseline <文件>` 基线存哪儿（默认 <media>/loop-baseline.json）
+#   ⛔ `gpu-tpu-pedia/Courses/tools/manim/` 下有一份**钉在那个项目上的副本**，
+#     已接进它的 build-all.sh。两份是故意的：那边是部署好的守卫，
+#     这边是拿去装进新项目的模板。改了这边记得想想要不要同步过去。
+MEDIA = os.getcwd()
+BASE = None
 
 INK = 12        # 跟白底差多少才算「有墨水」
 DIFF = 12       # 两帧差多少才算「这个像素变了」
@@ -70,13 +75,30 @@ def _frame(mp4, tail):
     return a
 
 
+def _bg(a):
+    """从画面自己测背景色 ——&#160;取四个角 12x12 的中位数。
+
+    ⛔⛔ 原来这里写死了「白」：`ink = (255 - a).max(2) > INK`。
+      2026-09-19 把动画改成作者默认的**黑底**之后，整帧都满足「不是白」，
+      于是分母从三千涨到五十万，不一致度塌成一个看着很漂亮的小数 ——&#160;
+      **守卫在深色片子上静默失效，而且是往「看起来更好」的方向失效。**
+    ⭐ 判据：**凡是「跟背景比」的度量，背景必须从画面里测，不能写死。**
+      写死的那一刻，这个工具就只对一种配色有效了。
+    """
+    h, w = a.shape[:2]
+    corners = np.concatenate([a[:12, :12].reshape(-1, 3), a[:12, -12:].reshape(-1, 3),
+                              a[-12:, :12].reshape(-1, 3), a[-12:, -12:].reshape(-1, 3)])
+    return np.median(corners, axis=0)
+
+
 def measure(mp4):
     """返回 (不一致度 %, 首帧墨水, 末帧墨水)，并落一张上下拼接图。"""
     a, z = _frame(mp4, False), _frame(mp4, True)
     if a.shape != z.shape:
         return 100.0, 0, 0
-    ink_a = (255 - a).max(2) > INK
-    ink_z = (255 - z).max(2) > INK
+    bg = _bg(a)
+    ink_a = np.abs(a - bg).max(2) > INK
+    ink_z = np.abs(z - bg).max(2) > INK
     both = ink_a | ink_z
     n = int(both.sum())
     bad = 0.0 if n == 0 else float((np.abs(a - z).max(2) > DIFF).sum()) / n * 100
@@ -96,7 +118,10 @@ def check_captions():
     ⛔ 容差 0.6 秒：图注写整数是刻意的，没必要逼着写 15.33。
     """
     import re
-    pages = glob.glob(os.path.join(os.path.dirname(MEDIA), "*.html"))
+    pages = (glob.glob(os.path.join(os.path.dirname(MEDIA), "*.html"))
+             + glob.glob(os.path.join(MEDIA, "*.html")))
+    if not pages:
+        return 0            # 没有页面引用它们，这一项不适用
     dur = {}
     for p in glob.glob(os.path.join(MEDIA, "*.mp4")):
         out = subprocess.run(
@@ -105,7 +130,13 @@ def check_captions():
         dur[os.path.basename(p)] = float(out.stdout.strip())
     bad = []
     for page in pages:
-        s = open(page, encoding="utf-8").read()
+        # ⛔ 这里会扫到旁边目录里任何 .html —— 包括不是 UTF-8 的（实测撞上过
+        #   一个 gzip 过的 .html，当场 UnicodeDecodeError 把整条流程带崩）。
+        #   ⭐ 判据：**顺带扫到的文件不该有能力让主流程失败。**
+        try:
+            s = open(page, encoding="utf-8").read()
+        except (UnicodeDecodeError, OSError):
+            continue
         for fig in re.findall(r"<figure\b.*?</figure>", s, re.S):
             m = re.search(r'src="media/([^"]+\.mp4)"', fig)
             if not m or m.group(1) not in dur:
@@ -132,9 +163,23 @@ def check_captions():
     return len(bad)
 
 
+def _opt(argv, name, default):
+    if name in argv:
+        i = argv.index(name)
+        v = argv[i + 1]
+        del argv[i:i + 2]
+        return v
+    return default
+
+
 def main(argv):
+    global MEDIA, BASE
+    argv = list(argv)
     update = "--update" in argv
     argv = [a for a in argv if a != "--update"]
+    MEDIA = os.path.abspath(_opt(argv, "--media", MEDIA))
+    BASE = os.path.abspath(_opt(argv, "--baseline",
+                                os.path.join(MEDIA, "loop-baseline.json")))
     files = argv or sorted(glob.glob(os.path.join(MEDIA, "*.mp4")))
     base = json.load(open(BASE, encoding="utf-8")) if os.path.exists(BASE) else {}
 
