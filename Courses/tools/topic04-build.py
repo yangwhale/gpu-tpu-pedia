@@ -669,6 +669,7 @@ __FIG_PER_BYTE__
   它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
   ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
 
+<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— 八行名次表、该切在哪、省多少付多少</b>　<span class="why">⭐ 判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
 <p>把 V3 在<b>基准的 4K</b> 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
 
 __TBL_PER_BYTE__
@@ -727,7 +728,9 @@ __TBL_PER_BYTE__
 <p><span class="sub">⭐ 但方向没变：两个基准上选择性都明显划算。
   <b>而全量重算那个「多付 33% 换 97%」是尺度无关的</b> ——&nbsp;
   它只取决于「前向跑两遍而不是一遍」，跟 S 一点关系都没有。</span></p></div>
+</details>
 
+<details class="foldfig"><summary><b>口径收紧：FlashAttention 下 attention 的反向是 2.5 倍不是 2 倍</b>　<span class="why">⚠️ 精确口径，不改变任何结论的方向</span></summary>
 <div class="note danger"><p>⛔ <b>顺带收紧一个口径：attention 那一部分的反向<u>不是 2 倍，是 2.5 倍</u>。</b></p>
 <p><em><a href="#s一">1.3</a> 那个「反向 ≈ 前向两倍」对<b>带权重的矩阵乘</b>是严格的。
   但这一讲<u>处处假设用了 FlashAttention</u>（<a href="#s1-7">1.7</a> 边界②）——&nbsp;
@@ -743,6 +746,7 @@ __TBL_PER_BYTE__
   一个 step 是 <b>3.41×</b> 而不是 3×（低估 14%）；
   4K 上 attention 只占 12.5%，是 <b>3.06×</b> ——&nbsp;<b>基本无碍</b>。
   ⛔ 本讲其余各处仍按 3× 的近似口径写，<u>这是有意的简化，不是漏了</u>。</span></p></div>
+</details>
 <p><span class="sub">⚠️ <b>这两个百分比早先分母不一样</b>（一个除一遍前向、一个除整个 step），
   并排比是不能比的 ——&nbsp;<em>而这一讲自己在 2.5 就写着「跨文献比这类比例前，
   先确认对方折没折半」。<b>已统一到 step 口径。</b></em></span></p>
@@ -798,6 +802,7 @@ __TBL_PER_BYTE__
   <em>FlashAttention 天生就不把分数矩阵写进显存、反向时现算
   ——&nbsp;等于把论文那条建议<b>内建成了默认行为</b>。</em></p>
 
+<details class="foldfig"><summary><b>去翻 Megatron 源码：那个默认值今天还在，而维护者在旁边钉了一条警告</b>　<span class="why">⭐ 很好玩，但属于框架实现细节</span></summary>
 <div class="note danger"><p>⛔ <b>这里我原来写「所以现代框架的候选名单里 attention 根本不出现」——&nbsp;
   <u>去翻了源码，完全说反了。</u></b></p>
 <p><em>Megatron-LM 的选择性重算开关 <code>--recompute-modules</code>，
@@ -834,6 +839,7 @@ __TBL_PER_BYTE__
   <b>看到任何一个默认值，先问它是哪一年选出来的、当时的前提还在不在。</b>
   ——&nbsp;而这一条对我自己也成立：<u>我最初写的是「它还在那里当默认」，
   那句话把三层揉成了一层，读者会以为一打开训练它就在偷偷重算 attention。</u></span></p></div>
+</details>
 <p><span class="sub">⭐ <b>更值得看的是名单上的其余几项</b>：
   <code>layernorm</code>、<code>moe_act</code>、<code>mla_up_proj</code>
   ——&nbsp;<em>对照 2.3 那张表：RMSNorm 输出、SwiGLU 乘积、K/V 解压与 Q 展开。
@@ -844,6 +850,17 @@ __TBL_PER_BYTE__
   ⛔ <b>判据：说「现代框架都不这么干了」之前，去 grep 一下那个框架。</b>
   <em>这类断言听起来像常识，而它正好是最容易过期的一类。</em></span></p></div>
 
+<p class="landing">⭐⭐ <b>这一节的落点，一句话：</b>
+  <em>反向要用中间结果，所以它们扔不掉；
+  <u>但「扔掉再算回来」是一笔可以谈的交易</u> ——&nbsp;
+  而谈不谈得拢，靠的是<b>一条能自己排出来的判据</b>，不是背别人的结论。</em></p>
+
+<p><span class="sub">⛔ <b>还有两件事这一节没展开</b>，因为它们不属于本讲那三件事：
+  <em>重算<u>可能算出不一样的东西</u>（随机数、副作用、逐比特），
+  以及<u>收益不能跨规模照抄</u>（MFU / HFU 那套口径）。
+  ——&nbsp;都收在下面这个折叠块里。</em></span></p>
+
+<details class="foldfig"><summary><b>重算的两笔「不在账上」的代价：结果可能不一样、收益不能照抄</b>　<span class="why">⭐ 工程上很重要，但属于「怎么把它跑起来」，不是反向/梯度下降/loss 的原理</span></summary>
 <h3>2.5b　⛔ 重算还有一笔<u>不在账上</u>的代价：它可能算出不一样的东西</h3>
 
 <!-- ⭐⭐⭐ 2026-09-17 补。整个第二节都在算「省多少显存、付多少算力」——
@@ -940,6 +957,7 @@ __TBL_PER_BYTE__
 
 
 
+</details>
 </div></section>
 
 
