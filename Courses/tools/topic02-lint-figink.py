@@ -60,6 +60,21 @@ r"""figink ——&#160;量一张图「删掉所有文字之后还剩多少东西
 #   ⭐ 共同点跟盲区之二一样：**它数不出「少而承重」的形状** ——&#160;
 #     它擅长抓「一堆方框配一堆字」，不擅长抓「三条线定生死」。
 #   ⛔ 仍然不放宽阈值：放宽到「2 条线也算」会把箭头连接的文字框全判成有画。
+#
+# ⭐⭐⭐ 盲区总结（2026-09-18，判完 18 格之后）：
+#   **问题不是阈值太严，是「形状词汇表」太小。**
+#   实测：专题四 24 格不及格里，**23 格的墨水是 0**；
+#   而人工判出的误报 —— 数轴、两三根长度对比条、unit chart、
+#   时间轴分段、坐标图、一排只有一个在动的推子 —— **墨水也全是 0**。
+#   ⛔ 也就是说它们不是「差一点」，是**根本没被这套词汇认出来**。
+#   ⭐ 这套词汇现在只认「**成组的**」：曲线、柱子组、向量组、箭头组、点群、斜线群。
+#     它不认「**少量的、承重的、非成组的**」——&#160;而好图里恰恰常常是后者。
+#   ⚠️ 所以**别放宽阈值**（那会把文字框放进来），
+#     要加的是**新的形状类型**。手上已有一个回归集可用：
+#     专题四 18 格已判样本（12 个误报 ／ 6 个真该改）。
+#     ⛔ 校准之后**两头都要跑**：只让 12 个误报转绿不算成功，
+#       6 个真该改必须仍然判红。
+
 
 
 用法：
@@ -223,8 +238,9 @@ def _ink_of(tags, rects):
                 arrow=n_arrow, dot=n_dot, slant=n_slant, ink=ink)
 
 
-def scan(path):
-    """返回这张图里**最差的那一格**的读数 ——&#160;一张图只报它最弱的一环。"""
+def _reads(path):
+    """返回 (格数, 每一格的读数)。⭐ scan() 和 scan_all() 共用这一份，
+    免得两条路算出不一样的数。"""
     svg = open(path, encoding="utf-8").read()
     panels = _panels(svg)
     els = re.findall(r"<(?:rect|line|path|ellipse|circle|polyline|polygon|text)\b[^>]*>", svg)
@@ -250,15 +266,29 @@ def scan(path):
         return r
 
     if not panels:
-        r = bucket(0, 10 ** 6)
-        r.update(name=os.path.basename(path), panels=0, worst=1)
-        return r
+        return 0, [bucket(0, 10 ** 6)]
+    return len(panels), [bucket(lo, hi) for lo, hi in panels]
 
-    reads = [bucket(lo, hi) for lo, hi in panels]
+
+def scan(path):
+    """这张图里**最差的那一格** ——&#160;一张图只报它最弱的一环。"""
+    n, reads = _reads(path)
     k = min(range(len(reads)), key=lambda i: reads[i]["ink"])
     r = dict(reads[k])
-    r.update(name=os.path.basename(path), panels=len(panels), worst=k + 1)
+    r.update(name=os.path.basename(path), panels=n, worst=k + 1)
     return r
+
+
+def scan_all(path):
+    """⭐ 2026-09-18 新增：**每一格都报**。
+    ⛔ 起因是一个真实的误解：改好一张图最差的那一格之后，
+      ❌ 计数**没有降** ——&#160;因为同一张图的下一格顶了上来。
+      于是「❌ 计数」被我当成了「问题数」，其实它是「**有问题的图数**」。
+    ⭐ 判据：**一个「每个对象只报最差项」的报告，它的计数不是工作量。**
+      要点工作量就得按「格」点，所以有了这个开关（`--per-panel`）。"""
+    n, reads = _reads(path)
+    return [dict(r, name=os.path.basename(path), panels=n, worst=i + 1)
+            for i, r in enumerate(reads)]
 
 
 def verdict(r):
@@ -281,6 +311,26 @@ def main():
                        if f.endswith(".svg"))
     if not files:
         print("   （没找到 svg）")
+        return 0
+
+    # ⭐ --per-panel：按**格**点，不按图。见 scan_all() 的注释。
+    if any(x == "--per-panel" for x in sys.argv[1:]):
+        cells = [c for f in files for c in scan_all(f)]
+        cells.sort(key=lambda r: (r["ink"], -r["text"]))
+        NAMES = "Ⓐ Ⓑ Ⓒ Ⓓ Ⓔ Ⓕ Ⓖ Ⓗ".split()
+        nbad = 0
+        print("\n\033[1m▸ 墨水体检 · 逐格\033[0m")
+        for c in cells:
+            v = verdict(c)
+            if not v.startswith("❌"):
+                continue
+            nbad += 1
+            print("   %-24s %-3s 文字%3d 墨水%3d  %s"
+                  % (c["name"], NAMES[c["worst"] - 1] if c["worst"] <= 8
+                     else str(c["worst"]), c["text"], c["ink"], v))
+        print("\n   共 %d 张图 / %d 格，其中 \033[1m%d 格\033[0m 进了最重那一档。"
+              % (len(files), len(cells), nbad))
+        print("   ⛔ 这个数才是工作量 ——　按图点出来的那个是「有问题的图数」。")
         return 0
 
     rows = [scan(f) for f in files]
