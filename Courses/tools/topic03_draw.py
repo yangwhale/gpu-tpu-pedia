@@ -103,6 +103,26 @@ MINSZ = 11
 _DECOR = ("⭐", "⛔", "⚠️", "⚠", "✅", "❗", "🆕", "📌", "💡", "🔬", "❓", "🎯")
 
 
+def _hair(sw):
+    """⭐⭐ 把**辅助线**的线宽吸附到两档，让主干和背景拉开层次。
+
+    ⛔⛔ **只动 < 1.5 的**。原因很具体：**线宽在有些图里是数据**
+      ——&#160;`fig4-circuit` Ⓑ 用 `1.8 + 4.8·|g|/4` 把梯度大小编码成粗细，
+      范围 1.8–6.6。一旦无脑吸附，那张图的论点当场毁掉。
+    ⭐ 判据：**改一个视觉属性之前，先问它在哪些地方承载着语义。**
+
+    实测改前：48 个线宽档位、10991 条线，其中 60% 是 1.0、另有一堆
+    0.8 / 1.2 / 1.3 / 1.4 混着用 ——&#160;辅助线自己就先毛糙了。
+    """
+    try:
+        v = float(sw)
+    except (TypeError, ValueError):
+        return sw
+    if v >= 1.5:
+        return sw            # 主干／有语义的，一律不碰
+    return 0.75 if v <= 0.9 else 1.0
+
+
 def _undecorate(s):
     for ch in _DECOR:
         s = s.replace(ch, "")
@@ -454,7 +474,9 @@ class Fig(object):
         #   ⛔ 保留 ✓ ✕ ↑ ↓ → ← ⋮ 这些 ——&#160;它们是**几何记号，不是装饰**。
         s = _undecorate(s)
         self._note_ink(y)
-        st = ["font-size:%.1fpx" % _sz(size)]
+        # ⭐ 数字按等宽位对齐 ——&#160;表格状的数值竖着看能对齐，
+        #   而且不会像比例数字那样 1 特别窄、0 特别宽。中文不受影响。
+        st = ["font-size:%.1fpx" % _sz(size), "font-variant-numeric:tabular-nums"]
         if mono:
             # ⛔ 这里必须用单引号：style 是双引号属性，里面再写双引号会把属性提前闭合，
             #   生成的 SVG 直接不良构（写盘前那道 XML 自检就是抓这个的）。
@@ -467,6 +489,7 @@ class Fig(object):
 
     def box(self, x, y, w, h, fill="#fff", stroke=LINE, r=6, sw=1, dash=None,
             shadow=False):
+        sw = _hair(sw)
         # 📌 stroke 默认就是 #dadce0 ——&nbsp;跟专题一的主力描边一致（那边 ×287）。
         #   ⛔ 别把默认改深；要强调就显式传主色，不要靠加重灰线。
         self.p.append('<rect x="%s" y="%s" width="%s" height="%s" rx="%d" fill="%s" '
@@ -476,6 +499,7 @@ class Fig(object):
                          ' filter="url(#sh)"' if shadow else ''))
 
     def line(self, x1, y1, x2, y2, col=GY2, sw=1.3, dash=None, arrow=True):
+        sw = _hair(sw)
         self.p.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" '
                       'stroke-width="%s" stroke-linecap="round"%s%s/>'
                       % (x1, y1, x2, y2, col, sw,
@@ -502,6 +526,7 @@ class Fig(object):
                       % (d, fill, stroke, sw))
 
     def path(self, d, col=GY2, sw=1.3, dash=None, arrow=True, fill="none"):
+        sw = _hair(sw)
         # ⛔⛔ 2026-09-13 审图抓到的最重一条：有 4 个调用方直接传**点列表**
         #   （fig3-info-law 那两条曲线、dsa-why 的「鸡生蛋」回环、swa-why 和
         #   attn-invented 各一根箭头）。于是 d="[(120.0, 184.0), …]" ——
@@ -973,6 +998,14 @@ class Fig(object):
         #   ① 必须是**内联**的 SVG（本课就是内联进 HTML 的，所以点得动）；
         #   ② `<a>` 要包在 `<text>` **里面**（包在外面 Chrome 不给点）。
         s = _svg_linkify(s)
+        # ⭐⭐⭐ 辅助线的线宽在这里统一吸附 ——&#160;**序列化出口，不是各个构造点。**
+        #   ⛔ 我先试过在 line()／path()／box() 三处改，结果没生效：
+        #     这个文件里一共有 **11 处**输出 stroke-width（panel 的分隔线、band 的
+        #     色条、箭头 marker、grid pattern……）。**构造点永远数不完。**
+        #   ⭐ 判据：**要做「全局一致」的改动，改在序列化出口。**
+        #   ⛔ 仍然只动 < 1.5 的：线宽在有些图里是数据（见 _hair 的注释）。
+        s = re.sub(r'stroke-width="([0-9.]+)"',
+                   lambda m: 'stroke-width="%s"' % _hair(m.group(1)), s)
         xml.dom.minidom.parseString(s.encode("utf-8"))
         io.open(os.path.join(HERE, name), "w", encoding="utf-8").write(s)
 
