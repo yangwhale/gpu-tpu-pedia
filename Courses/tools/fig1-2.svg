@@ -19,7 +19,7 @@
 <text class="svgsm" x="106" y="206">186 GB · 8.0 TB/s</text>
 <text class="svgsm" x="16" y="225" fill="#1a73e8">算力 dense</text>
 <text class="svgsm" x="106" y="225">BF16 2.5 ｜ FP8 5 PFLOPS</text>
-<text class="svgsm" x="16" y="244" fill="#1a73e8">⚠️ 别混</text>
+<text class="svgsm" x="16" y="244" fill="#1a73e8">别混</text>
 <text class="svgsm" x="106" y="244">HGX 板上的 B200 是 180 GB / BF16 2.25 —— 同代不同封装差 11.1%</text>
 <rect x="352" y="50" width="204" height="215" rx="10" fill="#f3e8fd" stroke="#9334e6"/>
 <text class="svglbl" x="366" y="72" fill="#9334e6">② 一个节点</text>
@@ -30,7 +30,7 @@
 <text class="svgsm" x="366" y="150">744 GB GPU 显存</text>
 <text class="svgsm" x="366" y="165"></text>
 <text class="svgsm" x="366" y="180">RDMA 4 × CX-7 × 400</text>
-<text class="svgsm" x="366" y="195">　= 1,600 Gbps　← 算通信用这个</text>
+<text class="svgsm" x="366" y="195">= 1,600 Gbps　← 算通信用这个</text>
 <text class="svgsm" x="366" y="210">管理网 400 Gbps</text>
 <text class="svgsm" x="366" y="225" fill="#d93025" text-decoration="line-through">合计 2,000 Gbps</text>
 <text class="svgsm" x="366" y="240" fill="#d93025" style="font-size:10px">管理网跟 GPU 通信无关，不能加进来（§4 陷阱二）</text>
@@ -39,7 +39,7 @@
 <text class="svgsm" x="588" y="92">18 节点 × 4 = 72 GPU，NVSwitch 5 全互联，不走网络</text>
 <text class="svgsm" x="588" y="110">域内 NVLink 总带宽 130 TB/s ｜ 每 GPU 1.8 TB/s</text>
 <rect x="588" y="122" width="396" height="66" rx="6" fill="#fce8e6" stroke="#d93025"/>
-<text class="svglbl" x="600" y="141" fill="#d93025">⚠️ 72 是物理规模；我们这批集群按 64 编排</text>
+<text class="svglbl" x="600" y="141" fill="#d93025">72 是物理规模；我们这批集群按 64 编排</text>
 <text class="svgsm" x="600" y="158" fill="#d93025">16 节点上阵，剩 2 节点 / 8 卡热备（auto-repair 关着，坏了要人顶）</text>
 <text class="svgsm" x="600" y="175" fill="#d93025">这是<tspan font-weight="700">编排口径不是平台限制</tspan> —— 换个人运维就是别的数（第 4 节）</text>
 <text class="svgsm" x="588" y="206">按 72 卡（物理域）</text>
@@ -50,11 +50,11 @@
 <path d="M556 148 h20" stroke="#5f6368" stroke-width="1.5" marker-end="url(#m1)"/>
 <defs><marker id="m1" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#5f6368"/></marker></defs>
 <line x1="0" y1="266" x2="1000" y2="266" stroke="#e8eaed"/>
-<text class="svglbl" x="0" y="290" fill="#202124">⭐ 跟 TPU 对齐着看：两边的三层完全不在同一个位置</text>
+<text class="svglbl" x="0" y="290" fill="#202124">跟 TPU 对齐着看：两边的三层完全不在同一个位置</text>
 <text class="svgsm" x="0" y="314" fill="#1a73e8">TPU v7</text>
 <text class="svgsm" x="70" y="314">TensorCore　→　chip（2 个 device）　→　切片（3D torus，最大 9,216 chip）</text>
 <text class="svgsm" x="0" y="334" fill="#1e8e3e">GB200</text>
 <text class="svgsm" x="70" y="334">GPU　→　节点（4 GPU）　→　NVL72 域（72 卡，本课按 64 编排）→ 跨域走 RDMA</text>
 <text class="svgsm" x="0" y="362" fill="#d93025">TPU 侧<tspan font-weight="700">同一套 ICI 一路铺到 9,216 chip</tspan>（形状受限：超过 64 颗要按 4×4×4 的 cube 拼）；GPU 侧出了 72 卡这个域<tspan font-weight="700">就换一套物理链路</tspan>。</text>
-<text class="svgsm" x="0" y="380" fill="#d93025">⚠️ 差别不在「连不连续」（两边都是离散的），在<tspan font-weight="700">换不换协议</tspan> —— 一个是「距离逐渐变远」，一个是「到某一点突然掉下去」。这是第 4 节全部内容的来源。</text>
+<text class="svgsm" x="0" y="380" fill="#d93025">差别不在「连不连续」（两边都是离散的），在<tspan font-weight="700">换不换协议</tspan> —— 一个是「距离逐渐变远」，一个是「到某一点突然掉下去」。这是第 4 节全部内容的来源。</text>
 </svg>

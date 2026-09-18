@@ -108,6 +108,10 @@ echo ""
 echo "▸ 专题四 教材"
 # ⛔ 图先生成 —— topic04-build.py 的 place_figs 找不到 svg 会直接 assert 挂掉。
 for s in topic04-fig-*.py; do python3 "$s"; done
+
+# ⭐ 所有图生成完之后统一剥一次图内装饰符（见该脚本头部注释）。
+#   幂等：走基元那条线的图早就没有了，扫过去不会变。
+python3 strip-fig-decor.py
 python3 topic04-build.py
 
 echo ""
