@@ -5366,6 +5366,25 @@ body.figonly section h3{margin-top:34px}
 <p>把前面三节的东西摆在一起，<b>按占多少排个序</b> ——&nbsp;
   <em>这个顺序本身就是这一节的全部内容。</em></p>
 
+<table class="tbl"><thead><tr><th>这一项</th><th class="num">每参数</th><th class="num">671B 上</th><th class="num">占常驻</th><th>它是什么</th><th>什么时候用得上</th></tr></thead><tbody><tr><td><b>优化器状态</b></td><td class="num">12 B</td><td class="num"><b>7.32 TiB</b></td><td class="num">75%</td><td>fp32 主权重 4 ＋ 一阶矩 <i>m</i> 4 ＋ 二阶矩 <i>v</i> 4</td><td><em>只在<b>更新那一瞬间</b>用一次</em></td></tr><tr><td><b>权重</b></td><td class="num">2 B</td><td class="num"><b>1.22 TiB</b></td><td class="num">12.5%</td><td>bf16 那一份，前向反向都拿它算</td><td><em>每一层都要读</em></td></tr><tr><td><b>梯度</b></td><td class="num">2 B</td><td class="num"><b>1.22 TiB</b></td><td class="num">12.5%</td><td>bf16，跟权重同形</td><td><em>反向写、更新后就能扔</em></td></tr><tr class="sum"><td><b>常驻小计</b></td><td class="num"><b>16 B</b></td><td class="num"><b>9.76 TiB</b></td><td class="num">100%</td><td colspan="2"><em>⭐ 跟 batch、跟序列长度<b>都无关</b> ——&nbsp;只要模型定了，这个数就定了。</em></td></tr><tr><td><b>中间激活</b></td><td class="num">——</td><td class="num"><b>看 batch</b></td><td class="num">——</td><td>反向要用的那一堆中间结果（<a href="#s1-6">1.6</a>）</td><td><em>⛔ 唯一一个<b>你自己能调</b>的 ——&nbsp;也是唯一一个能反超上面三项的</em></td></tr></tbody></table>
+
+<div class="note"><p>⭐ <b>前三行都是「每参数几字节 × 参数量」，所以它们的比例<u>永远是 12 : 2 : 2</u></b>
+  ——&nbsp;<em>换多大的模型都不变，换多少张卡也不变。</em></p>
+<p><em>优化器状态一项就占常驻的 <b>75%</b>。
+  ⭐ 而它是三项里<b>唯一一个前向反向都用不上</b>的
+  ——&nbsp;<a href="#s3-1">3.1</a> 说过，它只在<b>更新那一瞬间</b>被读一次、写一次。</em></p></div>
+
+<div class="note danger"><p>⛔ <b>但第四行不一样 ——&nbsp;它是唯一一个<u>你自己能调</u>的。</b></p>
+<p><em>前三项跟着参数量走，<b>你没得选</b>；激活跟着
+  「这一步同时在场多少 token」走 ——&nbsp;而那是 micro-batch、梯度累积、
+  DP 路数、序列长度<b>四个旋钮乘出来的</b>。</em></p>
+<p class="landing">⭐⭐ <b>所以「谁最大」不是模型的属性，是你这次训练配置的属性。</b>
+  <em>——&nbsp;batch 开到某个程度，第四行就会翻到第一行上面去。
+  那个分水岭具体在哪，<a href="#s5-1">5.1</a> 会算给你看。</em></p></div>
+
+<p class="landing">⭐⭐⭐ <b>记住这个顺序 ——&nbsp;下一小节讲的 ZeRO，
+  三级分法就是照着它一级一级往下切的。</b></p>
+
 
 
 <h3 id="s4-2">4.2　ZeRO 的三级，正是照着这个顺序来的</h3>

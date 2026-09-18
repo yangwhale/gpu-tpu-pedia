@@ -1647,6 +1647,25 @@ __FIG_LR_CURVE__
 <p>把前面三节的东西摆在一起，<b>按占多少排个序</b> ——&nbsp;
   <em>这个顺序本身就是这一节的全部内容。</em></p>
 
+__TBL_LEDGER__
+
+<div class="note"><p>⭐ <b>前三行都是「每参数几字节 × 参数量」，所以它们的比例<u>永远是 12 : 2 : 2</u></b>
+  ——&nbsp;<em>换多大的模型都不变，换多少张卡也不变。</em></p>
+<p><em>优化器状态一项就占常驻的 <b>75%</b>。
+  ⭐ 而它是三项里<b>唯一一个前向反向都用不上</b>的
+  ——&nbsp;<a href="#s3-1">3.1</a> 说过，它只在<b>更新那一瞬间</b>被读一次、写一次。</em></p></div>
+
+<div class="note danger"><p>⛔ <b>但第四行不一样 ——&nbsp;它是唯一一个<u>你自己能调</u>的。</b></p>
+<p><em>前三项跟着参数量走，<b>你没得选</b>；激活跟着
+  「这一步同时在场多少 token」走 ——&nbsp;而那是 micro-batch、梯度累积、
+  DP 路数、序列长度<b>四个旋钮乘出来的</b>。</em></p>
+<p class="landing">⭐⭐ <b>所以「谁最大」不是模型的属性，是你这次训练配置的属性。</b>
+  <em>——&nbsp;batch 开到某个程度，第四行就会翻到第一行上面去。
+  那个分水岭具体在哪，<a href="#s5-1">5.1</a> 会算给你看。</em></p></div>
+
+<p class="landing">⭐⭐⭐ <b>记住这个顺序 ——&nbsp;下一小节讲的 ZeRO，
+  三级分法就是照着它一级一级往下切的。</b></p>
+
 
 
 <h3>4.2　ZeRO 的三级，正是照着这个顺序来的</h3>
@@ -2745,8 +2764,48 @@ _CHEAP_TF = sum(r[1] * r[2] * GIB_F for r in _cheap)
 _TIMES = (PER_BYTE_ROWS[-1][2] / PER_BYTE_ROWS[-2][2])
 _CROSS = D_V3 / 1.25
 
+# ⭐ §4.1 那张「按大小排一遍」的表 —— 由常量生成，不手填。
+#   ⛔ 这一节原来是张空支票：正文写着「这个顺序本身就是这一节的全部内容」，
+#      然后**一张表一张图都没有**；而 4.2 第一句就是「正是照着这个顺序来的」。
+#      四位评审各自撞到它。
+N_PARAM = 671e9               # V3 总参数（激活参数是 37B，但显存按总量算）
+TIB = 1024 ** 4
+# 每参数的字节数 —— 拆法与 §3.1 一致（bf16 权重 2、bf16 梯度 2、
+# fp32 主权重 4 ＋ 一阶矩 4 ＋ 二阶矩 4 ＝ 12）
+LEDGER = [
+    ("优化器状态", 12, "fp32 主权重 4 ＋ 一阶矩 <i>m</i> 4 ＋ 二阶矩 <i>v</i> 4",
+     "只在<b>更新那一瞬间</b>用一次"),
+    ("权重",        2, "bf16 那一份，前向反向都拿它算", "每一层都要读"),
+    ("梯度",        2, "bf16，跟权重同形", "反向写、更新后就能扔"),
+]
+_LED_B = sum(r[1] for r in LEDGER)
+_pct = lambda v: ("%.1f" % v).rstrip("0").rstrip(".")   # 12.5 要保留，75.0 要收掉
+_rows = "".join(
+    '<tr><td><b>%s</b></td><td class="num">%d B</td>'
+    '<td class="num"><b>%.2f TiB</b></td><td class="num">%s%%</td>'
+    '<td>%s</td><td><em>%s</em></td></tr>'
+    % (nm, b, N_PARAM * b / TIB, _pct(100.0 * b / _LED_B), how, when)
+    for nm, b, how, when in LEDGER)
+_TBL_LEDGER = (
+    '<table class="tbl"><thead><tr>'
+    '<th>这一项</th><th class="num">每参数</th><th class="num">671B 上</th>'
+    '<th class="num">占常驻</th><th>它是什么</th><th>什么时候用得上</th>'
+    '</tr></thead><tbody>%s'
+    '<tr class="sum"><td><b>常驻小计</b></td><td class="num"><b>%d B</b></td>'
+    '<td class="num"><b>%.2f TiB</b></td><td class="num">100%%</td>'
+    '<td colspan="2"><em>⭐ 跟 batch、跟序列长度<b>都无关</b> ——&nbsp;'
+    '只要模型定了，这个数就定了。</em></td></tr>'
+    '<tr><td><b>中间激活</b></td><td class="num">——</td>'
+    '<td class="num"><b>看 batch</b></td><td class="num">——</td>'
+    '<td>反向要用的那一堆中间结果（<a href="#s1-6">1.6</a>）</td>'
+    '<td><em>⛔ 唯一一个<b>你自己能调</b>的 ——&nbsp;'
+    '也是唯一一个能反超上面三项的</em></td></tr>'
+    '</tbody></table>'
+    % (_rows, _LED_B, N_PARAM * _LED_B / TIB))
+
 _html = head + HERO + BODY + FOOT
 _html = _html.replace("__TBL_PER_BYTE__", _TBL)
+_html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
 
 for _txt, _got in (("一层省 53.5 GiB，付 48.9 TFLOP", (_CHEAP_GIB, _CHEAP_TF)),
                    ("贵 <b>23 倍</b>", _TIMES),
@@ -2756,6 +2815,18 @@ assert abs(_CHEAP_GIB - 53.5) < 0.05 and abs(_CHEAP_TF - 48.9) < 0.05, \
     "「比值小于 3 全收下」的合计变了：%.2f GiB / %.2f TFLOP" % (_CHEAP_GIB, _CHEAP_TF)
 assert abs(_TIMES - 23) < 0.5, "attention 比前一档贵的倍数变了：%.1f" % _TIMES
 assert abs(_CROSS - 5734) < 1, "交叉点变了：%.0f" % _CROSS
+
+# ⭐ §4.1 那张表跟散在正文里的那几个数必须对得上。
+#   ⛔ 它们分处两节、相隔三千行 —— 正是「改了一处忘了另一处」的经典产地，
+#      而这一讲自己已经因为讲义没跟着改而被评审抓到过一次。
+assert _LED_B == 16, "每参数字节数不是 16 了：%d —— §3.1 的拆法改了？" % _LED_B
+for _n, _v, _want in (("优化器状态", 12, 7.32), ("权重", 2, 1.22),
+                      ("常驻小计", _LED_B, 9.76)):
+    _tib = N_PARAM * _v / TIB
+    assert abs(_tib - _want) < 0.005, \
+        "§4.1 的表算出 %s ＝ %.3f TiB，可正文里写的是 %.2f" % (_n, _tib, _want)
+assert "权重 1.22 ＋ 梯度 1.22 ＋ 优化器状态 <b>7.32</b>" in _html, \
+    "§5.1 那句拆分被改过了 —— §4.1 的表要跟着核一遍"
 
 # ⛔ 标签配对：全课落点那个 <h3> 的开标签曾经整个丢了，只剩 </h3>。
 #   后果不是「样式不对」——是**全讲的落点渲染成裸正文、不进目录、锚点不存在**，
