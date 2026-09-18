@@ -29,7 +29,9 @@ r"""专题四 · 反向与优化器 —— **主线**（要拿上讲台的那一
   `topic03_page.py`，画法基元复用 `topic03_draw.py` ——&#160;
   ⛔ **别另起一套**，那是专题二、三、二x 已经共用的同一份。
 """
+import io
 import os
+import re
 
 import topic03_page as P
 
@@ -622,7 +624,7 @@ __TBL_PER_BYTE__
   重算前先恢复。</b>
   <em>——&nbsp;<code>torch.utils.checkpoint</code> 的
   <code>preserve_rng_state</code>，<b>默认就是 True</b>。</em></p>
-<p><span class="sub">⭐ 而这一条正好解释了 <a href="#s六">6.4</a> 那个清单里的第三项：
+<p><span class="sub">⭐ 而这一条正好解释了 <a href="#s3-7">3.7</a> 那个清单里的第三项：
   <em>checkpoint 里除了权重和优化器状态，<b>还得存随机数状态</b> ——&nbsp;
   原因是同一个：随机数是训练结果的一部分，不是「运行时的临时东西」。</em></span></p></div>
 
@@ -638,8 +640,8 @@ __TBL_PER_BYTE__
   ——&nbsp;归约的顺序不同、挑的 kernel 不同，都会这样。</em></p>
 <p><em>⭐ 对训练本身，这个量级的差别<b>基本没影响</b>。
   ⛔ <b>但它让「逐比特可复现」变难</b> ——&nbsp;
-  而那正是 <a href="#s六">6.7</a> 里 PaLM 做到的那件事，
-  也是 <a href="#s六">6.2</a> 那个「回滚 ＋ 跳数据」的救火办法所依赖的前提。</em></p></div>
+  而那正是 <a href="#s6-6">6.6</a> 里 PaLM 做到的那件事，
+  也是 <a href="#s6-2">6.2</a> 那个「回滚 ＋ 跳数据」的救火办法所依赖的前提。</em></p></div>
 
 <p class="landing">⭐⭐ 一句话：重算把「算力 ↔ 显存」这笔交易谈成了，
   <b>但它同时悄悄引入了一个「结果要可重现」的要求</b>。
@@ -1543,7 +1545,7 @@ __FIG_LR_CURVE__
     恢复之后又把同一批数据重训一遍，<b>loss 曲线看着完全正常</b>。</em></li>
   <li><b>③ 随机数状态</b> ——&nbsp;<em>dropout、数据打散都要用。</em></li>
 </ul>
-<p class="landing">⭐⭐ 而 <a href="#s六">§6.2</a> 那个「回滚 ＋ 跳数据」的救火办法，前提正是 ①②。
+<p class="landing">⭐⭐ 而 <a href="#s6-2">§6.2</a> 那个「回滚 ＋ 跳数据」的救火办法，前提正是 ①②。
   <em>——&nbsp;数据位置说不清，你连「跳掉哪几批」都没法讲。</em></p></div>
 
 <p><span class="sub">⭐ <b>顺带一个真实的省法</b>：优化器那部分<b>不一定要留在加速器上</b>。
@@ -1745,7 +1747,7 @@ __FIG_STEP__
 <!-- ⭐⭐⭐ 2026-09-17 夜间续轮 R2。
      接力清单上原本有一条待办：「画常驻块 vs 激活随序列长度的两条线，交点在哪」。
      ⛔ 动手前先验了一下，**这张图不该画**：
-       ① 激活账里**没有 S² 项**（1.2 那三条边界的第二条写着：
+       ① 激活账里**没有 S² 项**（1.7 那三条边界的第二条写着：
           注意力分数矩阵不落显存，FlashAttention 不写它）。
           所以激活是**随 token 总数线性**的 —— 两条线在 1,230 万 token
           才相交，那不是任何人会遇到的配置。
@@ -1767,7 +1769,7 @@ __FIG_STEP__
   <li><b>94 条 128K</b>，还是 <b>3,000 条 4K</b> ——&nbsp;
     <em>对显存<b>是同一件事</b>。</em></li>
   <li><b>为什么</b>：<em>激活账里<b>没有随 S² 涨的项</b>
-    ——&nbsp;注意力分数矩阵根本不落显存（<a href="#s一">1.2</a> 那三条边界的第二条）。
+    ——&nbsp;注意力分数矩阵根本不落显存（<a href="#s1-7">1.7</a> 那三条边界的第二条）。
     剩下的每一项都是「每个 token 一份」，<b>所以它只认 token 总数。</b></em></li>
 </ul>
 
@@ -1916,7 +1918,7 @@ __FIG_STEP__
   <em>换了 5,000 倍的规模，<b>那些<u>比例</u>基本没变</b>，变的只是绝对值。
   ——&nbsp;<b>所以这一讲教的是比例，不是那些数。</b></em></p></div>
 
-<div class="note"><p>⚠️ <b>三条边界，跟 1.2 那张表同一套。</b></p>
+<div class="note"><p>⚠️ <b>三条边界，跟 1.7 那张表同一套。</b></p>
 <ul>
   <li><em>这些数是<b>按算子逐项推的</b>，不是从哪份报告抄的
     ——&nbsp;框架的算子融合会让它小一些。<b>当量级看。</b></em></li>
@@ -2166,7 +2168,7 @@ __FIG_UNDERFLOW__
   <em>——&nbsp;数据管线不确定，你连「跳掉哪几批」都说不清。</em></p>
 <p><span class="sub">📌 同样出自 arXiv <b>2204.02311</b>。</span></p></div>
 
-　⭐⭐⭐ 全课落点：四条判据</h3>
+<h3>6.7　⭐⭐⭐ 全课落点：四条判据</h3>
 
 <p class="lead">这一讲报了几十个数字。<em>但真正想留下的不是那些数。</em></p>
 
@@ -2755,6 +2757,18 @@ assert abs(_CHEAP_GIB - 53.5) < 0.05 and abs(_CHEAP_TF - 48.9) < 0.05, \
 assert abs(_TIMES - 23) < 0.5, "attention 比前一档贵的倍数变了：%.1f" % _TIMES
 assert abs(_CROSS - 5734) < 1, "交叉点变了：%.0f" % _CROSS
 
+# ⛔ 标签配对：全课落点那个 <h3> 的开标签曾经整个丢了，只剩 </h3>。
+#   后果不是「样式不对」——是**全讲的落点渲染成裸正文、不进目录、锚点不存在**，
+#   而页面照样构建通过、照样上线。四位评审各自看见它，我自己读了几十遍没看见。
+#   ⭐ 判据：**会静默上线的错，必须让它在构建时炸。**
+for _tag in ("h2", "h3", "section", "div"):
+    _o = len(re.findall(r"<%s[ >]" % _tag, _html))
+    _c = _html.count("</%s>" % _tag)
+    assert _o == _c, (
+        "<%s> 开 %d 个、闭 %d 个 —— 差 %d。"
+        "少一个开标签的话，那一段会当成正文渲染，构建不会报错，但目录里它不存在。"
+        % (_tag, _o, _c, _c - _o))
+
 for ph, (what, figs, asks) in PLAN.items():
     assert ph in _html, "正文里没有 %s —— 章写完了要连这一行一起删" % ph
     _html = _html.replace(ph, todo(what, figs, asks))
@@ -2763,3 +2777,17 @@ for ph, (what, figs, asks) in PLAN.items():
 _html = P.place_figs(_html, FIGS)
 _html = P.add_figonly_toggle(_html)
 P.finish(_html, OUT, SECTIONS, "topic-04.html")
+
+# ⛔ 站内锚点必须落地 —— **查的是写出去的那份成品**，不是中间变量。
+#   小节 id 是 P.finish() 生成 tocbar 时才补上的，在它之前查会全军覆没。
+#   ⭐ 这一条防的是：交叉引用指向一个**真实存在但内容不相干**的小节
+#      （「6.4 那个清单」实际在 3.7、「1.2 那三条边界」实际在 1.7）。
+#      死链会被发现，跳错不会 —— 所以它比死链更该由机器盯。
+_final = io.open(OUT, encoding="utf-8").read()   # OUT 已是完整文件路径
+_ids = set(re.findall(r'\bid="([^"]+)"', _final))
+_bad = sorted({h for h in re.findall(r'href="#([^"]+)"', _final)
+               if h and not h.startswith("!") and h not in _ids})
+assert not _bad, (
+    "这些站内锚点指向不存在的 id：%s\n"
+    "⭐ 小节 id 形如 s3-7 / s6-6，节级形如 s六。" % "、".join(_bad))
+print("   ✅ 站内锚点 %d 个全部落地" % len(re.findall(r'href="#', _final)))

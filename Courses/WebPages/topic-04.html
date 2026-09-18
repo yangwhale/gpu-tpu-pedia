@@ -2851,7 +2851,7 @@ body.figonly section h3{margin-top:34px}
   重算前先恢复。</b>
   <em>——&nbsp;<code>torch.utils.checkpoint</code> 的
   <code>preserve_rng_state</code>，<b>默认就是 True</b>。</em></p>
-<p><span class="sub">⭐ 而这一条正好解释了 <a href="#s六">6.4</a> 那个清单里的第三项：
+<p><span class="sub">⭐ 而这一条正好解释了 <a href="#s3-7">3.7</a> 那个清单里的第三项：
   <em>checkpoint 里除了权重和优化器状态，<b>还得存随机数状态</b> ——&nbsp;
   原因是同一个：随机数是训练结果的一部分，不是「运行时的临时东西」。</em></span></p></div>
 
@@ -2867,8 +2867,8 @@ body.figonly section h3{margin-top:34px}
   ——&nbsp;归约的顺序不同、挑的 kernel 不同，都会这样。</em></p>
 <p><em>⭐ 对训练本身，这个量级的差别<b>基本没影响</b>。
   ⛔ <b>但它让「逐比特可复现」变难</b> ——&nbsp;
-  而那正是 <a href="#s六">6.7</a> 里 PaLM 做到的那件事，
-  也是 <a href="#s六">6.2</a> 那个「回滚 ＋ 跳数据」的救火办法所依赖的前提。</em></p></div>
+  而那正是 <a href="#s6-6">6.6</a> 里 PaLM 做到的那件事，
+  也是 <a href="#s6-2">6.2</a> 那个「回滚 ＋ 跳数据」的救火办法所依赖的前提。</em></p></div>
 
 <p class="landing">⭐⭐ 一句话：重算把「算力 ↔ 显存」这笔交易谈成了，
   <b>但它同时悄悄引入了一个「结果要可重现」的要求</b>。
@@ -5264,7 +5264,7 @@ body.figonly section h3{margin-top:34px}
     恢复之后又把同一批数据重训一遍，<b>loss 曲线看着完全正常</b>。</em></li>
   <li><b>③ 随机数状态</b> ——&nbsp;<em>dropout、数据打散都要用。</em></li>
 </ul>
-<p class="landing">⭐⭐ 而 <a href="#s六">§6.2</a> 那个「回滚 ＋ 跳数据」的救火办法，前提正是 ①②。
+<p class="landing">⭐⭐ 而 <a href="#s6-2">§6.2</a> 那个「回滚 ＋ 跳数据」的救火办法，前提正是 ①②。
   <em>——&nbsp;数据位置说不清，你连「跳掉哪几批」都没法讲。</em></p></div>
 
 <p><span class="sub">⭐ <b>顺带一个真实的省法</b>：优化器那部分<b>不一定要留在加速器上</b>。
@@ -5652,7 +5652,7 @@ body.figonly section h3{margin-top:34px}
 <!-- ⭐⭐⭐ 2026-09-17 夜间续轮 R2。
      接力清单上原本有一条待办：「画常驻块 vs 激活随序列长度的两条线，交点在哪」。
      ⛔ 动手前先验了一下，**这张图不该画**：
-       ① 激活账里**没有 S² 项**（1.2 那三条边界的第二条写着：
+       ① 激活账里**没有 S² 项**（1.7 那三条边界的第二条写着：
           注意力分数矩阵不落显存，FlashAttention 不写它）。
           所以激活是**随 token 总数线性**的 —— 两条线在 1,230 万 token
           才相交，那不是任何人会遇到的配置。
@@ -5674,7 +5674,7 @@ body.figonly section h3{margin-top:34px}
   <li><b>94 条 128K</b>，还是 <b>3,000 条 4K</b> ——&nbsp;
     <em>对显存<b>是同一件事</b>。</em></li>
   <li><b>为什么</b>：<em>激活账里<b>没有随 S² 涨的项</b>
-    ——&nbsp;注意力分数矩阵根本不落显存（<a href="#s一">1.2</a> 那三条边界的第二条）。
+    ——&nbsp;注意力分数矩阵根本不落显存（<a href="#s1-7">1.7</a> 那三条边界的第二条）。
     剩下的每一项都是「每个 token 一份」，<b>所以它只认 token 总数。</b></em></li>
 </ul>
 
@@ -5823,7 +5823,7 @@ body.figonly section h3{margin-top:34px}
   <em>换了 5,000 倍的规模，<b>那些<u>比例</u>基本没变</b>，变的只是绝对值。
   ——&nbsp;<b>所以这一讲教的是比例，不是那些数。</b></em></p></div>
 
-<div class="note"><p>⚠️ <b>三条边界，跟 1.2 那张表同一套。</b></p>
+<div class="note"><p>⚠️ <b>三条边界，跟 1.7 那张表同一套。</b></p>
 <ul>
   <li><em>这些数是<b>按算子逐项推的</b>，不是从哪份报告抄的
     ——&nbsp;框架的算子融合会让它小一些。<b>当量级看。</b></em></li>
@@ -6385,7 +6385,7 @@ body.figonly section h3{margin-top:34px}
   <em>——&nbsp;数据管线不确定，你连「跳掉哪几批」都说不清。</em></p>
 <p><span class="sub">📌 同样出自 arXiv <b><a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a></b>。</span></p></div>
 
-　⭐⭐⭐ 全课落点：四条判据</h3>
+<h3 id="s6-7">6.7　⭐⭐⭐ 全课落点：四条判据</h3>
 
 <p class="lead">这一讲报了几十个数字。<em>但真正想留下的不是那些数。</em></p>
 
