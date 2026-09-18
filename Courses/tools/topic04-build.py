@@ -506,7 +506,7 @@ __FIG_PER_BYTE__
   它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
   ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
 
-<p>把 V3 在 128K 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
+<p>把 V3 在<b>基准的 4K</b> 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
 
 __TBL_PER_BYTE__
 
@@ -519,10 +519,24 @@ __TBL_PER_BYTE__
   照着排的人会正好撞上它。<b>现在整张表由闭式解生成，手改不了。</b></em></span></p>
 
 <div class="note danger"><p>⭐⭐ 回答那个直觉问题：「有没有占显存很小、算力却很大的东西？」
-  ——&nbsp;<em>有，就是 attention，而且极端。
-  它比排在前一档的贵 <b>23 倍</b>。</em></p>
-<p>⛔ 但结论是反过来的：正因为如此，它是最该<u>留着</u>的那一个，不是最该重算的。
-  <em>判据只有一条比值 ——&nbsp;比值高的留，比值低的扔。</em></p></div>
+  ——&nbsp;<em>有，就是 attention ——&nbsp;<b>但「有多极端」完全取决于你在哪个序列长度上问。</b></em></p>
+<p><em>判据只有一条比值 ——&nbsp;<b>比值高的留，比值低的扔</b>。
+  而这张表里<u>只有 attention 这一行会随序列长度动</u>，其余七行是输入宽度，跟 S 无关。</em></p>
+<table><thead><tr><th>attention 每 GiB 付</th><th>4K（本讲基准）</th>
+  <th>128K（扩训）</th></tr></thead><tbody>
+<tr><td>绝对值</td><td><b>__ATT_PB_BASE__</b></td><td><b>__ATT_PB_LONG__</b></td></tr>
+<tr><td>跟最宽的线性层（gate/up，7.70）比</td>
+  <td><b>只有它的 __ATT_VS_W__</b></td><td><b>贵 __TIMES_LONG__ 倍</b></td></tr>
+<tr><td>在这张表里排第几</td><td>第 7 / 8（<b>gate/up 反而更贵</b>）</td><td>第 8 / 8（<b>最贵</b>）</td></tr>
+<tr><td>结论那一栏</td><td><b>边际</b></td><td><b>绝不</b></td></tr>
+</tbody></table>
+<p class="landing">⭐⭐⭐ <b>同一个模型、同一条判据，只把序列长度从 4K 推到 128K
+  ——&nbsp;attention 就从「跟 gate/up 一档」变成「比谁都贵 23 倍」。</b></p>
+<p><span class="sub">⛔ <b>别把话说过头</b>：4K 上 attention 的比值是 __ATT_PB_BASE__，
+  <u>仍然高于下面那条「小于 3 全收下」的线</u> ——&nbsp;
+  所以按本讲自己的切法，它<b>依然不进「收下」那一批</b>。
+  <em>变的是「它还是不是那个极端离群值」，不是「它突然该重算了」。
+  ⭐ 这个区别很重要：前者是事实，后者要看你把刀切在哪。</em></span></p></div>
 
 <div class="note"><p>❓ <b>「小于 3」这个 3 是哪来的？——&nbsp;<u>我定的，不是算出来的。</u></b></p>
 <p><em>它在表上的位置很清楚：专家输出那一行是 2.20，下一行 gate/up 是 7.70
@@ -534,11 +548,22 @@ __TBL_PER_BYTE__
   <em>要记的是「表是按比值排的，<b>你只需要决定在哪儿切一刀</b>」。
   ⭐ 排序是客观的，切在哪是你的配置说了算。</em></span></p></div>
 
-<p class="landing">⭐⭐ 照这条线切（把比值小于 3 的全收下来）：一层省 53.5 GiB，付 48.9 TFLOP。
-  <em>换算到<b>一个 step</b>（前向 ＋ 反向 ＝ 3 遍 ≈ 2,571 TFLOP）：
-  <u>只多付 1.9% 的算力，换掉约 77% 的激活显存</u>。</em></p>
+<p class="landing">⭐⭐ 照这条线切（把比值小于 3 的全收下来）：一层省 <b>__CHEAP_GIB__</b>，付 <b>__CHEAP_TF__</b>。
+  <em>换算到<b>一个 step</b>（一层，前向 ＋ 反向 ＝ 3 遍 ＝ <b>__STEP_TF__</b>）：
+  <u>多付 __SEL_PCT__ 的算力，换掉约 77% 的激活显存</u>。</em></p>
 <p><em>对比全量重算 ——&nbsp;同一个 step 口径下是「多付 33%，换掉 97%」。
-  ⭐ <b>选择性重算的性价比高一个数量级</b>，这就是它值得单独配的原因。</em></p>
+  ⭐ <b>选择性重算的性价比还是高 __EDGE__ 倍</b>，这就是它值得单独配的原因。</em></p>
+
+<div class="note"><p>⚠️ <b>这两个数在 128K 上长得很不一样，而漂亮的是那一档。</b></p>
+<p><em>128K 上同样切法是「<b>只多付 1.9%</b> 换 77%」，性价比高 <b>13.9 倍</b>
+  ——&nbsp;确实够得上「一个数量级」。</em></p>
+<p class="landing">⭐ <b>为什么差这么多：分子（重算代价）∝ S，
+  分母（一个 step）在 128K 上被 S² 的 attention 撑着。</b>
+  <em>——&nbsp;所以序列越长，同一批重算看起来越便宜。
+  ⛔ 那个「1.9%」是<u>长上下文专属的漂亮数字</u>，别拿到 4K 上引用。</em></p>
+<p><span class="sub">⭐ 但方向没变：两个基准上选择性都明显划算。
+  <b>而全量重算那个「多付 33% 换 97%」是尺度无关的</b> ——&nbsp;
+  它只取决于「前向跑两遍而不是一遍」，跟 S 一点关系都没有。</span></p></div>
 <p><span class="sub">⚠️ <b>这两个百分比早先分母不一样</b>（一个除一遍前向、一个除整个 step），
   并排比是不能比的 ——&nbsp;<em>而这一讲自己在 2.5 就写着「跨文献比这类比例前，
   先确认对方折没折半」。<b>已统一到 step 口径。</b></em></span></p>
@@ -2740,8 +2765,25 @@ FIGS = {
 #    手填的表里，「大部分行能对上」不构成任何保证 —— 错的那行长得跟对的一样。
 # ══════════════════════════════════════════════════════════════════
 GIB_F = 2 ** 30 / 1e12        # FLOPs/字节 → TFLOP/GiB
-S_V3 = 131072                 # 128K 上下文
+S_BASE = 4096                 # ⭐ 本讲基准：V3 预训练真实序列长度（14.8T token 全在这档）
+S_LONG = 131072               # 长上下文扩训（预训练之后各一千步）
+S_RATIO = S_LONG // S_BASE    # ＝ 32，激活线性缩放的倍数
 D_V3 = 7168                   # V3 的模型宽度（最宽的那个线性层的输入）
+N_ACT_L = 585.3e6             # 一层的激活参数量（MLA ＋ 被选中的 9 个专家）
+H_V3, DQK_V3, DV_V3 = 128, 192, 128
+
+def _step_tf(S):
+    """一层跑完一个 step（前向 ＋ 反向 ≈ 3 遍）要多少 TFLOP。
+    ⛔ 2,571 这个数原来是**空降的** —— 而「只多付 1.9%」整个结论拿它当分母。
+       三位评审都点名了。现在它由 S 算出来，换基准自动跟着走。
+    ⭐ 两项的 S 次数不同（线性 ∝ S，attention ∝ S²），**这正是翻转的来源**。"""
+    lin = 2 * N_ACT_L * S
+    att = S * S * H_V3 * (DQK_V3 + DV_V3)
+    return 3 * (lin + att) / 1e12
+
+def _att_share(S):
+    lin, att = 2 * N_ACT_L * S, S * S * H_V3 * (DQK_V3 + DV_V3)
+    return att / (lin + att)
 
 # (名称, 省显存 GiB, 每字节 FLOPs, 结论)
 #   线性层：每字节 FLOPs ＝ **输入宽度**（2·S·k·n ÷ (S·n·2)，S 和 n 全约掉）
@@ -2750,27 +2792,67 @@ D_V3 = 7168                   # V3 的模型宽度（最宽的那个线性层的
 #     而且取 2 还是取 3，显示出来都是「~0」，排序也不变。
 #     ⛔ 不要为了让表看起来精确而给它们编两个不同的值。
 #   attention：随序列长度线性上升，V3 那套头维度下约 1.25·S
-PER_BYTE_ROWS = [
-    ("MoE 派发（复制成 9 份）",                 15.75, 0.0,          "白捡"),
-    ("RMSNorm 输出（每层 2 个）",                3.50, 2.0,          "白捡"),
-    ("SwiGLU 乘积 9 份（逐元素）",               4.50, 2.0,          "白捡"),
-    ("K/V 解压（输入宽 512）",                   8.00, 512.0,        "划算"),
-    ("Q 展开（输入宽 1,536）",                   6.00, 1536.0,       "划算"),
-    ("专家输出 9 份（输入宽 2,048）",            15.75, 2048.0,       "划算"),
-    ("gate / up / 路由 / 降维（输入宽 7,168）",   9.14, float(D_V3),  "边际"),
-    ("attention 输出",                           4.00, 1.25 * S_V3,  "绝不"),
+# (名字, 128K 上省多少 GiB, 每字节代价 FLOPs/B)
+# ⛔ GiB 一列原来是**手填的 128K 常量**，而这一段正文的卖点是「你拿 config 自己也能排一遍」。
+#    现在按基准缩放；每字节代价里只有 attention 带 S，其余是输入宽度、与 S 无关。
+# ⭐⭐ 而这正是翻转的全部机制：**七行不动，一行在动。**
+PER_BYTE_ROWS_128K = [
+    ("MoE 派发（复制成 9 份）",                 15.75, 0.0),
+    ("RMSNorm 输出（每层 2 个）",                3.50, 2.0),
+    ("SwiGLU 乘积 9 份（逐元素）",               4.50, 2.0),
+    ("K/V 解压（输入宽 512）",                   8.00, 512.0),
+    ("Q 展开（输入宽 1,536）",                   6.00, 1536.0),
+    ("专家输出 9 份（输入宽 2,048）",            15.75, 2048.0),
+    ("gate / up / 路由 / 降维（输入宽 7,168）",   9.14, float(D_V3)),
+    ("attention 输出",                           4.00, None),   # None ＝ 1.25·S，跟着基准走
 ]
+CUT = 3.0        # 「比值小于 3 全收下」——&#160;正文里说清了这是我定的，不是算出来的
+
+
+def _per_byte(S):
+    """按序列长度 S 排一遍。⭐ 返回已按「每 GiB 付」升序排好的行。"""
+    out = []
+    for nm, gib128, pb in PER_BYTE_ROWS_128K:
+        out.append((nm, gib128 * S / S_LONG,
+                    1.25 * S if pb is None else pb))
+    return sorted(out, key=lambda r: r[2])
+
+
+def _verdict(ratio):
+    """⛔ 原来「白捡/划算/边际/绝不」是**手写在每一行上**的，
+       换个基准就会留下一行说谎的标签。现在从比值算出来。"""
+    if ratio < 0.05:  return "白捡"
+    if ratio < CUT:   return "划算"
+    if ratio < 20.0:  return "边际"
+    return "绝不"
+
+
+_ROWS_BASE = _per_byte(S_BASE)
+_ROWS_LONG = _per_byte(S_LONG)
+
+# ⭐⭐⭐ 这一讲最值钱的那个论断，写成断言：**同一条判据，两个基准给出不同的名次。**
+_att_base = [r for r in _ROWS_BASE if r[0] == "attention 输出"][0]
+_att_long = [r for r in _ROWS_LONG if r[0] == "attention 输出"][0]
+assert _ROWS_LONG[-1][0] == "attention 输出", "128K 上 attention 应该排最后（最贵）"
+assert _ROWS_BASE[-1][0] != "attention 输出", \
+    "4K 上 attention 不该再是最贵的那一个 —— 翻转没发生，去查斜率"
+assert abs(_att_base[2] * GIB_F - 5.50) < 0.01 and abs(_att_long[2] * GIB_F - 175.92) < 0.01
+# ⛔ 但**别把话说过头**：5.50 仍然高于 CUT ＝ 3，所以按本讲自己那条线，
+#    4K 上 attention 依然不进「收下」那一批。它从「绝不」变成「边际」，不是变成「该重算」。
+assert _att_base[2] * GIB_F > CUT, "4K 上 attention 仍在切线之上 —— 这条前提变了就要改正文"
+assert _verdict(_att_base[2] * GIB_F) == "边际" and _verdict(_att_long[2] * GIB_F) == "绝不"
 
 _rows, _prev = [], -1.0
-for _name, _gib, _pb, _verdict in PER_BYTE_ROWS:
+for _name, _gib, _pb in _ROWS_BASE:
     _cost, _ratio = _gib * _pb * GIB_F, _pb * GIB_F
-    assert _ratio >= _prev, "表是按「每 GiB 付」升序排的，%s 插错位置了" % _name
+    assert _ratio >= _prev, "排序坏了：%s" % _name
     _prev = _ratio
+    _v = _verdict(_ratio)
     _c = "~0" if _cost < 0.005 else "%.2f TFLOP" % _cost
     _r = "0" if _pb == 0 else ("~0" if _ratio < 0.05 else "%.2f" % _ratio)
-    _b = (lambda x: "<b>%s</b>" % x) if _verdict == "绝不" else (lambda x: x)
+    _b = (lambda x: "<b>%s</b>" % x) if _v in ("绝不", "边际") else (lambda x: x)
     _rows.append("<tr><td>%s</td><td>%s</td><td>%s</td><td><b>%s</b></td><td>%s</td></tr>"
-                 % (_b(_name), _b("%.2f GiB" % _gib), _b(_c), _r, _b(_verdict)))
+                 % (_b(_name), _b("%.3f GiB" % _gib), _b(_c), _r, _b(_v)))
 
 _TBL = ('<table>\n<thead><tr><th>张量</th><th>省显存</th><th>重算代价</th>'
         '<th>每 GiB 付</th><th>结论</th></tr></thead>\n<tbody>\n'
@@ -2778,11 +2860,28 @@ _TBL = ('<table>\n<thead><tr><th>张量</th><th>省显存</th><th>重算代价</
 
 # ⭐ 正文里引用这张表的三个数，也回头对一遍 —— 表改了正文没跟着改，
 #    是这类「生成表 + 手写正文」最典型的下一个坑。
-_cheap = [r for r in PER_BYTE_ROWS if r[2] * GIB_F < 3]
+_cheap = [r for r in _ROWS_BASE if r[2] * GIB_F < CUT]
 _CHEAP_GIB = sum(r[1] for r in _cheap)
 _CHEAP_TF = sum(r[1] * r[2] * GIB_F for r in _cheap)
-_TIMES = (PER_BYTE_ROWS[-1][2] / PER_BYTE_ROWS[-2][2])
 _CROSS = D_V3 / 1.25
+
+# ⭐ 选择性 vs 全量：两个百分比与它们的性价比之比，全部由基准算出来。
+_STEP_TF   = _step_tf(S_BASE)
+_SEL_PCT   = 100.0 * _CHEAP_TF / _STEP_TF          # 选择性重算多付百分之几
+_FULL_PCT, _FULL_SAVE, _SEL_SAVE = 100.0 / 3.0, 97.0, 77.0
+_EDGE      = (_SEL_SAVE / _SEL_PCT) / (_FULL_SAVE / _FULL_PCT)   # 性价比之比
+# attention 跟它前一档的倍数 —— 128K 上是 23 倍（最贵），4K 上它已经不在最后
+_TIMES_LONG = _ROWS_LONG[-1][2] / _ROWS_LONG[-2][2]
+_ATT_VS_WIDEST = _att_base[2] / float(D_V3)        # 4K 上 attention ÷ 最宽线性层
+
+for _nm, _got, _want in (("128K 的 23 倍", _TIMES_LONG, 22.857),
+                         ("4K attention ÷ gate/up", _ATT_VS_WIDEST, 0.714),
+                         ("4K 选择性占比", _SEL_PCT, 9.30),
+                         ("性价比之比", _EDGE, 2.85),
+                         ("一层一步 TFLOP", _STEP_TF, 16.45),
+                         ("4K attention 占前向", 100 * _att_share(S_BASE), 12.53),
+                         ("128K attention 占前向", 100 * _att_share(S_LONG), 82.11)):
+    assert abs(_got - _want) < 0.02, "%s 算出 %.3f，期望 %.3f" % (_nm, _got, _want)
 
 # ══════════════════════════════════════════════════════════════════
 # ⭐⭐⭐ §1.7 的两张激活表 —— 由「张量宽度」生成，序列长度只是一个变量。
@@ -2792,8 +2891,6 @@ _CROSS = D_V3 / 1.25
 #    那正是「改一处忘三处」的产地。
 # ⭐ 判据：**一个数如果是算出来的，就让它在构建时算，不要让它在正文里躺着。**
 #    改成这样之后，切基准只动 S_BASE 一个数，而 128K 的旧值成了回归锚点。
-S_BASE = 4096                 # ⭐ 本讲基准：V3 预训练的真实序列长度
-S_LONG = 131072               # 长上下文扩训阶段（只在对比点出现）
 DTYPE_B = 2                   # bf16
 
 # (说明, 宽度怎么来的, 等效宽度, 每元素字节)
@@ -2900,6 +2997,17 @@ _TBL_LEDGER = (
 
 _html = head + HERO + BODY + FOOT
 _html = _html.replace("__TBL_PER_BYTE__", _TBL)
+for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
+                  ("__ATT_PB_LONG__", "%.2f" % (_att_long[2] * GIB_F)),
+                  ("__ATT_VS_W__",    "%.0f%%" % (100 * _ATT_VS_WIDEST)),
+                  ("__TIMES_LONG__",  "%.0f" % _TIMES_LONG),
+                  ("__CHEAP_GIB__",   "%.2f GiB" % _CHEAP_GIB),
+                  ("__CHEAP_TF__",    "%.2f TFLOP" % _CHEAP_TF),
+                  ("__STEP_TF__",     "%.1f TFLOP" % _STEP_TF),
+                  ("__SEL_PCT__",     "%.1f%%" % _SEL_PCT),
+                  ("__EDGE__",        "%.1f" % _EDGE)):
+    assert _ph in _html, "正文里没有 %s" % _ph
+    _html = _html.replace(_ph, _val)
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
 _html = _html.replace("__TBL_ACT_MLA__",
                       _act_tbl(_MLA_ROWS, S_BASE, "宽度", "小计"))
@@ -2914,14 +3022,11 @@ for _ph, _val in (
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
 
-for _txt, _got in (("一层省 53.5 GiB，付 48.9 TFLOP", (_CHEAP_GIB, _CHEAP_TF)),
-                   ("贵 <b>23 倍</b>", _TIMES),
-                   ("<b>S ≈ 5,734</b>", _CROSS)):
-    assert _txt in _html, "正文里这句话被改过了，数对不上表：%s" % _txt
-assert abs(_CHEAP_GIB - 53.5) < 0.05 and abs(_CHEAP_TF - 48.9) < 0.05, \
-    "「比值小于 3 全收下」的合计变了：%.2f GiB / %.2f TFLOP" % (_CHEAP_GIB, _CHEAP_TF)
-assert abs(_TIMES - 23) < 0.5, "attention 比前一档贵的倍数变了：%.1f" % _TIMES
+assert "<b>S ≈ 5,734</b>" in _html, "交叉点那句被改过了"
 assert abs(_CROSS - 5734) < 1, "交叉点变了：%.0f" % _CROSS
+# ⛔ 128K 的旧值当回归锚点：×32 必须回到发布过的 53.5 GiB / 48.9 TFLOP
+assert abs(_CHEAP_GIB * S_RATIO - 53.5) < 0.05 and abs(_CHEAP_TF * S_RATIO - 48.9) < 0.1, \
+    "「比值小于 3 全收下」对不上 128K 旧值：%.2f / %.2f" % (_CHEAP_GIB * S_RATIO, _CHEAP_TF * S_RATIO)
 
 # ⭐ §4.1 那张表跟散在正文里的那几个数必须对得上。
 #   ⛔ 它们分处两节、相隔三千行 —— 正是「改了一处忘了另一处」的经典产地，
