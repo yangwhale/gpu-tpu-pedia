@@ -3010,10 +3010,37 @@ body.figonly section h3{margin-top:34px}
 <p><em>Megatron-LM 的选择性重算开关 <code>--recompute-modules</code>，
   候选项里第一个就是 <code>core_attn</code>，
   <b>而且它是<u>默认值</u></b>（<code>recompute_modules = ["core_attn"]</code>）。</em></p>
-<p class="landing">⭐⭐⭐ 而这个默认值，正是 <b>2.6 那条判据的活标本</b>。
-  <em>它是 2,048 那个年代选出来的最优解：在那个长度上它对，
-  在 128K 上按我们这张表，它<b>恰恰是最不该重算的那一个</b>
-  ——&nbsp;但它还在那里当默认。</em></p>
+<div class="note danger"><p>⛔⛔ <b>先把话说准 ——&nbsp;这里有三层，我原来只讲了一层。</b></p>
+<ul>
+  <li>① <b>「默认」不等于「默认开着」。</b><em><code>recompute_granularity</code>
+    的默认值是 <code>None</code>，也就是<u>什么都不重算</u>。
+    <code>core_attn</code> 是你<b>主动打开 selective 之后</b>，默认选中的那个模块。</em></li>
+  <li>② <b>而在 FlashAttention / 融合 attention 下，重算它基本没用。</b>
+    <em>FlashAttention 压根不把注意力分数写进显存 ——&nbsp;
+    <u>没有物化的东西，谈不上「扔掉再算回来」</u>。</em></li>
+  <li>③ ⭐⭐⭐ <b>最有意思的是：Megatron 自己知道这件事，而且把警告写进了源码。</b></li>
+</ul>
+<p class="landing"><em>「If you are using transformer_engine as the transformer implementation,
+  the core_attn is from transformer_engine and <b>may be the fused version</b>.
+  <b>For fused attention, you have no need to set 'core_attn' to recompute.</b>
+  Please check that the core_attn recompute is really needed.」</em></p>
+<p><span class="sub">📌 <code>transformer_config.py</code> 里
+  <code>if "core_attn" in self.recompute_modules: warnings.warn(...)</code>，2026-09 主干。</span></p></div>
+
+<p class="landing">⭐⭐⭐ <b>所以这不是「一个过期的默认值没人管」——&nbsp;
+  而是<u>有人发现了，但他没改默认值，他在旁边钉了一条警告</u>。</b></p>
+
+<div class="note ok"><p>⭐⭐ <b>为什么这样处理，比「直接改掉」更值得琢磨。</b></p>
+<p><em>改默认值是要付代价的：<b>别人照着旧默认跑出来的结果，从此复现不了</b>。
+  ——&nbsp;所以框架宁可留着一个不再最优的默认，也不愿意让历史结果失效。</em></p>
+<p class="landing">⛔ <b>于是这个默认值就成了一枚化石</b>：
+  <em>它记录的是 2,048 那个年代的最优解 ——&nbsp;在那个长度上它<u>对</u>，
+  在长上下文上按我们这张表它是最不该动的那一个，
+  而在<b>今天的融合 attention 下它干脆没什么可做</b>。</em></p>
+<p><span class="sub">⭐ 判据不在于「这个开关该不该开」，而在于：
+  <b>看到任何一个默认值，先问它是哪一年选出来的、当时的前提还在不在。</b>
+  ——&nbsp;而这一条对我自己也成立：<u>我最初写的是「它还在那里当默认」，
+  那句话把三层揉成了一层，读者会以为一打开训练它就在偷偷重算 attention。</u></span></p></div>
 <p><span class="sub">⭐ <b>更值得看的是名单上的其余几项</b>：
   <code>layernorm</code>、<code>moe_act</code>、<code>mla_up_proj</code>
   ——&nbsp;<em>对照 2.3 那张表：RMSNorm 输出、SwiGLU 乘积、K/V 解压与 Q 展开。
@@ -6942,7 +6969,7 @@ body.figonly section h3{margin-top:34px}
 <tr><td><b>选择性重算</b>（<a href="#s二">2.3</a>）</td>
     <td><code>--recompute-granularity selective</code> ＋
         <code>--recompute-modules</code><br>
-        <span class="sub">候选项：<code>core_attn</code>（<b>默认</b>）/ <code>layernorm</code> /
+        <span class="sub">候选项：<code>core_attn</code>（<b>selective 打开后的默认选项</b>）/ <code>layernorm</code> /
         <code>moe_act</code> / <code>mla_up_proj</code> / <code>mlp</code> …</span></td></tr>
 <tr><td><b>梯度裁剪</b>（<a href="#s一">1.8</a>）</td>
     <td><code>--clip-grad</code>（默认 <b>1.0</b>，正好是 V3 用的那个值）</td></tr>
@@ -6988,7 +7015,9 @@ body.figonly section h3{margin-top:34px}
     正是把第 ② 道整个关掉。</b>
     累积期间一次不通信，攒完再一次性同步 ——&nbsp;
     <b>所以「梯度累积顺带省通信」不是副作用，它就是这个 API 的用途。</b></em></li>
-  <li><code>core_attn</code> 是 Megatron 的<b>默认</b> ——&nbsp;
+  <li><code>core_attn</code> 是 Megatron 打开 selective 之后的<b>默认选项</b>
+    （⛔ 不是「默认开着」——&nbsp;<code>recompute_granularity</code> 默认是 <code>None</code>），
+    而且源码里就带着一条「融合 attention 下你不需要设它」的警告 ——&nbsp;
     <em>而按 <a href="#s二">2.4</a>，长上下文下它恰恰是<b>最不该重算</b>的那一个。
     ⭐ <b>默认值是有年代的</b>，这条在 <a href="#s二">2.6</a> 展开过。</em></li>
 </ul>
