@@ -87,6 +87,14 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 <p>⭐⭐ <em>所以这一讲的每一节只回答同一个问题：
   这一项有多大，能不能省，省它要拿什么去换。</em></p></div>
 
+<div class="note"><p>📐 <b>先把场景钉住，不然后面每个数你都不知道它在说哪一档。</b></p>
+<p><em>这一讲所有的账，默认都按 <b>DeepSeek-V3 预训练的真实配置</b>算：
+  <b>序列长度 4,096</b>，global batch 从 3,072 条爬到 15,360 条。</em></p>
+<p class="sub">⚠️ V3 对外说的是 128K 上下文，但那是预训练<u>之后</u>
+  两段各一千步的扩展；真正跑掉 14.8T token 的那一段，<b>是在 4K 上</b>。
+  ⭐ 本讲凡是出现 128K 的地方，都会明说那是<b>扩训场景</b>，
+  并给出跟 4K 的换算 ——&nbsp;<b>不标场景的数字没有意义</b>，这也是全讲第③条判据。</p></div>
+
 </div></section>
 
 
@@ -300,46 +308,38 @@ __FIG_ACT_BILL__
   <em>它是给要自己动手算的人看的 ——&nbsp;上面那两个数从哪来，全在这儿。</em></p>
 
 <p><b>基准单位先立住：</b><em>一份 hidden 宽的张量
-  ＝ <code>131,072 × 7,168 × 2 B</code> ＝ <b>1.75 GiB</b>。
-  下面所有数都是它的倍数。</em>（序列 131,072、batch 1、bf16。）</p>
+  ＝ <code>4,096 × 7,168 × 2 B</code> ＝ <b>56 MiB</b>。
+  下面所有数都是它的倍数。</em>（序列 <b>4,096</b>、batch 1、bf16。）</p>
+
+<div class="note"><p>⭐ <b>为什么是 4,096 而不是 128K</b> ——&nbsp;
+  <em>V3 是在 <b>4K</b> 上做的预训练（14.8T token 全在这个长度上），
+  128K 是预训练<u>之后</u>两段各一千步的扩展。
+  <b>本讲所有的账都按 4K 算</b>；128K 只在需要对比的地方出现，并会标明它是扩训场景。</em></p>
+<p class="sub">⚠️ 换算很简单：<b>激活只认 token 总数</b>（这一点 <a href="#s5-1">5.1</a> 会专门论证），
+  所以 128K 的数就是把下面每个数 <b>×32</b>（131,072 ÷ 4,096）。
+  ⛔ <b>唯一的例外是注意力分数矩阵</b> ——&nbsp;它带 S²，要 ×1024。见下面第二条边界。</p></div>
 
 <h4>MLA 子层留什么</h4>
-<table>
-<thead><tr><th>留下的张量</th><th>宽度</th><th>大小</th></tr></thead>
-<tbody>
-<tr><td>norm 的输入（＝ 残差入口，<b>重算模式下唯一留的那份</b>）</td><td>7,168</td><td>1.75 GiB</td></tr>
-<tr><td>norm 的输出</td><td>7,168</td><td>1.75 GiB</td></tr>
-<tr><td>Q 降维结果（layernorm 前后各一份）</td><td>1,536</td><td>0.75 GiB</td></tr>
-<tr><td>KV 降维结果（含 RoPE 那 64 维）</td><td>576 / 512</td><td>0.27 GiB</td></tr>
-<tr><td><b>Q 展开后</b></td><td>128 头 × 192 ＝ <b>24,576</b></td><td><b>6.00 GiB</b></td></tr>
-<tr><td><b>K、V 解压后</b></td><td>128 头 × 256 ＝ <b>32,768</b></td><td><b>8.00 GiB</b></td></tr>
-<tr><td>attention 输出</td><td>128 头 × 128 ＝ 16,384</td><td>4.00 GiB</td></tr>
-<tr><td>logsumexp（fp32）</td><td>128</td><td>0.06 GiB</td></tr>
-<tr><td><b>小计</b></td><td></td><td><b>约 22.6 GiB</b></td></tr>
-</tbody></table>
+__TBL_ACT_MLA__
 
 <h4>MoE 子层留什么</h4>
-<table>
-<thead><tr><th>留下的张量</th><th>份数 × 宽度</th><th>大小</th></tr></thead>
-<tbody>
-<tr><td>norm 的输入 / 输出</td><td>2 × 7,168</td><td>3.50 GiB</td></tr>
-<tr><td>路由分数</td><td>256</td><td>0.06 GiB</td></tr>
-<tr><td><b>派发出去的激活</b></td><td><b>9 份</b> × 7,168</td><td><b>15.75 GiB</b></td></tr>
-<tr><td>gate / up / SwiGLU 乘积</td><td>3 × 9 份 × 2,048</td><td>13.50 GiB</td></tr>
-<tr><td><b>专家输出（合并前）</b></td><td><b>9 份</b> × 7,168</td><td><b>15.75 GiB</b></td></tr>
-<tr><td><b>小计</b></td><td></td><td><b>约 48.6 GiB</b></td></tr>
-</tbody></table>
+__TBL_ACT_MOE__
 
 <div class="note ok"><p>⭐⭐⭐ 「9 份」是这张表里最值得停一下的地方。</p>
 <p><em>9 ＝ 被激活的 8 个路由专家 ＋ 1 个共享专家。
   <b>每个 token 的那份激活被复制了九遍</b> ——&nbsp;进去一次、出来一次，
-  光这两项就 <b>31.5 GiB</b>。</em></p>
+  光这两项就 <b>__ACT_NINE__</b>。</em></p>
 <p>⛔ 而它在专题一那张参数量的表上<u>完全看不出来</u>。
   <em>——&nbsp;MoE 在参数账上很划算（只激活一小部分），
   可在激活账上，它要付九份的复制费。</em></p></div>
 
-<p class="landing">⭐ 合起来：一层 MoE 块约 71 GiB，一层 dense 块约 40 GiB；
-  58 层 MoE ＋ 3 层 dense ≈ <u>4,245 GiB ≈ 4.15 TiB</u>。</p>
+<p class="landing">⭐ 合起来：一层 MoE 块约 <b>__ACT_LAYER__</b>，一层 dense 块约 <b>__ACT_DENSE__</b>；
+  58 层 MoE ＋ 3 层 dense ≈ <u>__ACT_TOTAL__</u>。</p>
+
+<div class="note"><p>📐 <b>换到扩训那一档（128K）</b>：<em>×32 ＝ 一层 MoE 块约 71 GiB，
+  全模型约 <b>4.15 TiB</b>。</em></p>
+<p class="sub">⛔ 这个 4.15 TiB 是很多人记住的那个数，但它是<b>扩训阶段</b>的账 ——&nbsp;
+  真正跑了 14.8T token 的那段预训练，这一项是 <b>__ACT_TOTAL__</b>。</p></div>
 
 <div class="note danger"><p>⚠️ 这张表的三条边界，讲的时候必须说清楚。</p>
 <ul>
@@ -347,10 +347,16 @@ __FIG_ACT_BILL__
     <em>不同框架的算子融合程度、是否顺手重算便宜算子、
     MoE 派发是否真的物化九份副本，差别都很大 ——&nbsp;当量级看，别当准数。</em></li>
   <li>注意力分数矩阵没算在里面。
-    <em>专题一算过它在 128K 上是 4 TiB／层。
+    <em>它带 <b>S²</b> ——&nbsp;<b>全表唯一一个不跟着 token 总数走的量</b>。
+    4K 上是 <b>__ATTN_SCORE__／层</b>（128 头 × 4,096² × 2 B），
+    128K 上是 <b>4 TiB／层</b>（×1024，不是 ×32）。
     FlashAttention 压根不把它写进显存，所以它不出现在这张表上
-    ——&nbsp;⛔ 换成不带 flash 的朴素实现，这张表整个作废。</em></li>
-  <li>那个 106.75 GiB 是「已经做过一次交易之后」的账。
+    ——&nbsp;⛔ 换成不带 flash 的朴素实现，这张表整个作废。</em>
+    <p class="sub">⭐⭐ <b>别因为「才 4 GiB」就放过它</b>：上面整整一层 MoE 块的全部激活
+      加起来才 __ACT_LAYER__ ——&nbsp;<b>这一项自己就比那一整层还大</b>。
+      在 128K 上它是压倒性的，在 4K 上它<u>依然是单个最大的张量</u>。
+      ⛔ 这条论点没有因为换基准而失效，只是从「吓人」变成「仍然第一」。</p></li>
+  <li>那个 106.75 GiB（<b>128K 口径</b>，4K 上 ÷32）是「已经做过一次交易之后」的账。
     <em>它假设每层只留入口那一份 ——&nbsp;而那恰恰就是<b>开了重算之后的样子</b>。
     ⭐ 所以先看原始账单、再看下一节，<b>顺序不能颠倒</b>。</em></li>
 </ul></div>
@@ -1780,12 +1786,26 @@ __FIG_STEP__
 <div class="note ok"><p>⭐⭐⭐ <b>顺着这个数往下问一句，会撞上一件反直觉的事。</b></p>
 <p><em>常驻那 9.76 TiB 是<b>定值</b> ——&nbsp;跟你喂多长、喂多少条都无关。
   那激活要涨到多大才追得上它？</em></p>
-<p class="landing">⭐ <b>按一条 128K 序列 106.75 GiB 算：<u>94 条</u>。</b>
-  <em>——&nbsp;折合大约 <b>1,230 万 token</b>。</em></p>
+<p class="landing">⭐ <b>答案是 <u>约 1,230 万 token</u></b>
+  ——&nbsp;<em>按本讲的 4K 基准，就是 <b>3,000 条序列</b>。</em>
+  <span class="sub">（一条 4K 序列开了重算之后约 3.34 GiB；换成扩训那一档，
+  一条 128K 是 106.75 GiB，<b>94 条</b>，token 总数一模一样。）</span></p>
 
-<p>⭐⭐ <b>而这里有个容易被跳过的前提：<u>那 1,230 万 token 怎么凑出来的，显存不在乎。</u></b></p>
+<div class="note danger"><p>⛔⛔ <b>停一下 ——&nbsp;把 V3 自己的 batch 代进去看看。</b></p>
+<p><em>§3.5 会讲到，V3 的 global batch 从 <b>3,072 条 4K</b> 起步
+  （＝ <b>1,258 万 token</b>），后期爬到 <b>15,360 条</b>（＝ 6,291 万 token）。</em></p>
+<p class="landing">⭐⭐⭐ <b>而分水岭是 1,230 万 —— 它<u>从第一步起就坐在线上</u>，
+  训到后期越过 5 倍。</b></p>
+<p><em>也就是说：<b>§零那个「最大的一块是优化器状态」的答案，
+  在这个模型自己的真实训练配置上并不成立</b> ——&nbsp;
+  激活从一开始就追平了它，而且这还是<u>开了全量重算之后</u>的账。</em></p>
+<p class="sub">⭐ 这不是打脸，这正是全讲第③条判据要说的事：
+  <b>「谁最大」不是模型的属性，是这次训练配置的属性。</b>
+  ⛔ 连本讲的第一个答案都服从它。</p></div>
+
+<p>⭐⭐ <b>还有个容易被跳过的前提：<u>那 1,230 万 token 怎么凑出来的，显存不在乎。</u></b></p>
 <ul>
-  <li><b>94 条 128K</b>，还是 <b>3,000 条 4K</b> ——&nbsp;
+  <li><b>3,000 条 4K</b>，还是 <b>94 条 128K</b> ——&nbsp;
     <em>对显存<b>是同一件事</b>。</em></li>
   <li><b>为什么</b>：<em>激活账里<b>没有随 S² 涨的项</b>
     ——&nbsp;注意力分数矩阵根本不落显存（<a href="#s1-7">1.7</a> 那三条边界的第二条）。
@@ -2764,6 +2784,81 @@ _CHEAP_TF = sum(r[1] * r[2] * GIB_F for r in _cheap)
 _TIMES = (PER_BYTE_ROWS[-1][2] / PER_BYTE_ROWS[-2][2])
 _CROSS = D_V3 / 1.25
 
+# ══════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ §1.7 的两张激活表 —— 由「张量宽度」生成，序列长度只是一个变量。
+#
+# ⛔ 原来两张表是**手写的 GiB 数**，钉死在 S ＝ 131,072 上。现场定的基准是
+#    **4K**（V3 预训练真实配置），一改就要手工改十几个数、还要改小计和总计 ——
+#    那正是「改一处忘三处」的产地。
+# ⭐ 判据：**一个数如果是算出来的，就让它在构建时算，不要让它在正文里躺着。**
+#    改成这样之后，切基准只动 S_BASE 一个数，而 128K 的旧值成了回归锚点。
+S_BASE = 4096                 # ⭐ 本讲基准：V3 预训练的真实序列长度
+S_LONG = 131072               # 长上下文扩训阶段（只在对比点出现）
+DTYPE_B = 2                   # bf16
+
+# (说明, 宽度怎么来的, 等效宽度, 每元素字节)
+_MLA_ROWS = [
+    ("norm 的输入（＝ 残差入口，<b>重算模式下唯一留的那份</b>）", "7,168", 7168, 2),
+    ("norm 的输出", "7,168", 7168, 2),
+    ("Q 降维结果（layernorm 前后各一份）", "2 × 1,536", 3072, 2),
+    ("KV 降维结果（含 RoPE 那 64 维）", "576 ＋ 512", 1088, 2),
+    ("<b>Q 展开后</b>", "128 头 × 192 ＝ <b>24,576</b>", 24576, 2),
+    ("<b>K、V 解压后</b>", "128 头 × 256 ＝ <b>32,768</b>", 32768, 2),
+    ("attention 输出", "128 头 × 128 ＝ 16,384", 16384, 2),
+    ("logsumexp（fp32）", "128", 128, 4),
+]
+_MOE_ROWS = [
+    ("norm 的输入 / 输出", "2 × 7,168", 14336, 2),
+    ("路由分数", "256", 256, 2),
+    ("<b>派发出去的激活</b>", "<b>9 份</b> × 7,168", 64512, 2),
+    ("gate / up / SwiGLU 乘积", "3 × 9 份 × 2,048", 55296, 2),
+    ("<b>专家输出（合并前）</b>", "<b>9 份</b> × 7,168", 64512, 2),
+]
+_DENSE_FFN_W = 3 * 18432 + 14336      # dense 层的 FFN 部分（MLA 那半边共用）
+N_MOE_L, N_DENSE_L = 58, 3
+
+def _bytes(rows, S):
+    return sum(w * b for _, _, w, b in rows) * S
+
+def _sz(nbytes):
+    """⭐ 4K 上很多项不到 1 GiB —— 硬写 GiB 会变成一串 0.02，读者读不出量级。"""
+    g = nbytes / 2 ** 30
+    if g >= 1:
+        return "%.2f GiB" % g
+    m = nbytes / 2 ** 20
+    # ⛔ 整数 MiB 会把 8.5 显示成 8（差 6%）—— 小数点后那一位在小项上是承重的
+    return ("%.1f MiB" % m).replace(".0 MiB", " MiB") if m < 100 else "%.0f MiB" % m
+
+def _act_tbl(rows, S, head2, total_label):
+    body = "".join('<tr><td>%s</td><td>%s</td><td>%s</td></tr>' % (n, w, _sz(ww * bb * S))
+                   for n, w, ww, bb in rows)
+    return ('<table><thead><tr><th>留下的张量</th><th>%s</th><th>大小</th></tr></thead>'
+            '<tbody>%s<tr><td><b>%s</b></td><td></td><td><b>约 %s</b></td></tr>'
+            '</tbody></table>' % (head2, body, total_label, _sz(_bytes(rows, S))))
+
+_MLA_B   = _bytes(_MLA_ROWS, S_BASE)
+_MOE_B   = _bytes(_MOE_ROWS, S_BASE)
+_LAYER_B = _MLA_B + _MOE_B
+_DENSE_B = _MLA_B + _DENSE_FFN_W * DTYPE_B * S_BASE
+_TOTAL_B = N_MOE_L * _LAYER_B + N_DENSE_L * _DENSE_B
+
+# ⛔ 回归锚点：同一套宽度在 128K 上必须复现页面发布过的那些数。
+#   ⭐ 这才是「换基准」和「算错了」的分水岭 —— 没有它，改完只能靠感觉。
+for _nm, _got, _want in (
+        ("MLA 小计",   _bytes(_MLA_ROWS, S_LONG) / 2 ** 30,                       22.58),
+        ("MoE 小计",   _bytes(_MOE_ROWS, S_LONG) / 2 ** 30,                       48.56),
+        ("一层 MoE 块", (_bytes(_MLA_ROWS, S_LONG) + _bytes(_MOE_ROWS, S_LONG)) / 2 ** 30, 71.14),
+        ("全模型",     (N_MOE_L * (_bytes(_MLA_ROWS, S_LONG) + _bytes(_MOE_ROWS, S_LONG))
+                        + N_DENSE_L * (_bytes(_MLA_ROWS, S_LONG)
+                                       + _DENSE_FFN_W * DTYPE_B * S_LONG)) / 2 ** 40, 4.145)):
+    assert abs(_got - _want) < 0.01, \
+        "128K 锚点对不上：%s 算出 %.3f，发布过的是 %.3f —— 宽度表被改坏了" % (_nm, _got, _want)
+
+# 注意力分数矩阵是 S² 项，**不跟着 token 总数走** —— 它是唯一一个换基准时
+# 要按平方缩的量。⭐ 这正是 §1.7 边界②该讲清楚的地方。
+_ATTN_SCORE_B = 128 * S_BASE ** 2 * DTYPE_B
+_ATTN_SCORE_LONG = 128 * S_LONG ** 2 * DTYPE_B
+
 # ⭐ §4.1 那张「按大小排一遍」的表 —— 由常量生成，不手填。
 #   ⛔ 这一节原来是张空支票：正文写着「这个顺序本身就是这一节的全部内容」，
 #      然后**一张表一张图都没有**；而 4.2 第一句就是「正是照着这个顺序来的」。
@@ -2806,6 +2901,18 @@ _TBL_LEDGER = (
 _html = head + HERO + BODY + FOOT
 _html = _html.replace("__TBL_PER_BYTE__", _TBL)
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
+_html = _html.replace("__TBL_ACT_MLA__",
+                      _act_tbl(_MLA_ROWS, S_BASE, "宽度", "小计"))
+_html = _html.replace("__TBL_ACT_MOE__",
+                      _act_tbl(_MOE_ROWS, S_BASE, "份数 × 宽度", "小计"))
+for _ph, _val in (
+        ("__ACT_NINE__",   _sz(2 * 64512 * DTYPE_B * S_BASE)),   # 派发 ＋ 专家输出
+        ("__ACT_LAYER__",  _sz(_LAYER_B)),
+        ("__ACT_DENSE__",  _sz(_DENSE_B)),
+        ("__ACT_TOTAL__",  _sz(_TOTAL_B)),
+        ("__ATTN_SCORE__", _sz(_ATTN_SCORE_B))):
+    assert _ph in _html, "正文里没有 %s" % _ph
+    _html = _html.replace(_ph, _val)
 
 for _txt, _got in (("一层省 53.5 GiB，付 48.9 TFLOP", (_CHEAP_GIB, _CHEAP_TF)),
                    ("贵 <b>23 倍</b>", _TIMES),
