@@ -1982,11 +1982,44 @@ __FIG_STEP__
   <li><b>激活随 token 总数长</b>（5.1，就在本节）——&nbsp;
     <em>2.11 GiB 里唯一的变量就是那 8,192 个 token。</em></li>
   <li><b>拿算力换显存</b>（<a href="#s二">2.2</a>）——&nbsp;
-    <em>多付 33%，省 6.7 倍。<b>比例跟 671B 上那笔几乎一样。</b></em></li>
+    <em>多付 <b>33%</b>，省 <b>6.7 倍</b>。</em></li>
 </ul>
-<p class="landing">⭐⭐⭐ 而最后这一句才是这一小节存在的理由：
-  <em>换了 5,000 倍的规模，<b>那些<u>比例</u>基本没变</b>，变的只是绝对值。
-  ——&nbsp;<b>所以这一讲教的是比例，不是那些数。</b></em></p></div>
+<p class="landing">⭐⭐ <b>「多付 33%」跟 671B 那边<u>一模一样</u> ——&nbsp;
+  但「省 6.7 倍」跟那边的 __RECOMP_X__ 倍<u>差了三倍半</u>。</b></p>
+<p><em>⛔ 这一处早先写的是「比例跟 671B 那笔几乎一样」。<b>不一样，而且差得不小。</b>
+  ——&nbsp;⭐ 不过它为什么不一样，本身比那句话值钱。</em></p></div>
+
+<div class="note ok"><p>⭐⭐⭐ <b>为什么同样是「全量重算」，一个省 6.7 倍、一个省 __RECOMP_X__ 倍？</b></p>
+<p><em>把账写成一个式子就看明白了。设 <b>r ＝ 一层激活 ÷ 入口那一份</b>、<b>L ＝ 层数</b>：</em></p>
+<p class="landing"><b>省多少倍　＝　r ÷ (1 ＋ r/L)</b></p>
+<p><em>分子 <b>r</b> 是「一层里挂了多少东西」——&nbsp;层越胖，扔掉能省越多。<br>
+  分母那一项是<b>当前正在重算的那一层</b>摊到每层头上 ——&nbsp;层越多，它越不碍事。</em></p>
+<table>
+<thead><tr><th></th><th>r ＝ 一层激活 ÷ 入口</th><th>L ＝ 层数</th><th>省多少倍</th></tr></thead>
+<tbody>
+<tr><td>125M 小模型</td><td><b>__R_SMALL__</b>（11,520 ÷ 768）</td><td>12</td><td><b>6.7</b></td></tr>
+<tr><td>V3 671B</td><td><b>__R_V3__</b>（一层 MoE 块 ÷ 7,168）</td><td>61</td><td><b>__RECOMP_X__</b></td></tr>
+</tbody></table>
+<p class="landing">⭐ <b>小模型<u>两项都吃亏</u>：r 小 2.7 倍，L 小 5 倍。</b>
+  <em>——&nbsp;所以它省得少<b>是必然的，不是哪儿算错了</b>。</em></p>
+<p><em>⭐⭐ 而 r 大，根子在 <b>MoE</b>：<a href="#s1-7">1.7</a> 那张表里
+  「派发出去的激活」和「专家输出」各复制九份 ——&nbsp;
+  <b>一层里挂的东西多了，重算能省的自然也多。</b>
+  <u>MoE 在参数账上省，在激活账上贵，而在重算账上又因此格外划算</u>
+  ——&nbsp;同一个设计，在三张账上是三个方向。</em></p>
+<p><span class="sub">⚠️ 这个式子给 V3 算出来是 <b>24.4</b>，实测 __RECOMP_X__
+  ——&nbsp;差在那 3 层 dense 比 MoE 薄。<b>当量级看，别当精确值。</b></span></p></div>
+
+<div class="note"><p>⭐⭐⭐ <b>那到底什么东西是<u>真的</u>跟规模无关的？</b>
+  ——&nbsp;<em>这一小节存在的理由，得换成这三条。</em></p>
+<ul>
+  <li><b>多付 33%。</b><em>它只取决于「前向跑两遍而不是一遍」，跟模型多大、序列多长都无关。</em></li>
+  <li><b>每参数 16 字节。</b><em>1.25 亿和 6,710 亿，拆法一字不差（<a href="#s3-1">3.1</a>）。</em></li>
+  <li><b>激活只认 token 总数。</b><em>8,192 个 token 和 737 万个 token，规律是同一条。</em></li>
+</ul>
+<p class="landing">⛔ <b>而「省多少倍」<u>不在这个名单里</u>。</b>
+  <em>——&nbsp;它跟着 r 和 L 走，<b>换个架构就得重算一遍</b>。
+  ⭐ 这正好是第③条判据的又一个实例：<u>会变的和不会变的，得分清楚</u>。</em></p></div>
 
 <div class="note"><p>⚠️ <b>三条边界，跟 1.7 那张表同一套。</b></p>
 <ul>
@@ -2984,6 +3017,24 @@ for _nm, _got, _want in (("存档点@128K",  _CKPT_B * S_RATIO / 2 ** 30,     10
     assert abs(_got - _want) < max(0.02, abs(_want) * 0.001), \
         "%s 算出 %.3f，期望 %.3f" % (_nm, _got, _want)
 
+# ⭐⭐ §5.4 那句「比例跟 671B 上那笔几乎一样」是错的（6.7 倍 vs 23.9 倍）。
+#   ⛔ 但光改掉它是浪费 ——&#160;这两个数为什么不一样，本身是条能带走的规律：
+#        省多少倍 ＝ r ÷ (1 + r/L)     r ＝ 一层激活 ÷ 入口那一份，L ＝ 层数
+#   分子是「一层里挂了多少东西」，分母那一项是「在算的那一层摊到每层头上」。
+#   ⭐ 小模型**两项都吃亏**：r 小 2.7 倍，L 小 5 倍。所以它省得少是必然的，不是算错。
+SMALL_L, SMALL_D = 12, 768
+SMALL_LAYER_W = 2 * 768 + 3 * 768 + 768 + 3072 + 3072 + 768      # ＝ 11,520
+_R_SMALL = SMALL_LAYER_W / float(SMALL_D)                         # ＝ 15.0
+_R_V3    = (_LAYER_B / (DTYPE_B * S_BASE)) / 7168.0               # ＝ 40.7
+_x_small = _R_SMALL / (1 + _R_SMALL / SMALL_L)
+_x_v3    = _R_V3 / (1 + _R_V3 / (N_MOE_L + N_DENSE_L))
+for _nm, _got, _want in (("小模型 r", _R_SMALL, 15.0), ("V3 r", _R_V3, 40.66),
+                         ("小模型省几倍", _x_small, 6.67), ("V3 闭式估", _x_v3, 24.395)):
+    assert abs(_got - _want) < 0.02, "%s 算出 %.3f，期望 %.3f" % (_nm, _got, _want)
+# ⚠️ 闭式给 V3 是 24.4，实测 23.9 ——&#160;差在那 3 层 dense 比 MoE 薄。
+#   写进正文时说「约」，不要拿闭式冒充精确值。
+assert abs(_x_v3 - _RECOMP_X) < 0.6
+
 _ATTN_SCORE_B = 128 * S_BASE ** 2 * DTYPE_B
 _ATTN_SCORE_LONG = 128 * S_LONG ** 2 * DTYPE_B
 
@@ -3040,6 +3091,9 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
+for _ph, _val in (("__R_SMALL__", "%.0f" % _R_SMALL), ("__R_V3__", "%.1f" % _R_V3)):
+    assert _ph in _html, "正文里没有 %s" % _ph
+    _html = _html.replace(_ph, _val)
 for _ph, _val in (("__PEAK__",        _sz(_PEAK_B)),
                   ("__CKPT__",        _sz(_CKPT_B)),
                   ("__INFLIGHT__",    _sz(_INFLIGHT_B)),
