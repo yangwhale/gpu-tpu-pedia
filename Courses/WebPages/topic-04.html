@@ -2731,7 +2731,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1290" y="932" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同时在场</tspan></text>
 <text class="svgsm" x="300" y="932" fill="#80868b" style="font-size:12.0px;font-variant-numeric:tabular-nums">一个方块 ＝ 一层。<tspan font-weight="700">💾 就是留下来的存档点</tspan></text>
 <text class="svgsm" x="700" y="1188" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两头一样高　——　<tspan font-weight="700">存得越少，并不是越省</tspan>。少存一个存档点，就要多扛一段重算时的中间结果。</tspan></text>
-</svg><figcaption>⭐⭐ <b>要看的是两根条的<u>不对称</u></b> ——&nbsp;<em>付出那边只多出一小截，省下那边短到几乎看不见。</em><span class="capmore"><br>⚠️ <em>两根条<b>都归一化了</b>，所以可以直接并排看 ——&nbsp;单位不同的量并排放，读者第一反应是去比长度，而那个比较没有意义。</em><br>⭐⭐⭐ <em>Ⓒ 换了<b>另一个轴</b>：Ⓑ 问的是「一层之内留哪些」，Ⓒ 问的是「<b>隔几层留一个</b>」。看那三个「同时在场」——&nbsp;<b>17 / 8 / 17，两头一样高。</b></em><br>⛔ <em><b>所以最优点在中间，而它落在 √L 上</b> ——&nbsp;这也是 ZeRO 论文说「把激活降到大约总量的平方根」的由来。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 4.15 TiB / 177.89 GiB 是<b>自己按算子推的估算</b>（V3 的 config ＋ 官方参考实现的 MLA 前向），<b>当量级看</b>；就算差一倍，「不对称」这个结论也不变</p>
+</svg><figcaption>⭐⭐ <b>要看的是两根条的<u>不对称</u></b> ——&nbsp;<em>付出那边只多出一小截，省下那边短到几乎看不见。</em><span class="capmore"><br>⚠️ <em>两根条<b>都归一化了</b>，所以可以直接并排看 ——&nbsp;单位不同的量并排放，读者第一反应是去比长度，而那个比较没有意义。</em><br>⭐⭐⭐ <em>Ⓒ 换了<b>另一个轴</b>：Ⓑ 问的是「一层之内留哪些」，Ⓒ 问的是「<b>隔几层留一个</b>」。看那三个「同时在场」——&nbsp;<b>17 / 8 / 17，两头一样高。</b></em><br>⛔ <em><b>所以最优点在中间，而它落在 √L 上</b> ——&nbsp;这个结果的出处是 <b>Chen et al. 2016</b>（arXiv <a href="https://arxiv.org/abs/1604.06174" target="_blank" rel="noopener">1604.06174</a>，标题就是结论：<i>Training Deep Nets with Sublinear Memory Cost</i>）：「an algorithm that costs <b>O(sqrt(n)) memory</b> to train a n layer network, with only the computational cost of <b>an extra forward pass</b>」。⚠️ ZeRO 论文（<a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> <a href="#s3-2">§3.2</a>）也说过「降到大约总量的平方根、代价 33% 重算」，<b>但它是在转述这个结果，不是它的出处</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 4.15 TiB / 177.89 GiB 是<b>自己按算子推的估算</b>（V3 的 config ＋ 官方参考实现的 MLA 前向），<b>当量级看</b>；就算差一倍，「不对称」这个结论也不变</p>
 <p>⭐ 「3× →&#160;4×」是矩阵乘口径：重算等于把前向那一遍再买一次，所以多出来的正好是 <b>1/3</b>　——　ZeRO 论文原话也是这个数（33% re-computation overhead）</p>
 <p>⭐ Ⓒ 那三个「同时在场」由 L/k ＋ k 当场算出，脚本内 assert 最优点落在 √L、且两头等高　——　<b>这一格的全部意思就是那个等高</b></p>
 <p>⛔ Ⓑ 里那两个百分比<b>都按「一个 step」做分母</b>（前向 ＋ 反向 ＝ 3 遍）。<b>早先「选择性」那一档写的是 6%，那是拿一遍前向当分母的旧口径</b>——&#160;并排摆着不能比，已统一。</p>
@@ -2934,6 +2934,22 @@ body.figonly section h3{margin-top:34px}
 <p><span class="sub">⭐ 但方向没变：两个基准上选择性都明显划算。
   <b>而全量重算那个「多付 33% 换 97%」是尺度无关的</b> ——&nbsp;
   它只取决于「前向跑两遍而不是一遍」，跟 S 一点关系都没有。</span></p></div>
+
+<div class="note danger"><p>⛔ <b>顺带收紧一个口径：attention 那一部分的反向<u>不是 2 倍，是 2.5 倍</u>。</b></p>
+<p><em><a href="#s一">1.3</a> 那个「反向 ≈ 前向两倍」对<b>带权重的矩阵乘</b>是严格的。
+  但这一讲<u>处处假设用了 FlashAttention</u>（<a href="#s1-7">1.7</a> 边界②）——&nbsp;
+  而 FlashAttention 为了省显存，<b>反向时要把注意力分数重新算一遍</b>。</em></p>
+<p class="landing">📌 FlashAttention-2 论文原话：<em>「To get the FLOPs of the backward pass,
+  we multiply the forward pass FLOPs by <b>2.5</b>
+  (since there are 2 matmuls in the forward pass and 5 matmuls in the backward pass,
+  <b>due to recomputation</b>).」</em>（arXiv <b><a href="https://arxiv.org/abs/2307.08691" target="_blank" rel="noopener">2307.08691</a></b> <a href="#s4-1">§4.1</a>）</p>
+<p><em>⭐⭐ <b>这正是这一节主题的又一个实例</b>：FlashAttention 省下的显存，
+  代价就是<u>它自己内部也在重算</u>。
+  ——&nbsp;<b>「没有免费的午餐」在这里有一个非常具体的价码。</b></em></p>
+<p><span class="sub">⚠️ 代进本讲的占比：128K 上 attention 占一层前向 82.1%，
+  一个 step 是 <b>3.41×</b> 而不是 3×（低估 14%）；
+  4K 上 attention 只占 12.5%，是 <b>3.06×</b> ——&nbsp;<b>基本无碍</b>。
+  ⛔ 本讲其余各处仍按 3× 的近似口径写，<u>这是有意的简化，不是漏了</u>。</span></p></div>
 <p><span class="sub">⚠️ <b>这两个百分比早先分母不一样</b>（一个除一遍前向、一个除整个 step），
   并排比是不能比的 ——&nbsp;<em>而这一讲自己在 2.5 就写着「跨文献比这类比例前，
   先确认对方折没折半」。<b>已统一到 step 口径。</b></em></span></p>
@@ -3078,7 +3094,29 @@ body.figonly section h3{margin-top:34px}
   📌 顺带：那个「多三分之一」不是我们推的，
   <b>ZeRO 论文原话就是「33% re-computation overhead」</b>（arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> <a href="#s3-2">§3.2</a>）。</em></span></p>
 <p>⭐ <em>这顺带解释了一个常见困惑 ——&nbsp;<b>为什么 MFU 看起来那么低</b>：
-  分母里有一大块被重算吃了，它做了功，但不算进「有效算力」。</em></p></div>
+  <b>分子</b>里那一大块重算做了功，但按定义<u>不算进「有效算力」</u>。</em></p>
+
+<div class="note"><p>⭐⭐ <b>说准一点：这里有<u>两个</u>指标，差的正好就是重算。</b></p>
+<ul>
+  <li><b>MFU</b>（Model FLOPs Utilization）：<em>分子用
+    <b>不含重算</b>的模型 FLOPs（也就是 <code>6ND</code> 那一套）。</em></li>
+  <li><b>HFU</b>（Hardware FLOPs Utilization）：<em>分子用
+    <b>机器真的算了</b>的 FLOPs，<u>含重算</u>。</em></li>
+</ul>
+<p class="landing">⭐ <b>全量重算时 <code>HFU ／ MFU ＝ 4 ／ 3</b></code>
+  ——&nbsp;<em>就是上面那个「4 份里有 1 份是重算」。</em></p>
+<p><span class="sub">⛔ <b>所以看到一个 MFU 数字，第一件事是问它的分子取的哪一套。</b>
+  ——&nbsp;两篇论文报的 MFU 差 30%，可能只是一篇开了重算、一篇没开。</span></p></div>
+
+<div class="note danger"><p>⛔⛔ <b>而在长上下文上，「MFU 低」的<u>主因不是重算</u>。</b></p>
+<p><em>重算最多让 MFU 变成 HFU 的 3/4（<b>1.33 倍</b>）。可 <a href="#s五">5.2</a> 会算给你看：
+  128K 上 <code>6ND</code> 只数到真实算力的 <b>17.9%</b> ——&nbsp;
+  光这个口径差就是 <b>5.6 倍</b>。</em></p>
+<p class="landing">⭐⭐ <b>两个因子的大小<u>随序列长度换位</u>：</b>
+  <em>4K 上 6ND 只低估 1.14 倍，<b>重算那 1.33 倍反而成了主因</b>；
+  128K 上正好倒过来。</em></p>
+<p><span class="sub">⛔ 这条很实际：在长上下文上看到「MFU 只有 20%」就去关重算，
+  <b>最多捞回四分之一</b> ——&nbsp;真正该做的是先把 FLOP 口径对齐。</span></p></div></div>
 
 
 
@@ -4289,7 +4327,7 @@ body.figonly section h3{margin-top:34px}
 <p>❓ <b>可凭什么是「除」？</b>
   <em>——&nbsp;这个问题有一个标准答案，而且小到能当场验。</em></p>
 
-<figure class="fbox fwide" id="fig-beststep"><svg viewBox="0 0 1400 1348" width="100%" role="img" aria-label="在一条抛物线上，一阶导除以二阶导，正好等于这一点离最低点的距离，所以最优的一步是可以算出来的。而只看梯度大小会看错：陡谷上那个点梯度更大，却离底更近。跨参数比较必须除以二阶导。但二阶导在大模型上算不起，所以自适应优化器改用一阶导的历史去估它 —— Adam 分母上那一坨就是这么来的"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-beststep"><svg viewBox="0 0 1400 1372" width="100%" role="img" aria-label="在一条抛物线上，一阶导除以二阶导，正好等于这一点离最低点的距离，所以最优的一步是可以算出来的。而只看梯度大小会看错：陡谷上那个点梯度更大，却离底更近。跨参数比较必须除以二阶导。但二阶导在大模型上算不起，所以自适应优化器改用一阶导的历史去估它 —— Adam 分母上那一坨就是这么来的"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">那一步该迈多大　——　<tspan font-weight="700">它其实是有标准答案的</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">前面只讲了「除完之后是多少」——&#160;<tspan font-weight="700">这一格回答「为什么要除」</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -4363,13 +4401,14 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1133" y="1058" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Adam：滑动平均</tspan></text>
 <text class="svgsm" x="1133" y="1108" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">分母上那一坨，就是这么来的</text>
 <text class="svgsm" x="910" y="1046" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
-<rect x="0" y="1196" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1196" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="1196" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1223" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以自适应优化器分母上那一项，不是「一个技巧」——　它是二阶导的替身</tspan></text>
-<text class="svgsm" x="20" y="1254" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">顺着这条线再看一眼本讲 3.3 那个结论就通了：<tspan font-weight="700">Adam 把梯度的尺度除掉之后，每步大约挪 0.2 × 学习率</tspan>　——　它之所以敢把尺度除掉，是因为<tspan font-weight="700">那个分母本来就在替二阶导干活</tspan></text>
-<text class="svgsm" x="20" y="1278" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">。</text>
-<text class="svgsm" x="20" y="1302" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">也要知道这个替身<tspan font-weight="700">只是替身</tspan>：「梯度一直大 ＝ 曲率大」只是个经验假设，它不总成立 ——　这正是为什么调参这件事至今还是手艺。</text>
+<rect x="0" y="1196" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1196" width="4" height="146" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1196" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1223" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以自适应优化器分母上那一项，不是「一个技巧」——　它在替二阶导<tspan text-decoration="underline">占那个位置</tspan></tspan></text>
+<text class="svgsm" x="20" y="1254" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">但要说准：<tspan font-weight="700">它不是二阶导，连量纲都不是</tspan>。二阶导是 loss ÷ 参数²，而 √v 大致是梯度的均方根，量纲是 loss ÷ 参数 ——　<tspan font-weight="700">差一个「参数」</tspan>。所以严格的牛顿步 g ÷ H 本身就</text>
+<text class="svgsm" x="20" y="1278" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">已经是「参数」量纲、不用再乘学习率；而 Adam 的 m ÷ √v <tspan font-weight="700">是无量纲的</tspan>。</text>
+<text class="svgsm" x="20" y="1302" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">而这个差别正好解释了本讲 3.3 那个结论：<tspan font-weight="700">Adam 把梯度的尺度除干净了，每步大约挪 0.2 × 学习率</tspan>　——　既然 m ÷ √v 无量纲，<tspan font-weight="700">Adam 的学习率量纲就是「参数」本身</tspan>，跟 S</text>
+<text class="svgsm" x="20" y="1326" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">GD 那个「参数² ÷ loss」<tspan text-decoration="underline">不是同一个东西</tspan>。这才是 Adam 的学习率好调、好迁移的真正原因。</text>
 </svg><figcaption>⭐⭐⭐ <b>这张图回答的是「<u>为什么要除</u>」</b> ——&nbsp;<em>Ⓐ 在抛物线上，<b>一阶导 ÷ 二阶导正好等于「离底还有多远」</b>，所以最优的一步是算得出来的。</em><span class="capmore"><br>⭐⭐ <em>Ⓑ 最反直觉的一格：<b>梯度大不代表离得远</b> ——&nbsp;陡谷那个点梯度是 2.0，却只差 0.5。<b>不除以二阶导，两个参数根本不可比。</b></em><br>⭐ <em>Ⓒ 收回现实：二阶导在几千亿参数上算不起，所以自适应优化器<b>拿一阶导的历史去估它</b> ——&nbsp;<b>Adam 分母上那一坨就是这么来的。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 「最优步长 ＝ |一阶导| ÷ 二阶导」与「用一阶导去估二阶导」取自<b>李宏毅</b>（台大）Gradient Descent 课程投影片的讲法　——　<b>图是我们自己重画的</b>。</p>
 <p>⭐ 图上四个数都能当场验：抛物线 f ＝ a·x² 上，一阶导 2ax ÷ 二阶导 2a ＝ x，<b>正好是到底的距离</b>。脚本里带 assert。</p></details></figure>
 
@@ -4388,6 +4427,12 @@ body.figonly section h3{margin-top:34px}
 
 <div class="note ok"><p>⭐⭐⭐ 现在关键的一步：Adam 的更新量大约是
   「动量 ÷ 二阶矩的根号」——&nbsp;<u>分子分母的量纲互相抵消</u>。</p>
+<p><span class="sub">📌 <b>完整一点</b>：真实的式子是
+  <code>m̂ ／ (√v̂ ＋ ε)</code>，那个 <b>ε</b>（常见 1e−8）是防止除零的。
+  ⛔ <b>而「量纲互相抵消」严格说只在 ε ＝ 0 时成立</b> ——&nbsp;
+  ε 带着梯度的量纲，<u>它正是这条「跟梯度尺度无关」的破口</u>。
+  ⭐ 平时它小到无所谓；但梯度真的很小的时候（比如 <a href="#s六">6.5</a> 讲的深层消失），
+  <b>是 ε 而不是 √v̂ 在当分母</b> ——&nbsp;那一刻 Adam 就退回成了普通的 SGD。</span></p>
 <p><em>也就是说，<b>Adam 把梯度的量纲给除掉了</b>
   ——&nbsp;这一步的大小，变成了一个<b>跟梯度尺度无关的常数</b>。</em></p>
 

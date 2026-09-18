@@ -700,6 +700,22 @@ __TBL_PER_BYTE__
 <p><span class="sub">⭐ 但方向没变：两个基准上选择性都明显划算。
   <b>而全量重算那个「多付 33% 换 97%」是尺度无关的</b> ——&nbsp;
   它只取决于「前向跑两遍而不是一遍」，跟 S 一点关系都没有。</span></p></div>
+
+<div class="note danger"><p>⛔ <b>顺带收紧一个口径：attention 那一部分的反向<u>不是 2 倍，是 2.5 倍</u>。</b></p>
+<p><em><a href="#s一">1.3</a> 那个「反向 ≈ 前向两倍」对<b>带权重的矩阵乘</b>是严格的。
+  但这一讲<u>处处假设用了 FlashAttention</u>（<a href="#s1-7">1.7</a> 边界②）——&nbsp;
+  而 FlashAttention 为了省显存，<b>反向时要把注意力分数重新算一遍</b>。</em></p>
+<p class="landing">📌 FlashAttention-2 论文原话：<em>「To get the FLOPs of the backward pass,
+  we multiply the forward pass FLOPs by <b>2.5</b>
+  (since there are 2 matmuls in the forward pass and 5 matmuls in the backward pass,
+  <b>due to recomputation</b>).」</em>（arXiv <b>2307.08691</b> §4.1）</p>
+<p><em>⭐⭐ <b>这正是这一节主题的又一个实例</b>：FlashAttention 省下的显存，
+  代价就是<u>它自己内部也在重算</u>。
+  ——&nbsp;<b>「没有免费的午餐」在这里有一个非常具体的价码。</b></em></p>
+<p><span class="sub">⚠️ 代进本讲的占比：128K 上 attention 占一层前向 82.1%，
+  一个 step 是 <b>3.41×</b> 而不是 3×（低估 14%）；
+  4K 上 attention 只占 12.5%，是 <b>3.06×</b> ——&nbsp;<b>基本无碍</b>。
+  ⛔ 本讲其余各处仍按 3× 的近似口径写，<u>这是有意的简化，不是漏了</u>。</span></p></div>
 <p><span class="sub">⚠️ <b>这两个百分比早先分母不一样</b>（一个除一遍前向、一个除整个 step），
   并排比是不能比的 ——&nbsp;<em>而这一讲自己在 2.5 就写着「跨文献比这类比例前，
   先确认对方折没折半」。<b>已统一到 step 口径。</b></em></span></p>
@@ -844,7 +860,29 @@ __TBL_PER_BYTE__
   📌 顺带：那个「多三分之一」不是我们推的，
   <b>ZeRO 论文原话就是「33% re-computation overhead」</b>（arXiv 1910.02054 §3.2）。</em></span></p>
 <p>⭐ <em>这顺带解释了一个常见困惑 ——&nbsp;<b>为什么 MFU 看起来那么低</b>：
-  分母里有一大块被重算吃了，它做了功，但不算进「有效算力」。</em></p></div>
+  <b>分子</b>里那一大块重算做了功，但按定义<u>不算进「有效算力」</u>。</em></p>
+
+<div class="note"><p>⭐⭐ <b>说准一点：这里有<u>两个</u>指标，差的正好就是重算。</b></p>
+<ul>
+  <li><b>MFU</b>（Model FLOPs Utilization）：<em>分子用
+    <b>不含重算</b>的模型 FLOPs（也就是 <code>6ND</code> 那一套）。</em></li>
+  <li><b>HFU</b>（Hardware FLOPs Utilization）：<em>分子用
+    <b>机器真的算了</b>的 FLOPs，<u>含重算</u>。</em></li>
+</ul>
+<p class="landing">⭐ <b>全量重算时 <code>HFU ／ MFU ＝ 4 ／ 3</b></code>
+  ——&nbsp;<em>就是上面那个「4 份里有 1 份是重算」。</em></p>
+<p><span class="sub">⛔ <b>所以看到一个 MFU 数字，第一件事是问它的分子取的哪一套。</b>
+  ——&nbsp;两篇论文报的 MFU 差 30%，可能只是一篇开了重算、一篇没开。</span></p></div>
+
+<div class="note danger"><p>⛔⛔ <b>而在长上下文上，「MFU 低」的<u>主因不是重算</u>。</b></p>
+<p><em>重算最多让 MFU 变成 HFU 的 3/4（<b>1.33 倍</b>）。可 <a href="#s五">5.2</a> 会算给你看：
+  128K 上 <code>6ND</code> 只数到真实算力的 <b>17.9%</b> ——&nbsp;
+  光这个口径差就是 <b>5.6 倍</b>。</em></p>
+<p class="landing">⭐⭐ <b>两个因子的大小<u>随序列长度换位</u>：</b>
+  <em>4K 上 6ND 只低估 1.14 倍，<b>重算那 1.33 倍反而成了主因</b>；
+  128K 上正好倒过来。</em></p>
+<p><span class="sub">⛔ 这条很实际：在长上下文上看到「MFU 只有 20%」就去关重算，
+  <b>最多捞回四分之一</b> ——&nbsp;真正该做的是先把 FLOP 口径对齐。</span></p></div></div>
 
 
 
@@ -1157,6 +1195,12 @@ __FIG_BESTSTEP__
 
 <div class="note ok"><p>⭐⭐⭐ 现在关键的一步：Adam 的更新量大约是
   「动量 ÷ 二阶矩的根号」——&nbsp;<u>分子分母的量纲互相抵消</u>。</p>
+<p><span class="sub">📌 <b>完整一点</b>：真实的式子是
+  <code>m̂ ／ (√v̂ ＋ ε)</code>，那个 <b>ε</b>（常见 1e−8）是防止除零的。
+  ⛔ <b>而「量纲互相抵消」严格说只在 ε ＝ 0 时成立</b> ——&nbsp;
+  ε 带着梯度的量纲，<u>它正是这条「跟梯度尺度无关」的破口</u>。
+  ⭐ 平时它小到无所谓；但梯度真的很小的时候（比如 <a href="#s六">6.5</a> 讲的深层消失），
+  <b>是 ε 而不是 √v̂ 在当分母</b> ——&nbsp;那一刻 Adam 就退回成了普通的 SGD。</span></p>
 <p><em>也就是说，<b>Adam 把梯度的量纲给除掉了</b>
   ——&nbsp;这一步的大小，变成了一个<b>跟梯度尺度无关的常数</b>。</em></p>
 
@@ -3096,7 +3140,12 @@ FIGS = {
         'Ⓒ 问的是「<b>隔几层留一个</b>」。'
         '看那三个「同时在场」——&nbsp;<b>17 / 8 / 17，两头一样高。</b></em><br>'
         '⛔ <em><b>所以最优点在中间，而它落在 √L 上</b> ——&nbsp;'
-        '这也是 ZeRO 论文说「把激活降到大约总量的平方根」的由来。</em>'),
+        '这个结果的出处是 <b>Chen et al. 2016</b>（arXiv 1604.06174，'
+        '标题就是结论：<i>Training Deep Nets with Sublinear Memory Cost</i>）：'
+        '「an algorithm that costs <b>O(sqrt(n)) memory</b> to train a n layer network, '
+        'with only the computational cost of <b>an extra forward pass</b>」。'
+        '⚠️ ZeRO 论文（1910.02054 §3.2）也说过「降到大约总量的平方根、代价 33% 重算」，'
+        '<b>但它是在转述这个结果，不是它的出处</b>。</em>'),
     "__FIG_PER_BYTE__": ("fig-per-byte", "fig4-per-byte.svg",
         'topic04-fig-per-byte.py',
         '⭐⭐⭐ <b>全专题最值钱的一张</b> ——&nbsp;'
