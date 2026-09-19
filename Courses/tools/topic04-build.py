@@ -218,10 +218,10 @@ __TBL_SCALE__
 <p class="landing">⭐⭐⭐ <b>记住这件事。</b>
   <em>——&nbsp;<a href="#s1-5">1.5</a> 会告诉你，<u>整个反向传播之所以划算，全靠这个「一」</u>。</em></p>
 
-<div class="note"><p>📐 <b>顺带说一句单位，后面 <a href="#s3-3">3.3</a> 要用。</b></p>
+<div class="note"><p>📐 <b>顺带说一句单位，后面 <a href="#s3-3b">3.3b</a> 要用。</b></p>
 <p><em>取的是自然对数，所以 loss 的单位是 <b>nats / token</b>
   ——&nbsp;「每个 token 平均有多少奈特的意外」。</em></p>
-<p><span class="sub">⭐ 别觉得这是学究气：<a href="#s3-3">3.3</a> 会靠它推出
+<p><span class="sub">⭐ 别觉得这是学究气：<a href="#s3-3b">3.3b</a> 会靠它推出
   <b>学习率的单位</b>，那是全讲最漂亮的一段推导之一 ——&nbsp;
   而它需要 loss <u>确实有单位</u>这件事。</span></p></div>
 
@@ -1561,7 +1561,7 @@ __FIG_LINEAGE__
   ——&nbsp;<b>「两行代码」说的是调用方改两行，不是它内部只改了一处。</b></em></span></p></div>
 
 <h4>⚠️ Muon 要在大模型上真跑起来，还得补两样</h4>
-<p><em>3.3 那段讲的是 Muon 的<b>想法</b>。
+<p><em><a href="#s3-3b">3.3b</a> 那段讲的是 Muon 的<b>想法</b>。
   可想法好用不等于能直接上规模 ——&nbsp;
   2025 年有一篇专门做这件事的论文，识别出两条必需的补丁：</em></p>
 <ul>
@@ -1834,7 +1834,7 @@ __FIG_LR_CURVE__
 <div class="note ok"><ul>
   <li>① 别从零猜。<em>找一个<b>规模和架构都接近</b>的公开配置抄过来当起点
     ——&nbsp;上面那张表和 V3 的报告都是公开的，<b>这是免费的先验</b>。</em></li>
-  <li>② 跨规模不能直接照抄。<em>回到 3.3 那条：
+  <li>② 跨规模不能直接照抄。<em>回到 <a href="#s3-3b">3.3b</a> 那条：
     <b>学习率带量纲</b>。小规模上扫出来的值，要么用可迁移的参数化，
     <b>要么在目标规模上小步重验</b>。</em></li>
   <li>③ 判据看两条曲线。<em>loss 炸了、或者 grad norm 出突刺 ——&nbsp;<b>太大</b>；
@@ -2376,7 +2376,7 @@ __FIG_STEP__
   一条 128K 是 177.89 GiB，<b>约 56 条</b>，token 总数一模一样。）</span></p>
 
 <div class="note danger"><p>⛔⛔ <b>停一下 ——&nbsp;把 V3 自己的 batch 代进去看看。</b></p>
-<p><em>§3.5 会讲到，V3 的 global batch 从 <b>3,072 条 4K</b> 起步
+<p><em>§3.5 说过，V3 的 global batch 从 <b>3,072 条 4K</b> 起步
   （＝ <b>1,258 万 token</b>），后期爬到 <b>15,360 条</b>（＝ 6,291 万 token）。</em></p>
 <p class="landing">⭐⭐⭐ <b>而分水岭是 __WS_TOK__ —— V3 <u>从第一步起就已经越过它 1.7 倍</u>，
   训到后期越过 8.5 倍。</b></p>
@@ -2479,7 +2479,8 @@ __FIG_STEP__
   <li><b>② 一个数变成多少个导数</b>：<em><b>1.25 亿个</b>。
     而代价是「多跑两遍前向」，不是 1.25 亿遍（<a href="#s1-1">1.1</a>）。</em></li>
   <li><b>③ 那一步该迈多大</b>：<em>Adam 要为<u>每一个</u>参数记两个滑动平均
-    ——&nbsp;<b>这就是下面那 12 字节的全部来历</b>（<a href="#s3-3">3.3</a>）。</em></li>
+    ——&nbsp;<b>那是 12 字节里的 8 字节</b>；剩下 4 字节是 fp32 主权重，
+    来自混合精度，跟 Adam 无关（<a href="#s3-1">3.1</a>）。</em></li>
 </ul>
 <p class="landing">⭐ <b>下面这张账之所以值得算一遍，是因为它能把③那句话变成一个你能验的数。</b></p></div>
 
@@ -3005,7 +3006,7 @@ __FIG_UNDERFLOW__
     （⛔ 不是「默认开着」——&nbsp;<code>recompute_granularity</code> 默认是 <code>None</code>），
     而且源码里就带着一条「融合 attention 下你不需要设它」的警告 ——&nbsp;
     <em>而按 <a href="#s二">2.4</a>，长上下文下它恰恰是<b>最不该重算</b>的那一个。
-    ⭐ <b>默认值是有年代的</b>，这条在 <a href="#s二">2.6</a> 展开过。</em></li>
+    ⭐ <b>默认值是有年代的</b>，这条在 <a href="#s二">2.5</a> 展开过。</em></li>
 </ul>
 <p><span class="sub">⚠️ <b>顺带承认这一讲少讲了一档。</b>
   <em>PyTorch 的 <code>CheckpointPolicy</code> 其实有<b>六个</b>枚举值，
@@ -3922,6 +3923,26 @@ _final = io.open(OUT, encoding="utf-8").read()   # OUT 已是完整文件路径
 _ids = set(re.findall(r'\bid="([^"]+)"', _final))
 _bad = sorted({h for h in re.findall(r'href="#([^"]+)"', _final)
                if h and not h.startswith("!") and h not in _ids})
+# ⭐⭐ 上面那段注释说这条断言「防的是跳错」——&#160;可它只查了 id 在不在，
+#    跳错一个字都拦不住（2026-09-19 红队查出六处：五处「3.3」实际在 3.3b，
+#    一处「2.6」实际在 2.5）。现在把那句话真的实现出来：
+#    **凡是链接文字本身就是节号的，它必须落在同号的那一节上。**
+_CN = dict(zip("零一二三四五六七八九", range(10)))
+_titles = dict(re.findall(r'\bid="(s[^"]+)"[^>]*>(.{0,18})', _final))
+_mis = []
+for _href, _txt in re.findall(r'href="#(s[^"]+)"[^>]*>(.*?)</a>', _final, re.S):
+    _t = re.sub(r"<[^>]+>", "", _txt).strip()
+    if not re.fullmatch(r"\d+(?:\.\d+[a-z]?)?", _t):
+        continue                                  # 「上面那张图」这类文字链不查
+    _m = re.fullmatch(r"s(\d+)-(\d+[a-z]?)", _href)
+    if _m:                                        # 指向小节 → 号必须一模一样
+        if "%s.%s" % _m.groups() != _t:
+            _mis.append("%s → #%s（同粒度但跳到了别的小节）" % (_t, _href))
+    elif re.fullmatch(r"s[零一二三四五六七八九]", _href):
+        if _CN[_href[1]] != int(_t.split(".")[0]):   # 指向整章 → 至少章号要对
+            _mis.append("%s → #%s（连章都不对）" % (_t, _href))
+assert not _mis, "节号链接跳错：\n  " + "\n  ".join(sorted(set(_mis)))
+
 assert not _bad, (
     "这些站内锚点指向不存在的 id：%s\n"
     "⭐ 小节 id 形如 s3-7 / s6-6，节级形如 s六。" % "、".join(_bad))
