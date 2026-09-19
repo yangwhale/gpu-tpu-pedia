@@ -175,7 +175,7 @@ def main():
     f.t(700, py2 + 226,
         "⚠️ 顺带记一句，后面会兑现："
         "<tspan font-weight=\"700\">「最快」是相对于你怎么量「这一步迈了多大」说的</tspan>"
-        "　——　换一把尺，最快的方向就跟着变（`fig-muon` Ⓒ）。",
+        "　——　换一把尺，最快的方向就跟着变（<tspan font-weight=\"700\">后面那张 Muon 图</tspan>的 Ⓒ）。",
         GY, size=13, anchor="middle")
     f._pan = None
 

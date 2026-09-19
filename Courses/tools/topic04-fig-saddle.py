@@ -264,7 +264,7 @@ def main():
                "那个数是编的。只讲定义层面必然成立的部分。",
                "⭐ 原片收尾那句也在本讲别处出现："
                "<tspan font-weight=\"700\">更小的 batch 和动量都有助于逃离临界点</tspan>"
-               "　——　噪声和惯性，正好是 `fig-batch` 与 Adam 那两格在讲的东西。")
+               "　——　噪声和惯性，正好是<tspan font-weight=\"700\">那张 batch 图</tspan>与 Adam 那两格在讲的东西。")
 
     f.save("fig4-saddle.svg", yb + 14)
 

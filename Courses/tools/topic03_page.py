@@ -356,11 +356,48 @@ def anchorize(html):
     #   （非法 HTML，浏览器会悄悄拆掉，点击行为不可预期）。
     # ⭐ 判据（本仓库第 N 次遇到）：**注释写「不碰 X」不等于真的没碰。**
     #   —— 而且这是自己给自己写的注释，最容易被当成已经成立的前提。
+    # ⛔⛔ 2026-09-19：这个自动链接**把别人论文的节号也链成了本页锚点**。
+    #   「arXiv 2005.14165 §2.3」点下去跳到**本讲**的 §2.3 —— 链接是活的、
+    #   指向也存在，所以「锚点必须落地」那条断言一个都抓不到。
+    #   ⭐⭐ 最讽刺的一处：正文正在说「原文分节是…**不是 §3.2**」，
+    #     而这句话里的那个 §3.2 本身就被链错了。
+    #   ⭐ 判据：**比死链更难发现的是「指向一个真实存在、但内容不相干的地方」。**
+    #
+    # 规则是从产物里**数出来的**，不是拍的（2026-09-19 在专题四上统计）：
+    #   · 「arXiv 号紧跟着 §」——&nbsp;15 处，**全部是引别人**，零误伤；
+    #   · 放宽到「同一句话里出现过 arXiv 号」——&nbsp;再多抓 4 处，也全对，
+    #     它们是被「（PaLM）」「）/ 」这类括号断开的；
+    #   · 唯一的例外是「…1910.02054 §3（…）、§7.2」那个 §7.2 ——&nbsp;它是**本讲**附录。
+    # ⇒ 引文上下文 ＝ 从 arXiv 号起，到下一个句号／换行／段落结束为止。
+    #   想在引文里指回本讲，**显式写「本讲 §X.Y」** ——&nbsp;那会复位上下文。
+    _ARXIV = _re.compile(r"\d{4}\.\d{4,5}")
+    _STOP = _re.compile(r"[。！？]|<br\s*/?>|</p>|</li>|</div>")
+
+    def _in_citation(chunk, at):
+        """at 这个 § 是不是落在某条引文的作用域里。"""
+        a = None
+        for mm in _ARXIV.finditer(chunk, 0, at):
+            a = mm.end()
+        if a is None:
+            return False
+        tail = chunk[a:at]
+        if _STOP.search(tail):                 # 句子已经结束，引文作用域断了
+            return False
+        # ⭐ 显式复位：「本讲 §7.2」「本页 §3.1」永远当成自指
+        return not _re.search(r"(本讲|本页|上面|前面)\s*$", _re.sub(r"<[^>]+>", "", tail))
+
     parts = _re.split(r"(<svg.*?</svg>)", html, flags=_re.S)
     for i in range(0, len(parts), 2):
         inner = _re.split(r"(<a\b.*?</a>)", parts[i], flags=_re.S)
         for j in range(0, len(inner), 2):
-            inner[j] = _re.sub(r"§(\d+\.\d+[a-z]?)", _link, inner[j])
+            chunk = inner[j]
+
+            def _link2(m, _c=chunk):
+                if _in_citation(_c, m.start()):
+                    return m.group(0)          # 别人论文的节号，原样留着
+                return _link(m)
+
+            inner[j] = _re.sub(r"§(\d+\.\d+[a-z]?)", _link2, chunk)
         parts[i] = "".join(inner)
     return "".join(parts)
 

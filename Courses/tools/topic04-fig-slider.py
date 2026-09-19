@@ -233,7 +233,7 @@ def main():
     f.t(700, py3 + 306,
         "⛔ 而「<tspan font-weight=\"700\">这一串数从哪一头开始乘</tspan>」"
         "　——　结果完全一样，<tspan font-weight=\"700\">代价差一万年</tspan>。"
-        "那是紧接着 `fig-reverse` 那一格的事。",
+        "那是紧接着<tspan font-weight=\"700\">后面那张「正向 vs 反向」图</tspan>的事。",
         INK, size=14.5, anchor="middle")
     f._pan = None
 
