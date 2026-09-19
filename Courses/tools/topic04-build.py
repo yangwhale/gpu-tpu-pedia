@@ -567,7 +567,23 @@ __FIG_ACT_BILL__
 <p class="landing">⭐ <b>但真正要记住的是这两样东西涨得不一样：权重是固定的，激活每多跑一条序列就多一份。</b>
   <em>batch 到约 <b>__ACT_XOVER__ 条</b>，激活就追平权重；而训练的 batch 从来不止十条。
   ——&nbsp;这才是下一节那笔交易存在的理由。</em></p>
-<p><span class="sub">⛔ <b>逐项怎么数的、哪一项最大、换到 128K 是多少</b>
+<div class="note ok"><p>❓ <b>那这 2.2 GiB 里，最大的是哪一项？</b>
+  <em>——&nbsp;这个问题必须在这儿答，因为<u>下一节整节都在挑「该扔哪一个」</u>。</em></p>
+<p class="landing">⛔⛔ <b>不是 attention ——&nbsp;是 MoE 的「九份复制」。</b></p>
+<ul>
+  <li><b>派发出去的激活 __MOE_D_PCT__ ＋ 专家输出 __MOE_O_PCT__ ＋ SwiGLU 乘积 __MOE_S_PCT__</b>
+      ——&nbsp;<em>三项是<u>同一件事的后果</u>：每个 token 要发给 9 个专家
+      （8 个路由 ＋ 1 个共享），于是这几个张量各存九份。
+      <b>合起来 __MOE_ALL_PCT__，一层的一半。</b></em></li>
+  <li><em>而 <b>attention 输出</b>只占 <b>__ATT_PCT__</b>
+      ——&nbsp;<u>比多数人猜的小一个档</u>。</em></li>
+</ul>
+<p><span class="sub">⭐ <b>这一条直接决定了下一节的名单</b>：
+  要省激活，先看的不是 attention，是那几份复制。
+  <em>⛔ 它也解释了一件反直觉的事 ——&nbsp;MoE 在<u>参数</u>账上很省
+  （每 token 只选中一小部分权重），在<u>激活</u>账上却要付九份的复制费。</em></span></p></div>
+
+<p><span class="sub">⛔ <b>逐项怎么数的、换到 128K 是多少</b>
   ——&nbsp;都在下面这个折叠块里。<em>属于「装不装得下」，本讲不要求。</em></span></p></div>
 
 <details class="foldfig"><summary><b>把那张激活账单逐项摊开：一层里到底挂了哪些张量</b>　<span class="why">⭐ 作者自己写着「这一小节可以整段跳过」—— 给要自己算的人看的，属于「装不装得下」</span></summary>
@@ -3774,6 +3790,26 @@ def _verdict(ratio):
 
 
 _POOL_B = _pool_w * DTYPE_B * S_BASE
+
+# ⭐ §1.6 主线要回答「一层里最大的是哪一项」——&#160;由这张表直接算，不手填。
+#   （2026-09-20 第 8 轮开讲时补：原来主线把这一问整个推给了折叠块，
+#    可下一节整节都在挑「该扔哪个」，不先说哪几项占地方就没法挑。）
+#   ⛔ 我一开始以为大头是 attention，一算是 MoE 的九份复制 ——&#160;查了才没写错。
+_L1 = {nm: w * DTYPE_B * S_BASE for nm, w, _ in PER_BYTE_W}
+_L1["入口"] = ENTRY_W * DTYPE_B * S_BASE
+_L1_TOT = sum(_L1.values())
+_pc = lambda k: "%.0f%%" % (100.0 * _L1[k] / _L1_TOT)
+_MOE_D_PCT = _pc("MoE 派发（复制成 9 份）")
+_MOE_O_PCT = _pc("专家输出 9 份（输入宽 2,048）")
+_MOE_S_PCT = _pc("SwiGLU 乘积 9 份（逐元素）")
+_ATT_PCT   = _pc("attention 输出")
+_MOE_ALL   = sum(_L1[k] for k in ("MoE 派发（复制成 9 份）",
+                                  "专家输出 9 份（输入宽 2,048）",
+                                  "SwiGLU 乘积 9 份（逐元素）"))
+_MOE_ALL_PCT = "%.0f%%" % (100.0 * _MOE_ALL / _L1_TOT)
+assert 48 < 100.0 * _MOE_ALL / _L1_TOT < 53, "九份复制不再占一半：%s" % _MOE_ALL_PCT
+assert _L1["attention 输出"] < _L1["MoE 派发（复制成 9 份）"], "大头变成 attention 了？"
+
 _ROWS_BASE = _per_byte(S_BASE)
 _ROWS_LONG = _per_byte(S_LONG)
 
@@ -4088,7 +4124,12 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__RANK_LONG__",   str(_RANK_LONG)),
                   ("__NPARAM_CN__",   _NPARAM_CN),
                   ("__NAIVE_YEARS__", format(int(round(_NAIVE_YEARS)), ",")),
-                  ("__NAIVE_YEARS_CN__", _NAIVE_YEARS_CN)):
+                  ("__NAIVE_YEARS_CN__", _NAIVE_YEARS_CN),
+                  ("__MOE_D_PCT__",   _MOE_D_PCT),
+                  ("__MOE_O_PCT__",   _MOE_O_PCT),
+                  ("__MOE_S_PCT__",   _MOE_S_PCT),
+                  ("__MOE_ALL_PCT__", _MOE_ALL_PCT),
+                  ("__ATT_PCT__",     _ATT_PCT)):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
     _SUBS[_ph] = _val

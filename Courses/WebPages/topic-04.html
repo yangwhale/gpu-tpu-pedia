@@ -2413,7 +2413,23 @@ body.figonly section h3{margin-top:34px}
 <p class="landing">⭐ <b>但真正要记住的是这两样东西涨得不一样：权重是固定的，激活每多跑一条序列就多一份。</b>
   <em>batch 到约 <b>9 条</b>，激活就追平权重；而训练的 batch 从来不止十条。
   ——&nbsp;这才是下一节那笔交易存在的理由。</em></p>
-<p><span class="sub">⛔ <b>逐项怎么数的、哪一项最大、换到 128K 是多少</b>
+<div class="note ok"><p>❓ <b>那这 2.2 GiB 里，最大的是哪一项？</b>
+  <em>——&nbsp;这个问题必须在这儿答，因为<u>下一节整节都在挑「该扔哪一个」</u>。</em></p>
+<p class="landing">⛔⛔ <b>不是 attention ——&nbsp;是 MoE 的「九份复制」。</b></p>
+<ul>
+  <li><b>派发出去的激活 22% ＋ 专家输出 22% ＋ SwiGLU 乘积 6%</b>
+      ——&nbsp;<em>三项是<u>同一件事的后果</u>：每个 token 要发给 9 个专家
+      （8 个路由 ＋ 1 个共享），于是这几个张量各存九份。
+      <b>合起来 51%，一层的一半。</b></em></li>
+  <li><em>而 <b>attention 输出</b>只占 <b>6%</b>
+      ——&nbsp;<u>比多数人猜的小一个档</u>。</em></li>
+</ul>
+<p><span class="sub">⭐ <b>这一条直接决定了下一节的名单</b>：
+  要省激活，先看的不是 attention，是那几份复制。
+  <em>⛔ 它也解释了一件反直觉的事 ——&nbsp;MoE 在<u>参数</u>账上很省
+  （每 token 只选中一小部分权重），在<u>激活</u>账上却要付九份的复制费。</em></span></p></div>
+
+<p><span class="sub">⛔ <b>逐项怎么数的、换到 128K 是多少</b>
   ——&nbsp;都在下面这个折叠块里。<em>属于「装不装得下」，本讲不要求。</em></span></p></div>
 
 <details class="foldfig"><summary><b>把那张激活账单逐项摊开：一层里到底挂了哪些张量</b>　<span class="why">⭐ 作者自己写着「这一小节可以整段跳过」—— 给要自己算的人看的，属于「装不装得下」</span></summary>
