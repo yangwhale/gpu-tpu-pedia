@@ -41,7 +41,7 @@ def main():
     f.marks = set()
     y0 = f.header(
         "RoPE ——　<tspan font-weight=\"700\">把位置写成一排里程表转盘</tspan>",
-        "⭐ 这张图回答三件事：<tspan font-weight=\"700\">它到底负责什么</tspan>、"
+        "⭐ 三件事：<tspan font-weight=\"700\">它负责什么</tspan>、"
         "<tspan font-weight=\"700\">为什么点积自动带上了相对距离</tspan>、"
         "以及<tspan font-weight=\"700\">凭什么能外推到 1M</tspan>",
         [(RD, "掩码管顺序"), (BL, "位置 m"), (OR, "位置 n"),

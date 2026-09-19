@@ -45,11 +45,9 @@ def main():
     y0 = f.header(
         "四种存法 ——　<tspan font-weight=\"700\">先只看接线，一个数都不看"
         "</tspan>",
-        "⭐ 这张图只回答一件事：<tspan font-weight=\"700\">省，省在哪儿</tspan>。"
-        "省多少、值不值，留给下一张。"
-        "📌 <tspan font-weight=\"700\">看最下面那排行李箱就够了</tspan> ——　"
-        "四家的算力几乎一样，差别全在<tspan font-weight=\"700\">"
-        "「这段对话得一直留着多少东西」</tspan>。",
+        "⭐ <tspan font-weight=\"700\">四家的算力几乎一样，差别全在「这段对话要一直留多少」"
+        "</tspan>　——　最下面那排行李箱就是各自的留存量。"
+        "<tspan font-weight=\"700\">省多少、值不值</tspan>，下一张才算。",
         [(GY, "Q 头"), (INK, "实线盒子＝要进箱子"),
          (GY2, "虚线盒子＝用完就扔"), (PU, "MLA 的压缩件")])
 

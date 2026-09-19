@@ -43,9 +43,10 @@ def main():
     y0 = f.header(
         "DeepSeek 这一支的四步："
         "<tspan font-weight=\"700\">NSA → DSA → CSA → HCA</tspan>",
-        "⭐ 四个名字看着各不相干，其实是<tspan font-weight=\"700\">同一条路上的四步</tspan>"
-        " ——　而且最后一步<tspan font-weight=\"700\">把「挑」这件事整个取消了</tspan>",
-        [(OR, "要运行时挑（动态）"), (GR, "编译期就定死（静态）")])
+        "⭐ 一条演进线，两个变量反向走：<tspan font-weight=\"700\">压缩率逐级提高，"
+        "运行时决策逐级退出</tspan>　——　到 HCA，<tspan font-weight=\"700\">"
+        "token 选择被取消，mask 落回编译期</tspan>",
+        [(OR, "运行时选择（动态）"), (GR, "编译期固定（静态）")])
 
     # ══════════ Ⓐ NSA：三条支路 ═══════════════════════════════════
     PH = 400

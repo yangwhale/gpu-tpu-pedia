@@ -54,8 +54,7 @@ def main():
     y0 = f.header(
         "MLA 省的那 56.9 倍，<tspan font-weight=\"700\">一半是白送的，"
         "一半是在赌</tspan>",
-        "⭐ 两栏都是真数字，<tspan font-weight=\"700\">你可以自己核</tspan> ——&#160;"
-        "不用相信我们",
+        "⭐ 两栏都是实测值，<tspan font-weight=\"700\">可按脚注的出处自行复核</tspan>",
         [(GR, "白送：秩够，恒等"), (RD, "赌：秩不够，有损")])
 
     U = 46
