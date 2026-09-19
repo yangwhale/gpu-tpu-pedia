@@ -2286,8 +2286,11 @@ body.figonly section h3{margin-top:34px}
 <div class="note"><p>📌 <b>那「一堆中间结果」到底有多少？——&nbsp;一句话给你个量级。</b></p>
 <p><em>按 V3 的真实配置（4K 序列、一条）逐项数下来：<b>一层约 2.2 GiB，
   61 层合起来约 133 GiB</b>。</em></p>
-<p class="landing">⭐ <b>记住这个量级就够了 ——&nbsp;它比整个模型的权重还大一截。</b>
-  <em>——&nbsp;而这正是下一节那笔交易存在的理由。</em></p>
+<p><em>对照一下：V3 的权重按 bf16 是 <b>1,250 GiB</b> ——&nbsp;所以一条序列的激活
+  只有权重的<b>约九分之一</b>。</em></p>
+<p class="landing">⭐ <b>但真正要记住的是这两样东西涨得不一样：权重是固定的，激活每多跑一条序列就多一份。</b>
+  <em>batch 到约 <b>9 条</b>，激活就追平权重；而训练的 batch 从来不止十条。
+  ——&nbsp;这才是下一节那笔交易存在的理由。</em></p>
 <p><span class="sub">⛔ <b>逐项怎么数的、哪一项最大、换到 128K 是多少</b>
   ——&nbsp;都在下面这个折叠块里。<em>属于「装不装得下」，本讲不要求。</em></span></p></div>
 
@@ -2825,7 +2828,7 @@ body.figonly section h3{margin-top:34px}
 <p><em>attention 不是线性层：代价随 S² 涨，产出只随 S 涨。
   一除，<b>每字节代价随序列长度<u>线性上升</u></b>。</em></p>
 
-<figure class="fbox fwide" id="fig-per-byte"><svg viewBox="0 0 1400 874" width="100%" role="img" aria-label="双对数坐标上，线性层的每字节重算代价是一条水平线（等于它的输入宽度），而 attention 的是一条随序列长度上升的斜线。两条斜率不同，所以必然相交：对 V3 交点在约 5,734。V3 预训练用的 4,096 落在交点左边，attention 只是普通候选；长上下文扩训推到 131,072 落到右边很远，同一个 attention 就变成最不该重算的那一个。GPT-3 的 2,048 也在它自己交点的左边，所以 2022 年那篇论文选 attention 是对的"><defs><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-per-byte"><svg viewBox="0 0 1400 874" width="100%" role="img" aria-label="双对数坐标上，线性层的每字节重算代价是一条水平线（等于它的输入宽度），而 attention 的是一条随序列长度上升的斜线。两条斜率不同，所以必然相交：对 V3 交点在约 13,107。V3 预训练用的 4,096 落在交点左边，attention 只是普通候选；长上下文扩训推到 131,072 落到右边很远，同一个 attention 就变成最不该重算的那一个。GPT-3 的 2,048 也在它自己交点的左边，所以 2022 年那篇论文选 attention 是对的"><defs><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">为什么同一条判据会给出<tspan font-weight="700">相反</tspan>的答案　——　<tspan font-weight="700">两条斜率不同的线，必然相交</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：<tspan font-weight="700">扔掉它、再算回来 ——&#160;一个字节的代价</tspan>　· 双对数坐标 ——&#160;<tspan font-weight="700">常数在这里是水平线，正比于 S 的是直线</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -2868,6 +2871,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1312" y="449" fill="#b06000" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家输出（输入宽 2,048）</tspan></text>
 <line x1="150" y1="392.33064841489545" x2="1320" y2="392.33064841489545" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
 <text class="svgsm" x="1312" y="382" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">gate / up / 路由（输入宽 7,168）</tspan></text>
+<line x1="150" y1="347.81192752732863" x2="1320" y2="347.81192752732863" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="160" y="367" fill="#a50e0e" text-anchor="start" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">o_proj（输入宽 16,384）——&#160;最宽</tspan></text>
 <path d="M 150.0 485.1 L 1320.0 186.5" fill="none" stroke="#9334e6" stroke-width="3.2" stroke-linecap="round"/>
 <text class="svgsm" x="832" y="292" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">V3 的 attention　＝　1.25 × 序列长度</tspan></text>
 <path d="M 150.0 497.1 L 1320.0 198.5" fill="none" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="7 5"/>
@@ -2876,11 +2881,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="160" y="278" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPT-3 最宽的线性层（49,152 ＝ 4h）</tspan></text>
 <rect x="960.8007657304694" y="282.6488919420905" width="12" height="12" rx="6" fill="#fff" stroke="#e8710a" stroke-width="2.0"/>
 <text class="svgsm" x="966" y="316" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPT-3 自己的交点　49,152</tspan></text>
-<rect x="506.49367347364796" y="385.33064841489545" width="14" height="14" rx="7" fill="#fff" stroke="#202124" stroke-width="2.4"/>
-<line x1="513.493673473648" y1="402.33064841489545" x2="513.493673473648" y2="548" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
-<rect x="401.49367347364796" y="308.33064841489545" width="224" height="62" rx="8" fill="#fff" stroke="#202124" stroke-width="1.6"/>
-<text class="svgsm" x="513" y="332" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交点　S ≈ 5,734</tspan></text>
-<text class="svgsm" x="513" y="354" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">左边 attention 最便宜，右边最贵</text>
+<rect x="680.9180161227233" y="340.81192752732863" width="14" height="14" rx="7" fill="#fff" stroke="#202124" stroke-width="2.4"/>
+<line x1="687.9180161227233" y1="357.81192752732863" x2="687.9180161227233" y2="548" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
+<rect x="575.9180161227233" y="263.81192752732863" width="224" height="62" rx="8" fill="#fff" stroke="#202124" stroke-width="1.6"/>
+<text class="svgsm" x="687" y="287" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交点　S ≈ 13,107</tspan></text>
+<text class="svgsm" x="687" y="309" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">左边 attention 还不是最贵的，右边它就是最贵的</text>
 <line x1="296.25" y1="548" x2="296.25" y2="172" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="6 4"/>
 <rect x="290.25" y="453.7950859143296" width="12" height="12" rx="6" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="286" y="190" fill="#b06000" text-anchor="end" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPT-3　2,048</tspan></text>
@@ -2902,11 +2907,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="732" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">2022 年那篇（<tspan font-weight="700">arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank"><tspan text-decoration="underline">2205.05198</tspan></a></tspan>）说：挑「占显存不少、但重算起来不贵」的扔，<tspan font-weight="700">它选中了 attention</tspan>。 看橙色那一组：GPT-3 在 2,048 处只要 <tspan font-weight="700">2,048</tspan>，而它自己的交点在</text>
 <text class="svgsm" x="20" y="756" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">49,152</tspan> ——&#160;<tspan font-weight="700">远在左边，attention 确实最便宜。论文没错。</tspan></text>
 <text class="svgsm" x="20" y="780" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">而真正值得记的是<tspan font-weight="700">红色那一组自己走的这段路</tspan>：V3 <tspan font-weight="700">预训练在 4,096</tspan>，每字节 <tspan font-weight="700">5,120</tspan> ——&#160;<tspan font-weight="700">比 gate/up 那条线还低，attention 只是个普通候选</tspan>。扩训把它推到 <tspan font-weight="700">131,072</tspan>，同一</text>
-<text class="svgsm" x="20" y="804" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">个 attention 变成 <tspan font-weight="700">163,840</tspan>，越过交点 5,734 <tspan font-weight="700">很远</tspan>，成了最该留的那一个。<tspan font-weight="700">同一个模型、同一条判据、只有一个旋钮在动 ——&#160;结论换了边。</tspan> 判据一个字没改 ——&#160;<tspan font-weight="700">而且注意：</tspan></text>
+<text class="svgsm" x="20" y="804" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">个 attention 变成 <tspan font-weight="700">163,840</tspan>，越过交点 13,107 <tspan font-weight="700">很远</tspan>，成了最该留的那一个。<tspan font-weight="700">同一个模型、同一条判据、只有一个旋钮在动 ——&#160;结论换了边。</tspan> 判据一个字没改 ——&#160;<tspan font-weight="700">而且注意：</tspan></text>
 <text class="svgsm" x="20" y="828" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两个模型的斜率和对照宽度<tspan text-decoration="underline">都不一样</tspan>，翻转靠的是「斜率不同必然相交」这件事本身，不靠任何一组具体数值。</tspan></text>
 </svg><figcaption>⭐⭐⭐ <b>全专题最值钱的一张</b> ——&nbsp;<em>「两条斜率不同的线必然相交」这句话，图讲一秒，字讲一段。</em><span class="capmore"><br>⭐ <em>双对数不是为了好看：只有在这个坐标上，「常数」才是水平线、「正比于 S」才是直线。</em><br>⛔ <em>两根竖线就是那场翻转的全部原因 ——&nbsp;判据一个字没改，变的只有序列长度。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 线性层那条闭式解：<b>一个 [S,k]×[k,n] 的矩阵乘，每字节代价 ＝ k</b>（重算 2·S·k·n FLOPs ÷ 产出 S·n·2 字节，S 和 n 全约掉）——&#160;所以它在图上必然是水平线</p>
 <p>⚠️ 两条斜率分别是 <b>V3 的 1.25（qk 192 / v 128）与 GPT-3 的 1.00（qk ＝ v ＝ 128）</b>；口径都是 causal 折半。⛔ <b>换个模型就得重画它自己那两条线（qk 192 / v 128）与 causal 折半的口径</b>；换个模型斜率会变，<b>但「它是斜的」不会变</b> ——&#160;这才是要记的东西</p>
-<p>⛔ 交点 5,734 <b>不是工程阈值</b>，它还取决于你拿哪条线性层做对照（图上四条给的交点各不相同）</p>
+<p>⛔ 交点 13,107 <b>不是工程阈值</b>，它还取决于你拿哪条线性层做对照（图上四条给的交点各不相同）</p>
 <p>📌 2022 那篇的收益数字（GPT-3 省 70% 付 2.7%）用的是<b>未折半的 Megatron 口径</b>；换成本图统一的 causal 口径，GPT-3 的 attention 占比是 1.37%</p></details></figure>
 
 <p class="landing">⭐⭐⭐ 图上那两条<b>斜率不同</b>的线，就是这一节的全部内容
@@ -2915,17 +2920,29 @@ body.figonly section h3{margin-top:34px}
 
 <div class="note"><p>⭐⭐⭐ 一条是常数（输入宽度），一条在往上爬
   ——&nbsp;<u>那它们必然相交</u>。</p>
-<p><em>对 V3：<code>1.25·S = 7168</code> →&nbsp;<b>S ≈ 5,734</b>。</em></p>
+<p><em>拿来对照的那条平线，要用<b>最宽的那个线性层</b>。对 V3 它是
+  <b>o_proj</b>（把 128 个头拼起来投回残差流），输入宽 <code>128 × 128 = 16,384</code>
+  ——&nbsp;<u>不是 d_model 的 7,168</u>。</em></p>
+<p><em>于是：<code>1.25·S = 16,384</code> →&nbsp;<b>S ≈ 13,107</b>。</em></p>
 <ul>
-  <li><b>短于 ~5.7K</b> ——&nbsp;<em>attention 比大多数线性层还便宜，
-    <b>是个好的重算对象</b>。</em></li>
-  <li><b>长于 ~5.7K</b> ——&nbsp;<em>它一路变成最贵的那个，<b>而且线性地越来越贵</b>。</em></li>
+  <li><b>短于 ~13K</b> ——&nbsp;<em>attention 还没爬到最贵那一档，
+    <b>扔掉它不是这一层里最亏的选择</b>。</em></li>
+  <li><b>长于 ~13K</b> ——&nbsp;<em>它越过最宽的线性层，从此一路最贵，
+    <b>而且线性地越来越贵</b>。</em></li>
 </ul>
-<p><span class="sub">⚠️ 5,734 是个粗略交叉点，不是工程阈值。
+<p><span class="sub">⚠️ 13,107 是个粗略交叉点，不是工程阈值。
   它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
-  ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
+  ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p>
+<p><span class="sub">⛔ <b>这里我自己踩过一次，值得你顺手学走。</b>
+  这个交点早先写的是 <b>5,734</b>，因为我拿 d_model（7,168）当了「最宽的线性层」。
+  <em>在标准 MHA 上「头数 × 每头维度 ＝ hidden」，所以那个等式成立；
+  <u>MLA 把这条约束解除了</u> ——&nbsp;V3 是 128 头 × 128 ＝ 16,384，比 d_model 宽一倍。
+  <b>反例一直印在 1.7 那张表上</b>（「attention 输出　128 头 × 128 ＝ 16,384」），
+  只是隔了半节没对上账。</em>
+  ⭐ 判据：<b>凡是「A ＝ B」这种听起来像常识的架构关系，换了架构就要重新验一遍</b>
+  ——&nbsp;它不会报错，只会让后面每一个数都偏。</span></p></div>
 
-<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— 八行名次表、该切在哪、省多少付多少</b>　<span class="why">⭐ 判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
+<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— 10 行名次表、该切在哪、省多少付多少</b><span class="why">⭐ 判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
 <p>把 V3 在<b>基准的 4K</b> 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
 
 <table>
@@ -2933,17 +2950,19 @@ body.figonly section h3{margin-top:34px}
 <tbody>
 <tr><td>MoE 派发（复制成 9 份）</td><td>0.492 GiB</td><td>~0</td><td><b>0</b></td><td>白捡</td></tr>
 <tr><td>logsumexp（attention 副产物，fp32）</td><td>0.002 GiB</td><td>~0</td><td><b>0</b></td><td>白捡</td></tr>
-<tr><td>RMSNorm 输出（MLA ＋ MoE，共 4 份）</td><td>0.176 GiB</td><td>~0</td><td><b>~0</b></td><td>白捡</td></tr>
+<tr><td>RMSNorm 输出（3 份，逐元素）</td><td>0.121 GiB</td><td>~0</td><td><b>~0</b></td><td>白捡</td></tr>
 <tr><td>SwiGLU 乘积 9 份（逐元素）</td><td>0.141 GiB</td><td>~0</td><td><b>~0</b></td><td>白捡</td></tr>
 <tr><td>K/V 解压（输入宽 512）</td><td>0.250 GiB</td><td>0.14 TFLOP</td><td><b>0.55</b></td><td>划算</td></tr>
 <tr><td>Q 展开（输入宽 1,536）</td><td>0.188 GiB</td><td>0.31 TFLOP</td><td><b>1.65</b></td><td>划算</td></tr>
 <tr><td>专家输出 9 份（输入宽 2,048）</td><td>0.492 GiB</td><td>1.08 TFLOP</td><td><b>2.20</b></td><td>划算</td></tr>
 <tr><td><b>attention 输出</b></td><td><b>0.125 GiB</b></td><td><b>0.69 TFLOP</b></td><td><b>5.50</b></td><td><b>边际</b></td></tr>
 <tr><td><b>gate / up / 路由 / 降维（输入宽 7,168）</b></td><td><b>0.303 GiB</b></td><td><b>2.33 TFLOP</b></td><td><b>7.70</b></td><td><b>边际</b></td></tr>
+<tr><td><b>MLA 后的残差流（＝ o_proj 输出，输入宽 16,384）</b></td><td><b>0.055 GiB</b></td><td><b>0.96 TFLOP</b></td><td><b>17.59</b></td><td><b>边际</b></td></tr>
 </tbody></table>
 
 <p><span class="sub">⭐ 这张表不用背，它是<u>上面那条闭式解直接排出来的</u> ——&nbsp;
-  前六行的「每 GiB 付」就是各自的输入宽度换了个单位，
+  除了逐元素那几行（代价≈0）和 attention 那一行（随 S 动），
+  其余每一行的「每 GiB 付」就是各自的<u>输入宽度</u>换了个单位，
   你拿 config 自己也能排一遍。
   <em>⛔ 顺带自曝：这张表早先有<b>一行</b>是手填的，
   「省显存 9.14 × 每 GiB 7.70」算出来是 70 TFLOP，那一栏却写着 39.08。
@@ -2953,17 +2972,18 @@ body.figonly section h3{margin-top:34px}
 <div class="note danger"><p>⭐⭐ 回答那个直觉问题：「有没有占显存很小、算力却很大的东西？」
   ——&nbsp;<em>有，就是 attention ——&nbsp;<b>但「有多极端」完全取决于你在哪个序列长度上问。</b></em></p>
 <p><em>判据只有一条比值 ——&nbsp;<b>比值高的留，比值低的扔</b>。
-  而这张表里<u>只有 attention 这一行会随序列长度动</u>，其余七行是输入宽度，跟 S 无关。</em></p>
+  而这张表里<u>只有 attention 这一行会随序列长度动</u>，其余各行是输入宽度，跟 S 无关。</em></p>
 <table><thead><tr><th>attention 每 GiB 付</th><th>4K（本讲基准）</th>
   <th>128K（扩训）</th></tr></thead><tbody>
 <tr><td>绝对值</td><td><b>5.50</b></td><td><b>175.92</b></td></tr>
-<tr><td>跟最宽的线性层（gate/up，7.70）比</td>
-  <td><b>只有它的 71%</b></td><td><b>贵 23 倍</b></td></tr>
-<tr><td>在这张表里排第几</td><td>第 7 / 8（<b>gate/up 反而更贵</b>）</td><td>第 8 / 8（<b>最贵</b>）</td></tr>
+<tr><td>跟最宽的线性层（o_proj，17.59）比</td>
+  <td><b>只有它的 31%</b></td><td><b>贵 10 倍</b></td></tr>
+<tr><td>在这张表里排第几</td><td>第 8 / 10（<b>o_proj 和 gate/up 都更贵</b>）</td>
+  <td>第 10 / 10（<b>最贵</b>）</td></tr>
 <tr><td>结论那一栏</td><td><b>边际</b></td><td><b>绝不</b></td></tr>
 </tbody></table>
 <p class="landing">⭐⭐⭐ <b>同一个模型、同一条判据，只把序列长度从 4K 推到 128K
-  ——&nbsp;attention 就从「跟 gate/up 一档」变成「比谁都贵 23 倍」。</b></p>
+  ——&nbsp;attention 就从「还排在两个线性层后面」变成「比谁都贵 10 倍」。</b></p>
 <p><span class="sub">⛔ <b>别把话说过头</b>：4K 上 attention 的比值是 5.50，
   <u>仍然高于下面那条「小于 3 全收下」的线</u> ——&nbsp;
   所以按本讲自己的切法，它<b>依然不进「收下」那一批</b>。
@@ -2980,14 +3000,14 @@ body.figonly section h3{margin-top:34px}
   <em>要记的是「表是按比值排的，<b>你只需要决定在哪儿切一刀</b>」。
   ⭐ 排序是客观的，切在哪是你的配置说了算。</em></span></p></div>
 
-<p class="landing">⭐⭐ 照这条线切（把比值小于 3 的全收下来）：一层省 <b>1.74 GiB</b>，付 <b>1.53 TFLOP</b>。
+<p class="landing">⭐⭐ 照这条线切（把比值小于 3 的全收下来）：一层省 <b>1.69 GiB</b>，付 <b>1.53 TFLOP</b>。
   <em>换算到<b>一个 step</b>（一层，前向 ＋ 反向 ＝ 3 遍 ＝ <b>16.4 TFLOP</b>）：
-  <u>多付 9.3% 的算力，换掉可重算池的 <b>80%</b></u>。</em></p>
+  <u>多付 9.3% 的算力，换掉可重算池的 <b>78%</b></u>。</em></p>
 <p><em>对比全量重算 ——&nbsp;同一个 step 口径下是「多付 33%，换掉 97%」。
-  ⭐ <b>选择性重算的性价比还是高 3.0 倍</b>，这就是它值得单独配的原因。</em></p>
+  ⭐ <b>选择性重算的性价比还是高 2.9 倍</b>，这就是它值得单独配的原因。</em></p>
 
 <div class="note"><p>⚠️ <b>这两个数在 128K 上长得很不一样，而漂亮的是那一档。</b></p>
-<p><em>128K 上同样切法是「<b>只多付 1.9%</b> 换 80%」，性价比高 <b>14.5 倍</b>
+<p><em>128K 上同样切法是「<b>只多付 1.9%</b> 换 78%」，性价比高 <b>14.5 倍</b>
   ——&nbsp;确实够得上「一个数量级」。</em></p>
 <p class="landing">⭐ <b>为什么差这么多：分子（重算代价）∝ S，
   分母（一个 step）在 128K 上被 S² 的 attention 撑着。</b>
@@ -7279,10 +7299,20 @@ body.figonly section h3{margin-top:34px}
         ＋ 官方参考实现的 MLA 前向</td>
     <td>框架的算子融合程度、MoE 派发是否真的物化九份</td></tr>
 <tr><td>attention 占一层算力 82.1%</td>
-    <td>按 causal 折半口径算。专题一独立算出 81.8%，两边对上了</td>
-    <td>口径（折没折半）；换头维度就变</td></tr>
-<tr><td>交叉点 <b>S ≈ 5,734</b></td>
-    <td><code>1.25·S = 7,168</code>。1.25 来自 V3 头维度 192/128、causal 折半</td>
+    <td>按 causal 折半口径算。<b>⛔ 这里早先写「专题一用完全独立的另一套算法算出
+        81.8%，两边对上了」——&nbsp;那句话是错的，已撤回。</b>
+        <em>两边分子是<u>同一条公式</u>（S²·H·(d<sub>qk</sub>+d<sub>v</sub>)、同一份 config、
+        同样 causal 折半），只有分母不同：专题一除整模型（含 lm_head），
+        这里除一层的激活参数。差的那 0.463% 正是 lm_head 的稀释
+        ——&nbsp;<code>81.8 ÷ (1−0.00463) = 82.18</code>。</em></td>
+    <td>口径（折没折半）；换头维度就变。
+        ⛔ <b>它是一次算术自检，不是外部锚点</b> ——&nbsp;两个数同源，对上是必然的。
+        这个量目前<b>没有第三方实测可验</b></td></tr>
+<tr><td>交叉点 <b>S ≈ 13,107</b></td>
+    <td><code>1.25·S = 16,384</code>（o_proj 的输入宽 ＝ 128 头 × 128）。
+        1.25 来自 V3 头维度 192/128、causal 折半。
+        ⛔ 早先这里分母写的是 d_model 7,168、交点报 5,734 ——&nbsp;
+        <b>「最宽线性层 ＝ d_model」在 MLA 上不成立</b></td>
     <td>⛔ 换一条线性层做对照，交点就不同 ——&nbsp;<b>它不是工程阈值</b></td></tr>
 <tr><td><b>6ND 低估五到六倍</b></td>
     <td>由上面那个 82.1% 反推（1 ÷ 0.179）</td>

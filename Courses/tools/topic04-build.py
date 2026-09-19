@@ -441,8 +441,11 @@ __FIG_ACT_BILL__
 <div class="note"><p>📌 <b>那「一堆中间结果」到底有多少？——&nbsp;一句话给你个量级。</b></p>
 <p><em>按 V3 的真实配置（4K 序列、一条）逐项数下来：<b>一层约 2.2 GiB，
   61 层合起来约 133 GiB</b>。</em></p>
-<p class="landing">⭐ <b>记住这个量级就够了 ——&nbsp;它比整个模型的权重还大一截。</b>
-  <em>——&nbsp;而这正是下一节那笔交易存在的理由。</em></p>
+<p><em>对照一下：V3 的权重按 bf16 是 <b>__W_BF16__ GiB</b> ——&nbsp;所以一条序列的激活
+  只有权重的<b>约九分之一</b>。</em></p>
+<p class="landing">⭐ <b>但真正要记住的是这两样东西涨得不一样：权重是固定的，激活每多跑一条序列就多一份。</b>
+  <em>batch 到约 <b>__ACT_XOVER__ 条</b>，激活就追平权重；而训练的 batch 从来不止十条。
+  ——&nbsp;这才是下一节那笔交易存在的理由。</em></p>
 <p><span class="sub">⛔ <b>逐项怎么数的、哪一项最大、换到 128K 是多少</b>
   ——&nbsp;都在下面这个折叠块里。<em>属于「装不装得下」，本讲不要求。</em></span></p></div>
 
@@ -684,23 +687,36 @@ __FIG_PER_BYTE__
 
 <div class="note"><p>⭐⭐⭐ 一条是常数（输入宽度），一条在往上爬
   ——&nbsp;<u>那它们必然相交</u>。</p>
-<p><em>对 V3：<code>1.25·S = 7168</code> →&nbsp;<b>S ≈ 5,734</b>。</em></p>
+<p><em>拿来对照的那条平线，要用<b>最宽的那个线性层</b>。对 V3 它是
+  <b>o_proj</b>（把 128 个头拼起来投回残差流），输入宽 <code>128 × 128 = __WIDEST__</code>
+  ——&nbsp;<u>不是 d_model 的 7,168</u>。</em></p>
+<p><em>于是：<code>1.25·S = __WIDEST__</code> →&nbsp;<b>S ≈ __CROSS__</b>。</em></p>
 <ul>
-  <li><b>短于 ~5.7K</b> ——&nbsp;<em>attention 比大多数线性层还便宜，
-    <b>是个好的重算对象</b>。</em></li>
-  <li><b>长于 ~5.7K</b> ——&nbsp;<em>它一路变成最贵的那个，<b>而且线性地越来越贵</b>。</em></li>
+  <li><b>短于 ~__CROSS_K__</b> ——&nbsp;<em>attention 还没爬到最贵那一档，
+    <b>扔掉它不是这一层里最亏的选择</b>。</em></li>
+  <li><b>长于 ~__CROSS_K__</b> ——&nbsp;<em>它越过最宽的线性层，从此一路最贵，
+    <b>而且线性地越来越贵</b>。</em></li>
 </ul>
-<p><span class="sub">⚠️ 5,734 是个粗略交叉点，不是工程阈值。
+<p><span class="sub">⚠️ __CROSS__ 是个粗略交叉点，不是工程阈值。
   它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
-  ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
+  ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p>
+<p><span class="sub">⛔ <b>这里我自己踩过一次，值得你顺手学走。</b>
+  这个交点早先写的是 <b>5,734</b>，因为我拿 d_model（7,168）当了「最宽的线性层」。
+  <em>在标准 MHA 上「头数 × 每头维度 ＝ hidden」，所以那个等式成立；
+  <u>MLA 把这条约束解除了</u> ——&nbsp;V3 是 128 头 × 128 ＝ 16,384，比 d_model 宽一倍。
+  <b>反例一直印在 1.7 那张表上</b>（「attention 输出　128 头 × 128 ＝ 16,384」），
+  只是隔了半节没对上账。</em>
+  ⭐ 判据：<b>凡是「A ＝ B」这种听起来像常识的架构关系，换了架构就要重新验一遍</b>
+  ——&nbsp;它不会报错，只会让后面每一个数都偏。</span></p></div>
 
-<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— 八行名次表、该切在哪、省多少付多少</b>　<span class="why">⭐ 判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
+<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— __NROWS__ 行名次表、该切在哪、省多少付多少</b><span class="why">⭐ 判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
 <p>把 V3 在<b>基准的 4K</b> 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
 
 __TBL_PER_BYTE__
 
 <p><span class="sub">⭐ 这张表不用背，它是<u>上面那条闭式解直接排出来的</u> ——&nbsp;
-  前六行的「每 GiB 付」就是各自的输入宽度换了个单位，
+  除了逐元素那几行（代价≈0）和 attention 那一行（随 S 动），
+  其余每一行的「每 GiB 付」就是各自的<u>输入宽度</u>换了个单位，
   你拿 config 自己也能排一遍。
   <em>⛔ 顺带自曝：这张表早先有<b>一行</b>是手填的，
   「省显存 9.14 × 每 GiB 7.70」算出来是 70 TFLOP，那一栏却写着 39.08。
@@ -710,17 +726,18 @@ __TBL_PER_BYTE__
 <div class="note danger"><p>⭐⭐ 回答那个直觉问题：「有没有占显存很小、算力却很大的东西？」
   ——&nbsp;<em>有，就是 attention ——&nbsp;<b>但「有多极端」完全取决于你在哪个序列长度上问。</b></em></p>
 <p><em>判据只有一条比值 ——&nbsp;<b>比值高的留，比值低的扔</b>。
-  而这张表里<u>只有 attention 这一行会随序列长度动</u>，其余七行是输入宽度，跟 S 无关。</em></p>
+  而这张表里<u>只有 attention 这一行会随序列长度动</u>，其余各行是输入宽度，跟 S 无关。</em></p>
 <table><thead><tr><th>attention 每 GiB 付</th><th>4K（本讲基准）</th>
   <th>128K（扩训）</th></tr></thead><tbody>
 <tr><td>绝对值</td><td><b>__ATT_PB_BASE__</b></td><td><b>__ATT_PB_LONG__</b></td></tr>
-<tr><td>跟最宽的线性层（gate/up，7.70）比</td>
+<tr><td>跟最宽的线性层（o_proj，__WIDEST_PB__）比</td>
   <td><b>只有它的 __ATT_VS_W__</b></td><td><b>贵 __TIMES_LONG__ 倍</b></td></tr>
-<tr><td>在这张表里排第几</td><td>第 7 / 8（<b>gate/up 反而更贵</b>）</td><td>第 8 / 8（<b>最贵</b>）</td></tr>
+<tr><td>在这张表里排第几</td><td>第 __RANK_BASE__ / __NROWS__（<b>o_proj 和 gate/up 都更贵</b>）</td>
+  <td>第 __RANK_LONG__ / __NROWS__（<b>最贵</b>）</td></tr>
 <tr><td>结论那一栏</td><td><b>边际</b></td><td><b>绝不</b></td></tr>
 </tbody></table>
 <p class="landing">⭐⭐⭐ <b>同一个模型、同一条判据，只把序列长度从 4K 推到 128K
-  ——&nbsp;attention 就从「跟 gate/up 一档」变成「比谁都贵 23 倍」。</b></p>
+  ——&nbsp;attention 就从「还排在两个线性层后面」变成「比谁都贵 __TIMES_LONG__ 倍」。</b></p>
 <p><span class="sub">⛔ <b>别把话说过头</b>：4K 上 attention 的比值是 __ATT_PB_BASE__，
   <u>仍然高于下面那条「小于 3 全收下」的线</u> ——&nbsp;
   所以按本讲自己的切法，它<b>依然不进「收下」那一批</b>。
@@ -3045,10 +3062,20 @@ __FIG_UNDERFLOW__
         ＋ 官方参考实现的 MLA 前向</td>
     <td>框架的算子融合程度、MoE 派发是否真的物化九份</td></tr>
 <tr><td>attention 占一层算力 82.1%</td>
-    <td>按 causal 折半口径算。专题一独立算出 81.8%，两边对上了</td>
-    <td>口径（折没折半）；换头维度就变</td></tr>
-<tr><td>交叉点 <b>S ≈ 5,734</b></td>
-    <td><code>1.25·S = 7,168</code>。1.25 来自 V3 头维度 192/128、causal 折半</td>
+    <td>按 causal 折半口径算。<b>⛔ 这里早先写「专题一用完全独立的另一套算法算出
+        81.8%，两边对上了」——&nbsp;那句话是错的，已撤回。</b>
+        <em>两边分子是<u>同一条公式</u>（S²·H·(d<sub>qk</sub>+d<sub>v</sub>)、同一份 config、
+        同样 causal 折半），只有分母不同：专题一除整模型（含 lm_head），
+        这里除一层的激活参数。差的那 0.463% 正是 lm_head 的稀释
+        ——&nbsp;<code>81.8 ÷ (1−0.00463) = 82.18</code>。</em></td>
+    <td>口径（折没折半）；换头维度就变。
+        ⛔ <b>它是一次算术自检，不是外部锚点</b> ——&nbsp;两个数同源，对上是必然的。
+        这个量目前<b>没有第三方实测可验</b></td></tr>
+<tr><td>交叉点 <b>S ≈ __CROSS__</b></td>
+    <td><code>1.25·S = __WIDEST__</code>（o_proj 的输入宽 ＝ 128 头 × 128）。
+        1.25 来自 V3 头维度 192/128、causal 折半。
+        ⛔ 早先这里分母写的是 d_model 7,168、交点报 5,734 ——&nbsp;
+        <b>「最宽线性层 ＝ d_model」在 MLA 上不成立</b></td>
     <td>⛔ 换一条线性层做对照，交点就不同 ——&nbsp;<b>它不是工程阈值</b></td></tr>
 <tr><td><b>6ND 低估五到六倍</b></td>
     <td>由上面那个 82.1% 反推（1 ÷ 0.179）</td>
@@ -3418,7 +3445,12 @@ DTYPE_B = 2                   # bf16
 S_BASE = 4096                 # ⭐ 本讲基准：V3 预训练真实序列长度（14.8T token 全在这档）
 S_LONG = 131072               # 长上下文扩训（预训练之后各一千步）
 S_RATIO = S_LONG // S_BASE    # ＝ 32，激活线性缩放的倍数
-D_V3 = 7168                   # V3 的模型宽度（最宽的那个线性层的输入）
+D_V3 = 7168                   # V3 的模型宽度（＝ 残差流的宽度，gate/up 的输入）
+# ⛔ D_V3 原来的注释写的是「最宽的那个线性层的输入」——&#160;**在 MLA 上不成立**。
+#    o_proj 吃的是 128 头 × 128 ＝ 16,384，比 d_model 宽一倍。
+#    这正是「老约束在新架构上已被解除」的标准案例：MHA 里 heads × head_dim ＝ hidden，
+#    MLA 里不是。交点、倍数、名次全都建在这个常数上，所以它单列并跟 §1.7 的表对账。
+W_WIDEST_V3 = 128 * 128       # o_proj 的输入宽 ——&#160;全层最宽的线性层
 N_ACT_L = 585.3e6             # 一层的激活参数量（MLA ＋ 被选中的 9 个专家）
 H_V3, DQK_V3, DV_V3 = 128, 192, 128
 
@@ -3460,12 +3492,18 @@ def _att_share(S):
 PER_BYTE_W = [
     ("MoE 派发（复制成 9 份）",                  64512, 0.0),
     ("logsumexp（attention 副产物，fp32）",        256, 0.0),
-    ("RMSNorm 输出（MLA ＋ MoE，共 4 份）",       23040, 2.0),
+    ("RMSNorm 输出（3 份，逐元素）",              15872, 2.0),
     ("SwiGLU 乘积 9 份（逐元素）",                18432, 2.0),
     ("K/V 解压（输入宽 512）",                    32768, 512.0),
     ("Q 展开（输入宽 1,536）",                    24576, 1536.0),
     ("专家输出 9 份（输入宽 2,048）",              64512, 2048.0),
     ("gate / up / 路由 / 降维（输入宽 7,168）",    39744, float(D_V3)),
+    # ⛔ 这一份原来跟另外三个 RMSNorm 输出捆在一起按「逐元素、白捡」计价（2026-09-19 红队查出）。
+    #    它是 MLA 之后的残差流 ＝ o_proj 的输出 ——&#160;要重算它就得跑 o_proj，
+    #    而 o_proj 的输入是 128 头 × 128 ＝ 16,384，**是这一层最宽的线性层输入**。
+    #    ⭐ 反例一直印在 §1.7 那张表上（「attention 输出　128 头 × 128 ＝ 16,384」），
+    #      隔了 100 行没对上账 ——&#160;所以下面那条 assert 直接跟 §1.7 的表绑死。
+    ("MLA 后的残差流（＝ o_proj 输出，输入宽 16,384）", 7168, float(W_WIDEST_V3)),
     ("attention 输出",                           16384, None),   # None ＝ 1.25·S
 ]
 ENTRY_W = 7168          # 入口那一份 ——&#160;重算模式下留的就是它，不在候选池里
@@ -3527,22 +3565,37 @@ _TBL = ('<table>\n<thead><tr><th>张量</th><th>省显存</th><th>重算代价</
 _cheap = [r for r in _ROWS_BASE if r[2] * GIB_F < CUT]
 _CHEAP_GIB = sum(r[1] for r in _cheap)
 _CHEAP_TF = sum(r[1] * r[2] * GIB_F for r in _cheap)
-_CROSS = D_V3 / 1.25
+_CROSS = W_WIDEST_V3 / 1.25       # attention 追平**最宽线性层**的序列长度
+# ⭐ 正文里凡是「交点是多少、表有几行、attention 排第几」，一律从这里取 ——
+#   这一节反复出问题的模式就是「表是生成的、正文是手写的」，所以不再留手写的数。
+_NROWS      = len(PER_BYTE_W)
+_WIDEST_PB  = W_WIDEST_V3 * GIB_F
+_RANK_BASE  = [r[0] for r in _ROWS_BASE].index("attention 输出") + 1
+_RANK_LONG  = [r[0] for r in _ROWS_LONG].index("attention 输出") + 1
+assert _RANK_LONG == _NROWS, "128K 上 attention 该排最后一名"
+assert _RANK_BASE < _NROWS, "4K 上 attention 不该排最后 —— 翻转没发生"
 
 # ⭐ 选择性 vs 全量：两个百分比与它们的性价比之比，全部由基准算出来。
 _STEP_TF   = _step_tf(S_BASE)
 _SEL_PCT   = 100.0 * _CHEAP_TF / _STEP_TF          # 选择性重算多付百分之几
-_FULL_PCT, _FULL_SAVE = 100.0 / 3.0, 97.0
+# ⛔ _FULL_SAVE 原来写死 97.0，而同一个脚本自己算出来的是 95.81 —— 这是全篇唯一一个
+#    「C 类手填常量」真的填错的地方（2026-09-19 审计查出）。它还撑着对外的「性价比 __EDGE__ 倍」。
+#    改成从峰值占比推，跟 fig-recompute 用同一个口径。
+_FULL_PCT  = 100.0 / 3.0          # 全量重算多付：在 fwd+bwd=3 上再加一次 fwd
+# _FULL_SAVE / _EDGE 依赖 _PEAK_PCT，在下面峰值那一块算完之后才定义。
 _SEL_SAVE = 100.0 * _CHEAP_GIB / (_POOL_B / 2 ** 30)   # 选择性换掉了池子的百分之几
-_EDGE      = (_SEL_SAVE / _SEL_PCT) / (_FULL_SAVE / _FULL_PCT)   # 性价比之比
-# attention 跟它前一档的倍数 —— 128K 上是 23 倍（最贵），4K 上它已经不在最后
+# _EDGE 见下方峰值块之后（它依赖 _FULL_SAVE）。
+# attention 跟它前一档的倍数 —— 128K 上最贵，4K 上它已经不在最后。
+# ⛔ 这两个数原来是 22.857 / 0.714，因为分母用了 7,168。分母换成真正最宽的 16,384 之后
+#    是 10.0 / 0.3125 ——&#160;代码本来就是算出来的，错的只有常数和正文。
 _TIMES_LONG = _ROWS_LONG[-1][2] / _ROWS_LONG[-2][2]
-_ATT_VS_WIDEST = _att_base[2] / float(D_V3)        # 4K 上 attention ÷ 最宽线性层
+_ATT_VS_WIDEST = _att_base[2] / float(W_WIDEST_V3)   # 4K 上 attention ÷ 最宽线性层
+assert _ROWS_LONG[-2][2] == float(W_WIDEST_V3), \
+    "128K 上第二贵的那行应该就是最宽线性层，现在是 %.0f" % _ROWS_LONG[-2][2]
 
-for _nm, _got, _want in (("128K 的 23 倍", _TIMES_LONG, 22.857),
-                         ("4K attention ÷ gate/up", _ATT_VS_WIDEST, 0.714),
+for _nm, _got, _want in (("128K attention ÷ 最宽线性层", _TIMES_LONG, 10.0),
+                         ("4K attention ÷ 最宽线性层", _ATT_VS_WIDEST, 0.3125),
                          ("4K 选择性占比", _SEL_PCT, 9.30),
-                         ("性价比之比", _EDGE, 2.965),
                          ("一层一步 TFLOP", _STEP_TF, 16.45),
                          ("4K attention 占前向", 100 * _att_share(S_BASE), 12.53),
                          ("128K attention 占前向", 100 * _att_share(S_LONG), 82.11)):
@@ -3626,9 +3679,21 @@ _INFLIGHT_B = _LAYER_B                       # 在算的那一层，取 MoE 块�
 _PEAK_B     = _CKPT_B + _INFLIGHT_B
 _RECOMP_X   = _TOTAL_B / _PEAK_B             # 全量重算省多少倍
 _PEAK_PCT   = 100.0 * _PEAK_B / _TOTAL_B
+_FULL_SAVE = 100.0 - _PEAK_PCT    # 全量重算省掉的比例 —— 跟 fig-recompute 同一口径
+assert abs(_FULL_SAVE - 95.81) < 0.05, "全量重算省的比例变了：%.2f" % _FULL_SAVE
+_EDGE = (_SEL_SAVE / _SEL_PCT) / (_FULL_SAVE / _FULL_PCT)   # 选择性 vs 全量 的性价比之比
 RESIDENT_B  = 671e9 * 16                     # 常驻块（每参数 16 字节）
 _WS_SEQ     = RESIDENT_B / _PEAK_B           # 激活追平常驻需要多少条序列
 _WS_TOK     = _WS_SEQ * S_BASE
+
+# §1.6 的对照。⛔ 这里原来写的是「133 GiB 比整个模型的权重还大一截」——
+#   方向反了：权重 bf16 是 1,250 GiB，133 GiB 只有它的九分之一（2026-09-19 红队查出）。
+#   真正成立、而且更有力的说法是「两者涨得不一样」：权重固定，激活按 batch 线性叠。
+#   所以这里算的是交叉点，不再拿两个孤立的数硬比大小。
+_W_BF16_B  = 671e9 * DTYPE_B                 # 只有权重，不含梯度和优化器状态
+_ACT_XOVER = _W_BF16_B / _TOTAL_B            # 激活追平**权重**要多少条 4K 序列
+assert _W_BF16_B > _TOTAL_B, "激活反而比权重大了？先查 _TOTAL_B 的口径"
+assert 9.0 < _ACT_XOVER < 10.0, "激活追平权重的 batch 变了：%.2f" % _ACT_XOVER
 
 for _nm, _got, _want in (("存档点@128K",  _CKPT_B * S_RATIO / 2 ** 30,     106.75),
                          ("在算层@128K",  _INFLIGHT_B * S_RATIO / 2 ** 30,  71.14),
@@ -3744,7 +3809,16 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__STEP_TF__",     "%.1f TFLOP" % _STEP_TF),
                   ("__SEL_PCT__",     "%.1f%%" % _SEL_PCT),
                   ("__SEL_SAVE__",    "%.0f%%" % _SEL_SAVE),
-                  ("__EDGE__",        "%.1f" % _EDGE)):
+                  ("__EDGE__",        "%.1f" % _EDGE),
+                  ("__W_BF16__",      format(_W_BF16_B / 2 ** 30, ",.0f")),
+                  ("__ACT_XOVER__",   "%.0f" % _ACT_XOVER),
+                  ("__WIDEST__",      format(W_WIDEST_V3, ",")),
+                  ("__CROSS__",       format(int(round(_CROSS)), ",")),
+                  ("__CROSS_K__",     "%.0fK" % (_CROSS / 1024)),
+                  ("__NROWS__",       str(_NROWS)),
+                  ("__WIDEST_PB__",   "%.2f" % _WIDEST_PB),
+                  ("__RANK_BASE__",   str(_RANK_BASE)),
+                  ("__RANK_LONG__",   str(_RANK_LONG))):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
@@ -3776,14 +3850,22 @@ for _ph, _val in (
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
 
-assert "<b>S ≈ 5,734</b>" in _html, "交叉点那句被改过了"
-assert abs(_CROSS - 5734) < 1, "交叉点变了：%.0f" % _CROSS
+assert abs(_CROSS - 13107) < 1, "交叉点变了：%.0f" % _CROSS
+# ⛔ 这两条原来钉的是 5,734（分母用了 d_model）。钉住一个错的值，assert 反而变成了保险箱 ——
+#    所以现在改成钉「交点 ＝ 最宽线性层 ÷ 1.25」这条**关系**，外加宽度本身跟 §1.7 的表对账。
+assert abs(_CROSS * 1.25 - W_WIDEST_V3) < 1e-6, "交点和最宽线性层脱钩了"
+assert "5,734" not in _html.replace("早先写的是 <b>5,734</b>", "").replace(
+    "交点报 5,734", ""), "正文里还留着旧交点 5,734"
 # ⛔ 128K 锚点。⚠️ 省显存那个数 T09 从 53.50 变成 55.69 ——&#160;**这是修正不是漂移**：
 #   旧表漏了 MLA 的两个 norm 输出和 Q 降维那份 layernorm 输出（都是 pb≈2 的白捡项）。
 #   ⭐ 算力代价 48.95 TFLOP **一点没变**，因为补上的几行每字节代价几乎为零。
-assert abs(_CHEAP_GIB * S_RATIO - 55.69) < 0.05 and abs(_CHEAP_TF * S_RATIO - 48.95) < 0.1, \
+# ⛔⛔ 2026-09-19 再修一次：55.69 → 53.94。少掉的 1.75 GiB 就是「MLA 后的残差流」那一份 ——
+#   它原来跟三个 RMSNorm 输出捆在一起按逐元素计价（白捡），实际重算它要跑 o_proj（输入宽 16,384），
+#   比值 17.59 远在切线之外，所以它不该进「收下」那一批。算力代价 48.95 依旧没变（同样因为
+#   它旧价几乎为零）。⭐ 这两次都是**修正**：省显存那一栏两次都在动，算力那一栏两次都没动。
+assert abs(_CHEAP_GIB * S_RATIO - 53.94) < 0.05 and abs(_CHEAP_TF * S_RATIO - 48.95) < 0.1, \
     "「比值小于 3 全收下」对不上 128K 锚点：%.2f / %.2f" % (_CHEAP_GIB * S_RATIO, _CHEAP_TF * S_RATIO)
-assert abs(_SEL_SAVE - 80.3) < 0.1, "选择性换掉池子的比例变了：%.1f%%" % _SEL_SAVE
+assert abs(_SEL_SAVE - 77.8) < 0.1, "选择性换掉池子的比例变了：%.1f%%" % _SEL_SAVE
 
 # ⭐ §4.1 那张表跟散在正文里的那几个数必须对得上。
 #   ⛔ 它们分处两节、相隔三千行 —— 正是「改了一处忘了另一处」的经典产地，
