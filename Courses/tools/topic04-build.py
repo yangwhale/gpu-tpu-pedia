@@ -175,6 +175,11 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 <p>模型读完前面的字，要猜下一个字。<b>它不是只报一个答案，而是给词表里每一个词打一个概率。</b>
   <em>——&nbsp;然后我们翻开正确答案，只看<b>它给对的那个词打了多少分</b>。</em></p>
 
+<p><span class="sub">📌 <b>那一列分数是怎么变成概率的：softmax。</b>
+  <em>每个分数取指数（保证为正），再除以全部之和（保证加起来等于 1）。
+  ——&nbsp;<b>本讲后面 softmax 出现十几次，说的都是这一个动作。</b>
+  <u>专题三那张注意力图里的「权重加起来等于 1」，用的也是它。</u></em></span></p>
+
 <p class="landing">⭐⭐ <b>loss ＝ −ln p</b>　
   <em>（p ＝ 模型给正确那个词的概率）</em></p>
 
