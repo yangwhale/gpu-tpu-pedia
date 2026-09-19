@@ -201,8 +201,14 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
   <li><em>模型很确信而且猜对了（p → 1）：<b>−ln 1 ＝ 0</b>，不罚。</em></li>
   <li><em>模型给对的那个词几乎没打分（p → 0）：<b>−ln p → ∞</b>，罚到天上去。</em></li>
   <li><em>⭐ 关键是<b>取了对数</b>：这让「从 1% 提到 2%」和「从 50% 提到 100%」
-    得到<u>一样的奖励</u> ——&nbsp;都是概率翻倍。
-    <b>不然模型会只顾着把已经很有把握的地方再推高一点点。</b></em></li>
+    得到<u>一样的奖励</u> ——&nbsp;都是概率翻倍，都降 <code>ln 2</code>。</em></li>
+  <li><em>⭐⭐ 而对数真正带来的是另一样东西：
+    <code>d(−ln p)/dp ＝ −1/p</code> ——&nbsp;<b>概率越低的位置，梯度越大</b>。
+    所以模型会<u>先去救它错得最离谱的那些</u>。
+    <span class="sub">⛔ 这里原来写的是「不然模型会只顾着把已经很有把握的地方
+    再推高一点点」——&nbsp;<b>那句推不出来</b>：换成线性的 <code>1−p</code>，
+    导数恒为 −1，模型对「已经有把握的」和「完全没把握的」是<u>无差别</u>的，
+    并不会偏向前者。方向正好说反了。</span></em></li>
 </ul>
 <p><span class="sub">📌 这个东西的正式名字叫<b>交叉熵</b>，也叫<b>负对数似然</b>。
   ——&nbsp;三个名字，同一个式子。</span></p></div>
@@ -3954,8 +3960,15 @@ _SCALE = [
 _TBL_SCALE = ('<table><thead><tr><th>loss</th><th>困惑度 ＝ e<sup>loss</sup></th>'
               '<th>大概是什么水平</th><th>「在几个词之间犹豫」</th></tr></thead><tbody>'
               + "".join(
-                  '<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td><em>%s</em></td></tr>'
+                  # ⭐ 只有最上面那一行是**算出来的**（ln 129,280）；其余四档是按
+                  #   公开模型的量级填的。原来它们长得一模一样，而这一讲自己的
+                  #   招牌就是「算出来的和估出来的要分得清」——&#160;所以标出来。
+                  ('<tr><td><b>%s</b>%s</td><td>%s</td><td>%s</td>'
+                   '<td><em>%s</em></td></tr>')
                   % ("%.2f" % v if abs(v - _L_RANDOM) < 1e-6 else "%.1f" % v,
+                     ' <span class="sub">算出来的</span>'
+                     if abs(v - _L_RANDOM) < 1e-6
+                     else ' <span class="sub">量级</span>',
                      format(int(round(math.exp(v))), ","), what, feel)
                   for v, what, feel in _SCALE)
               + '</tbody></table>')

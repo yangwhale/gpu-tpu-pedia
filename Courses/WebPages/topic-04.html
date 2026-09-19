@@ -959,8 +959,14 @@ body.figonly section h3{margin-top:34px}
   <li><em>模型很确信而且猜对了（p → 1）：<b>−ln 1 ＝ 0</b>，不罚。</em></li>
   <li><em>模型给对的那个词几乎没打分（p → 0）：<b>−ln p → ∞</b>，罚到天上去。</em></li>
   <li><em>⭐ 关键是<b>取了对数</b>：这让「从 1% 提到 2%」和「从 50% 提到 100%」
-    得到<u>一样的奖励</u> ——&nbsp;都是概率翻倍。
-    <b>不然模型会只顾着把已经很有把握的地方再推高一点点。</b></em></li>
+    得到<u>一样的奖励</u> ——&nbsp;都是概率翻倍，都降 <code>ln 2</code>。</em></li>
+  <li><em>⭐⭐ 而对数真正带来的是另一样东西：
+    <code>d(−ln p)/dp ＝ −1/p</code> ——&nbsp;<b>概率越低的位置，梯度越大</b>。
+    所以模型会<u>先去救它错得最离谱的那些</u>。
+    <span class="sub">⛔ 这里原来写的是「不然模型会只顾着把已经很有把握的地方
+    再推高一点点」——&nbsp;<b>那句推不出来</b>：换成线性的 <code>1−p</code>，
+    导数恒为 −1，模型对「已经有把握的」和「完全没把握的」是<u>无差别</u>的，
+    并不会偏向前者。方向正好说反了。</span></em></li>
 </ul>
 <p><span class="sub">📌 这个东西的正式名字叫<b>交叉熵</b>，也叫<b>负对数似然</b>。
   ——&nbsp;三个名字，同一个式子。</span></p></div>
@@ -971,7 +977,7 @@ body.figonly section h3{margin-top:34px}
   <code>e<sup>loss</sup></code> 就是<b>困惑度</b> ——&nbsp;
   直观说就是「<u>模型这一步大概在几个词之间犹豫</u>」。</em></p>
 
-<table><thead><tr><th>loss</th><th>困惑度 ＝ e<sup>loss</sup></th><th>大概是什么水平</th><th>「在几个词之间犹豫」</th></tr></thead><tbody><tr><td><b>11.77</b></td><td>129,280</td><td>刚初始化，还没学任何东西</td><td><em>在整个词表里均匀瞎猜 ——&nbsp;<b>这就是 loss 的上限</b></em></td></tr><tr><td><b>6.0</b></td><td>403</td><td>学会了最基本的字频</td><td><em>相当于在几百个词里犹豫</em></td></tr><tr><td><b>4.0</b></td><td>55</td><td>语法大致对了</td><td><em>几十个词</em></td></tr><tr><td><b>3.0</b></td><td>20</td><td>像模像样的文本</td><td><em>二十个词上下</em></td></tr><tr><td><b>2.0</b></td><td>7</td><td>现代大模型预训练末期<b>大致落在这一档</b></td><td><em>七八个词</em></td></tr><tr><td><b>1.0</b></td><td>3</td><td>几乎能背出来了</td><td><em>两三个词 ——&nbsp;<b>正常预训练到不了这里</b></em></td></tr></tbody></table>
+<table><thead><tr><th>loss</th><th>困惑度 ＝ e<sup>loss</sup></th><th>大概是什么水平</th><th>「在几个词之间犹豫」</th></tr></thead><tbody><tr><td><b>11.77</b> <span class="sub">算出来的</span></td><td>129,280</td><td>刚初始化，还没学任何东西</td><td><em>在整个词表里均匀瞎猜 ——&nbsp;<b>这就是 loss 的上限</b></em></td></tr><tr><td><b>6.0</b> <span class="sub">量级</span></td><td>403</td><td>学会了最基本的字频</td><td><em>相当于在几百个词里犹豫</em></td></tr><tr><td><b>4.0</b> <span class="sub">量级</span></td><td>55</td><td>语法大致对了</td><td><em>几十个词</em></td></tr><tr><td><b>3.0</b> <span class="sub">量级</span></td><td>20</td><td>像模像样的文本</td><td><em>二十个词上下</em></td></tr><tr><td><b>2.0</b> <span class="sub">量级</span></td><td>7</td><td>现代大模型预训练末期<b>大致落在这一档</b></td><td><em>七八个词</em></td></tr><tr><td><b>1.0</b> <span class="sub">量级</span></td><td>3</td><td>几乎能背出来了</td><td><em>两三个词 ——&nbsp;<b>正常预训练到不了这里</b></em></td></tr></tbody></table>
 
 <div class="note danger"><p>⭐⭐⭐ <b>看最上面那一行 ——&nbsp;它不是随手填的。</b></p>
 <p><em>一个<b>刚初始化、什么都没学</b>的模型，对每个词的概率都一样，
