@@ -243,7 +243,6 @@ def main():
     ], keep=True)
 
     yy = f.src(yy + 24,
-               "⚠️ 台阶画了 12 级只是为了看得清 ——&#160;"
                "<tspan font-weight=\"700\">真实是 %d 层</tspan>，"
                "而且每层内部还有若干个中间张量，山坡比图上细密得多" % N_LAYER,
                "⛔ 山形画成<tspan font-weight=\"700\">直上直下</tspan>是简化："
