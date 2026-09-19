@@ -36,10 +36,18 @@ assert 23 < RATIO < 25            # 「约 24 倍」是算出来的，不是说�
 
 
 def main():
-    f = Fig(W, "把显存占用按时间画出来，它是一座山："
-               "前向从第一层到第六十一层一路堆高，"
-               "堆到 loss 那一刻达到峰值，反向一层一层往回走才逐步释放。"
-               "峰值不在训练的某个阶段，而在前向刚结束的那一瞬间")
+    f = Fig(W, "把显存占用按时间画出来，它是一座山。横轴是一个 step 里的时间，"
+               "纵轴是显存里挂着的激活，单位 GiB。"
+               "蓝色那半边是前向：从第一层到第六十一层一路往上堆，"
+               "曲线按 V3 真实的层构成算出来 ——&#160;前三层是 dense、后五十八层是 MoE。"
+               "堆到 loss 那一刻达到峰值 132.7 GiB，"
+               "绿色那半边是反向：一层一层往回走，逐步释放。"
+               "峰值不在训练的某个阶段，而在前向刚结束的那一瞬间。"
+               "图里还有一条贴着地板的橙色曲线，那是开了全量重算之后的同一笔账，"
+               "峰值只有 5.56 GiB，省了二十四倍；"
+               "左下角有一个放大插图把它单独画了一遍，纵轴换了一把尺 ——&#160;"
+               "可以看到它是一级一级的台阶，而且它的峰值不在 loss 那一刻，"
+               "而在反向途中，因为那时候要额外物化当前正在重算的那一层")
 
     y0 = f.header(
         "激活是一座山　——　<tspan font-weight=\"700\">"
@@ -57,37 +65,131 @@ def main():
                  sub="⭐ 为什么不能扔：反向算权重梯度时"
                      "<tspan font-weight=\"700\">要用前向那一刻的输入</tspan>")
 
-    X0, X1 = 130, 1320
-    BOT, TOP = py + 320, py + 52
-    MID = (X0 + X1) / 2.0
+    # ⛔⛔ 2026-09-20 重画。原来这一格是 `N = 12` 根合成柱子拼的**对称三角形**
+    #   ——&#160;一个真数据都没有，而这一讲其余每张图都是算出来的。现场：
+    #   「这个图挺异类的…柱子搞那么粗，显得很没有技术、初级。」
+    # ⭐⭐ 根因不是「柱子太粗」，是**图形语法用错了**：横轴是<时间>（连续量），
+    #   而柱状图天然在说「每根是一个可数的东西」。连续量该用面积／折线。
+    # ⭐⭐⭐ 换成真数据之后，白捡了两个三角形画不出来的事实：
+    #   ① V3 **前 3 层是 dense、后 58 层是 MoE**（config 的 first_k_dense_replace=3），
+    #      所以上坡**不是一条直线**：开头三段缓，之后一路陡。
+    #   ② 开了重算之后，**峰值不在 loss 那一刻，而在反向途中** ——&#160;
+    #      因为那时候要额外物化「当前正在重算的那一层」。
+    #      （这正好是 T04 补回来的那一项，三角形根本表达不了。）
+    S_BASE = 4096
+    _MLA_W   = 7168 + 7168 + 3072 + 1088 + 24576 + 32768 + 16384
+    _MOE_W   = 14336 + 256 + 64512 + 55296 + 64512
+    _DENSE_W = 3 * 18432 + 14336
+    GIB = 1024.0 ** 3
+    _b = lambda w2, w4=0: (w2 * 2 + w4 * 4) * S_BASE / GIB
+    L_MOE   = _b(_MLA_W + _MOE_W, 128)       # 一层 MoE 块
+    L_DENSE = _b(_MLA_W + _DENSE_W, 128)     # 一层 dense 块
+    L_ENTRY = _b(7168)                       # 入口那一份（重算模式下留的就是它）
+    N_DENSE = 3                              # ⚠️ V3 config：前 3 层 dense
+    LAYERS = [L_DENSE] * N_DENSE + [L_MOE] * (N_LAYER - N_DENSE)
+    assert abs(sum(LAYERS) - 132.65) < 0.05, "全模型激活 %.2f GiB" % sum(LAYERS)
+    assert abs(L_ENTRY * N_LAYER + L_MOE - 5.56) < 0.02, "重算后峰值对不上"
+
+    # 两条曲线：y[i] ＝ 走到第 i 个时刻时，显存里挂着多少
+    raw, keep = [0.0], [0.0]
+    for h in LAYERS:                                   # 前向：一层一层堆
+        raw.append(raw[-1] + h)
+        keep.append(keep[-1] + L_ENTRY)
+    _fwd = len(raw) - 1
+    # ⛔ 顺序要对：重算第 k 层的那一刻，**61 个存档点还都在场**，
+    #   额外多出来的是当前这一层被物化出来的完整激活；
+    #   释放那个存档点是**算完之后**的事。
+    #   ⭐ 先加后减 —— 峰值 ＝ 全部存档点 ＋ 一层，写反了会少算一个存档点。
+    _ck = keep[-1]                                     # 61 个存档点
+    for i, h in enumerate(reversed(LAYERS)):           # 反向：一层一层拆
+        raw.append(raw[-1] - h)
+        _ck -= L_ENTRY if i else 0.0
+        keep.append(_ck + h)                           # 存档点 ＋ 正在重算的那一层
+    keep[-1] = 0.0
+    PEAK_RAW, PEAK_KEEP = max(raw), max(keep)
+    K_PEAK = keep.index(PEAK_KEEP)
+    assert abs(PEAK_RAW - 132.65) < 0.05 and abs(PEAK_KEEP - 5.56) < 0.02
+    assert K_PEAK > _fwd, "重算那条的峰值应该落在**反向**途中，而不是 loss 那一刻"
+
+    X0, X1 = 150, 1330
+    BOT, TOP = py + 318, py + 58
+    SX = lambda i: X0 + (X1 - X0) * i / float(len(raw) - 1)
+    SY = lambda v: BOT - (BOT - TOP) * v / PEAK_RAW
 
     f.line(X0, BOT, X1 + 10, BOT, GY2, 2.0, arrow=False)
     f.line(X0, BOT, X0, TOP - 14, GY2, 2.0, arrow=False)
-    f.t(X0 - 14, TOP - 24, "显存里的激活", GY, True, 13, "end")
+    f.t(X0 - 12, TOP - 24, "显存里的激活（GiB）", GY, True, 13, "end")
+    for v in (0, 40, 80, 120):                          # 真刻度，不是示意
+        f.line(X0 - 6, SY(v), X1, SY(v), LINE2, 0.8, dash="3 6", arrow=False)
+        f.t(X0 - 12, SY(v) + 5, "%d" % v, GY2, size=12, anchor="end")
 
-    # 台阶式的上升与下降 ——&#160;刻意画成阶梯，强调「一层加一份」
-    N = 12
-    for i in range(N):
-        h = (BOT - TOP) * (i + 1) / float(N)
-        w = (MID - X0) / N
-        f.box(X0 + i * w, BOT - h, w, h, "#e8f0fe", BL, 0, 0.8)
-    for i in range(N):
-        h = (BOT - TOP) * (N - i) / float(N)
-        w = (X1 - MID) / N
-        f.box(MID + i * w, BOT - h, w, h, "#e6f4ea", GR, 0, 0.8)
+    # ── 不重算：一整座山（前向蓝、反向绿，按峰值切开）
+    for seg, col, fill in ((range(0, _fwd + 1), BL, "#1a73e820"),
+                           (range(_fwd, len(raw)), GR, "#18803420")):
+        pts = list(seg)
+        d = ("M %.1f %.1f " % (SX(pts[0]), BOT)
+             + " ".join("L %.1f %.1f" % (SX(i), SY(raw[i])) for i in pts)
+             + " L %.1f %.1f Z" % (SX(pts[-1]), BOT))
+        f.poly(d, fill=fill, stroke=col, sw=2.0)
 
-    f.t((X0 + MID) / 2.0, BOT + 28, "前向：第 1 层 →　第 %d 层" % N_LAYER,
-        BL, True, 15.5, "middle")
-    f.t((MID + X1) / 2.0, BOT + 28, "反向：第 %d 层 →　第 1 层" % N_LAYER,
-        GR, True, 15.5, "middle")
-    f.t((X0 + MID) / 2.0, BOT + 52, "每过一层，多挂一份", GY, size=13, anchor="middle")
-    f.t((MID + X1) / 2.0, BOT + 52, "每走回一层，释放一份", GY, size=13, anchor="middle")
+    # ── 开了全量重算：贴着地板的那条（同一把尺，所以差距是真的）
+    d2 = ("M %.1f %.1f " % (X0, BOT)
+          + " ".join("L %.1f %.1f" % (SX(i), SY(v)) for i, v in enumerate(keep))
+          + " L %.1f %.1f Z" % (X1, BOT))
+    f.poly(d2, fill="#5f636814", stroke=OR, sw=2.0)
 
-    # 峰值
-    f.line(MID, TOP - 8, MID, BOT, RD, 2.2, dash="5 4", arrow=False)
-    f.box(MID - 168, TOP - 46, 336, 56, "#fce8e6", RD, 8)
-    f.t(MID, TOP - 22, "⭐⭐ 峰值在这一刻", RD, True, 18, "middle")
-    f.t(MID, TOP + 2, "前向刚算完、反向还没开始", GY, size=13, anchor="middle")
+    f.t((X0 + X1) / 2.0, BOT + 26, "前向：第 1 层 →　第 %d 层" % N_LAYER,
+        BL, True, 15, "end")
+    f.t((X0 + X1) / 2.0 + 24, BOT + 26, "反向：第 %d 层 →　第 1 层" % N_LAYER,
+        GR, True, 15, "start")
+    # ⛔ 原来这里写「开头三段缓」——&#160;61 层里的 3 层在这个尺度上**肉眼看不出来**。
+    #   ⭐ 判据：**图注不许声称画面上看不见的东西**（这一讲自己反复在讲这条）。
+    f.t(X0 + 6, BOT + 52,
+        "⭐ 曲线是按 V3 真实层构成算的：前 3 层 dense（每层 %.2f GiB）"
+        "＋ 58 层 MoE（每层 %.2f GiB）" % (L_DENSE, L_MOE), GY, size=12.5)
+
+    # ── 两个峰，两个时刻
+    f.line(SX(_fwd), SY(PEAK_RAW) - 6, SX(_fwd), BOT, RD, 2.0, dash="5 4", arrow=False)
+    f.box(SX(_fwd) - 150, TOP - 48, 300, 54, "#fce8e6", RD, 8)
+    f.t(SX(_fwd), TOP - 26, "⭐ 峰值 %.1f GiB" % PEAK_RAW, RD, True, 17, "middle")
+    f.t(SX(_fwd), TOP - 6, "前向刚算完、反向还没开始", GY, size=12.5, anchor="middle")
+
+    # ⛔⛔ 橙色那条在同一把尺上**必然贴着地板**（差 24 倍）——&#160;
+    #   于是「省了 24 倍」这个结论看得见，可**它自己的形状看不见**，
+    #   而那个形状才是这一格新加的信息（峰值不在 loss 那一刻）。
+    # ⭐ 判据：**同一张图里差一个数量级以上的两条线，小的那条必须另给一把尺。**
+    #   放大插图不是装饰，是让「看不见的那条」重新变成可读的。
+    # ⛔ 第一版把插图放在右下 ——&#160;正好压住绿色那半座山，还跟落点文字撞了。
+    #   ⭐ 挪到左下：蓝色上坡的**内侧**是一大片空白，插图放那儿谁也不挡。
+    IX0, IX1 = X0 + 34, X0 + 470
+    IBOT, ITOP = BOT - 26, BOT - 156
+    f.box(IX0 - 12, ITOP - 34, (IX1 - IX0) + 34, (IBOT - ITOP) + 60,
+          "#fffaf2", OR, 8, 1.2)
+    f.t(IX0 - 4, ITOP - 14,
+        "🔍 把橙色那条单独放大（<tspan font-weight=\"700\">纵轴换了一把尺</tspan>）",
+        OR, True, 12.5)
+    iSX = lambda i: IX0 + (IX1 - IX0) * i / float(len(keep) - 1)
+    iSY = lambda v: IBOT - (IBOT - ITOP) * v / (PEAK_KEEP * 1.18)
+    f.line(IX0, IBOT, IX1, IBOT, GY2, 1.2, arrow=False)
+    d3 = ("M %.1f %.1f " % (IX0, IBOT)
+          + " ".join("L %.1f %.1f" % (iSX(i), iSY(v)) for i, v in enumerate(keep))
+          + " L %.1f %.1f Z" % (IX1, IBOT))
+    f.poly(d3, fill="#f9ab0022", stroke=OR, sw=2.0)
+    f.line(iSX(_fwd), IBOT, iSX(_fwd), ITOP + 6, GY2, 1.0, dash="3 4", arrow=False)
+    f.t(iSX(_fwd) - 6, ITOP + 18, "loss", GY2, size=11, anchor="end")
+    f.box(iSX(K_PEAK) - 3, iSY(PEAK_KEEP) - 3, 6, 6, OR, OR, 3)
+    f.t(iSX(K_PEAK), iSY(PEAK_KEEP) - 10,
+        "峰值 %.2f GiB ——&#160;<tspan font-weight=\"700\">在反向途中</tspan>"
+        % PEAK_KEEP, OR, True, 12, "middle")
+    f.t(IX0, IBOT + 18,
+        "⭐ 台阶是每释放一个存档点掉一小格；<tspan font-weight=\"700\">"
+        "那一跳是「当前正在重算的那一层」被物化出来</tspan>", GY, size=11.5)
+
+    f.t(X1 - 10, SY(PEAK_KEEP) - 14,
+        "↓ 开了全量重算，整条压到这儿 ——&#160;峰值 "
+        "<tspan font-weight=\"700\">%.2f GiB</tspan>，省 "
+        "<tspan font-weight=\"700\">%.0f 倍</tspan>"
+        % (PEAK_KEEP, PEAK_RAW / PEAK_KEEP), OR, True, 13, "end")
     f._pan = None
 
     # ══════════ Ⓑ 这座山有多高 ═══════════════════════════════════
