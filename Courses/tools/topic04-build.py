@@ -99,7 +99,7 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 <ul>
   <li><b>① 这个数怎么来的</b> ——&nbsp;<em>loss 到底怎么算（<a href="#s1-0">1.0</a>）。</em></li>
   <li><b>② 一个数怎么变成 __NPARAM_CN__个导数</b> ——&nbsp;<em>反向传播的原理（<a href="#s一">第一节</a>）。
-    ⭐ 这一段是全讲最该讲透的：<b>笨办法要算两万年，而实际只多花两倍前向的时间</b>。</em></li>
+    ⭐ 这一段是全讲最该讲透的：<b>笨办法要算 __NAIVE_YEARS_CN__年，而实际只多花两倍前向的时间</b>。</em></li>
   <li><b>③ 有了导数，那一步该迈多大</b> ——&nbsp;<em>梯度下降与优化器（<a href="#s三">第三节</a>）。</em></li>
 </ul>
 <p class="landing">⭐⭐ <b>三件事，一条链。</b>
@@ -288,8 +288,10 @@ __FIG_SLIDER__
 <div class="note danger"><p>⛔ <b>笨办法（有限差分）：</b>
   我想知道某个参数对 loss 有多大影响，就把它动一丁点，
   整个网络重跑一遍前向，看 loss 变了多少。</p>
-<p><em>那 __NPARAM_CN__个参数，就是<b>__NPARAM_CN__次前向</b>。
-  一次前向按一秒算，跑完要将近<b>两万年</b> ——&nbsp;而这还只是<b>一步</b>。</em></p></div>
+<p><em>那 __NPARAM_CN__个参数，就是<b>__NPARAM_CN__次前向</b>。</em></p>
+<p class="landing"><code>671e9 秒 ÷ 3.156e7 秒/年 ＝ <b>__NAIVE_YEARS__ 年</b></code>
+  <em>（一次前向按一秒算 ——&nbsp;已经极度乐观了）</em></p>
+<p><em>⛔ <b>而这还只是<u>一步</u></b>。训练要走几十万步。</em></p></div>
 
 <p class="landing">⭐⭐⭐ 所以反向传播真正解决的问题，不是「怎么求导」，
   是<u>怎么把 __NPARAM_CN__次前向压成一次</u>。</p>
@@ -3479,7 +3481,7 @@ FIGS = {
         '而 __NPARAM_CN__个旋钮各自那个数排成一列，<b>那一列就叫梯度</b>。</em><br>'
         '⭐ <em>Ⓒ 链式法则就是<b>换汇</b>：人民币→港币→美元，'
         '每步一个汇率，<b>总汇率当然是乘出来的</b>。'
-        '——&nbsp;而「从哪一头开始乘」代价差两万年，那是 1.5 的事。</em>'),
+        '——&nbsp;而「从哪一头开始乘」代价差 __NAIVE_YEARS_CN__年，那是 1.5 的事。</em>'),
     "__FIG_VOTE__": ("fig-vote", "fig4-vote.svg",
         'topic04-fig-vote.py',
         '⭐⭐⭐ <b>全讲最口语的一张</b> ——&nbsp;'
@@ -3994,6 +3996,13 @@ N_PARAM = 671e9               # V3 总参数（激活参数是 37B，但显存�
 #   「不标场景的数字没有意义」，所以不能拿一个约数当标题用。
 #   现在由 N_PARAM 驱动，换模型就自动跟着走。
 _NPARAM_CN = format(round(N_PARAM / 1e8), ",") + " 亿"
+# ⭐ 笨办法要算多少年 ——&#160;原来是手算完手填「两万年」，跟「所有数由脚本算」
+#   这条规矩不一致（2026-09-20 第 3 轮开讲时发现：讲的时候我当场又算了一遍）。
+#   一次前向按 1 秒；一年 3.156e7 秒（365.25 天）。
+_SEC_PER_YEAR  = 3.156e7
+_NAIVE_YEARS   = N_PARAM / _SEC_PER_YEAR
+_NAIVE_YEARS_CN = "两万" if 15000 < _NAIVE_YEARS < 25000 else "%.0f" % _NAIVE_YEARS
+assert 21000 < _NAIVE_YEARS < 21500, "笨办法年数变了：%.0f" % _NAIVE_YEARS
 assert _NPARAM_CN == "6,710 亿", _NPARAM_CN
 TIB = 1024 ** 4
 # 每参数的字节数 —— 拆法与 §3.1 一致（bf16 权重 2、bf16 梯度 2、
@@ -4050,7 +4059,9 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__WIDEST_PB__",   "%.2f" % _WIDEST_PB),
                   ("__RANK_BASE__",   str(_RANK_BASE)),
                   ("__RANK_LONG__",   str(_RANK_LONG)),
-                  ("__NPARAM_CN__",   _NPARAM_CN)):
+                  ("__NPARAM_CN__",   _NPARAM_CN),
+                  ("__NAIVE_YEARS__", format(int(round(_NAIVE_YEARS)), ",")),
+                  ("__NAIVE_YEARS_CN__", _NAIVE_YEARS_CN)):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
