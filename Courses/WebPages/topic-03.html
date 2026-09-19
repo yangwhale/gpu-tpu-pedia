@@ -4385,9 +4385,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
      **新名词第一次出现就给白话。**
      ⛔ 而且这里还缺一样更要紧的 ——&nbsp;**1.0 到底算大算小**。
        没有尺度感，这一章的全部论证对读者就是一个悬空的数。 -->
-<p><span class="sub">📌 <b>下面这张图里会出现「困惑度」这个词，这里先交代一句</b>：
-  你就把它理解成 ——&nbsp;<b>模型读下一个字的时候，心里大概在几个候选之间犹豫</b>，
-  <b>数越小越好</b>。
+<p><span class="sub">📌 <b>困惑度 ＝ 模型读下一个字时，大致在几个候选之间犹豫</b>
+  ——&nbsp;它是 loss 取指数，<b>越小越好</b>。
   ⭐ 而且要有个尺度感：这一档模型在<b>三十上下</b>，<b>差 1.0 不是个小差距</b>
   ——&nbsp;后面你会看到有的方案改了一大堆东西，才换回零点几。</span></p>
 
@@ -5301,7 +5300,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <p>MLA 有一处形状很不好看：<b>它每个 token 要存的那一份，是 512 ＋ 64。</b>
   <em>512 是那份压缩件；多出来的 64 维专门用来装位置信息，<b>单独走一路</b>。</em><br>
-  <b>为什么非得这么别扭？——&nbsp;下面这张图三步说完，不用读公式。</b></p>
+  <b>为什么非得这么别扭？</b></p>
 
 <figure class="fbox fwide" id="fig-two-lanes"><svg viewBox="0 0 1400 1070" width="100%" role="img" aria-label="为什么 MLA 的 RoPE 必须单独走一路：紫色的上投影矩阵本来能从仓库那侧搬到提问那侧，可 RoPE 在中间立了一道闸；卡住的不是「中间有东西」，是那东西带下标 —— 每一对谁问谁都是一个不同的矩阵，预乘不出「那一个」。解法是把一条轨劈成两条，让闸只站在其中一条上"><defs><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">那条看起来很别扭的窄轨 ——&#160;<tspan font-weight="700">512 ＋ 64 里的那个 64，是被逼出来的</tspan></text>
@@ -5409,7 +5408,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="977" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">把这一节当成一个套路记住，别当成 MLA 的实现细节</tspan></text>
 <text class="svgsm" x="20" y="1008" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「为了保住某个代数变换，把功能拆成两路」</tspan>——&#160;这个动作后面还会换面貌出现：<tspan font-weight="700">V4 的部分 RoPE、K3 的 NoPE</tspan>。</text>
 <text class="svgsm" x="20" y="1032" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MLA 的代价是用计算换显存</tspan>：多了一对降维／升维矩阵乘。而且<tspan font-weight="700">它省的是推理时的 KV cache，不是训练时的激活</tspan>——&#160;训练前向里 K/V 会被解压出来算。<tspan font-weight="700">这是个非常常见的误解。</tspan></text>
-</svg><figcaption>⭐⭐ <b>三步，从上往下看就行 ——&nbsp;不用读那两行公式。</b><em>紫色的方块本来能从仓库那侧搬到提问那侧；RoPE 在中间立了一道闸，搬不过去；于是把一条轨劈成两条，让闸只站在窄的那条上。</em><span class="capmore"><br>⛔ <b>中间那个黄框别跳过，它是这张图真正的机关。</b><em>左右两边画的东西几乎一样，差的只有一个角标 ——&nbsp;<b>而 MLA 那个 512 ＋ 64 的怪形状，整个是被那个角标逼出来的。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>MLA 超参出自 DeepSeek-V3 论文 <a href="#s4-2">§4.2</a>：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层 ——&#160;512 ＋ 64 ＝ 576 由脚本断言</p>
+</svg><figcaption>⭐⭐ <b>三步，从上往下。</b><em>紫色的方块本来能从仓库那侧搬到提问那侧；RoPE 在中间立了一道闸，搬不过去；于是把一条轨劈成两条，让闸只站在窄的那条上。</em><span class="capmore"><br>⛔ <b>中间那个黄框别跳过，它是这张图真正的机关。</b><em>左右两边画的东西几乎一样，差的只有一个角标 ——&nbsp;<b>而 MLA 那个 512 ＋ 64 的怪形状，整个是被那个角标逼出来的。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>MLA 超参出自 DeepSeek-V3 论文 <a href="#s4-2">§4.2</a>：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层 ——&#160;512 ＋ 64 ＝ 576 由脚本断言</p>
 <p>⭐ 「中间那项跟位置差相关，所以合并不成一个固定矩阵」这个说法取自 苏剑林《缓存与效果的极限拉扯：从 MHA、MQA、GQA 到 MLA》（kexue.fm/archives/10091）——&#160;原话已核</p>
 <p>⛔ 论文原话「matrix multiplication does not obey a commutative law」<b>是结论不是原因</b> ——&#160;矩阵乘法本来就满足结合律，而「吸收」要的正是结合律。真正卡住的是 R 带着 (j−t)：<b>有多少种相对距离，就有多少个不同的中间矩阵</b></p>
 <p>Gated MLA（K3 在 MLA 输出端加全秩门控）：Kimi K3 技术报告 <a href="#s2-1">§2.1</a>.2</p></details></figure>
@@ -9675,7 +9674,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1378" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">这条轴上的「便宜层」<tspan font-weight="700">不全是线性</tspan> ——&#160;小米那两家是<tspan font-weight="700">滑窗</tspan>。<tspan font-weight="700">3:1 是消融出来的，不是推出来的</tspan>；同一家不同规模就换配比（Ling 的 tiny 是 3:1、flash 是 5:1）。</text>
 <text class="svgsm" x="20" y="1402" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">「纯线性一定兜不住」要说准：那条 L2M 条件要求的是<tspan font-weight="700">状态必须随长度变大</tspan> ——&#160;而「变大」的办法<tspan font-weight="700">不止混合一种</tspan>（论文自己给的另一条是按长度整个放大模型）。 <tspan font-weight="700">混合是工程</tspan></text>
 <text class="svgsm" x="20" y="1426" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上选的那条，不是定理逼出来的那条。</tspan></text>
-</svg><figcaption>⭐⭐ <b>先看左边那一格 ——&nbsp;它是这一整章的地基。</b><em>如果掺便宜的层只是为了省钱，那一格的结果就不该长成那样。</em><span class="capmore"><br>⭐ <em>右边那把尺子上，每一个点都是一个真模型。<b>「大家都在哪」不用数，看那一摞堆在哪儿就行。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>配比与型号见本课那两张配比表（每一行都标了出处，多数可在公开 config 里核）；系统性消融的建议区间出自 arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></p>
+</svg><figcaption>⭐⭐ <b>左边那一格是这一整章的地基</b>：<em>掺便宜的层如果只是为了省钱，那一格的结果就不该长成那样。</em><span class="capmore"><br>⭐ <em>右边那把尺子上每一个点都是一个真模型，<b>而它们堆在同一段区间里</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>配比与型号见本课那两张配比表（每一行都标了出处，多数可在公开 config 里核）；系统性消融的建议区间出自 arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></p>
 <p>「0:1 反而表现不好」出自 Kimi Linear arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a> ——&#160;⚠️ 原文只有一句定性描述，<b>没有公开数值</b></p>
 <p>NoPE 见 <b>Kimi Linear</b> 同文（对所有全注意力层用 NoPE）——&#160;⚠️ <b>是它先做的，K3 是沿用</b></p>
 <p>⚠️ 「普通员工 / 资深」是<b>本课的比喻</b></p></details></figure>
@@ -10899,7 +10898,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1233" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一条能带走的判据：看一个机制默认了什么样的机器</tspan></text>
 <text class="svgsm" x="20" y="1264" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">临时改单、散落取货、开工才知道做什么 ——&#160;<tspan font-weight="700">这三样都默认「随手跑腿不太贵」</tspan>。在一家为「按批预制」优化的厨房里，这个假设<tspan font-weight="700">不成立</tspan>。</text>
 <text class="svgsm" x="20" y="1288" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以移植的活儿不是「翻译代码」，是<tspan font-weight="700">把那个隐含的硬件假设找出来，再换一个等价但规整的做法</tspan>。下一张讲的就是这个「换法」。</text>
-</svg><figcaption>⭐ <b>整张图的题眼是那个厨房比喻，值得慢慢看完。</b><span class="capmore"><br><em>⛔ 特别注意中间那段引文的<b>日期</b> ——&nbsp;它不是五年前的旧话。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三处疼与那句摘要出自 Ragged Paged Attention（Jiang 等，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a>，2026-04）§1 与 §2.4；TPU 的三条约束亦见该文 §1</p>
+</svg><figcaption>⭐ <b>题眼是中间那个厨房比喻。</b><span class="capmore"><br><em>⛔ 那段引文的<b>日期</b>值得看一眼 ——&nbsp;它不是五年前的旧话。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三处疼与那句摘要出自 Ragged Paged Attention（Jiang 等，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a>，2026-04）§1 与 §2.4；TPU 的三条约束亦见该文 §1</p>
 <p>⚠️ 「中央厨房 / 点单现做 / 仓库取货」是<b>本课的比喻</b> ——&#160;论文那侧的说法是 static-first 编译、tiled 粗粒度布局、以及「从动态算出来的不连续地址 gather」</p></details></figure>
 
 <div class="note danger"><p>⛔⛔ <b>有人真的动手试过</b>，而他撞到的东西值得一字一句地看。</p>
