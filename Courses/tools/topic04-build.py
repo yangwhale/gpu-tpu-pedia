@@ -4040,6 +4040,7 @@ _TBL_LEDGER = (
 
 _html = head + HERO + BODY + FOOT
 _html = _html.replace("__TBL_PER_BYTE__", _TBL)
+_SUBS = {}          # ⭐ 记下每一次替换，供 place_figs 之后补跑一遍
 for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__ATT_PB_LONG__", "%.2f" % (_att_long[2] * GIB_F)),
                   ("__ATT_VS_W__",    "%.0f%%" % (100 * _ATT_VS_WIDEST)),
@@ -4064,12 +4065,14 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__NAIVE_YEARS_CN__", _NAIVE_YEARS_CN)):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
+    _SUBS[_ph] = _val
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
 _html = _html.replace("__TBL_SCALE__", _TBL_SCALE)
 _html = _html.replace("__LOGITS__", _sz(_LOGITS_B))
 for _ph, _val in (("__R_SMALL__", "%.0f" % _R_SMALL), ("__R_V3__", "%.1f" % _R_V3)):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
+    _SUBS[_ph] = _val
 for _ph, _val in (("__PEAK__",        _sz(_PEAK_B)),
                   ("__CKPT__",        _sz(_CKPT_B)),
                   ("__INFLIGHT__",    _sz(_INFLIGHT_B)),
@@ -4080,6 +4083,7 @@ for _ph, _val in (("__PEAK__",        _sz(_PEAK_B)),
                   ("__WS_TOK__",      "%.0f 万" % (_WS_TOK / 1e4))):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
+    _SUBS[_ph] = _val
 _html = _html.replace("__TBL_ACT_MLA__",
                       _act_tbl(_MLA_ROWS, S_BASE, "宽度", "小计"))
 _html = _html.replace("__TBL_ACT_MOE__",
@@ -4092,6 +4096,7 @@ for _ph, _val in (
         ("__ATTN_SCORE__", _sz(_ATTN_SCORE_B))):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
+    _SUBS[_ph] = _val
 
 assert abs(_CROSS - 13107) < 1, "交叉点变了：%.0f" % _CROSS
 # ⛔ 这两条原来钉的是 5,734（分母用了 d_model）。钉住一个错的值，assert 反而变成了保险箱 ——
@@ -4140,6 +4145,18 @@ for ph, (what, figs, asks) in PLAN.items():
 
 # ⭐ 这一份是**要投屏讲的**，所以装折叠开关，默认只剩图。
 _html = P.place_figs(_html, FIGS)
+
+# ⛔⛔ place_figs 在上面那几轮替换**之后**才把图注注入，所以图注里的占位符
+#   一轮都没被替换到 ——&#160;它们原样漏进了成品。
+#   ⭐ 而原来的断言只查「替换前在不在」（`assert _ph in _html`），
+#     **不查「替换后还剩没剩」** ——&#160;于是 __NPARAM_CN__ 在线上漏了半天没人发现。
+#   （2026-09-20 第 3 轮开讲时撞到：图注里写「代价差 __NAIVE_YEARS_CN__年」。）
+#   判据：**替换类操作要同时有前置断言和后置断言。** 只查前置，
+#   等于只保证「我动手了」，不保证「动干净了」。
+for _ph, _val in _SUBS.items():
+    _html = _html.replace(_ph, _val)
+_leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
+assert not _leak, "占位符没落地，漏进成品：%s" % "、".join(_leak)
 _html = P.add_figonly_toggle(_html)
 # ⛔⛔ 2026-09-20：T12 换主线时改了 SECTIONS 的标题，**却没改正文里的 <h2>** ——
 #   而吸顶目录是从 <h2> 长出来的，于是目录上挂了一整套旧标题，一挂就是八轮。
