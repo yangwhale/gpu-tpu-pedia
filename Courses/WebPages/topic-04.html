@@ -5635,8 +5635,7 @@ body.figonly section h3{margin-top:34px}
   并给出了一个更有解释力的机制。<b>而这个结论能不能搬到千亿参数上，
   他们自己没说能。</b></em></p>
 <p><span class="sub">⛔ 顺带自曝一处，而且很讽刺：
-  <em>这一讲在 <a href="#s二">2.6</a> 立了一条判据 ——&nbsp;
-  <b>小规模上验过的结论，到目标规模必须重验</b>。
+  <em>这一讲在 <a href="#s二">2.6</a> 立过那条「跨规模要重验」的判据，
   结果我转述这篇论文的时候自己就没守。
   ——&nbsp;<b>判据写在纸上容易，用在自己引的那篇论文上才难。</b></em></span></p></div>
 
@@ -5694,6 +5693,11 @@ body.figonly section h3{margin-top:34px}
   <b>「batch 翻倍，学习率就该翻倍」是错的</b>
   ——&nbsp;<em>它有上界，而且越往后收益越小。</em></p></div>
 
+<p class="landing">⛔⛔ <b>还有一层更反直觉的：在 Adam 底下，超过某个 batch 之后<u>最优学习率可能不升反降</u></b>（所谓 <b>Surge 现象</b>）。
+  <em>——&nbsp;成因、前提，以及它本身仍在争议这件事，都在下面的折叠块里。<b>主线要收的只有一句：别想当然地把任何缩放律往外推。</b></em></p>
+
+<details class="foldfig"><summary><b>Surge 现象：成因、前提，以及它本身还在争议中</b>
+  <span class="why">——&nbsp;一条<u>有争议</u>的深水结论（苏剑林本人就批评了原论文的近似）。主线只要「别想当然外推」那一句，细节可以直接跳过</span></summary>
 <p>⛔⛔⛔ <b>但在 Adam 底下，还可能更反直觉一点：</b>
   <em>超过某个 batch 之后，<b>最优学习率不升反降</b>
   ——&nbsp;这就是所谓的 <b>Surge 现象</b>。</em></p>
@@ -5719,6 +5723,7 @@ body.figonly section h3{margin-top:34px}
   所评论的原论文为《Surge Phenomenon in Optimal Learning Rate and Batch Size Scaling》。
   ⚠️ 引号里为原文原话。<b>这是作者本人的分析，不是同行评议结论</b>
   ——&nbsp;<b>我们收的是「别想当然地外推」这条警告，不是一个可以照抄的公式。</b></span></p></div>
+</details>
 
 <p>一个现代参考值，它看着完全不合上面那条规律：
   <em>DeepSeek-V3 是 <b>671B</b> 的 MoE，峰值 <b>2.2×10⁻⁴</b>
@@ -5925,8 +5930,7 @@ body.figonly section h3{margin-top:34px}
 <h4>第四步 · ⛔ 两个会<u>静默</u>咬人的实现细节</h4>
 
 <div class="note danger"><p>⛔⛔ <b>① 梯度累积忘了除以 K ——&nbsp;等于把学习率乘了 K。</b></p>
-<p><em><a href="#s一">1.8</a> 说过「累积改的是时间线，不是总量」。
-  <b>那句话成立的前提是你真的取了平均。</b></em></p>
+<p><em><a href="#s一">1.8</a> 那条结论<b>成立的前提是你真的取了平均</b>。</em></p>
 <p><em>K 个 micro-batch 的梯度加起来之后，<u>必须除以 K</u>
   ——&nbsp;忘了除，梯度整整大 K 倍，<b>而这跟把学习率乘 K 是一回事</b>。</em></p>
 <p class="landing">⭐ <b>症状很有迷惑性</b>：<em>代码跑得通、不报错、loss 一开始还在降，
@@ -6527,9 +6531,7 @@ body.figonly section h3{margin-top:34px}
   看上去远远越过了 737 万 那道分水岭。</em></p>
 <p class="landing">⛔⛔⛔ <b>可 global batch 代不进来 ——&nbsp;分水岭比的是<u>同时在场</u>。</b></p>
 <p><em><code>global batch ＝ DP 路数 × micro-batch × 梯度累积 K × 序列长度</code>，
-  而那 <b>K 份从来不同时存在</b>（<a href="#s一">1.8</a> 第 ④ 道、
-  <a href="#s3-5b">3.5b</a> 那张旋钮表都写着同一句：
-  <u>梯度累积改的是时间线，不是总量</u>）。
+  而那 <b>K 份从来不同时存在</b>（<a href="#s一">1.8</a> 第 ④ 道已经立过这一条）。
   <b>显存里同时在场的只有前两项</b> ——&nbsp;上面那张图的 Ⓑ 用的正是这个口径。</em></p>
 <p><em>给个稳的上界：V3 用 2,048 张卡、PP16 × EP64，
   就算把 DP 放到最宽松的 <code>2048 ÷ 16 ＝ 128</code> 路、micro-batch 取 1，
@@ -7259,7 +7261,7 @@ body.figonly section h3{margin-top:34px}
   <b>往往比 Pre-LN 有更好的 finetune 效果</b>。
   <em>⛔ 同一条曲线，预训练时是毛病，微调时是功能
   ——&nbsp;<b>这就是上面那张图左右两半在说的事。</b></em></p>
-<p><span class="sub">📌 出处：苏剑林《模型优化漫谈：BERT 的初始标准差为什么是 0.02？》
+<p><span class="sub">📌 出处同上（苏剑林那篇，见 3.4 的脚注）
   <a href="https://kexue.fm/archives/8747">kexue.fm/archives/8747</a>。
   ⚠️ 这是<b>作者本人的分析文章</b>，不是同行评议论文
   ——&nbsp;我们按「一个讲得通的机制解释」收下，不当定论。</span></p></div>
