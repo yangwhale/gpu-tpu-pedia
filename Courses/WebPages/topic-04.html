@@ -2154,6 +2154,19 @@ body.figonly section h3{margin-top:34px}
   看到任何一个「求一大堆偏导」的问题，先数一下<b>输入多、还是输出多</b>
   ——&nbsp;它决定了你该从哪头开始。</span></p></div>
 
+<div class="note"><p>🕰️ <b>而这件事第一次被写下来，是<u>一篇没人读的硕士论文</u>。</b></p>
+<p><em>1970 年，赫尔辛基大学，一个叫 <b>Seppo Linnainmaa</b> 的学生在硕士论文里
+  提出了<b>反向模式的自动微分</b> ——&nbsp;也就是上面这整套「从输出往回推」的做法。</em></p>
+<p class="landing">⛔ <b>而那篇论文里<u>一次都没提神经网络</u>。</b>
+  <em>——&nbsp;他解决的是「一个复合函数怎么高效求导」这个纯数学问题。</em></p>
+<p><em>⭐ 神经网络那边要再等十六年，才有人把它接上去（1986 年那篇 Nature）。</em></p>
+<p><span class="sub">⭐⭐ <b>记住这个形状，它一会儿还会再出现一次</b> ——&nbsp;
+  <a href="#s1-4">1.4</a> 那个「梯度消失」，第一次被说清楚也是在
+  <b>一篇硕士论文</b>里（1991 年，慕尼黑，德文，从没在英文期刊发表）。<br>
+  ⛔ <b>两次改变一切的东西，第一次出现时都是没人读的硕士论文。</b><br>
+  ⚠️ 1970 这条我核的是公开的传记资料，<b>没有读到论文原件</b>
+  （芬兰语，未数字化）——&nbsp;当量级可靠的二手事实看。</span></p></div>
+
 <h3 id="s1-6">1.6　闭环：反向<u>必须</u>用到前向的值 ——&nbsp;这就是激活扔不掉的根本原因</h3>
 
 <p>回头看 1.3 那两件事里的第①件：
@@ -4838,6 +4851,23 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ Ⓓ 那个「低于 1%」是<b>作者按 Llama 405B 的宽度和每批 token 数算出来的 FLOP 开销</b>，不是我们量的墙钟时间。⛔ <b>Newton-Schulz 是一串互相依赖的小矩阵乘，FLOP 少不代表时间短</b> ——&#160;真要用请在目标配置上自己量（<b>这正是本讲那条「不能跨规模照抄」</b>）</p>
 <p>⛔ 本图早先写的是「5% 以内 / 作者称 2%」，<b>那个 2% 查无出处</b> ——&#160;作者原文给的是 FLOP 开销低于 1%。2026-09-17 订正</p></details></figure>
 
+<div class="note danger"><p>🕰️ <b>这条「一路往上加」的线上，有一次很少被提的<u>翻车</u>。</b></p>
+<p><em>Adam 原始论文（2014）是带收敛性证明的。
+  ⛔ <b>2018 年，有人指出那个证明是错的。</b></em></p>
+<p class="landing">📌 <em>Reddi、Kale、Kumar，<b>《On the Convergence of Adam and Beyond》</b>
+  （ICLR 2018，arXiv <b><a href="https://arxiv.org/abs/1904.09237" target="_blank" rel="noopener">1904.09237</a></b>）——&nbsp;摘要原话：
+  给出了「a simple convex optimization setting where <b>Adam does not converge</b>」，
+  并「describe the <b>precise problems with the previous analysis</b> of Adam algorithm」。</em></p>
+<p><em>⭐ 他们指出病根在<b>那个指数滑动平均本身</b>：
+  <code>v</code> 会忘掉很久以前那些大梯度，于是某些方向上的步子可以一直不收敛。
+  他们的补丁叫 <b>AMSGrad</b> ——&nbsp;让 <code>v</code> 只增不减。</em></p>
+<p class="landing">⭐⭐⭐ <b>而最值得记的是后来发生的事：<u>大家继续用 Adam。</u></b></p>
+<p><em>AMSGrad 在实践里没比 Adam 好多少，于是那个「证明是错的」的算法
+  ——&nbsp;<b>被引用了十万次，训出了今天所有的大模型</b>。</em></p>
+<p><span class="sub">⛔ 这件事跟本讲的中心思想完全同频：
+  <b>一个东西能用，和它被证明过，是两回事。</b>
+  ——&nbsp;而这一讲从头到尾在教的，就是<u>别信结论，去看它的前提</u>。</span></p></div>
+
 <h4>Muon 更激进一层</h4>
 
 <p class="lead">⭐ 上面那张图基本讲完了。
@@ -7042,7 +7072,26 @@ body.figonly section h3{margin-top:34px}
 
 <h3 id="s6-7">6.7　⭐⭐⭐ 全课落点：四条判据</h3>
 
-<p class="lead">这一讲报了几十个数字。<em>但真正想留下的不是那些数。</em></p>
+<div class="note ok"><p>⭐⭐⭐ <b>先回到开头那句话。</b></p>
+<p><em>第零节我说：训练这件事，就是拿<u>一个</u>数，去决定<u>三千亿个</u>参数各自该往哪边挪。</em></p>
+<p class="landing">⭐ <b>现在这句话的每一个字都有着落了：</b></p>
+<ul>
+  <li><b>那个数</b> ——&nbsp;<em><code>−ln p</code>，模型对正确答案有多意外。
+    刚开始是 <b>11.77</b>（在整个词表里瞎猜），训到后来落在 <b>2</b> 附近。
+    （<a href="#s1-0">1.0</a>）</em></li>
+  <li><b>一个数怎么变成三千亿个导数</b> ——&nbsp;<em>因为<u>进去的多、出来的少</u>，
+    所以从输出往回推最划算。<b>三千亿次前向，压成了一次反向。</b>
+    （<a href="#s1-5">1.5</a>）</em></li>
+  <li><b>那一步该迈多大</b> ——&nbsp;<em>方向是算出来的，<b>步长不是</b>。
+    半个世纪的优化器史，都在跟这一个没有答案的问题较劲。
+    （<a href="#s3-3b">3.3b</a>）</em></li>
+</ul>
+<p class="landing">⭐⭐⭐ <b>而中间所有那些账 ——&nbsp;三倍算力、扔不掉的中间结果、
+  每参数 16 字节 ——&nbsp;都只是为了把那一个数，<u>从 11.8 挪到 2</u>。</b></p>
+<p><em>⛔ 到了 2 附近之后，<b>每往下 0.01 都很贵</b>
+  ——&nbsp;而那时候你付的，就是你刚才算过的那整张账。</em></p></div>
+
+<p class="lead">这一讲还报了几十个数字。<em>但真正想留下的不是那些数。</em></p>
 
 <div class="note ok"><ul>
   <li>① 要不要高精度，比的是<b>两个数</b>：
