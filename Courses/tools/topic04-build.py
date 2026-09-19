@@ -1591,6 +1591,9 @@ __FIG_BESTSTEP__
 
 __FIG_MUON__
 
+<p><span class="sub">🕰️ <b>顺带一句：Adam 原始论文（2014）那个收敛性证明，2018 年被指出是错的</b>（Reddi 等，ICLR 2018）——&nbsp;<em>补丁叫 AMSGrad，而大家<u>继续用 Adam</u>。<b>一个东西能用，和它被证明过，是两回事。</b>细节见下面的折叠块。</em></span></p>
+
+<details class="figsrc"><summary>那次翻车的细节：证明错在哪、AMSGrad 是什么、以及为什么大家没换</summary>
 <div class="note danger"><p>🕰️ <b>这条「一路往上加」的线上，有一次很少被提的<u>翻车</u>。</b></p>
 <p><em>Adam 原始论文（2014）是带收敛性证明的。
   ⛔ <b>2018 年，有人指出那个证明是错的。</b></em></p>
@@ -1607,6 +1610,7 @@ __FIG_MUON__
 <p><span class="sub">⛔ 这件事跟本讲的中心思想完全同频：
   <b>一个东西能用，和它被证明过，是两回事。</b>
   ——&nbsp;而这一讲从头到尾在教的，就是<u>别信结论，去看它的前提</u>。</span></p></div>
+</details>
 
 <h4>Muon 更激进一层</h4>
 
