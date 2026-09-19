@@ -2172,7 +2172,10 @@ __FIG_LR_CURVE__
     <td><b>整条链还是都要在场</b></td><td>⛔ <b>基本不省</b></td></tr>
 </tbody></table>
 
-<div class="note ok"><p>⭐⭐⭐ <b>第一行拿 70 亿参数代进去，数字很夸张。</b></p>
+<div class="note ok"><p>⭐⭐⭐ <b>第一行拿 70 亿参数代进去，数字很夸张。</b>
+  <span class="sub">（形状按 Llama-2-7B 一档：<b>32 层、隐藏维 4,096</b>。
+  下面那个 839 万是这么来的：<code>32 层 × 2 处（Q、V）× 2 块（A、B）× 4,096 × 16 ＝ 8,388,608</code>
+  ——&nbsp;⭐ 原来只给了结果，照着算的人凑不出来，因为「32 层」一个字都没写。）</span></p>
 <ul>
   <li><b>全量微调</b>：<em>6.74e9 × 16 B ＝ <b>100.4 GiB</b>。</em></li>
   <li><b>LoRA</b>（每层给 Q 和 V 各挂一对，秩 16）：
@@ -2600,6 +2603,7 @@ __FIG_STEP__
 <thead><tr><th></th><th>r ＝ 一层激活 ÷ 入口</th><th>L ＝ 层数</th><th>省多少倍</th></tr></thead>
 <tbody>
 <tr><td>125M 小模型</td><td><b>__R_SMALL__</b>（11,520 ÷ 768）</td><td>12</td><td><b>6.7</b></td></tr>
+<tr><td colspan="4"><span class="sub">⚠️ <b>这两行的 r 口径略有不同</b>：小模型那一行只数了两个 norm 的<u>输出</u>，V3 那一行（1.7 的表）把 norm 的<u>输入</u>（＝残差入口）也数了进去。把入口补上，小模型的 r 约 16、省的倍数约 7.1 ——&nbsp;<b>量级和结论都不变，但严格说这两个数不是同一把尺子量的。</b></span></td></tr>
 <tr><td>V3 671B</td><td><b>__R_V3__</b>（一层 MoE 块 ÷ 7,168）</td><td>61</td><td><b>__RECOMP_X__</b></td></tr>
 </tbody></table>
 <p class="landing">⭐ <b>小模型<u>两项都吃亏</u>：r 小 2.7 倍，L 小 5 倍。</b>
