@@ -4981,6 +4981,30 @@ body.figonly section h3{margin-top:34px}
 <p class="lead">⛔ 在比账单之前，先把这几个名字<b>串成一条线</b> ——&nbsp;
   <em>不然它们只是几个并列的选项，只能靠背。</em></p>
 
+<div class="note ok"><p>⭐⭐⭐ <b>这条线只有一句话：每一代都在治上一代<u>没治住的那种不稳</u>。</b>
+  <em>——&nbsp;对照 <a href="#s六">6.0</a> 那张失败模式表看，它就不用背了。</em></p>
+<ul>
+  <li><b>SGD</b> ——&nbsp;<em>只有方向，没有记忆。
+      沿陡方向来回弹，沿平方向几乎不动。</em></li>
+  <li><b>＋ 动量</b> ——&nbsp;<em>治的是<b>来回弹</b>：把历史梯度做滑动平均，
+      相反的分量互相抵消，同向的累加起来。</em></li>
+  <li><b>Adagrad / RMSProp</b> ——&nbsp;<em>治的是<b>各参数尺度差太远</b>：
+      全网共用一个学习率，可不同参数的梯度能差几个数量级
+      （<a href="#s3-5">3.5</a> 那两条轨迹就是这件事）。
+      办法是给每个参数各除以自己梯度的均方根。</em></li>
+  <li><b>Adam</b> ——&nbsp;<em>把上面两样<b>合体</b>：一阶矩管方向、二阶矩管尺度。
+      代价就是那多出来的 8 字节（<a href="#s3-1">3.1</a>）。</em></li>
+  <li><b>AdamW</b> ——&nbsp;<em>治的是一个副作用：
+      <b>权重衰减被二阶矩缩放了</b> ——&nbsp;梯度大的参数反而被正则得更弱。
+      办法是把衰减从梯度里摘出来，直接作用在权重上。</em></li>
+  <li><b>Muon</b> ——&nbsp;<em>治的是<b>更新的方向本身</b>：
+      Adam 逐元素地定每一步，整块矩阵的更新可能被少数几个方向主导。
+      Muon 对更新矩阵做正交化，让各方向的步子更均匀。</em></li>
+</ul>
+<p class="landing">⭐ <b>所以「换优化器」从来不是换个名字 ——&nbsp;
+  是换一个你打算治的病。</b>
+  <em>⛔ 而代价永远落在同一个地方：<u>每个参数要额外记几个字节</u>。</em></p></div>
+
 <figure class="fbox fwide" id="fig-lineage"><svg viewBox="0 0 1400 1576" width="100%" role="img" aria-label="这一串优化器不是并列的四个选项，是一条因果链：每一个都在补上一个留下的洞，同时又留下新的洞。喂同一串恒定的梯度进去，一个健康的优化器应该给出平的有效学习率；不平的那就是它自己的毛病。AdaGrad 的分母是累加的平方和，只增不减，所以有效学习率单调掉到接近零，后期走不动；RMSProp 把累加换成滑动平均，分母会遗忘了，可它没有偏差校正，头一步被放大三十多倍；Adam 把动量和偏差校正都加上，恒定梯度下从第一步起就是平的。而 Adam 论文自己证明了 AdaGrad 是它的一个特例"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">从 AdaGrad 到 Adam　——　<tspan font-weight="700">这不是四个选项，是一条因果链</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">喂<tspan font-weight="700">同一串恒定梯度</tspan>，看各自给出的「有效学习率」——&#160;<tspan font-weight="700">健康的应该是一条平线</tspan></text>
@@ -6690,6 +6714,55 @@ body.figonly section h3{margin-top:34px}
 <p>QK-norm：<b>arXiv <a href="https://arxiv.org/abs/2302.05442" target="_blank" rel="noopener">2302.05442</a></b>（ViT-22B）§2 ——&#160;在<b>约 80 亿参数</b>处观察到训练发散，根因是注意力 logits 变得极大、注意力权重塌成几乎 one-hot（熵接近 0）</p>
 <p>归一化的位置：<b>arXiv <a href="https://arxiv.org/abs/2002.04745" target="_blank" rel="noopener">2002.04745</a></b>（ICML 2020）——&#160;证明 Post-LN 在初始化时<b>靠近输出层的梯度很大</b>，所以必须靠 warmup 压住；换成 Pre-LN 则初始化时梯度就是良态的</p>
 <p>⛔ 本图<b>不含任何我们自己的实测</b> ——&#160;四条全部来自公开论文，Ⓒ 那三个数是照抄 Table 4</p></details></figure>
+
+<h3 id="s6-0">6.0　⭐⭐⭐ 先给这几种「坏」起个名字 ——&nbsp;一张对照表</h3>
+
+<p>这一讲从头到尾讲过<b>五种</b>不同的坏，可它们散在五个章节里，
+  各叫各的名字。<em>先把它们并排摆一次 ——&nbsp;
+  <b>训练现场真正难的不是治，是先认出这是哪一种。</b></em></p>
+
+<table><thead><tr><th>叫什么</th><th>现场长什么样</th><th>根因</th>
+  <th>怎么确认是它</th><th>治法在哪一节</th></tr></thead><tbody>
+<tr><td><b>梯度爆炸</b></td>
+    <td>loss 变 NaN／Inf，或梯度范数一步之内跳几个数量级</td>
+    <td>反向那条连乘里，一段的局部导数持续<b>大于 1</b>，
+        61 层复合下来指数放大（<a href="#s一">1.4</a>）</td>
+    <td>每步打印 global grad norm，看它是不是在某一步跳了几个数量级</td>
+    <td>裁剪（<a href="#s六">6.4</a>）· 换 Pre-LN（<a href="#s六">6.5</a>）</td></tr>
+<tr><td><b>梯度消失</b></td>
+    <td>靠近输入那几层几乎不动，训了很久还是初始化的样子</td>
+    <td><u>同一条连乘</u>，只是局部导数持续<b>小于 1</b> ——&nbsp;
+        跟爆炸是一枚硬币的两面</td>
+    <td>按层打印梯度范数，看是不是随深度单调塌下去</td>
+    <td>Pre-LN 与初始化（<a href="#s六">6.5</a>）</td></tr>
+<tr><td><b>更新被舍入吞掉</b><br><span class="sub">（「训不动」）</span></td>
+    <td>loss 不降，可梯度明明不是 0；换上 fp32 主权重立刻就好</td>
+    <td>单步的<u>相对</u>挪动幅度，小于尾数能分辨的门槛
+        （bf16 约 <code>1/256</code>）</td>
+    <td>算 <code>update RMS ÷ 参数 RMS</code>，跟 <code>1/256</code> 比</td>
+    <td>fp32 主权重（<a href="#s3-2">3.2</a>）</td></tr>
+<tr><td><b>步长过大发散</b></td>
+    <td>loss 一路上翘；或来回弹，<u>每弹一次幅度更大</u></td>
+    <td><code>η</code> 超过 <code>2 ÷ 陡方向的曲率</code>，
+        沿那个方向冲过头并被放大</td>
+    <td>把 <code>η</code> 砍一半重跑 ——&nbsp;立刻正常就是它</td>
+    <td>学习率上限与 warmup（<a href="#s3-3b">3.3b</a> · <a href="#s3-5">3.5</a>）</td></tr>
+<tr><td><b>loss spike</b><br><span class="sub">（不稳定）</span></td>
+    <td>平稳训练里突然一根尖峰，之后可能自愈、也可能一路崩</td>
+    <td>⛔ <b>不是数据坏</b> ——&nbsp;这一条有消融（<a href="#s六">6.2</a>）</td>
+    <td>回滚重跑<u>同一批</u>数据，看它还飞不飞</td>
+    <td>本章 6.1–6.6</td></tr>
+</tbody></table>
+
+<div class="note ok"><p>⭐⭐ <b>前两行值得单独看一眼：爆炸和消失不是两个问题，是<u>同一条连乘</u>
+  的两个方向。</b></p>
+<p><em><a href="#s一">1.4</a> 说过，一个参数的梯度是 61 个局部导数<b>乘起来</b>。
+  这串乘积里每一项平均大于 1，结果就指数涨；平均小于 1，就指数塌。
+  <b>所以它们的治法也是同一类</b> ——&nbsp;让每一层的局部导数<u>不偏离 1 太远</u>，
+  这正是 <a href="#s六">6.5</a> 那些结构手段在干的事。</em></p>
+<p><span class="sub">⛔ 中间那两行（舍入吞掉、步长发散）常被一起叫成「训不动」，
+  可它们的判据正好相反：<b>前者要把步子放大或提精度，后者要把步子调小</b>。
+  认错了会越治越糟。</span></p></div>
 
 <h3 id="s6-1">6.1　先看一个真实的画面</h3>
 
