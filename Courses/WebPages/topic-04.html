@@ -884,6 +884,23 @@ body.figonly section h3{margin-top:34px}
   <b>大约两倍于前向的算力</b>，以及 ——&nbsp;更要命的 ——&nbsp;
   <b>一路累加、不能提前扔掉的中间激活</b>。</em></p>
 
+<div class="note warn"><p>📌 <b>先把「激活」这个词钉死 ——&nbsp;它在这一讲出现六十多次，
+  而它有三个都很常见的意思。</b></p>
+<ul>
+  <li><b>本讲一律指第一个</b>：<em>前向算出来、<u>还没被扔掉</u>的
+      <b>中间结果</b>（每层的输入、norm 的输出、注意力的分数……）。
+      整个第二节都在算它占多少显存。</em></li>
+  <li>⛔ <b>不是「激活参数」。</b><em>上一讲说 V3「每 token 激活 37B」——&nbsp;
+      那是 MoE 里<u>这一步被选中参与计算的那部分权重</u>，
+      跟这里说的中间结果完全是两样东西。
+      本讲只在讲 MoE 派发时用到那个意思，用到时会写成
+      「<b>被激活的专家</b>」。</em></li>
+  <li>⛔ <b>也不是「激活函数」。</b><em>SwiGLU、GELU 那一类算子，
+      本讲一律写全「<b>激活函数</b>」，不简称。</em></li>
+</ul>
+<p class="landing">⭐ <b>一句话：本讲看到「激活」两个字单独出现，指的就是
+  <u>前向留下来、反向还要用的那堆中间结果</u>。</b></p></div>
+
 <p><span class="sub">⭐ 不过在算这笔账之前，得先把<b>起点</b>说清楚 ——&nbsp;
   <em>整条链是从一个叫 loss 的数开始往回走的，
   <b>而那个数本身，值得先花两分钟。</b></em></span></p>
@@ -1324,7 +1341,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 把一层摊开 ——　<tspan font-weight="700">总共只有三次矩阵乘，一次向前、两次向后</tspan></tspan></text>
-<text class="svgsm" x="652" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">只数矩阵乘：norm / 激活 / 偏置在这笔账里可以忽略</text>
+<text class="svgsm" x="652" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">只数矩阵乘：norm / 激活函数 / 偏置在这笔账里可以忽略</text>
 <text class="svgsm" x="40" y="216" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 前向</tspan></text>
 <text class="svgsm" x="40" y="240" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">算这一层的输出</text>
 <rect x="300" y="169.0" width="78.0" height="118.0" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
@@ -1484,7 +1501,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="1542" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「为什么训练比推理贵这么多」</tspan> ——&#160;算力上就是这个 3 倍； 但真正拉开差距的不是它，而是<tspan font-weight="700">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。</text>
 <text class="svgsm" x="20" y="1566" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「反向能不能只算一次」</tspan> ——&#160;能，如果你<tspan font-weight="700">不打算继续往前传</tspan>（比如只微调最后一层）。 那种情况下第 ③ 次确实可以省掉。 <tspan font-weight="700">但别把它安到冻结层头上</tspan> ——&#160;LoRA 那种每层都挂</text>
 <text class="svgsm" x="20" y="1590" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">adapter 的，第 ③ 笔一笔都省不掉；它省的是第 ② 笔（权重梯度）。见 3.8。</text>
-</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的钥匙</b> ——&nbsp;<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><span class="capmore"><br>⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;激活扔不掉、以及下一节那笔交易，全挂在这一句上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 「3 倍」是<b>矩阵乘口径</b>的常用近似：只数 matmul，忽略 norm / 激活 / 偏置 / 通信。真实 step 里这些占比不大，但<b>不是零</b></p>
+</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的钥匙</b> ——&nbsp;<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><span class="capmore"><br>⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;激活扔不掉、以及下一节那笔交易，全挂在这一句上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 「3 倍」是<b>矩阵乘口径</b>的常用近似：只数 matmul，忽略 norm / 激活函数 / 偏置 / 通信。真实 step 里这些占比不大，但<b>不是零</b></p>
 <p>⛔ 图上第 ② 步那句「用前向存下来的输入」是<b>整个专题的枢纽</b> ——&#160;激活扔不掉、以及下一节那笔重算交易，全都挂在这一句上</p></details></figure>
 
 <figure class="fbox fwide" id="fig-circuit"><svg viewBox="0 0 1400 1394" width="100%" role="img" aria-label="一个三节点的小电路：a 加 b 得到 q，q 乘 c 得到 f。前向在线上标黑字，反向在同一条线上标红字。加法门把上游的梯度原样分给两个输入，乘法门把两个输入的梯度换过来 —— 各自拿对方的前向值。而正因为乘法门反向要用前向的值，那个值就必须被存下来，这就是激活扔不掉的最小例子"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2370,7 +2387,7 @@ body.figonly section h3{margin-top:34px}
   <b>每个 token 的那份激活被复制了九遍</b> ——&nbsp;进去一次、出来一次，
   光这两项就 <b>1008 MiB</b>。</em></p>
 <p>⛔ 而它在专题一那张参数量的表上<u>完全看不出来</u>。
-  <em>——&nbsp;MoE 在参数账上很划算（只激活一小部分），
+  <em>——&nbsp;MoE 在参数账上很划算（每 token 只<b>选中</b>一小部分权重参与计算），
   可在激活账上，它要付九份的复制费。</em></p></div>
 
 <p class="landing">⭐ 合起来：一层 MoE 块约 <b>2.22 GiB</b>，一层 dense 块约 <b>1.24 GiB</b>；
@@ -6355,7 +6372,9 @@ body.figonly section h3{margin-top:34px}
   拆开是：权重 1.22 ＋ 梯度 1.22 ＋ 优化器状态 <b>7.32</b>。</em></p>
 <p>⭐ <em>换算一下就知道这是个什么量级 ——&nbsp;
   按每张卡 80 GiB 算，光这一块就要 125 张，还没算激活、没算任何冗余。</em>
-  <span class="sub">（80 GiB 是这里<b>随手设的换算基准</b>，不是在说某款具体的卡。）</span></p></div>
+  <span class="sub">（80 GiB 是这里<b>随手设的换算基准</b>，不是在说某款具体的卡。
+  ⭐ <b>专题一按 v7 的 94.74 GiB／device 算同一笔账，得到的是<u>约 105 张</u></b>
+  ——&nbsp;TiB 那个数两边一致，差的只是除数。）</span></p></div>
 
 <p class="landing">⭐⭐ 注意这三项里，只有优化器状态那 7.32 TiB 是<u>纯开销</u>
   ——&nbsp;<em>它既不参与前向，也不参与反向，
