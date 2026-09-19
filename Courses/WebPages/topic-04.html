@@ -2258,6 +2258,15 @@ body.figonly section h3{margin-top:34px}
   <em>⭐ 但就算差一倍，结论也不变：这个规模上，装不下。</em></span></p></div>
 
 
+<div class="note"><p>📌 <b>那「一堆中间结果」到底有多少？——&nbsp;一句话给你个量级。</b></p>
+<p><em>按 V3 的真实配置（4K 序列、一条）逐项数下来：<b>一层约 2.2 GiB，
+  61 层合起来约 133 GiB</b>。</em></p>
+<p class="landing">⭐ <b>记住这个量级就够了 ——&nbsp;它比整个模型的权重还大一截。</b>
+  <em>——&nbsp;而这正是下一节那笔交易存在的理由。</em></p>
+<p><span class="sub">⛔ <b>逐项怎么数的、哪一项最大、换到 128K 是多少</b>
+  ——&nbsp;都在下面这个折叠块里。<em>属于「装不装得下」，本讲不要求。</em></span></p></div>
+
+<details class="foldfig"><summary><b>把那张激活账单逐项摊开：一层里到底挂了哪些张量</b>　<span class="why">⭐ 作者自己写着「这一小节可以整段跳过」—— 给要自己算的人看的，属于「装不装得下」</span></summary>
 <h3 id="s1-7">1.7　把那张原始账单摊开 ——&nbsp;<u>一层里到底挂了些什么</u></h3>
 
 <!-- ⭐⭐ 2026-09-16 补。这一小节是**给要自己算的人**看的，讲课时可以整段跳过。
@@ -2349,6 +2358,7 @@ body.figonly section h3{margin-top:34px}
   ⭐ 扩训到 128K 那一档它是 <b>31.6 GiB</b>，届时它<u>不分块就根本跑不动</u>。</span></p></div>
 
 
+</details>
 <h3 id="s1-8">1.8　⭐ 梯度算出来之后，<u>还没完</u></h3>
 
 <!-- ⭐⭐⭐ 2026-09-16 补。现场把这一讲的范围收紧了：
@@ -2448,6 +2458,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption>⭐⭐ <b>看三条泳道，别只看第一条</b> ——&nbsp;<em>第一条是「做什么」，第二条是「<b>能不能跟计算叠在一起</b>」，第三条才是落点。</em><span class="capmore"><br>⭐⭐⭐ <em>第三条泳道<b>全是紫的</b> ——&nbsp;这一格是现场那条界（<b>推理里没有的那些东西</b>）最直观的一次落地。</em><br>⛔ <em>而五道里<b>只有裁剪那一道会把所有卡钉在一起等</b>，偏偏它传的只是一个数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 图上<b>不含任何量</b>　——　通信到底多大、能藏掉多少，是 fig-batch 和专题五的事。</p>
 <p>⭐ 第 ⑤ 道那句「用完就扔」是本讲另一处的伏笔：正因为它一次性，它才敢用 bf16 存　——　而一旦要做累积，它就变成累加量，得升回 fp32。</p></details></figure>
 
+<details class="foldfig"><summary><b>那笔通信有多大、为什么跟 batch 无关</b>　<span class="why">⭐ 通信是并行的事 —— 专题五整讲在算它</span></summary>
 <h4>⭐⭐ 第 ② 步那笔通信，有个很反直觉的性质</h4>
 
 <p><em>纯数据并行下，每一步要把<b>整份梯度</b>在所有卡之间汇总一遍。
@@ -2467,6 +2478,7 @@ body.figonly section h3{margin-top:34px}
     <em>累积 K 个 micro-batch 才更新一次，就是<b>把通信次数除以了 K</b>
     ——&nbsp;它省的不只是激活。</em></li>
 </ul></div>
+</details>
 
 <figure class="fbox fwide" id="fig-batch"><svg viewBox="0 0 1400 1286" width="100%" role="img" aria-label="横轴是 batch 大小，纵轴是一次更新要花的时间。左半段并行度还没吃满，时间几乎不随 batch 变化，所以 batch 开大是白赚的；右半段吃满之后，时间正比于 batch，再开大就不白赚了。教程里常说的「大 batch 一个 epoch 更快」，成立的前提是左半段；而大模型训练基本都在右半段。另外梯度通信量跟 batch 完全无关，所以它在两段里都是摊得越薄越好"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">「batch 开大就更快」　——　<tspan font-weight="700">这句话有个前提，而它通常不写</tspan></text>
@@ -3331,6 +3343,7 @@ body.figonly section h3{margin-top:34px}
   它就是 2 比 12 这个比。</em></p>
 <p>⛔ <em>而且这 12 字节<b>全是 fp32</b>。下一小节说为什么它们非 fp32 不可。</em></p></div>
 
+<details class="foldfig"><summary><b>那 16 字节摊开：混合精度到底省没省常驻显存</b>　<span class="why">⭐ 结论「一个字节都没省」很反直觉，但它是显存账 —— 本讲只要记住「Adam 每个参数要记两个矩」</span></summary>
 <div class="note danger"><p>⛔⛔ <b>顺手拆掉一个最顽固的误解：「用了混合精度，显存不就省一半吗？」</b></p>
 <p class="landing">⭐⭐⭐ <b>常驻这一块，它<u>一个字节都没省</u>。</b>
   <em>——&nbsp;两边算一遍，答案都是 16。</em></p>
@@ -3353,6 +3366,7 @@ body.figonly section h3{margin-top:34px}
   <em>常驻和激活是两本账，一句「省一半」把它们混在一起，
   <b>结论就会在你最需要它的时候是错的</b>（比如估一张卡装不装得下）。</em></span></p></div>
 
+</details>
 <h3 id="s3-2">3.2　哪些量必须高精度 ——&nbsp;判据只有一句：<u>看它累不累加</u></h3>
 
 <!-- ⭐⭐⭐ 2026-09-16 现场问：「为啥梯度是 bf16 的，它不是 fp32 的呢？」
@@ -5688,6 +5702,7 @@ body.figonly section h3{margin-top:34px}
   尺度本来就不同的那些参数（embedding、layer norm 的缩放）
   不会被按同一个比例一起压下去。</em></span></p>
 
+<details class="foldfig"><summary><b>checkpoint 要存什么、为什么正好是那 12 字节</b>　<span class="why">⭐ 存储的事，不是这三件事</span></summary>
 <h3 id="s3-7">3.7　⭐ checkpoint 要存的，正好就是那 12 字节</h3>
 
 <p class="lead">⭐ 这一节能用 3.1 那张账单直接推出来，
@@ -5732,6 +5747,7 @@ body.figonly section h3{margin-top:34px}
   ——&nbsp;<b>既不占显存也不占训练时间</b>，用途是提前估计「学习率衰减之后会有多好」。
   📌 arXiv <b><a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s3-2">§3.2</a>.3。</em></span></p>
 
+</details>
 <h3 id="s3-8">3.8　⭐⭐⭐ LoRA：<u>大多数人真正会碰到的那种训练</u></h3>
 
 <!-- ⭐⭐⭐ 2026-09-17 补。麻瓜审最狠的一条：
