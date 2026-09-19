@@ -140,7 +140,7 @@ def main():
         BL, True, 15, "middle")
     f.t(1160, py + 238, "<tspan font-weight=\"700\">来回冲过头</tspan>",
         BL, True, 15, "middle")
-    f.t(1160, py + 276, "——　这一条是免费送的，不用额外做什么",
+    f.t(1160, py + 276, "——　只要步子够小，这一条是免费送的",
         GY2, size=12, anchor="middle")
     f._pan = None
 

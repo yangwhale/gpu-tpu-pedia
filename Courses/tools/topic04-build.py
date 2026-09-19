@@ -885,7 +885,9 @@ __TBL_PER_BYTE__
 <p><span class="sub">⭐ <b>更值得看的是名单上的其余几项</b>：
   <code>layernorm</code>、<code>moe_act</code>、<code>mla_up_proj</code>
   ——&nbsp;<em>对照 2.3 那张表：RMSNorm 输出、SwiGLU 乘积、K/V 解压与 Q 展开。
-  <b>正好是最便宜的那几行，一个不多一个不少。</b>
+  <b>方向完全一致 ——&nbsp;都落在这张表最便宜的那一批里。</b>
+  <em>⛔ 但别说成「一个不多一个不少」：名单上还有 <code>mlp</code> / <code>moe</code> /
+  <code>shared_experts</code>，其中 <code>mlp</code> 对应的正是表里最贵的 gate/up。</em>
   我们那条闭式解排出来的名单，和框架实际提供的选项对上了。</em></span></p>
 <p><span class="sub">📌 <code>megatron/core/transformer/transformer_config.py</code>
   的 <code>recompute_modules</code> 字段（2026-09 主干）。
@@ -1727,7 +1729,8 @@ __FIG_LR_CURVE__
 <p><span class="sub">⛔ 注意这张表里 batch 和学习率是<u>一起</u>变的 ——&nbsp;
   这是最容易漏的一条：你不能只调学习率不看 batch，它俩绑在一起。
   GPT-3 还额外把 batch 从 32K token 线性爬到目标值（头 40–120 亿 token 内）。
-  📌 出处：arXiv <b>2005.14165</b> 表 2.1 与 §2.3。</span></p></div>
+  📌 出处：arXiv <b>2005.14165</b> 表 2.1 与<b>附录 B</b>；
+  「更大的模型要用更小的学习率」那句在 §2.3。</span></p></div>
 
 <!-- ⭐⭐⭐ 2026-09-18 R17：batch 与学习率的关系不是单调的。
      ⛔ 这一条**刻意不画图**，理由值得记：它是一条「取决于 β_noise、不一定出现」
@@ -2173,11 +2176,12 @@ __FIG_LR_CURVE__
   冻住的参数<b>只留 2 字节权重</b> ——&nbsp;它退回成了推理的样子。</em></span></p></div>
 
 <div class="note"><p>⭐⭐ <b>第二行那个「3× 变 2×」值得单独说，因为它直接来自 1.3。</b></p>
-<p><em><a href="#s一">1.3</a> 说过反向要付<b>两笔</b>乘法：
-  ① 算<b>输入</b>的梯度（往下一层传），② 算<b>权重</b>的梯度（给优化器用）。</em></p>
-<p class="landing">⭐⭐⭐ <b>而冻住的那些层，<u>第 ② 笔可以整个不算</u></b> ——&nbsp;
+<p><em><a href="#s一">1.3</a> 说过反向要付<b>两笔</b>乘法，这里沿用它的编号：
+  ① 算<b>权重</b>的梯度（给优化器用），② 算<b>输入</b>的梯度（往下一层传）。</em></p>
+<p class="landing">⭐⭐⭐ <b>而冻住的那些层，<u>第 ① 笔可以整个不算</u></b> ——&nbsp;
   <em>它的权重根本不更新，算出梯度也没人用。</em></p>
-<p><em>于是：前向 1 ＋ 只剩输入梯度那一笔 1 ＝ <b>约 2×</b>，而不是 3×。</em></p>
+<p><em>于是：前向 1 ＋ 只剩 ② 那一笔 1 ＝ <b>约 2×</b>，而不是 3×。</em></p>
+<p><span class="sub">⛔ <b>反过来的情形别搞混</b>：只微调<u>最后一层</u>时，省掉的是 ②（不用再往前传）；而 LoRA 每层都挂 adapter，② <b>一笔都省不掉</b>，省的是 ①。</span></p>
 <p><span class="sub">⭐ 这一条是<b>从 1.3 那两笔账直接推出来的</b>，不是新知识
   ——&nbsp;<em>这正是把 LoRA 放在这里讲的理由。</em></span></p></div>
 
@@ -2330,7 +2334,8 @@ __FIG_STEP__
   <b style="color:#4285f4">■</b> 激活 ——&nbsp;<b>前向堆高，反向释放</b>　｜　
   <b style="color:#d93025">■</b> 梯度（2 B/参数）——&nbsp;<b>反向才出现，反向结束时最全</b>　｜　
   最下面那排小格 ＝ 61 层，<b>走到哪一层就点到哪一格</b></span><br>
-  <em>⭐⭐ 盯住那根竖线：<b>最高点出现在前向刚走完、反向还没开始的那一刻</b>
+  <em>⭐⭐ 盯住那根竖线：<b>不开重算时，最高点出现在前向刚走完、反向还没开始的那一刻</b>
+  （<u>开了重算就不是了</u> ——&nbsp;那时峰值挪到反向的第一个瞬间：61 份入口 ＋ 正在重算的那一层，见 fig-act-bill 的放大格）
   ——&nbsp;<b>不是训练的某个阶段，是一个瞬间。</b>
   <span class="sub">（三条带的高度按真实字节数算，跟上面那张图同一套口径。
   14.6 秒无声循环，Manim 渲染，脚本在 <code>tools/manim/</code>。）</span></em></figcaption>
@@ -2546,7 +2551,7 @@ __FIG_STEP__
 <p><em>它只算了 12 层里的激活 ——&nbsp;<b>没算最后那个 logits</b>。
   GPT-3 那一代沿用 GPT-2 的 BPE 词表，<b>约 5.03 万</b>：</em></p>
 <p class="landing"><code>8,192 token × 50,257 × 2 B</code> ＝ <b>0.77 GiB</b>
-  ——&nbsp;<em><u>是那 0.32 GiB 的两倍半还多</u>。</em></p>
+  ——&nbsp;<em><u>是那 0.32 GiB 的 2.4 倍</u>。</em></p>
 <p><em>⭐ 也就是说：<b>如果你一次性把整个 logits 算出来，这台机器上最大的一块
   既不是权重也不是激活 ——&nbsp;是那张「词表上的分数表」。</b></em></p>
 <p class="landing">⛔ <b>而这一小节的卖点正是「你能自己算一遍」</b>
@@ -3048,7 +3053,7 @@ __FIG_UNDERFLOW__
     <td>Rajbhandari 等，<b>arXiv 1910.02054</b></td></tr>
 <tr><td>GPT-3 <b>八档</b>峰值学习率与 batch；375M token 线性 warmup；
     2,600 亿 token 内余弦降到 <b>10%</b>；weight decay 0.1；上下文 2,048</td>
-    <td><b>arXiv 2005.14165</b> 表 2.1 与 §2.3</td></tr>
+    <td><b>arXiv 2005.14165</b> 表 2.1 与<b>附录 B</b>（§2.3 只写「细节见附录 B」）</td></tr>
 <tr><td>DeepSeek-V3 的 <b>完整 LR schedule</b>（2K 步 →&nbsp;10T 恒定 →&nbsp;4.3T 余弦
     →&nbsp;末段两级）；梯度裁剪 <b>1.0</b>；batch 3072→15360；
     bf16 的一/二阶矩 ＋ fp32 主权重和梯度；<b>重算 RMSNorm 与 MLA 上投影</b></td>

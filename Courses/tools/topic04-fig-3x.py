@@ -223,8 +223,8 @@ def main():
         "而是<tspan font-weight=\"700\">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。",
         "❓ <tspan font-weight=\"700\">「反向能不能只算一次」</tspan> ——&#160;"
         "能，如果你<tspan font-weight=\"700\">不打算继续往前传</tspan>（比如只微调最后一层）。"
-        "⭐ 那种情况下第 ③ 次确实可以省掉 ——&#160;"
-        "<tspan font-weight=\"700\">冻结层为什么便宜，原因就在这儿。</tspan>",
+        "⭐ 那种情况下第 ③ 次确实可以省掉。"
+        "⛔ <tspan font-weight=\"700\">但别把它安到冻结层头上</tspan> ——&#160;LoRA 那种每层都挂 adapter 的，第 ③ 笔一笔都省不掉；它省的是第 ② 笔（权重梯度）。见 3.8。",
     ], keep=True)
 
     yy = f.src(yy + 24,
