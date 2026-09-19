@@ -237,3 +237,26 @@ class Momentum(MovingCameraScene):
                      color=BL_).next_to(e2, DOWN, buff=0.35)
         self.play(FadeIn(note2, shift=UP * 0.15), run_time=0.6)
         self.wait(1.6)
+
+        # ⭐⭐⭐ 2026-09-20 收尾复位 ——&#160;现场：「能放一个动图搞定的，就别放视频。」
+        #   原来这一段是全讲唯一带播放器控件的：因为它 23 秒、首尾不一样，
+        #   一循环就会突兀地跳回去，所以只好给它挂 controls。
+        #   ⭐ 而首尾不一样是**可以修的**：第 0 帧只有那条灰色曲线（上面 self.add(curve)），
+        #     所以结尾把除它以外的全部淡出，末帧就跟首帧一模一样。
+        #   ⛔ 镜头此前已经复位回 ORIGIN／scale 1（见上面那次推拉），否则这里还得一并还原。
+        #   判据：**要让一段动画能当动图用，先让它的最后一帧长得跟第一帧一样。**
+        # ⛔⛔ 第一版只留了 curve ——&#160;拼接图当场打脸：**首帧还有一个灰球**
+        #   （第 0 帧是 `self.add(curve)` ＋ `self.add(b1)`，而 b1 在 t1=0 处可见）。
+        #   数字看着正常（22.9%，跟其他黑底循环同档），**是图暴露的**。
+        #   ⭐ 判据：**首尾一致别只看那个百分比，一定要看拼接图** ——&#160;
+        #     一个小球的有无，在整幅画的平均差异里几乎看不出来。
+        # ⛔ 第二版又栽了一次：想靠 `t1.set_value(0)` ＋ `self.add(b1)` 把球复位，
+        #   可 b1 在幕一结尾就被 `self.remove(b1)` 换成了静态的 stuck 点 ——
+        #   末帧留下的是 stuck（停在浅谷），不是起点那颗。
+        #   ⭐ 判据：**复位不要去唤醒一个已经被移走的 always_redraw，
+        #     直接清干净、再摆一个跟第 0 帧同样的静态件** ——&#160;确定性比聪明重要。
+        _keep = [m for m in self.mobjects if m is not curve]
+        self.play(*[FadeOut(m) for m in _keep], run_time=0.9)
+        self.remove(*_keep)
+        self.add(Dot(P(PLAIN[0][0]), radius=0.13, color=GY2_))   # ＝ 第 0 帧那颗
+        self.wait(0.6)
