@@ -410,9 +410,13 @@ def anchorize(html):
 # ⭐ 目录**从 SECTIONS 里长出来**，不手写 —— 手写那份一定会跟节标题漂。
 # ══════════════════════════════════════════════════════════════════
 def build_nav(html):
+    # ⛔⛔ 2026-09-20：这条正则写死了「第 X 节」这个 badge，
+    #   于是 badge 写「附　录」的那一节**整个不进吸顶目录** ——
+    #   而专题四的 §7.0「这些东西在框架里叫什么」恰恰是全讲最实用的一张表。
+    #   ⭐ 判据：**目录的收录条件不要绑在「标签长什么样」上，绑在「它是不是一个 section」上。**
     secs = re.findall(
         r'<section id="(s[^"]+)"><div class="wrap"><div class="stn">'
-        r'<span class="badge">第 (\S+) 节</span><h2>(.*?)</h2>', html, re.S)
+        r'<span class="badge">(?:第 )?([^<]+?)(?: 节)?</span><h2>(.*?)</h2>', html, re.S)
     if not secs:
         return html
     # ⭐⭐ 2026-09-14：去掉条目前面的「零 一 二 三…」。

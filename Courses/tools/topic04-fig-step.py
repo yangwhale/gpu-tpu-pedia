@@ -179,14 +179,15 @@ def main():
     ROWS = (
         ("常驻那一块（不随 batch 变）", RESIDENT_TIB, RD, "#fce8e6",
          "权重 2 ＋ 梯度 2 ＋ 优化器 12 ＝ 16 B／参数，× 671B"),
-        ("激活 · global batch ＝ 1 条", ACT_ONE_SEQ_GIB / 1024.0, BL, "#e8f0fe",
+        # ⛔⛔ 2026-09-20 修：这两行原来写「global batch ＝ N 条」——&#160;**量名是错的**。
+        #   显存里同时在场的是 **DP 路数 × micro-batch**；global batch 还要再乘上
+        #   梯度累积的 K，而**那 K 份不同时在场**（1.8 第 ④ 道）。
+        #   ⭐ 也就是说这个分水岭原来量的是一个**物理上不会同时存在的量**。
+        ("激活 · 同时在场 ＝ 1 条", ACT_ONE_SEQ_GIB / 1024.0, BL, "#e8f0fe",
          "开了全量重算的 128K 序列"),
-        # ⛔ T19 待办：「global batch」这个量名是错的 ——&#160;同时在场的是
-        #   DP 路数 × micro-batch，不是 global batch（加了梯度累积之后两者不等）。
-        #   ⭐ 换句话说这个分水岭量的是一个**物理上不会同时存在**的量。留给 T19 一起改。
-        ("激活 · global batch ＝ %d 条" % round(CROSSOVER),
+        ("激活 · 同时在场 ＝ %d 条" % round(CROSSOVER),
          ACT_ONE_SEQ_GIB * CROSSOVER / 1024.0, BL, "#e8f0fe",
-         "⭐ 到这里才追平 ——　这个数就是分水岭"),
+         "⭐ 到这里才追平 ——　同时在场 ＝ DP 路数 × micro-batch"),
     )
     for i, (nm, tib, col, fill, note) in enumerate(ROWS):
         y = py2 + 40 + i * 84

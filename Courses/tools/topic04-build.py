@@ -60,9 +60,9 @@ SECTIONS = [
     ("s二", "二", "代价：那些中间结果扔不掉 —— 以及第一个真正的取舍"),
     ("s三", "三", "有了导数，那一步该迈多大 —— 梯度下降与优化器"),
     ("s四", "四", "这张账交给专题五（本讲不展开）"),
-    ("s五", "五", "一个完整 step 的总账 —— 以及峰值出现在哪一刻"),
-    ("s六", "六", "训不崩 —— 数值稳定性"),
-    ("s七", "七", "附录：这一讲的数是怎么核的"),
+    ("s五", "五", "把这三件事，放到一台你摸得到的机器上"),
+    ("s六", "六", "训不崩 —— loss 飞了怎么办，以及怎么让它别飞"),
+    ("s七", "七", "这一讲的数是怎么核的"),
 ]
 
 
@@ -120,7 +120,7 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 </div></section>
 
 
-<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>反向要付什么 ——&nbsp;三倍算力，外加一堆扔不掉的中间结果</h2></div>
+<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>一个数怎么变成三千亿个导数 ——&nbsp;反向传播的原理</h2></div>
 
 <p class="lead">反向传播不是「再跑一遍」。<em>它要付两样东西：
   <b>大约两倍于前向的算力</b>，以及 ——&nbsp;更要命的 ——&nbsp;
@@ -610,7 +610,7 @@ __FIG_BATCH__
 </div></section>
 
 
-<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>第一个真正的「决策」——&nbsp;拿算力换显存，换多少算划算</h2></div>
+<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>代价：那些中间结果扔不掉 ——&nbsp;以及第一个真正的取舍</h2></div>
 
 <p class="lead">这是全课第一次出现<b>真正的取舍</b>：
   <em>不是「有没有更好的办法」，而是两样东西只能选一样，你选哪个。</em></p>
@@ -986,7 +986,7 @@ __TBL_PER_BYTE__
 </div></section>
 
 
-<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>优化器 ——&nbsp;最大的一块显存，和最难调的那个数</h2></div>
+<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>有了导数，那一步该迈多大 ——&nbsp;梯度下降与优化器</h2></div>
 
 <p class="lead">前面两节都在跟激活较劲。<em>可把账摊开一看 ——&nbsp;
   那个从头到尾一言不发的角色，才是最大的一块。</em></p>
@@ -2186,7 +2186,7 @@ __FIG_LR_CURVE__
 </div></section>
 
 
-<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账单直接决定了并行策略长什么样</h2></div>
+<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账交给专题五（本讲不展开）</h2></div>
 
 <p class="lead">这一节是通向<b>专题五</b>的桥。
   <em>⭐ 把上面几项按大小排一遍，你会发现 ——&nbsp;
@@ -3816,6 +3816,19 @@ for ph, (what, figs, asks) in PLAN.items():
 # ⭐ 这一份是**要投屏讲的**，所以装折叠开关，默认只剩图。
 _html = P.place_figs(_html, FIGS)
 _html = P.add_figonly_toggle(_html)
+# ⛔⛔ 2026-09-20：T12 换主线时改了 SECTIONS 的标题，**却没改正文里的 <h2>** ——
+#   而吸顶目录是从 <h2> 长出来的，于是目录上挂了一整套旧标题，一挂就是八轮。
+#   ⭐ 判据：**同一个东西有两份写法时，必须断言它们一致** ——&#160;
+#     「改一处忘另一处」不会报错，它只是静默地展示旧的那份。
+_h2 = dict(re.findall(r'<section id="(s[^"]+)"><div class="wrap"><div class="stn">'
+                      r'<span class="badge">[^<]*</span><h2>(.*?)</h2>', _html, re.S))
+for _sid, _num, _title in SECTIONS:
+    _strip = lambda t: re.sub(r"<[^>]+>", "", t).replace("&nbsp;", " ").strip()
+    _got, _want = _strip(_h2.get(_sid, "")), _strip(_title)
+    assert _got == _want, \
+        "SECTIONS 跟正文 <h2> 对不上：%s\n  SECTIONS：%s\n  正文：%s" % (_sid, _want, _got)
+print("   ✅ SECTIONS 与正文 %d 个 <h2> 逐字一致" % len(SECTIONS))
+
 P.finish(_html, OUT, SECTIONS, "topic-04.html")
 
 # ⛔ 站内锚点必须落地 —— **查的是写出去的那份成品**，不是中间变量。
