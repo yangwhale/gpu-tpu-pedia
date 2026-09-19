@@ -1896,11 +1896,20 @@ __FIG_LR_CURVE__
 <p class="landing">⭐⭐ <b>global batch（一次更新看了多少 token）　＝　m × K × d × S</b></p>
 
 <div class="note danger"><p>⛔⛔ <b>而这里藏着一条最容易被忽略的连线：<u>TP 开大，global batch 会变小。</u></b></p>
-<p><em>卡的总数是定的。张量并行（TP）、流水线并行（PP）、专家并行（EP）
-  <b>每一个都在跟 DP 抢卡</b>：</em></p>
-<p class="landing"><b>d　＝　总卡数 ÷ (TP × PP × EP)</b></p>
+<p><em>卡的总数是定的，<b>凡是切模型的那几维都在跟 DP 抢卡</b>：</em></p>
+<p class="landing"><b>d　＝　总卡数 ÷ (TP × PP × CP)</b></p>
 <p><em>所以你把 TP 从 8 开到 16，<b>DP 路数当场减半</b> ——&nbsp;
   别的都不动的话，<b>global batch 也跟着减半</b>。</em></p>
+<p><span class="sub">⛔ <b>这条式子里<u>不该有 EP</u>，这是我改过一次的地方。</b>
+  <em>Megatron-Core 里其实有<b>两个</b> data-parallel 尺寸：注意力那张网格的
+  <code>data_parallel_size = world_size ÷ (TP × PP × CP)</code>，
+  和专家那张网格自己的
+  <code>expert_data_parallel_size = world_size ÷ (ETP × EP × PP)</code>。
+  <b>EP 只切后者</b>；global batch 看的是前者 ——&nbsp;
+  MoE 层只是把同一批 token 在专家维上重新分了一次，没有让这一步看的 token 变少。
+  （出处：<code>megatron/core/parallel_state.py</code> 里
+  <code>model_size = TP × PP × CP × gtp_remat</code> 那一段。）
+  ⭐ 顺带补上原来漏掉的 <b>CP</b> ——&nbsp;上下文并行确实在这个分母里。</em></span></p>
 <p class="landing">⭐⭐⭐ <b>而 batch 一变，学习率就得跟着变（下面第三步）。</b>
   <em>——&nbsp;也就是说：<u>并行策略那个旋钮的另一头，连着的是学习率</u>。</em>
   <em>它看起来是「怎么把模型切到卡上」的工程问题，<b>结果落在了收敛上。</b></em></p>
