@@ -1845,6 +1845,17 @@ body.figonly section h3{margin-top:34px}
 <p class="landing">⭐⭐ 链式法则真正的意思是：<u>你永远不用把它展开。</u>
   <em>你只要把 61 个<b>局部的小导数</b>，按顺序乘起来。</em></p>
 
+<div class="note ok"><p>⭐⭐⭐ <b>⚠️ 这里要把 <a href="#s一">1.3</a> 那两笔账跟「乘起来」这三个字焊在一起 ——&nbsp;它们说的是同一件事。</b></p>
+<p><em>1.3 说每一层拿到上游的敏感度之后做两笔矩阵乘，其中第 ② 笔是
+  「<b>用这个敏感度，乘上自己的权重</b>」，结果传给下游。</em></p>
+<p class="landing">⭐⭐ <b>那一乘，就是链式法则的一环；
+  而「自己的权重」，就是这个算子的<u>局部导数</u>。</b></p>
+<p><em>——&nbsp;所以「61 个局部导数按顺序乘起来」不是一个比喻，
+  <b>它就是反向那一趟里，第 ② 笔被连做了 61 次</b>。
+  ⛔ 第 ① 笔（算权重梯度）不在这条链上：它是<u>从链上取值</u>，
+  每一层各取各的，取完就交给优化器，不往下传。</em></p>
+<p><span class="sub">⭐ 这个区分后面一直有用：「梯度」这个词在本讲同时指两样东西 ——&nbsp;<b>第 ① 笔算出来的<u>权重梯度</u></b>（要 all-reduce、要进优化器、每参数 2 字节）和<b>第 ② 笔往回传的<u>敏感度</u></b>（用完就扔，不进任何账）。<a href="#s1-8">§1.8</a> 那道 all-reduce 传的是前者。</span></p></div>
+
 <p class="lead">❓ <em>——&nbsp;<b>那「乘起来」之后会怎样？</b></em>
   <em>这一问有一个非常出名的答案，而它是<b>链式法则最直接的后果</b>。</em></p>
 
@@ -3099,15 +3110,15 @@ body.figonly section h3{margin-top:34px}
   4K 上 attention 只占 12.5%，是 <b>3.06×</b> ——&nbsp;<b>基本无碍</b>。
   ⛔ 本讲其余各处仍按 3× 的近似口径写，<u>这是有意的简化，不是漏了</u>。</span></p></div>
 </details>
-<p><span class="sub">⚠️ <b>这两个百分比早先分母不一样</b>（一个除一遍前向、一个除整个 step），
+<p><span class="sub">⚠️ <b>「选择性重算多付 9.3%」和「全量重算多付三分之一」这两个百分比，早先分母不一样</b>（一个除一遍前向、一个除整个 step），
   并排比是不能比的 ——&nbsp;<em>而这一讲自己在 2.5 就写着「跨文献比这类比例前，
   先确认对方折没折半」。<b>已统一到 step 口径。</b></em></span></p>
 
-<div class="note ok"><p>⭐⭐ 一条第一方证据：这张排序表不是我们自己推着玩的。</p>
+<div class="note ok"><p>⭐⭐ <b>一条第一方证据：上面那条判据（每省一字节要付多少 FLOPs，＝ 产生它的那个算子的输入宽度）不是我们自己推着玩的。</b></p>
 <p><em>DeepSeek-V3 的报告里写得很直白 ——&nbsp;他们
   「重算全部 RMSNorm 运算和 MLA 上投影」，
   理由是「开销很小，却显著降低了存激活的显存需求」。</em></p>
-<p class="landing">⭐ 这正好落在上面那张表最便宜的那几行里。
+<p class="landing">⭐ <b>RMSNorm 输出和 MLA 上投影，正是这条判据算出来最便宜的那两类</b>——&nbsp;逐元素的代价≈0，上投影的输入宽只有 512 / 1,536。
   <em>判据是我们自己推的，但<b>推出来的名单跟人家实际配的对上了</b>
   ——&nbsp;这比多算一遍更有说服力。</em></p>
 <p><span class="sub">📌 出处：arXiv <b><a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> §3.2.3。</span></p></div>
@@ -3194,7 +3205,7 @@ body.figonly section h3{margin-top:34px}
 </details>
 <p><span class="sub">⭐ <b>更值得看的是名单上的其余几项</b>：
   <code>layernorm</code>、<code>moe_act</code>、<code>mla_up_proj</code>
-  ——&nbsp;<em>对照 2.3 那张表：RMSNorm 输出、SwiGLU 乘积、K/V 解压与 Q 展开。
+  ——&nbsp;<em>分别对应 RMSNorm 输出、SwiGLU 乘积、K/V 解压与 Q 展开，按 <a href="#s二">2.3</a> 那条判据算出来都很便宜。
   <b>方向完全一致 ——&nbsp;都落在这张表最便宜的那一批里。</b>
   <em>⛔ 但别说成「一个不多一个不少」：名单上还有 <code>mlp</code> / <code>moe</code> /
   <code>shared_experts</code>，其中 <code>mlp</code> 对应的正是表里最贵的 gate/up。</em>
@@ -6377,6 +6388,9 @@ body.figonly section h3{margin-top:34px}
   拆开是：权重 1.22 ＋ 梯度 1.22 ＋ 优化器状态 <b>7.32</b>。</em></p>
 <p>⭐ <em>换算一下就知道这是个什么量级 ——&nbsp;
   按每张卡 80 GiB 算，光这一块就要 125 张，还没算激活、没算任何冗余。</em>
+  <span class="sub">⚠️ <b>下面那个激活峰值按「全量重算」算</b> ——&nbsp;
+  而 <a href="#s二">2.4</a> 说过 V3 自己配的是<u>选择性</u>重算（RMSNorm ＋ MLA 上投影）。
+  <b>两个口径不是一回事</b>：这里取全量是为了给一个干净的下界，真机上激活会比它高。</span>
   <span class="sub">（80 GiB 是这里<b>随手设的换算基准</b>，不是在说某款具体的卡。
   ⭐ <b>专题一按 v7 的 94.74 GiB／device 算同一笔账，得到的是<u>约 105 张</u></b>
   ——&nbsp;TiB 那个数两边一致，差的只是除数。）</span></p></div>
@@ -7411,7 +7425,9 @@ body.figonly section h3{margin-top:34px}
     （⛔ 不是「默认开着」——&nbsp;<code>recompute_granularity</code> 默认是 <code>None</code>），
     而且源码里就带着一条「融合 attention 下你不需要设它」的警告 ——&nbsp;
     <em>而按 <a href="#s二">2.4</a>，长上下文下它恰恰是<b>最不该重算</b>的那一个。
-    ⭐ <b>默认值是有年代的</b>，这条在 <a href="#s二">2.5</a> 展开过。</em></li>
+    ⭐ <b>默认值是有年代的</b>，这条在 <a href="#s二">2.5</a> 展开过。
+    ⛔ <b>顺带消一个看起来矛盾的地方</b>：<a href="#s二">2.2</a> 说「大模型训练里重算默认就开着」讲的是<u>业界实践</u>，
+    这里说 <code>recompute_granularity</code> 默认 <code>None</code> 讲的是<u>框架出厂值</u> ——&nbsp;<b>两句都对，但不是同一个「默认」。</b></em></li>
 </ul>
 <p><span class="sub">⚠️ <b>顺带承认这一讲少讲了一档。</b>
   <em>PyTorch 的 <code>CheckpointPolicy</code> 其实有<b>六个</b>枚举值，
