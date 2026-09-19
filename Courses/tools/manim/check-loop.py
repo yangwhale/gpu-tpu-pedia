@@ -212,8 +212,18 @@ def main(argv):
         #   ⭐ 判据：**守卫要守的是「承诺」，不是「形状」** ——&#160;
         #     片子承诺了 loop 才查首尾；baseline 里写 "loop": false 就跳过。
         if rec is not None and rec.get("loop") is False:
-            print("   ➖ %-22s 不循环（%s），跳过首尾检查"
-                  % (key, rec.get("note", "")))
+            # ⛔⛔ 2026-09-20 现场收紧：「能放一个动图搞定的，就不要放一个视频啦。」
+            #   这个豁免以前被当成「叙事片天然不循环」的出口用 ——&#160;
+            #   而 2026-09-20 实测：24.6 秒的叙事片照样能循环，
+            #   只要结尾把画面恢复成第 0 帧的样子（见 SKILL.md 房规③ 的收尾模板）。
+            #   ⭐ 判据：**「它首尾不一样」是现状，不是理由。**
+            #     豁免必须写清「为什么这一支做不到复位」，不能只写「它是叙事片」。
+            why = rec.get("note", "")
+            print("   ⚠️  %-22s 声明了不循环 ——&nbsp;确认这是<必须>而不是<没做>" % key)
+            print("      理由：%s" % (why[:100] if why else "⛔ 没写理由，这不该通过"))
+            if not why:
+                print("   ⛔ `loop: false` 必须在 note 里写清为什么做不到复位。")
+                bad_any = True
             continue
         if rec is None:
             print("   ⛔ %-22s 不一致度 %5.1f%%   \033[1m没有基线\033[0m —— "
