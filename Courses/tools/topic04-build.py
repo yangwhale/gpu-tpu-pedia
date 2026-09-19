@@ -85,6 +85,16 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 <p class="landing">⭐⭐⭐ <b>而训练这件事，从头到尾就是在做一件事：</b>
   <em>拿这<u>一个</u>数，去决定<u>__NPARAM_CN__个</u>参数各自该往哪边挪、挪多少。</em></p>
 
+<div class="note warn"><p>✋ <b>这里台下一定会有人举手：<u>一个数怎么可能决定
+  __NPARAM_CN__个东西？信息量根本不够。</u></b></p>
+<p class="landing">⭐⭐⭐ <b>问得对，而这一问的答案就是整讲的主线：
+  那 __NPARAM_CN__个方向不是从这个数里<u>读</u>出来的，是从它<u>算</u>出来的。</b></p>
+<p><em>信息不在这个数里 ——&nbsp;它在<b>网络的结构</b>里，
+  在<b>那一次前向留下的每一个中间值</b>里。
+  loss 只是个起点，链式法则负责把它展开成 __NPARAM_CN__份。</em>
+  <span class="sub">⭐ 记住这句话，第二节那笔「激活为什么扔不掉」的账
+  就不用解释了 ——&nbsp;<u>要展开，就得留着展开时要用的东西</u>。</span></p></div>
+
 <div class="note ok"><p>⭐ <b>所以这一讲就三件事，顺着这条链走一遍：</b></p>
 <ul>
   <li><b>① 这个数怎么来的</b> ——&nbsp;<em>loss 到底怎么算（<a href="#s1-0">1.0</a>）。</em></li>
@@ -105,9 +115,12 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 <p class="landing">⭐ <b>具体说：<u>第二、四、五节里那些细账</u>，
   以及全讲所有点得开的折叠块 ——&nbsp;都属于上面这两类。</b>
   <em>它们是专题五的预习，<u>跳过去不影响这一讲的三件事</u>。</em></p>
-<p><span class="sub">⛔ <b>为什么要这么划线</b>：反向传播和梯度下降是<u>原理</u>，
-  它们几十年不变；而「放不放得下」是<u>当下这一代硬件的处境</u>，换一代机器就变。
-  ⭐ 把两者混在一起讲，读者会以为原理也是会过期的。</span></p></div>
+<details class="foldfig"><summary><b>为什么这条线要划在这儿</b>
+  <span class="why">——&nbsp;一句话的方法论，跟这一讲的三件事无关，可以直接跳过</span></summary>
+<p><span class="sub">⛔ 反向传播和梯度下降是<u>原理</u>，它们几十年不变；
+  而「放不放得下」是<u>当下这一代硬件的处境</u>，换一代机器就变。
+  ⭐ 把两者混在一起讲，读者会以为原理也是会过期的。</span></p>
+</details></div>
 
 <div class="note"><p>📐 <b>先把场景钉住，不然后面每个数你都不知道它在说哪一档。</b></p>
 <p><em>这一讲所有的账，默认都按 <b>DeepSeek-V3 预训练的真实配置</b>算：
