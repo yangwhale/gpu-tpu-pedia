@@ -1357,7 +1357,18 @@ body.figonly section h3{margin-top:34px}
     <em>用这个敏感度，乘上<b>自己的权重</b>。</em></li>
 </ul>
 <p class="landing">⭐ 这两件事各是一次矩阵乘。前向一次、反向两次
-  ——&nbsp;<u>三倍算力就是从这儿来的</u>，不是估的，是数出来的。</p></div>
+  ——&nbsp;<u>三倍算力就是从这儿来的</u>。</p>
+<p><span class="sub">⛔ <b>但「数次数」还不够 ——&nbsp;三次矩阵乘如果规模不一样，
+  1 ＋ 2 根本不等于 3。</b> <em>真正让它成立的是：这三次乘的
+  <u>形状是同一组</u>。设这一层是 <code>[B,in] × [in,out]</code>：
+  前向 <code>X·W</code>、① <code>dYᵀ·X</code>、② <code>dY·Wᵀ</code>
+  ——&nbsp;<b>三个都是 B × in × out 这三个数相乘</b>，
+  所以三块积的<u>体积一样大</u>，加起来才正好是 3 倍。
+  （下面那张图把这三块按真实比例画了出来。）</em></span></p>
+<p><span class="sub">⭐ <b>知道理由，才换得了情境</b>：
+  <em>最后一层不用往下游传 ——&nbsp;省掉 ②，就是 <b>2 倍</b>；
+  冻住的层不更新权重 ——&nbsp;省掉 ①，也是 <b>2 倍</b>（<a href="#s三">3.8</a> 的 LoRA 走的是这条）。
+  ⛔ <u>只记住「3×」这个数的人，这两问都答不了。</u></em></span></p></div>
 
 <figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 1636" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的敏感度。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">三倍算力是<tspan font-weight="700">数出来的</tspan>　——　前向一次矩阵乘，反向两次</text>
