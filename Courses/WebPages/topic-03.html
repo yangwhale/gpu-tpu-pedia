@@ -721,14 +721,28 @@ h4 { margin:18px 0 6px; font-size:15px }
 
 
 <style id="figonly-css">
-.figbar{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;gap:8px;
+/* ⛔⛔ 2026-09-19：这条浮动带原来钉在 right:18px bottom:18px，
+   跟「回到顶部」那个圆按钮（.totop，right:22 bottom:22）**完全重叠**，
+   而且它 z-index 99 压在人家 55 上面 —— 于是 totop 被挡得只剩一个角。
+   ⭐ 判据：**两个 position:fixed 的浮动件，坐标必须显式错开，不能靠 z-index 分胜负** ——
+     z-index 只决定谁盖住谁，不解决「两个都要能点」。
+   ⭐⭐ 顺带瘦身：那行「已折叠 720 段讲解 · 按 T 切换」是宽度的大头，
+     而它**只在第一次有用**。改成默认收起、悬停才展开。 */
+.figbar{position:fixed;right:76px;bottom:22px;z-index:99;display:flex;gap:8px;
   align-items:center;font:600 14px/1.4 system-ui,-apple-system,"Noto Sans CJK SC",sans-serif}
 .figbar button{cursor:pointer;border:1px solid #dadce0;background:#fff;color:#1a73e8;
-  border-radius:999px;padding:9px 18px;box-shadow:0 2px 10px rgba(0,0,0,.14);
-  font:inherit}
+  border-radius:999px;padding:9px 16px;box-shadow:0 2px 10px rgba(0,0,0,.14);
+  font:inherit;white-space:nowrap}
 .figbar button:hover{background:#f8f9fa}
 .figbar .hint{color:#80868b;font-weight:400;background:#fff;border-radius:999px;
-  padding:6px 12px;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+  box-shadow:0 2px 10px rgba(0,0,0,.10);white-space:nowrap;
+  max-width:0;padding:6px 0;opacity:0;overflow:hidden;
+  transition:max-width .22s ease,opacity .18s,padding .22s ease}
+.figbar:hover .hint,.figbar:focus-within .hint{max-width:280px;padding:6px 12px;opacity:1}
+/* ⛔ 窄屏上别让两件东西挤成一坨：提示整个不出现 */
+@media (max-width:720px){.figbar{right:70px;bottom:18px}
+  .figbar .hint{display:none}
+  .figbar button{padding:8px 13px;font-size:13px}}
 body.figonly section p:not(.lead):not(.landing),
 body.figonly section ul,
 body.figonly section ol,
@@ -11448,8 +11462,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   function set(on){
     document.body.classList.toggle("figonly", on);
     btn.textContent = on ? "展开讲解" : "折叠讲解";
-    hint.textContent = on ? ("已折叠 " + n + " 段讲解　·　按 T 切换")
-                          : ("讲解全展开　·　按 T 切换");
+    btn.title = on ? ("已折叠 " + n + " 段讲解，按 T 也可切换")
+                   : ("讲解全部展开，按 T 折叠");
+    hint.textContent = on ? ("已折叠 " + n + " 段　·　按 T 切换")
+                          : ("全展开　·　按 T 切换");
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
   }
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
