@@ -5457,7 +5457,8 @@ body.figonly section h3{margin-top:34px}
      ⭐ 同一条判据：**先给整体，再拆局部。**
        曲线的形状是这一节的骨架，骨架要先立住，后面三段才有地方挂。 -->
 
-<p class="lead">⭐ 整条学习率曲线只有三段：<b>升上去、稳住、降下来</b>。</p>
+<p class="lead">⭐ 这条曲线你只用做<b>三个决定</b>：
+  <b>从哪升上来、升到多高、怎么降下去。</b></p>
 
 <figure class="fbox fwide" id="fig-lr-curve"><svg viewBox="0 0 1400 1134" width="100%" role="img" aria-label="两条学习率曲线叠在一起比形状。GPT-3 是经典余弦：很短的 warmup 之后一路下滑，在总量的百分之八十七处降到峰值的十分之一，之后保持不变。DeepSeek-V3 是 warmup 加长平台加末段衰减：升到峰值后一直恒定到总量的三分之二，才开始降。两条曲线的落点都在峰值的十分之一附近"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两种学习率曲线　——　<tspan font-weight="700">形状差很多，落点却撞在同一个数上</tspan></text>
@@ -5537,8 +5538,19 @@ body.figonly section h3{margin-top:34px}
 <p>⭐ warmup 的真实机制（<b>不是「样本太少估不准」</b>）：arXiv <b><a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）——&#160;主要好处是让网络能承受更大的目标学习率。这个形状的系统分析：arXiv <b><a href="https://arxiv.org/abs/2410.05192" target="_blank" rel="noopener">2410.05192</a></b></p>
 <p>⛔ 本图<b>不含绝对学习率</b>（两者峰值差 3.7 倍，叠在一起就看不出形状了）——&#160;八档规模的峰值对照表写在正文里</p></details></figure>
 
-<p class="landing">⭐ 形状就这样。<em>下面把三段拆开 ——&nbsp;
-  <b>每一段都有公开配置可以抄，不用猜。</b></em></p>
+<!-- ⛔⛔ 2026-09-20 第 16 轮：这里原来写「整条学习率曲线只有三段：升上去、
+     稳住、降下来」——&nbsp;**而它跟自己下面这张图矛盾**：GPT-3 那条是
+     升完一路下滑，中间根本没有「稳」。那句话描述的只是 WSD 一派。
+     ⭐⭐ 更要命的是它**提前把包袱抖了**：中间那段平台在不在，
+       正是第三段要讲的「两派唯一的分歧」——&nbsp;开头就说成通例，
+       后面那个对比就没得比了。
+     ⛔ 判据（跟专题三那条同源）：**图改对了不等于文改对了。**
+       这一处是反过来的 ——&nbsp;图一直是对的，是字在替图说错话。 -->
+
+<p class="landing">⛔ 先看图上这两条<u>形状根本不一样</u>：
+  <b>GPT-3 升完就一路下滑；V3 中间多了一段又长又平的平台。</b>
+  <em>——&nbsp;<b>「要不要那段平台」正是两派唯一的分歧</b>，留到第三个决定再讲。
+  下面三个决定挨个拆，<b>每一个都有公开配置可以抄，不用猜。</b></em></p>
 
 <h4>第一段 · warmup ——&nbsp;流行的那个解释是错的</h4>
 
@@ -5628,13 +5640,9 @@ body.figonly section h3{margin-top:34px}
   ——&nbsp;上面引号里的两句为原文原话。
   ⚠️ 这是<b>作者本人的分析文章</b>，不是同行评议论文；
   <b>我们按「一个有前提的解释」收下它，不当定论。</b></span></p>
-<p class="landing">⭐⭐⭐ <b>所以准确的说法是</b>：
-  <em>在<u>那个尺度</u>上，他们把「估不准」这个解释证伪了，
-  并给出了一个更有解释力的机制。<b>而这个结论能不能搬到千亿参数上，
-  他们自己没说能。</b></em></p>
-<p><span class="sub">⛔ 顺带自曝一处，而且很讽刺：
-  <em>这一讲在 <a href="#s二">2.6</a> 立过那条「跨规模要重验」的判据，
-  结果我转述这篇论文的时候自己就没守。
+<p><span class="sub">⛔ 顺带自曝，而且很讽刺：
+  <em>这一讲在 <a href="#s二">2.6</a> 立过「跨规模要重验」那条判据，
+  结果我转述这篇论文时自己就没守，把「他们证伪了」写成了不带尺度的断言。
   ——&nbsp;<b>判据写在纸上容易，用在自己引的那篇论文上才难。</b></em></span></p></div>
 
 <p><b>实际用多长？</b><em>GPT-3 是<b>头 3.75 亿个 token</b> 线性升上去
@@ -5661,8 +5669,8 @@ body.figonly section h3{margin-top:34px}
   <em>而且幅度很温和 ——&nbsp;<b>1,400 倍的规模差，学习率只差 10 倍</b>（125M 的 6.0e-4 → 175B 的 0.6e-4）。</em></p>
 <p>⭐ <em>论文自己的话是：「更大的模型通常能用更大的 batch，
   <b>但需要更小的学习率</b>」。他们用<b>梯度噪声尺度</b>来定 batch。</em></p>
-<p><span class="sub">⛔ 注意这张表里 batch 和学习率是<u>一起</u>变的 ——&nbsp;
-  这是最容易漏的一条：你不能只调学习率不看 batch，它俩绑在一起。
+<p><span class="sub">⛔ 注意这张表里 batch 和学习率是<u>一起</u>变的
+  （这条留到本节落点再收）。
   GPT-3 还额外把 batch 从 32K token 线性爬到目标值（头 40–120 亿 token 内）。
   📌 出处：arXiv <b><a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">2005.14165</a></b> 表 2.1 与<b>附录 B</b>；
   「更大的模型要用更小的学习率」那句在 §2.3。</span></p></div>
