@@ -5092,8 +5092,7 @@ body.figonly section h3{margin-top:34px}
 
 <h3 id="s3-4">3.4　换个优化器，账单就跟着变</h3>
 
-<p class="lead">⭐ 优化器的选择是一个显存决策，不只是收敛速度的决策。
-  <em>——&nbsp;这一点常被忽略，而它恰恰是这一讲要立的那条判据。</em></p>
+<p class="lead">⭐ <b>优化器的选择是一个显存决策，不只是收敛速度的决策。</b></p>
 
 <!-- ⭐⭐⭐ 2026-09-16 现场：「你这个不得把主流优化器先捋一下？像什么 Adam、
      AdamW，还有 Muon，还有一个最开始的叫 G 什么来着？」
@@ -5312,16 +5311,14 @@ body.figonly section h3{margin-top:34px}
   <em>论文报告在一系列任务上保持 32 位效果，不改任何优化器超参
   ——&nbsp;两行代码的 drop-in 替换。</em></p>
 <p><span class="sub">📌 Dettmers 等，<b>arXiv <a href="https://arxiv.org/abs/2110.02861" target="_blank" rel="noopener">2110.02861</a></b>（ICLR 2022 spotlight）。</span></p>
-<p>⚠️ 但「不改算法只改存法」这句话<b><u>不完全成立</u></b>，摘要里就写着。
-  <em>论文把三件事绑在一起才达到 32 位的效果：分块量化、非线性量化，
-  以及第三件 ——&nbsp;<b>一个「稳定 embedding 层」</b>。</em></p>
-<p class="landing">⛔ <b>第三件是<u>动网络结构</u>的，不是存法。</b>
-  <em>它存在的理由很具体：语言模型的输入 token 分布极不均匀，
-  embedding 那一层的梯度方差特别大 ——&nbsp;
-  <b>而量化最怕的就是方差大。</b></em></p>
-<p><span class="sub">⭐ 这一条本身就是个判据：
-  <em>一个号称「drop-in 替换」的东西，先去摘要里数一数它到底改了几处
-  ——&nbsp;<b>「两行代码」说的是调用方改两行，不是它内部只改了一处。</b></em></span></p></div>
+<p>⚠️ <b>但「不改算法只改存法」<u>不完全成立</u>，摘要里就写着</b>：
+  <em>达到 32 位效果靠的是<b>三件事绑在一起</b> ——&nbsp;分块量化、非线性量化，
+  加上<b>一个「稳定 embedding 层」</b>。</em></p>
+<p class="landing">⛔ <b>第三件是<u>动网络结构</u>，不是存法。</b>
+  <em>理由很具体：语言模型的输入 token 分布极不均匀，embedding 那层梯度方差特别大，
+  <b>而量化最怕方差大</b>。</em></p>
+<p><span class="sub">⭐ <b>判据：一个号称「drop-in 替换」的东西，先去摘要里数它到底改了几处。</b>
+  <em>「两行代码」说的是<u>调用方</u>改两行。</em></span></p></div>
 
 <h4>⚠️ Muon 上规模还得补两样</h4>
 <p><em><a href="#s3-3b">3.3b</a> 讲的是 Muon 的<b>想法</b>，而想法好用不等于能直接上规模。
