@@ -958,7 +958,7 @@ body.figonly section h3{margin-top:34px}
         <b>5.2 个 device</b>，也就是<b>约 2.6 块 v7 芯片</b>。<br>
         <b>一个用户、一段输入，就要把两块半芯片的 HBM 整个拿来放 KV
         ——&nbsp;而模型权重还一个字节都没放进去。</b><br>
-        📌 <b>RoPE</b>（旋转位置编码）后面会反复出现，这里先把它的职责摆正：
+        📌 <b>RoPE</b>（旋转位置编码）的职责先摆正：
         <b>「谁在前谁在后」并不归它管。</b>那件事是<b>因果掩码</b>白送的
         ——&nbsp;每个位置只看得见自己左边，多堆几层就能数出自己前面有几个人
         （<b>NoPE</b>，arXiv <a href="https://arxiv.org/abs/2305.19466" target="_blank" rel="noopener">2305.19466</a>，NeurIPS 2023 ——&nbsp;
@@ -1498,8 +1498,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <div class="note info"><p>⭐ <b>这张表有两种读法，右上角可以切：</b>
   <b>Highlight</b>（默认）只留撑起这段历史的那些行，备注写的是「它凭什么在这条线上」；
-  <b>全部</b>是完整参照表，备注是这一行独有的那句话。<br>
-  ⭐⭐ <b>表头还能点</b> ——&nbsp;按时间、厂商、配比、上下文、KV cache 排序。</p></div>
+  <b>全部</b>是完整参照表，备注是这一行独有的那句话。</p></div>
 
 <p class="landing">⭐ 这一讲按时间顺序讲，一步一步走。
   每一步只回答两个问题：<b>上一步欠下了什么，这一步拿什么来还。</b>
@@ -3609,7 +3608,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </details>
 
 <div class="note ok"><p>⭐⭐ <b>这一讲的主角，就是那个 <code>S</code>。</b></p>
-<p>后面每一章你其实只要盯着它问一句：这一招是让 S 前面的系数变小、
+<p>后面每一章你只要盯着它问一句：这一招是让 S 前面的系数变小、
   让每步读到的 S 变少，还是干脆让 S 从形状里消失？</p>
 <p>⭐ <b>名词有几十个，它们全都只在回答这三问中的一个。</b></p></div>
 
@@ -4202,7 +4201,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第一次省：把头砍掉 ——&nbsp;MQA 砍过了头，GQA 停在半路</h2></div>
 
 <p class="lead">账摆在那儿了：<b>一人一份，而且随着话越说越长</b>。
-  <em>上一章末尾已经把最直白的那个省法问出来了 ——&nbsp;<b>这一章就去试。</b></em></p>
+  <em><b>这一章就去试。</b></em></p>
 
 <h3 id="s4-1">4.1　先把四种存法摆在一起</h3>
 
@@ -4992,7 +4991,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p class="sub">⚠️ 口径：这不等于「MHA / GQA 是 MLA 的特例」——&nbsp;
   那是转述放大出来的说法。苏剑林的原话是「MLA 被视为 GQA 的一般化」。<br>
   ⭐ <em>他把「换掉那个动作」这件事写成了一句更准的话 ——&nbsp;
-  <b>就在下面 5.x 那张矩阵图里</b>，这里不重复抄一遍。</em></p></div>
+  <b>就在下面 5.x 那张矩阵图里</b>。</em></p></div>
 
 <h3 id="s5-1">5.1　先说一件最容易听岔的事：箱子里那个，已经不是 K 和 V 了</h3>
 
@@ -5659,8 +5658,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>换个方向：不是存得少，是别全读 ——&nbsp;从滑窗到 DSA</h2></div>
 
-<p class="lead">前两章一直在拧同一个旋钮：让每一份小一点。
-  <em>这一章换一个完全没碰过的方向 ——&nbsp;每一份多大都不改，
+<p class="lead"><em>这一章换一个完全没碰过的方向 ——&nbsp;每一份多大都不改，
   改的是<b>每走一步到底读进来几份</b>。</em><br>
   ⛔ <em>先把话说在前面：<b>这条路一个字节的显存都不省。</b></em></p>
 
@@ -7445,7 +7443,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
      ⭐ 判据：**同一个词在两章里指不同的轴，必须在第二次出现的地方当场分开。**
      ⛔ 措辞上避开图里那句「远处压得很糊、近处一个不落」（判据⑩：挨着图的那一处赢），
        这里只写图给不了的：误解本身、两条支路的加法关系、以及跟 MLA 的轴对照。 -->
-<div class="note"><p>⭐⭐ <b>这里有两个坑，几乎每个人第一次读都会掉进去。</b></p>
+<div class="note"><p>⭐⭐ <b>两个坑，几乎每个人第一次读都会掉进去。</b></p>
 
 <p>❶ <b>「压缩难道还分远近吗？不是统一压的吗？」</b>——&nbsp;
   <em><b>是统一压的。</b>压缩器一视同仁，<b>不认远近</b>，每 128 个 token 合成一条。</em></p>
@@ -9676,7 +9674,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
         再看见「X 被否掉了」——&nbsp;**推翻落了空**。
      ⭐⭐ 判据：**要推翻一个说法，得先让读者真的相信过它。**
         被推翻的那一句不是冗余，它是论证的前半截。 -->
-<p>⭐ 那贵的层要配多少呢？<b>一个很自然的想法是：不用多。</b></p>
+<p>⭐ <b>那贵的层要配多少呢？</b></p>
 <p class="landing"><b>只要有几层能把全部历史查一遍，查到的东西就能传给后面所有层用。</b>
   <em>——&nbsp;所以全局层<b>不需要很多</b>。</em></p>
 <p><span class="sub">📌 「传给后面所有层」靠的是<b>残差流</b>：
@@ -9688,10 +9686,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <h3 id="s8-2">8.2　那为什么不能全用便宜的？——&nbsp;这里有一条能证伪的规律</h3>
 
-<p>一个很自然的反问：既然便宜的层这么好，<b>干脆全用它不行吗？</b>
+<p>既然便宜的层这么好，<b>干脆全用它不行吗？</b>
   <em><a href="#s七">上一章</a>给的答案是「板子会写满」——&nbsp;
   但那还只是一句直觉。</em></p>
-<p>⭐ <b>这件事其实有一条能算的规律。</b></p>
+<p>⭐ <b>这件事有一条能算的规律。</b></p>
 
 <figure class="fbox fwide" id="fig-info-law"><svg viewBox="0 0 1400 1228" width="100%" role="img" aria-label="信息账的严格版本：一本越读越厚的书和一个固定大小的笔记本 —— 隔得越远的两句话关系越弱但弱得很慢（幂律），只记上一句会断崖式忘掉（指数）；把书劈开两半的关联随书变厚而增加；笔记本得跟着一起变厚"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">「远处可以少看」这句直觉，严格版本长什么样</text>
@@ -10470,7 +10468,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
      出处：Kimi Linear 技术报告 arXiv 2510.26692，正文有一整段小标题就叫
      "No Position Encoding (NoPE) for MLA Layers"。 -->
 <div class="note danger"><p>⛔⛔ <b><u>那层全注意力（MLA）总还是得知道位置吧？它不留 RoPE 怎么行？</u></b></p>
-<p>⭐ <b>不留。而且这不是我们的推论，是论文里一整段的小标题。</b>
+<p>⭐ <b>不留 ——&nbsp;论文里有一整段的小标题就是这件事。</b>
   <em>Kimi Linear 技术报告（arXiv <b><a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a></b>）原话：
   <b>“we apply NoPE to <u>all</u> full attention (MLA) layers”</b> ——&nbsp;
   <b>所有</b> MLA 层，一个不留。</em></p>
@@ -10513,7 +10511,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <b>而且实测上，它比任何一头单用都更好。</b></em><br>
   <b>欠下的</b>：<em>多了一个要调的东西（配比），
   而它为什么是这个数，<b>目前没有一篇公开消融真正回答过</b>。</em></p>
-<p>⭐⭐ 到这里，这本书的「想法」部分讲完了。</p></div>
+</div>
 
 </div></section>
 
