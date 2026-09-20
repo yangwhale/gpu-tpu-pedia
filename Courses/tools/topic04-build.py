@@ -2149,30 +2149,26 @@ __FIG_LR_CURVE__
 
 <h4>第三步 · ⭐⭐ 那为什么<u>不能一直往大开</u></h4>
 
-<p>既然大了更稳，为什么不把 batch 开到天上去？<em>——&nbsp;<b>两个各自独立的理由。</b></em></p>
+<p>既然大了更稳，为什么不把 batch 开到天上去？
+  <em>——&nbsp;<b>下面这两条听起来是两回事，等会你会看到它们是同一条。</b></em></p>
 
-<div class="note"><p><b>理由一 · 噪声降下去了，但「每个样本的收益」也降下去了。</b></p>
+<div class="note"><p><b>第一张脸 · 噪声降下去了，但「每个样本的收益」也降下去了。</b></p>
 <p><em>batch 小的时候，梯度很糙，<b>加样本能实实在在让方向变准</b> ——&nbsp;
   这时候加倍 batch，大致能少走一半的步数。</em></p>
 <p><em>可一旦梯度已经够准了，<b>噪声不再是瓶颈</b>。这时候再加样本，
   方向也不会更对多少 ——&nbsp;<b>步数几乎不减，算力却实打实翻倍。</b></em></p>
 <p class="landing">⭐⭐⭐ <b>中间那个转折点，通常叫「临界 batch」。</b>
   <em>——&nbsp;过了它，<u>你花的是算力，买不到等量的进步</u>。</em></p>
-<div class="note ok"><p>⭐⭐ <b>这件事这一讲其实已经提过一次了 ——&nbsp;只是没展开。</b></p>
-<p><em><a href="#s3-5">3.5</a> 引 GPT-3 那八档配置时有一句：
-  <b>「他们用<u>梯度噪声尺度</u>来定 batch」</b>。</em></p>
-<p class="landing">⭐ <b>那就是上面这段话的量化版本</b>：
-  <em>先量一量「这一批梯度里有多少是噪声」，
-  <u>噪声还占大头 ——&nbsp;加样本划算；噪声已经很小 ——&nbsp;加样本是浪费</u>。</em></p>
-<p><span class="sub">⭐ 同一篇论文还写着「更大的模型通常能用更大的 batch，但需要更小的学习率」
-  ——&nbsp;<b>这半句就是下面「理由二」</b>。两条其实一直摆在那张表旁边。</span></p></div>
+<p><span class="sub">⭐ 它的量化版本就是 <a href="#s3-5">3.5</a> 那句
+  「他们用<u>梯度噪声尺度</u>来定 batch」：<em>先量一量这批梯度里有多少是噪声 ——&nbsp;
+  <u>噪声还占大头就加样本划算，噪声已经很小就是浪费</u>。</em></span></p>
 
 <p><span class="sub">⛔ 它<b>不是一个固定的数</b>：模型越大、训练越往后，它越大。
   所以真实配置里 batch 是<b>一路往上爬</b>的 ——&nbsp;
   V3 就是从 3,072 条爬到 15,360 条（上一小节那张表）。
   <b>爬 batch 不是为了更快，是因为临界点在往上挪。</b></span></p></div>
 
-<div class="note"><p><b>理由二 · batch 一大，学习率就得跟着抬 ——&nbsp;而抬学习率是有上限的。</b></p>
+<div class="note"><p><b>第二张脸 · batch 一大，学习率就得跟着抬 ——&nbsp;而抬学习率是有上限的。</b></p>
 <p><em>batch 翻倍，梯度噪声小了，<b>你可以也应该迈更大的步</b>
   ——&nbsp;不然等于白拿了准度却不用。<a href="#s3-5">3.5</a> 那八档 GPT-3 配置
   就是这条关系的实物：<b>模型越大、batch 越大，学习率反而在降</b>
@@ -2180,6 +2176,21 @@ __FIG_LR_CURVE__
 <p class="landing">⛔ <b>但学习率不能无限抬</b>：抬过头，
   <em>loss 直接飞（<a href="#s六">6</a>）。所以 batch 增大能换来的加速，
   <u>被「学习率能抬到多高」这条硬边界卡住了</u>。</em></p></div>
+
+<div class="note danger"><p>⭐⭐⭐ <b>现在把这两张脸合上 ——&nbsp;它们<u>不是两条约束</u>。</b></p>
+<p><em>回头看 <a href="#s3-5">3.5</a> 给的那个式子：</em></p>
+<p style="text-align:center"><code>η* ≈ η<sub>max</sub> ⁄ (1 ＋ B<sub>noise</sub>/B)</code></p>
+<p><em>第一张脸说的「临界 batch」，量化版本就是 <b>B<sub>noise</sub></b>
+  （<a href="#s3-5">3.5</a> 那句「他们用梯度噪声尺度来定 batch」）。
+  ⛔ <b>而第二张脸那条上限，分母里写的是<u>同一个</u> B<sub>noise</sub>。</b></em></p>
+<p class="landing">⭐⭐ <b>所以两边的拐点是同一个点</b>，而且能给出一个很好记的锚：
+  <em>当 <b>B ＝ B<sub>noise</sub></b> 时，代进去得 <b>η* ＝ η<sub>max</sub> 的一半</b>
+  ——&nbsp;<u>你手上那个学习率预算，到临界 batch 时正好用掉一半</u>。
+  再往后 batch 翻多少倍，剩下那一半也只是慢慢逼近，永远到不了。</em></p>
+<p><span class="sub">⛔ <b>这一格原来写的是「两个各自独立的理由」，是错的。</b>
+  <em>说成「独立」会让人以为可以分头绕开其中一条 ——&nbsp;
+  比如「那我把学习率的天花板抬高一点不就行了」。<b>抬不动：η<sub>max</sub> 是
+  发散门槛（<a href="#s3-3b">3.3b</a> 那条「2 ÷ 曲率」），不是你能调的旋钮。</b></em></span></p></div>
 
 <div class="note ok"><p>⭐⭐⭐ <b>所以那两句听起来矛盾的话，其实是同一条曲线的两段。</b></p>
 <table>
@@ -2215,15 +2226,13 @@ __FIG_LR_CURVE__
   <em>而它们的代码差别只有一行。⭐ 预训练几乎都用按 token 平均
   ——&nbsp;但重点不是选哪个，是<b>知道自己选的是哪个</b>。</em></p></div>
 
-<div class="note"><p>⚠️ <b>一个听不清的缩写，我没有替他补全。</b></p>
+<details class="foldfig"><summary>⚠️ 这一节有一个<b>没写</b>的点：一个听不清的缩写
+  <span class="why">——&nbsp;作者的备案，读者可以直接跳过</span></summary>
 <p><em>现场提到一个念作「TPS」的量，说「TP 开得太大的时候，TPS 就会很大」。
-  ⛔ 但按上面第一步那个式子，<b>TP 开大会让 DP 变少、global batch 变小</b>
-  ——&nbsp;三种可能的读法（tokens per step / TP size / tokens per sequence）
-  <u>都跟这句话对不上</u>。</em></p>
-<p class="landing">⭐ <b>所以这里写的是「四个旋钮各自怎么决定 global batch」这个骨架</b>
-  ——&nbsp;<em>等指认了 TPS 是哪一个，再把那条具体关系补上。</em>
-  <span class="sub">（判据：<b>听不清的缩写不要替人补全</b> ——&nbsp;
-  补错了，读者学到的是一条不存在的关系。）</span></p></div>
+  ⛔ 但按第一步那个式子，<b>TP 开大会让 DP 变少、global batch 变小</b>
+  ——&nbsp;三种读法（tokens per step / TP size / tokens per sequence）
+  <u>都跟这句话对不上</u>，所以没有替他猜，只写了骨架。
+  <b>判据：听不清的缩写不要替人补全 ——&nbsp;补错了，读者学到的是一条不存在的关系。</b></em></p></details>
 
 <p class="landing">⭐⭐ <b>这一节的落点：batch 不是「能塞多大塞多大」。</b>
   <em>它是四个旋钮的乘积，它决定学习率，它被并行策略牵着，
