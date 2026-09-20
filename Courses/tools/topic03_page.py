@@ -745,9 +745,49 @@ def lint_headings_inside_sections(html, label):
         "小节标题不是容器边界，section 才是。" % (label, len(bad), bad[:3]))
 
 
+_QTY_CN = {c: i for i, c in enumerate("零一二三四五六七八九十")}
+
+
+def lint_list_counts(html, label):
+    """标题里承诺了「N 条」，下面的列表就必须正好 N 条。
+
+    ⭐⭐ 2026-09-20 专题四第 14 轮抓到的：「Muon ……三条限制都是作者自己
+      写明的」下面只列了两条 —— 某轮精简删了一条，标题忘了跟着改。
+    ⛔ 判据：**承诺了数量就等于签了字。** 读者真的会去数。
+
+    两条把误报压下去的规则，都是被打脸打出来的：
+    ⛔ ① **先把括号里的话抠掉再数。** 挪进共用框架的第一次全量跑就在
+      专题三 L300 上误报：正文写「两个后果」，而紧跟的括号里自述
+      「原先这里写『三个』…数字忘了跟着改」—— 括号里是改动史，不是承诺。
+    ⛔ ② 量词表里故意没有「个 / 种 / 次」—— 它们太常出现在不是在数
+      列表的句子里。宁可漏，不可扰。
+    """
+    bad = []
+    # ⛔ ③ `(.*?)` 会**跨段落**：它一路吞到某个 `</p>` 正好贴着 `<ul>` 为止，
+    #   于是上面三四段的文字全被当成了这个列表的引子（专题三 L300 上因此
+    #   误报两条）。`(?:(?!</p>).)*` 把它钉死在紧贴列表的那一段里。
+    for m in re.finditer(
+            r"<p[^>]*>((?:(?!</p>).)*)</p>\s*<(ul|ol)>(.*?)</\2>", html, re.S):
+        head = re.sub(r"[（(][^（）()]*[）)]", "", m.group(1))   # ① 抠掉括号
+        q = None
+        for mm in re.finditer(r"([0-9一二三四五六七八九十])\s*(条|样|点|项|处|步|件)",
+                              head):
+            q = mm                                              # 取最后一个
+        if not q:
+            continue
+        num = int(q.group(1)) if q.group(1).isdigit() else _QTY_CN[q.group(1)]
+        n = m.group(3).count("<li>")
+        if num >= 2 and n and num != n:
+            bad.append("说「%s%s」却列了 %d 条：%s…"
+                       % (q.group(1), q.group(2), n,
+                          re.sub(r"<[^>]+>|&nbsp;|&#160;", "", head).strip()[:34]))
+    assert not bad, "%s 列表条数对不上标题：\n  %s" % (label, "\n  ".join(bad))
+
+
 def finish(html, out_path, sections, label):
     """锚点 → 吸顶目录 → arXiv 自动链接 → 写盘 → 打一行回执。"""
     lint_headings_inside_sections(html, label)
+    lint_list_counts(html, label)
     html = anchorize(html)
     html = build_nav(html)
     import course_links as _CL

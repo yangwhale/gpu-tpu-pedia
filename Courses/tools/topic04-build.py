@@ -1661,7 +1661,7 @@ __FIG_MUON__
        更新公式和收敛曲线在这一讲里都不承重。 -->
 
 
-<div class="note danger"><p>⛔ Muon 那一份不是白省的 ——&nbsp;三条限制都是作者自己写明的。</p>
+<div class="note danger"><p>⛔ Muon 那一份不是白省的 ——&nbsp;两条限制都是作者自己写明的。</p>
 <ul>
   <li>只管二维参数。<em>标量、向量，以及
     <b>embedding 和最后那个输出头</b>，仍然走 AdamW ——&nbsp;
@@ -1763,17 +1763,13 @@ __FIG_LINEAGE__
   <em>一个号称「drop-in 替换」的东西，先去摘要里数一数它到底改了几处
   ——&nbsp;<b>「两行代码」说的是调用方改两行，不是它内部只改了一处。</b></em></span></p></div>
 
-<h4>⚠️ Muon 要在大模型上真跑起来，还得补两样</h4>
-<p><em><a href="#s3-3b">3.3b</a> 那段讲的是 Muon 的<b>想法</b>。
-  可想法好用不等于能直接上规模 ——&nbsp;
-  2025 年有一篇专门做这件事的论文，识别出两条必需的补丁：</em></p>
-<ul>
-  <li>① 得加 weight decay。<em>原版没有。</em></li>
-  <li>② 得仔细调每个参数的<u>更新幅度</u>。
-    <em>——&nbsp;正交化之后各方向尺度是齐了，但整体该迈多大还得单独定。</em></li>
-</ul>
-<p class="landing">⭐ 补上这两样之后，它才能「开箱即用」地跑大规模训练。
-  <em>论文的规模律实验报告：在算力最优的设定下，Muon 的计算效率约为 AdamW 的两倍。</em></p>
+<h4>⚠️ Muon 上规模还得补两样</h4>
+<p><em><a href="#s3-3b">3.3b</a> 讲的是 Muon 的<b>想法</b>，而想法好用不等于能直接上规模。
+  2025 年那篇专门做这件事的论文补了两处：<b>加 weight decay</b>（原版没有，
+  正是上面 AdamW 那一栏治的病），<b>以及单独定整体更新幅度</b>
+  ——&nbsp;正交化只把各方向的尺度拉齐了，没说该迈多大。</em></p>
+<p class="landing">⭐ 补完才谈得上「开箱即用」。
+  <em>论文的规模律实验报告：算力最优设定下，Muon 的计算效率约为 AdamW 的两倍。</em></p>
 <p><span class="sub">📌 <b>arXiv 2502.16982</b>（Moonlight，3B/16B MoE，5.7T token）。
   ⚠️ 「两倍计算效率」是论文自己的规模律结论，不是我们的实测 ——&nbsp;
   <em>而且回想 <a href="#s二">2.6</a> 那条判据：这类结论换规模要重验。</em>
@@ -3563,6 +3559,8 @@ FIGS = {
         '<b>所以要平均 ——&nbsp;而多卡训练里那道「跨卡汇总」，干的就是这个平均。</b></em>'),
     "__FIG_LINEAGE__": ("fig-lineage", "fig4-lineage.svg",
         'topic04-fig-lineage.py',
+        '⭐⭐⭐ <b>上面那条谱系是「每一代治什么病」，这张图是它的<u>示波器</u></b>'
+        '——&nbsp;<em>每一种病，在这里都有自己的形状。</em><br>'
         '⭐⭐⭐ <b>这不是四个并列的选项，是一条因果链</b> ——&nbsp;'
         '<em>每一环补上一环的洞，同时留下一个新的。</em><br>'
         '⭐⭐ <em>喂<b>同一串恒定的梯度</b>进去，健康的优化器应当给出<b>一条平线</b>；'
@@ -4299,6 +4297,9 @@ for _href, _txt in re.findall(r'href="#(s[^"]+)"[^>]*>(.*?)</a>', _final, re.S):
         if _CN[_href[1]] != int(_t.split(".")[0]):   # 指向整章 → 至少章号要对
             _mis.append("%s → #%s（连章都不对）" % (_t, _href))
 assert not _mis, "节号链接跳错：\n  " + "\n  ".join(sorted(set(_mis)))
+
+# ⭐ 列表条数 lint 已上移到 topic03_page.lint_list_counts（finish 里调）——
+#   同一个毛病别的专题一样会犯，判据放在共用框架里才拦得住。
 
 assert not _bad, (
     "这些站内锚点指向不存在的 id：%s\n"

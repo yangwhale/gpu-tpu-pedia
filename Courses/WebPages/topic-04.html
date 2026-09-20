@@ -5130,7 +5130,7 @@ body.figonly section h3{margin-top:34px}
        更新公式和收敛曲线在这一讲里都不承重。 -->
 
 
-<div class="note danger"><p>⛔ Muon 那一份不是白省的 ——&nbsp;三条限制都是作者自己写明的。</p>
+<div class="note danger"><p>⛔ Muon 那一份不是白省的 ——&nbsp;两条限制都是作者自己写明的。</p>
 <ul>
   <li>只管二维参数。<em>标量、向量，以及
     <b>embedding 和最后那个输出头</b>，仍然走 AdamW ——&nbsp;
@@ -5297,7 +5297,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="1482" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">Adam 原文自己证了一件事：<tspan font-weight="700">AdaGrad 就是 Adam 的一个特例</tspan>（β₁ 取 0、(1−β₂) 取无穷小、学习率按 t 的负二分之一次方退火）。——&#160;<tspan font-weight="700">所以这真的是一条链，不是四个并列</tspan></text>
 <text class="svgsm" x="20" y="1506" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">的选项。</tspan></text>
 <text class="svgsm" x="20" y="1530" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">而每一环都<tspan font-weight="700">还欠着下一环</tspan>：Adam 留下的那个洞是<tspan font-weight="700">权重衰减被卷进了自适应的分母里</tspan>（AdamW 来修），以及<tspan font-weight="700">每个参数要挂两份状态</tspan>（Muon 来省）。这两环本讲后面都有。</text>
-</svg><figcaption>⭐⭐⭐ <b>这不是四个并列的选项，是一条因果链</b> ——&nbsp;<em>每一环补上一环的洞，同时留下一个新的。</em><span class="capmore"><br>⭐⭐ <em>喂<b>同一串恒定的梯度</b>进去，健康的优化器应当给出<b>一条平线</b>；不平的就是它自己的毛病。<b>AdaGrad 的病在后期</b>（分母只增不减，有效学习率自己掉到稳态的 4%）；<b>RMSProp 的病在初期</b>（滑动平均从 0 起步，头一步被放大 32 倍）；<b>Adam 从第一步起就是平的</b>。</em><br>⭐ <em>这条链最强的证据来自 Adam 原文自己：<b>AdaGrad 就是 Adam 的一个特例</b>（β₁ 取 0、(1−β₂) 取无穷小、学习率按 t 的负二分之一次方退火）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 <b>这一格每一环都出自 Adam 原文</b>（arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a>，已读原文）：AdaGrad 的更新式原文逐字写作 <b>θ_{t+1} ＝ θ_t −&#160;α·g_t / √(Σ g²)</b>　——　<b>分母是累加的平方和，不除以 t</b>，所以「单调衰减」这个病是从式子里长出来的；Adam 的定位原文写作「combine the advantages of AdaGrad（稀疏梯度）and RMSProp（在线与非平稳）」。</p>
+</svg><figcaption>⭐⭐⭐ <b>上面那条谱系是「每一代治什么病」，这张图是它的<u>示波器</u></b>——&nbsp;<em>每一种病，在这里都有自己的形状。</em><span class="capmore"><br>⭐⭐⭐ <b>这不是四个并列的选项，是一条因果链</b> ——&nbsp;<em>每一环补上一环的洞，同时留下一个新的。</em><br>⭐⭐ <em>喂<b>同一串恒定的梯度</b>进去，健康的优化器应当给出<b>一条平线</b>；不平的就是它自己的毛病。<b>AdaGrad 的病在后期</b>（分母只增不减，有效学习率自己掉到稳态的 4%）；<b>RMSProp 的病在初期</b>（滑动平均从 0 起步，头一步被放大 32 倍）；<b>Adam 从第一步起就是平的</b>。</em><br>⭐ <em>这条链最强的证据来自 Adam 原文自己：<b>AdaGrad 就是 Adam 的一个特例</b>（β₁ 取 0、(1−β₂) 取无穷小、学习率按 t 的负二分之一次方退火）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 <b>这一格每一环都出自 Adam 原文</b>（arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a>，已读原文）：AdaGrad 的更新式原文逐字写作 <b>θ_{t+1} ＝ θ_t −&#160;α·g_t / √(Σ g²)</b>　——　<b>分母是累加的平方和，不除以 t</b>，所以「单调衰减」这个病是从式子里长出来的；Adam 的定位原文写作「combine the advantages of AdaGrad（稀疏梯度）and RMSProp（在线与非平稳）」。</p>
 <p>⭐ 偏差校正那一条，原文的说法是：滑动平均<b>从 0 起步</b>，于是估计 biased towards zero，<b>especially during the initial timesteps</b>，而且 <b>β 越接近 1 越严重</b>。同一段还点名了 RMSProp：<b>without bias correction, like in RMSProp</b> ——&#160;Ⓒ 那条橙线画的就是这句话。</p>
 <p>⚠️ <b>李宏毅课上那页写的 Adagrad 是「均方根」形式</b>（分母里除了 t＋1），跟这里画的原版<b>不一样</b>。⛔ 本讲按原版画，因为「有效学习率单调衰减」这个病<b>只在原版（累加不除 t）上成立</b> ——&#160;这个区别值得知道，不然两边对不上会以为自己算错了。</p>
 <p>📌 <b>三则出处，放在一起看很有意思</b>（完整的故事在讲义里）：<b>AdaGrad</b> 是正经的 JMLR 长文（Duchi / Hazan / Singer，<b>12(61):2121–2159, 2011</b>，整整 39 页），⭐ 而且题目是《Adaptive Subgradient Methods for <b>Online Learning</b> and Stochastic Optimization》——&#160;<b>它根本不是为深度学习写的</b>。</p>
@@ -5353,17 +5353,13 @@ body.figonly section h3{margin-top:34px}
   <em>一个号称「drop-in 替换」的东西，先去摘要里数一数它到底改了几处
   ——&nbsp;<b>「两行代码」说的是调用方改两行，不是它内部只改了一处。</b></em></span></p></div>
 
-<h4>⚠️ Muon 要在大模型上真跑起来，还得补两样</h4>
-<p><em><a href="#s3-3b">3.3b</a> 那段讲的是 Muon 的<b>想法</b>。
-  可想法好用不等于能直接上规模 ——&nbsp;
-  2025 年有一篇专门做这件事的论文，识别出两条必需的补丁：</em></p>
-<ul>
-  <li>① 得加 weight decay。<em>原版没有。</em></li>
-  <li>② 得仔细调每个参数的<u>更新幅度</u>。
-    <em>——&nbsp;正交化之后各方向尺度是齐了，但整体该迈多大还得单独定。</em></li>
-</ul>
-<p class="landing">⭐ 补上这两样之后，它才能「开箱即用」地跑大规模训练。
-  <em>论文的规模律实验报告：在算力最优的设定下，Muon 的计算效率约为 AdamW 的两倍。</em></p>
+<h4>⚠️ Muon 上规模还得补两样</h4>
+<p><em><a href="#s3-3b">3.3b</a> 讲的是 Muon 的<b>想法</b>，而想法好用不等于能直接上规模。
+  2025 年那篇专门做这件事的论文补了两处：<b>加 weight decay</b>（原版没有，
+  正是上面 AdamW 那一栏治的病），<b>以及单独定整体更新幅度</b>
+  ——&nbsp;正交化只把各方向的尺度拉齐了，没说该迈多大。</em></p>
+<p class="landing">⭐ 补完才谈得上「开箱即用」。
+  <em>论文的规模律实验报告：算力最优设定下，Muon 的计算效率约为 AdamW 的两倍。</em></p>
 <p><span class="sub">📌 <b>arXiv <a href="https://arxiv.org/abs/2502.16982" target="_blank" rel="noopener">2502.16982</a></b>（Moonlight，3B/16B MoE，5.7T token）。
   ⚠️ 「两倍计算效率」是论文自己的规模律结论，不是我们的实测 ——&nbsp;
   <em>而且回想 <a href="#s二">2.6</a> 那条判据：这类结论换规模要重验。</em>
