@@ -5931,9 +5931,8 @@ body.figonly section h3{margin-top:34px}
      ⛔ 判据：**核一条超参的原文，常常会捡到两条别处的接口。**
        只查数字就会把这两条都错过。 -->
 
-<p class="lead">学习率讲完了，<b>可 Adam 还有两个数没讲</b>：<em>β₁ 和 β₂。</em>
-  <em>⭐ 它们通常被当成「用默认值就行」的东西
-  ——&nbsp;但它们的含义其实特别清楚。</em></p>
+<p class="lead">Adam 还剩两个数：<b>β₁ 和 β₂</b>。
+  <em>⭐ 通常被当成「用默认值就行」，<b>可它们的含义特别清楚</b>。</em></p>
 
 <div class="note ok"><p>⭐⭐ 一句话：β 决定「老的贡献能活多久」。</p>
 <p><em>滑动平均每步乘一个 β 再掺新值，所以<b>有效窗口大约是 <code>1/(1−β)</code> 步</b>。</em></p>
@@ -5965,8 +5964,7 @@ body.figonly section h3{margin-top:34px}
 <p><span class="sub">📌 arXiv <b><a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a></b> 的超参段。同段还有：
   <b>β₁ ＝ 0.9</b>、学习率前 1 万步固定 10⁻²、之后按 <code>1/√k</code> 衰减。</span></p></div>
 
-<div class="note danger"><p>⚠️ 这里有个顺带推出来的结论，而它跟 3.2 那条判据打架 ——&nbsp;
-  值得说清楚。</p>
+<div class="note danger"><p>⚠️ <b>这里顺带推出一个结论，而它跟 3.2 那条判据打架。</b></p>
 <p><em>3.2 说：动量和二阶矩是滑动平均，老的贡献会被衰减掉，所以 bf16 扛得住。<br>
   可如果 β₂ 一路涨到 0.9999，<b>那个「衰减」就慢得快要不衰减了</b>
   ——&nbsp;v 越来越像一个真的累加器。</em></p>
@@ -7434,7 +7432,7 @@ body.figonly section h3{margin-top:34px}
        **每一行都标了是从哪个文件 grep 出来的**，读者可以自己再验一遍。
        表里每一个名字都是 2026-09 主干上**当场 grep 到的**，不是凭记忆写的。 -->
 
-<p class="lead">⭐ 这一讲讲了一堆概念。<b>可回去打开框架，该搜哪个词？</b></p>
+<p class="lead">⭐ <b>回去打开框架，该搜哪个词？</b></p>
 
 <table>
 <thead><tr><th>这一讲里的说法</th><th>在框架里叫什么</th><th>核的地方</th></tr></thead>
@@ -7482,7 +7480,7 @@ body.figonly section h3{margin-top:34px}
     <td>bitsandbytes<br><code>optim/__init__.py</code></td></tr>
 </tbody></table>
 
-<div class="note ok"><p>⭐⭐ <b>这张表里有两行值得单独看一眼 ——&nbsp;它们是这一讲的判据<u>被写进 API 名字里</u>了。</b></p>
+<div class="note ok"><p>⭐⭐ <b>这两行，是这一讲的判据<u>被写进了 API 的名字里</u>。</b></p>
 <ul>
   <li><code>dots_with_no_batch_dims_saveable</code> ——&nbsp;
     <em>「矩阵乘的结果<b>存下来</b>」。<b>为什么是矩阵乘？</b>
@@ -7500,10 +7498,9 @@ body.figonly section h3{margin-top:34px}
     ⛔ <b>顺带消一个看起来矛盾的地方</b>：<a href="#s二">2.2</a> 说「大模型训练里重算默认就开着」讲的是<u>业界实践</u>，
     这里说 <code>recompute_granularity</code> 默认 <code>None</code> 讲的是<u>框架出厂值</u> ——&nbsp;<b>两句都对，但不是同一个「默认」。</b></em></li>
 </ul>
-<p><span class="sub">⚠️ <b>顺带承认这一讲少讲了一档。</b>
-  <em>PyTorch 的 <code>CheckpointPolicy</code> 其实有<b>六个</b>枚举值，
-  不是两个：<code>{MUST,PREFER}_SAVE</code>、<code>{MUST,PREFER}_RECOMPUTE</code>、
-  还有 <code>{MUST,PREFER}_CPU_OFFLOAD</code>。<br>
+<p><span class="sub">⚠️ <b>这一讲少讲了一档</b>：<em>PyTorch 的 <code>CheckpointPolicy</code>
+  有<b>六个</b>枚举值不是两个 ——&nbsp;<code>{MUST,PREFER}_SAVE</code>、
+  <code>{MUST,PREFER}_RECOMPUTE</code>、<code>{MUST,PREFER}_CPU_OFFLOAD</code>。<br>
   ⭐ 也就是说，框架眼里「这块激活怎么办」是<b>三选一</b>：
   <b>存在显存里 / 扔了重算 / 卸到 CPU 再搬回来</b> ——&nbsp;
   <b>而本讲只讲了前两个</b>。第三条是拿 PCIe 带宽换显存，
@@ -7511,8 +7508,8 @@ body.figonly section h3{margin-top:34px}
   ⛔ 至于 <code>MUST</code> 和 <code>PREFER</code> 的区别，文档写得很直接：
   <b><code>MUST_*</code> 表示这条不许被 <code>torch.compile</code> 那类子系统覆盖</b>。</em></span></p>
 
-<p class="landing">⭐ 所以这张表不只是「查词表」，<b>它是个反向检查</b> ——&nbsp;
-  <em>如果你理解的判据跟框架提供的选项对不上，
+<p class="landing">⭐ <b>所以这张表是个反向检查</b>：
+  <em>你理解的判据跟框架给的选项对不上时，
   <b>多半是你的判据错了，或者那个默认过期了。</b></em></p></div>
 
 <div class="note danger"><p>⚠️ <b>这张表<u>最容易过期</u>，所以用法要说清楚。</b></p>
@@ -7589,10 +7586,11 @@ body.figonly section h3{margin-top:34px}
   而读者会把它们<b>一起抄走</b>。</em></p>
 <p class="landing">⭐ 判据：一个自己推出来的数，必须连着推导一起给；
   否则它冒充的是事实。</p>
-<p><span class="sub">📌 顺带一条方法：上面 82.1% 那一行是这一讲最该学的做法
-  ——&nbsp;它之所以可信，不是因为算得仔细，
-  而是因为专题一用完全独立的另一套算法给出了 81.8%。
-  <em>⭐ 孤立的估算没法验证；能对上一个外部锚点的估算，一次就把整套公式验了。</em></span></p></div>
+<p><span class="sub">📌 <b>一条方法，而这一页正好有它的<u>反例</u>：孤立的估算没法验证，
+  能对上一个「外部」锚点的估算，一次就把整套公式验了。</b>
+  <em>⛔ 82.1% 那一行<b>没有</b>这样的锚点 ——&nbsp;上面那条撤回说得很清楚，
+  它跟专题一的 81.8% <u>同源</u>，对上是必然的。
+  <b>「两个数对上了」只有在两条路真的独立时才算数。</b></em></span></p></div>
 
 </div></section>
 
