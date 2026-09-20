@@ -5797,8 +5797,8 @@ body.figonly section h3{margin-top:34px}
        「GPS」按 GBS ＝ global batch size 处理（同一句前文他刚说过 global batch size）。
      ⛔ 判据：**听不清的缩写不要替人补全** ——&#160;补错了，读者学到的是一条不存在的关系。 -->
 
-<p class="lead">上一小节最后那句是：<b>单报一个学习率没有意义，它必须连着 batch 一起报。</b>
-  <em>——&nbsp;那 batch 自己呢？<b>它该怎么定，凭什么。</b></em></p>
+<p class="lead">上一小节收在<b>「单报一个学习率没有意义，它必须连着 batch 一起报」</b>。
+  <em>——&nbsp;<b>那 batch 自己凭什么定？</b></em></p>
 
 <h4>第一步 · ⭐ 先把「batch」这个词拆开 ——&nbsp;它是<u>四个旋钮乘出来的</u></h4>
 
@@ -5828,26 +5828,22 @@ body.figonly section h3{margin-top:34px}
 <p class="landing"><b>d　＝　总卡数 ÷ (TP × PP × CP)</b></p>
 <p><em>所以你把 TP 从 8 开到 16，<b>DP 路数当场减半</b> ——&nbsp;
   别的都不动的话，<b>global batch 也跟着减半</b>。</em></p>
-<p><span class="sub">⛔ <b>这条式子里<u>不该有 EP</u>，这是我改过一次的地方。</b>
-  <em>Megatron-Core 里其实有<b>两个</b> data-parallel 尺寸：注意力那张网格的
-  <code>data_parallel_size = world_size ÷ (TP × PP × CP)</code>，
-  和专家那张网格自己的
+<p><span class="sub">⛔ <b>式子里<u>不该有 EP</u></b>（我改过一次）。
+  <em>Megatron-Core 有<b>两个</b> data-parallel 尺寸：
+  <code>data_parallel_size = world_size ÷ (TP × PP × CP)</code> 和
   <code>expert_data_parallel_size = world_size ÷ (ETP × EP × PP)</code>。
-  <b>EP 只切后者</b>；global batch 看的是前者 ——&nbsp;
-  MoE 层只是把同一批 token 在专家维上重新分了一次，没有让这一步看的 token 变少。
-  （出处：<code>megatron/core/parallel_state.py</code> 里
-  <code>model_size = TP × PP × CP × gtp_remat</code> 那一段。）
-  ⭐ 顺带补上原来漏掉的 <b>CP</b> ——&nbsp;上下文并行确实在这个分母里。</em></span></p>
-<p class="landing">⭐⭐⭐ <b>而 batch 一变，学习率就得跟着变（下面第三步）。</b>
-  <em>——&nbsp;也就是说：<u>并行策略那个旋钮的另一头，连着的是学习率</u>。</em>
-  <em>它看起来是「怎么把模型切到卡上」的工程问题，<b>结果落在了收敛上。</b></em></p>
-<p><span class="sub">⭐ 这也是为什么换一套并行配置之后，
-  「代码没改、数据没改，loss 曲线却不一样了」——&nbsp;<b>因为 batch 悄悄变了。</b></span></p></div>
+  <b>EP 只切后者</b> ——&nbsp;MoE 只是把同一批 token 在专家维上重分一次，
+  没让这一步看的 token 变少。<b>CP 则确实在分母里</b>（原来漏了）。
+  📌 <code>megatron/core/parallel_state.py</code>：
+  <code>model_size = TP × PP × CP × gtp_remat</code>。</em></span></p>
+<p class="landing">⭐⭐⭐ <b>而 batch 一变学习率就得跟着变 ——&nbsp;
+  <u>并行策略那个旋钮的另一头，连着的是收敛</u>。</b>
+  <em>它看起来只是「怎么把模型切到卡上」。</em></p>
+<p><span class="sub">⭐ 「代码没改数据没改，换套并行配置 loss 曲线就变了」——&nbsp;就是这么来的。</span></p></div>
 
 <h4>第二步 · ⭐⭐⭐ 为什么 batch 开大了会<u>稳</u></h4>
 
-<p>回到 <a href="#s1-0">1.0</a> 那件事：<b>一个 batch 的 loss 是所有 token 的 loss 取平均。</b>
-  <em>梯度也一样 ——&nbsp;它是<b>一批样本各自意见的平均</b>。</em></p>
+<p>梯度跟 loss 一样，是<b>一批样本各自意见的平均</b>（<a href="#s1-0">1.0</a>）。</p>
 
 <div class="note ok"><p>⭐ <b>那张「一屋子人取平均」的图（<a href="#s1-2">1.2</a>），
   现在可以再用一次。</b></p>
@@ -5859,9 +5855,6 @@ body.figonly section h3{margin-top:34px}
   ⚠️ <b>前提是样本之间大致独立</b> ——&nbsp;同一条序列里相邻的 token 显然不独立，
   所以真实的有效样本数比 token 数少。<b>当量级看，别当精确公式。</b></span></p></div>
 
-<p class="landing">⭐ <b>所以「大 batch 更稳」不是玄学，就是平均的老道理：</b>
-  <em>参与平均的样本越多，<u>单个坏样本越带不动它</u>。</em></p>
-
 <p><em>⛔ 反过来说，<b>小 batch 的每一步都在被噪声推着走</b>。
   loss 曲线会毛、grad norm 会跳 ——&nbsp;而
   <a href="#s六">6</a> 那节讲的 spike，很多就是在这种时候被一小撮坏样本点着的。</em></p>
@@ -5872,15 +5865,11 @@ body.figonly section h3{margin-top:34px}
   <em>——&nbsp;<b>下面这两条听起来是两回事，等会你会看到它们是同一条。</b></em></p>
 
 <div class="note"><p><b>第一张脸 · 噪声降下去了，但「每个样本的收益」也降下去了。</b></p>
-<p><em>batch 小的时候，梯度很糙，<b>加样本能实实在在让方向变准</b> ——&nbsp;
-  这时候加倍 batch，大致能少走一半的步数。</em></p>
-<p><em>可一旦梯度已经够准了，<b>噪声不再是瓶颈</b>。这时候再加样本，
-  方向也不会更对多少 ——&nbsp;<b>步数几乎不减，算力却实打实翻倍。</b></em></p>
-<p class="landing">⭐⭐⭐ <b>中间那个转折点，通常叫「临界 batch」。</b>
-  <em>——&nbsp;过了它，<u>你花的是算力，买不到等量的进步</u>。</em></p>
-<p><span class="sub">⭐ 它的量化版本就是 <a href="#s3-5">3.5</a> 那句
-  「他们用<u>梯度噪声尺度</u>来定 batch」：<em>先量一量这批梯度里有多少是噪声 ——&nbsp;
-  <u>噪声还占大头就加样本划算，噪声已经很小就是浪费</u>。</em></span></p>
+<p><em>梯度糙的时候，加样本实实在在让方向变准，<b>加倍 batch 大致少走一半步数</b>。
+  可一旦梯度够准，<b>噪声不再是瓶颈</b> ——&nbsp;再加样本方向也不会更对，
+  <b>步数几乎不减，算力实打实翻倍。</b></em></p>
+<p class="landing">⭐⭐⭐ <b>转折点叫「临界 batch」——&nbsp;过了它，
+  <u>你花的是算力，买不到等量的进步</u>。</b></p>
 
 <p><span class="sub">⛔ 它<b>不是一个固定的数</b>：模型越大、训练越往后，它越大。
   所以真实配置里 batch 是<b>一路往上爬</b>的 ——&nbsp;
@@ -5888,10 +5877,9 @@ body.figonly section h3{margin-top:34px}
   <b>爬 batch 不是为了更快，是因为临界点在往上挪。</b></span></p></div>
 
 <div class="note"><p><b>第二张脸 · batch 一大，学习率就得跟着抬 ——&nbsp;而抬学习率是有上限的。</b></p>
-<p><em>batch 翻倍，梯度噪声小了，<b>你可以也应该迈更大的步</b>
-  ——&nbsp;不然等于白拿了准度却不用。<a href="#s3-5">3.5</a> 那八档 GPT-3 配置
-  就是这条关系的实物：<b>模型越大、batch 越大，学习率反而在降</b>
-  ——&nbsp;那是因为规模在同时往下压它，两股力量叠在一起。</em></p>
+<p><em>噪声小了就<b>该迈更大的步</b>，不然白拿了准度。
+  ⚠️ <a href="#s3-5">3.5</a> 那八档看着相反（<b>batch 越大学习率反而越小</b>）——&nbsp;
+  那是<u>规模在同时往下压它</u>，两股力量叠着。</em></p>
 <p class="landing">⛔ <b>但学习率不能无限抬</b>：抬过头，
   <em>loss 直接飞（<a href="#s六">6</a>）。所以 batch 增大能换来的加速，
   <u>被「学习率能抬到多高」这条硬边界卡住了</u>。</em></p></div>
@@ -5920,8 +5908,8 @@ body.figonly section h3{margin-top:34px}
 <tr><td><b>样本效率</b></td>
     <td>⛔ <b>有拐点</b> ——&nbsp;过了临界 batch，多花的算力换不回等量的进步</td></tr>
 </tbody></table>
-<p class="landing">⭐ <b>「大了就不行」说的是第二行，「大了才稳」说的是第一行。</b>
-  <em>——&nbsp;两句都对。<u>选 batch 就是在这两条之间找那个刚好够稳、又还没浪费的位置。</u></em></p></div>
+<p class="landing">⭐ <b>两句都对，各说一行。</b>
+  <em>选 batch 就是在这两行之间，<u>找那个刚好够稳、又还没开始浪费的位置</u>。</em></p></div>
 
 <h4>第四步 · ⛔ 两个会<u>静默</u>咬人的实现细节</h4>
 
@@ -5953,10 +5941,8 @@ body.figonly section h3{margin-top:34px}
   <u>都跟这句话对不上</u>，所以没有替他猜，只写了骨架。
   <b>判据：听不清的缩写不要替人补全 ——&nbsp;补错了，读者学到的是一条不存在的关系。</b></em></p></details>
 
-<p class="landing">⭐⭐ <b>这一节的落点：batch 不是「能塞多大塞多大」。</b>
-  <em>它是四个旋钮的乘积，它决定学习率，它被并行策略牵着，
-  而它的上限来自<u>样本效率</u>而不是显存。</em>
-  <em>——&nbsp;<b>显存只决定你能不能塞下，塞不塞得对是另一回事。</b></em></p>
+<p class="landing">⭐⭐ <b>落点：batch 的上限来自<u>样本效率</u>，不是显存。</b>
+  <em>——&nbsp;显存只决定你<b>能不能</b>塞下，塞不塞得对是另一回事。</em></p>
 
 <h3 id="s3-6">3.6　⭐⭐ 另外那两个超参：β₁ 和 β₂ 到底在干什么</h3>
 
