@@ -2788,7 +2788,7 @@ __FIG_STEP__
 <h4>第三步 · 开了重算之后</h4>
 <p><em>照 <a href="#s二">2.2</a> 那一档：每层只留入口那一份（768 宽），
   外加<b>当前正在重算的那一层</b>的完整一份。</em></p>
-<p class="landing">⭐ <b>0.32 GiB</b> ——&nbsp;<em>2.11 掉到 0.32，<b>省了 6.7 倍</b>，
+<p class="landing">⭐ <b>0.32 GiB</b> ——&nbsp;<em>2.11 掉到 0.32，<b>省了 __X_SMALL__ 倍</b>，
   代价是总算力从 3× 变 4×。</em></p>
 
 <div class="note danger"><p>⛔ <b>⚠️ 这个 0.32 GiB 有一个<u>故意的省略</u>，照着验的人会撞上它。</b></p>
@@ -2801,8 +2801,12 @@ __FIG_STEP__
 <p class="landing">⛔ <b>而这一小节的卖点正是「你能自己算一遍」</b>
   ——&nbsp;<em>所以这一条必须写出来。上面那 <a href="#s1-7">1.7</a> 的注解说了，
   真实实现<b>分块算 loss</b>，所以它不进总账；但<u>这是个口径选择，不是它不存在</u>。</em></p>
-<p><span class="sub">⚠️ 5.03 万这个词表大小我是按「GPT-3 沿用 GPT-2 的 BPE」写的，
-  <b>没有在这一轮回原文核过</b> ——&nbsp;换成 3 万或 6 万，结论（它比激活总量还大）不变。</span></p></div>
+<p><span class="sub">📌 <b>5.03 万这个词表大小的来路，写清楚一点</b>（2026-09-20 回原文核过）：
+  <em>GPT-3 论文 §2.1 的原话是「<b>我们使用与 GPT-2 相同的模型与架构，包括其中描述的
+  修改后的初始化、pre-normalization 和<u>可逆分词</u></b>」——&nbsp;
+  也就是沿用 GPT-2 那份 BPE，而那份词表是 <b>50,257</b>。
+  ⛔ <b>注意 GPT-3 论文自己没有印这个数，它是继承来的</b> ——&nbsp;
+  所以这是一条两跳的引用，不是一手数据。<u>换成 3 万或 6 万，结论（它比激活总量还大）不变。</u></em></span></p></div>
 
 <table>
 <thead><tr><th></th><th>不开重算</th><th>开了重算</th></tr></thead>
@@ -2819,14 +2823,14 @@ __FIG_STEP__
   <li><b>激活随 token 总数长</b>（5.1，就在本节）——&nbsp;
     <em>2.11 GiB 里唯一的变量就是那 8,192 个 token。</em></li>
   <li><b>拿算力换显存</b>（<a href="#s二">2.2</a>）——&nbsp;
-    <em>多付 <b>33%</b>，省 <b>6.7 倍</b>。</em></li>
+    <em>多付 <b>33%</b>，省 <b>__X_SMALL__ 倍</b>。</em></li>
 </ul>
 <p class="landing">⭐⭐ <b>「多付 33%」跟 671B 那边<u>一模一样</u> ——&nbsp;
-  但「省 6.7 倍」跟那边的 __RECOMP_X__ 倍<u>差了三倍半</u>。</b></p>
+  但「省 __X_SMALL__ 倍」跟那边的 __RECOMP_X__ 倍<u>差了三倍半</u>。</b></p>
 <p><em>⛔ 这一处早先写的是「比例跟 671B 那笔几乎一样」。<b>不一样，而且差得不小。</b>
   ——&nbsp;⭐ 不过它为什么不一样，本身比那句话值钱。</em></p></div>
 
-<div class="note ok"><p>⭐⭐⭐ <b>为什么同样是「全量重算」，一个省 6.7 倍、一个省 __RECOMP_X__ 倍？</b></p>
+<div class="note ok"><p>⭐⭐⭐ <b>为什么同样是「全量重算」，一个省 __X_SMALL__ 倍、一个省 __RECOMP_X__ 倍？</b></p>
 <p><em>把账写成一个式子就看明白了。设 <b>r ＝ 一层激活 ÷ 入口那一份</b>、<b>L ＝ 层数</b>：</em></p>
 <p class="landing"><b>省多少倍　＝　r ÷ (1 ＋ r/L)</b></p>
 <p><em>分子 <b>r</b> 是「一层里挂了多少东西」——&nbsp;层越胖，扔掉能省越多。<br>
@@ -2834,8 +2838,8 @@ __FIG_STEP__
 <table>
 <thead><tr><th></th><th>r ＝ 一层激活 ÷ 入口</th><th>L ＝ 层数</th><th>省多少倍</th></tr></thead>
 <tbody>
-<tr><td>125M 小模型</td><td><b>__R_SMALL__</b>（11,520 ÷ 768）</td><td>12</td><td><b>6.7</b></td></tr>
-<tr><td colspan="4"><span class="sub">⚠️ <b>这两行的 r 口径略有不同</b>：小模型那一行只数了两个 norm 的<u>输出</u>，V3 那一行（1.7 的表）把 norm 的<u>输入</u>（＝残差入口）也数了进去。把入口补上，小模型的 r 约 16、省的倍数约 7.1 ——&nbsp;<b>量级和结论都不变，但严格说这两个数不是同一把尺子量的。</b></span></td></tr>
+<tr><td>125M 小模型</td><td><b>__R_SMALL__</b>（11,520 ÷ 768）</td><td>12</td><td><b>__X_SMALL__</b></td></tr>
+<tr><td colspan="4"><span class="sub">⚠️ <b>这两行的 r 口径略有不同</b>：小模型那一行只数了两个 norm 的<u>输出</u>，V3 那一行（1.7 的表）把 norm 的<u>输入</u>（＝残差入口）也数了进去。把入口补上，小模型的 r 是 <b>__R_SMALL_E__</b>、省的倍数 <b>__X_SMALL_E__</b> ——&nbsp;<b>量级和结论都不变，但严格说这两个数不是同一把尺子量的。</b><br>⛔ <b>这里原来手写的是「r 约 16、省的倍数约 7.1」。</b><em>16 是对的，7.1 不是 ——&nbsp;拿本节自己那个式子代进去得 <b>6.9</b>。⭐ 而它错得很有代表性：<u>这一格里别的数全是脚本算的，就它是手打的</u>。</em></span></td></tr>
 <tr><td>V3 671B</td><td><b>__R_V3__</b>（一层 MoE 块 ÷ 7,168）</td><td>61</td><td><b>__RECOMP_X__</b></td></tr>
 </tbody></table>
 <p class="landing">⭐ <b>小模型<u>两项都吃亏</u>：r 小 2.7 倍，L 小 5 倍。</b>
@@ -4050,6 +4054,14 @@ SMALL_LAYER_W = 2 * 768 + 3 * 768 + 768 + 3072 + 3072 + 768      # ＝ 11,520
 _R_SMALL = SMALL_LAYER_W / float(SMALL_D)                         # ＝ 15.0
 _R_V3    = (_LAYER_B / (DTYPE_B * S_BASE)) / 7168.0               # ＝ 40.7
 _x_small = _R_SMALL / (1 + _R_SMALL / SMALL_L)
+# ⭐⭐ 2026-09-20 第 19 轮：把「补上入口之后」那一对数也算出来。
+#   ⛔ 它原来是手打的「r 约 16、省的倍数约 7.1」——&nbsp;而 r=16 代进同一个
+#     式子只有 6.86。**整格就它一个数没过脚本，就它错了。**
+#   ⭐ 判据：**一格里只要有一个数是手打的，它就是那一格里最可能错的那个**
+#     ——&nbsp;因为别的数每次 build 都被重算一遍，只有它不会。
+_R_SMALL_E = _R_SMALL + 1.0                       # 补一个残差入口（＝重算时留下的那份）
+_x_small_e = _R_SMALL_E / (1 + _R_SMALL_E / SMALL_L)
+assert abs(_x_small_e - 6.857) < 0.01, _x_small_e
 _x_v3    = _R_V3 / (1 + _R_V3 / (N_MOE_L + N_DENSE_L))
 for _nm, _got, _want in (("小模型 r", _R_SMALL, 15.0), ("V3 r", _R_V3, 40.66),
                          ("小模型省几倍", _x_small, 6.67), ("V3 闭式估", _x_v3, 24.395)):
@@ -4190,7 +4202,10 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
 _html = _html.replace("__TBL_SCALE__", _TBL_SCALE)
 _html = _html.replace("__LOGITS__", _sz(_LOGITS_B))
-for _ph, _val in (("__R_SMALL__", "%.0f" % _R_SMALL), ("__R_V3__", "%.1f" % _R_V3)):
+for _ph, _val in (("__R_SMALL__", "%.0f" % _R_SMALL), ("__R_V3__", "%.1f" % _R_V3),
+                  ("__X_SMALL__", "%.1f" % _x_small),
+                  ("__R_SMALL_E__", "%.0f" % _R_SMALL_E),
+                  ("__X_SMALL_E__", "%.1f" % _x_small_e)):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
     _SUBS[_ph] = _val
