@@ -3798,7 +3798,8 @@ body.figonly section h3{margin-top:34px}
 
 <div class="note ok"><p>⭐⭐⭐ <b>先把这件事的「为什么」说死，它其实只有一行。</b></p>
 <p><em>每个参数挪一点点，loss 会变多少？<b>把每个参数的挪动量乘上它自己的偏导数，再全加起来。</b>
-  ——&nbsp;这就是偏导数的定义，没别的。</em></p>
+  ——&nbsp;<b>这是从偏导数的定义<u>直接推出来的</u>，只要那一步挪得足够小。</b></em></p>
+<p><span class="sub">⛔ <b>措辞要抠一下，因为它是这一节唯一的裂缝</b>：<em>「各项乘起来再加总」<u>不是</u>偏导数的定义（偏导数的定义是单变量的那个极限），它是<b>一阶近似</b>（全微分）。——&nbsp;所以它<b>需要</b>「挪得很小」这个前提，而这个前提就是下面那半节、以及整个 <a href="#s3-3b">3.3b</a> 要对付的东西。</em></span></p>
 <p class="landing">⛔ <b>那想让 loss 变小，就要让这个总和是<u>负的</u>。</b></p>
 <p><em>⭐ 最省事的办法：<b>让每个参数都朝着自己偏导数的反方向挪</b>。
   于是每一项都是「负 × 正」或者「正 × 负」——&nbsp;
@@ -3807,14 +3808,12 @@ body.figonly section h3{margin-top:34px}
   <em>——&nbsp;而且在所有「走同样远」的方向里，<b>它降得最快</b>
   ——&nbsp;这就是「梯度是上坡最快的方向」那句话的另一面。</em></p></div>
 
-<div class="note danger"><p>⛔⛔ <b>但上面那段话里藏着一个词：<u>「挪一点点」</u>。</b></p>
-<p><em>「挪动量 × 偏导数」这个算法，<b>只在挪得很小的时候才准</b>。
-  ——&nbsp;偏导数说的是「<u>就在你脚下这一点</u>，坡有多陡」，
-  它<b>不保证一米之外那里还是这个坡</b>。</em></p>
-<p class="landing">⭐ <b>所以步子一大，「保证下降」就失效了</b>：
-  <em>你可能冲过谷底，落到对面<b>比出发点还高</b>的地方。</em></p>
-<p><span class="sub">⭐⭐ 记住这条裂缝 ——&nbsp;<b>方向是确定的，步长是没有答案的。</b>
-  这一小节剩下的部分、以及下一小节<u>整节</u>，都在跟它较劲。</span></p></div>
+<div class="note danger"><p>⛔⛔ <b>那「挪得足够小」到底有多小？——&nbsp;没有答案。</b></p>
+<p><em>偏导数说的是「<u>就在你脚下这一点</u>，坡有多陡」，
+  它<b>不保证一米之外那里还是这个坡</b>。
+  步子一大，「保证下降」就失效 ——&nbsp;你可能冲过谷底，落到对面<b>比出发点还高</b>的地方。</em></p>
+<p class="landing">⭐⭐ <b>方向是确定的，步长是没有答案的。</b>
+  <em>——&nbsp;这一小节剩下的部分、以及 <a href="#s3-3b">3.3b</a> <u>整节</u>，都在跟它较劲。</em></p></div>
 
 <figure class="fbox fwide" id="fig-descent"><svg viewBox="0 0 1400 1356" width="100%" role="img" aria-label="梯度下降为什么可以。一维上像一个球滚下山：斜率为正就往左挪，为负就往右挪；而且把步长取成跟斜率成正比，越接近谷底步子越小，自动刹车不会冲过头。两个输入时斜率不再是一个数，要用负梯度这个向量表示下降最快的方向。到了 6,710 亿维就别再想画面了，那一列数每一项的正负说往哪推、相对大小说哪一项更要紧。而那一整列，正是反向传播一遍算出来的那份"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">梯度下降为什么可以　——　<tspan font-weight="700">一切的本源，先把它讲透</tspan></text>
