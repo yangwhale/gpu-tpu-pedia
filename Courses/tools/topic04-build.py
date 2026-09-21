@@ -617,6 +617,12 @@ __FIG_VANISH__
   <b>而且越靠近 1，越说明问题</b>：连「每层只偏 10%」都扛不住 61 层，
   那就不存在「小心一点就没事」这种可能。
   这就是 2015 年之前「层一深就训不动」的全部原因。</em></p>
+<p><span class="sub">⛔ <b>顺手堵一个几乎人人都会踩的读法：「梯度小」≠「这一层不重要」。</b>
+  <em>梯度的含义是<u>每挪一格有多少效果</u> ——&nbsp;它小，说明这个参数<b>钝</b>，
+  也就意味着要达到同样的效果<u>得挪得更远</u>。
+  <b>它不是不需要动，是比谁都更需要动。</b>
+  ——&nbsp;而 <code>参数 − 学习率 × 梯度</code> 偏偏给了它<u>最小</u>的步子。
+  这条「正好拧反了」是 <a href="#s3-3b">3.3b</a> 的开场，也是自适应优化器存在的全部理由。</em></span></p>
 
 <div class="note ok"><p>⭐⭐⭐ <b>残差做的事，数学上只有一步：把每一层从
   <code>y ＝ F(x)</code> 改成 <code>y ＝ x ＋ F(x)</code>。</b></p>
@@ -1636,6 +1642,59 @@ __FIG_MOMENTUM__
 
 <p>⭐ <b>先看一行几乎所有人都写过的代码：</b>
   <em><code>参数 ← 参数 − 学习率 × 梯度</code></em></p>
+
+<h4>⭐⭐⭐ 先不谈量纲 ——&nbsp;<u>两个旋钮</u>就能看出这一行<u>拧反了</u></h4>
+
+<!-- ⭐⭐⭐ 2026-09-22 现场：讲完第一节之后原话是「反向传播、梯度下降、
+     偏导数，还有为什么梯度大的要让它慢点跑，你想想办法再重新讲一遍」。
+     ⛔ 病根在这一节的**入口**：原来是开门就上量纲。量纲是严的，可它先要求
+       读者接受「梯度的单位是 loss ÷ 参数」——&nbsp;而那正是还没消化的那一步。
+       于是「为什么大的反而要慢」这个问题，被一层更抽象的东西挡住了。
+     ⭐ 所以补这一格**纯算术**的入口：两个旋钮、四个整数，结论自己跳出来。
+       ⛔ 量纲那段一个字没删 ——&nbsp;它只是从「入口」降级成「证严的那一道」。
+     ⭐⭐ 这一格还顺手把 1.4 的「梯度消失」接上了：那里最容易被读成
+       「前面几层不重要」，而这里给出的正是相反的读法。 -->
+
+<p class="lead">⭐ 量纲那套是<b>严</b>的，但它不是<u>最快看见问题</u>的那条路。
+  <em>先用<b>两个旋钮</b>把结论看出来 ——&nbsp;只用小学算术。</em></p>
+
+<div class="note"><p>⭐⭐ 一台机器上只有两个旋钮，此刻误差是 <b>__KNOB_ERR__</b>。</p>
+<ul>
+  <li><b>甲很灵</b>：<em>拧一格，误差变 <b>__KNOB_A__</b>。</em></li>
+  <li><b>乙很钝</b>：<em>拧一格，误差才变 <b>__KNOB_B__</b>。</em></li>
+</ul>
+<p>❓ <b>要把这 __KNOB_ERR__ 消掉，两个旋钮各该拧多少格？</b></p>
+<p><em>甲：<code>__KNOB_ERR__ ÷ __KNOB_A__ ＝ <b>__KNOB_TURNS_A__ 格</b></code>。
+  乙：<code>__KNOB_ERR__ ÷ __KNOB_B__ ＝ <b>__KNOB_TURNS_B__ 格</b></code>。</em></p>
+<p class="landing">⭐⭐⭐ <b>该拧的圈数，跟灵敏度是<u>反比</u> ——&nbsp;灵的少拧，钝的多拧。</b></p></div>
+
+<p>⛔ <b>那 <code>参数 ← 参数 − 学习率 × 梯度</code> 实际给的是多少？</b>
+  <em>甲走 <code>η × __KNOB_A__</code>，乙走 <code>η × __KNOB_B__</code>
+  ——&nbsp;<b>__KNOB_RATIO__ : 1</b>。</em></p>
+
+<div class="note danger"><p>⭐⭐⭐ <b>需要的是 <u>1 : __KNOB_RATIO__</u>，
+  它给的是 <u>__KNOB_RATIO__ : 1</u> ——&nbsp;不是差一点，是<u>正好拧反</u>。</b></p>
+<p><em>后果分两头：<b>灵的那个被猛拧</b>，冲过头、来回震荡；
+  <b>钝的那个几乎没挪</b>，几千步都到不了位。
+  ——&nbsp;<u>整台机器被最钝的那个旋钮拖着走。</u></em></p>
+<p><span class="sub">⚠️ 这个反比是在「把每个方向当成<b>独立的、局部线性的</b>」这个近似下算的
+  ——&nbsp;真实的谷是弯的，方向之间还互相耦合。<b>当直觉用，别当公式用。</b>
+  <em>下面那张 fig-beststep 给的是同一件事更正规的版本。</em></span></p></div>
+
+<div class="note ok"><p>⭐⭐ <b>而这一条，正好把 <a href="#s一">1.4</a> 那个「梯度消失」<u>翻译</u>了一遍。</b></p>
+<p><em>那里算出来：连乘之后最前面几层的梯度只剩 <b>0.0016</b>。
+  ⛔ <b>这句话最容易被读成「前面几层不重要」——&nbsp;恰恰相反。</b></em></p>
+<p class="landing">⭐⭐⭐ <b>梯度小 ＝ 旋钮钝 ＝ <u>要走的距离更长</u>。
+  它不是不需要动，是<u>比谁都更需要动</u> ——&nbsp;而 SGD 偏偏给了它最小的步子。</b></p>
+<p><span class="sub">⭐ <b>这里有一处必须说准，否则两头会打架。</b>
+  <em>中间某一层若把信号压到 <b>0.5 倍</b>，上游的<b>梯度确实是减半</b>的；
+  <u>翻倍的是「要达到同样效果，它得挪多远」</u>。
+  ——&nbsp;<b>这两个量互为倒数</b>，所以「梯度减半」和「要走的路翻倍」
+  说的是同一件事的两面。<br>
+  ⛔ 混着说必然自相矛盾，所以本讲一律按这个口径：
+  <b>梯度 ＝ 每挪一格的效果，<u>不是</u>该挪多少。</b></em></span></p></div>
+
+<h4>同一件事，用量纲再说一遍 ——&nbsp;它<u>为什么</u>必须有个折算系数</h4>
 
 <div class="note"><p>⭐⭐ 两边的单位对不上。</p>
 <p><em>梯度的含义是「这个参数变一点，loss 变多少」——&nbsp;
@@ -4337,6 +4396,24 @@ _SEC_PER_YEAR  = 3.156e7
 _NAIVE_YEARS   = N_PARAM / _SEC_PER_YEAR
 _NAIVE_YEARS_CN = "两万" if 15000 < _NAIVE_YEARS < 25000 else "%.0f" % _NAIVE_YEARS
 assert 21000 < _NAIVE_YEARS < 21500, "笨办法年数变了：%.0f" % _NAIVE_YEARS
+
+# ══ 3.3b 的「两个旋钮」—— 这一格全部的论点就是一句「互为倒数」 ═══════
+# ⛔ 数字虽然是编的（示意用），但**它们之间的关系是承重的**，所以照样钉住：
+#    「该拧的圈数之比」必须正好是「梯度之比」的倒数 —— 这一条一旦不成立，
+#    「SGD 正好拧反了」这个结论当场垮掉，而正文照样会把它印出来。
+# ⭐ 这是 §5.4 那次的教训：唯一一个手打的数（7.1）就是唯一一个错的数。
+_KNOB_ERR      = 1000           # 当前误差
+_KNOB_A        = 100            # 甲的梯度：拧一格，误差变这么多（灵）
+_KNOB_B        = 1              # 乙的梯度（钝）
+_KNOB_TURNS_A  = _KNOB_ERR // _KNOB_A     # 甲要拧几格才消得掉
+_KNOB_TURNS_B  = _KNOB_ERR // _KNOB_B
+_KNOB_RATIO    = _KNOB_A // _KNOB_B       # SGD 给的步长之比
+assert _KNOB_A * _KNOB_TURNS_A == _KNOB_ERR and _KNOB_B * _KNOB_TURNS_B == _KNOB_ERR, \
+    "两个旋钮的圈数必须正好消掉误差，否则例子本身就是错的"
+assert _KNOB_A / _KNOB_B == _KNOB_TURNS_B / _KNOB_TURNS_A, (
+    "⛔ 「该拧的圈数」必须正好是「梯度」之比的倒数 —— 这是 3.3b 的全部论点。"
+    "现在是 %s:%s vs %s:%s" % (_KNOB_A, _KNOB_B, _KNOB_TURNS_B, _KNOB_TURNS_A))
+assert _KNOB_RATIO * _KNOB_B == _KNOB_A, "__KNOB_RATIO__ 必须真的是甲乙梯度之比"
 assert _NPARAM_CN == "6,710 亿", _NPARAM_CN
 TIB = 1024 ** 4
 # 每参数的字节数 —— 拆法与 §3.1 一致（bf16 权重 2、bf16 梯度 2、
@@ -4394,6 +4471,12 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__WIDEST_PB__",   "%.2f" % _WIDEST_PB),
                   ("__RANK_BASE__",   str(_RANK_BASE)),
                   ("__RANK_LONG__",   str(_RANK_LONG)),
+                  ("__KNOB_ERR__",     format(_KNOB_ERR, ",")),
+                  ("__KNOB_A__",       str(_KNOB_A)),
+                  ("__KNOB_B__",       str(_KNOB_B)),
+                  ("__KNOB_TURNS_A__", format(_KNOB_TURNS_A, ",")),
+                  ("__KNOB_TURNS_B__", format(_KNOB_TURNS_B, ",")),
+                  ("__KNOB_RATIO__",   format(_KNOB_RATIO, ",")),
                   ("__NPARAM_CN__",   _NPARAM_CN),
                   ("__NAIVE_YEARS__", format(int(round(_NAIVE_YEARS)), ",")),
                   ("__NAIVE_YEARS_CN__", _NAIVE_YEARS_CN),
