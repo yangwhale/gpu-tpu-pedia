@@ -237,6 +237,55 @@ __TBL_SCALE__
   <a href="#s六">6.3</a> 读那张表里的数。
   ——&nbsp;<b>没有尺，那三处都只能靠感觉。</b></em></p>
 
+<h4>⭐⭐⭐ 插一格 · <u>nat、bit、困惑度 —— 同一件事的三副面孔</u></h4>
+
+<!-- ⭐⭐⭐ 2026-09-21 新开。现场（语音课）原话：「那个 9 次 per token 是什么鬼？
+     一点都看不出来，这个得详细的讲一下。」——&#160;他把 **nats** 听成了「9 次」。
+     ⛔ 但根子不在听错：**全讲从头到尾没有一处说过 nat 是什么**，
+       只在上面一句「单位是 nats/token」就过去了。听错只是把这个洞照出来。
+     ⭐ 判据：**一个在正文里反复出现的单位，必须在它第一次出现的地方就被定义。**
+       不然它每出现一次，读者就默默跳过一次 ——&#160;而且不会有人举手。 -->
+
+<p class="lead">⭐ 上面那把尺用了两个词：<b>nat</b> 和<b>困惑度</b>。
+  <em>它们听起来是两个概念，其实<u>连同 bit 在内，是同一个量的三种读法</u>。</em></p>
+
+__FIG_NATBIT__
+
+<div class="note ok"><p>⭐⭐⭐ <b>先说 nat 和 bit ——&nbsp;它们差的只是一个底数。</b></p>
+<p><em><b>bit</b> 是「一次二选一」的信息量：抛一枚硬币，把结果告诉你，你就拿到 1 bit。
+  它以 <b>2</b> 为底。<br>
+  <b>nat</b> 是同一类东西，只是以 <b>e</b> 为底。
+  换算是死的：<b>1 nat ＝ 1.4427 bit</b>。</em></p>
+<p class="landing">⛔ <b>那为什么我们这儿冒出来的是 nat？——&nbsp;
+  <u>纯粹因为 loss 的定义里写的是 <code>ln</code></u>。</b>
+  <em>当初要是定义成 <code>−log₂ p</code>，整套东西一模一样，
+  所有数字乘 1.4427 而已。<b>这是个约定，不是什么深刻的选择。</b></em></p>
+<p><span class="sub">⭐ 至于 <b>per token</b> 那半截：它来自下面第三步那件事
+  ——&nbsp;一条序列几千个位置、每个位置一个 loss、最后取平均。
+  所以整个单位读作<b>「平均每个 token 多少 nat」</b>。</span></p></div>
+
+<div class="note danger"><p>⭐⭐⭐ <b>换成 bit 之后，这个数突然有了体感：<u>它就是压缩率</u>。</b></p>
+<p><em>「模型平均要花多少个 bit，才能把下一个 token 记下来」
+  ——&nbsp;<b>语言模型本质上就是个压缩器</b>，而 loss 就是它的压缩账单。</em></p>
+<ul>
+  <li><b>瞎猜时</b>：<em><code>ln 129,280 ＝ 11.77 nat ＝ <b>16.98 bit</b></code>。
+    ⭐ 而 <code>log₂ 129,280</code> 也正好是 <b>16.98</b>
+    ——&nbsp;<u>十二万九千个词里随便挑一个，本来就要花 17 个 bit</u>。
+    <b>这一档是自洽的，不是填上去的。</b></em></li>
+  <li><b>收敛后</b>：<em><code>2.0 nat ＝ <b>2.89 bit</b></code>。</em></li>
+</ul>
+<p class="landing">⭐⭐⭐ <b>从 17 bit 压到不到 3 bit ——&nbsp;
+  <u>这就是这个模型学到的全部东西，换算成压缩的样子</u>。</b></p></div>
+
+<div class="note"><p>📌 <b>所以同一件事有三副面孔，按场合挑：</b></p>
+<ul>
+  <li><b>nat/token</b> ——&nbsp;<em>定义直接给的，<u>训练日志里打的就是它</u>。</em></li>
+  <li><b>bit/token</b> ——&nbsp;<em>换算成压缩，<u>直觉最强</u>。</em></li>
+  <li><b>困惑度</b> ——&nbsp;<em>换算成「在几个词之间犹豫」，<u>最好向外行解释</u>。</em></li>
+</ul>
+<p><span class="sub">⛔ 它们之间是<b>恒等式</b>，不是三套测量
+  ——&nbsp;<em>任何一个变了，另外两个必然跟着变。所以别把它们并排列出来当成三条证据。</em></span></p></div>
+
 <h4>第三步 · 一个 token 一个 loss，<u>一个 batch 取平均</u></h4>
 
 <p>上面算的是<b>一个位置</b>的 loss。<em>而一条 4K 的序列有 4,096 个位置，
@@ -3507,6 +3556,19 @@ FIGS = {
         'sigmoid 的导数最大只有 <b>0.25</b>（σ(1−σ) 的闭式最大值），'
         '<b>光这一下每层就先乘了个 ≤ ¼ 的数</b> ——&nbsp;'
         '而 ReLU 正半轴恒为 1。<b>深网络忽然训得动，就是这么来的。</b></em>'),
+    "__FIG_NATBIT__": ("fig-natbit", "fig4-natbit.svg",
+        'topic04-fig-natbit.py',
+        '⭐⭐⭐ <b>一个量，三把尺</b> ——&nbsp;'
+        '<em>loss（nat）／压缩（bit）／困惑度，挂在<b>同一根轴</b>上。</em><br>'
+        '⭐⭐ <em>它们不是三个概念，是<b>三种读法</b>：'
+        '<b>bit ＝ nat × 1.4427</b>（只是底数从 e 换成 2）、'
+        '<b>困惑度 ＝ e^loss</b>。换算里<u>不含任何实测值</u>。</em><br>'
+        '⭐ <em>最左那档是<b>自检</b>：瞎猜时困惑度必须正好回到词表大小 '
+        '<b>129,280</b>、bit 必须正好等于 <b>log₂(词表)</b>。'
+        '<b>对不上就是公式写错了。</b></em><br>'
+        '⛔ <em>落点是那个压缩比：<b>17 bit → 2.9 bit</b> ——&nbsp;'
+        '<u>模型学到的全部东西，换算成压缩就是这个比例</u>。</em>'),
+
     "__FIG_SLIDER__": ("fig-slider", "fig4-slider.svg",
         'topic04-fig-slider.py',
         '⭐⭐⭐ <b>整讲的入口那一格</b> ——&nbsp;'
@@ -4024,18 +4086,29 @@ _SCALE = [
     (2.0,  "现代大模型预训练末期<b>大致落在这一档</b>", "七八个词"),
     (1.0,  "几乎能背出来了",      "两三个词 ——&nbsp;<b>正常预训练到不了这里</b>"),
 ]
-_TBL_SCALE = ('<table><thead><tr><th>loss</th><th>困惑度 ＝ e<sup>loss</sup></th>'
+#: nat → bit。⛔ 2026-09-21 补：这一列原来没有，而它恰恰是把「loss 是个抽象数」
+#:   变成「模型每个 token 要花几个 bit」的那一步。现场卡在「nat 是什么」上，
+#:   根子就是全讲没有一处把 nat 和 bit 摆在一起。
+_NAT2BIT = math.log2(math.e)
+assert abs(_NAT2BIT - 1.4426950) < 1e-6
+assert abs(_L_RANDOM * _NAT2BIT - math.log2(V_VOCAB)) < 1e-6, \
+    "瞎猜那一档换成 bit 必须正好等于 log2(词表)，对不上就是换算写错了"
+
+_TBL_SCALE = ('<table><thead><tr><th>loss<br><span class="sub">nat/token</span></th>'
+              '<th>换成 bit<br><span class="sub">＝ nat × 1.4427</span></th>'
+              '<th>困惑度 ＝ e<sup>loss</sup></th>'
               '<th>大概是什么水平</th><th>「在几个词之间犹豫」</th></tr></thead><tbody>'
               + "".join(
                   # ⭐ 只有最上面那一行是**算出来的**（ln 129,280）；其余四档是按
                   #   公开模型的量级填的。原来它们长得一模一样，而这一讲自己的
                   #   招牌就是「算出来的和估出来的要分得清」——&#160;所以标出来。
-                  ('<tr><td><b>%s</b>%s</td><td>%s</td><td>%s</td>'
+                  ('<tr><td><b>%s</b>%s</td><td>%s</td><td>%s</td><td>%s</td>'
                    '<td><em>%s</em></td></tr>')
                   % ("%.2f" % v if abs(v - _L_RANDOM) < 1e-6 else "%.1f" % v,
                      ' <span class="sub">算出来的</span>'
                      if abs(v - _L_RANDOM) < 1e-6
                      else ' <span class="sub">量级</span>',
+                     "<b>%.2f</b>" % (v * _NAT2BIT),
                      format(int(round(math.exp(v))), ","), what, feel)
                   for v, what, feel in _SCALE)
               + '</tbody></table>')

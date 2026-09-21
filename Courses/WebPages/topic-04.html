@@ -976,7 +976,7 @@ body.figonly section h3{margin-top:34px}
   <code>e<sup>loss</sup></code> 就是<b>困惑度</b> ——&nbsp;
   直观说就是「<u>模型这一步大概在几个词之间犹豫</u>」。</em></p>
 
-<table><thead><tr><th>loss</th><th>困惑度 ＝ e<sup>loss</sup></th><th>大概是什么水平</th><th>「在几个词之间犹豫」</th></tr></thead><tbody><tr><td><b>11.77</b> <span class="sub">算出来的</span></td><td>129,280</td><td>刚初始化，还没学任何东西</td><td><em>在整个词表里均匀瞎猜 ——&nbsp;<b>这就是 loss 的上限</b></em></td></tr><tr><td><b>6.0</b> <span class="sub">量级</span></td><td>403</td><td>学会了最基本的字频</td><td><em>相当于在几百个词里犹豫</em></td></tr><tr><td><b>4.0</b> <span class="sub">量级</span></td><td>55</td><td>语法大致对了</td><td><em>几十个词</em></td></tr><tr><td><b>3.0</b> <span class="sub">量级</span></td><td>20</td><td>像模像样的文本</td><td><em>二十个词上下</em></td></tr><tr><td><b>2.0</b> <span class="sub">量级</span></td><td>7</td><td>现代大模型预训练末期<b>大致落在这一档</b></td><td><em>七八个词</em></td></tr><tr><td><b>1.0</b> <span class="sub">量级</span></td><td>3</td><td>几乎能背出来了</td><td><em>两三个词 ——&nbsp;<b>正常预训练到不了这里</b></em></td></tr></tbody></table>
+<table><thead><tr><th>loss<br><span class="sub">nat/token</span></th><th>换成 bit<br><span class="sub">＝ nat × 1.4427</span></th><th>困惑度 ＝ e<sup>loss</sup></th><th>大概是什么水平</th><th>「在几个词之间犹豫」</th></tr></thead><tbody><tr><td><b>11.77</b> <span class="sub">算出来的</span></td><td><b>16.98</b></td><td>129,280</td><td>刚初始化，还没学任何东西</td><td><em>在整个词表里均匀瞎猜 ——&nbsp;<b>这就是 loss 的上限</b></em></td></tr><tr><td><b>6.0</b> <span class="sub">量级</span></td><td><b>8.66</b></td><td>403</td><td>学会了最基本的字频</td><td><em>相当于在几百个词里犹豫</em></td></tr><tr><td><b>4.0</b> <span class="sub">量级</span></td><td><b>5.77</b></td><td>55</td><td>语法大致对了</td><td><em>几十个词</em></td></tr><tr><td><b>3.0</b> <span class="sub">量级</span></td><td><b>4.33</b></td><td>20</td><td>像模像样的文本</td><td><em>二十个词上下</em></td></tr><tr><td><b>2.0</b> <span class="sub">量级</span></td><td><b>2.89</b></td><td>7</td><td>现代大模型预训练末期<b>大致落在这一档</b></td><td><em>七八个词</em></td></tr><tr><td><b>1.0</b> <span class="sub">量级</span></td><td><b>1.44</b></td><td>3</td><td>几乎能背出来了</td><td><em>两三个词 ——&nbsp;<b>正常预训练到不了这里</b></em></td></tr></tbody></table>
 
 <div class="note danger"><p>⭐⭐⭐ <b>看最上面那一行 ——&nbsp;它不是随手填的。</b></p>
 <p><em>一个<b>刚初始化、什么都没学</b>的模型，对每个词的概率都一样，
@@ -994,6 +994,199 @@ body.figonly section h3{margin-top:34px}
   <a href="#s六">6.1</a> 判断「飞了多少算飞」、
   <a href="#s六">6.3</a> 读那张表里的数。
   ——&nbsp;<b>没有尺，那三处都只能靠感觉。</b></em></p>
+
+<h4>⭐⭐⭐ 插一格 · <u>nat、bit、困惑度 —— 同一件事的三副面孔</u></h4>
+
+<!-- ⭐⭐⭐ 2026-09-21 新开。现场（语音课）原话：「那个 9 次 per token 是什么鬼？
+     一点都看不出来，这个得详细的讲一下。」——&#160;他把 **nats** 听成了「9 次」。
+     ⛔ 但根子不在听错：**全讲从头到尾没有一处说过 nat 是什么**，
+       只在上面一句「单位是 nats/token」就过去了。听错只是把这个洞照出来。
+     ⭐ 判据：**一个在正文里反复出现的单位，必须在它第一次出现的地方就被定义。**
+       不然它每出现一次，读者就默默跳过一次 ——&#160;而且不会有人举手。 -->
+
+<p class="lead">⭐ 上面那把尺用了两个词：<b>nat</b> 和<b>困惑度</b>。
+  <em>它们听起来是两个概念，其实<u>连同 bit 在内，是同一个量的三种读法</u>。</em></p>
+
+<figure class="fbox fwide" id="fig-natbit"><svg viewBox="0 0 1400 864" width="100%" role="img" aria-label="三块。第一块是一把双面尺：同一根横轴，上沿刻的是 nat，下沿刻的是 bit。两排刻度疏密不同，因为一个 nat 等于一点四四个 bit，但同一个横坐标代表的是同一件事 —— 就像厘米和英寸印在同一把直尺上。轴上标了三档：刚初始化瞎猜、训练早中期、收敛附近。第二块是压缩条，每个小格子代表一个 bit，按真实比例排开：瞎猜时要十七格，收敛后只要不到三格，长度差将近六倍，这就是模型学到的东西换算成压缩的样子。第三块画困惑度，也就是模型在几个词之间犹豫：收敛时是七点四个词，画得下；瞎猜时是十二万九千二百八十个词，整张纸都画不下，而这个画不下本身就是最好的说明"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<rect x="60" y="60" width="1280" height="226" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="60" y="60" width="1280" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="60" y="62" width="1280" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="60" y1="90" x2="1340" y2="90" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="74" y="80" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一把双面尺 —— 上沿 nat，下沿 bit，同一个位置是同一件事</tspan></text>
+<text class="svgsm" x="487" y="80" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">就像厘米和英寸印在同一把直尺上：刻度疏密不同，量的是同一段长度</text>
+<line x1="274" y1="176" x2="1246" y2="176" stroke="#202124" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-202124)"/>
+<line x1="300.0" y1="160" x2="300.0" y2="176" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="300" y="154" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<line x1="372.8" y1="167" x2="372.8" y2="176" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="445.6" y1="160" x2="445.6" y2="176" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="445" y="154" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<line x1="518.4" y1="167" x2="518.4" y2="176" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="591.2" y1="160" x2="591.2" y2="176" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="591" y="154" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<line x1="664.0" y1="167" x2="664.0" y2="176" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="736.8" y1="160" x2="736.8" y2="176" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="736" y="154" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<line x1="809.5999999999999" y1="167" x2="809.5999999999999" y2="176" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="882.4" y1="160" x2="882.4" y2="176" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="882" y="154" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<line x1="955.1999999999999" y1="167" x2="955.1999999999999" y2="176" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1028.0" y1="160" x2="1028.0" y2="176" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="1028" y="154" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10</tspan></text>
+<line x1="1100.8" y1="167" x2="1100.8" y2="176" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1173.6" y1="160" x2="1173.6" y2="176" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="1173" y="154" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">12</tspan></text>
+<text class="svgsm" x="264" y="154" fill="#174ea6" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">nat</tspan></text>
+<text class="svgsm" x="264" y="171" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">loss 本身</text>
+<line x1="300.0" y1="176" x2="300.0" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="300" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<line x1="350.461114744764" y1="176" x2="350.461114744764" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="400.92222948952804" y1="176" x2="400.92222948952804" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="400" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<line x1="451.38334423429205" y1="176" x2="451.38334423429205" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="501.84445897905607" y1="176" x2="501.84445897905607" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="501" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<line x1="552.3055737238201" y1="176" x2="552.3055737238201" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="602.7666884685841" y1="176" x2="602.7666884685841" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="602" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<line x1="653.2278032133481" y1="176" x2="653.2278032133481" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="703.6889179581121" y1="176" x2="703.6889179581121" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="703" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<line x1="754.1500327028762" y1="176" x2="754.1500327028762" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="804.6111474476402" y1="176" x2="804.6111474476402" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="804" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10</tspan></text>
+<line x1="855.0722621924042" y1="176" x2="855.0722621924042" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="905.5333769371682" y1="176" x2="905.5333769371682" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="905" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">12</tspan></text>
+<line x1="955.9944916819322" y1="176" x2="955.9944916819322" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1006.4556064266962" y1="176" x2="1006.4556064266962" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="1006" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">14</tspan></text>
+<line x1="1056.9167211714603" y1="176" x2="1056.9167211714603" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1107.3778359162243" y1="176" x2="1107.3778359162243" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="1107" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16</tspan></text>
+<line x1="1157.8389506609883" y1="176" x2="1157.8389506609883" y2="185" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1208.3000654057523" y1="176" x2="1208.3000654057523" y2="192" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="1208" y="206" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">18</tspan></text>
+<text class="svgsm" x="264" y="192" fill="#681da8" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">bit</tspan></text>
+<text class="svgsm" x="264" y="209" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">× 1.4427</text>
+<line x1="1156.8367716093583" y1="118" x2="1156.8367716093583" y2="222" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="1078.8367716093583" y="90" width="156" height="26" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="1156" y="108" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">刚初始化 · 瞎猜</tspan></text>
+<text class="svgsm" x="1156" y="238" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">11.77 nat ＝ 16.98 bit</tspan></text>
+<line x1="809.5999999999999" y1="118" x2="809.5999999999999" y2="222" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="731.5999999999999" y="90" width="156" height="26" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="809" y="108" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练早中期</tspan></text>
+<text class="svgsm" x="809" y="238" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.00 nat ＝ 10.10 bit</tspan></text>
+<line x1="445.6" y1="118" x2="445.6" y2="222" stroke="#1e8e3e" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="367.6" y="90" width="156" height="26" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="445" y="108" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收敛附近</tspan></text>
+<text class="svgsm" x="445" y="238" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.00 nat ＝ 2.89 bit</tspan></text>
+<rect x="60" y="312" width="1280" height="190" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="60" y="312" width="1280" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="60" y="314" width="1280" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="60" y1="342" x2="1340" y2="342" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="74" y="332" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 一个格子 ＝ 一个 bit —— 长度是量出来的，不是写上去的</tspan></text>
+<text class="svgsm" x="473" y="332" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">「模型平均要花多少个 bit，才能把下一个 token 记下来」</text>
+<text class="svgsm" x="310" y="388" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">刚初始化 · 瞎猜</tspan></text>
+<rect x="330" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="360" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="390" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="420" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="450" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="480" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="510" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="540" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="570" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="600" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="630" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="660" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="690" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="720" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="750" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="780" y="370" width="27" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="810" y="370" width="26.463768596257246" height="26" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.0" stroke-dasharray="3 2"/>
+<text class="svgsm" x="855" y="388" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16.98 bit</tspan></text>
+<text class="svgsm" x="310" y="444" fill="#0d652d" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收敛附近</tspan></text>
+<rect x="330" y="426" width="27" height="26" rx="3" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="360" y="426" width="27" height="26" rx="3" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="390" y="426" width="23.905532208004022" height="26" rx="3" fill="#fff" stroke="#1e8e3e" stroke-width="1.0" stroke-dasharray="3 2"/>
+<text class="svgsm" x="432" y="444" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.89 bit</tspan></text>
+<text class="svgsm" x="700" y="474" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">两条一比就完了：<tspan font-weight="700">5.9 倍</tspan>　——　<tspan font-weight="700">这就是模型学到的全部东西，换算成压缩的样子</tspan>。</text>
+<rect x="60" y="528" width="1280" height="188" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="60" y="528" width="1280" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="60" y="530" width="1280" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="60" y1="558" x2="1340" y2="558" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="74" y="548" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 困惑度 ＝ e^loss —— 「这一步在几个词之间犹豫」</tspan></text>
+<text class="svgsm" x="434" y="548" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">同一个量的第三种读法，换算里同样不含任何实测值</text>
+<text class="svgsm" x="310" y="588" fill="#0d652d" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收敛附近</tspan></text>
+<rect x="330" y="570" width="40" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="376" y="570" width="40" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="422" y="570" width="40" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="468" y="570" width="40" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="514" y="570" width="40" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="560" y="570" width="40" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="606" y="570" width="40" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="652" y="570" width="16" height="28" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0" stroke-dasharray="3 2"/>
+<text class="svgsm" x="682" y="588" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 困惑度 7.4 —— 七个多词之间犹豫</tspan></text>
+<text class="svgsm" x="310" y="640" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">刚初始化 · 瞎猜</tspan></text>
+<rect x="330" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="376" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="422" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="468" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="514" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="560" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="606" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="652" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="698" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="744" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="790" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="836" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="882" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="928" y="622" width="40" height="28" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="988" y="640" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums">……　<tspan font-weight="700">一共 129,280 个</tspan></text>
+<text class="svgsm" x="700" y="696" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">瞎猜那一档<tspan font-weight="700">画不下</tspan>　——　而它的困惑度正好<tspan font-weight="700">就是整个词表</tspan>，「在十二万九千个词之间挑一个」<tspan font-weight="700">就是瞎猜的定义</tspan>。</text>
+<rect x="0" y="736" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="736" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="736" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="763" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">nat 和 bit 不是两种东西 —— 是同一把尺换了个底</tspan></text>
+<text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">bit</tspan> 是「一次二选一」的信息量，以 <tspan font-weight="700">2</tspan> 为底；<tspan font-weight="700">nat</tspan> 以 <tspan font-weight="700">e</tspan> 为底 ——　差一个固定常数 <tspan font-weight="700">1.4427</tspan>。我们这儿是 nat，<tspan font-weight="700">纯粹因为 loss 的定义里写的是 ln</tspan>。</text>
+<text class="svgsm" x="20" y="818" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">per token</tspan> 那半截来自「一条序列几千个位置、每个位置一个 loss、最后取平均」——　读作<tspan font-weight="700">「平均每个 token 多少 nat」</tspan>。</text>
+</svg><figcaption>⭐⭐⭐ <b>一个量，三把尺</b> ——&nbsp;<em>loss（nat）／压缩（bit）／困惑度，挂在<b>同一根轴</b>上。</em><span class="capmore"><br>⭐⭐ <em>它们不是三个概念，是<b>三种读法</b>：<b>bit ＝ nat × 1.4427</b>（只是底数从 e 换成 2）、<b>困惑度 ＝ e^loss</b>。换算里<u>不含任何实测值</u>。</em><br>⭐ <em>最左那档是<b>自检</b>：瞎猜时困惑度必须正好回到词表大小 <b>129,280</b>、bit 必须正好等于 <b>log₂(词表)</b>。<b>对不上就是公式写错了。</b></em><br>⛔ <em>落点是那个压缩比：<b>17 bit → 2.9 bit</b> ——&nbsp;<u>模型学到的全部东西，换算成压缩就是这个比例</u>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ Ⓐ 最左那档是<b>自检</b>：困惑度必须正好回到词表 129,280、bit 必须正好等于 log₂(词表)。脚本里 assert 钉着，对不上就是换算写错了。</p>
+<p>⚠️ 「训练早中期 7.00」是<b>示意档</b>，「收敛附近 2.00」是公开模型的<b>大致量级</b>　——　当参照看，别当某个具体模型的实测值。</p></details></figure>
+
+<div class="note ok"><p>⭐⭐⭐ <b>先说 nat 和 bit ——&nbsp;它们差的只是一个底数。</b></p>
+<p><em><b>bit</b> 是「一次二选一」的信息量：抛一枚硬币，把结果告诉你，你就拿到 1 bit。
+  它以 <b>2</b> 为底。<br>
+  <b>nat</b> 是同一类东西，只是以 <b>e</b> 为底。
+  换算是死的：<b>1 nat ＝ 1.4427 bit</b>。</em></p>
+<p class="landing">⛔ <b>那为什么我们这儿冒出来的是 nat？——&nbsp;
+  <u>纯粹因为 loss 的定义里写的是 <code>ln</code></u>。</b>
+  <em>当初要是定义成 <code>−log₂ p</code>，整套东西一模一样，
+  所有数字乘 1.4427 而已。<b>这是个约定，不是什么深刻的选择。</b></em></p>
+<p><span class="sub">⭐ 至于 <b>per token</b> 那半截：它来自下面第三步那件事
+  ——&nbsp;一条序列几千个位置、每个位置一个 loss、最后取平均。
+  所以整个单位读作<b>「平均每个 token 多少 nat」</b>。</span></p></div>
+
+<div class="note danger"><p>⭐⭐⭐ <b>换成 bit 之后，这个数突然有了体感：<u>它就是压缩率</u>。</b></p>
+<p><em>「模型平均要花多少个 bit，才能把下一个 token 记下来」
+  ——&nbsp;<b>语言模型本质上就是个压缩器</b>，而 loss 就是它的压缩账单。</em></p>
+<ul>
+  <li><b>瞎猜时</b>：<em><code>ln 129,280 ＝ 11.77 nat ＝ <b>16.98 bit</b></code>。
+    ⭐ 而 <code>log₂ 129,280</code> 也正好是 <b>16.98</b>
+    ——&nbsp;<u>十二万九千个词里随便挑一个，本来就要花 17 个 bit</u>。
+    <b>这一档是自洽的，不是填上去的。</b></em></li>
+  <li><b>收敛后</b>：<em><code>2.0 nat ＝ <b>2.89 bit</b></code>。</em></li>
+</ul>
+<p class="landing">⭐⭐⭐ <b>从 17 bit 压到不到 3 bit ——&nbsp;
+  <u>这就是这个模型学到的全部东西，换算成压缩的样子</u>。</b></p></div>
+
+<div class="note"><p>📌 <b>所以同一件事有三副面孔，按场合挑：</b></p>
+<ul>
+  <li><b>nat/token</b> ——&nbsp;<em>定义直接给的，<u>训练日志里打的就是它</u>。</em></li>
+  <li><b>bit/token</b> ——&nbsp;<em>换算成压缩，<u>直觉最强</u>。</em></li>
+  <li><b>困惑度</b> ——&nbsp;<em>换算成「在几个词之间犹豫」，<u>最好向外行解释</u>。</em></li>
+</ul>
+<p><span class="sub">⛔ 它们之间是<b>恒等式</b>，不是三套测量
+  ——&nbsp;<em>任何一个变了，另外两个必然跟着变。所以别把它们并排列出来当成三条证据。</em></span></p></div>
 
 <h4>第三步 · 一个 token 一个 loss，<u>一个 batch 取平均</u></h4>
 
