@@ -1721,15 +1721,52 @@ body.figonly section h3{margin-top:34px}
 <p><em>很多人脑子里的画面是「一个梯度值一层一层传下去」。不是这样。</em></p>
 
 <p>往回传的是一整个张量，形状跟这一层的输出<u>一模一样</u>。
-  <em>它的含义是：「loss 对我这一层输出的每一个位置，各有多敏感」
-  ——&nbsp;这一层输出有多少个数，它就有多少个数。</em></p>
+  <em>它的含义是：「loss 对我这一层输出的每一个位置，各摊多少责任」
+  ——&nbsp;这一层输出有多少个数，它就有多少个数。本讲管它叫 <b>δ</b>。</em></p>
 
-<div class="note"><p>每一层拿到这个上游传来的敏感度之后，只做两件事：</p>
+<!-- ⭐⭐⭐ 2026-09-22 现场提的问题，逐字记下来因为它照出一个真的洞：
+     「那个激活它应该不会求激活的偏导数，对吧？也不会求激活的梯度。
+       激活在参与偏导数计算的过程中，是全程保持不变的，对吧？
+       那激活它只是一个中间传递的介质，是这么个道理不？」
+     ⛔ 三条里第一条是反的，而**全篇竟然没有一处说过「δ 就是激活的偏导数」** ——
+       所以会这么想完全怪教材，不怪读者。下面这一格就是补这句话。
+     ⭐ 顺带统一叫法：原来正文里管它叫「敏感度」（7 处）。那个词是我自己造的，
+       现场原话「『敏感度』这个词到底是谁创造的？有必要吗？」——&#160;
+       换成「责任 / δ」，跟图里、跟讲稿一致。**同一个东西不许有两个名字。** -->
+
+<div class="note ok"><p>⭐ <b>这里必须把 δ 的身份说破，否则后面全是黑话：
+  <u>δ 就是「激活的偏导数」</u>。</b></p>
+<p><em>这一层的输出就是激活。而 δ 的定义是「loss 对这一层输出的偏导数」
+  ——&nbsp;<b>所以我们不但求激活的偏导数，而且不求就没有反向</b>：
+  要算第 k 层权重的梯度，先得知道 loss 对第 k 层输出有多在乎，
+  而那个数只能由第 k＋1 层传回来。<b>δ 就是那条链本身。</b></em></p>
+<p><b>可「求它的导数」和「拿导数去改它」是两回事 ——&nbsp;这是最容易混的一处：</b></p>
+<table>
+<thead><tr><th></th><th>求它的偏导数？</th><th>拿这个导数去改它？</th><th>算完怎么处置</th></tr></thead>
+<tbody>
+<tr><td><b>权重</b></td><td>求</td><td><b>改</b></td><td>跨卡求平均、进优化器、每参数 2 字节</td></tr>
+<tr><td><b>激活</b></td><td><b>求</b>（就是 δ）</td><td>不改</td><td>传给上一层，<b>用完就扔</b>，不进任何账</td></tr>
+</tbody></table>
+<p class="landing">⭐ <b>为什么激活不改：它<u>不是自由变量</u>。</b>
+  <em>它是输入和权重算出来的结果 ——&nbsp;<b>想改激活，唯一的办法是改权重</b>。
+  所以给激活配优化器状态、去「拧」它，没有意义。</em></p>
+<p><span class="sub">❓ <b>那 δ 自己也是一整个张量，为什么它不出现在 1.7 那张显存账上？</b>
+  <em>因为它<u>反向走到哪一层才有哪一层，用完立刻释放</u>。
+  而激活要<b>从前向一直挂到反向</b> ——&nbsp;这就是 1.6 那座山的由来。
+  ⭐ 两个张量一样大，一个进账一个不进，差别只在<b>活多久</b>。</em></span></p>
+<p><span class="sub">⛔ <b>顺带修一个很自然但会误导的说法</b>：
+  「激活只是个中间传递的介质」。<em>前向确实是 ——&nbsp;可要真只是介质，
+  它<u>前向用完就该扔</u>。<b>而它扔不掉</b>，这件事本身就说明它在反向里还有活干：
+  每一层算自己权重梯度的时候，要把它当<b>来料</b>取出来用。
+  准确的说法是 ——&nbsp;<b>前向它是「传下去的东西」，反向传下去的换成了 δ，
+  而它变成了「拿出来对账的东西」。</b></em></span></p></div>
+
+<div class="note"><p>每一层拿到这个上游传来的责任 δ之后，只做两件事：</p>
 <ul>
   <li><b>① 算出自己那块权重的梯度</b> ——&nbsp;
-    <em>用这个敏感度，乘上<b>前向时存下来的输入</b>。</em></li>
-  <li><b>② 算出该继续往下游传的敏感度</b> ——&nbsp;
-    <em>用这个敏感度，乘上<b>自己的权重</b>。</em></li>
+    <em>用这个 δ，乘上<b>前向时存下来的输入</b>。</em></li>
+  <li><b>② 算出该继续往下游传的 δ</b> ——&nbsp;
+    <em>用这个 δ，乘上<b>自己的权重</b>。</em></li>
 </ul>
 <p class="landing">这两件事各是一次矩阵乘。前向一次、反向两次
   ——&nbsp;<u>三倍算力就是从这儿来的</u>。</p>
@@ -1744,7 +1781,7 @@ body.figonly section h3{margin-top:34px}
   冻住的层不更新权重。省掉 ①，也是 <b>2 倍</b>（<a href="#s三">3.8</a> 的 LoRA 走的是这条）。
   <u>只记住「3×」这个数的人，这两问都答不了。</u></em></span></p></div>
 
-<figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 1636" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的敏感度。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 1636" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的责任 δ。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">三倍算力是<tspan font-weight="700">数出来的</tspan>　——　前向一次矩阵乘，反向两次</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一格不讲链式法则，只数<tspan font-weight="700">乘法做了几次</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -1806,7 +1843,7 @@ body.figonly section h3{margin-top:34px}
 <line x1="501.0" y1="337.0" x2="501.0" y2="455.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
 <line x1="462.0" y1="425.5" x2="540.0" y2="425.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
 <line x1="520.5" y1="337.0" x2="520.5" y2="455.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="501" y="473" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游敏感度 dY</tspan></text>
+<text class="svgsm" x="501" y="473" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游责任 dY</tspan></text>
 <text class="svgsm" x="562" y="402" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
 <rect x="584.0" y="357.0" width="78.0" height="78.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
 <line x1="584.0" y1="376.5" x2="662.0" y2="376.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
@@ -1830,7 +1867,7 @@ body.figonly section h3{margin-top:34px}
 <line x1="339.0" y1="505.0" x2="339.0" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
 <line x1="300" y1="593.5" x2="378.0" y2="593.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
 <line x1="358.5" y1="505.0" x2="358.5" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="339" y="641" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游敏感度 dY</tspan></text>
+<text class="svgsm" x="339" y="641" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游责任 dY</tspan></text>
 <text class="svgsm" x="400" y="570" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
 <rect x="422.0" y="525.0" width="78.0" height="78.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
 <line x1="422.0" y1="544.5" x2="500.0" y2="544.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
@@ -1848,7 +1885,7 @@ body.figonly section h3{margin-top:34px}
 <line x1="583.0" y1="505.0" x2="583.0" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
 <line x1="544.0" y1="593.5" x2="622.0" y2="593.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
 <line x1="602.5" y1="505.0" x2="602.5" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="583" y="641" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新敏感度 dX</tspan></text>
+<text class="svgsm" x="583" y="641" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 dX</tspan></text>
 <text class="svgsm" x="646" y="570" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给前一层</text>
 <text class="svgsm" x="700" y="690" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">三块积的<tspan font-weight="700">面积一样大</tspan>　——　所以 <tspan font-weight="700">1 ＋ 2 ＝ 3</tspan> 不是个比喻，是<tspan font-weight="700">数出来的</tspan>。 而 ② 那块虚线的，就是<tspan font-weight="700">激活扔不掉的全部原因</tspan>。</text>
 <rect x="0" y="774" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -1858,7 +1895,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="14" y="794" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 全图的钥匙：<tspan font-weight="700">一条线进来，分成两支</tspan></tspan></text>
 <text class="svgsm" x="554" y="794" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">不是「反向比较慢」这种含糊说法 ——&#160;<tspan font-weight="700">是两支，而且一支都省不掉</tspan></text>
 <rect x="52" y="938" width="300" height="68" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="202" y="966" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游传来的敏感度</tspan></text>
+<text class="svgsm" x="202" y="966" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游传来的责任 δ</tspan></text>
 <text class="svgsm" x="202" y="990" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">（就这一个东西）</text>
 <line x1="352" y1="972" x2="456" y2="972" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
 <rect x="461" y="963" width="18" height="18" rx="9" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -1878,7 +1915,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="713" y="1066" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
 <line x1="878" y1="1048" x2="940" y2="1048" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
 <rect x="948" y="1018" width="250" height="60" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1073" y="1053" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的敏感度</tspan></text>
+<text class="svgsm" x="1073" y="1053" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 δ</tspan></text>
 <text class="svgsm" x="1218" y="1042" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">喂给前一层</tspan></text>
 <text class="svgsm" x="1218" y="1064" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">接着往左走</tspan></text>
 <text class="svgsm" x="713" y="1098" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">链条靠它　·　少了它，再往前就断了</text>
@@ -2539,15 +2576,15 @@ body.figonly section h3{margin-top:34px}
   <em>你只要把 61 个<b>局部的小导数</b>，按顺序乘起来。</em></p>
 
 <div class="note ok"><p><b>这里要把 <u>1.3</u> 那两笔账跟「乘起来」这三个字焊在一起 ——&nbsp;它们说的是同一件事。</b></p>
-<p><em>1.3 说每一层拿到上游的敏感度之后做两笔矩阵乘，其中第 ② 笔是
-  「<b>用这个敏感度，乘上自己的权重</b>」，结果传给下游。</em></p>
+<p><em>1.3 说每一层拿到上游的 δ 之后做两笔矩阵乘，其中第 ② 笔是
+  「<b>用这个 δ，乘上自己的权重</b>」，结果传给下游。</em></p>
 <p class="landing"><b>那一乘，就是链式法则的一环；
   而「自己的权重」，就是这个算子的<u>局部导数</u>。</b></p>
 <p><em>——&nbsp;所以「61 个局部导数按顺序乘起来」不是一个比喻，
   <b>它就是反向那一趟里，第 ② 笔被连做了 61 次</b>。
   第 ① 笔（算权重梯度）不在这条链上：它是<u>从链上取值</u>，
   每一层各取各的，取完就交给优化器，不往下传。</em></p>
-<p><span class="sub">这个区分后面一直有用：「梯度」这个词在本讲同时指两样东西 ——&nbsp;<b>第 ① 笔算出来的<u>权重梯度</u></b>（要 all-reduce、要进优化器、每参数 2 字节）和<b>第 ② 笔往回传的<u>敏感度</u></b>（用完就扔，不进任何账）。<a href="#s1-8">§1.8</a> 那道 all-reduce 传的是前者。</span></p></div>
+<p><span class="sub">这个区分后面一直有用：「梯度」这个词在本讲同时指两样东西 ——&nbsp;<b>第 ① 笔算出来的<u>权重梯度</u></b>（要 all-reduce、要进优化器、每参数 2 字节）和<b>第 ② 笔往回传的 <u>δ</u>（＝ 激活的偏导数）</b>（用完就扔，不进任何账）。<a href="#s1-8">§1.8</a> 那道 all-reduce 传的是前者。</span></p></div>
 
 <p class="lead">❓ <em>——&nbsp;<b>那「乘起来」之后会怎样？</b></em>
   <em>这一问有一个非常出名的答案，而它是<b>链式法则最直接的后果</b>。</em></p>
@@ -3125,6 +3162,41 @@ body.figonly section h3{margin-top:34px}
 
 <h4>MoE 子层留什么</h4>
 <table><thead><tr><th>留下的张量</th><th>份数 × 宽度</th><th>大小</th></tr></thead><tbody><tr><td>norm 的输入 / 输出</td><td>2 × 7,168</td><td>112 MiB</td></tr><tr><td>路由分数</td><td>256</td><td>2 MiB</td></tr><tr><td>派发给专家的那份</td><td>＝ 上一行本身，<b>九个专家共用</b></td><td>0 MiB</td></tr><tr><td>gate / up / SwiGLU 乘积</td><td>3 × <b>9 份</b> × 2,048</td><td>432 MiB</td></tr><tr><td><b>专家输出（合并前）</b></td><td><b>9 份</b> × 7,168</td><td>504 MiB</td></tr><tr><td><b>小计</b></td><td></td><td><b>约 1.03 GiB</b></td></tr></tbody></table>
+
+<!-- ⭐⭐⭐ 2026-09-22 现场的猜想，原话：「是不是大概的感觉就是经过一次计算，
+     它就会多一份激活？就即使是把一个激活矩阵统一加一个 bias 1，
+     它也会多出来一倍的激活，所以这好几十倍是这么来的，对吧？」
+     ⭐ 数量级的直觉完全对 ——&#160;上面这张表除以 56 MiB 就是 31 份出头。
+     ⛔ 但判据要修：**不是「算过就多一份」，是「反向要不要用到它」。**
+       而他举的加法恰好是**唯一不用存的那一类** ——&#160;加法的反向是恒等。
+     ⛔ 这张表原来只给「留下了什么」，**没给「凭什么是这些」** ——&#160;
+       于是读者只能自己猜一条规则出来。下面这一格补的就是那条规则。 -->
+
+<div class="note"><p>❓ <b>凭什么是这些张量？——&nbsp;判据只有一句：
+  <u>反向的公式里要不要用到它。</u></b></p>
+<p><em>框架只存反向真正会读的那几个量。按算子分，规律干净得出乎意料：</em></p>
+<table>
+<thead><tr><th>算子</th><th>反向要用什么</th><th>要存吗</th></tr></thead>
+<tbody>
+<tr><td><b>加法</b>　<code>y ＝ a ＋ b</code></td>
+    <td>导数恒等于 1，<b>谁都不依赖</b></td><td><b>一个字节都不用存</b></td></tr>
+<tr><td><b>逐元素乘</b>　<code>y ＝ a × b</code></td>
+    <td>算 a 的责任要用 b，算 b 的要用 a</td><td><b>两个都得存</b></td></tr>
+<tr><td><b>矩阵乘</b>　<code>y ＝ x·W</code></td>
+    <td>算 W 的梯度要用 x（1.3 第 ① 笔）</td><td>存 <b>x</b></td></tr>
+<tr><td><b>非线性</b>　SiLU / GELU</td>
+    <td>导数是输入的函数</td><td>存<b>输入</b></td></tr>
+<tr><td><b>softmax</b></td><td>导数能用输出表示</td><td>存<b>输出</b></td></tr>
+</tbody></table>
+<p class="landing">⭐ <b>加法白送，乘法和非线性要付钱。</b>
+  <em>而神经网络里几乎全是乘法和非线性 ——&nbsp;<u>所以「一层几十份」是必然的</u>。</em></p>
+<p><span class="sub">⚠️ <b>一个常见的误会</b>：<em>「加一个 bias 也会多一份激活。」
+  ——&nbsp;它确实会在显存里<u>短暂出现</u>一块新缓冲，但它<b>不进「留着等反向」那本账</b>，
+  用完就释放。上面那张表记的是后者。</em></span></p>
+<p><span class="sub">⭐ <b>再补一条，它是这张表里数目最大的来源</b>：
+  <em>不是每一份都跟输入一样宽。<u>Q 展开后 24,576 宽，一份顶 3.4 份；
+  K/V 解压后 32,768 宽，一份顶 4.6 份。</u>
+  ——&nbsp;<b>所以「几十份」里有一半是被「宽」撑起来的，不只是「多」。</b></em></span></p></div>
 
 <div class="note ok"><p>「9 份」是这张表里最值得停一下的地方 ——&nbsp;
   <b>而它出现在哪、不出现在哪，同样值得停一下</b>。</p>

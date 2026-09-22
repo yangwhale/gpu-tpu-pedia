@@ -31,7 +31,7 @@ assert TOTAL == 3 and TOTAL_REMAT == 4
 
 def main():
     f = Fig(W, "一层里前向只做一次矩阵乘，反向要做两次："
-               "一次算这块权重自己的梯度，一次算该往下游传的敏感度。"
+               "一次算这块权重自己的梯度，一次算该往下游传的责任 δ。"
                "一加二等于三，这就是训练比推理贵三倍的全部来源。"
                "如果再开全量重算，还要多跑一遍前向，变成四倍")
 
@@ -68,11 +68,11 @@ def main():
          ("输入 X", T_PX, D_PX, False), ("权重 W", D_PX, D_PX, False),
          ("输出 Y", T_PX, D_PX, False), "→ 交给下一层"),
         (RD, "② 反向 · 权重梯度", "算「我这块权重该怎么改」",
-         ("输入 Xᵀ", D_PX, T_PX, True), ("上游敏感度 dY", T_PX, D_PX, False),
+         ("输入 Xᵀ", D_PX, T_PX, True), ("上游责任 dY", T_PX, D_PX, False),
          ("权重梯度 dW", D_PX, D_PX, False), "→ 交给优化器"),
         (RD, "③ 反向 · 传给下游", "算「前一层该收到什么」",
-         ("上游敏感度 dY", T_PX, D_PX, False), ("权重 Wᵀ", D_PX, D_PX, False),
-         ("新敏感度 dX", T_PX, D_PX, False), "→ 交给前一层"),
+         ("上游责任 dY", T_PX, D_PX, False), ("权重 Wᵀ", D_PX, D_PX, False),
+         ("新的责任 dX", T_PX, D_PX, False), "→ 交给前一层"),
     )
     # ⭐ 三次的乘加次数必须真的相等 ——&#160;这是「1＋2＝3」成立的全部前提
     _flops = [a[1] * a[2] * b_[2] for _, _, _, a, b_, _c, _n in MULS]
@@ -160,7 +160,7 @@ def main():
 
     # 进来的那条
     f.box(52, JY - 34, 300, 68, "#fce8e6", RD, 8)
-    f.t(202, JY - 6, "上游传来的敏感度", RD, True, 16, "middle")
+    f.t(202, JY - 6, "上游传来的责任 δ", RD, True, 16, "middle")
     f.t(202, JY + 18, "（就这一个东西）", GY2, size=12.5, anchor="middle")
     f.line(352, JY, JX - 14, JY, RD, 2.0, arrow=False)
     f.box(JX - 9, JY - 9, 18, 18, RD, RD, 9)
@@ -184,7 +184,7 @@ def main():
            "这块权重的梯度", "交给优化器",
            "⛔ 到此为止", "⭐ 这是这一步真正要的东西　·　到这儿这一支就不往前了")
     branch(DY, BL, "这一层的<tspan font-weight=\"700\">权重</tspan>",
-           "新的敏感度", "喂给前一层",
+           "新的责任 δ", "喂给前一层",
            "⭐ 接着往左走", "⭐ 链条靠它　·　少了它，再往前就断了")
 
     f.t(700, py2 + 322, "⭐⭐⭐ <tspan font-weight=\"700\">两支乘的东西不一样</tspan>"
