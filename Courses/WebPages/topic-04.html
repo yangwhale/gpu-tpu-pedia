@@ -1075,6 +1075,203 @@ body.figonly section h3{margin-top:34px}
 <p class="landing"><b>loss ＝ −ln p</b>　
   <em>（p ＝ 模型给正确那个词的概率）</em></p>
 
+<!-- ⭐⭐⭐ 2026-09-22 现场两问，一前一后其实是同一条线：
+     ①「logits 怎么变成 loss？」
+     ②「我发现求 loss 的时候只有正确答案那个概率参与计算，
+        剩下那些**本来应该是 0、却概率大于 0** 的词并没有参与。为什么？」
+     ⛔ 两个真洞：**「logits」这个词全讲用了十几次却从没定义过**
+       （第一次出现在 1.2，那时候读者根本不知道它是什么）；
+       而 softmax 那两步原来只是下面那一行小字。
+     ⭐ 判据（今天第二次用到）：**一个贯穿全讲的词，
+       必须在第一次用它之前就定义好。** -->
+<h4>第一步之二 · <u>logits 怎么变成 loss</u> ——&nbsp;以及「猜错的那些」去哪了</h4>
+
+<p>上面那句 <code>−ln p</code> 里的 <b>p</b> 是怎么来的？<em>中间隔着两步。</em></p>
+
+<p class="landing"><b>模型最后一层吐出来的，是一排<u>原始分数</u> ——&nbsp;
+  这排数就叫 <u>logits</u>。</b>
+  <em>它<b>可正可负、没有范围</b>，<u>还不是概率</u>。</em></p>
+
+<ul>
+  <li><b>① 取指数</b> ——&nbsp;<em>全变正数，而且<b>差距被拉开</b>。</em></li>
+  <li><b>② 除以总和</b> ——&nbsp;<em>让它们<b>加起来正好是 1</b>。现在它是概率了。</em></li>
+  <li><b>③ 翻开正确答案</b>，取那一格的 p，<b>取负对数</b>。</li>
+</ul>
+
+<figure class="fbox fwide" id="fig-softmax"><svg viewBox="0 0 1400 1416" width="100%" role="img" aria-label="logits 是最后一层吐出来的一排分数，可正可负没有范围。softmax 把它变成概率只做两件事：取指数让它们全变正，再除以总和让它们加起来等于一。然后翻开正确答案，取那一格概率的负对数，那就是 loss。给所有 logits 加同一个数，概率完全不变，所以绝对大小不重要，只有差重要。而猜错的那些词并不是没参与 —— 它们全在分母里：只把一个错的分数抬高、正确那一格一个字不改，loss 照样会涨。求导之后它们更是全部显形，每一个的梯度就是它现在占的概率"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">logits 怎么变成 loss　——　<tspan font-weight="700">以及「猜错的那些」去哪了</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">三步：<tspan font-weight="700">取指数 → 除以总和 → 翻开答案取负对数</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓐ 三步</text>
+<rect x="96" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="117" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓑ 两个性质</text>
+<rect x="220" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="241" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓒ 错的那些去哪了</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 从一排<tspan font-weight="700">分数</tspan>，到一个<tspan font-weight="700">数</tspan></tspan></text>
+<text class="svgsm" x="646" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">词表这里缩成 5 个词；真实是 129,280 个，动作一模一样</text>
+<text class="svgsm" x="150" y="190" fill="#80868b" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① logits（原始分数）</tspan></text>
+<rect x="32" y="246.0" width="34" height="76.0" rx="3" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="49" y="242" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.00</tspan></text>
+<text class="svgsm" x="49" y="344" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">的</tspan></text>
+<rect x="82" y="284.0" width="34" height="38.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="280" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1.00</text>
+<text class="svgsm" x="99" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">了</text>
+<rect x="132" y="284.0" width="34" height="38.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="149" y="280" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1.00</text>
+<text class="svgsm" x="149" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">在</text>
+<rect x="182" y="322.0" width="34" height="0.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="199" y="318" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">0.00</text>
+<text class="svgsm" x="199" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">和</text>
+<rect x="232" y="322.0" width="34" height="0.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="249" y="318" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">0.00</text>
+<text class="svgsm" x="249" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">有</text>
+<text class="svgsm" x="150" y="376" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">可正可负，<tspan font-weight="700">没有范围</tspan></text>
+<line x1="282" y1="284" x2="344" y2="284" stroke="#80868b" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="480" y="190" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 取指数</tspan></text>
+<rect x="362" y="246.0" width="34" height="76.0" rx="3" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="379" y="242" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.4</tspan></text>
+<text class="svgsm" x="379" y="344" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">的</tspan></text>
+<rect x="412" y="294.0411624709704" width="34" height="27.958837529029616" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="429" y="290" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2.7</text>
+<text class="svgsm" x="429" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">了</text>
+<rect x="462" y="294.0411624709704" width="34" height="27.958837529029616" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="479" y="290" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2.7</text>
+<text class="svgsm" x="479" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">在</text>
+<rect x="512" y="311.71451847401744" width="34" height="10.285481525982565" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="529" y="307" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1.0</text>
+<text class="svgsm" x="529" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">和</text>
+<rect x="562" y="311.71451847401744" width="34" height="10.285481525982565" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="579" y="307" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1.0</text>
+<text class="svgsm" x="579" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">有</text>
+<text class="svgsm" x="480" y="376" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">全变正数，<tspan font-weight="700">差距被拉开</tspan></text>
+<line x1="612" y1="284" x2="674" y2="284" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="810" y="190" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 除以总和 ＝ 概率</tspan></text>
+<rect x="692" y="246.0" width="34" height="76.0" rx="3" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="709" y="242" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.50</tspan></text>
+<text class="svgsm" x="709" y="344" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">的</tspan></text>
+<rect x="742" y="294.0411624709704" width="34" height="27.95883752902962" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="759" y="290" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">0.18</text>
+<text class="svgsm" x="759" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">了</text>
+<rect x="792" y="294.0411624709704" width="34" height="27.95883752902962" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="809" y="290" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">0.18</text>
+<text class="svgsm" x="809" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">在</text>
+<rect x="842" y="311.71451847401744" width="34" height="10.285481525982565" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="859" y="307" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">0.07</text>
+<text class="svgsm" x="859" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">和</text>
+<rect x="892" y="311.71451847401744" width="34" height="10.285481525982565" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="909" y="307" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">0.07</text>
+<text class="svgsm" x="909" y="344" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">有</text>
+<text class="svgsm" x="810" y="376" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">加起来<tspan font-weight="700">正好是 1</tspan></text>
+<text class="svgsm" x="150" y="416" fill="#80868b" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">总和 ＝ 14.83</text>
+<text class="svgsm" x="480" y="416" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">总和 ＝ 14.83</tspan></text>
+<text class="svgsm" x="810" y="416" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">总和 ＝ 1.00</tspan></text>
+<rect x="1010" y="192" width="350" height="200" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1185" y="228" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④ 翻开正确答案</tspan></text>
+<text class="svgsm" x="1185" y="264" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">正确的是「的」，它的概率 <tspan font-weight="700">0.4984</tspan></text>
+<text class="svgsm" x="1185" y="304" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss ＝ −ln 0.4984</tspan></text>
+<text class="svgsm" x="1185" y="342" fill="#174ea6" text-anchor="middle" style="font-size:24.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ <tspan font-weight="700">0.6964</tspan></tspan></text>
+<text class="svgsm" x="1185" y="378" fill="#80868b" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">其余四个的概率，<tspan font-weight="700">式子里一个都没出现</tspan></text>
+<text class="svgsm" x="1185" y="424" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">——　那它们去哪了？<tspan font-weight="700">看 Ⓒ。</tspan></tspan></text>
+<text class="svgsm" x="700" y="482" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">顺带记住这个词：<tspan font-weight="700">logits ＝ 最后一层吐出来的那排原始分数</tspan>　——　<tspan font-weight="700">它还不是概率</tspan>，中间隔着 softmax 这两步。</text>
+<rect x="0" y="552" width="1400" height="258" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="552" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="554" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="582" x2="1400" y2="582" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="572" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 两个性质，一个漂亮、一个救命</tspan></text>
+<rect x="50" y="634" width="640" height="180" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="370" y="672" fill="#b06000" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 加同一个数，概率完全不变</tspan></text>
+<text class="svgsm" x="370" y="710" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">把那一排 logits <tspan font-weight="700">全部 ＋100</tspan>　——　算出来还是 <tspan font-weight="700">0.4984</tspan>。</text>
+<text class="svgsm" x="370" y="748" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以 logits 的<tspan font-weight="700">绝对大小不重要，只有「差」重要</tspan>。</tspan></text>
+<text class="svgsm" x="370" y="782" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">指数干的事，就是<tspan font-weight="700">把「差」变成「比」</tspan>。</text>
+<rect x="710" y="634" width="640" height="180" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="672" fill="#a50e0e" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 可别真直接取指数　——　会炸</tspan></text>
+<text class="svgsm" x="1030" y="710" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">真实 logit 可能几十上百：<tspan font-weight="700">e¹⁰² ≈ 2e+44</tspan>，</text>
+<text class="svgsm" x="1030" y="740" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">而 fp32 的上限只有 <tspan font-weight="700">3.4e+38</tspan>。</text>
+<text class="svgsm" x="1030" y="778" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以实现里<tspan font-weight="700">先减去这排里的最大值</tspan>再取指数</tspan></text>
+<text class="svgsm" x="1030" y="808" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">——　靠的正是左边那条平移不变。<tspan font-weight="700">数学等价，数值不炸。</tspan></text>
+<rect x="0" y="860" width="1400" height="386" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="860" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="862" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="890" x2="1400" y2="890" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="880" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 那<tspan font-weight="700">猜错的那些</tspan>去哪了？　——　它们全在<tspan font-weight="700">分母</tspan>里</tspan></text>
+<text class="svgsm" x="795" y="880" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">正确答案的概率 ＝ 它自己的指数 ÷ <tspan font-weight="700">所有格子的指数之和</tspan>　——　那个和里装着<tspan font-weight="700">每一个词</tspan></text>
+<text class="svgsm" x="230" y="954" fill="#80868b" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">原来</tspan></text>
+<rect x="130" y="989.0" width="30" height="51.0" rx="3" fill="#fef7e0" stroke="#e8710a" stroke-width="1.6"/>
+<rect x="172" y="1012.0" width="30" height="28.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="214" y="1012.0" width="30" height="28.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="256" y="1035.0" width="30" height="5.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="298" y="1035.0" width="30" height="5.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="230" y="1134" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">正确那格的概率 <tspan font-weight="700">0.4984</tspan></text>
+<text class="svgsm" x="230" y="1166" fill="#5f6368" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss ＝ <tspan font-weight="700">0.6964</tspan></tspan></text>
+<line x1="362" y1="1040" x2="426" y2="1040" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="630" y="954" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只把一个「错」的抬高一格</tspan></text>
+<rect x="530" y="989.0" width="30" height="51.0" rx="3" fill="#fef7e0" stroke="#e8710a" stroke-width="1.6"/>
+<rect x="572" y="989.0" width="30" height="51.0" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<line x1="587" y1="1080" x2="587" y2="1048" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="587" y="1100" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">抬高</tspan></text>
+<rect x="614" y="1012.0" width="30" height="28.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="656" y="1035.0" width="30" height="5.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="698" y="1035.0" width="30" height="5.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="630" y="1134" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">正确那格的概率 <tspan font-weight="700">0.3790</tspan></text>
+<text class="svgsm" x="630" y="1166" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss ＝ <tspan font-weight="700">0.9702</tspan></tspan></text>
+<text class="svgsm" x="390" y="1204" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">正确那一格的分数，一个字都没改</tspan>　——　可 loss 涨了 <tspan font-weight="700">0.2739</tspan>。</tspan></text>
+<text class="svgsm" x="390" y="1234" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以它们<tspan font-weight="700">参与了</tspan>，只是<tspan font-weight="700">不以自己的名义</tspan>。</tspan></text>
+<rect x="940" y="946" width="410" height="290" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1145" y="982" fill="#0d652d" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">而求导之后，它们全部显形</tspan></text>
+<text class="svgsm" x="1000" y="1012" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">的（正确）</tspan></text>
+<text class="svgsm" x="1290" y="1012" fill="#0d652d" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.5016</tspan></text>
+<text class="svgsm" x="1000" y="1042" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">了</text>
+<text class="svgsm" x="1290" y="1042" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+0.1834</tspan></text>
+<text class="svgsm" x="1000" y="1072" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">在</text>
+<text class="svgsm" x="1290" y="1072" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+0.1834</tspan></text>
+<text class="svgsm" x="1000" y="1102" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">和</text>
+<text class="svgsm" x="1290" y="1102" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+0.0675</tspan></text>
+<text class="svgsm" x="1000" y="1132" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">有</text>
+<text class="svgsm" x="1290" y="1132" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+0.0675</tspan></text>
+<text class="svgsm" x="1145" y="1178" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">加起来 ＝ <tspan font-weight="700">0</tspan>　——　一次<tspan font-weight="700">再分配</tspan></tspan></text>
+<text class="svgsm" x="1145" y="1210" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">错的那些，梯度<tspan font-weight="700">正好等于它现在占的概率</tspan>。</text>
+<rect x="0" y="1294" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1294" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1294" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1321" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一格的两句话</tspan></text>
+<text class="svgsm" x="20" y="1352" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">logits ＝ 最后一层的原始分数</tspan>（可正可负）；<tspan font-weight="700">取指数 →&#160;除以总和</tspan> 变成概率，再<tspan font-weight="700">翻开答案取负对数</tspan>，就是 loss。</text>
+<text class="svgsm" x="20" y="1376" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">猜错的那些没有从式子里消失，它们在分母里</tspan>　——　而且<tspan font-weight="700">求导之后每一个都显形</tspan>。 一句话：<tspan font-weight="700">loss 的式子里看不见它们，梯度里看得见；而训练只用梯度。</tspan></text>
+</svg><figcaption><b>logits → 概率 → loss，三步走完。</b><em>Ⓐ 取指数（全变正、差距拉开）→&nbsp;除以总和（加起来是 1）→&nbsp;翻开答案取负对数。<b>「logits」＝ 最后一层的原始分数，它还不是概率。</b></em><span class="capmore"><br><em>Ⓑ 两个性质：<b>全部加同一个数，概率完全不变</b>（所以只有「差」重要）；<b>而直接取指数会炸</b>，所以实现里先减最大值。</em><br><em>⛔ Ⓒ 回答现场那一问：<b>猜错的那些全在分母里</b> ——&nbsp;只抬高一个错的分数、正确那格一动不动，<b>loss 照样涨</b>；而求导之后<b>它们全部显形</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 完整的交叉熵其实是<b>对整个词表求和</b>；只因为标签是 one-hot（只有一格是 1），那个和里<b>只剩一项非零</b>　——　所以「只看一个」是 one-hot 的结果，不是定义。</p>
+<p>⚠️ 反过来验证：标签<b>不是</b> one-hot 时（label smoothing、蒸馏的软标签），<b>每一项就真的都会出现在 loss 里</b>。数都是本脚本现算并 assert 住的；fp32 上限取 3.4028e+38。</p></details></figure>
+
+<div class="note"><p><b>两个性质，一个漂亮、一个救命。</b></p>
+<p><em>① <b>给所有 logits 加同一个数，概率完全不变。</b>
+  ——&nbsp;所以 logits 的<b>绝对大小不重要，只有「差」重要</b>；
+  <b>指数干的事，就是把「差」变成「比」</b>。</em></p>
+<p><em>② <b>可别真直接取指数 ——&nbsp;会炸。</b>
+  真实 logit 可能几十上百，而 <code>e¹⁰²</code> 已经远远超出 fp32 的上限。
+  所以所有实现都<b>先减去这排里的最大值</b>再取指数 ——&nbsp;
+  靠的正是上面那条平移不变，<b>数学等价，数值不炸</b>。</em></p>
+<p class="landing">它跟 <a href="#s六">6.4</a> 那个 <b>z-loss</b> 是同一件事的两面：
+  <em><b>一个是事后不让它炸，一个是事前不让分数长那么大。</b></em></p></div>
+
+<div class="note warn"><p>✋ <b>那现场那一问呢 ——&nbsp;<u>「猜错的那些词，怎么没参与 loss 的计算？」</u></b></p>
+<p class="landing"><b>它们参与了，只是<u>不以自己的名义</u> ——&nbsp;
+  它们全在 <u>softmax 的分母</u>里。</b></p>
+<p><em>正确答案的概率 ＝ <b>它自己的指数 ÷ 所有格子的指数之和</b>
+  ——&nbsp;而那个和里，<b>装着词表里每一个词</b>。<br>
+  ⇒ 上面 Ⓒ 那一格是实算的证明：<b>只把一个「错」的分数抬高一格、
+  正确那一格一个字不改</b>，loss 照样从 <b>0.6964</b> 涨到 <b>0.9702</b>。</em></p>
+<p class="landing"><b>而求导之后，它们全部显形。</b>
+  <em>对错的那些，梯度就是 <b>＋它现在占的概率</b>
+  ——&nbsp;<u>占得越多，被压得越狠</u>。那一排加起来正好是 0。</em></p>
+<p><span class="sub">⭐ 一句话分清：<b>loss 的式子里看不见它们，梯度里看得见；
+  而训练只用梯度。</b><br>
+  <em>📌 再深一层：<b>完整的交叉熵其实是对整个词表求和</b>，
+  只因为标签是 <b>one-hot</b>（只有一格是 1），那个和里<b>只剩一项非零</b>。
+  ——&nbsp;所以「只看一个」<u>是 one-hot 的结果，不是交叉熵的定义</u>。
+  反过来验证：标签<b>不是</b> one-hot 时（label smoothing、蒸馏的软标签），
+  <b>每一项就真的都会出现在 loss 里</b>。</em></span></p></div>
+
 <div class="note ok"><p><b>为什么是这个式子 ——&nbsp;它其实很讲道理。</b></p>
 <ul>
   <li><em>模型很确信而且猜对了（p → 1）：<b>−ln 1 ＝ 0</b>，不罚。</em></li>
