@@ -2490,6 +2490,146 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>这一讲被追问得最深的一处，也是整节的枢纽。</b>——&nbsp;<em>Ⓐ 一个带权重的算子反向时做两件事：<b>一笔沿位置求和（结出权重梯度，位置维被吃掉）、一笔逐位置保留（结出传给上游的责任）</b>。<b>那就是 1.6 说的那两笔乘法。</b></em><span class="capmore"><br><em>Ⓑ 一层里带权重的各结各的账，不带权重的只是路过 ——&nbsp;<b>没有「一层算完再平均」这回事</b>。</em><br><em>Ⓒ 桶的大小固定、每层只加不除；Ⓓ 谁也不用等谁 ——&nbsp;<b>而这正是多卡训练能把通信藏进计算里的原因。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 现场自己推到的那一步是对的：「我当前这个 token 得用生成我这个 token 的激活，也就是前面所有 token 都参与计算之后的激活」——&#160;线性层的权重梯度<b>只用本位置的输入</b>，</p>
 <p>而前面那些 token 是<b>在前向的 attention 里就已经被搅进这个输入了</b>，不是反向时才拉进来的。⛔ 口径：V3 一层里<b>没有任何一块 7,168 × 7,168 的方阵</b> ——&#160;残差流是 7,168 宽，但<b>每一块的另一边都是别的数</b>（专家 7,168 → 2,048、MLA 把 KV 压到 512 那一档，而 o_proj 那一边是 16,384）。本图用专家 up 当例子。共 61 层。</p></details></figure>
 
+<!-- ⭐⭐⭐ 2026-09-22 现场再追一层：「这个平均到底是怎么个平均？是序列级别的，
+     还是 per device batch 的，然后再 cross device 的？……应该是分层次的。」
+     ⭐ 「分层次」对了，但层数和动作都要改 —— 见 fig-levels。 -->
+<div class="note ok"><p><b>还有一层要说清：那个「平均」<u>分几层</u>？</b>
+  <em>——&nbsp;现场的猜测是：序列内平均一次、本卡跨序列再平均一次、
+  micro-batch 之间再平均一次、跨卡再平均一次。</em></p>
+<p class="landing"><b>「分层次」这个直觉是对的，但实际是 ——&nbsp;
+  <u>三层加法 ＋ 一次除法</u>。</b></p>
+<ul>
+  <li><b>① 序列内 ＋ 本卡多条序列 ——&nbsp;这两层其实是<u>同一层</u>。</b>
+    <em>δ 表的形状是「(本卡条数 × 序列长度) × 宽」，
+    权重梯度那一次矩阵乘<b>一次就把这一整维收缩掉</b>。</em></li>
+  <li><b>② micro-batch 之间</b> ——&nbsp;<em>梯度累积，<b>累加到同一个桶，只加不除</b>。</em></li>
+  <li><b>③ 跨卡（DP）</b> ——&nbsp;<em>all-reduce <b>求和</b>。</em></li>
+  <li><b>④ 除法</b> ——&nbsp;<em><b>全程只有一次</b>，除以「全局有效 token 总数」。</em></li>
+</ul>
+<p><span class="sub">⛔ <b>为什么不能每层各除一次？那就成了「平均的平均」。</b>
+  <em>各层的有效 token 数并不相等（padding、拼接边界、最后一批）——&nbsp;
+  一旦各自先除，<b>token 少的那一批就被当成跟多的那批一样重</b>。
+  而它<u>不报错、不发散、曲线看着完全正常</u>。<br>
+  正确做法：<b>一路只传两个数 ——&nbsp;「loss 的和」和「token 的个数」</b>，
+  最后拿前者除后者。</em></span></p></div>
+
+<figure class="fbox fwide" id="fig-levels"><svg viewBox="0 0 1400 1568" width="100%" role="img" aria-label="那个平均分几层？分层次这个直觉是对的，但实际是三层加法加一次除法。序列内和同一张卡上的多条序列其实是同一层，因为权重梯度那一次矩阵乘一次就把它们收缩掉了；第二层是梯度累积，只加不除；第三层是跨卡求和。而除法全程只有一次，除以全局有效 token 总数。如果每层各除一次，就成了平均的平均，token 少的那一批会被当成跟多的那批一样重"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">那个「平均」，到底<tspan font-weight="700">分几层</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">「分层次」这个直觉对了，但实际是　——　<tspan font-weight="700">三层加法 ＋ 一次除法</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓐ 以为的</text>
+<rect x="110" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="131" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓑ 实际的</text>
+<rect x="220" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="241" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓒ 为什么不能各除各的</text>
+<rect x="414" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="435" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓓ 源码对照</text>
+<rect x="0" y="102" width="1400" height="216" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 很自然会这么想：<tspan font-weight="700">一层一层各平均一次</tspan></tspan></text>
+<rect x="70" y="180" width="270" height="90" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="205" y="214" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列内</tspan></text>
+<text class="svgsm" x="205" y="242" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">平均一次</tspan></text>
+<line x1="344" y1="225" x2="396" y2="225" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="400" y="180" width="270" height="90" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="535" y="214" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">本卡多条序列</tspan></text>
+<text class="svgsm" x="535" y="242" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">再平均一次</tspan></text>
+<line x1="674" y1="225" x2="726" y2="225" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="730" y="180" width="270" height="90" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="865" y="214" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">micro-batch 之间</tspan></text>
+<text class="svgsm" x="865" y="242" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">再平均一次</tspan></text>
+<line x1="1004" y1="225" x2="1056" y2="225" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1060" y="180" width="270" height="90" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1195" y="214" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">跨卡</tspan></text>
+<text class="svgsm" x="1195" y="242" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">再平均一次</tspan></text>
+<text class="svgsm" x="700" y="310" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">四次除法。而实际上除法只有一次</tspan>　——　而且其中有一层，<tspan font-weight="700">根本不存在</tspan>。</tspan></text>
+<rect x="0" y="368" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="368" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="370" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="398" x2="1400" y2="398" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="388" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 实际是这样：<tspan font-weight="700">加法分三层，除法只有一次</tspan></tspan></text>
+<rect x="40" y="446" width="300" height="168" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="40" y="446" width="300" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="190" y="482" fill="#0d652d" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 序列内 ＋ 本卡多条</tspan></text>
+<text class="svgsm" x="190" y="514" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这两层是<tspan font-weight="700">同一层</tspan></tspan></text>
+<text class="svgsm" x="190" y="552" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">δ 表的形状是「(本卡条数 × 序列长度) × 宽」，</text>
+<text class="svgsm" x="190" y="576" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">权重梯度那一次矩阵乘<tspan font-weight="700">一次收缩掉整维</tspan></text>
+<line x1="344" y1="530" x2="376" y2="530" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="380" y="446" width="300" height="168" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="380" y="446" width="300" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="530" y="482" fill="#174ea6" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② micro-batch 之间</tspan></text>
+<text class="svgsm" x="530" y="514" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">累加</tspan>到同一个桶</tspan></text>
+<text class="svgsm" x="530" y="552" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">梯度累积：算一批加一批，</text>
+<text class="svgsm" x="530" y="576" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加不除</tspan></text>
+<line x1="684" y1="530" x2="716" y2="530" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="720" y="446" width="300" height="168" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<rect x="720" y="446" width="300" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="870" y="482" fill="#681da8" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 跨卡（DP）</tspan></text>
+<text class="svgsm" x="870" y="514" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">all-reduce <tspan font-weight="700">求和</tspan></tspan></text>
+<text class="svgsm" x="870" y="552" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">每张卡把自己那个桶交出来，</text>
+<text class="svgsm" x="870" y="576" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">加到一起</text>
+<line x1="1096" y1="530" x2="1128" y2="530" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="1134" y="446" width="226" height="168" rx="8" fill="#fff" stroke="#e8710a" stroke-width="2.0"/>
+<text class="svgsm" x="1247" y="490" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④ 除一次</tspan></text>
+<text class="svgsm" x="1247" y="526" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">÷ <tspan font-weight="700">全局有效</tspan></tspan></text>
+<text class="svgsm" x="1247" y="550" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">token 总数</tspan></tspan></text>
+<text class="svgsm" x="1247" y="590" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全程<tspan font-weight="700">就这一次</tspan></tspan></text>
+<text class="svgsm" x="700" y="660" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以「加起来」这件事<tspan font-weight="700">确实分层</tspan>，只不过每一层做的都是<tspan font-weight="700">加</tspan>　——　<tspan font-weight="700">除，从头到尾只有一下。</tspan></text>
+<text class="svgsm" x="700" y="690" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">而 ① 那一层要特别说一句：你以为的「序列内平均」和「本卡跨序列平均」<tspan font-weight="700">不是两步，是同一次矩阵乘</tspan>　——　那两维早就拼成一维了。</text>
+<rect x="0" y="748" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="748" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="750" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="778" x2="1400" y2="778" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="768" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 那<tspan font-weight="700">为什么不能</tspan>每层各除各的？　——　因为那是「平均的平均」</tspan></text>
+<text class="svgsm" x="658" y="768" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">前提：各层的<tspan font-weight="700">有效 token 数并不相等</tspan>（padding、拼接边界、最后一批）</text>
+<rect x="60" y="838" width="470" height="66" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="295" y="866" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">micro-batch 1</tspan></text>
+<text class="svgsm" x="295" y="890" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">有效 token <tspan font-weight="700">100</tspan> 个　·　这一批的 loss 加起来 <tspan font-weight="700">200</tspan></text>
+<text class="svgsm" x="560" y="878" fill="#80868b" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 自己平均 2.0</text>
+<rect x="60" y="922" width="470" height="66" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="295" y="950" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">micro-batch 2</tspan></text>
+<text class="svgsm" x="295" y="974" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">有效 token <tspan font-weight="700">20</tspan> 个　·　这一批的 loss 加起来 <tspan font-weight="700">60</tspan></text>
+<text class="svgsm" x="560" y="962" fill="#80868b" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 自己平均 3.0</text>
+<rect x="760" y="836" width="290" height="116" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="905" y="870" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">❌ 各除各的</tspan></text>
+<text class="svgsm" x="905" y="904" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">(2.0 ＋ 3.0) ÷ 2</text>
+<text class="svgsm" x="905" y="934" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ <tspan font-weight="700">2.50</tspan></tspan></text>
+<rect x="1070" y="836" width="290" height="116" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1215" y="870" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先全加，最后除一次</tspan></text>
+<text class="svgsm" x="1215" y="904" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">(200 ＋ 60) ÷ (100 ＋ 20)</text>
+<text class="svgsm" x="1215" y="934" fill="#0d652d" text-anchor="middle" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ <tspan font-weight="700">2.17</tspan></tspan></text>
+<text class="svgsm" x="700" y="1010" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">差 <tspan font-weight="700">15%</tspan>。而错的那一边<tspan font-weight="700">不报错、不发散、曲线看着完全正常</tspan>　——　它只是<tspan font-weight="700">悄悄给每一批换了权重</tspan>。</text>
+<text class="svgsm" x="700" y="1040" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">病根一句话：<tspan font-weight="700">先除，就等于宣布「每一批一样重」</tspan>　——　可它们的 token 数明明不一样。</tspan></text>
+<text class="svgsm" x="700" y="1072" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">所以正确的做法是：<tspan font-weight="700">一路只传两个数</tspan>　——　「loss 的和」和「token 的个数」，最后拿前者除后者。</text>
+<rect x="0" y="1128" width="1400" height="270" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1128" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="0" y="1130" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1158" x2="1400" y2="1158" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1148" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓓ 这不是我推的　——　<tspan font-weight="700">梯度累积那段源码逐行就是这样</tspan></tspan></text>
+<rect x="50" y="1212" width="640" height="46" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="370" y="1242" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">累加的是<tspan font-weight="700">和</tspan>，不是平均</text>
+<rect x="710" y="1212" width="640" height="46" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="1242" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">acc["loss"] += 这一批的 loss 之和</tspan></text>
+<rect x="50" y="1270" width="640" height="46" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="370" y="1300" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">token 个数</tspan>另外单独累加</text>
+<rect x="710" y="1270" width="640" height="46" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="1300" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">acc["total_weights"] += 这一批的有效 token 数</tspan></text>
+<rect x="50" y="1328" width="640" height="46" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="370" y="1358" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">最后<tspan font-weight="700">除一次</tspan>，而且除的是<tspan font-weight="700">累加起来的 token 总数</tspan></text>
+<rect x="710" y="1328" width="640" height="46" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="1358" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">梯度 ÷ acc["total_weights"]</tspan></text>
+<text class="svgsm" x="700" y="1394" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">注意它除的<tspan font-weight="700">不是「micro-batch 的个数」</tspan>，是<tspan font-weight="700">累加起来的 token 总数</tspan>　——　这一手就是用来躲开上面那个坑的。</text>
+<rect x="0" y="1446" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1446" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1446" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1473" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一句话记住</tspan></text>
+<text class="svgsm" x="20" y="1504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">加法分三层（本卡一次矩阵乘 →&#160;梯度累积 →&#160;跨卡求和），除法只有一次</tspan>　——　除以全局有效 token 总数。</text>
+<text class="svgsm" x="20" y="1528" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一路只传两个数：loss 的和、token 的个数。</tspan> 任何一层提前做除法，都是「平均的平均」　——　它不报错，只是悄悄给每一批换了权重。</text>
+</svg><figcaption><b>「那个平均分几层？」——&nbsp;三层加法 ＋ 一次除法。</b><em>Ⓐ 很自然会数成「四层各平均一次」；Ⓑ 实际上<b>「序列内」和「本卡跨序列」是同一次矩阵乘</b>，后面两层（梯度累积、跨卡）都只是<b>加</b>，<b>除法全程只有一次</b>。</em><span class="capmore"><br><em>Ⓒ 是这张图的机关：每层各除一次就是<b>「平均的平均」</b> ——&nbsp;两个 token 数不等的批，错的算法差 15%，<b>而且不报错、曲线看着完全正常</b>。</em><br><em>Ⓓ 源码逐行对照：<b>一路只传「loss 的和」和「token 的个数」</b>，最后除一次。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：MaxText 的梯度累积实现 —— 循环里 <b>acc["loss"] += xent_sum</b>、<b>acc["total_weights"] += total_weights</b>，循环外 <b>grads ÷ acc["total_weights"]</b>。</p>
+<p>⚠️ 一个例外要说清：<b>辅助损失</b>（MoE 负载均衡这类）反而是<b>除以 micro-batch 个数</b>的　——　因为它们本来就是「每个 micro-batch 一个平均值」。两套口径，别混。</p></details></figure>
+
 <h3 id="s1-3">1.3　往回传的<u>不是一个数</u> ——&nbsp;这里是最多人卡住的地方</h3>
 
 <p><em>很多人脑子里的画面是「一个梯度值一层一层传下去」。不是这样。</em></p>
