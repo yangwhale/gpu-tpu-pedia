@@ -844,10 +844,15 @@ __FIG_ACT_BILL__
   <em>——&nbsp;这个问题必须在这儿答，因为<u>下一节整节都在挑「该扔哪一个」</u>。</em></p>
 <p class="landing"><b>不是 attention ——&nbsp;是 MoE 的「九份复制」。</b></p>
 <ul>
-  <li><b>派发出去的激活 __MOE_D_PCT__ ＋ 专家输出 __MOE_O_PCT__ ＋ SwiGLU 乘积 __MOE_S_PCT__</b>
-      ——&nbsp;<em>三项是<u>同一件事的后果</u>：每个 token 要发给 9 个专家
-      （8 个路由 ＋ 1 个共享），于是这几个张量各存九份。
-      <b>合起来 __MOE_ALL_PCT__，一层的一半。</b></em></li>
+  <li><b>专家输出 __MOE_O_PCT__ ＋ SwiGLU 乘积 __MOE_S_PCT__</b>
+      ——&nbsp;<em>两项是<u>同一件事的后果</u>：每个 token 要发给 9 个专家
+      （8 个路由 ＋ 1 个共享），<b>每个专家各产出一份自己的中间结果</b>，
+      于是这几个张量各存九份。<b>合起来 __MOE_ALL_PCT__，一层里最大的一块。</b></em></li>
+  <li><span class="sub"><b>⚠️ 进去那一份不算在内</b>：九个专家读的是
+      <u>同一块内存</u>（上游 norm 的输出），不需要复制九遍。
+      <em>常见实现会为了做分组矩阵乘而物化一份重排后的副本（那才是九份，
+      4K 上 504 MiB），但也有实现在反向里重做一遍重排而不存它
+      ——&nbsp;<b>那是实现选择，不是数学上的必需，所以不进这张账。</b></em></span></li>
   <li><em>而 <b>attention 输出</b>只占 <b>__ATT_PCT__</b>
       ——&nbsp;<u>比多数人猜的小一个档</u>。</em></li>
 </ul>
@@ -888,10 +893,19 @@ __TBL_ACT_MLA__
 <h4>MoE 子层留什么</h4>
 __TBL_ACT_MOE__
 
-<div class="note ok"><p>「9 份」是这张表里最值得停一下的地方。</p>
+<div class="note ok"><p>「9 份」是这张表里最值得停一下的地方 ——&nbsp;
+  <b>而它出现在哪、不出现在哪，同样值得停一下</b>。</p>
 <p><em>9 ＝ 被激活的 8 个路由专家 ＋ 1 个共享专家。
-  <b>每个 token 的那份激活被复制了九遍</b> ——&nbsp;进去一次、出来一次，
-  光这两项就 <b>__ACT_NINE__</b>。</em></p>
+  <b>九份出现在「出来」这一侧</b>：每个专家各算各的，各产出一份中间结果和一份输出
+  ——&nbsp;光「专家输出」这一项就 <b>__ACT_NINE__</b>。</em></p>
+<p><span class="sub">⛔ <b>「进去」那一侧没有九份。</b>
+  <em>九个专家读的是<u>同一块内存</u> ——&nbsp;就是上面那行「norm 的输出」，
+  已经记过一次了。<br>
+  ⚠️ 实际跑起来常见的做法是先按专家把 token 重排成连续块（好做分组矩阵乘），
+  那个重排缓冲区确实是一份副本，top-9 就是每个 token 出现九次，4K 上 504 MiB。
+  <b>但也有实现在反向里重做一遍重排、不把它存下来</b> ——&nbsp;
+  所以它是实现选择，这张「必需量」的表里不记。
+  （这一条 2026-09-22 现场纠过一次：原来这张表把它当必需量记了，虚报了 448 MiB。）</em></span></p>
 <p>而它在专题一那张参数量的表上<u>完全看不出来</u>。
   <em>——&nbsp;MoE 在参数账上很划算（每 token 只<b>选中</b>一小部分权重参与计算），
   可在激活账上，它要付九份的复制费。</em></p></div>
@@ -899,9 +913,9 @@ __TBL_ACT_MOE__
 <p class="landing">合起来：一层 MoE 块约 <b>__ACT_LAYER__</b>，一层 dense 块约 <b>__ACT_DENSE__</b>；
   58 层 MoE ＋ 3 层 dense ≈ <u>__ACT_TOTAL__</u>。</p>
 
-<div class="note"><p>📐 <b>换到扩训那一档（128K）</b>：<em>×32 ＝ 一层 MoE 块约 71 GiB，
-  全模型约 <b>4.15 TiB</b>。</em></p>
-<p class="sub">这个 4.15 TiB 是很多人记住的那个数，但它是<b>扩训阶段</b>的账 ——&nbsp;
+<div class="note"><p>📐 <b>换到扩训那一档（128K）</b>：<em>×32 ＝ 一层 MoE 块约
+  <b>__ACT_LAYER_L__</b>，全模型约 <b>__ACT_TOTAL_L__</b>。</em></p>
+<p class="sub">这个数是很多人记住的那个，但它是<b>扩训阶段</b>的账 ——&nbsp;
   真正跑了 14.8T token 的那段预训练，这一项是 <b>__ACT_TOTAL__</b>。</p></div>
 
 <div class="note danger"><p>⛔ 这张表的三条边界，讲的时候必须说清楚。</p>
@@ -1052,7 +1066,7 @@ __FIG_BATCH__
     V3 在基准的 4K 上具体是 <b>__ACT_TOTAL__</b> →&nbsp;<b>__PEAK__</b>，
     约 <b>__RECOMP_X__ 倍</b>。</em>
     <span class="sub">这个倍数<b>跟序列长度无关</b>（分子分母同比例缩），
-    128K 上也是 __RECOMP_X__ 倍 ——&nbsp;4.15 TiB →&nbsp;177.89 GiB。</span></li>
+    128K 上也是 __RECOMP_X__ 倍 ——&nbsp;__ACT_TOTAL_L__ →&nbsp;__PEAK_L__。</span></li>
   <li><b>付出什么：</b><em>多跑一次前向，总算力 <b>3× →&nbsp;4×</b>，
     也就是<b>多三分之一</b>。</em></li>
 </ul>
@@ -1090,10 +1104,9 @@ __FIG_RECOMPUTE__
 <p><em>1.6 排的是<b>占多少</b>，这一节排的是<b>每省一字节付多少</b>。
   一个看绝对量，一个看比值 ——&nbsp;<u>它们没有任何理由一致</u>。</em></p>
 <p class="landing"><b>而这一次，它们碰巧一致了 ——&nbsp;
-  1.6 里最占地方的那三项，正好都在最便宜的那一批。</b></p>
+  1.6 里最占地方的那两项，正好都在最便宜的那一批。</b></p>
 <ul>
-  <li><em><b>MoE 派发</b>（占 __MOE_D_PCT__）——&nbsp;逐元素，每字节代价 <b>≈ 0</b></em></li>
-  <li><em><b>SwiGLU 乘积</b>（占 __MOE_S_PCT__）——&nbsp;同上，<b>≈ 0</b></em></li>
+  <li><em><b>SwiGLU 乘积</b>（占 __MOE_S_PCT__）——&nbsp;逐元素，每字节代价 <b>≈ 0</b></em></li>
   <li><em><b>专家输出</b>（占 __MOE_O_PCT__）——&nbsp;输入宽 2,048，
       每 GiB 付 <b>2.20</b>，仍在「小于 3 全收下」那条线之下</em></li>
 </ul>
@@ -2929,7 +2942,7 @@ __FIG_STEP__
 <p class="landing"><b>答案是 <u>约 __WS_TOK__ token</u></b>
   ——&nbsp;<em>按本讲的 4K 基准，就是 <b>约 __WS_SEQ__ 条序列</b>。</em>
   <span class="sub">（一条 4K 序列开了全量重算之后峰值 __PEAK__；换成扩训那一档，
-  一条 128K 是 177.89 GiB，<b>约 56 条</b>，token 总数一模一样。）</span></p>
+  一条 128K 是 __PEAK_L__，<b>约 __WS_SEQ_L__ 条</b>，token 总数一模一样。）</span></p>
 
 <div class="note danger"><p><b>停一下 ——&nbsp;这里有个数特别容易代错，我自己代错过一版。</b></p>
 <p><em><a href="#s3-5">3.5</a> 说过，V3 的 global batch 从 <b>3,072 条 4K</b> 起步
@@ -4130,7 +4143,6 @@ def _att_share(S):
 #
 # (名字, 等效宽度, 每字节代价 ＝ 产生它的那个算子的输入宽度)
 PER_BYTE_W = [
-    ("MoE 派发（复制成 9 份）",                  64512, 0.0),
     ("logsumexp（attention 副产物，fp32）",        256, 0.0),
     ("RMSNorm 输出（3 份，逐元素）",              15872, 2.0),
     ("SwiGLU 乘积 9 份（逐元素）",                18432, 2.0),
@@ -4148,8 +4160,11 @@ PER_BYTE_W = [
 ]
 ENTRY_W = 7168          # 入口那一份 ——&#160;重算模式下留的就是它，不在候选池里
 _pool_w = sum(w for _, w, _ in PER_BYTE_W)
-assert _pool_w + ENTRY_W == 291392, \
-    "候选池 %d ＋ 入口 %d 加不回一层 MoE 块的 291,392" % (_pool_w, ENTRY_W)
+# ⛔ 2026-09-22：291,392 → 226,880。差的 64,512 正是那条被删掉的「派发九份」——
+#   它是实现产物不是必需量（见 _MOE_ROWS 里那段）。⭐ 这个锚点**必须跟着改**，
+#   不改就是拿旧的错数去校验新的对数；改了要说清为什么，否则跟「把测试改绿」没区别。
+assert _pool_w + ENTRY_W == 226880, \
+    "候选池 %d ＋ 入口 %d 加不回一层 MoE 块的 226,880" % (_pool_w, ENTRY_W)
 CUT = 3.0        # 「比值小于 3 全收下」——&#160;正文里说清了这是我定的，不是算出来的
 
 
@@ -4178,16 +4193,18 @@ _L1 = {nm: w * DTYPE_B * S_BASE for nm, w, _ in PER_BYTE_W}
 _L1["入口"] = ENTRY_W * DTYPE_B * S_BASE
 _L1_TOT = sum(_L1.values())
 _pc = lambda k: "%.0f%%" % (100.0 * _L1[k] / _L1_TOT)
-_MOE_D_PCT = _pc("MoE 派发（复制成 9 份）")
 _MOE_O_PCT = _pc("专家输出 9 份（输入宽 2,048）")
 _MOE_S_PCT = _pc("SwiGLU 乘积 9 份（逐元素）")
 _ATT_PCT   = _pc("attention 输出")
-_MOE_ALL   = sum(_L1[k] for k in ("MoE 派发（复制成 9 份）",
-                                  "专家输出 9 份（输入宽 2,048）",
+# ⛔ 2026-09-22：原来这里是三项（派发 ＋ 专家输出 ＋ SwiGLU）加起来「占一半」。
+#   派发那一项作废之后剩两项，占比从约 50% 掉到约 37% ——
+#   ⭐ 结论本身不变（**九份复制仍然是一层里最大的一块**），变的是它有多大。
+_MOE_ALL   = sum(_L1[k] for k in ("专家输出 9 份（输入宽 2,048）",
                                   "SwiGLU 乘积 9 份（逐元素）"))
 _MOE_ALL_PCT = "%.0f%%" % (100.0 * _MOE_ALL / _L1_TOT)
-assert 48 < 100.0 * _MOE_ALL / _L1_TOT < 53, "九份复制不再占一半：%s" % _MOE_ALL_PCT
-assert _L1["attention 输出"] < _L1["MoE 派发（复制成 9 份）"], "大头变成 attention 了？"
+assert 33 < 100.0 * _MOE_ALL / _L1_TOT < 40, "九份复制的占比变了：%s" % _MOE_ALL_PCT
+assert _L1["attention 输出"] < _L1["专家输出 9 份（输入宽 2,048）"], \
+    "一层里最大的那一项不再是「专家输出九份」了？"
 
 _ROWS_BASE = _per_byte(S_BASE)
 _ROWS_LONG = _per_byte(S_LONG)
@@ -4284,8 +4301,18 @@ _MLA_ROWS = [
 _MOE_ROWS = [
     ("norm 的输入 / 输出", "2 × 7,168", 14336, 2),
     ("路由分数", "256", 256, 2),
-    ("<b>派发出去的激活</b>", "<b>9 份</b> × 7,168", 64512, 2),
-    ("gate / up / SwiGLU 乘积", "3 × 9 份 × 2,048", 55296, 2),
+    # ⛔⛔ 2026-09-22 现场纠错，原话：「它输入给这九个专家的都是同一份。」
+    #    ——&#160;对。这一行原来记 9 × 7,168 ＝ 504 MiB，是**把某个实现的做法
+    #    当成了数学上的必需**。九个专家读的是同一块内存，而那块内存
+    #    **上一行已经记过了**（norm 的输出）。所以必需的增量是 0。
+    # ⭐ 九份是怎么冒出来的：MoE 跑起来通常先做一次 permute，按专家把 token
+    #    重排成连续块，好让每个专家做一次高效的分组矩阵乘。那个重排缓冲区
+    #    确实是副本，top-9 就是每个 token 出现九次。
+    #    ⛔ 但有实现在反向里**重做一遍 permute** 而不存它 ——&#160;
+    #    所以它是**实现选择**，写进必需账里就是虚报。
+    # ⭐ 判据：**账上只记数学上非有不可的，实现才有的东西写进旁注。**
+    ("派发给专家的那份", "＝ 上一行本身，<b>九个专家共用</b>", 0, 2),
+    ("gate / up / SwiGLU 乘积", "3 × <b>9 份</b> × 2,048", 55296, 2),
     ("<b>专家输出（合并前）</b>", "<b>9 份</b> × 7,168", 64512, 2),
 ]
 _DENSE_FFN_W = 3 * 18432 + 14336      # dense 层的 FFN 部分（MLA 那半边共用）
@@ -4316,17 +4343,25 @@ _LAYER_B = _MLA_B + _MOE_B
 _DENSE_B = _MLA_B + _DENSE_FFN_W * DTYPE_B * S_BASE
 _TOTAL_B = N_MOE_L * _LAYER_B + N_DENSE_L * _DENSE_B
 
-# ⛔ 回归锚点：同一套宽度在 128K 上必须复现页面发布过的那些数。
+# ⛔ 回归锚点：同一套宽度在 128K 上必须复现这几个数。
 #   ⭐ 这才是「换基准」和「算错了」的分水岭 —— 没有它，改完只能靠感觉。
+#
+# ⛔⛔ 2026-09-22 这四个数**整体下修**，因为「派发九份」那一行作废了
+#   （见 _MOE_ROWS 里那段：九个专家读的是同一块内存）。
+#   旧值 → 新值：MLA 22.58（不动）· MoE 48.56 → 32.81 ·
+#              一层 71.14 → 55.39 · 全模型 4.145 → 3.253 TiB
+#   ⚠️ **改回归锚点是一件需要说明理由的事** —— 不说理由的话，它跟
+#     「测试不过就把期望值改成实际值」在 diff 里长得一模一样。
+#     这里的理由是：旧值复现的是一个**记错了的账**，不是一个被改坏的表。
 for _nm, _got, _want in (
         ("MLA 小计",   _bytes(_MLA_ROWS, S_LONG) / 2 ** 30,                       22.58),
-        ("MoE 小计",   _bytes(_MOE_ROWS, S_LONG) / 2 ** 30,                       48.56),
-        ("一层 MoE 块", (_bytes(_MLA_ROWS, S_LONG) + _bytes(_MOE_ROWS, S_LONG)) / 2 ** 30, 71.14),
+        ("MoE 小计",   _bytes(_MOE_ROWS, S_LONG) / 2 ** 30,                       32.81),
+        ("一层 MoE 块", (_bytes(_MLA_ROWS, S_LONG) + _bytes(_MOE_ROWS, S_LONG)) / 2 ** 30, 55.39),
         ("全模型",     (N_MOE_L * (_bytes(_MLA_ROWS, S_LONG) + _bytes(_MOE_ROWS, S_LONG))
                         + N_DENSE_L * (_bytes(_MLA_ROWS, S_LONG)
-                                       + _DENSE_FFN_W * DTYPE_B * S_LONG)) / 2 ** 40, 4.145)):
+                                       + _DENSE_FFN_W * DTYPE_B * S_LONG)) / 2 ** 40, 3.253)):
     assert abs(_got - _want) < 0.01, \
-        "128K 锚点对不上：%s 算出 %.3f，发布过的是 %.3f —— 宽度表被改坏了" % (_nm, _got, _want)
+        "128K 锚点对不上：%s 算出 %.3f，期望 %.3f —— 宽度表被改坏了" % (_nm, _got, _want)
 
 # 注意力分数矩阵是 S² 项，**不跟着 token 总数走** —— 它是唯一一个换基准时
 # 要按平方缩的量。⭐ 这正是 §1.7 边界②该讲清楚的地方。
@@ -4340,7 +4375,10 @@ _PEAK_B     = _CKPT_B + _INFLIGHT_B
 _RECOMP_X   = _TOTAL_B / _PEAK_B             # 全量重算省多少倍
 _PEAK_PCT   = 100.0 * _PEAK_B / _TOTAL_B
 _FULL_SAVE = 100.0 - _PEAK_PCT    # 全量重算省掉的比例 —— 跟 fig-recompute 同一口径
-assert abs(_FULL_SAVE - 95.81) < 0.05, "全量重算省的比例变了：%.2f" % _FULL_SAVE
+# ⛔ 2026-09-22：95.81 → 95.13（省 23.9 倍 → 20.5 倍）。同一个原因：
+#   分子分母都因为「派发九份」作废而变小，而分母（重算后峰值）里
+#   存档点那一项没变，所以比例略降。⭐ 结论不动，量级不动。
+assert abs(_FULL_SAVE - 95.13) < 0.05, "全量重算省的比例变了：%.2f" % _FULL_SAVE
 _EDGE = (_SEL_SAVE / _SEL_PCT) / (_FULL_SAVE / _FULL_PCT)   # 选择性 vs 全量 的性价比之比
 RESIDENT_B  = 671e9 * 16                     # 常驻块（每参数 16 字节）
 _WS_SEQ     = RESIDENT_B / _PEAK_B           # 激活追平常驻需要多少条序列
@@ -4353,15 +4391,21 @@ _WS_TOK     = _WS_SEQ * S_BASE
 _W_BF16_B  = 671e9 * DTYPE_B                 # 只有权重，不含梯度和优化器状态
 _ACT_XOVER = _W_BF16_B / _TOTAL_B            # 激活追平**权重**要多少条 4K 序列
 assert _W_BF16_B > _TOTAL_B, "激活反而比权重大了？先查 _TOTAL_B 的口径"
-assert 9.0 < _ACT_XOVER < 10.0, "激活追平权重的 batch 变了：%.2f" % _ACT_XOVER
+# ⛔ 2026-09-22：9.x → 12.0。激活总量小了，追平权重自然要更多条序列。
+#   ⭐ 论点不变（**十几条就追平，而训练的 batch 从来不止十几条**），数动了。
+assert 11.5 < _ACT_XOVER < 12.5, "激活追平权重的 batch 变了：%.2f" % _ACT_XOVER
 
+# ⛔⛔ 2026-09-22 整组下修 —— 同一个根因（派发九份作废）。旧 → 新：
+#   在算层 71.14 → 55.39 · 峰值 177.89 → 162.14 · 倍数 23.86 → 20.53
+#   ⭐ 存档点那一项**一点没变**（106.75）——&#160;它只跟「每层留入口一份」有关，
+#     跟专家里发生了什么无关。这一条正好说明这次改动的作用面在哪。
 for _nm, _got, _want in (("存档点@128K",  _CKPT_B * S_RATIO / 2 ** 30,     106.75),
-                         ("在算层@128K",  _INFLIGHT_B * S_RATIO / 2 ** 30,  71.14),
-                         ("峰值@128K",    _PEAK_B * S_RATIO / 2 ** 30,     177.89),
-                         ("省多少倍",     _RECOMP_X,                        23.86),
-                         ("峰值占比",     _PEAK_PCT,                         4.19),
-                         ("分水岭条数",   _WS_SEQ,                        1798.6),
-                         ("分水岭 token", _WS_TOK / 1e6,                     7.37)):
+                         ("在算层@128K",  _INFLIGHT_B * S_RATIO / 2 ** 30,  55.39),
+                         ("峰值@128K",    _PEAK_B * S_RATIO / 2 ** 30,     162.14),
+                         ("省多少倍",     _RECOMP_X,                        20.53),
+                         ("峰值占比",     _PEAK_PCT,                         4.87),
+                         ("分水岭条数",   _WS_SEQ,                        1973.0),
+                         ("分水岭 token", _WS_TOK / 1e6,                     8.08)):
     assert abs(_got - _want) < max(0.02, abs(_want) * 0.001), \
         "%s 算出 %.3f，期望 %.3f" % (_nm, _got, _want)
 
@@ -4384,8 +4428,10 @@ _R_SMALL_E = _R_SMALL + 1.0                       # 补一个残差入口（＝�
 _x_small_e = _R_SMALL_E / (1 + _R_SMALL_E / SMALL_L)
 assert abs(_x_small_e - 6.857) < 0.01, _x_small_e
 _x_v3    = _R_V3 / (1 + _R_V3 / (N_MOE_L + N_DENSE_L))
-for _nm, _got, _want in (("小模型 r", _R_SMALL, 15.0), ("V3 r", _R_V3, 40.66),
-                         ("小模型省几倍", _x_small, 6.67), ("V3 闭式估", _x_v3, 24.395)):
+# ⛔ 2026-09-22：V3 的 r 从 40.66 → 31.65（派发九份作废，一层里少挂了 9 份宽张量），
+#   闭式估随之 24.395 → 20.84。⭐ 那条规律本身（小模型两项都吃亏）一个字没变。
+for _nm, _got, _want in (("小模型 r", _R_SMALL, 15.0), ("V3 r", _R_V3, 31.65),
+                         ("小模型省几倍", _x_small, 6.67), ("V3 闭式估", _x_v3, 20.839)):
     assert abs(_got - _want) < 0.02, "%s 算出 %.3f，期望 %.3f" % (_nm, _got, _want)
 # ⚠️ 闭式给 V3 是 24.4，实测 23.9 ——&#160;差在那 3 层 dense 比 MoE 薄。
 #   写进正文时说「约」，不要拿闭式冒充精确值。
@@ -4544,10 +4590,17 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
                   ("__KNOB_TURNS_A__", format(_KNOB_TURNS_A, ",")),
                   ("__KNOB_TURNS_B__", format(_KNOB_TURNS_B, ",")),
                   ("__KNOB_RATIO__",   format(_KNOB_RATIO, ",")),
+                  # ⛔ 2026-09-22：这四个 128K 的数原来是**手打在正文里**的
+                  #   （71 GiB / 4.15 TiB / 177.89 GiB / 56 条）。这一轮改口径时
+                  #   它们一个都没跟着动 —— ⭐ 判据还是那条：**算得出来的数
+                  #   不许在正文里躺着**。现在它们跟 4K 那套同源。
+                  ("__ACT_LAYER_L__", _sz(_LAYER_B * S_RATIO)),
+                  ("__ACT_TOTAL_L__", _sz(_TOTAL_B * S_RATIO)),
+                  ("__PEAK_L__",      _sz(_PEAK_B * S_RATIO)),
+                  ("__WS_SEQ_L__",    "%.0f" % (RESIDENT_B / (_PEAK_B * S_RATIO))),
                   ("__NPARAM_CN__",   _NPARAM_CN),
                   ("__NAIVE_YEARS__", format(int(round(_NAIVE_YEARS)), ",")),
                   ("__NAIVE_YEARS_CN__", _NAIVE_YEARS_CN),
-                  ("__MOE_D_PCT__",   _MOE_D_PCT),
                   ("__MOE_O_PCT__",   _MOE_O_PCT),
                   ("__MOE_S_PCT__",   _MOE_S_PCT),
                   ("__MOE_ALL_PCT__", _MOE_ALL_PCT),
@@ -4581,7 +4634,8 @@ _html = _html.replace("__TBL_ACT_MLA__",
 _html = _html.replace("__TBL_ACT_MOE__",
                       _act_tbl(_MOE_ROWS, S_BASE, "份数 × 宽度", "小计"))
 for _ph, _val in (
-        ("__ACT_NINE__",   _sz(2 * 64512 * DTYPE_B * S_BASE)),   # 派发 ＋ 专家输出
+        # ⛔ 2026-09-22：原来是 2 × 64512（派发 ＋ 专家输出），而派发那一份作废了。
+        ("__ACT_NINE__",   _sz(64512 * DTYPE_B * S_BASE)),   # 只剩「专家输出 9 份」
         ("__ACT_LAYER__",  _sz(_LAYER_B)),
         ("__ACT_DENSE__",  _sz(_DENSE_B)),
         ("__ACT_TOTAL__",  _sz(_TOTAL_B)),
@@ -4603,9 +4657,15 @@ assert "5,734" not in _html.replace("早先写的是 <b>5,734</b>", "").replace(
 #   它原来跟三个 RMSNorm 输出捆在一起按逐元素计价（白捡），实际重算它要跑 o_proj（输入宽 16,384），
 #   比值 17.59 远在切线之外，所以它不该进「收下」那一批。算力代价 48.95 依旧没变（同样因为
 #   它旧价几乎为零）。⭐ 这两次都是**修正**：省显存那一栏两次都在动，算力那一栏两次都没动。
-assert abs(_CHEAP_GIB * S_RATIO - 53.94) < 0.05 and abs(_CHEAP_TF * S_RATIO - 48.95) < 0.1, \
+# ⛔⛔ 2026-09-22 第三次动这一栏：53.94 → 38.19。少掉的 15.75 GiB 就是
+#   「派发九份」那一项 —— 它原来按逐元素（白捡）计价，所以整份都在「收下」那一批里。
+#   ⭐ 算力代价 48.95 **第三次一点没变**（它的每字节代价本来就≈0）。
+#   这一栏三次修正全在省显存那一侧、算力那一侧一次没动 —— 这本身就是个自洽性信号。
+assert abs(_CHEAP_GIB * S_RATIO - 38.19) < 0.05 and abs(_CHEAP_TF * S_RATIO - 48.95) < 0.1, \
     "「比值小于 3 全收下」对不上 128K 锚点：%.2f / %.2f" % (_CHEAP_GIB * S_RATIO, _CHEAP_TF * S_RATIO)
-assert abs(_SEL_SAVE - 77.8) < 0.1, "选择性换掉池子的比例变了：%.1f%%" % _SEL_SAVE
+# ⛔ 2026-09-22：77.8% → 71.2%。派发那一份（占池子一大块、且几乎白捡）没了，
+#   剩下的池子里「便宜项」的占比自然降下来。⭐ 论点（选择性一招吃掉七成多）不变。
+assert abs(_SEL_SAVE - 71.2) < 0.1, "选择性换掉池子的比例变了：%.1f%%" % _SEL_SAVE
 
 # ⭐ §4.1 那张表跟散在正文里的那几个数必须对得上。
 #   ⛔ 它们分处两节、相隔三千行 —— 正是「改了一处忘了另一处」的经典产地，

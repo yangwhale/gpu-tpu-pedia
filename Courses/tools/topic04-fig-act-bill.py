@@ -18,21 +18,27 @@ r"""专题四 · §1.6「那一整条从头挂到尾的激活 ——&#160;以及
      画进来会把「山形」这个唯一要看的东西压扁。留给 §五。
   ② **具体每层多少 GiB。** 那是 §1.2 的表，图上只留形状和两个总数。
 """
+# ⛔⛔ 2026-09-22 现场纠错：MoE「派发出去的激活」原来按 9 份 × 7,168 记，
+#   而九个专家读的是同一块内存（上游 norm 的输出，已经记过一次）。
+#   九份是某些实现为了做分组矩阵乘而物化的 permute 缓冲，**不是必需量**。
+#   于是这一组数整体下修：一层 MoE 块 71.14 → 55.39 GiB@128K（4K 上 2.22 → 1.73），
+#   峰值 177.89 → 162.14，全模型 4.15 → 3.253 TiB，省的倍数 23.9 → 20.5。
+
 from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, LINE2)
 
 W = 1400
 
 N_LAYER = 61                      # V3 的层数
 # ⛔⛔ 2026-09-19 T04：峰值 ＝ 存档点 ＋ **当前正在重算的那一层**。
-#   原来只算存档点（106.75），漏掉在算的那一层（71.14）——&#160;低估 67%。
+#   原来只算存档点（106.75），漏掉在算的那一层（55.39）——&#160;低估 67%。
 #   ⭐ 这一讲自己在 §5.4 的小例子和 §2.2 图 Ⓒ 用的都是正确口径，只有这个头号数字没做。
-ACT_RAW_TIB = 4.15                # 不开重算，一条 128K 序列
+ACT_RAW_TIB = 3.253                # 不开重算，一条 128K 序列
 ACT_CKPT_GIB = 106.75             # 61 个存档点
-ACT_INFLIGHT_GIB = 71.14          # 当前正在重算的那一层（MoE 块，最坏情况）
-ACT_REMAT_GIB = ACT_CKPT_GIB + ACT_INFLIGHT_GIB       # ＝ 177.89
+ACT_INFLIGHT_GIB = 55.39          # 当前正在重算的那一层（MoE 块，最坏情况）
+ACT_REMAT_GIB = ACT_CKPT_GIB + ACT_INFLIGHT_GIB       # ＝ 162.14
 RATIO = ACT_RAW_TIB * 1024 / ACT_REMAT_GIB
-assert abs(ACT_REMAT_GIB - 177.89) < 0.01
-assert 23 < RATIO < 25            # 「约 24 倍」是算出来的，不是说顺口的
+assert abs(ACT_REMAT_GIB - 162.14) < 0.01
+assert 20 < RATIO < 22            # 「约 21 倍」是算出来的，不是说顺口的
 
 
 def main():
@@ -40,11 +46,11 @@ def main():
                "纵轴是显存里挂着的激活，单位 GiB。"
                "蓝色那半边是前向：从第一层到第六十一层一路往上堆，"
                "曲线按 V3 真实的层构成算出来 ——&#160;前三层是 dense、后五十八层是 MoE。"
-               "堆到 loss 那一刻达到峰值 132.7 GiB，"
+               "堆到 loss 那一刻达到峰值 104.1 GiB，"
                "绿色那半边是反向：一层一层往回走，逐步释放。"
                "峰值不在训练的某个阶段，而在前向刚结束的那一瞬间。"
                "图里还有一条贴着地板的橙色曲线，那是开了全量重算之后的同一笔账，"
-               "峰值只有 5.56 GiB，省了二十四倍；"
+               "峰值只有 5.07 GiB，省了二十倍；"
                "左下角有一个放大插图把它单独画了一遍，纵轴换了一把尺 ——&#160;"
                "可以看到它是一级一级的台阶，而且它的峰值不在 loss 那一刻，"
                "而在反向途中，因为那时候要额外物化当前正在重算的那一层")
@@ -78,7 +84,7 @@ def main():
     #      （这正好是 T04 补回来的那一项，三角形根本表达不了。）
     S_BASE = 4096
     _MLA_W   = 7168 + 7168 + 3072 + 1088 + 24576 + 32768 + 16384
-    _MOE_W   = 14336 + 256 + 64512 + 55296 + 64512
+    _MOE_W   = 14336 + 256 + 0 + 55296 + 64512
     _DENSE_W = 3 * 18432 + 14336
     GIB = 1024.0 ** 3
     _b = lambda w2, w4=0: (w2 * 2 + w4 * 4) * S_BASE / GIB
@@ -87,8 +93,8 @@ def main():
     L_ENTRY = _b(7168)                       # 入口那一份（重算模式下留的就是它）
     N_DENSE = 3                              # ⚠️ V3 config：前 3 层 dense
     LAYERS = [L_DENSE] * N_DENSE + [L_MOE] * (N_LAYER - N_DENSE)
-    assert abs(sum(LAYERS) - 132.65) < 0.05, "全模型激活 %.2f GiB" % sum(LAYERS)
-    assert abs(L_ENTRY * N_LAYER + L_MOE - 5.56) < 0.02, "重算后峰值对不上"
+    assert abs(sum(LAYERS) - 104.11) < 0.05, "全模型激活 %.2f GiB" % sum(LAYERS)
+    assert abs(L_ENTRY * N_LAYER + L_MOE - 5.07) < 0.02, "重算后峰值对不上"
 
     # 两条曲线：y[i] ＝ 走到第 i 个时刻时，显存里挂着多少
     raw, keep = [0.0], [0.0]
@@ -108,7 +114,7 @@ def main():
     keep[-1] = 0.0
     PEAK_RAW, PEAK_KEEP = max(raw), max(keep)
     K_PEAK = keep.index(PEAK_KEEP)
-    assert abs(PEAK_RAW - 132.65) < 0.05 and abs(PEAK_KEEP - 5.56) < 0.02
+    assert abs(PEAK_RAW - 104.11) < 0.05 and abs(PEAK_KEEP - 5.07) < 0.02
     assert K_PEAK > _fwd, "重算那条的峰值应该落在**反向**途中，而不是 loss 那一刻"
 
     X0, X1 = 150, 1330
