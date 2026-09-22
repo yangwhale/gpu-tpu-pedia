@@ -2205,6 +2205,223 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>整条链，从一个位置一直走到 6,710 亿个数。</b>——&nbsp;<em>Ⓐ 词表那么长的诉求先<b>折成一股合力</b>（每个字占一个方向，按各自那个数加权）；Ⓑ 一条序列就是 <b>4,095 行</b>这样的合力，排成一张表。</em><span class="capmore"><br><em>⛔ Ⓒ 是这张图的机关：<b>那些行不能先加起来</b> ——&nbsp;第 i 行的责任只能配第 i 行的输入，先加就错配了。</em><br><em>Ⓓ 所以<b>求和确实发生，但发生在权重梯度上，而且每层各结一次账</b>；<b>位置那一维一路保留到最后。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>线性层：权重梯度 ＝ Σ_i（δ_i ⊗ x_i），沿位置维收缩；而对输入的梯度是逐位置的，不收缩。⚠️ 一个诚实的例外：<b>attention 会让不同位置的 δ 互相混合</b>　——　因为前向时位置之间本来就互相看；</p>
 <p>但那是 attention 的结构造成的，不是「求平均」，线性层那一路位置维严格独立。词表 129,280、宽度 7,168、层数 61 取自 DeepSeek-V3 配置。</p></details></figure>
 
+<!-- ⭐⭐⭐ 2026-09-22 现场追问到底的一处，原话：「每一个函数这个位置都得做
+     一次权重的平均，然后再往前搞，是这个意思吧？还是说把这一层算完了再平均？」
+     ⭐ 而他自己推到的前一步**是对的**，也逐字记下来，因为它点到了要害：
+       「我当前的这个 token 得用生成我这个 token 的激活，也就是说我前面的
+         所有的 token 都参与计算之后的激活来做偏导数。」 -->
+<div class="note ok"><p>⭐ <b>再往下一层：<u>「结账」到底发生在哪一步？</u></b>
+  <em>——&nbsp;现场问得很准：「是每个函数各做一次，还是把这一层算完再做？」</em></p>
+<p class="landing"><b>是前者：每一个<u>带权重的算子</u>各结一次账，
+  而且结账和往前传<u>互不等待</u>。</b></p>
+<p><em>一个带权重的算子收到 δ 之后，做的是<b>两件事</b>：<br>
+  ① <b>结账</b> ——&nbsp;把 δ 和<u>这一层的输入</u>相乘、<b>沿位置求和</b>，
+  得到这块权重的改动。<b>位置那一维在这一笔里被吃掉了</b>，这笔账不往下传。<br>
+  ② <b>往前传</b> ——&nbsp;把 δ 乘上权重本身，得到上游该收到的责任。
+  <b>位置那一维在这一笔里完整保留。</b></em></p>
+<p class="landing">⭐⭐ <b>而这两笔，正是 <a href="#s1-6">1.6</a> 那句
+  「反向要付<u>两笔</u>乘法，所以训练比推理贵三倍」里的那两笔。</b>
+  <em>——&nbsp;同一张 δ 表，两种收缩方式：<b>一笔把位置维吃掉，一笔把位置维留着。</b></em></p>
+<p><span class="sub">⛔ 两个特别容易错的地方：
+  <em>① <b>权重梯度的桶是固定大小的</b>，不随 token 数变大 ——&nbsp;
+  四千个位置只是往同一个桶里<b>加了四千笔</b>；这就是为什么整份梯度是
+  「每个参数一个数」，而不是「每个 token 一套参数」。<br>
+  ② <b>每层只加，不除。</b>那个「÷ 总数」在最开头的种子里就做过<u>一次</u>了
+  ——&nbsp;每层再除一遍的话，61 层就除了 61 次。
+  <b>所以严格说这一步叫「求和」，不叫「求平均」</b>：平均早就摊进每一笔里了。</em></span></p>
+<p><span class="sub">顺带确认现场推到的那一步：
+  <em><b>线性层的权重梯度只用<u>本位置</u>的输入</b> ——&nbsp;
+  而前面那些 token，是<b>在前向的 attention 里就已经被搅进这个输入了</b>，
+  不是反向的时候才被拉进来的。</em></span></p></div>
+
+<figure class="fbox fwide" id="fig-settle"><svg viewBox="0 0 1400 1784" width="100%" role="img" aria-label="一个带权重的算子在反向时做两件事，而这两件事就是第一节说的那两笔乘法：一笔是把这一层的责任和这一层的输入相乘、沿位置求和，得到对权重的改动，位置这一维在这一笔里被吃掉，账就结在这儿；另一笔是把责任乘上权重本身，得到该传给上游的新责任，位置这一维在这一笔里完整保留。所以结账是每一个带权重的算子各结一次，不是一层算完再结，而且结账和往前传互不等待。权重梯度的桶是固定大小的，每个位置只是往同一个桶里加一笔；而且每层只加不除，那个除以总数在最开头的种子里就做过一次了"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">「结账」——&#160;<tspan font-weight="700">权重梯度是在哪一步相加的</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">现场问：「每一个函数都做一次，还是把这一层算完再做？」——　<tspan font-weight="700">每一个带权重的算子各结一次，而且不等待</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓐ 两笔乘法</text>
+<rect x="124" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="145" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓑ 一层里谁结账</text>
+<rect x="276" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="297" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓒ 桶是固定大小的</text>
+<rect x="442" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓓ 顺序</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一个带权重的算子，反向时做<tspan font-weight="700">两件事</tspan>　——　这就是第一节说的那两笔乘法</tspan></text>
+<text class="svgsm" x="725" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张 δ 表，两种收缩方式</tspan>：一笔把位置维吃掉，一笔把位置维留着</text>
+<rect x="560" y="184" width="280" height="86" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="700" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">δ　（这一层的责任）</tspan></text>
+<text class="svgsm" x="700" y="244" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4,095 行 × 7,168 列</tspan></text>
+<rect x="560" y="282" width="280" height="76" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="700" y="310" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">x　（这一层的输入）</tspan></text>
+<text class="svgsm" x="700" y="338" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">4,095 行 × 7,168 列</text>
+<rect x="40" y="184" width="460" height="296" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="270" y="220" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 结账　——　<tspan font-weight="700">位置维被吃掉</tspan></tspan></text>
+<text class="svgsm" x="270" y="260" fill="#202124" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">δ　与　x　相乘，沿着「位置」求和</tspan></tspan></text>
+<text class="svgsm" x="270" y="294" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">得到一张 7,168 × 7,168 的改动表</text>
+<text class="svgsm" x="270" y="328" fill="#0d652d" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">4,095 这个数，在这一笔里消失了</tspan></tspan></text>
+<text class="svgsm" x="270" y="360" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">——　所有位置对这块权重的意见，</text>
+<text class="svgsm" x="270" y="384" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">在这里合成了一个数</tspan>。</tspan></text>
+<text class="svgsm" x="270" y="424" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一笔<tspan font-weight="700">不往下传</tspan>　——</tspan></text>
+<text class="svgsm" x="270" y="450" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">它就留在这块权重的账上，等更新那一刻。</text>
+<line x1="552" y1="228" x2="508" y2="228" stroke="#1e8e3e" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="900" y="184" width="460" height="296" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1130" y="220" fill="#174ea6" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 往前传　——　<tspan font-weight="700">位置维留着</tspan></tspan></text>
+<text class="svgsm" x="1130" y="260" fill="#202124" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">δ　乘上权重本身</tspan></tspan></text>
+<text class="svgsm" x="1130" y="294" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">得到一张<tspan font-weight="700">还是 4,095 行</tspan>的新表</text>
+<text class="svgsm" x="1130" y="328" fill="#174ea6" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">每个位置仍然各是各的</tspan></tspan></text>
+<text class="svgsm" x="1130" y="360" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">——　它就是上一层要收到的那份责任。</text>
+<text class="svgsm" x="1130" y="424" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">位置这一维，<tspan font-weight="700">一路留到最前面</tspan>。</tspan></text>
+<line x1="848" y1="228" x2="892" y2="228" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="700" y="500" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以第一节那句「反向要付<tspan font-weight="700">两笔</tspan>乘法，所以训练比推理贵三倍」——　<tspan font-weight="700">那两笔，就是这两笔。</tspan></text>
+<rect x="0" y="552" width="1400" height="350" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="552" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="554" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="582" x2="1400" y2="582" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="572" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 一层里有十几个算子　——　<tspan font-weight="700">带权重的各结各的账，不带权重的只是路过</tspan></tspan></text>
+<text class="svgsm" x="712" y="572" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">回答现场那个二选一：<tspan font-weight="700">是「每个算子一次」，不是「一层算完再一次」</tspan></text>
+<rect x="43.0" y="638" width="95.53846153846153" height="78" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="90" y="672" fill="#202124" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">归一化</tspan></text>
+<text class="svgsm" x="90" y="700" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<line x1="139.53846153846155" y1="677" x2="143.53846153846155" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="144.53846153846155" y="638" width="95.53846153846153" height="78" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="192" y="672" fill="#202124" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Q/K/V 投影</tspan></text>
+<text class="svgsm" x="192" y="700" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<line x1="241.0769230769231" y1="677" x2="245.0769230769231" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="246.07692307692307" y="638" width="95.53846153846153" height="78" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="293" y="672" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">注意力打分</text>
+<text class="svgsm" x="293" y="700" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只路过</tspan></text>
+<line x1="342.6153846153846" y1="677" x2="346.6153846153846" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="347.6153846153846" y="638" width="95.53846153846153" height="78" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="395" y="672" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">softmax</text>
+<text class="svgsm" x="395" y="700" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只路过</tspan></text>
+<line x1="444.15384615384613" y1="677" x2="448.15384615384613" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="449.15384615384613" y="638" width="95.53846153846153" height="78" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="496" y="672" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">加权求和</text>
+<text class="svgsm" x="496" y="700" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只路过</tspan></text>
+<line x1="545.6923076923076" y1="677" x2="549.6923076923076" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="550.6923076923076" y="638" width="95.53846153846153" height="78" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="598" y="672" fill="#202124" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出投影</tspan></text>
+<text class="svgsm" x="598" y="700" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<line x1="647.2307692307692" y1="677" x2="651.2307692307692" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="652.2307692307692" y="638" width="95.53846153846153" height="78" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="699" y="672" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">残差相加</text>
+<text class="svgsm" x="699" y="700" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只路过</tspan></text>
+<line x1="748.7692307692307" y1="677" x2="752.7692307692307" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="753.7692307692307" y="638" width="95.53846153846153" height="78" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="801" y="672" fill="#202124" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">归一化</tspan></text>
+<text class="svgsm" x="801" y="700" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<line x1="850.3076923076923" y1="677" x2="854.3076923076923" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="855.3076923076923" y="638" width="95.53846153846153" height="78" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="903" y="672" fill="#202124" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">路由打分</tspan></text>
+<text class="svgsm" x="903" y="700" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<line x1="951.8461538461538" y1="677" x2="955.8461538461538" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="956.8461538461538" y="638" width="95.53846153846153" height="78" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1004" y="672" fill="#202124" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 gate/up</tspan></text>
+<text class="svgsm" x="1004" y="700" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<line x1="1053.3846153846152" y1="677" x2="1057.3846153846152" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="1058.3846153846152" y="638" width="95.53846153846153" height="78" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1106" y="672" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">SwiGLU 相乘</text>
+<text class="svgsm" x="1106" y="700" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只路过</tspan></text>
+<line x1="1154.9230769230767" y1="677" x2="1158.9230769230767" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="1159.923076923077" y="638" width="95.53846153846153" height="78" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1207" y="672" fill="#202124" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 down</tspan></text>
+<text class="svgsm" x="1207" y="700" fill="#b06000" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<line x1="1256.4615384615383" y1="677" x2="1260.4615384615383" y2="677" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="1261.4615384615383" y="638" width="95.53846153846153" height="78" rx="5" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1309" y="672" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">残差相加</text>
+<text class="svgsm" x="1309" y="700" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只路过</tspan></text>
+<line x1="1360" y1="734" x2="40" y2="734" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="700" y="760" fill="#681da8" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">δ 从右往左走，<tspan font-weight="700">每碰到一个橙色的就顺手结一次账</tspan></tspan></text>
+<text class="svgsm" x="700" y="804" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">橙色的：自己有参数，所以有账要结。</tspan> 灰色的：自己没有参数（打分、softmax、逐元素相乘、加法），<tspan font-weight="700">只把责任改个形状递过去</tspan>。</text>
+<text class="svgsm" x="700" y="836" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以<tspan font-weight="700">「一层算完再平均」是没有的</tspan>　——　根本没有任何东西需要等一层走完。</tspan></text>
+<text class="svgsm" x="700" y="874" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">MoE 那几格还有一条：<tspan font-weight="700">一个 token 只往它选中的那几个专家的账上加</tspan>，没被选中的专家这一步收不到任何东西。</text>
+<text class="svgsm" x="700" y="902" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">上面这一排是<tspan font-weight="700">示意</tspan>：真实的 MLA ＋ MoE 一层比这还多几格，但「谁结账」这件事一模一样。</text>
+<rect x="0" y="952" width="1400" height="320" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="952" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="954" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="982" x2="1400" y2="982" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="972" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 每块权重有一个<tspan font-weight="700">固定大小的桶</tspan>　——　所有位置往同一个桶里加</tspan></text>
+<text class="svgsm" x="658" y="972" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">这就是为什么整份梯度是「每个参数一个数」，而不是「每个 token 一套参数」</text>
+<rect x="90" y="1040" width="150" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="1055" fill="#174ea6" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 1 的那一笔</text>
+<line x1="248" y1="1050" x2="356" y2="1132" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="90" y="1066" width="150" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="1081" fill="#174ea6" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 2 的那一笔</text>
+<line x1="248" y1="1076" x2="356" y2="1132" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="90" y="1092" width="150" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="1107" fill="#174ea6" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 3 的那一笔</text>
+<line x1="248" y1="1102" x2="356" y2="1132" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="90" y="1118" width="150" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="1133" fill="#174ea6" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 4 的那一笔</text>
+<line x1="248" y1="1128" x2="356" y2="1132" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="90" y="1144" width="150" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="1159" fill="#174ea6" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 5 的那一笔</text>
+<line x1="248" y1="1154" x2="356" y2="1132" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="90" y="1170" width="150" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="1185" fill="#174ea6" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 6 的那一笔</text>
+<line x1="248" y1="1180" x2="356" y2="1132" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="90" y="1196" width="150" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="1211" fill="#174ea6" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 7 的那一笔</text>
+<line x1="248" y1="1206" x2="356" y2="1132" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="165" y="1236" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">…… 共 4,095 笔（batch＝2 就是 8,190 笔）</text>
+<rect x="370" y="1078" width="250" height="110" rx="8" fill="#fff" stroke="#e8710a" stroke-width="2.0"/>
+<text class="svgsm" x="495" y="1116" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这块权重的桶</tspan></text>
+<text class="svgsm" x="495" y="1148" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 × 7,168 个数</tspan></text>
+<text class="svgsm" x="495" y="1174" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大小固定，永远不变</tspan></text>
+<rect x="670" y="1038" width="690" height="224" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1015" y="1074" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两条最容易搞错的：</tspan></text>
+<text class="svgsm" x="1015" y="1114" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">① <tspan font-weight="700">桶不会因为 token 多就变大</tspan>　——　四千个位置只是</text>
+<text class="svgsm" x="1015" y="1140" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">往同一个桶里<tspan font-weight="700">加了四千笔</tspan>，桶还是那么大。</text>
+<text class="svgsm" x="1015" y="1182" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">② <tspan font-weight="700">每层只加，不除。</tspan>那个「÷ 总数」在最开头的种子里</text>
+<text class="svgsm" x="1015" y="1208" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">就做过<tspan font-weight="700">一次</tspan>了　——　每层再除一遍的话，61 层就除了 61 次。</text>
+<text class="svgsm" x="1015" y="1242" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">所以严格说这一步叫<tspan font-weight="700">求和</tspan>，不叫求平均　——　平均早就摊进每一笔里了。</text>
+<rect x="0" y="1322" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1322" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="0" y="1324" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1352" x2="1400" y2="1352" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1342" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓓ 顺序：<tspan font-weight="700">一收到责任就能结账，谁也不用等谁</tspan></tspan></text>
+<line x1="1320" y1="1444" x2="80" y2="1444" stroke="#9334e6" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="1330" y="1418" fill="#681da8" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss 那头</tspan></text>
+<text class="svgsm" x="90" y="1418" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入那头</tspan></text>
+<rect x="1146" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="1200" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 1</tspan></text>
+<line x1="1200" y1="1466" x2="1200" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="1200" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="930" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="984" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 2</tspan></text>
+<line x1="984" y1="1466" x2="984" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="984" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="714" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="768" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 3</tspan></text>
+<line x1="768" y1="1466" x2="768" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="768" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="498" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="552" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 4</tspan></text>
+<line x1="552" y1="1466" x2="552" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="552" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="282" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="336" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 5</tspan></text>
+<line x1="336" y1="1466" x2="336" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="336" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="66" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="120" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 6</tspan></text>
+<line x1="120" y1="1466" x2="120" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="120" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<text class="svgsm" x="700" y="1560" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">而这正是<tspan font-weight="700">多卡训练能把通信藏进计算里</tspan>的原因：最后几层的账早就结完了，前面几层还在算　——</text>
+<text class="svgsm" x="700" y="1586" fill="#681da8" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">那段时间正好拿来把已经结完的那部分传出去。</tspan></tspan></text>
+<rect x="0" y="1638" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1638" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1638" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1665" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张图的两句话</tspan></text>
+<text class="svgsm" x="20" y="1696" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个带权重的算子，反向时做两件事</tspan>　——　「δ 配本位置的输入、沿位置求和」结出权重梯度（位置维被吃掉）；「δ 乘权重」结出传给上游的责任（位置维留着）。<tspan font-weight="700">那就是第一节那</tspan></text>
+<text class="svgsm" x="20" y="1720" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两笔乘法。</tspan></text>
+<text class="svgsm" x="20" y="1744" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以结账是「每个带权重的算子各一次」，不是「一层算完再一次」</tspan>　——　而且桶的大小固定、每层只加不除。</text>
+</svg><figcaption><b>这一讲被追问得最深的一处，也是整节的枢纽。</b>——&nbsp;<em>Ⓐ 一个带权重的算子反向时做两件事：<b>一笔沿位置求和（结出权重梯度，位置维被吃掉）、一笔逐位置保留（结出传给上游的责任）</b>。<b>那就是 1.6 说的那两笔乘法。</b></em><span class="capmore"><br><em>Ⓑ 一层里带权重的各结各的账，不带权重的只是路过 ——&nbsp;<b>没有「一层算完再平均」这回事</b>。</em><br><em>Ⓒ 桶的大小固定、每层只加不除；Ⓓ 谁也不用等谁 ——&nbsp;<b>而这正是多卡训练能把通信藏进计算里的原因。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 现场自己推到的那一步是对的：「我当前这个 token 得用生成我这个 token 的激活，也就是前面所有 token 都参与计算之后的激活」——&#160;线性层的权重梯度<b>只用本位置的输入</b>，</p>
+<p>而前面那些 token 是<b>在前向的 attention 里就已经被搅进这个输入了</b>，不是反向时才拉进来的。口径：V3 共 61 层、宽 7,168、专家腰 2,048、8 路由 ＋ 1 共享。</p></details></figure>
+
 <h3 id="s1-3">1.3　往回传的<u>不是一个数</u> ——&nbsp;这里是最多人卡住的地方</h3>
 
 <p><em>很多人脑子里的画面是「一个梯度值一层一层传下去」。不是这样。</em></p>
