@@ -263,7 +263,7 @@ def main():
     #   ⭐ 而这一格最该留下的不是那张表有多大，是下面这句：
     #     **我们从来不把它算出来。** 反向只做「拿责任去乘它」这一件事。
     DJ = 7168
-    PH4 = 300
+    PH4 = 320
     py4 = f.panel(0, py3 + PH3 + 20, W, PH4,
                   "Ⓓ 可真实的一级<tspan font-weight=\"700\">不是一个标量</tspan>"
                   "　——　它的「斜率」是一整张表", RD,
@@ -276,27 +276,36 @@ def main():
     f.t(155, py4 + 100, "进来", BL, True, 14, "middle")
     f.t(155, py4 + 126, "%s 个数" % format(DJ, ","), INK, True, 15, "middle")
     f.line(256, py4 + 106, 288, py4 + 106, PU, 2.2)
+    # ⛔⛔ 2026-09-22 现场：「不要写 7168×7168，这个虽然是 Input 7168 和
+    #   Output 7168，但是里边**从来没有出现过这么样一个方阵**。」——&#160;对。
+    #   ⭐ V3 一层里**没有任何一块权重是方阵**：专家 7,168 → 2,048、
+    #     MLA 把 KV 压到 512 那一档，而 o_proj 那一边反而更宽（16,384）。
+    #     ⛔ 所以别说成「全是瘦的」——&#160;准确的只有「没有一块两边都是 7,168」。
+    #     原来那么写，是我顺手拿「进 7168、出 7168」平方了 ——&#160;
+    #     正是第一原则点名的那类「听起来像常识的架构关系」。
     f.box(294, py4 + 62, 200, 88, "#fef7e0", OR, 6, sw=1.6)
-    f.t(394, py4 + 92, "装置", OR, True, 15, "middle")
-    f.t(394, py4 + 118, "一块 %s × %s" % (format(DJ, ","), format(DJ, ",")),
-        INK, True, 13, "middle")
-    f.t(394, py4 + 140, "的权重 ＋ 激活", GY, size=12.5, anchor="middle")
+    f.t(394, py4 + 90, "装置", OR, True, 15, "middle")
+    f.t(394, py4 + 114, "几块权重 ＋ 激活", INK, True, 13, "middle")
+    f.t(394, py4 + 136, "（7,168→2,048 这种，<tspan font-weight=\"700\">都不是方阵</tspan>）",
+        GY, size=12, anchor="middle")
     f.line(500, py4 + 106, 532, py4 + 106, PU, 2.2)
     f.box(538, py4 + 70, 190, 72, "#e8f0fe", BL, 6)
     f.t(633, py4 + 100, "出去", BL, True, 14, "middle")
     f.t(633, py4 + 126, "%s 个数" % format(DJ, ","), INK, True, 15, "middle")
 
     f.t(394, py4 + 186,
-        "那这一级的「斜率」是多少？　——　<tspan font-weight=\"700\">不是一个数，"
-        "是 %s × %s 张表</tspan>" % (format(DJ, ","), format(DJ, ",")),
+        "那这一级的「斜率」是多少？　——　<tspan font-weight=\"700\">不是一个数</tspan>："
+        "出去的每一维，", RD, True, 14.5, "middle")
+    f.t(394, py4 + 212,
+        "对进来的每一维，<tspan font-weight=\"700\">都各有一个兑换率</tspan>。",
         RD, True, 14.5, "middle")
-    f.t(394, py4 + 214,
-        "（出去的每一维，对进来的每一维，各有一个兑换率）",
-        GY, size=13, anchor="middle")
     f.t(394, py4 + 246,
-        "＝ <tspan font-weight=\"700\">%s 个数</tspan>　——　"
-        "而这<tspan font-weight=\"700\">只是一级</tspan>。"
-        % format(DJ * DJ, ","), INK, True, 14.5, "middle")
+        "⛔ 但注意：<tspan font-weight=\"700\">机器里并没有这样一张方阵</tspan>。",
+        INK, True, 14, "middle")
+    f.t(394, py4 + 270,
+        "真实的权重<tspan font-weight=\"700\">没有一块是方阵</tspan>，"
+        "那张表只是<tspan font-weight=\"700\">概念上</tspan>的。",
+        GY, size=13, anchor="middle")
 
     f.box(770, py4 + 58, 580, 210, "#e6f4ea", GR, 8)
     f.t(1060, py4 + 94, "⭐ 但好消息是：", GR, True, 17, "middle")

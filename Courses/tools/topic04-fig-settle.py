@@ -39,7 +39,17 @@ from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2
 
 W = 1400
 
-DM = 7168
+DM = 7168           # 残差流宽度
+# ⛔⛔ 2026-09-22 现场：「不要写 7168×7168，这个虽然是 Input 7168 和
+#   Output 7168，但是里边**从来没有出现过这么样一个方阵**。」
+#   ⭐ 核对了一遍：V3 一层里**没有任何一块权重是方阵** ——&#160;
+#     专家那几块是 7,168 → 2,048、MLA 把 KV 压到 512 那一档，
+#     而 o_proj 那一边反而更宽（16,384）。⛔ 注意别把它说成「全是瘦的」——&#160;
+#     **准确的说法只有一条：没有一块两边都是 7,168。**
+#     原来那么写是我顺手拿宽度平方了，
+#     属于「听起来像常识的架构关系」——&#160;本仓库第一原则点名的那一类。
+#   ⇒ 这张图改用一个**真实存在**的算子当例子：专家的 up 投影。
+D_IN, D_OUT = 7168, 2048          # 专家 up：7,168 进、2,048 出
 TGT = 4095
 LAYERS = 61
 
@@ -73,12 +83,12 @@ def main():
 
     # 中间：这一层的两张表
     f.box(560, py + 52, 280, 86, "#e8f0fe", BL, 6)
-    f.t(700, py + 82, "δ　（这一层的责任）", BL, True, 15, "middle")
-    f.t(700, py + 112, "%s 行 × %s 列" % (format(TGT, ","), format(DM, ",")),
+    f.t(700, py + 82, "δ　（出口那一侧的责任）", BL, True, 15, "middle")
+    f.t(700, py + 112, "%s 行 × %s 列" % (format(TGT, ","), format(D_OUT, ",")),
         INK, True, 15, "middle")
     f.box(560, py + 150, 280, 76, "#f1f3f4", GY2, 6)
-    f.t(700, py + 178, "x　（这一层的输入）", GY, True, 14, "middle")
-    f.t(700, py + 206, "%s 行 × %s 列" % (format(TGT, ","), format(DM, ",")),
+    f.t(700, py + 178, "x　（入口那一侧的输入）", GY, True, 14, "middle")
+    f.t(700, py + 206, "%s 行 × %s 列" % (format(TGT, ","), format(D_IN, ",")),
         GY, size=14, anchor="middle")
 
     # 左：结账
@@ -87,8 +97,8 @@ def main():
         GR, True, 17, "middle")
     f.t(270, py + 128, "<tspan font-weight=\"700\">δ　与　x　相乘，沿着「位置」求和</tspan>",
         INK, True, 15.5, "middle")
-    f.t(270, py + 162, "得到一张 %s × %s 的改动表"
-        % (format(DM, ","), format(DM, ",")), INK, size=14.5, anchor="middle")
+    f.t(270, py + 162, "得到一张 %s × %s 的改动表　——　跟这块权重一样大"
+        % (format(D_OUT, ","), format(D_IN, ",")), INK, size=14.5, anchor="middle")
     f.t(270, py + 196, "⭐ <tspan font-weight=\"700\">%s 这个数，在这一笔里消失了</tspan>"
         % format(TGT, ","), GR, True, 14.5, "middle")
     f.t(270, py + 228, "——　所有位置对这块权重的意见，", GY, size=13.5, anchor="middle")
@@ -191,7 +201,7 @@ def main():
 
     f.box(370, py3 + 96, 250, 110, "#fef7e0", OR, 8, sw=2.0)
     f.t(495, py3 + 134, "这块权重的桶", OR, True, 16, "middle")
-    f.t(495, py3 + 166, "%s × %s 个数" % (format(DM, ","), format(DM, ",")),
+    f.t(495, py3 + 166, "%s × %s 个数" % (format(D_OUT, ","), format(D_IN, ",")),
         INK, True, 15, "middle")
     f.t(495, py3 + 192, "⛔ 大小固定，永远不变", RD, True, 12.5, "middle")
 
@@ -255,8 +265,13 @@ def main():
                "线性层的权重梯度<tspan font-weight=\"700\">只用本位置的输入</tspan>，",
                "而前面那些 token 是<tspan font-weight=\"700\">在前向的 attention 里"
                "就已经被搅进这个输入了</tspan>，不是反向时才拉进来的。"
-               "口径：V3 共 %d 层、宽 %s、专家腰 2,048、8 路由 ＋ 1 共享。"
-               % (LAYERS, format(DM, ",")))
+               "⛔ 口径：V3 一层里<tspan font-weight=\"700\">没有任何一块 "
+               "%s × %s 的方阵</tspan> ——&#160;残差流是 %s 宽，"
+               "但<tspan font-weight=\"700\">每一块的另一边都是别的数</tspan>"
+               "（专家 %s → %s、MLA 把 KV 压到 512 那一档，而 o_proj 那一边是 16,384）。"
+               "本图用专家 up 当例子。共 %d 层。"
+               % (format(DM, ","), format(DM, ","), format(DM, ","),
+                  format(D_IN, ","), format(D_OUT, ","), LAYERS))
 
     f.save("fig4-settle.svg", yb + 14)
 
