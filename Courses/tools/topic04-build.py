@@ -435,8 +435,11 @@ __FIG_NATBIT__
   ——&nbsp;<em>任何一个变了，另外两个必然跟着变。所以别把它们并排列出来当成三条证据。</em></span></p></div>
 <h4>第三步 · 一个 token 一个 loss，<u>一个 batch 取平均</u></h4>
 
-<p>上面算的是<b>一个位置</b>的 loss。<em>而一条 4K 的序列有 4,096 个位置，
-  每个位置都在猜它的下一个字 ——&nbsp;<b>所以一条序列就有 4,096 个 loss。</b></em></p>
+<p>上面算的是<b>一个位置</b>的 loss。<em>而一条 4K 的序列里，
+  每个位置都在猜它的下一个字 ——&nbsp;<b>所以一条序列有 __TGT__ 个 loss。</b></em></p>
+<p><span class="sub">⛔ 是 <b>__TGT__</b> 不是 4,096 ——&nbsp;
+  <em>最后那个字<b>没有「下一个」</b>可预测。这个 1 在别处不重要，
+  但它正是 <a href="#s1-2">1.2</a> 那批账的分母，所以这里说准。</em></span></p>
 
 <p class="landing"><b>把它们全部<u>取平均</u>，就得到这一批的 loss。</b></p>
 
@@ -458,6 +461,48 @@ __FIG_NATBIT__
   ——&nbsp;「每个 token 平均有多少奈特的意外」。</em></p>
 <p><span class="sub">不是学究气：<a href="#s3-3b">3.3b</a> 要靠它推出<b>学习率的单位</b>，
   而那段推导<u>需要 loss 确实有单位</u>。</span></p></div>
+
+<!-- ⭐⭐⭐ 2026-09-22 现场：「你为啥总说 loss 只有一个数呢？为啥我认为 loss 是
+     一个 token 有 129,280 个数，然后一个序列有 4,095 个 token 的 loss，
+     然后如果 batch 得有 1 万的话，那就更多了呢？」
+     ⛔ 这个混淆**几乎人人会撞一次**，而教材里一个字都没有。
+     ⭐ 病根是「loss」这个词在三个层级上被用来指三样东西，而**中间压缩了两次**。 -->
+<h4>第四步之二 · 「一个数」和「几千万个数」——&nbsp;<u>到底是几个</u></h4>
+
+<p class="lead">这一问现场撞过，而且几乎人人会撞一次：
+  <em>「你为什么总说 loss 只有一个数？我看到的是 ——&nbsp;
+  一个 token 有 129,280 个数，一条序列 __TGT__ 个，再乘 batch 就更多了。」</em></p>
+
+<p class="landing"><b>答案：你说的那些<u>全都存在</u>，只是它们<u>不都叫 loss</u>
+  ——&nbsp;中间<b>压缩了两次</b>。</b></p>
+
+<table>
+<thead><tr><th>这一层是什么</th><th>有多少个数</th><th>它该叫什么</th></tr></thead>
+<tbody>
+<tr><td>一个位置上，词表里每个词的分数</td><td><b>129,280</b></td>
+    <td><b>logits ／ 概率</b> ——&nbsp;<u>这不是 loss</u></td></tr>
+<tr><td colspan="3"><b>↓ 第一次压缩：只取正确答案那一格，取负对数</b></td></tr>
+<tr><td>一个位置的 loss</td><td><b>1</b></td><td><code>−ln p</code></td></tr>
+<tr><td>一条序列</td><td><b>__TGT__</b></td><td>每个位置一个</td></tr>
+<tr><td>一步（按 V3 的 global batch 算）</td><td><b>__LOSS_STEP__</b></td><td>还是每个位置一个</td></tr>
+<tr><td colspan="3"><b>↓ 第二次压缩：全部加起来，除以有效 token 数</b></td></tr>
+<tr><td><b>最终 loss</b></td><td><b>1</b></td><td>你在 loss 曲线上看到的那个点</td></tr>
+</tbody></table>
+
+<div class="note ok"><p><b>那为什么非要压成一个数？——&nbsp;这不是为了好看。</b></p>
+<p class="landing"><b><u>「输出端只有一个数」，正是「反向只走一遍」的前提。</u></b></p>
+<p><em><a href="#s1-5">1.5</a> 会讲：种子插在右边，而右边只有一个数，<b>所以只插一次</b>。<br>
+  ——&nbsp;可如果最终目标<b>是 __TGT__ 个数</b>呢？那你就得<b>插 __TGT__ 次种子</b>，
+  每个目标各走一遍。<b>多目标优化之所以贵，根子就在这儿。</b></em></p></div>
+
+<div class="note warn"><p>✋ <b>最后拆一个会让人觉得前后矛盾的地方：</b></p>
+<p class="landing"><b>「loss 是一个数」和「反向的种子有十亿个数」——&nbsp;
+  <u>这两句同时成立，不打架。</u></b></p>
+<p><em>loss <b>这个量</b>确实是一个标量。<br>
+  但<b>对它求导</b>之后，得到的是「loss 对每一个 logit 的偏导」——&nbsp;
+  那是<b>每个位置 × 整个词表</b>，<u>十亿个数</u>（<a href="#s1-2">1.2</a> 那张图画的就是它）。</em></p>
+<p><span class="sub">⭐ 一句话分清：<b>「loss 有几个数」问的是那个量本身；
+  「种子有几个数」问的是<u>它的导数</u>。</b><em>前者是 1，后者是十亿。</em></span></p></div>
 
 <div class="note ok"><p><b>那么这一讲要干的事，现在可以用一句话说完了。</b></p>
 <p class="landing"><em>把这个数，<b>从 11.77 挪到 2 附近</b>。</em></p>
@@ -5395,6 +5440,17 @@ _spec.loader.exec_module(_SEC)
 for _ph, _val in (("__H_WCARD__", "%d" % round(_SEC.W_CARDS)),
                   ("__H_CARDS__", "%.0f 万亿块" % (_SEC.HESS_CARDS / 1e12)),
                   ("__H_YEARS__", "%.0f 亿年" % (_SEC.YEARS / 1e8))):
+    assert _ph in _html, "正文里没有 %s" % _ph
+    _html = _html.replace(_ph, _val)
+    _SUBS[_ph] = _val
+
+# ⭐ 1.0「到底是几个数」那张梯子上的两个数，现算不手写。
+_TGT_N = S_BASE - 1                       # 一条序列只有 S−1 个「下一个字」
+_GB_MAX = 15360                           # V3 预训练 global batch 的上限
+for _ph, _val in (("__TGT__", format(_TGT_N, ",")),
+                  ("__LOSS_STEP__", "%s（＝ %s × %s 条）"
+                   % (format(_TGT_N * _GB_MAX, ","), format(_TGT_N, ","),
+                      format(_GB_MAX, ",")))):
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
     _SUBS[_ph] = _val
