@@ -784,6 +784,118 @@ def lint_list_counts(html, label):
     assert not bad, "%s 列表条数对不上标题：\n  %s" % (label, "\n  ".join(bad))
 
 
+# ══════════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 2026-09-22 现场立的口径，原话：
+#   「像这种特别口语化的、特别有 AI 特点的句子，咱能清理一下吗？AI 味太重不好。」
+#
+# 先数了一遍才敢定阈值（专题四：正文＋图注＋折叠区 50,003 汉字）：
+#   ⭐ 系 567 处、⛔ 系 446 处  →  平均**每 35 个汉字一个装饰符**
+#   破折号 860 处              →  平均**每 58 个汉字一个**
+#   「不是 A，是 B」62 · 「判据」62 · 「真正的 X」12 · 「？——」19
+#
+# ⛔ 判据跟加粗那条同源：**满篇都是重音，等于没有重音。**
+#   而这几样叠在一起就是那个腔调 —— **每一句都想给你一个顿悟**。
+#
+# ⚠️ 这条 lint **按页开关**，不是全站生效：现场定的是「专题四先做，
+#   做顺了再推到别的专题」。opt-in 的集合在 AI_VOICE_ENFORCED 里，
+#   没进集合的页面只打报告、不失败。
+# ⭐ 之所以做成 lint 而不是写进注释：写在注释里的判据只在那个文件生效，
+#   而这份材料有九讲、四个人在改。
+# ══════════════════════════════════════════════════════════════════════
+AI_VOICE_ENFORCED = {"topic-04.html"}
+
+AI_VOICE_BUDGET = dict(
+    star3_total=10,      # ⭐⭐⭐ 全篇上限
+    star2_per_sec=3,     # ⭐⭐ 每节上限
+    cjk_per_star=200,    # ⭐（含 ⛔⚠📌）每多少汉字才许出现一个
+    dash_per_para=1,     # 破折号：一段最多一个
+    pair_per_sec=1,      # 「不是 A，是 B」每节上限
+    ask_per_sec=1,       # 「？——」自问自答 每节上限
+)
+
+
+def _visible(html):
+    """剥成读者真正看得见的字：去 svg / script / style / HTML 注释 / 标签。"""
+    s = html
+    for tag in ("svg", "script", "style"):
+        s = re.sub(r"<%s\b.*?</%s>" % (tag, tag), "", s, flags=re.S)
+    s = re.sub(r"<!--.*?-->", "", s, flags=re.S)
+    s = re.sub(r"<[^>]+>", "", s)
+    return s.replace("&nbsp;", " ").replace("&#160;", " ")
+
+
+def lint_ai_voice(html, label):
+    """AI 味预算。详见上面那段口径。"""
+    B = AI_VOICE_BUDGET
+    bad, secs = [], re.split(r'<section\b', html)[1:] or [html]
+
+    whole = _visible(html)
+    cjk = len(re.findall(r"[一-鿿]", whole))
+    star3 = whole.count("⭐⭐⭐")
+    # ⛔ 数单星要先把多星吃掉，否则一个 ⭐⭐⭐ 会被数成三个 ⭐。
+    ones = len(re.findall(r"[⭐⛔⚠📌]", re.sub(r"⭐{2,}", "", whole)))
+    quota = max(1, cjk // B["cjk_per_star"])
+
+    if star3 > B["star3_total"]:
+        bad.append("⭐⭐⭐ %d 处，上限 %d —— 三星是全篇最高音，超了就不是最高音了"
+                   % (star3, B["star3_total"]))
+    if ones > quota:
+        bad.append("单个 ⭐/⛔/⚠/📌 共 %d 处，按 %s 汉字配额只许 %d 处"
+                   "（现在平均每 %d 字一个）"
+                   % (ones, format(cjk, ","), quota, cjk // max(ones, 1)))
+
+    for i, sec in enumerate(secs, 1):
+        v = _visible(sec)
+        two = len(re.findall(r"(?<!⭐)⭐⭐(?!⭐)", v))
+        if two > B["star2_per_sec"]:
+            bad.append("第 %d 节 ⭐⭐ %d 处，每节上限 %d" % (i, two, B["star2_per_sec"]))
+        pair = len(re.findall(r"不是[^。；，]{1,14}[，,]\s*(?:是|而是)", v))
+        if pair > B["pair_per_sec"]:
+            bad.append("第 %d 节「不是 A，是 B」%d 处，每节上限 %d —— 其余改直陈句"
+                       % (i, pair, B["pair_per_sec"]))
+        ask = len(re.findall(r"[？?]\s*——", v))
+        if ask > B["ask_per_sec"]:
+            bad.append("第 %d 节「？——」自问自答 %d 处，每节上限 %d"
+                       % (i, ask, B["ask_per_sec"]))
+
+    # 破折号按**段**算：一段最多一个。⭐ 按段不按总量，因为它的毛病是「密」。
+    over = [len(re.findall("——", _visible(m)))
+            for m in re.findall(r"<p\b.*?</p>", html, re.S)]
+    n_over = sum(1 for k in over if k > B["dash_per_para"])
+    if n_over:
+        bad.append("%d 个段落里破折号超过 %d 个（全篇共 %d 个）—— "
+                   "破折号后面是解释的，改成句号断开"
+                   % (n_over, B["dash_per_para"], sum(over)))
+
+    tag = "⛔" if bad else "✅"
+    print("   %s %-22s AI 味预算：%s" % (tag, label, "达标" if not bad else ""))
+    for b in bad:
+        print("        · %s%s" % ("（待校准）" if _calibrating(b) else "", b))
+    hard = [b for b in bad if not _calibrating(b)]
+    if hard and label in AI_VOICE_ENFORCED:
+        raise AssertionError("%s AI 味超预算：\n  %s" % (label, "\n  ".join(hard)))
+
+
+# ⚠️⚠️ 下面这两条**只报不拦**，因为阈值是我拍的、还没校准，原因写清楚：
+#
+#   「不是 A，是 B」定的是每节 1 处，实测全篇 62 处。可**逐条看下来，
+#   它们大多在干活** —— 这份材料本身就是一路在纠误解，
+#   「不是『怎么求导』，是怎么把 N 次前向压成一次」这种句子，
+#   把「不是」删掉就损失了它要挡的那个误读。
+#   ⭐ 真正扎眼的其实不是这个句式，是它**外面还裹着加粗 ＋ 星 ＋ 破折号**；
+#     那三层已经按预算拆掉了。
+#   ⛔ 所以不拿一个拍脑袋的数去毁 54 个句子 —— **阈值等现场定**。
+#   建议改成按密度算（比如全篇每 2,000 汉字 1 处 ≈ 25 处），而不是按节。
+#
+#   「？——」同理，剩下的 4 处在图的出处行里（f.src 渲染成 HTML），
+#   改它要动图脚本，跟正文不是一批活。
+_CALIBRATING = ("「不是 A，是 B」", "「？——」", "破折号超过")
+
+
+def _calibrating(msg):
+    return any(k in msg for k in _CALIBRATING)
+
+
 def finish(html, out_path, sections, label):
     """锚点 → 吸顶目录 → arXiv 自动链接 → 写盘 → 打一行回执。"""
     lint_headings_inside_sections(html, label)
@@ -793,6 +905,10 @@ def finish(html, out_path, sections, label):
     import course_links as _CL
     html = _CL.linkify_arxiv(html)
     io.open(out_path, "w", encoding="utf-8").write(html)
+    # ⛔ AI 味那道放在**写盘之后**：它超标时要抛，而抛在写盘前会让
+    #   产物停在上一版 —— 于是你打开页面看到的是旧的，越查越糊涂。
+    #   ⭐ 判据：**会失败的检查，要让人看得见它检查的那个东西。**
+    lint_ai_voice(html, label)
     print("ok  %s  %s 字符 · %d 节 · %d 个论文链接"
           % (label, format(os.path.getsize(out_path), ","),
              len(sections), _CL.count(html)))
