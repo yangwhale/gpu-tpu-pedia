@@ -2059,6 +2059,152 @@ body.figonly section h3{margin-top:34px}
   <b>六千多万个位置的意见，一个都没有在 loss 那一步被抹掉</b> ——&nbsp;
   它们是在后面一层层的矩阵乘里才被累加起来的。</em></p></div>
 
+<!-- ⭐⭐⭐ 2026-09-22 现场把整条链自己复述了一遍，前四步一字不差，
+     第五步错了 —— 而那一步恰好最要紧。fig-fold 专门补它。 -->
+<div class="note danger"><p>⛔ <b>这里有一处特别自然、但会把整条链理解反的误解，
+  必须单独说：<u>不同位置的那个 7,168，不能先加起来。</u></b></p>
+<p><em>很容易这么想：一条序列 4,095 个位置、每个位置一个 7,168 长的向量，
+  <b>那就把它们加起来求个平均，再拿这个平均往前传</b>。
+  ——&nbsp;<b>这一步做了，整份梯度就错了。</b></em></p>
+<p class="landing"><b>因为第 i 个位置的责任，只能配<u>第 i 个位置的输入</u>。</b>
+  <em>权重梯度是「每一行各乘各的，乘完再加」；先把 δ 加起来再乘，
+  等于<b>把第 3 个位置的责任配到了第 900 个位置的输入上</b>
+  ——&nbsp;那是另一个量。</em></p>
+<p><span class="sub">所以<b>「求和」这件事确实发生，只是不发生在 δ 上，
+  发生在<u>权重梯度</u>上</b>，而且<b>每一层各结一次账</b>。
+  <em>δ 从头到尾是一张「位置 × 宽度」的表，
+  <b>位置那一维一路保留到最后</b>。</em></span></p></div>
+
+<figure class="fbox fwide" id="fig-fold"><svg viewBox="0 0 1400 1668" width="100%" role="img" aria-label="一个位置先拿到一个词表那么长的诉求，经过输出那张大表折成一个七千一百六十八维的向量，那就是这个位置的责任；一条序列有四千零九十五个这样的向量，它们排成一张表，位置这一维一路保留，不能先加起来。真正相加的是权重梯度：每一层里，每个位置的责任配上它自己那个位置的输入，乘出一份对权重的贡献，这些贡献才相加。先把责任加起来再乘，等于把这个位置的责任配到了别的位置的输入上，那是另一个量"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个位置的诉求，怎么一路变成 <tspan font-weight="700">6,710 亿个数</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">现场自己把这条链复述了一遍，<tspan font-weight="700">前四步全对</tspan>； 第五步「把那些 7,168 加起来」——　<tspan font-weight="700">那一步不能加，而它恰好最要紧</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓐ 折成一股力</text>
+<rect x="138" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓑ 位置维要保留</text>
+<rect x="290" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="311" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓒ 加错了会怎样</text>
+<rect x="442" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="463" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓓ 真正相加的地方</text>
+<rect x="0" y="102" width="1400" height="336" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 第一步：<tspan font-weight="700">词表那么长的诉求，折成一个方向</tspan></tspan></text>
+<text class="svgsm" x="536" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">词表里每一个字，在模型内部都占一个方向；按各自那个数加权，合成<tspan font-weight="700">一股力</tspan></text>
+<rect x="60" y="202" width="300" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="210" y="222" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">129,280 个数</tspan></text>
+<text class="svgsm" x="210" y="256" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">每个字一格　＝「你猜的 −　正确答案」</text>
+<text class="svgsm" x="210" y="280" fill="#80868b" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">概率≈0 的那些也在里面，只是它们那一格≈0</text>
+<line x1="380" y1="217" x2="470" y2="217" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="425" y="200" fill="#80868b" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">经过</text>
+<text class="svgsm" x="425" y="256" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">输出那张大表</tspan></tspan></text>
+<text class="svgsm" x="425" y="278" fill="#80868b" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">（129,280 × 7,168）</text>
+<rect x="490" y="202" width="190" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="585" y="222" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 个数</tspan></text>
+<text class="svgsm" x="585" y="256" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">这个位置的<tspan font-weight="700">责任</tspan>（δ）</text>
+<text class="svgsm" x="585" y="280" fill="#80868b" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">它是一个方向，不是一个目标值</text>
+<rect x="740" y="186" width="620" height="250" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1050" y="220" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一步在干什么？<tspan font-weight="700">合力。</tspan></tspan></text>
+<text class="svgsm" x="1050" y="258" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">像五个人拉同一个铁环：<tspan font-weight="700">「的」往这边拽 0.60，</tspan></text>
+<text class="svgsm" x="1050" y="284" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「了」「在」各往外推 0.20，「和」「有」各 0.10</tspan>。</text>
+<text class="svgsm" x="1050" y="316" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">环最后只朝<tspan font-weight="700">一个</tspan>方向动　——　那个合力，就是 δ。</text>
+<text class="svgsm" x="1050" y="356" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以<tspan font-weight="700">「只管那个 −0.60」是不行的</tspan>：</tspan></text>
+<text class="svgsm" x="1050" y="382" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">只说「往北走」，和说「往北走、同时离那三个人远点」——</text>
+<text class="svgsm" x="1050" y="406" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">走出来的路线不一样。</tspan></tspan></text>
+<rect x="0" y="488" width="1400" height="266" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="488" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="490" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="518" x2="1400" y2="518" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="508" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 一条序列：<tspan font-weight="700">4,095 个这样的向量，排成一张表</tspan></tspan></text>
+<text class="svgsm" x="550" y="508" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">是 4,095 不是 4,096 ——　最后那个字没有「下一个」。 而这张表的<tspan font-weight="700">「位置」那一维，要一路保留到最后</tspan></text>
+<rect x="120" y="584.0" width="420" height="12.666666666666666" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="598.6666666666666" width="420" height="12.666666666666666" rx="2" fill="#d2e3fc" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="613.3333333333334" width="420" height="12.666666666666666" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="628.0" width="420" height="12.666666666666666" rx="2" fill="#d2e3fc" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="642.6666666666666" width="420" height="12.666666666666666" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="657.3333333333334" width="420" height="12.666666666666666" rx="2" fill="#d2e3fc" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="672.0" width="420" height="12.666666666666666" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="686.6666666666666" width="420" height="12.666666666666666" rx="2" fill="#d2e3fc" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="120" y="701.3333333333334" width="420" height="12.666666666666666" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="552" y="595" fill="#80868b" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 1</text>
+<text class="svgsm" x="552" y="610" fill="#80868b" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 2</text>
+<text class="svgsm" x="552" y="713" fill="#80868b" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 4,095</text>
+<text class="svgsm" x="330" y="570" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">宽 7,168（每个位置的 δ）</tspan></text>
+<text class="svgsm" x="108" y="655" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">高 4,095</tspan></text>
+<text class="svgsm" x="330" y="742" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一行 ＝ 一个位置的那股合力</tspan></text>
+<rect x="620" y="576" width="740" height="150" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="990" y="612" fill="#174ea6" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch ＝ 2 就是两张这样的表叠起来</tspan></text>
+<text class="svgsm" x="990" y="646" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">8,190 行 × 7,168 列</tspan></tspan></text>
+<text class="svgsm" x="990" y="684" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">每一行在<tspan font-weight="700">生出来的那一刻就已经除过 8,190 了</tspan></text>
+<text class="svgsm" x="990" y="710" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">——　「平均」那个除法，早在种子那一步就做掉了。</text>
+<rect x="0" y="804" width="1400" height="344" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="804" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="806" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="834" x2="1400" y2="834" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="824" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ <tspan font-weight="700">现场那第五步：把这些 7,168 加起来</tspan>　——　这一步不能做</tspan></text>
+<text class="svgsm" x="639" y="824" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">因为每一行的责任，必须配<tspan font-weight="700">它自己那一行的输入</tspan></text>
+<rect x="50" y="886" width="640" height="268" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="370" y="922" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">❌ 先把 4,095 行加成一行，再往回传</tspan></text>
+<text class="svgsm" x="370" y="964" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">（所有 δ 加起来）⊗（所有输入加起来）</tspan></tspan></text>
+<text class="svgsm" x="370" y="1008" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">这样一加，<tspan font-weight="700">「第 3 个位置的责任」</tspan>就被配到了</text>
+<text class="svgsm" x="370" y="1034" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「第 900 个位置的输入」</tspan>上。</text>
+<text class="svgsm" x="370" y="1074" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">而「谁在什么上下文里提的要求」</text>
+<text class="svgsm" x="370" y="1098" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">正是这份梯度全部的信息</tspan>　——　加掉就没了。</text>
+<text class="svgsm" x="370" y="1134" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">它是另一个量，跟正确答案不相等。</tspan></text>
+<rect x="710" y="886" width="640" height="268" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="922" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一行配一行，乘完之后才加</tspan></text>
+<text class="svgsm" x="1030" y="964" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">Σ（第 i 行的责任 ⊗ 第 i 行的输入）</tspan></tspan></text>
+<text class="svgsm" x="1030" y="1008" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">每个位置<tspan font-weight="700">各乘各的</tspan>，得到各自那一份</text>
+<text class="svgsm" x="1030" y="1034" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">对权重的贡献　——　<tspan font-weight="700">这些贡献才相加</tspan>。</text>
+<text class="svgsm" x="1030" y="1074" fill="#0d652d" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以「相加」这件事<tspan font-weight="700">确实发生</tspan>，</tspan></text>
+<text class="svgsm" x="1030" y="1100" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">只是它<tspan font-weight="700">不发生在 δ 上，发生在权重梯度上</tspan>。</text>
+<text class="svgsm" x="1030" y="1134" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">而且<tspan font-weight="700">每一层各自发生一次</tspan>。</tspan></text>
+<rect x="0" y="1198" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1198" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="1200" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1228" x2="1400" y2="1228" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1218" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓓ 于是整条链是这样的　——　<tspan font-weight="700">位置维一路走到底，每层顺手结一次账</tspan></tspan></text>
+<rect x="34" y="1276" width="240" height="148" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<rect x="34" y="1276" width="240" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="154" y="1312" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个位置</tspan></text>
+<text class="svgsm" x="154" y="1346" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">129,280 个数</tspan></text>
+<text class="svgsm" x="154" y="1386" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">词表那么长的诉求</text>
+<line x1="278" y1="1350" x2="302" y2="1350" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="308" y="1276" width="240" height="148" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="308" y="1276" width="240" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="428" y="1312" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">折一次</tspan></text>
+<text class="svgsm" x="428" y="1346" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 个数</tspan></text>
+<text class="svgsm" x="428" y="1386" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">合力 ＝ 这个位置的 δ</text>
+<line x1="552" y1="1350" x2="576" y2="1350" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="582" y="1276" width="240" height="148" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="582" y="1276" width="240" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="702" y="1312" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一条序列</tspan></text>
+<text class="svgsm" x="702" y="1346" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4,095 行</tspan></text>
+<text class="svgsm" x="702" y="1386" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">排成一张表，行不相加</text>
+<line x1="826" y1="1350" x2="850" y2="1350" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="856" y="1276" width="240" height="148" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<rect x="856" y="1276" width="240" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="976" y="1312" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">穿 61 层</tspan></text>
+<text class="svgsm" x="976" y="1346" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每层一次</tspan></text>
+<text class="svgsm" x="976" y="1386" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">δ 配本行输入 → 权重贡献</text>
+<line x1="1100" y1="1350" x2="1124" y2="1350" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1130" y="1276" width="240" height="148" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<rect x="1130" y="1276" width="240" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1250" y="1312" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<text class="svgsm" x="1250" y="1346" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6,710 亿个数</tspan></text>
+<text class="svgsm" x="1250" y="1386" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">各层各权重，贡献求和</text>
+<text class="svgsm" x="700" y="1464" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以现场说的「无数个 7,168 加起来变成一个平均的期望」——　<tspan font-weight="700">「加起来」对，「在 7,168 这一层加」不对</tspan>。</text>
+<text class="svgsm" x="700" y="1492" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">加法要等到最后一格才发生，而且加的是对权重的贡献，不是 δ 本身。</tspan></tspan></text>
+<rect x="0" y="1546" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1546" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1546" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1573" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两句话记住这张图</tspan></text>
+<text class="svgsm" x="20" y="1604" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">δ 从头到尾是一张「位置 × 宽度」的表</tspan>　——　位置那一维一路保留，因为第 i 个位置的责任<tspan font-weight="700">只能</tspan>配第 i 个位置的输入。</text>
+<text class="svgsm" x="20" y="1628" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">求和发生在权重梯度上，每一层各结一次账</tspan>　——　所有位置、所有样本对同一个权重的贡献加起来，才是这一步要挪它的那个数。</text>
+</svg><figcaption><b>整条链，从一个位置一直走到 6,710 亿个数。</b>——&nbsp;<em>Ⓐ 词表那么长的诉求先<b>折成一股合力</b>（每个字占一个方向，按各自那个数加权）；Ⓑ 一条序列就是 <b>4,095 行</b>这样的合力，排成一张表。</em><span class="capmore"><br><em>⛔ Ⓒ 是这张图的机关：<b>那些行不能先加起来</b> ——&nbsp;第 i 行的责任只能配第 i 行的输入，先加就错配了。</em><br><em>Ⓓ 所以<b>求和确实发生，但发生在权重梯度上，而且每层各结一次账</b>；<b>位置那一维一路保留到最后。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>线性层：权重梯度 ＝ Σ_i（δ_i ⊗ x_i），沿位置维收缩；而对输入的梯度是逐位置的，不收缩。⚠️ 一个诚实的例外：<b>attention 会让不同位置的 δ 互相混合</b>　——　因为前向时位置之间本来就互相看；</p>
+<p>但那是 attention 的结构造成的，不是「求平均」，线性层那一路位置维严格独立。词表 129,280、宽度 7,168、层数 61 取自 DeepSeek-V3 配置。</p></details></figure>
+
 <h3 id="s1-3">1.3　往回传的<u>不是一个数</u> ——&nbsp;这里是最多人卡住的地方</h3>
 
 <p><em>很多人脑子里的画面是「一个梯度值一层一层传下去」。不是这样。</em></p>
