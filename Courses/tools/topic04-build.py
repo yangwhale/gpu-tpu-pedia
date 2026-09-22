@@ -940,6 +940,76 @@ __FIG_VANISH__
   出框层与消失层都是脚本当场算的，并有断言钉住。）</span></em></figcaption>
 </figure>
 
+<!-- ⭐⭐⭐ 2026-09-22 现场：「你已经说了好几次二阶导了，那是个什么东西？
+     能干嘛用？计算复杂度有多少？跟 Adam 里那个一阶动量和二阶动量什么关系？」
+     ⛔ 这一问照出一个真的洞：**「二阶导」在这一讲里承重了好几处**
+       （1.4 的「故意不算它」、3.3b 的最优步长、Adam 那条线的动机），
+       **却从来没有一个地方正面定义过它**。这一节补它。
+     ⭐ 判据（今天立过的那条）：**同一个话题只在一处讲。**
+       所以 3.3b 那边改成回指，不重讲。 -->
+<h3 id="s1-4b">1.4b　插一节：<u>二阶导到底是什么</u> ——&nbsp;以及它跟 Adam 那个「二阶矩」没有关系</h3>
+
+<p class="lead">上面刚说「我们故意不算二阶导」。<em>可它到底是个什么东西？</em></p>
+
+<div class="note ok"><p><b>一句话：<u>二阶导是坡度自己的变化率</u>。</b></p>
+<p><em>一阶导（梯度）说的是「你动一格，<b>loss</b> 动几格」——&nbsp;坡度。<br>
+  二阶导说的是「你动一格，<b>坡度</b>变几格」——&nbsp;翻译成画面就是
+  <b>这个地方弯得有多急</b>。</em></p>
+<p class="landing"><b>一阶导告诉你<u>往哪走</u>；二阶导告诉你<u>这个坡还能保持多久</u>。</b>
+  <em>——&nbsp;同样是陡坡，一个马上变平、一个一直陡下去，
+  <b>该迈的步子完全不同</b>；可一阶导看它俩是一样的。</em></p></div>
+
+__FIG_SECOND__
+
+<div class="note"><p><b>它的用处很硬：<u>最优步长可以算出来</u>。</b></p>
+<p><em>在一条抛物线上，<b>最优步长 ＝ 梯度 ÷ 二阶导</b>，<b>一步到底</b>
+  ——&nbsp;不用试，不用调。<br>
+  而且它正好治 <a href="#s3-3b">3.3b</a> 那个「拧反了」：
+  灵的旋钮该<b>少</b>拧、钝的该<b>多</b>拧 ——&nbsp;
+  <b>除以二阶导之后，不同参数才可比。</b></em></p>
+<p class="landing">柯西 1847 年那篇文章末尾写的就是这个分工：
+  <em><b>一阶负责从远处走过来，二阶负责最后收口</b>
+  ——&nbsp;而这一讲后半段要讲的，就是<b>二阶收不起口，怎么办</b>。</em></p></div>
+
+<div class="note danger"><p>⛔ <b>那为什么不用？——&nbsp;因为它的大小是<u>参数量的平方</u>。</b></p>
+<p><em>多参数的时候二阶导<b>不是一个数，是一张表</b>：<b>每两个参数之间一个数</b>。
+  这张表叫 <b>Hessian</b>。</em></p>
+<ul>
+  <li><b>存不下。</b><em>权重本身 1.22 TiB，<b>__H_WCARD__块 80 GiB 的卡</b>就装下了；
+    这张表要 <b>__H_CARDS__</b>。<u>不是十万块，是十万亿块。</u></em></li>
+  <li><b>也算不动。</b><em>真要拿它去解，朴素做法是<b>参数量的三次方</b>
+    ——&nbsp;拿一台每秒百亿亿次的机器跑，要 <b>__H_YEARS__</b>。
+    <u>宇宙到现在才 138 亿年。</u></em></li>
+</ul>
+<p class="landing">所以「我们故意不算二阶导」不是偷懒 ——&nbsp;
+  <u>它压根不在可能性范围内。</u></p>
+<p><span class="sub">⚠️ 那台「每秒百亿亿次」的机器是<b>随手设的换算基准</b>，
+  只用来给量级，不是在说某台具体的机器。数都在 <code>topic04-fig-second.py</code>
+  里现算并 assert 住。</span></p></div>
+
+<div class="note warn"><p>✋ <b>最后一件事，而且这是这一讲<u>最容易被中文坑到</u>的一处：
+  <br>Adam 里那个「<u>二阶矩</u>」<b>不是</b>「二阶导」。</b></p>
+<table>
+<thead><tr><th></th><th>二阶<b>导</b>（Hessian）</th><th>二阶<b>矩</b>（Adam 的分母）</th></tr></thead>
+<tbody>
+<tr><td><b>对谁做</b></td><td>对<b>参数</b>求<b>两次导</b></td>
+    <td>对<b>梯度</b>取<b>平方</b>再求平均</td></tr>
+<tr><td><b>得到什么</b></td><td>曲率 ——&nbsp;这儿<b>弯得多急</b></td>
+    <td>这个参数的梯度<b>平常多大</b></td></tr>
+<tr><td><b>属于哪一路</b></td><td><b>几何</b></td><td><b>统计</b></td></tr>
+<tr><td><b>多少个数</b></td><td><b>N 的平方</b></td><td><b>N</b></td></tr>
+</tbody></table>
+<p class="landing"><b>它们中文都带「二阶」，<u>纯属巧合</u>。</b></p>
+<p><em>同样，「<b>一阶动量</b>」也<b>不是</b>一阶导 ——&nbsp;
+  它是<b>梯度的滑动平均</b>，那个「一阶」指的是<b>统计上的一阶矩（期望）</b>。</em></p>
+<p><span class="sub">那为什么老有人说「Adam 的分母在估二阶导」？
+  <em>因为效果上确实有某种事后可以建立的联系。
+  <b>但那是后人回头加的解释，不是发明它的人的思路</b> ——&nbsp;
+  详见 <a href="#s3-3b">3.3b</a>，那一节从三代人各自要治的病讲起。<br>
+  ⭐ 而最能说明问题的是<b>尺寸</b>：<b>Adam 用 2 个 N 个数，换了一条路</b>，
+  <u>它压根没打算去逼近那张 N² 的表</u>。
+  这也是为什么它叫「自适应<b>学习率</b>」，而不叫「近似牛顿法」。</em></span></p></div>
+
 <h3>1.5　最深的一条：为什么是<u>从后往前</u></h3>
 
 <p>数学上<b>两个方向都成立</b>，算出来的结果<b>一模一样</b>。
@@ -4562,6 +4632,16 @@ FIGS = {
         '<em>Ⓒ 代价叫<b>曝光偏差</b>：它训练时没见过自己的错误 ——&nbsp;'
         '<b>长文本越跑越偏，根子在这儿。</b>那为什么还用？'
         '因为并行那个好处太大。</em>'),
+    "__FIG_SECOND__": ("fig-second", "fig4-second.svg",
+        'topic04-fig-second.py',
+        '<b>「二阶导」在这一讲里承重了好几处，却从来没被正面定义过。</b>'
+        '<em>Ⓐ 两个参数<b>梯度一模一样</b>，可一个离底 2.00、另一个离底 0.25 ——&nbsp;'
+        '<b>只看梯度分不出这两种处境</b>；Ⓑ 最优步长 ＝ 梯度 ÷ 二阶导，一步到底。</em><br>'
+        '<em>Ⓒ 可它是 N² 个数：权重 16 块卡，这张表要<b>十万亿块</b>；'
+        '解它要<b>九十多亿年</b>。所以「故意不算」不是偷懒。</em><br>'
+        '<em>⛔ Ⓓ 是这张图真正的机关：<b>Adam 的「二阶矩」跟「二阶导」没有关系</b> ——&nbsp;'
+        '一个对<b>参数</b>求两次导（几何），一个对<b>梯度</b>取平方求平均（统计）。'
+        '<b>中文都带「二阶」，纯属巧合。</b></em>'),
     "__FIG_LINEAGE__": ("fig-lineage", "fig4-lineage.svg",
         'topic04-fig-lineage.py',
         '<b>上面那条谱系是「每一代治什么病」，这张图是它的<u>示波器</u></b>'
@@ -5260,6 +5340,21 @@ for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
     assert _ph in _html, "正文里没有 %s" % _ph
     _html = _html.replace(_ph, _val)
     _SUBS[_ph] = _val
+# ⭐⭐ 1.4b 那三个数：**从画那张图的脚本里现取**，不在正文里手写第二遍。
+#   ⛔ 判据（本仓库反复用的那条）：**同一个数只能有一处来源。**
+#     手抄一份进正文，改了脚本忘了改正文，两边会静默漂开，而且谁都不报错。
+import importlib.util as _ilu                                       # noqa: E402
+_spec = _ilu.spec_from_file_location(
+    "_t4sec", os.path.join(HERE, "topic04-fig-second.py"))
+_SEC = _ilu.module_from_spec(_spec)
+_spec.loader.exec_module(_SEC)
+for _ph, _val in (("__H_WCARD__", "%d" % round(_SEC.W_CARDS)),
+                  ("__H_CARDS__", "%.0f 万亿块" % (_SEC.HESS_CARDS / 1e12)),
+                  ("__H_YEARS__", "%.0f 亿年" % (_SEC.YEARS / 1e8))):
+    assert _ph in _html, "正文里没有 %s" % _ph
+    _html = _html.replace(_ph, _val)
+    _SUBS[_ph] = _val
+
 _html = _html.replace("__TBL_LEDGER__", _TBL_LEDGER)
 _html = _html.replace("__TBL_SCALE__", _TBL_SCALE)
 _html = _html.replace("__LOGITS__", _sz(_LOGITS_B))

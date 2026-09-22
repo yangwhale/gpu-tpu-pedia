@@ -3834,6 +3834,178 @@ body.figonly section h3{margin-top:34px}
   出框层与消失层都是脚本当场算的，并有断言钉住。）</span></em></figcaption>
 </figure>
 
+<!-- ⭐⭐⭐ 2026-09-22 现场：「你已经说了好几次二阶导了，那是个什么东西？
+     能干嘛用？计算复杂度有多少？跟 Adam 里那个一阶动量和二阶动量什么关系？」
+     ⛔ 这一问照出一个真的洞：**「二阶导」在这一讲里承重了好几处**
+       （1.4 的「故意不算它」、3.3b 的最优步长、Adam 那条线的动机），
+       **却从来没有一个地方正面定义过它**。这一节补它。
+     ⭐ 判据（今天立过的那条）：**同一个话题只在一处讲。**
+       所以 3.3b 那边改成回指，不重讲。 -->
+<h3 id="s1-4b">1.4b　插一节：<u>二阶导到底是什么</u> ——&nbsp;以及它跟 Adam 那个「二阶矩」没有关系</h3>
+
+<p class="lead">上面刚说「我们故意不算二阶导」。<em>可它到底是个什么东西？</em></p>
+
+<div class="note ok"><p><b>一句话：<u>二阶导是坡度自己的变化率</u>。</b></p>
+<p><em>一阶导（梯度）说的是「你动一格，<b>loss</b> 动几格」——&nbsp;坡度。<br>
+  二阶导说的是「你动一格，<b>坡度</b>变几格」——&nbsp;翻译成画面就是
+  <b>这个地方弯得有多急</b>。</em></p>
+<p class="landing"><b>一阶导告诉你<u>往哪走</u>；二阶导告诉你<u>这个坡还能保持多久</u>。</b>
+  <em>——&nbsp;同样是陡坡，一个马上变平、一个一直陡下去，
+  <b>该迈的步子完全不同</b>；可一阶导看它俩是一样的。</em></p></div>
+
+<figure class="fbox fwide" id="fig-second"><svg viewBox="0 0 1400 1706" width="100%" role="img" aria-label="二阶导是坡度自己的变化率，也就是这儿弯得有多急。一阶导告诉你往哪走，二阶导告诉你这个坡还能保持多久。它的用处很硬：最优步长等于梯度除以二阶导，一步到底。可它的大小是参数量的平方，权重十六块卡就装下了，这张表要十万亿块卡；真要解它是参数量的三次方，百亿亿次的机器要跑九十六亿年。所以我们故意不算它。最后一件事：Adam 里那个二阶矩不是二阶导，一个是对参数求两次导属于几何，一个是对梯度取平方求平均属于统计，中文都带二阶纯属巧合"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">二阶导到底是什么　——　<tspan font-weight="700">以及它跟 Adam 那个「二阶矩」没有关系</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一阶导告诉你<tspan font-weight="700">往哪走</tspan>；二阶导告诉你<tspan font-weight="700">这个坡还能保持多久</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓐ 它是什么</text>
+<rect x="124" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="145" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓑ 能干嘛</text>
+<rect x="234" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="255" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓒ 为什么不用</text>
+<rect x="372" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="393" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓓ 跟二阶矩的区别</text>
+<rect x="0" y="102" width="1400" height="360" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 两个参数，<tspan font-weight="700">梯度一模一样</tspan>　——　可它们的处境完全不同</tspan></text>
+<text class="svgsm" x="617" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">一阶导看它俩<tspan font-weight="700">没有任何区别</tspan>；分得开它俩的，只有二阶导</text>
+<path d="M0.0,338.5 L6.0,340.6 L12.0,342.7 L18.0,344.8 L24.0,346.7 L30.0,348.7 L36.0,350.6 L42.0,352.4 L48.0,354.1 L54.0,355.9 L60.0,357.5 L66.0,359.1 L72.0,360.7 L78.0,362.2 L84.0,363.6 L90.0,365.0 L96.0,366.3 L102.0,367.6 L108.0,368.8 L114.0,370.0 L120.0,371.1 L126.0,372.2 L132.0,373.2 L138.0,374.1 L144.0,375.0 L150.0,375.9 L156.0,376.7 L162.0,377.4 L168.0,378.1 L174.0,378.7 L180.0,379.3 L186.0,379.8 L192.0,380.3 L198.0,380.7 L204.0,381.0 L210.0,381.3 L216.0,381.6 L222.0,381.8 L228.0,381.9 L234.0,382.0 L240.0,382.0 L246.0,382.0 L252.0,381.9 L258.0,381.8 L264.0,381.6 L270.0,381.3 L276.0,381.0 L282.0,380.7 L288.0,380.3 L294.0,379.8 L300.0,379.3 L306.0,378.7 L312.0,378.1 L318.0,377.4 L324.0,376.7 L330.0,375.9 L336.0,375.0 L342.0,374.1 L348.0,373.2 L354.0,372.2 L360.0,371.1 L366.0,370.0 L372.0,368.8 L378.0,367.6 L384.0,366.3 L390.0,365.0 L396.0,363.6 L402.0,362.2 L408.0,360.7 L414.0,359.1 L420.0,357.5 L426.0,355.9 L432.0,354.1 L438.0,352.4 L444.0,350.6 L450.0,348.7 L456.0,346.7 L462.0,344.8 L468.0,342.7 L474.0,340.6 L480.0,338.5" fill="none" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="50" y1="382" x2="430" y2="382" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="534.0" y="308.0" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<line x1="472.0" y1="344.82666666666665" x2="608.0" y2="283.17333333333335" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<text class="svgsm" x="624" y="274" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">坡度 <tspan font-weight="700">2</tspan></tspan></text>
+<line x1="240" y1="404" x2="540.0" y2="404" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<text class="svgsm" x="390" y="426" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">离底 <tspan font-weight="700">2.00</tspan></tspan></text>
+<text class="svgsm" x="240" y="192" fill="#174ea6" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 弯得缓</tspan></text>
+<text class="svgsm" x="240" y="218" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">二阶导 ＝ <tspan font-weight="700">1</tspan></tspan></text>
+<path d="M486.0,199.0 L492.0,211.4 L498.0,223.4 L504.0,234.9 L510.0,246.0 L516.0,256.7 L522.0,266.9 L528.0,276.7 L534.0,286.0 L540.0,295.0 L546.0,303.4 L552.0,311.5 L558.0,319.1 L564.0,326.3 L570.0,333.0 L576.0,339.4 L582.0,345.2 L588.0,350.7 L594.0,355.7 L600.0,360.2 L606.0,364.4 L612.0,368.1 L618.0,371.3 L624.0,374.2 L630.0,376.6 L636.0,378.5 L642.0,380.0 L648.0,381.1 L654.0,381.8 L660.0,382.0 L666.0,381.8 L672.0,381.1 L678.0,380.0 L684.0,378.5 L690.0,376.6 L696.0,374.2 L702.0,371.3 L708.0,368.1 L714.0,364.4 L720.0,360.2 L726.0,355.7 L732.0,350.7 L738.0,345.2 L744.0,339.4 L750.0,333.0 L756.0,326.3 L762.0,319.1 L768.0,311.5 L774.0,303.4 L780.0,295.0 L786.0,286.0 L792.0,276.7 L798.0,266.9 L804.0,256.7 L810.0,246.0 L816.0,234.9 L822.0,223.4 L828.0,211.4 L834.0,199.0" fill="none" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="470" y1="382" x2="850" y2="382" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="691.5" y="367.5" width="12" height="12" rx="6" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<line x1="629.5" y1="404.32666666666665" x2="765.5" y2="342.67333333333335" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<text class="svgsm" x="781" y="333" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">坡度 <tspan font-weight="700">2</tspan></tspan></text>
+<line x1="660" y1="404" x2="697.5" y2="404" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round"/>
+<text class="svgsm" x="678" y="426" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">离底 <tspan font-weight="700">0.25</tspan></tspan></text>
+<text class="svgsm" x="660" y="192" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 弯得急</tspan></text>
+<text class="svgsm" x="660" y="218" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">二阶导 ＝ <tspan font-weight="700">8</tspan></tspan></text>
+<text class="svgsm" x="700" y="452" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">两个点的<tspan font-weight="700">坡度完全一样</tspan>，可一个离底 2.00、另一个离底 0.25　——　<tspan font-weight="700">差 8 倍</tspan>。<tspan font-weight="700">只看梯度，你分不出这两种处境。</tspan></text>
+<rect x="0" y="512" width="1400" height="226" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="512" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="514" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="542" x2="1400" y2="542" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="532" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 所以它的用处很硬：<tspan font-weight="700">最优步长可以算出来</tspan></tspan></text>
+<rect x="70" y="594" width="600" height="120" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="370" y="634" fill="#202124" text-anchor="middle" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">最优步长 ＝ <tspan font-weight="700">梯度 ÷ 二阶导</tspan></tspan></text>
+<text class="svgsm" x="370" y="672" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">在一条抛物线上，<tspan font-weight="700">一步到底</tspan>　——　不用试，不用调。</text>
+<text class="svgsm" x="370" y="702" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">上面那两个点：2 ÷ 1 ＝ 2.00　·　2 ÷ 8 ＝ 0.25</text>
+<rect x="710" y="594" width="640" height="120" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="632" fill="#0d652d" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">而且它正好治那个「拧反了」</tspan></text>
+<text class="svgsm" x="1030" y="666" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">灵的旋钮该<tspan font-weight="700">少</tspan>拧、钝的该<tspan font-weight="700">多</tspan>拧　——</text>
+<text class="svgsm" x="1030" y="694" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">除以二阶导之后，不同参数才可比。</tspan></text>
+<rect x="0" y="788" width="1400" height="322" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="788" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="790" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="818" x2="1400" y2="818" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="808" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 那<tspan font-weight="700">为什么不用</tspan>？　——　因为它的大小是<tspan font-weight="700">参数量的平方</tspan></tspan></text>
+<text class="svgsm" x="835" y="808" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">多参数时它不是一个数，是一张表：<tspan font-weight="700">每两个参数之间一个数</tspan></text>
+<rect x="60" y="876" width="630" height="200" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="375" y="914" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">存不下</tspan></text>
+<text class="svgsm" x="375" y="954" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">权重本身 1.22 TiB　——　<tspan font-weight="700">16 块 80 GiB 的卡</tspan></text>
+<text class="svgsm" x="375" y="990" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张表　——　<tspan font-weight="700">10 万亿块</tspan></tspan></text>
+<text class="svgsm" x="375" y="1026" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不是十万块。是<tspan font-weight="700">十万亿块</tspan>。</tspan></text>
+<text class="svgsm" x="375" y="1058" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">（4.5e+23 个数，按 bf16 算）</text>
+<rect x="710" y="876" width="640" height="200" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="914" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">也算不动</tspan></text>
+<text class="svgsm" x="1030" y="954" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">真要拿它去解，朴素做法是<tspan font-weight="700">参数量的三次方</tspan></text>
+<text class="svgsm" x="1030" y="992" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拿一台每秒百亿亿次的机器跑 ——　<tspan font-weight="700">96 亿年</tspan></tspan></text>
+<text class="svgsm" x="1030" y="1030" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">宇宙到现在才 <tspan font-weight="700">138 亿年</tspan>。</tspan></text>
+<text class="svgsm" x="1030" y="1062" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">那台机器是随手设的换算基准，只给量级</text>
+<text class="svgsm" x="700" y="1106" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以「我们故意不算二阶导」<tspan font-weight="700">不是偷懒</tspan>　——　<tspan font-weight="700">它压根不在可能性范围内。</tspan></text>
+<rect x="0" y="1160" width="1400" height="352" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1160" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="0" y="1162" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1190" x2="1400" y2="1190" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1180" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓓ 最后一件事：<tspan font-weight="700">Adam 里那个「二阶矩」不是「二阶导」</tspan></tspan></text>
+<text class="svgsm" x="626" y="1180" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">它们<tspan font-weight="700">中文都带「二阶」，纯属巧合</tspan>　——　这是这一讲最容易被中文坑到的一处</text>
+<text class="svgsm" x="640" y="1252" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">二阶<tspan font-weight="700">导</tspan>（Hessian）</tspan></text>
+<text class="svgsm" x="1060" y="1252" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">二阶<tspan font-weight="700">矩</tspan>（Adam 的分母）</tspan></text>
+<rect x="60" y="1278" width="1290" height="38" rx="4" fill="#f8f9fa" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="230" y="1304" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对谁做</tspan></text>
+<text class="svgsm" x="640" y="1304" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">对<tspan font-weight="700">参数</tspan>求<tspan font-weight="700">两次导</tspan></text>
+<text class="svgsm" x="1060" y="1304" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">对<tspan font-weight="700">梯度</tspan>取<tspan font-weight="700">平方</tspan>再求平均</text>
+<rect x="60" y="1322" width="1290" height="38" rx="4" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="230" y="1348" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">得到什么</tspan></text>
+<text class="svgsm" x="640" y="1348" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">曲率　——　这儿<tspan font-weight="700">弯得多急</tspan></text>
+<text class="svgsm" x="1060" y="1348" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">这个参数的梯度<tspan font-weight="700">平常多大</tspan></text>
+<rect x="60" y="1366" width="1290" height="38" rx="4" fill="#f8f9fa" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="230" y="1392" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">属于哪一路</tspan></text>
+<text class="svgsm" x="640" y="1392" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">几何</tspan></text>
+<text class="svgsm" x="1060" y="1392" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">统计</tspan></text>
+<rect x="60" y="1410" width="1290" height="38" rx="4" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="230" y="1436" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">多少个数</tspan></text>
+<text class="svgsm" x="640" y="1436" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">N 的平方</tspan></text>
+<text class="svgsm" x="1060" y="1436" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">N</tspan></text>
+<text class="svgsm" x="700" y="1478" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">同样，「<tspan font-weight="700">一阶动量</tspan>」也<tspan font-weight="700">不是</tspan>一阶导　——　它是<tspan font-weight="700">梯度的滑动平均</tspan>，那个「一阶」指的是<tspan font-weight="700">统计上的一阶矩（期望）</tspan>。</text>
+<text class="svgsm" x="700" y="1508" fill="#681da8" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以 Adam <tspan font-weight="700">不是「近似了 Hessian」</tspan>　——　它用 <tspan font-weight="700">2 个 N</tspan> 个数，<tspan font-weight="700">换了一条路</tspan>，而不是去逼近那张 N² 的表。</tspan></text>
+<rect x="0" y="1560" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1560" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1560" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1587" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两句话记住</tspan></text>
+<text class="svgsm" x="20" y="1618" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">二阶导 ＝ 坡度自己的变化率 ＝ 这儿弯得多急。</tspan>一阶导告诉你往哪走，它告诉你这个坡还能保持多久　——　<tspan font-weight="700">最优步长 ＝ 梯度 ÷ 二阶导，一步到底</tspan>。 可它是 N² 个数，存不下也</text>
+<text class="svgsm" x="20" y="1642" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">算不动，所以我们故意不算。</text>
+<text class="svgsm" x="20" y="1666" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">而 Adam 的「二阶矩」跟它没有关系</tspan>　——　一个对<tspan font-weight="700">参数</tspan>求两次导（几何），一个对<tspan font-weight="700">梯度</tspan>取平方求平均（统计）。<tspan font-weight="700">中文都带「二阶」，纯属巧合。</tspan></text>
+</svg><figcaption><b>「二阶导」在这一讲里承重了好几处，却从来没被正面定义过。</b><em>Ⓐ 两个参数<b>梯度一模一样</b>，可一个离底 2.00、另一个离底 0.25 ——&nbsp;<b>只看梯度分不出这两种处境</b>；Ⓑ 最优步长 ＝ 梯度 ÷ 二阶导，一步到底。</em><span class="capmore"><br><em>Ⓒ 可它是 N² 个数：权重 16 块卡，这张表要<b>十万亿块</b>；解它要<b>九十多亿年</b>。所以「故意不算」不是偷懒。</em><br><em>⛔ Ⓓ 是这张图真正的机关：<b>Adam 的「二阶矩」跟「二阶导」没有关系</b> ——&nbsp;一个对<b>参数</b>求两次导（几何），一个对<b>梯度</b>取平方求平均（统计）。<b>中文都带「二阶」，纯属巧合。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>数都是本脚本现算的：Hessian 4.502e+23 个数（按 bf16 ＝ 9.00e+23 字节）；换算基准一块 80 GiB ⇒ 1.05e+13 块，而权重 1.22 TiB 只要 16 块。</p>
+<p>解它按 N³ ＝ 3.02e+35 次运算，拿每秒 1e18 次的机器 ⇒ 9.57e+09 年。⚠️ 那台机器是<b>随手设的换算基准</b>，只用来给量级，不是在说某台具体的机器；宇宙年龄取 138 亿年。</p></details></figure>
+
+<div class="note"><p><b>它的用处很硬：<u>最优步长可以算出来</u>。</b></p>
+<p><em>在一条抛物线上，<b>最优步长 ＝ 梯度 ÷ 二阶导</b>，<b>一步到底</b>
+  ——&nbsp;不用试，不用调。<br>
+  而且它正好治 <a href="#s3-3b">3.3b</a> 那个「拧反了」：
+  灵的旋钮该<b>少</b>拧、钝的该<b>多</b>拧 ——&nbsp;
+  <b>除以二阶导之后，不同参数才可比。</b></em></p>
+<p class="landing">柯西 1847 年那篇文章末尾写的就是这个分工：
+  <em><b>一阶负责从远处走过来，二阶负责最后收口</b>
+  ——&nbsp;而这一讲后半段要讲的，就是<b>二阶收不起口，怎么办</b>。</em></p></div>
+
+<div class="note danger"><p>⛔ <b>那为什么不用？——&nbsp;因为它的大小是<u>参数量的平方</u>。</b></p>
+<p><em>多参数的时候二阶导<b>不是一个数，是一张表</b>：<b>每两个参数之间一个数</b>。
+  这张表叫 <b>Hessian</b>。</em></p>
+<ul>
+  <li><b>存不下。</b><em>权重本身 1.22 TiB，<b>16块 80 GiB 的卡</b>就装下了；
+    这张表要 <b>10 万亿块</b>。<u>不是十万块，是十万亿块。</u></em></li>
+  <li><b>也算不动。</b><em>真要拿它去解，朴素做法是<b>参数量的三次方</b>
+    ——&nbsp;拿一台每秒百亿亿次的机器跑，要 <b>96 亿年</b>。
+    <u>宇宙到现在才 138 亿年。</u></em></li>
+</ul>
+<p class="landing">所以「我们故意不算二阶导」不是偷懒 ——&nbsp;
+  <u>它压根不在可能性范围内。</u></p>
+<p><span class="sub">⚠️ 那台「每秒百亿亿次」的机器是<b>随手设的换算基准</b>，
+  只用来给量级，不是在说某台具体的机器。数都在 <code>topic04-fig-second.py</code>
+  里现算并 assert 住。</span></p></div>
+
+<div class="note warn"><p>✋ <b>最后一件事，而且这是这一讲<u>最容易被中文坑到</u>的一处：
+  <br>Adam 里那个「<u>二阶矩</u>」<b>不是</b>「二阶导」。</b></p>
+<table>
+<thead><tr><th></th><th>二阶<b>导</b>（Hessian）</th><th>二阶<b>矩</b>（Adam 的分母）</th></tr></thead>
+<tbody>
+<tr><td><b>对谁做</b></td><td>对<b>参数</b>求<b>两次导</b></td>
+    <td>对<b>梯度</b>取<b>平方</b>再求平均</td></tr>
+<tr><td><b>得到什么</b></td><td>曲率 ——&nbsp;这儿<b>弯得多急</b></td>
+    <td>这个参数的梯度<b>平常多大</b></td></tr>
+<tr><td><b>属于哪一路</b></td><td><b>几何</b></td><td><b>统计</b></td></tr>
+<tr><td><b>多少个数</b></td><td><b>N 的平方</b></td><td><b>N</b></td></tr>
+</tbody></table>
+<p class="landing"><b>它们中文都带「二阶」，<u>纯属巧合</u>。</b></p>
+<p><em>同样，「<b>一阶动量</b>」也<b>不是</b>一阶导 ——&nbsp;
+  它是<b>梯度的滑动平均</b>，那个「一阶」指的是<b>统计上的一阶矩（期望）</b>。</em></p>
+<p><span class="sub">那为什么老有人说「Adam 的分母在估二阶导」？
+  <em>因为效果上确实有某种事后可以建立的联系。
+  <b>但那是后人回头加的解释，不是发明它的人的思路</b> ——&nbsp;
+  详见 <a href="#s3-3b">3.3b</a>，那一节从三代人各自要治的病讲起。<br>
+  ⭐ 而最能说明问题的是<b>尺寸</b>：<b>Adam 用 2 个 N 个数，换了一条路</b>，
+  <u>它压根没打算去逼近那张 N² 的表</u>。
+  这也是为什么它叫「自适应<b>学习率</b>」，而不叫「近似牛顿法」。</em></span></p></div>
+
 <h3 id="s1-5">1.5　最深的一条：为什么是<u>从后往前</u></h3>
 
 <p>数学上<b>两个方向都成立</b>，算出来的结果<b>一模一样</b>。
