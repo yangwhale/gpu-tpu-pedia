@@ -197,47 +197,127 @@ def main():
     f._pan = None
 
     # ══════════ Ⓒ 链式法则 ＝ 换汇 ═════════════════════════════════
-    PH3 = 336
+    PH3 = 380
     py3 = f.panel(0, py2 + PH2 + 20, W, PH3,
                   "Ⓒ ⭐⭐ 可旋钮<tspan font-weight=\"700\">不直接连到读数</tspan>"
                   "　——　中间隔着好几级", PU,
                   sub="⭐ 每一级有自己的兑换率，"
                       "<tspan font-weight=\"700\">总兑换率就是一路乘起来</tspan>")
 
-    BX, BW2, BGAP = 80, 230, 84
+    # ⛔⛔ 2026-09-22 现场：「你这图中间那个 2.0、0.5、3.0，它光画一条线，
+    #   这个表达得不清楚吧？它中间应该是一个参数，至少应该是一个标量，对吧？
+    #   但是实际上它是一个矩阵才能产生这个放大和缩小的作用，光画一条线有什么用？」
+    # ⭐ 说得对：原来那条**光秃秃的箭头**把「产生这个数的东西」整个藏起来了，
+    #   于是 2.0 看着像凭空写上去的。⭐ 判据：**一条边上标着一个数的时候，
+    #   图必须同时回答「这个数是谁产生的」** ——&#160;否则那个数就是魔法。
+    # ⇒ 每一级中间放一个**装置**：一块权重 ＋ 一个激活函数。
+    #   而那个兑换率是**装置的斜率**，不是装置本身。
+    BX, BW2, BGAP = 34, 216, 146
     NODES = ("推子", "中间量甲", "中间量乙", "难听程度")
     for k, name in enumerate(NODES):
         x = BX + k * (BW2 + BGAP)
         col = PU if k in (0, len(NODES) - 1) else GY2
-        f.box(x, py3 + 56, BW2, 74, "#fff", col, 8, sw=1.6)
-        f.t(x + BW2 / 2, py3 + 100, name, INK if k else PU, True, 16, "middle")
+        f.box(x, py3 + 62, BW2, 74, "#fff", col, 8, sw=1.6)
+        f.t(x + BW2 / 2, py3 + 106, name, INK if k else PU, True, 16, "middle")
         if k < len(NODES) - 1:
-            mx = x + BW2 + BGAP / 2
-            f.line(x + BW2 + 6, py3 + 93, x + BW2 + BGAP - 6, py3 + 93, PU, 2.0)
-            f.t(mx, py3 + 46, "× %.1f" % CHAIN[k][2], PU, True, 17, "middle")
+            gx = x + BW2
+            f.line(gx + 4, py3 + 99, gx + 18, py3 + 99, PU, 2.0)
+            f.box(gx + 22, py3 + 70, BGAP - 44, 58, "#fef7e0", OR, 6, sw=1.4)
+            f.t(gx + 22 + (BGAP - 44) / 2, py3 + 90, "× 权重", OR, True, 12, "middle")
+            f.t(gx + 22 + (BGAP - 44) / 2, py3 + 114, "过激活", OR, True, 12, "middle")
+            f.line(gx + BGAP - 18, py3 + 99, gx + BGAP - 4, py3 + 99, PU, 2.0)
+            f.t(gx + BGAP / 2, py3 + 50, "斜率 %.1f" % CHAIN[k][2],
+                PU, True, 15, "middle")
+    f.t(W / 2, py3 + 160,
+        "⭐ 橙色那个小方块才是<tspan font-weight=\"700\">装置</tspan>；"
+        "上面那个数是<tspan font-weight=\"700\">装置的斜率</tspan>，不是装置本身　——　"
+        "它 ＝ <tspan font-weight=\"700\">权重 × 激活函数在当前这一点的斜率</tspan>。",
+        INK, size=14, anchor="middle")
 
-    f.box(80, py3 + 158, 620, 116, "#f3e8fd", PU, 8)
-    f.t(390, py3 + 194, "总兑换率 ＝ 一路乘起来", PU, True, 17, "middle")
-    f.t(390, py3 + 236, "%.1f × %.1f × %.1f ＝ <tspan font-weight=\"700\">%d</tspan>"
+    f.box(80, py3 + 190, 620, 116, "#f3e8fd", PU, 8)
+    f.t(390, py3 + 226, "总兑换率 ＝ 一路乘起来", PU, True, 17, "middle")
+    f.t(390, py3 + 268, "%.1f × %.1f × %.1f ＝ <tspan font-weight=\"700\">%d</tspan>"
         % (CHAIN[0][2], CHAIN[1][2], CHAIN[2][2], int(TOTAL)),
         INK, True, 22, "middle")
 
-    f.box(740, py3 + 158, 610, 116, "#e8f0fe", BL, 8)
-    f.t(1045, py3 + 194, "⭐ 这就是<tspan font-weight=\"700\">换汇</tspan>",
+    f.box(740, py3 + 190, 610, 116, "#e8f0fe", BL, 8)
+    f.t(1045, py3 + 226, "⭐ 这就是<tspan font-weight=\"700\">换汇</tspan>",
         BL, True, 17, "middle")
-    f.t(1045, py3 + 228, "人民币 → 港币 → 美元，每步一个汇率",
+    f.t(1045, py3 + 260, "人民币 → 港币 → 美元，每步一个汇率",
         INK, size=14.5, anchor="middle")
-    f.t(1045, py3 + 254, "总汇率<tspan font-weight=\"700\">当然是乘出来的</tspan>"
+    f.t(1045, py3 + 286, "总汇率<tspan font-weight=\"700\">当然是乘出来的</tspan>"
         "　——　链式法则就这一件事", GY, size=13.5, anchor="middle")
 
-    f.t(700, py3 + 306,
+    f.t(700, py3 + 344,
         "⛔ 而「<tspan font-weight=\"700\">这一串数从哪一头开始乘</tspan>」"
         "　——　结果完全一样，<tspan font-weight=\"700\">代价差两万年</tspan>。"
         "那是紧接着<tspan font-weight=\"700\">后面那张「正向 vs 反向」图</tspan>的事。",
         INK, size=14.5, anchor="middle")
     f._pan = None
 
-    yb = f.band(py3 + PH3 + 20, "ok",
+    # ══════════ Ⓓ 真实的一级：那个「斜率」是一张表 ═══════════════════
+    # ⭐⭐⭐ 2026-09-22 现场那一问的后半句，也是更要紧的那半句：
+    #   「实际上它是一个矩阵才能产生这个放大和缩小的作用。」——&#160;完全正确。
+    #   ⛔ 前面三格是**一维玩具**（一个推子、一个读数），玩具里斜率确实是个标量；
+    #     可真实的一级是「七千多维进、七千多维出」，它的斜率是**一整张表**。
+    #   ⭐ 而这一格最该留下的不是那张表有多大，是下面这句：
+    #     **我们从来不把它算出来。** 反向只做「拿责任去乘它」这一件事。
+    DJ = 7168
+    PH4 = 300
+    py4 = f.panel(0, py3 + PH3 + 20, W, PH4,
+                  "Ⓓ 可真实的一级<tspan font-weight=\"700\">不是一个标量</tspan>"
+                  "　——　它的「斜率」是一整张表", RD,
+                  sub="⭐ 上面三格是<tspan font-weight=\"700\">一维玩具</tspan>："
+                      "一个推子、一个读数。真实的一级是"
+                      "<tspan font-weight=\"700\">%s 维进、%s 维出</tspan>"
+                      % (format(DJ, ","), format(DJ, ",")))
+
+    f.box(60, py4 + 70, 190, 72, "#e8f0fe", BL, 6)
+    f.t(155, py4 + 100, "进来", BL, True, 14, "middle")
+    f.t(155, py4 + 126, "%s 个数" % format(DJ, ","), INK, True, 15, "middle")
+    f.line(256, py4 + 106, 288, py4 + 106, PU, 2.2)
+    f.box(294, py4 + 62, 200, 88, "#fef7e0", OR, 6, sw=1.6)
+    f.t(394, py4 + 92, "装置", OR, True, 15, "middle")
+    f.t(394, py4 + 118, "一块 %s × %s" % (format(DJ, ","), format(DJ, ",")),
+        INK, True, 13, "middle")
+    f.t(394, py4 + 140, "的权重 ＋ 激活", GY, size=12.5, anchor="middle")
+    f.line(500, py4 + 106, 532, py4 + 106, PU, 2.2)
+    f.box(538, py4 + 70, 190, 72, "#e8f0fe", BL, 6)
+    f.t(633, py4 + 100, "出去", BL, True, 14, "middle")
+    f.t(633, py4 + 126, "%s 个数" % format(DJ, ","), INK, True, 15, "middle")
+
+    f.t(394, py4 + 186,
+        "那这一级的「斜率」是多少？　——　<tspan font-weight=\"700\">不是一个数，"
+        "是 %s × %s 张表</tspan>" % (format(DJ, ","), format(DJ, ",")),
+        RD, True, 14.5, "middle")
+    f.t(394, py4 + 214,
+        "（出去的每一维，对进来的每一维，各有一个兑换率）",
+        GY, size=13, anchor="middle")
+    f.t(394, py4 + 246,
+        "＝ <tspan font-weight=\"700\">%s 个数</tspan>　——　"
+        "而这<tspan font-weight=\"700\">只是一级</tspan>。"
+        % format(DJ * DJ, ","), INK, True, 14.5, "middle")
+
+    f.box(770, py4 + 58, 580, 210, "#e6f4ea", GR, 8)
+    f.t(1060, py4 + 94, "⭐ 但好消息是：", GR, True, 17, "middle")
+    f.t(1060, py4 + 130,
+        "<tspan font-weight=\"700\">我们从来不把那张表算出来。</tspan>",
+        INK, True, 17, "middle")
+    f.t(1060, py4 + 170,
+        "反向只做一件事：<tspan font-weight=\"700\">拿责任去乘它</tspan>，",
+        INK, size=14.5, anchor="middle")
+    f.t(1060, py4 + 196,
+        "直接得到<tspan font-weight=\"700\">上一级该收到的责任</tspan>。",
+        INK, size=14.5, anchor="middle")
+    f.t(1060, py4 + 234,
+        "——　那正是「反向那两笔乘法」里的<tspan font-weight=\"700\">第二笔</tspan>。",
+        GR, True, 14, "middle")
+    f.t(1060, py4 + 260,
+        "⭐ 所以「一路乘起来」这句话是真的，只是乘的是<tspan font-weight=\"700\">表</tspan>。",
+        GY, size=13.5, anchor="middle")
+    f._pan = None
+
+    yb = f.band(py4 + PH4 + 20, "ok",
                 "所以这一讲后面所有的东西，都只用到这三句话",
                 ("✅ <tspan font-weight=\"700\">① 导数 ＝ 你动一格，它动几格（兑换率）。"
                  "② 偏导数 ＝ 其余全按住时的那个兑换率。"
