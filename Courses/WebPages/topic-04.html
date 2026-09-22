@@ -3183,6 +3183,161 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>这是整讲唯一一处「小到能用眼睛跟着数走」的地方</b> ——&nbsp;<em>同一条线上两个数：黑的是前向，红的是反向。</em><span class="capmore"><br><em>Ⓑ 那三个门不用背：<b>加法是分发器、乘法是交换器、max 是路由器</b>。记住脾气就能手推任何一张电路。</em><br>⛔ <em><b>Ⓒ 别跳过</b> ——&nbsp;乘法门反向要用前向的值，<b>而这就是整讲那张激活账单的源头</b>：激活不是框架顺手缓存的东西，是反向的数学要求它在场。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 「电路图 ＋ 三个门（分发 / 交换 / 路由）」这个讲法取自 CS231n 的反向传播讲义　——　<b>图是我们自己重画的，数也是自己挑的</b>。</p>
 <p>⭐ 图上每个数都可以自己验：脚本里带 assert　——　a 和 b 的梯度都是 4、c 的梯度是 −1，对不上就不让构建。</p></details></figure>
 
+<!-- ⭐⭐⭐ 2026-09-22 现场自己推出来的一问，而且推对了（原话）：
+     「就属于那个错误不会向后传，不会因为前面的一系列 token 猜错了就影响我
+       这一个步骤。因为我压根不管它前面猜的对不对。」
+     ⭐ 这件事有名字（teacher forcing），而且它的**代价**那一半更值钱。
+       教材原来一个字都没有。 -->
+<h3 id="s1-3b">1.3b　前面猜错了，会不会影响后面 ——&nbsp;<u>训练时不会</u></h3>
+
+<p class="lead">这一问是现场推出来的，而且推对了：
+  <em><b>训练的时候，前面那些 token 猜没猜对，完全不影响这个位置。</b></em></p>
+
+<p>因为每个位置的<b>输入永远是真值</b>，不是模型自己刚猜出来的那个字。
+  <em>这件事有名字：<b>teacher forcing</b>。</em></p>
+
+<div class="note"><p>⛔ <b>但有一处要说准：这不是「一个 token 一个 token 地去查」。</b></p>
+<p><em>训练里 Q / K / V <b>一把算完</b>、注意力<b>一把做完</b>，
+  <b>所有位置同时</b>。<br>
+  ——&nbsp;而这正是<b>训练和推理最大的形态差别</b>：
+  <b>推理才是真的一个一个来</b>，因为下一个字得等上一个字生成出来。</em></p>
+<p class="landing">顺带一个小口径：「查<u>前面</u>的 K 和 V」严格说是
+  「<b>前面和自己</b>」——&nbsp;<em>因果掩码允许看到自己这个位置，只是不能看后面。</em></p></div>
+
+<figure class="fbox fwide" id="fig-teacher"><svg viewBox="0 0 1400 1330" width="100%" role="img" aria-label="训练的时候每个位置的输入永远是真值，不是模型自己刚猜出来的那个字，所以前面猜错了也污染不到后面，这叫 teacher forcing；而且所有位置是一次矩阵乘同时算完的，不是一个一个来。推理时前文全是它自己生成的，必须一个一个来，一旦错一个，后面全建立在那个错的上面。代价叫曝光偏差：训练时它从来没见过自己的错误，一旦在推理时错一个，就走进了训练时从没见过的分布，这就是长文本生成越跑越偏的原因"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">前面猜错了，会不会影响后面　——　<tspan font-weight="700">训练时不会</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这件事有名字：<tspan font-weight="700">teacher forcing</tspan>　——　每个位置的输入<tspan font-weight="700">永远是真值</tspan>，不是模型自己刚猜的那个字</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓐ 训练</text>
+<rect x="96" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="117" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓑ 推理</text>
+<rect x="192" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="213" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓒ 代价与取舍</text>
+<rect x="0" y="102" width="1400" height="336" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 训练：<tspan font-weight="700">输入那一排，从头到尾都是真值</tspan></tspan></text>
+<text class="svgsm" x="509" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">而且<tspan font-weight="700">所有位置同时算完</tspan>　——　一次矩阵乘，不是一个一个来</text>
+<text class="svgsm" x="96" y="214" fill="#0d652d" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">真值</tspan></text>
+<rect x="150" y="190" width="92" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="196" y="222" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">今</tspan></text>
+<line x1="196.0" y1="244" x2="196.0" y2="274" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="268" y="190" width="92" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="314" y="222" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">天</tspan></text>
+<line x1="314.0" y1="244" x2="314.0" y2="274" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="386" y="190" width="92" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="432" y="222" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">天</tspan></text>
+<line x1="432.0" y1="244" x2="432.0" y2="274" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="504" y="190" width="92" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="550" y="222" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">气</tspan></text>
+<line x1="550.0" y1="244" x2="550.0" y2="274" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="622" y="190" width="92" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="668" y="222" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">很</tspan></text>
+<line x1="668.0" y1="244" x2="668.0" y2="274" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="740" y="190" width="92" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="786" y="222" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">好</tspan></text>
+<line x1="786.0" y1="244" x2="786.0" y2="274" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="96" y="314" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">预测</tspan></text>
+<rect x="150" y="282" width="92" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="196" y="314" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">天</tspan></text>
+<rect x="268" y="282" width="92" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="314" y="314" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">天</tspan></text>
+<rect x="386" y="282" width="92" height="48" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="432" y="314" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">空</tspan></text>
+<text class="svgsm" x="432" y="356" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✘ 猜错了</tspan></text>
+<rect x="504" y="282" width="92" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="550" y="314" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">气</tspan></text>
+<rect x="622" y="282" width="92" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="668" y="314" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">很</tspan></text>
+<rect x="740" y="282" width="92" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="786" y="314" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">好</tspan></text>
+<path d="M432,332 C462,366 520,366 550,248" fill="none" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="525" y="390" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✘</tspan></text>
+<text class="svgsm" x="621" y="390" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">这条路不存在</tspan></tspan></text>
+<rect x="880" y="190" width="480" height="186" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1120" y="226" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以「错误不会向后传」</tspan></text>
+<text class="svgsm" x="1120" y="262" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">下一个位置拿到的输入，<tspan font-weight="700">来自上面那一排真值</tspan>，</text>
+<text class="svgsm" x="1120" y="288" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不是来自刚才那个错的预测</tspan>。</text>
+<text class="svgsm" x="1120" y="328" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每个位置<tspan font-weight="700">各算各的</tspan>，互不污染　——</tspan></text>
+<text class="svgsm" x="1120" y="354" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">所以 4,095 个位置可以<tspan font-weight="700">一次全算完</tspan>。</text>
+<rect x="0" y="488" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="488" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="490" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="518" x2="1400" y2="518" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="508" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 推理：<tspan font-weight="700">前文全是它自己生成的</tspan></tspan></text>
+<text class="svgsm" x="455" y="508" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">而且必须<tspan font-weight="700">一个一个来</tspan>　——　下一个字得等上一个字出来</text>
+<rect x="150" y="584" width="92" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="196" y="616" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">天</tspan></text>
+<line x1="246" y1="608" x2="264" y2="608" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="268" y="584" width="92" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="314" y="616" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">天</tspan></text>
+<line x1="364" y1="608" x2="382" y2="608" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="386" y="584" width="92" height="48" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="432" y="616" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">空</tspan></text>
+<line x1="482" y1="608" x2="500" y2="608" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="504" y="584" width="92" height="48" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="550" y="616" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">气</tspan></text>
+<line x1="600" y1="608" x2="618" y2="608" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="622" y="584" width="92" height="48" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="668" y="616" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">很</tspan></text>
+<line x1="718" y1="608" x2="736" y2="608" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="740" y="584" width="92" height="48" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="786" y="616" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">好</tspan></text>
+<text class="svgsm" x="432" y="658" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✘ 从这儿错</tspan></text>
+<line x1="386" y1="676" x2="832" y2="676" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="609" y="700" fill="#a50e0e" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">后面每一个，都建立在那个错的上面</tspan></tspan></text>
+<rect x="880" y="576" width="480" height="156" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1120" y="612" fill="#a50e0e" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练和推理，喂的东西不一样</tspan></text>
+<text class="svgsm" x="1120" y="648" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练：<tspan font-weight="700">真值</tspan>　·　推理：<tspan font-weight="700">它自己的输出</tspan></tspan></text>
+<text class="svgsm" x="1120" y="686" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练：<tspan font-weight="700">一次算完</tspan>　·　推理：<tspan font-weight="700">串行 4,095 次</tspan></tspan></text>
+<text class="svgsm" x="1120" y="718" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">这是训练和推理<tspan font-weight="700">最大的形态差别</tspan>。</text>
+<rect x="0" y="838" width="1400" height="322" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="838" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="840" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="868" x2="1400" y2="868" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="858" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 代价有个名字：<tspan font-weight="700">曝光偏差</tspan>（exposure bias）</tspan></text>
+<text class="svgsm" x="547" y="858" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">训练时它<tspan font-weight="700">从来没见过自己的错误</tspan></text>
+<rect x="50" y="924" width="630" height="214" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="365" y="960" fill="#b06000" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">它一直活在一个「前文永远是对的」世界里</tspan></text>
+<text class="svgsm" x="365" y="1000" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">可推理时前文<tspan font-weight="700">全是它自己生成的</tspan>。</text>
+<text class="svgsm" x="365" y="1034" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">一旦错一个，它就走进了一个</text>
+<text class="svgsm" x="365" y="1062" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">训练时从没见过的分布</tspan>　——　而在那儿它没有任何经验。</tspan></text>
+<text class="svgsm" x="365" y="1106" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这就解释了：<tspan font-weight="700">长文本生成为什么会越跑越偏。</tspan></tspan></text>
+<text class="svgsm" x="365" y="1132" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">不是它突然变笨了，是它走进了自己没被训练过的地方。</text>
+<rect x="710" y="924" width="640" height="214" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="960" fill="#0d652d" text-anchor="middle" style="font-size:16.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">那为什么还这么干？</tspan></text>
+<text class="svgsm" x="1030" y="1000" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">① <tspan font-weight="700">并行</tspan>　——　用自己的预测喂自己的话，第 t 个位置</text>
+<text class="svgsm" x="1030" y="1026" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">得等第 t−1 个算完，<tspan font-weight="700">4,095 个位置就得串行 4,095 次</tspan>。</text>
+<text class="svgsm" x="1030" y="1064" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">② <tspan font-weight="700">早期不发散</tspan>　——　刚开始模型猜得一塌糊涂，</text>
+<text class="svgsm" x="1030" y="1090" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">拿它自己的输出喂自己，<tspan font-weight="700">一步就飞了</tspan>。</text>
+<text class="svgsm" x="1030" y="1128" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以这是一笔<tspan font-weight="700">明知有代价、仍然划算</tspan>的交易。</tspan></text>
+<rect x="0" y="1208" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1208" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1208" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1235" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两句话记住</tspan></text>
+<text class="svgsm" x="20" y="1266" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练喂真值、推理喂自己</tspan>　——　所以训练时「前面猜错了」污染不到后面，而且 4,095 个位置能<tspan font-weight="700">一次算完</tspan>；推理只能一个一个来。</text>
+<text class="svgsm" x="20" y="1290" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">代价是曝光偏差</tspan>：它训练时没见过自己的错误，所以推理时一旦错一个，就进了没被训练过的分布　——　<tspan font-weight="700">长文本越跑越偏，根子在这儿。</tspan></text>
+</svg><figcaption><b>训练喂真值、推理喂自己</b> ——&nbsp;<em>Ⓐ 训练时那条"预测 →&nbsp;下一格输入"的路<b>根本不存在</b>，所以「前面猜错了」污染不到后面，而且所有位置能<b>一次算完</b>；Ⓑ 推理时前文全是它自己生成的，错一个，<b>后面每一个都建立在那个错的上面</b>。</em><span class="capmore"><br><em>Ⓒ 代价叫<b>曝光偏差</b>：它训练时没见过自己的错误 ——&nbsp;<b>长文本越跑越偏，根子在这儿。</b>那为什么还用？因为并行那个好处太大。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处（2026-09-22 现查，不是凭记忆）：<b>teacher forcing</b> 这个词由 Williams &amp; Zipser（1989）在循环网络上提出，原文写的是 “We call this intuitively sensible technique teacher forcing”；</p>
+<p><b>scheduled sampling</b>（训练中按概率混入模型自己的预测，用来缓解曝光偏差）出自 Bengio 等，arXiv <a href="https://arxiv.org/abs/1506.03099" target="_blank" rel="noopener">1506.03099</a>（2015）。⚠️ 今天的大模型基本仍是纯 teacher forcing　——　并行那个好处太大，大到愿意忍着曝光偏差。</p></details></figure>
+
+<div class="note warn"><p>✋ <b>那代价是什么？——&nbsp;<u>曝光偏差</u>（exposure bias）。</b></p>
+<p><em>训练时它<b>从来没见过自己的错误</b>，一直活在「前文永远是对的」那个世界里。<br>
+  可推理时前文<b>全是它自己生成的</b> ——&nbsp;
+  <b>一旦错一个，它就走进了一个训练时从没见过的分布</b>，而在那儿它没有任何经验。</em></p>
+<p class="landing"><b>这就解释了一个人人遇到过的现象：长文本生成为什么会越跑越偏。</b>
+  <em>不是它突然变笨了，<b>是它走进了自己没被训练过的地方</b>。</em></p>
+<p><span class="sub">那为什么还这么干？
+  <em>① <b>并行</b> ——&nbsp;用自己的预测喂自己的话，第 t 个位置得等第 t−1 个算完，
+  一条 4,096 长的序列就得<b>串行四千多次</b>，训练慢到不可行。
+  ② <b>早期不发散</b> ——&nbsp;刚开始模型猜得一塌糊涂，拿它自己的输出喂自己，一步就飞了。<br>
+  ——&nbsp;<b>所以这是一笔明知有代价、仍然划算的交易。</b></em></span></p>
+<p><span class="sub">📌 出处（现查）：<b>teacher forcing</b> 这个词由
+  <b>Williams &amp; Zipser（1989）</b>在循环网络上提出；
+  <b>scheduled sampling</b>（训练中按概率混入模型自己的预测，用来缓解曝光偏差）出自
+  <b>Bengio 等，arXiv <a href="https://arxiv.org/abs/1506.03099" target="_blank" rel="noopener">1506.03099</a>（2015）</b>。
+  <em>⚠️ 今天的大模型基本仍是<b>纯 teacher forcing</b>。</em></span></p></div>
+
 <h3 id="s1-4">1.4　为什么偏导数一出现，这件事就变容易了</h3>
 
 <p class="lead">因为偏导数是<u>局部</u>的。</p>
