@@ -670,6 +670,45 @@ nav.famnav em{display:block;font-style:normal;font-weight:400;font-size:11.5px;
 nav.famnav .here em{color:#174ea6}
 @media(max-width:760px){nav.famnav em{display:none}
   nav.famnav a,nav.famnav .here{padding:6px 10px}}
+
+/* ── 开场连线题 ─────────────────────────────────────────────────── */
+#qz{--qzgap:26px}
+#qz .qzwrap{position:relative;display:grid;grid-template-columns:1fr 150px 1fr;
+  gap:var(--qzgap) 0;align-items:center;margin:14px 0 6px}
+/* ⛔ 2026-09-22 第一版渲染出来是**四根竖线** ——&#160;因为两列都用了
+   `justify-self:stretch`，左格子的右边缘和右格子的左边缘几乎贴在一起，
+   两个端点的 x 坐标差不到 10px，贝塞尔曲线被压成了一根竖杠。
+   ⭐ 判据：**连线题里「线」是内容，而线的长度是布局给的。**
+     所以两列必须**各自贴着中间那条沟**收缩，不能拉满。 */
+/* ⛔ 第二个坑，而且第一次完全没看出来：中间那个 <svg> 是 position:absolute，
+   **所以它不是 grid item** ——&#160;右边那一列于是自动落到了第 2 条轨道
+   （150px 那条）上，把它撑破，两列就又贴到一起了。
+   ⭐ 判据：**绝对定位的孩子不占格子。** 靠「写了三列就会分三列」是错的，
+     要么给它留一个真的占位元素，要么把列号钉死 ——&#160;这里钉列号。 */
+#qz .qzL{grid-column:1;justify-items:end}
+#qz .qzR{grid-column:3;justify-items:start}
+#qz .qzi{position:relative;z-index:2;cursor:pointer;user-select:none;
+  border:2px solid transparent;border-radius:9px;padding:7px 10px;transition:.12s}
+#qz .qzi:hover{background:#f1f3f4}
+#qz .qzi.on{border-color:#1a73e8;background:#e8f0fe}
+#qz .qzi.tied{background:#fff}
+#qz .chip{display:inline-block;padding:2px 9px;border-radius:6px;border:1px solid;
+  font-weight:700;white-space:nowrap;font-size:13px}
+#qz .cy{white-space:nowrap}
+#qz .cy i{display:inline-block;width:35px;text-align:center;color:#fff;font-style:normal;
+  font-size:9px;font-weight:700;padding:3px 0;border-radius:3px;margin-right:3px}
+#qz svg.wire{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+#qz .qzbar{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+#qz button{font:inherit;font-weight:700;padding:7px 20px;border-radius:8px;cursor:pointer;
+  border:1px solid #1a73e8;background:#1a73e8;color:#fff}
+#qz button.gh{background:#fff;color:#1a73e8}
+#qz button:disabled{opacity:.45;cursor:default}
+#qz .qzmsg{font-weight:700}
+#qz .qzmsg.bad{color:#d93025}
+#qz .qzmsg.good{color:#1e8e3e}
+#qz .qzans{margin-top:14px;border-top:1px dashed #dadce0;padding-top:12px}
+#qz .qzans li{margin:7px 0}
+@media(max-width:760px){#qz .qzwrap{grid-template-columns:1fr 60px 1fr}}
 </style>
 <style>
 ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
@@ -833,6 +872,90 @@ body.figonly section h3{margin-top:34px}
 </div></div>
 
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一个数，和 6,710 亿个参数</h2></div>
+
+
+<details class="foldfig" id="qzbox"><summary><b>🎯 开场热身：上一讲那四个模型，各自走的是哪条路？</b>
+  <span class="why">——&nbsp;连线题，四条全对才公布答案。<u>不做也不影响这一讲</u></span></summary>
+<div id="qz">
+<p>左边是四个模型，右边是四条<b>注意力构成</b>（一格＝一层，这是
+  <a href="topic-03.html">专题三</a>那张编年史表里同一套配色）。
+  <b>先点左边一个，再点右边一个</b>就连上；<b>再点一次左边</b>可以拆掉。</p>
+<div class="qzwrap">
+  <div class="qzL" style="display:grid;gap:var(--qzgap)"><div class="qzi" data-ink="#5e35b1"><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi K3　2.8T/104B · 93 层</span></div><div class="qzi" data-ink="#00838f"><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V4-Pro　1.6T/49B · 61 层</span></div><div class="qzi" data-ink="#e8710a"><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3.5　397B/17B · 60 层</span></div><div class="qzi" data-ink="#f9ab00"><span class="chip" style="color:#f9ab00;background:#f9fbe7;border-color:#f9ab00">小米 MiMo-V2.5-Pro　1.02T/42B · 70 层</span></div></div>
+  <svg class="wire"></svg>
+  <div class="qzR" style="display:grid;gap:var(--qzgap)"><div class="qzi"><span class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></span></div><div class="qzi"><span class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">gMLA</i></span></div><div class="qzi"><span class="cy"><i style="background:#a50e0e">HCA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i></span></div><div class="qzi"><span class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></span></div></div>
+</div>
+<div class="qzbar"><button class="go" disabled>Submit</button>
+  <button class="gh rst">重来</button><span class="qzmsg"></span></div>
+<div class="qzans" hidden><p><b>对上了。这四条其实就是当下的四条主流路线：</b></p>
+<ul><li><span class="chip" style="color:#5e35b1;background:#ede7f6;border-color:#5e35b1">Kimi K3　2.8T/104B · 93 层</span>　<span class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#e8710a">gMLA</i></span><br><span class="sub">69 KDA ＋ 24 Gated MLA（<b>末层 92、93 连着两层 full</b>）　·　上下文 <b>1M</b></span></li><li><span class="chip" style="color:#00838f;background:#e0f2f1;border-color:#00838f">DeepSeek-V4-Pro　1.6T/49B · 61 层</span>　<span class="cy"><i style="background:#a50e0e">HCA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i><i style="background:#a50e0e">HCA</i><i style="background:#d93025">CSA</i></span><br><span class="sub">⛔ 跟 Flash 不同：<b>前两层是 HCA</b>。1.6T 而 KV 不到 1 GiB　·　上下文 <b>1M</b></span></li><li><span class="chip" style="color:#e8710a;background:#fff3e0;border-color:#e8710a">Qwen3.5　397B/17B · 60 层</span>　<span class="cy"><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#12b5cb">GDN</i><i style="background:#f9ab00">gAT</i></span><br><span class="sub">45 线性 ＋ 15 全（config: full_attention_interval 4）　·　上下文 <b>256K</b></span></li><li><span class="chip" style="color:#f9ab00;background:#f9fbe7;border-color:#f9ab00">小米 MiMo-V2.5-Pro　1.02T/42B · 70 层</span>　<span class="cy"><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#00838f">SWA</i><i style="background:#f9ab00">FULL</i></span><br><span class="sub">60 SWA ＋ 10 全，窗口 128 ——&#160;<b>1M 那档最省的</b>　·　上下文 <b>1M</b></span></li></ul>
+<p class="landing"><b>而这一讲要问的是另一半 ——&nbsp;上面这些都是「推理时怎么省」。
+  训练的时候，这四家谁都躲不开同一张账单。</b></p></div>
+</div>
+<script>
+(function(){
+ var root=document.getElementById('qz'); if(!root) return;
+ var KEY=[1,2,3,0];
+ var L=[].slice.call(root.querySelectorAll('.qzL .qzi'));
+ var R=[].slice.call(root.querySelectorAll('.qzR .qzi'));
+ var svg=root.querySelector('svg.wire'), wrap=root.querySelector('.qzwrap');
+ var msg=root.querySelector('.qzmsg'), ans=root.querySelector('.qzans');
+ var btn=root.querySelector('.go'), rst=root.querySelector('.rst');
+ var sel=null, tie={};                       // tie[左 index] = 右 index
+ function clear(){ while(svg.firstChild) svg.removeChild(svg.firstChild); }
+ function draw(){
+   clear();
+   var W=wrap.getBoundingClientRect();
+   if(!W.width) return;                      // details 还没展开，宽度是 0
+   Object.keys(tie).forEach(function(i){
+     var a=L[i].getBoundingClientRect(), b=R[tie[i]].getBoundingClientRect();
+     var ln=document.createElementNS('http://www.w3.org/2000/svg','path');
+     var x1=a.right-W.left, y1=a.top+a.height/2-W.top;
+     var x2=b.left-W.left,  y2=b.top+b.height/2-W.top;
+     var m=(x1+x2)/2;
+     ln.setAttribute('d','M'+x1+','+y1+'C'+m+','+y1+' '+m+','+y2+' '+x2+','+y2);
+     ln.setAttribute('fill','none');
+     ln.setAttribute('stroke', L[i].getAttribute('data-ink')||'#1a73e8');
+     ln.setAttribute('stroke-width','2.5');
+     ln.setAttribute('stroke-linecap','round');
+     svg.appendChild(ln);
+   });
+ }
+ function paint(){
+   L.forEach(function(e,i){ e.classList.toggle('on', sel===i);
+                            e.classList.toggle('tied', tie[i]!==undefined); });
+   R.forEach(function(e,j){ var used=Object.keys(tie).some(function(k){return tie[k]===+j;});
+                            e.classList.toggle('tied', used); });
+   btn.disabled = Object.keys(tie).length < L.length;
+   draw();
+ }
+ L.forEach(function(e,i){ e.onclick=function(){
+   if(tie[i]!==undefined){ delete tie[i]; sel=null; }   // 再点一次＝拆掉这条
+   else sel=(sel===i?null:i);
+   msg.textContent=''; msg.className='qzmsg'; ans.hidden=true; paint(); }; });
+ R.forEach(function(e,j){ e.onclick=function(){
+   if(sel===null){ msg.textContent='先点左边那个模型'; msg.className='qzmsg bad'; return; }
+   Object.keys(tie).forEach(function(k){ if(tie[k]===j) delete tie[k]; }); // 一对一
+   tie[sel]=j; sel=null; msg.textContent=''; msg.className='qzmsg';
+   ans.hidden=true; paint(); }; });
+ btn.onclick=function(){
+   var ok=L.every(function(_,i){ return tie[i]===KEY[i]; });
+   if(ok){ msg.textContent='✅ 四条全对 —— 答案在下面。'; msg.className='qzmsg good';
+           ans.hidden=false; }
+   else  { msg.textContent='❌ 不对。再看一眼这四家各自是哪条路线。';
+           msg.className='qzmsg bad'; ans.hidden=true; }
+   draw();
+ };
+ rst.onclick=function(){ tie={}; sel=null; msg.textContent=''; msg.className='qzmsg';
+                         ans.hidden=true; paint(); };
+ root.addEventListener('toggle', function(){ setTimeout(draw,0); });
+ var d=root.closest('details'); if(d) d.addEventListener('toggle',function(){setTimeout(draw,0);});
+ window.addEventListener('resize', draw);
+ paint();
+})();
+</script>
+</details>
+
 
 <p class="lead">专题一跟着一个 token 走完了前向 ——&nbsp;<b>模型吐出了它的猜测。</b>
   <em>这一讲从那一刻接着往下走：<u>猜错了，然后呢？</u></em></p>

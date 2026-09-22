@@ -815,9 +815,19 @@ AI_VOICE_BUDGET = dict(
 
 
 def _visible(html):
-    """剥成读者真正看得见的字：去 svg / script / style / HTML 注释 / 标签。"""
+    """剥成读者真正看得见的字：去 style / script / svg / HTML 注释 / 标签。
+
+    ⛔⛔ 2026-09-22 修：**这四个的剥离顺序是承重的，原来 `svg` 排在最前面。**
+      页面里有内联 SVG 的地方，`<svg\\b.*?</svg>` 会跨过 `</style>` 去匹配，
+      **把整张样式表和整段 JS 一起留在「可见文本」里** ——&#160;
+      于是 `lint_ai_voice` 数了五十个来自 **CSS 注释**的 ⭐⛔，
+      而那些字没有任何读者看得见。
+      ⭐ 判据（这一轮第三次撞上同一条）：**度量之前先问它数的是不是你想数的东西。**
+      ⭐ 修法：`style` / `script` 是严格配对的，**先把它们摘干净**，
+        再去剥容易跨界的 svg。顺序一换，同一页 328 → 278。
+    """
     s = html
-    for tag in ("svg", "script", "style"):
+    for tag in ("style", "script", "svg"):
         s = re.sub(r"<%s\b.*?</%s>" % (tag, tag), "", s, flags=re.S)
     s = re.sub(r"<!--.*?-->", "", s, flags=re.S)
     s = re.sub(r"<[^>]+>", "", s)

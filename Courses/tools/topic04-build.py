@@ -76,6 +76,8 @@ def todo(what, figs, asks):
 
 BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一个数，和 __NPARAM_CN__个参数</h2></div>
 
+__QUIZ__
+
 <p class="lead">专题一跟着一个 token 走完了前向 ——&nbsp;<b>模型吐出了它的猜测。</b>
   <em>这一讲从那一刻接着往下走：<u>猜错了，然后呢？</u></em></p>
 
@@ -4995,7 +4997,20 @@ _TBL_LEDGER = (
     '</tbody></table>'
     % (_rows, _LED_B, N_PARAM * _LED_B / TIB))
 
+# ⭐⭐ 2026-09-22 现场要的开场连线题。四行数据全部从专题三那份
+#   `topic03_models.ROWS` 现取 ——&#160;这里一个参数都不抄，理由写在
+#   `topic04_quiz.py` 顶上（「数据必须只有一份」）。
+import topic04_quiz as _QZ                                          # noqa: E402
+_QUIZ_HTML, _QUIZ_CSS = _QZ.build()
+# ⛔ `make_head()` 吐出来的 head 里有**两个** </style>（第二个是打印样式表）。
+#   ⭐ 判据：**往「那个 </style>」前面插之前，先数一数有几个。**
+#     盲 replace 会插进打印样式里 ——&#160;屏幕上完全看不出来，只有打印时才发作。
+assert head.count("</style>") == 2, "head 里 </style> 的个数变了，先去看 make_head"
+head = head.replace("</style>", _QUIZ_CSS + "</style>", 1)      # 只插第一个（屏幕样式）
+
 _html = head + HERO + BODY + FOOT
+_html = _html.replace("__QUIZ__", _QUIZ_HTML)
+assert "__QUIZ__" not in _html, "连线题占位符没被替换掉"
 _html = _html.replace("__TBL_PER_BYTE__", _TBL)
 _SUBS = {}          # ⭐ 记下每一次替换，供 place_figs 之后补跑一遍
 for _ph, _val in (("__ATT_PB_BASE__", "%.2f" % (_att_base[2] * GIB_F)),
