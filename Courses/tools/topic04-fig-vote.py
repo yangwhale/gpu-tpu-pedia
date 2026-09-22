@@ -35,6 +35,7 @@ r"""专题四 · §1.2「梯度是所有样本的诉求取平均」——&#160;�
 from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE)
 
 W = 1400
+TGT_N = 4095        # 一条长 4,096 的序列只有 4,095 个「下一个字」
 
 
 def main():
@@ -182,41 +183,98 @@ def main():
         GY2, size=12.5, anchor="middle")
     f._pan = None
 
-    # ══════════ Ⓒ 众口难调 ═════════════════════════════════════════
-    PH3 = 342
+    # ══════════ Ⓒ 四千多股力，加成一股 ═══════════════════════════
+    # ⛔⛔ 2026-09-22 现场：「样本一、样本二 OK，但是小方块里带那个字，
+    #   让人容易误解成 —— 其实那几个字是我们举那个单独 token 的例子时候用的……
+    #   但是这个图并不是，这个图的意思是我要有不同的 token 的诉求，
+    #   然后 4095 个 token 的诉求，再加上 batch 乘到一起的诉求，
+    #   然后把它们对于权重调整的这个合力加到一起。」
+    # ⭐ 完全对，而且这是**两个层级被画混了**：
+    #     Ⓐ 讲的是「**一个位置内部**，词表上那一排」——&#160;那里才有「的 / 了 / 在」；
+    #     Ⓒ 讲的是「**位置与位置之间**」——&#160;这里一格是一个位置，不是一个字。
+    #   ⛔ 原图在 Ⓒ 的方块里写「『的』推上去」，等于把 Ⓐ 的例子搬到了 Ⓒ 的坐标系里。
+    # ⭐⭐ 重画：每个位置的诉求画成**一个箭头**（方向和长度各不相同），
+    #   把它们**真的加起来**，让台下自己看见「合力比各自短得多」——&#160;
+    #   那就是「互相抵消」，也就是 batch 越大越稳的全部原因。
+    import math as _m
+    # 八股示意力（角度°，长度）。⛔ 写死，不用随机 ——&#160;构建要可复现。
+    FORCES = ((18, 1.00), (74, 0.85), (-46, 0.95), (131, 0.70),
+              (-100, 0.90), (36, 0.80), (168, 0.75), (-14, 0.88))
+    _sx = sum(L * _m.cos(_m.radians(a)) for a, L in FORCES)
+    _sy = sum(L * _m.sin(_m.radians(a)) for a, L in FORCES)
+    _R = _m.hypot(_sx, _sy)
+    _SUMLEN = sum(L for _, L in FORCES)
+    assert _R < 0.5 * _SUMLEN, \
+        "合力必须明显短于各分量长度之和 ——&#160;这一格的论点就是「互相抵消」"
+    _ang = _m.degrees(_m.atan2(_sy, _sx))
+
+    PH3 = 416
     py3 = f.panel(0, py2 + PH2 + 20, W, PH3,
-                  "Ⓒ ⭐⭐⭐ 但<tspan font-weight=\"700\">不能只听一个人的</tspan>", OR,
-                  sub="⛔ 只听那一条样本的，网络会学会"
-                      "<tspan font-weight=\"700\">把什么都答成「的」</tspan>")
+                  "Ⓒ <tspan font-weight=\"700\">每一个位置都提自己的一份</tspan>"
+                  "　——　几千股力，加成一股", OR,
+                  sub="⛔ 注意这一格<tspan font-weight=\"700\">一格 ＝ 一个位置</tspan>，"
+                      "不是一个字　——　字那一层在 Ⓐ，这一层是"
+                      "<tspan font-weight=\"700\">位置与位置之间</tspan>")
 
-    SEATS = (("样本 1", "「的」推上去", GR), ("样本 2", "「了」推上去", BL),
-             ("样本 3", "「在」推上去", PU), ("……", "各提各的", GY2))
-    for k, (who, ask, col) in enumerate(SEATS):
-        x = 60 + k * 230
-        f.box(x, py3 + 48, 200, 96, "#fff", col, 8, sw=1.4)
-        f.t(x + 100, py3 + 82, who, col, True, 15.5, "middle")
-        f.t(x + 100, py3 + 114, ask, GY, size=13, anchor="middle")
-        f.line(x + 100, py3 + 150, x + 100, py3 + 178, GY2, 1.2)
+    # 左：两条序列，各自一排箭头
+    for r in range(2):
+        cy = py3 + 96 + r * 116
+        col = (BL, PU)[r]
+        f.t(66, cy + 5, "序列 %d" % (r + 1), col, True, 14)
+        for k, (a, L) in enumerate(FORCES):
+            ox = 170 + k * 62
+            aa = a + (0 if r == 0 else 24)          # 两条序列的诉求也不一样
+            dx = 26 * L * _m.cos(_m.radians(aa))
+            dy = -26 * L * _m.sin(_m.radians(aa))
+            f.line(ox, cy, ox + dx, cy + dy, col, 2.0)
+            if r == 0 and k < 2:
+                f.t(ox, cy + 40, "位置 %d" % (k + 1), GY2, size=11, anchor="middle")
+        f.t(170 + 8 * 62 + 4, cy + 5, "……　共 %s 个位置" % format(TGT_N, ","),
+            GY2, size=12)
 
-    f.t(1090, py3 + 96, "→", GY2, True, 26, "middle")
-    f.box(1150, py3 + 48, 200, 96, "#fce8e6", OR, 8)
-    f.t(1250, py3 + 82, "全都满足？", OR, True, 16, "middle")
-    f.t(1250, py3 + 114, "⛔ 做不到", OR, True, 15, "middle")
+    f.t(430, py3 + 292,
+        "⭐ 每一支箭头 ＝ <tspan font-weight=\"700\">一个位置对这块权重的诉求</tspan>"
+        "（往哪改、改多少）", INK, size=14, anchor="middle")
+    f.t(430, py3 + 318,
+        "⛔ 它们<tspan font-weight=\"700\">方向各不相同</tspan>　——　这才是"
+        "「众口难调」四个字的实际样子。", GY, size=13.5, anchor="middle")
 
-    f.box(60, py3 + 186, 1290, 82, "#fef7e0", OR, 8)
-    f.t(705, py3 + 222,
-        "⭐⭐⭐ 于是<tspan font-weight=\"700\">把所有人的诉求加起来取平均</tspan>"
-        "　——　<tspan font-weight=\"700\">那个平均，就是梯度。</tspan>",
-        INK, True, 17, "middle")
-    f.t(705, py3 + 252,
-        "⭐ 而多卡训练里那一道「跨卡汇总」，干的<tspan font-weight=\"700\">就是这个平均</tspan>"
-        "　——　每张卡先收自己那批人的意见，再凑到一起。",
+    # 中：求和
+    f.t(880, py3 + 150, "⊕", OR, True, 34, "middle")
+    f.t(880, py3 + 190, "全部加起来", OR, True, 13, "middle")
+    f.t(880, py3 + 214, "（batch＝2 就是 %s 支）" % format(TGT_N * 2, ","),
+        GY2, size=11.5, anchor="middle")
+
+    # 右：合力
+    RX, RY = 1120, py3 + 150
+    for a, L in FORCES:                       # 淡淡地把分量叠在原点，当参照
+        f.line(RX, RY, RX + 26 * L * _m.cos(_m.radians(a)),
+               RY - 26 * L * _m.sin(_m.radians(a)), "#dadce0", 1.2, arrow=False)
+    f.line(RX, RY, RX + 26 * _R * _m.cos(_m.radians(_ang)),
+           RY - 26 * _R * _m.sin(_m.radians(_ang)), OR, 3.4)
+    f.t(RX + 130, RY - 46, "<tspan font-weight=\"700\">合力</tspan>", OR, True, 16,
+        "middle")
+    f.t(RX + 130, RY - 18,
+        "各自加起来 %.1f，" % _SUMLEN, GY, size=13, anchor="middle")
+    f.t(RX + 130, RY + 8,
+        "合力只有 <tspan font-weight=\"700\">%.2f</tspan>" % _R,
+        INK, True, 15, "middle")
+    f.t(RX + 130, RY + 40,
+        "⭐ <tspan font-weight=\"700\">大部分互相抵消了</tspan>", OR, True, 13.5,
+        "middle")
+    f.t(RX + 130, RY + 66,
+        "剩下的那一点，才是真信号", GY2, size=12.5, anchor="middle")
+
+    f.t(700, py3 + 356,
+        "⭐⭐⭐ <tspan font-weight=\"700\">这股合力，就是这块权重这一步要挪的方向。</tspan>"
+        "　而「抵消得多、剩得少」正是"
+        "<tspan font-weight=\"700\">batch 越大越稳</tspan>的全部原因　——　",
+        INK, size=14.5, anchor="middle")
+    f.t(700, py3 + 384,
+        "人越多，偏激的那几支越淹得住。"
+        "⭐ 多卡训练里那道「跨卡汇总」，干的就是这个加法："
+        "每张卡先加自己那批，再凑到一起。",
         GY, size=13.5, anchor="middle")
-
-    f.t(700, py3 + 298,
-        "⚠️ 所以 batch 不是「为了跑得快」才有的　——　"
-        "<tspan font-weight=\"700\">它首先是「别只听一个人的」。</tspan>",
-        GY, size=13, anchor="middle")
     f._pan = None
 
     yb = f.band(py3 + PH3 + 20, "ok",
