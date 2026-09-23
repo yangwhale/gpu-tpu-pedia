@@ -132,12 +132,21 @@ def main():
 
     f.box(1010, py + 60, 350, 200, "#e8f0fe", BL, 8)
     f.t(1185, py + 96, "④ 翻开正确答案", BL, True, 16, "middle")
+    # ⛔ 2026-09-23 现场：「图上不是画的 0.50 吗？这个 0.4984 怎么来的？」
+    #   同一个数，③ 那一排的柱子上是**两位小数**（0.50），这儿要四位
+    #   ——&#160;因为 loss 取的是它的对数，−ln 0.4984 ＝ 0.6964，
+    #   而 −ln 0.50 ＝ 0.6931，**第三位就分家了**。
+    #   ⭐ 判据：**同一个量在同一张图上用了两种精度，就得当场说一句。**
+    #     读者看见两个不一样的数，第一反应永远是「这是两个数」。
     f.t(1185, py + 132, "正确的是「%s」，它的概率 <tspan font-weight=\"700\">%.4f</tspan>"
         % (WORDS[GOLD], P[GOLD]), INK, size=14.5, anchor="middle")
-    f.t(1185, py + 172, "loss ＝ −ln %.4f" % P[GOLD], INK, True, 17, "middle")
-    f.t(1185, py + 210, "＝ <tspan font-weight=\"700\">%.4f</tspan>" % LOSS,
+    f.t(1185, py + 154,
+        "（就是 ③ 里那一格 ——&#160;那边四舍五入成了 %.2f）" % P[GOLD],
+        GY2, size=11.5, anchor="middle")
+    f.t(1185, py + 182, "loss ＝ −ln %.4f" % P[GOLD], INK, True, 17, "middle")
+    f.t(1185, py + 218, "＝ <tspan font-weight=\"700\">%.4f</tspan>" % LOSS,
         BL, True, 24, "middle")
-    f.t(1185, py + 246, "⛔ 其余四个的概率，"
+    f.t(1185, py + 252, "⛔ 其余四个的概率，"
         "<tspan font-weight=\"700\">式子里一个都没出现</tspan>",
         GY2, size=12, anchor="middle")
     f.t(1185, py + 292, "——　那它们去哪了？<tspan font-weight=\"700\">看 Ⓒ。</tspan>",
