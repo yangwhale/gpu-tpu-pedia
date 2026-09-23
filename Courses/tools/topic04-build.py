@@ -39,6 +39,7 @@ import os
 import re
 
 import topic03_page as P
+import topic04_family as FAM
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
@@ -5017,6 +5018,24 @@ HERO = '''
     AI Infra 架构师</p>
 </div></div>
 
+<!-- ⛔⛔ 2026-09-23：这一条原来**不存在** —— 讲义顶部早就有一条 tab 指回课件，
+     课件这边却一个字都没提讲义。于是讲义只有知道它存在的人才找得到。
+     ⭐ 判据见 tools/topic04_family.py 的头注：
+       **一份材料派生出第二份时，回头给第一份补入口。**
+       新的那份一定会指向旧的，反方向永远要专门做一次，而且漏了不报错。 -->
+<div class="wrap">''' + FAM.nav("topic-04.html") + '''
+<div class="note" style="margin-top:0">
+  <p><b>两份材料，分工是这样：</b></p>
+  <p><em><b>你现在看的这份是<u>教材</u></b> —— 给<b>学员</b>读的。
+    完整的推导、口径、出处、表格都在这儿，可以停下来查、可以回头翻。</em></p>
+  <p class="landing"><b>另一份是<a href="topic-04-lecture.html">讲义</a>
+    ——&nbsp;给<u>讲课的人</u>用的。</b>
+    <em>台词、屏幕该切到哪一格、每一段给多少分钟、台下会问什么怎么答。</em></p>
+  <p><span class="sub">⛔ <b>讲义不是教材的摘要。</b>
+    <em>它按「台上怎么说」重排，很多话在纸上根本不该出现（反过来也一样）。
+    ——&nbsp;<u>想自己讲一遍这一讲的人，两份都要看；只想弄懂内容的人，看这一份就够。</u></em></span></p>
+</div></div>
+
 '''
 
 FOOT = '''
@@ -5024,6 +5043,7 @@ FOOT = '''
   <p style="color:var(--gray)">
     ← 回 <a href="index.html">课程总纲</a>　·
     前向那半张账在 <a href="topic-01.html">专题一 · 一个 Token 的一生</a>　·
+    想自己讲一遍？看 <a href="topic-04-lecture.html">本讲讲义（授课稿）</a>　·
     这张账怎么切，在 <b>专题五 · 并行策略</b>（未上线）<br>
     本页由 <code>Courses/tools/topic04-build.py</code> 生成 ——&nbsp;
     <b>正文写在那个脚本里</b>。

@@ -24,6 +24,10 @@ r"""专题四 · 反向与优化器 —— **讲义（授课稿）**。
 import io
 import os
 import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import topic04_family as FAM
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
@@ -2932,6 +2936,7 @@ html = ('''<!doctype html>
 p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
       margin:12px 0;line-height:1.95}
 p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
+''' + FAM.CSS + '''
 </style>
 </head>
 <body>
@@ -2950,6 +2955,8 @@ p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
 
 <div class="shell">
 <main>
+
+''' + FAM.nav("topic-04-lecture.html") + '''
 
 <div class="plan">
   <h2>这份讲义怎么用</h2>
