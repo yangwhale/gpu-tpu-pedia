@@ -129,10 +129,10 @@ def main():
 
     PH2 = 372
     py2 = f.panel(0, py + PH + 20, W, PH2,
-                  "Ⓑ 输出改不了，只能<tspan font-weight=\"700\">改连过来的线</tspan>"
-                  "　——　那改<tspan font-weight=\"700\">哪一根</tspan>最划算？", GR,
+                  "Ⓑ 一根权重的<tspan font-weight=\"700\">梯度</tspan>，"
+                  "正比于<tspan font-weight=\"700\">上游有多亮</tspan>", GR,
                   sub="⭐ 两根线<tspan font-weight=\"700\">加粗同样多</tspan>，"
-                      "回报却差二十倍　——　差在<tspan font-weight=\"700\">上游有多亮</tspan>")
+                      "回报差二十倍 ——　而「回报有多大」就是「这根权重的梯度有多大」")
 
     OY, CX, OX = py2 + 60, 190, 760
     for k, (xv, col, lab) in enumerate(((X_HI, OR, "很亮"), (X_LO, GY2, "很暗"))):
@@ -167,20 +167,28 @@ def main():
         % int(round(G_HI / G_LO)), INK, True, 20, "middle")
     f.t(OX + 495, OY + 146, "——　正好是亮度之比", GY, size=12.5, anchor="middle")
 
-    f.t(700, py2 + 270,
+    # ⛔⛔ 2026-09-23 现场：「这个图说啥呢？真的有用吗？难道他说的是梯度吗？
+    #   这个东西怎么跟上下文结合起来？」——&#160;⭐ **说的就是梯度**，
+    #   可这一格从头到尾**一次都没提过「梯度」两个字**，它说的是「改哪根线最划算」。
+    #   ⛔ 判据：**一格图讲的是某个术语时，就得把那个术语说出来。**
+    #     换成大白话是为了好懂，可**连名字都换掉，读者就接不回上下文了** ——&#160;
+    #     他不知道该把这一格挂在哪儿。
+    #   ⚠️ 顺带删掉原来那条「三条路：改偏置 / 改权重 / 让上一层更亮，这格只讲 ②」——&#160;
+    #     它又开了一根轴，而这一格本来就已经在解释一件不容易的事了。
+    f.t(700, py2 + 262,
+        "⭐ 说的就是<tspan font-weight=\"700\">梯度</tspan>："
+        "<tspan font-weight=\"700\">一根权重的梯度 ＝ 上游那一刻的亮度 × 下游传来的责任。</tspan>"
+        "　这一格画的是<tspan font-weight=\"700\">前面那个乘数</tspan>。",
+        INK, size=15, anchor="middle")
+    f.t(700, py2 + 296,
         "⭐⭐⭐ 所以「<tspan font-weight=\"700\">改哪根线最划算</tspan>」这个问题，"
         "答案<tspan font-weight=\"700\">不在反向里，在前向里</tspan>　——　"
         "它由那一刻的<tspan font-weight=\"700\">亮度</tspan>决定。",
         INK, size=15, anchor="middle")
-    f.t(700, py2 + 300,
+    f.t(700, py2 + 326,
         "而那个亮度，是<tspan font-weight=\"700\">前向算出来、必须被存下来</tspan>的。"
         "<tspan font-weight=\"700\">整本显存账的根子，就在这一句上。</tspan>",
         INK, size=15, anchor="middle")
-    f.t(700, py2 + 340,
-        "📌 想让一个数变大其实有三条路：改偏置、改权重、让上一层更亮。"
-        "①③ 这一讲后面都会各自碰到（③ 就是「反向传播」这个名字的含义），"
-        "这一格<tspan font-weight=\"700\">只讲 ②</tspan>。",
-        GY2, size=12.5, anchor="middle")
     f._pan = None
 
     # ══════════ Ⓒ 四千多股力，加成一股 ═══════════════════════════
