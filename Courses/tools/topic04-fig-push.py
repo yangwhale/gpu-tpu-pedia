@@ -30,11 +30,14 @@ r"""专题四 · §1.2b「那 6,300 万个 loss，到底是怎么变成一份梯
     ⭐ 它跟「每个 token 各跑一遍反向再把梯度平均」**结果完全一样**，
       因为求导是线性的；只是便宜了 N 倍。
 """
+import math
+
 from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2
 
 W = 1400
 
 VOCAB = 129280          # DeepSeek-V3 词表
+D_MODEL = 7168          # 隐藏维 ——&#160;一个位置往回传的那支「合力」就是这么长
 SEQ = 4096
 TGT = SEQ - 1           # 4,095 个「下一个字」
 N1 = TGT * 1            # batch=1
@@ -59,6 +62,9 @@ def main():
                "是一次再分配而不是一次加分。"
                "一条四千零九十六长的序列有四千零九十五个这样的位置，"
                "每个位置都有一份完整的、整个词表那么长的意见；"
+               "而一个位置往回传的并不是一个方向 —— "
+               "词表十二万九千二百八十行各自拽着一个七千一百六十八维的向量，"
+               "全部叠加之后才得到一支合力，图上那支箭画的是这个合力；"
                "batch 等于二就是八千一百九十份，"
                "每一份先除以八千一百九十，再全部累加进同一套参数梯度里 —— "
                "这就是平均发生的全部地方")
@@ -135,27 +141,77 @@ def main():
     f._pan = None
 
     # ══════════ Ⓑ batch = 1 ════════════════════════════════════════
-    PH2 = 288
+    # ⛔⛔ 2026-09-23 现场：「这个图里一个小方块其实是 7,168 个方向的目标，
+    #   它不是一个方向，应该是一个合力的箭头。这个图画得不对。」——&#160;对。
+    #   ⭐ 而且毛病比「少画了几根」更具体：原来这排箭头**照抄了 Ⓐ 的语义**，
+    #     绿色＝推高、红色＝推低，还按 k%4 随机上色。
+    #     可「推高 / 推低」是**词表某一格**才有的说法；
+    #     到了「一个位置」这一层，那份意见已经是 129,280 个数了，
+    #     它往回传的是一个 D_MODEL 维的**合力**，没有单一的「往哪边推」。
+    #   ⛔ 判据：**放大一级之后，上一级的语义不会自动跟着上来。**
+    #     颜色是从 Ⓐ 继承的，而继承下来的那一刻它就已经没有所指了 ——&#160;
+    #     它不报错，只是让人读出一个不存在的意思。
+    PH2 = 502
     py2 = f.panel(0, py + PH + 20, W, PH2,
                   "Ⓑ 再放大到<tspan font-weight=\"700\">一整条序列</tspan>"
                   "（batch ＝ 1）　——　上面那一整套，每个位置都来一遍", BL,
                   sub="⛔ 一条长 %s 的序列只有 <tspan font-weight=\"700\">%s</tspan> "
-                      "个预测 ——　最后那个字没有「下一个」" % (format(SEQ, ","),
-                                                        format(TGT, ",")))
+                      "个预测 ——　最后那个字没有「下一个」；"
+                      "而下面每个位置底下那支箭，是<tspan font-weight=\"700\">"
+                      "一束，不是一根</tspan>" % (format(SEQ, ","), format(TGT, ",")))
 
-    # 一排缩略的位置
+    # 一排缩略的位置 ——&#160;每个位置底下画的是「一束的合力」，不是一根
     for k in range(26):
         x = 70 + k * 40
         h = 10 + (k * 7 % 23)
-        f.box(x, py2 + 118 - h, 22, h, "#f1f3f4", GY2, 2)
-        f.line(x + 11, py2 + 126, x + 11, py2 + 126 + 16, GR if k % 4 == 0 else RD,
-               1.8)
-    f.t(70 + 26 * 40 + 34, py2 + 122, "……", GY2, True, 20)
-    f.line(70, py2 + 166, 70 + 25 * 40 + 22, py2 + 166, BL, 1.4, arrow=False)
-    f.t((70 + 70 + 25 * 40 + 22) / 2, py2 + 190,
+        cx = x + 11
+        f.box(x, py2 + 108 - h, 22, h, "#f1f3f4", GY2, 2)
+        for dx in (-9, -5, 5, 9):           # 分量：淡、细、无箭头、明显岔开
+            f.line(cx, py2 + 116, cx + dx, py2 + 129, "#c9ccd1", 0.9, arrow=False)
+        f.line(cx, py2 + 116, cx, py2 + 140, BL, 2.4)      # 合力：粗、有箭头
+    f.t(70 + 26 * 40 + 34, py2 + 126, "……", GY2, True, 20)
+    f.line(70, py2 + 162, 70 + 25 * 40 + 22, py2 + 162, BL, 1.4, arrow=False)
+    f.t((70 + 70 + 25 * 40 + 22) / 2, py2 + 186,
         "<tspan font-weight=\"700\">%s 个位置</tspan>，每个位置都有一份"
         "<tspan font-weight=\"700\">整个词表那么长</tspan>的意见（%s 个数）"
         % (format(TGT, ","), format(VOCAB, ",")), INK, size=14.5, anchor="middle")
+
+    # ── 把一个位置放大：那支箭是 VOCAB 行叠出来的一个 D_MODEL 维合力 ──
+    f.box(60, py2 + 208, 1040, 218, "#f8f9fa", GY2, 8)
+    f.t(84, py2 + 238,
+        "⛔ <tspan font-weight=\"700\">那支箭不是「这个位置往哪边推」</tspan>"
+        "　——　到了这一层，已经没有单一的方向了", RD, size=14.5)
+
+    ox, oy = 258, py2 + 288                  # 扇形的出发点
+    for i in range(9):
+        a = math.radians(-62 + i * 15.5)
+        f.line(ox, oy, ox + 92 * math.sin(a), oy + 92 * math.cos(a),
+               GY2, 1.0, arrow=False)
+    f.t(ox, py2 + 272, "一个位置的那份意见", INK, True, 15, "middle")
+    f.t(ox, py2 + 404,
+        "词表 <tspan font-weight=\"700\">%s</tspan> 行，"
+        "<tspan font-weight=\"700\">每一行都往自己那边拉一把</tspan>"
+        % format(VOCAB, ","), GY, size=13.5, anchor="middle")
+
+    f.line(452, py2 + 318, 540, py2 + 318, OR, 2.4)
+    f.t(496, py2 + 302, "叠起来", OR, True, 14, "middle")
+
+    f.line(650, py2 + 258, 650, py2 + 378, BL, 4.4)
+    f.t(650, py2 + 404,
+        "<tspan font-weight=\"700\">一支合力：%s 维</tspan>" % format(D_MODEL, ","),
+        BL, True, 15, "middle")
+
+    f.t(772, py2 + 288,
+        "所以「一个方向」这个说法是错的：", INK, True, 14.5)
+    f.t(772, py2 + 316,
+        "词表上<tspan font-weight=\"700\">每一行</tspan>都拽着一个 %s 维的向量，"
+        % format(D_MODEL, ","), GY, size=13.5)
+    f.t(772, py2 + 340,
+        "<tspan font-weight=\"700\">%s 行全部叠加</tspan>，才得到这一支箭。"
+        % format(VOCAB, ","), GY, size=13.5)
+    f.t(772, py2 + 372,
+        "⭐ 它到底怎么叠出来的 ——　<tspan font-weight=\"700\">下一节专讲</tspan>。",
+        OR, True, 13.5)
 
     f.box(1130, py2 + 52, 232, 186, "#e8f0fe", BL, 8)
     f.t(1246, py2 + 88, "batch ＝ 1", BL, True, 17, "middle")
@@ -208,7 +264,10 @@ def main():
         "错的那些不是副作用。",
         "<tspan font-weight=\"700\">loss 按 token 平均（不是按序列），"
         "但反向并不从那个标量出发</tspan>　——　"
-        "它从一个「每个位置 × 整个词表」的张量出发，每个数都是「你猜的 −　正确答案」÷ 总数。",
+        "它从一个「每个位置 × 整个词表」的张量出发，每个数都是「你猜的 −　正确答案」÷ 总数"
+        "；而<tspan font-weight=\"700\">一个位置往回传的是一支合力</tspan>"
+        "（%s 行各拽一个 %s 维向量叠出来的），<tspan font-weight=\"700\">不是一个方向</tspan>。"
+        % (format(VOCAB, ","), format(D_MODEL, ",")),
     ])
 
     yb = f.src(yb + 10,

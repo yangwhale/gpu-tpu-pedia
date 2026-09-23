@@ -558,9 +558,23 @@ _HTML_ONLY_IN_SVG = re.compile(
 
 
 def lint_html_tags_in_svg(html):
-    """内联 SVG 里混进 HTML 专属标签 ——&nbsp;会把 SVG 就地截断。"""
+    """内联 SVG 里混进 HTML 专属标签 ——&nbsp;会把 SVG 就地截断。
+
+    ⛔⛔ 2026-09-23 修：**必须先把 style / script 整段摘掉再找 `<svg`。**
+      专题四那段 quiz 样式表的注释里写了一句「`<svg>` 是 position:absolute」——&nbsp;
+      纯注释、纯文字，可 `<svg\\b.*?</svg>` 不管它在不在注释里：
+      它从那行起步，一路吃到 body 里真正的 `<svg class="wire"></svg>` 才收，
+      于是整段样式表和整块 quiz DOM 被当成「一张图的内部」，
+      一口气报 57 个假阳性，**并且 raise SystemExit 把整条 build-all 掐断**。
+      ⭐ 判据跟 `_visible()` 那次是同一个（那次是 svg 排在 style 前面）：
+        **凡是用「起始标签 … 结束标签」正则划范围的，都要先把
+        「里面可以原样写标签的容器」摘干净** ——&nbsp;style / script / 注释。
+      ⛔ 这类失败最坏的地方在于它**中止构建**：一条注释里的六个字符，
+        表现出来是「专题四之后的页面全部没重新生成」，而报错只字未提样式表。
+    """
     bad = []
-    for m in re.finditer(r"<svg\b.*?</svg>", html, re.S):
+    src = re.sub(r"<(style|script)\b.*?</\1>", "", html, flags=re.S | re.I)
+    for m in re.finditer(r"<svg\b.*?</svg>", src, re.S):
         # ⛔ foreignObject 里的 HTML 是**合法**的（专题二有一处用它排版），
         #   先整段摘掉再查 ——&nbsp;否则会误报。
         seg = re.sub(r"<foreignObject\b.*?</foreignObject>", "",

@@ -2208,7 +2208,7 @@ body.figonly section h3{margin-top:34px}
   分母是遮掉 padding 与拼接边界之后真正算了的目标位置数
   （MaxText 里就叫 <code>total_weights</code>，<code>loss ＝ xent_sum ÷ total_weights</code>）。</em></span></p></div>
 
-<figure class="fbox fwide" id="fig-push"><svg viewBox="0 0 1400 1458" width="100%" role="img" aria-label="一个位置上的梯度是「你猜的减去正确答案」，正确那一格是负数所以被推高，其余每一格都是正数所以被推低，推多少等于它现在占了多少概率；这一整排数加起来正好是零，所以推上去和推下去是同一个动作，是一次再分配而不是一次加分。一条四千零九十六长的序列有四千零九十五个这样的位置，每个位置都有一份完整的、整个词表那么长的意见；batch 等于二就是八千一百九十份，每一份先除以八千一百九十，再全部累加进同一套参数梯度里 —— 这就是平均发生的全部地方"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-push"><svg viewBox="0 0 1400 1696" width="100%" role="img" aria-label="一个位置上的梯度是「你猜的减去正确答案」，正确那一格是负数所以被推高，其余每一格都是正数所以被推低，推多少等于它现在占了多少概率；这一整排数加起来正好是零，所以推上去和推下去是同一个动作，是一次再分配而不是一次加分。一条四千零九十六长的序列有四千零九十五个这样的位置，每个位置都有一份完整的、整个词表那么长的意见；而一个位置往回传的并不是一个方向 —— 词表十二万九千二百八十行各自拽着一个七千一百六十八维的向量，全部叠加之后才得到一支合力，图上那支箭画的是这个合力；batch 等于二就是八千一百九十份，每一份先除以八千一百九十，再全部累加进同一套参数梯度里 —— 这就是平均发生的全部地方"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">那 6,300 万个 loss，怎么变成<tspan font-weight="700">一份</tspan>梯度</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">现场问：「错的那几个要不要推向 0，还是只推对的那个、其余算副作用？」——　<tspan font-weight="700">答案是：都做，而且是同一个动作</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -2265,131 +2265,274 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1080" y="428" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">概率总量是守恒的 ——　所以这<tspan font-weight="700">不是一次加分，</tspan></text>
 <text class="svgsm" x="1080" y="454" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">是一次再分配。</tspan></tspan></text>
 <text class="svgsm" x="1080" y="484" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">剩下那 129,275 个字概率≈0，梯度也≈0　——　它们本来就没占地方</text>
-<rect x="0" y="604" width="1400" height="288" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="604" width="1400" height="502" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="604" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="606" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="634" x2="1400" y2="634" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="624" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 再放大到<tspan font-weight="700">一整条序列</tspan>（batch ＝ 1）　——　上面那一整套，每个位置都来一遍</tspan></text>
-<text class="svgsm" x="757" y="624" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">一条长 4,096 的序列只有 <tspan font-weight="700">4,095</tspan> 个预测 ——　最后那个字没有「下一个」</text>
-<rect x="70" y="742" width="22" height="10" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="81" y1="760" x2="81" y2="776" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="110" y="735" width="22" height="17" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="121" y1="760" x2="121" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="150" y="728" width="22" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="161" y1="760" x2="161" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="190" y="721" width="22" height="31" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="201" y1="760" x2="201" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="230" y="737" width="22" height="15" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="241" y1="760" x2="241" y2="776" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="270" y="730" width="22" height="22" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="281" y1="760" x2="281" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="310" y="723" width="22" height="29" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="321" y1="760" x2="321" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="350" y="739" width="22" height="13" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="361" y1="760" x2="361" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="390" y="732" width="22" height="20" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="401" y1="760" x2="401" y2="776" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="430" y="725" width="22" height="27" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="441" y1="760" x2="441" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="470" y="741" width="22" height="11" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="481" y1="760" x2="481" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="510" y="734" width="22" height="18" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="521" y1="760" x2="521" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="550" y="727" width="22" height="25" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="561" y1="760" x2="561" y2="776" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="590" y="720" width="22" height="32" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="601" y1="760" x2="601" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="630" y="736" width="22" height="16" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="641" y1="760" x2="641" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="670" y="729" width="22" height="23" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="681" y1="760" x2="681" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="710" y="722" width="22" height="30" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="721" y1="760" x2="721" y2="776" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="750" y="738" width="22" height="14" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="761" y1="760" x2="761" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="790" y="731" width="22" height="21" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="801" y1="760" x2="801" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="830" y="724" width="22" height="28" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="841" y1="760" x2="841" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="870" y="740" width="22" height="12" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="881" y1="760" x2="881" y2="776" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="910" y="733" width="22" height="19" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="921" y1="760" x2="921" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="950" y="726" width="22" height="26" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="961" y1="760" x2="961" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="990" y="742" width="22" height="10" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="1001" y1="760" x2="1001" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="1030" y="735" width="22" height="17" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="1041" y1="760" x2="1041" y2="776" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="1070" y="728" width="22" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<line x1="1081" y1="760" x2="1081" y2="776" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="1144" y="756" fill="#80868b" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">……</tspan></text>
-<line x1="70" y1="800" x2="1092" y2="800" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="581" y="824" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4,095 个位置</tspan>，每个位置都有一份<tspan font-weight="700">整个词表那么长</tspan>的意见（129,280 个数）</text>
+<text class="svgsm" x="757" y="624" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">一条长 4,096 的序列只有 <tspan font-weight="700">4,095</tspan> 个预测 ——　最后那个字没有「下一个」；而下面每个位置底下那支箭，是<tspan font-weight="700">一束，不是一根</tspan></text>
+<rect x="70" y="732" width="22" height="10" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="81" y1="750" x2="72" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="81" y1="750" x2="76" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="81" y1="750" x2="86" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="81" y1="750" x2="90" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="81" y1="750" x2="81" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="110" y="725" width="22" height="17" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="121" y1="750" x2="112" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="121" y1="750" x2="116" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="121" y1="750" x2="126" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="121" y1="750" x2="130" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="121" y1="750" x2="121" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="150" y="718" width="22" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="161" y1="750" x2="152" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="161" y1="750" x2="156" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="161" y1="750" x2="166" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="161" y1="750" x2="170" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="161" y1="750" x2="161" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="190" y="711" width="22" height="31" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="201" y1="750" x2="192" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="201" y1="750" x2="196" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="201" y1="750" x2="206" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="201" y1="750" x2="210" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="201" y1="750" x2="201" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="230" y="727" width="22" height="15" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="241" y1="750" x2="232" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="241" y1="750" x2="236" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="241" y1="750" x2="246" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="241" y1="750" x2="250" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="241" y1="750" x2="241" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="270" y="720" width="22" height="22" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="281" y1="750" x2="272" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="281" y1="750" x2="276" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="281" y1="750" x2="286" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="281" y1="750" x2="290" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="281" y1="750" x2="281" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="310" y="713" width="22" height="29" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="321" y1="750" x2="312" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="321" y1="750" x2="316" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="321" y1="750" x2="326" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="321" y1="750" x2="330" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="321" y1="750" x2="321" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="350" y="729" width="22" height="13" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="361" y1="750" x2="352" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="361" y1="750" x2="356" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="361" y1="750" x2="366" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="361" y1="750" x2="370" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="361" y1="750" x2="361" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="390" y="722" width="22" height="20" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="401" y1="750" x2="392" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="401" y1="750" x2="396" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="401" y1="750" x2="406" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="401" y1="750" x2="410" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="401" y1="750" x2="401" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="430" y="715" width="22" height="27" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="441" y1="750" x2="432" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="441" y1="750" x2="436" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="441" y1="750" x2="446" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="441" y1="750" x2="450" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="441" y1="750" x2="441" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="470" y="731" width="22" height="11" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="481" y1="750" x2="472" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="481" y1="750" x2="476" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="481" y1="750" x2="486" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="481" y1="750" x2="490" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="481" y1="750" x2="481" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="510" y="724" width="22" height="18" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="521" y1="750" x2="512" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="521" y1="750" x2="516" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="521" y1="750" x2="526" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="521" y1="750" x2="530" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="521" y1="750" x2="521" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="550" y="717" width="22" height="25" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="561" y1="750" x2="552" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="561" y1="750" x2="556" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="561" y1="750" x2="566" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="561" y1="750" x2="570" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="561" y1="750" x2="561" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="590" y="710" width="22" height="32" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="601" y1="750" x2="592" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="601" y1="750" x2="596" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="601" y1="750" x2="606" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="601" y1="750" x2="610" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="601" y1="750" x2="601" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="630" y="726" width="22" height="16" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="641" y1="750" x2="632" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="641" y1="750" x2="636" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="641" y1="750" x2="646" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="641" y1="750" x2="650" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="641" y1="750" x2="641" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="670" y="719" width="22" height="23" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="681" y1="750" x2="672" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="681" y1="750" x2="676" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="681" y1="750" x2="686" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="681" y1="750" x2="690" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="681" y1="750" x2="681" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="710" y="712" width="22" height="30" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="721" y1="750" x2="712" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="721" y1="750" x2="716" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="721" y1="750" x2="726" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="721" y1="750" x2="730" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="721" y1="750" x2="721" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="750" y="728" width="22" height="14" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="761" y1="750" x2="752" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="761" y1="750" x2="756" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="761" y1="750" x2="766" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="761" y1="750" x2="770" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="761" y1="750" x2="761" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="790" y="721" width="22" height="21" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="801" y1="750" x2="792" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="801" y1="750" x2="796" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="801" y1="750" x2="806" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="801" y1="750" x2="810" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="801" y1="750" x2="801" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="830" y="714" width="22" height="28" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="841" y1="750" x2="832" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="841" y1="750" x2="836" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="841" y1="750" x2="846" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="841" y1="750" x2="850" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="841" y1="750" x2="841" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="870" y="730" width="22" height="12" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="881" y1="750" x2="872" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="881" y1="750" x2="876" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="881" y1="750" x2="886" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="881" y1="750" x2="890" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="881" y1="750" x2="881" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="910" y="723" width="22" height="19" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="921" y1="750" x2="912" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="921" y1="750" x2="916" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="921" y1="750" x2="926" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="921" y1="750" x2="930" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="921" y1="750" x2="921" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="950" y="716" width="22" height="26" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="961" y1="750" x2="952" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="961" y1="750" x2="956" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="961" y1="750" x2="966" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="961" y1="750" x2="970" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="961" y1="750" x2="961" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="990" y="732" width="22" height="10" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="1001" y1="750" x2="992" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1001" y1="750" x2="996" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1001" y1="750" x2="1006" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1001" y1="750" x2="1010" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1001" y1="750" x2="1001" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="1030" y="725" width="22" height="17" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="1041" y1="750" x2="1032" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1041" y1="750" x2="1036" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1041" y1="750" x2="1046" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1041" y1="750" x2="1050" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1041" y1="750" x2="1041" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="1070" y="718" width="22" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<line x1="1081" y1="750" x2="1072" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1081" y1="750" x2="1076" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1081" y1="750" x2="1086" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1081" y1="750" x2="1090" y2="763" stroke="#c9ccd1" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="1081" y1="750" x2="1081" y2="774" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="1144" y="760" fill="#80868b" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">……</tspan></text>
+<line x1="70" y1="796" x2="1092" y2="796" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="581" y="820" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4,095 个位置</tspan>，每个位置都有一份<tspan font-weight="700">整个词表那么长</tspan>的意见（129,280 个数）</text>
+<rect x="60" y="842" width="1040" height="218" rx="8" fill="#f8f9fa" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="84" y="872" fill="#a50e0e" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">那支箭不是「这个位置往哪边推」</tspan>　——　到了这一层，已经没有单一的方向了</text>
+<line x1="258" y1="922" x2="176.76882145697874" y2="965.191383776302" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="191.26555786686953" y2="985.3286209638254" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="210.616497108275" y2="1000.8593916645943" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="233.41406940080037" y2="1010.6540016951933" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="258.0" y2="1014.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="282.5859305991996" y2="1010.6540016951933" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="305.38350289172496" y2="1000.8593916645943" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="324.73444213313047" y2="985.3286209638254" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="258" y1="922" x2="339.23117854302126" y2="965.191383776302" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="258" y="906" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个位置的那份意见</tspan></text>
+<text class="svgsm" x="258" y="1038" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">词表 <tspan font-weight="700">129,280</tspan> 行，<tspan font-weight="700">每一行都往自己那边拉一把</tspan></text>
+<line x1="452" y1="952" x2="540" y2="952" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="496" y="936" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">叠起来</tspan></text>
+<line x1="650" y1="892" x2="650" y2="1012" stroke="#1a73e8" stroke-width="4.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="650" y="1038" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">一支合力：7,168 维</tspan></tspan></text>
+<text class="svgsm" x="772" y="922" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以「一个方向」这个说法是错的：</tspan></text>
+<text class="svgsm" x="772" y="950" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">词表上<tspan font-weight="700">每一行</tspan>都拽着一个 7,168 维的向量，</text>
+<text class="svgsm" x="772" y="974" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">129,280 行全部叠加</tspan>，才得到这一支箭。</text>
+<text class="svgsm" x="772" y="1006" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">它到底怎么叠出来的 ——　<tspan font-weight="700">下一节专讲</tspan>。</tspan></text>
 <rect x="1130" y="686" width="232" height="186" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="1246" y="722" fill="#174ea6" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch ＝ 1</tspan></text>
 <text class="svgsm" x="1246" y="756" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">一共</text>
 <text class="svgsm" x="1246" y="786" fill="#202124" text-anchor="middle" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">529,401,600</tspan></tspan></text>
 <text class="svgsm" x="1246" y="812" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">个数当种子</text>
 <text class="svgsm" x="1246" y="848" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一份都<tspan font-weight="700">÷ 4,095</tspan></tspan></text>
-<rect x="0" y="942" width="1400" height="346" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="942" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="0" y="944" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="972" x2="1400" y2="972" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="962" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ batch ＝ 2　——　<tspan font-weight="700">唯一的变化是分母</tspan>，从 4,095 变成 8,190</tspan></text>
-<text class="svgsm" x="657" y="962" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">「平均」发生的全部地方就在这个除法上，而且它在<tspan font-weight="700">种子那一步就做掉了</tspan></text>
-<text class="svgsm" x="56" y="1050" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 1</tspan></text>
-<rect x="150" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="184" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="218" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="252" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="286" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="320" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="354" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="388" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="422" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="456" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="490" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="524" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="558" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="592" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="626" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="660" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="694" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="728" y="1034" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="774" y="1052" fill="#80868b" style="font-size:13.0px;font-variant-numeric:tabular-nums">…… 共 4,095 个位置</text>
-<text class="svgsm" x="56" y="1112" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 2</tspan></text>
-<rect x="150" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="184" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="218" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="252" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="286" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="320" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="354" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="388" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="422" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="456" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="490" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="524" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="558" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="592" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="626" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="660" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="694" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<rect x="728" y="1096" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="774" y="1114" fill="#80868b" style="font-size:13.0px;font-variant-numeric:tabular-nums">…… 共 4,095 个位置</text>
-<line x1="700" y1="1168" x2="700" y2="1204" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="700" y="1230" fill="#202124" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8,190 份意见，每一份先 ÷ 8,190，再全部累加进同一套 671B 的参数梯度</tspan></text>
-<text class="svgsm" x="700" y="1260" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">所以「每个 token 各跑一遍反向、再把 671B 个梯度平均」和「先把 loss 平均、只跑一次反向」——</text>
-<text class="svgsm" x="700" y="1284" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算出来完全一样</tspan>（求导是线性的），只是后者便宜 8,190 倍。</text>
-<rect x="0" y="1336" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1336" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="1336" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1363" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一句话记住这张图</tspan></text>
-<text class="svgsm" x="20" y="1394" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「把对的推上去」和「把错的压下去」是同一个动作</tspan>　——　那一排数加起来正好是 0，它是一次<tspan font-weight="700">再分配</tspan>，错的那些不是副作用。</text>
-<text class="svgsm" x="20" y="1418" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss 按 token 平均（不是按序列），但反向并不从那个标量出发</tspan>　——　它从一个「每个位置 × 整个词表」的张量出发，每个数都是「你猜的 −　正确答案」÷ 总数。</text>
+<rect x="0" y="1156" width="1400" height="346" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1156" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="1158" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1186" x2="1400" y2="1186" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1176" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ batch ＝ 2　——　<tspan font-weight="700">唯一的变化是分母</tspan>，从 4,095 变成 8,190</tspan></text>
+<text class="svgsm" x="657" y="1176" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">「平均」发生的全部地方就在这个除法上，而且它在<tspan font-weight="700">种子那一步就做掉了</tspan></text>
+<text class="svgsm" x="56" y="1264" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 1</tspan></text>
+<rect x="150" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="184" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="218" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="252" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="286" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="320" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="354" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="388" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="422" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="456" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="490" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="524" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="558" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="592" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="626" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="660" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="694" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="728" y="1248" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="774" y="1266" fill="#80868b" style="font-size:13.0px;font-variant-numeric:tabular-nums">…… 共 4,095 个位置</text>
+<text class="svgsm" x="56" y="1326" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 2</tspan></text>
+<rect x="150" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="184" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="218" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="252" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="286" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="320" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="354" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="388" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="422" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="456" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="490" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="524" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="558" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="592" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="626" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="660" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="694" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="728" y="1310" width="20" height="24" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="774" y="1328" fill="#80868b" style="font-size:13.0px;font-variant-numeric:tabular-nums">…… 共 4,095 个位置</text>
+<line x1="700" y1="1382" x2="700" y2="1418" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="700" y="1444" fill="#202124" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8,190 份意见，每一份先 ÷ 8,190，再全部累加进同一套 671B 的参数梯度</tspan></text>
+<text class="svgsm" x="700" y="1474" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">所以「每个 token 各跑一遍反向、再把 671B 个梯度平均」和「先把 loss 平均、只跑一次反向」——</text>
+<text class="svgsm" x="700" y="1498" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算出来完全一样</tspan>（求导是线性的），只是后者便宜 8,190 倍。</text>
+<rect x="0" y="1550" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1550" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1550" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1577" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一句话记住这张图</tspan></text>
+<text class="svgsm" x="20" y="1608" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「把对的推上去」和「把错的压下去」是同一个动作</tspan>　——　那一排数加起来正好是 0，它是一次<tspan font-weight="700">再分配</tspan>，错的那些不是副作用。</text>
+<text class="svgsm" x="20" y="1632" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss 按 token 平均（不是按序列），但反向并不从那个标量出发</tspan>　——　它从一个「每个位置 × 整个词表」的张量出发，每个数都是「你猜的 −　正确答案」÷ 总数；而<tspan font-weight="700">一个位置往</tspan></text>
+<text class="svgsm" x="20" y="1656" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回传的是一支合力</tspan>（129,280 行各拽一个 7,168 维向量叠出来的），<tspan font-weight="700">不是一个方向</tspan>。</text>
 </svg><figcaption><b>专答现场那一问：错的那几个要不要也推下去？</b>——&nbsp;<em>要，而且<b>跟「把对的推上去」是同一个动作</b>。</em><span class="capmore"><br><em>Ⓐ 一个位置上，词表每一格都拿到自己那一份「你猜的 −&nbsp;正确答案」；<b>负号推高、正号推低，力度 ＝ 它现在占了多少</b>，而这一排数<b>加起来正好是 0</b> ——&nbsp;它是一次<b>再分配</b>，不是一次加分。</em><br><em>Ⓑ 一条序列有 <b>4,095</b> 个这样的位置（不是 4,096）；Ⓒ batch 从 1 变 2，<b>唯一的变化是那个分母</b> ——&nbsp;「平均」发生的全部地方就在这个除法上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>口径来自 MaxText 训练脚本：<b>loss ＝ xent_sum ÷ total_weights</b>，其中 total_weights 是遮掉 padding 与拼接边界之后真正算了的目标位置数；</p>
 <p>梯度只跑一次（value_and_grad 作用在那个标量上）。词表 129,280、序列 4,096 取自 DeepSeek-V3 预训练配置。</p></details></figure>
+
+<!-- 2026-09-23 现场看着图提的：「一个小方块其实是 7,168 个方向的目标，
+     它不是一个方向，应该是一个合力的箭头 —— 这个图画得不对。」⭐ 对。
+     ⛔ 而且真正的病灶比「少画了几根」更具体：Ⓑ 那排箭头原来**照抄了 Ⓐ 的绿 / 红**，
+       而「推高 / 推低」只有在「词表的某一格」这一层才有所指。
+     图已重画（一束细线 ＋ 一支粗合力，另配一格放大）；
+     ⚠️ 这段文字是配套的 —— **图改了文没改**是这门课踩过好几次的坑。 -->
+<p><b>看 Ⓑ 那一排箭头的时候有个地方极容易读错，图上已经画明，这里再用字钉一遍：</b>
+  <em><u>一个位置往回传的那一支，不是「这个位置往哪边推」。</u></em></p>
+<p class="landing"><b>词表上<u>每一行</u>都拽着一个 7,168 维的向量，
+  129,280 行<u>全部叠加</u>，才得到那一支箭
+  ——&nbsp;它是一个<b>合力</b>，不是一个方向。</b></p>
+<p><em>「推高 / 推低」是<b>词表某一格</b>才有的说法，也就是 Ⓐ 那一层的事；
+  放大到「一个位置」这一层，<b>那个说法就没有所指了</b>
+  ——&nbsp;所以 Ⓑ 里的箭头一律是中性色，不再分绿红。</em></p>
+<p><span class="sub">⭐ 而这一支合力<u>到底是怎么叠出来的</u>，正是下一节
+  <a href="#s1-2c">1.2c</a> 整节要画的事。</span></p>
 
 <div class="note ok"><p><b>那「每个 token 各跑一遍反向，再把 6,710 亿个梯度平均」这个想法呢？</b>
   ——&nbsp;<em><b>它算出来跟实际做法一模一样。</b></em></p>
@@ -2968,7 +3111,7 @@ body.figonly section h3{margin-top:34px}
 <p><span class="sub"><b>但「数次数」还不够 ——&nbsp;三次矩阵乘如果规模不一样，
   1 ＋ 2 根本不等于 3。</b> <em>真正让它成立的是：这三次乘的
   <u>形状是同一组</u>。设这一层是 <code>[B,in] × [in,out]</code>：
-  前向 <code>X·W</code>、① <code>dYᵀ·X</code>、② <code>dY·Wᵀ</code>。<b>三个都是 B × in × out 这三个数相乘</b>，
+  前向 <code>X·W</code>、① <code>Xᵀ·dY</code>、② <code>dY·Wᵀ</code>。<b>三个都是 B × in × out 这三个数相乘</b>，
   所以三块积的<u>体积一样大</u>，加起来才正好是 3 倍。
   （下面那张图把这三块按真实比例画了出来。）</em></span></p>
 <p><span class="sub"><b>知道理由，才换得了情境</b>：
@@ -2976,7 +3119,7 @@ body.figonly section h3{margin-top:34px}
   冻住的层不更新权重。省掉 ①，也是 <b>2 倍</b>（<a href="#s三">3.8</a> 的 LoRA 走的是这条）。
   <u>只记住「3×」这个数的人，这两问都答不了。</u></em></span></p></div>
 
-<figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 1636" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的责任 δ。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 2210" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的责任 δ。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">三倍算力是<tspan font-weight="700">数出来的</tspan>　——　前向一次矩阵乘，反向两次</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一格不讲链式法则，只数<tspan font-weight="700">乘法做了几次</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -2993,165 +3136,282 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="652" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">只数矩阵乘：norm / 激活函数 / 偏置在这笔账里可以忽略</text>
 <text class="svgsm" x="40" y="216" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 前向</tspan></text>
 <text class="svgsm" x="40" y="240" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">算这一层的输出</text>
-<rect x="300" y="169.0" width="78.0" height="118.0" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<line x1="300" y1="198.5" x2="378.0" y2="198.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="319.5" y1="169.0" x2="319.5" y2="287.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="300" y1="228.0" x2="378.0" y2="228.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="339.0" y1="169.0" x2="339.0" y2="287.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="300" y1="257.5" x2="378.0" y2="257.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="358.5" y1="169.0" x2="358.5" y2="287.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="339" y="305" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 X</tspan></text>
-<text class="svgsm" x="400" y="234" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
-<rect x="422.0" y="189.0" width="78.0" height="78.0" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<line x1="422.0" y1="208.5" x2="500.0" y2="208.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="441.5" y1="189.0" x2="441.5" y2="267.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="422.0" y1="228.0" x2="500.0" y2="228.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="461.0" y1="189.0" x2="461.0" y2="267.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="422.0" y1="247.5" x2="500.0" y2="247.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="480.5" y1="189.0" x2="480.5" y2="267.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="461" y="285" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重 W</tspan></text>
-<text class="svgsm" x="522" y="234" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
-<rect x="544.0" y="169.0" width="78.0" height="118.0" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<line x1="544.0" y1="198.5" x2="622.0" y2="198.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="563.5" y1="169.0" x2="563.5" y2="287.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="544.0" y1="228.0" x2="622.0" y2="228.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="583.0" y1="169.0" x2="583.0" y2="287.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="544.0" y1="257.5" x2="622.0" y2="257.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="602.5" y1="169.0" x2="602.5" y2="287.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="583" y="305" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出 Y</tspan></text>
-<text class="svgsm" x="646" y="234" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给下一层</text>
+<rect x="300" y="168.0" width="84.0" height="120.0" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<line x1="300" y1="198.0" x2="384.0" y2="198.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="321.0" y1="168.0" x2="321.0" y2="288.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="300" y1="228.0" x2="384.0" y2="228.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="342.0" y1="168.0" x2="342.0" y2="288.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="300" y1="258.0" x2="384.0" y2="258.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="363.0" y1="168.0" x2="363.0" y2="288.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="342" y="306" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 X</tspan></text>
+<text class="svgsm" x="406" y="234" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="428.0" y="186.0" width="56.0" height="84.0" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<line x1="428.0" y1="207.0" x2="484.0" y2="207.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="442.0" y1="186.0" x2="442.0" y2="270.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="428.0" y1="228.0" x2="484.0" y2="228.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="456.0" y1="186.0" x2="456.0" y2="270.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="428.0" y1="249.0" x2="484.0" y2="249.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="470.0" y1="186.0" x2="470.0" y2="270.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="456" y="288" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重 W</tspan></text>
+<text class="svgsm" x="506" y="234" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
+<rect x="528.0" y="168.0" width="56.0" height="120.0" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<line x1="528.0" y1="198.0" x2="584.0" y2="198.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="542.0" y1="168.0" x2="542.0" y2="288.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="528.0" y1="228.0" x2="584.0" y2="228.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="556.0" y1="168.0" x2="556.0" y2="288.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="528.0" y1="258.0" x2="584.0" y2="258.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="570.0" y1="168.0" x2="570.0" y2="288.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="556" y="306" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出 Y</tspan></text>
+<text class="svgsm" x="608" y="234" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给下一层</text>
 <text class="svgsm" x="40" y="384" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 反向 · 权重梯度</tspan></text>
 <text class="svgsm" x="40" y="408" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">算「我这块权重该怎么改」</text>
-<rect x="300" y="357.0" width="118.0" height="78.0" rx="4" fill="#fef7e0" stroke="#e8710a" stroke-width="2.2" stroke-dasharray="5 3"/>
-<line x1="300" y1="376.5" x2="418.0" y2="376.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="329.5" y1="357.0" x2="329.5" y2="435.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="300" y1="396.0" x2="418.0" y2="396.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="359.0" y1="357.0" x2="359.0" y2="435.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="300" y1="415.5" x2="418.0" y2="415.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="388.5" y1="357.0" x2="388.5" y2="435.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="359" y="453" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 Xᵀ</tspan></text>
-<text class="svgsm" x="440" y="402" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
-<rect x="462.0" y="337.0" width="78.0" height="118.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<line x1="462.0" y1="366.5" x2="540.0" y2="366.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="481.5" y1="337.0" x2="481.5" y2="455.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="462.0" y1="396.0" x2="540.0" y2="396.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="501.0" y1="337.0" x2="501.0" y2="455.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="462.0" y1="425.5" x2="540.0" y2="425.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="520.5" y1="337.0" x2="520.5" y2="455.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="501" y="473" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游责任 dY</tspan></text>
-<text class="svgsm" x="562" y="402" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
-<rect x="584.0" y="357.0" width="78.0" height="78.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<line x1="584.0" y1="376.5" x2="662.0" y2="376.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="603.5" y1="357.0" x2="603.5" y2="435.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="584.0" y1="396.0" x2="662.0" y2="396.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="623.0" y1="357.0" x2="623.0" y2="435.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="584.0" y1="415.5" x2="662.0" y2="415.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="642.5" y1="357.0" x2="642.5" y2="435.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="623" y="453" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重梯度 dW</tspan></text>
-<text class="svgsm" x="686" y="402" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给优化器</text>
-<line x1="298" y1="396" x2="270" y2="396" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
-<line x1="270" y1="396" x2="270" y2="228" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
-<line x1="270" y1="228" x2="296" y2="228" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="448" y="322" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一块<tspan font-weight="700">不是新算的</tspan>　——　是 ① 里那个输入<tspan font-weight="700">被存下来了</tspan></tspan></text>
+<rect x="300" y="354.0" width="120.0" height="84.0" rx="4" fill="#fef7e0" stroke="#e8710a" stroke-width="2.2" stroke-dasharray="5 3"/>
+<line x1="300" y1="375.0" x2="420.0" y2="375.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="330.0" y1="354.0" x2="330.0" y2="438.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="300" y1="396.0" x2="420.0" y2="396.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="360.0" y1="354.0" x2="360.0" y2="438.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="300" y1="417.0" x2="420.0" y2="417.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="390.0" y1="354.0" x2="390.0" y2="438.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="360" y="456" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 Xᵀ</tspan></text>
+<text class="svgsm" x="442" y="402" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="464.0" y="336.0" width="56.0" height="120.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<line x1="464.0" y1="366.0" x2="520.0" y2="366.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="478.0" y1="336.0" x2="478.0" y2="456.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="464.0" y1="396.0" x2="520.0" y2="396.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="492.0" y1="336.0" x2="492.0" y2="456.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="464.0" y1="426.0" x2="520.0" y2="426.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="506.0" y1="336.0" x2="506.0" y2="456.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="492" y="474" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游责任 dY</tspan></text>
+<text class="svgsm" x="542" y="402" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
+<rect x="564.0" y="354.0" width="56.0" height="84.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<line x1="564.0" y1="375.0" x2="620.0" y2="375.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="578.0" y1="354.0" x2="578.0" y2="438.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="564.0" y1="396.0" x2="620.0" y2="396.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="592.0" y1="354.0" x2="592.0" y2="438.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="564.0" y1="417.0" x2="620.0" y2="417.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="606.0" y1="354.0" x2="606.0" y2="438.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="592" y="456" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重梯度 dW</tspan></text>
+<text class="svgsm" x="644" y="402" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给优化器</text>
+<line x1="298" y1="228" x2="270" y2="228" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="270" y1="228" x2="270" y2="396" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="270" y1="396" x2="296" y2="396" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="450" y="322" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一块<tspan font-weight="700">不是新算的</tspan>　——　是 ① 里那个输入<tspan font-weight="700">被存下来了</tspan></tspan></text>
 <text class="svgsm" x="40" y="552" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 反向 · 传给下游</tspan></text>
 <text class="svgsm" x="40" y="576" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">算「前一层该收到什么」</text>
-<rect x="300" y="505.0" width="78.0" height="118.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<line x1="300" y1="534.5" x2="378.0" y2="534.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="319.5" y1="505.0" x2="319.5" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="300" y1="564.0" x2="378.0" y2="564.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="339.0" y1="505.0" x2="339.0" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="300" y1="593.5" x2="378.0" y2="593.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="358.5" y1="505.0" x2="358.5" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="339" y="641" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游责任 dY</tspan></text>
-<text class="svgsm" x="400" y="570" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
-<rect x="422.0" y="525.0" width="78.0" height="78.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<line x1="422.0" y1="544.5" x2="500.0" y2="544.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="441.5" y1="525.0" x2="441.5" y2="603.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="422.0" y1="564.0" x2="500.0" y2="564.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="461.0" y1="525.0" x2="461.0" y2="603.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="422.0" y1="583.5" x2="500.0" y2="583.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="480.5" y1="525.0" x2="480.5" y2="603.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="461" y="621" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重 Wᵀ</tspan></text>
-<text class="svgsm" x="522" y="570" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
-<rect x="544.0" y="505.0" width="78.0" height="118.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<line x1="544.0" y1="534.5" x2="622.0" y2="534.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="563.5" y1="505.0" x2="563.5" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="544.0" y1="564.0" x2="622.0" y2="564.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="583.0" y1="505.0" x2="583.0" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="544.0" y1="593.5" x2="622.0" y2="593.5" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<line x1="602.5" y1="505.0" x2="602.5" y2="623.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="583" y="641" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 dX</tspan></text>
-<text class="svgsm" x="646" y="570" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给前一层</text>
-<text class="svgsm" x="700" y="690" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">三块积的<tspan font-weight="700">面积一样大</tspan>　——　所以 <tspan font-weight="700">1 ＋ 2 ＝ 3</tspan> 不是个比喻，是<tspan font-weight="700">数出来的</tspan>。 而 ② 那块虚线的，就是<tspan font-weight="700">激活扔不掉的全部原因</tspan>。</text>
-<rect x="0" y="774" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="774" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="300" y="504.0" width="56.0" height="120.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<line x1="300" y1="534.0" x2="356.0" y2="534.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="314.0" y1="504.0" x2="314.0" y2="624.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="300" y1="564.0" x2="356.0" y2="564.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="328.0" y1="504.0" x2="328.0" y2="624.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="300" y1="594.0" x2="356.0" y2="594.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="342.0" y1="504.0" x2="342.0" y2="624.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="328" y="642" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游责任 dY</tspan></text>
+<text class="svgsm" x="378" y="570" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="400.0" y="536.0" width="84.0" height="56.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<line x1="400.0" y1="550.0" x2="484.0" y2="550.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="421.0" y1="536.0" x2="421.0" y2="592.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="400.0" y1="564.0" x2="484.0" y2="564.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="442.0" y1="536.0" x2="442.0" y2="592.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="400.0" y1="578.0" x2="484.0" y2="578.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="463.0" y1="536.0" x2="463.0" y2="592.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="442" y="610" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重 Wᵀ</tspan></text>
+<text class="svgsm" x="506" y="570" fill="#80868b" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
+<rect x="528.0" y="504.0" width="84.0" height="120.0" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<line x1="528.0" y1="534.0" x2="612.0" y2="534.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="549.0" y1="504.0" x2="549.0" y2="624.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="528.0" y1="564.0" x2="612.0" y2="564.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="570.0" y1="504.0" x2="570.0" y2="624.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="528.0" y1="594.0" x2="612.0" y2="594.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="591.0" y1="504.0" x2="591.0" y2="624.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="570" y="642" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 dX</tspan></text>
+<text class="svgsm" x="636" y="570" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给前一层</text>
+<text class="svgsm" x="700" y="674" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">三次乘法的<tspan font-weight="700">乘加次数一模一样</tspan>（都是「位置数 × 进来的宽度 × 出去的宽度」）　——　所以 <tspan font-weight="700">1 ＋ 2 ＝ 3</tspan> 不是个比喻，是<tspan font-weight="700">数出来的</tspan>。</text>
+<text class="svgsm" x="700" y="700" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">② 那块虚线的，就是<tspan font-weight="700">激活扔不掉的全部原因</tspan>。　· 那两个 <tspan font-weight="700">ᵀ</tspan> 是怎么回事？<tspan font-weight="700">下面 Ⓑ 一整格专讲它。</tspan></text>
+<rect x="0" y="774" width="1400" height="522" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="774" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0" y="776" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="804" x2="1400" y2="804" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="794" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 全图的钥匙：<tspan font-weight="700">一条线进来，分成两支</tspan></tspan></text>
-<text class="svgsm" x="554" y="794" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">不是「反向比较慢」这种含糊说法 ——&#160;<tspan font-weight="700">是两支，而且一支都省不掉</tspan></text>
-<rect x="52" y="938" width="300" height="68" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="202" y="966" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游传来的责任 δ</tspan></text>
-<text class="svgsm" x="202" y="990" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">（就这一个东西）</text>
-<line x1="352" y1="972" x2="456" y2="972" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
-<rect x="461" y="963" width="18" height="18" rx="9" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<line x1="470" y1="972" x2="540" y2="896" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<line x1="470" y1="972" x2="540" y2="1048" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="548" y="862" width="330" height="68" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
-<text class="svgsm" x="713" y="888" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 前向存下来的<tspan font-weight="700">输入</tspan></tspan></text>
-<text class="svgsm" x="713" y="914" fill="#681da8" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
-<line x1="878" y1="896" x2="940" y2="896" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<rect x="948" y="866" width="250" height="60" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1073" y="901" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这块权重的梯度</tspan></text>
-<text class="svgsm" x="1218" y="890" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交给优化器</tspan></text>
-<text class="svgsm" x="1218" y="912" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">到此为止</tspan></text>
-<text class="svgsm" x="713" y="946" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">这是这一步真正要的东西　·　到这儿这一支就不往前了</text>
-<rect x="548" y="1014" width="330" height="68" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
-<text class="svgsm" x="713" y="1040" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 这一层的<tspan font-weight="700">权重</tspan></tspan></text>
-<text class="svgsm" x="713" y="1066" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
-<line x1="878" y1="1048" x2="940" y2="1048" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<rect x="948" y="1018" width="250" height="60" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1073" y="1053" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 δ</tspan></text>
-<text class="svgsm" x="1218" y="1042" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">喂给前一层</tspan></text>
-<text class="svgsm" x="1218" y="1064" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">接着往左走</tspan></text>
-<text class="svgsm" x="713" y="1098" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">链条靠它　·　少了它，再往前就断了</text>
-<text class="svgsm" x="700" y="1126" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两支乘的东西不一样</tspan>（一支乘输入、一支乘权重）——　<tspan font-weight="700">所以合并不了</tspan>；一支断了链条就断，一支没了这一层就白算。<tspan font-weight="700">一个都省不掉，这就是那个 2。</tspan></text>
-<rect x="0" y="1182" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1182" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="0" y="1184" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="1212" x2="1400" y2="1212" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="1202" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 于是这笔账就封口了</tspan></text>
-<text class="svgsm" x="300" y="1274" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">推理　只有前向</tspan></text>
-<rect x="320" y="1248" width="210" height="38" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="425" y="1273" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<text class="svgsm" x="546" y="1274" fill="#174ea6" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 1×</tspan></text>
-<text class="svgsm" x="300" y="1328" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练　前向 ＋ 反向</tspan></text>
-<rect x="320" y="1302" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="425" y="1327" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="540" y="1302" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="645" y="1327" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="760" y="1302" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="865" y="1327" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<text class="svgsm" x="986" y="1328" fill="#0d652d" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 3×</tspan></text>
-<text class="svgsm" x="300" y="1382" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练 ＋ 全量重算</tspan></text>
-<rect x="320" y="1356" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="425" y="1381" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="540" y="1356" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="645" y="1381" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="760" y="1356" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="865" y="1381" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="980" y="1356" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1085" y="1381" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<text class="svgsm" x="1206" y="1382" fill="#b06000" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 4×</tspan></text>
-<text class="svgsm" x="320" y="1420" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">「一遍」＝ 一次走完整个网络的矩阵乘量。<tspan font-weight="700">推理只买一遍，训练要买三遍</tspan></text>
-<rect x="0" y="1484" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1484" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="1484" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1511" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张图顺带回答了另外两个常见疑问</tspan></text>
-<text class="svgsm" x="20" y="1542" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「为什么训练比推理贵这么多」</tspan> ——&#160;算力上就是这个 3 倍； 但真正拉开差距的不是它，而是<tspan font-weight="700">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。</text>
-<text class="svgsm" x="20" y="1566" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「反向能不能只算一次」</tspan> ——&#160;能，如果你<tspan font-weight="700">不打算继续往前传</tspan>（比如只微调最后一层）。 那种情况下第 ③ 次确实可以省掉。 <tspan font-weight="700">但别把它安到冻结层头上</tspan> ——&#160;LoRA 那种每层都挂</text>
-<text class="svgsm" x="20" y="1590" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">adapter 的，第 ③ 笔一笔都省不掉；它省的是第 ② 笔（权重梯度）。见 3.8。</text>
+<text class="svglbl" x="14" y="794" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 那两个「ᵀ」是怎么回事 ——　<tspan font-weight="700">转置不是多算了一步，是同一张表换个方向读</tspan></tspan></text>
+<text class="svgsm" x="739" y="794" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">分两层：先说它<tspan font-weight="700">是什么</tspan>，再说<tspan font-weight="700">为什么非它不可</tspan></text>
+<text class="svgsm" x="48" y="850" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 它是什么</tspan></text>
+<text class="svgsm" x="48" y="874" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">行变列、列变行　——　一个数都没动</text>
+<rect x="64" y="896" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="919" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="98" y="896" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="919" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="132" y="896" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="149" y="919" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="64" y="930" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="953" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="98" y="930" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="953" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="132" y="930" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="149" y="953" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="115" y="988" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A　（2 行 3 列）</tspan></text>
+<line x1="184" y1="930" x2="228" y2="930" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="206" y="916" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">转置</tspan></text>
+<rect x="246" y="896" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="919" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="280" y="896" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="297" y="919" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="246" y="930" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="953" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="280" y="930" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="297" y="953" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="246" y="964" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="987" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="280" y="964" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="297" y="987" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="280" y="1022" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Aᵀ　（3 行 2 列）</tspan></text>
+<text class="svgsm" x="48" y="1066" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">黄色那<tspan font-weight="700">一行</tspan>，转完变成了黄色那<tspan font-weight="700">一列</tspan>。</tspan></text>
+<text class="svgsm" x="48" y="1090" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">数一个没少、值一个没变　——　变的只是<tspan font-weight="700">「从哪个方向读」</tspan>。</text>
+<text class="svgsm" x="48" y="1116" fill="#80868b" style="font-size:12.5px;font-variant-numeric:tabular-nums">所以它<tspan font-weight="700">不花算力</tspan>，真实实现里常常连搬都不搬。</text>
+<text class="svgsm" x="470" y="850" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 为什么非它不可</tspan></text>
+<text class="svgsm" x="470" y="874" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">矩阵乘有一条死规矩：<tspan font-weight="700">左边那个的列数，必须等于右边那个的行数</tspan></text>
+<text class="svgsm" x="470" y="916" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="500" y="916" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X ［T × d_in］　×　W ［d_in × d_out］　＝　Y ［T × d_out］</tspan></text>
+<text class="svgsm" x="500" y="942" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">d_in</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
+<text class="svgsm" x="500" y="964" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums">原本的摆法：把输入按权重混一遍</text>
+<text class="svgsm" x="470" y="1008" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="500" y="1008" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Xᵀ ［d_in × T］　×　dY ［T × d_out］　＝　dW ［d_in × d_out］</tspan></text>
+<text class="svgsm" x="500" y="1034" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">T（位置）</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
+<text class="svgsm" x="500" y="1056" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums">要得到一块<tspan font-weight="700">跟 W 同形</tspan>的结果 ——　只有这一种摆法</text>
+<text class="svgsm" x="470" y="1100" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="500" y="1100" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">dY ［T × d_out］　×　Wᵀ ［d_out × d_in］　＝　dX ［T × d_in］</tspan></text>
+<text class="svgsm" x="500" y="1126" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">d_out</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
+<text class="svgsm" x="500" y="1148" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums">要得到一块<tspan font-weight="700">跟 X 同形</tspan>的结果 ——　只有这一种摆法</text>
+<rect x="40" y="1204" width="1320" height="98" rx="8" fill="#fff8e1" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="64" y="1234" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">所以转置<tspan font-weight="700">不是一步额外的运算</tspan>：你要的结果形状一旦定死 ——　dW 得跟 W 同形、dX 得跟 X 同形 ——　<tspan font-weight="700">转置就是唯一摆得上的方式</tspan>。</text>
+<text class="svgsm" x="64" y="1262" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">换成人话：前向问的是「<tspan font-weight="700">输入怎么混成输出</tspan>」；③ 问的是反过来那个问题 ——　「<tspan font-weight="700">输出的责任怎么分回输入</tspan>」。</text>
+<text class="svgsm" x="64" y="1288" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张 W，换个方向读，写出来就是 Wᵀ。</tspan>　·　而 ② 里 Xᵀ 的作用是<tspan font-weight="700">把「位置」摆到中间去让它被吃掉</tspan>　——　这就是 1.2d 说的那笔「结账」。</text>
+<rect x="0" y="1348" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1348" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="1350" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1378" x2="1400" y2="1378" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1368" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 全图的钥匙：<tspan font-weight="700">一条线进来，分成两支</tspan></tspan></text>
+<text class="svgsm" x="554" y="1368" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">不是「反向比较慢」这种含糊说法 ——&#160;<tspan font-weight="700">是两支，而且一支都省不掉</tspan></text>
+<rect x="52" y="1512" width="300" height="68" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="202" y="1540" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游传来的责任 δ</tspan></text>
+<text class="svgsm" x="202" y="1564" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">（就这一个东西）</text>
+<line x1="352" y1="1546" x2="456" y2="1546" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="461" y="1537" width="18" height="18" rx="9" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<line x1="470" y1="1546" x2="540" y2="1470" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="470" y1="1546" x2="540" y2="1622" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="548" y="1436" width="330" height="68" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="713" y="1462" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 前向存下来的<tspan font-weight="700">输入</tspan></tspan></text>
+<text class="svgsm" x="713" y="1488" fill="#681da8" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
+<line x1="878" y1="1470" x2="940" y2="1470" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="948" y="1440" width="250" height="60" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1073" y="1475" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这块权重的梯度</tspan></text>
+<text class="svgsm" x="1218" y="1464" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交给优化器</tspan></text>
+<text class="svgsm" x="1218" y="1486" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">到此为止</tspan></text>
+<text class="svgsm" x="713" y="1520" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">这是这一步真正要的东西　·　到这儿这一支就不往前了</text>
+<rect x="548" y="1588" width="330" height="68" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="713" y="1614" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 这一层的<tspan font-weight="700">权重</tspan></tspan></text>
+<text class="svgsm" x="713" y="1640" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
+<line x1="878" y1="1622" x2="940" y2="1622" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="948" y="1592" width="250" height="60" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1073" y="1627" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 δ</tspan></text>
+<text class="svgsm" x="1218" y="1616" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">喂给前一层</tspan></text>
+<text class="svgsm" x="1218" y="1638" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">接着往左走</tspan></text>
+<text class="svgsm" x="713" y="1672" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">链条靠它　·　少了它，再往前就断了</text>
+<text class="svgsm" x="700" y="1700" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两支乘的东西不一样</tspan>（一支乘输入、一支乘权重）——　<tspan font-weight="700">所以合并不了</tspan>；一支断了链条就断，一支没了这一层就白算。<tspan font-weight="700">一个都省不掉，这就是那个 2。</tspan></text>
+<rect x="0" y="1756" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1756" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="1758" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1786" x2="1400" y2="1786" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1776" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓓ 于是这笔账就封口了</tspan></text>
+<text class="svgsm" x="300" y="1848" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">推理　只有前向</tspan></text>
+<rect x="320" y="1822" width="210" height="38" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="425" y="1847" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="546" y="1848" fill="#174ea6" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 1×</tspan></text>
+<text class="svgsm" x="300" y="1902" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练　前向 ＋ 反向</tspan></text>
+<rect x="320" y="1876" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="425" y="1901" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="540" y="1876" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="645" y="1901" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="760" y="1876" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="865" y="1901" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="986" y="1902" fill="#0d652d" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 3×</tspan></text>
+<text class="svgsm" x="300" y="1956" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练 ＋ 全量重算</tspan></text>
+<rect x="320" y="1930" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="425" y="1955" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="540" y="1930" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="645" y="1955" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="760" y="1930" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="865" y="1955" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="980" y="1930" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1085" y="1955" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="1206" y="1956" fill="#b06000" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 4×</tspan></text>
+<text class="svgsm" x="320" y="1994" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">「一遍」＝ 一次走完整个网络的矩阵乘量。<tspan font-weight="700">推理只买一遍，训练要买三遍</tspan></text>
+<rect x="0" y="2058" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="2058" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="2058" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="2085" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张图顺带回答了另外两个常见疑问</tspan></text>
+<text class="svgsm" x="20" y="2116" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「为什么训练比推理贵这么多」</tspan> ——&#160;算力上就是这个 3 倍； 但真正拉开差距的不是它，而是<tspan font-weight="700">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。</text>
+<text class="svgsm" x="20" y="2140" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「反向能不能只算一次」</tspan> ——&#160;能，如果你<tspan font-weight="700">不打算继续往前传</tspan>（比如只微调最后一层）。 那种情况下第 ③ 次确实可以省掉。 <tspan font-weight="700">但别把它安到冻结层头上</tspan> ——&#160;LoRA 那种每层都挂</text>
+<text class="svgsm" x="20" y="2164" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">adapter 的，第 ③ 笔一笔都省不掉；它省的是第 ② 笔（权重梯度）。见 3.8。</text>
 </svg><figcaption><b>Ⓑ 是这张图的钥匙</b> ——&nbsp;<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><span class="capmore"><br>⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;激活扔不掉、以及下一节那笔交易，全挂在这一句上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 「3 倍」是<b>矩阵乘口径</b>的常用近似：只数 matmul，忽略 norm / 激活函数 / 偏置 / 通信。真实 step 里这些占比不大，但<b>不是零</b></p>
 <p>⛔ 图上第 ② 步那句「用前向存下来的输入」是<b>整个专题的枢纽</b> ——&#160;激活扔不掉、以及下一节那笔重算交易，全都挂在这一句上</p></details></figure>
+
+<!-- ⛔⛔ 2026-09-23 现场：「这一段完全看不懂 ——&#160;为什么转置啊？
+     什么前向反向之类的这是啥东西？中间那个第二步向第一步的箭头又是怎么回事？」
+     ⭐ 三问里最要紧的是第一问，而它照出一条判据：
+       **图上（和正文里）任何一个没被解释过的记号，都是一道闸门，不是一个细节。**
+       你以为读者会先绕过去，其实他停在那儿了，后面整段都没进去。
+       ᵀ 这个记号在这一节出现了两次，而整讲从没定义过它。
+     ⭐ 图已补了一整格 Ⓑ；这里是配套的文字版（图改了文没改是这门课的老坑）。
+     ⚠️ 讲法上刻意不走链式法则：那是「怎么证」，而现场问的是「这是啥」。 -->
+<h4>那两个「ᵀ」是怎么回事 ——&nbsp;<u>转置不是多算了一步</u></h4>
+
+<p><em>上面那张图里立着两个 <code>ᵀ</code>：<code>Xᵀ</code> 和 <code>Wᵀ</code>。
+  <b>先把这个记号拆掉，不然后面整段都读不进去。</b></em></p>
+
+<div class="note"><p><b>① 它是什么 ——&nbsp;行变列、列变行，<u>一个数都没动</u></b></p>
+<p><em>一个 2 行 3 列的表，转置之后变成 3 行 2 列：
+  <b>原来的第一行，变成了现在的第一列。</b>
+  <u>数一个没少、值一个没变</u>，变的只是「从哪个方向读」。</em></p>
+<p class="landing">所以<b>转置不花算力</b> ——&nbsp;
+  <em>真实实现里常常连搬都不搬，只是换个读法。</em></p></div>
+
+<div class="note"><p><b>② 为什么非它不可 ——&nbsp;<u>是形状把它逼出来的</u></b></p>
+<p><em>矩阵乘有一条死规矩：<b>左边那个的列数，必须等于右边那个的行数</b>
+  ——&nbsp;对上的那一维，乘完就被吃掉。</em></p>
+<p>而反向要的两块结果，<b>形状是被定死的</b>：
+  <em><b>dW 必须跟 W 同形</b>（不然优化器没法把它加到 W 上），
+  <b>dX 必须跟 X 同形</b>（不然前一层接不住）。</em></p>
+<table>
+<thead><tr><th></th><th>摆法</th><th>被吃掉的那一维</th><th>为什么只能这么摆</th></tr></thead>
+<tbody>
+<tr><td><b>① 前向</b></td>
+    <td><code>X［T×d_in］· W［d_in×d_out］＝ Y［T×d_out］</code></td>
+    <td><b>d_in</b></td><td>原本的摆法：把输入按权重混一遍</td></tr>
+<tr><td><b>② 权重梯度</b></td>
+    <td><code>Xᵀ［d_in×T］· dY［T×d_out］＝ dW［d_in×d_out］</code></td>
+    <td><b>T（位置）</b></td><td>要凑出 <b>d_in×d_out</b>，只有这一种摆法</td></tr>
+<tr><td><b>③ 传给下游</b></td>
+    <td><code>dY［T×d_out］· Wᵀ［d_out×d_in］＝ dX［T×d_in］</code></td>
+    <td><b>d_out</b></td><td>要凑出 <b>T×d_in</b>，只有这一种摆法</td></tr>
+</tbody></table>
+<p class="landing"><b>结果形状一旦定死，转置就是唯一摆得上的方式。</b>
+  <em>——&nbsp;<u>它不是一步额外的运算，它是「怎么摆才对得上」的答案。</u></em></p></div>
+
+<div class="note ok"><p><b>换成人话，两句</b></p>
+<p><em><b>前向</b>问的是「<u>输入怎么混成输出</u>」；
+  <b>③</b> 问的是反过来那个问题 ——&nbsp;「<u>输出的责任怎么分回输入</u>」。
+  <b>同一张 W，换个方向读，写出来就是 Wᵀ。</b></em></p>
+<p class="landing"><b>而 ② 里 <code>Xᵀ</code> 的作用不一样：它把「位置」这一维摆到中间去，
+  好让它<u>被吃掉</u>。</b>
+  <em>——&nbsp;所有位置对这块权重的意见，就是在这一步被累加起来的。
+  这正是 <a href="#s1-2d">1.2d</a> 说的那笔「<b>结账</b>」：
+  <u>位置维在这里消失，所以这一笔不往前传</u>。</em></p></div>
+
+<p><span class="sub">⭐ 顺带说清图上那根<b>橙色的线</b>（现场也问了）：
+  <em>它表示 ② 里用的那块 <code>Xᵀ</code> <b>不是新算出来的</b> ——&nbsp;
+  就是 ① 前向时那个输入，被<u>存下来</u>了。
+  <b>这根线就是「激活为什么扔不掉」的全部答案</b>：
+  前向做完不能把 X 丢掉，因为反向算 dW 还要拿它当来料。
+  ⛔ 它原来箭头画反了（指着 ①），现已改成顺着流向：① 存下来 →&nbsp;② 取用。</em></span></p>
 
 <figure class="fbox fwide" id="fig-circuit"><svg viewBox="0 0 1400 1394" width="100%" role="img" aria-label="一个三节点的小电路：a 加 b 得到 q，q 乘 c 得到 f。前向在线上标黑字，反向在同一条线上标红字。加法门把上游的梯度原样分给两个输入，乘法门把两个输入的梯度换过来 —— 各自拿对方的前向值。而正因为乘法门反向要用前向的值，那个值就必须被存下来，这就是激活扔不掉的最小例子"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">跟着数走一遍　——　<tspan font-weight="700">三个节点，前向一遍，反向一遍</tspan></text>
@@ -4321,6 +4581,18 @@ body.figonly section h3{margin-top:34px}
 <tr><td><b>多少个数</b></td><td><b>N 的平方</b></td><td><b>N</b></td></tr>
 </tbody></table>
 <p class="landing"><b>它们中文都带「二阶」，<u>纯属巧合</u>。</b></p>
+
+<!-- 2026-09-23 现场追问：「梯度不都被 Adam 处理过了吗？它一开始还能大在哪？」
+     这问题问得极准，而这张表只说了两者「不是一回事」，**没说这件事的后果**。
+     补的这两句就是后果，它同时是 3.5 warmup 那一段的支点。 -->
+<p><b>这个区别不是学究气 ——&nbsp;它有一个很硬的后果</b>，
+  <em><a href="#s3-5">3.5</a> 那个 warmup 就卡在这儿：</em></p>
+<p class="landing"><b>Adam 除掉的是「陡」，它除不掉「弯」。</b></p>
+<p><em>分母是梯度的均方根，所以<b>不管这一步梯度多大，更新量都被拉回 η 的量级</b>
+  ——&nbsp;<u>「坡有多陡」这件事，被它归一化没了</u>。
+  可<b>「坡弯得多急」它从头到尾没算过</b>：手上那 N 个数里，没有这个信息。</em></p>
+<p><span class="sub">所以以后碰到「梯度都被 Adam 处理过了，怎么还会不稳」——&nbsp;
+  <b>答案就在这一行：不稳不是「陡」造成的，是「弯」造成的，而弯不在 Adam 的账本里。</b></span></p>
 <p><em>同样，「<b>一阶动量</b>」也<b>不是</b>一阶导 ——&nbsp;
   它是<b>梯度的滑动平均</b>，那个「一阶」指的是<b>统计上的一阶矩（期望）</b>。</em></p>
 <p><span class="sub">那为什么老有人说「Adam 的分母在估二阶导」？
@@ -7279,6 +7551,41 @@ body.figonly section h3{margin-top:34px}
   大家都在同一个刻度上 ——&nbsp;<u>这才是「自适应学习率」这个名字的真正含义：
   不看绝对值，看相对于自己的常态。</u></b></p></div>
 
+<!-- 2026-09-23 现场追问：「二阶矩有什么物理和几何意义」。
+     上面那块答了「物理意义」（一把它自己的尺子），**几何那一半一直是空的** ——
+     而我们还在别处反复说「它不是几何量」，等于只给了否定、没给肯定。
+     ⛔ 判据：**反复说「X 不是 Y」的时候，欠着一句「那 X 是什么」。**
+     补两段：① 「矩」这个词到底在说什么（顺带一条很硬的较真）；
+             ② 它确实有的那个几何作用 —— 对角缩放，以及它的边界。 -->
+<h4>把话说全：「矩」这个词，以及它<u>真正</u>的几何意义</h4>
+
+<div class="note"><p><b>先说「矩」。</b>统计里的<b>一阶矩就是期望，二阶矩就是平方的期望</b>。
+  <em>Adam 那个 v 就是<u>梯度平方的滑动平均</u> ——&nbsp;名字里那个「二阶」到此为止，
+  没有别的含义。</em></p>
+<p><b>这里有一条值得较真的：它是<u>未中心化</u>的二阶矩。</b>
+  <em>也就是 <code>E[g²]</code>，<b>不是方差</b> ——&nbsp;方差还要把均值减掉，
+  而 Adam 手里明明有 <code>m</code>（那就是均值），它<u>偏偏没减</u>。</em></p>
+<p class="landing"><b>而这不是疏忽，它正好是上面那条「信噪比」的来源。</b>
+  <em>梯度完全恒定时，<code>m</code> 和 <code>√v</code> 相等，比值是 1，<b>走满步</b>；
+  要是拿<u>方差</u>当分母 ——&nbsp;<b>恒定梯度的方差是 0，一除就炸了。</b>
+  <u>没减均值，这个比值才天然有上界。</u></em></p></div>
+
+<div class="note ok"><p><b>那几何意义呢 ——&nbsp;它确实有一个，只是不是大家以为的那个。</b></p>
+<p><em>把 loss 曲面想成一个<b>被拉得很长很扁的椭球</b>：
+  有的方向梯度天天很大，有的方向常年很小。
+  <b>Adam 做的事，是沿着每根坐标轴、按那根轴上梯度的典型大小，把轴各自重新标度一遍</b>
+  ——&nbsp;把这个拉长的东西压回<u>各方向可比</u>。</em></p>
+<p class="landing">这叫<b>对角缩放</b>（diagonal preconditioning）。
+  <b>它是个货真价实的几何操作</b> ——&nbsp;
+  <em>可它<u>缩放的依据</u>是「这个方向<b>平常动多大</b>」，
+  不是「这个方向<b>弯得多急</b>」。</em></p>
+<p><em>所以它治得了「各方向<b>尺度</b>差太多」，治不了「某个方向<b>弯</b>得急」
+  ——&nbsp;<a href="#s3-5">3.5</a> 那个 warmup 就是被后面这一条卡住的。</em></p>
+<p><span class="sub">⭐ 还有一条边界值得记：<b>它只会沿坐标轴缩放，不会<u>转动</u>坐标轴。</b>
+  <em>真正的耦合要是发生在轴与轴<u>之间</u>，逐坐标各缩各的就够不着
+  ——&nbsp;这正是后来 Muon、Shampoo 那一路想补的方向：<b>它们都不再是「逐坐标各缩各的」</b>
+  （见 <a href="#s3-4">3.4</a>）。</em></span></p></div>
+
 <div class="note"><p><b>② RMSProp：起点是<u>那把尺子会过期</u>。</b></p>
 <p><em>AdaGrad 有个致命伤 ——&nbsp;那个和<b>只增不减</b>。走着走着分母越来越大，
   步子越来越小，最后就停了。</em></p>
@@ -7660,7 +7967,14 @@ body.figonly section h3{margin-top:34px}
   <li>只管二维参数。<em>标量、向量，以及
     <b>embedding 和最后那个输出头</b>，仍然走 AdamW ——&nbsp;
     作者明说输入输出层用 AdamW 效果才最好。
-    所以整模型省不到那四分之一。</em></li>
+    所以整模型省不到那四分之一。</em>
+    <p><span class="sub">⚠️ <b>这一条里其实藏着<u>两种不一样的排除</u>，值得分开：</b>
+    <em>标量和向量是<b>原理上</b>不适用 ——&nbsp;正交化是矩阵上的概念，
+    得有多个奇异方向才有得拉平；一个向量只有一个方向，「正交化」退化成单纯归一化，
+    没有信息可言。<br>
+    可 <b>embedding 和输出头是二维的，原理上完全做得了</b> ——&nbsp;
+    作者还是把它们留给了 AdamW，理由是<b>实测效果更好</b>。
+    <u>这是实证排除，不是原理排除。</u></em></span></p></li>
   <li><b>每一步更慢</b>（原文写明）。<em>所以它<b>不是「又快又省」</b> ——&nbsp;
     <b>它把一笔账挪到了另一笔账上</b>：显存那栏减了，单步时间那栏加了。</em></li>
 </ul>
@@ -7704,6 +8018,132 @@ body.figonly section h3{margin-top:34px}
 <p class="landing"><b>所以「换优化器」从来不是换个名字 ——&nbsp;
   是换一个你打算治的病。</b>
   <em>而代价永远落在同一个地方：<u>每个参数要额外记几个字节</u>。</em></p></div>
+
+<!-- 2026-09-23 现场追问两条，都是**上面这张谱系表压缩掉的东西**：
+     ①「AdamW 那个 W 到底加了什么，没听懂」——&#160;那一行只有一句「被二阶矩缩放了」，
+       没有画面，现场讲到这儿基本都会卡。
+     ②「Muon 把二阶矩扔了，那『各参数尺度差太远』这个病谁来治？」
+       ⛔ 这是谱系表**自己欠下的债**：Adagrad 那一行刚说这是个要治的病，
+         Muon 那一行就把药扔了，中间没交代。
+     ⭐ 判据：**一张「每一代治什么病」的表，必须能回答「后一代是不是把前一代的病放了」。**
+       放了要说放了，没放要说换了什么药 —— 不能不提。 -->
+
+<!-- 2026-09-23 现场：「权重衰减这个好像从来没仔细讲过 —— 是什么？怎么衰减？
+     它为什么在优化器里而不在别的地方？」⭐ 全中：整讲提了它四次，
+     **每次都是拿它当已知量去讲别的事**（bf16 存不存、AdamW 改了它什么、一步的顺序）。
+     ⛔ 判据：**一个词被当成已知量引用三次以上，就该回头查它有没有被定义过。**
+       它不会报错 —— 引用得越多，越像是早就讲过了。
+     ⚠️ 位置：必须排在下面 AdamW 那一问**之前** —— 先知道它是什么，
+       才谈得上「W 改了它什么」。 -->
+<h4>插一节：<u>权重衰减本身是什么</u> ——&nbsp;以及它为什么会待在优化器里</h4>
+
+<p><em>下面那一问说的是「衰减<b>怎么加</b>」。<b>可衰减本身是什么，这一讲一直只是顺带提。</b>
+  ——&nbsp;三问，一次说清。</em></p>
+
+<div class="note"><p><b>① 它是什么 ——&nbsp;而答案跟教科书上那个<u>不一样</u></b></p>
+<p><b>一句话：每一步都把权重往零缩一点点。</b></p>
+<p><em>教科书给的理由是<b>正则化</b>：不让模型靠几个特别大的权重去死记硬背
+  ——&nbsp;岭回归那一脉传下来的。</em></p>
+<p class="landing">⛔ <b>可这个理由在大模型预训练上站不住</b>：
+  <em>单遍过数据、数据量远超参数量，<u>基本没有过拟合的机会</u>。</em></p>
+<p><b>但配置里它全都在</b>，<em>而且清一色 <b>0.1</b> ——&nbsp;
+  DeepSeek 全系都是 <code>weight_decay = 0.1</code>（配 β₁ 0.9 / β₂ 0.95 / 裁剪 1.0）。
+  <b>那它留着在干什么？</b></em></p>
+<p class="landing"><b>2017 年有人把这事说破了：在带归一化的网络里，L2 基本不当正则用了
+  ——&nbsp;<u>它影响的是权重的尺度，而尺度决定有效学习率。</u></b></p>
+<p><em>机制一想就通：<b>后面接着 Norm 的那些权重，你把整块放大两倍，输出一模一样</b>
+  （Norm 会把这个放大归一化掉）。<b>所以权重的长度不改变函数</b> ——&nbsp;
+  它只改变一件事：<u>同样迈一步，方向能转多少角度</u>。
+  <b>权重越长，同样的一步转过的角度越小，也就是有效学习率越低。</b></em></p>
+<p class="landing">而训练过程中权重是会慢慢变长的。
+  <b>不管它，有效学习率就会自己一路往下漂。</b>
+  <em>——&nbsp;<u>权重衰减把长度按住，让它别漂走。</u>
+  所以它今天更像<b>一个稳住有效学习率的旋钮</b>，而不是一个防过拟合的正则项。</em></p>
+<p><span class="sub">📌 van Laarhoven，arXiv <b><a href="https://arxiv.org/abs/1706.05350" target="_blank" rel="noopener">1706.05350</a></b>
+  《L2 Regularization versus Batch and Weight Normalization》。
+  ⚠️ <b>那篇讲的是 BatchNorm 时代</b>；搬到今天的 RMSNorm 上，起作用的是<u>同一个尺度不变性</u>
+  ——&nbsp;但这是我们的迁移，不是原文的实验范围（<a href="#s二">2.6</a> 那条判据）。</span></p></div>
+
+<div class="note"><p><b>② 怎么衰减 ——&nbsp;它是<u>乘</u>，不是减</b></p>
+<p><code>θ ← θ − η·λ·θ　＝　θ·(1 − η·λ)</code></p>
+<p><em>——&nbsp;<b>每一步乘一个略小于 1 的数。</b>所以它是<u>指数</u>衰减：
+  要是没有梯度在推，<b>权重会指数地趋向零</b>。</em></p>
+<p class="landing"><b>算一下有多温和</b>：<em>V3 峰值 η ＝ 2.2×10⁻⁴、λ ＝ 0.1
+  →&nbsp;<b>每步缩 2.2×10⁻⁵</b>；<b>一万步累下来只剩 80%</b>
+  ——&nbsp;<u>很轻。</u></em></p>
+<p>⚠️ <b>这里有个实践陷阱：那个收缩比例里<u>带着学习率</u>。</b>
+  <em>所以你一改 LR schedule，<b>正则强度跟着一起变了</b>
+  ——&nbsp;<u>你以为只动了一个旋钮，其实动了两个。</u>
+  这也正是 <a href="#s3-3b">3.3b</a> 那条「一步的顺序」里，
+  <b>衰减排在「按 schedule 取当前学习率」之后</b>的原因。</em></p>
+<p><span class="sub">顺带一句：实践上<b>一般不对所有参数做衰减</b> ——&nbsp;
+  bias 和归一化的增益系数通常排除在外。<em>这是常见做法；
+  具体某个模型排了哪几类，<b>得去看它自己的配置，别照抄</b>。</em></span></p></div>
+
+<div class="note ok"><p><b>③ 它为什么在优化器里 ——&nbsp;答案是：<u>它本来不在。</u></b></p>
+<p><em>它原本是 <b>loss 的一项</b>：<code>½·λ·‖θ‖²</code>。
+  你把这一项写进目标函数，<b>自动微分就会在梯度里自动产出 λθ</b>
+  ——&nbsp;<u>所以它最初的身份，是「你想优化什么」的一部分。</u></em></p>
+<p class="landing"><b>那为什么搬家？</b>
+  <em>因为只要它还在 loss 里，<b>它就必然跟梯度走同一条管道</b>
+  ——&nbsp;动量、二阶矩、除以分母，<u>一样不落</u>。而我们要的是<b>均匀地拉</b>。</em></p>
+<p><b>而唯一能绕开分母的地方，就是更新那一步本身 ——&nbsp;<u>那一步归优化器管</u>。</b></p>
+<p class="landing"><b>所以它从「你想优化什么」，变成了「你怎么走」。</b>
+  <em>——&nbsp;<u>换的是归属，不是公式。</u></em></p>
+<p><span class="sub">⚠️ 这次搬家是有代价的，值得记一句：
+  <em>它不在 loss 里之后，<b>你就不再能说「我在最小化 loss 加正则项」</b>
+  ——&nbsp;<u>你实际优化的东西，和你写下来的那个 loss，不再是同一回事了。</u>
+  这一点被批评过，<b>但实践上它赢了</b>。</em></span></p></div>
+
+<div class="note warn"><p>❓ <b>AdamW 那个「W」，用一个具体的画面再讲一遍</b></p>
+<p><b>权重衰减本身很简单：每一步都把权重往零缩一点点</b>，别让它越长越大。
+  <em>问题只在于 ——&nbsp;<u>这个「往回缩」放在哪一步做</u>。</em></p>
+<p><b>老办法（原版 Adam）：把它混进梯度。</b>
+  <em>算梯度的时候多加一项 <code>λθ</code>。听着很自然，反正都是要减的东西。
+  <b>可一旦混进梯度，后面每一步都会一视同仁地作用到它头上 ——&nbsp;包括除以 √v。</b></em></p>
+<p class="landing">于是出来一个反着的结果。<b>拿两个参数比一比就看出来了：</b></p>
+<table>
+<thead><tr><th>两个参数<b>都已经长到 10</b></th><th>√v（分母）</th><th>那份衰减</th><th>实际收缩</th></tr></thead>
+<tbody>
+<tr><td>常用特征，<b>梯度天天很大</b></td><td>大</td><td>被除小了</td>
+    <td><b>几乎没被拉回来</b></td></tr>
+<tr><td>冷门参数，<b>梯度常年很小</b></td><td>小</td><td>被放大了</td>
+    <td><b>被往死里拉</b></td></tr>
+</tbody></table>
+<p><em><b>它俩都长到 10，一样该被管住</b>，可实际受到的约束正好反过来。
+  ——&nbsp;我们要的是「<u>所有权重都被均匀地往回拉一点</u>」，
+  <b>不是「按梯度大小分配惩罚」</b>。这两件事被混在了一起。</em></p>
+<p class="landing"><b>AdamW 的修法就一句：衰减不走分母。</b>
+  <em>梯度那条路一个字不改；<b>落地那一步单独再扣一次</b> <code>η·λ·θ</code>，
+  跟分母彻底分开。<b>这就是 decoupled ——&nbsp;W 就是 weight decay 那个 W。</b></em></p></div>
+
+<div class="note warn"><p>❓ <b>Muon 把二阶矩整份扔了 ——&nbsp;
+  那「各参数尺度差太远」这个病，谁来治？</b></p>
+<p><em>这是上面那张表欠着的一问：<b>Adagrad 那一行刚说这是个要治的病，
+  Muon 那一行就把药扔了。</b></em></p>
+<p class="landing"><b>答案是：正交化本身就在治同一个病，<u>只是换了一层来治</u>。</b></p>
+<p><em>正交化把动量那块矩阵的<b>奇异值全部拉到一样大</b>。
+  奇异值就是「这块矩阵在各个方向上有多使劲」——&nbsp;
+  <b>全拉平，等于每个方向挪多少，跟那个方向原本梯度多大彻底脱钩。</b>
+  <u>尺度照样被抹掉了。</u></em></p>
+<table>
+<thead><tr><th></th><th>Adam 的 v</th><th>Muon 的正交化</th></tr></thead>
+<tbody>
+<tr><td><b>在哪一层抹</b></td><td><b>逐元素</b>，各除各的</td>
+    <td><b>整块矩阵</b>，奇异值归一</td></tr>
+<tr><td><b>抹掉的是</b></td><td>这个参数自己的梯度尺度</td>
+    <td>各奇异方向<u>之间</u>的尺度差</td></tr>
+<tr><td><b>轴与轴之间的耦合</b></td>
+    <td><b>够不着</b>（只沿坐标轴缩放，见 <a href="#s3-3b">3.3b</a>）</td>
+    <td><b>够得着</b> ——&nbsp;奇异方向本来就是跨轴的</td></tr>
+</tbody></table>
+<p><b>代价也在这儿。</b><em>Adam 那个分母还携带着一条信息 ——&nbsp;
+  <u>这个参数「最近」反常不反常</u>。v 一扔，这条就没了。
+  Muon 只剩动量：<b>方向平滑还在，逐元素的自适应没了。</b></em></p>
+<p class="landing">⚠️ <b>而且正交化只拉齐了<u>各方向之间</u>，它没说<u>整体</u>该迈多大。</b>
+  <em>——&nbsp;这正是下面 Moonlight 那篇要补「单独定整体更新幅度」的原因；
+  也是 Kimi K2 把 Muon 的 update RMS <b>校到 0.2</b>（跟 Adam 那个常数对齐）
+  之后，<u>Adam 那套超参就能整套搬过去</u>的原因。</em></p></div>
 
 <figure class="fbox fwide" id="fig-lineage"><svg viewBox="0 0 1400 1576" width="100%" role="img" aria-label="这一串优化器不是并列的四个选项，是一条因果链：每一个都在补上一个留下的洞，同时又留下新的洞。喂同一串恒定的梯度进去，一个健康的优化器应该给出平的有效学习率；不平的那就是它自己的毛病。AdaGrad 的分母是累加的平方和，只增不减，所以有效学习率单调掉到接近零，后期走不动；RMSProp 把累加换成滑动平均，分母会遗忘了，可它没有偏差校正，头一步被放大三十多倍；Adam 把动量和偏差校正都加上，恒定梯度下从第一步起就是平的。而 Adam 论文自己证明了 AdaGrad 是它的一个特例"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">从 AdaGrad 到 Adam　——　<tspan font-weight="700">这不是四个选项，是一条因果链</tspan></text>
@@ -8139,6 +8579,74 @@ body.figonly section h3{margin-top:34px}
   <em>那篇的 Limitations 自己写着实验规模偏小 ——&nbsp;
   <b>Transformer 只有 4 层、上下文 64</b>，另一组是 CIFAR-10 上的 WRN。
   <u>跟我们整讲谈的尺度差好几个数量级。</u></em></p>
+
+<!-- 2026-09-23 现场反馈：「warmup 到底干啥、凭什么能抬高峰值」没讲明白。
+     原来这里只有结论（把网络推到条件更好的区域），**没有说「条件」是什么**，
+     于是它读起来像同义反复。补的这一段把它接回 1.4b 的二阶导：
+     曲率决定最大可用步长，warmup 改的是曲面不是网络的忍耐力。 -->
+<p><b>那它凭什么就能把峰值抬高？</b>
+  <em>——&nbsp;这句得接回 <a href="#s1-4b">1.4b</a> 那个二阶导，
+  不然「条件更好的区域」只是一句同义反复。</em></p>
+
+<div class="note"><p>一步能迈多大，不是你定的，是曲率定的</p>
+<p><em>在一条抛物线上做梯度下降，步长只要超过
+  <b>「2 ÷ 曲率」</b>就发散 ——&nbsp;<b>不是走慢一点的问题，
+  是每一步都被放大，一步比一步远，直接翻出去。</b></em></p>
+<p class="landing">所以<b>「最大能用多大学习率」是当前这块曲面的曲率说了算的</b>，
+  <em>曲率越大，合法的步子越小。</em></p>
+<p><em>而那篇论文实测到的是：<b>训练一开始，预条件曲率就很高</b>
+  ——&nbsp;高到你想用的那个峰值<u>根本不合法</u>。
+  <b>而且这跟 batch 大小无关，大 batch 一样高</b>
+  ——&nbsp;这条正是他们用来反驳「样本太少估不准」的证据：
+  要是估计噪声的问题，加大 batch 就该好转。</em></p>
+<p class="landing">于是 warmup 做的事很具体：<b>先用一段小到安全的学习率，
+  让网络自己走到曲率更低的地方去。</b>
+  <em>等曲率降下来，那个峰值才变成合法的。</em></p>
+<p><b>关键是方向别搞反：不是网络学会了忍受大步子，是曲面本身变平缓了。</b>
+  <em>——&nbsp;这也解释了为什么<u>拉长 warmup 基本没收益</u>：
+  该走到的地方走到了就行，多磨几步曲率也不会再低多少。</em></p></div>
+
+<!-- 2026-09-23 现场追问，一次问到了三件事，而且三件都是**同一个误解的不同侧面**：
+     「开局困惑度 13 万选一，所以梯度大」「可梯度不是已经被 Adam 除过了吗」
+     「是不是一开始分母还没攒到值」。
+     ⛔ 三个问题都建立在「危险 ＝ 梯度大」这个前提上 —— 而那个前提本身是错的。
+     所以下面不是逐条答，是**先把那个前提拆掉**，三条自然就散了。 -->
+<h4>三个常见的误解 ——&nbsp;它们都建立在「危险＝梯度大」这个错前提上</h4>
+
+<div class="note warn"><p>❓ <b>「开局是 129,280 选一，那时候梯度一定很大吧？」</b></p>
+<p><em>——&nbsp;<b>loss 的值大，不等于梯度大。</b>
+  开局 loss 是 ln 129,280 ＝ <b>11.77</b>，确实是个大数；
+  可 <a href="#s1-2b">1.2b</a> 那张图上，logits 那一层的梯度是 <code>p − y</code>，
+  <b>每一项都夹在 −1 到 1 之间</b>，整条向量的长度撑死 √2。
+  <u>它跟词表是 129,280 还是 1,000，没关系。</u></em></p></div>
+
+<div class="note warn"><p>❓ <b>「梯度不是已经被 Adam 归一化过了吗？那还能大在哪？」</b></p>
+<p><em>——&nbsp;<b>这个问得对，而且它正好指着答案。</b>
+  Adam 的分子是动量、分母是梯度的均方根，量纲互相抵消，那个分式是 O(1)
+  ——&nbsp;<b>所以每一步迈多远，基本就等于学习率本身，跟这一步梯度多大几乎无关。</b></em></p>
+<p class="landing">所以危险<u>根本不来自「一开始梯度大」</u>。
+  <b>大的不是你迈的那一步，是你脚下那块地的弯度。</b></p>
+<p><em>同样迈 η 这么大一步：地形平缓时你往前挪一点、坡度也就变一点，很安稳；
+  <b>地形弯得急时，同一步会直接冲过底、冲到对面比原来还高的位置</b>
+  ——&nbsp;下一步被顶得更远，再下一步更远。这就是 2 ÷ 曲率那条线的现场版。</em></p>
+<p><span class="sub">这正是 <a href="#s1-4b">1.4b</a> 那条的落点：
+  <b>Adam 除掉的是「陡」，它除不掉「弯」</b> ——&nbsp;
+  它手上那个二阶<u>矩</u>是统计量，而弯度是二阶<u>导</u>，是几何量，它从来没算过。
+  <em>论文那个词「<b>预条件曲率</b>」的字面意思就是：<u>在 Adam 处理完之后再量的曲率</u>
+  ——&nbsp;所以「都处理过了为什么还高」的答案是：<b>量的就是处理之后那个数，它依然高。</b></em></span></p></div>
+
+<div class="note warn"><p>❓ <b>「是不是一开始分母还没攒到值？」</b></p>
+<p><em>——&nbsp;<b>这条 Adam 自己防了</b>：它有<b>偏差修正</b>，
+  一阶矩和二阶矩都要除以 <code>1 − β<sup>t</sup></code>，专门补头几步累积不足。
+  所以不是「分母为零」。</em></p>
+<p class="landing"><b>而「早期估不准所以要慢慢来」正是上面那篇否掉的那一个</b>
+  ——&nbsp;<em>他们的证据就是<u>大 batch 曲率一样高</u>：要真是估计噪声的问题，
+  加大 batch 就该好转。</em></p></div>
+
+<p><b>最后提醒一条，别把这个故事推太远：</b>
+  <em>这不是说「越往后曲率越低、学习率就能一路涨」。
+  <b>实际那条曲线升到峰值就不涨了，后面还要降下来</b>（下面两个决定讲的就是这个）。
+  <u>warmup 只负责把你送到峰值，不负责一直往上。</u></em></p>
 
 <!-- ⭐⭐⭐ 2026-09-18 R15：补上第三个解释。
      ⛔ 这一段的由来值得记：subagent 扒回来的转述是「warmup 治的不是更新量太小，
@@ -9909,9 +10417,25 @@ body.figonly section h3{margin-top:34px}
 <h3 id="s6-5">6.5　治法二 · 治结构：<u>让它天生不容易飞</u></h3>
 
 <h4>归一化放在哪儿 ——&nbsp;这件事顺带回答了 3.5 那个悬案</h4>
-<p><em>原始 Transformer 把 LayerNorm 放在<b>残差块之间</b>（Post-LN）。
-  后来大家改成放在<b>残差块里面</b>（Pre-LN）。</em>
-  这不是风格问题。</p>
+
+<!-- 2026-09-23 现场反馈：这一节原来一上来就是「Post-LN 放块之间、Pre-LN 放块里面」，
+     台下当场没接住。根因是**零件还没摆出来就先说差别** ——
+     「残差块之间」和「残差块里面」这两个词，要先有「主干 / 分支 / 第三个零件」
+     这张图才有指代。判据：讲位置之前，先把能放东西的位置都指出来。 -->
+<p><b>先把一层拆成三个零件</b>，不然下面那个差别看不出来。
+  <em>一层不是一条直线，是<b>两条路并在一起</b>：<b>主干</b>是 x 原样往前走、
+  什么都不做；<b>分支</b>是 x 进注意力或 MLP、算出一个修正量 F(x)。
+  层尾两条合流成 x ＋ F(x) ——&nbsp;这就是 <a href="#s1-6">1.6</a> 那条残差。</em></p>
+<p class="landing"><b>归一化是第三个零件，它总得插在这两条路的某个位置上。</b>
+  <em>而 Post-LN 与 Pre-LN 的<u>全部差别就是它插在哪儿</u> ——&nbsp;别的一个字都没改。</em></p>
+
+<div class="note"><p>两种放法，只差一个位置</p>
+<p><code>Post-LN　x<sub>t+1</sub> ＝ Norm( x<sub>t</sub> ＋ F(x<sub>t</sub>) )</code><br>
+  <em>——&nbsp;先合流，<b>再拿 Norm 去洗整条主干</b>。主干每过一层都被动一次手。</em></p>
+<p><code>Pre-LN 　x<sub>t+1</sub> ＝ x<sub>t</sub> ＋ F( Norm(x<sub>t</sub>) )</code><br>
+  <em>——&nbsp;Norm 被塞进<b>分支里面</b>了。<b>主干那条路从头到尾没人碰</b>，一路直通到顶。</em></p></div>
+
+<p><em>到这儿还看不出谁好谁坏 ——&nbsp;<b>但这绝不是风格问题</b>。下面才是。</em></p>
 
 <div class="note ok"><p>2020 年有一篇论文用理论证明了这件事，
   而它的结论直接接上了<a href="#s三">3.5</a>：</p>

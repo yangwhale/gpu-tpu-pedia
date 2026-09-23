@@ -240,19 +240,22 @@ printf '\n\033[1m▸ 产物\033[0m\n'
 #     而 SVG 源码里那六行一行不少、y 坐标全在带子里 —— 读源码查不出来。
 #   📌 topic03 那一家在 topic03_page.finish 里已经会当场中止；
 #     这里是**给其余各页兜底**（它们走别的脚手架）。
+# ⛔⛔ 2026-09-23：这里原来**把 topic03_page.lint_html_tags_in_svg 又抄了一遍**。
+#   于是同一个假阳性要修两处 —— 而我只修了库里那处，构建照样红，
+#   报错还换了一种措辞，看着像是「另一个问题」。
+#   ⭐ 判据：**兜底检查要复用那个函数，不要复刻它的正则。**
+#     复刻出来的第二份不会跟着第一份一起被修，它只会跟着一起被信任。
 python3 - "$W" <<'PY'
-import re, sys, glob, os
+import sys, glob, os
+sys.path.insert(0, ".")          # build-all.sh 的 cwd 就是 tools/
+from topic03_page import lint_html_tags_in_svg
 bad = 0
 for p in sorted(glob.glob(os.path.join(sys.argv[1], "*.html"))):
     s = open(p, encoding="utf-8").read()
-    for m in re.finditer(r"<svg\b.*?</svg>", s, re.S):
-        seg = re.sub(r"<foreignObject\b.*?</foreignObject>", "",
-                     m.group(0), flags=re.S)   # 里面的 HTML 合法
-        for t in re.finditer(r"<(u|b|i|em|strong|br|p|div|span|small|code)\b",
-                             seg, re.I):
-            bad += 1
-            print("    ⛔⛔ %s 的内联 SVG 里有 HTML 标签 <%s>"
-                  % (os.path.basename(p), t.group(1)))
+    for _fid, tag, _frag in lint_html_tags_in_svg(s):
+        bad += 1
+        print("    ⛔⛔ %s 的内联 SVG 里有 HTML 标签 <%s>"
+              % (os.path.basename(p), tag))
 if bad:
     sys.exit("内联 SVG 里不能有 HTML 标签 —— 它会把 SVG 就地截断。"
              '要下划线用 tspan text-decoration="underline"')
