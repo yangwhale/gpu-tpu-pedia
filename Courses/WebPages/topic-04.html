@@ -4902,12 +4902,57 @@ body.figonly section h3{margin-top:34px}
 
 <h4>那深层网络凭什么还能训得动 ——&nbsp;残差的全部秘密就一个加号</h4>
 
-<p><b>先把病说准。</b><em>一个参数的梯度 ＝ 61 个局部导数<u>连乘</u>。
-  连乘对「每一项平均是多少」极其敏感：</em></p>
-<ul>
-  <li><em>每层平均 <b>0.9</b> ——&nbsp;61 层乘下来是 <b>0.0016</b>，梯度到不了前面（消失）；</em></li>
-  <li><em>每层平均 <b>1.1</b> ——&nbsp;61 层乘下来是 <b>335</b>，一步就炸（爆炸）。</em></li>
-</ul>
+<!-- ⛔⛔ 2026-09-23 现场：「『一路乘下去会怎样 ——&#160;梯度消失，和梯度爆炸』
+     这个地方就光提出了问题，也没有解决问题。不得顺道说一下残差流的作用？」
+     ⭐ 查下来他是对的，病因很具体：**答案这一整段（三千多字符）里一张图都没有。**
+       而这门课默认开着「只留图」的折叠开关（投屏用）——&#160;
+       于是台下看到的是：一张图把问题摆出来，然后没了。
+     ⭐⭐ 判据：**「提出问题」和「解决问题」得在同一种载体上。**
+       一个画成图、一个写成字，在折叠模式下等于只讲了前半句。
+     ⚠️ 图补上之后，下面原来那两条 0.9 / 1.1 的列表就成了第二遍，压成一句。 -->
+<figure class="fbox fwide" id="fig-residual"><svg viewBox="0 0 1400 698" width="100%" role="img" aria-label="一个参数的梯度是六十一个局部导数连乘。每层平均零点九，六十一层乘下来是千分之一点六，梯度到不了前面；每层平均一点一，乘下来是三百三十五，一步就炸。两个数离一都只差一成，连乘照样塌得彻底。残差做的事只有一步：把每一层从 y 等于 F(x) 改成 y 等于 x 加 F(x)，于是每层的局部导数从「某个数」变成「一加某个数」。所有括号都取一的话，一的六十一次方还是一 —— 梯度总有一条不衰减的路，直达任何一层。换句话说，残差把「乘」换成了「加」：某一层学坏了只是少加一项，不会把整条路乘没"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">那深层网络凭什么还能训得动　——　<tspan font-weight="700">残差的全部秘密就一个加号</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上一格提出了问题（连乘不是指数塌就是指数涨）；<tspan font-weight="700">这一格是答案</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">没有残差：连乘</text>
+<rect x="145" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="166" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">有残差：连加</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">把一层的出口改一个字　——　<tspan font-weight="700">局部导数就从「某个数」变成「1 ＋ 某个数」</tspan></tspan></text>
+<text class="svgsm" x="727" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">只讲这一句；归一化放哪儿、初始化怎么缩，是 6.5 的事</text>
+<rect x="40" y="188" width="620" height="264" rx="10" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="350" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">❌ 没有残差</tspan></text>
+<text class="svgsm" x="350" y="262" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">y ＝ F(x)</tspan></text>
+<text class="svgsm" x="350" y="294" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每层的局部导数 ＝ <tspan font-weight="700">某个数</tspan></tspan></text>
+<text class="svgsm" x="80" y="328" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">每层 0.9，61 层连乘</text>
+<text class="svgsm" x="620" y="328" fill="#a50e0e" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0016　（消失）</tspan></text>
+<text class="svgsm" x="80" y="358" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">每层 1.1，61 层连乘</text>
+<text class="svgsm" x="620" y="358" fill="#a50e0e" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">335　（爆炸）</tspan></text>
+<text class="svgsm" x="350" y="428" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">离 1 只差一成，<tspan font-weight="700">照样塌得彻底</tspan></tspan></text>
+<rect x="740" y="188" width="620" height="264" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1050" y="224" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">有残差</tspan></text>
+<text class="svgsm" x="1050" y="262" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">y ＝ <tspan font-weight="700">x ＋</tspan> F(x)</tspan></text>
+<text class="svgsm" x="1050" y="294" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每层的局部导数 ＝ <tspan font-weight="700">1 ＋ 某个数</tspan></tspan></text>
+<text class="svgsm" x="780" y="328" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">所有括号都取 1，61 层连乘</text>
+<text class="svgsm" x="1320" y="328" fill="#0d652d" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1　（不塌不涨）</tspan></text>
+<text class="svgsm" x="780" y="358" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">初始化时 F 很小，所以本来就是</text>
+<text class="svgsm" x="1320" y="358" fill="#0d652d" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 ＋ 很小</tspan></text>
+<text class="svgsm" x="1050" y="428" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">梯度总有<tspan font-weight="700">一条不衰减的路</tspan>，直达任何一层</tspan></text>
+<rect x="0" y="552" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="552" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="552" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一句话记住这张图</tspan></text>
+<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">残差把「乘」换成了「加」。</tspan>　——　没有残差时，第 3 层收不收得到梯度，取决于第 4 到 61 层那一整串<tspan font-weight="700">乘积</tspan>；有残差之后，各层的贡献是<tspan font-weight="700">加</tspan>起来的，<tspan font-weight="700">某一层学坏了只是少加一项，</tspan></text>
+<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不会把整条路乘没</tspan>。</text>
+<text class="svgsm" x="20" y="658" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以「残差让模型能做深」不神秘：它把每一层的局部导数<tspan font-weight="700">从「某个数」钉到了 1 附近</tspan>　——　而 6.0 那张表里，爆炸和消失的根因正是<tspan font-weight="700">局部导数偏离 1</tspan>。</text>
+</svg><figcaption><b>上一张图提出了问题，这张是答案。</b><em>没有残差：每层局部导数是「某个数」，离 1 只差一成，61 层连乘要么 <b>0.0016</b>（消失）、要么 <b>335</b>（爆炸）。</em><span class="capmore"><br><em>有残差：<code>y ＝ x ＋ F(x)</code>，每层局部导数变成「<b>1 ＋ 某个数</b>」——&nbsp;<b>所有括号都取 1，1 的 61 次方还是 1</b>，梯度总有一条不衰减的路直达任何一层。</em><br><em>⭐ 一句话：<b>残差把「乘」换成了「加」</b> ——&nbsp;某一层学坏了只是少加一项，<b>不会把整条路乘没</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：He 等，arXiv <b><a href="https://arxiv.org/abs/1512.03385" target="_blank" rel="noopener">1512.03385</a></b>（ResNet）；更干净的恒等通路推导在同一组人的 arXiv <a href="https://arxiv.org/abs/1603.05027" target="_blank" rel="noopener">1603.05027</a>。⛔ 本格不展开那个式子 ——&#160;「1 的 61 次方还是 1」已经是它的全部内容。</p>
+<p>⚠️ 0.9 / 1.1 是<b>举例的量级</b>，不是某个模型的实测；层数 61 取自 DeepSeek-V3。两个连乘结果都是本脚本现算并 assert 住的。</p></details></figure>
+
+<p><b>先把病说准。</b><em>一个参数的梯度 ＝ 61 个局部导数<u>连乘</u>
+  ——&nbsp;而连乘对「每一项平均是多少」极其敏感（上图左半那两行）。</em></p>
 <p class="landing"><b>注意这两个数离 1 都只有<u>一成</u> ——&nbsp;
   比上面那张图用的 ±20% 还近一半，塌得照样彻底。</b>
   <em><u>连乘没有中间地带</u>：不是指数塌，就是指数涨。
