@@ -47,10 +47,23 @@ def _soft(z):
 
 P, EXP_RAW, _ = _soft(Z)
 LOSS = -math.log(P[GOLD])
-EXP = [math.exp(v) for v in Z]      # 不减最大值的原始指数（示意用，数小不会炸）
-ESUM = sum(EXP)                     # ⭐ 这是**指数**的总和，只属于第 ② 格
-ZSUM = sum(Z)                       # logits 自己的总和 ——&#160;它在数学上没有用处
-assert abs(ESUM - 14.83) < 0.01 and abs(ZSUM - 4.0) < 1e-9, (ESUM, ZSUM)
+# ⛔⛔ 2026-09-23 现场第三问：「为了不爆炸，softmax 取指数之前不是应该先减掉
+#   最大值吗？2.0 该变成 0、1.0 变成 −1。你这个写得不精确吧？」——&#160;对，
+#   ⛔ 这一格原来画的是**朴素版**（直接 e²＝7.4），而 Ⓑ② 又在说「实现里要先减最大值」
+#     ——&#160;**一张图里自己跟自己不一致**，而且不一致的那一半是「真实做法」那一半。
+#   ⭐ 改成真实做法之后，顺带把上一轮那个抱怨也解决了：
+#     减完最大值，分母 ＝ 1 ÷ 最高那一格的概率 ——&#160;**它终于是个有意义的数了**。
+#   ⭐⭐ 判据：**同一张图里「示意版」和「真实版」不能各占一格。**
+#     读者不会去分辨哪一格是简化的，他会认为两格在讲同一件事。
+ZMAX = max(Z)
+EXP = [math.exp(v - ZMAX) for v in Z]   # 真实做法：先减这一排的最大值
+ESUM = sum(EXP)                         # 减完之后的分母
+ZSUM = sum(Z)                           # logits 自己的总和 ——&#160;它在数学上没有用处
+# ⭐ 减完最大值之后这条恒等式成立：分母 ＝ 1 ÷ 最高那一格的概率。
+#   这里最高的那一格恰好就是正确答案，所以它同时也是这个位置的困惑度。
+assert abs(ESUM - 1.0 / max(P)) < 1e-9, (ESUM, max(P))
+assert abs(max(EXP) - 1.0) < 1e-12, "减完最大值之后，最高那一格必须正好是 1"
+assert abs(ESUM - 2.01) < 0.01 and abs(ZSUM - 4.0) < 1e-9, (ESUM, ZSUM)
 # ⛔⛔ 2026-09-23 现场抓到：第 ① 格底下原来也印着 ESUM（14.83）——&#160;
 #   那是**第 ② 格的数被搬到了第 ① 格底下**。logits 这一排加起来是 4.00。
 #   ⭐ 而正确的修法不是把它改成 4.00：**logits 的总和本来就没有意义** ——&#160;
@@ -102,7 +115,8 @@ def main():
 
     COLS = (
         ("① logits（原始分数）", Z, "可正可负，<tspan font-weight=\"700\">没有范围</tspan>", GY2),
-        ("② 取指数", EXP, "全变正数，<tspan font-weight=\"700\">差距被拉开</tspan>", OR),
+        ("② 减掉最大值，再取指数", EXP,
+         "全变正数，<tspan font-weight=\"700\">最高那格正好是 1</tspan>", OR),
         ("③ 除以总和 ＝ 概率", P, "加起来<tspan font-weight=\"700\">正好是 1</tspan>", GR),
     )
     for c, (title, vals, note, col) in enumerate(COLS):
@@ -115,10 +129,16 @@ def main():
             gold = (k == GOLD)
             f.box(bx, py + 190 - h, 34, h, "#fef7e0" if gold else "#f1f3f4",
                   OR if gold else GY2, 3, sw=1.4 if gold else 1.0)
-            f.t(bx + 17, py + 186 - h, ("%.2f" % v) if c != 1 else ("%.1f" % v),
+            f.t(bx + 17, py + 186 - h, "%.2f" % v,
                 OR if gold else GY2, gold, 11, "middle")
             f.t(bx + 17, py + 212, WORDS[k], INK if gold else GY, gold, 14, "middle")
         f.t(cx, py + 244, note, GY, size=12.5, anchor="middle")
+        if c == 1:
+            # ⭐ 现场把这一步的算式念出来了（「2.0 变成 0、1.0 变成 −1」）——
+            #   那就把它印在图上，否则「减掉最大值」只是个说法，跟不上手。
+            f.t(cx, py + 264,
+                "各减 %.2f：　0　／　−1　／　−1　／　−2　／　−2" % ZMAX,
+                GY2, size=11.5, anchor="middle")
         if c < 2:
             f.line(cx + 132, py + 152, cx + 194, py + 152, col, 2.4)
 
@@ -126,7 +146,8 @@ def main():
         "这一排的总和<tspan font-weight=\"700\">不用管</tspan>", GY2,
         size=12, anchor="middle")
     f.t(150, py + 302,
-        "整排同时加减一个数，概率一模一样", GY2, size=11.5, anchor="middle")
+        "整排同时加减一个数，概率一模一样　→　所以下一格敢减", GY2,
+        size=11.5, anchor="middle")
     # ⛔⛔ 2026-09-23 现场第二问：「14.83 这个数也没用 ——&#160;它不是 11.77 那种
     #   由词表决定的上限，你把大家的 logits 都抬高一点，它就变大。」——&#160;对。
     #   ⭐ 它**不是 shift 不变的**：整排 logits ＋c，这个和就乘 e^c，而概率一个不变。
@@ -139,7 +160,7 @@ def main():
     #   ⚠️ ③ 那个 1.00 不一样 ——&#160;它**是**有意义的：概率加起来必须等于 1，
     #     那是这一步做完的凭证。所以它保留「总和」这个名字。
     f.t(480, py + 282, "分母 ＝ %.2f" % ESUM, OR, True, 12.5, "middle")
-    f.t(480, py + 302, "下一步就是除以它，它不是指标",
+    f.t(480, py + 302, "＝ 1 ÷ 最高那格的概率　（这里也就是困惑度）",
         GY2, size=11.5, anchor="middle")
     f.t(810, py + 282, "总和 ＝ 1.00", GR, True, 12.5, "middle")
     f.t(810, py + 302, "这一条才是有意义的", GY2, size=11.5, anchor="middle")
@@ -200,10 +221,12 @@ def main():
         "而 fp32 的上限只有 <tspan font-weight=\"700\">%.1e</tspan>。" % FP32MAX,
         INK, size=14.5, anchor="middle")
     f.t(1030, py2 + 196,
-        "⭐ 所以实现里<tspan font-weight=\"700\">先减去这排里的最大值</tspan>再取指数",
+        "⭐ 所以实现里<tspan font-weight=\"700\">先减去这排里的最大值</tspan>再取指数"
+        "　——　<tspan font-weight=\"700\">Ⓐ 第 ② 格画的就是这一步</tspan>",
         RD, True, 14.5, "middle")
     f.t(1030, py2 + 226,
-        "——　靠的正是左边那条平移不变。<tspan font-weight=\"700\">数学等价，数值不炸。</tspan>",
+        "——　敢减，靠的正是左边那条平移不变。"
+        "<tspan font-weight=\"700\">数学等价，数值不炸。</tspan>",
         GY, size=13.5, anchor="middle")
     f._pan = None
 
