@@ -211,4 +211,4 @@ def main(files):
 #     所以这道工序只能扫「整批同一种坏写法」的页，不能当全局美化器用。
 if __name__ == "__main__":
     main(sys.argv[1:] or ["topic-02.html", "topic-02-L300.html",
-                          "topic-02x.html", "topic-08.html"])
+                          "topic-02x.html", "topic-05.html", "topic-08.html"])

@@ -119,6 +119,10 @@ echo "▸ 专题四 讲义"
 # ⛔ 必须排在教材之后 —— 讲义的 board cue 要跟成品 topic-04.html 对账。
 python3 topic04-build-lecture.py
 
+  # 专题五：2026-09-23 开工，§1 全景写完，其余是 🚧 大纲（见 topic05-build.py 文件头）。
+  step "专题五 教材"
+  python3 topic05-build.py
+
   step "专题八 教材"
   python3 topic08-build.py
 
@@ -292,7 +296,7 @@ python3 manim/check-loop.py --media ../WebPages/media \
 
 for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \
          topic-02x-L200.html \
-         topic-03.html topic-03-L300.html topic-08.html \
+         topic-03.html topic-03-L300.html topic-05.html topic-08.html \
          gpu-microscope.html tpu-microscope.html; do
   [ -f "$W/$f" ] || continue
   printf '  %-24s %9s  %2d 图\n' "$f" \

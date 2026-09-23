@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题五 · 并行策略</title>
+<!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
+     用自己的 emoji 字体现画：Mac 上是 Apple 那只红螃蟹，别处是各自的版本。
+     烤成 PNG 反而会把某一家的字形固定下来，在别的系统上看着别扭。
+     不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+<meta property="og:title" content="并行策略 · 用一种通信，换一份显存或一份算力">
+<meta property="og:description" content="今天所有的并行方式，按四种刀法排成一张图：切数据、切序列、切权重、拆阶段。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-05.html">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1a73e8">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6;
+  --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea;
+  --purple:#9334e6; --cyan:#12b5cb; --orange:#e8710a;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --tokmul:"";              /* batch≠1 时由 render() 写入，如 "128K × 64 条" */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{background:var(--bg);color:var(--ink);
+  font:400 16px/1.75 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:31px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+h3{font-size:20px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:22px 0 8px}
+p{margin-bottom:14px}
+.lead{color:var(--gray);font-size:17px;margin-bottom:28px}
+b,strong{font-weight:600;color:var(--ink)}
+a{color:var(--blue)}
+code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
+        border-radius:4px;color:var(--blue-d);white-space:nowrap}
+.num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── batch ≠ 1 的防误读标记 ───────────────
+   「token 总数」= 序列长度 × batch。batch=1 时两者相等，看不出区别；
+   一旦 batch>1，这个数就不再是序列长度了，最容易被当成「输入变长了」。
+   下面两条规则在 batch=1 时完全不匹配 —— 默认口径下页面一个字都不会多。 */
+body.batched [data-v="tokens"]::after{
+  content:" (" var(--tokmul) ")";
+  font:600 .78em/1.4 var(--mono);color:var(--orange);letter-spacing:0}
+.ctrl.hot output{color:var(--orange);background:var(--yellow-l);
+  box-shadow:0 0 0 1px var(--yellow) inset}
+.ctrl.hot label{color:var(--orange);font-weight:600}
+
+/* ── 旅程进度条 ─────────────────────── */
+.journey{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 18px;margin:0 0 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.jsteps{display:flex;align-items:center;gap:0;flex:1;min-width:280px}
+.jstep{flex:1;height:6px;background:var(--line);position:relative;border-radius:3px;margin-right:3px}
+.jstep.done{background:var(--blue)}
+.jstep.now{background:var(--red)}
+.jstep span{position:absolute;top:-19px;left:0;font:600 10px var(--mono);color:var(--gray2)}
+.jstep.now span{color:var(--red)}
+.jstep.done span{color:var(--blue)}
+.jmeter{display:flex;gap:18px;font-size:13px;white-space:nowrap}
+.jmeter b{font-family:var(--mono);color:var(--blue-d)}
+.jmeter i{font-style:normal;color:var(--gray);margin-right:5px}
+
+/* ── 猜一猜 ───────────────────────────── */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:var(--blue-l)}
+.guess button.right{border-color:var(--green);background:var(--green-l)}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.75}
+.guess .rev.on{display:block}
+.guess .rev>p>b{color:var(--red)}          /* 只有直属段落的粗体标红，表格和说明框不受影响 */
+.guess .qs{font-size:15px;line-height:1.7;color:var(--gray)}
+.guess .qs b{color:var(--ink)}
+.guess .qs em{font-style:normal;color:var(--gray2);font-size:14px}
+.guess .rvt{font-size:14px;margin:4px 0 14px}
+.guess .rvt b{color:var(--ink)}
+
+/* ── 章节插画带 ───────────────────────── */
+/* 插画是浅底扁平矢量（Google 四色），所以 :after 的洗白层是「白→透明」，
+   跟深色版正好相反。换图但不换这层，标题会变成白底白字。 */
+.band{position:relative;height:210px;border-radius:16px;overflow:hidden;margin:0 0 26px;
+      display:flex;align-items:flex-end;background:var(--bg2);border:1px solid var(--line2)}
+.band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.band:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,.93) 40%,
+                 rgba(255,255,255,.55) 72%,rgba(255,255,255,.10) 100%)}
+.band .cap{position:relative;z-index:2;padding:0 32px 24px;color:var(--ink);max-width:660px}
+.band .cap .bn{font:700 11px/1 var(--mono);letter-spacing:.14em;color:var(--blue);
+      text-transform:uppercase;display:block;margin-bottom:8px}
+.band .cap .bt{font-size:27px;font-weight:700;letter-spacing:-.02em;display:block;margin-bottom:6px}
+.band .cap .bs{font-size:14.5px;color:var(--gray);line-height:1.6}
+
+/* ── 步号标记 ─────────────────────────── */
+.stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
+            border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.stn.big .badge{background:var(--red)}
+.stn h2{margin:0}
+
+/* ── hero ─────────────────────────────── */
+/* 浅色 hero，与 index.html 同一套：blue-l → 白 的竖向底 + 低透明度插画 + 横向洗白层 */
+.hero{position:relative;padding:96px 0 64px;overflow:hidden;
+      background:linear-gradient(180deg,var(--blue-l) 0%,#fff 100%)}
+.hero:before{content:"";position:absolute;inset:0;opacity:.5;
+      background:url(img/hero-token-journey.webp) center/cover no-repeat}
+.hero:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(95deg,rgba(255,255,255,.94) 0%,rgba(255,255,255,.86) 38%,
+                 rgba(255,255,255,.46) 68%,rgba(255,255,255,.12) 100%)}
+.hero .wrap{position:relative;z-index:2}
+.hero h1,.hero .en,.hook{color:var(--ink)}
+.hero .crumb{color:var(--gray)}
+.hero .crumb a{color:var(--blue)}
+.lecbtn{display:inline-block;margin-left:14px;font-size:13px;padding:4px 12px;border-radius:14px;
+        background:#fff;border:1px solid var(--line);color:var(--blue);
+        text-decoration:none}
+.lecbtn:hover{background:var(--blue-l);border-color:var(--blue)}
+.hero .en{color:var(--gray)}
+.hook{border-left-color:var(--blue)}
+.hook em{color:var(--blue-d)}
+.hero p{color:var(--gray)}
+.hero p b{color:var(--ink)}
+.hero .chip{background:#fff;border-color:var(--line);color:var(--gray)}
+.hero .chip b{color:var(--blue-d)}
+.crumb{font-size:14px;color:var(--gray);margin-bottom:20px}
+.crumb a{text-decoration:none}
+.hero h1{font-size:50px;font-weight:700;letter-spacing:-.035em;line-height:1.12;margin-bottom:6px}
+.hero .en{font:italic 400 19px/1 var(--mono);color:var(--gray);letter-spacing:.02em;margin-bottom:26px}
+.hook{font-size:21px;line-height:1.6;font-weight:500;border-left:4px solid var(--blue);
+      padding-left:20px;max-width:800px;margin-bottom:22px}
+.hook em{font-style:normal;color:var(--blue-d);font-weight:600}
+/* 署名行。hero 里单独给色 —— .hero .author（0,2,0）压得过 .hero p（0,1,1） */
+.author{font-size:14.5px;margin-top:20px;line-height:1.7}
+.author b{font-weight:600}
+.author .sep{color:var(--line);margin:0 10px}
+.hero .author{color:var(--gray2)}
+.hero .author b{color:var(--ink)}
+.hero .author .sep{color:var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{font-size:13px;background:#fff;border:1px solid var(--line);border-radius:20px;
+      padding:5px 14px;color:var(--gray)}
+.chip b{color:var(--blue-d)}
+
+/* ── sticky 控制台 ─────────────────────── */
+.console{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);
+         backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+         box-shadow:0 1px 8px rgba(0,0,0,.05)}
+/* 单行布局：它是 sticky 的，每多一行就永久吃掉一条屏幕。
+   所有控件都保留，靠「滑块可压缩、其余固定」把宽度挤出来。 */
+.console .inner{max-width:1080px;margin:0 auto;padding:7px 24px;
+                display:flex;align-items:center;gap:13px;flex-wrap:nowrap}
+.console .tag{font:700 10px/1 var(--mono);letter-spacing:.08em;color:var(--blue);
+              text-transform:uppercase;flex:0 0 auto}
+.ctrl{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--gray);
+      flex:0 1 auto;min-width:0}
+.ctrl label{white-space:nowrap;font-weight:500}
+/* 唯一允许被压缩的东西 —— 窗口变窄时先短滑轨，不动文字和按钮 */
+.ctrl input[type=range]{flex:1 1 96px;min-width:50px;max-width:112px;accent-color:var(--blue)}
+.ctrl output{font:600 12.5px/1 var(--mono);color:var(--blue-d);min-width:44px;
+             background:var(--blue-l);padding:4px 6px;border-radius:5px;text-align:center;
+             flex:0 0 auto}
+.ctrl select{font:500 12.5px/1 inherit;padding:4px 6px;border:1px solid var(--line);
+             border-radius:5px;background:#fff;color:var(--ink);flex:0 0 auto}
+.presets{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;
+         color:var(--gray);flex:0 0 auto}
+.presets span{margin-right:1px}
+.presets button{font:500 11.5px/1 inherit;color:var(--gray);background:#fff;
+                border:1px solid var(--line);border-radius:13px;padding:5px 10px;
+                cursor:pointer;white-space:nowrap}
+.presets button:hover{border-color:var(--blue);color:var(--blue)}
+.presets button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.live{background:var(--yellow-l);box-shadow:0 0 0 3px var(--yellow-l);
+      border-radius:3px;transition:background .45s,box-shadow .45s}
+
+/* ── 卡片 / 表格 ───────────────────────── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;background:#fff}
+.card.tint{background:var(--bg2)}
+.card h4{font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.08em;
+         text-transform:uppercase;margin:0 0 8px}
+.stat{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:4px}
+.stat.blue{color:var(--blue-d)}.stat.red{color:var(--red)}
+.stat.green{color:var(--green)}.stat.orange{color:var(--orange)}
+.sub{font-size:.92em;color:var(--gray)}
+.card .sub{font-size:13.5px;color:var(--gray);line-height:1.55}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.06em;
+   text-transform:uppercase;padding:10px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.6}
+td.n{font-family:var(--mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tr.sum td{border-top:2px solid var(--line);font-weight:700;background:var(--blue-l)}
+tr.sum td.n{color:var(--blue-d)}
+.tbl-wrap{overflow-x:auto}
+.tbl-note{font-size:13px;color:var(--gray);margin:8px 2px 0;line-height:1.7}
+
+/* ── 提示块 ───────────────────────────── */
+.note{border-radius:var(--radius);padding:16px 20px;font-size:15px;line-height:1.7;margin:20px 0}
+/* ⛔⛔ 2026-09-08 全书去彩底：提示块**不填背景**，白底 ＋ 细灰框 ＋ 左侧 4px 彩条。
+   原话：「不要背景填充，好丑」「现代化的文档风格是不是不用这个背景填充？
+   就是外圈有颜色，加上字有颜色，我觉得就挺好」。
+   ⭐ 这是全书唯一一份 note 样式源，专题二/三/八都从这里继承 ——&nbsp;
+     ⛔ 不要在某一课里再写一份局部覆盖，那样两边迟早漂开且不报错。
+   ⚠️ 还有第五种 `.note.q`（提问框），它的定义在 topic02-port-microscope.py
+     注入的那段 CSS 里，不在这个文件 —— 已一并去底。 */
+.note{background:#fff;border:1px solid var(--line);border-left-width:4px}
+.note.info{border-left-color:var(--blue)}
+.note.warn{border-left-color:var(--yellow)}
+.note.danger{border-left-color:var(--red)}
+.note.ok{border-left-color:var(--green)}
+.note .t{display:block;font-weight:700;margin-bottom:5px}
+/* 两级强调块：.punch 实心蓝（最强），.punch.soft 浅蓝底（次一级）。
+   原来次一级是近黑底 —— 跟 index.html 的浅色基调不搭，已换成同色系的浅底。 */
+.punch{font-size:20px;font-weight:600;line-height:1.6;text-align:center;padding:26px 30px;
+       background:var(--blue);color:#fff;border-radius:14px;margin:28px 0}
+.punch.soft{background:var(--blue-l);color:var(--ink);border:1px solid #d2e3fc}
+.punch small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
+.punch.soft small{opacity:1;color:var(--gray)}
+
+/* ── 默认收起的详情块 ─────────────────── */
+details.more{border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2);
+             margin:18px 0;overflow:hidden}
+details.more>summary{list-style:none;cursor:pointer;padding:11px 18px;font-size:14.5px;
+                     font-weight:600;color:var(--blue-d);user-select:none;
+                     display:flex;align-items:baseline;gap:9px;transition:background .15s}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";display:inline-block;font-size:11px;color:var(--gray2);
+                             transition:transform .18s;flex:none}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary:hover{background:var(--line2)}
+details.more[open]>summary{border-bottom:1px solid var(--line2)}
+details.more>summary .why{font-weight:400;color:var(--gray);font-size:13px}
+details.more .body{padding:2px 20px 14px}
+details.more .body>:first-child{margin-top:14px}
+details.more .body>:last-child{margin-bottom:0}
+details.more .body .note{margin:14px 0}
+
+/* ── 图 ───────────────────────────────── */
+figure{margin:26px 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:15px;color:#3c4043;margin-top:11px;line-height:1.65;text-align:left;max-width:none;margin-left:0;margin-right:0}
+.fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
+/* ⚠️ fill 用 :not([fill]) 兜底：SVG 的 fill= 呈现属性优先级低于 class 选择器，
+   直接写 .svgsm{fill:...} 会把元素上显式写的颜色全部盖掉（本文件曾有 398 处被静默盖成灰色）。
+   拆成「没写 fill 才给默认色」，写了 fill= 的就让它生效 —— 也自动覆盖 JS 后生成的节点。 */
+.svgtxt{font:500 13px var(--mono)}   .svgtxt:not([fill]){fill:var(--ink)}
+.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif}   .svglbl:not([fill]){fill:var(--gray)}
+.svgnum{font:700 14px var(--mono)}   .svgnum:not([fill]){fill:var(--ink)}
+.svgsm{font:500 10.5px var(--mono)}   .svgsm:not([fill]){fill:var(--gray2)}
+
+/* ── 公式 ─────────────────────────────── */
+.eq{font-family:var(--mono);font-size:14.5px;background:var(--bg2);border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0;overflow-x:auto;line-height:1.9;
+    white-space:pre-wrap;tab-size:2}
+.eq .c{color:var(--gray)}
+.eq .r{color:var(--blue-d);font-weight:700}
+
+/* ── 阅读进度 + 回顶 ─────────────────── */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:transparent;
+          pointer-events:none}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#1a73e8,#9334e6);
+            transition:width .1s linear}
+.totop{position:fixed;right:22px;bottom:22px;width:44px;height:44px;border-radius:50%;
+       background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:19px;z-index:55;
+       opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 16px rgba(0,0,0,.24)}
+.totop.on{opacity:.88;pointer-events:auto}
+.totop:hover{opacity:1}
+
+/* ── 术语 tooltip ─────────────────────── */
+.gl{border-bottom:1px dashed var(--blue);cursor:help;position:relative;
+    text-decoration:none;color:inherit}
+/* ⚠️ 气泡默认必须 display:none，不能只靠 opacity:0。
+   它是 290px 宽的绝对定位盒子，opacity:0 时照样占布局 —— 靠右的词会把整页
+   scrollWidth 顶出两三百像素，在 940 / 360 这类窗口下出现横向滚动条。
+   实测：关掉这两个伪元素，940px 下 scrollWidth 从 1211 直接回到 940。
+   代价是没有淡入动画，换来的是彻底不参与布局。 */
+/* ⚠️ 气泡必须 position:fixed，不能用 absolute。
+   absolute 时它会被任何一个「overflow 不是 visible」的祖先裁掉 ——
+   本页 10 个术语里有 6 个躺在 .tbl-wrap（overflow-x:auto）或 .more（hidden）里面。
+   注意 overflow-x:auto 会把 overflow-y 从 visible 提升成 auto，
+   所以横向滚动的表格同样会**纵向**裁切，气泡顶上那一截就这么没的。
+   fixed 之后坐标由 JS 在 mouseenter / focus 时写进 --tx/--ty，见下方 glossary()。 */
+.gl:after{content:attr(data-t);display:none;position:fixed;
+   left:var(--tx,-9999px);top:var(--ty,-9999px);
+   background:var(--ink);color:#fff;
+   font:400 13.5px/1.6 "Noto Sans CJK SC",sans-serif;padding:11px 15px;border-radius:9px;
+   width:290px;pointer-events:none;
+   box-shadow:0 6px 22px rgba(0,0,0,.22);z-index:80;text-align:left;white-space:normal}
+.gl:before{content:"";display:none;position:fixed;
+   left:var(--ax,-9999px);top:var(--ay,-9999px);
+   transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink);
+   z-index:81;pointer-events:none}
+/* 上方放不下时整个翻到词的下方，箭头也要跟着掉个头 */
+.gl.below:before{border-top-color:transparent;border-bottom-color:var(--ink)}
+.gl:hover:after,.gl:focus:after{display:block}
+.gl:hover:before,.gl:focus:before{display:block}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ── 打印 ─────────────────────────────── */
+@media print{
+  .console,.progress,.totop,.presets{display:none !important}
+  .hero:before{opacity:.28}
+  section{padding:22px 0;break-inside:avoid}
+  .band{height:150px;break-inside:avoid}
+  figure,.card,.note,.topic,.punch{break-inside:avoid}
+  details.more{border-color:#ccc;background:#fff}
+  details.more>summary{color:#000}
+  a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
+  body{font-size:12px}
+  .punch{background:#eee !important;color:#000 !important}
+  .punch.soft{background:#f1f3f4 !important;color:#000 !important}
+}
+
+@media(max-width:860px){.gl:after{width:220px;font-size:12.5px}}
+
+/* ── 目录 ─────────────────────────────── */
+.toc{background:var(--bg2);border-radius:var(--radius);padding:22px 26px;margin:24px 0}
+.toc ol{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);
+        gap:2px 28px}
+.toc li{padding:6px 0;font-size:15px;display:flex;gap:10px}
+.toc li i{font:700 11px/1.6 var(--mono);color:#fff;background:var(--blue);border-radius:10px;
+          padding:2px 7px;flex:0 0 auto;font-style:normal;letter-spacing:.04em}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--blue)}
+
+footer{padding:44px 0 60px;color:var(--gray);font-size:14px;line-height:1.8;
+       border-top:1px solid var(--line)}
+footer a{text-decoration:none}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ⭐⭐ 2026-09-04 投影版式（现场反馈：「要投到屏幕上去，以画图为主。
+        文字不要搞那么小的字，也不要搞那么密集的信息。」）
+   ⛔ 这里**只动字号与留白，不动版心宽度** —— 版心是按图的宽度定的，
+      改宽了 38 张图全要重画。
+   把正文 16 → 17.5、note 15 → 16.5、行距一起放开；
+   段间距和框间距加大，让每一屏的信息块数量降下来。
+   ⚠️ 窄屏那条 12px 的规则保持不动（手机上不是投影场景）。
+   ══════════════════════════════════════════════════════════════════ */
+body{font-size:17.5px;line-height:1.85}
+p{margin-bottom:18px}
+.note{font-size:16.5px;line-height:1.8;padding:20px 24px;margin:26px 0}
+.note .t{margin-bottom:8px;font-size:1.02em}
+.sub{font-size:.9em;line-height:1.7}
+li{padding:8px 0}
+h3{font-size:23px;margin:44px 0 16px}
+figcaption{line-height:1.8}
+details.aside > summary,details > summary{font-size:16px;padding:10px 0}
+/* 图和正文之间多留一口气 —— 投影时这一条比字号还管用。
+   ⛔⛔ 只准写 margin-top／margin-bottom，**不许写简写 `margin:30px 0`**。
+   2026-09-04 这里写过一次简写，后果是：简写把 margin-left 也设成了 0，
+   而 `figure.fbox`（元素＋类，特异度 0,1,1）压过下面 .fwide（0,1,0）——
+   于是所有宽图的 `margin-left:50%` 失效，只剩 translateX(-50%) 生效，
+   **整张图往左平移 720px，在 1900px 宽的窗口里左边缘跑到 x = −286**。
+   ⭐ 阴险在于：溢出探针查的是 scrollWidth > clientWidth，
+   而「跑到视口左边外面」根本不产生溢出，也不产生滚动条 —— 查不出来，
+   只有人眼看到「图被裁掉一块」。判据已加进 topic02-lint-readability.py。 */
+/* ⭐ 2026-09-04 节尾那一句。第二轮全局审的判据：**一节的最后一句话，
+   必须是这一节要留下的那句** —— 而当时有三节的结尾分别是一句版面交代、
+   一条图注、一段版本说明。补了落点之后给它一点视觉重量，
+   让读者合上一节时知道「这句是要带走的」。⛔ 不要做成大色块，
+   全篇提示框已经够多了；一条左边线 + 稍大的字就够。 */
+/* ⭐ 2026-09-04 引原文用。**逐字引用必须看得出是引用** ——&nbsp;
+   这门课到处在要求「每个数都能回查」，自己引论文时更不能把原文和转述混在一起。
+   等宽 ＋ 灰底 ＋ 左边线，一眼就知道这一段不是作者写的。 */
+b.fno{display:inline-block;font:600 11px/1.5 var(--sans);color:#5f6368;
+  background:var(--bg2);border:1px solid #dadce0;border-radius:4px;
+  padding:1px 7px;vertical-align:1px;letter-spacing:.02em}
+blockquote{margin:14px 0;padding:12px 18px;background:var(--bg2);
+  border-left:3px solid var(--gray);border-radius:0 8px 8px 0;
+  font:400 15px/1.75 var(--sans);color:var(--ink)}
+blockquote b{font-weight:700}
+
+p.landing{border-left:3px solid var(--blue);padding:2px 0 2px 16px;
+  margin:26px 0 10px;font-size:1.03em;color:var(--ink)}
+
+figure.fbox{margin-top:30px;margin-bottom:30px}
+/* ⭐ 2026-09-04 窄图也放大一档：§0–§2 那批是按 1000 px 画的，
+   塞进 1032 px 的版心等于原生比例 1.0 —— 图里 10.5 px 的字投影上还是 10.5 px。
+   突破到 1240 就等比放大 1.24 倍，跟宽图那条（1400 → 1760，1.26 倍）配成一对。
+   ⚠️ 版心本身**不许动**（38 张图的排版都吊在 1080 上），动的只有 figure。
+   ⚠️ 同时挂 fbox＋fwide 的元素由后面 figure.fwide 覆盖（同特异度、后写赢）。 */
+figure.fbox{width:min(1240px,calc(100vw - 32px));max-width:none;
+  margin-left:50%;transform:translateX(-50%)}
+figure.fbox > figcaption{max-width:1080px;margin-left:0}
+
+/* ⛔ 2026-09-04：上面那条 code 的 white-space:nowrap 是给**行内**代码的，
+   但它会一路继承进 <pre> —— nowrap 把换行折成空格，于是多行代码块
+   全挤成一行，而且不报错、只是难看。专题二 3.4 那个矩阵例子就这么废过一次。
+   ⭐ 所以块级代码必须单独把它扳回来，顺便去掉行内那层底色和内边距。
+   （这条写在 L300 的 CSS 里，因为 L200／专题三／专题八都从这儿抄 head。） */
+pre{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;overflow-x:auto;margin:14px 0;
+    font:500 13px/1.65 var(--mono);color:var(--ink)}
+pre code,pre .k{white-space:pre;background:none;padding:0;border-radius:0;
+                color:inherit;font-size:inherit;font-weight:inherit}
+
+/* 超窄屏：code 默认 nowrap，长的行内代码会把页面撑出横向滚动条 */
+@media(max-width:420px){
+  code,.k{white-space:normal;word-break:break-word}
+}
+
+/* 中等窗口：还想保住一行，就先把「场景」两个字和按钮内边距让出来 */
+@media(max-width:1020px){
+  .console .inner{gap:10px}
+  .presets span{display:none}
+  .presets button{padding:5px 8px;font-size:11px}
+  .ctrl label{font-size:12px}
+}
+
+@media(max-width:860px){
+  .hero h1{font-size:34px}.hook{font-size:18px}
+  .console .inner{flex-wrap:wrap}       /* 小屏放弃单行，否则会横向溢出 */
+  .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
+  .toc ol{grid-auto-flow:row;grid-template-rows:none}
+  .console .inner{gap:10px;padding:9px 16px}
+  .ctrl input[type=range]{width:84px}
+  .presets{margin-left:0;flex-wrap:wrap;gap:5px}
+  .presets span{display:none}
+  .presets button{padding:5px 10px;font-size:11.5px}
+  .console .adv{display:none}            /* 小屏只留序列长度滑块 + 场景预设 */
+  .console .tag{font-size:10px}
+  .ctrl label{font-size:12px}
+  .jmeter{flex-wrap:wrap;gap:6px 14px;font-size:12px;width:100%}
+  .journey{padding:12px 14px;gap:12px}
+  h2{font-size:25px}.punch{font-size:17px;padding:20px 22px}
+  .guess button{padding:11px 16px;font-size:14px}
+  .band{height:160px}.band .cap{padding:0 20px 18px}.band .cap .bt{font-size:21px}
+  .hero:before{opacity:.4}
+  .figpair{grid-template-columns:1fr !important}
+  .eq{font-size:12.5px;padding:12px 14px}
+}
+/* ── 支线小节（整个 h3 折起来）─────────────────────────────
+   跟 details.aside 的区别：aside 装一段旁白，branch 装**一整个小节**
+   （标题 ＋ 正文 ＋ 图）。判据是故事线：说不出「这段在旅程的哪一站」就折。
+
+   ⚠️ 展开后的内容区**不能有水平 padding、不能有边框背景**。里面的图是
+   .fwide（margin-left:50% ＋ translateX(-50%)，突破 1080 版心到 1440），
+   它按父容器算中心 —— 一旦 .body 有 padding，图就整体偏移；有边框的话
+   图还会从框里溢出去，很怪。所以只有 summary 那条灰条带样式。
+
+   ⚠️ 这几条也必须留在下面 CSS_MARK 之前，理由同上面故事线那段。 */
+details.branch{margin:26px 0}
+details.branch > summary{cursor:pointer;list-style:none;user-select:none;
+  padding:13px 18px;background:var(--bg2);border:1px solid var(--line);
+  border-left:3px solid var(--gray2);border-radius:0 10px 10px 0;
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-size:16px;font-weight:600;color:var(--ink)}
+details.branch > summary::-webkit-details-marker{display:none}
+details.branch > summary::before{content:"▸";color:var(--gray2);font-weight:400}
+details.branch[open] > summary::before{content:"▾"}
+details.branch > summary:hover{border-left-color:var(--blue)}
+details.branch .tag{font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;
+  background:var(--gray2);border-radius:10px;padding:2px 9px;white-space:nowrap}
+details.branch summary em{font-style:normal;font-weight:400;font-size:13.5px;
+  color:var(--gray)}
+details.branch > .body{padding:20px 0 4px}
+/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
+/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。
+
+   ⭐ 2026-09-04 上限 1440 → 1760。1440 只是「不缩小」，图里 10.5 px 的字
+   投到屏幕上还是 10.5 px，后排看不清。放到 1760，整张图等比放大 1.26 倍，
+   字跟着到 13 px 上下。**一个坐标都不用改、不可能撞车** ——
+   比逐张调字号安全得多（SVG 的 <text> 不换行，调字号会压到隔壁）。
+   窄屏由 calc(100vw - 32px) 兜底，行为不变。
+
+   ⛔⛔ 特异度写成 `figure.fwide`（0,1,1），不要写 `.fwide`（0,1,0）。
+   2026-09-04 页面主 CSS 里有一条 `figure.fbox{margin:30px 0}`（0,1,1），
+   简写把 margin-left 一起设成 0，**压过这里的 margin-left:50%** ——
+   于是只剩 translateX(-50%) 生效，整张宽图往左平移 720 px，
+   在 1900 px 宽的窗口里左边缘落到 x = −286，左边一截被裁掉。
+   ⭐ 而「往左跑」既不产生滚动条、也不让 scrollWidth 变大，
+   原来那个查横向溢出的探针对它恒为 0 —— 判据已加进 topic02-lint-layout.py。 */
+figure.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1760px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+.fwide svg{display:block}
+/* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
+   figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
+   看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
+   fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
+   **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
+.fwide figcaption{max-width:1080px;margin-left:0}
+/* ⛔⛔ 2026-09-08：note.q 是第五种提示框，跟 info/warn/danger/ok 一样**去彩底**。
+   上一轮按名字挨个改那四种，**漏了它** —— 它不在那四个名字里，
+   而且它的定义还不在 topic-02-L300.html 里，是**这里注入进去的**。
+   ⭐ 两条判据：
+     ① 改一族样式要按「渲染后还有谁带底色」验收，不能按「我记得有几种」；
+     ② 先确认那个文件是不是生成物 —— 直接改 L300 会被下一次 build 原样盖掉，
+        而且**盖掉不报错**，只是下次渲染又变回来。 */
+.note.q{background:#fff;border:1px solid var(--line);
+        border-left:4px solid var(--purple)}
+/* ---- 开场热身选择题（.guess）----
+   样式从专题一原样搬（topic-01.html），两课同一个观感 ——&nbsp;
+   学员一眼认得出「又是那个先猜一猜」。改这里要顺手看一眼那边有没有跟着变。
+   ⚠️ 只有 L200 用到；L300 里这几条是死规则，留着无害，别为了「干净」删掉 ——
+      两版共用同一份 CSS，删了下次 L300 若要加就得再抄一遍。 */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px;line-height:1.7}
+.guess .q .qs{font-size:15px}
+.guess .oplab{font-size:15px;color:var(--ink);font-weight:600;margin:14px 0 8px}
+.guess .oplab:first-of-type{margin-top:0}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:#e8f0fe}
+.guess button.right{border-color:var(--green);background:#e6f4ea}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.8}
+.guess .rev .qs{font-size:15px;color:var(--gray)}
+.guess .rev.on{display:block}
+/* 「↺ 重来」按钮：由 JS 生成后塞进答案区顶部。放在答案区里面是有意的 ——
+   答案区没展开时它跟着一起隐藏，天然实现「答过了才出现」，不需要额外的状态类。 */
+.guess .rst{float:right;margin:-2px 0 8px 14px}
+.guess .rst button{font:600 13px/1 inherit;padding:8px 15px;border:1.5px solid var(--line);
+  background:#fff;border-radius:8px;cursor:pointer;color:var(--gray);
+  transition:border-color .15s,color .15s}
+.guess .rst button:hover{border-color:var(--gray);color:var(--ink)}
+/* ---- 收尾节的 take-away 大字块 ----
+   ⛔ 2026-09-05 读到 §9：「那么多字，抓不住重点，字还那么小。
+      是不是给他少整几句 take-away highlight 就行了？」
+   ⭐ 病根是**收尾节用了正文的字号和密度**。正文 14 px 靠信息量取胜，
+      收尾节靠的是「就这三句，记住」——&nbsp;两者需要相反的排版。
+      所以这里不是把字调大一点，是**换一种块**：标题 19 px、留白翻倍、
+      每条一个序号圆点，一屏之内最多三条。
+   ⚠️ 别在这个块里塞第四条。它一旦超过三条就退化成又一段正文。
+   ⛔ 更硬的一条（2026-09-05 二次收时立的）：**只写图上没有的那一样。**
+      收尾节最容易「想强调，于是重复」——&nbsp;§9 为此返工过三次。 */
+/* ---- 引导思考块 ----
+   ⭐ 2026-09-05 现场反馈：「详情写到讲义里，引导部分就放到教材的引导思考部分。」
+   ⭐ 它跟 .note 的区别不是颜色，是**语法**：note 是陈述句，think 是**疑问句**，
+      而且**问完要留白**，让读者先自己答一遍再往下读。
+   ⛔ 里面只许放问题和「先想一下」，**不许把答案也塞进来** ——&nbsp;
+      塞了它就退化成又一个 note，而且是更花哨的那种。 */
+.think{margin:22px 0;padding:20px 24px 20px 26px;border-radius:12px;
+  background:#f3f6fb;border-left:5px solid var(--purple)}
+.think .qk{display:block;font-size:12.5px;font-weight:700;letter-spacing:.06em;
+  color:var(--purple);margin-bottom:8px}
+.think .qq{display:block;font-size:18px;line-height:1.6;color:var(--ink);font-weight:700}
+.think .qh{display:block;margin-top:9px;font-size:14px;color:var(--gray);font-style:italic}
+.tkaway{margin:26px 0;display:grid;gap:14px}
+.tkaway .tk{display:grid;grid-template-columns:30px 1fr;gap:16px;align-items:start;
+  padding:20px 24px;border-radius:12px;background:var(--bg2);
+  border:1px solid var(--line);border-left:5px solid var(--blue)}
+.tkaway .tk.solo{grid-template-columns:1fr}
+.tkaway .tk .n{width:28px;height:28px;border-radius:50%;background:var(--blue);
+  color:#fff;font-weight:700;font-size:15px;line-height:28px;text-align:center}
+.tkaway .tk b{display:block;font-size:19px;line-height:1.5;color:var(--ink);
+  font-weight:700;margin-bottom:7px}
+.tkaway .tk .d{display:block;font-size:15px;line-height:1.75;color:var(--gray)}
+.tkaway .tk .d b{display:inline;font-size:inherit;color:var(--ink);margin:0}
+@media(max-width:700px){.tkaway .tk{grid-template-columns:1fr}}
+/* ---- 旁白折叠块 ----
+   有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
+   但作为方法论又值得留着。折起来：想看的人点开，讲课时直接跳过。
+   注意 open 属性一个都不要加，默认全收。 */
+details.aside{margin:18px 0;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--bg2);font-size:14px;color:var(--gray)}
+details.aside > summary{cursor:pointer;padding:11px 16px;list-style:none;
+  font-size:13.5px;color:var(--gray);user-select:none}
+details.aside > summary::-webkit-details-marker{display:none}
+details.aside > summary::before{content:"▸ ";color:var(--gray)}
+details.aside[open] > summary::before{content:"▾ "}
+details.aside > summary:hover{color:var(--ink)}
+details.aside[open] > summary{border-bottom:1px solid var(--line)}
+details.aside .body{padding:14px 16px 16px;line-height:1.75}
+details.aside b{color:var(--ink);font-weight:600}
+.msfrom{color:var(--gray);font-size:12.5px}
+.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
+.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
+  color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
+.mscard > b{display:block;font-size:16px;margin-bottom:6px}
+.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+
+/* ══ 「课前勿点」那个折叠块（专题二 L200 开篇的两道热身题）══
+   ⭐ 跟普通的 details.more 分开配色：普通折叠是「想深挖再点」，
+   这个是**明确劝阻**。用红而不是蓝，让「别点」这层意思在扫视时就成立 ——&nbsp;
+   ⛔ 只靠 summary 里的文字挡不住手快的人。 */
+/* ⭐ 2026-09-12：揭晓规则改成「全对才开」，全选但没全对时用它报分。
+   判据：新造的类名落地前先确认它真有样式（09-09 栽过一次）。 */
+.guess .hint{display:none;margin-top:14px;padding:11px 16px;border-radius:10px;
+  background:#fce8e6;border:1px solid #f3c0bb;color:#a50e0e;font-weight:700;font-size:15px}
+.guess .hint.on{display:block}
+details.more.preclass{border-color:#f3c0bb;background:#fef7f6}
+details.more.preclass[open]{background:#fff}
+details.more.preclass>summary{color:#a50e0e}
+details.more.preclass>summary:hover{background:#fce8e6}
+details.more.preclass>summary::before{color:#d93025}
+details.more.preclass[open]>summary{border-bottom-color:#f3c0bb}
+details.more.preclass>summary .why{color:#b06000}
+
+/* ══ 外传两页的节号 chip ══
+   ⛔ `.secno` 这个类是我在建外传时随手写的，**从来没有对应的 CSS** ——&nbsp;
+   于是节号跟标题挤成一团：「开场这一讲要回答的两件事」「一同一把尺子」。
+   页面照常构建、版面探针也不报（它查的是溢出和撞车，不查「读起来断不断句」）。
+   ⭐ 判据：**自己新造的类名，落地前要去确认它真有样式** ——&nbsp;
+   没有样式的 class 在 HTML 里是完全合法的，它只是安静地什么都不做。
+   ⚠️ 主线 L200/L300 的 h2 不带节号（纯文本标题），所以这条只影响外传两页。 */
+h2 .secno{display:inline-block;min-width:2.1em;margin-right:.52em;
+  padding:.1em .52em;border-radius:7px;background:#e8f0fe;color:#174ea6;
+  font-size:.6em;font-weight:700;letter-spacing:0;vertical-align:.24em;
+  text-align:center}
+
+/* ══ 专题二一家四页的互跳导航（定义在 tools/topic02_family.py）══
+   ⭐ 样式只写这一处：另外三页的 <head> 是从本文件整块切下去的。
+   ⛔ 别在各页自己的 <style> 里再写一份。 */
+nav.famnav{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;
+  margin:0 0 24px;font-size:13px}
+nav.famnav .famlab{align-self:center;color:var(--gray2,#80868b);
+  margin-right:2px;white-space:nowrap}
+nav.famnav a,nav.famnav .here{display:block;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--line,#dadce0);background:#fff;text-decoration:none;
+  line-height:1.45;transition:border-color .12s,background .12s}
+nav.famnav a{color:var(--blue,#1a73e8)}
+nav.famnav a:hover{border-color:var(--blue,#1a73e8);background:#f8fbff}
+/* ⭐ 当前页渲染成不可点的高亮块 ——&nbsp;它同时充当「你在这里」的指示，
+   所以不需要再单独放一个面包屑说明当前在哪一版。 */
+nav.famnav .here{color:var(--ink,#202124);font-weight:700;
+  border-color:var(--blue,#1a73e8);background:#e8f0fe;cursor:default}
+nav.famnav em{display:block;font-style:normal;font-weight:400;font-size:11.5px;
+  color:var(--gray2,#80868b);margin-top:2px}
+nav.famnav .here em{color:#174ea6}
+@media(max-width:760px){nav.famnav em{display:none}
+  nav.famnav a,nav.famnav .here{padding:6px 10px}}
+</style>
+<style>
+ul + p, ul + div.note { margin-top: 14px }
+.kind { display:inline-block; font-size:12px; font-weight:600; padding:0 7px;
+        border-radius:9px; margin-right:4px; white-space:nowrap }
+.k-d { background:#e8f0fe; color:#174ea6 }
+.k-s { background:#e6f4ea; color:#0d652d }
+.k-m { background:#fef7e0; color:#8a4b00 }
+.k-x { background:#f3e8fd; color:#681da8 }
+.k-new { background:#fce8e6; color:#a50e0e }
+td .where { color:var(--gray); font-size:13px }
+</style>
+
+</head>
+<body>
+
+<!-- ══════════ HERO ══════════ -->
+<div class="hero"><div class="wrap">
+  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题五
+    ／ <b>并行策略</b></div>
+  <h1>并行策略</h1>
+  <div class="hook">
+    一个模型装不进一块卡，就得切开分到很多卡上。<br>
+    <em>每切一刀，就在那一维上多出一种通信 —— 用一种通信，换一份显存或一份算力。</em>
+  </div>
+  <p style="max-width:820px;color:var(--gray)">
+    这一讲先把今天用得上的并行方式全部摆出来，训练和推理放在一起，
+    再回头讲每一种什么时候该用、什么时候会被通信拖垮。</p>
+  <div class="chips">
+    <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
+    <span class="chip">口径 <b>截至 2026-09</b></span>
+    <span class="chip">⏱ <b>约 1 小时</b></span>
+  </div>
+  <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
+    AI Infra 架构师</p>
+</div></div>
+
+<div class="wrap">
+  <div class="note warn"><span class="t">🚧 这一讲刚开工</span>
+    <b>§1（全景）是写完的</b>，每个参数名和定义都对过源码或官方文档，出处在文末。<br>
+    <b>§2 以后还是大纲</b>，页面上按原样列出，没有补写。</div>
+</div>
+
+<section id="s0"><div class="wrap">
+  <div class="stn"><span class="badge">第 0 节</span><h2>这一讲要回答的一个问题</h2></div>
+
+  <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，光训练状态就要约 10.7 TB。
+    <b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
+
+  <p>一个训练中的张量有好几个维度可以下刀：batch、序列、隐藏维、层、专家。
+    每切一刀，就在那一维上产生一种通信。所以这一讲从头到尾只讲一件事：</p>
+
+  <div class="note ok"><span class="t">一句话</span>
+    <b>用一种通信，换一份显存或一份算力。</b><br>
+    选并行策略，就是在选你愿意付哪一种通信、付多频繁。</div>
+
+  <p><b>目标</b>：看到任何一个并行方案，包括还没出现的，都能说出它切的是哪一维、
+    多出来的是哪种通信、每一步发生几次，以及它能不能放到慢链路上。</p>
+</div></section>
+
+<section id="s1"><div class="wrap">
+  <div class="stn"><span class="badge">第 1 节</span><h2>全景：今天所有的并行方式</h2></div>
+
+  <p class="lead">名字很多，DP、FSDP、TP、SP、CP、PP、EP，推理那边还有 DCP、PCP、DEP、TEP……
+    <b>但刀法只有四种。</b>先把刀法认清楚，名字就好记了。</p>
+
+  <h3 id="s1-1">1.1 · 四种刀法</h3>
+  <p>判据只有一个：<b>看它切的是什么。</b></p>
+  <table>
+    <tr><th>刀法</th><th>切的是什么</th><th>每张卡手里有什么</th><th>典型</th></tr>
+    <tr><td><span class="kind k-d">数据</span><b>数据并行</b></td><td>batch，或者说请求</td>
+      <td>算不同的样本，模型在逻辑上是完整的</td><td>DP、FSDP、Attention DP</td></tr>
+    <tr><td><span class="kind k-s">序列</span><b>序列并行</b></td><td>一条样本内部的 token</td>
+      <td>同一条样本的一段；训练时是一段激活，推理时是一段 KV cache</td><td>CP、Ulysses、DCP</td></tr>
+    <tr><td><span class="kind k-m">模型</span><b>模型并行</b></td><td>权重</td>
+      <td>只有模型的一部分：矩阵的几列、几层、几个专家</td><td>TP、PP、EP</td></tr>
+    <tr><td><span class="kind k-x">解耦</span><b>解耦</b></td><td>工作的阶段或模块</td>
+      <td>只干一种活：只做 prefill，或者只算专家</td><td>PD 分离、AFD</td></tr>
+  </table>
+
+  <p>有两个地方要多说一句。</p>
+  <ul>
+    <li><b>FSDP 算数据并行，不算模型并行。</b>它确实把权重分片存着，
+      但每一层算之前都会把完整权重临时拼回来，每张卡算的还是自己那份样本。
+      <em>它省的是显存，不改变「谁算什么」。</em></li>
+    <li><b>序列并行单独成一类。</b>严格说它也是在切数据（切一条样本内部），
+      但它专门对付长上下文，通信方式也跟 DP 完全不同，放一起反而讲不清。</li>
+  </ul>
+  <p>下面四张表就按这四种刀法排。「新」表示 2025–26 年才出现或才普及。</p>
+
+  <h3 id="s1-2">1.2 · 数据并行类</h3>
+  <table>
+    <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
+    <tr><td>DP / DDP</td><td>batch，模型整份复制</td><td>线性扩吞吐</td>
+      <td>训练：梯度 all-reduce，每个 step 一次。推理：没有，前面靠 router 分流</td><td>训 · 推</td></tr>
+    <tr><td>ZeRO-1 / 2 / 3</td><td>依次多切一样：优化器状态 → 梯度 → 参数</td>
+      <td>DP 每张卡存一份完整状态，是纯冗余</td><td>reduce-scatter ＋ all-gather；ZeRO-3 每层都要把参数 all-gather 回来</td><td>训</td></tr>
+    <tr><td>FSDP / FSDP2</td><td>就是 ZeRO-3，PyTorch 原生版本</td>
+      <td>通信量和 DP 同一个量级，显存却随卡数线性下降</td><td>前向 all-gather 权重，反向 reduce-scatter 梯度</td><td>训</td></tr>
+    <tr><td>HSDP</td><td>机内分片，机间复制</td><td>把最频繁的 all-gather 圈在高带宽域里</td>
+      <td>机内 AG / RS，机间 all-reduce</td><td>训</td></tr>
+    <tr><td>ZeRO++</td><td>ZeRO-3 上再加三招</td><td>跨节点通信太贵</td>
+      <td>权重量化成 INT8 再 all-gather；节点内多存一份参数；梯度也量化</td><td>训</td></tr>
+    <tr><td>跨 DCN 的 DP</td><td>DP 横跨多个 slice 或数据中心</td>
+      <td>DP 每个 step 才通信一次，是唯一放得上慢链路的维度</td><td>DCN 上的梯度 all-reduce</td><td>训</td></tr>
+    <tr><td>DiLoCo <span class="kind k-new">新</span></td><td>每个副本先自己走几百步，再同步一次</td>
+      <td>跨数据中心训练：论文里每 500 步才同步一次，通信次数降到几百分之一</td><td>一次外层梯度同步（Streaming 版分片轮流同步，跟计算重叠）</td><td>训</td></tr>
+    <tr><td>Attention DP <span class="kind k-new">新</span></td><td><b>只在 attention 层</b>按请求切，专家层另配</td>
+      <td>MLA 只有 1 个 KV 头，开 TP8 会把 KV 复制 8 份；改成 DP，每张卡只存自己那批请求的 KV</td>
+      <td>后面接 EP 时是 all-to-all；没活的卡也得跑一遍空前向陪着同步</td><td>推</td></tr>
+  </table>
+  <div class="note warn"><span class="t">⚠️ 同一个「DP」，在 MoE 推理里意思变了</span>
+    dense 模型上开 DP，是几份互不相干的副本。MoE 模型在 vLLM / SGLang 里开 DP，
+    实际开的是 <b>Attention DP</b>：专家层还是大家一起跑，所以每一步所有 rank 都要同步。
+    <br><em>vLLM 还有一个坑：只开 <code>-dp</code> 不开 <code>-ep</code>，专家层走的是 TP 而不是 EP。</em></div>
+
+  <h3 id="s1-3">1.3 · 序列并行类</h3>
+  <p>一条样本太长，一张卡放不下它，就沿序列切开。<b>这一类在训练和推理里的动机完全不一样</b>：
+    训练切的是激活，推理切的是 KV cache。所以分两张表。</p>
+
+  <p><b>训练侧（以及推理的 prefill）：切激活</b></p>
+  <table>
+    <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
+    <tr><td>Megatron SP</td><td>只切 LayerNorm、Dropout、残差这几段的激活，<b>必须跟 TP 搭配</b></td>
+      <td>TP 切不到的那部分激活，每张卡都存了一整份</td><td>把 TP 的 all-reduce 拆成 all-gather ＋ reduce-scatter，总量不变</td><td>训 · 推</td></tr>
+    <tr><td>CP（Context Parallel）</td><td><b>所有</b>激活沿序列切</td><td>长上下文训练，128K 以上基本绕不开</td>
+      <td>ring 传 KV，或者 all-to-all，或者 all-gather，可以分层组合</td><td>训</td></tr>
+    <tr><td>Ulysses</td><td>序列切和 head 切来回转换</td><td>长序列：序列长度和卡数同比放大时，每张卡的通信量不变</td>
+      <td>attention 前后各一次 all-to-all；<b>度数不能超过 head 数</b></td><td>训</td></tr>
+    <tr><td>Ring Attention</td><td>KV 分块沿一个环传递</td><td>度数不受 head 数限制</td><td>环上点对点传递，跟计算重叠</td><td>训 · 推</td></tr>
+    <tr><td>Striped / USP / 2D-Attention</td><td>改 token 的分配方式；Ulysses 和 Ring 叠成二维</td>
+      <td>ring 在 causal mask 下各卡负载不均；两者的限制互补</td><td>同上两种的组合</td><td>训</td></tr>
+    <tr><td>PCP（Prefill CP） <span class="kind k-new">新</span></td><td>prefill 阶段的 query token</td>
+      <td>长 prompt 的首字延迟（TTFT）</td><td>all-gather KV，或者 ring</td><td>推</td></tr>
+    <tr><td>Chunked PP <span class="kind k-new">新</span></td><td>长 prompt 切成块，依次灌进流水线</td>
+      <td>prefill 的启动延迟只跟第一块成正比</td><td>流水线的点对点</td><td>推</td></tr>
+  </table>
+
+  <p><b>推理 decode 侧：切 KV cache</b> —— 这是 2025–26 年最热的一块</p>
+  <table>
+    <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
+    <tr><td>DCP（Decode CP） <span class="kind k-new">新</span></td><td>KV cache 的序列维，按 token 轮流存到各卡</td>
+      <td>TP 一旦超过 KV 头数，KV 就开始复制。MLA 只有 1 个头，TP8 就是 8 份一模一样的 KV。
+        DCP 把这份冗余变回容量</td>
+      <td>先把 Q 收齐，各卡在自己那段 KV 上算 attention，再带着 LSE 合并结果</td><td>推</td></tr>
+    <tr><td>Helix <span class="kind k-new">新</span></td><td>同一组卡在一层里换两次布局：attention 按 KV 切，FFN 按 TP × EP 切</td>
+      <td>百万 token 级的 decode：读 KV 和读权重两件事都要摊开</td><td>一次 all-to-all 交换部分结果</td><td>推</td></tr>
+    <tr><td>MaxText <code>context_autoregressive</code></td><td>decode 时 KV 沿序列切，FFN 按专家切</td>
+      <td>同上，TPU 上的做法</td><td>XLA 自动插入</td><td>推</td></tr>
+  </table>
+
+  <div class="note ok"><span class="t">PD 分离的时候，PCP 和 DCP 正好一边一个</span>
+    <b>P 节点用 PCP</b>：把长 prompt 切开，压首字延迟。<br>
+    <b>D 节点用 DCP</b>：把 KV 摊开，让 decode 装得下更多、更长的请求。<br>
+    两者对卡数的作用也正好相反：<b>PCP 要加卡，DCP 不加卡</b>，直接复用 TP 那几张卡。
+    <br><em>这是 vLLM 源码里的原话：PCP expands the process world size；DCP does not expand
+    the process world size, without PCP it reuses TP ranks。</em></div>
+
+  <p>DCP 也是这一讲那句话最好的新例子。<b>它付出的是每层一次合并通信，换回来的是被 TP 白白复制掉的那 7/8 份 KV。</b>
+    用一种通信，换一份显存。</p>
+
+  <h3 id="s1-4">1.4 · 模型并行类</h3>
+  <p>这一类真正在切权重。按下刀的位置再分三种：矩阵内部、层、专家。</p>
+
+  <p><b>切矩阵内部（张量并行）</b></p>
+  <table>
+    <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
+    <tr><td>TP</td><td>矩阵先按列切、再按行切，两两配对</td><td>单层的权重或计算放不下</td>
+      <td>每层两次 all-reduce，<b>频率极高</b>，所以只能待在 NVLink 或 ICI 一跳之内</td><td>训 · 推</td></tr>
+    <tr><td>2D / 2.5D / 3D TP</td><td>把矩阵切成网格</td><td>1D TP 的通信随度数上涨</td>
+      <td>沿网格的行、列广播和归约</td><td>训，<b>已基本不用</b></td></tr>
+    <tr><td>GTP <span class="kind k-new">新</span></td><td>在 TP 轴上再把权重切一层，用的时候再收回来</td>
+      <td>Megatron 文档原话：GTP_remat is an implementation of ZeRO-3 —— 只不过切在模型并行轴上</td>
+      <td>逐个权重异步 all-gather，梯度 reduce-scatter</td><td>训，实验性</td></tr>
+  </table>
+
+  <p><b>切层（流水线并行）</b></p>
+  <table>
+    <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
+    <tr><td>PP</td><td>层，分成若干 stage</td><td>模型太深，或者跨机只剩低带宽链路</td>
+      <td>stage 边界的点对点，量最小；代价是<b>气泡</b></td><td>训 · 推</td></tr>
+    <tr><td>VPP（交错 1F1B）</td><td>每张卡放几段不连续的层</td><td>把气泡缩小</td><td>点对点的次数变多</td><td>训</td></tr>
+    <tr><td>Zero Bubble <span class="kind k-new">新</span></td><td>把反向拆成两半：激活的梯度和权重的梯度</td>
+      <td>拿权重梯度那一半去填气泡</td><td>点对点</td><td>训</td></tr>
+    <tr><td>DualPipe</td><td>两个方向同时灌流水线</td><td>V3 的专家通信太重，要把前反向的计算和通信完全叠起来</td>
+      <td>点对点，跟 EP 的 all-to-all 叠在一起</td><td>训</td></tr>
+  </table>
+
+  <p><b>切专家（MoE）</b></p>
+  <table>
+    <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
+    <tr><td>EP</td><td>不同专家放到不同的卡上</td><td>专家总参数太大</td>
+      <td>token 发出去、算完收回来，两次 all-to-all。<b>发给谁由数据决定</b>，所以负载会不均，这是 EP 独有的病</td><td>训 · 推</td></tr>
+    <tr><td>Wide-EP <span class="kind k-new">新</span></td><td>EP 铺到 32、64 甚至更多张卡</td>
+      <td>每张卡只放几个专家，decode 时每个专家分到的 batch 就大了</td><td>大规模 all-to-all，要专门的通信库</td><td>推</td></tr>
+    <tr><td>ETP</td><td>单个专家内部再做 TP</td><td>单个专家本身太大；细粒度 MoE 一般设成 1</td><td>专家内部 all-reduce</td><td>训</td></tr>
+    <tr><td>EDP</td><td>专家侧剩下的那一维数据并行，由别的维度推出来</td><td>专家梯度要在哪些卡之间求和</td><td>专家梯度 all-reduce</td><td>训</td></tr>
+    <tr><td>Parallel Folding <span class="kind k-new">新</span></td><td>attention 层和专家层各用一套切法，铺在同一批卡上</td>
+      <td>打破「EP 不能超过 DP」的老限制。比如 attention 用 TP4 · CP2 · DP8，专家可以直接 EP64</td>
+      <td>两套通信组</td><td>训</td></tr>
+  </table>
+
+  <div class="note ok"><span class="t">MoE 层有自己的一套并行维度</span>
+    训练时 Megatron 把 attention 层记作 TP × CP × DP × PP，把专家层记作 ETP × EP × EDP × PP，
+    <b>两套是分开配的</b>。推理时同样如此，只是换了一套名字，见 1.6。
+    <br>这是 MoE 模型调并行时自由度最大、也最容易配错的地方。</div>
+
+  <h3 id="s1-5">1.5 · 解耦类</h3>
+  <p>前三种刀法切的都是张量。这一类切的是<b>工作</b>：把不同性质的活拆到不同的机器上，
+    每一边再挑自己的并行方式。</p>
+  <table>
+    <tr><th>名称</th><th>拆什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
+    <tr><td>PD 分离</td><td>prefill 和 decode 放到不同机器</td>
+      <td>prefill 吃算力，decode 吃带宽，放在一起互相拖累首字延迟和出字速度</td><td>KV cache 跨机传输</td><td>推</td></tr>
+    <tr><td>AFD <span class="kind k-new">新</span></td><td>attention 放一组机器，专家放另一组</td>
+      <td>专家那边汇集好几组 attention 的 token，把专家的 batch 做大；两边的机器配比也能分开调</td>
+      <td>attention → 专家发一次，专家 → attention 收一次，要切小批次把它藏起来</td><td>推</td></tr>
+    <tr><td>Encoder 分离</td><td>多模态模型的视觉编码器单独部署</td><td>编码器和语言模型抢资源</td><td>embedding 传输</td><td>推</td></tr>
+    <tr><td>多模块异构并行</td><td>编码器和语言模型各用一套并行方式</td><td>多模态训练里两部分的形状差太远</td><td>两套网格之间的桥接通信</td><td>训</td></tr>
+  </table>
+  <p><em>AFD 目前的代表是字节的 MegaScale-Infer 和阶跃的 Step-3，vLLM 在 2026 年 7 月出了实验性插件。</em></p>
+
+  <h3 id="s1-6">1.6 · 组合简称：TEP 和 DEP</h3>
+  <p>推理这边，MoE 模型的并行配置通常用一个简称加一个数字说完，比如 TEP8、DEP16。
+    <b>前一个字母说 attention 怎么切，后面的 EP 说专家怎么切。</b></p>
+  <table>
+    <tr><th>简称</th><th>attention 层</th><th>专家层</th></tr>
+    <tr><td>TEP&lt;N&gt;</td><td>TP，N 张卡一起算</td><td>EP，铺在同样 N 张卡上</td></tr>
+    <tr><td>DEP&lt;N&gt;</td><td>Attention DP，每张卡自己管一批请求</td><td>EP，铺在同样 N 张卡上</td></tr>
+  </table>
+  <p>这是 TensorRT-LLM 的原文定义：<em>TEP&lt;N&gt; shards both attention (TP) and experts (EP) across N ranks.
+    DEP&lt;N&gt; keeps attention data-parallel (ADP) while distributing experts across N ranks.</em>
+    vLLM 和 NVIDIA Dynamo 的用法一致。</p>
+  <p>PD 分离时两边经常各选一种，但<b>哪边用哪种没有定式</b>，要看模型和负载：
+    vLLM 部署 Kimi K3 用的是 <b>TEP8 做 prefill、DEP16 做 decode</b>；
+    TensorRT-LLM 那篇文章举的例子却是 <b>DEP4 做 prefill、TEP8 做 decode</b>。
+    <em>这正是 §6 要讲的「怎么选」—— 这里先记住两个名字各是什么。</em></p>
+
+  <div class="note danger"><span class="t">⛔ TEP / DEP 不是 ETP / EDP</span>
+    名字只差一个字母的顺序，说的却是两件事。<br>
+    <b>TEP / DEP</b> 是推理侧的叫法，说的是 <b>attention 怎么切</b>，DEP 里的 D 是 Attention DP。<br>
+    <b>ETP / EDP</b> 是 Megatron 训练侧的叫法，说的是<b>专家内部</b>的 TP 度数，以及专家梯度在哪些卡之间求和。<br>
+    Megatron 仓库里搜 TEP / DEP，结果是零。所以这两套名字<b>并列记，不要互相换算</b>。</div>
+
+  <p>其它常听到的组合说法：</p>
+  <ul>
+    <li><b>3D / 4D / 5D 并行</b>：只是说「同时用了几种」，<b>各家算哪几维不一样</b>。
+      torchtitan 把 FSDP ＋ TP ＋ CP ＋ PP 叫 4D，Megatron 的 Parallel Folding 论文把 TP / EP / CP / DP / PP 叫 5D。
+      引用时要把具体是哪几维说出来。</li>
+    <li><b>TRT-LLM 的「Hybrid ETP」</b>：指专家层 TP 和 EP 混用，跟 Megatron 的 ETP 又不是一回事。</li>
+  </ul>
+
+  <h3 id="s1-7">1.7 · 常被当成并行、其实不是的</h3>
+  <p>判据：<b>它有没有多切出一维。</b>没有的，就不是新的并行方式。</p>
+  <table>
+    <tr><th>名称</th><th>它实际是什么</th></tr>
+    <tr><td>TBO / SBO / DBO</td><td>把通信藏到计算后面：两批数据错开跑，一批在通信时另一批在计算</td></tr>
+    <tr><td>Async TP、TP 通信重叠、collective matmul</td><td>还是 TP，只是把通信和矩阵乘切成小块交错着做</td></tr>
+    <tr><td>EPLB、冗余专家</td><td>负载均衡：把热门专家多复制几份再重新摆放。修的是 EP 的病，本身不切新维度</td></tr>
+    <tr><td>Offload、重计算</td><td>拿时间换显存，或者拿主机内存换显存</td></tr>
+  </table>
+
+  <h3 id="s1-8">1.8 · 同名不同义</h3>
+  <table>
+    <tr><th>词</th><th>在不同地方的意思</th></tr>
+    <tr><td>SP</td><td>至少三种：Megatron 的 SP（只切 LayerNorm 那几段，跟着 TP）；DeepSpeed 说的 SP（指 Ulysses）；
+      以及泛指一切切序列的做法。Megatron 里「所有激活都切」叫 CP</td></tr>
+    <tr><td>CP</td><td>训练里指切激活。vLLM 把它拆成两个作用相反的开关：PCP 加卡，DCP 不加卡</td></tr>
+    <tr><td>DP</td><td>dense 模型上是独立副本；MoE 推理里其实是 Attention DP，每一步都要同步</td></tr>
+    <tr><td>ETP</td><td>Megatron 指专家内部的 TP；TensorRT-LLM 的 Hybrid ETP 指专家层 TP 和 EP 混用</td></tr>
+    <tr><td>hierarchical</td><td>ZeRO++ 的分层分片、Megatron 的分层 DP、Megatron 的分层 CP，是三件不同的事</td></tr>
+  </table>
+</div></section>
+
+<section id="s2"><div class="wrap">
+  <div class="stn"><span class="badge">第 2 节</span><h2>🚧 什么时候真的会被通信拖累</h2></div>
+  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
+  <ul>
+    <li><b>判据还是那道除法，换个分母</b>：算力 ÷ 这一维用的那条链路的带宽</li>
+    <li><b>AllReduce = AllGather ＋ ReduceScatter</b>，所以 FSDP 的通信量跟 DP 一样 —— DP 跑得动，就该换 FSDP</li>
+    <li><b>FSDP 搬权重，TP 搬激活</b>：批次小多用 TP，批次大多用 FSDP</li>
+    <li>TP 有一个跟批次无关的硬上限</li>
+  </ul>
+</div></section>
+
+<section id="s3"><div class="wrap">
+  <div class="stn"><span class="badge">第 3 节</span><h2>🚧 逐个讲</h2></div>
+  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>
+    §1 已经把每一种是什么、切哪一维讲完了。这一节要讲的是每一种<b>怎么落地、踩什么坑</b>。</div>
+  <ul>
+    <li><b>DP → FSDP / HSDP</b>：为什么这笔买卖通常划算</li>
+    <li><b>TP</b>：度数受头数和高带宽域大小两头限制；跨机做 TP 基本等于自杀</li>
+    <li><b>SP 与 CP</b>：这两个最容易混；为什么 128K 以上必须上 CP；MLA 下 CP 的特殊性</li>
+    <li><b>PP 与 VPP</b>：气泡怎么算；V3 前 3 层 dense、后 58 层 MoE，怎么切才平衡</li>
+    <li><b>EP 家族</b>：负载不均为什么是 EP 独有的病；训练和推理两套名字怎么对上</li>
+    <li><b>推理侧</b>：Attention DP、DCP、PD 分离下两边各怎么配</li>
+  </ul>
+</div></section>
+
+<section id="s4"><div class="wrap">
+  <div class="stn"><span class="badge">第 4 节</span><h2>🚧 组合：mesh 与拓扑映射</h2></div>
+  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
+  <ul>
+    <li><b>mesh 是什么</b>：把物理设备排成多维网格，每个逻辑并行维绑一根轴</li>
+    <li><b>映射决定成败</b>：高频通信（TP）绑最快的轴，低频（DP）绑最慢的轴</li>
+    <li>我们的实测：换拓扑和调参数，收益不在一个量级</li>
+    <li>并行度不是连续旋钮，是一组离散、互相约束的选择</li>
+  </ul>
+</div></section>
+
+<section id="s5"><div class="wrap">
+  <div class="stn"><span class="badge">第 5 节</span><h2>🚧 评价：strong scaling 与 weak scaling</h2></div>
+  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
+  <ul>
+    <li><b>Strong scaling</b>：问题规模固定、加卡求快 —— 每卡活变少，通信占比必然上升</li>
+    <li><b>Weak scaling</b>：每卡活固定、加卡同时放大问题 —— 通信占比大致不变</li>
+  </ul>
+</div></section>
+
+<section id="s6"><div class="wrap">
+  <div class="stn"><span class="badge">第 6 节</span><h2>🚧 实际该怎么选</h2></div>
+  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
+  <ol>
+    <li><b>先看装不装得下</b>：FSDP / EP 先上到装得下为止</li>
+    <li><b>再看高带宽域有多大</b>：它决定 TP / EP 的度数上限</li>
+    <li><b>再看序列多长</b>：超过某个长度必须上 CP（推理看 DCP）</li>
+    <li><b>PP 通常最后考虑</b>：气泡是纯损失</li>
+    <li><b>DP 兜底</b>：剩下的规模用它铺开，可以铺到 DCN 上</li>
+  </ol>
+</div></section>
+
+<section id="src"><div class="wrap">
+  <div class="stn"><span class="badge">出处</span><h2>§1 的出处台账</h2></div>
+  <p class="lead">按「结论 ← 材料」排。全部在 2026-09-23 核对。</p>
+  <table>
+    <tr><th>结论</th><th>材料</th></tr>
+    <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
+    <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
+      <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>
+    <tr><td>PCP 加卡、DCP 不加卡、DCP 复用 TP rank</td><td>vllm-project/vllm main：vllm/config/parallel.py 的 docstring；vLLM context parallel 部署文档</td></tr>
+    <tr><td>Attention DP 的动机与开关</td><td>SGLang DP / DPA 指南；TensorRT-LLM docs/source/features/parallel-strategy.md；vLLM data parallel 部署文档</td></tr>
+    <tr><td>Helix</td><td>arXiv <a href="https://arxiv.org/abs/2507.07120" target="_blank" rel="noopener">2507.07120</a>；TensorRT-LLM tech blog 22</td></tr>
+    <tr><td>GTP 原话</td><td>Megatron-LM docs/api-guide/core/generalized_tensor_parallel.md</td></tr>
+    <tr><td>Zero Bubble / DualPipe</td><td>arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>；github.com/deepseek-ai/DualPipe</td></tr>
+    <tr><td>DiLoCo</td><td>arXiv <a href="https://arxiv.org/abs/2311.08105" target="_blank" rel="noopener">2311.08105</a>；Streaming DiLoCo arXiv <a href="https://arxiv.org/abs/2501.18512" target="_blank" rel="noopener">2501.18512</a>；MaxText 的 diloco mesh 轴</td></tr>
+    <tr><td>AFD</td><td>MegaScale-Infer arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a>；Step-3 arXiv <a href="https://arxiv.org/abs/2507.19427" target="_blank" rel="noopener">2507.19427</a>；vLLM AFD Plugin blog（2026-07-23）</td></tr>
+    <tr><td>Chunked PP</td><td>LMSYS blog（2026-01-15）；Mooncake arXiv <a href="https://arxiv.org/abs/2407.00079" target="_blank" rel="noopener">2407.00079</a></td></tr>
+    <tr><td>MaxText 的并行轴</td><td>AI-Hypercomputer/maxtext：src/maxtext/configs/base.yml、docs/guides/optimization/sharding.md</td></tr>
+  </table>
+</div></section>
+
+<div class="wrap" style="padding:32px 0 64px">
+  <p style="color:var(--gray)">
+    ← 回 <a href="index.html">课程总纲</a>　·
+    上一讲 <a href="topic-04.html">专题四 · 反向与优化器</a></p>
+</div>
+
+</body></html>
