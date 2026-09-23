@@ -62,7 +62,7 @@ def main():
         "⭐ 「分层次」这个直觉对了，但实际是　——　"
         "<tspan font-weight=\"700\">三层加法 ＋ 一次除法</tspan>",
         [(RD, "Ⓐ 以为的"), (GR, "Ⓑ 实际的"),
-         (OR, "Ⓒ 为什么不能各除各的"), (PU, "Ⓓ 源码对照")])
+         (OR, "Ⓒ 为什么不能各除各的")])
 
     # ══════════ Ⓐ 以为的：四层各平均一次 ═══════════════════════════
     PH = 216
@@ -179,35 +179,7 @@ def main():
         GY, size=13.5, anchor="middle")
     f._pan = None
 
-    # ══════════ Ⓓ 源码对照 ═════════════════════════════════════════
-    PH4 = 270
-    py4 = f.panel(0, py3 + PH3 + 20, W, PH4,
-                  "Ⓓ 这不是我推的　——　<tspan font-weight=\"700\">梯度累积那段源码逐行就是这样</tspan>",
-                  PU)
-    LINES = (
-        ("累加的是<tspan font-weight=\"700\">和</tspan>，不是平均",
-         "acc[\"loss\"] += 这一批的 loss 之和"),
-        ("<tspan font-weight=\"700\">token 个数</tspan>另外单独累加",
-         "acc[\"total_weights\"] += 这一批的有效 token 数"),
-        ("⭐ 最后<tspan font-weight=\"700\">除一次</tspan>，而且除的是"
-         "<tspan font-weight=\"700\">累加起来的 token 总数</tspan>",
-         "梯度 ÷ acc[\"total_weights\"]"),
-    )
-    for k, (say, code) in enumerate(LINES):
-        yy = py4 + 54 + k * 58
-        f.box(50, yy, 640, 46, "#f3e8fd", PU, 6)
-        f.t(370, yy + 30, say, INK, size=14, anchor="middle")
-        f.box(710, yy, 640, 46, "#f1f3f4", GY2, 6)
-        f.t(1030, yy + 30, code, GY, True, 13.5, "middle")
-
-    f.t(700, py4 + 236,
-        "⛔ 注意它除的<tspan font-weight=\"700\">不是「micro-batch 的个数」</tspan>，"
-        "是<tspan font-weight=\"700\">累加起来的 token 总数</tspan>"
-        "　——　这一手就是用来躲开上面那个坑的。",
-        INK, size=14.5, anchor="middle")
-    f._pan = None
-
-    yb = f.band(py4 + PH4 + 18, "ok", "⭐ 一句话记住", [
+    yb = f.band(py3 + PH3 + 18, "ok", "⭐ 一句话记住", [
         "<tspan font-weight=\"700\">加法分三层（本卡一次矩阵乘 →&#160;梯度累积 →&#160;跨卡求和），"
         "除法只有一次</tspan>　——　除以全局有效 token 总数。",
         "<tspan font-weight=\"700\">一路只传两个数：loss 的和、token 的个数。</tspan>"
@@ -227,4 +199,64 @@ def main():
     f.save("fig4-levels.svg", yb + 14)
 
 
+# ══════════════════════════════════════════════════════════════════
+# 第二张：只有源码对照那一格。⭐ 课件用 <details> 收着（__FIG_LEVELS_SRC__）。
+# ══════════════════════════════════════════════════════════════════
+def srcfig():
+    g = Fig(W, "上面那三层加法一次除法不是推出来的，"
+               "MaxText 里梯度累积那段源码逐行就是这样："
+               "累加的是和不是平均，token 个数另外单独累加，"
+               "最后只除一次，而且除的是累加起来的 token 总数，"
+               "不是 micro-batch 的个数")
+
+    y0e = g.header(
+        "补一格：<tspan font-weight=\"700\">源码对照</tspan>"
+        "　——　上面那套不是我推的",
+        "⭐ 这一格是<tspan font-weight=\"700\">证据</tspan>，不是内容 ——　"
+        "想自己核一遍的看它，讲课时用不上",
+        [(PU, "MaxText 梯度累积")])
+
+    # ══════════ 单独一张：源码对照 ══════════════════════════════
+    # ⛔ 2026-09-23 现场：「这个图折起来不要。」
+    #   ⭐ 它是**证据**，不是内容 ——&#160;上面三格已经把「三层加法、一次除法」
+    #     讲完了，这一格只是把 MaxText 的那几行摆出来给想核的人看。
+    #   ⭐⭐ 判据：**证据该放在读者<u>想核的时候</u>够得着的地方，不是主线上。**
+    #     主线要的是「为什么」，证据回答的是「凭什么信你」——&#160;两种需求不同时发生。
+    #   ⚠️ 折叠要求它先是独立产物，所以从主图里拆出来。
+    PH4 = 270
+    py4 = g.panel(0, y0e, W, PH4,
+                  "这不是我推的　——　<tspan font-weight=\"700\">梯度累积那段源码逐行就是这样</tspan>",
+                  PU)
+    LINES = (
+        ("累加的是<tspan font-weight=\"700\">和</tspan>，不是平均",
+         "acc[\"loss\"] += 这一批的 loss 之和"),
+        ("<tspan font-weight=\"700\">token 个数</tspan>另外单独累加",
+         "acc[\"total_weights\"] += 这一批的有效 token 数"),
+        ("⭐ 最后<tspan font-weight=\"700\">除一次</tspan>，而且除的是"
+         "<tspan font-weight=\"700\">累加起来的 token 总数</tspan>",
+         "梯度 ÷ acc[\"total_weights\"]"),
+    )
+    for k, (say, code) in enumerate(LINES):
+        yy = py4 + 54 + k * 58
+        g.box(50, yy, 640, 46, "#f3e8fd", PU, 6)
+        g.t(370, yy + 30, say, INK, size=14, anchor="middle")
+        g.box(710, yy, 640, 46, "#f1f3f4", GY2, 6)
+        g.t(1030, yy + 30, code, GY, True, 13.5, "middle")
+
+    g.t(700, py4 + 236,
+        "⛔ 注意它除的<tspan font-weight=\"700\">不是「micro-batch 的个数」</tspan>，"
+        "是<tspan font-weight=\"700\">累加起来的 token 总数</tspan>"
+        "　——　这一手就是用来躲开上面那个坑的。",
+        INK, size=14.5, anchor="middle")
+    g._pan = None
+
+
+    yb = g.src(y0e + PH4 + 26,
+               "⭐ 这一格原本是上一张图的第四格，2026-09-23 拆成独立一张"
+               "——&#160;<tspan font-weight=\"700\">为的是让课件那边能把它折叠起来</tspan>。")
+
+    g.save("fig4-levels-src.svg", yb + 14)
+
+
 main()
+srcfig()
