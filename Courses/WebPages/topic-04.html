@@ -1116,7 +1116,69 @@ body.figonly section h3{margin-top:34px}
        必须在第一次用它之前就定义好。** -->
 <h4>第一步之二 · <u>logits 怎么变成 loss</u> ——&nbsp;以及「猜错的那些」去哪了</h4>
 
-<p>上面那句 <code>−ln p</code> 里的 <b>p</b> 是怎么来的？<em>中间隔着两步。</em></p>
+<!-- ⭐⭐⭐ 2026-09-23 现场：「这个内容之前先加一个简要的图 ——&#160;
+     就是 logits 怎么来的。先画一个前向，然后得到了 7,168，
+     然后 7,168 经过一个 LM 的矩阵，就变成了 129,280 那么大一个 logits。」
+     ⛔ 下一张图一上来就是「一排 logits」，**它从哪儿来、为什么正好是 129,280 个，
+       一个字都没有**。
+     ⭐ 判据：**一张图以某个量开场时，上一张图得负责把那个量交到它手上。**
+       否则读者第一眼要处理的不是内容，是「这东西哪来的」。 -->
+<p><b>先说清 logits 是从哪儿来的</b>，<em>不然下面那张图一上来就是「一排分数」，
+  没人知道这排数为什么正好是 129,280 个。</em></p>
+
+<figure class="fbox fwide" id="fig-logits"><svg viewBox="0 0 1400 538" width="100%" role="img" aria-label="一个位置走完整条前向之后，手里拿到的是一个七千一百六十八个数的向量。再乘上最后那一块权重，也就是 LM head，它的形状是七千一百六十八乘十二万九千二百八十，于是那个向量被摊成十二万九千二百八十个数 —— 词表上每个词一个分数。这排数就叫 logits，它可正可负、还不是概率。下一步的 softmax 才把它变成概率"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">那排 <tspan font-weight="700">logits</tspan> 是从哪儿来的</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一句话：<tspan font-weight="700">前向走完 →&#160;一个 7,168 维的向量 →&#160;乘 LM head →&#160;129,280 个分数</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">前向</text>
+<rect x="75" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="96" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">LM head</text>
+<rect x="181" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="202" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">logits</text>
+<rect x="0" y="102" width="1400" height="372" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一个位置，走完前向之后手里有什么</tspan></text>
+<text class="svgsm" x="264" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">只画这一条线 ——　层里面长什么样是专题一的事</text>
+<rect x="60" y="192" width="210" height="88" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="165" y="226" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前向走完</tspan></text>
+<text class="svgsm" x="165" y="254" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">（61 层）</text>
+<line x1="276" y1="236" x2="316" y2="236" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="324" y="174" width="46" height="124" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
+<line x1="324" y1="194.66666666666666" x2="370" y2="194.66666666666666" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="324" y1="215.33333333333334" x2="370" y2="215.33333333333334" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="324" y1="236.0" x2="370" y2="236.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="324" y1="256.6666666666667" x2="370" y2="256.6666666666667" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="324" y1="277.3333333333333" x2="370" y2="277.3333333333333" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="347" y="322" fill="#202124" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这个位置的向量</tspan></text>
+<text class="svgsm" x="347" y="344" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">7,168</tspan> 个数</tspan></text>
+<line x1="388" y1="236" x2="440" y2="236" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="448" y="184" width="250" height="104" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.8"/>
+<text class="svgsm" x="573" y="218" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× LM head</tspan></text>
+<text class="svgsm" x="573" y="246" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 × 129,280</tspan></text>
+<text class="svgsm" x="573" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">这一块权重有 <tspan font-weight="700">9.27 亿</tspan> 个数</text>
+<line x1="706" y1="236" x2="758" y2="236" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="766" y="174" width="168" height="124" rx="5" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
+<line x1="766" y1="194.66666666666666" x2="934" y2="194.66666666666666" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="766" y1="215.33333333333334" x2="934" y2="215.33333333333334" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="766" y1="236.0" x2="934" y2="236.0" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="766" y1="256.6666666666667" x2="934" y2="256.6666666666667" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<line x1="766" y1="277.3333333333333" x2="934" y2="277.3333333333333" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="850" y="322" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">logits</tspan></text>
+<text class="svgsm" x="850" y="344" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">129,280</tspan> 个数　（词表每个词一个）</tspan></text>
+<text class="svgsm" x="850" y="154" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">画不成比例：真实是<tspan font-weight="700">长 18 倍</tspan></text>
+<rect x="970" y="174" width="370" height="124" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1155" y="210" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这排数就叫 <tspan font-weight="700">logits</tspan></tspan></text>
+<text class="svgsm" x="1155" y="242" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">可正可负、<tspan font-weight="700">没有范围</tspan></text>
+<text class="svgsm" x="1155" y="270" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">它还不是概率。</tspan></tspan></text>
+<text class="svgsm" x="700" y="398" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">所有位置一起算就是一次矩阵乘：<tspan font-weight="700">［4,095 × 7,168］× ［7,168 × 129,280］＝［4,095 × 129,280］</tspan></text>
+<text class="svgsm" x="700" y="428" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">那块结果<tspan font-weight="700">不小</tspan>：bf16 存下来约 <tspan font-weight="700">0.99 GiB</tspan>　——　它比 1.7 那张表里任何一个单独的张量都大。</text>
+<text class="svgsm" x="700" y="462" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">下一格才是 softmax</tspan>　——　它把这 129,280 个分数变成 129,280 个概率。</tspan></text>
+</svg><figcaption><b>一句话：前向走完 →&nbsp;一个 7,168 维的向量 →&nbsp;乘 LM head →&nbsp;129,280 个分数。</b><em>那块 LM head 的形状是 7,168 × 129,280，<b>光它自己就有 9.27 亿个数</b>；乘完之后，词表上每个词各拿到一个分数 ——&nbsp;<b>这排数就叫 logits</b>，可正可负、没有范围，<b>还不是概率</b>。</em><span class="capmore"><br><em>⭐ 所有位置一起算是一次矩阵乘，结果那块<b>约 0.99 GiB</b>（bf16）——&nbsp;比 1.7 那张表里任何一个单独的张量都大。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>词表 129,280、残差流宽度 7,168 取自 DeepSeek-V3 配置；LM head 的参数量与那 0.99 GiB 都是本脚本现算并 assert 住的。</p>
+<p>⚠️ 图里两个方块<b>不成比例</b>（真实差 18 倍，画不下）；层内部结构不在这一格，见专题一。</p></details></figure>
+
+<p>好，那上面那句 <code>−ln p</code> 里的 <b>p</b> 是怎么来的？<em>中间隔着两步。</em></p>
 
 <p class="landing"><b>模型最后一层吐出来的，是一排<u>原始分数</u> ——&nbsp;
   这排数就叫 <u>logits</u>。</b>
