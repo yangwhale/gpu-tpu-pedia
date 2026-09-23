@@ -32,6 +32,20 @@ W = 1400
 
 # ⭐ Ⓐ 的小例子：推子动 0.01，结果动 0.03 → 兑换率 3
 D_KNOB, D_OUT = 0.01, 0.03
+# ⛔⛔ 2026-09-23 现场：「这个地方的 5.0 不对，这哪来的 5.0？」
+#   ⭐ 查下来不是数值错，是**孤儿引用**：2026-09-18 把这一格从「纯文字框」
+#     改画成两把竖尺之后，**图上再没有任何绝对读数**，
+#     而正文、落点带、出处里那三句「读数是 …」原封不动留着。
+#     读者在图上找不到那个数，只能问「这哪来的」。
+#   ⭐⭐ 判据：**改画法的时候，去搜一遍旧画法里那些数还被谁引着。**
+#     图自己不会报错 ——&#160;它只是不再包含那个数了。
+#   ⚠️ 两处一起改：① 把读数**画回图上**；② 换成 4.00 ——&#160;
+#     4.0 是 §1.0 那把尺子上**真有的一档**（尺子是 11.77 / 6 / 4 / 3 / 2 / 1）。
+#     原来那个数其实也合法（落在 4 和 6 之间），但既然是随手取的，
+#     就取一个读者能在表里直接指出来的。
+L_BEFORE = 4.00                   # loss 读数（§1.0 尺子上「语法大致对了」那一档）
+L_AFTER = L_BEFORE + D_OUT
+assert abs(L_BEFORE - 4.00) < 1e-9, "这个读数要跟 §1.0 那把尺子上的某一档对上"
 RATE_A = D_OUT / D_KNOB
 assert abs(RATE_A - 3.0) < 1e-12
 
@@ -147,16 +161,20 @@ def main():
         "两把尺<tspan font-weight=\"700\">一格都是 %.2f</tspan>" % UNIT,
         GY2, size=12.5, anchor="middle")
 
-    f.box(850, py + 66, 500, 190, "#e8f0fe", BL, 8)
-    f.t(1100, py + 104, "那这个旋钮的<tspan font-weight=\"700\">导数</tspan>就是",
+    f.box(850, py + 62, 500, 208, "#e8f0fe", BL, 8)
+    f.t(1100, py + 96, "那这个旋钮的<tspan font-weight=\"700\">导数</tspan>就是",
         BL, True, 17, "middle")
-    f.t(1100, py + 152, "%.2f ÷ %.2f ＝ <tspan font-weight=\"700\">%d</tspan>"
+    # ⭐ 把那个绝对读数**画在图上**：正文要引它，图上就得有它。
+    f.t(1100, py + 126,
+        "loss 读数 %.2f →　%.2f　（动了 %.2f）" % (L_BEFORE, L_AFTER, D_OUT),
+        GY2, size=12.5, anchor="middle")
+    f.t(1100, py + 170, "%.2f ÷ %.2f ＝ <tspan font-weight=\"700\">%d</tspan>"
         % (D_OUT, D_KNOB, int(RATE_A)), INK, True, 22, "middle")
-    f.t(1100, py + 196, "⭐ 读作：<tspan font-weight=\"700\">你动一格，它动三格</tspan>",
+    f.t(1100, py + 212, "⭐ 读作：<tspan font-weight=\"700\">你动一格，它动三格</tspan>",
         BL, True, 15, "middle")
-    f.t(1100, py + 230, "⛔ 它<tspan font-weight=\"700\">不是</tspan>「读数是 5.00」"
-        "　——　那是<tspan font-weight=\"700\">值</tspan>，这是<tspan font-weight=\"700\">兑换率</tspan>",
-        GY, size=13, anchor="middle")
+    f.t(1100, py + 246, "⛔ 它<tspan font-weight=\"700\">不是</tspan>「读数是 %.2f」"
+        "　——　那是<tspan font-weight=\"700\">值</tspan>，这是<tspan font-weight=\"700\">兑换率</tspan>"
+        % L_BEFORE, GY, size=13, anchor="middle")
 
     f.t(700, py + 306,
         "⭐⭐ 顺带记住它的<tspan font-weight=\"700\">单位</tspan>："
@@ -334,14 +352,14 @@ def main():
                  "——&#160;没有极限，没有 ε，没有要背的公式。",
                  "⛔ 唯一一个<tspan font-weight=\"700\">真的要小心</tspan>的点："
                  "兑换率<tspan font-weight=\"700\">不是「值」</tspan>。"
-                 "读数是 5.00 跟「动一格变三格」是两件完全不同的事 ——&#160;"
+                 "读数是 4.00 跟「动一格变三格」是两件完全不同的事 ——&#160;"
                  "本讲后面每次说「梯度大」，说的都是<tspan font-weight=\"700\">后者</tspan>。",
                  "⭐⭐ 而 Ⓐ 末尾那个<tspan font-weight=\"700\">单位</tspan>是给 §3.3 埋的："
                  "梯度的单位是「loss 每参数」，可你要的是「参数该挪多少」——&#160;"
                  "<tspan font-weight=\"700\">两边对不上，中间必须再乘一个东西，那个东西就是学习率。</tspan>"))
 
     yb = f.src(yb + 16,
-               "⚠️ Ⓐ 的 5.00 → 5.03、Ⓒ 的 ×2 / ×0.5 / ×3 都是"
+               "⚠️ Ⓐ 的 4.00 → 4.03、Ⓒ 的 ×2 / ×0.5 / ×3 都是"
                "<tspan font-weight=\"700\">编出来的示意数</tspan>，"
                "唯一的作用是让「相除」和「相乘」这两件事看得见。"
                "⭐ 脚本里 assert 了两条：总兑换率必须真的是三个乘积，"
