@@ -66,6 +66,7 @@ import re
 import os
 
 import topic03_page as P
+import course_ai_trainer as AIT
 import topic03_family as FAM
 
 HERE = P.HERE
@@ -2372,6 +2373,8 @@ out = [head, '''
 </div></div>
 
 <div class="wrap">''' + FAM.nav("topic-03-L300.html") + '''</div>
+
+''' + AIT.note("topic-03-L300-lecture.html") + '''
 
 
 ''', BODY, '''

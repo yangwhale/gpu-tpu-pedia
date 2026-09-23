@@ -65,6 +65,7 @@ L300 手上已经有 48 个 `topic03-fig-*.py`、58 张图。这一份**不是�
 import os
 
 import topic03_page as P
+import course_ai_trainer as AIT
 import topic03_family as FAM
 
 HERE = P.HERE
@@ -2782,6 +2783,8 @@ out = [head, '''
 </div></div>
 
 <div class="wrap">''' + FAM.nav("topic-03.html") + '''</div>
+
+''' + AIT.note("topic-03-lecture.html") + '''
 
 ''', BODY, '''
 

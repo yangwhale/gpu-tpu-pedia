@@ -224,6 +224,11 @@ python3 topic02-lint-secnum.py
 step "退役说法体检（判过假的话，有没有在别处活着）"
 python3 topic02-lint-retired.py
 
+# ⛔ 2026-09-23：「把讲义丢给 AI」那一格散在七个页面上，其中三处是粘贴的副本。
+#   ⭐ 判据：**粘贴出来的副本不会跟着源头一起改，它只会跟着源头一起被信任。**
+step "每一讲开头「把讲义丢给 AI」那一格（正本在 tools/course_ai_trainer.py）"
+python3 lint-ai-trainer.py "$W"
+
 step "head 元信息体检（标题 / og 指向 / og 图存在）"
 python3 topic02-lint-meta.py
 # ⛔ 2026-09-10 加：四页 famnav 必须跟 topic02_family.PAGES 一致。

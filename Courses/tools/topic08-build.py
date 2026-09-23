@@ -1,3 +1,6 @@
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import course_ai_trainer as AIT
 # -*- coding: utf-8 -*-
 """专题八 · 精度与量化 —— 教材。
 
@@ -135,6 +138,8 @@ a('''
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
 </div></div>
+
+''' + AIT.note("topic-08-lecture.html") + '''
 
 <div class="wrap">
   <div class="note warn"><span class="t">🚧 这一讲写了一半，而且哪一半写了是标出来的</span>
