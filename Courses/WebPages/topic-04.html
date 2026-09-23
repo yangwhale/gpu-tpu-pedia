@@ -3679,7 +3679,7 @@ body.figonly section h3{margin-top:34px}
   冻住的层不更新权重。省掉 ①，也是 <b>2 倍</b>（<a href="#s三">3.8</a> 的 LoRA 走的是这条）。
   <u>只记住「3×」这个数的人，这两问都答不了。</u></em></span></p></div>
 
-<figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 2290" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的责任 δ。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-3x"><svg viewBox="0 0 1400 1716" width="100%" role="img" aria-label="一层里前向只做一次矩阵乘，反向要做两次：一次算这块权重自己的梯度，一次算该往下游传的责任 δ。一加二等于三，这就是训练比推理贵三倍的全部来源。如果再开全量重算，还要多跑一遍前向，变成四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">三倍算力是<tspan font-weight="700">数出来的</tspan>　——　前向一次矩阵乘，反向两次</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一格不讲链式法则，只数<tspan font-weight="700">乘法做了几次</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -3802,131 +3802,74 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="586" y="702" fill="#80868b" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">6 × 4</text>
 <text class="svgsm" x="654" y="606" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">→ 交给前一层</text>
 <text class="svgsm" x="700" y="728" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">三次乘法的<tspan font-weight="700">乘加次数一模一样</tspan>（都是「位置数 × 进来的宽度 × 出去的宽度」）　——　所以 <tspan font-weight="700">1 ＋ 2 ＝ 3</tspan> 不是个比喻，是<tspan font-weight="700">数出来的</tspan>。</text>
-<text class="svgsm" x="700" y="754" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">② 那块虚线的，就是<tspan font-weight="700">激活扔不掉的全部原因</tspan>。　· 那两个 <tspan font-weight="700">ᵀ</tspan> 是怎么回事？<tspan font-weight="700">下面 Ⓑ 一整格专讲它。</tspan></text>
-<rect x="0" y="854" width="1400" height="522" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="854" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="700" y="754" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">② 那块虚线的，就是<tspan font-weight="700">激活扔不掉的全部原因</tspan>。　· 那两个 <tspan font-weight="700">ᵀ</tspan> 是怎么回事？<tspan font-weight="700">另配了一格专讲它，在下面折叠着。</tspan></text>
+<rect x="0" y="854" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="854" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="856" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="884" x2="1400" y2="884" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="874" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 那两个「ᵀ」是怎么回事 ——　<tspan font-weight="700">转置不是多算了一步，是同一张表换个方向读</tspan></tspan></text>
-<text class="svgsm" x="739" y="874" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">分两层：先说它<tspan font-weight="700">是什么</tspan>，再说<tspan font-weight="700">为什么非它不可</tspan></text>
-<text class="svgsm" x="48" y="930" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 它是什么</tspan></text>
-<text class="svgsm" x="48" y="954" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">行变列、列变行　——　一个数都没动</text>
-<rect x="64" y="976" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="81" y="999" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
-<rect x="98" y="976" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="115" y="999" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<rect x="132" y="976" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="149" y="999" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
-<rect x="64" y="1010" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="81" y="1033" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
-<rect x="98" y="1010" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="115" y="1033" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
-<rect x="132" y="1010" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="149" y="1033" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
-<text class="svgsm" x="115" y="1068" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A　（2 行 3 列）</tspan></text>
-<line x1="184" y1="1010" x2="228" y2="1010" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="206" y="996" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">转置</tspan></text>
-<rect x="246" y="976" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="263" y="999" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
-<rect x="280" y="976" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="297" y="999" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
-<rect x="246" y="1010" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="263" y="1033" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<rect x="280" y="1010" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="297" y="1033" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
-<rect x="246" y="1044" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="263" y="1067" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
-<rect x="280" y="1044" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="297" y="1067" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
-<text class="svgsm" x="280" y="1102" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Aᵀ　（3 行 2 列）</tspan></text>
-<text class="svgsm" x="48" y="1146" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">黄色那<tspan font-weight="700">一行</tspan>，转完变成了黄色那<tspan font-weight="700">一列</tspan>。</tspan></text>
-<text class="svgsm" x="48" y="1170" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">数一个没少、值一个没变　——　变的只是<tspan font-weight="700">「从哪个方向读」</tspan>。</text>
-<text class="svgsm" x="48" y="1196" fill="#80868b" style="font-size:12.5px;font-variant-numeric:tabular-nums">所以它<tspan font-weight="700">不花算力</tspan>，真实实现里常常连搬都不搬。</text>
-<text class="svgsm" x="470" y="930" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 为什么非它不可</tspan></text>
-<text class="svgsm" x="470" y="954" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">矩阵乘有一条死规矩：<tspan font-weight="700">左边那个的列数，必须等于右边那个的行数</tspan></text>
-<text class="svgsm" x="470" y="996" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
-<text class="svgsm" x="500" y="996" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X ［T × d_in］　×　W ［d_in × d_out］　＝　Y ［T × d_out］</tspan></text>
-<text class="svgsm" x="500" y="1022" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">d_in</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
-<text class="svgsm" x="500" y="1044" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums">原本的摆法：把输入按权重混一遍</text>
-<text class="svgsm" x="470" y="1088" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">②</tspan></text>
-<text class="svgsm" x="500" y="1088" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Xᵀ ［d_in × T］　×　dY ［T × d_out］　＝　dW ［d_in × d_out］</tspan></text>
-<text class="svgsm" x="500" y="1114" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">T（位置）</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
-<text class="svgsm" x="500" y="1136" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums">要得到一块<tspan font-weight="700">跟 W 同形</tspan>的结果 ——　只有这一种摆法</text>
-<text class="svgsm" x="470" y="1180" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③</tspan></text>
-<text class="svgsm" x="500" y="1180" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">dY ［T × d_out］　×　Wᵀ ［d_out × d_in］　＝　dX ［T × d_in］</tspan></text>
-<text class="svgsm" x="500" y="1206" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">d_out</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
-<text class="svgsm" x="500" y="1228" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums">要得到一块<tspan font-weight="700">跟 X 同形</tspan>的结果 ——　只有这一种摆法</text>
-<rect x="40" y="1284" width="1320" height="98" rx="8" fill="#fff8e1" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="64" y="1314" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">所以转置<tspan font-weight="700">不是一步额外的运算</tspan>：你要的结果形状一旦定死 ——　dW 得跟 W 同形、dX 得跟 X 同形 ——　<tspan font-weight="700">转置就是唯一摆得上的方式</tspan>。</text>
-<text class="svgsm" x="64" y="1342" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">换成人话：前向问的是「<tspan font-weight="700">输入怎么混成输出</tspan>」；③ 问的是反过来那个问题 ——　「<tspan font-weight="700">输出的责任怎么分回输入</tspan>」。</text>
-<text class="svgsm" x="64" y="1368" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张 W，换个方向读，写出来就是 Wᵀ。</tspan>　·　而 ② 里 Xᵀ 的作用是<tspan font-weight="700">把「位置」摆到中间去让它被吃掉</tspan>　——　这就是 1.2d 说的那笔「结账」。</text>
-<rect x="0" y="1428" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1428" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="0" y="1430" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="1458" x2="1400" y2="1458" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="1448" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 全图的钥匙：<tspan font-weight="700">一条线进来，分成两支</tspan></tspan></text>
-<text class="svgsm" x="554" y="1448" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">不是「反向比较慢」这种含糊说法 ——&#160;<tspan font-weight="700">是两支，而且一支都省不掉</tspan></text>
-<rect x="52" y="1592" width="300" height="68" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="202" y="1620" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游传来的责任 δ</tspan></text>
-<text class="svgsm" x="202" y="1644" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">（就这一个东西）</text>
-<line x1="352" y1="1626" x2="456" y2="1626" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
-<rect x="461" y="1617" width="18" height="18" rx="9" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<line x1="470" y1="1626" x2="540" y2="1550" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<line x1="470" y1="1626" x2="540" y2="1702" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="548" y="1516" width="330" height="68" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
-<text class="svgsm" x="713" y="1542" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 前向存下来的<tspan font-weight="700">输入</tspan></tspan></text>
-<text class="svgsm" x="713" y="1568" fill="#681da8" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
-<line x1="878" y1="1550" x2="940" y2="1550" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<rect x="948" y="1520" width="250" height="60" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1073" y="1555" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这块权重的梯度</tspan></text>
-<text class="svgsm" x="1218" y="1544" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交给优化器</tspan></text>
-<text class="svgsm" x="1218" y="1566" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">到此为止</tspan></text>
-<text class="svgsm" x="713" y="1600" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">这是这一步真正要的东西　·　到这儿这一支就不往前了</text>
-<rect x="548" y="1668" width="330" height="68" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
-<text class="svgsm" x="713" y="1694" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 这一层的<tspan font-weight="700">权重</tspan></tspan></text>
-<text class="svgsm" x="713" y="1720" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
-<line x1="878" y1="1702" x2="940" y2="1702" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<rect x="948" y="1672" width="250" height="60" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1073" y="1707" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 δ</tspan></text>
-<text class="svgsm" x="1218" y="1696" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">喂给前一层</tspan></text>
-<text class="svgsm" x="1218" y="1718" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">接着往左走</tspan></text>
-<text class="svgsm" x="713" y="1752" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">链条靠它　·　少了它，再往前就断了</text>
-<text class="svgsm" x="700" y="1780" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两支乘的东西不一样</tspan>（一支乘输入、一支乘权重）——　<tspan font-weight="700">所以合并不了</tspan>；一支断了链条就断，一支没了这一层就白算。<tspan font-weight="700">一个都省不掉，这就是那个 2。</tspan></text>
-<rect x="0" y="1836" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1836" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="0" y="1838" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="1866" x2="1400" y2="1866" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="1856" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓓ 于是这笔账就封口了</tspan></text>
-<text class="svgsm" x="300" y="1928" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">推理　只有前向</tspan></text>
-<rect x="320" y="1902" width="210" height="38" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="425" y="1927" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<text class="svgsm" x="546" y="1928" fill="#174ea6" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 1×</tspan></text>
-<text class="svgsm" x="300" y="1982" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练　前向 ＋ 反向</tspan></text>
-<rect x="320" y="1956" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="425" y="1981" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="540" y="1956" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="645" y="1981" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="760" y="1956" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="865" y="1981" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<text class="svgsm" x="986" y="1982" fill="#0d652d" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 3×</tspan></text>
-<text class="svgsm" x="300" y="2036" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练 ＋ 全量重算</tspan></text>
-<rect x="320" y="2010" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="425" y="2035" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="540" y="2010" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="645" y="2035" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="760" y="2010" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="865" y="2035" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<rect x="980" y="2010" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1085" y="2035" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
-<text class="svgsm" x="1206" y="2036" fill="#b06000" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 4×</tspan></text>
-<text class="svgsm" x="320" y="2074" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">「一遍」＝ 一次走完整个网络的矩阵乘量。<tspan font-weight="700">推理只买一遍，训练要买三遍</tspan></text>
-<rect x="0" y="2138" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="2138" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="2138" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="2165" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张图顺带回答了另外两个常见疑问</tspan></text>
-<text class="svgsm" x="20" y="2196" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「为什么训练比推理贵这么多」</tspan> ——&#160;算力上就是这个 3 倍； 但真正拉开差距的不是它，而是<tspan font-weight="700">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。</text>
-<text class="svgsm" x="20" y="2220" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「反向能不能只算一次」</tspan> ——&#160;能，如果你<tspan font-weight="700">不打算继续往前传</tspan>（比如只微调最后一层）。 那种情况下第 ③ 次确实可以省掉。 <tspan font-weight="700">但别把它安到冻结层头上</tspan> ——&#160;LoRA 那种每层都挂</text>
-<text class="svgsm" x="20" y="2244" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">adapter 的，第 ③ 笔一笔都省不掉；它省的是第 ② 笔（权重梯度）。见 3.8。</text>
+<text class="svglbl" x="14" y="874" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 全图的钥匙：<tspan font-weight="700">一条线进来，分成两支</tspan></tspan></text>
+<text class="svgsm" x="554" y="874" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">不是「反向比较慢」这种含糊说法 ——&#160;<tspan font-weight="700">是两支，而且一支都省不掉</tspan></text>
+<rect x="52" y="1018" width="300" height="68" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="202" y="1046" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上游传来的责任 δ</tspan></text>
+<text class="svgsm" x="202" y="1070" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">（就这一个东西）</text>
+<line x1="352" y1="1052" x2="456" y2="1052" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="461" y="1043" width="18" height="18" rx="9" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<line x1="470" y1="1052" x2="540" y2="976" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="470" y1="1052" x2="540" y2="1128" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="548" y="942" width="330" height="68" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="713" y="968" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 前向存下来的<tspan font-weight="700">输入</tspan></tspan></text>
+<text class="svgsm" x="713" y="994" fill="#681da8" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
+<line x1="878" y1="976" x2="940" y2="976" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="948" y="946" width="250" height="60" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1073" y="981" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这块权重的梯度</tspan></text>
+<text class="svgsm" x="1218" y="970" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交给优化器</tspan></text>
+<text class="svgsm" x="1218" y="992" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">到此为止</tspan></text>
+<text class="svgsm" x="713" y="1026" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">这是这一步真正要的东西　·　到这儿这一支就不往前了</text>
+<rect x="548" y="1094" width="330" height="68" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="713" y="1120" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× 这一层的<tspan font-weight="700">权重</tspan></tspan></text>
+<text class="svgsm" x="713" y="1146" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘</tspan></text>
+<line x1="878" y1="1128" x2="940" y2="1128" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="948" y="1098" width="250" height="60" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1073" y="1133" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新的责任 δ</tspan></text>
+<text class="svgsm" x="1218" y="1122" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">喂给前一层</tspan></text>
+<text class="svgsm" x="1218" y="1144" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">接着往左走</tspan></text>
+<text class="svgsm" x="713" y="1178" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">链条靠它　·　少了它，再往前就断了</text>
+<text class="svgsm" x="700" y="1206" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两支乘的东西不一样</tspan>（一支乘输入、一支乘权重）——　<tspan font-weight="700">所以合并不了</tspan>；一支断了链条就断，一支没了这一层就白算。<tspan font-weight="700">一个都省不掉，这就是那个 2。</tspan></text>
+<rect x="0" y="1262" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1262" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="1264" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="1292" x2="1400" y2="1292" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1282" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 于是这笔账就封口了</tspan></text>
+<text class="svgsm" x="300" y="1354" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">推理　只有前向</tspan></text>
+<rect x="320" y="1328" width="210" height="38" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="425" y="1353" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="546" y="1354" fill="#174ea6" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 1×</tspan></text>
+<text class="svgsm" x="300" y="1408" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练　前向 ＋ 反向</tspan></text>
+<rect x="320" y="1382" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="425" y="1407" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="540" y="1382" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="645" y="1407" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="760" y="1382" width="210" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="865" y="1407" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="986" y="1408" fill="#0d652d" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 3×</tspan></text>
+<text class="svgsm" x="300" y="1462" fill="#202124" text-anchor="end" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练 ＋ 全量重算</tspan></text>
+<rect x="320" y="1436" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="425" y="1461" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="540" y="1436" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="645" y="1461" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="760" y="1436" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="865" y="1461" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<rect x="980" y="1436" width="210" height="38" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1085" y="1461" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一遍</tspan></text>
+<text class="svgsm" x="1206" y="1462" fill="#b06000" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝ 4×</tspan></text>
+<text class="svgsm" x="320" y="1500" fill="#5f6368" style="font-size:14.5px;font-variant-numeric:tabular-nums">「一遍」＝ 一次走完整个网络的矩阵乘量。<tspan font-weight="700">推理只买一遍，训练要买三遍</tspan></text>
+<rect x="0" y="1564" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1564" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1564" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1591" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张图顺带回答了另外两个常见疑问</tspan></text>
+<text class="svgsm" x="20" y="1622" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「为什么训练比推理贵这么多」</tspan> ——&#160;算力上就是这个 3 倍； 但真正拉开差距的不是它，而是<tspan font-weight="700">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。</text>
+<text class="svgsm" x="20" y="1646" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「反向能不能只算一次」</tspan> ——&#160;能，如果你<tspan font-weight="700">不打算继续往前传</tspan>（比如只微调最后一层）。 那种情况下第 ③ 次确实可以省掉。 <tspan font-weight="700">但别把它安到冻结层头上</tspan> ——&#160;LoRA 那种每层都挂</text>
+<text class="svgsm" x="20" y="1670" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">adapter 的，第 ③ 笔一笔都省不掉；它省的是第 ② 笔（权重梯度）。见 3.8。</text>
 </svg><figcaption><b>Ⓑ 是这张图的钥匙</b> ——&nbsp;<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><span class="capmore"><br>⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;激活扔不掉、以及下一节那笔交易，全挂在这一句上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 「3 倍」是<b>矩阵乘口径</b>的常用近似：只数 matmul，忽略 norm / 激活函数 / 偏置 / 通信。真实 step 里这些占比不大，但<b>不是零</b></p>
 <p>⛔ 图上第 ② 步那句「用前向存下来的输入」是<b>整个专题的枢纽</b> ——&#160;激活扔不掉、以及下一节那笔重算交易，全都挂在这一句上</p></details></figure>
 
@@ -3938,6 +3881,17 @@ body.figonly section h3{margin-top:34px}
        ᵀ 这个记号在这一节出现了两次，而整讲从没定义过它。
      ⭐ 图已补了一整格 Ⓑ；这里是配套的文字版（图改了文没改是这门课的老坑）。
      ⚠️ 讲法上刻意不走链式法则：那是「怎么证」，而现场问的是「这是啥」。 -->
+<!-- ⛔ 2026-09-23 现场：「这部分不用细说，折起来。」
+     ⭐ 同一天上午它才被加进来（那会儿的问题是「为什么转置」完全没解释）。
+     ⚠️ 这两件事不矛盾：**当时缺的是「有没有答案」，现在多的是「答案占了多少主线」。**
+     ⭐⭐ 判据：**补一个洞和给它主线篇幅，是两个决定。**
+       洞该补 ——&#160;但补完要回头问一句：它值几分钟。
+     ⭐ 折叠条上把两句结论写在外面，不展开也拿得到。 -->
+<details class="foldfig"><summary><b>展开：那两个「ᵀ」是怎么回事</b>
+  <span class="why">——&nbsp;结论两句：<b>转置不花算力</b>（行变列、列变行，一个数都没动，
+  真实实现里常常连搬都不搬）；<b>而非它不可是形状逼出来的</b> ——&nbsp;
+  dW 得跟 W 同形、dX 得跟 X 同形，<u>转置就是唯一摆得上的方式</u>。想看推演的展开</span></summary>
+
 <h4>那两个「ᵀ」是怎么回事 ——&nbsp;<u>转置不是多算了一步</u></h4>
 
 <p><em>上面那张图里立着两个 <code>ᵀ</code>：<code>Xᵀ</code> 和 <code>Wᵀ</code>。
@@ -3981,6 +3935,72 @@ body.figonly section h3{margin-top:34px}
   <em>——&nbsp;所有位置对这块权重的意见，就是在这一步被累加起来的。
   这正是 <a href="#s1-2d">1.2d</a> 说的那笔「<b>结账</b>」：
   <u>位置维在这里消失，所以这一笔不往前传</u>。</em></p></div>
+
+<figure class="fbox fwide" id="fig-3x-transpose"><svg viewBox="0 0 1400 664" width="100%" role="img" aria-label="转置就是行变列列变行，一个数都没动，所以它不花算力。而为什么非它不可，是形状逼出来的：矩阵乘要求左边那个的列数等于右边那个的行数，而反向要的两块结果形状是定死的 —— 权重梯度必须跟权重同形，传给下游那块必须跟输入同形，于是转置就是唯一摆得上的方式"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">补一格：那两个「<tspan font-weight="700">ᵀ</tspan>」是怎么回事</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">结论两句：<tspan font-weight="700">转置不花算力（行列对调，一个数没动）</tspan>；<tspan font-weight="700">而非它不可是形状逼出来的</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">先说是什么，再说为什么非它不可</text>
+<rect x="0" y="102" width="1400" height="522" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">那两个「ᵀ」是怎么回事 ——　<tspan font-weight="700">转置不是多算了一步，是同一张表换个方向读</tspan></tspan></text>
+<text class="svgsm" x="718" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">分两层：先说它<tspan font-weight="700">是什么</tspan>，再说<tspan font-weight="700">为什么非它不可</tspan></text>
+<text class="svgsm" x="48" y="178" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 它是什么</tspan></text>
+<text class="svgsm" x="48" y="202" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">行变列、列变行　——　一个数都没动</text>
+<rect x="64" y="224" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="247" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="98" y="224" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="247" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="132" y="224" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="149" y="247" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="64" y="258" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="81" y="281" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="98" y="258" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="281" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="132" y="258" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="149" y="281" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="115" y="316" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A　（2 行 3 列）</tspan></text>
+<line x1="184" y1="258" x2="228" y2="258" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="206" y="244" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">转置</tspan></text>
+<rect x="246" y="224" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="247" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="280" y="224" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="297" y="247" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="246" y="258" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="281" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="280" y="258" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="297" y="281" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="246" y="292" width="34" height="34" rx="3" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="263" y="315" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="280" y="292" width="34" height="34" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="297" y="315" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="280" y="350" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Aᵀ　（3 行 2 列）</tspan></text>
+<text class="svgsm" x="48" y="394" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">黄色那<tspan font-weight="700">一行</tspan>，转完变成了黄色那<tspan font-weight="700">一列</tspan>。</tspan></text>
+<text class="svgsm" x="48" y="418" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">数一个没少、值一个没变　——　变的只是<tspan font-weight="700">「从哪个方向读」</tspan>。</text>
+<text class="svgsm" x="48" y="444" fill="#80868b" style="font-size:12.5px;font-variant-numeric:tabular-nums">所以它<tspan font-weight="700">不花算力</tspan>，真实实现里常常连搬都不搬。</text>
+<text class="svgsm" x="470" y="178" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 为什么非它不可</tspan></text>
+<text class="svgsm" x="470" y="202" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">矩阵乘有一条死规矩：<tspan font-weight="700">左边那个的列数，必须等于右边那个的行数</tspan></text>
+<text class="svgsm" x="470" y="244" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="500" y="244" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X ［T × d_in］　×　W ［d_in × d_out］　＝　Y ［T × d_out］</tspan></text>
+<text class="svgsm" x="500" y="270" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">d_in</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
+<text class="svgsm" x="500" y="292" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums">原本的摆法：把输入按权重混一遍</text>
+<text class="svgsm" x="470" y="336" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="500" y="336" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Xᵀ ［d_in × T］　×　dY ［T × d_out］　＝　dW ［d_in × d_out］</tspan></text>
+<text class="svgsm" x="500" y="362" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">T（位置）</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
+<text class="svgsm" x="500" y="384" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums">要得到一块<tspan font-weight="700">跟 W 同形</tspan>的结果 ——　只有这一种摆法</text>
+<text class="svgsm" x="470" y="428" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="500" y="428" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">dY ［T × d_out］　×　Wᵀ ［d_out × d_in］　＝　dX ［T × d_in］</tspan></text>
+<text class="svgsm" x="500" y="454" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">中间对上的那一维是 <tspan font-weight="700" fill="#e8710a">d_out</tspan>　——　乘完它就<tspan font-weight="700">被吃掉了</tspan></text>
+<text class="svgsm" x="500" y="476" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums">要得到一块<tspan font-weight="700">跟 X 同形</tspan>的结果 ——　只有这一种摆法</text>
+<rect x="40" y="532" width="1320" height="98" rx="8" fill="#fff8e1" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="64" y="562" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">所以转置<tspan font-weight="700">不是一步额外的运算</tspan>：你要的结果形状一旦定死 ——　dW 得跟 W 同形、dX 得跟 X 同形 ——　<tspan font-weight="700">转置就是唯一摆得上的方式</tspan>。</text>
+<text class="svgsm" x="64" y="590" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">换成人话：前向问的是「<tspan font-weight="700">输入怎么混成输出</tspan>」；③ 问的是反过来那个问题 ——　「<tspan font-weight="700">输出的责任怎么分回输入</tspan>」。</text>
+<text class="svgsm" x="64" y="616" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张 W，换个方向读，写出来就是 Wᵀ。</tspan>　·　而 ② 里 Xᵀ 的作用是<tspan font-weight="700">把「位置」摆到中间去让它被吃掉</tspan>　——　这就是 1.2d 说的那笔「结账」。</text>
+</svg><figcaption><b>结论两句。</b><em>① <b>转置不花算力</b>：行变列、列变行，<b>一个数都没动</b>（真实实现里常常连搬都不搬）。② <b>而非它不可是形状逼出来的</b>：矩阵乘要求「左边的列数 ＝ 右边的行数」，而反向要的两块结果形状是定死的 ——&nbsp;<b>dW 得跟 W 同形、dX 得跟 X 同形</b>，于是转置是唯一摆得上的方式。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 这一格原本是上一张图的 Ⓑ，2026-09-23 拆成独立一张——&#160;<b>为的是让课件那边能把它折叠起来</b>。</p></details></figure>
+
+</details>
 
 <p><span class="sub">⭐ 顺带说清图上那根<b>橙色的线</b>（现场也问了）：
   <em>它表示 ② 里用的那块 <code>Xᵀ</code> <b>不是新算出来的</b> ——&nbsp;

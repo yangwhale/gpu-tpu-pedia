@@ -85,7 +85,7 @@ def main():
     #   ⭐⭐ 判据：**一张图里，承载信息的必须是「有几个」，不是「多大个」。**
     #     尺寸可以跟着变，但它得是**个数的结果**，不能是个数的替身。
     #   ⭐ 改法：格子是**边长固定的正方形**，行数列数才是维度。
-    #     于是转置在画面上就是**同一批方格换个排法** ——&#160;这正是 Ⓑ 要说的那件事。
+    #     于是转置在画面上就是**同一批方格换个排法** ——&#160;这正是那一格要说的事。
     CELL = 22.0                       # 每一个小格：固定边长的正方形，永远不拉伸
     NT, NIN, NOUT = 6, 4, 3           # 示意用的格子数：位置 T / 进来 d_in / 出去 d_out
     assert NT > NIN > NOUT, "三个维度画成三种格子数，要能一眼分开"
@@ -185,108 +185,11 @@ def main():
     f.t(700, py + 78 + 3 * ROW - 14,
         "⛔ ② 那块虚线的，就是<tspan font-weight=\"700\">激活扔不掉的全部原因</tspan>。"
         "　·　⭐ 那两个 <tspan font-weight=\"700\">ᵀ</tspan> 是怎么回事？"
-        "<tspan font-weight=\"700\">下面 Ⓑ 一整格专讲它。</tspan>",
+        "<tspan font-weight=\"700\">另配了一格专讲它，在下面折叠着。</tspan>",
         INK, size=15, anchor="middle")
     f._pan = None
 
-    # ══════════ Ⓑ 那两个「ᵀ」到底是怎么回事 ═══════════════════════
-    # ⭐⭐⭐ 2026-09-23 新加。现场原话：「为什么转置啊？」
-    #   ⛔ 讲法上的取舍：**不讲链式法则，也不讲「梯度的矩阵形式」。**
-    #     那两条都是「怎么证」，而现场问的是「这是啥」。
-    #   ⭐ 分两层答，顺序不能倒：
-    #     ① 它是什么 ——&#160;行列对调，**一个数都没变**。先把「它很高深」这个
-    #        印象拆掉，后面那层才听得进去。
-    #     ② 为什么非它不可 ——&#160;矩阵乘要求「左边的列数 ＝ 右边的行数」，
-    #        而结果的形状是被定死的（dW 得跟 W 同形、dX 得跟 X 同形），
-    #        于是**转置是唯一摆得上的方式**。它不是一步额外运算。
-    PHT = 522
-    pyt = f.panel(0, py + PH + 22, W, PHT,
-                  "Ⓑ 那两个「ᵀ」是怎么回事 ——　<tspan font-weight=\"700\">"
-                  "转置不是多算了一步，是同一张表换个方向读</tspan>", OR,
-                  sub="⭐ 分两层：先说它<tspan font-weight=\"700\">是什么</tspan>，"
-                      "再说<tspan font-weight=\"700\">为什么非它不可</tspan>")
-
-    # ── 左半：转置是什么（一个数都没动）──────────────────────────
-    f.t(48, pyt + 46, "① 它是什么", OR, True, 16)
-    f.t(48, pyt + 70, "行变列、列变行　——　一个数都没动", GY, size=13)
-
-    CELL = 34
-    MA = ((1, 2, 3), (4, 5, 6))
-    ax, ay = 64, pyt + 92
-    for r in range(2):
-        for c in range(3):
-            f.box(ax + c * CELL, ay + r * CELL, CELL, CELL,
-                  "#fef7e0" if r == 0 else "#fff", GY2, 3)
-            f.t(ax + c * CELL + CELL / 2, ay + r * CELL + CELL / 2 + 6,
-                str(MA[r][c]), INK, True, 14, "middle")
-    f.t(ax + 1.5 * CELL, ay + 2 * CELL + 24, "A　（2 行 3 列）",
-        INK, True, 13, "middle")
-
-    f.line(ax + 3 * CELL + 18, ay + CELL, ax + 3 * CELL + 62, ay + CELL, OR, 2.2)
-    f.t(ax + 3 * CELL + 40, ay + CELL - 14, "转置", OR, True, 12.5, "middle")
-
-    bx = ax + 3 * CELL + 80
-    for r in range(3):
-        for c in range(2):
-            f.box(bx + c * CELL, ay + r * CELL, CELL, CELL,
-                  "#fef7e0" if c == 0 else "#fff", GY2, 3)
-            f.t(bx + c * CELL + CELL / 2, ay + r * CELL + CELL / 2 + 6,
-                str(MA[c][r]), INK, True, 14, "middle")
-    f.t(bx + CELL, ay + 3 * CELL + 24, "Aᵀ　（3 行 2 列）", INK, True, 13, "middle")
-
-    f.t(48, ay + 3 * CELL + 68,
-        "⭐ 黄色那<tspan font-weight=\"700\">一行</tspan>，转完变成了黄色那"
-        "<tspan font-weight=\"700\">一列</tspan>。", OR, True, 13.5)
-    f.t(48, ay + 3 * CELL + 92,
-        "数一个没少、值一个没变　——　变的只是<tspan font-weight=\"700\">"
-        "「从哪个方向读」</tspan>。", GY, size=13)
-    f.t(48, ay + 3 * CELL + 118,
-        "⛔ 所以它<tspan font-weight=\"700\">不花算力</tspan>，"
-        "真实实现里常常连搬都不搬。", GY2, size=12.5)
-
-    # ── 右半：为什么非它不可（形状逼出来的）──────────────────────
-    sx = 470
-    f.t(sx, pyt + 46, "② 为什么非它不可", OR, True, 16)
-    f.t(sx, pyt + 70,
-        "矩阵乘有一条死规矩：<tspan font-weight=\"700\">"
-        "左边那个的列数，必须等于右边那个的行数</tspan>", GY, size=13)
-
-    CHAIN = (
-        (BL, "①", "X ［T × d_in］", "W ［d_in × d_out］", "Y ［T × d_out］",
-         "d_in", "原本的摆法：把输入按权重混一遍"),
-        (RD, "②", "Xᵀ ［d_in × T］", "dY ［T × d_out］", "dW ［d_in × d_out］",
-         "T（位置）", "要得到一块<tspan font-weight=\"700\">跟 W 同形</tspan>的结果 ——　"
-         "只有这一种摆法"),
-        (RD, "③", "dY ［T × d_out］", "Wᵀ ［d_out × d_in］", "dX ［T × d_in］",
-         "d_out", "要得到一块<tspan font-weight=\"700\">跟 X 同形</tspan>的结果 ——　"
-         "只有这一种摆法"),
-    )
-    for i, (col, tag, a_, b_, c_, kill, why) in enumerate(CHAIN):
-        yy = pyt + 112 + i * 92
-        f.t(sx, yy, tag, col, True, 16)
-        f.t(sx + 30, yy, "%s　×　%s　＝　%s" % (a_, b_, c_), INK, True, 14.5)
-        f.t(sx + 30, yy + 26,
-            "中间对上的那一维是 <tspan font-weight=\"700\" fill=\"%s\">%s</tspan>"
-            "　——　乘完它就<tspan font-weight=\"700\">被吃掉了</tspan>" % (OR, kill),
-            GY, size=12.5)
-        f.t(sx + 30, yy + 48, why, col, size=12.5)
-
-    f.box(40, pyt + 400, 1320, 98, "#fff8e1", OR, 8)
-    f.t(64, pyt + 430,
-        "⭐ 所以转置<tspan font-weight=\"700\">不是一步额外的运算</tspan>："
-        "你要的结果形状一旦定死 ——　dW 得跟 W 同形、dX 得跟 X 同形 ——　"
-        "<tspan font-weight=\"700\">转置就是唯一摆得上的方式</tspan>。", INK, size=14.5)
-    f.t(64, pyt + 458,
-        "⭐⭐ 换成人话：前向问的是「<tspan font-weight=\"700\">输入怎么混成输出</tspan>」；"
-        "③ 问的是反过来那个问题 ——　「<tspan font-weight=\"700\">"
-        "输出的责任怎么分回输入</tspan>」。", INK, size=14.5)
-    f.t(64, pyt + 484,
-        "<tspan font-weight=\"700\">同一张 W，换个方向读，写出来就是 Wᵀ。</tspan>"
-        "　·　而 ② 里 Xᵀ 的作用是<tspan font-weight=\"700\">把「位置」摆到中间去让它被吃掉</tspan>"
-        "　——　这就是 1.2d 说的那笔「结账」。", INK, size=14.5)
-    f._pan = None
-
-    # ══════════ Ⓒ 岔路：一进两出 ═════════════════════════════════
+    # ══════════ Ⓑ 岔路：一进两出 ═════════════════════════════════
     # ⭐⭐⭐ 2026-09-17 重画。原来这一格是**两张并排的问题卡**：
     #   「问题一：我这块权重该怎么改」「问题二：我前面那层该收到什么」。
     #   话是对的，但它是**读**出来的 ——&#160;两张卡并排，
@@ -300,8 +203,8 @@ def main():
     # ⛔ 判据：**「为什么是 N 个」这种问题，要用图形结构回答，不要用并列的卡片。**
     #   并列只表达「有 N 个」，结构才表达「为什么是 N 个」。
     PH2 = 356
-    py2 = f.panel(0, pyt + PHT + 22, W, PH2,
-                  "Ⓒ ⭐⭐⭐ 全图的钥匙：<tspan font-weight=\"700\">"
+    py2 = f.panel(0, py + PH + 22, W, PH2,
+                  "Ⓑ ⭐⭐⭐ 全图的钥匙：<tspan font-weight=\"700\">"
                   "一条线进来，分成两支</tspan>", RD,
                   sub="⛔ 不是「反向比较慢」这种含糊说法 ——&#160;"
                       "<tspan font-weight=\"700\">是两支，而且一支都省不掉</tspan>")
@@ -345,10 +248,10 @@ def main():
         INK, size=14, anchor="middle")
     f._pan = None
 
-    # ══════════ Ⓓ 加起来 ═════════════════════════════════════════
+    # ══════════ Ⓒ 加起来 ═════════════════════════════════════════
     PH3 = 250
     py3 = f.panel(0, py2 + PH2 + 22, W, PH3,
-                  "Ⓓ 于是这笔账就封口了", GR)
+                  "Ⓒ 于是这笔账就封口了", GR)
 
     BARS = ((FWD, BL, "#e8f0fe", "推理　只有前向"),
             (TOTAL, GR, "#e6f4ea", "训练　前向 ＋ 反向"),
@@ -388,4 +291,133 @@ def main():
     f.save("fig4-3x.svg", yy + 6)
 
 
+# ══════════════════════════════════════════════════════════════════
+# 第二张：只有转置那一格。⭐ 课件用 <details> 收着（__FIG_3X_TRANSPOSE__）。
+# ══════════════════════════════════════════════════════════════════
+def transpose():
+    g = Fig(W, "转置就是行变列列变行，一个数都没动，所以它不花算力。"
+               "而为什么非它不可，是形状逼出来的："
+               "矩阵乘要求左边那个的列数等于右边那个的行数，"
+               "而反向要的两块结果形状是定死的 —— "
+               "权重梯度必须跟权重同形，传给下游那块必须跟输入同形，"
+               "于是转置就是唯一摆得上的方式")
+
+    y0t = g.header(
+        "补一格：那两个「<tspan font-weight=\"700\">ᵀ</tspan>」是怎么回事",
+        "⭐ 结论两句：<tspan font-weight=\"700\">转置不花算力（行列对调，一个数没动）</tspan>；"
+        "<tspan font-weight=\"700\">而非它不可是形状逼出来的</tspan>",
+        [(OR, "先说是什么，再说为什么非它不可")])
+
+    # ══════════ 单独一张：那两个「ᵀ」到底是怎么回事 ══════════
+    # ⛔ 2026-09-23 现场：「这部分不用细说，折起来。」
+    #   ⭐ 同一天上午它才被加进来（那会儿的问题是「为什么转置」完全没解释）。
+    #     ⚠️ 这两件事不矛盾：**当时缺的是「有没有答案」，现在多的是「答案占了多少主线」。**
+    #     ⭐⭐ 判据：**补一个洞和给它主线篇幅，是两个决定。**
+    #       洞该补 ——&#160;但补完要回头问一句：它值几分钟。
+    #   拆成独立一张，课件那边用 <details> 收着，结论写在折叠条上。
+    # ⭐⭐⭐ 2026-09-23 新加。现场原话：「为什么转置啊？」
+    #   ⛔ 讲法上的取舍：**不讲链式法则，也不讲「梯度的矩阵形式」。**
+    #     那两条都是「怎么证」，而现场问的是「这是啥」。
+    #   ⭐ 分两层答，顺序不能倒：
+    #     ① 它是什么 ——&#160;行列对调，**一个数都没变**。先把「它很高深」这个
+    #        印象拆掉，后面那层才听得进去。
+    #     ② 为什么非它不可 ——&#160;矩阵乘要求「左边的列数 ＝ 右边的行数」，
+    #        而结果的形状是被定死的（dW 得跟 W 同形、dX 得跟 X 同形），
+    #        于是**转置是唯一摆得上的方式**。它不是一步额外运算。
+    PHT = 522
+    pyt = g.panel(0, y0t, W, PHT,
+                  "那两个「ᵀ」是怎么回事 ——　<tspan font-weight=\"700\">"
+                  "转置不是多算了一步，是同一张表换个方向读</tspan>", OR,
+                  sub="⭐ 分两层：先说它<tspan font-weight=\"700\">是什么</tspan>，"
+                      "再说<tspan font-weight=\"700\">为什么非它不可</tspan>")
+
+    # ── 左半：转置是什么（一个数都没动）──────────────────────────
+    g.t(48, pyt + 46, "① 它是什么", OR, True, 16)
+    g.t(48, pyt + 70, "行变列、列变行　——　一个数都没动", GY, size=13)
+
+    CELL = 34
+    MA = ((1, 2, 3), (4, 5, 6))
+    ax, ay = 64, pyt + 92
+    for r in range(2):
+        for c in range(3):
+            g.box(ax + c * CELL, ay + r * CELL, CELL, CELL,
+                  "#fef7e0" if r == 0 else "#fff", GY2, 3)
+            g.t(ax + c * CELL + CELL / 2, ay + r * CELL + CELL / 2 + 6,
+                str(MA[r][c]), INK, True, 14, "middle")
+    g.t(ax + 1.5 * CELL, ay + 2 * CELL + 24, "A　（2 行 3 列）",
+        INK, True, 13, "middle")
+
+    g.line(ax + 3 * CELL + 18, ay + CELL, ax + 3 * CELL + 62, ay + CELL, OR, 2.2)
+    g.t(ax + 3 * CELL + 40, ay + CELL - 14, "转置", OR, True, 12.5, "middle")
+
+    bx = ax + 3 * CELL + 80
+    for r in range(3):
+        for c in range(2):
+            g.box(bx + c * CELL, ay + r * CELL, CELL, CELL,
+                  "#fef7e0" if c == 0 else "#fff", GY2, 3)
+            g.t(bx + c * CELL + CELL / 2, ay + r * CELL + CELL / 2 + 6,
+                str(MA[c][r]), INK, True, 14, "middle")
+    g.t(bx + CELL, ay + 3 * CELL + 24, "Aᵀ　（3 行 2 列）", INK, True, 13, "middle")
+
+    g.t(48, ay + 3 * CELL + 68,
+        "⭐ 黄色那<tspan font-weight=\"700\">一行</tspan>，转完变成了黄色那"
+        "<tspan font-weight=\"700\">一列</tspan>。", OR, True, 13.5)
+    g.t(48, ay + 3 * CELL + 92,
+        "数一个没少、值一个没变　——　变的只是<tspan font-weight=\"700\">"
+        "「从哪个方向读」</tspan>。", GY, size=13)
+    g.t(48, ay + 3 * CELL + 118,
+        "⛔ 所以它<tspan font-weight=\"700\">不花算力</tspan>，"
+        "真实实现里常常连搬都不搬。", GY2, size=12.5)
+
+    # ── 右半：为什么非它不可（形状逼出来的）──────────────────────
+    sx = 470
+    g.t(sx, pyt + 46, "② 为什么非它不可", OR, True, 16)
+    g.t(sx, pyt + 70,
+        "矩阵乘有一条死规矩：<tspan font-weight=\"700\">"
+        "左边那个的列数，必须等于右边那个的行数</tspan>", GY, size=13)
+
+    CHAIN = (
+        (BL, "①", "X ［T × d_in］", "W ［d_in × d_out］", "Y ［T × d_out］",
+         "d_in", "原本的摆法：把输入按权重混一遍"),
+        (RD, "②", "Xᵀ ［d_in × T］", "dY ［T × d_out］", "dW ［d_in × d_out］",
+         "T（位置）", "要得到一块<tspan font-weight=\"700\">跟 W 同形</tspan>的结果 ——　"
+         "只有这一种摆法"),
+        (RD, "③", "dY ［T × d_out］", "Wᵀ ［d_out × d_in］", "dX ［T × d_in］",
+         "d_out", "要得到一块<tspan font-weight=\"700\">跟 X 同形</tspan>的结果 ——　"
+         "只有这一种摆法"),
+    )
+    for i, (col, tag, a_, b_, c_, kill, why) in enumerate(CHAIN):
+        yy = pyt + 112 + i * 92
+        g.t(sx, yy, tag, col, True, 16)
+        g.t(sx + 30, yy, "%s　×　%s　＝　%s" % (a_, b_, c_), INK, True, 14.5)
+        g.t(sx + 30, yy + 26,
+            "中间对上的那一维是 <tspan font-weight=\"700\" fill=\"%s\">%s</tspan>"
+            "　——　乘完它就<tspan font-weight=\"700\">被吃掉了</tspan>" % (OR, kill),
+            GY, size=12.5)
+        g.t(sx + 30, yy + 48, why, col, size=12.5)
+
+    g.box(40, pyt + 400, 1320, 98, "#fff8e1", OR, 8)
+    g.t(64, pyt + 430,
+        "⭐ 所以转置<tspan font-weight=\"700\">不是一步额外的运算</tspan>："
+        "你要的结果形状一旦定死 ——　dW 得跟 W 同形、dX 得跟 X 同形 ——　"
+        "<tspan font-weight=\"700\">转置就是唯一摆得上的方式</tspan>。", INK, size=14.5)
+    g.t(64, pyt + 458,
+        "⭐⭐ 换成人话：前向问的是「<tspan font-weight=\"700\">输入怎么混成输出</tspan>」；"
+        "③ 问的是反过来那个问题 ——　「<tspan font-weight=\"700\">"
+        "输出的责任怎么分回输入</tspan>」。", INK, size=14.5)
+    g.t(64, pyt + 484,
+        "<tspan font-weight=\"700\">同一张 W，换个方向读，写出来就是 Wᵀ。</tspan>"
+        "　·　而 ② 里 Xᵀ 的作用是<tspan font-weight=\"700\">把「位置」摆到中间去让它被吃掉</tspan>"
+        "　——　这就是 1.2d 说的那笔「结账」。", INK, size=14.5)
+    g._pan = None
+
+
+    yb = g.src(y0t + PHT + 26,
+               "⭐ 这一格原本是上一张图的 Ⓑ，2026-09-23 拆成独立一张"
+               "——&#160;<tspan font-weight=\"700\">为的是让课件那边能把它折叠起来</tspan>。")
+
+    g.save("fig4-3x-transpose.svg", yb + 14)
+
+
 main()
+transpose()
