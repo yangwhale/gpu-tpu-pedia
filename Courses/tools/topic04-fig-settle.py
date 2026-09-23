@@ -79,17 +79,42 @@ def main():
                  "Ⓐ 一个带权重的算子，反向时做<tspan font-weight=\"700\">两件事</tspan>"
                  "　——　这就是第一节说的那两笔乘法", GR,
                  sub="⭐ <tspan font-weight=\"700\">同一张 δ 表，两种收缩方式</tspan>："
-                     "一笔把位置维吃掉，一笔把位置维留着")
+                     "一笔把位置维吃掉，一笔把位置维留着"
+                     "　｜　⛔ 例子是一个<tspan font-weight=\"700\">真实存在</tspan>的算子："
+                     "<tspan font-weight=\"700\">专家的 up 投影，7,168 进 →&#160;2,048 出</tspan>")
 
     # 中间：这一层的两张表
-    f.box(560, py + 52, 280, 86, "#e8f0fe", BL, 6)
-    f.t(700, py + 82, "δ　（出口那一侧的责任）", BL, True, 15, "middle")
-    f.t(700, py + 112, "%s 行 × %s 列" % (format(TGT, ","), format(D_OUT, ",")),
+    # ⛔⛔ 2026-09-23 现场：「这个图里的 2,048 是哪来的？如果是序列长度的话，
+    #   不应该是 4,096 吗？那 2,048 的话，就只有可能是专家维度。」——&#160;
+    #   ⭐ 他推对了（＝ V3 的 moe_intermediate_size，专家的腰），
+    #     但**他是推出来的，不是读出来的** ——&#160;图上一个字都没说。
+    #   ⛔ 而且旁边就摆着 4,095，两个四位数并排、只有一个有身份，
+    #     读者第一反应必然是「这俩是不是一类东西」。
+    #   ⭐⭐ 判据：**一张图里并排出现两个同量级的数时，要么都标出身份，要么都别标。**
+    #     标了一个、漏了一个，比两个都不标更误导 ——&#160;
+    #     没标的那个会被自动归进已标的那一类。
+    DIMS = ((D_OUT, "这块权重的<tspan font-weight=\"700\">出口</tspan>宽　——　"
+                    "专家的「腰」"),
+            (D_IN,  "<tspan font-weight=\"700\">残差流</tspan>的宽度"))
+    f.box(560, py + 46, 280, 104, "#e8f0fe", BL, 6)
+    f.t(700, py + 74, "δ　（出口那一侧的责任）", BL, True, 15, "middle")
+    f.t(700, py + 104, "%s 行 × %s 列" % (format(TGT, ","), format(D_OUT, ",")),
         INK, True, 15, "middle")
-    f.box(560, py + 150, 280, 76, "#f1f3f4", GY2, 6)
-    f.t(700, py + 178, "x　（入口那一侧的输入）", GY, True, 14, "middle")
-    f.t(700, py + 206, "%s 行 × %s 列" % (format(TGT, ","), format(D_IN, ",")),
+    f.t(700, py + 132, "%s ＝ %s" % (format(D_OUT, ","), DIMS[0][1]),
+        GY2, size=11.5, anchor="middle")
+    f.box(560, py + 164, 280, 96, "#f1f3f4", GY2, 6)
+    f.t(700, py + 192, "x　（入口那一侧的输入）", GY, True, 14, "middle")
+    f.t(700, py + 220, "%s 行 × %s 列" % (format(TGT, ","), format(D_IN, ",")),
         GY, size=14, anchor="middle")
+    f.t(700, py + 246, "%s ＝ %s" % (format(D_IN, ","), DIMS[1][1]),
+        GY2, size=11.5, anchor="middle")
+    # ⭐ 4,095 也得有身份 ——&#160;判据说了「要么都标」。
+    f.t(700, py + 288,
+        "⭐ 而两张表共有的 <tspan font-weight=\"700\">%s</tspan> ＝ "
+        "<tspan font-weight=\"700\">位置数</tspan>" % format(TGT, ","),
+        GR, True, 13, "middle")
+    f.t(700, py + 310, "（4,096 长的序列有 4,095 个「下一个字」）",
+        GY2, size=11.5, anchor="middle")
 
     # 左：结账
     f.box(40, py + 52, 460, 296, "#e6f4ea", GR, 8)
