@@ -48,7 +48,16 @@ def _soft(z):
 P, EXP_RAW, _ = _soft(Z)
 LOSS = -math.log(P[GOLD])
 EXP = [math.exp(v) for v in Z]      # 不减最大值的原始指数（示意用，数小不会炸）
-ESUM = sum(EXP)
+ESUM = sum(EXP)                     # ⭐ 这是**指数**的总和，只属于第 ② 格
+ZSUM = sum(Z)                       # logits 自己的总和 ——&#160;它在数学上没有用处
+assert abs(ESUM - 14.83) < 0.01 and abs(ZSUM - 4.0) < 1e-9, (ESUM, ZSUM)
+# ⛔⛔ 2026-09-23 现场抓到：第 ① 格底下原来也印着 ESUM（14.83）——&#160;
+#   那是**第 ② 格的数被搬到了第 ① 格底下**。logits 这一排加起来是 4.00。
+#   ⭐ 而正确的修法不是把它改成 4.00：**logits 的总和本来就没有意义** ——&#160;
+#     整排同时加减一个常数，softmax 出来的概率一模一样（这正是后面那个
+#     log-sum-exp 技巧站得住的原因）。印一个没有意义的数，等于请人去琢磨它。
+#   ⭐⭐ 判据：**三格并排、每格底下都挂一个同名读数时，先问这个读数在每一格
+#     是不是都成立。** 版面上的对称会把一个不存在的量也变出来。
 
 # ⭐ 只抬高一个**错**的 logit，正确那一格一个字不改
 Z2 = (2.0, 2.0, 1.0, 0.0, 0.0)
@@ -113,7 +122,11 @@ def main():
         if c < 2:
             f.line(cx + 132, py + 152, cx + 194, py + 152, col, 2.4)
 
-    f.t(150, py + 284, "总和 ＝ %.2f" % ESUM, GY2, size=12, anchor="middle")
+    f.t(150, py + 282,
+        "这一排的总和<tspan font-weight=\"700\">不用管</tspan>", GY2,
+        size=12, anchor="middle")
+    f.t(150, py + 302,
+        "整排同时加减一个数，概率一模一样", GY2, size=11.5, anchor="middle")
     f.t(480, py + 284, "总和 ＝ %.2f" % ESUM, OR, True, 12.5, "middle")
     f.t(810, py + 284, "总和 ＝ 1.00", GR, True, 12.5, "middle")
 
