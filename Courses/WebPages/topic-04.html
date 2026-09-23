@@ -3246,7 +3246,7 @@ body.figonly section h3{margin-top:34px}
   而前面那些 token，是<b>在前向的 attention 里就已经被搅进这个输入了</b>，
   不是反向的时候才被拉进来的。</em></span></p></div>
 
-<figure class="fbox fwide" id="fig-settle"><svg viewBox="0 0 1400 1784" width="100%" role="img" aria-label="一个带权重的算子在反向时做两件事，而这两件事就是第一节说的那两笔乘法：一笔是把这一层的责任和这一层的输入相乘、沿位置求和，得到对权重的改动，位置这一维在这一笔里被吃掉，账就结在这儿；另一笔是把责任乘上权重本身，得到该传给上游的新责任，位置这一维在这一笔里完整保留。所以结账是每一个带权重的算子各结一次，不是一层算完再结，而且结账和往前传互不等待。权重梯度的桶是固定大小的，每个位置只是往同一个桶里加一笔；而且每层只加不除，那个除以总数在最开头的种子里就做过一次了"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-settle"><svg viewBox="0 0 1400 1466" width="100%" role="img" aria-label="一个带权重的算子在反向时做两件事，而这两件事就是第一节说的那两笔乘法：一笔是把这一层的责任和这一层的输入相乘、沿位置求和，得到对权重的改动，位置这一维在这一笔里被吃掉，账就结在这儿；另一笔是把责任乘上权重本身，得到该传给上游的新责任，位置这一维在这一笔里完整保留。所以结账是每一个带权重的算子各结一次，不是一层算完再结，而且结账和往前传互不等待。权重梯度的桶是固定大小的，每个位置只是往同一个桶里加一笔；而且每层只加不除，那个除以总数在最开头的种子里就做过一次了"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">「结账」——&#160;<tspan font-weight="700">权重梯度是在哪一步相加的</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">现场问：「每一个函数都做一次，还是把这一层算完再做？」——　<tspan font-weight="700">每一个带权重的算子各结一次，而且不等待</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -3255,8 +3255,6 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="145" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓑ 一层里谁结账</text>
 <rect x="276" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="297" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓒ 桶是固定大小的</text>
-<rect x="442" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="463" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Ⓓ 顺序</text>
 <rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3390,49 +3388,70 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1015" y="1182" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">② <tspan font-weight="700">每层只加，不除。</tspan>那个「÷ 总数」在最开头的种子里</text>
 <text class="svgsm" x="1015" y="1208" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">就做过<tspan font-weight="700">一次</tspan>了　——　每层再除一遍的话，61 层就除了 61 次。</text>
 <text class="svgsm" x="1015" y="1242" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">所以严格说这一步叫<tspan font-weight="700">求和</tspan>，不叫求平均　——　平均早就摊进每一笔里了。</text>
-<rect x="0" y="1322" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1322" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<rect x="0" y="1324" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="1352" x2="1400" y2="1352" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="1342" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓓ 顺序：<tspan font-weight="700">一收到责任就能结账，谁也不用等谁</tspan></tspan></text>
-<line x1="1320" y1="1444" x2="80" y2="1444" stroke="#9334e6" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<text class="svgsm" x="1330" y="1418" fill="#681da8" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss 那头</tspan></text>
-<text class="svgsm" x="90" y="1418" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入那头</tspan></text>
-<rect x="1146" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
-<text class="svgsm" x="1200" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 1</tspan></text>
-<line x1="1200" y1="1466" x2="1200" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="1200" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
-<rect x="930" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
-<text class="svgsm" x="984" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 2</tspan></text>
-<line x1="984" y1="1466" x2="984" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="984" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
-<rect x="714" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
-<text class="svgsm" x="768" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 3</tspan></text>
-<line x1="768" y1="1466" x2="768" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="768" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
-<rect x="498" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
-<text class="svgsm" x="552" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 4</tspan></text>
-<line x1="552" y1="1466" x2="552" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="552" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
-<rect x="282" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
-<text class="svgsm" x="336" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 5</tspan></text>
-<line x1="336" y1="1466" x2="336" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="336" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
-<rect x="66" y="1426" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
-<text class="svgsm" x="120" y="1450" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 6</tspan></text>
-<line x1="120" y1="1466" x2="120" y2="1498" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="120" y="1520" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
-<text class="svgsm" x="700" y="1560" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">而这正是<tspan font-weight="700">多卡训练能把通信藏进计算里</tspan>的原因：最后几层的账早就结完了，前面几层还在算　——</text>
-<text class="svgsm" x="700" y="1586" fill="#681da8" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">那段时间正好拿来把已经结完的那部分传出去。</tspan></tspan></text>
-<rect x="0" y="1638" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1638" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="1638" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1665" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张图的两句话</tspan></text>
-<text class="svgsm" x="20" y="1696" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个带权重的算子，反向时做两件事</tspan>　——　「δ 配本位置的输入、沿位置求和」结出权重梯度（位置维被吃掉）；「δ 乘权重」结出传给上游的责任（位置维留着）。<tspan font-weight="700">那就是第一节那</tspan></text>
-<text class="svgsm" x="20" y="1720" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两笔乘法。</tspan></text>
-<text class="svgsm" x="20" y="1744" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以结账是「每个带权重的算子各一次」，不是「一层算完再一次」</tspan>　——　而且桶的大小固定、每层只加不除。</text>
+<rect x="0" y="1320" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1320" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1320" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1347" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这张图的两句话</tspan></text>
+<text class="svgsm" x="20" y="1378" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个带权重的算子，反向时做两件事</tspan>　——　「δ 配本位置的输入、沿位置求和」结出权重梯度（位置维被吃掉）；「δ 乘权重」结出传给上游的责任（位置维留着）。<tspan font-weight="700">那就是第一节那</tspan></text>
+<text class="svgsm" x="20" y="1402" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两笔乘法。</tspan></text>
+<text class="svgsm" x="20" y="1426" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以结账是「每个带权重的算子各一次」，不是「一层算完再一次」</tspan>　——　而且桶的大小固定、每层只加不除。</text>
 </svg><figcaption><b>这一讲被追问得最深的一处，也是整节的枢纽。</b>——&nbsp;<em>Ⓐ 一个带权重的算子反向时做两件事：<b>一笔沿位置求和（结出权重梯度，位置维被吃掉）、一笔逐位置保留（结出传给上游的责任）</b>。<b>那就是 1.6 说的那两笔乘法。</b></em><span class="capmore"><br><em>Ⓑ 一层里带权重的各结各的账，不带权重的只是路过 ——&nbsp;<b>没有「一层算完再平均」这回事</b>。</em><br><em>Ⓒ 桶的大小固定、每层只加不除；Ⓓ 谁也不用等谁 ——&nbsp;<b>而这正是多卡训练能把通信藏进计算里的原因。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 现场自己推到的那一步是对的：「我当前这个 token 得用生成我这个 token 的激活，也就是前面所有 token 都参与计算之后的激活」——&#160;线性层的权重梯度<b>只用本位置的输入</b>，</p>
 <p>而前面那些 token 是<b>在前向的 attention 里就已经被搅进这个输入了</b>，不是反向时才拉进来的。⛔ 口径：V3 一层里<b>没有任何一块 7,168 × 7,168 的方阵</b> ——&#160;残差流是 7,168 宽，但<b>每一块的另一边都是别的数</b>（专家 7,168 → 2,048、MLA 把 KV 压到 512 那一档，而 o_proj 那一边是 16,384）。本图用专家 up 当例子。共 61 层。</p></details></figure>
+
+<!-- ⛔ 2026-09-23 现场：「这个地方有点讲不明白，把它折起来。因为它对全局
+     重要性也不高。」——&#160;它原来是上面那张图的第四格（顺序：一收到责任就能结账）。
+     ⭐ 判据：**一格图值不值得留在主线，看它在<u>这一讲</u>里承不承重** ——&#160;
+       不是看它本身对不对。这一格是对的，而且在专题五很要紧；
+       可这一讲要的只是「结账那一笔不往前传」，顺序不顺序的，这里用不上。
+     ⚠️ 折叠要求它先是独立产物，所以从主图里拆了出来。 -->
+<details class="foldfig"><summary><b>展开：结账不用排队 ——&nbsp;谁也不用等谁</b>
+  <span class="why">——&nbsp;<b>这一格在这一讲里不承重</b>，它真正派上用场是在
+  <u>专题五 · 并行策略</u>：最后几层的账早结完了、前面几层还在算，
+  那段时间正好拿来把已经结完的那部分传出去 ——&nbsp;
+  <b>这就是「把通信藏进计算里」</b>。想先看的展开</span></summary>
+
+<figure class="fbox fwide" id="fig-settle-order"><svg viewBox="0 0 1400 410" width="100%" role="img" aria-label="结账这件事不需要排队等：哪一层收到上游传来的责任，哪一层就能立刻把自己那笔权重梯度算掉，谁也不用等谁。而这正是多卡训练能把通信藏进计算里的原因 —— 最后几层的账早就结完了，前面几层还在算，那段时间正好拿来把已经结完的那部分传出去"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">补一格：<tspan font-weight="700">结账不用排队</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一格在<tspan font-weight="700">这一讲</tspan>里不承重；它真正派上用场是在<tspan font-weight="700">专题五 · 并行策略</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">顺序：谁也不用等谁</text>
+<rect x="0" y="102" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">顺序：<tspan font-weight="700">一收到责任就能结账，谁也不用等谁</tspan></tspan></text>
+<line x1="1320" y1="224" x2="80" y2="224" stroke="#9334e6" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="1330" y="198" fill="#681da8" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss 那头</tspan></text>
+<text class="svgsm" x="90" y="198" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入那头</tspan></text>
+<rect x="1146" y="206" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="1200" y="230" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 1</tspan></text>
+<line x1="1200" y1="246" x2="1200" y2="278" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="1200" y="300" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="930" y="206" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="984" y="230" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 2</tspan></text>
+<line x1="984" y1="246" x2="984" y2="278" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="984" y="300" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="714" y="206" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="768" y="230" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 3</tspan></text>
+<line x1="768" y1="246" x2="768" y2="278" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="768" y="300" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="498" y="206" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="552" y="230" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 4</tspan></text>
+<line x1="552" y1="246" x2="552" y2="278" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="552" y="300" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="282" y="206" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="336" y="230" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 5</tspan></text>
+<line x1="336" y1="246" x2="336" y2="278" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="336" y="300" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<rect x="66" y="206" width="108" height="36" rx="5" fill="#fff" stroke="#e8710a" stroke-width="1.5"/>
+<text class="svgsm" x="120" y="230" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算子 6</tspan></text>
+<line x1="120" y1="246" x2="120" y2="278" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="120" y="300" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结账</tspan></text>
+<text class="svgsm" x="700" y="340" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums">而这正是<tspan font-weight="700">多卡训练能把通信藏进计算里</tspan>的原因：最后几层的账早就结完了，前面几层还在算　——</text>
+<text class="svgsm" x="700" y="366" fill="#681da8" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">那段时间正好拿来把已经结完的那部分传出去。</tspan></tspan></text>
+</svg><figcaption><b>结账不用排队：哪一层收到上游传来的责任，哪一层就能立刻把自己那笔权重梯度算掉，谁也不用等谁。</b><em>⭐ 这一格在<b>这一讲</b>里不承重 ——&nbsp;它真正派上用场是在<b>专题五 · 并行策略</b>：最后几层的账早就结完了、前面几层还在算，那段时间正好拿来把已经结完的那部分传出去，<b>这就是「把通信藏进计算里」</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 这一格原本是上一张图的第四格，2026-09-23 拆成独立一张——&#160;<b>为的是让课件那边能把它折叠起来</b>。</p></details></figure>
+
+</details>
 
 <!-- ⭐⭐⭐ 2026-09-22 现场再追一层：「这个平均到底是怎么个平均？是序列级别的，
      还是 per device batch 的，然后再 cross device 的？……应该是分层次的。」
