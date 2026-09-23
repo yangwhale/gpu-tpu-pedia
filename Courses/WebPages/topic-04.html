@@ -2594,15 +2594,13 @@ body.figonly section h3{margin-top:34px}
   这个区别有实际后果：正因为约掉的是 softmax 那一步，
   <b>这个梯度才不会在 softmax 饱和的地方消失</b>。softmax 和交叉熵总是成对出现，一半的原因就在这儿。</em></span></p></div>
 
-<figure class="fbox fwide" id="fig-vote"><svg viewBox="0 0 1400 1524" width="100%" role="img" aria-label="梯度的本意是一屋子人各提各的要求，最后取平均。一条训练样本看到网络的输出之后，会希望正确那个字的分数推上去、其他字推下去，推多少跟差多远成正比 —— 这就是那颗种子，也就是预测减真值。而想让一个数变大有三条路：改偏置、改权重、让上一层更亮；改权重时按上游有多亮成比例最划算，这也正是反向必须用到前向存下来的值的原因。最后，如果只听一条样本的，网络会把所有输入都判成那一个答案，所以要把所有样本的诉求平均起来 —— 那个平均就是梯度，而多卡训练里的汇总，干的就是这个平均"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-vote"><svg viewBox="0 0 1400 1102" width="100%" role="img" aria-label="梯度的本意是一屋子人各提各的要求，最后取平均。一条训练样本看到网络的输出之后，会希望正确那个字的分数推上去、其他字推下去，推多少跟差多远成正比 —— 这就是那颗种子，也就是预测减真值。而想让一个数变大有三条路：改偏置、改权重、让上一层更亮 —— 上一层也改不了，于是这条要求就往回递一层，这就是反向传播。最后，如果只听一条样本的，网络会把所有输入都判成那一个答案，所以要把所有样本的诉求平均起来 —— 那个平均就是梯度，而多卡训练里的汇总，干的就是这个平均"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">梯度是什么　——　<tspan font-weight="700">一屋子人各提各的要求，最后取个平均</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一格不讲公式，只讲<tspan font-weight="700">这件事在干嘛</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">① 一条样本的诉求</text>
-<rect x="166" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="187" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">② 诉求怎么往回递</text>
-<rect x="332" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="353" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">③ 众口难调，取平均</text>
+<rect x="166" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="187" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">② 众口难调，取平均</text>
 <rect x="0" y="102" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -2645,95 +2643,127 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1060" y="346" fill="#174ea6" text-anchor="middle" style="font-size:15.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这就是本讲说的那颗<tspan font-weight="700">种子</tspan></tspan></text>
 <text class="svgsm" x="1060" y="374" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「预测 −　真值」</tspan>　——　换成人话就是这一句</text>
 <text class="svgsm" x="1060" y="408" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">注意它只是「希望」——　没人能直接改输出</text>
-<rect x="0" y="508" width="1400" height="372" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="508" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="508" width="1400" height="416" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="508" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0" y="510" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="538" x2="1400" y2="538" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="528" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 一根权重的<tspan font-weight="700">梯度</tspan>，正比于<tspan font-weight="700">上游有多亮</tspan></tspan></text>
-<text class="svgsm" x="727" y="528" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">两根线<tspan font-weight="700">加粗同样多</tspan>，回报差二十倍 ——　而「回报有多大」就是「这根权重的梯度有多大」</text>
-<rect x="160" y="614" width="60" height="60" rx="30" fill="#fef7e0" stroke="#e8710a" stroke-width="2.0"/>
-<text class="svgsm" x="190" y="650" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.0</tspan></text>
-<text class="svgsm" x="148" y="649" fill="#b06000" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">上游<tspan font-weight="700">很亮</tspan></text>
-<line x1="226" y1="644" x2="726" y2="708" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
-<text class="svgsm" x="465" y="658" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.1 粗</tspan></text>
-<rect x="160" y="742" width="60" height="60" rx="30" fill="#fff" stroke="#80868b" stroke-width="2.0"/>
-<text class="svgsm" x="190" y="778" fill="#80868b" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.2</tspan></text>
-<text class="svgsm" x="148" y="777" fill="#80868b" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">上游<tspan font-weight="700">很暗</tspan></text>
-<line x1="226" y1="772" x2="726" y2="708" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
-<text class="svgsm" x="465" y="730" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.1 粗</tspan></text>
-<rect x="730" y="674" width="60" height="68" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2.0"/>
-<text class="svgsm" x="760" y="714" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出</tspan></text>
-<line x1="800" y1="672" x2="834" y2="672" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<rect x="842" y="648" width="250" height="48" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="967" y="680" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出涨 <tspan font-weight="700">＋0.40</tspan></tspan></text>
-<line x1="800" y1="748" x2="834" y2="748" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<rect x="842" y="724" width="250" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="967" y="756" fill="#5f6368" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出涨 <tspan font-weight="700">＋0.02</tspan></tspan></text>
-<rect x="1120" y="644" width="270" height="104" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1255" y="682" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同样的力气</tspan></text>
-<text class="svgsm" x="1255" y="716" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回报差 <tspan font-weight="700">20 倍</tspan></tspan></text>
-<text class="svgsm" x="1255" y="744" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">——　正好是亮度之比</text>
-<text class="svgsm" x="700" y="800" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">说的就是<tspan font-weight="700">梯度</tspan>：<tspan font-weight="700">一根权重的梯度 ＝ 上游那一刻的亮度 × 下游传来的责任。</tspan>　这一格画的是<tspan font-weight="700">前面那个乘数</tspan>。</text>
-<text class="svgsm" x="700" y="834" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以「<tspan font-weight="700">改哪根线最划算</tspan>」这个问题，答案<tspan font-weight="700">不在反向里，在前向里</tspan>　——　它由那一刻的<tspan font-weight="700">亮度</tspan>决定。</text>
-<text class="svgsm" x="700" y="864" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">而那个亮度，是<tspan font-weight="700">前向算出来、必须被存下来</tspan>的。<tspan font-weight="700">整本显存账的根子，就在这一句上。</tspan></text>
-<rect x="0" y="930" width="1400" height="416" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="930" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="0" y="932" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="960" x2="1400" y2="960" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="950" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ <tspan font-weight="700">每一个位置都提自己的一份</tspan>　——　几千股力，加成一股</tspan></text>
-<text class="svgsm" x="617" y="950" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">注意这一格<tspan font-weight="700">一格 ＝ 一个位置</tspan>，不是一个字　——　字那一层在 Ⓐ，这一层是<tspan font-weight="700">位置与位置之间</tspan></text>
-<text class="svgsm" x="66" y="1061" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 1</tspan></text>
-<line x1="170" y1="1056" x2="194.727469423674" y2="1047.9655581462514" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="170" y="1096" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 1</text>
-<line x1="232" y1="1056" x2="238.09158556355567" y2="1034.756116519763" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="232" y="1096" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 2</text>
-<line x1="294" y1="1056" x2="311.15806175033725" y2="1073.7676930683647" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<line x1="356" y1="1056" x2="344.0597256723728" y2="1042.2642856399455" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<line x1="418" y1="1056" x2="413.93663264259385" y2="1079.0445014204856" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<line x1="480" y1="1056" x2="496.8275534829989" y2="1043.7740667523165" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<line x1="542" y1="1056" x2="522.9261217856908" y2="1051.9457220290537" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<line x1="604" y1="1056" x2="626.2003662171948" y2="1061.5351729713204" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="670" y="1061" fill="#80868b" style="font-size:12.0px;font-variant-numeric:tabular-nums">……　共 4,095 个位置</text>
-<text class="svgsm" x="66" y="1177" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 2</tspan></text>
-<line x1="170" y1="1172" x2="189.32176546241226" y2="1154.6026042346698" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<line x1="232" y1="1172" x2="228.92427446878256" y2="1150.1150756808113" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<line x1="294" y1="1172" x2="316.9014412077996" y2="1181.252782857373" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<line x1="356" y1="1172" x2="339.50519827593297" y2="1164.3083476363192" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<line x1="418" y1="1172" x2="423.6609723570322" y2="1194.7049199948583" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<line x1="480" y1="1172" x2="490.4" y2="1153.9866716012837" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<line x1="542" y1="1172" x2="522.9261217856908" y2="1176.0542779709463" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<line x1="604" y1="1172" x2="626.5324013889193" y2="1168.0269296949807" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<text class="svgsm" x="670" y="1177" fill="#80868b" style="font-size:12.0px;font-variant-numeric:tabular-nums">……　共 4,095 个位置</text>
-<text class="svgsm" x="430" y="1252" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">每一支箭头 ＝ <tspan font-weight="700">一个位置对这块权重的诉求</tspan>（往哪改、改多少）</text>
-<text class="svgsm" x="430" y="1278" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">它们<tspan font-weight="700">方向各不相同</tspan>　——　这才是「众口难调」四个字的实际样子。</text>
-<text class="svgsm" x="880" y="1110" fill="#b06000" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⊕</tspan></text>
-<text class="svgsm" x="880" y="1150" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全部加起来</tspan></text>
-<text class="svgsm" x="880" y="1174" fill="#80868b" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">（batch＝2 就是 8,190 支）</text>
-<line x1="1120" y1="1110" x2="1144.727469423674" y2="1101.9655581462514" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1126.0915855635558" y2="1088.756116519763" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1137.1580617503373" y2="1127.7676930683647" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1108.0597256723727" y2="1096.2642856399455" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1115.9366326425938" y2="1133.0445014204856" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1136.8275534829988" y2="1097.7740667523165" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1100.9261217856908" y2="1105.9457220290537" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1142.2003662171949" y2="1115.5351729713204" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="1120" y1="1110" x2="1171.927516538418" y2="1097.053116547501" stroke="#e8710a" stroke-width="3.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="1250" y="1064" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">合力</tspan></tspan></text>
-<text class="svgsm" x="1250" y="1092" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">各自加起来 6.8，</text>
-<text class="svgsm" x="1250" y="1118" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合力只有 <tspan font-weight="700">2.06</tspan></tspan></text>
-<text class="svgsm" x="1250" y="1150" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">大部分互相抵消了</tspan></tspan></text>
-<text class="svgsm" x="1250" y="1176" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">剩下的那一点，才是真信号</text>
-<text class="svgsm" x="700" y="1316" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这股合力，就是这块权重这一步要挪的方向。</tspan>　而「抵消得多、剩得少」正是<tspan font-weight="700">batch 越大越稳</tspan>的全部原因　——</text>
-<text class="svgsm" x="700" y="1344" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">人越多，偏激的那几支越淹得住。 多卡训练里那道「跨卡汇总」，干的就是这个加法：每张卡先加自己那批，再凑到一起。</text>
-<rect x="0" y="1396" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1396" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="1396" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1423" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整个反向传播，用人话讲完就是这三步</tspan></text>
-<text class="svgsm" x="20" y="1454" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一条样本提要求 →&#160;要求往回递一层又一层 →&#160;所有样本的要求取平均。</tspan>后面那些张量、链式法则、矩阵乘，都是这三句话的<tspan font-weight="700">算法实现</tspan>，不是另外一件事。</text>
-<text class="svgsm" x="20" y="1478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">而这一讲真正关心的账，全挂在第二步上：<tspan font-weight="700">要求往回递的时候，必须回头看前向留下的东西</tspan>　——　这就是激活扔不掉、显存下不来的全部原因。</text>
-</svg><figcaption><b>全讲最口语的一张</b> ——&nbsp;<em>「梯度」这个词唬人，本意却只是<b>一屋子人各提各的要求，最后取个平均</b>。</em><span class="capmore"><br><em>Ⓑ 讲的就是<b>权重梯度</b>：<b>一根权重的梯度 ＝ 上游那一刻的亮度 × 下游传来的责任</b>，而那一格画的是<b>前面那个乘数</b> ——&nbsp;同样加粗 0.1，上游亮 20 倍，回报就大 20 倍。<b>所以「激活扔不掉」的根子就在这儿</b>（<a href="#s1-6">§1.6</a>）：那个亮度是前向算出来的，反向还要拿它当来料。</em><br><em>Ⓒ 只听一条样本的，网络会学会把什么都答成同一个字。<b>所以要平均 ——&nbsp;而多卡训练里那道「跨卡汇总」，干的就是这个平均。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 「推一下（nudge），推多少跟差多远成正比」「想让一个神经元更亮有三条路」「改权重要按上游亮度成比例，回报最大」「众口难调，只能取平均；只听那张 2 的，网络会把所有图都判成 2」四个装置，取自 <b>3Blue1Brown</b>《What is backpropagation really doing?》官方讲义 ——&#160;<b>已逐条核过原文，图是我们自己重画的，例子换成了本讲一直在用的「下一个字」。</b></p>
+<text class="svglbl" x="14" y="528" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ <tspan font-weight="700">每一个位置都提自己的一份</tspan>　——　几千股力，加成一股</tspan></text>
+<text class="svgsm" x="617" y="528" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">注意这一格<tspan font-weight="700">一格 ＝ 一个位置</tspan>，不是一个字　——　字那一层在 Ⓐ，这一层是<tspan font-weight="700">位置与位置之间</tspan></text>
+<text class="svgsm" x="66" y="639" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 1</tspan></text>
+<line x1="170" y1="634" x2="194.727469423674" y2="625.9655581462514" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="170" y="674" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 1</text>
+<line x1="232" y1="634" x2="238.09158556355567" y2="612.7561165197632" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="232" y="674" fill="#80868b" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">位置 2</text>
+<line x1="294" y1="634" x2="311.15806175033725" y2="651.7676930683647" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="356" y1="634" x2="344.0597256723728" y2="620.2642856399456" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="418" y1="634" x2="413.93663264259385" y2="657.0445014204856" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="480" y1="634" x2="496.8275534829989" y2="621.7740667523166" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="542" y1="634" x2="522.9261217856908" y2="629.9457220290537" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="604" y1="634" x2="626.2003662171948" y2="639.5351729713204" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="670" y="639" fill="#80868b" style="font-size:12.0px;font-variant-numeric:tabular-nums">……　共 4,095 个位置</text>
+<text class="svgsm" x="66" y="755" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列 2</tspan></text>
+<line x1="170" y1="750" x2="189.32176546241226" y2="732.6026042346697" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="232" y1="750" x2="228.92427446878256" y2="728.1150756808113" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="294" y1="750" x2="316.9014412077996" y2="759.2527828573731" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="356" y1="750" x2="339.50519827593297" y2="742.3083476363192" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="418" y1="750" x2="423.6609723570322" y2="772.7049199948583" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="480" y1="750" x2="490.4" y2="731.9866716012837" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="542" y1="750" x2="522.9261217856908" y2="754.0542779709463" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="604" y1="750" x2="626.5324013889193" y2="746.0269296949806" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="670" y="755" fill="#80868b" style="font-size:12.0px;font-variant-numeric:tabular-nums">……　共 4,095 个位置</text>
+<text class="svgsm" x="430" y="830" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">每一支箭头 ＝ <tspan font-weight="700">一个位置对这块权重的诉求</tspan>（往哪改、改多少）</text>
+<text class="svgsm" x="430" y="856" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">它们<tspan font-weight="700">方向各不相同</tspan>　——　这才是「众口难调」四个字的实际样子。</text>
+<text class="svgsm" x="880" y="688" fill="#b06000" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⊕</tspan></text>
+<text class="svgsm" x="880" y="728" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全部加起来</tspan></text>
+<text class="svgsm" x="880" y="752" fill="#80868b" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">（batch＝2 就是 8,190 支）</text>
+<line x1="1120" y1="688" x2="1144.727469423674" y2="679.9655581462514" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1126.0915855635558" y2="666.7561165197632" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1137.1580617503373" y2="705.7676930683647" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1108.0597256723727" y2="674.2642856399456" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1115.9366326425938" y2="711.0445014204856" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1136.8275534829988" y2="675.7740667523166" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1100.9261217856908" y2="683.9457220290537" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1142.2003662171949" y2="693.5351729713204" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1120" y1="688" x2="1171.927516538418" y2="675.0531165475011" stroke="#e8710a" stroke-width="3.4" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="1250" y="642" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">合力</tspan></tspan></text>
+<text class="svgsm" x="1250" y="670" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">各自加起来 6.8，</text>
+<text class="svgsm" x="1250" y="696" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合力只有 <tspan font-weight="700">2.06</tspan></tspan></text>
+<text class="svgsm" x="1250" y="728" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"><tspan font-weight="700">大部分互相抵消了</tspan></tspan></text>
+<text class="svgsm" x="1250" y="754" fill="#80868b" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">剩下的那一点，才是真信号</text>
+<text class="svgsm" x="700" y="894" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这股合力，就是这块权重这一步要挪的方向。</tspan>　而「抵消得多、剩得少」正是<tspan font-weight="700">batch 越大越稳</tspan>的全部原因　——</text>
+<text class="svgsm" x="700" y="922" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums">人越多，偏激的那几支越淹得住。 多卡训练里那道「跨卡汇总」，干的就是这个加法：每张卡先加自己那批，再凑到一起。</text>
+<rect x="0" y="974" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="974" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="974" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1001" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整个反向传播，用人话讲完就是这三步</tspan></text>
+<text class="svgsm" x="20" y="1032" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一条样本提要求 →&#160;要求往回递一层又一层 →&#160;所有样本的要求取平均。</tspan>后面那些张量、链式法则、矩阵乘，都是这三句话的<tspan font-weight="700">算法实现</tspan>，不是另外一件事。</text>
+<text class="svgsm" x="20" y="1056" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">而这一讲真正关心的账，全挂在第二步上：<tspan font-weight="700">要求往回递的时候，必须回头看前向留下的东西</tspan>　——　这就是激活扔不掉、显存下不来的全部原因。</text>
+</svg><figcaption><b>全讲最口语的一张</b> ——&nbsp;<em>「梯度」这个词唬人，本意却只是<b>一屋子人各提各的要求，最后取个平均</b>。</em><span class="capmore"><br><em>Ⓐ 一条样本看完输出只会提一个要求：<b>对的推上去、别的推下去，推多少看差多远</b> ——&nbsp;那就是「预测 − 真值」换成人话。</em><br><em>Ⓑ 只听一条样本的，网络会学会把什么都答成同一个字。<b>所以要平均 ——&nbsp;而多卡训练里那道「跨卡汇总」，干的就是这个平均。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 「推一下（nudge），推多少跟差多远成正比」「想让一个神经元更亮有三条路」「改权重要按上游亮度成比例，回报最大」「众口难调，只能取平均；只听那张 2 的，网络会把所有图都判成 2」四个装置，取自 <b>3Blue1Brown</b>《What is backpropagation really doing?》官方讲义 ——&#160;<b>已逐条核过原文，图是我们自己重画的，例子换成了本讲一直在用的「下一个字」。</b></p>
 <p>⚠️ 他在「按上游亮度成比例」那里顺带提了赫布理论（neurons that fire together wire together），但<b>原文自己就说这个类比并不严格</b>（未训练的网络并没有在「想」那个答案），所以只记在这儿，不画上图。</p>
-<p>⭐ Ⓑ 与 <a href="#s1-6">§1.6</a>、Ⓒ 与 <a href="#s1-8">§1.8</a> 的那两处接头，<b>原文都没有，是本讲自己的合题</b> ——&#160;3B1B 讲的是「反向传播在干嘛」，本讲要的是「它为什么这么费显存」。</p></details></figure>
+<p>⭐ Ⓑ 与 <a href="#s1-8">§1.8</a> 的那处接头（以及折起来那张与 <a href="#s1-6">§1.6</a> 的那处），<b>原文都没有，是本讲自己的合题</b> ——&#160;3B1B 讲的是「反向传播在干嘛」，本讲要的是「它为什么这么费显存」。</p></details></figure>
+
+<!-- ⛔⛔⛔ 2026-09-23 现场，**同一格第二次被点名**：「这个内容插入的就有点突兀，
+     把它折起来，不放这张。」——&nbsp;指的是原来夹在 Ⓐ 和「取平均」中间的
+     「上游越亮、加粗越划算」那一格。
+     ⭐ 上一轮他说「这个图说啥呢？难道说的是梯度吗？」，我改的是**讲法**
+       （补上「梯度」两个字、把落点写明）。这次他还是不要 ——&nbsp;
+       说明问题从来不在讲法上：**这张图的主线是「一屋子人提要求 → 取平均」，
+       中间插一段「哪根线改起来最划算」，是另一条轴。**
+     ⭐⭐ 判据：**同一个抱怨来第二次时，别再修上一次修的那个维度。**
+       第一次说「看不懂」，改讲法是对的；第二次还说，就该问「它在不在位置上」。
+     ⚠️ 没删 ——&nbsp;那句话是整本显存账的根子（1.6 要用），
+       所以拆成独立一张折在这儿，想看再展开。 -->
+<details class="foldfig"><summary><b>展开：一根权重的梯度，正比于<u>上游有多亮</u></b>
+  <span class="why">——&nbsp;它回答的是<b>另一个</b>问题：「改哪根线最划算」。
+  结论一句话：<b>答案不在反向里，在前向里</b>
+  ——&nbsp;而这正是 <a href="#s1-6">1.6</a>「激活扔不掉」的根子，
+  想先看的展开</span></summary>
+
+<figure class="fbox fwide" id="fig-vote-bright"><svg viewBox="0 0 1400 536" width="100%" role="img" aria-label="想让一个数变大有三条路：改偏置、改权重、让上一层更亮。这一格只看改权重。两根线连到同一个输出，上面那根的上游很亮是四点零，下面那根很暗只有零点二。把两根加粗同样多，都加零点一，上面那根让输出涨零点四，下面那根只涨零点零二 —— 同样的力气，回报差二十倍，而这二十倍正好是亮度之比。说的就是梯度：一根权重的梯度等于上游那一刻的亮度乘下游传来的责任，这一格画的是前面那个乘数。所以改哪根线最划算，答案不在反向里，在前向里 —— 而那个亮度是前向算出来、必须被存下来的，整本显存账的根子就在这一句上"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一根权重的<tspan font-weight="700">梯度</tspan>，正比于<tspan font-weight="700">上游有多亮</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两根线<tspan font-weight="700">加粗同样多</tspan>，回报差二十倍　——　而「回报有多大」就是「<tspan font-weight="700">这根权重的梯度有多大</tspan>」</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">上游亮</text>
+<rect x="89" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="110" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">上游暗</text>
+<rect x="178" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="199" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">回报之比 ＝ 亮度之比</text>
+<rect x="0" y="102" width="1400" height="372" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同样加粗 <tspan font-weight="700">0.1</tspan>，接在亮的那根上<tspan font-weight="700">回报大 20 倍</tspan></tspan></text>
+<text class="svgsm" x="762" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">这一格是从 <tspan font-weight="700">fig-vote</tspan> 里拆出来的　——　它另开一根轴（「哪根线改起来最划算」），所以不占主线</text>
+<rect x="160" y="208" width="60" height="60" rx="30" fill="#fef7e0" stroke="#e8710a" stroke-width="2.0"/>
+<text class="svgsm" x="190" y="244" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.0</tspan></text>
+<text class="svgsm" x="148" y="243" fill="#b06000" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">上游<tspan font-weight="700">很亮</tspan></text>
+<line x1="226" y1="238" x2="726" y2="302" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="465" y="252" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.1 粗</tspan></text>
+<rect x="160" y="336" width="60" height="60" rx="30" fill="#fff" stroke="#80868b" stroke-width="2.0"/>
+<text class="svgsm" x="190" y="372" fill="#80868b" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.2</tspan></text>
+<text class="svgsm" x="148" y="371" fill="#80868b" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">上游<tspan font-weight="700">很暗</tspan></text>
+<line x1="226" y1="366" x2="726" y2="302" stroke="#80868b" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="465" y="324" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋0.1 粗</tspan></text>
+<rect x="730" y="268" width="60" height="68" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2.0"/>
+<text class="svgsm" x="760" y="308" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出</tspan></text>
+<line x1="800" y1="266" x2="834" y2="266" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="842" y="242" width="250" height="48" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="967" y="274" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出涨 <tspan font-weight="700">＋0.40</tspan></tspan></text>
+<line x1="800" y1="342" x2="834" y2="342" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="842" y="318" width="250" height="48" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="967" y="350" fill="#5f6368" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出涨 <tspan font-weight="700">＋0.02</tspan></tspan></text>
+<rect x="1120" y="238" width="270" height="104" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1255" y="276" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同样的力气</tspan></text>
+<text class="svgsm" x="1255" y="310" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回报差 <tspan font-weight="700">20 倍</tspan></tspan></text>
+<text class="svgsm" x="1255" y="338" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">——　正好是亮度之比</text>
+<text class="svgsm" x="700" y="394" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">说的就是<tspan font-weight="700">梯度</tspan>：<tspan font-weight="700">一根权重的梯度 ＝ 上游那一刻的亮度 × 下游传来的责任。</tspan>　这一格画的是<tspan font-weight="700">前面那个乘数</tspan>。</text>
+<text class="svgsm" x="700" y="428" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以「<tspan font-weight="700">改哪根线最划算</tspan>」这个问题，答案<tspan font-weight="700">不在反向里，在前向里</tspan>　——　它由那一刻的<tspan font-weight="700">亮度</tspan>决定。</text>
+<text class="svgsm" x="700" y="458" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">而那个亮度，是<tspan font-weight="700">前向算出来、必须被存下来</tspan>的。<tspan font-weight="700">整本显存账的根子，就在这一句上。</tspan></text>
+</svg><figcaption><b>一根权重的梯度 ＝ 上游那一刻的亮度 × 下游传来的责任</b> ——&nbsp;<em>这一格画的是<b>前面那个乘数</b>：两根线加粗同样多（＋0.1），上游亮 20 倍，回报就大 20 倍。</em><span class="capmore"><br><em>落点不在「怎么改权重」，在<b>「改哪根线最划算」这个问题的答案不在反向里，在前向里</b> ——&nbsp;它由那一刻的亮度决定，<b>而那个亮度是前向算出来、必须被存下来的</b>。「激活扔不掉」的根子就在这儿（<a href="#s1-6">1.6</a>）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 「改权重要按上游亮度成比例，回报最大」取自 <b>3Blue1Brown</b>《What is backpropagation really doing?》官方讲义（"adjust the weights in proportion to their associated activations"）——&#160;图是我们自己重画的。</p>
+<p>⚠️ 他在这里顺带提了赫布理论（neurons that fire together wire together），但<b>原文自己就说这个类比并不严格</b>，所以只记在这儿，不画上图。</p>
+<p>⭐ 「所以激活扔不掉」那一步是<b>本讲自己的合题</b>，3B1B 讲的是「反向传播在干嘛」，本讲要的是「它为什么这么费显存」。</p></details></figure>
+
+</details>
 
 <!-- ⭐⭐⭐ 2026-09-22 现场追问，逐字记：「你算反向的时候，你的目标要不要把
      那几个推向 0，然后把真正要预测那个值推向 1，都做？还是说只推那个 1，
