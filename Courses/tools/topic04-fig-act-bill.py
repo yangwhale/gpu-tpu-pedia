@@ -32,13 +32,27 @@ N_LAYER = 61                      # V3 的层数
 # ⛔⛔ 2026-09-19 T04：峰值 ＝ 存档点 ＋ **当前正在重算的那一层**。
 #   原来只算存档点（106.75），漏掉在算的那一层（55.39）——&#160;低估 67%。
 #   ⭐ 这一讲自己在 §5.4 的小例子和 §2.2 图 Ⓒ 用的都是正确口径，只有这个头号数字没做。
-ACT_RAW_TIB = 3.253                # 不开重算，一条 128K 序列
-ACT_CKPT_GIB = 106.75             # 61 个存档点
-ACT_INFLIGHT_GIB = 55.39          # 当前正在重算的那一层（MoE 块，最坏情况）
-ACT_REMAT_GIB = ACT_CKPT_GIB + ACT_INFLIGHT_GIB       # ＝ 162.14
-RATIO = ACT_RAW_TIB * 1024 / ACT_REMAT_GIB
-assert abs(ACT_REMAT_GIB - 162.14) < 0.01
+# ⛔⛔ 2026-09-23 现场：「整个这个部分的计算应该是基于 4K 的 sequence length，
+#   然后再去叠加那个 batch 的 number，而不是拿 128K 去算 ——&#160;
+#   128K 不是训练时候需要的长度。」——&#160;对，而且这张图**自己就不自洽**：
+#   Ⓐ 那座山是按 4K 画的（S_BASE ＝ 4096，峰值 104.11 GiB），
+#   而 Ⓑ 那两张卡片报的是 **128K** 的数（3.253 TiB）——&#160;整整差 32 倍。
+#   ⭐ 判据：**同一张图里两格报同一个量时，口径必须是同一个。**
+#     128K 那个数更唬人，可它回答的不是这一讲的问题 ——&#160;
+#     训练用的是 4K，长上下文是**后训练**阶段的事。
+#   ⭐⭐ 换成 4K 之后还白捡一条更硬的落点：**一块 80 GiB 的卡，
+#     不开重算连一条 4K 序列的激活都放不下**（104 GiB）；开了之后能放十几条。
+ACT_RAW_GIB = 104.11              # 不开重算，一条 4K 序列（＝ Ⓐ 那座山的峰值）
+ACT_CKPT_GIB = 3.34               # 61 个存档点（4K）
+ACT_INFLIGHT_GIB = 1.73           # 当前正在重算的那一层（MoE 块，最坏情况）
+ACT_REMAT_GIB = 5.07              # ＝ Ⓐ 里橙色那条的峰值
+RATIO = ACT_RAW_GIB / ACT_REMAT_GIB
+CARD_GIB = 80.0                   # 一块卡的显存，只用来做「放得下几条」的换算
+FIT_RAW = CARD_GIB / ACT_RAW_GIB
+FIT_REMAT = CARD_GIB / ACT_REMAT_GIB
+assert abs(ACT_CKPT_GIB + ACT_INFLIGHT_GIB - ACT_REMAT_GIB) < 0.02
 assert 20 < RATIO < 22            # 「约 21 倍」是算出来的，不是说顺口的
+assert FIT_RAW < 1.0 < FIT_REMAT  # 「一条都放不下」这句话的全部依据
 
 
 def main():
@@ -213,15 +227,19 @@ def main():
     PH2 = 344
     py2 = f.panel(0, py + PH + 22, W, PH2,
                   "Ⓑ 这座山有多高 ——　<tspan font-weight=\"700\">"
-                  "一条 128K 序列，V3 那个规模</tspan>", RD,
-                  sub="⚠️ 自己按算子推的估算，<tspan font-weight=\"700\">"
-                      "当量级看，别当准数</tspan>")
+                  "一条 4K 序列（batch ＝ 1），V3 那个规模</tspan>", RD,
+                  sub="⭐ 跟上面那座山<tspan font-weight=\"700\">同一个口径</tspan>"
+                      "　·　⚠️ 自己按算子推的估算，当量级看，别当准数")
 
     CARDS = (
-        (RD, "#fce8e6", "不开重算", "%.2f TiB" % ACT_RAW_TIB,
-         "⛔ 一整条全挂着", "光这一项就已经装不下"),
+        (RD, "#fce8e6", "不开重算", "%.1f GiB" % ACT_RAW_GIB,
+         "⛔ 一整条全挂着",
+         "一块 %d GiB 的卡，<tspan font-weight=\"700\">一条都放不下</tspan>"
+         % CARD_GIB),
         (GR, "#e6f4ea", "开了全量重算", "%.2f GiB" % ACT_REMAT_GIB,
-         "⭐ 每层只留入口那一份", "约 %d 倍的差距" % round(RATIO)),
+         "⭐ 每层只留入口那一份",
+         "同一块卡能放 <tspan font-weight=\"700\">%d 条</tspan>"
+         "（只算激活）" % int(FIT_REMAT)),
     )
     # ⛔ 逐图审抓到：原来两个框画成一样大，「约 40 倍」只活在文字里 ——
     #   那一格是表不是图。⭐ 改成**按 40:1 画高度**，不看数字也知道差多少。
@@ -244,8 +262,17 @@ def main():
     f.t(700, py2 + 34 + HI + 96,
         "⭐ 两个框的<tspan font-weight=\"700\">高度是按真实比例画的</tspan> ——　"
         "右边那条薄片就是重算之后剩下的厚度", GY, size=14, anchor="middle")
-    f.t(700, py2 + 230, "⭐ 下一节整节都在讲这两栏之间那个箭头",
-        GY, True, 14.5, "middle")
+    f.t(700, py2 + 224,
+        "⭐⭐ <tspan font-weight=\"700\">再往上就是乘 batch，线性的</tspan>："
+        "per-device batch ＝ 8，两边就各是 "
+        "<tspan font-weight=\"700\">%.0f GiB</tspan> 和 "
+        "<tspan font-weight=\"700\">%.1f GiB</tspan>。"
+        % (ACT_RAW_GIB * 8, ACT_REMAT_GIB * 8), INK, size=14.5, anchor="middle")
+    f.t(700, py2 + 252,
+        "⛔ 这里全程按 <tspan font-weight=\"700\">4K</tspan> 算 ——&#160;"
+        "<tspan font-weight=\"700\">训练用的就是 4K</tspan>，"
+        "长上下文是后训练阶段的事，不该拿来充这一节的门面。",
+        GY, size=13.5, anchor="middle")
     f._pan = None
 
     yy = f.band(py2 + PH2 + 22, "info", "这张图顺带把两件事一起讲了", [
@@ -265,10 +292,12 @@ def main():
                "⛔ 山形画成<tspan font-weight=\"700\">直上直下</tspan>是简化："
                "真实曲线会因为 MoE 派发、attention 那几个大中间量而有凸起，"
                "<tspan font-weight=\"700\">但「顶点在前向末尾」这个结论不受影响</tspan>",
-               "⚠️ %.2f TiB 与 %.2f GiB 两个数是<tspan font-weight=\"700\">"
+               "⚠️ %.1f GiB 与 %.2f GiB 两个数是<tspan font-weight=\"700\">"
                "自己按算子推的</tspan>（输入：V3 的 config ＋ 官方参考实现的 MLA 前向），"
-               "<tspan font-weight=\"700\">没有第三方背书</tspan>"
-               % (ACT_RAW_TIB, ACT_REMAT_GIB))
+               "<tspan font-weight=\"700\">没有第三方背书</tspan>；"
+               "序列长度取 <tspan font-weight=\"700\">4,096</tspan>、batch ＝ 1，"
+               "跟 Ⓐ 那座山同一个口径。"
+               % (ACT_RAW_GIB, ACT_REMAT_GIB))
     f.save("fig4-act-bill.svg", yy + 6)
 
 

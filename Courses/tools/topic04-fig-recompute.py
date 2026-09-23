@@ -30,11 +30,16 @@ W = 1400
 # ⛔⛔ 2026-09-19 T04：峰值 ＝ 存档点 ＋ **当前正在重算的那一层**。
 #   原来只算存档点（106.75），漏掉在算的那一层（55.39）——&#160;低估 67%。
 #   ⭐ 这一讲自己在 §5.4 的小例子和 §2.2 图 Ⓒ 用的都是正确口径，只有这个头号数字没做。
-ACT_RAW_TIB = 3.253
-ACT_REMAT_GIB = 106.75 + 55.39       # 存档点 ＋ 在算的那一层 ＝ 162.14
+# ⛔⛔ 2026-09-23 现场：「这部分的计算应该基于 4K 的 sequence length，
+#   而不是拿 128K 去算 ——&#160;128K 不是训练时候需要的长度。」
+#   ⭐ 这张图跟上一张（fig-act-bill）报的是**同一对数**，所以必须一起换口径，
+#     否则两张挨着的图会给出两组不一样的数字 ——&#160;那正是他刚抓到的病。
+#   ⭐ 比例（4.9% / 20.5 倍）跟序列长度无关，分子分母同比例缩，所以一个字没变。
+ACT_RAW_GIB = 104.11                 # 一条 4K 序列，不开重算（＝ 那座山的峰值）
+ACT_REMAT_GIB = 3.34 + 1.73          # 存档点 ＋ 在算的那一层 ＝ 5.07
 FWD_BWD, WITH_REMAT = 3, 4
 
-MEM_KEPT = ACT_REMAT_GIB / (ACT_RAW_TIB * 1024) * 100      # 省完还剩百分之几
+MEM_KEPT = ACT_REMAT_GIB / ACT_RAW_GIB * 100               # 省完还剩百分之几
 COMP_MORE = (WITH_REMAT - FWD_BWD) / float(FWD_BWD) * 100  # 算力多付百分之几
 assert 4.7 < MEM_KEPT < 5.0          # ≈ 4.9% ——&#160;也就是「省掉 20 分之 19」
 assert abs(COMP_MORE - 100.0 / 3) < 1e-6
@@ -84,7 +89,7 @@ def main():
     # 显存：原来 100%，现在 2.5%
     f.t(BX - 16, py + 210, "省下　显存", GR, True, 19, "end")
     f.box(BX, py + 188, BW, 44, "#e6f4ea", GR, 6)
-    f.t(BX + BW / 2.0, py + 216, "原来：%.2f TiB 激活" % ACT_RAW_TIB,
+    f.t(BX + BW / 2.0, py + 216, "原来：%.1f GiB 激活" % ACT_RAW_GIB,
         GR, True, 15, "middle")
     f.box(BX, py + 244, BW, 44, "#f8f9fa", LINE2, 6)
     f.box(BX, py + 244, BW * MEM_KEPT / 100.0, 44, GR, GR, 6)
@@ -205,11 +210,11 @@ def main():
     ], fold=True)
 
     yy = f.src(yy + 24,
-               "⚠️ %.2f TiB / %.2f GiB 是<tspan font-weight=\"700\">自己按算子推的估算</tspan>"
+               "⚠️ %.1f GiB / %.2f GiB 是<tspan font-weight=\"700\">自己按算子推的估算</tspan>"
                "（V3 的 config ＋ 官方参考实现的 MLA 前向），"
                "<tspan font-weight=\"700\">当量级看</tspan>；"
                "就算差一倍，「不对称」这个结论也不变"
-               % (ACT_RAW_TIB, ACT_REMAT_GIB),
+               % (ACT_RAW_GIB, ACT_REMAT_GIB),
                "⭐ 「3× →&#160;4×」是矩阵乘口径：重算等于把前向那一遍再买一次，"
                "所以多出来的正好是 <tspan font-weight=\"700\">1/3</tspan>"
                "　——　ZeRO 论文原话也是这个数（33% re-computation overhead）",
