@@ -86,6 +86,24 @@ BIG = math.exp(102.0)
 FP32MAX = 3.4028235e38
 assert BIG > FP32MAX, "溢出那个例子得真的溢出才行"
 
+# ⛔⛔⛔ 2026-09-23 现场第四问，也是这张图最要命的一处：
+#   「一开始的 loss 是 0.6964，后来的 loss 被折算成一个数了对吧，比如 11.77 ——&#160;
+#     这两个数哪一个是我们平时训练时候说的那个 loss？我怎么觉得是 11.77 这个。
+#     所以你要把 0.6964 那个口径说清楚，它其实不是我们平时说的那个 loss。」
+#   ⭐ 他是对的。公式确实是同一个 −ln p，但**这张图的 0.6964 差着两层口径**：
+#     ① 词表被缩成 5 个词 ——&#160;5 个词瞎猜就是 ln 5 ＝ 1.61，
+#        所以 0.6964 只说明「比瞎猜好一点」，跟真词表下的数根本不在一个量级；
+#     ② 它只是**一个位置**的数，训练日志里那个是**一整个 batch 取平均**。
+#   ⛔ 病因不是算错，是**这张图只说了「词表缩成 5 个词」，没说「所以这个数也缩了」**。
+#     读者刚在 1.0 见过 11.77，紧接着看到 0.6964，只能理解成「loss 已经降下来了」。
+#   ⭐⭐ 判据：**把一个量的输入缩小成玩具尺寸时，必须同时说明它的输出也是玩具尺寸。**
+#     「示意」这两个字读者会自动套在**图形**上，不会自动套在**读数**上。
+LN5 = math.log(len(WORDS))          # 5 个词瞎猜的 loss
+LN_V3 = math.log(129280)            # 真词表瞎猜的 loss ——&#160;1.0 那把尺的起点
+assert abs(LN5 - 1.6094) < 1e-4, LN5
+assert abs(LN_V3 - 11.77) < 0.005, LN_V3
+assert LOSS < LN5, "玩具词表下这个 loss 必须低于瞎猜，否则「比瞎猜好一点」就说不通"
+
 __doc__ = __doc__ % ("%.4f" % (LOSS2 - LOSS))
 
 
@@ -111,7 +129,7 @@ def main():
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 从一排<tspan font-weight=\"700\">分数</tspan>，到一个"
                  "<tspan font-weight=\"700\">数</tspan>", BL,
-                 sub="⭐ 词表这里缩成 5 个词；真实是 129,280 个，动作一模一样")
+                 sub="⭐ 词表这里缩成 5 个词；真实是 129,280 个 ——&#160;<tspan font-weight=\"700\">动作一模一样，但算出来的那个数也跟着缩了</tspan>（下面那条专说这件事）")
 
     COLS = (
         ("① logits（原始分数）", Z, "可正可负，<tspan font-weight=\"700\">没有范围</tspan>", GY2),
@@ -178,7 +196,7 @@ def main():
     f.t(1185, py + 154,
         "（就是 ③ 里那一格 ——&#160;那边四舍五入成了 %.2f）" % P[GOLD],
         GY2, size=11.5, anchor="middle")
-    f.t(1185, py + 182, "loss ＝ −ln %.4f" % P[GOLD], INK, True, 17, "middle")
+    f.t(1185, py + 182, "<tspan font-weight=\"700\">这一个位置</tspan>的 loss ＝ −ln %.4f" % P[GOLD], INK, True, 16, "middle")
     f.t(1185, py + 218, "＝ <tspan font-weight=\"700\">%.4f</tspan>" % LOSS,
         BL, True, 24, "middle")
     f.t(1185, py + 252, "⛔ 其余四个的概率，"
@@ -193,9 +211,30 @@ def main():
         INK, size=14.5, anchor="middle")
     f._pan = None
 
+    # ⭐⭐ 紧贴着 0.6964 放 ——&#160;读者就是在这儿把它当成「训练曲线上的 loss」的。
+    #   ⛔ 这一条**不能 fold**：它不是「别误用这张图」的脚注，
+    #     是「这个数到底是什么」——&#160;缺了它，这张图给的是一个错的量级。
+    ycal = f.band(py + PH + 18, "warn",
+                  "⛔ 这个 %.4f，<tspan font-weight=\"700\">不是</tspan>"
+                  "你在训练曲线上看到的那个 loss" % LOSS, [
+        "式子是同一个 <tspan font-weight=\"700\">−ln p</tspan>，但这张图为了画得下，"
+        "<tspan font-weight=\"700\">把口径缩了两层</tspan>：词表只有 "
+        "<tspan font-weight=\"700\">%d 个词</tspan>，而且只看"
+        "<tspan font-weight=\"700\">一个位置</tspan>。"
+        "5 个词瞎猜就是 −ln(1/5) ＝ <tspan font-weight=\"700\">%.2f</tspan>　——　"
+        "所以 <tspan font-weight=\"700\">%.4f 的全部含义是「比瞎猜好一点」</tspan>，"
+        "不是「已经训得很好了」。" % (len(WORDS), LN5, LOSS),
+        "⭐⭐ 训练日志里那个 loss ＝ <tspan font-weight=\"700\">真词表 129,280 个词</tspan>"
+        " ＋ <tspan font-weight=\"700\">一整个 batch 所有位置取平均</tspan>，"
+        "它瞎猜的起点是 <tspan font-weight=\"700\">%.2f</tspan>"
+        "（<tspan font-weight=\"700\">1.0</tspan> 那把尺的顶端，也是训练曲线的第 0 步）。"
+        "⛔ 所以 <tspan font-weight=\"700\">loss 的数值一半是词表定的</tspan>　——　"
+        "<tspan font-weight=\"700\">词表不一样的两个模型，loss 不能直接比。</tspan>" % LN_V3,
+    ], keep=True)
+
     # ══════════ Ⓑ 两个性质 ═════════════════════════════════════════
     PH2 = 258
-    py2 = f.panel(0, py + PH + 20, W, PH2,
+    py2 = f.panel(0, ycal + 2, W, PH2,
                   "Ⓑ 两个性质，一个漂亮、一个救命", OR)
 
     f.box(50, py2 + 52, 640, 180, "#fef7e0", OR, 8)
