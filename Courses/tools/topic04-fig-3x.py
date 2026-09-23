@@ -58,11 +58,12 @@ def main():
         [(BL, "前向 1 次"), (RD, "反向 2 次"), (GR, "合计 3 次")])
 
     # ══════════ Ⓐ 一层里的三次矩阵乘 ═════════════════════════════
-    PH = 620
+    PH = 700
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 把一层摊开 ——　<tspan font-weight=\"700\">"
                  "总共只有三次矩阵乘，一次向前、两次向后</tspan>", BL,
                  sub="⚠️ 只数矩阵乘：norm / 激活函数 / 偏置在这笔账里可以忽略")
+
 
     # ⛔⛔ 2026-09-18 R10 重画。原来这一格是**三张卡片**，
     #   每张卡里画个白框、框里写「一次矩阵乘」——&#160;
@@ -75,51 +76,68 @@ def main():
     #     ② 第 ② 次那个操作数是**前向存下来的输入** ——&#160;
     #        用虚线框 ＋ 一根指回上一行的箭头画出来。
     #        **激活为什么扔不掉，这根箭头就是全部答案。**
-    # ⛔ 2026-09-23：原来只有一个 D_PX，于是 W 被画成了**正方形**。
-    #   V3 里没有两边都一样的权重矩阵，而这一格恰恰要说「形状决定了怎么摆」——&#160;
-    #   画成方的，转置看上去就成了「什么都没变」。拆成进、出两个尺度。
-    T_PX = 120.0                      # token 维（一条序列有多少个位置）
-    DIN_PX, DOUT_PX = 84.0, 56.0      # 进来的宽度 d_in / 出去的宽度 d_out
+    # ⛔⛔ 2026-09-23 第二轮，现场原话：「那个矩阵变成方形，不是把里面每一个
+    #   小格拉成长条的，而是改变里边小方块的个数。」——&#160;**完全对，而且这是原则问题。**
+    #   ⭐ 原来的画法是：格子数**永远 4×4**，然后把整个框拉宽拉高。
+    #     于是一个「宽矩阵」画出来是四个扁格子，一个「高矩阵」是四个长格子 ——&#160;
+    #     **矩阵的维度被画成了格子的形变，而不是格子的个数。**
+    #     那就等于什么都没表达：4×4 的东西装作 6×3 在那儿站着。
+    #   ⭐⭐ 判据：**一张图里，承载信息的必须是「有几个」，不是「多大个」。**
+    #     尺寸可以跟着变，但它得是**个数的结果**，不能是个数的替身。
+    #   ⭐ 改法：格子是**边长固定的正方形**，行数列数才是维度。
+    #     于是转置在画面上就是**同一批方格换个排法** ——&#160;这正是 Ⓑ 要说的那件事。
+    CELL = 22.0                       # 每一个小格：固定边长的正方形，永远不拉伸
+    NT, NIN, NOUT = 6, 4, 3           # 示意用的格子数：位置 T / 进来 d_in / 出去 d_out
+    assert NT > NIN > NOUT, "三个维度画成三种格子数，要能一眼分开"
 
     # ⭐ 三次乘法的形状（行 × 列，单位就是上面那两个尺度）
     #   FLOPs 都 ∝ 行 × 内维 × 列 ——&#160;脚本当场验它们真的相等
     MULS = (
         (BL, "① 前向", "算这一层的输出",
-         ("输入 X", T_PX, DIN_PX, False), ("权重 W", DIN_PX, DOUT_PX, False),
-         ("输出 Y", T_PX, DOUT_PX, False), "→ 交给下一层"),
+         ("输入 X", NT, NIN, False), ("权重 W", NIN, NOUT, False),
+         ("输出 Y", NT, NOUT, False), "→ 交给下一层"),
         (RD, "② 反向 · 权重梯度", "算「我这块权重该怎么改」",
-         ("输入 Xᵀ", DIN_PX, T_PX, True), ("上游责任 dY", T_PX, DOUT_PX, False),
-         ("权重梯度 dW", DIN_PX, DOUT_PX, False), "→ 交给优化器"),
+         ("输入 Xᵀ", NIN, NT, True), ("上游责任 dY", NT, NOUT, False),
+         ("权重梯度 dW", NIN, NOUT, False), "→ 交给优化器"),
         (RD, "③ 反向 · 传给下游", "算「前一层该收到什么」",
-         ("上游责任 dY", T_PX, DOUT_PX, False), ("权重 Wᵀ", DOUT_PX, DIN_PX, False),
-         ("新的责任 dX", T_PX, DIN_PX, False), "→ 交给前一层"),
+         ("上游责任 dY", NT, NOUT, False), ("权重 Wᵀ", NOUT, NIN, False),
+         ("新的责任 dX", NT, NIN, False), "→ 交给前一层"),
     )
     # ⭐ 三次的乘加次数必须真的相等 ——&#160;这是「1＋2＝3」成立的全部前提
     _flops = [a[1] * a[2] * b_[2] for _, _, _, a, b_, _c, _n in MULS]
     assert len(set(round(v) for v in _flops)) == 1, \
         "三次乘法的乘加次数必须相等，现在是 %s" % _flops
 
-    LX, MX0, ROW = 40, 300, 168
+    LX, MX0, ROW = 40, 300, 186
+    # ⭐ 这一行是上面那条判据的「使用说明」——&#160;不写的话，
+    #   读者仍然可能把「框变大了」读成「数变大了」。
+    f.t(MX0, py + 30,
+        "⭐ 每个小方格<tspan font-weight=\"700\">都一样大</tspan>　——　"
+        "形状不同是因为<tspan font-weight=\"700\">格子的个数不同</tspan>"
+        "（示意：位置 T ＝ 6 格　·　进来 d_in ＝ 4 格　·　出去 d_out ＝ 3 格）。"
+        "<tspan font-weight=\"700\">转置 ＝ 同一批方格换个排法。</tspan>",
+        GY, size=13)
     for i, (col, tag, what, A, B, C, out) in enumerate(MULS):
         cy = py + 78 + i * ROW
         f.t(LX, cy + 6, tag, col, True, 17)
         f.t(LX, cy + 30, what, GY, size=12.5)
 
         x = MX0
-        for k, (name, h, w, borrowed) in enumerate((A, B, C)):
+        for k, (name, nr, nc, borrowed) in enumerate((A, B, C)):
+            h, w = nr * CELL, nc * CELL          # ⭐ 尺寸是格子数的结果，不是替身
             top = cy + 18 - h / 2.0
-            # ⭐ 真的画一个矩形，而且**高宽按维度成比例**
-            f.box(x, top, w, h, "#fff" if not borrowed else "#fef7e0",
+            f.box(x, top, w, h, "#fef7e0" if borrowed else "#fff",
                   OR if borrowed else col, 4,
                   sw=2.2 if borrowed else 1.4, dash="5 3" if borrowed else None)
-            # 里面拉几道网格线，让它看起来像个矩阵而不是个方块
-            for g in range(1, 4):
-                f.line(x, top + h * g / 4.0, x + w, top + h * g / 4.0,
-                       GY2, 0.6, arrow=False)
-                f.line(x + w * g / 4.0, top, x + w * g / 4.0, top + h,
-                       GY2, 0.6, arrow=False)
+            # ⭐ 网格线按**真实行列数**拉，所以每一格永远是同样大小的正方形
+            for g in range(1, nr):
+                f.line(x, top + g * CELL, x + w, top + g * CELL, GY2, 0.6, arrow=False)
+            for g in range(1, nc):
+                f.line(x + g * CELL, top, x + g * CELL, top + h, GY2, 0.6, arrow=False)
             f.t(x + w / 2.0, top + h + 18, name,
                 OR if borrowed else col, True, 12.5, "middle")
+            f.t(x + w / 2.0, top + h + 36, "%d × %d" % (nr, nc),
+                GY2, size=11.5, anchor="middle")
             x += w
             if k < 2:
                 f.t(x + 22, cy + 24, "×" if k == 0 else "＝", GY2, True, 20, "middle")
@@ -148,7 +166,7 @@ def main():
             f.line(gx, a_use, MX0 - 4, a_use, OR, 2.0)      # 箭头落在②行那个框上
             # ⛔ 注解原来落在 cy−34，而②行 dY 框顶在 cy−41 ——&#160;**字直接压进框里**。
             #   ⭐ 挪到两行之间那条空带（①行图注底 cy−73 与②行框顶 cy−41 之间）。
-            f.t(MX0 + T_PX + 30, cy - 56,
+            f.t(MX0 + 520, cy + 24,
                 "⭐ 这一块<tspan font-weight=\"700\">不是新算的</tspan>"
                 "　——　是 ① 里那个输入<tspan font-weight=\"700\">被存下来了</tspan>",
                 OR, True, 13.5)
