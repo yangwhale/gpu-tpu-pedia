@@ -120,7 +120,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 47 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 48 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -352,7 +352,7 @@ __FIG_INTENSITY__
 __FIG_TP_MLP__
 <figure class="fbox fwide" id="anim-tpsplit">
 <video src="media/topic05-tpsplit.mp4" autoplay loop muted playsinline
-       aria-label="张量并行切一个 MLP 的动画。两张卡，卡 0 蓝、卡 1 橙，各有完整的 X、按列切的一半 W1、按行切的一半 W2。标题：张量并行切一个 MLP：Y ＝ GeLU(X·W1)·W2。字幕一：① W1 按列切：每张卡算出中间结果的一半。字幕二：② 激活函数逐元素算：各算各的，这一段没有任何通信。字幕三：③ W2 按行切：每张卡只得到 Y 的一个部分和。字幕四：④ AllReduce：两份部分和相加，两张卡都拿到完整的 Y。字幕五：整个 MLP 只在最后通信一次 —— 代价是每一层都有这一次。最后复位。"></video>
+       aria-label="张量并行切一个 MLP 的动画。两张卡，卡 0 蓝、卡 1 橙，各有完整的 X（灰）；W1 画成宽矩阵竖切一刀、W2 画成高矩阵横切一刀，每张卡只亮自己那一半。标题：张量并行切一个 MLP：Y ＝ GeLU(X·W1)·W2。字幕一：① W1 按列切：每张卡算出中间结果的一半。字幕二：② 激活函数逐元素算：各算各的，这一段没有任何通信。字幕三：③ W2 按行切：每张卡只得到 Y 的一个部分和。字幕四：④ AllReduce：两份部分和相加，两张卡都拿到完整的 Y（中间一个绿框标 AllReduce，Y 是灰色的完整副本）。字幕五：整个 MLP 只在最后通信一次 —— 代价是每一层都有这一次。最后复位。"></video>
 <figcaption>通信只在最后那一下；可每一层都有这一下。
   <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>关键在切的方向。按列切第一块，每张卡手里是中间结果的某几列；激活函数只看单个元素，不需要别人的那几列；
@@ -369,7 +369,7 @@ __FIG_TP_MLP__
   <p>TP 搬的是激活，一层搬多少跟 token 数成正比，算多少也跟 token 数成正比，<b>batch 在账里约掉了</b>。
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。</p>
   <ul>
-    <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）。
+    <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4；4.5 这个系数按标准注意力加 4 倍宽 MLP 推出，V3 实际是 MLA 加 MoE，这里只作示意）。
       可 3,845 假设 TP 组占满三根带环回的轴，TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device）、用不满，实际门槛要高好几倍，已经在线下了；
       再加上 Megatron 的 TP 通信默认在关键路径上藏不住，实际更紧。</li>
     <li>另外两条约束：注意力头要按整个分，Megatron 要求查询头数能被 TP 度数整除（KV 头更少的模型，KV 头数和 TP 只要一个能整除另一个，TP 更大时 KV 就复制）；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>

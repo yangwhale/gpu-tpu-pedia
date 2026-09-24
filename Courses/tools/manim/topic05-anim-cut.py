@@ -35,12 +35,31 @@ class TPSplit(Scene):
             g[1].move_to(g[0].get_center())
             return g
 
+        # ⭐ 2026-09-25 L3 试讲：跟重画后的 fig-tp-mlp 对齐 —— W1 画成宽矩阵、竖切一刀（只亮自己那半），
+        #   W2 画成高矩阵、横切一刀；最后的 Y 是灰色的完整副本（相加，不是拼接），中间标 AllReduce。
+        from manim import DashedLine
+
+        def half_mat(w, h, col, x, y, vertical, first, lab):
+            outline = Rectangle(width=w, height=h, stroke_width=1.5, stroke_color=GREY_B).move_to([x, y, 0])
+            if vertical:
+                part = Rectangle(width=w / 2, height=h, stroke_width=0, fill_color=col, fill_opacity=0.9)
+                part.move_to([x - w / 4 if first else x + w / 4, y, 0])
+                cut = DashedLine([x, y - h / 2 - 0.12, 0], [x, y + h / 2 + 0.12, 0], color=WHITE, stroke_width=2)
+            else:
+                part = Rectangle(width=w, height=h / 2, stroke_width=0, fill_color=col, fill_opacity=0.9)
+                part.move_to([x, y + h / 4 if first else y - h / 4, 0])
+                cut = DashedLine([x - w / 2 - 0.12, y, 0], [x + w / 2 + 0.12, y, 0], color=WHITE, stroke_width=2)
+            t = Text(lab, font_size=20, color=WHITE, weight="BOLD").move_to(part.get_center())
+            return VGroup(outline, part, cut, t)
+
         base = VGroup()
-        for y, col, name in LANES:
+        for k, (y, col, name) in enumerate(LANES):
             base.add(Text(name, font_size=26, color=col).move_to([-6.3, y, 0]))
             base.add(blk(1.1, 0.9, GREY, "X", -5.0, y))
-            base.add(blk(0.6, 1.3, col, "W1", -3.3, y))
-            base.add(blk(0.8, 0.6, col, "W2", 0.9, y))
+            base.add(half_mat(1.8, 0.6, col, -3.1, y, True, k == 0, "W1"))
+            base.add(half_mat(0.55, 1.4, col, 0.9, y, False, k == 0, "W2"))
+        base.add(Text("竖切一刀", font_size=18, color=GREY_B).move_to([-3.1, 1.75, 0]),
+                 Text("横切一刀", font_size=18, color=GREY_B).move_to([0.9, 1.95, 0]))
         self.add(base)
         sub = cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2)
         self.add(sub)
@@ -66,17 +85,11 @@ class TPSplit(Scene):
         self.play(*[h.copy().animate.move_to(p.get_center()).set_opacity(0) for h, p in zip(hs, ps)],
                   FadeIn(ps), run_time=1.0)
         say("④ AllReduce：两份部分和相加，两张卡都拿到完整的 Y", GREEN)
-        ys = VGroup()
-        for y, _, _ in LANES:
-            g = VGroup(Rectangle(width=0.55, height=0.9, stroke_width=0, fill_color=BLUE, fill_opacity=0.9),
-                       Rectangle(width=0.55, height=0.9, stroke_width=0, fill_color=ORANGE, fill_opacity=0.9))
-            g[1].next_to(g[0], RIGHT, buff=0)
-            box = Rectangle(width=1.1, height=0.9, stroke_color=WHITE, stroke_width=4)
-            whole = VGroup(g, box, Text("Y", font_size=26, color=WHITE, weight="BOLD"))
-            whole.move_to([5.3, y, 0])
-            box.move_to(g.get_center())
-            whole[2].move_to(g.get_center())
-            ys.add(whole)
+        ys = VGroup(*[blk(1.1, 0.9, GREY, "Y", 5.5, y) for y, _, _ in LANES])
+        ar = VGroup(Rectangle(width=1.0, height=2.9, stroke_color=GREEN, stroke_width=3),
+                    Text("AllReduce", font_size=18, color=GREEN)).move_to([4.25, (LANES[0][0] + LANES[1][0]) / 2, 0])
+        ar[1].rotate(1.5708).move_to(ar[0].get_center())
+        self.play(FadeIn(ar), run_time=0.3)
         cross = [ps[0].copy(), ps[1].copy(), ps[0].copy(), ps[1].copy()]
         targets = [ys[0], ys[0], ys[1], ys[1]]
         self.play(*[c.animate.move_to(t.get_center()).set_opacity(0) for c, t in zip(cross, targets)],
@@ -84,7 +97,7 @@ class TPSplit(Scene):
         self.remove(*cross)
         say("整个 MLP 只在最后通信一次　——　代价是每一层都有这一次")
         self.wait(1.2)
-        keep = [hs, g_lab, ps, ys, sub]
+        keep = [hs, g_lab, ps, ys, ar, sub]
         self.play(*[FadeOut(m) for m in keep], run_time=0.7)
         self.remove(*keep)
         self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
