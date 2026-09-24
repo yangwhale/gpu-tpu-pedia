@@ -889,12 +889,15 @@ body.figonly section h3{margin-top:34px}
     <b>V3</b>：本讲反复拿来举例的 DeepSeek-V3，6,710 亿参数的 MoE 模型。<br>
     <b>Q、K、V</b>：注意力里每个 token 算出三样东西：Q 是「我要找什么」，K 是「我是什么」，V 是「我带着什么内容」。
     新 token 拿自己的 Q 去和前面所有 token 的 K 比，按相似度把它们的 V 加权合起来。<br>
+    <b>softmax</b>：注意力给前面每个 token 打分，再把分数归一化成加起来等于 1 的权重，这一步叫 softmax。<br>
     <b>MLA</b>：DeepSeek 的一种注意力，把 K 和 V 压成一小份所有头共用，所以 KV cache 小得多，但也只剩「一个头」可切。<br>
     <b>节点</b>：一台机器，里面通常有 4 到 8 张卡，机器内部走高速互联（NVIDIA 的叫 NVLink）。<br>
     <b>显存（HBM）</b>：卡上自带的高速内存，模型和中间结果都得放在这儿。<br>
     <b>算力和带宽</b>：算力是每秒能算多少次，带宽是每秒能搬多少字节。一件活要是搬得多算得少，就是「吃带宽」，反过来是「吃算力」。<br>
     <b>ICI 和切片</b>：TPU 芯片之间的专用快线叫 ICI；用 ICI 连在一起的一整块芯片叫一个切片，切片和切片之间走普通的数据中心网络。<br>
     <b>device 和轴</b>：v7 的一颗芯片，对软件显示成 2 个 device，并行度按 device 数；切片里的芯片排成三维网格，x、y、z 三个方向各叫一根轴。<br>
+    <b>rank</b>：参与并行的一个进程，通常就对应一张卡（TPU 上是一个 device）。<br>
+    <b>v7 与 v7x</b>：同一代 TPU（Ironwood）的两种叫法，本讲混用。<br>
     <b>几路</b>：「TP 8 路」就是 8 张卡一组做 TP。写成 TP4 × DP2，意思是每 4 张卡一组做 TP，这样的组有 2 份做数据并行，一共 4 × 2 ＝ 8 张卡。<br>
     <b>MoE 与专家</b>：模型里有很多组并排的前馈层，叫专家；每个 token 由一个小的路由器挑出其中几个去算，其余的不碰。
     所以参数很多，每个 token 实际用到的却很少。<br>
@@ -1954,9 +1957,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>先加后拼，跟一步到位的结果完全一样。</b><span class="capmore"><br><em>拆开之后，两半可以放在不同的时间点去做。</em></span></figcaption></figure>
   <p>这两半各自单独拿出来，就是两种有用的通信；拆开以后，中间还能塞进别的动作。<b>后面好几种并行白捡的便宜，全从这里来</b>：</p>
   <ul>
-    <li><b>ZeRO ／ FSDP</b>：数据并行同步梯度那一次 AllReduce 拆开：ReduceScatter 让每张卡只拿自己那 1/n 梯度的总和、就地更新那 1/n 参数；
-      AllGather 拼回来的，是更新好的新权重。账面上一个字节没多花（切 micro-batch 时的例外见 2.3），每张卡却只需要存 1/n 的梯度和优化器状态；
-      连权重也只存 1/n，就要多付一半。第二节细讲。</li>
+    <li><b>ZeRO</b>：数据并行同步梯度那一次 AllReduce 拆成两半，中间插进「每张卡只更新自己那 1/n」这一步，于是每卡只存 1/n 的梯度和优化器状态，通信一个字节不多。第二节细讲。</li>
     <li>张量并行每层要做 AllReduce；配上序列并行时，也是把它拆成这两半，分别挪到不同位置。第三节细讲。</li>
   </ul>
 
@@ -2528,7 +2529,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s2-4">2.4　这一刀能放多远：看频率</h3>
   <ul>
-    <li><b>数据并行、ZeRO-1</b>：一步通信一次，可以放在慢链路上，最远能横跨数据中心（ZeRO-2 只在不切 micro-batch 时才如此）。</li>
+    <li><b>数据并行、ZeRO-1</b>：一步通信一次，可以放在慢链路上，最远能横跨数据中心。</li>
     <li><b>FSDP</b>：每一层都要拼一次权重，一步下来多出成百上千次（第七节有个数），得放在高带宽域里。</li>
     <li><b>HSDP</b> 是两者的折中：<b>机内 FSDP、机间数据并行</b>。高频的拼权重留在机内，跨机只剩梯度同步，量也除以了机内的分片数。</li>
     <li><b>DiLoCo</b> 再往前一步：每个副本先自己走几百步再同步一次，专门为跨数据中心训练设计。</li>
@@ -2595,7 +2596,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
 <p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
   <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片之间的 ICI 每颗芯片每秒能发出约 0.6 TB
-    （常说的 1.2 TB/s，⚠️ 按推算是收发两个方向加起来的；上面搬的字节是「每卡发出」的量，只能跟发出那一半比，推算见台账）。
+    （常说的 1.2 TB/s 是收发合计，我们算的是发出量，所以用一半；⚠️ 这个拆分是推算，见台账）。
     硬件的比值约 3,845，也就是每送一个字节，得有三千八百多次活等着。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
     而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
   <p>这还是最乐观的算法。两种情况门槛更高：只走一根轴，只用得上三分之一的链路，高约 3 倍；MoE 只靠 FSDP、不配专家并行，
@@ -2674,9 +2675,9 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s3-3">3.3　SP：TP 的搭档</h3>
   <p>TP 切不到的那几段，是逐个 token 做的小运算（归一化、dropout、残差相加），每张卡都存着一整份激活。
-    Megatron 的序列并行（SP）把这几段沿序列切开（名字里有「序列」，但它是 TP 的搭档，跟第四刀切序列不是一回事，见 8.8），顺手把每次 AllReduce 拆成两半：进 TP 那块之前用 AllGather 把序列拼齐，出来时用 ReduceScatter 切回
+    Megatron 的序列并行（SP）把这几段沿序列切开。别被名字骗了：它是 TP 的搭档，不是第四刀（见 8.8）。它顺手把每次 AllReduce 拆成两半：进 TP 那块之前用 AllGather 把序列拼齐，出来时用 ReduceScatter 切回
     ——&nbsp;就是第一节那个等式，<b>通信量跟原来一样</b>，省下的是激活显存。
-    （为了连 TP 块里要用的那份激活也只存一段，反向时要再拼一次，但可以跟算权重梯度叠在一起藏掉。）</p>
+</p>
 
   <h3 id="s3-4">3.4　TP 的上限：跟 batch 无关</h3>
   <p>TP 送的是「半成品」（激活）：token 多一倍，要送的多一倍，算的也多一倍，<b>batch 在账里约掉了</b>。
@@ -2684,11 +2685,12 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4；4.5 这个系数按标准注意力加 4 倍宽 MLP 推出，V3 实际是 MLA 加 MoE，这里只作示意）。
       但这是最乐观的线，实际更紧，有两个原因：</li>
-    <li>① 3,845 假设三根轴都用满、而且每根轴首尾连成环；TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device），用不满，实际门槛高好几倍，已经在线下了。</li>
+    <li>① 3,845 假设三根轴都用满、而且每根轴首尾连成环；TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device），两个折扣叠在一起：切片太小成不了环（1.5），又只用得上一两根轴（3.1），实际门槛高好几倍，已经在线下了。</li>
     <li>② Megatron 的 TP 通信默认要等它做完才能往下算，藏不进计算里。</li>
     <li>另外两条约束：注意力头要按整个分，Megatron 要求查询头数能被 TP 度数整除（KV 头更少的模型，KV 头数和 TP 只要一个能整除另一个，TP 更大时 KV 就复制）；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>（GPU 上一般不出一个 NVLink 域）。</li>
   </ul>
-  <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP，两把刀各管一边。看图就是：左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。</p>
+  <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP，两把刀各管一边。看图就是：左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。
+    这要 TP 那条线本身在红线上面才成立：隐藏维越宽、硬件线越低，TP 越有余地；像 V3 这样两条线都贴着或落在线下，TP 本身就不划算，得换别的刀（3.6）。</p>
 
   <h3 id="s3-5">3.5　PP：按层切</h3>
   <p>TP 每一层都要通信，出不了最快的那一圈互联。要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，就按层切。
@@ -3288,9 +3290,8 @@ body.figonly section h3{margin-top:34px}
     挑哪个差别大到什么程度，我们自己测过一次：</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍（跟调完参的 TP4 比；卡数也变了，见 7.3）</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 DEP8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
-    其中最属于「换切法」的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
-    attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。注意上面的图画的是 V3（每卡 32 个专家），实测用的是 V4-Pro。<br>
-    <em>完整的账（卡数、并发、首字延迟）在 7.3。KV 这件事，下一刀专门讲。</em></div>
+    最属于「换切法」的一笔在 attention 那一半：KV 不再在 4 张卡上各存一份（5.4 讲为什么）。attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。注意上面的图画的是 V3（每卡 32 个专家），实测用的是 V4-Pro。<br>
+    <em>完整的账（卡数、并发、首字延迟）在 7.3。</em></div>
 
   <h3 id="s4-5">4.5　这一刀留下的问题</h3>
   <p>前三刀都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨。
@@ -3771,7 +3772,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s7-1">7.1　线有快有慢，刀有勤有懒</h3>
   <p>一个集群里的线不是一样快的。GPU 这边，GB300 NVL72 把 72 块卡连成一个 NVLink 域，域里每块卡 1.8 TB/s（收发合计，下同）；
     出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI（够大的切片连成 3D 环面，见 1.5），
-    跨切片走数据中心网络，同口径比慢约 50 倍（DCN 每芯片单向 100 Gbps，折成双向约 25 GB/s；ICI 双向约 1,200 GB/s，1,200 ÷ 25 ≈ 48），比 GPU 那边的 9 倍悬殊得多。</p>
+    跨切片走数据中心网络，同口径比慢约 50 倍（换算见台账），比 GPU 那边的 9 倍悬殊得多。</p>
   <p>刀也不是一样勤的。把每一刀一步要通信几次数一遍（本课推导，示意配置），差出三个数量级：</p>
 <figure class="fbox fwide" id="fig-freq"><svg viewBox="0 0 1400 868" width="100%" role="img" aria-label="每一刀一步要通信多少次，按实际比例画成横条。示意配置是 60 层、8 个 micro-batch。TP 和 EP 每步约 1920 次，FSDP 1440 次，都是每一层都要来几次；PP 每步 16 次，只在段边界上；DP 每步只有 1 次。下面是两种线的带宽：GB300 上一块 GPU 的 NVLink 双向 1.8 TB/s，一整柜 72 块 GPU 都连在这张网上；出了这一柜就只能走网卡，双向 200 GB/s，差 9 倍。规则是频率高的放快线，频率低的才走慢线"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每一刀多久说一次话　——　<tspan font-weight="700">说得勤的放快线，说得少的才走慢线</tspan></text>
@@ -3835,8 +3836,7 @@ body.figonly section h3{margin-top:34px}
   <p>先别往下看：TP、PP、DP 三个，谁该坐快线？</p>
   <p>于是有一条默认的摆法：<b>每一层都要说话的 TP、EP、FSDP、CP 先往最快的那一圈里放</b>；PP 只在段边界说话，DP 一步只说一次，它们去跨慢线。
     但光数次数不够，还要看<b>它能不能跟计算叠起来</b>。TP 叠不起来（每一块末尾那次 AllReduce 不做完，下一块就没法开始），所以必须待在快线里，度数上限就是那一圈的大小。
-    EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器
-    （V3 报告里 H800 机内 NVLink 实际约 160 GB/s、机间 IB 50 GB/s，只差约 3 倍，技术报告 §3.2.2；按规格同口径本课推算约 4 倍），Llama 3 把 FSDP 放在了最外层。
+    EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器（H800 机内外只差 3 到 4 倍，远没有 TPU 悬殊，见台账），Llama 3 把 FSDP 放在了最外层。
     DP 那一次量虽然最大，但一步只有一次，而且反向从最后一层往前算，后面几层的梯度一算好就能先传。
     第六节那趟 KV 也一样，一个请求只传一次，所以敢走数据中心网络这根慢线（指 TPU v7x 那套）。</p>
 
@@ -3888,8 +3888,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">换成 DEP8，同样并发下每卡 2.09 倍、出字间隔降到约 12 ms；把并发拉到 1,536 每卡能到 2.47 倍，但首字要等 95 秒。</text>
 </svg><figcaption><b>比吞吐要按每张卡比：三次实测用的卡数是 8、16、20。</b><span class="capmore"><br><em>本课程作者实测，4K 进 1K 出。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md（1p1d 14,563；3p1d 21,100；3p ＋ DEP8 并发 512 为 55,153、并发 1,536 为 65,132）。GPU 数按每节点 4 块、prefill 与 TP4 decode 各 1 节点、DEP8 2 节点；每卡数本脚本现算。</p></details></figure>
   <p>TP4 decode 上能调的都调了：去掉 eager 模式（即打开 CUDA Graph）只多 2.6%，加 prefill 机器、调并发，总数从 14,563 涨到 21,100。
-    可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 46.8–53 ms。换成 DEP8 那一步，同样并发 512 下出字间隔从 46.8 ms 降到 11.8 ms，首字延迟从 55.8 秒降到 22.8 秒。
-    真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（切序列那一节讲的毛病）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。两笔都换成了更大的 batch（并发是排队的请求数，batch 是同时在算的请求数）。
+    可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 46.8–53 ms。换成 DEP8 那一步，同样并发 512 下出字间隔从 46.8 ms 降到 11.8 ms，首字延迟从 55.8 秒降到 22.8 秒（同一套在并发 256 时首字只要 7.8 秒，并发 512 下多出来的大部分是排队）。
+    真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（5.4）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。两笔都换成了更大的 batch（并发是排队的请求数，batch 是同时在算的请求数）。
     GB300 一个计算托盘只有 4 块卡，DEP8 的 8 张卡横跨两个托盘，但还在同一柜的 NVLink 快线里。
     （出字间隔为什么同时降下来，原始记录里没有拆开归因。）<b>先问切法对不对，再动参数。</b></p>
   <p><em>口径提醒：图里后两行都是并发 512，第一行是原始脚本的并发 256。DEP8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
@@ -3909,7 +3909,7 @@ body.figonly section h3{margin-top:34px}
   <table>
     <tr><th>步骤</th><th>混元 3（295B MoE，TPU v7，256 芯片）</th><th>DeepSeek-V3（671B MoE，2,048 块 H800）</th></tr>
     <tr><td>① 装得下</td><td>FSDP 128（专家权重也由 FSDP 切）：再窄就爆显存</td><td>ZeRO-1 摊优化器状态；EP 64 摊专家</td></tr>
-    <tr><td>② 快线多大</td><td>256 芯片在同一个切片里，全是快线；小规模试 EP 吞吐掉了 71%，<b>不用 EP</b>（见表下注）</td>
+    <tr><td>② 快线多大</td><td>256 芯片在同一个切片里，全是快线，FSDP 已经能把专家也摊开，<b>不用 EP</b>；小规模试过一次 EP，吞吐反而掉了（见表下注）</td>
       <td>8 卡一台，<b>不用 TP</b>；EP 64 横跨 8 台机器，跨机那段是慢线，是个例外。为了少走慢线，规定每个 token 最多发到 4 台机器</td></tr>
     <tr><td>③ 序列</td><td>4K ／ 8K，不用 CP</td><td>预训练 4K，报告里没有 CP</td></tr>
     <tr><td>④ PP</td><td>一个切片放得下，不用</td><td>PP 16，用 DualPipe 把通信叠进计算</td></tr>
@@ -3930,8 +3930,8 @@ body.figonly section h3{margin-top:34px}
       训练大模型常常先走这一种：卡多了，global batch 也跟着加。但 global batch 有收敛允许的上限（临界 batch size：batch 再加大，需要的训练步数不再按比例减少），到了上限就只能 strong scaling。</li>
   </ul>
   <p>衡量的数叫扩展效率：加卡后每卡的吞吐 ÷ 加卡前每卡的吞吐。下面是我们自己的两组实测，<b>只能组内比</b>。
-    左边是一次 weak scaling：卡 ×4、global batch ×4。右边不是 strong scaling：卡数不变，只比 FSDP 组铺多宽。
-    倒是同一个 DP 4 × FSDP 128，每个 device batch 12 时是 580、batch 8 时是 453：每张卡的活一少就吃亏，这就是 strong scaling 撞墙的样子。</p>
+    左边是一次 weak scaling：卡 ×4、global batch ×4。右边比的是同样的卡、FSDP 铺多宽。
+    我们没有干净的 strong scaling 实测；最接近的是同一个 DP 4 × FSDP 128，每个 device 的 batch 从 12 降到 8，每芯片从 580 掉到 453：每张卡的活一少就吃亏。</p>
 <figure class="fbox fwide" id="fig-scale"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="混元 3 在 TPU v7 上的两组实测，纵轴是每芯片 TFLOP/s。左边：64 芯片和 256 芯片用同一个配方，多出来的卡当成数据并行的副本，每卡的活不变，都是 580，一点没掉，这叫 weak scaling。右边：同样 256 芯片、同样每个 device 的 batch，只改怎么分。多出来的卡当副本 453，FSDP 铺到一半 450，全塞进 FSDP 把权重摊得更薄 404，少了 11%；FSDP 再窄就放不下，爆显存"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">加卡怎么加　——　<tspan font-weight="700">当副本几乎不掉，摊得更薄就掉</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">混元 3 在 TPU v7 上的实测，每芯片 TFLOP/s。v7 一颗芯片算 2 个 device，DP × FSDP 按 device 数（64 芯片 ＝ 128 个）。左右两组每个 device 的 batch 不同</text>
