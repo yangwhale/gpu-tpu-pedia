@@ -2480,6 +2480,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="454" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">FSDP 每层前向前拼一次权重，算完就扔，所以显存里永远只有一层是完整的；反向要用时，<tspan font-weight="700">只好再拼一次</tspan>　——　多出来的正是这一份。</text>
 <text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">反过来也成立：前向后不扔（PyTorch 叫 reshard_after_forward=False），通信就回到 2 份，代价是整个反向期间都攥着完整权重。又是一次拿通信换显存。</text>
 </svg><figcaption><b>数据并行一层做两次通信，FSDP 做三次。</b><span class="capmore"><br><em>多出来的那次 AllGather，是反向时把前向扔掉的权重再拼回来。</em></span></figcaption></figure>
+<figure class="fbox fwide" id="anim-fsdp">
+<video src="media/topic05-fsdp.mp4" autoplay loop muted playsinline
+       aria-label="FSDP 一步的动画。四张卡，每张卡三层，每层只长期持有自己那一段（四分之一）。标题：FSDP：每层用之前借回来，用完就还。字幕一：前向：每层先 AllGather 拼回整层，算完只留自己那一段。第 1、2、3 层依次：别人的三段飞进来拼成整层，整层亮一下，再把借来的三段扔掉。底部计数一次次加一。字幕二：反向：扔掉的权重要再拼一次；算出的梯度 ReduceScatter 给各自的主人。从第 3 层往回：再拼一次整层、亮一下、扔掉，然后黄色的梯度小块飞回各自的主人。字幕三：每层三次：前向拼一次，反向再拼一次、散一次。计数停在 9。最后复位。"></video>
+<figcaption>整层只在用的那一刻出现；平时每张卡只拿着每层的四分之一。
+  <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>代价在反向：前向扔掉的权重，反向还得再拼一次。所以一层一步要做 AG、AG、RS 三次，
     通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 §7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB。</p>
   <div class="note warn"><span class="t">⚠️ 「FSDP 白送」这句话要说准</span>

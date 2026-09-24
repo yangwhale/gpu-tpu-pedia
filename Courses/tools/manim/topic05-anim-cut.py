@@ -571,3 +571,116 @@ class MeshMap(Scene):
         self.remove(sub, *kept)
         self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
         self.wait(0.6)
+
+
+# ── FSDP 一步 ───────────────────────────────────────────────────────────
+# ⭐ 增量来自时间：静态图能列出「AG、AG、RS」三个格子，列不出「借来 → 用 → 还掉 → 反向再借」
+#   这个节奏。每张卡始终只长期拿着每层 1/4（自己那一段），整层只在用的那一刻出现。
+# ⛔ 次数现算：前向每层 1 次 AllGather，反向每层 1 次 AllGather ＋ 1 次 ReduceScatter。
+FS_L = 3
+FS_COMM = FS_L * 1 + FS_L * 2
+assert FS_COMM == 3 * FS_L == 9
+
+
+class FSDPStep(Scene):
+    def construct(self):
+        title = cap_text("FSDP：每层用之前借回来，用完就还", size=30).to_edge(UP)
+        self.add(title)
+        XC = [-4.8, -1.6, 1.6, 4.8]
+        YL = [1.1, 0.0, -1.1]
+        SEGW = 0.62
+
+        def seg_pos(card, k, i):
+            return [XC[card] - 0.93 + k * SEGW, YL[i], 0]
+
+        base = VGroup()
+        for c in range(NR):
+            base.add(Text("卡 %d" % c, font_size=24, color=COL_R[c]).move_to([XC[c], 2.0, 0]))
+            for i in range(FS_L):
+                base.add(Rectangle(width=SEGW * 4 + 0.08, height=0.62, stroke_color=GREY_B,
+                                   stroke_width=1.2).move_to([XC[c], YL[i], 0]))
+        for i in range(FS_L):
+            base.add(Text("第 %d 层" % (i + 1), font_size=18, color=GREY_B).move_to([-6.6, YL[i], 0]))
+        own = VGroup(*[Rectangle(width=SEGW - 0.06, height=0.5, stroke_width=0, fill_color=COL_R[c],
+                                 fill_opacity=0.9).move_to(seg_pos(c, c, i))
+                       for c in range(NR) for i in range(FS_L)])
+        self.add(base, own)
+        sub = cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2)
+        self.add(sub)
+        self.wait(0.5)
+
+        def say(t, color=GREY_B):
+            nonlocal sub
+            n = cap_text(t, color, 24).next_to(title, DOWN, buff=0.2)
+            self.play(FadeOut(sub), FadeIn(n), run_time=0.3)
+            sub = n
+
+        count = [0, None]
+
+        def bump():
+            count[0] += 1
+            t = Text("通信次数：%d" % count[0], font_size=24, color=WHITE).move_to([0, -2.4, 0])
+            if count[1] is not None:
+                self.remove(count[1])
+            self.add(t)
+            count[1] = t
+
+        def gather(i):
+            cps, anims = [], []
+            for c in range(NR):
+                for k in range(NR):
+                    if k == c:
+                        continue
+                    r = Rectangle(width=SEGW - 0.06, height=0.5, stroke_width=0, fill_color=COL_R[k],
+                                  fill_opacity=0.9).move_to(seg_pos(k, k, i))
+                    cps.append(r)
+                    anims.append(r.animate.move_to(seg_pos(c, k, i)))
+            self.add(*cps)
+            self.play(*anims, run_time=0.55)
+            bump()
+            return cps
+
+        def use(i, col):
+            glow = VGroup(*[Rectangle(width=SEGW * 4 + 0.08, height=0.62, stroke_color=col,
+                                      stroke_width=4).move_to([XC[c], YL[i], 0]) for c in range(NR)])
+            self.play(FadeIn(glow), run_time=0.2)
+            self.play(FadeOut(glow), run_time=0.2)
+
+        def drop(cps):
+            self.play(*[FadeOut(r) for r in cps], run_time=0.25)
+            self.remove(*cps)
+
+        def scatter(i):
+            dots, anims = [], []
+            for c in range(NR):
+                for k in range(NR):
+                    if k == c:
+                        continue
+                    d = Rectangle(width=0.16, height=0.16, stroke_width=0, fill_color=YELLOW,
+                                  fill_opacity=1).move_to(seg_pos(c, k, i))
+                    dots.append(d)
+                    anims.append(d.animate.move_to(seg_pos(k, k, i)))
+            self.add(*dots)
+            self.play(*anims, run_time=0.55)
+            self.play(*[FadeOut(d) for d in dots], run_time=0.2)
+            self.remove(*dots)
+            bump()
+
+        say("前向：每层先 AllGather 拼回整层，算完只留自己那一段")
+        for i in range(FS_L):
+            cps = gather(i)
+            use(i, BLUE)
+            drop(cps)
+        say("反向：扔掉的权重要再拼一次；算出的梯度 ReduceScatter 给各自的主人")
+        for i in reversed(range(FS_L)):
+            cps = gather(i)
+            use(i, GREEN)
+            drop(cps)
+            scatter(i)
+        assert count[0] == FS_COMM
+        say("每层三次：前向拼一次，反向再拼一次、散一次", GREEN)
+        self.wait(1.6)
+        self.play(FadeOut(sub), FadeOut(count[1]), run_time=0.5)
+        self.remove(sub, count[1])
+        self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
+        self.wait(0.6)

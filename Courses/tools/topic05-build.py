@@ -276,6 +276,11 @@ __FIG_ZERO_MEM__
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB，照样装不下。
     所以大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
 __FIG_FSDP_STEP__
+<figure class="fbox fwide" id="anim-fsdp">
+<video src="media/topic05-fsdp.mp4" autoplay loop muted playsinline
+       aria-label="FSDP 一步的动画。四张卡，每张卡三层，每层只长期持有自己那一段（四分之一）。标题：FSDP：每层用之前借回来，用完就还。字幕一：前向：每层先 AllGather 拼回整层，算完只留自己那一段。第 1、2、3 层依次：别人的三段飞进来拼成整层，整层亮一下，再把借来的三段扔掉。底部计数一次次加一。字幕二：反向：扔掉的权重要再拼一次；算出的梯度 ReduceScatter 给各自的主人。从第 3 层往回：再拼一次整层、亮一下、扔掉，然后黄色的梯度小块飞回各自的主人。字幕三：每层三次：前向拼一次，反向再拼一次、散一次。计数停在 9。最后复位。"></video>
+<figcaption>整层只在用的那一刻出现；平时每张卡只拿着每层的四分之一。
+  <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>代价在反向：前向扔掉的权重，反向还得再拼一次。所以一层一步要做 AG、AG、RS 三次，
     通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 §7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB。</p>
   <div class="note warn"><span class="t">⚠️ 「FSDP 白送」这句话要说准</span>
