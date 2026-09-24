@@ -235,7 +235,8 @@ __FIG_RING__
     卡再多，也不到两整份。</p>
   <p>代价是步数跟着卡数涨。数据很大时，比的是带宽，环几乎是最优的；
     数据很小时，比的是一步一步的等待，步数多反而吃亏。
-    所以 NCCL 这类通信库会按消息大小，在环形、树形等几种算法之间自己挑。</p>
+    所以 NCCL 这类通信库会按消息大小，在环形、树形等几种算法之间自己挑。
+    NVLink 交换机（NVSwitch）还能在交换机里直接做加法，每张卡发出去的又能少将近一半。</p>
   <p><em>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
     更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</em></p>
 
@@ -250,7 +251,7 @@ __FIG_A2A__
     在「按序列切」和「按头切」之间来回换。</p>
 
   <h3>1.7　一张表收住</h3>
-  <p>「每卡发出」一列按最优算法算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
+  <p>「每卡发出」一列按点对点链路上的最优算法（环）算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
     ReduceScatter 指加之前那一整份）。</p>
   <table>
     <tr><th>通信</th><th>做什么</th><th>每卡发出</th><th>后面谁在用</th></tr>
@@ -367,7 +368,7 @@ __FIG_TP_MLP__
     <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）。
       可 3,845 假设 TP 组占满三根带环回的轴，TP 8 路只有 4 颗芯片、用不满，实际门槛要高好几倍，已经在线下了；
       再加上 Megatron 的 TP 通信默认在关键路径上藏不住，实际更紧。</li>
-    <li>另外两条约束：注意力头要按整个分，Megatron 要求头数（有分组的模型是 KV 组数）能被 TP 度数整除；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>
+    <li>另外两条约束：注意力头要按整个分，Megatron 要求查询头数能被 TP 度数整除（KV 头更少的模型，KV 头数和 TP 只要一个能整除另一个，TP 更大时 KV 就复制）；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>
   </ul>
   <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP。两把刀各管一边。</p>
 
@@ -436,11 +437,11 @@ __FIG_MOE_PARAMS__
 __FIG_FOLD__
   <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
     挑哪个差别大到什么程度，我们自己测过一次：</p>
-  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐 2.47 倍</span>
-    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），<b>摊到每张卡是 2.47 倍</b>。
+  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍</span>
+    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是原来的 2.09 倍</b>。
     最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
     attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。<br>
-    <em>完整的口径（卡数、并发、首字延迟）在 7.3。KV 这件事，下一刀专门讲。</em></div>
+    <em>完整的账（卡数、并发、首字延迟）在 7.3。KV 这件事，下一刀专门讲。</em></div>
 
   <h3>4.5　这一刀留下的问题</h3>
   <p>前三刀都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨。
@@ -582,7 +583,7 @@ __FIG_FREQ__
   <p>于是有一条默认的摆法：<b>每一层都要说话的 TP、EP、FSDP、CP 先往最快的那一圈里放</b>；PP 只在段边界说话，DP 一步只说一次，它们去跨慢线。
     但光数次数不够，还要看<b>它能不能跟计算叠起来</b>。TP 叠不起来，所以必须待在快线里，度数上限就是那一圈的大小。
     EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器
-    （H800 上机内 NVLink 160 GB/s、机间 IB 50 GB/s，只差约 3 倍，技术报告 §3.2.2），Llama 3 把 FSDP 放在了最外层。
+    （V3 报告里 H800 机内 NVLink 实际约 160 GB/s、机间 IB 50 GB/s，都是单向，只差约 3 倍；按规格同口径约 4 倍，技术报告 §3.2.2），Llama 3 把 FSDP 放在了最外层。
     TP 还有一条额外的理由：它每一块末尾那次 AllReduce 不做完，下一块就没法开始，不容易跟计算叠起来藏住。
     DP 那一次量虽然最大，但一步只有一次，而且反向从最后一层往前算，后面几层的梯度一算好就能先传。</p>
 
@@ -594,17 +595,17 @@ __FIG_FREQ__
 <figcaption>一轮通信要等最慢的那一段传完，所以摆法二每一轮都按慢线算。
   <span class="sub">（15 秒无声循环，Manim 渲染。一步 8 轮 TP、1 次 DP，快慢 1 : 9 是示意。）</span></figcaption></figure>
   <p>放到真实集群上，这就是为什么 TP 一般不出一台 8 卡机器。GB300 把 NVLink 域扩到一整柜，
-    TP 和 EP 才敢往大了开：<b>快线那一圈画多大，这几刀就能切多深。</b></p>
+    专家并行才敢往大了开（TP 受头数和矩阵效率限制，在整柜上也很少超过 8 或 16）：<b>快线那一圈画多大，这几刀就能切多深。</b></p>
 
   <h3>7.3　先选对切法，再调参数</h3>
   <p>摆法和切法选错了，参数调得再细也只是在错的天花板下面打转。我们在 GB300 上跑 DeepSeek-V4-Pro 时撞上过一次：</p>
 __FIG_TOPO__
   <p>TP4 decode 上能调的都调了：去掉 eager 模式只多 2.6%，加 prefill 机器、调并发，总数从 14,563 涨到 21,100。
-    可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 47–53 ms。换成 dep8 那一步，TPOT 从 46.8 ms 降到约 12 ms。
-    省下的显存主要有两笔：KV 不再在 4 张卡上各存一份（第五节讲的那个毛病），专家摊到 8 张卡上每张只放 48 个；两笔都换成了更大的 batch。
+    可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 46.8–53 ms。换成 dep8 那一步，同样并发 512 下出字间隔从 46.8 ms 降到 11.8 ms，首字延迟从 55.8 秒降到 22.8 秒。
+    真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（第五节讲的那个毛病）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。两笔都换成了更大的 batch。
     （出字间隔为什么同时降下来，原始记录里没有拆开归因。）<b>先问切法对不对，再动参数。</b></p>
-  <p><em>口径提醒：21,100 是并发 512 的最好成绩，65,132 是并发 1,536 的最好成绩。同样并发 512 时 dep8 是 55,153，
-    总量 2.61 倍、每卡约 2.09 倍。这里的吞吐是 prompt 和输出 token 加在一起算的。</em></p>
+  <p><em>口径提醒：图里三行都是并发 512。dep8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
+    这里的吞吐是 prompt 和输出 token 加在一起算的。</em></p>
 
   <h3>7.4　五步怎么选</h3>
   <p>把前面几节串起来，给一个模型挑并行方式，大致按这个顺序：</p>
@@ -736,7 +737,7 @@ __FIG_SCALE__
         DCP 把这份冗余变回容量</td>
       <td>先把 Q 收齐，各卡在自己那段 KV 上算 attention，再带着 LSE 合并结果</td><td>推</td></tr>
     <tr><td>Helix ''' + NEW + '''</td><td>同一组卡在一层里换两次布局：attention 按 KV 序列切（再叠一维不超过 KV 头数的 TP），FFN 按 TP × EP 切</td>
-      <td>百万 token 级的 decode：读 KV 和读权重两件事都要摊开</td><td>一次 all-to-all 交换部分结果</td><td>推</td></tr>
+      <td>百万 token 级的 decode：读 KV 和读权重两件事都要摊开</td><td>attention 后一次 all-to-all 交换部分结果；FFN 段照样有 TP 的 all-reduce 或 EP 的 all-to-all</td><td>推</td></tr>
     <tr><td>MaxText <code>context_autoregressive</code></td><td>decode 时 KV 沿序列切，FFN 按专家切</td>
       <td>同上，TPU 上的做法</td><td>XLA 自动插入</td><td>推</td></tr>
   </table>
@@ -868,7 +869,7 @@ __FIG_SCALE__
     <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s、每轴双向 200 GB/s，「6 条链路 × 200、发出方向 600」是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；3,845 是每芯片，按 device 约 1,900（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
-    <tr><td>GB300 上 TP4 → dep8：各取最好总量 3.09 倍、每卡 2.47 倍（同并发 512：2.61 ／ 2.09 倍）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；dep8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
+    <tr><td>GB300 上 TP4 → dep8：同并发 512 总量 2.61 倍、每卡 2.09 倍（dep8 并发 1,536 时每卡 2.47 倍、TTFT 95 s）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；dep8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
     <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv 2205.05198 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
     <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 §3</td></tr>
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>

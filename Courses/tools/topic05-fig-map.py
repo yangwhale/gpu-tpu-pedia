@@ -37,10 +37,13 @@ assert WEAK[1][2] / WEAK[0][2] == 1.0 and round(404 / 453 * 100) == 89
 # GB300 V4-Pro（vLLM，4K 进 1K 出）
 TOPO = [("1P1D，TP4 decode", "原始脚本", 14563, 8),
         ("3P1D，TP4 decode", "加 prefill、调并发后的最好成绩", 21100, 16),
-        ("3P ＋ dep8 decode", "换 decode 的切法（decode 卡 4→8 张）", 65132, 20)]
+        ("3P ＋ dep8 decode", "换 decode 的切法（decode 卡 4→8 张），同样并发 512", 55153, 20)]
+# ⛔ 2026-09-25 GPU 专家评审：原来第三行用 65,132（并发 1,536、首字延迟 95 秒），跟并发 512 的 21,100 不对等。
+#   改成同并发 512 的 55,153；65,132 只在图注里提一句。
 PER = [t[2] / t[3] for t in TOPO]
-assert [round(p) for p in PER] == [1820, 1319, 3257]
-assert round(TOPO[1][2] / TOPO[0][2] - 1, 2) == 0.45 and round(PER[2] / PER[1], 2) == 2.47
+assert [round(p) for p in PER] == [1820, 1319, 2758]
+assert round(TOPO[1][2] / TOPO[0][2] - 1, 2) == 0.45 and round(PER[2] / PER[1], 2) == 2.09
+assert round(65132 / 20 / PER[1], 2) == 2.47
 
 
 def fig_freq():
@@ -128,9 +131,9 @@ def fig_scale():
 def fig_topo():
     f = Fig(W, "GB300 上跑 DeepSeek-V4-Pro 的三次实测，按每块 GPU 的吞吐画。原始脚本 1P1D，每卡 1820；"
                "加 prefill 机器、调并发，总吞吐涨了 45%，但卡也翻了一倍，每卡反而降到 1319。"
-               "把 decode 从 TP4 换成 dep8（decode 卡也从 4 张变 8 张），每卡到 3257，是前一个的 2.47 倍")
+               "把 decode 从 TP4 换成 dep8（decode 卡也从 4 张变 8 张），同样并发下每卡到 2758，是前一个的 2.09 倍")
     y0 = f.header("调参和换切法，不是一个量级　——　<tspan font-weight=\"700\">看每张卡，不看总数</tspan>",
-                  "GB300 · DeepSeek-V4-Pro · vLLM，4K 进 1K 出，各取最好成绩。条长是每块 GPU 的吞吐（tok/s），括号里是总数和卡数",
+                  "GB300 · DeepSeek-V4-Pro · vLLM，4K 进 1K 出。条长是每块 GPU 的吞吐（tok/s），括号里是总数和卡数",
                   [(GY2, "TP4 decode"), (GR, "dep8 decode")])
     PH = 300
     py = f.panel(0, y0, W, PH, "每块 GPU 每秒出多少 token", GR)
@@ -140,16 +143,16 @@ def fig_topo():
         col = GR if i == 2 else GY2
         f.t(30, yy + 20, lab, INK, True, 15)
         f.t(30, yy + 42, sub, GY, size=13)
-        w = BW * PER[i] / 3400
+        w = BW * PER[i] / 3000
         f.box(BX, yy, w, 40, col, col, 4)
         f.t(BX + w + 12, yy + 27, "%s" % format(round(PER[i]), ","), GR if i == 2 else INK, True, 17)
         f.t(BX + w + 90, yy + 27, "（总 %s，%d 块卡）" % (format(tot, ","), g), GY, size=13.5)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "参数调得再好，也只是那一种切法的天花板", [
-        "在 TP4 上加机器、调并发，总数 +45%，<tspan font-weight=\"700\">其实是靠多一倍的卡换的</tspan>；出字间隔一直钉在约 47–53 ms。",
-        "换成 dep8 之后每卡 2.47 倍：只有一个头的 KV 不再被 TP 复制 4 份，省下的显存全变成了更大的 batch。",
+        "在 TP4 上加机器、调并发，总数 +45%，<tspan font-weight=\"700\">其实是靠多一倍的卡换的</tspan>；出字间隔一直钉在约 46.8–53 ms。",
+        "换成 dep8，同样并发下每卡 2.09 倍、出字间隔降到约 12 ms；把并发拉到 1,536 每卡能到 2.47 倍，但首字要等 95 秒。",
     ])
-    yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md（1p1d 14,563；3p1d 21,100；3p ＋ dep8 65,132）。"
+    yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md（1p1d 14,563；3p1d 21,100；3p ＋ dep8 并发 512 为 55,153、并发 1,536 为 65,132）。"
                         "GPU 数按每节点 4 块、prefill 与 TP4 decode 各 1 节点、dep8 2 节点；每卡数本脚本现算。")
     f.save("fig5-topo.svg", yb + 14)
 
