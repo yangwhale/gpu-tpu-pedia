@@ -878,7 +878,8 @@ body.figonly section h3{margin-top:34px}
     第三节还会拿出一把配套的：每搬一个字节换来多少计算。频率决定它放哪根线，这一把决定它会不会被拖住。</p>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b>：张量、激活、注意力头、MoE、KV cache、prefill 与 decode、Q/K/V、MLA、显存、ICI、「几路」……（专题一、三讲过，这里各一句话）</summary>
-  <p style="line-height:1.9"><b>张量与隐藏维</b>：模型里流动的数据都是多维数组，叫张量；每个 token 用一串数表示，这串数的长度就是隐藏维（V3 是 7,168）。<br>
+  <p style="line-height:1.9"><b>token 与 batch</b>：token 是模型处理文字的最小单位，大致一个字；batch 是一步喂进去的那一批数据，本讲常按 token 数算。<br>
+    <b>张量与隐藏维</b>：模型里流动的数据都是多维数组，叫张量；每个 token 用一串数表示，这串数的长度就是隐藏维（V3 是 7,168）。<br>
     <b>激活</b>：前向每一层算出来的中间结果。反向时还要用，所以得先存着。<br>
     <b>注意力头</b>：注意力被拆成几十份并排的小注意力，每一份叫一个头，各算各的。<br>
     <b>micro-batch</b>：把一步要算的一批样本再切成几小份，一份一份地过。<br>
@@ -2542,8 +2543,9 @@ body.figonly section h3{margin-top:34px}
   <p>想象砌墙：师傅砌一块砖两秒，小工送一块砖要五秒，师傅再快也得等。每张卡就是师傅，网络就是小工。
     所以判断一刀会不会被通信拖住，只看一个比值：<b>每在网络上搬一个字节，能换来多少次计算</b>。
     这个比值要高过硬件自己的比值（每秒能算多少次 ÷ 每秒能搬多少字节），否则师傅就在干等。</p>
-  <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是两次拼权重、一次分梯度，约 6Ψ 字节（Ψ 还是参数个数，bf16 每个 2 字节）；
-    一步算的是 6ΨT 次（专题四那条「训练每个 token 约 6 倍参数量次运算」），T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
+  <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是前向拼一次权重、反向再拼一次、再分一次梯度，各约 2Ψ 字节，合计约 6Ψ（Ψ 还是参数个数，bf16 每个 2 字节）；
+    一步算的是 6ΨT 次（专题四那条「训练每个 token 约 6 倍参数量次运算」），T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。
+    换回砌墙的说法：FSDP 送的是「工具」（权重），一件工具送到，这一批每个 token 都要拿它算一遍，token 越多，同一趟送货够师傅忙得越久。</p>
 <figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时，按最乐观的线才勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两把刀，两种账　——　<tspan font-weight="700">FSDP 看 batch，TP 看隐藏维</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（ 推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
@@ -2585,14 +2587,14 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
 <p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
   <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片之间的 ICI 每颗芯片每秒能发出约 0.6 TB
-    （常说的 1.2 TB/s 是收发两个方向加起来的；上面搬的字节是「每卡发出」的量，只能跟发出那一半比，推算见台账）。
-    硬件的比值约 3,845。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
+    （常说的 1.2 TB/s，⚠️ 按推算是收发两个方向加起来的；上面搬的字节是「每卡发出」的量，只能跟发出那一半比，推算见台账）。
+    硬件的比值约 3,845，也就是每送一个字节，得有三千八百多次活等着。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
     而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
-  <p>这还是最乐观的算法。两种情况门槛更高：只走一根轴，高约 3 倍；MoE 只靠 FSDP、不配专家并行，
+  <p>这还是最乐观的算法。两种情况门槛更高：只走一根轴，只用得上三分之一的链路，高约 3 倍；MoE 只靠 FSDP、不配专家并行，
     搬的是全部参数、算的只有被选中的那一小部分，还要再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p>
 
   <h3 id="s3-2">3.2　TP：切进矩阵内部</h3>
-  <p>张量并行把一层的权重矩阵本身切开，每张卡只存、只算其中一块。Megatron-LM 的切法里藏着一个巧思：</p>
+  <p>张量并行把一层的权重矩阵本身切开，每张卡只存、只算其中一块。英伟达的 Megatron-LM 框架的切法里藏着一个巧思：</p>
 <figure class="fbox fwide" id="fig-tp-mlp"><svg viewBox="0 0 1400 639" width="100%" role="img" aria-label="张量并行怎么切一个 MLP。输入 X 每张卡都有一整份。第一块权重 W1 按列切成两半，每张卡算出中间结果的一半，激活函数可以各自算，不用通信。第二块权重 W2 按行切，每张卡算出的是完整输出的一部分和，最后做一次 AllReduce 加起来，每张卡拿到完整的 Y。关键是两次矩阵乘之间不需要任何通信：先列切、再行切，正好让一次 AllReduce 放在最后"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TP 切 MLP　——　<tspan font-weight="700">先按列切，再按行切，中间一次通信都不用</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两张卡的例子。灰 ＝ 两张卡都有的完整副本，蓝 ／ 橙 ＝ 各自那一半；虚线是切口。蓝的只跟蓝的相乘，所以中间不用找对方要东西</text>
@@ -2664,26 +2666,27 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s3-3">3.3　SP：TP 的搭档</h3>
   <p>TP 切不到的那几段，是逐个 token 做的小运算（归一化、dropout、残差相加），每张卡都存着一整份激活。
-    Megatron 的序列并行（SP）把这几段沿序列切开（名字里有「序列」，但它是 TP 的搭档，跟第四刀切序列不是一回事，见 8.8），顺手把每次 AllReduce 拆成 AllGather ＋ ReduceScatter
+    Megatron 的序列并行（SP）把这几段沿序列切开（名字里有「序列」，但它是 TP 的搭档，跟第四刀切序列不是一回事，见 8.8），顺手把每次 AllReduce 拆成两半：进 TP 那块之前用 AllGather 把序列拼齐，出来时用 ReduceScatter 切回
     ——&nbsp;就是第一节那个等式，<b>通信量跟原来一样</b>，省下的是激活显存。
-    （为了连这份激活也只存一段，反向时要再拼一次，但可以跟算权重梯度叠在一起藏掉。）</p>
+    （为了连 TP 块里要用的那份激活也只存一段，反向时要再拼一次，但可以跟算权重梯度叠在一起藏掉。）</p>
 
   <h3 id="s3-4">3.4　TP 的上限：跟 batch 无关</h3>
-  <p>TP 搬的是激活，一层搬多少跟 token 数成正比，算多少也跟 token 数成正比，<b>batch 在账里约掉了</b>。
+  <p>TP 送的是「半成品」（激活）：token 多一倍，要送的多一倍，算的也多一倍，<b>batch 在账里约掉了</b>。
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。</p>
   <ul>
     <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4；4.5 这个系数按标准注意力加 4 倍宽 MLP 推出，V3 实际是 MLA 加 MoE，这里只作示意）。
-      可 3,845 假设 TP 组占满三根带环回的轴，TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device）、用不满，实际门槛要高好几倍，已经在线下了；
-      再加上 Megatron 的 TP 通信默认在关键路径上藏不住，实际更紧。</li>
-    <li>另外两条约束：注意力头要按整个分，Megatron 要求查询头数能被 TP 度数整除（KV 头更少的模型，KV 头数和 TP 只要一个能整除另一个，TP 更大时 KV 就复制）；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>
+      但这是最乐观的线，实际更紧，有两个原因：</li>
+    <li>① 3,845 假设三根轴都用满、而且每根轴首尾连成环；TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device），用不满，实际门槛高好几倍，已经在线下了。</li>
+    <li>② Megatron 的 TP 通信默认要等它做完才能往下算，藏不进计算里。</li>
+    <li>另外两条约束：注意力头要按整个分，Megatron 要求查询头数能被 TP 度数整除（KV 头更少的模型，KV 头数和 TP 只要一个能整除另一个，TP 更大时 KV 就复制）；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>（GPU 上一般不出一个 NVLink 域）。</li>
   </ul>
-  <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP。两把刀各管一边。</p>
+  <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP，两把刀各管一边。看图就是：左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。</p>
 
   <h3 id="s3-5">3.5　PP：按层切</h3>
   <p>TP 每一层都要通信，出不了最快的那一圈互联。要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，就按层切。
-    流水线并行把模型按层切成几段，每张卡负责一段，段与段之间只在边界上点对点传激活，
+    流水线并行把模型按层切成几段，每张卡负责一段，段与段之间只在边界上用一对一收发传激活，
     是所有刀里通信最少的，所以它<b>能跨到慢线上</b>，横跨很多台机器也吃得消。代价是<b>气泡</b>：</p>
-<figure class="fbox fwide" id="fig-pp-bubble"><svg viewBox="0 0 1400 548" width="100%" role="img" aria-label="流水线并行的时间表。四个 stage 从上到下，横轴是时间。每个小方块是一个 micro-batch 在这一段的前向或反向。一开始只有第一段在干活，后面几段在等；最后只剩第一段在做反向，前面几段在等。那两个三角形的空白就是气泡。micro-batch 越多，气泡占的比例越小。四段八个 micro-batch 时，气泡是理想计算时间的八分之三，占整步约百分之二十七"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-pp-bubble"><svg viewBox="0 0 1400 548" width="100%" role="img" aria-label="流水线并行的时间表。四个 stage 从上到下，横轴是时间。每个小方块是一个 micro-batch 在这一段的前向或反向。一开始只有第一段在干活，后面几段在等；最后只剩第一段在做反向，后面几段已经做完在等。那两个三角形的空白就是气泡。micro-batch 越多，气泡占的比例越小。四段八个 micro-batch 时，气泡是理想计算时间的八分之三，占整步约百分之二十七"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PP 的代价：气泡　——　<tspan font-weight="700">开头等人灌满，结尾等人排空</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 个 stage、8 个 micro-batch，GPipe 式时间表（先全部前向、再全部反向）。反向按前向的 2 倍长画</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -2848,8 +2851,8 @@ body.figonly section h3{margin-top:34px}
        aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：总量不变、切成 8 份（每份的格子窄一半）：气泡 ＝ (4−1) ÷ 8 ＝ 3/8，灰色真的短了一半。字幕三：气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱。最后复位。"></video>
 <figcaption>micro-batch 从 4 个加到 8 个，灰色的气泡跟着缩一半。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>开头要等后面几段灌满，结尾要等前面几段排空。气泡跟理想计算时间之比是 (p−1) ÷ m，
-    p 是段数，m 是 micro-batch 个数。micro-batch 越多越省；可在最早的 GPipe 调度里，每一份的激活都要攒着等反向，份数越多攒得越多
+  <p>图里一行就是一段（stage）。开头后面几段要等前面灌满，结尾前面几段要等后面排空；每一行空白的总长都一样，是 p−1 个前向加 p−1 个反向。气泡跟理想计算时间之比是 (p−1) ÷ m，
+    p 是段数，m 是 micro-batch 个数。micro-batch 越多越省；可每份太小，卡就吃不饱；而且在最早的 GPipe 调度里，每一份的激活都要攒着等反向，份数越多攒得越多
     （1F1B 调度把同时在路上的份数限制在 p 以内）。
     三种常见的改进：VPP 让每张卡负责几段不连续的层，气泡再除以每卡的段数；
     Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
@@ -3290,18 +3293,19 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s5-1">5.1　一条样本为什么会放不下</h3>
   <ul>
     <li><b>训练</b>：每层要存的激活至少跟序列长度成正比；不用 FlashAttention 时还有一项跟长度的平方成正比（Megatron 序列并行论文的式 1）。</li>
-    <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 存一份压缩后的 KV（512 维）加一小段位置信息（64 维），(512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节，
-      <b>一个 128K 的请求就是约 8.58 GiB</b>。</li>
+    <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 存一份压缩后的 KV（512 维）加一小段位置信息（64 维），(512 ＋ 64) × 61 层 × 2 字节（BF16）＝ 70,272 字节；再乘 131,072 个 token，
+      <b>一个 128K 的请求就是约 8.58 GiB</b>，这还只是一个请求。</li>
   </ul>
 
   <h3 id="s5-2">5.2　训练：CP 把激活沿序列切开</h3>
   <p>上下文并行（CP）把一条长序列切成几段，每张卡只存自己那段的激活。
     难点只在注意力：每个 token 要看到它前面所有的 token，而那些 token 在别的卡上。两种办法：</p>
   <ul>
-    <li><b>Ring Attention</b>：Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。</li>
-    <li><b>Ulysses</b>：注意力前后各做一次 AllToAll，在「按序列切」和「按头切」之间来回换。
+    <li><b>Ring Attention</b>：把 KV 想成每个 token 留下的「笔记」，Q 是新 token 手里的「提问」。Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。
+      这就是 1.5 那个环：传下一段时正在算这一段，通信藏在计算后面。</li>
+    <li><b>Ulysses</b>：注意力前后各做一次 AllToAll（1.6 那个转置），在「按序列切」和「按头切」之间来回换。
       换成按头切以后，每张卡手里是全部 token、但只有几个头，注意力就能在本卡算完，算完再换回去。
-      每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数（有分组的模型卡在 KV 头数上）。</li>
+      每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数：换过去以后每张卡至少要拿一个完整的头；KV 头比查询头少的模型（GQA），卡在 KV 头数上。</li>
   </ul>
 
 <figure class="fbox fwide" id="anim-ringattn">
@@ -3314,13 +3318,14 @@ body.figonly section h3{margin-top:34px}
        aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
 <figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>两者可以叠起来用（USP：一个方向走环，一个方向走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
+  <p>两者可以叠起来用（USP：卡排成二维，一个维度走环，另一个维度走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
 
   <h3 id="s5-3">5.3　causal 带来的不均</h3>
-  <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。</p>
+  <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。
+    解法很简单：轻的配重的，一张卡拿一轻一重两块，叫之字形切，见下图。</p>
 <figure class="fbox fwide" id="fig-cp-zigzag"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="因果注意力切序列时的负载问题。序列切成 8 块，每块只能看自己和前面的块，所以第 0 块要算 1 格，第 7 块要算 8 格。按顺序分给 4 张卡，卡 0 算 3 格、卡 3 算 15 格，差 5 倍。之字形分法：卡 r 拿第 r 块和第 7−r 块，每张卡都是 9 格，完全均匀"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">causal attention 切序列：顺序切会不均匀　——　<tspan font-weight="700">之字形切正好摆平</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">序列切成 2 × 4 ＝ 8 块。三角形里每一格是一对（查询块，KV 块）要算的注意力；因果掩码只留下三角形</text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">因果注意力切序列：顺序切会不均匀　——　<tspan font-weight="700">之字形切正好摆平</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">序列切成 2 × 4 ＝ 8 块。行 ＝ 查询块，列 ＝ KV 块，每一格是一对要算的注意力；因果掩码只留下三角形</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0</text>
 <rect x="76" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -3441,8 +3446,9 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>同样 8 块，换一种分法，最忙和最闲从差好几倍变成一样忙。</b><span class="capmore"><br><em>每格数由脚本按因果掩码现算。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-LM megatron/core/utils.py：序列切成 2×cp_size 块，rank r 拿第 r 块和第 2·cp−r−1 块；文档 docs/user-guide/features/context_parallel.md 称其避免下三角的多余计算并保持负载均衡。每格数本脚本现算；对角格按整格计。对角格只算一半时是 2／6／10／14 对 8／8／8／8，顺序切差 7 倍。</p></details></figure>
 
   <h3 id="s5-4">5.4　推理：KV cache 被 TP 复制了</h3>
-  <p>推理时 KV 常常是最大的一块。而 TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated tp_size / H times）。
-    MLA 模型只有一个 KV 头，TP 8 路就是每张卡一整份、8 份一模一样的 KV。</p>
+  <p>长上下文、高并发的推理（decode 阶段）里，KV 常常是最大的一块。TP 在注意力里是按头分卡的：V3 的查询头有 128 个，分得开；MLA 把 KV 压成所有头共用的一份，只剩一个头，切不开。
+    一般地，TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated tp_size / H times）。
+    MLA 模型只有一个 KV 头，TP 8 路就是每张卡一整份、8 份一模一样的 KV。4.4 里 V4-Pro 在 TP4 上白存 3 份，毛病就在这儿。</p>
 <figure class="fbox fwide" id="fig-kv-dup"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。每个 token 的 KV 是 70272 字节，12 万 8 千个 token 就是约 8.58 GiB。TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">推理时切序列：KV cache 被 TP 复制了几份　——　<tspan font-weight="700">DCP 把复制变回容量</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，一个 128K 上下文的请求。每 token 的 KV ＝ (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节</text>
@@ -3474,7 +3480,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1069" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 7</text>
 <text class="svgsm" x="1150" y="202" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每卡 8.58 GiB</tspan></text>
 <text class="svgsm" x="1150" y="226" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">合计 68.6 GiB（8 份一样的）</text>
-<text class="svgsm" x="24" y="318" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DCP 8 路</tspan></text>
+<text class="svgsm" x="24" y="318" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 8 ＋ DCP 8</tspan></text>
 <rect x="230.0" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="282" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 0</text>
 <rect x="342.5" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -3503,10 +3509,10 @@ body.figonly section h3{margin-top:34px}
   <p><b>DCP（decode 上下文并行）</b>让 KV 按 token 轮流存到几张卡上，用的还是原来那几张卡：</p>
 <figure class="fbox fwide" id="anim-dcp">
 <video src="media/topic05-decodecp.mp4" autoplay loop muted playsinline
-       aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕二：12 个 token，每张卡只存 3 个的 KV：容量是原来的 4 倍。字幕三：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕四：四份部分结果合并成一份：每层多几次通信，换回 4 倍的 KV 空间。最后复位。"></video>
+       aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：只开 TP：笔记切不开，每张卡都存全部 12 个 token 的 KV（四张卡各一块红色大块）。字幕二：DCP：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕三：12 个 token，每张卡只存 3 个的 KV：同样的卡，能装 4 倍的笔记。字幕四：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕五：四份部分结果合并成一份：每层多几次通信，换回 4 倍的 KV 空间。最后复位。"></video>
 <figcaption>KV 轮流落到四张卡上；每一层多几次通信，把 Q 收齐、把结果合起来。
-  <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并（每份带着自己的归一化分母，记作 LSE，才能合得对）。
+  <span class="sub">（11 秒无声循环，Manim 渲染。先放只开 TP 时的样子做对照。）</span></figcaption></figure>
+  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并。每张卡的 softmax 只在自己那份 KV 上归一化，合并时要按各自的分母重新加权，所以每份都得带着自己的归一化分母（记作 LSE）。
     每层多付三次通信（vLLM 默认实现：收齐 Q、交换归一化分母、合并输出），换回被 TP 白白复制掉的那几份 KV。
     DCP 的度数最多开到 TP ÷ KV 头数，也就是刚好把复制的那几份收回来。<b>用一种通信，换一份显存</b>，又一次。</p>
 
@@ -4297,7 +4303,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a> 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
     <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>；arXiv <a href="https://arxiv.org/abs/2309.14509" target="_blank" rel="noopener">2309.14509</a> §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv <a href="https://arxiv.org/abs/2405.07719" target="_blank" rel="noopener">2405.07719</a> §3</td></tr>
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
-    <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算</td></tr>
+    <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算。config 里 num_key_value_heads=128 是 MLA 解压后的头数，推理缓存的是压缩后那一份，vLLM 当作 1 个 KV 头</td></tr>
     <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>（prefill 偏算力、decode 受带宽约束；7.4 倍请求或 12.6 倍更紧的 SLO）</td></tr>
     <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> §3），FSDP 每层 3 次（arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> §7），EP ／ PP ／ DP 按调度数出</td></tr>

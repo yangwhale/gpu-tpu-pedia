@@ -40,8 +40,8 @@ def fig_zigzag():
     f = Fig(W, "因果注意力切序列时的负载问题。序列切成 8 块，每块只能看自己和前面的块，"
                "所以第 0 块要算 1 格，第 7 块要算 8 格。按顺序分给 4 张卡，卡 0 算 3 格、卡 3 算 15 格，差 5 倍。"
                "之字形分法：卡 r 拿第 r 块和第 7−r 块，每张卡都是 9 格，完全均匀")
-    y0 = f.header("causal attention 切序列：顺序切会不均匀　——　<tspan font-weight=\"700\">之字形切正好摆平</tspan>",
-                  "序列切成 2 × 4 ＝ 8 块。三角形里每一格是一对（查询块，KV 块）要算的注意力；因果掩码只留下三角形",
+    y0 = f.header("因果注意力切序列：顺序切会不均匀　——　<tspan font-weight=\"700\">之字形切正好摆平</tspan>",
+                  "序列切成 2 × 4 ＝ 8 块。行 ＝ 查询块，列 ＝ KV 块，每一格是一对要算的注意力；因果掩码只留下三角形",
                   [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3")])
     PH = 380
     py = f.panel(0, y0, W, PH, "8 × 8 的因果注意力块，谁算哪几行", BL)
@@ -80,7 +80,7 @@ def fig_kv_dup():
     PH = 290
     py = f.panel(0, y0, W, PH, "8 张卡上，这一个请求的 KV 各占多少", GR)
     BX, BW = 230, 900
-    rows = [("TP 8 路", [KV_REQ] * 8, True), ("DCP 8 路", [KV_REQ / 8] * 8, False)]
+    rows = [("TP 8 路", [KV_REQ] * 8, True), ("TP 8 ＋ DCP 8", [KV_REQ / 8] * 8, False)]
     for i, (name, per, dup) in enumerate(rows):
         yy = py + 40 + i * 110
         f.t(24, yy + 36, name, INK, True, 17)

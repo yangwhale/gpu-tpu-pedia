@@ -371,7 +371,19 @@ class DecodeCP(Scene):
             sub = n
 
         NT = 12
-        say("每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上")
+        # ⭐ 2026-09-25 L11：补「之前」的对照帧 —— 只开 TP 时每张卡都存全部 12 个 token 的 KV，
+        #   「容量是原来的 4 倍」才有基准。
+        say("只开 TP：笔记切不开，每张卡都存全部 12 个 token 的 KV", RED)
+        before = VGroup(*[VGroup(Rectangle(width=1.4, height=1.6, stroke_width=0, fill_color=RED, fill_opacity=0.55),
+                                 Text("12 个 token", font_size=18, color=WHITE)).move_to([XS4[c], 0.9, 0])
+                          for c in range(NR)])
+        for g in before:
+            g[1].move_to(g[0].get_center())
+        self.play(FadeIn(before), run_time=0.5)
+        self.wait(1.0)
+        self.play(FadeOut(before), run_time=0.4)
+        self.remove(before)
+        say("DCP：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上")
         cells = VGroup()
         for t in range(NT):
             c = t % NR
@@ -381,7 +393,7 @@ class DecodeCP(Scene):
             g = VGroup(r, lab)
             self.play(FadeIn(g), run_time=0.16)
             cells.add(g)
-        say("12 个 token，每张卡只存 3 个的 KV：容量是原来的 4 倍", GREEN)
+        say("12 个 token，每张卡只存 3 个的 KV：同样的卡，能装 4 倍的笔记", GREEN)
         self.wait(0.8)
         say("算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算")
         q = Circle(radius=0.22, stroke_width=0, fill_color=YELLOW, fill_opacity=1).move_to([0, -1.3, 0])
