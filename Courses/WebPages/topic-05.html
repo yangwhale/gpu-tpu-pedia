@@ -2160,6 +2160,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">班长模式里所有数据都挤进卡 0 一条线；环形里<tspan font-weight="700">每一步每条线上只走一块</tspan>，所有线同时在用。</text>
 <text class="svgsm" x="20" y="502" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以卡再多，每张卡发出去的总量也只是 2(n−1)/n 份，<tspan font-weight="700">不到两整份</tspan>。代价是步数随卡数增长：数据很小时，比的就不是带宽而是步数了。</text>
 </svg><figcaption><b>盯着条纹看：每一步，每张卡都有一块多加进一个人。</b><span class="capmore"><br><em>每一步是脚本按调度现算的，不是手摆的。</em></span></figcaption></figure>
+<figure class="fbox fwide" id="anim-ring">
+<video src="media/topic05-ring.mp4" autoplay loop muted playsinline
+       aria-label="环形 AllReduce 动画。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，箭头从卡 0 依次指向卡 3，再从卡 3 绕回卡 0。字幕一：ReduceScatter：每人往右发一块，收到的加到自己那块上。三步里，每一步四张卡同时把一块飞给右边的邻居，落地后那一块多出一种颜色的条纹。字幕二：三步之后：每张卡恰好握着一块完整总和。字幕三：AllGather：把总和接着往右传，只替换，不相加。再转三步，完整总和一块块复制过去。字幕四：人人一份总和 ＝ AllReduce ＝ ReduceScatter ＋ AllGather。最后画面复位到四张卡的初始状态。"></video>
+<figcaption>同一个环转两圈：前三步<b>加</b>（ReduceScatter），后三步<b>拼</b>（AllGather），合起来就是一次 AllReduce。
+  <span class="sub">（15 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>ReduceScatter 转 n−1 步、AllGather 再转 n−1 步，每张卡一共发出 2(n−1)/n 份数据。
     卡再多，也不到两整份。</p>
   <p>代价是步数跟着卡数涨。数据很大时，比的是带宽，环几乎是最优的；
@@ -2308,6 +2313,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="488" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">MoE 里这张表的一格，就是<tspan font-weight="700">我手里要送到卡 j 上那个专家的 token</tspan>。发过去算完，还要再转置一次送回来　——　所以专家并行每层两次 AllToAll。</text>
 <text class="svgsm" x="20" y="512" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">每一格多大由路由决定，<tspan font-weight="700">事先不知道</tspan>，而且任意两张卡之间都有流量。前三种都能安排成只跟邻居说话；它的每一格都得从发的人一路走到收的人，所以对网络拓扑最挑剔。</text>
 </svg><figcaption><b>左边一行是「我要发给谁」，右边一行是「谁发给了我」。</b><span class="capmore"><br><em>每一格多大，在 MoE 里要等路由算完才知道。</em></span></figcaption></figure>
+<figure class="fbox fwide" id="anim-a2a">
+<video src="media/topic05-a2a.mp4" autoplay loop muted playsinline
+       aria-label="AllToAll 动画。四张卡各有四块，颜色表示出自哪张卡，对角线上的四块画粗框。字幕一：派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）。十六块同时飞到新位置，卡 k 的第 j 块落到卡 j 的第 k 行。字幕二：卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次。字幕三：专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll。十六块原路飞回，画面回到开始的样子。"></video>
+<figcaption>派发过去、送回来，正好是专家并行每层的两次 AllToAll。
+  <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>它是这五种里<b>唯一一个「人人对人人发不同数据」的</b>。
     专家并行派发 token 要用它（每层两次：发过去、送回来）；切序列时的 Ulysses 也用它，
     在「按序列切」和「按头切」之间来回换。</p>

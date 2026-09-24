@@ -192,6 +192,11 @@ __FIG_AR_SPLIT__
     卡 0 要收 n−1 份、发 n−1 份，卡一多，它那条线就成了全场的瓶颈。</p>
   <p>换个办法：把卡首尾相连排成一圈，谁都不当班长。</p>
 __FIG_RING__
+<figure class="fbox fwide" id="anim-ring">
+<video src="media/topic05-ring.mp4" autoplay loop muted playsinline
+       aria-label="环形 AllReduce 动画。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，箭头从卡 0 依次指向卡 3，再从卡 3 绕回卡 0。字幕一：ReduceScatter：每人往右发一块，收到的加到自己那块上。三步里，每一步四张卡同时把一块飞给右边的邻居，落地后那一块多出一种颜色的条纹。字幕二：三步之后：每张卡恰好握着一块完整总和。字幕三：AllGather：把总和接着往右传，只替换，不相加。再转三步，完整总和一块块复制过去。字幕四：人人一份总和 ＝ AllReduce ＝ ReduceScatter ＋ AllGather。最后画面复位到四张卡的初始状态。"></video>
+<figcaption>同一个环转两圈：前三步<b>加</b>（ReduceScatter），后三步<b>拼</b>（AllGather），合起来就是一次 AllReduce。
+  <span class="sub">（15 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>ReduceScatter 转 n−1 步、AllGather 再转 n−1 步，每张卡一共发出 2(n−1)/n 份数据。
     卡再多，也不到两整份。</p>
   <p>代价是步数跟着卡数涨。数据很大时，比的是带宽，环几乎是最优的；
@@ -201,6 +206,11 @@ __FIG_RING__
 
   <h3>1.6　AllToAll：每人给每人一份不一样的</h3>
 __FIG_A2A__
+<figure class="fbox fwide" id="anim-a2a">
+<video src="media/topic05-a2a.mp4" autoplay loop muted playsinline
+       aria-label="AllToAll 动画。四张卡各有四块，颜色表示出自哪张卡，对角线上的四块画粗框。字幕一：派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）。十六块同时飞到新位置，卡 k 的第 j 块落到卡 j 的第 k 行。字幕二：卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次。字幕三：专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll。十六块原路飞回，画面回到开始的样子。"></video>
+<figcaption>派发过去、送回来，正好是专家并行每层的两次 AllToAll。
+  <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>它是这五种里<b>唯一一个「人人对人人发不同数据」的</b>。
     专家并行派发 token 要用它（每层两次：发过去、送回来）；切序列时的 Ulysses 也用它，
     在「按序列切」和「按头切」之间来回换。</p>
