@@ -838,9 +838,9 @@ body.figonly section h3{margin-top:34px}
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲写了四节</span>
-    <b>第一到第三节和第八节（全景）是写完的</b>，出处在文末台账。<br>
-    第四到第七节还是大纲，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了五节</span>
+    <b>第一到第四节和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第五到第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一张卡装不下</h2></div>
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，
@@ -2829,13 +2829,150 @@ body.figonly section h3{margin-top:34px}
     <b>占全部参数的约 97%</b>。每个专家只有 2,048 宽，切进它内部不划算；真正该切的，是「专家」这一维。这是第三刀。</p>
 </div></section>
 
-<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第三刀：切专家</h2></div><div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
-<ul>
-  <li><b>EP</b>：专家放到不同卡上，每层两次 AllToAll</li>
-  <li>EP 独有的病：<b>发给谁由数据决定</b>，负载天生不均（EPLB、冗余专家）</li>
-  <li>一个模型里 attention 和专家是两种形状 → <b>各配各的</b>：训练叫 Parallel Folding（ETP / EP / EDP），推理叫 DEP / TEP</li>
-  <li>Wide-EP：把 EP 铺到几十张卡，decode 时每个专家的 batch 才做得大</li>
-</ul>
+<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第三刀：切专家</h2></div>
+  <p class="lead">MoE 模型的参数几乎全在专家里。第三刀就切这一维：把不同的专家放到不同的卡上。
+    <b>它多出来的通信只有一种，AllToAll；可它也带来了一个别的刀都没有的病。</b></p>
+
+  <h3 id="s4-1">4.1　为什么该切专家</h3>
+<figure class="fbox fwide" id="fig-moe-params"><svg viewBox="0 0 1400 464" width="100%" role="img" aria-label="DeepSeek-V3 的 6710 亿参数都在哪。一根横条按比例切成两段：路由专家约 6539 亿，占百分之九十七；其余所有东西，注意力、共享专家、前三层稠密 MLP、词表，加起来只有约 171 亿，占百分之三。每个专家是三块 7168 乘 2048 的矩阵，约 4400 万参数，一共 256 个专家、58 个 MoE 层"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">V3 的参数几乎全在专家里　——　<tspan font-weight="700">该切的是「专家」这一维</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">按参数量画成一根横条。每个专家 ＝ 3 块 7,168 × 2,048 的矩阵（gate ／ up ／ down）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">路由专家</text>
+<rect x="103" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="124" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">其余：注意力、共享专家、稠密 MLP、词表</text>
+<rect x="0" y="102" width="1400" height="190" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">671B 按参数量摊开</tspan></text>
+<rect x="40" y="172" width="1286.3779098019672" height="56" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1326.3779098019672" y="172" width="33.622090198032765" height="56" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="683" y="208" fill="#ffffff" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">路由专家 ≈ 6539 亿　（约 97%）</tspan></text>
+<text class="svgsm" x="1354" y="256" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余 ≈ 171 亿（约 3%）↑</tspan></text>
+<text class="svgsm" x="40" y="256" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个专家 ≈ 4404 万参数 × 256 个 × 58 层</tspan></text>
+<rect x="0" y="342" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="342" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="342" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="369" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以 V3 训练时一点 TP 都没用</tspan></text>
+<text class="svgsm" x="20" y="400" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个专家只有 2,048 宽，再切进它内部不划算；而专家本身有 256 个，<tspan font-weight="700">天然就是一维可以切的</tspan>。</text>
+<text class="svgsm" x="20" y="424" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">V3 的训练配置：16 路 PP ＋ 64 路专家并行 ＋ ZeRO-1 数据并行，<tspan font-weight="700">不用 TP</tspan>（技术报告 §3.2）。</text>
+</svg><figcaption><b>那一小截灰色，是注意力、共享专家、稠密 MLP 和词表加起来的全部。</b><span class="capmore"><br><em>路由专家的份额由 config.json 的尺寸现算。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 config.json：hidden_size 7,168、moe_intermediate_size 2,048、n_routed_experts 256、num_hidden_layers 61、first_k_dense_replace 3。671B 为主模型总参数，不含 MTP 模块。「其余」＝ 671B 减去路由专家，本脚本现算。</p></details></figure>
+  <p>换句话说，TP 那把刀要切的是「一个很宽的矩阵」，而 V3 里真正占地方的是「很多个窄矩阵」。
+    对后者，最省事的切法不是把每一个都劈开，而是<b>把它们整个分给不同的卡</b>。</p>
+
+  <h3 id="s4-2">4.2　EP：token 飞去专家那里</h3>
+  <p>专家并行（EP）的通信只在 MoE 层里发生，每层两次 AllToAll：
+    <b>派发</b>，把每个 token 送到它选中的专家所在的卡；<b>合并</b>，算完再送回原来的卡。</p>
+<figure class="fbox fwide" id="anim-ep">
+<video src="media/topic05-ep.mp4" autoplay loop muted playsinline
+       aria-label="专家并行的动画。四张卡，每张卡上方 4 个 token（颜色表示来自哪张卡），下方 2 个专家，共 8 个专家。标题：专家并行：token 飞到专家那里，算完再飞回来。字幕一：每个 token 由路由挑一个专家（真实的 V3 每个 token 挑 8 个）。字幕二：派发（AllToAll）：token 飞到专家所在的卡，在专家门口排队。专家 0 门口排了 7 个，其他专家 1 到 2 个。字幕三：专家 0 排了 7 个，别的专家只有 1 到 2 个：它算完之前，大家都得等。字幕四：合并（AllToAll）：算完再送回原来的卡。字幕五：发给谁由数据决定，负载天生不均 —— 这是专家并行独有的病。最后 token 回到原位。"></video>
+<figcaption>派发、排队、合并。那一根排得最高的队，决定了所有卡什么时候能往下走。
+  <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>V3 为了压住这两次 AllToAll，做了两件事（技术报告 <a href="#s2-1">§2.1</a>.2、<a href="#s3-2">§3.2</a>.2、<a href="#s3-3">§3.3</a>.3）：</p>
+  <ul>
+    <li><b>限制跨节点</b>：每个 token 最多发往 4 个节点。先走节点间网络发到目标节点，再走节点内的 NVLink 转给真正持有专家的卡。</li>
+    <li><b>派发用 FP8，合并用 BF16</b>：派发那一趟的字节数直接减半。</li>
+  </ul>
+  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节 ≈ 28.7 KB，跟它选了几个专家无关，只跟去了几个节点有关。</p>
+
+  <h3 id="s4-3">4.3　EP 独有的病：负载由数据决定</h3>
+  <p>别的刀切得均匀不均匀，是配置决定的，事先就知道。<b>EP 不是</b>：
+    哪个专家忙、哪个专家闲，要等路由算完才知道，而且每一批数据都不一样。
+    最忙的那个专家算完之前，所有人都得等它。治法分两头：</p>
+  <ul>
+    <li><b>训练时</b>：让路由本身尽量均匀。V3 用的是不加辅助损失的做法，给每个专家一个偏置项，
+      负载高了就把它调低一点，负载低了就调高。</li>
+    <li><b>推理时</b>：把热门专家多复制几份，摊到不同的卡上，也就是 EPLB 和冗余专家。</li>
+  </ul>
+
+  <h3 id="s4-4">4.4　attention 和专家，各配各的</h3>
+  <p>一层 Transformer 里，attention 和专家是两种完全不同的形状：attention 的负担跟序列和 KV 有关，
+    专家的负担是那一大堆参数。<b>所以同一批卡，在这两部分可以用两套切法。</b></p>
+<figure class="fbox fwide" id="fig-fold"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="同一批卡，两套切法。左边是注意力层眼里的这 8 张卡：按张量并行 4 路、数据并行 2 路来组。右边是专家层眼里的同样 8 张卡：按专家并行 8 路，每张卡放 32 个专家。注意力和专家的形状完全不同，所以一个模型里两者各配各的切法。训练里 Megatron 叫它并行折叠，推理里叫 DEP 和 TEP：前一个字母说注意力怎么切，后面的 EP 说专家怎么切"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">attention 和专家，各配各的切法　——　<tspan font-weight="700">同一批卡，两套映射</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">8 张卡的示意。同一张卡在注意力层里是某个 TP 组的一员，到了专家层就换一个身份</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 组 A</text>
+<rect x="102" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="123" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 组 B</text>
+<rect x="204" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="225" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专家（每卡 32 个）</text>
+<rect x="0" y="102" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一层 Transformer 里，同一张卡换两次身份</tspan></text>
+<text class="svgsm" x="40" y="162" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力层：TP 4 路 × DP 2 路</tspan></text>
+<rect x="40" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="100" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<text class="svgsm" x="100" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 0 份</text>
+<rect x="180" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="240" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<text class="svgsm" x="240" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 1 份</text>
+<rect x="320" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="380" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<text class="svgsm" x="380" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 2 份</text>
+<rect x="460" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="520" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<text class="svgsm" x="520" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 3 份</text>
+<rect x="40" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="100" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 4</tspan></text>
+<text class="svgsm" x="100" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 0 份</text>
+<rect x="180" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="240" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 5</tspan></text>
+<text class="svgsm" x="240" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 1 份</text>
+<rect x="320" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="380" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 6</tspan></text>
+<text class="svgsm" x="380" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 2 份</text>
+<rect x="460" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="520" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 7</tspan></text>
+<text class="svgsm" x="520" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 3 份</text>
+<text class="svgsm" x="620" y="262" fill="#202124" style="font-size:30.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
+<text class="svgsm" x="700" y="162" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家层：EP 8 路</tspan></text>
+<rect x="700" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="760" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<text class="svgsm" x="760" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 0–31</text>
+<rect x="860" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="920" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<text class="svgsm" x="920" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 32–63</text>
+<rect x="1020" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1080" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<text class="svgsm" x="1080" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 64–95</text>
+<rect x="1180" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1240" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<text class="svgsm" x="1240" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 96–127</text>
+<rect x="700" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="760" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 4</tspan></text>
+<text class="svgsm" x="760" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 128–159</text>
+<rect x="860" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="920" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 5</tspan></text>
+<text class="svgsm" x="920" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 160–191</text>
+<rect x="1020" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1080" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 6</tspan></text>
+<text class="svgsm" x="1080" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 192–223</text>
+<rect x="1180" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1240" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 7</tspan></text>
+<text class="svgsm" x="1240" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 224–255</text>
+<rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练和推理各有一套名字，说的是同一件事</tspan></text>
+<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">训练：Megatron 叫它 Parallel Folding，attention 按 TP×CP×DP×PP 映射，专家按 ETP×EP×EDP×PP 映射，例如 attention 用 TP4·CP2·DP8·PP4，专家直接 EP64。</text>
+<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">推理：TEP ＝ attention 走 TP、专家走 EP；DEP ＝ attention 走数据并行、专家走 EP。<tspan font-weight="700"> 它们不是 Megatron 的 ETP ／ EDP</tspan>，两套名字别互相换算。</text>
+</svg><figcaption><b>左右两边是同样的 8 张卡。</b><span class="capmore"><br><em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-Core moe/README.md（MoE Parallel Folding，例子 TP4·CP2·DP8·PP4 → ETP1·EP64·EDP1）；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a>。TEP ／ DEP 定义：TensorRT-LLM tech blog 26。</p></details></figure>
+  <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
+    挑哪个差别大到什么程度，我们自己测过一次：</p>
+  <div class="note ok"><span class="t">一次实测：同样的卡，换一种切法 3.09 倍</span>
+    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 用 TP4，把能调的参数全调了，吞吐停在 <b>21,100 tok/s</b>。
+    decode 改成 dep8，也就是 attention 数据并行 8 路、专家 EP8，吞吐直接到 <b>65,132 tok/s</b>，
+    <b>3.09 倍</b>，延迟降到约四分之一。<br>
+    <em>根因在 attention 那一半：这类 MLA 模型的 KV 只有一个头，TP 切不开，<b>只能在 4 张卡上各复制一份</b>。
+    改成数据并行后，每张卡只存自己那批请求的 KV。KV 这件事，下一刀专门讲。</em></div>
+
+  <h3 id="s4-5">4.5　这一刀留下的问题</h3>
+  <p>前三刀都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨。
+    <b>一条样本本身就放不进一张卡了</b>，只能把它切开。这是第四刀。</p>
 </div></section>
 
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>第四刀：切序列</h2></div><div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
@@ -3089,6 +3226,9 @@ body.figonly section h3{margin-top:34px}
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener">2104.04473</a> §2.2.1–2.2.2；Zero Bubble arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>；DualPipe README</td></tr>
     <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
     <tr><td>每字节换多少计算、v7 硬件线约 1,922</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16、ICI 1,200 GB/s 三轴合计（wiki ici-dcn、Inferact 博客规格表）</td></tr>
+    <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
+    <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>
+    <tr><td>GB300 上 TP4 → dep8 3.09 倍</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md（TP4 decode 21,100 → dep8 65,132 tok/s）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>

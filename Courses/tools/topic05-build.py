@@ -122,9 +122,9 @@ HERO = '''
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲写了四节</span>
-    <b>第一到第三节和第八节（全景）是写完的</b>，出处在文末台账。<br>
-    第四到第七节还是大纲，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了五节</span>
+    <b>第一到第四节和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第五到第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
 '''
 
@@ -353,12 +353,56 @@ __FIG_PP_BUBBLE__
     <b>占全部参数的约 97%</b>。每个专家只有 2,048 宽，切进它内部不划算；真正该切的，是「专家」这一维。这是第三刀。</p>
 </div></section>
 
-''' + sec("s四", "四", "第三刀：切专家") + todo([
-    "<b>EP</b>：专家放到不同卡上，每层两次 AllToAll",
-    "EP 独有的病：<b>发给谁由数据决定</b>，负载天生不均（EPLB、冗余专家）",
-    "一个模型里 attention 和专家是两种形状 → <b>各配各的</b>：训练叫 Parallel Folding（ETP / EP / EDP），推理叫 DEP / TEP",
-    "Wide-EP：把 EP 铺到几十张卡，decode 时每个专家的 batch 才做得大",
-]) + '''
+''' + sec("s四", "四", "第三刀：切专家") + '''
+  <p class="lead">MoE 模型的参数几乎全在专家里。第三刀就切这一维：把不同的专家放到不同的卡上。
+    <b>它多出来的通信只有一种，AllToAll；可它也带来了一个别的刀都没有的病。</b></p>
+
+  <h3>4.1　为什么该切专家</h3>
+__FIG_MOE_PARAMS__
+  <p>换句话说，TP 那把刀要切的是「一个很宽的矩阵」，而 V3 里真正占地方的是「很多个窄矩阵」。
+    对后者，最省事的切法不是把每一个都劈开，而是<b>把它们整个分给不同的卡</b>。</p>
+
+  <h3>4.2　EP：token 飞去专家那里</h3>
+  <p>专家并行（EP）的通信只在 MoE 层里发生，每层两次 AllToAll：
+    <b>派发</b>，把每个 token 送到它选中的专家所在的卡；<b>合并</b>，算完再送回原来的卡。</p>
+<figure class="fbox fwide" id="anim-ep">
+<video src="media/topic05-ep.mp4" autoplay loop muted playsinline
+       aria-label="专家并行的动画。四张卡，每张卡上方 4 个 token（颜色表示来自哪张卡），下方 2 个专家，共 8 个专家。标题：专家并行：token 飞到专家那里，算完再飞回来。字幕一：每个 token 由路由挑一个专家（真实的 V3 每个 token 挑 8 个）。字幕二：派发（AllToAll）：token 飞到专家所在的卡，在专家门口排队。专家 0 门口排了 7 个，其他专家 1 到 2 个。字幕三：专家 0 排了 7 个，别的专家只有 1 到 2 个：它算完之前，大家都得等。字幕四：合并（AllToAll）：算完再送回原来的卡。字幕五：发给谁由数据决定，负载天生不均 —— 这是专家并行独有的病。最后 token 回到原位。"></video>
+<figcaption>派发、排队、合并。那一根排得最高的队，决定了所有卡什么时候能往下走。
+  <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>V3 为了压住这两次 AllToAll，做了两件事（技术报告 §2.1.2、§3.2.2、§3.3.3）：</p>
+  <ul>
+    <li><b>限制跨节点</b>：每个 token 最多发往 4 个节点。先走节点间网络发到目标节点，再走节点内的 NVLink 转给真正持有专家的卡。</li>
+    <li><b>派发用 FP8，合并用 BF16</b>：派发那一趟的字节数直接减半。</li>
+  </ul>
+  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节 ≈ 28.7 KB，跟它选了几个专家无关，只跟去了几个节点有关。</p>
+
+  <h3>4.3　EP 独有的病：负载由数据决定</h3>
+  <p>别的刀切得均匀不均匀，是配置决定的，事先就知道。<b>EP 不是</b>：
+    哪个专家忙、哪个专家闲，要等路由算完才知道，而且每一批数据都不一样。
+    最忙的那个专家算完之前，所有人都得等它。治法分两头：</p>
+  <ul>
+    <li><b>训练时</b>：让路由本身尽量均匀。V3 用的是不加辅助损失的做法，给每个专家一个偏置项，
+      负载高了就把它调低一点，负载低了就调高。</li>
+    <li><b>推理时</b>：把热门专家多复制几份，摊到不同的卡上，也就是 EPLB 和冗余专家。</li>
+  </ul>
+
+  <h3>4.4　attention 和专家，各配各的</h3>
+  <p>一层 Transformer 里，attention 和专家是两种完全不同的形状：attention 的负担跟序列和 KV 有关，
+    专家的负担是那一大堆参数。<b>所以同一批卡，在这两部分可以用两套切法。</b></p>
+__FIG_FOLD__
+  <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
+    挑哪个差别大到什么程度，我们自己测过一次：</p>
+  <div class="note ok"><span class="t">一次实测：同样的卡，换一种切法 3.09 倍</span>
+    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 用 TP4，把能调的参数全调了，吞吐停在 <b>21,100 tok/s</b>。
+    decode 改成 dep8，也就是 attention 数据并行 8 路、专家 EP8，吞吐直接到 <b>65,132 tok/s</b>，
+    <b>3.09 倍</b>，延迟降到约四分之一。<br>
+    <em>根因在 attention 那一半：这类 MLA 模型的 KV 只有一个头，TP 切不开，<b>只能在 4 张卡上各复制一份</b>。
+    改成数据并行后，每张卡只存自己那批请求的 KV。KV 这件事，下一刀专门讲。</em></div>
+
+  <h3>4.5　这一刀留下的问题</h3>
+  <p>前三刀都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨。
+    <b>一条样本本身就放不进一张卡了</b>，只能把它切开。这是第四刀。</p>
 </div></section>
 
 ''' + sec("s五", "五", "第四刀：切序列") + todo([
@@ -609,6 +653,9 @@ __FIG_PP_BUBBLE__
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv 2104.04473 §2.2.1–2.2.2；Zero Bubble arXiv 2401.10241；DualPipe README</td></tr>
     <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
     <tr><td>每字节换多少计算、v7 硬件线约 1,922</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16、ICI 1,200 GB/s 三轴合计（wiki ici-dcn、Inferact 博客规格表）</td></tr>
+    <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
+    <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
+    <tr><td>GB300 上 TP4 → dep8 3.09 倍</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md（TP4 decode 21,100 → dep8 65,132 tok/s）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv 2504.14960</td></tr>
@@ -647,6 +694,12 @@ FIGS = {
     "__FIG_PP_BUBBLE__": ("fig-pp-bubble", "fig5-pp-bubble.svg", "topic05-fig-tp.py",
         '<b>浅灰色就是气泡：这一段在干等。</b><br>'
         '<em>4 段 8 个 micro-batch，气泡是理想计算时间的 3/8。</em>'),
+    "__FIG_MOE_PARAMS__": ("fig-moe-params", "fig5-moe-params.svg", "topic05-fig-ep.py",
+        '<b>那一小截灰色，是注意力、共享专家、稠密 MLP 和词表加起来的全部。</b><br>'
+        '<em>路由专家的份额由 config.json 的尺寸现算。</em>'),
+    "__FIG_FOLD__": ("fig-fold", "fig5-fold.svg", "topic05-fig-ep.py",
+        '<b>左右两边是同样的 8 张卡。</b><br>'
+        '<em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em>'),
     "__FIG_ZERO_MEM__": ("fig-zero-mem", "fig5-zero-mem.svg", "topic05-fig-zero.py",
         '<b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><br>'
         '<em>ZeRO-3 那条短到几乎看不见 —— 每卡从 9.76 TiB 降到 9.76 GiB，正好除以 1,024。</em>'),
