@@ -473,16 +473,17 @@ __FIG_FOLD__
       换成按头切以后，每张卡手里是全部 token、但只有几个头，注意力就能在本卡算完，算完再换回去。
       每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数（有分组的模型卡在 KV 头数上）。</li>
   </ul>
-<figure class="fbox fwide" id="anim-ulysses">
-<video src="media/topic05-ulysses.mp4" autoplay loop muted playsinline
-       aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
-<figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
-  <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+
 <figure class="fbox fwide" id="anim-ringattn">
 <video src="media/topic05-ringattention.mp4" autoplay loop muted playsinline
        aria-label="Ring Attention 动画。四张卡，每张卡左边固定一段 Q（Q0 到 Q3），旁边一段 KV。右边是 4 乘 4 的注意力块网格，行是哪张卡的 Q，列是哪段 KV。标题：Ring Attention：Q 不动，KV 沿环传。字幕一：每张卡固定一段 Q；每一步算手上这对（Q, KV），同时把 KV 传给下一张。四步里 KV 段一格格往下传，卡 3 的传回卡 0，网格每行逐格填满。字幕二：转完一圈：每张卡都跟所有 KV 算过了，自己那一行填满。字幕三：关键：传下一块的时候正在算这一块，通信藏在计算后面。最后复位。"></video>
 <figcaption>Q 留在原地，KV 沿环转一圈，每张卡把自己那一行填满。
   <span class="sub">（9 秒无声循环，Manim 渲染。画的是不带因果掩码的情形。）</span></figcaption></figure>
+<figure class="fbox fwide" id="anim-ulysses">
+<video src="media/topic05-ulysses.mp4" autoplay loop muted playsinline
+       aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
+<figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
+  <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>两者可以叠起来用（USP：一个方向走环，一个方向走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
 
   <h3>5.3　causal 带来的不均</h3>
