@@ -55,9 +55,9 @@ def fig_pd():
         x += CW
     f.t(X0 + 20 * CW + 12, py + 264, "一直稳定地出字", GR, True, 14)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "拆开之后，两边各挑各的切法", [
-        "prefill 吃算力、decode 吃带宽。<tspan font-weight=\"700\">拆开后 prefill 机器可以上 PCP 切 prompt，decode 机器可以上 DCP 摊 KV。</tspan>",
-        "代价是多一趟 KV 传输，还有两边机器的配比：长 prompt 多就多配 prefill，长输出多就多配 decode。",
+    yb = f.band(py + PH + 20, "ok", "拆开换来的：出字不再被打断", [
+        "放在一起时，一个长 prompt 的 prefill 就能让所有人停几步。<tspan font-weight=\"700\">拆开后 decode 那条线一格不少。</tspan>",
+        "代价只是多一趟 KV 传输：KV 从 prefill 机器的显存走到 decode 机器的显存。",
     ])
     yb = f.src(yb + 10, "📌 DistServe arXiv 2401.09670：prefill 偏算力、decode 受显存带宽约束；拆开后多服务 7.4 倍请求或把 SLO 收紧 12.6 倍。",
                         "📌 本课程作者 TPU v7x 实测（Qwen3-Coder-480B，1P1D）：KV 4 跳约 100 ms，占 1–2 s prefill 的 5–10%%。"

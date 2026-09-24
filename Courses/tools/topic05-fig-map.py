@@ -91,7 +91,7 @@ def fig_scale():
                "右边：同样 256 芯片、同样每卡 batch，只改怎么分。多出来的卡当副本 453，全塞进 FSDP 把权重摊得更薄 404，"
                "少了 11%；FSDP 再窄就放不下，爆显存")
     y0 = f.header("加卡怎么加　——　<tspan font-weight=\"700\">当副本几乎不掉，摊得更薄就掉</tspan>",
-                  "混元 3（295B MoE）在 TPU v7 上的实测，每芯片 TFLOP/s。左右两组的每卡 batch 不同，不要跨组比",
+                  "混元 3 在 TPU v7 上的实测，每芯片 TFLOP/s。v7 一颗芯片算 2 个 device，DP × FSDP 按 device 数（64 芯片 ＝ 128 个）。左右两组每卡 batch 不同",
                   [(GR, "多出来的卡当 DP 副本"), (OR, "多出来的卡全塞进 FSDP"), (RD, "放不下")])
     PH = 370
     py = f.panel(0, y0, 470, PH, "同配方放大 4 倍（每卡 batch 12）", GR)
