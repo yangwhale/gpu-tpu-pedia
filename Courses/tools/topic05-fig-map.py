@@ -167,9 +167,9 @@ fig_topo()
 #   每个名字只挂两样东西：用的是哪种通信、能不能跨到慢线上。细节仍在后面的表里。
 PANO = [
     ("数据并行", "切 batch", BL, [("DP", "AllReduce", 1), ("ZeRO-1", "RS ＋ AG", 1), ("FSDP", "AG ×2 ＋ RS", 0),
-                                 ("HSDP", "机内 FSDP、机间 DP", 1), ("Attention DP", "推理：MoE 里跟着 EP 走", 0)]),
-    ("序列并行", "切一条样本", GR, [("Megatron SP", "AG ＋ RS（TP 的搭档）", 0), ("CP · Ring", "Send／Recv 沿环", 0),
-                                  ("Ulysses", "AllToAll", 0), ("DCP", "推理：收齐 Q、合并", 0), ("PCP", "推理：切长 prompt", 0)]),
+                                 ("HSDP", "机间那一维可跨慢线", 1), ("Attention DP", "AllToAll（随 EP 走）", 0)]),
+    ("序列并行", "切一条样本", GR, [("Megatron SP", "AG ＋ RS（TP 的搭档）", 0), ("Ring Attention", "Send／Recv 沿环", 0),
+                                  ("Ulysses", "AllToAll", 0), ("DCP", "推理：AG ＋ 合并，每层 3 次", 0), ("PCP", "推理：切长 prompt", 0)]),
     ("模型并行", "切权重", OR, [("TP", "AllReduce，每层", 0), ("PP", "Send／Recv，段边界", 1),
                               ("EP", "AllToAll，每个 MoE 层", 0), ("Wide-EP", "EP 铺到几十张卡", 0)]),
     ("解耦", "拆工作", PU, [("PD 分离", "KV 跨机传一次", 1), ("AFD", "每层 attention→专家→attention", 0), ("Encoder 分离", "embedding 传一次", 1)]),
@@ -183,7 +183,7 @@ def fig_panorama():
                "数据并行里的 DP、ZeRO-1、HSDP 能跨慢线，FSDP 要在快线里，Attention DP 在 MoE 里跟着专家并行走，也要在快线里；模型并行里只有 PP 能跨慢线；"
                "解耦里 PD 分离和 Encoder 分离只传一次，能跨机器")
     y0 = f.header("全景：四类刀法，每个名字挂两样东西　——　<tspan font-weight=\"700\">用哪种通信，能不能跨慢线</tspan>",
-                  "五刀里切权重和切专家都归「模型并行」。● 可以跨到慢线上　○ 要待在快线里（默认摆法，有例外，见第七节）",
+                  "切权重和切专家都归「模型并行」。● 可以跨慢线　○ 要快线（AFD、Wide-EP 跨机但每层都走，也要快网；有例外见第七节）",
                   [(BL, "数据并行"), (GR, "序列并行"), (OR, "模型并行"), (PU, "解耦")])
     PH = 470
     colw = (W - 50) / 4

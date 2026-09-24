@@ -286,7 +286,7 @@ __FIG_A2A__
   <p>n 张卡，每张卡都放一整份模型，各算各的一批样本。反向算完，每张卡手里是<b>自己那批样本的梯度</b>，
     大家的不一样，所以要做一次 AllReduce 求平均，然后每张卡用同一份梯度更新同一份权重。</p>
   <ul>
-    <li><b>通信</b>：每一步只有这一次 AllReduce，量是 2Ψ（Ψ 是参数个数）。</li>
+    <li><b>通信</b>：每一步只有这一次 AllReduce，量是 2Ψ 个数（Ψ 是参数个数；bf16 下约 4Ψ 字节）。低的是频率不是量：这一次 AllReduce，V3 每卡要发约 2.7 TB。</li>
     <li><b>频率</b>：一步一次。这是后面所有刀里最低的，所以它最能忍受慢链路。</li>
     <li><b>问题</b>：每张卡还是存一整份 16 字节／参数。V3 就是每张卡 9.76 TiB，<b>装不下的问题一点没变</b>，
       而且 n 张卡存了 n 份一模一样的东西。</li>
@@ -300,12 +300,13 @@ __FIG_ZERO_MEM__
     <li><b>ZeRO-2</b> 再切梯度：每张卡只需要自己负责那 1/n 参数的梯度。</li>
     <li><b>ZeRO-3</b> 连权重也切：每张卡只长期存 1/n 的权重。</li>
   </ul>
-  <p>前两级为什么不多花一个字节的通信？就是第一节那个等式。数据并行那次 AllReduce 拆开来做：
+  <p>前两级为什么不多花一个字节的通信？就是 1.4 那条：AllReduce ＝ ReduceScatter ＋ AllGather。数据并行那次 AllReduce 拆开来做：
     先 ReduceScatter，每张卡正好拿到自己负责那 1/n 的梯度总和，就地更新那 1/n 的参数；
-    再 AllGather，把更新好的权重拼回给每个人。<b>通信还是 2Ψ，显存却不用再存别人的状态和梯度了。</b></p>
+    再 AllGather，把更新好的权重拼回给每个人。<b>通信还是 2Ψ，显存却不用再存别人的状态和梯度了。</b>
+    像老师们汇总意见：每人只收自己负责的那一页，改好再复印给大家。</p>
 
   <h3>2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
-  <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB，照样装不下。
+  <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
     如果只靠数据并行这一刀，大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
 __FIG_FSDP_STEP__
 <figure class="fbox fwide" id="anim-fsdp">
@@ -314,10 +315,10 @@ __FIG_FSDP_STEP__
 <figcaption>整层只在用的那一刻出现；平时每张卡只拿着每层的四分之一。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>代价在反向：前向扔掉的权重，反向还得再拼一次。所以一层一步要做 AG、AG、RS 三次，
-    通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 §7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB。</p>
+    通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 §7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB（约 10 GB，还不含激活）。</p>
   <div class="note warn"><span class="t">⚠️ 「FSDP 白送」这句话要说准</span>
     一步只同步一次时，ZeRO-1、ZeRO-2 白送：通信一个字节不多，已经削掉 16 字节里的 14 个。<br>
-    一步切成几个 micro-batch 时，只剩 ZeRO-1 白送：ZeRO-2 手里没有完整梯度，每个 micro-batch 都得分一次。所以配流水线时，V3、Megatron 都选 ZeRO-1。<br>
+    一步切成几个 micro-batch 时，只剩 ZeRO-1 白送：ZeRO-2 不留整份梯度，没法把几份梯度先攒起来，只好每份算完就 ReduceScatter 一次。所以配流水线时（流水线必须切 micro-batch，见第三节），V3、Megatron 都选 ZeRO-1。<br>
     ZeRO-3 不白送：最后那 2 个字节，要多付一半的通信。只是对大模型来说，这笔钱非付不可。</div>
 
   <h3>2.4　这一刀能放多远：看频率</h3>
@@ -331,7 +332,8 @@ __FIG_FSDP_STEP__
   <h3>2.5　这一刀留下的问题</h3>
   <p>FSDP 每一步搬的是<b>权重</b>，搬多少只跟参数量有关，<b>跟 batch 无关</b>；
     而每一步要算多少，跟每张卡分到的 token 数成正比。</p>
-  <p>所以每张卡的 batch 一小，算得少、搬得一样多，时间就被搬权重吃掉了。
+  <p>一次喂进去的总 batch 又不能跟着卡数无限加，加太大模型反而学不好；所以卡越多，每卡分到的越少。
+    每张卡的 batch 一小，算得少、搬得一样多，时间就被搬权重吃掉了。
     要继续加卡、又不能让每张卡的 batch 变小，就得换一种切法：<b>不再拼整层权重，直接把权重切开</b>。
     这样几张卡合起来算同一批 token，每张卡要处理的 token 数不会随加卡被摊薄。这是第二刀。</p>
 </div></section>
@@ -635,7 +637,7 @@ __FIG_TOPO__
     GB300 一个计算托盘只有 4 块卡，DEP8 的 8 张卡横跨两个托盘，但还在同一柜的 NVLink 快线里。
     （出字间隔为什么同时降下来，原始记录里没有拆开归因。）<b>先问切法对不对，再动参数。</b></p>
   <p><em>口径提醒：图里后两行都是并发 512，第一行是原始脚本的并发 256。DEP8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
-    这里的吞吐是 prompt 和输出 token 加在一起算的。</em></p>
+    这里的吞吐是 prompt 和输出 token 加在一起算的。跟最早的原始脚本（每卡 1,820）比，DEP8 每卡约 1.5 倍。</em></p>
 
   <h3>7.4　五步怎么选</h3>
   <p>把前面几节串起来，给一个模型挑并行方式，大致按这个顺序：</p>
@@ -722,10 +724,10 @@ __FIG_PANO__
     <tr><td>DP / DDP</td><td>batch，模型整份复制</td><td>线性扩吞吐</td>
       <td>训练：梯度 all-reduce，每个 step 一次。推理：没有，前面靠 router 分流</td><td>训 · 推</td></tr>
     <tr><td>ZeRO-1 / 2 / 3</td><td>依次多切一样：优化器状态 → 梯度 → 参数</td>
-      <td>DP 每张卡存一份完整状态，是纯冗余</td><td>reduce-scatter ＋ all-gather；ZeRO-3 每层都要把参数 all-gather 回来</td><td>训</td></tr>
+      <td>DP 每张卡存一份完整状态，是纯冗余</td><td>reduce-scatter ＋ all-gather；ZeRO-1／2 通信与 DP 相同（ZeRO-2 切 micro-batch 时每份都要 RS 一次）；ZeRO-3 每层都要把参数 all-gather 回来</td><td>训</td></tr>
     <tr><td>FSDP / FSDP2</td><td>就是 ZeRO-3，PyTorch 原生版本</td>
       <td>通信量是 DP 的 1.5 倍，显存却随卡数线性下降</td><td>前向 all-gather 权重，反向再 all-gather 一次、再 reduce-scatter 梯度</td><td>训</td></tr>
-    <tr><td>HSDP</td><td>机内分片，机间复制</td><td>把最频繁的 all-gather 圈在高带宽域里</td>
+    <tr><td>HSDP</td><td>机内分片，机间复制（例：混元 3 的 DP 4 × FSDP 128，不过它整个在一个切片里）</td><td>把最频繁的 all-gather 圈在高带宽域里</td>
       <td>机内 AG / RS，机间 all-reduce</td><td>训</td></tr>
     <tr><td>ZeRO++</td><td>ZeRO-3 上再加三招</td><td>跨节点通信太贵</td>
       <td>权重量化成 INT8 再 all-gather；节点内多存一份参数；梯度也量化</td><td>训</td></tr>
@@ -751,10 +753,10 @@ __FIG_PANO__
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
     <tr><td>Megatron SP</td><td>只切 LayerNorm、Dropout、残差这几段的激活，<b>必须跟 TP 搭配</b>（按「切什么」归到这一列；按用途它是 TP 的搭档，见 3.3）</td>
       <td>TP 切不到的那部分激活，每张卡都存了一整份</td><td>把 TP 的 all-reduce 拆成 all-gather ＋ reduce-scatter，总量不变</td><td>训 · 推</td></tr>
-    <tr><td>CP（Context Parallel）</td><td><b>所有</b>激活沿序列切</td><td>长上下文训练，128K 以上基本绕不开</td>
+    <tr><td>CP（Context Parallel）</td><td><b>所有</b>激活沿序列切</td><td>长上下文训练，上下文到几十 K 以上基本都要用</td>
       <td>ring 传 KV，或者 all-to-all，或者 all-gather，可以分层组合</td><td>训</td></tr>
     <tr><td>Ulysses</td><td>序列切和 head 切来回转换</td><td>长序列：序列长度和卡数同比放大时，每张卡的通信量不变</td>
-      <td>attention 前后各一次 all-to-all；<b>度数不能超过 head 数</b></td><td>训</td></tr>
+      <td>attention 前后各一次 all-to-all；<b>度数不能超过 head 数</b>（GQA 模型卡在 KV 头数上）</td><td>训</td></tr>
     <tr><td>Ring Attention</td><td>KV 分块沿一个环传递</td><td>度数不受 head 数限制</td><td>环上点对点传递，跟计算重叠</td><td>训 · 推</td></tr>
     <tr><td>Striped / USP / 2D-Attention</td><td>改 token 的分配方式；Ulysses 和 Ring 叠成二维</td>
       <td>ring 在 causal mask 下各卡负载不均；两者的限制互补</td><td>同上两种的组合</td><td>训</td></tr>
@@ -770,7 +772,7 @@ __FIG_PANO__
     <tr><td>DCP（Decode CP） ''' + NEW + '''</td><td>KV cache 的序列维，按 token 轮流存到各卡</td>
       <td>TP 一旦超过 KV 头数，KV 就开始复制。MLA 只有 1 个头，TP8 就是 8 份一模一样的 KV。
         DCP 把这份冗余变回容量</td>
-      <td>先把 Q 收齐，各卡在自己那段 KV 上算 attention，再带着 LSE 合并结果</td><td>推</td></tr>
+      <td>每层三次（vLLM 默认实现）：all-gather 收齐 Q、交换 LSE、合并输出</td><td>推</td></tr>
     <tr><td>Helix ''' + NEW + '''</td><td>同一组卡在一层里换两次布局：attention 按 KV 序列切（再叠一维不超过 KV 头数的 TP），FFN 按 TP × EP 切</td>
       <td>百万 token 级的 decode：读 KV 和读权重两件事都要摊开</td><td>attention 后一次 all-to-all 交换部分结果；FFN 段照样有 TP 的 all-reduce 或 EP 的 all-to-all</td><td>推</td></tr>
     <tr><td>MaxText <code>context_autoregressive</code></td><td>decode 时 KV 沿序列切，FFN 按专家切</td>
@@ -786,7 +788,7 @@ __FIG_PANO__
   <table>
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
     <tr><td>TP</td><td>矩阵先按列切、再按行切，两两配对</td><td>单层的权重或计算放不下</td>
-      <td>每层前向两次、反向两次 all-reduce，<b>频率极高</b>，所以只能待在 NVLink 或 ICI 一跳之内</td><td>训 · 推</td></tr>
+      <td>每层前向两次、反向两次 all-reduce，<b>频率极高</b>，所以只能待在最快那一圈（NVLink 域、同一切片的 ICI）；v7 上 TP8 只有 4 颗芯片，已经在线下</td><td>训 · 推</td></tr>
     <tr><td>2D / 2.5D / 3D TP</td><td>把矩阵切成网格</td><td>1D TP 的通信随度数上涨</td>
       <td>沿网格的行、列广播和归约</td><td>训，<b>已基本不用</b></td></tr>
     <tr><td>GTP ''' + NEW + '''</td><td>在 TP 轴上再把权重切一层，用的时候再收回来</td>
@@ -834,7 +836,7 @@ __FIG_PANO__
       <td>prefill 吃算力，decode 吃带宽，放在一起互相拖累首字延迟和出字速度</td><td>KV cache 跨机传输</td><td>推</td></tr>
     <tr><td>AFD ''' + NEW + '''</td><td>attention 放一组机器，专家放另一组</td>
       <td>专家那边汇集好几组 attention 的 token，把专家的 batch 做大；两边的机器配比也能分开调</td>
-      <td>attention → 专家发一次，专家 → attention 收一次，要切小批次把它藏起来</td><td>推</td></tr>
+      <td>每层一来一回：attention → 专家发一次，专家 → attention 收一次，要切三四个小批把它藏起来</td><td>推</td></tr>
     <tr><td>Encoder 分离</td><td>多模态模型的视觉编码器单独部署</td><td>编码器和语言模型抢资源</td><td>embedding 传输</td><td>推</td></tr>
     <tr><td>多模块异构并行</td><td>编码器和语言模型各用一套并行方式</td><td>多模态训练里两部分的形状差太远</td><td>两套网格之间的桥接通信</td><td>训</td></tr>
   </table>
@@ -876,6 +878,7 @@ __FIG_PANO__
     <tr><td>Async TP、TP 通信重叠、collective matmul</td><td>还是 TP，只是把通信和矩阵乘切成小块交错着做</td></tr>
     <tr><td>EPLB、冗余专家</td><td>负载均衡：把热门专家多复制几份再重新摆放。修的是 EP 的病，本身不切新维度</td></tr>
     <tr><td>Offload、重计算</td><td>拿时间换显存，或者拿主机内存换显存</td></tr>
+    <tr><td>分块 prefill（chunked prefill）</td><td>推理调度：把长 prompt 切成小块跟 decode 拼着跑，缓解互相卡住（6.1）；别跟训练里的 Chunked PP 混</td></tr>
   </table>
 
   <h3>8.8　同名不同义</h3>
@@ -886,19 +889,22 @@ __FIG_PANO__
     <tr><td>CP</td><td>训练里指切激活。vLLM 把它拆成两个开关，对卡数的作用相反：PCP 加卡，DCP 不加卡；功能也不同，一个压首字延迟，一个扩 KV 容量</td></tr>
     <tr><td>DP</td><td>dense 模型上是独立副本；MoE 推理里其实是 Attention DP，每一步都要同步</td></tr>
     <tr><td>ETP</td><td>Megatron 指专家内部的 TP；TensorRT-LLM 的 Hybrid ETP 指专家层 TP 和 EP 混用</td></tr>
-    <tr><td>hierarchical</td><td>ZeRO++ 的分层分片、Megatron 的分层 DP、Megatron 的分层 CP，是三件不同的事</td></tr>
+    <tr><td>hierarchical</td><td>ZeRO++ 的分层分片、Megatron 的分层 CP，是两件不同的事</td></tr>
+    <tr><td>卡／芯片／device</td><td>GPU 上一张卡就是一个 device；TPU v7 一颗芯片对软件显示成 2 个 device，并行度按 device 数</td></tr>
+    <tr><td>带宽</td><td>有的按单向报、有的按收发合计报：本讲的 1.8 TB/s（NVLink）、1.2 TB/s（ICI）是收发合计，800 Gb/s、100 Gbps（网卡）是单向</td></tr>
+    <tr><td>并发与 batch</td><td>并发是在排队的请求数，batch 是同时在算的请求数</td></tr>
   </table>
 
 </div></section>
 
 ''' + sec("s九", "九", "出处台账") + '''
-  <p class="lead">按「结论 ← 材料」排。第八节 2026-09-23 核对，第一节 2026-09-24 核对。</p>
+  <p class="lead">按「结论 ← 材料」排。第八节 2026-09-23 核对，第一节 2026-09-24 核对，其余各节 2026-09-25 经十轮评审与两遍试讲复核。</p>
   <table>
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
     <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv 1910.02054 §5、§7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
-    <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv 1909.08053 §3（前向 2 次、反向 2 次 all-reduce）；arXiv 2205.05198 §4.2.2（AG＋RS 替代 all-reduce，无额外通信）；头数须被 TP 整除：megatron/core/transformer/transformer_config.py 的校验</td></tr>
+    <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv 1909.08053 §3（前向 2 次、反向 2 次 all-reduce）；arXiv 2205.05198 §4.2.2（AG＋RS 替代 all-reduce，无额外通信）；查询头数须被 TP 整除、KV 组数与 TP 互为倍数或约数：megatron/core/transformer/transformer_config.py 的校验</td></tr>
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv 2104.04473 §2.2.1–2.2.2；Zero Bubble arXiv 2401.10241；DualPipe README</td></tr>
     <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
     <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s，另给 200 GB/s 一档；把它理解成每条链路收发合计，「6 条链路 × 200、发出方向 600」才对得上，这是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；按 device 口径同样约 3,845（一颗芯片的两个 device 共用链路，算力和带宽一起减半）（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
@@ -913,7 +919,11 @@ __FIG_PANO__
     <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv 1909.08053 §3），FSDP 每层 3 次（arXiv 1910.02054 §7），EP ／ PP ／ DP 按调度数出</td></tr>
     <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki sources/nvidia-gpu-comparison-20260311、analyses/gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
-    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580）、§3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。组间 all-reduce 十几到二十几毫秒为本课推算（原文 12 ms 的算式前后不一致）</td></tr>
+    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580）、§3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。§4.1 一步 23.54 s；组间 all-reduce 占不到百分之一为本课推算（原文 12 ms 的算式前后不一致）；换配法 EP 掉 37% 与 FSDP 加宽只慢不到 1%（450 对 453）见 §3.7</td></tr>
+    <tr><td>DCP 每层三次通信</td><td>vllm/config/parallel.py 中 dcp_comm_backend 的 docstring（默认 ag_rs 每层 3 次 NCCL 调用，a2a 后端 2 次）</td></tr>
+    <tr><td>ZeRO-2 切 micro-batch 不再白送；配 PP 选 ZeRO-1</td><td>DeepSpeed 文档：流水线并行不兼容 ZeRO-2／3；V3 技术报告 §3.2（ZeRO-1）；Megatron distributed optimizer</td></tr>
+    <tr><td>TP 每字节换多少计算 ≈ 4.5 × 隐藏维 ÷ TP、V3 TP8 ≈ 4,032</td><td>⚠️ 本课推导：每层 4 次 AllReduce 各发约 4Th 字节、算 72h²T／n（标准注意力＋4 倍宽 MLP），对 V3 只作示意</td></tr>
+    <tr><td>decode 时 EP 按专家逐个直发</td><td>DeepEP 低延迟模式（deepseek-ai/DeepEP README）；V3 技术报告 §3.4</td></tr>
     <tr><td>V3 的集群与每 token 最多 4 节点</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.1（2,048 块 H800、节点内 NVLink、节点间 IB）、§2.1.2、§3.2</td></tr>
     <tr><td>strong ／ weak scaling</td><td>Amdahl 1967；Gustafson 1988（Reevaluating Amdahl's Law）；临界 batch size：arXiv 1812.06162</td></tr>
     <tr><td>NVSwitch 在交换机里做加法（NVLS）</td><td>NCCL NVLS 算法（NVIDIA NCCL 文档）；「少将近一半」为按每卡发出约 S 对 2(n−1)/n·S 的本课推算</td></tr>

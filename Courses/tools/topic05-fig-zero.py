@@ -77,7 +77,7 @@ def fig_mem():
             RD if comm == 3 else INK, comm == 3, 15)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "前两级白送，最后一级要付钱", [
-        "ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight=\"700\">一个字节都不多</tspan>，却已经把 16 字节削到约 2 字节。"
+        "ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight=\"700\">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。"
         "　可 V3 按这个算每卡还要 1.23 TiB，一张卡照样装不下。",
         "只有 ZeRO-3 能降到每卡 9.76 GiB，代价是通信从 2Ψ 变成 <tspan font-weight=\"700\">3Ψ，多一半</tspan>。"
         "　这就是 FSDP：大模型没得选，只能付这 50%。",
