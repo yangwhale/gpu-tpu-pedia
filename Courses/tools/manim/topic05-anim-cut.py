@@ -462,3 +462,112 @@ class PDDisagg(Scene):
         self.remove(shown, sub)
         self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
         self.wait(0.6)
+
+
+# ── 摆到机器上 ─────────────────────────────────────────────────────────
+# ⭐ 增量来自时间：同样 8 张卡、同样 TP4 × DP2，只是 TP 组摆的位置不同。
+#   摆法一 TP 的来回都在机器里的快线上，慢线只走一次 DP；摆法二 TP 每一轮都要过慢线，
+#   计时器一格一格跳，差距是「看着它慢」出来的。
+# ⛔ 示意模型（不是实测）：一步 8 轮 TP 通信、1 次 DP 通信；快线 1 格、慢线 9 格
+#   （9 ＝ GB300 NVLink 1.8 TB/s ÷ 每 GPU 网卡 200 GB/s，见 topic05-fig-map.py）。
+MAP_TP, MAP_DP, MAP_FAST, MAP_SLOW = 8, 1, 1, 9
+MAP_A = MAP_TP * MAP_FAST + MAP_DP * MAP_SLOW
+MAP_B = MAP_TP * MAP_SLOW + MAP_DP * MAP_FAST
+assert (MAP_A, MAP_B) == (17, 73) and round(MAP_B / MAP_A, 1) == 4.3
+
+
+class MeshMap(Scene):
+    def construct(self):
+        from manim import Dot, Line, RoundedRectangle, DashedLine
+        title = cap_text("同样 8 张卡、TP4 × DP2：TP 组摆在哪，差好几倍", size=30).to_edge(UP)
+        self.add(title)
+        NX = [-3.3, 3.3]
+        base = VGroup()
+        for n, x in enumerate(NX):
+            base.add(RoundedRectangle(width=4.2, height=3.0, corner_radius=0.2, stroke_color=GREY_B,
+                                      stroke_width=2).move_to([x, -0.4, 0]))
+            base.add(Text("机器 %d" % n, font_size=22, color=GREY_B).move_to([x, 1.4, 0]))
+        link = DashedLine([-1.2, -0.4, 0], [1.2, -0.4, 0], color=GREY_B, stroke_width=3)
+        base.add(link, Text("慢线：机器之间", font_size=18, color=GREY_B).move_to([0, -0.05, 0]))
+        self.add(base)
+        # 每台机器 2 × 2 张卡：卡号 0–3 在机器 0，4–7 在机器 1
+        POS = []
+        for n, x in enumerate(NX):
+            for r in range(2):
+                for c in range(2):
+                    POS.append([x - 0.9 + c * 1.8, -0.4 + 0.7 - r * 1.4, 0])
+        cards = VGroup(*[Rectangle(width=1.1, height=0.8, stroke_width=0, fill_color=GREY_D_,
+                                   fill_opacity=1).move_to(POS[i]) for i in range(8)])
+        self.add(cards)
+        sub = cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2)
+        self.add(sub)
+        self.wait(0.5)
+
+        def say(t, color=GREY_B):
+            nonlocal sub
+            n = cap_text(t, color, 24).next_to(title, DOWN, buff=0.2)
+            self.play(FadeOut(sub), FadeIn(n), run_time=0.35)
+            sub = n
+
+        TICK = 0.05
+        clock = [None]
+        kept = []
+
+        def show_clock(v, x, lab, col=WHITE):
+            t = Text("%s：这一步用了 %d 格" % (lab, v), font_size=24, color=col).move_to([x, -2.6, 0])
+            if clock[0] is not None:
+                self.remove(clock[0])
+            self.add(t)
+            clock[0] = t
+
+        def run(groups, cross_tp, x, lab):
+            # groups：两个 TP 组各自的 4 张卡；一轮 TP ＝ 组内沿环传一格
+            used = 0
+            show_clock(0, x, lab)
+            for _ in range(MAP_TP):
+                dots, anims = [], []
+                for g, col in zip(groups, (BLUE, ORANGE)):
+                    for k in range(4):
+                        a, b = POS[g[k]], POS[g[(k + 1) % 4]]
+                        d = Dot(a, radius=0.11, color=WHITE)
+                        dots.append(d)
+                        anims.append(d.animate.move_to(b))
+                cost = MAP_SLOW if cross_tp else MAP_FAST
+                self.add(*dots)
+                self.play(*anims, run_time=cost * TICK * 2)
+                self.remove(*dots)
+                used += cost
+                show_clock(used, x, lab)
+            # DP：两个组里对应的卡把梯度对一下
+            cost = MAP_FAST if cross_tp else MAP_SLOW
+            dots = [Dot(POS[groups[0][k]], radius=0.11, color=GREEN) for k in range(4)]
+            self.add(*dots)
+            self.play(*[d.animate.move_to(POS[groups[1][k]]) for k, d in enumerate(dots)], run_time=cost * TICK * 2)
+            self.remove(*dots)
+            used += cost
+            show_clock(used, x, lab, GREEN if used == MAP_A else RED)
+            kept.append(clock[0])
+            clock[0] = None
+            return used
+
+        def paint(groups):
+            self.play(*[cards[i].animate.set_fill(col, opacity=0.9)
+                        for g, col in zip(groups, (BLUE, ORANGE)) for i in g], run_time=0.4)
+
+        say("摆法一：一个 TP 组就在一台机器里，DP 才过慢线")
+        GA = [[0, 1, 3, 2], [4, 5, 7, 6]]
+        paint(GA)
+        a = run(GA, False, -3.3, "摆法一")
+        self.wait(0.8)
+        say("摆法二：TP 组横跨两台机器，每一轮都要过慢线")
+        GB = [[0, 1, 5, 4], [2, 3, 7, 6]]
+        paint(GB)
+        b = run(GB, True, 3.3, "摆法二")
+        assert (a, b) == (MAP_A, MAP_B)
+        say("%d 格对 %d 格：同样的卡，慢 %.1f 倍（示意）" % (MAP_A, MAP_B, MAP_B / MAP_A), GREEN)
+        self.wait(1.6)
+        self.play(FadeOut(sub), *[FadeOut(k) for k in kept],
+                  *[c.animate.set_fill(GREY_D_, opacity=1) for c in cards], run_time=0.6)
+        self.remove(sub, *kept)
+        self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
+        self.wait(0.6)
