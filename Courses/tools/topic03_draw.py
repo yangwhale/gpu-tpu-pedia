@@ -619,7 +619,8 @@ class Fig(object):
             for col, lab in legend:
                 self.box(x, yy - 11, 14, 14, col, col, 3)
                 self.t(x + 21, yy, lab, GY, size=_sz(14))
-                x += 21 + wpx(lab, 14) + 26
+                # ⭐ 2026-09-24：原来没乘 MONO_K，ASCII 多的图例（如「prefill：一口吞下 prompt」）会顶到下一个色块。
+                x += 21 + wpx(lab, 14) * MONO_K + 26
             yy += 20
         return yy + 8
 

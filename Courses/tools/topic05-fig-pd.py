@@ -25,7 +25,7 @@ def fig_pd():
                "代价是多了一趟 KV 传输。按我们 TPU v7x 那套的带宽估算，这一趟约 100 毫秒，占一次 prefill 的百分之五到十")
     y0 = f.header("第五刀：把两种活拆到两批机器上　——　<tspan font-weight=\"700\">decode 不再被 prefill 卡住</tspan>",
                   "示意时间线（不是实测时序）。每格是一步；绿色的 decode 一格一格往外出字，橙色是一次长 prompt 的 prefill",
-                  [(GR, "decode：每步出一个字"), (OR, "prefill：一次吞下整个 prompt"), (BL, "KV cache 传输")])
+                  [(GR, "decode：每步出一个字"), (OR, "prefill：一口吞下 prompt"), (BL, "KV cache 传输")])
     PH = 330
     py = f.panel(0, y0, W, PH, "同一批卡 vs 分开两批", OR)
     X0, CW = 230, 48
@@ -89,19 +89,20 @@ def fig_afd():
     f.t(410, py + 290, "N → M：算完送回来", GY, True, 13, anchor="middle")
     # ⭐ 2026-09-25 L6 试讲：原来只画两个小批、没画「在路上」，看图会以为两个就够。
     #   改成 attention ／ 路上 ／ 专家三条道、A B C 三个小批：三条道每一格都有活，通信才藏得住。
-    TX, CW = 830, 54
+    TX, CW, LW = 792, 54, 108          # LW：道名那一列的宽度，「路上（去＋回）」要 ~100px
     COLS3 = [GR, PU, CY]
+    assert TX + LW + 9 * CW <= W - 10
     f.t(TX, py + 40, "三个小批轮着跑，三条道都不闲", INK, True, 15)
     for r, (lab, col) in enumerate((("attention", BL), ("路上（去＋回）", GY), ("专家", OR))):
         f.t(TX, py + 82 + r * 52, lab, col, True, 13)
         for t in range(9):
             b = t - r
             if b < 0:
-                f.box(TX + 80 + t * CW, py + 60 + r * 52, CW - 4, 34, "none", LINE, 3)
+                f.box(TX + LW + t * CW, py + 60 + r * 52, CW - 4, 34, "none", LINE, 3)
                 continue
             c = COLS3[b % 3]
-            f.box(TX + 80 + t * CW, py + 60 + r * 52, CW - 4, 34, c, c, 3)
-            f.t(TX + 80 + t * CW + (CW - 4) / 2, py + 82 + r * 52, "ABC"[b % 3], "#ffffff", True, 13, "middle")
+            f.box(TX + LW + t * CW, py + 60 + r * 52, CW - 4, 34, c, c, 3)
+            f.t(TX + LW + t * CW + (CW - 4) / 2, py + 82 + r * 52, "ABC"[b % 3], "#ffffff", True, 13, "middle")
     f.t(TX, py + 238, "A 在算专家时，B 在路上、C 在算 attention。", GY, size=13)
     f.t(TX, py + 262, "单程通信不到半格时三个够，否则要四个（MegaScale-Infer）。", GY, size=13)
     f._pan = None
