@@ -7,9 +7,10 @@ r"""专题五 · 第三节「第二刀：切权重」的三张静态图。
        算 6PT FLOPs（T ＝ 每张卡这一步的 token 数，稠密近似）→ 每字节 ＝ **T**，跟模型多大无关。
      · TP：一层前向 2 次、反向 2 次 AllReduce，每次每卡发 ≈ 4Th 字节（bf16 激活），共 16Th；
        一层算 72h²T／n（稠密层 12h² 参数，前向 2、反向 4 倍）→ 每字节 ＝ **4.5h／n**，跟 batch 无关。
-   硬件那一边：v7 每芯片 2,307 TFLOP/s（bf16）÷ ICI 1,200 GB/s ≈ **1,922 FLOPs/字节**。
-   ⛔ 1,200 GB/s 取自 Inferact 那篇 TPU megakernel 博客的规格表（Google TPU7x 文档口径），
-     是三根轴一起用的总量；只用一根轴时分母要除以 3。
+   硬件那一边：v7 每芯片 2,307 TFLOP/s（bf16）÷ 每卡发出方向 600 GB/s ≈ **3,845 FLOPs/字节**。
+   ⛔⛔ 2026-09-25 专家评审抓到的错：原来用的是 1,200 GB/s ——&#160;那是 6 条链路 × 200 GB/s
+     **收发两个方向加起来**的数，而分子 6Ψ、16Th 都是「每卡发出」的量，只能跟发出方向比（一半，600）。
+     旧门槛 1,922 大了一倍。只用一根轴时分母再除以 3。
 
 ⛔ 所有数字现算并断言。
 """
@@ -17,10 +18,10 @@ from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 
 W = 1400
 C_V7 = 2307e12                  # v7 每芯片 bf16 FLOP/s
-B_V7 = 1.2e12                   # v7 每芯片 ICI（三轴合计）
+B_V7 = 0.6e12                   # v7 每芯片 ICI 发出方向（6 条链路 × 100 GB/s；双向合计才是 1,200）
 RIDGE = C_V7 / B_V7
 H_V3 = 7168
-assert abs(RIDGE - 1922) < 1, RIDGE
+assert abs(RIDGE - 3845) < 1, RIDGE
 
 
 def tp_intensity(h, n):
@@ -28,20 +29,20 @@ def tp_intensity(h, n):
 
 
 N_TP_MAX = 4.5 * H_V3 / RIDGE
-assert 16 < N_TP_MAX < 17.5, N_TP_MAX       # ≈ 16.8
+assert 8 < N_TP_MAX < 8.5, N_TP_MAX         # ≈ 8.4：TP 8 路只是勉强在线上
 
 
 def fig_intensity():
     f = Fig(W, "每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。"
                "FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。"
                "TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。"
-               "中间那条水平虚线是 TPU v7 的硬件线，约一千九百二十二：每秒能算的次数除以每秒能搬的字节。"
-               "线下面就是被通信拖住。FSDP 在 token 数少于一千九百二十二时掉到线下；"
-               "V3 的 TP 开到 8 路时在线上，开到 32 路时在线下")
+               "中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。"
+               "线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；"
+               "V3 的 TP 开到 8 路时勉强在线上，开到 32 路时在线下")
     y0 = f.header("两把刀，两种账　——　<tspan font-weight=\"700\">FSDP 看 batch，TP 看隐藏维</tspan>",
                   "纵轴：每在网络上搬 1 字节，换来多少 FLOPs（⚠️ 推导，稠密层近似）。"
                   "低于硬件线 ＝ 算得没有搬得快，被通信拖住",
-                  [(BL, "FSDP：＝ 每卡 token 数 T"), (OR, "TP：＝ 4.5 × 隐藏维 ÷ TP 度数"), (RD, "v7 硬件线 ≈ 1,922")])
+                  [(BL, "FSDP：＝ 每卡 token 数 T"), (OR, "TP：＝ 4.5 × 隐藏维 ÷ TP 度数"), (RD, "v7 硬件线 ≈ 3,845")])
     PX, PY, PW, PH = 150, y0 + 20, 980, 380
     f.box(PX, PY, PW, PH, "none", LINE, 6)
     TMAX, IMAX = 8192, 8192
@@ -57,7 +58,7 @@ def fig_intensity():
     for i in (0, 2048, 4096, 6144, 8192):
         f.t(PX - 10, Y(i) + 5, "{:,}".format(i), GY, size=12.5, anchor="end")
     f.path("M%d,%d L%d,%d" % (X(RIDGE), Y(0), X(RIDGE), Y(RIDGE)), RD, 1.6, dash="4,4", arrow=False)
-    f.t(X(RIDGE) + 8, Y(420), "T ＜ 1,922：FSDP 被拖住", RD, True, 13)
+    f.t(X(RIDGE) + 8, Y(420), "T ＜ 3,845：FSDP 被拖住", RD, True, 13)
     f.path("M%d,%d L%d,%d" % (X(0), Y(0), X(TMAX), Y(TMAX)), BL, 3, arrow=False)
     f.t(X(6600), Y(6600) - 14, "FSDP", BL, True, 15)
     for n, lab in ((8, "TP 8 路"), (32, "TP 32 路")):
@@ -66,17 +67,17 @@ def fig_intensity():
                dash="7,4" if n == 32 else None, arrow=False)
         f.t(X(TMAX) + 10, Y(yi) + 5, "%s ≈ %s" % (lab, "{:,.0f}".format(yi)), OR, True, 13.5)
     f.path("M%d,%d L%d,%d" % (X(0), Y(RIDGE), X(TMAX), Y(RIDGE)), RD, 2, dash="4,4", arrow=False)
-    f.t(X(TMAX) + 10, Y(RIDGE) + 5, "v7 硬件线 ≈ 1,922", RD, True, 13.5)
+    f.t(X(TMAX) + 10, Y(RIDGE) + 20, "v7 硬件线 ≈ 3,845", RD, True, 13.5)
     yb = f.band(PY + PH + 70, "ok", "batch 小就换 TP，batch 大就用 FSDP", [
-        "FSDP 每字节换来的计算 ＝ 每卡 token 数：在 v7 上每卡少于约 1,922 个 token，就搬得比算得慢。"
+        "FSDP 每字节换来的计算 ＝ 每卡 token 数：在 v7 上每卡少于约 3,845 个 token，就搬得比算得慢。"
         "　<tspan font-weight=\"700\">加卡又不想加 batch，FSDP 迟早掉到线下。</tspan>",
         "TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，"
-        "TP 8 路 ≈ 4,032 在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight=\"700\">TP 有一个跟 batch 无关的上限</tspan>。",
+        "TP 8 路 ≈ 4,032 勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight=\"700\">TP 有一个跟 batch 无关的上限</tspan>。",
     ])
     yb = f.src(yb + 10,
-               "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6P 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6PT FLOPs；"
+               "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；"
                "TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。",
-               "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 为三轴合计（Inferact TPU megakernel 博客规格表，"
+               "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，"
                "来源为 Google TPU7x 文档）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。")
     f.save("fig5-intensity.svg", yb + 14)
 
