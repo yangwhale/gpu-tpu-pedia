@@ -38,7 +38,7 @@ def fig_intensity():
                "TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。"
                "中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。"
                "线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；"
-               "V3 的 TP 开到 8 路时勉强在线上，开到 32 路时在线下")
+               "V3 的 TP 开到 8 路时，按最乐观的线才勉强在线上，开到 32 路时在线下")
     y0 = f.header("两把刀，两种账　——　<tspan font-weight=\"700\">FSDP 看 batch，TP 看隐藏维</tspan>",
                   "纵轴：每在网络上搬 1 字节，换来多少 FLOPs（⚠️ 推导，稠密层近似）。"
                   "低于硬件线 ＝ 算得没有搬得快，被通信拖住",
@@ -78,7 +78,7 @@ def fig_intensity():
                "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；"
                "TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。",
                "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，"
-               "来源为 Google TPU7x 文档）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。")
+               "来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。")
     f.save("fig5-intensity.svg", yb + 14)
 
 

@@ -831,7 +831,7 @@ body.figonly section h3{margin-top:34px}
   </div>
   <p style="max-width:820px;color:var(--gray)">
     先认识五种通信，再一刀一刀地切：数据、权重、专家、序列，最后连工作一起拆开。
-    每一刀都是上一刀留下的问题逼出来的。</p>
+    每一刀都在补前面没管到的那一块。</p>
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
@@ -863,18 +863,19 @@ body.figonly section h3{margin-top:34px}
     <b>用一种通信，换一份显存或一份算力。</b><br>
     选并行策略，就是在选你愿意付哪一种通信、付多频繁。</div>
 
-  <p>这一讲按一条接力线走。<b>每一刀都是上一刀留下的问题逼出来的</b>：</p>
+  <p>这一讲按一条接力线走。<b>每一刀都在补前面没管到的那一块</b>：前一刀撑不住了，或者模型换了形状、上下文变长了，就得换一刀。</p>
   <ol>
     <li><b>先认识五种通信。</b>后面每一刀多出来的，都是其中某一种。</li>
     <li><b>第一刀，切数据。</b>最朴素，但每张卡还是存一整份模型，于是有了 FSDP（全分片数据并行：连模型本身也分片存）。</li>
     <li><b>第二刀，切权重。</b>FSDP 每一层都要把整层权重拼回来，batch 一小就被搬权重拖垮，于是切进矩阵、切开层。</li>
-    <li><b>第三刀，切专家。</b>MoE 的专家太多；而且 attention 和专家是两种形状，得各配各的。</li>
-    <li><b>第四刀，切序列。</b>上下文一长，训练时激活爆，推理时 KV cache 爆。</li>
+    <li><b>第三刀，切专家。</b>模型换了形状：MoE 的参数几乎全在一堆窄窄的专家里，TP 不对路了；而且 attention 和专家是两种形状，得各配各的。</li>
+    <li><b>第四刀，切序列。</b>前三刀都没碰过的一维：上下文一长，训练时激活爆，推理时 KV cache 爆。</li>
     <li><b>第五刀，不切张量，切工作。</b>prefill 和 decode 分开，attention 和专家分开。</li>
-    <li><b>最后摆到真机器上</b>，再用一张全景地图把走过的路收一遍。</li>
+    <li><b>最后摆到真机器上</b>，再用一张全景表把走过的路收一遍。</li>
   </ol>
 
-  <p>整条线只用一把尺子量：<b>这一刀多出来的通信有多频繁，它就只能放在多快的链路上。</b></p>
+  <p>整条线主要用一把尺子量：<b>这一刀多出来的通信有多频繁，它就只能放在多快的链路上。</b>
+    第三节还会拿出一把配套的：每搬一个字节换来多少计算。频率决定它放哪根线，这一把决定它会不会被拖住。</p>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b>：张量、激活、注意力头、MoE、KV cache、prefill 与 decode、Q/K/V、MLA、显存、ICI、「几路」……（专题一、三讲过，这里各一句话）</summary>
   <p style="line-height:1.9"><b>张量与隐藏维</b>：模型里流动的数据都是多维数组，叫张量；每个 token 用一串数表示，这串数的长度就是隐藏维（V3 是 7,168）。<br>
@@ -2539,7 +2540,7 @@ body.figonly section h3{margin-top:34px}
     这个比值要高过硬件自己的比值（每秒能算多少次 ÷ 每秒能搬多少字节），否则就是算得没有搬得快。</p>
   <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是两次拼权重、一次分梯度，约 6Ψ 字节（Ψ 还是参数个数，bf16 每个 2 字节）；
     一步算的是 6ΨT 次（专题四那条「训练每个 token 约 6 倍参数量次运算」），T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
-<figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时，按最乐观的线才勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两把刀，两种账　——　<tspan font-weight="700">FSDP 看 batch，TP 看隐藏维</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（ 推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -2578,8 +2579,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，TP 8 路 ≈ 4,032 按最乐观的线才勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight="700">TP 有一个跟 batch 无</tspan></text>
 <text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关的上限</tspan>。</text>
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
-<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
-  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片间 ICI 常说的 1.2 TB/s 是 6 条链路收发两个方向加起来的，
+<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
+  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片间 ICI 常说的 1.2 TB/s，按官方给的每轴数字推算，是 6 条链路收发两个方向加起来的，
     而上面搬的字节是「每卡发出」的量，只能跟发出那一半比：每秒 0.6 TB。
     硬件的比值约 3,845。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
     而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
@@ -2668,7 +2669,7 @@ body.figonly section h3{margin-top:34px}
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。</p>
   <ul>
     <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）。
-      可 3,845 假设 TP 组占满三根带环回的轴，TP 8 路只有 4 颗芯片、用不满，实际门槛要高好几倍，已经在线下了；
+      可 3,845 假设 TP 组占满三根带环回的轴，TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device）、用不满，实际门槛要高好几倍，已经在线下了；
       再加上 Megatron 的 TP 通信默认在关键路径上藏不住，实际更紧。</li>
     <li>另外两条约束：注意力头要按整个分，Megatron 要求查询头数能被 TP 度数整除（KV 头更少的模型，KV 头数和 TP 只要一个能整除另一个，TP 更大时 KV 就复制）；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>
   </ul>
@@ -3267,7 +3268,7 @@ body.figonly section h3{margin-top:34px}
   <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
     挑哪个差别大到什么程度，我们自己测过一次：</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍</span>
-    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是原来的 2.09 倍</b>。
+    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
     最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
     attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。<br>
     <em>完整的账（卡数、并发、首字延迟）在 7.3。KV 这件事，下一刀专门讲。</em></div>
@@ -3283,7 +3284,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s5-1">5.1　一条样本为什么会放不下</h3>
   <ul>
-    <li><b>训练</b>：每层要存的激活跟序列长度成正比（Megatron 序列并行论文的式 1）。</li>
+    <li><b>训练</b>：每层要存的激活至少跟序列长度成正比；不用 FlashAttention 时还有一项跟长度的平方成正比（Megatron 序列并行论文的式 1）。</li>
     <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 存一份压缩后的 KV（512 维）加一小段位置信息（64 维），(512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节，
       <b>一个 128K 的请求就是约 8.58 GiB</b>。</li>
   </ul>
@@ -3766,8 +3767,8 @@ body.figonly section h3{margin-top:34px}
   <p>于是有一条默认的摆法：<b>每一层都要说话的 TP、EP、FSDP、CP 先往最快的那一圈里放</b>；PP 只在段边界说话，DP 一步只说一次，它们去跨慢线。
     但光数次数不够，还要看<b>它能不能跟计算叠起来</b>。TP 叠不起来，所以必须待在快线里，度数上限就是那一圈的大小。
     EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器
-    （V3 报告里 H800 机内 NVLink 实际约 160 GB/s、机间 IB 50 GB/s，都是单向，只差约 3 倍；按规格同口径约 4 倍，技术报告 <a href="#s3-2">§3.2</a>.2），Llama 3 把 FSDP 放在了最外层。
-    TP 还有一条额外的理由：它每一块末尾那次 AllReduce 不做完，下一块就没法开始，不容易跟计算叠起来藏住。
+    （V3 报告里 H800 机内 NVLink 实际约 160 GB/s、机间 IB 50 GB/s，只差约 3 倍，技术报告 <a href="#s3-2">§3.2</a>.2；按规格同口径本课推算约 4 倍），Llama 3 把 FSDP 放在了最外层。
+    （TP 叠不起来，是因为每一块末尾那次 AllReduce 不做完，下一块就没法开始。）
     DP 那一次量虽然最大，但一步只有一次，而且反向从最后一层往前算，后面几层的梯度一算好就能先传。</p>
 
   <h3 id="s7-2">7.2　摆错一次是什么样</h3>
@@ -3818,9 +3819,9 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>比吞吐要按每张卡比：三次实测用的卡数是 8、16、20。</b><span class="capmore"><br><em>本课程作者实测，4K 进 1K 出。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md（1p1d 14,563；3p1d 21,100；3p ＋ dep8 并发 512 为 55,153、并发 1,536 为 65,132）。GPU 数按每节点 4 块、prefill 与 TP4 decode 各 1 节点、dep8 2 节点；每卡数本脚本现算。</p></details></figure>
   <p>TP4 decode 上能调的都调了：去掉 eager 模式只多 2.6%，加 prefill 机器、调并发，总数从 14,563 涨到 21,100。
     可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 46.8–53 ms。换成 dep8 那一步，同样并发 512 下出字间隔从 46.8 ms 降到 11.8 ms，首字延迟从 55.8 秒降到 22.8 秒。
-    真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（第五节讲的那个毛病）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。两笔都换成了更大的 batch。
+    真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（切序列那一节讲的毛病）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。两笔都换成了更大的 batch。
     （出字间隔为什么同时降下来，原始记录里没有拆开归因。）<b>先问切法对不对，再动参数。</b></p>
-  <p><em>口径提醒：图里三行都是并发 512。dep8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
+  <p><em>口径提醒：图里后两行都是并发 512，第一行是原始脚本的并发 256。dep8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
     这里的吞吐是 prompt 和输出 token 加在一起算的。</em></p>
 
   <h3 id="s7-4">7.4　五步怎么选</h3>
@@ -3837,12 +3838,12 @@ body.figonly section h3{margin-top:34px}
   <table>
     <tr><th>步骤</th><th>混元 3（295B MoE，TPU v7，256 芯片）</th><th>DeepSeek-V3（671B MoE，2,048 块 H800）</th></tr>
     <tr><td>① 装得下</td><td>FSDP 128（专家权重也由 FSDP 切）：再窄就爆显存</td><td>ZeRO-1 摊优化器状态；EP 64 摊专家</td></tr>
-    <tr><td>② 快线多大</td><td>切片内全是 ICI；但在 16 芯片上试 EP 4 路，吞吐反而掉 71%（只测了这一次），<b>不用 EP</b>。原因没查清：环面上 all-to-all 的代价随 EP 度数变大，但 4 路时这笔账其实不大</td>
+    <tr><td>② 快线多大</td><td>切片内全是 ICI；但在 16 芯片上试 EP 4 路，吞吐反而掉 71%（那次 batch 减半，有混杂；换一种配法是掉 37%），<b>不用 EP</b>。原文归因于环面上 all-to-all 要多跳，但 4 路时这笔账其实不大，原因还要再查</td>
       <td>8 卡一台，<b>不用 TP</b>；EP 64 横跨 8 台机器，跨机那段是慢线，是个例外。为了少走慢线，规定每个 token 最多发到 4 台机器</td></tr>
     <tr><td>③ 序列</td><td>4K ／ 8K，不用 CP</td><td>预训练 4K，报告里没有 CP</td></tr>
     <tr><td>④ PP</td><td>一个切片放得下，不用</td><td>PP 16，用 DualPipe 把通信叠进计算</td></tr>
     <tr><td>⑤ DP</td><td>剩下的 4 倍全给 DP：DP 4 × FSDP 128，这是默认配方（v7 一颗芯片算 2 个 device，并行度按 device 数：256 芯片 ＝ 512 个）。
-      最好成绩反而是把 FSDP 加宽到 256、用省下的显存把 batch 推到 16，比默认配方高 3%</td><td>剩下的给 ZeRO-1 的数据并行</td></tr>
+      最好成绩是把 FSDP 加宽到 256、用省下的显存把每卡 batch 从 12 推到 16，比默认配方高 3%；batch 不变只加宽 FSDP 会变慢（见 7.5）</td><td>剩下的给 ZeRO-1 的数据并行</td></tr>
   </table>
   <p>同一套五步，两个模型走出来的配置几乎没有重合，<b>因为两台机器的快线长得不一样</b>。
     这也是为什么别人家的并行配置不能照抄：先看自己的线。</p>
@@ -3925,7 +3926,113 @@ body.figonly section h3{margin-top:34px}
     <b>但归起类来只有四种。</b>前面五刀里，切权重和切专家都算模型并行。先把类认清楚，名字就好记了。</p>
 
   <h3 id="s8-1">8.1　四类刀法</h3>
-  <p>判据只有一个：<b>看它切的是什么。</b></p>
+  <p>判据只有一个：<b>看它切的是什么。</b>先看一张图，再看表：</p>
+<figure class="fbox fwide" id="fig-panorama"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="并行方式的全景图。四列是四类：数据并行切 batch，序列并行切一条样本，模型并行切权重，解耦拆工作。每个名字下面写着它用哪种通信；实心圆点表示它可以跨到慢线上，空心圆点表示它要待在快线里。数据并行里的 DP、ZeRO-1 和 2、HSDP 能跨慢线，FSDP 要在快线里；模型并行里只有 PP 能跨慢线；解耦里 PD 分离和 Encoder 分离只传一次，能跨机器"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">全景：四类刀法，每个名字挂两样东西　——　<tspan font-weight="700">用哪种通信，能不能跨慢线</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">五刀里切权重和切专家都归「模型并行」。● 可以跨到慢线上　○ 要待在快线里（默认摆法，有例外，见第七节）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">数据并行</text>
+<rect x="103" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="124" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">序列并行</text>
+<rect x="206" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="227" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">模型并行</text>
+<rect x="309" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="330" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">解耦</text>
+<rect x="10.0" y="102" width="337.5" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="10.0" y="102" width="337.5" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="10.0" y="104" width="337.5" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="10.0" y1="132" x2="347.5" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="24" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数据并行　切 batch</tspan></text>
+<rect x="24.0" y="162" width="309.5" height="70" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="40" y="192" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DP</tspan></text>
+<text class="svgsm" x="40" y="216" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">AllReduce</text>
+<text class="svgsm" x="307" y="194" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<rect x="24.0" y="246" width="309.5" height="70" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="40" y="276" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ZeRO-1／2</tspan></text>
+<text class="svgsm" x="40" y="300" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">RS ＋ AG</text>
+<text class="svgsm" x="307" y="278" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<rect x="24.0" y="330" width="309.5" height="70" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="40" y="360" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP</tspan></text>
+<text class="svgsm" x="40" y="384" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">AG ×2 ＋ RS</text>
+<text class="svgsm" x="307" y="362" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="24.0" y="414" width="309.5" height="70" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="40" y="444" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">HSDP</tspan></text>
+<text class="svgsm" x="40" y="468" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">机内 FSDP、机间 DP</text>
+<text class="svgsm" x="307" y="446" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<rect x="24.0" y="498" width="309.5" height="70" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="40" y="528" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Attention DP</tspan></text>
+<text class="svgsm" x="40" y="552" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">推理：各管各的请求</text>
+<text class="svgsm" x="307" y="530" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<rect x="357.5" y="102" width="337.5" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="357.5" y="102" width="337.5" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="357.5" y="104" width="337.5" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="357.5" y1="132" x2="695.0" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="371" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列并行　切一条样本</tspan></text>
+<rect x="371.5" y="162" width="309.5" height="70" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="387" y="192" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SP</tspan></text>
+<text class="svgsm" x="387" y="216" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">AG ＋ RS（TP 的搭档）</text>
+<text class="svgsm" x="655" y="194" fill="#0d652d" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="371.5" y="246" width="309.5" height="70" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="387" y="276" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">CP · Ring</tspan></text>
+<text class="svgsm" x="387" y="300" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">Send／Recv 沿环</text>
+<text class="svgsm" x="655" y="278" fill="#0d652d" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="371.5" y="330" width="309.5" height="70" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="387" y="360" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ulysses</tspan></text>
+<text class="svgsm" x="387" y="384" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">AllToAll</text>
+<text class="svgsm" x="655" y="362" fill="#0d652d" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="371.5" y="414" width="309.5" height="70" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="387" y="444" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DCP</tspan></text>
+<text class="svgsm" x="387" y="468" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">推理：收齐 Q、合并</text>
+<text class="svgsm" x="655" y="446" fill="#0d652d" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="371.5" y="498" width="309.5" height="70" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="387" y="528" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PCP</tspan></text>
+<text class="svgsm" x="387" y="552" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">推理：切长 prompt</text>
+<text class="svgsm" x="655" y="530" fill="#0d652d" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="705.0" y="102" width="337.5" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="705.0" y="102" width="337.5" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="705.0" y="104" width="337.5" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="705.0" y1="132" x2="1042.5" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="719" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">模型并行　切权重</tspan></text>
+<rect x="719.0" y="162" width="309.5" height="70" rx="10" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="735" y="192" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP</tspan></text>
+<text class="svgsm" x="735" y="216" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">AllReduce，每层</text>
+<text class="svgsm" x="1002" y="194" fill="#b06000" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="719.0" y="246" width="309.5" height="70" rx="10" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="735" y="276" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PP</tspan></text>
+<text class="svgsm" x="735" y="300" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">Send／Recv，段边界</text>
+<text class="svgsm" x="1002" y="278" fill="#b06000" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<rect x="719.0" y="330" width="309.5" height="70" rx="10" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="735" y="360" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP</tspan></text>
+<text class="svgsm" x="735" y="384" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">AllToAll，每个 MoE 层</text>
+<text class="svgsm" x="1002" y="362" fill="#b06000" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="719.0" y="414" width="309.5" height="70" rx="10" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="735" y="444" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Wide-EP</tspan></text>
+<text class="svgsm" x="735" y="468" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">EP 铺到几十张卡</text>
+<text class="svgsm" x="1002" y="446" fill="#b06000" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="1052.5" y="102" width="337.5" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1052.5" y="102" width="337.5" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1052.5" y="104" width="337.5" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="1052.5" y1="132" x2="1390.0" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="1066" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">解耦　拆工作</tspan></text>
+<rect x="1066.5" y="162" width="309.5" height="70" rx="10" fill="none" stroke="#9334e6" stroke-width="2"/>
+<text class="svgsm" x="1082" y="192" fill="#681da8" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PD 分离</tspan></text>
+<text class="svgsm" x="1082" y="216" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">KV 跨机传一次</text>
+<text class="svgsm" x="1350" y="194" fill="#681da8" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<rect x="1066.5" y="246" width="309.5" height="70" rx="10" fill="none" stroke="#9334e6" stroke-width="2"/>
+<text class="svgsm" x="1082" y="276" fill="#681da8" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AFD</tspan></text>
+<text class="svgsm" x="1082" y="300" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每层 M → N → M</text>
+<text class="svgsm" x="1350" y="278" fill="#681da8" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
+<rect x="1066.5" y="330" width="309.5" height="70" rx="10" fill="none" stroke="#9334e6" stroke-width="2"/>
+<text class="svgsm" x="1082" y="360" fill="#681da8" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Encoder 分离</tspan></text>
+<text class="svgsm" x="1082" y="384" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">embedding 传一次</text>
+<text class="svgsm" x="1350" y="362" fill="#681da8" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<rect x="0" y="592" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="592" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="592" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读名字先问两句：它切的是什么，它多出来的是哪种通信</tspan></text>
+<text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">切什么定了它在哪一列；多出来的通信定了它该放在哪根线上。<tspan font-weight="700">说得少的才敢跨慢线</tspan>。</text>
+<text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TEP8、DEP16 这类推理简称，是把 attention 的切法和专家的切法拼在一起说：前一个字母管 attention，EP 管专家。</text>
+</svg><figcaption><b>名字再多，先问它在哪一列、圆点是实是空。</b><span class="capmore"><br><em>圆点是默认摆法，例外见第七节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 归类与通信原语汇总自本讲第一到第七节；「能否跨慢线」是默认摆法，例外（V3 的 EP 跨机、Llama 3 的 FSDP 在最外层）见第七节。</p></details></figure>
   <table>
     <tr><th>刀法</th><th>切的是什么</th><th>每张卡手里有什么</th><th>典型</th></tr>
     <tr><td><span class="kind k-d">数据</span><b>数据并行</b></td><td>batch，或者说请求</td>
@@ -4081,7 +4188,7 @@ body.figonly section h3{margin-top:34px}
   </table>
   <p>这是 TensorRT-LLM 的原文定义：<em>TEP&lt;N&gt; shards both attention (TP) and experts (EP) across N ranks.
     DEP&lt;N&gt; keeps attention data-parallel (ADP) while distributing experts across N ranks.</em>
-    vLLM 和 NVIDIA Dynamo 的用法一致。</p>
+    vLLM 的用法与此一致。</p>
   <p>PD 分离时两边经常各选一种，但<b>哪边用哪种没有定式</b>，要看模型和负载：
     vLLM 部署 Kimi K3 用的是 <b>TEP8 做 prefill、DEP16 做 decode</b>；
     TensorRT-LLM 那篇文章举的例子却是 <b>DEP4 做 prefill、TEP8 做 decode</b>。</p>
@@ -4144,10 +4251,16 @@ body.figonly section h3{margin-top:34px}
     <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>（prefill 偏算力、decode 受带宽约束；7.4 倍请求或 12.6 倍更紧的 SLO）</td></tr>
     <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> §3），FSDP 每层 3 次（arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> §7），EP ／ PP ／ DP 按调度数出</td></tr>
-    <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki nvidia-gpu-comparison、gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
+    <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki sources/nvidia-gpu-comparison-20260311、analyses/gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
     <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580）、§3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。组间 all-reduce 十几到二十几毫秒为本课推算（原文 12 ms 的算式前后不一致）</td></tr>
     <tr><td>V3 的集群与每 token 最多 4 节点</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §3.1（2,048 块 H800、节点内 NVLink、节点间 IB）、§2.1.2、§3.2</td></tr>
-    <tr><td>strong ／ weak scaling</td><td>Amdahl 1967；Gustafson 1988（Reevaluating Amdahl's Law）</td></tr>
+    <tr><td>strong ／ weak scaling</td><td>Amdahl 1967；Gustafson 1988（Reevaluating Amdahl's Law）；临界 batch size：arXiv <a href="https://arxiv.org/abs/1812.06162" target="_blank" rel="noopener">1812.06162</a></td></tr>
+    <tr><td>NVSwitch 在交换机里做加法（NVLS）</td><td>NCCL NVLS 算法（NVIDIA NCCL 文档）；「少将近一半」为按每卡发出约 S 对 2(n−1)/n·S 的本课推算</td></tr>
+    <tr><td>TPU 切片何时首尾成环、小切片带宽约减半</td><td>How to Scale Your Model（scaling book）TPU 章节：只有整 cube（4 的倍数）才有环回；Google Cloud TPU7x 拓扑文档</td></tr>
+    <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv <a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">2407.21783</a> §3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
+    <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> 摘要与 §4.1</td></tr>
+    <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
+    <tr><td>DCN 每芯片 100 Gbps</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>

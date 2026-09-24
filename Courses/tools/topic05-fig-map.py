@@ -160,3 +160,50 @@ def fig_topo():
 fig_freq()
 fig_scale()
 fig_topo()
+
+
+# ── 第八节：全景图 ───────────────────────────────────────────────────────
+# ⭐ 2026-09-25 R7 麻瓜全篇重读：开头许诺「一张全景地图」，第八节却全是表。这张把五刀归进四类，
+#   每个名字只挂两样东西：用的是哪种通信、能不能跨到慢线上。细节仍在后面的表里。
+PANO = [
+    ("数据并行", "切 batch", BL, [("DP", "AllReduce", 1), ("ZeRO-1／2", "RS ＋ AG", 1), ("FSDP", "AG ×2 ＋ RS", 0),
+                                 ("HSDP", "机内 FSDP、机间 DP", 1), ("Attention DP", "推理：各管各的请求", 1)]),
+    ("序列并行", "切一条样本", GR, [("SP", "AG ＋ RS（TP 的搭档）", 0), ("CP · Ring", "Send／Recv 沿环", 0),
+                                  ("Ulysses", "AllToAll", 0), ("DCP", "推理：收齐 Q、合并", 0), ("PCP", "推理：切长 prompt", 0)]),
+    ("模型并行", "切权重", OR, [("TP", "AllReduce，每层", 0), ("PP", "Send／Recv，段边界", 1),
+                              ("EP", "AllToAll，每个 MoE 层", 0), ("Wide-EP", "EP 铺到几十张卡", 0)]),
+    ("解耦", "拆工作", PU, [("PD 分离", "KV 跨机传一次", 1), ("AFD", "每层 M → N → M", 0), ("Encoder 分离", "embedding 传一次", 1)]),
+]
+assert sum(len(c[3]) for c in PANO) == 17
+
+
+def fig_panorama():
+    f = Fig(W, "并行方式的全景图。四列是四类：数据并行切 batch，序列并行切一条样本，模型并行切权重，解耦拆工作。"
+               "每个名字下面写着它用哪种通信；实心圆点表示它可以跨到慢线上，空心圆点表示它要待在快线里。"
+               "数据并行里的 DP、ZeRO-1 和 2、HSDP 能跨慢线，FSDP 要在快线里；模型并行里只有 PP 能跨慢线；"
+               "解耦里 PD 分离和 Encoder 分离只传一次，能跨机器")
+    y0 = f.header("全景：四类刀法，每个名字挂两样东西　——　<tspan font-weight=\"700\">用哪种通信，能不能跨慢线</tspan>",
+                  "五刀里切权重和切专家都归「模型并行」。● 可以跨到慢线上　○ 要待在快线里（默认摆法，有例外，见第七节）",
+                  [(BL, "数据并行"), (GR, "序列并行"), (OR, "模型并行"), (PU, "解耦")])
+    PH = 470
+    colw = (W - 50) / 4
+    for c, (name, what, col, items) in enumerate(PANO):
+        x = 10 + c * (colw + 10)
+        py = f.panel(x, y0, colw, PH, "%s　%s" % (name, what), col)
+        for k, (nm, comm, slow) in enumerate(items):
+            yy = py + 30 + k * 84
+            f.box(x + 14, yy, colw - 28, 70, "none", col, 10, sw=2)
+            f.t(x + 30, yy + 30, nm, col, True, 17)
+            f.t(x + 30, yy + 54, comm, GY, size=13.5)
+            cx = x + colw - 40
+            f.t(cx, yy + 32, "●" if slow else "○", col, True, 22, "middle")
+        f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "读名字先问两句：它切的是什么，它多出来的是哪种通信", [
+        "切什么定了它在哪一列；多出来的通信定了它该放在哪根线上。<tspan font-weight=\"700\">说得少的才敢跨慢线</tspan>。",
+        "TEP8、DEP16 这类推理简称，是把 attention 的切法和专家的切法拼在一起说：前一个字母管 attention，EP 管专家。",
+    ])
+    yb = f.src(yb + 10, "📌 归类与通信原语汇总自本讲第一到第七节；「能否跨慢线」是默认摆法，例外（V3 的 EP 跨机、Llama 3 的 FSDP 在最外层）见第七节。")
+    f.save("fig5-panorama.svg", yb + 14)
+
+
+fig_panorama()
