@@ -850,8 +850,7 @@ body.figonly section h3{margin-top:34px}
     也知道该怎么讲的助教，让它带你走一遍。</p>
 </div></div>
 <div class="wrap">
-  <div class="note ok"><span class="t">这一讲九节全部写完</span>
-    每个数字的出处在文末台账；自己推出来的数，都标了「本课推导」。</div>
+  <p style="color:var(--gray)">每个数字的出处在文末台账；自己推出来的数，都标了「本课推导」。</p>
 </div>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一张卡装不下</h2></div>
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，
@@ -877,8 +876,8 @@ body.figonly section h3{margin-top:34px}
 
   <p>整条线只用一把尺子量：<b>这一刀多出来的通信有多频繁，它就只能放在多快的链路上。</b></p>
 
-  <div class="note ok"><span class="t">后面会反复用到的几个词（专题一、三讲过，这里各一句话）</span>
-    <b>张量与隐藏维</b>：模型里流动的数据都是多维数组，叫张量；每个 token 用一串数表示，这串数的长度就是隐藏维（V3 是 7,168）。<br>
+  <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b>：张量、激活、注意力头、MoE、KV cache、prefill 与 decode、Q/K/V、MLA、显存、ICI、「几路」……（专题一、三讲过，这里各一句话）</summary>
+  <p style="line-height:1.9"><b>张量与隐藏维</b>：模型里流动的数据都是多维数组，叫张量；每个 token 用一串数表示，这串数的长度就是隐藏维（V3 是 7,168）。<br>
     <b>激活</b>：前向每一层算出来的中间结果。反向时还要用，所以得先存着。<br>
     <b>注意力头</b>：注意力被拆成几十份并排的小注意力，每一份叫一个头，各算各的。<br>
     <b>micro-batch</b>：把一步要算的一批样本再切成几小份，一份一份地过。<br>
@@ -896,7 +895,7 @@ body.figonly section h3{margin-top:34px}
     <b>KV cache</b>：生成文字时，每个已经处理过的 token 都留下一份 K 和 V，后面的 token 算注意力时要回头看它们。
     这份东西要一直存着，上下文越长越大。<br>
     <b>prefill 和 decode</b>：推理分两段。prefill 一口气读完整个 prompt，算出第一个字；decode 之后每一步只出一个字。
-    decode 这一步很轻，所以要把很多请求拼成一批一起跑：<b>权重读一遍，一批请求一起用</b>，batch 越大越划算。</div>
+    decode 这一步很轻，所以要把很多请求拼成一批一起跑：<b>权重读一遍，一批请求一起用</b>，batch 越大越划算。</p></details>
 </div></section>
 
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>先认识五种通信</h2></div>
@@ -905,7 +904,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s1-1">1.1　所有集合通信，拆到底只有「发」和「收」</h3>
   <p>一组卡按同一个规则一起发、一起收，叫<b>集合通信</b>（collective communication）。
-    拆到最底层，每一种都只是很多次「一张卡发、另一张卡收」按某个顺序排起来。</p>
+</p>
   <p>下面几张图用同一套画法，只学一次：</p>
   <ul>
     <li>四张卡，<b>一张一个颜色</b>：卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫。</li>
@@ -2360,8 +2359,7 @@ body.figonly section h3{margin-top:34px}
        aria-label="AllToAll 动画。四张卡各有四块，颜色表示出自哪张卡，对角线上的四块画粗框。字幕一：派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）。十六块同时飞到新位置，卡 k 的第 j 块落到卡 j 的第 k 行。字幕二：卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次。字幕三：专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll。十六块原路飞回，画面回到开始的样子。"></video>
 <figcaption>派发过去、送回来，正好是专家并行每层的两次 AllToAll。
   <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>它是这五种里<b>唯一一个「人人对人人发不同数据」的</b>。
-    专家并行派发 token 要用它（每层两次：发过去、送回来）；切序列时的 Ulysses 也用它，
+  <p>专家并行派发 token 要用它；切序列时的 Ulysses 也用它，
     在「按序列切」和「按头切」之间来回换。</p>
 
   <h3 id="s1-7">1.7　一张表收住</h3>
@@ -2512,9 +2510,8 @@ body.figonly section h3{margin-top:34px}
   <p>代价在反向：前向扔掉的权重，反向还得再拼一次。所以一层一步要做 AG、AG、RS 三次，
     通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 §7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB。</p>
   <div class="note warn"><span class="t">⚠️ 「FSDP 白送」这句话要说准</span>
-    白送的是 ZeRO-1、ZeRO-2：通信一个字节不多，已经削掉 16 字节里的 14 个。<br>
-    再说准一点：这只在一步只同步一次时成立。一步切成几个 micro-batch 时，ZeRO-2 手里没有完整梯度，
-    每个 micro-batch 都得分一次梯度；ZeRO-1 可以先在本地攒着。所以配流水线并行时，V3、Megatron 选的都是 ZeRO-1。<br>
+    一步只同步一次时，ZeRO-1、ZeRO-2 白送：通信一个字节不多，已经削掉 16 字节里的 14 个。<br>
+    一步切成几个 micro-batch 时，只剩 ZeRO-1 白送：ZeRO-2 手里没有完整梯度，每个 micro-batch 都得分一次。所以配流水线时，V3、Megatron 都选 ZeRO-1。<br>
     ZeRO-3 不白送：最后那 2 个字节，要多付一半的通信。只是对大模型来说，这笔钱非付不可。</div>
 
   <h3 id="s2-4">2.4　这一刀能放多远：看频率</h3>
@@ -2541,7 +2538,7 @@ body.figonly section h3{margin-top:34px}
     这个比值要高过硬件自己的比值（每秒能算多少次 ÷ 每秒能搬多少字节），否则就是算得没有搬得快。</p>
   <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是两次拼权重、一次分梯度，约 6Ψ 字节（Ψ 还是参数个数，bf16 每个 2 字节）；
     一步算的是 6ΨT 次（专题四那条「训练每个 token 约 6 倍参数量次运算」），T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
-<figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 694" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两把刀，两种账　——　<tspan font-weight="700">FSDP 看 batch，TP 看隐藏维</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（ 推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -2572,104 +2569,83 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1140" y="460" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 32 路 ≈ 1,008</tspan></text>
 <path d="M150,323 L1130,323" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
 <text class="svgsm" x="1140" y="343" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7 硬件线 ≈ 3,845</tspan></text>
-<rect x="0" y="572" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="572" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="572" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<rect x="0" y="572" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="572" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="572" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="599" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch 小就换 TP，batch 大就用 FSDP</tspan></text>
 <text class="svgsm" x="20" y="630" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">FSDP 每字节换来的计算 ＝ 每卡 token 数：在 v7 上每卡少于约 3,845 个 token，就搬得比算得慢。　<tspan font-weight="700">加卡又不想加 batch，FSDP 迟早掉到线下。</tspan></text>
-<text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，TP 8 路 ≈ 4,032 勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight="700">TP 有一个跟 batch 无关的上限</tspan>。</text>
+<text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，TP 8 路 ≈ 4,032 按最乐观的线才勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight="700">TP 有一个跟 batch 无</tspan></text>
+<text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关的上限</tspan>。</text>
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
 <p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
   <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片间 ICI 常说的 1.2 TB/s 是 6 条链路收发两个方向加起来的，
     而上面搬的字节是「每卡发出」的量，只能跟发出那一半比：每秒 0.6 TB。
     硬件的比值约 3,845。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
-    这还是乐观情形：三根轴全用上、稠密模型。只走一根轴，门槛高约 3 倍；MoE 只靠 FSDP、不配专家并行时更吃亏，搬的是全部参数、算的只有被选中的那一小部分，
-    门槛还要再乘上「总参数 ÷ 每个 token 激活的参数」（V3 是 6,710 亿 ÷ 370 亿，约 18 倍）。
     而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
+  <p>这还是最乐观的算法。两种情况门槛更高：只走一根轴，高约 3 倍；MoE 只靠 FSDP、不配专家并行，
+    搬的是全部参数、算的只有被选中的那一小部分，还要再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p>
 
   <h3 id="s3-2">3.2　TP：切进矩阵内部</h3>
   <p>张量并行把一层的权重矩阵本身切开，每张卡只存、只算其中一块。Megatron-LM 的切法里藏着一个巧思：</p>
-<figure class="fbox fwide" id="fig-tp-mlp"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="张量并行怎么切一个 MLP。输入 X 每张卡都有一整份。第一块权重 W1 按列切成两半，每张卡算出中间结果的一半，激活函数可以各自算，不用通信。第二块权重 W2 按行切，每张卡算出的是完整输出的一部分和，最后做一次 AllReduce 加起来，每张卡拿到完整的 Y。关键是两次矩阵乘之间不需要任何通信：先列切、再行切，正好让一次 AllReduce 放在最后"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-tp-mlp"><svg viewBox="0 0 1400 639" width="100%" role="img" aria-label="张量并行怎么切一个 MLP。输入 X 每张卡都有一整份。第一块权重 W1 按列切成两半，每张卡算出中间结果的一半，激活函数可以各自算，不用通信。第二块权重 W2 按行切，每张卡算出的是完整输出的一部分和，最后做一次 AllReduce 加起来，每张卡拿到完整的 Y。关键是两次矩阵乘之间不需要任何通信：先列切、再行切，正好让一次 AllReduce 放在最后"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TP 切 MLP　——　<tspan font-weight="700">先按列切，再按行切，中间一次通信都不用</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两张卡的例子。灰 ＝ 两张卡都有的完整副本，蓝 ／ 橙 ＝ 各自那一半</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两张卡的例子。灰 ＝ 两张卡都有的完整副本，蓝 ／ 橙 ＝ 各自那一半；虚线是切口。蓝的只跟蓝的相乘，所以中间不用找对方要东西</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0 的那一半</text>
 <rect x="140" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="161" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 1 的那一半</text>
 <rect x="280" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="301" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">完整副本</text>
-<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="365" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y ＝ GeLU(X · W1) · W2</tspan></text>
 <text class="svgsm" x="209" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">Megatron-LM 的切法</text>
-<text class="svgsm" x="18" y="220" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
-<rect x="80" y="192" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="125" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X</tspan></text>
-<text class="svgsm" x="125" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
-<text class="svgsm" x="186" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
-<rect x="210" y="182" width="60" height="80" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="240" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
-<text class="svgsm" x="240" y="280" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按列切：半</text>
-<text class="svgsm" x="286" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
-<rect x="310" y="192" width="90" height="60" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="355" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GeLU</tspan></text>
-<text class="svgsm" x="355" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">中间的一半</text>
-<text class="svgsm" x="416" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
-<rect x="440" y="197" width="80" height="50" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="480" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
-<text class="svgsm" x="480" y="265" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按行切：半</text>
-<text class="svgsm" x="536" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
-<rect x="560" y="192" width="90" height="60" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="605" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
-<text class="svgsm" x="605" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">只是 Y 的一部分</text>
-<text class="svgsm" x="18" y="350" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
-<rect x="80" y="322" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="125" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X</tspan></text>
-<text class="svgsm" x="125" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
-<text class="svgsm" x="186" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
-<rect x="210" y="312" width="60" height="80" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="240" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
-<text class="svgsm" x="240" y="410" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按列切：半</text>
-<text class="svgsm" x="286" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
-<rect x="310" y="322" width="90" height="60" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="355" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GeLU</tspan></text>
-<text class="svgsm" x="355" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">中间的一半</text>
-<text class="svgsm" x="416" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
-<rect x="440" y="327" width="80" height="50" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="480" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
-<text class="svgsm" x="480" y="395" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按行切：半</text>
-<text class="svgsm" x="536" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
-<rect x="560" y="322" width="90" height="60" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="605" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
-<text class="svgsm" x="605" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">只是 Y 的一部分</text>
-<rect x="700" y="212" width="160" height="200" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="780" y="302" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllReduce</tspan></text>
-<text class="svgsm" x="780" y="328" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">两份部分和相加</text>
-<line x1="652" y1="222" x2="698" y2="282" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<line x1="862" y1="282" x2="908" y2="222" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<rect x="910" y="192" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="955" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y</tspan></text>
-<text class="svgsm" x="955" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
-<line x1="652" y1="352" x2="698" y2="312" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<line x1="862" y1="312" x2="908" y2="352" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<rect x="910" y="322" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="955" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y</tspan></text>
-<text class="svgsm" x="955" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
-<rect x="1040" y="192" width="330" height="220" rx="8" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1058" y="222" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">中间结果在两张卡上各一半，</text>
-<text class="svgsm" x="1058" y="248" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">激活函数逐元素算，各算各的；</text>
-<text class="svgsm" x="1058" y="274" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">W2 按行切正好接住这一半。</text>
-<text class="svgsm" x="1058" y="300" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"></text>
-<text class="svgsm" x="1058" y="326" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">所以整个 MLP 只在最后</text>
-<text class="svgsm" x="1058" y="352" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">做一次 AllReduce。</text>
-<rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切法的全部巧思，就是把通信挤到最后一次</tspan></text>
-<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第一块按列切、第二块按行切：中间结果各留一半、各自过激活函数，<tspan font-weight="700">两次矩阵乘之间零通信</tspan>。</text>
-<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">attention 同理：按头切，每张卡算自己那几个头，出口处一次 AllReduce。　于是一层前向 2 次、反向 2 次 AllReduce，<tspan font-weight="700">每层都有，频率极高</tspan>。</text>
+<rect x="50" y="247" width="70" height="120" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="85" y="313" fill="#ffffff" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="85" y="225" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 X</tspan></text>
+<text class="svgsm" x="85" y="397" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">每张卡都有整份</text>
+<text class="svgsm" x="150" y="315" fill="#202124" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="180" y="272" width="120.0" height="70" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="300.0" y="272" width="120.0" height="70" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<path d="M300,260 L300,354" fill="none" stroke="#202124" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="300" y="250" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1：竖着切一刀</tspan></text>
+<text class="svgsm" x="300" y="372" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">左半在卡 0，右半在卡 1</text>
+<text class="svgsm" x="450" y="315" fill="#202124" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
+<rect x="480" y="247" width="120.0" height="120" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="600.0" y="247" width="120.0" height="120" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<path d="M600,235 L600,379" fill="none" stroke="#202124" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="600" y="225" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">中间结果也是左右两半</tspan></text>
+<text class="svgsm" x="600" y="397" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">GeLU 逐个元素算，各算各的</text>
+<text class="svgsm" x="750" y="315" fill="#202124" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="780" y="197" width="60" height="110.0" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="780" y="307.0" width="60" height="110.0" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<path d="M768,307 L852,307" fill="none" stroke="#202124" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="810" y="175" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2：横着切一刀</tspan></text>
+<text class="svgsm" x="810" y="447" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"></text>
+<text class="svgsm" x="810" y="447" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">上半在卡 0，下半在卡 1</text>
+<text class="svgsm" x="870" y="315" fill="#202124" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
+<rect x="900" y="232" width="70" height="60" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="935" y="267" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<text class="svgsm" x="935" y="315" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
+<rect x="900" y="322" width="70" height="60" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="935" y="357" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<rect x="1000" y="275" width="150" height="64" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="1075" y="303" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllReduce</tspan></text>
+<text class="svgsm" x="1075" y="325" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">唯一一次通信</text>
+<line x1="972" y1="262" x2="998" y2="295" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="972" y1="352" x2="998" y2="319" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="1152" y1="307" x2="1200" y2="307" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1210" y="247" width="70" height="120" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1245" y="313" fill="#ffffff" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y</tspan></text>
+<text class="svgsm" x="1245" y="397" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">每张卡拿到整份</text>
+<rect x="0" y="517" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="517" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="517" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="544" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切法的全部巧思，就是把通信挤到最后一次</tspan></text>
+<text class="svgsm" x="20" y="575" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第一块按列切、第二块按行切：中间结果各留一半、各自过激活函数，<tspan font-weight="700">两次矩阵乘之间零通信</tspan>。</text>
+<text class="svgsm" x="20" y="599" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">attention 同理：按头切，每张卡算自己那几个头，出口处一次 AllReduce。　于是一层前向 2 次、反向 2 次 AllReduce，<tspan font-weight="700">每层都有，频率极高</tspan>。</text>
 </svg><figcaption><b>列切接行切，中间结果不出卡。</b><span class="capmore"><br><em>这是 Megatron-LM 的切法，attention 按头切也是同一个思路。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：Shoeybi 等，Megatron-LM，arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> §3（MLP 与 self-attention 的切法、f／g 两个通信算子）。</p></details></figure>
 <figure class="fbox fwide" id="anim-tpsplit">
 <video src="media/topic05-tpsplit.mp4" autoplay loop muted playsinline
@@ -2690,8 +2666,9 @@ body.figonly section h3{margin-top:34px}
   <p>TP 搬的是激活，一层搬多少跟 token 数成正比，算多少也跟 token 数成正比，<b>batch 在账里约掉了</b>。
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。</p>
   <ul>
-    <li>V3 的隐藏维 7,168：TP 8 路约 4,032，勉强在 v7 硬件线之上；再多一点就掉下去了（7,168 × 4.5 ÷ 3,845 ≈ 8.4）。
-      而且这条线假设通信能完全藏进计算里，Megatron 的 TP 通信默认却在关键路径上，实际更紧。</li>
+    <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）。
+      可 3,845 假设 TP 组占满三根带环回的轴，TP 8 路只有 4 颗芯片、用不满，实际门槛要高好几倍，已经在线下了；
+      再加上 Megatron 的 TP 通信默认在关键路径上藏不住，实际更紧。</li>
     <li>另外两条约束：注意力头要按整个分，Megatron 要求头数（有分组的模型是 KV 组数）能被 TP 度数整除；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>
   </ul>
   <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP。两把刀各管一边。</p>
@@ -2924,107 +2901,375 @@ body.figonly section h3{margin-top:34px}
       同一台机器上就算有好几个它要找的专家，跨机也只发一份，到了再在机器里分。</li>
     <li><b>派发用 FP8，合并用 BF16</b>：派发那一趟的字节数直接减半。</li>
   </ul>
-  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节 ≈ 28.7 KB（FP8 还要带一点缩放因子，实际略多），跟它选了几个专家无关，只跟去了几个节点有关。
-    这是训练和 prefill 的做法；decode 追求低延迟时改成按专家逐个直发，份数就跟着选的专家数涨了。</p>
+  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节 ≈ 28.7 KB，跟它选了几个专家无关，只跟去了几个节点有关。</p>
+  <p>这是训练和 prefill 的做法；decode 追求低延迟时改成按专家逐个直发，份数就跟着选的专家数涨了。</p>
 
   <h3 id="s4-3">4.3　EP 最重的病：负载由数据决定</h3>
-  <p>别的刀切得均匀不均匀，大多是配置决定的，事先就知道（推理时各请求长短不一、训练时拼接的文档长短不一，也会带来一些不均）。<b>EP 的不均最严重</b>：
+  <p>别的刀负载均不均，大多事先就知道。<b>EP 的不均最严重</b>：
     哪个专家忙、哪个专家闲，要等路由算完才知道，而且每一批数据都不一样。
     最忙的那个专家算完之前，所有人都得等它。治法分两头：</p>
   <ul>
-    <li><b>训练时</b>：让路由本身尽量均匀。以前的办法是在训练目标里加一项「辅助损失」专门罚不均匀，但它会拖累模型效果；V3 基本不靠这一项（只留一个权重极小的，防极端情况），主要给每个专家一个偏置项，
-      负载高了就把它调低一点，负载低了就调高。偏置只影响「挑哪几个专家」，不改算出来的权重。</li>
+    <li><b>训练时</b>：让路由本身尽量均匀。以前靠在训练目标里加一项「辅助损失」罚不均，但会拖累模型效果。
+      V3 改用偏置：哪个专家负载高就把它的偏置调低，低了就调高；偏置只影响挑谁，不改算出来的权重。辅助损失只留一个极小的兜底。</li>
     <li><b>推理时</b>：把热门专家多复制几份，摊到不同的卡上，也就是 EPLB 和冗余专家。</li>
   </ul>
 
   <h3 id="s4-4">4.4　attention 和专家，各配各的</h3>
   <p>一层 Transformer 里，attention 和专家是两种完全不同的形状：attention 的负担跟序列和 KV 有关，
     专家的负担是那一大堆参数。<b>所以同一批卡，在这两部分可以用两套切法。</b></p>
-<figure class="fbox fwide" id="fig-fold"><svg viewBox="0 0 1400 598" width="100%" role="img" aria-label="同一批卡，两套切法。左边是注意力层眼里的这 8 张卡：按张量并行 4 路、数据并行 2 路来组。右边是专家层眼里的同样 8 张卡：按专家并行 8 路，每张卡放 32 个专家。注意力和专家的形状完全不同，所以一个模型里两者各配各的切法。训练里 Megatron 叫它并行折叠，推理里叫 DEP 和 TEP：前一个字母说注意力怎么切，后面的 EP 说专家怎么切"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-fold"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="同一批卡，两套切法。左边是注意力层眼里的这 8 张卡：按张量并行 4 路、数据并行 2 路来组。右边是专家层眼里的同样 8 张卡：按专家并行 8 路，每张卡放 32 个专家。注意力和专家的形状完全不同，所以一个模型里两者各配各的切法。训练里 Megatron 叫它并行折叠，推理里叫 DEP 和 TEP：前一个字母说注意力怎么切，后面的 EP 说专家怎么切"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">attention 和专家，各配各的切法　——　<tspan font-weight="700">同一批卡，两套映射</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">8 张卡的示意。同一张卡在注意力层里是某个 TP 组的一员，到了专家层就换一个身份</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 组 A</text>
-<rect x="102" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="123" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 组 B</text>
-<rect x="204" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="225" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专家（每卡 32 个）</text>
-<rect x="0" y="102" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">第一组：管请求 A</text>
+<rect x="161" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="182" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">第二组：管请求 B</text>
+<rect x="322" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="343" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">一个小方块 ＝ 一个专家</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一层 Transformer 里，同一张卡换两次身份</tspan></text>
-<text class="svgsm" x="40" y="162" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力层：TP 4 路 × DP 2 路</tspan></text>
-<rect x="40" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="100" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
-<text class="svgsm" x="100" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 0 份</text>
-<rect x="180" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="240" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
-<text class="svgsm" x="240" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 1 份</text>
-<rect x="320" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="380" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
-<text class="svgsm" x="380" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 2 份</text>
-<rect x="460" y="182" width="120" height="70" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="520" y="214" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
-<text class="svgsm" x="520" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 A · 第 3 份</text>
-<rect x="40" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="100" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 4</tspan></text>
-<text class="svgsm" x="100" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 0 份</text>
-<rect x="180" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="240" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 5</tspan></text>
-<text class="svgsm" x="240" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 1 份</text>
-<rect x="320" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="380" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 6</tspan></text>
-<text class="svgsm" x="380" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 2 份</text>
-<rect x="460" y="282" width="120" height="70" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="520" y="314" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 7</tspan></text>
-<text class="svgsm" x="520" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">TP 组 B · 第 3 份</text>
-<text class="svgsm" x="620" y="262" fill="#202124" style="font-size:30.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
-<text class="svgsm" x="700" y="162" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家层：EP 8 路</tspan></text>
-<rect x="700" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="760" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
-<text class="svgsm" x="760" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 0–31</text>
-<rect x="860" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="920" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
-<text class="svgsm" x="920" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 32–63</text>
-<rect x="1020" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="1080" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
-<text class="svgsm" x="1080" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 64–95</text>
-<rect x="1180" y="182" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="1240" y="214" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
-<text class="svgsm" x="1240" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 96–127</text>
-<rect x="700" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="760" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 4</tspan></text>
-<text class="svgsm" x="760" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 128–159</text>
-<rect x="860" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="920" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 5</tspan></text>
-<text class="svgsm" x="920" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 160–191</text>
-<rect x="1020" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="1080" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 6</tspan></text>
-<text class="svgsm" x="1080" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 192–223</text>
-<rect x="1180" y="282" width="120" height="70" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="1240" y="314" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 7</tspan></text>
-<text class="svgsm" x="1240" y="336" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">专家 224–255</text>
-<rect x="0" y="452" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="452" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="452" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练和推理各有一套名字，说的是同一件事</tspan></text>
-<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">训练：Megatron 叫它 Parallel Folding，attention 按 TP×CP×DP×PP 映射，专家按 ETP×EP×EDP×PP 映射，例如 attention 用 TP4·CP2·DP8·PP4，专家直接 EP64。</text>
-<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">推理：TEP ＝ attention 走 TP、专家走 EP；DEP ＝ attention 走数据并行、专家走 EP；图里这种一半一半的也有。<tspan font-weight="700"> 它们不是 Megatron 的 ETP ／ EDP</tspan>，两套名字别互相</text>
-<text class="svgsm" x="20" y="558" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">换算。</text>
+<text class="svgsm" x="40" y="166" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力层：4 张卡一组切一份 attention，两组各管一批请求</tspan></text>
+<rect x="40" y="188" width="130" height="96" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="48" y="206" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<rect x="62" y="216" width="20" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="84" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="106" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="128" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="180" y="188" width="130" height="96" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="188" y="206" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<rect x="202" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="224" y="216" width="20" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="246" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="268" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="320" y="188" width="130" height="96" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="328" y="206" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<rect x="342" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="364" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="386" y="216" width="20" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="408" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="460" y="188" width="130" height="96" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="468" y="206" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<rect x="482" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="504" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="526" y="216" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="548" y="216" width="20" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="40" y="312" width="130" height="96" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="48" y="330" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 4</tspan></text>
+<rect x="62" y="340" width="20" height="56" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="84" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="106" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="128" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="180" y="312" width="130" height="96" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="188" y="330" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 5</tspan></text>
+<rect x="202" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="224" y="340" width="20" height="56" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="246" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="268" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="320" y="312" width="130" height="96" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="328" y="330" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 6</tspan></text>
+<rect x="342" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="364" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="386" y="340" width="20" height="56" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="408" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="460" y="312" width="130" height="96" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="468" y="330" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 7</tspan></text>
+<rect x="482" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="504" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="526" y="340" width="20" height="56" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="548" y="340" width="20" height="56" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="600" y="236" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">请求 A</tspan></text>
+<text class="svgsm" x="600" y="360" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">请求 B</tspan></text>
+<text class="svgsm" x="662" y="302" fill="#202124" style="font-size:30.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
+<text class="svgsm" x="710" y="166" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家层：8 张卡各放 32 个专家，所有请求的 token 都往这儿送</tspan></text>
+<rect x="710" y="188" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="718" y="206" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<rect x="722" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="722" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="722" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="722" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="875" y="188" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="883" y="206" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<rect x="887" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="887" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="887" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="887" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1040" y="188" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1048" y="206" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<rect x="1052" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1205" y="188" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1213" y="206" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<rect x="1217" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="220" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1217" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="234" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1217" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="248" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1217" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="262" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="710" y="312" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="718" y="330" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 4</tspan></text>
+<rect x="722" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="722" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="722" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="722" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="754" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="770" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="786" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="802" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="818" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="834" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="875" y="312" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="883" y="330" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 5</tspan></text>
+<rect x="887" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="887" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="887" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="887" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="903" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="919" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="935" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="951" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="967" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="999" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1040" y="312" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1048" y="330" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 6</tspan></text>
+<rect x="1052" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1068" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1084" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1100" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1116" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1132" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1205" y="312" width="150" height="96" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="1213" y="330" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 7</tspan></text>
+<rect x="1217" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="344" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1217" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="358" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1217" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="372" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1217" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1233" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1249" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1265" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1281" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1297" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1313" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1329" y="386" width="11" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 是一块大矩阵，专家是一堆小矩阵：各切各的</tspan></text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">attention 那块大矩阵切成条，4 张卡一组合起来算；两组各管一批请求。专家本来就是 256 个小块，<tspan font-weight="700">整个分出去就行</tspan>。</text>
+<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">训练里 Megatron 叫它 Parallel Folding；推理里 attention 用 TP 的叫 TEP，用数据并行的叫 DEP，图里这种一半一半的也有。</text>
 </svg><figcaption><b>左右两边是同样的 8 张卡。</b><span class="capmore"><br><em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-Core moe/README.md（MoE Parallel Folding，例子 TP4·CP2·DP8·PP4 → ETP1·EP64·EDP1）；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a>。TEP ／ DEP 定义：TensorRT-LLM tech blog 26。</p></details></figure>
   <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
     挑哪个差别大到什么程度，我们自己测过一次：</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐 2.47 倍</span>
-    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 用 TP4，把能调的参数全调了，吞吐停在 <b>21,100 tok/s</b>。
-    decode 改成 dep8，也就是 attention 数据并行 8 路、专家 EP8，吞吐最高到 <b>65,132 tok/s</b>，
-    出字间隔从 46.8 ms 降到约 12 ms（首字延迟反而变长，prefill 成了新瓶颈）。两套卡数不一样（16 张对 20 张），
-    各取最好成绩，<b>摊到每张卡是 2.47 倍</b>（同样并发 512 比是 2.09 倍）。<br>
-    <em>这一步其实同时换了三样：attention 改数据并行、专家改 EP8、decode 从 4 张卡变 8 张。
-    最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，<b>只能在 4 张卡上各复制一份</b>；
-    改成数据并行后，每张卡只存自己那批请求的 KV。EP8 把专家摊开，也省下一块显存。attention 的权重虽然要每张卡复制一份，但 MoE 模型里它只占几个百分点，划得来。
-    KV 这件事，下一刀专门讲。<br>
-    卡数：两套都是 3 台 prefill 机器（每台 4 张卡），decode 一套是 1 台 4 张卡，一套是 2 台 8 张卡。</em></div>
+    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），<b>摊到每张卡是 2.47 倍</b>。
+    最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
+    attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。<br>
+    <em>完整的口径（卡数、并发、首字延迟）在 7.3。KV 这件事，下一刀专门讲。</em></div>
 
   <h3 id="s4-5">4.5　这一刀留下的问题</h3>
   <p>前三刀都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨。
@@ -3248,14 +3493,13 @@ body.figonly section h3{margin-top:34px}
 <figcaption>KV 轮流落到四张卡上；每一层多几次通信，把 Q 收齐、把结果合起来。
   <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并（每份带着自己的归一化分母，记作 LSE，才能合得对）。
-    每层多付两三次通信（vLLM 默认实现是三次：收齐 Q、交换归一化分母、合并输出），换回被 TP 白白复制掉的那几份 KV。
+    每层多付三次通信（vLLM 默认实现：收齐 Q、交换归一化分母、合并输出），换回被 TP 白白复制掉的那几份 KV。
     DCP 的度数最多开到 TP ÷ KV 头数，也就是刚好把复制的那几份收回来。<b>用一种通信，换一份显存</b>，又一次。</p>
 
   <h3 id="s5-5">5.5　prefill 那边也有一种</h3>
   <p>DCP 管的是 decode。prefill 那边要把一个长 prompt 切开、让第一个字早点出来，叫 <b>PCP</b>（prefill 上下文并行）。
-    两者对卡数的作用相反：<b>PCP 是在 TP 之外再加一维，所以会增加卡；DCP 就在原来那几张卡上摊，不增加卡。</b>
-    PCP 也不帮 KV 扩容量（vLLM 源码原话：does not increase the KV-cache shard count），两种实现都还在开发中。
-    下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（这是本课的归纳，vLLM 文档里的 DCP 例子都是不拆开的部署）。</p>
+    PCP 是在 TP 之外再加一维，所以<b>PCP 加卡，DCP 不加卡</b>；PCP 也不帮 KV 扩容量。
+    下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（本课的归纳）。</p>
 
   <h3 id="s5-6">5.6　这一刀留下的问题</h3>
   <p>说到这儿，prefill 和 decode 已经各要各的切法了：一个吃算力、要把 prompt 切开；一个吃带宽、要把 KV 摊开。
@@ -3271,8 +3515,7 @@ body.figonly section h3{margin-top:34px}
     <b>decode</b> 每一步只出一个 token，却要把全部权重和 KV 从显存里读一遍，吃的是带宽。</p>
   <p>它们挤在同一批卡上时，引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
     这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
-  <p>decode 还有一个脾气要记住：它靠把很多请求拼成一大批来摊薄「把权重读一遍」的成本，<b>batch 越大越划算</b>。
-    后面 DEP、AFD、Wide-EP 这些做法，说到底都是在想办法把 decode 的 batch 做大。</p>
+  <p>还记得 decode 靠大 batch 摊薄读权重的成本吗？后面 DEP、AFD、Wide-EP 这些做法，说到底都是在想办法把 decode 的 batch 做大。</p>
 <figure class="fbox fwide" id="fig-pd"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="为什么要把 prefill 和 decode 分开。上面是放在同一批卡上：大家都在一步一步 decode，突然来了一个长 prompt，它的 prefill 要占好几步的时间，这几步里所有人的 decode 都停住了，出字速度掉下去。下面是分开：prefill 机器专门吞 prompt，算完把 KV cache 传给 decode 机器；decode 机器一直稳定地出字，代价是多了一趟 KV 传输。按我们 TPU v7x 那套的带宽估算，这一趟约 100 毫秒，占一次 prefill 的百分之五到十"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第五刀：把两种活拆到两批机器上　——　<tspan font-weight="700">decode 不再被 prefill 卡住</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意时间线（不是实测时序）。每格是一步；绿色的 decode 一格一格往外出字，橙色是一次长 prompt 的 prefill</text>
@@ -3344,17 +3587,17 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s6-2">6.2　代价：一趟 KV 传输</h3>
   <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode、再加一个 CPU 上的转发代理），
-    KV 从 prefill 那台的显存走到 decode 那台的显存。<b>结论先说：按带宽估算一趟约 100 ms，占一次 prefill 的 5–10%，网络不是瓶颈。</b>细账是三段（这是按各段带宽算的，不是计时实测）：</p>
+    KV 从 prefill 那台的显存走到 decode 那台的显存。结论先说：按带宽估算一趟约 100 ms，占一次 prefill 的 5–10%，<b>网络不是瓶颈</b>。细账是三段：</p>
   <table>
     <tr><th>段</th><th>路径</th><th>估算</th></tr>
     <tr><td>①</td><td>HBM → 本机内存（PCIe）</td><td>约 10 ms</td></tr>
-    <tr><td>②</td><td>本机内存 → 对方内存（100 Gbps 数据中心网络）</td><td>约 80 ms</td></tr>
+    <tr><td>②</td><td>本机内存 → 对方内存（数据中心网络，按单颗芯片的 100 Gbps 份额保守估）</td><td>约 80 ms</td></tr>
     <tr><td>③</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
     <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b></td></tr>
   </table>
   <p>对一下账：8K prompt 的 KV 是 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节（FP8）≈ 1.04 GB，
     100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms，中间那段就是这么来的。
-    前提要说清：这个模型 KV 头少（8 个）又用 FP8 存，KV 本来就小；KV 大得多的模型、或者机器之间的网络慢得多，就得重算这笔账。</p>
+    这个模型 KV 头少（8 个）又用 FP8 存，KV 本来就小；换模型、换网络，要重算。</p>
   <p>反过来说，请求都很短、量也不大的时候，拆开多出来的这趟传输和两套机器就不一定划算，放在一起、用分块 prefill 缓解就够了。</p>
 
   <h3 id="s6-3">6.3　两边各配几台</h3>
@@ -3457,8 +3700,8 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s7-1">7.1　线有快有慢，刀有勤有懒</h3>
   <p>一个集群里的线不是一样快的。GPU 这边，GB300 NVL72 把 72 块卡连成一个 NVLink 域，域里每块卡 1.8 TB/s（收发合计，下同）；
-    出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI 连成 3D 环面，
-    跨切片走数据中心网络，又慢一个数量级以上。</p>
+    出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI（够大的切片连成 3D 环面，见 1.5），
+    跨切片走数据中心网络，同口径比慢将近两个数量级，比 GPU 那边的 9 倍悬殊得多。</p>
   <p>刀也不是一样勤的。把每一刀一步要通信几次数一遍（本课推导，示意配置），差出三个数量级：</p>
 <figure class="fbox fwide" id="fig-freq"><svg viewBox="0 0 1400 868" width="100%" role="img" aria-label="每一刀一步要通信多少次，按实际比例画成横条。示意配置是 60 层、8 个 micro-batch。TP 和 EP 每步约 1920 次，FSDP 1440 次，都是每一层都要来几次；PP 每步 16 次，只在段边界上；DP 每步只有 1 次。下面是两种线的带宽：GB300 上一块 GPU 的 NVLink 双向 1.8 TB/s，一整柜 72 块 GPU 都连在这张网上；出了这一柜就只能走网卡，双向 200 GB/s，差 9 倍。规则是频率高的放快线，频率低的才走慢线"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每一刀多久说一次话　——　<tspan font-weight="700">说得勤的放快线，说得少的才走慢线</tspan></text>
@@ -3524,7 +3767,7 @@ body.figonly section h3{margin-top:34px}
     EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器
     （H800 上机内 NVLink 160 GB/s、机间 IB 50 GB/s，只差约 3 倍，技术报告 <a href="#s3-2">§3.2</a>.2），Llama 3 把 FSDP 放在了最外层。
     TP 还有一条额外的理由：它每一块末尾那次 AllReduce 不做完，下一块就没法开始，不容易跟计算叠起来藏住。
-    DP 那一次量虽然最大，但一步只有一次，而且反向从最后一层往前算，后面几层的梯度一算好就能先传。图里没画 CP，它也是每个注意力层都要通信。</p>
+    DP 那一次量虽然最大，但一步只有一次，而且反向从最后一层往前算，后面几层的梯度一算好就能先传。</p>
 
   <h3 id="s7-2">7.2　摆错一次是什么样</h3>
   <p>同样 8 张卡、同样 TP4 × DP2，只改 TP 组放在哪。下面的时间是示意：快线传一次 1 格，慢线 9 格。</p>
@@ -3593,7 +3836,7 @@ body.figonly section h3{margin-top:34px}
   <table>
     <tr><th>步骤</th><th>混元 3（295B MoE，TPU v7，256 芯片）</th><th>DeepSeek-V3（671B MoE，2,048 块 H800）</th></tr>
     <tr><td>① 装得下</td><td>FSDP 128（专家权重也由 FSDP 切）：再窄就爆显存</td><td>ZeRO-1 摊优化器状态；EP 64 摊专家</td></tr>
-    <tr><td>② 快线多大</td><td>切片内全是 ICI；但在 16 芯片上试 EP 4 路，吞吐反而掉 71%（只测了这一次），<b>不用 EP</b>。作者推测是 3D 环面上 all-to-all 要经别的芯片转手</td>
+    <tr><td>② 快线多大</td><td>切片内全是 ICI；但在 16 芯片上试 EP 4 路，吞吐反而掉 71%（只测了这一次），<b>不用 EP</b>。原因没查清：环面上 all-to-all 的代价随 EP 度数变大，但 4 路时这笔账其实不大</td>
       <td>8 卡一台，<b>不用 TP</b>；EP 64 横跨 8 台机器，跨机那段是慢线，是个例外。为了少走慢线，规定每个 token 最多发到 4 台机器</td></tr>
     <tr><td>③ 序列</td><td>4K ／ 8K，不用 CP</td><td>预训练 4K，报告里没有 CP</td></tr>
     <tr><td>④ PP</td><td>一个切片放得下，不用</td><td>PP 16，用 DualPipe 把通信叠进计算</td></tr>
@@ -3611,8 +3854,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>weak scaling</b>：每张卡的活不变，卡和总活一起加倍，看每张卡的速度掉不掉（Gustafson 定律的视角）。
       训练大模型常常先走这一种：卡多了，global batch 也跟着加。但 global batch 有收敛允许的上限（临界 batch size），到了上限就只能 strong scaling。</li>
   </ul>
-  <p>下面是我们自己的两组实测。<b>左右两组的每卡 batch 不同，只能组内比，不能拿左边的 580 跟右边的 453 比。</b>
-    我们手上没有干净的 strong scaling 实测；右边那组也不是 strong scaling，它每张卡的活没变，变的是一个 FSDP 组越来越大。</p>
+  <p>下面是我们自己的两组实测。左右两组的每卡 batch 不同，<b>只能组内比</b>。右边那组每卡活不变，变的只是 FSDP 组的大小。</p>
 <figure class="fbox fwide" id="fig-scale"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="混元 3 在 TPU v7 上的两组实测，纵轴是每芯片 TFLOP/s。左边：64 芯片和 256 芯片用同一个配方，多出来的卡当成数据并行的副本，每卡的活不变，都是 580，一点没掉，这叫 weak scaling。右边：同样 256 芯片、同样每卡 batch，只改怎么分。多出来的卡当副本 453，全塞进 FSDP 把权重摊得更薄 404，少了 11%；FSDP 再窄就放不下，爆显存"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">加卡怎么加　——　<tspan font-weight="700">当副本几乎不掉，摊得更薄就掉</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">混元 3 在 TPU v7 上的实测，每芯片 TFLOP/s。v7 一颗芯片算 2 个 device，DP × FSDP 按 device 数（64 芯片 ＝ 128 个）。左右两组每卡 batch 不同</text>
@@ -3663,11 +3905,11 @@ body.figonly section h3{margin-top:34px}
 <rect x="2" y="522" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">加卡时要连 batch 一起加</tspan></text>
 <text class="svgsm" x="20" y="580" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">左边每卡的活不变，4 倍的卡换来 4 倍的吞吐　——　weak scaling 100%。组和组之间每步只有一次梯度 all-reduce。</text>
-<text class="svgsm" x="20" y="604" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">右边一个 FSDP 组从 128 个 device 扩到 512 个，拼权重的步数和跳数都多了，固定延迟摊不掉：<tspan font-weight="700">404 比 453 少 11%</tspan>。</text>
+<text class="svgsm" x="20" y="604" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">右边一个 FSDP 组从 128 个 device 扩到 512 个，拼权重的步数多了、每块更小，固定延迟摊不掉：<tspan font-weight="700">404 比 453 少 11%</tspan>。</text>
 </svg><figcaption><b>同样多的卡，当副本用和摊薄了用，差 11%。</b><span class="capmore"><br><em>本课程作者实测；左右两组每卡 batch 不同，只在组内比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法，pdbs 8）、<a href="#s4-1">§4.1</a>（64 与 256 芯片同为 580，pdbs 12）。数字是每芯片 TFLOP/s。</p></details></figure>
   <p>左边那组说明 DP 方向几乎是白送的：4 个 64 芯片的组之间，一步只有一次梯度 all-reduce，
-    按 v7 的 ICI 粗算十几到二十几毫秒，占一步 23.5 秒不到千分之一（本课推算）。
-    右边那组才是要小心的：卡没变、batch 没变，只是一个 FSDP 组从 128 个 device 扩到 512 个，每拼一次权重要走的步数和跳数都多了，就少了 11%。FSDP 再窄（64 份、32 份）每份权重太大，加上激活就放不下了。
+    按 v7 的 ICI 粗算，就算几组共用链路、打个折扣，也占不到一步 23.5 秒的百分之一（本课推算）。
+    右边那组才是要小心的：卡没变、batch 没变，只是把 FSDP 从四分之一的芯片铺到全部芯片，每拼一次权重要走的步数多了、每块数据更小，延迟摊不掉，就少了 11%。FSDP 再窄（64 份、32 份）每份权重太大，加上激活就放不下了。
     <b>所以在 batch 还能加的时候，加卡要连 batch 一起加，多出来的卡优先当副本。</b></p>
 
   <h3 id="s7-6">7.6　这一节留下的问题</h3>
@@ -3695,7 +3937,6 @@ body.figonly section h3{margin-top:34px}
       <td>只干一种活：只做 prefill，或者只算专家</td><td>PD 分离、AFD</td></tr>
   </table>
 
-  <p>有两个地方要多说一句。</p>
   <ul>
     <li><b>FSDP 算数据并行，不算模型并行。</b>它确实把权重分片存着，
       但每一层算之前都会把完整权重临时拼回来，每张卡算的还是自己那份样本。
@@ -3720,7 +3961,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>ZeRO++</td><td>ZeRO-3 上再加三招</td><td>跨节点通信太贵</td>
       <td>权重量化成 INT8 再 all-gather；节点内多存一份参数；梯度也量化</td><td>训</td></tr>
     <tr><td>跨 DCN 的 DP</td><td>DP 横跨多个 slice 或数据中心</td>
-      <td>DP 每个 step 才通信一次，是唯一放得上慢链路的维度</td><td>DCN 上的梯度 all-reduce</td><td>训</td></tr>
+      <td>DP 每个 step 才通信一次，最适合放上慢链路（PP 也能）</td><td>DCN 上的梯度 all-reduce</td><td>训</td></tr>
     <tr><td>DiLoCo <span class="kind k-new">新</span></td><td>每个副本先自己走几百步，再同步一次</td>
       <td>跨数据中心训练：论文里每 500 步才同步一次，通信次数降到几百分之一</td><td>一次外层梯度同步（Streaming 版分片轮流同步，跟计算重叠）</td><td>训</td></tr>
     <tr><td>Attention DP <span class="kind k-new">新</span></td><td><b>只在 attention 层</b>按请求切，专家层另配</td>
@@ -3767,15 +4008,7 @@ body.figonly section h3{margin-top:34px}
       <td>同上，TPU 上的做法</td><td>XLA 自动插入</td><td>推</td></tr>
   </table>
 
-  <div class="note ok"><span class="t">PD 分离的时候，PCP 和 DCP 正好一边一个</span>
-    <b>P 节点用 PCP</b>：把长 prompt 切开，压首字延迟。<br>
-    <b>D 节点用 DCP</b>：把 KV 摊开，让 decode 装得下更多、更长的请求。<br>
-    两者对卡数的作用也正好相反：<b>PCP 要加卡，DCP 不加卡</b>，直接复用 TP 那几张卡。
-    <br><em>这是 vLLM 源码里的原话：PCP expands the process world size；DCP does not expand
-    the process world size, without PCP it reuses TP ranks。</em></div>
 
-  <p>DCP 也是这一讲那句话最好的新例子。<b>它付出的是每层两三次通信，换回来的是被 TP 白白复制掉的那 7/8 份 KV。</b>
-    用一种通信，换一份显存。</p>
 
   <h3 id="s8-4">8.4　模型并行类</h3>
   <p>这一类真正在切权重。按下刀的位置再分三种：矩阵内部、层、专家。</p>
@@ -3836,7 +4069,6 @@ body.figonly section h3{margin-top:34px}
     <tr><td>Encoder 分离</td><td>多模态模型的视觉编码器单独部署</td><td>编码器和语言模型抢资源</td><td>embedding 传输</td><td>推</td></tr>
     <tr><td>多模块异构并行</td><td>编码器和语言模型各用一套并行方式</td><td>多模态训练里两部分的形状差太远</td><td>两套网格之间的桥接通信</td><td>训</td></tr>
   </table>
-  <p><em>AFD 目前的代表是字节的 MegaScale-Infer 和阶跃的 Step-3，vLLM 在 2026 年 7 月出了实验性插件。</em></p>
 
   <h3 id="s8-6">8.6　组合简称：TEP 和 DEP</h3>
   <p>推理这边，MoE 模型的并行配置通常用一个简称加一个数字说完，比如 TEP8、DEP16。
@@ -3851,8 +4083,7 @@ body.figonly section h3{margin-top:34px}
     vLLM 和 NVIDIA Dynamo 的用法一致。</p>
   <p>PD 分离时两边经常各选一种，但<b>哪边用哪种没有定式</b>，要看模型和负载：
     vLLM 部署 Kimi K3 用的是 <b>TEP8 做 prefill、DEP16 做 decode</b>；
-    TensorRT-LLM 那篇文章举的例子却是 <b>DEP4 做 prefill、TEP8 做 decode</b>。
-    <em>第七节讲过：先看模型和机器的快线，再定切法，没有一张通用的答案。</em></p>
+    TensorRT-LLM 那篇文章举的例子却是 <b>DEP4 做 prefill、TEP8 做 decode</b>。</p>
 
   <div class="note danger"><span class="t">⛔ TEP / DEP 不是 ETP / EDP</span>
     名字只差一个字母的顺序，说的却是两件事。<br>
@@ -3901,7 +4132,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> §3（前向 2 次、反向 2 次 all-reduce）；arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a> §4.2.2（AG＋RS 替代 all-reduce，无额外通信）；头数须被 TP 整除：megatron/core/transformer/transformer_config.py 的校验</td></tr>
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener">2104.04473</a> §2.2.1–2.2.2；Zero Bubble arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>；DualPipe README</td></tr>
     <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
-    <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；ICI 1,200 GB/s 为 6 条链路 × 200 GB/s 的收发合计，每卡发出方向取 600 GB/s（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
+    <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s、每轴双向 200 GB/s，「6 条链路 × 200、发出方向 600」是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；3,845 是每芯片，按 device 约 1,900（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>
     <tr><td>GB300 上 TP4 → dep8：各取最好总量 3.09 倍、每卡 2.47 倍（同并发 512：2.61 ／ 2.09 倍）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；dep8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>

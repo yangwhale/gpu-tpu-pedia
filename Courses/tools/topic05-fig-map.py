@@ -118,7 +118,7 @@ def fig_scale():
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "加卡时要连 batch 一起加", [
         "左边每卡的活不变，4 倍的卡换来 4 倍的吞吐　——　weak scaling 100%。组和组之间每步只有一次梯度 all-reduce。",
-        "右边一个 FSDP 组从 128 个 device 扩到 512 个，拼权重的步数和跳数都多了，固定延迟摊不掉：<tspan font-weight=\"700\">404 比 453 少 11%</tspan>。",
+        "右边一个 FSDP 组从 128 个 device 扩到 512 个，拼权重的步数多了、每块更小，固定延迟摊不掉：<tspan font-weight=\"700\">404 比 453 少 11%</tspan>。",
     ])
     yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法，pdbs 8）、§4.1（64 与 256 芯片同为 580，pdbs 12）。"
                         "数字是每芯片 TFLOP/s。")

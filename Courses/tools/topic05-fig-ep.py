@@ -54,28 +54,37 @@ def fig_fold():
                "推理里叫 DEP 和 TEP：前一个字母说注意力怎么切，后面的 EP 说专家怎么切")
     y0 = f.header("attention 和专家，各配各的切法　——　<tspan font-weight=\"700\">同一批卡，两套映射</tspan>",
                   "8 张卡的示意。同一张卡在注意力层里是某个 TP 组的一员，到了专家层就换一个身份",
-                  [(BL, "TP 组 A"), (GR, "TP 组 B"), (OR, "专家（每卡 32 个）")])
-    PH = 300
+                  [(BL, "第一组：管请求 A"), (GR, "第二组：管请求 B"), (OR, "一个小方块 ＝ 一个专家")])
+    # ⭐ 2026-09-25 逐图审后重画（原判「写字的板子」）：卡里不再写「TP 组 A · 第 0 份」，
+    #   左边画一小块 attention 矩阵、只点亮这张卡负责的那一条；右边画 32 个小点代表专家。
+    PH = 330
     py = f.panel(0, y0, W, PH, "一层 Transformer 里，同一张卡换两次身份", BL)
-    def card(x, y, col, lab, sub):
-        f.box(x, y, 120, 70, "none", col, 8, sw=2)
-        f.t(x + 60, y + 32, lab, col, True, 15, "middle")
-        f.t(x + 60, y + 54, sub, GY, size=12, anchor="middle")
-    f.t(40, py + 30, "注意力层：TP 4 路 × DP 2 路", INK, True, 15)
+    CWD, CHT = 130, 96
+    f.t(40, py + 34, "注意力层：4 张卡一组切一份 attention，两组各管一批请求", INK, True, 15)
     for i in range(8):
-        col = BL if i < 4 else GR
-        card(40 + (i % 4) * 140, py + 50 + (i // 4) * 100, col, "卡 %d" % i,
-             ("TP 组 %s · 第 %d 份" % ("A" if i < 4 else "B", i % 4)))
-    f.t(620, py + 130, "→", INK, True, 30)
-    f.t(700, py + 30, "专家层：EP 8 路", INK, True, 15)
+        g, k = i // 4, i % 4
+        x, y = 40 + k * 140, py + 56 + g * 124
+        col = BL if g == 0 else GR
+        f.box(x, y, CWD, CHT, "none", col, 8, sw=2)
+        f.t(x + 8, y + 18, "卡 %d" % i, col, True, 13)
+        for c in range(4):                      # 一块 attention 权重，竖着切 4 条，只点亮第 k 条
+            fill = col if c == k else "#e8eaed"
+            f.box(x + 22 + c * 22, y + 28, 20, 56, fill, fill, 2)
+    f.t(600, py + 104, "请求 A", BL, True, 14)
+    f.t(600, py + 228, "请求 B", GR, True, 14)
+    f.t(662, py + 170, "→", INK, True, 30)
+    f.t(710, py + 34, "专家层：8 张卡各放 32 个专家，所有请求的 token 都往这儿送", INK, True, 15)
     for i in range(8):
-        card(700 + (i % 4) * 160, py + 50 + (i // 4) * 100, OR, "卡 %d" % i, "专家 %d–%d" % (i * 32, i * 32 + 31))
+        x, y = 710 + (i % 4) * 165, py + 56 + (i // 4) * 124
+        f.box(x, y, 150, CHT, "none", OR, 8, sw=2)
+        f.t(x + 8, y + 18, "卡 %d" % i, OR, True, 13)
+        for e in range(32):                     # 32 个专家，一个一个小方块
+            ex, ey = x + 12 + (e % 8) * 16, y + 32 + (e // 8) * 14
+            f.box(ex, ey, 11, 10, OR, OR, 2)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "训练和推理各有一套名字，说的是同一件事", [
-        "训练：Megatron 叫它 Parallel Folding，attention 按 TP×CP×DP×PP 映射，专家按 ETP×EP×EDP×PP 映射，"
-        "例如 attention 用 TP4·CP2·DP8·PP4，专家直接 EP64。",
-        "推理：TEP ＝ attention 走 TP、专家走 EP；DEP ＝ attention 走数据并行、专家走 EP；图里这种一半一半的也有。"
-        "<tspan font-weight=\"700\">⛔ 它们不是 Megatron 的 ETP ／ EDP</tspan>，两套名字别互相换算。",
+    yb = f.band(py + PH + 20, "ok", "attention 是一块大矩阵，专家是一堆小矩阵：各切各的", [
+        "attention 那块大矩阵切成条，4 张卡一组合起来算；两组各管一批请求。专家本来就是 256 个小块，<tspan font-weight=\"700\">整个分出去就行</tspan>。",
+        "训练里 Megatron 叫它 Parallel Folding；推理里 attention 用 TP 的叫 TEP，用数据并行的叫 DEP，图里这种一半一半的也有。",
     ])
     yb = f.src(yb + 10, "📌 Megatron-Core moe/README.md（MoE Parallel Folding，例子 TP4·CP2·DP8·PP4 → ETP1·EP64·EDP1）；"
                         "论文 arXiv 2504.14960。TEP ／ DEP 定义：TensorRT-LLM tech blog 26。")

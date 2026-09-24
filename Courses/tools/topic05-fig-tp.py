@@ -72,7 +72,7 @@ def fig_intensity():
         "FSDP 每字节换来的计算 ＝ 每卡 token 数：在 v7 上每卡少于约 3,845 个 token，就搬得比算得慢。"
         "　<tspan font-weight=\"700\">加卡又不想加 batch，FSDP 迟早掉到线下。</tspan>",
         "TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，"
-        "TP 8 路 ≈ 4,032 勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight=\"700\">TP 有一个跟 batch 无关的上限</tspan>。",
+        "TP 8 路 ≈ 4,032 按最乐观的线才勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight=\"700\">TP 有一个跟 batch 无关的上限</tspan>。",
     ])
     yb = f.src(yb + 10,
                "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；"
@@ -88,43 +88,52 @@ def fig_tp_mlp():
                "每张卡算出的是完整输出的一部分和，最后做一次 AllReduce 加起来，每张卡拿到完整的 Y。"
                "关键是两次矩阵乘之间不需要任何通信：先列切、再行切，正好让一次 AllReduce 放在最后")
     y0 = f.header("TP 切 MLP　——　<tspan font-weight=\"700\">先按列切，再按行切，中间一次通信都不用</tspan>",
-                  "两张卡的例子。灰 ＝ 两张卡都有的完整副本，蓝 ／ 橙 ＝ 各自那一半",
+                  "两张卡的例子。灰 ＝ 两张卡都有的完整副本，蓝 ／ 橙 ＝ 各自那一半；虚线是切口。蓝的只跟蓝的相乘，所以中间不用找对方要东西",
                   [(BL, "卡 0 的那一半"), (OR, "卡 1 的那一半"), (GY2, "完整副本")])
-    PH = 330
+    # ⭐ 2026-09-25 逐图审后重画：原来 W1、W2 只是两个色块，看不出往哪个方向切。现在按真实形状画、切口画成虚线。
+    PH = 365
     py = f.panel(0, y0, W, PH, "Y ＝ GeLU(X · W1) · W2", BL, sub="Megatron-LM 的切法")
-    cy0 = py + 40
-    # 列：X | W1 | 中间 | W2 | 部分和 | AllReduce | Y
-    def mat(x, y, w, h, col, lab, sub=None):
-        f.box(x, y, w, h, col, col, 4)
-        f.t(x + w / 2, y + h / 2 + 5, lab, "#ffffff", True, 14, "middle")
-        if sub:
-            f.t(x + w / 2, y + h + 18, sub, GY, size=12, anchor="middle")
-    for r, (col, k) in enumerate(((BL, 0), (OR, 1))):
-        yy = cy0 + r * 130
-        f.t(18, yy + 48, "卡 %d" % k, col, True, 16)
-        mat(80, yy + 20, 90, 60, GY2, "X", "完整")
-        f.t(186, yy + 56, "×", INK, True, 18)
-        mat(210, yy + 10, 60, 80, col, "W1", "按列切：半")
-        f.t(286, yy + 56, "→", INK, True, 18)
-        mat(310, yy + 20, 90, 60, col, "GeLU", "中间的一半")
-        f.t(416, yy + 56, "×", INK, True, 18)
-        mat(440, yy + 25, 80, 50, col, "W2", "按行切：半")
-        f.t(536, yy + 56, "→", INK, True, 18)
-        mat(560, yy + 20, 90, 60, col, "部分和", "只是 Y 的一部分")
-    f.box(700, cy0 + 40, 160, 200, "none", GR, 8, sw=2)
-    f.t(780, cy0 + 130, "AllReduce", GR, True, 16, "middle")
-    f.t(780, cy0 + 156, "两份部分和相加", GY, size=12.5, anchor="middle")
-    for r in range(2):
-        f.line(652, cy0 + r * 130 + 50, 698, cy0 + 110 + r * 30, GY2, 1.6)
-        f.line(862, cy0 + 110 + r * 30, 908, cy0 + r * 130 + 50, GY2, 1.6)
-        mat(910, cy0 + r * 130 + 20, 90, 60, GY2, "Y", "完整")
-    f.box(1040, cy0 + 20, 330, 220, "none", LINE, 8)
-    f.lines(1058, cy0 + 50, 300, ["中间结果在两张卡上各一半，",
-                                   "激活函数逐元素算，各算各的；",
-                                   "W2 按行切正好接住这一半。",
-                                   "",
-                                   "所以整个 MLP 只在最后",
-                                   "做一次 AllReduce。"], size=14, lh=26, fill=INK)
+    CY = py + 175                        # 各矩阵的垂直中线
+
+    def half(x, y, w, h, vertical, lab, sub):
+        """一块矩阵，按列（vertical=True）或按行切成蓝／橙两半，中间一条虚线是切口。"""
+        if vertical:
+            f.box(x, y, w / 2, h, BL, BL, 3)
+            f.box(x + w / 2, y, w / 2, h, OR, OR, 3)
+            f.path("M%d,%d L%d,%d" % (x + w / 2, y - 12, x + w / 2, y + h + 12), INK, 2, dash="5,4", arrow=False)
+        else:
+            f.box(x, y, w, h / 2, BL, BL, 3)
+            f.box(x, y + h / 2, w, h / 2, OR, OR, 3)
+            f.path("M%d,%d L%d,%d" % (x - 12, y + h / 2, x + w + 12, y + h / 2), INK, 2, dash="5,4", arrow=False)
+        f.t(x + w / 2, y - 22, lab, INK, True, 15, "middle")
+        f.t(x + w / 2, y + h + 30, sub, GY, size=13, anchor="middle")
+
+    f.box(50, CY - 60, 70, 120, GY2, GY2, 3)
+    f.t(85, CY + 6, "X", "#ffffff", True, 18, "middle")
+    f.t(85, CY - 82, "输入 X", INK, True, 15, "middle")
+    f.t(85, CY + 90, "每张卡都有整份", GY, size=13, anchor="middle")
+    f.t(150, CY + 8, "×", INK, True, 22, "middle")
+    half(180, CY - 35, 240, 70, True, "W1：竖着切一刀", "左半在卡 0，右半在卡 1")
+    f.t(450, CY + 8, "＝", INK, True, 22, "middle")
+    half(480, CY - 60, 240, 120, True, "中间结果也是左右两半", "GeLU 逐个元素算，各算各的")
+    f.t(750, CY + 8, "×", INK, True, 22, "middle")
+    half(780, CY - 110, 60, 220, False, "W2：横着切一刀", "")
+    f.t(810, CY + 140, "上半在卡 0，下半在卡 1", GY, size=13, anchor="middle")
+    f.t(870, CY + 8, "＝", INK, True, 22, "middle")
+    f.box(900, CY - 75, 70, 60, BL, BL, 3)
+    f.t(935, CY - 40, "部分和", "#ffffff", True, 13, "middle")
+    f.t(935, CY + 8, "＋", INK, True, 20, "middle")
+    f.box(900, CY + 15, 70, 60, OR, OR, 3)
+    f.t(935, CY + 50, "部分和", "#ffffff", True, 13, "middle")
+    f.box(1000, CY - 32, 150, 64, "none", GR, 8, sw=2)
+    f.t(1075, CY - 4, "AllReduce", GR, True, 16, "middle")
+    f.t(1075, CY + 18, "唯一一次通信", GR, size=13, anchor="middle")
+    f.line(972, CY - 45, 998, CY - 12, GY2, 1.6)
+    f.line(972, CY + 45, 998, CY + 12, GY2, 1.6)
+    f.line(1152, CY, 1200, CY, GY2, 1.6)
+    f.box(1210, CY - 60, 70, 120, GY2, GY2, 3)
+    f.t(1245, CY + 6, "Y", "#ffffff", True, 18, "middle")
+    f.t(1245, CY + 90, "每张卡拿到整份", GY, size=13, anchor="middle")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "切法的全部巧思，就是把通信挤到最后一次", [
         "第一块按列切、第二块按行切：中间结果各留一半、各自过激活函数，<tspan font-weight=\"700\">两次矩阵乘之间零通信</tspan>。",
