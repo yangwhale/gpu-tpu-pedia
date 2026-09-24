@@ -3274,7 +3274,7 @@ body.figonly section h3{margin-top:34px}
     挑哪个差别大到什么程度，我们自己测过一次：</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍（跟调完参的 TP4 比；卡数也变了，见 7.3）</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 DEP8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
-    最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
+    其中最属于「换切法」的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
     attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。<br>
     <em>完整的账（卡数、并发、首字延迟）在 7.3。KV 这件事，下一刀专门讲。</em></div>
 
@@ -3846,7 +3846,7 @@ body.figonly section h3{margin-top:34px}
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每块 GPU 每秒出多少 token</tspan></text>
 <text class="svgsm" x="30" y="202" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1P1D，TP4 decode</tspan></text>
-<text class="svgsm" x="30" y="224" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">原始脚本</text>
+<text class="svgsm" x="30" y="224" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">原始脚本（并发 256）</text>
 <rect x="330" y="182" width="485.43333333333334" height="40" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="827" y="209" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,820</tspan></text>
 <text class="svgsm" x="905" y="209" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">（总 14,563，8 块卡）</text>

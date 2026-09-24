@@ -35,7 +35,7 @@ SPLIT = [("DP 1 × FSDP 512", 404), ("DP 2 × FSDP 256", 450), ("DP 4 × FSDP 12
 assert WEAK[1][2] / WEAK[0][2] == 1.0 and round(404 / 453 * 100) == 89
 
 # GB300 V4-Pro（vLLM，4K 进 1K 出）
-TOPO = [("1P1D，TP4 decode", "原始脚本", 14563, 8),
+TOPO = [("1P1D，TP4 decode", "原始脚本（并发 256）", 14563, 8),
         ("3P1D，TP4 decode", "加 prefill、调并发后的最好成绩", 21100, 16),
         ("3P ＋ DEP8 decode", "换 decode 的切法（decode 卡 4→8 张），同样并发 512", 55153, 20)]
 # ⛔ 2026-09-25 GPU 专家评审：原来第三行用 65,132（并发 1,536、首字延迟 95 秒），跟并发 512 的 21,100 不对等。
