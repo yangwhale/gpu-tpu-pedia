@@ -22,7 +22,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 ════════════════════════════════════════════════════════════════
 写完的和没写的混在一起，而且必须看得出来
 ════════════════════════════════════════════════════════════════
-第一节（集合通信）、第二节（切数据）与第八节（全景）是写完的；其余是 🚧 大纲，不补写。
+第一到第六节与第八节（全景）是写完的；其余是 🚧 大纲，不补写。
 ⛔ 编出来的内容看着最合理，也最难被自己发现（第一原则）。
 
 几条核对过的事实（出处在文末台账）：
@@ -122,9 +122,9 @@ HERO = '''
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲写了六节</span>
-    <b>第一到第五节和第八节（全景）是写完的</b>，出处在文末台账。<br>
-    第六、第七节还是大纲，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了七节</span>
+    <b>第一到第六节和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
 '''
 
@@ -461,11 +461,67 @@ __FIG_KV_DUP__
     <b>硬塞在同一批卡上，谁都配不好。</b>那就干脆别切张量了，把这两种活拆到不同的机器上。这是第五刀。</p>
 </div></section>
 
-''' + sec("s六", "六", "第五刀：不切张量，切工作") + todo([
-    "<b>PD 分离</b>：prefill 吃算力、decode 吃带宽，放在一起互相拖累；中间靠传 KV cache 衔接",
-    "<b>AFD</b>：attention 和专家分到两组机器，把专家的 batch 做大",
-    "两边各自再挑并行方式（比如 P 端 TEP、D 端 DEP，或者反过来）",
-]) + '''
+''' + sec("s六", "六", "第五刀：不切张量，切工作") + '''
+  <p class="lead">前四刀切的都是张量：batch、权重、专家、序列。第五刀换个思路 ——&nbsp;
+    <b>一个请求里本来就有性质完全不同的几段活，把它们拆到不同的机器上</b>，每一边再挑自己的切法。</p>
+
+  <h3>6.1　prefill 和 decode 为什么会打架</h3>
+  <p>一个请求分两段。<b>prefill</b> 一口气吞下整个 prompt，几千个 token 一起过矩阵乘，吃的是算力；
+    <b>decode</b> 每一步只出一个 token，却要把全部权重和 KV 从显存里读一遍，吃的是带宽。</p>
+  <p>它们挤在同一批卡上时，引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
+    这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
+__FIG_PD__
+<figure class="fbox fwide" id="anim-pd">
+<video src="media/topic05-pd.mp4" autoplay loop muted playsinline
+       aria-label="PD 分离动画。标题：PD 分离：prefill 和 decode 拆到两批机器上。三条车道：放在一起、prefill 机器、decode 机器。字幕一：放在一起：大家一步一步 decode，每格出一个字。上面一条车道绿格一格一格长出来，第 5 步落下一个长橙块「新请求的 prefill」，下面标红「这 5 步没人出字」，之后绿格继续。字幕二：拆开：prefill 在自己的机器上跑，decode 那边一步不停。decode 车道 16 个绿格连续长出，prefill 车道同时跑完橙块，一支蓝色箭头「KV 传过去」落到 decode 车道。字幕三：同样 16 步：放在一起出 11 个字，拆开出 16 个（示意）。字幕四：代价：多一趟 KV 传输；我们在 TPU v7x 上实测约 100 毫秒。最后复位。"></video>
+<figcaption>同样 16 步，上面那条被长 prefill 截走了 5 步；下面那条一格没少。
+  <span class="sub">（11 秒无声循环，Manim 渲染。格数是示意，不是实测时序。）</span></figcaption></figure>
+  <p>分块 prefill（chunked prefill）能缓解：把长 prompt 切成小块，每一步跟 decode 拼着跑。
+    但两种活还在抢同一批卡，而且<b>只能用同一套并行方式</b>。PD 分离干脆把它们拆开：
+    prefill 机器只做 prefill，算完把 KV cache 交给 decode 机器，decode 机器只管出字。</p>
+
+  <h3>6.2　代价：一趟 KV 传输</h3>
+  <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode、再加一个 CPU 上的转发代理），
+    KV 从 prefill 那台的 HBM 走到 decode 那台的 HBM，一共 4 跳：</p>
+  <table>
+    <tr><th>跳</th><th>路径</th><th>实测</th></tr>
+    <tr><td>①</td><td>HBM → 本机内存（PCIe）</td><td>约 10 ms</td></tr>
+    <tr><td>②</td><td>本机内存 → 对方内存（100 Gbps 数据中心网络）</td><td>约 80 ms</td></tr>
+    <tr><td>③ ④</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
+    <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b></td></tr>
+  </table>
+  <p>对一下账：8K prompt 的 KV 是 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节（FP8）≈ 1.04 GB，
+    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms，<b>跟实测的 80 ms 对得上</b>。
+    这一趟占一次 1–2 秒 prefill 的 5–10%。网络不是瓶颈。</p>
+
+  <h3>6.3　两边各配几台</h3>
+  <p>拆开之后多了一个旋钮：prefill 和 decode 的机器配比。粗算的平衡点是让两边一样忙：</p>
+  <div class="note ok"><span class="t">两边一样忙的条件</span>输出长度 × 每个 token 的出字间隔 ≈ 输入长度 × prefill 每个 token 的耗时</div>
+  <p>比如输入 8K、输出 1K、出字间隔 20 ms、prefill 每 token 2 ms，两边之比约 1.25 : 1（本课推导，只是起点）。
+    经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。
+    DistServe 论文把配比和各自的并行方式一起搜，同样的延迟要求下能多服务 7.4 倍的请求，或者把延迟要求收紧 12.6 倍。</p>
+
+  <h3>6.4　两边各挑各的切法</h3>
+  <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。prefill 机器可以上 PCP 把长 prompt 切开压首字延迟；
+    decode 机器可以上 DCP 把 KV 摊开、上 Wide-EP 把专家的 batch 做大（见 5.5 和第四节）。
+    MoE 模型常见的写法是一边 TEP、一边 DEP，但<b>哪边用哪个没有定式</b>，要看模型和负载（见 8.6）。</p>
+
+  <h3>6.5　AFD：attention 和专家分到两组机器</h3>
+  <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大。
+    <b>AFD</b>（Attention-FFN 分离）把两者放到两组机器上：M 台只算 attention，N 台只放专家。</p>
+__FIG_AFD__
+  <p>每一层都要把 token 从 attention 那边发给专家（M → N），算完再收回来（N → M）。
+    为了不让这一来一回拖慢，把一批请求切成两个小批交替跑，一个在算 attention，另一个正好在算专家。
+    字节的 MegaScale-Infer 报告每 GPU 吞吐最高提升 1.90 倍；阶跃的 Step-3 也是这个路子；
+    vLLM 在 2026 年 7 月出了实验性插件。</p>
+
+  <h3>6.6　多模态：编码器也单独放</h3>
+  <p>同样的思路还能往前推一段：多模态模型的视觉编码器单独部署，算好的 embedding 再传给语言模型（Encoder 分离，
+    跟 PD 连起来常写作 EPD）。训练里对应的是多模块异构并行：编码器和语言模型各用一套并行方式。</p>
+
+  <h3>6.7　这一刀留下的问题</h3>
+  <p>五刀讲完了，每一刀都有自己的通信和适用场景。真到一个集群上，它们要同时存在：
+    谁放在同一台机器里、谁跨机器、先定哪一刀的度数？<b>摆错了位置，前面每一刀省下来的都会被网络吃回去。</b>这是第七节。</p>
 </div></section>
 
 ''' + sec("s七", "七", "摆到机器上") + todo([
@@ -709,6 +765,8 @@ __FIG_KV_DUP__
     <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 §3</td></tr>
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
     <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算</td></tr>
+    <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv 2401.09670（prefill 偏算力、decode 受带宽约束；7.4 倍请求或 12.6 倍更紧的 SLO）</td></tr>
+    <tr><td>v7x 上 1P1D 的 KV 4 跳约 100 ms；2P:1D ／ 1P:2D；配比平衡点</td><td>本课程作者实测：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms、平衡比 1.25 : 1 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv 2504.14960</td></tr>
@@ -759,6 +817,12 @@ FIGS = {
     "__FIG_KV_DUP__": ("fig-kv-dup", "fig5-kv-dup.svg", "topic05-fig-seq.py",
         '<b>红色那 7 份，存的是一模一样的东西。</b><br>'
         '<em>KV 尺寸取自 V3 的 config.json。</em>'),
+    "__FIG_PD__": ("fig-pd", "fig5-pd.svg", "topic05-fig-pd.py",
+        '<b>上面那条被截走的几格，就是拆开要换回来的东西。</b><br>'
+        '<em>时间线是示意；KV 传输的 100 ms 是我们在 v7x 上的实测。</em>'),
+    "__FIG_AFD__": ("fig-afd", "fig5-afd.svg", "topic05-fig-pd.py",
+        '<b>拆开的不是张量，是一层里的两种活。</b><br>'
+        '<em>机器数和格子都是示意。</em>'),
     "__FIG_ZERO_MEM__": ("fig-zero-mem", "fig5-zero-mem.svg", "topic05-fig-zero.py",
         '<b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><br>'
         '<em>ZeRO-3 那条短到几乎看不见 —— 每卡从 9.76 TiB 降到 9.76 GiB，正好除以 1,024。</em>'),

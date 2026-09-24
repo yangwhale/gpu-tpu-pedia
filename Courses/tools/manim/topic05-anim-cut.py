@@ -12,7 +12,7 @@ r"""专题五 · 第三节起「五刀」的动画。
   气泡比例按 Narayanan 等 arXiv 2104.04473 §2.2.1 的 (p−1)/m 断言。
 """
 from manim import (Scene, VGroup, Rectangle, Text, Arrow, FadeIn, FadeOut, Indicate,
-                   WHITE, GREY, GREY_B, BLUE, GREEN, ORANGE, YELLOW, UP, DOWN, LEFT, RIGHT)
+                   WHITE, GREY, GREY_B, BLUE, GREEN, ORANGE, YELLOW, RED, UP, DOWN, LEFT, RIGHT)
 
 GREY_D_ = "#3a3a3a"
 
@@ -377,5 +377,88 @@ class DecodeCP(Scene):
         self.wait(1.2)
         self.play(FadeOut(cells), FadeOut(q), FadeOut(qlab), FadeOut(sub), *[FadeOut(qc) for qc in qs], run_time=0.6)
         self.remove(cells, q, qlab, sub, *qs)
+        self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
+        self.wait(0.6)
+
+
+# ── PD 分离 ─────────────────────────────────────────────────────────────
+# ⭐ 增量来自时间：放在一起时，长 prefill 落下来的那几步里 decode 格子「长不出来」；
+#   拆开后 decode 那条线一格一格照常长，prefill 在另一条线上并行跑完、再把 KV 递过去。
+#   格数是示意（prefill 占 PD_LEN 步），不是实测时序；字幕里的字数按下面现算。
+PD_STEPS, PD_AT, PD_LEN = 16, 5, 5
+PD_TOGETHER = PD_STEPS - PD_LEN          # 放一起：prefill 那几步没人出字
+PD_APART = PD_STEPS                      # 拆开：decode 每一步都出字
+assert (PD_TOGETHER, PD_APART) == (11, 16)
+
+
+class PDDisagg(Scene):
+    def construct(self):
+        title = cap_text("PD 分离：prefill 和 decode 拆到两批机器上", size=30).to_edge(UP)
+        self.add(title)
+        X0, SW = -4.4, 0.6
+        Y1, Y2, Y3 = 1.2, -0.7, -2.1
+        labs = VGroup(Text("放在一起", font_size=24, color=WHITE).move_to([-5.9, Y1, 0]),
+                      Text("prefill 机器", font_size=22, color=ORANGE).move_to([-5.9, Y2, 0]),
+                      Text("decode 机器", font_size=22, color=GREEN).move_to([-5.9, Y3, 0]))
+        self.add(labs)
+        sub = cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2)
+        self.add(sub)
+        self.wait(0.5)
+
+        def say(t, color=GREY_B):
+            nonlocal sub
+            n = cap_text(t, color, 24).next_to(title, DOWN, buff=0.2)
+            self.play(FadeOut(sub), FadeIn(n), run_time=0.35)
+            sub = n
+
+        def tick(step, y, col=GREEN):
+            return Rectangle(width=SW - 0.08, height=0.5, stroke_width=0, fill_color=col,
+                             fill_opacity=0.9).move_to([X0 + step * SW, y, 0])
+
+        def pblock(step, y):
+            w = PD_LEN * SW - 0.08
+            r = Rectangle(width=w, height=0.5, stroke_width=0, fill_color=ORANGE, fill_opacity=0.95)
+            r.move_to([X0 + step * SW + (PD_LEN - 1) * SW / 2, y, 0])
+            return VGroup(r, Text("新请求的 prefill", font_size=18, color=WHITE, weight="BOLD").move_to(r.get_center()))
+
+        shown = VGroup()
+        say("放在一起：大家一步一步 decode，每格出一个字")
+        s = 0
+        while s < PD_STEPS:
+            if s == PD_AT:
+                pb = pblock(s, Y1)
+                self.play(FadeIn(pb), run_time=0.9)
+                warn = Text("这 %d 步没人出字" % PD_LEN, font_size=20, color=RED).next_to(pb, DOWN, buff=0.12)
+                self.play(FadeIn(warn), run_time=0.3)
+                shown.add(pb, warn)
+                s += PD_LEN
+                continue
+            t = tick(s, Y1)
+            self.play(FadeIn(t), run_time=0.12)
+            shown.add(t)
+            s += 1
+        say("拆开：prefill 在自己的机器上跑，decode 那边一步不停")
+        kv = None
+        for s in range(PD_STEPS):
+            anims = [FadeIn(tick(s, Y3))]
+            if s == PD_AT:
+                pb2 = pblock(s, Y2)
+                anims.append(FadeIn(pb2))
+                shown.add(pb2)
+            self.play(*anims, run_time=0.14)
+            shown.add(anims[0].mobject)
+            if s == PD_AT + PD_LEN - 1:
+                end = pb2[0].get_right()
+                kv = Arrow([end[0], Y2 - 0.3, 0], [end[0] + 0.5, Y3 + 0.3, 0], buff=0, color=BLUE,
+                           stroke_width=5, max_tip_length_to_length_ratio=0.3)
+                kvl = Text("KV 传过去", font_size=18, color=BLUE).next_to(kv, RIGHT, buff=0.1)
+                self.play(FadeIn(kv), FadeIn(kvl), run_time=0.3)
+                shown.add(kv, kvl)
+        say("同样 %d 步：放在一起出 %d 个字，拆开出 %d 个（示意）" % (PD_STEPS, PD_TOGETHER, PD_APART), GREEN)
+        self.wait(1.4)
+        say("代价：多一趟 KV 传输；我们在 TPU v7x 上实测约 100 毫秒")
+        self.wait(1.4)
+        self.play(FadeOut(shown), FadeOut(sub), run_time=0.6)
+        self.remove(shown, sub)
         self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
         self.wait(0.6)
