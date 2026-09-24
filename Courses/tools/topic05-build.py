@@ -60,7 +60,9 @@ head += """
 .k-m { background:#fef7e0; color:#8a4b00 }
 .k-x { background:#f3e8fd; color:#681da8 }
 .k-new { background:#fce8e6; color:#a50e0e }
-.animgrid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; max-width:1760px; margin:14px auto }
+.animgrid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; margin:14px 0;
+             width:min(1408px, 94vw); position:relative; left:50%; transform:translateX(-50%) }
+/* ⭐ 2026-09-25 L12：原来被正文版心限在约 1032px，每格动画只有 509px 宽、方块上的字约 10px；放到跟静态图一样宽 */
 .animgrid figure { margin:0; min-width:0 }
 .animcell figcaption { font-size:14px; color:var(--gray); margin-top:6px; line-height:1.6 }
 .animgrid video { width:100%; border-radius:8px; display:block }
@@ -133,21 +135,22 @@ HERO = '''
 '''
 
 BODY = sec("s零", "零", "一张卡装不下") + '''
-  <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，
-    光常驻的训练状态就要 9.76 TiB。<b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
+  <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算（权重 2 ＋ 梯度 2 ＋ 优化器状态 12），
+    光常驻的训练状态就要 9.76 TiB，约合一万 GB。最大的一块卡显存也就两三百 GB，光放下就要三四十到五六十块卡，还没开始算。
+    <b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
 
   <p>一个训练中的张量有好几个维度可以下刀：batch、序列、隐藏维、层、专家。
-    每切一刀，就在那一维上产生一种通信。所以这一讲从头到尾只讲一件事：</p>
+    每切一刀，就在那一维上产生一种通信：切开之后，你缺的那块在我这儿，我缺的在你那儿，只能互相传。所以这一讲从头到尾只讲一件事：</p>
 
   <div class="note ok"><span class="t">一句话</span>
     <b>用一种通信，换一份显存或一份算力。</b><br>
-    选并行策略，就是在选你愿意付哪一种通信、付多频繁。</div>
+    选并行策略，就是在选你愿意付哪一种通信、付多频繁、放在哪根线上。</div>
 
   <p>这一讲按一条接力线走。<b>每一刀都在补前面没管到的那一块</b>：前一刀撑不住了，或者模型换了形状、上下文变长了，就得换一刀。</p>
   <ol>
     <li><b>先认识五种通信。</b>后面每一刀多出来的，都是其中某一种。</li>
     <li><b>第一刀，切数据。</b>最朴素，但每张卡还是存一整份模型，于是有了 FSDP（全分片数据并行：连模型本身也分片存）。</li>
-    <li><b>第二刀，切权重。</b>FSDP 每一层都要把整层权重拼回来，batch 一小就被搬权重拖垮，于是切进矩阵、切开层。</li>
+    <li><b>第二刀，切权重。</b>FSDP 每一层都要把整层权重拼回来，batch 一小就被搬权重拖垮，于是切进矩阵（张量并行，TP）、切开层（流水线并行，PP）。</li>
     <li><b>第三刀，切专家。</b>模型换了形状：MoE 的参数几乎全在一堆窄窄的专家里，TP 不对路了；而且 attention 和专家是两种形状，得各配各的。</li>
     <li><b>第四刀，切序列。</b>前三刀都没碰过的一维：上下文一长，训练时激活爆，推理时 KV cache 爆。</li>
     <li><b>第五刀，不切张量，切工作。</b>prefill 和 decode 分开，attention 和专家分开。</li>
@@ -185,7 +188,7 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
   <p class="lead">后面每一刀都会多出一种通信。这一节先把它们认全：日常用到的是五种，AllReduce、AllGather、ReduceScatter、AllToAll，再加最朴素的一对一收发。
     名字看着多，但每一个都只回答两个问题：<b>谁发给谁</b>；数据到了之后是<b>拼起来、加起来，还是原样放着</b>。</p>
 
-  <h3>1.1　所有集合通信，拆到底只有「发」和「收」</h3>
+  <h3>1.1　先学会看图</h3>
   <p>一组卡按同一个规则一起发、一起收，叫<b>集合通信</b>（collective communication）。
 </p>
   <p>下面几张图用同一套画法，只学一次：</p>
@@ -194,14 +197,16 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
     <li>每张卡的数据切成四块，一块一个小方格。</li>
     <li><b>加过的块画成竖条纹</b>，条纹是哪几种颜色，就是哪几张卡的数加在了一起。</li>
     <li>虚线框表示这里没有数据。</li>
+    <li>动画是黑底，<b>一列是一张卡</b>（静态图里一行是一张卡），颜色稍淡，对应关系不变。</li>
   </ul>
 
   <h3>1.2　一个人对所有人：四个基本动作</h3>
+  <p>把四张卡想成四个同学，卡 0 是班长。</p>
 __FIG_COLL_1N__
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
   <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
-    按最朴素的做法（班长挨个发、挨个收），班长那一条线要扛下全部流量，卡越多越堵。
-    通信库会把广播、归约排成一条链接力传，让班长只发或只收一份；收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西（总量倒是不随卡数涨）。</p>
+    按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
+    通信库会把它们排成一条链接力传，让班长只发或只收一份。收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西：总量不随卡数涨，但全压在它一条线上。</p>
 
   <h3>1.3　人人对人人：训练里天天在跑的四个</h3>
 __FIG_COLL_NN__
@@ -209,17 +214,17 @@ __FIG_COLL_NN__
   <p>All 就是「人人都拿到结果」。拿上一组对照着看：</p>
   <ul>
     <li><b>AllGather</b> ＝ Gather，再把拼好的结果发给每个人。</li>
-    <li><b>AllReduce</b> ＝ Reduce，再把加好的结果发给每个人。</li>
     <li><b>ReduceScatter</b> ＝ Reduce，再把结果切开，一人一块。</li>
+    <li><b>AllReduce</b> ＝ Reduce，再把加好的结果发给每个人。</li>
     <li><b>AllToAll</b> 独一份：每一对卡之间各传一份专属的数据，不加也不拼。</li>
   </ul>
 
   <h3>1.4　AllReduce 可以拆成两半</h3>
 __FIG_AR_SPLIT__
-  <p>这两半各自单独拿出来，就是两种有用的通信。<b>后面好几种并行白捡的便宜，全从这里来</b>：</p>
+  <p>这两半各自单独拿出来，就是两种有用的通信；拆开以后，中间还能塞进别的动作。<b>后面好几种并行白捡的便宜，全从这里来</b>：</p>
   <ul>
     <li><b>ZeRO ／ FSDP</b>：数据并行同步梯度那一次 AllReduce 拆开：ReduceScatter 让每张卡只拿自己那 1/n 梯度的总和、就地更新那 1/n 参数；
-      AllGather 拼回来的，是更新好的新权重。账面上一个字节没多花，每张卡却只需要存 1/n 的梯度和优化器状态；
+      AllGather 拼回来的，是更新好的新权重。账面上一个字节没多花（切 micro-batch 时的例外见 2.3），每张卡却只需要存 1/n 的梯度和优化器状态；
       连权重也只存 1/n，就要多付一半。第二节细讲。</li>
     <li>张量并行每层要做 AllReduce；配上序列并行时，也是把它拆成这两半，分别挪到不同位置。第三节细讲。</li>
   </ul>
@@ -250,10 +255,11 @@ __FIG_A2A__
        aria-label="AllToAll 动画。四张卡各有四块，颜色表示出自哪张卡，对角线上的四块画粗框。字幕一：派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）。十六块同时飞到新位置，卡 k 的第 j 块落到卡 j 的第 k 行。字幕二：卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次。字幕三：专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll。十六块原路飞回，画面回到开始的样子。"></video>
 <figcaption>派发过去、送回来，正好是专家并行每层的两次 AllToAll。
   <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>专家并行派发 token 要用它；切序列时的 Ulysses 也用它，
-    在「按序列切」和「按头切」之间来回换。</p>
+  <p>它相当于每个人各做一次分发。网络最怕它：前几种都能排成只跟邻居说话的环，它不行，任意两张卡之间都有东西要走；而且每份多大，要等模型算到这一层才知道。
+    专家并行（第四节）派发 token 要用它；切序列时的 Ulysses（第五节）也用它，在「按序列切」和「按头切」之间来回换。</p>
 
   <h3>1.7　一张表收住</h3>
+  <p>前面一共八个名字，带班长的四个只是积木，日常用的是五种；最后一种一对一收发，是把模型按层切成几段时，段和段之间传激活用的（第三节）。</p>
   <p>「每卡发出」一列按点对点链路上的最优算法（环）算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
     ReduceScatter 指加之前那一整份）；Broadcast ／ Reduce 那一行按链式接力算。</p>
   <table>
@@ -269,7 +275,7 @@ __FIG_A2A__
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
     <b>① AllReduce 可以拆成 ReduceScatter 和 AllGather 两半</b>，后面好几刀都靠它白捡便宜。<br>
     <b>② AllToAll 是唯一一个人人对人人发不同数据的</b>，专家并行离不开它，网络也最怕它。<br>
-    后面五刀，每一刀多出来的通信都是这张表里的某一行。</div>
+    后面五刀，每一刀多出来的通信都是这张表里的某一行。话认全了，第一刀：切数据。</div>
 </div></section>
 
 ''' + sec("s二", "二", "第一刀：切数据") + '''
@@ -542,7 +548,7 @@ __FIG_PD__
 
   <h3>6.2　代价：一趟 KV 传输</h3>
   <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode、再加一个 CPU 上的转发代理），
-    KV 从 prefill 那台的显存走到 decode 那台的显存。结论先说：按带宽估算一趟约 100 ms，占一次 prefill 的 5–10%，<b>网络不是瓶颈</b>。细账是三段：</p>
+    KV 从 prefill 那台的显存走到 decode 那台的显存。结论先说：按带宽估算，一个 8K token 的 prompt 传一趟约 100 ms；这么长的 prompt，prefill 本身要 1–2 秒，所以只占 5–10%，<b>网络不是瓶颈</b>。细账是三段：</p>
   <table>
     <tr><th>段</th><th>路径</th><th>估算</th></tr>
     <tr><td>①</td><td>HBM → 本机内存（PCIe）</td><td>约 10 ms</td></tr>
@@ -550,9 +556,10 @@ __FIG_PD__
     <tr><td>③</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
     <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b></td></tr>
   </table>
-  <p>对一下账：8K prompt 的 KV 是 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节（FP8）≈ 1.04 GB，
+  <p>对一下账：8K prompt 的 KV 是 2（K、V 各一份）× 62 层 × 8 个 KV 头 × 128（每头维度）× 8,192 × 1 字节（FP8）≈ 1.04 GB，
     100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms，中间那段就是这么来的。
     这个模型 KV 头少（8 个）又用 FP8 存，KV 本来就小；换模型、换网络，要重算。</p>
+  <p>这一趟用的是第一节那个一对一收发，而且跨机器、走数据中心网络这根慢线；它敢跨出去，是因为一个请求只传一次。</p>
   <p>反过来说，请求都很短、量也不大的时候，拆开多出来的这趟传输和两套机器就不一定划算，放在一起、用分块 prefill 缓解就够了。</p>
 
   <h3>6.3　两边各配几台</h3>
@@ -564,13 +571,13 @@ __FIG_PD__
   <h3>6.4　两边各挑各的切法</h3>
   <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。</p>
   <ul>
-    <li><b>prefill 机器</b>：可以上 PCP，把一个长 prompt 切到几张卡上一起算，第一个字出得快（5.5）。</li>
-    <li><b>decode 机器</b>：可以上 DCP，把 KV 摊到几张卡上装更多请求（5.4）；还可以把专家铺到更多卡上（Wide-EP），每个专家分到的 batch 更大。</li>
+    <li><b>prefill 机器</b>：可以上 PCP，把一个长 prompt 切到几张卡上一起算，第一个字出得快，它要另外加卡（5.5）。</li>
+    <li><b>decode 机器</b>：可以上 DCP，把 KV 摊到几张卡上装更多请求（5.4）；还可以把专家铺到更多卡上（Wide-EP）：卡多了，送 token 来的请求也多，每个专家分到的 batch 就更大。</li>
     <li><b>MoE 模型</b>：常见的写法是一边 TEP（attention 用 TP）、一边 DEP（attention 用数据并行），但<b>哪边用哪个没有定式</b>，要看模型和负载（8.6）。</li>
   </ul>
 
   <h3>6.5　AFD：attention 和专家分到两组机器</h3>
-  <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大。
+  <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大：decode 每步都要把专家权重读一遍，来的 token 越多，这一遍越值（6.1）。
     <b>AFD</b>（Attention-FFN 分离）把两者放到两组机器上：M 台只算 attention，N 台只放专家。</p>
 __FIG_AFD__
   <p>每一层都要把 token 从 attention 那边发给专家（M → N），算完再收回来（N → M）。
@@ -960,7 +967,7 @@ FIGS = {
         '<em>KV 尺寸取自 V3 的 config.json。</em>'),
     "__FIG_PD__": ("fig-pd", "fig5-pd.svg", "topic05-fig-pd.py",
         '<b>上面那条被截走的几格，就是拆开要换回来的东西。</b><br>'
-        '<em>时间线是示意；KV 传输的 100 ms 是按我们 v7x 那套的带宽估算的。</em>'),
+        '<em>下面那条多用了一批 prefill 机器，比的不是谁出字多，是出字断不断。时间线是示意；100 ms 是按我们 v7x 那套的带宽估算的。</em>'),
     "__FIG_AFD__": ("fig-afd", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>拆开的不是张量，是一层里的两种活。</b><br>'
         '<em>机器数和格子都是示意。</em>'),
@@ -993,7 +1000,7 @@ FIGS = {
         '<em>拆开之后，两半可以放在不同的时间点去做。</em>'),
     "__FIG_RING__": ("fig-ring", "fig5-ring.svg", "topic05-fig-coll.py",
         '<b>盯着条纹看：每一步，每张卡都有一块多加进一个人。</b><br>'
-        '<em>每一步谁发给谁、加到哪一块，由脚本按环形调度现算。</em>'),
+        '<em>一行一张卡；「右边」就是下一号卡，卡 3 的右边是卡 0。</em>'),
     "__FIG_A2A__": ("fig-a2a", "fig5-a2a.svg", "topic05-fig-coll.py",
         '<b>左边一行是「我要发给谁」，右边一行是「谁发给了我」。</b><br>'
         '<em>每一格多大，在 MoE 里要等路由算完才知道。</em>'),

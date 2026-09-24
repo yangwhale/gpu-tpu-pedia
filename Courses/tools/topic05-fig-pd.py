@@ -92,7 +92,7 @@ def fig_afd():
     TX, CW = 830, 54
     COLS3 = [GR, PU, CY]
     f.t(TX, py + 40, "三个小批轮着跑，三条道都不闲", INK, True, 15)
-    for r, (lab, col) in enumerate((("attention", BL), ("路上", GY), ("专家", OR))):
+    for r, (lab, col) in enumerate((("attention", BL), ("路上（去＋回）", GY), ("专家", OR))):
         f.t(TX, py + 82 + r * 52, lab, col, True, 13)
         for t in range(9):
             b = t - r
@@ -103,7 +103,7 @@ def fig_afd():
             f.box(TX + 80 + t * CW, py + 60 + r * 52, CW - 4, 34, c, c, 3)
             f.t(TX + 80 + t * CW + (CW - 4) / 2, py + 82 + r * 52, "ABC"[b % 3], "#ffffff", True, 13, "middle")
     f.t(TX, py + 238, "A 在算专家时，B 在路上、C 在算 attention。", GY, size=13)
-    f.t(TX, py + 262, "论文说至少要三个小批，通信慢时要四个。", GY, size=13)
+    f.t(TX, py + 262, "单程通信不到半格时三个够，否则要四个（MegaScale-Infer）。", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "拆得越细，每一边越能挑适合自己的机器和切法", [
         "专家那边同时接几台 attention 机器的 token，<tspan font-weight=\"700\">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。",
