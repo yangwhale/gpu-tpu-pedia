@@ -93,13 +93,13 @@ def fig_freq():
 def fig_scale():
     f = Fig(W, "混元 3 在 TPU v7 上的两组实测，纵轴是每芯片 TFLOP/s。左边：64 芯片和 256 芯片用同一个配方，"
                "多出来的卡当成数据并行的副本，每卡的活不变，都是 580，一点没掉，这叫 weak scaling。"
-               "右边：同样 256 芯片、同样每卡 batch，只改怎么分。多出来的卡当副本 453，全塞进 FSDP 把权重摊得更薄 404，"
+               "右边：同样 256 芯片、同样每个 device 的 batch，只改怎么分。多出来的卡当副本 453，FSDP 铺到一半 450，全塞进 FSDP 把权重摊得更薄 404，"
                "少了 11%；FSDP 再窄就放不下，爆显存")
     y0 = f.header("加卡怎么加　——　<tspan font-weight=\"700\">当副本几乎不掉，摊得更薄就掉</tspan>",
-                  "混元 3 在 TPU v7 上的实测，每芯片 TFLOP/s。v7 一颗芯片算 2 个 device，DP × FSDP 按 device 数（64 芯片 ＝ 128 个）。左右两组每卡 batch 不同",
-                  [(GR, "多出来的卡当 DP 副本"), (OR, "多出来的卡全塞进 FSDP"), (RD, "放不下")])
+                  "混元 3 在 TPU v7 上的实测，每芯片 TFLOP/s。v7 一颗芯片算 2 个 device，DP × FSDP 按 device 数（64 芯片 ＝ 128 个）。左右两组每个 device 的 batch 不同",
+                  [(GR, "多出来的卡当 DP 副本"), (OR, "FSDP 铺得更宽"), (RD, "放不下")])
     PH = 370
-    py = f.panel(0, y0, 470, PH, "同配方放大 4 倍（每卡 batch 12）", GR)
+    py = f.panel(0, y0, 470, PH, "同配方放大 4 倍（每个 device 的 batch 12）", GR)
     H, BASE = 220, py + 300
     def bar(x, v, col, lab, sub, w=110):
         if v is None:
@@ -114,7 +114,7 @@ def fig_scale():
     bar(70, WEAK[0][2], GR, WEAK[0][0], WEAK[0][1], 130)
     bar(270, WEAK[1][2], GR, WEAK[1][0], WEAK[1][1], 130)
     f._pan = None
-    f.panel(490, y0, W - 490, PH, "同样 256 芯片，只改怎么分（每卡 batch 8，不能跟左边比）", OR)
+    f.panel(490, y0, W - 490, PH, "同样 256 芯片，只改怎么分（每个 device 的 batch 8，不能跟左边比）", OR)
     for i, (lab, v) in enumerate(SPLIT):
         col = GR if lab.startswith("DP 4") else OR
         bar(530 + i * 172, v, col if v else RD, lab.split(" × ")[0], lab.split(" × ")[1], 120)

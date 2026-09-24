@@ -373,11 +373,18 @@ def anchorize(html):
     _ARXIV = _re.compile(r"\d{4}\.\d{4,5}")
     _STOP = _re.compile(r"[。！？]|<br\s*/?>|</p>|</li>|</div>")
 
+    # ⛔⛔ 2026-09-25 专题五复审：「技术报告 §2.1.2、§3.2.2」没有 arXiv 号挨着，照样被链到了本讲。
+    #   ⭐ 把「技术报告／报告／论文／README」也当成引文起点（同一句话内有效），规则跟 arXiv 号一样。
+    _CITE_WORD = _re.compile(r"技术报告|报告|论文|README|原文")
+
     def _in_citation(chunk, at):
         """at 这个 § 是不是落在某条引文的作用域里。"""
         a = None
         for mm in _ARXIV.finditer(chunk, 0, at):
             a = mm.end()
+        for mm in _CITE_WORD.finditer(chunk, 0, at):
+            if a is None or mm.end() > a:
+                a = mm.end()
         if a is None:
             return False
         tail = chunk[a:at]

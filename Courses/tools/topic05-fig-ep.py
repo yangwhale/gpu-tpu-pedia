@@ -73,6 +73,7 @@ def fig_fold():
     f.t(600, py + 104, "请求 A", BL, True, 14)
     f.t(600, py + 228, "请求 B", GR, True, 14)
     f.t(662, py + 170, "→", INK, True, 30)
+    f.t(676, py + 196, "AllToAll", GY, True, 12, "middle")
     f.t(710, py + 34, "专家层：8 张卡各放 32 个专家，所有请求的 token 都往这儿送", INK, True, 15)
     for i in range(8):
         x, y = 710 + (i % 4) * 165, py + 56 + (i // 4) * 124

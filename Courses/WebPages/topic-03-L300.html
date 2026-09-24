@@ -2077,10 +2077,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <td><b>省得最狠</b>：只读那 576 维</td><td><a href="#s五">§五</a></td></tr>
 <tr><td><b>② 稀疏</b></td><td>⛔ <b>可能一点不省</b>：要先算出注意力图才知道挑谁
   ——&nbsp;NSA 论文 §2 的第一个坑说的就是这个</td>
-  <td>每步只读 k 条</td><td><a href="#s6-3b">§6.3b</a></td></tr>
+  <td>每步只读 k 条</td><td>§6.3b</td></tr>
 <tr><td><b>③ 线性</b></td><td>要靠<b>分块</b>才榨得出并行度（块内并行、块间串行）</td>
   <td><b>就是一条纯递推</b>，每步只碰那块固定大小的板子</td>
-  <td><a href="#s7-4">§7.4</a></td></tr>
+  <td>§7.4</td></tr>
 </tbody></table>
 <p>⛔ <b>所以「省了 N 倍」这句话，不带阶段就是半句话。</b>
   <em><a href="#s九">§九</a>那张代价表专门有一列「⭐ 省在哪个阶段」，就是为了逼出这一问。</em></p></div>
@@ -2649,7 +2649,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="417" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一刀换来了什么，又欠下了什么</tspan></text>
 <text class="svgsm" x="20" y="448" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换来的</tspan>：串行步数从 O(n) 掉到 O(1)——&#160;整段序列一次算完，加速器终于喂得饱了（这正是「RNN 在硬件上为什么慢」那张图那笔账的反面）。</text>
 <text class="svgsm" x="20" y="472" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">欠下的</tspan>：连线数从 n 变成 n²。 而且注意 ——&#160;<tspan font-weight="700">状态没了</tspan>：RNN 那个固定大小的 h 被换成了「把所有历史原封不动留着」。</text>
-</svg><figcaption>⭐ <b>左边是 §零 那条链，右边是它的替代品。</b>看完带走一件事：<b>要算的格子从 n 变成了 n²，而那张表就是后面反复出现的「注意力矩阵」本人</b>。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a>) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；循环层两项都是 O(n)。因果遮罩见同一篇论文 <a href="#s3-2">§3.2</a>.3：把非法连接「setting to −∞」</p></details></figure>
+</svg><figcaption>⭐ <b>左边是 §零 那条链，右边是它的替代品。</b>看完带走一件事：<b>要算的格子从 n 变成了 n²，而那张表就是后面反复出现的「注意力矩阵」本人</b>。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a>) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；循环层两项都是 O(n)。因果遮罩见同一篇论文 §3.2.3：把非法连接「setting to −∞」</p></details></figure>
 <!-- ⛔ 2026-09-12：前半句（O(n)→O(1)、格子 n→n²）图上就写着，删。
      留下的这句**图画不出来**：图能画「多了什么」，画不出「少了什么」。 -->
 <div class="note danger"><p>⛔ 被换掉的不只是那根箭头 ——&nbsp;<b>状态也没了</b>。
@@ -2808,7 +2808,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="609" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两个最常被跳过的「为什么」</tspan></text>
 <text class="svgsm" x="20" y="640" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么要投三次，不能只用一个向量？</tspan>——&#160;去图书馆找书：<tspan font-weight="700">你脑子里那个需求</tspan>（q）跟<tspan font-weight="700">书脊上印的标题</tspan>（k）不是同一个东西。</text>
 <text class="svgsm" x="20" y="664" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">那 v 为什么还要跟 k 再分一次？<tspan font-weight="700">k 是书脊，v 是书里的内容</tspan>——&#160;「凭什么被选中」和「被选中之后交出什么」，本来就是两回事。</text>
-</svg><figcaption>⭐ <b>跟着最后那个 token 走一遍：它提问（q）、每个位置报价（k）、按权重把所有人的货（v）加起来。</b><b>一步之内够到全场，而且六个位置同时在做</b> —— 这就是那句标题的意思：<b>混合信息这件事，只要注意力就够了。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 论文 <a href="#s3-2">§3.2</a> 的原话，不是本课编的比喻；<b>图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</b></p>
+</svg><figcaption>⭐ <b>跟着最后那个 token 走一遍：它提问（q）、每个位置报价（k）、按权重把所有人的货（v）加起来。</b><b>一步之内够到全场，而且六个位置同时在做</b> —— 这就是那句标题的意思：<b>混合信息这件事，只要注意力就够了。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 论文 §3.2 的原话，不是本课编的比喻；<b>图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</b></p>
 <p>⚠️ 本图<b>只画注意力</b> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，它们不在本专题这条轴上（本专题的账本只有 KV cache）</p></details></figure>
 <!-- ⛔⛔ 2026-09-12：这里原来有一条 134 字的注解，写着「一层注意力 ＝ 全员报价
      按需取货」「每个位置同时在做」「那个标题最常被读反」——&nbsp;
@@ -2934,8 +2934,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="797" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">那个 √d_k 不是玄学，推导链在论文脚注里，两行就能讲完</tspan></text>
 <text class="svgsm" x="20" y="828" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">假设 q、k 各维<tspan font-weight="700">独立、均值 0、方差 1</tspan>，那么 q·k ＝ Σ q<tspan baseline-shift="sub" font-size="10">i</tspan>k<tspan baseline-shift="sub" font-size="10">i</tspan> 的<tspan font-weight="700">均值是 0，方差是 d_k</tspan>——&#160;标准差就是 √d_k。</text>
 <text class="svgsm" x="20" y="852" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以除以 √d_k 只做一件事：<tspan font-weight="700">把打分的方差拉回 1</tspan>。维度越高分数摊得越开，不拉回来 softmax 会被推到「几乎全是 0 和 1」的角落，<tspan font-weight="700">梯度就没了</tspan>。</text>
-</svg><figcaption>⭐⭐ <b>看第二格那两根横条就够了 —— 它们破的是全课最常见的那个误解</b>：注意力<b>不是「找出最像的那一个」</b>，而是<b>把五家的货按百分比混成一碗</b>；而且<b>这一整条的长度永远是 100%</b> —— softmax 不许有人弃权（<a href="#s六">§六</a> 讲 attention sink 时会回到这一句）。<b>左右两根条唯一的差别就是除没除 √d_k</b>：不除，整条被一家吃掉、模型只看得见「抽屉」；除了，才混得出「放进 ＋ 抽屉」。⭐ 所以 √d_k 决定的不只是梯度，是<b>这一层到底在「挑一家」还是在「混一碗」</b>。<b>而牌子和货（K 和 V）要留着给下一个 token 用，留下来的那两份就叫 KV cache。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 <a href="#s3-2">§3.2</a>：「a weighted sum of the values … compatibility function of the query with the corresponding key」</p>
-<p>同一篇论文 <a href="#s3-2">§3.2</a>.1 与脚注 4：「the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients」</p></details></figure>
+</svg><figcaption>⭐⭐ <b>看第二格那两根横条就够了 —— 它们破的是全课最常见的那个误解</b>：注意力<b>不是「找出最像的那一个」</b>，而是<b>把五家的货按百分比混成一碗</b>；而且<b>这一整条的长度永远是 100%</b> —— softmax 不许有人弃权（<a href="#s六">§六</a> 讲 attention sink 时会回到这一句）。<b>左右两根条唯一的差别就是除没除 √d_k</b>：不除，整条被一家吃掉、模型只看得见「抽屉」；除了，才混得出「放进 ＋ 抽屉」。⭐ 所以 √d_k 决定的不只是梯度，是<b>这一层到底在「挑一家」还是在「混一碗」</b>。<b>而牌子和货（K 和 V）要留着给下一个 token 用，留下来的那两份就叫 KV cache。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 §3.2：「a weighted sum of the values … compatibility function of the query with the corresponding key」</p>
+<p>同一篇论文 §3.2.1 与脚注 4：「the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients」</p></details></figure>
 <div class="note warn"><p>⚠️ 「query / key / value」不是我们编的比喻，是论文自己的措辞：
   <em>「mapping a query and a set of key-value pairs to an output … the output is a
   weighted sum of the values」</em>。<br>
@@ -3302,7 +3302,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1674" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拿去加权平均</tspan> ——&#160;那就必须非负、和为 1、可导，<tspan font-weight="700">softmax 一次全给了</tspan>。</text>
 <text class="svgsm" x="20" y="1698" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只拿去排序</tspan> ——&#160;那「和为 1」根本不必要。DSA 的索引器走的正是这一条：它<tspan font-weight="700">换成了 ReLU</tspan>，论文给的理由就两个字 ——&#160;吞吐（讲 DSA 时会再碰到）。</text>
 </svg><figcaption>⭐⭐ <b>softmax 的三条要求（非负、和为 1、可导）全是「加权平均」逼出来的。</b><b>所以 DSA 的索引器敢换成 ReLU —— 它只拿分数去排序，不做加权平均。</b><em>右边：k 是书脊、v 是内容，检索天生非对称 —— 按 A 去找，取回 B。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三条性质由 softmax 的定义直接给出；柱子的数由本脚本当场算并断言</p>
-<p>「索引器用 ReLU，for throughput consideration」出自 DeepSeek-V3.2-Exp 技术报告 <a href="#s2-1">§2.1</a></p>
+<p>「索引器用 ReLU，for throughput consideration」出自 DeepSeek-V3.2-Exp 技术报告 §2.1</p>
 <p>⚠️ 图书馆卡片是<b>类比</b>，不是论文原话 ——&#160;论文只给了 query / key / value 三个名字</p></details></figure>
 <h3 id="s1-2b">1.2b　那为什么非得是 softmax，k 和 v 又为什么不能是同一个</h3>
 <p>⭐ 这条判据的<b>通用形式</b>：
@@ -3406,7 +3406,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="611" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">而这个形状的代价，2019 年就被点名了</tspan></text>
 <text class="svgsm" x="20" y="642" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">Shazeer 2019（MQA 那篇）摘要原话：训练很快，因为序列方向可以并行；但 ——</text>
 <text class="svgsm" x="20" y="666" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-style="italic">「incremental inference … is often slow, due to the <tspan font-weight="700">memory-bandwidth cost of repeatedly loading the large &quot;keys&quot; and &quot;values&quot; tensors</tspan>」</tspan></text>
-</svg><figcaption>⭐ <b>8 × 64 = 512：多头是「切开」不是「加倍」</b>，总维度和计算量都没变。<b>唯一被乘上去的是 KV</b> —— 下一节起要砍的就是它。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 <a href="#s3-2">§3.2</a>.2：「jointly attend to information from different representation subspaces」、「With a single attention head, averaging inhibits this」；h = 8，d_k = d_v = d_model/h = 64</p>
+</svg><figcaption>⭐ <b>8 × 64 = 512：多头是「切开」不是「加倍」</b>，总维度和计算量都没变。<b>唯一被乘上去的是 KV</b> —— 下一节起要砍的就是它。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 §3.2.2：「jointly attend to information from different representation subspaces」、「With a single attention head, averaging inhibits this」；h = 8，d_k = d_v = d_model/h = 64</p>
 <p>Shazeer 2019 (arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>)《Fast Transformer Decoding: One Write-Head is All You Need》摘要 ——&#160;本课模型表第二行 PaLM 用的就是它</p></details></figure>
 <!-- ⛔⛔ 2026-09-12：这里原来那条注解，跟图里那条落点带**连标题都一样**
      （「多头的代价，正好是本专题的题眼」），三句话在图上一句不少。删。
@@ -4755,8 +4755,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <em>那正是 FA2 最吃香的场合。</em></p>
 <p>⛔ <b>这个 1.49 是本课自己按两份 Algorithm 1 数出来的，不是论文报的数</b> ——&nbsp;
   FA2 全文没有 IO-complexity 定理，整个 IO 分析 defer 给了 FA1。
-  <em>论文自己给的理由是两条：减少 non-matmul FLOP（<b><a href="#s3-1">§3.1</a></b>）、
-  提高 occupancy 且 thread block 之间无需通信（<b><a href="#s3-2">§3.2</a></b>）。</em></p></div>
+  <em>论文自己给的理由是两条：减少 non-matmul FLOP（<b>§3.1</b>）、
+  提高 occupancy 且 thread block 之间无需通信（<b>§3.2</b>）。</em></p></div>
 
 <div class="note info"><p>📌 <b>三处容易记错，一并说清</b></p>
 <ul><li><b>这个顺序不是 FA2 首创。</b>论文自己写的是
@@ -6486,7 +6486,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1426" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">「白送 4.57 倍」不是普适的：它等于 2·n_kv·d_h ÷ d_model，<tspan font-weight="700">分子是真正被缓存的头数</tspan>。V3 是 MHA 所以 4.57；Llama-3-70B 是 GQA-8，算出来 <tspan font-weight="700">0.25</tspan> ——&#160;那里根本没</text>
 <text class="svgsm" x="20" y="1450" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">有「白送」这一段。</text>
 <text class="svgsm" x="20" y="1474" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">被缩印的是 <tspan font-weight="700">K 和 V 合起来</tspan>那一份（两者共用同一张原稿），比「只压 K」狠得多；带 RoPE 的那 64 维<tspan font-weight="700">另走一路，不在缩印范围里</tspan>。</text>
-</svg><figcaption>⭐⭐ <b>32,768 个数是从一个 7,168 维的 h 算出来的 —— 一次确定性映射不造信息，所以 4.57 倍是白送的。</b><b>真正的赌注是后面那步：7,168 压到 576，等于强制 K 投影的秩 ≤ 512。</b><em>而敢赌是因为「K/V 本来就低秩」在 MLA 之前已经被量过了。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>维度出自 DeepSeek-V2 论文 <a href="#s2-1">§2.1</a>（arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>）与 V3 config：d=7168, n_h=128, d_h=128, d_c=512, d_h^R=64；三个倍数由脚本当场算并断言</p>
+</svg><figcaption>⭐⭐ <b>32,768 个数是从一个 7,168 维的 h 算出来的 —— 一次确定性映射不造信息，所以 4.57 倍是白送的。</b><b>真正的赌注是后面那步：7,168 压到 576，等于强制 K 投影的秩 ≤ 512。</b><em>而敢赌是因为「K/V 本来就低秩」在 MLA 之前已经被量过了。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>维度出自 DeepSeek-V2 论文 §2.1（arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>）与 V3 config：d=7168, n_h=128, d_h=128, d_c=512, d_h^R=64；三个倍数由脚本当场算并断言</p>
 <p>事后低秩：Eigen Attention（EMNLP Findings 2024）、Palu、LoRC　「MLA 优于 MHA」的口径见 DeepSeek-V2 仓库 issue #26</p>
 <p>⚠️ 「复印 / 缩印」是<b>本课的比喻</b> ——&#160;论文那一侧的说法是「低秩联合压缩」</p></details></figure>
 <!-- ⭐⭐ 2026-09-13 夜间 R2。上一张答「MLA 凭什么敢压」，
@@ -9114,7 +9114,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1238" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">H2O 是<tspan font-weight="700">事后才压</tspan>的 ——&#160;一个 KV 驱逐策略，不改训练，随时可开关。</text>
 <text class="svgsm" x="20" y="1262" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DSA 是<tspan font-weight="700">训练时就知道</tspan>的 ——&#160;热身 2.1B ＋ 稀疏期 <tspan font-weight="700">943.7B token</tspan> 的继续训练，模型是在「我会被稀疏」这个前提下学出来的。</text>
 </svg><figcaption>⭐⭐ <b>「能不能少看」是经验事实（H2O 量到注意力矩阵 95% 以上稀疏）；「怎么知道该看谁」才是难点 —— 要判断谁重要得先算注意力分数，而那正是你想省掉的东西。</b><em>DSA 的解法不是猜，是让真注意力当老师：冻住模型、保持密集，训一个便宜的索引器去 KL 拟合主注意力的分布。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 出自 H2O：Zhang 等 arXiv <a href="https://arxiv.org/abs/2306.14048" target="_blank" rel="noopener">2306.14048</a>（「over 95% sparse」与累计注意力分数的幂律分布，均为原文表述）</p>
-<p>②③ 出自 DeepSeek-V3.2-Exp 技术报告 §1–<a href="#s2-1">§2.1</a>：KL 对齐、冻结主模型热身、跨头求和后 L1 归一、梯度断开、ReLU「for throughput consideration」、index_topk=2048、索引器 64 头且跑在 FP8 上</p>
+<p>②③ 出自 DeepSeek-V3.2-Exp 技术报告 §1–§2.1：KL 对齐、冻结主模型热身、跨头求和后 L1 归一、梯度断开、ReLU「for throughput consideration」、index_topk=2048、索引器 64 头且跑在 FP8 上</p>
 <p>⚠️ 「书墙 / 师徒」是<b>本课的比喻</b>；⛔ <b>k 的消融论文没有给</b> ——&#160;2048 这个数只能说它占多少、以及短序列下等于全选</p></details></figure>
 <!-- ⭐⭐⭐ 2026-09-13 新增。本课原来只讲了**一种**破法（DSA 的师徒），
      而实际上有三条真正不同的路，第三条（CSA 的降维打击）正好是 V4 相对
