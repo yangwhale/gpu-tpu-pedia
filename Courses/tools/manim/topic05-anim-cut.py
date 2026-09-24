@@ -688,3 +688,57 @@ class FSDPStep(Scene):
         self.remove(sub, count[1])
         self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
         self.wait(0.6)
+
+
+# ── Ulysses ─────────────────────────────────────────────────────────────
+# ⭐ 2026-09-25 R9 麻瓜：「只说来回换，没说换完有什么好处」。增量来自时间：
+#   一次 AllToAll 把「每卡一段序列、全部头」换成「每卡全部序列、一个头」，
+#   本卡就能把这个头的注意力算完，再换回去。颜色 ＝ 哪一段序列，格子里写的是第几个头。
+class Ulysses(Scene):
+    def construct(self):
+        title = cap_text("Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换", size=28).to_edge(UP)
+        self.add(title)
+        XS4 = [-4.5, -1.5, 1.5, 4.5]
+        heads = VGroup(*[Text("卡 %d" % c, font_size=24, color=WHITE).move_to([XS4[c], 1.9, 0]) for c in range(NR)])
+        self.add(heads)
+
+        def pos(card, idx):
+            return [XS4[card], 1.2 - idx * 0.72, 0]
+
+        cells = {}
+        for k in range(NR):              # 序列第 k 段
+            for j in range(NR):          # 第 j 个头
+                r = Rectangle(width=1.9, height=0.56, stroke_width=0, fill_color=COL_R[k], fill_opacity=0.9)
+                t = Text("第 %d 段 · 头 %d" % (k, j), font_size=17, color=WHITE)
+                g = VGroup(r, t).move_to(pos(k, j))
+                t.move_to(r.get_center())
+                cells[(k, j)] = g
+        self.add(*cells.values())
+        sub = cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2)
+        self.add(sub)
+        self.wait(0.5)
+
+        def say(t, color=GREY_B):
+            nonlocal sub
+            n = cap_text(t, color, 24).next_to(title, DOWN, buff=0.2)
+            self.play(FadeOut(sub), FadeIn(n), run_time=0.35)
+            sub = n
+
+        say("开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）")
+        self.wait(1.2)
+        say("第一次 AllToAll：第 j 个头的那一格，送到卡 j")
+        self.play(*[cells[(k, j)].animate.move_to(pos(j, k)) for k in range(NR) for j in range(NR)], run_time=1.4)
+        say("现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完", GREEN)
+        glow = VGroup(*[Rectangle(width=2.1, height=3.0, stroke_color=YELLOW, stroke_width=4).move_to([XS4[c], 0.12, 0])
+                        for c in range(NR)])
+        self.play(FadeIn(glow), run_time=0.3)
+        self.wait(1.0)
+        self.play(FadeOut(glow), run_time=0.3)
+        say("第二次 AllToAll：算完再换回按序列切，接着往下走")
+        self.play(*[cells[(k, j)].animate.move_to(pos(k, j)) for k in range(NR) for j in range(NR)], run_time=1.4)
+        say("代价：每层两次 AllToAll；卡数不能超过头数", GREEN)
+        self.wait(1.4)
+        self.play(FadeOut(sub), run_time=0.4)
+        self.remove(sub)
+        self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
+        self.wait(0.6)

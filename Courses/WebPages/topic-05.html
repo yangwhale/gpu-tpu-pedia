@@ -890,6 +890,7 @@ body.figonly section h3{margin-top:34px}
     <b>显存（HBM）</b>：卡上自带的高速内存，模型和中间结果都得放在这儿。<br>
     <b>算力和带宽</b>：算力是每秒能算多少次，带宽是每秒能搬多少字节。一件活要是搬得多算得少，就是「吃带宽」，反过来是「吃算力」。<br>
     <b>ICI 和切片</b>：TPU 芯片之间的专用快线叫 ICI；用 ICI 连在一起的一整块芯片叫一个切片，切片和切片之间走普通的数据中心网络。<br>
+    <b>device 和轴</b>：v7 的一颗芯片，对软件显示成 2 个 device，并行度按 device 数；切片里的芯片排成立方网格，x、y、z 三个方向各叫一根轴。<br>
     <b>几路</b>：「TP 8 路」就是 8 张卡一组做 TP。写成 TP4 × DP2，意思是每 4 张卡一组做 TP，这样的组有 2 份做数据并行，一共 4 × 2 ＝ 8 张卡。<br>
     <b>MoE 与专家</b>：模型里有很多组并排的前馈层，叫专家；每个 token 由一个小的路由器挑出其中几个去算，其余的不碰。
     所以参数很多，每个 token 实际用到的却很少。<br>
@@ -915,7 +916,7 @@ body.figonly section h3{margin-top:34px}
   </ul>
 
   <h3 id="s1-2">1.2　一个人对所有人：四个基本动作</h3>
-<figure class="fbox fwide" id="fig-coll-1n"><svg viewBox="0 0 1400 786" width="100%" role="img" aria-label="一对多和多对一的四个基本动作。广播：卡零把自己的一整份数据发给所有人，之后四张卡手里是同一份 A。分发：卡零把自己的四块拆开，一人一块。收集：每人一块，全部交给卡零，卡零拼成一整份。归约：每人一整份，全部交给卡零并逐块相加，卡零手里是四块总和。前两个是一变多，后两个是多变一；归约和收集的区别只在于到了之后加不加"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-coll-1n"><svg viewBox="0 0 1400 810" width="100%" role="img" aria-label="一对多和多对一的四个基本动作。广播：卡零把自己的一整份数据发给所有人，之后四张卡手里是同一份 A。分发：卡零把自己的四块拆开，一人一块。收集：每人一块，全部交给卡零，卡零拼成一整份。归约：每人一整份，全部交给卡零并逐块相加，卡零手里是四块总和。前两个是一变多，后两个是多变一；归约和收集的区别只在于到了之后加不加"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">先认识四个基本动作　——　<tspan font-weight="700">一个人对所有人</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">四张卡，一张一个颜色。数据切成四块。<tspan font-weight="700">条纹块 ＝ 几张卡的数加在了一起</tspan>，虚线框 ＝ 这里没有数据</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -1234,12 +1235,13 @@ body.figonly section h3{margin-top:34px}
 <rect x="1226" y="568" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
 <line x1="1012" y1="524.0" x2="1056" y2="524.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <text class="svgsm" x="738" y="634" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每人交一整份给卡 0，卡 0 逐块相加</text>
-<rect x="0" y="674" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="674" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="674" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<rect x="0" y="674" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="674" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="674" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="701" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两两成对，差别只在一个动作</tspan></text>
 <text class="svgsm" x="20" y="732" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">广播和分发是<tspan font-weight="700">一变多</tspan>，收集和归约是<tspan font-weight="700">多变一</tspan>。　收集和归约的区别只在于：数据到了之后<tspan font-weight="700">拼起来</tspan>还是<tspan font-weight="700">加起来</tspan>。</text>
-<text class="svgsm" x="20" y="756" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这四个都有一个「班长」卡 0，所有流量都挤在它一个人的线上。训练里真正天天在跑的，是它们<tspan font-weight="700">没有班长</tspan>的版本：AllGather、ReduceScatter、AllReduce、AllToAll。</text>
+<text class="svgsm" x="20" y="756" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这四个都有一个「班长」卡 0，按最朴素的做法，所有流量都挤在它一个人的线上。训练里真正天天在跑的，是它们<tspan font-weight="700">没有班长</tspan>的版本：AllGather、ReduceScatter、AllReduce、All</text>
+<text class="svgsm" x="20" y="780" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">ToAll。</text>
 </svg><figcaption><b>四个有班长的动作：广播、分发、收集、归约。</b><span class="capmore"><br><em>收集和归约只差一个动作：数据到了之后是拼起来，还是加起来。</em></span></figcaption></figure>
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
   <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
@@ -2528,7 +2530,8 @@ body.figonly section h3{margin-top:34px}
   <p>FSDP 每一步搬的是<b>权重</b>，搬多少只跟参数量有关，<b>跟 batch 无关</b>；
     而每一步要算多少，跟每张卡分到的 token 数成正比。</p>
   <p>所以每张卡的 batch 一小，算得少、搬得一样多，时间就被搬权重吃掉了。
-    要继续加卡、又不能让每张卡的 batch 变小，就得换一种切法：<b>不再拼整层权重，直接把权重切开</b>。这是第二刀。</p>
+    要继续加卡、又不能让每张卡的 batch 变小，就得换一种切法：<b>不再拼整层权重，直接把权重切开</b>。
+    这样几张卡合起来算同一批 token，每张卡要处理的 token 数不会随加卡被摊薄。这是第二刀。</p>
 </div></section>
 
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>第二刀：切权重</h2></div>
@@ -2536,8 +2539,9 @@ body.figonly section h3{margin-top:34px}
     <b>batch 一小，就藏不住了。</b>第二刀不再拼权重，直接把权重切开。</p>
 
   <h3 id="s3-1">3.1　FSDP 的尽头：搬一个字节，换来多少计算</h3>
-  <p>判断一刀会不会被通信拖住，只看一个比值：<b>每在网络上搬一个字节，能换来多少次计算</b>。
-    这个比值要高过硬件自己的比值（每秒能算多少次 ÷ 每秒能搬多少字节），否则就是算得没有搬得快。</p>
+  <p>想象砌墙：师傅砌一块砖两秒，小工送一块砖要五秒，师傅再快也得等。每张卡就是师傅，网络就是小工。
+    所以判断一刀会不会被通信拖住，只看一个比值：<b>每在网络上搬一个字节，能换来多少次计算</b>。
+    这个比值要高过硬件自己的比值（每秒能算多少次 ÷ 每秒能搬多少字节），否则师傅就在干等。</p>
   <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是两次拼权重、一次分梯度，约 6Ψ 字节（Ψ 还是参数个数，bf16 每个 2 字节）；
     一步算的是 6ΨT 次（专题四那条「训练每个 token 约 6 倍参数量次运算」），T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
 <figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时，按最乐观的线才勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2580,8 +2584,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关的上限</tspan>。</text>
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
 <p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
-  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片间 ICI 常说的 1.2 TB/s，按官方给的 200 GB/s 理解成每条链路收发合计推算，是 6 条链路加起来的，
-    而上面搬的字节是「每卡发出」的量，只能跟发出那一半比：每秒 0.6 TB。
+  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片之间的 ICI 每颗芯片每秒能发出约 0.6 TB
+    （常说的 1.2 TB/s 是收发两个方向加起来的；上面搬的字节是「每卡发出」的量，只能跟发出那一半比，推算见台账）。
     硬件的比值约 3,845。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
     而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
   <p>这还是最乐观的算法。两种情况门槛更高：只走一根轴，高约 3 倍；MoE 只靠 FSDP、不配专家并行，
@@ -2660,7 +2664,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s3-3">3.3　SP：TP 的搭档</h3>
   <p>TP 切不到的那几段，是逐个 token 做的小运算（归一化、dropout、残差相加），每张卡都存着一整份激活。
-    Megatron 的序列并行（SP）把这几段沿序列切开，顺手把每次 AllReduce 拆成 AllGather ＋ ReduceScatter
+    Megatron 的序列并行（SP）把这几段沿序列切开（名字里有「序列」，但它是 TP 的搭档，跟第四刀切序列不是一回事，见 8.8），顺手把每次 AllReduce 拆成 AllGather ＋ ReduceScatter
     ——&nbsp;就是第一节那个等式，<b>通信量跟原来一样</b>，省下的是激活显存。
     （为了连这份激活也只存一段，反向时要再拼一次，但可以跟算权重梯度叠在一起藏掉。）</p>
 
@@ -2676,7 +2680,8 @@ body.figonly section h3{margin-top:34px}
   <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP。两把刀各管一边。</p>
 
   <h3 id="s3-5">3.5　PP：按层切</h3>
-  <p>流水线并行把模型按层切成几段，每张卡负责一段，段与段之间只在边界上点对点传激活，
+  <p>TP 每一层都要通信，出不了一台机器。模型大到一台机器都装不下怎么办？按层切。
+    流水线并行把模型按层切成几段，每张卡负责一段，段与段之间只在边界上点对点传激活，
     是所有刀里通信最少的，所以它<b>能跨到慢线上</b>，横跨很多台机器也吃得消。代价是<b>气泡</b>：</p>
 <figure class="fbox fwide" id="fig-pp-bubble"><svg viewBox="0 0 1400 548" width="100%" role="img" aria-label="流水线并行的时间表。四个 stage 从上到下，横轴是时间。每个小方块是一个 micro-batch 在这一段的前向或反向。一开始只有第一段在干活，后面几段在等；最后只剩第一段在做反向，前面几段在等。那两个三角形的空白就是气泡。micro-batch 越多，气泡占的比例越小。四段八个 micro-batch 时，气泡是理想计算时间的八分之三，占整步约百分之二十七"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PP 的代价：气泡　——　<tspan font-weight="700">开头等人灌满，结尾等人排空</tspan></text>
@@ -2903,7 +2908,7 @@ body.figonly section h3{margin-top:34px}
       同一台机器上就算有好几个它要找的专家，跨机也只发一份，到了再在机器里分。</li>
     <li><b>派发用 FP8，合并用 BF16</b>：派发那一趟的字节数直接减半。</li>
   </ul>
-  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节 ≈ 28.7 KB，跟它选了几个专家无关，只跟去了几个节点有关。</p>
+  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节（隐藏维 7,168 个数，FP8 每个 1 字节）≈ 28.7 KB，跟它选了几个专家无关，只跟去了几个节点有关。</p>
   <p>这是训练和 prefill 的做法；decode 追求低延迟时改成按专家逐个直发，份数就跟着选的专家数涨了。</p>
 
   <h3 id="s4-3">4.3　EP 最重的病：负载由数据决定</h3>
@@ -3267,7 +3272,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>左右两边是同样的 8 张卡。</b><span class="capmore"><br><em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-Core moe/README.md（MoE Parallel Folding，例子 TP4·CP2·DP8·PP4 → ETP1·EP64·EDP1）；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a>。TEP ／ DEP 定义：TensorRT-LLM tech blog 26。</p></details></figure>
   <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
     挑哪个差别大到什么程度，我们自己测过一次：</p>
-  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍（跟调完参的 TP4 比）</span>
+  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍（跟调完参的 TP4 比；卡数也变了，见 7.3）</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
     最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
     attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。<br>
@@ -3295,8 +3300,14 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li><b>Ring Attention</b>：Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。</li>
     <li><b>Ulysses</b>：注意力前后各做一次 AllToAll，在「按序列切」和「按头切」之间来回换。
+      换成按头切以后，每张卡手里是全部 token、但只有几个头，注意力就能在本卡算完，算完再换回去。
       每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数（有分组的模型卡在 KV 头数上）。</li>
   </ul>
+<figure class="fbox fwide" id="anim-ulysses">
+<video src="media/topic05-ulysses.mp4" autoplay loop muted playsinline
+       aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
+<figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
+  <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
 <figure class="fbox fwide" id="anim-ringattn">
 <video src="media/topic05-ringattention.mp4" autoplay loop muted playsinline
        aria-label="Ring Attention 动画。四张卡，每张卡左边固定一段 Q（Q0 到 Q3），旁边一段 KV。右边是 4 乘 4 的注意力块网格，行是哪张卡的 Q，列是哪段 KV。标题：Ring Attention：Q 不动，KV 沿环传。字幕一：每张卡固定一段 Q；每一步算手上这对（Q, KV），同时把 KV 传给下一张。四步里 KV 段一格格往下传，卡 3 的传回卡 0，网格每行逐格填满。字幕二：转完一圈：每张卡都跟所有 KV 算过了，自己那一行填满。字幕三：关键：传下一块的时候正在算这一块，通信藏在计算后面。最后复位。"></video>
@@ -3500,7 +3511,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s5-5">5.5　prefill 那边也有一种</h3>
   <p>DCP 管的是 decode。prefill 那边要把一个长 prompt 切开、让第一个字早点出来，叫 <b>PCP</b>（prefill 上下文并行）。
-    PCP 是在 TP 之外再加一维，所以<b>PCP 加卡，DCP 不加卡</b>；PCP 也不帮 KV 扩容量。
+    它是在 TP 之外再加一维，所以<b>PCP 加卡，DCP 不加卡</b>；它只管算得快，不管 KV 装不装得下。
     下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（本课的归纳）。</p>
 
   <h3 id="s5-6">5.6　这一刀留下的问题</h3>
@@ -3831,7 +3842,7 @@ body.figonly section h3{margin-top:34px}
       推理时 KV 放不下就上 DCP（第五节）。</li>
     <li><b>再看快线那一圈有多大</b>：TP、EP 的度数别超过它（8 卡一台的机器就是 8，GB300 一柜是 72，TPU 看切片）。</li>
     <li><b>再看序列多长</b>：训练长上下文加 CP，推理长 prompt 加 PCP。</li>
-    <li><b>还不够，或者必须跨很慢的线，才上 PP</b>：它通信量最小，能跨慢线，代价是气泡（第三节）。</li>
+    <li><b>还不够，或者必须跨很慢的线，才上 PP</b>：它只传段边界的激活，量小、频率低，能跨慢线，代价是气泡（第三节）。</li>
     <li><b>剩下的卡全给 DP</b>：一步只通信一次，最便宜。</li>
   </ol>
   <p>拿两个真实配置对一遍。表里「DP 4 × FSDP 128」这类写法按乘法读：两种切法各切几份，乘起来就是总共多少份。</p>
@@ -3927,7 +3938,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s8-1">8.1　四类刀法</h3>
   <p>判据只有一个：<b>看它切的是什么。</b>先看一张图，再看表：</p>
-<figure class="fbox fwide" id="fig-panorama"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="并行方式的全景图。四列是四类：数据并行切 batch，序列并行切一条样本，模型并行切权重，解耦拆工作。每个名字下面写着它用哪种通信；实心圆点表示它可以跨到慢线上，空心圆点表示它要待在快线里。数据并行里的 DP、ZeRO-1 和 2、HSDP 能跨慢线，FSDP 要在快线里；模型并行里只有 PP 能跨慢线；解耦里 PD 分离和 Encoder 分离只传一次，能跨机器"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-panorama"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="并行方式的全景图。四列是四类：数据并行切 batch，序列并行切一条样本，模型并行切权重，解耦拆工作。每个名字下面写着它用哪种通信；实心圆点表示它可以跨到慢线上，空心圆点表示它要待在快线里。数据并行里的 DP、ZeRO-1、HSDP 能跨慢线，FSDP 要在快线里，Attention DP 在 MoE 里跟着专家并行走，也要在快线里；模型并行里只有 PP 能跨慢线；解耦里 PD 分离和 Encoder 分离只传一次，能跨机器"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">全景：四类刀法，每个名字挂两样东西　——　<tspan font-weight="700">用哪种通信，能不能跨慢线</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">五刀里切权重和切专家都归「模型并行」。● 可以跨到慢线上　○ 要待在快线里（默认摆法，有例外，见第七节）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -3961,8 +3972,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="307" y="446" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
 <rect x="24.0" y="498" width="309.5" height="70" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
 <text class="svgsm" x="40" y="528" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Attention DP</tspan></text>
-<text class="svgsm" x="40" y="552" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">推理：各管各的请求</text>
-<text class="svgsm" x="307" y="530" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
+<text class="svgsm" x="40" y="552" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">推理：MoE 里跟着 EP 走</text>
+<text class="svgsm" x="307" y="530" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
 <rect x="357.5" y="102" width="337.5" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="357.5" y="102" width="337.5" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="357.5" y="104" width="337.5" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -4260,7 +4271,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv <a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">2407.21783</a> §3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
     <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> 摘要与 §4.1</td></tr>
     <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
-    <tr><td>DCN 每芯片 100 Gbps</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）</td></tr>
+    <tr><td>DCN 每芯片 100 Gbps；跨切片同口径慢约 50 倍</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）；100 Gbps 按单向计、×2 得双向约 25 GB/s，对 ICI 双向 1,200 GB/s 约 48 倍，为本课换算（只按单向比则约 96 倍）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>

@@ -125,7 +125,7 @@ def fig_1n():
     yb = f.band(y2 + 20, "ok", "两两成对，差别只在一个动作", [
         "广播和分发是<tspan font-weight=\"700\">一变多</tspan>，收集和归约是<tspan font-weight=\"700\">多变一</tspan>。"
         "　收集和归约的区别只在于：数据到了之后<tspan font-weight=\"700\">拼起来</tspan>还是<tspan font-weight=\"700\">加起来</tspan>。",
-        "这四个都有一个「班长」卡 0，所有流量都挤在它一个人的线上。"
+        "这四个都有一个「班长」卡 0，按最朴素的做法，所有流量都挤在它一个人的线上。"
         "训练里真正天天在跑的，是它们<tspan font-weight=\"700\">没有班长</tspan>的版本：AllGather、ReduceScatter、AllReduce、AllToAll。",
     ])
     f.save("fig5-coll-1n.svg", yb + 14)
