@@ -1,0 +1,199 @@
+# -*- coding: utf-8 -*-
+r"""专题五 · 第三节「第二刀：切权重」的三张静态图。
+
+⭐ 这一节承重的是一条推导（⚠️ 推导，不是某篇论文的原话，页面上也标成推导）：
+   「每在网络上搬一个字节，能换来多少 FLOPs」——&#160;
+     · FSDP：一步搬 ≈ 6P 字节（两次 AllGather 拼 bf16 权重 ＋ 一次 ReduceScatter 分 bf16 梯度），
+       算 6PT FLOPs（T ＝ 每张卡这一步的 token 数，稠密近似）→ 每字节 ＝ **T**，跟模型多大无关。
+     · TP：一层前向 2 次、反向 2 次 AllReduce，每次每卡发 ≈ 4Th 字节（bf16 激活），共 16Th；
+       一层算 72h²T／n（稠密层 12h² 参数，前向 2、反向 4 倍）→ 每字节 ＝ **4.5h／n**，跟 batch 无关。
+   硬件那一边：v7 每芯片 2,307 TFLOP/s（bf16）÷ ICI 1,200 GB/s ≈ **1,922 FLOPs/字节**。
+   ⛔ 1,200 GB/s 取自 Inferact 那篇 TPU megakernel 博客的规格表（Google TPU7x 文档口径），
+     是三根轴一起用的总量；只用一根轴时分母要除以 3。
+
+⛔ 所有数字现算并断言。
+"""
+from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+
+W = 1400
+C_V7 = 2307e12                  # v7 每芯片 bf16 FLOP/s
+B_V7 = 1.2e12                   # v7 每芯片 ICI（三轴合计）
+RIDGE = C_V7 / B_V7
+H_V3 = 7168
+assert abs(RIDGE - 1922) < 1, RIDGE
+
+
+def tp_intensity(h, n):
+    return 4.5 * h / n
+
+
+N_TP_MAX = 4.5 * H_V3 / RIDGE
+assert 16 < N_TP_MAX < 17.5, N_TP_MAX       # ≈ 16.8
+
+
+def fig_intensity():
+    f = Fig(W, "每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。"
+               "FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。"
+               "TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。"
+               "中间那条水平虚线是 TPU v7 的硬件线，约一千九百二十二：每秒能算的次数除以每秒能搬的字节。"
+               "线下面就是被通信拖住。FSDP 在 token 数少于一千九百二十二时掉到线下；"
+               "V3 的 TP 开到 8 路时在线上，开到 32 路时在线下")
+    y0 = f.header("两把刀，两种账　——　<tspan font-weight=\"700\">FSDP 看 batch，TP 看隐藏维</tspan>",
+                  "纵轴：每在网络上搬 1 字节，换来多少 FLOPs（⚠️ 推导，稠密层近似）。"
+                  "低于硬件线 ＝ 算得没有搬得快，被通信拖住",
+                  [(BL, "FSDP：＝ 每卡 token 数 T"), (OR, "TP：＝ 4.5 × 隐藏维 ÷ TP 度数"), (RD, "v7 硬件线 ≈ 1,922")])
+    PX, PY, PW, PH = 150, y0 + 20, 980, 380
+    f.box(PX, PY, PW, PH, "none", LINE, 6)
+    TMAX, IMAX = 8192, 8192
+
+    def X(t):
+        return PX + PW * t / TMAX
+
+    def Y(i):
+        return PY + PH - PH * min(i, IMAX) / IMAX
+    for t in (0, 2048, 4096, 6144, 8192):
+        f.t(X(t), PY + PH + 22, "{:,}".format(t), GY, size=12.5, anchor="middle")
+    f.t(PX + PW / 2, PY + PH + 46, "每张卡这一步的 token 数 T", GY, True, 13.5, anchor="middle")
+    for i in (0, 2048, 4096, 6144, 8192):
+        f.t(PX - 10, Y(i) + 5, "{:,}".format(i), GY, size=12.5, anchor="end")
+    f.path("M%d,%d L%d,%d" % (X(RIDGE), Y(0), X(RIDGE), Y(RIDGE)), RD, 1.6, dash="4,4", arrow=False)
+    f.t(X(RIDGE) + 8, Y(420), "T ＜ 1,922：FSDP 被拖住", RD, True, 13)
+    f.path("M%d,%d L%d,%d" % (X(0), Y(0), X(TMAX), Y(TMAX)), BL, 3, arrow=False)
+    f.t(X(6600), Y(6600) - 14, "FSDP", BL, True, 15)
+    for n, lab in ((8, "TP 8 路"), (32, "TP 32 路")):
+        yi = tp_intensity(H_V3, n)
+        f.path("M%d,%d L%d,%d" % (X(0), Y(yi), X(TMAX), Y(yi)), OR, 2.5,
+               dash="7,4" if n == 32 else None, arrow=False)
+        f.t(X(TMAX) + 10, Y(yi) + 5, "%s ≈ %s" % (lab, "{:,.0f}".format(yi)), OR, True, 13.5)
+    f.path("M%d,%d L%d,%d" % (X(0), Y(RIDGE), X(TMAX), Y(RIDGE)), RD, 2, dash="4,4", arrow=False)
+    f.t(X(TMAX) + 10, Y(RIDGE) + 5, "v7 硬件线 ≈ 1,922", RD, True, 13.5)
+    yb = f.band(PY + PH + 70, "ok", "batch 小就换 TP，batch 大就用 FSDP", [
+        "FSDP 每字节换来的计算 ＝ 每卡 token 数：在 v7 上每卡少于约 1,922 个 token，就搬得比算得慢。"
+        "　<tspan font-weight=\"700\">加卡又不想加 batch，FSDP 迟早掉到线下。</tspan>",
+        "TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，"
+        "TP 8 路 ≈ 4,032 在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight=\"700\">TP 有一个跟 batch 无关的上限</tspan>。",
+    ])
+    yb = f.src(yb + 10,
+               "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6P 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6PT FLOPs；"
+               "TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。",
+               "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 为三轴合计（Inferact TPU megakernel 博客规格表，"
+               "来源为 Google TPU7x 文档）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。")
+    f.save("fig5-intensity.svg", yb + 14)
+
+
+def fig_tp_mlp():
+    f = Fig(W, "张量并行怎么切一个 MLP。输入 X 每张卡都有一整份。第一块权重 W1 按列切成两半，"
+               "每张卡算出中间结果的一半，激活函数可以各自算，不用通信。第二块权重 W2 按行切，"
+               "每张卡算出的是完整输出的一部分和，最后做一次 AllReduce 加起来，每张卡拿到完整的 Y。"
+               "关键是两次矩阵乘之间不需要任何通信：先列切、再行切，正好让一次 AllReduce 放在最后")
+    y0 = f.header("TP 切 MLP　——　<tspan font-weight=\"700\">先按列切，再按行切，中间一次通信都不用</tspan>",
+                  "两张卡的例子。灰 ＝ 两张卡都有的完整副本，蓝 ／ 橙 ＝ 各自那一半",
+                  [(BL, "卡 0 的那一半"), (OR, "卡 1 的那一半"), (GY2, "完整副本")])
+    PH = 330
+    py = f.panel(0, y0, W, PH, "Y ＝ GeLU(X · W1) · W2", BL, sub="Megatron-LM 的切法")
+    cy0 = py + 40
+    # 列：X | W1 | 中间 | W2 | 部分和 | AllReduce | Y
+    def mat(x, y, w, h, col, lab, sub=None):
+        f.box(x, y, w, h, col, col, 4)
+        f.t(x + w / 2, y + h / 2 + 5, lab, "#ffffff", True, 14, "middle")
+        if sub:
+            f.t(x + w / 2, y + h + 18, sub, GY, size=12, anchor="middle")
+    for r, (col, k) in enumerate(((BL, 0), (OR, 1))):
+        yy = cy0 + r * 130
+        f.t(18, yy + 48, "卡 %d" % k, col, True, 16)
+        mat(80, yy + 20, 90, 60, GY2, "X", "完整")
+        f.t(186, yy + 56, "×", INK, True, 18)
+        mat(210, yy + 10, 60, 80, col, "W1", "按列切：半")
+        f.t(286, yy + 56, "→", INK, True, 18)
+        mat(310, yy + 20, 90, 60, col, "GeLU", "中间的一半")
+        f.t(416, yy + 56, "×", INK, True, 18)
+        mat(440, yy + 25, 80, 50, col, "W2", "按行切：半")
+        f.t(536, yy + 56, "→", INK, True, 18)
+        mat(560, yy + 20, 90, 60, col, "部分和", "只是 Y 的一部分")
+    f.box(700, cy0 + 40, 160, 200, "none", GR, 8, sw=2)
+    f.t(780, cy0 + 130, "AllReduce", GR, True, 16, "middle")
+    f.t(780, cy0 + 156, "两份部分和相加", GY, size=12.5, anchor="middle")
+    for r in range(2):
+        f.line(652, cy0 + r * 130 + 50, 698, cy0 + 110 + r * 30, GY2, 1.6)
+        f.line(862, cy0 + 110 + r * 30, 908, cy0 + r * 130 + 50, GY2, 1.6)
+        mat(910, cy0 + r * 130 + 20, 90, 60, GY2, "Y", "完整")
+    f.box(1040, cy0 + 20, 330, 220, "none", LINE, 8)
+    f.lines(1058, cy0 + 50, 300, ["中间结果在两张卡上各一半，",
+                                   "激活函数逐元素算，各算各的；",
+                                   "W2 按行切正好接住这一半。",
+                                   "",
+                                   "所以整个 MLP 只在最后",
+                                   "做一次 AllReduce。"], size=14, lh=26, fill=INK)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "切法的全部巧思，就是把通信挤到最后一次", [
+        "第一块按列切、第二块按行切：中间结果各留一半、各自过激活函数，<tspan font-weight=\"700\">两次矩阵乘之间零通信</tspan>。",
+        "attention 同理：按头切，每张卡算自己那几个头，出口处一次 AllReduce。"
+        "　于是一层前向 2 次、反向 2 次 AllReduce，<tspan font-weight=\"700\">每层都有，频率极高</tspan>。",
+    ])
+    yb = f.src(yb + 10, "📌 出处：Shoeybi 等，Megatron-LM，arXiv 1909.08053 §3（MLP 与 self-attention 的切法、f／g 两个通信算子）。")
+    f.save("fig5-tp-mlp.svg", yb + 14)
+
+
+def bubble_ratio(p, m):
+    """Narayanan 等 arXiv 2104.04473 §2.2.1 的口径：气泡时间 ÷ 理想计算时间 ＝ (p−1)/m。
+    GPipe 与 1F1B 一样大（1F1B 只省激活显存）。"""
+    return (p - 1) / m
+
+
+def bubble_share(p, m):
+    """同一件事换成「占整步时长」的口径：(p−1)/(m+p−1)。"""
+    return (p - 1) / (m + p - 1)
+
+
+def fig_pp():
+    P, M = 4, 8
+    f = Fig(W, "流水线并行的时间表。四个 stage 从上到下，横轴是时间。每个小方块是一个 micro-batch 在这一段的前向或反向。"
+               "一开始只有第一段在干活，后面几段在等；最后只剩第一段在做反向，前面几段在等。"
+               "那两个三角形的空白就是气泡。micro-batch 越多，气泡占的比例越小。"
+               "四段八个 micro-batch 时，气泡是理想计算时间的八分之三，占整步约百分之二十七")
+    y0 = f.header("PP 的代价：气泡　——　<tspan font-weight=\"700\">开头等人灌满，结尾等人排空</tspan>",
+                  "4 个 stage、8 个 micro-batch，GPipe 式时间表（先全部前向、再全部反向）。反向按前向的 2 倍长画",
+                  [(BL, "前向"), (GR, "反向"), ("#cfd8dc", "气泡：这一段在空等")])
+    CW = 30
+    PH = 30 + P * 46 + 60
+    py = f.panel(0, y0, W, PH, "一步里每个 stage 在干什么", BL)
+    X0 = 130
+    for s in range(P):
+        yy = py + 24 + s * 46
+        f.t(20, yy + 24, "stage %d" % s, INK, True, 14)
+        # 气泡：先把整条时间轴涂成浅灰，再在上面盖前向／反向块
+        total_t = (M + P - 1) + (M * 2 + (P - 1) * 2)
+        f.box(X0, yy + 6, total_t * CW, 30, "#eceff1", "none", 3)
+        # 前向：micro-batch i 在 stage s 的时刻 = i + s
+        for i in range(M):
+            x = X0 + (i + s) * CW
+            f.box(x + 1, yy + 6, CW - 2, 30, BL, BL, 3)
+            f.t(x + CW / 2, yy + 26, str(i), "#ffffff", True, 11.5, "middle")
+        # 反向：从最后一段开始，时刻 = (M+P-1) + (M-1-i)*2 + (P-1-s)*2
+        t0 = M + P - 1
+        for i in range(M):
+            x = X0 + (t0 + (P - 1 - s) * 2 + i * 2) * CW
+            f.box(x + 1, yy + 6, 2 * CW - 2, 30, GR, GR, 3)
+            f.t(x + CW, yy + 26, str(i), "#ffffff", True, 11.5, "middle")
+    total = (M + P - 1) + (M * 2 + (P - 1) * 2)
+    f.line(X0, py + 24 + P * 46 + 8, X0 + total * CW, py + 24 + P * 46 + 8, GY2, 1.4)
+    f.t(X0 + total * CW, py + 24 + P * 46 + 28, "时间 →", GY, size=13, anchor="end")
+    b, sh = bubble_ratio(P, M), bubble_share(P, M)
+    assert abs(b - 3 / 8) < 1e-9 and abs(sh - 3 / 11) < 1e-9
+    f.t(X0, py + 24 + P * 46 + 30,
+        "气泡 ÷ 理想计算时间 ＝ (p−1) ÷ m ＝ 3 ÷ 8 ≈ %.0f%%（占整步约 %.0f%%）" % (b * 100, sh * 100), RD, True, 14)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "气泡是纯损失，只能摊薄，不能消灭", [
+        "stage 越多、micro-batch 越少，气泡越大：<tspan font-weight=\"700\">(p−1) ÷ m</tspan>。"
+        "　所以 PP 要配足够多的 micro-batch，而 micro-batch 多了，每张卡要攒的激活也多。",
+        "后来的调度都在跟这块空白较劲：交错式（VPP）把每段再切细，Zero Bubble 拿权重梯度去填缝，"
+        "DualPipe 两头同时灌。<tspan font-weight=\"700\">代价都是更复杂的调度和更多的点对点通信</tspan>。",
+    ])
+    yb = f.src(yb + 10, "📌 气泡占比：Narayanan 等，arXiv 2104.04473 §2.2（GPipe／1F1B 的 bubble time fraction）；"
+                        "交错式把气泡再除以每卡的虚拟段数 v。Zero Bubble：arXiv 2401.10241。DualPipe：github.com/deepseek-ai/DualPipe。")
+    f.save("fig5-pp-bubble.svg", yb + 14)
+
+
+fig_intensity()
+fig_tp_mlp()
+fig_pp()

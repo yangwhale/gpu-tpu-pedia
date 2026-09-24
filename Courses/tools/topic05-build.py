@@ -122,9 +122,9 @@ HERO = '''
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲写了三节</span>
-    <b>第一节（集合通信）、第二节（切数据）和第八节（全景）是写完的</b>，出处在文末台账。<br>
-    第三到第七节还是大纲，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了四节</span>
+    <b>第一到第三节和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第四到第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
 '''
 
@@ -292,12 +292,65 @@ __FIG_FSDP_STEP__
     要继续加卡、又不能让每张卡的 batch 变小，就得换一种切法：<b>不再拼整层权重，直接把权重切开</b>。这是第二刀。</p>
 </div></section>
 
-''' + sec("s三", "三", "第二刀：切权重") + todo([
-    "FSDP 的尽头：每一层都要把整层权重拼回来；<b>FSDP 搬权重、TP 搬激活</b>，batch 小时搬权重吃光时间",
-    "<b>TP</b>：切进矩阵，每层两次 AllReduce，频率极高 → 只能待在 NVLink / ICI 一跳之内；度数受头数限制",
-    "<b>SP（Megatron）</b>：TP 的搭档，把 AllReduce 拆成 AG ＋ RS，顺手切掉 LayerNorm 那几段的激活",
-    "<b>PP / VPP</b>：按层切，通信最少，代价是气泡；V3 前 3 层 dense、后 58 层 MoE 怎么切才平衡",
-]) + '''
+''' + sec("s三", "三", "第二刀：切权重") + '''
+  <p class="lead">FSDP 每一层都要把整层权重拼回来。只要每张卡的 batch 够大，这笔搬运能藏在计算后面；
+    <b>batch 一小，就藏不住了。</b>第二刀不再拼权重，直接把权重切开。</p>
+
+  <h3>3.1　FSDP 的尽头：搬一个字节，换来多少计算</h3>
+  <p>判断一刀会不会被通信拖住，只看一个比值：<b>每在网络上搬一个字节，能换来多少次计算</b>。
+    这个比值要高过硬件自己的比值（每秒能算多少次 ÷ 每秒能搬多少字节），否则就是算得没有搬得快。</p>
+  <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是两次拼权重、一次分梯度，约 6P 字节；
+    一步算的是 6PT 次，T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
+__FIG_INTENSITY__
+  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16），芯片间 ICI 每秒能搬 1.2 TB（三根轴合计），
+    硬件的比值约 1,922。所以 <b>每张卡每步少于约 1,922 个 token，FSDP 就被搬权重拖住了</b>。
+    而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
+
+  <h3>3.2　TP：切进矩阵内部</h3>
+  <p>张量并行把一层的权重矩阵本身切开，每张卡只存、只算其中一块。Megatron-LM 的切法里藏着一个巧思：</p>
+__FIG_TP_MLP__
+<figure class="fbox fwide" id="anim-tpsplit">
+<video src="media/topic05-tpsplit.mp4" autoplay loop muted playsinline
+       aria-label="张量并行切一个 MLP 的动画。两张卡，卡 0 蓝、卡 1 橙，各有完整的 X、按列切的一半 W1、按行切的一半 W2。标题：张量并行切一个 MLP：Y ＝ GeLU(X·W1)·W2。字幕一：① W1 按列切：每张卡算出中间结果的一半。字幕二：② 激活函数逐元素算：各算各的，这一段没有任何通信。字幕三：③ W2 按行切：每张卡只得到 Y 的一个部分和。字幕四：④ AllReduce：两份部分和相加，两张卡都拿到完整的 Y。字幕五：整个 MLP 只在最后通信一次 —— 代价是每一层都有这一次。最后复位。"></video>
+<figcaption>通信只在最后那一下；可每一层都有这一下。
+  <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>关键在切的方向。按列切第一块，每张卡手里是中间结果的某几列；激活函数只看单个元素，不需要别人的那几列；
+    按行切第二块，正好只用到自己这几列。所以通信被整个推到了出口。
+    代价也在这儿：<b>这一下每层都要来</b>，前向两下、反向两下。</p>
+
+  <h3>3.3　SP：TP 的搭档</h3>
+  <p>TP 切不到的那几段，LayerNorm、dropout、残差相加，每张卡都存着一整份激活。
+    Megatron 的序列并行（SP）把这几段沿序列切开，顺手把每次 AllReduce 拆成 AllGather ＋ ReduceScatter
+    ——&nbsp;就是第一节那个等式，<b>通信量一个字节不变</b>，省下的是激活显存。</p>
+
+  <h3>3.4　TP 的上限：跟 batch 无关</h3>
+  <p>TP 搬的是激活，一层搬多少跟 token 数成正比，算多少也跟 token 数成正比，<b>batch 在账里约掉了</b>。
+    剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。</p>
+  <ul>
+    <li>V3 的隐藏维 7,168：TP 8 路约 4,032，在 v7 硬件线之上；开到约 17 路以上就掉下去了。</li>
+    <li>另外两条硬约束：注意力头数必须能被 TP 度数整除；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>
+  </ul>
+  <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP。两把刀各管一边。</p>
+
+  <h3>3.5　PP：按层切</h3>
+  <p>流水线并行把模型按层切成几段，每张卡负责一段，段与段之间只在边界上点对点传激活，
+    是所有刀里通信最少的。代价是<b>气泡</b>：</p>
+__FIG_PP_BUBBLE__
+<figure class="fbox fwide" id="anim-pipeline">
+<video src="media/topic05-pipeline.mp4" autoplay loop muted playsinline
+       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了。字幕三：气泡只能摊薄、不能消灭：micro-batch 越多越省，可每张卡要攒的激活也越多。最后复位。"></video>
+<figcaption>micro-batch 从 4 个加到 8 个，灰色的气泡跟着缩一半。
+  <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>开头要等后面几段灌满，结尾要等前面几段排空。气泡跟理想计算时间之比是 (p−1) ÷ m，
+    p 是段数，m 是 micro-batch 个数。micro-batch 越多越省，可每张卡要攒的激活也越多。
+    三种常见的改进：VPP 让每张卡负责几段不连续的层，气泡再除以每卡的段数；
+    Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
+    DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌。</p>
+
+  <h3>3.6　这一刀留下的问题</h3>
+  <p>DeepSeek-V3 训练时<b>一点 TP 都没用</b>：16 路 PP、64 路专家并行、ZeRO-1 数据并行（技术报告 §3.2）。
+    原因在参数的分布上：每个专家 3 × 7,168 × 2,048 ≈ 4,400 万参数，256 个专家 × 58 个 MoE 层 ≈ 6,539 亿，
+    <b>占全部参数的约 97%</b>。每个专家只有 2,048 宽，切进它内部不划算；真正该切的，是「专家」这一维。这是第三刀。</p>
 </div></section>
 
 ''' + sec("s四", "四", "第三刀：切专家") + todo([
@@ -552,6 +605,10 @@ __FIG_FSDP_STEP__
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
     <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv 1910.02054 §5、§7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
+    <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv 1909.08053 §3（前向 2 次、反向 2 次 all-reduce）；arXiv 2205.05198 §4.2.2（AG＋RS 替代 all-reduce，无额外通信）；头数须被 TP 整除：megatron/core/transformer/transformer_config.py 的校验</td></tr>
+    <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv 2104.04473 §2.2.1–2.2.2；Zero Bubble arXiv 2401.10241；DualPipe README</td></tr>
+    <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
+    <tr><td>每字节换多少计算、v7 硬件线约 1,922</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16、ICI 1,200 GB/s 三轴合计（wiki ici-dcn、Inferact 博客规格表）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv 2504.14960</td></tr>
@@ -581,6 +638,15 @@ FOOT = '''
 </body></html>'''
 
 FIGS = {
+    "__FIG_INTENSITY__": ("fig-intensity", "fig5-intensity.svg", "topic05-fig-tp.py",
+        '<b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><br>'
+        '<em>低于红色虚线，就是算得没有搬得快。</em>'),
+    "__FIG_TP_MLP__": ("fig-tp-mlp", "fig5-tp-mlp.svg", "topic05-fig-tp.py",
+        '<b>列切接行切，中间结果不出卡。</b><br>'
+        '<em>这是 Megatron-LM 的切法，attention 按头切也是同一个思路。</em>'),
+    "__FIG_PP_BUBBLE__": ("fig-pp-bubble", "fig5-pp-bubble.svg", "topic05-fig-tp.py",
+        '<b>浅灰色就是气泡：这一段在干等。</b><br>'
+        '<em>4 段 8 个 micro-batch，气泡是理想计算时间的 3/8。</em>'),
     "__FIG_ZERO_MEM__": ("fig-zero-mem", "fig5-zero-mem.svg", "topic05-fig-zero.py",
         '<b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><br>'
         '<em>ZeRO-3 那条短到几乎看不见 —— 每卡从 9.76 TiB 降到 9.76 GiB，正好除以 1,024。</em>'),

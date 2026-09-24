@@ -838,9 +838,9 @@ body.figonly section h3{margin-top:34px}
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲写了三节</span>
-    <b>第一节（集合通信）、第二节（切数据）和第八节（全景）是写完的</b>，出处在文末台账。<br>
-    第三到第七节还是大纲，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了四节</span>
+    <b>第一到第三节和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第四到第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一张卡装不下</h2></div>
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，
@@ -2490,13 +2490,343 @@ body.figonly section h3{margin-top:34px}
     要继续加卡、又不能让每张卡的 batch 变小，就得换一种切法：<b>不再拼整层权重，直接把权重切开</b>。这是第二刀。</p>
 </div></section>
 
-<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>第二刀：切权重</h2></div><div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
-<ul>
-  <li>FSDP 的尽头：每一层都要把整层权重拼回来；<b>FSDP 搬权重、TP 搬激活</b>，batch 小时搬权重吃光时间</li>
-  <li><b>TP</b>：切进矩阵，每层两次 AllReduce，频率极高 → 只能待在 NVLink / ICI 一跳之内；度数受头数限制</li>
-  <li><b>SP（Megatron）</b>：TP 的搭档，把 AllReduce 拆成 AG ＋ RS，顺手切掉 LayerNorm 那几段的激活</li>
-  <li><b>PP / VPP</b>：按层切，通信最少，代价是气泡；V3 前 3 层 dense、后 58 层 MoE 怎么切才平衡</li>
-</ul>
+<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>第二刀：切权重</h2></div>
+  <p class="lead">FSDP 每一层都要把整层权重拼回来。只要每张卡的 batch 够大，这笔搬运能藏在计算后面；
+    <b>batch 一小，就藏不住了。</b>第二刀不再拼权重，直接把权重切开。</p>
+
+  <h3 id="s3-1">3.1　FSDP 的尽头：搬一个字节，换来多少计算</h3>
+  <p>判断一刀会不会被通信拖住，只看一个比值：<b>每在网络上搬一个字节，能换来多少次计算</b>。
+    这个比值要高过硬件自己的比值（每秒能算多少次 ÷ 每秒能搬多少字节），否则就是算得没有搬得快。</p>
+  <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是两次拼权重、一次分梯度，约 6P 字节；
+    一步算的是 6PT 次，T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
+<figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 694" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约一千九百二十二：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于一千九百二十二时掉到线下；V3 的 TP 开到 8 路时在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两把刀，两种账　——　<tspan font-weight="700">FSDP 看 batch，TP 看隐藏维</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（ 推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FSDP：＝ 每卡 token 数 T</text>
+<rect x="228" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="249" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP：＝ 4.5 × 隐藏维 ÷ TP 度数</text>
+<rect x="500" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="521" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7 硬件线 ≈ 1,922</text>
+<rect x="150" y="122" width="980" height="380" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="150" y="524" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="395" y="524" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">2,048</text>
+<text class="svgsm" x="640" y="524" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">4,096</text>
+<text class="svgsm" x="885" y="524" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">6,144</text>
+<text class="svgsm" x="1130" y="524" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">8,192</text>
+<text class="svgsm" x="640" y="548" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡这一步的 token 数 T</tspan></text>
+<text class="svgsm" x="140" y="507" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="140" y="412" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">2,048</text>
+<text class="svgsm" x="140" y="317" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">4,096</text>
+<text class="svgsm" x="140" y="222" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">6,144</text>
+<text class="svgsm" x="140" y="127" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">8,192</text>
+<path d="M379,502 L379,412" fill="none" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="4,4"/>
+<text class="svgsm" x="387" y="482" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">T ＜ 1,922：FSDP 被拖住</tspan></text>
+<path d="M150,502 L1130,122" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
+<text class="svgsm" x="939" y="181" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP</tspan></text>
+<path d="M150,314 L1130,314" fill="none" stroke="#e8710a" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="1140" y="319" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 8 路 ≈ 4,032</tspan></text>
+<path d="M150,455 L1130,455" fill="none" stroke="#e8710a" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="7,4"/>
+<text class="svgsm" x="1140" y="460" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 32 路 ≈ 1,008</tspan></text>
+<path d="M150,412 L1130,412" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
+<text class="svgsm" x="1140" y="417" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7 硬件线 ≈ 1,922</tspan></text>
+<rect x="0" y="572" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="572" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="572" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="599" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch 小就换 TP，batch 大就用 FSDP</tspan></text>
+<text class="svgsm" x="20" y="630" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">FSDP 每字节换来的计算 ＝ 每卡 token 数：在 v7 上每卡少于约 1,922 个 token，就搬得比算得慢。　<tspan font-weight="700">加卡又不想加 batch，FSDP 迟早掉到线下。</tspan></text>
+<text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，TP 8 路 ≈ 4,032 在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight="700">TP 有一个跟 batch 无关的上限</tspan>。</text>
+</svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6P 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6PT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
+<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 为三轴合计（Inferact TPU megakernel 博客规格表，来源为 Google TPU7x 文档）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
+  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16），芯片间 ICI 每秒能搬 1.2 TB（三根轴合计），
+    硬件的比值约 1,922。所以 <b>每张卡每步少于约 1,922 个 token，FSDP 就被搬权重拖住了</b>。
+    而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
+
+  <h3 id="s3-2">3.2　TP：切进矩阵内部</h3>
+  <p>张量并行把一层的权重矩阵本身切开，每张卡只存、只算其中一块。Megatron-LM 的切法里藏着一个巧思：</p>
+<figure class="fbox fwide" id="fig-tp-mlp"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="张量并行怎么切一个 MLP。输入 X 每张卡都有一整份。第一块权重 W1 按列切成两半，每张卡算出中间结果的一半，激活函数可以各自算，不用通信。第二块权重 W2 按行切，每张卡算出的是完整输出的一部分和，最后做一次 AllReduce 加起来，每张卡拿到完整的 Y。关键是两次矩阵乘之间不需要任何通信：先列切、再行切，正好让一次 AllReduce 放在最后"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TP 切 MLP　——　<tspan font-weight="700">先按列切，再按行切，中间一次通信都不用</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两张卡的例子。灰 ＝ 两张卡都有的完整副本，蓝 ／ 橙 ＝ 各自那一半</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0 的那一半</text>
+<rect x="140" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="161" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 1 的那一半</text>
+<rect x="280" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="301" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">完整副本</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y ＝ GeLU(X · W1) · W2</tspan></text>
+<text class="svgsm" x="209" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">Megatron-LM 的切法</text>
+<text class="svgsm" x="18" y="220" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<rect x="80" y="192" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="125" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="125" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
+<text class="svgsm" x="186" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="210" y="182" width="60" height="80" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="240" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
+<text class="svgsm" x="240" y="280" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按列切：半</text>
+<text class="svgsm" x="286" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
+<rect x="310" y="192" width="90" height="60" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="355" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GeLU</tspan></text>
+<text class="svgsm" x="355" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">中间的一半</text>
+<text class="svgsm" x="416" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="440" y="197" width="80" height="50" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="480" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
+<text class="svgsm" x="480" y="265" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按行切：半</text>
+<text class="svgsm" x="536" y="228" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
+<rect x="560" y="192" width="90" height="60" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="605" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<text class="svgsm" x="605" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">只是 Y 的一部分</text>
+<text class="svgsm" x="18" y="350" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<rect x="80" y="322" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="125" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="125" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
+<text class="svgsm" x="186" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="210" y="312" width="60" height="80" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="240" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
+<text class="svgsm" x="240" y="410" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按列切：半</text>
+<text class="svgsm" x="286" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
+<rect x="310" y="322" width="90" height="60" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="355" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GeLU</tspan></text>
+<text class="svgsm" x="355" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">中间的一半</text>
+<text class="svgsm" x="416" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="440" y="327" width="80" height="50" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="480" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
+<text class="svgsm" x="480" y="395" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">按行切：半</text>
+<text class="svgsm" x="536" y="358" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→</tspan></text>
+<rect x="560" y="322" width="90" height="60" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="605" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<text class="svgsm" x="605" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">只是 Y 的一部分</text>
+<rect x="700" y="212" width="160" height="200" rx="8" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="780" y="302" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllReduce</tspan></text>
+<text class="svgsm" x="780" y="328" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">两份部分和相加</text>
+<line x1="652" y1="222" x2="698" y2="282" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="862" y1="282" x2="908" y2="222" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="910" y="192" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="955" y="227" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y</tspan></text>
+<text class="svgsm" x="955" y="270" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
+<line x1="652" y1="352" x2="698" y2="312" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="862" y1="312" x2="908" y2="352" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="910" y="322" width="90" height="60" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="955" y="357" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y</tspan></text>
+<text class="svgsm" x="955" y="400" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">完整</text>
+<rect x="1040" y="192" width="330" height="220" rx="8" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1058" y="222" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">中间结果在两张卡上各一半，</text>
+<text class="svgsm" x="1058" y="248" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">激活函数逐元素算，各算各的；</text>
+<text class="svgsm" x="1058" y="274" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">W2 按行切正好接住这一半。</text>
+<text class="svgsm" x="1058" y="300" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"></text>
+<text class="svgsm" x="1058" y="326" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">所以整个 MLP 只在最后</text>
+<text class="svgsm" x="1058" y="352" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">做一次 AllReduce。</text>
+<rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切法的全部巧思，就是把通信挤到最后一次</tspan></text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第一块按列切、第二块按行切：中间结果各留一半、各自过激活函数，<tspan font-weight="700">两次矩阵乘之间零通信</tspan>。</text>
+<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">attention 同理：按头切，每张卡算自己那几个头，出口处一次 AllReduce。　于是一层前向 2 次、反向 2 次 AllReduce，<tspan font-weight="700">每层都有，频率极高</tspan>。</text>
+</svg><figcaption><b>列切接行切，中间结果不出卡。</b><span class="capmore"><br><em>这是 Megatron-LM 的切法，attention 按头切也是同一个思路。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：Shoeybi 等，Megatron-LM，arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> §3（MLP 与 self-attention 的切法、f／g 两个通信算子）。</p></details></figure>
+<figure class="fbox fwide" id="anim-tpsplit">
+<video src="media/topic05-tpsplit.mp4" autoplay loop muted playsinline
+       aria-label="张量并行切一个 MLP 的动画。两张卡，卡 0 蓝、卡 1 橙，各有完整的 X、按列切的一半 W1、按行切的一半 W2。标题：张量并行切一个 MLP：Y ＝ GeLU(X·W1)·W2。字幕一：① W1 按列切：每张卡算出中间结果的一半。字幕二：② 激活函数逐元素算：各算各的，这一段没有任何通信。字幕三：③ W2 按行切：每张卡只得到 Y 的一个部分和。字幕四：④ AllReduce：两份部分和相加，两张卡都拿到完整的 Y。字幕五：整个 MLP 只在最后通信一次 —— 代价是每一层都有这一次。最后复位。"></video>
+<figcaption>通信只在最后那一下；可每一层都有这一下。
+  <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>关键在切的方向。按列切第一块，每张卡手里是中间结果的某几列；激活函数只看单个元素，不需要别人的那几列；
+    按行切第二块，正好只用到自己这几列。所以通信被整个推到了出口。
+    代价也在这儿：<b>这一下每层都要来</b>，前向两下、反向两下。</p>
+
+  <h3 id="s3-3">3.3　SP：TP 的搭档</h3>
+  <p>TP 切不到的那几段，LayerNorm、dropout、残差相加，每张卡都存着一整份激活。
+    Megatron 的序列并行（SP）把这几段沿序列切开，顺手把每次 AllReduce 拆成 AllGather ＋ ReduceScatter
+    ——&nbsp;就是第一节那个等式，<b>通信量一个字节不变</b>，省下的是激活显存。</p>
+
+  <h3 id="s3-4">3.4　TP 的上限：跟 batch 无关</h3>
+  <p>TP 搬的是激活，一层搬多少跟 token 数成正比，算多少也跟 token 数成正比，<b>batch 在账里约掉了</b>。
+    剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。</p>
+  <ul>
+    <li>V3 的隐藏维 7,168：TP 8 路约 4,032，在 v7 硬件线之上；开到约 17 路以上就掉下去了。</li>
+    <li>另外两条硬约束：注意力头数必须能被 TP 度数整除；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>。</li>
+  </ul>
+  <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP。两把刀各管一边。</p>
+
+  <h3 id="s3-5">3.5　PP：按层切</h3>
+  <p>流水线并行把模型按层切成几段，每张卡负责一段，段与段之间只在边界上点对点传激活，
+    是所有刀里通信最少的。代价是<b>气泡</b>：</p>
+<figure class="fbox fwide" id="fig-pp-bubble"><svg viewBox="0 0 1400 548" width="100%" role="img" aria-label="流水线并行的时间表。四个 stage 从上到下，横轴是时间。每个小方块是一个 micro-batch 在这一段的前向或反向。一开始只有第一段在干活，后面几段在等；最后只剩第一段在做反向，前面几段在等。那两个三角形的空白就是气泡。micro-batch 越多，气泡占的比例越小。四段八个 micro-batch 时，气泡是理想计算时间的八分之三，占整步约百分之二十七"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PP 的代价：气泡　——　<tspan font-weight="700">开头等人灌满，结尾等人排空</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 个 stage、8 个 micro-batch，GPipe 式时间表（先全部前向、再全部反向）。反向按前向的 2 倍长画</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">前向</text>
+<rect x="75" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="96" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">反向</text>
+<rect x="150" y="63" width="14" height="14" rx="3" fill="#cfd8dc" stroke="#cfd8dc" stroke-width="1.0"/>
+<text class="svgsm" x="171" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">气泡：这一段在空等</text>
+<rect x="0" y="102" width="1400" height="274" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步里每个 stage 在干什么</tspan></text>
+<text class="svgsm" x="20" y="180" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">stage 0</tspan></text>
+<rect x="130" y="162" width="990" height="30" rx="3" fill="#eceff1" stroke="none" stroke-width="1.0"/>
+<rect x="131" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="145" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="161" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="175" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="191" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="205" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="221" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="235" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="251" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="265" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="281" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="295" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="311" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="325" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="341" y="162" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="355" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="641" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="670" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="701" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="730" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="761" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="790" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="821" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="850" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="881" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="910" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="941" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="970" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="1001" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="1061" y="162" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1090" y="182" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="20" y="226" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">stage 1</tspan></text>
+<rect x="130" y="208" width="990" height="30" rx="3" fill="#eceff1" stroke="none" stroke-width="1.0"/>
+<rect x="161" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="175" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="191" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="205" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="221" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="235" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="251" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="265" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="281" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="295" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="311" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="325" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="341" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="355" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="371" y="208" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="385" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="581" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="610" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="641" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="670" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="701" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="730" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="761" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="790" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="821" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="850" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="881" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="910" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="941" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="970" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="1001" y="208" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="228" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="20" y="272" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">stage 2</tspan></text>
+<rect x="130" y="254" width="990" height="30" rx="3" fill="#eceff1" stroke="none" stroke-width="1.0"/>
+<rect x="191" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="205" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="221" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="235" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="251" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="265" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="281" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="295" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="311" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="325" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="341" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="355" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="371" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="385" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="401" y="254" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="415" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="521" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="550" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="581" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="610" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="641" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="670" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="701" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="730" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="761" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="790" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="821" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="850" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="881" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="910" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="941" y="254" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="970" y="274" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="20" y="318" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">stage 3</tspan></text>
+<rect x="130" y="300" width="990" height="30" rx="3" fill="#eceff1" stroke="none" stroke-width="1.0"/>
+<rect x="221" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="235" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="251" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="265" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="281" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="295" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="311" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="325" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="341" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="355" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="371" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="385" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="401" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="415" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="431" y="300" width="28" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="445" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<rect x="461" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="490" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<rect x="521" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="550" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="581" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="610" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="641" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="670" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="701" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="730" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="761" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="790" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<rect x="821" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="850" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<rect x="881" y="300" width="58" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="910" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<line x1="130" y1="348" x2="1120" y2="348" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1120" y="368" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">时间 →</text>
+<text class="svgsm" x="130" y="370" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">气泡 ÷ 理想计算时间 ＝ (p−1) ÷ m ＝ 3 ÷ 8 ≈ 38%（占整步约 27%）</tspan></text>
+<rect x="0" y="426" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="426" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="426" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="453" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">气泡是纯损失，只能摊薄，不能消灭</tspan></text>
+<text class="svgsm" x="20" y="484" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">stage 越多、micro-batch 越少，气泡越大：<tspan font-weight="700">(p−1) ÷ m</tspan>。　所以 PP 要配足够多的 micro-batch，而 micro-batch 多了，每张卡要攒的激活也多。</text>
+<text class="svgsm" x="20" y="508" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">后来的调度都在跟这块空白较劲：交错式（VPP）把每段再切细，Zero Bubble 拿权重梯度去填缝，DualPipe 两头同时灌。<tspan font-weight="700">代价都是更复杂的调度和更多的点对点通信</tspan>。</text>
+</svg><figcaption><b>浅灰色就是气泡：这一段在干等。</b><span class="capmore"><br><em>4 段 8 个 micro-batch，气泡是理想计算时间的 3/8。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 气泡占比：Narayanan 等，arXiv <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener">2104.04473</a> §2.2（GPipe／1F1B 的 bubble time fraction）；交错式把气泡再除以每卡的虚拟段数 v。Zero Bubble：arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>。DualPipe：github.com/deepseek-ai/DualPipe。</p></details></figure>
+<figure class="fbox fwide" id="anim-pipeline">
+<video src="media/topic05-pipeline.mp4" autoplay loop muted playsinline
+       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了。字幕三：气泡只能摊薄、不能消灭：micro-batch 越多越省，可每张卡要攒的激活也越多。最后复位。"></video>
+<figcaption>micro-batch 从 4 个加到 8 个，灰色的气泡跟着缩一半。
+  <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>开头要等后面几段灌满，结尾要等前面几段排空。气泡跟理想计算时间之比是 (p−1) ÷ m，
+    p 是段数，m 是 micro-batch 个数。micro-batch 越多越省，可每张卡要攒的激活也越多。
+    三种常见的改进：VPP 让每张卡负责几段不连续的层，气泡再除以每卡的段数；
+    Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
+    DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌。</p>
+
+  <h3 id="s3-6">3.6　这一刀留下的问题</h3>
+  <p>DeepSeek-V3 训练时<b>一点 TP 都没用</b>：16 路 PP、64 路专家并行、ZeRO-1 数据并行（技术报告 <a href="#s3-2">§3.2</a>）。
+    原因在参数的分布上：每个专家 3 × 7,168 × 2,048 ≈ 4,400 万参数，256 个专家 × 58 个 MoE 层 ≈ 6,539 亿，
+    <b>占全部参数的约 97%</b>。每个专家只有 2,048 宽，切进它内部不划算；真正该切的，是「专家」这一维。这是第三刀。</p>
 </div></section>
 
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第三刀：切专家</h2></div><div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
@@ -2755,6 +3085,10 @@ body.figonly section h3{margin-top:34px}
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
     <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> §5、§7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
+    <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> §3（前向 2 次、反向 2 次 all-reduce）；arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a> §4.2.2（AG＋RS 替代 all-reduce，无额外通信）；头数须被 TP 整除：megatron/core/transformer/transformer_config.py 的校验</td></tr>
+    <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener">2104.04473</a> §2.2.1–2.2.2；Zero Bubble arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>；DualPipe README</td></tr>
+    <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
+    <tr><td>每字节换多少计算、v7 硬件线约 1,922</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16、ICI 1,200 GB/s 三轴合计（wiki ici-dcn、Inferact 博客规格表）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>
