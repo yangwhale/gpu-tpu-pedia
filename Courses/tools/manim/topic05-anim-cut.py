@@ -471,7 +471,7 @@ class PDDisagg(Scene):
                 kvl = Text("KV 传过去", font_size=18, color=BLUE).next_to(kv, RIGHT, buff=0.1)
                 self.play(FadeIn(kv), FadeIn(kvl), run_time=0.3)
                 shown.add(kv, kvl)
-        say("同样 %d 步：放在一起出 %d 个字，拆开出 %d 个（示意）" % (PD_STEPS, PD_TOGETHER, PD_APART), GREEN)
+        say("放在一起：decode 被截走 %d 步；拆开：一格不断（多用了一批 prefill 机器）" % PD_LEN, GREEN)
         self.wait(1.4)
         say("代价：多一趟 KV 传输；按我们 v7x 那套的带宽估算约 100 毫秒")
         self.wait(1.4)

@@ -523,11 +523,11 @@ __FIG_KV_DUP__
     <b>decode</b> 每一步只出一个 token，却要把全部权重和 KV 从显存里读一遍，吃的是带宽。</p>
   <p>它们挤在同一批卡上时，引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
     这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
-  <p>还记得 decode 靠大 batch 摊薄读权重的成本吗？后面 DEP、AFD、Wide-EP 这些做法，说到底都是在想办法把 decode 的 batch 做大。</p>
+  <p>decode 还有个脾气：它每一步都要把权重读一遍，靠把很多请求拼成一大批来摊薄这笔成本，batch 越大越划算。后面 DEP、AFD、Wide-EP 这些做法，说到底都是在想办法把 decode 的 batch 做大。</p>
 __FIG_PD__
 <figure class="fbox fwide" id="anim-pd">
 <video src="media/topic05-pd.mp4" autoplay loop muted playsinline
-       aria-label="PD 分离动画。标题：PD 分离：prefill 和 decode 拆到两批机器上。三条车道：放在一起、prefill 机器、decode 机器。字幕一：放在一起：大家一步一步 decode，每格出一个字。上面一条车道绿格一格一格长出来，第 5 步落下一个长橙块「新请求的 prefill」，下面标红「这 5 步没人出字」，之后绿格继续。字幕二：拆开：prefill 在自己的机器上跑，decode 那边一步不停。decode 车道 16 个绿格连续长出，prefill 车道同时跑完橙块，一支蓝色箭头「KV 传过去」落到 decode 车道。字幕三：同样 16 步：放在一起出 11 个字，拆开出 16 个（示意）。字幕四：代价：多一趟 KV 传输；按我们 v7x 那套的带宽估算约 100 毫秒。最后复位。"></video>
+       aria-label="PD 分离动画。标题：PD 分离：prefill 和 decode 拆到两批机器上。三条车道：放在一起、prefill 机器、decode 机器。字幕一：放在一起：大家一步一步 decode，每格出一个字。上面一条车道绿格一格一格长出来，第 5 步落下一个长橙块「新请求的 prefill」，下面标红「这 5 步没人出字」，之后绿格继续。字幕二：拆开：prefill 在自己的机器上跑，decode 那边一步不停。decode 车道 16 个绿格连续长出，prefill 车道同时跑完橙块，一支蓝色箭头「KV 传过去」落到 decode 车道。字幕三：放在一起：decode 被截走 5 步；拆开：一格不断（多用了一批 prefill 机器）。字幕四：代价：多一趟 KV 传输；按我们 v7x 那套的带宽估算约 100 毫秒。最后复位。"></video>
 <figcaption>同样 16 步，上面那条被长 prefill 截走了 5 步；下面那条一格没少。
   <span class="sub">（11 秒无声循环，Manim 渲染。格数是示意，不是实测时序。）</span></figcaption></figure>
   <p>分块 prefill（chunked prefill）能缓解：把长 prompt 切成小块，每一步跟 decode 拼着跑。
@@ -553,7 +553,7 @@ __FIG_PD__
   <p>拆开之后多了一个旋钮：prefill 和 decode 的机器配比。思路是让两边差不多同时忙满：
     先量一台 prefill 机器每秒能吞多少 prompt token、一台 decode 机器（一整批请求一起跑）每秒能吐多少 token，
     再按业务里输入和输出的长度比去配。经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。
-    DistServe 论文把配比和各自的并行方式一起搜，跟 vLLM 比，同样的延迟要求下最多能多服务 7.4 倍的请求，或者把延迟要求收紧最多 12.6 倍（OPT 系列模型，以 90% 请求达标为准）。</p>
+    DistServe 论文把配比和各自的并行方式一起搜，跟 vLLM 等不拆开的系统比，同样的延迟要求下最多能多服务 7.4 倍的请求，或者把延迟要求收紧最多 12.6 倍（OPT 系列模型，以 90% 请求达标为准）。</p>
 
   <h3>6.4　两边各挑各的切法</h3>
   <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。</p>

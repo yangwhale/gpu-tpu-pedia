@@ -8,7 +8,7 @@ r"""专题五 · 第六节「第五刀：不切张量，切工作」的两张静
   · AFD 的 M2N ／ N2M 与乒乓 micro-batch：MegaScale-Infer（arXiv 2504.02263），每 GPU 吞吐最高 1.90 倍。
 ⛔ 时间线是示意（格子长度按 prefill 比 decode 一步长很多来画），不是实测时序；图上也这样标。
 """
-from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
 
 W = 1400
 # Qwen3-Coder-480B（config.json：62 层、8 个 KV 头、head_dim 128），8K prompt、FP8 每元素 1 字节
@@ -70,10 +70,10 @@ def fig_afd():
     f = Fig(W, "attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。"
                "每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。"
                "专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。"
-               "为了把这来回两趟藏起来，把一批请求切成几个小批轮着跑，这一个在算 attention，另一个正好在算专家，图里画两个示意，论文里要三四个")
+               "为了把这来回两趟藏起来，把一批请求切成三个小批轮着跑：一个在算 attention，一个在路上，一个在算专家，三条道每一格都有活")
     y0 = f.header("再拆一层：attention 和专家也分开　——　<tspan font-weight=\"700\">专家那边一次接好几家的 token</tspan>",
-                  "AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，两个小批交替跑",
-                  [(BL, "attention 机器"), (OR, "专家机器"), (GR, "小批 A"), (PU, "小批 B")])
+                  "AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，三个小批轮着跑",
+                  [(BL, "attention 机器"), (OR, "专家机器"), (GR, "小批 A"), (PU, "小批 B"), (CY, "小批 C")])
     PH = 330
     py = f.panel(0, y0, W, PH, "每一层都要跑一趟 M → N → M", BL)
     for i in range(3):
@@ -87,18 +87,23 @@ def fig_afd():
             f.line(262, py + 78 + i * 76, 558, py + 108 + k * 96, GY2, 1.2, arrow=False)
     f.t(410, py + 36, "M → N：token 发给专家", GY, True, 13, anchor="middle")
     f.t(410, py + 290, "N → M：算完送回来", GY, True, 13, anchor="middle")
-    # 乒乓时间线
+    # ⭐ 2026-09-25 L6 试讲：原来只画两个小批、没画「在路上」，看图会以为两个就够。
+    #   改成 attention ／ 路上 ／ 专家三条道、A B C 三个小批：三条道每一格都有活，通信才藏得住。
     TX, CW = 830, 54
-    f.t(TX, py + 50, "小批轮着跑（示意画两个）", INK, True, 15)
-    f.t(TX, py + 96, "attention", BL, True, 13)
-    f.t(TX, py + 156, "专家", OR, True, 13)
-    for t in range(8):
-        a_col = GR if t % 2 == 0 else PU
-        e_col = PU if t % 2 == 0 else GR
-        f.box(TX + 80 + t * CW, py + 72, CW - 4, 36, a_col, a_col, 3)
-        f.box(TX + 80 + t * CW, py + 132, CW - 4, 36, e_col if t > 0 else "none", e_col if t > 0 else LINE, 3)
-    f.t(TX, py + 214, "attention 在算 A 的时候，专家在算 B；", GY, size=13)
-    f.t(TX, py + 238, "示意画两个；真要藏住来回的通信，得三四个。", GY, size=13)
+    COLS3 = [GR, PU, CY]
+    f.t(TX, py + 40, "三个小批轮着跑，三条道都不闲", INK, True, 15)
+    for r, (lab, col) in enumerate((("attention", BL), ("路上", GY), ("专家", OR))):
+        f.t(TX, py + 82 + r * 52, lab, col, True, 13)
+        for t in range(9):
+            b = t - r
+            if b < 0:
+                f.box(TX + 80 + t * CW, py + 60 + r * 52, CW - 4, 34, "none", LINE, 3)
+                continue
+            c = COLS3[b % 3]
+            f.box(TX + 80 + t * CW, py + 60 + r * 52, CW - 4, 34, c, c, 3)
+            f.t(TX + 80 + t * CW + (CW - 4) / 2, py + 82 + r * 52, "ABC"[b % 3], "#ffffff", True, 13, "middle")
+    f.t(TX, py + 238, "A 在算专家时，B 在路上、C 在算 attention。", GY, size=13)
+    f.t(TX, py + 262, "论文说至少要三个小批，通信慢时要四个。", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "拆得越细，每一边越能挑适合自己的机器和切法", [
         "专家那边同时接几台 attention 机器的 token，<tspan font-weight=\"700\">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。",
