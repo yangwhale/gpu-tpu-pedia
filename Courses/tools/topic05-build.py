@@ -122,9 +122,9 @@ HERO = '''
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲写了五节</span>
-    <b>第一到第四节和第八节（全景）是写完的</b>，出处在文末台账。<br>
-    第五到第七节还是大纲，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了六节</span>
+    <b>第一到第五节和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第六、第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
 '''
 
@@ -405,11 +405,60 @@ __FIG_FOLD__
     <b>一条样本本身就放不进一张卡了</b>，只能把它切开。这是第四刀。</p>
 </div></section>
 
-''' + sec("s五", "五", "第四刀：切序列") + todo([
-    "训练：激活沿序列爆 → <b>CP</b>（ring / Ulysses / 两者叠加）；为什么 128K 以上绕不开",
-    "推理：KV cache 沿序列爆 → <b>DCP</b>；TP 超过 KV 头数时 KV 被复制，DCP 用一次合并通信把冗余换回容量",
-    "PCP：prefill 端切长 prompt，压首字延迟；PD 分离时和 DCP 一边一个",
-]) + '''
+''' + sec("s五", "五", "第四刀：切序列") + '''
+  <p class="lead">前三刀切的是 batch、权重、专家，从没碰过「一条样本」本身。
+    <b>上下文一长，一条样本自己就放不进一张卡了。</b>第四刀沿序列切。训练和推理切的东西不一样，分开讲。</p>
+
+  <h3>5.1　一条样本为什么会放不下</h3>
+  <ul>
+    <li><b>训练</b>：每层要存的激活跟序列长度成正比（Megatron 序列并行论文式 1 里 34·sbh 那一项；
+      不用 FlashAttention 时还多一个跟长度平方成正比的注意力分数项）。</li>
+    <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 是 (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节，
+      <b>一个 128K 的请求就是约 8.58 GiB</b>。</li>
+  </ul>
+
+  <h3>5.2　训练：CP 把激活沿序列切开</h3>
+  <p>上下文并行（CP）把一条长序列切成几段，每张卡只存自己那段的激活。
+    难点只在注意力：每个 token 要看到它前面所有的 token，而那些 token 在别的卡上。两种办法：</p>
+  <ul>
+    <li><b>Ring Attention</b>：Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。</li>
+    <li><b>Ulysses</b>：注意力前后各做一次 AllToAll，在「按序列切」和「按头切」之间来回换。
+      每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数。</li>
+  </ul>
+<figure class="fbox fwide" id="anim-ringattn">
+<video src="media/topic05-ringattention.mp4" autoplay loop muted playsinline
+       aria-label="Ring Attention 动画。四张卡，每张卡左边固定一段 Q（Q0 到 Q3），旁边一段 KV。右边是 4 乘 4 的注意力块网格，行是哪张卡的 Q，列是哪段 KV。标题：Ring Attention：Q 不动，KV 沿环传。字幕一：每张卡固定一段 Q；每一步算手上这对（Q, KV），同时把 KV 传给下一张。四步里 KV 段一格格往下传，卡 3 的传回卡 0，网格每行逐格填满。字幕二：转完一圈：每张卡都跟所有 KV 算过了，自己那一行填满。字幕三：关键：传下一块的时候正在算这一块，通信藏在计算后面。最后复位。"></video>
+<figcaption>Q 留在原地，KV 沿环转一圈，每张卡把自己那一行填满。
+  <span class="sub">（9 秒无声循环，Manim 渲染。画的是不带因果掩码的情形。）</span></figcaption></figure>
+  <p>两者可以叠起来用（USP：一个方向走环，一个方向走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
+
+  <h3>5.3　causal 带来的不均</h3>
+  <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。</p>
+__FIG_CP_ZIGZAG__
+
+  <h3>5.4　推理：KV cache 被 TP 复制了</h3>
+  <p>推理时 KV 常常是最大的一块。而 TP 一旦超过 KV 头数，KV 就切不开，只能每张卡复制一份。
+    MLA 模型只有一个 KV 头，TP 8 路就是 8 份一模一样的 KV（vLLM 文档原话：复制 tp_size ÷ H 次）。</p>
+__FIG_KV_DUP__
+  <p><b>DCP（decode 上下文并行）</b>让 KV 按 token 轮流存到几张卡上，用的还是原来那几张卡：</p>
+<figure class="fbox fwide" id="anim-dcp">
+<video src="media/topic05-decodecp.mp4" autoplay loop muted playsinline
+       aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕二：12 个 token，每张卡只存 3 个的 KV：容量是原来的 4 倍。字幕三：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕四：四份部分结果带着 LSE 合并成一份：多一次合并通信，换回 4 倍的 KV 空间。最后复位。"></video>
+<figcaption>KV 轮流落到四张卡上；每一步多一次合并通信。
+  <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果带着 LSE 合并。
+    多付一次合并通信，换回被 TP 白白复制掉的那几份 KV。<b>用一种通信，换一份显存</b>，又一次。</p>
+
+  <h3>5.5　PD 分离时，两边各切一刀</h3>
+  <ul>
+    <li><b>prefill 端用 PCP</b>：把长 prompt 切开压首字延迟。它会增加卡。</li>
+    <li><b>decode 端用 DCP</b>：把 KV 摊开，一台机器能扛更多、更长的请求。它不增加卡。</li>
+    <li>上下文再长到百万 token 级，NVIDIA 的 Helix 在一层里换两次布局：attention 按 KV 切，FFN 按 TP × EP 切。</li>
+  </ul>
+
+  <h3>5.6　这一刀留下的问题</h3>
+  <p>说到这儿，prefill 和 decode 已经各要各的切法了：一个吃算力、要把 prompt 切开；一个吃带宽、要把 KV 摊开。
+    <b>硬塞在同一批卡上，谁都配不好。</b>那就干脆别切张量了，把这两种活拆到不同的机器上。这是第五刀。</p>
 </div></section>
 
 ''' + sec("s六", "六", "第五刀：不切张量，切工作") + todo([
@@ -656,6 +705,10 @@ __FIG_FOLD__
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
     <tr><td>GB300 上 TP4 → dep8 3.09 倍</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md（TP4 decode 21,100 → dep8 65,132 tok/s）</td></tr>
+    <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv 2205.05198 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
+    <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 §3</td></tr>
+    <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
+    <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv 2504.14960</td></tr>
@@ -700,6 +753,12 @@ FIGS = {
     "__FIG_FOLD__": ("fig-fold", "fig5-fold.svg", "topic05-fig-ep.py",
         '<b>左右两边是同样的 8 张卡。</b><br>'
         '<em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em>'),
+    "__FIG_CP_ZIGZAG__": ("fig-cp-zigzag", "fig5-cp-zigzag.svg", "topic05-fig-seq.py",
+        '<b>同样 8 块，换一种分法，最忙和最闲从差 5 倍变成一样忙。</b><br>'
+        '<em>每格数由脚本按因果掩码现算。</em>'),
+    "__FIG_KV_DUP__": ("fig-kv-dup", "fig5-kv-dup.svg", "topic05-fig-seq.py",
+        '<b>红色那 7 份，存的是一模一样的东西。</b><br>'
+        '<em>KV 尺寸取自 V3 的 config.json。</em>'),
     "__FIG_ZERO_MEM__": ("fig-zero-mem", "fig5-zero-mem.svg", "topic05-fig-zero.py",
         '<b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><br>'
         '<em>ZeRO-3 那条短到几乎看不见 —— 每卡从 9.76 TiB 降到 9.76 GiB，正好除以 1,024。</em>'),

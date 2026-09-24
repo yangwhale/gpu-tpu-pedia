@@ -838,9 +838,9 @@ body.figonly section h3{margin-top:34px}
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲写了五节</span>
-    <b>第一到第四节和第八节（全景）是写完的</b>，出处在文末台账。<br>
-    第五到第七节还是大纲，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了六节</span>
+    <b>第一到第五节和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第六、第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一张卡装不下</h2></div>
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，
@@ -2975,12 +2975,236 @@ body.figonly section h3{margin-top:34px}
     <b>一条样本本身就放不进一张卡了</b>，只能把它切开。这是第四刀。</p>
 </div></section>
 
-<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>第四刀：切序列</h2></div><div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
-<ul>
-  <li>训练：激活沿序列爆 → <b>CP</b>（ring / Ulysses / 两者叠加）；为什么 128K 以上绕不开</li>
-  <li>推理：KV cache 沿序列爆 → <b>DCP</b>；TP 超过 KV 头数时 KV 被复制，DCP 用一次合并通信把冗余换回容量</li>
-  <li>PCP：prefill 端切长 prompt，压首字延迟；PD 分离时和 DCP 一边一个</li>
-</ul>
+<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>第四刀：切序列</h2></div>
+  <p class="lead">前三刀切的是 batch、权重、专家，从没碰过「一条样本」本身。
+    <b>上下文一长，一条样本自己就放不进一张卡了。</b>第四刀沿序列切。训练和推理切的东西不一样，分开讲。</p>
+
+  <h3 id="s5-1">5.1　一条样本为什么会放不下</h3>
+  <ul>
+    <li><b>训练</b>：每层要存的激活跟序列长度成正比（Megatron 序列并行论文式 1 里 34·sbh 那一项；
+      不用 FlashAttention 时还多一个跟长度平方成正比的注意力分数项）。</li>
+    <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 是 (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节，
+      <b>一个 128K 的请求就是约 8.58 GiB</b>。</li>
+  </ul>
+
+  <h3 id="s5-2">5.2　训练：CP 把激活沿序列切开</h3>
+  <p>上下文并行（CP）把一条长序列切成几段，每张卡只存自己那段的激活。
+    难点只在注意力：每个 token 要看到它前面所有的 token，而那些 token 在别的卡上。两种办法：</p>
+  <ul>
+    <li><b>Ring Attention</b>：Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。</li>
+    <li><b>Ulysses</b>：注意力前后各做一次 AllToAll，在「按序列切」和「按头切」之间来回换。
+      每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数。</li>
+  </ul>
+<figure class="fbox fwide" id="anim-ringattn">
+<video src="media/topic05-ringattention.mp4" autoplay loop muted playsinline
+       aria-label="Ring Attention 动画。四张卡，每张卡左边固定一段 Q（Q0 到 Q3），旁边一段 KV。右边是 4 乘 4 的注意力块网格，行是哪张卡的 Q，列是哪段 KV。标题：Ring Attention：Q 不动，KV 沿环传。字幕一：每张卡固定一段 Q；每一步算手上这对（Q, KV），同时把 KV 传给下一张。四步里 KV 段一格格往下传，卡 3 的传回卡 0，网格每行逐格填满。字幕二：转完一圈：每张卡都跟所有 KV 算过了，自己那一行填满。字幕三：关键：传下一块的时候正在算这一块，通信藏在计算后面。最后复位。"></video>
+<figcaption>Q 留在原地，KV 沿环转一圈，每张卡把自己那一行填满。
+  <span class="sub">（9 秒无声循环，Manim 渲染。画的是不带因果掩码的情形。）</span></figcaption></figure>
+  <p>两者可以叠起来用（USP：一个方向走环，一个方向走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
+
+  <h3 id="s5-3">5.3　causal 带来的不均</h3>
+  <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。</p>
+<figure class="fbox fwide" id="fig-cp-zigzag"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="因果注意力切序列时的负载问题。序列切成 8 块，每块只能看自己和前面的块，所以第 0 块要算 1 格，第 7 块要算 8 格。按顺序分给 4 张卡，卡 0 算 3 格、卡 3 算 15 格，差 5 倍。之字形分法：卡 r 拿第 r 块和倒数第 r 块，每张卡都是 9 格，完全均匀"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">causal attention 切序列：顺序切会不均匀　——　<tspan font-weight="700">之字形切正好摆平</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">序列切成 2 × 4 ＝ 8 块。三角形里每一格是一对（查询块，KV 块）要算的注意力；因果掩码只留下三角形</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0</text>
+<rect x="76" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="97" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 1</text>
+<rect x="152" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="173" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 2</text>
+<rect x="228" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="249" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 3</text>
+<rect x="0" y="102" width="1400" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 × 8 的因果注意力块，谁算哪几行</tspan></text>
+<text class="svgsm" x="60" y="158" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">顺序切：卡 r 拿第 2r、2r＋1 块</tspan></text>
+<rect x="60" y="176" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="196" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 0 → 卡 0</text>
+<rect x="60" y="206" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="90" y="206" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="226" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 1 → 卡 0</text>
+<rect x="60" y="236" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="90" y="236" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="120" y="236" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="256" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 2 → 卡 1</text>
+<rect x="60" y="266" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="90" y="266" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="120" y="266" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="150" y="266" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="286" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 3 → 卡 1</text>
+<rect x="60" y="296" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="90" y="296" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="120" y="296" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="150" y="296" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="180" y="296" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="316" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 4 → 卡 2</text>
+<rect x="60" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="90" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="120" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="150" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="180" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="210" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="346" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 5 → 卡 2</text>
+<rect x="60" y="356" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="90" y="356" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="120" y="356" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="150" y="356" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="180" y="356" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="356" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="240" y="356" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="376" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 6 → 卡 3</text>
+<rect x="60" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="90" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="120" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="150" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="180" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="240" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="270" y="386" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="406" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 7 → 卡 3</text>
+<text class="svgsm" x="60" y="446" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0：3 格</tspan></text>
+<text class="svgsm" x="175" y="446" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1：7 格</tspan></text>
+<text class="svgsm" x="290" y="446" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2：11 格</tspan></text>
+<text class="svgsm" x="405" y="446" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3：15 格</tspan></text>
+<text class="svgsm" x="760" y="158" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">之字形切：卡 r 拿第 r 块和第 7−r 块</tspan></text>
+<rect x="760" y="176" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="196" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 0 → 卡 0</text>
+<rect x="760" y="206" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="790" y="206" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="226" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 1 → 卡 1</text>
+<rect x="760" y="236" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="790" y="236" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="820" y="236" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="256" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 2 → 卡 2</text>
+<rect x="760" y="266" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="790" y="266" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="820" y="266" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="850" y="266" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="286" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 3 → 卡 3</text>
+<rect x="760" y="296" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="790" y="296" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="820" y="296" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="850" y="296" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="880" y="296" width="27" height="27" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="316" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 4 → 卡 3</text>
+<rect x="760" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="790" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="820" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="850" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="880" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="910" y="326" width="27" height="27" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="346" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 5 → 卡 2</text>
+<rect x="760" y="356" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="790" y="356" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="820" y="356" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="850" y="356" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="880" y="356" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="910" y="356" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="940" y="356" width="27" height="27" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="376" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 6 → 卡 1</text>
+<rect x="760" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="790" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="820" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="850" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="880" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="910" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="940" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="970" y="386" width="27" height="27" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="406" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">块 7 → 卡 0</text>
+<text class="svgsm" x="760" y="446" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0：9 格</tspan></text>
+<text class="svgsm" x="875" y="446" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1：9 格</tspan></text>
+<text class="svgsm" x="990" y="446" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2：9 格</tspan></text>
+<text class="svgsm" x="1105" y="446" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3：9 格</tspan></text>
+<rect x="0" y="532" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="532" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="532" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="559" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">顺序切差 5 倍，之字形切完全均匀</tspan></text>
+<text class="svgsm" x="20" y="590" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">因果掩码让越靠后的块算得越多。顺序切时卡 3 要算 15 格、卡 0 只算 3 格，<tspan font-weight="700">大家都得等卡 3</tspan>。</text>
+<text class="svgsm" x="20" y="614" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">之字形把「最轻的一块」和「最重的一块」配成一对交给同一张卡，每张卡都是 9 格　——　Megatron 的 CP 就是这么切的。</text>
+</svg><figcaption><b>同样 8 块，换一种分法，最忙和最闲从差 5 倍变成一样忙。</b><span class="capmore"><br><em>每格数由脚本按因果掩码现算。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-LM megatron/core/utils.py：序列切成 2×cp_size 块，rank r 拿第 r 块和第 2·cp−r−1 块；文档 docs/user-guide/features/context_parallel.md 称其避免下三角的多余计算并保持负载均衡。每格数本脚本现算。</p></details></figure>
+
+  <h3 id="s5-4">5.4　推理：KV cache 被 TP 复制了</h3>
+  <p>推理时 KV 常常是最大的一块。而 TP 一旦超过 KV 头数，KV 就切不开，只能每张卡复制一份。
+    MLA 模型只有一个 KV 头，TP 8 路就是 8 份一模一样的 KV（vLLM 文档原话：复制 tp_size ÷ H 次）。</p>
+<figure class="fbox fwide" id="fig-kv-dup"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。每个 token 的 KV 是 70272 字节，12 万 8 千个 token 就是约 8.58 GiB。TP 8 路时，MLA 的 KV 只有一个头切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">推理时切序列：KV cache 被 TP 复制了几份　——　<tspan font-weight="700">DCP 把复制变回容量</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，一个 128K 上下文的请求。每 token 的 KV ＝ (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">重复存的那几份</text>
+<rect x="145" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="166" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">真正需要的那一份</text>
+<rect x="0" y="102" width="1400" height="290" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 张卡上，这一个请求的 KV 各占多少</tspan></text>
+<text class="svgsm" x="24" y="208" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 8 路</tspan></text>
+<rect x="230.0" y="172.0" width="104.5" height="60.0" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="282" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 0</text>
+<rect x="342.5" y="172.0" width="104.5" height="60.0" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="394" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 1</text>
+<rect x="455.0" y="172.0" width="104.5" height="60.0" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="507" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 2</text>
+<rect x="567.5" y="172.0" width="104.5" height="60.0" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="619" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 3</text>
+<rect x="680.0" y="172.0" width="104.5" height="60.0" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="732" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 4</text>
+<rect x="792.5" y="172.0" width="104.5" height="60.0" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="844" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 5</text>
+<rect x="905.0" y="172.0" width="104.5" height="60.0" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="957" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 6</text>
+<rect x="1017.5" y="172.0" width="104.5" height="60.0" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1069" y="252" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 7</text>
+<text class="svgsm" x="1150" y="202" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每卡 8.58 GiB</tspan></text>
+<text class="svgsm" x="1150" y="226" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">合计 68.6 GiB（8 份一样的）</text>
+<text class="svgsm" x="24" y="318" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DCP 8 路</tspan></text>
+<rect x="230.0" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="282" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 0</text>
+<rect x="342.5" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="394" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 1</text>
+<rect x="455.0" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="507" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 2</text>
+<rect x="567.5" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="619" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 3</text>
+<rect x="680.0" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="732" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 4</text>
+<rect x="792.5" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="844" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 5</text>
+<rect x="905.0" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="957" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 6</text>
+<rect x="1017.5" y="334.5" width="104.5" height="7.5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1069" y="362" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">卡 7</text>
+<text class="svgsm" x="1150" y="312" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每卡 1.07 GiB</tspan></text>
+<text class="svgsm" x="1150" y="336" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">合计 8.58 GiB（刚好一份）</text>
+<rect x="0" y="442" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="442" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="442" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="469" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 超过 KV 头数，多出来的全是复制</tspan></text>
+<text class="svgsm" x="20" y="500" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">MLA 的 KV 只有一个头。TP 8 路时每张卡都存完整的一份，<tspan font-weight="700">7 份是白存的</tspan>。</text>
+<text class="svgsm" x="20" y="524" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP 让 KV 按 token 轮流落到 8 张卡上，每卡只剩 1/8；它<tspan font-weight="700">不增加卡</tspan>，直接复用 TP 那几张。</text>
+</svg><figcaption><b>红色那 7 份，存的是一模一样的东西。</b><span class="capmore"><br><em>KV 尺寸取自 V3 的 config.json。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 vLLM context parallel 部署文档：KV cache 会被复制 tp_size / H 次；DeepSeek-R1 在 MLA 下只有 1 个 KV 头，-tp 8 就是 8 倍复制，可加 -dcp 8。KV 尺寸取自 V3 config.json，本脚本现算。</p></details></figure>
+  <p><b>DCP（decode 上下文并行）</b>让 KV 按 token 轮流存到几张卡上，用的还是原来那几张卡：</p>
+<figure class="fbox fwide" id="anim-dcp">
+<video src="media/topic05-decodecp.mp4" autoplay loop muted playsinline
+       aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕二：12 个 token，每张卡只存 3 个的 KV：容量是原来的 4 倍。字幕三：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕四：四份部分结果带着 LSE 合并成一份：多一次合并通信，换回 4 倍的 KV 空间。最后复位。"></video>
+<figcaption>KV 轮流落到四张卡上；每一步多一次合并通信。
+  <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果带着 LSE 合并。
+    多付一次合并通信，换回被 TP 白白复制掉的那几份 KV。<b>用一种通信，换一份显存</b>，又一次。</p>
+
+  <h3 id="s5-5">5.5　PD 分离时，两边各切一刀</h3>
+  <ul>
+    <li><b>prefill 端用 PCP</b>：把长 prompt 切开压首字延迟。它会增加卡。</li>
+    <li><b>decode 端用 DCP</b>：把 KV 摊开，一台机器能扛更多、更长的请求。它不增加卡。</li>
+    <li>上下文再长到百万 token 级，NVIDIA 的 Helix 在一层里换两次布局：attention 按 KV 切，FFN 按 TP × EP 切。</li>
+  </ul>
+
+  <h3 id="s5-6">5.6　这一刀留下的问题</h3>
+  <p>说到这儿，prefill 和 decode 已经各要各的切法了：一个吃算力、要把 prompt 切开；一个吃带宽、要把 KV 摊开。
+    <b>硬塞在同一批卡上，谁都配不好。</b>那就干脆别切张量了，把这两种活拆到不同的机器上。这是第五刀。</p>
 </div></section>
 
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>第五刀：不切张量，切工作</h2></div><div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
@@ -3229,6 +3453,10 @@ body.figonly section h3{margin-top:34px}
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>
     <tr><td>GB300 上 TP4 → dep8 3.09 倍</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md（TP4 decode 21,100 → dep8 65,132 tok/s）</td></tr>
+    <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a> 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
+    <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>；arXiv <a href="https://arxiv.org/abs/2309.14509" target="_blank" rel="noopener">2309.14509</a> §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv <a href="https://arxiv.org/abs/2405.07719" target="_blank" rel="noopener">2405.07719</a> §3</td></tr>
+    <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
+    <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a></td></tr>

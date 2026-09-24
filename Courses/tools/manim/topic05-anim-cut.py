@@ -248,3 +248,134 @@ class ExpertParallel(Scene):
         self.remove(sub)
         self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
         self.wait(0.6)
+
+
+# ════════════════════════════════════════════════════════════════
+# 第五节：Ring Attention（训练切激活） 与 DCP（推理切 KV）
+# ════════════════════════════════════════════════════════════════
+NR = 4
+COL_R = [BLUE, ORANGE, GREEN, "#9A72AC"]
+
+
+def ring_kv_at(card, step):
+    """第 step 步，卡 card 手上是第几段 KV：每步把手上的 KV 传给下一张卡。"""
+    return (card - step) % NR
+
+
+# 四步走完，每张卡把 4 段 KV 各见一次
+for _c in range(NR):
+    assert sorted(ring_kv_at(_c, s) for s in range(NR)) == list(range(NR))
+
+
+class RingAttention(Scene):
+    def construct(self):
+        title = cap_text("Ring Attention：Q 不动，KV 沿环传", size=30).to_edge(UP)
+        self.add(title)
+        rows = VGroup()
+        for c in range(NR):
+            y = 1.3 - c * 1.0
+            rows.add(Text("卡 %d" % c, font_size=24, color=COL_R[c]).move_to([-6.2, y, 0]))
+            q = VGroup(Rectangle(width=0.9, height=0.6, stroke_width=0, fill_color=COL_R[c], fill_opacity=0.9),
+                       Text("Q%d" % c, font_size=22, color=WHITE, weight="BOLD"))
+            q.move_to([-5.0, y, 0])
+            q[1].move_to(q[0].get_center())
+            rows.add(q)
+        self.add(rows)
+        grid = VGroup()
+        for i in range(NR):
+            for j in range(NR):
+                grid.add(Rectangle(width=0.62, height=0.62, stroke_color=GREY, stroke_width=1.5)
+                         .move_to([2.6 + j * 0.7, 1.3 - i * 1.0, 0]))
+        self.add(grid)
+        hdr = VGroup(*[Text("KV%d" % j, font_size=18, color=GREY_B).move_to([2.6 + j * 0.7, 1.95, 0]) for j in range(NR)])
+        self.add(hdr, Text("注意力块（行 ＝ 哪张卡的 Q，列 ＝ 哪段 KV）", font_size=20, color=GREY_B).move_to([3.65, -2.55, 0]))
+
+        def kv_blk(j, x, y):
+            g = VGroup(Rectangle(width=0.9, height=0.6, stroke_color=WHITE, stroke_width=1.5, fill_color=GREY_D_,
+                                 fill_opacity=1), Text("KV%d" % j, font_size=22, color=WHITE))
+            g.move_to([x, y, 0])
+            g[1].move_to(g[0].get_center())
+            return g
+        kvs = [kv_blk(c, -3.6, 1.3 - c * 1.0) for c in range(NR)]
+        self.add(*kvs)
+        sub = cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2)
+        self.add(sub)
+        self.wait(0.5)
+
+        def say(t, color=GREY_B):
+            nonlocal sub
+            n = cap_text(t, color, 24).next_to(title, DOWN, buff=0.2)
+            self.play(FadeOut(sub), FadeIn(n), run_time=0.35)
+            sub = n
+
+        filled = VGroup()
+        say("每张卡固定一段 Q；每一步算手上这对（Q, KV），同时把 KV 传给下一张")
+        for s in range(NR):
+            news = []
+            for c in range(NR):
+                j = ring_kv_at(c, s)
+                r = Rectangle(width=0.58, height=0.58, stroke_width=0, fill_color=COL_R[c], fill_opacity=0.9)
+                r.move_to([2.6 + j * 0.7, 1.3 - c * 1.0, 0])
+                news.append(r)
+            self.play(*[FadeIn(r) for r in news], run_time=0.5)
+            filled.add(*news)
+            if s < NR - 1:
+                # KV 往下一张卡传（卡 3 绕回卡 0）
+                self.play(*[kvs[j].animate.move_to([-3.6, 1.3 - ((c + 1) % NR) * 1.0, 0])
+                            for c in range(NR) for j in [ring_kv_at(c, s)]], run_time=0.7)
+        say("转完一圈：每张卡都跟所有 KV 算过了，自己那一行填满", GREEN)
+        self.wait(1.0)
+        say("关键：传下一块的时候正在算这一块，通信藏在计算后面")
+        self.wait(1.4)
+        # 复位：KV 回到起点（第 NR−1 步后，卡 c 手上是 KV_(c+1)），清掉填色
+        self.play(FadeOut(filled), FadeOut(sub), *[kvs[j].animate.move_to([-3.6, 1.3 - j * 1.0, 0]) for j in range(NR)],
+                  run_time=0.8)
+        self.remove(filled, sub)
+        self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
+        self.wait(0.6)
+
+
+class DecodeCP(Scene):
+    def construct(self):
+        from manim import Dot, Circle
+        title = cap_text("DCP：decode 时 KV 按 token 轮流存到各张卡", size=30).to_edge(UP)
+        self.add(title)
+        XS4 = [-4.5, -1.5, 1.5, 4.5]
+        heads = VGroup(*[Text("卡 %d" % c, font_size=26, color=COL_R[c]).move_to([XS4[c], 1.9, 0]) for c in range(NR)])
+        self.add(heads)
+        sub = cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2)
+        self.add(sub)
+        self.wait(0.5)
+
+        def say(t, color=GREY_B):
+            nonlocal sub
+            n = cap_text(t, color, 24).next_to(title, DOWN, buff=0.2)
+            self.play(FadeOut(sub), FadeIn(n), run_time=0.35)
+            sub = n
+
+        NT = 12
+        say("每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上")
+        cells = VGroup()
+        for t in range(NT):
+            c = t % NR
+            r = Rectangle(width=1.4, height=0.34, stroke_width=0, fill_color=COL_R[c], fill_opacity=0.85)
+            r.move_to([XS4[c], 1.35 - (t // NR) * 0.42, 0])
+            lab = Text("token %d" % t, font_size=16, color=WHITE).move_to(r.get_center())
+            g = VGroup(r, lab)
+            self.play(FadeIn(g), run_time=0.16)
+            cells.add(g)
+        say("12 个 token，每张卡只存 3 个的 KV：容量是原来的 4 倍", GREEN)
+        self.wait(0.8)
+        say("算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算")
+        q = Circle(radius=0.22, stroke_width=0, fill_color=YELLOW, fill_opacity=1).move_to([0, -1.3, 0])
+        qlab = Text("新 Q", font_size=20, color=YELLOW).next_to(q, DOWN, buff=0.1)
+        self.play(FadeIn(q), FadeIn(qlab), run_time=0.3)
+        qs = [q.copy() for _ in range(NR)]
+        self.play(*[qc.animate.move_to([XS4[c], 0.0, 0]) for c, qc in enumerate(qs)], run_time=0.8)
+        say("四份部分结果带着 LSE 合并成一份：多一次合并通信，换回 4 倍的 KV 空间")
+        self.play(*[qc.animate.move_to([0, -1.3, 0]) for qc in qs], run_time=0.8)
+        self.wait(1.2)
+        self.play(FadeOut(cells), FadeOut(q), FadeOut(qlab), FadeOut(sub), *[FadeOut(qc) for qc in qs], run_time=0.6)
+        self.remove(cells, q, qlab, sub, *qs)
+        self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
+        self.wait(0.6)
