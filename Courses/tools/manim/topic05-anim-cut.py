@@ -170,7 +170,7 @@ class Pipeline(Scene):
         say("换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了", GREEN)
         l2, d2 = run(8)
         self.wait(1.2)
-        say("气泡只能摊薄、不能消灭：micro-batch 越多越省，可每张卡要攒的激活也越多")
+        say("气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱")
         self.wait(1.4)
         self.play(FadeOut(l2), FadeOut(d2), FadeOut(sub), run_time=0.6)
         self.remove(l2, d2, sub)

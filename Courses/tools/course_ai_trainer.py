@@ -40,6 +40,7 @@ DECKS = (
     ("topic-03.html",      "topic-03-lecture.html"),
     ("topic-03-L300.html", "topic-03-L300-lecture.html"),
     ("topic-04.html",      "topic-04-lecture.html"),
+    ("topic-05.html",      "topic-05-lecture.html"),
     ("topic-08.html",      "topic-08-lecture.html"),
 )
 

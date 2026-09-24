@@ -119,11 +119,15 @@ echo "▸ 专题四 讲义"
 # ⛔ 必须排在教材之后 —— 讲义的 board cue 要跟成品 topic-04.html 对账。
 python3 topic04-build-lecture.py
 
-  # 专题五：2026-09-23 开工，§1 全景写完，其余是 🚧 大纲（见 topic05-build.py 文件头）。
+  # 专题五：2026-09-23 开工，2026-09-24 教材九节 ＋ 讲义写完。
   step "专题五 教材"
   # ⛔ 图先生成 —— place_figs 找不到 svg 会直接 assert 挂掉。
   for s in topic05-fig-*.py; do python3 "$s"; done
   python3 topic05-build.py
+
+  step "专题五 讲义"
+  # ⛔ 必须排在教材之后 —— 讲义的 board cue 和动画 id 要跟成品 topic-05.html 对账。
+  python3 topic05-build-lecture.py
 
   step "专题八 教材"
   python3 topic08-build.py

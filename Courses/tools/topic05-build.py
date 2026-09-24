@@ -41,6 +41,7 @@ import os
 import re
 
 import topic03_page as P
+import course_ai_trainer as AIT
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "WebPages", "topic-05.html")
@@ -64,6 +65,9 @@ head += """
 .animcell figcaption { font-size:14px; color:var(--gray); margin-top:6px; line-height:1.6 }
 .animgrid video { width:100%; border-radius:8px; display:block }
 @media (max-width:900px) { .animgrid { grid-template-columns:1fr } }
+.lecbtn { display:inline-block; margin-left:14px; font-size:13px; padding:4px 12px; border-radius:14px;
+          background:#fff; border:1px solid var(--line); color:var(--blue); text-decoration:none }
+.lecbtn:hover { background:var(--blue-l); border-color:var(--blue) }
 </style>"""
 
 D = '<span class="kind k-d">数据</span>'
@@ -103,7 +107,8 @@ HERO = '''
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题五
-    ／ <b>并行策略</b></div>
+    ／ <b>并行策略</b>
+    <a class="lecbtn" href="topic-05-lecture.html">📝 讲义（授课稿）</a></div>
   <h1>并行策略</h1>
   <div class="hook">
     一个模型装不进一块卡，就得切开分到很多卡上。<br>
@@ -121,6 +126,7 @@ HERO = '''
     AI Infra 架构师</p>
 </div></div>
 
+''' + AIT.note("topic-05-lecture.html") + '''
 <div class="wrap">
   <div class="note ok"><span class="t">这一讲九节全部写完</span>
     每个数字的出处在文末台账；自己推出来的数，都标了「本课推导」。</div>
@@ -337,11 +343,12 @@ __FIG_TP_MLP__
 __FIG_PP_BUBBLE__
 <figure class="fbox fwide" id="anim-pipeline">
 <video src="media/topic05-pipeline.mp4" autoplay loop muted playsinline
-       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了。字幕三：气泡只能摊薄、不能消灭：micro-batch 越多越省，可每张卡要攒的激活也越多。最后复位。"></video>
+       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了。字幕三：气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱。最后复位。"></video>
 <figcaption>micro-batch 从 4 个加到 8 个，灰色的气泡跟着缩一半。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>开头要等后面几段灌满，结尾要等前面几段排空。气泡跟理想计算时间之比是 (p−1) ÷ m，
-    p 是段数，m 是 micro-batch 个数。micro-batch 越多越省，可每张卡要攒的激活也越多。
+    p 是段数，m 是 micro-batch 个数。micro-batch 越多越省；可在最早的 GPipe 调度里，每一份的激活都要攒着等反向，份数越多攒得越多
+    （1F1B 调度把同时在路上的份数限制在 p 以内）。
     三种常见的改进：VPP 让每张卡负责几段不连续的层，气泡再除以每卡的段数；
     Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
     DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌。</p>
@@ -858,7 +865,8 @@ FOOT = '''
 <div class="wrap" style="padding:32px 0 64px">
   <p style="color:var(--gray)">
     ← 回 <a href="index.html">课程总纲</a>　·
-    上一讲 <a href="topic-04.html">专题四 · 反向与优化器</a><br>
+    上一讲 <a href="topic-04.html">专题四 · 反向与优化器</a>　·
+    想自己讲一遍？看 <a href="topic-05-lecture.html">本讲讲义（授课稿）</a><br>
     本页由 <code>Courses/tools/topic05-build.py</code> 生成 ——&nbsp;<b>正文写在那个脚本里</b>。</p>
 </div>
 
