@@ -170,7 +170,7 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
     <b>显存（HBM）</b>：卡上自带的高速内存，模型和中间结果都得放在这儿。<br>
     <b>算力和带宽</b>：算力是每秒能算多少次，带宽是每秒能搬多少字节。一件活要是搬得多算得少，就是「吃带宽」，反过来是「吃算力」。<br>
     <b>ICI 和切片</b>：TPU 芯片之间的专用快线叫 ICI；用 ICI 连在一起的一整块芯片叫一个切片，切片和切片之间走普通的数据中心网络。<br>
-    <b>device 和轴</b>：v7 的一颗芯片，对软件显示成 2 个 device，并行度按 device 数；切片里的芯片排成立方网格，x、y、z 三个方向各叫一根轴。<br>
+    <b>device 和轴</b>：v7 的一颗芯片，对软件显示成 2 个 device，并行度按 device 数；切片里的芯片排成三维网格，x、y、z 三个方向各叫一根轴。<br>
     <b>几路</b>：「TP 8 路」就是 8 张卡一组做 TP。写成 TP4 × DP2，意思是每 4 张卡一组做 TP，这样的组有 2 份做数据并行，一共 4 × 2 ＝ 8 张卡。<br>
     <b>MoE 与专家</b>：模型里有很多组并排的前馈层，叫专家；每个 token 由一个小的路由器挑出其中几个去算，其余的不碰。
     所以参数很多，每个 token 实际用到的却很少。<br>
@@ -377,7 +377,7 @@ __FIG_TP_MLP__
   <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP。两把刀各管一边。</p>
 
   <h3>3.5　PP：按层切</h3>
-  <p>TP 每一层都要通信，出不了一台机器。模型大到一台机器都装不下怎么办？按层切。
+  <p>TP 每一层都要通信，出不了最快的那一圈互联。要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，就按层切。
     流水线并行把模型按层切成几段，每张卡负责一段，段与段之间只在边界上点对点传激活，
     是所有刀里通信最少的，所以它<b>能跨到慢线上</b>，横跨很多台机器也吃得消。代价是<b>气泡</b>：</p>
 __FIG_PP_BUBBLE__
@@ -443,7 +443,7 @@ __FIG_FOLD__
   <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
     挑哪个差别大到什么程度，我们自己测过一次：</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍（跟调完参的 TP4 比；卡数也变了，见 7.3）</span>
-    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
+    GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 DEP8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
     最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
     attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。<br>
     <em>完整的账（卡数、并发、首字延迟）在 7.3。KV 这件事，下一刀专门讲。</em></div>
@@ -612,10 +612,10 @@ __FIG_FREQ__
   <p>摆法和切法选错了，参数调得再细也只是在错的天花板下面打转。我们在 GB300 上跑 DeepSeek-V4-Pro 时撞上过一次：</p>
 __FIG_TOPO__
   <p>TP4 decode 上能调的都调了：去掉 eager 模式只多 2.6%，加 prefill 机器、调并发，总数从 14,563 涨到 21,100。
-    可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 46.8–53 ms。换成 dep8 那一步，同样并发 512 下出字间隔从 46.8 ms 降到 11.8 ms，首字延迟从 55.8 秒降到 22.8 秒。
+    可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 46.8–53 ms。换成 DEP8 那一步，同样并发 512 下出字间隔从 46.8 ms 降到 11.8 ms，首字延迟从 55.8 秒降到 22.8 秒。
     真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（切序列那一节讲的毛病）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。两笔都换成了更大的 batch。
     （出字间隔为什么同时降下来，原始记录里没有拆开归因。）<b>先问切法对不对，再动参数。</b></p>
-  <p><em>口径提醒：图里后两行都是并发 512，第一行是原始脚本的并发 256。dep8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
+  <p><em>口径提醒：图里后两行都是并发 512，第一行是原始脚本的并发 256。DEP8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
     这里的吞吐是 prompt 和输出 token 加在一起算的。</em></p>
 
   <h3>7.4　五步怎么选</h3>
@@ -726,7 +726,7 @@ __FIG_PANO__
   <p><b>训练侧（以及推理的 prefill）：切激活</b></p>
   <table>
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
-    <tr><td>Megatron SP</td><td>只切 LayerNorm、Dropout、残差这几段的激活，<b>必须跟 TP 搭配</b></td>
+    <tr><td>Megatron SP</td><td>只切 LayerNorm、Dropout、残差这几段的激活，<b>必须跟 TP 搭配</b>（按「切什么」归到这一列；按用途它是 TP 的搭档，见 3.3）</td>
       <td>TP 切不到的那部分激活，每张卡都存了一整份</td><td>把 TP 的 all-reduce 拆成 all-gather ＋ reduce-scatter，总量不变</td><td>训 · 推</td></tr>
     <tr><td>CP（Context Parallel）</td><td><b>所有</b>激活沿序列切</td><td>长上下文训练，128K 以上基本绕不开</td>
       <td>ring 传 KV，或者 all-to-all，或者 all-gather，可以分层组合</td><td>训</td></tr>
@@ -881,7 +881,7 @@ __FIG_PANO__
     <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s，另给 200 GB/s 一档；把它理解成每条链路收发合计，「6 条链路 × 200、发出方向 600」才对得上，这是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；按 device 口径同样约 3,845（一颗芯片的两个 device 共用链路，算力和带宽一起减半）（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
-    <tr><td>GB300 上 TP4 → dep8：同并发 512 总量 2.61 倍、每卡 2.09 倍（dep8 并发 1,536 时每卡 2.47 倍、TTFT 95 s）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；dep8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
+    <tr><td>GB300 上 TP4 → DEP8：同并发 512 总量 2.61 倍、每卡 2.09 倍（DEP8 并发 1,536 时每卡 2.47 倍、TTFT 95 s）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；DEP8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
     <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv 2205.05198 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
     <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 §3</td></tr>
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>

@@ -244,7 +244,7 @@ p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，<b>也不含等动画转完一圈的时间</b>（全讲约 3 分钟）。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第零节　开场：一张卡装不下</td><td>305</td><td>1</td><td>1.8′</td><td>3′</td></tr><tr><td>第一节　先认识五种通信</td><td>791</td><td>5</td><td>5.2′</td><td>8′</td></tr><tr><td>第二节　第一刀：切数据</td><td>709</td><td>2</td><td>4.0′</td><td>5′</td></tr><tr><td>第三节　第二刀：切权重</td><td>839</td><td>3</td><td>4.9′</td><td>7′</td></tr><tr><td>第四节　第三刀：切专家</td><td>538</td><td>3</td><td>3.4′</td><td>5′</td></tr><tr><td>第五节　第四刀：切序列</td><td>636</td><td>5</td><td>4.4′</td><td>5′</td></tr><tr><td>第六节　第五刀：不切张量，切工作</td><td>599</td><td>2</td><td>3.5′</td><td>5′</td></tr><tr><td>第七节　摆到机器上</td><td>907</td><td>5</td><td>5.8′</td><td>7′</td></tr><tr><td>第八节　全景与收尾</td><td>205</td><td>2</td><td>1.5′</td><td>2′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>35′</b></td><td><b>47′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第零节　开场：一张卡装不下</td><td>305</td><td>1</td><td>1.8′</td><td>3′</td></tr><tr><td>第一节　先认识五种通信</td><td>791</td><td>5</td><td>5.2′</td><td>8′</td></tr><tr><td>第二节　第一刀：切数据</td><td>709</td><td>2</td><td>4.0′</td><td>5′</td></tr><tr><td>第三节　第二刀：切权重</td><td>852</td><td>3</td><td>5.0′</td><td>7′</td></tr><tr><td>第四节　第三刀：切专家</td><td>558</td><td>3</td><td>3.5′</td><td>5′</td></tr><tr><td>第五节　第四刀：切序列</td><td>636</td><td>5</td><td>4.4′</td><td>5′</td></tr><tr><td>第六节　第五刀：不切张量，切工作</td><td>599</td><td>2</td><td>3.5′</td><td>5′</td></tr><tr><td>第七节　摆到机器上</td><td>907</td><td>5</td><td>5.8′</td><td>7′</td></tr><tr><td>第八节　全景与收尾</td><td>205</td><td>2</td><td>1.5′</td><td>2′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>35′</b></td><td><b>47′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把两条暗线记在心里</h3>
@@ -415,7 +415,7 @@ FSDP 每一步搬的是权重，搬多少跟模型大小有关，<b>跟一次喂
 <p class="say">「怎么判断一刀会不会被通信拖住？想象砌墙：师傅砌一块砖两秒，小工送一块砖要五秒，师傅再快也得等。<br>
 每张卡就是师傅，网络就是小工。所以要看的是：<b>每送来一个字节，够师傅忙多久</b>。忙的时间比送的时间短，就在干等。」</p>
 
-<p>💬 <b>互动</b>：这里可以问一句「一次送来的砖越多，师傅是不是越不用等？」——答案就是 FSDP 那条斜线。</p>
+<p>💬 <b>互动</b>：这里可以问一句「一块砖能砌的墙越多，师傅是不是越不用等？」——同一份权重喂给的 token 越多，就是 FSDP 那条斜线。</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-intensity</code>，整张，先指那条红色虚线。</p>
 
@@ -439,7 +439,7 @@ FSDP 每一步搬的是权重，搬多少跟模型大小有关，<b>跟一次喂
 V3 切 8 份就已经贴着红线了，实际还要更紧。<br>
 所以两把刀各管一边：<b>batch 小的时候多用 TP，batch 大的时候多用 FSDP</b>。」</p>
 
-<p class="say">「TP 出不了一台机器。那模型大到一台机器都装不下怎么办？按层切：前几层给第一张卡，后几层给第二张卡，像流水线。叫 PP。<br>
+<p class="say">「TP 出不了最快的那一圈互联。要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，怎么办？按层切：前几层给第一张卡，后几层给第二张卡，像流水线。叫 PP。<br>
 它只在段和段的边界上传一次激活，是所有刀里通信最少的。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>anim-pipeline</code>，让 4 个和 8 个 micro-batch 都放完。</p>
@@ -495,7 +495,7 @@ EP 不行：哪个专家忙，要等路由算完才知道，而且每一批都�
 
 <p class="say">「推理那边给这种组合起了简称，叫 TEP、DEP，最后一节再说。」</p>
 
-<p class="say">「差别能有多大？我们在 GB300 上跑 DeepSeek-V4-Pro 测过一次：出字那一段从 TP4 换成 DEP8，跟调完参的老配置比，每张卡的吞吐翻了一倍。<br>
+<p class="say">「差别能有多大？我们在 GB300 上跑 DeepSeek-V4-Pro 测过一次：出字那一段从 TP4 换成 DEP8，也就是 attention 改成每张卡各管一批请求、专家铺满 8 张卡，跟调完参的老配置比，每张卡的吞吐翻了一倍。<br>
 最大的一笔在 attention 那一半，跟 KV cache 有关，就是每个字留下的那份笔记。」</p>
 
 <p class="say">「这就是这一刀留下的问题：KV cache 跟着对话长度往上涨，这是一条样本自己的长度。前面三刀，谁都没碰过「序列」这一维。」</p>
