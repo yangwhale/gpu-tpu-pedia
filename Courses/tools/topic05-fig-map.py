@@ -166,7 +166,7 @@ fig_topo()
 # ⭐ 2026-09-25 R7 麻瓜全篇重读：开头许诺「一张全景地图」，第八节却全是表。这张把五刀归进四类，
 #   每个名字只挂两样东西：用的是哪种通信、能不能跨到慢线上。细节仍在后面的表里。
 PANO = [
-    ("数据并行", "切 batch", BL, [("DP", "AllReduce", 1), ("ZeRO-1／2", "RS ＋ AG", 1), ("FSDP", "AG ×2 ＋ RS", 0),
+    ("数据并行", "切 batch", BL, [("DP", "AllReduce", 1), ("ZeRO-1", "RS ＋ AG", 1), ("FSDP", "AG ×2 ＋ RS", 0),
                                  ("HSDP", "机内 FSDP、机间 DP", 1), ("Attention DP", "推理：各管各的请求", 1)]),
     ("序列并行", "切一条样本", GR, [("SP", "AG ＋ RS（TP 的搭档）", 0), ("CP · Ring", "Send／Recv 沿环", 0),
                                   ("Ulysses", "AllToAll", 0), ("DCP", "推理：收齐 Q、合并", 0), ("PCP", "推理：切长 prompt", 0)]),

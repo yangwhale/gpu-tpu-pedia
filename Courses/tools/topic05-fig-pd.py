@@ -98,7 +98,7 @@ def fig_afd():
         f.box(TX + 80 + t * CW, py + 72, CW - 4, 36, a_col, a_col, 3)
         f.box(TX + 80 + t * CW, py + 132, CW - 4, 36, e_col if t > 0 else "none", e_col if t > 0 else LINE, 3)
     f.t(TX, py + 214, "attention 在算 A 的时候，专家在算 B；", GY, size=13)
-    f.t(TX, py + 238, "来回两趟通信就藏在对方的计算后面。", GY, size=13)
+    f.t(TX, py + 238, "示意画两个；真要藏住来回的通信，得三四个。", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "拆得越细，每一边越能挑适合自己的机器和切法", [
         "专家那边同时接几台 attention 机器的 token，<tspan font-weight=\"700\">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。",

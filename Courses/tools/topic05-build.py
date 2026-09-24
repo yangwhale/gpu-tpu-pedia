@@ -120,7 +120,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 45 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 47 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -180,7 +180,7 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
 </div></section>
 
 ''' + sec("s一", "一", "先认识五种通信") + '''
-  <p class="lead">后面每一刀都会多出一种通信。这一节先把它们认全。
+  <p class="lead">后面每一刀都会多出一种通信。这一节先把它们认全：日常用到的是五种，AllReduce、AllGather、ReduceScatter、AllToAll，再加最朴素的一对一收发。
     名字看着多，但每一个都只回答两个问题：<b>谁发给谁</b>；数据到了之后是<b>拼起来、加起来，还是原样放着</b>。</p>
 
   <h3>1.1　所有集合通信，拆到底只有「发」和「收」</h3>
@@ -199,7 +199,7 @@ __FIG_COLL_1N__
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
   <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
     按最朴素的做法（班长挨个发、挨个收），班长那一条线要扛下全部流量，卡越多越堵。
-    通信库会把广播、归约排成一条链接力传，让班长只发或只收一份；收集和分发的班长却躲不掉，它手里本来就是 n 份不同的东西。</p>
+    通信库会把广播、归约排成一条链接力传，让班长只发或只收一份；收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西（总量倒是不随卡数涨）。</p>
 
   <h3>1.3　人人对人人：训练里天天在跑的四个</h3>
 __FIG_COLL_NN__
@@ -256,7 +256,7 @@ __FIG_A2A__
     ReduceScatter 指加之前那一整份）。</p>
   <table>
     <tr><th>通信</th><th>做什么</th><th>每卡发出</th><th>后面谁在用</th></tr>
-    <tr><td>AllReduce</td><td>加完，人人一份</td><td>2(n−1)/n · S</td><td>数据并行同步梯度；张量并行每层两次</td></tr>
+    <tr><td>AllReduce</td><td>加完，人人一份</td><td>2(n−1)/n · S</td><td>数据并行同步梯度；张量并行每层前向两次、反向两次</td></tr>
     <tr><td>ReduceScatter</td><td>加完，各拿一块</td><td>(n−1)/n · S</td><td>FSDP 反向分梯度；张量并行配序列并行</td></tr>
     <tr><td>AllGather</td><td>拼完，人人一份</td><td>(n−1)/n · S</td><td>FSDP 前向拼权重；张量并行配序列并行；推理切 KV 时收齐 Q</td></tr>
     <tr><td>AllToAll</td><td>只换位置</td><td>(n−1)/n · S</td><td>专家并行派发和收回 token；Ulysses</td></tr>
@@ -314,7 +314,7 @@ __FIG_FSDP_STEP__
 
   <h3>2.4　这一刀能放多远：看频率</h3>
   <ul>
-    <li><b>数据并行、ZeRO-1、ZeRO-2</b>：一步通信一次，可以放在慢链路上，最远能横跨数据中心。</li>
+    <li><b>数据并行、ZeRO-1</b>：一步通信一次，可以放在慢链路上，最远能横跨数据中心（ZeRO-2 只在不切 micro-batch 时才如此）。</li>
     <li><b>FSDP</b>：每一层都要拼一次权重，一步下来多出成百上千次（第七节有个数），得放在高带宽域里。</li>
     <li><b>HSDP</b> 是两者的折中：<b>机内 FSDP、机间数据并行</b>。高频的拼权重留在机内，跨机只剩梯度同步，量也除以了机内的分片数。</li>
     <li><b>DiLoCo</b> 再往前一步：每个副本先自己走几百步再同步一次，专门为跨数据中心训练设计。</li>
@@ -337,7 +337,7 @@ __FIG_FSDP_STEP__
   <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬的是两次拼权重、一次分梯度，约 6Ψ 字节（Ψ 还是参数个数，bf16 每个 2 字节）；
     一步算的是 6ΨT 次（专题四那条「训练每个 token 约 6 倍参数量次运算」），T 是每张卡分到的 token 数。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
 __FIG_INTENSITY__
-  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片间 ICI 常说的 1.2 TB/s，按官方给的每轴数字推算，是 6 条链路收发两个方向加起来的，
+  <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片间 ICI 常说的 1.2 TB/s，按官方给的 200 GB/s 理解成每条链路收发合计推算，是 6 条链路加起来的，
     而上面搬的字节是「每卡发出」的量，只能跟发出那一半比：每秒 0.6 TB。
     硬件的比值约 3,845。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
     而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
@@ -438,7 +438,7 @@ __FIG_MOE_PARAMS__
 __FIG_FOLD__
   <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP。
     挑哪个差别大到什么程度，我们自己测过一次：</p>
-  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍</span>
+  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍（跟调完参的 TP4 比）</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 dep8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
     最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，只能在 4 张卡上各复制一份；改成数据并行后，每张卡只存自己那批请求的 KV。
     attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。<br>
@@ -578,7 +578,7 @@ __FIG_AFD__
   <h3>7.1　线有快有慢，刀有勤有懒</h3>
   <p>一个集群里的线不是一样快的。GPU 这边，GB300 NVL72 把 72 块卡连成一个 NVLink 域，域里每块卡 1.8 TB/s（收发合计，下同）；
     出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI（够大的切片连成 3D 环面，见 1.5），
-    跨切片走数据中心网络，同口径比慢将近两个数量级，比 GPU 那边的 9 倍悬殊得多。</p>
+    跨切片走数据中心网络，同口径比慢约 50 倍，比 GPU 那边的 9 倍悬殊得多。</p>
   <p>刀也不是一样勤的。把每一刀一步要通信几次数一遍（本课推导，示意配置），差出三个数量级：</p>
 __FIG_FREQ__
   <p>于是有一条默认的摆法：<b>每一层都要说话的 TP、EP、FSDP、CP 先往最快的那一圈里放</b>；PP 只在段边界说话，DP 一步只说一次，它们去跨慢线。
@@ -615,7 +615,7 @@ __FIG_TOPO__
       推理时 KV 放不下就上 DCP（第五节）。</li>
     <li><b>再看快线那一圈有多大</b>：TP、EP 的度数别超过它（8 卡一台的机器就是 8，GB300 一柜是 72，TPU 看切片）。</li>
     <li><b>再看序列多长</b>：训练长上下文加 CP，推理长 prompt 加 PCP。</li>
-    <li><b>还不够，或者必须跨很慢的线，才上 PP</b>：它最能忍慢线，代价是气泡（第三节）。</li>
+    <li><b>还不够，或者必须跨很慢的线，才上 PP</b>：它通信量最小，能跨慢线，代价是气泡（第三节）。</li>
     <li><b>剩下的卡全给 DP</b>：一步只通信一次，最便宜。</li>
   </ol>
   <p>拿两个真实配置对一遍。表里「DP 4 × FSDP 128」这类写法按乘法读：两种切法各切几份，乘起来就是总共多少份。</p>
@@ -680,7 +680,7 @@ __FIG_PANO__
     <li><b>序列并行单独成一类。</b>严格说它也是在切数据（切一条样本内部），
       但它专门对付长上下文，通信方式也跟 DP 完全不同，放一起反而讲不清。</li>
   </ul>
-  <p>下面四张表就按这四类排。「新」表示 2025–26 年才出现或才普及。
+  <p>下面几张表就按这四类排。「新」表示 2025–26 年才出现或才普及。
     <b>这四张是查阅用的，第一次读可以直接跳到 8.6</b>；表里有不少前面没讲过的名字，用到时再回来翻。</p>
 
   <h3>8.2　数据并行类</h3>
@@ -753,7 +753,7 @@ __FIG_PANO__
   <table>
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
     <tr><td>TP</td><td>矩阵先按列切、再按行切，两两配对</td><td>单层的权重或计算放不下</td>
-      <td>每层两次 all-reduce，<b>频率极高</b>，所以只能待在 NVLink 或 ICI 一跳之内</td><td>训 · 推</td></tr>
+      <td>每层前向两次、反向两次 all-reduce，<b>频率极高</b>，所以只能待在 NVLink 或 ICI 一跳之内</td><td>训 · 推</td></tr>
     <tr><td>2D / 2.5D / 3D TP</td><td>把矩阵切成网格</td><td>1D TP 的通信随度数上涨</td>
       <td>沿网格的行、列广播和归约</td><td>训，<b>已基本不用</b></td></tr>
     <tr><td>GTP ''' + NEW + '''</td><td>在 TP 轴上再把权重切一层，用的时候再收回来</td>
@@ -868,7 +868,7 @@ __FIG_PANO__
     <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv 1909.08053 §3（前向 2 次、反向 2 次 all-reduce）；arXiv 2205.05198 §4.2.2（AG＋RS 替代 all-reduce，无额外通信）；头数须被 TP 整除：megatron/core/transformer/transformer_config.py 的校验</td></tr>
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv 2104.04473 §2.2.1–2.2.2；Zero Bubble arXiv 2401.10241；DualPipe README</td></tr>
     <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
-    <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s、每轴双向 200 GB/s，「6 条链路 × 200、发出方向 600」是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；3,845 是每芯片，按 device 约 1,900（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
+    <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s，另给 200 GB/s 一档；把它理解成每条链路收发合计，「6 条链路 × 200、发出方向 600」才对得上，这是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；按 device 口径同样约 3,845（一颗芯片的两个 device 共用链路，算力和带宽一起减半）（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
     <tr><td>GB300 上 TP4 → dep8：同并发 512 总量 2.61 倍、每卡 2.09 倍（dep8 并发 1,536 时每卡 2.47 倍、TTFT 95 s）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；dep8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
