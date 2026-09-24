@@ -1972,7 +1972,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">环形 ReduceScatter，四张卡、三步</tspan></text>
-<text class="svgsm" x="249" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">第 s 步，卡 k 把第 (k−s−1) mod 4 块发给卡 k＋1</text>
+<text class="svgsm" x="249" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">每一步：每张卡把一块发给右边的邻居，同时从左边收一块、加到自己的同号块上</text>
 <text class="svgsm" x="70" y="158" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">开始</tspan></text>
 <text class="svgsm" x="16" y="192" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
 <rect x="70.0" y="172" width="46.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
@@ -2216,7 +2216,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s1-6">1.6　AllToAll：每人给每人一份不一样的</h3>
 <figure class="fbox fwide" id="fig-a2a"><svg viewBox="0 0 1400 542" width="100%" role="img" aria-label="全交换就是把一张四乘四的表转置一次。左边一行是一张卡手里的数据，第 j 格是它要交给卡 j 的那一份。做完之后，卡 j 手里的一行，是四张卡各自给它的那一份，也就是原来的第 j 列。对角线上那四格不用走网络，其余十二格都要跨卡。MoE 里这张表的一格，就是我手里要送去卡 j 上那个专家的 token"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">AllToAll　——　<tspan font-weight="700">把一张表转置一次</tspan></text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">AllToAll　——　<tspan font-weight="700">每人给每人寄一份不一样的</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左边：一行 ＝ 一张卡手里的数据，第 j 格是它要交给卡 j 的那一份。右边：第 j 行 ＝ 原来的第 j 列</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0 出的</text>
@@ -2463,11 +2463,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FSDP 为什么多 50%　——　<tspan font-weight="700">反向时要把扔掉的权重再拼一次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一层、同一步。每个色块是一次通信，量都是这一层权重的 (n−1)/n 份</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">AllGather（拼权重）</text>
-<rect x="177" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="198" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">ReduceScatter（分梯度）</text>
-<rect x="389" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="410" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">计算</text>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">AllGather（拼回整份）</text>
+<rect x="191" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="212" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">ReduceScatter（加起来再分）</text>
+<rect x="431" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="452" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">计算</text>
 <rect x="0" y="102" width="1400" height="244" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -2563,7 +2563,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="140" y="222" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">6,144</text>
 <text class="svgsm" x="140" y="127" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">8,192</text>
 <path d="M609,502 L609,323" fill="none" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="4,4"/>
-<text class="svgsm" x="617" y="482" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">T ＜ 3,845：FSDP 被拖住</tspan></text>
+<text class="svgsm" x="601" y="482" fill="#a50e0e" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">← T ＜ 3,845：FSDP 被拖住</tspan></text>
 <path d="M150,502 L1130,122" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
 <text class="svgsm" x="939" y="181" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP</tspan></text>
 <path d="M150,314 L1130,314" fill="none" stroke="#e8710a" stroke-width="2.5" stroke-linecap="round"/>
@@ -2861,7 +2861,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>浅灰色就是气泡：这一段在干等。</b><span class="capmore"><br><em>4 段 8 个 micro-batch，气泡是理想计算时间的 3/8。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 气泡占比：Narayanan 等，arXiv <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener">2104.04473</a> §2.2（GPipe／1F1B 的 bubble time fraction）；交错式把气泡再除以每卡的虚拟段数 v。Zero Bubble：arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>。DualPipe：github.com/deepseek-ai/DualPipe。</p></details></figure>
 <figure class="fbox fwide" id="anim-pipeline">
 <video src="media/topic05-pipeline.mp4" autoplay loop muted playsinline
-       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了。字幕三：气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱。最后复位。"></video>
+       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：总量不变、切成 8 份（每份的格子窄一半）：气泡 ＝ (4−1) ÷ 8 ＝ 3/8，灰色真的短了一半。字幕三：气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱。最后复位。"></video>
 <figcaption>micro-batch 从 4 个加到 8 个，灰色的气泡跟着缩一半。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>开头要等后面几段灌满，结尾要等前面几段排空。气泡跟理想计算时间之比是 (p−1) ÷ m，
@@ -3288,50 +3288,43 @@ body.figonly section h3{margin-top:34px}
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一批卡 vs 分开两批</tspan></text>
 <text class="svgsm" x="24" y="194" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放在一起</tspan></text>
-<rect x="230" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="268" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="306" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="344" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="382" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="420" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="458" y="172" width="224" height="36" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="572" y="196" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">长 prompt 的 prefill</tspan></text>
-<text class="svgsm" x="572" y="232" fill="#a50e0e" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这几步所有人的 decode 都停住</tspan></text>
-<rect x="686" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="724" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="762" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="800" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="838" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="876" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="914" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="952" y="172" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="230" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="278" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="374" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="422" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="470" y="172" width="236" height="36" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="590" y="196" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">长 prompt 的 prefill</tspan></text>
+<text class="svgsm" x="590" y="232" fill="#a50e0e" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这 5 步所有人的 decode 都停住</tspan></text>
+<rect x="710" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="758" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="806" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="854" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="902" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="950" y="172" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="24" y="314" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill 机器</tspan></text>
 <text class="svgsm" x="24" y="394" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 机器</tspan></text>
-<rect x="458" y="292" width="224" height="36" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="572" y="316" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill</tspan></text>
-<path d="M686,330 L724,370" fill="none" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="734" y="354" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV cache 传过去（按带宽估算约 100 ms）</tspan></text>
-<rect x="230" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="268" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="306" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="344" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="382" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="420" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="458" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="496" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="534" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="572" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="610" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="648" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="686" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="724" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="762" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="800" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="838" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="876" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="914" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="952" y="372" width="34" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1002" y="396" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一直稳定地出字</tspan></text>
+<rect x="470" y="292" width="236" height="36" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="590" y="316" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill</tspan></text>
+<path d="M710,330 L758,370" fill="none" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="768" y="354" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV cache 传过去（按带宽估算约 100 ms）</tspan></text>
+<rect x="230" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="278" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="374" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="422" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="470" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="518" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="566" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="614" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="662" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="710" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="758" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="806" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="854" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="902" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="950" y="372" width="44" height="36" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1010" y="396" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一直稳定地出字</tspan></text>
 <rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3381,7 +3374,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s6-5">6.5　AFD：attention 和专家分到两组机器</h3>
   <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大。
     <b>AFD</b>（Attention-FFN 分离）把两者放到两组机器上：M 台只算 attention，N 台只放专家。</p>
-<figure class="fbox fwide" id="fig-afd"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。为了把这来回两趟藏起来，把一批请求切成几个小批轮着跑，一个在算 attention 时另一个在算专家，像打乒乓"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-afd"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。为了把这来回两趟藏起来，把一批请求切成几个小批轮着跑，这一个在算 attention，另一个正好在算专家，图里画两个示意，论文里要三四个"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">再拆一层：attention 和专家也分开　——　<tspan font-weight="700">专家那边一次接好几家的 token</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，两个小批交替跑</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -3467,9 +3460,9 @@ body.figonly section h3{margin-top:34px}
     出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI 连成 3D 环面，
     跨切片走数据中心网络，又慢一个数量级以上。</p>
   <p>刀也不是一样勤的。把每一刀一步要通信几次数一遍（本课推导，示意配置），差出三个数量级：</p>
-<figure class="fbox fwide" id="fig-freq"><svg viewBox="0 0 1400 868" width="100%" role="img" aria-label="每一刀一步要通信多少次，按对数刻度画成横条。示意配置是 60 层、8 个 micro-batch。TP 和 EP 每步约 1920 次，FSDP 1440 次，都是每一层都要来几次；PP 每步 16 次，只在段边界上；DP 每步只有 1 次。下面是两种线的带宽：GB300 上一块 GPU 的 NVLink 双向 1.8 TB/s，一整柜 72 块 GPU 都连在这张网上；出了这一柜就只能走网卡，双向 200 GB/s，差 9 倍。规则是频率高的放快线，频率低的才走慢线"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-freq"><svg viewBox="0 0 1400 868" width="100%" role="img" aria-label="每一刀一步要通信多少次，按实际比例画成横条。示意配置是 60 层、8 个 micro-batch。TP 和 EP 每步约 1920 次，FSDP 1440 次，都是每一层都要来几次；PP 每步 16 次，只在段边界上；DP 每步只有 1 次。下面是两种线的带宽：GB300 上一块 GPU 的 NVLink 双向 1.8 TB/s，一整柜 72 块 GPU 都连在这张网上；出了这一柜就只能走网卡，双向 200 GB/s，差 9 倍。规则是频率高的放快线，频率低的才走慢线"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每一刀多久说一次话　——　<tspan font-weight="700">说得勤的放快线，说得少的才走慢线</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每步通信次数（对数刻度，本课推导）。示意配置：60 层、8 个 micro-batch、每层都是 MoE</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每步通信次数（按实际比例，本课推导）。示意配置：60 层、8 个 micro-batch、每层都是 MoE</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">放在最快的那一层线上</text>
 <rect x="187" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -3480,33 +3473,33 @@ body.figonly section h3{margin-top:34px}
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步里的通信次数</tspan></text>
 <text class="svgsm" x="40" y="204" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP</tspan></text>
-<rect x="200" y="180" width="755.9182852298749" height="34" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="967" y="203" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,920 次</tspan></text>
-<text class="svgsm" x="1055" y="203" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每层 4 次 all-reduce</text>
+<rect x="200" y="180" width="760.0" height="34" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="972" y="203" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,920 次</tspan></text>
+<text class="svgsm" x="1060" y="203" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每层 4 次 all-reduce</text>
 <text class="svgsm" x="40" y="258" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP</tspan></text>
-<rect x="200" y="234" width="755.9182852298749" height="34" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="967" y="257" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,920 次</tspan></text>
-<text class="svgsm" x="1055" y="257" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每个 MoE 层 4 次 all-to-all</text>
+<rect x="200" y="234" width="760.0" height="34" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="972" y="257" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,920 次</tspan></text>
+<text class="svgsm" x="1060" y="257" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每个 MoE 层 4 次 all-to-all</text>
 <text class="svgsm" x="40" y="312" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP</tspan></text>
-<rect x="200" y="288" width="727.1534936505699" height="34" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="939" y="311" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,440 次</tspan></text>
-<text class="svgsm" x="1027" y="311" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每层拼一次、反向再拼一次、再散一次</text>
+<rect x="200" y="288" width="570.0" height="34" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="782" y="311" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,440 次</tspan></text>
+<text class="svgsm" x="870" y="311" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每层拼一次、反向再拼一次、再散一次</text>
 <text class="svgsm" x="40" y="366" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PP</tspan></text>
-<rect x="200" y="342" width="277.2259531178329" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="489" y="365" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16 次</tspan></text>
-<text class="svgsm" x="577" y="365" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每个 micro-batch 过段边界一来一回</text>
+<rect x="200" y="342" width="6.333333333333333" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="218" y="365" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16 次</tspan></text>
+<text class="svgsm" x="306" y="365" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每个 micro-batch 过段边界一来一回</text>
 <text class="svgsm" x="40" y="420" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DP</tspan></text>
-<rect x="200" y="396" width="6" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="218" y="419" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 次</tspan></text>
-<text class="svgsm" x="306" y="419" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每步一次梯度 all-reduce</text>
+<rect x="200" y="396" width="3" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="215" y="419" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 次</tspan></text>
+<text class="svgsm" x="303" y="419" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每步一次梯度 all-reduce</text>
 <line x1="200.0" y1="450" x2="200.0" y2="442" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="200" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
-<line x1="430.23117057351396" y1="450" x2="430.23117057351396" y2="442" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="430" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">10</text>
-<line x1="660.4623411470279" y1="450" x2="660.4623411470279" y2="442" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="660" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">100</text>
-<line x1="890.6935117205418" y1="450" x2="890.6935117205418" y2="442" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="890" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1,000</text>
+<text class="svgsm" x="200" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="397.91666666666663" y1="450" x2="397.91666666666663" y2="442" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="397" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">500</text>
+<line x1="595.8333333333333" y1="450" x2="595.8333333333333" y2="442" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="595" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1,000</text>
+<line x1="793.75" y1="450" x2="793.75" y2="442" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="793" y="460" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1,500</text>
 <rect x="0" y="526" width="1400" height="170" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="526" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0" y="528" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3545,7 +3538,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s7-3">7.3　先选对切法，再调参数</h3>
   <p>摆法和切法选错了，参数调得再细也只是在错的天花板下面打转。我们在 GB300 上跑 DeepSeek-V4-Pro 时撞上过一次：</p>
-<figure class="fbox fwide" id="fig-topo"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="GB300 上跑 DeepSeek-V4-Pro 的三次实测，按每块 GPU 的吞吐画。原始脚本 1P1D，每卡 1820；加 prefill 机器、调并发，总吞吐涨了 45%，但卡也翻了一倍，每卡反而降到 1319。只把 decode 从 TP4 换成 dep8，每卡到 3257，是前一个的 2.47 倍"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-topo"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="GB300 上跑 DeepSeek-V4-Pro 的三次实测，按每块 GPU 的吞吐画。原始脚本 1P1D，每卡 1820；加 prefill 机器、调并发，总吞吐涨了 45%，但卡也翻了一倍，每卡反而降到 1319。把 decode 从 TP4 换成 dep8（decode 卡也从 4 张变 8 张），每卡到 3257，是前一个的 2.47 倍"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">调参和换切法，不是一个量级　——　<tspan font-weight="700">看每张卡，不看总数</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · DeepSeek-V4-Pro · vLLM，4K 进 1K 出，各取最好成绩。条长是每块 GPU 的吞吐（tok/s），括号里是总数和卡数</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -3568,7 +3561,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="652" y="289" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,319</tspan></text>
 <text class="svgsm" x="730" y="289" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">（总 21,100，16 块卡）</text>
 <text class="svgsm" x="30" y="362" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3P ＋ dep8 decode</tspan></text>
-<text class="svgsm" x="30" y="384" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">只换 decode 的切法</text>
+<text class="svgsm" x="30" y="384" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">换 decode 的切法（decode 卡 4→8 张）</text>
 <rect x="330" y="342" width="766.2588235294118" height="40" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1108" y="369" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3,257</tspan></text>
 <text class="svgsm" x="1186" y="369" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">（总 65,132，20 块卡）</text>
@@ -3670,7 +3663,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="2" y="522" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">加卡时要连 batch 一起加</tspan></text>
 <text class="svgsm" x="20" y="580" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">左边每卡的活不变，4 倍的卡换来 4 倍的吞吐　——　weak scaling 100%。组和组之间每步只有一次梯度 all-reduce。</text>
-<text class="svgsm" x="20" y="604" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">右边 FSDP 组从 128 张变 512 张，拼权重的环更长、跳数更多，固定延迟摊不掉：<tspan font-weight="700">404 比 453 少 11%</tspan>。</text>
+<text class="svgsm" x="20" y="604" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">右边一个 FSDP 组从 128 个 device 扩到 512 个，拼权重的步数和跳数都多了，固定延迟摊不掉：<tspan font-weight="700">404 比 453 少 11%</tspan>。</text>
 </svg><figcaption><b>同样多的卡，当副本用和摊薄了用，差 11%。</b><span class="capmore"><br><em>本课程作者实测；左右两组每卡 batch 不同，只在组内比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法，pdbs 8）、<a href="#s4-1">§4.1</a>（64 与 256 芯片同为 580，pdbs 12）。数字是每芯片 TFLOP/s。</p></details></figure>
   <p>左边那组说明 DP 方向几乎是白送的：4 个 64 芯片的组之间，一步只有一次梯度 all-reduce，
     按 v7 的 ICI 粗算十几到二十几毫秒，占一步 23.5 秒不到千分之一（本课推算）。

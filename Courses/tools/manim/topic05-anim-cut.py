@@ -135,11 +135,15 @@ class Pipeline(Scene):
             self.play(FadeOut(sub), FadeIn(n), run_time=0.35)
             sub = n
 
+        # ⭐ 2026-09-25 逐图审：原来两次的格宽都按屏宽摊，8 份时灰色的**绝对长度**没变（只是占比变了），
+        #   图注却说「缩一半」。改成总 batch 不变：8 份时每份的格子窄一半，灰色才真的短一半。
+        CW4 = 0.34
+
         def run(m):
             L = total_len(m)
-            cw = min(11.0 / L, 0.34)
+            cw = CW4 * 4 / m
             x0 = -5.4
-            lanes = VGroup(*[Rectangle(width=L * cw, height=0.55, stroke_width=0, fill_color=GREY_D_,
+            lanes = VGroup(*[Rectangle(width=L * cw, height=0.55, stroke_width=0, fill_color="#6b6b6b",
                                        fill_opacity=1).move_to([x0 + L * cw / 2, 1.6 - s * 0.8, 0])
                              for s in range(P)])
             self.play(FadeIn(lanes), run_time=0.4)
@@ -167,7 +171,7 @@ class Pipeline(Scene):
         self.wait(1.0)
         self.play(FadeOut(l1), FadeOut(d1), run_time=0.5)
         self.remove(l1, d1)
-        say("换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了", GREEN)
+        say("总量不变、切成 8 份：气泡 ＝ (4−1) ÷ 8 ＝ 3/8，灰色真的短了一半", GREEN)
         l2, d2 = run(8)
         self.wait(1.2)
         say("气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱")

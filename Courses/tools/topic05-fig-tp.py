@@ -58,7 +58,7 @@ def fig_intensity():
     for i in (0, 2048, 4096, 6144, 8192):
         f.t(PX - 10, Y(i) + 5, "{:,}".format(i), GY, size=12.5, anchor="end")
     f.path("M%d,%d L%d,%d" % (X(RIDGE), Y(0), X(RIDGE), Y(RIDGE)), RD, 1.6, dash="4,4", arrow=False)
-    f.t(X(RIDGE) + 8, Y(420), "T ＜ 3,845：FSDP 被拖住", RD, True, 13)
+    f.t(X(RIDGE) - 8, Y(420), "← T ＜ 3,845：FSDP 被拖住", RD, True, 13, "end")
     f.path("M%d,%d L%d,%d" % (X(0), Y(0), X(TMAX), Y(TMAX)), BL, 3, arrow=False)
     f.t(X(6600), Y(6600) - 14, "FSDP", BL, True, 15)
     for n, lab in ((8, "TP 8 路"), (32, "TP 32 路")):

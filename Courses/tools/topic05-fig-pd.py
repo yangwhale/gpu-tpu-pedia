@@ -28,32 +28,33 @@ def fig_pd():
                   [(GR, "decode：每步出一个字"), (OR, "prefill：一次吞下整个 prompt"), (BL, "KV cache 传输")])
     PH = 330
     py = f.panel(0, y0, W, PH, "同一批卡 vs 分开两批", OR)
-    X0, CW = 230, 38
+    X0, CW = 230, 48
+    N, AT, LN = 16, 5, 5                 # 跟 PD 动画同一套：16 步、第 5 步起 prefill 占 5 步
     # 同一批卡
     f.t(24, py + 62, "放在一起", INK, True, 16)
     x = X0
-    seq = ["d"] * 6 + ["P"] + ["d"] * 8
+    seq = ["d"] * AT + ["P"] + ["d"] * (N - AT - LN)
     for s in seq:
         if s == "d":
             f.box(x, py + 40, CW - 4, 36, GR, GR, 3)
             x += CW
         else:
-            f.box(x, py + 40, CW * 6 - 4, 36, OR, OR, 3)
-            f.t(x + CW * 3, py + 64, "长 prompt 的 prefill", "#ffffff", True, 14, "middle")
-            f.t(x + CW * 3, py + 100, "这几步所有人的 decode 都停住", RD, True, 13.5, "middle")
-            x += CW * 6
+            f.box(x, py + 40, CW * LN - 4, 36, OR, OR, 3)
+            f.t(x + CW * LN / 2, py + 64, "长 prompt 的 prefill", "#ffffff", True, 14, "middle")
+            f.t(x + CW * LN / 2, py + 100, "这 %d 步所有人的 decode 都停住" % LN, RD, True, 13.5, "middle")
+            x += CW * LN
     # 分开
     f.t(24, py + 182, "prefill 机器", INK, True, 16)
     f.t(24, py + 262, "decode 机器", INK, True, 16)
-    f.box(X0 + 6 * CW, py + 160, CW * 6 - 4, 36, OR, OR, 3)
-    f.t(X0 + 9 * CW, py + 184, "prefill", "#ffffff", True, 14, "middle")
-    f.path("M%d,%d L%d,%d" % (X0 + 12 * CW, py + 198, X0 + 13 * CW, py + 238), BL, 2.2)
-    f.t(X0 + 13 * CW + 10, py + 222, "KV cache 传过去（按带宽估算约 100 ms）", BL, True, 13)
+    f.box(X0 + AT * CW, py + 160, CW * LN - 4, 36, OR, OR, 3)
+    f.t(X0 + (AT + LN / 2) * CW, py + 184, "prefill", "#ffffff", True, 14, "middle")
+    f.path("M%d,%d L%d,%d" % (X0 + (AT + LN) * CW, py + 198, X0 + (AT + LN + 1) * CW, py + 238), BL, 2.2)
+    f.t(X0 + (AT + LN + 1) * CW + 10, py + 222, "KV cache 传过去（按带宽估算约 100 ms）", BL, True, 13)
     x = X0
-    for i in range(20):
+    for i in range(N):
         f.box(x, py + 240, CW - 4, 36, GR, GR, 3)
         x += CW
-    f.t(X0 + 20 * CW + 12, py + 264, "一直稳定地出字", GR, True, 14)
+    f.t(X0 + N * CW + 12, py + 264, "一直稳定地出字", GR, True, 14)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "拆开换来的：出字不再被打断", [
         "放在一起时，一个长 prompt 的 prefill 就能让所有人停几步。<tspan font-weight=\"700\">拆开后 decode 那条线一格不少。</tspan>",
@@ -69,7 +70,7 @@ def fig_afd():
     f = Fig(W, "attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。"
                "每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。"
                "专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。"
-               "为了把这来回两趟藏起来，把一批请求切成几个小批轮着跑，一个在算 attention 时另一个在算专家，像打乒乓")
+               "为了把这来回两趟藏起来，把一批请求切成几个小批轮着跑，这一个在算 attention，另一个正好在算专家，图里画两个示意，论文里要三四个")
     y0 = f.header("再拆一层：attention 和专家也分开　——　<tspan font-weight=\"700\">专家那边一次接好几家的 token</tspan>",
                   "AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，两个小批交替跑",
                   [(BL, "attention 机器"), (OR, "专家机器"), (GR, "小批 A"), (PU, "小批 B")])

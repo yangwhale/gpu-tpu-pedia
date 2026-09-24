@@ -37,33 +37,35 @@ assert WEAK[1][2] / WEAK[0][2] == 1.0 and round(404 / 453 * 100) == 89
 # GB300 V4-Pro（vLLM，4K 进 1K 出）
 TOPO = [("1P1D，TP4 decode", "原始脚本", 14563, 8),
         ("3P1D，TP4 decode", "加 prefill、调并发后的最好成绩", 21100, 16),
-        ("3P ＋ dep8 decode", "只换 decode 的切法", 65132, 20)]
+        ("3P ＋ dep8 decode", "换 decode 的切法（decode 卡 4→8 张）", 65132, 20)]
 PER = [t[2] / t[3] for t in TOPO]
 assert [round(p) for p in PER] == [1820, 1319, 3257]
 assert round(TOPO[1][2] / TOPO[0][2] - 1, 2) == 0.45 and round(PER[2] / PER[1], 2) == 2.47
 
 
 def fig_freq():
-    f = Fig(W, "每一刀一步要通信多少次，按对数刻度画成横条。示意配置是 60 层、8 个 micro-batch。"
+    f = Fig(W, "每一刀一步要通信多少次，按实际比例画成横条。示意配置是 60 层、8 个 micro-batch。"
                "TP 和 EP 每步约 1920 次，FSDP 1440 次，都是每一层都要来几次；PP 每步 16 次，只在段边界上；"
                "DP 每步只有 1 次。下面是两种线的带宽：GB300 上一块 GPU 的 NVLink 双向 1.8 TB/s，一整柜 72 块 GPU 都连在这张网上；"
                "出了这一柜就只能走网卡，双向 200 GB/s，差 9 倍。规则是频率高的放快线，频率低的才走慢线")
     y0 = f.header("每一刀多久说一次话　——　<tspan font-weight=\"700\">说得勤的放快线，说得少的才走慢线</tspan>",
-                  "每步通信次数（对数刻度，本课推导）。示意配置：60 层、8 个 micro-batch、每层都是 MoE",
+                  "每步通信次数（按实际比例，本课推导）。示意配置：60 层、8 个 micro-batch、每层都是 MoE",
                   [(BL, "放在最快的那一层线上"), (OR, "可以跨到慢线上")])
     PH = 370
     py = f.panel(0, y0, W, PH, "一步里的通信次数", BL)
     BX, BW = 200, 760
-    top = math.log10(2000)
+    # ⭐ 2026-09-25 逐图审：原来是对数刻度，1,920 对 16 画出来只差约 3 倍长，「差三个数量级」被刻度吃掉了。
+    #   改成线性：PP、DP 短到几乎看不见 —— 这正是要讲的点。
+    top = 1920
     for i, (name, n, col, why) in enumerate(FREQ):
         yy = py + 48 + i * 54
         f.t(40, yy + 24, name, INK, True, 17)
-        w = max(BW * math.log10(n) / top, 6)
+        w = max(BW * n / top, 3)
         f.box(BX, yy, w, 34, col, col, 4)
         f.t(BX + w + 12, yy + 23, "%s 次" % format(n, ","), col, True, 15)
         f.t(BX + w + 100, yy + 23, why, GY, size=13.5)
-    for v in (1, 10, 100, 1000):
-        x = BX + BW * math.log10(v) / top
+    for v in (0, 500, 1000, 1500):
+        x = BX + BW * v / top
         f.line(x, py + 318, x, py + 310, GY2, 1, arrow=False)
         f.t(x, py + 330 - 2, format(v, ","), GY, size=12, anchor="middle")
     f._pan = None
@@ -116,7 +118,7 @@ def fig_scale():
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "加卡时要连 batch 一起加", [
         "左边每卡的活不变，4 倍的卡换来 4 倍的吞吐　——　weak scaling 100%。组和组之间每步只有一次梯度 all-reduce。",
-        "右边 FSDP 组从 128 张变 512 张，拼权重的环更长、跳数更多，固定延迟摊不掉：<tspan font-weight=\"700\">404 比 453 少 11%</tspan>。",
+        "右边一个 FSDP 组从 128 个 device 扩到 512 个，拼权重的步数和跳数都多了，固定延迟摊不掉：<tspan font-weight=\"700\">404 比 453 少 11%</tspan>。",
     ])
     yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法，pdbs 8）、§4.1（64 与 256 芯片同为 580，pdbs 12）。"
                         "数字是每芯片 TFLOP/s。")
@@ -126,7 +128,7 @@ def fig_scale():
 def fig_topo():
     f = Fig(W, "GB300 上跑 DeepSeek-V4-Pro 的三次实测，按每块 GPU 的吞吐画。原始脚本 1P1D，每卡 1820；"
                "加 prefill 机器、调并发，总吞吐涨了 45%，但卡也翻了一倍，每卡反而降到 1319。"
-               "只把 decode 从 TP4 换成 dep8，每卡到 3257，是前一个的 2.47 倍")
+               "把 decode 从 TP4 换成 dep8（decode 卡也从 4 张变 8 张），每卡到 3257，是前一个的 2.47 倍")
     y0 = f.header("调参和换切法，不是一个量级　——　<tspan font-weight=\"700\">看每张卡，不看总数</tspan>",
                   "GB300 · DeepSeek-V4-Pro · vLLM，4K 进 1K 出，各取最好成绩。条长是每块 GPU 的吞吐（tok/s），括号里是总数和卡数",
                   [(GY2, "TP4 decode"), (GR, "dep8 decode")])

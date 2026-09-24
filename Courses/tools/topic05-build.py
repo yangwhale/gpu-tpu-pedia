@@ -379,7 +379,7 @@ __FIG_TP_MLP__
 __FIG_PP_BUBBLE__
 <figure class="fbox fwide" id="anim-pipeline">
 <video src="media/topic05-pipeline.mp4" autoplay loop muted playsinline
-       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：换成 8 个 micro-batch：＝ (4−1) ÷ 8 ＝ 3/8，灰色明显缩了。字幕三：气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱。最后复位。"></video>
+       aria-label="流水线并行时间表的动画。四个 stage，时间轴一格一格长出来，蓝色是前向、绿色是反向、深灰是空等的气泡。标题：流水线并行：灰色是气泡，每个 stage 都在空等的时间。字幕一：先用 4 个 micro-batch：气泡 ÷ 理想计算时间 ＝ (4−1) ÷ 4 ＝ 3/4。字幕二：总量不变、切成 8 份（每份的格子窄一半）：气泡 ＝ (4−1) ÷ 8 ＝ 3/8，灰色真的短了一半。字幕三：气泡只能摊薄、不能消灭：份数越多越省，可每份太小，卡就吃不饱。最后复位。"></video>
 <figcaption>micro-batch 从 4 个加到 8 个，灰色的气泡跟着缩一半。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>开头要等后面几段灌满，结尾要等前面几段排空。气泡跟理想计算时间之比是 (p−1) ÷ m，

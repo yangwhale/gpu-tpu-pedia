@@ -97,7 +97,7 @@ def fig_step():
                "多出来的那一份，就是反向时把扔掉的权重再拼一次")
     y0 = f.header("FSDP 为什么多 50%　——　<tspan font-weight=\"700\">反向时要把扔掉的权重再拼一次</tspan>",
                   "同一层、同一步。每个色块是一次通信，量都是这一层权重的 (n−1)/n 份",
-                  [(BL, "AllGather（拼权重）"), (GR, "ReduceScatter（分梯度）"), (GY2, "计算")])
+                  [(BL, "AllGather（拼回整份）"), (GR, "ReduceScatter（加起来再分）"), (GY2, "计算")])
     PH = 30 + 2 * 92 + 30
     py = f.panel(0, y0, W, PH, "一层 · 一步", BL)
     rows = [

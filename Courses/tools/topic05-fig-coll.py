@@ -261,7 +261,7 @@ def fig_ring():
     st = ring_states()
     PH = 30 + 34 + N * RH + 44
     py = f.panel(0, y0, W, PH, "环形 ReduceScatter，四张卡、三步", GR,
-                 sub="第 s 步，卡 k 把第 (k−s−1) mod 4 块发给卡 k＋1")
+                 sub="每一步：每张卡把一块发给右边的邻居，同时从左边收一块、加到自己的同号块上")
     SX = [70, 400, 730, 1060]
     labs = ["开始", "第 1 步后：两人之和", "第 2 步后：三人之和", "第 3 步后：每人一块完整总和"]
     for i, (held, hot) in enumerate(st):
@@ -298,7 +298,7 @@ def fig_a2a():
                "是四张卡各自给它的那一份，也就是原来的第 j 列。"
                "对角线上那四格不用走网络，其余十二格都要跨卡。"
                "MoE 里这张表的一格，就是我手里要送去卡 j 上那个专家的 token")
-    y0 = f.header("AllToAll　——　<tspan font-weight=\"700\">把一张表转置一次</tspan>",
+    y0 = f.header("AllToAll　——　<tspan font-weight=\"700\">每人给每人寄一份不一样的</tspan>",
                   "左边：一行 ＝ 一张卡手里的数据，第 j 格是它要交给卡 j 的那一份。"
                   "右边：第 j 行 ＝ 原来的第 j 列",
                   [(BL, "卡 0 出的"), (OR, "卡 1 出的"), (GR, "卡 2 出的"), (PU, "卡 3 出的")])
