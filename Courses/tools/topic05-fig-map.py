@@ -77,11 +77,11 @@ def fig_freq():
     f.t(560, py2 + 117, "← 差 %d 倍" % (NVL / NIC), RD, True, 20)
     f._pan = None
     yb = f.band(py2 + 170 + 20, "ok", "上下两张图一对，摆法就出来了", [
-        "TP、EP、FSDP 每一层都要通信，<tspan font-weight=\"700\">只能放在同一个 NVLink 域里</tspan>（GB300 是一整柜 72 块）；度数上限就是这个域的大小。",
+        "TP 每一层都要通信又藏不住，<tspan font-weight=\"700\">必须待在 NVLink 域里</tspan>（GB300 是一整柜 72 块）；EP、FSDP 能边算边传时才敢跨出去。",
         "PP 一步十几次、DP 一步一次，跨到慢线上也吃得消。TPU 上同理：切片里走 ICI，跨切片走数据中心网络。",
     ])
     yb = f.src(yb + 10, "📌 次数为本课推导：TP 每层前反向各 2 次 all-reduce（arXiv 1909.08053 §3）；FSDP 每层 3 次（ZeRO 的 3Ψ，arXiv 1910.02054 §7）；"
-                        "EP、PP、DP 按调度数出。链路：GB300 NVLink 5 每 GPU 1.8 TB/s；A4X Max 每节点 4 块 GPU、4 × CX-8 800 Gb/s。")
+                        "EP、PP、DP 按调度数出；叠上 PP 时 TP 的次数要除以 PP 段数，开重算时 TP 每层是 6 次。链路：GB300 NVLink 5 每 GPU 1.8 TB/s；A4X Max 每节点 4 块 GPU、4 × CX-8 800 Gb/s。")
     f.save("fig5-freq.svg", yb + 14)
 
 
@@ -109,14 +109,14 @@ def fig_scale():
     bar(70, WEAK[0][2], GR, WEAK[0][0], WEAK[0][1], 130)
     bar(270, WEAK[1][2], GR, WEAK[1][0], WEAK[1][1], 130)
     f._pan = None
-    f.panel(490, y0, W - 490, PH, "同样 256 芯片，只改怎么分（每卡 batch 8）", OR)
+    f.panel(490, y0, W - 490, PH, "同样 256 芯片，只改怎么分（每卡 batch 8，不能跟左边比）", OR)
     for i, (lab, v) in enumerate(SPLIT):
         col = GR if lab.startswith("DP 4") else OR
         bar(530 + i * 172, v, col if v else RD, lab.split(" × ")[0], lab.split(" × ")[1], 120)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "加卡时要连 batch 一起加", [
         "左边每卡的活不变，4 倍的卡换来 4 倍的吞吐　——　weak scaling 100%。组和组之间每步只有一次梯度 all-reduce。",
-        "右边权重摊得越薄，每次通信搬的越少、次数却不变，固定开销摊不掉：<tspan font-weight=\"700\">404 比 453 少 11%</tspan>。",
+        "右边 FSDP 组从 128 张变 512 张，拼权重的环更长、跳数更多，固定延迟摊不掉：<tspan font-weight=\"700\">404 比 453 少 11%</tspan>。",
     ])
     yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法，pdbs 8）、§4.1（64 与 256 芯片同为 580，pdbs 12）。"
                         "数字是每芯片 TFLOP/s。")

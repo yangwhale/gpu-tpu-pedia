@@ -456,7 +456,7 @@ class PDDisagg(Scene):
                 shown.add(kv, kvl)
         say("同样 %d 步：放在一起出 %d 个字，拆开出 %d 个（示意）" % (PD_STEPS, PD_TOGETHER, PD_APART), GREEN)
         self.wait(1.4)
-        say("代价：多一趟 KV 传输；我们在 TPU v7x 上实测约 100 毫秒")
+        say("代价：多一趟 KV 传输；按我们 v7x 那套的带宽估算约 100 毫秒")
         self.wait(1.4)
         self.play(FadeOut(shown), FadeOut(sub), run_time=0.6)
         self.remove(shown, sub)

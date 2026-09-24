@@ -167,6 +167,10 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
     新 token 拿自己的 Q 去和前面所有 token 的 K 比，按相似度把它们的 V 加权合起来。<br>
     <b>MLA</b>：DeepSeek 的一种注意力，把 K 和 V 压成一小份所有头共用，所以 KV cache 小得多，但也只剩「一个头」可切。<br>
     <b>节点</b>：一台机器，里面通常有 4 到 8 张卡，机器内部走高速互联（NVIDIA 的叫 NVLink）。<br>
+    <b>显存（HBM）</b>：卡上自带的高速内存，模型和中间结果都得放在这儿。<br>
+    <b>算力和带宽</b>：算力是每秒能算多少次，带宽是每秒能搬多少字节。一件活要是搬得多算得少，就是「吃带宽」，反过来是「吃算力」。<br>
+    <b>ICI 和切片</b>：TPU 芯片之间的专用快线叫 ICI；用 ICI 连在一起的一整块芯片叫一个切片，切片和切片之间走普通的数据中心网络。<br>
+    <b>几路</b>：「TP 8 路」就是 8 张卡一组做 TP。写成 TP4 × DP2，意思是每 4 张卡一组做 TP，这样的组有 2 份做数据并行，一共 4 × 2 ＝ 8 张卡。<br>
     <b>MoE 与专家</b>：模型里有很多组并排的前馈层，叫专家；每个 token 由一个小的路由器挑出其中几个去算，其余的不碰。
     所以参数很多，每个 token 实际用到的却很少。<br>
     <b>KV cache</b>：生成文字时，每个已经处理过的 token 都留下一份 K 和 V，后面的 token 算注意力时要回头看它们。
@@ -387,9 +391,9 @@ __FIG_PP_BUBBLE__
 
   <h3>3.6　这一刀留下的问题</h3>
   <p>DeepSeek-V3 训练时<b>一点 TP 都没用</b>：16 路 PP、64 路专家并行、ZeRO-1 数据并行（技术报告 §3.2）。
-    原因在参数的分布上：每个专家 3 × 7,168 × 2,048 ≈ 4,400 万参数，256 个专家 × 58 个 MoE 层 ≈ 6,539 亿，
-    <b>占全部参数的约 97%</b>。模型已经被 PP 和专家并行切开，每张卡上那一份放得下，数据并行那一维 ZeRO-1 就够了。
-    技术报告给的理由是显存抠得够细，用不着代价高的 TP；换个角度看（本课解读），专家本来就窄，再往里切，每份更小，要搬的激活却一点不少；真正该切的，是「专家」这一维。这是第三刀。</p>
+    报告自己的解释是显存优化做得够细，用不着代价高的 TP。模型已经被 PP 和专家并行切开，每张卡上那一份放得下，数据并行那一维 ZeRO-1 就够了。
+    再从参数的分布看（本课解读）：每个专家 3 × 7,168 × 2,048 ≈ 4,400 万参数，256 个专家 × 58 个 MoE 层 ≈ 6,539 亿，
+    <b>占全部参数的约 97%</b>。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少；真正该切的，是「专家」这一维。这是第三刀。</p>
 </div></section>
 
 ''' + sec("s四", "四", "第三刀：切专家") + '''
@@ -438,7 +442,7 @@ __FIG_FOLD__
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 用 TP4，把能调的参数全调了，吞吐停在 <b>21,100 tok/s</b>。
     decode 改成 dep8，也就是 attention 数据并行 8 路、专家 EP8，吞吐最高到 <b>65,132 tok/s</b>，
     出字间隔从 46.8 ms 降到约 12 ms（首字延迟反而变长，prefill 成了新瓶颈）。两套卡数不一样（16 张对 20 张），
-    各取最好成绩，<b>摊到每张卡是 2.47 倍</b>。<br>
+    各取最好成绩，<b>摊到每张卡是 2.47 倍</b>（同样并发 512 比是 2.09 倍）。<br>
     <em>这一步其实同时换了三样：attention 改数据并行、专家改 EP8、decode 从 4 张卡变 8 张。
     最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，<b>只能在 4 张卡上各复制一份</b>；
     改成数据并行后，每张卡只存自己那批请求的 KV。EP8 把专家摊开，也省下一块显存。attention 的权重虽然要每张卡复制一份，但 MoE 模型里它只占几个百分点，划得来。
@@ -519,7 +523,7 @@ __FIG_KV_DUP__
 __FIG_PD__
 <figure class="fbox fwide" id="anim-pd">
 <video src="media/topic05-pd.mp4" autoplay loop muted playsinline
-       aria-label="PD 分离动画。标题：PD 分离：prefill 和 decode 拆到两批机器上。三条车道：放在一起、prefill 机器、decode 机器。字幕一：放在一起：大家一步一步 decode，每格出一个字。上面一条车道绿格一格一格长出来，第 5 步落下一个长橙块「新请求的 prefill」，下面标红「这 5 步没人出字」，之后绿格继续。字幕二：拆开：prefill 在自己的机器上跑，decode 那边一步不停。decode 车道 16 个绿格连续长出，prefill 车道同时跑完橙块，一支蓝色箭头「KV 传过去」落到 decode 车道。字幕三：同样 16 步：放在一起出 11 个字，拆开出 16 个（示意）。字幕四：代价：多一趟 KV 传输；我们在 TPU v7x 上实测约 100 毫秒。最后复位。"></video>
+       aria-label="PD 分离动画。标题：PD 分离：prefill 和 decode 拆到两批机器上。三条车道：放在一起、prefill 机器、decode 机器。字幕一：放在一起：大家一步一步 decode，每格出一个字。上面一条车道绿格一格一格长出来，第 5 步落下一个长橙块「新请求的 prefill」，下面标红「这 5 步没人出字」，之后绿格继续。字幕二：拆开：prefill 在自己的机器上跑，decode 那边一步不停。decode 车道 16 个绿格连续长出，prefill 车道同时跑完橙块，一支蓝色箭头「KV 传过去」落到 decode 车道。字幕三：同样 16 步：放在一起出 11 个字，拆开出 16 个（示意）。字幕四：代价：多一趟 KV 传输；按我们 v7x 那套的带宽估算约 100 毫秒。最后复位。"></video>
 <figcaption>同样 16 步，上面那条被长 prefill 截走了 5 步；下面那条一格没少。
   <span class="sub">（11 秒无声循环，Manim 渲染。格数是示意，不是实测时序。）</span></figcaption></figure>
   <p>分块 prefill（chunked prefill）能缓解：把长 prompt 切成小块，每一步跟 decode 拼着跑。
@@ -528,35 +532,40 @@ __FIG_PD__
 
   <h3>6.2　代价：一趟 KV 传输</h3>
   <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode、再加一个 CPU 上的转发代理），
-    KV 从 prefill 那台的 HBM 走到 decode 那台的 HBM，一共 4 跳：</p>
+    KV 从 prefill 那台的显存走到 decode 那台的显存。<b>结论先说：按带宽估算一趟约 100 ms，占一次 prefill 的 5–10%，网络不是瓶颈。</b>细账是三段（这是按各段带宽算的，不是计时实测）：</p>
   <table>
-    <tr><th>跳</th><th>路径</th><th>实测</th></tr>
+    <tr><th>段</th><th>路径</th><th>估算</th></tr>
     <tr><td>①</td><td>HBM → 本机内存（PCIe）</td><td>约 10 ms</td></tr>
     <tr><td>②</td><td>本机内存 → 对方内存（100 Gbps 数据中心网络）</td><td>约 80 ms</td></tr>
-    <tr><td>③ ④</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
+    <tr><td>③</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
     <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b></td></tr>
   </table>
   <p>对一下账：8K prompt 的 KV 是 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节（FP8）≈ 1.04 GB，
-    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms，<b>跟实测的 80 ms 对得上</b>。
-    这一趟占一次 1–2 秒 prefill 的 5–10%。网络不是瓶颈。</p>
+    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms，中间那段就是这么来的。
+    前提要说清：这个模型 KV 头少（8 个）又用 FP8 存，KV 本来就小；KV 大得多的模型、或者机器之间的网络慢得多，就得重算这笔账。</p>
+  <p>反过来说，请求都很短、量也不大的时候，拆开多出来的这趟传输和两套机器就不一定划算，放在一起、用分块 prefill 缓解就够了。</p>
 
   <h3>6.3　两边各配几台</h3>
   <p>拆开之后多了一个旋钮：prefill 和 decode 的机器配比。思路是让两边差不多同时忙满：
     先量一台 prefill 机器每秒能吞多少 prompt token、一台 decode 机器（一整批请求一起跑）每秒能吐多少 token，
     再按业务里输入和输出的长度比去配。经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。
-    DistServe 论文把配比和各自的并行方式一起搜，同样的延迟要求下能多服务 7.4 倍的请求，或者把延迟要求收紧 12.6 倍。</p>
+    DistServe 论文把配比和各自的并行方式一起搜，跟 vLLM 比，同样的延迟要求下最多能多服务 7.4 倍的请求，或者把延迟要求收紧最多 12.6 倍（OPT 系列模型，以 90% 请求达标为准）。</p>
 
   <h3>6.4　两边各挑各的切法</h3>
-  <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。prefill 机器可以上 PCP 把长 prompt 切开压首字延迟；
-    decode 机器可以上 DCP 把 KV 摊开、上 Wide-EP 把专家的 batch 做大（PCP、DCP 见 5.5，Wide-EP 见 8.4）。
-    MoE 模型常见的写法是一边 TEP、一边 DEP，但<b>哪边用哪个没有定式</b>，要看模型和负载（见 8.6）。</p>
+  <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。</p>
+  <ul>
+    <li><b>prefill 机器</b>：可以上 PCP，把一个长 prompt 切到几张卡上一起算，第一个字出得快（5.5）。</li>
+    <li><b>decode 机器</b>：可以上 DCP，把 KV 摊到几张卡上装更多请求（5.4）；还可以把专家铺到更多卡上（Wide-EP），每个专家分到的 batch 更大。</li>
+    <li><b>MoE 模型</b>：常见的写法是一边 TEP（attention 用 TP）、一边 DEP（attention 用数据并行），但<b>哪边用哪个没有定式</b>，要看模型和负载（8.6）。</li>
+  </ul>
 
   <h3>6.5　AFD：attention 和专家分到两组机器</h3>
   <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大。
     <b>AFD</b>（Attention-FFN 分离）把两者放到两组机器上：M 台只算 attention，N 台只放专家。</p>
 __FIG_AFD__
   <p>每一层都要把 token 从 attention 那边发给专家（M → N），算完再收回来（N → M）。
-    为了不让这一来一回拖慢，把一批请求切成两个小批交替跑，一个在算 attention，另一个正好在算专家。
+    为了不让这一来一回拖慢，把一批请求切成几个小批轮着跑：这一个在算 attention，另一个正好在算专家，还有一个在路上。
+    MegaScale-Infer 论文算过，要藏住通信至少得三个小批，通信慢的时候要四个。
     字节的 MegaScale-Infer 报告每 GPU 吞吐最高提升 1.90 倍；阶跃的 Step-3 也是这个路子；
     vLLM 在 2026 年 7 月出了实验性插件。</p>
 
@@ -574,13 +583,15 @@ __FIG_AFD__
     剩下的问题只有一个：<b>哪一刀放在哪根线上</b>。摆对了，前面每一刀省下的都是真省；摆错了，全被网络吃回去。</p>
 
   <h3>7.1　线有快有慢，刀有勤有懒</h3>
-  <p>一个集群里的线不是一样快的。GPU 这边，GB300 NVL72 把 72 块卡连成一个 NVLink 域，域里每块卡 1.8 TB/s；
+  <p>一个集群里的线不是一样快的。GPU 这边，GB300 NVL72 把 72 块卡连成一个 NVLink 域，域里每块卡 1.8 TB/s（收发合计，下同）；
     出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI 连成 3D 环面，
     跨切片走数据中心网络，又慢一个数量级以上。</p>
   <p>刀也不是一样勤的。把每一刀一步要通信几次数一遍（本课推导，示意配置），差出三个数量级：</p>
 __FIG_FREQ__
-  <p>于是摆法几乎是定死的：<b>每一层都要说话的 TP、EP、FSDP、CP 放在最快的那一圈里</b>，
-    它们的度数上限也就由那一圈的大小决定；PP 只在段边界说话，DP 一步只说一次，它们才去跨慢线。
+  <p>于是有一条默认的摆法：<b>每一层都要说话的 TP、EP、FSDP、CP 先往最快的那一圈里放</b>；PP 只在段边界说话，DP 一步只说一次，它们去跨慢线。
+    但光数次数不够，还要看<b>它能不能跟计算叠起来</b>。TP 叠不起来，所以必须待在快线里，度数上限就是那一圈的大小。
+    EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器
+    （H800 上机内 NVLink 160 GB/s、机间 IB 50 GB/s，只差约 3 倍，技术报告 §3.2.2），Llama 3 把 FSDP 放在了最外层。
     TP 还有一条额外的理由：它每一块末尾那次 AllReduce 不做完，下一块就没法开始，不容易跟计算叠起来藏住。
     DP 那一次量虽然最大，但一步只有一次，而且反向从最后一层往前算，后面几层的梯度一算好就能先传。图里没画 CP，它也是每个注意力层都要通信。</p>
 
@@ -599,7 +610,10 @@ __FIG_FREQ__
 __FIG_TOPO__
   <p>TP4 decode 上能调的都调了：去掉 eager 模式只多 2.6%，加 prefill 机器、调并发，总数从 14,563 涨到 21,100。
     可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 47–53 ms。换成 dep8 那一步，TPOT 从 46.8 ms 降到约 12 ms。
-    根因在第五节讲过：只有一个头的 KV 被 TP 白白复制了 4 份。<b>先问切法对不对，再动参数。</b></p>
+    省下的显存主要有两笔：KV 不再在 4 张卡上各存一份（第五节讲的那个毛病），专家摊到 8 张卡上每张只放 48 个；两笔都换成了更大的 batch。
+    （出字间隔为什么同时降下来，原始记录里没有拆开归因。）<b>先问切法对不对，再动参数。</b></p>
+  <p><em>口径提醒：21,100 是并发 512 的最好成绩，65,132 是并发 1,536 的最好成绩。同样并发 512 时 dep8 是 55,153，
+    总量 2.61 倍、每卡约 2.09 倍。这里的吞吐是 prompt 和输出 token 加在一起算的。</em></p>
 
   <h3>7.4　五步怎么选</h3>
   <p>把前面几节串起来，给一个模型挑并行方式，大致按这个顺序：</p>
@@ -611,15 +625,16 @@ __FIG_TOPO__
     <li><b>还不够，或者必须跨很慢的线，才上 PP</b>：它最能忍慢线，代价是气泡（第三节）。</li>
     <li><b>剩下的卡全给 DP</b>：一步只通信一次，最便宜。</li>
   </ol>
-  <p>拿两个真实配置对一遍：</p>
+  <p>拿两个真实配置对一遍。表里「DP 4 × FSDP 128」这类写法按乘法读：两种切法各切几份，乘起来就是总共多少份。</p>
   <table>
     <tr><th>步骤</th><th>混元 3（295B MoE，TPU v7，256 芯片）</th><th>DeepSeek-V3（671B MoE，2,048 块 H800）</th></tr>
     <tr><td>① 装得下</td><td>FSDP 128（专家权重也由 FSDP 切）：再窄就爆显存</td><td>ZeRO-1 摊优化器状态；EP 64 摊专家</td></tr>
-    <tr><td>② 快线多大</td><td>切片内全是 ICI；但 3D 环面上 all-to-all 要多跳，实测 EP 反而慢 71%，<b>不用 EP</b></td>
-      <td>8 卡一台，<b>不用 TP</b>；EP 64 超出了一台机器，是个例外，所以每个 token 最多发到 4 台机器，限住跨机流量</td></tr>
+    <tr><td>② 快线多大</td><td>切片内全是 ICI；但在 16 芯片上试 EP 4 路，吞吐反而掉 71%（只测了这一次），<b>不用 EP</b>。作者推测是 3D 环面上 all-to-all 要经别的芯片转手</td>
+      <td>8 卡一台，<b>不用 TP</b>；EP 64 横跨 8 台机器，跨机那段是慢线，是个例外。为了少走慢线，规定每个 token 最多发到 4 台机器</td></tr>
     <tr><td>③ 序列</td><td>4K ／ 8K，不用 CP</td><td>预训练 4K，报告里没有 CP</td></tr>
     <tr><td>④ PP</td><td>一个切片放得下，不用</td><td>PP 16，用 DualPipe 把通信叠进计算</td></tr>
-    <tr><td>⑤ DP</td><td>剩下的 4 倍全给 DP：DP 4 × FSDP 128（v7 一颗芯片算 2 个 device，并行度按 device 数：256 芯片 ＝ 512 个）</td><td>剩下的给 ZeRO-1 的数据并行</td></tr>
+    <tr><td>⑤ DP</td><td>剩下的 4 倍全给 DP：DP 4 × FSDP 128，这是默认配方（v7 一颗芯片算 2 个 device，并行度按 device 数：256 芯片 ＝ 512 个）。
+      最好成绩反而是把 FSDP 加宽到 256、用省下的显存把 batch 推到 16，比默认配方高 3%</td><td>剩下的给 ZeRO-1 的数据并行</td></tr>
   </table>
   <p>同一套五步，两个模型走出来的配置几乎没有重合，<b>因为两台机器的快线长得不一样</b>。
     这也是为什么别人家的并行配置不能照抄：先看自己的线。</p>
@@ -628,15 +643,17 @@ __FIG_TOPO__
   <p>配好之后要回答一个问题：卡加上去，每张卡的效率还剩多少。有两种量法：</p>
   <ul>
     <li><b>strong scaling</b>：总活不变，卡加倍，看时间能不能减半。每张卡分到的活越来越少，固定开销的占比越来越大，
-      迟早撞墙（Amdahl 定律说的就是这个）。</li>
+      迟早撞墙。</li>
     <li><b>weak scaling</b>：每张卡的活不变，卡和总活一起加倍，看每张卡的速度掉不掉（Gustafson 定律的视角）。
-      训练大模型通常是这一种：卡多了，global batch 也跟着加。</li>
+      训练大模型常常先走这一种：卡多了，global batch 也跟着加。但 global batch 有收敛允许的上限（临界 batch size），到了上限就只能 strong scaling。</li>
   </ul>
+  <p>下面是我们自己的两组实测。<b>左右两组的每卡 batch 不同，只能组内比，不能拿左边的 580 跟右边的 453 比。</b>
+    我们手上没有干净的 strong scaling 实测；右边那组也不是 strong scaling，它每张卡的活没变，变的是一个 FSDP 组越来越大。</p>
 __FIG_SCALE__
   <p>左边那组说明 DP 方向几乎是白送的：4 个 64 芯片的组之间，一步只有一次梯度 all-reduce，
-    按 v7 的 ICI 算约 12 ms，占一步 23.5 秒的 0.05%（本课程作者的推算）。
-    右边那组才是要小心的：卡没变、batch 没变，只是把权重摊得更薄，就少了 11%。
-    <b>加卡时要连 batch 一起加，多出来的卡优先当副本。</b></p>
+    按 v7 的 ICI 粗算十几到二十几毫秒，占一步 23.5 秒不到千分之一（本课推算）。
+    右边那组才是要小心的：卡没变、batch 没变，只是一个 FSDP 组从 128 个 device 扩到 512 个，每拼一次权重要走的步数和跳数都多了，就少了 11%。FSDP 再窄（64 份、32 份）每份权重太大，加上激活就放不下了。
+    <b>所以在 batch 还能加的时候，加卡要连 batch 一起加，多出来的卡优先当副本。</b></p>
 
   <h3>7.6　这一节留下的问题</h3>
   <p>到这里，每一种并行都有了来处：它切什么、多出什么通信、该放在哪根线上。
@@ -671,7 +688,8 @@ __FIG_SCALE__
     <li><b>序列并行单独成一类。</b>严格说它也是在切数据（切一条样本内部），
       但它专门对付长上下文，通信方式也跟 DP 完全不同，放一起反而讲不清。</li>
   </ul>
-  <p>下面四张表就按这四类排。「新」表示 2025–26 年才出现或才普及。</p>
+  <p>下面四张表就按这四类排。「新」表示 2025–26 年才出现或才普及。
+    <b>这四张是查阅用的，第一次读可以直接跳到 8.6</b>；表里有不少前面没讲过的名字，用到时再回来翻。</p>
 
   <h3>8.2　数据并行类</h3>
   <table>
@@ -871,16 +889,16 @@ __FIG_SCALE__
     <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；ICI 1,200 GB/s 为 6 条链路 × 200 GB/s 的收发合计，每卡发出方向取 600 GB/s（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
-    <tr><td>GB300 上 TP4 → dep8：总量 3.09 倍、每卡 2.47 倍；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；dep8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
+    <tr><td>GB300 上 TP4 → dep8：各取最好总量 3.09 倍、每卡 2.47 倍（同并发 512：2.61 ／ 2.09 倍）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；dep8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
     <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv 2205.05198 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
     <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 §3</td></tr>
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
     <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算</td></tr>
     <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv 2401.09670（prefill 偏算力、decode 受带宽约束；7.4 倍请求或 12.6 倍更紧的 SLO）</td></tr>
-    <tr><td>v7x 上 1P1D 的 KV 4 跳约 100 ms；2P:1D ／ 1P:2D</td><td>本课程作者实测：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
+    <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv 1909.08053 §3），FSDP 每层 3 次（arXiv 1910.02054 §7），EP ／ PP ／ DP 按调度数出</td></tr>
     <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki nvidia-gpu-comparison、gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
-    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580；组间 all-reduce 约 12 ms、占 0.05%）、EP 实测 −71%</td></tr>
+    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580）、§3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。组间 all-reduce 十几到二十几毫秒为本课推算（原文 12 ms 的算式前后不一致）</td></tr>
     <tr><td>V3 的集群与每 token 最多 4 节点</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.1（2,048 块 H800、节点内 NVLink、节点间 IB）、§2.1.2、§3.2</td></tr>
     <tr><td>strong ／ weak scaling</td><td>Amdahl 1967；Gustafson 1988（Reevaluating Amdahl's Law）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
@@ -936,7 +954,7 @@ FIGS = {
         '<em>KV 尺寸取自 V3 的 config.json。</em>'),
     "__FIG_PD__": ("fig-pd", "fig5-pd.svg", "topic05-fig-pd.py",
         '<b>上面那条被截走的几格，就是拆开要换回来的东西。</b><br>'
-        '<em>时间线是示意；KV 传输的 100 ms 是我们在 v7x 上的实测。</em>'),
+        '<em>时间线是示意；KV 传输的 100 ms 是按我们 v7x 那套的带宽估算的。</em>'),
     "__FIG_AFD__": ("fig-afd", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>拆开的不是张量，是一层里的两种活。</b><br>'
         '<em>机器数和格子都是示意。</em>'),
