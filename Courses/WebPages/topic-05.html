@@ -3966,7 +3966,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s7-6">7.6　这一节留下的问题</h3>
   <p>到这里，每一种并行都有了来处：它切什么、多出什么通信、该放在哪根线上。
-    下一节把它们全部摊在一张表上，那些 TEP8、DEP16、DP4 × FSDP128 的写法，就都读得懂了。</p>
+    下一节把它们摊在一张全景图和几张表上，那些 TEP8、DEP16、DP4 × FSDP128 的写法，就都读得懂了。</p>
 </div></section>
 
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>全景：今天所有的并行方式</h2></div>
@@ -4019,7 +4019,7 @@ body.figonly section h3{margin-top:34px}
 <line x1="357.5" y1="132" x2="695.0" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="371" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">序列并行　切一条样本</tspan></text>
 <rect x="371.5" y="162" width="309.5" height="70" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="387" y="192" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SP</tspan></text>
+<text class="svgsm" x="387" y="192" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Megatron SP</tspan></text>
 <text class="svgsm" x="387" y="216" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">AG ＋ RS（TP 的搭档）</text>
 <text class="svgsm" x="655" y="194" fill="#0d652d" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
 <rect x="371.5" y="246" width="309.5" height="70" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2"/>
@@ -4070,7 +4070,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1350" y="194" fill="#681da8" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">●</tspan></text>
 <rect x="1066.5" y="246" width="309.5" height="70" rx="10" fill="none" stroke="#9334e6" stroke-width="2"/>
 <text class="svgsm" x="1082" y="276" fill="#681da8" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AFD</tspan></text>
-<text class="svgsm" x="1082" y="300" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每层 M → N → M</text>
+<text class="svgsm" x="1082" y="300" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">每层 attention→专家→attention</text>
 <text class="svgsm" x="1350" y="278" fill="#681da8" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">○</tspan></text>
 <rect x="1066.5" y="330" width="309.5" height="70" rx="10" fill="none" stroke="#9334e6" stroke-width="2"/>
 <text class="svgsm" x="1082" y="360" fill="#681da8" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Encoder 分离</tspan></text>
@@ -4113,7 +4113,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>ZeRO-1 / 2 / 3</td><td>依次多切一样：优化器状态 → 梯度 → 参数</td>
       <td>DP 每张卡存一份完整状态，是纯冗余</td><td>reduce-scatter ＋ all-gather；ZeRO-3 每层都要把参数 all-gather 回来</td><td>训</td></tr>
     <tr><td>FSDP / FSDP2</td><td>就是 ZeRO-3，PyTorch 原生版本</td>
-      <td>通信量和 DP 同一个量级，显存却随卡数线性下降</td><td>前向 all-gather 权重，反向 reduce-scatter 梯度</td><td>训</td></tr>
+      <td>通信量是 DP 的 1.5 倍，显存却随卡数线性下降</td><td>前向 all-gather 权重，反向再 all-gather 一次、再 reduce-scatter 梯度</td><td>训</td></tr>
     <tr><td>HSDP</td><td>机内分片，机间复制</td><td>把最频繁的 all-gather 圈在高带宽域里</td>
       <td>机内 AG / RS，机间 all-reduce</td><td>训</td></tr>
     <tr><td>ZeRO++</td><td>ZeRO-3 上再加三招</td><td>跨节点通信太贵</td>

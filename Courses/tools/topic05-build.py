@@ -660,7 +660,7 @@ __FIG_SCALE__
 
   <h3>7.6　这一节留下的问题</h3>
   <p>到这里，每一种并行都有了来处：它切什么、多出什么通信、该放在哪根线上。
-    下一节把它们全部摊在一张表上，那些 TEP8、DEP16、DP4 × FSDP128 的写法，就都读得懂了。</p>
+    下一节把它们摊在一张全景图和几张表上，那些 TEP8、DEP16、DP4 × FSDP128 的写法，就都读得懂了。</p>
 </div></section>
 
 ''' + sec("s八", "八", "全景：今天所有的并行方式") + '''
@@ -702,7 +702,7 @@ __FIG_PANO__
     <tr><td>ZeRO-1 / 2 / 3</td><td>依次多切一样：优化器状态 → 梯度 → 参数</td>
       <td>DP 每张卡存一份完整状态，是纯冗余</td><td>reduce-scatter ＋ all-gather；ZeRO-3 每层都要把参数 all-gather 回来</td><td>训</td></tr>
     <tr><td>FSDP / FSDP2</td><td>就是 ZeRO-3，PyTorch 原生版本</td>
-      <td>通信量和 DP 同一个量级，显存却随卡数线性下降</td><td>前向 all-gather 权重，反向 reduce-scatter 梯度</td><td>训</td></tr>
+      <td>通信量是 DP 的 1.5 倍，显存却随卡数线性下降</td><td>前向 all-gather 权重，反向再 all-gather 一次、再 reduce-scatter 梯度</td><td>训</td></tr>
     <tr><td>HSDP</td><td>机内分片，机间复制</td><td>把最频繁的 all-gather 圈在高带宽域里</td>
       <td>机内 AG / RS，机间 all-reduce</td><td>训</td></tr>
     <tr><td>ZeRO++</td><td>ZeRO-3 上再加三招</td><td>跨节点通信太贵</td>
