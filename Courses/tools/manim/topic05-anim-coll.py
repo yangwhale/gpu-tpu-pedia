@@ -213,3 +213,179 @@ class AllToAll(Scene):
         self.remove(cap)
         self.add(Text(" ", font_size=30).to_edge(UP))
         self.wait(0.6)
+
+
+# ════════════════════════════════════════════════════════════════
+# 一个原语一支（2026-09-24 现场：「那么多集合通信，是不是都应该做成会动的？」）
+# ⭐ 判断改了：单看每个原语「谁的数据飞去了哪、到了是拼还是加」，这就是时间维度上的增量；
+#   总览图负责并排对比，这几支负责把每一个动作演清楚，两者不冲突。
+# ⭐ 逻辑视图，不是算法视图：块直接从发的人飞到收的人。真实的环形实现看 Ring 那一支。
+# ════════════════════════════════════════════════════════════════
+from manim import DashedVMobject
+
+E = set()
+
+
+def empty_chunk(j, x):
+    return DashedVMobject(Rectangle(width=CW, height=CH, stroke_color=GREY, stroke_width=2)
+                          .move_to([x, cy(j), 0]), num_dashes=18)
+
+
+def cell(contrib, j, x, bold=False):
+    return chunk(contrib, j, x, bold) if contrib else empty_chunk(j, x)
+
+
+def grid(held, hot=()):
+    return VGroup(*[cell(held[k][j], j, XS[k], (k, j) in hot) for k in range(N) for j in range(N)])
+
+
+def full_all():
+    return [[{k} for _ in range(N)] for k in range(N)]
+
+
+def only_diag():
+    return [[{k} if j == k else set() for j in range(N)] for k in range(N)]
+
+
+def only_card0(rows):
+    return [rows] + [[set() for _ in range(N)] for _ in range(N - 1)]
+
+
+class Prim(Scene):
+    """一个原语：before → 若干段（字幕, 飞行清单, after）→ 复位到 before。
+    飞行清单里每一项 (k, j, d, r, mode)：卡 k 第 j 块 → 卡 d 第 r 块；
+    mode：copy 源留着 / move 源拿走 / add 源拿走、到了加起来。"""
+    TITLE = ""
+
+    def before(self):
+        raise NotImplementedError
+
+    def phases(self):
+        raise NotImplementedError
+
+    def construct(self):
+        held = self.before()
+        self.add(labels())
+        state = grid(held)
+        self.add(state)
+        title = Text(self.TITLE, font_size=30, color=WHITE).to_edge(UP)
+        self.add(title)
+        self.wait(0.7)
+        cap = None
+        for txt, flights, after in self.phases():
+            new = Text(txt, font_size=26, color=GREY_B_).next_to(title, DOWN, buff=0.18)
+            self.play(*( [FadeOut(cap)] if cap else []), FadeIn(new), run_time=0.4)
+            cap = new
+            movers, stay = [], grid(held)
+            gone = {(k, j) for k, j, d, r, m in flights if m in ("move", "add")}
+            # 源头被拿走的块先换成空位
+            src_view = [[set() if (k, j) in gone else held[k][j] for j in range(N)] for k in range(N)]
+            base = grid(src_view)
+            for k, j, d, r, m in flights:
+                mv = chunk(held[k][j], j, XS[k])
+                movers.append((mv, d, r))
+            self.remove(state)
+            self.add(base, *[m for m, _, _ in movers])
+            self.play(*[m.animate.move_to([XS[d], cy(r), 0]) for m, d, r in movers], run_time=1.3)
+            hot = {(d, r) for _, d, r in movers}
+            state = grid(after, hot)
+            self.remove(base, *[m for m, _, _ in movers])
+            self.add(state)
+            held = after
+            self.wait(0.9)
+        # ⭐ 复位：清干净，摆回第 0 帧
+        self.play(FadeOut(state), FadeOut(cap), run_time=0.6)
+        self.remove(state, cap)
+        state = grid(self.before())
+        self.play(FadeIn(state), run_time=0.6)
+        self.wait(0.6)
+
+
+from manim import GREY_B as GREY_B_
+
+
+class Broadcast(Prim):
+    TITLE = "Broadcast　广播：一份 → 人人一份"
+
+    def before(self):
+        return only_card0([{0}] * N)
+
+    def phases(self):
+        fl = [(0, j, d, j, "copy") for d in range(1, N) for j in range(N)]
+        return [("卡 0 把整份数据复制给每一个人", fl, full_all_of(0))]
+
+
+def full_all_of(k0):
+    return [[{k0} for _ in range(N)] for _ in range(N)]
+
+
+class Scatter(Prim):
+    TITLE = "Scatter　分发：一份拆开 → 一人一块"
+
+    def before(self):
+        return only_card0([{0}] * N)
+
+    def phases(self):
+        fl = [(0, j, j, j, "move") for j in range(1, N)]
+        after = [[{0} if j == k else set() for j in range(N)] for k in range(N)]
+        return [("卡 0 把第 j 块发给卡 j，自己只留第 0 块", fl, after)]
+
+
+class Gather(Prim):
+    TITLE = "Gather　收集：一人一块 → 拼成一份"
+
+    def before(self):
+        return only_diag()
+
+    def phases(self):
+        fl = [(k, k, 0, k, "move") for k in range(1, N)]
+        return [("每人把自己那块交给卡 0，卡 0 按顺序拼起来", fl, only_card0([{k} for k in range(N)]))]
+
+
+class Reduce(Prim):
+    TITLE = "Reduce　归约：人人一份 → 加成一份"
+
+    def before(self):
+        return full_all()
+
+    def phases(self):
+        fl = [(k, j, 0, j, "add") for k in range(1, N) for j in range(N)]
+        return [("每人把整份交给卡 0，卡 0 逐块相加", fl, only_card0([set(range(N))] * N))]
+
+
+class AllGather(Prim):
+    TITLE = "AllGather　全收集：一人一块 → 人人一整份"
+
+    def before(self):
+        return only_diag()
+
+    def phases(self):
+        fl = [(k, k, d, k, "copy") for k in range(N) for d in range(N) if d != k]
+        return [("每人把自己那块发给所有人：只拼，不加", fl, [[{j} for j in range(N)] for _ in range(N)])]
+
+
+class ReduceScatter(Prim):
+    TITLE = "ReduceScatter　归约分散：人人一整份 → 各拿一块总和"
+
+    def before(self):
+        return full_all()
+
+    def phases(self):
+        fl = [(k, j, j, j, "add") for k in range(N) for j in range(N) if j != k]
+        after = [[set(range(N)) if j == k else set() for j in range(N)] for k in range(N)]
+        return [("第 j 块全部送到卡 j 加起来：先加，再分", fl, after)]
+
+
+class AllReduce(Prim):
+    TITLE = "AllReduce　全归约 ＝ ReduceScatter ＋ AllGather"
+
+    def before(self):
+        return full_all()
+
+    def phases(self):
+        rs = [(k, j, j, j, "add") for k in range(N) for j in range(N) if j != k]
+        mid = [[set(range(N)) if j == k else set() for j in range(N)] for k in range(N)]
+        ag = [(k, k, d, k, "copy") for k in range(N) for d in range(N) if d != k]
+        end = [[set(range(N)) for _ in range(N)] for _ in range(N)]
+        return [("① ReduceScatter：各拿一块总和", rs, mid),
+                ("② AllGather：总和发给所有人 → 人人一份总和", ag, end)]
