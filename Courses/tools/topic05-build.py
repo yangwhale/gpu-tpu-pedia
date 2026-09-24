@@ -254,7 +254,7 @@ __FIG_A2A__
 
   <h3>1.7　一张表收住</h3>
   <p>「每卡发出」一列按点对点链路上的最优算法（环）算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
-    ReduceScatter 指加之前那一整份）。</p>
+    ReduceScatter 指加之前那一整份）；Broadcast ／ Reduce 那一行按链式接力算。</p>
   <table>
     <tr><th>通信</th><th>做什么</th><th>每卡发出</th><th>后面谁在用</th></tr>
     <tr><td>AllReduce</td><td>加完，人人一份</td><td>2(n−1)/n · S</td><td>数据并行同步梯度；张量并行每层前向两次、反向两次</td></tr>
@@ -898,6 +898,7 @@ __FIG_PANO__
     <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv 2407.21783 §3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
     <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 摘要与 §4.1</td></tr>
     <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
+    <tr><td>「最大的一块卡显存也就两三百 GB」</td><td>NVIDIA B300 每卡 288 GB HBM3e；Google TPU7x 每芯片 192 GB HBM（官方规格）；9.76 TiB ≈ 10,700 GB（十进制）</td></tr>
     <tr><td>DCN 每芯片 100 Gbps；跨切片同口径慢约 50 倍</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）；100 Gbps 按单向计、×2 得双向约 25 GB/s，对 ICI 双向 1,200 GB/s 约 48 倍，为本课换算（只按单向比则约 96 倍）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>

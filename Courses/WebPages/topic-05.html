@@ -1240,8 +1240,8 @@ body.figonly section h3{margin-top:34px}
 <rect x="2" y="674" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="701" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两两成对，差别只在一个动作</tspan></text>
 <text class="svgsm" x="20" y="732" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">广播和分发是<tspan font-weight="700">一变多</tspan>，收集和归约是<tspan font-weight="700">多变一</tspan>。　收集和归约的区别只在于：数据到了之后<tspan font-weight="700">拼起来</tspan>还是<tspan font-weight="700">加起来</tspan>。</text>
-<text class="svgsm" x="20" y="756" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这四个都有一个「班长」卡 0，按最朴素的做法，所有流量都挤在它一个人的线上。训练里真正天天在跑的，是它们<tspan font-weight="700">没有班长</tspan>的版本：AllGather、ReduceScatter、AllReduce、All</text>
-<text class="svgsm" x="20" y="780" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">ToAll。</text>
+<text class="svgsm" x="20" y="756" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这四个都有一个「班长」卡 0，按最朴素的做法，所有流量都挤在它一个人的线上。训练里真正天天在跑的是<tspan font-weight="700">没有班长</tspan>的几个：AllGather、ReduceScatter、AllReduce；AllToAll</text>
+<text class="svgsm" x="20" y="780" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">则是每个人各做一次分发。</text>
 </svg><figcaption><b>四个有班长的动作：广播、分发、收集、归约。</b><span class="capmore"><br><em>收集和归约只差一个动作：数据到了之后是拼起来，还是加起来。</em></span></figcaption></figure>
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
   <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
@@ -2368,7 +2368,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s1-7">1.7　一张表收住</h3>
   <p>「每卡发出」一列按点对点链路上的最优算法（环）算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
-    ReduceScatter 指加之前那一整份）。</p>
+    ReduceScatter 指加之前那一整份）；Broadcast ／ Reduce 那一行按链式接力算。</p>
   <table>
     <tr><th>通信</th><th>做什么</th><th>每卡发出</th><th>后面谁在用</th></tr>
     <tr><td>AllReduce</td><td>加完，人人一份</td><td>2(n−1)/n · S</td><td>数据并行同步梯度；张量并行每层前向两次、反向两次</td></tr>
@@ -4271,6 +4271,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv <a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">2407.21783</a> §3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
     <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> 摘要与 §4.1</td></tr>
     <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
+    <tr><td>「最大的一块卡显存也就两三百 GB」</td><td>NVIDIA B300 每卡 288 GB HBM3e；Google TPU7x 每芯片 192 GB HBM（官方规格）；9.76 TiB ≈ 10,700 GB（十进制）</td></tr>
     <tr><td>DCN 每芯片 100 Gbps；跨切片同口径慢约 50 倍</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）；100 Gbps 按单向计、×2 得双向约 25 GB/s，对 ICI 双向 1,200 GB/s 约 48 倍，为本课换算（只按单向比则约 96 倍）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
