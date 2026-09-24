@@ -37,8 +37,8 @@ def fig_params():
     f.t(BX + BW - 6, py + 124, "其余 ≈ %.0f 亿（约 %.0f%%）↑" % (REST / 1e8, REST / TOTAL * 100), GY, True, 14, anchor="end")
     f.t(BX, py + 124, "一个专家 ≈ %.0f 万参数 × 256 个 × 58 层" % (EXPERT / 1e4), INK, True, 14)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "所以 V3 训练时一点 TP 都没用", [
-        "每个专家只有 2,048 宽，再切进它内部不划算；而专家本身有 256 个，<tspan font-weight=\"700\">天然就是一维可以切的</tspan>。",
+    yb = f.band(py + PH + 20, "ok", "V3 训练时一点 TP 都没用", [
+        "技术报告的理由是显存抠得够细，用不着代价高的 TP；专家只有 2,048 宽，TP 更不划算，而专家有 256 个，<tspan font-weight=\"700\">天然就是一维可以切的</tspan>。",
         "V3 的训练配置：16 路 PP ＋ 64 路专家并行 ＋ ZeRO-1 数据并行，<tspan font-weight=\"700\">不用 TP</tspan>（技术报告 §3.2）。",
     ])
     yb = f.src(yb + 10, "📌 config.json：hidden_size 7,168、moe_intermediate_size 2,048、n_routed_experts 256、"
@@ -74,7 +74,7 @@ def fig_fold():
     yb = f.band(py + PH + 20, "ok", "训练和推理各有一套名字，说的是同一件事", [
         "训练：Megatron 叫它 Parallel Folding，attention 按 TP×CP×DP×PP 映射，专家按 ETP×EP×EDP×PP 映射，"
         "例如 attention 用 TP4·CP2·DP8·PP4，专家直接 EP64。",
-        "推理：TEP ＝ attention 走 TP、专家走 EP；DEP ＝ attention 走数据并行、专家走 EP。"
+        "推理：TEP ＝ attention 走 TP、专家走 EP；DEP ＝ attention 走数据并行、专家走 EP；图里这种一半一半的也有。"
         "<tspan font-weight=\"700\">⛔ 它们不是 Megatron 的 ETP ／ EDP</tspan>，两套名字别互相换算。",
     ])
     yb = f.src(yb + 10, "📌 Megatron-Core moe/README.md（MoE Parallel Folding，例子 TP4·CP2·DP8·PP4 → ETP1·EP64·EDP1）；"

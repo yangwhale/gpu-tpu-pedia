@@ -22,6 +22,10 @@ def work(chunks):
 NAIVE = [work([2 * r, 2 * r + 1]) for r in range(CP)]
 ZIG = [work([r, NCH - r - 1]) for r in range(CP)]
 assert NAIVE == [3, 7, 11, 15] and ZIG == [9, 9, 9, 9]
+# 对角那一格因果掩码下只算一半：按半格算再核一遍（2026-09-25 专家评审）
+NAIVE_H = [sum(c + 0.5 for c in (2 * r, 2 * r + 1)) for r in range(CP)]
+ZIG_H = [sum(c + 0.5 for c in (r, NCH - r - 1)) for r in range(CP)]
+assert NAIVE_H == [2, 6, 10, 14] and ZIG_H == [8, 8, 8, 8]
 
 KV_TOK = (512 + 64) * 61 * 2
 CTX = 131072
@@ -56,19 +60,19 @@ def fig_zigzag():
     tri(60, lambda q: q // 2, "顺序切：卡 r 拿第 2r、2r＋1 块", NAIVE)
     tri(760, lambda q: q if q < CP else NCH - 1 - q, "之字形切：卡 r 拿第 r 块和第 7−r 块", ZIG)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "顺序切差 5 倍，之字形切完全均匀", [
+    yb = f.band(py + PH + 20, "ok", "顺序切差好几倍，之字形切完全均匀", [
         "因果掩码让越靠后的块算得越多。顺序切时卡 3 要算 15 格、卡 0 只算 3 格，<tspan font-weight=\"700\">大家都得等卡 3</tspan>。",
         "之字形把「最轻的一块」和「最重的一块」配成一对交给同一张卡，每张卡都是 9 格　——　Megatron 的 CP 就是这么切的。",
     ])
     yb = f.src(yb + 10, "📌 Megatron-LM megatron/core/utils.py：序列切成 2×cp_size 块，rank r 拿第 r 块和第 2·cp−r−1 块；"
-                        "文档 docs/user-guide/features/context_parallel.md 称其避免下三角的多余计算并保持负载均衡。每格数本脚本现算。")
+                        "文档 docs/user-guide/features/context_parallel.md 称其避免下三角的多余计算并保持负载均衡。每格数本脚本现算；对角格按整格计。对角格只算一半时是 2／6／10／14 对 8／8／8／8，顺序切差 7 倍。")
     f.save("fig5-cp-zigzag.svg", yb + 14)
 
 
 def fig_kv_dup():
     f = Fig(W, "一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。"
                "每个 token 的 KV 是 70272 字节，12 万 8 千个 token 就是约 8.58 GiB。"
-               "TP 8 路时，MLA 的 KV 只有一个头切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。"
+               "TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。"
                "DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB")
     y0 = f.header("推理时切序列：KV cache 被 TP 复制了几份　——　<tspan font-weight=\"700\">DCP 把复制变回容量</tspan>",
                   "DeepSeek-V3，一个 128K 上下文的请求。每 token 的 KV ＝ (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节",

@@ -128,7 +128,7 @@ def fig_topo():
                "加 prefill 机器、调并发，总吞吐涨了 45%，但卡也翻了一倍，每卡反而降到 1319。"
                "只把 decode 从 TP4 换成 dep8，每卡到 3257，是前一个的 2.47 倍")
     y0 = f.header("调参和换切法，不是一个量级　——　<tspan font-weight=\"700\">看每张卡，不看总数</tspan>",
-                  "GB300 · DeepSeek-V4-Pro · vLLM，4K 进 1K 出。条长是每块 GPU 的吞吐（tok/s），括号里是总数和用了几块卡",
+                  "GB300 · DeepSeek-V4-Pro · vLLM，4K 进 1K 出，各取最好成绩。条长是每块 GPU 的吞吐（tok/s），括号里是总数和卡数",
                   [(GY2, "TP4 decode"), (GR, "dep8 decode")])
     PH = 300
     py = f.panel(0, y0, W, PH, "每块 GPU 每秒出多少 token", GR)
@@ -145,7 +145,7 @@ def fig_topo():
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "参数调得再好，也只是那一种切法的天花板", [
         "在 TP4 上加机器、调并发，总数 +45%，<tspan font-weight=\"700\">其实是靠多一倍的卡换的</tspan>；出字间隔一直钉在约 47–53 ms。",
-        "换成 dep8 之后每卡 2.47 倍：MLA 的 KV 不再被 TP 复制 4 份，省下的显存全变成了更大的 batch。",
+        "换成 dep8 之后每卡 2.47 倍：只有一个头的 KV 不再被 TP 复制 4 份，省下的显存全变成了更大的 batch。",
     ])
     yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md（1p1d 14,563；3p1d 21,100；3p ＋ dep8 65,132）。"
                         "GPU 数按每节点 4 块、prefill 与 TP4 decode 各 1 节点、dep8 2 节点；每卡数本脚本现算。")

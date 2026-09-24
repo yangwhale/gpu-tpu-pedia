@@ -242,7 +242,7 @@ class ExpertParallel(Scene):
         self.wait(0.8)
         say("合并（AllToAll）：算完再送回原来的卡")
         self.play(*[tk.animate.move_to(home(t)) for t, tk in enumerate(toks)], run_time=1.6)
-        say("发给谁由数据决定，负载天生不均　——　这是专家并行独有的病", GREEN)
+        say("发给谁由数据决定，负载天生不均　——　这是专家并行最重的病", GREEN)
         self.wait(1.4)
         self.play(FadeOut(sub), run_time=0.4)
         self.remove(sub)
@@ -372,7 +372,7 @@ class DecodeCP(Scene):
         self.play(FadeIn(q), FadeIn(qlab), run_time=0.3)
         qs = [q.copy() for _ in range(NR)]
         self.play(*[qc.animate.move_to([XS4[c], 0.0, 0]) for c, qc in enumerate(qs)], run_time=0.8)
-        say("四份部分结果带着 LSE 合并成一份：多一次合并通信，换回 4 倍的 KV 空间")
+        say("四份部分结果合并成一份：每层多几次通信，换回 4 倍的 KV 空间")
         self.play(*[qc.animate.move_to([0, -1.3, 0]) for qc in qs], run_time=0.8)
         self.wait(1.2)
         self.play(FadeOut(cells), FadeOut(q), FadeOut(qlab), FadeOut(sub), *[FadeOut(qc) for qc in qs], run_time=0.6)

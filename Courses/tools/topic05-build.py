@@ -163,6 +163,10 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
     <b>注意力头</b>：注意力被拆成几十份并排的小注意力，每一份叫一个头，各算各的。<br>
     <b>micro-batch</b>：把一步要算的一批样本再切成几小份，一份一份地过。<br>
     <b>V3</b>：本讲反复拿来举例的 DeepSeek-V3，6,710 亿参数的 MoE 模型。<br>
+    <b>Q、K、V</b>：注意力里每个 token 算出三样东西：Q 是「我要找什么」，K 是「我是什么」，V 是「我带着什么内容」。
+    新 token 拿自己的 Q 去和前面所有 token 的 K 比，按相似度把它们的 V 加权合起来。<br>
+    <b>MLA</b>：DeepSeek 的一种注意力，把 K 和 V 压成一小份所有头共用，所以 KV cache 小得多，但也只剩「一个头」可切。<br>
+    <b>节点</b>：一台机器，里面通常有 4 到 8 张卡，机器内部走高速互联（NVIDIA 的叫 NVLink）。<br>
     <b>MoE 与专家</b>：模型里有很多组并排的前馈层，叫专家；每个 token 由一个小的路由器挑出其中几个去算，其余的不碰。
     所以参数很多，每个 token 实际用到的却很少。<br>
     <b>KV cache</b>：生成文字时，每个已经处理过的 token 都留下一份 K 和 V，后面的 token 算注意力时要回头看它们。
@@ -390,7 +394,7 @@ __FIG_PP_BUBBLE__
 
 ''' + sec("s四", "四", "第三刀：切专家") + '''
   <p class="lead">MoE 模型的参数几乎全在专家里。第三刀就切这一维：把不同的专家放到不同的卡上。
-    <b>它多出来的通信只有一种，AllToAll；可它也带来了一个别的刀都没有的病。</b></p>
+    <b>它多出来的通信只有一种，AllToAll；可它也带来了一个别的刀里最严重的病。</b></p>
 
   <h3>4.1　为什么该切专家</h3>
 __FIG_MOE_PARAMS__
@@ -402,23 +406,25 @@ __FIG_MOE_PARAMS__
     <b>派发</b>，把每个 token 送到它选中的专家所在的卡；<b>合并</b>，算完再送回原来的卡。</p>
 <figure class="fbox fwide" id="anim-ep">
 <video src="media/topic05-ep.mp4" autoplay loop muted playsinline
-       aria-label="专家并行的动画。四张卡，每张卡上方 4 个 token（颜色表示来自哪张卡），下方 2 个专家，共 8 个专家。标题：专家并行：token 飞到专家那里，算完再飞回来。字幕一：每个 token 由路由挑一个专家（真实的 V3 每个 token 挑 8 个）。字幕二：派发（AllToAll）：token 飞到专家所在的卡，在专家门口排队。专家 0 门口排了 7 个，其他专家 1 到 2 个。字幕三：专家 0 排了 7 个，别的专家只有 1 到 2 个：它算完之前，大家都得等。字幕四：合并（AllToAll）：算完再送回原来的卡。字幕五：发给谁由数据决定，负载天生不均 —— 这是专家并行独有的病。最后 token 回到原位。"></video>
+       aria-label="专家并行的动画。四张卡，每张卡上方 4 个 token（颜色表示来自哪张卡），下方 2 个专家，共 8 个专家。标题：专家并行：token 飞到专家那里，算完再飞回来。字幕一：每个 token 由路由挑一个专家（真实的 V3 每个 token 挑 8 个）。字幕二：派发（AllToAll）：token 飞到专家所在的卡，在专家门口排队。专家 0 门口排了 7 个，其他专家 1 到 2 个。字幕三：专家 0 排了 7 个，别的专家只有 1 到 2 个：它算完之前，大家都得等。字幕四：合并（AllToAll）：算完再送回原来的卡。字幕五：发给谁由数据决定，负载天生不均 —— 这是专家并行最重的病。最后 token 回到原位。"></video>
 <figcaption>派发、排队、合并。那一根排得最高的队，决定了所有卡什么时候能往下走。
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>V3 为了压住这两次 AllToAll，做了两件事（技术报告 §2.1.2、§3.2.2、§3.3.3）：</p>
   <ul>
-    <li><b>限制跨节点</b>：每个 token 最多发往 4 个节点。先走节点间网络发到目标节点，再走节点内的 NVLink 转给真正持有专家的卡。</li>
+    <li><b>限制跨节点</b>：每个 token 最多发往 4 个节点。先走节点间网络发到目标节点，再走节点内的 NVLink 转给真正持有专家的卡。
+      同一台机器上就算有好几个它要找的专家，跨机也只发一份，到了再在机器里分。</li>
     <li><b>派发用 FP8，合并用 BF16</b>：派发那一趟的字节数直接减半。</li>
   </ul>
-  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节 ≈ 28.7 KB，跟它选了几个专家无关，只跟去了几个节点有关。</p>
+  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节 ≈ 28.7 KB（FP8 还要带一点缩放因子，实际略多），跟它选了几个专家无关，只跟去了几个节点有关。
+    这是训练和 prefill 的做法；decode 追求低延迟时改成按专家逐个直发，份数就跟着选的专家数涨了。</p>
 
-  <h3>4.3　EP 独有的病：负载由数据决定</h3>
-  <p>别的刀切得均匀不均匀，是配置决定的，事先就知道。<b>EP 不是</b>：
+  <h3>4.3　EP 最重的病：负载由数据决定</h3>
+  <p>别的刀切得均匀不均匀，大多是配置决定的，事先就知道（推理时各请求长短不一、训练时拼接的文档长短不一，也会带来一些不均）。<b>EP 的不均最严重</b>：
     哪个专家忙、哪个专家闲，要等路由算完才知道，而且每一批数据都不一样。
     最忙的那个专家算完之前，所有人都得等它。治法分两头：</p>
   <ul>
-    <li><b>训练时</b>：让路由本身尽量均匀。V3 用的是不加辅助损失的做法，给每个专家一个偏置项，
-      负载高了就把它调低一点，负载低了就调高。</li>
+    <li><b>训练时</b>：让路由本身尽量均匀。以前的办法是在训练目标里加一项「辅助损失」专门罚不均匀，但它会拖累模型效果；V3 基本不靠这一项（只留一个权重极小的，防极端情况），主要给每个专家一个偏置项，
+      负载高了就把它调低一点，负载低了就调高。偏置只影响「挑哪几个专家」，不改算出来的权重。</li>
     <li><b>推理时</b>：把热门专家多复制几份，摊到不同的卡上，也就是 EPLB 和冗余专家。</li>
   </ul>
 
@@ -430,10 +436,14 @@ __FIG_FOLD__
     挑哪个差别大到什么程度，我们自己测过一次：</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐 2.47 倍</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 用 TP4，把能调的参数全调了，吞吐停在 <b>21,100 tok/s</b>。
-    decode 改成 dep8，也就是 attention 数据并行 8 路、专家 EP8，吞吐直接到 <b>65,132 tok/s</b>，
-    总量 3.09 倍，延迟降到约四分之一。两套用的卡数不一样（16 张对 20 张），<b>摊到每张卡是 2.47 倍</b>。<br>
-    <em>根因在 attention 那一半：这类 MLA 模型的 KV 只有一个头，TP 切不开，<b>只能在 4 张卡上各复制一份</b>。
-    改成数据并行后，每张卡只存自己那批请求的 KV。KV 这件事，下一刀专门讲。</em></div>
+    decode 改成 dep8，也就是 attention 数据并行 8 路、专家 EP8，吞吐最高到 <b>65,132 tok/s</b>，
+    出字间隔从 46.8 ms 降到约 12 ms（首字延迟反而变长，prefill 成了新瓶颈）。两套卡数不一样（16 张对 20 张），
+    各取最好成绩，<b>摊到每张卡是 2.47 倍</b>。<br>
+    <em>这一步其实同时换了三样：attention 改数据并行、专家改 EP8、decode 从 4 张卡变 8 张。
+    最大的一笔在 attention 那一半：V4-Pro 的 KV 只有一个头，TP 切不开，<b>只能在 4 张卡上各复制一份</b>；
+    改成数据并行后，每张卡只存自己那批请求的 KV。EP8 把专家摊开，也省下一块显存。attention 的权重虽然要每张卡复制一份，但 MoE 模型里它只占几个百分点，划得来。
+    KV 这件事，下一刀专门讲。<br>
+    卡数：两套都是 3 台 prefill 机器（每台 4 张卡），decode 一套是 1 台 4 张卡，一套是 2 台 8 张卡。</em></div>
 
   <h3>4.5　这一刀留下的问题</h3>
   <p>前三刀都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨。
@@ -446,9 +456,8 @@ __FIG_FOLD__
 
   <h3>5.1　一条样本为什么会放不下</h3>
   <ul>
-    <li><b>训练</b>：每层要存的激活跟序列长度成正比（Megatron 序列并行论文式 1 里 34·sbh 那一项；
-      不用 FlashAttention 时还多一个跟长度平方成正比的注意力分数项）。</li>
-    <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 是 (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节，
+    <li><b>训练</b>：每层要存的激活跟序列长度成正比（Megatron 序列并行论文的式 1）。</li>
+    <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 存一份压缩后的 KV（512 维）加一小段位置信息（64 维），(512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节，
       <b>一个 128K 的请求就是约 8.58 GiB</b>。</li>
   </ul>
 
@@ -458,7 +467,7 @@ __FIG_FOLD__
   <ul>
     <li><b>Ring Attention</b>：Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。</li>
     <li><b>Ulysses</b>：注意力前后各做一次 AllToAll，在「按序列切」和「按头切」之间来回换。
-      每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数。</li>
+      每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数（有分组的模型卡在 KV 头数上）。</li>
   </ul>
 <figure class="fbox fwide" id="anim-ringattn">
 <video src="media/topic05-ringattention.mp4" autoplay loop muted playsinline
@@ -472,24 +481,24 @@ __FIG_FOLD__
 __FIG_CP_ZIGZAG__
 
   <h3>5.4　推理：KV cache 被 TP 复制了</h3>
-  <p>推理时 KV 常常是最大的一块。而 TP 一旦超过 KV 头数，KV 就切不开，只能每张卡复制一份。
-    MLA 模型只有一个 KV 头，TP 8 路就是 8 份一模一样的 KV（vLLM 文档原话：复制 tp_size ÷ H 次）。</p>
+  <p>推理时 KV 常常是最大的一块。而 TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated tp_size / H times）。
+    MLA 模型只有一个 KV 头，TP 8 路就是每张卡一整份、8 份一模一样的 KV。</p>
 __FIG_KV_DUP__
   <p><b>DCP（decode 上下文并行）</b>让 KV 按 token 轮流存到几张卡上，用的还是原来那几张卡：</p>
 <figure class="fbox fwide" id="anim-dcp">
 <video src="media/topic05-decodecp.mp4" autoplay loop muted playsinline
-       aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕二：12 个 token，每张卡只存 3 个的 KV：容量是原来的 4 倍。字幕三：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕四：四份部分结果带着 LSE 合并成一份：多一次合并通信，换回 4 倍的 KV 空间。最后复位。"></video>
-<figcaption>KV 轮流落到四张卡上；每一步多一次合并通信。
+       aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕二：12 个 token，每张卡只存 3 个的 KV：容量是原来的 4 倍。字幕三：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕四：四份部分结果合并成一份：每层多几次通信，换回 4 倍的 KV 空间。最后复位。"></video>
+<figcaption>KV 轮流落到四张卡上；每一层多几次通信，把 Q 收齐、把结果合起来。
   <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果带着 LSE 合并。
-    多付一次合并通信，换回被 TP 白白复制掉的那几份 KV。<b>用一种通信，换一份显存</b>，又一次。</p>
+  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并（每份带着自己的归一化分母，记作 LSE，才能合得对）。
+    每层多付两三次通信（vLLM 默认实现是三次：收齐 Q、交换归一化分母、合并输出），换回被 TP 白白复制掉的那几份 KV。
+    DCP 的度数最多开到 TP ÷ KV 头数，也就是刚好把复制的那几份收回来。<b>用一种通信，换一份显存</b>，又一次。</p>
 
-  <h3>5.5　PD 分离时，两边各切一刀</h3>
-  <ul>
-    <li><b>prefill 端用 PCP</b>：把长 prompt 切开压首字延迟。它是在 TP 之外再加一维，所以会增加卡。</li>
-    <li><b>decode 端用 DCP</b>：把 KV 摊开，一台机器能扛更多、更长的请求。它不增加卡。</li>
-    <li>上下文再长到百万 token 级，NVIDIA 的 Helix 在一层里换两次布局：attention 按 KV 切，FFN 按 TP × EP 切。</li>
-  </ul>
+  <h3>5.5　prefill 那边也有一种</h3>
+  <p>DCP 管的是 decode。prefill 那边要把一个长 prompt 切开、让第一个字早点出来，叫 <b>PCP</b>（prefill 上下文并行）。
+    两者对卡数的作用相反：<b>PCP 是在 TP 之外再加一维，所以会增加卡；DCP 就在原来那几张卡上摊，不增加卡。</b>
+    PCP 也不帮 KV 扩容量（vLLM 源码原话：does not increase the KV-cache shard count），两种实现都还在开发中。
+    下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（这是本课的归纳，vLLM 文档里的 DCP 例子都是不拆开的部署）。</p>
 
   <h3>5.6　这一刀留下的问题</h3>
   <p>说到这儿，prefill 和 decode 已经各要各的切法了：一个吃算力、要把 prompt 切开；一个吃带宽、要把 KV 摊开。
@@ -590,7 +599,7 @@ __FIG_FREQ__
 __FIG_TOPO__
   <p>TP4 decode 上能调的都调了：去掉 eager 模式只多 2.6%，加 prefill 机器、调并发，总数从 14,563 涨到 21,100。
     可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 47–53 ms。换成 dep8 那一步，TPOT 从 46.8 ms 降到约 12 ms。
-    根因在第五节讲过：MLA 的 KV 被 TP 白白复制了 4 份。<b>先问切法对不对，再动参数。</b></p>
+    根因在第五节讲过：只有一个头的 KV 被 TP 白白复制了 4 份。<b>先问切法对不对，再动参数。</b></p>
 
   <h3>7.4　五步怎么选</h3>
   <p>把前面几节串起来，给一个模型挑并行方式，大致按这个顺序：</p>
@@ -719,7 +728,7 @@ __FIG_SCALE__
       <td>TP 一旦超过 KV 头数，KV 就开始复制。MLA 只有 1 个头，TP8 就是 8 份一模一样的 KV。
         DCP 把这份冗余变回容量</td>
       <td>先把 Q 收齐，各卡在自己那段 KV 上算 attention，再带着 LSE 合并结果</td><td>推</td></tr>
-    <tr><td>Helix ''' + NEW + '''</td><td>同一组卡在一层里换两次布局：attention 按 KV 切，FFN 按 TP × EP 切</td>
+    <tr><td>Helix ''' + NEW + '''</td><td>同一组卡在一层里换两次布局：attention 按 KV 序列切（再叠一维不超过 KV 头数的 TP），FFN 按 TP × EP 切</td>
       <td>百万 token 级的 decode：读 KV 和读权重两件事都要摊开</td><td>一次 all-to-all 交换部分结果</td><td>推</td></tr>
     <tr><td>MaxText <code>context_autoregressive</code></td><td>decode 时 KV 沿序列切，FFN 按专家切</td>
       <td>同上，TPU 上的做法</td><td>XLA 自动插入</td><td>推</td></tr>
@@ -732,7 +741,7 @@ __FIG_SCALE__
     <br><em>这是 vLLM 源码里的原话：PCP expands the process world size；DCP does not expand
     the process world size, without PCP it reuses TP ranks。</em></div>
 
-  <p>DCP 也是这一讲那句话最好的新例子。<b>它付出的是每层一次合并通信，换回来的是被 TP 白白复制掉的那 7/8 份 KV。</b>
+  <p>DCP 也是这一讲那句话最好的新例子。<b>它付出的是每层两三次通信，换回来的是被 TP 白白复制掉的那 7/8 份 KV。</b>
     用一种通信，换一份显存。</p>
 
   <h3>8.4　模型并行类</h3>
@@ -766,7 +775,7 @@ __FIG_SCALE__
   <table>
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
     <tr><td>EP</td><td>不同专家放到不同的卡上</td><td>专家总参数太大</td>
-      <td>token 发出去、算完收回来，两次 all-to-all。<b>发给谁由数据决定</b>，所以负载会不均，这是 EP 独有的病</td><td>训 · 推</td></tr>
+      <td>token 发出去、算完收回来，两次 all-to-all。<b>发给谁由数据决定</b>，所以负载会不均，这是 EP 最重的病</td><td>训 · 推</td></tr>
     <tr><td>Wide-EP ''' + NEW + '''</td><td>EP 铺到 32、64 甚至更多张卡</td>
       <td>每张卡只放几个专家，decode 时每个专家分到的 batch 就大了</td><td>大规模 all-to-all，要专门的通信库</td><td>推</td></tr>
     <tr><td>ETP</td><td>单个专家内部再做 TP</td><td>单个专家本身太大；细粒度 MoE 一般设成 1</td><td>专家内部 all-reduce</td><td>训</td></tr>
@@ -841,7 +850,7 @@ __FIG_SCALE__
     <tr><th>词</th><th>在不同地方的意思</th></tr>
     <tr><td>SP</td><td>至少三种：Megatron 的 SP（只切 LayerNorm 那几段，跟着 TP）；DeepSpeed 说的 SP（指 Ulysses）；
       以及泛指一切切序列的做法。Megatron 里「所有激活都切」叫 CP</td></tr>
-    <tr><td>CP</td><td>训练里指切激活。vLLM 把它拆成两个作用相反的开关：PCP 加卡，DCP 不加卡</td></tr>
+    <tr><td>CP</td><td>训练里指切激活。vLLM 把它拆成两个开关，对卡数的作用相反：PCP 加卡，DCP 不加卡；功能也不同，一个压首字延迟，一个扩 KV 容量</td></tr>
     <tr><td>DP</td><td>dense 模型上是独立副本；MoE 推理里其实是 Attention DP，每一步都要同步</td></tr>
     <tr><td>ETP</td><td>Megatron 指专家内部的 TP；TensorRT-LLM 的 Hybrid ETP 指专家层 TP 和 EP 混用</td></tr>
     <tr><td>hierarchical</td><td>ZeRO++ 的分层分片、Megatron 的分层 DP、Megatron 的分层 CP，是三件不同的事</td></tr>
@@ -920,7 +929,7 @@ FIGS = {
         '<b>左右两边是同样的 8 张卡。</b><br>'
         '<em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em>'),
     "__FIG_CP_ZIGZAG__": ("fig-cp-zigzag", "fig5-cp-zigzag.svg", "topic05-fig-seq.py",
-        '<b>同样 8 块，换一种分法，最忙和最闲从差 5 倍变成一样忙。</b><br>'
+        '<b>同样 8 块，换一种分法，最忙和最闲从差好几倍变成一样忙。</b><br>'
         '<em>每格数由脚本按因果掩码现算。</em>'),
     "__FIG_KV_DUP__": ("fig-kv-dup", "fig5-kv-dup.svg", "topic05-fig-seq.py",
         '<b>红色那 7 份，存的是一模一样的东西。</b><br>'
