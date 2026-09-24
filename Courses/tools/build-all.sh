@@ -121,6 +121,8 @@ python3 topic04-build-lecture.py
 
   # 专题五：2026-09-23 开工，§1 全景写完，其余是 🚧 大纲（见 topic05-build.py 文件头）。
   step "专题五 教材"
+  # ⛔ 图先生成 —— place_figs 找不到 svg 会直接 assert 挂掉。
+  for s in topic05-fig-*.py; do python3 "$s"; done
   python3 topic05-build.py
 
   step "专题八 教材"

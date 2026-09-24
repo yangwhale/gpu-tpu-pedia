@@ -4,62 +4,54 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 """专题五 · 并行策略 —— 教材。
 
 ════════════════════════════════════════════════════════════════
-这个文件的状态：写完的和没写的混在一起，而且必须看得出来
+主线（2026-09-24 定）：一刀一刀接力，每一刀都是上一刀留下的问题逼出来的
 ════════════════════════════════════════════════════════════════
-2026-09-23 开工。第一步的要求是「先把所有并行方式列全，不分训练推理，
-新的别漏」—— 那一轮调研直接写成了 §1（全景），**这一节是写完的**。
-其余各节还是大纲，照专题八的做法渲染成 🚧 占位，不补写。
+    零  一张卡装不下 → 得切；一句话：用一种通信，换一份显存或一份算力
+    一  先认识五种通信（集合通信）—— 后面每一刀多出来的都是这里的某一种
+    二  第一刀 切数据：DP → FSDP（AllReduce 拆两半，白送）
+    三  第二刀 切权重：TP / PP
+    四  第三刀 切专家：EP；attention 和专家各配各的（Folding / DEP / TEP）
+    五  第四刀 切序列：训练切激活（CP），推理切 KV（DCP）
+    六  第五刀 不切张量，切工作：PD 分离 / AFD
+    七  摆到机器上：频率高的绑快链路；五步怎么选；strong / weak scaling
+    八  全景地图（走完五刀回头看的总复习）
 
-⛔ 不要为了「看起来完整」去补写占位节 —— 编出来的内容看着最合理，
-   也最难被自己发现（第一原则）。
+⭐ 全景原来放在最前面，主线定下来之后挪到最后：学员没认识通信、没走过五刀，
+   一上来看一张几十行的表只会记名字。走完再看，一行一行都有来处。
 
-§1 里每一个参数名、每一句定义，都对过源码或官方文档（出处在文末台账）。
-几条值得记住的核对结果：
+════════════════════════════════════════════════════════════════
+写完的和没写的混在一起，而且必须看得出来
+════════════════════════════════════════════════════════════════
+第一节（集合通信）与第八节（全景）是写完的；其余是 🚧 大纲，不补写。
+⛔ 编出来的内容看着最合理，也最难被自己发现（第一原则）。
+
+几条核对过的事实（出处在文末台账）：
+  · 各集合通信每卡发出的量：NCCL nccl-tests 的 PERFORMANCE.md 给的 busbw 修正系数
+    —— AllReduce 2(n−1)/n，AllGather / ReduceScatter / AllToAll (n−1)/n，Broadcast / Reduce 1。
+  · 环形 ReduceScatter 的逐步推演参考 wanghonglei《分布式深度学习集体通信原语——从零到精通》
+    （2026-06-27），原文已存 my-wiki-v2/raw/articles/。图里的每一步是脚本现算并断言的。
   · TEP / DEP 是推理侧叫法（TRT-LLM blog26 原文定义），D 是 attention DP；
-    Megatron 仓库里 grep 为零。**不能等同 ETP / EDP** —— 大纲原来那句是错的。
-  · vLLM 的 PCP 扩大 world size、DCP 不扩大（复用 TP rank）——
-    vllm/config/parallel.py 的 docstring 原话。
-  · 「DTP」这个缩写没有在任何框架文档里查到，所以这一页不列。
+    **不能等同 Megatron 的 ETP / EDP**。
+  · vLLM 的 PCP 扩大 world size、DCP 不扩大（vllm/config/parallel.py docstring）。
 
 ⭐ 大纲在 `Courses/专题05-并行策略.md`，只是计划，不必与页面同步。
-
-CSS 从专题二 L300 抄（同专题八，见 topic08-build.py 文件头）。
 """
 import io
-import re
 import os
+import re
+
+import topic03_page as P
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
 OUT = os.path.join(HERE, "..", "WebPages", "topic-05.html")
 
-_src = io.open(SRC, encoding="utf-8").read()
-
-
-def _sub(text, pattern, repl, what):
-    """替换 + 断言真的替换了（str.replace 匹配不上是静默的，见 topic08-build.py）。"""
-    new, n = re.subn(pattern, repl, text, count=1)
-    assert n == 1, "改不动 %s —— 模板变了？（模式：%s）" % (what, pattern)
-    return new
-
-
-_head = _src[:_src.index("</style>") + len("</style>")]
-_head = _sub(_head, r"<title>.*?</title>", "<title>专题五 · 并行策略</title>", "<title>")
-_head = _sub(_head, r'<meta property="og:title" content="[^"]*">',
-             '<meta property="og:title" content="并行策略 · 用一种通信，换一份显存或一份算力">', "og:title")
-_head = _sub(_head, r'<meta property="og:description" content="[^"]*">',
-             '<meta property="og:description" content="今天所有的并行方式，按四种刀法排成一张图：切数据、切序列、切权重、拆阶段。">',
-             "og:description")
-_head = _sub(_head, r'<meta property="og:url" content="[^"]*">',
-             '<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-05.html">', "og:url")
-_head = re.sub(r'\s*<meta property="og:image"[^>]*>(\s*<meta property="og:image:(width|height)"[^>]*>)*',
-               "", _head)
-_probe = re.sub(r"/\*.*?\*/|<!--.*?-->", "", _head, flags=re.S)
-assert "TPU 与 GPU" not in _probe and "topic-02" not in _probe, "head 里还有专题二的残留"
-
-_head += """
+head = P.make_head(
+    "专题五 · 并行策略",
+    "并行策略 · 用一种通信，换一份显存或一份算力",
+    "先认识五种集合通信，再一刀一刀地切：数据、权重、专家、序列，最后连工作一起拆开。",
+    "topic-05.html")
+head += """
 <style>
-ul + p, ul + div.note { margin-top: 14px }
 .kind { display:inline-block; font-size:12px; font-weight:600; padding:0 7px;
         border-radius:9px; margin-right:4px; white-space:nowrap }
 .k-d { background:#e8f0fe; color:#174ea6 }
@@ -67,7 +59,6 @@ ul + p, ul + div.note { margin-top: 14px }
 .k-m { background:#fef7e0; color:#8a4b00 }
 .k-x { background:#f3e8fd; color:#681da8 }
 .k-new { background:#fce8e6; color:#a50e0e }
-td .where { color:var(--gray); font-size:13px }
 </style>"""
 
 D = '<span class="kind k-d">数据</span>'
@@ -76,26 +67,46 @@ M = '<span class="kind k-m">模型</span>'
 X = '<span class="kind k-x">解耦</span>'
 NEW = '<span class="kind k-new">新</span>'
 
-out = []
-a = out.append
+SECTIONS = [
+    ("s零", "零", "一张卡装不下"),
+    ("s一", "一", "先认识五种通信"),
+    ("s二", "二", "第一刀：切数据"),
+    ("s三", "三", "第二刀：切权重"),
+    ("s四", "四", "第三刀：切专家"),
+    ("s五", "五", "第四刀：切序列"),
+    ("s六", "六", "第五刀：不切张量，切工作"),
+    ("s七", "七", "摆到机器上"),
+    ("s八", "八", "全景：今天所有的并行方式"),
+    ("s九", "九", "出处台账"),
+]
 
-a(_head)
-a('''
+
+def sec(sid, num, title):
+    return ('<section id="%s"><div class="wrap"><div class="stn"><span class="badge">第 %s 节</span>'
+            '<h2>%s</h2></div>' % (sid, num, title))
+
+
+def todo(lines):
+    return ('<div class="note warn"><span class="t">🚧 这一节还是大纲</span>'
+            '下面是计划要讲的东西，还没有展开。</div>\n<ul>\n%s\n</ul>'
+            % "\n".join("  <li>%s</li>" % ln for ln in lines))
+
+
+HERO = '''
 </head>
 <body>
 
-<!-- ══════════ HERO ══════════ -->
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题五
     ／ <b>并行策略</b></div>
   <h1>并行策略</h1>
   <div class="hook">
     一个模型装不进一块卡，就得切开分到很多卡上。<br>
-    <em>每切一刀，就在那一维上多出一种通信 —— 用一种通信，换一份显存或一份算力。</em>
+    <em>每切一刀，就在那一维上多出一种通信。用一种通信，换一份显存或一份算力。</em>
   </div>
   <p style="max-width:820px;color:var(--gray)">
-    这一讲先把今天用得上的并行方式全部摆出来，训练和推理放在一起，
-    再回头讲每一种什么时候该用、什么时候会被通信拖垮。</p>
+    先认识五种通信，再一刀一刀地切：数据、权重、专家、序列，最后连工作一起拆开。
+    每一刀都是上一刀留下的问题逼出来的。</p>
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
@@ -106,16 +117,15 @@ a('''
 </div></div>
 
 <div class="wrap">
-  <div class="note warn"><span class="t">🚧 这一讲刚开工</span>
-    <b>§1（全景）是写完的</b>，每个参数名和定义都对过源码或官方文档，出处在文末。<br>
-    <b>§2 以后还是大纲</b>，页面上按原样列出，没有补写。</div>
+  <div class="note warn"><span class="t">🚧 这一讲写了两节</span>
+    <b>第一节（集合通信）和第八节（全景）是写完的</b>，出处在文末台账。<br>
+    第二到第七节还是大纲，页面上按原样列出，没有补写。</div>
 </div>
+'''
 
-<section id="s0"><div class="wrap">
-  <div class="stn"><span class="badge">第 0 节</span><h2>这一讲要回答的一个问题</h2></div>
-
-  <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，光训练状态就要约 10.7 TB。
-    <b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
+BODY = sec("s零", "零", "一张卡装不下") + '''
+  <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算，
+    光训练状态就要约 10.7 TB。<b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
 
   <p>一个训练中的张量有好几个维度可以下刀：batch、序列、隐藏维、层、专家。
     每切一刀，就在那一维上产生一种通信。所以这一讲从头到尾只讲一件事：</p>
@@ -124,17 +134,150 @@ a('''
     <b>用一种通信，换一份显存或一份算力。</b><br>
     选并行策略，就是在选你愿意付哪一种通信、付多频繁。</div>
 
-  <p><b>目标</b>：看到任何一个并行方案，包括还没出现的，都能说出它切的是哪一维、
-    多出来的是哪种通信、每一步发生几次，以及它能不能放到慢链路上。</p>
+  <p>这一讲按一条接力线走。<b>每一刀都是上一刀留下的问题逼出来的</b>：</p>
+  <ol>
+    <li><b>先认识五种通信。</b>后面每一刀多出来的，都是其中某一种。</li>
+    <li><b>第一刀，切数据。</b>最朴素，但每张卡还是存一整份模型，于是有了 FSDP。</li>
+    <li><b>第二刀，切权重。</b>FSDP 每一层都要把整层权重拼回来，batch 一小就被搬权重拖垮，于是切进矩阵、切开层。</li>
+    <li><b>第三刀，切专家。</b>MoE 的专家太多；而且 attention 和专家是两种形状，得各配各的。</li>
+    <li><b>第四刀，切序列。</b>上下文一长，训练时激活爆，推理时 KV cache 爆。</li>
+    <li><b>第五刀，不切张量，切工作。</b>prefill 和 decode 分开，attention 和专家分开。</li>
+    <li><b>最后摆到真机器上</b>，再用一张全景地图把走过的路收一遍。</li>
+  </ol>
+
+  <p>整条线只用一把尺子量：<b>这一刀多出来的通信有多频繁，它就只能放在多快的链路上。</b></p>
 </div></section>
 
-<section id="s1"><div class="wrap">
-  <div class="stn"><span class="badge">第 1 节</span><h2>全景：今天所有的并行方式</h2></div>
+''' + sec("s一", "一", "先认识五种通信") + '''
+  <p class="lead">后面每一刀都会多出一种通信。这一节先把它们认全。
+    名字看着多，但每一个都只回答两个问题：<b>谁发给谁</b>；数据到了之后是<b>拼起来、加起来，还是原样放着</b>。</p>
+
+  <h3>1.1　所有集合通信，拆到底只有「发」和「收」</h3>
+  <p>一组卡按同一个规则一起发、一起收，叫<b>集合通信</b>（collective communication）。
+    拆到最底层，每一种都只是很多次「一张卡发、另一张卡收」按某个顺序排起来。</p>
+  <p>下面几张图用同一套画法，只学一次：</p>
+  <ul>
+    <li>四张卡，<b>一张一个颜色</b>：卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫。</li>
+    <li>每张卡的数据切成四块，一块一个小方格。</li>
+    <li><b>加过的块画成竖条纹</b>，条纹是哪几种颜色，就是哪几张卡的数加在了一起。</li>
+    <li>虚线框表示这里没有数据。</li>
+  </ul>
+
+  <h3>1.2　一个人对所有人：四个基本动作</h3>
+__FIG_COLL_1N__
+  <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
+    班长那一条线要扛下全部流量，卡越多越堵。</p>
+
+  <h3>1.3　人人对人人：训练里天天在跑的四个</h3>
+__FIG_COLL_NN__
+  <p>All 就是「人人都拿到结果」。拿上一组对照着看：</p>
+  <ul>
+    <li><b>AllGather</b> ＝ Gather，再把拼好的结果发给每个人。</li>
+    <li><b>AllReduce</b> ＝ Reduce，再把加好的结果发给每个人。</li>
+    <li><b>ReduceScatter</b> ＝ Reduce，再把结果切开，一人一块。</li>
+    <li><b>AllToAll</b> 独一份：每一对卡之间各传一份专属的数据，不加也不拼。</li>
+  </ul>
+
+  <h3>1.4　AllReduce 可以拆成两半</h3>
+__FIG_AR_SPLIT__
+  <p>这两半各自单独拿出来，就是两种有用的通信。<b>后面好几种并行白捡的便宜，全从这里来</b>：</p>
+  <ul>
+    <li><b>FSDP</b>：数据并行同步梯度那一次 AllReduce，一半挪到反向去分梯度，一半挪到前向去拼权重。
+      账面上一个字节没多花，每张卡却只需要长期存 1/n 的权重。第二节细讲。</li>
+    <li>张量并行每层要做 AllReduce；配上序列并行时，也是把它拆成这两半，分别挪到不同位置。第三节细讲。</li>
+  </ul>
+
+  <h3>1.5　没有班长，怎么做到的：环</h3>
+  <p>最直接的 AllReduce 是班长模式：大家先把数据交给卡 0 加起来，卡 0 再广播回去。
+    卡 0 要收 n−1 份、发 n−1 份，卡一多，它那条线就成了全场的瓶颈。</p>
+  <p>换个办法：把卡首尾相连排成一圈，谁都不当班长。</p>
+__FIG_RING__
+  <p>ReduceScatter 转 n−1 步、AllGather 再转 n−1 步，每张卡一共发出 2(n−1)/n 份数据。
+    卡再多，也不到两整份。</p>
+  <p>代价是步数跟着卡数涨。数据很大时，比的是带宽，环几乎是最优的；
+    数据很小时，比的是一步一步的等待，步数多反而吃亏。
+    所以 NCCL 这类通信库会按消息大小，在环形、树形等几种算法之间自己挑。</p>
+  <p><em>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，每一维天然就是一个环。</em></p>
+
+  <h3>1.6　AllToAll：每人给每人一份不一样的</h3>
+__FIG_A2A__
+  <p>它是这五种里<b>唯一一个「人人对人人发不同数据」的</b>。
+    专家并行派发 token 要用它（每层两次：发过去、送回来）；切序列时的 Ulysses 也用它，
+    在「按序列切」和「按头切」之间来回换。</p>
+
+  <h3>1.7　一张表收住</h3>
+  <p>「每卡发出」一列按最优算法算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
+    ReduceScatter 指加之前那一整份）。系数就是 NCCL 官方测试工具换算总线带宽时用的那一组。</p>
+  <table>
+    <tr><th>通信</th><th>做什么</th><th>每卡发出</th><th>后面谁在用</th></tr>
+    <tr><td>AllReduce</td><td>加完，人人一份</td><td>2(n−1)/n · S</td><td>数据并行同步梯度；张量并行每层两次</td></tr>
+    <tr><td>ReduceScatter</td><td>加完，各拿一块</td><td>(n−1)/n · S</td><td>FSDP 反向分梯度；张量并行配序列并行</td></tr>
+    <tr><td>AllGather</td><td>拼完，人人一份</td><td>(n−1)/n · S</td><td>FSDP 前向拼权重；张量并行配序列并行；推理切 KV 时收齐 Q</td></tr>
+    <tr><td>AllToAll</td><td>只换位置</td><td>(n−1)/n · S</td><td>专家并行派发和收回 token；Ulysses</td></tr>
+    <tr><td>Broadcast / Reduce</td><td>一对多 / 多对一</td><td>S</td><td>分发初始权重、汇总指标这类场合</td></tr>
+    <tr><td>Send / Recv</td><td>一对一</td><td>看传多少</td><td>流水线并行在 stage 之间传激活；Ring Attention 沿环传 KV</td></tr>
+  </table>
+
+  <div class="note ok"><span class="t">这一节只要带走两件事</span>
+    <b>① AllReduce 可以拆成 ReduceScatter 和 AllGather 两半</b>，后面好几刀都靠它白捡便宜。<br>
+    <b>② AllToAll 是唯一一个人人对人人发不同数据的</b>，专家并行离不开它，网络也最怕它。<br>
+    后面五刀，每一刀多出来的通信都是这张表里的某一行。</div>
+</div></section>
+
+''' + sec("s二", "二", "第一刀：切数据") + todo([
+    "<b>DP</b>：最朴素，每张卡一整份模型、算不同的样本，每一步一次 AllReduce 同步梯度",
+    "问题：<b>装不下的问题一点没解决</b>，n 张卡存了 n 份一模一样的东西",
+    "<b>ZeRO / FSDP</b>：把重复的削掉。AllReduce 拆两半，通信量不变，显存随卡数线性下降，所以「DP 跑得动就该换 FSDP」",
+    "<b>HSDP</b>：机内分片、机间复制",
+    "尺子立在这儿：DP 每一步才通信一次，<b>所以它是唯一能跨机、跨数据中心的维度</b>（以及 DiLoCo 把频率再降几百倍）",
+]) + '''
+</div></section>
+
+''' + sec("s三", "三", "第二刀：切权重") + todo([
+    "FSDP 的尽头：每一层都要把整层权重拼回来；<b>FSDP 搬权重、TP 搬激活</b>，batch 小时搬权重吃光时间",
+    "<b>TP</b>：切进矩阵，每层两次 AllReduce，频率极高 → 只能待在 NVLink / ICI 一跳之内；度数受头数限制",
+    "<b>SP（Megatron）</b>：TP 的搭档，把 AllReduce 拆成 AG ＋ RS，顺手切掉 LayerNorm 那几段的激活",
+    "<b>PP / VPP</b>：按层切，通信最少，代价是气泡；V3 前 3 层 dense、后 58 层 MoE 怎么切才平衡",
+]) + '''
+</div></section>
+
+''' + sec("s四", "四", "第三刀：切专家") + todo([
+    "<b>EP</b>：专家放到不同卡上，每层两次 AllToAll",
+    "EP 独有的病：<b>发给谁由数据决定</b>，负载天生不均（EPLB、冗余专家）",
+    "一个模型里 attention 和专家是两种形状 → <b>各配各的</b>：训练叫 Parallel Folding（ETP / EP / EDP），推理叫 DEP / TEP",
+    "Wide-EP：把 EP 铺到几十张卡，decode 时每个专家的 batch 才做得大",
+]) + '''
+</div></section>
+
+''' + sec("s五", "五", "第四刀：切序列") + todo([
+    "训练：激活沿序列爆 → <b>CP</b>（ring / Ulysses / 两者叠加）；为什么 128K 以上绕不开",
+    "推理：KV cache 沿序列爆 → <b>DCP</b>；TP 超过 KV 头数时 KV 被复制，DCP 用一次合并通信把冗余换回容量",
+    "PCP：prefill 端切长 prompt，压首字延迟；PD 分离时和 DCP 一边一个",
+]) + '''
+</div></section>
+
+''' + sec("s六", "六", "第五刀：不切张量，切工作") + todo([
+    "<b>PD 分离</b>：prefill 吃算力、decode 吃带宽，放在一起互相拖累；中间靠传 KV cache 衔接",
+    "<b>AFD</b>：attention 和专家分到两组机器，把专家的 batch 做大",
+    "两边各自再挑并行方式（比如 P 端 TEP、D 端 DEP，或者反过来）",
+]) + '''
+</div></section>
+
+''' + sec("s七", "七", "摆到机器上") + todo([
+    "<b>mesh</b>：把设备排成多维网格，每个并行维绑一根轴；高频的绑最快的轴，低频的绑最慢的",
+    "我们的实测：换拓扑和调参数，收益不在一个量级",
+    "<b>怎么选</b>：先装得下（FSDP / EP）→ 看高带宽域多大（TP / EP 上限）→ 看序列多长（CP / DCP）→ PP 最后 → DP 兜底",
+    "<b>怎么评</b>：strong scaling 与 weak scaling",
+]) + '''
+</div></section>
+
+''' + sec("s八", "八", "全景：今天所有的并行方式") + '''
+
 
   <p class="lead">名字很多，DP、FSDP、TP、SP、CP、PP、EP，推理那边还有 DCP、PCP、DEP、TEP……
     <b>但刀法只有四种。</b>先把刀法认清楚，名字就好记了。</p>
 
-  <h3 id="s1-1">1.1 · 四种刀法</h3>
+  <h3>8.1　四种刀法</h3>
   <p>判据只有一个：<b>看它切的是什么。</b></p>
   <table>
     <tr><th>刀法</th><th>切的是什么</th><th>每张卡手里有什么</th><th>典型</th></tr>
@@ -158,7 +301,7 @@ a('''
   </ul>
   <p>下面四张表就按这四种刀法排。「新」表示 2025–26 年才出现或才普及。</p>
 
-  <h3 id="s1-2">1.2 · 数据并行类</h3>
+  <h3>8.2　数据并行类</h3>
   <table>
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
     <tr><td>DP / DDP</td><td>batch，模型整份复制</td><td>线性扩吞吐</td>
@@ -184,7 +327,7 @@ a('''
     实际开的是 <b>Attention DP</b>：专家层还是大家一起跑，所以每一步所有 rank 都要同步。
     <br><em>vLLM 还有一个坑：只开 <code>-dp</code> 不开 <code>-ep</code>，专家层走的是 TP 而不是 EP。</em></div>
 
-  <h3 id="s1-3">1.3 · 序列并行类</h3>
+  <h3>8.3　序列并行类</h3>
   <p>一条样本太长，一张卡放不下它，就沿序列切开。<b>这一类在训练和推理里的动机完全不一样</b>：
     训练切的是激活，推理切的是 KV cache。所以分两张表。</p>
 
@@ -206,7 +349,7 @@ a('''
       <td>prefill 的启动延迟只跟第一块成正比</td><td>流水线的点对点</td><td>推</td></tr>
   </table>
 
-  <p><b>推理 decode 侧：切 KV cache</b> —— 这是 2025–26 年最热的一块</p>
+  <p><b>推理 decode 侧：切 KV cache</b>。这是 2025–26 年最热的一块</p>
   <table>
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
     <tr><td>DCP（Decode CP） ''' + NEW + '''</td><td>KV cache 的序列维，按 token 轮流存到各卡</td>
@@ -229,7 +372,7 @@ a('''
   <p>DCP 也是这一讲那句话最好的新例子。<b>它付出的是每层一次合并通信，换回来的是被 TP 白白复制掉的那 7/8 份 KV。</b>
     用一种通信，换一份显存。</p>
 
-  <h3 id="s1-4">1.4 · 模型并行类</h3>
+  <h3>8.4　模型并行类</h3>
   <p>这一类真正在切权重。按下刀的位置再分三种：矩阵内部、层、专家。</p>
 
   <p><b>切矩阵内部（张量并行）</b></p>
@@ -240,7 +383,7 @@ a('''
     <tr><td>2D / 2.5D / 3D TP</td><td>把矩阵切成网格</td><td>1D TP 的通信随度数上涨</td>
       <td>沿网格的行、列广播和归约</td><td>训，<b>已基本不用</b></td></tr>
     <tr><td>GTP ''' + NEW + '''</td><td>在 TP 轴上再把权重切一层，用的时候再收回来</td>
-      <td>Megatron 文档原话：GTP_remat is an implementation of ZeRO-3 —— 只不过切在模型并行轴上</td>
+      <td>Megatron 文档原话：GTP_remat is an implementation of ZeRO-3。只不过它切在模型并行轴上</td>
       <td>逐个权重异步 all-gather，梯度 reduce-scatter</td><td>训，实验性</td></tr>
   </table>
 
@@ -272,10 +415,10 @@ a('''
 
   <div class="note ok"><span class="t">MoE 层有自己的一套并行维度</span>
     训练时 Megatron 把 attention 层记作 TP × CP × DP × PP，把专家层记作 ETP × EP × EDP × PP，
-    <b>两套是分开配的</b>。推理时同样如此，只是换了一套名字，见 1.6。
+    <b>两套是分开配的</b>。推理时同样如此，只是换了一套名字，见 8.6。
     <br>这是 MoE 模型调并行时自由度最大、也最容易配错的地方。</div>
 
-  <h3 id="s1-5">1.5 · 解耦类</h3>
+  <h3>8.5　解耦类</h3>
   <p>前三种刀法切的都是张量。这一类切的是<b>工作</b>：把不同性质的活拆到不同的机器上，
     每一边再挑自己的并行方式。</p>
   <table>
@@ -290,7 +433,7 @@ a('''
   </table>
   <p><em>AFD 目前的代表是字节的 MegaScale-Infer 和阶跃的 Step-3，vLLM 在 2026 年 7 月出了实验性插件。</em></p>
 
-  <h3 id="s1-6">1.6 · 组合简称：TEP 和 DEP</h3>
+  <h3>8.6　组合简称：TEP 和 DEP</h3>
   <p>推理这边，MoE 模型的并行配置通常用一个简称加一个数字说完，比如 TEP8、DEP16。
     <b>前一个字母说 attention 怎么切，后面的 EP 说专家怎么切。</b></p>
   <table>
@@ -304,7 +447,7 @@ a('''
   <p>PD 分离时两边经常各选一种，但<b>哪边用哪种没有定式</b>，要看模型和负载：
     vLLM 部署 Kimi K3 用的是 <b>TEP8 做 prefill、DEP16 做 decode</b>；
     TensorRT-LLM 那篇文章举的例子却是 <b>DEP4 做 prefill、TEP8 做 decode</b>。
-    <em>这正是 §6 要讲的「怎么选」—— 这里先记住两个名字各是什么。</em></p>
+    <em>这正是第七节要讲的「怎么选」，这里先记住两个名字各是什么。</em></p>
 
   <div class="note danger"><span class="t">⛔ TEP / DEP 不是 ETP / EDP</span>
     名字只差一个字母的顺序，说的却是两件事。<br>
@@ -320,7 +463,7 @@ a('''
     <li><b>TRT-LLM 的「Hybrid ETP」</b>：指专家层 TP 和 EP 混用，跟 Megatron 的 ETP 又不是一回事。</li>
   </ul>
 
-  <h3 id="s1-7">1.7 · 常被当成并行、其实不是的</h3>
+  <h3>8.7　常被当成并行、其实不是的</h3>
   <p>判据：<b>它有没有多切出一维。</b>没有的，就不是新的并行方式。</p>
   <table>
     <tr><th>名称</th><th>它实际是什么</th></tr>
@@ -330,7 +473,7 @@ a('''
     <tr><td>Offload、重计算</td><td>拿时间换显存，或者拿主机内存换显存</td></tr>
   </table>
 
-  <h3 id="s1-8">1.8 · 同名不同义</h3>
+  <h3>8.8　同名不同义</h3>
   <table>
     <tr><th>词</th><th>在不同地方的意思</th></tr>
     <tr><td>SP</td><td>至少三种：Megatron 的 SP（只切 LayerNorm 那几段，跟着 TP）；DeepSpeed 说的 SP（指 Ulysses）；
@@ -340,70 +483,15 @@ a('''
     <tr><td>ETP</td><td>Megatron 指专家内部的 TP；TensorRT-LLM 的 Hybrid ETP 指专家层 TP 和 EP 混用</td></tr>
     <tr><td>hierarchical</td><td>ZeRO++ 的分层分片、Megatron 的分层 DP、Megatron 的分层 CP，是三件不同的事</td></tr>
   </table>
+
 </div></section>
 
-<section id="s2"><div class="wrap">
-  <div class="stn"><span class="badge">第 2 节</span><h2>🚧 什么时候真的会被通信拖累</h2></div>
-  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
-  <ul>
-    <li><b>判据还是那道除法，换个分母</b>：算力 ÷ 这一维用的那条链路的带宽</li>
-    <li><b>AllReduce = AllGather ＋ ReduceScatter</b>，所以 FSDP 的通信量跟 DP 一样 —— DP 跑得动，就该换 FSDP</li>
-    <li><b>FSDP 搬权重，TP 搬激活</b>：批次小多用 TP，批次大多用 FSDP</li>
-    <li>TP 有一个跟批次无关的硬上限</li>
-  </ul>
-</div></section>
-
-<section id="s3"><div class="wrap">
-  <div class="stn"><span class="badge">第 3 节</span><h2>🚧 逐个讲</h2></div>
-  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>
-    §1 已经把每一种是什么、切哪一维讲完了。这一节要讲的是每一种<b>怎么落地、踩什么坑</b>。</div>
-  <ul>
-    <li><b>DP → FSDP / HSDP</b>：为什么这笔买卖通常划算</li>
-    <li><b>TP</b>：度数受头数和高带宽域大小两头限制；跨机做 TP 基本等于自杀</li>
-    <li><b>SP 与 CP</b>：这两个最容易混；为什么 128K 以上必须上 CP；MLA 下 CP 的特殊性</li>
-    <li><b>PP 与 VPP</b>：气泡怎么算；V3 前 3 层 dense、后 58 层 MoE，怎么切才平衡</li>
-    <li><b>EP 家族</b>：负载不均为什么是 EP 独有的病；训练和推理两套名字怎么对上</li>
-    <li><b>推理侧</b>：Attention DP、DCP、PD 分离下两边各怎么配</li>
-  </ul>
-</div></section>
-
-<section id="s4"><div class="wrap">
-  <div class="stn"><span class="badge">第 4 节</span><h2>🚧 组合：mesh 与拓扑映射</h2></div>
-  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
-  <ul>
-    <li><b>mesh 是什么</b>：把物理设备排成多维网格，每个逻辑并行维绑一根轴</li>
-    <li><b>映射决定成败</b>：高频通信（TP）绑最快的轴，低频（DP）绑最慢的轴</li>
-    <li>我们的实测：换拓扑和调参数，收益不在一个量级</li>
-    <li>并行度不是连续旋钮，是一组离散、互相约束的选择</li>
-  </ul>
-</div></section>
-
-<section id="s5"><div class="wrap">
-  <div class="stn"><span class="badge">第 5 节</span><h2>🚧 评价：strong scaling 与 weak scaling</h2></div>
-  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
-  <ul>
-    <li><b>Strong scaling</b>：问题规模固定、加卡求快 —— 每卡活变少，通信占比必然上升</li>
-    <li><b>Weak scaling</b>：每卡活固定、加卡同时放大问题 —— 通信占比大致不变</li>
-  </ul>
-</div></section>
-
-<section id="s6"><div class="wrap">
-  <div class="stn"><span class="badge">第 6 节</span><h2>🚧 实际该怎么选</h2></div>
-  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>下面是计划要讲的东西，还没有展开。</div>
-  <ol>
-    <li><b>先看装不装得下</b>：FSDP / EP 先上到装得下为止</li>
-    <li><b>再看高带宽域有多大</b>：它决定 TP / EP 的度数上限</li>
-    <li><b>再看序列多长</b>：超过某个长度必须上 CP（推理看 DCP）</li>
-    <li><b>PP 通常最后考虑</b>：气泡是纯损失</li>
-    <li><b>DP 兜底</b>：剩下的规模用它铺开，可以铺到 DCN 上</li>
-  </ol>
-</div></section>
-
-<section id="src"><div class="wrap">
-  <div class="stn"><span class="badge">出处</span><h2>§1 的出处台账</h2></div>
-  <p class="lead">按「结论 ← 材料」排。全部在 2026-09-23 核对。</p>
+''' + sec("s九", "九", "出处台账") + '''
+  <p class="lead">按「结论 ← 材料」排。第八节 2026-09-23 核对，第一节 2026-09-24 核对。</p>
   <table>
     <tr><th>结论</th><th>材料</th></tr>
+    <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
+    <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv 2504.14960</td></tr>
@@ -419,15 +507,44 @@ a('''
   </table>
 </div></section>
 
+
+'''
+
+FOOT = '''
 <div class="wrap" style="padding:32px 0 64px">
   <p style="color:var(--gray)">
     ← 回 <a href="index.html">课程总纲</a>　·
-    上一讲 <a href="topic-04.html">专题四 · 反向与优化器</a></p>
+    上一讲 <a href="topic-04.html">专题四 · 反向与优化器</a><br>
+    本页由 <code>Courses/tools/topic05-build.py</code> 生成 ——&nbsp;<b>正文写在那个脚本里</b>。</p>
 </div>
 
-</body></html>''')
+</body></html>'''
 
-import course_links as _CL
-_html = _CL.linkify_arxiv("\n".join(out))
-io.open(OUT, "w", encoding="utf-8").write(_html)
-print("ok  topic-05.html  %s 字符" % format(os.path.getsize(OUT), ","))
+FIGS = {
+    "__FIG_COLL_1N__": ("fig-coll-1n", "fig5-coll-1n.svg", "topic05-fig-coll.py",
+        '<b>四个有班长的动作：广播、分发、收集、归约。</b><br>'
+        '<em>收集和归约只差一个动作：数据到了之后是拼起来，还是加起来。</em>'),
+    "__FIG_COLL_NN__": ("fig-coll-nn", "fig5-coll-nn.svg", "topic05-fig-coll.py",
+        '<b>名字带 All 的，结果人人一份。</b><br>'
+        '<em>AllToAll 是另一回事：不加也不拼，只换位置。</em>'),
+    "__FIG_AR_SPLIT__": ("fig-ar-split", "fig5-ar-split.svg", "topic05-fig-coll.py",
+        '<b>先加后拼，跟一步到位的结果完全一样。</b><br>'
+        '<em>拆开之后，两半可以放在不同的时间点去做。</em>'),
+    "__FIG_RING__": ("fig-ring", "fig5-ring.svg", "topic05-fig-coll.py",
+        '<b>盯着条纹看：每一步，每张卡都有一块多加进一个人。</b><br>'
+        '<em>每一步是脚本按调度现算的，不是手摆的。</em>'),
+    "__FIG_A2A__": ("fig-a2a", "fig5-a2a.svg", "topic05-fig-coll.py",
+        '<b>左边一行是「我要发给谁」，右边一行是「谁发给了我」。</b><br>'
+        '<em>每一格多大，在 MoE 里要等路由算完才知道。</em>'),
+}
+
+_html = head + HERO + BODY + FOOT
+_html = P.place_figs(_html, FIGS)
+_leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
+assert not _leak, "占位符没落地：%s" % "、".join(_leak)
+for _tag in ("h2", "h3", "section", "div"):
+    _o = len(re.findall(r"<%s[ >]" % _tag, _html))
+    _c = _html.count("</%s>" % _tag)
+    assert _o == _c, "<%s> 开 %d 个、闭 %d 个" % (_tag, _o, _c)
+_html = P.add_figonly_toggle(_html)
+P.finish(_html, OUT, SECTIONS, "topic-05.html")
