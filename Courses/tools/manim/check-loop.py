@@ -223,7 +223,7 @@ def main(argv):
             print("      理由：%s" % (why[:100] if why else "⛔ 没写理由，这不该通过"))
             if not why:
                 print("   ⛔ `loop: false` 必须在 note 里写清为什么做不到复位。")
-                bad_any = True
+                fail += 1          # ⛔ 2026-09-25：原来写的是没人读的 bad_any，打印「不该通过」却照样通过
             continue
         if rec is None:
             print("   ⛔ %-22s 不一致度 %5.1f%%   \033[1m没有基线\033[0m —— "

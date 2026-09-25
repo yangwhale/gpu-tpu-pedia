@@ -4,7 +4,9 @@ r"""专题五 · 并行策略 —— **讲义（授课稿）**。
 ════════════════════════════════════════════════════════════════════
 ⭐ 这一讲的讲法，一句话说清
 ════════════════════════════════════════════════════════════════════
-  它是一条**接力线**：每一刀都是上一刀留下的问题逼出来的。
+  它是一条**接力线**：每一刀都在补前面没管到的那一块。
+  （2026-09-24 R7 更正：原写「每一刀都是上一刀逼出来的」，只在 FSDP→TP、切序列→PD 分离两处成立；
+    V3 不用 TP 是选型不是「逼」，长上下文是模型换了形状。课件早已改口，讲义 2026-09-25 跟上。）
   ⛔ 所以**不能跳**。每节最后那句「这一刀留下的问题」就是下一节的开场白，
     台上一定要念出来，台下才知道为什么要换刀。
 
@@ -578,8 +580,8 @@ p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
 <div class="say">
   <p><b>① 每一刀都付一种通信。</b>
     <em>讲每一刀时都点一次名：它多出来的是第一节那五种话里的哪一种。讲到第七节，台下自己就能说出「那它该放快线还是慢线」。</em></p>
-  <p><b>② 每一刀都是上一刀逼出来的。</b>
-    <em>FSDP 被小 batch 逼出 TP；V3 不用 TP 逼出 EP；长上下文逼出 CP；prefill 和 decode 要的切法不一样，逼出 PD 分离。
+  <p><b>② 每一刀都在补前面没管到的那一块。</b>
+    <em>batch 小了 FSDP 撑不住，补上 TP；V3 的参数几乎全在专家里，补上 EP；上下文一长一条样本放不下，补上 CP；prefill 和 decode 要的切法不一样，补上 PD 分离。
     ⛔ 一旦讲成「接下来介绍另一种并行」，这条线就断了。</em></p>
   <span class="pause">⭐ <b>如果只能让台下带走一句话</b>：
   <b>选并行策略，就是在选你愿意付哪一种通信、付多频繁、放在哪根线上。</b></span>
@@ -617,7 +619,7 @@ _cuts = len(re.findall(r'<p class="board">', html))
 _tot = _n / 200.0 + _cuts * 0.25
 
 _secs = [(m.start(), re.sub(r"<[^>]+>", "", m.group(1)))
-         for m in re.finditer(r'<h3 class="sec" id="c\d+">(第[零一二三四五六七八]节.*?)</h3>', html)]
+         for m in re.finditer(r'<h3 class="sec" id="c\d+">(第[零一二三四五六七八九十]+节.*?)</h3>', html)]
 assert len(_secs) == len(CH) == len(PLAN), "节数对不上：%d / %d / %d" % (len(_secs), len(CH), len(PLAN))
 _secs.append((html.index("🚧 这份讲义还薄"), ""))
 _rows, _floor, _over = [], 0.0, []
@@ -640,7 +642,7 @@ html = html.replace("@@FLOOR@@",
     % (_floor, PLAN_SUM) + "</tbody></table>")
 
 # ⭐ 两套计划时长（节标题里的、时间表里的）必须一致 —— 专题四踩过「各自自洽、互相对不上」。
-_head_min = [int(m) for m in re.findall(r'<h3 class="sec" id="c\d+">第[零一二三四五六七八]节[^（<]*（(\d+)′', html)]
+_head_min = [int(m) for m in re.findall(r'<h3 class="sec" id="c\d+">第[零一二三四五六七八九十]+节[^（<]*（(\d+)′', html)]
 assert _head_min == [p[1] for p in PLAN], ("节标题 %s 与时间表 %s 对不上"
                                             % (_head_min, [p[1] for p in PLAN]))
 # ⭐ 2026-09-24 L19：「可压到 N」曾经五节都写得比地板还低 —— 压不到的承诺比不写更坑讲师。

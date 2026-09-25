@@ -392,12 +392,9 @@ def main(paths):
 if __name__ == '__main__':
     HERE = os.path.dirname(os.path.abspath(__file__))
     W = os.path.join(HERE, '..', 'WebPages')
-    main(sys.argv[1:] or [os.path.join(W, f) for f in
-                          ('topic-02-L300.html', 'topic-02.html', 'topic-01.html',
-                           'topic-03.html', 'topic-03-L300.html', 'topic-04.html', 'topic-05.html', 'topic-08.html',
-                           # ⛔ 2026-09-09 审计补：外传两页原来**不在清单里**，
-                           #   也就是从没被这道 lint 查过 —— 而 L100 明天就要讲。
-                           # ⚠️ 但它对这两页的覆盖很弱：正文只数到 285 汉字，
-                           #   因为内容几乎全在 <details> 折叠块和 SVG 里。
-                           #   **报「干净」不等于查过**，别把它当验收标准。
-                           'topic-02x.html', 'topic-02x-L200.html')])
+    # ⚠️ 外传两页正文几乎全在 <details> 和 SVG 里，这道 lint 对它们覆盖很弱 —— 报「干净」不等于查过。
+    # ⭐ 2026-09-25：页面清单改成从目录现取（原手写清单漏登记不报错，新专题会静默逃过体检）。
+    #   只收课件页：topic-NN[x].html 与 topic-NN[x]-L200／L300.html。
+    import re as _re_pages
+    main(sys.argv[1:] or [os.path.join(W, f) for f in sorted(os.listdir(W))
+                          if _re_pages.match(r'topic-\d+[a-z]?(-L\d00)?\.html$', f)])

@@ -54,7 +54,9 @@ CROSS_DOC_OK = {
 # ⭐ 2026-09-25：补「报告 / 手册 / README / RUNBOOK / TUNING」—— 专题五引外部调优文档
 #   「TUNING-v7 §3.7」被报成本页死指针。跟 topic03_page.anchorize 的 _CITE_WORD 同一批词。
 FOREIGN = re.compile(r'(专题[一二三四五六七八九十\d]|L300|L200|完整版|精讲版'
-                     r'|论文|paper|arXiv|原文|报告|手册|README|RUNBOOK|TUNING)')
+                     r'|论文|paper|arXiv|原文|报告|手册|README|RUNBOOK|TUNING'
+                     # 作者年份式引文：「Vaswani 等 2017，Attention Is All You Need §5.4」
+                     r'|等\s*20\d\d|et al)')
 
 
 def collect(path):
@@ -90,7 +92,10 @@ def audit(fname):
     ok = CROSS_DOC_OK.get(fname, set())
 
     bad, cross = {}, {}
-    for m in re.finditer(r'(?:§|第)\s*(\d+\.\d+[a-z]?)\s*节?', txt):
+    # ⭐ 2026-09-25 页面清单扩到专题一后三处误报：
+    #   「§3.2.1」三级节号 —— 本课小节只有两级，三级一定是别人的；
+    #   「第 7.5 步」—— 步／层／个／次／轮不是小节。
+    for m in re.finditer(r'(?:§|第)\s*(\d+\.\d+[a-z]?)(?![\d.]*\.\d|\s*[步层个次轮])\s*节?', txt):
         n = m.group(1)
         if n in have:
             continue
@@ -202,10 +207,18 @@ def audit_counts(fname, txt):
     return bad
 
 
+import re as _re_pages
+# ⭐ 2026-09-25：页面清单改成从目录现取 —— 原来是手写清单，新页面「漏登记也不报错」，
+#   等于新专题静默逃过这道体检（build-all.sh 里「让清单消失」那条同一个道理）。
+#   只收课件页：topic-NN[x].html 与 topic-NN[x]-L200／L300.html；讲义和特刊页不收。
+def _course_pages(W):
+    return sorted(f for f in os.listdir(W)
+                  if _re_pages.match(r"topic-\d+[a-z]?(-L\d00)?\.html$", f))
+
+
 def main():
     total = 0
-    for f in ("topic-02.html", "topic-02-L300.html",
-              "topic-03.html", "topic-03-L300.html", "topic-04.html", "topic-05.html", "topic-08.html"):
+    for f in _course_pages(W):
         if os.path.exists(os.path.join(W, f)):
             total += audit(f)
     print("\n跨节指针体检：%d 类死指针。" % total)

@@ -212,6 +212,8 @@ if __name__ == '__main__':
     # ⭐ 教训：**漏检的那一页，恰恰是最需要检的那一页** —— 新页面天然图最少、
     #    最容易被忘进清单，而它的图又是最新画的、最没被人眼扫过的。
     #    新建一个 topic-NN 页面时，第一件事就是把它加进这一行。
-    main(sys.argv[1:] or [os.path.join(W, f) for f in
-                          ('topic-02.html', 'topic-02-L300.html', 'topic-01.html',
-                           'topic-02x.html', 'topic-02x-L200.html', 'topic-03.html', 'topic-03-L300.html', 'topic-04.html', 'topic-05.html', 'topic-08.html')])
+    # ⭐ 2026-09-25：页面清单改成从目录现取（原手写清单漏登记不报错，新专题会静默逃过体检）。
+    #   只收课件页：topic-NN[x].html 与 topic-NN[x]-L200／L300.html。
+    import re as _re_pages
+    main(sys.argv[1:] or [os.path.join(W, f) for f in sorted(os.listdir(W))
+                          if _re_pages.match(r'topic-\d+[a-z]?(-L\d00)?\.html$', f)])

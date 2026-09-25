@@ -300,10 +300,8 @@ PY
 python3 manim/check-loop.py --media ../WebPages/media \
         --baseline manim/loop-baseline.json || exit 1
 
-for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \
-         topic-02x-L200.html \
-         topic-03.html topic-03-L300.html topic-05.html topic-08.html \
-         gpu-microscope.html tpu-microscope.html; do
+# ⭐ 2026-09-25：产物清单改成 glob —— 手写版漏了 topic-04.html（又一个「手工清单 ＋ 漏了不报错」）
+for f in $(cd "$W" && ls topic-*.html | grep -v -- '-lecture\.html$') gpu-microscope.html tpu-microscope.html; do
   [ -f "$W/$f" ] || continue
   printf '  %-24s %9s  %2d 图\n' "$f" \
     "$(wc -c <"$W/$f" | numfmt --to=iec)" "$(grep -c '<figure' "$W/$f" || true)"
