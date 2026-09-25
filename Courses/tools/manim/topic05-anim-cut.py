@@ -10,6 +10,10 @@ r"""专题五 · 第三节起「五刀」的动画。
 ⛔ 数据当场算：流水线每一格的起止时刻由 `schedule()` 按 GPipe 调度现算
   （前向 i 在 stage s 的时刻 ＝ i＋s；反向从最后一段倒着排、按前向 2 倍长），
   气泡比例按 Narayanan 等 arXiv 2104.04473 §2.2.1 的 (p−1)/m 断言。
+
+⛔ 刻意没画（2026-09-25 补）：ExpertParallel 每个 token 只挑 1 个专家（V3 实际挑 8 个），为了看得清；
+   RingAttention 演的是不带因果掩码的情形（因果掩码下负载不均，第五节另讲之字形）；
+   PDDisagg 与 MeshMap 的格数、快慢 1:9 都是示意，不是实测时序。
 """
 from manim import (Scene, VGroup, Rectangle, Text, Arrow, FadeIn, FadeOut, Indicate,
                    WHITE, GREY, GREY_B, BLUE, GREEN, ORANGE, YELLOW, RED, UP, DOWN, LEFT, RIGHT)

@@ -169,6 +169,7 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
     <b>V3</b>：本讲反复拿来举例的 DeepSeek-V3，6,710 亿参数的 MoE 模型。<br>
     <b>Q、K、V</b>：注意力里每个 token 算出三样东西：Q 是「我要找什么」，K 是「我是什么」，V 是「我带着什么内容」。
     新 token 拿自己的 Q 去和前面所有 token 的 K 比，按相似度把它们的 V 加权合起来。<br>
+    <b>查询头与 KV 头</b>：注意力分很多个头，每个头都有自己的 Q；K 和 V 的头可以更少，几个查询头共用一组 KV（极端情况只有一个 KV 头）。推理时缓存的是 KV，所以 KV 头的个数决定了 KV cache 能不能按头切开。<br>
     <b>softmax</b>：注意力给前面每个 token 打分，再把分数归一化成加起来等于 1 的权重，这一步叫 softmax。<br>
     <b>MLA</b>：DeepSeek 的一种注意力，把 K 和 V 压成一小份所有头共用，所以 KV cache 小得多，但也只剩「一个头」可切。<br>
     <b>节点</b>：一台机器，里面通常有 4 到 8 张卡，机器内部走高速互联（NVIDIA 的叫 NVLink）。<br>
@@ -206,14 +207,14 @@ BODY = sec("s零", "零", "一张卡装不下") + '''
   <h3>1.2　一个人对所有人：四个基本动作</h3>
   <p>把四张卡想成四个同学，卡 0 是班长。</p>
 __FIG_COLL_1N__
-<div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
+<div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播：一份 → 人人一份。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发：一份拆开 → 一人一块。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集：一人一块 → 拼成一份。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约：人人一份 → 加成一份。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
   <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
     按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
     通信库会把它们排成一条链接力传，让班长只发或只收一份。收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西：总量不随卡数涨，但全压在它一条线上。</p>
 
   <h3>1.3　人人对人人：训练里天天在跑的四个</h3>
 __FIG_COLL_NN__
-<div class="animgrid"><figure class="animcell" id="anim-allgather"><video src="media/topic05-allgather.mp4" autoplay loop muted playsinline aria-label="AllGather 全收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllGather 全收集。字幕：每人把自己那块发给所有人：只拼，不加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllGather 全收集</b>：每人把自己那块发给所有人：只拼，不加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reducescatter"><video src="media/topic05-reducescatter.mp4" autoplay loop muted playsinline aria-label="ReduceScatter 归约分散 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：ReduceScatter 归约分散。字幕：第 j 块全部送到卡 j 加起来：先加，再分。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>ReduceScatter 归约分散</b>：第 j 块全部送到卡 j 加起来：先加，再分<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-allreduce"><video src="media/topic05-allreduce.mp4" autoplay loop muted playsinline aria-label="AllReduce 全归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllReduce 全归约。字幕：① ReduceScatter 各拿一块总和；② AllGather 总和发给所有人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllReduce 全归约</b>：① ReduceScatter 各拿一块总和；② AllGather 总和发给所有人<span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
+<div class="animgrid"><figure class="animcell" id="anim-allgather"><video src="media/topic05-allgather.mp4" autoplay loop muted playsinline aria-label="AllGather 全收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllGather 全收集：一人一块 → 人人一整份。字幕：每人把自己那块发给所有人：只拼，不加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllGather 全收集</b>：每人把自己那块发给所有人：只拼，不加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reducescatter"><video src="media/topic05-reducescatter.mp4" autoplay loop muted playsinline aria-label="ReduceScatter 归约分散 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：ReduceScatter 归约分散：人人一整份 → 各拿一块总和。字幕：第 j 块全部送到卡 j 加起来：先加，再分。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>ReduceScatter 归约分散</b>：第 j 块全部送到卡 j 加起来：先加，再分<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-allreduce"><video src="media/topic05-allreduce.mp4" autoplay loop muted playsinline aria-label="AllReduce 全归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllReduce 全归约 ＝ ReduceScatter ＋ AllGather。字幕：① ReduceScatter：各拿一块总和；② AllGather：总和发给所有人 → 人人一份总和。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllReduce 全归约</b>：① ReduceScatter 各拿一块总和；② AllGather 总和发给所有人<span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
   <p>All 就是「人人都拿到结果」。拿上一组对照着看：</p>
   <ul>
     <li><b>AllGather</b> ＝ Gather，再把拼好的结果发给每个人。</li>
@@ -224,7 +225,7 @@ __FIG_COLL_NN__
 
   <h3>1.4　AllReduce 可以拆成两半</h3>
 __FIG_AR_SPLIT__
-  <p>这两半各自单独拿出来，就是两种有用的通信；拆开以后，中间还能塞进别的动作。<b>后面好几种并行白捡的便宜，全从这里来</b>：</p>
+  <p>这两半各自单独拿出来，就是两种有用的通信；拆开以后，中间还能塞进别的动作。后面好几种并行白捡的便宜，全从这里来：</p>
   <ul>
     <li><b>ZeRO</b>：数据并行同步梯度那一次 AllReduce 拆成两半，中间插进「每张卡只更新自己那 1/n」这一步，于是每卡只存 1/n 的梯度和优化器状态，通信一个字节不多。第二节细讲。</li>
     <li>张量并行每层要做 AllReduce；配上序列并行时，也是把它拆成这两半，分别挪到不同位置。第三节细讲。</li>
@@ -316,8 +317,8 @@ __FIG_FSDP_STEP__
 <figcaption>整层只在用的那一刻出现；平时每张卡只拿着每层的四分之一。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>代价在反向：前向扔掉的权重，反向还得再拼一次。所以一层一步要做 AG、AG、RS 三次，
-    通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 §7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB（约 10 GB，还不含激活）。</p>
-  <div class="note warn"><span class="t">⚠️ 「FSDP 白送」这句话要说准</span>
+    通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 sec. 7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB（约 10 GB，还不含激活）。</p>
+  <div class="note warn"><span class="t">⚠️ 哪几级白送，哪一级要付钱</span>
     一步只同步一次时，ZeRO-1、ZeRO-2 白送：通信一个字节不多，已经削掉 16 字节里的 14 个。<br>
     一步切成几个 micro-batch 时，只剩 ZeRO-1 白送：ZeRO-2 不留整份梯度，没法把几份梯度先攒起来，只好每份算完就 ReduceScatter 一次。所以配流水线时（流水线必须切 micro-batch，见第三节），V3、Megatron 都选 ZeRO-1。<br>
     ZeRO-3 不白送：最后那 2 个字节，要多付一半的通信。只是对大模型来说，这笔钱非付不可。</div>
@@ -335,13 +336,12 @@ __FIG_FSDP_STEP__
     而每一步要算多少，跟每张卡分到的 token 数成正比。</p>
   <p>一次喂进去的总 batch 又不能跟着卡数无限加，加太大模型反而学不好；所以卡越多，每卡分到的越少。
     每张卡的 batch 一小，算得少、搬得一样多，时间就被搬权重吃掉了。
-    要继续加卡、又不能让每张卡的 batch 变小，就得换一种切法：<b>不再拼整层权重，直接把权重切开</b>。
-    这样几张卡合起来算同一批 token，每张卡要处理的 token 数不会随加卡被摊薄。这是第二刀。</p>
+    <b>要继续加卡，又不想让每张卡越算越少，还能怎么切？</b></p>
 </div></section>
 
 ''' + sec("s三", "三", "第二刀：切权重") + '''
   <p class="lead">FSDP 每一层都要把整层权重拼回来。只要每张卡的 batch 够大，这笔搬运能藏在计算后面；
-    <b>batch 一小，就藏不住了。</b>第二刀不再拼权重，直接把权重切开。</p>
+    <b>batch 一小，就藏不住了。</b>第二刀不再拼权重，直接把权重切开：几张卡合起来算同一批 token，每张卡要处理的 token 数不会随加卡被摊薄。</p>
 
   <h3>3.1　FSDP 的尽头：搬一个字节，换来多少计算</h3>
   <p>想象砌墙：师傅砌一块砖两秒，小工送一块砖要五秒，师傅再快也得等。每张卡就是师傅，网络就是小工。
@@ -353,8 +353,7 @@ __FIG_FSDP_STEP__
 __FIG_INTENSITY__
   <p>TPU v7 每芯片每秒能算 2,307 T 次（bf16）。芯片之间的 ICI 每颗芯片每秒能发出约 0.6 TB
     （常说的 1.2 TB/s 是收发合计，我们算的是发出量，所以用一半；⚠️ 这个拆分是推算，见台账）。
-    硬件的比值约 3,845，也就是每送一个字节，得有三千八百多次活等着。所以 <b>每张卡每步少于约 3,845 个 token，FSDP 就被搬权重拖住了</b>。
-    而加卡时总 batch 往往不能跟着涨，每张卡分到的只会越来越少。</p>
+    硬件的比值约 3,845，也就是每送一个字节，得有三千八百多次活等着 —— 图里那根红虚线。</p>
   <p>这还是最乐观的算法。两种情况门槛更高：只走一根轴，只用得上三分之一的链路，高约 3 倍；MoE 只靠 FSDP、不配专家并行，
     搬的是全部参数、算的只有被选中的那一小部分，还要再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p>
 
@@ -372,7 +371,7 @@ __FIG_TP_MLP__
 
   <h3>3.3　SP：TP 的搭档</h3>
   <p>TP 切不到的那几段，是逐个 token 做的小运算（归一化、dropout、残差相加），每张卡都存着一整份激活。
-    Megatron 的序列并行（SP）把这几段沿序列切开。别被名字骗了：它是 TP 的搭档，不是第四刀（见 8.8）。它顺手把每次 AllReduce 拆成两半：进 TP 那块之前用 AllGather 把序列拼齐，出来时用 ReduceScatter 切回
+    Megatron 的序列并行（SP）把这几段沿序列切开。别被名字骗了：它是 TP 的搭档，不是第四刀（见 §8.8）。它顺手把每次 AllReduce 拆成两半：进 TP 那块之前用 AllGather 把序列拼齐，出来时用 ReduceScatter 切回
     ——&nbsp;就是第一节那个等式，<b>通信量跟原来一样</b>，省下的是激活显存。
 </p>
 
@@ -380,14 +379,14 @@ __FIG_TP_MLP__
   <p>TP 送的是「半成品」（激活）：token 多一倍，要送的多一倍，算的也多一倍，<b>batch 在账里约掉了</b>。
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。</p>
   <ul>
-    <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4；4.5 这个系数按标准注意力加 4 倍宽 MLP 推出，V3 实际是 MLA 加 MoE，这里只作示意）。
+    <li>V3 的隐藏维 7,168：按最乐观的硬件线，TP 8 路约 4,032，刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4，推导和系数的口径见台账）。
       但这是最乐观的线，实际更紧，有两个原因：</li>
-    <li>① 3,845 假设三根轴都用满、而且每根轴首尾连成环；TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device），两个折扣叠在一起：切片太小成不了环（1.5），又只用得上一两根轴（3.1），实际门槛高好几倍，已经在线下了。</li>
+    <li>① 3,845 假设三根轴都用满、而且每根轴首尾连成环；TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device），两个折扣叠在一起：切片太小成不了环（§1.5），又只用得上一两根轴（§3.1），实际门槛高好几倍，已经在线下了。</li>
     <li>② Megatron 的 TP 通信默认要等它做完才能往下算，藏不进计算里。</li>
     <li>另外两条约束：注意力头要按整个分，Megatron 要求查询头数能被 TP 度数整除（KV 头更少的模型，KV 头数和 TP 只要一个能整除另一个，TP 更大时 KV 就复制）；TP 每层都要通信，<b>只能待在最快的那一圈互联里</b>（GPU 上一般不出一个 NVLink 域）。</li>
   </ul>
   <p>所以 batch 小的时候多用 TP，batch 大的时候多用 FSDP，两把刀各管一边。看图就是：左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。
-    这要 TP 那条线本身在红线上面才成立：隐藏维越宽、硬件线越低，TP 越有余地；像 V3 这样两条线都贴着或落在线下，TP 本身就不划算，得换别的刀（3.6）。</p>
+    这要 TP 那条线本身在红线上面才成立：隐藏维越宽、硬件线越低，TP 越有余地；像 V3 这样两条线都贴着或落在线下，TP 本身就不划算，得换别的刀（§3.6）。</p>
 
   <h3>3.5　PP：按层切</h3>
   <p>TP 每一层都要通信，出不了最快的那一圈互联。要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，就按层切。</p>
@@ -404,12 +403,12 @@ __FIG_PP_BUBBLE__
     （1F1B 调度把同时在路上的份数限制在 p 以内）。</p>
   <p>三种常见的改进：VPP 让每张卡负责几段不连续的层，气泡再除以每卡的段数；
     Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
-    DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌，更要紧的是把一对前向和反向的计算，跟专家并行的通信叠在一起藏掉（技术报告 §3.2.1）。</p>
+    DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌，更要紧的是把一对前向和反向的计算，跟专家并行的通信叠在一起藏掉（技术报告 sec. 3.2.1）。</p>
 
   <h3>3.6　这一刀留下的问题</h3>
-  <p>DeepSeek-V3 训练时<b>一点 TP 都没用</b>：16 路 PP、64 路专家并行、ZeRO-1 数据并行（技术报告 §3.2）。
+  <p>DeepSeek-V3 训练时<b>一点 TP 都没用</b>：16 路 PP、64 路专家并行、ZeRO-1 数据并行（技术报告 sec. 3.2）。
     报告自己的解释是显存优化做得够细，用不着代价高的 TP。模型已经被 PP 和专家并行切开，每张卡上那一份放得下，数据并行那一维 ZeRO-1 就够了。
-    再从参数的分布看（本课解读）：每个专家 3 × 7,168 × 2,048 ≈ 4,400 万参数，256 个专家 × 58 个 MoE 层 ≈ 6,539 亿，
+    再从参数的分布看（本课归纳）：每个专家 3 × 7,168 × 2,048 ≈ 4,400 万参数，256 个专家 × 58 个 MoE 层 ≈ 6,539 亿，
     <b>占全部参数的约 97%</b>。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少；真正该切的，是「专家」这一维。这是第三刀。</p>
 </div></section>
 
@@ -431,7 +430,7 @@ __FIG_MOE_PARAMS__
        aria-label="专家并行的动画。四张卡，每张卡上方 4 个 token（颜色表示来自哪张卡），下方 2 个专家，共 8 个专家。标题：专家并行：token 飞到专家那里，算完再飞回来。字幕一：每个 token 由路由挑一个专家（真实的 V3 每个 token 挑 8 个）。字幕二：派发（AllToAll）：token 飞到专家所在的卡，在专家门口排队。专家 0 门口排了 7 个，其他专家 1 到 2 个。字幕三：专家 0 排了 7 个，别的专家只有 1 到 2 个：它算完之前，大家都得等。字幕四：合并（AllToAll）：算完再送回原来的卡。字幕五：发给谁由数据决定，负载天生不均 —— 这是专家并行最重的病。最后 token 回到原位。"></video>
 <figcaption>派发、排队、合并。那一根排得最高的队，决定了所有卡什么时候能往下走。token 的颜色表示它从哪张卡出发，每张卡下方两个框是它的专家。
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>V3 为了压住这两次 AllToAll，做了两件事（技术报告 §2.1.2、§3.2.2、§3.3.3）：</p>
+  <p>V3 为了压住这两次 AllToAll，做了两件事（技术报告 sec. 2.1.2、sec. 3.2.2、sec. 3.3.3）：</p>
   <ul>
     <li><b>限制跨节点</b>：每个 token 最多发往 4 个节点。先走节点间网络发到目标节点，再走节点内的 NVLink 转给真正持有专家的卡。
       同一台机器上就算有好几个它要找的专家，跨机也只发一份，到了再在机器里分。</li>
@@ -455,21 +454,20 @@ __FIG_MOE_PARAMS__
     专家的负担是那一大堆参数。<b>所以同一批卡，在这两部分可以用两套切法。</b></p>
 __FIG_FOLD__
   <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP；字母后的数字是总卡数，DEP8 ＝ 8 张卡。
-    上图左边那种配法，算两者中间。别和 Megatron 的 ETP／EDP 混，见 8.6。
+    上图左边那种配法，算两者中间。别和 Megatron 的 ETP／EDP 混，见 §8.6。
     挑哪个差别大到什么程度，我们自己测过一次：</p>
-  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍（跟调完参的 TP4 比；卡数也变了，见 7.3）</span>
+  <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 DEP8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
-    最属于「换切法」的一笔在 attention 那一半：KV 不再在 4 张卡上各存一份（5.4 讲为什么）。attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。注意上面的图画的是 V3（每卡 32 个专家），实测用的是 V4-Pro。<br>
-    <em>完整的账（卡数、并发、首字延迟）在 7.3。</em></div>
+    最属于「换切法」的一笔在 attention 那一半：KV 不再在 4 张卡上各存一份（§5.4 讲为什么）。attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。注意上面的图画的是 V3（每卡 32 个专家），实测用的是 V4-Pro。<br>
+    <em>完整的账（卡数、并发、首字延迟）在 §7.3。</em></div>
 
   <h3>4.5　这一刀留下的问题</h3>
-  <p>前三刀都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨。
-    <b>一条样本本身就放不进一张卡了</b>，只能把它切开。这是第四刀。</p>
+  <p>前三刀切的是 batch、权重、专家，都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨 ——
+    <b>涨到一条样本都放不进一张卡时，怎么办？</b></p>
 </div></section>
 
 ''' + sec("s五", "五", "第四刀：切序列") + '''
-  <p class="lead">前三刀切的是 batch、权重、专家，从没碰过「一条样本」本身。
-    <b>上下文一长，一条样本自己就放不进一张卡了。</b>第四刀沿序列切。训练和推理切的东西不一样，分开讲。</p>
+  <p class="lead"><b>一条样本自己放不进一张卡，那就把它沿序列切开。</b>这是第四刀。训练和推理切的东西不一样，分开讲。</p>
 
   <h3>5.1　一条样本为什么会放不下</h3>
   <ul>
@@ -484,7 +482,7 @@ __FIG_FOLD__
   <ul>
     <li><b>Ring Attention</b>：把 KV 想成每个 token 留下的「笔记」，Q 是新 token 手里的「提问」。Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。
       这就是 1.5 那个环：传下一段时正在算这一段，通信藏在计算后面。</li>
-    <li><b>Ulysses</b>：注意力前后各做一次 AllToAll（1.6 那个转置），在「按序列切」和「按头切」之间来回换。
+    <li><b>Ulysses</b>：注意力前后各做一次 AllToAll（§1.6 那个转置），在「按序列切」和「按头切」之间来回换。
       换成按头切以后，每张卡手里是全部 token、但只有几个头，注意力就能在本卡算完，算完再换回去。
       每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数：换过去以后每张卡至少要拿一个完整的头；KV 头比查询头少的模型（GQA），卡在 KV 头数上。</li>
   </ul>
@@ -576,13 +574,13 @@ __FIG_PD__
   <h3>6.4　两边各挑各的切法</h3>
   <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。</p>
   <ul>
-    <li><b>prefill 机器</b>：可以上 PCP，把一个长 prompt 切到几张卡上一起算，第一个字出得快，它要另外加卡（5.5）。</li>
-    <li><b>decode 机器</b>：可以上 DCP，把 KV 摊到几张卡上装更多请求（5.4）；还可以把专家铺到更多卡上（Wide-EP）：卡多了，送 token 来的请求也多，每个专家分到的 batch 就更大。</li>
-    <li><b>MoE 模型</b>：常见的写法是一边 TEP（attention 用 TP）、一边 DEP（attention 用数据并行），但<b>哪边用哪个没有定式</b>，要看模型和负载（8.6）。</li>
+    <li><b>prefill 机器</b>：可以上 PCP，把一个长 prompt 切到几张卡上一起算，第一个字出得快，它要另外加卡（§5.5）。</li>
+    <li><b>decode 机器</b>：可以上 DCP，把 KV 摊到几张卡上装更多请求（§5.4）；还可以把专家铺到更多卡上（Wide-EP）：卡多了，送 token 来的请求也多，每个专家分到的 batch 就更大。</li>
+    <li><b>MoE 模型</b>：常见的写法是一边 TEP（attention 用 TP）、一边 DEP（attention 用数据并行），但<b>哪边用哪个没有定式</b>，要看模型和负载（§8.6）。</li>
   </ul>
 
   <h3>6.5　AFD：attention 和专家分到两组机器</h3>
-  <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大：decode 每步都要把专家权重读一遍，来的 token 越多，这一遍越值（6.1）。
+  <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大：decode 每步都要把专家权重读一遍，来的 token 越多，这一遍越值（§6.1）。
     <b>AFD</b>（Attention-FFN 分离）把两者放到两组机器上：M 台只算 attention，N 台只放专家。</p>
 __FIG_AFD__
   <p>每一层都要把 token 从 attention 那边发给专家（M → N），算完再收回来（N → M）。
@@ -597,23 +595,22 @@ __FIG_AFD__
 
   <h3>6.7　这一刀留下的问题</h3>
   <p>五刀讲完了，每一刀都有自己的通信和适用场景。真到一个集群上，它们要同时存在：
-    谁放在同一台机器里、谁跨机器、先定哪一刀的度数？<b>摆错了位置，前面每一刀省下来的都会被网络吃回去。</b>这是第七节。</p>
+    <b>谁放在同一台机器里、谁跨机器、先定哪一刀的度数？</b></p>
 </div></section>
 
 ''' + sec("s七", "七", "摆到机器上") + '''
-  <p class="lead">五刀都讲完了，真到一个集群上它们是同时存在的：一套配置里常常有三四种并行叠在一起。
-    剩下的问题只有一个：<b>哪一刀放在哪根线上</b>。摆对了，前面每一刀省下的都是真省；摆错了，全被网络吃回去。</p>
+  <p class="lead">一套真实配置里常常有三四种并行叠在一起。剩下的问题只有一个：<b>哪一刀放在哪根线上</b>。摆对了，前面每一刀省下的都是真省；摆错了，全被网络吃回去。</p>
 
   <h3>7.1　线有快有慢，刀有勤有懒</h3>
   <p>一个集群里的线不是一样快的。GPU 这边，GB300 NVL72 把 72 块卡连成一个 NVLink 域，域里每块卡 1.8 TB/s（收发合计，下同）；
-    出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI（够大的切片连成 3D 环面，见 1.5），
+    出了这个域只能走网卡，每块卡 200 GB/s，差 9 倍。TPU 这边，一个切片里的芯片走 ICI（够大的切片连成 3D 环面，见 §1.5），
     跨切片走数据中心网络，同口径比慢约 50 倍（换算见台账），比 GPU 那边的 9 倍悬殊得多。</p>
   <p>刀也不是一样勤的。把每一刀一步要通信几次数一遍（本课推导，示意配置），差出三个数量级：</p>
 __FIG_FREQ__
   <p>先别往下看：TP、PP、DP 三个，谁该坐快线？</p>
   <p>于是有一条默认的摆法：<b>每一层都要说话的 TP、EP、FSDP、CP 先往最快的那一圈里放</b>；PP 只在段边界说话，DP 一步只说一次，它们去跨慢线。
     但光数次数不够，还要看<b>它能不能跟计算叠起来</b>。TP 叠不起来（每一块末尾那次 AllReduce 不做完，下一块就没法开始），所以必须待在快线里，度数上限就是那一圈的大小。</p>
-  <p>EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器（H800 机内外只差 3 到 4 倍，远没有 TPU 悬殊，见台账），Llama 3 把 FSDP 放在了最外层。
+  <p>EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器 —— H800 机内外只差 3 到 4 倍，远没有 TPU 悬殊；Llama 3 把 FSDP 放在了最外层。
     DP 那一次量虽然最大，但一步只有一次，而且反向从最后一层往前算，后面几层的梯度一算好就能先传。
     第六节那趟 KV 也一样，一个请求只传一次，所以敢走数据中心网络这根慢线（指 TPU v7x 那套）。</p>
 
@@ -631,13 +628,20 @@ __FIG_FREQ__
   <h3>7.3　先选对切法，再调参数</h3>
   <p>摆法和切法选错了，参数调得再细也只是在错的天花板下面打转。我们在 GB300 上跑 DeepSeek-V4-Pro 时撞上过一次：</p>
 __FIG_TOPO__
-  <p>TP4 decode 上能调的都调了：去掉 eager 模式（即打开 CUDA Graph）只多 2.6%，加 prefill 机器、调并发，总数从 14,563 涨到 21,100。
-    可这 45% 是拿多一倍的卡换来的，出字间隔始终钉在 46.8–53 ms。换成 DEP8 那一步，同样并发 512 下出字间隔从 46.8 ms 降到 11.8 ms，首字延迟从 55.8 秒降到 22.8 秒（同一套在并发 256 时首字只要 7.8 秒，并发 512 下多出来的大部分是排队）。</p>
-  <p>真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（5.4）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。两笔都换成了更大的 batch（并发是排队的请求数，batch 是同时在算的请求数）。
-    GB300 一个计算托盘只有 4 块卡，DEP8 的 8 张卡横跨两个托盘，但还在同一柜的 NVLink 快线里；prefill 到 decode 的 KV 也走这条柜内 NVLink，不走网卡。
-    （出字间隔为什么同时降下来，原始记录里没有拆开归因。）<b>先问切法对不对，再动参数。</b></p>
-  <p><em>口径提醒：图里后两行都是并发 512，第一行是原始脚本的并发 256。DEP8 把并发拉到 1,536 总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。
-    这里的吞吐是 prompt 和输出 token 加在一起算的。跟最早的原始脚本（每卡 1,820）比，DEP8 每卡约 1.5 倍。</em></p>
+  <p>TP4 decode 上能调的都调了（去掉 eager 模式、加 prefill 机器、调并发），总吞吐涨了四成五 ——
+    可这是拿多一倍的卡换来的，每卡反而掉了，出字间隔一直在 50 ms 上下。
+    换成 DEP8 那一步，同样的并发下出字间隔降到原来的四分之一，首字延迟也少了一半多。</p>
+  <p>真正属于「换切法」的那笔账，是 KV 不再在 4 张卡上各存一份（§5.4）；decode 从 4 张卡加到 8 张，也把专家摊薄了一半。
+    两笔都换成了更大的 batch。这 8 张卡横跨两个计算托盘，但还在同一柜的 NVLink 快线里。<b>先问切法对不对，再动参数。</b></p>
+  <details class="foldfig"><summary><b>这一段的细账</b>：每个数、口径，以及原始记录里没归因的地方</summary>
+  <ul>
+    <li>去掉 eager 模式（即打开 CUDA Graph）只多 2.6%；加 prefill 机器、调并发，总数从 14,563 涨到 21,100（+45%），出字间隔始终在 46.8–53 ms。</li>
+    <li>换 DEP8，同样并发 512：出字间隔 46.8 ms → 11.8 ms，首字延迟 55.8 秒 → 22.8 秒。同一套在并发 256 时首字只要 7.8 秒，并发 512 下多出来的大部分是排队。</li>
+    <li>出字间隔为什么同时降下来，原始记录里没有拆开归因。</li>
+    <li>GB300 一个计算托盘 4 块卡；prefill 到 decode 的 KV 也走柜内 NVLink，不走网卡。并发是排队的请求数，batch 是同时在算的请求数。</li>
+    <li>图里后两行都是并发 512，第一行是原始脚本的并发 256。DEP8 把并发拉到 1,536，总量能到 65,132（每卡 2.47 倍），但那时首字要等 95 秒，prefill 又成了瓶颈。</li>
+    <li>吞吐是 prompt 和输出 token 加在一起算的。跟最早的原始脚本（每卡 1,820）比，DEP8 每卡约 1.5 倍。</li>
+  </ul></details>
 
   <h3>7.4　五步怎么选</h3>
   <p>把前面几节串起来，给一个模型挑并行方式，大致按这个顺序：</p>
@@ -662,8 +666,8 @@ __FIG_TOPO__
   </table>
   <p>同一套五步，两个模型走出来的配置几乎没有重合，<b>因为两台机器的快线长得不一样</b>。
     这也是为什么别人家的并行配置不能照抄：先看自己的线。读这张表，先看两个「不用」：V3 在 8 卡一台的 H800 上不用 TP；混元 3 在 TPU 上不用 EP。</p>
-  <p><em>表下注：混元 3 那次 EP 实测是在 16 芯片上开 4 路，batch 同时减半，有混杂；换一种配法掉 37%。原始记录归因于环面上 all-to-all 要多跳，但 4 路时这笔账不大，原因还要再查。
-    V3 那一列按乘法读：PP 16 × 数据并行 128 ＝ 2,048；EP 64 不另占卡，是在那 128 路数据并行里切专家（本课推算）。</em></p>
+  <p><em>表下注：混元 3 那次 EP 实测是在 16 芯片上开 4 路，吞吐掉了 71%（只跑了一次），batch 同时减半，有混杂；换一种配法掉 37%。原始记录归因于环面上 all-to-all 要多跳，但 4 路时这笔账不大，原因还要再查。
+    V3 那一列按乘法读：PP 16 × 数据并行 128 ＝ 2,048；EP 64 不另占卡，是在那 128 路数据并行里切专家（本课推导）。</em></p>
 
   <h3>7.5　怎么评：加卡之后掉了多少</h3>
   <p>配好之后要回答一个问题：卡加上去，每张卡的效率还剩多少。有两种量法：</p>
@@ -677,8 +681,9 @@ __FIG_TOPO__
     我们没有干净的 strong scaling 实测；最接近的是同一个 DP 4 × FSDP 128，每个 device 的 batch 从 12 降到 8，每芯片从 580 掉到 453：每张卡的活一少就吃亏。</p>
   <p>下面是我们自己的两组实测，<b>只能组内比</b>。左边是一次 weak scaling：卡 ×4、global batch ×4。右边比的是同样的卡、FSDP 铺多宽。</p>
 __FIG_SCALE__
-  <p>左边那组说明 DP 方向几乎是白送的（这 4 组在同一个切片里，DP 走的是 ICI，不能直接推到跨切片）：4 个 64 芯片的组之间，一步只有一次梯度 all-reduce，
-    按 v7 的 ICI 粗算，就算几组共用链路、打个折扣，也占不到一步 23.5 秒的百分之一（本课推算）。</p>
+  <p>左边那组说明 DP 方向几乎是白送的：4 个 64 芯片的组之间，一步只有一次梯度 all-reduce，
+    按 v7 的 ICI 粗算，就算几组共用链路、打个折扣，也占不到一步 23.5 秒的百分之一（本课推导）。
+    不过这 4 组在同一个切片里，DP 走的是 ICI，这个结论不能直接推到跨切片。</p>
   <p>右边那组才是要小心的：卡没变、batch 没变，只是把 FSDP 从四分之一的芯片铺到全部芯片，每拼一次权重要走的步数多了、每块数据更小，延迟摊不掉，就少了 11%。FSDP 再窄（64 份、32 份）每份权重太大，加上激活就放不下了。
     <b>所以在 batch 还能加的时候，加卡要连 batch 一起加，多出来的卡优先当副本。</b></p>
 
@@ -751,7 +756,7 @@ __FIG_PANO__
   <p><b>训练侧（以及推理的 prefill）：切激活</b></p>
   <table>
     <tr><th>名称</th><th>切什么</th><th>解决什么</th><th>多出来的通信</th><th>场景</th></tr>
-    <tr><td>Megatron SP</td><td>只切 LayerNorm、Dropout、残差这几段的激活，<b>必须跟 TP 搭配</b>（按「切什么」归到这一列；按用途它是 TP 的搭档，见 3.3）</td>
+    <tr><td>Megatron SP</td><td>只切 LayerNorm、Dropout、残差这几段的激活，<b>必须跟 TP 搭配</b>（按「切什么」归到这一列；按用途它是 TP 的搭档，见 §3.3）</td>
       <td>TP 切不到的那部分激活，每张卡都存了一整份</td><td>把 TP 的 all-reduce 拆成 all-gather ＋ reduce-scatter，总量不变</td><td>训 · 推</td></tr>
     <tr><td>CP（Context Parallel）</td><td><b>所有</b>激活沿序列切</td><td>长上下文训练，上下文到几十 K 以上基本都要用</td>
       <td>ring 传 KV，或者 all-to-all，或者 all-gather，可以分层组合</td><td>训</td></tr>
@@ -824,7 +829,7 @@ __FIG_PANO__
 
   <div class="note ok"><span class="t">MoE 层有自己的一套并行维度</span>
     训练时 Megatron 把 attention 层记作 TP × CP × DP × PP，把专家层记作 ETP × EP × EDP × PP，
-    <b>两套是分开配的</b>。推理时同样如此，只是换了一套名字，见 8.6。
+    <b>两套是分开配的</b>。推理时同样如此，只是换了一套名字，见 §8.6。
     <br>这是 MoE 模型调并行时自由度最大、也最容易配错的地方。</div>
 
   <h3>8.5　解耦类</h3>
@@ -878,7 +883,7 @@ __FIG_PANO__
     <tr><td>Async TP、TP 通信重叠、collective matmul</td><td>还是 TP，只是把通信和矩阵乘切成小块交错着做</td></tr>
     <tr><td>EPLB、冗余专家</td><td>负载均衡：把热门专家多复制几份再重新摆放。修的是 EP 的病，本身不切新维度</td></tr>
     <tr><td>Offload、重计算</td><td>拿时间换显存，或者拿主机内存换显存</td></tr>
-    <tr><td>分块 prefill（chunked prefill）</td><td>推理调度：把长 prompt 切成小块跟 decode 拼着跑，缓解互相卡住（6.1）；别跟训练里的 Chunked PP 混</td></tr>
+    <tr><td>分块 prefill（chunked prefill）</td><td>推理调度：把长 prompt 切成小块跟 decode 拼着跑，缓解互相卡住（§6.1）；别跟训练里的 Chunked PP 混</td></tr>
   </table>
 
   <h3>8.8　同名不同义</h3>
@@ -895,6 +900,9 @@ __FIG_PANO__
     <tr><td>并发与 batch</td><td>并发是在排队的请求数，batch 是同时在算的请求数</td></tr>
   </table>
 
+  <p class="landing">⭐ 回到开头那个问题：从哪儿下刀。五刀切的东西各不一样，付的账却是同一种：<b>拿一种通信，换一份显存或一份算力</b>。
+    所以选并行策略，说到底是在选你愿意付哪一种通信、付多频繁、放在哪根线上。</p>
+
 </div></section>
 
 ''' + sec("s九", "九", "出处台账") + '''
@@ -903,36 +911,36 @@ __FIG_PANO__
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
-    <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv 1910.02054 §5、§7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
-    <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv 1909.08053 §3（前向 2 次、反向 2 次 all-reduce）；arXiv 2205.05198 §4.2.2（AG＋RS 替代 all-reduce，无额外通信）；查询头数须被 TP 整除、KV 组数与 TP 互为倍数或约数：megatron/core/transformer/transformer_config.py 的校验</td></tr>
-    <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv 2104.04473 §2.2.1–2.2.2；Zero Bubble arXiv 2401.10241；DualPipe README</td></tr>
-    <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
-    <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s，另给 200 GB/s 一档；把它理解成每条链路收发合计，「6 条链路 × 200、发出方向 600」才对得上，这是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；按 device 口径同样约 3,845（一颗芯片的两个 device 共用链路，算力和带宽一起减半）（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922</td></tr>
-    <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §2.1.2、§3.2.2、§3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
+    <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv 1910.02054 sec. 5、sec. 7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
+    <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv 1909.08053 sec. 3（前向 2 次、反向 2 次 all-reduce）；arXiv 2205.05198 sec. 4.2.2（AG＋RS 替代 all-reduce，无额外通信）；查询头数须被 TP 整除、KV 组数与 TP 互为倍数或约数：megatron/core/transformer/transformer_config.py 的校验</td></tr>
+    <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv 2104.04473 sec. 2.2.1–2.2.2；Zero Bubble arXiv 2401.10241；DualPipe README</td></tr>
+    <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
+    <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s，另给 200 GB/s 一档；把它理解成每条链路收发合计，「6 条链路 × 200、发出方向 600」才对得上，这是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；按 device 口径同样约 3,845（一颗芯片的两个 device 共用链路，算力和带宽一起减半）（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922；TP 那条线的 4.5 系数按标准注意力加 4 倍宽 MLP 推出（V3 实际是 MLA 加 MoE，只作示意）</td></tr>
+    <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 2.1.2、sec. 3.2.2、sec. 3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
     <tr><td>GB300 上 TP4 → DEP8：同并发 512 总量 2.61 倍、每卡 2.09 倍（DEP8 并发 1,536 时每卡 2.47 倍、TTFT 95 s）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；DEP8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
     <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv 2205.05198 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
-    <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 §3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 §3</td></tr>
+    <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 sec. 3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 sec. 3</td></tr>
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
     <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算。config 里 num_key_value_heads=128 是 MLA 解压后的头数，推理缓存的是压缩后那一份，vLLM 当作 1 个 KV 头</td></tr>
     <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv 2401.09670（prefill 偏算力、decode 受带宽约束；7.4 倍请求或 12.6 倍更紧的 SLO）</td></tr>
     <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
-    <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv 1909.08053 §3），FSDP 每层 3 次（arXiv 1910.02054 §7），EP ／ PP ／ DP 按调度数出</td></tr>
+    <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv 1909.08053 sec. 3），FSDP 每层 3 次（arXiv 1910.02054 sec. 7），EP ／ PP ／ DP 按调度数出</td></tr>
     <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki sources/nvidia-gpu-comparison-20260311、analyses/gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
-    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580）、§3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。§4.1 一步 23.54 s；组间 all-reduce 占不到百分之一为本课推算（原文 12 ms 的算式前后不一致）；换配法 EP 掉 37% 与 FSDP 加宽只慢不到 1%（450 对 453）见 TUNING-v7 §3.7</td></tr>
+    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 sec. 3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、sec. 4.1（64 与 256 芯片同为 580）、sec. 3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。sec. 4.1 一步 23.54 s；组间 all-reduce 占不到百分之一为本课推导（原文 12 ms 的算式前后不一致）；换配法 EP 掉 37% 与 FSDP 加宽只慢不到 1%（450 对 453）见 TUNING-v7 sec. 3.7</td></tr>
     <tr><td>DCP 每层三次通信</td><td>vllm/config/parallel.py 中 dcp_comm_backend 的 docstring（默认 ag_rs 每层 3 次 NCCL 调用，a2a 后端 2 次）</td></tr>
-    <tr><td>ZeRO-2 切 micro-batch 不再白送；配 PP 选 ZeRO-1</td><td>DeepSpeed 文档：流水线并行不兼容 ZeRO-2／3；V3 技术报告 §3.2（ZeRO-1）；Megatron distributed optimizer</td></tr>
+    <tr><td>ZeRO-2 切 micro-batch 不再白送；配 PP 选 ZeRO-1</td><td>DeepSpeed 文档：流水线并行不兼容 ZeRO-2／3；V3 技术报告 sec. 3.2（ZeRO-1）；Megatron distributed optimizer</td></tr>
     <tr><td>TP 每字节换多少计算 ≈ 4.5 × 隐藏维 ÷ TP、V3 TP8 ≈ 4,032</td><td>⚠️ 本课推导：每层 4 次 AllReduce 各发约 4Th 字节、算 72h²T／n（标准注意力＋4 倍宽 MLP），对 V3 只作示意</td></tr>
-    <tr><td>decode 时 EP 按专家逐个直发</td><td>DeepEP 低延迟模式（deepseek-ai/DeepEP README）；V3 技术报告 §3.4</td></tr>
-    <tr><td>V3 的集群与每 token 最多 4 节点</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 §3.1（2,048 块 H800、节点内 NVLink、节点间 IB）、§2.1.2、§3.2</td></tr>
+    <tr><td>decode 时 EP 按专家逐个直发</td><td>DeepEP 低延迟模式（deepseek-ai/DeepEP README）；V3 技术报告 sec. 3.4</td></tr>
+    <tr><td>V3 的集群与每 token 最多 4 节点</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.1（2,048 块 H800、节点内 NVLink、节点间 IB）、sec. 2.1.2、sec. 3.2</td></tr>
     <tr><td>strong ／ weak scaling</td><td>Amdahl 1967；Gustafson 1988（Reevaluating Amdahl's Law）；临界 batch size：arXiv 1812.06162</td></tr>
-    <tr><td>NVSwitch 在交换机里做加法（NVLS）</td><td>NCCL NVLS 算法（NVIDIA NCCL 文档）；「少将近一半」为按每卡发出约 S 对 2(n−1)/n·S 的本课推算</td></tr>
+    <tr><td>NVSwitch 在交换机里做加法（NVLS）</td><td>NCCL NVLS 算法（NVIDIA NCCL 文档）；「少将近一半」为按每卡发出约 S 对 2(n−1)/n·S 的本课推导</td></tr>
     <tr><td>TPU 切片何时首尾成环、小切片带宽约减半</td><td>How to Scale Your Model（scaling book）TPU 章节：只有整 cube（4 的倍数）才有环回；Google Cloud TPU7x 拓扑文档</td></tr>
-    <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv 2407.21783 §3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
-    <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 摘要与 §4.1</td></tr>
+    <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv 2407.21783 sec. 3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
+    <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 摘要与 sec. 4.1</td></tr>
     <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
     <tr><td>「最大的一块卡显存也就两三百 GB」</td><td>NVIDIA B300 每卡 288 GB HBM3e；Google TPU7x 每芯片 192 GB HBM（官方规格）；9.76 TiB ≈ 10,700 GB（十进制）</td></tr>
-    <tr><td>DCN 每芯片 100 Gbps；跨切片同口径慢约 50 倍</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）；100 Gbps 按单向计、×2 得双向约 25 GB/s，对 ICI 双向 1,200 GB/s 约 48 倍，为本课换算（只按单向比则约 96 倍）</td></tr>
+    <tr><td>DCN 每芯片 100 Gbps；跨切片同口径慢约 50 倍</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）；100 Gbps 按单向计、×2 得双向约 25 GB/s，对 ICI 双向 1,200 GB/s 约 48 倍，为本课推导（只按单向比则约 96 倍）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv 2504.14960</td></tr>
@@ -1004,7 +1012,7 @@ FIGS = {
         '<em>圆点是默认摆法，例外见第七节。</em>'),
     "__FIG_ZERO_MEM__": ("fig-zero-mem", "fig5-zero-mem.svg", "topic05-fig-zero.py",
         '<b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><br>'
-        '<em>ZeRO-3 那条短到几乎看不见 —— 每卡从 9.76 TiB 降到 9.76 GiB，正好除以 1,024。</em>'),
+        '<em>ZeRO-3 那条短到几乎看不见：16 个字节切成 1,024 份，每份只剩 0.016。</em>'),
     "__FIG_FSDP_STEP__": ("fig-fsdp-step", "fig5-fsdp-step.svg", "topic05-fig-zero.py",
         '<b>数据并行一层做两次通信，FSDP 做三次。</b><br>'
         '<em>多出来的那次 AllGather，是反向时把前向扔掉的权重再拼回来。</em>'),
@@ -1033,5 +1041,16 @@ for _tag in ("h2", "h3", "section", "div"):
     _o = len(re.findall(r"<%s[ >]" % _tag, _html))
     _c = _html.count("</%s>" % _tag)
     assert _o == _c, "<%s> 开 %d 个、闭 %d 个" % (_tag, _o, _c)
+# ⭐ 2026-09-25 对照构建手册补的锁：正文里手打的关键数，必须在对应的图里也出现（图是脚本现算的）。
+#   图脚本常量一改，正文不跟着改就当场失败 —— 否则正文会静默过期。比较时去掉千分位逗号。
+_NUM_LOCK = [("3,845", "fig5-intensity.svg"), ("4,032", "fig5-intensity.svg"),
+             ("9.76 TiB", "fig5-zero-mem.svg"), ("1.23 TiB", "fig5-zero-mem.svg"), ("9.76 GiB", "fig5-zero-mem.svg"),
+             ("8.58 GiB", "fig5-kv-dup.svg"), ("97%", "fig5-moe-params.svg"), ("6,539", "fig5-moe-params.svg"),
+             ("1,319", "fig5-topo.svg"), ("1,820", "fig5-topo.svg"), ("2.09", "fig5-topo.svg"),
+             ("580", "fig5-scale.svg"), ("453", "fig5-scale.svg"), ("404", "fig5-scale.svg")]
+for _n, _svg in _NUM_LOCK:
+    assert _n in BODY, "正文里已经没有 %s 了 —— 从 _NUM_LOCK 里删掉这一条" % _n
+    _g = io.open(os.path.join(HERE, _svg), encoding="utf-8").read().replace(",", "")
+    assert _n.replace(",", "") in _g, "正文写 %s，而 %s 里没有这个数 —— 图脚本改了，正文没跟上" % (_n, _svg)
 _html = P.add_figonly_toggle(_html)
 P.finish(_html, OUT, SECTIONS, "topic-05.html")

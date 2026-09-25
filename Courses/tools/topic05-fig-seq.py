@@ -7,6 +7,8 @@ r"""专题五 · 第五节「第四刀：切序列」的两张静态图。
      `_get_batch_on_this_cp_rank_per_sequence_balancing` 的做法）。
    · V3 的 KV：(kv_lora_rank 512 ＋ qk_rope_head_dim 64) × 61 层 × 2 字节（bf16）＝ 70,272 字节／token，
      取自 config.json。128K 上下文 ＝ 131,072 个 token。
+
+⛔ 刻意没画：Ring Attention 的逐步通信（动画 anim-ringattn 演）；fig-kv-dup 不画 DCP 的三次通信，只画显存。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 

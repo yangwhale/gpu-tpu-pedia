@@ -13,6 +13,9 @@ r"""专题五 · 第三节「第二刀：切权重」的三张静态图。
      旧门槛 1,922 大了一倍。只用一根轴时分母再除以 3。
 
 ⛔ 所有数字现算并断言。
+
+⛔ 刻意没画：fig-intensity 只画最乐观的带宽线（三根轴都用满、首尾成环），真实门槛更高，正文 3.4 说明；
+   fig-pp-bubble 画的是 GPipe 调度（先全部前向再全部反向），不是 1F1B —— 两者气泡一样大，GPipe 更好看懂。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 
@@ -140,12 +143,12 @@ def fig_tp_mlp():
         "attention 同理：按头切，每张卡算自己那几个头，出口处一次 AllReduce。"
         "　于是一层前向 2 次、反向 2 次 AllReduce，<tspan font-weight=\"700\">每层都有，频率极高</tspan>。",
     ])
-    yb = f.src(yb + 10, "📌 出处：Shoeybi 等，Megatron-LM，arXiv 1909.08053 §3（MLP 与 self-attention 的切法、f／g 两个通信算子）。")
+    yb = f.src(yb + 10, "📌 出处：Shoeybi 等，Megatron-LM，arXiv 1909.08053 sec. 3（MLP 与 self-attention 的切法、f／g 两个通信算子）。")
     f.save("fig5-tp-mlp.svg", yb + 14)
 
 
 def bubble_ratio(p, m):
-    """Narayanan 等 arXiv 2104.04473 §2.2.1 的口径：气泡时间 ÷ 理想计算时间 ＝ (p−1)/m。
+    """Narayanan 等 arXiv 2104.04473 sec. 2.2.1 的口径：气泡时间 ÷ 理想计算时间 ＝ (p−1)/m。
     GPipe 与 1F1B 一样大（1F1B 只省激活显存）。"""
     return (p - 1) / m
 
@@ -199,7 +202,7 @@ def fig_pp():
         "后来的调度都在跟这块空白较劲：交错式（VPP）把每段再切细，Zero Bubble 拿权重梯度去填缝，"
         "DualPipe 两头同时灌。<tspan font-weight=\"700\">代价都是更复杂的调度和更多的点对点通信</tspan>。",
     ])
-    yb = f.src(yb + 10, "📌 气泡占比：Narayanan 等，arXiv 2104.04473 §2.2（GPipe／1F1B 的 bubble time fraction）；"
+    yb = f.src(yb + 10, "📌 气泡占比：Narayanan 等，arXiv 2104.04473 sec. 2.2（GPipe／1F1B 的 bubble time fraction）；"
                         "交错式把气泡再除以每卡的虚拟段数 v。Zero Bubble：arXiv 2401.10241。DualPipe：github.com/deepseek-ai/DualPipe。")
     f.save("fig5-pp-bubble.svg", yb + 14)
 

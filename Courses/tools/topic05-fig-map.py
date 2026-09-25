@@ -3,15 +3,18 @@ r"""专题五 · 第七节「摆到机器上」的三张静态图。
 
 ⛔ 数字现算并断言：
    · 每步通信次数（本课推导，示意配置 60 层、8 个 micro-batch、每层都是 MoE）：
-       TP   每层前向 2 次、反向 2 次 all-reduce（Megatron arXiv 1909.08053 §3）→ 4·L·m
+       TP   每层前向 2 次、反向 2 次 all-reduce（Megatron arXiv 1909.08053 sec. 3）→ 4·L·m
        EP   每个 MoE 层前向派发＋合并 2 次、反向再 2 次 all-to-all → 4·L·m
        FSDP 每层前向 all-gather、反向 all-gather ＋ reduce-scatter（ZeRO 的 3Ψ）→ 3·L·m
        PP   每个 micro-batch 在一个段边界上前向发一次、反向发一次 → 2·m
        DP   每步一次梯度 all-reduce（实际按桶分几次，仍是「每步」量级）→ 1
    · 链路：GB300 每 GPU NVLink 1.8 TB/s（双向）；跨机每 GPU 一块 800 Gb/s 网卡 ＝ 100 GB/s 单向、200 GB/s 双向
      （A4X Max：每节点 4 × CX-8 × 800 Gb/s、4 块 GPU）。同口径之比 9 倍。
-   · 混元 3（本课程作者实测，gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7、§4.1）。
+   · 混元 3（本课程作者实测，gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 sec. 3.7、sec. 4.1）。
    · GB300 V4-Pro（本课程作者实测，gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md）。
+
+⛔ 刻意没画：fig-freq 的次数是示意配置（60 层、8 个 micro-batch）下的推导，不是实测；
+   fig-topo 不画出字间隔和首字延迟（在正文和出处里），只比每卡吞吐。
 """
 import math
 from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
@@ -85,7 +88,7 @@ def fig_freq():
         "TP 每一层都要通信又藏不住，<tspan font-weight=\"700\">必须待在 NVLink 域里</tspan>（GB300 是一整柜 72 块）；EP、FSDP 能边算边传时才敢跨出去。",
         "PP 一步十几次、DP 一步一次，跨到慢线上也吃得消。TPU 上同理：切片里走 ICI，跨切片走数据中心网络。",
     ])
-    yb = f.src(yb + 10, "📌 次数为本课推导：TP 每层前反向各 2 次 all-reduce（arXiv 1909.08053 §3）；FSDP 每层 3 次（ZeRO 的 3Ψ，arXiv 1910.02054 §7）；"
+    yb = f.src(yb + 10, "📌 次数为本课推导：TP 每层前反向各 2 次 all-reduce（arXiv 1909.08053 sec. 3）；FSDP 每层 3 次（ZeRO 的 3Ψ，arXiv 1910.02054 sec. 7）；"
                         "EP、PP、DP 按调度数出；叠上 PP 时 TP 的次数要除以 PP 段数，开重算时 TP 每层是 6 次。链路：GB300 NVLink 5 每 GPU 1.8 TB/s；A4X Max 每节点 4 块 GPU、4 × CX-8 800 Gb/s。")
     f.save("fig5-freq.svg", yb + 14)
 
@@ -123,7 +126,7 @@ def fig_scale():
         "左边每卡的活不变，4 倍的卡换来 4 倍的吞吐　——　weak scaling 100%。组和组之间每步只有一次梯度 all-reduce。",
         "右边一个 FSDP 组从 128 个 device 扩到 512 个，拼权重的步数多了、每块更小，固定延迟摊不掉：<tspan font-weight=\"700\">404 比 453 少 11%</tspan>。",
     ])
-    yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法，pdbs 8）、§4.1（64 与 256 芯片同为 580，pdbs 12）。"
+    yb = f.src(yb + 10, "📌 本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 sec. 3.7（五种分法，pdbs 8）、sec. 4.1（64 与 256 芯片同为 580，pdbs 12）。"
                         "数字是每芯片 TFLOP/s。")
     f.save("fig5-scale.svg", yb + 14)
 
