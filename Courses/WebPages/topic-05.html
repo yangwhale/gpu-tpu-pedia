@@ -1485,7 +1485,9 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="756" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这四个都有一个「班长」卡 0，按最朴素的做法，所有流量都挤在它一个人的线上。训练里真正天天在跑的是<tspan font-weight="700">没有班长</tspan>的几个：AllGather、ReduceScatter、AllReduce；AllToAll</text>
 <text class="svgsm" x="20" y="780" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">则是每个人各做一次分发。</text>
 </svg><figcaption><b>四个有班长的动作：广播、分发、收集、归约。</b><span class="capmore"><br><em>收集和归约只差一个动作：数据到了之后是拼起来，还是加起来。</em></span></figcaption></figure>
+<details class="foldfig"><summary><b>看它们动起来</b>：四支小动画，一步一停</summary>
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" data-pauses="3.20" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播：一份 → 人人一份。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（7 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" data-pauses="3.20" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发：一份拆开 → 一人一块。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（7 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" data-pauses="3.20" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集：一人一块 → 拼成一份。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（7 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" data-pauses="3.20" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约：人人一份 → 加成一份。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（7 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环。）</span></figcaption></figure></div>
+</details>
   <p>这四个都有一个「班长」，数据全压在它一条线上，卡一多就堵。所以训练里天天跑的是下面那组。</p>
   <details class="foldfig"><summary><b>细一点</b>：班长到底怎么堵、通信库怎么缓解</summary>
   <p>按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
@@ -2443,7 +2445,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="447" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">环的好处：没有人闲着，也没有人被挤爆</tspan></text>
 <text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">班长模式里所有数据都挤进卡 0 一条线；环形里<tspan font-weight="700">每一步每条线上只走一块</tspan>，所有线同时在用。</text>
 <text class="svgsm" x="20" y="502" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以卡再多，每张卡发出去的总量也只是 2(n−1)/n 份，<tspan font-weight="700">不到两整份</tspan>。代价是步数随卡数增长：数据很小时，比的就不是带宽而是步数了。</text>
-</svg><figcaption><b>盯着条纹看：每一步，每张卡都有一块多加进一个人。</b><span class="capmore"><br><em>一行一张卡；「右边」就是下一号卡，卡 3 的右边是卡 0。</em></span></figcaption></figure>
+</svg><figcaption><b>盯着条纹看：每一步，每张卡都有一块多加进一个人。</b><span class="capmore"><br><em>一行一张卡；「右边」就是下一号卡，卡 3 的右边是卡 0。条纹看不清加了谁，就看下面那支动画，一步一停。</em></span></figcaption></figure>
 <figure class="fbox fwide" id="anim-ring">
 <video src="media/topic05-ring.mp4" data-pauses="5.10,9.70,14.30,16.70,19.90,25.30,29.90,34.50,37.80" autoplay loop muted playsinline
        aria-label="环形 AllReduce 动画。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。卡名之间有往右的箭头，卡片下面一条虚线车道表示卡 3 绕回卡 0。字幕依次是：ReduceScatter，每一步人人同时往右发一块，收到的加到自己那块上；第 1、2、3 步各自写明 0→1、1→2、2→3、卡 3 从右边绕回卡 0，落地后写「第几步完成：粗框那块又多加进了一个人」并停住。三步之后每张卡恰好握着一块完整总和，其余中间结果淡出。接着 AllGather，把总和往右再传三步，只替换不相加。最后人人一份总和，画面复位。"></video>
@@ -2718,10 +2720,12 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s2-1">2.1　数据并行：每张卡一整份模型</h3>
   <p>每张卡放一整份模型、各算一批样本；反向算完做一次 AllReduce 求平均，再一起更新。
-    一步只通信一次（频率最低，量却不小：V3 每卡约 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
+    一步只通信一次（频率最低，量却不小：V3 这么大的模型要是纯数据并行，每卡一步约发 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
+  <p>像几个人结伴徒步，每人都背一整套帐篷、炉子、锅：谁也不缺，可谁都背得最重。下面一节一节把重复的卸下来。</p>
 
   <h3 id="s2-2">2.2　ZeRO：越闲的越先削</h3>
-<figure class="fbox fwide" id="fig-zero-mem"><svg viewBox="0 0 1400 610" width="100%" role="img" aria-label="数据并行和 ZeRO 三级，每张卡的常驻显存。每个参数 16 字节：权重 2、梯度 2、优化器状态 12。数据并行每张卡都存一整份，16 字节。ZeRO-1 把优化器状态切成 1024 份，每卡剩约 4 字节；ZeRO-2 再切梯度，剩约 2 字节；ZeRO-3 连权重也切，只剩千分之十六字节。换成 DeepSeek-V3 的 6710 亿参数、1024 路：每卡 9.76 TiB、2.45 TiB、1.23 TiB、9.76 GiB。通信量：前三种都是 2 Ψ，跟数据并行一模一样；ZeRO-3 是 3 Ψ，多一半"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p>先认清那三块：<b>权重</b>是模型本身；<b>梯度</b>是这一步算出来的「每个参数该往哪改、改多少」；<b>优化器状态</b>是优化器替每个参数记的账（主权重、两个动量），它最大。下文的 Ψ 就是参数个数。</p>
+<figure class="fbox fwide" id="fig-zero-mem"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="数据并行和 ZeRO 三级，每张卡的常驻显存。每个参数 16 字节：权重 2、梯度 2、优化器状态 12。数据并行每张卡都存一整份，16 字节。ZeRO-1 把优化器状态切成 1024 份，每卡剩约 4 字节；ZeRO-2 再切梯度，剩约 2 字节；ZeRO-3 连权重也切，只剩千分之十六字节。换成 DeepSeek-V3 的 6710 亿参数、1024 路：每卡 9.76 TiB、2.45 TiB、1.23 TiB、9.76 GiB。通信量：前三种都是 2 Ψ，跟数据并行一模一样；ZeRO-3 是 3 Ψ，多一半"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">ZeRO：把重复的削掉，一次削一样　——　<tspan font-weight="700">前两级白送，最后一级要付 50% 的通信</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个参数 16 字节，按专题四那张表的口径拆成三块。例子：DeepSeek-V3，6,710 亿参数，1,024 路数据并行</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -2730,7 +2734,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="219" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">梯度 2 字节（bf16）</text>
 <rect x="396.40000000000003" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="417" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">优化器状态 12 字节（fp32）</text>
-<rect x="0" y="102" width="1400" height="336" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="360" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
@@ -2767,12 +2771,13 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="262" y="388" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.016 字节</tspan></text>
 <text class="svgsm" x="1040" y="388" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.76 GiB</tspan></text>
 <text class="svgsm" x="1220" y="388" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3Ψ（1.5×）</tspan></text>
-<rect x="0" y="488" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="488" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="488" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="515" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前两级白送，最后一级要付钱</tspan></text>
-<text class="svgsm" x="20" y="546" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight="700">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。　可 V3 按这个算每卡还要 1.23 TiB，一张卡照样装不下。</text>
-<text class="svgsm" x="20" y="570" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">只有 ZeRO-3 能降到每卡 9.76 GiB，代价是通信从 2Ψ 变成 <tspan font-weight="700">3Ψ，多一半</tspan>。　这就是 FSDP：大模型没得选，只能付这 50%。</text>
+<text class="svgsm" x="18" y="446" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">被切掉的那几块没有消失：每张卡只剩自己那 1/1,024，细到看不见。</text>
+<rect x="0" y="512" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="512" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="512" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="539" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前两级白送，最后一级要付钱</tspan></text>
+<text class="svgsm" x="20" y="570" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight="700">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。　可 V3 按这个算每卡还要 1.23 TiB，一张卡照样装不下。</text>
+<text class="svgsm" x="20" y="594" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">只有 ZeRO-3 能降到每卡 9.76 GiB，代价是通信从 2Ψ 变成 <tspan font-weight="700">3Ψ，多一半</tspan>。　这就是 FSDP：大模型没得选，只能付这 50%。</text>
 </svg><figcaption><b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><span class="capmore"><br><em>ZeRO-3 那条短到几乎看不见：16 个字节切成 1,024 份，每份只剩 0.016。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：Rajbhandari 等，ZeRO，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 5、sec. 7。原文：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍。Ψ 为参数个数，此处按元素数计。</p>
 <p>⚠️ 每卡字节数本脚本现算并 assert；9.76 TiB 与专题四 5.1 同一口径（671e9 × 16 ÷ 1024⁴）。只算常驻，不含激活。</p></details></figure>
   <p>16 字节里，12 个是优化器状态 —— 开场第二问的答案：最大的是它，先削它。巧的是，它也是最闲的那块：</p>
@@ -3077,8 +3082,9 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>① ReduceScatter、③ AllGather 拼起来就是原来那次 AllReduce。</b><span class="capmore"><br><em>多出来的只是中间那一格：每张卡只更新自己那一段。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 ZeRO 原论文 arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 7：Pos、Pos+g 的通信量与数据并行相同（2Ψ）。Adam 逐元素更新：Kingma 与 Ba，arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a> 算法 1。</p>
 <p>⚠️ 一步切成几个 micro-batch 时，只剩 ZeRO-1 严格白送：ZeRO-2 不留整份梯度，没法把几份梯度先攒起来，只好每份算完就 ReduceScatter 一次；所以配流水线（必须切 micro-batch）时，V3、Megatron 都选 ZeRO-1。</p></details></figure>
 <div class="note ok"><span class="t">开场第三问的答案：V3 把两个动量压成了半精度，主权重留在全精度（批次累积用的那份梯度也是）</span>
-  主权重每步只加一点点、要一直累加，压了会被舍掉；动量能不能压要看 β₂ —— 看下面那把刻度尺（V3 用 0.95，PyTorch 默认 0.999）。</div>
+  主权重每步只加一点点、要一直累加，压了会被舍掉；动量能不能压要看 β₂ —— 展开下面「细一点」那把刻度尺（V3 用 0.95，PyTorch 默认 0.999）。</div>
 
+  <details class="foldfig"><summary><b>细一点</b>：动量为什么压得了、主权重为什么压不得 —— 一把刻度尺</summary>
 <figure class="fbox fwide" id="fig-bf16-beta"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="二阶动量每一步按 v 等于 β₂ 乘旧 v 加上 1 减 β₂ 乘新梯度平方来更新。图里是一把刻度尺，刻度是 bf16 在 1 附近能表示的数，相邻两个相差 128 分之一。假设当前 v 等于 1，新来的梯度平方是它的 2 倍。β₂ 等于 0.95 时，新值占 5%，v 挪到 1.05，存成 bf16 是 1.047，这一步留下来了。β₂ 等于 0.999 时，新值只占 0.1%，v 挪到 1.001，还不到半格，存成 bf16 又回到 1，这一步被舍掉了。V3 用 β₂ 等于 0.95，所以它敢把动量存成 bf16；主权重每步只加一点点、要一直累加，所以必须留 fp32"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">动量能不能存成 bf16：看一步挪多远　——　<tspan font-weight="700">挪不过半格，就被舍回原处</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">刻度＝bf16 在 1 附近能表示的数（相邻差 1/128）。v ← β₂·v ＋ (1−β₂)·g²；假设当前 v＝1，新来的 g² 是它的 2 倍</text>
@@ -3125,11 +3131,12 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>绿的那一步挪过了几格，红的那一步没挪过半格。</b><span class="capmore"><br><em>舍入按 bf16 真算；假设新来的 g² 是当前 v 的 2 倍。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.3：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32。sec. 4.2：β₁＝0.9、β₂＝0.95。</p>
 <p>📌 这不是默认做法：常规做法里优化器状态与参数同精度；Megatron Core 要显式开启 --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16。PyTorch AdamW 默认 β₂＝0.999。</p>
 <p>⚠️ 本课推导：刻度与舍入按 bf16（8 位有效位、就近舍入）真算。V3 报告的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线，16B 与 230B 两个规模损失相对误差低于 0.25%；未单独消融 bf16 动量。</p></details></figure>
+  </details>
 
   <h3 id="s2-3">2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
     ZeRO-2 加再多卡也降不下去了：剩下的正是人人一整份的权重。只靠数据并行这一刀，大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
-  <p>像几个人结伴徒步：一人背帐篷、一人背炉子、一人背锅，谁也不背全套；晚上扎营，把别人背的借过来一起用，第二天早上各自收好接着走。
+  <p>回到徒步：现在一人背帐篷、一人背炉子、一人背锅，谁也不背全套；晚上扎营，把别人背的借过来一起用，第二天早上各自收好接着走。
     背的是分片，扎营时借过来就是 AllGather，收好就是用完就还。每人都背一整套，就是数据并行。</p>
 <figure class="fbox fwide" id="fig-fsdp-step"><svg viewBox="0 0 1400 508" width="100%" role="img" aria-label="一层在一步训练里要做哪些通信。数据并行：前向和反向都不通信，反向算完梯度后做一次全归约，也就是一次归约分散加一次全收集，一共两份。FSDP：前向之前先全收集把这一层的权重拼回来，算完就扔；反向之前再全收集一次，算完梯度做一次归约分散，一共三份，是数据并行的一点五倍。多出来的那一份，就是反向时把扔掉的权重再拼一次"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FSDP 为什么多 50%　——　<tspan font-weight="700">反向时要把扔掉的权重再拼一次</tspan></text>

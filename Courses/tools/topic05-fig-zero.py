@@ -54,7 +54,7 @@ def fig_mem():
                   "每个参数 16 字节，按专题四那张表的口径拆成三块。例子：DeepSeek-V3，6,710 亿参数，1,024 路数据并行",
                   [(BL, "权重 2 字节（bf16）"), (OR, "梯度 2 字节（bf16）"), (GR, "优化器状态 12 字节（fp32）")])
     RH, BX, SCALE = 64, 250, 38.0          # 每字节 38 px，16 字节 ＝ 608 px
-    PH = 30 + 30 + len(STAGES) * RH + 20
+    PH = 30 + 30 + len(STAGES) * RH + 44
     py = f.panel(0, y0, W, PH, "每张卡要常驻多少字节 / 参数", GR, tag="条长 ∝ 每参数字节数")
     f.t(BX, py + 22, "每参数字节（切成 1,024 份之后）", GY, True, 13)
     f.t(1040, py + 22, "V3 每卡常驻", GY, True, 13)
@@ -84,6 +84,7 @@ def fig_mem():
         f.t(1040, yy + 30, fmt(per_dev_bytes(st)), RD if i < 3 else GR, True, 16)
         f.t(1220, yy + 30, "%dΨ%s" % (comm, "（1.5×）" if comm == 3 else "（＝数据并行）" if i else ""),
             RD if comm == 3 else INK, comm == 3, 15)
+    f.t(18, py + PH - 46, "被切掉的那几块没有消失：每张卡只剩自己那 1/1,024，细到看不见。", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "前两级白送，最后一级要付钱", [
         "ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight=\"700\">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。"

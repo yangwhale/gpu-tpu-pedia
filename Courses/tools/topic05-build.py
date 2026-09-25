@@ -200,7 +200,9 @@ __FIG_ROADMAP__
   <h3>1.2　一个人对所有人：四个基本动作</h3>
   <p>把四张卡想成四个同学，卡 0 是班长。</p>
 __FIG_COLL_1N__
+<details class="foldfig"><summary><b>看它们动起来</b>：四支小动画，一步一停</summary>
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播：一份 → 人人一份。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发：一份拆开 → 一人一块。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集：一人一块 → 拼成一份。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约：人人一份 → 加成一份。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
+</details>
   <p>这四个都有一个「班长」，数据全压在它一条线上，卡一多就堵。所以训练里天天跑的是下面那组。</p>
   <details class="foldfig"><summary><b>细一点</b>：班长到底怎么堵、通信库怎么缓解</summary>
   <p>按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
@@ -268,9 +270,11 @@ __FIG_A2A__
 
   <h3>2.1　数据并行：每张卡一整份模型</h3>
   <p>每张卡放一整份模型、各算一批样本；反向算完做一次 AllReduce 求平均，再一起更新。
-    一步只通信一次（频率最低，量却不小：V3 每卡约 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
+    一步只通信一次（频率最低，量却不小：V3 这么大的模型要是纯数据并行，每卡一步约发 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
+  <p>像几个人结伴徒步，每人都背一整套帐篷、炉子、锅：谁也不缺，可谁都背得最重。下面一节一节把重复的卸下来。</p>
 
   <h3>2.2　ZeRO：越闲的越先削</h3>
+  <p>先认清那三块：<b>权重</b>是模型本身；<b>梯度</b>是这一步算出来的「每个参数该往哪改、改多少」；<b>优化器状态</b>是优化器替每个参数记的账（主权重、两个动量），它最大。下文的 Ψ 就是参数个数。</p>
 __FIG_ZERO_MEM__
   <p>16 字节里，12 个是优化器状态 —— 开场第二问的答案：最大的是它，先削它。巧的是，它也是最闲的那块：</p>
 __FIG_ZERO_BUSY__
@@ -279,12 +283,14 @@ __FIG_ZERO_BUSY__
   <p>前两级为什么不多花一个字节的通信？就是 §1.4 那个等式：</p>
 __FIG_ZERO_STEP__
 __Q3_ANSWER__
+  <details class="foldfig"><summary><b>细一点</b>：动量为什么压得了、主权重为什么压不得 —— 一把刻度尺</summary>
 __FIG_BF16_BETA__
+  </details>
 
   <h3>2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
     ZeRO-2 加再多卡也降不下去了：剩下的正是人人一整份的权重。只靠数据并行这一刀，大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
-  <p>像几个人结伴徒步：一人背帐篷、一人背炉子、一人背锅，谁也不背全套；晚上扎营，把别人背的借过来一起用，第二天早上各自收好接着走。
+  <p>回到徒步：现在一人背帐篷、一人背炉子、一人背锅，谁也不背全套；晚上扎营，把别人背的借过来一起用，第二天早上各自收好接着走。
     背的是分片，扎营时借过来就是 AllGather，收好就是用完就还。每人都背一整套，就是数据并行。</p>
 __FIG_FSDP_STEP__
 <figure class="fbox fwide" id="anim-fsdp">
@@ -1069,7 +1075,7 @@ FIGS = {
         '<em>拆开之后，两半可以放在不同的时间点去做。</em>'),
     "__FIG_RING__": ("fig-ring", "fig5-ring.svg", "topic05-fig-coll.py",
         '<b>盯着条纹看：每一步，每张卡都有一块多加进一个人。</b><br>'
-        '<em>一行一张卡；「右边」就是下一号卡，卡 3 的右边是卡 0。</em>'),
+        '<em>一行一张卡；「右边」就是下一号卡，卡 3 的右边是卡 0。条纹看不清加了谁，就看下面那支动画，一步一停。</em>'),
     "__FIG_AR_TWO_WAYS__": ("fig-ar-two-ways", "fig5-ar-two-ways.svg", "topic05-fig-coll.py",
         '<b>结果一样，差的是谁在干活。</b><br>'
         '<em>右边那张小表：班长那列跟着卡数涨，环那列永远不到 2。</em>'),
