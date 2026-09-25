@@ -297,7 +297,7 @@ vLLM 对 DeepSeek-V4 的 prefill 权重分片**只有 TP 可用**：
 
 TP4 decode 对 V4 是**次优**的：**V4 的 128 个 query 头共用一个 KV 头，TP 下不分片、只复制** —— TP4 把 KV cache 复制 4 份，零节省。
 
-> ⚠️ V4 **不是 MLA**（2026-09-25 更正，此前本文误写为「MLA 的压缩 latent（512+64）」）。config.json：`num_key_value_heads: 1`、`head_dim: 512`（64 维 RoPE 在 512 **里面**），**没有 `kv_lora_rank`** —— 是共享 KV 的 MQA ＋ 压缩池。「只有一个 KV 头 → TP 切不开」这个结论不变。
+> ⚠️ V4 **不是 MLA**（2026-09-25 更正，此前本文误写为「MLA 的压缩 latent（512+64）」）。V4 的注意力是 **CSA 与 HCA 交错堆叠**：V4-Pro 61 层 ＝ 30 层 CSA（序列压 4 倍，再由索引器挑 top-1024）＋ 31 层 HCA（压 128 倍，不挑），每层另带一条 128 token 的滑窗；config `compress_ratios` 前两层是 128，之后 4／128 交替。两种层存的都是**所有 128 个 query 头共享的一条 512 维 KV**（`num_key_value_heads: 1`、`head_dim: 512`，64 维 RoPE 在 512 里面，**没有 `kv_lora_rank`**）。「只有一个 KV 头 → TP 切不开」这个结论不变。架构细节见课程专题三 6.4b／6.4c。
 
 dep8 才是对的：DP-attention 每 rank 各存各请求的 KV（天然不复制）+ EP8 把 384 expert 摊到每卡 48 个（省 HBM → 更大 batch）+ attention/dense 权重只存一份。**实测每卡效率 2.6×**（1,983 vs 763 tok/s/GPU，ShareGPT 闭环口径）。
 

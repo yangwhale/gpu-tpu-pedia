@@ -92,7 +92,7 @@ vLLM 为 DeepSeek V4 实现了全套专用组件，**不复用** V3/V2 代码：
 | 组件 | vLLM 实现 | 说明 |
 |---|---|---|
 | MegaMoE | `deep_gemm_mega_moe` backend | 256 experts, MXFP4 权重 |
-| Attention（共享 KV 的 MQA，不是 MLA） | `deepseek_v4_attention.py` | 包含 Compressor + Sparse SWA |
+| Attention（CSA／HCA 交错，不是 MLA） | `deepseek_v4_attention.py` | 包含 Compressor + Sparse SWA；两种层都只存一条所有头共享的 KV |
 | FP4 Indexer | `use_fp4_indexer_cache` | MXFP4 格式 indexer cache |
 | MTP | `deepseek_v4_mtp.py` | 多 token 预测 (投机解码) |
 | Tokenizer | `deepseek_v4.py` 自定义 | 非 HuggingFace 默认 tokenizer |

@@ -588,7 +588,7 @@ TP 是按头切的：提问分得开，笔记那一个头切不开，<b>只能�
 <p class="say">「这一刀留下的问题：到这儿，prefill 和 decode 已经各要各的切法了，一个要把问题切开，一个要把笔记摊开。硬塞在同一批卡上，谁都配不好。」</p>
 
 <div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
-⚠️ <b>被追问「V3 的 config 里 KV 头明明是 128」</b>：那是 MLA 解压之后的头数；推理时缓存的是压缩后那一份，所有头共用，vLLM 把它当一个 KV 头处理。V4-Pro 的 config 直接就是 1 个 KV 头，但它不是 MLA（是共享 KV 的 MQA，见专题三），别说成 MLA（它的 config 里没有 kv_lora_rank）。<br>
+⚠️ <b>被追问「V3 的 config 里 KV 头明明是 128」</b>：那是 MLA 解压之后的头数；推理时缓存的是压缩后那一份，所有头共用，vLLM 把它当一个 KV 头处理。V4-Pro 的 config 直接就是 1 个 KV 头，但它不是 MLA，别说成 MLA：V4 的注意力是 CSA 和 HCA 交错堆叠（见专题三 6.4b），两种层存的都是所有头共享的一条 KV，config 里也没有 kv_lora_rank。<br>
 ⛔ <b>不要展开 Ulysses 的通信量推导和「并行度不超过头数」的原因。</b><br>
 <em>点一句「还有一种办法用 AllToAll 在按序列切和按头切之间来回换」就够。</em><br>
 ⚠️ Ring Attention 那段动画画的是<b>不带因果掩码</b>的情形，别说成它自带负载均衡。<br>
