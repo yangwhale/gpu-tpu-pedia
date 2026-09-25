@@ -42,6 +42,8 @@ import re
 
 import topic03_page as P
 import course_ai_trainer as AIT
+import topic05_quiz as QZ          # 开场热身题；数字从 topic05_numbers 取
+import topic05_numbers as NB
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "WebPages", "topic-05.html")
@@ -77,6 +79,10 @@ S = '<span class="kind k-s">序列</span>'
 M = '<span class="kind k-m">模型</span>'
 X = '<span class="kind k-x">解耦</span>'
 NEW = '<span class="kind k-new">新</span>'
+
+# 开场热身题的样式单独追加一段 <style>，不去猜往第几个 </style> 前面插（专题四踩过：head 里有好几个）
+_QUIZ_HTML, _QUIZ_CSS = QZ.build()
+head += "<style>" + _QUIZ_CSS + "</style>\n"
 
 SECTIONS = [
     ("s零", "零", "一张卡装不下"),
@@ -122,7 +128,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 48 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 50 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -135,9 +141,13 @@ HERO = '''
 '''
 
 BODY = sec("s零", "零", "一张卡装不下") + '''
+__QUIZ__
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算（权重 2 ＋ 梯度 2 ＋ 优化器状态 12），
     光常驻的训练状态就要 9.76 TiB，约合一万 GB。最大的一块卡显存也就两三百 GB，光放下就要三四十到五六十块卡，还没开始算。
     <b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
+  <p>这一万 GB 还只是模型状态，不含激活：每一层算出来、留着反向要用的中间结果，它跟 batch × 序列长度成正比，序列一长比模型状态还大。
+    而且就算放得下，一块卡也算不完：V3 技术报告写着，全部训练用了 278.8 万 H800 卡时，换成一块卡要算 __V3_YEARS__ 年。
+    <b>所以切开不只为了放得下，也为了算得快。</b></p>
 
   <p>一个训练中的张量有好几个维度可以下刀：batch、序列、隐藏维、层、专家。
     每切一刀，就在那一维上产生一种通信：切开之后，你缺的那块在我这儿，我缺的在你那儿，只能互相传。所以这一讲从头到尾只讲一件事：</p>
@@ -302,10 +312,13 @@ __FIG_ZERO_MEM__
     <li><b>ZeRO-2</b> 再切梯度：每张卡只需要自己负责那 1/n 参数的梯度。</li>
     <li><b>ZeRO-3</b> 连权重也切：每张卡只长期存 1/n 的权重。</li>
   </ul>
-  <p>前两级为什么不多花一个字节的通信？就是 1.4 那条：AllReduce ＝ ReduceScatter ＋ AllGather。数据并行那次 AllReduce 拆开来做：
+  <p>前两级为什么不多花一个字节的通信？就是 §1.4 那条：AllReduce ＝ ReduceScatter ＋ AllGather。数据并行那次 AllReduce 拆开来做：
     先 ReduceScatter，每张卡正好拿到自己负责那 1/n 的梯度总和，就地更新那 1/n 的参数；
     再 AllGather，把更新好的权重拼回给每个人。<b>通信还是 2Ψ，显存却不用再存别人的状态和梯度了。</b>
     像老师们汇总意见：每人只收自己负责的那一页，改好再复印给大家。</p>
+  <p>中间那一步「就地更新」为什么不用通信？因为 Adam 是<b>逐个元素</b>算的：第 i 个参数的新值，只跟它自己的梯度、自己的两个动量、自己的主权重有关，
+    跟别的参数一点关系都没有。所以每张卡更新自己那 1/n，跟一张卡把全部参数更新一遍，结果一模一样。
+    只有一个例外：梯度裁剪要看<b>全体</b>梯度的总长度。做法是每张卡先算自己那段的平方和，再对这一个数做一次 AllReduce，量可以忽略。</p>
 
   <h3>2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
@@ -911,6 +924,11 @@ __FIG_PANO__
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
+    <tr><td>开场题：常规混合精度每参数 16 字节；V3 实际把 m、v 存成 bf16，主权重与累积梯度留 fp32</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.3.3（原文：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32）；常规做法里优化器状态与参数同精度（PyTorch 默认）；Megatron Core 需显式开启 --use-precision-aware-optimizer --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16（Megatron Core MoE 文档）</td></tr>
+    <tr><td>V3 的 FP8 方案整体验证：损失相对误差低于 0.25%</td><td>同上 sec. 3.3 与附录 B.1：约 16B、230B 两个规模各训约一万亿 token，整套 FP8 方案（含 bf16 优化器状态）对 BF16 基线；报告未单独消融「动量用 bf16」这一项</td></tr>
+    <tr><td>动量能不能用 bf16，要看 β₂</td><td>V3 的 AdamW β₁＝0.9、β₂＝0.95（技术报告 sec. 4.2）；PyTorch AdamW 默认 β₂＝0.999。⚠️ 本课推导：bf16 有效位 8 位，相邻两数的相对间隔 2⁻⁷～2⁻⁸，四舍五入丢掉小于半个间隔（最小约 0.2%）的改动；β₂＝0.999 时新值每步只占 0.1%。独立证据：Dettmers 等 arXiv 2110.02861，分块量化的 8 比特优化器状态能追平 32 比特</td></tr>
+    <tr><td>V3 全部训练 278.8 万 H800 卡时；一块卡约 318 年</td><td>DeepSeek-V3 技术报告摘要（含预训练、长上下文扩展与后训练）；318 年 ＝ 2.788M ÷ 8,760 小时，本课推导</td></tr>
+    <tr><td>ZeRO 的本地更新不需要通信；梯度裁剪要一次标量 AllReduce</td><td>Adam 逐元素更新（Kingma 与 Ba，arXiv 1412.6980 算法 1）；梯度裁剪按全体梯度的范数（Pascanu 等 arXiv 1211.5063），分片时各卡算局部平方和再 AllReduce（本课归纳）</td></tr>
     <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv 1910.02054 sec. 5、sec. 7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
     <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv 1909.08053 sec. 3（前向 2 次、反向 2 次 all-reduce）；arXiv 2205.05198 sec. 4.2.2（AG＋RS 替代 all-reduce，无额外通信）；查询头数须被 TP 整除、KV 组数与 TP 互为倍数或约数：megatron/core/transformer/transformer_config.py 的校验</td></tr>
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv 2104.04473 sec. 2.2.1–2.2.2；Zero Bubble arXiv 2401.10241；DualPipe README</td></tr>
@@ -1035,6 +1053,7 @@ FIGS = {
 
 _html = head + HERO + BODY + FOOT
 _html = P.place_figs(_html, FIGS)
+_html = _html.replace("__QUIZ__", _QUIZ_HTML).replace("__V3_YEARS__", "%.0f" % NB.V3_ONE_CARD_YEARS)
 _leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
 assert not _leak, "占位符没落地：%s" % "、".join(_leak)
 for _tag in ("h2", "h3", "section", "div"):

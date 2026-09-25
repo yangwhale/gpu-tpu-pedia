@@ -13,12 +13,9 @@ r"""专题五 · 第二节「第一刀：切数据」的两张图。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
 
-W = 1400
-PSI = 671e9                     # DeepSeek-V3 总参数
-N = 1024                        # 例子里的数据并行路数
-TIB, GIB = 1024 ** 4, 1024 ** 3
+from topic05_numbers import PSI, N_DP as N, TIB, GIB, W_B, G_B, O_B   # 16 字节的账只有一份
 
-W_B, G_B, O_B = 2, 2, 12        # 每参数：权重 / 梯度 / 优化器状态
+W = 1400
 STAGES = [                       # (名字, 权重份额, 梯度份额, 状态份额, 通信 Ψ 倍数)
     ("数据并行", 1, 1, 1, 2),
     ("ZeRO-1", 1, 1, 1 / N, 2),

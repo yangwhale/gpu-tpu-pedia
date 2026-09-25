@@ -736,7 +736,18 @@ h4 { margin:18px 0 6px; font-size:15px }
 .lecbtn { display:inline-block; margin-left:14px; font-size:13px; padding:4px 12px; border-radius:14px;
           background:#fff; border:1px solid var(--line); color:var(--blue); text-decoration:none }
 .lecbtn:hover { background:var(--blue-l); border-color:var(--blue) }
+</style><style>
+.qz5 table{margin:10px 0;border-collapse:collapse;width:auto}
+.qz5 td,.qz5 th{padding:6px 12px;border-bottom:1px solid #e8eaed;text-align:left}
+.qz5 input{width:4.2em;font:inherit;padding:2px 6px;border:1px solid #dadce0;border-radius:6px}
+.qz5 input.ok{border-color:#1e8e3e;background:#e6f4ea}
+.qz5 input.bad{border-color:#d93025;background:#fce8e6}
+.qz5 .qzbar button{font:inherit;padding:4px 14px;border-radius:16px;border:1px solid #1a73e8;
+  background:#1a73e8;color:#fff;cursor:pointer;margin-right:8px}
+.qz5 .qzbar button.gh{background:#fff;color:#1a73e8}
+.qz5 .qzmsg{color:#5f6368}
 </style>
+
 
 <style id="figonly-css">
 /* ⛔⛔ 2026-09-19：这条浮动带原来钉在 right:18px bottom:18px，
@@ -837,7 +848,7 @@ body.figonly section h3{margin-top:34px}
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 48 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 50 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -855,9 +866,57 @@ body.figonly section h3{margin-top:34px}
   <p style="color:var(--gray)">每个数字的出处在文末台账；自己推出来的数，都标了「本课推导」。</p>
 </div>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一张卡装不下</h2></div>
+
+<details class="foldfig" id="qz5box"><summary><b>🎯 开场热身：DeepSeek-V3 训练时，每个参数占的那 16 个字节都是什么？</b>
+  <span class="why">—— 回顾专题四那张账，三问。<u>不做也不影响这一讲</u></span></summary>
+<div class="qz5" id="qz5">
+<p><b>第一问</b>：按常规的混合精度 AdamW 训练，每个参数要在显存里常驻下面五样东西。各占几个字节？</p>
+<table><tr><td>权重（算的时候用的那一份）</td><td><input inputmode="numeric" data-k="2" aria-label="权重（算的时候用的那一份） 占几个字节"> 字节</td></tr><tr><td>梯度</td><td><input inputmode="numeric" data-k="2" aria-label="梯度 占几个字节"> 字节</td></tr><tr><td>主权重（优化器更新的那一份）</td><td><input inputmode="numeric" data-k="4" aria-label="主权重（优化器更新的那一份） 占几个字节"> 字节</td></tr><tr><td>一阶动量 m</td><td><input inputmode="numeric" data-k="4" aria-label="一阶动量 m 占几个字节"> 字节</td></tr><tr><td>二阶动量 v</td><td><input inputmode="numeric" data-k="4" aria-label="二阶动量 v 占几个字节"> 字节</td></tr></table>
+<div class="qzbar"><button class="go">对答案</button><button class="gh rst">重来</button><span class="qzmsg"></span></div>
+<div class="qzans" hidden>
+<p>2 ＋ 2 ＋ 4 ＋ 4 ＋ 4 ＝ <b>16 字节</b>。前两样是半精度（bf16），算矩阵乘用；后三样是全精度（fp32），给优化器用。
+  乘上 V3 的 6,710 亿参数：<b>9.76 TiB</b>，约合一万 GB —— 这还不含激活。</p>
+</div>
+<details class="aside"><summary><b>第二问</b>：这 16 字节里哪一块最大？要是让你削，先削哪块？</summary>
+<p>后三样合起来（主权重 ＋ 两个动量）是 <b>12 字节，占四分之三</b>，统称优化器状态。
+  第二节的第一刀（ZeRO）就是从这一块削起的。</p></details>
+<details class="aside"><summary><b>第三问</b>：V3 其实没按 16 字节存。它把哪两块压成了半精度？主权重为什么不能压？</summary>
+<p>V3 把<b>两个动量</b>改用 bf16 存，报告说「没有观察到可见的性能退化」；主权重和用于累积的梯度仍留在 fp32
+  （技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.3）。这不是默认做法：常规做法里动量跟着主权重用 fp32，Megatron 要显式打开开关才用 bf16。</p>
+<p><b>主权重不能压</b>：它每一步只加进一个很小的更新，而且要一直累加下去；bf16 只有约三位有效数字，
+  小更新会在四舍五入时整个被抹掉。</p>
+<p><b>动量能不能压，要看衰减系数 β₂</b>（本课推导）：二阶动量每一步只掺进 (1 − β₂) 那么多新值。
+  V3 的 β₂ ＝ 0.95，新值每步占 5% 的份量，bf16 分辨得出来；如果用 PyTorch 默认的 0.999，新值只占 0.1%，
+  比 bf16 能分辨的最小相对差距（约 0.2%）还小 —— 除非新来的梯度跟旧值差好几倍，否则这一步的改动会被四舍五入抹掉，二阶动量就卡住了。
+  所以「动量是滑动平均，所以 bf16 扛得住」这句话只在 β₂ 不太接近 1 时成立。</p>
+<p>V3 报告里的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线：16B 和 230B 两个规模各训约一万亿 token，
+  损失相对误差一直低于 0.25%；没有单独把「动量用 bf16」拆出来做消融。</p></details>
+</div>
+<script>
+(function(){
+ var root=document.getElementById('qz5'); if(!root) return;
+ var ins=root.querySelectorAll('input[data-k]'), msg=root.querySelector('.qzmsg'),
+     ans=root.querySelector('.qzans');
+ root.querySelector('.go').addEventListener('click',function(){
+   var bad=0;
+   ins.forEach(function(i){ var ok=(parseFloat(i.value)===parseFloat(i.dataset.k));
+     i.classList.toggle('ok',ok); i.classList.toggle('bad',!ok); if(!ok) bad++; });
+   if(bad){ msg.textContent='还有 '+bad+' 格不对（红框）。提示：半精度 2 字节，全精度 4 字节。'; ans.hidden=true; }
+   else { msg.textContent='全对。'; ans.hidden=false; }
+ });
+ root.querySelector('.rst').addEventListener('click',function(){
+   ins.forEach(function(i){ i.value=''; i.classList.remove('ok','bad'); });
+   msg.textContent=''; ans.hidden=true; });
+})();
+</script>
+</details>
+
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算（权重 2 ＋ 梯度 2 ＋ 优化器状态 12），
     光常驻的训练状态就要 9.76 TiB，约合一万 GB。最大的一块卡显存也就两三百 GB，光放下就要三四十到五六十块卡，还没开始算。
     <b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
+  <p>这一万 GB 还只是模型状态，不含激活：每一层算出来、留着反向要用的中间结果，它跟 batch × 序列长度成正比，序列一长比模型状态还大。
+    而且就算放得下，一块卡也算不完：V3 技术报告写着，全部训练用了 278.8 万 H800 卡时，换成一块卡要算 318 年。
+    <b>所以切开不只为了放得下，也为了算得快。</b></p>
 
   <p>一个训练中的张量有好几个维度可以下刀：batch、序列、隐藏维、层、专家。
     每切一刀，就在那一维上产生一种通信：切开之后，你缺的那块在我这儿，我缺的在你那儿，只能互相传。所以这一讲从头到尾只讲一件事：</p>
@@ -2463,10 +2522,13 @@ body.figonly section h3{margin-top:34px}
     <li><b>ZeRO-2</b> 再切梯度：每张卡只需要自己负责那 1/n 参数的梯度。</li>
     <li><b>ZeRO-3</b> 连权重也切：每张卡只长期存 1/n 的权重。</li>
   </ul>
-  <p>前两级为什么不多花一个字节的通信？就是 1.4 那条：AllReduce ＝ ReduceScatter ＋ AllGather。数据并行那次 AllReduce 拆开来做：
+  <p>前两级为什么不多花一个字节的通信？就是 <a href="#s1-4">§1.4</a> 那条：AllReduce ＝ ReduceScatter ＋ AllGather。数据并行那次 AllReduce 拆开来做：
     先 ReduceScatter，每张卡正好拿到自己负责那 1/n 的梯度总和，就地更新那 1/n 的参数；
     再 AllGather，把更新好的权重拼回给每个人。<b>通信还是 2Ψ，显存却不用再存别人的状态和梯度了。</b>
     像老师们汇总意见：每人只收自己负责的那一页，改好再复印给大家。</p>
+  <p>中间那一步「就地更新」为什么不用通信？因为 Adam 是<b>逐个元素</b>算的：第 i 个参数的新值，只跟它自己的梯度、自己的两个动量、自己的主权重有关，
+    跟别的参数一点关系都没有。所以每张卡更新自己那 1/n，跟一张卡把全部参数更新一遍，结果一模一样。
+    只有一个例外：梯度裁剪要看<b>全体</b>梯度的总长度。做法是每张卡先算自己那段的平方和，再对这一个数做一次 AllReduce，量可以忽略。</p>
 
   <h3 id="s2-3">2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
@@ -4323,6 +4385,11 @@ body.figonly section h3{margin-top:34px}
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
+    <tr><td>开场题：常规混合精度每参数 16 字节；V3 实际把 m、v 存成 bf16，主权重与累积梯度留 fp32</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.3（原文：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32）；常规做法里优化器状态与参数同精度（PyTorch 默认）；Megatron Core 需显式开启 --use-precision-aware-optimizer --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16（Megatron Core MoE 文档）</td></tr>
+    <tr><td>V3 的 FP8 方案整体验证：损失相对误差低于 0.25%</td><td>同上 sec. 3.3 与附录 B.1：约 16B、230B 两个规模各训约一万亿 token，整套 FP8 方案（含 bf16 优化器状态）对 BF16 基线；报告未单独消融「动量用 bf16」这一项</td></tr>
+    <tr><td>动量能不能用 bf16，要看 β₂</td><td>V3 的 AdamW β₁＝0.9、β₂＝0.95（技术报告 sec. 4.2）；PyTorch AdamW 默认 β₂＝0.999。⚠️ 本课推导：bf16 有效位 8 位，相邻两数的相对间隔 2⁻⁷～2⁻⁸，四舍五入丢掉小于半个间隔（最小约 0.2%）的改动；β₂＝0.999 时新值每步只占 0.1%。独立证据：Dettmers 等 arXiv <a href="https://arxiv.org/abs/2110.02861" target="_blank" rel="noopener">2110.02861</a>，分块量化的 8 比特优化器状态能追平 32 比特</td></tr>
+    <tr><td>V3 全部训练 278.8 万 H800 卡时；一块卡约 318 年</td><td>DeepSeek-V3 技术报告摘要（含预训练、长上下文扩展与后训练）；318 年 ＝ 2.788M ÷ 8,760 小时，本课推导</td></tr>
+    <tr><td>ZeRO 的本地更新不需要通信；梯度裁剪要一次标量 AllReduce</td><td>Adam 逐元素更新（Kingma 与 Ba，arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a> 算法 1）；梯度裁剪按全体梯度的范数（Pascanu 等 arXiv <a href="https://arxiv.org/abs/1211.5063" target="_blank" rel="noopener">1211.5063</a>），分片时各卡算局部平方和再 AllReduce（本课归纳）</td></tr>
     <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 5、sec. 7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
     <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> sec. 3（前向 2 次、反向 2 次 all-reduce）；arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a> sec. 4.2.2（AG＋RS 替代 all-reduce，无额外通信）；查询头数须被 TP 整除、KV 组数与 TP 互为倍数或约数：megatron/core/transformer/transformer_config.py 的校验</td></tr>
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener">2104.04473</a> sec. 2.2.1–2.2.2；Zero Bubble arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>；DualPipe README</td></tr>
