@@ -246,12 +246,10 @@ CH = [
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-tp-mlp</code>，整张。</p>
 
-<p class="say">「英伟达的 Megatron 框架用了一个巧思：第一块权重竖着切一刀，第二块横着切一刀。输入 X 是灰的，两张卡都有一整份。<br>
+<p class="say">「英伟达的 Megatron 框架用了一个巧思：第一块权重竖着切一刀，第二块横着切一刀。<br>
 两个人各拿一半，蓝的只跟蓝的乘，橙的只跟橙的乘，中间谁也不用问谁。<b>通信被整个推到了出口，只在最后做一次 AllReduce 加一下</b>。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>anim-tpsplit</code>，<b>先闭嘴看完一圈</b>（9 秒）。</p>
-
-<p class="say">「最后那一下是两张卡的部分和加在一起，所以两边拿到的是同一个完整的 Y，画成灰色。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-tp-order</code>，先左后右。</p>
 
