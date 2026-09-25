@@ -73,7 +73,7 @@ def fig_afd():
                "为了把这来回两趟藏起来，把一批请求切成三个小批轮着跑：一个在算 attention，一个在路上，一个在算专家，三条道每一格都有活")
     y0 = f.header("再拆一层：attention 和专家也分开　——　<tspan font-weight=\"700\">专家那边一次接好几家的 token</tspan>",
                   "AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，三个小批轮着跑",
-                  [(BL, "attention 机器"), (OR, "专家机器"), (GR, "小批 A"), (PU, "小批 B"), (CY, "小批 C")])
+                  [(BL, "attention 机器"), (OR, "专家机器"), (GR, "小批 A（盯着它看）"), ("#80868b", "小批 B"), ("#bdc1c6", "小批 C")])
     PH = 340
     py = f.panel(0, y0, W, PH, "每一层都要跑一趟 M → N → M", BL)
     for i in range(3):
@@ -100,7 +100,7 @@ def fig_afd():
     assert M_MB >= 2 * (1 + TC / 1.0) and CYCLE == M_MB
     TX, LW, SW, NS = 690, 92, 70, 8          # SW：一格宽
     assert TX + LW + NS * SW <= W - 10
-    COLS3 = [GR, PU, CY]
+    COLS3 = [GR, "#80868b", "#bdc1c6"]      # ⭐ 麻瓜读图：只高亮 A，B、C 调灰，盯一个小批才看得清
     f.t(TX, py + 36, "三个小批轮着跑：去、回各占半格", INK, True, 15)
     rows = (("attention", BL, 0.0, 1.0), ("去", BL, 1.0, TC), ("专家", OR, 1.0 + TC, 1.0), ("回", OR, 2.0 + TC, TC))
     for r, (lab, col, off, dur) in enumerate(rows):
@@ -153,7 +153,7 @@ def fig_decode_ai():
                "TPU v7 每秒能算 2307 万亿次、每秒能从显存读约 7.4 万亿字节，一除约 313：一批不到约 313 个请求，卡就在等显存。"
                "MoE 更难：每个专家平均只分到这一批的三十二分之一，要一批约一万个请求，每个专家才吃得饱")
     y0 = f.header("decode 为什么非要把一批做大　——　<tspan font-weight=\"700\">读一遍权重，只够这一批用一次</tspan>",
-                  "横轴：一步里一起出字的请求数 b（对数刻度）。纵轴：从显存读 1 字节权重，换来多少次计算（⚠️ 推导，只算读权重）",
+                  "横轴：一步里一起出字的请求数 b（对数刻度）。纵轴：从显存读 1 字节权重，换来多少次计算（本课推导，只算读权重）",
                   [(BL, "稠密层：＝ b"), (OR, "MoE 的一个专家：＝ b ÷ 32（V3 挑 8／256）"), (RD, "v7 显存线 ≈ %.0f" % RIDGE_HBM)])
     PX, PY, PW, PH = 150, y0 + 20, 980, 360
     X0, X1 = 0, 14                         # log2 b：1 … 16,384

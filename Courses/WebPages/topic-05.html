@@ -3223,7 +3223,7 @@ body.figonly section h3{margin-top:34px}
     算 6ΨT 次（专题四「每个 token 约 6 倍参数量次运算」，T 是每张卡分到的 token 数）。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
 <figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时，按最乐观的线才勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两把刀，两种账　——　<tspan font-weight="700">FSDP 看 batch，TP 看隐藏维</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（ 推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（本课推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FSDP：＝ 每卡 token 数 T</text>
 <rect x="249.72000000000003" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -4432,7 +4432,7 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li><b>训练</b>：每层要存的激活至少跟序列长度成正比；不用 FlashAttention 时还有一项跟长度的平方成正比（Megatron 序列并行论文的式 1）。</li>
     <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 存一份压缩后的 KV（512 维）加一小段位置信息（64 维），(512 ＋ 64) × 61 层 × 2 字节（BF16）＝ 70,272 字节；再乘 131,072 个 token，
-      <b>一个 128K 的请求就是约 8.58 GiB</b>，这还只是一个请求。</li>
+      <b>一个 128K 的请求就是约 8.58 GiB</b>，差不多是一张 80 GB 显卡的九分之一，这还只是一个请求。把 KV 想成每个字留下的「笔记」，后面的字都要回头翻它。</li>
   </ul>
 
   <h3 id="s5-2">5.2　训练：CP 把激活沿序列切开</h3>
@@ -4441,7 +4441,7 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li><b>Ring Attention</b>：把 KV 想成每个 token 留下的「笔记」，Q 是新 token 手里的「提问」。Q 不动，KV 沿环一段段传，每一步算手上这一对，同时把 KV 传给下一张。
       这就是 1.5 那个环：传下一段时正在算这一段，通信藏在计算后面。</li>
-    <li><b>Ulysses</b>：注意力前后各做一次 AllToAll（<a href="#s1-6">§1.6</a> 那个转置），在「按序列切」和「按头切」之间来回换。
+    <li><b>Ulysses</b>：先说一个词：注意力被拆成几十个并排的「头」，各看各的。Ulysses 在注意力前后各做一次 AllToAll（<a href="#s1-6">§1.6</a> 那个转置），在「按序列切」和「按头切」之间来回换。
       换成按头切以后，每张卡手里是全部 token、但只有几个头，注意力就能在本卡算完，算完再换回去。
       每张卡的通信量在序列长度和卡数同比放大时保持不变；代价是并行度不能超过注意力头数：换过去以后每张卡至少要拿一个完整的头；KV 头比查询头少的模型（GQA），卡在 KV 头数上。</li>
   </ul>
@@ -4585,7 +4585,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>同样 8 块，换一种分法，最忙和最闲从差好几倍变成一样忙。</b><span class="capmore"><br><em>每格数由脚本按因果掩码现算。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-LM megatron/core/utils.py：序列切成 2×cp_size 块，rank r 拿第 r 块和第 2·cp−r−1 块；文档 docs/user-guide/features/context_parallel.md 称其避免下三角的多余计算并保持负载均衡。每格数本脚本现算；对角格按整格计。对角格只算一半时是 2／6／10／14 对 8／8／8／8，顺序切差 7 倍。</p></details></figure>
 
   <h3 id="s5-4">5.4　推理：KV cache 被 TP 复制了</h3>
-  <p>长上下文、高并发的推理（decode 阶段）里，KV 常常是最大的一块。TP 在注意力里是按头分卡的：V3 的查询头有 128 个，分得开；MLA 把 KV 压成所有头共用的一份，只剩一个头，切不开。</p>
+  <p>长上下文、高并发的推理（decode 阶段）里，KV 常常是最大的一块。先记住一句：<b>TP 按头切，DCP 按字切</b>，下面两段就是这句话的展开。TP 在注意力里是按头分卡的：V3 的查询头有 128 个，分得开；MLA 把 KV 压成所有头共用的一份，只剩一个头，切不开。</p>
   <p>很多模型把 KV 头定成 8 个，TP 8 路时每张卡正好分一组（Llama 2 70B 就是 8 个 KV 头）。一般地，TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated tp_size / H times）。
     MLA 模型只有一个 KV 头，TP 8 路就是每张卡一整份、8 份一模一样的 KV。4.4 里 V4-Pro 在 TP4 上白存 3 份，毛病就在这儿。</p>
 <figure class="fbox fwide" id="fig-kv-dup"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。每个 token 的 KV 是 70272 字节，12 万 8 千个 token 就是约 8.58 GiB。TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -4651,7 +4651,7 @@ body.figonly section h3{margin-top:34px}
        aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：只开 TP：笔记切不开，每张卡都存全部 12 个 token 的 KV（四张卡各一块红色大块）。字幕二：DCP：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕三：12 个 token，每张卡只存 3 个的 KV：同样的卡，能装 4 倍的笔记。字幕四：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕五：四份部分结果合并成一份：每层多几次通信，换回 4 倍的 KV 空间。最后复位。"></video>
 <figcaption>KV 轮流落到四张卡上；每一层多几次通信，把 Q 收齐、把结果合起来。
   <span class="sub">（11 秒无声循环，Manim 渲染。先放只开 TP 时的样子做对照。）</span></figcaption></figure>
-  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并。合并不能各除各的，要「先别除」：</p>
+  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并。注意力本身就是按分数加权平均，所以合并不能各除各的，要「先别除」：</p>
 <figure class="fbox fwide" id="fig-softmax-merge"><svg viewBox="0 0 1400 544" width="100%" role="img" aria-label="笔记分在两张卡上时，注意力的结果怎么合。三个 token 的分数取指数是 2、1、1，值是 10、4、20；卡 0 拿前两个，卡 1 拿第三个。各除各的：卡 0 得 24 除以 3 等于 8，卡 1 得 20 除以 1 等于 20，再平均是 14，错了。先别除：分子加分子 44，分母加分母 4，最后除一次得 11，跟不分卡算的一样。所以每张卡除了结果还要交出自己的分母"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">分块算注意力，合并时先别除　——　<tspan font-weight="700">分子加分子，分母加分母，最后只除一次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">注意力 ＝ 按分数加权平均。三个 token：分数取指数后是 2、1、1，值是 10、4、20。卡 0 拿前两个，卡 1 拿第三个</text>
@@ -4730,7 +4730,7 @@ body.figonly section h3{margin-top:34px}
   <p>decode 还有个脾气：每一步都要把权重从显存读一遍，读一次只够这一批用一次。一批要多大才不白读？</p>
 <figure class="fbox fwide" id="fig-decode-ai"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="decode 每一步都要把权重从显存读一遍。一批里有 b 个请求一起出字时，读一个字节的权重换来 b 次计算。TPU v7 每秒能算 2307 万亿次、每秒能从显存读约 7.4 万亿字节，一除约 313：一批不到约 313 个请求，卡就在等显存。MoE 更难：每个专家平均只分到这一批的三十二分之一，要一批约一万个请求，每个专家才吃得饱"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">decode 为什么非要把一批做大　——　<tspan font-weight="700">读一遍权重，只够这一批用一次</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴：一步里一起出字的请求数 b（对数刻度）。纵轴：从显存读 1 字节权重，换来多少次计算（ 推导，只算读权重）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴：一步里一起出字的请求数 b（对数刻度）。纵轴：从显存读 1 字节权重，换来多少次计算（本课推导，只算读权重）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密层：＝ b</text>
 <rect x="143.32" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -4969,8 +4969,9 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="506" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 的业务 prefill 更累，就多配 prefill；长回答的业务多配 decode。</text>
 </svg><figcaption><b>多用一种机器，反而省卡。</b><span class="capmore"><br><em>每张卡接的请求翻了一倍多，是因为谁也不再拖谁。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DistServe（Zhong 等，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）作者博客「Throughput is Not All You Need」中的例子：同一 SLO 下单卡 goodput 1.6／5.6／10 rps。</p>
 <p>⚠️ 本课推导：2P1D 每秒 min(2 × 5.6, 10) ＝ 10 个，每卡约 3.3 个；混着做接 10 个要 ⌈10 ÷ 1.6⌉ ＝ 7 张卡。</p></details></figure>
-  <p>经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。
-    DistServe 论文把配比和各自的并行方式一起搜，跟 vLLM 等不拆开的系统比，同样的延迟要求下最多能多服务 7.4 倍的请求，或者把延迟要求收紧最多 12.6 倍（OPT 系列模型，以 90% 请求达标为准）。</p>
+  <p>经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。</p>
+  <details class="foldfig"><summary><b>细一点</b>：论文里最多能多服务几倍</summary>
+  <p>DistServe 论文把配比和各自的并行方式一起搜，跟 vLLM 等不拆开的系统比，同样的延迟要求下最多能多服务 7.4 倍的请求，或者把延迟要求收紧最多 12.6 倍（OPT 系列模型，以 90% 请求达标为准）。上图那个「翻一倍多」是论文里一个单卡算例，7.4 倍是搜遍配比和切法之后的最好结果。</p></details>
 
   <h3 id="s6-4">6.4　两边各挑各的切法</h3>
   <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。</p>
@@ -4991,11 +4992,11 @@ body.figonly section h3{margin-top:34px}
 <rect x="154.52" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="175" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专家机器</text>
 <rect x="264.24" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="285" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 A</text>
-<rect x="360.52" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="381" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 B</text>
-<rect x="456.79999999999995" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="477" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 C</text>
+<text class="svgsm" x="285" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 A（盯着它看）</text>
+<rect x="454.6" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="475" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 B</text>
+<rect x="550.88" y="63" width="14" height="14" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<text class="svgsm" x="571" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 C</text>
 <rect x="0" y="102" width="1400" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5029,15 +5030,15 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1026" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
 <rect x="1203.0" y="189" width="67.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1236" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="853.0" y="189" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="853.0" y="189" width="67.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="886" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1063.0" y="189" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1063.0" y="189" width="67.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1096" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1273.0" y="189" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1273.0" y="189" width="67.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1306" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="923.0" y="189" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="923.0" y="189" width="67.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="956" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1133.0" y="189" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="1133.0" y="189" width="67.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1166" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
 <text class="svgsm" x="690" y="256" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">去</tspan></text>
 <rect x="782" y="234" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -5047,13 +5048,13 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1079" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
 <rect x="1273.0" y="235" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1289" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="923.0" y="235" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="923.0" y="235" width="32.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="939" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1133.0" y="235" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1133.0" y="235" width="32.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1149" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="993.0" y="235" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="993.0" y="235" width="32.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1009" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1203.0" y="235" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="1203.0" y="235" width="32.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1219" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
 <text class="svgsm" x="690" y="302" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家</tspan></text>
 <rect x="782" y="280" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -5063,13 +5064,13 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1131" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
 <rect x="1308.0" y="281" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1324" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="958.0" y="281" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="958.0" y="281" width="67.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="991" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1168.0" y="281" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1168.0" y="281" width="67.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1201" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1028.0" y="281" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="1028.0" y="281" width="67.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1061" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1238.0" y="281" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="1238.0" y="281" width="67.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1271" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
 <text class="svgsm" x="690" y="348" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回</tspan></text>
 <rect x="782" y="326" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -5077,13 +5078,13 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="974" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
 <rect x="1168.0" y="327" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1184" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1028.0" y="327" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1028.0" y="327" width="32.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1044" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1238.0" y="327" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1238.0" y="327" width="32.0" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1254" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1098.0" y="327" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="1098.0" y="327" width="32.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1114" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1308.0" y="327" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="1308.0" y="327" width="32.0" height="30" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1324" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
 <text class="svgsm" x="782" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
 <text class="svgsm" x="852" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
@@ -5105,9 +5106,8 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>拆开的不是张量，是一层里的两种活。</b><span class="capmore"><br><em>机器数和格子都是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 MegaScale-Infer arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a>（disaggregated expert parallelism、ping-pong pipeline、每 GPU 吞吐最高 1.90×）；Step-3 arXiv <a href="https://arxiv.org/abs/2507.19427" target="_blank" rel="noopener">2507.19427</a>；vLLM 于 2026-07 发布实验性 AFD 插件。</p></details></figure>
   <p>每一层都要把 token 从 attention 那边发给专家（M → N），算完再收回来（N → M）。
     为了不让这一来一回拖慢，把一批请求切成几个小批轮着跑：这一个在算 attention，另一个正好在算专家，还有一个在路上。
-    MegaScale-Infer 论文算过，要藏住通信至少得三个小批，通信慢的时候要四个。
-    字节的 MegaScale-Infer 报告每 GPU 吞吐最高提升 1.90 倍；阶跃的 Step-3 也是这个路子；
-    vLLM 在 2026 年 7 月出了实验性插件。</p>
+    MegaScale-Infer 论文算过，要藏住通信至少得三个小批，通信慢的时候要四个；它报告每 GPU 吞吐最高提升 1.90 倍。</p>
+  <details class="foldfig"><summary><b>谁在用</b></summary><p>字节的 MegaScale-Infer、阶跃的 Step-3 都是这个路子；vLLM 在 2026 年 7 月出了实验性插件。</p></details>
 
   <h3 id="s6-6">6.6　多模态：编码器也单独放</h3>
   <p>同样的思路还能往前推一段：多模态模型的视觉编码器单独部署，算好的 embedding 再传给语言模型（Encoder 分离，

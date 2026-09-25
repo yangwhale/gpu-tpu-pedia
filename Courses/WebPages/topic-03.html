@@ -1808,7 +1808,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="1186" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="1186" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="1186" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1213" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以这一讲的前半程只有一个账本：KV cache（ 到旋钮② 它就不够用了）</tspan></text>
+<text class="svglbl" x="20" y="1213" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以这一讲的前半程只有一个账本：KV cache（到旋钮② 它就不够用了）</tspan></text>
 <text class="svgsm" x="20" y="1244" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">在张量形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;全图只有 K 和 V 两处带它，<tspan font-weight="700">那就是唯一要跨 token 留下来的东西</tspan>。</text>
 <text class="svgsm" x="20" y="1268" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">三个旋钮是它的三个面：<tspan fill="#1a73e8" font-weight="700">① 每份多大</tspan>　<tspan fill="#e8710a" font-weight="700">② 每步读多少</tspan>　<tspan fill="#9334e6" font-weight="700">③ 干脆别让它变长</tspan></text>
 </svg><figcaption>⭐ <b>这就是整本书的路线图。</b>六段，每段只问三件事：图啥、带来了什么、欠下了什么。<span class="capmore"><br><b>底下那两条数才是落点，而且缺一不可</b> ——&nbsp;<em>只把长度做上去、价钱降不下来，没人用得起；价钱降下来了、长度还是 2K，那它仍旧只是个接话的补全器。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>2K ＝ GPT-3 的 max_position_embeddings；1M 与 846 倍见本课模型表（128K、BF16、batch 1，两端都取 ≥100B 的模型）</p>
@@ -1990,7 +1990,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="908" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="2" y="908" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="935" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆开一格看：里面就是两个矩阵乘、一个加法、一个非线性</tspan></text>
-<text class="svgsm" x="20" y="966" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">h<tspan baseline-shift="sub" font-size="10">t</tspan> ＝ f( W<tspan baseline-shift="sub" font-size="10">h</tspan> · h<tspan baseline-shift="sub" font-size="10">t−1</tspan> ＋ W<tspan baseline-shift="sub" font-size="10">x</tspan> · x<tspan baseline-shift="sub" font-size="10">t</tspan> ＋ b ) y<tspan baseline-shift="sub" font-size="10">t</tspan> ＝ W<tspan baseline-shift="sub" font-size="10">y</tspan> · h<tspan baseline-shift="sub" font-size="10">t</tspan> <tspan fill="#5f6368">形状：h 是 [d]，W<tspan baseline-shift="sub" font-size="10">h</tspan> 是 [d × d]</tspan></text>
+<text class="svgsm" x="20" y="966" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">h<tspan baseline-shift="sub" font-size="10">t</tspan> ＝ f(W<tspan baseline-shift="sub" font-size="10">h</tspan> · h<tspan baseline-shift="sub" font-size="10">t−1</tspan> ＋ W<tspan baseline-shift="sub" font-size="10">x</tspan> · x<tspan baseline-shift="sub" font-size="10">t</tspan> ＋ b ) y<tspan baseline-shift="sub" font-size="10">t</tspan> ＝ W<tspan baseline-shift="sub" font-size="10">y</tspan> · h<tspan baseline-shift="sub" font-size="10">t</tspan> <tspan fill="#5f6368">形状：h 是 [d]，W<tspan baseline-shift="sub" font-size="10">h</tspan> 是 [d × d]</tspan></text>
 <text class="svgsm" x="20" y="990" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">d 就是它能记住的全部容量</tspan>——&#160;喂 10 个词还是 10 万个词，盒子一样大。</text>
 </svg><figcaption>⭐ 左边是 1990 年的原始画法，右边把它<b>沿时间摊开</b> ——&nbsp;<em>一条链的样子，得摊开才看得见。</em><span class="capmore"><br>看完只要记住一件事：<b>那条红线是横着走的。</b><em>这本书接下来所有的招，都是在想办法<b>别沿着它走</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Elman 1990《Finding Structure in Time》——&#160;context units「copied … on a one-for-one basis, with fixed weight of 1.0」；LSTM: Hochreiter &amp; Schmidhuber 1997；GRU: Cho et al. 2014</p></details></figure>
 
@@ -5022,7 +5022,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="84" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="112" x2="1400" y2="112" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="102" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四种存法 ——　把它们摆到一张图上</tspan></text>
-<text class="svgsm" x="251" y="102" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">横轴：一份占多少地方（对数）　·　纵轴：换回多少能力（ 定性）</text>
+<text class="svgsm" x="251" y="102" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">横轴：一份占多少地方（对数）　·　纵轴：换回多少能力（定性）</text>
 <rect x="170" y="156" width="850" height="130" rx="8" fill="#fff" stroke="none" stroke-width="1.0"/>
 <rect x="170" y="308" width="850" height="130" rx="8" fill="#fff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="180" y="186" fill="#0d652d" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">跟 MHA 基本打平</tspan></text>
@@ -7136,7 +7136,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="182" y="170" width="412" height="112" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="198" y="198" fill="#174ea6" style="font-size:21.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⚡ 闪电索引器</tspan></text>
 <text class="svgsm" x="198" y="224" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">给<tspan font-weight="700">每一个</tspan>历史 token 打一个分</text>
-<text class="svgsm" x="198" y="254" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">I[t,s] ＝ Σ<tspan baseline-shift="sub" font-size="11">j</tspan> w[t,j] · ReLU( q[t,j] · k[s] )</tspan></text>
+<text class="svgsm" x="198" y="254" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">I[t,s] ＝ Σ<tspan baseline-shift="sub" font-size="11">j</tspan> w[t,j] · ReLU(q[t,j] · k[s] )</tspan></text>
 <text class="svgsm" x="198" y="304" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">它便宜在三处：</tspan></text>
 <text class="svgsm" x="216" y="332" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">· 头很少（不是主注意力那 128 个头）</text>
 <text class="svgsm" x="216" y="356" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">· 用 ReLU 不用 softmax ——　只排序，不做加权平均</text>
@@ -8342,7 +8342,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="14" y="526" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 「叉掉」这个动作，在式子里就是这一块</tspan></text>
 <text class="svgsm" x="291" y="526" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">把比喻钉到代数上</text>
 <rect x="56" y="590" width="620" height="96" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="80" y="644" fill="#202124" style="font-size:28.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">S ← S ( I − β k kᵀ ) ＋ β v kᵀ</tspan></text>
+<text class="svgsm" x="80" y="644" fill="#202124" style="font-size:28.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">S ← S (I − β k kᵀ ) ＋ β v kᵀ</tspan></text>
 <rect x="214" y="606" width="214" height="62" rx="6" fill="none" stroke="#1e8e3e" stroke-width="2.4"/>
 <text class="svgsm" x="321" y="704" fill="#0d652d" text-anchor="middle" style="font-size:21.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一块就是「叉掉」</tspan></text>
 <text class="svgsm" x="321" y="732" fill="#5f6368" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums">在 k 这个方向上，按比例把旧的擦掉</text>
@@ -9230,7 +9230,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="2336" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="2" y="2336" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="2363" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一张真正的落点：它不是「更快的注意力」，是一次改算法顺序</tspan></text>
-<text class="svgsm" x="20" y="2394" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">chunkwise <tspan font-weight="700">数学上跟逐 token 递推等价</tspan>（ 数值上不完全等价 ——&#160;求和顺序变了，舍入就变了）。它改的只有一件事：<tspan font-weight="700">什么时候算什么</tspan>。</text>
+<text class="svgsm" x="20" y="2394" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">chunkwise <tspan font-weight="700">数学上跟逐 token 递推等价</tspan>（数值上不完全等价 ——&#160;求和顺序变了，舍入就变了）。它改的只有一件事：<tspan font-weight="700">什么时候算什么</tspan>。</text>
 <text class="svgsm" x="20" y="2418" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">而这恰好是这门课的主线又一次出现：<tspan font-weight="700">一个数学上无所谓的选择，在硬件上决定生死</tspan> ——&#160;不分块，线性注意力根本喂不饱加速器，再省显存也没用。</text>
 <rect x="0" y="2448" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="2448" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -9645,7 +9645,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="1184" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="2" y="1184" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="1211" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这条轴上最值得说的，是「大家都在哪」</tspan></text>
-<text class="svgsm" x="20" y="1242" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">最高的那一摞在 3:1，这十四家里占五个</tspan>；往右<tspan font-weight="700">没有一家超过 7:1</tspan>（ 指<tspan font-weight="700">这一批</tspan>）。这就是「大家都在哪」——&#160;不用数，堆在那儿。</text>
+<text class="svgsm" x="20" y="1242" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">最高的那一摞在 3:1，这十四家里占五个</tspan>；往右<tspan font-weight="700">没有一家超过 7:1</tspan>（指<tspan font-weight="700">这一批</tspan>）。这就是「大家都在哪」——&#160;不用数，堆在那儿。</text>
 <text class="svgsm" x="20" y="1266" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">再看最左边那一摞：<tspan font-weight="700">1:1 上那两个清一色是橙的</tspan>（滑窗 / 局部）——&#160;<tspan font-weight="700">线性混合最省也是从 3:1 起步，没有一家敢一比一。</tspan> 一种读法是：滑窗层毕竟还是注意力，只是不看远处</text>
 <text class="svgsm" x="20" y="1290" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">；线性换掉的东西更多，得多配几层来摊。<tspan font-weight="700">这只是读法</tspan> ——&#160;没有哪篇论文这么归因过。</text>
 <rect x="0" y="1320" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -10128,7 +10128,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <figure class="fbox fwide" id="fig-ratio-or-count"><svg viewBox="0 0 1400 1290" width="100%" role="img" aria-label="守恒的是比值不是绝对层数：十四个能拉到 layer_types 配置文件的混合模型里，全注意力层的绝对条数随深度线性涨，Kimi 从 27 层 7 条涨到 93 层 24 条而比值不动，Qwen3.5 七个尺寸逐层写死、恰好 3 比 1；更准的说法是主体按比例铺，外加几个按位置钉死的全局层"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">守恒的是比值，还是全注意力的层数</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">去数<tspan font-weight="700">配置文件</tspan>，不猜 ——&#160;十四个模型的 layer_types 逐个拉下来（ 跟配比点阵那张不是同一批）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">去数<tspan font-weight="700">配置文件</tspan>，不猜 ——&#160;十四个模型的 layer_types 逐个拉下来（跟配比点阵那张不是同一批）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Qwen 系</text>
 <rect x="113.08000000000001" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -11192,7 +11192,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <line x1="710" y1="470" x2="1400" y2="470" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="724" y="460" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 一条防骗判据</tspan></text>
 <text class="svgsm" x="839" y="460" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">这一讲最该带走的一句</text>
-<text class="svgsm" x="732" y="496" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次前向的<tspan font-weight="700">算力</tspan>都花在哪（ 算力，不是时间）</tspan></text>
+<text class="svgsm" x="732" y="496" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次前向的<tspan font-weight="700">算力</tspan>都花在哪（算力，不是时间）</tspan></text>
 <text class="svgsm" x="732" y="530" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4K</tspan></text>
 <rect x="772" y="517" width="606" height="18" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="773" y="518" width="74.23279915253036" height="16" rx="2" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
