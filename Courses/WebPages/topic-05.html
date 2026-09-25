@@ -1040,16 +1040,81 @@ body.figonly section h3{margin-top:34px}
     <b>用一种通信，换一份显存或一份算力。</b><br>
     选并行策略，就是在选你愿意付哪一种通信、付多频繁、放在哪根线上。</div>
 
-  <p>这一讲按一条接力线走。<b>每一刀都在补前面没管到的那一块</b>：前一刀撑不住了，或者模型换了形状、上下文变长了，就得换一刀。</p>
-  <ol>
-    <li><b>先认识五种通信</b>：后面每一刀多出来的，都是其中一种。</li>
-    <li><b>第一刀，切数据</b>：装不下，一路削到把模型也切开。</li>
-    <li><b>第二刀，切权重</b>：batch 一小，第一刀被搬权重拖垮。</li>
-    <li><b>第三刀，切专家</b>：MoE 的参数几乎全在专家里。</li>
-    <li><b>第四刀，切序列</b>：上下文一长，一条样本自己就放不下。</li>
-    <li><b>第五刀，切工作</b>：prefill 和 decode、attention 和专家，要的切法不一样。</li>
-    <li><b>摆到机器上</b>，最后用一张全景图收一遍。</li>
-  </ol>
+  <p>这一讲按一条接力线走：<b>切一刀，付一笔通信；切完发现还有一块没管到，再切一刀。</b></p>
+<figure class="fbox fwide" id="fig-roadmap"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="这一讲的接力线。先认识五种通信，然后五刀依次出场，最后摆到机器上。第一刀切数据，付的是把 AllReduce 拆成两半，留下的问题是 batch 一小搬权重就藏不住；第二刀切权重，每层一次 AllReduce，留下的问题是参数几乎全在很窄的专家里；第三刀切专家，每层两次 AllToAll，留下的问题是上下文一长一条样本装不下；第四刀切序列，留下的问题是 prefill 和 decode 要的切法不一样；第五刀切工作，一个请求一趟 KV 传输，留下的问题是刀这么多谁坐快线；最后摆到机器上，说得勤的坐快线"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一条接力线　——　<tspan font-weight="700">红字就是下一刀出场的理由</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">盒子里：这一刀切什么、多付哪种通信（过路费）。盒子下面的红字：它留下的问题，逼出下一刀</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">留下的问题 → 下一刀的理由</text>
+<rect x="0" y="102" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先认识五种通信，再一刀一刀切</tspan></text>
+<rect x="24" y="162" width="196" height="150" rx="10" fill="none" stroke="#1a73e8" stroke-width="2.4"/>
+<rect x="24" y="162" width="196" height="34" rx="10" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="24" y="186" width="196" height="10" rx="0" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="122" y="185" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第一刀　切数据</tspan></text>
+<text class="svgsm" x="36" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切 batch；再削掉重复存的</tspan></text>
+<text class="svgsm" x="36" y="266" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">过路费：</text>
+<text class="svgsm" x="36" y="288" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllReduce 拆成两半</tspan></text>
+<line x1="223" y1="237.0" x2="251" y2="237.0" stroke="#80868b" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="34" y="342" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↳ 留下的问题</tspan></text>
+<text class="svgsm" x="34" y="366" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">batch 一小，搬权重就藏不住</text>
+<rect x="254" y="162" width="196" height="150" rx="10" fill="none" stroke="#e8710a" stroke-width="2.4"/>
+<rect x="254" y="162" width="196" height="34" rx="10" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="254" y="186" width="196" height="10" rx="0" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="352" y="185" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二刀　切权重</tspan></text>
+<text class="svgsm" x="266" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切进矩阵、按层切</tspan></text>
+<text class="svgsm" x="266" y="266" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">过路费：</text>
+<text class="svgsm" x="266" y="288" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每层 AllReduce；段间收发</tspan></text>
+<line x1="453" y1="237.0" x2="481" y2="237.0" stroke="#80868b" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="264" y="342" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↳ 留下的问题</tspan></text>
+<text class="svgsm" x="264" y="366" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">参数几乎全在很窄的专家里</text>
+<rect x="484" y="162" width="196" height="150" rx="10" fill="none" stroke="#1e8e3e" stroke-width="2.4"/>
+<rect x="484" y="162" width="196" height="34" rx="10" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="484" y="186" width="196" height="10" rx="0" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="582" y="185" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第三刀　切专家</tspan></text>
+<text class="svgsm" x="496" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家整个分给不同的卡</tspan></text>
+<text class="svgsm" x="496" y="266" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">过路费：</text>
+<text class="svgsm" x="496" y="288" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每层两次 AllToAll</tspan></text>
+<line x1="683" y1="237.0" x2="711" y2="237.0" stroke="#80868b" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="494" y="342" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↳ 留下的问题</tspan></text>
+<text class="svgsm" x="494" y="366" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">上下文一长，一条样本装不下</text>
+<rect x="714" y="162" width="196" height="150" rx="10" fill="none" stroke="#9334e6" stroke-width="2.4"/>
+<rect x="714" y="162" width="196" height="34" rx="10" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="714" y="186" width="196" height="10" rx="0" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="812" y="185" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第四刀　切序列</tspan></text>
+<text class="svgsm" x="726" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练切激活，推理切 KV</tspan></text>
+<text class="svgsm" x="726" y="266" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">过路费：</text>
+<text class="svgsm" x="726" y="288" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">环上传 KV；收齐 Q、合结果</tspan></text>
+<line x1="913" y1="237.0" x2="941" y2="237.0" stroke="#80868b" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="724" y="342" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↳ 留下的问题</tspan></text>
+<text class="svgsm" x="724" y="366" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">prefill、decode 要的切法不一样</text>
+<rect x="944" y="162" width="196" height="150" rx="10" fill="none" stroke="#00838f" stroke-width="2.4"/>
+<rect x="944" y="162" width="196" height="34" rx="10" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<rect x="944" y="186" width="196" height="10" rx="0" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1042" y="185" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第五刀　切工作</tspan></text>
+<text class="svgsm" x="956" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill、decode 分开放</tspan></text>
+<text class="svgsm" x="956" y="266" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">过路费：</text>
+<text class="svgsm" x="956" y="288" fill="#007b83" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一请求一趟 KV 传输</tspan></text>
+<line x1="1143" y1="237.0" x2="1171" y2="237.0" stroke="#80868b" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="954" y="342" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↳ 留下的问题</tspan></text>
+<text class="svgsm" x="954" y="366" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">刀这么多，谁坐快线？</text>
+<rect x="1174" y="162" width="196" height="150" rx="10" fill="none" stroke="#202124" stroke-width="2.4"/>
+<rect x="1174" y="162" width="196" height="34" rx="10" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="1174" y="186" width="196" height="10" rx="0" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1272" y="185" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">摆到机器上</tspan></text>
+<text class="svgsm" x="1186" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">说得勤的坐快线</tspan></text>
+<text class="svgsm" x="1186" y="266" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">过路费：</text>
+<text class="svgsm" x="1186" y="288" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">摆错一次，同样的卡慢几倍</tspan></text>
+<rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一刀都不白来，也都不是最后一刀</tspan></text>
+<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">它多付一种通信，换回一截显存或一份速度。</text>
+<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">它没管到的那一块，就是下一节开头要解决的问题。</text>
+</svg><figcaption><b>红字是剧情：每一刀留下的问题，就是下一节的开头。</b><span class="capmore"><br><em>每一节最后一小节「这一刀留下的问题」，就是这里的一格红字。</em></span></figcaption></figure>
   <p>量每一刀用两把尺子：它多出来的通信<b>有多频繁</b>（决定放哪根线），每搬一个字节<b>换来多少计算</b>（决定会不会被拖住，第三节）。</p>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b>：张量、激活、注意力头、MoE、KV cache、prefill 与 decode、Q/K/V、MLA、显存、ICI、「几路」……（专题一、三讲过，这里各一句话）</summary>
