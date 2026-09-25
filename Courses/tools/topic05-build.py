@@ -919,7 +919,7 @@ __FIG_PANO__
     <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv 1909.08053 §3），FSDP 每层 3 次（arXiv 1910.02054 §7），EP ／ PP ／ DP 按调度数出</td></tr>
     <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki sources/nvidia-gpu-comparison-20260311、analyses/gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
-    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580）、§3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。§4.1 一步 23.54 s；组间 all-reduce 占不到百分之一为本课推算（原文 12 ms 的算式前后不一致）；换配法 EP 掉 37% 与 FSDP 加宽只慢不到 1%（450 对 453）见 §3.7</td></tr>
+    <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 §3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、§4.1（64 与 256 芯片同为 580）、§3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。§4.1 一步 23.54 s；组间 all-reduce 占不到百分之一为本课推算（原文 12 ms 的算式前后不一致）；换配法 EP 掉 37% 与 FSDP 加宽只慢不到 1%（450 对 453）见 TUNING-v7 §3.7</td></tr>
     <tr><td>DCP 每层三次通信</td><td>vllm/config/parallel.py 中 dcp_comm_backend 的 docstring（默认 ag_rs 每层 3 次 NCCL 调用，a2a 后端 2 次）</td></tr>
     <tr><td>ZeRO-2 切 micro-batch 不再白送；配 PP 选 ZeRO-1</td><td>DeepSpeed 文档：流水线并行不兼容 ZeRO-2／3；V3 技术报告 §3.2（ZeRO-1）；Megatron distributed optimizer</td></tr>
     <tr><td>TP 每字节换多少计算 ≈ 4.5 × 隐藏维 ÷ TP、V3 TP8 ≈ 4,032</td><td>⚠️ 本课推导：每层 4 次 AllReduce 各发约 4Th 字节、算 72h²T／n（标准注意力＋4 倍宽 MLP），对 V3 只作示意</td></tr>

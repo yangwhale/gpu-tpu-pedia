@@ -3139,7 +3139,7 @@ p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
 <p><b>讲稿台词 @@SAY@@ 汉字</b>（按 200 字/分 ＝ <b>@@SAYMIN@@ 分钟</b>）
 ＋ <b>@@CUTS@@ 次切图</b>（每次滚动定位按 15 秒 ＝ <b>@@CUTMIN@@ 分钟</b>）
 ——&nbsp;<b>合计 @@TOTAL@@ 分钟</b>，<em>而这里面还没算任何讲图、互动、答问的时间。</em></p>
-<p>⭐ <b>83′ 版</b>：剩 <b>@@BUF70@@ 分钟</b>给讲图和现场发挥。</p></div>
+<p>⭐ <b>@@PLANSUM@@′ 版</b>：@@BUF70@@</p></div>
 
 <h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
 <div class="say">
@@ -3228,7 +3228,7 @@ _secs = [(m.start(), re.sub(r"<[^>]+>", "", m.group(1)))
          for m in re.finditer(r'<h3 class="sec"[^>]*>(第[零一二三四五六]节.*?)</h3>', html)]
 assert len(_secs) == 7, "节标题只找到 %d 个" % len(_secs)
 _secs.append((html.index("🚧 这份讲义还薄"), ""))
-_rows, _floor = [], 0.0
+_rows, _floor, _plan_sum = [], 0.0, 0
 _over_rows = []          # ⭐ 地板超过计划的节，build 时喊出来
 for _i in range(7):
     _t = html[_secs[_i][0]:_secs[_i + 1][0]]
@@ -3240,6 +3240,7 @@ for _i in range(7):
     _floor += _f
     _plan = re.search(r"（(\d+)′", _secs[_i][1])
     _plan = int(_plan.group(1)) if _plan else 0
+    _plan_sum += _plan
     _bad = ' style="color:#c5221f;font-weight:700"' if _f > _plan else ""
     if _f > _plan + 0.5:
         _over_rows.append((_secs[_i][1].split("　")[0], _f, _plan))
@@ -3250,14 +3251,20 @@ _floorhtml = ('<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th
               '<th>地板</th><th>计划给的</th></tr></thead><tbody>'
               + "".join(_rows)
               + '<tr><td><b>七节合计</b></td><td colspan="2"></td>'
-                '<td><b>%.0f′</b></td><td><b>83′</b></td></tr>' % _floor
+                '<td><b>%.0f′</b></td><td><b>%d′</b></td></tr>' % (_floor, _plan_sum)
               + "</tbody></table>")
 html = html.replace("@@FLOOR@@", _floorhtml)
 assert _n > 3000 and _cuts > 8, "时间账数出来不对劲：%d 字 / %d 切图" % (_n, _cuts)
 for _k, _v in (("@@SAY@@", format(_n, ",")), ("@@SAYMIN@@", "%.0f" % _smin),
                ("@@CUTS@@", str(_cuts)), ("@@CUTMIN@@", "%.1f" % _cmin),
                ("@@TOTAL@@", "%.0f" % _tot),
-               ("@@BUF70@@", "%.0f" % (80 - _tot))):
+               # ⛔ 2026-09-25：合计格原写死 83′、缓冲按 80 算，而计划早改成 77′ —— 改成从节标题现算
+               ("@@PLANSUM@@", str(_plan_sum)),
+               # 地板超过计划时「剩 -87 分钟」是句胡话 —— 超了就直说超多少、该怎么办
+               ("@@BUF70@@", ("剩 <b>%.0f 分钟</b>给讲图和现场发挥。" % (_plan_sum - _tot))
+                if _tot <= _plan_sum else
+                ("<b>照稿念完就要超 %.0f 分钟</b> —— 讲稿是给准备用的全量，"
+                 "台上只讲每节「🎯 只留一句」和标 ⭐ 的段落，其余按「别讲什么」砍。" % (_tot - _plan_sum)))):
     assert _k in html, "时间账占位符 %s 不在文里了" % _k
     html = html.replace(_k, _v)
 

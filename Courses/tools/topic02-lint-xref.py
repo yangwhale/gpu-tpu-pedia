@@ -51,8 +51,10 @@ CROSS_DOC_OK = {
 # ⛔ 2026-09-12 补 `论文|paper|arXiv`。触发：专题三里两处「V3 **论文** §4.2」
 #    被报成本文档的死指针 —— 它指的是 DeepSeek 那篇论文的第 4.2 节。
 #    ⭐ 一个总在误报的闸门等于没有闸门，误报要当真 bug 修。
+# ⭐ 2026-09-25：补「报告 / 手册 / README / RUNBOOK / TUNING」—— 专题五引外部调优文档
+#   「TUNING-v7 §3.7」被报成本页死指针。跟 topic03_page.anchorize 的 _CITE_WORD 同一批词。
 FOREIGN = re.compile(r'(专题[一二三四五六七八九十\d]|L300|L200|完整版|精讲版'
-                     r'|论文|paper|arXiv|原文)')
+                     r'|论文|paper|arXiv|原文|报告|手册|README|RUNBOOK|TUNING)')
 
 
 def collect(path):
@@ -174,7 +176,9 @@ def audit_counts(fname, txt):
     #   普通行文里的「出现一次」不再算数。
     claims = [_ORD[m.group(1)] for m in re.finditer(
         r"(?:一共|总共|会|在?(?:本讲|这一讲|这一课|全文|全课|全书)[^。；\n]{0,10})"
-        r"出现(?:了)?([一二两三四五六七八九十])次", txt)
+        # ⭐ 2026-09-25：后面紧跟冒号的是「当场列举」（「已经出现两次：A……B……」），
+        #   数目就摆在眼前，不会随后续改动过期 —— 不算计数断言。
+        r"出现(?:了)?([一二两三四五六七八九十])次(?![：:])", txt)
         if m.group(1) in _ORD]
     if not seen and not claims:
         return 0
@@ -207,6 +211,9 @@ def main():
     print("\n跨节指针体检：%d 类死指针。" % total)
     if not total:
         print("   ✅ 每一处「§X.Y」都指向真实存在的小节。")
+    # ⛔ 2026-09-25：原来没有 return，sys.exit(None) 恒为 0 —— 打印出错误 ≠ 报告了失败
+    #   （topic02-lint-cues.py 修过同一个 bug）。build-all 开着 set -e，现在死指针会中止构建。
+    return 1 if total else 0
 
 
 if __name__ == '__main__':
