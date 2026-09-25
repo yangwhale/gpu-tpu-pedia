@@ -208,6 +208,9 @@ assert max(LOAD) >= 2.5 * (len(ROUTE) / 8), LOAD          # 热门专家至少�
 assert all(0 <= e < 8 for e in ROUTE)
 
 
+# ⭐ 增量来自时间（2026-09-25 对照构建手册补写）：负载不均是「看着堆起来」的 ——
+#   token 一个个飞到专家门口，热门专家那一队越排越长，别人早算完在等它。静态图只能画一张结果分布，
+#   画不出「它算完之前大家都得等」。
 class ExpertParallel(Scene):
     def construct(self):
         from manim import Circle, RED
@@ -273,6 +276,9 @@ class ExpertParallel(Scene):
 NR = 4
 COL_R = [BLUE, ORANGE, GREEN, "#9A72AC"]
 
+
+# ⭐ 增量来自时间（2026-09-25 补写）：KV 沿环一步一步传，每张卡那一行注意力一格一格填满；
+#   要点「传下一块的时候正在算这一块」是两件事同时发生，只有放在时间里才看得见重叠。
 
 def ring_kv_at(card, step):
     """第 step 步，卡 card 手上是第几段 KV：每步把手上的 KV 传给下一张卡。"""
@@ -352,6 +358,8 @@ class RingAttention(Scene):
         self.wait(0.6)
 
 
+# ⭐ 增量来自时间（2026-09-25 补写）：decode 本身就是一个 token 一个 token 往外出，
+#   KV 落到哪张卡按 token 号轮转 —— 「轮流存」这个动作只能演出来。开头先演一幕「只开 TP」当对照。
 class DecodeCP(Scene):
     def construct(self):
         from manim import Dot, Circle

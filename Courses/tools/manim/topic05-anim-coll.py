@@ -18,7 +18,7 @@ r"""专题五 · 第一节「先认识五种通信」的动画：环、AllToAll�
   `ring_rs_step` / `ring_ag_step` 按调度现算，并断言 RS 三步后卡 k 恰好握着第 k 块的完整总和、
   AG 三步后人人四块全满。块号约定跟 topic05-fig-coll.py 一致（第 s 步卡 k 发第 (k−s−1) mod 4 块）。
 
-📌 渲染：~/.claude/skills/manim-teaching-figures/scripts/render.sh \
+📌 渲染（在 Courses/ 下）：构建手册/脚本/render.sh \
         tools/manim/topic05-anim-coll.py Ring WebPages/media/topic05-ring.mp4
 """
 from manim import (Scene, VGroup, Rectangle, Text, Arrow, CurvedArrow, FadeIn, FadeOut,

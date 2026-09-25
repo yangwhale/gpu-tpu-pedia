@@ -122,6 +122,8 @@ python3 topic04-build-lecture.py
   # 专题五：2026-09-23 开工，2026-09-24 教材九节 ＋ 讲义写完。
   step "专题五 教材"
   # ⛔ 图先生成 —— place_figs 找不到 svg 会直接 assert 挂掉。
+  # ⭐ 2026-09-25 对照构建手册补：先删旧图（照专题三），否则删掉的图脚本留下的 svg 会被悄悄继续内联
+  rm -f fig5-*.svg fig5-*.src.html
   for s in topic05-fig-*.py; do python3 "$s"; done
   python3 topic05-build.py
 

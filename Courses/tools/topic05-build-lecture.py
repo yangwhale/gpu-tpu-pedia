@@ -655,6 +655,31 @@ if _over:
     for _nm, _fl, _pl in _over:
         print("       %-16s 地板 %5.1f′ > 给 %2d′" % (_nm, _fl, _pl))
 
+# ⭐ 2026-09-25 对照构建手册补的两条（手册 09 · 3.3）：
+# ① 课件封面「讲约 N 分钟」是手打的，跟这里的计划表是同一个量的两处写法 —— 断两处之间。
+_chip = re.search(r"讲约 (\d+) 分钟", io.open(os.path.join(WEB, DECK), encoding="utf-8").read())
+assert _chip and int(_chip.group(1)) == PLAN_SUM, \
+    "课件封面写「讲约 %s 分钟」，讲义计划表合计 %d′ —— 改一处不改另一处" % (_chip and _chip.group(1), PLAN_SUM)
+# ② 台词数字密度（从专题四搬来，只报告）：一串数从耳朵进去台下留不住。
+#   判据：这个数是「内容」还是「内容的证据」？证据说「有人量过」就够。
+# 已判定「数就是内容」的块（2026-09-25 判）：
+#   · 之字形那段：3／7／11／15 格对 9／9／9／9，这几个数就是这一格要讲的全部
+#   · GB300 那段：1820／1319／2758 每卡吞吐，是第七节的论据本身，台下跟着比大小
+_JUDGED = ("「生成式模型还有个麻烦", "「切法选错了，参数调得再细也没用")
+_noisy = []
+for _b in re.findall(r'<p class="say">(.*?)</p>', html, re.S):
+    _t = re.sub(r"<[^>]+>", "", _b).replace("&nbsp;", " ")
+    _c = len(re.findall(r"[一-鿿]", _t))
+    if _c < 40:
+        continue
+    _d = len(re.findall(r"[0-9]", re.sub(r"[A-Za-z]+-?[0-9]+", "", _t)))   # 摘掉 TP4、DEP8 这类名字里的数字
+    if _d * 100.0 / _c > 12.0 and not _t.strip().startswith(_JUDGED):
+        _noisy.append("%.0f/百字  %s" % (_d * 100.0 / _c, re.sub(r"\s+", " ", _t)[:40]))
+if _noisy:
+    print("   ⚠️  台词数字偏密（只报告，判断是内容还是证据）：")
+    for _x in _noisy:
+        print("       " + _x)
+
 # ⛔ 讲稿里报的 TiB/GiB 大数，教材页面上必须也有（讲稿是手打的，漂的一定是讲稿）。
 _DECKP = os.path.join(WEB, DECK)
 _deck = re.sub(r"\s+", "", io.open(_DECKP, encoding="utf-8").read())
