@@ -3218,9 +3218,11 @@ body.figonly section h3{margin-top:34px}
     这一节会连撞三堵墙：batch 一小，FSDP 被拖住，换 TP；TP 出不了一台机器，换 PP；PP 又有人闲着等。</p>
 
   <h3 id="s3-1">3.1　FSDP 的尽头：搬一个字节，换来多少计算</h3>
-  <p>判断一刀会不会被通信拖住，只看一个比值：<b>每在网络上搬一个字节，能换来多少次计算</b>。它要高过硬件自己的比值（每秒算多少次 ÷ 每秒搬多少字节），否则卡就在干等。</p>
+  <p>先问一个朴素的问题：<b>一份数据搬过来一次，能被用几回？</b>用的回数多，搬的那点时间就藏得住；只用一回，卡就在等搬运。
+    换成数字，就是一个比值：<b>每在网络上搬一个字节，能换来多少次计算</b>。它要高过硬件自己的比值（每秒算多少次 ÷ 每秒搬多少字节），否则卡就在干等。</p>
   <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬约 6Ψ 字节（前向、反向各拼一次 bf16 权重，再分一次梯度，各约 2Ψ），
-    算 6ΨT 次（专题四「每个 token 约 6 倍参数量次运算」，T 是每张卡分到的 token 数）。<b>两者一除，正好等于 T</b>，跟模型多大没关系。</p>
+    算 6ΨT 次（专题四「每个 token 约 6 倍参数量次运算」，T 是每张卡分到的 token 数）。<b>两者一除，正好等于 T</b>，跟模型多大没关系。
+    更直观的看法：一个参数占 2 字节，每个 token 拿它做一次乘加，正好 2 次运算。所以送来一个参数，这张卡上有几个 token，它就被用几回。</p>
 <figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时，按最乐观的线才勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两把刀，两种账　——　<tspan font-weight="700">FSDP 看 batch，TP 看隐藏维</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（本课推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
