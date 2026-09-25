@@ -17,6 +17,8 @@ r"""专题五 · 第三节「第二刀：切权重」的三张静态图。
 ⛔ 刻意没画：fig-intensity 只画最乐观的带宽线（三根轴都用满、首尾成环），真实门槛更高，正文 3.4 说明；
    fig-pp-bubble 画的是 GPipe 调度（先全部前向再全部反向），不是 1F1B —— 两者气泡一样大，GPipe 更好看懂。
 """
+import math
+
 from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 
 W = 1400
@@ -147,6 +149,74 @@ def fig_tp_mlp():
     f.save("fig5-tp-mlp.svg", yb + 14)
 
 
+def gelu(x):
+    """GeLU 精确式 0.5·x·(1＋erf(x／√2))，Megatron 用的也是它（或 tanh 近似，差在小数点后三位）。"""
+    return 0.5 * x * (1 + math.erf(x / math.sqrt(2)))
+
+
+# 反例的三个数：同一个元素在两张卡上各有一份部分和
+P0, P1 = 2.0, -3.0
+G_TRUE = gelu(P0 + P1)                  # 先加再过 GeLU：正确答案
+G_WRONG = gelu(P0) + gelu(P1)           # 各过各的再加：错的
+assert abs(G_TRUE - (-0.1587)) < 1e-3 and abs(G_WRONG - 1.9504) < 1e-3, (G_TRUE, G_WRONG)
+
+
+def fig_tp_order():
+    """⭐ 2026-09-25 现场讲课补的「为什么」图：fig-tp-mlp 只画了「先列后行」，没画「反过来为什么不行」。
+    承重的只有一件事：GeLU 不是线性的，部分和不能先各自过激活再相加。数字用 gelu() 现算并断言。"""
+    f = Fig(W, "为什么 Megatron 一定要先竖着切第一块权重。左边反过来，先横着切：每张卡手里是同一个元素的一份部分和，"
+               "比如卡 0 是 2、卡 1 是负 3，真值是负 1。GeLU 不是线性的，先加再过 GeLU 得负 0.159，"
+               "各过各的再加却得 1.950，完全错了，所以过 GeLU 之前必须先做一次 AllReduce，多一次通信。"
+               "右边先竖着切：每个元素整个在一张卡上，GeLU 各算各的，中间零通信")
+    y0 = f.header("为什么非得先竖着切　——　<tspan font-weight=\"700\">GeLU 只肯吃完整的数</tspan>",
+                  "同一个 MLP：Y ＝ GeLU(X · W1) · W2。只看中间结果里的某一个元素",
+                  [(BL, "卡 0 手里的"), (OR, "卡 1 手里的"), (RD, "错"), (GR, "对")])
+    PH = 330
+    HW = 680
+
+    def cell(x, y, col, txt, w=120):
+        f.box(x, y, w, 46, col, col, 5)
+        f.t(x + w / 2, y + 30, txt, "#ffffff", True, 16, "middle")
+
+    # 左：先横切
+    py = f.panel(0, y0, HW, PH, "反过来：先横着切 W1", RD)
+    f.t(24, py + 40, "每张卡算出的是同一个元素的「一份」，要加起来才是它", INK, size=14)
+    cell(24, py + 62, BL, "卡 0：%g" % P0)
+    cell(160, py + 62, OR, "卡 1：%g" % P1)
+    f.t(300, py + 92, "真值 ＝ %g" % (P0 + P1), GY, size=14)
+    f.t(24, py + 150, "先加，再过 GeLU：", INK, True, 15)
+    f.t(330, py + 150, "GeLU(%g) ＝ %.3f" % (P0 + P1, G_TRUE), GR, True, 15)
+    f.t(24, py + 190, "各过各的，再加：", INK, True, 15)
+    f.t(330, py + 190, "%.3f ＋ (%.3f) ＝ %.3f" % (gelu(P0), gelu(P1), G_WRONG), RD, True, 15)
+    f.box(24, py + 222, HW - 48, 70, "none", RD, 8, sw=2)
+    f.t(44, py + 252, "差了十几倍，符号都反了 → 过 GeLU 之前必须先 AllReduce", RD, True, 15)
+    f.t(44, py + 276, "每个 MLP 凭空多一次通信", GY, size=13)
+    f._pan = None
+    # 右：先竖切
+    px = HW + 40
+    py2 = f.panel(px, y0, HW, PH, "Megatron：先竖着切 W1", GR)
+    f.t(px + 24, py2 + 40, "每个元素整个落在一张卡上，另一张卡根本没有它", INK, size=14)
+    cell(px + 24, py2 + 62, BL, "卡 0：%g" % (P0 + P1))
+    f.box(px + 160, py2 + 62, 120, 46, "none", GY2, 5, dash="5,4")
+    f.t(px + 220, py2 + 91, "卡 1：没有", GY, size=14, anchor="middle")
+    f.t(px + 24, py2 + 150, "卡 0 自己过 GeLU：", INK, True, 15)
+    f.t(px + 330, py2 + 150, "GeLU(%g) ＝ %.3f" % (P0 + P1, G_TRUE), GR, True, 15)
+    f.t(px + 24, py2 + 190, "卡 1 也只算自己那几列，", INK, size=14)
+    f.t(px + 24, py2 + 212, "谁也不用问谁", INK, size=14)
+    f.box(px + 24, py2 + 222 + 0, HW - 48, 70, "none", GR, 8, sw=2)
+    f.t(px + 44, py2 + 252, "两次矩阵乘之间零通信，唯一的一次挪到出口", GR, True, 15)
+    f.t(px + 44, py2 + 276, "第二块横着切，正好只用到自己这几列", GY, size=13)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "所以一层 4 次 AllReduce：前向 2 次、反向 2 次", [
+        "前向：MLP 出口一次、attention 出口一次（Megatron 叫它 g）。",
+        "反向倒过来：入口处 X 的梯度是两张卡各算一半、要加起来，又各一次（叫 f）。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 Shoeybi 等，Megatron-LM，arXiv 1909.08053 sec. 3：GeLU 非线性，按行切第一块需要在 GeLU 前同步；f 前向恒等、反向 AllReduce，g 反之。",
+               "⚠️ 本课反例：2 与 −3 是随手取的数，GeLU 按精确式现算。")
+    f.save("fig5-tp-order.svg", yb + 14)
+
+
 def bubble_ratio(p, m):
     """Narayanan 等 arXiv 2104.04473 sec. 2.2.1 的口径：气泡时间 ÷ 理想计算时间 ＝ (p−1)/m。
     GPipe 与 1F1B 一样大（1F1B 只省激活显存）。"""
@@ -209,4 +279,5 @@ def fig_pp():
 
 fig_intensity()
 fig_tp_mlp()
+fig_tp_order()
 fig_pp()
