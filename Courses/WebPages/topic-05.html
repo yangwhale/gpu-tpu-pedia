@@ -2712,6 +2712,8 @@ body.figonly section h3{margin-top:34px}
     <b>① AllReduce 可以拆成 ReduceScatter 和 AllGather 两半</b>，后面好几刀都靠它白捡便宜。<br>
     <b>② AllToAll 是唯一一个人人对人人发不同数据的</b>，专家并行离不开它，网络也最怕它。<br>
     后面五刀，每一刀多出来的通信都是这张表里的某一行。话认全了，第一刀：切数据。</div>
+  <details class="foldfig"><summary><b>考考自己</b>：四张卡做一次 AllReduce：环形做法下每张卡一共发出几份数据？最朴素的班长做法下，卡 0 要发几份？</summary>
+  <p>环：ReduceScatter 3 步各发 1/4 份，AllGather 再 3 步，一共 1.5 份；班长：卡 0 发 3 份。卡越多差得越远。</p></details>
 </div></section>
 
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>第一刀：切数据</h2></div>
@@ -3210,6 +3212,8 @@ body.figonly section h3{margin-top:34px}
     <b>要继续加卡，又不想让每张卡越算越少，还能怎么切？</b></p>
   <p>还有一句话能帮你分清下一刀：FSDP <b>形式上</b>把模型切开了，<b>实质</b>还是数据并行 —— 算的那一刻，权重已经拼回一整份，每张卡算的是自己那批数据。
     下一刀要的是：算的时候，权重也不拼回来。</p>
+  <details class="foldfig"><summary><b>考考自己</b>：ZeRO 三级里，哪两级不多花一个字节的通信？为什么先削优化器状态？</summary>
+  <p>ZeRO-1、ZeRO-2 不多花（AllReduce 本来就能拆成 RS＋AG，中间那步本地更新不用传）。优化器状态最大，又最闲，只在更新那一下用。</p></details>
 </div></section>
 
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>第二刀：切权重</h2></div>
@@ -3724,6 +3728,8 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s3-6">3.6　这一刀留下的问题</h3>
   <p>还记得开场那行配置吗？DeepSeek-V3 里<b>没有 TP</b>。报告自己的解释是显存优化做得够细，用不着代价高的 TP。
     再看它的参数都在哪：几乎全在一种叫「专家」的窄矩阵里。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少。<b>真正该切的，是「专家」这一维。</b>这是第三刀。</p>
+  <details class="foldfig"><summary><b>考考自己</b>：每张卡分到的 token 很少时，FSDP 和 TP 哪个先被通信拖住？TP 为什么出不了一台机器？</summary>
+  <p>FSDP：它每搬一个字节换来的计算就等于每卡 token 数，token 少就藏不住。TP 每一层都要对账，而且半成品要等算完才能送，藏不进计算，只能待在最快的那圈线里。</p></details>
 </div></section>
 
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第三刀：切专家</h2></div>
@@ -4425,6 +4431,8 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s4-5">4.5　这一刀留下的问题</h3>
   <p>前三刀切的是 batch、权重、专家，都没碰过「序列」这一维。可上下文一长，训练时的激活、推理时的 KV cache，都跟着序列长度往上涨 ——
     <b>涨到一条样本都放不进一张卡时，怎么办？</b></p>
+  <details class="foldfig"><summary><b>考考自己</b>：专家并行最重的病是什么？V3 用什么办法治，为什么不拖累模型学东西？</summary>
+  <p>负载不均：最忙的专家决定所有人等多久。V3 给每个专家的分数挂一个偏置，超载减、欠载加；偏置只影响挑谁，不改算出来的权重。</p></details>
 </div></section>
 
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>第四刀：切序列</h2></div>
@@ -4717,6 +4725,8 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s5-6">5.6　这一刀留下的问题</h3>
   <p>说到这儿，prefill 和 decode 已经各要各的切法了：一个吃算力、要把 prompt 切开；一个吃带宽、要把 KV 摊开。
     <b>硬塞在同一批卡上，谁都配不好。</b>那就干脆别切张量了，把这两种活拆到不同的机器上。这是第五刀。</p>
+  <details class="foldfig"><summary><b>考考自己</b>：两张卡各自算出注意力的一部分结果，能不能直接取平均？</summary>
+  <p>不能。要「先别除」：每张卡交出分子和分母，分子加分子、分母加分母，最后只除一次。</p></details>
 </div></section>
 
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>第五刀：不切张量，切工作</h2></div>
@@ -5118,6 +5128,8 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s6-7">6.7　这一刀留下的问题</h3>
   <p>五刀讲完了，每一刀都有自己的通信和适用场景。真到一个集群上，它们要同时存在：
     <b>谁放在同一台机器里、谁跨机器、先定哪一刀的度数？</b></p>
+  <details class="foldfig"><summary><b>考考自己</b>：把 prefill 和 decode 拆到两批机器上，还要多搬一趟 KV，为什么反而省卡？</summary>
+  <p>两种活不再互相拖，各自都能接满：论文的例子里 2 台 prefill ＋ 1 台 decode 每秒接 10 个请求，混着做要 7 张卡。那趟 KV 只占 prefill 的一小截。</p></details>
 </div></section>
 
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>摆到机器上</h2></div>
@@ -5397,6 +5409,8 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s7-6">7.6　这一节留下的问题</h3>
   <p>到这里，每一种并行都有了来处：它切什么、多出什么通信、该放在哪根线上。
     下一节把它们摊在一张全景图和几张表上，那些 TEP8、DEP16、DP4 × FSDP128 的写法，就都读得懂了。</p>
+  <details class="foldfig"><summary><b>考考自己</b>：TP、PP、DP 三个，谁最该坐最快的那圈线？谁可以去跨慢线？</summary>
+  <p>TP：每层都要对账、又藏不住。PP 只在段边界递一次，能跨机器；DP 一步只说一次，最远能跨数据中心。</p></details>
 </div></section>
 
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>全景：今天所有的并行方式</h2></div>
@@ -5726,7 +5740,7 @@ body.figonly section h3{margin-top:34px}
   <p class="landing">⭐ 回到开头那个问题：从哪儿下刀。五刀切的东西各不一样，付的账却是同一种：<b>拿一种通信，换一份显存或一份算力</b>。
     所以选并行策略，说到底是在选你愿意付哪一种通信、付多频繁、放在哪根线上。</p>
   <p>最后一句也是第三节和第六节那把尺子：<b>硬件线是算力 ÷ 带宽，负载线由你的切法决定</b>。这一讲的每一刀，都是在让某条负载线爬到硬件线上面去。</p>
-  <details class="foldfig"><summary><b>会后两道小题</b>（答案都在前面，自己先想）</summary>
+  <details class="foldfig"><summary><b>会后两道小题</b>（答案都在前面，自己先想；第一到第七节末尾还各有一道「考考自己」）</summary>
   <p>① 一个 MoE 模型要在一柜 GB300（72 块卡、同一个 NVLink 快线圈）上做 decode，attention 那一半和专家那一半，你会各怎么切？先答三问，再对照 7.3。<br>
     ② TEP8 和 Megatron 的 ETP8，名字只差一个字母顺序，意思有什么不同？先自己查，再看 8.6 那个红框。</p></details>
 </div></section>
