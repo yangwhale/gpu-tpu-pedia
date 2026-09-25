@@ -20,6 +20,7 @@ r"""专题五 · 第三节「第二刀：切权重」的三张静态图。
 import math
 
 from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+RD_ = RD
 
 W = 1400
 C_V7 = 2307e12                  # v7 每芯片 bf16 FLOP/s
@@ -261,6 +262,55 @@ def fig_tp_order():
     f.save("fig5-tp-order.svg", yb + 14)
 
 
+def fig_wide_deep():
+    """⭐ 2026-09-25 夜 · 蒸馏 R4：TP 与 PP 的对照记忆点「一个切宽、一个切深」（Hugging Face《Ultra-Scale Playbook》
+    的 hidden vs depth 说法）。⛔ 刻意不说「横切／竖切」：各家对横纵的用法相反，本课「竖着切／横着切」已经用来说列切／行切。"""
+    f = Fig(W, "同一个 8 层的模型，两种切法。左边切宽：每一层都切成四竖条，四张卡各拿一条，所以每一层算完都要对一次账，做一次 AllReduce，只能坐快线。"
+               "右边切深：前两层给卡 0、再两层给卡 1，依此类推，卡和卡之间只在段的交界递一次半成品，能跨慢线；代价是有人要等，就是气泡")
+    y0 = f.header("TP 切宽，PP 切深　——　<tspan font-weight=\"700\">一个每层都要对账，一个只在交界递一次</tspan>",
+                  "同一个 8 层的模型、4 张卡。颜色 ＝ 这一块归哪张卡",
+                  [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3"), (RD, "要通信的地方")])
+    PH = 440
+    HW = 680
+    COLS = [BL, OR, GR, PU]
+    LH, LG = 34, 8
+    # 左：TP
+    py = f.panel(0, y0, HW, PH, "切宽（TP）：每一层都切成四条", BL)
+    X0, LW = 60, 320
+    for l in range(8):
+        yy = py + 40 + l * (LH + LG)
+        for k in range(4):
+            f.box(X0 + k * LW / 4, yy, LW / 4 - 3, LH, COLS[k], COLS[k], 3)
+        f.t(X0 - 10, yy + 23, "层 %d" % (l + 1), GY, size=12.5, anchor="end")
+        f.box(X0 + LW + 14, yy + 8, 18, 18, RD_, RD_, 9)
+    f.t(X0 + LW + 44, py + 60, "每一层都要", RD_, True, 14)
+    f.t(X0 + LW + 44, py + 82, "四张卡对账", RD_, True, 14)
+    f.t(X0 + LW + 44, py + 104, "（attention、MLP 各一次 AllReduce）", RD_, size=13)
+    f.t(24, py + PH - 30, "每层都要通信 → 只能坐最快的那圈线", BL, True, 14)
+    f._pan = None
+    # 右：PP
+    px = HW + 40
+    py2 = f.panel(px, y0, HW, PH, "切深（PP）：两层一段，一张卡一段", OR)
+    X1 = px + 60
+    for l in range(8):
+        yy = py2 + 40 + l * (LH + LG)
+        k = l // 2
+        f.box(X1, yy, LW, LH, COLS[k], COLS[k], 3)
+        f.t(X1 - 10, yy + 23, "层 %d" % (l + 1), GY, size=12.5, anchor="end")
+        if l % 2 == 1 and l < 7:
+            f.box(X1 + LW + 14, yy + LH + LG / 2 - 9, 18, 18, RD_, RD_, 9)
+    f.t(X1 + LW + 44, py2 + 104, "只在段的交界", RD_, True, 14)
+    f.t(X1 + LW + 44, py2 + 126, "递一次半成品", RD_, True, 14)
+    f.t(X1 + LW + 44, py2 + 148, "（一对一收发）", RD_, size=13)
+    f.t(px + 24, py2 + PH - 30, "只 3 处通信 → 能跨慢线；代价是有人闲着等", OR, True, 14)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "一个切宽、一个切深，各付各的代价", [
+        "切宽：每张卡每层只算四分之一，可每一层都得跟另外三张卡对账，所以 TP 出不了一台机器。",
+        "切深：卡和卡之间几乎不说话，所以 PP 敢横跨很多台机器；代价是流水线灌满、排空时有人在等。",
+    ])
+    f.save("fig5-wide-deep.svg", yb + 14)
+
+
 def bubble_ratio(p, m):
     """Narayanan 等 arXiv 2104.04473 sec. 2.2.1 的口径：气泡时间 ÷ 理想计算时间 ＝ (p−1)/m。
     GPipe 与 1F1B 一样大（1F1B 只省激活显存）。"""
@@ -324,4 +374,5 @@ def fig_pp():
 fig_intensity()
 fig_tp_mlp()
 fig_tp_order()
+fig_wide_deep()
 fig_pp()
