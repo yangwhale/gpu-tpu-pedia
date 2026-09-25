@@ -52,7 +52,6 @@ def fig_demo():
     f.box(BX, py + 118, RS * SC, 36, GR, GR, 4)
     f.box(BX + RS * SC, py + 118, AG * SC, 36, BL, BL, 4)
     f.t(BX + AR * SC + 14, py + 142, "%.2f ＋ %.2f 份" % (RS, AG), INK, True, 15)
-    f._pan = None
 
     # ── ⑤ 落点带最多两行：换来了什么 ／ 代价是什么 ────────────────────
     yb = f.band(py + PH + 20, "ok", "所以后面好几种并行能「白捡」", [
