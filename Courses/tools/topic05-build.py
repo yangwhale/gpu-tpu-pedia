@@ -129,7 +129,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 56 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 57 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -270,14 +270,12 @@ __FIG_A2A__
   <p>每张卡放一整份模型、各算一批样本；反向算完做一次 AllReduce 求平均，再一起更新。
     一步只通信一次（频率最低，量却不小：V3 每卡约 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
 
-  <h3>2.2　ZeRO：按大小顺序，一级一级削</h3>
+  <h3>2.2　ZeRO：越闲的越先削</h3>
 __FIG_ZERO_MEM__
-  <p>16 字节里，12 个是优化器状态，占四分之三 —— 这就是开场第二问的答案：最大的是它，先削它。ZeRO 按大小顺序一级一级削：</p>
-  <ul>
-    <li><b>ZeRO-1</b> 切优化器状态：每张卡只管 1/n 的参数，只存这 1/n 的状态。</li>
-    <li><b>ZeRO-2</b> 再切梯度：每张卡只需要自己负责那 1/n 参数的梯度。</li>
-    <li><b>ZeRO-3</b> 连权重也切：每张卡只长期存 1/n 的权重。</li>
-  </ul>
+  <p>16 字节里，12 个是优化器状态 —— 开场第二问的答案：最大的是它，先削它。巧的是，它也是最闲的那块：</p>
+__FIG_ZERO_BUSY__
+  <p><b>ZeRO-1</b> 切优化器状态，<b>ZeRO-2</b> 再切梯度，<b>ZeRO-3</b> 连权重也切。每张卡只长期存自己负责的那 1/n。
+    ZeRO-1 顺手还省了一笔计算：原来每张卡都把全部参数更新一遍，现在各更新各的 1/n。</p>
   <p>前两级为什么不多花一个字节的通信？就是 §1.4 那个等式：</p>
 __FIG_ZERO_STEP__
 __Q3_ANSWER__
@@ -285,7 +283,9 @@ __FIG_BF16_BETA__
 
   <h3>2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
-    如果只靠数据并行这一刀，大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
+    ZeRO-2 加再多卡也降不下去了：剩下的正是人人一整份的权重。只靠数据并行这一刀，大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
+  <p>像几个人结伴徒步：一人背帐篷、一人背炉子、一人背锅，谁也不背全套；晚上扎营时摊开大家一起用，第二天早上各自收好接着走。
+    背的是分片，扎营摊开就是 AllGather，收好就是用完就扔。</p>
 __FIG_FSDP_STEP__
 <figure class="fbox fwide" id="anim-fsdp">
 <video src="media/topic05-fsdp.mp4" autoplay loop muted playsinline
@@ -312,6 +312,8 @@ __FIG_FSDP_STEP__
   <p>一次喂进去的总 batch 又不能跟着卡数无限加，加太大模型反而学不好；所以卡越多，每卡分到的越少。
     每张卡的 batch 一小，算得少、搬得一样多，时间就被搬权重吃掉了。
     <b>要继续加卡，又不想让每张卡越算越少，还能怎么切？</b></p>
+  <p>还有一句话能帮你分清下一刀：FSDP <b>形式上</b>把模型切开了，<b>实质</b>还是数据并行 —— 算的那一刻，权重已经拼回一整份，每张卡算的是自己那批数据。
+    下一刀要的是：算的时候，权重也不拼回来。</p>
 </div></section>
 
 ''' + sec("s三", "三", "第二刀：切权重") + '''
@@ -1003,6 +1005,9 @@ FIGS = {
     "__FIG_WHY_CUT__": ("fig-why-cut", "fig5-why-cut.svg", "topic05-fig-why.py",
         '<b>左边是放不下，右边是算不完。</b><br>'
         '<em>一格一块卡；右边两根条用的是同一把尺子。</em>'),
+    "__FIG_ZERO_BUSY__": ("fig-zero-busy", "fig5-zero-busy.svg", "topic05-fig-zero.py",
+        '<b>虚线那一长条，就是 ZeRO-1 白捡的地方。</b><br>'
+        '<em>时间轴是示意，只画每块东西什么时候被读写。</em>'),
     "__FIG_ZERO_STEP__": ("fig-zero-step", "fig5-zero-step.svg", "topic05-fig-zero.py",
         '<b>① ReduceScatter、③ AllGather 拼起来就是原来那次 AllReduce。</b><br>'
         '<em>多出来的只是中间那一格：每张卡只更新自己那一段。</em>'),

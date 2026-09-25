@@ -203,6 +203,48 @@ import struct                                                         # noqa: E4
 from topic05_numbers import V3_BETA2, TORCH_BETA2                     # noqa: E402
 
 
+def fig_zero_busy():
+    """⭐ 2026-09-25 夜 · 蒸馏 R3：ZeRO 三级的顺序，按「闲忙」讲比按「大小」讲更像故事。
+    越闲的越先削（削了几乎不用付钱），越忙的越后削（削了就得每次用之前借回来）。
+    时间轴是示意：前向 1 份、反向 2 份、更新一小段；只画「这块东西在哪段时间被读写」。"""
+    f = Fig(W, "一步训练里，三块东西各在什么时候被用到。权重从前向到反向每一层都要用，最忙；梯度到反向才一层层算出来、攒到更新；"
+               "优化器状态最大，占 12 字节，却只在最后更新那一下才用，整整一步都在显存里干放着。所以 ZeRO 先削最闲的优化器状态，"
+               "再削梯度，最后才削最忙的权重，削了权重就得每层用之前借回来，要多付一半通信")
+    y0 = f.header("越闲的越先削　——　<tspan font-weight=\"700\">ZeRO 三级的顺序，就是闲忙的顺序</tspan>",
+                  "一步训练里，每块东西在什么时候被读写（时间轴示意：前向 1 份、反向 2 份、最后一小段更新）",
+                  [(BL, "权重 2 字节"), (OR, "梯度 2 字节"), (GR, "优化器状态 12 字节")])
+    PH = 300
+    py = f.panel(0, y0, W, PH, "一步：前向 → 反向 → 更新", INK)
+    TX, TW = 220, 640
+    SEG = [("前向", 0, 1), ("反向", 1, 3), ("更新", 3, 3.35)]
+    U = TW / 3.35
+    for lab, a, b in SEG:
+        f.t(TX + (a + b) / 2 * U, py + 34, lab, GY, True, 14, "middle")
+        f.line(TX + a * U, py + 44, TX + a * U, py + 250, LINE, 1, arrow=False)
+    f.line(TX + TW, py + 44, TX + TW, py + 250, LINE, 1, arrow=False)
+    rows = [("权重", BL, [(0, 3.35, True)], "ZeRO-3 最后削：最忙，削了就得每层借回来", "多付一半通信"),
+            ("梯度", OR, [(1, 3.35, True)], "ZeRO-2 再削：反向时才一层层出现", "白送"),
+            ("优化器状态", GR, [(0, 3, False), (3, 3.35, True)], "ZeRO-1 先削：最大又最闲，只在更新那一下用", "白送")]
+    for r, (lab, col, spans, why, cost) in enumerate(rows):
+        yy = py + 62 + r * 64
+        f.t(24, yy + 24, lab, col, True, 15)
+        for a, b, busy in spans:
+            if busy:
+                f.box(TX + a * U, yy, (b - a) * U, 36, col, col, 3)
+            else:
+                f.box(TX + a * U, yy, (b - a) * U - 2, 36, "none", col, 3, sw=1.6, dash="6,4")
+                f.t(TX + (a + b) / 2 * U, yy + 23, "整整一步都在显存里干放着", col, size=13, anchor="middle")
+        f.t(TX + TW + 24, yy + 16, why, col, True, 14)
+        f.t(TX + TW + 24, yy + 36, cost, RD if cost != "白送" else GY, True, 13)
+    f.t(24, py + PH - 40, "实心 ＝ 这段时间在读写它；虚线 ＝ 占着显存，但没人碰", GY, size=13)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "最大的恰好也最闲，所以先削它", [
+        "优化器状态占 16 字节里的 12 个，一步里只在最后更新那一下用：每张卡只管自己那 1/n，谁也不耽误。",
+        "越往上越忙：权重每一层都要用，削了它，每层算之前就得先借回来，这就是 FSDP 多付的那一半通信。",
+    ])
+    f.save("fig5-zero-busy.svg", yb + 14)
+
+
 def bf16(x):
     """把一个数按 bf16（round-to-nearest-even）存一次，再读回来。"""
     u = struct.unpack(">I", struct.pack(">f", x))[0]
@@ -266,3 +308,4 @@ fig_mem()
 fig_step()
 fig_zero_step()
 fig_bf16_beta()
+fig_zero_busy()
