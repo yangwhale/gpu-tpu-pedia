@@ -524,8 +524,9 @@ __FIG_PD__
     prefill 机器只做 prefill，算完把 KV cache 交给 decode 机器，decode 机器只管出字。</p>
 
   <h3>6.2　代价：一趟 KV 传输</h3>
-  <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode、再加一个 CPU 上的转发代理），
-    KV 从 prefill 那台的显存走到 decode 那台的显存。结论先说：按带宽估算，一个 8K token 的 prompt 传一趟约 100 ms；这么长的 prompt，prefill 本身要 1–2 秒，所以只占 5–10%，<b>网络不是瓶颈</b>。细账是三段：</p>
+  <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode），KV 从 prefill 那台的显存走到 decode 那台的显存：</p>
+__FIG_KV_TRIP__
+  <details class="foldfig"><summary><b>细一点</b>：三段各怎么估的</summary>
   <table>
     <tr><th>段</th><th>路径</th><th>估算</th></tr>
     <tr><td>①</td><td>HBM → 本机内存（PCIe）</td><td>约 10 ms</td></tr>
@@ -533,9 +534,8 @@ __FIG_PD__
     <tr><td>③</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
     <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b></td></tr>
   </table>
-  <p>对一下账：8K prompt 的 KV 是 2（K、V 各一份）× 62 层 × 8 个 KV 头 × 128（每头维度）× 8,192 × 1 字节（FP8）≈ 1.04 GB，
-    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms，中间那段就是这么来的。
-    这个模型 KV 头少（8 个）又用 FP8 存，KV 本来就小；换模型、换网络，要重算。</p>
+  <p>中间那段：8K prompt 的 KV 是 2（K、V 各一份）× 62 层 × 8 个 KV 头 × 128（每头维度）× 8,192 × 1 字节（FP8）≈ 1.04 GB，
+    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms。另有一个 CPU 上的转发代理负责把请求分给两边。</p></details>
   <p>这一趟用的是第一节那个一对一收发，而且跨机器、走数据中心网络这根慢线；它敢跨出去，是因为一个请求只传一次。</p>
   <p>反过来说，请求都很短、量也不大的时候，拆开多出来的这趟传输和两套机器就不一定划算，放在一起、用分块 prefill 缓解就够了。</p>
 
@@ -984,6 +984,9 @@ FIGS = {
     "__FIG_DECODE_AI__": ("fig-decode-ai", "fig5-decode-ai.svg", "topic05-fig-pd.py",
         '<b>蓝线看一批有多少请求，橙线还要再除以 32。</b><br>'
         '<em>跟第三节那张「搬一个字节换多少计算」是同一把尺子，只是这回搬的是显存。</em>'),
+    "__FIG_KV_TRIP__": ("fig-kv-trip", "fig5-kv-trip.svg", "topic05-fig-pd.py",
+        '<b>下面那条细细的三色条，就是拆开要付的全部代价。</b><br>'
+        '<em>放大 10 倍那行才看得清三段。</em>'),
     "__FIG_AFD__": ("fig-afd", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>拆开的不是张量，是一层里的两种活。</b><br>'
         '<em>机器数和格子都是示意。</em>'),

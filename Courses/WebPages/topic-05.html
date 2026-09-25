@@ -4282,7 +4282,7 @@ body.figonly section h3{margin-top:34px}
   <p>它们挤在同一批卡上时，引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
     这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
   <p>decode 还有个脾气：每一步都要把权重从显存读一遍，读一次只够这一批用一次。一批要多大才不白读？</p>
-<figure class="fbox fwide" id="fig-decode-ai"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="decode 每一步都要把权重从显存读一遍。一批里有 b 个请求一起出字时，读一个字节的权重换来 b 次计算。TPU v7 每秒能算 2307 万亿次、每秒能从显存读约 7.4 万亿字节，一除约 313：一批不到约 313 个请求，卡就在等显存。MoE 更难：每个专家平均只分到这一批的三十二分之一，要一批约一万个请求，每个专家才吃得饱"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-decode-ai"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="decode 每一步都要把权重从显存读一遍。一批里有 b 个请求一起出字时，读一个字节的权重换来 b 次计算。TPU v7 每秒能算 2307 万亿次、每秒能从显存读约 7.4 万亿字节，一除约 313：一批不到约 313 个请求，卡就在等显存。MoE 更难：每个专家平均只分到这一批的三十二分之一，要一批约一万个请求，每个专家才吃得饱"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">decode 为什么非要把一批做大　——　<tspan font-weight="700">读一遍权重，只够这一批用一次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴：一步里一起出字的请求数 b（对数刻度）。纵轴：从显存读 1 字节权重，换来多少次计算（ 推导，只算读权重）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -4396,8 +4396,61 @@ body.figonly section h3{margin-top:34px}
     prefill 机器只做 prefill，算完把 KV cache 交给 decode 机器，decode 机器只管出字。</p>
 
   <h3 id="s6-2">6.2　代价：一趟 KV 传输</h3>
-  <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode、再加一个 CPU 上的转发代理），
-    KV 从 prefill 那台的显存走到 decode 那台的显存。结论先说：按带宽估算，一个 8K token 的 prompt 传一趟约 100 ms；这么长的 prompt，prefill 本身要 1–2 秒，所以只占 5–10%，<b>网络不是瓶颈</b>。细账是三段：</p>
+  <p>我们在 TPU v7x 上搭过一套 1P1D（Qwen3-Coder-480B，一台 v7x-8 做 prefill、一台做 decode），KV 从 prefill 那台的显存走到 decode 那台的显存：</p>
+<figure class="fbox fwide" id="fig-kv-trip"><svg viewBox="0 0 1400 542" width="100%" role="img" aria-label="一趟 KV 传输和一次 prefill 放在同一把时间尺上。8K token 的 prompt，prefill 本身要 1 到 2 秒；把它的 KV cache 从 prefill 机器搬到 decode 机器，按带宽估算约 100 毫秒，分三段：显存到本机内存约 10 毫秒，走数据中心网络约 83 毫秒，再进对方显存约 10 毫秒。只占 prefill 的百分之五到十"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一趟 KV 传输，只占一次 prefill 的 5–10%　——　<tspan font-weight="700">网络不是瓶颈</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">我们在 TPU v7x 上的 1P1D（Qwen3-Coder-480B），8K token 的 prompt。KV 传输是按带宽估算，不是计时实测</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">prefill（1–2 秒）</text>
+<rect x="171.32" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="192" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">①</text>
+<rect x="234.0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="255" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">②</text>
+<rect x="296.68" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="317" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">③</text>
+<rect x="0" y="102" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一把时间尺：0 到 2 秒</tspan></text>
+<text class="svgsm" x="230" y="176" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">0</text>
+<line x1="230.0" y1="184" x2="230.0" y2="282" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="505" y="176" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">500 ms</text>
+<line x1="505.0" y1="184" x2="505.0" y2="282" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="780" y="176" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">1000 ms</text>
+<line x1="780.0" y1="184" x2="780.0" y2="282" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1055" y="176" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">1500 ms</text>
+<line x1="1055.0" y1="184" x2="1055.0" y2="282" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1330" y="176" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">2000 ms</text>
+<line x1="1330.0" y1="184" x2="1330.0" y2="282" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="24" y="220" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次 prefill</tspan></text>
+<rect x="230.0" y="198" width="550.0" height="34" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="780.0" y="198" width="550.0" height="34" rx="3" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="5,4"/>
+<text class="svgsm" x="792" y="221" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1–2 秒</tspan></text>
+<text class="svgsm" x="24" y="270" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一趟 KV 传输</tspan></text>
+<rect x="230.0" y="248" width="5.5" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="235.5" y="248" width="45.650000000000006" height="34" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="281.15" y="248" width="5.5" height="34" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="298" y="271" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10 ＋ 83 ＋ 10 ≈ 100 ms</tspan></text>
+<text class="svgsm" x="24" y="332" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放大 10 倍：</tspan></text>
+<rect x="230.0" y="312" width="53.0" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="256" y="332" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10 ms</tspan></text>
+<text class="svgsm" x="256" y="364" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">① 显存 → 本机内存（PCIe）</text>
+<rect x="285.0" y="312" width="454.5" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="512" y="332" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">83 ms</tspan></text>
+<text class="svgsm" x="512" y="364" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">② 本机 → 对方（数据中心网络 100 Gbps）</text>
+<rect x="741.5" y="312" width="53.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="768" y="332" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10 ms</tspan></text>
+<text class="svgsm" x="768" y="364" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">③ 对方内存 → 显存（PCIe）</text>
+<rect x="0" y="420" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="420" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="420" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="447" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">敢走慢线，是因为一个请求只传这一次</tspan></text>
+<text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这个模型 KV 头少（8 个）又用 FP8 存，8K prompt 的 KV 约 1.04 GB；换一个 KV 大得多的模型、换网络，要重算。</text>
+<text class="svgsm" x="20" y="502" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">对比第三节的 TP：它每一层都要通信，只能待在最快那一圈；这里一个请求就一趟，跨机器也藏得住。</text>
+</svg><figcaption><b>下面那条细细的三色条，就是拆开要付的全部代价。</b><span class="capmore"><br><em>放大 10 倍那行才看得清三段。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。</p>
+<p>⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gbps ＝ 12.5 GB/s → 约 83 ms。</p></details></figure>
+  <details class="foldfig"><summary><b>细一点</b>：三段各怎么估的</summary>
   <table>
     <tr><th>段</th><th>路径</th><th>估算</th></tr>
     <tr><td>①</td><td>HBM → 本机内存（PCIe）</td><td>约 10 ms</td></tr>
@@ -4405,9 +4458,8 @@ body.figonly section h3{margin-top:34px}
     <tr><td>③</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
     <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b></td></tr>
   </table>
-  <p>对一下账：8K prompt 的 KV 是 2（K、V 各一份）× 62 层 × 8 个 KV 头 × 128（每头维度）× 8,192 × 1 字节（FP8）≈ 1.04 GB，
-    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms，中间那段就是这么来的。
-    这个模型 KV 头少（8 个）又用 FP8 存，KV 本来就小；换模型、换网络，要重算。</p>
+  <p>中间那段：8K prompt 的 KV 是 2（K、V 各一份）× 62 层 × 8 个 KV 头 × 128（每头维度）× 8,192 × 1 字节（FP8）≈ 1.04 GB，
+    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms。另有一个 CPU 上的转发代理负责把请求分给两边。</p></details>
   <p>这一趟用的是第一节那个一对一收发，而且跨机器、走数据中心网络这根慢线；它敢跨出去，是因为一个请求只传一次。</p>
   <p>反过来说，请求都很短、量也不大的时候，拆开多出来的这趟传输和两套机器就不一定划算，放在一起、用分块 prefill 缓解就够了。</p>
 
@@ -4428,7 +4480,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s6-5">6.5　AFD：attention 和专家分到两组机器</h3>
   <p>decode 这边还能再拆。attention 要读每个请求自己的 KV，跟请求绑定；专家不管 token 来自谁，只要 batch 够大：decode 每步都要把专家权重读一遍，来的 token 越多，这一遍越值（<a href="#s6-1">§6.1</a>）。
     <b>AFD</b>（Attention-FFN 分离）把两者放到两组机器上：M 台只算 attention，N 台只放专家。</p>
-<figure class="fbox fwide" id="fig-afd"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。为了把这来回两趟藏起来，把一批请求切成三个小批轮着跑：一个在算 attention，一个在路上，一个在算专家，三条道每一格都有活"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-afd"><svg viewBox="0 0 1400 614" width="100%" role="img" aria-label="attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。为了把这来回两趟藏起来，把一批请求切成三个小批轮着跑：一个在算 attention，一个在路上，一个在算专家，三条道每一格都有活"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">再拆一层：attention 和专家也分开　——　<tspan font-weight="700">专家那边一次接好几家的 token</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，三个小批轮着跑</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -4441,92 +4493,112 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="381" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 B</text>
 <rect x="456.79999999999995" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
 <text class="svgsm" x="477" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小批 C</text>
-<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一层都要跑一趟 M → N → M</tspan></text>
-<rect x="60" y="182" width="200" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="160" y="216" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 1</tspan></text>
-<rect x="60" y="258" width="200" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="160" y="292" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 2</tspan></text>
-<rect x="60" y="334" width="200" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="160" y="368" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 3</tspan></text>
-<rect x="560" y="212" width="200" height="56" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="660" y="246" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家机器 1</tspan></text>
-<rect x="560" y="308" width="200" height="56" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="660" y="342" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家机器 2</tspan></text>
-<line x1="262" y1="210" x2="558" y2="240" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="262" y1="210" x2="558" y2="336" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="262" y1="286" x2="558" y2="240" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="262" y1="286" x2="558" y2="336" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="262" y1="362" x2="558" y2="240" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="262" y1="362" x2="558" y2="336" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="410" y="168" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">M → N：token 发给专家</tspan></text>
-<text class="svgsm" x="410" y="422" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">N → M：算完送回来</tspan></text>
-<text class="svgsm" x="792" y="172" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三个小批轮着跑，三条道都不闲</tspan></text>
-<text class="svgsm" x="792" y="214" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention</tspan></text>
-<rect x="900" y="192" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="925" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="954" y="192" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="979" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1008" y="192" width="50" height="34" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="1033" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1062" y="192" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1087" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1116" y="192" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1141" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1170" y="192" width="50" height="34" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="1195" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1224" y="192" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1249" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1278" y="192" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1303" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1332" y="192" width="50" height="34" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="1357" y="214" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<text class="svgsm" x="792" y="266" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">路上（去＋回）</tspan></text>
-<rect x="900" y="244" width="50" height="34" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="954" y="244" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="979" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1008" y="244" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1033" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1062" y="244" width="50" height="34" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="1087" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1116" y="244" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1141" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1170" y="244" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1195" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1224" y="244" width="50" height="34" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="1249" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1278" y="244" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1303" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1332" y="244" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1357" y="266" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<text class="svgsm" x="792" y="318" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家</tspan></text>
-<rect x="900" y="296" width="50" height="34" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="954" y="296" width="50" height="34" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="1008" y="296" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1033" y="318" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1062" y="296" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1087" y="318" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1116" y="296" width="50" height="34" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="1141" y="318" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1170" y="296" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1195" y="318" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<rect x="1224" y="296" width="50" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1249" y="318" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
-<rect x="1278" y="296" width="50" height="34" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
-<text class="svgsm" x="1303" y="318" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
-<rect x="1332" y="296" width="50" height="34" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1357" y="318" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
-<text class="svgsm" x="792" y="370" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">A 在算专家时，B 在路上、C 在算 attention。</text>
-<text class="svgsm" x="792" y="394" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">单程通信不到半格时三个够，否则要四个（MegaScale-Infer）。</text>
-<rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆得越细，每一边越能挑适合自己的机器和切法</tspan></text>
-<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">专家那边同时接几台 attention 机器的 token，<tspan font-weight="700">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。</text>
-<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价是每一层都有一趟来回，得靠几个小批轮着跑藏住（论文里要三四个才藏得住）；两边之间的网络要够快。</text>
+<rect x="40" y="182" width="180" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="130" y="216" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 1</tspan></text>
+<rect x="40" y="258" width="180" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="130" y="292" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 2</tspan></text>
+<rect x="40" y="334" width="180" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="130" y="368" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 3</tspan></text>
+<rect x="460" y="212" width="180" height="56" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="550" y="246" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家机器 1</tspan></text>
+<rect x="460" y="308" width="180" height="56" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="550" y="342" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家机器 2</tspan></text>
+<line x1="222" y1="204" x2="456" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="222" y1="204" x2="456" y2="328" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="222" y1="280" x2="456" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="222" y1="280" x2="456" y2="328" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="222" y1="356" x2="456" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="222" y1="356" x2="456" y2="328" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<path d="M 460,282 C 380,432 300,432 222,338" fill="none" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="6,4" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="340" y="166" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">去（M → N）：token 发给专家</tspan></text>
+<text class="svgsm" x="340" y="432" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回（N → M）：算完送回来</tspan></text>
+<text class="svgsm" x="690" y="168" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三个小批轮着跑：去、回各占半格</tspan></text>
+<text class="svgsm" x="690" y="210" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention</tspan></text>
+<rect x="782" y="188" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="783.0" y="189" width="67.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="816" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="993.0" y="189" width="67.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1026" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="1203.0" y="189" width="67.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1236" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="853.0" y="189" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="886" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="1063.0" y="189" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1096" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="1273.0" y="189" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1306" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="923.0" y="189" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="956" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="1133.0" y="189" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1166" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<text class="svgsm" x="690" y="256" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">去</tspan></text>
+<rect x="782" y="234" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="853.0" y="235" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="869" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="1063.0" y="235" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1079" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="1273.0" y="235" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1289" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="923.0" y="235" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="939" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="1133.0" y="235" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1149" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="993.0" y="235" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1009" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="1203.0" y="235" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1219" y="255" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<text class="svgsm" x="690" y="302" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家</tspan></text>
+<rect x="782" y="280" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="888.0" y="281" width="67.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="921" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="1098.0" y="281" width="67.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1131" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="1308.0" y="281" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1324" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="958.0" y="281" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="991" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="1168.0" y="281" width="67.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1201" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="1028.0" y="281" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1061" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="1238.0" y="281" width="67.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1271" y="301" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<text class="svgsm" x="690" y="348" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回</tspan></text>
+<rect x="782" y="326" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="958.0" y="327" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="974" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="1168.0" y="327" width="32.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1184" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="1028.0" y="327" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1044" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="1238.0" y="327" width="32.0" height="30" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1254" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="1098.0" y="327" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1114" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="1308.0" y="327" width="32.0" height="30" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1324" y="347" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<text class="svgsm" x="782" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="852" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
+<text class="svgsm" x="922" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2</text>
+<text class="svgsm" x="992" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">3</text>
+<text class="svgsm" x="1062" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">4</text>
+<text class="svgsm" x="1132" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">5</text>
+<text class="svgsm" x="1202" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">6</text>
+<text class="svgsm" x="1272" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">7</text>
+<text class="svgsm" x="1342" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">8</text>
+<text class="svgsm" x="690" y="414" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">看 A：第 0 格算 attention，去半格，专家一格，回半格，第 3 格又轮到它。</text>
+<text class="svgsm" x="690" y="436" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">单程通信超过半格，一圈就超过 3 格，得四个小批（MegaScale-Infer）。</text>
+<rect x="0" y="492" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="492" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="492" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="519" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆得越细，每一边越能挑适合自己的机器和切法</tspan></text>
+<text class="svgsm" x="20" y="550" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">专家那边同时接几台 attention 机器的 token，<tspan font-weight="700">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。</text>
+<text class="svgsm" x="20" y="574" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价是每一层都有一趟来回，得靠几个小批轮着跑藏住（论文里要三四个才藏得住）；两边之间的网络要够快。</text>
 </svg><figcaption><b>拆开的不是张量，是一层里的两种活。</b><span class="capmore"><br><em>机器数和格子都是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 MegaScale-Infer arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a>（disaggregated expert parallelism、ping-pong pipeline、每 GPU 吞吐最高 1.90×）；Step-3 arXiv <a href="https://arxiv.org/abs/2507.19427" target="_blank" rel="noopener">2507.19427</a>；vLLM 于 2026-07 发布实验性 AFD 插件。</p></details></figure>
   <p>每一层都要把 token 从 attention 那边发给专家（M → N），算完再收回来（N → M）。
     为了不让这一来一回拖慢，把一批请求切成几个小批轮着跑：这一个在算 attention，另一个正好在算专家，还有一个在路上。

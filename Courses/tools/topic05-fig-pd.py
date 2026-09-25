@@ -74,37 +74,55 @@ def fig_afd():
     y0 = f.header("再拆一层：attention 和专家也分开　——　<tspan font-weight=\"700\">专家那边一次接好几家的 token</tspan>",
                   "AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，三个小批轮着跑",
                   [(BL, "attention 机器"), (OR, "专家机器"), (GR, "小批 A"), (PU, "小批 B"), (CY, "小批 C")])
-    PH = 330
+    PH = 340
     py = f.panel(0, y0, W, PH, "每一层都要跑一趟 M → N → M", BL)
     for i in range(3):
-        f.box(60, py + 50 + i * 76, 200, 56, "none", BL, 8, sw=2)
-        f.t(160, py + 84 + i * 76, "attention 机器 %d" % (i + 1), BL, True, 14, "middle")
+        f.box(40, py + 50 + i * 76, 180, 56, "none", BL, 8, sw=2)
+        f.t(130, py + 84 + i * 76, "attention 机器 %d" % (i + 1), BL, True, 14, "middle")
     for i in range(2):
-        f.box(560, py + 80 + i * 96, 200, 56, "none", OR, 8, sw=2)
-        f.t(660, py + 114 + i * 96, "专家机器 %d" % (i + 1), OR, True, 14, "middle")
+        f.box(460, py + 80 + i * 96, 180, 56, "none", OR, 8, sw=2)
+        f.t(550, py + 114 + i * 96, "专家机器 %d" % (i + 1), OR, True, 14, "middle")
+    # ⭐ 2026-09-25 讲后自查：原来只有无向细线，「去」和「回」两个标签挂在同一捆线上，看不出方向。
     for i in range(3):
         for k in range(2):
-            f.line(262, py + 78 + i * 76, 558, py + 108 + k * 96, GY2, 1.2, arrow=False)
-    f.t(410, py + 36, "M → N：token 发给专家", GY, True, 13, anchor="middle")
-    f.t(410, py + 290, "N → M：算完送回来", GY, True, 13, anchor="middle")
-    # ⭐ 2026-09-25 L6 试讲：原来只画两个小批、没画「在路上」，看图会以为两个就够。
-    #   改成 attention ／ 路上 ／ 专家三条道、A B C 三个小批：三条道每一格都有活，通信才藏得住。
-    TX, CW, LW = 792, 54, 108          # LW：道名那一列的宽度，「路上（去＋回）」要 ~100px
+            f.line(222, py + 72 + i * 76, 456, py + 100 + k * 96, BL, 1.3)
+    f.path("M 460,%d C 380,%d 300,%d 222,%d" % (py + 150, py + 300, py + 300, py + 206), OR, 1.8, dash="6,4")
+    f.t(340, py + 34, "去（M → N）：token 发给专家", BL, True, 13, anchor="middle")
+    f.t(340, py + 300, "回（N → M）：算完送回来", OR, True, 13, anchor="middle")
+    # ⭐⭐ 2026-09-25 讲后自查：原来三条道是 attention ／「路上（去＋回）」／专家，每格一整步 ——
+    #   A 在第 2 格算完专家、第 3 格就又在算 attention，**回程根本没地方走**，逻辑是断的。
+    #   按 MegaScale-Infer 的条件画真时序：单程通信 Tc ＝ 半格，一个小批走一圈
+    #   ＝ attention 1 ＋ 去 ½ ＋ 专家 1 ＋ 回 ½ ＝ 3 格，所以三个小批正好把 attention 和专家都填满；
+    #   专家那条道比 attention 晚半格，去、回各占半格。论文式 m ≥ 2(1 ＋ Tc／Tf)。
+    TC = 0.5
+    CYCLE = 1 + TC + 1 + TC
+    M_MB = 3
+    assert M_MB >= 2 * (1 + TC / 1.0) and CYCLE == M_MB
+    TX, LW, SW, NS = 690, 92, 70, 8          # SW：一格宽
+    assert TX + LW + NS * SW <= W - 10
     COLS3 = [GR, PU, CY]
-    assert TX + LW + 9 * CW <= W - 10
-    f.t(TX, py + 40, "三个小批轮着跑，三条道都不闲", INK, True, 15)
-    for r, (lab, col) in enumerate((("attention", BL), ("路上（去＋回）", GY), ("专家", OR))):
-        f.t(TX, py + 82 + r * 52, lab, col, True, 13)
-        for t in range(9):
-            b = t - r
-            if b < 0:
-                f.box(TX + LW + t * CW, py + 60 + r * 52, CW - 4, 34, "none", LINE, 3)
-                continue
-            c = COLS3[b % 3]
-            f.box(TX + LW + t * CW, py + 60 + r * 52, CW - 4, 34, c, c, 3)
-            f.t(TX + LW + t * CW + (CW - 4) / 2, py + 82 + r * 52, "ABC"[b % 3], "#ffffff", True, 13, "middle")
-    f.t(TX, py + 238, "A 在算专家时，B 在路上、C 在算 attention。", GY, size=13)
-    f.t(TX, py + 262, "单程通信不到半格时三个够，否则要四个（MegaScale-Infer）。", GY, size=13)
+    f.t(TX, py + 36, "三个小批轮着跑：去、回各占半格", INK, True, 15)
+    rows = (("attention", BL, 0.0, 1.0), ("去", BL, 1.0, TC), ("专家", OR, 1.0 + TC, 1.0), ("回", OR, 2.0 + TC, TC))
+    for r, (lab, col, off, dur) in enumerate(rows):
+        yy = py + 56 + r * 46
+        f.t(TX, yy + 22, lab, col, True, 13)
+        f.box(TX + LW, yy, NS * SW, 32, "none", LINE, 3)
+        for b in range(M_MB):
+            for c in range(4):
+                t0 = b + c * CYCLE + off
+                t1 = t0 + dur
+                if t0 >= NS:
+                    continue
+                t1 = min(t1, NS)
+                x0 = TX + LW + t0 * SW + 1
+                w = (t1 - t0) * SW - 3
+                f.box(x0, yy + 1, w, 30, COLS3[b], COLS3[b], 3)
+                if w > 16:
+                    f.t(x0 + w / 2, yy + 21, "ABC"[b], "#ffffff", True, 13, "middle")
+    for t in range(NS + 1):
+        f.t(TX + LW + t * SW, py + 56 + 4 * 46 + 12, str(t), GY, size=12, anchor="middle")
+    f.t(TX, py + 282, "看 A：第 0 格算 attention，去半格，专家一格，回半格，第 3 格又轮到它。", GY, size=13)
+    f.t(TX, py + 304, "单程通信超过半格，一圈就超过 3 格，得四个小批（MegaScale-Infer）。", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "拆得越细，每一边越能挑适合自己的机器和切法", [
         "专家那边同时接几台 attention 机器的 token，<tspan font-weight=\"700\">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。",
@@ -176,6 +194,63 @@ def fig_decode_ai():
     f.save("fig5-decode-ai.svg", yb + 14)
 
 
+# ── fig-kv-trip：一趟 KV 传输对一次 prefill，按同一把尺子画（2026-09-25 讲后：6.2 那张表是证据不是图） ──
+SEG = [("① 显存 → 本机内存（PCIe）", 10, BL), ("② 本机 → 对方（数据中心网络 100 Gbps）", round(T_DCN * 1e3), OR),
+       ("③ 对方内存 → 显存（PCIe）", 10, GR)]
+TRIP_MS = sum(m for _, m, _ in SEG)
+PREFILL_MS = (1000, 2000)                 # 8K prompt 的 prefill 1–2 s（wiki 实测页）
+assert 100 <= TRIP_MS <= 105 and 0.05 <= TRIP_MS / PREFILL_MS[1] and TRIP_MS / PREFILL_MS[0] <= 0.105
+
+
+def fig_kv_trip():
+    f = Fig(W, "一趟 KV 传输和一次 prefill 放在同一把时间尺上。8K token 的 prompt，prefill 本身要 1 到 2 秒；"
+               "把它的 KV cache 从 prefill 机器搬到 decode 机器，按带宽估算约 100 毫秒，分三段：显存到本机内存约 10 毫秒，"
+               "走数据中心网络约 83 毫秒，再进对方显存约 10 毫秒。只占 prefill 的百分之五到十")
+    y0 = f.header("一趟 KV 传输，只占一次 prefill 的 5–10%　——　<tspan font-weight=\"700\">网络不是瓶颈</tspan>",
+                  "我们在 TPU v7x 上的 1P1D（Qwen3-Coder-480B），8K token 的 prompt。KV 传输是按带宽估算，不是计时实测",
+                  [(GY2, "prefill（1–2 秒）"), (BL, "①"), (OR, "②"), (GR, "③")])
+    PH = 268
+    py = f.panel(0, y0, W, PH, "同一把时间尺：0 到 2 秒", OR)
+    BX, BW = 230, 1100
+    SC = BW / PREFILL_MS[1]
+
+    def X(ms):
+        return BX + ms * SC
+    for ms in range(0, 2001, 500):
+        f.t(X(ms), py + 44, "%d ms" % ms if ms else "0", GY, size=12.5, anchor="middle")
+        f.line(X(ms), py + 52, X(ms), py + 150, LINE, 1, arrow=False)
+    f.t(24, py + 88, "一次 prefill", INK, True, 15)
+    f.box(X(0), py + 66, X(PREFILL_MS[0]) - X(0), 34, GY2, GY2, 3)
+    f.box(X(PREFILL_MS[0]), py + 66, X(PREFILL_MS[1]) - X(PREFILL_MS[0]), 34, "none", GY2, 3, dash="5,4")
+    f.t(X(PREFILL_MS[0]) + 12, py + 89, "1–2 秒", GY, True, 14)
+    f.t(24, py + 138, "一趟 KV 传输", INK, True, 15)
+    x = X(0)
+    for _, ms, col in SEG:
+        f.box(x, py + 116, ms * SC, 34, col, col, 2)
+        x += ms * SC
+    f.t(x + 12, py + 139, "10 ＋ %d ＋ 10 ≈ 100 ms" % SEG[1][1], INK, True, 15)
+    # 放大 10 倍看三段
+    ZX, ZS = X(0), 10 * SC
+    f.t(24, py + 200, "放大 10 倍：", GY, True, 14)
+    zx = ZX
+    for lab, ms, col in SEG:
+        w = ms * ZS
+        f.box(zx, py + 180, w - 2, 30, col, col, 3)
+        f.t(zx + (w - 2) / 2, py + 200, "%d ms" % ms, "#ffffff", True, 13, "middle")
+        f.t(zx + (w - 2) / 2, py + 232, lab, col, size=13, anchor="middle")
+        zx += w
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "敢走慢线，是因为一个请求只传这一次", [
+        "这个模型 KV 头少（8 个）又用 FP8 存，8K prompt 的 KV 约 1.04 GB；换一个 KV 大得多的模型、换网络，要重算。",
+        "对比第三节的 TP：它每一层都要通信，只能待在最快那一圈；这里一个请求就一趟，跨机器也藏得住。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。",
+               "⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gbps ＝ 12.5 GB/s → 约 83 ms。")
+    f.save("fig5-kv-trip.svg", yb + 14)
+
+
 fig_pd()
 fig_afd()
 fig_decode_ai()
+fig_kv_trip()
