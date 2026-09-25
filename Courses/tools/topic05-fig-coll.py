@@ -213,6 +213,18 @@ def fig_ring():
                   "每一步：每张卡同时往右发一块、从左收一块，<tspan font-weight=\"700\">收到的加到自己的同号块上</tspan>。"
                   "粗框 ＝ 这一步刚加过的块",
                   [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3")])
+    # ⭐ 2026-09-25 逐图审：标题说「连成一个环」，画面里却没有环。右上角补一个四卡小环。
+    RC, RR = (1310, 54), 30
+    pos = [(RC[0], RC[1] - RR), (RC[0] + RR, RC[1]), (RC[0], RC[1] + RR), (RC[0] - RR, RC[1])]
+    for k in range(4):
+        (x1, y1), (x2, y2) = pos[k], pos[(k + 1) % 4]
+        f.path("M%.1f,%.1f Q%.1f,%.1f %.1f,%.1f" % (x1 + (x2 - x1) * 0.28, y1 + (y2 - y1) * 0.28,
+               (x1 + x2) / 2 + (x1 + x2 - 2 * RC[0]) * 0.35, (y1 + y2) / 2 + (y1 + y2 - 2 * RC[1]) * 0.35,
+               x1 + (x2 - x1) * 0.72, y1 + (y2 - y1) * 0.72), GY, 1.6)
+    for k, (cx, cy) in enumerate(pos):
+        col = (BL, OR, GR, PU)[k]
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="11" fill="%s"/>' % (cx, cy, col))
+        f.t(cx, cy + 5, str(k), "#ffffff", True, 13, "middle")
     st = ring_states()
     PH = 30 + 34 + N * RH + 44
     py = f.panel(0, y0, W, PH, "环形 ReduceScatter，四张卡、三步", GR,
@@ -257,24 +269,30 @@ def fig_a2a():
                   "左边：一行 ＝ 一张卡手里的数据，第 j 格是它要交给卡 j 的那一份。"
                   "右边：第 j 行 ＝ 原来的第 j 列",
                   [(BL, "卡 0 出的"), (OR, "卡 1 出的"), (GR, "卡 2 出的"), (PU, "卡 3 出的")])
-    PH = 30 + 44 + N * RH + 44
+    PH = 30 + 44 + N * RH + 60
     py = f.panel(0, y0, W, PH, "4 张卡的全交换", PU)
     LX, RX = 160, 820
     f.t(LX, py + 26, "之前：卡 k 的第 j 格要去卡 j", INK, True, 14)
     f.t(RX, py + 26, "之后：卡 j 收齐所有人给它的那一格", INK, True, 14)
     for j in range(N):
-        f.t(LX + j * (CW + GAP) + CW / 2.0, py + 50, "→%d" % j, GY, size=12, anchor="middle")
-        f.t(RX + j * (CW + GAP) + CW / 2.0, py + 50, "从%d" % j, GY, size=12, anchor="middle")
+        f.t(LX + j * (CW + GAP) + CW / 2.0, py + 50, "寄%d" % j, GY, size=13, anchor="middle")
+        f.t(RX + j * (CW + GAP) + CW / 2.0, py + 50, "从%d" % j, GY, size=13, anchor="middle")
     for k in range(N):
         yy = py + 58 + k * RH
         rowlab(f, LX - 64, yy, k)
         rowlab(f, RX - 64, yy, k)
         row(f, LX, yy, [([k], "%s%d" % (NAME[k], j)) for j in range(N)], hot={k})
         row(f, RX, yy, [([j], "%s%d" % (NAME[j], k)) for j in range(N)], hot={k})
+    # ⭐ 2026-09-25 逐图审：「转置」对大众是术语。圈出一条具体的路：左边第 1 列（都寄给卡 1）→ 右边卡 1 那一行
+    f.box(LX + (CW + GAP) - 5, py + 56, CW + 10, N * RH - 1, "none", INK, 6, sw=2, dash="5,3")
+    f.t(LX + (CW + GAP) + CW / 2.0, py + 58 + N * RH + 12, "这一列都寄给卡 1", INK, True, 13, "middle")
+    f.box(RX - 5, py + 58 + RH - 5, N * (CW + GAP) - GAP + 10, CH + 10, "none", INK, 6, sw=2, dash="5,3")
+    f.t(RX + N * (CW + GAP) + 6, py + 58 + RH + CH / 2.0 + 5, "卡 1 收齐", INK, True, 13)
     mid = py + 58 + N * RH / 2.0 - 4
     f.line(LX + N * (CW + GAP) + 20, mid, RX - 90, mid, PU, 2)
-    f.t((LX + N * (CW + GAP) + RX - 70) / 2.0, mid - 14, "转置", PU, True, 15, "middle")
-    f.t(16, py + 58 + N * RH + 24,
+    f.t((LX + N * (CW + GAP) + RX - 70) / 2.0, mid - 14, "按收件人重新分拣", PU, True, 15, "middle")
+    f.t((LX + N * (CW + GAP) + RX - 70) / 2.0, mid + 24, "（整张表转置一次）", GY, size=13, anchor="middle")
+    f.t(16, py + 58 + N * RH + 40,
         "粗框是对角线：自己给自己的那一格，不用走网络。其余 12 格都要跨卡　——　每张卡发出去整份的 (n−1)/n",
         GY, size=13.5)
     f._pan = None

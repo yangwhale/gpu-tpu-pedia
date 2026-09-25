@@ -70,6 +70,16 @@ def fig_mem():
                 f.box(x, yy + 8, w, 32, col, col, 3)
             x += w
         pp = per_param(ws, gs, os_)
+        if x - BX < 1:
+            # ⭐ 2026-09-25 逐图审：ZeRO-3 的条不到 1 px，画面上一片空白。画一根细线 ＋ 放大 100 倍的样子。
+            f.box(BX, yy + 8, 2, 32, INK, INK, 0)
+            zx, ZOOM = BX + 130, 100
+            f.line(BX + 92, yy + 24, zx - 6, yy + 24, GY2, 1.2, dash="3,3")
+            for col, bytes_, share in ((BL, W_B, ws), (OR, G_B, gs), (GR, O_B, os_)):
+                w = bytes_ * share * SCALE * ZOOM
+                f.box(zx, yy + 8, w, 32, col, col, 3)
+                zx += w
+            f.t(zx + 10, yy + 30, "← 放大 %d 倍才看得见" % ZOOM, GY, size=13)
         f.t(x + 12, yy + 30, ("%.2f 字节" % pp) if pp >= 0.1 else ("%.3f 字节" % pp), INK, True, 14)
         f.t(1040, yy + 30, fmt(per_dev_bytes(st)), RD if i < 3 else GR, True, 16)
         f.t(1220, yy + 30, "%dΨ%s" % (comm, "（1.5×）" if comm == 3 else "（＝数据并行）" if i else ""),
