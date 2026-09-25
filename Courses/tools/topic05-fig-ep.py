@@ -166,6 +166,72 @@ def fig_ep_route():
     f.save("fig5-ep-route.svg", yb + 14)
 
 
+# ── fig-ep-bias：偏置怎么把排队的队伍拉平（2026-09-25 夜 · 蒸馏 R5） ─────────────
+# ⭐ 讲法借自苏剑林「MoE 环游记」与 DeepSeek Loss-Free 论文：均衡和建模分开调，偏置只管「挑谁」、不改算出来的权重。
+# ⛔ 数据当场模拟（固定种子）：8 个专家挑 2 个、每步 1,024 个 token；天生的偏好一个比一个低；
+#   每步结束，超载的专家偏置减 u、欠载的加 u。u 取 0.02 是为了几十步就看得出来（V3 是 256 挑 8、u ＝ 0.001），图上标示意。
+import random as _random
+_E, _K, _T, _U = 8, 2, 1024, 0.02
+_MU = [0.9 - 0.25 * e for e in range(_E)]
+_SNAP = (0, 30, 150)
+
+
+def _simulate():
+    rng = _random.Random(5)
+    b = [0.0] * _E
+    out = {}
+    for st in range(max(_SNAP) + 1):
+        cnt = [0] * _E
+        for _ in range(_T):
+            sc = [_MU[e] + rng.gauss(0, 1) + b[e] for e in range(_E)]
+            for e in sorted(range(_E), key=lambda e: -sc[e])[:_K]:
+                cnt[e] += 1
+        if st in _SNAP:
+            out[st] = cnt
+        m = _T * _K / _E
+        b = [b[e] - _U * (1 if cnt[e] > m else -1) for e in range(_E)]
+    return out
+
+
+_LOAD = _simulate()
+_MEAN = _T * _K / _E
+_RATIO = {st: max(c) / _MEAN for st, c in _LOAD.items()}
+assert _RATIO[0] > 2 and _RATIO[150] < 1.15 and _RATIO[0] > _RATIO[30] > _RATIO[150], _RATIO
+
+
+def fig_ep_bias():
+    f = Fig(W, "偏置怎么把专家门口的队伍拉平。8 个专家，每个 token 挑 2 个，天生有的专家更受欢迎。第 0 步最忙的专家接了平均的 %.1f 倍，"
+               "所有人都得等它；每一步结束，超载的专家偏置减一点、欠载的加一点，偏置只影响挑谁，不改算出来的权重。"
+               "第 30 步降到 %.1f 倍，第 150 步只剩 %.2f 倍。这是示意模拟" % (_RATIO[0], _RATIO[30], _RATIO[150]))
+    y0 = f.header("门口挂个号牌：偏置怎么把队伍拉平　——　<tspan font-weight=\"700\">只管排号，不管诊断</tspan>",
+                  "示意模拟：8 个专家挑 2 个、每步 1,024 个 token，天生的偏好一个比一个低。每步结束，超载的偏置减一点、欠载的加一点",
+                  [(OR, "这个专家这一步接了多少 token"), (RD, "平均线")])
+    PH = 300
+    CW3 = 443
+    for i, st in enumerate(_SNAP):
+        px = i * (CW3 + 35)
+        cnt = _LOAD[st]
+        py = f.panel(px, y0, CW3, PH, "第 %d 步：最忙的是平均的 %.2f 倍" % (st, _RATIO[st]), OR if i < 2 else GR)
+        base, top = py + 240, py + 40
+        sc = (base - top) / 600
+        bw = (CW3 - 60) / _E
+        for e, c in enumerate(cnt):
+            x = px + 30 + e * bw
+            f.box(x, base - c * sc, bw - 8, c * sc, OR, OR, 3)
+            f.t(x + (bw - 8) / 2, base + 20, "专家 %d" % e if e == 0 else str(e), GY, size=12, anchor="middle")
+        f.path("M%.1f,%.1f L%.1f,%.1f" % (px + 24, base - _MEAN * sc, px + CW3 - 24, base - _MEAN * sc), RD, 1.8, dash="6,4", arrow=False)
+        f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "最忙的那个专家，决定所有人等多久", [
+        "老办法是在训练目标里罚「分得不匀」，等于逼分诊员改诊断，会拖累模型本身学什么。",
+        "V3 的偏置只加在「挑谁」的分数上，算出来的权重不动：只管排号，不管诊断。训练最后 500B token 连偏置也停了。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 无辅助损失均衡：Wang 等，arXiv 2408.15664；V3 技术报告 arXiv 2412.19437 sec. 2.1.2、sec. 4.2（u ＝ 0.001，最后 500B token 置 0）。",
+               "⚠️ 本图为示意模拟（固定随机种子，8 选 2、u ＝ 0.02），不是 V3 的实测负载。")
+    f.save("fig5-ep-bias.svg", yb + 14)
+
+
 fig_params()
 fig_fold()
 fig_ep_route()
+fig_ep_bias()
