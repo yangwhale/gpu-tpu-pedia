@@ -129,7 +129,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 59 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 60 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -512,10 +512,12 @@ __FIG_SOFTMAX_MERGE__
   <h3>6.1　prefill 和 decode 为什么会打架</h3>
   <p>一个请求分两段。<b>prefill</b> 一口气吞下整个 prompt，几千个 token 一起过矩阵乘，吃的是算力；
     <b>decode</b> 每一步只出一个 token，却要把全部权重和 KV 从显存里读一遍，吃的是带宽。</p>
-  <p>它们挤在同一批卡上时，引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
+  <p>你正看着回答一个字一个字往外吐，别人丢进来一份一百页的合同，你的字就停了。语音助手更明显：说一句停一段，平均速度再快也觉得卡。
+    这就是两种活挤在同一批卡上：引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
     这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
   <p>decode 还有个脾气：每一步都要把权重从显存读一遍，读一次只够这一批用一次。一批要多大才不白读？</p>
 __FIG_DECODE_AI__
+  <p>模型这边也在帮忙凑：MLA 把 KV 压小，一张卡装得下更多请求，一批就大。MegaScale-Infer 论文在 A100 上算过同一笔账：一批至少 156 个请求，Mixtral 每个专家只分到 39 个。</p>
 __FIG_PD__
 <figure class="fbox fwide" id="anim-pd">
 <video src="media/topic05-pd.mp4" autoplay loop muted playsinline
@@ -523,7 +525,7 @@ __FIG_PD__
 <figcaption>同样 16 步，上面那条被长 prefill 截走了 5 步；下面那条一格没少。
   <span class="sub">（11 秒无声循环，Manim 渲染。格数是示意，不是实测时序。）</span></figcaption></figure>
   <p>分块 prefill（chunked prefill）能缓解：把长 prompt 切成小块，每一步跟 decode 拼着跑。
-    但两种活还在抢同一批卡，而且<b>只能用同一套并行方式</b>。PD 分离干脆把它们拆开：
+    但块切小了 prefill 自己变慢（每一块都要把前面的 KV 重读一遍），两种活还在抢同一批卡，而且<b>只能用同一套并行方式</b>。PD 分离干脆把它们拆开：
     prefill 机器只做 prefill，算完把 KV cache 交给 decode 机器，decode 机器只管出字。</p>
 
   <h3>6.2　代价：一趟 KV 传输</h3>
@@ -539,13 +541,14 @@ __FIG_KV_TRIP__
   </table>
   <p>中间那段：8K prompt 的 KV 是 2（K、V 各一份）× 62 层 × 8 个 KV 头 × 128（每头维度）× 8,192 × 1 字节（FP8）≈ 1.04 GB，
     100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms。另有一个 CPU 上的转发代理负责把请求分给两边。</p></details>
-  <p>这一趟用的是第一节那个一对一收发，而且跨机器、走数据中心网络这根慢线；它敢跨出去，是因为一个请求只传一次。</p>
+  <p>这一趟用的是第一节那个一对一收发，而且跨机器、走数据中心网络这根慢线；它敢跨出去，是因为一个请求只传一次。
+    从这一刀往后，调度的中心其实是那份笔记：KV 跟着请求搬家。Kimi 的 Mooncake 干脆把整套推理系统叫作「以 KV cache 为中心」。</p>
   <p>反过来说，请求都很短、量也不大的时候，拆开多出来的这趟传输和两套机器就不一定划算，放在一起、用分块 prefill 缓解就够了。</p>
 
   <h3>6.3　两边各配几台</h3>
-  <p>拆开之后多了一个旋钮：prefill 和 decode 的机器配比。思路是让两边差不多同时忙满：
-    先量一台 prefill 机器每秒能吞多少 prompt token、一台 decode 机器（一整批请求一起跑）每秒能吐多少 token，
-    再按业务里输入和输出的长度比去配。经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。
+  <p>拆开之后多了一个旋钮：prefill 和 decode 的机器配比。思路是让两边差不多同时忙满，DistServe 论文给过一道很干净的算术：</p>
+__FIG_PD_RATIO__
+  <p>经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。
     DistServe 论文把配比和各自的并行方式一起搜，跟 vLLM 等不拆开的系统比，同样的延迟要求下最多能多服务 7.4 倍的请求，或者把延迟要求收紧最多 12.6 倍（OPT 系列模型，以 90% 请求达标为准）。</p>
 
   <h3>6.4　两边各挑各的切法</h3>
@@ -999,6 +1002,9 @@ FIGS = {
     "__FIG_KV_TRIP__": ("fig-kv-trip", "fig5-kv-trip.svg", "topic05-fig-pd.py",
         '<b>下面那条细细的三色条，就是拆开要付的全部代价。</b><br>'
         '<em>放大 10 倍那行才看得清三段。</em>'),
+    "__FIG_PD_RATIO__": ("fig-pd-ratio", "fig5-pd-ratio.svg", "topic05-fig-pd.py",
+        '<b>多用一种机器，反而省卡。</b><br>'
+        '<em>每张卡接的请求翻了一倍多，是因为谁也不再拖谁。</em>'),
     "__FIG_AFD__": ("fig-afd", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>拆开的不是张量，是一层里的两种活。</b><br>'
         '<em>机器数和格子都是示意。</em>'),

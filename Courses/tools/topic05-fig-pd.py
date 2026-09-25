@@ -250,7 +250,50 @@ def fig_kv_trip():
     f.save("fig5-kv-trip.svg", yb + 14)
 
 
+# ── fig-pd-ratio：拆开以后，三张卡顶混着做的六张（2026-09-25 夜 · 蒸馏 R7） ─────────────
+# ⭐ 算术借自 DistServe（Hao AI Lab 博客「Throughput is Not All You Need」）：同一套延迟要求下，
+#   一张卡两样都做每秒接 1.6 个请求；只做 prefill 接 5.6 个；只做 decode 接 10 个。
+MIX, P_ONLY, D_ONLY = 1.6, 5.6, 10.0
+N_P, N_D = 2, 1
+PD_RPS = min(N_P * P_ONLY, N_D * D_ONLY)
+MIX_CARDS = math.ceil(PD_RPS / MIX)
+assert PD_RPS == 10.0 and MIX_CARDS == 7 and abs(PD_RPS / (N_P + N_D) / MIX - 2.08) < 0.01
+
+
+def fig_pd_ratio():
+    f = Fig(W, "同样守住首字延迟和出字间隔两个要求。一张卡两样都做，每秒只接得住 1.6 个请求；只做 prefill 能接 5.6 个，只做 decode 能接 10 个。"
+               "两张做 prefill、一张做 decode，三张卡每秒接 10 个请求，每张卡 3.3 个，是混着做的两倍多；混着做要接住 10 个，得 7 张卡")
+    y0 = f.header("拆开以后，3 张卡顶混着做的 7 张　——　<tspan font-weight=\"700\">各干各的，谁也不拖谁</tspan>",
+                  "同一套延迟要求下，一张卡每秒接得住几个请求（DistServe 论文的例子，OPT 模型）",
+                  [(GY2, "两样都做"), (OR, "只做 prefill"), (GR, "只做 decode")])
+    PH = 272
+    py = f.panel(0, y0, W, PH, "每张卡每秒接得住几个请求", INK)
+    CWD, CH_, GAPC = 92, 74, 14
+
+    def cards(x, y, n, col, lab, rps):
+        for i in range(n):
+            f.box(x + i * (CWD + GAPC), y, CWD, CH_, "none" if col == GY2 else col, GY2 if col == GY2 else col, 8, sw=2)
+            f.t(x + i * (CWD + GAPC) + CWD / 2, y + 32, lab, INK if col == GY2 else "#ffffff", True, 13, "middle")
+            f.t(x + i * (CWD + GAPC) + CWD / 2, y + 56, "%g 个/秒" % rps, INK if col == GY2 else "#ffffff", True, 13, "middle")
+    f.t(24, py + 60, "混着做", INK, True, 15)
+    cards(140, py + 30, MIX_CARDS, GY2, "两样都做", MIX)
+    f.t(140 + MIX_CARDS * (CWD + GAPC) + 10, py + 72, "7 张 ≈ %.1f 个/秒" % (MIX_CARDS * MIX), INK, True, 15)
+    f.t(24, py + 170, "拆开", INK, True, 15)
+    cards(140, py + 140, N_P, OR, "prefill", P_ONLY)
+    cards(140 + N_P * (CWD + GAPC), py + 140, N_D, GR, "decode", D_ONLY)
+    f.t(140 + 3 * (CWD + GAPC) + 10, py + 172, "3 张 ＝ min(2 × %g, %g) ＝ %g 个/秒" % (P_ONLY, D_ONLY, PD_RPS), GR, True, 15)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "每张卡接的请求翻了一倍多，配比就是这么算出来的", [
+        "两边各有各的上限：prefill 一张接 5.6 个，decode 一张接 10 个，所以配 2 比 1，两边差不多同时忙满。",
+        "长 prompt 的业务 prefill 更累，就多配 prefill；长回答的业务多配 decode。",
+    ])
+    yb = f.src(yb + 10, "📌 DistServe（Zhong 等，arXiv 2401.09670）作者博客「Throughput is Not All You Need」中的例子：同一 SLO 下单卡 goodput 1.6／5.6／10 rps。",
+               "⚠️ 本课推导：2P1D 每秒 min(2 × 5.6, 10) ＝ 10 个，每卡约 3.3 个；混着做接 10 个要 ⌈10 ÷ 1.6⌉ ＝ 7 张卡。")
+    f.save("fig5-pd-ratio.svg", yb + 14)
+
+
 fig_pd()
 fig_afd()
 fig_decode_ai()
 fig_kv_trip()
+fig_pd_ratio()
