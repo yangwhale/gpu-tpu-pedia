@@ -5187,7 +5187,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>次数差三个数量级，线速差一个数量级，两边一对就是摆法。</b><span class="capmore"><br><em>次数是示意配置下的推导；带宽取 GB300 每块 GPU 的双向值。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 次数为本课推导：TP 每层前反向各 2 次 all-reduce（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> sec. 3）；FSDP 每层 3 次（ZeRO 的 3Ψ，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 7）；EP、PP、DP 按调度数出；叠上 PP 时 TP 的次数要除以 PP 段数，开重算时 TP 每层是 6 次。链路：GB300 NVLink 5 每 GPU 1.8 TB/s；A4X Max 每节点 4 块 GPU、4 × CX-8 800 Gb/s。</p></details></figure>
   <p>先别往下看：TP、PP、DP 三个，谁该坐快线？把集群想成一栋写字楼就好猜了：</p>
 <figure class="fbox fwide" id="fig-office"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="把一个集群想成一栋写字楼。最里面一圈是同一张桌子，就是最快的那圈线：一台机器、GB300 的一整柜、或者 TPU 的一个切片，TP、EP、CP 这些每一层都要说话的刀坐这里，像几个人合写一份合同，每一段都要对一遍。中间一圈是同一栋楼，走集群网络，PP 坐这里，像按章节递稿，隔几层楼也行。最外一圈是别的楼甚至别的城市，DP 坐这里，像另一个组下班前对一次账"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">说得勤的坐里圈，说得少的去外圈　——　<tspan font-weight="700">一个集群就是一栋写字楼</tspan></text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个集群就是一栋写字楼　——　<tspan font-weight="700">谁该坐同一张桌？</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一圈比一圈的线慢。由里到外的顺序，跟 Llama 3 报告里 [TP, CP, PP, DP] 的排法一样</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同一张桌：最快的那圈线</text>
@@ -5203,7 +5203,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="50" y="155" width="840" height="330" rx="165" fill="none" stroke="#1e8e3e" stroke-width="2.6"/>
 <rect x="170" y="208" width="600" height="224" rx="112" fill="none" stroke="#e8710a" stroke-width="2.6"/>
 <rect x="295" y="260" width="350" height="120" rx="60" fill="none" stroke="#1a73e8" stroke-width="2.6"/>
-<text class="svgsm" x="470" y="314" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张桌：TP、EP、CP</tspan></text>
+<text class="svgsm" x="470" y="314" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张桌：TP、EP、FSDP、CP</tspan></text>
 <text class="svgsm" x="470" y="340" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">合写合同，每段都对一遍</text>
 <text class="svgsm" x="470" y="234" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一栋楼：PP</tspan></text>
 <text class="svgsm" x="470" y="254" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">按章节递稿（只在段边界）</text>
@@ -5244,7 +5244,8 @@ body.figonly section h3{margin-top:34px}
     专家并行才敢往大了开（TP 受头数和矩阵效率限制，在整柜上也很少超过 8 或 16）：<b>快线那一圈画多大，这几刀就能切多深。</b></p>
 
   <h3 id="s7-3">7.3　先选对切法，再调参数</h3>
-  <p>摆法和切法选错了，参数调得再细也只是在错的天花板下面打转。我们在 GB300 上跑 DeepSeek-V4-Pro 时撞上过一次：</p>
+  <p>摆法和切法选错了，参数调得再细也只是在错的天花板下面打转。我们在 GB300 上跑 DeepSeek-V4-Pro 时撞上过一次。
+    图里的 1P1D 是一台 prefill 机器配一台 decode 机器，3P 是三台 prefill；DEP8 是 decode 那边 attention 每张卡各管一批请求、专家铺在 8 张卡上：</p>
 <figure class="fbox fwide" id="fig-topo"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="GB300 上跑 DeepSeek-V4-Pro 的三次实测，按每块 GPU 的吞吐画。原始脚本 1P1D，每卡 1820；加 prefill 机器、调并发，总吞吐涨了 45%，但卡也翻了一倍，每卡反而降到 1319。把 decode 从 TP4 换成 DEP8（decode 卡也从 4 张变 8 张），同样并发下每卡到 2758，是前一个的 2.09 倍"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">调参和换切法，不是一个量级　——　<tspan font-weight="700">看每张卡，不看总数</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · DeepSeek-V4-Pro · vLLM，4K 进 1K 出。条长是每块 GPU 的吞吐（tok/s），括号里是总数和卡数</text>
@@ -5267,11 +5268,13 @@ body.figonly section h3{margin-top:34px}
 <rect x="330" y="262" width="351.6666666666667" height="40" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="693" y="289" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,319</tspan></text>
 <text class="svgsm" x="771" y="289" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">（总 21,100，16 块卡）</text>
+<text class="svgsm" x="971" y="289" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">总数 +45%，每卡 -28%</tspan></text>
 <text class="svgsm" x="30" y="362" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3P ＋ DEP8 decode</tspan></text>
 <text class="svgsm" x="30" y="384" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">decode 卡 4→8 张，并发 512</text>
 <rect x="330" y="342" width="735.3733333333333" height="40" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1077" y="369" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2,758</tspan></text>
 <text class="svgsm" x="1155" y="369" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">（总 55,153，20 块卡）</text>
+<text class="svgsm" x="330" y="162" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">条越长越好，按每张卡算</text>
 <rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5304,7 +5307,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>第 4 关　还不够，或者非跨很慢的线不可？</b>这时才上 PP：它只传段边界的激活，量小、频率低，能跨慢线，代价是气泡（第三节）。</li>
     <li><b>第 5 关　还剩卡吗？</b>全给 DP：一步只通信一次，最便宜。</li>
   </ol>
-  <p>拿两个真实配置对一遍。表里「DP 4 × FSDP 128」这类写法按乘法读：两种切法各切几份，乘起来就是总共多少份。</p>
+  <p>拿两个真实配置对一遍。读这张表，先看两个「不用」：V3 在 8 卡一台的 H800 上不用 TP；混元 3 在 TPU 上不用 EP。表里「DP 4 × FSDP 128」这类写法按乘法读：两种切法各切几份，乘起来就是总共多少份。</p>
   <table>
     <tr><th>步骤</th><th>混元 3（295B MoE，TPU v7，256 芯片）</th><th>DeepSeek-V3（671B MoE，2,048 块 H800）</th></tr>
     <tr><td>① 装得下</td><td>FSDP 128（专家权重也由 FSDP 切）：再窄就爆显存</td><td>ZeRO-1 摊优化器状态；EP 64 摊专家</td></tr>
@@ -5316,7 +5319,7 @@ body.figonly section h3{margin-top:34px}
       最好成绩是把 FSDP 加宽到 256、用省下的显存把每个 device 的 batch 从 12 推到 16，比默认配方高 3%；加宽本身只慢不到 1%，收益全来自推大的 batch</td><td>剩下的给 ZeRO-1 的数据并行</td></tr>
   </table>
   <p>同一套五步，两个模型走出来的配置几乎没有重合，<b>因为两台机器的快线长得不一样</b>。
-    这也是为什么别人家的并行配置不能照抄：先看自己的线。读这张表，先看两个「不用」：V3 在 8 卡一台的 H800 上不用 TP；混元 3 在 TPU 上不用 EP。</p>
+    这也是为什么别人家的并行配置不能照抄：先看自己的线。</p>
   <p><em>表下注：混元 3 那次 EP 实测是在 16 芯片上开 4 路，吞吐掉了 71%（只跑了一次），batch 同时减半，有混杂；换一种配法掉 37%。原始记录归因于环面上 all-to-all 要多跳，但 4 路时这笔账不大，原因还要再查。
     V3 那一列按乘法读：PP 16 × 数据并行 128 ＝ 2,048；EP 64 不另占卡，是在那 128 路数据并行里切专家（本课推导）。</em></p>
 
@@ -5707,8 +5710,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>并发与 batch</td><td>并发是在排队的请求数，batch 是同时在算的请求数</td></tr>
   </table>
 
-  <p class="landing">⭐ 回到开头那个问题：从哪儿下刀。五刀切的东西各不一样，付的账却是同一种：<b>拿一种通信，换一份显存或一份算力</b>。
-    所以选并行策略，说到底是在选你愿意付哪一种通信、付多频繁、放在哪根线上。</p>
+
 
 
   <h3 id="s8-9">8.9　带走三句话</h3>
@@ -5719,6 +5721,8 @@ body.figonly section h3{margin-top:34px}
   <p>拿开场那个 V3 试一次：<b>PP 16、EP 64、ZeRO-1 数据并行</b>（技术报告 sec. 3.2）。
     PP 是切深，只在段边界收发，敢跨机器；EP 是切专家，每层两次 AllToAll，所以规定每个 token 最多去 4 台机器；ZeRO-1 是切数据，一步一次 ReduceScatter ＋ AllGather，最便宜。
     三刀、三种通信、三根线 —— 开场看着像天书的一行配置，现在读得懂了。</p>
+  <p class="landing">⭐ 回到开头那个问题：从哪儿下刀。五刀切的东西各不一样，付的账却是同一种：<b>拿一种通信，换一份显存或一份算力</b>。
+    所以选并行策略，说到底是在选你愿意付哪一种通信、付多频繁、放在哪根线上。</p>
   <p>最后一句也是第三节和第六节那把尺子：<b>硬件线是算力 ÷ 带宽，负载线由你的切法决定</b>。这一讲的每一刀，都是在让某条负载线爬到硬件线上面去。</p>
   <details class="foldfig"><summary><b>会后两道小题</b>（答案都在前面，自己先想）</summary>
   <p>① 一个 MoE 模型要在一柜 GB300（72 块卡、同一个 NVLink 快线圈）上做 decode，attention 那一半和专家那一半，你会各怎么切？先答三问，再对照 7.3。<br>

@@ -150,6 +150,13 @@ def fig_topo():
         f.box(BX, yy, w, 40, col, col, 4)
         f.t(BX + w + 12, yy + 27, "%s" % format(round(PER[i]), ","), GR if i == 2 else INK, True, 17)
         f.t(BX + w + 90, yy + 27, "（总 %s，%d 块卡）" % (format(tot, ","), g), GY, size=13.5)
+        if i == 1:
+            # ⭐ 2026-09-26 麻瓜读图：这条比上一条短，容易看成「调参调坏了」→ 把两个变化并排写出来
+            d_tot = TOPO[1][2] / TOPO[0][2] - 1
+            d_per = PER[1] / PER[0] - 1
+            assert round(d_tot * 100) == 45 and round(d_per * 100) == -28, (d_tot, d_per)
+            f.t(BX + w + 290, yy + 27, "总数 +%d%%，每卡 %d%%" % (round(d_tot * 100), round(d_per * 100)), RD, True, 14)
+    f.t(BX, py + 30, "条越长越好，按每张卡算", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "参数调得再好，也只是那一种切法的天花板", [
         "在 TP4 上加机器、调并发，总数 +45%，<tspan font-weight=\"700\">其实是靠多一倍的卡换的</tspan>；出字间隔一直钉在约 46.8–53 ms。",
@@ -167,7 +174,7 @@ def fig_office():
     f = Fig(W, "把一个集群想成一栋写字楼。最里面一圈是同一张桌子，就是最快的那圈线：一台机器、GB300 的一整柜、或者 TPU 的一个切片，"
                "TP、EP、CP 这些每一层都要说话的刀坐这里，像几个人合写一份合同，每一段都要对一遍。中间一圈是同一栋楼，走集群网络，"
                "PP 坐这里，像按章节递稿，隔几层楼也行。最外一圈是别的楼甚至别的城市，DP 坐这里，像另一个组下班前对一次账")
-    y0 = f.header("说得勤的坐里圈，说得少的去外圈　——　<tspan font-weight=\"700\">一个集群就是一栋写字楼</tspan>",
+    y0 = f.header("一个集群就是一栋写字楼　——　<tspan font-weight=\"700\">谁该坐同一张桌？</tspan>",
                   "一圈比一圈的线慢。由里到外的顺序，跟 Llama 3 报告里 [TP, CP, PP, DP] 的排法一样",
                   [(BL, "同一张桌：最快的那圈线"), (OR, "同一栋楼：集群网络"), (GR, "别的楼：慢线")])
     PH = 400
@@ -175,7 +182,7 @@ def fig_office():
     cx, cy = 470, py + 188
     rings = [(GR, 420, 165, "别的楼、别的城市：DP", "下班前对一次账（一步一次）"),
              (OR, 300, 112, "同一栋楼：PP", "按章节递稿（只在段边界）"),
-             (BL, 175, 60, "同一张桌：TP、EP、CP", "合写合同，每段都对一遍")]
+             (BL, 175, 60, "同一张桌：TP、EP、FSDP、CP", "合写合同，每段都对一遍")]
     for col, rx, ry, lab, how in rings:
         f.box(cx - rx, cy - ry, 2 * rx, 2 * ry, "none", col, int(ry), sw=2.6)
     f.t(cx, cy - 6, rings[2][3], BL, True, 16, "middle")
