@@ -145,12 +145,9 @@ __QUIZ__
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算（权重 2 ＋ 梯度 2 ＋ 优化器状态 12），
     光常驻的训练状态就要 9.76 TiB，约合一万 GB。最大的一块卡显存也就两三百 GB，光放下就要三四十到五六十块卡，还没开始算。
     <b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
-  <p>这一万 GB 还只是模型状态，不含激活：每一层算出来、留着反向要用的中间结果，它跟 batch × 序列长度成正比，序列一长比模型状态还大。
-    而且就算放得下，一块卡也算不完：V3 技术报告写着，全部训练用了 278.8 万 H800 卡时，换成一块卡要算 __V3_YEARS__ 年。
-    <b>所以切开不只为了放得下，也为了算得快。</b></p>
+__FIG_WHY_CUT__
 
-  <p>一个训练中的张量有好几个维度可以下刀：batch、序列、隐藏维、层、专家。
-    每切一刀，就在那一维上产生一种通信：切开之后，你缺的那块在我这儿，我缺的在你那儿，只能互相传。所以这一讲从头到尾只讲一件事：</p>
+  <p>一个训练中的张量能下刀的维度有好几个：batch、序列、隐藏维、层、专家。这一讲从头到尾只讲一件事：</p>
 
   <div class="note ok"><span class="t">一句话</span>
     <b>用一种通信，换一份显存或一份算力。</b><br>
@@ -158,17 +155,15 @@ __QUIZ__
 
   <p>这一讲按一条接力线走。<b>每一刀都在补前面没管到的那一块</b>：前一刀撑不住了，或者模型换了形状、上下文变长了，就得换一刀。</p>
   <ol>
-    <li><b>先认识五种通信。</b>后面每一刀多出来的，都是其中某一种。</li>
-    <li><b>第一刀，切数据。</b>最朴素，但每张卡还是存一整份模型，于是有了 FSDP（全分片数据并行：连模型本身也分片存）。</li>
-    <li><b>第二刀，切权重。</b>FSDP 每一层都要把整层权重拼回来，batch 一小就被搬权重拖垮，于是切进矩阵（张量并行，TP）、切开层（流水线并行，PP）。</li>
-    <li><b>第三刀，切专家。</b>模型换了形状：MoE 的参数几乎全在一堆窄窄的专家里，TP 不对路了；而且 attention 和专家是两种形状，得各配各的。</li>
-    <li><b>第四刀，切序列。</b>前三刀都没碰过的一维：上下文一长，训练时激活爆，推理时 KV cache 爆。</li>
-    <li><b>第五刀，不切张量，切工作。</b>prefill 和 decode 分开，attention 和专家分开。</li>
-    <li><b>最后摆到真机器上</b>，再用一张全景表把走过的路收一遍。</li>
+    <li><b>先认识五种通信</b>：后面每一刀多出来的，都是其中一种。</li>
+    <li><b>第一刀，切数据</b>：装不下，一路削到把模型也切开。</li>
+    <li><b>第二刀，切权重</b>：batch 一小，第一刀被搬权重拖垮。</li>
+    <li><b>第三刀，切专家</b>：MoE 的参数几乎全在专家里。</li>
+    <li><b>第四刀，切序列</b>：上下文一长，一条样本自己就放不下。</li>
+    <li><b>第五刀，切工作</b>：prefill 和 decode、attention 和专家，要的切法不一样。</li>
+    <li><b>摆到机器上</b>，最后用一张全景图收一遍。</li>
   </ol>
-
-  <p>整条线主要用一把尺子量：<b>这一刀多出来的通信有多频繁，它就只能放在多快的链路上。</b>
-    第三节还会拿出一把配套的：每搬一个字节换来多少计算。频率决定它放哪根线，这一把决定它会不会被拖住。</p>
+  <p>量每一刀用两把尺子：它多出来的通信<b>有多频繁</b>（决定放哪根线），每搬一个字节<b>换来多少计算</b>（决定会不会被拖住，第三节）。</p>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b>：张量、激活、注意力头、MoE、KV cache、prefill 与 decode、Q/K/V、MLA、显存、ICI、「几路」……（专题一、三讲过，这里各一句话）</summary>
   <p style="line-height:1.9"><b>token 与 batch</b>：token 是模型处理文字的最小单位，大致一个字；batch 是一步喂进去的那一批数据，本讲常按 token 数算。<br>
@@ -203,48 +198,32 @@ __QUIZ__
     名字看着多，但每一个都只回答两个问题：<b>谁发给谁</b>；数据到了之后是<b>拼起来、加起来，还是原样放着</b>。</p>
 
   <h3>1.1　先学会看图</h3>
-  <p>一组卡按同一个规则一起发、一起收，叫<b>集合通信</b>（collective communication）。
-</p>
-  <p>下面几张图用同一套画法，只学一次：</p>
+  <p>一组卡按同一个规则一起发、一起收，叫<b>集合通信</b>。下面几张图用同一套画法，只学一次：</p>
   <ul>
-    <li>四张卡，<b>一张一个颜色</b>：卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫。</li>
-    <li>每张卡的数据切成四块，一块一个小方格。</li>
-    <li><b>加过的块画成竖条纹</b>，条纹是哪几种颜色，就是哪几张卡的数加在了一起。</li>
-    <li>虚线框表示这里没有数据。</li>
-    <li>动画是黑底，<b>一列是一张卡</b>（静态图里一行是一张卡），颜色稍淡，对应关系不变。</li>
+    <li>四张卡一张一个颜色（卡 0 蓝、1 橙、2 绿、3 紫），每张卡的数据切成四块。</li>
+    <li>动画是黑底，<b>一列是一张卡</b>（静态图里一行是一张卡）。</li>
   </ul>
 
   <h3>1.2　一个人对所有人：四个基本动作</h3>
   <p>把四张卡想成四个同学，卡 0 是班长。</p>
 __FIG_COLL_1N__
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播：一份 → 人人一份。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发：一份拆开 → 一人一块。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集：一人一块 → 拼成一份。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约：人人一份 → 加成一份。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
-  <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
-    按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
-    通信库会把它们排成一条链接力传，让班长只发或只收一份。收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西：总量不随卡数涨，但全压在它一条线上。</p>
+  <p>这四个都有一个「班长」，数据全压在它一条线上，卡一多就堵。所以训练里天天跑的是下面那组。</p>
+  <details class="foldfig"><summary><b>细一点</b>：班长到底怎么堵、通信库怎么缓解</summary>
+  <p>按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
+    通信库会把它们排成一条链接力传，让班长只发或只收一份。收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西：总量不随卡数涨，但全压在它一条线上。</p></details>
 
   <h3>1.3　人人对人人：训练里天天在跑的四个</h3>
 __FIG_COLL_NN__
 <div class="animgrid"><figure class="animcell" id="anim-allgather"><video src="media/topic05-allgather.mp4" autoplay loop muted playsinline aria-label="AllGather 全收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllGather 全收集：一人一块 → 人人一整份。字幕：每人把自己那块发给所有人：只拼，不加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllGather 全收集</b>：每人把自己那块发给所有人：只拼，不加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reducescatter"><video src="media/topic05-reducescatter.mp4" autoplay loop muted playsinline aria-label="ReduceScatter 归约分散 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：ReduceScatter 归约分散：人人一整份 → 各拿一块总和。字幕：第 j 块全部送到卡 j 加起来：先加，再分。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>ReduceScatter 归约分散</b>：第 j 块全部送到卡 j 加起来：先加，再分<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-allreduce"><video src="media/topic05-allreduce.mp4" autoplay loop muted playsinline aria-label="AllReduce 全归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllReduce 全归约 ＝ ReduceScatter ＋ AllGather。字幕：① ReduceScatter：各拿一块总和；② AllGather：总和发给所有人 → 人人一份总和。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllReduce 全归约</b>：① ReduceScatter 各拿一块总和；② AllGather 总和发给所有人<span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
-  <p>All 就是「人人都拿到结果」。拿上一组对照着看：</p>
-  <ul>
-    <li><b>AllGather</b> ＝ Gather，再把拼好的结果发给每个人。</li>
-    <li><b>ReduceScatter</b> ＝ Reduce，再把结果切开，一人一块。</li>
-    <li><b>AllReduce</b> ＝ Reduce，再把加好的结果发给每个人。</li>
-    <li><b>AllToAll</b> 独一份：每一对卡之间各传一份专属的数据，不加也不拼。</li>
-  </ul>
+  <p>All ＝「人人都拿到结果」：AllGather 是收集完发给每个人，ReduceScatter 是归约完切开、一人一块，AllReduce 是归约完发给每个人；AllToAll 独一份，不加也不拼。</p>
 
   <h3>1.4　AllReduce 可以拆成两半</h3>
 __FIG_AR_SPLIT__
-  <p>这两半各自单独拿出来，就是两种有用的通信；拆开以后，中间还能塞进别的动作。后面好几种并行白捡的便宜，全从这里来：</p>
-  <ul>
-    <li><b>ZeRO</b>：数据并行同步梯度那一次 AllReduce 拆成两半，中间插进「每张卡只更新自己那 1/n」这一步，于是每卡只存 1/n 的梯度和优化器状态，通信一个字节不多。第二节细讲。</li>
-    <li>张量并行每层要做 AllReduce；配上序列并行时，也是把它拆成这两半，分别挪到不同位置。第三节细讲。</li>
-  </ul>
+  <p>拆开以后，中间还能塞进别的动作。后面好几种并行白捡的便宜全从这里来：ZeRO（第二节）、张量并行配序列并行（第三节）。</p>
 
   <h3>1.5　没有班长，怎么做到的：环</h3>
-  <p>最直接的 AllReduce 是班长模式：大家先把数据交给卡 0 加起来，卡 0 再广播回去。
-    卡 0 要收 n−1 份、发 n−1 份，卡一多，它那条线就成了全场的瓶颈。</p>
-  <p>换个办法：把卡首尾相连排成一圈，谁都不当班长。</p>
+  <p>班长模式下卡 0 要收 n−1 份、发 n−1 份，成了全场的瓶颈。换个办法：首尾相连排成一圈，谁都不当班长。</p>
 __FIG_RING__
 <figure class="fbox fwide" id="anim-ring">
 <video src="media/topic05-ring.mp4" autoplay loop muted playsinline
@@ -253,12 +232,13 @@ __FIG_RING__
   <span class="sub">（15 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>ReduceScatter 转 n−1 步、AllGather 再转 n−1 步；每一步每张卡只发 1/n 份，所以一共发出 2(n−1)/n 份数据。
     卡再多也不到两整份，每个人的负担不随卡数涨，而且每一步所有的线同时都在用。</p>
-  <p>代价是步数跟着卡数涨。数据很大时，比的是带宽，环几乎是最优的；
-    数据很小时，比的是一步一步的等待，步数多反而吃亏。
+  <p>代价是步数跟着卡数涨：数据小时比的是一步步的等待，环反而吃亏，所以通信库会按数据大小自己挑算法。</p>
+  <details class="foldfig"><summary><b>细一点</b>：环形和树形怎么挑、NVSwitch 在交换机里做加法、TPU 的环面</summary>
+  <p>数据很大时比的是带宽，环几乎是最优的；数据很小时比的是一步一步的等待，步数多反而吃亏。
     所以 NCCL 这类通信库会按消息大小，在环形、树形等几种算法之间自己挑。
     NVLink 交换机（NVSwitch）还能在交换机里直接做加法，每张卡发出去的又能少将近一半。</p>
-  <p><em>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
-    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</em></p>
+  <p>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
+    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</p></details>
 
   <h3>1.6　AllToAll：每人给每人一份不一样的</h3>
 __FIG_A2A__
@@ -267,14 +247,13 @@ __FIG_A2A__
        aria-label="AllToAll 动画。四张卡各有四块，颜色表示出自哪张卡，对角线上的四块画粗框。字幕一：派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）。十六块同时飞到新位置，卡 k 的第 j 块落到卡 j 的第 k 行。字幕二：卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次。字幕三：专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll。十六块原路飞回，画面回到开始的样子。"></video>
 <figcaption>派发过去、送回来，正好是专家并行每层的两次 AllToAll。
   <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>它相当于每个人各做一次分发。网络最怕它：前几种都能排成只跟邻居说话的环，它不行，任意两张卡之间都有东西要走，拼的是整个网络的横截面有多宽（切开网络的一刀上能同时过多少流量）；而且每份多大，要等模型算到这一层才知道。
-    专家并行（第四节）派发 token 要用它；切序列时的 Ulysses（第五节）也用它，在「按序列切」和「按头切」之间来回换。</p>
+  <p>网络最怕它：排不成环，任意两张卡之间都有东西要走，拼的是整个网络的横截面有多宽；而且每份多大，要等模型算到这一层才知道。
+    专家并行（第四节）、Ulysses（第五节）都用它。</p>
 
   <h3>1.7　一张表收住</h3>
-  <p>前面一共八个名字，带班长的四个只是积木，日常用的是五种；最后一种一对一收发，是把模型按层切成几段时，段和段之间传激活用的（第三节）。</p>
-  <p>「每卡发出」一列按点对点链路上的最优算法（环）算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
-    ReduceScatter 指加之前那一整份）；Broadcast ／ Reduce 那一行按链式接力算。</p>
+  <p>八个名字里带班长的四个只是积木，日常用的是五种（最后一种一对一收发，第三节切层时用）。给会后查：</p>
   <table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">「每卡发出」按环形算法算；S 是一整份数据（AllGather 指拼好之后那份，ReduceScatter 指加之前那份）；Broadcast／Reduce 按链式接力算。</caption>
     <tr><th>通信</th><th>做什么</th><th>每卡发出</th><th>后面谁在用</th></tr>
     <tr><td>AllReduce</td><td>加完，人人一份</td><td>2(n−1)/n · S</td><td>数据并行同步梯度；张量并行每层前向两次、反向两次</td></tr>
     <tr><td>ReduceScatter</td><td>加完，各拿一块</td><td>(n−1)/n · S</td><td>FSDP 反向分梯度；张量并行配序列并行</td></tr>
@@ -1021,6 +1000,9 @@ FIGS = {
     "__FIG_ZERO_MEM__": ("fig-zero-mem", "fig5-zero-mem.svg", "topic05-fig-zero.py",
         '<b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><br>'
         '<em>ZeRO-3 那条短到几乎看不见：16 个字节切成 1,024 份，每份只剩 0.016。</em>'),
+    "__FIG_WHY_CUT__": ("fig-why-cut", "fig5-why-cut.svg", "topic05-fig-why.py",
+        '<b>左边是放不下，右边是算不完。</b><br>'
+        '<em>一格一块卡；右边两根条用的是同一把尺子。</em>'),
     "__FIG_ZERO_STEP__": ("fig-zero-step", "fig5-zero-step.svg", "topic05-fig-zero.py",
         '<b>① ReduceScatter、③ AllGather 拼起来就是原来那次 AllReduce。</b><br>'
         '<em>多出来的只是中间那一格：每张卡只更新自己那一段。</em>'),
@@ -1049,7 +1031,7 @@ FIGS = {
 
 _html = head + HERO + BODY + FOOT
 _html = P.place_figs(_html, FIGS)
-_html = _html.replace("__QUIZ__", _QUIZ_HTML).replace("__Q3_ANSWER__", QZ.answers_html()).replace("__V3_YEARS__", "%.0f" % NB.V3_ONE_CARD_YEARS)
+_html = _html.replace("__QUIZ__", _QUIZ_HTML).replace("__Q3_ANSWER__", QZ.answers_html())
 _leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
 assert not _leak, "占位符没落地：%s" % "、".join(_leak)
 for _tag in ("h2", "h3", "section", "div"):

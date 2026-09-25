@@ -906,12 +906,135 @@ body.figonly section h3{margin-top:34px}
   <p class="lead">专题四把账算完了：一个 6,710 亿参数的模型，按每参数 16 字节算（权重 2 ＋ 梯度 2 ＋ 优化器状态 12），
     光常驻的训练状态就要 9.76 TiB，约合一万 GB。最大的一块卡显存也就两三百 GB，光放下就要三四十到五六十块卡，还没开始算。
     <b>一块卡装不下，就得切。问题是沿哪一维切。</b></p>
-  <p>这一万 GB 还只是模型状态，不含激活：每一层算出来、留着反向要用的中间结果，它跟 batch × 序列长度成正比，序列一长比模型状态还大。
-    而且就算放得下，一块卡也算不完：V3 技术报告写着，全部训练用了 278.8 万 H800 卡时，换成一块卡要算 318 年。
-    <b>所以切开不只为了放得下，也为了算得快。</b></p>
+<figure class="fbox fwide" id="fig-why-cut"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="为什么要切。左边：放不下。DeepSeek-V3 训练时光模型状态就要 9.76 TiB，一格代表一块卡的显存，按 B300 每卡 288 GB 要 38 块，按 TPU v7 每芯片 192 GiB 要 53 块，这还没算激活。右边：算不完。V3 全部训练用了 278.8 万 H800 卡时，一块卡要算 318 年，摊到 2,048 张卡上约 57 天"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一张卡：放不下，也算不完　——　<tspan font-weight="700">切开是为了放得下，也为了算得快</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，6,710 亿参数，常规混合精度训练（每参数 16 字节）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">B300</text>
+<rect x="82.84" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="103" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU v7</text>
+<rect x="184.72" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="205" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">2,048 张卡一起算</text>
+<rect x="0" y="102" width="680" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="680" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="680" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放不下：9.76 TiB 要摊到几块卡上</tspan></text>
+<text class="svgsm" x="24" y="176" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B300（每卡 288 GB）：38 块</tspan></text>
+<rect x="24" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="47" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="70" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="93" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="116" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="139" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="162" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="185" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="208" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="231" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="254" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="277" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="300" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="323" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="346" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="369" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="392" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="415" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="438" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="461" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="484" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="507" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="530" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="553" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="576" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="599" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="622" y="192" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="24" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="47" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="70" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="93" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="116" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="139" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="162" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="185" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="208" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="231" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="254" y="215" width="18" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="24" y="296" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU v7（每芯片 192 GiB）：53 块</tspan></text>
+<rect x="24" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="47" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="70" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="93" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="116" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="139" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="162" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="185" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="208" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="231" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="254" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="277" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="300" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="323" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="346" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="369" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="392" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="415" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="438" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="461" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="484" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="507" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="530" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="553" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="576" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="599" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="622" y="312" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="24" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="47" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="70" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="93" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="116" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="139" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="162" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="185" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="208" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="231" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="254" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="277" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="300" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="323" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="346" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="369" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="392" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="415" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="438" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="461" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="484" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="507" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="530" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="553" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="576" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="599" y="335" width="18" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="720" y="102" width="680" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="720" y="102" width="680" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="720" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="720" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="734" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算不完：278.8 万 H800 卡时</tspan></text>
+<text class="svgsm" x="744" y="182" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一块卡：318 年</tspan></text>
+<rect x="744" y="198" width="620" height="34" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="744" y="282" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2,048 张卡一起算：约 57 天</tspan></text>
+<rect x="744" y="298" width="3" height="34" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="759" y="322" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">← 同一把尺子，短到只剩一条线</text>
+<text class="svgsm" x="744" y="382" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡时含预训练、长上下文扩展和后训练。</text>
+<rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以要切：可每切一刀，卡和卡之间就多一种通信</tspan></text>
+<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">左边这一万 GB 还只是模型状态；激活跟 batch × 序列长度成正比，序列一长比它还大。</text>
+<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">切开之后，你缺的那块在我这儿、我缺的在你那儿，只能互相传 —— 这一讲只讲这件事。</text>
+</svg><figcaption><b>左边是放不下，右边是算不完。</b><span class="capmore"><br><em>一格一块卡；右边两根条用的是同一把尺子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 V3 全部训练 2.788M H800 GPU hours（DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> 摘要，含预训练、长上下文扩展与后训练）；2,048 块 H800（sec. 3.1）。</p>
+<p>📌 B300 每卡 288 GB（NVIDIA DGX B300 用户手册：8 × 288 GB）；TPU v7 每芯片 192 GiB HBM3e。</p>
+<p>⚠️ 本课推导：9.76 TiB ＝ 6,710 亿 × 16 字节；318 年 ＝ 2.788M ÷ 8,760 小时；57 天 ＝ 2.788M ÷ 2,048 ÷ 24。</p></details></figure>
 
-  <p>一个训练中的张量有好几个维度可以下刀：batch、序列、隐藏维、层、专家。
-    每切一刀，就在那一维上产生一种通信：切开之后，你缺的那块在我这儿，我缺的在你那儿，只能互相传。所以这一讲从头到尾只讲一件事：</p>
+  <p>一个训练中的张量能下刀的维度有好几个：batch、序列、隐藏维、层、专家。这一讲从头到尾只讲一件事：</p>
 
   <div class="note ok"><span class="t">一句话</span>
     <b>用一种通信，换一份显存或一份算力。</b><br>
@@ -919,17 +1042,15 @@ body.figonly section h3{margin-top:34px}
 
   <p>这一讲按一条接力线走。<b>每一刀都在补前面没管到的那一块</b>：前一刀撑不住了，或者模型换了形状、上下文变长了，就得换一刀。</p>
   <ol>
-    <li><b>先认识五种通信。</b>后面每一刀多出来的，都是其中某一种。</li>
-    <li><b>第一刀，切数据。</b>最朴素，但每张卡还是存一整份模型，于是有了 FSDP（全分片数据并行：连模型本身也分片存）。</li>
-    <li><b>第二刀，切权重。</b>FSDP 每一层都要把整层权重拼回来，batch 一小就被搬权重拖垮，于是切进矩阵（张量并行，TP）、切开层（流水线并行，PP）。</li>
-    <li><b>第三刀，切专家。</b>模型换了形状：MoE 的参数几乎全在一堆窄窄的专家里，TP 不对路了；而且 attention 和专家是两种形状，得各配各的。</li>
-    <li><b>第四刀，切序列。</b>前三刀都没碰过的一维：上下文一长，训练时激活爆，推理时 KV cache 爆。</li>
-    <li><b>第五刀，不切张量，切工作。</b>prefill 和 decode 分开，attention 和专家分开。</li>
-    <li><b>最后摆到真机器上</b>，再用一张全景表把走过的路收一遍。</li>
+    <li><b>先认识五种通信</b>：后面每一刀多出来的，都是其中一种。</li>
+    <li><b>第一刀，切数据</b>：装不下，一路削到把模型也切开。</li>
+    <li><b>第二刀，切权重</b>：batch 一小，第一刀被搬权重拖垮。</li>
+    <li><b>第三刀，切专家</b>：MoE 的参数几乎全在专家里。</li>
+    <li><b>第四刀，切序列</b>：上下文一长，一条样本自己就放不下。</li>
+    <li><b>第五刀，切工作</b>：prefill 和 decode、attention 和专家，要的切法不一样。</li>
+    <li><b>摆到机器上</b>，最后用一张全景图收一遍。</li>
   </ol>
-
-  <p>整条线主要用一把尺子量：<b>这一刀多出来的通信有多频繁，它就只能放在多快的链路上。</b>
-    第三节还会拿出一把配套的：每搬一个字节换来多少计算。频率决定它放哪根线，这一把决定它会不会被拖住。</p>
+  <p>量每一刀用两把尺子：它多出来的通信<b>有多频繁</b>（决定放哪根线），每搬一个字节<b>换来多少计算</b>（决定会不会被拖住，第三节）。</p>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b>：张量、激活、注意力头、MoE、KV cache、prefill 与 decode、Q/K/V、MLA、显存、ICI、「几路」……（专题一、三讲过，这里各一句话）</summary>
   <p style="line-height:1.9"><b>token 与 batch</b>：token 是模型处理文字的最小单位，大致一个字；batch 是一步喂进去的那一批数据，本讲常按 token 数算。<br>
@@ -964,15 +1085,10 @@ body.figonly section h3{margin-top:34px}
     名字看着多，但每一个都只回答两个问题：<b>谁发给谁</b>；数据到了之后是<b>拼起来、加起来，还是原样放着</b>。</p>
 
   <h3 id="s1-1">1.1　先学会看图</h3>
-  <p>一组卡按同一个规则一起发、一起收，叫<b>集合通信</b>（collective communication）。
-</p>
-  <p>下面几张图用同一套画法，只学一次：</p>
+  <p>一组卡按同一个规则一起发、一起收，叫<b>集合通信</b>。下面几张图用同一套画法，只学一次：</p>
   <ul>
-    <li>四张卡，<b>一张一个颜色</b>：卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫。</li>
-    <li>每张卡的数据切成四块，一块一个小方格。</li>
-    <li><b>加过的块画成竖条纹</b>，条纹是哪几种颜色，就是哪几张卡的数加在了一起。</li>
-    <li>虚线框表示这里没有数据。</li>
-    <li>动画是黑底，<b>一列是一张卡</b>（静态图里一行是一张卡），颜色稍淡，对应关系不变。</li>
+    <li>四张卡一张一个颜色（卡 0 蓝、1 橙、2 绿、3 紫），每张卡的数据切成四块。</li>
+    <li>动画是黑底，<b>一列是一张卡</b>（静态图里一行是一张卡）。</li>
   </ul>
 
   <h3 id="s1-2">1.2　一个人对所有人：四个基本动作</h3>
@@ -1305,9 +1421,10 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="780" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">则是每个人各做一次分发。</text>
 </svg><figcaption><b>四个有班长的动作：广播、分发、收集、归约。</b><span class="capmore"><br><em>收集和归约只差一个动作：数据到了之后是拼起来，还是加起来。</em></span></figcaption></figure>
 <div class="animgrid"><figure class="animcell" id="anim-broadcast"><video src="media/topic05-broadcast.mp4" autoplay loop muted playsinline aria-label="Broadcast 广播 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Broadcast 广播：一份 → 人人一份。字幕：卡 0 的整份数据，复制给每一个人。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Broadcast 广播</b>：卡 0 的整份数据，复制给每一个人<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-scatter"><video src="media/topic05-scatter.mp4" autoplay loop muted playsinline aria-label="Scatter 分发 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Scatter 分发：一份拆开 → 一人一块。字幕：卡 0 把第 j 块发给卡 j，自己只留第 0 块。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Scatter 分发</b>：卡 0 把第 j 块发给卡 j，自己只留第 0 块<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-gather"><video src="media/topic05-gather.mp4" autoplay loop muted playsinline aria-label="Gather 收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Gather 收集：一人一块 → 拼成一份。字幕：每人把自己那块交给卡 0，卡 0 按顺序拼起来。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Gather 收集</b>：每人把自己那块交给卡 0，卡 0 按顺序拼起来<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reduce"><video src="media/topic05-reduce.mp4" autoplay loop muted playsinline aria-label="Reduce 归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：Reduce 归约：人人一份 → 加成一份。字幕：每人把整份交给卡 0，卡 0 逐块相加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>Reduce 归约</b>：每人把整份交给卡 0，卡 0 逐块相加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
-  <p>这四个都有一个「班长」：所有数据要么从它那里发出去，要么都往它那里送。
-    按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
-    通信库会把它们排成一条链接力传，让班长只发或只收一份。收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西：总量不随卡数涨，但全压在它一条线上。</p>
+  <p>这四个都有一个「班长」，数据全压在它一条线上，卡一多就堵。所以训练里天天跑的是下面那组。</p>
+  <details class="foldfig"><summary><b>细一点</b>：班长到底怎么堵、通信库怎么缓解</summary>
+  <p>按最朴素的做法（班长挨个发、挨个收），广播和归约的班长要扛下全部流量，卡越多越堵；
+    通信库会把它们排成一条链接力传，让班长只发或只收一份。收集和分发的班长省不掉那份量，它手里本来就是 n 份不同的东西：总量不随卡数涨，但全压在它一条线上。</p></details>
 
   <h3 id="s1-3">1.3　人人对人人：训练里天天在跑的四个</h3>
 <figure class="fbox fwide" id="fig-coll-nn"><svg viewBox="0 0 1400 786" width="100%" role="img" aria-label="人人对人人的四个集合通信。全收集：每人一块，结束后每人都有完整的四块。归约分散：每人一整份，结束后卡 k 只拿到第 k 块的总和。全归约：每人一整份，结束后每人都拿到四块总和。全交换：卡 k 的第 j 块发给卡 j，结束后卡 j 手里是四张卡各自的第 j 块，相当于把四行四列的表转置了一次。前三个是把收集、归约的结果发给所有人，全交换不加也不拼，只是换位置"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -1781,13 +1898,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="756" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">AllToAll 不加也不拼：每张卡给每张卡发一份<tspan font-weight="700">不一样的</tspan>。任意两张卡之间都有流量，所以它对网络最挑剔。</text>
 </svg><figcaption><b>名字带 All 的，结果人人一份。</b><span class="capmore"><br><em>AllToAll 是另一回事：不加也不拼，只换位置。</em></span></figcaption></figure>
 <div class="animgrid"><figure class="animcell" id="anim-allgather"><video src="media/topic05-allgather.mp4" autoplay loop muted playsinline aria-label="AllGather 全收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllGather 全收集：一人一块 → 人人一整份。字幕：每人把自己那块发给所有人：只拼，不加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllGather 全收集</b>：每人把自己那块发给所有人：只拼，不加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reducescatter"><video src="media/topic05-reducescatter.mp4" autoplay loop muted playsinline aria-label="ReduceScatter 归约分散 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：ReduceScatter 归约分散：人人一整份 → 各拿一块总和。字幕：第 j 块全部送到卡 j 加起来：先加，再分。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>ReduceScatter 归约分散</b>：第 j 块全部送到卡 j 加起来：先加，再分<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-allreduce"><video src="media/topic05-allreduce.mp4" autoplay loop muted playsinline aria-label="AllReduce 全归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllReduce 全归约 ＝ ReduceScatter ＋ AllGather。字幕：① ReduceScatter：各拿一块总和；② AllGather：总和发给所有人 → 人人一份总和。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllReduce 全归约</b>：① ReduceScatter 各拿一块总和；② AllGather 总和发给所有人<span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
-  <p>All 就是「人人都拿到结果」。拿上一组对照着看：</p>
-  <ul>
-    <li><b>AllGather</b> ＝ Gather，再把拼好的结果发给每个人。</li>
-    <li><b>ReduceScatter</b> ＝ Reduce，再把结果切开，一人一块。</li>
-    <li><b>AllReduce</b> ＝ Reduce，再把加好的结果发给每个人。</li>
-    <li><b>AllToAll</b> 独一份：每一对卡之间各传一份专属的数据，不加也不拼。</li>
-  </ul>
+  <p>All ＝「人人都拿到结果」：AllGather 是收集完发给每个人，ReduceScatter 是归约完切开、一人一块，AllReduce 是归约完发给每个人；AllToAll 独一份，不加也不拼。</p>
 
   <h3 id="s1-4">1.4　AllReduce 可以拆成两半</h3>
 <figure class="fbox fwide" id="fig-ar-split"><svg viewBox="0 0 1400 528" width="100%" role="img" aria-label="全归约可以拆成两步。开始时每张卡一整份自己的数据。第一步归约分散：每张卡拿到一块总和，卡零拿第零块，卡一拿第一块，以此类推。第二步全收集：把这四块总和拼给每一个人。两步做完，每人手里都是四块总和，跟直接做一次全归约结果完全一样。每一步每张卡要发出去的数据是整份的四分之三，两步加起来是二乘四分之三"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2007,16 +2118,10 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="474" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">数据并行本来就要做一次 AllReduce。<tspan font-weight="700">ZeRO 把它拆开</tspan>：先用 ReduceScatter 分梯度、各自更新，再用 AllGather 拼回新权重　——　前两级通信总量不变，显存却省下来了。</text>
 <text class="svgsm" x="20" y="498" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">同理，张量并行配上序列并行时，也是把每层那次 AllReduce 拆成这两半，分别挪到不同位置去做。</text>
 </svg><figcaption><b>先加后拼，跟一步到位的结果完全一样。</b><span class="capmore"><br><em>拆开之后，两半可以放在不同的时间点去做。</em></span></figcaption></figure>
-  <p>这两半各自单独拿出来，就是两种有用的通信；拆开以后，中间还能塞进别的动作。后面好几种并行白捡的便宜，全从这里来：</p>
-  <ul>
-    <li><b>ZeRO</b>：数据并行同步梯度那一次 AllReduce 拆成两半，中间插进「每张卡只更新自己那 1/n」这一步，于是每卡只存 1/n 的梯度和优化器状态，通信一个字节不多。第二节细讲。</li>
-    <li>张量并行每层要做 AllReduce；配上序列并行时，也是把它拆成这两半，分别挪到不同位置。第三节细讲。</li>
-  </ul>
+  <p>拆开以后，中间还能塞进别的动作。后面好几种并行白捡的便宜全从这里来：ZeRO（第二节）、张量并行配序列并行（第三节）。</p>
 
   <h3 id="s1-5">1.5　没有班长，怎么做到的：环</h3>
-  <p>最直接的 AllReduce 是班长模式：大家先把数据交给卡 0 加起来，卡 0 再广播回去。
-    卡 0 要收 n−1 份、发 n−1 份，卡一多，它那条线就成了全场的瓶颈。</p>
-  <p>换个办法：把卡首尾相连排成一圈，谁都不当班长。</p>
+  <p>班长模式下卡 0 要收 n−1 份、发 n−1 份，成了全场的瓶颈。换个办法：首尾相连排成一圈，谁都不当班长。</p>
 <figure class="fbox fwide" id="fig-ring"><svg viewBox="0 0 1400 532" width="100%" role="img" aria-label="环形归约分散的逐步推演。四张卡连成一个环，每人只跟右边邻居说话。每一步，每张卡同时往右发一块、从左收一块，收到的那块加到自己的同号块上。第一步后，每张卡有一块是两个人的和；第二步后是三个人的和；第三步后，每张卡恰好握着一块完整的四人总和。再用同样的环把这四块总和转三步，就是全收集，全归约就做完了。每一步每条线上只走一块数据，所以卡再多，每张卡发出去的总量也不超过两整份"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">没有班长，怎么做到的　——　<tspan font-weight="700">连成一个环，每人只跟右边的邻居说话</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每一步：每张卡同时往右发一块、从左收一块，<tspan font-weight="700">收到的加到自己的同号块上</tspan>。粗框 ＝ 这一步刚加过的块</text>
@@ -2269,12 +2374,13 @@ body.figonly section h3{margin-top:34px}
   <span class="sub">（15 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>ReduceScatter 转 n−1 步、AllGather 再转 n−1 步；每一步每张卡只发 1/n 份，所以一共发出 2(n−1)/n 份数据。
     卡再多也不到两整份，每个人的负担不随卡数涨，而且每一步所有的线同时都在用。</p>
-  <p>代价是步数跟着卡数涨。数据很大时，比的是带宽，环几乎是最优的；
-    数据很小时，比的是一步一步的等待，步数多反而吃亏。
+  <p>代价是步数跟着卡数涨：数据小时比的是一步步的等待，环反而吃亏，所以通信库会按数据大小自己挑算法。</p>
+  <details class="foldfig"><summary><b>细一点</b>：环形和树形怎么挑、NVSwitch 在交换机里做加法、TPU 的环面</summary>
+  <p>数据很大时比的是带宽，环几乎是最优的；数据很小时比的是一步一步的等待，步数多反而吃亏。
     所以 NCCL 这类通信库会按消息大小，在环形、树形等几种算法之间自己挑。
     NVLink 交换机（NVSwitch）还能在交换机里直接做加法，每张卡发出去的又能少将近一半。</p>
-  <p><em>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
-    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</em></p>
+  <p>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
+    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</p></details>
 
   <h3 id="s1-6">1.6　AllToAll：每人给每人一份不一样的</h3>
 <figure class="fbox fwide" id="fig-a2a"><svg viewBox="0 0 1400 542" width="100%" role="img" aria-label="全交换就是把一张四乘四的表转置一次。左边一行是一张卡手里的数据，第 j 格是它要交给卡 j 的那一份。做完之后，卡 j 手里的一行，是四张卡各自给它的那一份，也就是原来的第 j 列。对角线上那四格不用走网络，其余十二格都要跨卡。MoE 里这张表的一格，就是我手里要送去卡 j 上那个专家的 token"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2422,14 +2528,13 @@ body.figonly section h3{margin-top:34px}
        aria-label="AllToAll 动画。四张卡各有四块，颜色表示出自哪张卡，对角线上的四块画粗框。字幕一：派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）。十六块同时飞到新位置，卡 k 的第 j 块落到卡 j 的第 k 行。字幕二：卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次。字幕三：专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll。十六块原路飞回，画面回到开始的样子。"></video>
 <figcaption>派发过去、送回来，正好是专家并行每层的两次 AllToAll。
   <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>它相当于每个人各做一次分发。网络最怕它：前几种都能排成只跟邻居说话的环，它不行，任意两张卡之间都有东西要走，拼的是整个网络的横截面有多宽（切开网络的一刀上能同时过多少流量）；而且每份多大，要等模型算到这一层才知道。
-    专家并行（第四节）派发 token 要用它；切序列时的 Ulysses（第五节）也用它，在「按序列切」和「按头切」之间来回换。</p>
+  <p>网络最怕它：排不成环，任意两张卡之间都有东西要走，拼的是整个网络的横截面有多宽；而且每份多大，要等模型算到这一层才知道。
+    专家并行（第四节）、Ulysses（第五节）都用它。</p>
 
   <h3 id="s1-7">1.7　一张表收住</h3>
-  <p>前面一共八个名字，带班长的四个只是积木，日常用的是五种；最后一种一对一收发，是把模型按层切成几段时，段和段之间传激活用的（第三节）。</p>
-  <p>「每卡发出」一列按点对点链路上的最优算法（环）算，S 是一整份数据的大小（AllGather 指拼好之后那一整份，
-    ReduceScatter 指加之前那一整份）；Broadcast ／ Reduce 那一行按链式接力算。</p>
+  <p>八个名字里带班长的四个只是积木，日常用的是五种（最后一种一对一收发，第三节切层时用）。给会后查：</p>
   <table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">「每卡发出」按环形算法算；S 是一整份数据（AllGather 指拼好之后那份，ReduceScatter 指加之前那份）；Broadcast／Reduce 按链式接力算。</caption>
     <tr><th>通信</th><th>做什么</th><th>每卡发出</th><th>后面谁在用</th></tr>
     <tr><td>AllReduce</td><td>加完，人人一份</td><td>2(n−1)/n · S</td><td>数据并行同步梯度；张量并行每层前向两次、反向两次</td></tr>
     <tr><td>ReduceScatter</td><td>加完，各拿一块</td><td>(n−1)/n · S</td><td>FSDP 反向分梯度；张量并行配序列并行</td></tr>
