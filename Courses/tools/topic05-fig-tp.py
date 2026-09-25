@@ -179,7 +179,7 @@ def fig_tp_order():
                   [(BL, "卡 0 手里的"), (OR, "卡 1 手里的"), (RD, "错"), (GR, "对")])
     PH = 380
     LW = 820
-    py = f.panel(0, y0, LW, PH, "先横着切，每张卡只有一份部分和：2 和 −3，真值 −1", RD)
+    py = f.panel(0, y0, LW, PH, "先横着切，每张卡只有一份部分和（随手取 2 和 −3，真值 −1）", RD)
     X0, X1, U0, U1 = 70, 780, -3.5, 2.5
     YT, YB, G0, G1 = py + 40, py + 300, -0.4, 2.6
 
@@ -253,8 +253,8 @@ def fig_tp_order():
     f.t(RX + 20, gy + 120, "整个元素只在卡 0 上，零通信", GR, size=14)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "所以一层 4 次 AllReduce：前向 2 次、反向 2 次", [
-        "前向：MLP 出口一次、attention 出口一次（Megatron 叫它 g）。",
-        "反向倒过来：入口处 X 的梯度是两张卡各算一半、要加起来，又各一次（叫 f）。",
+        "前向：MLP 出口一次、attention 出口一次。",
+        "反向倒过来：入口处 X 的梯度是两张卡各算一半、要加起来，又各一次。",
     ])
     yb = f.src(yb + 10,
                "📌 Shoeybi 等，Megatron-LM，arXiv 1909.08053 sec. 3：GeLU 非线性，按行切第一块需要在 GeLU 前同步；f 前向恒等、反向 AllReduce，g 反之。",
@@ -358,7 +358,7 @@ def fig_pp():
     b, sh = bubble_ratio(P, M), bubble_share(P, M)
     assert abs(b - 3 / 8) < 1e-9 and abs(sh - 3 / 11) < 1e-9
     f.t(X0, py + 24 + P * 46 + 30,
-        "气泡 ÷ 理想计算时间 ＝ (p−1) ÷ m ＝ 3 ÷ 8 ≈ %.0f%%（占整步约 %.0f%%）" % (b * 100, sh * 100), RD, True, 14)
+        "气泡 ÷ 理想计算时间 ＝ (p−1) ÷ m ＝ 3 ÷ 8 ≈ %.0f%%" % (b * 100), RD, True, 14)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "气泡是纯损失，只能摊薄，不能消灭", [
         "stage 越多、micro-batch 越少，气泡越大：<tspan font-weight=\"700\">(p−1) ÷ m</tspan>。"

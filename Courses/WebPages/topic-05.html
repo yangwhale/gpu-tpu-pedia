@@ -3264,9 +3264,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关的上限</tspan>。</text>
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
 <p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
+  <p>红虚线约 3,845：<b>每颗芯片一步分不到三千八百多个 token，FSDP 就被拖住</b>。</p>
+  <details class="foldfig"><summary><b>细一点</b>：3,845 怎么来的，什么情况下门槛更高</summary>
   <p>红虚线 3,845 ＝ v7 每芯片 2,307 TFLOP/s（bf16）÷ 每芯片发出约 0.6 TB/s（常说的 1.2 TB/s 是收发合计；⚠️ 这个拆分是推算，见台账）。
-    换句话说，<b>每颗芯片一步分不到三千八百多个 token，FSDP 就被拖住</b>。这还是最乐观的线：只走一根轴，高约 3 倍；
-    MoE 只靠 FSDP、不配专家并行，搬的是全部参数、算的只有被选中的那部分，再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p>
+    这还是最乐观的线：只走一根轴，高约 3 倍；
+    MoE 只靠 FSDP、不配专家并行，搬的是全部参数、算的只有被选中的那部分，再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p></details>
 
   <h3 id="s3-2">3.2　TP：切进矩阵内部</h3>
   <p>张量并行把一层的权重矩阵本身切开，每张卡只存、只算其中一块。英伟达 Megatron-LM 的切法：</p>
@@ -3351,7 +3353,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="102" width="820" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="820" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先横着切，每张卡只有一份部分和：2 和 −3，真值 −1</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先横着切，每张卡只有一份部分和（随手取 2 和 −3，真值 −1）</tspan></text>
 <line x1="70" y1="397.3333333333333" x2="780" y2="397.3333333333333" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <line x1="484.1666666666667" y1="172" x2="484.1666666666667" y2="432" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="780" y="415" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">输入</text>
@@ -3407,21 +3409,23 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="532" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="532" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="559" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以一层 4 次 AllReduce：前向 2 次、反向 2 次</tspan></text>
-<text class="svgsm" x="20" y="590" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">前向：MLP 出口一次、attention 出口一次（Megatron 叫它 g）。</text>
-<text class="svgsm" x="20" y="614" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">反向倒过来：入口处 X 的梯度是两张卡各算一半、要加起来，又各一次（叫 f）。</text>
+<text class="svgsm" x="20" y="590" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">前向：MLP 出口一次、attention 出口一次。</text>
+<text class="svgsm" x="20" y="614" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">反向倒过来：入口处 X 的梯度是两张卡各算一半、要加起来，又各一次。</text>
 </svg><figcaption><b>一个元素、两张卡、两种顺序。</b><span class="capmore"><br><em>反过来切，GeLU 之前就得先通信一次。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Shoeybi 等，Megatron-LM，arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> sec. 3：GeLU 非线性，按行切第一块需要在 GeLU 前同步；f 前向恒等、反向 AllReduce，g 反之。</p>
 <p>⚠️ 本课反例：2 与 −3 是随手取的数，GeLU 按精确式现算。</p></details></figure>
 
   <h3 id="s3-3">3.3　SP：TP 的搭档</h3>
+  <p>TP 切不到的那几段小运算，由它的搭档 SP 沿序列切开：<b>通信量不变，省激活显存</b>。别被名字骗了，它不是第四刀（<a href="#s8-8">§8.8</a>）。</p>
+  <details class="foldfig"><summary><b>细一点</b>：SP 切的是哪几段、怎么做到通信量不变</summary>
   <p>TP 切不到的是逐个 token 的小运算（归一化、dropout、残差相加），那几段每张卡都存着一整份激活。
     Megatron 的序列并行（SP）把它们沿序列切开，顺手把每次 AllReduce 拆成两半：进 TP 那块之前 AllGather 拼齐序列，出来时 ReduceScatter 切回。
-    就是第一节那个等式，<b>通信量不变</b>，省下的是激活显存。别被名字骗了：它是 TP 的搭档，不是第四刀（<a href="#s8-8">§8.8</a>）。</p>
+    就是第一节那个等式，所以通信量跟原来一样。</p></details>
 
   <h3 id="s3-4">3.4　TP 的上限：跟 batch 无关</h3>
   <p>TP 送的是「半成品」（激活）：token 多一倍，要送的和要算的都多一倍，<b>batch 在账里约掉了</b>。
-    工具能提前送（算这一层时就把下一层的权重拿过来），半成品是刚算出来的，默认只能等它算完再送，所以 TP 的通信很难藏进计算里。
+    FSDP 送的权重像工具，能提前送（算这一层时就把下一层的拿过来）；TP 送的半成品是刚算出来的，默认只能等它算完再送，所以 TP 的通信很难藏进计算里。
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。
-    V3 的隐藏维 7,168，TP 8 路约 4,032，按最乐观的线刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4），实际已经在线下。</p>
+    V3 的隐藏维 7,168，TP 8 路约 4,032。图上那条红线是<b>最乐观</b>的画法，所以看着刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）；真实的红线还要更高，TP 8 路其实已经在线下（原因在下面「细一点」）。</p>
   <p>所以 <b>batch 小多用 TP，batch 大多用 FSDP</b>：图上左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。
     前提是 TP 那条线本身在红线上面。像 V3 这样两条都贴着或落在线下，TP 本身就不划算（<a href="#s3-6">§3.6</a>）。</p>
   <details class="foldfig"><summary><b>细一点</b>：为什么说实际已经在线下；TP 度数还受哪两条约束</summary>
@@ -3694,7 +3698,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="910" y="320" fill="#ffffff" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
 <line x1="130" y1="348" x2="1120" y2="348" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <text class="svgsm" x="1120" y="368" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">时间 →</text>
-<text class="svgsm" x="130" y="370" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">气泡 ÷ 理想计算时间 ＝ (p−1) ÷ m ＝ 3 ÷ 8 ≈ 38%（占整步约 27%）</tspan></text>
+<text class="svgsm" x="130" y="370" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">气泡 ÷ 理想计算时间 ＝ (p−1) ÷ m ＝ 3 ÷ 8 ≈ 38%</tspan></text>
 <rect x="0" y="426" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="426" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="426" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3716,10 +3720,8 @@ body.figonly section h3{margin-top:34px}
     DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌，更要紧的是把一对前向和反向的计算，跟专家并行的通信叠在一起藏掉（技术报告 sec. 3.2.1）。</p></details>
 
   <h3 id="s3-6">3.6　这一刀留下的问题</h3>
-  <p>DeepSeek-V3 训练时<b>一点 TP 都没用</b>：16 路 PP、64 路专家并行、ZeRO-1 数据并行（技术报告 sec. 3.2）。
-    报告自己的解释是显存优化做得够细，用不着代价高的 TP。模型已经被 PP 和专家并行切开，每张卡上那一份放得下，数据并行那一维 ZeRO-1 就够了。
-    再从参数的分布看（本课归纳）：每个专家 3 × 7,168 × 2,048 ≈ 4,400 万参数，256 个专家 × 58 个 MoE 层 ≈ 6,539 亿，
-    <b>占全部参数的约 97%</b>。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少；真正该切的，是「专家」这一维。这是第三刀。</p>
+  <p>还记得开场那行配置吗？DeepSeek-V3 里<b>没有 TP</b>。报告自己的解释是显存优化做得够细，用不着代价高的 TP。
+    再看它的参数都在哪：几乎全在一种叫「专家」的窄矩阵里。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少。<b>真正该切的，是「专家」这一维。</b>这是第三刀。</p>
 </div></section>
 
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第三刀：切专家</h2></div>
@@ -3752,7 +3754,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="400" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">技术报告的理由是显存抠得够细，用不着代价高的 TP；专家只有 2,048 宽，TP 更不划算，而专家有 256 个，<tspan font-weight="700">天然就是一维可以切的</tspan>。</text>
 <text class="svgsm" x="20" y="424" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">V3 的训练配置：16 路 PP ＋ 64 路专家并行 ＋ ZeRO-1 数据并行，<tspan font-weight="700">不用 TP</tspan>（技术报告 sec. 3.2）。</text>
 </svg><figcaption><b>那一小截灰色，是注意力、共享专家、稠密 MLP 和词表加起来的全部。</b><span class="capmore"><br><em>路由专家的份额由 config.json 的尺寸现算。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 config.json：hidden_size 7,168、moe_intermediate_size 2,048、n_routed_experts 256、num_hidden_layers 61、first_k_dense_replace 3。671B 为主模型总参数，不含 MTP 模块。「其余」＝ 671B 减去路由专家，本脚本现算。</p></details></figure>
-  <p>换句话说，TP 那把刀要切的是「一个很宽的矩阵」，而 V3 里真正占地方的是「很多个窄矩阵」。
+  <p>256 个路由专家 × 58 层 ≈ 6,539 亿参数，<b>占全部的约 97%</b>。换句话说，TP 那把刀要切的是「一个很宽的矩阵」，而 V3 里真正占地方的是「很多个窄矩阵」。
     对后者，最省事的切法不是把每一个都劈开，而是<b>把它们整个分给不同的卡</b>：搬病人，不劈医生。图底那行就是 V3 训练的真实配置：PP16 ＋ EP64，一路 TP 都没用。</p>
 
   <h3 id="s4-2">4.2　EP：token 飞去专家那里</h3>
@@ -3772,9 +3774,11 @@ body.figonly section h3{margin-top:34px}
 <rect x="160.12" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="181" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">持有被选中专家的卡</text>
 <rect x="348.24" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="369" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">跨机（IB）</text>
-<rect x="472.52" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="493" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">机器内（NVLink）</text>
+<text class="svgsm" x="369" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">跨机：慢线（IB）</text>
+<rect x="519.56" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="540" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">机器内：快线（NVLink）</text>
+<rect x="742.4" y="63" width="14" height="14" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="763" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">红框 ＝ 跨机先落地的同编号卡</text>
 <rect x="0" y="102" width="680" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="680" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -4407,9 +4411,10 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">attention 那块大矩阵切成条，4 张卡一组合起来算；两组各管一批请求。专家本来就是 256 个小块，<tspan font-weight="700">整个分出去就行</tspan>。</text>
 <text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">训练里 Megatron 叫它 Parallel Folding；推理里 attention 用 TP 的叫 TEP，用数据并行的叫 DEP，图里这种一半一半的也有。</text>
 </svg><figcaption><b>左右两边是同样的 8 张卡。</b><span class="capmore"><br><em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-Core moe/README.md（MoE Parallel Folding，例子 TP4·CP2·DP8·PP4 → ETP1·EP64·EDP1）；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a>。TEP ／ DEP 定义：TensorRT-LLM tech blog 26。</p></details></figure>
-  <p>推理那边的简称：TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP；字母后的数字是总卡数，DEP8 ＝ 8 张卡。
-    上图左边那种配法，算两者中间。别和 Megatron 的 ETP／EDP 混，见 <a href="#s8-6">§8.6</a>。
-    挑哪个差别大到什么程度，我们自己测过一次：</p>
+  <p>挑哪种配法，差别大到什么程度？我们自己测过一次：</p>
+  <details class="foldfig"><summary><b>先认两个简称</b>：TEP、DEP</summary>
+  <p>TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP；字母后的数字是总卡数，DEP8 ＝ 8 张卡。
+    上图左边那种配法，算两者中间。别和 Megatron 的 ETP／EDP 混，见 <a href="#s8-6">§8.6</a>。</p></details>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 DEP8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
     最属于「换切法」的一笔在 attention 那一半：KV 不再在 4 张卡上各存一份（<a href="#s5-4">§5.4</a> 讲为什么）。attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。注意上面的图画的是 V3（每卡 32 个专家），实测用的是 V4-Pro。<br>
