@@ -94,5 +94,77 @@ def fig_fold():
     f.save("fig5-fold.svg", yb + 14)
 
 
+# ── fig-ep-route：限制跨节点 ＋ FP8 派发（2026-09-25 现场讲课补） ──────────────
+H_V3 = 7168
+M_NODES, TOPK = 4, 8                         # 技术报告 sec. 4.2：M ＝ 4；每 token 选 8 个路由专家
+NV_BW, IB_BW = 160, 50                       # sec. 3.2.2：NVLink 160 GB/s，IB 50 GB/s
+V3_B = M_NODES * H_V3 * 1                    # FP8 每数 1 字节，跨机每节点只发一份
+NAIVE_B = TOPK * H_V3 * 2                    # 不限节点、BF16：最坏 8 份
+assert V3_B == 28672 and NAIVE_B == 114688 and NAIVE_B // V3_B == 4
+assert abs(NV_BW / IB_BW - 3.2) < 1e-9 and round(M_NODES * NV_BW / IB_BW) == 13   # 4 × 3.2 ＝ 12.8，报告写 13
+
+
+def fig_ep_route():
+    """⭐ 课件 4.2 原来是两条 bullet ＋ 一段推导；「跨机只发一份、到了机器里再分」这件事画出来一眼就懂。"""
+    f = Fig(W, "一个 token 选中 8 个专家时，派发要跨机发几份。左边不限节点、用 BF16：最坏 8 个专家在 8 台机器上，"
+               "要跨机发 8 份，每份 14336 字节，约 115 KB。右边是 V3 的做法：最多只去 4 台机器，每台机器跨机只发一份，"
+               "到了机器里再走 NVLink 转给真正持有专家的卡；派发还压成 FP8，每份 7168 字节，一共约 28.7 KB，是左边的四分之一")
+    y0 = f.header("派发一个 token：跨机只发一份，到了机器里再分",
+                  "V3 每个 token 选 8 个路由专家；每层的专家摊在 8 台机器、64 张卡上，一台机器 8 张卡",
+                  [(BL, "token 出发的卡"), (OR, "持有被选中专家的卡"), (RD, "跨机（IB）"), (GR, "机器内（NVLink）")])
+    PH, HW = 420, 680
+
+    def node(x, y, hot, lab="", w=8 * 22 + 12):
+        f.box(x, y, w, 34, "none", GY2, 6)
+        for g in range(8):
+            c = OR if g in hot else "none"
+            f.box(x + 6 + g * 22, y + 8, 18, 18, c, OR if g in hot else LINE, 3)
+        f.t(x + w + 10, y + 23, lab, GY, size=13)
+        return w
+
+    # 左：不限节点、BF16
+    py = f.panel(0, y0, HW, PH, "不限节点、BF16：最坏跨机 8 份", RD)
+    SX, SY = 30, py + 170
+    node(SX, SY, [])
+    f.box(SX + 6, SY + 8, 18, 18, BL, BL, 3)
+    f.t(SX, SY - 12, "出发的机器", INK, True, 14)
+    for i in range(8):
+        ty = py + 44 + i * 40
+        node(370, ty, [i % 8], "")
+        f.line(SX + 200, SY + 17, 368, ty + 17, RD, 1.6)
+    f.t(24, py + PH - 44, "8 份 × 14,336 字节 ≈ %.0f KB" % (NAIVE_B / 1e3), RD, True, 16)
+    f._pan = None
+    # 右：V3
+    px = HW + 40
+    py2 = f.panel(px, y0, HW, PH, "V3：最多 4 台机器、FP8：跨机 4 份", GR)
+    SX2, SY2 = px + 30, py2 + 170
+    node(SX2, SY2, [])
+    f.box(SX2 + 6 + 3 * 22, SY2 + 8, 18, 18, BL, BL, 3)
+    f.t(SX2, SY2 - 12, "出发的机器（卡 3）", INK, True, 14)
+    HOT = [[0, 5], [2, 7], [1, 4], [6, 3]]
+    for i, hot in enumerate(HOT):
+        ty = py2 + 50 + i * 80
+        nx = px + 360
+        node(nx, ty, hot, "")
+        gx = nx + 6 + 3 * 22 + 9                 # 同编号的卡 3：跨机先落在这里
+        f.line(SX2 + 200, SY2 + 17, gx, ty - 2, RD, 2.4)
+        for h in hot:
+            if h == 3:
+                continue
+            hx = nx + 6 + h * 22 + 9
+            f.path("M%d,%d Q%d,%d %d,%d" % (gx, ty + 34, (gx + hx) / 2, ty + 56, hx, ty + 36), GR, 1.8)
+    f.t(px + 24, py2 + PH - 44, "4 份 × 7,168 字节 ≈ %.1f KB　（左边的 1/4）" % (V3_B / 1e3), GR, True, 16)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "为什么是「跨机少发、机器里多分」", [
+        "NVLink 160 GB/s，约是跨机 IB 50 GB/s 的 3.2 倍：跨机送到的一份，在机器里平均转给 3.2 个专家也不添开销。",
+        "所以报告说同样的通信量最多能选 13 个专家（4 台 × 3.2）；只跟去了几台机器有关，跟选了几个专家无关。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 DeepSeek-V3 技术报告 arXiv 2412.19437：sec. 2.1.2 限制节点路由（按每台机器上最高的 2 个亲和分之和挑机器）；sec. 3.2.2 先走 IB 到目标机器上同编号的卡、再走 NVLink 转发，NVLink 160 ／ IB 50 GB/s，13 个专家；sec. 3.3.3 派发 FP8、合并 BF16；sec. 4.2 M ＝ 4、64 卡 8 台。",
+               "⚠️ 本课推导：28.7 KB ＝ 4 × 7,168 × 1 字节；115 KB ＝ 8 × 7,168 × 2 字节（不限节点、最坏每个专家在不同机器上）。图中被选中的是哪几张卡为示意。")
+    f.save("fig5-ep-route.svg", yb + 14)
+
+
 fig_params()
 fig_fold()
+fig_ep_route()

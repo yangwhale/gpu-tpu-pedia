@@ -128,7 +128,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 53 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 54 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -406,13 +406,8 @@ __FIG_MOE_PARAMS__
        aria-label="专家并行的动画。四张卡，每张卡上方 4 个 token（颜色表示来自哪张卡），下方 2 个专家，共 8 个专家。标题：专家并行：token 飞到专家那里，算完再飞回来。字幕一：每个 token 由路由挑一个专家（真实的 V3 每个 token 挑 8 个）。字幕二：派发（AllToAll）：token 飞到专家所在的卡，在专家门口排队。专家 0 门口排了 7 个，其他专家 1 到 2 个。字幕三：专家 0 排了 7 个，别的专家只有 1 到 2 个：它算完之前，大家都得等。字幕四：合并（AllToAll）：算完再送回原来的卡。字幕五：发给谁由数据决定，负载天生不均 —— 这是专家并行最重的病。最后 token 回到原位。"></video>
 <figcaption>派发、排队、合并。那一根排得最高的队，决定了所有卡什么时候能往下走。token 的颜色表示它从哪张卡出发，每张卡下方两个框是它的专家。
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>V3 为了压住这两次 AllToAll，做了两件事（技术报告 sec. 2.1.2、sec. 3.2.2、sec. 3.3.3）：</p>
-  <ul>
-    <li><b>限制跨节点</b>：每个 token 最多发往 4 个节点。先走节点间网络发到目标节点，再走节点内的 NVLink 转给真正持有专家的卡。
-      同一台机器上就算有好几个它要找的专家，跨机也只发一份，到了再在机器里分。</li>
-    <li><b>派发用 FP8，合并用 BF16</b>：派发那一趟的字节数直接减半。</li>
-  </ul>
-  <p>按这个算（⚠️ 推导）：每个 token 跨节点派发最多 4 份 × 7,168 字节（隐藏维 7,168 个数，FP8 每个 1 字节）≈ 28.7 KB，跟它选了几个专家无关，只跟去了几个节点有关。作为对照，不限节点又用 BF16 的话，最坏要发 8 份 × 14,336 字节 ≈ 115 KB，是它的 4 倍。</p>
+  <p>V3 为了压住这两次 AllToAll，做了两件事：<b>每个 token 最多去 4 台机器</b>，跨机每台只发一份、到了再在机器里分；<b>派发压成 FP8</b>，合并还用 BF16。</p>
+__FIG_EP_ROUTE__
   <p>这是训练和 prefill 的做法；decode 追求低延迟时改成按专家逐个直发（跳过机器里的转发，每个专家各收一份），份数就跟着选的专家数涨了。</p>
 
   <h3>4.3　EP 最重的病：负载由数据决定</h3>
@@ -421,7 +416,8 @@ __FIG_MOE_PARAMS__
     最忙的那个专家算完之前，所有人都得等它。治法分两头：</p>
   <ul>
     <li><b>训练时</b>：让路由本身尽量均匀。以前靠在训练目标里加一项「辅助损失」罚不均，但会拖累模型效果。
-      V3 改用偏置：路由给每个专家打分、挑最高的 8 个，偏置是加在分上的一个数，哪个专家负载高就把它调低，降低它被挑中的机会，低了就调高；偏置只影响挑谁，不改算出来的权重。辅助损失只留一个极小的兜底。</li>
+      V3 改用偏置：路由给每个专家打分、挑最高的 8 个，偏置是加在分上的一个数。每步结束看一眼整批的负载，超载的专家偏置减 0.001，欠载的加 0.001；偏置只影响挑谁，不改算出来的权重。
+      辅助损失只留一个 0.0001 的兜底，防止单条序列里极端不均。因为够均匀，V3 训练时<b>一个 token 都没丢</b>：不设容量上限，不均就直接变成等待。</li>
     <li><b>推理时</b>：把热门专家多复制几份，摊到不同的卡上，也就是 EPLB（专家并行负载均衡器）和冗余专家。</li>
   </ul>
 
@@ -898,6 +894,7 @@ __FIG_PANO__
     <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
     <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s，另给 200 GB/s 一档；把它理解成每条链路收发合计，「6 条链路 × 200、发出方向 600」才对得上，这是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；按 device 口径同样约 3,845（一颗芯片的两个 device 共用链路，算力和带宽一起减半）（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922；TP 那条线的 4.5 系数按标准注意力加 4 倍宽 MLP 推出（V3 实际是 MLA 加 MoE，只作示意）</td></tr>
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 2.1.2、sec. 3.2.2、sec. 3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
+    <tr><td>V3 负载均衡的超参与「不丢 token」；NVLink ／ IB 3.2 倍、同通信量最多 13 个专家</td><td>同一份报告 sec. 4.2（偏置更新步长 γ ＝ 0.001，最后 500B token 置 0；序列级平衡损失 α ＝ 0.0001；M ＝ 4、64 卡 8 台）、sec. 2.1.2（No Token-Dropping）、sec. 3.2.2（160 ／ 50 GB/s，4 × 3.2 ≈ 13）</td></tr>
     <tr><td>Parallel Folding 的例子</td><td>Megatron-Core megatron/core/transformer/moe/README.md；arXiv 2504.14960</td></tr>
     <tr><td>GB300 上 TP4 → DEP8：同并发 512 总量 2.61 倍、每卡 2.09 倍（DEP8 并发 1,536 时每卡 2.47 倍、TTFT 95 s）；调参 +45%</td><td>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/README.md 与 VLLM-V4PRO-RUNBOOK.md（TP4 decode 14,563 → 调参后 21,100，16 GPU、每卡 1,319；DEP8 65,132，20 GPU、每卡 3,257 tok/s）</td></tr>
     <tr><td>激活随序列长度增长</td><td>Korthikanti 等 arXiv 2205.05198 式 (1)：每层 sbh(34 ＋ 5as/h)</td></tr>
@@ -967,6 +964,9 @@ FIGS = {
     "__FIG_MOE_PARAMS__": ("fig-moe-params", "fig5-moe-params.svg", "topic05-fig-ep.py",
         '<b>那一小截灰色，是注意力、共享专家、稠密 MLP 和词表加起来的全部。</b><br>'
         '<em>路由专家的份额由 config.json 的尺寸现算。</em>'),
+    "__FIG_EP_ROUTE__": ("fig-ep-route", "fig5-ep-route.svg", "topic05-fig-ep.py",
+        '<b>同一个 token，左边跨机 8 份，右边 4 份、每份还小一半。</b><br>'
+        '<em>机器里那几根绿色短弧几乎是白送的。</em>'),
     "__FIG_FOLD__": ("fig-fold", "fig5-fold.svg", "topic05-fig-ep.py",
         '<b>左右两边是同样的 8 张卡。</b><br>'
         '<em>进 attention 时按 TP 组干活，进专家层时每张卡管 32 个专家。</em>'),
