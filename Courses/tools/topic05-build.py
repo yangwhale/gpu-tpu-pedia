@@ -273,7 +273,7 @@ __FIG_A2A__
   <h3>2.1　数据并行：每张卡一整份模型</h3>
   <p>每张卡放一整份模型、各算一批样本；反向算完做一次 AllReduce 求平均，再一起更新。
     一步只通信一次（频率最低，量却不小：V3 这么大的模型要是纯数据并行，每卡一步约发 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
-  <p>像几个人结伴徒步，每人都背一整套帐篷、炉子、锅：谁也不缺，可谁都背得最重。下面一节一节把重复的卸下来。</p>
+  <p>像几个人结伴徒步，每人都背一整套帐篷、炉子、斧头：谁也不缺，可谁都背得最重。下面一节一节把重复的卸下来。</p>
 
   <h3>2.2　ZeRO：越闲的越先削</h3>
   <p>先认清那三块：<b>权重</b>是模型本身；<b>梯度</b>是这一步算出来的「每个参数该往哪改、改多少」；<b>优化器状态</b>是优化器替每个参数记的账（主权重、两个动量），它最大。下文的 Ψ 就是参数个数。</p>
@@ -292,7 +292,7 @@ __FIG_BF16_BETA__
   <h3>2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
     ZeRO-2 加再多卡也降不下去了：剩下的正是人人一整份的权重。只靠数据并行这一刀，大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
-  <p>回到徒步：现在一人背帐篷、一人背炉子、一人背锅，谁也不背全套；晚上扎营，把别人背的借过来一起用，第二天早上各自收好接着走。
+  <p>回到徒步：现在一人背帐篷、一人背炉子、一人背斧头，谁也不背全套；晚上扎营，把别人背的借过来一起用，第二天早上各自收好接着走。
     背的是分片，扎营时借过来就是 AllGather，收好就是用完就还。每人都背一整套，就是数据并行。</p>
 __FIG_FSDP_STEP__
 <figure class="fbox fwide" id="anim-fsdp">
@@ -571,7 +571,7 @@ __FIG_KV_TRIP__
 __FIG_PD_RATIO__
   <p>经验上<b>长 prompt 的业务配 2P:1D，长输出的业务配 1P:2D</b>。</p>
   <details class="foldfig"><summary><b>细一点</b>：论文里最多能多服务几倍</summary>
-  <p>DistServe 论文把配比和各自的并行方式一起搜，跟 vLLM 等不拆开的系统比，同样的延迟要求下最多能多服务 7.4 倍的请求，或者把延迟要求收紧最多 12.6 倍（OPT 系列模型，以 90% 请求达标为准）。上图那个「翻一倍多」是论文里一个单卡算例，7.4 倍是搜遍配比和切法之后的最好结果。</p></details>
+  <p>DistServe 论文把配比和各自的并行方式一起搜，跟不拆开的系统比，同样的延迟要求下最多能多服务 7.4 倍的请求（对 DeepSpeed-MII），或者把延迟要求收紧最多 12.6 倍（对 vLLM）（OPT 系列模型，以 90% 请求达标为准）。上图那个「翻一倍多」是论文里一个单卡算例，7.4 倍是搜遍配比和切法之后的最好结果。</p></details>
 
   <h3>6.4　两边各挑各的切法</h3>
   <p>这才是拆开的真正收益：<b>两边不再被迫用同一套并行方式</b>。</p>
@@ -950,7 +950,7 @@ __FIG_PANO__
     <tr><td>Ring Attention；Ulysses 通信量恒定、并行度不超过头数</td><td>arXiv 2310.01889；arXiv 2309.14509 sec. 3.2（4Nh/P，N 与 P 同比放大时不变）；头数上限见 USP arXiv 2405.07719 sec. 3</td></tr>
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
     <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算。config 里 num_key_value_heads=128 是 MLA 解压后的头数，推理缓存的是压缩后那一份，vLLM 当作 1 个 KV 头</td></tr>
-    <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv 2401.09670（prefill 偏算力、decode 受带宽约束；7.4 倍请求或 12.6 倍更紧的 SLO）</td></tr>
+    <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv 2401.09670（prefill 偏算力、decode 受带宽约束；7.4 倍请求是对 DeepSpeed-MII，12.6 倍更紧的 SLO 是对 vLLM）</td></tr>
     <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv 1909.08053 sec. 3），FSDP 每层 3 次（arXiv 1910.02054 sec. 7），EP ／ PP ／ DP 按调度数出</td></tr>
     <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki sources/nvidia-gpu-comparison-20260311、analyses/gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
