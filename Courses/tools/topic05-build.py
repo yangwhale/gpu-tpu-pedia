@@ -1079,7 +1079,8 @@ def _hook_steps(html):
         i = html.index(tag)
         j = html.index("</figure>", i)
         fig = html[i:j]
-        fig2, n = re.subn(r"（\d+ 秒无声循环，", "（%d 秒无声循环，每一步落地会自动停住，点「下一步」继续；" % round(st["duration"]), fig)
+        # ⚠️ 「N 秒」后 24 字内必须出现 Manim —— check-loop.py 靠这个正则认图注秒数，写长了它会静默跳过
+        fig2, n = re.subn(r"（\d+ 秒无声循环，(.*?)Manim 渲染", lambda m: "（%d 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环%s" % (round(st["duration"]), m.group(1).rstrip("，；")), fig, flags=re.S)
         assert n == 1, "%s 的图注里没找到「N 秒无声循环」" % mp4
         html = html[:i] + fig2 + html[j:]
     return html
@@ -1088,28 +1089,43 @@ def _hook_steps(html):
 STEP_JS = """<style>
 .stepbar{display:flex;gap:12px;align-items:center;margin:6px 0 2px;font-size:14px;color:#5f6368;flex-wrap:wrap}
 .stepbar button{font:inherit;padding:3px 14px;border-radius:14px;border:1px solid #1a73e8;background:#1a73e8;color:#fff;cursor:pointer}
+.stepbar button.gh{background:#fff;color:#1a73e8}
 .stepbar button:disabled{background:#fff;color:#9aa0a6;border-color:#dadce0;cursor:default}
 .stepbar label{cursor:pointer}
 </style>
 <script>
+// ⭐ 2026-09-25 现场第二轮：「手工播放的时候，我还没看呢，刚翻过去，第一步就跳完了……
+//   手工模式第一步也得是让我准备好了，自己点按钮，再给我预备一个 reset 按钮。」
+//   所以手工模式下：一上来停在第 0 帧等「开始」；每一步落地停住等「下一步」；
+//   播完一圈绕回开头时也停在第 0 帧，不自己再跑一遍。勾「连续播放」才是原来的无缝循环。
 document.querySelectorAll('video[data-pauses]').forEach(function(v){
   var P=v.dataset.pauses.split(',').map(Number), i=0, last=0, auto=false;
   var bar=document.createElement('div'); bar.className='stepbar';
-  bar.innerHTML='<button type="button">下一步 ▶</button><span></span><label><input type="checkbox"> 连续播放</label>';
+  bar.innerHTML='<button type="button" class="nx"></button><button type="button" class="rs gh">⟲ 重来</button>'+
+                '<span></span><label><input type="checkbox"> 连续播放</label>';
   v.insertAdjacentElement('afterend', bar);
-  var nx=bar.querySelector('button'), st=bar.querySelector('span'), au=bar.querySelector('input');
+  var nx=bar.querySelector('.nx'), rs=bar.querySelector('.rs'), st=bar.querySelector('span'), au=bar.querySelector('input');
+  function toStart(){ v.pause(); v.currentTime=0; i=0; last=0; }
   function show(){
-    nx.disabled=!v.paused;
-    st.textContent = auto ? '连续播放中' : (v.paused && i ? '停住了（'+i+' / '+P.length+'），看明白了再点' : '播放中');
+    nx.disabled = auto || !v.paused;
+    nx.textContent = (i===0) ? '开始 ▶' : '下一步 ▶';
+    if(auto) st.textContent='连续播放中';
+    else if(!v.paused) st.textContent='播放中';
+    else if(i===0) st.textContent='准备好了就点「开始」';
+    else st.textContent='停住了（'+i+' / '+P.length+'），看明白了再点';
   }
+  v.removeAttribute('autoplay'); toStart();
   v.addEventListener('timeupdate',function(){
-    if(v.currentTime < last-1) i=0;          // 循环回到了开头
+    if(v.currentTime < last-1){                 // 播完一圈绕回了开头
+      if(auto){ i=0; } else { toStart(); show(); return; }
+    }
     last=v.currentTime;
     if(!auto && i<P.length && v.currentTime>=P[i]){ v.pause(); i++; }
     show();
   });
   v.addEventListener('pause',show); v.addEventListener('play',show);
   nx.addEventListener('click',function(){ v.play(); });
+  rs.addEventListener('click',function(){ toStart(); if(auto) v.play(); show(); });
   au.addEventListener('change',function(){ auto=au.checked; if(auto) v.play(); show(); });
   show();
 });
