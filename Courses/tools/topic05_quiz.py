@@ -81,6 +81,6 @@ def answers_html():
     step_v3 = 1 - NB.V3_BETA2
     step_torch = 1 - NB.TORCH_BETA2
     assert step_torch < NB.BF16_HALF_ULP and step_v3 > 2 ** -7, "β₂ 那段推导的前提变了，重写第三问"
-    return """<div class="note ok"><span class="t">开场第三问的答案：V3 把两个动量压成了半精度，主权重和梯度留在全精度</span>
+    return """<div class="note ok"><span class="t">开场第三问的答案：V3 把两个动量压成了半精度，主权重留在全精度（批次累积用的那份梯度也是）</span>
   主权重每步只加一点点、要一直累加，压了会被舍掉；动量能不能压要看 β₂ —— 看下面那把刻度尺（V3 用 %.2f，PyTorch 默认 %.3f）。</div>
 """ % (NB.V3_BETA2, NB.TORCH_BETA2)

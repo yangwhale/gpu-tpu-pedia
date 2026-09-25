@@ -3076,7 +3076,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="494" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">① ＋ ③ 正好是原来那一次 AllReduce，<tspan font-weight="700">一个字节不多</tspan>；唯一例外是梯度裁剪：各卡算自己那段的平方和，再 AllReduce 一个数。</text>
 </svg><figcaption><b>① ReduceScatter、③ AllGather 拼起来就是原来那次 AllReduce。</b><span class="capmore"><br><em>多出来的只是中间那一格：每张卡只更新自己那一段。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 ZeRO 原论文 arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 7：Pos、Pos+g 的通信量与数据并行相同（2Ψ）。Adam 逐元素更新：Kingma 与 Ba，arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a> 算法 1。</p>
 <p>⚠️ 一步切成几个 micro-batch 时，只剩 ZeRO-1 严格白送：ZeRO-2 不留整份梯度，没法把几份梯度先攒起来，只好每份算完就 ReduceScatter 一次；所以配流水线（必须切 micro-batch）时，V3、Megatron 都选 ZeRO-1。</p></details></figure>
-<div class="note ok"><span class="t">开场第三问的答案：V3 把两个动量压成了半精度，主权重和梯度留在全精度</span>
+<div class="note ok"><span class="t">开场第三问的答案：V3 把两个动量压成了半精度，主权重留在全精度（批次累积用的那份梯度也是）</span>
   主权重每步只加一点点、要一直累加，压了会被舍掉；动量能不能压要看 β₂ —— 看下面那把刻度尺（V3 用 0.95，PyTorch 默认 0.999）。</div>
 
 <figure class="fbox fwide" id="fig-bf16-beta"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="二阶动量每一步按 v 等于 β₂ 乘旧 v 加上 1 减 β₂ 乘新梯度平方来更新。图里是一把刻度尺，刻度是 bf16 在 1 附近能表示的数，相邻两个相差 128 分之一。假设当前 v 等于 1，新来的梯度平方是它的 2 倍。β₂ 等于 0.95 时，新值占 5%，v 挪到 1.05，存成 bf16 是 1.047，这一步留下来了。β₂ 等于 0.999 时，新值只占 0.1%，v 挪到 1.001，还不到半格，存成 bf16 又回到 1，这一步被舍掉了。V3 用 β₂ 等于 0.95，所以它敢把动量存成 bf16；主权重每步只加一点点、要一直累加，所以必须留 fp32"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -4712,7 +4712,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s6-1">6.1　prefill 和 decode 为什么会打架</h3>
   <p>一个请求分两段。<b>prefill</b> 一口气吞下整个 prompt，几千个 token 一起过矩阵乘，吃的是算力；
     <b>decode</b> 每一步只出一个 token，却要把全部权重和 KV 从显存里读一遍，吃的是带宽。</p>
-  <p>你正看着回答一个字一个字往外吐，别人丢进来一份一百页的合同，你的字就停了。语音助手更明显：说一句停一段，平均速度再快也觉得卡。
+  <p>你正看着回答一个字一个字往外吐，别人丢进来一本一百页的说明书，你的字就停了。语音助手更明显：说一句停一段，平均速度再快也觉得卡。
     这就是两种活挤在同一批卡上：引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
     这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
   <p>decode 还有个脾气：每一步都要把权重从显存读一遍，读一次只够这一批用一次。一批要多大才不白读？</p>
