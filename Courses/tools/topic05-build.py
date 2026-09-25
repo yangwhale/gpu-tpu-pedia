@@ -37,6 +37,7 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 ⭐ 大纲在 `Courses/专题05-并行策略.md`，只是计划，不必与页面同步。
 """
 import io
+import json
 import os
 import re
 
@@ -215,7 +216,7 @@ __FIG_COLL_1N__
 
   <h3>1.3　人人对人人：训练里天天在跑的四个</h3>
 __FIG_COLL_NN__
-<div class="animgrid"><figure class="animcell" id="anim-allgather"><video src="media/topic05-allgather.mp4" autoplay loop muted playsinline aria-label="AllGather 全收集 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllGather 全收集：一人一块 → 人人一整份。字幕：每人把自己那块发给所有人：只拼，不加。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllGather 全收集</b>：每人把自己那块发给所有人：只拼，不加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reducescatter"><video src="media/topic05-reducescatter.mp4" autoplay loop muted playsinline aria-label="ReduceScatter 归约分散 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：ReduceScatter 归约分散：人人一整份 → 各拿一块总和。字幕：第 j 块全部送到卡 j 加起来：先加，再分。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>ReduceScatter 归约分散</b>：第 j 块全部送到卡 j 加起来：先加，再分<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-allreduce"><video src="media/topic05-allreduce.mp4" autoplay loop muted playsinline aria-label="AllReduce 全归约 动画。四张卡，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。标题：AllReduce 全归约 ＝ ReduceScatter ＋ AllGather。字幕：① ReduceScatter：各拿一块总和；② AllGather：总和发给所有人 → 人人一份总和。块从发送的卡飞到接收的卡，最后画面复位到开始的样子。"></video><figcaption><b>AllReduce 全归约</b>：① ReduceScatter 各拿一块总和；② AllGather 总和发给所有人<span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
+<div class="animgrid"><figure class="animcell" id="anim-allgather"><video src="media/topic05-allgather.mp4" autoplay loop muted playsinline aria-label="AllGather 全收集 动画，按环一步一步走。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。卡名之间有往右的箭头，卡片下面一条虚线车道表示卡 3 绕回卡 0。开始时卡 k 只有第 k 块。三步里，每一步四张卡同时把上一步刚拿到的那块发给右边的人，卡 3 那块从右边出去、沿车道绕回卡 0，落地后停住。三步之后人人一整份，只拼不加。最后画面复位。"></video><figcaption><b>AllGather 全收集</b>：按环转三步，每步人人把刚拿到的那块传给右边，只拼不加<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-reducescatter"><video src="media/topic05-reducescatter.mp4" autoplay loop muted playsinline aria-label="ReduceScatter 归约分散 动画，按环一步一步走。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。卡名之间有往右的箭头，卡片下面一条虚线车道表示卡 3 绕回卡 0。开始时人人一整份。三步里，每一步四张卡同时往右发一块，收到的加到自己那块上，条纹多一种颜色，卡 3 那块沿车道绕回卡 0，落地后停住。三步之后卡 k 恰好握着第 k 块的完整总和，其余中间结果淡出。最后画面复位。"></video><figcaption><b>ReduceScatter 归约分散</b>：按环转三步，每步人人往右发一块、收的人加上；三步后卡 j 握着第 j 块的总和<span class="sub">（5 秒无声循环，Manim 渲染。）</span></figcaption></figure><figure class="animcell" id="anim-allreduce"><video src="media/topic05-allreduce.mp4" autoplay loop muted playsinline aria-label="AllReduce 全归约 动画，按环一步一步走，跟 1.5 的环是同一支。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。卡名之间有往右的箭头，卡片下面一条虚线车道表示卡 3 绕回卡 0。前三步是 ReduceScatter：人人往右发一块，收的人加上；三步后每张卡握着一块完整总和，其余中间结果淡出。后三步是 AllGather：把总和接着往右传，只替换不相加。每一步落地后停住。最后人人一份总和，画面复位。"></video><figcaption><b>AllReduce 全归约</b>：同一个环转两圈，先加三步（ReduceScatter）、再拼三步（AllGather）<span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure></div>
   <p>All ＝「人人都拿到结果」：AllGather 是收集完发给每个人，ReduceScatter 是归约完切开、一人一块，AllReduce 是归约完发给每个人；AllToAll 独一份，不加也不拼。</p>
 
   <h3>1.4　AllReduce 可以拆成两半</h3>
@@ -227,9 +228,9 @@ __FIG_AR_SPLIT__
 __FIG_RING__
 <figure class="fbox fwide" id="anim-ring">
 <video src="media/topic05-ring.mp4" autoplay loop muted playsinline
-       aria-label="环形 AllReduce 动画。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，箭头从卡 0 依次指向卡 3，再从卡 3 绕回卡 0。字幕一：ReduceScatter：每人往右发一块，收到的加到自己那块上。三步里，每一步四张卡同时把一块飞给右边的邻居，落地后那一块多出一种颜色的条纹。字幕二：三步之后：每张卡恰好握着一块完整总和。字幕三：AllGather：把总和接着往右传，只替换，不相加。再转三步，完整总和一块块复制过去。字幕四：人人一份总和 ＝ AllReduce ＝ ReduceScatter ＋ AllGather。最后画面复位到四张卡的初始状态。"></video>
-<figcaption>同一个环转两圈：前三步<b>加</b>（ReduceScatter），后三步<b>拼</b>（AllGather），合起来就是一次 AllReduce。
-  <span class="sub">（15 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+       aria-label="环形 AllReduce 动画。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。卡名之间有往右的箭头，卡片下面一条虚线车道表示卡 3 绕回卡 0。字幕依次是：ReduceScatter，每一步人人同时往右发一块，收到的加到自己那块上；第 1、2、3 步各自写明 0→1、1→2、2→3、卡 3 从右边绕回卡 0，落地后写「第几步完成：粗框那块又多加进了一个人」并停住。三步之后每张卡恰好握着一块完整总和，其余中间结果淡出。接着 AllGather，把总和往右再传三步，只替换不相加。最后人人一份总和，画面复位。"></video>
+<figcaption>同一个环转两圈：前三步<b>加</b>（ReduceScatter），后三步<b>拼</b>（AllGather），合起来就是一次 AllReduce。卡 3 发出的那块从右边出去、绕回卡 0。
+  <span class="sub">（15 秒无声循环，Manim 渲染。）</span></figure>
   <p>ReduceScatter 转 n−1 步、AllGather 再转 n−1 步；每一步每张卡只发 1/n 份，所以一共发出 2(n−1)/n 份数据。
     卡再多也不到两整份，每个人的负担不随卡数涨，而且每一步所有的线同时都在用。</p>
   <p>代价是步数跟着卡数涨：数据小时比的是一步步的等待，环反而吃亏，所以通信库会按数据大小自己挑算法。</p>
@@ -244,9 +245,9 @@ __FIG_RING__
 __FIG_A2A__
 <figure class="fbox fwide" id="anim-a2a">
 <video src="media/topic05-a2a.mp4" autoplay loop muted playsinline
-       aria-label="AllToAll 动画。四张卡各有四块，颜色表示出自哪张卡，对角线上的四块画粗框。字幕一：派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）。十六块同时飞到新位置，卡 k 的第 j 块落到卡 j 的第 k 行。字幕二：卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次。字幕三：专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll。十六块原路飞回，画面回到开始的样子。"></video>
-<figcaption>派发过去、送回来，正好是专家并行每层的两次 AllToAll。
-  <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+       aria-label="AllToAll 动画。四张卡，每张卡分「寄出」「收到」两列；块的名字是谁出的加要寄给谁，A1 是卡 0 出的、要寄给卡 1，颜色表示出自哪张卡。先把自己留给自己的四块挪到右列，不走网络。第 1 步人人寄给右边第 1 个人，第 2 步直接寄给右边第 2 个人，第 3 步寄给右边第 3 个人，到头的从右边出去、沿卡片下面的车道绕回来；每一步落地后停住。三步之后卡 j 的右列收齐了四个人寄给它的那一份。字幕提示专家算完还要原路寄回一次，MoE 每层两次 AllToAll。最后画面复位。"></video>
+<figcaption>三步寄完：第 s 步人人直接寄给右边第 s 个人，到头的绕回来；专家算完还要原路寄回一次。
+  <span class="sub">（8 秒无声循环，Manim 渲染。）</span></figure>
   <p>网络最怕它：排不成环，任意两张卡之间都有东西要走，拼的是整个网络的横截面有多宽；而且每份多大，要等模型算到这一层才知道。
     专家并行（第四节）、Ulysses（第五节）都用它。</p>
 
@@ -1046,5 +1047,68 @@ for _n, _svg in _NUM_LOCK:
     assert _n in BODY, "正文里已经没有 %s 了 —— 从 _NUM_LOCK 里删掉这一条" % _n
     _g = io.open(os.path.join(HERE, _svg), encoding="utf-8").read().replace(",", "")
     assert _n.replace(",", "") in _g, "正文写 %s，而 %s 里没有这个数 —— 图脚本改了，正文没跟上" % (_n, _svg)
+# ⭐⭐ 2026-09-25 现场：「那个动图你每跳一步就停一下，我们琢磨一下再跳第二步。」
+#   动画脚本在每一步落地后打点，写进 manim/steps/<Scene>.json；这里把时刻挂到 <video data-pauses>，
+#   页面脚本在这些时刻自动暂停，出一个「下一步」按钮。勾「连续播放」就不停。
+#   图注里的「N 秒」也从同一份 json 取，免得跟实测时长对不上（check-loop 会查）。
+STEP_VIDEOS = {"topic05-ring.mp4": "Ring", "topic05-allreduce.mp4": "AllReduce",
+               "topic05-reducescatter.mp4": "ReduceScatter", "topic05-allgather.mp4": "AllGather",
+               "topic05-a2a.mp4": "AllToAll", "topic05-broadcast.mp4": "Broadcast",
+               "topic05-scatter.mp4": "Scatter", "topic05-gather.mp4": "Gather", "topic05-reduce.mp4": "Reduce"}
+
+
+def _steps(mp4):
+    with io.open(os.path.join(HERE, "manim", "steps", STEP_VIDEOS[mp4] + ".json"), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _hook_steps(html):
+    for mp4 in STEP_VIDEOS:
+        st = _steps(mp4)
+        tag = '<video src="media/%s"' % mp4
+        assert html.count(tag) == 1, "%s 在页面上出现 %d 次" % (mp4, html.count(tag))
+        html = html.replace(tag, tag + ' data-pauses="%s"' % ",".join("%.2f" % t for t in st["pauses"]))
+        i = html.index(tag)
+        j = html.index("</figure>", i)
+        fig = html[i:j]
+        fig2, n = re.subn(r"（\d+ 秒无声循环，", "（%d 秒无声循环，每一步落地会自动停住，点「下一步」继续；" % round(st["duration"]), fig)
+        assert n == 1, "%s 的图注里没找到「N 秒无声循环」" % mp4
+        html = html[:i] + fig2 + html[j:]
+    return html
+
+
+STEP_JS = """<style>
+.stepbar{display:flex;gap:12px;align-items:center;margin:6px 0 2px;font-size:14px;color:#5f6368;flex-wrap:wrap}
+.stepbar button{font:inherit;padding:3px 14px;border-radius:14px;border:1px solid #1a73e8;background:#1a73e8;color:#fff;cursor:pointer}
+.stepbar button:disabled{background:#fff;color:#9aa0a6;border-color:#dadce0;cursor:default}
+.stepbar label{cursor:pointer}
+</style>
+<script>
+document.querySelectorAll('video[data-pauses]').forEach(function(v){
+  var P=v.dataset.pauses.split(',').map(Number), i=0, last=0, auto=false;
+  var bar=document.createElement('div'); bar.className='stepbar';
+  bar.innerHTML='<button type="button">下一步 ▶</button><span></span><label><input type="checkbox"> 连续播放</label>';
+  v.insertAdjacentElement('afterend', bar);
+  var nx=bar.querySelector('button'), st=bar.querySelector('span'), au=bar.querySelector('input');
+  function show(){
+    nx.disabled=!v.paused;
+    st.textContent = auto ? '连续播放中' : (v.paused && i ? '停住了（'+i+' / '+P.length+'），看明白了再点' : '播放中');
+  }
+  v.addEventListener('timeupdate',function(){
+    if(v.currentTime < last-1) i=0;          // 循环回到了开头
+    last=v.currentTime;
+    if(!auto && i<P.length && v.currentTime>=P[i]){ v.pause(); i++; }
+    show();
+  });
+  v.addEventListener('pause',show); v.addEventListener('play',show);
+  nx.addEventListener('click',function(){ v.play(); });
+  au.addEventListener('change',function(){ auto=au.checked; if(auto) v.play(); show(); });
+  show();
+});
+</script>
+"""
+_html = _hook_steps(_html)
+assert _html.count("</body>") == 1
+_html = _html.replace("</body>", STEP_JS + "</body>")
 _html = P.add_figonly_toggle(_html)
 P.finish(_html, OUT, SECTIONS, "topic-05.html")

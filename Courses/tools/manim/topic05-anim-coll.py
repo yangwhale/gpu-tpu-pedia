@@ -19,12 +19,24 @@ r"""专题五 · 第一节「先认识五种通信」的动画：环、AllToAll�
   `ring_rs_step` / `ring_ag_step` 按调度现算，并断言 RS 三步后卡 k 恰好握着第 k 块的完整总和、
   AG 三步后人人四块全满。块号约定跟 topic05-fig-coll.py 一致（第 s 步卡 k 发第 (k−s−1) mod 4 块）。
 
+⛔⛔ 2026-09-25 现场纠正（原话要点）：「你怎么 A 往右，然后剩下都往左。它应该是环形的，大家都往右发，
+  到头了转一圈回来……第一步慢点，还没看明白呢，停一下再跳第二步。」
+  病根两处：① 环里卡 3 → 卡 0 那一块是**横穿整个画面往左飞**的，看上去就是「别人都往左」；
+  ② AllGather／ReduceScatter／AllReduce 三支用的是「块直接飞到目的地」的逻辑视图，一半往左一半往右。
+  ⭐ 改成：人人对人人的四支（AllGather、ReduceScatter、AllReduce＝Ring、AllToAll）**全部按环一步一步走**：
+    每一步人人同时往右发；卡 3 发出的那块**从右边出画面、沿卡片下面的车道绕回来、从左边进卡 0**。
+    每一步飞 1.8 秒，落地后停 2 秒，字幕写「第 s 步完成：……」。
+  ⭐ 每一步停住的时刻记进 `steps/<Scene>.json`，课件里的播放器读它：**每一步自动暂停，点「下一步」再走**。
+
 📌 渲染（在 Courses/ 下）：构建手册/脚本/render.sh \
         tools/manim/topic05-anim-coll.py Ring WebPages/media/topic05-ring.mp4
 """
-from manim import (Scene, VGroup, Rectangle, Text, Arrow, CurvedArrow, FadeIn, FadeOut,
-                   Indicate, AnimationGroup, WHITE, GREY, BLUE, GREEN, ORANGE, PURPLE_B,
-                   UP, DOWN, LEFT, RIGHT, ORIGIN)
+import json
+import os
+
+from manim import (Scene, VGroup, VMobject, Rectangle, Text, Arrow, CurvedArrow, FadeIn, FadeOut,
+                   Indicate, AnimationGroup, MoveAlongPath, DashedVMobject, WHITE, GREY, BLUE, GREEN,
+                   ORANGE, PURPLE_B, YELLOW, UP, DOWN, LEFT, RIGHT, ORIGIN, linear, smooth)
 
 N = 4
 COL = [BLUE, ORANGE, GREEN, PURPLE_B]
@@ -72,15 +84,43 @@ def labels():
                     for k in range(N)])
 
 
-def ring_arrows():
+XR, XL = XS[-1] + CW / 2 + 0.55, XS[0] - CW / 2 - 0.55   # 绕回时出画面右边、进画面左边的位置
+LANE = cy(N - 1) - CH / 2 - 0.55                          # 卡片下面那条绕回车道
+YLAB = Y0 + 0.75
+
+
+def ring_guide(xr=None, xl=None):
+    """环的示意：卡名之间三根往右的箭头 ＋ 卡片下面一条虚线车道（卡 3 → 卡 0 绕回来）。"""
+    xr, xl = xr or XR, xl or XL
     g = VGroup()
-    ybar = cy(1.5)
     for k in range(N - 1):
-        g.add(Arrow([XS[k] + CW / 2 + 0.12, ybar, 0], [XS[k + 1] - CW / 2 - 0.12, ybar, 0],
-                    color=GREY, stroke_width=4, buff=0))
-    g.add(CurvedArrow([XS[3], cy(3) - CH / 2 - 0.15, 0], [XS[0], cy(3) - CH / 2 - 0.15, 0],
-                      angle=-0.55, color=GREY, stroke_width=4))
+        g.add(Arrow([XS[k] + 0.55, YLAB, 0], [XS[k + 1] - 0.55, YLAB, 0],
+                    color=GREY, stroke_width=3, buff=0, max_tip_length_to_length_ratio=0.12))
+    lane = VMobject(stroke_color=GREY, stroke_width=2.5)
+    lane.set_points_as_corners([[XS[-1] + 0.55, YLAB, 0], [xr, YLAB, 0], [xr, LANE, 0],
+                                [xl, LANE, 0], [xl, YLAB, 0], [XS[0] - 0.55, YLAB, 0]])
+    g.add(DashedVMobject(lane, num_dashes=70))
+    g.add(Arrow([xl, YLAB, 0], [XS[0] - 0.5, YLAB, 0], color=GREY, stroke_width=3, buff=0,
+                max_tip_length_to_length_ratio=0.5))
+    g.add(Text("卡 3 → 卡 0：绕回来", font_size=20, color=GREY).move_to([0, LANE - 0.28, 0]))
     return g
+
+
+def flight_path(k, j, d, r, x0=None, x1=None, xr=None, xl=None):
+    """卡 k 第 j 块 → 卡 d 第 r 块。⭐ 只许往右走：d 在右边就直飞；
+    d 在左边（到头了）就先往右出画面、沿车道绕到最左、再往右进卡 d。
+    x0／x1 默认是两张卡的中线；AllToAll 用「寄出／收到」两列时另传。"""
+    x0 = XS[k] if x0 is None else x0
+    x1 = XS[d] if x1 is None else x1
+    xr, xl = xr or XR, xl or XL
+    p0, p1 = [x0, cy(j), 0], [x1, cy(r), 0]
+    vm = VMobject()
+    if d > k or (d == k and x1 >= x0):
+        vm.set_points_as_corners([p0, p1])
+    else:
+        vm.set_points_as_corners([p0, [xr, cy(j), 0], [xr, LANE, 0], [xl, LANE, 0],
+                                  [xl, cy(r), 0], p1])
+    return vm
 
 
 def start_state():
@@ -88,6 +128,7 @@ def start_state():
 
 
 def ring_rs_step(held, s):
+    """环形 ReduceScatter 第 s 步：卡 k 把第 (k−s−1) mod 4 块发给右边，收的人加到自己那块上。"""
     sends = [(k, (k - s - 1) % N) for k in range(N)]
     new = [[set(c) for c in r] for r in held]
     for k, j in sends:
@@ -95,12 +136,14 @@ def ring_rs_step(held, s):
     return new, sends
 
 
-def ring_ag_step(held, s):
-    # AllGather：卡 k 把它最近拿到的那块完整总和往右传（第 s 步发第 (k−s) mod 4 块），只替换不相加
+def ring_ag_step(held, s, need_full=False):
+    """环形 AllGather 第 s 步：卡 k 把它上一步刚拿到的那块（第 (k−s) mod 4 块）发给右边，只替换不相加。"""
     sends = [(k, (k - s) % N) for k in range(N)]
     new = [[set(c) for c in r] for r in held]
     for k, j in sends:
-        assert held[k][j] == set(range(N)), (k, j, held[k][j])
+        assert held[k][j], (k, j)
+        if need_full:
+            assert held[k][j] == set(range(N)), (k, j, held[k][j])
         new[(k + 1) % N][j] = set(held[k][j])
     return new, sends
 
@@ -112,108 +155,201 @@ for _s in range(N - 1):
 for _k in range(N):
     assert _h[_k][_k] == set(range(N))
 for _s in range(N - 1):
-    _h, _ = ring_ag_step(_h, _s)
+    _h, _ = ring_ag_step(_h, _s, need_full=True)
 assert all(_h[k][j] == set(range(N)) for k in range(N) for j in range(N))
 
 
-class Ring(Scene):
-    def construct(self):
-        held = start_state()
-        labs, arr = labels(), ring_arrows()
-        state = cards(held)
-        self.add(labs, arr, state)
-        cap = Text(" ", font_size=30).to_edge(UP)
-        self.add(cap)
+FLY, HOLD = 1.8, 2.0            # 每一步飞 1.8 秒、落地停 2 秒（2026-09-25 现场：「别搞那么快，还没看明白呢」）
+STEPS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "steps")
+
+
+class Stepper(Scene):
+    """共用：标题、字幕、按环飞行、每一步的停顿打点。
+    ⭐ `hold()` 每调一次就记一个时刻，渲染完写进 steps/<Scene>.json，课件播放器在这些时刻自动暂停。"""
+    TITLE = ""
+
+    def setup(self):
+        self.marks, self.cap = [], None
+
+    def say(self, txt, color=None):
+        new = Text(txt, font_size=26, color=color or GREY_B_).next_to(self.title, DOWN, buff=0.18)
+        self.play(*([FadeOut(self.cap)] if self.cap else []), FadeIn(new), run_time=0.4)
+        self.cap = new
+
+    def hold(self, t=HOLD):
+        self.marks.append(round(self.renderer.time + 0.3, 2))
+        self.wait(t)
+
+    def dump(self):
+        os.makedirs(STEPS_DIR, exist_ok=True)
+        with open(os.path.join(STEPS_DIR, type(self).__name__ + ".json"), "w") as fh:
+            json.dump({"pauses": self.marks, "duration": round(self.renderer.time, 2)}, fh)
+
+    def opening(self, held, guide=True):
+        self.title = Text(self.TITLE, font_size=30, color=WHITE).to_edge(UP)
+        self.add(self.title, labels())
+        if guide:
+            self.add(ring_guide())
+        self.state = grid(held)
+        self.add(self.state)
+        self.wait(0.8)
+
+    def fly(self, held, flights, after, move=False):
+        """flights：[(k, j, d, r)] 卡 k 第 j 块 → 卡 d 第 r 块，同时出发。move=True 时源头腾空。"""
+        gone = {(k, j) for k, j, d, r in flights} if move else set()
+        base = grid([[set() if (k, j) in gone else held[k][j] for j in range(N)] for k in range(N)])
+        movers = [(chunk(held[k][j], j, XS[k]), flight_path(k, j, d, r)) for k, j, d, r in flights]
+        self.remove(self.state)
+        self.add(base, *[m for m, _ in movers])
+        self.play(*[MoveAlongPath(m, pth, rate_func=smooth) for m, pth in movers], run_time=FLY)
+        self.state = grid(after, {(d, r) for _, _, d, r in flights})
+        self.remove(base, *[m for m, _ in movers])
+        self.add(self.state)
+
+    def closing(self, first):
+        """⭐ 复位：清干净，摆回第 0 帧（skill 的通用收尾）。"""
+        self.play(FadeOut(self.state), FadeOut(self.cap), run_time=0.6)
+        self.remove(self.state, self.cap)
+        self.cap = None
+        self.state = grid(first)
+        self.play(FadeIn(self.state), run_time=0.6)
         self.wait(0.6)
+        self.dump()
 
-        def swap_caption(txt, color=WHITE):
-            nonlocal cap
-            new = Text(txt, font_size=30, color=color).to_edge(UP)
-            self.play(FadeOut(cap), FadeIn(new), run_time=0.4)
-            cap = new
-
-        def fly(sends, new_held, merge):
-            nonlocal state, held
-            movers = []
-            for k, j in sends:
-                src = chunk(held[k][j], j, XS[k])
-                self.add(src)
-                movers.append((src, (k + 1) % N, j))
-            self.play(*[m.animate.move_to([XS[d], cy(j), 0]) for m, d, j in movers],
-                      run_time=0.9)
-            hot = {(d, j) for _, d, j in movers}
-            new_state = cards(new_held, hot)
-            self.remove(state, *[m for m, _, _ in movers])
-            self.add(new_state)
-            state, held = new_state, new_held
-            self.wait(0.45)
-
-        swap_caption("ReduceScatter：每人往右发一块，收到的加到自己那块上")
+    # ── 三段可复用的环 ────────────────────────────────────────
+    def ring_rs(self, held):
+        self.say("ReduceScatter：每一步人人同时往右发一块，收到的加到自己那块上")
+        self.wait(1.0)
         for s in range(N - 1):
+            self.say("第 %d 步（共 3 步）：0→1、1→2、2→3，卡 3 从右边绕回卡 0" % (s + 1))
             nh, sends = ring_rs_step(held, s)
-            fly(sends, nh, True)
-        swap_caption("三步之后：每张卡恰好握着一块完整总和", GREEN)
-        self.wait(0.8)
+            self.fly(held, [(k, j, (k + 1) % N, j) for k, j in sends], nh)
+            held = nh
+            self.say("第 %d 步完成：每张卡的粗框那块，又多加进了一个人" % (s + 1), YELLOW)
+            self.hold()
+        self.say("三步之后：每张卡恰好握着一块完整总和 Σ", GREEN)
+        self.hold()
+        only = [[set(range(N)) if j == k else set() for j in range(N)] for k in range(N)]
+        new = grid(only)
+        self.play(FadeOut(self.state), FadeIn(new), run_time=0.8)
+        self.state = new
+        self.say("其余几块是半路上的中间结果，不要了", GREY)
+        self.hold(1.4)
+        return only
 
-        swap_caption("AllGather：把总和接着往右传，只替换，不相加")
+    def ring_ag(self, held, what="总和"):
+        self.say("AllGather：把%s接着往右传，只替换，不相加" % what)
+        self.wait(1.0)
         for s in range(N - 1):
+            self.say("第 1 步（共 3 步）：人人把自己那块%s传给右边，卡 3 绕回卡 0" % ("总和" if what == "总和" else "")
+                     if s == 0 else
+                     "第 %d 步（共 3 步）：人人把上一步刚收到的那块传给右边，卡 3 绕回卡 0" % (s + 1))
             nh, sends = ring_ag_step(held, s)
-            fly(sends, nh, False)
-        swap_caption("人人一份总和　＝　AllReduce ＝ ReduceScatter ＋ AllGather", GREEN)
-        self.play(Indicate(state, color=WHITE, scale_factor=1.03), run_time=0.9)
-        self.wait(0.8)
-
-        # ⭐ 复位：清干净，再摆一份跟第 0 帧一模一样的静态件（skill 的通用收尾）
-        self.play(FadeOut(state), FadeOut(cap), run_time=0.7)
-        self.remove(state, cap)
-        state = cards(start_state())
-        self.play(FadeIn(state), run_time=0.7)
-        self.add(Text(" ", font_size=30).to_edge(UP))
-        self.wait(0.6)
+            self.fly(held, [(k, j, (k + 1) % N, j) for k, j in sends], nh)
+            held = nh
+            self.say("第 %d 步完成：每张卡又多了一块" % (s + 1), YELLOW)
+            self.hold()
+        return held
 
 
-class AllToAll(Scene):
+class Ring(Stepper):
+    """环形 AllReduce ＝ 环形 ReduceScatter ＋ 环形 AllGather。课件 1.3 的 AllReduce 与 1.5 的环用同一支。"""
+    TITLE = "AllReduce 全归约：连成一个环，人人只往右边的邻居发"
+
     def construct(self):
-        base = [[({k}, "%s%d" % (NAME[k], j)) for j in range(N)] for k in range(N)]
+        first = start_state()
+        self.opening(first)
+        mid = self.ring_rs(first)
+        self.ring_ag(mid)
+        self.say("人人一份总和 ＝ AllReduce ＝ ReduceScatter ＋ AllGather", GREEN)
+        self.play(Indicate(self.state, color=WHITE, scale_factor=1.03), run_time=0.9)
+        self.hold()
+        self.closing(first)
 
-        def block(k_src, j_dst, x, y, bold=False):
-            g = VGroup(Rectangle(width=CW, height=CH, stroke_width=0, fill_color=COL[k_src],
-                                 fill_opacity=0.85).move_to([x, y, 0]),
-                       Rectangle(width=CW, height=CH, stroke_color=WHITE,
-                                 stroke_width=5 if bold else 1.5).move_to([x, y, 0]),
-                       Text("%s%d" % (NAME[k_src], j_dst), font_size=24, color=WHITE,
-                            weight="BOLD").move_to([x, y, 0]))
+
+class AllReduce(Ring):
+    pass
+
+
+class ReduceScatter(Stepper):
+    TITLE = "ReduceScatter　归约分散：人人一整份 → 各拿一块总和"
+
+    def construct(self):
+        first = start_state()
+        self.opening(first)
+        self.ring_rs(first)
+        self.closing(first)
+
+
+class AllGather(Stepper):
+    TITLE = "AllGather　全收集：一人一块 → 人人一整份"
+
+    def construct(self):
+        first = [[{k} if j == k else set() for j in range(N)] for k in range(N)]
+        self.opening(first)
+        self.ring_ag(first, "自己那块")
+        self.say("三步之后：人人一整份，只拼，不加", GREEN)
+        self.hold()
+        self.closing(first)
+
+
+class AllToAll(Stepper):
+    """AllToAll 按「第 s 步寄给右边第 s 个人」排：三步，每步人人同时寄一块，到头的绕回来。
+    ⭐ 块的标签是「谁出的 ＋ 要去谁」：A1 ＝ 卡 0 出的、要寄给卡 1。
+    ⭐⭐ 每张卡分「寄出」「收到」两列：收到的块按来源排在右列第 k 行。
+      只用一列的话，落点（卡 j，第 k 行）上还坐着没寄走的块 —— 2026-09-25 草稿里撞在一起过。"""
+    TITLE = "AllToAll　全交换：每人给每人寄一份不一样的"
+    OFF = 0.58
+
+    def construct(self):
+        SND = [x - self.OFF for x in XS]
+        RCV = [x + self.OFF for x in XS]
+        xr, xl = RCV[-1] + CW / 2 + 0.35, SND[0] - CW / 2 - 0.35
+
+        def block(k, j, x, y):
+            return VGroup(Rectangle(width=CW, height=CH, stroke_width=0, fill_color=COL[k],
+                                    fill_opacity=0.85).move_to([x, y, 0]),
+                          Rectangle(width=CW, height=CH, stroke_color=WHITE,
+                                    stroke_width=5 if k == j else 1.5).move_to([x, y, 0]),
+                          Text("%s%d" % (NAME[k], j), font_size=24, color=WHITE,
+                               weight="BOLD").move_to([x, y, 0]))
+
+        def slots():
+            g = VGroup()
+            for k in range(N):
+                for j in range(N):
+                    g.add(empty_chunk(j, RCV[k]))
+                g.add(Text("寄出", font_size=18, color=GREY).move_to([SND[k], Y0 + 0.42, 0]))
+                g.add(Text("收到", font_size=18, color=GREY).move_to([RCV[k], Y0 + 0.42, 0]))
             return g
 
-        labs = labels()
-        self.add(labs)
-        # blocks[(k, j)]：卡 k 手里、要去卡 j 的那一块；初始在 (卡 k, 第 j 行)
-        blocks = {(k, j): block(k, j, XS[k], cy(j), k == j) for k in range(N) for j in range(N)}
+        self.title = Text(self.TITLE, font_size=30, color=WHITE).to_edge(UP)
+        self.add(self.title, labels(), ring_guide(xr, xl), slots())
+        blocks = {(k, j): block(k, j, SND[k], cy(j)) for k in range(N) for j in range(N)}
         self.add(*blocks.values())
-        cap = Text(" ", font_size=30).to_edge(UP)
-        self.add(cap)
+        self.wait(0.8)
+        self.say("A1 ＝ 卡 0 出的、要寄给卡 1。先把自己留给自己的挪到右列：不走网络")
+        self.play(*[blocks[(k, k)].animate.move_to([RCV[k], cy(k), 0]) for k in range(N)], run_time=1.2)
+        self.hold(1.6)
+        for s in range(1, N):
+            self.say("第 %d 步（共 3 步）：人人直接寄给「右边第 %d 个人」，到头绕回来" % (s, s) if s == 1 else
+                     "第 %d 步（共 3 步）：直接寄给右边第 %d 个人，隔着人，不是接力" % (s, s))
+            fl = [(k, (k + s) % N) for k in range(N)]
+            self.play(*[MoveAlongPath(blocks[(k, d)],
+                                      flight_path(k, d, d, k, SND[k], RCV[d], xr, xl), rate_func=smooth)
+                        for k, d in fl], run_time=FLY)
+            self.say("第 %d 步完成：每人又收到一块别人寄给它的" % s, YELLOW)
+            self.hold()
+        self.say("三步之后：卡 j 的右列，收齐了四个人寄给它的那一份", GREEN)
+        self.hold()
+        self.say("专家算完，还要原路再寄回一次：MoE 每层两次 AllToAll", GREY)
+        self.hold(1.6)
+        self.play(FadeOut(VGroup(*blocks.values())), FadeOut(self.cap), run_time=0.6)
+        self.remove(*blocks.values(), self.cap)
+        self.play(FadeIn(VGroup(*[block(k, j, SND[k], cy(j)) for k in range(N) for j in range(N)])),
+                  run_time=0.6)
         self.wait(0.6)
-
-        def swap_caption(txt, color=WHITE):
-            nonlocal cap
-            new = Text(txt, font_size=30, color=color).to_edge(UP)
-            self.play(FadeOut(cap), FadeIn(new), run_time=0.4)
-            cap = new
-
-        swap_caption("派发：卡 k 的第 j 块 → 发给卡 j（粗框是自己留给自己的，不走网络）")
-        # 转置：(k, j) 飞到 (卡 j, 第 k 行)
-        self.play(*[b.animate.move_to([XS[j], cy(k), 0]) for (k, j), b in blocks.items()],
-                  run_time=1.8)
-        swap_caption("卡 j 收齐了四个人给它的那一份 —— 一张表转置了一次", GREEN)
-        self.wait(1.2)
-        swap_caption("专家算完，再转置一次送回去 —— MoE 每层两次 AllToAll")
-        self.play(*[b.animate.move_to([XS[k], cy(j), 0]) for (k, j), b in blocks.items()],
-                  run_time=1.8)
-        self.wait(0.6)
-        self.play(FadeOut(cap), run_time=0.4)
-        self.remove(cap)
-        self.add(Text(" ", font_size=30).to_edge(UP))
-        self.wait(0.6)
+        self.dump()
 
 
 # ════════════════════════════════════════════════════════════════
@@ -252,7 +388,7 @@ def only_card0(rows):
     return [rows] + [[set() for _ in range(N)] for _ in range(N - 1)]
 
 
-class Prim(Scene):
+class Prim(Stepper):
     """一个原语：before → 若干段（字幕, 飞行清单, after）→ 复位到 before。
     飞行清单里每一项 (k, j, d, r, mode)：卡 k 第 j 块 → 卡 d 第 r 块；
     mode：copy 源留着 / move 源拿走 / add 源拿走、到了加起来。"""
@@ -287,19 +423,20 @@ class Prim(Scene):
                 movers.append((mv, d, r))
             self.remove(state)
             self.add(base, *[m for m, _, _ in movers])
-            self.play(*[m.animate.move_to([XS[d], cy(r), 0]) for m, d, r in movers], run_time=1.3)
+            self.play(*[m.animate.move_to([XS[d], cy(r), 0]) for m, d, r in movers], run_time=FLY)
             hot = {(d, r) for _, d, r in movers}
             state = grid(after, hot)
             self.remove(base, *[m for m, _, _ in movers])
             self.add(state)
             held = after
-            self.wait(0.9)
+            self.hold()
         # ⭐ 复位：清干净，摆回第 0 帧
         self.play(FadeOut(state), FadeOut(cap), run_time=0.6)
         self.remove(state, cap)
         state = grid(self.before())
         self.play(FadeIn(state), run_time=0.6)
         self.wait(0.6)
+        self.dump()
 
 
 from manim import GREY_B as GREY_B_
@@ -354,39 +491,3 @@ class Reduce(Prim):
         return [("每人把整份交给卡 0，卡 0 逐块相加", fl, only_card0([set(range(N))] * N))]
 
 
-class AllGather(Prim):
-    TITLE = "AllGather　全收集：一人一块 → 人人一整份"
-
-    def before(self):
-        return only_diag()
-
-    def phases(self):
-        fl = [(k, k, d, k, "copy") for k in range(N) for d in range(N) if d != k]
-        return [("每人把自己那块发给所有人：只拼，不加", fl, [[{j} for j in range(N)] for _ in range(N)])]
-
-
-class ReduceScatter(Prim):
-    TITLE = "ReduceScatter　归约分散：人人一整份 → 各拿一块总和"
-
-    def before(self):
-        return full_all()
-
-    def phases(self):
-        fl = [(k, j, j, j, "add") for k in range(N) for j in range(N) if j != k]
-        after = [[set(range(N)) if j == k else set() for j in range(N)] for k in range(N)]
-        return [("第 j 块全部送到卡 j 加起来：先加，再分", fl, after)]
-
-
-class AllReduce(Prim):
-    TITLE = "AllReduce　全归约 ＝ ReduceScatter ＋ AllGather"
-
-    def before(self):
-        return full_all()
-
-    def phases(self):
-        rs = [(k, j, j, j, "add") for k in range(N) for j in range(N) if j != k]
-        mid = [[set(range(N)) if j == k else set() for j in range(N)] for k in range(N)]
-        ag = [(k, k, d, k, "copy") for k in range(N) for d in range(N) if d != k]
-        end = [[set(range(N)) for _ in range(N)] for _ in range(N)]
-        return [("① ReduceScatter：各拿一块总和", rs, mid),
-                ("② AllGather：总和发给所有人 → 人人一份总和", ag, end)]
