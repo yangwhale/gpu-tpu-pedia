@@ -471,7 +471,8 @@ __FIG_FOLD__
        aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
 <figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>两者可以叠起来用（USP：卡排成二维，一个维度走环，另一个维度走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
+  <p>一句话记住两者：<b>Ring 是人不动、笔记转圈；Ulysses 是换个切法，每人拿全部笔记的几个头。</b>
+    两者可以叠起来用（USP：卡排成二维，一个维度走环，另一个维度走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
 
   <h3>5.3　causal 带来的不均</h3>
   <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。
@@ -480,17 +481,18 @@ __FIG_CP_ZIGZAG__
 
   <h3>5.4　推理：KV cache 被 TP 复制了</h3>
   <p>长上下文、高并发的推理（decode 阶段）里，KV 常常是最大的一块。TP 在注意力里是按头分卡的：V3 的查询头有 128 个，分得开；MLA 把 KV 压成所有头共用的一份，只剩一个头，切不开。</p>
-  <p>一般地，TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated tp_size / H times）。
+  <p>很多模型把 KV 头定成 8 个，TP 8 路时每张卡正好分一组（Llama 2 70B 就是 8 个 KV 头）。一般地，TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated tp_size / H times）。
     MLA 模型只有一个 KV 头，TP 8 路就是每张卡一整份、8 份一模一样的 KV。4.4 里 V4-Pro 在 TP4 上白存 3 份，毛病就在这儿。</p>
 __FIG_KV_DUP__
-  <p><b>DCP（decode 上下文并行）</b>让 KV 按 token 轮流存到几张卡上，用的还是原来那几张卡：</p>
+  <p><b>DCP（decode 上下文并行）</b>让 KV 按 token 轮流存到几张卡上，用的还是原来那几张卡。按 token 轮流而不是一段一段地存，是因为笔记一直在长：新来的字也会均摊到每张卡上。</p>
 <figure class="fbox fwide" id="anim-dcp">
 <video src="media/topic05-decodecp.mp4" autoplay loop muted playsinline
        aria-label="DCP 动画。四张卡。标题：DCP：decode 时 KV 按 token 轮流存到各张卡。字幕一：只开 TP：笔记切不开，每张卡都存全部 12 个 token 的 KV（四张卡各一块红色大块）。字幕二：DCP：每生成一个 token，它的 KV 存到第 (token 号 mod 4) 张卡上。token 0 到 11 依次落到卡 0、1、2、3 轮转。字幕三：12 个 token，每张卡只存 3 个的 KV：同样的卡，能装 4 倍的笔记。字幕四：算注意力：新 token 的 Q 发给所有卡，各自在自己那份 KV 上算。字幕五：四份部分结果合并成一份：每层多几次通信，换回 4 倍的 KV 空间。最后复位。"></video>
 <figcaption>KV 轮流落到四张卡上；每一层多几次通信，把 Q 收齐、把结果合起来。
   <span class="sub">（11 秒无声循环，Manim 渲染。先放只开 TP 时的样子做对照。）</span></figcaption></figure>
-  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并。每张卡的 softmax 只在自己那份 KV 上归一化，合并时要按各自的分母重新加权，所以每份都得带着自己的归一化分母（记作 LSE）。
-    每层多付三次通信（vLLM 默认实现：收齐 Q、交换归一化分母、合并输出），换回被 TP 白白复制掉的那几份 KV。
+  <p>算注意力时，新 token 的 Q 发给所有卡，各自在自己那份 KV 上算，再把几份部分结果合并。合并不能各除各的，要「先别除」：</p>
+__FIG_SOFTMAX_MERGE__
+  <p>每层多付三次通信（vLLM 默认实现：收齐 Q、交换归一化分母、合并输出），换回被 TP 白白复制掉的那几份 KV。
     DCP 的度数最多开到 TP ÷ KV 头数，也就是刚好把复制的那几份收回来。<b>用一种通信，换一份显存</b>，又一次。</p>
 
   <h3>5.5　prefill 那边也有一种</h3>
@@ -982,6 +984,9 @@ FIGS = {
     "__FIG_CP_ZIGZAG__": ("fig-cp-zigzag", "fig5-cp-zigzag.svg", "topic05-fig-seq.py",
         '<b>同样 8 块，换一种分法，最忙和最闲从差好几倍变成一样忙。</b><br>'
         '<em>每格数由脚本按因果掩码现算。</em>'),
+    "__FIG_SOFTMAX_MERGE__": ("fig-softmax-merge", "fig5-softmax-merge.svg", "topic05-fig-seq.py",
+        '<b>两个平均数不能再平均，得带上各自的「人数」。</b><br>'
+        '<em>分子分母各自交上来，最后只除一次。</em>'),
     "__FIG_KV_DUP__": ("fig-kv-dup", "fig5-kv-dup.svg", "topic05-fig-seq.py",
         '<b>红色那 7 份，存的是一模一样的东西。</b><br>'
         '<em>KV 尺寸取自 V3 的 config.json。</em>'),
