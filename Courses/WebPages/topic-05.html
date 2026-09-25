@@ -746,6 +746,7 @@ h4 { margin:18px 0 6px; font-size:15px }
   background:#1a73e8;color:#fff;cursor:pointer;margin-right:8px}
 .qz5 .qzbar button.gh{background:#fff;color:#1a73e8}
 .qz5 .qzmsg{color:#5f6368}
+.qz5 ol{padding-left:2.2em;margin:6px 0}
 </style>
 
 
@@ -848,7 +849,7 @@ body.figonly section h3{margin-top:34px}
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 50 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 51 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -868,7 +869,7 @@ body.figonly section h3{margin-top:34px}
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一张卡装不下</h2></div>
 
 <details class="foldfig" id="qz5box"><summary><b>🎯 开场热身：DeepSeek-V3 训练时，每个参数占的那 16 个字节都是什么？</b>
-  <span class="why">—— 回顾专题四那张账，三问。<u>不做也不影响这一讲</u></span></summary>
+  <span class="why">—— 第一问复习专题四，第二、三问预习这一讲。<u>不做也不影响这一讲</u></span></summary>
 <div class="qz5" id="qz5">
 <p><b>第一问</b>：按常规的混合精度 AdamW 训练，每个参数要在显存里常驻下面五样东西。各占几个字节？</p>
 <table><tr><td>权重（算的时候用的那一份）</td><td><input inputmode="numeric" data-k="2" aria-label="权重（算的时候用的那一份） 占几个字节"> 字节</td></tr><tr><td>梯度</td><td><input inputmode="numeric" data-k="2" aria-label="梯度 占几个字节"> 字节</td></tr><tr><td>主权重（优化器更新的那一份）</td><td><input inputmode="numeric" data-k="4" aria-label="主权重（优化器更新的那一份） 占几个字节"> 字节</td></tr><tr><td>一阶动量 m</td><td><input inputmode="numeric" data-k="4" aria-label="一阶动量 m 占几个字节"> 字节</td></tr><tr><td>二阶动量 v</td><td><input inputmode="numeric" data-k="4" aria-label="二阶动量 v 占几个字节"> 字节</td></tr></table>
@@ -877,20 +878,11 @@ body.figonly section h3{margin-top:34px}
 <p>2 ＋ 2 ＋ 4 ＋ 4 ＋ 4 ＝ <b>16 字节</b>。前两样是半精度（bf16），算矩阵乘用；后三样是全精度（fp32），给优化器用。
   乘上 V3 的 6,710 亿参数：<b>9.76 TiB</b>，约合一万 GB —— 这还不含激活。</p>
 </div>
-<details class="aside"><summary><b>第二问</b>：这 16 字节里哪一块最大？要是让你削，先削哪块？</summary>
-<p>后三样合起来（主权重 ＋ 两个动量）是 <b>12 字节，占四分之三</b>，统称优化器状态。
-  第二节的第一刀（ZeRO）就是从这一块削起的。</p></details>
-<details class="aside"><summary><b>第三问</b>：V3 其实没按 16 字节存。它把哪两块压成了半精度？主权重为什么不能压？</summary>
-<p>V3 把<b>两个动量</b>改用 bf16 存，报告说「没有观察到可见的性能退化」；主权重和用于累积的梯度仍留在 fp32
-  （技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.3）。这不是默认做法：常规做法里动量跟着主权重用 fp32，Megatron 要显式打开开关才用 bf16。</p>
-<p><b>主权重不能压</b>：它每一步只加进一个很小的更新，而且要一直累加下去；bf16 只有约三位有效数字，
-  小更新会在四舍五入时整个被抹掉。</p>
-<p><b>动量能不能压，要看衰减系数 β₂</b>（本课推导）：二阶动量每一步只掺进 (1 − β₂) 那么多新值。
-  V3 的 β₂ ＝ 0.95，新值每步占 5% 的份量，bf16 分辨得出来；如果用 PyTorch 默认的 0.999，新值只占 0.1%，
-  比 bf16 能分辨的最小相对差距（约 0.2%）还小 —— 除非新来的梯度跟旧值差好几倍，否则这一步的改动会被四舍五入抹掉，二阶动量就卡住了。
-  所以「动量是滑动平均，所以 bf16 扛得住」这句话只在 β₂ 不太接近 1 时成立。</p>
-<p>V3 报告里的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线：16B 和 230B 两个规模各训约一万亿 token，
-  损失相对误差一直低于 0.25%；没有单独把「动量用 bf16」拆出来做消融。</p></details>
+<p><b>预习</b>（先想一想，答案在这一讲的 <a href="#s2-2">§2.2</a> 揭晓）：</p>
+<ol start="2">
+<li><b>第二问</b>：这 16 字节里哪一块最大？要是让你削，先削哪块？</li>
+<li><b>第三问</b>：DeepSeek-V3 其实没按 16 字节存，它把其中两块压成了半精度。是哪两块？主权重为什么不能压？</li>
+</ol>
 </div>
 <script>
 (function(){
@@ -2516,7 +2508,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="570" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">只有 ZeRO-3 能降到每卡 9.76 GiB，代价是通信从 2Ψ 变成 <tspan font-weight="700">3Ψ，多一半</tspan>。　这就是 FSDP：大模型没得选，只能付这 50%。</text>
 </svg><figcaption><b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><span class="capmore"><br><em>ZeRO-3 那条短到几乎看不见：16 个字节切成 1,024 份，每份只剩 0.016。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：Rajbhandari 等，ZeRO，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 5、sec. 7。原文：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍。Ψ 为参数个数，此处按元素数计。</p>
 <p>⚠️ 每卡字节数本脚本现算并 assert；9.76 TiB 与专题四 5.1 同一口径（671e9 × 16 ÷ 1024⁴）。只算常驻，不含激活。</p></details></figure>
-  <p>16 字节里，12 个是优化器状态。ZeRO 按大小顺序一级一级削：</p>
+  <p>16 字节里，12 个是优化器状态，占四分之三 —— 这就是开场第二问的答案：最大的是它，先削它。ZeRO 按大小顺序一级一级削：</p>
   <ul>
     <li><b>ZeRO-1</b> 切优化器状态：每张卡只管 1/n 的参数，只存这 1/n 的状态。</li>
     <li><b>ZeRO-2</b> 再切梯度：每张卡只需要自己负责那 1/n 参数的梯度。</li>
@@ -2529,6 +2521,16 @@ body.figonly section h3{margin-top:34px}
   <p>中间那一步「就地更新」为什么不用通信？因为 Adam 是<b>逐个元素</b>算的：第 i 个参数的新值，只跟它自己的梯度、自己的两个动量、自己的主权重有关，
     跟别的参数一点关系都没有。所以每张卡更新自己那 1/n，跟一张卡把全部参数更新一遍，结果一模一样。
     只有一个例外：梯度裁剪要看<b>全体</b>梯度的总长度。做法是每张卡先算自己那段的平方和，再对这一个数做一次 AllReduce，量可以忽略。</p>
+<div class="note ok"><span class="t">开场第三问的答案：V3 为什么敢把两个动量压成半精度，主权重却不行</span>
+  V3 把<b>两个动量</b>改用 bf16 存，报告说「没有观察到可见的性能退化」；主权重和用于累积的梯度仍留在 fp32
+  （技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.3）。这不是默认做法：常规做法里动量跟着主权重用 fp32，Megatron 要显式打开开关才用 bf16。<br>
+  <b>主权重不能压</b>：它每一步只加进一个很小的更新，而且要一直累加下去；bf16 只有约三位有效数字，小更新会在四舍五入时整个被抹掉。<br>
+  <b>动量能不能压，要看衰减系数 β₂</b>（本课推导）：二阶动量每一步只掺进 (1 − β₂) 那么多新值。
+  V3 的 β₂ ＝ 0.95，新值每步占 5% 的份量，bf16 分辨得出来；如果用 PyTorch 默认的 0.999，新值只占 0.1%，
+  比 bf16 能分辨的最小相对差距（约 0.2%）还小 —— 除非新来的梯度跟旧值差好几倍，否则这一步的改动会被四舍五入抹掉，二阶动量就卡住了。<br>
+  <em>V3 报告里的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线：16B 和 230B 两个规模各训约一万亿 token，损失相对误差一直低于 0.25%；
+  没有单独把「动量用 bf16」拆出来做消融。</em></div>
+
 
   <h3 id="s2-3">2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。

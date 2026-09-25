@@ -128,7 +128,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 50 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 51 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -306,7 +306,7 @@ __FIG_A2A__
 
   <h3>2.2　ZeRO：按大小顺序，一级一级削</h3>
 __FIG_ZERO_MEM__
-  <p>16 字节里，12 个是优化器状态。ZeRO 按大小顺序一级一级削：</p>
+  <p>16 字节里，12 个是优化器状态，占四分之三 —— 这就是开场第二问的答案：最大的是它，先削它。ZeRO 按大小顺序一级一级削：</p>
   <ul>
     <li><b>ZeRO-1</b> 切优化器状态：每张卡只管 1/n 的参数，只存这 1/n 的状态。</li>
     <li><b>ZeRO-2</b> 再切梯度：每张卡只需要自己负责那 1/n 参数的梯度。</li>
@@ -319,6 +319,7 @@ __FIG_ZERO_MEM__
   <p>中间那一步「就地更新」为什么不用通信？因为 Adam 是<b>逐个元素</b>算的：第 i 个参数的新值，只跟它自己的梯度、自己的两个动量、自己的主权重有关，
     跟别的参数一点关系都没有。所以每张卡更新自己那 1/n，跟一张卡把全部参数更新一遍，结果一模一样。
     只有一个例外：梯度裁剪要看<b>全体</b>梯度的总长度。做法是每张卡先算自己那段的平方和，再对这一个数做一次 AllReduce，量可以忽略。</p>
+__Q3_ANSWER__
 
   <h3>2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
@@ -1053,7 +1054,7 @@ FIGS = {
 
 _html = head + HERO + BODY + FOOT
 _html = P.place_figs(_html, FIGS)
-_html = _html.replace("__QUIZ__", _QUIZ_HTML).replace("__V3_YEARS__", "%.0f" % NB.V3_ONE_CARD_YEARS)
+_html = _html.replace("__QUIZ__", _QUIZ_HTML).replace("__Q3_ANSWER__", QZ.answers_html()).replace("__V3_YEARS__", "%.0f" % NB.V3_ONE_CARD_YEARS)
 _leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
 assert not _leak, "占位符没落地：%s" % "、".join(_leak)
 for _tag in ("h2", "h3", "section", "div"):
