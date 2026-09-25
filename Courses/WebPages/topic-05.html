@@ -5173,7 +5173,47 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="804" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 每一层都要通信又藏不住，<tspan font-weight="700">必须待在 NVLink 域里</tspan>（GB300 是一整柜 72 块）；EP、FSDP 能边算边传时才敢跨出去。</text>
 <text class="svgsm" x="20" y="828" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PP 一步十几次、DP 一步一次，跨到慢线上也吃得消。TPU 上同理：切片里走 ICI，跨切片走数据中心网络。</text>
 </svg><figcaption><b>次数差三个数量级，线速差一个数量级，两边一对就是摆法。</b><span class="capmore"><br><em>次数是示意配置下的推导；带宽取 GB300 每块 GPU 的双向值。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 次数为本课推导：TP 每层前反向各 2 次 all-reduce（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> sec. 3）；FSDP 每层 3 次（ZeRO 的 3Ψ，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 7）；EP、PP、DP 按调度数出；叠上 PP 时 TP 的次数要除以 PP 段数，开重算时 TP 每层是 6 次。链路：GB300 NVLink 5 每 GPU 1.8 TB/s；A4X Max 每节点 4 块 GPU、4 × CX-8 800 Gb/s。</p></details></figure>
-  <p>先别往下看：TP、PP、DP 三个，谁该坐快线？</p>
+  <p>先别往下看：TP、PP、DP 三个，谁该坐快线？把集群想成一栋写字楼就好猜了：</p>
+<figure class="fbox fwide" id="fig-office"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="把一个集群想成一栋写字楼。最里面一圈是同一张桌子，就是最快的那圈线：一台机器、GB300 的一整柜、或者 TPU 的一个切片，TP、EP、CP 这些每一层都要说话的刀坐这里，像几个人合写一份合同，每一段都要对一遍。中间一圈是同一栋楼，走集群网络，PP 坐这里，像按章节递稿，隔几层楼也行。最外一圈是别的楼甚至别的城市，DP 坐这里，像另一个组下班前对一次账"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">说得勤的坐里圈，说得少的去外圈　——　<tspan font-weight="700">一个集群就是一栋写字楼</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一圈比一圈的线慢。由里到外的顺序，跟 Llama 3 报告里 [TP, CP, PP, DP] 的排法一样</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同一张桌：最快的那圈线</text>
+<rect x="219.48000000000002" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="240" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同一栋楼：集群网络</text>
+<rect x="407.6" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="428" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">别的楼：慢线</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">由里到外，一圈比一圈慢</tspan></text>
+<rect x="50" y="155" width="840" height="330" rx="165" fill="none" stroke="#1e8e3e" stroke-width="2.6"/>
+<rect x="170" y="208" width="600" height="224" rx="112" fill="none" stroke="#e8710a" stroke-width="2.6"/>
+<rect x="295" y="260" width="350" height="120" rx="60" fill="none" stroke="#1a73e8" stroke-width="2.6"/>
+<text class="svgsm" x="470" y="314" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张桌：TP、EP、CP</tspan></text>
+<text class="svgsm" x="470" y="340" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">合写合同，每段都对一遍</text>
+<text class="svgsm" x="470" y="234" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一栋楼：PP</tspan></text>
+<text class="svgsm" x="470" y="254" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">按章节递稿（只在段边界）</text>
+<text class="svgsm" x="470" y="182" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">别的楼、别的城市：DP</tspan></text>
+<text class="svgsm" x="470" y="202" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">下班前对一次账（一步一次）</text>
+<text class="svgsm" x="940" y="192" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一张桌是哪一圈？</tspan></text>
+<text class="svgsm" x="940" y="220" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">· 8 卡一台的机器：这一台</text>
+<text class="svgsm" x="940" y="246" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">· GB300 NVL72：一整柜 72 块卡</text>
+<text class="svgsm" x="940" y="272" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">· TPU：一个切片</text>
+<text class="svgsm" x="940" y="322" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么这么排</tspan></text>
+<text class="svgsm" x="940" y="350" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">一步里说话的次数差三个数量级，</text>
+<text class="svgsm" x="940" y="376" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">线速差一个数量级：</text>
+<text class="svgsm" x="940" y="402" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每根线上说的话，</tspan></text>
+<text class="svgsm" x="940" y="428" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">要跟它的速度配得上。</tspan></text>
+<rect x="0" y="552" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="552" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="552" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这是默认摆法，也有人故意往外挪</tspan></text>
+<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">能边算边传、藏得住的刀才敢往外挪：V3 的 EP 横跨了 8 台机器，Llama 3 把 FSDP 放在了最外层。</text>
+<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 藏不住，每一块末尾那次加总不做完下一块就没法开始，所以它几乎不出里圈。</text>
+</svg><figcaption><b>合写合同得同桌，递稿子隔层楼也行，对账可以在别的城市。</b><span class="capmore"><br><em>圈的大小不代表带宽比例，只表示由里到外越来越慢。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Llama 3 技术报告 arXiv <a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">2407.21783</a> sec. 3.3.2（并行维度由里到外 [TP, CP, PP, DP]）；V3 技术报告 sec. 3.2（EP 64 跨 8 台机器）。</p>
+<p>⚠️ 写字楼的比方为本课借喻（底子参考 CERFACS 讲并行的办公楼例子）；圈的大小不代表带宽比例。</p></details></figure>
   <p>于是有一条默认的摆法：<b>每一层都要说话的 TP、EP、FSDP、CP 先往最快的那一圈里放</b>；PP 只在段边界说话，DP 一步只说一次，它们去跨慢线。
     但光数次数不够，还要看<b>它能不能跟计算叠起来</b>。TP 叠不起来（每一块末尾那次 AllReduce 不做完，下一块就没法开始），所以必须待在快线里，度数上限就是那一圈的大小。</p>
   <p>EP 和 FSDP 能靠提前发、边算边传藏住一部分，就有人让它们跨出去：V3 的 EP 64 就横跨 8 台机器 —— H800 机内外只差 3 到 4 倍，远没有 TPU 悬殊；Llama 3 把 FSDP 放在了最外层。
@@ -5243,14 +5283,14 @@ body.figonly section h3{margin-top:34px}
   </ul></details>
 
   <h3 id="s7-4">7.4　五步怎么选</h3>
-  <p>把前面几节串起来，给一个模型挑并行方式，大致按这个顺序：</p>
+  <p>把前面几节串起来，给一个模型挑并行方式，像闯五关，每一关一个是非题：</p>
   <ol>
-    <li><b>先装得下</b>：权重和优化器状态摊不开就上 FSDP ／ ZeRO（第二节）；MoE 的专家太多就上 EP（第四节）；
+    <li><b>第 1 关　装得下吗？</b>装不下：权重和优化器状态摊不开就上 FSDP ／ ZeRO（第二节）；MoE 的专家太多就上 EP（第四节）；
       推理时 KV 放不下就上 DCP（第五节）。</li>
-    <li><b>再看快线那一圈有多大</b>：TP、EP 的度数别超过它（8 卡一台的机器就是 8，GB300 一柜是 72，TPU 看切片）。</li>
-    <li><b>再看序列多长</b>：训练长上下文加 CP，推理长 prompt 加 PCP。</li>
-    <li><b>还不够，或者必须跨很慢的线，才上 PP</b>：它只传段边界的激活，量小、频率低，能跨慢线，代价是气泡（第三节）。</li>
-    <li><b>剩下的卡全给 DP</b>：一步只通信一次，最便宜。</li>
+    <li><b>第 2 关　快线那一圈有多大？</b>TP、EP 的度数别超过它（8 卡一台的机器就是 8，GB300 一柜是 72，TPU 看切片）。</li>
+    <li><b>第 3 关　序列长吗？</b>训练长上下文加 CP，推理长 prompt 加 PCP。</li>
+    <li><b>第 4 关　还不够，或者非跨很慢的线不可？</b>这时才上 PP：它只传段边界的激活，量小、频率低，能跨慢线，代价是气泡（第三节）。</li>
+    <li><b>第 5 关　还剩卡吗？</b>全给 DP：一步只通信一次，最便宜。</li>
   </ol>
   <p>拿两个真实配置对一遍。表里「DP 4 × FSDP 128」这类写法按乘法读：两种切法各切几份，乘起来就是总共多少份。</p>
   <table>

@@ -160,9 +160,54 @@ def fig_topo():
     f.save("fig5-topo.svg", yb + 14)
 
 
+def fig_office():
+    """⭐ 2026-09-25 夜 · 蒸馏 R8：摆法讲成「写字楼里的项目组」（底子借 CERFACS 讲并行的办公楼比方），
+    嵌套的一圈圈 ＝ 一圈比一圈慢的线；由里到外的顺序跟 Llama 3 报告里 [TP, CP, PP, DP] 的排法一致。
+    ⛔ 只是摆法的默认值；例外写在落点带里（V3 的 EP 跨了机器、Llama 3 的 FSDP 在最外层）。"""
+    f = Fig(W, "把一个集群想成一栋写字楼。最里面一圈是同一张桌子，就是最快的那圈线：一台机器、GB300 的一整柜、或者 TPU 的一个切片，"
+               "TP、EP、CP 这些每一层都要说话的刀坐这里，像几个人合写一份合同，每一段都要对一遍。中间一圈是同一栋楼，走集群网络，"
+               "PP 坐这里，像按章节递稿，隔几层楼也行。最外一圈是别的楼甚至别的城市，DP 坐这里，像另一个组下班前对一次账")
+    y0 = f.header("说得勤的坐里圈，说得少的去外圈　——　<tspan font-weight=\"700\">一个集群就是一栋写字楼</tspan>",
+                  "一圈比一圈的线慢。由里到外的顺序，跟 Llama 3 报告里 [TP, CP, PP, DP] 的排法一样",
+                  [(BL, "同一张桌：最快的那圈线"), (OR, "同一栋楼：集群网络"), (GR, "别的楼：慢线")])
+    PH = 400
+    py = f.panel(0, y0, W, PH, "由里到外，一圈比一圈慢", INK)
+    cx, cy = 470, py + 188
+    rings = [(GR, 420, 165, "别的楼、别的城市：DP", "下班前对一次账（一步一次）"),
+             (OR, 300, 112, "同一栋楼：PP", "按章节递稿（只在段边界）"),
+             (BL, 175, 60, "同一张桌：TP、EP、CP", "合写合同，每段都对一遍")]
+    for col, rx, ry, lab, how in rings:
+        f.box(cx - rx, cy - ry, 2 * rx, 2 * ry, "none", col, int(ry), sw=2.6)
+    f.t(cx, cy - 6, rings[2][3], BL, True, 16, "middle")
+    f.t(cx, cy + 20, rings[2][4], BL, size=13, anchor="middle")
+    f.t(cx, cy - 86, rings[1][3], OR, True, 16, "middle")
+    f.t(cx, cy - 66, rings[1][4], OR, size=13, anchor="middle")
+    f.t(cx, cy - 138, rings[0][3], GR, True, 16, "middle")
+    f.t(cx, cy - 118, rings[0][4], GR, size=13, anchor="middle")
+    RX = 940
+    f.t(RX, py + 60, "同一张桌是哪一圈？", INK, True, 15)
+    f.t(RX, py + 88, "· 8 卡一台的机器：这一台", INK, size=14)
+    f.t(RX, py + 114, "· GB300 NVL72：一整柜 72 块卡", INK, size=14)
+    f.t(RX, py + 140, "· TPU：一个切片", INK, size=14)
+    f.t(RX, py + 190, "为什么这么排", INK, True, 15)
+    f.t(RX, py + 218, "一步里说话的次数差三个数量级，", INK, size=14)
+    f.t(RX, py + 244, "线速差一个数量级：", INK, size=14)
+    f.t(RX, py + 270, "每根线上说的话，", INK, True, 14)
+    f.t(RX, py + 296, "要跟它的速度配得上。", INK, True, 14)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "这是默认摆法，也有人故意往外挪", [
+        "能边算边传、藏得住的刀才敢往外挪：V3 的 EP 横跨了 8 台机器，Llama 3 把 FSDP 放在了最外层。",
+        "TP 藏不住，每一块末尾那次加总不做完下一块就没法开始，所以它几乎不出里圈。",
+    ])
+    yb = f.src(yb + 10, "📌 Llama 3 技术报告 arXiv 2407.21783 sec. 3.3.2（并行维度由里到外 [TP, CP, PP, DP]）；V3 技术报告 sec. 3.2（EP 64 跨 8 台机器）。",
+               "⚠️ 写字楼的比方为本课借喻（底子参考 CERFACS 讲并行的办公楼例子）；圈的大小不代表带宽比例。")
+    f.save("fig5-office.svg", yb + 14)
+
+
 fig_freq()
 fig_scale()
 fig_topo()
+fig_office()
 
 
 # ── 第八节：全景图 ───────────────────────────────────────────────────────
