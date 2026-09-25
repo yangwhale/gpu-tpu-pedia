@@ -306,8 +306,83 @@ def fig_a2a():
     f.save("fig5-a2a.svg", yb + 14)
 
 
+# ── fig-ar-two-ways：同一个 AllReduce 的两种拼法（2026-09-25 夜 · 蒸馏 R2） ─────────────
+# ⭐ 讲法借自 NCCL 文档：AllReduce 既能拼成 Reduce ＋ Broadcast，也能拼成 ReduceScatter ＋ AllGather。
+#   等式的「啊哈」不在「它成立」，在「它是赢家」：两种拼法并排，一种班长累死，一种人人平摊。
+# ⛔ 数字现算：朴素班长做法里卡 0 收 n−1 份、发 n−1 份（S ＝ 一整份数据）；环上每张卡 RS 发 (n−1)/n、AG 再发 (n−1)/n。
+def star_send(n):
+    return n - 1
+
+
+def ring_send(n):
+    return 2 * (n - 1) / n
+
+
+assert ring_send(4) == 1.5 and star_send(4) == 3
+assert [round(ring_send(n), 3) for n in (2, 4, 8, 1000)] == [1.0, 1.5, 1.75, 1.998]
+
+
+def fig_ar_two_ways():
+    from topic03_draw import RD as _RD
+    f = Fig(W, "同一个 AllReduce 的两种拼法。左边是最朴素的班长做法：先归约到卡 0，再从卡 0 广播回去，卡 0 要发 3 份，别人各发 1 份。"
+               "中间是环上的拼法：先 ReduceScatter 再 AllGather，四张卡每张都只发 1.5 份。"
+               "右边把卡数加上去：班长那条线要发的份数跟卡数一起涨，n 减 1；环上每张卡发 2 乘 n 减 1 除以 n，永远不到 2 份")
+    y0 = f.header("同一个 AllReduce，两种拼法　——　<tspan font-weight=\"700\">班长累死，还是人人平摊</tspan>",
+                  "S ＝ 一整份数据。条长 ＝ 这张卡一共要发出去多少份（最朴素的班长做法，不排链）",
+                  [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3")])
+    PH = 330
+    CW3 = 430
+    # 左：Reduce ＋ Broadcast
+    py = f.panel(0, y0, CW3, PH, "拼法一：Reduce ＋ Broadcast（班长）", _RD)
+    sc = 80
+    for k in range(4):
+        v = 3 if k == 0 else 1
+        yy = py + 40 + k * 52
+        f.t(20, yy + 22, "卡 %d" % k, (BL, OR, GR, PU)[k], True, 14)
+        f.box(80, yy, v * sc, 32, (BL, OR, GR, PU)[k], (BL, OR, GR, PU)[k], 3)
+        f.t(80 + v * sc + 10, yy + 22, "%d 份" % v, INK, True, 14)
+    f.t(20, py + PH - 46, "卡 0 那一条线扛下全部，卡越多越堵", _RD, True, 14)
+    f._pan = None
+    # 中：RS ＋ AG
+    px = CW3 + 25
+    py2 = f.panel(px, y0, CW3, PH, "拼法二：ReduceScatter ＋ AllGather（环）", GR)
+    for k in range(4):
+        yy = py2 + 40 + k * 52
+        c = (BL, OR, GR, PU)[k]
+        f.t(px + 20, yy + 22, "卡 %d" % k, c, True, 14)
+        f.box(px + 80, yy, 0.75 * sc, 32, c, c, 3)
+        f.box(px + 80 + 0.75 * sc + 2, yy, 0.75 * sc, 32, "none", c, 3, sw=2)
+        f.t(px + 80 + 1.5 * sc + 12, yy + 22, "1.5 份", INK, True, 14)
+    f.t(px + 20, py2 + PH - 70, "实心 ＝ RS 那 3 步，空心 ＝ AG 那 3 步，各 3/4 份", GY, size=13)
+    f.t(px + 20, py2 + PH - 46, "人人一样忙，所有的线同时在用", GR, True, 14)
+    f._pan = None
+    # 右：卡数加上去
+    px3 = 2 * (CW3 + 25)
+    RW = W - px3
+    py3 = f.panel(px3, y0, RW, PH, "卡再多，也发不满两份", BL)
+    NS = (2, 4, 8, 1000)
+    f.t(px3 + 20, py3 + 34, "卡数 n", GY, True, 13)
+    f.t(px3 + 110, py3 + 34, "班长：n − 1", _RD, True, 13)
+    f.t(px3 + 260, py3 + 34, "环：2(n−1)/n", GR, True, 13)
+    for i, n in enumerate(NS):
+        yy = py3 + 70 + i * 46
+        f.t(px3 + 20, yy, "{:,}".format(n), INK, True, 15)
+        f.t(px3 + 110, yy, "{:,}".format(star_send(n)), _RD, True, 15)
+        f.t(px3 + 260, yy, ("%.3f" % ring_send(n)).rstrip("0").rstrip("."), GR, True, 15)
+    f.t(px3 + 20, py3 + PH - 46, "公式里的 −1：自己那块不用寄给自己", GY, size=13)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "所以通信库几乎都选拼法二", [
+        "两种拼法算出来的结果一模一样，差的只是谁在干活：拼法一压在卡 0 一个人身上，拼法二摊给所有人。",
+        "而拼法二的两半，就是 ReduceScatter 和 AllGather —— 后面几刀白捡的便宜，全从这个拆法里来。",
+    ])
+    yb = f.src(yb + 10, "📌 两种拼法：NVIDIA NCCL 文档 Collective Operations（AllReduce ＝ Reduce ＋ Broadcast ＝ ReduceScatter ＋ AllGather）。",
+               "⚠️ 本课推导：朴素班长做法卡 0 发 n−1 份；环上每卡发 2(n−1)/n 份。通信库实际会给班长做法排链或走树，这里只比最朴素的两种。")
+    f.save("fig5-ar-two-ways.svg", yb + 14)
+
+
 fig_1n()
 fig_nn()
 fig_split()
 fig_ring()
 fig_a2a()
+fig_ar_two_ways()

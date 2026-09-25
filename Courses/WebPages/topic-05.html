@@ -2449,8 +2449,88 @@ body.figonly section h3{margin-top:34px}
        aria-label="环形 AllReduce 动画。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。卡名之间有往右的箭头，卡片下面一条虚线车道表示卡 3 绕回卡 0。字幕依次是：ReduceScatter，每一步人人同时往右发一块，收到的加到自己那块上；第 1、2、3 步各自写明 0→1、1→2、2→3、卡 3 从右边绕回卡 0，落地后写「第几步完成：粗框那块又多加进了一个人」并停住。三步之后每张卡恰好握着一块完整总和，其余中间结果淡出。接着 AllGather，把总和往右再传三步，只替换不相加。最后人人一份总和，画面复位。"></video>
 <figcaption>同一个环转两圈：前三步<b>加</b>（ReduceScatter），后三步<b>拼</b>（AllGather），合起来就是一次 AllReduce。卡 3 发出的那块从右边出去、绕回卡 0。
   <span class="sub">（41 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环。）</span></figure>
-  <p>ReduceScatter 转 n−1 步、AllGather 再转 n−1 步；每一步每张卡只发 1/n 份，所以一共发出 2(n−1)/n 份数据。
-    卡再多也不到两整份，每个人的负担不随卡数涨，而且每一步所有的线同时都在用。</p>
+  <p>这个环，其实就是把 AllReduce 拼成了 ReduceScatter ＋ AllGather。换一种拼法比一比，就知道它为什么赢：</p>
+<figure class="fbox fwide" id="fig-ar-two-ways"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="同一个 AllReduce 的两种拼法。左边是最朴素的班长做法：先归约到卡 0，再从卡 0 广播回去，卡 0 要发 3 份，别人各发 1 份。中间是环上的拼法：先 ReduceScatter 再 AllGather，四张卡每张都只发 1.5 份。右边把卡数加上去：班长那条线要发的份数跟卡数一起涨，n 减 1；环上每张卡发 2 乘 n 减 1 除以 n，永远不到 2 份"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一个 AllReduce，两种拼法　——　<tspan font-weight="700">班长累死，还是人人平摊</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">S ＝ 一整份数据。条长 ＝ 这张卡一共要发出去多少份（最朴素的班长做法，不排链）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0</text>
+<rect x="79.48" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="100" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 1</text>
+<rect x="158.96" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="179" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 2</text>
+<rect x="238.44" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="259" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 3</text>
+<rect x="0" y="102" width="430" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="430" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="430" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼法一：Reduce ＋ Broadcast（班长）</tspan></text>
+<text class="svgsm" x="20" y="194" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<rect x="80" y="172" width="240" height="32" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="330" y="194" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3 份</tspan></text>
+<text class="svgsm" x="20" y="246" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<rect x="80" y="224" width="80" height="32" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="170" y="246" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 份</tspan></text>
+<text class="svgsm" x="20" y="298" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<rect x="80" y="276" width="80" height="32" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="170" y="298" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 份</tspan></text>
+<text class="svgsm" x="20" y="350" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<rect x="80" y="328" width="80" height="32" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="170" y="350" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 份</tspan></text>
+<text class="svgsm" x="20" y="416" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0 那一条线扛下全部，卡越多越堵</tspan></text>
+<rect x="455" y="102" width="430" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="455" y="102" width="430" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="455" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="455" y1="132" x2="885" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="469" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼法二：ReduceScatter ＋ AllGather（环）</tspan></text>
+<text class="svgsm" x="475" y="194" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<rect x="535" y="172" width="60.0" height="32" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="597.0" y="172" width="60.0" height="32" rx="3" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="667" y="194" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.5 份</tspan></text>
+<text class="svgsm" x="475" y="246" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<rect x="535" y="224" width="60.0" height="32" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="597.0" y="224" width="60.0" height="32" rx="3" fill="none" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="667" y="246" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.5 份</tspan></text>
+<text class="svgsm" x="475" y="298" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<rect x="535" y="276" width="60.0" height="32" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="597.0" y="276" width="60.0" height="32" rx="3" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="667" y="298" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.5 份</tspan></text>
+<text class="svgsm" x="475" y="350" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<rect x="535" y="328" width="60.0" height="32" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="597.0" y="328" width="60.0" height="32" rx="3" fill="none" stroke="#9334e6" stroke-width="2"/>
+<text class="svgsm" x="667" y="350" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.5 份</tspan></text>
+<text class="svgsm" x="475" y="392" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">实心 ＝ RS 那 3 步，空心 ＝ AG 那 3 步，各 3/4 份</text>
+<text class="svgsm" x="475" y="416" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">人人一样忙，所有的线同时在用</tspan></text>
+<rect x="910" y="102" width="490" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="910" y="102" width="490" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="910" y="104" width="490" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="910" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="924" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡再多，也发不满两份</tspan></text>
+<text class="svgsm" x="930" y="166" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡数 n</tspan></text>
+<text class="svgsm" x="1020" y="166" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">班长：n − 1</tspan></text>
+<text class="svgsm" x="1170" y="166" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">环：2(n−1)/n</tspan></text>
+<text class="svgsm" x="930" y="202" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="1020" y="202" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="1170" y="202" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="930" y="248" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="1020" y="248" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="1170" y="248" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.5</tspan></text>
+<text class="svgsm" x="930" y="294" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<text class="svgsm" x="1020" y="294" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="1170" y="294" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.75</tspan></text>
+<text class="svgsm" x="930" y="340" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,000</tspan></text>
+<text class="svgsm" x="1020" y="340" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">999</tspan></text>
+<text class="svgsm" x="1170" y="340" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.998</tspan></text>
+<text class="svgsm" x="930" y="416" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">公式里的 −1：自己那块不用寄给自己</text>
+<rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以通信库几乎都选拼法二</tspan></text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">两种拼法算出来的结果一模一样，差的只是谁在干活：拼法一压在卡 0 一个人身上，拼法二摊给所有人。</text>
+<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">而拼法二的两半，就是 ReduceScatter 和 AllGather —— 后面几刀白捡的便宜，全从这个拆法里来。</text>
+</svg><figcaption><b>结果一样，差的是谁在干活。</b><span class="capmore"><br><em>右边那张小表：班长那列跟着卡数涨，环那列永远不到 2。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 两种拼法：NVIDIA NCCL 文档 Collective Operations（AllReduce ＝ Reduce ＋ Broadcast ＝ ReduceScatter ＋ AllGather）。</p>
+<p>⚠️ 本课推导：朴素班长做法卡 0 发 n−1 份；环上每卡发 2(n−1)/n 份。通信库实际会给班长做法排链或走树，这里只比最朴素的两种。</p></details></figure>
   <p>代价是步数跟着卡数涨：数据小时比的是一步步的等待，环反而吃亏，所以通信库会按数据大小自己挑算法。</p>
   <details class="foldfig"><summary><b>细一点</b>：环形和树形怎么挑、NVSwitch 在交换机里做加法、TPU 的环面</summary>
   <p>数据很大时比的是带宽，环几乎是最优的；数据很小时比的是一步一步的等待，步数多反而吃亏。
@@ -2610,7 +2690,7 @@ body.figonly section h3{margin-top:34px}
        aria-label="AllToAll 动画。四张卡，每张卡分「寄出」「收到」两列；块的名字是谁出的加要寄给谁，A1 是卡 0 出的、要寄给卡 1，颜色表示出自哪张卡。先把自己留给自己的四块挪到右列，不走网络。第 1 步人人寄给右边第 1 个人，第 2 步直接寄给右边第 2 个人，第 3 步寄给右边第 3 个人，到头的从右边出去、沿卡片下面的车道绕回来；每一步落地后停住。三步之后卡 j 的右列收齐了四个人寄给它的那一份。字幕提示专家算完还要原路寄回一次，MoE 每层两次 AllToAll。最后画面复位。"></video>
 <figcaption>三步寄完：第 s 步人人直接寄给右边第 s 个人，到头的绕回来；专家算完还要原路寄回一次。
   <span class="sub">（24 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环。）</span></figure>
-  <p>网络最怕它：排不成环，任意两张卡之间都有东西要走，拼的是整个网络的横截面有多宽；而且每份多大，要等模型算到这一层才知道。
+  <p>网络最怕它：每一份都是写给某一个人的私信，路上没法像 AllReduce 那样边走边合并；排不成只跟邻居说话的环，任意两张卡之间都有东西要走，拼的是整个网络的横截面有多宽；而且每份多大，要等模型算到这一层才知道。
     专家并行（第四节）、Ulysses（第五节）都用它。</p>
 
   <h3 id="s1-7">1.7　一张表收住</h3>
