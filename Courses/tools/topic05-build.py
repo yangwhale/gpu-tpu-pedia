@@ -592,9 +592,9 @@ __FIG_FREQ__
   <p>同样 8 张卡、同样 TP4 × DP2，只改 TP 组放在哪。下面的时间是示意：快线传一次 1 格，慢线 9 格。</p>
 <figure class="fbox fwide" id="anim-meshmap">
 <video src="media/topic05-meshmap.mp4" autoplay loop muted playsinline
-       aria-label="TP 组摆放动画。标题：同样 8 张卡、TP4 × DP2：TP 组摆在哪，差好几倍。两台机器各 4 张卡，中间一条虚线标着「慢线：机器之间」。字幕一：摆法一：一个 TP 组就在一台机器里，DP 才过慢线。机器 0 的 4 张卡涂蓝、机器 1 的涂橙，白点在机器内沿环传 8 轮，最后绿点过慢线一次，左下角计时：摆法一：这一步用了 17 格。字幕二：摆法二：TP 组横跨两台机器，每一轮都要过慢线。每台机器上下两排分属两个组，白点每一轮都要穿过慢线，右下角计时一格一格跳到 73 格，标红。字幕三：17 格对 73 格：同样的卡，慢 4.3 倍（示意）。最后复位。"></video>
-<figcaption>一轮通信要等最慢的那一段传完，所以摆法二每一轮都按慢线算。
-  <span class="sub">（15 秒无声循环，Manim 渲染。一步 8 轮 TP、1 次 DP，快慢 1 : 9 是示意。）</span></figcaption></figure>
+       aria-label="TP 组摆在哪的动画。两台机器各 4 张卡，中间一条虚线是机器之间的慢线。摆法一：机器 0 的 4 张卡是蓝色 TP 组、机器 1 的是橙色 TP 组，每组的环画成同色箭头。第 1 轮 TP，每组沿自己的环传一格，全在机器里，快线 1 格，停住；后面 7 轮一模一样，快进；最后 1 次 DP，两个组里对应的卡交换梯度，要过慢线，9 格，停住，一共 17 格。摆法二：上排 4 张卡是蓝组、下排 4 张是橙组，环横跨两台机器，过慢线的两段画成红箭头，其中一段从机器上方或下方绕回。第 1 轮 TP 要等最慢的那段，9 格，停住；后 7 轮快进；DP 那一对在同一台机器里，1 格，一共 73 格。最后字幕：17 格对 73 格，同样的卡，慢 4.3 倍（示意）。画面复位。"></video>
+<figcaption>一轮通信要等最慢的那一段传完，所以摆法二每一轮都按慢线算。红箭头就是过慢线的那几段。
+  <span class="sub">（15 秒无声循环，Manim 渲染。一步 8 轮 TP、1 次 DP，快慢 1 : 9 是示意。）</span></figure>
   <p>同一个颜色就是一个 TP 组；摆法二里上排、下排各是一组。一步是 8 轮 TP 加 1 次 DP：摆法一 8 × 1 ＋ 9 ＝ 17 格，摆法二 8 × 9 ＋ 1 ＝ 73 格（DP 那一对卡在同一台机器里，只花 1 格）。</p>
   <p>放到真实集群上，这就是为什么 TP 一般不出一台 8 卡机器。GB300 把 NVLink 域扩到一整柜，
     专家并行才敢往大了开（TP 受头数和矩阵效率限制，在整柜上也很少超过 8 或 16）：<b>快线那一圈画多大，这几刀就能切多深。</b></p>
@@ -1061,7 +1061,8 @@ for _n, _svg in _NUM_LOCK:
 STEP_VIDEOS = {"topic05-ring.mp4": "Ring", "topic05-allreduce.mp4": "AllReduce",
                "topic05-reducescatter.mp4": "ReduceScatter", "topic05-allgather.mp4": "AllGather",
                "topic05-a2a.mp4": "AllToAll", "topic05-broadcast.mp4": "Broadcast",
-               "topic05-scatter.mp4": "Scatter", "topic05-gather.mp4": "Gather", "topic05-reduce.mp4": "Reduce"}
+               "topic05-scatter.mp4": "Scatter", "topic05-gather.mp4": "Gather", "topic05-reduce.mp4": "Reduce",
+               "topic05-meshmap.mp4": "MeshMap"}
 
 
 def _steps(mp4):

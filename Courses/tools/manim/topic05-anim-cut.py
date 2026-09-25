@@ -518,8 +518,18 @@ assert (MAP_A, MAP_B) == (17, 73) and round(MAP_B / MAP_A, 1) == 4.3
 
 
 class MeshMap(Scene):
+    """⭐⭐ 2026-09-25 按「一步一步来、停一下再跳」重做（原话见 topic05-anim-coll.py 头注）：
+      原来格数 ∝ 动画时长，摆法一 8 轮 TP 一共只演了 0.8 秒，根本看不见；消息点全是白的，看不出谁传给谁。
+      现在：每个 TP 组的环画成同色箭头，过慢线的那几段标红；第 1 轮慢放并停住，
+      后 7 轮快进（计数照加）；DP 那一次单独停住。停顿时刻写 steps/MeshMap.json，课件播放器据此自动暂停。"""
     def construct(self):
-        from manim import Dot, Line, RoundedRectangle, DashedLine
+        import json, os
+        from manim import Dot, RoundedRectangle, DashedLine, RED, CurvedArrow, ArcBetweenPoints, MoveAlongPath, PI
+        marks = []
+
+        def hold(t=2.0):
+            marks.append(round(self.renderer.time + 0.3, 2))
+            self.wait(t)
         title = cap_text("同样 8 张卡、TP4 × DP2：TP 组摆在哪，差好几倍", size=30).to_edge(UP)
         self.add(title)
         NX = [-3.3, 3.3]
@@ -527,11 +537,10 @@ class MeshMap(Scene):
         for n, x in enumerate(NX):
             base.add(RoundedRectangle(width=4.2, height=3.0, corner_radius=0.2, stroke_color=GREY_B,
                                       stroke_width=2).move_to([x, -0.4, 0]))
-            base.add(Text("机器 %d" % n, font_size=22, color=GREY_B).move_to([x, 1.4, 0]))
+            base.add(Text("机器 %d" % n, font_size=22, color=GREY_B).move_to([x, 1.85, 0]))
         link = DashedLine([-1.2, -0.4, 0], [1.2, -0.4, 0], color=GREY_B, stroke_width=3)
         base.add(link, Text("慢线：机器之间", font_size=18, color=GREY_B).move_to([0, -0.05, 0]))
         self.add(base)
-        # 每台机器 2 × 2 张卡：卡号 0–3 在机器 0，4–7 在机器 1
         POS = []
         for n, x in enumerate(NX):
             for r in range(2):
@@ -550,7 +559,6 @@ class MeshMap(Scene):
             self.play(FadeOut(sub), FadeIn(n), run_time=0.35)
             sub = n
 
-        TICK = 0.05
         clock = [None]
         kept = []
 
@@ -561,57 +569,104 @@ class MeshMap(Scene):
             self.add(t)
             clock[0] = t
 
-        def run(groups, cross_tp, x, lab):
-            # groups：两个 TP 组各自的 4 张卡；一轮 TP ＝ 组内沿环传一格
-            used = 0
-            show_clock(0, x, lab)
-            for _ in range(MAP_TP):
-                dots, anims = [], []
-                for g, col in zip(groups, (BLUE, ORANGE)):
-                    for k in range(4):
-                        a, b = POS[g[k]], POS[g[(k + 1) % 4]]
-                        d = Dot(a, radius=0.11, color=WHITE)
-                        dots.append(d)
-                        anims.append(d.animate.move_to(b))
-                cost = MAP_SLOW if cross_tp else MAP_FAST
-                self.add(*dots)
-                self.play(*anims, run_time=cost * TICK * 2)
-                self.remove(*dots)
-                used += cost
-                show_clock(used, x, lab)
-            # DP：两个组里对应的卡把梯度对一下
-            cost = MAP_FAST if cross_tp else MAP_SLOW
-            dots = [Dot(POS[groups[0][k]], radius=0.11, color=GREEN) for k in range(4)]
+        def machine(i):
+            return 0 if i < 4 else 1
+
+        def is_return(grp, k):
+            """环的最后一段（第 4 张 → 第 1 张）跨机器时，走机器外面的弧线绕回来，不横穿画面。"""
+            a, b = grp[k], grp[(k + 1) % 4]
+            return k == 3 and machine(a) != machine(b)
+
+        def arc_ends(grp, gi, k):
+            a, b = grp[k], grp[(k + 1) % 4]
+            dy = 0.42 if gi == 0 else -0.42
+            return [POS[a][0], POS[a][1] + dy, 0], [POS[b][0], POS[b][1] + dy, 0], (PI / 4 if gi == 0 else -PI / 4)
+
+        def ring(groups):
+            g = VGroup()
+            for gi, (grp, col) in enumerate(zip(groups, (BLUE, ORANGE))):
+                for k in range(4):
+                    a, b = grp[k], grp[(k + 1) % 4]
+                    cross = machine(a) != machine(b)
+                    if is_return(grp, k):
+                        p0, p1, ang = arc_ends(grp, gi, k)
+                        g.add(CurvedArrow(p0, p1, angle=ang, color=RED, stroke_width=5))
+                    else:
+                        g.add(Arrow(POS[a], POS[b], buff=0.5, color=RED if cross else col,
+                                    stroke_width=5 if cross else 3, max_tip_length_to_length_ratio=0.15))
+            return g
+
+        def tp_round(groups, cross_tp, run_time):
+            dots, anims = [], []
+            for gi, (grp, col) in enumerate(zip(groups, (BLUE, ORANGE))):
+                for k in range(4):
+                    a, b = grp[k], grp[(k + 1) % 4]
+                    d = Dot(POS[a], radius=0.12, color=RED if machine(a) != machine(b) else WHITE)
+                    dots.append(d)
+                    if is_return(grp, k):
+                        p0, p1, ang = arc_ends(grp, gi, k)
+                        d.move_to(p0)
+                        anims.append(MoveAlongPath(d, ArcBetweenPoints(p0, p1, angle=ang)))
+                    else:
+                        anims.append(d.animate.move_to(POS[b]))
             self.add(*dots)
-            self.play(*[d.animate.move_to(POS[groups[1][k]]) for k, d in enumerate(dots)], run_time=cost * TICK * 2)
+            self.play(*anims, run_time=run_time)
+            self.remove(*dots)
+            return MAP_SLOW if cross_tp else MAP_FAST
+
+        def dp(groups, cross_tp, x, lab, used):
+            cost = MAP_FAST if cross_tp else MAP_SLOW
+            say("最后 1 次 DP：两个组里对应的卡交换梯度，%s：%d 格" % ("这一对在同一台机器里" if cross_tp else "要过慢线", cost))
+            dots = [Dot(POS[groups[0][k]], radius=0.12, color=GREEN) for k in range(4)] + \
+                   [Dot(POS[groups[1][k]], radius=0.12, color=GREEN) for k in range(4)]
+            self.add(*dots)
+            self.play(*[d.animate.move_to(POS[groups[1][k]]) for k, d in enumerate(dots[:4])],
+                      *[d.animate.move_to(POS[groups[0][k]]) for k, d in enumerate(dots[4:])], run_time=1.4)
             self.remove(*dots)
             used += cost
             show_clock(used, x, lab, GREEN if used == MAP_A else RED)
-            kept.append(clock[0])
-            clock[0] = None
+            hold()
             return used
 
-        def paint(groups):
+        def run(groups, cross_tp, x, lab, first_msg):
+            arrows = ring(groups)
             self.play(*[cards[i].animate.set_fill(col, opacity=0.9)
-                        for g, col in zip(groups, (BLUE, ORANGE)) for i in g], run_time=0.4)
+                        for g, col in zip(groups, (BLUE, ORANGE)) for i in g], FadeIn(arrows), run_time=0.6)
+            show_clock(0, x, lab)
+            say(first_msg)
+            used = tp_round(groups, cross_tp, 1.6)
+            show_clock(used, x, lab)
+            say("第 1 轮完成：%d 格" % used, YELLOW)
+            hold()
+            say("后面 7 轮一模一样，快进")
+            for _ in range(MAP_TP - 1):
+                used += tp_round(groups, cross_tp, 0.35)
+                show_clock(used, x, lab)
+            used = dp(groups, cross_tp, x, lab, used)
+            kept.append(clock[0])
+            clock[0] = None
+            self.play(FadeOut(arrows), run_time=0.4)
+            return used
 
-        say("摆法一：一个 TP 组就在一台机器里，DP 才过慢线")
+        say("摆法一：一个 TP 组就在一台机器里")
         GA = [[0, 1, 3, 2], [4, 5, 7, 6]]
-        paint(GA)
-        a = run(GA, False, -3.3, "摆法一")
-        self.wait(0.8)
-        say("摆法二：TP 组横跨两台机器，每一轮都要过慢线")
-        GB = [[0, 1, 5, 4], [2, 3, 7, 6]]
-        paint(GB)
-        b = run(GB, True, 3.3, "摆法二")
+        a = run(GA, False, -3.3, "摆法一", "第 1 轮 TP：每组沿自己的环传一格，全在机器里，快线 1 格")
+        say("摆法二：TP 组横跨两台机器（红箭头是过慢线的那几段）")
+        GB = [[0, 1, 4, 5], [2, 3, 6, 7]]      # 1→4 贴着缝过去，5→0 从机器上方绕回（下排从下方）
+        self.wait(0.6)
+        b = run(GB, True, 3.3, "摆法二", "第 1 轮 TP：环上有两段过慢线，这一轮要等最慢的那段：9 格")
         assert (a, b) == (MAP_A, MAP_B)
         say("%d 格对 %d 格：同样的卡，慢 %.1f 倍（示意）" % (MAP_A, MAP_B, MAP_B / MAP_A), GREEN)
-        self.wait(1.6)
+        hold(2.2)
         self.play(FadeOut(sub), *[FadeOut(k) for k in kept],
                   *[c.animate.set_fill(GREY_D_, opacity=1) for c in cards], run_time=0.6)
         self.remove(sub, *kept)
         self.add(cap_text(" ", GREY_B, 24).next_to(title, DOWN, buff=0.2))
         self.wait(0.6)
+        d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "steps")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "MeshMap.json"), "w") as fh:
+            json.dump({"pauses": marks, "duration": round(self.renderer.time, 2)}, fh)
 
 
 # ── FSDP 一步 ───────────────────────────────────────────────────────────
