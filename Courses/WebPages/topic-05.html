@@ -849,7 +849,7 @@ body.figonly section h3{margin-top:34px}
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 55 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 56 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -4281,7 +4281,51 @@ body.figonly section h3{margin-top:34px}
     <b>decode</b> 每一步只出一个 token，却要把全部权重和 KV 从显存里读一遍，吃的是带宽。</p>
   <p>它们挤在同一批卡上时，引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
     这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
-  <p>decode 还有个脾气：它每一步都要把权重读一遍，靠把很多请求拼成一大批来摊薄这笔成本，batch 越大越划算。后面 DEP、AFD、Wide-EP 这些做法，说到底都是在想办法把 decode 的 batch 做大。</p>
+  <p>decode 还有个脾气：每一步都要把权重从显存读一遍，读一次只够这一批用一次。一批要多大才不白读？</p>
+<figure class="fbox fwide" id="fig-decode-ai"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="decode 每一步都要把权重从显存读一遍。一批里有 b 个请求一起出字时，读一个字节的权重换来 b 次计算。TPU v7 每秒能算 2307 万亿次、每秒能从显存读约 7.4 万亿字节，一除约 313：一批不到约 313 个请求，卡就在等显存。MoE 更难：每个专家平均只分到这一批的三十二分之一，要一批约一万个请求，每个专家才吃得饱"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">decode 为什么非要把一批做大　——　<tspan font-weight="700">读一遍权重，只够这一批用一次</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴：一步里一起出字的请求数 b（对数刻度）。纵轴：从显存读 1 字节权重，换来多少次计算（ 推导，只算读权重）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密层：＝ b</text>
+<rect x="143.32" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="164" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">MoE 的一个专家：＝ b ÷ 32（V3 挑 8／256）</text>
+<rect x="539.76" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7 显存线 ≈ 313</text>
+<path d="M 150.00 182.98 L 1130.00 182.98 L 1130.00 482.00 L 150.00 482.00 Z" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<rect x="150" y="122" width="980" height="360" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="150" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">1</text>
+<text class="svgsm" x="290" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">4</text>
+<text class="svgsm" x="430" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">16</text>
+<text class="svgsm" x="570" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">64</text>
+<text class="svgsm" x="710" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">256</text>
+<text class="svgsm" x="850" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">1,024</text>
+<text class="svgsm" x="990" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">4,096</text>
+<text class="svgsm" x="1130" y="504" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">16,384</text>
+<text class="svgsm" x="640" y="528" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步里一起出字的请求数 b</tspan></text>
+<text class="svgsm" x="140" y="464" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">1/16</text>
+<text class="svgsm" x="140" y="374" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">1</text>
+<text class="svgsm" x="140" y="284" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">16</text>
+<text class="svgsm" x="140" y="194" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">256</text>
+<path d="M150.0,369.5 L920.0,122.0" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
+<path d="M150.0,482.0 L1130.0,167.0" fill="none" stroke="#e8710a" stroke-width="3" stroke-linecap="round"/>
+<path d="M150.0,183.0 L1130.0,183.0" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
+<text class="svgsm" x="1140" y="187" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">显存线 ≈ 313</tspan></text>
+<circle cx="730.3" cy="183.0" r="7" fill="#1a73e8"/>
+<path d="M730.3,183.0 L730.3,482.0" fill="none" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4,3"/>
+<text class="svgsm" x="718" y="168" fill="#174ea6" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密：b ≈ 313 才吃饱</tspan></text>
+<circle cx="1080.3" cy="183.0" r="7" fill="#e8710a"/>
+<path d="M1080.3,183.0 L1080.3,482.0" fill="none" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4,3"/>
+<text class="svgsm" x="1068" y="168" fill="#b06000" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE：b ≈ 10,000 才吃饱</tspan></text>
+<text class="svgsm" x="170" y="152" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">线上：卡算得过来</tspan></text>
+<text class="svgsm" x="689" y="452" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">线下：卡在等显存把权重读出来</tspan></text>
+<rect x="0" y="552" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="552" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="552" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以 decode 的各种做法，都在凑一个大 batch</tspan></text>
+<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PD 分离让 decode 机器只管出字，一批能攒得更大；DEP 让 attention 各管各的请求，专家那边收齐所有卡的 token。</text>
+<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">Wide-EP 把专家铺到更多卡上、每张卡只放几个，AFD 干脆让一组专家机器同时接好几组 attention 机器的 token。</text>
+</svg><figcaption><b>蓝线看一批有多少请求，橙线还要再除以 32。</b><span class="capmore"><br><em>跟第三节那张「搬一个字节换多少计算」是同一把尺子，只是这回搬的是显存。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导：稠密层一步读 2P 字节（bf16）、算 2Pb 次，每字节 ＝ b；MoE 每个专家平均分到 b × 8 ÷ 256 个 token。只算读权重，读 KV 会让门槛更高。</p>
+<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；HBM 每 TensorCore 3,433 GiB/s、每芯片两个（wiki entities/tpu-v7）。V3 的 8／256 取自 config.json。</p></details></figure>
 <figure class="fbox fwide" id="fig-pd"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="为什么要把 prefill 和 decode 分开。上面是放在同一批卡上：大家都在一步一步 decode，突然来了一个长 prompt，它的 prefill 要占好几步的时间，这几步里所有人的 decode 都停住了，出字速度掉下去。下面是分开：prefill 机器专门吞 prompt，算完把 KV cache 传给 decode 机器；decode 机器一直稳定地出字，代价是多了一趟 KV 传输。按我们 TPU v7x 那套的带宽估算，这一趟约 100 毫秒，占一次 prefill 的百分之五到十"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第五刀：把两种活拆到两批机器上　——　<tspan font-weight="700">decode 不再被 prefill 卡住</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意时间线（不是实测时序）。每格是一步；绿色的 decode 一格一格往外出字，橙色是一次长 prompt 的 prefill</text>

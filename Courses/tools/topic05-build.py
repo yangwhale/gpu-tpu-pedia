@@ -129,7 +129,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 55 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 56 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -511,7 +511,8 @@ __FIG_KV_DUP__
     <b>decode</b> 每一步只出一个 token，却要把全部权重和 KV 从显存里读一遍，吃的是带宽。</p>
   <p>它们挤在同一批卡上时，引擎每一步都要决定先干哪个。长 prompt 一来，它的 prefill 要占好几步，
     这几步里<b>所有正在出字的请求都得等</b>：新请求的首字延迟（TTFT）和老请求的出字间隔（TPOT）一起变差。</p>
-  <p>decode 还有个脾气：它每一步都要把权重读一遍，靠把很多请求拼成一大批来摊薄这笔成本，batch 越大越划算。后面 DEP、AFD、Wide-EP 这些做法，说到底都是在想办法把 decode 的 batch 做大。</p>
+  <p>decode 还有个脾气：每一步都要把权重从显存读一遍，读一次只够这一批用一次。一批要多大才不白读？</p>
+__FIG_DECODE_AI__
 __FIG_PD__
 <figure class="fbox fwide" id="anim-pd">
 <video src="media/topic05-pd.mp4" autoplay loop muted playsinline
@@ -980,6 +981,9 @@ FIGS = {
     "__FIG_PD__": ("fig-pd", "fig5-pd.svg", "topic05-fig-pd.py",
         '<b>上面那条被截走的几格，就是拆开要换回来的东西。</b><br>'
         '<em>下面那条多用了一批 prefill 机器，比的不是谁出字多，是出字断不断。时间线是示意；100 ms 是按我们 v7x 那套的带宽估算的。</em>'),
+    "__FIG_DECODE_AI__": ("fig-decode-ai", "fig5-decode-ai.svg", "topic05-fig-pd.py",
+        '<b>蓝线看一批有多少请求，橙线还要再除以 32。</b><br>'
+        '<em>跟第三节那张「搬一个字节换多少计算」是同一把尺子，只是这回搬的是显存。</em>'),
     "__FIG_AFD__": ("fig-afd", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>拆开的不是张量，是一层里的两种活。</b><br>'
         '<em>机器数和格子都是示意。</em>'),

@@ -115,5 +115,67 @@ def fig_afd():
     f.save("fig5-afd.svg", yb + 14)
 
 
+# ── fig-decode-ai：decode 为什么非要把一批做大（2026-09-25 现场讲课补） ─────────────
+import math
+C_V7 = 2307e12                            # v7 每芯片 bf16 FLOP/s（同 topic05-fig-tp.py）
+HBM_V7 = 2 * 3433 * 2 ** 30               # v7 每芯片 HBM 带宽：每 TensorCore 3,433 GiB/s × 2（wiki entities/tpu-v7）
+RIDGE_HBM = C_V7 / HBM_V7
+assert abs(HBM_V7 / 1e12 - 7.37) < 0.01 and 310 < RIDGE_HBM < 316, RIDGE_HBM
+TOPK, EXPERTS = 8, 256                    # V3：每个 token 挑 256 个路由专家里的 8 个
+SHARE = TOPK / EXPERTS                    # 一个专家平均分到这一批的 1/32
+B_DENSE = RIDGE_HBM                       # 稠密层：每字节换来的计算 ＝ b（bf16 权重，一次乘加 2 FLOPs ÷ 2 字节）
+B_MOE = RIDGE_HBM / SHARE
+assert SHARE == 1 / 32 and 9900 < B_MOE < 10100, B_MOE
+
+
+def fig_decode_ai():
+    """⭐ 课件 6.1 原来一句话带过「decode 靠把很多请求拼成一大批来摊薄」。这张图把「多大才够」算出来。
+    ⚠️ 推导：只算读权重，不算读 KV（算上 KV 门槛更高）；按 bf16 权重、每个专家的 token 均匀分。"""
+    f = Fig(W, "decode 每一步都要把权重从显存读一遍。一批里有 b 个请求一起出字时，读一个字节的权重换来 b 次计算。"
+               "TPU v7 每秒能算 2307 万亿次、每秒能从显存读约 7.4 万亿字节，一除约 313：一批不到约 313 个请求，卡就在等显存。"
+               "MoE 更难：每个专家平均只分到这一批的三十二分之一，要一批约一万个请求，每个专家才吃得饱")
+    y0 = f.header("decode 为什么非要把一批做大　——　<tspan font-weight=\"700\">读一遍权重，只够这一批用一次</tspan>",
+                  "横轴：一步里一起出字的请求数 b（对数刻度）。纵轴：从显存读 1 字节权重，换来多少次计算（⚠️ 推导，只算读权重）",
+                  [(BL, "稠密层：＝ b"), (OR, "MoE 的一个专家：＝ b ÷ 32（V3 挑 8／256）"), (RD, "v7 显存线 ≈ %.0f" % RIDGE_HBM)])
+    PX, PY, PW, PH = 150, y0 + 20, 980, 360
+    X0, X1 = 0, 14                         # log2 b：1 … 16,384
+    Y0_, Y1_ = -5, 11                      # log2 强度：1/32 … 2,048
+
+    def X(b):
+        return PX + PW * (math.log2(b) - X0) / (X1 - X0)
+
+    def Y(v):
+        return PY + PH - PH * (math.log2(v) - Y0_) / (Y1_ - Y0_)
+    yr = Y(RIDGE_HBM)
+    f.poly([(PX, yr), (PX + PW, yr), (PX + PW, PY + PH), (PX, PY + PH)], "#fce8e6")
+    f.box(PX, PY, PW, PH, "none", LINE, 6)
+    for e in (0, 2, 4, 6, 8, 10, 12, 14):
+        f.t(X(2 ** e), PY + PH + 22, "{:,}".format(2 ** e), GY, size=12.5, anchor="middle")
+    f.t(PX + PW / 2, PY + PH + 46, "一步里一起出字的请求数 b", GY, True, 13.5, anchor="middle")
+    for e in (-4, 0, 4, 8):
+        v = 2 ** e
+        f.t(PX - 10, Y(v) + 5, ("1/%d" % (1 / v)) if v < 1 else "{:,}".format(v), GY, size=12.5, anchor="end")
+    f.path("M%.1f,%.1f L%.1f,%.1f" % (X(1), Y(1), X(2 ** 11), Y(2 ** 11)), BL, 3, arrow=False)
+    f.path("M%.1f,%.1f L%.1f,%.1f" % (X(1), Y(SHARE), X(2 ** 14), Y(2 ** 14 * SHARE)), OR, 3, arrow=False)
+    f.path("M%.1f,%.1f L%.1f,%.1f" % (PX, yr, PX + PW, yr), RD, 2, dash="4,4", arrow=False)
+    f.t(PX + PW + 10, yr + 5, "显存线 ≈ %.0f" % RIDGE_HBM, RD, True, 13.5)
+    for b, col, lab, dy in ((B_DENSE, BL, "稠密：b ≈ %.0f 才吃饱" % B_DENSE, -14),
+                            (B_MOE, OR, "MoE：b ≈ %s 才吃饱" % "{:,.0f}".format(round(B_MOE, -2)), -14)):
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="%s"/>' % (X(b), yr, col))
+        f.path("M%.1f,%.1f L%.1f,%.1f" % (X(b), yr, X(b), PY + PH), col, 1.4, dash="4,3", arrow=False)
+        f.t(X(b) - 12, yr + dy, lab, col, True, 15, "end")
+    f.t(PX + 20, PY + 30, "线上：卡算得过来", GR, True, 15)
+    f.t(PX + PW * 0.55, PY + PH - 30, "线下：卡在等显存把权重读出来", RD, True, 15)
+    yb = f.band(PY + PH + 70, "ok", "所以 decode 的各种做法，都在凑一个大 batch", [
+        "PD 分离让 decode 机器只管出字，一批能攒得更大；DEP 让 attention 各管各的请求，专家那边收齐所有卡的 token。",
+        "Wide-EP 把专家铺到更多卡上、每张卡只放几个，AFD 干脆让一组专家机器同时接好几组 attention 机器的 token。",
+    ])
+    yb = f.src(yb + 10,
+               "⚠️ 推导：稠密层一步读 2P 字节（bf16）、算 2Pb 次，每字节 ＝ b；MoE 每个专家平均分到 b × 8 ÷ 256 个 token。只算读权重，读 KV 会让门槛更高。",
+               "📌 v7：每芯片 bf16 2,307 TFLOP/s；HBM 每 TensorCore 3,433 GiB/s、每芯片两个（wiki entities/tpu-v7）。V3 的 8／256 取自 config.json。")
+    f.save("fig5-decode-ai.svg", yb + 14)
+
+
 fig_pd()
 fig_afd()
+fig_decode_ai()
