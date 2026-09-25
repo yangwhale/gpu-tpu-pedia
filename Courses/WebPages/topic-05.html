@@ -849,7 +849,7 @@ body.figonly section h3{margin-top:34px}
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 51 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 52 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -2450,14 +2450,8 @@ body.figonly section h3{margin-top:34px}
     <b>可它一开始根本没解决「装不下」</b>，要一路削到 FSDP 才解决 —— 而最后那一步是要付钱的。</p>
 
   <h3 id="s2-1">2.1　数据并行：每张卡一整份模型</h3>
-  <p>n 张卡，每张卡都放一整份模型，各算各的一批样本。反向算完，每张卡手里是<b>自己那批样本的梯度</b>，
-    大家的不一样，所以要做一次 AllReduce 求平均，然后每张卡用同一份梯度更新同一份权重。</p>
-  <ul>
-    <li><b>通信</b>：每一步只有这一次 AllReduce，量是 2Ψ 个数（Ψ 是参数个数；bf16 下约 4Ψ 字节）。低的是频率不是量：这一次 AllReduce，V3 每卡要发约 2.7 TB。</li>
-    <li><b>频率</b>：一步一次。这是后面所有刀里最低的，所以它最能忍受慢链路。</li>
-    <li><b>问题</b>：每张卡还是存一整份 16 字节／参数。V3 就是每张卡 9.76 TiB，<b>装不下的问题一点没变</b>，
-      而且 n 张卡存了 n 份一模一样的东西。</li>
-  </ul>
+  <p>每张卡放一整份模型、各算一批样本；反向算完做一次 AllReduce 求平均，再一起更新。
+    一步只通信一次（频率最低，量却不小：V3 每卡约 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
 
   <h3 id="s2-2">2.2　ZeRO：按大小顺序，一级一级削</h3>
 <figure class="fbox fwide" id="fig-zero-mem"><svg viewBox="0 0 1400 610" width="100%" role="img" aria-label="数据并行和 ZeRO 三级，每张卡的常驻显存。每个参数 16 字节：权重 2、梯度 2、优化器状态 12。数据并行每张卡都存一整份，16 字节。ZeRO-1 把优化器状态切成 1024 份，每卡剩约 4 字节；ZeRO-2 再切梯度，剩约 2 字节；ZeRO-3 连权重也切，只剩千分之十六字节。换成 DeepSeek-V3 的 6710 亿参数、1024 路：每卡 9.76 TiB、2.45 TiB、1.23 TiB、9.76 GiB。通信量：前三种都是 2 Ψ，跟数据并行一模一样；ZeRO-3 是 3 Ψ，多一半"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2514,23 +2508,310 @@ body.figonly section h3{margin-top:34px}
     <li><b>ZeRO-2</b> 再切梯度：每张卡只需要自己负责那 1/n 参数的梯度。</li>
     <li><b>ZeRO-3</b> 连权重也切：每张卡只长期存 1/n 的权重。</li>
   </ul>
-  <p>前两级为什么不多花一个字节的通信？就是 <a href="#s1-4">§1.4</a> 那条：AllReduce ＝ ReduceScatter ＋ AllGather。数据并行那次 AllReduce 拆开来做：
-    先 ReduceScatter，每张卡正好拿到自己负责那 1/n 的梯度总和，就地更新那 1/n 的参数；
-    再 AllGather，把更新好的权重拼回给每个人。<b>通信还是 2Ψ，显存却不用再存别人的状态和梯度了。</b>
-    像老师们汇总意见：每人只收自己负责的那一页，改好再复印给大家。</p>
-  <p>中间那一步「就地更新」为什么不用通信？因为 Adam 是<b>逐个元素</b>算的：第 i 个参数的新值，只跟它自己的梯度、自己的两个动量、自己的主权重有关，
-    跟别的参数一点关系都没有。所以每张卡更新自己那 1/n，跟一张卡把全部参数更新一遍，结果一模一样。
-    只有一个例外：梯度裁剪要看<b>全体</b>梯度的总长度。做法是每张卡先算自己那段的平方和，再对这一个数做一次 AllReduce，量可以忽略。</p>
-<div class="note ok"><span class="t">开场第三问的答案：V3 为什么敢把两个动量压成半精度，主权重却不行</span>
-  V3 把<b>两个动量</b>改用 bf16 存，报告说「没有观察到可见的性能退化」；主权重和用于累积的梯度仍留在 fp32
-  （技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.3）。这不是默认做法：常规做法里动量跟着主权重用 fp32，Megatron 要显式打开开关才用 bf16。<br>
-  <b>主权重不能压</b>：它每一步只加进一个很小的更新，而且要一直累加下去；bf16 只有约三位有效数字，小更新会在四舍五入时整个被抹掉。<br>
-  <b>动量能不能压，要看衰减系数 β₂</b>（本课推导）：二阶动量每一步只掺进 (1 − β₂) 那么多新值。
-  V3 的 β₂ ＝ 0.95，新值每步占 5% 的份量，bf16 分辨得出来；如果用 PyTorch 默认的 0.999，新值只占 0.1%，
-  比 bf16 能分辨的最小相对差距（约 0.2%）还小 —— 除非新来的梯度跟旧值差好几倍，否则这一步的改动会被四舍五入抹掉，二阶动量就卡住了。<br>
-  <em>V3 报告里的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线：16B 和 230B 两个规模各训约一万亿 token，损失相对误差一直低于 0.25%；
-  没有单独把「动量用 bf16」拆出来做消融。</em></div>
+  <p>前两级为什么不多花一个字节的通信？就是 <a href="#s1-4">§1.4</a> 那个等式：</p>
+<figure class="fbox fwide" id="fig-zero-step"><svg viewBox="0 0 1400 534" width="100%" role="img" aria-label="ZeRO 的一步，四张卡。第一格：反向算完，每张卡手里一整份梯度，但只是自己那批样本的。第二格：做一次 ReduceScatter，卡 k 只拿到第 k 段梯度的总和。第三格：每张卡只用这一段梯度，更新自己负责的那一段参数，这一步不通信。第四格：做一次 AllGather，把各自更新好的那一段拼回来，每张卡又有了完整的新权重。中间那步不用通信，是因为 Adam 逐个元素算，第 i 个参数只看它自己的梯度、动量和主权重。ReduceScatter 加 AllGather 正好等于原来那一次 AllReduce，通信一个字节不多"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">ZeRO 的一步：中间那次更新只在自己卡上做　——　<tspan font-weight="700">拆开的 AllReduce，正好把它夹在中间</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">四张卡；梯度按参数切成四段，卡 k 负责第 k 段。条纹＝几张卡的加在一起，虚线框＝这张卡不存</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0</text>
+<rect x="79.48" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="100" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 1</text>
+<rect x="158.96" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="179" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 2</text>
+<rect x="238.44" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="259" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 3</text>
+<rect x="0" y="102" width="1400" height="260" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步里发生的三件事</tspan></text>
+<text class="svgsm" x="66" y="158" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反向算完：各有一整份梯度</tspan></text>
+<text class="svgsm" x="14" y="192" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<rect x="66.0" y="172" width="46.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="66" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="89" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g0</tspan></text>
+<rect x="118.0" y="172" width="46.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="118" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="141" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g1</tspan></text>
+<rect x="170.0" y="172" width="46.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="170" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g2</tspan></text>
+<rect x="222.0" y="172" width="46.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="222" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="245" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g3</tspan></text>
+<text class="svgsm" x="14" y="232" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<rect x="66.0" y="212" width="46.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="66" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="89" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g0</tspan></text>
+<rect x="118.0" y="212" width="46.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="118" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="141" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g1</tspan></text>
+<rect x="170.0" y="212" width="46.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="170" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g2</tspan></text>
+<rect x="222.0" y="212" width="46.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="222" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="245" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g3</tspan></text>
+<text class="svgsm" x="14" y="272" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<rect x="66.0" y="252" width="46.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="66" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="89" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g0</tspan></text>
+<rect x="118.0" y="252" width="46.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="118" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="141" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g1</tspan></text>
+<rect x="170.0" y="252" width="46.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="170" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g2</tspan></text>
+<rect x="222.0" y="252" width="46.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="222" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="245" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g3</tspan></text>
+<text class="svgsm" x="14" y="312" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<rect x="66.0" y="292" width="46.0" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="66" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="89" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g0</tspan></text>
+<rect x="118.0" y="292" width="46.0" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="118" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="141" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g1</tspan></text>
+<rect x="170.0" y="292" width="46.0" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="170" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g2</tspan></text>
+<rect x="222.0" y="292" width="46.0" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="222" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="245" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">g3</tspan></text>
+<text class="svgsm" x="400" y="158" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ReduceScatter：只拿第 k 段的总和</tspan></text>
+<rect x="400.0" y="172" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="411.5" y="172" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="423.0" y="172" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="434.5" y="172" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="400" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="423" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Σ0</tspan></text>
+<rect x="452" y="172" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="504" y="172" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="556" y="172" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="400" y="212" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="452.0" y="212" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="463.5" y="212" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="475.0" y="212" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="486.5" y="212" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="452" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="475" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Σ1</tspan></text>
+<rect x="504" y="212" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="556" y="212" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="400" y="252" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="452" y="252" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="504.0" y="252" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="515.5" y="252" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="527.0" y="252" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="538.5" y="252" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="504" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="527" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Σ2</tspan></text>
+<rect x="556" y="252" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="400" y="292" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="452" y="292" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="504" y="292" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="556.0" y="292" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="567.5" y="292" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="579.0" y="292" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="590.5" y="292" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="556" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="579" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Σ3</tspan></text>
+<text class="svgsm" x="734" y="158" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">本地更新第 k 段（不通信）</tspan></text>
+<rect x="734.0" y="172" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="745.5" y="172" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="757.0" y="172" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="768.5" y="172" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="734" y="172" width="46" height="30" rx="5" fill="none" stroke="#202124" stroke-width="2.2"/>
+<text class="svgsm" x="757" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W0</tspan></text>
+<rect x="786" y="172" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="838" y="172" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="890" y="172" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="734" y="212" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="786.0" y="212" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="797.5" y="212" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="809.0" y="212" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="820.5" y="212" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="786" y="212" width="46" height="30" rx="5" fill="none" stroke="#202124" stroke-width="2.2"/>
+<text class="svgsm" x="809" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
+<rect x="838" y="212" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="890" y="212" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="734" y="252" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="786" y="252" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="838.0" y="252" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="849.5" y="252" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="861.0" y="252" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="872.5" y="252" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="838" y="252" width="46" height="30" rx="5" fill="none" stroke="#202124" stroke-width="2.2"/>
+<text class="svgsm" x="861" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
+<rect x="890" y="252" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="734" y="292" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="786" y="292" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="838" y="292" width="46" height="30" rx="5" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="890.0" y="292" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="901.5" y="292" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="913.0" y="292" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="924.5" y="292" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="890" y="292" width="46" height="30" rx="5" fill="none" stroke="#202124" stroke-width="2.2"/>
+<text class="svgsm" x="913" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W3</tspan></text>
+<text class="svgsm" x="1068" y="158" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllGather：拼回整份新权重</tspan></text>
+<rect x="1068.0" y="172" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1079.5" y="172" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1091.0" y="172" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1102.5" y="172" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1068" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1091" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W0</tspan></text>
+<rect x="1120.0" y="172" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1131.5" y="172" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1143.0" y="172" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1154.5" y="172" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1120" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1143" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
+<rect x="1172.0" y="172" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1183.5" y="172" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1195.0" y="172" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1206.5" y="172" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1172" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1195" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
+<rect x="1224.0" y="172" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1235.5" y="172" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1247.0" y="172" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1258.5" y="172" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1224" y="172" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1247" y="192" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W3</tspan></text>
+<rect x="1068.0" y="212" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1079.5" y="212" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1091.0" y="212" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1102.5" y="212" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1068" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1091" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W0</tspan></text>
+<rect x="1120.0" y="212" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1131.5" y="212" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1143.0" y="212" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1154.5" y="212" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1120" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1143" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
+<rect x="1172.0" y="212" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1183.5" y="212" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1195.0" y="212" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1206.5" y="212" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1172" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1195" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
+<rect x="1224.0" y="212" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1235.5" y="212" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1247.0" y="212" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1258.5" y="212" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1224" y="212" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1247" y="232" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W3</tspan></text>
+<rect x="1068.0" y="252" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1079.5" y="252" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1091.0" y="252" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1102.5" y="252" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1068" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1091" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W0</tspan></text>
+<rect x="1120.0" y="252" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1131.5" y="252" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1143.0" y="252" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1154.5" y="252" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1120" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1143" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
+<rect x="1172.0" y="252" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1183.5" y="252" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1195.0" y="252" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1206.5" y="252" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1172" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1195" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
+<rect x="1224.0" y="252" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1235.5" y="252" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1247.0" y="252" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1258.5" y="252" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1224" y="252" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1247" y="272" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W3</tspan></text>
+<rect x="1068.0" y="292" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1079.5" y="292" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1091.0" y="292" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1102.5" y="292" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1068" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1091" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W0</tspan></text>
+<rect x="1120.0" y="292" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1131.5" y="292" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1143.0" y="292" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1154.5" y="292" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1120" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1143" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W1</tspan></text>
+<rect x="1172.0" y="292" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1183.5" y="292" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1195.0" y="292" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1206.5" y="292" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1172" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1195" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W2</tspan></text>
+<rect x="1224.0" y="292" width="12.0" height="30" rx="0" fill="#aecbfa" stroke="none" stroke-width="1.0"/>
+<rect x="1235.5" y="292" width="12.0" height="30" rx="0" fill="#fdc69c" stroke="none" stroke-width="1.0"/>
+<rect x="1247.0" y="292" width="12.0" height="30" rx="0" fill="#a8dab5" stroke="none" stroke-width="1.0"/>
+<rect x="1258.5" y="292" width="11.5" height="30" rx="0" fill="#d7aefb" stroke="none" stroke-width="1.0"/>
+<rect x="1224" y="292" width="46" height="30" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1247" y="312" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">W3</tspan></text>
+<line x1="284" y1="248.0" x2="386" y2="248.0" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="335" y="238" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
+<line x1="618" y1="248.0" x2="720" y2="248.0" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="669" y="238" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">②</tspan></text>
+<line x1="952" y1="248.0" x2="1054" y2="248.0" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="1003" y="238" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③</tspan></text>
+<rect x="0" y="412" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="412" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="412" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="439" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">中间那步不用通信：Adam 是逐个元素算的</tspan></text>
+<text class="svgsm" x="20" y="470" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第 i 个参数的新值只看它自己的梯度、两个动量和主权重。四张卡各更新一段，跟一张卡全部更新一遍，结果一模一样。</text>
+<text class="svgsm" x="20" y="494" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">① ＋ ③ 正好是原来那一次 AllReduce，<tspan font-weight="700">一个字节不多</tspan>；唯一例外是梯度裁剪：各卡算自己那段的平方和，再 AllReduce 一个数。</text>
+</svg><figcaption><b>① ReduceScatter、③ AllGather 拼起来就是原来那次 AllReduce。</b><span class="capmore"><br><em>多出来的只是中间那一格：每张卡只更新自己那一段。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 ZeRO 原论文 arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 7：Pos、Pos+g 的通信量与数据并行相同（2Ψ）。Adam 逐元素更新：Kingma 与 Ba，arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a> 算法 1。</p>
+<p>⚠️ 一步切成几个 micro-batch 时，只剩 ZeRO-1 严格白送：ZeRO-2 不留整份梯度，没法把几份梯度先攒起来，只好每份算完就 ReduceScatter 一次；所以配流水线（必须切 micro-batch）时，V3、Megatron 都选 ZeRO-1。</p></details></figure>
+<div class="note ok"><span class="t">开场第三问的答案：V3 把两个动量压成了半精度，主权重和梯度留在全精度</span>
+  主权重每步只加一点点、要一直累加，压了会被舍掉；动量能不能压要看 β₂ —— 看下面那把刻度尺（V3 用 0.95，PyTorch 默认 0.999）。</div>
 
+<figure class="fbox fwide" id="fig-bf16-beta"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="二阶动量每一步按 v 等于 β₂ 乘旧 v 加上 1 减 β₂ 乘新梯度平方来更新。图里是一把刻度尺，刻度是 bf16 在 1 附近能表示的数，相邻两个相差 128 分之一。假设当前 v 等于 1，新来的梯度平方是它的 2 倍。β₂ 等于 0.95 时，新值占 5%，v 挪到 1.05，存成 bf16 是 1.047，这一步留下来了。β₂ 等于 0.999 时，新值只占 0.1%，v 挪到 1.001，还不到半格，存成 bf16 又回到 1，这一步被舍掉了。V3 用 β₂ 等于 0.95，所以它敢把动量存成 bf16；主权重每步只加一点点、要一直累加，所以必须留 fp32"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">动量能不能存成 bf16：看一步挪多远　——　<tspan font-weight="700">挪不过半格，就被舍回原处</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">刻度＝bf16 在 1 附近能表示的数（相邻差 1/128）。v ← β₂·v ＋ (1−β₂)·g²；假设当前 v＝1，新来的 g² 是它的 2 倍</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">β₂＝0.95（V3）</text>
+<rect x="155.64000000000001" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="176" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">β₂＝0.999（PyTorch 默认）</text>
+<rect x="0" y="102" width="1400" height="272" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一把 bf16 的刻度尺</tspan></text>
+<line x1="100" y1="282" x2="1240.0" y2="282" stroke="#80868b" stroke-width="1.5" stroke-linecap="round"/>
+<line x1="120.0" y1="270" x2="120.0" y2="294" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="120" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0000</text>
+<line x1="257.5" y1="270" x2="257.5" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="257" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0078</text>
+<line x1="395.0" y1="270" x2="395.0" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="395" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0156</text>
+<line x1="532.5" y1="270" x2="532.5" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="532" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0234</text>
+<line x1="670.0" y1="270" x2="670.0" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="670" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0312</text>
+<line x1="807.5" y1="270" x2="807.5" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="807" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0391</text>
+<line x1="945.0" y1="270" x2="945.0" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="945" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0469</text>
+<line x1="1082.5" y1="270" x2="1082.5" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1082" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0547</text>
+<line x1="1220.0" y1="270" x2="1220.0" y2="294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1220" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.0625</text>
+<path d="M120.0,266.0 Q560.0,172.0 1000.0,264.0" fill="none" stroke="#1e8e3e" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="939.0" y="276" width="12" height="12" rx="6" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="186" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新值占 5%：挪到 1.050，存成 1.0469 —— 留下来了</tspan></text>
+<path d="M120.0,332.0 L151.6,332.0" fill="none" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="114" y="276" width="12" height="12" rx="6" fill="none" stroke="#d93025" stroke-width="2.4"/>
+<text class="svgsm" x="150" y="362" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新值占 0.1%：挪到 1.001，不到半格（0.0039），存成 1.000 —— 被舍掉了</tspan></text>
+<rect x="0" y="424" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="424" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="424" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="451" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以 V3 敢把两个动量存成 bf16，主权重却不行</tspan></text>
+<text class="svgsm" x="20" y="482" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">动量是滑动平均，β₂ 不太接近 1 时每步挪得够远，bf16 存得住；V3 用的是 0.95。</text>
+<text class="svgsm" x="20" y="506" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">主权重每一步只加一点点、而且要一直累加下去：小于半格的更新全被舍掉，所以留在 fp32。</text>
+</svg><figcaption><b>绿的那一步挪过了几格，红的那一步没挪过半格。</b><span class="capmore"><br><em>舍入按 bf16 真算；假设新来的 g² 是当前 v 的 2 倍。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.3：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32。sec. 4.2：β₁＝0.9、β₂＝0.95。</p>
+<p>📌 这不是默认做法：常规做法里优化器状态与参数同精度；Megatron Core 要显式开启 --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16。PyTorch AdamW 默认 β₂＝0.999。</p>
+<p>⚠️ 本课推导：刻度与舍入按 bf16（8 位有效位、就近舍入）真算。V3 报告的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线，16B 与 230B 两个规模损失相对误差低于 0.25%；未单独消融 bf16 动量。</p></details></figure>
 
   <h3 id="s2-3">2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
   <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
@@ -2585,20 +2866,19 @@ body.figonly section h3{margin-top:34px}
        aria-label="FSDP 一步的动画。四张卡，每张卡三层，每层只长期持有自己那一段（四分之一）。标题：FSDP：每层用之前借回来，用完就还。字幕一：前向：每层先 AllGather 拼回整层，算完只留自己那一段。第 1、2、3 层依次：别人的三段飞进来拼成整层，整层亮一下，再把借来的三段扔掉。底部计数一次次加一。字幕二：反向：扔掉的权重要再拼一次；算出的梯度 ReduceScatter 给各自的主人。从第 3 层往回：再拼一次整层、亮一下、扔掉，然后黄色的梯度小块飞回各自的主人。字幕三：每层三次：前向拼一次，反向再拼一次、散一次。计数停在 9。最后复位。"></video>
 <figcaption>整层只在用的那一刻出现；平时每张卡只拿着每层的四分之一。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>代价在反向：前向扔掉的权重，反向还得再拼一次。所以一层一步要做 AG、AG、RS 三次，
-    通信是 3Ψ，<b>数据并行的 1.5 倍</b>（ZeRO 原论文 sec. 7 的结论）。换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB（约 10 GB，还不含激活）。</p>
+  <p>通信是 3Ψ，<b>数据并行的 1.5 倍</b>；换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB（约 10 GB，还不含激活）。</p>
   <div class="note warn"><span class="t">⚠️ 哪几级白送，哪一级要付钱</span>
-    一步只同步一次时，ZeRO-1、ZeRO-2 白送：通信一个字节不多，已经削掉 16 字节里的 14 个。<br>
-    一步切成几个 micro-batch 时，只剩 ZeRO-1 白送：ZeRO-2 不留整份梯度，没法把几份梯度先攒起来，只好每份算完就 ReduceScatter 一次。所以配流水线时（流水线必须切 micro-batch，见第三节），V3、Megatron 都选 ZeRO-1。<br>
-    ZeRO-3 不白送：最后那 2 个字节，要多付一半的通信。只是对大模型来说，这笔钱非付不可。</div>
+    ZeRO-1、ZeRO-2 白送（切 micro-batch 时只剩 ZeRO-1，原因见「ZeRO 的一步」那张图的出处）；ZeRO-3 多付一半，对大模型来说非付不可。</div>
 
   <h3 id="s2-4">2.4　这一刀能放多远：看频率</h3>
+  <p>数据并行一步说一次话，能放在慢链路上；FSDP 每层都要说，得放在快线里。</p>
+  <details class="foldfig"><summary><b>细一点</b>：数据并行、FSDP、HSDP、DiLoCo 各能放多远</summary>
   <ul>
     <li><b>数据并行、ZeRO-1</b>：一步通信一次，可以放在慢链路上，最远能横跨数据中心。</li>
     <li><b>FSDP</b>：每一层都要拼一次权重，一步下来多出成百上千次（第七节有个数），得放在高带宽域里。</li>
     <li><b>HSDP</b> 是两者的折中：<b>机内 FSDP、机间数据并行</b>。高频的拼权重留在机内，跨机只剩梯度同步，量也除以了机内的分片数。</li>
     <li><b>DiLoCo</b> 再往前一步：每个副本先自己走几百步再同步一次，专门为跨数据中心训练设计。</li>
-  </ul>
+  </ul></details>
 
   <h3 id="s2-5">2.5　这一刀留下的问题</h3>
   <p>FSDP 每一步搬的是<b>权重</b>，搬多少只跟参数量有关，<b>跟 batch 无关</b>；

@@ -11,7 +11,7 @@ r"""专题五 · 第二节「第一刀：切数据」的两张图。
 
 ⛔ 刻意没画：激活（它随 batch 和序列长度变，专题四讲过）；ZeRO++ 这类通信优化。每卡字节只算模型状态。
 """
-from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
+from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 
 from topic05_numbers import PSI, N_DP as N, TIB, GIB, W_B, G_B, O_B   # 16 字节的账只有一份
 
@@ -128,5 +128,131 @@ def fig_step():
     f.save("fig5-fsdp-step.svg", yb + 14)
 
 
+# ════════════════════════════════════════════════════════════════
+# 图三：ZeRO 的一步 —— 拆开的 AllReduce，中间夹一次只在本卡做的更新
+# ⭐ 2026-09-25 现场「多画图少说话」：原来 §2.2 用两段话讲「前两级为什么白送、就地更新为什么不用通信」，改成这张图。
+#   画法沿用 §1.1 那套（topic05_blocks）：四张卡四种颜色，条纹＝加过，虚线框＝不存。
+# ⛔ 刻意没画：主权重、m、v 各自的块（它们跟着「第 k 段」走，画出来只会更挤）；梯度裁剪那次标量 AllReduce 写在落点带里。
+# ════════════════════════════════════════════════════════════════
+import topic05_blocks as B                                            # noqa: E402
+
+
+def fig_zero_step():
+    f = Fig(W, "ZeRO 的一步，四张卡。第一格：反向算完，每张卡手里一整份梯度，但只是自己那批样本的。"
+               "第二格：做一次 ReduceScatter，卡 k 只拿到第 k 段梯度的总和。"
+               "第三格：每张卡只用这一段梯度，更新自己负责的那一段参数，这一步不通信。"
+               "第四格：做一次 AllGather，把各自更新好的那一段拼回来，每张卡又有了完整的新权重。"
+               "中间那步不用通信，是因为 Adam 逐个元素算，第 i 个参数只看它自己的梯度、动量和主权重。"
+               "ReduceScatter 加 AllGather 正好等于原来那一次 AllReduce，通信一个字节不多")
+    y0 = f.header("ZeRO 的一步：中间那次更新只在自己卡上做"
+                  "　——　<tspan font-weight=\"700\">拆开的 AllReduce，正好把它夹在中间</tspan>",
+                  "四张卡；梯度按参数切成四段，卡 k 负责第 k 段。条纹＝几张卡的加在一起，虚线框＝这张卡不存",
+                  [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3")])
+    N4 = B.N
+    PH = 30 + 34 + N4 * B.RH + 36
+    py = f.panel(0, y0, W, PH, "一步里发生的三件事", GR)
+    g_full = [[([k], "g%d" % j) for j in range(N4)] for k in range(N4)]
+    g_rs = [[(list(range(N4)), "Σ%d" % j) if j == k else ([], None) for j in range(N4)] for k in range(N4)]
+    w_new = [[(list(range(N4)), "W%d" % j) if j == k else ([], None) for j in range(N4)] for k in range(N4)]
+    w_all = [[(list(range(N4)), "W%d" % j) for j in range(N4)] for _ in range(N4)]
+    states = [("反向算完：各有一整份梯度", g_full, False),
+              ("ReduceScatter：只拿第 k 段的总和", g_rs, False),
+              ("本地更新第 k 段（不通信）", w_new, True),
+              ("AllGather：拼回整份新权重", w_all, False)]
+    SX = [66, 400, 734, 1068]
+    for i, (lab, st, hot) in enumerate(states):
+        f.t(SX[i], py + 26, lab, INK, True, 13.5)
+        for k in range(N4):
+            yy = py + 40 + k * B.RH
+            if i == 0:
+                B.rowlab(f, 14, yy, k)
+            B.row(f, SX[i], yy, st[k], hot=(k,) if hot else ())
+    mid = py + 40 + N4 * B.RH / 2.0 - 4
+    for i, lab in enumerate(["①", "②", "③"]):
+        x1 = SX[i] + N4 * (B.CW + B.GAP) + 10
+        x2 = SX[i + 1] - 14
+        f.line(x1, mid, x2, mid, GR, 2)
+        f.t((x1 + x2) / 2.0, mid - 10, lab, GR, True, 15, "middle")
+    yb = f.band(py + PH + 20, "ok", "中间那步不用通信：Adam 是逐个元素算的", [
+        "第 i 个参数的新值只看它自己的梯度、两个动量和主权重。四张卡各更新一段，跟一张卡全部更新一遍，结果一模一样。",
+        "① ＋ ③ 正好是原来那一次 AllReduce，<tspan font-weight=\"700\">一个字节不多</tspan>；唯一例外是梯度裁剪：各卡算自己那段的平方和，再 AllReduce 一个数。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 ZeRO 原论文 arXiv 1910.02054 sec. 7：Pos、Pos+g 的通信量与数据并行相同（2Ψ）。Adam 逐元素更新：Kingma 与 Ba，arXiv 1412.6980 算法 1。",
+               "⚠️ 一步切成几个 micro-batch 时，只剩 ZeRO-1 严格白送：ZeRO-2 不留整份梯度，没法把几份梯度先攒起来，只好每份算完就 ReduceScatter 一次；"
+               "所以配流水线（必须切 micro-batch）时，V3、Megatron 都选 ZeRO-1。")
+    f.save("fig5-zero-step.svg", yb + 14)
+
+
+# ════════════════════════════════════════════════════════════════
+# 图四：动量能不能存成 bf16 —— 每一步挪不过半格，就被舍回原处
+# ⭐ 开场第三问的答案（§2.2）画成一把刻度尺。舍入是真按 bf16 算的，不是画示意。
+# ⛔ 刻意没画：随机舍入（它能救回被舍掉的部分，专题四 §3.2 讲过）；一阶动量（β₁＝0.9，挪得更远，更不成问题）。
+# ════════════════════════════════════════════════════════════════
+import struct                                                         # noqa: E402
+from topic05_numbers import V3_BETA2, TORCH_BETA2                     # noqa: E402
+
+
+def bf16(x):
+    """把一个数按 bf16（round-to-nearest-even）存一次，再读回来。"""
+    u = struct.unpack(">I", struct.pack(">f", x))[0]
+    u = (u + 0x7FFF + ((u >> 16) & 1)) & 0xFFFF0000
+    return struct.unpack(">f", struct.pack(">I", u))[0]
+
+
+V0, G2 = 1.0, 2.0                        # 当前 v ＝ 1，新来的 g² 是它的 2 倍
+STEP = 2 ** -7                           # [1, 2) 里相邻两个 bf16 的间隔
+V_A = V3_BETA2 * V0 + (1 - V3_BETA2) * G2        # 1.05
+V_B = TORCH_BETA2 * V0 + (1 - TORCH_BETA2) * G2  # 1.001
+S_A, S_B = bf16(V_A), bf16(V_B)
+assert abs(V_A - 1.05) < 1e-12 and abs(V_B - 1.001) < 1e-12
+assert S_A > V0 and abs(S_A - 1.046875) < 1e-9, S_A     # 留下来了（6 格）
+assert S_B == V0, S_B                                    # 被舍回 1.0
+assert bf16(1 + STEP) == 1 + STEP and bf16(1 + STEP / 2 - 1e-6) == 1.0
+
+
+def fig_bf16_beta():
+    f = Fig(W, "二阶动量每一步按 v 等于 β₂ 乘旧 v 加上 1 减 β₂ 乘新梯度平方来更新。"
+               "图里是一把刻度尺，刻度是 bf16 在 1 附近能表示的数，相邻两个相差 128 分之一。"
+               "假设当前 v 等于 1，新来的梯度平方是它的 2 倍。"
+               "β₂ 等于 0.95 时，新值占 5%，v 挪到 1.05，存成 bf16 是 1.047，这一步留下来了。"
+               "β₂ 等于 0.999 时，新值只占 0.1%，v 挪到 1.001，还不到半格，存成 bf16 又回到 1，这一步被舍掉了。"
+               "V3 用 β₂ 等于 0.95，所以它敢把动量存成 bf16；主权重每步只加一点点、要一直累加，所以必须留 fp32")
+    y0 = f.header("动量能不能存成 bf16：看一步挪多远"
+                  "　——　<tspan font-weight=\"700\">挪不过半格，就被舍回原处</tspan>",
+                  "刻度＝bf16 在 1 附近能表示的数（相邻差 1/128）。v ← β₂·v ＋ (1−β₂)·g²；假设当前 v＝1，新来的 g² 是它的 2 倍",
+                  [(GR, "β₂＝0.95（V3）"), (RD, "β₂＝0.999（PyTorch 默认）")])
+    PH = 272
+    py = f.panel(0, y0, W, PH, "一把 bf16 的刻度尺", GR)
+    X0, SC = 120, 1100 / (8 * STEP)             # 画 1.0 到 1+8 格
+    ay = py + 150
+    f.line(X0 - 20, ay, X0 + 8 * STEP * SC + 20, ay, GY2, 1.5, arrow=False)
+    for k in range(9):
+        x = X0 + k * STEP * SC
+        f.line(x, ay - 12, x, ay + 12, INK if k == 0 else GY, 2 if k == 0 else 1.2, arrow=False)
+        f.t(x, ay + 32, "%.4f" % (1 + k * STEP), GY, size=12, anchor="middle")
+    xa, xb = X0 + (V_A - 1) * SC, X0 + (V_B - 1) * SC
+    xsa = X0 + (S_A - 1) * SC
+    # β₂ = 0.95：挪到 1.05，落在第 6 格附近 → 存成 1.047
+    f.path("M%.1f,%.1f Q%.1f,%.1f %.1f,%.1f" % (X0, ay - 16, (X0 + xa) / 2, ay - 110, xa, ay - 18), GR, 2.4)
+    f.box(xsa - 6, ay - 6, 12, 12, GR, GR, 6)
+    f.t((X0 + xa) / 2, ay - 96, "新值占 5%%：挪到 %.3f，存成 %.4f —— 留下来了" % (V_A, S_A), GR, True, 14, "middle")
+    # β₂ = 0.999：挪到 1.001，不到半格 → 舍回 1.000
+    f.path("M%.1f,%.1f L%.1f,%.1f" % (X0, ay + 50, xb + 14, ay + 50), RD, 2.4)
+    f.box(X0 - 6, ay - 6, 12, 12, "none", RD, 6, sw=2.4)            # 舍回原处：存下来的还是 1.000
+    f.t(X0 + 30, ay + 80, "新值占 0.1%%：挪到 %.3f，不到半格（%.4f），存成 %.3f —— 被舍掉了" % (V_B, STEP / 2, S_B), RD, True, 14)
+    yb = f.band(py + PH + 20, "ok", "所以 V3 敢把两个动量存成 bf16，主权重却不行", [
+        "动量是滑动平均，β₂ 不太接近 1 时每步挪得够远，bf16 存得住；V3 用的是 0.95。",
+        "主权重每一步只加一点点、而且要一直累加下去：小于半格的更新全被舍掉，所以留在 fp32。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.3.3：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32。sec. 4.2：β₁＝0.9、β₂＝0.95。",
+               "📌 这不是默认做法：常规做法里优化器状态与参数同精度；Megatron Core 要显式开启 --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16。PyTorch AdamW 默认 β₂＝0.999。",
+               "⚠️ 本课推导：刻度与舍入按 bf16（8 位有效位、就近舍入）真算。V3 报告的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线，16B 与 230B 两个规模损失相对误差低于 0.25%；未单独消融 bf16 动量。")
+    f.save("fig5-bf16-beta.svg", yb + 14)
+
+
 fig_mem()
 fig_step()
+fig_zero_step()
+fig_bf16_beta()
