@@ -3,7 +3,7 @@
 # 用法: head   节点: bash vllm-decode-dep8.sh head   <head-ip> <本pod-ip>
 #       worker 节点: bash vllm-decode-dep8.sh worker <head-ip> <本pod-ip>
 # ⚠️ 第 3 个参数是【本 pod 自己的 IP】—— VLLM_NIXL_SIDE_CHANNEL_HOST 是 bind 地址不是对端
-# 为什么 dep8 优于 TP4: MLA 的 KV 是所有头共享的 latent，TP 下不分片只复制
+# 为什么 dep8 优于 TP4: V4 只有一个所有头共享的 KV 头（共享 KV 的 MQA，不是 MLA），TP 下不分片只复制
 #   → TP4 把 KV 复制 4 份。DP-attention 每 rank 各存各请求，天然不复制；
 #   EP8 把 384 expert 摊到每卡 48 个，省 HBM → 更大 batch。实测每卡效率 2.6×
 ROLE=$1; HEAD_IP=$2; SELF_IP=$3

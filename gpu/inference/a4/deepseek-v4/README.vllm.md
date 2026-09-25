@@ -83,7 +83,7 @@ huggingface-cli download deepseek-ai/DeepSeek-V4-Flash \
 | v0.20.1 | (进行中) | 修复+优化 | 14+ 个 DSV4 cherry-pick，含多项关键 bugfix |
 
 > vLLM v0.20.0 是首个支持 DeepSeek V4 的版本，基于 **PyTorch 2.11** + **CUDA 13.0**。
-> 由 Bugen Zhao、Woosuk Kwon 等联合开发，一次性引入完整的 MegaMoE、MLA、MTP 实现。
+> 由 Bugen Zhao、Woosuk Kwon 等联合开发，一次性引入完整的 MegaMoE、V4 稀疏注意力、MTP 实现。
 
 ### 3.2 架构支持
 
@@ -92,7 +92,7 @@ vLLM 为 DeepSeek V4 实现了全套专用组件，**不复用** V3/V2 代码：
 | 组件 | vLLM 实现 | 说明 |
 |---|---|---|
 | MegaMoE | `deep_gemm_mega_moe` backend | 256 experts, MXFP4 权重 |
-| MLA Attention | `deepseek_v4_attention.py` | 包含 Compressor + Sparse SWA |
+| Attention（共享 KV 的 MQA，不是 MLA） | `deepseek_v4_attention.py` | 包含 Compressor + Sparse SWA |
 | FP4 Indexer | `use_fp4_indexer_cache` | MXFP4 格式 indexer cache |
 | MTP | `deepseek_v4_mtp.py` | 多 token 预测 (投机解码) |
 | Tokenizer | `deepseek_v4.py` 自定义 | 非 HuggingFace 默认 tokenizer |
@@ -106,7 +106,7 @@ vLLM 为 DeepSeek V4 实现了全套专用组件，**不复用** V3/V2 代码：
 | MoE Backend | DeepEP / flashinfer_mxfp4 / triton | deep_gemm_mega_moe |
 | Expert 并行 | `--dp 8 --moe-a2a-backend deepep` | `--enable-expert-parallel --data-parallel-size 8` |
 | 投机解码 | EAGLE (外部 draft model) | MTP (内置多 token 预测) |
-| Attention | FlashMLA (DeepSeek 自研 kernel) | 自研 Sparse MLA + SWA |
+| Attention | FlashMLA (DeepSeek 自研 kernel，名字沿用 MLA，V4 本身不是 MLA) | 自研稀疏注意力 + SWA |
 | CUDA Graph | 52 级 bs 梯度 (1~512) | `FULL_AND_PIECEWISE` 模式 |
 | 镜像大小 | 90 GB | 31.5 GB |
 
@@ -356,7 +356,7 @@ evalscope perf \
 |---|---|---|
 | `--tokenizer-mode deepseek_v4` | **必填** | V4 自定义 tokenizer，非 HuggingFace 默认 |
 | `--kv-cache-dtype fp8` | 推荐 | FP8 KV cache，节省显存 |
-| `--block-size 256` | 推荐 | MLA 注意力推荐 block size |
+| `--block-size 256` | 推荐 | V4 注意力推荐 block size |
 | `--enable-expert-parallel` | 高吞吐 | 启用 Expert Parallelism |
 | `--data-parallel-size 8` | 高吞吐 | 8 路数据并行 |
 | `--compilation-config` | 高吞吐 | CUDA Graph 模式: `FULL_AND_PIECEWISE` |
@@ -475,7 +475,7 @@ EP+DP=8 高吞吐配置首次启动耗时较长：
 > 来源: [vllm-project/vllm#40902](https://github.com/vllm-project/vllm/issues/40902)
 
 ### 已完成
-- [x] DeepSeek V4 初始支持 (MegaMoE + MLA + MTP)
+- [x] DeepSeek V4 初始支持 (MegaMoE + 稀疏注意力 + MTP)
 - [x] SM90 (Hopper) + SM100 (Blackwell) 硬件支持
 - [x] FP4 Indexer
 - [x] Multi-stream Pre-Attention GEMM

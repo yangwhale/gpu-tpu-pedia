@@ -295,7 +295,9 @@ vLLM 对 DeepSeek-V4 的 prefill 权重分片**只有 TP 可用**：
 
 ### 5.2 decode 扩展：dep8（TP1 + DP8-attention + EP8）
 
-TP4 decode 对 MLA-MoE 是**次优**的：**MLA 的 KV 是所有头共享的压缩 latent（512+64），TP 下不分片、只复制** —— TP4 把 KV cache 复制 4 份，零节省。
+TP4 decode 对 V4 是**次优**的：**V4 的 128 个 query 头共用一个 KV 头，TP 下不分片、只复制** —— TP4 把 KV cache 复制 4 份，零节省。
+
+> ⚠️ V4 **不是 MLA**（2026-09-25 更正，此前本文误写为「MLA 的压缩 latent（512+64）」）。config.json：`num_key_value_heads: 1`、`head_dim: 512`（64 维 RoPE 在 512 **里面**），**没有 `kv_lora_rank`** —— 是共享 KV 的 MQA ＋ 压缩池。「只有一个 KV 头 → TP 切不开」这个结论不变。
 
 dep8 才是对的：DP-attention 每 rank 各存各请求的 KV（天然不复制）+ EP8 把 384 expert 摊到每卡 48 个（省 HBM → 更大 batch）+ attention/dense 权重只存一份。**实测每卡效率 2.6×**（1,983 vs 763 tok/s/GPU，ShareGPT 闭环口径）。
 
@@ -307,7 +309,7 @@ dep8 才是对的：DP-attention 每 rank 各存各请求的 KV（天然不复�
 --data-parallel-start-rank 4 --headless
 ```
 
-> **TP4-prefill → DP8-decode 的 KV 传输天然兼容** —— MLA 的 block 布局与 TP/DP 并行度无关（都是 per-rank 完整 latent）。所以「只改 decode、不动 prefill」路线成立，省掉全栈改造。
+> **TP4-prefill → DP8-decode 的 KV 传输天然兼容** —— 单 KV 头的 block 布局与 TP/DP 并行度无关（每个 rank 存的都是完整的那一个 KV 头）。所以「只改 decode、不动 prefill」路线成立，省掉全栈改造。
 
 ---
 
@@ -473,7 +475,7 @@ TP4-decode 最佳 21,100 = 厂商基线 22,000 的 96%。
 
 **这是本轮最大的单项收益，远超所有参数调优的总和。** 换算成每卡：TP4 配置 16 GPU → 1,319 total-tok/s/GPU；dep8 配置 20 GPU → **3,257**，**每卡 2.47×**。
 
-原因就是 §5.2 写的那条：**MLA 的 KV 是所有 head 共享的压缩 latent，TP 下不分片、只复制** —— TP4 白白把 KV cache 复制 4 份。DP-attention 每个 rank 只存自己那批请求的 KV，天然不复制；EP8 再把 384 个 expert 摊到每卡 48 个，省下的 HBM 全变成更大的 batch。
+原因就是 §5.2 写的那条：**V4 只有一个所有头共享的 KV 头，TP 下不分片、只复制** —— TP4 白白把 KV cache 复制 4 份。DP-attention 每个 rank 只存自己那批请求的 KV，天然不复制；EP8 再把 384 个 expert 摊到每卡 48 个，省下的 HBM 全变成更大的 batch。
 
 > **spec 接受率 35.7%**（8 个 DP rank 一致：draft ~2.10M / accepted ~0.75M each），与 TP4 时的 34% 一致 —— 说明这 2.85× **不是**投机解码变好带来的，纯粹是 KV 布局和 EP 的收益。
 
