@@ -22,6 +22,7 @@ r"""专题五 · 并行策略 —— **讲义（授课稿）**。
 import io
 import os
 import re
+import topic03_page as P
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
@@ -696,12 +697,14 @@ def _chapter(i, title, sid, fig, body, dont):
               "　·　<b>本节无图</b>（故意的）"
     return """
 <h3 class="sec" id="c%d">%s</h3>
+%s
 <div class="say">
 %s
 <div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>%s</div>
 <p class="board sub">🖥 本节主屏：课件 <a href="%s#%s">%s</a>%s</p>
 </div>
-""" % (i, title, body, dont, DECK, sid, title.split("（")[0], figline)
+""" % (i, title, P.audio_block(OUT, "topic05-lecture-s%d.mp3" % i, "这一节的讲课录音（照着讲的示范）"),
+       body, dont, DECK, sid, title.split("（")[0], figline)
 
 
 PLAN = [("零　开场", 5, "不能", "⭐ 开场热身题（16 字节）必须做；只立一句话：用一种通信换一份显存或算力"),
@@ -919,6 +922,7 @@ _early = sorted({w for m in re.finditer(r'<p class="say">(.*?)</p>', html, re.S)
                  for w in _CURTAIN if w in m.group(1) and m.start() < _cstart[-1]})
 assert not _early, "收尾语气出现在最后一节之前：%s" % "、".join(_early)
 
+html = P.bust_media(html, OUT)          # 录音地址挂内容指纹，重生成后不被缓存成旧的
 io.open(OUT, "w", encoding="utf-8").write(html)
 print("ok  topic-05-lecture.html  %s 字符 · %d 节 · 台词 %s 字 ＋ %d 切图 ＝ 地板 %.0f′（计划 %d′）"
       % (format(os.path.getsize(OUT), ","), len(CH), format(_n, ","), _cuts, _tot, PLAN_SUM))

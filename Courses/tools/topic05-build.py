@@ -99,9 +99,14 @@ SECTIONS = [
 ]
 
 
+_SNUM = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+
 def sec(sid, num, title):
+    # ⭐ 2026-09-26：每节开头挂讲课录音（media/topic05-lecture-s<N>.mp3，由 topic05-audio/make.py 生成）
     return ('<section id="%s"><div class="wrap"><div class="stn"><span class="badge">第 %s 节</span>'
-            '<h2>%s</h2></div>' % (sid, num, title))
+            '<h2>%s</h2></div>%s' % (sid, num, title,
+                                    P.audio_block(OUT, "topic05-lecture-s%d.mp3" % _SNUM[num])))
 
 
 def todo(lines):

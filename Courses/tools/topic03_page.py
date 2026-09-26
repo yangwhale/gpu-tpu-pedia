@@ -942,7 +942,22 @@ def bust_media(html, out_path):
             return m.group(0)
         with open(p, "rb") as fh:
             return 'src="media/%s?v=%s"' % (fn, hashlib.md5(fh.read()).hexdigest()[:8])
-    return re.sub(r'src="media/([^"?]+\.mp4)"', one, html)
+    return re.sub(r'src="media/([^"?]+\.(?:mp4|mp3))"', one, html)
+
+
+def audio_block(out_path, fname, label="本节讲课录音"):
+    """⭐ 2026-09-26：每节开头放一段讲课录音（文件不在就返回空串，页面不受影响）。"""
+    import subprocess
+    p = os.path.join(os.path.dirname(out_path), "media", fname)
+    if not os.path.exists(p):
+        return ""
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", p],
+                               capture_output=True, text=True).stdout or 0)
+    return ('<div class="lecaudio" style="margin:10px 0 18px;padding:10px 14px;border:1px solid #dadce0;'
+            'border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+            '<span style="font-weight:600">🎧 %s</span><span class="sub">约 %d 分 %02d 秒</span>'
+            '<audio controls preload="none" src="media/%s" style="flex:1;min-width:260px"></audio></div>'
+            % (label, int(dur) // 60, int(dur) % 60, fname))
 
 
 def finish(html, out_path, sections, label):
