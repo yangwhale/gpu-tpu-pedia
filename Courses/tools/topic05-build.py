@@ -510,8 +510,13 @@ __FIG_FOLD__
        aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
 <figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>一句话记住两者：<b>Ring 是人不动、笔记转圈；Ulysses 是换个切法，每人拿全部笔记的几个头。</b>
-    两者可以叠起来用（USP：卡排成二维，一个维度走环，另一个维度走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
+  <p>Ulysses 为什么转置一下就不用传笔记？把注意力的活排成一张「段 × 头」表就清楚了：同一列里后面的段要看前面的段，同一行里头与头互不相干。
+    Ring 按行分，依赖跨了卡，只好让笔记转圈；Ulysses 先转置，让每张卡拿整列。</p>
+__FIG_ULYSSES__
+  <p>一句话记住两者：<b>Ring 是人不动、笔记转圈；Ulysses 是换个切法，每人拿全部笔记的几个头。</b></p>
+  <p>两者可以叠起来用，叫 <b>USP</b>：把表分成块，卡排成二维，一维在机器里做 Ulysses 的 AllToAll，另一维在机器之间走环，总卡数 ＝ 两维相乘。
+    Megatron 的 CP 也支持这种分层组合。</p>
+__FIG_USP__
 
   <h3>5.3　causal 带来的不均</h3>
   <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。
@@ -1108,6 +1113,12 @@ FIGS = {
     "__FIG_FSDP_TP__": ("fig-fsdp-tp", "fig5-fsdp-tp.svg", "topic05-fig-tp.py",
         '<b>FSDP 在列里拼，TP 在行里加；拼回来的只是自己那一条。</b><br>'
         '<em>切法对照 Scaling Book 训练篇；961 是本课推导。</em>'),
+    "__FIG_ULYSSES__": ("fig-ulysses", "fig5-ulysses.svg", "topic05-fig-seq.py",
+        '<b>列里有依赖、行里没有：按列分，注意力就不用问别人。</b><br>'
+        '<em>示意：4 段 × 4 头、4 张卡。</em>'),
+    "__FIG_USP__": ("fig-usp", "fig5-usp.svg", "topic05-fig-seq.py",
+        '<b>机器里转置、机器之间走环：头数上限只剩一维。</b><br>'
+        '<em>「AllToAll 放机器里、环放机器之间」是本课归纳的常见摆法。</em>'),
     "__FIG_FSDP_STEP__": ("fig-fsdp-step", "fig5-fsdp-step.svg", "topic05-fig-zero.py",
         '<b>数据并行一层做两次通信，FSDP 做三次。</b><br>'
         '<em>多出来的那次 AllGather，是反向时把前向扔掉的权重再拼回来。</em>'),

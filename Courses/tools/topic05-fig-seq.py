@@ -168,3 +168,161 @@ def fig_softmax_merge():
 fig_zigzag()
 fig_kv_dup()
 fig_softmax_merge()
+
+
+# ════════════════════════════════════════════════════════════════
+# 图：Ulysses 与 USP —— 同一张「段 × 头」表的几种分法
+# ⭐ 2026-09-26 现场：「尤利西斯一直没搞懂，还有 USP 也没搞懂，额外画图好好讲。」
+#   讲法：把注意力的活排成一张表，行＝一段序列，列＝一个头。
+#     · 同一列里要互相看（后面的段要看前面的段）→ 跨段就得传笔记
+#     · 同一行里互不相干（头与头各算各的）→ 按列分就不用说话
+#   Ring ＝ 按行分、笔记沿环转；Ulysses ＝ 先 AllToAll 转置成按列分；USP ＝ 分成块，两种叠起来。
+# 📌 DeepSpeed-Ulysses arXiv 2309.14509；Ring Attention arXiv 2310.01889；
+#   USP arXiv 2405.07719 ＋ xDiT 文档：ulysses-degree × ring-degree ＝ sp-degree，去掉「不能超过头数」的限制。
+# ⛔ 刻意没画：因果掩码（之字形切那张图管）；GQA 里 KV 头少于查询头的细节（只写在上限那句里）。
+# ════════════════════════════════════════════════════════════════
+NS, NH, CS = 4, 4, 46
+
+
+def sp_grid(f, x, y, owner, title=None, cs=CS, lab=True):
+    """画 4 段 × 4 头的表。owner(i, j) 返回卡号（None ＝ 中性灰）。返回表的右下角。"""
+    if title:
+        f.t(x, y - 30, title, INK, True, 13.5)
+    if lab:
+        for j in range(NH):
+            f.t(x + j * cs + cs / 2.0, y - 8, "头%d" % j, GY, size=12, anchor="middle")
+        for i in range(NS):
+            f.t(x - 8, y + i * cs + cs / 2.0 + 5, "段%d" % i, GY, size=12, anchor="end")
+    for i in range(NS):
+        for j in range(NH):
+            k = owner(i, j)
+            col = COLS[k] if k is not None else "#f1f3f4"
+            f.box(x + j * cs, y + i * cs, cs - 3, cs - 3, col, col if k is not None else LINE, 3)
+    return x + NH * cs, y + NS * cs
+
+
+def fig_ulysses():
+    f = Fig(W, "把注意力的活排成一张表：一行是一段序列，一列是一个头。同一列里后面的段要看前面的段，所以跨段要传笔记；"
+               "同一行里头与头互不相干。Ring Attention 按行分给四张卡，每张卡有一段序列的全部头，要看别的段就让笔记沿环转。"
+               "Ulysses 先做一次 AllToAll，把按行分换成按列分：每张卡拿一个头的全部段，这一列要看的东西全在本卡，注意力不用再问别人；"
+               "算完再做一次 AllToAll 换回按行分。上限是卡数不能超过头数")
+    y0 = f.header("Ulysses：转置一下，就不用传笔记了"
+                  "　——　<tspan font-weight=\"700\">Ring 按行分，Ulysses 换成按列分</tspan>",
+                  "把注意力的活排成一张表：一行是一段序列（一段 token），一列是一个头。四种颜色是四张卡",
+                  [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3")])
+
+    # ── ① 这张表 ＋ Ring ──
+    PH1 = 330
+    py = f.panel(0, y0, W, PH1, "① 先认识这张表：列里有依赖，行里没有", INK)
+    gx, gy = 110, py + 70
+    x2, y2 = sp_grid(f, gx, gy, lambda i, j: None, "注意力的活")
+    f.line(gx + CS * 1.5, gy + 6, gx + CS * 1.5, y2 - 8, RD, 2.4)
+    f.line(gx + CS * 1.5, y2 - 8, gx + CS * 1.5, gy + 6, RD, 2.4)
+    f.t(x2 + 24, gy + 40, "同一列：后面的段要看前面的段", RD, True, 14)
+    f.t(x2 + 24, gy + 62, "跨段 → 得传笔记（K、V）", RD, size=13)
+    f.t(x2 + 24, gy + 120, "同一行：头与头各算各的", GR, True, 14)
+    f.t(x2 + 24, gy + 142, "跨头 → 分开算，不用说话", GR, size=13)
+    rx = 820
+    x3, y3 = sp_grid(f, rx, gy, lambda i, j: i, "Ring：按行分")
+    for i in range(NS):
+        yy = gy + i * CS + CS / 2.0
+        f.line(x3 + 14, yy, x3 + 50, yy, GY2, 1, arrow=False)
+    f.path("M%d,%d L%d,%d L%d,%d L%d,%d" % (x3 + 50, gy + CS / 2.0, x3 + 70, gy + CS / 2.0,
+                                            x3 + 70, y3 - CS / 2.0, x3 + 54, y3 - CS / 2.0), BL, 2)
+    f.t(x3 + 84, gy + 70, "每张卡：一段 × 全部头", INK, True, 13.5)
+    f.t(x3 + 84, gy + 94, "要看别的段，", GY, size=13)
+    f.t(x3 + 84, gy + 114, "笔记就沿环转一圈", BL, True, 13.5)
+    f.t(gx - 70, py + PH1 - 44, "所以关键在于：按列分，列里的依赖就全落在一张卡上。Ulysses 做的就是这件事。", INK, True, 14)
+
+    # ── ② Ulysses 三步 ──
+    y2p = py + PH1 - 30 + 20
+    PH2 = 362
+    py = f.panel(0, y2p, W, PH2, "② Ulysses：前后各一次 AllToAll", BL)
+    gy = py + 76
+    ax = [110, 560, 1010]
+    sp_grid(f, ax[0], gy, lambda i, j: i, "进来时：按段分")
+    sp_grid(f, ax[1], gy, lambda i, j: j, "AllToAll 后：按头分")
+    sp_grid(f, ax[2], gy, lambda i, j: i, "再 AllToAll：换回按段分")
+    for k in range(2):
+        xa, xb = ax[k] + NH * CS + 20, ax[k + 1] - 60
+        f.line(xa, gy + 2 * CS, xb, gy + 2 * CS, BL, 2.4)
+        f.t((xa + xb) / 2.0, gy + 2 * CS - 12, "AllToAll", BL, True, 13.5, "middle")
+    f.t(ax[1] - 40, gy + NS * CS + 30, "每张卡：一个头 × 全部段", INK, True, 13.5)
+    f.t(ax[1] - 40, gy + NS * CS + 52, "这一列要看的全在本卡：注意力本地算完", GR, True, 13.5)
+    f.t(ax[0] - 70, gy + NS * CS + 30, "卡 k 把自己那行的第 j 格发给卡 j：", GY, size=13)
+    f.t(ax[0] - 70, gy + NS * CS + 52, "留 1 格，发 3 格", GY, size=13)
+    f.t(ax[2] - 40, gy + NS * CS + 30, "后面的逐 token 运算", GY, size=13)
+    f.t(ax[2] - 40, gy + NS * CS + 52, "又按段各算各的", GY, size=13)
+
+    f._pan = None
+    yb = f.band(py + PH2 + 20 - 30, "ok", "Ring 靠传笔记，Ulysses 靠换切法", [
+        "好处：序列长一倍、卡也多一倍，每张卡的通信量不变；注意力本身一次都不用等别人。",
+        "代价：每层前后各一次 AllToAll（网络最怕的那种），而且卡数不能超过头数；KV 头比查询头少的模型，卡在 KV 头数上。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 DeepSpeed-Ulysses：Jacobs 等，arXiv 2309.14509（注意力前后各一次 AllToAll，序列长度与卡数同比放大时每卡通信量不变）。"
+               "Ring Attention：Liu 等，arXiv 2310.01889。",
+               "⚠️ 示意：4 段 × 4 头、4 张卡；实际每一格是一整段 token 在一个头上的 Q、K、V。")
+    f.save("fig5-ulysses.svg", yb + 14)
+
+
+def fig_usp():
+    f = Fig(W, "USP 把 Ulysses 和 Ring 叠起来用。四张卡、两台机器：卡数等于 Ulysses 2 乘以环 2。"
+               "进来时每张卡一段序列的全部头。第一步在机器里做 AllToAll：机器一的卡 0 拿前两段的头 0、头 1，卡 1 拿前两段的头 2、头 3；机器二同理拿后两段。"
+               "第二步在机器之间走环：拿同一批头的两张卡互传笔记，卡 0 和卡 2 一对，卡 1 和卡 3 一对。"
+               "头数上限只管 Ulysses 那一维，环那一维可以随便加；AllToAll 留在机器里，跨机器只走环")
+    y0 = f.header("USP：Ulysses 和 Ring 叠起来"
+                  "　——　<tspan font-weight=\"700\">表分成块：机器里转置，机器之间走环</tspan>",
+                  "还是那张「段 × 头」表。4 张卡、2 台机器：总卡数 ＝ Ulysses 那一维（2）× 环那一维（2）",
+                  [(BL, "卡 0（机器一）"), (OR, "卡 1（机器一）"), (GR, "卡 2（机器二）"), (PU, "卡 3（机器二）")])
+    PH1 = 340
+    py = f.panel(0, y0, W, PH1, "① 两步：先机器内 AllToAll，再机器间走环", BL)
+    gy = py + 80
+    ax = [110, 600]
+    sp_grid(f, ax[0], gy, lambda i, j: i, "进来时：按段分")
+    blk = lambda i, j: (0 if i < 2 else 2) + (0 if j < 2 else 1)
+    x2, y2 = sp_grid(f, ax[1], gy, blk, "机器内 AllToAll 后：按块分")
+    xa, xb = ax[0] + NH * CS + 20, ax[1] - 60
+    f.line(xa, gy + 2 * CS, xb, gy + 2 * CS, BL, 2.4)
+    f.t((xa + xb) / 2.0, gy + 2 * CS - 30, "机器内 AllToAll", BL, True, 13.5, "middle")
+    f.t((xa + xb) / 2.0, gy + 2 * CS - 12, "（Ulysses 2）", BL, size=13, anchor="middle")
+    f.t(xa, gy + 2 * CS + 26, "卡 0↔卡 1 换列，卡 2↔卡 3 换列", GY, size=12.5)
+    # 机器间的环：同一批头的上下两块互传笔记
+    for c0, col in ((0, BL), (2, OR)):
+        cx = ax[1] + c0 * CS + CS - 1.5
+        f.line(cx - 8, gy + 2 * CS - 16, cx - 8, gy + 2 * CS + 16, RD, 2.4)
+        f.line(cx + 8, gy + 2 * CS + 16, cx + 8, gy + 2 * CS - 16, RD, 2.4)
+    f.t(x2 + 30, gy + 30, "机器间走环（Ring 2）", RD, True, 14)
+    f.t(x2 + 30, gy + 54, "拿同一批头的上下两块互传笔记：", GY, size=13)
+    f.t(x2 + 30, gy + 76, "卡 0 ↔ 卡 2（头 0、1），卡 1 ↔ 卡 3（头 2、3）", INK, True, 13)
+    f.t(x2 + 30, gy + 118, "每张卡：两段 × 两个头", INK, True, 13.5)
+    f.t(x2 + 30, gy + 140, "头已经分开了，跨段的部分交给环", GY, size=13)
+    f.t(ax[0] - 70, py + PH1 - 44, "算完注意力，再在机器内 AllToAll 一次，换回按段分。", GY, size=13.5)
+
+    y2p = py + PH1 - 30 + 20
+    PH2 = 230
+    py = f.panel(0, y2p, W, PH2, "② 三种放在一起比", INK)
+    CX = [24, 190, 440, 800, 1070]
+    for x, h in zip(CX, ["", "表怎么分", "通信", "上限", "适合放在"]):
+        f.t(x, py + 30, h, GY, True, 13.5)
+    rows = [("Ring", "按行（段）", "笔记沿环一对一传", "没有", "可以跨机器", BL),
+            ("Ulysses", "按列（头）", "前后各一次 AllToAll", "卡数 ≤ 头数", "机器里（快线）", OR),
+            ("USP", "按块", "机器内 AllToAll ＋ 机器间环", "只有 Ulysses 那一维 ≤ 头数", "两种各放各的", GR)]
+    for r, row in enumerate(rows):
+        yy = py + 66 + r * 40
+        f.t(CX[0], yy, row[0], row[5], True, 15)
+        for c in range(1, 5):
+            f.t(CX[c], yy, row[c], INK, c == 3 and r == 2, 13.5)
+    f._pan = None
+    yb = f.band(py + PH2 + 20 - 30, "ok", "USP ＝ 两刀叠起来：总卡数 ＝ Ulysses 那一维 × 环那一维", [
+        "头数上限只管 Ulysses 那一维，环那一维可以随便加，所以头少的模型也能切到很多张卡上。",
+        "AllToAll 最怕慢线，留在机器里；环一步只跟邻居说话、还能边算边传，放到机器之间。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 USP：Fang 与 Zhao，arXiv 2405.07719；xDiT 文档：ulysses-degree × ring-degree ＝ sp-degree，去掉「sp-degree 必须小于头数」的限制，对异构网络更友好。",
+               "⚠️ 「AllToAll 放机器里、环放机器之间」是本课按两种通信的脾气归纳的常见摆法，不是论文的硬规定。")
+    f.save("fig5-usp.svg", yb + 14)
+
+
+fig_ulysses()
+fig_usp()

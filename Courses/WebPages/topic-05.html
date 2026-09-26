@@ -5444,8 +5444,303 @@ body.figonly section h3{margin-top:34px}
        aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
 <figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>一句话记住两者：<b>Ring 是人不动、笔记转圈；Ulysses 是换个切法，每人拿全部笔记的几个头。</b>
-    两者可以叠起来用（USP：卡排成二维，一个维度走环，另一个维度走 AllToAll），Megatron 的 CP 也支持分层组合。</p>
+  <p>Ulysses 为什么转置一下就不用传笔记？把注意力的活排成一张「段 × 头」表就清楚了：同一列里后面的段要看前面的段，同一行里头与头互不相干。
+    Ring 按行分，依赖跨了卡，只好让笔记转圈；Ulysses 先转置，让每张卡拿整列。</p>
+<figure class="fbox fwide" id="fig-ulysses"><svg viewBox="0 0 1400 956" width="100%" role="img" aria-label="把注意力的活排成一张表：一行是一段序列，一列是一个头。同一列里后面的段要看前面的段，所以跨段要传笔记；同一行里头与头互不相干。Ring Attention 按行分给四张卡，每张卡有一段序列的全部头，要看别的段就让笔记沿环转。Ulysses 先做一次 AllToAll，把按行分换成按列分：每张卡拿一个头的全部段，这一列要看的东西全在本卡，注意力不用再问别人；算完再做一次 AllToAll 换回按行分。上限是卡数不能超过头数"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">Ulysses：转置一下，就不用传笔记了　——　<tspan font-weight="700">Ring 按行分，Ulysses 换成按列分</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">把注意力的活排成一张表：一行是一段序列（一段 token），一列是一个头。四种颜色是四张卡</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0</text>
+<rect x="79.48" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="100" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 1</text>
+<rect x="158.96" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="179" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 2</text>
+<rect x="238.44" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="259" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 3</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 先认识这张表：列里有依赖，行里没有</tspan></text>
+<text class="svgsm" x="110" y="172" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力的活</tspan></text>
+<text class="svgsm" x="133" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头0</text>
+<text class="svgsm" x="179" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头1</text>
+<text class="svgsm" x="225" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头2</text>
+<text class="svgsm" x="271" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头3</text>
+<text class="svgsm" x="102" y="230" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段0</text>
+<text class="svgsm" x="102" y="276" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段1</text>
+<text class="svgsm" x="102" y="322" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段2</text>
+<text class="svgsm" x="102" y="368" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段3</text>
+<rect x="110" y="202" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="156" y="202" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="202" y="202" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="248" y="202" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="110" y="248" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="156" y="248" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="202" y="248" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="248" y="248" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="110" y="294" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="156" y="294" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="202" y="294" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="248" y="294" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="110" y="340" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="156" y="340" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="202" y="340" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="248" y="340" width="43" height="43" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="179.0" y1="208" x2="179.0" y2="378" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="179.0" y1="378" x2="179.0" y2="208" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="318" y="242" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一列：后面的段要看前面的段</tspan></text>
+<text class="svgsm" x="318" y="264" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">跨段 → 得传笔记（K、V）</text>
+<text class="svgsm" x="318" y="322" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一行：头与头各算各的</tspan></text>
+<text class="svgsm" x="318" y="344" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums">跨头 → 分开算，不用说话</text>
+<text class="svgsm" x="820" y="172" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ring：按行分</tspan></text>
+<text class="svgsm" x="843" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头0</text>
+<text class="svgsm" x="889" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头1</text>
+<text class="svgsm" x="935" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头2</text>
+<text class="svgsm" x="981" y="194" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头3</text>
+<text class="svgsm" x="812" y="230" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段0</text>
+<text class="svgsm" x="812" y="276" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段1</text>
+<text class="svgsm" x="812" y="322" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段2</text>
+<text class="svgsm" x="812" y="368" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段3</text>
+<rect x="820" y="202" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="866" y="202" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="912" y="202" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="958" y="202" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="820" y="248" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="866" y="248" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="912" y="248" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="958" y="248" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="820" y="294" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="866" y="294" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="912" y="294" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="958" y="294" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="820" y="340" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="866" y="340" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="912" y="340" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="958" y="340" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<line x1="1018" y1="225.0" x2="1054" y2="225.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1018" y1="271.0" x2="1054" y2="271.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1018" y1="317.0" x2="1054" y2="317.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1018" y1="363.0" x2="1054" y2="363.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<path d="M1054,225 L1074,225 L1074,363 L1058,363" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="1088" y="272" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡：一段 × 全部头</tspan></text>
+<text class="svgsm" x="1088" y="296" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">要看别的段，</text>
+<text class="svgsm" x="1088" y="316" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">笔记就沿环转一圈</tspan></text>
+<text class="svgsm" x="40" y="418" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以关键在于：按列分，列里的依赖就全落在一张卡上。Ulysses 做的就是这件事。</tspan></text>
+<rect x="0" y="452" width="1400" height="362" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="454" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="482" x2="1400" y2="482" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="472" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② Ulysses：前后各一次 AllToAll</tspan></text>
+<text class="svgsm" x="110" y="528" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">进来时：按段分</tspan></text>
+<text class="svgsm" x="133" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头0</text>
+<text class="svgsm" x="179" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头1</text>
+<text class="svgsm" x="225" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头2</text>
+<text class="svgsm" x="271" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头3</text>
+<text class="svgsm" x="102" y="586" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段0</text>
+<text class="svgsm" x="102" y="632" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段1</text>
+<text class="svgsm" x="102" y="678" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段2</text>
+<text class="svgsm" x="102" y="724" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段3</text>
+<rect x="110" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="156" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="202" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="248" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="110" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="156" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="202" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="248" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="110" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="156" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="202" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="248" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="110" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="156" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="202" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="248" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="528" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllToAll 后：按头分</tspan></text>
+<text class="svgsm" x="583" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头0</text>
+<text class="svgsm" x="629" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头1</text>
+<text class="svgsm" x="675" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头2</text>
+<text class="svgsm" x="721" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头3</text>
+<text class="svgsm" x="552" y="586" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段0</text>
+<text class="svgsm" x="552" y="632" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段1</text>
+<text class="svgsm" x="552" y="678" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段2</text>
+<text class="svgsm" x="552" y="724" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段3</text>
+<rect x="560" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="606" y="558" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="652" y="558" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="698" y="558" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="560" y="604" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="606" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="652" y="604" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="698" y="604" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="560" y="650" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="606" y="650" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="652" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="698" y="650" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="560" y="696" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="606" y="696" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="652" y="696" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="698" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1010" y="528" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">再 AllToAll：换回按段分</tspan></text>
+<text class="svgsm" x="1033" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头0</text>
+<text class="svgsm" x="1079" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头1</text>
+<text class="svgsm" x="1125" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头2</text>
+<text class="svgsm" x="1171" y="550" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头3</text>
+<text class="svgsm" x="1002" y="586" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段0</text>
+<text class="svgsm" x="1002" y="632" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段1</text>
+<text class="svgsm" x="1002" y="678" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段2</text>
+<text class="svgsm" x="1002" y="724" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段3</text>
+<rect x="1010" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1056" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1102" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1148" y="558" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1010" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1056" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1102" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1148" y="604" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1010" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1056" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1102" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1148" y="650" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1010" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1056" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1102" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1148" y="696" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<line x1="314" y1="650" x2="500" y2="650" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="407" y="638" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllToAll</tspan></text>
+<line x1="764" y1="650" x2="950" y2="650" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="857" y="638" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">AllToAll</tspan></text>
+<text class="svgsm" x="520" y="772" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡：一个头 × 全部段</tspan></text>
+<text class="svgsm" x="520" y="794" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一列要看的全在本卡：注意力本地算完</tspan></text>
+<text class="svgsm" x="40" y="772" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡 k 把自己那行的第 j 格发给卡 j：</text>
+<text class="svgsm" x="40" y="794" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">留 1 格，发 3 格</text>
+<text class="svgsm" x="970" y="772" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">后面的逐 token 运算</text>
+<text class="svgsm" x="970" y="794" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">又按段各算各的</text>
+<rect x="0" y="834" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="834" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="834" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="861" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ring 靠传笔记，Ulysses 靠换切法</tspan></text>
+<text class="svgsm" x="20" y="892" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">好处：序列长一倍、卡也多一倍，每张卡的通信量不变；注意力本身一次都不用等别人。</text>
+<text class="svgsm" x="20" y="916" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：每层前后各一次 AllToAll（网络最怕的那种），而且卡数不能超过头数；KV 头比查询头少的模型，卡在 KV 头数上。</text>
+</svg><figcaption><b>列里有依赖、行里没有：按列分，注意力就不用问别人。</b><span class="capmore"><br><em>示意：4 段 × 4 头、4 张卡。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DeepSpeed-Ulysses：Jacobs 等，arXiv <a href="https://arxiv.org/abs/2309.14509" target="_blank" rel="noopener">2309.14509</a>（注意力前后各一次 AllToAll，序列长度与卡数同比放大时每卡通信量不变）。Ring Attention：Liu 等，arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>。</p>
+<p>⚠️ 示意：4 段 × 4 头、4 张卡；实际每一格是一整段 token 在一个头上的 Q、K、V。</p></details></figure>
+  <p>一句话记住两者：<b>Ring 是人不动、笔记转圈；Ulysses 是换个切法，每人拿全部笔记的几个头。</b></p>
+  <p>两者可以叠起来用，叫 <b>USP</b>：把表分成块，卡排成二维，一维在机器里做 Ulysses 的 AllToAll，另一维在机器之间走环，总卡数 ＝ 两维相乘。
+    Megatron 的 CP 也支持这种分层组合。</p>
+<figure class="fbox fwide" id="fig-usp"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="USP 把 Ulysses 和 Ring 叠起来用。四张卡、两台机器：卡数等于 Ulysses 2 乘以环 2。进来时每张卡一段序列的全部头。第一步在机器里做 AllToAll：机器一的卡 0 拿前两段的头 0、头 1，卡 1 拿前两段的头 2、头 3；机器二同理拿后两段。第二步在机器之间走环：拿同一批头的两张卡互传笔记，卡 0 和卡 2 一对，卡 1 和卡 3 一对。头数上限只管 Ulysses 那一维，环那一维可以随便加；AllToAll 留在机器里，跨机器只走环"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">USP：Ulysses 和 Ring 叠起来　——　<tspan font-weight="700">表分成块：机器里转置，机器之间走环</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">还是那张「段 × 头」表。4 张卡、2 台机器：总卡数 ＝ Ulysses 那一维（2）× 环那一维（2）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0（机器一）</text>
+<rect x="157.88" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="178" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 1（机器一）</text>
+<rect x="315.76" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="336" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 2（机器二）</text>
+<rect x="473.64" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="494" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 3（机器二）</text>
+<rect x="0" y="102" width="1400" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 两步：先机器内 AllToAll，再机器间走环</tspan></text>
+<text class="svgsm" x="110" y="182" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">进来时：按段分</tspan></text>
+<text class="svgsm" x="133" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头0</text>
+<text class="svgsm" x="179" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头1</text>
+<text class="svgsm" x="225" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头2</text>
+<text class="svgsm" x="271" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头3</text>
+<text class="svgsm" x="102" y="240" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段0</text>
+<text class="svgsm" x="102" y="286" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段1</text>
+<text class="svgsm" x="102" y="332" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段2</text>
+<text class="svgsm" x="102" y="378" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段3</text>
+<rect x="110" y="212" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="156" y="212" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="202" y="212" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="248" y="212" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="110" y="258" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="156" y="258" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="202" y="258" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="248" y="258" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="110" y="304" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="156" y="304" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="202" y="304" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="248" y="304" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="110" y="350" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="156" y="350" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="202" y="350" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="248" y="350" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="600" y="182" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">机器内 AllToAll 后：按块分</tspan></text>
+<text class="svgsm" x="623" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头0</text>
+<text class="svgsm" x="669" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头1</text>
+<text class="svgsm" x="715" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头2</text>
+<text class="svgsm" x="761" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">头3</text>
+<text class="svgsm" x="592" y="240" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段0</text>
+<text class="svgsm" x="592" y="286" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段1</text>
+<text class="svgsm" x="592" y="332" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段2</text>
+<text class="svgsm" x="592" y="378" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">段3</text>
+<rect x="600" y="212" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="646" y="212" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="692" y="212" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="212" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="600" y="258" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="646" y="258" width="43" height="43" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="692" y="258" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="258" width="43" height="43" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="600" y="304" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="646" y="304" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="692" y="304" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="738" y="304" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="600" y="350" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="646" y="350" width="43" height="43" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="692" y="350" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="738" y="350" width="43" height="43" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<line x1="314" y1="304" x2="540" y2="304" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="427" y="274" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">机器内 AllToAll</tspan></text>
+<text class="svgsm" x="427" y="292" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">（Ulysses 2）</text>
+<text class="svgsm" x="314" y="330" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">卡 0↔卡 1 换列，卡 2↔卡 3 换列</text>
+<line x1="636.5" y1="288" x2="636.5" y2="320" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="652.5" y1="320" x2="652.5" y2="288" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="728.5" y1="288" x2="728.5" y2="320" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="744.5" y1="320" x2="744.5" y2="288" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="814" y="242" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">机器间走环（Ring 2）</tspan></text>
+<text class="svgsm" x="814" y="266" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">拿同一批头的上下两块互传笔记：</text>
+<text class="svgsm" x="814" y="288" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0 ↔ 卡 2（头 0、1），卡 1 ↔ 卡 3（头 2、3）</tspan></text>
+<text class="svgsm" x="814" y="330" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡：两段 × 两个头</tspan></text>
+<text class="svgsm" x="814" y="352" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">头已经分开了，跨段的部分交给环</text>
+<text class="svgsm" x="40" y="428" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">算完注意力，再在机器内 AllToAll 一次，换回按段分。</text>
+<rect x="0" y="462" width="1400" height="230" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="462" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="464" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="492" x2="1400" y2="492" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="482" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 三种放在一起比</tspan></text>
+<text class="svgsm" x="24" y="522" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
+<text class="svgsm" x="190" y="522" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">表怎么分</tspan></text>
+<text class="svgsm" x="440" y="522" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">通信</tspan></text>
+<text class="svgsm" x="800" y="522" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上限</tspan></text>
+<text class="svgsm" x="1070" y="522" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">适合放在</tspan></text>
+<text class="svgsm" x="24" y="558" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ring</tspan></text>
+<text class="svgsm" x="190" y="558" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">按行（段）</text>
+<text class="svgsm" x="440" y="558" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">笔记沿环一对一传</text>
+<text class="svgsm" x="800" y="558" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">没有</text>
+<text class="svgsm" x="1070" y="558" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">可以跨机器</text>
+<text class="svgsm" x="24" y="598" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ulysses</tspan></text>
+<text class="svgsm" x="190" y="598" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">按列（头）</text>
+<text class="svgsm" x="440" y="598" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">前后各一次 AllToAll</text>
+<text class="svgsm" x="800" y="598" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">卡数 ≤ 头数</text>
+<text class="svgsm" x="1070" y="598" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">机器里（快线）</text>
+<text class="svgsm" x="24" y="638" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">USP</tspan></text>
+<text class="svgsm" x="190" y="638" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">按块</text>
+<text class="svgsm" x="440" y="638" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">机器内 AllToAll ＋ 机器间环</text>
+<text class="svgsm" x="800" y="638" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只有 Ulysses 那一维 ≤ 头数</tspan></text>
+<text class="svgsm" x="1070" y="638" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">两种各放各的</text>
+<rect x="0" y="712" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="712" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="712" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="739" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">USP ＝ 两刀叠起来：总卡数 ＝ Ulysses 那一维 × 环那一维</tspan></text>
+<text class="svgsm" x="20" y="770" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">头数上限只管 Ulysses 那一维，环那一维可以随便加，所以头少的模型也能切到很多张卡上。</text>
+<text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">AllToAll 最怕慢线，留在机器里；环一步只跟邻居说话、还能边算边传，放到机器之间。</text>
+</svg><figcaption><b>机器里转置、机器之间走环：头数上限只剩一维。</b><span class="capmore"><br><em>「AllToAll 放机器里、环放机器之间」是本课归纳的常见摆法。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 USP：Fang 与 Zhao，arXiv <a href="https://arxiv.org/abs/2405.07719" target="_blank" rel="noopener">2405.07719</a>；xDiT 文档：ulysses-degree × ring-degree ＝ sp-degree，去掉「sp-degree 必须小于头数」的限制，对异构网络更友好。</p>
+<p>⚠️ 「AllToAll 放机器里、环放机器之间」是本课按两种通信的脾气归纳的常见摆法，不是论文的硬规定。</p></details></figure>
 
   <h3 id="s5-3">5.3　causal 带来的不均</h3>
   <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。
