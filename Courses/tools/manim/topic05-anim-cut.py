@@ -670,7 +670,8 @@ class MeshMap(Scene):
 
 
 # ── FSDP 一步 ───────────────────────────────────────────────────────────
-# ⭐ 增量来自时间：静态图能列出「AG、AG、RS」三个格子，列不出「借来 → 用 → 还掉 → 反向再借」
+# ⭐ 增量来自时间：静态图能列出「AG、AG、RS」三个格子，列不出「复制过来 → 用 → 扔掉 → 反向再复制」
+# ⛔ 2026-09-26 真人纠正：别说「借／还」——借意味着对方就没了；AllGather 是复制，原件一直在主人手里
 #   这个节奏。每张卡始终只长期拿着每层 1/4（自己那一段），整层只在用的那一刻出现。
 # ⛔ 次数现算：前向每层 1 次 AllGather，反向每层 1 次 AllGather ＋ 1 次 ReduceScatter。
 FS_L = 3
@@ -680,7 +681,7 @@ assert FS_COMM == 3 * FS_L == 9
 
 class FSDPStep(Scene):
     def construct(self):
-        title = cap_text("FSDP：每层用之前借回来，用完就还", size=30).to_edge(UP)
+        title = cap_text("FSDP：每层用之前把别人那几段复制过来，用完就扔", size=30).to_edge(UP)
         self.add(title)
         XC = [-4.8, -1.6, 1.6, 4.8]
         YL = [1.1, 0.0, -1.1]
@@ -762,7 +763,7 @@ class FSDPStep(Scene):
             self.remove(*dots)
             bump()
 
-        say("前向：每层先 AllGather 拼回整层，算完只留自己那一段")
+        say("前向：每层先 AllGather，把别人那几段复制过来拼成整层，算完扔掉复制件")
         for i in range(FS_L):
             cps = gather(i)
             use(i, BLUE)
