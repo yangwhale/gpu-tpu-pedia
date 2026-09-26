@@ -505,18 +505,24 @@ __FIG_FOLD__
        aria-label="Ring Attention 动画。四张卡，每张卡左边固定一段 Q（Q0 到 Q3），旁边一段 KV。右边是 4 乘 4 的注意力块网格，行是哪张卡的 Q，列是哪段 KV。标题：Ring Attention：Q 不动，KV 沿环传。字幕一：每张卡固定一段 Q；每一步算手上这对（Q, KV），同时把 KV 传给下一张。四步里 KV 段一格格往下传，卡 3 的传回卡 0，网格每行逐格填满。字幕二：转完一圈：每张卡都跟所有 KV 算过了，自己那一行填满。字幕三：关键：传下一块的时候正在算这一块，通信藏在计算后面。最后复位。"></video>
 <figcaption>Q 留在原地，KV 沿环转一圈，每张卡把自己那一行填满。
   <span class="sub">（9 秒无声循环，Manim 渲染。画的是不带因果掩码的情形。）</span></figcaption></figure>
-<figure class="fbox fwide" id="anim-ulysses">
-<video src="media/topic05-ulysses.mp4" autoplay loop muted playsinline
-       aria-label="Ulysses 动画。标题：Ulysses：用两次 AllToAll，在「按序列切」和「按头切」之间换。四张卡，每张卡四格，颜色表示哪一段序列，格子里写「第 k 段 · 头 j」。字幕一：开始：每张卡拿一段序列，这一段的全部头都在（颜色 ＝ 哪一段）。字幕二：第一次 AllToAll：第 j 个头的那一格，送到卡 j。十六格同时飞到新位置，每张卡变成四种颜色、同一个头。字幕三：现在每张卡：全部序列、一个头 —— 这个头的注意力在本卡就能算完。四张卡外框亮黄一下。字幕四：第二次 AllToAll：算完再换回按序列切，接着往下走。十六格飞回原位。字幕五：代价：每层两次 AllToAll；卡数不能超过头数。"></video>
-<figcaption>一次转置，每张卡就有了一个头的全部序列，注意力不用再问别人。
-  <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+
   <p>Ulysses 为什么转置一下就不用传笔记？把注意力的活排成一张「段 × 头」表就清楚了：同一列里后面的段要看前面的段，同一行里头与头互不相干。
     Ring 按行分，依赖跨了卡，只好让笔记转圈；Ulysses 先转置，让每张卡拿整列。</p>
 __FIG_ULYSSES__
+<figure class="fbox fwide" id="anim-ulysses">
+<video src="media/topic05-ulysses.mp4" autoplay loop muted playsinline
+       aria-label="Ulysses 分步动画。标题：Ulysses：转置一下，每张卡拿一个头的全部段。四张卡，每张卡分左右两列：左列「按段」，右列「按头」；每格写「段 s · 头 h」，颜色表示哪一段。字幕一：进来时按段分：卡 k 拿第 k 段的全部头（颜色 ＝ 哪一段）。字幕二：可头 0 的注意力要的是：头 0 的全部段 —— 现在散在四张卡上（四张卡的头 0 格亮黄框）。字幕三：AllToAll，先看卡 0：头 0 留在本卡，头 1、2、3 分别发给卡 1、2、3。字幕四：卡 0 那一行发完了：留 1 格，发 3 格。字幕五：其余三张卡同时照做：第 j 个头那一格，发给卡 j。字幕六：换完了：卡 j 拿头 j 的全部四段。字幕七：这一列要看的全在本卡：注意力本地算完，一次都不用问别人（右列亮绿框）。字幕八：算完再 AllToAll 一次，换回按段分，接着做逐 token 的运算。字幕九：代价：每层前后各一次 AllToAll；卡数不能超过头数。最后复位。"></video>
+<figcaption>AllToAll 一步一步看：先看卡 0 怎么发，再看大家同时照做；换完每张卡拿一个头的全部段。
+  <span class="sub">（26 秒无声循环，Manim 渲染；手动模式每一步停住。）</span></figcaption></figure>
   <p>一句话记住两者：<b>Ring 是人不动、笔记转圈；Ulysses 是换个切法，每人拿全部笔记的几个头。</b></p>
   <p>两者可以叠起来用，叫 <b>USP</b>：把表分成块，卡排成二维，一维在机器里做 Ulysses 的 AllToAll，另一维在机器之间走环，总卡数 ＝ 两维相乘。
     Megatron 的 CP 也支持这种分层组合。</p>
 __FIG_USP__
+<figure class="fbox fwide" id="anim-usp">
+<video src="media/topic05-usp.mp4" autoplay loop muted playsinline
+       aria-label="USP 分步动画。标题：USP：机器里做 Ulysses，机器之间走环。两台机器，机器一有卡 0、卡 1，机器二有卡 2、卡 3；每格写「段 s · 头 h」，颜色表示哪一段。字幕一：4 张卡、2 台机器；进来时照样按段分，卡 k 拿第 k 段的全部头。字幕二：第一步：只在机器里做 AllToAll（Ulysses 2）：卡 0、卡 1 互换头。字幕三：机器一换完：卡 0 拿段 0、1 的头 0、1，卡 1 拿段 0、1 的头 2、3。字幕四：机器二同时照做，拿后两段。字幕五：现在每张卡：两段 × 两个头 —— 头分开了，段还缺一半。字幕六：卡 0 管头 0、1，可段 2、3 的笔记在机器二的卡 2 上（卡 2 那四格亮红框）。字幕七：第二步：机器之间走环（Ring 2）：卡 0↔卡 2、卡 1↔卡 3 互传笔记（半透明的抄件飞过去）。字幕八：传过去的是抄件（半透明）：各自算完自己两段 × 两头的注意力，抄件就扔。字幕九：算完，再在机器里 AllToAll 一次，换回按段分。字幕十：总卡数 ＝ Ulysses 2 × 环 2；头数上限只管机器里那一维。最后复位。"></video>
+<figcaption>先在机器里换头，再在机器之间传笔记：机器里走 AllToAll，跨机器只走环。
+  <span class="sub">（27 秒无声循环，Manim 渲染；手动模式每一步停住。）</span></figcaption></figure>
 
   <h3>5.3　causal 带来的不均</h3>
   <p>生成式模型的注意力有因果掩码：每个 token 只看前面的。于是越靠后的段算得越多，顺序切会让最后一张卡累死。
@@ -1170,7 +1176,8 @@ STEP_VIDEOS = {"topic05-ring.mp4": "Ring", "topic05-allreduce.mp4": "AllReduce",
                "topic05-reducescatter.mp4": "ReduceScatter", "topic05-allgather.mp4": "AllGather",
                "topic05-a2a.mp4": "AllToAll", "topic05-broadcast.mp4": "Broadcast",
                "topic05-scatter.mp4": "Scatter", "topic05-gather.mp4": "Gather", "topic05-reduce.mp4": "Reduce",
-               "topic05-meshmap.mp4": "MeshMap"}
+               "topic05-meshmap.mp4": "MeshMap",
+               "topic05-ulysses.mp4": "UlyssesSteps", "topic05-usp.mp4": "USPSteps"}
 
 
 def _steps(mp4):
