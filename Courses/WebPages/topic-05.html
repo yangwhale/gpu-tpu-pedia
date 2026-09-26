@@ -2724,14 +2724,14 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s2-1">2.1　数据并行：每张卡一整份模型</h3>
   <p>每张卡放一整份模型、各算一批样本；反向算完做一次 AllReduce 求平均，再一起更新。
     一步只通信一次（频率最低，量却不小：V3 这么大的模型要是纯数据并行，每卡一步约发 2.7 TB）。<b>每张卡还是存一整份 16 字节／参数 —— 装不下一点没变。</b></p>
-  <p>像几个人合写一本书，每人手里都放着一整本书稿：谁也不缺，可每人的书架都被同一本书占满。下面一节一节把重复的清掉。</p>
+  <p>打个比方：V3 的全部权重是一整套四库全书，分放在 61 间书房里，一间一层。按 V3 的配置有 128 个阁（一个阁就是一张卡），数据并行等于每个阁都藏一整套。下面一节一节把重复的清掉。</p>
 
   <h3 id="s2-2">2.2　ZeRO：越闲的越先削</h3>
   <p>先认清那三块：<b>权重</b>是模型本身；<b>梯度</b>是这一步算出来的「每个参数该往哪改、改多少」；<b>优化器状态</b>是优化器替每个参数记的账（主权重、两个动量），它最大。下文的 Ψ 就是参数个数。</p>
   <p class="sub">口径：本课按 ZeRO 论文算，优化器状态指<b>跨步常驻、要存进 checkpoint</b> 的那几样；梯度每步重算、用完清零，单独算一块（所以 ZeRO 才能把「切梯度」单列一级）。Megatron 里累加梯度的精度（<code>--main-grads-dtype</code>）跟主权重、两个动量的精度归在同一组「精度感知优化器」参数里配，所以也有人把它算进优化器。</p>
-<figure class="fbox fwide" id="fig-zero-mem"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="数据并行和 ZeRO 三级，每张卡的常驻显存。每个参数 16 字节：权重 2、梯度 2、优化器状态 12。数据并行每张卡都存一整份，16 字节。ZeRO-1 把优化器状态切成 1024 份，每卡剩约 4 字节；ZeRO-2 再切梯度，剩约 2 字节；ZeRO-3 连权重也切，只剩千分之十六字节。换成 DeepSeek-V3 的 6710 亿参数、1024 路：每卡 9.76 TiB、2.45 TiB、1.23 TiB、9.76 GiB。通信量：前三种都是 2 Ψ，跟数据并行一模一样；ZeRO-3 是 3 Ψ，多一半"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-zero-mem"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="数据并行和 ZeRO 三级，每张卡的常驻显存。每个参数 16 字节：权重 2、梯度 2、优化器状态 12。数据并行每张卡都存一整份，16 字节。ZeRO-1 把优化器状态切成 128 份，每卡剩约 4 字节；ZeRO-2 再切梯度，剩约 2 字节；ZeRO-3 连权重也切，只剩 0.125 字节。换成 DeepSeek-V3 的 6710 亿参数、128 路：每卡 9.76 TiB、2.50 TiB、1.29 TiB、78.11 GiB。通信量：前三种都是 2 Ψ，跟数据并行一模一样；ZeRO-3 是 3 Ψ，多一半"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">ZeRO：把重复的削掉，一次削一样　——　<tspan font-weight="700">前两级白送，最后一级要付 50% 的通信</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个参数 16 字节，按专题四那张表的口径拆成三块。例子：DeepSeek-V3，6,710 亿参数，1,024 路数据并行</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个参数 16 字节，按专题四那张表的口径拆成三块。例子：DeepSeek-V3，6,710 亿参数，128 路数据并行（2,048 卡 ÷ 16 段流水线）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">权重 2 字节（bf16）</text>
 <rect x="198.20000000000002" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -2744,7 +2744,7 @@ body.figonly section h3{margin-top:34px}
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡要常驻多少字节 / 参数</tspan></text>
 <text class="svgsm" x="1386" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">条长 ∝ 每参数字节数</text>
-<text class="svgsm" x="250" y="154" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每参数字节（切成 1,024 份之后）</tspan></text>
+<text class="svgsm" x="250" y="154" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每参数字节（切成 128 份之后）</tspan></text>
 <text class="svgsm" x="1040" y="154" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">V3 每卡常驻</tspan></text>
 <text class="svgsm" x="1220" y="154" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每步通信</tspan></text>
 <text class="svgsm" x="18" y="194" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数据并行</tspan></text>
@@ -2757,33 +2757,36 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="18" y="258" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ZeRO-1</tspan></text>
 <rect x="250" y="238" width="76.0" height="32" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="326.0" y="238" width="76.0" height="32" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="414" y="260" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.01 字节</tspan></text>
-<text class="svgsm" x="1040" y="260" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.45 TiB</tspan></text>
+<rect x="402.0" y="238" width="3.5625" height="32" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="417" y="260" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.09 字节</tspan></text>
+<text class="svgsm" x="1040" y="260" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.50 TiB</tspan></text>
 <text class="svgsm" x="1220" y="260" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">2Ψ（＝数据并行）</text>
 <text class="svgsm" x="18" y="322" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ZeRO-2</tspan></text>
 <rect x="250" y="302" width="76.0" height="32" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="338" y="324" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.01 字节</tspan></text>
-<text class="svgsm" x="1040" y="324" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.23 TiB</tspan></text>
+<rect x="326.59375" y="302" width="3.5625" height="32" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="342" y="324" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.11 字节</tspan></text>
+<text class="svgsm" x="1040" y="324" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.29 TiB</tspan></text>
 <text class="svgsm" x="1220" y="324" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">2Ψ（＝数据并行）</text>
 <text class="svgsm" x="18" y="386" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ZeRO-3 ＝ FSDP</tspan></text>
-<rect x="250" y="366" width="2" height="32" rx="0" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="251.1875" y="366" width="3.5625" height="32" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="250" y="366" width="4.75" height="32" rx="0" fill="#202124" stroke="#202124" stroke-width="1.0"/>
 <line x1="342" y1="382" x2="374" y2="382" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3" marker-end="url(#ah-80868b)"/>
-<rect x="380" y="366" width="7.421875" height="32" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="387.421875" y="366" width="7.421875" height="32" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="394.84375" y="366" width="44.53125" height="32" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="449" y="388" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">← 放大 100 倍才看得见</text>
-<text class="svgsm" x="262" y="388" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.016 字节</tspan></text>
-<text class="svgsm" x="1040" y="388" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.76 GiB</tspan></text>
+<rect x="380" y="366" width="11.875" height="32" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="391.875" y="366" width="11.875" height="32" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="403.75" y="366" width="71.25" height="32" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="485" y="388" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">← 放大 20 倍才看得见</text>
+<text class="svgsm" x="266" y="388" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.125 字节</tspan></text>
+<text class="svgsm" x="1040" y="388" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">78.11 GiB</tspan></text>
 <text class="svgsm" x="1220" y="388" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3Ψ（1.5×）</tspan></text>
-<text class="svgsm" x="18" y="446" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">被切掉的那几块没有消失：每张卡只剩自己那 1/1,024，细到看不见。</text>
+<text class="svgsm" x="18" y="446" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">被切掉的那几块没有消失：每张卡只剩自己那 1/128。</text>
 <rect x="0" y="512" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="512" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="512" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="539" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前两级白送，最后一级要付钱</tspan></text>
-<text class="svgsm" x="20" y="570" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight="700">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。　可 V3 按这个算每卡还要 1.23 TiB，一张卡照样装不下。</text>
-<text class="svgsm" x="20" y="594" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">只有 ZeRO-3 能降到每卡 9.76 GiB，代价是通信从 2Ψ 变成 <tspan font-weight="700">3Ψ，多一半</tspan>。　这就是 FSDP：大模型没得选，只能付这 50%。</text>
-</svg><figcaption><b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><span class="capmore"><br><em>ZeRO-3 那条短到几乎看不见：16 个字节切成 1,024 份，每份只剩 0.016。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：Rajbhandari 等，ZeRO，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 5、sec. 7。原文：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍。Ψ 为参数个数，此处按元素数计。</p>
-<p>⚠️ 每卡字节数本脚本现算并 assert；9.76 TiB 与专题四 5.1 同一口径（671e9 × 16 ÷ 1024⁴）。只算常驻，不含激活。</p></details></figure>
+<text class="svgsm" x="20" y="570" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight="700">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。　可 V3 按这个算每卡还要 1.29 TiB，一张卡照样装不下。</text>
+<text class="svgsm" x="20" y="594" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">只有 ZeRO-3 能降到每卡 78.11 GiB，代价是通信从 2Ψ 变成 <tspan font-weight="700">3Ψ，多一半</tspan>。　可一张 H800 才 80 GB，放进去就满了，激活没地方放：光切数据还不够。</text>
+</svg><figcaption><b>16 字节里，优化器状态独占 12 个 —— 所以先削它。</b><span class="capmore"><br><em>ZeRO-3 那条细得要放大才看得清：16 个字节切成 128 份，每份只剩 0.125。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：Rajbhandari 等，ZeRO，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 5、sec. 7。原文：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍。Ψ 为参数个数，此处按元素数计。</p>
+<p>⚠️ 每卡字节数本脚本现算并 assert；9.76 TiB 与专题四 5.1 同一口径（671e9 × 16 ÷ 1024⁴）。128 路 ＝ V3 的 2,048 卡 ÷ 16 段流水线（技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.2 给出 PP16，除法为本课推导）。只算常驻，不含激活。</p></details></figure>
   <p>16 字节里，12 个是优化器状态 —— 开场第二问的答案：最大的是它，先削它。巧的是，它也是最闲的那块：</p>
 <figure class="fbox fwide" id="fig-zero-busy"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一步训练里，三块东西各在什么时候被用到。权重从前向到反向每一层都要用，最忙；梯度到反向才一层层算出来、攒到更新；优化器状态最大，占 12 字节，却只在最后更新那一下才用，整整一步都在显存里干放着。所以 ZeRO 先削最闲的优化器状态，再削梯度，最后才削最忙的权重，削了权重就得每层用之前把别人那几段复制过来，要多付一半通信"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">越闲的越先削　——　<tspan font-weight="700">ZeRO 三级的顺序，就是闲忙的顺序</tspan></text>
@@ -3140,10 +3143,709 @@ body.figonly section h3{margin-top:34px}
   </details>
 
   <h3 id="s2-3">2.3　ZeRO-3 ＝ FSDP：最后那 2 个字节要付 50%</h3>
-  <p>削完前两级，每参数还剩 2 字节的权重。V3 按 1,024 路算，每卡仍要 1.23 TiB（约 1,350 GB，一张卡才两三百 GB），照样装不下。
+  <p>削完前两级，每参数还剩 2 字节的权重。V3 按 128 路算，每卡仍要 1.29 TiB（约 1,415 GB，一张卡才两三百 GB），照样装不下。
     ZeRO-2 加再多卡也降不下去了：剩下的正是人人一整份的权重。只靠数据并行这一刀，大模型只能走到 ZeRO-3，也就是 PyTorch 里的 <b>FSDP</b>：每层要算之前先 AllGather 拼回这一层，算完就扔。</p>
-  <p>回到合写书：现在每人只保管其中几章的原稿。要用哪一章，就把别人那几章<b>复印</b>一份凑齐，用完把复印件扔掉 —— 原稿一直在保管人手里，谁也没少。
-    保管的是分片，复印凑齐就是 AllGather，用完扔掉就是只留自己那份；反向算完，大家对每一章的修改意见交给那一章的保管人合并，就是 ReduceScatter。每人都放一整本，就是数据并行。</p>
+  <p>回到藏书楼。FSDP 切的时候<b>根本不管书是什么</b>：把一间书房的书一页页排成一长条，按长度等分成 128 段，每阁拿一段。切口常常落在一本书中间，所以每阁手里那段，可能是一本书的后半截接着另一本的开头 —— <b>单拿这一段谁也读不了</b>。
+    要用这一间，就得把其余 127 段都<b>抄</b>过来，凑回整间（AllGather），读完把抄本扔掉，只留自己那段；反向算完，每一段的修改意见交回管那段的阁合并（ReduceScatter）。</p>
+<figure class="fbox fwide" id="fig-siku"><svg viewBox="0 0 1400 1146" width="100%" role="img" aria-label="把 DeepSeek-V3 的全部权重想成一整套四库全书，存进 61 间书房，一间就是一层：前 3 间是 Dense，后 58 间是 MoE，每间有一张注意力目录台、1 个共享书架和 256 个专家书架。按 V3 的配置一共 128 个阁。数据并行：每阁一整套。FSDP：把每间书房的书一页页排成一长条，按长度等分成 128 段，切口落在书中间也不管，每阁拿一段；单独一段读不了，要用这间时把 128 段各抄一份拼回整间，读完扔掉抄本，只留自己那段。EP：256 个专家书架整架分给 64 个阁，每阁 4 整架，拿着就能用；PP：61 间书房按顺序分成 16 段"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一座藏书楼，三种分法　——　<tspan font-weight="700">FSDP 切碎了、拼回来才能读；EP 整架分、拿着就能用</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">把 V3 的全部权重想成一整套四库全书：一间书房 ＝ 一层，一个阁 ＝ 一张卡。阁数按 V3 的真实配置</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Dense 书房</text>
+<rect x="131.0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="152" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">注意力目录台</text>
+<rect x="272.08000000000004" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="293" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">共享书架</text>
+<rect x="381.80000000000007" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="402" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专家书架</text>
+<rect x="0" y="102" width="1400" height="222" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 藏书楼 ＝ 模型：61 间书房 ＝ 61 层</tspan></text>
+<rect x="24" y="172" width="11" height="56" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="38" y="172" width="11" height="56" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="52" y="172" width="11" height="56" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="66" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="80" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="94" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="108" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="122" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="136" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="150" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="164" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="178" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="192" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="206" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="220" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="234" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="248" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="262" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="276" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="290" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="304" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="332" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="346" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="360" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="374" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="388" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="402" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="416" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="430" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="444" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="458" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="472" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="486" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="500" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="514" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="528" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="542" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="556" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="570" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="584" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="598" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="612" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="626" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="640" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="654" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="668" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="682" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="696" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="710" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="724" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="738" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="752" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="766" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="780" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="794" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="808" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="822" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="836" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="850" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="864" y="172" width="11" height="56" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="24" y="250" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前 3 间：Dense</tspan></text>
+<text class="svgsm" x="126" y="250" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">后 58 间：MoE，大多数长得一模一样</tspan></text>
+<text class="svgsm" x="24" y="274" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">第 1 间在最左，数据从左往右一间一间过</text>
+<text class="svgsm" x="24" y="296" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">整套约 6,710 亿个参数；这是全部的书，不是其中一本</text>
+<line x1="883" y1="200" x2="935" y2="200" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3" marker-end="url(#ah-80868b)"/>
+<rect x="945" y="172" width="435" height="140" rx="6" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="957" y="192" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放大一间 MoE 书房</tspan></text>
+<rect x="957" y="206" width="70" height="40" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="992" y="231" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">目录台</tspan></text>
+<rect x="957" y="254" width="70" height="40" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="992" y="279" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">共享架</tspan></text>
+<rect x="1045" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="208" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="218" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="228" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="238" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="248" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="258" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="268" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1052" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1059" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1066" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1080" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1087" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1094" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1101" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1108" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1115" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1122" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1129" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1136" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1143" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1150" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1157" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1164" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1171" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1178" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1185" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1192" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1206" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1213" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1220" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1227" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1234" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1241" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1248" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1255" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1262" y="278" width="5" height="8" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1045" y="304" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums">256 个专家书架，每架是一个完整的专家</text>
+<rect x="0" y="344" width="1400" height="118" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="344" width="1400" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="0" y="346" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="374" x2="1400" y2="374" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="364" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 数据并行：128 个阁，每阁一整套</tspan></text>
+<rect x="24" y="392" width="120" height="48" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="30.0" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="33.5" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="37.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="40.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="44.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="47.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="51.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="54.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="58.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="61.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="65.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="68.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="72.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="75.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="79.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="82.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="86.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="89.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="93.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="96.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="100.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="103.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="107.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="110.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="114.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="117.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="121.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="124.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="128.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="131.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="135.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="84" y="436" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 1：整套</tspan></text>
+<rect x="174" y="392" width="120" height="48" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="180.0" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="183.5" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="187.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="190.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="194.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="197.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="201.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="204.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="208.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="211.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="215.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="218.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="222.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="225.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="229.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="232.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="236.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="239.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="243.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="246.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="250.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="253.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="257.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="260.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="264.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="267.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="271.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="274.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="278.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="281.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="285.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="234" y="436" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 2：整套</tspan></text>
+<rect x="324" y="392" width="120" height="48" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="330.0" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="333.5" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="337.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="340.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="344.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="347.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="351.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="354.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="358.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="361.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="365.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="368.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="372.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="375.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="379.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="382.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="386.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="389.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="393.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="396.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="400.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="403.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="407.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="410.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="414.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="417.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="421.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="424.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="428.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="431.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="435.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="384" y="436" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 3：整套</tspan></text>
+<rect x="474" y="392" width="120" height="48" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="480.0" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="483.5" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="487.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="490.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="494.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="497.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="501.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="504.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="508.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="511.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="515.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="518.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="522.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="525.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="529.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="532.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="536.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="539.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="543.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="546.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="550.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="553.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="557.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="560.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="564.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="567.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="571.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="574.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="578.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="581.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="585.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="534" y="436" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 4：整套</tspan></text>
+<text class="svgsm" x="674" y="424" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">…</tspan></text>
+<rect x="774" y="392" width="120" height="48" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="780.0" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="783.5" y="400" width="2.6" height="22" rx="0" fill="#80868b" stroke="none" stroke-width="1.0"/>
+<rect x="787.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="790.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="794.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="797.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="801.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="804.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="808.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="811.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="815.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="818.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="822.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="825.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="829.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="832.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="836.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="839.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="843.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="846.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="850.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="853.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="857.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="860.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="864.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="867.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="871.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="874.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="878.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="881.5" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<rect x="885.0" y="400" width="2.6" height="22" rx="0" fill="#e8710a" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="834" y="436" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 128：整套</tspan></text>
+<text class="svgsm" x="930" y="412" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">谁也不缺，可每个阁都被同一套书占满</tspan></text>
+<text class="svgsm" x="930" y="436" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">128 个阁存了 128 份一模一样的书</text>
+<rect x="0" y="482" width="1400" height="272" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="482" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="484" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="512" x2="1400" y2="512" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="502" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ FSDP：每间书房拍平、按长度等分，每阁只拿一段</tspan></text>
+<text class="svgsm" x="1386" y="502" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">示意画 8 段，实际 128 段</text>
+<text class="svgsm" x="24" y="580" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 k 间的书，</tspan></text>
+<text class="svgsm" x="24" y="598" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">一页页排成一条</text>
+<rect x="150" y="558" width="196" height="44" rx="2" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="248" y="585" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">书 1</text>
+<rect x="346" y="558" width="172" height="44" rx="2" fill="#e8f0fe" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="432" y="585" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">书 2</text>
+<rect x="518" y="558" width="214" height="44" rx="2" fill="#e6f4ea" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="625" y="585" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">书 3</text>
+<rect x="732" y="558" width="150" height="44" rx="2" fill="#f3e8fd" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="807" y="585" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">书 4</text>
+<rect x="882" y="558" width="150" height="44" rx="2" fill="#fce8e6" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="957" y="585" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">书 5</text>
+<rect x="1032" y="558" width="150" height="44" rx="2" fill="#fef7e0" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1107" y="585" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">书 6</text>
+<rect x="1182" y="558" width="68" height="44" rx="2" fill="#e8f0fe" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1216" y="585" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">书 7</text>
+<line x1="150.0" y1="546" x2="150.0" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="287.5" y1="546" x2="287.5" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="425.0" y1="546" x2="425.0" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="562.5" y1="546" x2="562.5" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="700.0" y1="546" x2="700.0" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="837.5" y1="546" x2="837.5" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="975.0" y1="546" x2="975.0" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="1112.5" y1="546" x2="1112.5" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<line x1="1250.0" y1="546" x2="1250.0" y2="616" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,3"/>
+<text class="svgsm" x="218" y="634" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">阁 1</text>
+<text class="svgsm" x="356" y="634" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">阁 2</text>
+<text class="svgsm" x="493" y="634" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 3</tspan></text>
+<text class="svgsm" x="631" y="634" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">阁 4</text>
+<text class="svgsm" x="768" y="634" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">…</text>
+<text class="svgsm" x="906" y="634" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">阁 126</text>
+<text class="svgsm" x="1043" y="634" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">阁 127</text>
+<text class="svgsm" x="1181" y="634" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">阁 128</text>
+<text class="svgsm" x="1264" y="578" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">红线等距切，</tspan></text>
+<text class="svgsm" x="1264" y="596" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不看书的边界</tspan></text>
+<rect x="425.0" y="554" width="137.5" height="52" rx="3" fill="none" stroke="#d93025" stroke-width="2.4"/>
+<text class="svgsm" x="493" y="658" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">阁 3 手里：一本书的后半截 ＋ 另一本的开头</text>
+<text class="svgsm" x="493" y="678" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">单拿这一段，读不了</tspan></text>
+<rect x="150" y="706" width="150" height="34" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="225" y="728" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">要用第 k 间</tspan></text>
+<line x1="304" y1="723" x2="330" y2="723" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="334" y="706" width="330" height="34" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="499" y="728" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128 段各抄一份，拼回整间（AllGather）</tspan></text>
+<line x1="668" y1="723" x2="694" y2="723" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="698" y="706" width="170" height="34" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="783" y="728" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读：这一层算完</tspan></text>
+<line x1="872" y1="723" x2="898" y2="723" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="902" y="706" width="230" height="34" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1017" y="728" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">扔掉抄本，只留自己那段</tspan></text>
+<text class="svgsm" x="1172" y="728" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反向时再抄一次</tspan></text>
+<rect x="0" y="774" width="1400" height="200" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="774" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="776" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="804" x2="1400" y2="804" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="794" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④ 对比：EP、PP 按整件分，拿到手就能用</tspan></text>
+<text class="svgsm" x="24" y="844" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP</tspan></text>
+<text class="svgsm" x="24" y="862" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">256 架分 64 阁</text>
+<rect x="150" y="820" width="140" height="50" rx="4" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="160" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="191" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="222" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="253" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="220" y="866" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 1：书架 1–4</tspan></text>
+<rect x="320" y="820" width="140" height="50" rx="4" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="330" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="361" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="392" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="423" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="390" y="866" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 2：书架 5–8</tspan></text>
+<rect x="490" y="820" width="140" height="50" rx="4" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="500" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="531" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="562" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="593" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="866" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 3：书架 9–12</tspan></text>
+<text class="svgsm" x="720" y="850" fill="#5f6368" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">…</tspan></text>
+<rect x="830" y="820" width="140" height="50" rx="4" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="840" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="871" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="902" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="933" y="828" width="24" height="26" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="900" y="866" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">阁 64：书架 253–256</tspan></text>
+<text class="svgsm" x="1000" y="842" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每阁 4 整架，一架就是一个完整专家</tspan></text>
+<text class="svgsm" x="1000" y="864" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">拿着就能用；要查，就跑去那一阁</text>
+<text class="svgsm" x="24" y="922" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PP</tspan></text>
+<text class="svgsm" x="24" y="940" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">61 间分 16 段</text>
+<rect x="150" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="153" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="162" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="171" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="180" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="198" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="201" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="219" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="228" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="246" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="249" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="258" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="267" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="276" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="294" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="297" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="306" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="315" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="324" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="342" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="345" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="354" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="363" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="372" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="390" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="393" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="402" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="411" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="420" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="438" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="441" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="450" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="459" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="468" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="486" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="489" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="498" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="507" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="516" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="534" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="537" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="546" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="555" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="564" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="582" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="585" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="594" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="603" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="612" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="630" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="633" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="642" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="651" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="660" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="678" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="681" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="690" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="699" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="708" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="726" y="900" width="40" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="729" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="738" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="747" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="756" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="774" y="900" width="31" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="777" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="786" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="795" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="813" y="900" width="31" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="816" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="825" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="834" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="852" y="900" width="31" height="40" rx="3" fill="none" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="855" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="864" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="873" y="906" width="7" height="28" rx="1" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1000" y="920" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每段按顺序拿几间完整的书房</tspan></text>
+<text class="svgsm" x="1000" y="942" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">一间就是一整层，拿着就能算</text>
+<text class="svgsm" x="150" y="970" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">每段约 4 间（示意；V3 实际每段几层，报告没写）</text>
+<rect x="0" y="1024" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1024" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1024" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1051" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">区别在拿到手的那一份能不能单独用</tspan></text>
+<text class="svgsm" x="20" y="1082" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">FSDP 不管书的边界，只按长度等分，为的是通信好切块；所以单独一段没用，每次用之前都得 AllGather 拼回整间。</text>
+<text class="svgsm" x="20" y="1106" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">EP、PP 按整件分：一架是一个完整专家，一间是一整层，拿着就能算。它们付的是别的钱：token 得跑去找专家，层与层得排队递活。</text>
+</svg><figcaption><b>单独一段读不了：这是 FSDP 跟 EP、PP 最大的区别。</b><span class="capmore"><br><em>阁数按 V3 的真实配置：数据并行 128、EP 64、PP 16。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 V3 配置：技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.1–3.2（2,048 块 H800；PP 16、EP 64 跨 8 节点、ZeRO-1 数据并行）；config.json（61 层，前 3 层 dense，256 个路由专家 ＋ 1 个共享专家）。</p>
+<p>⚠️ 本课推导：数据并行 128 ＝ 2,048 ÷ 16。V3 实际用 ZeRO-1 不是 FSDP，这里借它的路数讲 FSDP 怎么切。PyTorch FSDP 第一版把一层的参数拍平成一条再等分；FSDP2 按每个参数的第 0 维切，单独一份同样不能直接拿来算。</p></details></figure>
+  <p>注意跟后面 EP 的区别：EP 按整架分，每架都是一个完整专家，单独就能算；FSDP 切的是碎片，为的是通信好切块，<b>拼回来之前没用</b>。</p>
 <figure class="fbox fwide" id="fig-fsdp-step"><svg viewBox="0 0 1400 508" width="100%" role="img" aria-label="一层在一步训练里要做哪些通信。数据并行：前向和反向都不通信，反向算完梯度后做一次全归约，也就是一次归约分散加一次全收集，一共两份。FSDP：前向之前先全收集把这一层的权重拼回来，算完就扔；反向之前再全收集一次，算完梯度做一次归约分散，一共三份，是数据并行的一点五倍。多出来的那一份，就是反向时把扔掉的权重再拼一次"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FSDP 为什么多 50%　——　<tspan font-weight="700">反向时要把扔掉的权重再拼一次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一层、同一步。每个色块是一次通信，量都是这一层权重的 (n−1)/n 份</text>
@@ -3194,7 +3896,7 @@ body.figonly section h3{margin-top:34px}
        aria-label="FSDP 一步的动画。四张卡，每张卡三层，每层只长期持有自己那一段（四分之一）。标题：FSDP：每层用之前把别人那几段复制过来，用完就扔。字幕一：前向：每层先 AllGather，把别人那几段复制过来拼成整层，算完扔掉复制件。第 1、2、3 层依次：别人那三段各复制一份飞进来拼成整层（原件留在原处），整层亮一下，再把复制来的三段扔掉。底部计数一次次加一。字幕二：反向：扔掉的权重要再拼一次；算出的梯度 ReduceScatter 给各自的主人。从第 3 层往回：再拼一次整层、亮一下、扔掉，然后黄色的梯度小块飞回各自的主人。字幕三：每层三次：前向拼一次，反向再拼一次、散一次。计数停在 9。最后复位。"></video>
 <figcaption>整层只在用的那一刻出现；平时每张卡只拿着每层的四分之一。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>通信是 3Ψ，<b>数据并行的 1.5 倍</b>；换来的是每卡常驻从 9.76 TiB 降到 9.76 GiB（约 10 GB，还不含激活）。</p>
+  <p>通信是 3Ψ，<b>数据并行的 1.5 倍</b>；换来的是每卡常驻从 9.76 TiB 降到 78.11 GiB（约 84 GB，还不含激活）。可 V3 用的 H800 一张才 80 GB，放进去就满了 —— 光切数据还不够，后面几刀就是这么来的。</p>
   <div class="note warn"><span class="t">⚠️ 哪几级白送，哪一级要付钱</span>
     ZeRO-1、ZeRO-2 白送（切 micro-batch 时只剩 ZeRO-1，原因见「ZeRO 的一步」那张图的出处）；ZeRO-3 多付一半，对大模型来说非付不可。</div>
 
@@ -3768,6 +4470,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>那一小截灰色，是注意力、共享专家、稠密 MLP 和词表加起来的全部。</b><span class="capmore"><br><em>路由专家的份额由 config.json 的尺寸现算。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 config.json：hidden_size 7,168、moe_intermediate_size 2,048、n_routed_experts 256、num_hidden_layers 61、first_k_dense_replace 3。671B 为主模型总参数，不含 MTP 模块。「其余」＝ 671B 减去路由专家，本脚本现算。</p></details></figure>
   <p>256 个路由专家 × 58 层 ≈ 6,539 亿参数，<b>占全部的约 97%</b>。换句话说，TP 那把刀要切的是「一个很宽的矩阵」，而 V3 里真正占地方的是「很多个窄矩阵」。
     对后者，最省事的切法不是把每一个都劈开，而是<b>把它们整个分给不同的卡</b>：搬病人，不劈医生。图底那行就是 V3 训练的真实配置：PP16 ＋ EP64，一路 TP 都没用。</p>
+  <p>回到第二节那座藏书楼：EP 是把每间的 256 个专家书架<b>整架</b>分给 64 个阁，每阁 4 架；PP 是把 61 间书房按顺序分成 16 段。都是按整件分，拿到手就能用 —— 跟 FSDP 切碎了再拼正好相反。</p>
 
   <h3 id="s4-2">4.2　EP：token 飞去专家那里</h3>
   <p>专家并行（EP）的通信只在 MoE 层里发生，就是 1.6 讲的 AllToAll，网络最怕的那种，每层两次：

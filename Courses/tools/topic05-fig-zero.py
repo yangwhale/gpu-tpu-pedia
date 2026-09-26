@@ -34,9 +34,9 @@ def per_dev_bytes(st):
 
 _b = [per_dev_bytes(s) for s in STAGES]
 assert abs(_b[0] / TIB - 9.76) < 0.01, _b[0] / TIB          # 跟专题四 5.1 的 9.76 TiB 对齐
-assert abs(_b[1] / TIB - 2.45) < 0.01, _b[1] / TIB
-assert abs(_b[2] / TIB - 1.23) < 0.01, _b[2] / TIB
-assert abs(_b[3] / GIB - 9.76) < 0.01, _b[3] / GIB          # 9.76 TiB → 9.76 GiB，正好 ÷1024
+assert abs(_b[1] / TIB - 2.50) < 0.01, _b[1] / TIB
+assert abs(_b[2] / TIB - 1.29) < 0.01, _b[2] / TIB
+assert abs(_b[3] / GIB - 78.11) < 0.01, _b[3] / GIB         # 9.76 TiB ÷ 128 ≈ 78 GiB（约 84 GB）
 
 
 def fmt(b):
@@ -45,18 +45,18 @@ def fmt(b):
 
 def fig_mem():
     f = Fig(W, "数据并行和 ZeRO 三级，每张卡的常驻显存。每个参数 16 字节：权重 2、梯度 2、优化器状态 12。"
-               "数据并行每张卡都存一整份，16 字节。ZeRO-1 把优化器状态切成 1024 份，每卡剩约 4 字节；"
-               "ZeRO-2 再切梯度，剩约 2 字节；ZeRO-3 连权重也切，只剩千分之十六字节。"
-               "换成 DeepSeek-V3 的 6710 亿参数、1024 路：每卡 9.76 TiB、2.45 TiB、1.23 TiB、9.76 GiB。"
+               "数据并行每张卡都存一整份，16 字节。ZeRO-1 把优化器状态切成 128 份，每卡剩约 4 字节；"
+               "ZeRO-2 再切梯度，剩约 2 字节；ZeRO-3 连权重也切，只剩 0.125 字节。"
+               "换成 DeepSeek-V3 的 6710 亿参数、128 路：每卡 9.76 TiB、2.50 TiB、1.29 TiB、78.11 GiB。"
                "通信量：前三种都是 2 Ψ，跟数据并行一模一样；ZeRO-3 是 3 Ψ，多一半")
     y0 = f.header("ZeRO：把重复的削掉，一次削一样"
                   "　——　<tspan font-weight=\"700\">前两级白送，最后一级要付 50% 的通信</tspan>",
-                  "每个参数 16 字节，按专题四那张表的口径拆成三块。例子：DeepSeek-V3，6,710 亿参数，1,024 路数据并行",
+                  "每个参数 16 字节，按专题四那张表的口径拆成三块。例子：DeepSeek-V3，6,710 亿参数，128 路数据并行（2,048 卡 ÷ 16 段流水线）",
                   [(BL, "权重 2 字节（bf16）"), (OR, "梯度 2 字节（bf16）"), (GR, "优化器状态 12 字节（fp32）")])
     RH, BX, SCALE = 64, 250, 38.0          # 每字节 38 px，16 字节 ＝ 608 px
     PH = 30 + 30 + len(STAGES) * RH + 44
     py = f.panel(0, y0, W, PH, "每张卡要常驻多少字节 / 参数", GR, tag="条长 ∝ 每参数字节数")
-    f.t(BX, py + 22, "每参数字节（切成 1,024 份之后）", GY, True, 13)
+    f.t(BX, py + 22, "每参数字节（切成 128 份之后）", GY, True, 13)
     f.t(1040, py + 22, "V3 每卡常驻", GY, True, 13)
     f.t(1220, py + 22, "每步通信", GY, True, 13)
     for i, st in enumerate(STAGES):
@@ -70,32 +70,32 @@ def fig_mem():
                 f.box(x, yy + 8, w, 32, col, col, 3)
             x += w
         pp = per_param(ws, gs, os_)
-        if x - BX < 1:
-            # ⭐ 2026-09-25 逐图审：ZeRO-3 的条不到 1 px，画面上一片空白。画一根细线 ＋ 放大 100 倍的样子。
-            f.box(BX, yy + 8, 2, 32, INK, INK, 0)
-            zx, ZOOM = BX + 130, 100
+        if x - BX < 8:
+            # ⭐ 2026-09-25 逐图审：ZeRO-3 的条细到看不清。画一根细线 ＋ 放大后的样子（128 路时放大 20 倍）。
+            f.box(BX, yy + 8, max(2, x - BX), 32, INK, INK, 0)
+            zx, ZOOM = BX + 130, 20
             f.line(BX + 92, yy + 24, zx - 6, yy + 24, GY2, 1.2, dash="3,3")
             for col, bytes_, share in ((BL, W_B, ws), (OR, G_B, gs), (GR, O_B, os_)):
                 w = bytes_ * share * SCALE * ZOOM
                 f.box(zx, yy + 8, w, 32, col, col, 3)
                 zx += w
             f.t(zx + 10, yy + 30, "← 放大 %d 倍才看得见" % ZOOM, GY, size=13)
-        f.t(x + 12, yy + 30, ("%.2f 字节" % pp) if pp >= 0.1 else ("%.3f 字节" % pp), INK, True, 14)
+        f.t(x + 12, yy + 30, ("%.2f 字节" % pp) if pp >= 0.2 else ("%.3f 字节" % pp), INK, True, 14)
         f.t(1040, yy + 30, fmt(per_dev_bytes(st)), RD if i < 3 else GR, True, 16)
         f.t(1220, yy + 30, "%dΨ%s" % (comm, "（1.5×）" if comm == 3 else "（＝数据并行）" if i else ""),
             RD if comm == 3 else INK, comm == 3, 15)
-    f.t(18, py + PH - 46, "被切掉的那几块没有消失：每张卡只剩自己那 1/1,024，细到看不见。", GY, size=13)
+    f.t(18, py + PH - 46, "被切掉的那几块没有消失：每张卡只剩自己那 1/128。", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "前两级白送，最后一级要付钱", [
         "ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight=\"700\">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。"
-        "　可 V3 按这个算每卡还要 1.23 TiB，一张卡照样装不下。",
-        "只有 ZeRO-3 能降到每卡 9.76 GiB，代价是通信从 2Ψ 变成 <tspan font-weight=\"700\">3Ψ，多一半</tspan>。"
-        "　这就是 FSDP：大模型没得选，只能付这 50%。",
+        "　可 V3 按这个算每卡还要 1.29 TiB，一张卡照样装不下。",
+        "只有 ZeRO-3 能降到每卡 78.11 GiB，代价是通信从 2Ψ 变成 <tspan font-weight=\"700\">3Ψ，多一半</tspan>。"
+        "　可一张 H800 才 80 GB，放进去就满了，激活没地方放：光切数据还不够。",
     ])
     yb = f.src(yb + 10,
                "📌 出处：Rajbhandari 等，ZeRO，arXiv 1910.02054 sec. 5、sec. 7。原文：Pos、Pos+g 通信量与数据并行相同（2Ψ），"
                "Pos+g+p 最多 1.5 倍。Ψ 为参数个数，此处按元素数计。",
-               "⚠️ 每卡字节数本脚本现算并 assert；9.76 TiB 与专题四 5.1 同一口径（671e9 × 16 ÷ 1024⁴）。"
+               "⚠️ 每卡字节数本脚本现算并 assert；9.76 TiB 与专题四 5.1 同一口径（671e9 × 16 ÷ 1024⁴）。128 路 ＝ V3 的 2,048 卡 ÷ 16 段流水线（技术报告 arXiv 2412.19437 sec. 3.2 给出 PP16，除法为本课推导）。"
                "只算常驻，不含激活。")
     f.save("fig5-zero-mem.svg", yb + 14)
 
@@ -310,3 +310,170 @@ fig_step()
 fig_zero_step()
 fig_bf16_beta()
 fig_zero_busy()
+
+
+# ════════════════════════════════════════════════════════════════
+# 图六：四库藏书楼 —— 同一套书，三种分法
+# ⭐ 2026-09-26 现场定稿的比方（三轮打磨）：
+#   · 全部权重 ＝ 一整套四库全书；61 间书房 ＝ 61 层（前 3 间 Dense，后 58 间 MoE，大多数长得一样）。
+#     ⛔ 第一版按「卷」分层 —— 被指出「又把内容变小了」：一层是一整间书房，不是某本书的一卷。
+#   · 阁的个数用 V3 的真实数：数据并行 128、EP 64、PP 16。⛔ 不用乾隆的「七阁」，那个数跟模型对不上。
+#   · ⭐⭐ FSDP 是**无脑切碎**：一间书房的书一页页排成一长条，按长度等分，切口落在书中间也不管。
+#     单独一段谁也读不了，拼回整间才能读 ——&#160;这正是 AllGather 之前那份分片「没用」的意思。
+#     ⛔ 不能画成「每阁分到几本完整的书」：那是 EP 的分法（一架 ＝ 一个完整专家，拿着就能用）。
+# ⛔ 刻意没画：TP（它切的是一本书内部，第二刀自己有图）；数据并行 128 个阁里的每一个。
+# ════════════════════════════════════════════════════════════════
+import random                                                         # noqa: E402
+
+N_LAYER, N_DENSE, N_EXP, N_PP, N_EP = 61, 3, 256, 16, 64           # V3 config.json ＋ 技术报告 sec. 3.2
+assert N_EXP % N_EP == 0 and N_EXP // N_EP == 4
+BOOK_TINT = ["#fef7e0", "#e8f0fe", "#e6f4ea", "#f3e8fd", "#fce8e6"]
+
+
+def fig_siku():
+    f = Fig(W, "把 DeepSeek-V3 的全部权重想成一整套四库全书，存进 61 间书房，一间就是一层："
+               "前 3 间是 Dense，后 58 间是 MoE，每间有一张注意力目录台、1 个共享书架和 256 个专家书架。"
+               "按 V3 的配置一共 128 个阁。数据并行：每阁一整套。"
+               "FSDP：把每间书房的书一页页排成一长条，按长度等分成 128 段，切口落在书中间也不管，每阁拿一段；"
+               "单独一段读不了，要用这间时把 128 段各抄一份拼回整间，读完扔掉抄本，只留自己那段。"
+               "EP：256 个专家书架整架分给 64 个阁，每阁 4 整架，拿着就能用；PP：61 间书房按顺序分成 16 段")
+    y0 = f.header("一座藏书楼，三种分法　——　<tspan font-weight=\"700\">FSDP 切碎了、拼回来才能读；EP 整架分、拿着就能用</tspan>",
+                  "把 V3 的全部权重想成一整套四库全书：一间书房 ＝ 一层，一个阁 ＝ 一张卡。阁数按 V3 的真实配置",
+                  [(GY2, "Dense 书房"), (BL, "注意力目录台"), (GR, "共享书架"), (OR, "专家书架")])
+
+    # ── ① 藏书楼 ＝ 模型 ─────────────────────────────────────────
+    PH1 = 222
+    py = f.panel(0, y0, W, PH1, "① 藏书楼 ＝ 模型：61 间书房 ＝ 61 层", INK)
+    RX, RW, RG = 24, 11, 3
+    for i in range(N_LAYER):
+        x = RX + i * (RW + RG)
+        col = GY2 if i < N_DENSE else OR
+        f.box(x, py + 40, RW, 56, "#f1f3f4" if i < N_DENSE else "#fef7e0", col, 2, sw=1.2)
+    xe = RX + N_LAYER * (RW + RG) - RG
+    f.t(RX, py + 118, "前 3 间：Dense", GY, True, 13)
+    f.t(RX + N_DENSE * (RW + RG) + 60, py + 118, "后 58 间：MoE，大多数长得一模一样", OR, True, 13)
+    f.t(RX, py + 142, "第 1 间在最左，数据从左往右一间一间过", GY, size=13)
+    f.t(RX, py + 164, "整套约 6,710 亿个参数；这是全部的书，不是其中一本", GY, size=13)
+    # 右边：放大一间 MoE 书房
+    ZX = xe + 70
+    f.line(xe + 8, py + 68, ZX - 10, py + 68, GY2, 1.2, dash="3,3")
+    f.box(ZX, py + 40, W - ZX - 20, 140, "none", OR, 6, sw=1.4)
+    f.t(ZX + 12, py + 60, "放大一间 MoE 书房", OR, True, 13.5)
+    f.box(ZX + 12, py + 74, 70, 40, BL, BL, 3)
+    f.t(ZX + 47, py + 99, "目录台", "#ffffff", True, 13, "middle")
+    f.box(ZX + 12, py + 122, 70, 40, GR, GR, 3)
+    f.t(ZX + 47, py + 147, "共享架", "#ffffff", True, 13, "middle")
+    GX, CELL = ZX + 100, 5
+    for k in range(N_EXP):
+        r, c = divmod(k, 32)
+        f.box(GX + c * (CELL + 2), py + 76 + r * (CELL + 5), CELL, CELL + 3, OR, OR, 1)
+    f.t(GX, py + 172, "256 个专家书架，每架是一个完整的专家", OR, size=13)
+
+    # ── ② 数据并行 ───────────────────────────────────────────────
+    y2 = py + PH1 - 30 + 20
+    PH2 = 118
+    py = f.panel(0, y2, W, PH2, "② 数据并行：128 个阁，每阁一整套", GY)
+    for j, lab in enumerate(["阁 1", "阁 2", "阁 3", "阁 4", "…", "阁 128"]):
+        x = 24 + j * 150
+        if lab == "…":
+            f.t(x + 50, py + 50, "…", GY, True, 20, "middle")
+            continue
+        f.box(x, py + 18, 120, 48, "none", GY2, 4)
+        for i in range(0, N_LAYER, 2):
+            f.box(x + 6 + i * 1.75, py + 26, 2.6, 22, GY2 if i < N_DENSE else OR, "none", 0)
+        f.t(x + 60, py + 62, lab + "：整套", INK, True, 12.5, "middle")
+    f.t(930, py + 38, "谁也不缺，可每个阁都被同一套书占满", RD, True, 14)
+    f.t(930, py + 62, "128 个阁存了 128 份一模一样的书", GY, size=13)
+
+    # ── ③ FSDP ───────────────────────────────────────────────────
+    y3 = py + PH2 - 30 + 20
+    PH3 = 272
+    py = f.panel(0, y3, W, PH3, "③ FSDP：每间书房拍平、按长度等分，每阁只拿一段", BL,
+                 tag="示意画 8 段，实际 128 段")
+    SX, SW, SY = 150, 1100, py + 46
+    f.t(24, SY + 22, "第 k 间的书，", INK, True, 13)
+    f.t(24, SY + 40, "一页页排成一条", GY, size=12.5)
+    rnd = random.Random(7)
+    x, b = SX, 0
+    while x < SX + SW - 1:
+        # ⭐ 每本书都比一段长：没有哪一段里装着一整本 —— 每阁手里都只是碎片
+        w = min(rnd.choice([150, 172, 196, 214]), SX + SW - x)
+        f.box(x, SY, w, 44, BOOK_TINT[b % len(BOOK_TINT)], GY2, 2, sw=1)
+        if w > 50:
+            f.t(x + w / 2.0, SY + 27, "书 %d" % (b + 1), GY, size=12, anchor="middle")
+        x, b = x + w, b + 1
+    SEG = 8
+    segw = SW / SEG
+    for k in range(SEG + 1):
+        cx = SX + k * segw
+        f.line(cx, SY - 12, cx, SY + 58, RD, 2, dash="5,3", arrow=False)
+    names = ["阁 1", "阁 2", "阁 3", "阁 4", "…", "阁 126", "阁 127", "阁 128"]
+    for k, nm in enumerate(names):
+        f.t(SX + (k + 0.5) * segw, SY + 76, nm, RD if k == 2 else INK, k == 2, 13, "middle")
+    f.t(SX + SW + 14, SY + 20, "红线等距切，", RD, True, 13)
+    f.t(SX + SW + 14, SY + 38, "不看书的边界", RD, True, 13)
+    # 阁 3 那一段放大：半本 ＋ 另一本的开头
+    hx = SX + 2 * segw
+    f.box(hx, SY - 4, segw, 52, "none", RD, 3, sw=2.4)
+    f.t(hx + segw / 2.0, SY + 100, "阁 3 手里：一本书的后半截 ＋ 另一本的开头", INK, size=13, anchor="middle")
+    f.t(hx + segw / 2.0, SY + 120, "单拿这一段，读不了", RD, True, 14, "middle")
+    # 用之前：抄齐、读、扔
+    FY = SY + 148
+    steps = [("要用第 k 间", GY2, 150), ("128 段各抄一份，拼回整间（AllGather）", BL, 330),
+             ("读：这一层算完", GY2, 170), ("扔掉抄本，只留自己那段", GY2, 230)]
+    x = 150
+    for i, (lab, col, w) in enumerate(steps):
+        filled = col == BL
+        f.box(x, FY, w, 34, col if filled else "none", col, 4, sw=1.4)
+        f.t(x + w / 2.0, FY + 22, lab, "#ffffff" if filled else INK, True, 13, "middle")
+        if i < len(steps) - 1:
+            f.line(x + w + 4, FY + 17, x + w + 30, FY + 17, GY2, 1.6)
+        x += w + 34
+    f.t(x + 6, FY + 22, "反向时再抄一次", BL, True, 13)
+
+    # ── ④ EP 与 PP ───────────────────────────────────────────────
+    y4 = py + PH3 - 30 + 20
+    PH4 = 200
+    py = f.panel(0, y4, W, PH4, "④ 对比：EP、PP 按整件分，拿到手就能用", OR)
+    f.t(24, py + 40, "EP", OR, True, 15)
+    f.t(24, py + 58, "256 架分 64 阁", GY, size=12.5)
+    labs = [("阁 1", "1–4"), ("阁 2", "5–8"), ("阁 3", "9–12"), ("…", ""), ("阁 64", "253–256")]
+    for j, (nm, rng) in enumerate(labs):
+        x = 150 + j * 170
+        if nm == "…":
+            f.t(x + 60, py + 46, "…", GY, True, 20, "middle")
+            continue
+        f.box(x, py + 16, 140, 50, "none", OR, 4)
+        for q in range(4):
+            f.box(x + 10 + q * 31, py + 24, 24, 26, OR, OR, 2)
+        f.t(x + 70, py + 62, "%s：书架 %s" % (nm, rng), INK, True, 12, "middle")
+    f.t(1000, py + 38, "每阁 4 整架，一架就是一个完整专家", OR, True, 14)
+    f.t(1000, py + 60, "拿着就能用；要查，就跑去那一阁", GY, size=13)
+    f.t(24, py + 118, "PP", PU, True, 15)
+    f.t(24, py + 136, "61 间分 16 段", GY, size=12.5)
+    x = 150
+    for g in range(N_PP):
+        n = 4 if g < N_LAYER - 3 * N_PP else 3            # 示意：13 段 4 间、3 段 3 间，凑满 61
+        gw = 6 + n * 7 + (n - 1) * 2
+        f.box(x, py + 96, gw, 40, "none", PU, 3, sw=1.4)
+        for i in range(n):
+            f.box(x + 3 + i * 9, py + 102, 7, 28, "#f3e8fd", PU, 1)
+        x += gw + 8
+    f.t(1000, py + 116, "每段按顺序拿几间完整的书房", PU, True, 14)
+    f.t(1000, py + 138, "一间就是一整层，拿着就能算", GY, size=13)
+    f.t(150, py + 166, "每段约 4 间（示意；V3 实际每段几层，报告没写）", GY, size=12.5)
+
+    f._pan = None
+    yb = f.band(py + PH4 + 20, "ok", "区别在拿到手的那一份能不能单独用", [
+        "FSDP 不管书的边界，只按长度等分，为的是通信好切块；所以单独一段没用，每次用之前都得 AllGather 拼回整间。",
+        "EP、PP 按整件分：一架是一个完整专家，一间是一整层，拿着就能算。它们付的是别的钱：token 得跑去找专家，层与层得排队递活。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 V3 配置：技术报告 arXiv 2412.19437 sec. 3.1–3.2（2,048 块 H800；PP 16、EP 64 跨 8 节点、ZeRO-1 数据并行）；"
+               "config.json（61 层，前 3 层 dense，256 个路由专家 ＋ 1 个共享专家）。",
+               "⚠️ 本课推导：数据并行 128 ＝ 2,048 ÷ 16。V3 实际用 ZeRO-1 不是 FSDP，这里借它的路数讲 FSDP 怎么切。"
+               "PyTorch FSDP 第一版把一层的参数拍平成一条再等分；FSDP2 按每个参数的第 0 维切，单独一份同样不能直接拿来算。")
+    f.save("fig5-siku.svg", yb + 14)
+
+
+fig_siku()
