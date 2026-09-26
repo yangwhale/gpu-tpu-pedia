@@ -3967,6 +3967,9 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1140" y="460" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 32 路 ≈ 1,008</tspan></text>
 <path d="M150,323 L1130,323" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
 <text class="svgsm" x="1140" y="343" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7 硬件线 ≈ 3,845</tspan></text>
+<path d="M150,247 L1130,247" fill="none" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2,4"/>
+<text class="svgsm" x="1140" y="252" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">实测只跑到 7 成 ≈ 5,493</text>
+<text class="svgsm" x="1140" y="270" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">（假设的示意）</text>
 <rect x="0" y="572" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="572" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="572" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3975,8 +3978,12 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，TP 8 路 ≈ 4,032 按最乐观的线才勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight="700">TP 有一个跟 batch 无</tspan></text>
 <text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关的上限</tspan>。</text>
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
-<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p></details></figure>
+<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p>
+<p>⚠️ 分母该用实测带宽：在自己的网络上跑一次 AllGather（GPU 上用 nccl-tests），取它报的 busbw（按 AllGather 口径 ＝ 数据量 ÷ 用时 × (n−1)/n）。细虚线假设实测只有标称的 70%，门槛升到约 5,493；70% 不是 v7 的实测数。</p></details></figure>
   <p>红虚线约 3,845：<b>每颗芯片一步分不到三千八百多个 token，FSDP 就被拖住</b>。</p>
+  <p>分母要当心：<b>该用你在自己网络上实测的带宽，不是规格表上的数</b>。门槛 ＝ 每秒能算多少次 ÷ 每秒实际拼得动多少字节的权重。
+    测法是真跑一次 AllGather（GPU 上用 nccl-tests），看它报的 busbw。它按 AllGather 的口径算：数据量 ÷ 用时 × (n−1)/n，扣掉了自己那份本来就有、不用收的部分，正好对上每张卡每秒实际收到的字节。
+    实测只跑到标称的七成，门槛就从 3,845 抬到约 5,493（图上细虚线，七成是假设的）。FSDP 那根轴要是只占几根链路、还跟别的轴抢线，这个数还得往上走。</p>
   <details class="foldfig"><summary><b>细一点</b>：3,845 怎么来的，什么情况下门槛更高</summary>
   <p>红虚线 3,845 ＝ v7 每芯片 2,307 TFLOP/s（bf16）÷ 每芯片发出约 0.6 TB/s（常说的 1.2 TB/s 是收发合计；⚠️ 这个拆分是推算，见台账）。
     这还是最乐观的线：只走一根轴，高约 3 倍；
@@ -4049,6 +4056,10 @@ body.figonly section h3{margin-top:34px}
        aria-label="张量并行切一个 MLP 的动画。两张卡，卡 0 蓝、卡 1 橙，各有完整的 X（灰）；W1 画成宽矩阵竖切一刀、W2 画成高矩阵横切一刀，每张卡只亮自己那一半。标题：张量并行切一个 MLP：Y ＝ GeLU(X·W1)·W2。字幕一：① W1 按列切：每张卡算出中间结果的一半。字幕二：② 激活函数逐元素算：各算各的，这一段没有任何通信。字幕三：③ W2 按行切：每张卡只得到 Y 的一个部分和。字幕四：④ AllReduce：两份部分和相加，两张卡都拿到完整的 Y（中间一个绿框标 AllReduce，Y 是灰色的完整副本）。字幕五：整个 MLP 只在最后通信一次 —— 代价是每一层都有这一次。最后复位。"></video>
 <figcaption>通信只在最后那一下；可每一层都有这一下。
   <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>两个容易绕晕的地方。<b>一、每张卡两块都有份</b>：卡 0 拿上投影（UP）的一半，也拿下投影（DOWN）的一半，不是一张卡管 UP、另一张管 DOWN（那是按层切，后面讲的 PP）。
+    两块之间不通信，DOWN 算完才把部分和加一次，传的是激活。attention 那块同理：按头切，出口加一次。所以一层前向两次 AllReduce，反向再两次。</p>
+  <p><b>二、「横」「竖」只是画法</b>：本课把 W1 画成「输入维 × 输出维」（X·W1），第一刀切的是输出维，看着是竖切；PyTorch 的 nn.Linear 把权重存成「输出维 × 输入维」，同一刀在它那里就是横切。
+    所以别记横竖，记<b>第一块切输出维，第二块切输入维</b>。Megatron 按 X·A 的画法起名，叫列并行（ColumnParallelLinear）和行并行（RowParallelLinear）。</p>
   <p>顺序不能反过来，因为两次矩阵乘中间夹着一个不是线性的 GeLU：</p>
 <figure class="fbox fwide" id="fig-tp-order"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="为什么 Megatron 一定要先竖着切第一块权重。左边是 GeLU 曲线：先横着切的话，同一个元素在两张卡上各有一份部分和，卡 0 是 2、卡 1 是负 3，真值是负 1。各过各的 GeLU 再相加得 1.950，先加再过 GeLU 得负 0.159，差得很远。右边两条路：先横着切，过 GeLU 之前必须先做一次 AllReduce；先竖着切，每个元素整个在一张卡上，直接过 GeLU，零通信"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">为什么非得先竖着切　——　<tspan font-weight="700">GeLU 是弯的，部分和不能各过各的</tspan></text>
@@ -4139,7 +4150,7 @@ body.figonly section h3{margin-top:34px}
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。
     V3 的隐藏维 7,168，TP 8 路约 4,032。图上那条红线是<b>最乐观</b>的画法，所以看着刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）；真实的红线还要更高，TP 8 路其实已经在线下（原因在下面「细一点」）。</p>
   <p>所以 <b>batch 小多用 TP，batch 大多用 FSDP</b>：图上左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。
-    前提是 TP 那条线本身在红线上面。像 V3 这样两条都贴着或落在线下，TP 本身就不划算（<a href="#s3-6">§3.6</a>）。</p>
+    前提是 TP 那条线本身在红线上面。像 V3 这样两条都贴着或落在线下，TP 本身就不划算（<a href="#s3-7">§3.7</a>）。</p>
   <details class="foldfig"><summary><b>细一点</b>：为什么说实际已经在线下；TP 度数还受哪两条约束</summary>
   <ul>
     <li>① 3,845 假设三根轴都用满、而且每根轴首尾连成环；TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device），两个折扣叠在一起：切片太小成不了环（<a href="#s1-5">§1.5</a>），又只用得上一两根轴（<a href="#s3-1">§3.1</a>），实际门槛高好几倍。</li>
@@ -4148,7 +4159,265 @@ body.figonly section h3{margin-top:34px}
     <li>TP 每层都要通信，只能待在最快的那一圈互联里（GPU 上一般不出一个 NVLink 域）。</li>
   </ul></details>
 
-  <h3 id="s3-5">3.5　PP：按层切</h3>
+  <h3 id="s3-5">3.5　FSDP 和 TP 一起用：二维切</h3>
+  <p>两把刀能并存，大模型训练里也常常一起用。关键是<b>切在不同的维上</b>：把卡排成一张表，一行是一组 TP，一列是一组 FSDP。TP 按输出维把权重切成几条，FSDP 再把每一条按输入维劈开。</p>
+<figure class="fbox fwide" id="fig-fsdp-tp"><svg viewBox="0 0 1400 1132" width="100%" role="img" aria-label="FSDP 和 TP 一起用。8 张卡排成 2 行 4 列：一行 4 张卡是一组 TP，看同一份数据；一列 2 张卡是一组 FSDP，数据各不相同。以 MLP 第一块权重为例：TP 按输出那一维把它切成 4 条，FSDP 再把每一条按输入那一维切成上下两半，每张卡常驻 1/8。算一层时：先在一列里 AllGather，把自己那一条拼齐，只是整个矩阵的四分之一；再各算各的；最后在一行里 AllReduce 把部分和加起来，传的是激活。账怎么算：一行 4 张卡共用同一批 token，每张卡只拼四分之一条，所以 FSDP 的门槛按一行的 token 数算，摊到每张卡只要约 961"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FSDP 和 TP 一起用：两刀切在不同的维上　——　<tspan font-weight="700">每卡常驻 1/8，拼回来也只是自己那一条</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">8 张卡排成 2 行 × 4 列：一行是一组 TP（看同一份数据），一列是一组 FSDP（同一条权重的上下两半）。以 MLP 第一块权重 W1 为例</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 0 那一条</text>
+<rect x="138.84" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="159" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 1</text>
+<rect x="221.68" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="242" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 2</text>
+<rect x="304.52" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="325" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 3</text>
+<rect x="0" y="102" width="1400" height="372" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 怎么切：TP 竖着分 4 条，FSDP 再把每条上下劈开</tspan></text>
+<rect x="40" y="192" width="62" height="68" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="104" y="192" width="62" height="68" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="168" y="192" width="62" height="68" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="232" y="192" width="62" height="68" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="40" y="262" width="62" height="68" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="104" y="262" width="62" height="68" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="168" y="262" width="62" height="68" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="232" y="262" width="62" height="68" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="40" y="178" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整块 W1（输入维 × 输出维）</tspan></text>
+<text class="svgsm" x="168" y="356" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">输出维：TP 切成 4 条</text>
+<text class="svgsm" x="40" y="378" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">输入维：FSDP 劈成上下两半</text>
+<line x1="316" y1="262" x2="366" y2="262" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="515" y="178" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 0</tspan></text>
+<text class="svgsm" x="759" y="178" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 1</tspan></text>
+<text class="svgsm" x="1003" y="178" fill="#0d652d" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 2</tspan></text>
+<text class="svgsm" x="1247" y="178" fill="#681da8" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 3</tspan></text>
+<text class="svgsm" x="396" y="250" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数据第 1 份</tspan></text>
+<rect x="400" y="188" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="412" y="202" width="26" height="28" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="440" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="468" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="496" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="412" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="440" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="468" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="496" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="532" y="228" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="532" y="250" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 1 · 列 1</text>
+<rect x="644" y="188" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="656" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="684" y="202" width="26" height="28" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="712" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="740" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="656" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="684" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="712" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="740" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="776" y="228" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="776" y="250" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 1 · 列 2</text>
+<rect x="888" y="188" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="900" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="928" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="956" y="202" width="26" height="28" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="984" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="900" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="928" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="956" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="984" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1020" y="228" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="1020" y="250" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 1 · 列 3</text>
+<rect x="1132" y="188" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1144" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1172" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1200" y="202" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1228" y="202" width="26" height="28" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1144" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1172" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1200" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1228" y="232" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1264" y="228" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="1264" y="250" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 1 · 列 4</text>
+<text class="svgsm" x="396" y="368" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数据第 2 份</tspan></text>
+<rect x="400" y="306" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="412" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="440" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="468" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="496" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="412" y="350" width="26" height="28" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="440" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="468" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="496" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="532" y="346" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="532" y="368" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 2 · 列 1</text>
+<rect x="644" y="306" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="656" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="684" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="712" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="740" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="656" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="684" y="350" width="26" height="28" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="712" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="740" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="776" y="346" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="776" y="368" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 2 · 列 2</text>
+<rect x="888" y="306" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="900" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="928" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="956" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="984" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="900" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="928" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="956" y="350" width="26" height="28" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="984" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1020" y="346" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="1020" y="368" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 2 · 列 3</text>
+<rect x="1132" y="306" width="216" height="104" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1144" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1172" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1200" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1228" y="320" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1144" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1172" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1200" y="350" width="26" height="28" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1228" y="350" width="26" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1264" y="346" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只存这 1/8</tspan></text>
+<text class="svgsm" x="1264" y="368" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">行 2 · 列 4</text>
+<text class="svgsm" x="400" y="462" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">同一行：数据相同、权重条不同（TP） 同一列：权重条相同、数据不同（FSDP）</text>
+<rect x="0" y="494" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="494" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="496" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="524" x2="1400" y2="524" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="514" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 算一层：先列内拼，再各算各的，出口行内加</tspan></text>
+<text class="svgsm" x="30" y="552" fill="#174ea6" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 列内 AllGather（FSDP）</tspan></text>
+<text class="svgsm" x="490" y="552" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 各算各的</tspan></text>
+<text class="svgsm" x="950" y="552" fill="#b06000" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 行内 AllReduce（TP）</tspan></text>
+<rect x="30" y="574" width="110" height="72" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="40" y="582" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="62" y="582" width="20" height="24" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="84" y="582" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="106" y="582" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="40" y="608" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="62" y="608" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="84" y="608" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="106" y="608" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="280" y="574" width="110" height="72" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="290" y="582" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="312" y="582" width="20" height="24" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="334" y="582" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="356" y="582" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="290" y="608" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="312" y="608" width="20" height="24" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="334" y="608" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="356" y="608" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="150" y1="610" x2="270" y2="610" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="30" y="660" width="110" height="72" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="40" y="668" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="62" y="668" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="84" y="668" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="106" y="668" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="40" y="694" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="62" y="694" width="20" height="24" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="84" y="694" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="106" y="694" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="280" y="660" width="110" height="72" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="290" y="668" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="312" y="668" width="20" height="24" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="334" y="668" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="356" y="668" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="290" y="694" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="312" y="694" width="20" height="24" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="334" y="694" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="356" y="694" width="20" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="150" y1="696" x2="270" y2="696" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="210" y="660" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼齐</tspan></text>
+<text class="svgsm" x="30" y="772" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">拼回的是第 2 条：整矩阵的 1/4，不是整个矩阵</text>
+<rect x="490" y="574" width="400" height="30" rx="4" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="690" y="594" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一份数据 X（这一行共用）</tspan></text>
+<line x1="535" y1="608" x2="535" y2="628" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="490" y="634" width="90" height="76" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="498" y="644" width="16" height="24" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="516" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="534" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="552" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="498" y="670" width="16" height="24" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="516" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="534" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="552" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="635" y1="608" x2="635" y2="628" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="590" y="634" width="90" height="76" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="598" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="616" y="644" width="16" height="24" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="634" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="652" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="598" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="616" y="670" width="16" height="24" rx="2" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="634" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="652" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="735" y1="608" x2="735" y2="628" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="690" y="634" width="90" height="76" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="698" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="716" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="734" y="644" width="16" height="24" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="752" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="698" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="716" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="734" y="670" width="16" height="24" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="752" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="835" y1="608" x2="835" y2="628" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="790" y="634" width="90" height="76" rx="5" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<rect x="798" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="816" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="834" y="644" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="852" y="644" width="16" height="24" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="798" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="816" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="834" y="670" width="16" height="24" rx="2" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="852" y="670" width="16" height="24" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="490" y="746" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">每张卡算中间结果的 1/4；GeLU 也各算各的</text>
+<text class="svgsm" x="490" y="772" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">这一段不通信</text>
+<rect x="950" y="584" width="90" height="60" rx="5" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="995" y="620" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<line x1="995" y1="648" x2="1145" y2="684" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="1050" y="584" width="90" height="60" rx="5" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="1095" y="620" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<line x1="1095" y1="648" x2="1145" y2="684" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="1150" y="584" width="90" height="60" rx="5" fill="none" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="1195" y="620" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<line x1="1195" y1="648" x2="1145" y2="684" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="1250" y="584" width="90" height="60" rx="5" fill="none" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="1295" y="620" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和</tspan></text>
+<line x1="1295" y1="648" x2="1145" y2="684" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="1080" y="686" width="130" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1145" y="708" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">加起来 ＝ Y</tspan></text>
+<text class="svgsm" x="950" y="746" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">W2 算完只是部分和，出口加一次</text>
+<text class="svgsm" x="950" y="772" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">传的是激活，不是权重</tspan></text>
+<rect x="0" y="814" width="1400" height="176" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="814" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="816" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="844" x2="1400" y2="844" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="834" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 账怎么算：TP 把一行的 token 借给了 FSDP</tspan></text>
+<rect x="30" y="866" width="640" height="110" rx="6" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="48" y="894" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只用 FSDP</tspan></text>
+<text class="svgsm" x="48" y="922" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">每张卡拼一整层，只给自己那 T 个 token 用</text>
+<text class="svgsm" x="48" y="950" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛：每卡 T ≥ 3,845</tspan></text>
+<rect x="700" y="866" width="670" height="110" rx="6" fill="none" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="718" y="894" fill="#0d652d" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP × TP 4</tspan></text>
+<text class="svgsm" x="718" y="922" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">每张卡只拼 1/4 条，却给这一行的全部 token 用</text>
+<text class="svgsm" x="718" y="950" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛：一行 ≥ 3,845 个 token，摊到每卡约 961</tspan></text>
+<rect x="0" y="1010" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1010" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1010" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1037" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">能并存，而且互补：batch 小时 TP 替 FSDP 撑住</tspan></text>
+<text class="svgsm" x="20" y="1068" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">FSDP 切输入维、在列内拼；TP 切输出维、在行内加。两刀切在不同的维上，互不打架：每卡常驻 1/8，拼回来也只是自己那 1/4 条。</text>
+<text class="svgsm" x="20" y="1092" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价在 TP 那根轴：每层前向两次、反向两次对账，还藏不进计算，所以 TP 占最快的那一圈线，FSDP 用剩下的。</text>
+</svg><figcaption><b>FSDP 在列里拼，TP 在行里加；拼回来的只是自己那一条。</b><span class="capmore"><br><em>切法对照 Scaling Book 训练篇；961 是本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Scaling Book（How to Scale Your Model）训练篇「FSDP ＋ 张量并行」：In[B_X, D_Y] · W_in[D_X, F_Y] · W_out[F_Y, D_X]，X 轴做 FSDP、Y 轴做 TP；原书在 TP 轴上用 AllGather ＋ ReduceScatter 传激活，通信量跟一次 AllReduce 相同。</p>
+<p>⚠️ 本课推导：一行共用同一批 token，所以 FSDP 那根轴每搬一字节换来的计算 ＝ 这一行的 token 数；961 ＝ 3,845 ÷ 4。两根轴会分走不同的链路，各自的门槛要按各自那几根链路的实测带宽重算，只会更高。</p></details></figure>
+  <p>算一层时，先在<b>列</b>里 AllGather，把自己那一条拼齐。拼回的只是整矩阵的 1/TP，不是整个矩阵。再各算各的，最后在<b>行</b>里把部分和加一次。反向时，梯度按列 ReduceScatter 回各自的主人。</p>
+  <p>账也跟着变：同一行的几张卡用的是同一批 token，每张卡却只拼 1/TP 条，所以 FSDP 那根轴的门槛按<b>一行的 token 数</b>算。TP 4 路时，摊到每张卡只要约 961 个（⚠️ 推导，没按各轴的实测带宽修正）。
+    这才是「batch 小多用 TP」的真正意思：<b>TP 把一行的 token 借给了 FSDP</b>。代价是 TP 那根轴每层都要对账，得占最快的线。</p>
+
+  <h3 id="s3-6">3.6　PP：按层切</h3>
   <p>要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，就按层切。TP 是<b>切宽</b>，PP 是<b>切深</b>：</p>
 <figure class="fbox fwide" id="fig-wide-deep"><svg viewBox="0 0 1400 704" width="100%" role="img" aria-label="同一个 8 层的模型，两种切法。左边切宽：每一层都切成四竖条，四张卡各拿一条，所以每一层算完都要对一次账，做一次 AllReduce，只能坐快线。右边切深：前两层给卡 0、再两层给卡 1，依此类推，卡和卡之间只在段的交界递一次半成品，能跨慢线；代价是有人要等，就是气泡"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TP 切宽，PP 切深　——　<tspan font-weight="700">一个每层都要对账，一个只在交界递一次</tspan></text>
@@ -4431,7 +4700,7 @@ body.figonly section h3{margin-top:34px}
     Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
     DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌，更要紧的是把一对前向和反向的计算，跟专家并行的通信叠在一起藏掉（技术报告 sec. 3.2.1）。</p></details>
 
-  <h3 id="s3-6">3.6　这一刀留下的问题</h3>
+  <h3 id="s3-7">3.7　这一刀留下的问题</h3>
   <p>还记得开场那行配置吗？DeepSeek-V3 里<b>没有 TP</b>。报告自己的解释是显存优化做得够细，用不着代价高的 TP。
     再看它的参数都在哪：几乎全在一种叫「专家」的窄矩阵里。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少。<b>真正该切的，是「专家」这一维。</b>这是第三刀。</p>
   <details class="foldfig"><summary><b>考考自己</b>：每张卡分到的 token 很少时，FSDP 和 TP 哪个先被通信拖住？TP 为什么出不了一台机器？</summary>

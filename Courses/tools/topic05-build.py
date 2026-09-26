@@ -342,6 +342,9 @@ __FIG_FSDP_STEP__
     更直观的看法：一个参数占 2 字节，每个 token 拿它做一次乘加，正好 2 次运算。所以送来一个参数，这张卡上有几个 token，它就被用几回。</p>
 __FIG_INTENSITY__
   <p>红虚线约 3,845：<b>每颗芯片一步分不到三千八百多个 token，FSDP 就被拖住</b>。</p>
+  <p>分母要当心：<b>该用你在自己网络上实测的带宽，不是规格表上的数</b>。门槛 ＝ 每秒能算多少次 ÷ 每秒实际拼得动多少字节的权重。
+    测法是真跑一次 AllGather（GPU 上用 nccl-tests），看它报的 busbw。它按 AllGather 的口径算：数据量 ÷ 用时 × (n−1)/n，扣掉了自己那份本来就有、不用收的部分，正好对上每张卡每秒实际收到的字节。
+    实测只跑到标称的七成，门槛就从 3,845 抬到约 5,493（图上细虚线，七成是假设的）。FSDP 那根轴要是只占几根链路、还跟别的轴抢线，这个数还得往上走。</p>
   <details class="foldfig"><summary><b>细一点</b>：3,845 怎么来的，什么情况下门槛更高</summary>
   <p>红虚线 3,845 ＝ v7 每芯片 2,307 TFLOP/s（bf16）÷ 每芯片发出约 0.6 TB/s（常说的 1.2 TB/s 是收发合计；⚠️ 这个拆分是推算，见台账）。
     这还是最乐观的线：只走一根轴，高约 3 倍；
@@ -355,6 +358,10 @@ __FIG_TP_MLP__
        aria-label="张量并行切一个 MLP 的动画。两张卡，卡 0 蓝、卡 1 橙，各有完整的 X（灰）；W1 画成宽矩阵竖切一刀、W2 画成高矩阵横切一刀，每张卡只亮自己那一半。标题：张量并行切一个 MLP：Y ＝ GeLU(X·W1)·W2。字幕一：① W1 按列切：每张卡算出中间结果的一半。字幕二：② 激活函数逐元素算：各算各的，这一段没有任何通信。字幕三：③ W2 按行切：每张卡只得到 Y 的一个部分和。字幕四：④ AllReduce：两份部分和相加，两张卡都拿到完整的 Y（中间一个绿框标 AllReduce，Y 是灰色的完整副本）。字幕五：整个 MLP 只在最后通信一次 —— 代价是每一层都有这一次。最后复位。"></video>
 <figcaption>通信只在最后那一下；可每一层都有这一下。
   <span class="sub">（9 秒无声循环，Manim 渲染。）</span></figcaption></figure>
+  <p>两个容易绕晕的地方。<b>一、每张卡两块都有份</b>：卡 0 拿上投影（UP）的一半，也拿下投影（DOWN）的一半，不是一张卡管 UP、另一张管 DOWN（那是按层切，后面讲的 PP）。
+    两块之间不通信，DOWN 算完才把部分和加一次，传的是激活。attention 那块同理：按头切，出口加一次。所以一层前向两次 AllReduce，反向再两次。</p>
+  <p><b>二、「横」「竖」只是画法</b>：本课把 W1 画成「输入维 × 输出维」（X·W1），第一刀切的是输出维，看着是竖切；PyTorch 的 nn.Linear 把权重存成「输出维 × 输入维」，同一刀在它那里就是横切。
+    所以别记横竖，记<b>第一块切输出维，第二块切输入维</b>。Megatron 按 X·A 的画法起名，叫列并行（ColumnParallelLinear）和行并行（RowParallelLinear）。</p>
   <p>顺序不能反过来，因为两次矩阵乘中间夹着一个不是线性的 GeLU：</p>
 __FIG_TP_ORDER__
 
@@ -371,7 +378,7 @@ __FIG_TP_ORDER__
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。
     V3 的隐藏维 7,168，TP 8 路约 4,032。图上那条红线是<b>最乐观</b>的画法，所以看着刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）；真实的红线还要更高，TP 8 路其实已经在线下（原因在下面「细一点」）。</p>
   <p>所以 <b>batch 小多用 TP，batch 大多用 FSDP</b>：图上左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。
-    前提是 TP 那条线本身在红线上面。像 V3 这样两条都贴着或落在线下，TP 本身就不划算（§3.6）。</p>
+    前提是 TP 那条线本身在红线上面。像 V3 这样两条都贴着或落在线下，TP 本身就不划算（§3.7）。</p>
   <details class="foldfig"><summary><b>细一点</b>：为什么说实际已经在线下；TP 度数还受哪两条约束</summary>
   <ul>
     <li>① 3,845 假设三根轴都用满、而且每根轴首尾连成环；TP 8 路只有 4 颗芯片（v7 一颗芯片算 2 个 device），两个折扣叠在一起：切片太小成不了环（§1.5），又只用得上一两根轴（§3.1），实际门槛高好几倍。</li>
@@ -380,7 +387,14 @@ __FIG_TP_ORDER__
     <li>TP 每层都要通信，只能待在最快的那一圈互联里（GPU 上一般不出一个 NVLink 域）。</li>
   </ul></details>
 
-  <h3>3.5　PP：按层切</h3>
+  <h3>3.5　FSDP 和 TP 一起用：二维切</h3>
+  <p>两把刀能并存，大模型训练里也常常一起用。关键是<b>切在不同的维上</b>：把卡排成一张表，一行是一组 TP，一列是一组 FSDP。TP 按输出维把权重切成几条，FSDP 再把每一条按输入维劈开。</p>
+__FIG_FSDP_TP__
+  <p>算一层时，先在<b>列</b>里 AllGather，把自己那一条拼齐。拼回的只是整矩阵的 1/TP，不是整个矩阵。再各算各的，最后在<b>行</b>里把部分和加一次。反向时，梯度按列 ReduceScatter 回各自的主人。</p>
+  <p>账也跟着变：同一行的几张卡用的是同一批 token，每张卡却只拼 1/TP 条，所以 FSDP 那根轴的门槛按<b>一行的 token 数</b>算。TP 4 路时，摊到每张卡只要约 961 个（⚠️ 推导，没按各轴的实测带宽修正）。
+    这才是「batch 小多用 TP」的真正意思：<b>TP 把一行的 token 借给了 FSDP</b>。代价是 TP 那根轴每层都要对账，得占最快的线。</p>
+
+  <h3>3.6　PP：按层切</h3>
   <p>要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，就按层切。TP 是<b>切宽</b>，PP 是<b>切深</b>：</p>
 __FIG_WIDE_DEEP__
   <p>段与段之间只在边界上用一对一收发传激活，是所有刀里通信最少的，所以它<b>能跨到慢线上</b>。
@@ -400,7 +414,7 @@ __FIG_PP_BUBBLE__
     Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
     DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌，更要紧的是把一对前向和反向的计算，跟专家并行的通信叠在一起藏掉（技术报告 sec. 3.2.1）。</p></details>
 
-  <h3>3.6　这一刀留下的问题</h3>
+  <h3>3.7　这一刀留下的问题</h3>
   <p>还记得开场那行配置吗？DeepSeek-V3 里<b>没有 TP</b>。报告自己的解释是显存优化做得够细，用不着代价高的 TP。
     再看它的参数都在哪：几乎全在一种叫「专家」的窄矩阵里。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少。<b>真正该切的，是「专家」这一维。</b>这是第三刀。</p>
   <details class="foldfig"><summary><b>考考自己</b>：每张卡分到的 token 很少时，FSDP 和 TP 哪个先被通信拖住？TP 为什么出不了一台机器？</summary>
@@ -1089,6 +1103,9 @@ FIGS = {
     "__FIG_SIKU__": ("fig-siku", "fig5-siku.svg", "topic05-fig-zero.py",
         '<b>单独一段读不了：这是 FSDP 跟 EP、PP 最大的区别。</b><br>'
         '<em>阁数按 V3 的真实配置：数据并行 128、EP 64、PP 16。</em>'),
+    "__FIG_FSDP_TP__": ("fig-fsdp-tp", "fig5-fsdp-tp.svg", "topic05-fig-tp.py",
+        '<b>FSDP 在列里拼，TP 在行里加；拼回来的只是自己那一条。</b><br>'
+        '<em>切法对照 Scaling Book 训练篇；961 是本课推导。</em>'),
     "__FIG_FSDP_STEP__": ("fig-fsdp-step", "fig5-fsdp-step.svg", "topic05-fig-zero.py",
         '<b>数据并行一层做两次通信，FSDP 做三次。</b><br>'
         '<em>多出来的那次 AllGather，是反向时把前向扔掉的权重再拼回来。</em>'),
@@ -1127,7 +1144,7 @@ _NUM_LOCK = [("3,845", "fig5-intensity.svg"), ("4,032", "fig5-intensity.svg"),
              ("9.76 TiB", "fig5-zero-mem.svg"), ("1.29 TiB", "fig5-zero-mem.svg"), ("78.11 GiB", "fig5-zero-mem.svg"),
              ("8.58 GiB", "fig5-kv-dup.svg"), ("97%", "fig5-moe-params.svg"), ("6,539", "fig5-moe-params.svg"),
              ("1,319", "fig5-topo.svg"), ("1,820", "fig5-topo.svg"), ("2.09", "fig5-topo.svg"),
-             ("580", "fig5-scale.svg"), ("453", "fig5-scale.svg"), ("404", "fig5-scale.svg")]
+             ("961", "fig5-fsdp-tp.svg"), ("5,493", "fig5-intensity.svg"), ("580", "fig5-scale.svg"), ("453", "fig5-scale.svg"), ("404", "fig5-scale.svg")]
 for _n, _svg in _NUM_LOCK:
     assert _n in BODY, "正文里已经没有 %s 了 —— 从 _NUM_LOCK 里删掉这一条" % _n
     _g = io.open(os.path.join(HERE, _svg), encoding="utf-8").read().replace(",", "")

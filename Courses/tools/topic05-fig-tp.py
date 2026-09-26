@@ -28,6 +28,12 @@ B_V7 = 0.6e12                   # v7 每芯片 ICI 发出方向（6 条链路 ×
 RIDGE = C_V7 / B_V7
 H_V3 = 7168
 assert abs(RIDGE - 3845) < 1, RIDGE
+# ⭐ 2026-09-26 现场：「分母不是物理带宽，是你做 NCCL test 测出来的算法带宽」。
+#   门槛 ＝ 算力 ÷ **实测**的 AllGather 带宽（nccl-tests 的 busbw 口径）。实测跑不满标称，门槛就往上抬。
+#   ⛔ EFF 是**假设**的示意值，不是 v7 的实测数；图上和正文都标「假设」。
+EFF = 0.7
+RIDGE_EFF = RIDGE / EFF
+assert abs(RIDGE_EFF - 5493) < 1, RIDGE_EFF
 
 
 def tp_intensity(h, n):
@@ -79,6 +85,9 @@ def fig_intensity():
         f.t(X(TMAX) + 10, Y(yi) + 5, "%s ≈ %s" % (lab, "{:,.0f}".format(yi)), OR, True, 13.5)
     f.path("M%d,%d L%d,%d" % (X(0), Y(RIDGE), X(TMAX), Y(RIDGE)), RD, 2, dash="4,4", arrow=False)
     f.t(X(TMAX) + 10, Y(RIDGE) + 20, "v7 硬件线 ≈ 3,845", RD, True, 13.5)
+    f.path("M%d,%d L%d,%d" % (X(0), Y(RIDGE_EFF), X(TMAX), Y(RIDGE_EFF)), RD, 1.4, dash="2,4", arrow=False)
+    f.t(X(TMAX) + 10, Y(RIDGE_EFF) + 5, "实测只跑到 7 成 ≈ {:,.0f}".format(RIDGE_EFF), RD, False, 13)
+    f.t(X(TMAX) + 10, Y(RIDGE_EFF) + 23, "（假设的示意）", GY, False, 12.5)
     yb = f.band(PY + PH + 70, "ok", "batch 小就换 TP，batch 大就用 FSDP", [
         "FSDP 每字节换来的计算 ＝ 每卡 token 数：在 v7 上每卡少于约 3,845 个 token，就搬得比算得慢。"
         "　<tspan font-weight=\"700\">加卡又不想加 batch，FSDP 迟早掉到线下。</tspan>",
@@ -89,7 +98,9 @@ def fig_intensity():
                "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；"
                "TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。",
                "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，"
-               "来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。")
+               "来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。",
+               "⚠️ 分母该用实测带宽：在自己的网络上跑一次 AllGather（GPU 上用 nccl-tests），取它报的 busbw（按 AllGather 口径 ＝ 数据量 ÷ 用时 × (n−1)/n）。"
+               "细虚线假设实测只有标称的 70%，门槛升到约 5,493；70% 不是 v7 的实测数。")
     f.save("fig5-intensity.svg", yb + 14)
 
 
@@ -376,3 +387,129 @@ fig_tp_mlp()
 fig_tp_order()
 fig_wide_deep()
 fig_pp()
+
+
+# ════════════════════════════════════════════════════════════════
+# 图：FSDP × TP 二维切
+# ⭐ 2026-09-26 现场：「它们到底能不能并存？并存的时候卡是怎么切？这个是最复杂的地方。」
+#   切法对照 Scaling Book 训练篇「FSDP + 张量并行」：In[B_X, D_Y] · W_in[D_X, F_Y]
+#   —— FSDP（X 轴）切输入那一维，TP（Y 轴）切输出那一维，两刀切在不同的维上。
+# ⭐ 承重结论（本课推导）：一行 TP 共用同一批 token，每张卡却只拼自己那 1/TP 条，
+#   所以 FSDP 那根轴的「每字节换来的计算」＝ 这一行的 token 数，摊到每张卡的门槛除以 TP 度数。
+# ⛔ 刻意没画：W2（切法对称：输入维给 TP、输出维给 FSDP）；序列并行把 AllReduce 拆成两半的版本。
+# ════════════════════════════════════════════════════════════════
+N_F, N_T = 2, 4
+TCOL = [BL, OR, GR, PU]
+TTINT = ["#e8f0fe", "#fef7e0", "#e6f4ea", "#f3e8fd"]
+PER_CARD_SHARE = RIDGE / N_T
+assert abs(PER_CARD_SHARE - 961) < 1, PER_CARD_SHARE
+
+
+def _mat(f, x, y, cw, ch, own=None, strip=None):
+    """画一个 2 行 × 4 列的 W1 小矩阵。own＝(行, 列) 只填这一块；strip＝列号 填整条；都不给就全填。"""
+    for i in range(N_F):
+        for j in range(N_T):
+            full = (own is None and strip is None) or own == (i, j) or strip == j
+            fill = (TCOL[j] if i == 0 else TTINT[j]) if full else "none"
+            f.box(x + j * cw, y + i * ch, cw - 2, ch - 2, fill, TCOL[j] if full else LINE, 2, sw=1.2)
+
+
+def fig_fsdp_tp():
+    f = Fig(W, "FSDP 和 TP 一起用。8 张卡排成 2 行 4 列：一行 4 张卡是一组 TP，看同一份数据；一列 2 张卡是一组 FSDP，数据各不相同。"
+               "以 MLP 第一块权重为例：TP 按输出那一维把它切成 4 条，FSDP 再把每一条按输入那一维切成上下两半，每张卡常驻 1/8。"
+               "算一层时：先在一列里 AllGather，把自己那一条拼齐，只是整个矩阵的四分之一；再各算各的；最后在一行里 AllReduce 把部分和加起来，传的是激活。"
+               "账怎么算：一行 4 张卡共用同一批 token，每张卡只拼四分之一条，所以 FSDP 的门槛按一行的 token 数算，摊到每张卡只要约 961")
+    y0 = f.header("FSDP 和 TP 一起用：两刀切在不同的维上"
+                  "　——　<tspan font-weight=\"700\">每卡常驻 1/8，拼回来也只是自己那一条</tspan>",
+                  "8 张卡排成 2 行 × 4 列：一行是一组 TP（看同一份数据），一列是一组 FSDP（同一条权重的上下两半）。以 MLP 第一块权重 W1 为例",
+                  [(BL, "TP 0 那一条"), (OR, "TP 1"), (GR, "TP 2"), (PU, "TP 3")])
+
+    # ── ① 每张卡常驻哪一块 ───────────────────────────────────────
+    PH1 = 372
+    py = f.panel(0, y0, W, PH1, "① 怎么切：TP 竖着分 4 条，FSDP 再把每条上下劈开", INK)
+    MX, MY, CW, CH = 40, py + 60, 64, 70
+    _mat(f, MX, MY, CW, CH)
+    f.t(MX, MY - 14, "整块 W1（输入维 × 输出维）", INK, True, 13.5)
+    f.t(MX + 2 * CW, MY + 2 * CH + 24, "输出维：TP 切成 4 条", GY, size=13, anchor="middle")
+    f.t(MX, MY + 2 * CH + 46, "输入维：FSDP 劈成上下两半", GY, size=13)
+    f.line(MX + 4 * CW + 20, MY + CH, MX + 4 * CW + 70, MY + CH, GY2, 1.6)
+    GX0, GY0, CARDW, CARDH = 400, py + 44, 230, 104
+    for j in range(N_T):
+        f.t(GX0 + 100 + j * (CARDW + 14) + CARDW / 2 - 100, GY0 + 2, "TP %d" % j, TCOL[j], True, 13.5, "middle")
+    for i in range(N_F):
+        f.t(GX0 - 4, GY0 + 22 + i * (CARDH + 14) + CARDH / 2, "数据第 %d 份" % (i + 1), INK, True, 13, "end")
+        for j in range(N_T):
+            cx, cy = GX0 + j * (CARDW + 14), GY0 + 12 + i * (CARDH + 14)
+            f.box(cx, cy, CARDW - 14, CARDH, "none", GY2, 6, sw=1.2)
+            _mat(f, cx + 12, cy + 14, 28, 30, own=(i, j))
+            f.t(cx + 132, cy + 40, "只存这 1/8", INK, True, 12.5)
+            f.t(cx + 132, cy + 62, "行 %d · 列 %d" % (i + 1, j + 1), GY, size=12)
+    f.t(GX0, py + PH1 - 42, "同一行：数据相同、权重条不同（TP）　　同一列：权重条相同、数据不同（FSDP）", GY, size=13)
+
+    # ── ② 一层前向怎么走 ─────────────────────────────────────────
+    y2 = py + PH1 - 30 + 20
+    PH2 = 300
+    py = f.panel(0, y2, W, PH2, "② 算一层：先列内拼，再各算各的，出口行内加", BL)
+    SX = [30, 490, 950]
+    TT = ["① 列内 AllGather（FSDP）", "② 各算各的", "③ 行内 AllReduce（TP）"]
+    for k in range(3):
+        f.t(SX[k], py + 28, TT[k], BL if k == 0 else (INK if k == 1 else OR), True, 14.5)
+    # ①：一列两张卡，上下两半拼成整条
+    j = 1
+    for i in range(N_F):
+        cy = py + 50 + i * 86
+        f.box(SX[0], cy, 110, 72, "none", GY2, 5)
+        _mat(f, SX[0] + 10, cy + 8, 22, 26, own=(i, j))
+        f.box(SX[0] + 250, cy, 110, 72, "none", GY2, 5)
+        _mat(f, SX[0] + 260, cy + 8, 22, 26, strip=j)
+        f.line(SX[0] + 120, cy + 36, SX[0] + 240, cy + 36, BL, 2)
+    f.t(SX[0] + 180, py + 136, "拼齐", BL, True, 13, "middle")
+    f.t(SX[0], py + 248, "拼回的是第 2 条：整矩阵的 1/4，不是整个矩阵", INK, size=13)
+    # ②：一行四张卡，各拿自己那条，共用同一份数据
+    f.box(SX[1], py + 50, 400, 30, "#f1f3f4", GY2, 4)
+    f.t(SX[1] + 200, py + 70, "同一份数据 X（这一行共用）", INK, True, 13, "middle")
+    for jj in range(N_T):
+        cx = SX[1] + jj * 100
+        f.line(cx + 45, py + 84, cx + 45, py + 104, GY2, 1.4)
+        f.box(cx, py + 110, 90, 76, "none", GY2, 5)
+        _mat(f, cx + 8, py + 120, 18, 26, strip=jj)
+    f.t(SX[1], py + 222, "每张卡算中间结果的 1/4；GeLU 也各算各的", INK, size=13)
+    f.t(SX[1], py + 248, "这一段不通信", GY, size=13)
+    # ③：一行四张卡，部分和加起来
+    for jj in range(N_T):
+        cx = SX[2] + jj * 100
+        f.box(cx, py + 60, 90, 60, "none", TCOL[jj], 5, sw=1.6)
+        f.t(cx + 45, py + 96, "部分和", TCOL[jj], True, 13, "middle")
+        f.line(cx + 45, py + 124, SX[2] + 195, py + 160, OR, 1.4)
+    f.box(SX[2] + 130, py + 162, 130, 34, OR, OR, 4)
+    f.t(SX[2] + 195, py + 184, "加起来 ＝ Y", "#ffffff", True, 13.5, "middle")
+    f.t(SX[2], py + 222, "W2 算完只是部分和，出口加一次", INK, size=13)
+    f.t(SX[2], py + 248, "传的是激活，不是权重", OR, True, 13)
+
+    # ── ③ 账怎么算 ───────────────────────────────────────────────
+    y3 = py + PH2 - 30 + 20
+    PH3 = 176
+    py = f.panel(0, y3, W, PH3, "③ 账怎么算：TP 把一行的 token 借给了 FSDP", GR)
+    f.box(30, py + 22, 640, 110, "none", GY2, 6)
+    f.t(48, py + 50, "只用 FSDP", INK, True, 14.5)
+    f.t(48, py + 78, "每张卡拼一整层，只给自己那 T 个 token 用", INK, size=13)
+    f.t(48, py + 106, "门槛：每卡 T ≥ 3,845", RD, True, 14)
+    f.box(700, py + 22, 670, 110, "none", GR, 6, sw=1.6)
+    f.t(718, py + 50, "FSDP × TP 4", GR, True, 14.5)
+    f.t(718, py + 78, "每张卡只拼 1/4 条，却给这一行的全部 token 用", INK, size=13)
+    f.t(718, py + 106, "门槛：一行 ≥ 3,845 个 token，摊到每卡约 {:,.0f}".format(PER_CARD_SHARE), GR, True, 14)
+
+    f._pan = None
+    yb = f.band(py + PH3 - 10, "ok", "能并存，而且互补：batch 小时 TP 替 FSDP 撑住", [
+        "FSDP 切输入维、在列内拼；TP 切输出维、在行内加。两刀切在不同的维上，互不打架：每卡常驻 1/8，拼回来也只是自己那 1/4 条。",
+        "代价在 TP 那根轴：每层前向两次、反向两次对账，还藏不进计算，所以 TP 占最快的那一圈线，FSDP 用剩下的。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 Scaling Book（How to Scale Your Model）训练篇「FSDP ＋ 张量并行」：In[B_X, D_Y] · W_in[D_X, F_Y] · W_out[F_Y, D_X]，X 轴做 FSDP、Y 轴做 TP；"
+               "原书在 TP 轴上用 AllGather ＋ ReduceScatter 传激活，通信量跟一次 AllReduce 相同。",
+               "⚠️ 本课推导：一行共用同一批 token，所以 FSDP 那根轴每搬一字节换来的计算 ＝ 这一行的 token 数；961 ＝ 3,845 ÷ 4。"
+               "两根轴会分走不同的链路，各自的门槛要按各自那几根链路的实测带宽重算，只会更高。")
+    f.save("fig5-fsdp-tp.svg", yb + 14)
+
+
+fig_fsdp_tp()
