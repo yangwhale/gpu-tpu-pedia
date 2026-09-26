@@ -3933,15 +3933,17 @@ body.figonly section h3{margin-top:34px}
   <p>FSDP 这笔账很干净（⚠️ 推导，按稠密模型算）：一步搬约 6Ψ 字节（前向、反向各拼一次 bf16 权重，再分一次梯度，各约 2Ψ），
     算 6ΨT 次（专题四「每个 token 约 6 倍参数量次运算」，T 是每张卡分到的 token 数）。<b>两者一除，正好等于 T</b>，跟模型多大没关系。
     更直观的看法：一个参数占 2 字节，每个 token 拿它做一次乘加，正好 2 次运算。所以送来一个参数，这张卡上有几个 token，它就被用几回。</p>
+  <p>打个比方：一间做门的工坊，卡是师傅，网络是跑腿的小工。小工搬两样东西：一样是<b>工具</b>（电刨、模具），就是权重；一样是<b>门板</b>，一块块正在加工、一道工序做完递给下一道，就是激活，每个 token 一块。
+    FSDP 让小工搬工具：一件工具送到，这个师傅手上的每块门板都拿它过一遍，门板越多，这趟越值。</p>
 <figure class="fbox fwide" id="fig-intensity"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="每在网络上搬一个字节能换来多少次计算。横轴是每张卡这一步分到的 token 数。FSDP 那条线斜着往上走：它每字节换来的计算正好等于 token 数，batch 越大越划算。TP 那条线是平的，只取决于隐藏维除以 TP 度数，跟 batch 无关。中间那条水平虚线是 TPU v7 的硬件线，约三千八百四十五：每秒能算的次数除以每秒能搬的字节。线下面就是被通信拖住。FSDP 在 token 数少于三千八百四十五时掉到线下；V3 的 TP 开到 8 路时，按最乐观的线才勉强在线上，开到 32 路时在线下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两把刀，两种账　——　<tspan font-weight="700">FSDP 看 batch，TP 看隐藏维</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴：每在网络上搬 1 字节，换来多少 FLOPs（本课推导，稠密层近似）。低于硬件线 ＝ 算得没有搬得快，被通信拖住</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FSDP：＝ 每卡 token 数 T</text>
-<rect x="249.72000000000003" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="270" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP：＝ 4.5 × 隐藏维 ÷ TP 度数</text>
-<rect x="548.72" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="569" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7 硬件线 ≈ 3,845</text>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FSDP 搬工具：＝ 每卡 token 数 T</text>
+<rect x="305.72" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="326" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 递门板：＝ 4.5 × 隐藏维 ÷ TP 度数</text>
+<rect x="660.72" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="681" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7 硬件线 ≈ 3,845</text>
 <path d="M 150.00 323.64 L 1130.00 323.64 L 1130.00 502.00 L 150.00 502.00 Z" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="777" y="386" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">线下：师傅（卡）在等小工（网络）</tspan></text>
 <text class="svgsm" x="170" y="152" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">线上：师傅忙得过来</tspan></text>
@@ -4145,8 +4147,8 @@ body.figonly section h3{margin-top:34px}
     就是第一节那个等式，所以通信量跟原来一样。</p></details>
 
   <h3 id="s3-4">3.4　TP 的上限：跟 batch 无关</h3>
-  <p>TP 送的是「半成品」（激活）：token 多一倍，要送的和要算的都多一倍，<b>batch 在账里约掉了</b>。
-    FSDP 送的权重像工具，能提前送（算这一层时就把下一层的拿过来）；TP 送的半成品是刚算出来的，默认只能等它算完再送，所以 TP 的通信很难藏进计算里。
+  <p>TP 让小工递的是门板（激活）：几个师傅合干同一批门板，各做一半工序，做完得凑到一起合成。门板多一倍，要递的和要干的都多一倍，<b>batch 在账里约掉了</b>；隐藏维就是门板的尺寸，板子越大，每递一趟要干的活越多。
+    工具能提前送（算这一层时就把下一层的拿过来）；门板是刚加工出来的，默认只能等这道工序做完再递，所以 TP 的通信很难藏进计算里。
     剩下的只有隐藏维和 TP 度数：每字节换来的计算约 4.5 × 隐藏维 ÷ TP 度数（⚠️ 推导，稠密层）。
     V3 的隐藏维 7,168，TP 8 路约 4,032。图上那条红线是<b>最乐观</b>的画法，所以看着刚好贴线（7,168 × 4.5 ÷ 3,845 ≈ 8.4）；真实的红线还要更高，TP 8 路其实已经在线下（原因在下面「细一点」）。</p>
   <p>所以 <b>batch 小多用 TP，batch 大多用 FSDP</b>：图上左边蓝线还没爬过红线，靠橙线；右边爬过去了，交给 FSDP。
@@ -4419,7 +4421,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s3-6">3.6　PP：按层切</h3>
   <p>要横跨很多台机器、走慢线，又不想像 FSDP 那样每层搬权重，就按层切。TP 是<b>切宽</b>，PP 是<b>切深</b>：</p>
-<figure class="fbox fwide" id="fig-wide-deep"><svg viewBox="0 0 1400 704" width="100%" role="img" aria-label="同一个 8 层的模型，两种切法。左边切宽：每一层都切成四竖条，四张卡各拿一条，所以每一层算完都要对一次账，做一次 AllReduce，只能坐快线。右边切深：前两层给卡 0、再两层给卡 1，依此类推，卡和卡之间只在段的交界递一次半成品，能跨慢线；代价是有人要等，就是气泡"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-wide-deep"><svg viewBox="0 0 1400 704" width="100%" role="img" aria-label="同一个 8 层的模型，两种切法。左边切宽：每一层都切成四竖条，四张卡各拿一条，所以每一层算完都要对一次账，做一次 AllReduce，只能坐快线。右边切深：前两层给卡 0、再两层给卡 1，依此类推，卡和卡之间只在段的交界递一次门板（激活），能跨慢线；代价是有人要等，就是气泡"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TP 切宽，PP 切深　——　<tspan font-weight="700">一个每层都要对账，一个只在交界递一次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一个 8 层的模型、4 张卡。颜色 ＝ 这一块归哪张卡</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -4514,7 +4516,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="780" y="466" width="320" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="770" y="489" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">层 8</text>
 <text class="svgsm" x="1144" y="236" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只在段的交界</tspan></text>
-<text class="svgsm" x="1144" y="258" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">递一次半成品</tspan></text>
+<text class="svgsm" x="1144" y="258" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">递一次门板</tspan></text>
 <text class="svgsm" x="1144" y="280" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">（一对一收发）</text>
 <text class="svgsm" x="744" y="542" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只 3 处通信 → 能跨慢线；代价是有人闲着等</tspan></text>
 <rect x="0" y="592" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -4525,8 +4527,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">切深：卡和卡之间几乎不说话，所以 PP 敢横跨很多台机器；代价是流水线灌满、排空时有人在等。</text>
 </svg><figcaption><b>红点就是通信：左边每层一个，右边只有三个。</b><span class="capmore"><br><em>各家对「横切、纵切」的叫法正好相反，本课只说切宽、切深。</em></span></figcaption></figure>
   <p>段与段之间只在边界上用一对一收发传激活，是所有刀里通信最少的，所以它<b>能跨到慢线上</b>。
-    可朴素地切，就是「4 张卡的显存、1 张卡的速度」：同一时刻只有一段在干活。于是把一批数据切成几份 micro-batch 轮着灌进去，像装修队：
-    泥瓦、水电、油漆三队一户一户往下做，第一户开工时后两队只能在楼道里等，最后一户只剩油漆在干。等的那段，叫<b>气泡</b>：</p>
+    可朴素地切，就是「4 张卡的显存、1 张卡的速度」：同一时刻只有一段在干活。于是把一批数据切成几份 micro-batch 轮着灌进去，像门厂的流水线：
+    刨光、开孔、上漆三道工序各守一个工位，门板一摞一摞往下传。第一摞刚进刨光时，后两个工位只能干等；最后一摞到了上漆，前两个工位又闲着。干等的那段，叫<b>气泡</b>：</p>
 <figure class="fbox fwide" id="fig-pp-bubble"><svg viewBox="0 0 1400 548" width="100%" role="img" aria-label="流水线并行的时间表。四个 stage 从上到下，横轴是时间。每个小方块是一个 micro-batch 在这一段的前向或反向。一开始只有第一段在干活，后面几段在等；最后只剩第一段在做反向，后面几段已经做完在等。那两个三角形的空白就是气泡。micro-batch 越多，气泡占的比例越小。四段八个 micro-batch 时，气泡是理想计算时间的八分之三，占整步约百分之二十七"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PP 的代价：气泡　——　<tspan font-weight="700">开头等人灌满，结尾等人排空</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 个 stage、8 个 micro-batch，GPipe 式时间表（先全部前向、再全部反向）。反向按前向的 2 倍长画</text>
@@ -4704,7 +4706,7 @@ body.figonly section h3{margin-top:34px}
   <p>还记得开场那行配置吗？DeepSeek-V3 里<b>没有 TP</b>。报告自己的解释是显存优化做得够细，用不着代价高的 TP。
     再看它的参数都在哪：几乎全在一种叫「专家」的窄矩阵里。专家本来就窄，再往里切，每份更小，要搬的激活却一点不少。<b>真正该切的，是「专家」这一维。</b>这是第三刀。</p>
   <details class="foldfig"><summary><b>考考自己</b>：每张卡分到的 token 很少时，FSDP 和 TP 哪个先被通信拖住？TP 为什么出不了一台机器？</summary>
-  <p>FSDP：它每搬一个字节换来的计算就等于每卡 token 数，token 少就藏不住。TP 每一层都要对账，而且半成品要等算完才能送，藏不进计算，只能待在最快的那圈线里。</p></details>
+  <p>FSDP：它每搬一个字节换来的计算就等于每卡 token 数，token 少就藏不住。TP 每一层都要对账，而且门板要等这道工序做完才能递，藏不进计算，只能待在最快的那圈线里。</p></details>
 </div></section>
 
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第三刀：切专家</h2></div>
