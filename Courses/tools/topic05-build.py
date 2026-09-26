@@ -129,7 +129,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 60 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 80 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>

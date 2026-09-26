@@ -963,6 +963,7 @@ Kimi K3 的 sec. 2.1.2 变成 §4.1.2、DeepSeek-V4 的 sec. 2.3 变成 §4.3…
 | §4 | 无意见 | — |
 | §5–§6 | 讲义加厚：8.58 GiB 来历、Ulysses 上限与 USP、TP÷KV 头数、DCP 度数、PCP；TTFT/TPOT、分块 prefill 局限、KV 一趟 1.04 GB ÷ 12.5 GB/s、配比与 7.4 倍、MegaScale-Infer 156/39、AFD 三个小批 | 「这两节讲的太简陋了，随便一提就过去了……重来」 |
 | §5 | 新增 fig-ulysses、fig-usp（「段 × 头」表：Ring 按行、Ulysses 按列、USP 按块）＋ 两支分步 Manim（UlyssesSteps 取代旧片、USPSteps 新增） | 「尤利西斯一直没搞懂，还有 USP 也没搞懂……额外画图」「高级的动图画了吗」 |
+| §7–§8 | 讲义按现场讲法补细节（带宽数、17/73 算式、GB300 延迟；四类判据、FSDP 为何算切数据、三个坑）；课件封面时长 60′ → 80′，各节计划按地板取整 | 「优化文档」；时长只报告不砍（见 feedback 记忆） |
 
 ## 记录规矩
 
