@@ -277,6 +277,7 @@ __FIG_A2A__
 
   <h3>2.2　ZeRO：越闲的越先削</h3>
   <p>先认清那三块：<b>权重</b>是模型本身；<b>梯度</b>是这一步算出来的「每个参数该往哪改、改多少」；<b>优化器状态</b>是优化器替每个参数记的账（主权重、两个动量），它最大。下文的 Ψ 就是参数个数。</p>
+  <p class="sub">口径：本课按 ZeRO 论文算，优化器状态指<b>跨步常驻、要存进 checkpoint</b> 的那几样；梯度每步重算、用完清零，单独算一块（所以 ZeRO 才能把「切梯度」单列一级）。Megatron 里累加梯度的精度（<code>--main-grads-dtype</code>）跟主权重、两个动量的精度归在同一组「精度感知优化器」参数里配，所以也有人把它算进优化器。</p>
 __FIG_ZERO_MEM__
   <p>16 字节里，12 个是优化器状态 —— 开场第二问的答案：最大的是它，先削它。巧的是，它也是最闲的那块：</p>
 __FIG_ZERO_BUSY__
@@ -932,7 +933,7 @@ __FIG_PANO__
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
-    <tr><td>开场题：常规混合精度每参数 16 字节；V3 实际把 m、v 存成 bf16，主权重与累积梯度留 fp32</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.3.3（原文：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32）；常规做法里优化器状态与参数同精度（PyTorch 默认）；Megatron Core 需显式开启 --use-precision-aware-optimizer --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16（Megatron Core MoE 文档）；bf16 训练时 Megatron 默认把梯度累加与 all-reduce 放 fp32（megatron/training/arguments.py：「bfloat16 requires gradient accumulation and all-reduce to be done in fp32」），此时梯度 4 字节、每参数 18 字节</td></tr>
+    <tr><td>开场题：常规混合精度每参数 16 字节；V3 实际把 m、v 存成 bf16，主权重与累积梯度留 fp32</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.3.3（原文：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32）；常规做法里优化器状态与参数同精度（PyTorch 默认）；Megatron Core 需显式开启 --use-precision-aware-optimizer --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16（Megatron Core MoE 文档）；Megatron 的「精度感知优化器」参数组里并列 --main-grads-dtype、--main-params-dtype、--exp-avg-dtype、--exp-avg-sq-dtype（arguments.py），本课口径仍把梯度单列；V3 每参数约 14 字节为本课推导（计算用权重的精度报告未写，按 BF16 计）；bf16 训练时 Megatron 默认把梯度累加与 all-reduce 放 fp32（megatron/training/arguments.py：「bfloat16 requires gradient accumulation and all-reduce to be done in fp32」），此时梯度 4 字节、每参数 18 字节</td></tr>
     <tr><td>V3 的 FP8 方案整体验证：损失相对误差低于 0.25%</td><td>同上 sec. 3.3 与附录 B.1：约 16B、230B 两个规模各训约一万亿 token，整套 FP8 方案（含 bf16 优化器状态）对 BF16 基线；报告未单独消融「动量用 bf16」这一项</td></tr>
     <tr><td>动量能不能用 bf16，要看 β₂</td><td>V3 的 AdamW β₁＝0.9、β₂＝0.95（技术报告 sec. 4.2）；PyTorch AdamW 默认 β₂＝0.999。⚠️ 本课推导：bf16 有效位 8 位，相邻两数的相对间隔 2⁻⁷～2⁻⁸，四舍五入丢掉小于半个间隔（最小约 0.2%）的改动；β₂＝0.999 时新值每步只占 0.1%。独立证据：Dettmers 等 arXiv 2110.02861，分块量化的 8 比特优化器状态能追平 32 比特</td></tr>
     <tr><td>V3 全部训练 278.8 万 H800 卡时；一块卡约 318 年</td><td>DeepSeek-V3 技术报告摘要（含预训练、长上下文扩展与后训练）；318 年 ＝ 2.788M ÷ 8,760 小时，本课推导</td></tr>
