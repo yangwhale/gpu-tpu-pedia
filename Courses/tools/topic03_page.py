@@ -953,9 +953,10 @@ def audio_block(out_path, fname, label="本节讲课录音"):
         return ""
     dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", p],
                                capture_output=True, text=True).stdout or 0)
-    return ('<div class="lecaudio" style="margin:10px 0 18px;padding:10px 14px;border:1px solid #dadce0;'
-            'border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
-            '<span style="font-weight:600">🎧 %s</span><span class="sub">约 %d 分 %02d 秒</span>'
+    # ⭐ 2026-09-26 现场：「放在最前面显眼的位置」—— 蓝色描边、浅蓝底、大一号字
+    return ('<div class="lecaudio" style="margin:12px 0 22px;padding:14px 18px;border:2px solid #1a73e8;'
+            'background:#e8f0fe;border-radius:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+            '<span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 %s</span><span class="sub">约 %d 分 %02d 秒</span>'
             '<audio controls preload="none" src="media/%s" style="flex:1;min-width:260px"></audio></div>'
             % (label, int(dur) // 60, int(dur) % 60, fname))
 
