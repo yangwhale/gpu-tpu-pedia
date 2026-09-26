@@ -35,7 +35,7 @@ import json
 import os
 
 from manim import (Scene, VGroup, VMobject, Rectangle, Text, Arrow, CurvedArrow, FadeIn, FadeOut,
-                   Indicate, AnimationGroup, MoveAlongPath, DashedVMobject, WHITE, GREY, BLUE, GREEN,
+                   Indicate, AnimationGroup, MoveAlongPath, DashedVMobject, Line, WHITE, GREY, BLUE, GREEN,
                    ORANGE, PURPLE_B, YELLOW, UP, DOWN, LEFT, RIGHT, ORIGIN, linear, smooth)
 
 N = 4
@@ -294,60 +294,85 @@ class AllGather(Stepper):
 
 
 class AllToAll(Stepper):
-    """AllToAll 按「第 s 步寄给右边第 s 个人」排：三步，每步人人同时寄一块，到头的绕回来。
-    ⭐ 块的标签是「谁出的 ＋ 要去谁」：A1 ＝ 卡 0 出的、要寄给卡 1。
-    ⭐⭐ 每张卡分「寄出」「收到」两列：收到的块按来源排在右列第 k 行。
-      只用一列的话，落点（卡 j，第 k 行）上还坐着没寄走的块 —— 2026-09-25 草稿里撞在一起过。"""
-    TITLE = "AllToAll　全交换：每人给每人寄一份不一样的"
-    OFF = 0.58
+    """AllToAll 的一般情形：派发时人人同时往所有方向「乱射」，专家算完再沿原路飞回（合并）。
+    ⛔⛔ 2026-09-26 现场纠正：「转置只能说是 AllToAll 的一种特例……动图你还一步一步的往右发，
+      跟环形通讯太像了。你得把 dispatch 和 combine 这种乱射之后又原路回来的感觉表现出来。」
+      旧版按「第 s 步寄给右边第 s 个人」排成三步环，还只画等量（转置），两处都讲偏了。
+    ⭐ 现在：每张卡上半「出发」8 个 token（颜色 ＝ 出自哪张卡，数字 ＝ 路由定的目的卡），
+      下半「收到」。一次同时飞完（直线交叉），数目不等；专家算完描黄边；原路飞回原位。
+    ⛔ 数目 C 是示意固定值，跟静态图 fig-a2a 同一组（topic05-fig-coll.py 的 A2A_C）。"""
+    TITLE = "AllToAll　全交换：每人给每人寄一份，多少不一样"
+    C = [[2, 3, 1, 2], [3, 1, 2, 2], [4, 2, 1, 1], [2, 2, 3, 1]]
+    TS, TG = 0.5, 0.1
+
+    def tok(self, k, d, done=False):
+        g = VGroup(Rectangle(width=self.TS, height=self.TS, fill_color=COL[k], fill_opacity=0.95,
+                             stroke_color=YELLOW if done else COL[k], stroke_width=5 if done else 1),
+                   Text(str(d), font_size=22, color=WHITE, weight="BOLD"))
+        g[1].move_to(g[0].get_center())
+        return g
+
+    def spot(self, card, area, idx):
+        r, c = divmod(idx, 4)
+        x = XS[card] + (c - 1.5) * (self.TS + self.TG)
+        y = (1.15 - r * 0.6) if area == 0 else (-0.85 - r * 0.6)
+        return [x, y, 0]
 
     def construct(self):
-        SND = [x - self.OFF for x in XS]
-        RCV = [x + self.OFF for x in XS]
-        xr, xl = RCV[-1] + CW / 2 + 0.35, SND[0] - CW / 2 - 0.35
-
-        def block(k, j, x, y):
-            return VGroup(Rectangle(width=CW, height=CH, stroke_width=0, fill_color=COL[k],
-                                    fill_opacity=0.85).move_to([x, y, 0]),
-                          Rectangle(width=CW, height=CH, stroke_color=WHITE,
-                                    stroke_width=5 if k == j else 1.5).move_to([x, y, 0]),
-                          Text("%s%d" % (NAME[k], j), font_size=24, color=WHITE,
-                               weight="BOLD").move_to([x, y, 0]))
-
-        def slots():
-            g = VGroup()
-            for k in range(N):
-                for j in range(N):
-                    g.add(empty_chunk(j, RCV[k]))
-                g.add(Text("寄出", font_size=18, color=GREY).move_to([SND[k], Y0 + 0.42, 0]))
-                g.add(Text("收到", font_size=18, color=GREY).move_to([RCV[k], Y0 + 0.42, 0]))
-            return g
-
+        import random as _r
         self.title = Text(self.TITLE, font_size=30, color=WHITE).to_edge(UP)
-        self.add(self.title, labels(), ring_guide(xr, xl), slots())
-        blocks = {(k, j): block(k, j, SND[k], cy(j)) for k in range(N) for j in range(N)}
-        self.add(*blocks.values())
+        frame = VGroup()
+        for k in range(N):
+            frame.add(Rectangle(width=2.75, height=4.3, stroke_color=GREY, stroke_width=2).move_to([XS[k], -0.5, 0]))
+            frame.add(Text("卡 %d" % k, font_size=24, color=COL[k]).move_to([XS[k], 1.95, 0]))
+            frame.add(Text("出发", font_size=18, color=GREY).move_to([XS[k] - 1.0, 1.55, 0]))
+            frame.add(Text("收到", font_size=18, color=GREY).move_to([XS[k] - 1.0, -0.42, 0]))
+        self.add(self.title, frame)
+        src = {}                                   # (k, i) → (目的卡, 原位)
+        for k in range(N):
+            lst = [d for d in range(N) for _ in range(self.C[k][d])]
+            _r.Random(10 + k).shuffle(lst)
+            for i, d in enumerate(lst):
+                src[(k, i)] = (d, self.spot(k, 0, i))
+        dst, fill = {}, [0] * N                    # 收件那边按出发的卡排好
+        for k in range(N):
+            for i in range(8):
+                d = src[(k, i)][0]
+                dst[(k, i)] = self.spot(d, 1, fill[d])
+                fill[d] += 1
+        assert fill == [11, 8, 7, 6]
+        toks = {key: self.tok(key[0], src[key][0]).move_to(src[key][1]) for key in src}
+        self.add(*toks.values())
         self.wait(0.8)
-        self.say("A1 ＝ 卡 0 出的、要寄给卡 1。先把自己留给自己的挪到右列：不走网络")
-        self.play(*[blocks[(k, k)].animate.move_to([RCV[k], cy(k), 0]) for k in range(N)], run_time=1.2)
-        self.hold(1.6)
-        for s in range(1, N):
-            self.say("第 %d 步（共 3 步）：人人直接寄给「右边第 %d 个人」，到头绕回来" % (s, s) if s == 1 else
-                     "第 %d 步（共 3 步）：直接寄给右边第 %d 个人，隔着人，不是接力" % (s, s))
-            fl = [(k, (k + s) % N) for k in range(N)]
-            self.play(*[MoveAlongPath(blocks[(k, d)],
-                                      flight_path(k, d, d, k, SND[k], RCV[d], xr, xl), rate_func=smooth)
-                        for k, d in fl], run_time=FLY)
-            self.say("第 %d 步完成：每人又收到一块别人寄给它的" % s, YELLOW)
-            self.hold()
-        self.say("三步之后：卡 j 的右列，收齐了四个人寄给它的那一份", GREEN)
+
+        self.say("每个 token 已由路由定好去哪张卡（格子里的数字），每人要寄给每人的数目都不一样")
         self.hold()
-        self.say("专家算完，还要原路再寄回一次：MoE 每层两次 AllToAll", GREY)
-        self.hold(1.6)
-        self.play(FadeOut(VGroup(*blocks.values())), FadeOut(self.cap), run_time=0.6)
-        self.remove(*blocks.values(), self.cap)
-        self.play(FadeIn(VGroup(*[block(k, j, SND[k], cy(j)) for k in range(N) for j in range(N)])),
-                  run_time=0.6)
+        # ⭐ 轨迹线：派发时画出来、合并时同一批线再亮一次 —— 「原路回来」要靠看见同一条路
+        trails = VGroup(*[Line(src[key][1], dst[key], color=COL[key[0]], stroke_width=2.5, stroke_opacity=0.55)
+                          for key in src])
+        self.say("派发：所有卡同时往所有方向寄，一次飞完，不排队、不接力")
+        self.play(FadeIn(trails), run_time=0.5)
+        self.play(*[m.animate.move_to(dst[key]) for key, m in toks.items()], run_time=2.2, rate_func=smooth)
+        self.play(FadeOut(trails), run_time=0.4)
+        self.say("收到的忙闲不均：卡 0 收了 11 个，卡 3 只收 6 个", YELLOW)
+        self.hold()
+        self.say("各卡上的专家算自己收到的（描黄边）；卡 0 最忙，大家都等它")
+        done = {key: self.tok(key[0], src[key][0], True).move_to(dst[key]) for key in src}
+        self.play(*[FadeOut(toks[key]) for key in src], *[FadeIn(done[key]) for key in src], run_time=0.9)
+        toks = done
+        self.hold()
+        self.say("合并：又一次 AllToAll，沿原路飞回，回到出发的卡、原来的位置")
+        self.play(FadeIn(trails), run_time=0.5)
+        self.play(*[m.animate.move_to(src[key][1]) for key, m in toks.items()], run_time=2.2, rate_func=smooth)
+        self.play(FadeOut(trails), run_time=0.4)
+        self.remove(trails)
+        self.say("MoE 每层两次：派发一次、合并一次；每份一样大时，才正好是一次转置", GREEN)
+        self.hold()
+        self.play(*[FadeOut(m) for m in toks.values()], FadeOut(self.cap), run_time=0.6)
+        self.remove(*toks.values(), self.cap)
+        self.cap = None
+        fresh = [self.tok(key[0], src[key][0]).move_to(src[key][1]) for key in src]
+        self.play(*[FadeIn(m) for m in fresh], run_time=0.6)
         self.wait(0.6)
         self.dump()
 

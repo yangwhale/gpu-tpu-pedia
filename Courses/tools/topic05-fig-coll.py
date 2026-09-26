@@ -17,7 +17,7 @@ r"""专题五 · 第一节「先认识五种通信」的五张图。
 ⛔ 刻意没画（2026-09-25 对照构建手册补）：八个原语只画「逻辑视图」—— 谁发给谁、结果长什么样；
    不画实际用的算法（环形、树形、分层），那是 fig-ring 和动画的事。也不画延迟，只讲带宽。
 """
-from topic03_draw import Fig, BL, OR, GR, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, BL, OR, GR, PU, GY, INK, GY2, LINE, RD as RD_
 
 W = 1400
 from topic05_blocks import (N, COL, MID, NAME, CW, CH, GAP, RH, chunk, row, rowlab, sumlab,   # noqa: E402
@@ -93,8 +93,8 @@ def fig_nn():
     f = Fig(W, "人人对人人的四个集合通信。全收集：每人一块，结束后每人都有完整的四块。"
                "归约分散：每人一整份，结束后卡 k 只拿到第 k 块的总和。"
                "全归约：每人一整份，结束后每人都拿到四块总和。"
-               "全交换：卡 k 的第 j 块发给卡 j，结束后卡 j 手里是四张卡各自的第 j 块，"
-               "相当于把四行四列的表转置了一次。前三个是把收集、归约的结果发给所有人，"
+               "全交换：卡 k 给卡 j 寄一份，份份不同，一般多少也不同；这里画的是每份一样大的特例，"
+               "结束后卡 j 手里是四张卡各自的第 j 块。前三个是把收集、归约的结果发给所有人，"
                "全交换不加也不拼，只是换位置")
     y0 = f.header("训练里天天在跑的四个　——　<tspan font-weight=\"700\">人人对人人，没有班长</tspan>",
                   "名字前面带 All 的，意思是<tspan font-weight=\"700\">结果人人都有一份</tspan>。"
@@ -115,7 +115,7 @@ def fig_nn():
                rs_before, rs_after, "先加再分。卡 k 只拿到第 k 块的总和", GR)
     y2 = panel_pair(f, 0, y1 + 20, PW, "AllReduce　全归约", "人人一整份 → 人人一份总和",
                     rs_before, ar_after, "数据并行同步梯度用的就是它", GR)
-    panel_pair(f, W - PW, y1 + 20, PW, "AllToAll　全交换", "卡 k 的第 j 块 → 发给卡 j",
+    panel_pair(f, W - PW, y1 + 20, PW, "AllToAll　全交换", "卡 k 给卡 j 寄一份（这里画每份一样大的特例）",
                [full(k) for k in range(N)], a2a_after, "不加也不拼，只换位置。MoE 派发 token 用它", PU)
 
     yb = f.band(y2 + 20, "ok", "前三个是一家人，第四个是另一回事", [
@@ -257,52 +257,104 @@ def fig_ring():
 
 
 # ════════════════════════════════════════════════════════════════
-# 图五：AllToAll 就是一次转置
+# 图五：AllToAll —— 一般情形是「每人给每人寄的多少不一样」，转置只是等量特例
+# ⛔⛔ 2026-09-26 现场纠正：「转置只能说是 AllToAll 的一种特例……你得把 dispatch 和 combine
+#   这种乱射之后又原路回来了的感觉表现出来。」原图整张画成转置，讲成了特例。
+# ⭐ 改成：主画面用专家并行的派发 —— 每个 token 由路由定去哪张卡，每人寄给每人的数目不等
+#   （线粗 ∝ 数目），收件人忙闲不均；再画合并原路寄回；转置降成右下角的小图，标「每份一样大时」。
+# ⛔ 数目 A2A_C 是示意（固定），不是实测路由分布。
 # ════════════════════════════════════════════════════════════════
-def fig_a2a():
-    f = Fig(W, "全交换就是把一张四乘四的表转置一次。左边一行是一张卡手里的数据，"
-               "第 j 格是它要交给卡 j 的那一份。做完之后，卡 j 手里的一行，"
-               "是四张卡各自给它的那一份，也就是原来的第 j 列。"
-               "对角线上那四格不用走网络，其余十二格都要跨卡。"
-               "MoE 里这张表的一格，就是我手里要送去卡 j 上那个专家的 token")
-    y0 = f.header("AllToAll　——　<tspan font-weight=\"700\">每人给每人寄一份不一样的</tspan>",
-                  "左边：一行 ＝ 一张卡手里的数据，第 j 格是它要交给卡 j 的那一份。"
-                  "右边：第 j 行 ＝ 原来的第 j 列",
-                  [(BL, "卡 0 出的"), (OR, "卡 1 出的"), (GR, "卡 2 出的"), (PU, "卡 3 出的")])
-    PH = 30 + 44 + N * RH + 60
-    py = f.panel(0, y0, W, PH, "4 张卡的全交换", PU)
-    LX, RX = 160, 820
-    f.t(LX, py + 26, "之前：卡 k 的第 j 格要去卡 j", INK, True, 14)
-    f.t(RX, py + 26, "之后：卡 j 收齐所有人给它的那一格", INK, True, 14)
-    for j in range(N):
-        f.t(LX + j * (CW + GAP) + CW / 2.0, py + 50, "寄%d" % j, GY, size=13, anchor="middle")
-        f.t(RX + j * (CW + GAP) + CW / 2.0, py + 50, "从%d" % j, GY, size=13, anchor="middle")
-    for k in range(N):
-        yy = py + 58 + k * RH
-        rowlab(f, LX - 64, yy, k)
-        rowlab(f, RX - 64, yy, k)
-        row(f, LX, yy, [([k], "%s%d" % (NAME[k], j)) for j in range(N)], hot={k})
-        row(f, RX, yy, [([j], "%s%d" % (NAME[j], k)) for j in range(N)], hot={k})
-    # ⭐ 2026-09-25 逐图审：「转置」对大众是术语。圈出一条具体的路：左边第 1 列（都寄给卡 1）→ 右边卡 1 那一行
-    f.box(LX + (CW + GAP) - 5, py + 56, CW + 10, N * RH - 1, "none", INK, 6, sw=2, dash="5,3")
-    f.t(LX + (CW + GAP) + CW / 2.0, py + 58 + N * RH + 12, "这一列都寄给卡 1", INK, True, 13, "middle")
-    f.box(RX - 5, py + 58 + RH - 5, N * (CW + GAP) - GAP + 10, CH + 10, "none", INK, 6, sw=2, dash="5,3")
-    f.t(RX + N * (CW + GAP) + 6, py + 58 + RH + CH / 2.0 + 5, "卡 1 收齐", INK, True, 13)
-    mid = py + 58 + N * RH / 2.0 - 4
-    f.line(LX + N * (CW + GAP) + 20, mid, RX - 90, mid, PU, 2)
-    f.t((LX + N * (CW + GAP) + RX - 70) / 2.0, mid - 14, "按收件人重新分拣", PU, True, 15, "middle")
-    f.t((LX + N * (CW + GAP) + RX - 70) / 2.0, mid + 24, "（整张表转置一次）", GY, size=13, anchor="middle")
-    f.t(16, py + 58 + N * RH + 40,
-        "粗框是对角线：自己给自己的那一格，不用走网络。其余 12 格都要跨卡　——　每张卡发出去整份的 (n−1)/n",
-        GY, size=13.5)
-    f._pan = None
+import random as _rnd                                                  # noqa: E402
 
-    yb = f.band(py + PH + 20, "ok", "为什么 MoE 离不开它，又最怕它", [
-        "MoE 里这张表的一格，就是<tspan font-weight=\"700\">我手里要送到卡 j 上那个专家的 token</tspan>。"
-        "发过去算完，还要再转置一次送回来　——　所以专家并行每层两次 AllToAll。",
-        "每一格多大由路由决定，<tspan font-weight=\"700\">事先不知道</tspan>，而且任意两张卡之间都有流量。"
-        "前三种都能安排成只跟邻居说话；它的每一格都得从发的人一路走到收的人，所以对网络拓扑最挑剔。",
+A2A_C = [[2, 3, 1, 2], [3, 1, 2, 2], [4, 2, 1, 1], [2, 2, 3, 1]]      # A2A_C[k][d]：卡 k 寄给卡 d 几个 token
+A2A_IN = [sum(A2A_C[k][d] for k in range(N)) for d in range(N)]
+assert [sum(r) for r in A2A_C] == [8] * N and A2A_IN == [11, 8, 7, 6]
+TOK = 26
+
+
+def _tokens(k):
+    lst = [d for d in range(N) for _ in range(A2A_C[k][d])]
+    _rnd.Random(10 + k).shuffle(lst)
+    return lst
+
+
+def fig_a2a():
+    f = Fig(W, "全交换的一般情形：每张卡给每张卡各寄一份，而且多少不一样。以专家并行为例，"
+               "每张卡有 8 个 token，每个 token 由路由决定去哪张卡。派发时所有卡同时往所有方向寄，"
+               "线越粗寄得越多；收件那边忙闲不均，卡 0 收了 11 个，卡 3 只收了 6 个。"
+               "专家算完，再沿原路寄回出发的卡，这是合并，又一次全交换。"
+               "每份一样大时，全交换正好是把一张表转置一次，这只是特例，Ulysses 用的就是它")
+    y0 = f.header("AllToAll　——　<tspan font-weight=\"700\">每人给每人寄一份，份份不同，多少也不同</tspan>",
+                  "以专家并行为例：每个 token 由路由定好去哪张卡（格子里的数字）；颜色 ＝ 从哪张卡出发",
+                  [(BL, "卡 0 出发"), (OR, "卡 1 出发"), (GR, "卡 2 出发"), (PU, "卡 3 出发")])
+    PH = 500
+    py = f.panel(0, y0, W, PH, "① 派发：人人同时往所有方向寄，线越粗寄得越多", PU)
+    LX, RX, RW0 = 70, 930, 90
+    ROWY = [py + 70 + k * 100 for k in range(N)]
+    f.t(LX, py + 30, "出发：每张卡 8 个 token，各去各的卡", INK, True, 14)
+    f.t(RX, py + 30, "收到：按出发的卡排好", INK, True, 14)
+    lx_end = LX + 8 * (TOK + 4) + 10
+    for k in range(N):
+        yy = ROWY[k]
+        f.t(LX - 12, yy + 20, "卡 %d" % k, COL[k], True, 14, "end")
+        for i, d in enumerate(_tokens(k)):
+            x = LX + i * (TOK + 4)
+            f.box(x, yy, TOK, TOK, COL[k], COL[k], 3)
+            f.t(x + TOK / 2.0, yy + 18, "%d" % d, "#ffffff", True, 13, "middle")
+    for d in range(N):
+        yy = ROWY[d]
+        f.t(RX - 12, yy + 20, "卡 %d" % d, INK, True, 14, "end")
+        x = RX
+        for k in range(N):
+            for _ in range(A2A_C[k][d]):
+                f.box(x, yy, TOK, TOK, COL[k], COL[k], 3)
+                x += TOK + 4
+            x += 8
+        f.t(x + 6, yy + 19, "收 %d 个" % A2A_IN[d], RD_ if d == 0 else GY, d == 0, 13.5)
+    for k in range(N):
+        for d in range(N):
+            y1, y2 = ROWY[k] + TOK / 2.0, ROWY[d] + TOK / 2.0
+            f.line(lx_end, y1, RX - 70, y2, COL[k], 1.2 + 2.2 * A2A_C[k][d],
+                   dash="4,4" if k == d else None, arrow=False)
+    f.t(lx_end + 10, py + PH - 70, "虚线 ＝ 寄给自己：不走网络。其余每一根都要跨卡，而且全部同时出发", GY, size=13)
+    f.t(lx_end + 10, py + PH - 46, "卡 0 收了 11 个、卡 3 只收 6 个：大家都得等卡 0 算完", RD_, True, 13.5)
+
+    y2 = py + PH - 30 + 20
+    PH2 = 250
+    py = f.panel(0, y2, 820, PH2, "② 合并：专家算完，原路寄回", PU)
+    for k in range(N):
+        yy = py + 30 + k * 48
+        f.t(40, yy + 18, "卡 %d" % k, COL[k], True, 13.5)
+        f.t(560, yy + 18, "卡 %d" % k, INK, True, 13.5)
+        for d in range(N):
+            f.line(540, py + 30 + d * 48 + 12, 100, yy + 12, COL[k], 1 + 1.6 * A2A_C[k][d],
+                   dash="4,4" if k == d else None, arrow=True)
+    f.t(610, py + 60, "同一批线，", INK, True, 13.5)
+    f.t(610, py + 84, "方向反过来：", INK, True, 13.5)
+    f.t(610, py + 112, "每个 token 回到", GY, size=13)
+    f.t(610, py + 134, "出发的卡、原来的位置", GY, size=13)
+    f.t(610, py + 170, "每层两次：派发一次，", PU, True, 13.5)
+    f.t(610, py + 192, "合并一次", PU, True, 13.5)
+
+    px = 840
+    py3 = f.panel(px, y2, W - px, PH2, "③ 特例：每份一样大，就是一次转置", GY)
+    SC = 22
+    for k in range(N):
+        for j in range(N):
+            f.box(px + 30 + j * (SC + 3), py3 + 40 + k * (SC + 3), SC, SC, COL[k], COL[k], 2)
+            f.box(px + 250 + j * (SC + 3), py3 + 40 + k * (SC + 3), SC, SC, COL[j], COL[j], 2)
+    f.t(px + 30, py3 + 26, "卡 k 一行", GY, size=12.5)
+    f.t(px + 250, py3 + 26, "卡 j 一行", GY, size=12.5)
+    f.line(px + 140, py3 + 88, px + 236, py3 + 88, GY2, 1.6)
+    f.t(px + 188, py3 + 78, "转置", GY, True, 13, "middle")
+    f.t(px + 30, py3 + 170, "Ulysses 在按段、按头之间换，", INK, size=13)
+    f.t(px + 30, py3 + 192, "用的就是这个等量的特例", INK, size=13)
+    f._pan = None
+    yb = f.band(py + PH2 - 10, "ok", "为什么网络最怕它", [
+        "每份多大要等路由算完才知道（数目不等时常叫 AllToAllv），收件的人忙闲不均，最忙的那张卡决定大家等多久。",
+        "每一份都是私信：路上没法像 AllReduce 那样边走边合并，也排不成只跟邻居说话的环，任意两张卡之间都有流量，拼的是整个网络的横截面。",
     ])
+    yb = f.src(yb + 10, "⚠️ 示意：每张卡寄给每张卡几个 token 是随手定的固定数，不是实测的路由分布；真实的 V3 每个 token 挑 8 个专家。")
     f.save("fig5-a2a.svg", yb + 14)
 
 
