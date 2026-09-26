@@ -145,7 +145,7 @@ def check_captions():
         except (UnicodeDecodeError, OSError):
             continue
         for fig in re.findall(r"<figure\b.*?</figure>", s, re.S):
-            m = re.search(r'src="media/([^"]+\.mp4)"', fig)
+            m = re.search(r'src="media/([^"?]+\.mp4)(?:\?[^"]*)?"', fig)   # 地址后面可能挂了 ?v=指纹
             if not m or m.group(1) not in dur:
                 continue
             # ⛔ 第一版写的是 `（\s*([0-9.]+)\s*秒` ——&#160;要求左括号**紧挨着**数字，

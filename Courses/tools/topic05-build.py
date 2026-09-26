@@ -1246,6 +1246,21 @@ document.querySelectorAll('video[data-pauses]').forEach(function(v){
 </script>
 """
 _html = _hook_steps(_html)
+
+
+# ⭐ 2026-09-26 现场：重渲的 AllToAll 已部署，读者看到的还是旧片 —— 文件名没变，浏览器／CDN 按旧缓存放。
+#   每个 mp4 地址后面挂内容指纹，片子一改地址就变，缓存自然失效。
+def _bust(html):
+    import hashlib
+
+    def one(m):
+        fn = m.group(1)
+        with open(os.path.join(os.path.dirname(OUT), "media", fn), "rb") as fh:
+            return 'src="media/%s?v=%s"' % (fn, hashlib.md5(fh.read()).hexdigest()[:8])
+    return re.sub(r'src="media/([^"?]+\.mp4)"', one, html)
+
+
+_html = _bust(_html)
 assert _html.count("</body>") == 1
 _html = _html.replace("</body>", STEP_JS + "</body>")
 _html = P.add_figonly_toggle(_html)
