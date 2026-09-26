@@ -64,6 +64,7 @@ def build():
 <div class="qzans" hidden>
 <p>2 ＋ 2 ＋ 4 ＋ 4 ＋ 4 ＝ <b>16 字节</b>。前两样是半精度（bf16），算矩阵乘用；后三样是全精度（fp32），给优化器用。
   乘上 V3 的 6,710 亿参数：<b>%.2f TiB</b>，约合一万 GB —— 这还不含激活。</p>
+<p class="sub">16 字节是常规口径，梯度按半精度算。实际用 bf16 训练时，框架常把<b>累加梯度</b>的那份放全精度（Megatron 默认就这样，V3 也是），那就是 18 字节。</p>
 </div>
 <p><b>预习</b>（先想一想，答案在这一讲的 §2.2 揭晓）：</p>
 <ol start="2">
@@ -82,5 +83,6 @@ def answers_html():
     step_torch = 1 - NB.TORCH_BETA2
     assert step_torch < NB.BF16_HALF_ULP and step_v3 > 2 ** -7, "β₂ 那段推导的前提变了，重写第三问"
     return """<div class="note ok"><span class="t">开场第三问的答案：V3 把两个动量压成了半精度，主权重留在全精度（批次累积用的那份梯度也是）</span>
+  注意优化器状态里<b>没有梯度</b>：梯度只是每步喂给优化器的输入，用完就清零；要放全精度的是把几个小批的梯度加起来的那个累加器。<br>
   主权重每步只加一点点、要一直累加，压了会被舍掉；动量能不能压要看 β₂ —— 展开下面「细一点」那把刻度尺（V3 用 %.2f，PyTorch 默认 %.3f）。</div>
 """ % (NB.V3_BETA2, NB.TORCH_BETA2)
