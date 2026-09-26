@@ -961,6 +961,8 @@ Kimi K3 的 sec. 2.1.2 变成 §4.1.2、DeepSeek-V4 的 sec. 2.3 变成 §4.3…
 | §3 | 门槛分母改讲实测带宽（nccl-tests busbw）；TP 讲清每卡 UP／DOWN 各一半、横竖只是画法；新增 3.5 FSDP×TP 二维切 ＋ fig-fsdp-tp | 「是 NCCL test 测出来的算法带宽」「FSDP 和 TP 能不能并存、卡怎么切，这是最复杂的地方」 |
 | §3 | 工地／装修队 → 门厂（工具＝权重，门板＝激活）；试过制琴坊、三体智子、印刷厂、晶圆厂均否，定门板 | 「小工搬的东西你得讲清楚」「就门板得了，别说那么多了」 |
 | §4 | 无意见 | — |
+| §5–§6 | 讲义加厚：8.58 GiB 来历、Ulysses 上限与 USP、TP÷KV 头数、DCP 度数、PCP；TTFT/TPOT、分块 prefill 局限、KV 一趟 1.04 GB ÷ 12.5 GB/s、配比与 7.4 倍、MegaScale-Infer 156/39、AFD 三个小批 | 「这两节讲的太简陋了，随便一提就过去了……重来」 |
+| §5 | 新增 fig-ulysses、fig-usp（「段 × 头」表：Ring 按行、Ulysses 按列、USP 按块）＋ 两支分步 Manim（UlyssesSteps 取代旧片、USPSteps 新增） | 「尤利西斯一直没搞懂，还有 USP 也没搞懂……额外画图」「高级的动图画了吗」 |
 
 ## 记录规矩
 
