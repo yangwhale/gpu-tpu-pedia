@@ -929,14 +929,31 @@ def _calibrating(msg):
     return any(k in msg for k in _CALIBRATING)
 
 
+def bust_media(html, out_path):
+    """⭐ 2026-09-26：给页面里每个 media/*.mp4 地址挂内容指纹（?v=md5 前 8 位）。
+    起因：专题五重渲 AllToAll 后已部署，读者看到的仍是旧片 —— 文件名没变，浏览器／CDN 命中旧缓存。
+    片子一改地址就变，缓存自然失效。原先只在 topic05-build.py 里，挪到这里让所有专题都生效。"""
+    import hashlib
+
+    def one(m):
+        fn = m.group(1)
+        p = os.path.join(os.path.dirname(out_path), "media", fn)
+        if not os.path.exists(p):
+            return m.group(0)
+        with open(p, "rb") as fh:
+            return 'src="media/%s?v=%s"' % (fn, hashlib.md5(fh.read()).hexdigest()[:8])
+    return re.sub(r'src="media/([^"?]+\.mp4)"', one, html)
+
+
 def finish(html, out_path, sections, label):
-    """锚点 → 吸顶目录 → arXiv 自动链接 → 写盘 → 打一行回执。"""
+    """锚点 → 吸顶目录 → arXiv 自动链接 → 视频地址挂指纹 → 写盘 → 打一行回执。"""
     lint_headings_inside_sections(html, label)
     lint_list_counts(html, label)
     html = anchorize(html)
     html = build_nav(html)
     import course_links as _CL
     html = _CL.linkify_arxiv(html)
+    html = bust_media(html, out_path)
     io.open(out_path, "w", encoding="utf-8").write(html)
     # ⛔ AI 味那道放在**写盘之后**：它超标时要抛，而抛在写盘前会让
     #   产物停在上一版 —— 于是你打开页面看到的是旧的，越查越糊涂。
