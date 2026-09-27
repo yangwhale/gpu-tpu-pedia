@@ -4306,7 +4306,7 @@ HERO = '''
 <body>
 
 <div class="hero"><div class="wrap">
-  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题二
+  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题二
     ／ <b>L200 · 精讲版</b>
     <a class="lecbtn" href="topic-02-L200-lecture.html">📝 讲义（授课稿）</a></div>
   ''' + nav("topic-02.html") + '''

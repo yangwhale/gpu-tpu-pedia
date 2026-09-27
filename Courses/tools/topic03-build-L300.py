@@ -2347,7 +2347,7 @@ out = [head, '''
      也别去改 md 再生成回来（md 只是大纲，2026-09-04 定的）。 -->
 
 <div class="hero"><div class="wrap">
-  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题三
+  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题三
     ／ <b>注意力演进</b>
     <a class="lecbtn" href="topic-03-L300-lecture.html">📝 讲义（授课稿）</a></div>
   <h1>注意力演进</h1>

@@ -6,7 +6,10 @@
 每一帧由时间 t 算出：滚动位置、标注（红框/圈/聚光）、页面里各段动画视频该在第几秒，
 设好以后截一帧；相邻帧状态完全相同就复用上一帧。分片并行，最后拼接、合音。
 
-用法：python3 render.py cues.json out.mp4 [--shards 8] [--fps 25]
+用法：python3 render.py cues.json out.mp4 [--shards 8] [--fps 25] [--scale 2]
+
+--scale：设备像素比。版面不变（CSS 视口仍是 2200×1238），只是每个 CSS 像素用 scale² 个真像素画，
+  字和线条是矢量重画、不是放大。1 → 出 1920×1080（网页内嵌用）；2 → 出 3840×2160（传 YouTube / B 站用）。
 """
 import json, math, os, subprocess, sys, time
 from concurrent.futures import ProcessPoolExecutor
@@ -165,17 +168,18 @@ def state_at(t, P, vdur):
 
 
 def shard(args):
-    idx, f0, f1, cues_path, html, fps, out = args
+    idx, f0, f1, cues_path, html, fps, out, scale = args
+    ow, oh = 1920 * scale, 1080 * scale
     from playwright.sync_api import sync_playwright
     cfg = json.load(open(cues_path))
     cues = cfg["cues"]
     ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-c:v", "mjpeg",
-                           "-framerate", str(fps), "-i", "-", "-vf", "scale=1920:1080:flags=lanczos",
+                           "-framerate", str(fps), "-i", "-", "-vf", "scale=%d:%d:flags=lanczos" % (ow, oh),
                            "-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p", out],
                           stdin=subprocess.PIPE)
     with sync_playwright() as p:
         b = p.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
-        pg = b.new_page(viewport={"width": W, "height": H})
+        pg = b.new_page(viewport={"width": W, "height": H}, device_scale_factor=scale)
         pg.goto("file://" + html)
         pg.wait_for_timeout(1500)
         pg.evaluate(SETUP_JS, cfg.get("open", []))
@@ -196,7 +200,7 @@ def shard(args):
             key = json.dumps(s, sort_keys=True)
             if key != last_key:
                 pg.evaluate(FRAME_JS, s)
-                last_img = pg.screenshot(type="jpeg", quality=92)
+                last_img = pg.screenshot(type="jpeg", quality=95)
                 last_key = key; n_shot += 1
             ff.stdin.write(last_img)
         b.close()
@@ -208,6 +212,7 @@ def main():
     cues_path, out = sys.argv[1], sys.argv[2]
     shards = int(sys.argv[sys.argv.index("--shards") + 1]) if "--shards" in sys.argv else 8
     fps = int(sys.argv[sys.argv.index("--fps") + 1]) if "--fps" in sys.argv else FPS
+    scale = int(sys.argv[sys.argv.index("--scale") + 1]) if "--scale" in sys.argv else 1
     only = float(sys.argv[sys.argv.index("--until") + 1]) if "--until" in sys.argv else None
     cfg = json.load(open(cues_path))
     html, audio = os.path.abspath(cfg["html"]), os.path.abspath(cfg["audio"])
@@ -219,14 +224,14 @@ def main():
     step = int(math.ceil(N / shards))
     tmp = os.path.splitext(out)[0] + "-parts"
     os.makedirs(tmp, exist_ok=True)
-    jobs = [(i, i * step, min(N, (i + 1) * step), cues_path, html, fps, os.path.join(tmp, "p%02d.mp4" % i))
+    jobs = [(i, i * step, min(N, (i + 1) * step), cues_path, html, fps, os.path.join(tmp, "p%02d.mp4" % i), scale)
             for i in range(shards) if i * step < N]
     t0 = time.time()
     with ProcessPoolExecutor(len(jobs)) as ex:
         for idx, n, tot in ex.map(shard, jobs):
             print("shard %d: %d 张截图 / %d 帧" % (idx, n, tot), flush=True)
     lst = os.path.join(tmp, "list.txt")
-    open(lst, "w").write("".join("file '%s'\n" % j[-1] for j in jobs))
+    open(lst, "w").write("".join("file '%s'\n" % j[-2] for j in jobs))
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", lst,
                     "-i", audio, "-t", str(dur), "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", out], check=True)
     print("ok %s  %.0f 秒视频  用时 %.0f 秒" % (out, dur, time.time() - t0))

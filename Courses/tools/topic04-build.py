@@ -5230,7 +5230,7 @@ HERO = '''
      **正文写在那个脚本的 BODY 常量里** ——&nbsp;改内容改那里，别改这个产物。 -->
 
 <div class="hero"><div class="wrap">
-  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题四
+  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题四
     ／ <b>反向与优化器</b></div>
   <h1>反向与优化器</h1>
   <!-- ⛔ 2026-09-23 现场：「Completing the Bill: Backward, Recompute, and the

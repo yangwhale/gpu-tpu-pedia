@@ -120,7 +120,7 @@ HERO = '''
 <body>
 
 <div class="hero"><div class="wrap">
-  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题五
+  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题五
     ／ <b>并行策略</b>
     <a class="lecbtn" href="topic-05-lecture.html">📝 讲义（授课稿）</a></div>
   <h1>并行策略</h1>

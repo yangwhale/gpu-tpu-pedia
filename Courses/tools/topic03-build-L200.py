@@ -2759,7 +2759,7 @@ out = [head, '''
      **正文写在那个脚本的 BODY 常量里** —— 改内容改那里，别改这个产物。 -->
 
 <div class="hero"><div class="wrap">
-  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题三
+  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题三
     ／ <b>注意力演进</b></div>
   <h1>注意力演进</h1>
 
