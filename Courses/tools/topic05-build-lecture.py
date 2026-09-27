@@ -725,7 +725,7 @@ def _chapter(i, title, sid, fig, body, dont):
 <div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>%s</div>
 <p class="board sub">🖥 本节主屏：课件 <a href="%s#%s">%s</a>%s</p>
 </div>
-""" % (i, title, P.audio_block(OUT, "topic05-lecture-s%d.mp3" % i, "这一节的讲课录音（照着讲的示范）"),
+""" % (i, title, P.audio_block(OUT, "topic05-lecture-s%d.mp3" % i, "这一节的讲课录音（照着讲的示范）", video="topic05-video-s%d.mp4" % i),
        body, dont, DECK, sid, title.split("（")[0], figline)
 
 

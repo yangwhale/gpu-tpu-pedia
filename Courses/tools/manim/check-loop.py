@@ -187,7 +187,8 @@ def main(argv):
     MEDIA = os.path.abspath(_opt(argv, "--media", MEDIA))
     BASE = os.path.abspath(_opt(argv, "--baseline",
                                 os.path.join(MEDIA, "loop-baseline.json")))
-    files = argv or sorted(glob.glob(os.path.join(MEDIA, "*.mp4")))
+    files = argv or sorted(f for f in glob.glob(os.path.join(MEDIA, "*.mp4"))
+                           if "-video-s" not in os.path.basename(f))   # 讲课视频（lecture-video）不是循环动画，不查接缝
     # ⛔⛔ 2026-09-19：**空集合绝不能当成通过。**
     #   把通用版直接覆盖到项目里之后，默认目录从 `WebPages/media` 变成了 `cwd`，
     #   而 build 是在 `tools/` 下调它的 —— 扫不到任何 mp4，`fail` 保持 0，

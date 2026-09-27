@@ -945,20 +945,32 @@ def bust_media(html, out_path):
     return re.sub(r'src="media/([^"?]+\.(?:mp4|mp3))"', one, html)
 
 
-def audio_block(out_path, fname, label="本节讲课录音"):
-    """⭐ 2026-09-26：每节开头放一段讲课录音（文件不在就返回空串，页面不受影响）。"""
+def _media_dur(p):
     import subprocess
-    p = os.path.join(os.path.dirname(out_path), "media", fname)
+    return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", p],
+                                capture_output=True, text=True).stdout or 0)
+
+
+def audio_block(out_path, fname, label="本节讲课录音", video=None):
+    """⭐ 2026-09-26：每节开头放讲课录音（文件不在就返回空串，页面不受影响）。
+    ⭐ 2026-09-27：有讲课视频（lecture-video skill 生成）时，录音和视频各占一半并排放。"""
+    media = os.path.join(os.path.dirname(out_path), "media")
+    p = os.path.join(media, fname)
     if not os.path.exists(p):
         return ""
-    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", p],
-                               capture_output=True, text=True).stdout or 0)
-    # ⭐ 2026-09-26 现场：「放在最前面显眼的位置」—— 蓝色描边、浅蓝底、大一号字
-    return ('<div class="lecaudio" style="margin:12px 0 22px;padding:14px 18px;border:2px solid #1a73e8;'
-            'background:#e8f0fe;border-radius:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
-            '<span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 %s</span><span class="sub">约 %d 分 %02d 秒</span>'
-            '<audio controls preload="none" src="media/%s" style="flex:1;min-width:260px"></audio></div>'
-            % (label, int(dur) // 60, int(dur) % 60, fname))
+    dur = _media_dur(p)
+    aud = ('<div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;'
+           'background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px">'
+           '<span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 %s</span><span class="sub">约 %d 分 %02d 秒</span>'
+           '<audio controls preload="none" src="media/%s" style="width:100%%"></audio></div>'
+           % (label, int(dur) // 60, int(dur) % 60, fname))
+    vid = ""
+    if video and os.path.exists(os.path.join(media, video)):
+        vid = ('<div class="lecvideo" style="flex:1 1 0;min-width:280px">'
+               '<video controls preload="metadata" src="media/%s" style="width:100%%;border-radius:12px;'
+               'border:2px solid #1a73e8;background:#000;display:block"></video></div>' % video)
+    return ('<div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
+            '%s%s</div>' % (aud, vid))
 
 
 def finish(html, out_path, sections, label):

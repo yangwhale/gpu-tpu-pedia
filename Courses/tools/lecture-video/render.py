@@ -24,7 +24,7 @@ SETUP_JS = r"""
 async (opens) => {
   const st = document.createElement('style');
   st.textContent = `*{transition:none!important;animation:none!important;scroll-behavior:auto!important}
-    .lecaudio{display:none!important}`;
+    .lecaudio,.lecmedia{display:none!important}`;
   document.head.appendChild(st);
   for (const sel of opens) document.querySelectorAll(sel).forEach(d => d.open = true);
   // 页面自带的分步播放器会自己暂停/跳转 —— 换成没挂监听的新 video，由我们逐帧设 currentTime
@@ -130,7 +130,7 @@ def plan(cues, geo, vdur):
         if c.get("scroll") is not None:
             y = geo[c["target"]][1] - NAV - c["scroll"]
         y = max(0, y)
-        out.append(dict(c, r=r, y=y, y0=prev_y))
+        out.append(dict(c, r=r, y=y, y0=prev_y if i else y))   # 第一条不从页顶滚下来：片头第一帧就停在该讲的位置
         prev_y = y
     return out
 

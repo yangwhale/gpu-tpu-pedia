@@ -106,7 +106,7 @@ def sec(sid, num, title):
     # ⭐ 2026-09-26：每节开头挂讲课录音（media/topic05-lecture-s<N>.mp3，由 topic05-audio/make.py 生成）
     return ('<section id="%s"><div class="wrap"><div class="stn"><span class="badge">第 %s 节</span>'
             '<h2>%s</h2></div>%s' % (sid, num, title,
-                                    P.audio_block(OUT, "topic05-lecture-s%d.mp3" % _SNUM[num])))
+                                    P.audio_block(OUT, "topic05-lecture-s%d.mp3" % _SNUM[num], video="topic05-video-s%d.mp4" % _SNUM[num])))
 
 
 def todo(lines):

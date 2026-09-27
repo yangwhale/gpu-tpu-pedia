@@ -1,9 +1,9 @@
 import sys, json
 from faster_whisper import WhisperModel
 audio, out = sys.argv[1], sys.argv[2]
-m = WhisperModel("large-v3", device="cpu", compute_type="int8", cpu_threads=64)
+m = WhisperModel("large-v3", device="cpu", compute_type="int8", cpu_threads=int(sys.argv[3]) if len(sys.argv) > 3 else 64)
 segs, info = m.transcribe(audio, language="zh", word_timestamps=True, vad_filter=False, beam_size=5,
-                          initial_prompt="并行策略 AllReduce AllGather ReduceScatter AllToAll GPU TPU 卡")
+                          initial_prompt="讲课 GPU TPU AllReduce AllGather ReduceScatter AllToAll FSDP TP PP EP")
 res = []
 for s in segs:
     res.append({"start": s.start, "end": s.end, "text": s.text,
