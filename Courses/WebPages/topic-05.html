@@ -6249,9 +6249,9 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s5-5">5.5　prefill 那边也有一种</h3>
   <p>DCP 管的是 decode。prefill 那边要把一个长 prompt 切开、让第一个字早点出来，叫 <b>PCP</b>（prefill 上下文并行）。
-    两个名字只差一个字母，切的东西却不一样。把注意力看成一张「提问 × 笔记」表就清楚了：</p>
+    两个名字只差一个字母，其实是一前一后的两步。把注意力看成一张「提问 × 笔记」表：prefill 一次有几千个提问，先按行切；decode 每步只剩一个提问，没行可切了，DCP 才<b>进一步</b>把这一行按笔记切开。</p>
 <figure class="fbox fwide" id="fig-pcp-dcp"><svg viewBox="0 0 1400 754" width="100%" role="img" aria-label="注意力可以看成一张表：一行是一个提问，也就是新来的 token；一列是一条笔记，也就是前面某个 token 留下的 K 和 V。prefill 一口气有很多提问，表又高又宽，因为只看前面，是个三角。PCP 按行切，把提问分给四张卡：每一行在一张卡上算完，结果不用合，但每张卡要把它那几行左边的笔记收齐，还要另外加卡。decode 每个请求这一步只有一个提问，表只有一行，没法按行切，只能按列切：DCP 把笔记按 token 轮流存到原来那几张卡上，每张卡只算这一行的一部分，最后按先别除的办法把部分结果合起来。PCP 为了算得快，DCP 为了装得下"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PCP 和 DCP：同一张表，一个把行分给不同的卡，一个把列分给不同的卡　——　<tspan font-weight="700">prefill 行多，分行；decode 只有一行，只能分列</tspan></text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PCP 和 DCP：先按行切，行切到只剩一行，再把这一行切开　——　<tspan font-weight="700">DCP 不是跟 PCP 对等的另一刀，是行切到头以后的下一步</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">注意力是一张「提问 × 笔记」表：一行 ＝ 一个新 token 的提问（Q），一列 ＝ 前面一个 token 的笔记（K、V）；只看前面，所以是三角</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0</text>
@@ -6265,7 +6265,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="102" width="680" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="680" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PCP（prefill）：整行整行分给不同的卡，每行不拆</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PCP（prefill）：Q 有几千个，按行切（例：4,000 行 → 每卡 1,000 行）</tspan></text>
 <text class="svgsm" x="246" y="178" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">笔记（K、V）→</text>
 <text class="svgsm" x="96" y="328" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">提问</text>
 <rect x="110" y="192" width="31" height="31" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -6315,7 +6315,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="106" y="392" width="277" height="73" rx="4" fill="none" stroke="#d93025" stroke-width="2.4" stroke-dasharray="5,3"/>
 <text class="svgsm" x="452" y="212" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill：几千个提问一起来</tspan></text>
 <text class="svgsm" x="452" y="236" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">表又高又宽，活很多</text>
-<text class="svgsm" x="452" y="278" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整行分给 4 张卡：</tspan></text>
+<text class="svgsm" x="452" y="278" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按行切给 4 张卡：</tspan></text>
 <text class="svgsm" x="452" y="302" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">每一行在一张卡上算完，</text>
 <text class="svgsm" x="452" y="324" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">结果不用合</text>
 <text class="svgsm" x="452" y="368" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">可卡 3 那两行（红框）</tspan></text>
@@ -6331,7 +6331,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="720" y="102" width="680" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="720" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="720" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="734" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DCP（decode）：整列整列分给不同的卡，那一行被拆成几段</tspan></text>
+<text class="svglbl" x="734" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DCP（decode）：只剩 1 个 Q，没行可切了，再把这一行按列切开</tspan></text>
 <text class="svgsm" x="780" y="186" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一步：每个请求只有 1 个新提问（表只有一行），前面存了一长串笔记</tspan></text>
 <rect x="780" y="202" width="31" height="31" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="814" y="202" width="31" height="31" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -6384,10 +6384,10 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="642" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="642" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="642" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="669" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">行多就分行，只有一行就只能分列</tspan></text>
-<text class="svgsm" x="20" y="700" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PCP 把行分给各卡：每行不拆、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。</text>
-<text class="svgsm" x="20" y="724" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP 把列分给各卡：那唯一一行被拆成几段，各算一段再按先别除合起来；为了装得下，用原来的卡。</text>
-</svg><figcaption><b>分行：每行不拆，结果不用合，但要收齐笔记。分列：一行拆成几段，结果要合，但不用加卡。</b><span class="capmore"><br><em>示意：8 个提问、16 条笔记、4 张卡；PCP 实际也按之字形分行摆平负载。</em></span></figcaption></figure>
+<text class="svglbl" x="20" y="669" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先切行；行切到只剩一行，再切这一行</tspan></text>
+<text class="svgsm" x="20" y="700" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PCP：prefill 一次有几千个 Q，按行切开，每行在一张卡上算完、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。</text>
+<text class="svgsm" x="20" y="724" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP：decode 每步只剩 1 个 Q，没行可切，只能进一步把这一行按列（笔记）切开，各算一段再按先别除合起来；为了装得下，用原来的卡。</text>
+</svg><figcaption><b>Q 多就按行切；decode 只剩一个 Q，才进一步把这一行切开。</b><span class="capmore"><br><em>示意：8 个提问、16 条笔记、4 张卡；PCP 实际也按之字形分行摆平负载。</em></span></figcaption></figure>
   <p>下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（本课的归纳）。</p>
 
   <h3 id="s5-6">5.6　这一刀留下的问题</h3>

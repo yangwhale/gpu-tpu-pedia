@@ -553,7 +553,7 @@ __FIG_SOFTMAX_MERGE__
 
   <h3>5.5　prefill 那边也有一种</h3>
   <p>DCP 管的是 decode。prefill 那边要把一个长 prompt 切开、让第一个字早点出来，叫 <b>PCP</b>（prefill 上下文并行）。
-    两个名字只差一个字母，切的东西却不一样。把注意力看成一张「提问 × 笔记」表就清楚了：</p>
+    两个名字只差一个字母，其实是一前一后的两步。把注意力看成一张「提问 × 笔记」表：prefill 一次有几千个提问，先按行切；decode 每步只剩一个提问，没行可切了，DCP 才<b>进一步</b>把这一行按笔记切开。</p>
 __FIG_PCP_DCP__
   <p>下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（本课的归纳）。</p>
 
@@ -1137,7 +1137,7 @@ FIGS = {
         '<b>专家那一半一样；attention 那一半，一个一起算、一个各算各的。</b><br>'
         '<em>示意：4 张卡、4 批请求、8 个专家。</em>'),
     "__FIG_PCP_DCP__": ("fig-pcp-dcp", "fig5-pcp-dcp.svg", "topic05-fig-seq.py",
-        '<b>分行：每行不拆，结果不用合，但要收齐笔记。分列：一行拆成几段，结果要合，但不用加卡。</b><br>'
+        '<b>Q 多就按行切；decode 只剩一个 Q，才进一步把这一行切开。</b><br>'
         '<em>示意：8 个提问、16 条笔记、4 张卡；PCP 实际也按之字形分行摆平负载。</em>'),
     "__FIG_FSDP_STEP__": ("fig-fsdp-step", "fig5-fsdp-step.svg", "topic05-fig-zero.py",
         '<b>数据并行一层做两次通信，FSDP 做三次。</b><br>'
