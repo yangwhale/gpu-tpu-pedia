@@ -344,13 +344,13 @@ def fig_pcp_dcp():
                "结果不用合，但每张卡要把它那几行左边的笔记收齐，还要另外加卡。"
                "decode 每个请求这一步只有一个提问，表只有一行，没法按行切，只能按列切：DCP 把笔记按 token 轮流存到原来那几张卡上，"
                "每张卡只算这一行的一部分，最后按先别除的办法把部分结果合起来。PCP 为了算得快，DCP 为了装得下")
-    y0 = f.header("PCP 和 DCP：同一张表，一个按行切，一个按列切"
-                  "　——　<tspan font-weight=\"700\">prefill 行多，切提问；decode 只有一行，只能切笔记</tspan>",
+    y0 = f.header("PCP 和 DCP：同一张表，一个把行分给不同的卡，一个把列分给不同的卡"
+                  "　——　<tspan font-weight=\"700\">prefill 行多，分行；decode 只有一行，只能分列</tspan>",
                   "注意力是一张「提问 × 笔记」表：一行 ＝ 一个新 token 的提问（Q），一列 ＝ 前面一个 token 的笔记（K、V）；只看前面，所以是三角",
                   [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3")])
     PW, PH = 680, 520
     # ── 左：PCP ──
-    py = f.panel(0, y0, PW, PH, "PCP（prefill）：按行切提问", BL)
+    py = f.panel(0, y0, PW, PH, "PCP（prefill）：整行整行分给不同的卡，每行不拆", BL)
     Lt, C = 8, 34
     gx, gy = 110, py + 60
     f.t(gx + Lt * C / 2.0, gy - 14, "笔记（K、V）→", GY, size=12.5, anchor="middle")
@@ -364,7 +364,7 @@ def fig_pcp_dcp():
     tx = gx + Lt * C + 70
     f.t(tx, gy + 20, "prefill：几千个提问一起来", INK, True, 14)
     f.t(tx, gy + 44, "表又高又宽，活很多", GY, size=13)
-    f.t(tx, gy + 86, "按行分给 4 张卡：", BL, True, 14)
+    f.t(tx, gy + 86, "整行分给 4 张卡：", BL, True, 14)
     f.t(tx, gy + 110, "每一行在一张卡上算完，", GY, size=13)
     f.t(tx, gy + 132, "结果不用合", GY, size=13)
     f.t(tx, gy + 176, "可卡 3 那两行（红框）", RD, True, 13.5)
@@ -377,7 +377,7 @@ def fig_pcp_dcp():
         f.t(130, yy + i * 30, v, BL if i == 0 else INK, i == 0, 13.5)
     # ── 右：DCP ──
     px = W - PW
-    py = f.panel(px, y0, PW, PH, "DCP（decode）：只有一行，只能按列切笔记", OR)
+    py = f.panel(px, y0, PW, PH, "DCP（decode）：整列整列分给不同的卡，那一行被拆成几段", OR)
     N_ = 16
     rx, ry, CC = px + 60, py + 70, 34
     f.t(rx, ry - 16, "这一步：每个请求只有 1 个新提问（表只有一行），前面存了一长串笔记", INK, True, 13.5)
@@ -398,9 +398,9 @@ def fig_pcp_dcp():
         f.t(px + 24, yy + i * 30, k, GY, True, 13.5)
         f.t(px + 130, yy + i * 30, v, OR if i == 0 else INK, i == 0, 13.5)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "行多就切行，只有一行就切列", [
-        "PCP 切提问：每行完整、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。",
-        "DCP 切笔记：每张卡只算一行的一段，要按先别除合起来；为了装得下，用原来的卡。",
+    yb = f.band(y0 + PH + 20, "ok", "行多就分行，只有一行就只能分列", [
+        "PCP 把行分给各卡：每行不拆、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。",
+        "DCP 把列分给各卡：那唯一一行被拆成几段，各算一段再按先别除合起来；为了装得下，用原来的卡。",
     ])
     f.save("fig5-pcp-dcp.svg", yb + 14)
 

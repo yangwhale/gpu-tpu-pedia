@@ -1137,7 +1137,7 @@ FIGS = {
         '<b>专家那一半一样；attention 那一半，一个一起算、一个各算各的。</b><br>'
         '<em>示意：4 张卡、4 批请求、8 个专家。</em>'),
     "__FIG_PCP_DCP__": ("fig-pcp-dcp", "fig5-pcp-dcp.svg", "topic05-fig-seq.py",
-        '<b>切行的结果不用合，但要收齐笔记；切列的要合结果，但不用加卡。</b><br>'
+        '<b>分行：每行不拆，结果不用合，但要收齐笔记。分列：一行拆成几段，结果要合，但不用加卡。</b><br>'
         '<em>示意：8 个提问、16 条笔记、4 张卡；PCP 实际也按之字形分行摆平负载。</em>'),
     "__FIG_FSDP_STEP__": ("fig-fsdp-step", "fig5-fsdp-step.svg", "topic05-fig-zero.py",
         '<b>数据并行一层做两次通信，FSDP 做三次。</b><br>'
