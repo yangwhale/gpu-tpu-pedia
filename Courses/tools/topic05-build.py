@@ -553,7 +553,8 @@ __FIG_SOFTMAX_MERGE__
 
   <h3>5.5　prefill 那边也有一种</h3>
   <p>DCP 管的是 decode。prefill 那边要把一个长 prompt 切开、让第一个字早点出来，叫 <b>PCP</b>（prefill 上下文并行）。
-    两个名字只差一个字母，切的东西却不一样：</p>
+    两个名字只差一个字母，切的东西却不一样。把注意力看成一张「提问 × 笔记」表就清楚了：</p>
+__FIG_PCP_DCP__
   <table>
     <tr><th></th><th>PCP（prefill）</th><th>DCP（decode）</th></tr>
     <tr><td>切的是</td><td>新进来的 prompt：几千个 token 的<b>提问</b>分给几张卡一起算</td><td>已经存下的<b>笔记</b>（KV）：按 token 轮流存到几张卡上；提问每个请求只有 1 个字</td></tr>
@@ -1142,6 +1143,9 @@ FIGS = {
     "__FIG_TEP_DEP__": ("fig-tep-dep", "fig5-tep-dep.svg", "topic05-fig-ep.py",
         '<b>专家那一半一样；attention 那一半，一个一起算、一个各算各的。</b><br>'
         '<em>示意：4 张卡、4 批请求、8 个专家。</em>'),
+    "__FIG_PCP_DCP__": ("fig-pcp-dcp", "fig5-pcp-dcp.svg", "topic05-fig-seq.py",
+        '<b>prefill 行多，按行切提问；decode 只有一行，只能按列切笔记。</b><br>'
+        '<em>示意：8 个提问、16 条笔记、4 张卡；PCP 实际也按之字形分行摆平负载。</em>'),
     "__FIG_FSDP_STEP__": ("fig-fsdp-step", "fig5-fsdp-step.svg", "topic05-fig-zero.py",
         '<b>数据并行一层做两次通信，FSDP 做三次。</b><br>'
         '<em>多出来的那次 AllGather，是反向时把前向扔掉的权重再拼回来。</em>'),

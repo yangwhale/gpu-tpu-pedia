@@ -326,3 +326,83 @@ def fig_usp():
 
 fig_ulysses()
 fig_usp()
+
+
+# ════════════════════════════════════════════════════════════════
+# 图：PCP 与 DCP —— 同一张「提问 × 笔记」表，一个按行切，一个按列切
+# ⭐ 2026-09-27 第二轮试讲：「PCP 跟 DCP 还是没有讲清楚，单独把它俩讲清楚。」
+#   讲法：注意力是一张表，行 ＝ 提问（新来的 token 的 Q），列 ＝ 笔记（前面 token 的 K、V）。
+#     · prefill：一口气几千个提问，表又高又宽（因果掩码下是个三角）→ 按行切给几张卡（PCP）。
+#       每行是完整的，结果不用合；但每张卡要看它那几行左边的全部笔记 → 收齐前面的 KV。
+#     · decode：每个请求这一步只有 1 个提问，表只有一行 → 行没法切，只能按列切笔记（DCP）。
+#       每张卡只算到一行的一部分 → 部分结果要按「先别除」合起来。
+# ⛔ 刻意没画：负载均衡（PCP 也用之字形，见 fig-cp-zigzag）；DCP 前面收齐 Q 那一步的头维细节。
+# ════════════════════════════════════════════════════════════════
+def fig_pcp_dcp():
+    f = Fig(W, "注意力可以看成一张表：一行是一个提问，也就是新来的 token；一列是一条笔记，也就是前面某个 token 留下的 K 和 V。"
+               "prefill 一口气有很多提问，表又高又宽，因为只看前面，是个三角。PCP 按行切，把提问分给四张卡：每一行在一张卡上算完，"
+               "结果不用合，但每张卡要把它那几行左边的笔记收齐，还要另外加卡。"
+               "decode 每个请求这一步只有一个提问，表只有一行，没法按行切，只能按列切：DCP 把笔记按 token 轮流存到原来那几张卡上，"
+               "每张卡只算这一行的一部分，最后按先别除的办法把部分结果合起来。PCP 为了算得快，DCP 为了装得下")
+    y0 = f.header("PCP 和 DCP：同一张表，一个按行切，一个按列切"
+                  "　——　<tspan font-weight=\"700\">prefill 行多，切提问；decode 只有一行，只能切笔记</tspan>",
+                  "注意力是一张「提问 × 笔记」表：一行 ＝ 一个新 token 的提问（Q），一列 ＝ 前面一个 token 的笔记（K、V）；只看前面，所以是三角",
+                  [(BL, "卡 0"), (OR, "卡 1"), (GR, "卡 2"), (PU, "卡 3")])
+    PW, PH = 680, 520
+    # ── 左：PCP ──
+    py = f.panel(0, y0, PW, PH, "PCP（prefill）：按行切提问", BL)
+    Lt, C = 8, 34
+    gx, gy = 110, py + 60
+    f.t(gx + Lt * C / 2.0, gy - 14, "笔记（K、V）→", GY, size=12.5, anchor="middle")
+    f.t(gx - 14, gy + Lt * C / 2.0, "提问", GY, size=12.5, anchor="end")
+    for i in range(Lt):
+        card = i // 2
+        for j in range(i + 1):
+            f.box(gx + j * C, gy + i * C, C - 3, C - 3, COLS[card], COLS[card], 3)
+        f.t(gx + Lt * C + 16, gy + i * C + 22, "卡 %d" % card if i % 2 == 0 else "", COLS[card], True, 13)
+    f.box(gx - 4, gy + 6 * C - 4, 8 * C + 5, 2 * C + 5, "none", RD, 4, sw=2.4, dash="5,3")
+    tx = gx + Lt * C + 70
+    f.t(tx, gy + 20, "prefill：几千个提问一起来", INK, True, 14)
+    f.t(tx, gy + 44, "表又高又宽，活很多", GY, size=13)
+    f.t(tx, gy + 86, "按行分给 4 张卡：", BL, True, 14)
+    f.t(tx, gy + 110, "每一行在一张卡上算完，", GY, size=13)
+    f.t(tx, gy + 132, "结果不用合", GY, size=13)
+    f.t(tx, gy + 176, "可卡 3 那两行（红框）", RD, True, 13.5)
+    f.t(tx, gy + 198, "要看左边全部笔记：", RD, True, 13.5)
+    f.t(tx, gy + 220, "得先把前面的 KV 收齐", RD, True, 13.5)
+    yy = gy + Lt * C + 40
+    for i, (k, v) in enumerate([("为了", "算得快：第一个字早出来"), ("卡", "在 TP 之外再加一维，要加卡"),
+                                ("多出的通信", "收齐前面几段的 KV")]):
+        f.t(24, yy + i * 30, k, GY, True, 13.5)
+        f.t(130, yy + i * 30, v, BL if i == 0 else INK, i == 0, 13.5)
+    # ── 右：DCP ──
+    px = W - PW
+    py = f.panel(px, y0, PW, PH, "DCP（decode）：只有一行，只能按列切笔记", OR)
+    N_ = 16
+    rx, ry, CC = px + 60, py + 70, 34
+    f.t(rx, ry - 16, "这一步：每个请求只有 1 个新提问（表只有一行），前面存了一长串笔记", INK, True, 13.5)
+    for j in range(N_):
+        f.box(rx + j * CC, ry, CC - 3, CC - 3, COLS[j % 4], COLS[j % 4], 3)
+    f.t(rx, ry + 60, "笔记按 token 轮流存：第 1 条卡 0、第 2 条卡 1……（原来那 4 张 TP 卡，不加卡）", GY, size=13)
+    by = ry + 100
+    for c in range(4):
+        cy_ = by + c * 44
+        f.t(rx, cy_ + 22, "卡 %d" % c, COLS[c], True, 13.5)
+        for j in range(c, N_, 4):
+            f.box(rx + 60 + (j // 4) * 40, cy_, 34, 30, COLS[c], COLS[c], 3)
+        f.t(rx + 240, cy_ + 21, "→ 这一行的一部分：分子 ＋ 分母", INK, size=13)
+    f.t(rx, by + 4 * 44 + 26, "四份部分结果 → 先别除：分子加分子、分母加分母，最后除一次", OR, True, 14)
+    yy = by + 4 * 44 + 76
+    for i, (k, v) in enumerate([("为了", "装得下：收回被 TP 复制掉的 KV"), ("卡", "用原来那几张 TP 卡，不加卡"),
+                                ("多出的通信", "收齐提问、交换分母、合并结果")]):
+        f.t(px + 24, yy + i * 30, k, GY, True, 13.5)
+        f.t(px + 130, yy + i * 30, v, OR if i == 0 else INK, i == 0, 13.5)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "行多就切行，只有一行就切列", [
+        "PCP 切提问：每行完整、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。",
+        "DCP 切笔记：每张卡只算一行的一段，要按先别除合起来；为了装得下，用原来的卡。",
+    ])
+    f.save("fig5-pcp-dcp.svg", yb + 14)
+
+
+fig_pcp_dcp()
