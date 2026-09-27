@@ -553,8 +553,15 @@ __FIG_SOFTMAX_MERGE__
 
   <h3>5.5　prefill 那边也有一种</h3>
   <p>DCP 管的是 decode。prefill 那边要把一个长 prompt 切开、让第一个字早点出来，叫 <b>PCP</b>（prefill 上下文并行）。
-    它是在 TP 之外再加一维，所以<b>PCP 加卡，DCP 不加卡</b>；它只管算得快，不管 KV 装不装得下。
-    下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（本课的归纳）。</p>
+    两个名字只差一个字母，切的东西却不一样：</p>
+  <table>
+    <tr><th></th><th>PCP（prefill）</th><th>DCP（decode）</th></tr>
+    <tr><td>切的是</td><td>新进来的 prompt：几千个 token 的<b>提问</b>分给几张卡一起算</td><td>已经存下的<b>笔记</b>（KV）：按 token 轮流存到几张卡上；提问每个请求只有 1 个字</td></tr>
+    <tr><td>为了什么</td><td>算得快：第一个字早点出来</td><td>装得下：收回被 TP 复制掉的 KV</td></tr>
+    <tr><td>卡</td><td>在 TP 之外再加一维，<b>要加卡</b></td><td>用原来那几张 TP 卡，<b>不加卡</b></td></tr>
+    <tr><td>多出的通信</td><td>收齐前面几段的 KV（AllGather 或环）</td><td>收齐提问、交换分母、合并结果</td></tr>
+  </table>
+  <p>下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（本课的归纳）。</p>
 
   <h3>5.6　这一刀留下的问题</h3>
   <p>说到这儿，prefill 和 decode 已经各要各的切法了：一个吃算力、要把 prompt 切开；一个吃带宽、要把 KV 摊开。
@@ -624,6 +631,7 @@ __FIG_PD_RATIO__
 __FIG_AFD__
   <p>每一层都要把 token 从 attention 那边发给专家（M → N），算完再收回来（N → M）。
     为了不让这一来一回拖慢，把一批请求切成几个小批轮着跑：这一个在算 attention，另一个正好在算专家，还有一个在路上。
+    注意切的是 <b>batch（按请求分组）</b>，不是序列：decode 每一步每个请求只出一个字，比如这一步有 3,000 个请求，就分成三组、每组 1,000 个字轮流走。
     MegaScale-Infer 论文算过，要藏住通信至少得三个小批，通信慢的时候要四个；它报告每 GPU 吞吐最高提升 1.90 倍。</p>
   <details class="foldfig"><summary><b>谁在用</b></summary><p>字节的 MegaScale-Infer、阶跃的 Step-3 都是这个路子；vLLM 在 2026 年 7 月出了实验性插件。</p></details>
 
