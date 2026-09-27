@@ -134,7 +134,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题四</b>（那张 16 字节的账）</span>
     <span class="chip">口径 <b>截至 2026-09</b></span>
-    <span class="chip">⏱ <b>讲约 80 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 84 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -449,6 +449,7 @@ __FIG_MOE_PARAMS__
   <span class="sub">（10 秒无声循环，Manim 渲染。）</span></figcaption></figure>
   <p>V3 为了压住这两次 AllToAll，做了两件事：<b>每个 token 最多去 4 台机器</b>，跨机每台只发一份、到了再在机器里分；<b>派发压成 FP8</b>，合并还用 BF16。</p>
 __FIG_EP_ROUTE__
+  <p>账只跟去了几台机器有关：每台机器只收一份，到了机器里再走 NVLink 转给那几个专家。报告算过，NVLink 比跨机网络快约 3.2 倍，所以每台机器平均能转给 3.2 个专家而不多花时间；4 台 × 3.2 ≈ 13，同样的通信量最多能挑 13 个专家（V3 实际挑 8 个）。</p>
   <p>这是训练和 prefill 的做法；decode 追求低延迟时改成按专家逐个直发（跳过机器里的转发，每个专家各收一份），份数就跟着选的专家数涨了。</p>
 
   <h3>4.3　EP 最重的病：负载由数据决定</h3>
@@ -469,9 +470,9 @@ __FIG_EP_BIAS__
     专家的负担是那一大堆参数。<b>所以同一批卡，在这两部分可以用两套切法。</b></p>
 __FIG_FOLD__
   <p>挑哪种配法，差别大到什么程度？我们自己测过一次：</p>
-  <details class="foldfig"><summary><b>先认两个简称</b>：TEP、DEP</summary>
-  <p>TEP 是 attention 用 TP、专家用 EP；DEP 是 attention 用数据并行、专家用 EP；字母后的数字是总卡数，DEP8 ＝ 8 张卡。
-    上图左边那种配法，算两者中间。别和 Megatron 的 ETP／EDP 混，见 §8.6。</p></details>
+  <p>推理里最常见的两种配法有简称：<b>TEP</b>（attention 用 TP、专家用 EP）和 <b>DEP</b>（attention 用数据并行、专家用 EP），后面的数字是总卡数。专家那一半两者一样，差别全在 attention：<b>一起算同一批请求，还是各算各的一批</b>。</p>
+__FIG_TEP_DEP__
+  <p>TEP 的每个请求有几张卡一起算，单个请求出字快；可 attention 是按头切的，V3 这类笔记只有一个头的模型切不开，KV 在每张卡上都是整份（§5.4）。DEP 每张卡只存自己那批请求的 KV，同样的显存装得下更多请求，专家那一步分到的 batch 也更大；代价是：专家那一步改走 AllToAll，各卡请求长短不一时会忙闲不均，没请求的卡也得陪着跑一遍空前向。上面 fig-fold 左边那种配法，算两者中间。别和 Megatron 的 ETP／EDP 混，见 §8.6。</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 DEP8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
     最属于「换切法」的一笔在 attention 那一半：KV 不再在 4 张卡上各存一份（§5.4 讲为什么）。attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。注意上面的图画的是 V3（每卡 32 个专家），实测用的是 V4-Pro。<br>
@@ -1130,6 +1131,9 @@ FIGS = {
     "__FIG_USP__": ("fig-usp", "fig5-usp.svg", "topic05-fig-seq.py",
         '<b>机器里转置、机器之间走环：头数上限只剩一维。</b><br>'
         '<em>「AllToAll 放机器里、环放机器之间」是本课归纳的常见摆法。</em>'),
+    "__FIG_TEP_DEP__": ("fig-tep-dep", "fig5-tep-dep.svg", "topic05-fig-ep.py",
+        '<b>专家那一半一样；attention 那一半，一个一起算、一个各算各的。</b><br>'
+        '<em>示意：4 张卡、4 批请求、8 个专家。</em>'),
     "__FIG_FSDP_STEP__": ("fig-fsdp-step", "fig5-fsdp-step.svg", "topic05-fig-zero.py",
         '<b>数据并行一层做两次通信，FSDP 做三次。</b><br>'
         '<em>多出来的那次 AllGather，是反向时把前向扔掉的权重再拼回来。</em>'),

@@ -235,3 +235,83 @@ fig_params()
 fig_fold()
 fig_ep_route()
 fig_ep_bias()
+
+
+# ════════════════════════════════════════════════════════════════
+# 图：TEP 与 DEP —— 同样 4 张卡，attention 那一半两种切法
+# ⭐ 2026-09-27 第二轮试讲：「DEP 和 TEP 讲得太浅了，难以理解，深入地讲一下。」
+#   讲清四件事：每张卡算谁的请求、KV 存几份、每层通信是哪种、各自的坑。
+# ⭐ 专家那一半两边一样（专家铺在 4 张卡上，每卡 2 个）；差别全在 attention。
+#   TEP 做完 attention 的 AllReduce 后，每张卡都有全部 token，专家那一步各算本卡专家、再 AllReduce 合起来；
+#   DEP 每张卡只有自己请求的 token，专家那一步要 AllToAll 派发、合并（常见实现，vLLM：DP＝1 走 all-reduce，DP>1 走 all2all）。
+# ⛔ 刻意没画：MTP、共享专家；TEP 里 attention 按头切的细节（MLA 只有一个 KV 头，所以 KV 在每张卡上是整份）。
+# ════════════════════════════════════════════════════════════════
+REQC = [BL, OR, GR, PU]
+
+
+def fig_tep_dep():
+    f = Fig(W, "同样四张卡，推理时 attention 那一半的两种切法。左边 TEP4：四张卡一起算同一批请求，每张卡算四分之一的头；"
+               "V3 这类 MLA 模型只有一个 KV 头切不开，所以每张卡都存一整份全部请求的 KV；每层 attention 出口做一次 AllReduce，"
+               "之后每张卡都有全部 token，专家那一步各算本卡的专家，再 AllReduce 合起来。"
+               "右边 DEP4：每张卡各管一批自己的请求，只存自己请求的 KV，attention 不用通信，attention 权重每张卡一整份；"
+               "专家那一步要 AllToAll 把 token 派发到专家所在的卡，算完再合并回来。"
+               "TEP 让单个请求更快，代价是 KV 复制；DEP 吞吐大、KV 不重复，代价是忙闲不均，没请求的卡也得陪着跑")
+    y0 = f.header("TEP 和 DEP：attention 那一半怎么切"
+                  "　——　<tspan font-weight=\"700\">一起算同一批，还是各算各的一批</tspan>",
+                  "同样 4 张卡、同样 4 批请求（颜色 ＝ 哪一批）；专家那一半两边一样：8 个专家铺在 4 张卡上，每卡 2 个",
+                  [(BL, "请求 1"), (OR, "请求 2"), (GR, "请求 3"), (PU, "请求 4")])
+    PW, PH = 680, 470
+    for side, (px, title, col) in enumerate(((0, "TEP4：attention 用 TP，四张卡一起算同一批", BL),
+                                             (W - PW, "DEP4：attention 用数据并行，各算各的一批", OR))):
+        py = f.panel(px, y0, PW, PH, title, col)
+        f.t(px + 20, py + 34, "请求", GY, True, 13)
+        f.t(px + 20, py + 92, "注意力", GY, True, 13)
+        f.t(px + 20, py + 150, "KV 笔记", GY, True, 13)
+        f.t(px + 20, py + 222, "专家", GY, True, 13)
+        for c in range(4):
+            cx = px + 110 + c * 140
+            f.box(cx, py + 10, 124, 250, "none", GY2, 6)
+            f.t(cx + 62, py + 280, "卡 %d" % c, INK, True, 13.5, "middle")
+            if side == 0:
+                for r in range(4):
+                    f.box(cx + 8 + r * 28, py + 22, 22, 22, REQC[r], REQC[r], 3)
+                f.box(cx + 8, py + 76, 108, 26, "none", BL, 3, sw=1.6)
+                f.t(cx + 62, py + 94, "1/4 的头", BL, True, 12.5, "middle")
+                for r in range(4):
+                    f.box(cx + 8 + r * 28, py + 132, 22, 30, REQC[r], RD, 3, sw=2)
+                f.t(cx + 62, py + 182, "全部 KV（整份）", RD, True, 12, "middle")
+            else:
+                f.box(cx + 50, py + 22, 22, 22, REQC[c], REQC[c], 3)
+                f.box(cx + 8, py + 76, 108, 26, "none", OR, 3, sw=1.6)
+                f.t(cx + 62, py + 94, "全部的头", OR, True, 12.5, "middle")
+                f.box(cx + 50, py + 132, 22, 30, REQC[c], REQC[c], 3)
+                f.t(cx + 62, py + 182, "只存自己的", GR, True, 12, "middle")
+            for e in range(2):
+                f.box(cx + 16 + e * 50, py + 204, 42, 34, "#fef7e0", OR, 4)
+                f.t(cx + 37 + e * 50, py + 226, "专%d" % (2 * c + e), INK, True, 12, "middle")
+        yy = py + 310
+        if side == 0:
+            rows = [("attention 出口", "AllReduce：四份部分结果加起来", BL),
+                    ("专家那一步", "token 本来人人都有，各算本卡专家，再 AllReduce", BL),
+                    ("好处", "每个请求四张卡一起算，单个请求更快", GR),
+                    ("坑", "KV 切不开，每张卡存一整份：TEP4 白存 3 份", RD)]
+        else:
+            rows = [("attention", "各算各的，不用通信", GR),
+                    ("专家那一步", "AllToAll 派发到专家所在的卡，算完合并回来", OR),
+                    ("好处", "KV 不重复，装得下更多请求，吞吐大", GR),
+                    ("坑", "各卡请求长短不一、忙闲不均；没请求的卡也得陪跑", RD)]
+        for i, (k, v, cc) in enumerate(rows):
+            f.t(px + 20, yy + i * 30, k, GY, True, 13)
+            f.t(px + 130, yy + i * 30, v, cc, i >= 2, 13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "差别全在 attention 那一半：一起算同一批，还是各算各的一批", [
+        "TEP：同一批请求四张卡一起算，单个请求快；可 MLA 这类只有一个 KV 头的模型，KV 在每张卡上都得存一整份。",
+        "DEP：每张卡只管自己那批请求，KV 不重复、batch 能开大；代价是专家那一步换成 AllToAll，还要防各卡忙闲不均。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 TensorRT-LLM 定义：TEP<N> shards both attention (TP) and experts (EP) across N ranks；DEP<N> keeps attention data-parallel (ADP) while distributing experts across N ranks。",
+               "⚠️ 专家那一步的通信按常见实现画：attention 用 TP 时各卡 token 相同，专家输出用 AllReduce 合并；attention 用数据并行时各卡 token 不同，走 AllToAll。示意 4 张卡、8 个专家。")
+    f.save("fig5-tep-dep.svg", yb + 14)
+
+
+fig_tep_dep()
