@@ -24,7 +24,12 @@ RD_ = RD
 
 W = 1400
 C_V7 = 2307e12                  # v7 每芯片 bf16 FLOP/s
-B_V7 = 0.6e12                   # v7 每芯片 ICI 发出方向（6 条链路 × 100 GB/s；双向合计才是 1,200）
+B_V7 = 0.6e12                   # v7 每芯片 ICI 单方向（6 条链路 × 100 GB/s；收发合计才是 1,200）。环上每张卡收多少就发多少
+HBM_V7 = 7.37e12                # v7 每芯片显存带宽（跟 topic05-fig-pd.py 同一个数）
+RIDGE_HBM = C_V7 / HBM_V7
+assert 310 < RIDGE_HBM < 316 and 12 < HBM_V7 / B_V7 < 13     # 显存比网络快十二倍多
+# ⭐ 2026-09-26 现场：「是每张卡收多少字节来参与计算……卡在网络带宽上而不是 HBM 上，差了十几倍」
+#   → 图上补一条显存线（≈313），标明 FSDP／TP 这里卡的是网络线；门槛按「每秒收进来多少字节」讲
 RIDGE = C_V7 / B_V7
 H_V3 = 7168
 assert abs(RIDGE - 3845) < 1, RIDGE
@@ -54,7 +59,7 @@ def fig_intensity():
     y0 = f.header("两把刀，两种账　——　<tspan font-weight=\"700\">FSDP 看 batch，TP 看隐藏维</tspan>",
                   "纵轴：每在网络上搬 1 字节，换来多少 FLOPs（本课推导，稠密层近似）。"
                   "低于硬件线 ＝ 算得没有搬得快，被通信拖住",
-                  [(BL, "FSDP 搬工具：＝ 每卡 token 数 T"), (OR, "TP 递门板：＝ 4.5 × 隐藏维 ÷ TP 度数"), (RD, "v7 硬件线 ≈ 3,845")])
+                  [(BL, "FSDP 搬工具：＝ 每卡 token 数 T"), (OR, "TP 递门板：＝ 4.5 × 隐藏维 ÷ TP 度数"), (RD, "v7 网络线（ICI）≈ 3,845")])
     PX, PY, PW, PH = 150, y0 + 20, 980, 380
     TMAX, IMAX = 8192, 8192
     # ⭐ 2026-09-25 逐图审：红线以下涂浅红，接回门厂的比方（师傅＝卡，小工＝网络；工具＝权重，门板＝激活）
@@ -84,7 +89,9 @@ def fig_intensity():
                dash="7,4" if n == 32 else None, arrow=False)
         f.t(X(TMAX) + 10, Y(yi) + 5, "%s ≈ %s" % (lab, "{:,.0f}".format(yi)), OR, True, 13.5)
     f.path("M%d,%d L%d,%d" % (X(0), Y(RIDGE), X(TMAX), Y(RIDGE)), RD, 2, dash="4,4", arrow=False)
-    f.t(X(TMAX) + 10, Y(RIDGE) + 20, "v7 硬件线 ≈ 3,845", RD, True, 13.5)
+    f.t(X(TMAX) + 10, Y(RIDGE) + 20, "v7 网络线 ≈ 3,845", RD, True, 13.5)
+    f.path("M%d,%d L%d,%d" % (X(0), Y(RIDGE_HBM), X(TMAX), Y(RIDGE_HBM)), GY2, 1.4, dash="2,4", arrow=False)
+    f.t(X(TMAX) + 10, Y(RIDGE_HBM) + 5, "显存线 ≈ {:,.0f}（不是瓶颈）".format(RIDGE_HBM), GY, False, 12.5)
     f.path("M%d,%d L%d,%d" % (X(0), Y(RIDGE_EFF), X(TMAX), Y(RIDGE_EFF)), RD, 1.4, dash="2,4", arrow=False)
     f.t(X(TMAX) + 10, Y(RIDGE_EFF) + 5, "实测只跑到 7 成 ≈ {:,.0f}".format(RIDGE_EFF), RD, False, 13)
     f.t(X(TMAX) + 10, Y(RIDGE_EFF) + 23, "（假设的示意）", GY, False, 12.5)
@@ -97,7 +104,7 @@ def fig_intensity():
     yb = f.src(yb + 10,
                "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；"
                "TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。",
-               "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，"
+               "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，单方向按 600 GB/s 算（环上每张卡收多少就发多少，所以按「每秒收进来」讲也是 600）；显存 7.37 TB/s，比网络快十二倍多，所以这里卡的是网络线（Inferact TPU megakernel 博客规格表、wiki ici-dcn，"
                "来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。",
                "⚠️ 分母该用实测带宽：在自己的网络上跑一次 AllGather（GPU 上用 nccl-tests），取它报的 busbw（按 AllGather 口径 ＝ 数据量 ÷ 用时 × (n−1)/n）。"
                "细虚线假设实测只有标称的 70%，门槛升到约 5,493；70% 不是 v7 的实测数。")

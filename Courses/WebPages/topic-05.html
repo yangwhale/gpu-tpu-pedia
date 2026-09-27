@@ -4026,7 +4026,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="305.72" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="326" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TP 递门板：＝ 4.5 × 隐藏维 ÷ TP 度数</text>
 <rect x="660.72" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="681" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7 硬件线 ≈ 3,845</text>
+<text class="svgsm" x="681" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7 网络线（ICI）≈ 3,845</text>
 <path d="M 150.00 323.64 L 1130.00 323.64 L 1130.00 502.00 L 150.00 502.00 Z" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="777" y="386" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">线下：师傅（卡）在等小工（网络）</tspan></text>
 <text class="svgsm" x="170" y="152" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">线上：师傅忙得过来</tspan></text>
@@ -4051,7 +4051,9 @@ body.figonly section h3{margin-top:34px}
 <path d="M150,455 L1130,455" fill="none" stroke="#e8710a" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="7,4"/>
 <text class="svgsm" x="1140" y="460" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 32 路 ≈ 1,008</tspan></text>
 <path d="M150,323 L1130,323" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
-<text class="svgsm" x="1140" y="343" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7 硬件线 ≈ 3,845</tspan></text>
+<text class="svgsm" x="1140" y="343" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7 网络线 ≈ 3,845</tspan></text>
+<path d="M150,487 L1130,487" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2,4"/>
+<text class="svgsm" x="1140" y="492" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">显存线 ≈ 313（不是瓶颈）</text>
 <path d="M150,247 L1130,247" fill="none" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2,4"/>
 <text class="svgsm" x="1140" y="252" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">实测只跑到 7 成 ≈ 5,493</text>
 <text class="svgsm" x="1140" y="270" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">（假设的示意）</text>
@@ -4063,14 +4065,15 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 的账跟 batch 无关，只看隐藏维 ÷ TP 度数：V3 的隐藏维 7,168，TP 8 路 ≈ 4,032 按最乐观的线才勉强在线上，32 路 ≈ 1,008 就掉下去了　——　<tspan font-weight="700">TP 有一个跟 batch 无</tspan></text>
 <text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关的上限</tspan>。</text>
 </svg><figcaption><b>FSDP 那条斜线看 batch，TP 那几条平线看隐藏维。</b><span class="capmore"><br><em>低于红色虚线，就是算得没有搬得快。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。</p>
-<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，每卡发出方向按 600 GB/s 算（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p>
+<p>📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，单方向按 600 GB/s 算（环上每张卡收多少就发多少，所以按「每秒收进来」讲也是 600）；显存 7.37 TB/s，比网络快十二倍多，所以这里卡的是网络线（Inferact TPU megakernel 博客规格表、wiki ici-dcn，来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。</p>
 <p>⚠️ 分母该用实测带宽：在自己的网络上跑一次 AllGather（GPU 上用 nccl-tests），取它报的 busbw（按 AllGather 口径 ＝ 数据量 ÷ 用时 × (n−1)/n）。细虚线假设实测只有标称的 70%，门槛升到约 5,493；70% 不是 v7 的实测数。</p></details></figure>
   <p>红虚线约 3,845：<b>每颗芯片一步分不到三千八百多个 token，FSDP 就被拖住</b>。</p>
   <p>分母要当心：<b>该用你在自己网络上实测的带宽，不是规格表上的数</b>。门槛 ＝ 每秒能算多少次 ÷ 每秒实际拼得动多少字节的权重。
     测法是真跑一次 AllGather（GPU 上用 nccl-tests），看它报的 busbw。它按 AllGather 的口径算：数据量 ÷ 用时 × (n−1)/n，扣掉了自己那份本来就有、不用收的部分，正好对上每张卡每秒实际收到的字节。
     实测只跑到标称的七成，门槛就从 3,845 抬到约 5,493（图上细虚线，七成是假设的）。FSDP 那根轴要是只占几根链路、还跟别的轴抢线，这个数还得往上走。</p>
   <details class="foldfig"><summary><b>细一点</b>：3,845 怎么来的，什么情况下门槛更高</summary>
-  <p>红虚线 3,845 ＝ v7 每芯片 2,307 TFLOP/s（bf16）÷ 每芯片发出约 0.6 TB/s（常说的 1.2 TB/s 是收发合计；⚠️ 这个拆分是推算，见台账）。
+  <p>红虚线 3,845 ＝ v7 每芯片 2,307 TFLOP/s（bf16）÷ 每芯片每秒收进来约 0.6 TB/s（常说的 1.2 TB/s 是收发合计，环上每张卡收多少就发多少；⚠️ 这个拆分是推算，见台账）。
+    注意这里卡的是<b>网络</b>：权重收进来以后还要从显存读，可显存每秒 7.37 TB，比网络快十二倍多，那条线只有约 313（图最下面的灰虚线），远不是瓶颈。
     这还是最乐观的线：只走一根轴，高约 3 倍；
     MoE 只靠 FSDP、不配专家并行，搬的是全部参数、算的只有被选中的那部分，再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p></details>
 
