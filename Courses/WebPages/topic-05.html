@@ -6387,14 +6387,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="669" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">行多就切行，只有一行就切列</tspan></text>
 <text class="svgsm" x="20" y="700" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PCP 切提问：每行完整、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。</text>
 <text class="svgsm" x="20" y="724" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP 切笔记：每张卡只算一行的一段，要按先别除合起来；为了装得下，用原来的卡。</text>
-</svg><figcaption><b>prefill 行多，按行切提问；decode 只有一行，只能按列切笔记。</b><span class="capmore"><br><em>示意：8 个提问、16 条笔记、4 张卡；PCP 实际也按之字形分行摆平负载。</em></span></figcaption></figure>
-  <table>
-    <tr><th></th><th>PCP（prefill）</th><th>DCP（decode）</th></tr>
-    <tr><td>切的是</td><td>新进来的 prompt：几千个 token 的<b>提问</b>分给几张卡一起算</td><td>已经存下的<b>笔记</b>（KV）：按 token 轮流存到几张卡上；提问每个请求只有 1 个字</td></tr>
-    <tr><td>为了什么</td><td>算得快：第一个字早点出来</td><td>装得下：收回被 TP 复制掉的 KV</td></tr>
-    <tr><td>卡</td><td>在 TP 之外再加一维，<b>要加卡</b></td><td>用原来那几张 TP 卡，<b>不加卡</b></td></tr>
-    <tr><td>多出的通信</td><td>收齐前面几段的 KV（AllGather 或环）</td><td>收齐提问、交换分母、合并结果</td></tr>
-  </table>
+</svg><figcaption><b>切行的结果不用合，但要收齐笔记；切列的要合结果，但不用加卡。</b><span class="capmore"><br><em>示意：8 个提问、16 条笔记、4 张卡；PCP 实际也按之字形分行摆平负载。</em></span></figcaption></figure>
   <p>下一节把 prefill 和 decode 拆到两批机器上以后，它们正好可以一边一个（本课的归纳）。</p>
 
   <h3 id="s5-6">5.6　这一刀留下的问题</h3>
