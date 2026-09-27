@@ -47,15 +47,19 @@ def main(n):
                                         format(os.path.getsize(out), ",")))
 
 
-def from_pcm(n, pcm):
+def from_pcm(n, pcm, skip=0.0):
+    """skip：开头要剪掉的秒数 —— 现场那段开头若有一句跟上课无关的交代（比如「上一节录音已放好」），
+    按静音点剪掉。第二节就是这样：剪 6.6 秒（STT 核过切点落在两句之间的静音里）。"""
     out = os.path.join(MEDIA, "topic05-lecture-s%s.mp3" % n)
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", "48000", "-ac", "2", "-i", pcm,
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", "48000", "-ac", "2",
+                    "-ss", str(skip), "-i", pcm,
                     "-ac", "1", "-b:a", "64k", out], check=True)
     print("ok  %s  ← %s  %s" % (os.path.basename(out), pcm, format(os.path.getsize(out), ",")))
 
 
 if __name__ == "__main__":
     if "--from-pcm" in sys.argv:
-        from_pcm(sys.argv[1], sys.argv[sys.argv.index("--from-pcm") + 1])
+        from_pcm(sys.argv[1], sys.argv[sys.argv.index("--from-pcm") + 1],
+                 float(sys.argv[sys.argv.index("--skip") + 1]) if "--skip" in sys.argv else 0.0)
     else:
         main(sys.argv[1])
