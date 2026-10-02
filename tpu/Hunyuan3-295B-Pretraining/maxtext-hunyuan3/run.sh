@@ -19,6 +19,7 @@
 #   bash run.sh <run-name> [额外参数...]
 set -euo pipefail
 RUN=${1:?用法: run.sh <run-name>}; shift || true
+case "${MAX_RESTARTS:-0}" in ''|*[!0-9]*) echo "MAX_RESTARTS 必须是非负整数"; exit 1;; esac
 PLATFORM=${PLATFORM:?需要 PLATFORM=v5p 或 v7}
 GCS_STAGE=${GCS_STAGE:?}; IMAGE=${IMAGE:?}
 MODEL=${MODEL:-hunyuan3-295b}; STEPS=${STEPS:-10}; NAME=hy3-$RUN
@@ -57,7 +58,7 @@ v5p)
   # TILE_MLP 可覆盖：v7 上实测 tile 必须**等于** base_moe_mlp_dim(1536)，
   # 1024 除不尽会断言失败、512 能整除但更慢。v5p 默认仍是 1024，待验。
   TILE=""; for m in wi wo; do for p in fwd dlhs drhs; do
-    TILE="$TILE ${m}_tile_${p}_batch_seq=512 ${m}_tile_${p}_embed_dim=1024 ${m}_tile_${p}_mlp_dim=${TILE_MLP:-1024}"
+    TILE="$TILE ${m}_tile_${p}_batch_seq=512 ${m}_tile_${p}_embed_dim=${TILE_EMB:-1024} ${m}_tile_${p}_mlp_dim=${TILE_MLP:-1024}"
   done; done
   EXTRA="per_device_batch_size=8 max_target_length=8192 use_custom_sort_vjp=True
   sa_use_fused_bwd_kernel=False out_proj=remat$TILE"
@@ -159,9 +160,36 @@ NS=${NAMESPACE:-default}
 QUEUE=${QUEUE:-}
 PRIO=${PRIORITY_CLASS:-}
 QLABEL=""; [ -n "$QUEUE" ] && QLABEL="kueue.x-k8s.io/queue-name: $QUEUE"
+# MLDIAG=1：给 JobSet 打 GKE ML Diagnostics 的标签。集群要先开 --enable-managed-mldiagnostics，
+# 训练参数还要带 managed_mldiagnostics=True。只开参数不打标签，SDK 拿不到 webhook 注入的
+# 环境变量，训练一启动就报 ValueError。
+if [ "${MLDIAG:-0}" = 1 ]; then QLABEL="${QLABEL:+$QLABEL, }managed-mldiagnostics-gke: \"true\""; fi
+# MTC=1：挂 Multi-Tier Checkpointing 的内存盘到 /local（集群要先开 HighScaleCheckpointing
+# 插件并建好 CheckpointConfiguration）。训练参数另带 enable_multi_tier_checkpointing=True 等。
+# 训练容器默认**不**开 privileged：GKE 1.28 起 TPU 不需要特权容器（2026-10-02 v5p 256 芯实测
+# 冒烟与 295B 基线均正常）。需要时 PRIVILEGED=1。
+# hostNetwork 默认开：同一天实测 HOSTNET=0 时 64 个 Pod 都 Running、互相 DNS/8471 端口都通，
+# 但 TPU 初始化卡在 SliceBuilder 超过 7 分钟不前进，原因未查明，所以保持 hostNetwork。
+NETLINES=""; [ "${HOSTNET:-1}" = 1 ] && NETLINES="hostNetwork: true
+            dnsPolicy: ClusterFirstWithHostNet"
+SECCTX=""; [ "${PRIVILEGED:-0}" = 1 ] && SECCTX="securityContext: {privileged: true}"
+SANAME="serviceAccountName: ${KSA:-default}"
+MTC_MOUNT=""; MTC_VOL=""
+if [ "${MTC:-0}" = 1 ]; then
+  MTC_MOUNT=", {mountPath: /local, name: mtc-ramdisk}"
+  MTC_VOL=", {name: mtc-ramdisk, csi: {driver: multitier-checkpoint.csi.storage.gke.io}}"
+fi
 PRIOLINE=""; [ -n "$PRIO" ] && PRIOLINE="priorityClassName: $PRIO"
 
-kubectl delete jobset "$NAME" -n "$NS" --ignore-not-found=true --wait=false >/dev/null 2>&1
+# 提交前自检：连不上集群 / 没装 JobSet / namespace 不存在时，下面的 kubectl 会被 set -e
+# 静默打断，屏幕上一个字都没有。先把这三件事查清楚并说人话。
+kubectl version --request-timeout=15s >/dev/null 2>&1 || {
+  echo "✗ 连不上集群：先跑 gcloud container clusters get-credentials ... --dns-endpoint"; exit 1; }
+kubectl get crd jobsets.jobset.x-k8s.io >/dev/null 2>&1 || {
+  echo "✗ 集群里没有 JobSet CRD：先安装 JobSet（kubectl apply --server-side -f .../jobset/releases/.../manifests.yaml）"; exit 1; }
+kubectl get ns "$NS" >/dev/null 2>&1 || {
+  echo "✗ namespace $NS 不存在：kubectl create namespace $NS，或设 NAMESPACE=已有的命名空间"; exit 1; }
+kubectl delete jobset "$NAME" -n "$NS" --ignore-not-found=true --wait=false >/dev/null 2>&1 || true
 cat <<YAML | kubectl apply -f - >/dev/null
 apiVersion: jobset.x-k8s.io/v1alpha2
 kind: JobSet
@@ -172,7 +200,7 @@ metadata:
   annotations: {$ANNO}
 spec:
   ttlSecondsAfterFinished: 7200
-  failurePolicy: {maxRestarts: 0}
+  failurePolicy: {maxRestarts: ${MAX_RESTARTS:-0}}
   replicatedJobs:
   - name: slice-job
     replicas: 1
@@ -191,14 +219,14 @@ spec:
             nodeSelector:
               cloud.google.com/gke-tpu-accelerator: $ACCEL
               cloud.google.com/gke-tpu-topology: $TOPO$POOLSEL
-            hostNetwork: true
-            dnsPolicy: ClusterFirstWithHostNet
+            $SANAME
+            $NETLINES
             tolerations: [{operator: "Exists"}]
             containers:
             - name: jax-tpu
               image: $IMAGE
               ports: [{containerPort: 8471}, {containerPort: 8080}]
-              securityContext: {privileged: true}
+              $SECCTX
               command: ["bash","-c"]
               args:
               - |
@@ -213,8 +241,8 @@ spec:
                   dataset_type=synthetic enable_checkpointing=False steps=$STEPS \\
                   dtype=bfloat16 weight_dtype=float32 $COMMON $EXTRA $*
               resources: {limits: {google.com/tpu: 4}}
-              volumeMounts: [{mountPath: /dev/shm, name: dshm}]
-            volumes: [{name: dshm, emptyDir: {medium: Memory}}]
+              volumeMounts: [{mountPath: /dev/shm, name: dshm}$MTC_MOUNT]
+            volumes: [{name: dshm, emptyDir: {medium: Memory}}$MTC_VOL]
 YAML
 echo "[$NAME] 已提交（$PLATFORM，$NODES 台）。"
 echo
@@ -224,11 +252,12 @@ echo "    活着的 pod 会报 GetSliceInfo 失败 —— 那是症状不是病�
 echo "  * 判错看**最早**那条，不是日志尾。配置非法会先起 TPU 再退，"
 echo "    真正的报错是 'MAXTEXT CONFIG ERROR' / pydantic 的 'Value error'。"
 echo "  * step 0 含编译，step 1/2 是 JAX 异步派发的假读数，稳态取 step >= 3。"
-if [ "$PLATFORM" = v5p ]; then
+if [ "$PLATFORM" = v5p ] && [ "$MODEL" = hunyuan3-295b ]; then
 echo "  * v5p 是 MegaCore，1 device = 1 chip，日志里的 TFLOP/s/device 不用换算。"
 echo "  * MFU = TFLOP/s/device / 459"
-echo "  * 预期：step ≈ 63.2 s，TFLOP/s/device ≈ 160.9，MFU ≈ 35.1%"
-else
+echo "  * 预期（STEPS=10 默认配置）：稳态 step 63.2–63.6 s，TFLOP/s/device 160–161，MFU ≈ 35%"
+echo "    （2026-10-02 europe-west4 实测 63.49 s / 160.2 / 34.9%）"
+elif [ "$PLATFORM" = v7 ]; then
 echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2307"
 echo "  * v7 编译约 46 s（80 层 / 64 芯片实测），真正慢的是建切片：TPU init 约 70 s"
 echo "    —— '编译要 10-17 分钟' 是旧说法，已被 TUNING-v7 与 2026-08-15 的 AOT 对照实验两次推翻"

@@ -13,6 +13,10 @@ trap 'rm -rf "$WORK"' EXIT
 echo "[1/3] clone $REPO @ $BRANCH"
 git clone -q --depth=1 --single-branch --branch "$BRANCH" "$REPO" "$WORK/mt"
 cd "$WORK/mt"
+# COMMIT=<sha>：钉死到某个提交（可复现的前提）。不设就用分支最新提交。
+if [ -n "${COMMIT:-}" ]; then
+  git fetch -q --depth=1 origin "$COMMIT" && git checkout -q FETCH_HEAD
+fi
 echo "      commit $(git rev-parse --short HEAD)  $(git log -1 --format=%ad --date=short)"
 
 # 自检：确认分支里该有的东西都在。少一样后面到 TPU 上才炸，代价大得多。
