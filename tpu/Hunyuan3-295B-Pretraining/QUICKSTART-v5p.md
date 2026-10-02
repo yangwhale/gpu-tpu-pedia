@@ -10,6 +10,11 @@
 | 精度 | BF16 计算 / FP32 主权重 |
 | **实测基线** | **step 63.2–63.3 s · 160.6–161.0 TFLOP/s/chip · MFU 34.98–35.07% · 约 265,000 tok/s** |
 
+> **要给客户做 POC、从空项目一步步搭生产级环境**（VPC / 私有 GKE / 预留 / 存储 / checkpoint 恢复），
+> 另有一份配套的 **POC 实施手册**（逐条命令 + 原理讲解），2026-10-02 在 `europe-west4-b`
+> 的真实 v5p 预留上逐条执行通过，loss 与本文 §5.2 逐位相同。本文侧重模型与配置本身，
+> 环境搭建相关的坑（预留、系统池、kube-dns、桶权限）已同步收进 §3。
+
 > 这份文档只讲**当前可复现的那一条路径**。完整的移植过程、失败轮次、
 > 十二个 bug 的复盘在 [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md)，需要追溯时再去查。
 
@@ -176,9 +181,25 @@ gcloud container node-pools create np-v5p-dev \
   --num-nodes=1 --spot --scopes=cloud-platform
 ```
 
+**有预留时**（生产 / POC 的常态）把 `--spot` 换成预留参数，并且不要再建 4 芯小池 ——
+预留通常正好 256 芯，小池会占掉 4 颗，256 芯池就凑不齐了。冒烟改在 256 芯池上跑（§4.2）：
+
+```bash
+gcloud container node-pools create np-v5p-256 \
+  --cluster=CLUSTER --project=PROJECT --location=REGION --node-locations=ZONE \
+  --machine-type=ct5p-hightpu-4t --tpu-topology=4x8x8 --num-nodes=64 \
+  --reservation-affinity=specific --reservation=RESERVATION_NAME \
+  --max-pods-per-node=32 --enable-gvnic --max-surge-upgrade=0 --max-unavailable-upgrade=1 \
+  --workload-metadata=GKE_METADATA --scopes=cloud-platform
+```
+
+- 预留的 `specificReservationRequired: true` 时必须显式 `--reservation-affinity=specific`；
+  跨项目共享预留写 `projects/<项目ID>/reservations/<名>`（**项目 ID，不是项目编号**）
+- `--max-surge-upgrade=0`：预留用满时没有多余机器做 surge 升级，不设会卡死
 - `--num-nodes` = 芯片数 ÷ 4，且必须与 `--tpu-topology` 相乘一致
 - 建池耗时：256 芯片池实测 **5–9 分钟**（两次分别是 4 分 55 秒 / 8 分 26 秒），4 芯片小池约 **3 分钟**
-- **v5p 在 us-central1 只有 `-a` 区有货**；集群是区域级的，节点池自己指定 zone 即可
+- **v5p 在 us-central1 只有 `-a` 区有货**（spot）；集群是区域级的，节点池自己指定 zone 即可。
+  有预留时 zone 以预留为准（2026-10 的一份预留在 `europe-west4-b`）
 - Spot 配额在控制台查不到不代表没有 —— v5p 不走 `PREEMPTIBLE_TPU_LITE_PODSLICE_V5`
   那组老 metric，Cloud Quotas API 返回空。**只能试**，报错会直接告诉你是配额还是容量
 
@@ -191,23 +212,46 @@ kubectl wait --for=condition=Available deploy/jobset-controller-manager \
   -n jobset-system --timeout=180s
 ```
 
+> ⚠️ **系统池（CPU 池）`max-pods-per-node` 要留到 110，并限制 kube-dns 副本数。**
+> kube-dns 扩缩器按「总 vCPU ÷ 256」算副本数，每台 v5p 主机 208 vCPU，64 台算出 **53 个 kube-dns**，
+> 全挤在 CPU 节点上。系统池若是 32 pods/节点，JobSet 控制器会 Pending（`Too many pods`），
+> 提交训练报 `failed calling webhook "mjobset.kb.io" ... no endpoints available`。修法：
+>
+> ```bash
+> kubectl patch cm kube-dns-autoscaler -n kube-system --type merge -p \
+>  '{"data":{"linear":"{\"coresPerReplica\":256,\"nodesPerReplica\":16,\"preventSinglePointFailure\":true,\"includeUnschedulableNodes\":true,\"min\":2,\"max\":6}"}}'
+> ```
+
 v0.11.1 自带证书，**不需要 cert-manager**。新集群默认没有这个 CRD，
 不装的话提交训练时 `kubectl apply` 会找不到 `jobset.x-k8s.io/v1alpha2`。
 
 ### 3.3 暂存桶 + 跨项目授权
 
 ```bash
-gcloud storage buckets create gs://YOUR-STAGE-BUCKET --location=US
+# 桶放在 TPU 所在的区域（checkpoint 一次约 3 TB，跨区域又慢又产生出口费）
+gcloud storage buckets create gs://YOUR-STAGE-BUCKET --location=REGION \
+  --uniform-bucket-level-access --enable-hierarchical-namespace
 
-NODE_SA=<集群项目号>-compute@developer.gserviceaccount.com
+# 节点池用的 SA（默认是 <集群项目号>-compute@developer.gserviceaccount.com）
+NODE_SA=<节点 SA>
 gcloud storage buckets add-iam-policy-binding gs://YOUR-STAGE-BUCKET \
-  --member="serviceAccount:$NODE_SA" --role=roles/storage.objectViewer
+  --member="serviceAccount:$NODE_SA" --role=roles/storage.objectUser
+gcloud storage buckets add-iam-policy-binding gs://YOUR-STAGE-BUCKET \
+  --member="serviceAccount:$NODE_SA" --role=roles/storage.bucketViewer
 
 # 镜像在别的项目时，节点 SA 还要能拉
 gcloud artifacts repositories add-iam-policy-binding gcr.io --location=us \
   --project=IMAGE_PROJECT --member="serviceAccount:$NODE_SA" \
   --role=roles/artifactregistry.reader
 ```
+
+> **为什么授给节点 SA**：训练 Pod 是 `hostNetwork: true`，GKE 元数据服务器不拦截
+> hostNetwork Pod，所以即使集群开了 Workload Identity，训练 Pod 也是以**节点 SA** 身份访问 GCS。
+>
+> **为什么要 `bucketViewer`**：只给对象权限时下载代码包没问题，但一开
+> `enable_checkpointing=True`，MaxText 启动时先 `get_bucket()` 检查桶，缺
+> `storage.buckets.get` 直接退出：`FileNotFoundError: GCS bucket 'gs://...' not found or accessible.`
+> （2026-10-02 实测）
 
 ### 3.4 网络（新项目常踩）
 
@@ -242,7 +286,10 @@ cd maxtext-hunyuan3/
 gcloud container clusters get-credentials CLUSTER --region=REGION --project=PROJECT
 
 export GCS_STAGE=gs://YOUR-STAGE-BUCKET/hy3
-export IMAGE=us-docker.pkg.dev/YOUR-PROJECT/gcr.io/YOUR-maxtext-latest:runner
+# 官方公开镜像即可（2026-10-02 实测 0.2.4：JAX 0.10.2 / libtpu 0.0.42.1，25 个 flag 全部接受）
+export IMAGE=us-docker.pkg.dev/cloud-tpu-images/maxtext-images/tpu_pre_training:0.2.4
+# 可选：命名空间（默认 default）。共享的 Kueue 集群再加 QUEUE=... PRIORITY_CLASS=...
+export NAMESPACE=default
 
 # ① 准备代码（只有改了代码才要重跑；换参数不用）
 bash prep.sh
@@ -251,7 +298,7 @@ bash prep.sh
 PLATFORM=v5p bash run.sh myrun
 
 # ③ 看日志
-kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
+kubectl logs -n $NAMESPACE -f job/hy3-myrun-slice-job-0 -c jax-tpu
 ```
 
 ### 4.1 两个脚本各做什么
@@ -260,6 +307,8 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 |---|---|
 | `prep.sh` | clone `hunyuan3` 分支 → **8 项自检** → `tar` 整棵 `src/maxtext` → 传 GCS |
 | `run.sh` | 提交 JobSet；pod 里 `rm -rf /deps/src/maxtext` 后**整棵解包覆盖** |
+
+镜像只提供运行时（JAX / libtpu / 依赖），所以**公开镜像就能跑**：混元 3 的代码全部来自分支。
 
 **注意是整棵覆盖，不是只注入改动文件。** 只注入的话，测的是
 「我的改动 + 容器里的旧基座」，不是分支本身。
@@ -274,6 +323,15 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 NODES=1 TOPO=2x2x1 PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 \
   bash run.sh smoke per_device_batch_size=1 max_target_length=2048
 ```
+
+没有 4 芯小池时（例如预留正好 256 芯），直接在 256 芯池上跑同一个冒烟，约 2 分钟：
+
+```bash
+NODES=64 TOPO=4x8x8 PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 \
+  bash run.sh smoke per_device_batch_size=1 max_target_length=2048
+```
+
+实测（2026-10-02）：参数量 16.139 B，稳态 step 0.62 s，loss 13.423 → 12.879，`mtp_loss` 1.220 → 1.202。
 
 4 层缩层，结构与 295B 完全一致（192 专家、top-8、sigmoid、专家偏置、
 共享专家、GQA、QK-norm、fp32 路由、MTP 全是满配），只砍层数。
@@ -305,7 +363,8 @@ NODES=1 TOPO=2x2x1 PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 \
 2. **判错看最早那条，不是日志尾。** 配置非法会先把 TPU 拉起来再退，
    真正的报错（`MAXTEXT CONFIG ERROR` / pydantic 的 `Value error`）在日志上方。
 3. **step 0 含编译，step 1/2 是 JAX 异步派发的假读数**，稳态取 step ≥ 3。
-   v5p 上编译约 9 分钟。
+   2026-10-02 用公开镜像 0.2.4 实测：提交到 step 0 完成 **5 分钟**（含 TPU 初始化与编译）；
+   早期镜像约 9 分钟。
 4. **v5p 是 MegaCore，1 device = 1 chip**，日志里的 `TFLOP/s/device`
    不需要换算，`MFU = TFLOP/s/device ÷ 459`。
 
@@ -370,6 +429,10 @@ completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 > **拿这份文档对基线时，±0.5% 以内都算复现成功。**
 
 再往前一次是换项目 / 换 VPC / 换集群从零跑的，与既有水位相差 +0.05%。
+
+**三次复现（2026-10-02，europe-west4-b，公开镜像 0.2.4，预留节点池）**：
+step 3–9 均值 **63.47 s**、**160.2 TFLOP/s/chip**、MFU **34.90%**、约 264,300 tok/s；
+`Total TFLOPs` 10169.38；**loss step 3–7 与上表逐位相同**。换了区域、项目、镜像版本，数值不变。
 
 > **参照**：同一个模型在 GB300 上 64 GPU BF16 的 MFU 是 **34.2%**（分母用官方 dense 2,500）。
 > v5p 的单卡算力只有 GB300 的 1/5.4，MFU 仍略高 ——

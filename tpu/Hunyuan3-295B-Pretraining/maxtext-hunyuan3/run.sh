@@ -150,9 +150,16 @@ else
   ANNO="alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool"; POOLSEL=""
 fi
 
-NS=${NAMESPACE:-priority-dev}
-QUEUE=${QUEUE:-multislice-queue}
-PRIO=${PRIORITY_CLASS:-medium}
+# 命名空间 / Kueue 队列 / 优先级类：**默认全部不设**，新建集群直接能跑。
+# 共享的排队制集群（Kueue）才需要显式传，例如：
+#   NAMESPACE=priority-dev QUEUE=multislice-queue PRIORITY_CLASS=medium bash run.sh ...
+# 早先这里把某个共享集群的值写成了默认值 —— 在全新集群上 namespace 不存在、
+# PriorityClass 不存在，kubectl apply 直接被拒（2026-10-02 在新集群上踩到）。
+NS=${NAMESPACE:-default}
+QUEUE=${QUEUE:-}
+PRIO=${PRIORITY_CLASS:-}
+QLABEL=""; [ -n "$QUEUE" ] && QLABEL="kueue.x-k8s.io/queue-name: $QUEUE"
+PRIOLINE=""; [ -n "$PRIO" ] && PRIOLINE="priorityClassName: $PRIO"
 
 kubectl delete jobset "$NAME" -n "$NS" --ignore-not-found=true --wait=false >/dev/null 2>&1
 cat <<YAML | kubectl apply -f - >/dev/null
@@ -161,8 +168,7 @@ kind: JobSet
 metadata:
   name: $NAME
   namespace: $NS
-  labels:
-    kueue.x-k8s.io/queue-name: $QUEUE
+  labels: {$QLABEL}
   annotations: {$ANNO}
 spec:
   ttlSecondsAfterFinished: 7200
@@ -180,7 +186,7 @@ spec:
             labels:
               declared-duration-minutes: "120"
           spec:
-            priorityClassName: $PRIO
+            $PRIOLINE
             restartPolicy: Never
             nodeSelector:
               cloud.google.com/gke-tpu-accelerator: $ACCEL
@@ -197,6 +203,7 @@ spec:
               args:
               - |
                 set -e
+                ulimit -c 0   # 不写 core：abort 时每进程几十 GB core 会写满启动盘 → DiskPressure → 整个任务被驱逐
                 gcloud storage cp $GCS_STAGE/hy3-maxtext.tgz /tmp/p.tgz
                 cd /deps && rm -rf src/maxtext && tar xzf /tmp/p.tgz
                 export JAX_PLATFORMS=tpu,cpu TPU_STDERR_LOG_LEVEL=0 TF_CPP_MIN_LOG_LEVEL=0
