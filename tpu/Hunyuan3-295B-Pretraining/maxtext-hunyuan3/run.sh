@@ -154,7 +154,7 @@ fi
 # 共享的排队制集群（Kueue）才需要显式传，例如：
 #   NAMESPACE=priority-dev QUEUE=multislice-queue PRIORITY_CLASS=medium bash run.sh ...
 # 早先这里把某个共享集群的值写成了默认值 —— 在全新集群上 namespace 不存在、
-# PriorityClass 不存在，kubectl apply 直接被拒（2026-10-02 在新集群上踩到）。
+# PriorityClass 不存在，提交会被拒（2026-10-02 照文档在全新集群上复现前发现并改掉）。
 NS=${NAMESPACE:-default}
 QUEUE=${QUEUE:-}
 PRIO=${PRIORITY_CLASS:-}
