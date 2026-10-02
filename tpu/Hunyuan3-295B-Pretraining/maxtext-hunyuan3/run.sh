@@ -258,13 +258,17 @@ SEEN=0
 for _ in 1 2 3 4 5 6; do
   sleep 5
   NP=$(kubectl get pods -n "$NS" -l "jobset.sigs.k8s.io/jobset-uid=$JS_UID" --no-headers 2>/dev/null | wc -l || true)
-  if [ "${NP:-0}" -gt 0 ]; then echo "  Pod 已创建：$NP 个"; SEEN=1; break; fi
+  if [ "${NP:-0}" -ge "$NODES" ]; then echo "  Pod 已创建：$NP 个"; SEEN=1; break; fi
+  [ "${NP:-0}" -gt 0 ] && SEEN=1
   FC=$(kubectl get events -n "$NS" --field-selector "reason=FailedCreate,involvedObject.name=$NAME-slice-job-0" \
         -o jsonpath='{range .items[*]}{.lastTimestamp}{"\t"}{.message}{"\n"}{end}' 2>/dev/null \
         | awk -F'\t' -v t="$SUBMIT_TS" '$1 >= t' | grep -E "ValidatingAdmissionPolicy|forbidden" | tail -1 || true)
   if [ -n "$FC" ]; then echo "✗ Pod 创建被拒：${FC#*$'\t'}"; exit 1; fi
 done
-[ "$SEEN" = 1 ] || echo "  30 秒内还没有 Pod（排队制集群里属正常）；用 kubectl get pods -n $NS 继续观察"
+if [ "${NP:-0}" -lt "$NODES" ]; then
+  if [ "$SEEN" = 1 ]; then echo "  Pod 已创建：${NP:-0}/$NODES 个，其余还在创建；用 kubectl get pods -n $NS 继续观察"
+  else echo "  30 秒内还没有 Pod，也没有准入拒绝事件；用 kubectl get pods -n $NS 和 kubectl describe job -n $NS 继续观察"; fi
+fi
 echo
 echo "读结果前必看："
 echo "  * **先确认 $NODES/$NODES Running 再看日志**。TPU 切片全有全无，人不齐时"
