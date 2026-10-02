@@ -176,6 +176,7 @@ SECCTX="securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: 
 [ "${PRIVILEGED:-0}" = 1 ] && SECCTX="securityContext: {privileged: true}"
 # PKG_SHA256（prep.sh 最后一行会打印）：Pod 里先校验代码包再解包，防止桶里的包被替换。
 PKGCHECK=""; [ -n "${PKG_SHA256:-}" ] && PKGCHECK="echo '$PKG_SHA256  /tmp/p.tgz' | sha256sum -c - || { echo '✗ 代码包 sha256 不符，拒绝运行'; exit 1; }"
+[ -n "${PKG_SHA256:-}" ] || echo "⚠ 没有设置 PKG_SHA256：Pod 里不会校验代码包（见手册 §10.1）"
 SANAME="serviceAccountName: ${KSA:-default}"
 MTC_MOUNT=""; MTC_VOL=""
 if [ "${MTC:-0}" = 1 ]; then
@@ -250,13 +251,20 @@ spec:
 YAML
 echo "[$NAME] 已提交（$PLATFORM，$NODES 台）。"
 # 提交后确认 Pod 真的建出来了：准入策略拒绝时 Pod 一个都不会出现，原因只在 Job 事件里。
+# 只认这次提交的 JobSet（按 uid）和它自己的 Job（精确名字），只认提交之后、且是准入拒绝的事件。
+SUBMIT_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+JS_UID=$(kubectl get jobset "$NAME" -n "$NS" -o jsonpath='{.metadata.uid}' 2>/dev/null || true)
+SEEN=0
 for _ in 1 2 3 4 5 6; do
   sleep 5
-  NP=$(kubectl get pods -n "$NS" -l jobset.sigs.k8s.io/jobset-name="$NAME" --no-headers 2>/dev/null | wc -l)
-  [ "$NP" -gt 0 ] && { echo "  Pod 已创建：$NP 个"; break; }
-  FC=$(kubectl get events -n "$NS" --field-selector reason=FailedCreate -o jsonpath='{range .items[*]}{.involvedObject.name}{"\t"}{.message}{"\n"}{end}' 2>/dev/null | grep "^$NAME" | tail -1)
-  [ -n "$FC" ] && { echo "✗ Pod 创建被拒：$FC"; exit 1; }
+  NP=$(kubectl get pods -n "$NS" -l "jobset.sigs.k8s.io/jobset-uid=$JS_UID" --no-headers 2>/dev/null | wc -l || true)
+  if [ "${NP:-0}" -gt 0 ]; then echo "  Pod 已创建：$NP 个"; SEEN=1; break; fi
+  FC=$(kubectl get events -n "$NS" --field-selector "reason=FailedCreate,involvedObject.name=$NAME-slice-job-0" \
+        -o jsonpath='{range .items[*]}{.lastTimestamp}{"\t"}{.message}{"\n"}{end}' 2>/dev/null \
+        | awk -F'\t' -v t="$SUBMIT_TS" '$1 >= t' | grep -E "ValidatingAdmissionPolicy|forbidden" | tail -1 || true)
+  if [ -n "$FC" ]; then echo "✗ Pod 创建被拒：${FC#*$'\t'}"; exit 1; fi
 done
+[ "$SEEN" = 1 ] || echo "  30 秒内还没有 Pod（排队制集群里属正常）；用 kubectl get pods -n $NS 继续观察"
 echo
 echo "读结果前必看："
 echo "  * **先确认 $NODES/$NODES Running 再看日志**。TPU 切片全有全无，人不齐时"

@@ -37,9 +37,17 @@ B=$(grep -c 'Hunyuan3MoeBlock_0' src/maxtext/trainers/pre_train/train.py)
 echo "      8 项全过"
 
 echo "[3/3] 打包上传"
-tar czf "$WORK/hy3-maxtext.tgz" src/maxtext
+# 确定性打包：固定 mtime / 顺序 / 属主，并去掉 gzip 头里的时间戳 —— 同一个 COMMIT 每次得到同一个 sha256，
+# 这样 PKG_SHA256 可以和 COMMIT 一起写死在 env.sh 里。
+tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -cf - src/maxtext | gzip -n -9 > "$WORK/hy3-maxtext.tgz"
 # 用 gcloud storage 不用 gsutil：gsutil 不认 ADC，会退回默认服务账号，
 # 在没给那个 SA 授权的桶上直接 403（2026-07-30 在共享集群的桶上踩过）。
 gcloud storage cp "$WORK/hy3-maxtext.tgz" "$GCS_STAGE/hy3-maxtext.tgz" 2>&1 | tail -1
 echo "      -> $GCS_STAGE/hy3-maxtext.tgz  ($(du -h "$WORK/hy3-maxtext.tgz" | cut -f1))"
-echo "export PKG_SHA256=$(sha256sum "$WORK/hy3-maxtext.tgz" | cut -d' ' -f1)   # 复制这一行执行；run.sh 会在 Pod 里校验"
+SUM=$(sha256sum "$WORK/hy3-maxtext.tgz" | cut -d' ' -f1)
+echo "      sha256 $SUM"
+if [ -n "${PKG_SHA256:-}" ] && [ "$PKG_SHA256" != "$SUM" ]; then
+  echo "  ⚠ 与环境变量 PKG_SHA256（$PKG_SHA256）不一致：COMMIT 变了，或代码包内容不是预期的那份"
+elif [ -n "${PKG_SHA256:-}" ]; then
+  echo "      与 PKG_SHA256 一致"
+fi
