@@ -172,7 +172,10 @@ if [ "${MLDIAG:-0}" = 1 ]; then QLABEL="${QLABEL:+$QLABEL, }managed-mldiagnostic
 # 但 TPU 初始化卡在 SliceBuilder 超过 7 分钟不前进，原因未查明，所以保持 hostNetwork。
 NETLINES=""; [ "${HOSTNET:-1}" = 1 ] && NETLINES="hostNetwork: true
             dnsPolicy: ClusterFirstWithHostNet"
-SECCTX=""; [ "${PRIVILEGED:-0}" = 1 ] && SECCTX="securityContext: {privileged: true}"
+SECCTX="securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}"
+[ "${PRIVILEGED:-0}" = 1 ] && SECCTX="securityContext: {privileged: true}"
+# PKG_SHA256（prep.sh 最后一行会打印）：Pod 里先校验代码包再解包，防止桶里的包被替换。
+PKGCHECK=""; [ -n "${PKG_SHA256:-}" ] && PKGCHECK="echo '$PKG_SHA256  /tmp/p.tgz' | sha256sum -c - || { echo '✗ 代码包 sha256 不符，拒绝运行'; exit 1; }"
 SANAME="serviceAccountName: ${KSA:-default}"
 MTC_MOUNT=""; MTC_VOL=""
 if [ "${MTC:-0}" = 1 ]; then
@@ -233,7 +236,8 @@ spec:
                 set -e
                 ulimit -c 0   # 不写 core：abort 时每进程几十 GB core 会写满启动盘 → DiskPressure → 整个任务被驱逐
                 gcloud storage cp $GCS_STAGE/hy3-maxtext.tgz /tmp/p.tgz
-                cd /deps && rm -rf src/maxtext && tar xzf /tmp/p.tgz
+                $PKGCHECK
+                cd /deps && rm -rf src/maxtext && tar --no-same-owner -xzf /tmp/p.tgz
                 export JAX_PLATFORMS=tpu,cpu TPU_STDERR_LOG_LEVEL=0 TF_CPP_MIN_LOG_LEVEL=0
                 export LIBTPU_INIT_ARGS='$FLAGS'
                 python3 -m src.maxtext.trainers.pre_train.train src/maxtext/configs/base.yml \\
@@ -245,6 +249,14 @@ spec:
             volumes: [{name: dshm, emptyDir: {medium: Memory}}$MTC_VOL]
 YAML
 echo "[$NAME] 已提交（$PLATFORM，$NODES 台）。"
+# 提交后确认 Pod 真的建出来了：准入策略拒绝时 Pod 一个都不会出现，原因只在 Job 事件里。
+for _ in 1 2 3 4 5 6; do
+  sleep 5
+  NP=$(kubectl get pods -n "$NS" -l jobset.sigs.k8s.io/jobset-name="$NAME" --no-headers 2>/dev/null | wc -l)
+  [ "$NP" -gt 0 ] && { echo "  Pod 已创建：$NP 个"; break; }
+  FC=$(kubectl get events -n "$NS" --field-selector reason=FailedCreate -o jsonpath='{range .items[*]}{.involvedObject.name}{"\t"}{.message}{"\n"}{end}' 2>/dev/null | grep "^$NAME" | tail -1)
+  [ -n "$FC" ] && { echo "✗ Pod 创建被拒：$FC"; exit 1; }
+done
 echo
 echo "读结果前必看："
 echo "  * **先确认 $NODES/$NODES Running 再看日志**。TPU 切片全有全无，人不齐时"
@@ -255,7 +267,7 @@ echo "  * step 0 含编译，step 1/2 是 JAX 异步派发的假读数，稳态�
 if [ "$PLATFORM" = v5p ] && [ "$MODEL" = hunyuan3-295b ]; then
 echo "  * v5p 是 MegaCore，1 device = 1 chip，日志里的 TFLOP/s/device 不用换算。"
 echo "  * MFU = TFLOP/s/device / 459"
-echo "  * 预期（STEPS=10 默认配置）：稳态 step 63.2–63.6 s，TFLOP/s/device 160–161，MFU ≈ 35%"
+echo "  * 预期（STEPS=10 默认配置）：稳态 step 63.1–63.8 s，TFLOP/s/device 约 160，MFU ≈ 35%"
 echo "    （2026-10-02 europe-west4 实测 63.49 s / 160.2 / 34.9%）"
 elif [ "$PLATFORM" = v7 ]; then
 echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2307"

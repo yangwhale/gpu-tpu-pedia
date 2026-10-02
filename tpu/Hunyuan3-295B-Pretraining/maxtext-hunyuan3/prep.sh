@@ -42,3 +42,4 @@ tar czf "$WORK/hy3-maxtext.tgz" src/maxtext
 # 在没给那个 SA 授权的桶上直接 403（2026-07-30 在共享集群的桶上踩过）。
 gcloud storage cp "$WORK/hy3-maxtext.tgz" "$GCS_STAGE/hy3-maxtext.tgz" 2>&1 | tail -1
 echo "      -> $GCS_STAGE/hy3-maxtext.tgz  ($(du -h "$WORK/hy3-maxtext.tgz" | cut -f1))"
+echo "export PKG_SHA256=$(sha256sum "$WORK/hy3-maxtext.tgz" | cut -d' ' -f1)   # 复制这一行执行；run.sh 会在 Pod 里校验"
