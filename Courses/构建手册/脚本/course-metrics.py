@@ -50,12 +50,39 @@ def svgs(html):
         yield (nm.group(1) if nm else "?"), s
 
 
-def font_of(attrs):
-    m = re.search(r"font-size:\s*([\d.]+)px", attrs)
-    if m:
-        return float(m.group(1))
+def _own_font(attrs):
+    """元素自己声明的字号：style 里的 font-size:Npx 或属性 font-size="N"。"""
+    m = re.search(r"font-size:\s*([\d.]+)px", attrs) or re.search(r'\bfont-size="([\d.]+)', attrs)
+    return float(m.group(1)) if m else None
+
+
+def font_of(attrs, inherited=None):
+    f = _own_font(attrs)
+    if f is not None:
+        return f
+    if inherited is not None:          # 2026-10-04 加：字号写在外层 <g font-size> 上的图
+        return inherited               # 以前一律被当成默认 13，整类图的统计是假的
     c = re.search(r'class="(\w+)"', attrs)
     return CLS_DEFAULT.get(c.group(1) if c else "", 13.0)
+
+
+def texts_with_font(svg):
+    """按文档顺序走一遍标签栈，给每个 <text> 带上从祖先 <g>/<svg> 继承来的字号。"""
+    stack = []
+    # text 分支必须放在前面：否则通用标签分支会先吃掉 <text …>
+    for m in re.finditer(r"<text\b([^>]*)>(.*?)</text>|<(/?)(\w+)([^>]*?)(/?)>", svg, re.S):
+        if m.group(2) is not None:
+            inh = next((f for f in reversed(stack) if f is not None), None)
+            yield m.group(1), m.group(2), font_of(m.group(1), inh)
+            continue
+        closing, tag, attrs, selfclose = m.group(3), m.group(4), m.group(5), m.group(6)
+        if tag not in ("g", "svg", "a"):
+            continue
+        if closing:
+            if stack:
+                stack.pop()
+        elif not selfclose:
+            stack.append(_own_font(attrs))
 
 
 def _covered_text(svg):
@@ -123,12 +150,12 @@ def check_page(path):
     figs = []
     for fig, s in svgs(html):
         tot = big = 0
-        for m in re.finditer(r"<text([^>]*)>(.*?)</text>", s, re.S):
-            n = len(re.sub(r"\s", "", strip_tags(m.group(2))))
+        for attrs, body, fsz in texts_with_font(s):
+            n = len(re.sub(r"\s", "", strip_tags(body)))
             if not n:
                 continue
             tot += n
-            if font_of(m.group(1)) >= BIG:
+            if fsz >= BIG:
                 big += n
         if tot >= 30:
             figs.append((round(100.0 * big / tot), fig, tot))
