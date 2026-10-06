@@ -105,7 +105,9 @@ v7)
   ;;
 *) echo "PLATFORM 只能是 v5p 或 v7"; exit 1;;
 esac
-FLAGS=$(echo $FLAGS); EXTRA=$(echo $EXTRA)
+# LIBTPU_EXTRA：追加 libtpu 参数（例如 SparseCore 三维集合通信卸载的两个开关，见手册 §20.1）。
+# 镜像里的 libtpu 必须认识它们，否则启动即报 Unknown command line flag。
+FLAGS=$(echo $FLAGS ${LIBTPU_EXTRA:-}); EXTRA=$(echo $EXTRA)
 
 # 两个平台共用的部分。踩过的雷：
 #   use_tokamax_gmm=True   -> v7 上死锁（§6.7）；也是 use_gmm_v2 的强制前置，所以 gmm_v2 一并不可用
