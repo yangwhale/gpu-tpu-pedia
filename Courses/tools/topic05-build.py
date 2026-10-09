@@ -221,6 +221,15 @@ __FIG_COLL_NN__
   <h3>1.4　AllReduce 可以拆成两半</h3>
 __FIG_AR_SPLIT__
   <p>拆开以后，中间还能塞进别的动作。后面好几种并行白捡的便宜全从这里来：ZeRO（第二节）、张量并行配序列并行（第三节）。</p>
+  <details class="foldfig"><summary><b>细一点</b>：同样是 AG 和 RS 两个动作，顺序和中间夹什么，决定了它是谁</summary>
+  <ul>
+    <li><b>AllReduce</b>：先 RS 后 AG，两半之间<b>什么都不夹</b>，就是同一个环转两圈（<a href="#s1-5">§1.5</a>）。</li>
+    <li><b>先 AG 后 RS，中间夹一段计算</b>：进门拼齐、算、出门切回。FSDP 拼权重（<a href="#s2-3">§2.3</a>）、SP 拼序列（<a href="#s3-3">§3.3</a>）都是这个形状，专家并行用 AllGather 派发 token 时也是（Megatron 的 allgather 派发器）。本课简写成 <b>AGRS</b>。</li>
+    <li><b>先 RS 后 AG，中间夹优化器</b>：ZeRO 分梯度、各自更新、再拼新权重（<a href="#s2-2">§2.2</a>）。字母顺序跟 AllReduce 一样，差别在中间多了一步更新。本课简写成 <b>RSAG</b>。</li>
+    <li><b>AG 和 RS 互为转置</b>：前向在某处做 AG，反向在同一处就做 RS，反过来也一样。所以 SP 的反向按位置看两者对调了，按时间看还是先 AG 后 RS：反向先碰到的是前向的出口。</li>
+    <li>FSDP 比较特殊：前向只有 AG。反向那次 AG 不是转置来的，是把前向扔掉的权重再拼一次；RS 才是前向 AG 的转置。</li>
+  </ul>
+  <p>⚠️ AGRS／RSAG 是本课为了说清顺序起的简写，不是通用术语。</p></details>
 
   <h3>1.5　没有班长，怎么做到的：环</h3>
   <p>班长模式下卡 0 要收 n−1 份、发 n−1 份，成了全场的瓶颈。换个办法：首尾相连排成一圈，谁都不当班长。</p>
@@ -320,6 +329,12 @@ __FIG_FSDP_STEP__
     <li><b>HSDP</b> 是两者的折中：<b>机内 FSDP、机间数据并行</b>。高频的拼权重留在机内，跨机只剩梯度同步，量也除以了机内的分片数。</li>
     <li><b>DiLoCo</b> 再往前一步：每个副本先自己走几百步再同步一次，专门为跨数据中心训练设计。</li>
   </ul></details>
+  <div class="note warn"><span class="t">⚠️ HSDP 的梯度同步，写法不对会被编成一次全员 AllReduce</span>
+    HSDP 的梯度要在两根轴上求和，最后按 FSDP 那根轴切开，各回各的主人。<br>
+    <b>省的做法</b>：先在机内 FSDP 轴上 ReduceScatter，每人只剩 1/F；再在机间数据轴上，对这 1/F 做 AllReduce。<br>
+    <b>费的做法</b>：两根轴并成一个大组，对整份梯度做一次 AllReduce，每人拿到整份总和后只留自己那块。AllReduce 里 AG 那一半拼回来的东西随手就扔了；跨机那段搬的也是整份，不是 1/F。<br>
+    让编译器自动切分时（比如 JAX 的 GSPMD），跨两根轴求和有可能被编成后一种，我们实测碰到过。查法：在编译后的 HLO 里找 all-reduce，看它的 replica group 是不是把两根轴都包进去了。<br>
+    纯 FSDP 只有一根轴，没有这个问题。跟跨不跨机房无关，要看的是有没有多出一根数据轴。</div>
 
   <h3>2.5　这一刀留下的问题</h3>
   <p>FSDP 每一步搬的是<b>权重</b>，搬多少只跟参数量有关，<b>跟 batch 无关</b>；
@@ -356,6 +371,17 @@ __FIG_INTENSITY__
     注意这里卡的是<b>网络</b>：权重收进来以后还要从显存读，可显存每秒 7.37 TB，比网络快十二倍多，那条线只有约 313（图最下面的灰虚线），远不是瓶颈。
     这还是最乐观的线：只走一根轴，高约 3 倍；
     MoE 只靠 FSDP、不配专家并行，搬的是全部参数、算的只有被选中的那部分，再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p></details>
+  <details class="foldfig"><summary><b>细一点</b>：「藏在计算后面」具体是怎么藏的</summary>
+  <ul>
+    <li><b>一次通信拆成两条指令</b>：start 把活交出去，计算接着往下走；done 表示「我要用结果了，没到就等」。XLA 的 HLO 里就叫 all-gather-start／all-gather-done；PyTorch 里是 <code>async_op=True</code> 拿回一个 work，再 <code>work.wait()</code>。</li>
+    <li><b>done 只等自己</b>：它不是全员屏障，只等自己那份数据到齐。可环上谁慢，谁的数据就晚到，所以慢卡还是会间接拖住你。</li>
+    <li><b>藏，就是把 start 提前、done 推后</b>，中间塞进计算。FSDP 算第 i 层时就 start 第 i＋1 层的 AG，这叫预取；反向梯度的 RS 晚几层再 done。</li>
+    <li><b>代价是显存</b>：start 那一刻接收 buffer 就得占上，一直占到 done 之后用完。提前得越多，同时在路上的层越多。所以预取要限流，PyTorch FSDP 有 <code>limit_all_gathers</code>，限制同时在路上的 AG。</li>
+    <li><b>发得早不等于传得早</b>：通信走的通道有限，同一条通道上的集合通信一个接一个排队。前面一个大的没传完，后面提前发的也只能干等。排程要看通道上的队，不能只看指令发出的时刻。</li>
+    <li><b>循环会卡住它</b>：JAX 常把每层（或每几层）写成一个循环体（scan）。start 和 done 必须在同一轮里配对，最多只能在一层里面挪。想在这一层算的时候拉下一层的权重，得让编译器把通信挪到上一轮去，XLA 里管这件事的 pass 叫 collective pipeliner。⚠️ 实测：它挪的时候不把显存算进去，挪多了可能爆显存。</li>
+    <li>PyTorch FSDP 不写成循环，由运行时按层的顺序预取（<code>forward_prefetch</code>／<code>backward_prefetch</code>）。</li>
+    <li>TP 难藏也是这个道理（<a href="#s3-4">§3.4</a>）：要传的激活是这一层刚算出来的，没法提前 start。</li>
+  </ul></details>
 
   <h3>3.2　TP：切进矩阵内部</h3>
   <p>张量并行把一层的权重矩阵本身切开，每张卡只存、只算其中一块。英伟达 Megatron-LM 的切法：</p>
