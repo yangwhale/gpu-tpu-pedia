@@ -4813,6 +4813,17 @@ body.figonly section h3{margin-top:34px}
   <p>VPP 让每张卡负责几段不连续的层，气泡再除以每卡的段数；
     Zero Bubble 把反向拆成「算输入的梯度」和「算权重的梯度」，后者不急，挪去填空；
     DeepSeek-V3 用的 DualPipe 从流水线两头同时往里灌，更要紧的是把一对前向和反向的计算，跟专家并行的通信叠在一起藏掉（技术报告 sec. 3.2.1）。</p></details>
+  <details class="foldfig"><summary><b>再深一点</b>：micro-batch 从哪来、切多大；1F1B 具体怎么排；前后显存不均；DualPipe 的代价</summary>
+  <p><b>micro-batch 不是为流水线发明的。</b>它最早是梯度累积：一份模型副本一次装不下它该分到的那批数据，就按时间切成几份，一份接一份算前向反向，梯度攒起来，最后更新一次。流水线是借用了它，好让几段同时有活干。三层关系：全局批次 ＝ 每份 micro-batch 的样本数 × 份数 × 数据并行份数。
+    开了 PP，「每卡批次」就只是记账：几段合起来才是一份副本，同一时刻吃同一份数据。MaxText 里全局批次 ＝ per_device_batch_size × 设备数，micro-batch ＝ 全局批次 ÷ num_pipeline_microbatches（份数须是段数的整数倍，默认等于段数）。</p>
+  <p><b>GPipe 多占显存，有个前提。</b>总量固定时，切得再细，GPipe 攒的激活总量也不变（份数多了，每份也小了）；真正的问题出在<b>每份大小固定</b>时：那时多切几份就是往批次里加数据，激活跟着涨。1F1B 的激活只跟「段数 × 每份大小」有关，跟份数、总批次无关。</p>
+  <p><b>1F1B 怎么排。</b>第 k 段（从 0 数）先做 p−1−k 份前向热身，之后做一份反向、接一份新前向，一进一出交替，最后把剩下的反向做完。所以第一段最多同时攒 p 份，最后一段只攒 1 份。
+    为什么第一段不趁着等反向多发几份？稳定后整条流水线的节奏是每「一次前向 ＋ 一次反向」出一份，一份从第一段出发再回到第一段大约要 p 个这样的周期；在路上的份数 ＝ 节奏 × 在路上的时间 ≈ p。多发只会在路上排队、白占显存，一点不快。</p>
+  <p><b>前后显存不均怎么办。</b>第一段攒 p 份、最后一段攒 1 份。常见的摊法：首尾段层数不均分（最后一段本来就扛着输出层和损失）；只在前几段开重算；把激活临时挪到主机内存；或者换成 V 字形放法，让每张卡同时负责靠前和靠后的一段，各卡的激活峰值就拉平了（Qi 等，Pipeline Parallelism with Controllable Memory，arXiv <a href="https://arxiv.org/abs/2405.15362" target="_blank" rel="noopener">2405.15362</a>，Zero Bubble 的后续）。</p>
+  <p><b>micro-batch 切多大。</b>不是「一份塞满显存」，1F1B 下第一段要同时装 p 份。要的是<b>刚好让单段算力跑满的最小那份</b>：大模型一条序列就有几千个 token，矩阵已经不小，常常一两条就够，实测找拐点。再看份数：p＝4、每份副本 64 条，每份 16 条只能切 4 份，气泡是理想时间的 3/4；每份 1 条切 64 份，只剩 3/64。经验上份数要到段数的四倍以上；凑不够就开 VPP、少切几段，或者上 Zero Bubble 一类调度。</p>
+  <p><b>DualPipe 的代价。</b>技术报告表 2：每卡要存<b>两份参数</b>（正向那条流水线里是第 i 段，反向那条里是倒数第 i 段），激活峰值是 p＋1 份，比 1F1B 还多一份。它的目的是藏住专家并行那约 1:1 的跨机通信、顺带减气泡。V3 吃得下两份参数，是因为专家并行切得很大，每卡权重本来就少。双向流水线 2021 年的 Chimera 就提过，DualPipe 把条件放宽到段数和份数是偶数即可。</p></details>
+
+  <p><b>PP 是给「慢线上的大规模」准备的。</b>快线够大的地方就不用操这份心：TPU 一个 slice 里上千颗芯片都连在高速 ICI 上，FSDP 和 TP 在里面就跑得开，slice 之间再走数据并行。所以 MaxText 的 <code>ici_pipeline_parallelism</code>、<code>dcn_pipeline_parallelism</code> 默认都是 1，常见配法不开 PP，省下不少头发。GPU 这边，PP 之所以常见，是因为 TP 出不了 NVLink 那一圈，跨机那条慢线只能交给它。</p>
 
   <h3 id="s3-7">3.7　这一刀留下的问题</h3>
   <p>还记得开场那行配置吗？DeepSeek-V3 里<b>没有 TP</b>。报告自己的解释是显存优化做得够细，用不着代价高的 TP。
@@ -7457,6 +7468,9 @@ body.figonly section h3{margin-top:34px}
     <tr><td>ZeRO 各级的显存与通信（第二节）</td><td>Rajbhandari 等，ZeRO，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 5、sec. 7：Pos、Pos+g 通信量与数据并行相同（2Ψ），Pos+g+p 最多 1.5 倍；显存 16Ψ → 16Ψ/Nd</td></tr>
     <tr><td>TP 的切法与通信次数；SP 不增通信（第三节）</td><td>Megatron-LM arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> sec. 3（前向 2 次、反向 2 次 all-reduce）；arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a> sec. 4.2.2（AG＋RS 替代 all-reduce，无额外通信）；查询头数须被 TP 整除、KV 组数与 TP 互为倍数或约数：megatron/core/transformer/transformer_config.py 的校验</td></tr>
     <tr><td>PP 气泡 (p−1)/m；交错式除以 v</td><td>Narayanan 等 arXiv <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener">2104.04473</a> sec. 2.2.1–2.2.2；Zero Bubble arXiv <a href="https://arxiv.org/abs/2401.10241" target="_blank" rel="noopener">2401.10241</a>；DualPipe README</td></tr>
+    <tr><td>DualPipe 两份参数、激活峰值 p＋1；Chimera 先例</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.2.1、表 2</td></tr>
+    <tr><td>V 字形调度拉平各卡激活峰值</td><td>Qi 等 arXiv <a href="https://arxiv.org/abs/2405.15362" target="_blank" rel="noopener">2405.15362</a></td></tr>
+    <tr><td>MaxText：PP 默认 1；micro-batch ＝ 全局批次 ÷ num_pipeline_microbatches</td><td>MaxText configs/base.yml 注释</td></tr>
     <tr><td>V3 训练并行配置；参数分布</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.2（16 路 PP、64 路 EP、ZeRO-1，不用 TP）；config.json（61 层、前 3 层 dense、256 专家、moe_intermediate_size 2048、hidden 7168）</td></tr>
     <tr><td>每字节换多少计算、v7 硬件线约 3,845</td><td>⚠️ 本课推导（稠密近似、完全重叠）；v7 2,307 TFLOP/s bf16；官方给每芯片 ICI 1,200 GB/s，另给 200 GB/s 一档；把它理解成每条链路收发合计，「6 条链路 × 200、发出方向 600」才对得上，这是推导（按 scaling book 单链路单向 9e10 算约 540，硬件线约 4,270，所以取 3,800–4,300 区间）；按 device 口径同样约 3,845（一颗芯片的两个 device 共用链路，算力和带宽一起减半）（wiki ici-dcn、Inferact 博客规格表）。2026-09-25 更正：旧版误用 1,200 得出 1,922；TP 那条线的 4.5 系数按标准注意力加 4 倍宽 MLP 推出（V3 实际是 MLA 加 MoE，只作示意）</td></tr>
     <tr><td>V3 的 EP 细节：最多 4 节点、FP8 派发 BF16 合并、无辅助损失的负载均衡</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 2.1.2、sec. 3.2.2、sec. 3.3.3；每 token 跨节点派发 ≈ 28.7 KB 为本课推导</td></tr>
