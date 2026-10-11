@@ -16,7 +16,7 @@
   <div id="qr" class="qr" role="listbox"></div></div>
 </div></header>
 <div class="page l3">
-<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a class="on" aria-current="page" href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a class="on" aria-current="page" href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-pre-delivery-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
 <main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>00 总览：一个整 pod 是什么</span></nav><nav class="lbar" aria-label="手册与讲义"><a class="on" aria-current="page" href="00-overview.html">📘 手册</a><a href="../lectures/00-overview.html">📝 讲义 · 11.25′</a><span class="lbar-tip">讲课的人看讲义，投屏放这一页</span></nav><article class="md"><h1 id="00-总览一个整-pod-是什么">00 总览：一个整 pod 是什么</h1>
 <blockquote>
 <p>9,216 颗芯片不是「2,304 台一样的机器」，而是 144 个固定积木块，用光交换临时拼起来跑训练。
@@ -210,7 +210,7 @@
 <p><span class="co-t"><i>💡</i><span>单片最多 32 cube（公开文档），整 pod 训练只能走 multislice</span></span></p>
 <ul>
 <li><strong>公开文档：单个 super-slice 最多 32 个 sub-block（cube）= 2,048 chip</strong>；每维须是 4 的倍数、A ≤ B ≤ C、乘积 ≤ 9,216；8x16x16（32）、8x12x20（30）、12x12x12（27）都合法，没有「2 的幂」限制 <span class="src" tabindex="0">源<span class="srci"><a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing" target="_blank" rel="noopener">https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing</a></span></span>。</li>
-<li>「单片最大 128 cube、须是 2 的幂」这一说法<strong>与公开文档冲突</strong>，以 Google 书面答复为准。全书配额公式 min(128, …) 里的 128（<code>CUBES_MAX_JOB</code>）按「最大规划任务的 cube 总数（可以是多片）」用，不当单片上限。<strong>待 Google 书面确认</strong>：「tpu7x 单个 ICI 切片上限以公开文档 32 cube 为准还是 128」，见 <a href="09-customer-alignment.html#d02">09 D02</a>。</li>
+<li>「单片最大 128 cube、须是 2 的幂」这一说法<strong>与公开文档冲突</strong>，以 Google 书面答复为准。全书配额公式 min(128, …) 里的 128（<code>CUBES_MAX_JOB</code>）按「最大规划任务的 cube 总数（可以是多片）」用，不当单片上限。<strong>待 Google 书面确认</strong>：「tpu7x 单个 ICI 切片上限以公开文档 32 cube 为准还是 128」，见 <a href="09-pre-delivery-alignment.html#d02">09 D02</a>。</li>
 </ul>
 </blockquote>
 <ul>
@@ -221,7 +221,7 @@
 <div class="kp kc0"><div class="kp-t">cube 内外两种线</div>
 <ul>
 <li>cube 内铜缆固定布线，cube 间走光纤 + OCS。</li>
-<li>≥ 1 cube 默认开 <strong>ICI resiliency</strong>：光链路 / OCS 端口坏了绕路降速也开得出 <span class="src" tabindex="0">源<span class="srci"><a href="https://docs.cloud.google.com/tpu/docs/system-architecture-tpu-vm" target="_blank" rel="noopener">https://docs.cloud.google.com/tpu/docs/system-architecture-tpu-vm</a></span></span>；DEGRADED 在 SLO 里算健康（<a href="09-customer-alignment.html#d01">09 D01</a>），关掉它属于 SLA 排除项（09 D02）。</li>
+<li>≥ 1 cube 默认开 <strong>ICI resiliency</strong>：光链路 / OCS 端口坏了绕路降速也开得出 <span class="src" tabindex="0">源<span class="srci"><a href="https://docs.cloud.google.com/tpu/docs/system-architecture-tpu-vm" target="_blank" rel="noopener">https://docs.cloud.google.com/tpu/docs/system-architecture-tpu-vm</a></span></span>；DEGRADED 在 SLO 里算健康（<a href="09-pre-delivery-alignment.html#d01">09 D01</a>），关掉它属于 SLA 排除项（09 D02）。</li>
 <li>值得开：TPU v4 论文约 50 cube 作业可用性，只靠 cube 级重配约 94%，加容错路由 99.98% <span class="src" tabindex="0">源<span class="srci"><a href="https://www.usenix.org/system/files/nsdi24-zu.pdf" target="_blank" rel="noopener">https://www.usenix.org/system/files/nsdi24-zu.pdf</a> §5</span></span>；TPU7x 无公开数据。</li>
 </ul></div>
 <p>Slice 状态机（Ready 条件的 reason）：</p>
@@ -229,12 +229,12 @@
 <h2 id="4-144-个-cube不等于144-个都能用" class="hc5"><span class="hn">4.</span>「144 个 cube」不等于「144 个都能用」</h2>
 <figure class="img"><a href="../figs/fig-cube-capacity-line.svg" target="_blank" title="新窗口看原图"><img src="../figs/fig-cube-capacity-line.svg" alt="144 个 cube 的数轴：128 最大任务上限、130 SLO 线、144 物理；规划空出的 16 = 2 规划余量（128 到 130 之间）+ 14 不保证" loading="lazy"></a><figcaption>144 个 cube 的数轴：128 最大任务上限、130 SLO 线、144 物理；规划空出的 16 = 2 规划余量（128 到 130 之间）+ 14 不保证</figcaption></figure>
 <ul>
-<li><strong>144 个 cube 全在使用方的 reservation 里 = 130 个在 SLO 目标内 + 14 个不在</strong>；14 个照样能调度，坏了不算违约，当热备。模板也常写 130/144，以签署原文为准（<a href="09-customer-alignment.html#d02">09 D02</a>）。</li>
+<li><strong>144 个 cube 全在使用方的 reservation 里 = 130 个在 SLO 目标内 + 14 个不在</strong>；14 个照样能调度，坏了不算违约，当热备。模板也常写 130/144，以签署原文为准（<a href="09-pre-delivery-alignment.html#d02">09 D02</a>）。</li>
 </ul>
 <p><strong>备件两层</strong>：Google 层 OCS「optically bypass the unhealthy unit … swapping in a designated spare」<span class="src" tabindex="0">源<span class="srci"><a href="https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack" target="_blank" rel="noopener">https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack</a></span></span>；交付方这层自己隔离坏 cube、在备件上重切（05 §5.7、07 §7.3）。</p>
 <p>公开文档称 slice controller 会自动 reshape 当前切片、重配网络，用健康备用 partition 换掉故障 partition <span class="src" tabindex="0">源<span class="srci"><a href="https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dynamic-slicing" target="_blank" rel="noopener">https://docs.cloud.google.com/kubernetes-engine/docs/concepts/dynamic-slicing</a></span></span>；All Capacity 下备件是否只从本 reservation 的 144 个里取、实测是否触发，待 Google 确认。</p>
 <ul>
-<li><strong>待 Google 书面确认</strong>：「All Capacity 下 slice controller 自动换备件时备件从哪来、是不是 reservation 里那 144 个之一、什么条件触发」，见 <a href="09-customer-alignment.html#d08">09 D08</a>。</li>
+<li><strong>待 Google 书面确认</strong>：「All Capacity 下 slice controller 自动换备件时备件从哪来、是不是 reservation 里那 144 个之一、什么条件触发」，见 <a href="09-pre-delivery-alignment.html#d08">09 D08</a>。</li>
 </ul>
 <div class="tbl"><table>
 <thead>
@@ -275,7 +275,7 @@
 </tbody>
 </table></div>
 <blockquote class="co key">
-<p><span class="co-t"><i>💡</i><span>结论 <span class="tg inf">[推断]</span>：规划最大任务 ≤128 cube，盯剩余备件数</span></span>留 ≥2 个 cube 高于 SLO 线作缓冲。和交付前对齐健康口径、SLO 线 128 / 130（130 是多数资料的 SLO 线，128 是规划线）→ <a href="01-capacity-and-prereqs.html#step-1-9">01 §1.9</a>、<a href="09-customer-alignment.html#d01">09 D01–D04</a>。</p>
+<p><span class="co-t"><i>💡</i><span>结论 <span class="tg inf">[推断]</span>：规划最大任务 ≤128 cube，盯剩余备件数</span></span>留 ≥2 个 cube 高于 SLO 线作缓冲。和交付前对齐健康口径、SLO 线 128 / 130（130 是多数资料的 SLO 线，128 是规划线）→ <a href="01-capacity-and-prereqs.html#step-1-9">01 §1.9</a>、<a href="09-pre-delivery-alignment.html#d01">09 D01–D04</a>。</p>
 </blockquote>
 <h2 id="5-所有权边界all-capacity-模式" class="hc0"><span class="hn">5.</span>所有权边界（All Capacity 模式）</h2>
 <div class="tbl"><table>
@@ -304,7 +304,7 @@
 </tr>
 </tbody>
 </table></div>
-<figure class="mermaid"><img src="../assets/mermaid/c920c6592690.png" width="937" alt="示意图" loading="lazy"></figure><p>读图：Google 那格无时长承诺，恢复快慢看蓝色两格。GKE 不做组维护，走 GCE reservation API；池里有 VM 坏，池状态也不变 ERROR。每行要和使用方书面说清 → <a href="09-customer-alignment.html#d05">09 D02、D05、D07</a>。</p>
+<figure class="mermaid"><img src="../assets/mermaid/c920c6592690.png" width="937" alt="示意图" loading="lazy"></figure><p>读图：Google 那格无时长承诺，恢复快慢看蓝色两格。GKE 不做组维护，走 GCE reservation API；池里有 VM 坏，池状态也不变 ERROR。每行要和使用方书面说清 → <a href="09-pre-delivery-alignment.html#d05">09 D02、D05、D07</a>。</p>
 <h2 id="6-本手册的数据从哪来" class="hc1"><span class="hn">6.</span>本手册的数据从哪来</h2>
 <p>本手册的数据来自两个万卡级 TPU7x 整 pod，书里分别这样称呼：</p>
 <div class="tbl"><table>
@@ -658,7 +658,7 @@
 <li class="task-list-item qa"><details><summary>两个「slice controller」各是谁装的、挂了分别是什么后果？</summary><div class="qa-a">§2 对照表</div></details></li>
 <li class="task-list-item qa"><details><summary>为什么 9,216 芯片训练一定是 multislice？</summary><div class="qa-a">公开文档单片最多 32 cube；130 是 SLO 可用数不是上限，§3</div></details></li>
 <li class="task-list-item qa"><details><summary>坏了一段 cube 之间的光路，切片还开得出来吗？</summary><div class="qa-a">开得出，ICI resiliency 绕路降速，§3</div></details></li>
-<li class="task-list-item qa"><details><summary>书面约定里最多能指望多少 cube 同时可用？</summary><div class="qa-a">SLO 目标 130，最大任务 128，§4；和使用方怎么定见 <a href="09-customer-alignment.html">09</a></div></details></li>
+<li class="task-list-item qa"><details><summary>书面约定里最多能指望多少 cube 同时可用？</summary><div class="qa-a">SLO 目标 130，最大任务 128，§4；和使用方怎么定见 <a href="09-pre-delivery-alignment.html">09</a></div></details></li>
 </ul>
 <p><strong>交棒</strong>：数清能用的 cube，定下建完就改不了的配额、版本、网络 → <a href="01-capacity-and-prereqs.html">01</a>。</p>
 </article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="README.html"><small>← 上一页</small>目录与交付清单</a><a class="next" href="01-capacity-and-prereqs.html"><small>下一页 →</small>01 容量核对与前置条件</a></nav></main>

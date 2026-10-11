@@ -16,7 +16,7 @@
   <div id="qr" class="qr" role="listbox"></div></div>
 </div></header>
 <div class="page l3">
-<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a class="on" aria-current="page" href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a class="on" aria-current="page" href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-pre-delivery-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
 <main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>02 建集群与 144 个节点池</span></nav><nav class="lbar" aria-label="手册与讲义"><a class="on" aria-current="page" href="02-cluster-bringup.html">📘 手册</a><a href="../lectures/02-cluster-bringup.html">📝 讲义 · 18.5′</a><span class="lbar-tip">讲课的人看讲义，投屏放这一页</span></nav><article class="md"><h1 id="02-建集群与-144-个节点池">02 建集群与 144 个节点池</h1>
 <blockquote>
 <p><a href="01-capacity-and-prereqs.html">01</a> 出口满足后，建 VPC、集群、workload policy 和 144 个一 cube 一池的节点池。
@@ -401,7 +401,7 @@ runbook/scripts/02-create-tpu-nodepools.sh<span class="w"> </span>--watch-only<s
 <tr>
 <td>池落在 DEGRADED sub-block 上</td>
 <td>reservation 层降级</td>
-<td><strong>保留池、不删</strong>，按下面「DEGRADED 池处置」走；该 cube 暂不进 <a href="00-overview.html#g-kueue">Kueue</a> 配额；修复时长不保证，别干等；SLO 把 DEGRADED 算健康，不触发赔付（<a href="09-customer-alignment.html#d01">09 D01</a>）</td>
+<td><strong>保留池、不删</strong>，按下面「DEGRADED 池处置」走；该 cube 暂不进 <a href="00-overview.html#g-kueue">Kueue</a> 配额；修复时长不保证，别干等；SLO 把 DEGRADED 算健康，不触发赔付（<a href="09-pre-delivery-alignment.html#d01">09 D01</a>）</td>
 </tr>
 <tr>
 <td><code>ZONE_RESOURCE_POOL_EXHAUSTED</code> 过夜自愈</td>
@@ -420,8 +420,8 @@ runbook/scripts/02-create-tpu-nodepools.sh<span class="w"> </span>--watch-only<s
 <ol>
 <li><strong>保留池</strong>：池停在 15/16 也不删；删了能不能把这块容量拿回来，资料没写（见下面问题 ④）。</li>
 <li><strong>扣出配额</strong>：<code>03-addons.sh quota</code> 只数 16/16 Ready + HEALTHY + allocatable=4 + 无 <code>PartOfBrokenSlice</code> 的 cube，DEGRADED 的自动不算进去（<a href="03-control-plane-addons.html#step-3-5">03 §3.5</a>）。</li>
-<li><strong>交 Google</strong>：把池名、sub-block 名、<code>healthyHostCount</code>/<code>degradedInfraCount</code> 写进 15/16 清单，交付后 T+7 天的周会上交 Google（<a href="09-customer-alignment.html#s9-timeline">09 时间线</a>；每周评审见 <a href="09-customer-alignment.html#d05">09 D05</a>，要带 sub-block ID，只报池名 Google SRE 不受理）。负责：交付方整理，Google TAM 转 Google 工程。</li>
-<li><strong>赔付口径</strong>：按 <a href="09-customer-alignment.html#d01">09 D01</a>。Google SLO 把 DEGRADED 算健康、不赔；大任务要不要用 DEGRADED cube 按 <a href="09-customer-alignment.html#d03">D03</a> 书面定。</li>
+<li><strong>交 Google</strong>：把池名、sub-block 名、<code>healthyHostCount</code>/<code>degradedInfraCount</code> 写进 15/16 清单，交付后 T+7 天的周会上交 Google（<a href="09-pre-delivery-alignment.html#s9-timeline">09 时间线</a>；每周评审见 <a href="09-pre-delivery-alignment.html#d05">09 D05</a>，要带 sub-block ID，只报池名 Google SRE 不受理）。负责：交付方整理，Google TAM 转 Google 工程。</li>
+<li><strong>赔付口径</strong>：按 <a href="09-pre-delivery-alignment.html#d01">09 D01</a>。Google SLO 把 DEGRADED 算健康、不赔；大任务要不要用 DEGRADED cube 按 <a href="09-pre-delivery-alignment.html#d03">D03</a> 书面定。</li>
 <li><strong>加池 / 换池：交付期不做</strong>。全书没有 day-2 加池或换池流程；要做先拿到下面 Google 的书面答复，再单独写流程。</li>
 </ol>
 <p><strong>要 Google 书面答复</strong>（交付方经 Google TAM 问 Google 工程）<span class="tg inf">[需确认]</span>：</p>
@@ -593,8 +593,8 @@ kubectl<span class="w"> </span>get<span class="w"> </span>nodes<span class="w"> 
 <ul>
 <li>先按 §2.5 处理 CHECK 的池；</li>
 <li>再和 <code>01-precheck.sh</code> 第 4 段的 reservation 侧 HEALTHY 数对一下，看缺口在 GKE 侧还是 reservation 侧；</li>
-<li>缺口在 Google 侧的，交付方经 Google TAM 提单。修复时长 Google 没有承诺（<a href="00-overview.html#5-%E6%89%80%E6%9C%89%E6%9D%83%E8%BE%B9%E7%95%8Call-capacity-%E6%A8%A1%E5%BC%8F">00 §5</a>、<a href="09-customer-alignment.html#d05">09 D05</a>），别干等；</li>
-<li>能不能带缺口交付按 <a href="09-customer-alignment.html#d01">09 D01</a> / <a href="09-customer-alignment.html#d03">D03</a> 书面定。</li>
+<li>缺口在 Google 侧的，交付方经 Google TAM 提单。修复时长 Google 没有承诺（<a href="00-overview.html#5-%E6%89%80%E6%9C%89%E6%9D%83%E8%BE%B9%E7%95%8Call-capacity-%E6%A8%A1%E5%BC%8F">00 §5</a>、<a href="09-pre-delivery-alignment.html#d05">09 D05</a>），别干等；</li>
+<li>能不能带缺口交付按 <a href="09-pre-delivery-alignment.html#d01">09 D01</a> / <a href="09-pre-delivery-alignment.html#d03">D03</a> 书面定。</li>
 </ul>
 </li>
 </ul>

@@ -16,7 +16,7 @@
   <div id="qr" class="qr" role="listbox"></div></div>
 </div></header>
 <div class="page l3">
-<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a class="on" aria-current="page" href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a class="on" aria-current="page" href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-pre-delivery-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
 <main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</span></nav><article class="md"><h1 id="08c-上线周的生产事故会出什么怎么提前防出了怎么判">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</h1>
 <blockquote>
 <div class="kp kc0"><div class="kp-t">要解决什么</div>
@@ -207,7 +207,7 @@
 <ul>
 <li><strong>每天出一张「已修未回池」表</strong>，每台标出卡在哪一段（drain、测试、链路测试、缺件）和进入该段的时间（<a href="08-day2-operations.html#s8-4-repaired">08 §8.4</a>）。</li>
 <li>开 case 附这张清单，明确要求：缺件的改走整机置换、卡在测试的手工放回、批准过的动作写明谁执行、何时执行。实际案例里有一次批准过的动作 30 多小时没人执行。</li>
-<li>维修多久回池、缺件多久、谁对「已修未回池」负责，交付前写进对齐清单（<a href="09-customer-alignment.html#d05">09 D05</a>）。</li>
+<li>维修多久回池、缺件多久、谁对「已修未回池」负责，交付前写进对齐清单（<a href="09-pre-delivery-alignment.html#d05">09 D05</a>）。</li>
 </ul>
 </li>
 </ul>
@@ -345,7 +345,7 @@
 <td>五</td>
 <td><strong>同一个数，几个系统各说各话</strong></td>
 <td>交付时约定以哪个系统的数为准，写进对齐清单</td>
-<td><a href="pitfalls.html#l-3">经验教训第 3 条</a>、<a href="09-customer-alignment.html#d01">09 D01</a></td>
+<td><a href="pitfalls.html#l-3">经验教训第 3 条</a>、<a href="09-pre-delivery-alignment.html#d01">09 D01</a></td>
 </tr>
 <tr>
 <td>六</td>
@@ -369,7 +369,7 @@
 <td>九</td>
 <td><strong>修复要靠人手，规程不全</strong></td>
 <td>交付前向 Google 要齐现有规程（维护指南、整机置换流程、巡检工具），引用不重写</td>
-<td><a href="09-customer-alignment.html#d18">09 D18</a></td>
+<td><a href="09-pre-delivery-alignment.html#d18">09 D18</a></td>
 </tr>
 </tbody>
 </table></div>
@@ -423,12 +423,12 @@
 <li class="task-list-item qa"><details><summary>遇到 GCS 429 为什么不先申请配额？</summary><div class="qa-a">可能是没走 gRPC、撞的是单桶限额</div></details></li>
 <li class="task-list-item qa"><details><summary>作业所有主机挂在初始化、不报错，先查什么？</summary><div class="qa-a">是不是撒片；MegaScale 默认要重试很久才放弃</div></details></li>
 </ul>
-<p><strong>交棒</strong>：回 <a href="README.html#%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95%E6%8C%89%E9%A1%BA%E5%BA%8F%E5%8B%BE">README 交付清单 H</a> 打勾；交付条件（健康 cube 数以哪个系统为准、维修多久回池）收进 <a href="09-customer-alignment.html">09 交付前对齐清单</a>；出事时按 <a href="08-day2-operations.html#step-8-6">08 §8.6</a> 处理、按 <a href="08-day2-operations.html#step-8-5">08 §8.5</a> 联系 Google。</p>
+<p><strong>交棒</strong>：回 <a href="README.html#%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95%E6%8C%89%E9%A1%BA%E5%BA%8F%E5%8B%BE">README 交付清单 H</a> 打勾；交付条件（健康 cube 数以哪个系统为准、维修多久回池）收进 <a href="09-pre-delivery-alignment.html">09 交付前对齐清单</a>；出事时按 <a href="08-day2-operations.html#step-8-6">08 §8.6</a> 处理、按 <a href="08-day2-operations.html#step-8-5">08 §8.5</a> 联系 Google。</p>
 <h2 id="出处" class="hc5">出处</h2>
 <ul>
-<li>相关章节：<a href="08-day2-operations.html">08 日常运维</a>、<a href="08a-slow-node-sop.html">08a 慢节点标准流程</a>、<a href="08b-observability.html">08b 可观测性</a>、<a href="07-resilience-and-recovery.html">07 韧性与恢复</a>、<a href="09-customer-alignment.html">09 交付前对齐清单</a></li>
+<li>相关章节：<a href="08-day2-operations.html">08 日常运维</a>、<a href="08a-slow-node-sop.html">08a 慢节点标准流程</a>、<a href="08b-observability.html">08b 可观测性</a>、<a href="07-resilience-and-recovery.html">07 韧性与恢复</a>、<a href="09-pre-delivery-alignment.html">09 交付前对齐清单</a></li>
 </ul>
-</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="08b-observability.html"><small>← 上一页</small>08b 可观测性：看什么、怎么看、怎么靠它找到问题</a><a class="next" href="09-customer-alignment.html"><small>下一页 →</small>09 交付前需要和你确认的决策</a></nav></main>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="08b-observability.html"><small>← 上一页</small>08b 可观测性：看什么、怎么看、怎么靠它找到问题</a><a class="next" href="09-pre-delivery-alignment.html"><small>下一页 →</small>09 交付前需要和你确认的决策</a></nav></main>
 <nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#总图">总图</a></li><li class="l2"><a href="#8c1-上线周风险地图">8c.1 上线周风险地图</a></li><li class="l2"><a href="#8c2-上线周九类问题怎么认我们有办法你配合什么">8c.2 上线周九类问题：怎么认、我们有办法、你配合什么</a></li><li class="l3"><a href="#各类问题的判法与处置细节">各类问题的判法与处置细节</a></li><li class="l2"><a href="#8c3-跨事件规律--预防动作">8c.3 跨事件规律 → 预防动作</a></li><li class="l3"><a href="#规律七放大链">规律七：放大链</a></li><li class="l2"><a href="#检查点">检查点</a></li><li class="l2"><a href="#出处">出处</a></li></ol></nav>
 </div>
 <footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
