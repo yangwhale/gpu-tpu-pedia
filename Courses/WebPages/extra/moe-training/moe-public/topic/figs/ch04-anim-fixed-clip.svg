@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 470" width="900" height="470" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="动图：两个面板随训练进度推进。左边固定 scale 的量程定死在正负 224，离群值到后期越过上限后被削平，不报错也不出 NaN，下方 loss 在后期出尖刺。右边 absmax 的量程跟着当前最大值一起变大，离群值原样保留，loss 平滑。">
+<title>固定 scale 是刻度定死的尺子：后期冒出的离群值被静默削平；absmax 跟着当前最大值走</title>
+<style>@keyframes cov0 { 0.00% { transform: scaleX(0); } 3.00% { transform: scaleX(1); } 80.00% { transform: scaleX(0); } 100.00% { transform: scaleX(0); } } .cov0 { animation: cov0 10.0s linear infinite; transform-box: fill-box; transform-origin: 100% 50%; transform: scaleX(0); } @keyframes lab0 { 0.00% { opacity: 1; } 3.00% { opacity: 0; } 72.00% { opacity: 0; } 78.00% { opacity: 1; } 100.00% { opacity: 1; } } .lab0 { animation: lab0 10.0s linear infinite; } @keyframes now0 { 0.00% { transform: translateX(0px); } 3.00% { transform: translateX(0px); } 80.00% { transform: translateX(330px); } 100.00% { transform: translateX(330px); } } @keyframes nowop { 0.00% { opacity: 0; } 3.00% { opacity: 1; } 80.00% { opacity: 1; } 82.00% { opacity: 0; } 100.00% { opacity: 0; } } .now0 { animation: now0 10.0s linear infinite, nowop 10.0s linear infinite; opacity: 0; } @keyframes cov1 { 0.00% { transform: scaleX(0); } 3.00% { transform: scaleX(1); } 80.00% { transform: scaleX(0); } 100.00% { transform: scaleX(0); } } .cov1 { animation: cov1 10.0s linear infinite; transform-box: fill-box; transform-origin: 100% 50%; transform: scaleX(0); } .lab1 { animation: lab0 10.0s linear infinite; } @keyframes now1 { 0.00% { transform: translateX(0px); } 3.00% { transform: translateX(0px); } 80.00% { transform: translateX(330px); } 100.00% { transform: translateX(330px); } } @keyframes nowop { 0.00% { opacity: 0; } 3.00% { opacity: 1; } 80.00% { opacity: 1; } 82.00% { opacity: 0; } 100.00% { opacity: 0; } } .now1 { animation: now1 10.0s linear infinite, nowop 10.0s linear infinite; opacity: 0; } @media (prefers-reduced-motion: reduce) { * { animation: none !important } }</style>
+<defs><marker id="ar-5f6368" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker><marker id="ar-1a73e8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker><marker id="ar-e8710a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker><marker id="ar-d93025" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker><marker id="ar-188038" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#188038"/></marker><marker id="ar-202124" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#202124"/></marker><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fce8e6"/><line x1="0" y1="0" x2="0" y2="6" stroke="#d93025" stroke-width="2"/></pattern><pattern id="hatchg" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#ffffff"/><line x1="0" y1="0" x2="0" y2="6" stroke="#bdc1c6" stroke-width="2"/></pattern></defs>
+<rect width="900" height="470" fill="#ffffff"/>
+<text x="24" y="34" font-size="19" font-weight="700" fill="#202124">固定 scale 是刻度定死的尺子：后期冒出的离群值被静默削平；absmax 跟着当前最大值走</text>
+<text x="24" y="58" font-size="14" fill="#5f6368">动图（示意，无刻度）：横轴是训练进度，竖轴是数值；灰点是普通激活，粗线是一个越长越大的离群值；下方小图是 loss</text>
+<rect x="24.0" y="76.0" width="414.0" height="344.0" rx="6" fill="#ffffff" stroke="#dadce0" stroke-width="1"/>
+<rect x="24.0" y="76.0" width="414.0" height="4.0" rx="0" fill="#d93025"/>
+<text x="38.0" y="102.0" font-size="15" fill="#a50e0e" text-anchor="start" font-weight="700">固定 scale：fixed,-224,224</text>
+<line x1="74.0" y1="110.0" x2="74.0" y2="334.0" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="74.0" y1="222.0" x2="404.0" y2="222.0" stroke="#dadce0" stroke-width="1"/>
+<text x="66.0" y="227.0" font-size="13" fill="#5f6368" text-anchor="end">0</text>
+<circle cx="152.5" cy="229.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="273.3" cy="224.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="280.5" cy="220.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="350.4" cy="221.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="159.6" cy="219.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="229.2" cy="196.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="350.0" cy="233.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="123.7" cy="220.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="283.5" cy="215.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="318.6" cy="229.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="295.6" cy="209.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="269.1" cy="216.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="173.4" cy="206.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="230.0" cy="218.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="311.2" cy="212.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="378.0" cy="230.6" r="2.2" fill="#9aa0a6"/>
+<circle cx="204.3" cy="219.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="382.7" cy="230.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="364.0" cy="218.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="145.6" cy="219.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="392.6" cy="232.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="173.3" cy="217.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="241.4" cy="227.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="267.1" cy="217.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="266.8" cy="212.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="380.6" cy="228.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="356.6" cy="210.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="127.8" cy="222.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="358.0" cy="205.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="261.8" cy="225.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="309.6" cy="218.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="263.3" cy="207.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="168.0" cy="207.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="400.6" cy="216.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="103.2" cy="219.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="123.8" cy="229.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="171.0" cy="220.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="88.6" cy="238.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="276.8" cy="209.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="183.2" cy="218.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="364.7" cy="212.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="403.5" cy="223.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="176.2" cy="212.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="84.4" cy="217.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="139.1" cy="231.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="125.5" cy="216.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="88.0" cy="217.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="390.4" cy="227.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="369.9" cy="228.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="245.6" cy="215.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="286.5" cy="230.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="278.6" cy="227.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="384.4" cy="230.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="311.7" cy="222.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="152.4" cy="228.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="246.0" cy="201.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="255.0" cy="213.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="265.4" cy="221.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="80.6" cy="230.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="93.8" cy="229.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="281.0" cy="233.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="190.4" cy="219.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="307.3" cy="222.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="94.0" cy="223.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="297.1" cy="216.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="224.6" cy="223.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="269.6" cy="225.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="177.2" cy="215.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="195.8" cy="227.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="198.5" cy="225.8" r="2.2" fill="#9aa0a6"/>
+<path d="M74.0,204.0 L79.5,204.0 L85.0,204.0 L90.5,204.0 L96.0,204.0 L101.5,204.0 L107.0,204.0 L112.5,204.0 L118.0,204.0 L123.5,204.0 L129.0,203.9 L134.5,203.9 L140.0,203.9 L145.5,203.8 L151.0,203.8 L156.5,203.7 L162.0,203.6 L167.5,203.5 L173.0,203.3 L178.5,203.2 L184.0,203.0 L189.5,202.8 L195.0,202.5 L200.5,202.2 L206.0,201.9 L211.5,201.5 L217.0,201.1 L222.5,200.6 L228.0,200.1 L233.5,199.5 L239.0,198.8 L244.5,198.1 L250.0,197.3 L255.5,196.4 L261.0,195.5 L266.5,194.4 L272.0,193.3 L277.5,192.0 L283.0,190.7 L288.5,189.2 L294.0,187.6 L299.5,185.9 L305.0,184.1 L310.5,182.2 L316.0,180.1 L321.5,177.8 L327.0,175.4 L332.5,172.8 L338.0,170.1 L343.5,167.2 L349.0,164.1 L354.5,160.8 L360.0,157.3 L365.5,153.6 L371.0,149.7 L376.5,145.5 L382.0,141.2 L387.5,136.6 L393.0,131.7 L398.5,126.6 L404.0,121.2" stroke="#9aa0a6" stroke-width="1.5" fill="none" stroke-dasharray="5 4"/>
+<path d="M74.0,204.0 L79.5,204.0 L85.0,204.0 L90.5,204.0 L96.0,204.0 L101.5,204.0 L107.0,204.0 L112.5,204.0 L118.0,204.0 L123.5,204.0 L129.0,203.9 L134.5,203.9 L140.0,203.9 L145.5,203.8 L151.0,203.8 L156.5,203.7 L162.0,203.6 L167.5,203.5 L173.0,203.3 L178.5,203.2 L184.0,203.0 L189.5,202.8 L195.0,202.5 L200.5,202.2 L206.0,201.9 L211.5,201.5 L217.0,201.1 L222.5,200.6 L228.0,200.1 L233.5,199.5 L239.0,198.8 L244.5,198.1 L250.0,197.3 L255.5,196.4 L261.0,195.5 L266.5,194.4 L272.0,193.3 L277.5,192.0 L283.0,190.7 L288.5,189.2 L294.0,187.6 L299.5,185.9 L305.0,184.1 L310.5,182.2 L316.0,180.1 L321.5,177.8 L327.0,175.4 L332.5,172.8 L338.0,170.1 L343.5,167.2 L349.0,164.4 L354.5,164.4 L360.0,164.4 L365.5,164.4 L371.0,164.4 L376.5,164.4 L382.0,164.4 L387.5,164.4 L393.0,164.4 L398.5,164.4 L404.0,164.4" stroke="#d93025" stroke-width="3" fill="none"/>
+<path d="M74.0,370.0 L79.5,370.4 L85.0,370.9 L90.5,371.3 L96.0,371.8 L101.5,372.2 L107.0,372.6 L112.5,373.1 L118.0,373.5 L123.5,373.9 L129.0,374.3 L134.5,374.7 L140.0,375.1 L145.5,375.5 L151.0,375.9 L156.5,376.3 L162.0,376.7 L167.5,377.1 L173.0,377.5 L178.5,377.8 L184.0,378.2 L189.5,378.6 L195.0,378.9 L200.5,379.3 L206.0,379.6 L211.5,380.0 L217.0,380.3 L222.5,380.7 L228.0,381.0 L233.5,381.3 L239.0,381.6 L244.5,382.0 L250.0,382.3 L255.5,382.6 L261.0,382.9 L266.5,383.2 L272.0,383.4 L277.5,383.7 L283.0,384.0 L288.5,384.3 L294.0,384.5 L299.5,384.8 L305.0,385.0 L310.5,385.3 L316.0,385.5 L321.5,385.8 L327.0,386.0 L332.5,386.2 L338.0,386.4 L343.5,386.6 L349.0,386.8 L354.5,380.0 L360.0,369.1 L365.5,380.3 L371.0,387.4 L376.5,380.6 L382.0,369.7 L387.5,380.8 L393.0,387.9 L398.5,381.0 L404.0,370.0" stroke="#d93025" stroke-width="2" fill="none"/>
+<text x="66.0" y="388.0" font-size="13" fill="#5f6368" text-anchor="end">loss</text>
+<rect x="75.0" y="106.0" width="336.0" height="300.0" rx="0" fill="#ffffff" class="cov0"/>
+<text x="404.0" y="336.0" font-size="13" fill="#5f6368" text-anchor="end">训练进度 →</text>
+<line x1="74.0" y1="164.4" x2="404.0" y2="164.4" stroke="#d93025" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="66.0" y="169.4" font-size="13" fill="#a50e0e" text-anchor="end">+224</text>
+<line x1="74.0" y1="279.6" x2="404.0" y2="279.6" stroke="#d93025" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="66.0" y="284.6" font-size="13" fill="#a50e0e" text-anchor="end">−224</text>
+<text x="400.0" y="128.0" font-size="13" fill="#a50e0e" text-anchor="end" font-weight="700" class="lab0">越线的部分被削平：不报错、不出 NaN</text>
+<text x="400.0" y="404.0" font-size="13" fill="#a50e0e" text-anchor="end" class="lab0">长跑后期出尖刺</text>
+<line x1="74.0" y1="106.0" x2="74.0" y2="404.0" stroke="#202124" stroke-width="1.2" stroke-dasharray="3 3" class="now0"/>
+<rect x="462.0" y="76.0" width="414.0" height="344.0" rx="6" fill="#ffffff" stroke="#dadce0" stroke-width="1"/>
+<rect x="462.0" y="76.0" width="414.0" height="4.0" rx="0" fill="#188038"/>
+<text x="476.0" y="102.0" font-size="15" fill="#0d652d" text-anchor="start" font-weight="700">absmax：每次按当前最大值定 scale</text>
+<line x1="512.0" y1="110.0" x2="512.0" y2="334.0" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="512.0" y1="222.0" x2="842.0" y2="222.0" stroke="#dadce0" stroke-width="1"/>
+<text x="504.0" y="227.0" font-size="13" fill="#5f6368" text-anchor="end">0</text>
+<path d="M512.0,196.8 L517.5,196.8 L523.0,196.8 L528.5,196.8 L534.0,196.8 L539.5,196.8 L545.0,196.8 L550.5,196.8 L556.0,196.8 L561.5,196.8 L567.0,196.8 L572.5,196.8 L578.0,196.8 L583.5,196.8 L589.0,196.8 L594.5,196.8 L600.0,196.8 L605.5,196.8 L611.0,196.8 L616.5,196.8 L622.0,196.8 L627.5,196.8 L633.0,196.8 L638.5,196.8 L644.0,196.8 L649.5,196.8 L655.0,196.8 L660.5,196.8 L666.0,196.8 L671.5,196.8 L677.0,196.8 L682.5,196.8 L688.0,196.8 L693.5,196.4 L699.0,195.5 L704.5,194.4 L710.0,193.3 L715.5,192.0 L721.0,190.7 L726.5,189.2 L732.0,187.6 L737.5,185.9 L743.0,184.1 L748.5,182.2 L754.0,180.1 L759.5,177.8 L765.0,175.4 L770.5,172.8 L776.0,170.1 L781.5,167.2 L787.0,164.1 L792.5,160.8 L798.0,157.3 L803.5,153.6 L809.0,149.7 L814.5,145.5 L820.0,141.2 L825.5,136.6 L831.0,131.7 L836.5,126.6 L842.0,121.2 L842.0,322.8 L836.5,317.4 L831.0,312.3 L825.5,307.4 L820.0,302.8 L814.5,298.5 L809.0,294.3 L803.5,290.4 L798.0,286.7 L792.5,283.2 L787.0,279.9 L781.5,276.8 L776.0,273.9 L770.5,271.2 L765.0,268.6 L759.5,266.2 L754.0,263.9 L748.5,261.8 L743.0,259.9 L737.5,258.1 L732.0,256.4 L726.5,254.8 L721.0,253.3 L715.5,252.0 L710.0,250.7 L704.5,249.6 L699.0,248.5 L693.5,247.6 L688.0,247.2 L682.5,247.2 L677.0,247.2 L671.5,247.2 L666.0,247.2 L660.5,247.2 L655.0,247.2 L649.5,247.2 L644.0,247.2 L638.5,247.2 L633.0,247.2 L627.5,247.2 L622.0,247.2 L616.5,247.2 L611.0,247.2 L605.5,247.2 L600.0,247.2 L594.5,247.2 L589.0,247.2 L583.5,247.2 L578.0,247.2 L572.5,247.2 L567.0,247.2 L561.5,247.2 L556.0,247.2 L550.5,247.2 L545.0,247.2 L539.5,247.2 L534.0,247.2 L528.5,247.2 L523.0,247.2 L517.5,247.2 L512.0,247.2 Z" stroke="none" stroke-width="1.5" fill="#e6f4ea"/>
+<circle cx="590.5" cy="229.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="711.3" cy="224.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="718.5" cy="220.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="788.4" cy="221.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="597.6" cy="219.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="667.2" cy="196.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="788.0" cy="233.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="561.7" cy="220.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="721.5" cy="215.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="756.6" cy="229.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="733.6" cy="209.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="707.1" cy="216.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="611.4" cy="206.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="668.0" cy="218.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="749.2" cy="212.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="816.0" cy="230.6" r="2.2" fill="#9aa0a6"/>
+<circle cx="642.3" cy="219.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="820.7" cy="230.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="802.0" cy="218.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="583.6" cy="219.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="830.6" cy="232.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="611.3" cy="217.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="679.4" cy="227.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="705.1" cy="217.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="704.8" cy="212.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="818.6" cy="228.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="794.6" cy="210.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="565.8" cy="222.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="796.0" cy="205.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="699.8" cy="225.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="747.6" cy="218.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="701.3" cy="207.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="606.0" cy="207.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="838.6" cy="216.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="541.2" cy="219.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="561.8" cy="229.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="609.0" cy="220.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="526.6" cy="238.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="714.8" cy="209.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="621.2" cy="218.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="802.7" cy="212.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="841.5" cy="223.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="614.2" cy="212.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="522.4" cy="217.0" r="2.2" fill="#9aa0a6"/>
+<circle cx="577.1" cy="231.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="563.5" cy="216.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="526.0" cy="217.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="828.4" cy="227.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="807.9" cy="228.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="683.6" cy="215.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="724.5" cy="230.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="716.6" cy="227.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="822.4" cy="230.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="749.7" cy="222.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="590.4" cy="228.9" r="2.2" fill="#9aa0a6"/>
+<circle cx="684.0" cy="201.3" r="2.2" fill="#9aa0a6"/>
+<circle cx="693.0" cy="213.8" r="2.2" fill="#9aa0a6"/>
+<circle cx="703.4" cy="221.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="518.6" cy="230.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="531.8" cy="229.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="719.0" cy="233.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="628.4" cy="219.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="745.3" cy="222.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="532.0" cy="223.7" r="2.2" fill="#9aa0a6"/>
+<circle cx="735.1" cy="216.1" r="2.2" fill="#9aa0a6"/>
+<circle cx="662.6" cy="223.4" r="2.2" fill="#9aa0a6"/>
+<circle cx="707.6" cy="225.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="615.2" cy="215.2" r="2.2" fill="#9aa0a6"/>
+<circle cx="633.8" cy="227.5" r="2.2" fill="#9aa0a6"/>
+<circle cx="636.5" cy="225.8" r="2.2" fill="#9aa0a6"/>
+<path d="M512.0,204.0 L517.5,204.0 L523.0,204.0 L528.5,204.0 L534.0,204.0 L539.5,204.0 L545.0,204.0 L550.5,204.0 L556.0,204.0 L561.5,204.0 L567.0,203.9 L572.5,203.9 L578.0,203.9 L583.5,203.8 L589.0,203.8 L594.5,203.7 L600.0,203.6 L605.5,203.5 L611.0,203.3 L616.5,203.2 L622.0,203.0 L627.5,202.8 L633.0,202.5 L638.5,202.2 L644.0,201.9 L649.5,201.5 L655.0,201.1 L660.5,200.6 L666.0,200.1 L671.5,199.5 L677.0,198.8 L682.5,198.1 L688.0,197.3 L693.5,196.4 L699.0,195.5 L704.5,194.4 L710.0,193.3 L715.5,192.0 L721.0,190.7 L726.5,189.2 L732.0,187.6 L737.5,185.9 L743.0,184.1 L748.5,182.2 L754.0,180.1 L759.5,177.8 L765.0,175.4 L770.5,172.8 L776.0,170.1 L781.5,167.2 L787.0,164.1 L792.5,160.8 L798.0,157.3 L803.5,153.6 L809.0,149.7 L814.5,145.5 L820.0,141.2 L825.5,136.6 L831.0,131.7 L836.5,126.6 L842.0,121.2" stroke="#1a73e8" stroke-width="3" fill="none"/>
+<path d="M512.0,370.0 L517.5,370.4 L523.0,370.9 L528.5,371.3 L534.0,371.8 L539.5,372.2 L545.0,372.6 L550.5,373.1 L556.0,373.5 L561.5,373.9 L567.0,374.3 L572.5,374.7 L578.0,375.1 L583.5,375.5 L589.0,375.9 L594.5,376.3 L600.0,376.7 L605.5,377.1 L611.0,377.5 L616.5,377.8 L622.0,378.2 L627.5,378.6 L633.0,378.9 L638.5,379.3 L644.0,379.6 L649.5,380.0 L655.0,380.3 L660.5,380.7 L666.0,381.0 L671.5,381.3 L677.0,381.6 L682.5,382.0 L688.0,382.3 L693.5,382.6 L699.0,382.9 L704.5,383.2 L710.0,383.4 L715.5,383.7 L721.0,384.0 L726.5,384.3 L732.0,384.5 L737.5,384.8 L743.0,385.0 L748.5,385.3 L754.0,385.5 L759.5,385.8 L765.0,386.0 L770.5,386.2 L776.0,386.4 L781.5,386.6 L787.0,386.8 L792.5,387.0 L798.0,387.1 L803.5,387.3 L809.0,387.4 L814.5,387.6 L820.0,387.7 L825.5,387.8 L831.0,387.9 L836.5,388.0 L842.0,388.0" stroke="#188038" stroke-width="2" fill="none"/>
+<text x="504.0" y="388.0" font-size="13" fill="#5f6368" text-anchor="end">loss</text>
+<rect x="513.0" y="106.0" width="336.0" height="300.0" rx="0" fill="#ffffff" class="cov1"/>
+<text x="842.0" y="336.0" font-size="13" fill="#5f6368" text-anchor="end">训练进度 →</text>
+<text x="838.0" y="128.0" font-size="13" fill="#0d652d" text-anchor="end" font-weight="700" class="lab1">量程跟着最大值走，按构造不溢出</text>
+<line x1="512.0" y1="106.0" x2="512.0" y2="404.0" stroke="#202124" stroke-width="1.2" stroke-dasharray="3 3" class="now1"/>
+</svg>

@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8（数千芯片） · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a class="on" aria-current="page" href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</span></nav><article class="md"><h1 id="06b-公开配置训练配方deepseek-v3-671b--10-片-4x8x8数千芯片">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8（数千芯片）</h1>
+<blockquote>
+<p><strong>要解决什么</strong>：06c 章用的是非公开模型；要复现，用这份<strong>只用公开东西</strong>跑数千芯片的配方。公开配置按单片调，上多片先在 CPU 上编一遍再占卡。</p>
+</blockquote>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>一句话结论</span></span>原样上 10+ 片 <strong>OOM</strong>；加一条 <code>XLA_FLAGS</code>（关两个 HLO pass）装得下，但关掉的 pass 管片间通信重叠，10+ 片步时以真机实测为准。</p>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>数千芯片</strong> 10+ × 4x8x8</li>
+<li><strong>95.87 GiB</strong> 原样上多片：OOM</li>
+<li><strong>78.82 GiB</strong> 加 <code>XLA_FLAGS</code> 后 10+ 片</li>
+<li><strong>+6%</strong> 单片基准实测步时（比公开 tpu-recipes 同形状参考）</li>
+</ul>
+</div>
+<blockquote>
+<p><strong>前置条件</strong></p>
+<ul>
+<li><strong>同 06c</strong>：<a href="04-functional-verification.html">04</a> 全过、<a href="03-control-plane-addons.html#step-3-5">03 §3.5</a> 的 LocalQueue 在、节点双网卡（<a href="02-cluster-bringup.html#step-2-7">02 §2.7</a>）；不用环境 tar、gcsfuse PVC、overlay、私有仓库 Secret。</li>
+<li><strong>多一条</strong>：镜像仓库 <code>us-docker.pkg.dev/tpu-prod-env-multipod/maxtext-images</code> <strong>不能匿名拉</strong>（<code>DENIED: Unauthenticated request … artifactregistry.repositories.downloadArtifacts</code>）。
+<ul>
+<li>本机 AOT 先 <code>gcloud auth configure-docker us-docker.pkg.dev</code>。</li>
+<li>节点服务账号能不能拉 <span class="tg inf">[需验证]</span>：第一天前按下面「镜像可拉验证」试拉，拉不到就复制进使用方自己的 Artifact Registry。</li>
+</ul>
+</li>
+</ul>
+</blockquote>
+<p><a id="s06a-pull"></a>
+<strong>镜像可拉验证</strong>（第一天前做；命令全部未实测）</p>
+<ul>
+<li><strong>什么时候做</strong>：建集群窗口内、第一天之前。拉不到就什么都跑不了。</li>
+<li><strong>拉不到怎么办</strong>：按下面②③复制进你自己的 Artifact Registry；你的账号能否直接读源仓库，Google 可协助确认。</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 【工作站】① 试拉：在 $INSPECT_NS 起一个只拉镜像的 pod（$NS 里会被 Kueue 挂住，06c §6.1）</span>
+<span class="nb">source</span><span class="w"> </span>~/runbook-env.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">source</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06a-dsv3-recipe.env
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>run<span class="w"> </span>dsv3-pull-check<span class="w"> </span>--image<span class="o">=</span><span class="s2">&quot;</span><span class="nv">$RECIPE_IMAGE</span><span class="s2">&quot;</span><span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--overrides<span class="o">=</span><span class="s1">&#39;{&quot;spec&quot;:{&quot;nodeSelector&quot;:{&quot;cloud.google.com/gke-nodepool&quot;:&quot;&#39;</span><span class="s2">&quot;</span><span class="nv">$SYSTEM_POOL</span><span class="s2">&quot;</span><span class="s1">&#39;&quot;}}}&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--command<span class="w"> </span>--<span class="w"> </span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;print(&quot;PULL_OK&quot;)&#39;</span>
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>dsv3-pull-check<span class="w"> </span>-w<span class="w">      </span><span class="c1"># 期望 Completed；ErrImagePull / ImagePullBackOff = 节点身份拉不到</span>
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>logs<span class="w"> </span>dsv3-pull-check<span class="w">            </span><span class="c1"># 期望 PULL_OK</span>
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>delete<span class="w"> </span>pod<span class="w"> </span>dsv3-pull-check
+<span class="c1"># TPU 池和系统池的节点身份要一样，①才代表 TPU 池；两条输出应相同（&quot;default&quot; = Compute Engine 默认服务账号 [推断]）</span>
+<span class="nv">TPU_POOL</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>list<span class="w"> </span>--cluster<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--filter<span class="o">=</span><span class="s2">&quot;name~^</span><span class="si">${</span><span class="nv">POOL_PREFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span>--limit<span class="o">=</span><span class="m">1</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(name)&#39;</span><span class="k">)</span>
+<span class="k">for</span><span class="w"> </span>p<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="nv">$SYSTEM_POOL</span><span class="w"> </span><span class="nv">$TPU_POOL</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>describe<span class="w"> </span><span class="nv">$p</span><span class="w"> </span>--cluster<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(config.serviceAccount)&#39;</span><span class="p">;</span><span class="w"> </span><span class="k">done</span>
+</code></pre></div>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 【工作站】② 拉不到：复制进使用方 AR（docker 三步；本机要先能拉到源镜像）</span>
+gcloud<span class="w"> </span>artifacts<span class="w"> </span>repositories<span class="w"> </span>create<span class="w"> </span>maxtext<span class="w"> </span>--repository-format<span class="o">=</span>docker<span class="w"> </span>--location<span class="o">=</span><span class="nv">$REGION</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span>
+gcloud<span class="w"> </span>auth<span class="w"> </span>configure-docker<span class="w"> </span>us-docker.pkg.dev,<span class="si">${</span><span class="nv">REGION</span><span class="si">}</span>-docker.pkg.dev
+<span class="nv">DST</span><span class="o">=</span><span class="si">${</span><span class="nv">REGION</span><span class="si">}</span>-docker.pkg.dev/<span class="nv">$PROJECT</span>/maxtext/maxtext_jax_nightly:maxtext_54f66f5_20260924
+docker<span class="w"> </span>pull<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RECIPE_IMAGE</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>docker<span class="w"> </span>tag<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RECIPE_IMAGE</span><span class="s2">&quot;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DST</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>docker<span class="w"> </span>push<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$DST</span><span class="s2">&quot;</span><span class="w">   </span><span class="c1"># push 末行打印 digest: sha256:…</span>
+<span class="c1"># ③ 给节点身份读权限：NODE_SA 取 TPU 池的节点服务账号；describe 打出 &quot;default&quot; 时换成 Compute Engine 默认服务账号</span>
+<span class="nv">NODE_SA</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>describe<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TPU_POOL</span><span class="s2">&quot;</span><span class="w"> </span>--cluster<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(config.serviceAccount)&#39;</span><span class="k">)</span>
+<span class="o">[[</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NODE_SA</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">==</span><span class="w"> </span>default<span class="w"> </span><span class="o">]]</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">NODE_SA</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(projectNumber)&#39;</span><span class="k">)</span><span class="s2">-compute@developer.gserviceaccount.com&quot;</span>
+<span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;NODE_SA=</span><span class="nv">$NODE_SA</span><span class="s2">&quot;</span><span class="w">                                  </span><span class="c1"># 空的就别往下跑（TPU_POOL 来自上面①的最后一段）</span>
+gcloud<span class="w"> </span>artifacts<span class="w"> </span>repositories<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>maxtext<span class="w"> </span>--location<span class="o">=</span><span class="nv">$REGION</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--member<span class="o">=</span><span class="s2">&quot;serviceAccount:</span><span class="nv">$NODE_SA</span><span class="s2">&quot;</span><span class="w"> </span>--role<span class="o">=</span>roles/artifactregistry.reader
+<span class="c1"># 之后所有命令前：export RECIPE_IMAGE=${REGION}-docker.pkg.dev/$PROJECT/maxtext/maxtext_jax_nightly@sha256:&lt;push 打印的 digest&gt;</span>
+<span class="c1"># 再跑一遍 ①（--image 用新地址）</span>
+</code></pre></div>
+<ul>
+<li><strong>digest 可能变</strong>：docker 推回去时会不会重新打包层、push 后 digest 是否与源相同，未核。不同就用 push 打印的那个，并重跑 §5 的 AOT 核一遍 temp。</li>
+<li><strong><code>RECIPE_IMAGE</code> 可以 export 覆盖</strong>：<code>06a-dsv3-recipe.env</code> 写成 <code>${RECIPE_IMAGE:-…}</code>，不用改文件（未实测）。</li>
+</ul>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>优先级</span></span><strong>共享集群 <code>POD_PRIORITY=</code>（清空）</strong>，render 后确认没有 <code>priorityClassName</code>，否则静默抢占别人；默认 <code>high</code> 只适合独占集群。见 <a href="06c-multislice-training.html#step-6-5-ladder">06c §6.5.1 警告框</a>。</p>
+</blockquote>
+<p><strong>术语</strong>（06c 章有的不重复）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>一句话</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AOT（提前编译）</td>
+<td>CPU 上按目标拓扑编训练步，拿每 device 的编译期显存估计（不是实机峰值）</td>
+</tr>
+<tr>
+<td>HLO pass</td>
+<td>XLA 的一道改写步骤；<code>--xla_disable_hlo_passes</code> 按名字关</td>
+</tr>
+<tr>
+<td>FSDP / <code>fsdp_transpose</code></td>
+<td>权重、梯度、优化器状态切到 N 个 device，用时 all-gather；后者是第二个切分轴</td>
+</tr>
+<tr>
+<td>remat / offload</td>
+<td>反向时重算激活 / 激活暂存到 host 内存</td>
+</tr>
+<tr>
+<td>temp / argument / host temp</td>
+<td>编译报告三笔账：临时内存 / 常驻参数与优化器状态 / 卸到 host 的临时内存</td>
+</tr>
+<tr>
+<td>MFU</td>
+<td>实际 TFLOP/s ÷ 峰值 TFLOP/s</td>
+</tr>
+</tbody>
+</table></div>
+<p>脚本（<code>runbook/scripts/</code>）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>干什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="scripts/06a-dsv3-recipe.env"><code>06a-dsv3-recipe.env</code></a></td>
+<td><strong>唯一参数源</strong>：镜像 digest、MaxText 参数、32 个编译器 flag、<code>XLA_FLAGS</code>、1 个 megascale flag</td>
+</tr>
+<tr>
+<td><a href="scripts/06a-jobset-dsv3.yaml"><code>06a-jobset-dsv3.yaml</code></a></td>
+<td>JobSet 模板（骨架同 JIT 基线作业）</td>
+</tr>
+<tr>
+<td><a href="scripts/06-jobset.sh"><code>06-jobset.sh</code></a> <code>RECIPE=dsv3</code></td>
+<td>06c 的脚本</td>
+</tr>
+<tr>
+<td><a href="scripts/06a-aot-dsv3.sh"><code>06a-aot-dsv3.sh</code></a></td>
+<td>见下图</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="mermaid"><img src="../assets/mermaid/6ca873d8d3df.png" width="278" alt="示意图" loading="lazy"></figure><p>读图：JobSet 和 AOT 读同一份 env，体检的就是真要跑的配置。</p>
+<p><a id="s06a-1"></a></p>
+<h2 id="1-为什么选-deepseek-v3-671b" class="hc0"><span class="hn">1.</span>为什么选 DeepSeek-V3 671B</h2>
+<p>同量级、上游有配置、<strong>实测环境里出现过</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th></th>
+<th>大号 MoE 模型（06c 章 JIT 基线作业）</th>
+<th><strong>DeepSeek-V3 671B（本配方）</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码</td>
+<td>训练方自有的 MaxText 分支</td>
+<td>上游 <a href="https://github.com/AI-Hypercomputer/maxtext" target="_blank" rel="noopener">AI-Hypercomputer/maxtext</a> <code>@54f66f5</code></td>
+</tr>
+<tr>
+<td>模型配置</td>
+<td>私有 <code>moe-large.yml</code></td>
+<td>公开 <code>src/maxtext/configs/models/deepseek3-671b-2dfsdp.yml</code></td>
+</tr>
+<tr>
+<td>镜像</td>
+<td>python 基础镜像 + 自建 10.3 GB env tar</td>
+<td>公开 MaxText nightly 镜像，按 digest 钉死</td>
+</tr>
+<tr>
+<td>规模</td>
+<td>数百 B 级 MoE</td>
+<td>671B（官方口径）；61 层（前 3 层稠密）；256 专家 top-8 + 1 共享专家；MLA</td>
+</tr>
+<tr>
+<td>每 device 每步 FLOPs</td>
+<td>—（只给相对值）</td>
+<td><strong>8,206.74 TFLOP</strong>（MaxText 自报）</td>
+</tr>
+<tr>
+<td>单片 4x8x8（实测集群）</td>
+<td>有（本书实测，06c 第 2 级；作为下一行相对值的基准）</td>
+<td><strong>步时比公开参考长约 6%</strong>，约 290 TFLOP/s/device（单片基准：与公开 tpu-recipes 4x8x8 配置几乎相同，在实测集群上跑 30 步合成数据；下文都叫它「单片基准」）</td>
+</tr>
+<tr>
+<td>10+ 片（实测集群）</td>
+<td>弱扩展效率 72%，步时比单片慢约 40%（本书实测，06c 第 4 级）</td>
+<td><strong>没有</strong></td>
+</tr>
+<tr>
+<td>公开参考</td>
+<td>无</td>
+<td><a href="https://github.com/AI-Hypercomputer/tpu-recipes/tree/main/training/ironwood/deepseek3-671b" target="_blank" rel="noopener">tpu-recipes</a> Ironwood 单片 4x8x8：26.586 s/step、617.38 TFLOP/s/chip（commit cd4b64a286 的提交说明，对应当时的 nightly；main 上的 recipe 目录已重组、不再列这组数，公开 recipe 会持续更新）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><span class="src" tabindex="0">源<span class="srci">模型配置 gh api repos/AI-Hypercomputer/maxtext/contents/src/maxtext/configs/models/deepseek3-671b-2dfsdp.yml?ref=54f66f5</span></span></li>
+<li></li>
+<li><span class="src" tabindex="0">源<span class="srci">公开参考 tpu-recipes commit cd4b64a286 的提交说明</span></span></li>
+</ul>
+<p><strong>为什么用 <code>-2dfsdp</code> 而不是 <code>deepseek3-671b.yml</code></strong>：单片基准用的就是它，结构一字不差（diff 只多 <code>mesh_axes</code> / <code>logical_axis_rules</code>）；<code>data_sharding</code> 有 <code>data</code> 轴，<code>dcn_data_parallelism</code> 直接接上。</p>
+<p><a id="s06a-2"></a></p>
+<h2 id="2-配方一览" class="hc1"><span class="hn">2.</span>配方一览</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>形状</td>
+<td>10+ × 4x8x8 = 数千芯片，device 数 = 芯片数 × 2（v7x 每芯片 2 个 device）；每片 64 pod，pod 数 = 片数 × 64</td>
+<td>同 06c 章</td>
+</tr>
+<tr>
+<td>并行</td>
+<td>片内 FSDP × <code>fsdp_transpose</code>，片间数据并行</td>
+<td>见下图</td>
+</tr>
+<tr>
+<td>batch</td>
+<td><code>per_device_batch_size=8</code> × <code>max_target_length=4096</code></td>
+<td>单片基准原值，<strong>贴着显存上限</strong>，改前重跑 AOT（§5）</td>
+</tr>
+<tr>
+<td>精度</td>
+<td>BF16 计算、FP32 主权重、BF16 梯度（<code>grad_dtype=bfloat16</code>）</td>
+<td>片间 all-reduce 字节减半</td>
+</tr>
+<tr>
+<td>优化器</td>
+<td>AdamW，一阶矩 BF16（<code>mu_dtype=bfloat16</code>）、二阶矩 FP32</td>
+<td>§5 锚点</td>
+</tr>
+<tr>
+<td>显存策略</td>
+<td><code>remat_policy=custom</code> + <code>decoder_layer_input=offload</code>（每层输入存到 host 内存）</td>
+<td>§5 锚点</td>
+</tr>
+<tr>
+<td>kernel</td>
+<td>Tokamax Splash 注意力（<code>sa_block_*=2048</code>）、Tokamax GMM v2（MoE 分组矩阵乘，分块 <code>wi_tile_*</code> / <code>wo_tile_*</code>）</td>
+<td>单片基准原值</td>
+</tr>
+<tr>
+<td>数据</td>
+<td>合成数据，不开检查点，50 步</td>
+<td>只验「环境 + 规模 + 网络」，同 JIT 基线作业</td>
+</tr>
+<tr>
+<td>功耗档</td>
+<td><code>--xla_tpu_dvfs_p_state=3</code>（默认档）</td>
+<td>7 档快几个百分点；高负载下的稳定性仍在确认，先用默认档（06c §6.4.1）</td>
+</tr>
+<tr>
+<td>镜像</td>
+<td><code>us-docker.pkg.dev/tpu-prod-env-multipod/maxtext-images/maxtext_jax_nightly@sha256:ee855b80…c23cc5</code>（digest 中间省略，全文见 §3 的 JobSet；tag <code>maxtext_54f66f5_20260924</code>；jax / jaxlib 0.12.0.dev20260923、libtpu 0.0.49）</td>
+<td>官方仓库（要登录）；digest 取自实测时的 <code>docker pull</code>，版本取自 <code>pip list</code></td>
+</tr>
+</tbody>
+</table></div>
+<figure class="mermaid"><img src="../assets/mermaid/b2053da63c25.png" width="1157" alt="示意图" loading="lazy"></figure><p>读图：片间只做数据并行，跨 DCN 的只有梯度同步。</p>
+<div class="kp kc0"><div class="kp-t">和 JIT 基线作业运维上的不同</div>
+<ul>
+<li><strong>不挂桶</strong>：输出写 pod 本地 <code>/tmp/maxtext-out</code>；要留 tensorboard 就把 <code>OUTPUT_DIR</code> 设成 <code>gs://…</code> 并按 <a href="01-capacity-and-prereqs.html#step-1-5">01 §1.5 ③</a> 给 <code>$KSA</code> 授权。</li>
+<li><strong>镜像解压约 18 GB、传输约 3.55 GB</strong>（kubelet <code>sizeBytes: 3550427400</code>）；大量 host 同拉会慢 <span class="tg inf">[推断]</span>，可 DaemonSet 预拉。</li>
+</ul></div>
+<p><a id="s06a-3"></a></p>
+<h2 id="3-生成与提交-jobset" class="hc2"><span class="hn">3.</span>生成与提交 JobSet</h2>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nb">source</span><span class="w"> </span>~/runbook-env.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>rb_env_check<span class="w"> </span>PROJECT<span class="w"> </span>REGION<span class="w"> </span>ZONE<span class="w"> </span>CLUSTER<span class="w">      </span><span class="c1"># 全书变量块 scripts/env.sh；本配方只多要 RUN_NAME / JOBSET_NAME</span>
+<span class="nv">S</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-jobset.sh
+<span class="nb">export</span><span class="w"> </span><span class="nv">RECIPE</span><span class="o">=</span>dsv3
+
+<span class="c1"># 0）先在 CPU 上编一遍（不占卡，约 10 分钟，见 §5）</span>
+<span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06a-aot-dsv3.sh<span class="w"> </span>ms<span class="w">            </span><span class="c1"># 期望脚本最后打印「temp 78.82 GiB … ✓ 装得下」、退出码 0（只看到 Finished … successfully! 不算数，§5 坑 2）</span>
+
+<span class="c1"># 共享集群：export POD_PRIORITY=     （清空；独占集群保持默认 high，见开头 ⚠️）</span>
+
+<span class="c1"># 1）单片：配置 = 单片基准 + XLA_FLAGS + megascale flag，量出的是本配方自己的分母，不等于单片基准（§7 第 4 条）</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">RUN_NAME</span><span class="o">=</span>dsv3-s1<span class="w"> </span><span class="nv">JOBSET_NAME</span><span class="o">=</span>dsv3-s1<span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span><span class="m">1</span>
+<span class="nv">$S</span><span class="w"> </span>render<span class="w"> </span><span class="p">|</span><span class="w"> </span>less<span class="w">          </span><span class="c1"># 看一眼：replicas、dcn_data_parallelism、有没有 priorityClassName</span>
+<span class="nv">$S</span><span class="w"> </span>apply<span class="w">                  </span><span class="c1"># 内含 preflight（LocalQueue、优先级、多片 XLA_FLAGS、HEALTHY 节点数）与 05-avoid-manual-slices.py</span>
+<span class="nv">$S</span><span class="w"> </span>watch<span class="w">                  </span><span class="c1"># 反复看，直到 pod 全 Running</span>
+mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$STATE_DIR</span>/run-<span class="nv">$RUN_NAME</span><span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>logs<span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span><span class="nv">$STATE_DIR</span>/run-<span class="nv">$RUN_NAME</span>/live.log<span class="w">   </span><span class="c1"># 边跑边落盘：maxRestarts 0 下失败会先删 pod，事后 logs 全 NotFound</span>
+<span class="nv">$S</span><span class="w"> </span>steps<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>verify<span class="w">       </span><span class="c1"># 跑完、pod 还在时做；verify 把日志和生效 flag 存到 $STATE_DIR/run-$RUN_NAME/</span>
+<span class="nv">$S</span><span class="w"> </span>delete
+
+<span class="c1"># 2）两片：第一次过 DCN，也是不带 XLA_FLAGS 就 OOM 的第一级。先跑同片数的 DCN 小基准（04 §4.8），再：</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">RUN_NAME</span><span class="o">=</span>dsv3-s2<span class="w"> </span><span class="nv">JOBSET_NAME</span><span class="o">=</span>dsv3-s2<span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span><span class="m">2</span>
+<span class="nv">$S</span><span class="w"> </span>apply<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>watch<span class="p">;</span><span class="w"> </span>mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$STATE_DIR</span>/run-<span class="nv">$RUN_NAME</span><span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>logs<span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span><span class="nv">$STATE_DIR</span>/run-<span class="nv">$RUN_NAME</span>/live.log
+<span class="nv">$S</span><span class="w"> </span>steps<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>verify<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>delete
+
+<span class="c1"># 3）10+ 片（同上四步）</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">RUN_NAME</span><span class="o">=</span>dsv3-ms<span class="w"> </span><span class="nv">JOBSET_NAME</span><span class="o">=</span>dsv3-ms<span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w">   </span><span class="c1"># ← 换成你的片数</span>
+<span class="nv">$S</span><span class="w"> </span>apply<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>watch<span class="p">;</span><span class="w"> </span>mkdir<span class="w"> </span>-p<span class="w"> </span><span class="nv">$STATE_DIR</span>/run-<span class="nv">$RUN_NAME</span><span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>logs<span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span><span class="nv">$STATE_DIR</span>/run-<span class="nv">$RUN_NAME</span>/live.log
+<span class="nv">$S</span><span class="w"> </span>steps<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>verify<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>delete
+</code></pre></div>
+<p>判过没过只看 §7。<code>RECIPE=dsv3</code> 下：</p>
+<ul>
+<li><code>overlay</code> 直接返回；<code>SLICES</code> / <code>TOPO</code> / <code>STEPS</code> / <code>EXTRA_LIBTPU_ARGS</code> / <code>POD_PRIORITY</code> 同 06c 章。</li>
+<li><code>XLA_FLAGS_ENV=</code> 覆盖容器 <code>XLA_FLAGS</code>，只用于单片量关 pass 的代价；多片设空 preflight FAIL。</li>
+<li>换形状 FSDP 度 <code>-1</code> 自动吃满，但 AOT 要改 <code>TOPO_NAME</code>（4x4x4 = <code>tpu7x-128</code>，§5）。</li>
+<li>模板没写 <code>serviceAccountName</code>，<code>KSA</code> 必须保持 <code>default</code>。</li>
+<li><strong>阶梯跳过 1 cube</strong>（§5 #11 OOM），其余见 <a href="06c-multislice-training.html#ladder">06c 路线图</a>与 <a href="06c-multislice-training.html#step-6-5-ladder">§6.5</a>。</li>
+</ul>
+<p><strong>完整 JobSet</strong>（<code>PROJECT=… RUN_NAME=dsv3-ms JOBSET_NAME=dsv3-ms RECIPE=dsv3 06-jobset.sh render</code> 输出，<code>NS=default</code>、<code>LOCAL_QUEUE=multislice-queue</code>、<code>POD_PRIORITY=high</code>；只删注释）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jobset.x-k8s.io/v1alpha2</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">JobSet</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dsv3-ms</span>
+<span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dsv3-671b-recipe</span>
+<span class="w">    </span><span class="nt">kueue.x-k8s.io/queue-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">multislice-queue</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">ttlSecondsAfterFinished</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">86400</span>
+<span class="w">  </span><span class="nt">coordinator</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">replicatedJob</span><span class="p">:</span><span class="w"> </span><span class="nv">worker</span><span class="p p-Indicator">,</span><span class="nt"> jobIndex</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> podIndex</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">failurePolicy</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">maxRestarts</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">    </span><span class="nt">rules</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">restart_on_failure</span><span class="p p-Indicator">,</span><span class="nt"> action</span><span class="p">:</span><span class="w"> </span><span class="nv">RestartJobSet</span><span class="p p-Indicator">,</span><span class="nt"> onJobFailureReasons</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">BackoffLimitExceeded</span><span class="p p-Indicator">]}</span>
+<span class="w">  </span><span class="nt">network</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">enableDNSHostnames</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">,</span><span class="nt"> publishNotReadyAddresses</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">replicatedJobs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker</span>
+<span class="w">    </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span>
+<span class="w">    </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">labels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="nv">dsv3-671b-recipe</span><span class="p p-Indicator">}</span>
+<span class="w">      </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">backoffLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">completionMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Indexed</span>
+<span class="w">        </span><span class="nt">completions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<span class="w">        </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<span class="w">        </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-tpu-slice-topology</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4x8x8</span>
+<span class="w">            </span><span class="nt">labels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="nv">dsv3-671b-recipe</span><span class="p p-Indicator">}</span>
+<span class="w">          </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">hostNetwork</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">            </span><span class="nt">dnsPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterFirstWithHostNet</span>
+<span class="w">            </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span>
+<span class="w">            </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span>
+<span class="w">            </span><span class="nt">terminationGracePeriodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<span class="w">            </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-networking-dra-driver</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-tpu-accelerator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tpu7x</span>
+<span class="w">            </span><span class="nt">tolerations</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="nv">NoSchedule</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">google.com/tpu</span><span class="p p-Indicator">,</span><span class="nt"> operator</span><span class="p">:</span><span class="w"> </span><span class="nv">Exists</span><span class="p p-Indicator">}</span>
+<span class="w">            </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jax-tpu</span>
+<span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">us-docker.pkg.dev/tpu-prod-env-multipod/maxtext-images/maxtext_jax_nightly@sha256:ee855b8087abe62722a3643f5f89a9ea52caa03ae12eb63f3c28643170c23cc5</span>
+<span class="w">              </span><span class="nt">imagePullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">IfNotPresent</span>
+<span class="w">              </span><span class="nt">securityContext</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="nt">ports</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="nv">8471</span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="nv">8080</span><span class="p p-Indicator">},</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="nv">8431</span><span class="p p-Indicator">}]</span>
+<span class="w">              </span><span class="nt">workingDir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/deps/src</span>
+<span class="w">              </span><span class="nt">command</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bash</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-c</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">                </span><span class="no">set -eo pipefail</span>
+<span class="w">                </span><span class="no">ulimit -c 0</span>
+<span class="w">                </span><span class="no">python3 -c &#39;import importlib.metadata as m; print(&quot;TPU runtime versions:&quot;, &quot;jax=&quot; + m.version(&quot;jax&quot;), &quot;jaxlib=&quot; + m.version(&quot;jaxlib&quot;), &quot;libtpu=&quot; + m.version(&quot;libtpu&quot;))&#39;</span>
+<span class="w">                </span><span class="no">echo &quot;LIBTPU_INIT_ARGS: $LIBTPU_INIT_ARGS&quot;</span>
+<span class="w">                </span><span class="no">echo &quot;XLA_FLAGS: $XLA_FLAGS&quot;</span>
+<span class="w">                </span><span class="no">python3 -u -m maxtext.trainers.pre_train.train maxtext/configs/base.yml \</span>
+<span class="w">                  </span><span class="no">model_name=deepseek3-671b-2dfsdp per_device_batch_size=8 max_target_length=4096 dcn_pipeline_parallelism=1 ici_pipeline_parallelism=1 ici_fsdp_transpose_parallelism=2 ici_fsdp_parallelism=-1 allow_split_physical_axes=True use_iota_embed=True remat_policy=custom decoder_layer_input=offload opt_type=adamw mu_dtype=bfloat16 grad_dtype=bfloat16 megablox=True sparse_matmul=True use_custom_sort_vjp=True shard_exp_on_fsdp=False use_2d_fsdp_sharding=True sa_use_fused_bwd_kernel=True sa_block_q=2048 sa_block_kv=2048 sa_block_q_dkv=2048 sa_block_kv_dkv=2048 sa_block_kv_dkv_compute=2048 sa_block_kv_dq=2048 sa_block_q_dq=2048 attention=flash use_tokamax_splash=True use_max_logit_estimate=-1 cost_estimate_flops_fwd=5000000000000 cost_estimate_flops_bwd=5000000000000 float32_weight_sum=False use_tokamax_gmm=True use_gmm_v2=True wi_tile_fwd_batch_seq=256 wi_tile_fwd_embed_dim=7168 wi_tile_fwd_mlp_dim=1024 wi_tile_dlhs_batch_seq=256 wi_tile_dlhs_embed_dim=3584 wi_tile_dlhs_mlp_dim=2048 wi_tile_drhs_batch_seq=512 wi_tile_drhs_embed_dim=1792 wi_tile_drhs_mlp_dim=2048 wo_tile_fwd_batch_seq=512 wo_tile_fwd_embed_dim=3584 wo_tile_fwd_mlp_dim=2048 wo_tile_dlhs_batch_seq=512 wo_tile_dlhs_embed_dim=1792 wo_tile_dlhs_mlp_dim=2048 wo_tile_drhs_batch_seq=512 wo_tile_drhs_embed_dim=1792 wo_tile_drhs_mlp_dim=2048 tokenizer_path=assets/tokenizer.mistral-v3 dataset_type=synthetic enable_checkpointing=False \</span>
+<span class="w">                  </span><span class="no">dcn_data_parallelism=N steps=50 \</span>
+<span class="w">                  </span><span class="no">run_name=dsv3-ms base_output_directory=/tmp/maxtext-out</span>
+<span class="w">              </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">LIBTPU_INIT_ARGS</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;--xla_tpu_dvfs_p_state=3</span><span class="nv"> </span><span class="s">--xla_tpu_scoped_vmem_limit_kib=65536</span><span class="nv"> </span><span class="s">--xla_tpu_bf16_emission_mode=NATIVE_EMISSION</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_reduce_scatter_v2=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_collective_offload_all_gather=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_collective_offload_2d_all_gather=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_all_gather_offload_tracing=true</span><span class="nv"> </span><span class="s">--xla_tpu_use_tc_device_shape_on_sc=True</span><span class="nv"> </span><span class="s">--xla_sc_disable_megacore_partitioning=True</span><span class="nv"> </span><span class="s">--xla_tpu_enable_async_collective_fusion_fuse_all_gather=false</span><span class="nv"> </span><span class="s">--xla_enable_async_all_gather=true</span><span class="nv"> </span><span class="s">--xla_tpu_prefer_async_allgather_to_allreduce=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_collective_offload_all_reduce=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_collective_offload_reduce_scatter=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_collective_offload_3d_all_gather=true</span><span class="nv"> </span><span class="s">--xla_tpu_use_single_sparse_core_for_all_gather_offload=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_concurrent_sparse_core_offloading=true</span><span class="nv"> </span><span class="s">--xla_tpu_aggressive_opt_barrier_removal=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_offloading_gather_to_sparsecore=true</span><span class="nv"> </span><span class="s">--xla_tpu_sparse_core_all_gather_latency_multiplier=1</span><span class="nv"> </span><span class="s">--xla_tpu_sparse_core_reduce_scatter_latency_multiplier=3</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_collective_aggregator=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_latency_hiding_layer_scheduler=false</span><span class="nv"> </span><span class="s">--xla_tpu_rerun_latency_hiding_scheduler_post_sc_assignment=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_offloading_copy_to_sparsecore=false</span><span class="nv"> </span><span class="s">--xla_tpu_scheduler_percent_shared_memory_limit=150</span><span class="nv"> </span><span class="s">--xla_tpu_enable_layer_scheduler_for_dependent_collectives=true</span><span class="nv"> </span><span class="s">--xla_tpu_pcie_bandwidth_multiplier=0.03</span><span class="nv"> </span><span class="s">--xla_tpu_enable_multi_compute_overlap_in_layer_scheduler=false</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_offload_queuing_in_lhs=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_sparse_core_collective_offload_nd_reduce_scatter=true</span><span class="nv"> </span><span class="s">--xla_tpu_enable_3d_reduce_scatter_decomposer=false</span><span class="nv"> </span><span class="s">--megascale_grpc_interface_prefixes=eth1,eth2,lo&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">XLA_FLAGS</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;--xla_disable_hlo_passes=all_gather_decomposer,collective-pipeliner-forward&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">JAX_PLATFORMS</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;tpu,cpu&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">ENABLE_PJRT_COMPATIBILITY</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">                </span><span class="nt">limits</span><span class="p">:</span><span class="w">   </span><span class="p p-Indicator">{</span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="nt">volumeMounts</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">mountPath</span><span class="p">:</span><span class="w"> </span><span class="nv">/dev/shm</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">dshm</span><span class="p p-Indicator">}</span>
+<span class="w">            </span><span class="nt">volumes</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">dshm</span><span class="p p-Indicator">,</span><span class="nt"> emptyDir</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">medium</span><span class="p">:</span><span class="w"> </span><span class="nv">Memory</span><span class="p p-Indicator">}}</span>
+</code></pre></div>
+<p>字段（06c §6.4 有的不重复）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>字段</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>replicas: N</code> / <code>dcn_data_parallelism=N</code></td>
+<td>必须相等，脚本按 <code>SLICES</code> 一起改</td>
+</tr>
+<tr>
+<td><code>workingDir: /deps/src</code></td>
+<td>源码在 <code>/deps/src/maxtext</code></td>
+</tr>
+<tr>
+<td><code>ulimit -c 0</code></td>
+<td>不落 core dump（见<a href="pitfalls.html#l-42">经验教训第 42 条</a>）</td>
+</tr>
+<tr>
+<td>两行 <code>echo</code></td>
+<td>生效 flag 进日志</td>
+</tr>
+<tr>
+<td><code>JAX_PLATFORMS=tpu,cpu</code>、<code>ENABLE_PJRT_COMPATIBILITY=true</code></td>
+<td>单片基准原值</td>
+</tr>
+<tr>
+<td>没有 <code>MEGASCALE_*</code> env</td>
+<td>GKE 侧建 pod 时注入（具体组件未核实，06 §5）</td>
+</tr>
+<tr>
+<td><code>maxRestarts: 0</code></td>
+<td>验收跑法（不开检查点，重启也是从头来）；正式训练不要设 0（见<a href="pitfalls.html#l-38">经验教训第 38 条</a>），按 <a href="07-resilience-and-recovery.html#step-7-2">07 §7.2</a> 改</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="s06a-4"></a></p>
+<h2 id="4-flag-逐条解释" class="hc3"><span class="hn">4.</span>flag 逐条解释</h2>
+<blockquote class="co danger">
+<p><span class="co-t"><i>⛔</i><span>整套照抄，不要挑着删</span></span><strong>没有一个 flag 单独 A/B 过</strong>，且互有依赖（见 SparseCore 聚合器那行）。32 个编译器 flag = 单片基准原样（与公开 tpu-recipes 一致）；megascale 那条 JIT 基线作业 10+ 片用过；<code>XLA_FLAGS</code> 只过 CPU AOT（§5），<strong>没上真机</strong>。</p>
+</blockquote>
+<figure class="mermaid"><img src="../assets/mermaid/6420c9aa5fcf.png" width="501" alt="示意图" loading="lazy"></figure><p>官方没有逐条说明，<span class="tg inf">[推断：按名字]</span> 即只按名字读。</p>
+<p><strong>功耗、片上内存、数值</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>flag</th>
+<th>值</th>
+<th>干什么</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--xla_tpu_dvfs_p_state</code></td>
+<td>3</td>
+<td>功耗档；3 默认，7 满档</td>
+<td>实测集群 P7 对比实测（06c §6.4.1 注 2）：7 档中位 host matmul +3–15%，最慢 host 只慢不到 2%；§2</td>
+</tr>
+<tr>
+<td><code>--xla_tpu_scoped_vmem_limit_kib</code></td>
+<td>65536</td>
+<td>kernel 可用 VMEM 上限 64 MiB</td>
+<td>默认 -1；公开配方都用 65536；报错 23 次不致命（注 1）</td>
+</tr>
+<tr>
+<td><code>--xla_tpu_bf16_emission_mode</code></td>
+<td>NATIVE_EMISSION</td>
+<td>BF16 原生发射 <span class="tg inf">[推断：按名字]</span></td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p>注 1：单片基准日志 <code>INVALID_ARGUMENT: 67108864 bytes of scoped Vmem requested … max valid bytes is 67043328</code>，照样跑完；是否生效没查。</p>
+<p><strong>其余 SparseCore / 调度 / 异步通信 flag</strong>：整套照抄，不逐条解释。跑起来时会碰到的四件事：</p>
+<ul>
+<li><code>--xla_tpu_enable_sparse_core_reduce_scatter_v2</code> 在 libtpu 0.0.49 已删除，日志报 <code>[DEPRECATED_XLA_TPU_FLAG_USE] … deleted</code>，不是配置错。</li>
+<li><code>--xla_tpu_enable_sparse_core_collective_aggregator</code> 不能漏：漏掉它而开 layer scheduler，编译报 <code>Latency hiding layer scheduler requires sparse core collective aggregator to be enabled</code>。</li>
+<li><code>--xla_tpu_enable_concurrent_sparse_core_offloading</code> 只收 <code>true</code> / <code>false</code>，写 <code>enabled</code> 起不来。</li>
+<li><code>--xla_tpu_enable_sparse_core_collective_offload_all_reduce</code> 与一类已知静默数值问题有关，用数值 canary 盯（见<a href="pitfalls.html#l-26">经验教训第 26 条</a>）。</li>
+</ul>
+<p><strong>本配方加的两条</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>flag</th>
+<th>放在哪</th>
+<th>干什么</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--megascale_grpc_interface_prefixes=eth1,eth2,lo</code></td>
+<td><code>LIBTPU_INIT_ARGS</code></td>
+<td>跨片通信（megascale）走 eth1、eth2</td>
+<td>JIT 基线作业 10+ 片跑通，数千芯 DEVICE_CHECK 一次过；≤ 4 片的 DCN 基准里双网卡看不出快（按双网卡建网仍是<a href="pitfalls.html#l-20">经验教训第 20 条</a>的要求）</td>
+</tr>
+<tr>
+<td><code>--xla_disable_hlo_passes=all_gather_decomposer,collective-pipeliner-forward</code></td>
+<td><strong><code>XLA_FLAGS</code> 环境变量</strong></td>
+<td>关两个 HLO pass：不改写 all-gather、不把集合通信往前流水</td>
+<td><strong>不带就 OOM</strong>（§5 #2–#8，起作用的是 <code>collective-pipeliner-forward</code>）；写法照大号 MoE 模型（06c §6.4.1）。<strong>代价没量过</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>改 flag 照 <a href="06c-multislice-training.html#step-6-4-params">06c §6.4.1</a>，先过 §5 AOT（<code>Unknown command line flag</code> 和 OOM 都能提前看到）。</p>
+<p><a id="s06a-5"></a></p>
+<h2 id="5-hbm-核对在-cpu-上把-10-片编一遍aot-实测" class="hc4"><span class="hn">5.</span>HBM 核对：在 CPU 上把 10+ 片编一遍（AOT 实测）</h2>
+<p>MaxText <code>train_compile</code> 按目标拓扑（<code>compile_topology=tpu7x-512</code>，<code>compile_topology_num_slices=N</code>）在 CPU 上编训练步。编出的显存数和真机 JIT 时的编译报告一致（锚点表第 3 行），但那也是编译期估计，<strong>不等于实机 HBM 峰值</strong>：同一程序两者能差几到十几 GiB，两个方向都有。</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06a-aot-dsv3.sh<span class="w"> </span>ms<span class="w">          </span><span class="c1"># 本配方（带 XLA_FLAGS）</span>
+<span class="nv">SLICES</span><span class="o">=</span><span class="m">1</span><span class="w">  </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06a-aot-dsv3.sh<span class="w"> </span>s1<span class="w">           </span><span class="c1"># 单片对照</span>
+<span class="nv">XLA_FLAGS_ENV</span><span class="o">=</span><span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06a-aot-dsv3.sh<span class="w"> </span>ms-raw<span class="w">   </span><span class="c1"># 单片基准原样（不带 XLA_FLAGS）→ 会 OOM</span>
+</code></pre></div>
+<ul>
+<li>要 docker、约 25 GB 磁盘；不要 TPU、GCS、集群凭据。脚本解析 <code>CompiledMemoryStats</code>，<strong>temp &gt; 94.74 时退出码 3</strong>。</li>
+<li><strong>拓扑名按 device 数写</strong>：4x8x8 = <code>tpu7x-512</code>；写成 <code>tpu7x-256</code> 编的是 4x4x8，不报错。</li>
+<li><strong>编译期初筛看 temp</strong>（<code>temp_size_in_bytes</code>），上限 94.74 GiB（每芯片 192 GiB ÷ 2 device 后的可用值）；argument 与输出有 alias，相加高估。</li>
+<li><strong>temp 只是初筛，OOM 最终以实机 <code>peakBytesInUse</code> 为准</strong>：编译期 temp 和实机峰值能差几到十几 GiB，两个方向都有（temp 超上限的实机不一定 OOM，temp 也不是上界）。</li>
+<li>实测机 n4-highmem-80（80 vCPU、629 GiB）：每次 9–10 分钟、大多单核；<code>CPUS</code> 默认 min(64, 本机核数)。<strong>内存 32 GiB 大概够 <span class="tg inf">[推断]</span>、64 GiB 稳妥</strong>（<code>docker stats</code> 每 10 s 采样最高 12.8 GiB，会漏尖峰）。</li>
+</ul>
+<figure class="img"><a href="../figs/fig-dsv3-aot-temp.svg" target="_blank" title="新窗口看原图"><img src="../figs/fig-dsv3-aot-temp.svg" alt="多片不带 XLA_FLAGS 就 OOM：关掉 collective-pipeliner-forward 一个 pass，10+ 片从 95.87 压到 78.82 GiB" loading="lazy"></a><figcaption>多片不带 XLA_FLAGS 就 OOM：关掉 collective-pipeliner-forward 一个 pass，10+ 片从 95.87 压到 78.82 GiB</figcaption></figure>
+<p>读图：只关 <code>collective-pipeliner-forward</code>（#6）就压回来，只关另一个（#7）没用。</p>
+<p><strong>结果</strong>（每 device；GiB = 2³⁰ 字节；「余」= 94.74 − temp，即编译期初筛的口径；日志在 <code>~/runbook-state/aot/aot-*.log</code>）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>配置</th>
+<th>片 × 形状（device）</th>
+<th style="text-align:right">argument</th>
+<th style="text-align:right"><strong>temp</strong></th>
+<th style="text-align:right">host temp</th>
+<th>结论</th>
+<th style="text-align:right">编译墙钟</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>单片基准原样</td>
+<td>1 × 4x8x8（512）</td>
+<td style="text-align:right">12.25</td>
+<td style="text-align:right"><strong>81.77</strong></td>
+<td style="text-align:right">26.69</td>
+<td>装得下（余 12.97）</td>
+<td style="text-align:right">556 s</td>
+</tr>
+<tr>
+<td>2</td>
+<td>单片基准原样</td>
+<td>2 × 4x8x8（1,024）</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>95.87</strong></td>
+<td style="text-align:right">—</td>
+<td><strong>OOM</strong>（编译报 <code>RESOURCE_EXHAUSTED … HLO temporaries (95.87G) exceeds available HBM (94.74G)</code>）</td>
+<td style="text-align:right">567 s</td>
+</tr>
+<tr>
+<td>3</td>
+<td>单片基准原样</td>
+<td>10+ × 4x8x8（数千）</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>95.87</strong></td>
+<td style="text-align:right">—</td>
+<td><strong>OOM</strong>（同上）</td>
+<td style="text-align:right">527 s</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>本配方</strong>（+ <code>XLA_FLAGS</code>）</td>
+<td>10+ × 4x8x8（数千）</td>
+<td style="text-align:right">12.25</td>
+<td style="text-align:right"><strong>78.82</strong></td>
+<td style="text-align:right">26.69</td>
+<td><strong>装得下（只算 temp 余 15.92；连 argument 余 3.67）</strong></td>
+<td style="text-align:right">610 s</td>
+</tr>
+<tr>
+<td>5</td>
+<td>同 4，但写进编译器 flag 而非 <code>XLA_FLAGS</code></td>
+<td>10+ × 4x8x8</td>
+<td style="text-align:right">12.25</td>
+<td style="text-align:right">78.82</td>
+<td style="text-align:right">26.69</td>
+<td>与 #4 逐字节相同</td>
+<td style="text-align:right">609 s</td>
+</tr>
+<tr>
+<td>6</td>
+<td>只关 <code>collective-pipeliner-forward</code></td>
+<td>10+ × 4x8x8</td>
+<td style="text-align:right">12.25</td>
+<td style="text-align:right"><strong>78.82</strong></td>
+<td style="text-align:right">26.69</td>
+<td>与 #4 逐字节相同 → <strong>起作用的是这一个 pass</strong></td>
+<td style="text-align:right">616 s</td>
+</tr>
+<tr>
+<td>7</td>
+<td>只关 <code>all_gather_decomposer</code></td>
+<td>10+ × 4x8x8</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>95.87</strong></td>
+<td style="text-align:right">—</td>
+<td>OOM，和不关一样</td>
+<td style="text-align:right">556 s</td>
+</tr>
+<tr>
+<td>8</td>
+<td>本配方 flag，单片</td>
+<td>1 × 4x8x8</td>
+<td style="text-align:right">12.25</td>
+<td style="text-align:right"><strong>82.20</strong></td>
+<td style="text-align:right">26.69</td>
+<td>装得下；比 #1 多 0.43 GiB</td>
+<td style="text-align:right">577 s</td>
+</tr>
+<tr>
+<td>9</td>
+<td>不加 flag，改 <code>per_device_batch_size=7</code></td>
+<td>10+ × 4x8x8</td>
+<td style="text-align:right">12.25</td>
+<td style="text-align:right"><strong>80.75</strong></td>
+<td style="text-align:right">23.35</td>
+<td>装得下，但全局 batch 少 1/8</td>
+<td style="text-align:right">723 s</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>本配方，2 片</strong></td>
+<td>2 × 4x8x8（1,024）</td>
+<td style="text-align:right">12.25</td>
+<td style="text-align:right"><strong>78.82</strong></td>
+<td style="text-align:right">26.69</td>
+<td>与 #4 逐字节相同 → 第 3 级（2 片）HBM 判据有实测</td>
+<td style="text-align:right">684 s</td>
+</tr>
+<tr>
+<td>11</td>
+<td>本配方，1 cube</td>
+<td>1 × 4x4x4（128）</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>136.57</strong></td>
+<td style="text-align:right">—</td>
+<td><strong>OOM</strong> → 跳过 1 cube 是对的</td>
+<td style="text-align:right">550 s</td>
+</tr>
+</tbody>
+</table></div>
+<p>原始字节数：argument 13,152,781,824；temp 87,801,405,600（#1）与 84,633,883,776（#4 / #5 / #6 / #10）；host temp 见锚点表。</p>
+<p><strong>读法</strong>：1 → 2 片涨 14.1 GiB，2 片 = 10+ 片，看的是有没有片间数据并行 <span class="tg inf">[推断：61 层 scan 里多留一份梯度缓冲，没看 HLO]</span>；06c 章「HBM 和上一级差不多」在第 3 级（2 片）第一次被考到。在真机撞到它的代价：</p>
+<figure class="mermaid"><img src="../assets/mermaid/b6e1249aa977.png" width="806" alt="示意图" loading="lazy"></figure><p>读图：10–15 min 是保守估算 <span class="tg inf">[推断]</span>。#4 只算 temp 余 15.92 GiB（编译期初筛口径）；连常驻的 argument 一起算，temp 78.82 + argument 12.25 = 91.07 GiB，只余 3.7 GiB（保守口径：output 与 argument 几乎全 alias，不另计）。加大 batch / 序列前先重跑 AOT。</p>
+<p><strong>三个外部锚点</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>锚点</th>
+<th style="text-align:right">AOT 数</th>
+<th>独立来源</th>
+<th style="text-align:right">差</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>每层输入卸到 host</td>
+<td style="text-align:right">host temp 28,655,484,928 字节</td>
+<td>61 层 × 8 条 × 4,096 token × 7,168 维 × 2 字节 = 28,655,484,928</td>
+<td style="text-align:right"><strong>0</strong></td>
+</tr>
+<tr>
+<td>参数 + 优化器常驻</td>
+<td style="text-align:right">argument 13.15 GB / device</td>
+<td>每参数 10 字节（FP32 权重 4 + BF16 一阶矩 2 + FP32 二阶矩 4；<code>mu_dtype</code> 只改一阶矩）× 512 反推 ≈ 673B；官方 671B</td>
+<td style="text-align:right">+0.4% <span class="tg inf">[推断：余下是没切的小张量]</span></td>
+</tr>
+<tr>
+<td>单片基准真机的编译报告</td>
+<td style="text-align:right">temp 81.77 / argument 12.25 GiB（#1）</td>
+<td>真机日志 <code>estimated temp size: 81.8 GB, estimated argument size: 12.2 GB</code>（按 2³⁰ 除）</td>
+<td style="text-align:right">对到小数点后 1 位</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>附：两条静默的 AOT 坑</strong></p>
+<p><strong>坑 1：别用减层数的 AOT 问显存</strong>。5 层只适合试通链路（67 s）；<code>base_num_decoder_layers=5</code> temp <strong>125.48 GiB OOM</strong>，61 层却是 81.77，方向反了；同组 native megablox 115.68、<code>per_device_batch_size=4</code> 106.00 全 OOM <span class="tg inf">[推断：5 层 = 3 稠密 + 2 MoE，编译器决定不同]</span>。</p>
+<p><strong>坑 2：<code>Finished train_compile.py successfully!</code> 不等于装得下</strong>。同组 <code>decoder_layer_input=device</code>、<code>remat_policy=full</code> 都成功结束，temp 却是 96.53 / 104.57 GiB。</p>
+<p><strong>编译期 temp 和实机 HBM 峰值对不上</strong></p>
+<p>编译期取 <code>CompiledMemoryStats</code> 的 temp、实机取 XProf memory profile 的峰值，两者能差几到十几 GiB，<strong>两个方向都有</strong>：temp 超上限的实机不一定 OOM，temp 也不是上界 <span class="tg inf">[推断：编译期按保守的生命周期算，实机分配器复用更紧]</span>。</p>
+<ul>
+<li>用法：temp 用来在 CPU 上提前筛掉明显放不下的配置；离上限近（不论哪边）的，在 1 片真机上看 <code>peakBytesInUse</code> 再定。</li>
+</ul>
+<p><strong>把 AOT 产物拉上卡跑：代价与判据</strong>（通用注意事项；<strong>未在本配方上实测</strong>，上游 dsv3 产物上卡没验证过）</p>
+<ul>
+<li><strong>一个产物对应一个「拓扑 × 片数 × 配置」</strong>：<code>compile_topology</code> + <code>compile_topology_num_slices</code> 每级片数各编一次，可并行。</li>
+<li><strong>跟版本绑死</strong>：jax / jaxlib / libtpu 版本都烤进产物，编译和训练用同一个镜像。</li>
+<li><strong>配置必须逐字一致，没有指纹校验</strong>：学习率、优化器、remat、数据契约（合成数据还是真数据、按数据集分 loss 会改变 batch 的叶子数）都烤进文件。不一致时要么报 <code>Too few leaves for PyTreeDef</code>（例如数据契约变了，batch 叶子数和编译时对不上），要么<strong>静默</strong>跑编译时那份计算。两端传逐字相同的参数。</li>
+<li><strong>运行时 flag</strong>：<code>LIBTPU_INIT_ARGS</code> 里运行时生效的项照常起作用，编译期的项已烤进文件，训练端改了不生效。</li>
+<li><strong>判据：真加载了，没退回 JIT</strong>——日志依次出现 <code>Loading the compiled function...</code> → <code>Loaded compiled function!</code>（约几分钟），之前<strong>没有</strong>多片 JIT 那种 20 多分钟的编译段，且 <code>completed step: 0</code> 不到 1 s。</li>
+</ul>
+<p><a id="s06a-6"></a></p>
+<h2 id="6-起-pod-到首步" class="hc5"><span class="hn">6.</span>起 pod 到首步</h2>
+<p>单片基准建 JobSet → step 0 约 9 min，其中冷编译（从 <code>Num_devices</code> 到显存报告）<strong>约 5 min</strong>（<code>jax_cache_dir=~/jax_cache</code> 在 pod 本地）。</p>
+<blockquote class="co tip">
+<p><span class="co-t"><i>✅</i><span>编译期的安静别杀</span></span>编译中段约有 5 min 一行日志都没有——<strong>正常，别杀</strong>。</p>
+</blockquote>
+<p>10+ 片首步比单片长：切片激活、大量进程连成 JAX 集群、编译都会变长，以真机实测为准。</p>
+<p><a id="s06a-7"></a></p>
+<h2 id="7-验收每一级过这-5-条" class="hc0"><span class="hn">7.</span>验收：每一级过这 5 条</h2>
+<p>同 06c 章 <a href="06c-multislice-training.html#ladder">5 条</a>，数换成本配方的（<code>steps</code> / <code>verify</code> 出前 4 条）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>查什么</th>
+<th>过的标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>步数真的走了</td>
+<td>最后一步 = STEPS − 1（49）；loss 从 12.27 往下走（单片基准 30 步 → 9.10）</td>
+</tr>
+<tr>
+<td>2</td>
+<td>device 数</td>
+<td>日志 <code>Num_devices: &lt;设备数&gt;, shape (1, &lt;片数&gt;, 1, 256, 2, 1, 1)</code>（片数 × 512；1 片 512、2 片 1,024）</td>
+</tr>
+<tr>
+<td>3</td>
+<td>HBM</td>
+<td><code>estimated temp size: X GB</code>（即 GiB）：<strong>2 / 10+ 片 ≈ 78.8，1 片 ≈ 82.2</strong>（AOT #10 / #4 / #8）；多片 ≈ 95.9 或 <code>RESOURCE_EXHAUSTED</code> = <code>XLA_FLAGS</code> 没生效</td>
+</tr>
+<tr>
+<td>4</td>
+<td>步时</td>
+<td>见下图（注 1）</td>
+</tr>
+<tr>
+<td>5</td>
+<td>生效 flag</td>
+<td><code>effective-libtpu-flags.txt</code> 有 <code>LIBTPU_INIT_ARGS</code> 与 <code>XLA_FLAGS: --xla_disable_hlo_passes=…</code> 两行，和上一级只差有意改的一处</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="mermaid"><img src="../assets/mermaid/79d7b61a3826.png" width="541" alt="示意图" loading="lazy"></figure><p>读图：只有均值 ÷ p50 越线算不过，步时越线都是先查。</p>
+<p>注 1：单片基准不带 <code>XLA_FLAGS</code>；本配方关掉这个 pass，步时可能略慢；分诊 <a href="06c-multislice-training.html#step-6-6-bimodal">06c §6.6 ④</a>。第 3 级（2 片）前先跑同片数 DCN 小基准（<a href="04-functional-verification.html#step-4-8">04 §4.8</a>）。</p>
+<p><a id="s06a-8"></a></p>
+<h2 id="8-还没做的--已知风险" class="hc1"><span class="hn">8.</span>还没做的 / 已知风险</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>事</th>
+<th>现状</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>10+ 片真机</td>
+<td><strong>没跑过</strong></td>
+<td>按 §3 跑 1 / 2 / 10+ 片</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>XLA_FLAGS</code> 真机效果</td>
+<td>只有 AOT 数（§5）</td>
+<td>第 3 级（2 片）核对 §7 第 3 条</td>
+</tr>
+<tr>
+<td>3</td>
+<td>nightly 镜像</td>
+<td>不是稳定版</td>
+<td>正式训练换 stable，重跑 §5</td>
+</tr>
+<tr>
+<td>4</td>
+<td>FP8</td>
+<td>没放进配方（注 1）</td>
+<td>先定 scale（absmax），带 / 不带 <code>XLA_FLAGS</code> 各编一次</td>
+</tr>
+<tr>
+<td>5</td>
+<td>检查点、真数据</td>
+<td>都没开</td>
+<td>开检查点时加 <code>--megascale_grpc_premap_memory_bytes</code>（见<a href="pitfalls.html#l-25">经验教训第 25 条</a>）；真数据重测管线</td>
+</tr>
+<tr>
+<td>6</td>
+<td>路由</td>
+<td>合成数据专家负载与真数据不同</td>
+<td>真数据重量</td>
+</tr>
+<tr>
+<td>7</td>
+<td>镜像拉取权限</td>
+<td>匿名拉不了；节点服务账号能不能拉 <span class="tg inf">[需验证]</span></td>
+<td>第一天前跑<a href="#s06a-pull">镜像可拉验证</a>①；拉不到走②③</td>
+</tr>
+<tr>
+<td>8</td>
+<td>host 内存</td>
+<td>每 host 8 device × 26.69 ≈ 213.5 GiB；实测集群 tpu7x 节点 allocatable 约 918 GiB，够</td>
+<td>使用方集群开卡后自己核：<code>kubectl get node &lt;双网卡节点&gt; -o jsonpath='{.status.allocatable.memory}'</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>注 1：同集群 FP8 单片吞吐比 BF16 单片基准高约 7%（约 310 TFLOP/s/device）（06c §6.8），固定 scale <strong>会毁收敛</strong>，只当吞吐参考；BF16 下带不带这条 <code>XLA_FLAGS</code> 对性能没有影响。</p>
+<blockquote>
+<div class="kp kc1"><div class="kp-t">本节可能踩到的问题</div>
+<ul>
+<li><a href="pitfalls.html#l-44">exit 0 不等于训练了</a></li>
+<li><a href="pitfalls.html#l-26">钉镜像与 libtpu</a></li>
+<li><a href="pitfalls.html#l-42">core dump 写满盘</a></li>
+<li><a href="pitfalls.html#l-44">超 HBM 可能静默挂住</a></li>
+<li><a href="pitfalls.html#l-26">SparseCore all-reduce 卸载与数值</a></li>
+<li><a href="pitfalls.html#l-38">step 0 后掉 host</a></li>
+</ul></div>
+</blockquote>
+<h2 id="检查点" class="hc2">检查点</h2>
+<p><strong>说得出</strong>（先自己答，再点开对答案）</p>
+<ul class="contains-task-list">
+<li class="task-list-item">
+<p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 为什么给使用方的是 DeepSeek-V3 而不是 06c 章的大号 MoE 模型？（本书的可复现部分以 DeepSeek-V3 公开配置为准）</p>
+</li>
+<li class="task-list-item">
+<p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 照单片基准原样上 10+ 片会怎样？（AOT 实测临时内存 95.87 GiB &gt; 94.74，OOM；加 <code>XLA_FLAGS</code> 关掉 <code>collective-pipeliner-forward</code> 后 78.82 GiB，§4、§5）</p>
+</li>
+<li class="task-list-item">
+<p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 本机 AOT 之前先做什么？（<code>gcloud auth configure-docker us-docker.pkg.dev</code>：镜像仓库不能匿名拉）</p>
+</li>
+</ul>
+<p><strong>交棒</strong>：同一套流程用参考配置的大号 MoE 模型负载逐级跑一遍、看 JIT 步时 → <a href="06c-multislice-training.html">06c</a>（大规模建议提前编译（AOT），Google 可协助）；片数和 JobSet 字段回看 <a href="06-slice-request-and-multislice.html">06</a>，坏一台机器怎么恢复 → <a href="07-resilience-and-recovery.html">07</a>。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="06a-storage-anywhere-cache-gcsfuse.html"><small>← 上一页</small>06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a><a class="next" href="06c-multislice-training.html"><small>下一页 →</small>06c 起一个数千芯片多切片训练</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#1-为什么选-deepseek-v3-671b">1. 为什么选 DeepSeek-V3 671B</a></li><li class="l2"><a href="#2-配方一览">2. 配方一览</a></li><li class="l2"><a href="#3-生成与提交-jobset">3. 生成与提交 JobSet</a></li><li class="l2"><a href="#4-flag-逐条解释">4. flag 逐条解释</a></li><li class="l2"><a href="#5-hbm-核对在-cpu-上把-10-片编一遍aot-实测">5. HBM 核对：在 CPU 上把 10+ 片编一遍（AOT 实测）</a></li><li class="l2"><a href="#6-起-pod-到首步">6. 起 pod 到首步</a></li><li class="l2"><a href="#7-验收每一级过这-5-条">7. 验收：每一级过这 5 条</a></li><li class="l2"><a href="#8-还没做的--已知风险">8. 还没做的 / 已知风险</a></li><li class="l2"><a href="#检查点">检查点</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>13 · 静默错误总表：跑通了，不等于对了 · MoE 训练优化</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="moe">
+<link rel="stylesheet" href="../../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="../..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../../index.html"><span class="crab">🦀</span><span class="bt">MoE 训练优化</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../../index.html" class="">首页</a><a class="on" href="README.html">专题</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（/ 聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="专题"><div class="side-h">专题</div><ol><li><a href="README.html">一个 MoE 模型在 TPU v7x 上的训练优化</a></li><li><a href="01-model-and-baseline.html">01 · 量法与口径：这是个什么模型，时间花在哪，怎么量才不自欺</a></li><li><a href="02-collective-scheduling-and-overlap.html">02 · 集合通信调度与重叠：搬的时机比搬的速度更要命</a></li><li><a href="03-dcn-and-multislice.html">03 · DCN 与多切片：把单片的优化搬到 10+ 片</a></li><li><a href="04-fp8-quantization.html">04 · FP8：稠密乘法</a></li><li><a href="05-kernels-kda-mla-moe.html">05 · KDA / MLA / MoE kernel：手写的算子要过三关</a></li><li><a href="06-memory-remat-compile.html">06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</a></li><li><a href="07-data-and-checkpointing.html">07 · 数据与检查点：训练跑顺之后，时间从哪漏走</a></li><li><a href="08-open-problems.html">08 · 未解决问题：下一个集群的实验清单</a></li><li><a href="09-ablation-ladder.html">09 · 消融阶梯：一刀一刀拆掉，看每一刀值多少</a></li><li><a href="10-optimization-roadmap.html">10 · 优化依赖图：哪刀先哪刀后、为什么这个顺序</a></li><li><a href="11-porting-checklist.html">11 · 迁移清单</a></li><li><a href="12-multimodal-and-numerics-alignment.html">12 · 多模态版与精度对拍</a></li><li><a class="on" aria-current="page" href="13-silent-errors.html">13 · 静默错误总表：跑通了，不等于对了</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../../index.html">首页</a> › <a href="README.html">专题</a> › <span>13 · 静默错误总表：跑通了，不等于对了</span></nav><article class="md"><h1 id="13--静默错误总表跑通了不等于对了">13 · 静默错误总表：跑通了，不等于对了</h1>
+<p><strong>要解决的问题</strong>：跑通、不报错、loss 看着正常，结果却是错的，或者优化根本没生效。这类错怎么分类、每类最便宜怎么抓、上线前查什么？01–12 章里的静默错误收在 §2 一张总表里，另有几条是本章新增的。</p>
+<p><strong>按什么顺序查</strong>（左边不过，右边的结论都不能信；「先校秤再谈快慢」是硬顺序，其余先后是本章的建议排法）：</p>
+<figure class="mermaid"><img src="../../assets/mermaid/f89dc403fcc5.png" width="1169" alt="示意图" loading="lazy"></figure><div class="kp kc0"><div class="kp-t">一句话结论</div>
+<ul>
+<li><strong>静默错误＝跑通、不报错、loss 看着正常，但结果是错的，或者优化根本没生效</strong>。不打断训练就没人查；查到时前面几周的 A/B 往往都要重做。</li>
+<li><strong>最贵的不是 bug 本身，是它污染的那批结论</strong>：FP8 配方静默退回 BF16 时，期间所有 A/B 都作废（<a href="04-fp8-quantization.html#9-%E9%AA%8C%E8%AF%81%E5%88%AB%E9%9D%99%E9%BB%98%E9%80%80%E5%9B%9E-bf16">04 §9</a>）；两个「快约 50%」「快约 40%」其实一个算错、一个梯度全 0（<a href="02-collective-scheduling-and-overlap.html#3-%E6%98%BE%E5%BC%8F-all-gather%E5%88%AB%E8%AE%A9-gspmd-%E6%8A%8A%E6%9D%83%E9%87%8D%E6%94%B6%E9%9B%86%E9%80%80%E5%8C%96%E6%88%90%E5%85%A8%E7%BD%91%E6%A0%BC-ar">02 §3</a> 的 WARN）。</li>
+<li><strong>先校秤，再看数</strong>：profiler 会悄悄丢 trace、FLOPs 公式会走错分支、异步计时会把一步的秒数记到别的步上。秤不准时，所有「快了 / 慢了」都不能信（§3）。</li>
+<li><strong>跨框架对拍抓到的问题，大多 loss 看不出来</strong>：初始化尺度差几倍、aux loss 恒为 0、qk_clip 从没触发过，曲线都和对照「看着差不多」（§4）。</li>
+<li><strong>分布式状态的错最难抓</strong>：第 0 步逐位一致，之后单调漂；1000 步后才差到约 −5%（§5）。</li>
+</ul></div>
+<div class="x-stats">
+<ul>
+<li><strong>约 1/7</strong> 的优化项涉及静默错误 <span class="tg inf">[推断：按类别粗估，非逐项标注]</span></li>
+<li><strong>一整段</strong> FP8 A/B 因静默退回 BF16 作废；所有修复都意味着之前的 A/B 要重做</li>
+<li><strong>第 199 步</strong> 路由 ID 配错，loss 才差到能看出来的程度（13.658 vs 13.547）</li>
+<li><strong>第 0 步逐位一致 → 第 1000 步差约 −5%</strong> 联合 all-gather 反向的分片顺序错</li>
+<li><strong>约 27 倍</strong> scan 模式下 z-loss 被算成 0 前后的差（lm_loss 逐位一致）</li>
+<li><strong>22 倍</strong> scan 与 unscan 对 Megatron 的平均偏差之比（小模型，900 步）</li>
+<li><strong>0 → 几十万</strong> 修 profiler 选项前后，每个设备 plane 上的事件数</li>
+</ul>
+</div>
+<hr />
+<h2 id="1-为什么静默错误是-moe-大规模训练的头号成本" class="hc0"><span class="hn">1.</span>为什么静默错误是 MoE 大规模训练的头号成本</h2>
+<p><strong>它们不报错，只改数</strong>，要等有人拿两个数对不上去追，往往晚几周才被发现。MoE 大规模训练特别容易出，四个原因叠在一起：</p>
+<ul>
+<li><strong>开关多，生效路径多</strong>。同一个 FP8 配方要经过配置校验、模型构建、量化注入、AOT 编译、运行时读取五处，任一处用了不同的判断（<code>==</code> 对 <code>startswith</code>、正则对模块路径），就会<strong>静默退回 BF16</strong>（<a href="04-fp8-quantization.html#9-%E9%AA%8C%E8%AF%81%E5%88%AB%E9%9D%99%E9%BB%98%E9%80%80%E5%9B%9E-bf16">04 §9</a>）。</li>
+<li><strong>AOT 和运行时是两个进程</strong>。AOT 是在 CPU 机器上提前把程序编好存成 pickle，TPU 上的训练进程只加载它，所以编译端和训练端读的不是同一份配置，flag、LR、remat 策略可以各说各话，而 pickle 名字里不带这些（<a href="06-memory-remat-compile.html#8-%E7%BC%96%E8%AF%91%E6%8C%AA%E5%88%B0-cpu-%E4%B8%8A%E4%BA%A4%E5%8F%89-aot">06 §8</a>）。</li>
+<li><strong>MoE 的错常常只影响少数专家或少数 device</strong>。路由 ID 配错、scale 按形状推断错、CP 下 bias 各 device 各算各的，平均到全局 loss 上不到 1%，要几百步才看得出。</li>
+<li><strong>loss 是最不灵敏的指标</strong>。好几类错根本不进 lm_loss（§4 末图）。</li>
+</ul>
+<blockquote>
+<p><strong>为什么</strong>：<strong>错的东西要么根本不进 lm_loss，要么只占一小部分、被平均掉，曲线照样往下走</strong>。前一条有实测（§4 表 4.4）；后一条（只错部分专家／token、被全 token 平均稀释）本书没有实测案例 <span class="tg inf">[推断]</span>。所以兜底退回要改成直接报错，并在产物上验：HLO 里有 f8 乘法、该生效的计数大于 0。</p>
+<p><sub>把握：推断 · 出处：本书 §4 的数据；稀释那条未实测，判据是故意只弄坏一个专家，看 lm_loss 偏差多少步后才超出噪声</sub></p>
+</blockquote>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>判据</span></span>「意外的大收益」先默认是静默错误：查 HLO 里有没有该有的 op、loss 对不对、计时口径变没变（02 章两个大加速、04 章因 FP8 静默退回而作废的 A/B 都是这么来的）。</p>
+</blockquote>
+<hr />
+<h2 id="2-总表" class="hc1"><span class="hn">2.</span>总表</h2>
+<p>按症状分五组。「怎么抓」一列只写<strong>最便宜</strong>的那个检测手段；能 grep 的不跑实验，能看第 0 步的不跑一千步。编号供 §6 和别章引用。</p>
+<h3 id="21-数值错结果错但跑得下去">2.1 数值错（结果错，但跑得下去）</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>症状</th>
+<th>根因</th>
+<th>怎么抓</th>
+<th>详见</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>N01</td>
+<td>loss 比对照高一点点，几百步后才分开</td>
+<td>MoE <code>permute()</code> 出来的权重按 token 排序（token-major），专家 ID 按专家排序（expert-major），两列顺序不同却按位置直接配对，routed 梯度送错专家</td>
+<td>拿 unfused 路径跑同一 batch，比第 0 步梯度</td>
+<td><a href="05-kernels-kda-mla-moe.html#91-fused-moe-%E7%9A%84%E8%B0%83%E5%8F%82%E9%99%B7%E9%98%B1%E4%B8%8E%E9%9D%99%E9%BB%98%E9%94%99">05 §9.1 fused MoE 调参陷阱</a></td>
+</tr>
+<tr>
+<td>N02</td>
+<td>路由偏斜时 loss 偏</td>
+<td>路由 scratch 按「平均每专家多少 token」定容量，热点专家写出界、覆盖相邻专家的数据</td>
+<td>构造偏斜路由的单测，比 unfused 路径</td>
+<td><a href="05-kernels-kda-mla-moe.html#91-fused-moe-%E7%9A%84%E8%B0%83%E5%8F%82%E9%99%B7%E9%98%B1%E4%B8%8E%E9%9D%99%E9%BB%98%E9%94%99">05 §9.1 fused MoE 调参陷阱</a></td>
+</tr>
+<tr>
+<td>N03</td>
+<td>某些形状下梯度出 NaN；tile 扫描里最快的那组参数</td>
+<td>GMM v2 尾部 tile 读到越界数据；ragged 输出有未初始化的行；扫描只看耗时，最快的候选恰是 NaN</td>
+<td>用不整除 tile 的形状跑单测；扫描脚本加数值校验，NaN 直接淘汰</td>
+<td><a href="05-kernels-kda-mla-moe.html#10-kernel-%E5%9D%91%E9%9D%99%E9%BB%98%E9%94%99%E4%B8%8E%E8%B0%83%E5%8F%82%E9%99%B7%E9%98%B1">05 §10</a></td>
+</tr>
+<tr>
+<td>N04</td>
+<td>FP8 反向梯度偏，只在某些切分下</td>
+<td><code>_gmm_bwd</code> 按形状推断 scale 归属，每个 device 只有一个本地专家时大部分行用错 scale</td>
+<td>单专家 / 多专家两种切分各跑一次，比梯度</td>
+<td><a href="04-fp8-quantization.html#41-%E4%BA%94%E9%81%93%E9%94%81">04 §4.1 五道锁</a></td>
+</tr>
+<tr>
+<td>N05</td>
+<td>FP8 下所有专家用同一个 scale</td>
+<td>megablox 路径只取第 0 个专家的 scale</td>
+<td>打印各专家 scale，看是否全等</td>
+<td><a href="04-fp8-quantization.html#41-%E4%BA%94%E9%81%93%E9%94%81">04 §4.1 五道锁</a></td>
+</tr>
+<tr>
+<td>N06</td>
+<td>FP8 blockwise 反向在大 tile 下错</td>
+<td>tgmm 的子块循环次数用了 K 方向 tile 而不是 M 方向</td>
+<td>tile 跨 128 两侧各跑一次对拍</td>
+<td><a href="10-optimization-roadmap.html#6-%E7%AC%AC%E4%BA%94%E5%B1%82fp8--qag">10 §6</a> 末「别章已展开」→ <a href="04-fp8-quantization.html#21-gpu-%E5%BC%8F-blockwise-%E5%9C%A8-tpu-%E4%B8%8A%E4%B8%BA%E4%BB%80%E4%B9%88%E6%85%A2">04 §2.1 blockwise 一节</a></td>
+</tr>
+<tr>
+<td>N07</td>
+<td>梯度范数大了几个数量级，loss 还在降</td>
+<td>vocab tiling 反向漏乘上游 cotangent（<code>raw_grad_norm</code> 约 675K，正确约 0.36）</td>
+<td>看第 0 步 grad norm 的量级</td>
+<td><a href="06-memory-remat-compile.html#6-loss-%E5%A4%B4%E5%92%8C-mtp-%E7%9A%84%E7%9C%81%E6%98%BE%E5%AD%98%E6%94%B9%E5%8A%A8">06 §6</a></td>
+</tr>
+<tr>
+<td>N08</td>
+<td>MTP loss 只有一半，或恒为 0</td>
+<td>Flax <code>sow</code> 用 APPEND 累加了两份；上游 <code>nnx.pop</code> 覆盖掉 MTP 的值</td>
+<td>单独打印 MTP loss，和手算比</td>
+<td><a href="06-memory-remat-compile.html#6-loss-%E5%A4%B4%E5%92%8C-mtp-%E7%9A%84%E7%9C%81%E6%98%BE%E5%AD%98%E6%94%B9%E5%8A%A8">06 §6</a></td>
+</tr>
+<tr>
+<td>N09</td>
+<td>Muon 更新幅度偏</td>
+<td>Newton-Schulz 在 bf16 里算；MLA 投影按块正交化的分块配置填成了每头维度，按错的块正交化；一处性能改动顺带改了默认 dtype</td>
+<td>关 Muon 批量路径对拍单步更新</td>
+<td><a href="06-memory-remat-compile.html#5-muon-%E4%BC%98%E5%8C%96%E5%99%A8%E6%95%B0%E5%80%BC%E7%BC%96%E8%AF%91%E9%80%9A%E4%BF%A1%E4%B8%89%E7%B1%BB%E4%BF%AE%E6%B3%95">06 §5</a></td>
+</tr>
+<tr>
+<td>N10</td>
+<td>KDA 层输出和参考差一截</td>
+<td>短卷积少了翻转；beta 默认没过 sigmoid；gated RMSNorm 实际没开</td>
+<td>逐层对拍 KDA 输出，先看第 0 步</td>
+<td><a href="05-kernels-kda-mla-moe.html#1-%E8%83%8C%E6%99%AFkda-%E6%98%AF%E4%BB%80%E4%B9%88%E6%97%B6%E9%97%B4%E8%8A%B1%E5%9C%A8%E5%93%AA">05 §1</a></td>
+</tr>
+<tr>
+<td>N11</td>
+<td>长 packed 序列上 KDA 输出偏</td>
+<td>超过 25 个 segment 的部分被置零；varlen 状态在文档间泄漏</td>
+<td>构造 &gt;25 段的样本单测</td>
+<td><a href="12-multimodal-and-numerics-alignment.html#51-a-%E7%B1%BBtpu-%E7%9C%9F%E7%AE%97%E9%94%99%E4%BA%86">12 §5.1</a></td>
+</tr>
+<tr>
+<td>N12</td>
+<td>SwiGLU clip 边界上梯度只剩一半</td>
+<td><code>jnp.clip</code> 在恰好等于边界的点回传 1/2 梯度，参考实现回传全部；clip 作用的层范围也配错</td>
+<td>对边界点做数值梯度检查</td>
+<td><a href="12-multimodal-and-numerics-alignment.html#51-a-%E7%B1%BBtpu-%E7%9C%9F%E7%AE%97%E9%94%99%E4%BA%86">12 §5.1</a></td>
+</tr>
+<tr>
+<td>N13</td>
+<td>多片上数值偶发错</td>
+<td>split-AR 把静态切片改写成 RS，并把 iota replica group 读成整张 mesh</td>
+<td>开、关 HLO 通信重排各跑一步比 loss</td>
+<td><a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7 HLO 通信重排一节</a></td>
+</tr>
+<tr>
+<td>N14</td>
+<td>跨迭代预取读到下一代数据</td>
+<td>跨迭代双缓冲读成第 j+1 代；DCN AR 合并时丢了 ISSUE 归属</td>
+<td>对重排后的 HLO 做依赖检查</td>
+<td><a href="03-dcn-and-multislice.html#11-dcn-%E6%B5%81%E6%B0%B4%E4%B8%8E%E5%88%86%E5%8C%BA%E8%B0%83%E5%BA%A6">03 §11 私有 DCN pass 一节</a></td>
+</tr>
+<tr>
+<td>N15</td>
+<td>「快约 50%」「快约 40%」</td>
+<td>megablox 忽略 <code>weight_gather_axes</code>（loss 5.98）；a2a CP 路径无条件 <code>stop_gradient</code>，KDA 梯度全 0</td>
+<td>加速超出预期就先看 loss 和梯度范数</td>
+<td><a href="02-collective-scheduling-and-overlap.html#3-%E6%98%BE%E5%BC%8F-all-gather%E5%88%AB%E8%AE%A9-gspmd-%E6%8A%8A%E6%9D%83%E9%87%8D%E6%94%B6%E9%9B%86%E9%80%80%E5%8C%96%E6%88%90%E5%85%A8%E7%BD%91%E6%A0%BC-ar">02 §3 的 WARN</a></td>
+</tr>
+<tr>
+<td>N16</td>
+<td>MLA 对拍有一点点系统偏差；换到 GPU 路径偏差更大</td>
+<td>Splash 把 scale（含 YaRN mscale）乘在 query、用 base2 指数，Megatron 乘在 logits、用 e 指数。修法：scale 作 logits scale 传 kernel、关 base2；改后 1000 步 loss 差约 −0.001%</td>
+<td>逐条 attention 路径数「scale 乘了几次」，应恰好一次；第 0 步比 logits。坑：GPU cuDNN 路径缩了两次，CI 覆盖不到</td>
+<td><a href="12-multimodal-and-numerics-alignment.html#53-c-%E7%B1%BB%E4%B8%A4%E8%BE%B9%E5%86%99%E6%B3%95%E4%B8%8D%E5%90%8C%E8%A6%81%E9%80%89%E5%8F%A3%E5%BE%84%E9%83%BD%E4%B8%8D%E7%AE%97%E9%94%99">12 §5.3</a></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="22-优化静默不生效开了但没开上">2.2 优化静默不生效（开了，但没开上）</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>症状</th>
+<th>根因</th>
+<th>怎么抓</th>
+<th>详见</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>O01</td>
+<td>开了 FP8 不快；配置校验通过，运行时不是那个配方</td>
+<td>校验写 <code>== &quot;fp8_full&quot;</code>，运行时用 <code>startswith</code>，二者不一致时 blockwise GMM 静默走 BF16</td>
+<td><code>grep f8e4m3fn</code> 编译后 HLO</td>
+<td><a href="04-fp8-quantization.html#9-%E9%AA%8C%E8%AF%81%E5%88%AB%E9%9D%99%E9%BB%98%E9%80%80%E5%9B%9E-bf16">04 §9</a></td>
+</tr>
+<tr>
+<td>O02</td>
+<td>AOT 出来的整个程序是 BF16；首尾层 BF16 开关没效果</td>
+<td>AOT 路径跳过 <code>maybe_quantize_model</code>；首尾层 BF16 三键是空操作</td>
+<td>查 AOT 产物 HLO 里各层的 dtype</td>
+<td><a href="04-fp8-quantization.html#9-%E9%AA%8C%E8%AF%81%E5%88%AB%E9%9D%99%E9%BB%98%E9%80%80%E5%9B%9E-bf16">04 §9</a></td>
+</tr>
+<tr>
+<td>O03</td>
+<td>开了 QAG 通信没减半</td>
+<td>条件不满足时 QAG 静默跳过；scan 里 Qwix 路径匹配不上</td>
+<td>看 all-gather 的 dtype 是否为 FP8</td>
+<td><a href="04-fp8-quantization.html#9-%E9%AA%8C%E8%AF%81%E5%88%AB%E9%9D%99%E9%BB%98%E9%80%80%E5%9B%9E-bf16">04 §9</a></td>
+</tr>
+<tr>
+<td>O04</td>
+<td>某个模块没被量化</td>
+<td>量化规则用正则匹配模块路径，路径一变就静默跳过</td>
+<td>打印量化规则命中的模块清单；再按模块数编译后 HLO 里的 f8 乘法，和应量化清单对账（<a href="04-fp8-quantization.html#91-%E8%AF%A5%E9%87%8F%E5%8C%96%E7%9A%84%E5%B1%82%E6%98%AF%E4%B8%8D%E6%98%AF%E9%83%BD%E9%87%8F%E5%8C%96%E4%BA%86%E6%95%B0-hlo-%E9%87%8C%E7%9A%84-f8-%E4%B9%98%E6%B3%95">04 §9.1</a>）</td>
+<td><a href="11-porting-checklist.html#a08--fp8-%E8%AE%AD%E7%BB%83%E9%85%8D%E6%96%B9qwix-fp8_fullhybrid%E5%89%8D%E5%90%91-e4m3--%E6%A2%AF%E5%BA%A6-e5m2per-expert-%E6%9D%83%E9%87%8D-scale%E6%9C%AB-2-%E5%B1%82-bf16">11 A08</a></td>
+</tr>
+<tr>
+<td>O05</td>
+<td>HLO 通信重排没生效</td>
+<td>AOT 编译时没带 HLO 通信重排配置，重排全部静默跳过</td>
+<td>看 pass 的计数器输出，0 就是没跑</td>
+<td><a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7 HLO 通信重排一节</a></td>
+</tr>
+<tr>
+<td>O06</td>
+<td>两阶段 RS 开了没效果</td>
+<td>拆分段被 placement 的 192 MiB 大小阈值过滤，选中 0 对</td>
+<td>同上，看被选中的数量</td>
+<td><a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7 HLO 通信重排一节</a></td>
+</tr>
+<tr>
+<td>O07</td>
+<td>调好的 kernel 配置没上生产</td>
+<td>查找表没同步，生产走默认</td>
+<td>在训练里打印实际用的 tile</td>
+<td><a href="05-kernels-kda-mla-moe.html#91-fused-moe-%E7%9A%84%E8%B0%83%E5%8F%82%E9%99%B7%E9%98%B1%E4%B8%8E%E9%9D%99%E9%BB%98%E9%94%99">05 §9.1 fused MoE 调参陷阱</a></td>
+</tr>
+<tr>
+<td>O08</td>
+<td>CPU AOT 出来的程序慢 2–3%</td>
+<td>漏设 kernel 库的目标平台环境变量，走了 JAX 参考实现</td>
+<td>在 HLO 里找 Pallas custom-call</td>
+<td><a href="05-kernels-kda-mla-moe.html#1-%E8%83%8C%E6%99%AFkda-%E6%98%AF%E4%BB%80%E4%B9%88%E6%97%B6%E9%97%B4%E8%8A%B1%E5%9C%A8%E5%93%AA">05 §1</a></td>
+</tr>
+<tr>
+<td>O09</td>
+<td>remat 策略改了，显存不变</td>
+<td>残差名字和 <code>checkpoint_name</code> 对不上（kda_residuals、GLA 线性注意力层）</td>
+<td>改前改后比编译期 temp，相同就是没生效</td>
+<td><a href="11-porting-checklist.html#c03--kda_residuals%E8%AE%A9-remat-%E7%9C%8B%E8%A7%81-custom_vjp-kernel-%E7%9A%84%E4%B8%AD%E9%97%B4%E9%87%8F">11 C03</a></td>
+</tr>
+<tr>
+<td>O10</td>
+<td>EP=1 时某个专家侧优化无效</td>
+<td>依赖 EP 维的优化（如 RoE）在 EP=1 时是空操作</td>
+<td>读代码确认生效条件</td>
+<td>本章新增</td>
+</tr>
+<tr>
+<td>O11</td>
+<td>训练端和编译端的 flag 不一样</td>
+<td>flag 只在 AOT 里设；pickle 名不含 remat / Muon；没有指纹；LR 被烤进 HLO</td>
+<td>给 AOT 产物加配置指纹，加载时比对</td>
+<td><a href="06-memory-remat-compile.html#8-%E7%BC%96%E8%AF%91%E6%8C%AA%E5%88%B0-cpu-%E4%B8%8A%E4%BA%A4%E5%8F%89-aot">06 §8</a></td>
+</tr>
+<tr>
+<td>O12</td>
+<td>删掉一个 CLI 键表示「关」，两边读到不同值</td>
+<td>编译端回落到 base.yml，训练端读别的配置</td>
+<td>显式写 <code>quantization=</code>，不要靠删键</td>
+<td><a href="09-ablation-ladder.html#46-%E7%AC%AC-7-%E7%BA%A7%E6%95%B4%E4%B8%AA-fp8--bf16">09 §4.6</a></td>
+</tr>
+<tr>
+<td>O13</td>
+<td>升 libtpu 后 Muon 数值变了</td>
+<td>新版本改了 NS 的数值行为</td>
+<td>升级前后跑同一步对拍</td>
+<td><a href="06-memory-remat-compile.html#5-muon-%E4%BC%98%E5%8C%96%E5%99%A8%E6%95%B0%E5%80%BC%E7%BC%96%E8%AF%91%E9%80%9A%E4%BF%A1%E4%B8%89%E7%B1%BB%E4%BF%AE%E6%B3%95">06 §5</a></td>
+</tr>
+<tr>
+<td>O14</td>
+<td>升 kernel 库 pin，loss 对齐但慢约 7 倍</td>
+<td>新版本性能回退，loss 检查放过</td>
+<td>升 pin 时 loss 和步时一起看</td>
+<td><a href="05-kernels-kda-mla-moe.html#3-pallas-%E5%8D%87%E7%89%88%E4%B8%8E-mega-kernel--costestimate">05 §3</a></td>
+</tr>
+<tr>
+<td>O15</td>
+<td>yml 里开了 gated attention，checkpoint 里也有 <code>g_proj</code> 权重，却不报错</td>
+<td>MLA 构造函数漏传门控注意力类型键：配置写按头门控，实际不门控；<code>g_proj</code> 被加载、前向从不用</td>
+<td><strong>权重里有、前向没用到</strong>：查每个加载参数在不在前向图里（或梯度恒 0）；按配置项 grep 构造函数有没有传下去</td>
+<td><a href="11-porting-checklist.html#%E9%99%84%E6%96%B0%E6%A8%A1%E5%9E%8B%E6%8E%A5%E8%BF%9B%E6%A1%86%E6%9E%B6%E6%97%B6%E7%9A%84%E9%9D%99%E9%BB%98%E6%8E%A5%E7%BA%BF%E5%9D%91">11 附：静默接线坑</a></td>
+</tr>
+<tr>
+<td>O16</td>
+<td>新模型的 MoE 负载均衡指标、expert counts 一直没有，训练照跑</td>
+<td>训练入口三处写死旧模型枚举，新模型不在名单里，整段静默跳过（§4 表 4.4 是路径名找不到，这条是枚举分支没进去）</td>
+<td><strong>全仓 grep 旧模型枚举名</strong>，逐处问新模型该不该进；指标为空时报错不跳过</td>
+<td><a href="11-porting-checklist.html#%E9%99%84%E6%96%B0%E6%A8%A1%E5%9E%8B%E6%8E%A5%E8%BF%9B%E6%A1%86%E6%9E%B6%E6%97%B6%E7%9A%84%E9%9D%99%E9%BB%98%E6%8E%A5%E7%BA%BF%E5%9D%91">11 附：静默接线坑</a></td>
+</tr>
+<tr>
+<td>O17</td>
+<td>高 GA（梯度累加步数）下 AOT 编译 OOM，GA=1 时放得下</td>
+<td>先 RS 再累加 ＝ 先累加再 RS，XLA 据此把专家权重梯度（dW）的 RS 挪到 GA 循环外，于是 GA 循环里累加的梯度从切好的一份变成整份未切分的。修法：dW 的 RS 后插 optimization barrier（对应一个防梯度 RS 上提的开关，默认关，本书未验证，<strong>未收进 11 清单</strong>）</td>
+<td>比 GA=1 与 GA&gt;1 的编译期 temp，猛涨就查 RS 外提。坑见表下注</td>
+<td><a href="11-porting-checklist.html#b05--ga--1-%E6%97%B6%E9%98%BB%E6%AD%A2%E4%B8%93%E5%AE%B6%E6%9D%83%E9%87%8D-all-gather-%E8%A2%AB%E6%8F%90%E5%88%B0%E5%BE%AA%E7%8E%AF%E5%A4%96">11 B05</a>（B05 收进的是前向权重 AG 外提；这条反向 dW RS 外提是它的姊妹开关，11 清单在 B05 条下判为不收）</td>
+</tr>
+<tr>
+<td>O18</td>
+<td>placement pass 摆放效果不如预期，不报错</td>
+<td>在嵌套的完全外提 1→1 链里找不到上一个 stage 的 producer，搜索悄悄退化成只看下一个 stage 那一段</td>
+<td>给 pass 加「搜索区实际覆盖了哪些段」的日志 / 回归测试，覆盖嵌套外提链</td>
+<td><a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7 HLO 通信重排一节</a></td>
+</tr>
+<tr>
+<td>O19</td>
+<td>开了 FP8，MTP 层还是 BF16</td>
+<td>Qwix scope 前缀传不过 <code>ToNNX</code> 边界、外加递归深度上限（O04 之外第二个原因）；改法：前缀跨 <code>ToNNX</code> 传播、去掉深度上限</td>
+<td>打印命中模块清单，<strong>确认 MTP 层在里面</strong>；查 HLO 里 MTP 那段的 dtype</td>
+<td><a href="04-fp8-quantization.html#9-%E9%AA%8C%E8%AF%81%E5%88%AB%E9%9D%99%E9%BB%98%E9%80%80%E5%9B%9E-bf16">04 §9</a></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>O17 的坑：仅专家按 FSDP 切且走 QAG / 强制 gather 时生效，否则<strong>静默无效</strong>；两阶段 AG、megablox 非 tokamax 分支不受保护；与 batch_split 互斥（同开报错）；GA&gt;1 数值未对拍。</li>
+</ul>
+<h3 id="23-量法错秤不准">2.3 量法错（秤不准）</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>症状</th>
+<th>根因</th>
+<th>怎么抓</th>
+<th>详见</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>M01</td>
+<td>第 1 步只要几秒；存档那步算出物理上不可能的 TFLOP/s</td>
+<td>异步派发：日志里的步时是 N−2 步的；异步存档的秒数溢出到相邻步</td>
+<td>加一次 <code>block_until_ready</code> 对照；存档步单独标记、剔出统计</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a>、§3.3</td>
+</tr>
+<tr>
+<td>M02</td>
+<td>打开 dumper 后慢了约 5%</td>
+<td>dumper 强制同步</td>
+<td>测速时关掉所有 dumper</td>
+<td><a href="07-data-and-checkpointing.html#11-%E6%95%B0%E6%8D%AE%E7%AE%A1%E7%BA%BF%E9%80%A0%E6%88%90%E7%9A%84%E6%80%AA%E7%8E%B0%E8%B1%A1">07 §1.1</a></td>
+</tr>
+<tr>
+<td>M03</td>
+<td>MFU 偏低或 &gt;100%</td>
+<td>FLOPs 公式走错分支（KDA 走成 GQA）；上一代模型 TFLOP/s 虚高 4–6 倍</td>
+<td>手算一层 FLOPs 对公式输出</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a></td>
+</tr>
+<tr>
+<td>M04</td>
+<td>MFU 高了约 12%</td>
+<td>分母用了旧口径的 1028.75，不是 1153.5（1153.5 ÷ 1028.75 ≈ 1.12）；芯片与 device 混用</td>
+<td>分母只写一处，标明是每 device</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a></td>
+</tr>
+<tr>
+<td>M05</td>
+<td>trace 里没有设备事件</td>
+<td>ProfileOptions 默认把设备 tracer 关了</td>
+<td>看 trace 文件大小，看设备 plane 事件数</td>
+<td>§3.1</td>
+</tr>
+<tr>
+<td>M06</td>
+<td>抓 profile 的那几步特别慢</td>
+<td>profiler 自己造成慢步</td>
+<td>慢步对照「是否在抓 profile」</td>
+<td><a href="09-ablation-ladder.html#21-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E7%9C%81%E4%B8%8B%E7%9A%84%E9%82%A3%E6%88%AA%E5%8E%BB%E4%BA%86%E5%93%AA">09 §2.1</a></td>
+</tr>
+<tr>
+<td>M07</td>
+<td>整段 MoE GMM 的耗时被算到 Shared Expert 上</td>
+<td>Pallas 外层 scope 丢失、<code>source_stack</code> 被污染，按源码位置归错</td>
+<td>按编译后 <code>tf_op</code> scope 归因</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a></td>
+</tr>
+<tr>
+<td>M08</td>
+<td>编译期 temp 说放得下，实机 OOM；HBM 读数超过 94.74 GiB</td>
+<td>temp 只是初筛，和实机峰值能差好几 GiB，两个方向都有；<code>max_utils</code> 报的是「逻辑」用量</td>
+<td>终判看实机 <code>peakBytesInUse</code></td>
+<td><a href="06-memory-remat-compile.html#101-%E7%BC%96%E5%AE%8C%E5%85%88%E7%9C%8B-hbm-%E9%97%B8%E8%A6%81%E8%AE%B0%E4%BD%99%E9%87%8F%E4%B8%8D%E5%8F%AA%E8%AE%B0%E8%BF%87%E6%B2%A1%E8%BF%87">06 §10.1</a></td>
+</tr>
+<tr>
+<td>M09</td>
+<td>显存估算偏低</td>
+<td>估算器把 6 种 FP8 dtype 算成 0 字节</td>
+<td>估算结果和编译期 temp 对一下</td>
+<td><a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7 HLO 通信重排一节</a></td>
+</tr>
+<tr>
+<td>M10</td>
+<td>微基准赢了，训练里反而慢</td>
+<td>微基准没设 DVFS p_state，差 8%</td>
+<td>微基准和训练用同一套环境变量</td>
+<td><a href="05-kernels-kda-mla-moe.html#91-fused-moe-%E7%9A%84%E8%B0%83%E5%8F%82%E9%99%B7%E9%98%B1%E4%B8%8E%E9%9D%99%E9%BB%98%E9%94%99">05 §9.1 fused MoE 调参陷阱</a></td>
+</tr>
+<tr>
+<td>M11</td>
+<td>「这次改动快了不到 1%」</td>
+<td>单次噪声可达 ±5%；同机成对跑后差值仍 &lt;1% 的，不下结论</td>
+<td>同机成对跑，报中位数</td>
+<td><a href="09-ablation-ladder.html#12-%E6%95%B0%E5%AD%97%E6%80%8E%E4%B9%88%E8%AF%BB">09 §1.2</a></td>
+</tr>
+<tr>
+<td>M12</td>
+<td>对拍差超过门槛</td>
+<td>GPU 自己重跑的差就是门槛的两倍；有符号均值和 MARE 混用</td>
+<td>先量对照自身的重跑差</td>
+<td><a href="12-multimodal-and-numerics-alignment.html#6-d-%E7%B1%BB%E5%B0%BA%E5%AD%90%E6%9C%AC%E8%BA%AB%E4%B8%8D%E5%87%86">12 §6</a></td>
+</tr>
+<tr>
+<td>M13</td>
+<td>「DCN 利用率 99%」</td>
+<td>分子分母口径不同</td>
+<td>不引用这个数</td>
+<td><a href="03-dcn-and-multislice.html#162-dcn-%E5%88%A9%E7%94%A8%E7%8E%87-99%E4%BB%8E%E5%93%AA%E6%9D%A5">03 §16.2</a></td>
+</tr>
+<tr>
+<td>M14</td>
+<td>逐层 dump 开了却没东西；没开 dump 的训练启动变慢</td>
+<td>① 编译路径<strong>无条件</strong> <code>jax.clear_caches()</code>，拖慢启动；② 初始化晚于编译，守卫读到「未开」，dump 静默失效；③ callback 要 <code>ordered=True</code></td>
+<td>开 / 关 dump 各跑一次，数层数、比启动时间；回归测试先改坏代码确认会红</td>
+<td><a href="12-multimodal-and-numerics-alignment.html#5-%E7%B2%BE%E5%BA%A6%E5%AF%B9%E6%8B%8D%E5%9B%9B%E7%B1%BB%E5%81%8F%E5%B7%AE%E5%85%88%E5%88%86%E6%B8%85%E6%98%AF%E8%B0%81%E7%9A%84%E9%97%AE%E9%A2%98">12 §5</a></td>
+</tr>
+<tr>
+<td>M15</td>
+<td>CI 一直只报一个失败，修完又冒一个</td>
+<td>CI 用 <code>pytest -x</code>，第一个失败就停，后面积累的 20 个单测失败（优化器注册缺失、并行度断言、NS 批量化等）全被挡在后面</td>
+<td>CI 不用 <code>-x</code>，跑全量、报失败总数</td>
+<td>本章新增</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="24-数据与状态">2.4 数据与状态</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>症状</th>
+<th>根因</th>
+<th>怎么抓</th>
+<th>详见</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D01</td>
+<td>loss 归一化的分母时对时错</td>
+<td><code>total_weights</code> 有竞争（perm∘perm）</td>
+<td>同一 batch 跑两遍比分母</td>
+<td><a href="07-data-and-checkpointing.html#11-%E6%95%B0%E6%8D%AE%E7%AE%A1%E7%BA%BF%E9%80%A0%E6%88%90%E7%9A%84%E6%80%AA%E7%8E%B0%E8%B1%A1">07 §1.1</a></td>
+</tr>
+<tr>
+<td>D02</td>
+<td>开 CP 后样本悄悄变少</td>
+<td>per-device batch &lt; 1 加 CP 时，发起 ID 对不上、样本被永久丢弃</td>
+<td>数每步实际消费的样本数</td>
+<td><a href="07-data-and-checkpointing.html#11-%E6%95%B0%E6%8D%AE%E7%AE%A1%E7%BA%BF%E9%80%A0%E6%88%90%E7%9A%84%E6%80%AA%E7%8E%B0%E8%B1%A1">07 §1.1</a></td>
+</tr>
+<tr>
+<td>D03</td>
+<td>恢复后数据重复或跳过</td>
+<td>检查点不存数据迭代器；状态绑死 host 数；samples 模式差一</td>
+<td>恢复前后各打印下一个样本 ID</td>
+<td><a href="07-data-and-checkpointing.html#2-%E6%95%B0%E6%8D%AE%E4%BD%8D%E7%BD%AE%E5%86%99%E8%BF%9B%E6%A3%80%E6%9F%A5%E7%82%B9%E4%B8%8E-host-%E6%95%B0%E8%A7%A3%E8%80%A6">07 §2</a></td>
+</tr>
+<tr>
+<td>D04</td>
+<td>CP 下 routed bias 各 device 不一致</td>
+<td>expert_counts 的 psum 少了 context 轴；ring 路径漏 psum</td>
+<td>各 device 打印 bias 的标准差</td>
+<td><a href="11-porting-checklist.html#b04--%E9%95%BF%E4%B8%8A%E4%B8%8B%E6%96%87-cp-%E7%9A%84%E9%85%8D%E5%A5%97%E4%B8%93%E5%AE%B6-fsdp-%E5%88%87%E5%88%86--cp-%E8%AE%A1%E6%95%B0%E4%BF%AE%E5%A4%8D">11 B04</a></td>
+</tr>
+<tr>
+<td>D05</td>
+<td>CP / 联合 all-gather 下第 0 步对、之后慢慢漂</td>
+<td>线性注意力状态在 CP 分片边界断开；反向 reduce-scatter 的分片顺序错，梯度落到别的 device</td>
+<td>见 §5</td>
+<td>§5</td>
+</tr>
+<tr>
+<td>D06</td>
+<td>作业退出码 0，训练其实没跑完</td>
+<td>异常路径也走正常退出</td>
+<td>以最后一个检查点步数判定</td>
+<td><a href="07-data-and-checkpointing.html#8-exit-0%E4%B8%8D%E7%AD%89%E4%BA%8E%E8%AE%AD%E7%BB%83%E6%88%90%E5%8A%9F">07 §8</a></td>
+</tr>
+<tr>
+<td>D07</td>
+<td>硬件算错，loss 不报警</td>
+<td>硬件静默算错（SDC）；检查器只查 ICI / DCN，且自身改数值约 1e-4</td>
+<td>定期跑同输入对拍</td>
+<td><a href="07-data-and-checkpointing.html#9-%E7%A1%AC%E4%BB%B6%E9%9D%99%E9%BB%98%E7%AE%97%E9%94%99sdc%E6%A3%80%E6%9F%A5%E7%82%B9%E7%AD%96%E7%95%A5%E8%A6%81%E9%98%B2%E5%AE%83">07 §9</a></td>
+</tr>
+<tr>
+<td>D08</td>
+<td>同一个镜像标签，代码不一样</td>
+<td><code>:latest</code> 被特性分支覆盖</td>
+<td>用 digest 不用标签</td>
+<td><a href="10-optimization-roadmap.html#115-latest-%E9%95%9C%E5%83%8F%E6%A0%87%E7%AD%BE%E9%9D%99%E9%BB%98%E6%8D%A2%E4%BB%A3%E7%A0%81">10 §11.5</a></td>
+</tr>
+<tr>
+<td>D09</td>
+<td>MTC 恢复时千级 peer 一起干等 300 s，日志里没有致命错误</td>
+<td>注册 coordinator 的 PUT 遇 http2 断连，replicator 不重试不上报；shutdown barrier 与 restore 超时赛跑；absl 把 CRITICAL 当 VLOG 吞掉。修法：注册加重试、shutdown 超时参数化、修日志级别</td>
+<td>恢复阶段找日志里的长时间空白；目标规模上做一次断连注入</td>
+<td><a href="07-data-and-checkpointing.html#62-10-%E7%89%87%E5%B8%A6-mtc-%E7%9A%84%E6%B3%A8%E5%85%A5%E6%B5%8B%E8%AF%95">07 §6.2</a> 及其后「20+ 片一次」</td>
+</tr>
+<tr>
+<td>D10</td>
+<td>（安全）代码仓库令牌出现在日志里</td>
+<td>启动脚本把令牌拼进 <code>git config</code> URL，前面开着 <code>set -x</code>，令牌随命令回显进日志</td>
+<td>在日志里搜令牌前缀。修法：令牌走 credential helper 或 Secret 挂载，不进命令行；<strong>令牌必须轮换</strong>，否则泄出的那份仍有效</td>
+<td><a href="11-porting-checklist.html#%E9%99%84%E6%96%B0%E6%A8%A1%E5%9E%8B%E6%8E%A5%E8%BF%9B%E6%A1%86%E6%9E%B6%E6%97%B6%E7%9A%84%E9%9D%99%E9%BB%98%E6%8E%A5%E7%BA%BF%E5%9D%91">11 附：静默接线坑</a> 表后的 DANGER 块</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="25-监控假报">2.5 监控假报</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>症状</th>
+<th>根因</th>
+<th>怎么抓</th>
+<th>详见</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>W01</td>
+<td>router 统计 TPU 比 GPU 低 90% 多，loss 只差零点几</td>
+<td>统计在 sigmoid＋bias 后的分数上又做了一次 softmax</td>
+<td>先确认两边统计的定义</td>
+<td>§4 表 4.8</td>
+</tr>
+<tr>
+<td>W02</td>
+<td>aux 指标随 GA 放大</td>
+<td>指标没除以 GA 步数</td>
+<td>改 GA 前后比指标</td>
+<td>§4 表 4.2</td>
+</tr>
+<tr>
+<td>W03</td>
+<td>逐层统计突然全没了</td>
+<td>采集器按参数路径名找，路径一改就找不到，不报错</td>
+<td>采集器找不到时报错</td>
+<td>§4 表 4.4</td>
+</tr>
+<tr>
+<td>W04</td>
+<td>nightly 显示「已取消」，其实成功了</td>
+<td>轮询脚本吞了凭证过期的错误；真正的 FAIL 也一起丢了</td>
+<td>轮询失败单独报警</td>
+<td><a href="07-data-and-checkpointing.html#8-exit-0%E4%B8%8D%E7%AD%89%E4%BA%8E%E8%AE%AD%E7%BB%83%E6%88%90%E5%8A%9F">07 §8</a></td>
+</tr>
+<tr>
+<td>W05</td>
+<td>步时偏差监控一直不响</td>
+<td>uploader 的启停没接上配置（开关打开了也不生效）</td>
+<td>故意注入一个慢步验证</td>
+<td><a href="10-optimization-roadmap.html#113-%E7%9B%91%E6%8E%A7%E8%87%AA%E5%B7%B1%E7%9A%84%E5%9D%91%E5%A4%B1%E6%95%88%E5%B9%B3%E6%96%B9%E5%A2%9E%E9%95%BF">10 §11.3</a></td>
+</tr>
+<tr>
+<td>W06</td>
+<td>TensorBoard 曲线停了，进程 0 存档后变慢</td>
+<td>TensorBoard region 写死在另一区，跨区 copyTo 30 s 超时返回 503，uploader 反复重启</td>
+<td>监控上传进程重启次数；TensorBoard 与训练同 region</td>
+<td><a href="07-data-and-checkpointing.html#4-%E8%BF%9B%E7%A8%8B-0-%E5%AD%98%E6%A1%A3%E6%85%A2%E9%97%AE%E9%A2%98%E4%B8%A4%E4%B8%AA%E5%80%99%E9%80%89%E6%A0%B9%E5%9B%A0">07 §4</a>（候选根因 ②）</td>
+</tr>
+<tr>
+<td>W07</td>
+<td>部分 pod 的 goodput 指标没写</td>
+<td>文件名冲突阻塞写入，约一成 pod 受影响</td>
+<td>数实际写指标的 pod 数</td>
+<td><a href="07-data-and-checkpointing.html#8-exit-0%E4%B8%8D%E7%AD%89%E4%BA%8E%E8%AE%AD%E7%BB%83%E6%88%90%E5%8A%9F">07 §8</a></td>
+</tr>
+<tr>
+<td>W08</td>
+<td>FP8 精度门禁一直绿</td>
+<td>硬门禁没接上，有限值的发散也算通过；格式名拼错静默变成 e5m2</td>
+<td>故意喂一个坏 run 看门禁响不响</td>
+<td><a href="10-optimization-roadmap.html#64-ci-%E9%97%A8%E7%A6%81%E5%8F%AA%E6%B5%8B-bf16fp8-%E5%9B%9E%E5%BD%92%E6%BC%8F%E7%BD%91">10 §6.4</a></td>
+</tr>
+<tr>
+<td>W09</td>
+<td>对拍脚本说通过</td>
+<td>比较白名单放过了该比的字段</td>
+<td>抽查白名单</td>
+<td>本章新增</td>
+</tr>
+<tr>
+<td>W10</td>
+<td>注入的 kill 被报成芯片故障</td>
+<td>故障分类按现象不按来源</td>
+<td>对照注入日志</td>
+<td><a href="07-data-and-checkpointing.html#13-%E8%BF%98%E6%B2%A1%E8%A7%A3%E5%86%B3%E7%9A%84">07 §13</a></td>
+</tr>
+<tr>
+<td>W11</td>
+<td>goodput 报 44%，实际 37%；disruption 次数和 step 数一样多</td>
+<td>goodput 库两个 worker 进程共用一个 cache 文件，<code>threading.Lock</code> 管不到跨进程，每条记录写两遍</td>
+<td>disruption 数 ≈ step 数即重复记账；拿日志手算一次对照。修法：分开 <code>cache_dir</code> 或关 step deviation（该 API 已弃用）</td>
+<td>本章新增</td>
+</tr>
+<tr>
+<td>W12</td>
+<td>HBM 不可纠正错误（UE）告警从来不响，真出了 UE 也不响</td>
+<td>告警指标的关联键（主机名）和实际不一致，查不到序列、读数恒为 0；指标管道大规模下也取不全</td>
+<td>每个告警指标交付前用<strong>已知坏机或注入</strong>验证一次「看不看得见」；读数恒为 0 的指标当作不存在</td>
+<td>本章新增</td>
+</tr>
+<tr>
+<td>W13</td>
+<td>节点明明坏了，平台一直报 HEALTHY</td>
+<td>健康状态只说明节点活着：限频、致命 ICI link 后 all-reduce 慢十几倍 / 约 25% 都报 HEALTHY；GKE 状态晚好几小时；MegaScale 挂住没同步到节点标签</td>
+<td>按片跑 collective / GEMM / HBM 微基准，慢了 cordon 二分；<strong>按节点筛，不信池标签</strong></td>
+<td><a href="08-open-problems.html#%E9%99%84%E7%AC%AC%E4%B8%80%E5%91%A8%E5%B0%B1%E8%A6%81%E5%81%9A%E7%9A%84%E5%88%AB%E4%BF%A1%E5%B9%B3%E5%8F%B0%E7%9A%84-healthy">08 附：别信 HEALTHY</a></td>
+</tr>
+</tbody>
+</table></div>
+<p>五组分布：数值错 16、优化不生效 19、量法错 15、数据与状态 10（含一条安全）、监控假报 13。</p>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>「本章新增」那几行在 01–12 章基本没展开</span></span>例外：O10 在 <a href="10-optimization-roadmap.html#31-%E5%85%88%E7%AE%97-top-k-%E5%86%8D-all-gather">10 §3.1</a> 有一张概要卡。</p>
+</blockquote>
+<hr />
+<h2 id="3-先校秤三件套" class="hc2"><span class="hn">3.</span>先校秤三件套</h2>
+<h3 id="31-profiler-悄悄丢掉设备-trace">3.1 profiler 悄悄丢掉设备 trace</h3>
+<ul>
+<li><strong>现象</strong>：trace 能抓，文件也能打开，但只有 host 侧事件。修之前 trace 约 1.7 MB，修之后约 42 MB。</li>
+<li><strong>为什么错</strong>：<code>ProfileOptions</code> 把 <code>device_tracer_level</code> 设成 0，设备 tracer 整个没开。修后每个设备 plane 事件数从 0 变成几十万，SparseCore plane 从 0 变成二十万上下。修之前所有「SparseCore 上没活」「设备空闲」的读法都是看错了。</li>
+<li><strong>怎么校</strong>：抓完先看两样——<strong>文件大小</strong>和<strong>设备 plane 的事件数</strong>。是 0 就是 tracer 没开，不是设备闲。</li>
+</ul>
+<h3 id="32-flops-公式走错分支">3.2 FLOPs 公式走错分支</h3>
+<ul>
+<li><strong>现象</strong>：MFU 偏低，而且看不出原因。</li>
+<li><strong>为什么错</strong>：KDA 层落进 GQA 分支、按 softmax 注意力算；修后 chunk 内块求逆仍没计入（漏项细节见 <a href="08-open-problems.html">08 开头 WARN</a>）。反方向是上一代模型 TFLOP/s 虚高 4–6 倍、MFU &gt;100%（<a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a>）。</li>
+<li><strong>怎么校</strong>：手算一层的 FLOPs，和公式输出比。MFU &gt;100% 或比同类模型低一大截，先怀疑分子，再怀疑分母（每芯片还是每 device）。</li>
+</ul>
+<h3 id="33-异步计时把秒数记到别的步上">3.3 异步计时把秒数记到别的步上</h3>
+<ul>
+<li><strong>现象一</strong>：第 1 步日志显示的秒数只有实际的约 1/43（上一代模型，32 芯片）。日志里的 <code>seconds</code> 是 N−2 步的。</li>
+<li><strong>现象二</strong>：存档阻塞的秒数溢出到相邻几步，算出物理上不可能的 TFLOP/s（<a href="07-data-and-checkpointing.html#3-%E5%AD%98%E6%A1%A3%E4%B8%8D%E7%AD%89%E6%9C%80%E6%85%A2-host-%E5%BB%BA%E7%9B%AE%E5%BD%95%E9%9D%9E%E9%98%BB%E5%A1%9E%E4%BF%9D%E5%AD%98">07 §3</a>）。</li>
+<li><strong>为什么错</strong>：JAX 异步派发，见下图。</li>
+<li><strong>怎么校</strong>：步尾加一次 <code>block_until_ready</code> 对照；存档步剔出统计；测速关 dumper（M02）。</li>
+</ul>
+<figure class="img"><a href="figs/ch13-anim-async-timing.svg" target="_blank" title="新窗口看原图"><img src="figs/ch13-anim-async-timing.svg" alt="JAX 异步派发：Python 记下的是「派发完」的时间，不是「算完」的时间" loading="lazy"></a><figcaption>JAX 异步派发：Python 记下的是「派发完」的时间，不是「算完」的时间</figcaption></figure>
+<p><sub>比两个括号：只有下排量到的等于真实步时（示意）。</sub></p>
+<blockquote class="co tip">
+<p><span class="co-t"><i>✅</i><span>三件套的共同点</span></span>都不需要跑新实验。看文件大小、手算一层、加一行同步——几分钟就能做完，而每一个都推翻过一批结论。</p>
+</blockquote>
+<hr />
+<h2 id="4-跨框架对拍清单" class="hc3"><span class="hn">4.</span>跨框架对拍清单</h2>
+<p>同模型同数据在本书的 MaxText 实现和 Megatron 上对跑，下面八条都是这样抓到的「两边都不报错、但不一样」。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>差异</th>
+<th>后果</th>
+<th>怎么查</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>4.1</td>
+<td>初始化：对拍配置里 Megatron 侧用 N(0, 0.006)（Megatron 默认 0.02）、输出投影再 ÷√(2·层数)；MaxText 用 1/√fan_in 的 variance scaling。两者差几倍，差多少随 hidden 变</td>
+<td>只影响从零训练；接 checkpoint 时看不出来</td>
+<td>打印第 0 步各层参数的 std</td>
+</tr>
+<tr>
+<td>4.2</td>
+<td>aux loss / aux 指标没除以 GA 步数</td>
+<td>GA&gt;1 时负载均衡项被放大 GA 倍；GA=1 时看不出</td>
+<td>GA=1 和 GA=2 各跑一次，比 aux loss</td>
+</tr>
+<tr>
+<td>4.3</td>
+<td>LR 调度步数被硬编码成测试的总步数（100），warmup 比例跟着失真，不报错</td>
+<td>warmup 过快，第 1 步之后 loss「飞走」；修后第 0 步对 Megatron 差 0.003%</td>
+<td>打印前几步的 LR，和对照逐步比</td>
+</tr>
+<tr>
+<td>4.4</td>
+<td>scan 模式下 aux loss 采集器只认 unscan 的路径名</td>
+<td>lb / z-loss 静默为 0（z-loss 差约 27 倍），expert_counts 为 None 导致 routed bias 从不更新；lm_loss 逐位一致</td>
+<td>scan 与 unscan 各跑一步，比 aux loss；找不到路径时报错</td>
+</tr>
+<tr>
+<td>4.5</td>
+<td>scan 与 unscan 长跑漂移：900 步对 Megatron 的平均偏差 0.96% 对 0.04%，约 22 倍</td>
+<td>带 warmup 时最多偏低 1–2%；100 步的 CI 门禁不跑 scan，覆盖不到</td>
+<td>门禁里加 scan 配置的长跑。<strong>最可能的候选是 4.4</strong>（scan 下 routed bias 从不更新，负载均衡失效会随步数累积）<span class="tg inf">[推断：规约顺序误差也可能是原因，未定位；4.4 修复后未复测]</span></td>
+</tr>
+<tr>
+<td>4.6</td>
+<td>RMSNorm 的 dγ：fp32 转换被折进 reduce，实际按 bf16 粒度累加；短卷积也在 bf16 里累加，Megatron 是 fp32</td>
+<td>小偏差；测试容差太松，抓不到</td>
+<td>查优化后的 HLO 里 reduce 的 dtype</td>
+</tr>
+<tr>
+<td>4.7</td>
+<td>qk_clip 从没触发过：查找时漏了 AttentionOp 子模块，静默返回原参数</td>
+<td>继承自上游，基于上游的实现都受影响；因为 max logits 只有 26–41，远低于阈值 100，被掩盖了</td>
+<td>故意把阈值调低，看 logits 有没有被截</td>
+</tr>
+<tr>
+<td>4.8</td>
+<td>router 统计口径：在 sigmoid＋bias 的分数上又做了 softmax</td>
+<td>TPU 对 GPU 低 90% 以上，lm_loss 只差 0.06–0.23%，对训练零影响</td>
+<td>先对齐两边统计的定义再比数</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>loss 对齐 ≠ 对齐</span></span>4.4、4.7、4.8 三条 lm_loss 都和对照几乎一致，只比 loss 会全部放过。至少要再比：第 0 步各层参数 std、aux loss 各分项、前几步 LR、优化后 HLO 里关键 reduce 的 dtype。</p>
+</blockquote>
+<blockquote>
+<p><strong>为什么</strong>：<strong>lm_loss 只是一个标量平均，表里这些错要么不进它，要么只在特定条件下才起作用</strong>（见下图）。正常短程对拍里这些条件都不满足。</p>
+<ul>
+<li>旁证：业界公开的对齐判据也止于 loss 曲线重合，补的都是曲线之外的手段。</li>
+</ul>
+<p><sub>把握：推断 · 出处：本节表格；业界旁证：MegaScale（arXiv 2402.15627）§6.2 先在小模型上跑超过千亿 token 对齐再放大；Gemini 1.0 技术报告 §3 靠确定性重放加 SDC 扫描抓硬件静默算错，称约一两周碰到一次；Llama 3 论文表 5，419 次意外中断里 SDC 占 6 次</sub></p>
+</blockquote>
+<figure class="img"><a href="figs/ch13-loss-blind-spots.svg" target="_blank" title="新窗口看原图"><img src="figs/ch13-loss-blind-spots.svg" alt="lm_loss 看不见的三类错" loading="lazy"></a><figcaption>lm_loss 看不见的三类错</figcaption></figure>
+<p><sub>括号里是上表行号。</sub></p>
+<hr />
+<h2 id="5-两个分布式状态陷阱" class="hc4"><span class="hn">5.</span>两个分布式状态陷阱</h2>
+<p>这两条的共同点：<strong>单 device 测试全过，第 0 步逐位一致</strong>，错误只在切分之后、跑了很多步才显现。</p>
+<h3 id="51-cp-下线性注意力状态在分片边界断开">5.1 CP 下线性注意力状态在分片边界断开</h3>
+<ul>
+<li><strong>现象</strong>：开 context parallelism（CP&gt;1）后，GLA / KDA 层每个分片都从 <code>initial_state=None</code> 开始，相当于每个分片是一段独立的序列。修复前后显存相同、步时几乎不变，loss 看着也正常——没有任何信号提示它错了。</li>
+<li><strong>为什么错</strong>：递推的状态没跨边界交接，见下图。CP 和 packing 叠在一起时还会直接报错。</li>
+</ul>
+<figure class="img"><a href="figs/ch13-anim-cp-state-break.svg" target="_blank" title="新窗口看原图"><img src="figs/ch13-anim-cp-state-break.svg" alt="CP 切开线性注意力：不交接状态，每个分片从零起算，边界处静默断开" loading="lazy"></a><figcaption>CP 切开线性注意力：不交接状态，每个分片从零起算，边界处静默断开</figcaption></figure>
+<p><sub>看绿点到分片边界那一刻（示意）。</sub></p>
+<ul>
+<li><strong>相关</strong>：全局 striped 重排同样会打断 KDA 状态；CP 下的 <code>jnp.roll</code> 会丢 token；packing 会让目标跨文档泄漏。<strong>短卷积也一样</strong>（图中红斜纹）：不在 shard_map 里时各分片各卷各的；修法是用 <code>ppermute</code> 把前一分片末尾的 halo 交换过来再卷。</li>
+<li><strong>怎么查</strong>：同一条长序列，CP=1 和 CP&gt;1 各跑一次前向，比最后一个分片的输出。差得多就是状态没传。</li>
+<li><strong>当前状态</strong>：KDA 有两条安全路径，<code>a2a</code>（按头切、不切状态）和 <code>all_gather</code>（CPContext 跨 rank 传状态）；GLA 路径修没修未核；大号模型生产不开 CP。机理与选哪种的判据见 <a href="11-porting-checklist.html#b04--%E9%95%BF%E4%B8%8A%E4%B8%8B%E6%96%87-cp-%E7%9A%84%E9%85%8D%E5%A5%97%E4%B8%93%E5%AE%B6-fsdp-%E5%88%87%E5%88%86--cp-%E8%AE%A1%E6%95%B0%E4%BF%AE%E5%A4%8D">11 B04</a>。</li>
+</ul>
+<h3 id="52-联合-all-gather-反向的分片顺序错">5.2 联合 all-gather 反向的分片顺序错</h3>
+<ul>
+<li><strong>现象</strong>：FSDP 加 CP 时，权重沿两个轴联合 all-gather。loss 第 0 步逐位一致、之后单调漂（下图右）。</li>
+<li><strong>为什么错</strong>：反向 RS 的分片顺序必须和前向 gather 布局对上。一次性多维 psum_scatter 弄乱时，<strong>128 个 device 里 126 个</strong>拿到的是别人的梯度分片。</li>
+</ul>
+<figure class="img"><a href="figs/ch13-anim-rs-shard-order.svg" target="_blank" title="新窗口看原图"><img src="figs/ch13-anim-rs-shard-order.svg" alt="联合 all-gather 的反向：一次多轴 reduce-scatter 把分片顺序弄乱，梯度落到别的 device" loading="lazy"></a><figcaption>联合 all-gather 的反向：一次多轴 reduce-scatter 把分片顺序弄乱，梯度落到别的 device</figcaption></figure>
+<p><sub>看左下两排：拆两次单轴 RS 梯度各归其主，一次多轴 RS 红框拿错（4 卡示意）。</sub></p>
+<ul>
+<li><strong>根子在更底层</strong>：最小复现显示，多维 reduce-scatter 的 lowering 本身会把分片顺序打乱，非多维形状不触发，是 XLA / libtpu 的问题；上游是否已修未核。</li>
+<li><strong>修法</strong>：反向自定义 VJP，拆成两次按前向 gather 顺序的单轴 RS。正向合并成一个多轴 all_gather 是对的，所以和 <a href="10-optimization-roadmap.html#104-%E4%B8%A4%E6%AC%A1-tiled-gather-%E5%9D%97%E9%A1%BA%E5%BA%8F%E4%BA%A4%E9%94%99%E6%9D%83%E9%87%8D%E9%9D%99%E9%BB%98%E6%8D%9F%E5%9D%8F">10 §10.4</a> 不矛盾。</li>
+<li><strong>相关</strong>：两个 tiled gather 交错也会静默改坏权重；context-major 规则会把梯度放错位置，须加守卫，违反时直接报 ValueError。</li>
+<li><strong>怎么查</strong>：这类错<strong>没有单测会自然覆盖</strong>，要专门写多 device 测试，切分与不切分的梯度逐分片比（测法见下）。</li>
+<li><strong>EP&gt;1 + FSDP 会不会撞上同一类</strong> <span class="tg inf">[推断，未测；大号模型 EP=1 没碰到]</span>：
+<ul>
+<li><strong>触发条件</strong>是「同一个张量维度被两根以上 mesh 轴联合切分」，于是前向是一次多轴 all-gather，反向自动生成多轴 reduce-scatter。CP 只是其中一种来源。</li>
+<li><strong>上游 MaxText 默认规则里就有这种维度</strong>（<code>src/maxtext/configs/base.yml</code> 的 <code>logical_axis_rules</code>）：<code>embed_attn</code>、<code>q_lora</code>、<code>kv_lora</code>、<code>embed_vocab</code> 都联合切在 <code>fsdp</code>、<code>fsdp_transpose</code>、<code>context</code>…<code>expert</code> 上。所以 EP&gt;1 时，<strong>注意力、embedding 这些非专家权重</strong>的梯度 RS 变成 fsdp × expert 双轴。</li>
+<li><strong>专家权重本身</strong>按同一份规则是 <code>exp → expert</code>、<code>embed_moe → fsdp</code>（加 <code>context</code>），专家维和 FSDP 维是两个不同的张量维度，各走单轴；只有再开 CP 或 <code>fsdp_transpose</code> 时才变成同维多轴。</li>
+<li>lowering 问题上游修没修没核，不能默认安全。</li>
+<li><strong>数值对拍测法</strong>：
+<ol>
+<li>在 TPU 上取 8 个 device 建 mesh <code>fsdp=4, expert=2</code>，用和训练相同的 <code>logical_axis_rules</code>。问题在 XLA / libtpu 的 lowering，CPU 上 <code>--xla_force_host_platform_device_count=8</code> 过了不代表 TPU 安全，只当快速冒烟。</li>
+<li>同一 batch、同一 seed，分别在该 mesh 和单 device（或全复制）上算一步梯度。</li>
+<li>切分版梯度 gather 回全量，和单 device 版<strong>逐元素</strong>比，并逐分片比（看哪几个 device 对不上）。</li>
+<li>必须带负例：手工把 RS 的轴顺序反过来，测试必须红。阈值按 bf16 累加误差定；错位时差值是 O(1) 级，不会和舍入误差混淆。</li>
+</ol>
+</li>
+<li>测不过的修法同上。</li>
+</ul>
+</li>
+</ul>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>为什么第 0 步对拍不够</span></span>第 0 步只验证前向，反向和优化器的错最早在第 1 步才体现（下图）。分布式改动至少要比<strong>第 1 步的参数</strong>，而不只是第 0 步的 loss。</p>
+</blockquote>
+<figure class="img"><a href="figs/ch13-catch-window.svg" target="_blank" title="新窗口看原图"><img src="figs/ch13-catch-window.svg" alt="越早的检查越便宜：左边三格能提前抓的错，只看 loss 要等到右边两格" loading="lazy"></a><figcaption>越早的检查越便宜：左边三格能提前抓的错，只看 loss 要等到右边两格</figcaption></figure>
+<p><sub>灰底两格是只看 loss 时才露出来的时刻（示意，步数轴非线性）。</sub></p>
+<hr />
+<h2 id="6-上线前五分钟检查" class="hc5"><span class="hn">6.</span>上线前五分钟检查</h2>
+<p>每条后面是它挡住的总表行。</p>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>HLO 里 grep 一遍该有的 op</strong>：<code>f8e4m3fn</code>、Pallas custom-call、FP8 的 all-gather。挡 O01–O03、O08、N15。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>按模块数 f8 乘法</strong>：编译后 HLO 里操作数为 f8 的 dot／custom-call 按模块路径分组，和应量化清单对账，scan 内的乘 trip count（<a href="04-fp8-quantization.html#91-%E8%AF%A5%E9%87%8F%E5%8C%96%E7%9A%84%E5%B1%82%E6%98%AF%E4%B8%8D%E6%98%AF%E9%83%BD%E9%87%8F%E5%8C%96%E4%BA%86%E6%95%B0-hlo-%E9%87%8C%E7%9A%84-f8-%E4%B9%98%E6%B3%95">04 §9.1</a>）。挡 O04、O19。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>看 HLO 通信重排的计数输出</strong>：选中为 0 就是没跑。挡 O05、O06。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>AOT 产物和训练配置比指纹</strong>：flag、LR、remat、量化方式写进指纹，不靠删键表示「关」。挡 O11、O12。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>第 0 步对拍 + 第 1 步参数对拍</strong>：比 loss、aux loss 各分项、grad norm 量级、各层参数 std、前几步 LR；查每个加载的参数在前向里有没有被用到。挡 N07、N08、N15、O15、§4 表 4.1–4.4、D05。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>校秤</strong>：trace 文件大小和设备事件数、手算一层 FLOPs、加一次同步对照步时、关 dumper。挡 M01–M05。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>小于 1% 的差不下结论</strong>：同机成对、报中位数、先量对照自身的重跑差。挡 M11、M12。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>CP 打开时</strong>：CP=1 对 CP&gt;1 前向对拍、各 device bias std、每步样本数。挡 D02、D04、D05。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>监控自己先验证一次</strong>：注入一个慢步、喂一个坏 run，看告警和门禁响不响；每个告警指标拿已知坏机验证一次，恒为 0 的当不存在。挡 W04–W08、W11–W13。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <strong>镜像用 digest，退出码不当成功判据</strong>。挡 D06、D08。</li>
+</ul>
+</article><div class="srcline">源文件：<code>moe-public/topic/13-silent-errors.md</code></div><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="12-multimodal-and-numerics-alignment.html"><small>← 上一页</small>12 · 多模态版与精度对拍</a><span></span></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#1-为什么静默错误是-moe-大规模训练的头号成本">1. 为什么静默错误是 MoE 大规模训练的头号成本</a></li><li class="l2"><a href="#2-总表">2. 总表</a></li><li class="l3"><a href="#21-数值错结果错但跑得下去">2.1 数值错（结果错，但跑得下去）</a></li><li class="l3"><a href="#22-优化静默不生效开了但没开上">2.2 优化静默不生效（开了，但没开上）</a></li><li class="l3"><a href="#23-量法错秤不准">2.3 量法错（秤不准）</a></li><li class="l3"><a href="#24-数据与状态">2.4 数据与状态</a></li><li class="l3"><a href="#25-监控假报">2.5 监控假报</a></li><li class="l2"><a href="#3-先校秤三件套">3. 先校秤三件套</a></li><li class="l3"><a href="#31-profiler-悄悄丢掉设备-trace">3.1 profiler 悄悄丢掉设备 trace</a></li><li class="l3"><a href="#32-flops-公式走错分支">3.2 FLOPs 公式走错分支</a></li><li class="l3"><a href="#33-异步计时把秒数记到别的步上">3.3 异步计时把秒数记到别的步上</a></li><li class="l2"><a href="#4-跨框架对拍清单">4. 跨框架对拍清单</a></li><li class="l2"><a href="#5-两个分布式状态陷阱">5. 两个分布式状态陷阱</a></li><li class="l3"><a href="#51-cp-下线性注意力状态在分片边界断开">5.1 CP 下线性注意力状态在分片边界断开</a></li><li class="l3"><a href="#52-联合-all-gather-反向的分片顺序错">5.2 联合 all-gather 反向的分片顺序错</a></li><li class="l2"><a href="#6-上线前五分钟检查">6. 上线前五分钟检查</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">Google Cloud · TPU v7x 训练优化</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../../assets/site.js"></script>
+</body></html>

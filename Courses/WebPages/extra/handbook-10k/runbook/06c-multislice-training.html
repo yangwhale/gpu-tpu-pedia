@@ -1,0 +1,1784 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>06c 起一个数千芯片多切片训练（复现一份参考训练配置） · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a class="on" aria-current="page" href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>06c 起一个数千芯片多切片训练</span></nav><nav class="lbar" aria-label="手册与讲义"><a class="on" aria-current="page" href="06c-multislice-training.html">📘 手册</a><a href="../lectures/06c-multislice-training.html">📝 讲义 · 26.5′</a><span class="lbar-tip">讲课的人看讲义，投屏放这一页</span></nav><article class="md"><h1 id="06c-起一个-数千芯片多切片训练复现一份参考训练配置">06c 起一个数千芯片多切片训练（复现一份参考训练配置）</h1>
+<blockquote>
+<p><strong>目标</strong>：第一次跑真实规模训练，并认得「跑对了」的样子。
+<strong>难点</strong>：切片、DCN、共享存储、libtpu flag 任一环错都可能「看起来在跑」；JIT 下从 pod 起来到首步 32–45 分钟（从 apply 起算 40–50），出错也可能 exit 0。</p>
+</blockquote>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>状态 / 一句话结论</span></span></p>
+<ul>
+<li><strong>本章是判读样板</strong>：私有代码路线照抄跑不起来；要跑的配方见 <a href="06b-public-config-recipe-dsv3.html">06b</a>。</li>
+<li><strong>§6.1–6.8 已实测</strong>：10+ 片跑通，步时和原任务差 &lt; 1%。</li>
+<li>这是 <strong>JIT 对照</strong>；大规模建议提前编译（AOT），Google 可协助。</li>
+<li>更大规模有已知限制（见 <a href="#step-6-9-scale">§6.9「规模边界」</a>）。</li>
+</ul>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>数千芯</strong> 10+ × 4x8x8，device 数 = 芯片 × 2</li>
+<li><strong>约 +40%</strong> 10+ 片 JIT 稳态步时 p50（比 1 片）</li>
+<li><strong>72%</strong> 弱扩展效率（以单片为 100%）</li>
+<li><strong>40–50 min</strong> apply 到第一步，两段编译各约 20 min</li>
+<li><strong>84 GiB</strong> 每 device HBM，上限 94.74 GiB</li>
+</ul>
+</div>
+<p><strong>06c 和 06b / 06 / 06a 怎么分工</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>篇</th>
+<th>回答什么</th>
+<th>编法</th>
+<th>给谁用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>06c（本章）</strong></td>
+<td>数千芯怎么起、怎么认得「跑对了」</td>
+<td>JIT，开卡现编</td>
+<td>判读样板：大号 MoE 模型 JIT 基线作业，原样复现</td>
+</tr>
+<tr>
+<td><a href="06b-public-config-recipe-dsv3.html">06b</a></td>
+<td>没有私有代码怎么跑</td>
+<td>CPU 上 AOT 核显存</td>
+<td><strong>使用方的训练负载</strong>：公开 DeepSeek-V3 671B，同样 10+ × 4x8x8</td>
+</tr>
+<tr>
+<td><a href="06-slice-request-and-multislice.html">06</a></td>
+<td>卡怎么要到手</td>
+<td>—</td>
+<td>片数、形状、placement、JobSet 字段、多片互联</td>
+</tr>
+<tr>
+<td><a href="06a-storage-anywhere-cache-gcsfuse.html">06a</a></td>
+<td>9,216 芯同时读，桶扛不扛得住</td>
+<td>—</td>
+<td>Anywhere Cache、带宽配额（20 Tbps）、dashboard、gcsfuse 配置；实测集群实况</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>给使用方的训练负载用 <a href="06b-public-config-recipe-dsv3.html">06b 公开配置配方</a></strong></p>
+<ul>
+<li>上游 MaxText DeepSeek-V3 671B、公开镜像钉 digest、不用 env tar / 桶 / 私有仓库；同样 10+ × 4x8x8，<code>RECIPE=dsv3</code>，CPU 上 AOT 编过 10+ 片；阶梯与验收同本章，数字换 06b §7。本章的 JIT 基线作业跑的是私有模型，只作判读样板。</li>
+</ul>
+<p><strong>为什么是 10+ 个 4x8x8</strong>：单 <a href="00-overview.html#g-ici">ICI</a> 片公开上限 32 cube = 2,048 芯、没有 144 cube 单片（<a href="00-overview.html#3-%E5%88%87%E7%89%87%E6%80%8E%E4%B9%88%E6%9D%A5">00 §3</a>），只能 <a href="00-overview.html#g-multislice">multislice</a>：<code>ici_*</code> 管片内，<code>dcn_*</code> 管片间（<a href="00-overview.html#g-dcn">DCN</a>）。</p>
+</blockquote>
+<blockquote>
+<div class="kp kc0"><div class="kp-t">变量</div>
+<ul>
+<li><code>source ~/runbook-env.sh &amp;&amp; rb_env_check PROJECT REGION ZONE CLUSTER DATA_BUCKET</code>（<a href="scripts/env.sh"><code>scripts/env.sh</code></a>）。</li>
+<li>本章用：<code>$NS</code> <code>$LOCAL_QUEUE</code> <code>$SYSTEM_POOL</code>、<code>$DATA_BUCKET</code> <code>$DATA_PV</code> <code>$DATA_PVC</code> <code>$KSA</code>（§6.1）、<code>$ENV_TAR</code> <code>$GITHUB_SECRET</code>（§6.2）、<code>$RUN_NAME</code> <code>$JOBSET_NAME</code>（§6.3–6.5）；默认值见 env.sh。</li>
+</ul></div>
+<div class="kp kc1"><div class="kp-t">前提</div>
+<ul>
+<li><a href="04-functional-verification.html">04</a> 全过，有 <a href="03-control-plane-addons.html#step-3-5">03 §3.5</a> 的 LocalQueue；集群开了 <code>GcsFuseCsiDriver</code> 和 Workload Identity（<a href="02-cluster-bringup.html">02</a>）；<a href="01-capacity-and-prereqs.html#step-1-5">01 §1.5</a> 已授权桶给 <code>ns/$NS/sa/$KSA</code>；本机有 <code>kubectl</code> <code>gcloud</code> <code>jq</code> <code>envsubst</code>。</li>
+</ul></div>
+<p>本章脚本（<code>runbook/scripts/</code>）：</p>
+</blockquote>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>干什么</th>
+<th>节</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>06-data-pv-pvc.yaml</code></td>
+<td>数据桶的静态 PV + PVC</td>
+<td>§6.1</td>
+</tr>
+<tr>
+<td><code>06-gcsfuse-smoke-pod.yaml</code></td>
+<td>从 pod 里 <code>ls</code> 桶，验证挂载</td>
+<td>§6.1</td>
+</tr>
+<tr>
+<td><code>06-envbuild-pod.yaml</code> + <code>06-build-env.sh</code></td>
+<td>构建并上传 Python 环境 tar</td>
+<td>§6.2</td>
+</tr>
+<tr>
+<td><code>06-jobset.sh</code></td>
+<td>提交 / 盯盘 / 停删 / 验收 / 步时（<code>RECIPE=dsv3</code> 跑 06b 公开配方）；<code>SLICES</code> <code>TOPO</code> <code>STEPS</code> <code>EXTRA_LIBTPU_ARGS</code> <code>POD_PRIORITY</code> 调阶梯；<code>notin-pools</code> / <code>EXCLUDE_POOLS</code> 排除坏池</td>
+<td>§6.3–§6.6</td>
+</tr>
+<tr>
+<td><code>06a-dsv3-recipe.env</code> + <code>06a-jobset-dsv3.yaml</code> + <code>06a-aot-dsv3.sh</code></td>
+<td>公开配方；CPU AOT 核对 HBM</td>
+<td><a href="06b-public-config-recipe-dsv3.html">06b</a></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="任务画像" class="hc0">任务画像</h2>
+<p>运维要对上切片、device 数、镜像 digest、libtpu 版本、生效 LIBTPU flag；其余归训练方。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码</td>
+<td>训练方自有的 MaxText 分支（使用方没有访问权；使用方跑公开配方 <a href="06b-public-config-recipe-dsv3.html">06b</a>）</td>
+</tr>
+<tr>
+<td>运行时</td>
+<td>jax 0.11.0 / jaxlib 0.11.0 / libtpu 0.0.48，公开 Python 基础镜像钉 digest（全文见 §6.4 的 JobSet）</td>
+</tr>
+<tr>
+<td>模型</td>
+<td>一个数百 B 级 MoE 模型（自定义 decoder）</td>
+</tr>
+<tr>
+<td>并行</td>
+<td>10+ 片 × 4x8x8；<code>ici_fsdp_parallelism: 512</code>、<code>dcn_data_parallelism: N</code>、<code>num_slices: N</code></td>
+</tr>
+<tr>
+<td>batch</td>
+<td><code>per_device_batch_size</code> × 序列长度按生产配置 → <code>global_batch_size_to_train_on</code> 随片数线性放大</td>
+</tr>
+<tr>
+<td>精度</td>
+<td>FP8（MaxText <code>quantization: fp8_full</code>）+ <code>enable_fp8_absmax_qag: true</code>（§6.4.1）</td>
+</tr>
+<tr>
+<td>数据</td>
+<td>合成（<code>DATASET_TYPE=synthetic</code>），50 步，无检查点</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>一个 JobSet 展开成</strong>（每 host 4 chip、每 chip 2 device）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>每片</th>
+<th>全任务（× 片数）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JobSet → replicatedJob <code>worker</code> 的 replica</td>
+<td>1</td>
+<td>10+</td>
+</tr>
+<tr>
+<td><a href="00-overview.html#g-slice">Slice</a>（4x8x8 = 4 cube）</td>
+<td>1</td>
+<td>10+</td>
+</tr>
+<tr>
+<td>pod = host</td>
+<td>64（= 256 chip ÷ 4）</td>
+<td>片数 × 64</td>
+</tr>
+<tr>
+<td>chip</td>
+<td>256（= 4 × 8 × 8）</td>
+<td>数千</td>
+</tr>
+<tr>
+<td>device</td>
+<td>512（= 256 × 2）</td>
+<td>数千</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="img"><a href="../figs/f08-multislice-layout.svg" target="_blank" title="新窗口看原图"><img src="../figs/f08-multislice-layout.svg" alt="N 片 × 4x8x8（示意只画 8 片）：片内 512 路 FSDP 走 ICI，片间 N 路数据并行走 DCN" loading="lazy"></a><figcaption>N 片 × 4x8x8（示意只画 8 片）：片内 512 路 FSDP 走 ICI，片间 N 路数据并行走 DCN</figcaption></figure>
+<p><a id="ladder"></a></p>
+<h2 id="路线图从-1-个-cube-爬到-10-片先看这张表" class="hc1">路线图：从 1 个 cube 爬到 10+ 片（先看这张表）</h2>
+<p>直接上数千芯，出问题分不清怪环境、单片还是 DCN；上一级 5 条全过才进下一级（§6.5.1）。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>级</th>
+<th>形状 × 片数（芯）</th>
+<th>新引入什么</th>
+<th>脚本 / 关键变量</th>
+<th>预期：起 pod → 首步</th>
+<th>预期：稳态步时（p50 比第 2 级 1 片慢多少）</th>
+<th style="text-align:right">TFLOP/s/device</th>
+<th>HBM（编译报告）</th>
+<th>数字从哪来</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>4x4x4 × 1 → 4x8x8 × 10+</td>
+<td>切片、Kueue、多网卡</td>
+<td><code>04-gen-jobset.sh</code>（DEVICE_CHECK，不训练）</td>
+<td>约 2–5 min 跑完</td>
+<td>—</td>
+<td style="text-align:right">—</td>
+<td>—</td>
+<td><a href="04-functional-verification.html#step-4-3">04 §4.3–§4.8</a>；实测 1 cube 95 s；10+ 片提交 → 全 Completed ≤ 230 s（驱动总耗时 264 s，<a href="04-functional-verification.html#step-4-8">04 §4.8</a>）</td>
+</tr>
+<tr>
+<td>1</td>
+<td>4x4x4 × 1（64）</td>
+<td>env tar、gcsfuse、overlay、MaxText</td>
+<td><code>SLICES=1 TOPO=4x4x4 STEPS=30 MODEL_NAME=moe-small</code></td>
+<td><strong>约 21 min</strong>（apply 起算；训练步第 1 次编译约 10 min + 第 2 次编译约 8 min，见表下注）</td>
+<td>单峰（只验管线，不和后面几级比）</td>
+<td style="text-align:right"><strong>约 190</strong>（MFU 约 15%）</td>
+<td><strong>43.2 GiB</strong></td>
+<td>实测。实测集群 64 芯 CI 的 BF16 / FP8 步时比本级慢约 10% / 20%，commit 不同</td>
+</tr>
+<tr>
+<td>2</td>
+<td>4x8x8 × 1（256）</td>
+<td>真模型、真 mesh（FSDP 512）</td>
+<td><code>SLICES=1</code></td>
+<td><strong>约 40 min</strong>（编译约 20 + 再编一遍约 18）</td>
+<td><strong>基准</strong>（单峰；后面各级都和它比）</td>
+<td style="text-align:right"><strong>约 210</strong>（MFU 约 20%）</td>
+<td><strong>86 GiB</strong></td>
+<td>实测；预估（≈ 210 TFLOP/s）比实测慢 1–2%；实测集群同 libtpu 的 AOT 步时比本级慢 1–2% / 不到 1%（较新的 nightly）</td>
+</tr>
+<tr>
+<td>3</td>
+<td>4x8x8 × 2（512）</td>
+<td>DCN 数据并行</td>
+<td><code>SLICES=2</code></td>
+<td><strong>四十多分钟</strong>（两段编译各约 20）</td>
+<td><strong>慢约 25% / 30%</strong>（两次，效率 79% / 78%；第一次前半段有双峰，均值慢约 40%）</td>
+<td style="text-align:right"><strong>约 170</strong>（MFU 约 15%）</td>
+<td><strong>84 GiB</strong></td>
+<td>实测，在预估 75–92% 内；另一次掉 host 作废</td>
+</tr>
+<tr>
+<td>补点</td>
+<td>4x8x8 × 4 / × 8（1,024 / 2,048）</td>
+<td>片数</td>
+<td><code>SLICES=4</code> / <code>8</code></td>
+<td>四十多分钟</td>
+<td>慢约 20% / 30%（效率 82% / 78%，单峰）</td>
+<td style="text-align:right">约 180 / 约 170</td>
+<td>84 GiB</td>
+<td>实测</td>
+</tr>
+<tr>
+<td>4</td>
+<td>4x8x8 × 10+（数千）</td>
+<td>全规模 DCN</td>
+<td>不设（= JIT 基线作业）</td>
+<td><strong>40–50 min</strong>（两段编译各约 20 min）</td>
+<td><strong>慢约 40%</strong>（效率 72%；单峰，均值 ≈ p50，0 个慢步）</td>
+<td style="text-align:right"><strong>约 150</strong>（MFU 约 15%）</td>
+<td><strong>84 GiB</strong></td>
+<td>实测（30 步、profiler 关），对上 JIT 基线作业</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>口径</strong>：第 1–3 级与补点同批实测，第 4 级另批实测，都用实测集群的 cube；首步从 <code>kubectl apply</code> 起算（pod 全 Running 约 2 min，10+ 片约 2–3 min，不同运行）；步时 = 稳态 p50（§6.6 口径；第 1–3 级与补点开了 profiler，另按步号剔除 step 10–14）。均值与 p50 差不到 1%，仅 2 片第一次差 10%；10+ 片各 replica p50 几乎完全一致（差异远小于 1%）。第 1 级第 2 次编译那约 8 min 没单独查，同一段代码 <span class="tg inf">[推断]</span>。</p>
+<p><strong>每级 5 条</strong>（<code>verify</code> + <code>steps</code> 自动出前 4 条）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>查什么</th>
+<th>过的标准</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>步数真走了</td>
+<td>最后一行 <code>completed step: N</code>，N = STEPS − 1；loss 在降</td>
+<td><code>Completed</code> / exit 0 <strong>不等于</strong>训练了（见<a href="pitfalls.html#l-44">经验教训第 44 条</a>）</td>
+</tr>
+<tr>
+<td>2</td>
+<td>device 数</td>
+<td><code>jax.devices() returned</code> = 片数 × 芯片数 × 2</td>
+<td>少了 = 有 pod 没进 JAX 集群</td>
+</tr>
+<tr>
+<td>3</td>
+<td>HBM</td>
+<td><code>Total memory size</code> ≤ 94.74 GiB。实测：1 片 86、2 / 4 / 8 / 10+ 片都是 84</td>
+<td>第 3 级起有 DCN DP，漏 <code>XLA_FLAGS</code> 会超（§6.4.1）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>步时</td>
+<td>落在上表区间；均值 ÷ p50 ≤ 1.23（&gt; 1.05 即有慢步，报占比）</td>
+<td>超出按 §6.6 分诊</td>
+</tr>
+<tr>
+<td>5</td>
+<td>生效 flag</td>
+<td>存档 <code>LIBTPU_INIT_ARGS:</code> 行，与上一级只差有意改的一处</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p>第 3、4 级前各跑一次同片数 DCN 基准（<a href="04-functional-verification.html#step-4-8">04 §4.8</a>，工具自备）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>DCN 基准（28 个梯度，合并，并发，中位 ms）</th>
+<th style="text-align:right">2 × 4x4x4</th>
+<th style="text-align:right">4 × 4x4x4</th>
+<th style="text-align:right">4 × 4x8x8</th>
+<th style="text-align:right">10+ × 4x8x8</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>实测集群</td>
+<td style="text-align:right">22.6 / 28.1</td>
+<td style="text-align:right">33.0 / 33.4</td>
+<td style="text-align:right">36.0</td>
+<td style="text-align:right">比 8 片更高（验收以你自己集群的基线为准，见 04 阈值表）</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<p><a id="step-6-1"></a></p>
+<h2 id="61-数据桶与-gcsfuse-挂载" class="hc2"><span class="hn">6.1</span>数据桶与 gcsfuse 挂载</h2>
+<p><strong>目标</strong>：所有 worker 在 <code>/models</code> 看到同一个桶。实测集群用静态 PV/PVC（<a href="scripts/06-data-pv-pvc.yaml"><code>scripts/06-data-pv-pvc.yaml</code></a>）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="c1"># 节选，完整见 runbook/scripts/06-data-pv-pvc.yaml（apply 用下面那条 envsubst）</span>
+<span class="w">  </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcsfuse-static</span>
+<span class="w">  </span><span class="nt">persistentVolumeReclaimPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Retain</span>
+<span class="w">  </span><span class="nt">mountOptions</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">implicit-dirs</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">client-protocol=grpc</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">csi</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">driver</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gcsfuse.csi.storage.gke.io</span>
+<span class="w">    </span><span class="nt">volumeHandle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${DATA_BUCKET}</span><span class="w">           </span><span class="c1"># = 桶名（实测集群 &lt;主数据桶&gt;）</span>
+</code></pre></div>
+<p>实测集群 PVC <code>&lt;数据卷&gt;</code>（ns default）绑它；第二个桶 <code>&lt;中区数据桶&gt;</code> 挂 <code>/models2</code>（JIT 基线作业没用）。<strong>全规模读数据靠 Anywhere Cache 和缓存带宽配额，见 <a href="06a-storage-anywhere-cache-gcsfuse.html">06a</a>。</strong></p>
+<p><strong>建</strong>（幂等，未改 → <code>unchanged</code>）：</p>
+<div class="code"><span class="lang">bash</span><pre><code>envsubst<span class="w"> </span><span class="s1">&#39;$DATA_PV $DATA_PVC $NS $DATA_BUCKET&#39;</span><span class="w"> </span>&lt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-data-pv-pvc.yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+</code></pre></div>
+<ul>
+<li>pod 注解 <code>gke-gcsfuse/volumes: &quot;true&quot;</code>，sidecar 用内存 emptyDir <code>gke-gcsfuse-cache</code>（tpu7x 无 Local SSD）。</li>
+<li>桶权限给工作负载身份（实测集群 <code>ns/default/sa/default</code> 有 <code>roles/storage.objectUser</code>），见 <a href="01-capacity-and-prereqs.html#step-1-5">01 §1.5 ③</a>；缺了报 <code>FileNotFoundError: GCS bucket 'gs://&lt;主数据桶&gt;' not found or accessible.</code>。</li>
+</ul>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>本书的 Kueue 配置会把 smoke pod（和 §6.2 构建 pod）永远挂在 <code>SchedulingGated</code>（未实测）</span></span></p>
+<ul>
+<li><strong>原因</strong>：03 开了 <code>manageJobsWithoutQueueName: true</code> 和 <code>pod</code> 集成，<code>$NS</code> 没排除；带队列名也不行，ClusterQueue 只覆盖 <code>google.com/tpu</code>。实测集群注释掉了（<a href="03-control-plane-addons.html#step-3-2">03 §3.2</a>）。</li>
+<li><strong>做法</strong>：非 TPU 的 pod 一律放进已排除的 <code>$INSPECT_NS</code>（<code>rb-inspect</code>，在 <code>03-kueue-values.yaml</code> 的排除列表里），在那里另建一组同桶 PV/PVC，命令见下 [推断：Kueue 文档称排除的 namespace 不受 Pod 集成管]。</li>
+<li><strong>PV 名必须另起</strong>：PV 是集群级对象，<code>claimRef</code> 钉死一个 namespace，不能和 <code>$NS</code> 那组共用。</li>
+<li><strong>三个变量都要显式给</strong>：env.sh 在 source 时就按 <code>NS</code> 推好了 <code>DATA_PV</code> / <code>DATA_PVC</code>，只改 <code>NS</code> 不会跟着变。</li>
+<li>02 §2.6 的 <code>dnscheck</code>、04 C6 同理改 <code>-n $INSPECT_NS</code>（各在本章外，见对应章）。</li>
+</ul>
+</blockquote>
+<p><strong><code>$INSPECT_NS</code> 版：建 PV/PVC、授权、验证</strong>（未实测）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 【工作站】source ~/runbook-env.sh 之后</span>
+rb_env_check<span class="w"> </span>NS<span class="w"> </span>INSPECT_NS<span class="w"> </span>DATA_BUCKET<span class="w"> </span>DATA_PV<span class="w"> </span>DATA_PVC<span class="w"> </span>KSA<span class="w"> </span>SYSTEM_POOL
+kubectl<span class="w"> </span>get<span class="w"> </span>namespace<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w">   </span><span class="c1"># 04 §4.1 一般已建</span>
+<span class="nv">IPV</span><span class="o">=</span><span class="si">${</span><span class="nv">DATA_PV</span><span class="si">}</span>-inspect<span class="w"> </span><span class="nv">IPVC</span><span class="o">=</span><span class="si">${</span><span class="nv">DATA_PVC</span><span class="si">}</span>-inspect
+<span class="nv">NS</span><span class="o">=</span><span class="nv">$INSPECT_NS</span><span class="w"> </span><span class="nv">DATA_PV</span><span class="o">=</span><span class="nv">$IPV</span><span class="w"> </span><span class="nv">DATA_PVC</span><span class="o">=</span><span class="nv">$IPVC</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>envsubst<span class="w"> </span><span class="s1">&#39;$DATA_PV $DATA_PVC $NS $DATA_BUCKET&#39;</span><span class="w"> </span>&lt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-data-pv-pvc.yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<span class="c1"># 授权：同 01 §1.5 ③，只把 ns 换成 $INSPECT_NS</span>
+<span class="nv">PN</span><span class="o">=</span><span class="k">$(</span>gcloud<span class="w"> </span>projects<span class="w"> </span>describe<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(projectNumber)&#39;</span><span class="k">)</span>
+gcloud<span class="w"> </span>storage<span class="w"> </span>buckets<span class="w"> </span>add-iam-policy-binding<span class="w"> </span>gs://<span class="nv">$DATA_BUCKET</span><span class="w"> </span>--role<span class="o">=</span>roles/storage.objectUser<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--member<span class="o">=</span><span class="s2">&quot;principal://iam.googleapis.com/projects/</span><span class="nv">$PN</span><span class="s2">/locations/global/workloadIdentityPools/</span><span class="nv">$PROJECT</span><span class="s2">.svc.id.goog/subject/ns/</span><span class="nv">$INSPECT_NS</span><span class="s2">/sa/</span><span class="nv">$KSA</span><span class="s2">&quot;</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>pv<span class="w"> </span><span class="nv">$IPV</span><span class="p">;</span><span class="w"> </span>kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>get<span class="w"> </span>pvc<span class="w"> </span><span class="nv">$IPVC</span><span class="w">                       </span><span class="c1"># 两个都 STATUS=Bound</span>
+<span class="nv">NS</span><span class="o">=</span><span class="nv">$INSPECT_NS</span><span class="w"> </span><span class="nv">DATA_PVC</span><span class="o">=</span><span class="nv">$IPVC</span><span class="w"> </span>envsubst<span class="w"> </span><span class="s1">&#39;$NS $DATA_PVC $SYSTEM_POOL&#39;</span><span class="w"> </span>&lt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-gcsfuse-smoke-pod.yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>gcsfuse-smoke<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.schedulingGates}{&quot;\n&quot;}&#39;</span><span class="w">   </span><span class="c1"># 期望空；有 kueue 字样 = 排除没生效，回 03 §3.2</span>
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span><span class="nb">wait</span><span class="w"> </span>pod<span class="w"> </span>gcsfuse-smoke<span class="w"> </span>--for<span class="o">=</span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.phase}&#39;</span><span class="o">=</span>Succeeded<span class="w"> </span>--timeout<span class="o">=</span>5m
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>logs<span class="w"> </span>gcsfuse-smoke<span class="w"> </span>-c<span class="w"> </span>main<span class="w">                                </span><span class="c1"># 期望：桶顶层目录 + SMOKE_OK</span>
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$INSPECT_NS</span><span class="w"> </span>delete<span class="w"> </span>pod<span class="w"> </span>gcsfuse-smoke
+</code></pre></div>
+<ul>
+<li><strong>怎么判过</strong>：<code>schedulingGates</code> 为空、pod <code>Succeeded</code>、日志末行 <code>SMOKE_OK</code>。</li>
+<li><strong>回滚</strong>：<code>kubectl delete pvc $IPVC -n $INSPECT_NS; kubectl delete pv $IPV</code>（<code>Retain</code>，不删桶数据）；IAM 用 <code>remove-iam-policy-binding</code> 同参数。</li>
+<li>§6.2 构建 pod 的 <code>06-build-env.sh</code> <strong>已默认放 <code>$INSPECT_NS</code></strong>（<code>BUILD_NS</code> 变量，未实测）；它不挂 PVC，但上传 env tar 要上面那条 IAM。</li>
+</ul>
+<p><strong>验证</strong>（<code>$NS</code> 版，只适用于没装 Kueue pod 集成的集群；本书的集群用上面的 <code>$INSPECT_NS</code> 版）：</p>
+<div class="code"><span class="lang">bash</span><pre><code>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>describe<span class="w"> </span><span class="nv">$SYSTEM_POOL</span><span class="w"> </span>--cluster<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--format<span class="o">=</span><span class="s1">&#39;value(config.workloadMetadataConfig.mode)&#39;</span><span class="w">             </span><span class="c1"># 先查：必须是 GKE_METADATA，否则下面挂载必失败（见实测框）</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>pv<span class="w"> </span><span class="nv">$DATA_PV</span><span class="p">;</span><span class="w"> </span>kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$NS</span><span class="w"> </span>get<span class="w"> </span>pvc<span class="w"> </span><span class="nv">$DATA_PVC</span><span class="w">          </span><span class="c1"># 两个都 STATUS=Bound</span>
+envsubst<span class="w"> </span><span class="s1">&#39;$NS $DATA_PVC $SYSTEM_POOL&#39;</span><span class="w"> </span>&lt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-gcsfuse-smoke-pod.yaml<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$NS</span><span class="w"> </span><span class="nb">wait</span><span class="w"> </span>pod<span class="w"> </span>gcsfuse-smoke<span class="w"> </span>--for<span class="o">=</span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.phase}&#39;</span><span class="o">=</span>Succeeded<span class="w"> </span>--timeout<span class="o">=</span>5m
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$NS</span><span class="w"> </span>logs<span class="w"> </span>gcsfuse-smoke<span class="w"> </span>-c<span class="w"> </span>main<span class="w">                           </span><span class="c1"># 期望：桶顶层目录 + SMOKE_OK</span>
+kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$NS</span><span class="w"> </span>delete<span class="w"> </span>pod<span class="w"> </span>gcsfuse-smoke
+</code></pre></div>
+<p><strong>实测 FAIL：节点池没开 WI</strong>（实测集群）</p>
+<ul>
+<li>卡 <code>Init:0/1</code>，报 <code>Workload Identity Federation is not enabled on node</code>：集群级开了、<strong>节点池级</strong>没开（<code>default-pool</code> 和单网卡池为空）。挂载耗时与目录列表<strong>没取到</strong>。</li>
+<li>修正：<a href="scripts/02-create-cluster.sh">02-create-cluster.sh</a> 给系统池加 <code>--workload-metadata=GKE_METADATA</code>；已有集群 <code>gcloud container node-pools update $SYSTEM_POOL --cluster $CLUSTER --location $ZONE --workload-metadata=GKE_METADATA</code>。开 WI 后 §6.2 上传身份变成 <code>$KSA</code>。</li>
+</ul>
+<div class="kp kc2"><div class="kp-t">实测 PASS：双网卡池上挂载与读取</div>
+<ul>
+<li>default KSA 直接授权（不经 GSA）一次挂上；读 10.3 GB env tar <strong>单流 ≈ 0.32 GB/s</strong>（≈ 33 s），多 host 线性扩展（<a href="04-functional-verification.html#card-c6">04 C6 的图</a>）。</li>
+</ul></div>
+<p><strong>读写路径</strong>（<code>Config param</code> 行与桶列表）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>什么</th>
+<th>路径（本书变量）</th>
+<th>谁写 / 谁读</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>环境 tar</td>
+<td><code>gs://$DATA_BUCKET/$ENV_TAR</code></td>
+<td>§6.2 写；每个 pod 启动时经 <code>/models</code> 读</td>
+</tr>
+<tr>
+<td>config overlay</td>
+<td><code>gs://$DATA_BUCKET/configs/submit/$RUN_NAME/config_overlay.yml</code></td>
+<td>§6.3 写；worker 读</td>
+</tr>
+<tr>
+<td>输出根（<code>base_output_directory</code>）</td>
+<td><code>gs://$DATA_BUCKET/pretrain/moe-large</code>（= JobSet env <code>GCS_BUCKET</code>）</td>
+<td>MaxText</td>
+</tr>
+<tr>
+<td>本 run 目录</td>
+<td><code>…/moe-large/$RUN_NAME/</code>：<code>train-*.log</code>、<code>tensorboard/</code></td>
+<td>worker 0</td>
+</tr>
+<tr>
+<td>检查点（<code>checkpoint_dir</code>）</td>
+<td><code>…/moe-large/$RUN_NAME/checkpoints/</code>（JIT 基线作业关着，07 章打开）</td>
+<td>MaxText</td>
+</tr>
+<tr>
+<td>JAX 编译缓存（<code>jax_cache_dir</code>）</td>
+<td><code>…/moe-large/jax_cache</code>，<strong>所有 run 共用</strong>（默认 <code>${GCS_BUCKET}/jax_cache</code>）</td>
+<td>编译时读写；JIT 基线作业的第二次运行 step 0 比第一次短几分钟，可能是命中它 <span class="tg inf">[推断]</span></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>JAX 编译缓存</strong></p>
+<figure class="mermaid"><img src="../assets/mermaid/7035725f9135.png" width="623" alt="示意图" loading="lazy"></figure><p>读图：缓存只省编译那一段，trace + lower 省不掉；权限不够时不报错。</p>
+<ul>
+<li><strong>实测</strong>：1 cube 冷启动三十多 min → 命中缓存约 28 min（两次编译各 133 s → 7 s），trace + lower（~15 min）照做。</li>
+<li>权限：装了 TensorFlow 时 etils 走 gfile，<code>makedirs</code> 要整桶 <code>storage.objects.list</code>；gcsfs（<code>EPATH_USE_TF=false</code>）读也要 list（可用 <code>objectListPrefix</code> 限前缀）。</li>
+<li>键含 <code>LIBTPU_INIT_ARGS</code> 和 <code>XLA_FLAGS</code>（jax 0.11.0 <code>cache_key.py</code> <code>_hash_xla_flags</code>），改 flag 不误命中。放 <code>gs://&lt;你的桶&gt;/jax-cache/&lt;tag&gt;/</code>，即同区域的 <code>gs://$DATA_BUCKET/jax-cache/&lt;tag&gt;/</code> <span class="tg inf">[推断：路径布局照搬，未实测]</span>，pod 身份要有上面那条整桶 list 权限。</li>
+</ul>
+<p><a id="step-6-1-buckets"></a>
+<strong>桶按谁来读放</strong></p>
+<figure class="mermaid"><img src="../assets/mermaid/4b4db45d3fa2.png" width="799" alt="示意图" loading="lazy"></figure><p>读图：运行时桶 <code>gs://mirror-bucket</code>，分析桶 <code>gs://analysis-bucket</code>；虚线 <code>gs://&lt;中区数据桶&gt;</code> 最好搬到卡所在区域。</p>
+<ul>
+<li>以上为示意桶名，换成你们自己的。</li>
+<li>使用方：运行时桶就是 env.sh 的 <code>$DATA_BUCKET</code>（与卡同区域）；分析桶 env.sh 没有对应变量，由使用方自定。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>事项</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>迁移</td>
+<td>等在跑的任务结束、补同步再删源端；驱动脚本用 <code>sed -i</code> 改（换 inode），别原地改（§6.10 第 3 条）</td>
+</tr>
+<tr>
+<td>权限</td>
+<td>HNS 桶按前缀授权要同时放行 <code>objects/</code> 和 <code>folders/</code></td>
+</tr>
+<tr>
+<td>服务端镜像（<code>rewrite</code>，48 线程，不经本机）</td>
+<td>ckpt、env tar、数据集都走服务端复制，单进程约 2.7–2.84 GB/s；大数据集多进程并行</td>
+</tr>
+<tr>
+<td>长复制别用 <code>CLOUDSDK_AUTH_ACCESS_TOKEN_FILE</code></td>
+<td>只读一次，1 h 后 401；用 SDK <code>refresh_handler</code> 每 40 min 换 STS token</td>
+</tr>
+</tbody>
+</table></div>
+<p>smoke pod 跑完 <code>0/2 Completed</code>，卡 Running 但有 <code>SMOKE_OK</code> 也算过。
+<strong>回滚</strong>：<code>kubectl -n $NS delete pvc $DATA_PVC &amp;&amp; kubectl delete pv $DATA_PV</code>（<code>Retain</code>，桶数据不动）；先确认没 pod 在用，否则 <code>pvc-protection</code> 卡 Terminating。</p>
+<blockquote>
+<div class="kp kc3"><div class="kp-t">本节可能踩到的问题</div>
+<ul>
+<li><a href="pitfalls.html#l-18">2k+ 节点下 DNS 扛不住</a></li>
+<li><a href="pitfalls.html#l-27">每台主机启动时现装训练环境</a></li>
+<li><a href="pitfalls.html#l-21">存储类型与持久卷</a></li>
+<li><a href="pitfalls.html#l-21">节点池没开 Workload Identity</a></li>
+<li><a href="pitfalls.html#l-23">Checkpoint 存储与 MTC 使用坑</a></li>
+<li><a href="pitfalls.html#l-22">没有 Local SSD</a></li>
+</ul></div>
+</blockquote>
+<p><a id="step-6-2"></a></p>
+<h2 id="62-预构建-python-环境-tar别让大量机器各自-pip-install" class="hc3"><span class="hn">6.2</span>预构建 Python 环境 tar（别让大量机器各自 pip install）</h2>
+<p>CPU pod 构建一次、worker 只解压，不在每台 host 启动时现装（<code>git clone</code> + <code>uv pip install</code> + apt-get）；原因（因果为推断）见<a href="pitfalls.html#l-27">经验教训第 27 条</a>。
+构建 pod（<code>default-pool</code>，4 CPU / 12Gi / 40Gi 临时盘）：<a href="scripts/06-envbuild-pod.yaml"><code>scripts/06-envbuild-pod.yaml</code></a>：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 节选，在构建 pod 里执行，不在本机敲；实际跑下面的 06-build-env.sh</span>
+git<span class="w"> </span>clone<span class="w"> </span>--branch<span class="o">=</span><span class="s2">&quot;&lt;分支&gt;&quot;</span><span class="w"> </span>https://github.com/&lt;组织&gt;/maxtext.git<span class="w"> </span>/root/maxtext
+<span class="nb">cd</span><span class="w"> </span>/root/maxtext<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>git<span class="w"> </span>checkout<span class="w"> </span>&lt;commit&gt;
+uv<span class="w"> </span>venv<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.12<span class="w"> </span>--seed<span class="w"> </span>maxtext_venv<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">source</span><span class="w"> </span>maxtext_venv/bin/activate
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s1">&#39;.[tpu]&#39;</span><span class="w"> </span>--resolution<span class="o">=</span>lowest<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>install_maxtext_tpu_github_deps
+uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-U<span class="w"> </span>--no-deps<span class="w"> </span><span class="nv">libtpu</span><span class="o">==</span><span class="m">0</span>.0.48<span class="w"> </span>-f<span class="w"> </span>https://storage.googleapis.com/jax-releases/libtpu_releases.html
+uv<span class="w"> </span>pip<span class="w"> </span>freeze<span class="w"> </span>&gt;<span class="w"> </span>/root/maxtext/env-freeze.txt<span class="w">                       </span><span class="c1"># freeze 一起打进 tar</span>
+tar<span class="w"> </span>-C<span class="w"> </span>/<span class="w"> </span>-cf<span class="w"> </span>/tmp/env.tar<span class="w"> </span>root/maxtext<span class="w">                             </span><span class="c1"># 再上传到 gs://$DATA_BUCKET/$ENV_TAR</span>
+</code></pre></div>
+<p><strong>前提</strong>：</p>
+<ol>
+<li>私有代码仓库的 token 放进 Secret（下称 <code>&lt;SECRET&gt;</code>，key <code>token</code> <span class="src" tabindex="0">源<span class="srci">envbuild pod</span></span>）：<div class="code"><span class="lang">bash</span><pre><code><span class="nb">read</span><span class="w"> </span>-rs<span class="w"> </span>T<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>kubectl<span class="w"> </span>-n<span class="w"> </span><span class="nv">$NS</span><span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span><span class="nv">$GITHUB_SECRET</span><span class="w"> </span>--from-literal<span class="o">=</span><span class="nv">token</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$T</span><span class="s2">&quot;</span><span class="p">;</span><span class="w"> </span><span class="nb">unset</span><span class="w"> </span>T
+</code></pre></div>
+已存在报 <code>AlreadyExists</code>，换 token 先 <code>kubectl -n $NS delete secret $GITHUB_SECRET</code>；JobSet 也引用它。</li>
+<li>（可选）PyPI 代理：实测集群用 Artifact Registry 远程仓库 <code>pypi-remote</code> <span class="src" tabindex="0">源<span class="srci">envbuild pod</span></span>（[https://cloud.google.com/artifact-registry/docs/repositories/remote-repo]），不用就 <code>export AR_PYPI=</code>：<div class="code"><span class="lang">bash</span><pre><code>gcloud<span class="w"> </span>artifacts<span class="w"> </span>repositories<span class="w"> </span>create<span class="w"> </span>pypi-remote<span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$REGION</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--repository-format<span class="o">=</span>python<span class="w"> </span>--mode<span class="o">=</span>remote-repository<span class="w"> </span>--remote-python-repo<span class="o">=</span>PYPI
+</code></pre></div>
+构建 pod 身份要 <code>roles/artifactregistry.reader</code>。</li>
+<li>桶的 <code>roles/storage.objectUser</code>（§6.1），上传靠它。</li>
+</ol>
+<p><strong>跑</strong>（默认值见 env.sh，分支和 commit 必填；换版本先 <code>export MAXTEXT_BRANCH=… MAXTEXT_COMMIT=… LIBTPU_VERSION=… ENV_TAR=…</code>）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-build-env.sh<span class="w"> </span>--dry-run<span class="w">     </span><span class="c1"># 看一眼渲染后的 Pod</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-build-env.sh<span class="w">               </span><span class="c1"># 建 pod → 等 Succeeded → 验 → 删 pod</span>
+</code></pre></div>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>环节</th>
+<th>做法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>验证（脚本自动）</td>
+<td>日志有 <code>ENV_BUILD_OK</code> 与 <code>VERSIONS jax … libtpu 0.0.48</code>，存 <code>$STATE_DIR/envbuild-*.log</code>；<code>gcloud storage ls -l gs://$DATA_BUCKET/$ENV_TAR</code> 约 10.3 GB</td>
+</tr>
+<tr>
+<td>幂等</td>
+<td>已存在跳过，<code>--force</code> 覆盖；<strong>换版本就换 <code>ENV_TAR</code> 名字</strong>（注 1）</td>
+</tr>
+<tr>
+<td>回滚 / 清理</td>
+<td><code>gcloud storage rm gs://$DATA_BUCKET/$ENV_TAR</code>（先确认没 JobSet 引用）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：同一目录下可以并存多个 tar，名字里带 commit 和 libtpu 版本，按名字区分。</li>
+<li><strong>钉死 commit、libtpu、镜像 digest，freeze 留档</strong> → 见<a href="pitfalls.html#l-26">经验教训第 26 条</a>。见过的错配：<code>Unknown command line flag 'xla_tpu_collective_asymmetric_loop'</code>、依赖库版本不匹配报 <code>got an unexpected keyword argument</code>。</li>
+</ul>
+<blockquote>
+<div class="kp kc0"><div class="kp-t">本节可能踩到的问题</div>
+<ul>
+<li><a href="pitfalls.html#l-21">节点池没开 Workload Identity</a></li>
+<li><a href="pitfalls.html#l-55">控制面访问与组织策略</a></li>
+<li><a href="pitfalls.html#l-26">数值静默出错或 flag 没生效</a></li>
+</ul></div>
+</blockquote>
+<p><a id="step-6-3"></a></p>
+<h2 id="63-配置-overlay" class="hc4"><span class="hn">6.3</span>配置 overlay</h2>
+<p>放 <code>gs://&lt;桶&gt;/configs/submit/&lt;RUN_NAME&gt;/config_overlay.yml</code>，启动脚本检测到就合并。overlay 按你的训练配置写，运维要对上的键：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">dcn_data_parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span>
+<span class="nt">num_slices</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span>
+<span class="nt">quantization</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">fp8_full</span>
+<span class="nt">enable_fp8_absmax_qag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">        </span><span class="c1"># FP8 层生效；日志那行 fallback 警告只针对个别调用点，见 §6.4.1</span>
+</code></pre></div>
+<p><strong>上传</strong>（容器里路径 <code>/models/configs/submit/$RUN_NAME/config_overlay.yml</code>）：</p>
+<div class="code"><span class="lang">bash</span><pre><code>gcloud<span class="w"> </span>storage<span class="w"> </span>cp<span class="w"> </span>&lt;你的<span class="w"> </span>overlay<span class="w"> </span>文件&gt;<span class="w"> </span>gs://<span class="nv">$DATA_BUCKET</span>/configs/submit/<span class="nv">$RUN_NAME</span>/config_overlay.yml
+</code></pre></div>
+<ul>
+<li><strong>验证</strong>：<code>gcloud storage cat gs://$DATA_BUCKET/configs/submit/$RUN_NAME/config_overlay.yml | grep -E '^(num_slices|dcn_data_parallelism):'</code> 两行都等于片数；日志有 <code>Merging config overlay: /models/configs/submit/&lt;RUN_NAME&gt;/config_overlay.yml</code>。</li>
+<li><strong>幂等</strong>：<strong>别改跑过的 run 的 overlay</strong>，换 <code>RUN_NAME</code>（重跑时用新的 run 目录）。</li>
+<li>文件不存在<strong>静默跳过</strong>合并（<code>if [ -f … ]</code>），preflight 先查它。</li>
+<li><strong>回滚</strong>：<code>gcloud storage rm gs://$DATA_BUCKET/configs/submit/$RUN_NAME/config_overlay.yml</code>。</li>
+</ul>
+<p><strong>overlay 管不到模型 yml 里已有的键</strong>（实测）</p>
+<figure class="mermaid"><img src="../assets/mermaid/ad5533b4354d.png" width="527" alt="示意图" loading="lazy"></figure><p>读图：overlay 里的模型结构键被 <code>pyconfig</code> 用模型 yml <strong>静默盖掉</strong>；<code>override_model_config=true</code> 只让<strong>命令行</strong>压过模型 yml。</p>
+<ul>
+<li>例：覆盖文件里减层后的 <code>base_num_decoder_layers</code> 被 <code>moe-large.yml</code> 里模型配置的层数盖掉（日志 <code>Config param base_num_decoder_layers</code> 打出的是盖掉之后的值）；JIT 基线作业重名的 <code>use_tokamax_gmm</code> / <code>use_gmm_v2</code> 恰好同值。</li>
+<li>这类键追加在 <code>bash scripts/&lt;大号模型启动脚本&gt;</code> 后（<code>&quot;$@&quot;</code> 透传），核对 <code>Config param &lt;键&gt;:</code>。</li>
+</ul>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>规则</span></span></p>
+<p><code>num_slices</code> = JobSet <code>replicas</code> = <code>dcn_data_parallelism</code>（这里都是片数）；<code>ici_fsdp_parallelism</code> = 每片 device 数（4x8x8 = 256 chip = 512 device）——JIT 基线作业其余 <code>ici_*</code> / <code>dcn_*_parallelism</code> 都是 1 <span class="src" tabindex="0">源<span class="srci">pyconfig</span></span>。</p>
+</blockquote>
+<p><a id="step-6-4"></a></p>
+<h2 id="64-jobsetjit-基线运行原样删掉无关字段" class="hc5"><span class="hn">6.4</span>JobSet（JIT 基线作业原样，删掉无关字段）</h2>
+<p>可直接跑的同构 JobSet 见 06b 公开配方。节选运维要对上的字段：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${JOBSET_NAME}</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">kueue.x-k8s.io/queue-name</span><span class="p">:</span><span class="w"> </span><span class="nv">$</span><span class="p p-Indicator">{</span><span class="nv">LOCAL_QUEUE</span><span class="p p-Indicator">}}</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">failurePolicy</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">maxRestarts</span><span class="p">:</span><span class="w"> </span><span class="nv">0</span><span class="p p-Indicator">,</span><span class="nt"> rules</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="nv">RestartJobSet</span><span class="p p-Indicator">,</span><span class="nt"> onJobFailureReasons</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">BackoffLimitExceeded</span><span class="p p-Indicator">]}]}</span>
+<span class="w">  </span><span class="nt">replicatedJobs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker</span>
+<span class="w">    </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span>
+<span class="w">    </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">completions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<span class="w">        </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<span class="w">        </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">annotations</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cloud.google.com/gke-tpu-slice-topology</span><span class="p">:</span><span class="w"> </span><span class="nv">4x8x8</span><span class="p p-Indicator">,</span><span class="nt"> gke-gcsfuse/volumes</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">          </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">hostNetwork</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">            </span><span class="nt">dnsPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterFirstWithHostNet</span>
+<span class="w">            </span><span class="nt">nodeSelector</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cloud.google.com/gke-networking-dra-driver</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="p p-Indicator">,</span><span class="nt"> cloud.google.com/gke-tpu-accelerator</span><span class="p">:</span><span class="w"> </span><span class="nv">tpu7x</span><span class="p p-Indicator">}</span>
+<span class="w">            </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jax-tpu</span>
+<span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;公开 Python 基础镜像@sha256:…&gt;</span>
+<span class="w">              </span><span class="nt">securityContext</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">bash</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">-c</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;&lt;多行脚本&gt;&quot;</span><span class="p p-Indicator">]</span><span class="w">         </span><span class="c1"># 解压 /models/${ENV_TAR} → 激活 venv → 合并 overlay → 启动训练脚本</span>
+<span class="w">              </span><span class="nt">env</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># 只列运维要对上的</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">ICI_FSDP_PARALLELISM</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;512&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">ENABLE_CHECKPOINTING</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;false&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="nv">LIBTPU_INIT_ARGS</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;--megascale_grpc_interface_prefixes=eth1,eth2,lo</span><span class="nv"> </span><span class="s">...&quot;</span><span class="p p-Indicator">}</span>
+<span class="w">              </span><span class="nt">resources</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">requests</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span><span class="p p-Indicator">},</span><span class="nt"> limits</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span><span class="p p-Indicator">}}</span>
+<span class="w">              </span><span class="nt">volumeMounts</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">/models ← PVC</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">/tmp/ramdisk ← 200Gi 内存盘</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">/dev/shm ← 内存盘</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<div class="kp kc1"><div class="kp-t">字段为什么这样写</div>
+<ul>
+<li><code>completions: 64</code>：一 pod 一台 host。<code>hostNetwork: true</code>：<a href="01-capacity-and-prereqs.html#step-1-7">01 §1.7</a>。<code>queue-name</code> 标签填 <code>$LOCAL_QUEUE</code>，即 <a href="03-control-plane-addons.html#step-3-5">03 §3.5</a> 建的 LocalQueue（实测集群叫 <code>multislice-queue</code>）。</li>
+<li><code>gke-networking-dra-driver</code>：只有双网卡池有 eth2（<a href="02-cluster-bringup.html#step-2-7">02 §2.7</a> 第 5 条）；<a href="00-overview.html#g-megascale">megascale</a> 是 libtpu 里管 DCN 通信的层。</li>
+<li>command 另有打印版本、worker 0 日志同步（<code>scripts/job_log_sync.sh</code> → <code>/models/pretrain/moe-large/&lt;RUN_NAME&gt;/</code>）、<code>tee</code>，exit code 由 <code>${PIPESTATUS[0]}</code> 透传；提交后多出 Kueue 注解、4x4x4-state 亲和、<code>gke-tpu-topology: 4x8x8</code> nodeSelector 和 scheduling gate，正常。</li>
+</ul></div>
+<p><strong>flag 怎么生效</strong></p>
+<figure class="mermaid"><img src="../assets/mermaid/d1fbe2963deb.png" width="825" alt="示意图" loading="lazy"></figure><p>读图：越右越优先，能改中间两格，生效值认日志那行。</p>
+<ul>
+<li>默认 flag 另有 SparseCore collective offload 一组和 async allgather。<code>XLA_FLAGS</code> 不走这条链：默认 <code>--xla_disable_hlo_passes=all_gather_decomposer,collective-pipeliner-forward</code>，一设就整个替换 <span class="src" tabindex="0">源<span class="srci">实测作业启动脚本</span></span>。</li>
+</ul>
+<p><a id="step-6-4-params"></a></p>
+<h3 id="641-每个要紧参数是干什么的">6.4.1 每个要紧参数是干什么的</h3>
+<p>取值出自 <code>Config param</code> 行和生效 <code>LIBTPU_INIT_ARGS</code>。</p>
+<p><strong>并行与 batch</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>JIT 基线作业</th>
+<th>干什么</th>
+<th>约束 / 证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>num_slices</code></td>
+<td>N（片数）</td>
+<td>JAX 认为有几片</td>
+<td>§6.3 规则</td>
+</tr>
+<tr>
+<td><code>dcn_data_parallelism</code></td>
+<td>N（片数）</td>
+<td>片间数据并行，每步 all-reduce 梯度</td>
+<td>求和在 host CPU</td>
+</tr>
+<tr>
+<td><code>ici_fsdp_parallelism</code></td>
+<td>512</td>
+<td>片内 FSDP 切 512 份</td>
+<td>不开专家并行（EP=1）</td>
+</tr>
+<tr>
+<td><code>per_device_batch_size</code> × <code>max_target_length</code></td>
+<td>按生产配置</td>
+<td>决定每 device 每步 token 数</td>
+<td><strong>超 HBM 可能静默挂住</strong>（一次韧性演练梯度累积 2 → 101.0 GiB，挂约 6 min 被杀，<a href="pitfalls.html#l-44">经验教训第 44 条</a>）</td>
+</tr>
+<tr>
+<td><code>weight_dtype</code> / <code>grad_dtype</code> / <code>dtype</code></td>
+<td>float32 / float32 / bfloat16</td>
+<td>参数 / 梯度 / 计算的精度</td>
+<td>梯度精度决定 DCN 流量</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>显存与编译</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>JIT 基线作业</th>
+<th>干什么</th>
+<th>约束 / 证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>remat_policy</code></td>
+<td><code>custom</code>：按张量选存 HBM 还是重算</td>
+<td>重算换显存</td>
+<td>多存常变慢</td>
+</tr>
+<tr>
+<td><code>scan_layers</code></td>
+<td>true</td>
+<td>按一层编译再循环</td>
+<td>不 scan 编译更久、稳态略快</td>
+</tr>
+<tr>
+<td><code>XLA_FLAGS</code></td>
+<td>关 <code>all_gather_decomposer</code>、<code>collective-pipeliner-forward</code></td>
+<td>前者防止 all-gather 被改写成 all-reduce；后者关掉数据并行的通信重叠，<strong>省显存的是它</strong>（注 1）</td>
+<td><strong>有片间数据并行就必须带</strong>：不带时大号模型两片数据并行要 103.7 GiB；单片约 +3%</td>
+</tr>
+<tr>
+<td>HLO 通信重排</td>
+<td>关</td>
+<td>一组私有的 XLA HLO pass（未开源），改集合通信的切法、落点和调度顺序；本书只讲理念和判据，实现需读者自行开发</td>
+<td>只在 AOT 编译时生效，本章 JIT 基线不开</td>
+</tr>
+<tr>
+<td><code>compiled_trainstep_file</code></td>
+<td>空（= JIT）</td>
+<td>加载 AOT 程序</td>
+<td>JIT 10+ 片到 step 0 四十多分钟；AOT 编 512 device 约一小时</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：该 MaxText 分支自己做重叠，所以敢关，06b 同样。<strong>反证</strong>：大号模型 2 × 4x8x8 只设 <code>XLA_FLAGS=--xla_disable_hlo_passes=all_gather_decomposer</code>（pipeliner 重新打开），HBM <strong>108.6 GiB</strong>，加载时 OOM（<code>Attempting to allocate 1.14G … 1.08G free</code>）。</li>
+</ul>
+<p><strong>FP8</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>JIT 基线作业</th>
+<th>干什么</th>
+<th>约束 / 证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>quantization: fp8_full</code> + <code>use_qwix_quantization</code> + <code>fp8_format: hybrid</code> + <code>use_tokamax_gmm</code></td>
+<td>开</td>
+<td>matmul 用 FP8（<code>hybrid</code> 以 Qwix 源码为准）</td>
+<td>部分层保留 BF16</td>
+</tr>
+<tr>
+<td><code>enable_fp8_absmax_qag</code></td>
+<td>true，<strong>FP8 专家层生效</strong></td>
+<td>先量化再 all-gather，通信减半</td>
+<td><code>absmax QAG is not supported ... falling back</code> 不代表没生效；<strong>看 XProf 里 all-gather 的 dtype</strong>（注 1）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：警告带 <code>@functools.lru_cache(maxsize=1)</code>（moe.py），<strong>任一调用点回退就打一次</strong>（逐调用点判定）。回退 <span class="tg inf">[推断]</span> 来自保留 BF16 的那几层。</li>
+</ul>
+<p><strong>网络与功耗（LIBTPU flag）</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>flag</th>
+<th>JIT 基线作业</th>
+<th>干什么</th>
+<th>证据 / 建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--megascale_grpc_interface_prefixes=eth1,eth2,lo</code></td>
+<td>开</td>
+<td>DCN 用两张网卡</td>
+<td>要 eth2，所以带 §6.4 的 nodeSelector（注 1）。</td>
+</tr>
+<tr>
+<td><code>--xla_tpu_prefer_async_allgather_to_allreduce=true</code></td>
+<td>开（默认）</td>
+<td>防止 all-gather 被改写成 all-reduce、DCN 字节翻倍</td>
+<td>小号模型 2 片约 −20%</td>
+</tr>
+<tr>
+<td><code>--xla_tpu_dvfs_p_state=7</code></td>
+<td>开（默认，启动脚本的 XLA flag 默认值）</td>
+<td>功耗档拉满（默认 3）</td>
+<td>预期 bf16 0–5%、fp8 8–15%；<strong>高负载下的稳定性仍在确认</strong>（注 2）</td>
+</tr>
+<tr>
+<td><code>--xla_tpu_enable_sparse_core_collective_offload_all_reduce=true</code></td>
+<td>开（默认）</td>
+<td>all-reduce 卸到 SparseCore</td>
+<td>与一类已知静默数值问题有关，用数值 canary 盯（见<a href="pitfalls.html#l-26">经验教训第 26 条</a>）</td>
+</tr>
+<tr>
+<td><code>--megascale_grpc_premap_memory_bytes</code></td>
+<td>不设</td>
+<td>DCN 预分配 host 内存</td>
+<td>开检查点才要紧（见<a href="pitfalls.html#l-25">经验教训第 25 条</a>）。别和 <code>TPU_PREMAPPED_BUFFER_SIZE</code>（默认 4 GiB；调大要改 MaxText，上游未合入，需验证）混</td>
+</tr>
+<tr>
+<td><code>--megascale_grpc_transport_stall_threshold=2s</code> 等 4 个诊断 flag</td>
+<td>不设（诊断运行设了）</td>
+<td>stall 看门狗 + collective 延迟</td>
+<td>与慢步无关（§6.6 ④）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>
+<p>注 1：数千芯 DEVICE_CHECK 一次过；≤4 片 DCN 基准看不出双网卡差别（按双网卡建网仍是<a href="pitfalls.html#l-20">经验教训第 20 条</a>的要求）。</p>
+</li>
+<li>
+<p>注 2：P7 档实测 host matmul 中位提升约 4% 到一成多，但最慢 host 只快不到 2%，而同步训练看最慢 host。高负载下的稳定性仍在确认；不开就在 <code>EXTRA_LIBTPU_ARGS</code> 写 <code>--xla_tpu_dvfs_p_state=3</code>。</p>
+</li>
+</ul>
+<blockquote class="co tip">
+<p><span class="co-t"><i>✅</i><span>改 flag 的规矩</span></span></p>
+<p><code>EXTRA_LIBTPU_ARGS</code> 追加、换 <code>RUN_NAME</code>、只改一处、≥ 20 稳态步，比 p50 和均值；先确认 libtpu 认得（否则 <code>Unknown command line flag</code>）。</p>
+</blockquote>
+<blockquote>
+<div class="kp kc2"><div class="kp-t">本节可能踩到的问题</div>
+<ul>
+<li><a href="pitfalls.html#l-31">作业清单与队列配置写错</a></li>
+<li><a href="pitfalls.html#l-38">一个 Slice 出事，N 片全部重切</a></li>
+<li><a href="pitfalls.html#l-42">JAX abort 写几十 GB core dump → 节点 DiskPressure → 整个任务被驱逐</a></li>
+<li><a href="pitfalls.html#l-53">控制面容量</a></li>
+<li><a href="pitfalls.html#l-22">没有 Local SSD</a></li>
+<li><a href="pitfalls.html#l-13">命名与长度限制</a></li>
+</ul></div>
+</blockquote>
+<p><a id="step-6-5"></a></p>
+<h2 id="65-提交与盯盘" class="hc0"><span class="hn">6.5</span>提交与盯盘</h2>
+<p>全走 <a href="scripts/06-jobset.sh"><code>scripts/06-jobset.sh</code></a>（<code>render</code> 按 <code>SLICES</code> / <code>TOPO</code> 改片数、形状、FSDP 度；不设 = JIT 基线作业原样，已逐行 diff）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">S</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-jobset.sh
+<span class="nv">$S</span><span class="w"> </span>preflight<span class="w">     </span><span class="c1"># PVC Bound、Secret、LocalQueue、env tar、overlay 在且片数对得上；报 HEALTHY 节点数（应为 片数 × 64）</span>
+<span class="nv">$S</span><span class="w"> </span>apply<span class="w">         </span><span class="c1"># preflight 通过才 apply；默认先过 05-avoid-manual-slices.py 避开手工 Slice</span>
+<span class="nv">$S</span><span class="w"> </span>watch<span class="w">         </span><span class="c1"># JobSet / Workload / N 个 Slice / 全部 Pod 概况，反复跑</span>
+<span class="nv">$S</span><span class="w"> </span>logs<span class="w">          </span><span class="c1"># 跟 worker-0-0 的 jax-tpu 日志</span>
+<span class="nv">$S</span><span class="w"> </span>steps<span class="w">         </span><span class="c1"># 出 step 以后：稳态 p50 / 均值 / 慢步占比 / TFLOP/s / MFU / HBM（口径见 §6.6，对 JIT 基线作业的原始日志复算与 §6.6 表一致）</span>
+</code></pre></div>
+<p><strong>提交后依次看到</strong><span class="src" tabindex="0">源<span class="srci">worker 日志</span></span></p>
+<div class="x-steps">
+<ol>
+<li><strong>准入</strong> Workload <code>jobset-$JOBSET_NAME-xxxxx</code> ADMITTED。</li>
+<li><strong>切片激活</strong> N 个 Slice（名字是 <code>$NS-jobset-$JOBSET_NAME-&lt;随机后缀&gt;-worker-&lt;i&gt;</code>，i 从 0 到片数 − 1，形状 4x8x8）ACTIVATING → ACTIVE。</li>
+<li><strong>Pod 起来</strong> 片数 × 64 个 Running（2/2：训练容器 + gcsfuse sidecar）。</li>
+<li><strong>JAX 连上</strong> worker-0-0 依次打出 <code>TPU runtime versions: jax=0.11.0 jaxlib=0.11.0 libtpu=0.0.48</code>、<code>Merging config overlay</code>、<code>jax.devices() returned &lt;设备数&gt; devices</code>。</li>
+</ol>
+</div>
+<p><strong>幂等</strong>：同名同内容 <code>unchanged</code>；同名改内容被拒，先 <code>delete</code> 或换名。</p>
+<p><strong>停 / 删</strong>：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">$S</span><span class="w"> </span>stop<span class="w">          </span><span class="c1"># Workload spec.active=false：驱逐、释放 N 个 Slice、不再排队；JobSet 对象留着   → $S resume 重新排队</span>
+<span class="nv">$S</span><span class="w"> </span><span class="nb">suspend</span><span class="w">       </span><span class="c1"># 另一种：patch JobSet spec.suspend=true（Kueue 管理下的行为「未实测」：没在集群上跑过，Kueue 自己也写 suspend，优先用 stop）      → $S unsuspend</span>
+<span class="nv">$S</span><span class="w"> </span>delete<span class="w">        </span><span class="c1"># 删 JobSet（Workload / Slice / Pod 随之回收），30 s 后检查 Slice 是否已释放</span>
+</code></pre></div>
+<ul>
+<li><code>stop</code> 语义：[https://kueue.sigs.k8s.io/docs/concepts/workload/]（「…will cause a running workload to be evicted and not be requeued」）。<code>delete</code> 后 Slice 超 15 分钟还在 → <a href="05-dynamic-slicing-operations.html">05</a>、<a href="08-day2-operations.html#step-8-1">08</a> 告警 #4 / #15。</li>
+</ul>
+<p>正常时间线（JIT 基线作业）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>时间</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>切片激活（10+ 片）</td>
+<td>正常 112–197 s；JIT 基线作业因巡检切片占 cube 有 7 片重试（最慢 worker-4 7 次、368 s），任务级 370 s</td>
+</tr>
+<tr>
+<td><code>jax.devices()</code> → step 0 完成</td>
+<td>约 1 min + <strong>四十多分钟</strong>（逐段见 §6.6 ①）</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>验收</strong>（MTC replicator 失败也会被包成 <code>StopTraining</code> exit 0 → 见<a href="pitfalls.html#l-44">经验教训第 44 条</a>）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">$S</span><span class="w"> </span>verify
+</code></pre></div>
+<p>查这些 <span class="src" tabindex="0">源<span class="srci">train-&lt;时间戳&gt;.log</span></span>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>查</th>
+<th>期望（JIT 基线作业）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JobSet conditions</td>
+<td><code>Completed=True AllJobsCompleted</code></td>
+</tr>
+<tr>
+<td>最后一行 <code>completed step: N</code></td>
+<td><strong>N = STEPS − 1 = 49</strong></td>
+</tr>
+<tr>
+<td>step 0 / 3 / 49 耗时与 loss；<code>jax.devices()</code> 与版本行</td>
+<td>step 0 约 18 min、50 步 loss 降约 5%；device 数 = 芯片 × 2</td>
+</tr>
+<tr>
+<td>生效 <code>LIBTPU_INIT_ARGS</code></td>
+<td>存到 <code>$STATE_DIR/run-$RUN_NAME/</code></td>
+</tr>
+<tr>
+<td><code>gs://$DATA_BUCKET/pretrain/moe-large/$RUN_NAME/</code></td>
+<td><code>train-*.log</code>（JIT 基线作业的日志是 <code>train-&lt;时间戳&gt;.log</code>）</td>
+</tr>
+</tbody>
+</table></div>
+<p>然后 <code>$S delete</code>（跑完的 JobSet 不会自己消失），Slice 拆没拆看 <code>$S watch</code> 的「ACTIVE slices」行 <span class="tg inf">[需验证：语料里没有完成瞬间的 Slice 快照]</span>。</p>
+<p><a id="step-6-5-ladder"></a></p>
+<h3 id="651-逐级命令对应开头路线图">6.5.1 逐级命令（对应开头「路线图」）</h3>
+<p>每级换 <code>RUN_NAME</code> / <code>JOBSET_NAME</code>，各一份 overlay。<strong>时间预算</strong>（apply → 首步，训练段按步数另加；编译全冷）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>级</th>
+<th style="text-align:right">步数</th>
+<th style="text-align:right">apply → 首步</th>
+<th style="text-align:right">再留一次重跑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1（1 cube 小号模型）</td>
+<td style="text-align:right">30</td>
+<td style="text-align:right">约 21 min</td>
+<td style="text-align:right">＋同样时长</td>
+</tr>
+<tr>
+<td>2（1 片 4x8x8）</td>
+<td style="text-align:right">50</td>
+<td style="text-align:right">约 40 min</td>
+<td style="text-align:right">＋同样时长</td>
+</tr>
+<tr>
+<td>3（2 片）</td>
+<td style="text-align:right">50</td>
+<td style="text-align:right">四十多分钟</td>
+<td style="text-align:right">＋同样时长</td>
+</tr>
+<tr>
+<td>补点 4 / 8 片</td>
+<td style="text-align:right">50</td>
+<td style="text-align:right">四十多分钟</td>
+<td style="text-align:right">—</td>
+</tr>
+<tr>
+<td>4（10+ 片）</td>
+<td style="text-align:right">30（本书实测）/ 50（JIT 基线作业原任务）</td>
+<td style="text-align:right"><strong>40–50 min</strong></td>
+<td style="text-align:right">＋同样时长</td>
+</tr>
+<tr>
+<td>补点下一档</td>
+<td style="text-align:right">30</td>
+<td style="text-align:right">约 50 min</td>
+<td style="text-align:right">—</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="chart"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 520" width="880" role="img" aria-label="六次训练（1、2、4、8、10+ 片和下一档）从 apply 到第 0 步的分段横条：总长约 40 到 50 分钟，几乎不随片数变；每条里蓝段第一遍编译约 20–22 分钟、橙段第二遍约 18–21 分钟。最下面一条是另一次实测在 1 个 cube 上的冷缓存拆解：追踪约 3、降级约 12、XLA 编译约 2 分钟，第二遍再降级约 12、再编译约 2 分钟，共约 35 分钟。" font-family='"Noto Sans CJK SC","PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif' class="chart"><title>按下 apply 到第一步要 40–50 分钟：两大段各约 20 分钟，而且是把同一个程序编了两遍</title><desc>六次训练（1、2、4、8、10+ 片和下一档）从 apply 到第 0 步的分段横条：总长约 40 到 50 分钟，几乎不随片数变；每条里蓝段第一遍编译约 20–22 分钟、橙段第二遍约 18–21 分钟。最下面一条是另一次实测在 1 个 cube 上的冷缓存拆解：追踪约 3、降级约 12、XLA 编译约 2 分钟，第二遍再降级约 12、再编译约 2 分钟，共约 35 分钟。</desc><style>.pt{cursor:default}.pt:hover>*:not(title),.pt:focus>*:not(title){stroke:#202124;stroke-width:2.2}.pt:focus{outline:none}</style><rect width="880" height="520" fill="#fff"/><text x="20.0" y="30.0" font-size="19" fill="#202124" font-weight="700">按下 apply 到第一步要 40–50 分钟：两大段各约 20 分钟，而且是把同一个程序编了两遍</text><text x="20.0" y="52.0" font-size="14" fill="#5f6368">每根横条 = 一次训练从 kubectl apply 到第 0 步完成；灰 = 编组、起 pod、TPU 初始化，</text><text x="20.0" y="74.0" font-size="14" fill="#5f6368">蓝 = 第一遍编译，橙 = 第 0 步输入的切分声明对不上、同一个程序重编一遍（含第 0 步本身）。最下一条把编译拆开看</text><rect x="20" y="89" width="12" height="12" rx="2" fill="#dadce0"/><text x="38.0" y="100.0" font-size="13.5" fill="#202124">编组 + 起 pod + TPU 初始化</text><rect x="246.84000000000003" y="89" width="12" height="12" rx="2" fill="#1a73e8"/><text x="264.8" y="100.0" font-size="13.5" fill="#202124">第一遍编译</text><rect x="354.34000000000003" y="89" width="12" height="12" rx="2" fill="#e8710a"/><text x="372.3" y="100.0" font-size="13.5" fill="#202124">第二遍：同一程序重编 + 第 0 步</text><line x1="601.7" y1="95" x2="615.7" y2="95" stroke="#9aa0a6" stroke-width="2" stroke-dasharray="4 3"/><text x="619.7" y="100.0" font-size="13.5" fill="#202124">虚线框：10+ 片只有总区间、未拆段</text><line x1="150" y1="462" x2="770" y2="462" stroke="#80868b"/><line x1="150.0" y1="122" x2="150.0" y2="462" stroke="#eceff1"/><line x1="150.0" y1="462" x2="150.0" y2="467" stroke="#80868b"/><text x="150.0" y="483.0" font-size="13" fill="#5f6368" text-anchor="middle">0</text><line x1="269.2" y1="122" x2="269.2" y2="462" stroke="#eceff1"/><line x1="269.2" y1="462" x2="269.2" y2="467" stroke="#80868b"/><text x="269.2" y="483.0" font-size="13" fill="#5f6368" text-anchor="middle">10</text><line x1="388.5" y1="122" x2="388.5" y2="462" stroke="#eceff1"/><line x1="388.5" y1="462" x2="388.5" y2="467" stroke="#80868b"/><text x="388.5" y="483.0" font-size="13" fill="#5f6368" text-anchor="middle">20</text><line x1="507.7" y1="122" x2="507.7" y2="462" stroke="#eceff1"/><line x1="507.7" y1="462" x2="507.7" y2="467" stroke="#80868b"/><text x="507.7" y="483.0" font-size="13" fill="#5f6368" text-anchor="middle">30</text><line x1="626.9" y1="122" x2="626.9" y2="462" stroke="#eceff1"/><line x1="626.9" y1="462" x2="626.9" y2="467" stroke="#80868b"/><text x="626.9" y="483.0" font-size="13" fill="#5f6368" text-anchor="middle">40</text><line x1="746.2" y1="122" x2="746.2" y2="462" stroke="#eceff1"/><line x1="746.2" y1="462" x2="746.2" y2="467" stroke="#80868b"/><text x="746.2" y="483.0" font-size="13" fill="#5f6368" text-anchor="middle">50</text><text x="460.0" y="506.0" font-size="13.5" fill="#5f6368" text-anchor="middle">分钟（从 kubectl apply 起）</text><text x="138.0" y="141.0" font-size="14" fill="#202124" text-anchor="end">1 片 · 256 芯</text><g class="pt" tabindex="0"><title>1 片 · 编组 + 起 pod + TPU 初始化：约 3 min</title><rect x="150.0" y="125.0" width="33.4" height="22.0" fill="#dadce0" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><g class="pt" tabindex="0"><title>1 片 · 第一遍编译：约 20 min</title><rect x="183.4" y="125.0" width="233.7" height="22.0" fill="#1a73e8" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="300.2" y="141.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">20</text><g class="pt" tabindex="0"><title>1 片 · 第二遍（重编）+ 第 0 步：约 18 min</title><rect x="417.1" y="125.0" width="214.6" height="22.0" fill="#e8710a" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="524.4" y="141.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">18</text><text x="639.7" y="141.0" font-size="14" fill="#202124" font-weight="700">约 40 min</text><text x="138.0" y="179.0" font-size="14" fill="#202124" text-anchor="end">2 片 · 512 芯</text><g class="pt" tabindex="0"><title>2 片 · 编组 + 起 pod + TPU 初始化：约 3 min</title><rect x="150.0" y="163.0" width="34.6" height="22.0" fill="#dadce0" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><g class="pt" tabindex="0"><title>2 片 · 第一遍编译：约 22 min</title><rect x="184.6" y="163.0" width="262.3" height="22.0" fill="#1a73e8" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="315.7" y="179.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">22</text><g class="pt" tabindex="0"><title>2 片 · 第二遍（重编）+ 第 0 步：约 19 min</title><rect x="446.9" y="163.0" width="225.3" height="22.0" fill="#e8710a" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="559.6" y="179.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">19</text><text x="680.2" y="179.0" font-size="14" fill="#202124" font-weight="700">约 44 min</text><text x="138.0" y="217.0" font-size="14" fill="#202124" text-anchor="end">4 片 · 1,024 芯</text><g class="pt" tabindex="0"><title>4 片 · 编组 + 起 pod + TPU 初始化：约 3 min</title><rect x="150.0" y="201.0" width="38.2" height="22.0" fill="#dadce0" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><g class="pt" tabindex="0"><title>4 片 · 第一遍编译：约 22 min</title><rect x="188.2" y="201.0" width="257.5" height="22.0" fill="#1a73e8" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="316.9" y="217.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">22</text><g class="pt" tabindex="0"><title>4 片 · 第二遍（重编）+ 第 0 步：约 19 min</title><rect x="445.7" y="201.0" width="232.5" height="22.0" fill="#e8710a" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="561.9" y="217.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">19</text><text x="686.2" y="217.0" font-size="14" fill="#202124" font-weight="700">约 44 min</text><text x="138.0" y="255.0" font-size="14" fill="#202124" text-anchor="end">8 片 · 2,048 芯</text><g class="pt" tabindex="0"><title>8 片 · 编组 + 起 pod + TPU 初始化：约 4 min</title><rect x="150.0" y="239.0" width="45.3" height="22.0" fill="#dadce0" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><g class="pt" tabindex="0"><title>8 片 · 第一遍编译：约 22 min</title><rect x="195.3" y="239.0" width="265.9" height="22.0" fill="#1a73e8" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="328.2" y="255.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">22</text><g class="pt" tabindex="0"><title>8 片 · 第二遍（重编）+ 第 0 步：约 19 min</title><rect x="461.2" y="239.0" width="231.3" height="22.0" fill="#e8710a" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="576.8" y="255.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">19</text><text x="700.5" y="255.0" font-size="14" fill="#202124" font-weight="700">约 46 min</text><text x="138.0" y="293.0" font-size="14" fill="#202124" text-anchor="end">10+ 片 · 数千芯</text><g class="pt" tabindex="0"><title>10+ 片 · apply → 第 0 步：40–50 min（两遍编译各约 20 min）</title><rect x="150.0" y="277.0" width="476.9" height="22.0" fill="#fff" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="5 3"/></g><text x="388.5" y="293.0" font-size="13" fill="#202124" text-anchor="middle">未拆段：编组 + 起 pod + 两遍编译（各约 20 min）</text><line x1="626.9" y1="288.0" x2="746.2" y2="288.0" stroke="#5f6368" stroke-width="1.6"/><line x1="626.9" y1="281.0" x2="626.9" y2="295.0" stroke="#5f6368" stroke-width="1.6"/><line x1="746.2" y1="281.0" x2="746.2" y2="295.0" stroke="#5f6368" stroke-width="1.6"/><text x="754.2" y="293.0" font-size="14" fill="#202124" font-weight="700">40–50 min</text><text x="138.0" y="331.0" font-size="14" fill="#202124" text-anchor="end">下一档</text><g class="pt" tabindex="0"><title>下一档 · 编组 + 起 pod + TPU 初始化：约 7 min</title><rect x="150.0" y="315.0" width="82.3" height="22.0" fill="#dadce0" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><g class="pt" tabindex="0"><title>下一档 · 第一遍编译：约 22 min</title><rect x="232.3" y="315.0" width="262.3" height="22.0" fill="#1a73e8" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="363.4" y="331.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">22</text><g class="pt" tabindex="0"><title>下一档 · 第二遍（重编）+ 第 0 步：约 21 min</title><rect x="494.6" y="315.0" width="250.4" height="22.0" fill="#e8710a" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="619.8" y="331.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">21</text><text x="753.0" y="331.0" font-size="14" fill="#202124" font-weight="700">约 50 min</text><line x1="20" y1="358.0" x2="860" y2="358.0" stroke="#dadce0"/><text x="20.0" y="380.0" font-size="14" fill="#202124" font-weight="700">放大看编译里面（另一次实测：1 个 cube、模型减层、冷缓存；总长约 35 min）</text><text x="138.0" y="421.0" font-size="14" fill="#202124" text-anchor="end">1 cube · 64 芯</text><g class="pt" tabindex="0"><title>冷缓存 · 编组 + 起 pod + TPU 初始化 + 建模型：约 2 min</title><rect x="150.0" y="405.0" width="25.6" height="22.0" fill="#dadce0" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><g class="pt" tabindex="0"><title>冷缓存 · 追踪（Python 跑一遍训练步）：约 3 min</title><rect x="175.6" y="405.0" width="37.0" height="22.0" fill="#1a73e8" fill-opacity="0.45" stroke="#fff" stroke-width="1"/></g><line x1="194.1" y1="427.0" x2="194.1" y2="438.0" stroke="#9aa0a6" stroke-width="1"/><text x="194.1" y="454.0" font-size="13" fill="#202124" text-anchor="middle">追踪 3</text><g class="pt" tabindex="0"><title>冷缓存 · 降级成 StableHLO（几乎全在 Pallas 手写核）：约 12 min</title><rect x="212.6" y="405.0" width="144.3" height="22.0" fill="#1a73e8" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="284.7" y="421.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">降级 12</text><g class="pt" tabindex="0"><title>冷缓存 · XLA 编译：约 2 min</title><rect x="356.9" y="405.0" width="26.2" height="22.0" fill="#174ea6" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><line x1="370.0" y1="427.0" x2="370.0" y2="438.0" stroke="#9aa0a6" stroke-width="1"/><text x="370.0" y="454.0" font-size="13" fill="#202124" text-anchor="middle">XLA 2</text><g class="pt" tabindex="0"><title>冷缓存 · 重新追踪（切分声明对不上）：约 15 s</title><rect x="383.1" y="405.0" width="3.1" height="22.0" fill="#e8710a" fill-opacity="0.45" stroke="#fff" stroke-width="1"/></g><g class="pt" tabindex="0"><title>冷缓存 · 再降级一遍：约 12 min</title><rect x="386.2" y="405.0" width="146.7" height="22.0" fill="#e8710a" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="459.5" y="421.0" font-size="13" fill="#fff" text-anchor="middle" font-weight="700">再降级 12</text><g class="pt" tabindex="0"><title>冷缓存 · 再 XLA 编译一遍：约 2 min</title><rect x="532.8" y="405.0" width="26.2" height="22.0" fill="#b06000" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><line x1="546.0" y1="427.0" x2="546.0" y2="438.0" stroke="#9aa0a6" stroke-width="1"/><text x="546.0" y="454.0" font-size="13" fill="#202124" text-anchor="middle">再编译 2</text><g class="pt" tabindex="0"><title>冷缓存 · 第 0 步执行：约 15 s</title><rect x="559.1" y="405.0" width="3.0" height="22.0" fill="#5f6368" fill-opacity="1.0" stroke="#fff" stroke-width="1"/></g><text x="570.1" y="421.0" font-size="14" fill="#202124" font-weight="700">约 35 min</text></svg><figcaption>按下 apply 到第一步要 40–50 分钟：两大段各约 20 分钟，而且是把同一个程序编了两遍<span class="hint">（悬停或点按数据点看原值）</span></figcaption><details class="chart-data"><summary>数据表与出处（14 行）</summary><div class="tbl"><table><thead><tr><th>规模</th><th>apply → jax.devices() 返回（min）</th><th>第一遍编译（min）</th><th>第二遍 + 第 0 步（min）</th><th>apply → 第 0 步（min）</th></tr></thead><tbody><tr><td>1 片</td><td>约 3</td><td>约 20</td><td>约 18</td><td>约 40</td></tr><tr><td>2 片</td><td>约 3</td><td>约 22</td><td>约 19</td><td>约 44</td></tr><tr><td>4 片</td><td>约 3</td><td>约 22</td><td>约 19</td><td>约 44</td></tr><tr><td>8 片</td><td>约 4</td><td>约 22</td><td>约 19</td><td>约 46</td></tr><tr><td>10+ 片</td><td>—</td><td>—</td><td>—</td><td>40–50</td></tr><tr><td>下一档</td><td>约 7</td><td>约 22</td><td>约 21</td><td>约 50</td></tr><tr><td>冷缓存拆解（1 cube）</td><td>编组 + 起 pod + TPU 初始化 + 建模型</td><td>约 2 min</td><td></td><td></td></tr><tr><td>冷缓存拆解（1 cube）</td><td>追踪（Python 跑一遍训练步）</td><td>约 3 min</td><td></td><td></td></tr><tr><td>冷缓存拆解（1 cube）</td><td>降级成 StableHLO（几乎全在 Pallas 手写核）</td><td>约 12 min</td><td></td><td></td></tr><tr><td>冷缓存拆解（1 cube）</td><td>XLA 编译</td><td>约 2 min</td><td></td><td></td></tr><tr><td>冷缓存拆解（1 cube）</td><td>重新追踪（切分声明对不上）</td><td>约 15 s</td><td></td><td></td></tr><tr><td>冷缓存拆解（1 cube）</td><td>再降级一遍</td><td>约 12 min</td><td></td><td></td></tr><tr><td>冷缓存拆解（1 cube）</td><td>再 XLA 编译一遍</td><td>约 2 min</td><td></td><td></td></tr><tr><td>冷缓存拆解（1 cube）</td><td>第 0 步执行</td><td>约 15 s</td><td></td><td></td></tr></tbody></table></div><p class="sub">出处：本书实测的各级训练运行的 steps.txt（apply→devices / hbm / step0 三行）；本书冷缓存实测的阶段表（1 cube）。<a href="../figs/charts/c13-startup-time.svg" target="_blank">单独打开 SVG</a></p><p class="sub">分段口径：jax.devices() 返回 → 打出 Total memory size 行 = 第一遍（追踪 + 降级 + XLA 编译）；Total memory size 行 → completed step: 0 = 第二遍（后来查明是 step 0 输入带切分声明导致 tracing cache miss 重做）+ 第 0 步执行。六次都是冷编译（JAX 缓存指到本地 ramdisk）。拆解那一条是减层、单 cube 的小配置，所以总长比上面短，不是同一配置。分钟数都取整，逐段相加与总长可能差 1。</p></details></figure>
+<ul>
+<li>「训练步编译约 20–22 min + 同一个程序再编一遍约 18–21 min」（见 §6.6 ①），与片数几乎无关——阶梯省卡时不省墙钟；第 1–3 级光到首步就要一百多 min。</li>
+<li><strong>每级留一次重跑</strong>（<code>maxRestarts: 0</code>、无检查点）：阶梯实测的 8 个训练 JobSet 里就有 1 次在 step 0 之后 18 s 掉了一台 host，整个 JobSet 失败、四十多分钟作废（见<a href="pitfalls.html#l-38">经验教训第 38 条</a>）。</li>
+</ul>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>共享集群上，默认 <code>POD_PRIORITY=</code>（清空）再 render 核对</span></span></p>
+<ul>
+<li>
+<p><strong>不清空会静默抢占集群上的其他作业</strong>；默认 <code>high</code> 是为<strong>独占</strong>集群定的（04「优先级」），值 800（<a href="scripts/03-kueue-priority.yaml">03-kueue-priority.yaml</a>）。集群上已有同名 PriorityClass 时先 <code>kubectl get priorityclass</code> 看值，别撞名。</p>
+</li>
+<li>
+<p><strong>核对</strong>：<code>$S render | grep -n priorityClassName</code> 应<strong>无输出</strong>；非空且有别人的、已准入、优先级更低的 Workload 时脚本打 <code>██ WARN</code>（不拦）。</p>
+</li>
+</ul>
+</blockquote>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">S</span><span class="o">=</span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/06-jobset.sh
+<span class="c1"># 优先级：脚本默认 POD_PRIORITY=high，不 export 也会写进 YAML。</span>
+<span class="c1">#   · 使用方独占集群、还没有生产任务：默认即可。和生产任务共用时，验收级给低优先级（会被抢，报告里写明），正式训练给高优先级。</span>
+<span class="c1">#   · ⚠ 共享集群：一律 export POD_PRIORITY=   （清空），render 后确认没有 priorityClassName——见下方警告框</span>
+<span class="c1"># POD_PRIORITY 写的是普通 PriorityClass（preflight 会查它存在）；实测集群没有 WorkloadPriorityClass，写 WPC 标签会静默卡死（04「验收任务的优先级」）</span>
+<span class="c1"># export POD_PRIORITY=&lt;PriorityClass 名&gt;      # 或 export POD_PRIORITY=（共享集群）；现有的名字：kubectl get priorityclass</span>
+
+<span class="c1"># 第 1 级：1 cube 冒烟 —— 用小号模型，大号模型放不进 1 cube（见下）</span>
+<span class="c1"># 用大号模型的启动脚本换 MODEL_NAME，别用 TRAIN_SCRIPT=&lt;小号模型启动脚本&gt;（那个脚本会静默加载小号模型预训练权重，见下）</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">RUN_NAME</span><span class="o">=</span>my-run-c1<span class="w"> </span><span class="nv">JOBSET_NAME</span><span class="o">=</span>my-run-c1<span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">TOPO</span><span class="o">=</span>4x4x4<span class="w"> </span><span class="nv">STEPS</span><span class="o">=</span><span class="m">30</span><span class="w"> </span><span class="nv">MODEL_NAME</span><span class="o">=</span>moe-small
+<span class="nv">$S</span><span class="w"> </span>overlay<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>apply<span class="w">        </span><span class="c1"># apply 内含 preflight，并默认过一遍 05-avoid-manual-slices.py（AVOID_MANUAL=0 关）</span>
+<span class="nv">$S</span><span class="w"> </span>watch<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>logs<span class="w">             </span><span class="c1"># 反复看；出 step 之后：</span>
+<span class="nv">$S</span><span class="w"> </span>steps<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>verify<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>delete
+
+<span class="c1"># 第 2 级：1 片 4x8x8，真模型真 mesh</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">RUN_NAME</span><span class="o">=</span>my-run-s1<span class="w"> </span><span class="nv">JOBSET_NAME</span><span class="o">=</span>my-run-s1<span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span><span class="m">1</span><span class="w"> </span><span class="nv">TOPO</span><span class="o">=</span>4x8x8<span class="w"> </span><span class="nv">STEPS</span><span class="o">=</span><span class="m">50</span><span class="p">;</span><span class="w"> </span><span class="nb">unset</span><span class="w"> </span>MODEL_NAME
+<span class="nv">$S</span><span class="w"> </span>overlay<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>apply
+<span class="nv">$S</span><span class="w"> </span>watch<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>logs<span class="w">             </span><span class="c1"># 反复看；出 step 之后：</span>
+<span class="nv">$S</span><span class="w"> </span>steps<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>verify<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>delete
+
+<span class="c1"># 第 3 级：2 片，第一次过 DCN（之前先跑 2 片 DCN 基准，见 04 §4.8）</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">RUN_NAME</span><span class="o">=</span>my-run-s2<span class="w"> </span><span class="nv">JOBSET_NAME</span><span class="o">=</span>my-run-s2<span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span><span class="m">2</span>
+<span class="nv">$S</span><span class="w"> </span>overlay<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>apply
+<span class="nv">$S</span><span class="w"> </span>watch<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>logs
+<span class="nv">$S</span><span class="w"> </span>steps<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>verify<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>delete
+
+<span class="c1"># 第 4 级：10+ 片 = JIT 基线作业原样</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">RUN_NAME</span><span class="o">=</span>&lt;作业名&gt;<span class="w"> </span><span class="nv">JOBSET_NAME</span><span class="o">=</span>&lt;作业名&gt;<span class="w"> </span><span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w">   </span><span class="c1"># ← 换成你的片数</span>
+<span class="nv">$S</span><span class="w"> </span>overlay<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>apply
+<span class="nv">$S</span><span class="w"> </span>watch<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>logs
+<span class="nv">$S</span><span class="w"> </span>steps<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>verify<span class="p">;</span><span class="w"> </span><span class="nv">$S</span><span class="w"> </span>delete
+</code></pre></div>
+<p><strong>为什么第 1 级换小号模型、怎么换</strong></p>
+<figure class="mermaid"><img src="../assets/mermaid/4297e0275efd.png" width="857" alt="示意图" loading="lazy"></figure><p>读图：绿框是对的换法；红框那个脚本 JobSet 挡不住它加载权重。</p>
+<ul>
+<li><strong>大号模型</strong>：<code>RESOURCE_EXHAUSTED: … HLO temporaries (97.12G) exceeds available HBM (94.74G)</code>。FSDP 512 下放得下；FSDP 128 时按 FSDP 切的状态变 4 倍，Temp 超过可用上限。</li>
+<li><strong>小号模型</strong> 64 芯放得下（FSDP 128）；大号模型脚本是 <code>MODEL_NAME=${MODEL_NAME:-&quot;moe-large&quot;}</code>，加一条 env 即可。</li>
+<li><code>scripts/&lt;小号模型启动脚本&gt;</code> 写 <code>LOAD_PARAMETERS_PATH=${LOAD_PARAMETERS_PATH:-&quot;&lt;预训练 ckpt&gt;&quot;}</code> 默认值，JobSet 写 <code>LOAD_PARAMETERS_PATH: &quot;&quot;</code> 挡不住（<code>:-</code> 把空串当没设），会静默加载预训练权重，loss 起点不再是随机初始化的值，也没有 <code>XLA_FLAGS</code> 默认值。</li>
+</ul>
+<p><strong>其余几条</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>要点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>第 2 级是尺子</td>
+<td>只少 DCN；第 4 级慢了先拿它除，分清片内还是片间（§6.6 ③）</td>
+</tr>
+<tr>
+<td>短跑避开 profiler 起点</td>
+<td>profile 从 step 10 抓，<code>STEPS</code> 更小编完就报 <code>Profiling requested but initial profiling step set past training final step</code>；≥ 14 步或关 profiler</td>
+</tr>
+<tr>
+<td>短跑 loss 不跨片数比</td>
+<td>片数越多 50 步降得越少（实测 50 步降幅：1 片约 15%，2 片约 10%，JIT 基线作业 10+ 片约 5%）；lr 还在 warmup<span class="tg inf">[推断：每步更新量相近、batch 更大 → 同样步数下降幅小]</span>。按 §6.6 ⑤ 比</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<div class="kp kc3"><div class="kp-t">本节可能踩到的问题</div>
+<ul>
+<li><a href="pitfalls.html#l-43">START_SESSION failed / barrier</a></li>
+<li><a href="pitfalls.html#l-44">训练挂住不报错</a></li>
+<li><a href="pitfalls.html#l-45">一片慢拖全局</a></li>
+<li><a href="pitfalls.html#l-50">主机故障率远超 SLO</a></li>
+</ul></div>
+</blockquote>
+<p><a id="step-6-6"></a></p>
+<h2 id="66-结果判读正常的样子" class="hc1"><span class="hn">6.6</span>结果判读（「正常」的样子）</h2>
+<p>前四列从原始日志算，最后一列（本书 10+ 片实测）用同一口径：稳态 = step ≥ 3，剔除低于中位 0.3 倍的步和 profiler 假象步（&gt; 2.1 × 中位），取 worker-0-0。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>指标</th>
+<th style="text-align:right">第一次运行</th>
+<th style="text-align:right">第二次运行</th>
+<th style="text-align:right">运行 A（诊断 flag，profiler 关）</th>
+<th style="text-align:right">运行 B（= 运行 A + 关 host reduction）</th>
+<th style="text-align:right"><strong>10+ 片本书实测（profiler 关）</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>step0 自报（含第二次编译，§6.6 ①）</td>
+<td style="text-align:right">约 18 min</td>
+<td style="text-align:right">约 13 min</td>
+<td style="text-align:right">约 19 min</td>
+<td style="text-align:right">约 18 min</td>
+<td style="text-align:right">约 18 min</td>
+</tr>
+<tr>
+<td>起 pod → 首步 min</td>
+<td style="text-align:right">四十多</td>
+<td style="text-align:right">三十多</td>
+<td style="text-align:right">四十多</td>
+<td style="text-align:right">四十多</td>
+<td style="text-align:right">四十多</td>
+</tr>
+<tr>
+<td>p50 弱扩展效率（1 片 p50 ÷ 本列 p50）</td>
+<td style="text-align:right"><strong>71%</strong></td>
+<td style="text-align:right">72%</td>
+<td style="text-align:right">72%</td>
+<td style="text-align:right"><strong>39%</strong></td>
+<td style="text-align:right"><strong>72%</strong></td>
+</tr>
+<tr>
+<td>p90 比本列 p50 慢</td>
+<td style="text-align:right">60%</td>
+<td style="text-align:right">50%</td>
+<td style="text-align:right">15%</td>
+<td style="text-align:right">不到 1%</td>
+<td style="text-align:right">1–2%</td>
+</tr>
+<tr>
+<td>均值比本列 p50 高（真实吞吐看均值）</td>
+<td style="text-align:right">约 20%</td>
+<td style="text-align:right">约 15%</td>
+<td style="text-align:right">约 6%</td>
+<td style="text-align:right">1–2%</td>
+<td style="text-align:right">不到 1%</td>
+</tr>
+<tr>
+<td>慢步（&gt; 1.2 × p50，<a href="00-overview.html#g-slow-step">口径</a>）占比</td>
+<td style="text-align:right">约四成</td>
+<td style="text-align:right">约三成</td>
+<td style="text-align:right">约一成（集中在一刻钟内出现）</td>
+<td style="text-align:right">约 6%（整体慢在 p50，不是慢步）</td>
+<td style="text-align:right">无（最慢比 p50 慢不到 3%）</td>
+</tr>
+<tr>
+<td>TFLOP/s/device（p50）</td>
+<td style="text-align:right">约 150</td>
+<td style="text-align:right">约 150</td>
+<td style="text-align:right">约 150</td>
+<td style="text-align:right">约 85</td>
+<td style="text-align:right">约 150</td>
+</tr>
+<tr>
+<td>MFU（÷1,153.5 = BF16 峰值口径，FP8 run 也按它除，见 §6.6.1「分母」行；按 FP8 峰值 2,307/device 算则减半）<span class="tg inf">[推断：口径换算]</span></td>
+<td style="text-align:right">约 15%</td>
+<td style="text-align:right">约 15%</td>
+<td style="text-align:right">约 15%</td>
+<td style="text-align:right">约 7%</td>
+<td style="text-align:right">约 15%</td>
+</tr>
+<tr>
+<td>HBM（编译报告 Total）GiB / 94.74</td>
+<td style="text-align:right">84</td>
+<td style="text-align:right">84</td>
+<td style="text-align:right">84</td>
+<td style="text-align:right">78</td>
+<td style="text-align:right">84</td>
+</tr>
+<tr>
+<td>loss（首 → 末）</td>
+<td style="text-align:right">降约 5%（50 步）</td>
+<td style="text-align:right">降约 10%（80 步）</td>
+<td style="text-align:right">降约 10%（80 步）</td>
+<td style="text-align:right">降约 10%（80 步）</td>
+<td style="text-align:right">降约 2%（30 步）</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="chart"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" width="880" role="img" aria-label="大号 MoE 模型数千芯片四个 run 的步时分布示意（点位按 5% 分档），以 第一次运行 的中位数为 0：前三个 run 快步贴着中位数，慢步比中位慢 35–100%；最后一个 run 关掉 megascale host reduction 后全部是慢步，比中位慢 80–180%。" font-family='"Noto Sans CJK SC","PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif' class="chart"><title>数千芯片训练的步时是两堆：快步贴着中位数，慢步比中位慢 35–100% —— 不是抖动，是两种状态</title><desc>大号 MoE 模型数千芯片四个 run 的步时分布示意（点位按 5% 分档），以 第一次运行 的中位数为 0：前三个 run 快步贴着中位数，慢步比中位慢 35–100%；最后一个 run 关掉 megascale host reduction 后全部是慢步，比中位慢 80–180%。</desc><style>.pt{cursor:default}.pt:hover>*:not(title),.pt:focus>*:not(title){stroke:#202124;stroke-width:2.2}.pt:focus{outline:none}</style><rect width="880" height="430" fill="#fff"/><text x="20.0" y="30.0" font-size="19" fill="#202124" font-weight="700">数千芯片训练的步时是两堆：快步贴着中位数，慢步比中位慢 35–100% —— 不是抖动，是两种状态</text><text x="20.0" y="52.0" font-size="14" fill="#5f6368">每点 = 一步（replica 0，第 3 步起）；横轴 = 比第一次运行的中位数慢多少；右侧 = 平均被慢步拖慢多少</text><circle cx="26" cy="73" r="5.5" fill="#1a73e8"/><text x="38.0" y="78.0" font-size="13.5" fill="#202124">快步（慢 ≤ 20%）</text><circle cx="178.86" cy="73" r="5.5" fill="#d93025"/><text x="190.9" y="78.0" font-size="13.5" fill="#202124">慢步（慢 &gt; 20%）</text><rect x="325.72" y="67" width="14" height="12" fill="#f1f3f4"/><text x="343.7" y="78.0" font-size="13.5" fill="#202124">+20% 分界</text><line x1="210" y1="380" x2="730" y2="380" stroke="#80868b"/><line x1="234.8" y1="380" x2="234.8" y2="385" stroke="#80868b"/><text x="234.8" y="401.0" font-size="13" fill="#5f6368" text-anchor="middle">中位</text><line x1="358.6" y1="380" x2="358.6" y2="385" stroke="#80868b"/><text x="358.6" y="401.0" font-size="13" fill="#5f6368" text-anchor="middle">+50%</text><line x1="482.4" y1="380" x2="482.4" y2="385" stroke="#80868b"/><text x="482.4" y="401.0" font-size="13" fill="#5f6368" text-anchor="middle">+100%</text><line x1="606.2" y1="380" x2="606.2" y2="385" stroke="#80868b"/><text x="606.2" y="401.0" font-size="13" fill="#5f6368" text-anchor="middle">+150%</text><line x1="730.0" y1="380" x2="730.0" y2="385" stroke="#80868b"/><text x="730.0" y="401.0" font-size="13" fill="#5f6368" text-anchor="middle">+200%</text><text x="470.0" y="424.0" font-size="13.5" fill="#5f6368" text-anchor="middle">比第一次运行中位慢（%）</text><rect x="210.0" y="104" width="74.3" height="276" fill="#f1f3f4"/><text x="198.0" y="143.5" font-size="14" fill="#202124" text-anchor="end">第一次运行</text><circle cx="371.0" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="138.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="141.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="321.4" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="371.0" cy="141.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="321.4" cy="141.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="135.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="144.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="383.3" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="321.4" cy="135.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="346.2" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="383.3" cy="141.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="132.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="148.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="128.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="151.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="125.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="383.3" cy="135.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="346.2" cy="141.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="333.8" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="154.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="122.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="157.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="119.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="160.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="116.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="164.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="112.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="138.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="141.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="135.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="333.8" cy="141.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="321.4" cy="144.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="395.7" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="333.8" cy="135.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="383.3" cy="144.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="144.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="132.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="333.8" cy="144.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="148.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="358.6" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="432.9" cy="138.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="128.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><text x="746.0" y="135.5" font-size="13.5" fill="#202124">慢步约四成</text><text x="746.0" y="154.5" font-size="13.5" fill="#a50e0e" font-weight="700">平均比全快步慢约 25%</text><text x="198.0" y="212.5" font-size="14" fill="#202124" text-anchor="end">第二次运行</text><circle cx="333.8" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="207.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="333.8" cy="210.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="358.6" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="210.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="333.8" cy="204.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="204.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="321.4" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="213.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="201.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="217.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="197.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="333.8" cy="213.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="220.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="194.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="223.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="191.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="226.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="188.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="229.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="185.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="233.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="181.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="207.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="210.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="204.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="321.4" cy="210.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="213.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="371.0" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="201.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="217.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="197.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="220.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="194.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="223.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="191.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="333.8" cy="201.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="346.2" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="321.4" cy="204.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="226.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="371.0" cy="210.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="188.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="229.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="383.3" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="321.4" cy="213.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="185.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="233.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="181.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="207.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="210.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="204.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="213.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="201.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="321.4" cy="201.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="333.8" cy="217.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="482.4" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="217.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="395.7" cy="207.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="383.3" cy="210.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="383.3" cy="204.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="197.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="220.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="321.4" cy="217.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="194.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="223.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="191.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="226.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="188.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="229.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="185.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="233.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="181.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="207.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="210.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><text x="746.0" y="204.5" font-size="13.5" fill="#202124">慢步约三成</text><text x="746.0" y="223.5" font-size="13.5" fill="#a50e0e" font-weight="700">平均比全快步慢约 15%</text><line x1="210" y1="173.0" x2="730" y2="173.0" stroke="#eceff1"/><text x="198.0" y="281.5" font-size="14" fill="#202124" text-anchor="end">运行 A（诊断 flag）</text><circle cx="234.8" cy="276.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="279.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="273.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="282.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="270.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="286.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="266.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="289.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="263.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="292.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="260.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="295.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="257.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="298.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="254.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="302.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="250.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="276.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="279.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="273.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="282.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="270.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="286.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="266.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="289.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="263.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="292.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="260.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="295.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="257.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="298.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="346.2" cy="276.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="254.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="302.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="250.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="276.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="279.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="273.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="282.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="270.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="286.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="266.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="289.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="263.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="292.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="260.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="247.1" cy="276.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="295.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="257.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="298.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="254.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="302.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="250.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="276.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="279.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="273.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="282.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="270.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="286.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="266.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="358.6" cy="276.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="289.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="263.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="292.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="333.8" cy="276.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="432.9" cy="276.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="371.0" cy="276.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="321.4" cy="276.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="260.5" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="295.7" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="371.0" cy="279.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="358.6" cy="279.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="234.8" cy="257.3" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="298.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="254.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="302.1" r="3.6" fill="#1a73e8" fill-opacity=".85"/><circle cx="234.8" cy="250.9" r="3.6" fill="#1a73e8" fill-opacity=".85"/><text x="746.0" y="273.5" font-size="13.5" fill="#202124">慢步约一成</text><text x="746.0" y="292.5" font-size="13.5" fill="#5f6368">平均比全快步慢约 6%</text><line x1="210" y1="242.0" x2="730" y2="242.0" stroke="#eceff1"/><text x="198.0" y="350.5" font-size="14" fill="#202124" text-anchor="end">运行 B（关 host reduction）</text><circle cx="432.9" cy="345.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="345.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="348.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="342.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="351.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="339.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="355.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="335.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="358.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="332.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="361.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="329.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="364.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="326.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="367.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="323.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="371.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="319.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="345.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="348.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="342.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="351.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="339.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="355.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="335.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="358.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="332.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="361.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="329.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="364.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="326.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="367.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="323.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="371.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="319.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="345.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="348.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="342.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="351.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="581.4" cy="345.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="339.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="355.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="335.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="358.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="332.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="361.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="329.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="364.7" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="680.5" cy="345.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="531.9" cy="345.5" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="326.3" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="367.9" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="323.1" r="3.6" fill="#d93025" fill-opacity=".85"/><circle cx="445.2" cy="371.1" r="3.6" fill="#d93025" fill-opacity=".85"/><text x="746.0" y="342.5" font-size="13.5" fill="#202124">全是慢步</text><text x="746.0" y="361.5" font-size="13.5" fill="#a50e0e" font-weight="700">没有快步</text><line x1="210" y1="311.0" x2="730" y2="311.0" stroke="#eceff1"/></svg><figcaption>四次运行的步时分布：前三次聚成快步（≈ 中位）和慢步（比中位慢 35–100%）两堆，第四次关 host reduction 后每步都比快步慢八成以上<span class="hint">（点位按 5% 分档，示意）</span></figcaption><details class="chart-data"><summary>数据表与出处（4 行）</summary><div class="tbl"><table><thead><tr><th>run</th><th>步时形态</th><th>慢步占比</th><th>平均比全快步慢</th></tr></thead><tbody><tr><td>第一次运行</td><td>两峰（快步贴着中位 + 慢步）</td><td>约四成</td><td>约 25%</td></tr><tr><td>第二次运行</td><td>两峰（快步贴着中位 + 慢步）</td><td>约三成</td><td>约 15%</td></tr><tr><td>运行 A（诊断 flag）</td><td>两峰，慢步比前两次明显少</td><td>约一成</td><td>约 6%</td></tr><tr><td>运行 B（关 host reduction）</td><td>单峰，全是慢步（比第一次运行中位慢 80–180%）</td><td>全部</td><td>—</td></tr></tbody></table></div><p class="sub">出处：本书实测（worker 日志逐步解析与同口径汇总，本图断言步数一致）；本章 §6.6。<a href="../figs/charts/c04-bimodal.svg" target="_blank">单独打开 SVG</a></p><p class="sub">口径：step ≥ 3，剔除 profiler 假象步；点位按相对第一次运行中位数（replica 0）的百分比、取到 5% 一档画（示意，不是逐步原值），快 / 慢分界 = 慢约 20%。</p></details></figure>
+<p>注：运行 B 列是跑到第 56 步时的截面；跑完 80 步按 worker-5-0 日志重算，p50 效率 39%、均值比 p50 高 1–2%、最慢比 p50 慢约 50%，loss 同 <span class="tg inf">[推断]</span>。</p>
+<p><strong>判「正常」</strong>：快步 p50 <strong>比 1 片慢约 40%</strong>（效率 71–72%），均值 ÷ p50 <strong>≤ 1.23</strong>（JIT 基线作业三个 run 均值比 p50 高约 20% / 约 15% / 约 6%）。均值比快步慢：r1 约 25%、r2 约 15%、运行 A 约 6%（运行 A 的慢步集中在一刻钟内出现）；均值 ≈ 快步是优化目标，不是验收线。本书 10+ 片实测均值和 p50 差不到 1%，但只跑了 30 步，没出慢步可能是没用到坏 cube，也可能是没赶上维护 <span class="tg inf">[推断：10+ 片实测的 cube 名单没核]</span>。</p>
+<p><a id="step-6-6-judge"></a></p>
+<h3 id="661-怎么判数字">6.6.1 怎么判数字</h3>
+<p><a id="step-6-6-milestones"></a>
+<strong>① 日志里程碑</strong>（JIT 基线作业第一次运行的 worker-0-0）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th style="text-align:right">距上一行</th>
+<th>日志</th>
+<th>这一段在干什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">—</td>
+<td>gcsfuse sidecar <code>waiting for SIGTERM</code></td>
+<td>桶挂上（计时起点）</td>
+</tr>
+<tr>
+<td style="text-align:right">54 s</td>
+<td><code>TPU runtime versions: … libtpu=0.0.48</code>、<code>Merging config overlay</code></td>
+<td>解压 10.3 GB tar</td>
+</tr>
+<tr>
+<td style="text-align:right">79 s</td>
+<td><code>jax.devices() returned &lt;设备数&gt; devices (elapsed …s)</code>，自报约 55 s</td>
+<td>大量进程连成 JAX 集群</td>
+</tr>
+<tr>
+<td style="text-align:right"><strong>约 22 min</strong></td>
+<td><code>Total memory size: … GB</code>（约 84；MaxText 除的是 1024³，实为 GiB）</td>
+<td>训练步第 1 次编译（<code>lower().compile()</code>）<strong>← 看 HBM</strong>（注 1）</td>
+</tr>
+<tr>
+<td style="text-align:right"><strong>约 18 min</strong></td>
+<td><code>Memstats: After params initialized</code> 每 device 约 10 GiB 量级</td>
+<td><strong>不是参数初始化</strong>：训练步再编一遍（注 2）</td>
+</tr>
+<tr>
+<td style="text-align:right">71 s</td>
+<td><code>completed step: 0, seconds: &lt;约 18 min 的秒数&gt;</code></td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align:right">—</td>
+<td><code>completed step: 2, seconds: &lt;约 1 min 的秒数&gt;</code></td>
+<td>大号 MoE 模型的 step 2 是第二次编译（30–150 s，§6.6 口径）</td>
+</tr>
+<tr>
+<td style="text-align:right">—</td>
+<td><code>completed step: 4, seconds: &lt;稳态步时&gt;</code></td>
+<td>进入稳态</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：一次 1 cube 复测（大号模型结构、减层）把它拆开，大头在 Python：参数初始化编译 ~10 s → <strong>trace 约 3 min</strong>（py-spy：约 85% 在 megablox <code>tgmm_v2</code> 的 <code>zero_out_start/fill_zero</code> 逐个发 DMA）→ <strong>StableHLO lowering 约 12 min</strong>（全在 Pallas Mosaic，约七成是 lowering_cache 的 dataclass <code>__eq__</code>）→ <strong>XLA 编译只约 2 min</strong>（HLO passes 41 s，SPMD 分区 ~5 s；backend 70 s；codegen 10 s）。</li>
+<li>注 2：step 0 调 <code>p_train_step(state, batch, rng)</code> 报 <code>TRACING CACHE MISS … different input types: data['inputs'] … now i32[…]({Auto: (…)})</code>：<code>lower()</code> 的 <code>shaped_batch</code> 不带 sharding、真 batch 带，于是<strong>再 trace（15 s）+ lower（12 min）+ 编译（2 min，HLO 不同，持久缓存不中）一遍</strong>。</li>
+</ul>
+<p><strong>两段各约 20 min 没新行，别杀</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>级（实测，约数，min）</th>
+<th style="text-align:right"><code>jax.devices()</code> → <code>Total memory size</code></th>
+<th style="text-align:right">→ step 0</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>第 1 级小号模型</td>
+<td style="text-align:right">10</td>
+<td style="text-align:right">18</td>
+</tr>
+<tr>
+<td>第 2 级</td>
+<td style="text-align:right">20</td>
+<td style="text-align:right">38</td>
+</tr>
+<tr>
+<td>2 片到下一档</td>
+<td style="text-align:right">约 22</td>
+<td style="text-align:right">41–43</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>10+ 片 / 下一档 pod 起到 <code>jax.devices()</code> 比 2–8 片多几分钟，首步多出的几分钟在这。超 60 min 没新行按<a href="pitfalls.html#l-44">经验教训第 44 条</a>查。step 0 自报的约 18 min 从 <code>Total memory size</code> 那行之后约 1 min 算起，只含第二次编译加第一步 <span class="tg inf">[推断：按时间戳倒推]</span>。</li>
+</ul>
+<p><strong>第二段能省（未验证）</strong>：给 <code>maxtext_utils.get_shaped_batch()</code> 的 ShapeDtypeStruct 带上 <code>sharding.get_input_data_sharding(...)</code>，或直接用第一次的 <code>compiled</code>：1 cube 复测配置省冷缓存约 15 min、热缓存约 13 min，JIT 基线作业 10+ 片约 18 min <span class="tg inf">[推断]</span> <span class="src" tabindex="0">源<span class="srci">没改代码验证</span></span>。</p>
+<p>拆编译各段的开关（开销小：同一配置编到 OOM，全开比不开只多不到 1 min（都约 18 min））：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>开关</th>
+<th>看什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>JAX_LOG_COMPILES=1</code></td>
+<td>tracing / jaxpr→MLIR / XLA 各段秒数</td>
+</tr>
+<tr>
+<td><code>JAX_EXPLAIN_CACHE_MISSES=1</code></td>
+<td>cache miss 原因（上面那条就这么查到）</td>
+</tr>
+<tr>
+<td><code>JAX_DEBUG_LOG_MODULES=jax._src.compiler,jax._src.compilation_cache</code></td>
+<td>持久缓存 hit / miss / write</td>
+</tr>
+<tr>
+<td>只在 worker-0-0 加 <code>TPU_STDERR_LOG_LEVEL=0 TPU_MIN_LOG_LEVEL=0 TPU_VMODULE=hlo_pass_pipeline=1</code></td>
+<td>每个 pass 耗时；再 <code>kubectl exec</code> 用 py-spy <code>record --nonblocking</code> 抓 Python 栈</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="step-6-6-mfu"></a>
+<strong>② MFU 口径</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>取法</th>
+<th>容易错在哪</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>分子</td>
+<td>MaxText 自报 <code>TFLOP/s/device</code>：模型 FLOPs（MoE 只算激活专家）÷ 步时</td>
+<td>自定义算子里的部分 FLOPs 可能没计入，MFU 偏低 <span class="tg inf">[推断]</span>，只能横比</td>
+</tr>
+<tr>
+<td>分母</td>
+<td><strong>1,153.5 = 每芯片 BF16 峰值 2,307 ÷ 每芯片 2 个 device</strong></td>
+<td>FP8 也除 BF16 峰值。2,307 是 P7 频率，默认档约 1,996 <span class="tg inf">[推断：按周期比 ×0.865，依据一次 P7 对比实测]</span>，<strong>报 MFU 写明功耗档</strong></td>
+</tr>
+<tr>
+<td>每芯片</td>
+<td>× 2</td>
+<td>外部数字先确认是每 chip 还是每 device，两者差 2 倍</td>
+</tr>
+<tr>
+<td>步时</td>
+<td>口径同 §6.6；<strong>p50 和均值都报</strong></td>
+<td>只报 p50 藏掉双峰（第一次运行均值比 p50 高约 20%）</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="step-6-6-weak"></a>
+<strong>③ 弱扩展效率</strong>（第 2 级步时 ÷ 第 N 级；两轮实测，各一次，JIT）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>片数（芯）</th>
+<th style="text-align:right">p50 比 1 片慢</th>
+<th style="text-align:right">TFLOP/s/device</th>
+<th style="text-align:right">效率（1 片 p50 ÷ 本行 p50）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1（256）</td>
+<td style="text-align:right">基准</td>
+<td style="text-align:right">约 210</td>
+<td style="text-align:right">100%</td>
+</tr>
+<tr>
+<td>2（512）</td>
+<td style="text-align:right">约 25% / 30%（两次）</td>
+<td style="text-align:right">约 170 / 约 170</td>
+<td style="text-align:right">79% / 78%</td>
+</tr>
+<tr>
+<td>4（1,024）</td>
+<td style="text-align:right">约 20%</td>
+<td style="text-align:right">约 180</td>
+<td style="text-align:right">82%</td>
+</tr>
+<tr>
+<td>8（2,048）</td>
+<td style="text-align:right">约 30%</td>
+<td style="text-align:right">约 170</td>
+<td style="text-align:right">78%</td>
+</tr>
+<tr>
+<td>10+（数千）本书实测 p50</td>
+<td style="text-align:right"><strong>约 40%</strong></td>
+<td style="text-align:right">约 150</td>
+<td style="text-align:right"><strong>72%</strong></td>
+</tr>
+<tr>
+<td>下一档本书实测 p50</td>
+<td style="text-align:right">更慢</td>
+<td style="text-align:right">更低</td>
+<td style="text-align:right"><strong>更低</strong></td>
+</tr>
+<tr>
+<td>10+，参考 JIT 基线作业快步 p50</td>
+<td style="text-align:right">约 40%</td>
+<td style="text-align:right">约 150</td>
+<td style="text-align:right">71%</td>
+</tr>
+<tr>
+<td>10+，均值运行 A（慢步约一成）</td>
+<td style="text-align:right">约 45%</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">68%</td>
+</tr>
+<tr>
+<td>10+，均值第一次运行（慢步约四成）</td>
+<td style="text-align:right">约 70%</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">59%</td>
+</tr>
+</tbody>
+</table></div>
+<p>JIT 基线作业三个 run 为 71–72%。</p>
+<figure class="chart"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 470" width="880" role="img" aria-label="弱扩展效率随片数变化：1 片 100%，2 片两次 79% 和 78%，4 片 82%，8 片 78%，10+ 片本书脚本一次 72%、参考 JIT 基线作业三个 run 71–72%；参考目标线 90%，本书第 3 级「先查网络」的判据线约 75%。" font-family='"Noto Sans CJK SC","PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif' class="chart"><title>片数加倍，步时不按比例涨：掉的大头在 1 → 2 片（第一次有 DCN 数据并行），2 → 8 片基本持平</title><desc>弱扩展效率随片数变化：1 片 100%，2 片两次 79% 和 78%，4 片 82%，8 片 78%，10+ 片本书脚本一次 72%、参考 JIT 基线作业三个 run 71–72%；参考目标线 90%，本书第 3 级「先查网络」的判据线约 75%。</desc><style>.pt{cursor:default}.pt:hover>*:not(title),.pt:focus>*:not(title){stroke:#202124;stroke-width:2.2}.pt:focus{outline:none}</style><rect width="880" height="470" fill="#fff"/><text x="20.0" y="30.0" font-size="19" fill="#202124" font-weight="700">片数加倍，步时不按比例涨：掉的大头在 1 → 2 片（第一次有 DCN 数据并行），2 → 8 片基本持平</text><text x="20.0" y="52.0" font-size="14" fill="#5f6368">06c 章大号模型，每 device batch 不变（全局 batch 随片数线性长）；纵轴 = 弱扩展效率 = 1 片 p50 ÷ N 片 p50；</text><text x="20.0" y="74.0" font-size="14" fill="#5f6368">灰字 = 比 1 片慢百分之几（≥10% 取 5 的倍数）</text><circle cx="26" cy="95" r="5.5" fill="#1a73e8"/><text x="38.0" y="100.0" font-size="13.5" fill="#202124">本书实测</text><circle cx="120.0" cy="95" r="5.5" fill="#e8710a"/><text x="132.0" y="100.0" font-size="13.5" fill="#202124">参考 JIT 基线作业同配置（10+ 片）</text><line x1="384.04" y1="95" x2="398.04" y2="95" stroke="#188038" stroke-width="2" stroke-dasharray="4 3"/><text x="402.0" y="100.0" font-size="13.5" fill="#202124">参考目标线 90%</text><line x1="521.78" y1="95" x2="535.78" y2="95" stroke="#d93025" stroke-width="2" stroke-dasharray="4 3"/><text x="539.8" y="100.0" font-size="13.5" fill="#202124">第 3 级判据 ≈ 75%</text><line x1="80" y1="400.0" x2="700" y2="400.0" stroke="#eceff1"/><text x="72.0" y="404.5" font-size="13" fill="#5f6368" text-anchor="end">60%</text><line x1="80" y1="334.3" x2="700" y2="334.3" stroke="#eceff1"/><text x="72.0" y="338.8" font-size="13" fill="#5f6368" text-anchor="end">70%</text><line x1="80" y1="268.6" x2="700" y2="268.6" stroke="#eceff1"/><text x="72.0" y="273.1" font-size="13" fill="#5f6368" text-anchor="end">80%</text><line x1="80" y1="202.9" x2="700" y2="202.9" stroke="#eceff1"/><text x="72.0" y="207.4" font-size="13" fill="#5f6368" text-anchor="end">90%</text><line x1="80" y1="137.1" x2="700" y2="137.1" stroke="#eceff1"/><text x="72.0" y="141.6" font-size="13" fill="#5f6368" text-anchor="end">100%</text><text x="24" y="262.0" font-size="13.5" fill="#5f6368" text-anchor="middle" transform="rotate(-90 24 262.0)">弱扩展效率</text><line x1="80" y1="400" x2="700" y2="400" stroke="#80868b"/><text x="142.0" y="420.0" font-size="13.5" fill="#202124" text-anchor="middle">1 片</text><text x="142.0" y="438.0" font-size="13" fill="#5f6368" text-anchor="middle">256 芯</text><text x="266.0" y="420.0" font-size="13.5" fill="#202124" text-anchor="middle">2 片</text><text x="266.0" y="438.0" font-size="13" fill="#5f6368" text-anchor="middle">512 芯</text><text x="390.0" y="420.0" font-size="13.5" fill="#202124" text-anchor="middle">4 片</text><text x="390.0" y="438.0" font-size="13" fill="#5f6368" text-anchor="middle">1,024 芯</text><text x="514.0" y="420.0" font-size="13.5" fill="#202124" text-anchor="middle">8 片</text><text x="514.0" y="438.0" font-size="13" fill="#5f6368" text-anchor="middle">2,048 芯</text><text x="638.0" y="420.0" font-size="13.5" fill="#202124" text-anchor="middle">10+ 片</text><text x="638.0" y="438.0" font-size="13" fill="#5f6368" text-anchor="middle">数千芯</text><line x1="80.0" y1="202.9" x2="700.0" y2="202.9" stroke="#188038" stroke-width="1.4" stroke-dasharray="6 4"/><text x="84.0" y="196.9" font-size="13" fill="#188038">参考目标线 90%</text><line x1="80.0" y1="301.4" x2="700.0" y2="301.4" stroke="#d93025" stroke-width="1.4" stroke-dasharray="6 4"/><text x="84.0" y="319.4" font-size="13" fill="#d93025">第 3 级判据 ≈ 75%（低于它先查网络）</text><g class="pt" tabindex="0"><title>本书实测（1 片）：效率 100%（基准）</title><circle cx="142.0" cy="137.1" r="6" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><text x="156.0" y="125.1" font-size="13.5" fill="#202124" font-weight="700">100%</text><text x="156.0" y="143.1" font-size="13" fill="#5f6368">基准</text><g class="pt" tabindex="0"><title>本书实测（2 片）：效率 79%，比 1 片慢 25%</title><circle cx="258.0" cy="272.7" r="6" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>本书实测（2 片）：效率 78%，比 1 片慢 30%</title><circle cx="274.0" cy="284.5" r="6" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><text x="288.0" y="260.7" font-size="13.5" fill="#202124" font-weight="700">78–79%</text><text x="288.0" y="278.7" font-size="13" fill="#5f6368">慢 25 / 30%</text><g class="pt" tabindex="0"><title>本书实测（4 片）：效率 82%，比 1 片慢 20%</title><circle cx="390.0" cy="253.3" r="6" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><text x="404.0" y="241.3" font-size="13.5" fill="#202124" font-weight="700">82%</text><text x="404.0" y="259.3" font-size="13" fill="#5f6368">慢 20%</text><g class="pt" tabindex="0"><title>本书实测（8 片）：效率 78%，比 1 片慢 30%</title><circle cx="514.0" cy="281.0" r="6" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><text x="528.0" y="269.0" font-size="13.5" fill="#202124" font-weight="700">78%</text><text x="528.0" y="287.0" font-size="13" fill="#5f6368">慢 30%</text><g class="pt" tabindex="0"><title>本书实测（10+ 片）：效率 72%，比 1 片慢 40%</title><circle cx="614.0" cy="322.1" r="6" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>参考 JIT 基线作业（10+ 片）：效率 71%，比 1 片慢 40%</title><circle cx="630.0" cy="325.7" r="6" fill="#e8710a" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>参考 JIT 基线作业（10+ 片）：效率 72%，比 1 片慢 40%</title><circle cx="646.0" cy="322.7" r="6" fill="#e8710a" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>参考 JIT 基线作业（10+ 片）：效率 72%，比 1 片慢 40%</title><circle cx="662.0" cy="324.1" r="6" fill="#e8710a" stroke="#fff" stroke-width="1.2"/></g><text x="676.0" y="310.1" font-size="13.5" fill="#202124" font-weight="700">71–72%</text><text x="676.0" y="328.1" font-size="13" fill="#5f6368">慢 40%</text><path d="M142.0 137.1 L266.0 278.6 L390.0 253.3 L514.0 281.0 L638.0 323.4" fill="none" stroke="#dadce0" stroke-width="1.6" stroke-linejoin="round" stroke-dasharray="4 3"/><text x="218.0" y="176.6" font-size="13" fill="#a50e0e" font-weight="700">1 → 2 片：−21～−22 个点</text></svg><figcaption>弱扩展效率随片数变化<span class="hint">（悬停或点按数据点看原值）</span></figcaption><details class="chart-data"><summary>数据表与出处（9 行）</summary><div class="tbl"><table><thead><tr><th>片数</th><th>芯片</th><th>来源</th><th>比 1 片慢（分档）</th><th>效率</th></tr></thead><tbody><tr><td class="num">1</td><td class="num">256</td><td>本书实测</td><td>基准</td><td>100%</td></tr><tr><td class="num">2</td><td class="num">512</td><td>本书实测</td><td>25%</td><td>79%</td></tr><tr><td class="num">2</td><td class="num">512</td><td>本书实测</td><td>30%</td><td>78%</td></tr><tr><td class="num">4</td><td class="num">1,024</td><td>本书实测</td><td>20%</td><td>82%</td></tr><tr><td class="num">8</td><td class="num">2,048</td><td>本书实测</td><td>30%</td><td>78%</td></tr><tr><td class="num">10+</td><td class="num">数千</td><td>本书实测</td><td>40%</td><td>72%</td></tr><tr><td class="num">10+</td><td class="num">数千</td><td>参考 JIT 基线作业</td><td>40%</td><td>71%</td></tr><tr><td class="num">10+</td><td class="num">数千</td><td>参考 JIT 基线作业</td><td>40%</td><td>72%</td></tr><tr><td class="num">10+</td><td class="num">数千</td><td>参考 JIT 基线作业</td><td>40%</td><td>72%</td></tr></tbody></table></div><p class="sub">出处：本书实测的各级运行的 steps.txt（RESULT 行：step ≥ 3、剔除 profiler 窗口 10–14）；本书实测 10+ 片运行的 steps.txt（RESULT 行：step ≥ 3、不剔除，profiler 关）；本书实测（参考 JIT 基线作业三个 run 的 s_p50）。<a href="../figs/charts/c11-weak-scaling.svg" target="_blank">单独打开 SVG</a></p><p class="sub">2 片两次样本、4 片一次，都是非独占时段，所以「4 片比 2 片快」还不能当结论。10+ 片的均值（有双峰慢步）效率只有 59–68%，见 06c §6.6 ③。「比 1 片慢」= N 片 p50 ÷ 1 片 p50 − 1，按 ≥10% 取 5 的倍数写。</p></details></figure>
+<ul>
+<li><strong>读图</strong>：大头在 1 → 2 片（第一次有 DCN DP），之后片数越多效率越低：8 片 78% → 10+ 片 72%，再往上一档继续下降；<span class="tg inf">[推断]</span> 与前面的 DCN 基准同向（梯度 all-reduce 耗时随片数增长）。10+ 片各 replica 间 p50 几乎一致（差远小于 1%）；4 片比 2 片快约 4–6%，单样本没查。</li>
+<li><strong>判据</strong>：第 3 级低于约 75% 先查网络（04 §4.8 基准、网卡、MTU），75–80% 正常 [推断：各 1–2 个样本，不是独占时段；2 片同期 DCN 基准 PASS]。</li>
+</ul>
+<p><a id="step-6-6-bimodal"></a>
+<strong>④ 双峰怎么查</strong>：快峰在 p50 上下约 2% 内，慢步比 p50 慢约 35–100%（第一次运行约 35–80%、第二次约 35–100%）。</p>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>根因已查清</span></span>根因：一个 sub-block 计划外维护（A/B 证实）。</p>
+<ul>
+<li>一个 sub-block 里一台节点整天计划外维护（<code>maintenanceReasons: FAILURE_INFRA</code>），健康信号全程正常（见<a href="pitfalls.html#l-48">经验教训第 48 条</a>）。</li>
+<li>A/B：同时间窗含该 sub-block 的运行连续 14 步慢、去掉它的运行 0 步慢；完全不重叠的另一次运行 65 步全快，中位对应弱扩展效率 72%。</li>
+<li><strong>交付第一件事：排除在维护的 cube</strong>（<code>upcomingMaintenance</code> 与 sub-block 维护状态，<a href="01-capacity-and-prereqs.html#step-1-3">01 §1.3</a>、<a href="08-day2-operations.html#step-8-1">08 §8.1</a> 第 6 条假象）。</li>
+</ul>
+</blockquote>
+<figure class="mermaid"><img src="../assets/mermaid/523066703add.png" width="982" alt="示意图" loading="lazy"></figure><p>排查顺序：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>步</th>
+<th>做什么</th>
+<th>JIT 基线作业的结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 定位</td>
+<td>同一步比 10+ 个 replica（<code>worker-&lt;i&gt;-0</code>），按墙钟对时，别按自报 <code>seconds</code>（滞后 2 行）</td>
+<td>差在 2% 以内 → <strong>全局同步点在等</strong>。某片一直慢 → 慢片的 <code>collective_end_to_end_latencies</code> 反而最低（按片找慢片见<a href="pitfalls.html#l-45">经验教训第 45 条</a>）</td>
+</tr>
+<tr>
+<td>2 取证</td>
+<td>慢步窗口谁在用 DCN、有没有建删片；加 4 个诊断 flag + <code>TPU_STDERR_LOG_LEVEL=1</code>；逐 host 采样（duty cycle、HLO 队列、eth1/eth2 吞吐、TCP 重传），如自建的采样 DaemonSet</td>
+<td>第一次运行稳态时没有第二个 ≥ 1,024 芯作业；运行 A 慢步与同期其他任务建删片不能说因果。两次运行所有 host 看门狗 <strong>0 次</strong>、libtpu 日志 <strong>0 行</strong> → 排除 host 线程卡 &gt; 2 s，<strong>没排除</strong> DCN 慢路径。采样只写 stdout，<strong>pod 删了就没</strong></td>
+</tr>
+<tr>
+<td>3 A/B</td>
+<td>单变量换 cube 组合（先于换 flag）</td>
+<td>上面那组含 / 不含该 sub-block 的对照就这么定位。<code>transport_stall_threshold</code> 不是原因，运行 A 慢步少是那段维护扰动少 <span class="tg inf">[推断：按维护窗口时间对齐]</span></td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="step-6-6-gap"></a></p>
+<p><a id="step-6-6-loss"></a>
+<strong>⑤ loss 对不对：和参考实现逐步比</strong>（实测）</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>规模与数据</td>
+<td>1 片 4x8x8（512 device），全局 batch 与序列长度同生产配置；真数据；初值从参考实现的 checkpoint 转来</td>
+</tr>
+<tr>
+<td>判定</td>
+<td>逐步算相对差：step 0 一道阈值，前 N 步平均一道更紧的阈值（本节用主 loss ≤ 0.1%）；FP8 阈值比 BF16 宽</td>
+</tr>
+<tr>
+<td>对齐方式</td>
+<td>参考实现和 MaxText 的步号可能有固定偏移，先对齐再比</td>
+</tr>
+</tbody>
+</table></div>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>run</th>
+<th>step 0 主 loss / 辅助 loss（占各自阈值）</th>
+<th>平均 主 loss / 辅助 loss（占各自阈值）</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JIT，50 步</td>
+<td>约一半 / 三成多</td>
+<td>近九成 / 约四分之三</td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>JIT，1000 步</td>
+<td>约一半 / 三成多</td>
+<td>约四分之三 / 约四分之三</td>
+<td>PASS</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>与参考侧 AOT 运行逐步比，两边的主 loss 平均相对差几乎相同（差比阈值小两个数量级）；超阈值的只是零星单步。</li>
+<li><strong>门很紧</strong>：50 步的主 loss 平均相对差已到阈值的近九成，复测要钉死代码、数据、ckpt。</li>
+<li><strong>换节点逐位相同</strong>：复测时重跑一次，换不重合的 64 个节点，50 步各项 loss 与 grad_norm 最大相对差 0。</li>
+<li><strong>JIT 验 loss，AOT 量性能</strong>：JIT 和参考 AOT 逐步差 1e-5 量级，与两次参考运行之间的差同级 [推断：HLO 通信重排主要改调度和通信切法，不改模型数学；两段式 RS 改规约顺序，实测影响 &lt; 1e-5]；步时差来自编译方式；大规模建议提前编译（AOT），Google 可协助。</li>
+</ul>
+<blockquote>
+<div class="kp kc0"><div class="kp-t">本节可能踩到的问题</div>
+<ul>
+<li><a href="pitfalls.html#l-44">exit 0 / JobSet Completed 不等于训练成功</a></li>
+<li><a href="pitfalls.html#l-20">DCN 弱扩展差（③ 的实测曲线）</a></li>
+<li><a href="pitfalls.html#l-38"><code>ReachedMaxRestarts</code> 先查是不是掉了 host</a></li>
+</ul></div>
+</blockquote>
+<p><a id="step-6-7"></a></p>
+<p><a id="step-6-7-1"></a></p>
+<h2 id="67-性能优化" class="hc2"><span class="hn">6.7</span>性能优化</h2>
+<p>本手册只管跑起来、跑得稳、数对得上参考值。模型性能优化（DCN flag、编译期调度、逐项 A/B）见配套文档《<a href="../../moe-training/index.html">混合注意力 MoE 模型在 TPU v7x 上的训练优化</a>》：一个大号 MoE 模型从单片调到 10+ 片、更大规模的全过程，含每一刀的前后实测。大规模训练建议提前编译（AOT），Google 可协助。</p>
+<p><a id="step-6-8"></a></p>
+<h2 id="68-实测集群其他已验证形状可直接当基线" class="hc3"><span class="hn">6.8</span>实测集群其他已验证形状（可直接当基线）</h2>
+<p>口径同 §6.6。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>任务</th>
+<th>芯片 / 形状</th>
+<th>精度</th>
+<th style="text-align:right">s/step p50</th>
+<th style="text-align:right">TFLOP/s/device</th>
+<th style="text-align:right">MFU（÷1,153.5 BF16 口径，FP8 也按它）</th>
+<th style="text-align:right">step0 s</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>先例：DeepSeek-V3 多作业并发</td>
+<td>每个 1,024（8x8x16，手动 Slice，多个作业并发）</td>
+<td>fp8_full</td>
+<td style="text-align:right">25.25</td>
+<td style="text-align:right">约 330</td>
+<td style="text-align:right">约 30%</td>
+<td style="text-align:right">17–19</td>
+<td>作业之间差不到 1%；loss 12.27 → 11.79（10 步）</td>
+</tr>
+<tr>
+<td>先例：DeepSeek-V3 公开基准</td>
+<td>512（8x8x8）</td>
+<td>fp8_full（pdb=1，EP16）</td>
+<td style="text-align:right">9.61</td>
+<td style="text-align:right">约 110</td>
+<td style="text-align:right">约 9%</td>
+<td style="text-align:right">约 3</td>
+<td>loss 5.84 → 5.06</td>
+</tr>
+<tr>
+<td>DSV3 b16 / fp8</td>
+<td>128（4x4x8）</td>
+<td>bf16 / fp8_full</td>
+<td style="text-align:right">27.95 / 22.47</td>
+<td style="text-align:right">约 290 / <strong>约 370</strong></td>
+<td style="text-align:right">约 25% / 30%</td>
+<td style="text-align:right">15 / 13</td>
+<td>pdb=8，纯 FSDP，30 步；fp8 用 <code>fixed,-224,224</code>，只作吞吐参考</td>
+</tr>
+<tr>
+<td>DSV3 b16 / fp8</td>
+<td>256（4x8x8）</td>
+<td>bf16 / fp8_full</td>
+<td style="text-align:right">28.15 / 26.32</td>
+<td style="text-align:right">约 290 / 约 310</td>
+<td style="text-align:right">约 25% / 25%</td>
+<td style="text-align:right">15 / 14</td>
+<td>b16 即 <a href="06b-public-config-recipe-dsv3.html">06b</a> 单片基准</td>
+</tr>
+<tr>
+<td>DSV3 b16</td>
+<td>2,048（8x16x16，单 ICI 片）</td>
+<td>bf16</td>
+<td style="text-align:right">15.10</td>
+<td style="text-align:right">约 270</td>
+<td style="text-align:right">约 25%</td>
+<td style="text-align:right">约 7</td>
+<td><code>ici_fsdp=512 ici_expert=8</code>，pdb=4</td>
+</tr>
+<tr>
+<td>07 章韧性演练 3 次，缩小版 MoE 模型 + MTC</td>
+<td>192（3×4x4x4）</td>
+<td>bf16</td>
+<td style="text-align:right">第 1 次约是后两次的 4 倍，后两次差不到 1%</td>
+<td style="text-align:right">约 140</td>
+<td style="text-align:right">约 10%</td>
+<td style="text-align:right">36–44</td>
+<td>HBM 72.4 GiB；续训 loss 1.82 起</td>
+</tr>
+<tr>
+<td><strong>大号 MoE 模型（本书脚本）</strong></td>
+<td>数千（10+ × 4x8x8）</td>
+<td>qwix fp8_full</td>
+<td style="text-align:right">比 1 片慢约 40%（均值 ≈ p50）</td>
+<td style="text-align:right">约 150</td>
+<td style="text-align:right">约 15%</td>
+<td style="text-align:right">约 18 min</td>
+<td>30 步、profiler 关、0 慢步；§6.6 口径</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<div class="kp kc1"><div class="kp-t">本节可能踩到的问题</div>
+<ul>
+<li><a href="pitfalls.html#l-20">DCN 弱扩展差</a></li>
+<li><a href="pitfalls.html#l-7">整 pod 没有单一 ICI 切片</a></li>
+<li><a href="pitfalls.html#l-44">训练挂住不报错</a></li>
+</ul></div>
+</blockquote>
+<p><a id="step-6-9"></a>
+<a id="step-6-9-scale"></a></p>
+<h2 id="69-规模边界" class="hc4"><span class="hn">6.9</span>规模边界</h2>
+<ul>
+<li><strong>已知限制</strong>：更大规模的多片训练，在部分软件栈组合下可能停在初始化（<code>jax.devices()</code>），pod 全 Running、无报错。同集群上更大片数的训练已用提前编译（AOT）方式跑通，不是平台或网络的硬墙。</li>
+<li><strong>怎么认出来</strong>：pod 全部 Running，日志停在 <code>jax.devices()</code>，超过看门狗时限没有下一行。</li>
+<li><strong>有办法</strong>：Google 侧可协助对齐软件栈与初始化方式；大规模建议提前编译（AOT），Google 可协助。</li>
+<li><strong>你要配合</strong>：上更大规模之前，先用要交付的训练栈重跑一次多片初始化；驱动带 <code>INIT_TO</code> 看门狗（§6.10 第 8 条），挂住时自动删 JobSet 并收证据。</li>
+</ul>
+<p><a id="step-6-10"></a></p>
+<h2 id="610-经验可以带到下一个集群的做法" class="hc5"><span class="hn">6.10</span>经验：可以带到下一个集群的做法</h2>
+<p>驱动脚本的四个自保动作（第 2、8、10、11 条）：</p>
+<figure class="mermaid"><img src="../assets/mermaid/a8cfe1c1711e.png" width="417" alt="示意图" loading="lazy"></figure><p>读图：两个超时本书脚本都用 600 s；失败后 pod 先没，日志只能去 Cloud Logging 找。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>主题</th>
+<th>以后怎么做</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>报数判读</td>
+<td><strong>AOT 快峰不是稳态：报快峰、p50、均值、慢步占比和统计了哪几步</strong></td>
+<td>AOT 单步可压到 JIT 约 65%，但可能大半步落在慢峰（比快峰慢五成以上）<span class="tg inf">[推断：AOT 快峰 ÷ JIT 快峰]</span>。慢步占多数时 p50 落在慢峰，<strong>「均值 ÷ p50」失灵</strong>，要画逐步耗时</td>
+</tr>
+<tr>
+<td>2</td>
+<td>共享集群</td>
+<td><strong>验收任务自带「让路」：其他高优先级作业排队等不到卡，就删掉自己</strong></td>
+<td>被更高优先级驱逐是期望行为，<strong>不反抢</strong>。精确匹配任务名（宽松正则会误中自己）；阈值 600 s（演练驱逐后几十秒会再准入）。<code>gke-nodepool NotIn</code> 避开其他高优先级作业排队时钉死的池</td>
+</tr>
+<tr>
+<td>3</td>
+<td>驱动脚本</td>
+<td><strong>驱动在跑时不原地改脚本：复制成新名字或等它结束</strong></td>
+<td>bash 按字节偏移边读边执行，改后收尾会死（没写 END、没 delete、没采集）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>数据与桶</td>
+<td><strong>按需镜像数据先抓全文件清单，抓 open 不只抓 read</strong></td>
+<td>GCS 按整个对象复制；初始化若 open 所有分片，按需退化成全量。只挂 pread 会漏 open 和小文件（lens、index），换桶即 FileNotFoundError</td>
+</tr>
+<tr>
+<td>5</td>
+<td>共享集群</td>
+<td><strong>复现已有负载先只读存档，不凭描述重建</strong></td>
+<td>spec、命令、overlay、生效 flag、CLI 覆盖、日志、profile 全取到自己的桶；不 apply、不 delete、不写源桶</td>
+</tr>
+<tr>
+<td>6</td>
+<td>节点与容量</td>
+<td><strong>一台节点芯片驱动故障能让几千芯任务失败：长准备期负载先预热或确认替换容量，<code>maxRestarts</code> 设小、SLICE_FAILURE 不自动重试</strong></td>
+<td>没备用、没 ckpt 时准备全作废。粘住不掉的 condition（如 <code>MegascaleHangDetected</code>）不是坏节点判据；降级要同步成 label + taint 调度器才看得见（见<a href="pitfalls.html#l-48">经验教训第 48 条</a>）</td>
+</tr>
+<tr>
+<td>7</td>
+<td>报数判读</td>
+<td><strong>一行警告不等于全局回退</strong></td>
+<td>只说明至少一个调用点回退；看编译产物或 profile</td>
+</tr>
+<tr>
+<td>8</td>
+<td>驱动脚本</td>
+<td><strong>初始化挂住没人杀：驱动自带看门狗，超时删整个 JobSet 并收证据</strong></td>
+<td><code>INIT_TO</code> 默认 600 s（正常 55–101 s，10+ 片 / 下一档从 pod 起算约 5 / 7 min）</td>
+</tr>
+<tr>
+<td>9</td>
+<td>节点与容量</td>
+<td><strong>提交前把带 <code>cloud.google.com/scheduled-maintenance-time</code> 标签、<code>maintenance-window-started</code> taint、NotReady / unreachable 节点的池放进 <code>NotIn</code></strong></td>
+<td>维护标签只提前几分钟出现，<strong>挡不住未公告的维护</strong>。本书脚本：<code>06-jobset.sh notin-pools</code> / <code>EXCLUDE_POOLS=auto</code>（未实测）</td>
+</tr>
+<tr>
+<td>10</td>
+<td>驱动脚本</td>
+<td><strong>JobSet 失败时报错去 Cloud Logging 捞</strong></td>
+<td>等终态再 <code>kubectl logs</code> 只拿到 NotFound；<code>gcloud logging read 'resource.type=&quot;k8s_container&quot; AND resource.labels.pod_name:&quot;&lt;名字&gt;-worker-&quot;' --project &lt;项目&gt;</code></td>
+</tr>
+<tr>
+<td>11</td>
+<td>驱动脚本</td>
+<td><strong>长跑驱动与会话脱钩：<code>setsid nohup &lt;驱动&gt; … &lt; /dev/null &amp;</code></strong></td>
+<td>只用 <code>nohup … &amp;</code>，工具调用超时会连带杀掉驱动</td>
+</tr>
+<tr>
+<td>12</td>
+<td>驱动脚本</td>
+<td><strong><code>pkill -f</code> 会匹配发出它的 shell 自己：写成 <code>pkill -f &quot;[k]ubectl get …&quot;</code></strong></td>
+<td>模式串也在 <code>bash -c &quot;… pkill -f &lt;模式&gt;&quot;</code> 命令行里，方括号让它不匹配自己（通用 shell 坑，不是集群问题；<code>07-fault-drill.sh</code> 就是这样写的）</td>
+</tr>
+<tr>
+<td>13</td>
+<td>报数判读</td>
+<td><strong>换一批不重合节点重跑，当确定性检查</strong></td>
+<td>loss 应逐位相同；之后有偏差可先排除硬件和随机性（<a href="#step-6-6-loss">§6.6 ⑤</a>）</td>
+</tr>
+<tr>
+<td>14</td>
+<td>数据与桶</td>
+<td><strong>桶按谁来读放，搬桶先等在跑的任务结束</strong></td>
+<td>运行时读写的跟卡同区域，分析材料进长期桶（<a href="#step-6-1-buckets">§6.1</a>）</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="检查点" class="hc0">检查点</h2>
+<p><strong>做完了</strong>（本章出口）</p>
+<p>判据按跑的配方分列：使用方跑 dsv3（<a href="06b-public-config-recipe-dsv3.html">06b</a>），JIT 基线作业那列只是本书实测的判读样板。</p>
+<ul class="contains-task-list">
+<li class="task-list-item">
+<p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 两种配方都要：10+ 片 ACTIVE（<code>kubectl get slices</code> 10+ 行 4x8x8）；两段编译安静期没去杀；<code>verify</code> 最后一步 = STEPS−1、loss 下降，之后 <code>delete</code> 且 Slice 已释放。</p>
+</li>
+<li class="task-list-item">
+<p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 两种配方都要：均值 ÷ p50 ≤ 1.23，并写慢步占比；生效 flag、镜像 digest、libtpu 版本已存档。</p>
+</li>
+<li class="task-list-item">
+<p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 两种配方都要：阶梯第 1–3 级各过 5 条，第 2 级步时记为扩展效率分母。</p>
+</li>
+<li class="task-list-item">
+<p><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 下表按配方对一遍（表里每一行都要过，标「记录不判」的只记数）。</p>
+</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>JIT 基线作业（本书实测，样板）</th>
+<th>dsv3（使用方，<a href="06b-public-config-recipe-dsv3.html#s06a-7">06b §7</a>）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>前置</td>
+<td>PV/PVC Bound；smoke pod 在 <code>$INSPECT_NS</code> 看得到桶（§6.1，未实测）；env tar 与 overlay 在 GCS；<code>preflight</code> 全 OK</td>
+<td>不用 PVC / env tar / overlay；<code>preflight</code> 全 OK；镜像节点能拉（06b 前置条件）</td>
+</tr>
+<tr>
+<td>10+ 片步时</td>
+<td>快步 p50 比 1 片慢约 40%</td>
+<td>28–39 s 先接受，超 39 s 走 §6.6 ④ 分诊；1 片 ≤ 29.5 s 记为分母</td>
+</tr>
+<tr>
+<td>TFLOP/s/device</td>
+<td>约 150</td>
+<td><strong>记录不判</strong>（没有 dsv3 实测基线）</td>
+</tr>
+<tr>
+<td>HBM</td>
+<td>84 GiB</td>
+<td>2 / 10+ 片 ≈ 78.8 GiB、1 片 ≈ 82.2 GiB（AOT 数）；多片 ≈ 95.9 = <code>XLA_FLAGS</code> 没生效</td>
+</tr>
+<tr>
+<td>freeze 存档</td>
+<td>要（env tar 里的 <code>uv pip freeze</code>，§6.2）</td>
+<td>不适用（公开镜像钉 digest，06b §2）</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>说得出</strong>（先自己答，再点开对答案）</p>
+<ul class="contains-task-list">
+<li class="task-list-item qa"><details><summary>为什么是 10+ × 4x8x8 而不是一个数千芯片的单片？</summary><div class="qa-a">整 pod 本来就得走 multislice；少而大的同形状切片 + DCN 数据并行已验证</div></details></li>
+<li class="task-list-item qa"><details><summary><code>ici_fsdp_parallelism: 512</code> 和 <code>dcn_data_parallelism: N</code> 各管什么？</summary><div class="qa-a">前者切片内、走 ICI，= 每片 512 device；后者切片间、走 DCN，= 10+ 片</div></details></li>
+<li class="task-list-item qa"><details><summary>一片 4x8x8 为什么是 <code>completions: 64</code>？</summary><div class="qa-a">256 chip ÷ 每 pod 4 chip = 64 pod</div></details></li>
+<li class="task-list-item qa"><details><summary>日志停在 <code>jax.devices()</code> 或 <code>Total memory size</code> 之后 20 分钟没新行，要杀吗？</summary><div class="qa-a">不要：两段都是训练步编译，§6.6 ①；超过 60 min 再查经验教训第 44 条</div></details></li>
+<li class="task-list-item qa"><details><summary>外部给的 TFLOP/s 和 MaxText 自报的怎么比？</summary><div class="qa-a">先确认是每 chip 还是每 device，每 chip = 2 device</div></details></li>
+<li class="task-list-item qa"><details><summary>为什么不能单独加 <code>--xla_tpu_use_megascale_host_reduction=false</code>？</summary><div class="qa-a">运行 B 步时变成约 1.9 倍；要和 shard size 一起开，以训练步时为准</div></details></li>
+<li class="task-list-item qa"><details><summary>10+ 片均值比 p50 高约 20%，扩展效率报多少？</summary><div class="qa-a">都报：对 1 片是 71%（p50）/ 59%（均值），差在慢步；本书实测无慢步，72%；§6.6 ③</div></details></li>
+<li class="task-list-item qa"><details><summary>本章步时能当生产基线吗？</summary><div class="qa-a">不能：本章全是 JIT 对照；大规模建议提前编译（AOT），Google 可协助</div></details></li>
+<li class="task-list-item qa"><details><summary>为什么 1 cube 冒烟不用大号模型？</summary><div class="qa-a">按 FSDP 切的状态变 4 倍；实测编了约 18 min 后报 OOM，光 HLO 临时内存就 97.12 GB &gt; 94.74 GB</div></details></li>
+<li class="task-list-item qa"><details><summary>阶梯跑到一半 JobSet <code>ReachedMaxRestarts</code>，第一件事查什么？</summary><div class="qa-a">Workload 有没有 <code>NodeFailures</code>、节点有没有 <code>Shutdown</code> / <code>NodeNotReady</code>——掉了 host 就直接重提，Kueue 会避开 UNHEALTHY 的 cube</div></details></li>
+</ul>
+<p><strong>交棒</strong></p>
+<p>JIT 基线作业无检查点、<code>maxRestarts: 0</code>，坏一台就从头来。下一步进 <a href="07-resilience-and-recovery.html">07</a>：多层检查点、失败策略、故障演练（3×4x4x4，不是 10+ 片）。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="06b-public-config-recipe-dsv3.html"><small>← 上一页</small>06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a><a class="next" href="07-resilience-and-recovery.html"><small>下一页 →</small>07 韧性：检查点、故障演练、恢复</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#任务画像">任务画像</a></li><li class="l2"><a href="#路线图从-1-个-cube-爬到-10-片先看这张表">路线图：从 1 个 cube 爬到 10+ 片（先看这张表）</a></li><li class="l2"><a href="#61-数据桶与-gcsfuse-挂载">6.1 数据桶与 gcsfuse 挂载</a></li><li class="l2"><a href="#62-预构建-python-环境-tar别让大量机器各自-pip-install">6.2 预构建 Python 环境 tar（别让大量机器各自 pip install）</a></li><li class="l2"><a href="#63-配置-overlay">6.3 配置 overlay</a></li><li class="l2"><a href="#64-jobsetjit-基线运行原样删掉无关字段">6.4 JobSet（JIT 基线作业原样，删掉无关字段）</a></li><li class="l3"><a href="#641-每个要紧参数是干什么的">6.4.1 每个要紧参数是干什么的</a></li><li class="l2"><a href="#65-提交与盯盘">6.5 提交与盯盘</a></li><li class="l3"><a href="#651-逐级命令对应开头路线图">6.5.1 逐级命令（对应开头「路线图」）</a></li><li class="l2"><a href="#66-结果判读正常的样子">6.6 结果判读（「正常」的样子）</a></li><li class="l3"><a href="#661-怎么判数字">6.6.1 怎么判数字</a></li><li class="l2"><a href="#67-性能优化">6.7 性能优化</a></li><li class="l2"><a href="#68-实测集群其他已验证形状可直接当基线">6.8 实测集群其他已验证形状（可直接当基线）</a></li><li class="l2"><a href="#69-规模边界">6.9 规模边界</a></li><li class="l2"><a href="#610-经验可以带到下一个集群的做法">6.10 经验：可以带到下一个集群的做法</a></li><li class="l2"><a href="#检查点">检查点</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

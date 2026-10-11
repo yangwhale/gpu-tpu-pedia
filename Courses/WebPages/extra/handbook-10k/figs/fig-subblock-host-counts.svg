@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" font-family="Noto Sans CJK SC, sans-serif">
+  <rect width="1000" height="420" fill="#ffffff"/>
+  <text x="30" y="34" font-size="20" font-weight="bold" fill="#202124">16/16、15/15、15/16：前一个数是健康台数，后一个是在用台数</text>
+  <text x="30" y="60" font-size="14" fill="#5f6368">每个方块 = 一台 host；一个 sub-block（cube）16 台。可用的判据：HEALTHY 且 healthyHostCount = 16</text>
+
+  <defs>
+    <g id="ok"><rect width="34" height="34" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.5"/></g>
+    <g id="idle"><rect width="34" height="34" rx="4" fill="#ffffff" stroke="#1e8e3e" stroke-width="1.5" stroke-dasharray="4 3"/></g>
+    <g id="off"><rect width="34" height="34" rx="4" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.5" stroke-dasharray="4 3"/></g>
+    <g id="bad"><rect width="34" height="34" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="2"/></g>
+    <g id="grid16ok">
+      <use href="#ok" x="0" y="0"/><use href="#ok" x="42" y="0"/><use href="#ok" x="84" y="0"/><use href="#ok" x="126" y="0"/>
+      <use href="#ok" x="0" y="42"/><use href="#ok" x="42" y="42"/><use href="#ok" x="84" y="42"/><use href="#ok" x="126" y="42"/>
+      <use href="#ok" x="0" y="84"/><use href="#ok" x="42" y="84"/><use href="#ok" x="84" y="84"/><use href="#ok" x="126" y="84"/>
+      <use href="#ok" x="0" y="126"/><use href="#ok" x="42" y="126"/><use href="#ok" x="84" y="126"/>
+    </g>
+  </defs>
+
+  <!-- 面板 1：16/0 -->
+  <rect x="30" y="80" width="220" height="280" rx="10" fill="none" stroke="#dadce0" stroke-width="1.4"/>
+  <text x="140" y="108" font-size="17" font-weight="bold" fill="#202124" text-anchor="middle">16/0 建池前</text>
+  <g transform="translate(55,122)">
+    <use href="#idle" x="0" y="0"/><use href="#idle" x="42" y="0"/><use href="#idle" x="84" y="0"/><use href="#idle" x="126" y="0"/>
+    <use href="#idle" x="0" y="42"/><use href="#idle" x="42" y="42"/><use href="#idle" x="84" y="42"/><use href="#idle" x="126" y="42"/>
+    <use href="#idle" x="0" y="84"/><use href="#idle" x="42" y="84"/><use href="#idle" x="84" y="84"/><use href="#idle" x="126" y="84"/>
+    <use href="#idle" x="0" y="126"/><use href="#idle" x="42" y="126"/><use href="#idle" x="84" y="126"/><use href="#idle" x="126" y="126"/>
+  </g>
+  <text x="140" y="324" font-size="14" fill="#0d652d" text-anchor="middle">正常：16 台健康、还没人用</text>
+  <text x="140" y="344" font-size="14" fill="#0d652d" text-anchor="middle">02 选 sub-block 就要这种</text>
+
+  <!-- 面板 2：16/16 -->
+  <rect x="270" y="80" width="220" height="280" rx="10" fill="none" stroke="#dadce0" stroke-width="1.4"/>
+  <text x="380" y="108" font-size="17" font-weight="bold" fill="#202124" text-anchor="middle">HEALTHY 16/16</text>
+  <g transform="translate(295,122)"><use href="#grid16ok"/><use href="#ok" x="126" y="126"/></g>
+  <text x="380" y="324" font-size="14" fill="#0d652d" text-anchor="middle" font-weight="bold">可用</text>
+  <text x="380" y="344" font-size="14" fill="#0d652d" text-anchor="middle">16 台都在用、都健康</text>
+
+  <!-- 面板 3：15/15 -->
+  <rect x="510" y="80" width="220" height="280" rx="10" fill="none" stroke="#dadce0" stroke-width="1.4"/>
+  <text x="620" y="108" font-size="17" font-weight="bold" fill="#202124" text-anchor="middle">DEGRADED 15/15</text>
+  <g transform="translate(535,122)"><use href="#grid16ok"/><use href="#off" x="126" y="126"/></g>
+  <text x="620" y="324" font-size="14" fill="#b06000" text-anchor="middle" font-weight="bold">操作口径不可用</text>
+  <text x="620" y="344" font-size="14" fill="#b06000" text-anchor="middle">少一台没开起来</text>
+
+  <!-- 面板 4：15/16 -->
+  <rect x="750" y="80" width="220" height="280" rx="10" fill="none" stroke="#dadce0" stroke-width="1.4"/>
+  <text x="860" y="108" font-size="17" font-weight="bold" fill="#202124" text-anchor="middle">DEGRADED 15/16</text>
+  <g transform="translate(775,122)"><use href="#grid16ok"/><use href="#bad" x="126" y="126"/></g>
+  <text x="860" y="324" font-size="14" fill="#a50e0e" text-anchor="middle" font-weight="bold">操作口径不可用</text>
+  <text x="860" y="344" font-size="14" fill="#a50e0e" text-anchor="middle">16 台在用，1 台不健康</text>
+
+  <!-- 图例 -->
+  <use href="#ok" x="30" y="376" transform="scale(1)"/>
+  <text x="72" y="398" font-size="14" fill="#202124">健康且在用</text>
+  <use href="#idle" x="190" y="376"/>
+  <text x="232" y="398" font-size="14" fill="#202124">健康、未在用</text>
+  <use href="#off" x="370" y="376"/>
+  <text x="412" y="398" font-size="14" fill="#202124">没开起来（不在用）</text>
+  <use href="#bad" x="590" y="376"/>
+  <text x="632" y="398" font-size="14" fill="#202124">在用但不健康</text>
+</svg>

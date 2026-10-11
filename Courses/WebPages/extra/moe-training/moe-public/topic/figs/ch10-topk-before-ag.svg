@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 467" width="900" height="467" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="示意图：ring-of-experts 下每个 shard 有一块本地 token 的路由 logits，宽度是专家数。左边先 all-gather 整块 logits 再在每个 shard 上算 top-k；右边先在本地算 top-k，只 all-gather 选中的专家编号和权重，宽度是 top-k。搬的字节差「专家数 ÷ top-k」倍，反向的 reduce-scatter 同比。">
+<title>示意图：ring-of-experts 下每个 shard 有一块本地 token 的路由 logits，宽度是专家数。左边先 all-gather 整块 logits 再在每个 shard 上算 top-k；右边先在本地算 top-k，只 all-gather 选中的专家编号和权重，宽度是 top-k。搬的字节差「专家数 ÷ top-k」倍，反向的 reduce-scatter 同比。</title>
+<defs><marker id="ar1a73e8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker><marker id="are8710a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker><style></style></defs>
+<rect x="0" y="0" width="900" height="467" fill="#ffffff"/>
+<text x="20.0" y="34.0" font-size="19" fill="#202124" font-weight="700">先在本地算 top-k 再 all-gather：搬的东西从「专家数」那么宽缩到「top-k」那么宽</text>
+<text x="20.0" y="60.0" font-size="14" fill="#5f6368">示意，宽窄只表意，不按真实比例。ring-of-experts（EP > 1）下，每层都要沿 EP 轴 gather 路由结果</text>
+<rect x="20.0" y="73.0" width="22.0" height="13.0" rx="2" fill="#1a73e8" />
+<text x="48.0" y="85.0" font-size="14" fill="#202124">本地算</text>
+<rect x="112.0" y="73.0" width="22.0" height="13.0" rx="2" fill="#e8710a" />
+<text x="140.0" y="85.0" font-size="14" fill="#202124">沿 EP 轴 all-gather 的数据</text>
+<text x="30.0" y="127.0" font-size="16" fill="#202124" font-weight="700">原来：先 gather 再 top-k</text>
+<text x="30.0" y="169.0" font-size="13" fill="#5f6368">本地 logits</text>
+<g>
+<rect x="30.0" y="177.0" width="300.0" height="40.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+<text x="180.0" y="201.7" font-size="13" fill="#202124" text-anchor="middle">E 列（专家数）</text>
+</g>
+<line x1="180.0" y1="221.0" x2="180.0" y2="253.0" stroke="#e8710a" stroke-width="1.6" marker-end="url(#are8710a)"/>
+<text x="188.0" y="243.0" font-size="13" fill="#e8710a">all-gather</text>
+<g>
+<rect x="30.0" y="259.0" width="300.0" height="28.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+<text x="180.0" y="277.7" font-size="13" fill="#202124" text-anchor="middle">shard 1 的 logits</text>
+</g>
+<g>
+<rect x="30.0" y="293.0" width="300.0" height="28.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+<text x="180.0" y="311.7" font-size="13" fill="#202124" text-anchor="middle">shard 2 的 logits</text>
+</g>
+<g>
+<rect x="30.0" y="327.0" width="300.0" height="28.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+<text x="180.0" y="345.7" font-size="13" fill="#202124" text-anchor="middle">shard 3 的 logits</text>
+</g>
+<line x1="180.0" y1="363.0" x2="180.0" y2="391.0" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#ar1a73e8)"/>
+<g>
+<rect x="30.0" y="395.0" width="300.0" height="30.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2" />
+<text x="180.0" y="414.7" font-size="13" fill="#202124" text-anchor="middle">每个 shard 各算 top-k</text>
+</g>
+<text x="30.0" y="453.0" font-size="13" fill="#5f6368">反向是同样宽的 reduce-scatter</text>
+<text x="470.0" y="127.0" font-size="16" fill="#202124" font-weight="700">上游开关：先 top-k 再 gather</text>
+<text x="470.0" y="169.0" font-size="13" fill="#5f6368">本地 logits</text>
+<g>
+<rect x="470.0" y="177.0" width="300.0" height="40.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2" />
+<text x="620.0" y="201.7" font-size="13" fill="#202124" text-anchor="middle">E 列（不搬）</text>
+</g>
+<line x1="620.0" y1="221.0" x2="620.0" y2="253.0" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#ar1a73e8)"/>
+<text x="628.0" y="243.0" font-size="13" fill="#1a73e8">本地 top-k</text>
+<g>
+<rect x="597.0" y="259.0" width="46.0" height="28.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+<text x="620.0" y="277.7" font-size="13" fill="#202124" text-anchor="middle">k 列</text>
+</g>
+<line x1="620.0" y1="291.0" x2="620.0" y2="323.0" stroke="#e8710a" stroke-width="1.6" marker-end="url(#are8710a)"/>
+<text x="628.0" y="313.0" font-size="13" fill="#e8710a">all-gather</text>
+<g>
+<rect x="597.0" y="329.0" width="46.0" height="26.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+</g>
+<g>
+<rect x="597.0" y="361.0" width="46.0" height="26.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+</g>
+<g>
+<rect x="597.0" y="393.0" width="46.0" height="26.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+</g>
+<text x="653.0" y="379.0" font-size="13" fill="#e8710a">选中的专家编号 + 权重</text>
+<text x="470.0" y="453.0" font-size="13" fill="#5f6368">softmax、top-k、负载均衡 loss 提到顶层复用</text>
+</svg>

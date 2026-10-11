@@ -1,0 +1,71 @@
+# 04 组件验收 C6：gcsfuse 读吞吐。由 04-bench.sh gcsfuse 渲染，不要手改占位。
+# 来源：本书实测用的模板，只把 namespace / PVC / 镜像 / 标签换成本书变量。
+# N 个 pod（每台 host 一个，hostname 反亲和）同时读桶里同一个大文件；每 pod 把文件切成 READERS 段、每段一个线程 pread 16 MiB 块。
+# 挂载 = 06-data-pv-pvc.yaml 原样（implicit-dirs, client-protocol=grpc，无 file cache）；pod 注解与参考 JIT 基线作业相同。
+# 不申请 TPU（只借 TPU 节点的网卡和 CPU），但要容忍 google.com/tpu 污点；节点池必须开了 Workload Identity（经验教训第 21 条 同类问题：
+# 实测集群 单网卡池没开 → FailedMount「Workload Identity Federation is not enabled on node」）。
+# 占位：${JOB} ${NS} ${N} ${POOL} ${FILE} ${READERS} ${DATA_PVC} ${TEST_IMAGE}
+# ${NS} 默认渲染成 $INSPECT_NS（04-bench.sh gcsfuse --ns 可改）：本 Job 不带队列名，放 Kueue 受管的 $NS 会永远 suspended。
+#   ${DATA_PVC} 默认 ${DATA_PVC}-inspect（06-data-pv-pvc.yaml 头注释的 $INSPECT_NS 变体），要先建好（04 C6「前提」）。pod 用该 ns 的 default KSA，桶权限要单独授给它。
+#   这个 ns 变体 [需验证]。manageJobsWithoutQueueName 为 false 的集群（04 §4.1）上，无队列 Job 本来就不会被挂起。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB}
+  namespace: ${NS}
+  labels: {app: rb-bench}
+spec:
+  parallelism: ${N}
+  completions: ${N}
+  completionMode: Indexed
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels: {app: rb-bench, rb-bench-job: ${JOB}}
+      annotations:
+        gke-gcsfuse/volumes: "true"
+    spec:
+      restartPolicy: Never
+      nodeSelector: {cloud.google.com/gke-nodepool: ${POOL}}
+      tolerations:
+      - {key: google.com/tpu, operator: Exists, effect: NoSchedule}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: {matchLabels: {rb-bench-job: ${JOB}}}
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - name: main
+        image: ${TEST_IMAGE}
+        env: [{name: READERS, value: "${READERS}"}]
+        resources:
+          requests: {cpu: "2", memory: 4Gi}
+        command:
+        - bash
+        - -c
+        - |
+          set -e
+          F=/data/${FILE}
+          ls -l "$F"
+          python3 - "$F" <<'PY'
+          import os, sys, time, threading
+          f = sys.argv[1]; R = int(os.environ.get("READERS", "1")); bs = 16 << 20
+          size = os.path.getsize(f); seg = (size + R - 1) // R; got = [0] * R
+          def rd(i):
+              fd = os.open(f, os.O_RDONLY); off = i * seg; end = min(size, off + seg)
+              while off < end:
+                  b = os.pread(fd, min(bs, end - off), off)
+                  if not b: break
+                  off += len(b); got[i] += len(b)
+              os.close(fd)
+          t0 = time.time(); th = [threading.Thread(target=rd, args=(i,)) for i in range(R)]
+          [t.start() for t in th]; [t.join() for t in th]
+          dt = time.time() - t0; tot = sum(got)
+          print(f"GCSFUSE_READ pod={os.environ.get('HOSTNAME')} readers={R} bytes={tot} seconds={dt:.2f} GBps={tot/dt/1e9:.3f} start={t0:.2f} end={t0+dt:.2f}", flush=True)
+          PY
+        volumeMounts:
+        - {mountPath: /data, name: data, readOnly: true}
+      volumes:
+      - {name: gke-gcsfuse-cache, emptyDir: {medium: Memory}}
+      - {name: data, persistentVolumeClaim: {claimName: ${DATA_PVC}}}

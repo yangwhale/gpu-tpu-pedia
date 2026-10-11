@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" width="900" height="300" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="上排：一条序列被切成三十多段，前 25 段输出正常，第 26 段起输出被置零（红色斜线）。下排：上限改成序列长度，即每个 token 一段的最坏情况，所有段输出正常，并加容量检查。">
+<title>KDA 每段要重置状态，段数上限退回兜底值 25：多模态 packing 段很碎，第 26 段起输出全是 0</title>
+<defs><marker id="ar-5f6368" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker><marker id="ar-1a73e8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker><marker id="ar-e8710a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker><marker id="ar-d93025" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker><marker id="ar-188038" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#188038"/></marker><marker id="ar-202124" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#202124"/></marker><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fce8e6"/><line x1="0" y1="0" x2="0" y2="6" stroke="#d93025" stroke-width="2"/></pattern><pattern id="hatchg" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#ffffff"/><line x1="0" y1="0" x2="0" y2="6" stroke="#bdc1c6" stroke-width="2"/></pattern></defs>
+<rect width="900" height="300" fill="#ffffff"/>
+<text x="24" y="34" font-size="19" font-weight="700" fill="#202124">KDA 每段要重置状态，段数上限退回兜底值 25：多模态 packing 段很碎，第 26 段起输出全是 0</text>
+<text x="24" y="58" font-size="14" fill="#5f6368">示意：一条 packing 后的序列，每格是一段（一条样本里拼进去的独立内容），格宽＝段长</text>
+<text x="24.0" y="132.0" font-size="15" fill="#a50e0e" text-anchor="start" font-weight="700">改前</text>
+<rect x="100.0" y="110.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text x="102.0" y="102.0" font-size="13" fill="#174ea6" text-anchor="start">1</text>
+<rect x="112.4" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="138.9" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="165.4" y="110.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="177.8" y="110.0" width="13.9" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="193.7" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="220.2" y="110.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="239.6" y="110.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="275.0" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="301.5" y="110.0" width="6.8" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="310.3" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="336.8" y="110.0" width="6.8" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="345.7" y="110.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="365.1" y="110.0" width="13.9" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="381.0" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="407.5" y="110.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="419.9" y="110.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="432.3" y="110.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="467.6" y="110.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="487.1" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="513.6" y="110.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="540.1" y="110.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="559.5" y="110.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="579.0" y="110.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="614.3" y="110.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text x="620.7" y="102.0" font-size="13" fill="#174ea6" text-anchor="end">25</text>
+<rect x="626.7" y="110.0" width="10.4" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<text x="630.7" y="102.0" font-size="13" fill="#a50e0e" text-anchor="start">26</text>
+<rect x="639.1" y="110.0" width="33.3" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="674.4" y="110.0" width="10.4" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="686.8" y="110.0" width="24.5" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="713.3" y="110.0" width="17.4" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="732.7" y="110.0" width="33.3" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="768.1" y="110.0" width="6.8" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="776.9" y="110.0" width="33.3" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="812.3" y="110.0" width="6.8" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="821.1" y="110.0" width="10.4" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<rect x="833.5" y="110.0" width="24.5" height="32.0" rx="1" fill="url(#hatch)" stroke="#d93025" stroke-width="1"/>
+<line x1="625.7" y1="88.0" x2="625.7" y2="154.0" stroke="#d93025" stroke-width="2"/>
+<text x="617.7" y="168.0" font-size="13" fill="#a50e0e" text-anchor="end">兜底上限 25（没单独配）</text>
+<text x="633.7" y="168.0" font-size="13" fill="#a50e0e" text-anchor="start">第 26 段起输出置零，不报错</text>
+<text x="24.0" y="242.0" font-size="15" fill="#0d652d" text-anchor="start" font-weight="700">改后</text>
+<rect x="100.0" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="112.4" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="138.9" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="165.4" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="177.8" y="220.0" width="13.9" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="193.7" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="220.2" y="220.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="239.6" y="220.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="275.0" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="301.5" y="220.0" width="6.8" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="310.3" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="336.8" y="220.0" width="6.8" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="345.7" y="220.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="365.1" y="220.0" width="13.9" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="381.0" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="407.5" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="419.9" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="432.3" y="220.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="467.6" y="220.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="487.1" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="513.6" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="540.1" y="220.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="559.5" y="220.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="579.0" y="220.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="614.3" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="626.7" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="639.1" y="220.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="674.4" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="686.8" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="713.3" y="220.0" width="17.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="732.7" y="220.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="768.1" y="220.0" width="6.8" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="776.9" y="220.0" width="33.3" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="812.3" y="220.0" width="6.8" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="821.1" y="220.0" width="10.4" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="833.5" y="220.0" width="24.5" height="32.0" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text x="100.0" y="278.0" font-size="13" fill="#0d652d" text-anchor="start">上限＝序列长度（每 token 一段的最坏情况）＋ 容量检查</text>
+</svg>

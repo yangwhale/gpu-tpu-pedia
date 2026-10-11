@@ -1,0 +1,82 @@
+# =============================================================================
+# 03-kueue-priority.yaml —— §3.5 PriorityClass + WorkloadPriorityClass（静态，无模板变量）
+#
+# 出处：参考集群蓝图，
+#   名字、数值、preemptionPolicy 原样；description 改成中性描述
+#
+# 实测集群线上是另一套五档 PriorityClass（最高 / 高 / 中 / 低 / 最低，数值各集群自定），
+#   没有 WorkloadPriorityClass。
+#   档位怎么分是使用方的业务决定；这里给参考集群 3 档做起点。
+#
+# preemptionPolicy: Never = kube-scheduler 不抢占，抢占权全部交给 Kueue。
+# PriorityClass 与 WorkloadPriorityClass 同名同值一一对应（参考集群的校验脚本断言这一点）。
+#
+# health-check（文件末尾两段）：本书新增，不在参考集群蓝图里。给 08a 的周期 / 准入健康检查用（配 03-kueue-queues 的 `hc` 队列）。
+#   名字是本书示例（priority `health-check`）；实测集群的数值没采集到，50 是本书取的 [推断]：
+#   只要低于 low=100，生产任务就能按 withinClusterQueue: LowerPriority 抢占它。数值按你们的生产优先级定。
+#   前提：生产任务必须带 priority-class（high/medium/low）。不带的 workload 优先级按 0 算，反而低于 50，会被健康检查挤住。
+#   未实测；验证 = 先提一个 health-check 单 cube 作业占住，再提一个 low 作业要同一 cube，看前者被 Kueue 驱逐（Evicted, reason Preempted）。
+# =============================================================================
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: high
+value: 800
+preemptionPolicy: Never
+globalDefault: false
+description: "top tier"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: medium
+value: 500
+preemptionPolicy: Never
+globalDefault: false
+description: "second tier"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low
+value: 100
+preemptionPolicy: Never
+globalDefault: false
+description: "best effort / preemptible"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: high
+value: 800
+description: "top tier"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: medium
+value: 500
+description: "second tier"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: low
+value: 100
+description: "best effort / preemptible"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: health-check
+value: 50
+preemptionPolicy: Never
+globalDefault: false
+description: "periodic / admission health check, lowest; production preempts it"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: health-check
+value: 50
+description: "periodic / admission health check, lowest; production preempts it"

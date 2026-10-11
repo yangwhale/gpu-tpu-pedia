@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>00 总览 · 讲义 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="" href="../runbook/README.html">交付手册</a><a class="on" href="index.html">讲义</a><a class="" href="../runbook/pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="讲义"><div class="side-h">讲义</div><ol><li><a href="index.html">讲义总览</a></li><li><a class="on" aria-current="page" href="00-overview.html">00 总览 · 讲义</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件 · 讲义</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池 · 讲义</a></li><li><a href="03-control-plane-addons.html">03 集群内组件 · 讲义</a></li><li><a href="04-functional-verification.html">04 功能验证 · 讲义</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作 · 讲义</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：九千芯同时读，桶扛不扛得住 · 讲义</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练 · 讲义</a></li><li><a href="07-resilience-and-recovery.html">07 韧性与恢复 · 讲义</a></li><li><a href="08-day2-operations.html">08 日常运维 · 讲义</a></li><li><a href="09-customer-alignment.html">09 交付前对齐 · 讲义</a></li></ol></nav><aside class="lsplit" aria-label="并排的手册页"><iframe name="chap" title="手册页" loading="lazy" data-src="../runbook/00-overview.html"></iframe></aside>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="index.html">讲义</a> › <span>00 总览 · 讲义</span></nav><nav class="lbar" aria-label="手册与讲义"><a href="../runbook/00-overview.html">📘 手册</a><a class="on" aria-current="page" href="00-overview.html">📝 讲义 · 11.25′</a><button type="button" class="lsplit-btn" aria-pressed="false" title="左边讲义、右边手册；点 🖥 屏幕里的链接，右边跟着跳">⇆ 并排看手册</button></nav><article class="md lecture"><h1 id="00-总览--讲义">00 总览 · 讲义</h1><div class="lcard"><div class="lnums"><span><b>11.25′</b>计划</span><span><b>10.1′</b>地板</span><span><b>1,627</b>台词汉字</span><span><b>8</b>切屏</span><span><b>4</b>互动</span></div><ul class="lsecs"><li>一、问题：你拿到的到底是什么 · 1.75′</li><li>二、为什么难：和普通节点池的三处相反 · 2′</li><li>三、怎么做：一个任务怎么从提交走到跑起来 · 4′</li><li>四、代价和坑：144 不等于 144 · 3.5′</li></ul><p class="lhow">黄底＝台词，照着念；蓝框＝🖥️ 切屏动作，点链接跳到手册里那张图；绿框＝💬 先问台下；红框＝⚠️ 别讲什么。地板＝台词一字不落念完＋切屏的时间，不含互动。<a href="index.html">全课计划与用法 →</a></p></div>
+<blockquote class="lkey">
+<p>🎯 这一章只留一句：cube 是固定的车厢，训练跑在临时编好的列车上；144 节车厢里，规划时只按一百二十八节算。</p>
+</blockquote>
+<blockquote class="lthread">
+<p>🧵 暗线：① 芯片不会自己连起来，一切跑之前先「编组」；② 前半句：一处坏、整团重编，所以永远留备件；后半句：永远别信单一健康信号。</p>
+</blockquote>
+<blockquote class="lstar">
+<p>⭐ 如果只能带走一句话：节点池全绿不等于能跑，144 个 cube 也不等于 144 个能用。</p>
+</blockquote>
+<h2 id="一问题你拿到的到底是什么175" class="hc0">一、问题：你拿到的到底是什么（1.75′）</h2>
+<p class="say">「先说一个场景。九千二百一十六颗芯片交到你手上，两千三百零四台机器，一百四十四个节点池全部 Ready，控制台一片绿。你一定以为，可以把训练交给算法同学了。其实那一刻，它一个 TPU 任务都跑不起来。」</p>
+<p class="ask"><b>💬 互动</b>趁还没切屏先押一个数：一百四十四个 cube，规划时最多能指望几个同时能用？举手就行，第四节揭晓。等台下押出「一百四十四」「一百四十」之类再切屏——手册这一章顶上的数字卡和层级图左下角的彩色格都写着答案，押之前别露。</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/00-overview.html#0-%E5%85%88%E7%9C%8B%E4%B8%80%E5%BC%A0%E5%9B%BE%E8%B0%81%E5%8C%85%E5%90%AB%E8%B0%81">00 §0 那张层级图</a>，底部那条账遮住；有人问左下角为什么有几格颜色不一样，答「第四节讲」。</p>
+<p class="say">「先认识它长什么样。整套机器是一百四十四个积木块，我们叫 cube。一个 cube 分四层、每层四台机器，一共十六台；每台四颗芯片，所以一个 cube 六十四颗。在 GKE 上，一个 cube 就是一个十六节点的节点池。一百四十四乘十六乘四，就是九千二百一十六。」</p>
+<p class="board"><b>🖥️ 屏幕</b>指中间那块的四层、每层同色四格是一台 host，再指右边一台 host 的四颗 chip、每颗两个 TC（这几个数的出处是 <a data-chap="1" href="../runbook/00-overview.html#1-%E7%89%A9%E7%90%86%E4%B8%8E%E8%AE%A1%E8%B4%B9%E5%8D%95%E4%BD%8D">00 §1 物理与计费单位</a>）。</p>
+<p class="say">「有一个口径先记住：运维、配额、SLA 里都数芯片；训练日志里数 device，一颗芯片算两个 device。以后看到一个大数，先问一句，这是芯片还是 device。」</p>
+<h2 id="二为什么难和普通节点池的三处相反2" class="hc1">二、为什么难：和普通节点池的三处相反（2′）</h2>
+<p class="say">「为什么节点池全绿还跑不了？因为它和普通 GKE 有三处正好相反。整门课用一个车辆段来比方：屏幕左边这一百四十四格，每格是一节车厢，停在自己固定的股道上，从来不挪动。车厢之间的贯通道，默认是断开的。」</p>
+<p class="say">「第一处相反：普通 TPU 节点池建好就是一台连好的机器，能直接跑；这里节点池建好，只是车厢进了段、通了电，贯通道没接。芯片之间的高速互联 ICI 一根都没通，连 cube 内部都没有。」</p>
+<p class="say">「第二处：要开车，得由信号楼临时把几节车厢接成一列车，这列车叫 Slice，训练只跑在列车上。第三处：普通节点池坏一台，GCE 给你换新的；这个车辆段是整个包下来的，车坏了原地修，没人替你换，要你自己把人挪到备用车厢上。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，车厢不动，信号楼凭什么能把不挨着的两节接成一列？等台下说出「远程改线路」再切屏（下一张表的 OCS 那行就是答案）。</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/00-overview.html#15-%E8%B4%AF%E7%A9%BF%E5%85%A8%E4%B9%A6%E7%9A%84%E6%AF%94%E6%96%B9%E4%B8%80%E4%B8%AA%E8%BD%A6%E8%BE%86%E6%AE%B5%E5%92%8C%E5%AE%83%E7%9A%84%E4%BF%A1%E5%8F%B7%E6%A5%BC">00 §1.5 车辆段比方表</a>，从第一行往下指，停在「OCS」那行，再指「Slice」那行。</p>
+<p class="say">「靠的是光交换，OCS。它就是信号楼的接线台，远程改光纤走向，车厢原地不动。这也是今天的第一条暗线：芯片不会自己连起来，一切跑之前，先编组。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>被问「控制台里那些名字」时（对照 <a href="../runbook/00-overview.html#glossary">00 §7 术语表</a>）：同一个 cube 在 reservation 叫 sub-block、GCE 是一个 MIG、GKE 是一个节点池、Kueue 是一个 4x4x4 分区编号，都是同一组 16 台机器。容易说错：节点池 Ready ≠ 能跑 TPU 负载；这个比方只到「编组」为止，真实切片是三维形状，讲形状时别再想列车。被问「cube 内是焊死的铜缆，为什么也没 ICI」：线一直在，但 PROVISION_ONLY 只开 VM、不连 ICI，要形成 Slice（哪怕只有一个 cube 的 4x4x4）才连上（<a href="../runbook/00-overview.html#2-%E8%BD%AF%E4%BB%B6%E5%88%86%E5%B1%82%E8%B0%81%E7%AE%A1%E4%BB%80%E4%B9%88">00 §2</a> 那条 bullet）；再往下的硬件机制手册没写，这个我不确定。</p>
+<h2 id="三怎么做一个任务怎么从提交走到跑起来4" class="hc2">三、怎么做：一个任务怎么从提交走到跑起来（4′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/00-overview.html#2-%E8%BD%AF%E4%BB%B6%E5%88%86%E5%B1%82%E8%B0%81%E7%AE%A1%E4%BB%80%E4%B9%88">00 §2 软件分层</a>的对照表，指「GKE Slice Controller」和「kueue-slice-controller」两列。</p>
+<p class="say">「谁来编组？分三层。最下面是 GCE 和光交换，真的去接光纤。中间是 Google 托管的 Slice Controller，相当于信号楼调度员。最上面一层是我们自己装、自己运维的：Kueue 是售票处，排队、查配额；kueue-slice-controller 是售票处派出的传令员加检票闸机。」</p>
+<p class="say">「两个名字都叫 slice controller，千万别混。调度员挂了，切片编不出来，找 Google。闸机挂了更狠：整个集群一个 Job 都建不了，因为它坏了默认锁死，谁都不放行。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/00-overview.html#2-%E8%BD%AF%E4%BB%B6%E5%88%86%E5%B1%82%E8%B0%81%E7%AE%A1%E4%BB%80%E4%B9%88">00 §2 下面的时序图</a>，先留几秒让台下从上往下扫一遍，再指右栏绿字，最后指两行红字。</p>
+<p class="say">「一张票从提交到上车，大部分跳都在一两秒内。真正花时间的只有一跳：等列车编好。安静的时候半分钟到一分钟，和别的大任务挤在一起建，不到三分钟。」</p>
+<p class="say">「最下面那行红字是另一回事：选中的车厢里，哪怕只有一个小包厢被单独建的切片占着，这节就编不进来，编组一次次失败重试，实测拖到六到十二分钟。那是在等车厢腾出来，状态一直在跳，不是卡死。」</p>
+<p class="say">「所以给大家一把判断卡没卡的尺子：编一列车，从一个 cube 到三十二个 cube，正常半分钟到一分半钟。一个中间状态停了十分钟一动不动（三十二节以上的大片放宽到十五分钟），就不是慢，是出 bug 了，别干等，去查卡在哪一层。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，九千二百一十六颗芯片，能不能编成一列超长的车？等台下押出「能」或「不能」再往下。</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/00-overview.html#3-%E5%88%87%E7%89%87%E6%80%8E%E4%B9%88%E6%9D%A5">00 §3 切片形状图</a>，指最大那个 8x16x16。</p>
+<p class="say">「不能。公开文档写明：单片最多三十二个 cube，就是图上最大那块八乘十六乘十六；我们在真集群上编过它，一分钟上下编好。常听到的一百三十，是第四节要讲的可用 cube 数，不是切片上限；单片能到一百二十八的口头说法和公开文档对不上，以 Google 书面答复为准。一百四十四个编成一列，没有任何资料给出过。」</p>
+<p class="say">「所以整套机器训练，是一个旅行团分乘好几列同型号的车，车和车之间用无线电，也就是 DCN，说话。十几列以上的规模有已知限制，建议提前编译，也就是 AOT，Google 可以协助。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>红字两档分开说：和另一个大任务同时建，161–172 s，是挤；约 6 / 12 min 是选中的 cube 里有子切片占着，Slice 反复报 <code>has an active sub slice</code>、退避重试直到包厢释放——状态在变，不算「10–15 min 不动就是 bug」。单片上限按公开文档答：最多 32 个 cube / 2,048 芯，每维 4 的倍数，8x12x20、12x12x12 都合法，没有「2 的幂」限制；130 是 SLO 目标里的可用 cube 数，不是切片上限；144 个编成一片，没有资料给出形状。</p>
+<h2 id="四代价和坑144-不等于-14435" class="hc3">四、代价和坑：144 不等于 144（3.5′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/00-overview.html#4-144-%E4%B8%AA-cube%E4%B8%8D%E7%AD%89%E4%BA%8E144-%E4%B8%AA%E9%83%BD%E8%83%BD%E7%94%A8">00 §4 那条数轴</a>，先指右端 144，再从右往左指红 14、绿色 SLO 线、黄 2、蓝线 128。</p>
+<p class="say">「揭晓刚才押的数。一百四十四个 cube 全在你手上：一百三十个受 Google 的可用性目标保障，也就是 SLO；另外十四个不受保障，正好当热备。规划最大的任务按一百二十八个算，比 SLO 线再低两个。」</p>
+<p class="say">「这不是纸面账。有先例：交付时健康 cube 一百三十多个，几天后就掉到一百二十多个，跌破了保障线。」</p>
+<p class="say">「还有个坑：一百三十个「可用」里，降级的也算。降级分三种：一根连线坏了，数据绕路，能跑但变慢；一台光交换机箱下线，整个 pod 全标降级，整 cube 以上的切片都受影响；十六台机器少一台。同一节车厢，GCE 说降级，K8s 标签说不健康，SLO 说达标。这是第二条暗线的后半句：永远别信单一健康信号。」</p>
+<p class="ask"><b>💬 互动</b>降级的车厢建得起来、只是跑得慢，算不算 Google 违约？举手押「算」或「不算」，两边都有人举再往下。</p>
+<p class="say">「答案是：说不清。SLA 模板只在额度内建切片被拒时才计停机，可它又写一台机器或一根连线不健康，车厢就算不健康，两句对不上。有先例：大任务躲着降级车厢一直被打断，报表却一直达标。所以哪种降级算可用，必须书面谈清。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/00-overview.html#5-%E6%89%80%E6%9C%89%E6%9D%83%E8%BE%B9%E7%95%8Call-capacity-%E6%A8%A1%E5%BC%8F">00 §5 所有权对照表</a>，指「坏一台机器」那行，再指下面那张流程图的蓝色两格。</p>
+<p class="say">「坏了原地修，几小时到几天，不给替换机。所以第二条暗线的前半句是：一处坏、整团重编，永远留备件。动态切片干的就是这件事：车厢不断电、不挪窝，信号楼把坏的那节踢出去、调一节备件进来重新接线。以前的硬切片要删了节点池重建，一次十到十五分钟。」</p>
+<p class="say">「但训练是同步的，一节坏了，所有列车都停，从检查点一起重来；现在的 Kueue 还会把这个任务的切片全拆了重接。三片的小任务，打断到训练走出第一步约六分钟；十几片实测十一分钟左右。所以平时要盯的，是还剩几个备件。」</p>
+<p class="say">「这一章留下的问题：既然一百四十四不等于一百四十四，动手之前第一件事，就是数清这个 reservation 里到底有几个能用的 cube；还有哪些东西，一旦建完就再也改不了？」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>被问解编锁（finalizer）：要保留的集群上默认不要手摘；唯一例外是 Slice 的：MMIG 成员已为 0、且已开 Google case 时，按手册 05 的步骤摘；Kueue 对象的不摘；整集群销毁时由清理流程统一摘除。05 讲。换坏 cube：动态切片 = OCS 改线把备件 cube 换进来、其余 VM 不重启；但当前 Kueue TAS 一个 workload 只有一个固定分配，不能只换坏的那片，实测每次删光该任务所有 Slice 再建：3 片打断→第一个新 step 约 6 min，10+ 片原地重启约 11 min（<a href="../runbook/07a-fault-recovery.html">07a</a>）；同步训练一 pod 失败就全体从检查点重来。最容易跑偏：⛔ 不讲术语表逐条、不讲 BF16 峰值和 HBM 数字；⚠️ 容易说错：SLO 的「130 可用」包含 DEGRADED，不是 130 个全 HEALTHY；降级三类（都是 cube 级 DEGRADED）= BAD_ICI 绕路降速 / BAD_OCS 一台机箱下线全 pod 标降级、4x4x4 及以上受影响 / 16 台缺 1（healthInfo 15/16）；别和 Slice 的 ACTIVE_DEGRADED 混：那是切片自己的状态，出现即删 JobSet 重提（<a href="../runbook/00-overview.html#3-%E5%88%87%E7%89%87%E6%80%8E%E4%B9%88%E6%9D%A5">00 §3 状态图下的读图</a>、05 §5.6）；数轴上 128 到 130 之间的 2 是规划余量（最大任务比 SLO 线低 2）；被追问「备件到底留几个」：本手册不替你定，要和 Google 书面约定；被追问「数据从哪来」：万卡级 TPU7x 集群上的实测（<a href="../runbook/00-overview.html#6-%E6%9C%AC%E6%89%8B%E5%86%8C%E7%9A%84%E6%95%B0%E6%8D%AE%E4%BB%8E%E5%93%AA%E6%9D%A5">00 §6</a>）。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="index.html"><small>← 上一页</small>讲义总览</a><a class="next" href="01-capacity-and-prereqs.html"><small>下一页 →</small>01 容量核对与前置条件 · 讲义</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#一问题你拿到的到底是什么175">一、问题：你拿到的到底是什么（1.75′）</a></li><li class="l2"><a href="#二为什么难和普通节点池的三处相反2">二、为什么难：和普通节点池的三处相反（2′）</a></li><li class="l2"><a href="#三怎么做一个任务怎么从提交走到跑起来4">三、怎么做：一个任务怎么从提交走到跑起来（4′）</a></li><li class="l2"><a href="#四代价和坑144-不等于-14435">四、代价和坑：144 不等于 144（3.5′）</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

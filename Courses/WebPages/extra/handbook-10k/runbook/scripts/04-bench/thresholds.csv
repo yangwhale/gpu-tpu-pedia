@@ -1,0 +1,25 @@
+# 04 组件验收阈值。bench_judge.py 读这个文件；改阈值只改这里。
+# dir：ge = 越大越好（值 ≥ pass 为 PASS，≥ warn 为 WARN，否则 FAIL）；le = 越小越好。
+# scope：per_host = 每台 host 一个值，判最差那台；slice = 每个切片一个值（process 0 打印）；per_pod = gcsfuse 每 pod 一个值。
+# p_state：default = 不写 --xla_tpu_dvfs_p_state；7 = 写了 =7；* = 与档位无关。
+# baseline_lo/hi = 实测范围（出处见 source 列）；pass/warn 全部是 [推断]：
+#   算力 / HBM：pass ≈ 实测最低 −4%，warn ≈ 实测最低 −10%（64 台 host 的最低值离中位 < 1%，所以 −4% 已经远超噪声）；
+#   ICI：pass ≈ 实测最低 × 0.9，warn ≈ × 0.8（同形状 2–5 个独立切片之间差 < 6%）；gcsfuse / H2D：按实测最低留约 20–40% 余量。
+# 只有 jax 0.11.2 / libtpu 0.0.49 的数据；换 libtpu 版本先重测一遍基线再用这些阈值。
+test,metric,scope,shape,p_state,unit,dir,baseline_lo,baseline_hi,pass,warn,source
+C1,matmul/all_local/bf16/16384,per_host,*,default,TFLOP/s/chip,ge,1713,1730,1650,1550,首轮芯片基准（64 host）
+C1,matmul/all_local/bf16/32768,per_host,*,default,TFLOP/s/chip,ge,1802,1816,1730,1620,首轮芯片基准（64 host）
+C1,matmul/all_local/fp8/16384,per_host,*,default,TFLOP/s/chip,ge,3262,3306,3150,2950,首轮芯片基准（64 host）
+C1,matmul/all_local/bf16/32768,per_host,*,7,TFLOP/s/chip,ge,1808,1939,1730,1620,P7 档实测（4x8x8 64 host；最慢 host P7 等于默认档）
+C1,matmul/all_local/fp8/16384,per_host,*,7,TFLOP/s/chip,ge,3706,3716,3500,3300,P7 档实测（两片 host 中位；逐 host 极差不到 2%）
+C1,spread/all_local/bf16/32768,per_slice,*,default,max/min,le,1.007,1.008,1.03,1.05,首轮芯片基准 + P7 档实测的 default（极差不到 1%）
+C2,hbm/all_local/4,per_host,*,*,TB/s/chip,ge,5.12,5.50,5.0,4.7,首轮芯片基准；P7 档实测（P7 不变）
+C5,h2d/all_local_sharded,per_host,*,*,GB/s/host,ge,34.5,50.5,30,20,首轮芯片基准（JAX device_put 口径，不是 raw DMA）
+C3,all_reduce/all_1d/1024,slice,4x4x4,*,GB/s busbw,ge,362,370,330,290,一维 ICI 实测（3 片）+ 分轴 ICI 实测（2 片）
+C3,all_reduce/all_1d/1024,slice,4x4x8,*,GB/s busbw,ge,140,141,126,112,一维 ICI 实测（3 片）+ 分轴 ICI 实测（2 片）
+C3,all_reduce/all_1d/1024,slice,4x8x8,*,GB/s busbw,ge,165,171,150,133,一维 ICI 实测 + 分轴 ICI 实测 + P7 档实测（default 165–171）
+C3,all_reduce/all_1d/1024,slice,8x8x8,*,GB/s busbw,ge,329,350,296,263,一维 ICI 实测 + 分轴 ICI 实测（2 片）
+C3,all_reduce/all_1d/1024,slice,8x8x16,*,GB/s busbw,ge,255,258,230,204,分轴 ICI 实测（第一次运行塌到 19，重跑正常）
+C3,all_reduce/axis/1024,slice,*,*,GB/s busbw,ge,83.6,87.5,78,70,分轴 ICI 实测全部形状的 x/y/z 单轴（k=4/8/16 一致）
+C6,gcsfuse/readers=1,per_pod,*,*,GB/s/host,ge,0.31,0.34,0.25,0.15,gcsfuse 读实测（单流顺序读）
+C6,gcsfuse/readers=32,per_pod,*,*,GB/s/host,ge,3.76,5.34,3.0,2.0,gcsfuse 读实测（16 台 × 32 路 合计 56–60 GB/s）

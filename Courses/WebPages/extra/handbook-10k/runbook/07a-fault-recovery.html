@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>07a 故障恢复专题：演练、MTC、换片与时间账 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a class="on" aria-current="page" href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>07a 故障恢复专题：演练、MTC、换片与时间账</span></nav><article class="md"><h1 id="07a-故障恢复专题演练mtc换片与时间账">07a 故障恢复专题：演练、MTC、换片与时间账</h1>
+<blockquote>
+<div class="kp kc0"><div class="kp-t">结论先看</div>
+<ul>
+<li><strong>恢复一次多久</strong>：10+ 片原地重启<strong>约 11 min</strong>；换片顺利约 12 min，先挂住再驱逐 17–19 min，人工重建 13–31 min；更大规模仅 1 次约 22 min，其中约 5 min 是 MTC 注册失败后的白等（见<a href="pitfalls.html#l-62">经验教训第 62 条</a>）。</li>
+<li><strong>时间花在哪</strong>：数据集加载、AOT 载入占一半多；<strong>读检查点只要约二十秒</strong>。更大规模多出的约 3 min 在「等恢复目录」。</li>
+<li><strong>出故障时做什么</strong>：<a href="#s7a-0">§7a.0 速查</a>；最要紧：见 <code>ACTIVE_DEGRADED</code> 立刻删 JobSet 重提。</li>
+<li><strong>建议目标</strong>：10+ 片原地重启 ≤ 15 min，优化目标 ≤ 8 min（<span class="tg inf">[推断]</span>，<a href="#s7a-5">§7a.5</a>）；更大规模只记录不设目标（<a href="07-resilience-and-recovery.html#step-7-3">07 §7.3</a> 第 6 步）。</li>
+<li>2 片演练只验流程，时间要在交付片数上测；丢步要在本地周期之上留余量，实测丢掉的步数超过一个本地周期（<a href="#s7a-3">§7a.3</a>）。</li>
+</ul></div>
+</blockquote>
+<p>本章拆 10+ 片 / 更大规模生产作业的恢复实测和 2 片演练；开 MTC、失败策略、演练脚本、3 片演练、换 cube 修法在 <a href="07-resilience-and-recovery.html#step-7-1">07</a>。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>意思</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原地重启</td>
+<td>JobSet <code>BackoffLimitExceeded</code> → <code>RestartJobSet</code>，<strong>切片不动</strong></td>
+</tr>
+<tr>
+<td>驱逐重建</td>
+<td>Kueue 驱逐（<code>EvictedDueTo*</code>）后重新准入，切片部分或全部重建</td>
+</tr>
+<tr>
+<td>恢复时间</td>
+<td>故障 → 恢复后第一个新 step 的日志时刻</td>
+</tr>
+<tr>
+<td>MTC</td>
+<td>多层检查点：每隔一定步数先存本机内存盘（本地层），再复制到别的机器和 GCS</td>
+</tr>
+<tr>
+<td>replicator</td>
+<td>每台机器上替 MTC 复制、找回本地层的进程</td>
+</tr>
+<tr>
+<td>AOT</td>
+<td>提前编译好的程序，恢复时载入，不现编</td>
+</tr>
+<tr>
+<td><code>ACTIVE_DEGRADED</code></td>
+<td>切片状态「能用但有毛病」；照样被准入，上去就挂；一天二十多次都不回 ACTIVE（<a href="05-dynamic-slicing-operations.html#step-5-6">05 §5.6</a>）</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="s7a-0"></a></p>
+<h2 id="7a0-速查出了故障做什么" class="hc0"><span class="hn">7a.0</span>速查：出了故障做什么</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>看到</th>
+<th>做什么</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>slice FAILED、Kueue 已驱逐</td>
+<td>交给自动路径，<strong>别手删片</strong>（必全部重切）</td>
+<td><a href="#s7a-4">§7a.4</a></td>
+</tr>
+<tr>
+<td>驱逐后 <code>kubectl get slices.accelerator.gke.io</code> 或 <code>05-triage-slice.sh &lt;slice&gt;</code> 见 <code>ACTIVE_DEGRADED</code></td>
+<td>立刻删 JobSet 重提（§7a.4 #1 干等 14 min）</td>
+<td><a href="#s7a-4">§7a.4</a></td>
+</tr>
+<tr>
+<td>重启后 5 min 还没 <code>replicator.yaml</code>，或容器起 10 min（更大规模 14 min）还没首步</td>
+<td>当挂住，删 JobSet 重提（阈值见 <a href="#s7a-1">§7a.1</a>）</td>
+<td><a href="#s7a-5">§7a.5</a></td>
+</tr>
+<tr>
+<td>exec / 删 pod 后几秒，同片别的 host 报 <code>SLICE_FAILURE_CHIP_DRIVER_ERROR</code></td>
+<td>演练连坐，按审计时刻去重，不送修</td>
+<td><a href="#s7a-2">§7a.2</a></td>
+</tr>
+<tr>
+<td>同一个 cube 第二次出事</td>
+<td><code>05-triage-slice.sh</code> 取证 → <code>05-isolate-cube.sh</code>（先 dry-run，没上过真集群）→ 删 JobSet 重提（删不掉的片用 <code>05-delete-slice-chain.sh</code>）→ 报修（<a href="07-resilience-and-recovery.html#step-7-5">07 §7.5</a>）</td>
+<td><a href="#s7a-4">§7a.4</a></td>
+</tr>
+<tr>
+<td>恢复完</td>
+<td>grep <code>restoring step N from the local tier</code>：N 应是最近一次本地存档的步数，丢掉的步数超过一个本地周期就保留 replicator 日志交给 Google（<a href="08-day2-operations.html#step-8-5">08 §8.5</a>）；记 <a href="#s7a-1">§7a.1</a> 的 11 个时刻</td>
+<td><a href="#s7a-3">§7a.3</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="s7a-1"></a></p>
+<h2 id="7a1-交付前演练梯子与配置" class="hc1"><span class="hn">7a.1</span>交付前：演练梯子与配置</h2>
+<p><strong>L1 过了才上 L2</strong>；L3 要先上 <a href="07-resilience-and-recovery.html#step-7-4b">07 §7.4b</a> 的修法，否则只会看到「本地层被拒」。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>级</th>
+<th>注入</th>
+<th>怎么做</th>
+<th>预期</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L0</td>
+<td>无</td>
+<td><code>08-daily-check.sh</code>；按 <a href="07-resilience-and-recovery.html#step-7-2">07 §7.2</a> 的 jsonpath 核失败策略；<code>07-mtc-setup.sh</code> 核 MTC</td>
+<td><code>maxRestarts</code> ≥ 3 且不是 0；<code>backoffLimit: 0</code>；Kueue <code>waitForPodsReady</code> 生效；<code>LOCAL_CHECKPOINT_PERIOD</code>、<code>MTC_DATA_PARALLELISM</code>＝片数</td>
+</tr>
+<tr>
+<td>L1</td>
+<td>2 片：杀进程 ×3、删 pod ×3、删片 ×1</td>
+<td><a href="scripts/07-jobset-mtc.yaml"><code>07-jobset-mtc.yaml</code></a> 起；<code>07-fault-drill.sh --mode pod-kill</code> 先 dry-run 再 <code>--execute</code></td>
+<td>每次都 <code>restoring step N from the local tier</code>，N＝最近本地周期；无 <code>conflicting rank</code>；每 16 个 pod 同一个 4x4x4 分区</td>
+</tr>
+<tr>
+<td>L2</td>
+<td>交付片数：杀进程、删 pod 各 ≥3 次，自然故障全记</td>
+<td>重复 L1，时刻填进 <a href="#s7a-5">§7a.5</a> 的表</td>
+<td>原地重启 ≤ 15 min；丢步不超过一个本地周期再加余量（<a href="#s7a-3">§7a.3</a> 的已知例外）。要在交付片数上实测，不拿本章的数代替</td>
+</tr>
+<tr>
+<td>L3</td>
+<td>交付片数：换 cube</td>
+<td><a href="07-resilience-and-recovery.html#step-7-4b">07 §7.4b</a> 验收演练表的 D2–D4</td>
+<td><a href="07-resilience-and-recovery.html#step-7-4b">07 §7.4b 验收演练</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>每次演练记 11 个时刻</strong>（＝<a href="#s7a-5">§7a.5</a> 各段边界）：注入（<code>inject.log</code>、审计）→ <code>BackoffLimitExceeded</code> / <code>Evicted*</code> → <code>RestartJobSetFailurePolicyAction</code> / <code>Admitted</code> → <code>Created pod</code> → <code>Docker Image Validation</code> → <code>replicator.yaml</code> → <code>Found a restore directory</code> → <code>restoring step N</code> → <code>Submitted transfer</code> → <code>Loading the compiled function</code> / <code>Loaded compiled function</code> → 第一个 <code>completed step</code>。</p>
+<div class="kp kc1"><div class="kp-t">演练规矩</div>
+<ul>
+<li>每次注入都要事先约定窗口、通知相关值班；两次注入隔 ≥ 1 个本地周期、出新 step 再注（脚本不幂等）。</li>
+<li>顺序：exec 杀进程（无脚本，手工）→ 删 pod → 删 VM → 模拟维护；删 Slice 只做一次，确认「全部重切」。</li>
+<li>2 片演练要开 MTC、用 AOT 产物和生产镜像。</li>
+<li>验先存再退（exit 3 + PodFailurePolicy）要杀整组或删 pod，杀单个进程不触发（<a href="07-resilience-and-recovery.html#step-7-6">07 §7.6</a>）。</li>
+</ul></div>
+<div class="kp kc2"><div class="kp-t">配置</div>
+<ul>
+<li>
+<p>ramdisk 按 <a href="07-resilience-and-recovery.html#step-7-1">07 §7.1</a> 第 5 步的 ≈ 本地检查点 × 2.2 起步；本书实测给到约 2.6 倍。</p>
+</li>
+<li>
+<p>持久层<strong>不要全关</strong>，按使用方能丢多少步留一个低频的（<a href="07-resilience-and-recovery.html#step-7-4b-p0">07 §7.4b P0</a>）。</p>
+</li>
+<li>
+<p>最坏丢步（RPO）可按两个本地周期估算（是估算不是承诺），前提是换 cube 也能读本地层。这要靠 device id 配对补丁，上游 MaxText／Orbax 还没有，换 cube 那条路径也还没有实战日志，所以仍按持久层周期写。</p>
+</li>
+<li>
+<p>容器里 <code>ulimit -c 0</code>（见<a href="pitfalls.html#l-42">经验教训第 42 条</a>）；数据集初始化开 <code>BUILD_WORKERS=8</code>；AOT 产物放本地盘或 Anywhere Cache 旁（<a href="06a-storage-anywhere-cache-gcsfuse.html">06a</a>）。</p>
+</li>
+<li>
+<p>挂住判定 <code>megascale_graph_hang_threshold</code> 要长过容器到首步：10+ 片 ≥ 10 min，更大规模 ≥ 14 min。</p>
+</li>
+<li>
+<p>关缓存类开关在 worker-0-0 日志 <code>Config param</code> 行核实，别只看 overlay（实测有过 overlay 被命令行盖住、没关成的情况）。</p>
+</li>
+</ul></div>
+<p><a id="s7a-2"></a></p>
+<h2 id="7a2-怎么模拟故障每种手段走哪条路" class="hc2"><span class="hn">7a.2</span>怎么模拟故障：每种手段走哪条路</h2>
+<ul>
+<li><strong>杀进程、删 pod 只模拟软件崩</strong>。最费时的两类真实故障（先原地挂住再被驱逐、切到 DEGRADED 片）人为造不出。</li>
+<li>交付最常见的坏 cube 只有 VM 手段能模拟，10+ 片没做过，<strong>恢复时间和丢步是空白</strong>。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>手段</th>
+<th>模拟的真实故障</th>
+<th>走哪条路</th>
+<th>坑</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kubectl exec</code> 杀训练进程（日志 <code>trainer Killed</code>）</td>
+<td>进程崩、OOM</td>
+<td>原地重启</td>
+<td>几秒内同片另一台报芯片错（8 次 7 次），libtpu 连坐</td>
+<td>10+ 片 8 次，约 11–14 min</td>
+</tr>
+<tr>
+<td><code>kubectl delete pod</code>（<code>--mode pod-kill</code>）</td>
+<td>pod 被驱逐、kubelet 重启</td>
+<td>原地重启</td>
+<td>日志是 <code>SIGTERM</code> 不是 <code>Killed</code></td>
+<td>10+ 片 3 次，约 11–12 min</td>
+</tr>
+<tr>
+<td><code>gcloud compute instances stop</code>（<code>--mode vm-stop</code>）/ <code>delete</code> / <code>simulate-maintenance-event</code></td>
+<td>掉电 / 主机回收 / 计划维护</td>
+<td>驱逐重建，换 cube</td>
+<td>未修经验教训第 24 条时本地层被拒；stop 要手动 <code>start</code>，delete 后 MIG 重建那台</td>
+<td>3 片 5 次（<a href="07-resilience-and-recovery.html#step-7-4">07 §7.4</a>）：顺利 3 次约 6 min；stop 的一次约 39 min 挂住，delete 有一次 66 min 未恢复</td>
+</tr>
+<tr>
+<td><code>kubectl delete slice</code>（<code>--mode slice-delete</code>）</td>
+<td>切片被收回</td>
+<td>驱逐重建，<strong>全部重切</strong>（<a href="pitfalls.html#l-38">经验教训第 38 条</a>）</td>
+<td>—</td>
+<td>3 片 2 次（07 §7.4），约 30 / 38 min，都挂住</td>
+</tr>
+<tr>
+<td>切片 FAILED（自然）</td>
+<td>ICI / 硬件故障</td>
+<td><code>EvictedDueToAdmissionCheck</code>，部分或全部重建</td>
+<td>message 全空</td>
+<td>10+ 片 3 次：约 12 / 17（先原地挂住）/ 31 min（DEGRADED）</td>
+</tr>
+<tr>
+<td>节点故障（自然；fast-kill SIGTERM 时触发过一次）</td>
+<td>节点 NotReady</td>
+<td><code>EvictedDueToNodeFailures</code></td>
+<td>—</td>
+<td>10+ 片 1 次约 12 min；另一次约 31 min（排队约 11 min，<a href="#s7a-5">§7a.5</a>）</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="s7a-3"></a></p>
+<h2 id="7a3-mtc本地层存一次十几秒读一次约二十秒丢步有一个已知例外" class="hc3"><span class="hn">7a.3</span>MTC：本地层存一次十几秒、读一次约二十秒，丢步有一个已知例外</h2>
+<figure class="mermaid"><img src="../assets/mermaid/d45c64e0633b.png" width="887" alt="示意图" loading="lazy"></figure><p>恢复先找本地 ramdisk，没有就由 replicator 从 peer 或 GCS 备份灌回。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>实测生产值（10+ 片 / 更大规模）</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GCS 备份</td>
+<td><code>MTC_BACKUP_INTERVAL_STEPS</code>：比本地层稀，取本地周期的整数倍</td>
+</tr>
+<tr>
+<td>持久层</td>
+<td><code>ENABLE_CHECKPOINTING=false</code>、<code>MTC_PERSISTENT_CHECKPOINTING=false</code></td>
+</tr>
+<tr>
+<td>本地层容量</td>
+<td>每 host 需要百余 GiB，ramdisk 数百 GiB</td>
+</tr>
+</tbody>
+</table></div>
+<p>本书实测用了两个 MaxText 补丁作绕过办法，上游 MaxText／Orbax 都未合入：</p>
+<ul>
+<li><strong>device id 补丁</strong>（日志 <code>hosts renumbered; restoring it by device id</code>，十几次）：机器重新编号后按设备号（replicator 的 runtime index）找回自己那份，修经验教训第 24 条；二十多次恢复全走本地层。</li>
+<li><strong>sharding-metadata-cache 补丁</strong>（<code>patch installed: Orbax _sharding serialization is memoized</code>）：<span class="tg inf">[推断]</span> 存盘时少算一遍分片信息；2 片测不出差别。</li>
+</ul>
+<p><strong>存一次</strong>（阻塞取 <code>Finished blocking save in N seconds … @ /local/N</code>，阻塞 + 后台取 <code>Finished save (blocking + background) in N seconds @ /local/N</code>）</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>规模</th>
+<th>次数</th>
+<th>阻塞（中位）</th>
+<th>阻塞 + 后台</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10+ 片</td>
+<td>几十</td>
+<td>秒级（个位数）</td>
+<td>十几秒</td>
+</tr>
+<tr>
+<td>更大规模</td>
+<td>十来</td>
+<td>秒级（个位数）</td>
+<td>十几秒</td>
+</tr>
+<tr>
+<td>持久层（对照）</td>
+<td>1</td>
+<td>几分钟（数 TiB）</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>持久层那行是一次 GCS save 的阻塞时间；同作业其余 GCS save 阻塞只有几秒。</li>
+<li>本地层阻塞每次只有几秒，摊到本地周期里可以忽略。</li>
+<li>更大规模阻塞不比 10+ 片长：<span class="tg inf">[推断]</span> 片数更多，每台要存的量不变。</li>
+</ul>
+<p><strong>读一次</strong>（一次原地重启逐行）</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>相对时刻（以找到恢复目录为 0）</th>
+<th>事件</th>
+<th>段耗时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0 s</td>
+<td><code>Found a restore directory</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>+10 → +26 s</td>
+<td>建 emergency replicator 管理器</td>
+<td>16 s</td>
+</tr>
+<tr>
+<td>+28 → +202 s</td>
+<td><code>Loading 8 shards</code>：数据集状态</td>
+<td><strong>174 s</strong></td>
+</tr>
+<tr>
+<td>+203 s</td>
+<td><code>restoring step &lt;N&gt; from the local tier</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>约 +212 s</td>
+<td>本地读完：数 TiB，数百 GiB/s</td>
+<td>约 9 s</td>
+</tr>
+<tr>
+<td>+221 s</td>
+<td><code>Submitted transfer</code>：搬到 mesh</td>
+<td>约 10 s</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>日志里的 <code>Finished load in … @ /local/N</code>（不到 1 s）只读了元数据，不是读本地层的耗时。</li>
+<li>旧说法「MTC 恢复三分多钟」里<strong>约 3 min 是数据集加载</strong>。</li>
+</ul>
+<p><strong>丢步</strong>：原地重启十几次，一般从最近一次本地存档恢复，最多时丢掉的步数超过一个本地周期；驱逐重建 5 次也全读本地层，丢的步数都不到一个本地周期。</p>
+<p><strong>已知限制</strong>：本地层刚存完不久进程被杀，可能退回上一个本地存档，丢掉的步数超过一个本地周期。<span class="tg inf">[推断]</span> peer 复制还没完成，replicator 判最新那份不完整。估 RPO、定演练预期时在本地周期之上再留余量。</p>
+<p><a id="s7a-4"></a></p>
+<h2 id="7a4-换掉坏片自动和手动" class="hc4"><span class="hn">7a.4</span>换掉坏片：自动和手动</h2>
+<ul>
+<li><strong>不总是全换，也没证实「只换坏片」</strong>：下表 6 次里自动只换部分的<strong>只有 2 次</strong>（下表 #3、#5），#3 还换了 2 片好的；判据未核，按全换估。</li>
+</ul>
+<p><strong>10+ 片作业的每一次换片</strong>（单位 s，除注明外）</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>起因</th>
+<th>新建几片</th>
+<th>① → 驱逐</th>
+<th>③ 下线或等配额 → 建片</th>
+<th>④ 激活</th>
+<th>⑤ 准入 + ⑥ 容器</th>
+<th>→ 首步</th>
+<th>合计</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>切片 FAILED</td>
+<td>全部</td>
+<td>—</td>
+<td>—</td>
+<td>新片 → <code>ACTIVE_DEGRADED</code></td>
+<td>—</td>
+<td>挂住，人工删 JobSet</td>
+<td>约 31 min</td>
+</tr>
+<tr>
+<td>2</td>
+<td>人工重建 JobSet</td>
+<td>2（其余复用）</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>约 12 min</td>
+</tr>
+<tr>
+<td>3</td>
+<td>切片 FAILED</td>
+<td>3</td>
+<td>2</td>
+<td>16</td>
+<td>87–117</td>
+<td>4 + 3</td>
+<td>约 10 min（⑦–⑫ 未拆）</td>
+<td><strong>干净，约 12 min</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>jax-dist-fatal，原地挂住 → PodsReady 超时驱逐</td>
+<td>8</td>
+<td>34 重启 + 34 容器 + 254</td>
+<td>61 配额</td>
+<td>53–138</td>
+<td>2 + 6</td>
+<td>约 10 min</td>
+<td>约 19 min</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>EvictedDueToNodeFailures</code></td>
+<td>1</td>
+<td>19</td>
+<td>5</td>
+<td>53</td>
+<td>3 + 3</td>
+<td>约 11 min</td>
+<td>约 12 min</td>
+</tr>
+<tr>
+<td>6</td>
+<td>jax-dist-fatal，原地挂住，期间一片 FAILED</td>
+<td>全部</td>
+<td>41 + 35 + 158</td>
+<td>17</td>
+<td>51–141</td>
+<td>2 + 5</td>
+<td>约 10 min</td>
+<td>约 17 min</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>#1 逐段</strong>：FAILED → 2 s 驱逐 → 约 30 s 新建 → 新片 ACTIVATING 后进 <code>ACTIVE_DEGRADED</code> → 准入、容器起来只打 28 行，停在 replicator 之前 → 干等约 14 min 后人工删 JobSet → 删后约 13 min 出首步。教训：见 <code>ACTIVE_DEGRADED</code> 立刻删 JobSet 重提（<a href="#s7a-0">§7a.0</a>）。</li>
+<li><span class="tg inf">[推断]</span> PodsReady 超时：原地挂住约 5 min 被驱逐，像 <code>recoveryTimeout</code>；另一次准入后约 10 min 驱逐，像 <code>timeout</code>（<a href="07-resilience-and-recovery.html#step-7-2">07 §7.2</a>）。</li>
+<li><span class="tg inf">[推断]</span> 原地挂住多半和 <code>ACTIVE_DEGRADED</code> 片有关：同期有 <code>ACTIVE_DEGRADED</code> 片报 <code>DEADLINE_EXCEEDED</code>。</li>
+<li><strong>复用</strong>：新建 slice 都带 <code>kueue.gke.io/tpu-reusable-slice</code> 标签；更大规模首次准入也有片是复用的，不是全部新建。<span class="tg inf">[推断]</span> 换几片看哪些能复用，不看坏了几片。</li>
+</ul>
+<p><strong>人工删 JobSet 重建的三次</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>删 → 重提</th>
+<th>重提 → 准入</th>
+<th>准入 → 容器</th>
+<th>容器 → 首步</th>
+<th>删 → 首步</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>约 40 s</td>
+<td>约 100 s</td>
+<td>约 2 s</td>
+<td>约 10 min</td>
+<td>约 13 min</td>
+</tr>
+<tr>
+<td>2</td>
+<td>约 50 s</td>
+<td>约 200 s</td>
+<td>约 9 s</td>
+<td>约 11 min</td>
+<td>约 15 min</td>
+</tr>
+<tr>
+<td>3</td>
+<td>约 50 s</td>
+<td>约 100 s</td>
+<td>约 5 s</td>
+<td>第一代 barrier 失败，第二代约 22 min 才出 step</td>
+<td>约 25 min</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="s7a-5"></a></p>
+<h2 id="7a5-时间账故障到第一步" class="hc5"><span class="hn">7a.5</span>时间账：故障到第一步</h2>
+<p><strong>10+ 片约 11 min 里 K8s 调度（①②⑤）只占约 90 s</strong>，要缩短先砍 ⑨ 和 ⑪。</p>
+<p><strong>分段总表</strong>（中位取整，单位 s；驱逐、人工重建见 <a href="#s7a-4">§7a.4</a>）</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>段</th>
+<th>10+ 片原地重启（十几次）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>① 故障 → 发现</td>
+<td>约 50（<code>BackoffLimitExceeded</code>）</td>
+</tr>
+<tr>
+<td>② JobSet 重启</td>
+<td>约 2</td>
+</tr>
+<tr>
+<td>⑤ 重启 → pod 建好</td>
+<td>约 40</td>
+</tr>
+<tr>
+<td>⑥ pod → 容器第一行</td>
+<td>约 4</td>
+</tr>
+<tr>
+<td>⑦ jax 分布式初始化 + MTC 握手</td>
+<td>约 100</td>
+</tr>
+<tr>
+<td>⑧ 等恢复目录</td>
+<td>约 6</td>
+</tr>
+<tr>
+<td>⑨ 管理器 + 数据集加载</td>
+<td>约 200</td>
+</tr>
+<tr>
+<td>⑩ 读本地层 + 搬到 mesh</td>
+<td>约 20</td>
+</tr>
+<tr>
+<td>⑪ AOT 载入（另有 5–9 s 准备）</td>
+<td>约 200</td>
+</tr>
+<tr>
+<td>⑫ 首步</td>
+<td>约 60</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td><strong>约 11 min（10–14 min）</strong></td>
+</tr>
+<tr>
+<td>其中容器 → 首步</td>
+<td>约 10 min</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="mermaid"><img src="../assets/mermaid/1c83eebaa02d.png" width="1280" alt="示意图" loading="lazy"></figure><ul>
+<li>① 按起因：exec 50–56 s、删 pod 61–63 s、Traceback 19–35 s。⑧ 有两次 71 / 58 s，其余 4–9 s，<span class="tg inf">[推断]</span> replicator 在等某个 peer；⑫ 有一次 221 s，原因未核。</li>
+<li><strong>更大规模</strong>（1 次）：第一代故障后 41 s 重启，容器起 147 s 后才有 replicator.yaml，随即失败，第二次重启。失败原因：rank 0 的 coordinator 注册碰上 apiserver 瞬断、不重试，其余节点等满 300 s 才报错（见<a href="pitfalls.html#l-62">经验教训第 62 条</a>）。第二代容器 → 首步约 13 min，多在 ⑦ ⑧（一直等到 <code>Found a restore directory</code>），<span class="tg inf">[推断]</span> 要等所有机器全部报到。</li>
+<li><strong>3 片演练</strong>（<a href="07-resilience-and-recovery.html#step-7-4">07 §7.4</a>）顺利时快一半，因为没 AOT；那里的挂住根因<a href="pitfalls.html#l-42">经验教训第 42 条</a>在 10+ 片/更大规模实测里没再出现，是否彻底消失未核。</li>
+</ul>
+<p><strong>排队吃掉约 11 min 的一次</strong>（节点故障驱逐）：等配额 <strong>十余分钟</strong> → 新建 8 片到准入约 2 min → 容器约 2 min → 首步约 11 min，合计约 31 min，丢的步数不到一个本地周期。</p>
+<p><strong>8 min 目标怎么来的</strong> <span class="tg inf">[推断：约 11 min 减预期节省]</span>：</p>
+<ul>
+<li>
+<p>⑨ 数据集加载：按 2 片 <code>BUILD_WORKERS=8</code> 的比例（125 → 43 s，约 0.34 倍）从约 200 s 缩到约 70 s，省约 2 min。10+ 片未实测。</p>
+</li>
+<li>
+<p>⑪ AOT 载入：再压约 1 min，即约 3 min → 约 2 min；怎么压（本地盘、Anywhere Cache）未实测。</p>
+</li>
+<li>
+<p>core dump：10+ 片 ① 没被拖慢；关它是<strong>守住</strong> ①（2 片开着时慢 4–6 min）。</p>
+</li>
+<li>
+<p>约 11 min 减去约 2 min、约 1 min ≈ 8 min；缺一项就到不了。</p>
+</li>
+</ul>
+<p><a id="s7a-6"></a></p>
+<h2 id="7a6-2-片演练能说明什么" class="hc0"><span class="hn">7a.6</span>2 片演练能说明什么</h2>
+<ul>
+<li>
+<p>2 片总时间和 10+ 片接近是巧合，各段完全不同；但能抓到问题：core dump 让重启慢 4–6 min，<code>BUILD_WORKERS=8</code> 让数据初始化快 3 倍。</p>
+</li>
+<li>
+<p>SIGTERM 时 MaxText 本身 exit 0，JobSet 判 <code>Completed</code>；先存再退（exit 3）只在杀整组或删 pod 时生效（<a href="07-resilience-and-recovery.html#step-7-6">07 §7.6</a>、<a href="pitfalls.html#l-44">经验教训第 44 条</a>）。</p>
+</li>
+<li>
+<p>能从 2 片外推的：发现 → 重启（前提是关 core dump）、重启 → 容器、数据集初始化。jax 初始化与等恢复目录随台数涨（2 片约 1 min，10+ 片一分半左右，更大规模约 5 min）；读检查点、编译、首步、丢步，以及挂住再驱逐、DEGRADED、切片复用，都要在交付片数上测。</p>
+</li>
+</ul>
+<p><a id="s7a-7"></a></p>
+<h2 id="7a7-还不知道的" class="hc1"><span class="hn">7a.7</span>还不知道的</h2>
+<ul>
+<li><code>ACTIVE_DEGRADED</code> 片照样能被准入，上去就挂；处置见 <a href="#s7a-0">§7a.0</a>。</li>
+<li>何时全部重切、何时只换部分，判据没有公开；按全部重切估恢复时间（<a href="#s7a-4">§7a.4</a>）。</li>
+<li>切片 FAILED 事件的 message 为空，判断要不要报修靠 <a href="05-dynamic-slicing-operations.html#step-5-6">05 §5.6</a> 的取证。</li>
+<li>本地层存完多久才算「可恢复」没有公开判据；按 <a href="#s7a-3">§7a.3</a> 的已知限制留余量。</li>
+</ul>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="07-resilience-and-recovery.html"><small>← 上一页</small>07 韧性：检查点、故障演练、恢复</a><a class="next" href="08-day2-operations.html"><small>下一页 →</small>08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#7a0-速查出了故障做什么">7a.0 速查：出了故障做什么</a></li><li class="l2"><a href="#7a1-交付前演练梯子与配置">7a.1 交付前：演练梯子与配置</a></li><li class="l2"><a href="#7a2-怎么模拟故障每种手段走哪条路">7a.2 怎么模拟故障：每种手段走哪条路</a></li><li class="l2"><a href="#7a3-mtc本地层存一次十几秒读一次约二十秒丢步有一个已知例外">7a.3 MTC：本地层存一次十几秒、读一次约二十秒，丢步有一个已知例外</a></li><li class="l2"><a href="#7a4-换掉坏片自动和手动">7a.4 换掉坏片：自动和手动</a></li><li class="l2"><a href="#7a5-时间账故障到第一步">7a.5 时间账：故障到第一步</a></li><li class="l2"><a href="#7a6-2-片演练能说明什么">7a.6 2 片演练能说明什么</a></li><li class="l2"><a href="#7a7-还不知道的">7a.7 还不知道的</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

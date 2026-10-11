@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" width="1000" height="470" font-family="Noto Sans CJK SC, sans-serif">
+  <rect width="1000" height="470" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker>
+    <marker id="ahr" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker>
+    <marker id="ahg" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1e8e3e"/></marker>
+  </defs>
+
+  <!-- 左：修之前 -->
+  <text x="30" y="36" font-size="19" font-weight="bold" fill="#d93025">修之前：外层 remat 看不见 kernel 里面</text>
+  <rect x="30" y="56" width="440" height="300" rx="12" fill="none" stroke="#dadce0" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="46" y="82" font-size="15" fill="#5f6368">nn.remat（policy = save "context"）</text>
+  <rect x="60" y="100" width="380" height="170" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+  <text x="76" y="126" font-size="16" font-weight="bold" fill="#a50e0e">chunk_kda（custom_vjp）</text>
+  <rect x="80" y="156" width="140" height="48" rx="8" fill="#ffffff" stroke="#d93025"/>
+  <text x="150" y="186" font-size="15" text-anchor="middle" fill="#202124">f_fwd</text>
+  <rect x="280" y="156" width="140" height="48" rx="8" fill="#ffffff" stroke="#d93025"/>
+  <text x="350" y="186" font-size="15" text-anchor="middle" fill="#202124">f_bwd</text>
+  <line x1="220" y1="180" x2="276" y2="180" stroke="#5f6368" stroke-width="2" marker-end="url(#ah)"/>
+  <text x="249" y="152" font-size="14" text-anchor="middle" fill="#202124">17 个残差</text>
+  <text x="250" y="258" font-size="14" text-anchor="middle" fill="#a50e0e">反向时整个重跑；外面打的名字对 f_bwd 没意义</text>
+  <path d="M350 204 C 350 244, 150 244, 150 208" fill="none" stroke="#d93025" stroke-width="2" marker-end="url(#ahr)"/>
+  <text x="60" y="300" font-size="15" fill="#202124">结果：前向被反向重跑</text>
+  <text x="60" y="330" font-size="15" font-weight="bold" fill="#d93025">每层每步 4 次 kda_fwd</text>
+
+  <!-- 右：修之后 -->
+  <text x="530" y="36" font-size="19" font-weight="bold" fill="#1e8e3e">修之后：在 f_fwd 里面给残差打 tag</text>
+  <rect x="530" y="56" width="440" height="300" rx="12" fill="none" stroke="#dadce0" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="546" y="82" font-size="15" fill="#5f6368">nn.remat + save_only_these_names("kda_residuals")</text>
+  <rect x="560" y="100" width="380" height="170" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+  <text x="576" y="126" font-size="16" font-weight="bold" fill="#0d652d">chunk_kda（kernel 库新版）</text>
+  <rect x="580" y="156" width="140" height="48" rx="8" fill="#ffffff" stroke="#1e8e3e"/>
+  <text x="650" y="186" font-size="15" text-anchor="middle" fill="#202124">f_fwd</text>
+  <rect x="780" y="156" width="140" height="48" rx="8" fill="#ffffff" stroke="#1e8e3e"/>
+  <text x="850" y="186" font-size="15" text-anchor="middle" fill="#202124">f_bwd</text>
+  <line x1="720" y1="180" x2="776" y2="180" stroke="#1e8e3e" stroke-width="2" marker-end="url(#ahg)"/>
+  <rect x="580" y="214" width="340" height="48" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+  <text x="750" y="234" font-size="14" text-anchor="middle" fill="#202124">只存 Aqk / Akk / g_cumsum</text>
+  <text x="750" y="254" font-size="14" text-anchor="middle" fill="#202124">每层数百 MB</text>
+  <text x="560" y="300" font-size="15" fill="#202124">小号模型 64 芯片：步时指数 31 → 28</text>
+  <text x="560" y="330" font-size="15" font-weight="bold" fill="#1e8e3e">约 −10%</text>
+
+  <!-- 底部：代价 -->
+  <rect x="30" y="380" width="940" height="70" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+  <text x="50" y="408" font-size="15" font-weight="bold" fill="#b06000">但不是存得越多越好</text>
+  <text x="50" y="434" font-size="15" fill="#202124">17 个全存：编译 OOM（多出约 19 GB）；再加存 mlpwi_0/1：指数回到 31，反而变慢</text>
+</svg>

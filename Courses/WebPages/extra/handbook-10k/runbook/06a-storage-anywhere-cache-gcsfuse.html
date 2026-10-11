@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a class="on" aria-current="page" href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</span></nav><nav class="lbar" aria-label="手册与讲义"><a class="on" aria-current="page" href="06a-storage-anywhere-cache-gcsfuse.html">📘 手册</a><a href="../lectures/06a-storage-anywhere-cache-gcsfuse.html">📝 讲义 · 10.5′</a><span class="lbar-tip">讲课的人看讲义，投屏放这一页</span></nav><article class="md"><h1 id="06a-存储anywhere-cache带宽配额gcsfuse-怎么配合">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</h1>
+<blockquote>
+<p>06c §6.1 讲「桶怎么挂上」，本节讲「几千芯同时读，桶扛不扛得住」。实况取自实测集群。</p>
+</blockquote>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>三句话</span></span></p>
+<ul>
+<li><strong>训练读数据靠的是 Anywhere Cache 带宽，不是桶的出口配额。</strong> 缓存按字节命中 99.96%；桶出口配额只有 1 Tbps，满打满算一天也远不够缓存实际出量。</li>
+<li><strong>缓存带宽按 zone 给，每项目每 zone 封顶 20 Tbps。</strong> 实测 24 小时内 5 分钟均值冲到略超 20 Tbps。这条配额使用方自己提不了，开卡前要设好，Google 可协助。</li>
+<li><strong>缓存只服务同 zone、且建在那个桶上。</strong> 10+ 片主训练都挂同 zone 有缓存的那个桶，全走缓存；没缓存的桶只剩一次性搬运和一个 1 片小任务在读（§1）。</li>
+</ul>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>20 Tbps</strong> 卡所在 zone 的缓存带宽配额</li>
+<li><strong>略超 20 Tbps</strong> 24h 内 5 分钟峰值</li>
+<li><strong>99.96%</strong> 同 zone 缓存按字节命中</li>
+<li><strong>PiB 级</strong> 缓存当前容量（已超单缓存默认 1 PiB）</li>
+<li><strong>1 Tbps</strong> 桶出口配额（不是瓶颈）</li>
+</ul>
+</div>
+<p><strong>本节用词</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>一句话</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Anywhere Cache</td>
+<td>GCS 的 zone 级 SSD 只读缓存，同 zone 读自动走它；官方文档现改名 Rapid Cache，API / gcloud / 指标名仍叫 anywhere-cache</td>
+</tr>
+<tr>
+<td>出口配额</td>
+<td>桶往 Google 服务（含 GCE / GKE）出数据的带宽配额，按 region 计</td>
+</tr>
+<tr>
+<td>producer override</td>
+<td>Google 后台设的配额覆盖值，使用方在 Console 看得到、自己改不了；使用方自己提的是 consumer override</td>
+</tr>
+<tr>
+<td>file cache</td>
+<td>gcsfuse 在节点本地的文件缓存；tpu7x 无 Local SSD，只能放内存</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<p><a id="step-6a-1"></a></p>
+<h2 id="1-实测现场集群桶缓存" class="hc0"><span class="hn">1.</span>实测现场：集群、桶、缓存</h2>
+<ul>
+<li>
+<p><strong>集群</strong>：tpu7x 节点全部在同一个 zone。</p>
+</li>
+<li>
+<p><strong>桶</strong>：训练数据桶在卡所在 zone 建了 Anywhere Cache；另有两个桶没建缓存。</p>
+</li>
+<li>
+<p><strong>谁在读</strong>：24 小时内，同 zone 缓存按字节命中 99.96%。</p>
+</li>
+<li>
+<p>缓存参数：<code>admission_policy: admit-on-first-miss</code>、<code>ttl: 604800s</code>（7 天，上限）、<code>ingest_on_write: true</code>、<code>state: running</code>。</p>
+</li>
+<li>
+<p>「谁在读」来自 Monitoring <code>anywhere_cache/sent_bytes_count</code>，只算 <code>ReadObject</code>，标签 <code>anywhere_cache_zone</code> 是<strong>请求方所在 zone</strong>，<code>anywhere_cache_hit</code> 是否命中（§3 查询）。</p>
+</li>
+</ul>
+<blockquote class="co data">
+<p><span class="co-t"><i>📊</i><span>没缓存的桶：一次性搬运 + 一个小任务</span></span></p>
+<ul>
+<li>主训练只挂有缓存的那个桶。</li>
+<li>没缓存的桶，24 小时里的读量大头集中在一个小时内，是一次性搬运，不是训练常态读。</li>
+<li>还在读的只有一个 1 片小任务，量级远在 1 Tbps 出口配额以内，不影响主训练。</li>
+<li><strong>要它放大到多片时</strong>：数据先搬进有缓存的桶，或给那个桶在卡所在 zone 建缓存（多区域桶允许在其覆盖的 zone 建）。</li>
+</ul>
+</blockquote>
+<hr />
+<p><a id="step-6a-2"></a></p>
+<h2 id="2-配额读哪几条要设成什么" class="hc1"><span class="hn">2.</span>配额：读哪几条、要设成什么</h2>
+<p><strong>怎么读</strong>（<code>gcloud alpha quotas</code> 在部分账号权限下不可用；直接调 Service Usage REST）：</p>
+<div class="code"><span class="lang">bash</span><pre><code>curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="k">$(</span>gcloud<span class="w"> </span>auth<span class="w"> </span>print-access-token<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;https://serviceusage.googleapis.com/v1beta1/projects/</span><span class="nv">$PROJECT</span><span class="s2">/services/storage.googleapis.com/consumerQuotaMetrics?view=FULL&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>quota.json
+<span class="c1"># 每条 metric → consumerQuotaLimits[].quotaBuckets[]：dimensions 是 zone/region，</span>
+<span class="c1"># effectiveLimit 是生效值，defaultLimit 是默认，producerOverride / consumerOverride 是谁改的</span>
+</code></pre></div>
+<p><strong>要设成什么</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>配额 metric</th>
+<th>维度</th>
+<th>默认</th>
+<th>要设到</th>
+<th>谁能改</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>anywhere_cache_egress_bandwidth</code></td>
+<td>卡所在 zone</td>
+<td>无值</td>
+<td><strong>20 Tbps</strong></td>
+<td>producer override，使用方自己提不了，Google 可协助</td>
+</tr>
+<tr>
+<td><code>anywhere_cache_storage_size</code></td>
+<td>桶 / zone</td>
+<td>—</td>
+<td>按数据集大小</td>
+<td>producer override</td>
+</tr>
+<tr>
+<td><code>google_egress_bandwidth</code></td>
+<td>卡所在 region</td>
+<td>200 Gbps</td>
+<td><strong>1 Tbps</strong> 兜底</td>
+<td>使用方在 Console「IAM → Quotas &amp; System Limits」自助提；&gt;5 Tbps 找 Google</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>20 Tbps 是缓存带宽配额，不是桶出口配额。</strong> 官方：缓存带宽起步 100 Gbps，每存 1 TiB 加 20 Gbps，<strong>每项目每 zone 封顶 20 Tbps</strong>，同 zone 各桶共用；超出部分按桶出口配额计。</li>
+<li>出口配额兜的是缓存未命中、超出缓存带宽的读、checkpoint 恢复读；<strong>写入不计这个配额</strong>。多区域桶超过 1 Tbps 不支持。</li>
+<li>带宽 API 原值是 bit/s。<code>consumerOverride: -1</code> 是使用方不额外限制，生效值取 producer 那个。</li>
+</ul>
+<p><strong>开卡前做完</strong>：</p>
+<ol>
+<li>先定卡在哪个 zone，再在<strong>同 zone</strong> 为训练数据桶建缓存（§5 命令）。建缓存最长要 48 小时，zone 一定就建。</li>
+<li>缓存带宽和容量两条配额设好（Google 可协助）。</li>
+<li>出口配额提到 1 Tbps。</li>
+<li>上线当天用上面的 curl 读一遍生效值，和 <a href="01-capacity-and-prereqs.html#step-1-4">01 §1.4</a> 一起归档。</li>
+</ol>
+<hr />
+<p><a id="step-6a-3"></a></p>
+<h2 id="3-dashboard-怎么看" class="hc2"><span class="hn">3.</span>Dashboard 怎么看</h2>
+<div class="kp kc0"><div class="kp-t">Console 两处</div>
+<ul>
+<li>单桶：Cloud Storage → Buckets → 选桶 → <strong>Observability</strong> 页签 → Rapid Cache。</li>
+<li>全项目：Cloud Storage → <strong>Monitoring</strong> → Rapid Cache。</li>
+</ul></div>
+<p>图里看四样：命中率（按字节 / 按请求）、命中与未命中吞吐、缓存容量与淘汰、Cache throughput benefit（缓存多给的吞吐 vs 配额用量）。<span class="src" tabindex="0">源<span class="srci"><a href="https://cloud.google.com/storage/docs/using-anywhere-cache" target="_blank" rel="noopener">https://cloud.google.com/storage/docs/using-anywhere-cache</a></span></span></p>
+<p><strong>Metrics Explorer / API</strong>（前缀 <code>storage.googleapis.com/</code>）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>指标</th>
+<th>用来看</th>
+<th>关键标签</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>anywhere_cache/sent_bytes_count</code></td>
+<td>吞吐、命中率</td>
+<td><code>bucket_name</code>、<code>anywhere_cache_zone</code>（请求方 zone）、<code>anywhere_cache_hit</code>、<code>method</code></td>
+</tr>
+<tr>
+<td><code>anywhere_cache/request_count</code></td>
+<td>按请求的命中率</td>
+<td>同上</td>
+</tr>
+<tr>
+<td><code>anywhere_cache/ingested_bytes_count</code></td>
+<td>进缓存速率（未命中回填 + 写入同步）</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>anywhere_cache_metering/cache_storage_bytes_count</code></td>
+<td>缓存当前容量</td>
+<td><code>cache_zone</code>；按小时采样，最多延迟 8 小时</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>实测 24 小时读数</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+<th>怎么算的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>卡所在 zone 命中吞吐峰值</td>
+<td><strong>略超 20 Tbps</strong></td>
+<td><code>sent_bytes_count</code> 过滤训练数据桶、hit=true，5 分钟 <code>ALIGN_RATE</code> 后求和取最大</td>
+</tr>
+<tr>
+<td>卡所在 zone 命中吞吐均值</td>
+<td>约 3 Tbps</td>
+<td>同上取平均（288 个点）</td>
+</tr>
+<tr>
+<td>按字节命中率</td>
+<td>99.96%</td>
+<td>命中字节 ÷ (命中 + 未命中)</td>
+</tr>
+<tr>
+<td>按请求命中率</td>
+<td>约 85%</td>
+<td>命中请求数 ÷ (命中 + 未命中)</td>
+</tr>
+<tr>
+<td>进缓存</td>
+<td>每天数百 TiB</td>
+<td><code>ingested_bytes_count</code></td>
+</tr>
+<tr>
+<td>缓存容量</td>
+<td>PiB 级（主训练 zone）、TiB 级（另一 zone）</td>
+<td><code>cache_storage_bytes_count</code> 小时均值</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>峰值略超 20 Tbps 配额：5 分钟均值，可能含突发宽限或协议开销 <span class="tg inf">[需确认：超额部分是否已经转计入出口配额]</span>。<strong>要看是否被限速，盯同时段该 region 的出口配额（<code>google_egress_bandwidth</code>）用量有没有跟着抬起来</strong>；未命中吞吐只作旁证——没命中的读本来就不算缓存带宽 <span class="tg inf">[推断：依 §2 官方「超出部分按桶出口配额计」]</span>。</li>
+<li>按请求命中率比按字节低：未命中的多是小请求（元数据附近的小读），字节上几乎全命中。</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 复现峰值那条（只读）。表里是 24 小时窗；要复现当天的读数，把 START / END 换成当时的 UTC 时间</span>
+<span class="nv">BUCKET</span><span class="o">=</span><span class="si">${</span><span class="nv">BUCKET</span><span class="k">:-</span><span class="p">&lt;你的数据桶&gt;</span><span class="si">}</span><span class="w">                     </span><span class="c1"># 换成要查的桶（不带 gs:）</span>
+<span class="nv">START</span><span class="o">=</span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>-d<span class="w"> </span><span class="s1">&#39;-24 hours&#39;</span><span class="w"> </span>+%FT%TZ<span class="k">)</span><span class="p">;</span><span class="w"> </span><span class="nv">END</span><span class="o">=</span><span class="k">$(</span>date<span class="w"> </span>-u<span class="w"> </span>+%FT%TZ<span class="k">)</span>
+<span class="nv">F</span><span class="o">=</span><span class="s1">&#39;metric.type=&quot;storage.googleapis.com/anywhere_cache/sent_bytes_count&quot; AND resource.labels.bucket_name=&quot;&#39;</span><span class="s2">&quot;</span><span class="nv">$BUCKET</span><span class="s2">&quot;</span><span class="s1">&#39;&quot; AND metric.labels.anywhere_cache_hit=&quot;true&quot;&#39;</span>
+curl<span class="w"> </span>-s<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="k">$(</span>gcloud<span class="w"> </span>auth<span class="w"> </span>print-access-token<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="s2">&quot;https://monitoring.googleapis.com/v3/projects/</span><span class="nv">$PROJECT</span><span class="s2">/timeSeries?filter=</span><span class="k">$(</span>python3<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))&#39;</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$F</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&amp;interval.startTime=</span><span class="nv">$START</span><span class="s2">&amp;interval.endTime=</span><span class="nv">$END</span><span class="s2">&amp;aggregation.alignmentPeriod=300s&amp;aggregation.perSeriesAligner=ALIGN_RATE&amp;aggregation.crossSeriesReducer=REDUCE_SUM&quot;</span>
+</code></pre></div>
+<hr />
+<p><a id="step-6a-4"></a></p>
+<h2 id="4-gcsfuse-怎么和缓存配合" class="hc3"><span class="hn">4.</span>gcsfuse 怎么和缓存配合</h2>
+<p><strong>分工</strong>：gcsfuse 在 pod 里把桶挂成目录；它发出去的读请求从卡所在 zone 出发，GCS 自动交给同 zone 的 Anywhere Cache。<strong>gcsfuse 不需要任何「开缓存」参数</strong>，缓存对客户端透明。gcsfuse 自己的 file cache 是第二层，放节点内存，省的是重复读同一文件的往返。</p>
+<p><strong>实测集群的 PV</strong>（都是 <code>gcsfuse.csi.storage.gke.io</code>、RWX、Retain）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>PV</th>
+<th>mountOptions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主数据桶（有缓存）</td>
+<td><code>implicit-dirs</code>、<code>client-protocol=grpc</code>、<code>metadata-cache:negative-ttl-secs:0</code>、<code>metadata-cache:ttl-secs:-1</code>、<code>metadata-cache:stat-cache-max-size-mb:-1</code>、<code>metadata-cache:type-cache-max-size-mb:-1</code>、<code>file-cache:max-size-mb:204800</code></td>
+</tr>
+<tr>
+<td>其余数据桶</td>
+<td>上面全部 + <code>profile:aiml-training</code>、<code>file-cache:cache-file-for-range-read:true</code>、<code>file-cache:enable-parallel-downloads:true</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>10+ 片主训练都只挂主数据桶那个 PV。</p>
+<p>一个 1 片小任务用了两个 inline 卷（直接写在 pod spec 里，不经 PV）：</p>
+<ul>
+<li>只读的 chunk 缓存卷：<code>only-dir:</code> 指到本次 run 的目录，<code>file-cache:max-size-mb:1024</code>、<code>file-system:kernel-list-cache-ttl-secs:0</code>。</li>
+<li>读写的输出卷：<code>enable-hns=false</code>、<code>metadata-cache:ttl-secs:0</code>、<code>kernel-list-cache-ttl-secs:0</code> —— 写目录关掉元数据缓存，保证多 pod 看到彼此新写的文件。</li>
+</ul>
+<div class="kp kc1"><div class="kp-t">sidecar 与内存</div>
+<ul>
+<li>注解只有 <code>gke-gcsfuse/volumes: &quot;true&quot;</code>；sidecar <code>gcs-fuse-csi-driver-sidecar-mounter:v1.24.5-gke.2</code>，原生 sidecar（<code>restartPolicy: Always</code>），request 250m / 256Mi / 5Gi，<strong>不设 limit</strong>（1.29.1 起默认如此）。</li>
+<li>file cache 卷 <code>gke-gcsfuse-cache</code> 是 <code>emptyDir: {medium: Memory}</code>，<strong>不限大小</strong>。</li>
+<li><code>file-cache:max-size-mb:204800</code> 的单位是 MiB：每个节点最多 200 GiB（≈ 215 GB）内存给文件缓存，再加 200 GiB 的 tmpfs ramdisk，合计约 430 GB，约占 960 GB 主机内存的 45% [推导：(200 + 200) × 2³⁰ ≈ 429.5 GB，÷ 960 GB ≈ 45%]。见<a href="pitfalls.html#l-22">经验教训第 22 条</a>。</li>
+<li><code>profile:aiml-training</code> 把元数据缓存设成无限容量、无限 TTL；官方提示内存小于 1 TiB 的机器易 OOM。GCS 文档说 CSI 不支持 <code>profile</code>，GKE 文档却给了 StorageClass 写法 —— 两份冲突，实测集群在用且能挂上。</li>
+</ul></div>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>两层缓存各管什么</span></span></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>在哪</th>
+<th>管什么</th>
+<th>实测设置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Anywhere Cache</td>
+<td>GCS 侧、zone 级 SSD</td>
+<td>全 zone 共享：第一台读过，同 zone 其他节点都命中</td>
+<td>7 天 TTL、首次未命中即进</td>
+</tr>
+<tr>
+<td>gcsfuse file cache</td>
+<td>每个节点内存</td>
+<td>本节点重复读同一文件</td>
+<td>200 GiB、并行下载、range read 也缓存</td>
+</tr>
+</tbody>
+</table></div>
+<p>全部节点数据并行读同一批 shard：第一层把回源压到 0.04%；第二层省每节点的重复往返。<strong>第一层决定能不能起量，第二层决定省多少内存换多少延迟。</strong></p>
+</blockquote>
+<p><strong>gcsfuse 起步配置</strong>（照实测集群主数据桶 PV，去掉争议项）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">mountOptions</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">implicit-dirs</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">client-protocol=grpc</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metadata-cache:negative-ttl-secs:0</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metadata-cache:ttl-secs:-1</span><span class="w">            </span><span class="c1"># 只读数据集可以；写目录改 0</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metadata-cache:stat-cache-max-size-mb:-1</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metadata-cache:type-cache-max-size-mb:-1</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">file-cache:max-size-mb:204800</span><span class="w">         </span><span class="c1"># 与 MTC ramdisk 一起核内存预算</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">file-cache:enable-parallel-downloads:true</span>
+</code></pre></div>
+<ul>
+<li><strong>06c 的 PV 模板默认没有这些项</strong>：<code>scripts/06-data-pv-pvc.yaml</code> 只开了前两项（<code>implicit-dirs</code>、<code>client-protocol=grpc</code>），其余几项在文件里注释着。</li>
+<li><strong>怎么用</strong>：起步照 yaml 默认；要开 file cache / 元数据缓存就去掉那几行注释，先按上面的内存预算核一遍。这几项组合在本书集群上没有实测。</li>
+</ul>
+<p><a id="step-6a-4-grpc"></a></p>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>新桶第一件事：挂载带 <code>client-protocol=grpc</code></span></span></p>
+<ul>
+<li>新桶挂载漏了 <code>client-protocol: grpc</code>：DIRECT_PATH 流量为 0，GCSFuse 全部退回 HTTP/1.1 走 CLOUD_PATH。</li>
+<li>CLOUD_PATH 撞上单桶的请求速率上限，返回 429。带 gRPC 的桶 98% 以上的元数据和读请求走 DIRECT_PATH，不受这条限额。</li>
+<li><strong>扩配额无效</strong>：项目级 <code>NonMultiregionRequests</code> 提到默认值的约 2 倍也碰不到单桶的请求速率上限。修法只有补 gRPC。</li>
+<li>规模参考：数千芯冷启动按秒统计，<code>GRPC_DOWNLOAD</code> 峰值数十万 QPS、持续十几秒；稳态只有约万级 QPS。1 分钟均值图只显示二十多万，看不出尖峰。</li>
+<li><code>max-retry-attempts:10</code> 不是解法：HTTP 下无效，gRPC 下会把限流变成读报错。</li>
+<li>检查：建桶后先看挂载参数有没有 gRPC；429 按原因（项目配额还是单桶速率上限）分开监控。</li>
+<li>写检查点走 Orbax / TensorStore，默认是 HTTP（CLOUD_PATH，经 GFE），不受挂载参数影响。</li>
+</ul>
+</blockquote>
+<p><a id="step-6a-4-metacache"></a></p>
+<p><strong>只读挂载开元数据缓存</strong>（经验建议，本书集群未实测）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>挂载</th>
+<th>参数</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据集（只读）</td>
+<td><code>metadata-cache:negative-ttl-secs:-1</code></td>
+<td>缓存 404，同一个不存在的路径不再反复问 GCS</td>
+</tr>
+<tr>
+<td></td>
+<td><code>file-system:kernel-list-cache-ttl-secs:-1</code></td>
+<td>内核锁住目录列表</td>
+</tr>
+<tr>
+<td></td>
+<td><code>gcsfuseMetadataPrefetchOnMount: &quot;true&quot;</code>（卷属性）</td>
+<td>挂载时预取元数据，压冷启动请求量</td>
+</tr>
+<tr>
+<td>检查点（读写）</td>
+<td><code>metadata-cache:negative-ttl-secs:60</code>（≥0）</td>
+<td>MTC 场景 404 很多，缓存 60 s 削峰</td>
+</tr>
+<tr>
+<td></td>
+<td><code>metadata-cache:ttl-secs:-1</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><code>negative-ttl-secs</code>：<code>0</code> 不缓存 404；<code>-1</code> 永久缓存，只适合只读；<code>60</code> 缓存 60 s，适合读写的检查点桶。</li>
+<li>上面起步 yaml 里的 <code>negative-ttl-secs:0</code> 照抄自实测集群主数据桶 PV，是保守值。只读数据集可按本表改成 <code>-1</code>。</li>
+<li>数据集和检查点同一个桶时，建两个 PV 分别设挂载参数。</li>
+<li>写目录（多 pod 互看新文件）仍按上文输出卷的做法关元数据缓存。</li>
+<li><code>-1</code> 的 kernel list cache 意味着挂载期间新增的文件看不见 <span class="tg inf">[推断：锁住列表的直接后果]</span>。数据集要在训练前写完。</li>
+</ul>
+<p>用 CSI StorageClass 时可以让驱动替你建缓存：<code>anywhereCacheZones: &quot;&lt;卡所在 zone&gt;&quot;</code>、<code>anywhereCacheTTL</code>、<code>anywhereCacheAdmissionPolicy</code> <span class="src" tabindex="0">源<span class="srci">GKE gcsfuse-profiles 文档</span></span>。但缓存带宽配额仍要另外谈（§2）。</p>
+<hr />
+<p><a id="step-6a-5"></a></p>
+<h2 id="5-建查改缓存的命令" class="hc4"><span class="hn">5.</span>建、查、改缓存的命令</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>操作</th>
+<th>命令</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>建</td>
+<td><code>gcloud storage buckets anywhere-caches create gs://$DATA_BUCKET $ZONE --ttl=7d --enable-ingest-on-write</code></td>
+</tr>
+<tr>
+<td>列</td>
+<td><code>gcloud storage buckets anywhere-caches list gs://$DATA_BUCKET</code></td>
+</tr>
+<tr>
+<td>看</td>
+<td><code>gcloud storage buckets anywhere-caches describe $DATA_BUCKET/$ZONE</code></td>
+</tr>
+<tr>
+<td>改</td>
+<td><code>gcloud storage buckets anywhere-caches update $DATA_BUCKET/$ZONE --ttl=3d</code></td>
+</tr>
+<tr>
+<td>停 / 恢复</td>
+<td><code>... disable $DATA_BUCKET/$ZONE</code>（1 小时内可 <code>resume</code>）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>建是长操作，最长 48 小时，zone 没容量会一直重试；每项目每 zone 同时 creating 最多 20 个 <span class="tg inf">[需验证：未找到公开出处]</span>。</li>
+<li>TTL 1–7 天，从最后一次读起算；按 2 MB 分块进缓存。</li>
+<li><code>--ttl=7d</code> 的取值：本机 gcloud SDK 587 的参数解析器把 <code>7d</code> 解成 604800 秒（<code>3d</code> → 259200），与实测缓存显示的 <code>ttl: 604800s</code> 一致；只核了本机解析，没对云端执行。</li>
+<li><code>$DATA_BUCKET</code> 是 env.sh 的数据桶变量（不带 <code>gs://</code>）；缓存要建在训练真正读的那个桶上。</li>
+<li>gcloud 现行 FLAGS 里已没有 <code>--admission-policy</code>（参考页示例还残留），实测缓存显示 <code>admit-on-first-miss</code>。</li>
+<li>计费：进缓存 $0.0032/GiB、读出 $0.0006/GiB、命中读 $0.0002/千次（代替 Class B）；命中读免多区域传输费 <span class="src" tabindex="0">源<span class="srci"><a href="https://cloud.google.com/storage/pricing" target="_blank" rel="noopener">https://cloud.google.com/storage/pricing</a>; 价格按地区与时间变化; 地区未记; 以 pricing 页为准</span></span>。</li>
+</ul>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-21">gcsfuse 挂载要 WI</a> · <a href="pitfalls.html#l-23">Checkpoint 存储与 MTC</a> · <a href="pitfalls.html#l-22">没有 Local SSD，缓存吃内存</a></p>
+</blockquote>
+<p><strong>交棒</strong>：存储就绪后跑训练：公开配置 → <a href="06b-public-config-recipe-dsv3.html">06b</a>，大号 MoE 模型 JIT 对照 → <a href="06c-multislice-training.html">06c</a>；大规模建议提前编译（AOT），Google 可协助。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="06-slice-request-and-multislice.html"><small>← 上一页</small>06 申请 slice：数量、形状、placement、多片互联</a><a class="next" href="06b-public-config-recipe-dsv3.html"><small>下一页 →</small>06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#1-实测现场集群桶缓存">1. 实测现场：集群、桶、缓存</a></li><li class="l2"><a href="#2-配额读哪几条要设成什么">2. 配额：读哪几条、要设成什么</a></li><li class="l2"><a href="#3-dashboard-怎么看">3. Dashboard 怎么看</a></li><li class="l2"><a href="#4-gcsfuse-怎么和缓存配合">4. gcsfuse 怎么和缓存配合</a></li><li class="l2"><a href="#5-建查改缓存的命令">5. 建、查、改缓存的命令</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

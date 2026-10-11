@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>05 动态切片日常操作 · 讲义 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="" href="../runbook/README.html">交付手册</a><a class="on" href="index.html">讲义</a><a class="" href="../runbook/pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="讲义"><div class="side-h">讲义</div><ol><li><a href="index.html">讲义总览</a></li><li><a href="00-overview.html">00 总览 · 讲义</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件 · 讲义</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池 · 讲义</a></li><li><a href="03-control-plane-addons.html">03 集群内组件 · 讲义</a></li><li><a href="04-functional-verification.html">04 功能验证 · 讲义</a></li><li><a class="on" aria-current="page" href="05-dynamic-slicing-operations.html">05 动态切片日常操作 · 讲义</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：九千芯同时读，桶扛不扛得住 · 讲义</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练 · 讲义</a></li><li><a href="07-resilience-and-recovery.html">07 韧性与恢复 · 讲义</a></li><li><a href="08-day2-operations.html">08 日常运维 · 讲义</a></li><li><a href="09-customer-alignment.html">09 交付前对齐 · 讲义</a></li></ol></nav><aside class="lsplit" aria-label="并排的手册页"><iframe name="chap" title="手册页" loading="lazy" data-src="../runbook/05-dynamic-slicing-operations.html"></iframe></aside>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="index.html">讲义</a> › <span>05 动态切片日常操作 · 讲义</span></nav><nav class="lbar" aria-label="手册与讲义"><a href="../runbook/05-dynamic-slicing-operations.html">📘 手册</a><a class="on" aria-current="page" href="05-dynamic-slicing-operations.html">📝 讲义 · 19′</a><button type="button" class="lsplit-btn" aria-pressed="false" title="左边讲义、右边手册；点 🖥 屏幕里的链接，右边跟着跳">⇆ 并排看手册</button></nav><article class="md lecture"><h1 id="05-动态切片日常操作--讲义">05 动态切片日常操作 · 讲义</h1><div class="lcard"><div class="lnums"><span><b>19′</b>计划</span><span><b>16.1′</b>地板</span><span><b>2,628</b>台词汉字</span><span><b>12</b>切屏</span><span><b>2</b>互动</span></div><ul class="lsecs"><li>一、问题：一列车从编组到发车，中间那几十秒谁在干活 · 5′</li><li>二、为什么难：三层、两道闸、全有或全无、还有碎片 · 4.25′</li><li>三、怎么做：找车厢、按顺序拆、先抓现场、再隔离 · 7.5′</li><li>四、代价和坑：车厢在，时间没了 · 2.25′</li></ul><p class="lhow">黄底＝台词，照着念；蓝框＝🖥️ 切屏动作，点链接跳到手册里那张图；绿框＝💬 先问台下；红框＝⚠️ 别讲什么。地板＝台词一字不落念完＋切屏的时间，不含互动。<a href="index.html">全课计划与用法 →</a></p></div>
+<blockquote class="lkey">
+<p>🎯 这一章只留一句：切片卡住时，症状在一层、原因常在另一层；先抓三层现场，按顺序拆，解编锁默认不手摘。</p>
+</blockquote>
+<h2 id="一问题一列车从编组到发车中间那几十秒谁在干活5" class="hc0">一、问题：一列车从编组到发车，中间那几十秒谁在干活（5′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-1">05 §5.1</a>，先放「切片的一生」动图，转完一圈（17 秒）再开讲，然后切到上面那张 GCE 调用时间线，指蓝条最右端。</p>
+<p class="say">「上一章留下三个问题：删不掉、卡在过渡态、坏车厢怎么隔离。答案都藏在编组到发车那几十秒里。先看一个怪现象：一个四乘八乘八切片，GCE 那边真正干活，把四节车厢挂进一张编组单，十一秒就挂完了。可你在 kubectl 里要等几十秒才看到 ACTIVE。剩下那段谁在干？」</p>
+<p class="say">「答案是信号楼。GCE 挂完之后，是 Google 托管的调度员在接线，我们推断是 OCS 接光纤、打通贯通道、给节点打标签。这段在 GCE 审计里看不到。拆的时候也一样：GCE 删编组单只要两秒，前面三十多秒都在信号楼里。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-1">05 §5.1 GCE 调用表</a>，从上往下指四行，只指「作用」那一列。</p>
+<p class="say">「编组这件事，落到 GCE 上就是四类调用。第一类，给每个大切片建一份带拓扑的放置策略。第二类，建那张编组单，GCE 里叫 Multi-MIG，名字是切片名后面接集群哈希的前八位，出事时你就拿这个名字去 GCE 里找它。第三类，把每节车厢的 MIG 挂进、摘出编组单。第四类最多，是车厢内部开关包厢门，也就是小切片的激活和停用。」</p>
+<p class="say">「这张表的数字不用记，只记一个结论：调用量非常大，一个忙碌的集群半天就是上万条，所以 GCE 的读写配额是会被打满的。后面分诊表里最要紧的那一行，就是从这里来的。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-1">05 §5.1 状态表</a>，指「正常」和「超过即异常」两列。</p>
+<p class="say">「所以你们手里第一件工具，是这张状态表。单片激活，安静时一分钟上下，形状几乎不影响；拆一片半分钟左右。十几片的任务，中位数两分多钟，慢的到七分多钟。」</p>
+<p class="say">「判异常的线：激活超过十分钟就是异常，三十二个 cube 以上的大片放宽到十五分钟。FAILED 是终态，不会自愈，别干等。还有一个坑，写轮询的同学记一下：状态在 Ready 条件的 reason 字段里，没有 status.state 这个字段。读错了，你的脚本会一直拿到空值。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-1">05 §5.1 激活延迟散点图</a>，先指左下一片小点，再指右上红点，最后指那一排一百六十秒上下的点。</p>
+<p class="say">「这张散点图告诉你，一个任务等多久由最慢那一片决定。一到三片的任务，从两个 cube 到三十二个 cube，都在一分钟左右。十几片的任务起步两分钟，一旦跟小包厢抢车厢，就是红点，六到十二分钟。集群里同时在建大任务的时候，任何形状都在一百六十到一百七十秒。所以报激活时间，要同时记下集群里在建多少片。」</p>
+<p class="say">「顺带一条经验：两个十几片的大任务首尾相接，删完一秒就建，头一批十几片全报车厢还挂着、还没稳定，一百五十二秒才齐。所以我们推断，两个大任务之间留一分钟左右。」</p>
+<h2 id="二为什么难三层两道闸全有或全无还有碎片425" class="hc1">二、为什么难：三层、两道闸、全有或全无、还有碎片（4.25′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html">05 开头</a>「为什么难」那一条，指「切片横跨三层」。</p>
+<p class="say">「一个切片横跨三层：我们装的售票处 Kueue，Google 托管的信号楼调度员，最底下 GCE 和 OCS 接线台。卡住的时候，症状常在一层露出来，原因在另一层。这是第一个难处。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-2">05 §5.2「准入两道闸与抢占」</a>那张流程图，指两个红框里的两个「约 1 s」。</p>
+<p class="say">「售票处那两道闸的 message 上一章认过了，这里只补一条：两道闸都是一两秒就给结论，先查配额、再查拓扑。所以我们推断，一个 Workload Pending 了几十秒、上面一条消息都没有，就不是闸的事，要去别处找。」</p>
+<p class="say">「再说抢占。训练脚本默认高优先级，是给独占集群里的生产训练用的；跑验收记得改低，上一章讲过。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，一个十几片的训练，我手删其中一片 Slice，会怎样？只重建那一片，还是？停一拍，再往下揭晓。</p>
+<p class="say">「会全部重建。售票处发现一列出事，整团十几列车全部解散重编。有人量过：删掉之后两分钟左右才恢复，这期间十几片全部重建了一遍。这就是第二条暗线的前半句：一处坏，整团重编，所以永远要留空闲的健康车厢当备件。」</p>
+<p class="say">「好消息是，普通的 JobSet 重启不会重切。证据是有一个任务重启了四次，从头到尾只建过一轮切片，一次没重切。区分就一句：Workload 被驱逐或挂起，才重切；只是 pod 重启，车不动。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-3">05 §5.3</a> 末尾那张「手工子切片 Kueue 看不见」图，指上面两排的红块。</p>
+<p class="say">「第三个难处是碎片。一节车厢里只要还有一个包厢在用，它就编不进大列车。有人做巡检，实际只用了四到七节车厢的主机，同一时刻却挡住了六十七节。两个方向抢车厢的失败，占了全部切片失败的近一半。」</p>
+<p class="say">「碎片最严重的那一次，一片重试了十几次，十多分钟才就绪。你在 kubectl 里看到的是 SliceCreationFailed 一遍遍重试，根本想不到是隔壁巡检的小包厢挡着。这就是症状在一层、原因在另一层。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>容易说错：「全部重切」只在 workload 被驱逐或挂起时发生，普通 JobSet 重启不重切，别说反。PriorityClass 取值每个集群不同，换集群要重查；本书自己建的档位是 high 800 / medium 500 / low 100（另有 health-check 50），<code>06-jobset.sh</code> 默认 <code>POD_PRIORITY=high</code>。状态表原数（台上不念）：单片激活安静时 26–63 s（本书实测）、各形状 42–81 s（实测集群）；1 cube 42 s、32 cube 46–68 s、2x2x1 22 s；多 cube 片删除中位 33 s；10+ 片任务中位 166 s、p90 443 s。</p>
+<h2 id="三怎么做找车厢按顺序拆先抓现场再隔离75" class="hc2">三、怎么做：找车厢、按顺序拆、先抓现场、再隔离（7.5′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-3">05 §5.3 手工切片模板</a>，指 topology 和 partitionIds 两行注释。</p>
+<p class="say">「先说手工建片，维护窗口里会用到。规则就三条：所有车厢在同一个 superpod、同一个 reservation；形状每一维是四的倍数，而且不降序，四乘四乘八合法，四乘八乘四不合法；车厢号的个数等于三个维度相乘再除以六十四。不要求车厢物理相邻，因为 OCS 是远程接线，这一条是我们从校验规则推出来的。」</p>
+<p class="say">「找空闲车厢用列表脚本加 free 参数。我们在线上跑过一次，挂着手工小切片的那几个被正确排除了。有一点要知道：节点标签上的健康状态，实测只见过 HEALTHY 和 UNHEALTHY，所以按标签筛，实际就是只挑 HEALTHY。」</p>
+<p class="say">「如果有未走 Kueue 的手工片已经占着车厢，售票处又看不见，你的任务会被一次次派过去撞墙。临时绕法是提交前跑一个小脚本，给 JobSet 加一条亲和，写明不要这几个手工片名。我们实测，三十二个 cube 的单片任务和数千芯片的多片任务都一次过。」</p>
+<p class="say">「还有一个假碎片要会认：Workload Pending，消息里被 nodeSelector 排除的节点数，正好等于全部节点数。这不是车厢丢了，是选择器写错了，比如遗留的旧放置策略选择器。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-5">05 §5.5</a>，指最上面那条依赖链，从右往左划一遍。</p>
+<p class="say">「再说拆。依赖链从右往左删：先停准入、再停负载，然后删 Slice，等编组单上的车厢都摘干净，最后才动节点池。日常情况简单：删 JobSet，让售票处去删 Slice。手工片用 kubectl delete，等它走完 DEACTIVATING 自己消失。」</p>
+<p class="say">「这里有个大坑。第一步停准入，是把整个 ClusterQueue 的配额改成零，这会停掉全集群的准入，生产训练重启、恢复也排不进去。所以只回收几节车厢的时候，别做这一步，改用隔离脚本，只把那几节车厢从配额里排除，再从删任务往下走。配额归零只留给拆整个集群。」</p>
+<p class="say">「顺序违反了会怎样？删池直接失败，报 MIG 还处在原始容量模式；或者池记录删了，MIG 还挂在底层，之后表现成假缺货；或者 MIG 指向一张已经删掉的编组单，只能经 support case 请 Google 在服务端清。拆完用链式删除脚本的扫孤儿模式扫一遍，报出悬空、孤儿这几类，就说明有残留。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，删 Slice 卡住了，上面挂着一个 finalizer。把它摘掉，对象马上就没了。能不能摘？停一拍，再往下揭晓。</p>
+<p class="say">「不能。finalizer 就是解编锁：线路没拆干净之前，车次不许注销。硬注销的后果是，车厢还挂着旧车次牌，调度不再派它，看起来像没车了。这叫假缺货，只能找 Google 服务端清。只有确认编组单成员为零、并且 Google 的 case 开着的时候，才轮得到摘锁。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-6">05 §5.6 分诊表</a>，先指表上方「slice controller 有三个」那段，再依次指 already attached、active sub slice、FAILED 超过十分钟、Ready=Unknown 四行。</p>
+<p class="say">「再说卡住。先分清，嘴上说的切片控制器其实有三个，日志各在一处：Google 托管的那个在控制面里，大部分 GCE 报错来自它；我们装的那个在自己的命名空间里；第三个叫 slice-scheduler，实测集群没装。所以第一步永远是跑分诊脚本，一次抓全三层现场，升级时整份附上。」</p>
+<p class="say">「然后对表：报 already attached，多半是删完立刻重建撞上了，通常自愈。报 active sub slice、名字不是 default-jobset 开头，就是上一章那种手工片，删任务、避开它重提。」</p>
+<p class="say">「任务卡着不动，Slice 却已经 FAILED 十分钟以上、也没被驱逐，说明售票处没接住。已知的解法是把这个 Workload 的 active 先置成假，再置回真，或者干脆删了重提。顺手查一下我们装的传令员，也就是 kueue-slice-controller 的镜像版本，新版才有二十分钟一次的周期对账，老版本漏了就一直漏。」</p>
+<p class="say">「最要紧的一行：一批 Slice 同时 Ready=Unknown，多半是 GCE 读配额被打满，就是第一节那四类调用，不是硬件坏了。千万别批量删。有人这么删过，反而卡死，五个高优作业停了六到十二小时。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-7">05 §5.7</a>，指隔离脚本那两行命令。</p>
+<p class="say">「真坏的车厢，用隔离脚本：打上 taint，同时按配额公式把配额重算一遍，记一笔台账。没封顶时每隔离一节少六十四个芯片；配额已封顶在一百二十八节，隔离一节配额不变。只有 Google 确认修好才去掉。你们自己的自动化不要去删重建不健康节点，Google 的维修是原地修。」</p>
+<p class="say">「演练还抓出一个坑：脚本里的 flavor 名和集群里的不一致时，它曾一声不吭地退出。换集群先核对这个名字。」</p>
+<p class="say">「手工片要立规矩，写进和使用方的约定：生产一律走售票处；手工片只在维护窗口、队列清空时用，用完立刻删；非要长期留，就把那几节车厢隔离掉、重算配额。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>不讲：finalizer 强制摘除和 MIG 强制 detach 的具体命令，那是 Google case 开着时才做的事，指到 §5.5 第 5、6 步即可。被追问「托管控制器的日志我们项目里能不能查到」时：原文标着还没验证，这个我不确定，会后查；查不到就把分诊脚本输出交给 Google。「不要求物理相邻」是由校验规则推出的；taint 能让 Kueue TAS 避开被隔离 cube 也标着需验证。隔离脚本先打 taint、后改配额：改配额那步失败会停在半完成（已 taint、配额没改、台账没写），修好原因后原样重跑同一条命令即可补齐；这段时间未封顶时 Kueue 会多放 64 × cube 数的芯片，多放进来的任务卡在 Pending（推断，未实测）。重算要求 <code>SPARE_CUBES</code> 已填，公式只在 <code>03-addons.sh quota</code> 一处。</p>
+<h2 id="四代价和坑车厢在时间没了225" class="hc3">四、代价和坑：车厢在，时间没了（2.25′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/05-dynamic-slicing-operations.html#step-5-4">05 §5.4</a>防碎片那段。</p>
+<p class="say">「最后看一笔账。实测集群的池子，整体利用率并不高，有大任务在跑的时段也只占一半左右；切片建好了却没在跑、白占掉的芯片时，和失败任务烧掉的在同一个量级。」</p>
+<p class="say">「所以我们推断，瓶颈不在车厢够不够，而在从提交到真正开跑那一段。落到做法上，要把两类活错开：巡检会切碎车厢，连续提交的大任务会撞上删完立刻重建。给小任务划一组固定的车厢，巡检只在维护窗口跑。」</p>
+<p class="say">「这一章留下的问题：切片会建、会拆、会分诊了。下一章先把数据备好，再把多片四乘八乘八一起编起来，跑一个数千芯片的真训练。真训练从 pod 起来到第一步，要等三十多到四十多分钟。这段时间它在干什么？怎么知道它没卡死？」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>⛔ 不讲 GCE 调用次数那张表的具体数字，它只说明调用量大、会打满配额（表里只给到「上万次」这个量级）；⚠️ 容易说错：「小任务 cube 集合、巡检只在维护窗口跑」是我们推断的做法，不是实测结论；被追问「节点标签上会不会出现 DEGRADED」时：实测只见过 HEALTHY 和 UNHEALTHY，别的情况还不知道。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="04-functional-verification.html"><small>← 上一页</small>04 功能验证 · 讲义</a><a class="next" href="06a-storage-anywhere-cache-gcsfuse.html"><small>下一页 →</small>06a 存储：九千芯同时读，桶扛不扛得住 · 讲义</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#一问题一列车从编组到发车中间那几十秒谁在干活5">一、问题：一列车从编组到发车，中间那几十秒谁在干活（5′）</a></li><li class="l2"><a href="#二为什么难三层两道闸全有或全无还有碎片425">二、为什么难：三层、两道闸、全有或全无、还有碎片（4.25′）</a></li><li class="l2"><a href="#三怎么做找车厢按顺序拆先抓现场再隔离75">三、怎么做：找车厢、按顺序拆、先抓现场、再隔离（7.5′）</a></li><li class="l2"><a href="#四代价和坑车厢在时间没了225">四、代价和坑：车厢在，时间没了（2.25′）</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

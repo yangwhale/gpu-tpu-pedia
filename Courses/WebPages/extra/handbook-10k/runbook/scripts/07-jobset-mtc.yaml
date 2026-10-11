@@ -1,0 +1,190 @@
+# =============================================================================
+# 07-jobset-mtc.yaml —— 07 §7.1 第 6 步：开 MTC（多层检查点）+ 容错重启的 JobSet 模板，默认 ${SLICES} × 4x8x8
+#
+# ⚠ 未实测，T0（reservation 生效时刻）前的演练须在 2 片上验证（SLICES=2，4x8x8，512 chip）。新写，只做过静态编写。
+#
+# 怎么来的：
+#   - 底子是 06-jobset.sh 生成的 JobSet（JIT 基线作业在 10+ × 4x8x8 上实跑过的命令、卷）原样复制；模型 / 优化器 / 并行参数换成了占位，按你们的启动脚本补；
+#   - 只从 07 §7.1 那份 3 × 4x4x4 容错实验（第一次演练）借了结构：failurePolicy（maxRestarts 10 + Recreate）、
+#     /local 挂 multitier-checkpoint CSI 卷、MTC 那组 env、ML Diagnostics 标签；
+#   - 那次演练的模型、批大小、GA、镜像、项目名、桶名一个都没抄（那是另一个小模型，GA 2 编译就超 HBM，07 §7.1）。
+#   相对 06-jobset.sh 生成的 JobSet 改了什么，搜「MTC 新增」。
+#
+# 用前必须满足（任一不满足别提交）：
+#   1. 07-mtc-setup.sh 已跑：addon 开、CheckpointConfiguration 建好、HNS 备份桶授权；multitier driver ≥0.8.4（07 §7.1 第 2 步）。
+#   2. ENV_TAR 里的 MaxText 带 MTC 的 env 接线（ENABLE_MTC 等由 pretrain_*.sh 读）且 orbax ≥ 0.12.3。
+#      带不带要自己确认 [需验证]：不带 = 这些 env 被静默忽略，训练照跑但没有本地层——要看日志确认（见下「验证」）。
+#   3. 多片 MTC 要求跨片只做纯数据并行（DCN 方向 dcn_data_parallelism = 片数）；JIT 基线作业的 replicas = num_slices = dcn_data_parallelism 满足。
+#   4. CheckpointConfiguration 的 inMemoryVolumeSize 按本模型本地检查点 × 2.2 估（07 §7.1 第 5 步）；本地检查点多大按你们的模型算 [需验证]。
+#
+# 占位（envsubst）：06-jobset.sh 生成的 JobSet 那 8 个，加 MTC 新增的 3 个（都要自己 export，env.sh 里没有），再加 ${OWNER} / ${PROJECT}：
+#   | 占位             | 默认建议 | 说明 |
+#   |------------------|----------|------|
+#   | ${SLICES}        | 2（验证）/ <交付片数>（交付） | 同时决定 replicas 和 MTC_DATA_PARALLELISM，二者必须相等 |
+#   | ${MTC_STEPS}     | 2000     | 演练要跑够长，能挨几次打断；JIT 基线作业只有 50 步 |
+#   | ${LOCAL_CKPT_PERIOD} / ${PERSIST_CKPT_PERIOD} | 20 / 40 | 照第二、三次演练的本地 20 步、持久 40 步。
+#   |                  |          | 出事时最多回退「周期步数 × 你的步时」；按使用方能接受的 RPO 重定（07 §7.6） |
+#   | ${OWNER}         | 你们的标签值 | 标签 owner 的值；K8s 标签值只能是字母数字和 -_.（不能有空格、中文） |
+#   | ${PROJECT}       | env.sh 已设 | TensorBoard（VERTEX_TB_PROJECT）写到的 GCP 项目 ID |
+#   completions: 64 只对 4x8x8 成立（256 chip ÷ 4）；换拓扑要同时改 completions / parallelism / 注解 / ICI_FSDP_PARALLELISM。
+#
+# 渲染与提交（06-jobset.sh 没有 MTC 选项，这里手工 envsubst）：
+#   source "$RUNBOOK_DIR"/scripts/env.sh
+#   export SLICES=2 MTC_STEPS=2000 LOCAL_CKPT_PERIOD=20 PERSIST_CKPT_PERIOD=40 RUN_NAME=mtc-demo JOBSET_NAME=mtc-demo OWNER=<标签值> GITHUB_SECRET=<secret 名>
+#   envsubst '$JOBSET_NAME $NS $LOCAL_QUEUE $DATA_PVC $DATA_BUCKET $RUN_NAME $ENV_TAR $GITHUB_SECRET $SLICES $MTC_STEPS $LOCAL_CKPT_PERIOD $PERSIST_CKPT_PERIOD $OWNER $PROJECT' \
+#     < "$RUNBOOK_DIR"/scripts/07-jobset-mtc.yaml > "$STATE_DIR/$JOBSET_NAME.yaml"
+#   grep -nE '\$\{|<[^>]*>' "$STATE_DIR/$JOBSET_NAME.yaml"   # 尖括号占位也要清掉；应只剩命令体里的 shell 变量（${ENV_TAR} 等已被替换；${JOBSET_REPLICA_INDEX:-0} ${PIPESTATUS[0]} 是 shell 自己的）
+#   kubectl apply --dry-run=server -f "$STATE_DIR/$JOBSET_NAME.yaml"
+#   kubectl apply -f "$STATE_DIR/$JOBSET_NAME.yaml"
+#
+# 验证（2 片上全部过了才算这份模板可用，结果回填 07 §7.1 并去掉本文件的「未实测」）：
+#   1. 每个 pod 有 /local：kubectl exec -n $NS <worker-0-0> -c jax-tpu -- df -h /local
+#   2. 训练日志出现本地层保存行（07 §7.1「验证」）；没有 = 第 2 条前提不满足
+#   3. 用 07-fault-drill.sh 打一次 vm-stop（需 ≥ 2 片），看 JobSet .status.restarts +1、恢复点 `[MTC] restoring step N from the local/persistent tier`（07 §7.3）
+#   4. 每个 replica 的 16 个 pod 在同一 4x4x4 分区（08 §8.6-C 循环）
+# =============================================================================
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: ${JOBSET_NAME}
+  namespace: ${NS}
+  labels:
+    app: tpu-mtc-resilience-job
+    owner: ${OWNER}
+    kueue.x-k8s.io/queue-name: ${LOCAL_QUEUE}
+    managed-mldiagnostics-gke: "true"    # MTC 新增：开 ML Diagnostics（同容错演练）；不需要可删
+spec:
+  ttlSecondsAfterFinished: 86400         # 结束 1 天后自动删，留出 verify / 取日志的时间；完成态 pod 堆积见 经验教训第 53 条、08 §8.4
+  coordinator: {replicatedJob: worker, jobIndex: 0, podIndex: 0}
+  failurePolicy:
+    maxRestarts: 10                      # MTC 新增：容错（07 §7.2 恢复测试用 10）
+    restartStrategy: Recreate            # MTC 新增：整套 Job 重建（同容错演练）
+    rules:
+    - {name: restart_on_failure, action: RestartJobSet, onJobFailureReasons: [BackoffLimitExceeded]}
+  network: {enableDNSHostnames: true, publishNotReadyAddresses: true}
+  replicatedJobs:
+  - name: worker
+    replicas: ${SLICES}                  # MTC 新增：= num_slices = dcn_data_parallelism = MTC_DATA_PARALLELISM
+    template:
+      metadata:
+        labels: {app: tpu-mtc-resilience-job, owner: ${OWNER}}
+      spec:
+        backoffLimit: 0
+        completionMode: Indexed
+        completions: 64                  # 4x8x8 = 256 chip ÷ 4 chip/pod
+        parallelism: 64
+        template:
+          metadata:
+            annotations:
+              cloud.google.com/gke-tpu-slice-topology: 4x8x8
+              gke-gcsfuse/volumes: "true"
+            labels: {app: tpu-mtc-resilience-job, owner: ${OWNER}}
+          spec:
+            # priorityClassName: <low|medium|high>   # 06-jobset.sh 的 POD_PRIORITY 在这里注入；手工渲染时自己填
+            hostNetwork: true
+            dnsPolicy: ClusterFirstWithHostNet
+            restartPolicy: Never
+            terminationGracePeriodSeconds: 30
+            nodeSelector:
+              cloud.google.com/gke-networking-dra-driver: "true"
+              cloud.google.com/gke-tpu-accelerator: tpu7x
+            tolerations:
+            - {effect: NoSchedule, key: google.com/tpu, operator: Exists}
+            containers:
+            - name: jax-tpu
+              image: mirror.gcr.io/library/python@sha256:4d1caded1f729ae443eb803f26ffde7b61e696aeaef62f099abb6dd6b14257c7
+              imagePullPolicy: IfNotPresent
+              securityContext: {privileged: true}
+              ports: [{containerPort: 8471}, {containerPort: 8080}, {containerPort: 8431}]
+              command:
+              - bash
+              - -c
+              - |
+                set -exo pipefail
+                ulimit -c 0   # 不落 core。几十 GiB 的 core 写满启动盘 → DiskPressure 驱逐 + 旧 pod 退不干净 → rank 冲突撒 cube（经验教训第 42 条，09 D14）
+                tar -C / -xf /models/${ENV_TAR}
+                cat /root/maxtext/.env-info
+                cd /root/maxtext
+                source maxtext_venv/bin/activate
+                export PATH=/root/maxtext/.bin:$PATH
+                python3 -c 'import importlib.metadata as m; print("TPU runtime versions:", "jax=" + m.version("jax"), "jaxlib=" + m.version("jaxlib"), "libtpu=" + m.version("libtpu"))'
+
+                # Merge config overlay (uploaded to GCS, available via GCS-CSI fuse mount)
+                if [ -f "/models/configs/submit/${RUN_NAME}/config_overlay.yml" ]; then
+                  echo "Merging config overlay: /models/configs/submit/${RUN_NAME}/config_overlay.yml"
+                  cat "/models/configs/submit/${RUN_NAME}/config_overlay.yml"
+                  export CONFIG_OVERLAY_YAML="/models/configs/submit/${RUN_NAME}/config_overlay.yml"
+                fi
+                if [ "${JOBSET_REPLICA_INDEX:-0}" = "0" ] && [ "${JOB_COMPLETION_INDEX}" = "0" ]; then
+                  source scripts/job_log_sync.sh "/models/pretrain/moe-large/${RUN_NAME}"
+                fi
+
+                export PYTHONUNBUFFERED=1
+                if [ -n "$LOG_FILE" ]; then
+                  bash scripts/pretrain_moe_large.sh  2>&1 | tee -a "$LOG_FILE"
+                  exit "${PIPESTATUS[0]}"
+                else
+                  bash scripts/pretrain_moe_large.sh
+                fi
+              env:
+              - {name: STEPS, value: "${MTC_STEPS}"}                 # MTC 新增：演练要跑长
+              # <你的训练参数>：模型、优化器、并行、batch、序列长度等 env 按你们的启动脚本补（公开配方可参照 06a-dsv3-recipe.env）
+              - {name: EVAL_INTERVAL, value: "-1"}
+              - {name: ENABLE_CHECKPOINTING, value: "true"}          # MTC 新增
+              - {name: ASYNC_CHECKPOINTING, value: "true"}           # MTC 新增
+              - {name: CHECKPOINT_PERIOD, value: "${PERSIST_CKPT_PERIOD}"}            # MTC 新增：持久层（GCS）周期
+              - {name: ENABLE_MTC, value: "true"}                                     # MTC 新增：以下 6 个是 MTC 接线（同容错演练）
+              - {name: LOCAL_CHECKPOINT_DIRECTORY, value: "/local"}
+              - {name: LOCAL_CHECKPOINT_PERIOD, value: "${LOCAL_CKPT_PERIOD}"}        # 本地层（内存）周期
+              - {name: MTC_BACKUP_INTERVAL_STEPS, value: "${PERSIST_CKPT_PERIOD}"}    # 与持久层同周期（三次演练都是这样配）
+              - {name: MTC_DATA_PARALLELISM, value: "${SLICES}"}                      # = 片数，必须等于 replicas
+              - {name: MTC_PERSISTENT_CHECKPOINTING, value: "true"}
+              - {name: GCS_BUCKET, value: "gs://${DATA_BUCKET}/pretrain/moe-large"}
+              - {name: RUN_NAME, value: "${RUN_NAME}"}
+              - {name: LOAD_PARAMETERS_PATH, value: ""}
+              - {name: LOAD_FULL_STATE_PATH, value: ""}
+              - {name: ICI_EXPERT_PARALLELISM, value: "1"}
+              - {name: ICI_DATA_PARALLELISM, value: "1"}
+              - {name: ICI_FSDP_PARALLELISM, value: "512"}
+              - {name: ICI_TENSOR_PARALLELISM, value: "1"}
+              - {name: ICI_CONTEXT_PARALLELISM, value: "1"}
+              - {name: COMPILED_TRAINSTEP_FILE, value: ""}
+              - {name: PROFILER, value: "xplane"}
+              - {name: SKIP_FIRST_N_STEPS_FOR_PROFILER, value: "10"}
+              - {name: PROFILER_STEPS, value: "3"}
+              - {name: ENABLE_TPU_PROFILING_OPTIONS, value: "true"}
+              - {name: TPU_NUM_CHIPS_TO_PROFILE_PER_TASK, value: "1"}
+              - {name: TPU_NUM_SPARSE_CORE_TILES_TO_TRACE, value: ""}
+              - {name: TPU_NUM_SPARSE_CORES_TO_TRACE, value: "2"}
+              - {name: LIBTPU_INIT_ARGS, value: "--megascale_grpc_interface_prefixes=eth1,eth2,lo --xla_tpu_num_sparse_cores_for_gather_offloading=1 --xla_tpu_num_sparse_cores_for_scatter_offloading=1 --xla_latency_hiding_scheduler_estimate_fragmentation_size=true --xla_tpu_impure_enable_large_2nd_minor_layout=true"}
+              - {name: USE_VERTEX_TENSORBOARD, value: "false"}
+              - {name: VERTEX_TB_PROJECT, value: "${PROJECT}"}
+              - {name: VERTEX_TB_REGION, value: "us-central1"}
+              - {name: ENABLE_CLOUD_MONITORING, value: "false"}
+              - {name: ENABLE_GOODPUT, value: "true"}                # MTC 新增：算 goodput（07 §7.4）
+              - {name: ENABLE_CHECKPOINT_CLOUD_LOGGER, value: "true"} # MTC 新增：检查点事件进 Cloud Logging（同容错演练）
+              - {name: PIP_CACHE_DIR, value: "/tmp/ramdisk/.cache/pip"}
+              - {name: DATASET_TYPE, value: "synthetic"}
+              - {name: LOG_LOSS_BY_DATASET, value: "false"}
+              - {name: PATH, value: "/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
+              - name: GITHUB_TOKEN
+                valueFrom: {"secretKeyRef": {"key": "token", "name": "${GITHUB_SECRET}"}}
+              - name: JOBSET_REPLICA_INDEX
+                valueFrom: {"fieldRef": {"fieldPath": "metadata.labels['jobset.sigs.k8s.io/job-index']"}}
+              resources:
+                requests: {google.com/tpu: "4"}
+                limits:   {google.com/tpu: "4"}
+              volumeMounts:
+              - {mountPath: /models, name: data}
+              - {mountPath: /tmp/ramdisk, name: tmpfs}
+              - {mountPath: /dev/shm, name: dshm}
+              - {mountPath: /local, name: mtc-ramdisk}                # MTC 新增：MTC 本地层
+              # - {mountPath: /models2, name: data-prod}     # 第二个数据卷，本模板不用
+            volumes:
+            - {name: tmpfs, emptyDir: {medium: Memory, sizeLimit: 200Gi}}
+            - {name: gke-gcsfuse-cache, emptyDir: {medium: Memory}}   # gcsfuse sidecar 缓存；tpu7x 无 Local SSD
+            - {name: data, persistentVolumeClaim: {claimName: "${DATA_PVC}"}}
+            - {name: dshm, emptyDir: {medium: Memory}}
+            - name: mtc-ramdisk                                     # MTC 新增：大小由 CheckpointConfiguration 的 inMemoryVolumeSize 定
+              csi: {driver: multitier-checkpoint.csi.storage.gke.io}
+            # - {name: data-prod, persistentVolumeClaim: {claimName: <第二个 PVC>}}

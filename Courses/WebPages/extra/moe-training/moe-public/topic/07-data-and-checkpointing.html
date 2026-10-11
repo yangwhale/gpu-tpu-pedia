@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>07 · 数据与检查点：训练跑顺之后，时间从哪漏走 · MoE 训练优化</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="moe">
+<link rel="stylesheet" href="../../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="../..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../../index.html"><span class="crab">🦀</span><span class="bt">MoE 训练优化</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../../index.html" class="">首页</a><a class="on" href="README.html">专题</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（/ 聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="专题"><div class="side-h">专题</div><ol><li><a href="README.html">一个 MoE 模型在 TPU v7x 上的训练优化</a></li><li><a href="01-model-and-baseline.html">01 · 量法与口径：这是个什么模型，时间花在哪，怎么量才不自欺</a></li><li><a href="02-collective-scheduling-and-overlap.html">02 · 集合通信调度与重叠：搬的时机比搬的速度更要命</a></li><li><a href="03-dcn-and-multislice.html">03 · DCN 与多切片：把单片的优化搬到 10+ 片</a></li><li><a href="04-fp8-quantization.html">04 · FP8：稠密乘法</a></li><li><a href="05-kernels-kda-mla-moe.html">05 · KDA / MLA / MoE kernel：手写的算子要过三关</a></li><li><a href="06-memory-remat-compile.html">06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</a></li><li><a class="on" aria-current="page" href="07-data-and-checkpointing.html">07 · 数据与检查点：训练跑顺之后，时间从哪漏走</a></li><li><a href="08-open-problems.html">08 · 未解决问题：下一个集群的实验清单</a></li><li><a href="09-ablation-ladder.html">09 · 消融阶梯：一刀一刀拆掉，看每一刀值多少</a></li><li><a href="10-optimization-roadmap.html">10 · 优化依赖图：哪刀先哪刀后、为什么这个顺序</a></li><li><a href="11-porting-checklist.html">11 · 迁移清单</a></li><li><a href="12-multimodal-and-numerics-alignment.html">12 · 多模态版与精度对拍</a></li><li><a href="13-silent-errors.html">13 · 静默错误总表：跑通了，不等于对了</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../../index.html">首页</a> › <a href="README.html">专题</a> › <span>07 · 数据与检查点：训练跑顺之后，时间从哪漏走</span></nav><article class="md"><h1 id="07--数据与检查点训练跑顺之后时间从哪漏走">07 · 数据与检查点：训练跑顺之后，时间从哪漏走</h1>
+<p><strong>这章解决什么</strong>：步时调快之后，墙钟时间还会从三处悄悄漏走：读数据、存档、出故障后的恢复。这三处都不在 TPU 上算，在主机、存储和调度这几层。训练像一支车队，每一步都要等最慢的那辆车：一台主机读数据慢、建目录慢、恢复时卡住，全体都跟着停。所以这章的修法大多是同一个思路——<strong>把「等」挪出训练线程，并且给每一层的「等」设上限</strong>。</p>
+<p><strong>步时指数</strong>：大号模型以单片 BF16 最初基线 = 100，小号模型以开发期起点 = 100，越小越快；只在单个 A/B 里出现的数只给百分比。</p>
+<p><strong>依赖顺序</strong>：</p>
+<figure class="mermaid"><img src="../../assets/mermaid/dcfa6f766d93.png" width="990" alt="示意图" loading="lazy"></figure><p>读图：蓝框是 feature，绿框是收益最大的两样，黄框是「先定位再修」的问题，灰框是试过没进生产的路线。§2 必须在 §5 之前：MTC 默认不存数据位置，恢复后会静默重复消费数据。§6 的演练催生了 §7、§8 两条规矩。</p>
+<div class="x-stats">
+<ul>
+<li><strong>十倍上下</strong> 小号模型千芯片级生产：存档那一步比平时慢的倍数（§3）</li>
+<li><strong>约 40%</strong> 大号模型 128 芯片修后的存档阻塞降幅（热态）</li>
+<li><strong>约 450 s → 约 8 s</strong> 读检查点（MTC＝多层检查点：本地内存盘一层＋GCS 一层，§5）</li>
+<li><strong>4 / 9</strong> 次恢复挂住（192 芯片演练）</li>
+<li><strong>11 / 11</strong> 次注入（故意杀进程 / 删 pod 来演练恢复）全部恢复，11–14 min（10+ 片带 MTC）</li>
+<li><strong>约六成</strong> 注入演练的 goodput（有效训练时间 ÷ 墙钟；多数重启是人为注入）<span class="tg inf">[推断]</span></li>
+</ul>
+</div>
+<hr />
+<h2 id="1-数据加载逐元素对齐-gpumegatron-格式--共享内存索引" class="hc0"><span class="hn">1.</span>数据加载逐元素对齐 GPU（Megatron 格式 + 共享内存索引）</h2>
+<p><strong>前置</strong>：无；<strong>后续</strong>：§2 数据位置进检查点</p>
+<p><strong>收益</strong>：与 GPU 样本顺序逐元素一致（对拍 5 万步 × 8 样本 0 mismatch）；共享内存存索引后，索引内存从约 1.8 TB 降到约 267 GB。</p>
+<p><strong>怎么考虑的</strong>：要做 loss 逐步对拍，样本顺序必须和 GPU 侧逐元素一样，所以直接读 Megatron <code>.bin/.idx</code> 和自有的两种打包格式，在 TPU 侧重建同一套索引。</p>
+<p><strong>怎么开 / 实现要点</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>做了什么</th>
+<th>数字 / 状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Megatron mmap loader（<code>grain_file_type</code> = <code>mmap</code> / <code>mmap_npy</code>）</td>
+<td>重建 doc/sample/shuffle 索引 + 混合；各 host 独立算，host 0 原子写缓存，无 barrier</td>
+<td>上游 MaxText 已有</td>
+</tr>
+<tr>
+<td>lazy loader</td>
+<td><code>os.pread</code> 代替 mmap（避免 SIGBUS）；BFD 打包</td>
+<td>对拍 5 万步 × 8 样本 0 mismatch</td>
+</tr>
+<tr>
+<td>共享内存存索引</td>
+<td>517 数据集 × 32 shard × 8 worker，单是文档结束位置数组就 &gt;1 TB</td>
+<td>见下图</td>
+</tr>
+<tr>
+<td>启动热点</td>
+<td><code>_validate_indices</code> 每数据集 20 s；首 batch 40 s；Fuse 读 <code>.idx</code> 约 45 s/数据集</td>
+<td>mmap <code>.idx</code>、抽样校验、用 <code>.bin</code> 大小算 token 数</td>
+</tr>
+<tr>
+<td><code>vm.max_map_count</code></td>
+<td>几百个 shard → mmap 用尽</td>
+<td>65536 → 655360</td>
+</tr>
+<tr>
+<td>packing 进 KDA kernel</td>
+<td>segment_ids 在文档边界重置状态</td>
+<td>step-0 loss 与 Megatron 差约十万分之二</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="img"><a href="figs/ch07-shm-index.svg" target="_blank" title="新窗口看原图"><img src="figs/ch07-shm-index.svg" alt="索引放进共享内存：同一份数组不再每个进程各抄一遍" loading="lazy"></a><figcaption>索引放进共享内存：同一份数组不再每个进程各抄一遍</figcaption></figure>
+<ul>
+<li><strong>BFD</strong>（best-fit decreasing）：把长短不一的文档按长度从大到小，塞进剩余空间最合适的那条序列，减少补零。</li>
+<li><strong>PDB</strong>（per-device batch）：每个设备分到的样本数。PDB&lt;1 表示有的设备这一步没有样本，要用占位数据填。</li>
+</ul>
+<h3 id="11-数据管线造成的怪现象">1.1 数据管线造成的「怪现象」</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>根因 / 修法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TFLOP/s 虚高、「错开两步」</td>
+<td>异步 dispatch + buffered metrics；dumper（逐步导出 loss 的调试工具）每步 <code>float(np.asarray(loss))</code> 强制同步，<strong>多约 5%</strong></td>
+</tr>
+<tr>
+<td>同配置 <code>total_weights</code> 差 ±2～±370（约 25% 的 run）</td>
+<td>预取线程对「设定 epoch」那一步竞态，某 lane 拿到 perm∘perm（排查见表下）</td>
+</tr>
+<tr>
+<td>256K+CP step 0 崩（<code>unexpected peer … different launch id</code>）</td>
+<td>PDB&lt;1 时占位迭代器少一个 key（6 vs 7）→ 各 host <code>device_put</code> 的 launch 次数错位。修法：占位数据补发缺的字段（填 −1），15/15 步健康、step 0 loss 逐位一致</td>
+</tr>
+<tr>
+<td>PDB&lt;1 + CP 下<strong>永久丢样本</strong>（不报错）</td>
+<td>process index 不连续时 scatter 用了 <code>jax.process_index()</code> 而非实际加载的 rank，有的样本谁都不读。修法：按 loading rank 分发、按设备 cutoff 加载、空位填 −1、epoch 按真实 GBS 算</td>
+</tr>
+<tr>
+<td>被 TensorBoard 卡住</td>
+<td>gcsfuse 每次 flush 重传整文件；350+ 标量/步塞满 <code>max_queue=10</code></td>
+</tr>
+<tr>
+<td>CI 里 ESTALE</td>
+<td>metadata TTL -1（≈292 年）+ 挂载预取</td>
+</tr>
+<tr>
+<td>恢复后首 batch 约 37 min（小号模型 4 片 Pathways 弹性实验）</td>
+<td>输入管线重建；colocated 数据面（输入管线放进 TPU 主机上的 colocated Python 进程）降到约 5 min（7×），没进生产（§12）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>跨跑逐步对拍偶发对不上时，先怀疑数据管线的并发，别先怀疑数值</strong>（<code>total_weights</code> 那条就是这样查出来的）。先排除 packing 平局规则、short read 两个候选；三重哈希哨兵双跑 39,283 个共同样本<strong>零不一致</strong>，才确认坏的是抽样顺序。修法是 dict 缓存 + <code>threading.Lock</code> 双重检查锁。</li>
+</ul>
+<figure class="img"><a href="figs/ch07-perm-race.svg" target="_blank" title="新窗口看原图"><img src="figs/ch07-perm-race.svg" alt="样本没坏、顺序却不一样：输掉竞争的线程把同一个排列又套了一遍" loading="lazy"></a><figcaption>样本没坏、顺序却不一样：输掉竞争的线程把同一个排列又套了一遍</figcaption></figure>
+<ul>
+<li><strong>launch 错位怎么取证</strong>：<code>maxRestarts: 0</code> 让失败 pod 不被重启、日志留住，再开 TPU verbose 日志逐 worker 对 launch_id，才看出是哪个 host 少发了一次。</li>
+<li><strong>真数据比合成数据慢 1–2%</strong>（大号模型 1 片 JIT；真数据取自 loss 对拍配置、合成数据取自量步时配置；<a href="09-ablation-ladder.html#72-jit-%E5%92%8C-aot-%E5%90%84%E5%B9%B2%E4%BB%80%E4%B9%88">09 §7.2</a> 引这里）。两边配置不全同，只看量级 <span class="tg inf">[推断：两边原始步时相除]</span>。量优化收益时两边要用同一种数据。</li>
+<li><strong>host 内存怎么查：先插桩，再下结论</strong>。exit 137 只说明「被 SIGKILL」，是谁杀的（cgroup OOM、节点驱逐、人工）要靠插桩分开。
+<ul>
+<li>案例：CI 单测 exit 137，候选假说是「tmpfs 把内存吃光了」。</li>
+<li>做法：在 9 个阶段点各拍一次内存快照（cgroup / free / tmpfs / RSS），外加后台每 30 s 采样一次；9 次快照合计约 150 ms，开销不到万分之一。</li>
+<li>结果：available 内存最低也还剩一大截、训练进程 RSS 只占很小一部分，<strong>tmpfs 假说被推翻</strong>，改归因为节点级驱逐。</li>
+<li>这套插桩上游没有，要用得自己加。</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="2-数据位置写进检查点与-host-数解耦" class="hc1"><span class="hn">2.</span>数据位置写进检查点（与 host 数解耦）</h2>
+<p><strong>前置</strong>：§1；<strong>后续</strong>：§5 MTC 也要存数据集状态</p>
+<p><strong>收益</strong>：64 → 32 host 缩容恢复，iterator 从正确位置续读、loss 无跳变。</p>
+<p><strong>怎么考虑的</strong>：两处会让恢复后<strong>静默重复消费数据</strong>：</p>
+<ul>
+<li><strong>MTC 默认不存 data iterator</strong>：多层检查点的 save / restore 只存模型 <code>state</code>，恢复后 dataloader 从头读（上游 MaxText 的 MTC 路径同样，是否已补未核）。</li>
+<li><strong>数据状态按 host 数绑定</strong>：每个 host 各存自己读到哪，换了 host 数就对不上。</li>
+</ul>
+<p><strong>怎么开 / 实现要点</strong>：改成单一全局状态（只由 primary host 写一个全局的「下一个样本序号」），与 host 数解耦；MTC 也存数据集状态；restore 改成探测 <code>dataset/</code> 目录，不再用宽泛的 <code>except</code> 吞掉「没读到数据状态」。验收：恢复后首批样本序号和中断前最后一批接得上，就是生效了。</p>
+<div class="kp kc0"><div class="kp-t">坑</div>
+<ul>
+<li>已知、没修：多个 iterator 时只存第一个；换数据分发（scatter）方式后 index 会静默错位。恢复后打印首批样本 index，和中断前对一下。</li>
+<li>同族：按样本数触发存档的模式，续训时读回 trainer 状态那一步有差一（off-by-one）会恒返回空、改 GBS 续训会静默漂移；是否已修未核，用这个模式要自己验一次续训位置。</li>
+</ul></div>
+<hr />
+<h2 id="3-存档不等最慢-host-建目录非阻塞保存" class="hc2"><span class="hn">3.</span>存档不等最慢 host 建目录（非阻塞保存）</h2>
+<p><strong>前置</strong>：无；<strong>后续</strong>：§4（进程 0 独有的另一处慢）、§5、§7（「用集合通信当 I/O barrier」是超时要放宽的源头之一）</p>
+<p><strong>收益</strong>（几组「修前 → 修后」出自不同配置，别混着比）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>配置</th>
+<th>修前 → 修后</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>小号模型 128 芯片</td>
+<td>存档停顿 100 s → <strong>约 12 s</strong></td>
+</tr>
+<tr>
+<td>大号模型 128 芯片</td>
+<td>冷约 −35%；热 <strong>约 −40%</strong>（图底约 19 → 11 s）</td>
+</tr>
+<tr>
+<td>故意让一台 host 睡 20 s</td>
+<td>修前 process-0 阻塞从 200 ms 涨到约 20 s，即全体陪等；修后应接近 0 <span class="tg inf">[推断：未实测]</span>（验收法见下）</td>
+</tr>
+<tr>
+<td>小号模型千芯片级长上下文生产</td>
+<td>症状：存档那一步慢到平时的好几倍（十倍上下）；这个规模修后的数本书没有</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>怎么考虑的</strong>：慢的不是写盘，而是所有主机在训练线程里互相等（先等主进程建 GCS 目录，再等最慢那台到齐）。修法是训练线程只拍快照，其余交给后台。</p>
+<ul>
+<li><strong>根因怎么定位的：不是 D2H，也不是写数据，大头是 GCS 目录创建。</strong>
+<ul>
+<li>全部 host 遥测里 checkpointer 不到 2 s、manager 约 60 s（前者是各台中位数还是主进程自己的值，未核），差在 manager 里。</li>
+<li>逐段计时落到 <code>save()</code> 阻塞路径上的第二道 barrier <code>CheckpointManager:old_steps_to_remove</code>（<code>sync_global_processes</code>），其中耗时最多的是 <code>STEP/ITEM_DIRECTORY_CREATION</code>。</li>
+</ul>
+</li>
+<li><strong>handler</strong> 是 Orbax 里负责存某一类东西的插件：模型参数一个，数据迭代器位置一个，JSON 元数据一个。异步 handler 在主线程只拍快照、写盘交给后台；同步 handler 就在主线程当场写。</li>
+</ul>
+<figure class="img"><a href="figs/fig-t07-blocking-save.svg" target="_blank" title="新窗口看原图"><img src="figs/fig-t07-blocking-save.svg" alt="阻塞保存：旧路径主线程等主进程建目录、再等最慢主机到齐，新路径把建目录和等待都挪到后台" loading="lazy"></a><figcaption>阻塞保存：旧路径主线程等主进程建目录、再等最慢主机到齐，新路径把建目录和等待都挪到后台</figcaption></figure>
+<blockquote>
+<p><strong>原理</strong>：<strong>主机之间问一声「到齐没」，本可以走网络上的小服务，Orbax 默认却借 TPU 跑一次全员 all-gather。</strong> TPU 按队列干活，这一问要排在已经派出去的训练步后面，等于清空了 JAX「派发领先 1–2 步」的余量 <span class="tg inf">[推断]</span>；<code>save()</code> 要过好几道这种点名，每道都等最慢那台。同步 handler 还要在主线程等目录建好（见上图）。补丁两步缺一不可：handler 改异步，点名换成走 KV 存储、并挪进后台。</p>
+<p>GPU 上相当于：旧路径像用 NCCL 后端的 <code>dist.barrier()</code>（在 stream 上发一次 all-reduce，排在还没跑完的 kernel 后面）；新路径像改用 TCPStore 做 barrier，只走 CPU 网络、不碰 GPU 队列（类比）。</p>
+<p><sub>把握：源码证实 · 出处：Orbax <code>CheckpointManager.save()</code>、<code>multihost.sync_global_processes</code>（flag <code>experimental_orbax_use_distributed_barrier</code> 默认 False 时走 <code>jax.experimental.multihost_utils.sync_global_devices</code>）、<code>atomicity.create_all_async</code>（仅主进程建目录）、<code>CompositeCheckpointHandler.async_save</code>（同步 handler 分支 <code>.result()</code>）；MaxText 文档 Megascale hang playbook 把「用集合通信当 I/O 全局 barrier」列为通病，建议改用 <code>wait_at_barrier</code>；「排在训练步后面」是推断，判据是 profile 里存档那步的设备 barrier 是否 ≈ 一个步时 + 主机偏差。</sub></p>
+</blockquote>
+<p><strong>怎么开</strong>：上游没有，需自行实现（orbax 0.11.33 monkey patch，要版本守卫）。修后 barrier 残余从 1–10 s 降到 70–340 ms。最小骨架（基于 orbax 0.11.33 的结构，其他版本先核对函数名）：</p>
+<ol>
+<li>把 Grain、JSON 等同步 handler 改成继承 <code>ocp.AsyncCheckpointHandler</code>，主线程只拍快照、写盘交给后台。</li>
+<li>安装时检查 <code>CheckpointManager._finalize</code> 的签名，对不上就<strong>不装</strong>，并打日志。签名变了，首次存档会报 TypeError；barrier 改了名，补丁会静默失效，速度退回修前。</li>
+<li>monkey-patch 掉 <code>save()</code> 主线程上 <code>old_steps_to_remove</code> 那道 <code>sync_global_processes</code>。</li>
+<li>在 <code>_finalize</code> 起点补一道 KV-store barrier（走分布式 KV 存储，不占设备），保证删旧 step 之前各主机都已写完。</li>
+<li>验收：故意让一台主机 sleep 20 s，看 process-0 的阻塞是 20 s 还是接近 0（收益表第 3 行就该这么验，目前未实测）；再看存档前后几步的墙钟。</li>
+</ol>
+<p>上游可替代到哪一步：没有现成开关；收益能拿回几成取决于自己集群 GCS 建目录的尾延迟，未测。</p>
+<div class="kp kc1"><div class="kp-t">坑</div>
+<ul>
+<li><strong>排除过的路</strong>（别再试）：<code>enable_per_process_directory_creation=True</code> 会<strong>死锁</strong>；升 orbax 0.12.1 没用；只调 <code>AsyncOptions</code> 没用。</li>
+<li><strong>修后的地板</strong>：热态残余 11–13 s 就是 D2H 拷贝本身，由每 host 的 D2H 带宽决定，<strong>异步化压不掉</strong>；再往下只能减少每 host 要拷的字节。MegaScale 论文（NSDI 2024）§4.4 的两阶段存档也是同一结构：先写主机内存再回去训练。</li>
+<li><strong>没试过的一条</strong>：<code>experimental_orbax_use_distributed_barrier=True</code> 能把 barrier 换成 KV 存储，但位置仍在主线程、仍等最慢主机，只省「设备排队」那一半 <span class="tg inf">[推断：读源码；本书没测]</span>。</li>
+<li><strong>计时陷阱</strong>：单步 <code>seconds</code> 字段是异步测的，存档的阻塞会串到相邻 step 上，异步计时会算出几千 TFLOP/s/device 这种物理上不可能的值。看存档开销要用存档前后几步的墙钟，别看单步字段。</li>
+</ul></div>
+<h3 id="31-按样本数存档时的另一处同步小号模型">3.1 按样本数存档时的另一处同步（小号模型）</h3>
+<p>按样本数触发存档的模式下，周期保存和最终 / 抢占保存走同一条路径，每次都 <code>wait_until_finished()</code> 同步等 GCS 上传完。</p>
+<ul>
+<li>修法两步：① 步边界不再做 <code>block_until_ready(state)</code>；② 拆成 <code>force_ckpt_save</code>（最终步、抢占，必须同步）和周期保存（异步）。</li>
+<li>效果（小号模型）：主线程阻塞约 200 s → 0，存档那步不再卡（<a href="11-porting-checklist.html#a15--checkpoint-%E4%BF%9D%E5%AD%98%E4%B8%8D%E9%98%BB%E5%A1%9E%E4%B8%BB%E7%BA%BF%E7%A8%8B">11 A15</a> 同此）。</li>
+<li>副作用：samples 模式下按 step 触发的 emergency checkpoint 也一起关了，要自己补。</li>
+</ul>
+<hr />
+<h2 id="4-进程-0-存档慢问题两个候选根因" class="hc3"><span class="hn">4.</span>进程 0 存档慢（问题：两个候选根因）</h2>
+<p><strong>前置</strong>：§3</p>
+<p><strong>症状</strong>：数千芯片大号模型文本生产作业，存档那段步时涨到平时的 3–4 倍。适用条件：本节两个修法上线前、存的是持久层（GCS，只有第 0 片主机在写，§5）。影响：按修前的存档间隔，吞吐掉三分之一左右。它和 <a href="03-dcn-and-multislice.html">03</a> 生产长跑的步时漂移不是同一件事。有两个候选根因，<strong>没能判定是哪个、还是两个都有</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>候选根因</th>
+<th>机理</th>
+<th>证据强度</th>
+<th>修法（状态）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>① GIL 单线程序列化 sharding 元数据</td>
+<td>只有进程 0 写 Orbax <code>_sharding</code> 文件：每个数组调 <code>from_jax_sharding(...).to_serialized_string()</code>，每次遍历全部 device，纯 Python 持 GIL；其他 writer 写完在等它</td>
+<td>CPU 单独复现也要几分钟，与多出的时长同量级；随「数组数 × device 数」增长</td>
+<td>缓存补丁 + sharding 文件写入开关（见表下）；上游没有，需自行实现；<strong>目标规模上未验证</strong></td>
+</tr>
+<tr>
+<td>② TensorBoard 跨区写</td>
+<td>region 配置写死在另一区，logdir 在训练区；跨区 copyTo 30 s 超时返回 503，uploader 反复重启，进程 0 每次存档 / profile 后慢 6–7 倍</td>
+<td><span class="tg inf">[推断]</span>，没有单独 A/B</td>
+<td>TensorBoard 和镜像仓库都搬到同 region</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>①的修法细节</strong>：运行时 monkey-patch Orbax，普通 manager 和 MTC replicator 都装。
+<ul>
+<li>缓存：<code>from_jax_sharding</code> 加 <code>lru_cache</code>（不可哈希时退回原函数）、序列化结果按实例缓存。验收：用上表的 CPU 单独复现，打补丁前后比序列化耗时。</li>
+<li>sharding 文件写入开关（默认开启写入）：关掉就不写这个文件；但关掉与 colocated Python 不兼容、报 <code>ValueError</code>。</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p><strong>原理</strong>：<strong>有几样活只有进程 0 干，而且它在后台干活时和训练抢同一把锁。</strong> 每个数组的 sharding 元数据要对每个 device 逐个转成文本，纯 Python，开销 ∝ 数组数 × device 数；后台线程不挡主线程，却抢同一把 GIL（Python 同一时刻只让一个线程跑字节码），进程 0 一慢，全体在下一个同步点陪它等。存档收尾时合并各进程的子库、校验全部数组元数据，也只在进程 0 做（表里没列）。</p>
+<p><sub>把握：源码证实 · 出处：Orbax <code>jax_array_handlers._async_serialize_shardings</code>（<code>is_primary_host</code> 分支）、<code>sharding.DeviceMetadataMesh.from_jax_mesh</code> / <code>to_serialized_string</code>、<code>base_pytree_checkpoint_handler</code> finalize 里的 <code>merge_ocdbt_per_process_files</code>、<code>validate_all_array_metadatas</code>；源码证实的是「谁写、开销随什么涨」，「拖慢步时」是推断。</sub></p>
+</blockquote>
+<ul>
+<li><strong>不用新实验的判据：翻已有日志，只做 profile、不存档的那几步进程 0 也慢，②就成立</strong>；只在存档时慢、片数翻倍更慢，是①。
+<ul>
+<li>依据：②的症状是「每次存档 / profile 后都慢」，①只在存档时出现。</li>
+<li>表外那两步占多少：监控事件 <code>/jax/checkpoint/write/async/ocdbt_merge_duration_secs</code> 和 finalize 那行「merge_ocdbt + ArrayMetadata validation … Time taken」日志能直接量出。</li>
+</ul>
+</li>
+<li><strong>为什么判不了</strong>：生产里两个修法都在，没有单独量过各自的存档开销；①修后的存档步数据和修前不在同一基准下，不能直接相减。要判定就得在目标规模上各关一个跑一次存档。</li>
+<li><strong>两条都值得做</strong>：①是规模越大越重的结构性开销；②是一类「依赖跨区」的通病——上线前把 TensorBoard、镜像仓库、日志桶逐个对一遍 region（region 从 downward API 读，别写死）。</li>
+<li><strong>存档之后那几步也要单独看</strong>：量「存档开销」时，把存档那步和之后 3 步的墙钟一起算。
+<ul>
+<li>实测存档后头两步各慢一截。根因是 MegaScale（libtpu 的多片 DCN 运行时，和 §3、§5 引的 MegaScale 论文同名不同物）预映射缓冲（<code>--megascale_grpc_premap_memory_bytes</code>，默认 4 GiB）远小于每 host 要 D2H 的量；判据是设到 ≥ 2 × 每 host 检查点，调大的方案没验证完（见 <a href="03-dcn-and-multislice.html#13-%E5%B9%B3%E5%8F%B0%E4%BE%A7%E5%B7%B2%E7%9F%A5%E7%9A%84%E5%9D%91">03 §13</a>）。</li>
+<li>profile 的 <code>stop_trace</code> 上传也会让全体停约 150 s——它和存档一样是全体同步点，别放在训练关键路径上。</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="5-多层检查点mtc本地-ramdisk--gcs" class="hc4"><span class="hn">5.</span>多层检查点（MTC）：本地 ramdisk + GCS</h2>
+<p><strong>前置</strong>：§2（数据状态要一起存）、§3、§10（转出来的检查点要能被多 host 分片读）；<strong>后续</strong>：§6 恢复演练、§8、§9</p>
+<p><strong>收益</strong>：大号模型 256 芯片（64 host）恢复读检查点 <strong>约 450 s → 约 8 s</strong>；但 pod 起来到第一步只从 37 降到 28 min——<strong>瓶颈已转到编译和首步</strong>（AOT 与缓存见 <a href="06-memory-remat-compile.html">06</a>）。</p>
+<figure class="img"><a href="figs/fig-t07-mtc-first-step.svg" target="_blank" title="新窗口看原图"><img src="figs/fig-t07-mtc-first-step.svg" alt="pod 起来到第一步：MTC 前后" loading="lazy"></a><figcaption>pod 起来到第一步：MTC 前后</figcaption></figure><div class="tbl"><table>
+<thead>
+<tr>
+<th>数字（大号模型 256 芯片，64 host）</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本地存一次：阻塞 / 后台</td>
+<td>4–7 s / 32–41 s；按常用存档间隔摊到训练上，额外开销不到 1%，可以忽略</td>
+</tr>
+<tr>
+<td>GCS 标准存一次：阻塞 / 后台</td>
+<td>41–43 s / 132–147 s</td>
+</tr>
+<tr>
+<td>恢复读检查点</td>
+<td>冷 GCS 约 450 s → ramdisk <strong>约 8 s</strong></td>
+</tr>
+<tr>
+<td>ramdisk 容量</td>
+<td>要按每 host 检查点大小留足，否则首存 OOM</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>怎么考虑的</strong>：每台主机先存进自己的内存盘（ramdisk），再隔一段时间备份到 GCS。ramdisk 随机器消失，所以后台进程 <strong>replicator</strong> 在片间补齐：各片同一位置的主机存同一份（数据并行副本），互为 <strong>peer</strong>；片内分片各不相同，彼此补不了。</p>
+<figure class="img"><a href="figs/ch07-anim-mtc-restore.svg" target="_blank" title="新窗口看原图"><img src="figs/ch07-anim-mtc-restore.svg" alt="MTC：内存盘比训练进程活得久，重启后每台主机就地读自己那份" loading="lazy"></a><figcaption>MTC：内存盘比训练进程活得久，重启后每台主机就地读自己那份</figcaption></figure>
+<p>读图（示意）：三幕对应底部三行字幕。</p>
+<blockquote>
+<p><strong>原理</strong>：<strong>内存盘比训练进程活得久，所以重启后每台主机就地读自己那份，不再几十台一起挤 GCS。</strong> 内存盘挂在节点上，不属于某个 pod，kill 进程、删 pod 都不清它。</p>
+<p><sub>把握：文档证实 · 出处：MaxText 文档 Multi-tier checkpointing；GKE 文档 Multi-tier checkpointing（内存盘由 CSI 临时卷驱动提供，Replicator 随 CSI driver 跑在每个节点）；MegaScale 论文（NSDI 2024）§4.4 的「组内单读 + 广播」同一思路。</sub></p>
+</blockquote>
+<p><strong>怎么开</strong>（上游 MaxText 有 MTC；下面是 10+ / 20+ 片 FP8 生产参数）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本地层存档间隔</td>
+<td>100 步</td>
+</tr>
+<tr>
+<td>GCS 备份间隔</td>
+<td>4 片作业 500 步；10+ 片、20+ 片作业 200 步</td>
+</tr>
+<tr>
+<td>持久层</td>
+<td>普通检查点和 MTC 持久层都关（风险见 §13）</td>
+</tr>
+<tr>
+<td>MTC 数据并行度</td>
+<td>4 / 10+ / 20+（跟片数走）</td>
+</tr>
+<tr>
+<td>ramdisk 大小</td>
+<td>GKE 文档：TPU 本地检查点大小 × 2.2；日志打出每 host 需要量与 ramdisk 大小，启动时核对</td>
+</tr>
+<tr>
+<td>存一次本地层（派发耗时）</td>
+<td>2–15 s，p50 约 5 s；开销可以忽略</td>
+</tr>
+<tr>
+<td>replicator peer</td>
+<td>N 片每个 rank N−1 个，片数越多 peer 越多</td>
+</tr>
+<tr>
+<td>恢复：开始 → trainer_state 读完</td>
+<td>3–4 min；约 3 min 是数据集加载，读本地检查点＋搬到 mesh 只要约 19 s</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>
+<div class="kp kc2"><div class="kp-t">恢复后先确认两件事</div>
+<ul>
+<li>本地层被接受、没有退回持久层。主判据：日志显示命中本地层；辅助：读检查点那段明显短于走 GCS（tiny 调试配置 192 芯片：本地层约 3 s、GCS 28–33 s，本地层只成功过 1 次，见 §6.1 阶段表；大号 10+ / 20+ 片生产作业读本地检查点＋搬到 mesh 约 19 s，见上表）。这说明按 device id 恢复的补丁（§13 第 1、2 条）生效了，host 重编号或 slice FAILED 换新 slice 后都走这条。</li>
+<li>数据状态恢复了：首批样本序号和中断前接得上（§2）。</li>
+</ul></div>
+<p>注：换 cube 那条路径（按列重新配对）还没有实战验证。</p>
+</li>
+<li>
+<p>pod 起来到第一步的 28 min 里，首步约占 10 min；首步内部由哪几段构成未公开（公开文档和源码都没有分段数据；本书也没有对首步内部分段计时）。</p>
+</li>
+</ul>
+<p><strong>坑</strong>（上规模的两个，数百 pod）：</p>
+<ul>
+<li><strong>rank server 活锁</strong>：一个数百 pod 的 MTC 作业 15 min 内所有 pod 拿到的 rank 都是 −1，作业无限重启，几十个节点始终没连上。
+<ul>
+<li>机理：rank 为 −1 时 rank client 每 5 ms 轮询一次（200 Hz）。<strong>组件自带的扩展测试规模更小、参数和线上不同</strong>（超时更长、连接预热好），复现不出来。</li>
+<li>叠加：Orbax 的 jax 初始化超时写死 900 s、不看 MaxText 的设置，轮询风暴拖过 900 s 就整体失败重来。</li>
+<li>修法：把 ranker 挪到<strong>专用的大配置节点</strong>后能跑。带修复的 MTC driver 版本生产没用。</li>
+<li>教训：MTC 在目标规模上要先跑一次故障注入（§6.2 就是这么做的），别信组件自带的规模测试。</li>
+</ul>
+</li>
+<li><strong><code>use_replica_parallel</code> 被 MTC 写死成 False</strong>：持久层存档于是只有第 0 片的主机在写，一台慢全体等（§6.3 的停摆就是这样放大的）。在 MaxText 侧打开副本并行写本该让全部主机分摊写入，但在 MTC 下<strong>静默无效</strong>、不报错。判据：看持久层存档时有几台主机在写 GCS，别看配置。</li>
+<li><strong>换了 cube 本地层就用不上</strong>（§6.1）；按 device id 配对的补丁见 §13。</li>
+</ul>
+<hr />
+<h2 id="6-恢复演练大头是挂住不是读档" class="hc5"><span class="hn">6.</span>恢复演练：大头是挂住，不是读档</h2>
+<p><strong>前置</strong>：§5；<strong>后续</strong>：§7 超时分层、§8</p>
+<p><strong>结论先说</strong>：顺利时读检查点只占半分钟，不顺利时挂住 30–66 min；MTC 把读档压到几秒帮助有限，先要解决挂住。</p>
+<blockquote>
+<p><strong>原理</strong>：<strong>恢复是一串「等最后一个到」，哪一环有一台卡住，全体就等到那一环超时为止。</strong> 每一环都是全员同步点、等多久由超时定，所以恢复时间是长尾，期望被挂住主导：E[R] = (1−p)·R₀ + p·R_h，p = 4/9、R_h 取 30–66 中点 48 min，得约 25 min。</p>
+<p><sub>把握：推断 · 出处：§6.1 的阶段表与挂住统计。</sub></p>
+</blockquote>
+<figure class="img"><a href="figs/ch07-anim-recovery-gates.svg" target="_blank" title="新窗口看原图"><img src="figs/ch07-anim-recovery-gates.svg" alt="恢复是一串「等最后一个到」：一台卡住，全体等到那一环超时" loading="lazy"></a><figcaption>恢复是一串「等最后一个到」：一台卡住，全体等到那一环超时</figcaption></figure>
+<p>读图：上半示意，下半按分钟比例画。</p>
+<h3 id="61-192-芯片演练各阶段耗时与挂住">6.1 192 芯片演练：各阶段耗时与挂住</h3>
+<ul>
+<li>配置：三次演练，每次 3 × 4x4x4 = 192 芯片、tiny 模型；本地每 20 步、持久每 40 步、<code>maxRestarts: 10</code>。</li>
+<li>打断：删 Slice 2 次、<code>instances.stop</code> 1、<code>instances.delete</code> 3、<code>simulateMaintenanceEvent</code> 1；另 2 次 core dump 写满启动盘 → DiskPressure 驱逐。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>顺利时（三次顺利的恢复）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>打断 → Kueue 驱逐</td>
+<td>删 Slice 约 1 s；停/删 VM、模拟维护 16–21 s</td>
+</tr>
+<tr>
+<td>驱逐 → 3 片全 ACTIVE、48 pod 建好</td>
+<td>74–75 s（ACTIVATING→ACTIVE 53–58 s）</td>
+</tr>
+<tr>
+<td>建 pod → TPU OK</td>
+<td>58–101 s</td>
+</tr>
+<tr>
+<td>MTC 握手 + replicator 灌 restore 目录 + 数据集</td>
+<td>64–70 s</td>
+</tr>
+<tr>
+<td>读检查点</td>
+<td>GCS 28–33 s；本地层约 3 s（只成功过 1 次）</td>
+</tr>
+<tr>
+<td>编译（命中 <code>jax_cache_dir</code>）+ 首步</td>
+<td>78–81 s</td>
+</tr>
+<tr>
+<td><strong>打断 → 第一个新 step</strong></td>
+<td><strong>约 6 min</strong>（三次），丢 14–36 步</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="img"><a href="figs/fig-t07-recovery-phases.svg" target="_blank" title="新窗口看原图"><img src="figs/fig-t07-recovery-phases.svg" alt="顺利时一次恢复的各阶段耗时：读检查点只占 28–33 s" loading="lazy"></a><figcaption>顺利时一次恢复的各阶段耗时：读检查点只占 28–33 s</figcaption></figure>
+<ul>
+<li><strong>换了 cube 本地层就用不上</strong>：replicator 把 restore 目录灌回全部 48 台，但每次有 10–36 台被本地恢复的配对检查拒收（本机持有的是另一列写的副本），退回持久层。唯一一次读到本地层，是 pod 落回了原 cube。</li>
+<li><strong>坑</strong>（上面的拒收）：本地层被拒时数据没坏，是认领标签变了：重启后主机重新编号（修法：按设备号认领）；pod 落到别的 cube，本机拿着别列的副本（修法：按列重新配对，列不平衡时仍退回持久层）。见 §13 第 1、2 条。</li>
+<li><strong>本地层只比 GCS 省约 25–30 s</strong>；读档以外的固定开销约 5 min（上表另五段相加 290–348 s [推断：16–21 + 74–75 + 58–101 + 64–70 + 78–81]）。</li>
+</ul>
+<p><strong>最大的问题不在 MTC</strong>：<strong>9 次里 4 次恢复掉进 TPU 初始化挂住</strong>（30–66 min）。</p>
+<figure class="mermaid"><img src="../../assets/mermaid/e3833a8b5fc2.png" width="249" alt="示意图" loading="lazy"></figure><p>图中最后一环，libtpu 报 <code>START_SESSION failed</code> / <code>Mismatch barrier id … PRE_START_SESSION_BARRIER</code>。</p>
+<blockquote class="co data">
+<p><span class="co-t"><i>📊</i><span>goodput</span></span>口径：goodput＝完成步数 × 同配置稳态步时 ÷ 墙钟。带挂住的两次演练只有一到两成，挂住的那一代吃掉了一半左右的时间。</p>
+</blockquote>
+<h3 id="62-10-片带-mtc-的注入测试">6.2 10+ 片带 MTC 的注入测试</h3>
+<ul>
+<li>10+ × 4x8x8，大号模型 FP8，沿用已有 AOT 产物；本地层与 GCS 备份间隔同 §5。</li>
+<li>20 个 attempt、16 次重启；其中 11 次人为注入：8 次 exec kill 训练进程、3 次删 pod。</li>
+<li>「恢复」＝故障到下一 attempt 第一个新 step。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>类别</th>
+<th>次数</th>
+<th>恢复路径</th>
+<th>恢复耗时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>人为注入（8 次 exec kill、3 次删 pod）</td>
+<td>11</td>
+<td>全部原地恢复、读本地层</td>
+<td>11–14 min</td>
+</tr>
+<tr>
+<td>非注入（Traceback、jax-dist-fatal、NodeFailure）</td>
+<td>5</td>
+<td>本地层</td>
+<td>10–19 min</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>注入的 11 次全部原地恢复、都读本地层</strong>。</li>
+<li>192 芯片演练那种挂住没再出现，但条件不同（192 芯片演练 core dump 开着、删 pod 打在已跨 cube 挂住的一代上；10+ 片这两项未核），不能说已解决。</li>
+<li>丢掉的步数可能超过一个本地存档间隔（最近的本地存档没被用上），原因未核。</li>
+<li><strong>20+ 片规模的一次恢复约 22 min</strong>（协调服务报错，恢复中又失败一次）。两种可能的解释，关系未核：
+<ul>
+<li>① 混杂项：同一台 worker 上有一次人为 exec，可能就是一次没登记的注入 <span class="tg inf">[推断]</span>；</li>
+<li>② MTC 的 <code>RegisterCoordinator</code> PUT 遇到 <code>http2: client connection lost</code>，<strong>replicator 不重试、也不往上报</strong>，千级 peer 白等 300 s；同时 rank 0 退出时的 shutdown barrier（300 s）和 restore 超时（300 s）赛跑。修法：注册加重试、暴露 shutdown 超时参数（MTC 侧修复，是否已升级未核）。</li>
+<li>另一个坑：absl 日志把 CRITICAL（级别 50）当成 VLOG，<strong>致命错误日志被吞</strong>，日志里看不到真正的死因。排查 MTC 挂住时，别因为「日志里没有 FATAL / CRITICAL」就排除致命错误。</li>
+</ul>
+</li>
+<li><strong>部分重建与全量重建都出现过，「自动只换坏片」的判据未坐实</strong>：触发原因有 slice FAILED、PodsReady 超时、NodeFailure。估恢复时间时按全部重切取上限。</li>
+</ul>
+<blockquote>
+<p><strong>原理</strong>：<strong>「只换坏片」换的只是硬件，进程照样全体重启，所以恢复时间不分两堆。</strong> 多控制器 JAX 的进程集合启动时就定死，一片掉线，其余片卡在下一次集合通信上，只能全体重启。只换坏片，省的是健康片重新排队激活那一两分钟和它们的内存盘；初始化、编译、首步一样不少。进程不停要靠单控制器（Pathways）的弹性重试，且上游只演示了固定 mesh。</p>
+<p>GPU 上相当于：torchrun 的弹性代理，一个 worker 挂了就杀掉全组、重新 rendezvous 再起（类比）。</p>
+<p><sub>把握：文档证实 · 出处：JobSet 文档 Concepts（「A restart is done by recreating all child jobs」）；MaxText 文档 Elastic training（<code>elastic_retry</code>，需 <code>enable_single_controller=True</code>、<code>elastic_enabled=true</code>）；JAX 进程集合定死那句是推断。</sub></p>
+</blockquote>
+<ul>
+<li>和本节数据对得上：16 次恢复都在 10–19 min，没有按「部分换 / 全换」分成两堆 <span class="tg inf">[推断：没按两组分开列耗时，判据是分组后比较]</span>。</li>
+</ul>
+<blockquote class="co data">
+<p><span class="co-t"><i>📊</i><span>goodput <span class="tg inf">[推断]</span></span></span>口径同 §6.1：完成步数 × 稳态步时 ÷ 墙钟，约六成，其余是重启停机和重做。大部分重启是人为注入，<strong>这个数说明不了故障率</strong>。</p>
+</blockquote>
+<h3 id="63-同一套机制在生产上放大成整作业停摆">6.3 同一套机制在生产上放大成整作业停摆</h3>
+<p>数千芯片大号模型文本 FP8 作业：</p>
+<figure class="mermaid"><img src="../../assets/mermaid/8ef63497fec6.png" width="266" alt="示意图" loading="lazy"></figure><ul>
+<li><strong>每一环为什么会放大</strong>：
+<ul>
+<li>TensorStore 写 GCS <strong>没有单请求 deadline</strong>，一台挂 20 min 也不报错。</li>
+<li>持久层只有第 0 片的主机在写（§5 <code>use_replica_parallel</code>），一台慢全体等。</li>
+<li>镜像默认允许 core dump，TPU 进程地址空间巨大，每台写上百 GB。</li>
+<li>TAS 对 DiskPressure 宽限 0 s，而 TAS 的拓扑形状把一块物理单元的节点占满，坏节点<strong>没有空位可替换</strong>，只能整片甚至整作业重来。</li>
+<li>各层超时都按「宁可多等」设，最外层最慢（§7）。</li>
+</ul>
+</li>
+<li><strong>修法</strong>（逐条对应）：
+<ol>
+<li>镜像第一行 <code>ulimit -c 0</code>。数千芯片上演练恢复 <strong>36 → 12 min</strong>，省下的大头（约 19 min）就来自关 core dump。</li>
+<li>Orbax 存档超时（<code>AsyncOptions(timeout_secs)</code>）默认值比存档间隔还长，要调到<strong>小于存档间隔</strong>——否则上一次还没判失败，下一次已经开始。</li>
+<li>初始化等超时：jax 分布式初始化从 1,800 s 下调到 300–600 s；其余见 §7 超时表。</li>
+<li>退出时跳过 jax 的 shutdown barrier（300 s）：目前只在「MTC 初始化失败」这一种情况下直接 <code>os._exit(1)</code> 绕过；通用版本上游还没有。</li>
+<li>TensorBoard 搬回同区（§4）。</li>
+</ol>
+</li>
+<li>估计全部修完可把这类停摆压到约 40 min（估计，未演练）。</li>
+</ul>
+<h3 id="64-驱逐后重入tas-把子-job-撒到十几到二十个-cube">6.4 驱逐后重入：TAS 把子 Job 撒到十几到二十个 cube</h3>
+<p>数千芯片多模态作业：</p>
+<ul>
+<li><strong>现象</strong>：一台主机 NotReady，重新准入后各子 Job 被撒开（按物理 slice 数，全作业落到 7–10 个；按 cube 数，每个子 Job 落到 14–22 个），永远等不齐，全体挂在 <code>make_tpu_client</code>，不报错也不退出，只能人工 suspend；反复中断时可以<strong>数小时没有净进度</strong>。</li>
+<li><strong>机理</strong>：Kueue TAS 的 ungater 碰到还在 Terminating 的旧 pod，放弃按拓扑放置、退回贪心放置 <span class="tg inf">[推断：源码分析，未确认]</span>。和 §6.1 的「撒到 2–3 个 cube」同类，规模大了撒得更开。</li>
+<li><strong>为什么不报错</strong>：MegaScale 拓扑发现拿到不可重试的 <code>INVALID_ARGUMENT</code>，<code>SendControlRPC</code> 照样重试，<code>--megascale_topology_discovery_timeout</code> 默认 <strong>4,000 s</strong>；所有主机静默挂住，libtpu 本来要等约 67 min 才放弃。</li>
+<li><strong>三条修法</strong>：
+<ol>
+<li>JobSet 配 FailureRecoveryPolicy：Terminating 超过 <strong>90 s</strong> 的 pod 直接标 Failed，不让它挡住重新放置；Kueue 侧补丁另等。</li>
+<li>按子 Job 统计跨了几个 cube，超过拓扑应有的数就告警。</li>
+<li>pod Running 后约 <strong>25 min</strong> 还没有第一个 step 就告警（正常 p95 是 17–19 min，留余量）。告警判据看「步号在不在涨」，不看「进程活着」。</li>
+</ol>
+</li>
+</ul>
+<hr />
+<h2 id="7-超时分层按检测顺序排逐个下调" class="hc0"><span class="hn">7.</span>超时分层（按检测顺序排，逐个下调）</h2>
+<p><strong>前置</strong>：§3（集合通信当 I/O barrier，超时要放宽的源头之一）、§6 的几次停摆；<strong>后续</strong>：<a href="11-porting-checklist.html#b08--%E6%8A%8A-megascale-%E6%8C%82%E4%BD%8F%E9%98%88%E5%80%BC%E6%94%BE%E5%AE%BD%E5%88%B0-20-min%E5%A4%9A%E7%89%87--mtc%E6%8E%A8%E6%96%AD">11 B08</a></p>
+<p><strong>怎么考虑的</strong>：几次作业级停摆（§6.3 生产停摆、§6.4 TAS 撒片、§6.2 coordinator 断连）的共同点：「多久算挂了」各层自定，<strong>没有排序，最外层又最慢</strong>（见表后图）。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>层（按应有的检测顺序）</th>
+<th>默认</th>
+<th>问题</th>
+<th>建议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TensorStore 单个 GCS 请求</td>
+<td><strong>无 deadline</strong></td>
+<td>一台写卡 20 min 也不报错，只能等外层存档超时</td>
+<td>加单请求 deadline；改 <code>gcs_grpc</code> driver（§11）</td>
+</tr>
+<tr>
+<td>Orbax 存档 <code>AsyncOptions(timeout_secs)</code></td>
+<td>库默认值</td>
+<td>比存档间隔还长，上一次没判失败下一次已开始</td>
+<td>调到<strong>小于存档间隔</strong></td>
+</tr>
+<tr>
+<td>jax shutdown barrier / Orbax restore</td>
+<td>300 s / 300 s</td>
+<td>两者<strong>赛跑</strong>，谁先到谁决定结局</td>
+<td>barrier 参数名未核，只能 patch 退出路径（§6.3 修法 4）；restore 上游写死 300 s，生产里没改；可自行加一个 MTC 恢复超时配置项（默认 600 s 验证过，未进生产）</td>
+</tr>
+<tr>
+<td>Orbax 内部的 jax 初始化</td>
+<td>900 s，<strong>写死</strong></td>
+<td>不看 MaxText 的超时设置（§5 rank server 活锁就撞它）</td>
+<td>只能改 Orbax / 等上游暴露参数</td>
+</tr>
+<tr>
+<td><code>jax_distributed_initialization_timeout</code></td>
+<td>1,800 s</td>
+<td>等于「挂住 30 min 才知道」</td>
+<td>下调到 300–600 s</td>
+</tr>
+<tr>
+<td>MegaScale 跨片同步点 hang 检测 <code>--megascale_graph_hang_threshold</code></td>
+<td>5 min</td>
+<td>部分主机被 GCS 限流就触发整作业重启（§11「等满 5 min」就是它 <span class="tg inf">[推断：默认值相同]</span>）</td>
+<td>稳态别放宽、先修限流；恢复期（灌数据、首步编译）可放宽到 20m 防误杀。几个 MegaScale 阈值<strong>取 min</strong> 才生效，单改它可能无效</td>
+</tr>
+<tr>
+<td>MegaScale 拓扑发现 <code>--megascale_topology_discovery_timeout</code></td>
+<td>4,000 s</td>
+<td>对不可重试的错误也照样重试（§6.4）</td>
+<td>能否经 <code>LIBTPU_INIT_ARGS</code> 调低未核；在那之前靠「Running 后 25 min 无 step」告警兜底</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="img"><a href="figs/ch07-timeout-ladder.svg" target="_blank" title="新窗口看原图"><img src="figs/ch07-timeout-ladder.svg" alt="超时没排序：最内层没有上限，最外层又最慢" loading="lazy"></a><figcaption>超时没排序：最内层没有上限，最外层又最慢</figcaption></figure>
+<p>读图：左边长短错乱、第一行没有尽头，右边是应有的阶梯。上新规模前按自己的栈把表填一遍。</p>
+<blockquote>
+<p><strong>原理</strong>：<strong>阈值设低了误杀、设高了晚发现，两头代价不对称，所以按「合法的到达偏差」设，不按恢复总时长。</strong> hang 阈值量的是某个 worker 在某个跨片通信上等了多久，下界是主机间合法的到达偏差：稳态秒级，恢复期还要加各主机读档、编译、数据初始化的差。误杀一次 ≈ 一次完整恢复（约 12 min，§6.2），晚发现每多 1 min 是全作业多停 1 min。按测出的偏差高分位加余量设。</p>
+<p>GPU 上相当于：NCCL 的超时（<code>init_process_group(timeout=…)</code>，watchdog 到点就杀进程），一样是设短了误杀、设长了干等。</p>
+<p><sub>把握：推断 · 出处：MaxText 文档 Megascale hang playbook（阈值定义）。</sub></p>
+</blockquote>
+<div class="kp kc3"><div class="kp-t">坑</div>
+<ul>
+<li>能从源头去掉放宽的理由更好：把「用集合通信当 I/O barrier」换成 KV barrier（§3 的修法），稳态就能留在默认值。量到达偏差的办法：取每台主机「恢复完成」「第一步完成」时间戳的最大差。</li>
+<li><strong>同类的启动预算</strong>：数据缓存清理放在启动路径上，受启动初始化总超时（也是 1,800 s）约束，删得慢就整作业 <code>ReachedMaxRestarts</code>。清理不要进恢复关键路径。</li>
+</ul></div>
+<hr />
+<h2 id="8-exit-0不等于训练成功" class="hc1"><span class="hn">8.</span>「exit 0」不等于训练成功</h2>
+<p><strong>前置</strong>：§5（问题出在 MTC replicator 的错误路径上）、§6（演练催生了这条规矩）；<strong>后续</strong>：<a href="08-open-problems.html#7-exit-0-%E4%BC%AA%E8%A3%85%E6%88%90%E5%8A%9F">08 §7</a></p>
+<blockquote class="co danger">
+<p><span class="co-t"><i>⛔</i><span>检查点失败 = 进程 exit 0 = 作业显示成功</span></span><code>maxRestarts</code> 不触发；只能数步数、翻日志。</p>
+</blockquote>
+<figure class="mermaid"><img src="../../assets/mermaid/28abab7973c0.png" width="471" alt="示意图" loading="lazy"></figure><ul>
+<li>0 步、0 个检查点、0 个备份的作业，和跑完 400 步的作业分不出来。</li>
+<li><strong>上游没有这个问题</strong>：上游 MaxText 的 <code>maybe_save_checkpoint</code> 用 <code>_checkpoint_error_handler</code> 抛 RuntimeError，进程非零退出。生产代码在弹性 / colocated 路径里把错误包成 StopTraining，所以「改抛非零退出的自定义检查点异常」这条修法只针对这套代码。自己的代码若也包了 StopTraining，要自行实现同样的非零退出。</li>
+<li>同族：MTC driver 0.8.3 不卸 peer NFS，脏节点下个作业 10 s 后死（v0.9.0-gke.2 修）。</li>
+</ul>
+<p><strong>怎么核对</strong>（作业结束时）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># &lt;jobset&gt; 换成作业名；W0 = 第 0 片第 0 个 worker 的 pod</span>
+<span class="nv">W0</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>jobset.sigs.k8s.io/jobset-name<span class="o">=</span>&lt;jobset&gt;<span class="w"> </span>-o<span class="w"> </span>name<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>--<span class="w"> </span><span class="s1">&#39;-worker-0-0-&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span>
+kubectl<span class="w"> </span>logs<span class="w"> </span><span class="nv">$W0</span><span class="w"> </span>-c<span class="w"> </span>jax-tpu<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;completed step:&quot;</span><span class="w">      </span><span class="c1"># 期望 = STEPS（只对不重启的短作业成立；有重启/续训时改看最后一步步号 = STEPS−1 加重启次数）</span>
+kubectl<span class="w"> </span>logs<span class="w"> </span><span class="nv">$W0</span><span class="w"> </span>-c<span class="w"> </span>jax-tpu<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;replicator.failed|StopTraining|Traceback&quot;</span><span class="w">   </span><span class="c1"># 不加 head：截断会把「一条」看成「没几条」</span>
+</code></pre></div>
+<p><strong>同一类「看起来成功、其实没成」的坑</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>坑</th>
+<th>现象</th>
+<th>根因</th>
+<th>修法 / 教训</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vertex TensorBoard 上传线程不退出</td>
+<td>跑完最后一步 pod 仍 Running <strong>3 天多</strong>，JobSet 永不 Succeeded，卡被僵尸 pod 占着</td>
+<td><code>VertexTensorboardManager</code> 是模块级全局对象，<code>__del__</code> 里的停止上传永不被调用，后台线程卡住进程</td>
+<td>改成 <code>main()</code> 局部变量；告警看最后一步步号在不在涨，别看「进程活着」</td>
+</tr>
+<tr>
+<td>nightly loss 校验把真 FAIL 丢了</td>
+<td>成功的 run 被标 cancelled；真实超门槛（0.0217% 对门槛 0.02%）没报出来</td>
+<td>轮询脚本 <code>kubectl get pod … 2&gt;/dev/null</code> 吞掉凭据过期错误，<code>$PHASE</code> 为空又无对应分支，等到超时</td>
+<td>判 <code>JobSet.Completed=True</code>，统计连续空 PHASE；<strong>CI 脚本里不要 <code>2&gt;/dev/null</code></strong></td>
+</tr>
+<tr>
+<td>TensorBoard 事件文件撞名</td>
+<td>goodput 监控停更；<code>add_scalar</code> 永久阻塞（实际作业里不罕见）</td>
+<td>三个 tensorboardX writer 文件名只到整秒、不含 PID，撞名后 GCS generation 永远 412，后台线程死，<code>max_queue=10</code> 写满</td>
+<td>文件名加 PID；只丢监控、训练不受影响，但会让人以为训练停了</td>
+</tr>
+<tr>
+<td>镜像构建缓存</td>
+<td>改了代码、pod 跑的还是旧代码</td>
+<td>clone 层被构建缓存复用</td>
+<td>Dockerfile 用 commit SHA 让 clone 层失效</td>
+</tr>
+<tr>
+<td>libtpu 初始化挂住</td>
+<td>小号模型 2K 芯片级作业 24 h 内 18 台 host 命中，每次约 17 min（15 min 等待 + 重启），pod-0 连续失败 11 次</td>
+<td>真错误（slice builder <code>UNIMPLEMENTED</code>）被 teardown 的 FATAL 盖住；根因在 libtpu 侧</td>
+<td>只能先加诊断（见下）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>libtpu 挂住的诊断</strong>：常开 <code>PYTHONFAULTHANDLER=1</code>；<code>jax.devices()</code> 外包 <code>faulthandler.dump_traceback_later(60)</code>；按需开 <code>TPU_STDERR_LOG_LEVEL=0</code> / <code>TPU_VMODULE</code> 等。</li>
+</ul>
+<hr />
+<h2 id="9-硬件静默算错sdc检查点策略要防它" class="hc2"><span class="hn">9.</span>硬件静默算错（SDC）：检查点策略要防它</h2>
+<p><strong>前置</strong>：§5；<strong>后续</strong>：§13 第 6 条（持久层关掉后的 RPO）</p>
+<p><strong>问题</strong>：数千芯片文本作业上遇到两次硬件静默算错（SDC）：一次位置没查出来；另一次定位到一颗芯片，<strong>22 min 后</strong>它才报 HBM 不可纠正错误，污染了 MTC 测试作业后面的检查点（生产作业不读这批检查点，没受影响）。</p>
+<div class="kp kc0"><div class="kp-t">怎么防</div>
+<ul>
+<li><strong>错误比告警早 10–22 min</strong>：回退窗口留 <strong>≥30 min</strong>，重启后比对重叠几步的 loss，对不上就再往前退（见下图）。</li>
+<li><strong>推荐的 SDC checker 只抓 ICI / DCN 传输错，抓不到片上计算错</strong>。</li>
+<li><strong>checker 本身会改数值</strong>：打开它的顶层 flag 会改编译决策（融合、VMEM 估算等），即使不重复执行也带来约万分之一的 loss 差，编译期 temp 也变。做精度对拍或逐位重放时，<strong>A / B 两边 checker 必须同开同关</strong>。</li>
+</ul></div>
+<figure class="img"><a href="figs/ch07-sdc-window.svg" target="_blank" title="新窗口看原图"><img src="figs/ch07-sdc-window.svg" alt="硬件静默算错比告警早 10–22 min：只退一份，退到的还是坏档" loading="lazy"></a><figcaption>硬件静默算错比告警早 10–22 min：只退一份，退到的还是坏档</figcaption></figure>
+<p>读图：从告警往回退一格仍是红档，退满绿色区间才到出错之前。</p>
+<p><strong>片数越多越频繁</strong>：各片独立坏时，作业平均故障间隔 ≈ 单片 MTBF ÷ 片数（两个规模的推算点折成单片 MTBF 基本相同，见 <a href="12-multimodal-and-numerics-alignment.html">12 §7</a>）。</p>
+<ul>
+<li>自己估用 badput ≈ √(2δ/M) + R/M（推导见下方原理与图）。例：N 片同跑，M ≈ 单片 MTBF ÷ N；每次损失 R ≈ 恢复（§6.2 实测 10–19 min）＋ 重做那截（按本地层存档间隔的一半算）；本地层存档派发很便宜，第一项可忽略。
+<ul>
+<li>适用条件：§4 修法上线后、MTC 本地层每 100 步存一次（§5）、§6.2 的 10+ 片规模、单片 MTBF 取 12 §7 两个规模的推算值（本书不给具体数）；代入得 badput <strong>不到 1%</strong> <span class="tg inf">[推断：本段算式]</span>。</li>
+<li>不适用：§4 修法上线前的持久层存档，那时第一项不可忽略。</li>
+</ul>
+</li>
+<li>目标要求 goodput ≥95%（<a href="01-model-and-baseline.html">01</a>）；更大片数下「goodput 上限约 95%」只是估计。按上式粗推：损失到 5% 要 M ≈ R ÷ 0.05，即 N ≈ 单片 MTBF × 0.05 ÷ R（两者同单位）<span class="tg inf">[推断]</span>。</li>
+</ul>
+<blockquote>
+<p><strong>原理</strong>：<strong>存得勤就多付存档钱，存得稀就多付重做钱，最优间隔在两者相等处；存档便宜以后，剩下的几乎全是恢复钱。</strong> 每段故障间隔 M 里存档损失 M·δ/τ，故障一次损失 R 加平均重做 τ/2：badput ≈ δ/τ + (R + τ/2)/M，最小处 τ* = √(2δM)，代回即 √(2δ/M) + R/M。</p>
+<p><sub>把握：公开资料 · 出处：Young 1974（CACM，一阶最优检查点间隔）；Daly 2006（高阶修正）。</sub></p>
+</blockquote>
+<figure class="img"><a href="figs/ch07-badput-tradeoff.svg" target="_blank" title="新窗口看原图"><img src="figs/ch07-badput-tradeoff.svg" alt="存得勤付存档钱，存得稀付重做钱；存档便宜以后，剩下的几乎全是恢复钱" loading="lazy"></a><figcaption>存得勤付存档钱，存得稀付重做钱；存档便宜以后，剩下的几乎全是恢复钱</figcaption></figure>
+<p>读图（示意）：蓝色 U 形贴着红色底带——存档便宜后损失由 R/M 决定。</p>
+<p><strong>坑</strong>：式子失效的情形——故障相关（同一电源域、同批坏件）时 M 比「单片 ÷ 片数」更短；计划内维护不该算进单片 MTBF；SDC 让回退点本身坏掉时，R 还要加上再往前退那段。R 本身是长尾，见 §6 开头。</p>
+<hr />
+<h2 id="10-检查点格式转换几处静默退化" class="hc3"><span class="hn">10.</span>检查点格式转换：几处静默退化</h2>
+<p><strong>前置</strong>：无；<strong>后续</strong>：§5（转出来的检查点要能被多 host 分片读）</p>
+<p>GPU（Megatron DCP / safetensors）和 TPU（Orbax OCDBT）之间来回转检查点；坑都是「能跑完，但慢或错得不出声」。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>改了什么</th>
+<th>原理</th>
+<th>效果</th>
+<th>坑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>流式 safetensors → OCDBT</strong>：逐组直接写 OCDBT，多进程 + 共享内存预取，后台线程写盘；optimizer 状态按文件头里的 shape 查找</td>
+<td>旧路径先把整个模型读进内存再写；流式只留一组 buffer</td>
+<td>峰值内存约 <strong>4.6× 模型大小</strong> → <strong>几 GB + 一组 buffer</strong>；去掉约 35% 冗余 GCS 读；三种检查点逐位一致</td>
+<td>流式路径<strong>丢了旧路径的防护</strong>（见表下）；重写时把旧路径每道校验列出来逐条对</td>
+</tr>
+<tr>
+<td><strong><code>--lazy_load_tensors</code> 透传</strong></td>
+<td>flag 定义了 <code>main()</code> 却从没读：取权重的 4 处写死不 lazy load；另给 lazy tensor 补 <code>__deepcopy__</code>，否则 Orbax 深拷贝抓住文件句柄、保存中途中止</td>
+<td>修前内存不够的机器被 OOM kill；修后能转完</td>
+<td>加了 flag 不等于生效，看峰值 RSS 有没有变</td>
+</tr>
+<tr>
+<td><strong>转 DCP 的本地模式改滚动分片</strong></td>
+<td>本地输出目录时 writer 没拿到最终目录，滚动分片不触发，<strong>静默写成一个巨型文件</strong>，上传只能单流</td>
+<td>改成分片暂存再并行上传，微基准约 <strong>44×</strong> [未核：本书没复现]</td>
+<td>新增检查：拒绝「暂存目录 = 输出目录」，否则分片拷到自己身上后被删，<strong>丢数据</strong></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>流式路径相对旧路径少掉的防护</strong>（都已补回）：shape 校验没了、optimizer 状态 dtype 没归一化、「有没用上的 key」检查挪到 finalize 之后、某个系数写死默认值、flush 会死锁。</li>
+</ul>
+<p><strong>不分片的检查点会撞缓存出口</strong>：在 CPU 节点上走「GPU DCP → Orbax → safetensors」，转出来的检查点<strong>本来就不分片</strong>；几百台主机同时读这一份，撞上 GCS 缓存层（Rapid Cache）的出口上限。</p>
+<ul>
+<li>修法：转换时指定 sharding。</li>
+<li><strong>不是 Orbax 缺功能</strong>：Orbax 本就支持多 host 分片保存和按片恢复，问题在转换流水线没传 sharding。</li>
+<li>教训：先把<strong>完整流水线</strong>（在哪转、经过哪几种格式）写出来再定位问题；只盯着想要的方案，容易把流水线配置问题当成库缺功能。</li>
+</ul>
+<hr />
+<h2 id="11-gcs-429先画数据路径再谈配额" class="hc4"><span class="hn">11.</span>GCS 429：先画数据路径，再谈配额</h2>
+<p><strong>问题</strong>：启动阶段反复撞 GCS 429 / <code>RESOURCE_EXHAUSTED</code>，每次重启损失 15–20 min。放大链：部分主机被限流落后 → 其他主机在跨片同步点等满 5 min（<code>--megascale_graph_hang_threshold</code> 的默认值 <span class="tg inf">[推断]</span>，§7）→ MegaScale 判 hang、终止整个作业。</p>
+<p>扩 QPS 配额、缓存出口、缓存容量都没根治 429——扩的都不是真瓶颈，要按数据路径分开看：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>数据路径</th>
+<th>撞的限额</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>gcsfuse 走 gRPC + DIRECT_PATH</td>
+<td>QPS 限额<strong>按项目</strong>算</td>
+<td>有一部分限额<strong>在 Console 里看不到</strong>，要走 GCP 支持工单提额</td>
+</tr>
+<tr>
+<td>gcsfuse 走 HTTP/1（经 HTTP 前端）</td>
+<td><strong>按桶</strong>的请求限流</td>
+<td>新桶挂载没写 <code>client-protocol: grpc</code>，100% 流量走了 HTTP/1；扩项目配额对它无效（<a href="12-multimodal-and-numerics-alignment.html#32-%E6%95%B0%E6%8D%AE%E4%BE%A7%E4%BF%AE%E4%BA%86%E4%BB%80%E4%B9%88">12 §3.2</a>）</td>
+</tr>
+<tr>
+<td>TensorStore 写检查点</td>
+<td>走 JSON/HTTP 经 HTTP 前端，天生撞按桶限流</td>
+<td>约占四分之一字节；写路径<strong>根本不经过</strong>扩了出口的那层缓存。建议改用 TensorStore 的 <code>gcs_grpc</code> driver</td>
+</tr>
+<tr>
+<td>MTC 元数据探测</td>
+<td>大量 404 元数据请求</td>
+<td>只读数据集桶设 <code>metadata-cache:negative-ttl-secs=-1</code> 并开 kernel list cache</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>做法</strong>：遇到 429 先回答三件事——谁在发请求、用什么协议、走哪个前端——再判断撞的是哪个限额，最后才提配额。429 按配额名分类监控。</li>
+<li><strong>坑</strong>：提单标题和第一句写清单位（requests per second），配额写「从 A 调到 B（+Δ）」，否则容易被读成带宽或总量。</li>
+<li>建桶清单：所有 gcsfuse 挂载写 <code>client-protocol: grpc</code>；只读桶配 negative TTL；写检查点的路径单独核一遍。</li>
+</ul>
+<hr />
+<h2 id="12-pathways-弹性训练试过没进生产" class="hc5"><span class="hn">12.</span>Pathways 弹性训练（试过，没进生产）</h2>
+<p><strong>前置</strong>：无；<strong>对照</strong>：§5、§6.2 的 MTC 路线</p>
+<p>小号模型 4 片 × 64 芯片上试过上游 Pathways 的弹性训练（<code>--num_elastic_slices</code>、pause / resume），加 colocated Python 数据面和 OCDBT 检查点。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>驱逐 → 回到正常步（同一任务配置）</th>
+<th>时间</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>普通 Pathways 重启</td>
+<td>约 65 min</td>
+</tr>
+<tr>
+<td>Pathways + colocated 数据面</td>
+<td>约 17 min</td>
+</tr>
+<tr>
+<td>不用 Pathways 的多控制器 JAX 基线</td>
+<td>约 14 min（但 JAX 版本不同，不完全可比）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>数据管线重建是大头</strong>：恢复期间数据管线重建 36 min → 约 5 min（7×）。§1.1 表里「恢复后首 batch 约 37 min」，其中约 36 min 就是这段重建。</li>
+<li><strong>检查点完整性检查约 7 min → 42 ms</strong>：GCS glob 模式没锚定前缀，扫了整个桶；加前缀锚定就好。任何按 glob 找检查点的代码都该查一下。</li>
+<li>坏片隔离式弹性训练验证过、没进生产：约 10 min 恢复齐员，读检查点 26 s + 编译缓存命中 7 s，无重编译，loss 逐位一致。</li>
+<li><strong>坑</strong>：旧版 Pathways server 在弹性模式下持久化会双写、报 <code>ALREADY_EXISTS</code>，升级 server 修复；OCDBT 把 GCS 对象数从十万级降到几百个，但恢复比 zarr 慢约 85 s。</li>
+<li><strong>结论</strong>：带 colocated 数据面的 Pathways 也没跑赢普通多控制器重启，生产走的是 MTC 路线（§5、§6.2）。</li>
+</ul>
+<hr />
+<h2 id="13-还没解决的" class="hc0"><span class="hn">13.</span>还没解决的</h2>
+<ol>
+<li><strong>exit 0 与 MTC 按设备号配对的修复</strong>：生产代码里有，上游 MaxText／Orbax 没有；本书没复测。MTC 那条的机理：rank server 按节点名排序发 distributed id、重启后重新编号，Orbax 按这个号认本地文件而 replicator 按 JAX 运行时 index 放文件；补丁改按设备号配对。</li>
+<li><strong>换 cube 本地层被拒</strong>：生产代码已改配对逻辑（别列副本按列配对，列不平衡仍退回持久层），换 cube 的实战日志未见；跨 cube 挂住 → 改 Kueue 或关 core dump（生产上的复发与三条修法见 §6.4）。</li>
+<li>safetensors 检查点在约 2K 芯片恢复 40–50 min，未 profile。</li>
+<li>硬件挂起不能自动检测；单 slice 无 collective 超时，MegaScale hang 检测只管多片。</li>
+<li>10+ 片上真实数据没核（注入演练用的是 <code>dataset_type: synthetic</code>）；检查点已带 MTC 跑，但持久层是关的；premap buffer（<code>--megascale_grpc_premap_memory_bytes</code> ≥ 2 × 每 host 检查点）需按 10+ 片的检查点重算（<a href="03-dcn-and-multislice.html#13-%E5%B9%B3%E5%8F%B0%E4%BE%A7%E5%B7%B2%E7%9F%A5%E7%9A%84%E5%9D%91">03 §13</a>）。</li>
+<li><strong>持久层关掉后的 RPO</strong>：10+ / 20+ 片生产 run 持久层全关（§5），只剩本地层 + 每 200 步 GCS 备份。整池都丢（全部 host 的 ramdisk 一起没）时能回到哪一步、备份能不能单独恢复，没有演练过。</li>
+<li><strong>注入 kill 被报成芯片故障</strong>：exec kill 后几秒内报 <code>SLICE_FAILURE_CHIP_DRIVER_ERROR</code>：8 次 exec kill 里 7 次报了这个错；一次真实 NodeFailure 也报同一个错——错误码分不出注入和真坏。按这个错误码自动隔离节点会误伤好芯片。</li>
+<li><strong><code>ACTIVE_DEGRADED</code> 与空的 FAILED</strong>：注入演练期间 22 次 <code>ACTIVE_DEGRADED</code>，前一状态都是 <code>ACTIVATING</code>，之后 21 次 <code>DEACTIVATING</code>、1 次 <code>FAILED</code>，从没回到 <code>ACTIVE</code>；fp8 作业遇到都伴随失败或人工重建。slice <code>FAILED</code> 9 次，message 字段都空。定义和根因都未核。</li>
+<li><strong>跨片补货耗时没量过</strong>：新机器 ramdisk 是空的，replicator 经 NFS（<code>/peers/N</code>）从别片同位置 peer 拉。192 芯片演练里这段混在 64–70 s 里。实验：删一片，单独计 peer 拉取时间，对比冷 GCS 约 450 s。</li>
+<li><strong>补货走哪块网卡没核</strong>：megascale 用 eth1／eth2 两个 DCN 接口；NFS 多半连节点 IP（eth0），若是则只用一张 200G 卡 <span class="tg inf">[推断]</span>。另外换 cube 配对补丁在片内 DP&gt;1（如 192 芯片演练的 DP4）时列能否配平也未核。</li>
+</ol>
+<p><strong>优先级</strong>：十条里风险最大的是第 6 条 RPO。补验证的顺序：整池掉电演练 → 删一片测补货 → 复现挂住再修。</p>
+<blockquote>
+<p>排序后的实验清单：<a href="08-open-problems.html">08</a>。</p>
+</blockquote>
+<details><summary>考考自己</summary>
+<p>MTC 把恢复时读检查点从约 450 s 降到约 8 s，为什么「pod 起来到第一步」仍要 28 min（原 37 min）？
+答：剩下的主要是编译（约 11 min）、首步（约 10 min）、数据初始化（约 3.5 min），都与检查点无关；这三段之外余下的约 3.5 min 没有分段计时。要靠 AOT/编译缓存和更快的数据恢复。</p>
+</details>
+</article><div class="srcline">源文件：<code>moe-public/topic/07-data-and-checkpointing.md</code></div><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="06-memory-remat-compile.html"><small>← 上一页</small>06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</a><a class="next" href="08-open-problems.html"><small>下一页 →</small>08 · 未解决问题：下一个集群的实验清单</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#1-数据加载逐元素对齐-gpumegatron-格式--共享内存索引">1. 数据加载逐元素对齐 GPU（Megatron 格式 + 共享内存索引）</a></li><li class="l3"><a href="#11-数据管线造成的怪现象">1.1 数据管线造成的「怪现象」</a></li><li class="l2"><a href="#2-数据位置写进检查点与-host-数解耦">2. 数据位置写进检查点（与 host 数解耦）</a></li><li class="l2"><a href="#3-存档不等最慢-host-建目录非阻塞保存">3. 存档不等最慢 host 建目录（非阻塞保存）</a></li><li class="l3"><a href="#31-按样本数存档时的另一处同步小号模型">3.1 按样本数存档时的另一处同步（小号模型）</a></li><li class="l2"><a href="#4-进程-0-存档慢问题两个候选根因">4. 进程 0 存档慢（问题：两个候选根因）</a></li><li class="l2"><a href="#5-多层检查点mtc本地-ramdisk--gcs">5. 多层检查点（MTC）：本地 ramdisk + GCS</a></li><li class="l2"><a href="#6-恢复演练大头是挂住不是读档">6. 恢复演练：大头是挂住，不是读档</a></li><li class="l3"><a href="#61-192-芯片演练各阶段耗时与挂住">6.1 192 芯片演练：各阶段耗时与挂住</a></li><li class="l3"><a href="#62-10-片带-mtc-的注入测试">6.2 10+ 片带 MTC 的注入测试</a></li><li class="l3"><a href="#63-同一套机制在生产上放大成整作业停摆">6.3 同一套机制在生产上放大成整作业停摆</a></li><li class="l3"><a href="#64-驱逐后重入tas-把子-job-撒到十几到二十个-cube">6.4 驱逐后重入：TAS 把子 Job 撒到十几到二十个 cube</a></li><li class="l2"><a href="#7-超时分层按检测顺序排逐个下调">7. 超时分层（按检测顺序排，逐个下调）</a></li><li class="l2"><a href="#8-exit-0不等于训练成功">8. 「exit 0」不等于训练成功</a></li><li class="l2"><a href="#9-硬件静默算错sdc检查点策略要防它">9. 硬件静默算错（SDC）：检查点策略要防它</a></li><li class="l2"><a href="#10-检查点格式转换几处静默退化">10. 检查点格式转换：几处静默退化</a></li><li class="l2"><a href="#11-gcs-429先画数据路径再谈配额">11. GCS 429：先画数据路径，再谈配额</a></li><li class="l2"><a href="#12-pathways-弹性训练试过没进生产">12. Pathways 弹性训练（试过，没进生产）</a></li><li class="l2"><a href="#13-还没解决的">13. 还没解决的</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">Google Cloud · TPU v7x 训练优化</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../../assets/site.js"></script>
+</body></html>

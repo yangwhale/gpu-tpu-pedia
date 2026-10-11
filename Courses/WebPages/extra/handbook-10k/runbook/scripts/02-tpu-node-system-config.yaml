@@ -1,0 +1,14 @@
+# 02-tpu-node-system-config.yaml —— TPU 节点池的 --system-config-from-file
+#   config.kubeletConfig.topologyManager {policy: best-effort, scope: container}
+#   config.linuxNodeConfig.transparentHugepageEnabled = TRANSPARENT_HUGEPAGE_ENABLED_ALWAYS
+# 键名与取值按公开参考 https://cloud.google.com/sdk/gcloud/reference/container/node-pools/create
+#   （kubeletConfig.topologyManager.policy/scope；linuxConfig.transparentHugepageEnabled）。
+# 实测各池这两项配置一样，可能是 GKE 对 tpu7x 的默认值 [推断]；显式写出无害。
+# 注意：公开文档的 NUMA 多容器方案还要 cpuManagerPolicy: static（Deploy TPU workloads in GKE Standard, Example 4），
+# 实测集群池没开（节点池配置快照里无该字段），这里也不开；要走「每 VM 2 容器 × google.com/tpu: 2」时再加。
+kubeletConfig:
+  topologyManager:
+    policy: best-effort
+    scope: container
+linuxConfig:
+  transparentHugepageEnabled: TRANSPARENT_HUGEPAGE_ENABLED_ALWAYS

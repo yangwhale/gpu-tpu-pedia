@@ -1,0 +1,1540 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>08 日常运维：监控、维护、升级、巡检、找谁、事故手册 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a class="on" aria-current="page" href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>08 日常运维：监控、维护、升级、巡检、找谁、事故手册</span></nav><nav class="lbar" aria-label="手册与讲义"><a class="on" aria-current="page" href="08-day2-operations.html">📘 手册</a><a href="../lectures/08-day2-operations.html">📝 讲义 · 19.75′</a><span class="lbar-tip">讲课的人看讲义，投屏放这一页</span></nav><article class="md"><h1 id="08-日常运维监控维护升级巡检找谁事故手册">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</h1>
+<blockquote>
+<p><strong>这一章要解决什么问题</strong>：交付后怎么天天跑——看什么信号、每天每周查什么、怎么分批维护和升级、出事翻哪本手册、做不动找谁。
+<strong>为什么难</strong>：平台侧告警不一定比你先发现问题；<strong>健康信号会说谎</strong>；维护和升级本身会打断切片。<strong>检测必须自己做。</strong></p>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>29</strong> 条告警（7 条首个生产任务前必须有）</li>
+<li><strong>7</strong> 种「看着健康」的假象</li>
+<li><strong>≥132</strong> 自触发维护每批之后的健康 cube 下限</li>
+<li><strong>306 s</strong> 日报完整 8 段跑一遍</li>
+<li><strong>A–G</strong> 7 本事故手册</li>
+</ul>
+</div>
+<blockquote>
+<p>变量：<code>source ~/runbook-env.sh &amp;&amp; rb_env_check PROJECT REGION ZONE CLUSTER RESERVATION</code>（全书唯一变量块 <a href="scripts/env.sh"><code>scripts/env.sh</code></a>）</p>
+<ul>
+<li>另用 <code>$BLOCK $NS $CLUSTER_QUEUE $CUBES_SLO $SPARE_CUBES $STATE_DIR</code>；<strong>集群是 zonal</strong>，一律 <code>--location=$ZONE</code>。</li>
+<li>脚本：<a href="scripts/08-alert-sources.yaml"><code>scripts/08-alert-sources.yaml</code></a>（29 条告警同号）、<a href="scripts/08-daily-check.sh"><code>scripts/08-daily-check.sh</code></a>；复用 <a href="scripts/05-triage-slice.sh"><code>05-triage-slice.sh</code></a>、<a href="scripts/05-isolate-cube.sh"><code>05-isolate-cube.sh</code></a>、<a href="scripts/05-delete-slice-chain.sh"><code>05-delete-slice-chain.sh</code></a>、<a href="scripts/05-avoid-manual-slices.py"><code>05-avoid-manual-slices.py</code></a>。</li>
+</ul>
+</blockquote>
+<hr />
+<p><a id="step-8-1"></a></p>
+<h2 id="81-监控与告警" class="hc0"><span class="hn">8.1</span>监控与告警</h2>
+<blockquote>
+<p>本节的告警是散装的。把它们收进一张看板、一套 BigQuery 模型的做法见 <a href="08b-observability.html">08b 可观测性</a>。</p>
+</blockquote>
+<h3 id="先记住健康信号会说谎">先记住：健康信号会说谎</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>看起来</th>
+<th>实际可能是</th>
+<th>为什么</th>
+<th>改看什么</th>
+<th>页</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>节点 Ready、partition HEALTHY、单片正常</td>
+<td>网卡 TX 队列复位，<strong>多片</strong>任务卡在首次跨片 all-reduce</td>
+<td>GVE 约 2 s 自愈</td>
+<td>串口日志（#8）</td>
+<td><a href="pitfalls.html#l-19">经验教训第 19 条</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td>sub-block <code>DEGRADED</code> =「坏了」</td>
+<td>SLO 把 DEGRADED <strong>算健康</strong>；K8s 标签却没有 DEGRADED</td>
+<td>节点标签只有 HEALTHY / UNHEALTHY；GCE 的 DEGRADED(15/15) 在 K8s 上是 UNHEALTHY</td>
+<td>两个数都报</td>
+<td><a href="pitfalls.html#l-48">经验教训第 48 条</a></td>
+</tr>
+<tr>
+<td>3</td>
+<td>整点前后一批 sub-block 翻 DEGRADED</td>
+<td>假的：<code>gcp_health_status</code> 每 4 h 在一批 sub-block 上翻 1–3 个采样</td>
+<td>未定位</td>
+<td><code>healthyHostCount</code> / <code>degradedInfraCount</code>，<strong>连续 ≥5 min</strong>（#2）</td>
+<td><a href="pitfalls.html#l-48">经验教训第 48 条</a></td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>kubectl get events</code> 里没有驱逐原因</td>
+<td>Event 被 RBAC 拒掉（<code>events is forbidden … in the namespace &quot;default&quot;</code>，多次打断共数十条）</td>
+<td>Kueue SA 缺权限</td>
+<td>Kueue 日志 <code>jsonPayload.reason</code>（#26、#29）</td>
+<td><a href="pitfalls.html#l-54">经验教训第 54 条</a></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Slice <code>Ready=Unknown</code> / <code>MMIGHealthProbeFailed</code></td>
+<td>GCE 读配额打满（429），旧版控制器把健康切片标 Unknown</td>
+<td>每 5 s 轮询每个 MIG/MMIG</td>
+<td>查 429（#7）</td>
+<td><a href="pitfalls.html#l-52">经验教训第 52 条</a></td>
+</tr>
+<tr>
+<td>6</td>
+<td>节点池 RUNNING / 预留 sub-block HEALTHY 16/16</td>
+<td>池里一台 unreachable；预留 HEALTHY 但 <code>FAILURE_INFRA</code> 维护中</td>
+<td><code>healthyHostCount</code> 不保证 VM 能落地；partition 标签最多滞后 20 min</td>
+<td>逐 cube 对账（§8.4）</td>
+<td><a href="pitfalls.html#l-48">经验教训第 48 条</a></td>
+</tr>
+<tr>
+<td>7</td>
+<td>JobSet <code>Completed</code></td>
+<td>0 步就退了：致命错误被包成 <code>StopTraining</code> 后 exit 0</td>
+<td>—</td>
+<td>step 数与检查点数（#17）</td>
+<td><a href="pitfalls.html#l-44">经验教训第 44 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>判据</strong>：</p>
+<figure class="mermaid"><img src="../assets/mermaid/b2706bb2ff3a.png" width="717" alt="示意图" loading="lazy"></figure><p>读图：单一信号都不能判好 <span class="src" tabindex="0">源<span class="srci">组合方式为推断</span></span>。</p>
+<h3 id="告警总表">告警总表</h3>
+<ul>
+<li><strong>加粗</strong> 7 条 = 首个生产任务前必须有；<strong>★</strong> 3 条 = 恢复测试漏看、代价以小时计 <span class="tg inf">[推断]</span>。阈值是起点，前两周调。</li>
+<li>数据源：<strong>K</strong> kubectl、<strong>P</strong> PromQL、<strong>L</strong> Cloud Logging、<strong>G</strong> gcloud 轮询；查询与前提（串口日志先开、<code>:8443</code> 抓取）见 <code>08-alert-sources.yaml</code> 同号条目，「日报」= <code>08-daily-check.sh</code> 已覆盖。怎么建成策略见下文「把 10 条必备告警建成策略」。<a href="00-overview.html#g-mig">MMIG</a>、<a href="00-overview.html#g-hdb">HDB</a> 见术语表。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>信号</th>
+<th>数据源</th>
+<th>阈值</th>
+<th>动作</th>
+<th>页</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td>健康 cube 数</td>
+<td>K 日报；<code>08-daily-check.sh --probe</code> 每 5–10 min（退出码 2 page、1 通知）</td>
+<td>&lt; SLO 线+2 持续 10 min 通知；&lt; SLO 线 page</td>
+<td>§8.6-A</td>
+<td><a href="pitfalls.html#l-3">经验教训第 3 条</a>、<a href="pitfalls.html#l-33">经验教训第 33 条</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td>sub-block <code>healthyHostCount</code> / <code>degradedInfraCount</code> 变化</td>
+<td>G 每 5 min 存一份做 diff</td>
+<td>同一行连续 2 次不同；<strong>忽略</strong> <code>gcp_health_status</code></td>
+<td>对到 cube → §8.6-A</td>
+<td><a href="pitfalls.html#l-48">经验教训第 48 条</a></td>
+</tr>
+<tr>
+<td>3</td>
+<td>全 pod 同时变状态</td>
+<td>L 节点 patch 审计</td>
+<td>10 min 内 ≥20 cube</td>
+<td>当一个事件：§8.6-F</td>
+<td><a href="pitfalls.html#l-49">经验教训第 49 条</a></td>
+</tr>
+<tr>
+<td><strong>4</strong></td>
+<td>Slice 停在 ACTIVATING / DEACTIVATING / INCOMPLETE</td>
+<td>P <code>accelerator_slice_state</code>；K 日报</td>
+<td>DEACTIVATING / INCOMPLETE &gt; 15 min page（正常 p50 33 s）；ACTIVATING &gt; 15 min 通知，&gt; 60 min page；<strong><code>ACTIVE_DEGRADED</code> 任意一次即通知</strong>（实测从不回到 ACTIVE，见 05 §5.6）</td>
+<td>§8.6-B</td>
+<td><a href="pitfalls.html#l-39">经验教训第 39 条</a>、<a href="pitfalls.html#l-35">经验教训第 35 条</a></td>
+</tr>
+<tr>
+<td><strong>5</strong></td>
+<td>Slice <code>Ready=Unknown</code> / <code>MMIGHealthProbeFailed</code></td>
+<td>K；L slice-controller-system</td>
+<td>&gt; 10 min</td>
+<td>§8.6-G，<strong>别批量删</strong></td>
+<td><a href="pitfalls.html#l-52">经验教训第 52 条</a></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Slice FAILED 且 Workload 没被驱逐</td>
+<td>P / K 日报</td>
+<td>&gt; 10 min</td>
+<td>删 JobSet 重提（05 §5.6）</td>
+<td><a href="pitfalls.html#l-39">经验教训第 39 条</a></td>
+</tr>
+<tr>
+<td>7</td>
+<td>GCE API 429、读配额 / multi-MIG 配额用量</td>
+<td>P serviceruntime</td>
+<td>429 持续 5 min；用量 &gt; 70%</td>
+<td>§8.6-G</td>
+<td><a href="pitfalls.html#l-52">经验教训第 52 条</a>、<a href="pitfalls.html#l-5">经验教训第 5 条</a></td>
+</tr>
+<tr>
+<td><strong>8</strong></td>
+<td>串口 <code>NETDEV WATCHDOG</code> / <code>gve … Performing reset</code></td>
+<td>L 串口日志（要先开）</td>
+<td>任意一次</td>
+<td>§8.6-E</td>
+<td><a href="pitfalls.html#l-19">经验教训第 19 条</a></td>
+</tr>
+<tr>
+<td><strong>9</strong></td>
+<td>Ready 节点 <code>google.com/tpu</code> ≠ 4 或带 TPU_UNALLOCATABLE taint</td>
+<td>K 日报</td>
+<td>&gt; 10 min</td>
+<td>查 device plugin；持续则隔离 cube</td>
+<td><a href="pitfalls.html#l-11">经验教训第 11 条</a></td>
+</tr>
+<tr>
+<td>10</td>
+<td>节点 Ready+HEALTHY 却 <code>unschedulable</code></td>
+<td>K 日报</td>
+<td>&gt; 30 min</td>
+<td>查谁 cordon 的</td>
+<td><a href="pitfalls.html#l-50">经验教训第 50 条</a></td>
+</tr>
+<tr>
+<td>11</td>
+<td>GCE 实例 REPAIRING、自动修复次数</td>
+<td>G 日报 / P</td>
+<td>REPAIRING &gt; 1 h；每池每天 &gt; 5 次；&gt; 12 h 升级</td>
+<td>§8.5「维修卡住」</td>
+<td><a href="pitfalls.html#l-3">经验教训第 3 条</a></td>
+</tr>
+<tr>
+<td>12</td>
+<td>缺 partition-id / topology / chip-ids 标签，或某 partition 下 ≠16 节点</td>
+<td>K 日报</td>
+<td>任意</td>
+<td>找 Google 要 relabel</td>
+<td><a href="pitfalls.html#l-50">经验教训第 50 条</a></td>
+</tr>
+<tr>
+<td><strong>13</strong></td>
+<td>Kueue / kueue-slice-controller / JobSet 重启、OOM、NotReady</td>
+<td>P <code>container_restart_count</code></td>
+<td>任意</td>
+<td>看日志</td>
+<td><a href="pitfalls.html#l-28">经验教训第 28 条</a></td>
+</tr>
+<tr>
+<td>14</td>
+<td>Workload 已准入却没 Slice；或 Pending 且 excluded = 全部节点</td>
+<td>K</td>
+<td>&gt; 15 min</td>
+<td>多半手工片：§8.6-B</td>
+<td><a href="pitfalls.html#l-33">经验教训第 33 条</a></td>
+</tr>
+<tr>
+<td>15</td>
+<td>泄漏对象：孤儿 Slice、悬空 <code>multiMig</code>、卡 Terminating 的 pod</td>
+<td>K；<code>05-delete-slice-chain.sh --scan-orphans</code></td>
+<td>夜间发现即报</td>
+<td>按经验教训第 40 条顺序清</td>
+<td><a href="pitfalls.html#l-40">经验教训第 40 条</a>、<a href="pitfalls.html#l-41">经验教训第 41 条</a></td>
+</tr>
+<tr>
+<td>16</td>
+<td>节点池 PROVISIONING / RECONCILING</td>
+<td>G 日报</td>
+<td>&gt; 45 min</td>
+<td>15/16 流程</td>
+<td><a href="pitfalls.html#l-9">经验教训第 9 条</a></td>
+</tr>
+<tr>
+<td><strong>17</strong></td>
+<td>训练 N 分钟无新 step；Completed 但 0 步</td>
+<td>L 容器日志（<strong><code>textPayload</code> 或 <code>jsonPayload.message</code></strong>，只拉前者全漏）</td>
+<td>N = 2×(step+检查点耗时)；<strong>第一条 <code>completed step:</code> 后才上膛</strong>（或 pod 起来 60 min 后）：实测到 step 0 要四十多分钟（<a href="06c-multislice-training.html#step-6-6-judge">06c §6.6</a>）</td>
+<td>§8.6-C</td>
+<td><a href="pitfalls.html#l-44">经验教训第 44 条</a></td>
+</tr>
+<tr>
+<td>18</td>
+<td>一片 / 一台 host 掉队</td>
+<td>P tensorcore 利用率、collective 延迟；每周 soak</td>
+<td><strong>按功耗档分开</strong>（见下）</td>
+<td>先取证再重建 JobSet</td>
+<td><a href="pitfalls.html#l-45">经验教训第 45 条</a></td>
+</tr>
+<tr>
+<td>19</td>
+<td>每个整 pod（144 cube 整池）每天中断次数（按原因分类）</td>
+<td>P <code>node_interruption_count</code></td>
+<td>&gt; 2（目标约 1.2）</td>
+<td>周报里看趋势</td>
+<td>—</td>
+</tr>
+<tr>
+<td>20</td>
+<td>维护 scheduled / started / completed</td>
+<td>L 审计</td>
+<td>任意（通知）</td>
+<td>§8.2</td>
+<td><a href="pitfalls.html#l-51">经验教训第 51 条</a></td>
+</tr>
+<tr>
+<td>21</td>
+<td>节点注册 CSR <code>AutoDenied</code></td>
+<td>K</td>
+<td>任意</td>
+<td>找 Google</td>
+<td><a href="pitfalls.html#l-41">经验教训第 41 条</a></td>
+</tr>
+<tr>
+<td>22</td>
+<td>集群 pod 总数 / apiserver 5xx</td>
+<td>P / K 日报</td>
+<td>&gt; 100k（上限 200k）</td>
+<td>删完成态 pod，补 <code>ttlSecondsAfterFinished</code></td>
+<td><a href="pitfalls.html#l-53">经验教训第 53 条</a></td>
+</tr>
+<tr>
+<td>23</td>
+<td>tpu-device-plugin / vbar-control-agent 重启</td>
+<td>P</td>
+<td>1 h 内 &gt; 1% 节点</td>
+<td>多半是控制面升级：§8.3</td>
+<td><a href="pitfalls.html#l-51">经验教训第 51 条</a></td>
+</tr>
+<tr>
+<td>24</td>
+<td>Released PV / HDB 配额用量</td>
+<td>P / G</td>
+<td>&gt; 80%</td>
+<td>清 PV；提配额</td>
+<td><a href="pitfalls.html#l-5">经验教训第 5 条</a>、<a href="pitfalls.html#l-21">经验教训第 21 条</a></td>
+</tr>
+<tr>
+<td>25★</td>
+<td>TPU 节点 <code>NodeHasDiskPressure</code> / <code>EvictionThresholdMet</code></td>
+<td>L <code>log_id(&quot;events&quot;)</code>；K events</td>
+<td>任意一次</td>
+<td>§8.6-D</td>
+<td><a href="pitfalls.html#l-42">经验教训第 42 条</a></td>
+</tr>
+<tr>
+<td>26★</td>
+<td>Kueue 驱逐（<code>EvictedDueToNodeFailures</code> / <code>…AdmissionCheck</code> / Preempted）</td>
+<td>L kueue-system <code>jsonPayload.reason</code>；K 日报（24 h 计数）</td>
+<td>通知；同一 Workload 1 h 内 ≥3 次 page <span class="tg inf">[推断]</span></td>
+<td>按 reason 走 §8.6-A / D</td>
+<td><a href="pitfalls.html#l-54">经验教训第 54 条</a></td>
+</tr>
+<tr>
+<td>27★</td>
+<td>一片的 pod 撒到多个 cube（<code>conflicting rank</code>）</td>
+<td>L kueue-system <code>jsonPayload.error</code>；K 分区一致性检查</td>
+<td>任意一次</td>
+<td>§8.6-C（别等 12 min 超时）</td>
+<td><a href="pitfalls.html#l-42">经验教训第 42 条</a></td>
+</tr>
+<tr>
+<td>28</td>
+<td>手工 Slice（无 owner 注解）存在</td>
+<td>K 日报</td>
+<td>存在 &gt; 24 h 或与 Kueue 任务共用 cube <span class="tg inf">[推断]</span></td>
+<td>找主人删；提交加避让</td>
+<td><a href="pitfalls.html#l-33">经验教训第 33 条</a></td>
+</tr>
+<tr>
+<td>29</td>
+<td>Kueue 写 Event 被拒（<code>events is forbidden</code>）</td>
+<td>L；<code>kubectl auth can-i</code></td>
+<td>任意</td>
+<td>补 RBAC，之后留作回归告警</td>
+<td><a href="pitfalls.html#l-54">经验教训第 54 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>指标名</strong>出自 [https://cloud.google.com/monitoring/api/metrics_kubernetes]、[https://cloud.google.com/kubernetes-engine/docs/how-to/tpus]、[https://cloud.google.com/kubernetes-engine/docs/how-to/kube-state-metrics]；PromQL 名 <code>kubernetes.io/node_pool/status</code> → <code>kubernetes_io:node_pool_status</code>。<strong>GKE 系统指标比 kubectl 慢 2–3 min</strong>（每 60 s 采样、最多 120 s 可见）。</p>
+<blockquote class="co data">
+<p><span class="co-t"><i>📊</i><span>实测</span></span>29 条各跑一次，三类问题 yaml 已改：</p>
+<ol>
+<li><strong><code>kube_*</code> 整类无数据</strong>（托管 kube-state-metrics OOM），#13 和 #17 的备用查询（yaml 里的 <code>alt</code>）、#22、#24 永不报 → 加 <code>absent()</code> 元告警，限额找 Google 调。</li>
+<li><strong><code>min_over_time(x[15m]) == 1</code> 一个样本就成立</strong> → #4 / #6 / #16 已加 <code>count_over_time(...) &gt;= 14</code>。</li>
+<li><strong>k8s_node 无 <code>node_pool_name</code> 标签</strong>：#11 的备用查询和 #18 塌成一条全集群序列。</li>
+</ol>
+</blockquote>
+<h3 id="把-10-条必备告警建成策略未实测">把 10 条必备告警建成策略（未实测）</h3>
+<p>加粗 7 条 + ★ 3 条的建法。<strong>下面的模板没在任何集群上建过</strong>，上线前先在测试项目建一条看能否触发。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>建法</th>
+<th>负责人（角色）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1、9</td>
+<td>不建策略：<code>08-daily-check.sh --probe</code> / 完整版挂 cron，退出码接通知</td>
+<td>使用方 SRE</td>
+</tr>
+<tr>
+<td>5</td>
+<td>同上（kubectl 主路）；或用 yaml 里的 <code>alt</code> 日志过滤器走下方模板 B</td>
+<td>使用方 SRE</td>
+</tr>
+<tr>
+<td>4、13</td>
+<td>模板 A（PromQL）</td>
+<td>使用方 SRE 建，查询从 yaml 抄</td>
+</tr>
+<tr>
+<td>8、25、26、27</td>
+<td>模板 B（日志匹配）</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>17</td>
+<td>先 <code>gcloud logging metrics create</code> 建计数指标，再建「N 分钟无数据」策略；上膛条件（第一条 <code>completed step:</code> 后）策略本身做不到，要人工启用或按 JobSet 分建 <span class="tg inf">[推断]</span></td>
+<td>同上</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>工时没估：要使用方 SRE 按上表自己估，排期见 09。</li>
+<li>查询原文一律从 <code>08-alert-sources.yaml</code> 同号条目的 <code>primary</code> 抄，<code>$CLUSTER</code> / <code>$PROJECT</code> / <code>$NS</code> 换成真值。</li>
+</ul>
+<p>模板 A（PromQL 条件，以 #4 page 为例）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="c1"># alert-04.yaml —— 未实测</span>
+<span class="nt">displayName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;#4</span><span class="nv"> </span><span class="s">Slice</span><span class="nv"> </span><span class="s">DEACTIVATING/INCOMPLETE</span><span class="nv"> </span><span class="s">&gt;</span><span class="nv"> </span><span class="s">15m&quot;</span>
+<span class="nt">combiner</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OR</span>
+<span class="nt">conditions</span><span class="p">:</span>
+<span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">displayName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;#4</span><span class="nv"> </span><span class="s">page&quot;</span>
+<span class="w">  </span><span class="nt">conditionPrometheusQueryLanguage</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">query</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">      </span><span class="no">&lt;08-alert-sources.yaml id: 4 primary.query 原文&gt;</span>
+<span class="w">    </span><span class="nt">evaluationInterval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span><span class="w">       </span><span class="c1"># 须为 30 s 的倍数</span>
+<span class="nt">notificationChannels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;&lt;通知渠道全名，见下&gt;&quot;</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<p>模板 B（日志匹配，以 #25 为例）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="c1"># alert-25.yaml —— 未实测</span>
+<span class="nt">displayName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;#25</span><span class="nv"> </span><span class="s">DiskPressure&quot;</span>
+<span class="nt">combiner</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OR</span>
+<span class="nt">conditions</span><span class="p">:</span>
+<span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">displayName</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;#25&quot;</span>
+<span class="w">  </span><span class="nt">conditionMatchedLog</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">filter</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<span class="w">      </span><span class="no">&lt;08-alert-sources.yaml id: 25 primary.filter 原文&gt;</span>
+<span class="nt">alertStrategy</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">notificationRateLimit</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">period</span><span class="p">:</span><span class="w"> </span><span class="nv">300s</span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># 日志型策略必填</span>
+<span class="nt">notificationChannels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;&lt;通知渠道全名&gt;&quot;</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<div class="code"><span class="lang">bash</span><pre><code>gcloud<span class="w"> </span>beta<span class="w"> </span>monitoring<span class="w"> </span>channels<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(name,displayName)&#39;</span><span class="w">   </span><span class="c1"># 渠道全名；本地 gcloud 里 channels 只有 alpha/beta</span>
+gcloud<span class="w"> </span>monitoring<span class="w"> </span>policies<span class="w"> </span>create<span class="w"> </span>--policy-from-file<span class="o">=</span>alert-04.yaml<span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span>
+gcloud<span class="w"> </span>monitoring<span class="w"> </span>policies<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(displayName,enabled)&#39;</span><span class="w">    </span><span class="c1"># 验证</span>
+</code></pre></div>
+<ul>
+<li>字段名核过 alertPolicies REST 参考 [https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.alertPolicies]；<code>policies create --policy-from-file</code> 在本地 gcloud <code>--help</code> 里有。<strong>能否建成、能否触发都未实测。</strong></li>
+<li><strong>回滚</strong>：<code>gcloud monitoring policies delete &lt;策略名&gt; --project=$PROJECT</code>。</li>
+</ul>
+<h3 id="掉队阈值要按功耗档分开">掉队阈值要按功耗档分开</h3>
+<p>默认档和 P7 的跨 host 离散差一个数量级（同一批 host 上默认档、P7 交替跑的 ABBA 对照）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>功耗档</th>
+<th>跨 host 极差 =（最高 − 最低）÷ 中位，单次运行；括号里是两次运行合起来的 min–max（bf16 N=32768，折算每芯片）</th>
+<th>逐 host 固定吗</th>
+<th>建议判据 <span class="tg inf">[推断]</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>默认（P3）</td>
+<td>4x4x4 0.7%（1,802–1,815）；4x8x8 0.8%（1,802–1,817）</td>
+<td>否（噪声）</td>
+<td>低于同片中位 <strong>&gt; 2%</strong> 疑似掉队</td>
+</tr>
+<tr>
+<td>P7（<code>--xla_tpu_dvfs_p_state=7</code>）</td>
+<td>4x4x4 <strong>约 6%</strong>（1,821–1,926）；4x8x8 <strong>约 7%</strong>（1,808–1,939）</td>
+<td><strong>是</strong>：两次逐 host 相关 1.00 / 0.999</td>
+<td>和这台自己的 P7 基线比，偏离 &gt; 2% 报；跨 host 只报 &gt; 8%</td>
+</tr>
+<tr>
+<td>P7 下的 fp8</td>
+<td>不到 2%，两次相关 −0.26 / −0.14</td>
+<td>否</td>
+<td>同默认档</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>P7 离散大：满载时被功耗 / 散热顶住，每台涨幅固定；最慢那台（4x8x8、bf16 N=32768，同一台 host 自比）P7 1,808 vs 默认 1,807；两种模式各取最慢 host 相比（1,802 → 1,808）的话，比的不是同一台 <span class="src" tabindex="0">源<span class="srci">「功耗顶住」为推断</span></span>。</li>
+<li>片级掉队：拖后腿那片 collective 延迟<strong>最低</strong>、duty cycle <strong>最高</strong>（按片看这两项找慢片，见<a href="pitfalls.html#l-45">经验教训第 45 条</a>）。准入、周期测、在岗发现到送修的整条流程见 <a href="08a-slow-node-sop.html">08a 慢节点标准流程</a>。</li>
+<li>训练中只有分钟级 <code>tensorcore_utilization</code> 和 <code>container/multislice/*</code> 延迟；逐 host 靠每周 soak（<a href="scripts/04-bench/c1_chip_bench.py"><code>04-bench/c1_chip_bench.py</code></a>，P7 阈值见 <a href="scripts/04-bench/thresholds.csv"><code>thresholds.csv</code></a>）。容器内读不到功耗 / 频率 / 温度（vfio，<code>tpu_throttle_score</code> 为空）。</li>
+</ul>
+<h3 id="要存的-cloud-logging-查询">要存的 Cloud Logging 查询</h3>
+<p><strong>纪律</strong>（恢复测试复盘换来的）</p>
+<figure class="mermaid"><img src="../assets/mermaid/3204ed0a4751.png" width="453" alt="示意图" loading="lazy"></figure><p>读图：退出码 0 ≠ 拉全。查询都带 <code>resource.labels.cluster_name</code> 和 <code>resource.type</code>，否则太慢。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>用途</th>
+<th>过滤器</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Q1</td>
+<td>训练容器日志（按 JobSet，每 replica 的 worker-X-0）</td>
+<td><code>resource.type=&quot;k8s_container&quot; AND resource.labels.container_name=&quot;jax-tpu&quot; AND resource.labels.pod_name=~&quot;^&lt;JOBSET&gt;-worker-[0-9]+-0-&quot; AND timestamp&gt;=&quot;&lt;T0&gt;&quot; AND timestamp&lt;&quot;&lt;T1&gt;&quot;</code></td>
+<td><strong>复盘原样跑通</strong>（日志按时间窗分段拉、核对首末时间戳，见<a href="pitfalls.html#l-54">经验教训第 54 条</a>）</td>
+</tr>
+<tr>
+<td>Q2</td>
+<td>全部 pod 的关键行</td>
+<td>Q1 去掉 <code>-0-</code> 限定，加 <code>(textPayload=~&quot;&lt;K&gt;&quot; OR jsonPayload.message=~&quot;&lt;K&gt;&quot;)</code>，K = <code>TPU initialization|barrier|completed step|Traceback|SIGTERM|restore|…</code></td>
+<td><strong>复盘原样跑通</strong>（K 全文见表下）</td>
+</tr>
+<tr>
+<td>Q3</td>
+<td>Kueue 驱逐原因</td>
+<td><code>resource.type=&quot;k8s_container&quot; resource.labels.cluster_name=&quot;$CLUSTER&quot; resource.labels.namespace_name=&quot;kueue-system&quot; resource.labels.container_name=&quot;manager&quot; jsonPayload.reason=~&quot;^Evicted&quot;</code></td>
+<td>字段名与复盘时导出的驱逐日志核对过；过滤器原文未留存</td>
+</tr>
+<tr>
+<td>Q4</td>
+<td>Kueue rank 冲突</td>
+<td>同 Q3 前三项 + <code>jsonPayload.error:&quot;conflicting rank&quot;</code></td>
+<td>字段名与复盘时导出的 Kueue 日志核对过（报错来自 <code>tas/topology_ungater.go</code>）</td>
+</tr>
+<tr>
+<td>Q5</td>
+<td>Kueue Event 被拒</td>
+<td>同 Q3 前三项 + <code>jsonPayload.message:&quot;events is forbidden&quot;</code></td>
+<td>字段名与复盘时导出的驱逐日志核对过</td>
+</tr>
+<tr>
+<td>Q6</td>
+<td>kueue-slice-controller 日志</td>
+<td><code>resource.type=&quot;k8s_container&quot; resource.labels.cluster_name=&quot;$CLUSTER&quot; resource.labels.namespace_name=&quot;slice-controller-system&quot; resource.labels.container_name=&quot;manager&quot;</code>（再加 <code>&quot;&lt;slice 名&gt;&quot;</code> 全文）</td>
+<td>资源标签与复盘时导出的切片控制器日志核对过</td>
+</tr>
+<tr>
+<td>Q7</td>
+<td>节点事件（DiskPressure、NotReady…）</td>
+<td><code>log_id(&quot;events&quot;) resource.labels.cluster_name=&quot;$CLUSTER&quot; jsonPayload.reason=(&quot;NodeHasDiskPressure&quot; OR &quot;EvictionThresholdMet&quot; OR &quot;NodeNotReady&quot; OR &quot;KernelDeadlock&quot; OR &quot;ReadonlyFilesystem&quot;)</code></td>
+<td>reason 取自复盘时导出的节点事件；写法</td>
+</tr>
+<tr>
+<td>Q8</td>
+<td>谁停 / 删了 VM</td>
+<td>注 1</td>
+<td>注 1</td>
+</tr>
+<tr>
+<td>Q9</td>
+<td>切片审计（谁建 / 删了它）</td>
+<td><code>protoPayload.resourceName:&quot;accelerator.gke.io/v1beta1/slices/&lt;name&gt;&quot;</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Q10</td>
+<td>partition 状态历史</td>
+<td>审计 <code>protoPayload.methodName=&quot;io.k8s.core.v1.nodes.patch&quot;</code>，读 <code>protoPayload.response.metadata.labels.&quot;cloud.google.com/gke-tpu-partition-4x4x4-state&quot;</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Q11</td>
+<td>缺货</td>
+<td>注 2</td>
+<td></td>
+</tr>
+<tr>
+<td>Q12</td>
+<td>维护</td>
+<td><code>protoPayload.methodName=&quot;compute.reservations.CAPACITY_COMPONENT.startGroupMaintenance&quot;</code>（另有 <code>upcoming…</code> / <code>completed…</code>；CAPACITY_COMPONENT = <code>reservations</code> | <code>reservations.blocks</code> | <code>reservations.blocks.subblocks</code>）</td>
+<td></td>
+</tr>
+<tr>
+<td>Q13</td>
+<td>MMIG detach 审计</td>
+<td><code>resource.type=&quot;gce_instance_group_manager&quot; protoPayload.methodName=&quot;v1.compute.instanceGroupManagers.patch&quot; protoPayload.request.multiMig=&quot;&quot;</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Q14</td>
+<td>GKE 托管 slice controller</td>
+<td><code>logName=&quot;projects/$PROJECT/logs/slice-controller&quot; AND textPayload=~&quot;&lt;slice&gt;&quot;</code></td>
+<td>官方指南写法；使用方项目能否查到 <span class="tg inf">[需验证]</span></td>
+</tr>
+</tbody>
+</table></div>
+<p>Q2 的 K 全文（复盘时原样用过的，按需增删）。<code>Restor</code>、<code>oordination</code> 这种半截词是有意的：子串匹配能同时命中 Restore / Restoring、Coordination / coordination。</p>
+<div class="code"><span class="lang">text</span><pre><code>(TPU backend|TPU initialization|barrier|Barrier|restore|Restor|completed step|heartbeat|unhealthy|fatal|Terminating|replicator|Traceback|Error|MTC|Found a|signal|SIGTERM|preempt|oordination|Aborted|train.py_initialize|jax.devices|Total memory|checkpoint)
+</code></pre></div>
+<ul>
+<li>注 1（Q8，查谁停 / 删了 VM）：实测审计日志里删 VM 的 methodName 是 <code>v1.compute.instances.delete</code>；下面用 <code>:</code> 做子串匹配、一次查删 / 停 / 模拟维护三种，这个写法没跑过 <span class="tg inf">[推断]</span>：</li>
+</ul>
+<div class="code"><span class="lang">text</span><pre><code>log_id(&quot;cloudaudit.googleapis.com/activity&quot;) resource.type=&quot;gce_instance&quot; protoPayload.methodName:(&quot;instances.delete&quot; OR &quot;instances.stop&quot; OR &quot;simulateMaintenanceEvent&quot;)
+</code></pre></div>
+<ul>
+<li>注 2（Q11，查缺货：建 / 改节点池时报 <code>TPU_OUT_OF_RESOURCES_RESERVATION</code>）：</li>
+</ul>
+<div class="code"><span class="lang">text</span><pre><code>log_id(&quot;cloudaudit.googleapis.com/activity&quot;) resource.type=&quot;k8s_node&quot; resource.labels.cluster_name=&quot;$CLUSTER&quot; protoPayload.methodName:(&quot;CreateNodePool&quot; OR &quot;UpdateNodePool&quot;) protoPayload.status.message:&quot;TPU_OUT_OF_RESOURCES_RESERVATION&quot;
+</code></pre></div>
+<div class="kp kc0"><div class="kp-t">指标包要开</div>
+<ul>
+<li>实测集群<strong>没开 <code>API_SERVER</code></strong>（告警 #22 要）；<strong><code>--monitoring</code> 给的是全集，会覆盖原设置</strong> [https://cloud.google.com/kubernetes-engine/docs/how-to/configure-metrics]：</li>
+</ul></div>
+<div class="code"><span class="lang">bash</span><pre><code>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>describe<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;value(monitoringConfig.componentConfig.enableComponents)&#39;</span><span class="w">   </span><span class="c1"># 先抄下现值</span>
+gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--enable-managed-prometheus<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--monitoring<span class="o">=</span>SYSTEM,API_SERVER,STORAGE,HPA,POD,DAEMONSET,DEPLOYMENT,STATEFULSET,CADVISOR,KUBELET,JOBSET
+</code></pre></div>
+<ul>
+<li><strong>验证</strong>：再 describe 多了 API server 项（<code>SYSTEM</code> 显示为 <code>SYSTEM_COMPONENTS</code>）；查得到 <code>apiserver_request_total</code>。<strong>幂等</strong>。<strong>回滚</strong>：用抄下的原值再 update。</li>
+</ul>
+<p><strong>可用信号的全集</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>信号</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GKE 系统指标</td>
+<td><code>accelerator/slice/{state,formation_durations,deformation_durations}</code>、<code>accelerator/partition/state</code>、<code>jobset/assigned_slices</code></td>
+</tr>
+<tr>
+<td>kueue-slice-controller</td>
+<td><code>tpu_ac_*</code>（只有名字没有语义）</td>
+</tr>
+<tr>
+<td>ML Diagnostics</td>
+<td>GKE ≥1.36.0-gke.4447000 自动开（实测集群 <code>managedMachineLearningDiagnosticsConfig.enabled: true</code>）</td>
+</tr>
+<tr>
+<td>Google 侧 SLO 告警</td>
+<td><strong>使用方看不到</strong>，自己盯 formation/deformation 时长</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>监控本身也会弄坏 TPU</strong></p>
+<figure class="mermaid"><img src="../assets/mermaid/72cec7328910.png" width="766" alt="示意图" loading="lazy"></figure><p>读图：轮询<strong>间隔 ≥30 s</strong>；<strong>列表失败不能当空</strong>（先例：大集群的 pod 列表超时，一批任务被误报为 Stalled）。</p>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-48">健康信号各说各话</a> · <a href="pitfalls.html#l-19">主机网卡反复重置</a> · <a href="pitfalls.html#l-52">GCE 读配额被打满</a> · <a href="pitfalls.html#l-42">core dump 撑满启动盘被驱逐</a> · <a href="pitfalls.html#l-11">组件版本低于下限</a> · <a href="pitfalls.html#l-53">控制面容量</a> · <a href="pitfalls.html#l-41">泄漏与孤儿对象静默吃容量</a> · <a href="pitfalls.html#l-40">删除卡住</a> · <a href="pitfalls.html#l-21">存储类型与持久卷</a> · <a href="pitfalls.html#l-44">训练挂住不报错</a> · <a href="pitfalls.html#l-45">一片慢拖全局</a> · <a href="pitfalls.html#l-50">修回的主机又坏 / 标签丢失</a> · <a href="pitfalls.html#l-35">切片激活慢或超时</a> · <a href="pitfalls.html#l-54">可观测性盲区</a> · <a href="pitfalls.html#l-25">从检查点恢复后变慢（premap）</a> · <a href="pitfalls.html#l-56">性能对比结论站不住</a></p>
+</blockquote>
+<p><a id="step-8-2"></a></p>
+<h2 id="82-主机维护" class="hc1"><span class="hn">8.2</span>主机维护</h2>
+<p><a href="00-overview.html#g-ctm">自触发维护</a> = 自己分批触发维护。两类（<a href="00-overview.html#g-grouped">GROUPED</a> = 分组维护）：</p>
+<figure class="mermaid"><img src="../assets/mermaid/233b8b19d2d7.png" width="994" alt="示意图" loading="lazy"></figure><ul>
+<li>计划外维护（<code>maintenanceReasons: [FAILURE_INFRA]</code>）期间，sub-block 上可能还跑着任务。部分主机侧 bug 修复<strong>只能靠自触发维护生效</strong>，分组维护别拖到强制执行。</li>
+</ul>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>GKE 维护例外<strong>挡不住</strong> GCE 主机维护；<strong>不要</strong>用节点上的 <code>perform-maintenance</code> 标签。</span></span></p>
+</blockquote>
+<p><strong>列出待办维护</strong>（只读；字段路径取自快照）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># reservation 级 / block 级：总计数 + upcomingGroupMaintenance</span>
+gcloud<span class="w"> </span>compute<span class="w"> </span>reservations<span class="w"> </span>describe<span class="w"> </span><span class="nv">$RESERVATION</span><span class="w"> </span>--zone<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;yaml(resourceStatus.reservationMaintenance)&#39;</span>
+gcloud<span class="w"> </span>compute<span class="w"> </span>reservations<span class="w"> </span>blocks<span class="w"> </span>describe<span class="w"> </span><span class="nv">$RESERVATION</span><span class="w"> </span>--block-name<span class="w"> </span><span class="nv">$BLOCK</span><span class="w"> </span>--zone<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;yaml(resource.reservationMaintenance)&#39;</span><span class="w">   </span><span class="c1"># describe 输出外包一层 resource:，旧写法实测输出 null</span>
+<span class="c1"># sub-block 级：一行一个，看哪些能自己触发（sub-block 的字段叫 reservationSubBlockMaintenance）</span>
+<span class="nv">M</span><span class="o">=</span>reservationSubBlockMaintenance
+gcloud<span class="w"> </span>compute<span class="w"> </span>reservations<span class="w"> </span>sub-blocks<span class="w"> </span>list<span class="w"> </span><span class="nv">$RESERVATION</span><span class="w"> </span>--block-name<span class="w"> </span><span class="nv">$BLOCK</span><span class="w"> </span>--zone<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--format<span class="o">=</span><span class="s2">&quot;table(name.basename(),</span><span class="nv">$M</span><span class="s2">.upcomingGroupMaintenance.maintenanceStatus:label=STATUS,</span><span class="nv">$M</span><span class="s2">.upcomingGroupMaintenance.type:label=TYPE,</span><span class="nv">$M</span><span class="s2">.upcomingGroupMaintenance.canReschedule:label=CAN_TRIGGER,</span><span class="nv">$M</span><span class="s2">.upcomingGroupMaintenance.windowStartTime:label=WINDOW_START,</span><span class="nv">$M</span><span class="s2">.maintenancePendingCount:label=PENDING,</span><span class="nv">$M</span><span class="s2">.maintenanceOngoingCount:label=ONGOING)&quot;</span>
+<span class="c1"># VM 级（单台）</span>
+<span class="nv">VM</span><span class="o">=</span>&lt;VM<span class="w"> </span>名&gt;<span class="w">     </span><span class="c1"># = TPU 节点名（GKE 节点名就是 GCE 实例名）：kubectl get nodes -l cloud.google.com/gke-tpu-accelerator=tpu7x</span>
+gcloud<span class="w"> </span>compute<span class="w"> </span>instances<span class="w"> </span>describe<span class="w"> </span><span class="nv">$VM</span><span class="w"> </span>--zone<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--format<span class="o">=</span><span class="s1">&#39;yaml(resourceStatus.upcomingMaintenance)&#39;</span>
+</code></pre></div>
+<ul>
+<li>
+<p><strong>读法</strong>：<code>STATUS=PENDING</code> 且 <code>CAN_TRIGGER=True</code> 才能自己触发；VM 级为空 = 没排期 [https://cloud.google.com/compute/docs/instances/monitor-plan-host-maintenance-event]。</p>
+<p>全量扫 VM：<code>gcloud compute instances list --filter=&quot;zone:($ZONE) AND resourceStatus.upcomingMaintenance.maintenanceStatus:*&quot;</code>（是否带回 <code>resourceStatus</code> <span class="tg inf">[需验证]</span>）。</p>
+</li>
+<li>
+<p><strong>sub-block ↔ 池 ↔ 节点</strong>：节点标签 <code>cloud.google.com/reservation-subblocks</code> 的值是 sub-block 全名。值的格式是 <code>&lt;reservation&gt;-block-&lt;B&gt;-subblock-&lt;S&gt;</code>（<code>&lt;B&gt;</code> 是 4 位 block 号，<code>&lt;S&gt;</code> 是 4 位 sub-block 编号），所在池名带同样两个编号。按 sub-block 查节点：
+<code>kubectl get nodes -l cloud.google.com/reservation-subblocks=&lt;sub-block 全名&gt; -L cloud.google.com/gke-nodepool,cloud.google.com/gke-tpu-partition-4x4x4-id</code></p>
+</li>
+</ul>
+<p><strong>每批的前 / 中 / 后</strong>（第 6 步「还原」做完才开下一批）<span class="src" tabindex="0">源<span class="srci">顺序为推断</span></span>：</p>
+<figure class="mermaid"><img src="../assets/mermaid/1f766268c7c0.png" width="1016" alt="示意图" loading="lazy"></figure><div class="tbl"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>补充</th>
+<th>为什么 / 先例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 选批</td>
+<td>132 = 130 SLO + 2 缓冲，通常每批 4–8 个 <span class="tg inf">[推断]</span></td>
+<td>二十多 cube 一批：可调度跌到一百二十出头，几十台超 9 h、大部分进重装；大批次检修有主机没回来的先例</td>
+</tr>
+<tr>
+<td>2 腾空</td>
+<td><code>05-isolate-cube.sh --execute</code>；窗口告诉 Google</td>
+<td>删池丢主机映射，首次前请 Google 书面确认（注 1）；免得 4 h 告警静默掩盖真掉线</td>
+</tr>
+<tr>
+<td>3–4</td>
+<td>命令见下</td>
+<td><strong>不能撤回</strong></td>
+</tr>
+<tr>
+<td>5 验</td>
+<td>扫尾先例里大多数恢复了</td>
+<td>重建池无效，1:1 映射总落回掉队主机；混版本会打断 sub-slicing（见<a href="pitfalls.html#l-51">经验教训第 51 条</a>、<a href="pitfalls.html#l-29">经验教训第 29 条</a>）</td>
+</tr>
+<tr>
+<td>6 还原</td>
+<td>日报「Ready 但 TPU≠4」= 0 → <code>--undo --execute</code>；回不来的当坏 cube（§8.6-A）</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：公开文档「删池」限定静态多主机切片池；动态切片按 GA 指南「deform the slice before triggering maintenance」<span class="src" tabindex="0">源<span class="srci"><a href="https://docs.cloud.google.com/tpu/docs/all-capacity-maintenance-events" target="_blank" rel="noopener">https://docs.cloud.google.com/tpu/docs/all-capacity-maintenance-events</a></span></span>。</li>
+</ul>
+<p>触发（原样；sub-block 级没有 <code>--scope</code>）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 不可撤回：先确认 PROJECT / RESERVATION / SB 指向的是你以为的那个（gcloud config get project 不算数，命令里显式写 --project）</span>
+<span class="nv">SB</span><span class="o">=</span>&lt;sub-block<span class="w"> </span>名&gt;<span class="w">     </span><span class="c1"># 上面 sub-blocks list 第一列里 STATUS=PENDING 且 CAN_TRIGGER=True 的那行</span>
+gcloud<span class="w"> </span>compute<span class="w"> </span>reservations<span class="w"> </span>sub-blocks<span class="w"> </span>perform-maintenance<span class="w"> </span><span class="nv">$RESERVATION</span><span class="w"> </span>--block-name<span class="w"> </span><span class="nv">$BLOCK</span><span class="w"> </span>--sub-block-name<span class="w"> </span><span class="nv">$SB</span><span class="w"> </span>--zone<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span>
+<span class="c1"># 更大范围：</span>
+gcloud<span class="w"> </span>compute<span class="w"> </span>reservations<span class="w"> </span>blocks<span class="w"> </span>perform-maintenance<span class="w"> </span><span class="nv">$RESERVATION</span><span class="w"> </span>--block-name<span class="w"> </span><span class="nv">$BLOCK</span><span class="w"> </span>--scope<span class="o">=</span>all<span class="w"> </span>--zone<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w">   </span><span class="c1"># --scope 三选一：all / running / unused</span>
+gcloud<span class="w"> </span>compute<span class="w"> </span>reservations<span class="w"> </span>perform-maintenance<span class="w"> </span><span class="nv">$RESERVATION</span><span class="w"> </span>--zone<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--scope<span class="o">=</span>all<span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w">                             </span><span class="c1"># 同上，三选一</span>
+</code></pre></div>
+<ul>
+<li><code>blocks</code> / <code>sub-blocks</code> 的 describe、list、perform-maintenance 在 Cloud SDK 587.0.0 是 GA（<code>gcloud compute reservations blocks --help</code> / <code>sub-blocks --help</code>；<code>--help</code> 里同时列出 alpha / beta 变体）；老版本 SDK 报「Invalid choice / unknown command」就加 <code>beta</code> 或先升级；<code>blocks</code> 行的 <code>--zone</code> 是本书补的 <span class="tg inf">[推断]</span>。</li>
+<li><strong>验证</strong>：<code>STATUS</code> 变 <code>ONGOING</code>。<strong>幂等</strong>：再跑被拒 <span class="tg inf">[推断]</span>。<strong>回滚</strong>：没有。断电恢复时积压升级会被强制打上。</li>
+</ul>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-51">主机维护与 GKE 升级打掉切片</a> · <a href="pitfalls.html#l-6">硬件过了出厂检测仍出问题</a> · <a href="pitfalls.html#l-29">sub-slice 建不起来</a> · <a href="pitfalls.html#l-8">电力事件后报缺货</a></p>
+</blockquote>
+<p><a id="step-8-3"></a></p>
+<h2 id="83-gke-与软件升级" class="hc2"><span class="hn">8.3</span>GKE 与软件升级</h2>
+<p><strong>谁跟谁绑在一起</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>升什么</th>
+<th>顺带变了什么</th>
+<th>对在跑切片的影响</th>
+<th>怎么做</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GKE 控制面</td>
+<td>托管 slice controller、<strong>tpu-device-plugin 被悄悄滚动</strong>（allocatable 掉到 0，约 20 min）</td>
+<td>在跑的切片可能卡死、任务失败</td>
+<td>第 2、3 步</td>
+</tr>
+<tr>
+<td>节点池（= 节点镜像）</td>
+<td>节点 GKE 版本、COS、device plugin、网卡修复等</td>
+<td>该 cube 上 ACTIVE 切片变 FAILED <strong>且不恢复</strong></td>
+<td>逐 cube 先删切片（第 4 步）</td>
+</tr>
+<tr>
+<td>需重建池才生效的修复</td>
+<td>网卡修复、多网卡、workload policy</td>
+<td>同上</td>
+<td>按自触发维护批次逐 cube 重建</td>
+</tr>
+<tr>
+<td>kueue-slice-controller（自装）</td>
+<td>镜像 <code>tpuongke/kueue-slice-controller</code>，钉 digest。实测用的 <code>v0.8.0-200</code> 不含恢复路径修复（要含修复的版本 + kueue-tpu-ac 新版本（版本号以 Google 确认为准），<a href="07-resilience-and-recovery.html#step-7-2">07 §7.2</a>）；交付前升级并重跑 07 演练，版本结论见 <a href="09-customer-alignment.html#d10">09 D10</a></td>
+<td>全集群单点，重启期间不建 / 不删切片</td>
+<td>改 <a href="scripts/03-slice-controller.yaml"><code>03-slice-controller.yaml</code></a> 的 digest 再 apply；<strong>别用 latest</strong></td>
+</tr>
+<tr>
+<td>Kueue / JobSet（Helm）</td>
+<td><code>KUEUE_VERSION</code> 钉 0.18.x（≥0.18.5）；JobSet CRD 不随 <code>helm upgrade</code> 更新</td>
+<td>重启控制器；非 TAS pod 的 TAS 缓存修复最早出现在 0.15.3 / 0.16.1，那是首个含修复的版本，不是本书要求的下限（下限仍是 ≥0.18.5）</td>
+<td><code>03-addons.sh kueue</code> / <code>jobset</code>；回滚 <code>03-addons.sh rollback-kueue &lt;REV&gt;</code>（手工 patch 不在 Helm 历史里）</td>
+</tr>
+<tr>
+<td>jax / libtpu / 镜像</td>
+<td>数值、集合通信性能</td>
+<td>0.0.48 在 2x4x4 上并行 all-gather 带宽减半；0.0.47 改了 batched-dot 数值</td>
+<td>钉 digest；升前跑数值 + collective 金丝雀（04 §4.10 C1/C3/C4）</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>顺序</strong>：</p>
+<figure class="mermaid"><img src="../assets/mermaid/a4308588e993.png" width="984" alt="示意图" loading="lazy"></figure><p>读图：pending 维护挡自动升级、controller 先于控制面各有出处，串成一条是推断。</p>
+<ol>
+<li>
+<p><strong>冻结自动升级</strong>：集群级「No minor or node upgrades」维护例外（控制面仍打补丁；手动升级无视例外）；实测集群池 <code>autoUpgrade: true</code>、无此例外。flag 核对 [https://cloud.google.com/sdk/gcloud/reference/container/clusters/update; https://cloud.google.com/kubernetes-engine/docs/how-to/maintenance-windows-and-exclusions]：</p>
+<div class="code"><span class="lang">bash</span><pre><code>gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--add-maintenance-exclusion-name<span class="o">=</span>tpu-node-freeze<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--add-maintenance-exclusion-scope<span class="o">=</span>no_minor_or_node_upgrades<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--add-maintenance-exclusion-until-end-of-support
+<span class="c1"># 不想跟随 end of support 就换成固定终点：--add-maintenance-exclusion-start=&lt;RFC3339&gt; --add-maintenance-exclusion-end=&lt;RFC3339&gt;</span>
+</code></pre></div>
+<ul>
+<li>「until end of support」对此 scope 无明文 <span class="tg inf">[需验证]</span>，被拒就用固定终点；自定义镜像池另加<strong>池级</strong> <code>gcloud container node-pools update &lt;池&gt; --cluster $CLUSTER --location $ZONE --add-maintenance-exclusion-until-end-of-support</code>（撤销 <code>--remove-maintenance-exclusion-until-end-of-support</code>）。</li>
+<li><strong>验证</strong>：<code>gcloud container clusters describe $CLUSTER --location=$ZONE --format='yaml(maintenancePolicy)'</code> 里有 <code>tpu-node-freeze</code>。<strong>回滚</strong>：<code>--remove-maintenance-exclusion=tpu-node-freeze</code>。</li>
+</ul>
+</li>
+<li>
+<p><strong>确认目标版本还在 channel 里</strong>（<code>--flatten</code> 写法 <span class="tg inf">[推断]</span>）：</p>
+<div class="code"><span class="lang">bash</span><pre><code>gcloud<span class="w"> </span>container<span class="w"> </span>get-server-config<span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--flatten<span class="o">=</span>channels<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--filter<span class="o">=</span><span class="s2">&quot;channels.channel=</span><span class="si">${</span><span class="nv">RELEASE_CHANNEL</span><span class="p">^^</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span>--format<span class="o">=</span><span class="s2">&quot;value(channels.validVersions)&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span><span class="s1">&#39;;&#39;</span><span class="w"> </span><span class="s1">&#39;\n&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-x<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NODE_VERSION</span><span class="s2">&quot;</span>
+</code></pre></div>
+<p><code>${RELEASE_CHANNEL^^}</code> 把 env.sh 的 <code>rapid</code> 转成 API 里的大写 <code>RAPID</code>（bash 4+）；channel 本身未定，见 <a href="09-customer-alignment.html#d10">09 D10</a>。
+没打印 = 找 Google 要 allowlist（先例：某个版本在交付 zone 任何 channel 都没有）；同时要捆绑组件版本和变更列表，对照<a href="pitfalls.html#l-11">经验教训第 11 条</a>。</p>
+</li>
+<li>
+<p><strong>金丝雀</strong>：带真实 cube 的<strong>非生产</strong>集群先升：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">CANARY_CLUSTER</span><span class="o">=</span>&lt;金丝雀集群&gt;<span class="p">;</span><span class="w"> </span><span class="nv">CANARY_ZONE</span><span class="o">=</span>&lt;它的<span class="w"> </span>zone&gt;<span class="w">     </span><span class="c1"># 查：gcloud container clusters list --project=$PROJECT --format=&#39;table(name,location)&#39;</span>
+<span class="o">[[</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CANARY_CLUSTER</span><span class="s2">&quot;</span><span class="w"> </span>!<span class="o">=</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$CLUSTER</span><span class="s2">&quot;</span><span class="w"> </span><span class="o">]]</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="o">{</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;金丝雀集群名和生产相同，停&quot;</span><span class="p">;</span><span class="w"> </span><span class="nb">exit</span><span class="w"> </span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="o">}</span>
+gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>upgrade<span class="w"> </span><span class="nv">$CANARY_CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$CANARY_ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--master<span class="w"> </span>--cluster-version<span class="o">=</span><span class="nv">$GKE_VERSION</span><span class="w">     </span><span class="c1"># 先 source env.sh；GKE_VERSION 还是占位 &lt;BOM 里的 GKE 版本&gt; 时别跑；目标版本 = env.sh 的 GKE_VERSION（NODE_VERSION 默认同值，第 2 步核对过在 channel 里）</span>
+</code></pre></div>
+</li>
+<li>
+<p><strong>节点</strong>：按自触发维护同样的批次逐 cube 升：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">POOL</span><span class="o">=</span>&lt;池名&gt;<span class="w">      </span><span class="c1"># 例 ${POOL_PREFIX}040</span>
+<span class="c1"># ① 腾空：同 §8.2 每批流程的第 2 步「腾空」</span>
+<span class="c1"># ② 升级策略：surge=0（必须）、unavailable=16（推荐）</span>
+gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>update<span class="w"> </span><span class="nv">$POOL</span><span class="w"> </span>--cluster<span class="o">=</span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--max-surge-upgrade<span class="o">=</span><span class="m">0</span><span class="w"> </span>--max-unavailable-upgrade<span class="o">=</span><span class="m">16</span>
+<span class="c1"># ③ 升级</span>
+gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>upgrade<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--node-pool<span class="o">=</span><span class="nv">$POOL</span><span class="w"> </span>--cluster-version<span class="o">=</span><span class="nv">$NODE_VERSION</span><span class="w"> </span>--quiet
+</code></pre></div>
+<ul>
+<li><strong>验证</strong>：<code>gcloud container node-pools describe $POOL … --format='value(version,status)'</code> → <code>$NODE_VERSION  RUNNING</code>。<strong>回滚</strong>只限 canceled / failed：<code>gcloud container node-pools rollback $POOL --cluster=$CLUSTER --location=$ZONE</code> [https://cloud.google.com/sdk/gcloud/reference/container/node-pools/rollback]；成功后能否降级 <span class="tg inf">[需验证]</span>，兜底重建该池。</li>
+</ul>
+</li>
+<li>
+<p><strong>升级后 1 h</strong> 盯告警 #4、#5、#9、#13、#23 和大批 MMIG 被拆；jax/libtpu 变了就重建掉队基线。</p>
+</li>
+</ol>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-51">主机维护与 GKE 升级打掉切片</a> · <a href="pitfalls.html#l-28">slice controller 单点</a> · <a href="pitfalls.html#l-34">waitForPodsReady 被关掉</a> · <a href="pitfalls.html#l-39">Slice 卡在过渡态</a> · <a href="pitfalls.html#l-14">改活池 / 活集群的配置会重建或死锁</a> · <a href="pitfalls.html#l-11">组件版本低于下限</a> · <a href="pitfalls.html#l-15">Cluster Toolkit / Terraform 路径的陷阱</a> · <a href="pitfalls.html#l-45">一片慢拖全局</a> · <a href="pitfalls.html#l-26">版本不钉死或 flag 没生效</a></p>
+</blockquote>
+<p><a id="step-8-4"></a></p>
+<h2 id="84-日常巡检每天--每周与容量跟踪" class="hc3"><span class="hn">8.4</span>日常巡检（每天 / 每周）与容量跟踪</h2>
+<p><strong>容量账</strong></p>
+<p>144 cube 里最大任务 ≤128，16 个当备件；Kueue 配额 ≤ min(128, 健康 − S) × 64，HEALTHY 标签数每天重算。</p>
+<p>S = 备件数。健康 cube 数先定口径（<a href="01-capacity-and-prereqs.html#step-1-2">01 §1.2</a>）；健康数会因维修往下掉，先例中交付后几天内健康数明显下降（<a href="pitfalls.html#l-3">经验教训第 3 条</a>、<a href="pitfalls.html#l-50">经验教训第 50 条</a>），所以配额每天按健康数重算。</p>
+<figure class="img"><a href="../figs/fig-quota-vs-healthy.svg" target="_blank" title="新窗口看原图"><img src="../figs/fig-quota-vs-healthy.svg" alt="配额按池数 × 64 配，健康的只有 127–128 个 cube：日报两次都报超配" loading="lazy"></a><figcaption>配额按池数 × 64 配，健康的只有 127–128 个 cube：日报两次都报超配</figcaption></figure>
+<h3 id="每天">每天</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>查什么</th>
+<th>怎么查</th>
+<th>不对时</th>
+<th>页</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>健康 cube / 备件 / 15/16 / TPU≠4 / cordon</td>
+<td>日报第 1 段</td>
+<td>&lt; SLO 线+2 → §8.6-A</td>
+<td><a href="pitfalls.html#l-3">经验教训第 3 条</a></td>
+</tr>
+<tr>
+<td>Kueue Σ nominalQuota ≤ min(128, 健康 − S) × 64</td>
+<td>日报第 2 段</td>
+<td>超了 → 03 §3.5 调小</td>
+<td><a href="pitfalls.html#l-33">经验教训第 33 条</a></td>
+</tr>
+<tr>
+<td>sub-block 健康分布、有维护的 sub-block</td>
+<td>日报第 3 段</td>
+<td>对到 cube；UNSCHEDULED 的当坏 cube</td>
+<td><a href="pitfalls.html#l-48">经验教训第 48 条</a>、§8.2</td>
+</tr>
+<tr>
+<td>REPAIRING VM、非 RUNNING 池</td>
+<td>日报第 4 段</td>
+<td>REPAIRING &gt; 12 h → §8.5</td>
+<td><a href="pitfalls.html#l-9">经验教训第 9 条</a></td>
+</tr>
+<tr>
+<td>非 ACTIVE ≥60 min 的 Slice</td>
+<td>日报第 5 段</td>
+<td>§8.6-B</td>
+<td><a href="pitfalls.html#l-39">经验教训第 39 条</a></td>
+</tr>
+<tr>
+<td>手工 Slice（无 owner 注解）</td>
+<td>日报第 5 段</td>
+<td>找主人删；Kueue 任务加 <code>05-avoid-manual-slices.py</code></td>
+<td><a href="pitfalls.html#l-33">经验教训第 33 条</a></td>
+</tr>
+<tr>
+<td>pod 总数与完成态占比</td>
+<td>日报第 6 段</td>
+<td>&gt; 100k → 同告警 #22</td>
+<td><a href="pitfalls.html#l-53">经验教训第 53 条</a></td>
+</tr>
+<tr>
+<td>24 h Kueue 驱逐 / rank 冲突 / Event 被拒</td>
+<td>日报第 7 段</td>
+<td>rank 冲突 → 经验教训第 42 条；被拒 → 补 RBAC</td>
+<td><a href="pitfalls.html#l-42">经验教训第 42 条</a>、<a href="pitfalls.html#l-54">经验教训第 54 条</a></td>
+</tr>
+<tr>
+<td>reservation 到期</td>
+<td>日报第 8 段</td>
+<td>≤30 / 14 / 3 天各提醒</td>
+<td><a href="pitfalls.html#l-4">经验教训第 4 条</a></td>
+</tr>
+<tr>
+<td><strong>维修卡单</strong>：卡在 drain / blocked 阶段的主机、卡了多久、挡住哪个 cube</td>
+<td>手工（脚本未覆盖）：维修状态使用方看不到，向 Google 要</td>
+<td>超过 12 h → §8.5 带「主机 + 时长 + 挡住的 cube」升级；逐台记进下面<a href="#s8-4-repaired">「已修未回池」日表</a></td>
+<td><a href="pitfalls.html#l-50">经验教训第 50 条</a></td>
+</tr>
+<tr>
+<td>单机限频：throttle 比例、功率传感器读数</td>
+<td>手工（脚本未覆盖）；可疑主机跑 <a href="scripts/04-bench.sh"><code>04-bench.sh</code></a> gemm / HBM</td>
+<td>读数 &gt; 3 V 或 gemm 远低于基线 → cordon，附 gemm / 读数证据交给 Google</td>
+<td><a href="pitfalls.html#l-48">经验教训第 48 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<div class="code"><span class="lang">bash</span><pre><code><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/08-daily-check.sh<span class="w">                    </span><span class="c1"># HEALTHY 口径</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/08-daily-check.sh<span class="w"> </span>--include-degraded<span class="w"> </span><span class="c1"># HEALTHY+DEGRADED 口径（实测集群两者输出一样，见下）</span>
+</code></pre></div>
+<ul>
+<li><strong>输出</strong>：<code>$STATE_DIR/daily-&lt;时间&gt;.txt</code>、<code>cubes-&lt;时间&gt;.tsv</code>、<code>slices-notactive-&lt;时间&gt;.tsv</code>（留着算趋势）。只读。文件名 UTC，表头本地时间（带时区）。</li>
+<li><strong>退出码 1</strong> = 上表任一「不对」，可挂 cron；<code>$SPARE_CUBES</code> 未约定按 0 算。</li>
+</ul>
+<p>两次实测都退出 1、都是真告警：健康 cube 低于呼人线，配额超出健康容量；第二次还报出 reservation 剩 0 天、有无主的手工 Slice。完整 8 段 <strong>306 s</strong>，大头是数几万个 pod 和拉 24 h Kueue 日志。</p>
+<p><a id="s8-4-repaired"></a></p>
+<h3 id="已修未回池每天一张表逐台跟">已修未回池：每天一张表，逐台跟</h3>
+<p>送修的机器修好后，<strong>还可能卡在回池路上</strong>，健康 cube 数迟迟不回升。回池由 Google 处理；使用方每天记一张表：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>列</th>
+<th>填什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>机器 / cube</td>
+<td>主机名、所在 sub-block</td>
+</tr>
+<tr>
+<td>送修时间</td>
+<td>本地时间，注明时区</td>
+</tr>
+<tr>
+<td>已过多久</td>
+<td>现在 − 送修时间</td>
+</tr>
+<tr>
+<td>挡住的 cube 里坏几台</td>
+<td>只坏 1 台的先催（修 1 台就救回整个 cube）</td>
+</tr>
+<tr>
+<td>case 号 / ETA</td>
+<td>Google 给的；没给就写「无」</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>超过 12 h 没回来，按 <a href="#step-8-5">§8.5</a> 升级，附上这几行。</li>
+<li>同一台机器第二次出现在表里，按 <a href="08a-slow-node-sop.html#s8a-6">08a §8a.6</a> 要求换件。</li>
+</ul>
+<h3 id="每周">每周</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>查什么</th>
+<th>怎么查</th>
+<th>为什么</th>
+<th>页</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>容量趋势、坏 cube 原因分布</td>
+<td>拼一周 <code>cubes-*.tsv</code></td>
+<td>单日的健康数会因维修上下跳，看一周才分得清是在恢复还是在恶化</td>
+<td><a href="pitfalls.html#l-3">经验教训第 3 条</a></td>
+</tr>
+<tr>
+<td>故障率：按症状分类的终止次数 / 每整 pod 每天中断</td>
+<td>告警 #19 的查询按周汇总</td>
+<td>目标约 1.2 次 / 天，按整 pod（144 cube）算，不是每个 GKE pod</td>
+<td>—</td>
+</tr>
+<tr>
+<td>孤儿 multi-MIG / 没有 Slice 的 MMIG 与 WP</td>
+<td><code>--scan-orphans</code>（只读）</td>
+<td>让 cube 不可用、删池卡住；只有 Google 能清</td>
+<td><a href="pitfalls.html#l-40">经验教训第 40 条</a></td>
+</tr>
+<tr>
+<td>泄漏 Slice CR（有 owner 注解但 Workload 已不在）</td>
+<td>列出带 owner 注解的 Slice，逐个核对对应 Workload 还在不在（<a href="pitfalls.html#l-41">经验教训第 41 条</a>）</td>
+<td>partition 永久算「已占用」，表现成假缺货</td>
+<td><a href="pitfalls.html#l-41">经验教训第 41 条</a></td>
+</tr>
+<tr>
+<td>删池后 MIG 真没了</td>
+<td><code>gcloud compute instance-groups managed list --filter=&quot;name~gke-$CLUSTER&quot;</code></td>
+<td>孤儿 MIG 让健康 sub-block 上的新池缺货</td>
+<td><a href="pitfalls.html#l-41">经验教训第 41 条</a></td>
+</tr>
+<tr>
+<td>每 cube soak（剔除降频主机、更新掉队基线）</td>
+<td><a href="scripts/04-bench.sh"><code>04-bench.sh</code></a> C1 + ≥4 min 持续段（注 1）</td>
+<td>Google 遥测漏报过降频主机（先例：HBM 降频未被遥测报出）</td>
+<td><a href="pitfalls.html#l-45">经验教训第 45 条</a>、<a href="08a-slow-node-sop.html">08a</a></td>
+</tr>
+<tr>
+<td>维护日历：90 天内到期的 PENDING 分组维护</td>
+<td>§8.2 sub-block 表</td>
+<td>别等强制执行</td>
+<td><a href="pitfalls.html#l-51">经验教训第 51 条</a></td>
+</tr>
+<tr>
+<td>版本漂移：host 软件版本、控制器 digest</td>
+<td><code>kubectl -n slice-controller-system get deploy -o yaml | grep image:</code>；host 版本向 Google 要</td>
+<td>混版本打断 sub-slicing</td>
+<td><a href="pitfalls.html#l-29">经验教训第 29 条</a>、<a href="pitfalls.html#l-28">经验教训第 28 条</a></td>
+</tr>
+<tr>
+<td>配额余量：HDB、读 API、multi-MIG 配额、IP</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-4">01 §1.4</a></td>
+<td>读 limit 也读 usage</td>
+<td><a href="pitfalls.html#l-5">经验教训第 5 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：C1 <strong>没有</strong>持续段；gemm_throttling 要 <code>--duration_s=240</code> 才到热稳态；P7 对照测试用的 60 s soak要并进 C1 并加长 <span class="tg inf">[推断]</span>。</li>
+<li>对账可请 Google 出一份逐 cube 健康快照。</li>
+</ul>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-3">预留标的 cube 数 ≠ 能用的 cube 数</a> · <a href="pitfalls.html#l-48">健康信号各说各话</a> · <a href="pitfalls.html#l-41">泄漏与孤儿对象静默吃容量</a> · <a href="pitfalls.html#l-23">Checkpoint 存储与 MTC</a> · <a href="pitfalls.html#l-36">排队与抢占</a></p>
+</blockquote>
+<p><a id="step-8-5"></a></p>
+<h2 id="85-出问题找谁" class="hc4"><span class="hn">8.5</span>出问题找谁</h2>
+<p><strong>出了问题开 case 交给 Google（同时知会你的 account team），附上下面「升级时附上什么」里的信息。</strong></p>
+<ul>
+<li>先按 <a href="#step-8-6">§8.6</a> 止血、取证（遥测会过期），再交给 Google。</li>
+<li>一个事件开一个 case，别按 cube 拆成很多个。</li>
+</ul>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>坏主机怎么报才不会被送回来</span></span><code>gcloud compute instances report-host-as-faulty</code>；理由里写清症状和证据（报错原文、gemm / 读数）。别只写「请跑 burn-in 确认这台机器正常」——只写这句，主机可能复检通过后被直接送回服务。</p>
+</blockquote>
+<h3 id="升级时附上什么">升级时附上什么</h3>
+<p>前 6 项每个 case 必带：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>附件</th>
+<th>怎么拿</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>cluster hash、项目编号与名称、region/zone（GKE 项目编号可能 ≠ Google 侧预留项目）</td>
+<td><code>gcloud container clusters describe $CLUSTER --location=$ZONE --format='value(id,selfLink)'</code>；<code>gcloud projects describe $PROJECT --format='value(projectNumber)'</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>时间线（开始、频率）、现象、第一行报错原文</td>
+<td>Q1–Q8</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Slice YAML、Workload 条件、两层 controller 日志、切片审计</td>
+<td><code>05-triage-slice.sh &lt;slice&gt; --since 2h</code>（整份附 <code>$STATE_DIR/triage-*.txt</code>）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>reservation / block / sub-block 状态</td>
+<td><code>gcloud compute reservations describe $RESERVATION --zone $ZONE --format=yaml</code>；<code>gcloud compute reservations blocks describe … --format=yaml</code>；§8.2 sub-block 表</td>
+</tr>
+<tr>
+<td>5</td>
+<td>受影响池 / partition / host 清单（loci）</td>
+<td>日报 <code>cubes-*.tsv</code>；<code>kubectl get nodes -l cloud.google.com/gke-tpu-partition-4x4x4-id=&lt;id&gt; -o wide</code></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Kueue 驱逐原因、rank 冲突</td>
+<td>Q3、Q4（events 里可能没有）</td>
+</tr>
+<tr>
+<td>7</td>
+<td>升级 Google 支持时附上：实例 ID / 名、MIG 与 MMIG 名、<code>multiMig</code> 字段</td>
+<td><code>05-delete-slice-chain.sh &lt;slice&gt;</code>（dry-run）；<code>--scan-orphans</code></td>
+</tr>
+<tr>
+<td>8</td>
+<td>缺货：精确错误串（<code>GCE_LOCATION_OUT_OF_RESOURCES|GCE_RESERVATION_OUT_OF_RESOURCE|GCE_RESOURCE_EXHAUSTED|TPU_OUT_OF_RESOURCES|TPU_OUT_OF_RESOURCES_RESERVATION</code>）、operation ID</td>
+<td>Q11</td>
+</tr>
+<tr>
+<td>9</td>
+<td>硬件：GCE UUID（<code>START_SESSION failed. Contact GCE with UUID: …</code>）、<code>/tmp/tpu_logs/tpu_driver.INFO</code>（worker 0 优先）</td>
+<td>容器日志；<a href="pitfalls.html#l-43">经验教训第 43 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>维修卡单类升级，附上 <a href="#s8-4-repaired">§8.4「已修未回池」日表</a>当天那几行：主机 + 送修时间 + 挡住的 cube 里坏几台。</li>
+<li>维修原因目前只给到 <code>FAILURE_TPU</code> / <code>FAILURE_INFRA</code> / <code>hostError</code> 这一级，看不出是哪类硬件故障；要细分得单独提需求。紧急修复几乎没有提前量，非紧急的硬件预警有 7 天窗口，所以检查点要按「随时会丢主机」设计 <span class="tg inf">[推断]</span>。</li>
+</ul>
+<p><strong>交付前要备好</strong>（和 account team 一起定）：按上面附件表写好 case 模板；一线响应人与夜间升级路径。</p>
+<h3 id="开-case-与推进升级">开 case 与推进升级</h3>
+<div class="kp kc1"><div class="kp-t">定优先级</div>
+<ul>
+<li>优先级跟影响走，不跟紧迫感走：交付日被挡、容量掉出 SLA 线标最高级；单台主机变慢但已隔离标低级。</li>
+<li>不打算要求对方立即响应就别标最高级；拿不准先标次一级，再找 account team 确认。</li>
+<li>缓解了就主动降级，写清缓解了什么、还剩什么，剩下的拆成后续 case。</li>
+<li>是你的头号优先级可以要求升级，但要在 case 里写明业务原因。</li>
+</ul></div>
+<p><strong>case 模板</strong>（时间线一律 UTC；附件按上表带齐）</p>
+<div class="code"><span class="lang">markdown</span><pre><code><span class="gu">## Summary</span>
+&lt;一句话：什么规模、什么版本、发生了什么、量化后果&gt;
+<span class="gs">**Project / Cluster / Zone / Reservation:**</span> &lt;project id&gt; (&lt;number&gt;) / &lt;cluster&gt; / &lt;zone&gt; / &lt;reservation&gt;
+
+<span class="gu">## Business Impact</span>
+<span class="k">-</span><span class="w"> </span>Scale: &lt;N chips / N hosts / N slices&gt;
+<span class="k">-</span><span class="w"> </span>Effect: &lt;step time A s -&gt; B s / job blocked N min / restart costs N min&gt;
+<span class="k">-</span><span class="w"> </span>Workaround in place: &lt;yes/no, what&gt;
+
+<span class="gu">## Environment</span>
+Accelerator / topology, GKE version, libtpu / JAX / framework, relevant flags / configmap
+
+<span class="gu">## Timeline (UTC)</span>
+| Time | Event |
+
+<span class="gu">## Evidence</span>
+<span class="k">-</span><span class="w"> </span>Logs (key lines quoted), dashboards / screenshots
+<span class="k">-</span><span class="w"> </span>Already ruled out: &lt;isolation test / health check result / ...&gt;
+
+<span class="gu">## Root cause (if known) / Hypothesis</span>
+&lt;What we think + confidence; &quot;unknown&quot; if unknown&gt;
+
+<span class="gu">## Ask</span>
+<span class="k">1.</span> &lt;Concrete action: confirm RC / replace host X / raise quota Q from A to B (+Δ)&gt;
+<span class="k">2.</span> &lt;Needed by: UTC time + reason&gt;
+
+<span class="gu">## Related</span>
+&lt;other case IDs&gt;
+</code></pre></div>
+<p><strong>提交前自检（缺一条就补）</strong></p>
+<ol>
+<li>标题里有对象（主机 / 预留 / 配额名）和量化现象。</li>
+<li>有 Business Impact，对方一眼能判断优先级。</li>
+<li>时间线用 UTC（你和工程师多半不在一个时区，UTC 不会算错）。</li>
+<li>版本号、flag、configmap 写全。</li>
+<li>已经排除的写出来（健康检查、隔离实验）。</li>
+<li>Ask 是动作，不是「please investigate」；配额写成 A → B（+Δ），写明单位（QPS 还是带宽）。</li>
+<li>一个 case 只讲一个问题；多个根因分开开，后续 case 只写增量并引用原 case 号。</li>
+<li>附件按「升级时附上什么」带齐。</li>
+</ol>
+<p><strong>十个反例</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>反例</th>
+<th>教训</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>请求本身是误诊：要的功能框架本来就支持，真正原因是自己转换脚本产出的检查点不分片</td>
+<td>提功能需求前把完整流水线写进去</td>
+</tr>
+<tr>
+<td>2</td>
+<td>复现器没复现真正问题，数值回归白查一轮（容差口径不同）</td>
+<td>先证明复现的是同一件事；容差和对方测试口径对齐</td>
+</tr>
+<tr>
+<td>3</td>
+<td>写总量不写增量，风险按总量评估，远大于实际增量</td>
+<td>写「从 A 到 B（增量 B−A）」，三个数都写</td>
+</tr>
+<tr>
+<td>4</td>
+<td>问题分错类，空等 4 h 以上</td>
+<td>开 case 时选对产品类别</td>
+</tr>
+<tr>
+<td>5</td>
+<td>不打算要求立即响应却标最高级</td>
+<td>拿不准先标次一级</td>
+</tr>
+<tr>
+<td>6</td>
+<td>QPS 被读成带宽，升级被错关</td>
+<td>标题和第一句写明单位</td>
+</tr>
+<tr>
+<td>7</td>
+<td>批准了但没人执行，拖了 30 多小时</td>
+<td>批准时写上谁执行、何时执行</td>
+</tr>
+<tr>
+<td>8</td>
+<td>日报说已执行，case 里显示没执行</td>
+<td>下结论前回 case 原文核对</td>
+</tr>
+<tr>
+<td>9</td>
+<td>case 十天没更新、没人负责</td>
+<td>每个 case 有 owner；需求变了主动关或合并</td>
+</tr>
+<tr>
+<td>10</td>
+<td>补充评论不等于要求紧急响应</td>
+<td>要立刻响应就升优先级或找 account team</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>推进阶梯</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>级</th>
+<th>什么时候</th>
+<th>怎么做</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>开 case 时</td>
+<td>Ask 和需要的时间写进 case</td>
+</tr>
+<tr>
+<td>1</td>
+<td>超过该优先级响应时间一半还没回</td>
+<td>用下面 4 问追问</td>
+</tr>
+<tr>
+<td>2</td>
+<td>有业务时间点要赶</td>
+<td>写明你的计划和 UTC 时间</td>
+</tr>
+<tr>
+<td>3</td>
+<td>很久没动、没人认领</td>
+<td>问「还在处理吗？谁负责？」；不需要了就关</td>
+</tr>
+<tr>
+<td>4</td>
+<td>影响扩大或到了 SLA 线</td>
+<td>提升 case 优先级，附理由</td>
+</tr>
+<tr>
+<td>5</td>
+<td>要 Google 别的团队立刻动手，或容量 / 配额</td>
+<td>找 account team / TAM 升级</td>
+</tr>
+</tbody>
+</table></div>
+<div class="code"><span class="lang">markdown</span><pre><code>Hi, following up on case &lt;N&gt; (P&lt;x&gt;).
+<span class="k">1.</span> Can you confirm the root cause in &lt;update&gt; is correct?
+<span class="k">2.</span> What&#39;s the ETA for a fix / next update?
+<span class="k">3.</span> Is there a workaround we can apply today?
+<span class="k">4.</span> Is this related to case &lt;other&gt;? Should we consolidate?
+Context: we plan X at &lt;UTC time&gt;.
+</code></pre></div>
+<p>别只回「+1」；别为了催进度在不紧急的事上升级。</p>
+<p><strong>每日状态</strong>（事件期间每天至少一条，发给 account team）</p>
+<div class="code"><span class="lang">markdown</span><pre><code><span class="gs">**Update for &lt;Date&gt; (as of &lt;HH:MM TZ&gt;): &lt;Event&gt;**</span>
+<span class="gu">### 1. Capacity (&lt;reservation&gt; | &lt;zone&gt;)</span>
+<span class="k">*</span><span class="w"> </span>Overall: &lt;N&gt; of &lt;total&gt; sub-blocks HEALTHY, &lt;M&gt; DEGRADED; within / below the SLA line
+<span class="k">*</span><span class="w"> </span>Since yesterday: +X recovered (list), −Y newly degraded (list)
+<span class="k">*</span><span class="w"> </span>Repaired but not back in pool: &lt;host / since&gt;
+<span class="gu">### 2. Per case</span>
+<span class="gu">#### A. &lt;Title&gt; (Case &lt;N&gt; [P?, &lt;status&gt;])</span>
+<span class="k">*</span><span class="w"> </span>What Google told us / what we&#39;re waiting for
+<span class="gu">### 3. Blockers / asks</span>
+<span class="k">*</span><span class="w"> </span>&lt;who&gt; to &lt;do what&gt; by &lt;UTC time&gt;
+</code></pre></div>
+<p><strong>关 case 前确认关成什么</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>情况</th>
+<th>怎么关</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>修复已上生产</td>
+<td>列证据再关（已生效、某时刻后没再出现、最近测试正常），尽量由报告人验证</td>
+</tr>
+<tr>
+<td>采纳建议后不再出现</td>
+<td>可关；剩下的子问题另开 case 并写号</td>
+</tr>
+<tr>
+<td>现象消失、根因没找到</td>
+<td>可关，写明「复发就重开」</td>
+</tr>
+<tr>
+<td>同一件事多处跟踪</td>
+<td>合并到一个主 case，告诉相关方以后看哪里</td>
+</tr>
+<tr>
+<td>本来不是缺陷</td>
+<td>按预期行为关</td>
+</tr>
+<tr>
+<td>事件结束</td>
+<td>写收尾总结，没关的另开 case 跟</td>
+</tr>
+</tbody>
+</table></div>
+<p>复发就带着复发时间线和具体问题重开。</p>
+<div class="kp kc2"><div class="kp-t">周末与时区</div>
+<ul>
+<li>美国工程师按太平洋时间（夏令时 PDT、冬令时 PST）上下班；美国周五下班时，亚洲时区多半已是周六。</li>
+<li>容量、配额周末没人处理，夜里升级也只按工作时间处理：<strong>按你的时区换算，赶在美国周五之前提</strong>。</li>
+<li>修复决策常要等美国时区拍板；需要美国工程师决定的事，在美国上班前后跟进 <span class="tg inf">[推断]</span>。</li>
+<li>截止时间写 UTC（「by &lt;日期时间&gt; UTC」），不写「明天」。</li>
+</ul></div>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-28">slice controller 单点</a> · <a href="pitfalls.html#l-40">删除卡住</a> · <a href="pitfalls.html#l-1">「缺货」多半不是缺货</a> · <a href="pitfalls.html#l-8">电力事件后报缺货</a> · <a href="pitfalls.html#l-54">可观测性盲区</a></p>
+</blockquote>
+<p><a id="step-8-6"></a></p>
+<h2 id="86-事故手册" class="hc5"><span class="hn">8.6</span>事故手册</h2>
+<blockquote>
+<p>上线周会出哪些事故、交付前怎么防、出了怎么判，按类整理在 <a href="08c-production-incidents.html">08c 上线周的生产事故</a>。本节是止血步骤。</p>
+</blockquote>
+<p>每本都是「止血 → 取证 → 修 → 升级」，取证在破坏性操作之前（遥测会过期）。</p>
+<figure class="mermaid"><img src="../assets/mermaid/5729db5b85d8.png" width="512" alt="示意图" loading="lazy"></figure><h3 id="a-跑着任务的-cube-变-unhealthy">A. 跑着任务的 cube 变 UNHEALTHY</h3>
+<p>触发：Kueue 日志 <code>EvictedDueToAdmissionCheck</code> 或 <code>Workload was evicted as there was no replacement for unhealthy node(s)</code>。</p>
+<figure class="mermaid"><img src="../assets/mermaid/40a24656974d.png" width="1108" alt="示意图" loading="lazy"></figure><ol>
+<li><strong>按图判断</strong>：VM 坏不会自动 deform，只靠 pod 挂驱逐；重切耗时见 <a href="07-resilience-and-recovery.html#step-7-4">07 §7.4</a>。</li>
+<li><strong>恢复的坑</strong>：新 pod 跑分区一致性检查（C 第 1 步）；新 cube 上本地检查点被拒、退回持久层（丢到上一个 40 步倍数）→ 见<a href="pitfalls.html#l-24">经验教训第 24 条</a>。</li>
+<li><strong>隔离</strong>：<code>05-isolate-cube.sh --reason &quot;&lt;case 号&gt;&quot; --execute &lt;partition-id&gt;</code>。</li>
+<li><strong>取证</strong>：<code>kubectl get nodes -l cloud.google.com/gke-tpu-partition-4x4x4-id=&lt;id&gt; -o wide -L cloud.google.com/gke-tpu-partition-4x4x4-state</code>；sub-block healthInfo；REPAIRING / UNSCHEDULED 维护。</li>
+<li><strong>修</strong>：原地修复无 holdback <a href="pitfalls.html#l-3">经验教训第 3 条</a>；REPAIRING &gt; 12 h 或反复坏 → §8.5。修好、16 Ready + HEALTHY → <code>--undo --execute &lt;id&gt;</code>。</li>
+</ol>
+<h3 id="b-slicecreationfailed-风暴--slice-卡在过渡态">B. <code>SliceCreationFailed</code> 风暴 / Slice 卡在过渡态</h3>
+<p>触发：日报第 5 段。</p>
+<ol>
+<li><strong>分类</strong>：<code>05-triage-slice.sh &lt;slice&gt;</code>，对 <a href="05-dynamic-slicing-operations.html#step-5-6">05 §5.6</a>：<div class="tbl"><table>
+<thead>
+<tr>
+<th>报错片段</th>
+<th>含义</th>
+<th>会自愈吗</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AttachMIGsToMMIG failed ... already attached to '...'</code></td>
+<td>cube 还被上一个切片占着（多为删完立刻重建）</td>
+<td>通常会（实测集中在约 20 min 内）</td>
+</tr>
+<tr>
+<td><code>... active sub slice in it with external slice ID &lt;名&gt;-&lt;hash8&gt;</code>，<code>&lt;名&gt;</code> 不是 <code>default-jobset-…</code></td>
+<td><strong>手工 Slice</strong> 占着 cube</td>
+<td>常驻的不会（实测被常驻手工片挡住的任务重试到第 11 次、650 s 仍失败）；跑完就删的会（实测各重试 4–5 次，267 s 准入）</td>
+</tr>
+<tr>
+<td><code>FormSubsliceStep failed ... has an active sub slice</code> / <code>ConfigureAcceleratorTopology ... not supported ... Multi-MIG</code></td>
+<td>大片和 2x2x1 互相挡</td>
+<td>删挡路的 sub-slice</td>
+</tr>
+<tr>
+<td><code>Error 412 ... not stable</code> / <code>400 resourceNotReady</code></td>
+<td>与 GCE 后台操作竞争</td>
+<td>等 2–5 min</td>
+</tr>
+<tr>
+<td><code>SliceCreationFailed</code> ↔ <code>INCOMPLETE</code> 一分钟内来回</td>
+<td><code>cacheSyncUp</code> bug</td>
+<td>不会；已有修复，所需版本向 Google 确认</td>
+</tr>
+</tbody>
+</table></div>
+</li>
+<li><strong>手工片</strong>：删 JobSet，用 <code>05-avoid-manual-slices.py</code> 重提；找主人删片 → 见<a href="pitfalls.html#l-33">经验教训第 33 条</a>。</li>
+<li><strong>过渡态 &gt; 60 min</strong>：带 deletionTimestamp 卡 ACTIVATING 的<strong>别自己改 status</strong>，找 Google；FAILED 不驱逐 → 删 JobSet 重提 → 见<a href="pitfalls.html#l-39">经验教训第 39 条</a>、<a href="pitfalls.html#l-35">经验教训第 35 条</a>。</li>
+<li><strong>删不掉</strong>：<code>05-delete-slice-chain.sh &lt;slice&gt;</code> 按顺序删；卡在 <code>DETACH_MIG_FROM_MULTI_MIG</code> 只有 Google 能清 → §8.5 附件 7。</li>
+<li><strong>风暴</strong>：先查告警 #7 和 #13，逐片处理没用。</li>
+</ol>
+<h3 id="c-重切后-tpu-初始化挂住">C. 重切后 TPU 初始化挂住</h3>
+<p>触发：新 pod 全打出 <code>TPU backend initialization is taking more than 60.0 seconds</code> 后无输出；或 <code>START_SESSION failed</code> / <code>Mismatch barrier id … PRE_START_SESSION_BARRIER</code>。</p>
+<ol>
+<li><strong>30 秒确认</strong>（每个 replica 只应有 1 个 partition ID）：<div class="code"><span class="lang">bash</span><pre><code><span class="nv">JS</span><span class="o">=</span><span class="nv">$JOBSET_NAME</span><span class="w">     </span><span class="c1"># 别的任务：kubectl get jobset -n $NS 的 NAME 列</span>
+<span class="nv">N</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>jobset<span class="w"> </span><span class="nv">$JS</span><span class="w"> </span>-n<span class="w"> </span><span class="nv">$NS</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.replicatedJobs[0].replicas}&#39;</span><span class="k">)</span><span class="w">     </span><span class="c1"># replica 数（= 片数）</span>
+<span class="k">for</span><span class="w"> </span>r<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="k">$(</span>seq<span class="w"> </span><span class="m">0</span><span class="w"> </span><span class="k">$((</span><span class="nv">N</span><span class="o">-</span><span class="m">1</span><span class="k">)))</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;replica </span><span class="nv">$r</span><span class="s2">: </span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span><span class="nv">$NS</span><span class="w"> </span>-l<span class="w"> </span>jobset.sigs.k8s.io/jobset-name<span class="o">=</span><span class="nv">$JS</span>,jobset.sigs.k8s.io/job-index<span class="o">=</span><span class="nv">$r</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*]}{.spec.nodeName}{&quot;\n&quot;}{end}&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>-I<span class="o">{}</span><span class="w"> </span>kubectl<span class="w"> </span>get<span class="w"> </span>node<span class="w"> </span><span class="o">{}</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.metadata.labels.cloud\.google\.com/gke-tpu-partition-4x4x4-id}{&quot;\n&quot;}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span><span class="p">|</span><span class="w"> </span>tr<span class="w"> </span><span class="s1">&#39;\n&#39;</span><span class="w"> </span><span class="s1">&#39; &#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+<span class="k">done</span>
+kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>kueue-system<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>kueue<span class="w"> </span>--since<span class="o">=</span>15m<span class="w"> </span>--tail<span class="o">=</span>-1<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;conflicting rank&quot;</span>
+</code></pre></div>
+</li>
+<li><strong>别等 12 min barrier 超时，也别指望 RestartJobSet</strong>（大概率再跨 cube）：删 JobSet，<code>kubectl get pods -n $NS -l jobset.sigs.k8s.io/jobset-name=$JS</code> <strong>为空后</strong>再重提（同 run 名续检查点）。</li>
+<li>一片一个 cube 仍挂（演练中见过 1 次）：拿 GCE UUID 按<a href="pitfalls.html#l-43">经验教训第 43 条</a>分诊。</li>
+</ol>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>C、D 同一根治：交付 JobSet 模板启动命令必须带 <code>ulimit -c 0</code></span></span>旧 pod 在宽限期内退干净，也不落 core 撑满启动盘。</p>
+</blockquote>
+<h3 id="d-diskpressure-驱逐">D. DiskPressure 驱逐</h3>
+<p>触发：<code>EvictedDueToNodeFailures</code>。</p>
+<figure class="mermaid"><img src="../assets/mermaid/bd9e444053c3.png" width="743" alt="示意图" loading="lazy"></figure><div class="tbl"><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>做法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. <strong>确认链条</strong></td>
+<td>按图核对驱逐链条（链条本身见<a href="pitfalls.html#l-42">经验教训第 42 条</a>）</td>
+</tr>
+<tr>
+<td>2. <strong>等压力解除</strong></td>
+<td><code>kubectl describe node &lt;n&gt; | grep -A2 DiskPressure</code>；重切后照 C 第 1 步查</td>
+</tr>
+<tr>
+<td>3. <strong>根治</strong></td>
+<td><code>ulimit -c 0</code>（或不落盘的 <code>core_pattern</code>；要 core 就写带 <code>sizeLimit</code> 的 emptyDir）；启动盘仅 94.3 GiB、无 Local SSD <a href="pitfalls.html#l-22">经验教训第 22 条</a></td>
+</tr>
+<tr>
+<td>4. <strong>验证</strong></td>
+<td><code>kubectl auth can-i create events -n $NS --as=system:serviceaccount:kueue-system:kueue-controller-manager</code> 为 yes（告警 #29）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="e-dcn-挂住疑似网卡复位">E. DCN 挂住（疑似网卡复位）</h3>
+<p>触发：多片任务卡在首次跨片 all-reduce（<code>Deadline Exceeded</code>），单片正常；或 #17 响而无节点告警。</p>
+<figure class="mermaid"><img src="../assets/mermaid/b1a247094f0a.png" width="480" alt="示意图" loading="lazy"></figure><ul>
+<li><strong>查</strong>：串口搜 <code>NETDEV WATCHDOG|gve.*Performing reset</code>；节点上 <code>ethtool -g eth0 | grep -i &quot;tcp data split&quot;</code>、<code>dmesg -T | grep -i &quot;gve.*reset&quot;</code>（<a href="scripts/04-nic-check.sh"><code>04-nic-check.sh</code></a> 批量做）。没命中就按主机网卡硬件排查（上图右支，见<a href="pitfalls.html#l-19">经验教训第 19 条</a>）。</li>
+<li><strong>别做</strong>：运行时 <code>ethtool -K</code> 关 tcp-data-split；调大 <code>--node-monitor-grace-period</code>。修复版 1.35.13-gke.0+ / 1.36.4-gke.0+。</li>
+<li>慢而不是挂：按<a href="pitfalls.html#l-45">经验教训第 45 条</a>先取证再重建，区分<a href="pitfalls.html#l-20">经验教训第 20 条</a>。</li>
+</ul>
+<h3 id="f-ocs-drain很多-cube-同时翻-degraded--unhealthy">F. OCS drain：很多 cube 同时翻 DEGRADED / UNHEALTHY</h3>
+<p>触发：<code>degradedInfraCount: 1</code> 大面积出现；同组机位号（如每 cube 的 1、6、9、14 号机）有 drained link。</p>
+<ul>
+<li>先开一个 case 交给 Google，再看 sub-block healthInfo。</li>
+<li>一个机箱 DEGRADED：可用（需 ICI resiliency），SLO 算健康，照常调度；任务起不来就暂停提交。</li>
+<li>一对交换机都 drain：全部 UNHEALTHY，整 pod 不可用。</li>
+<li>事后：回 HEALTHY 后重建受影响切片。</li>
+</ul>
+<p>实测集群标签把 DEGRADED 显示成 UNHEALTHY，只有 healthInfo 分得清。</p>
+<ul>
+<li><strong>一个事件一张 case</strong>，别开 144 张。</li>
+<li><strong>照常调度</strong>前提：书面约定 <code>--default-slice-health-node-affinity=HEALTHY_AND_DEGRADED</code>（<a href="09-customer-alignment.html#d03">09 D03</a>）。<strong>暂停提交</strong>信号：<code>TPU backend initialization is taking more than 60.0 seconds</code> / <code>STOP_SESSION failed</code>；<strong>别按 cube 快速连发</strong>（先例致全 pod UNHEALTHY）。</li>
+<li><strong>事后</strong>：<code>healthyInfraCount</code> 恢复后重建，让 resilient routing 生效<span class="tg inf">[需确认]</span>。</li>
+</ul>
+<h3 id="g-配额耗尽">G. 配额耗尽</h3>
+<p>触发：<code>Quota exceeded for quota metric 'Read requests' and limit 'Read requests per minute per region'</code>；<code>Invalid slice state transition 'ACTIVE' -&gt; 'MMIGHealthProbeFailed'</code>。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>配额</th>
+<th>症状</th>
+<th>先做</th>
+<th>根治</th>
+<th>页</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GCE 读请求 / 分钟 / region</td>
+<td>健康切片成批 <code>Ready=Unknown</code>、<code>Unexpected partition state</code></td>
+<td><strong>别批量删切片</strong>（先例：删了反把 detach 卡死，作业长时间停摆）；开 case；停自己的轮询器</td>
+<td>控制器升到含修复的版本；交付前抬读配额（(MIG+MMIG)×12，144 cube 仅控制器约 3,456 reads/min <span class="tg inf">[推断算术]</span>）</td>
+<td><a href="pitfalls.html#l-52">经验教训第 52 条</a></td>
+</tr>
+<tr>
+<td>multi-MIG 配额</td>
+<td>新 super-slice 建不起</td>
+<td>看用量</td>
+<td>交付前 override 到千级</td>
+<td><a href="pitfalls.html#l-5">经验教训第 5 条</a></td>
+</tr>
+<tr>
+<td>HDB（启动盘）/ IP</td>
+<td>新池 / 新节点起不来</td>
+<td>读 limit 也读 usage；清 Released PV</td>
+<td>Cloud Quotas API 提额（最慢）</td>
+<td><a href="pitfalls.html#l-5">经验教训第 5 条</a>、<a href="pitfalls.html#l-21">经验教训第 21 条</a></td>
+</tr>
+<tr>
+<td>etcd / pod 数</td>
+<td><code>mvcc: database space exceeded</code>、新池 0 节点</td>
+<td>批量删完成态 pod；<strong>别成批建池</strong></td>
+<td>JobSet 加 <code>ttlSecondsAfterFinished</code>；已满时控制面存储配额只有 Google 能调</td>
+<td><a href="pitfalls.html#l-53">经验教训第 53 条</a></td>
+</tr>
+<tr>
+<td>Cloud Logging API</td>
+<td>日志断档</td>
+<td>按小项目给的配额（先例 600 MB）</td>
+<td>交付前提额</td>
+<td><a href="pitfalls.html#l-53">经验教训第 53 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="检查点" class="hc0">检查点</h2>
+<p><strong>做完了</strong>（对应 README 交付清单 H）</p>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 加粗 7 条 + ★ 3 条告警按 <code>08-alert-sources.yaml</code> 上线；串口日志与指标包已开；Q1–Q14 存好（§8.1）</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 掉队阈值按功耗档分开写进告警 #18 和 soak 阈值文件（§8.1）</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> Kueue events RBAC 已补（<code>kubectl auth can-i</code> = yes）或 Q3 接进告警（§8.1 #29）</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 自触发维护批次方案（每批 cube 数、批后健康 cube ≥132）与 Google 确认；「只删 Slice 不删池」书面确认（§8.2）</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 维护例外 <code>tpu-node-freeze</code> 已加且 describe 可见；升级金丝雀集群；kueue-slice-controller 钉 digest，版本按 <a href="09-customer-alignment.html#d10">09 D10</a> 升级并重跑 07 演练（§8.3）</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <code>--probe</code> 挂 cron；完整版每天一次（别高频跑）；每周清单排进值班日历（§8.4）</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 交付用 JobSet 模板带 <code>ulimit -c 0</code> 和 <code>ttlSecondsAfterFinished</code>（§8.6-C/D、§8.4）</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> §8.5「交付前要备好」到位</li>
+</ul>
+<p><strong>说得出</strong>（先自己答，再点开对答案）</p>
+<ul class="contains-task-list">
+<li class="task-list-item qa"><details><summary>为什么告警要自己做？</summary><div class="qa-a">平台侧告警不一定比你先发现；健康信号会说谎</div></details></li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 举三种「看着健康其实不健康」。（网卡 2 s 复位节点不 NotReady；sub-block 每 4 h 假 DEGRADED；驱逐原因不在 events；429 把健康切片标 Unknown；池 RUNNING 但一台 unreachable）</li>
+<li class="task-list-item qa"><details><summary>P7 下为什么不能用默认档的掉队阈值？</summary><div class="qa-a">P7 跨 host 极差 5.6–6.8% 且逐 host 固定，默认档 &lt; 1%；和每台自己的 P7 基线比</div></details></li>
+<li class="task-list-item qa"><details><summary>自触发维护一批要先做哪三件事？</summary><div class="qa-a">排空任务、删 Slice、配额减去批量×64</div></details></li>
+<li class="task-list-item qa"><details><summary>维护前删 Slice 还是删节点池？</summary><div class="qa-a">只删 Slice，删池会丢主机映射</div></details></li>
+<li class="task-list-item qa"><details><summary>节点池升级前为什么要先删切片？</summary><div class="qa-a">升级会把 ACTIVE 切片变 FAILED 且不恢复</div></details></li>
+<li class="task-list-item qa"><details><summary>重切后 TPU 初始化挂住，第一步查什么？</summary><div class="qa-a">每个 replica 的 pod 是否在同一 partition；跨了就删 JobSet，旧 pod 删净再重提</div></details></li>
+<li class="task-list-item qa"><details><summary>读配额打满时最不该做什么？</summary><div class="qa-a">批量删切片</div></details></li>
+<li class="task-list-item qa"><details><summary>出了问题第一步做什么？</summary><div class="qa-a">按 §8.6 止血、取证，同时开 case 交给 Google，带齐 §8.5 附件表</div></details></li>
+</ul>
+<p><strong>交棒</strong>：回 <a href="README.html#%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95%E6%8C%89%E9%A1%BA%E5%BA%8F%E5%8B%BE">README 交付清单 H</a> 打勾；「谁值班、能不能 page、维护谁触发、坏了多久回来」要和使用方书面定，收在 <a href="09-customer-alignment.html">09 交付前对齐清单</a>（D05、D07、D18、D23）。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="07a-fault-recovery.html"><small>← 上一页</small>07a 故障恢复专题：演练、MTC、换片与时间账</a><a class="next" href="08a-slow-node-sop.html"><small>下一页 →</small>08a 慢节点 / 慢片标准流程</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#81-监控与告警">8.1 监控与告警</a></li><li class="l3"><a href="#先记住健康信号会说谎">先记住：健康信号会说谎</a></li><li class="l3"><a href="#告警总表">告警总表</a></li><li class="l3"><a href="#把-10-条必备告警建成策略未实测">把 10 条必备告警建成策略（未实测）</a></li><li class="l3"><a href="#掉队阈值要按功耗档分开">掉队阈值要按功耗档分开</a></li><li class="l3"><a href="#要存的-cloud-logging-查询">要存的 Cloud Logging 查询</a></li><li class="l2"><a href="#82-主机维护">8.2 主机维护</a></li><li class="l2"><a href="#83-gke-与软件升级">8.3 GKE 与软件升级</a></li><li class="l2"><a href="#84-日常巡检每天--每周与容量跟踪">8.4 日常巡检（每天 / 每周）与容量跟踪</a></li><li class="l3"><a href="#每天">每天</a></li><li class="l3"><a href="#已修未回池每天一张表逐台跟">已修未回池：每天一张表，逐台跟</a></li><li class="l3"><a href="#每周">每周</a></li><li class="l2"><a href="#85-出问题找谁">8.5 出问题找谁</a></li><li class="l3"><a href="#升级时附上什么">升级时附上什么</a></li><li class="l3"><a href="#开-case-与推进升级">开 case 与推进升级</a></li><li class="l2"><a href="#86-事故手册">8.6 事故手册</a></li><li class="l3"><a href="#a-跑着任务的-cube-变-unhealthy">A. 跑着任务的 cube 变 UNHEALTHY</a></li><li class="l3"><a href="#b-slicecreationfailed-风暴--slice-卡在过渡态">B. SliceCreationFailed 风暴 / Slice 卡在过渡态</a></li><li class="l3"><a href="#c-重切后-tpu-初始化挂住">C. 重切后 TPU 初始化挂住</a></li><li class="l3"><a href="#d-diskpressure-驱逐">D. DiskPressure 驱逐</a></li><li class="l3"><a href="#e-dcn-挂住疑似网卡复位">E. DCN 挂住（疑似网卡复位）</a></li><li class="l3"><a href="#f-ocs-drain很多-cube-同时翻-degraded--unhealthy">F. OCS drain：很多 cube 同时翻 DEGRADED / UNHEALTHY</a></li><li class="l3"><a href="#g-配额耗尽">G. 配额耗尽</a></li><li class="l2"><a href="#检查点">检查点</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

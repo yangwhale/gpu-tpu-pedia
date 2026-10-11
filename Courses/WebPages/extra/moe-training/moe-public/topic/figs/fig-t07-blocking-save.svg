@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 420" width="1000" height="420" font-family="Noto Sans CJK SC, sans-serif">
+  <rect width="1000" height="420" fill="#ffffff"/>
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker>
+  </defs>
+
+  <!-- 旧 -->
+  <text x="30" y="38" font-size="19" font-weight="bold" fill="#d93025">旧：barrier 在主线程上，训练停下来等最慢那台 host</text>
+  <text x="30" y="84" font-size="15" fill="#5f6368">主线程</text>
+  <rect x="110" y="62" width="110" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+  <text x="165" y="88" font-size="14" text-anchor="middle" fill="#174ea6">训练 step</text>
+  <rect x="224" y="62" width="110" height="40" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
+  <text x="279" y="88" font-size="14" text-anchor="middle" fill="#202124">等主进程建目录</text>
+  <rect x="338" y="62" width="420" height="40" rx="6" fill="#fce8e6" stroke="#d93025"/>
+  <text x="548" y="88" font-size="14" text-anchor="middle" fill="#a50e0e">barrier#2：设备 all-gather，等最慢 host 到齐</text>
+  <rect x="762" y="62" width="110" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+  <text x="817" y="88" font-size="14" text-anchor="middle" fill="#174ea6">训练 step</text>
+  <line x1="224" y1="120" x2="758" y2="120" stroke="#d93025" stroke-width="2"/>
+  <line x1="224" y1="114" x2="224" y2="126" stroke="#d93025" stroke-width="2"/>
+  <line x1="758" y1="114" x2="758" y2="126" stroke="#d93025" stroke-width="2"/>
+  <text x="491" y="146" font-size="16" font-weight="bold" text-anchor="middle" fill="#d93025">小号模型千芯片级长上下文生产：存档那一步慢到平时的十倍上下，大头是主线程里的 barrier</text>
+
+  <!-- 新 -->
+  <text x="30" y="210" font-size="19" font-weight="bold" fill="#1e8e3e">新：主线程只做 device→host 拷贝，建目录和 barrier 都挪到后台</text>
+  <text x="30" y="256" font-size="15" fill="#5f6368">主线程</text>
+  <rect x="110" y="234" width="110" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+  <text x="165" y="260" font-size="14" text-anchor="middle" fill="#174ea6">训练 step</text>
+  <rect x="224" y="234" width="100" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+  <text x="274" y="260" font-size="14" text-anchor="middle" fill="#0d652d">D2H 拷贝</text>
+  <rect x="328" y="234" width="110" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+  <text x="383" y="260" font-size="14" text-anchor="middle" fill="#174ea6">训练 step</text>
+  <rect x="442" y="234" width="110" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+  <text x="497" y="260" font-size="14" text-anchor="middle" fill="#174ea6">训练 step</text>
+  <rect x="556" y="234" width="110" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+  <text x="611" y="260" font-size="14" text-anchor="middle" fill="#174ea6">训练 step</text>
+
+  <text x="30" y="324" font-size="15" fill="#5f6368">后台线程</text>
+  <rect x="328" y="302" width="150" height="40" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
+  <text x="403" y="328" font-size="14" text-anchor="middle" fill="#202124">等主进程建目录</text>
+  <rect x="482" y="302" width="306" height="40" rx="6" fill="#f1f3f4" stroke="#5f6368"/>
+  <text x="635" y="328" font-size="14" text-anchor="middle" fill="#202124">后台收尾：KV barrier（等最慢 host）</text>
+  <line x1="324" y1="278" x2="336" y2="298" stroke="#5f6368" stroke-width="1.6" marker-end="url(#ah)"/>
+
+  <rect x="30" y="360" width="940" height="46" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+  <text x="50" y="389" font-size="15" fill="#202124">另一次实验（大号模型 128 芯片，修前 → 修后）：<tspan font-weight="bold" fill="#0d652d">热存约 −40%（约 19 → 11 s）</tspan>，约等于 D2H 拷贝本身（地板）</text>
+</svg>

@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 327" width="900" height="327" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="示意图：一次 HLO 通信重排全开的 CPU 编译。提速前：探测那遍要做一次 Python trace 加 lowering 再白编一次后端，正式那遍再 trace 加 lowering 一次，两遍 trace 加 lowering 才是大头，placement 搜索只占十几分钟。四刀分别砍在：trace 加 lowering 变短、探测不再编后端、两遍合成一遍、placement 搜索并行。提速后约 17 分钟，产物逐字节不变。">
+<title>示意图：一次 HLO 通信重排全开的 CPU 编译。提速前：探测那遍要做一次 Python trace 加 lowering 再白编一次后端，正式那遍再 trace 加 lowering 一次，两遍 trace 加 lowering 才是大头，placement 搜索只占十几分钟。四刀分别砍在：trace 加 lowering 变短、探测不再编后端、两遍合成一遍、placement 搜索并行。提速后约 17 分钟，产物逐字节不变。</title>
+<defs><style></style></defs>
+<rect x="0" y="0" width="900" height="327" fill="#ffffff"/>
+<text x="20.0" y="34.0" font-size="19" fill="#202124" font-weight="700">两小时的编译大头在 Python trace + lowering，不在 placement 搜索：先砍 Python</text>
+<text x="20.0" y="60.0" font-size="14" fill="#5f6368">示意，块长不按比例。上排提速前（约 2 h），下排提速后（约 17 min，产物逐字节不变）；红圈＝四刀各砍在哪</text>
+<rect x="20.0" y="73.0" width="22.0" height="13.0" rx="2" fill="#1a73e8" />
+<text x="48.0" y="85.0" font-size="14" fill="#202124">Python trace + lowering</text>
+<rect x="245.0" y="73.0" width="22.0" height="13.0" rx="2" fill="#5f6368" />
+<text x="273.0" y="85.0" font-size="14" fill="#202124">XLA 后端 / 调度 / codegen</text>
+<rect x="469.4" y="73.0" width="22.0" height="13.0" rx="2" fill="#e8710a" />
+<text x="497.4" y="85.0" font-size="14" fill="#202124">placement 搜索</text>
+<rect x="624.7" y="73.0" width="22.0" height="13.0" rx="2" fill="#188038" />
+<text x="652.7" y="85.0" font-size="14" fill="#202124">借配置的小编译</text>
+<text x="20.0" y="169.0" font-size="16" fill="#202124" font-weight="700">提速前</text>
+<text x="20.0" y="189.0" font-size="13" fill="#5f6368">约 2 h</text>
+<text x="150.0" y="137.0" font-size="13" fill="#5f6368">探测遍</text>
+<text x="536.0" y="137.0" font-size="13" fill="#5f6368">正式遍</text>
+<g>
+<rect x="120.0" y="147.0" width="160.0" height="34.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2" />
+<text x="200.0" y="168.7" font-size="13" fill="#202124" text-anchor="middle">trace + lower</text>
+</g>
+<g>
+<rect x="284.0" y="147.0" width="80.0" height="34.0" rx="3" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.2" />
+<text x="324.0" y="168.7" font-size="13" fill="#202124" text-anchor="middle">后端</text>
+</g>
+<g>
+<rect x="370.0" y="147.0" width="130.0" height="34.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="1.2" />
+<text x="435.0" y="168.7" font-size="13" fill="#202124" text-anchor="middle">借配置 ×十来个</text>
+</g>
+<g>
+<rect x="506.0" y="147.0" width="160.0" height="34.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2" />
+<text x="586.0" y="168.7" font-size="13" fill="#202124" text-anchor="middle">trace + lower</text>
+</g>
+<g>
+<rect x="670.0" y="147.0" width="50.0" height="34.0" rx="3" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.2" />
+<text x="695.0" y="168.7" font-size="13" fill="#202124" text-anchor="middle">调度</text>
+</g>
+<g>
+<rect x="724.0" y="147.0" width="110.0" height="34.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+<text x="779.0" y="168.7" font-size="13" fill="#202124" text-anchor="middle">placement</text>
+</g>
+<text x="200.0" y="201.0" font-size="13" fill="#1a73e8" text-anchor="middle">每遍 15–16 min</text>
+<text x="586.0" y="201.0" font-size="13" fill="#1a73e8" text-anchor="middle">每遍 15–16 min</text>
+<text x="779.0" y="201.0" font-size="13" fill="#e8710a" text-anchor="middle">约 11 min</text>
+<g>
+<rect x="838.0" y="147.0" width="42.0" height="34.0" rx="3" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.2" />
+<text x="859.0" y="168.7" font-size="13" fill="#202124" text-anchor="middle">后端</text>
+</g>
+<path d="M120,211 L120,219 L666,219 L666,211" stroke="#d93025" stroke-width="1.6" fill="none"/>
+<circle cx="393.0" cy="219.0" r="11" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text x="393.0" y="224.0" font-size="14" fill="#d93025" text-anchor="middle" font-weight="700">③</text>
+<circle cx="132.0" cy="149.0" r="11" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text x="132.0" y="154.0" font-size="14" fill="#d93025" text-anchor="middle" font-weight="700">①</text>
+<circle cx="518.0" cy="149.0" r="11" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text x="518.0" y="154.0" font-size="14" fill="#d93025" text-anchor="middle" font-weight="700">①</text>
+<circle cx="330.0" cy="147.0" r="11" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text x="330.0" y="152.0" font-size="14" fill="#d93025" text-anchor="middle" font-weight="700">②</text>
+<circle cx="820.0" cy="147.0" r="11" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text x="820.0" y="152.0" font-size="14" fill="#d93025" text-anchor="middle" font-weight="700">④</text>
+<text x="20.0" y="279.0" font-size="16" fill="#202124" font-weight="700">提速后</text>
+<text x="20.0" y="299.0" font-size="13" fill="#5f6368">约 17 min</text>
+<g>
+<rect x="120.0" y="257.0" width="130.0" height="34.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="1.2" />
+<text x="185.0" y="278.7" font-size="13" fill="#202124" text-anchor="middle">借配置</text>
+</g>
+<g>
+<rect x="256.0" y="257.0" width="60.0" height="34.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2" />
+<text x="286.0" y="278.7" font-size="13" fill="#202124" text-anchor="middle">trace</text>
+</g>
+<g>
+<rect x="320.0" y="257.0" width="50.0" height="34.0" rx="3" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.2" />
+<text x="345.0" y="278.7" font-size="13" fill="#202124" text-anchor="middle">调度</text>
+</g>
+<g>
+<rect x="374.0" y="257.0" width="80.0" height="34.0" rx="3" fill="#fef0e1" stroke="#e8710a" stroke-width="1.2" />
+<text x="414.0" y="278.7" font-size="13" fill="#202124" text-anchor="middle">placement</text>
+</g>
+<g>
+<rect x="458.0" y="257.0" width="42.0" height="34.0" rx="3" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.2" />
+<text x="479.0" y="278.7" font-size="13" fill="#202124" text-anchor="middle">后端</text>
+</g>
+<text x="286.0" y="311.0" font-size="13" fill="#1a73e8" text-anchor="middle">约 2 min，只一遍</text>
+<text x="414.0" y="249.0" font-size="13" fill="#e8710a" text-anchor="middle">约 5 min</text>
+</svg>

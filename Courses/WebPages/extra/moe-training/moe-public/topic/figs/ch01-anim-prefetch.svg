@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400" width="900" height="400" role="img" aria-label="动图示意：上半部分不预取，每层先等权重 all-gather 完成再算，TensorCore 在每次 AG 期间干等（红色）。下半部分提前发，下一层的 AG 在这一层计算期间进行，只剩搬比算多出来的那一小截等待，整步更早结束。虚线竖线从左往右扫，表示时间推进。"><style>
+@keyframes sw2 { 0% { transform: translate(0px,0px); opacity: 0 } 7.0% { transform: translate(0px,0px); opacity: 0 } 10.0% { transform: translate(0px,0px); opacity: 1 } 85% { transform: translate(703.1px,0px); opacity: 1 } 100% { transform: translate(703.1px,0px); opacity: 1 } }
+.sw2 { animation: sw2 10s linear infinite; }
+@keyframes sw4 { 0% { transform: translate(0px,0px); opacity: 0 } 7.0% { transform: translate(0px,0px); opacity: 0 } 10.0% { transform: translate(0px,0px); opacity: 1 } 85% { transform: translate(703.1px,0px); opacity: 1 } 100% { transform: translate(703.1px,0px); opacity: 1 } }
+.sw4 { animation: sw4 10s linear infinite; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+</style><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker><marker id="ahO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker><marker id="ahR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker><marker id="ahB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker><clipPath id="clip1"><rect x="150" y="128" width="705.1" height="70"/></clipPath><clipPath id="clip3"><rect x="150" y="258" width="705.1" height="70"/></clipPath></defs><rect width="900" height="400" fill="#fff"/><text x="450.0" y="30.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="17" text-anchor="middle" fill="#202124" font-weight="bold">藏通信：下一层的权重 AG 提前发，压在这一层的计算底下</text>
+<text x="450.0" y="53.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#5f6368">示意，只画前向几层；搬比算重时，提前发也只藏得住和计算等长的那一截</text>
+<rect x="129.0" y="69.0" width="18.0" height="13.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="153.0" y="80.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="start" fill="#202124">计算（TensorCore）</text>
+<rect x="371.0" y="69.0" width="18.0" height="13.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.5"/>
+<text x="395.0" y="80.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="start" fill="#202124">权重 AG（通信）</text>
+<rect x="543.0" y="69.0" width="18.0" height="13.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+<text x="567.0" y="80.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="start" fill="#202124">TensorCore 干等</text>
+<text x="30.0" y="122.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="start" fill="#202124" font-weight="bold">不预取</text>
+<text x="84.0" y="122.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="start" fill="#5f6368">AG 发完才开始算</text>
+<text x="140.0" y="150.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="end" fill="#202124">计算</text>
+<text x="140.0" y="182.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="end" fill="#202124">通信</text>
+<rect x="150.0" y="164.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="197.4" y="182.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 1</text>
+<rect x="150.0" y="132.0" width="94.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="244.8" y="132.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="284.3" y="150.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 1</text>
+<rect x="323.8" y="164.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="371.2" y="182.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 2</text>
+<rect x="323.8" y="132.0" width="94.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="418.6" y="132.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="458.1" y="150.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 2</text>
+<rect x="497.6" y="164.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="545.0" y="182.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 3</text>
+<rect x="497.6" y="132.0" width="94.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="592.4" y="132.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="631.9" y="150.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 3</text>
+<rect x="671.4" y="164.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="718.8" y="182.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 4</text>
+<rect x="671.4" y="132.0" width="94.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="766.2" y="132.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="805.7" y="150.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 4</text>
+<line x1="845.2" y1="128.0" x2="845.2" y2="196.0" stroke="#202124" stroke-width="2"/>
+<text x="839.2" y="124.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="end" fill="#202124">这一步算完</text>
+<text x="30.0" y="252.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="start" fill="#202124" font-weight="bold">提前发</text>
+<text x="84.0" y="252.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="start" fill="#5f6368">第 i+1 层的 AG 和第 i 层的计算同时跑</text>
+<text x="140.0" y="280.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="end" fill="#202124">计算</text>
+<text x="140.0" y="312.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="end" fill="#202124">通信</text>
+<rect x="150.0" y="294.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="197.4" y="312.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 1</text>
+<rect x="150.0" y="262.0" width="94.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="244.8" y="262.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="284.3" y="280.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 1</text>
+<rect x="244.8" y="294.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="292.2" y="312.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 2</text>
+<rect x="323.8" y="262.0" width="15.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="339.6" y="262.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="379.1" y="280.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 2</text>
+<rect x="339.6" y="294.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="387.0" y="312.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 3</text>
+<rect x="418.6" y="262.0" width="15.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="434.4" y="262.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="473.9" y="280.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 3</text>
+<rect x="434.4" y="294.0" width="94.8" height="26.0" rx="2" fill="#fef0e3" stroke="#e8710a" stroke-width="1.3"/>
+<text x="481.8" y="312.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">AG 4</text>
+<rect x="513.4" y="262.0" width="15.8" height="26.0" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<rect x="529.2" y="262.0" width="79.0" height="26.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="568.7" y="280.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">算 4</text>
+<line x1="608.2" y1="258.0" x2="608.2" y2="326.0" stroke="#202124" stroke-width="2"/>
+<text x="602.2" y="254.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="end" fill="#202124">这一步算完</text>
+<path d="M 331.7 252 L 331.7 244 L 521.3 244 L 521.3 252" stroke="#d93025" stroke-width="1.2" fill="none"/>
+<text x="426.5" y="238.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#d93025">剩下的红 ＝ 搬比算多出来的那截</text>
+<line x1="608.2" y1="352.0" x2="845.2" y2="352.0" stroke="#188038" stroke-width="2" marker-end="url(#ah)"/>
+<line x1="845.2" y1="352.0" x2="608.2" y2="352.0" stroke="#188038" stroke-width="2" marker-end="url(#ah)"/>
+<text x="726.7" y="374.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#188038" font-weight="bold">省下的步时</text>
+<g clip-path="url(#clip1)"><rect class="sw2" transform="translate(705.1,0)" x="150" y="128" width="705.1" height="70" fill="#fff" fill-opacity="0.75"/></g>
+<line class="sw2" transform="translate(703.1,0)" x1="150" y1="124" x2="150" y2="202" stroke="#202124" stroke-width="2" stroke-dasharray="4 3" opacity="0"/>
+<g clip-path="url(#clip3)"><rect class="sw4" transform="translate(705.1,0)" x="150" y="258" width="705.1" height="70" fill="#fff" fill-opacity="0.75"/></g>
+<line class="sw4" transform="translate(703.1,0)" x1="150" y1="254" x2="150" y2="332" stroke="#202124" stroke-width="2" stroke-dasharray="4 3" opacity="0"/></svg>

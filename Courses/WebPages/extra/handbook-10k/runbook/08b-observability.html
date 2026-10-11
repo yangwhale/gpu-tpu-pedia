@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>08b 可观测性：看什么、怎么看、怎么靠它找到问题 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a class="on" aria-current="page" href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>08b 可观测性：看什么、怎么看、怎么靠它找到问题</span></nav><article class="md"><h1 id="08b-可观测性看什么怎么看怎么靠它找到问题">08b 可观测性：看什么、怎么看、怎么靠它找到问题</h1>
+<blockquote>
+<div class="kp kc0"><div class="kp-t">要解决什么</div>
+<ul>
+<li>08 给了 29 条告警和 14 条日志查询，但它们是散的。值班的人想知道「这个 job 现在好不好、慢在哪、钱花哪了」，得自己拼五六个控制台。</li>
+<li>下面是一套参考设计：把这些问题收进 5 张看板和一条告警出口。这一章讲它的<strong>思路</strong>：观测哪些对象、口径怎么定、看板怎么排、出了事怎么一步步下钻。</li>
+</ul></div>
+<div class="kp kc1"><div class="kp-t">难在哪</div>
+<ul>
+<li>现成信号有不少是假的。Cloud Monitoring 自带的利用率均值<strong>明显虚高</strong>；慢节点在 GKE 里一直显示 Ready / HEALTHY（见<a href="pitfalls.html#l-48">经验教训第 48 条</a>）。</li>
+<li>有些正常状态长得像故障。四成多的 slice 先报一次 <code>SliceCreationFailed</code> 再自己成功，照字面告警会一直响。</li>
+<li>监控自己也会停。建模循环停住时看板照常显示旧数，没人报警。</li>
+</ul></div>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>9</strong> 类观测对象：job、吞吐与 goodput、变慢与掉队、中断与恢复、节点体检、平台事件、告警投递、财务、数据新鲜度</li>
+<li><strong>4</strong> 类信号来源：训练日志、指标、事件、审计</li>
+<li><strong>5</strong> 张看板，<strong>上百</strong>个面板；1 个原则：先落 BigQuery，再出图</li>
+<li><strong>2</strong> 条落地路线：最小版（零常驻进程）／完整版（§8b.6）</li>
+</ul>
+</div>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>一句话结论</span></span></p>
+<ul>
+<li><strong>所有出口读同一批表。</strong> 告警、看板、财务报表、自动处置都从同一套 BigQuery 模型出数，「看板说慢」和「告警说慢」不会是两个口径。</li>
+<li><strong>看板的第一行永远是数据新鲜度</strong>，其次是结论，最后才是证据。先确认「我看到的是不是现在」，再看「现在好不好」。</li>
+<li><strong>最值得抄的三条口径</strong>：
+<ol>
+<li>利用率一律除以<strong>已付费芯片小时</strong>。</li>
+<li>「卡住」要两个信号同时成立。</li>
+<li>监控自己的每一轮都记账，并对账本告警。</li>
+</ol>
+</li>
+<li><strong>使用方先上最小版</strong>：只把 step 日志引进 BigQuery，没有常驻进程，就能看到所有 job 的 step 曲线和「卡住」判定。完整版要等告警通道、体检门禁、价目表三件事定了再上。</li>
+</ul>
+</blockquote>
+<h2 id="总图" class="hc0">总图</h2>
+<figure class="mermaid"><img src="../assets/mermaid/60089da7bae3.png" width="1155" alt="示意图" loading="lazy"></figure><p>读图：</p>
+<ul>
+<li>左边四类信号各有延迟。step 日志是秒级，指标导出每 30 分钟一批，审计每 5 分钟一批。</li>
+<li>中间那本账（「每轮记账」）也接到告警上。</li>
+<li>红色出口会<strong>改集群</strong>。使用方照搭时先放在 shadow（只记录、不动手）。</li>
+</ul>
+<p><a id="step-8b-1"></a></p>
+<h2 id="8b1-要观测什么" class="hc1"><span class="hn">8b.1</span>要观测什么</h2>
+<p>四类信号的意思：</p>
+<ul>
+<li><strong>训练日志</strong>：训练程序自己打的 step 行。</li>
+<li><strong>指标</strong>：Cloud Monitoring 的时间序列。</li>
+<li><strong>事件</strong>：GCE、预留、Kueue 报出来的状态变化。也包括定时去轮询的状态。</li>
+<li><strong>审计</strong>：K8s API 的审计日志，谁在什么时候建、删、改了哪个对象。</li>
+</ul>
+<p>维度从粗到细是：job → slice → cube（16 台主机的 sub-block）→ host。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>对象</th>
+<th>为什么看</th>
+<th>最细到</th>
+<th>主要信号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>job</td>
+<td>一切的主键</td>
+<td>job × 尝试</td>
+<td>审计</td>
+</tr>
+<tr>
+<td>吞吐与 goodput</td>
+<td>跑得值不值</td>
+<td>job</td>
+<td>训练日志、指标</td>
+</tr>
+<tr>
+<td>变慢与掉队</td>
+<td>一片慢拖全局</td>
+<td>slice → cube</td>
+<td>训练日志、指标</td>
+</tr>
+<tr>
+<td>中断与恢复</td>
+<td>时间丢在哪</td>
+<td>job × 原因</td>
+<td>审计、事件</td>
+</tr>
+<tr>
+<td>节点体检</td>
+<td>坏机器别进生产</td>
+<td>cube</td>
+<td>体检结果、审计</td>
+</tr>
+<tr>
+<td>平台事件</td>
+<td>平台在动你的机器</td>
+<td>host → 预留</td>
+<td>事件</td>
+</tr>
+<tr>
+<td>告警投递</td>
+<td>告警发了不等于送到</td>
+<td>每条告警</td>
+<td>自己的账本</td>
+</tr>
+<tr>
+<td>财务</td>
+<td>钱花哪了</td>
+<td>全局 → job</td>
+<td>指标、事件</td>
+</tr>
+<tr>
+<td>数据新鲜度</td>
+<td>看到的是不是现在</td>
+<td>每张表</td>
+<td>自己的账本</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="job先认清谁在跑">job：先认清「谁在跑」</h3>
+<ul>
+<li><strong>为什么看</strong>：后面每个数都要挂到一个 job 上。job 认错，掉队、中断、花费全算错。</li>
+<li><strong>口径</strong>：job 的身份是 JobSet 名 + uid，从 K8s 审计日志里推出来，<strong>不靠训练侧上报</strong>。
+<ul>
+<li>同名 job 跑了多次，按 uid 分成多次运行。</li>
+<li>一次运行里的每次重启算一次「尝试」。</li>
+</ul>
+</li>
+<li><strong>结局</strong>也从审计里读。JobSet 没了但审计里找不到终态的，单独标成「已停止（未记录结局）」，<strong>不算成功</strong>。</li>
+<li><strong>信号</strong>：审计。</li>
+</ul>
+<h3 id="吞吐与-goodput跑得值不值">吞吐与 goodput：跑得值不值</h3>
+<ul>
+<li><strong>为什么看</strong>：芯片小时是钱，step 才是产出。</li>
+<li><strong>关键指标</strong>：
+<ul>
+<li>步时：中位和最慢 rank。</li>
+<li>TFLOP/s/device、tokens/s/device。</li>
+<li>goodput 和逐类 badput：启动与准备、数据加载、中断与恢复等。</li>
+</ul>
+</li>
+<li><strong>口径</strong>：
+<ul>
+<li>每个 pod 都打一行 step 日志，所以先按 (job, 尝试, step) 去重。步时取最慢的那个 pod，并记下是谁。</li>
+<li>goodput 分两种，看板上标明：
+<ul>
+<li><strong>measured</strong>：训练侧开了 goodput 上报，读的是上报的值。</li>
+<li><strong>估算</strong>：没开上报，只能按 step 时间推。</li>
+</ul>
+</li>
+<li>「重做的 step」：step 号低于这个 job 已经到过的最高值的那些步。也就是从检查点重启后白跑的那段，跨重启累计。</li>
+</ul>
+</li>
+<li><strong>信号</strong>：训练日志（step 行）、指标（goodput 上报）。</li>
+</ul>
+<h3 id="变慢与掉队一片慢拖全局">变慢与掉队：一片慢拖全局</h3>
+<ul>
+<li><strong>为什么看</strong>：多片同步训练里，最慢那片决定全局步时。慢节点不报错、不挂，GKE 照样显示健康（见<a href="pitfalls.html#l-45">经验教训第 45 条</a>）。</li>
+<li><strong>关键指标</strong>：
+<ul>
+<li><strong>掉队比</strong>：最慢 rank 的步时 ÷ 中位步时，取 p90。看板 1.1 以上标黄、1.5 以上标红。</li>
+<li><strong>变慢比</strong>：当前 10 分钟步时 ÷ 前 2 小时基线。1.10 报警，回到 1.05 才解除（有回差，免得来回跳）。</li>
+<li><strong>按 slice 的集合通信延迟</strong>：慢片的延迟反而最低。集合通信要等最后到的那片，它一到就收尾，几乎不等。</li>
+<li>TensorCore 利用率按 pod 看。</li>
+</ul>
+</li>
+<li><strong>口径</strong>：
+<ul>
+<li>变慢比跟<strong>自己</strong>的过去比，不跟别的 job 比，所以不用按模型或功耗分档。</li>
+<li>集合通信延迟只能可靠地定位到 <strong>slice</strong>。片内是 ICI 同步的，同一片里哪个 cube 慢，这个指标分不出来。要靠下面「找坏 cube 的三层」。</li>
+</ul>
+</li>
+<li><strong>找坏 cube 的三层</strong>：
+<ol>
+<li><strong>跨运行</strong>：慢运行用过的 cube 取交集，减去快运行用过的 cube，再和硬件事件交叉。</li>
+<li><strong>片级</strong>：哪一片反复「最后到」。数的是每分钟「卡住的集合操作」，不看均值，免得拓扑带来的固定快慢被读成掉队；再用二项检验（Binomial test）排除偶然。</li>
+<li><strong>秒级</strong>：在嫌疑 job 的节点上按秒采集合通信延迟，定位到主机。前提是训练 pod 用 hostNetwork。</li>
+</ol>
+</li>
+<li><strong>信号</strong>：训练日志（步时）、指标（集合通信延迟、TensorCore）。</li>
+</ul>
+<h3 id="中断与恢复时间丢在哪">中断与恢复：时间丢在哪</h3>
+<ul>
+<li><strong>为什么看</strong>：大任务一天中断几次很常见。每次的代价不是「重启那一分钟」，而是「从上一个检查点到现在白跑的步 + 重新排队 + 编译 + 恢复」。</li>
+<li><strong>关键指标</strong>：按原因分类的中断次数、每次恢复花的时间、恢复期损失的芯片小时、重做的 step 数。</li>
+<li><strong>口径</strong>：
+<ul>
+<li>原因要分清「基础设施」和「作业自己」。job 页有个「中断范围」选项，建议选「仅基础设施与作业重启」。</li>
+<li>昨日浪费按芯片小时算，每天汇总一次。</li>
+</ul>
+</li>
+<li><strong>信号</strong>：审计（pod / JobSet 的生灭）、事件（GCE 维护、slice 失败）。</li>
+</ul>
+<h3 id="节点体检坏机器别进生产">节点体检：坏机器别进生产</h3>
+<ul>
+<li><strong>为什么看</strong>：坏节点大多是长时间加压才逼出来的。只靠在岗发现，等于拿生产 job 当探针。</li>
+<li><strong>关键指标</strong>：每个 cube 的体检状态、最深通过的档位（快测 / 加 soak 的标准测）、上次体检时间、为什么待检（新进门 / 修回 / 归还）。</li>
+<li><strong>口径</strong>：
+<ul>
+<li><strong>被抢占、未准入、超时都不算体检失败。</strong></li>
+<li>测试级别取「通过过、且之后没有同套件失败的最深一档」。</li>
+<li>「初始打标」单独算：由初始化命令直接标成 passed（批量或人工放行），<strong>从没实测过</strong>。</li>
+</ul>
+</li>
+<li><strong>信号</strong>：体检结果、审计（节点标签和污点的变化）。</li>
+</ul>
+<h3 id="平台事件平台在动你的机器">平台事件：平台在动你的机器</h3>
+<ul>
+<li><strong>为什么看</strong>：平台侧的维护和修复，很多不会反映到 GKE 节点状态上。</li>
+<li><strong>关键指标</strong>：
+<ul>
+<li><strong>当前不健康的节点</strong>：GCE 计划外维护、主机不健康。</li>
+<li><strong>预留三级健康</strong>：reservation → block → sub-block 的健康主机数。</li>
+<li><strong>计划维护排期</strong>：90 天一轮。</li>
+<li>Kueue 的准入和驱逐决定。</li>
+</ul>
+</li>
+<li><strong>口径</strong>：
+<ul>
+<li>计划维护通知是挂在资源上的<strong>状态</strong>，从发出一直挂到窗口结束。所以用定时轮询读，5 分钟一轮不可能漏掉。只订阅事件流会漏。</li>
+<li>主机不健康要<strong>至少 2 个 5 分钟点</strong>才算：只有一个点的 episode 很常见，单点就报会很吵。</li>
+<li>sub-block DEGRADED 会来回跳，也要连续几轮才算。</li>
+</ul>
+</li>
+<li><strong>信号</strong>：事件（含轮询的状态）。</li>
+</ul>
+<h3 id="告警投递发了不等于送到">告警投递：发了不等于送到</h3>
+<ul>
+<li><strong>为什么看</strong>：告警通道本身会坏（比如 webhook 改了、消息格式不符被丢弃）。不记账的话，「没收到告警」和「没出事」看起来一样。</li>
+<li><strong>关键指标</strong>：每条告警的去重键、规则、是 shadow 还是真发、送达结果；7 天内未送达的条数。</li>
+<li><strong>口径</strong>：
+<ul>
+<li>shadow 的也记一行，只是不发。新规则先 shadow 跑一段，对完账再打开。</li>
+<li>同一件事按去重键只发一次，并有冷却时间。</li>
+</ul>
+</li>
+<li><strong>信号</strong>：告警服务自己的账本。</li>
+</ul>
+<h3 id="财务一个分母">财务：一个分母</h3>
+<ul>
+<li><strong>为什么看</strong>：利用率是对外汇报和扩缩容的依据。分母错了，结论就反了。</li>
+<li><strong>四层漏斗</strong>，每层都除以<strong>已付费（reserved）芯片小时</strong>，所以可以直接相减：</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>含义</th>
+<th>信号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A 已调度给 VM</td>
+<td>预留里有多少芯片分给了 VM</td>
+<td>指标（预留占用）</td>
+</tr>
+<tr>
+<td>B 节点上有 Pod</td>
+<td>有 pod 的时间 × 芯片</td>
+<td>指标</td>
+</tr>
+<tr>
+<td>C 卡在跑</td>
+<td>duty cycle × 时间 × 芯片</td>
+<td>指标</td>
+</tr>
+<tr>
+<td>D 张量核忙</td>
+<td>TensorCore 利用率 × 时间 × 芯片</td>
+<td>指标</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>为什么分母是已付费芯片小时</strong>：空闲的预留芯片上没有 pod，也就没有容器指标。拿「有采样的芯片」当分母，等于把这部分直接从分母里拿掉，没有按 0 算进去。</li>
+<li>按需和 flex-start 的芯片在分子分母里都去掉，因为它们不占预留。</li>
+<li>另有一条 FLOPs 口径：实测 TFLOP/s ÷ 峰值。<strong>TensorCore 利用率不是 MFU</strong>，两条线分开画。</li>
+<li>数据不全的日子（四层出现交叉）单独列出，不计入。</li>
+</ul>
+<h3 id="数据新鲜度看到的是不是现在">数据新鲜度：看到的是不是现在</h3>
+<ul>
+<li><strong>为什么看</strong>：建模是批处理，停了以后看板不会变红，只会<strong>一直显示上一次的数</strong>。这是最难发现的故障。</li>
+<li><strong>关键指标</strong>：
+<ul>
+<li>每张表最后一次写入的时间。</li>
+<li>最后一个 step 的时间。</li>
+<li>轮询距今。</li>
+<li>建模每一轮的成败。</li>
+</ul>
+</li>
+<li><strong>口径</strong>：
+<ul>
+<li>采集分「必需」和「可选」两类。可选的失败只记账，不停整轮。</li>
+<li>每一轮写一行账，告警读这本账。</li>
+<li>job 页上距今超过 15 分钟标黄、60 分钟标红。已结束的 job 这个数自然很大，先看结局。</li>
+</ul>
+</li>
+<li><strong>信号</strong>：自己的账本。</li>
+</ul>
+<p><a id="step-8b-2"></a></p>
+<h2 id="8b2-看板怎么展示" class="hc2"><span class="hn">8b.2</span>看板怎么展示</h2>
+<h3 id="每张看板都按同一个顺序排">每张看板都按同一个顺序排</h3>
+<ol>
+<li><strong>新鲜度</strong>：这页的数据截止到什么时候。</li>
+<li><strong>结论</strong>：几个大数字，颜色就是判断。</li>
+<li><strong>证据</strong>：曲线、明细表。</li>
+<li><strong>排查</strong>：日志、事件、诊断。贵的面板默认折叠，<strong>展开才查询</strong>。</li>
+</ol>
+<p>5 张看板各管一件事，顶部导航条互相跳：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>看板</th>
+<th>回答什么</th>
+<th>第一行</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>任务索引</td>
+<td>谁在跑、谁 goodput 低</td>
+<td>运行中的 job（goodput 着色）</td>
+</tr>
+<tr>
+<td>单任务</td>
+<td>这个 job 好不好、慢在哪</td>
+<td>数据新鲜度</td>
+</tr>
+<tr>
+<td>Cube 体检</td>
+<td>哪些 cube 能放生产</td>
+<td>各状态计数</td>
+</tr>
+<tr>
+<td>集群事件</td>
+<td>平台层发生了什么</td>
+<td>维护排期、降级预留、轮询距今、未送达告警</td>
+</tr>
+<tr>
+<td>财务口径</td>
+<td>钱花哪了</td>
+<td>口径说明（<strong>看数之前先读它</strong>）</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="颜色和分级">颜色和分级</h3>
+<ul>
+<li><strong>绿 / 黄 / 红就是判断</strong>，不需要再对照阈值表：</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>量</th>
+<th>绿</th>
+<th>黄</th>
+<th>红</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>goodput</td>
+<td>≥ 60%</td>
+<td>25–60%</td>
+<td>&lt; 25%</td>
+</tr>
+<tr>
+<td>数据新鲜度</td>
+<td>&lt; 15 min</td>
+<td>15–60 min</td>
+<td>≥ 60 min</td>
+</tr>
+<tr>
+<td>掉队比（p90）</td>
+<td>&lt; 1.1</td>
+<td>1.1–1.5</td>
+<td>≥ 1.5</td>
+</tr>
+<tr>
+<td>轮询距今</td>
+<td>&lt; 10 min</td>
+<td>10–30 min</td>
+<td>≥ 30 min</td>
+</tr>
+<tr>
+<td>未送达告警</td>
+<td>0</td>
+<td>—</td>
+<td>≥ 1</td>
+</tr>
+<tr>
+<td>全局利用率</td>
+<td>≥ 60%</td>
+<td>30–60%</td>
+<td>&lt; 30%</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>体检网格</strong>里一格一个 cube，颜色是状态。多个状态同时成立时，按这个优先级取第一个：
+<ul>
+<li>不通过 → 体检中 → 待体检 → cordon → 维护中 → 硬件告警 → 超期未复测 → 正常 → 未接管 → 未建池。</li>
+<li>绿是正常，黄是待体检，红是硬件告警，紫是维护中。</li>
+<li>格子后缀 <code>L</code> 表示只过了快测，<code>S</code> 表示过了加 soak 的标准测。圆点表示上面有生产 job。</li>
+</ul>
+</li>
+</ul>
+<h3 id="下钻路径总览--单任务--坏-cube">下钻路径：总览 → 单任务 → 坏 cube</h3>
+<figure class="mermaid"><img src="../assets/mermaid/c86a8ef7a3be.png" width="1244" alt="示意图" loading="lazy"></figure><ul>
+<li>在索引页点 job 名进单任务页。</li>
+<li>单任务页往下，依次是 goodput 拆分、速度、变慢记录、数值健康、排查、实时资源、硬件与坏 cube。</li>
+<li>从嫌疑 cube 再跳到体检页和事件页，看它是不是本来就在维护或告警。</li>
+</ul>
+<h3 id="财务页逐层留存找最大的那一刀">财务页：逐层留存，找最大的那一刀</h3>
+<ul>
+<li>四层漏斗画成横条，同一个分母，所以条和条可以直接比。</li>
+<li>从头往下看哪一层掉得最多。
+<ul>
+<li>如果 B → C 这一刀最大，说明 pod 占着卡却没在跑，比如在排队、装载、恢复。</li>
+</ul>
+</li>
+<li>第二个看板是同一分母的逐日走势，以及芯片小时的绝对量。
+<ul>
+<li>比例掉了先看绝对量。绝对量突然变大多半是新预留交付了，比例下降是因为分母一下变大，不是用得更差 <span class="tg inf">[推断]</span>。</li>
+</ul>
+</li>
+</ul>
+<p><a id="step-8b-3"></a></p>
+<h2 id="8b3-常见反模式" class="hc3"><span class="hn">8b.3</span>常见反模式</h2>
+<p>常见反模式（监控停了没人知道、用采样到的芯片当分母、信 GKE 节点状态判硬件、把「标着 passed」当「测过」、门禁动作用污点表达等）连同实例和改法，统一列在 <a href="#反模式">§8b.5 反模式表</a>。</p>
+<p><a id="step-8b-4"></a></p>
+<h2 id="8b4-和-04--08--08a-的接口" class="hc4"><span class="hn">8b.4</span>和 04 / 08 / 08a 的接口</h2>
+<p><strong>08 的告警在这套设计里对应什么</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>08 告警</th>
+<th>这套设计里的信号</th>
+<th>看板位置</th>
+<th>差别</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>#17 无新 step</td>
+<td>卡住规则：日志指标断流 <strong>且</strong> TensorCore &lt; 5%</td>
+<td>单任务：新鲜度、最大 step；索引：goodput</td>
+<td>多一道 TensorCore 确认，指标断了不会误报</td>
+</tr>
+<tr>
+<td>#18 一片 / 一台掉队</td>
+<td>变慢规则；片级「最后到达」；跨运行坏 cube</td>
+<td>单任务：掉队比、变慢比、按 slice 最后到达</td>
+<td>08 按功耗档分阈值；这套设计跟自己前 2 小时比</td>
+</tr>
+<tr>
+<td>#19 每整 pod（整池）每天中断</td>
+<td>按原因分类的中断 + 昨日浪费</td>
+<td>单任务：中断与恢复；事件页</td>
+<td>多算出恢复期损失的芯片小时</td>
+</tr>
+<tr>
+<td>硬件 / 维护</td>
+<td>硬件台账，节点空闲也报</td>
+<td>事件：当前不健康节点</td>
+<td>可以接自动 cordon</td>
+</tr>
+<tr>
+<td>（08 没有）监控断档</td>
+<td>每轮记账 + 新鲜度</td>
+<td>单任务第一行；事件：轮询距今</td>
+<td>对「监控本身」告警</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>08a 慢节点流程每一步，看板上看哪个信号</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>08a 步骤</th>
+<th>看板信号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>进门关（<a href="08a-slow-node-sop.html#s8a-3">§8a.3</a>）</td>
+<td>体检页：待检原因 = 新进门 / 修回；格子后缀 L / S</td>
+</tr>
+<tr>
+<td>例行关（<a href="08a-slow-node-sop.html#s8a-3">§8a.3</a>）</td>
+<td>体检页：超期未复测；体检记录</td>
+</tr>
+<tr>
+<td>在岗关：步时一步跳上（<a href="08a-slow-node-sop.html#s8a-4">§8a.4</a>）</td>
+<td>单任务：步时中位 / 最慢 rank；变慢比</td>
+</tr>
+<tr>
+<td>在岗关：按片延迟最低</td>
+<td>单任务：按 slice 最后到达次数</td>
+</tr>
+<tr>
+<td>在岗关：TensorCore 按 pod</td>
+<td>单任务：实时资源</td>
+</tr>
+<tr>
+<td>取证 → 挪走对比（<a href="08a-slow-node-sop.html#s8a-5">§8a.5</a>）</td>
+<td>单任务：硬件与坏 cube（嫌疑 cube 和硬件事件交叉）；事件页</td>
+</tr>
+<tr>
+<td>离线复测</td>
+<td>嫌疑 cube 登记后，等它空了自动去测；体检页看结果</td>
+</tr>
+<tr>
+<td>cordon + 注解（<a href="08a-slow-node-sop.html#s8a-6">§8a.6</a>）</td>
+<td>事件页：cordon 提议；自动 cordon 只处理硬件证据，统计类嫌疑留给人</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>08a 把自动 cordon 列为按需自建。这套设计的自动 cordon、送修打污点、体检门禁就是这个「可选」的现成做法，默认都该先放在 shadow。</p>
+</blockquote>
+<p><strong>和 04 的关系</strong>：这套设计的体检用的是现有的 cube 检测套件，和 04 的 C1/C2/C3 不是同一套。使用方已经用 04 的脚本做准入的话，把结果写进同一张体检记录表，就能复用体检页和门禁，不必换套件 <span class="tg inf">[推断]</span>。两边判法也不同：它看「卡死 / pod 消失 / 送修」，不设性能阈值；04 有数值阈值。两种合起来用。</p>
+<p><a id="step-8b-5"></a></p>
+<h2 id="8b5-设计原则和反模式" class="hc5"><span class="hn">8b.5</span>设计原则和反模式</h2>
+<h3 id="原则">原则</h3>
+<ol>
+<li><strong>先落 BigQuery，再出图。</strong> 告警、看板、处置读同一批表，口径只有一份。</li>
+<li><strong>默认状态不能长得像错误状态。</strong>
+<ul>
+<li>近半数 slice 先报过一次 <code>SliceCreationFailed</code>，其中绝大多数最后 ACTIVE。所以这个状态不能当告警。</li>
+<li>每天数百次建作业失败（webhook 调用失败或被拒），也是常态。要分清「webhook 暂时不可用」和「被拒」。</li>
+<li>体检里被抢占、未准入、超时不算失败。</li>
+</ul>
+</li>
+<li><strong>监控本身要被监控。</strong> 每轮记账、新鲜度放第一行、轮询距今、未送达告警。可选依赖失败不拖垮整轮。</li>
+<li><strong>一个结论至少两个信号。</strong>
+<ul>
+<li>卡住 = step 断流 <strong>且</strong> TensorCore &lt; 5%。</li>
+<li>主机不健康要连续 2 个点。</li>
+<li>sub-block 降级要连续几轮。</li>
+</ul>
+</li>
+<li><strong>状态优于事件。</strong> 维护通知、预留健康是挂在资源上的状态，用轮询读，不会漏；事件流会漏。</li>
+<li><strong>检测和动手分开。</strong> 检测器只登记嫌疑，不碰集群；动手的服务等 cube 空了再测、再改门禁。两边的权限和出事范围都分开。</li>
+<li><strong>先 shadow，再实打。</strong> 新规则（比如送修打污点）先 shadow 一段时间，只记账不发，对完账再实打。</li>
+<li><strong>一个分母，一个原子粒度。</strong> 财务每一层都除以已付费芯片小时，层与层可以直接相减。所有芯片量都从「每芯片每 5 分钟一行」这一张表汇总：几张表各自从原始指标算、加权方法不同的话，结果会互相对不上。</li>
+<li><strong>贵的面板默认折叠。</strong> 多 slice / DCN 的 16 个面板展开才查询，免得每次打开都扫一遍。</li>
+</ol>
+<h3 id="反模式">反模式</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>反模式</th>
+<th>实例</th>
+<th>怎么改</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>照字面对状态告警</td>
+<td><code>SliceCreationFailed</code> 是常态；<code>MegascaleHangDetected</code> 在绝大多数节点上为 True，原因全空</td>
+<td>先统计常态分布，再定告警条件</td>
+</tr>
+<tr>
+<td>失败放行的门禁不配兜底</td>
+<td>门禁策略 <code>failurePolicy: Ignore</code>，挂了就静默放行</td>
+<td>加一条「没带 passed 选择器的 TPU 任务数 &gt; 0」告警</td>
+</tr>
+<tr>
+<td>门禁动作用污点表达</td>
+<td>打体检污点后，调度器立刻把在跑的 job 当节点故障驱逐</td>
+<td>改成提交时加节点选择器</td>
+</tr>
+<tr>
+<td>把「标着 passed」当「测过」</td>
+<td>批量初始打标的 passed 节点大多没实测过</td>
+<td>报实测覆盖率；只写通过不写失败的判定要补「失败」</td>
+</tr>
+<tr>
+<td>信 GKE 节点状态判硬件</td>
+<td>计划外维护中的节点照样 Ready / HEALTHY，一个 job 慢了一天</td>
+<td>硬件状态以 GCE 为准，节点空闲也报</td>
+</tr>
+<tr>
+<td>用采样到的芯片当分母</td>
+<td>自带看板明显虚高</td>
+<td>一律用已付费芯片小时</td>
+</tr>
+<tr>
+<td>一个可选依赖拖垮整轮</td>
+<td>一个采集器出错，整轮建模停住、看板照常显示旧数</td>
+<td>依赖分级 + 每轮记账 + 对账本告警</td>
+</tr>
+<tr>
+<td>开关语义不统一</td>
+<td>自动 uncordon 开关只认 off / 0 / false，写 shadow 等于<strong>打开</strong></td>
+<td>所有开关用同一套取值；上线前逐个核</td>
+</tr>
+<tr>
+<td>匿名用户给管理员</td>
+<td>Grafana 匿名角色可被设成 Admin，部署时常被忽略</td>
+<td>匿名只给只读</td>
+</tr>
+<tr>
+<td>自动 cordon 滞后却当主防线</td>
+<td>从开始故障到被自动 cordon 可能隔几个小时以上</td>
+<td>以 GCE 送修状态直接挡调度，cordon 只是补充</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="step-8b-6"></a></p>
+<h2 id="8b6-使用方怎么落地" class="hc0"><span class="hn">8b.6</span>使用方怎么落地</h2>
+<p>两条路。先最小版，跑一两周再决定要不要上完整版。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th></th>
+<th>最小版</th>
+<th>完整版</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>得到什么</td>
+<td>所有 job 的最新 step、卡没卡住；步时、TFLOP/s、loss 曲线；Cloud Monitoring 的 TensorCore / goodput / 集合通信延迟</td>
+<td>5 张看板全部；告警出口；体检门禁；自动 cordon；坏 cube 诊断；财务</td>
+</tr>
+<tr>
+<td>组件类别</td>
+<td>日志路由 1 条、消息队列 1 个（带 BigQuery 订阅和单消息变换）、BigQuery 数据集 1 个（1 张表 + 2 个视图）、看板 1 张</td>
+<td>几条日志路由、几个消息队列和数据集（上百张表 / 视图）、若干镜像、定时任务和常驻服务、二十多个调度、集群内 RBAC 和可选的准入策略</td>
+</tr>
+<tr>
+<td>常驻进程</td>
+<td>无，全托管</td>
+<td>有（Cloud Run 按调度跑）</td>
+</tr>
+<tr>
+<td>权限</td>
+<td>建日志路由、消息队列、数据集的项目权限；看板服务账号要数据集只读、BigQuery 查询、Monitoring 只读；Pub/Sub 服务代理要能写 BigQuery</td>
+<td>每个组件一个服务账号，权限分开；只读面最宽的是建模账号（日志、指标、计算、集群、ML Diagnostics 只读）；<strong>改节点的权限全在集群 RBAC 里</strong>，不在 IAM</td>
+</tr>
+<tr>
+<td>成本量级</td>
+<td>只收 step 行，存储和查询都很小 <span class="tg inf">[推断，未核]</span></td>
+<td>建模查询费是大头，存储费很小；上百个面板里大部分带 BigQuery 查询（其余是文本、日志等不查表的面板 <span class="tg inf">[推断]</span>）按 1 天窗口各查一次，扫描上限约 0.1 TB；Cloud Run / 调度 / Pub/Sub [未核]</td>
+</tr>
+<tr>
+<td>卡住判定</td>
+<td>只看多久没出新 step，<strong>没有 TensorCore 确认</strong>，长检查点会误判</td>
+<td>两个信号同时成立</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>最小版的数据链</strong>（全托管，按下面五步自己建；每步一条 <code>gcloud</code> / <code>bq</code> 命令就够）：</p>
+<ol>
+<li>Cloud Logging 日志路由：过滤训练容器 stdout 里 MaxText 的 <code>completed step: N, seconds: x, TFLOP/s/device: y, … loss: z</code> 行，导到一个 Pub/Sub topic。</li>
+<li>这个 topic 建一个 <strong>BigQuery 订阅</strong>，挂单消息变换（SMT），把那行解析成 job、step、步时、TFLOP/s、loss 几列，写进一张按天分区的表（建议分区 30 天过期）。</li>
+<li>在表上建两个视图：每个 job × step 去重一行；每个 job 的最新 step、近 50 步中位步时、「卡住」标志（多久没出新 step，例如 &gt; 10 min 或 &gt; 中位步时 × 20）。</li>
+<li>Grafana 建一张看板：BigQuery 数据源读这两个视图；Cloud Monitoring 数据源直接读 TensorCore 利用率 / goodput，不落表。</li>
+<li>权限：Pub/Sub 服务代理要能写这个数据集；Grafana 的服务账号要 <code>roles/bigquery.dataViewer</code>（该数据集）、<code>roles/bigquery.jobUser</code>、<code>roles/monitoring.viewer</code>。</li>
+</ol>
+<p><strong>跑通的判据</strong>：随便挑一个在跑的 job，看板上的最新 step 与它日志里最后一行 <code>completed step</code> 相差不超过一两步；手动停一个 job，超过阈值后「卡住」标志变真。</p>
+<p><strong>完整版之前要先定的事</strong>：</p>
+<ol>
+<li><strong>告警通道</strong>：要接到使用方自己的 IM 或别的。消息格式要改 <span class="tg inf">[推断]</span>。</li>
+<li><strong>体检门禁上不上</strong>：上的话先只在一个集群、先 shadow；同时配 §8b.5 那条兜底告警。</li>
+<li><strong>价目表</strong>：财务的金额列要按实际单价自建。不建只缺金额，比例照样有。</li>
+<li><strong>节点 / pod 标签前缀</strong>：换成使用方自己的。</li>
+<li><strong>日志格式</strong>：step 行的解析按 MaxText 写。不用 MaxText 要改解析规则；没开 goodput 上报就只有估算 goodput。</li>
+<li><strong>体检套件</strong>：可以换成 04 的验收脚本 <span class="tg inf">[推断]</span>。</li>
+<li><strong>安全开关</strong>：自动 cordon、自动 uncordon、送修打污点、体检、自动诊断，第一周全部 shadow / off；Grafana 匿名只读。</li>
+</ol>
+<div class="kp kc2"><div class="kp-t">[未核]</div>
+<ul>
+<li>完整版没在一个空项目里从零跑通过。</li>
+<li>真实账单没查。</li>
+<li>BigQuery 走按量还是 slot 预留没看到配置。</li>
+<li>使用方有没有现成的 Grafana。</li>
+</ul></div>
+<p><a id="step-8b-7"></a></p>
+<h2 id="8b7-缺口与未核" class="hc1"><span class="hn">8b.7</span>缺口与未核</h2>
+<ul>
+<li>
+<p><strong>[未核] 花费</strong>：上面只给了量级，没有拿账单核对。</p>
+</li>
+<li>
+<p><strong>[未核] 秒级诊断</strong>：要求训练 pod 用 hostNetwork。使用方的 JobSet 骨架是不是 hostNetwork，要对一下。</p>
+</li>
+<li>
+<p><strong>没覆盖</strong>：推理服务的可观测性。这套设计只管训练。</p>
+</li>
+</ul>
+<h2 id="检查点" class="hc2">检查点</h2>
+<p><strong>做完了</strong>（对应 README 交付清单 H）</p>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 最小版跑通（按 §8b.6「最小版的数据链」五步建好，并过了那里的判据）：所有在跑的 job 都能看到最新 step 和「卡没卡住」</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 告警通道、体检门禁、价目表、标签前缀四件事已和使用方定下</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 完整版（如上）的安全开关第一周全部 shadow / off，Grafana 匿名只读</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 「监控本身」至少有一条告警：建模或采集停了能报出来</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 上了失败放行的门禁的话，兜底告警已配</li>
+</ul>
+<p><strong>说得出</strong>（先自己答，再点开对答案）</p>
+<ul class="contains-task-list">
+<li class="task-list-item qa"><details><summary>为什么自带的利用率看板不能对账？</summary><div class="qa-a">分母只算有采样的芯片，空闲预留芯片没有序列；所以明显虚高</div></details></li>
+<li class="task-list-item qa"><details><summary>为什么每张看板第一行是数据新鲜度？</summary><div class="qa-a">建模停了看板不变红，只显示旧数</div></details></li>
+<li class="task-list-item qa"><details><summary>为什么慢的那片集合通信延迟反而最低？</summary><div class="qa-a">大家等最后到的，它一到就收尾</div></details></li>
+<li class="task-list-item qa"><details><summary>「卡住」为什么要加 TensorCore &lt; 5%？</summary><div class="qa-a">日志指标断流时不至于把还在算的 job 报成卡住</div></details></li>
+<li class="task-list-item qa"><details><summary>「标着 passed」为什么不等于测过？</summary><div class="qa-a">批量初始打标的节点是直接标成 passed 的，大多没实测过</div></details></li>
+<li class="task-list-item qa"><details><summary>为什么 <code>SliceCreationFailed</code> 不能当告警？</summary><div class="qa-a">四成多的 slice 先报一次再自己成功，是常态</div></details></li>
+</ul>
+<p><strong>交棒</strong>：回 <a href="README.html#%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95%E6%8C%89%E9%A1%BA%E5%BA%8F%E5%8B%BE">README 交付清单 H</a> 打勾；告警出口、谁看看板、谁能开自动处置，收进 <a href="09-customer-alignment.html">09 交付前对齐清单</a>。</p>
+<h2 id="出处" class="hc3">出处</h2>
+<ul>
+<li>相关章节：<a href="08-day2-operations.html">08 日常运维</a>、<a href="08a-slow-node-sop.html">08a 慢节点标准流程</a>、<a href="04-functional-verification.html">04 功能验证</a>；问题单<a href="pitfalls.html#l-48">经验教训第 48 条</a>、<a href="pitfalls.html#l-45">经验教训第 45 条</a></li>
+</ul>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="08a-slow-node-sop.html"><small>← 上一页</small>08a 慢节点 / 慢片标准流程</a><a class="next" href="08c-production-incidents.html"><small>下一页 →</small>08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#总图">总图</a></li><li class="l2"><a href="#8b1-要观测什么">8b.1 要观测什么</a></li><li class="l3"><a href="#job先认清谁在跑">job：先认清「谁在跑」</a></li><li class="l3"><a href="#吞吐与-goodput跑得值不值">吞吐与 goodput：跑得值不值</a></li><li class="l3"><a href="#变慢与掉队一片慢拖全局">变慢与掉队：一片慢拖全局</a></li><li class="l3"><a href="#中断与恢复时间丢在哪">中断与恢复：时间丢在哪</a></li><li class="l3"><a href="#节点体检坏机器别进生产">节点体检：坏机器别进生产</a></li><li class="l3"><a href="#平台事件平台在动你的机器">平台事件：平台在动你的机器</a></li><li class="l3"><a href="#告警投递发了不等于送到">告警投递：发了不等于送到</a></li><li class="l3"><a href="#财务一个分母">财务：一个分母</a></li><li class="l3"><a href="#数据新鲜度看到的是不是现在">数据新鲜度：看到的是不是现在</a></li><li class="l2"><a href="#8b2-看板怎么展示">8b.2 看板怎么展示</a></li><li class="l3"><a href="#每张看板都按同一个顺序排">每张看板都按同一个顺序排</a></li><li class="l3"><a href="#颜色和分级">颜色和分级</a></li><li class="l3"><a href="#下钻路径总览--单任务--坏-cube">下钻路径：总览 → 单任务 → 坏 cube</a></li><li class="l3"><a href="#财务页逐层留存找最大的那一刀">财务页：逐层留存，找最大的那一刀</a></li><li class="l2"><a href="#8b3-常见反模式">8b.3 常见反模式</a></li><li class="l2"><a href="#8b4-和-04--08--08a-的接口">8b.4 和 04 / 08 / 08a 的接口</a></li><li class="l2"><a href="#8b5-设计原则和反模式">8b.5 设计原则和反模式</a></li><li class="l3"><a href="#原则">原则</a></li><li class="l3"><a href="#反模式">反模式</a></li><li class="l2"><a href="#8b6-使用方怎么落地">8b.6 使用方怎么落地</a></li><li class="l2"><a href="#8b7-缺口与未核">8b.7 缺口与未核</a></li><li class="l2"><a href="#检查点">检查点</a></li><li class="l2"><a href="#出处">出处</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

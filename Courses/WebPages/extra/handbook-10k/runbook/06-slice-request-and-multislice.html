@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>06 申请 slice：数量、形状、placement、多片互联 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a class="on" aria-current="page" href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>06 申请 slice：数量、形状、placement、多片互联</span></nav><article class="md"><h1 id="06-申请-slice数量形状placement多片互联">06 申请 slice：数量、形状、placement、多片互联</h1>
+<blockquote>
+<p>06b / 06c 讲「跑什么」，本节讲「怎么把卡要到手」。</p>
+</blockquote>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>多片互联不用额外声明</span></span><code>replicas: N</code> + pod 注解 <code>cloud.google.com/gke-tpu-slice-topology: 4x8x8</code> + 标签 <code>kueue.x-k8s.io/queue-name</code> 就够；本书的更大规模连通测试作业只多加了一个 libtpu 网卡 flag，更大规模也连通（§5.3）。</p>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>256 芯</strong> 一片 = 64 pod × 4 芯</li>
+<li><strong>72%</strong> 10+ 片 JIT 弱扩展效率（对 1 片）</li>
+<li><strong>35%</strong> 10+ 片 AOT 步时比首跑 JIT 缩短（本书复跑现成 AOT 产物；生产作业口径约 40%）</li>
+<li><strong>数十个</strong> 空 cube 才准入 10+ 片</li>
+</ul>
+</div>
+<p><strong>本节用词</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>一句话</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>片（slice）</td>
+<td>ICI 环面 = JobSet 一个 replica；本书统一 4x8x8 = 256 芯 = 64 host = 512 device</td>
+</tr>
+<tr>
+<td>cube</td>
+<td>4x4x4 = 64 芯 = 16 host = 一个节点池（02 §2.4）</td>
+</tr>
+<tr>
+<td>DCN</td>
+<td>片间网络：eth1 / eth2（02 §2.4 的 <code>--additional-node-network</code>）</td>
+</tr>
+<tr>
+<td>megascale</td>
+<td>libtpu 跨片通信层，靠 <code>MEGASCALE_*</code> 找协调者和片号</td>
+</tr>
+<tr>
+<td>TAS</td>
+<td>Kueue 按 Topology 层级决定 pod 落在哪</td>
+</tr>
+<tr>
+<td>开 / 关 pipeliner</td>
+<td>AOT 编译时开 / 关 collective pipeliner</td>
+</tr>
+<tr>
+<td>按书复跑</td>
+<td>按本书步骤从头复跑的实测</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<p><a id="step-6-1"></a></p>
+<h2 id="1-五个问题的短答案" class="hc0"><span class="hn">1.</span>五个问题的短答案</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>问题</th>
+<th>答案</th>
+<th>细节</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>片数怎么选</td>
+<td>= DCN data 轴；多一片 batch 加一份、步时变慢；<strong>AOT 换片数要重编</strong></td>
+<td>§2</td>
+</tr>
+<tr>
+<td>一片 256 芯怎么申请</td>
+<td><code>replicas: 1</code>、<code>completions/parallelism: 64</code>、拓扑注解、每 pod <code>google.com/tpu: 4</code>、队列标签 + nodeSelector、toleration、hostNetwork</td>
+<td>§3</td>
+</tr>
+<tr>
+<td>10+ 片怎么申请</td>
+<td>只差 <code>replicas: N</code>，overlay 的 <code>num_slices</code>、<code>dcn_data_parallelism</code> 写 N</td>
+<td>§4</td>
+</tr>
+<tr>
+<td>多片默认连通吗</td>
+<td>连通，<code>MEGASCALE_*</code> 由 GKE 侧建 pod 时注入（具体组件未核实，§5）。<strong>没有整 pod 的 ICI 大片</strong>（见<a href="pitfalls.html#l-7">经验教训第 7 条</a>）</td>
+<td>§5</td>
+</tr>
+<tr>
+<td>placement / TAS 要不要写</td>
+<td>不用：建池时挂好（02 §2.3–2.4），拼片另建（05 §5.1）；TAS 约束 webhook 按注解加</td>
+<td>§5.4</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="step-6-2"></a></p>
+<h2 id="2-片数怎么选选了意味着什么" class="hc1"><span class="hn">2.</span>片数怎么选、选了意味着什么</h2>
+<h3 id="21-片数改动哪些字段-src-runbookscripts06-jobsetsh">2.1 片数改动哪些字段 <span class="src" tabindex="0">源<span class="srci">runbook/scripts/06-jobset.sh</span></span></h3>
+<p><code>06-jobset.sh</code> 只收 <code>SLICES</code> 和 <code>TOPO</code>，其余推出来：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>你设的</th>
+<th>推出来的</th>
+<th>写到哪</th>
+<th style="text-align:right">1 片</th>
+<th style="text-align:right">10+ 片</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SLICES</code></td>
+<td>JobSet <code>replicas</code></td>
+<td><code>spec.replicatedJobs[0].replicas</code></td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">10+</td>
+</tr>
+<tr>
+<td><code>SLICES</code></td>
+<td>overlay <code>num_slices</code> = <code>dcn_data_parallelism</code></td>
+<td>config_overlay.yml</td>
+<td style="text-align:right">1</td>
+<td style="text-align:right">10+</td>
+</tr>
+<tr>
+<td><code>TOPO=4x8x8</code></td>
+<td>每片芯片数 = 4×8×8</td>
+<td>—</td>
+<td style="text-align:right">256</td>
+<td style="text-align:right">256</td>
+</tr>
+<tr>
+<td><code>TOPO</code></td>
+<td>每片 pod 数 = 芯片数 ÷ 4（每台 host 4 芯）</td>
+<td><code>completions</code> / <code>parallelism</code></td>
+<td style="text-align:right">64</td>
+<td style="text-align:right">64</td>
+</tr>
+<tr>
+<td><code>TOPO</code></td>
+<td>每片 device 数 = 芯片数 × 2</td>
+<td>容器 env <code>ICI_FSDP_PARALLELISM</code></td>
+<td style="text-align:right">512</td>
+<td style="text-align:right">512</td>
+</tr>
+<tr>
+<td><code>TOPO</code></td>
+<td>slice 形状</td>
+<td>pod 注解 <code>cloud.google.com/gke-tpu-slice-topology</code></td>
+<td style="text-align:right">4x8x8</td>
+<td style="text-align:right">4x8x8</td>
+</tr>
+<tr>
+<td>两者</td>
+<td>总 device 数 = SLICES × 芯片数 × 2</td>
+<td>日志里 <code>jax.devices() returned N</code></td>
+<td style="text-align:right">512</td>
+<td style="text-align:right">数千</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>多片实测日志 <code>Num_devices: &lt;设备数&gt;, shape (1, &lt;片数&gt;, 1, 512, 1, ...)</code>：10+ 片 × 每片 512 device 全部认到（第 2 维是片数、对应片间数据并行，512 对应片内 FSDP，见 §5.1）。每个 device 打印成 <code>MegaScalePjRtDevice(... slice_id=…)</code>，带着自己所在的片号。<code>TOPO</code> 芯片数不是 64 的倍数报错退出（06-jobset.sh 的 TOPO 校验）。</li>
+</ul>
+<figure class="mermaid"><img src="../assets/mermaid/1b541a753588.png" width="421" alt="示意图" loading="lazy"></figure><p>读图：只有绿格自动，其余自己管。</p>
+<ul>
+<li><strong>batch</strong>：每片每步数百万 token，多片每步 token 随片数线性增长 <span class="tg inf">[推断]</span>；实测中片越多、30 步 loss 降得越少。</li>
+<li><strong>AOT</strong> 钉死 <code>COMPILE_TOPOLOGY_NUM_SLICES</code>、<code>dcn_data_parallelism</code>。</li>
+<li><strong>preflight</strong>：<code>RECIPE=dsv3</code>（06b）查 <code>collective-pipeliner-forward</code>（<code>06-jobset.sh</code> preflight）：06b 多片 AOT temp 95.87 GiB 超上限。</li>
+</ul>
+<h3 id="22-片数和步时选片数时看这张表">2.2 片数和步时（选片数时看这张表）</h3>
+<p>JIT 列出自 06c §6.5 和多片实测，AOT 列出自本书的提前编译实测；稳态 p50。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th style="text-align:right">片数</th>
+<th style="text-align:right">芯片</th>
+<th style="text-align:right">JIT 弱扩展效率（比 1 片慢）</th>
+<th style="text-align:right">AOT 开 pipeliner：比同片数 JIT 缩短</th>
+<th style="text-align:right">AOT 关 pipeliner：比同片数 JIT 缩短</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">1</td>
+<td style="text-align:right">256</td>
+<td style="text-align:right">100%（基准）</td>
+<td style="text-align:right"><strong>30%</strong></td>
+<td style="text-align:right">10%</td>
+<td>JIT 基准是合成数据，换真数据慢 1–2%</td>
+</tr>
+<tr>
+<td style="text-align:right">2</td>
+<td style="text-align:right">512</td>
+<td style="text-align:right">78–79%（慢 25–30%）</td>
+<td style="text-align:right">20%</td>
+<td style="text-align:right">25–30%</td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align:right">4</td>
+<td style="text-align:right">1,024</td>
+<td style="text-align:right">82%（慢 20%）</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">—</td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align:right">8</td>
+<td style="text-align:right">2,048</td>
+<td style="text-align:right">78%（慢 30%）</td>
+<td style="text-align:right">15%</td>
+<td style="text-align:right">25%</td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align:right">10+</td>
+<td style="text-align:right">数千</td>
+<td style="text-align:right">72%</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">35%</td>
+<td>现成编译产物，口径不同，<strong>不能和其它行连成曲线</strong>；生产作业口径约 40%</td>
+</tr>
+<tr>
+<td style="text-align:right">下一档</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">更低</td>
+<td style="text-align:right">25%（双峰，按均值 10%）</td>
+<td style="text-align:right">未实测（被抢占后没准入）</td>
+<td></td>
+</tr>
+<tr>
+<td style="text-align:right">更大规模</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">挂在 <code>jax.devices()</code></td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">—</td>
+<td>更大规模的两档各实测一次；裸 device check 过更大规模，问题在软件栈（§5.3）。更大规模的生产作业用提前编译（AOT）跑通过，不是平台硬墙（<a href="06c-multislice-training.html#step-6-9-scale">06c §6.9</a>）</td>
+</tr>
+</tbody>
+</table></div>
+<p>效率 = 1 片 JIT p50 ÷ N 片 JIT p50；AOT 两列 = 1 − AOT p50 ÷ 同片数 JIT p50（2 片 JIT 两次，给范围）。</p>
+<p>片数越多每步越慢：8 片起片数再往上，步时继续变长；更大规模没出步。同配置 10+ 片另两次实测与上表 10+ 片相差不到 1%（<a href="06c-multislice-training.html#step-6-6">06c §6.6</a>）；更大规模「挂住约 17 min」见 <a href="06c-multislice-training.html#step-6-9-scale">06c §6.9</a>。</p>
+<p>怎么选：</p>
+<figure class="mermaid"><img src="../assets/mermaid/7c31ac6c1f43.png" width="842" alt="示意图" loading="lazy"></figure><ul>
+<li>读图：1 片时开 pipeliner 比关 pipeliner 快约 20%，2 片起反过来，关掉快约 9% <span class="tg inf">[推断：同片数 AOT 开 pipeliner 与关 pipeliner 的 p50 直接相比]</span>；<strong>多片关掉反快的机制未查</strong>。</li>
+<li>提前编译（AOT）时开不开 pipeliner 没有 preflight 拦，自己选对。</li>
+<li><strong>先定每片形状再定片数</strong>：训练全是 4x8x8；4x4x4 只做冒烟（06c §6.5）。</li>
+</ul>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>更大规模：本书的 JIT 训练栈目前跑不起来</span></span>训练栈 jax 0.11.0 / libtpu 0.0.48；上更大规模要先换软件栈（<a href="06c-multislice-training.html#step-6-9-scale">06c §6.9</a>）。</p>
+</blockquote>
+<ul>
+<li>准入两道闸：配额、拓扑（05 §5.2）；片越多越难放。</li>
+</ul>
+<p><a id="step-6-3"></a></p>
+<h2 id="3-申请一片-256-芯1--4x8x8" class="hc2"><span class="hn">3.</span>申请一片 256 芯（1 × 4x8x8）</h2>
+<h3 id="31-jobset-里决定要什么卡的字段">3.1 JobSet 里决定「要什么卡」的字段</h3>
+<p>下面是实测作业实际提交的 yaml。</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jobset.x-k8s.io/v1alpha2</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">JobSet</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;作业名&gt;</span>
+<span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;作业名&gt;</span>
+<span class="w">    </span><span class="nt">owner</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;团队名&gt;</span>
+<span class="w">    </span><span class="nt">kueue.x-k8s.io/queue-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">multislice-queue</span><span class="w">      </span><span class="c1"># ① 进哪个 LocalQueue：不写就不归 Kueue 管</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">ttlSecondsAfterFinished</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">86400</span>
+<span class="w">  </span><span class="nt">coordinator</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">jobIndex</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">    </span><span class="nt">podIndex</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">    </span><span class="nt">replicatedJob</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker</span>
+<span class="w">  </span><span class="nt">failurePolicy</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">maxRestarts</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span><span class="w">                                     </span><span class="c1"># ② 任何一个 pod 失败，整个 JobSet 就 Failed（不自动重来）</span>
+<span class="w">    </span><span class="nt">rules</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">restart_on_failure</span>
+<span class="w">      </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RestartJobSet</span>
+<span class="w">      </span><span class="nt">onJobFailureReasons</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BackoffLimitExceeded</span>
+<span class="w">  </span><span class="nt">network</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">enableDNSHostnames</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">    </span><span class="nt">publishNotReadyAddresses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">replicatedJobs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker</span>
+<span class="w">    </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span><span class="w">                                        </span><span class="c1"># ③ 片数</span>
+<span class="w">    </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">backoffLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">completionMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Indexed</span>
+<span class="w">        </span><span class="nt">completions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span><span class="w">                                </span><span class="c1"># ④ 每片 pod 数 = 256 芯 ÷ 4 芯/pod</span>
+<span class="w">        </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<span class="w">        </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-tpu-slice-topology</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4x8x8</span><span class="w">   </span><span class="c1"># ⑤ 每片形状：slice controller 按它拼片</span>
+<span class="w">              </span><span class="nt">gke-gcsfuse/volumes</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;true&#39;</span>
+<span class="w">          </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">hostNetwork</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                          </span><span class="c1"># ⑥ 用 host 的网卡（eth1/eth2 = DCN）</span>
+<span class="w">            </span><span class="nt">dnsPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterFirstWithHostNet</span>
+<span class="w">            </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span>
+<span class="w">            </span><span class="nt">terminationGracePeriodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<span class="w">            </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-networking-dra-driver</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;true&#39;</span><span class="w">   </span><span class="c1"># ⑦ 只落在带多网卡 DRA 标签的节点（02 §2.4 --node-labels）</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-tpu-accelerator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tpu7x</span>
+<span class="w">            </span><span class="nt">tolerations</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NoSchedule</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">google.com/tpu</span>
+<span class="w">              </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
+<span class="w">            </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jax-tpu</span>
+<span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mirror.gcr.io/library/python@sha256:4d1caded1f729ae443eb803f26ffde7b61e696aeaef62f099abb6dd6b14257c7</span>
+<span class="w">              </span><span class="nt">securityContext</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">              </span><span class="nt">ports</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8471</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8080</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8431</span>
+<span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;4&#39;</span><span class="w">                  </span><span class="c1"># ⑧ 每 pod 独占一台 host 的 4 芯</span>
+<span class="w">                </span><span class="nt">requests</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;4&#39;</span>
+<span class="w">            </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span><span class="w">                    </span><span class="c1"># ⑨ 优先级</span>
+<span class="w">            </span><span class="nt">affinity</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">nodeAffinity</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">requiredDuringSchedulingIgnoredDuringExecution</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">nodeSelectorTerms</span><span class="p">:</span>
+<span class="w">                  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">matchExpressions</span><span class="p">:</span>
+<span class="w">                    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cloud.google.com/gke-tpu-slice</span><span class="w">   </span><span class="c1"># ⑩ 避开已被手工 Slice 占用的节点</span>
+<span class="w">                      </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NotIn</span>
+<span class="w">                      </span><span class="nt">values</span><span class="p">:</span>
+<span class="w">                      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;手工片名&gt;</span>
+<span class="w">                      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;手工片名&gt;</span>
+<span class="w">                      </span><span class="c1"># …（共 16 项，是 05-avoid-manual-slices.py 在提交那一刻生成的，每次都要重新生成）</span>
+</code></pre></div>
+<ul>
+<li><strong>①</strong>：<code>multislice-queue</code>（03 §3.5）→ <code>cluster-queue</code>；flavor <code>tpu7x-flavor-v2</code>、AdmissionCheck <code>dynamic-slicing-ac</code>、7 层 <code>dynamic-slicing-topology-v2</code>（03 §3.4，<code>runbook/scripts/03-kueue-topology-flavor.yaml.tmpl</code>）；集群原有的 flavor / 拓扑可能和这套不同，以集群上实际的 ResourceFlavor / Topology 对象为准。</li>
+<li><strong>③④⑤</strong>：配额 = replicas × completions × 4。podSetAssignment 的 <code>count</code> = N × 64、<code>google.com/tpu</code> = N × 64 × 4（N 为片数）。</li>
+<li><strong>⑨</strong>：本书 high 800 / medium 500 / low 100，<code>preemptionPolicy: Never</code>（<code>runbook/scripts/03-kueue-priority.yaml</code>）。<strong>共享集群</strong>上可能已有同名 high，会静默抢占集群上的其他作业，要清空（<code>export POD_PRIORITY=</code>，见 <a href="06c-multislice-training.html#step-6-5-ladder">06c §6.5.1 的优先级警告框</a>）；上面 YAML 里的 high 是独占集群的默认值。</li>
+<li><strong>⑩ 是时点值</strong>：<code>AVOID_MANUAL=1 06-jobset.sh apply</code> 每次重新生成。</li>
+</ul>
+<h3 id="32-平台在-pod-上补了什么-src-worker-0-0-的真实-pod-对象">3.2 平台在 pod 上补了什么 <span class="src" tabindex="0">源<span class="srci">worker-0-0 的真实 pod 对象</span></span></h3>
+<figure class="mermaid"><img src="../assets/mermaid/5b07b2142c0f.png" width="1460" alt="示意图" loading="lazy"></figure><p>更大规模实测时平台多加的字段（逐字，截短）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">kueue.x-k8s.io/podset-required-topology</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cloud.google.com/gce-topology-block</span><span class="w">          </span><span class="c1"># 整个作业必须落在同一个 block</span>
+<span class="w">    </span><span class="nt">kueue.x-k8s.io/podset-slice-required-topology</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cloud.google.com/gke-tpu-partition-4x4x4-id</span><span class="w">   </span><span class="c1"># 每 16 个 pod 必须在同一个 cube</span>
+<span class="w">    </span><span class="nt">kueue.x-k8s.io/podset-slice-size</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;16&quot;</span>
+<span class="w">    </span><span class="nt">kueue.x-k8s.io/workload</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;作业名&gt;</span>
+<span class="w">    </span><span class="nt">jobset.sigs.k8s.io/group-replicas</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&lt;片数&gt;&quot;</span>
+<span class="w">    </span><span class="nt">jobset.sigs.k8s.io/job-group-index</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0&quot;</span>
+<span class="w">    </span><span class="nt">jobset.sigs.k8s.io/coordinator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;jobset&gt;-worker-0-0.&lt;jobset&gt;</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">cloud.google.com/gke-accelerator-count</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;4&quot;</span><span class="w">          </span><span class="c1"># 新增</span>
+<span class="w">    </span><span class="nt">cloud.google.com/gke-tpu-topology</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4x8x8</span><span class="w">             </span><span class="c1"># 新增</span>
+<span class="w">    </span><span class="nt">kubernetes.io/hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;节点名&gt;</span><span class="w">        </span><span class="c1"># TAS 选定的具体节点</span>
+<span class="w">  </span><span class="nt">affinity</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">nodeAffinity</span><span class="p">:</span><span class="w">   </span><span class="c1"># 在你写的 NotIn 之外，又加了一条：</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cloud.google.com/gke-tpu-partition-4x4x4-state</span>
+<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">In</span>
+<span class="w">        </span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">HEALTHY</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">DEGRADED</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MEGASCALE_NUM_SLICES</span>
+<span class="w">      </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">fieldRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">fieldPath</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;metadata.annotations[&#39;jobset.sigs.k8s.io/group-replicas&#39;]&quot;</span><span class="p p-Indicator">}}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MEGASCALE_SLICE_ID</span>
+<span class="w">      </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">fieldRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">fieldPath</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;metadata.annotations[&#39;jobset.sigs.k8s.io/job-group-index&#39;]&quot;</span><span class="p p-Indicator">}}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MEGASCALE_COORDINATOR_ADDRESS</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;jobset&gt;-worker-0-0.&lt;jobset&gt;:9915</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MEGASCALE_PORT</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;9915&quot;</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_WORKER_HOSTNAMES</span><span class="w">        </span><span class="c1"># 本片 64 台 host：&lt;jobset&gt;-worker-0-0.&lt;jobset&gt;,…,&lt;jobset&gt;-worker-0-63.&lt;jobset&gt;</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_PROCESS_ADDRESSES</span><span class="w">       </span><span class="c1"># 同上，每个加 :8471</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_PROCESS_PORT</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8471&quot;</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_TOPOLOGY</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4x8x8</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_HOST_BOUNDS</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2,4,8</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_CHIPS_PER_HOST_BOUNDS</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2,2,1</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_TOPOLOGY_WRAP</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true,true,true</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_ACCELERATOR_TYPE</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tpu7x-512</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_WORKER_ID</span>
+<span class="w">      </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0&quot;</span>
+</code></pre></div>
+<ul>
+<li>TAS 注解和亲和：webhook 见拓扑注解就加（<a href="05-dynamic-slicing-operations.html#52-kueue-%E8%B7%AF%E5%BE%84%E7%94%9F%E4%BA%A7%E9%BB%98%E8%AE%A4">05 §5.2</a> 第 1 步；<a href="03-control-plane-addons.html#step-3-7">03 §3.7</a> 自检）。</li>
+<li><strong><code>MEGASCALE_*</code> / <code>TPU_*</code></strong> JobSet 里没有（1 片和 10+ 片实测的 <code>grep -c MEGASCALE</code> 为 0），建 pod 时注入（<code>runbook/scripts/04-gen-jobset.sh</code>）。<code>MEGASCALE_NUM_SLICES</code> 随 <code>replicas</code> 变；overlay 的 <code>num_slices</code>、<code>dcn_data_parallelism</code> 要手动同步（§2.1）。</li>
+</ul>
+<h3 id="33-看它到底拿到了什么只读-src-runbookscripts06-jobsetsh-watch--verify-子命令">3.3 看它到底拿到了什么（只读） <span class="src" tabindex="0">源<span class="srci">runbook/scripts/06-jobset.sh watch / verify 子命令</span></span></h3>
+<p>提交（<code>06-jobset.sh apply</code>）后：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 在你的工作站上跑（KUBECONFIG 指向集群）</span>
+<span class="nv">JOBSET_NAME</span><span class="o">=</span>&lt;作业名&gt;<span class="w">          </span><span class="c1"># 换成你的</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>workload<span class="w"> </span>-o<span class="w"> </span>wide<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;jobset-</span><span class="nv">$JOBSET_NAME</span><span class="s2">-&quot;</span>
+<span class="nv">WL</span><span class="o">=</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>workload<span class="w"> </span>-o<span class="w"> </span>name<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;jobset-</span><span class="nv">$JOBSET_NAME</span><span class="s2">-&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span>
+kubectl<span class="w"> </span>get<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$WL</span><span class="s2">&quot;</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .status.conditions[*]}{.type}{&quot;\t&quot;}{.status}{&quot;\t&quot;}{.message}{&quot;\n&quot;}{end}&#39;</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>slices.accelerator.gke.io<span class="w"> </span>--no-headers<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;jobset-</span><span class="nv">$JOBSET_NAME</span><span class="s2">-&quot;</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>jobset.sigs.k8s.io/jobset-name<span class="o">=</span><span class="nv">$JOBSET_NAME</span><span class="w"> </span>--no-headers<span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">&#39;{print $3}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c
+</code></pre></div>
+<p>期望：</p>
+<ul>
+<li><code>kueue.gke.io/TPUSlicesProvisioned</code>：1 片 <code>TPU slices: 1 created</code>，10+ 片 <code>TPU slices: N−1 reused, 1 created</code>。</li>
+<li>Slice 数 = 片数且 <code>ACTIVE</code>；pod 数 = 片数 × 64 且 <code>Running</code>；worker-0-0 日志：<code>[DIAG] … jax.devices() returned 512 devices</code>，elapsed 约 21 s（1 片）。</li>
+</ul>
+<p><a id="step-6-4"></a></p>
+<h2 id="4-申请-10-片数千芯" class="hc3"><span class="hn">4.</span>申请 10+ 片（数千芯）</h2>
+<h3 id="41-和-1-片的全部差别">4.1 和 1 片的全部差别</h3>
+<p>要卡相关只一行：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="w">  </span><span class="nt">replicatedJobs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker</span>
+<span class="w">    </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span><span class="w">          </span><span class="c1"># 1 → N；completions / parallelism 仍是 64，注解仍是 4x8x8</span>
+</code></pre></div>
+<p>overlay 差别：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">dcn_data_parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span><span class="w">   </span><span class="c1"># 1 → N</span>
+<span class="nt">num_slices</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">N</span><span class="w">             </span><span class="c1"># 1 → N</span>
+</code></pre></div>
+<p>其余 diff 与要卡无关：env tar、pickle、label、ttl、避开名单（坏 cube 的节点池、手工 Slice）。</p>
+<h3 id="42-两条提交路径都是实际用过的">4.2 两条提交路径（都是实际用过的）</h3>
+<p><strong>runbook 路径</strong>（10+ 片实测用过）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 在工作站上跑；先 source env.sh（06c §6.1）</span>
+<span class="nb">cd</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts
+<span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w"> </span><span class="nv">TOPO</span><span class="o">=</span>4x8x8<span class="w"> </span>./06-jobset.sh<span class="w"> </span>render<span class="w"> </span><span class="p">|</span><span class="w"> </span>less<span class="w">   </span><span class="c1"># 只打印，不改集群</span>
+<span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w"> </span>./06-jobset.sh<span class="w"> </span>overlay<span class="w">                    </span><span class="c1"># 生成并上传 num_slices=dcn_data_parallelism=N 的 overlay</span>
+<span class="nv">SLICES</span><span class="o">=</span>&lt;片数&gt;<span class="w"> </span><span class="nv">AVOID_MANUAL</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>./06-jobset.sh<span class="w"> </span>apply<span class="w">       </span><span class="c1"># 先跑 preflight，通过后才 kubectl apply</span>
+./06-jobset.sh<span class="w"> </span>watch<span class="w">                                </span><span class="c1"># 反复跑：JobSet / Workload / Slice / Pod</span>
+</code></pre></div>
+<p>子命令见 <a href="06c-multislice-training.html#step-6-4">06c §6.4</a>–<a href="06c-multislice-training.html#step-6-5-ladder">6.5</a> 和脚本头的变量说明。</p>
+<blockquote class="co danger">
+<p><span class="co-t"><i>⛔</i><span><code>overlay</code> 子命令会写数据桶</span></span><code>06-jobset.sh overlay</code> 往 <code>gs://$DATA_BUCKET/configs/submit/$RUN_NAME/config_overlay.yml</code> 写文件。数据桶是只读的或属于别人时，先把 <code>DATA_BUCKET</code> 换成你自己可写的桶再跑。</p>
+</blockquote>
+<p><strong>实测 10+ 片的时间线（加载 AOT 产物的作业，不是本章 06-jobset.sh 的 JIT 路径）</strong>：下图是一条加载提前编译（AOT）产物的 10+ 片作业，由实测驱动脚本的 timeline.log 记下各时间点，秒数都从提交（APPLY）算起。照本章 06-jobset.sh 跑是 JIT，首步耗时对照 06c 图 c13：</p>
+<figure class="mermaid"><img src="../assets/mermaid/47ca3a3842e8.png" width="694" alt="示意图" loading="lazy"></figure><p>读图：准入到全 Running 不到半分钟，大头是全 Running 之后到首步的约 8 min。日志 <code>jax.devices() returned &lt;设备数&gt; devices</code>，elapsed 约 99 s；10+ 片全 ACTIVE 114–136 s，任务口径 p50 166 s（04 §4.8、05 §5.1）。下载脚本 06-jobset.sh 走 JIT，首步要四十多分钟（40–50 min，从 apply 起算，06c 图 c13）；用 AOT 产物时约 10 min（加载约 3 min，不在线编译）。</p>
+<p><strong>提交之前先确认拼得出 10+ 片（按书复跑实测没准入）</strong></p>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>配额够不代表能准入</span></span>10+ × 4x8x8 要数十个空 cube，TAS 按 cube 数判。</p>
+</blockquote>
+<ul>
+<li>按书复跑提交 10+ 片任务：CQ 余额理论上够本任务，但 12 min 没准入：</li>
+</ul>
+<div class="code"><pre><code>QuotaReserved False  couldn&#x27;t assign flavors to pod set worker: topology &quot;super-slice-topology&quot; allows to fit only &lt;N&gt; out of &lt;所需 cube 数&gt; slice(s). Total nodes: &lt;节点总数&gt;; excluded: affinity: &lt;N&gt;, nodeSelector: &lt;N&gt;, resource &quot;google.com/tpu&quot;: &lt;N&gt;
+</code></pre></div>
+<p>这行的后半段是 TAS 排除节点的原因：<code>resource &quot;google.com/tpu&quot;: &lt;N&gt;</code> 是 TPU 已被其他作业占用的节点，<code>affinity: &lt;N&gt;</code> 是被避开名单（NotIn）排除的节点。</p>
+<figure class="mermaid"><img src="../assets/mermaid/b3f1233a847e.png" width="1058" alt="示意图" loading="lazy"></figure><p>读图：这是先后两次提交。先交 10+ 片任务时空 cube 只剩十几个，不够；挂了 12 min 后改交 2 片任务时只剩 7 个（「7 out of 8」）。按后一次算，空 cube <strong>只够跑 1 片</strong>。</p>
+<p><strong>提早发现</strong>：原因只在 Workload condition（timeline 只打 <code>wl=[]</code>），提交后 1 min 内看：</p>
+<div class="code"><span class="lang">bash</span><pre><code>kubectl<span class="w"> </span>get<span class="w"> </span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>workload<span class="w"> </span>-o<span class="w"> </span>name<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;jobset-</span><span class="nv">$JOBSET_NAME</span><span class="s2">-&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-1<span class="k">)</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[0].message}{&quot;\n&quot;}&#39;</span>
+</code></pre></div>
+<p><code>fit only K out of M</code> 且 K 远小于 M（所需 cube 数）就别等。</p>
+<p><a id="step-6-5"></a></p>
+<h2 id="5-多片默认连通吗靠什么连" class="hc4"><span class="hn">5.</span>多片默认连通吗？靠什么连？</h2>
+<h3 id="51-网络分层">5.1 网络分层</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>范围</th>
+<th>走什么</th>
+<th>谁建的</th>
+<th>证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>一片之内</td>
+<td>ICI（OCS 接 cube）</td>
+<td>slice controller 拼片（05 §5.1）</td>
+<td><code>TPU_TOPOLOGY=4x8x8</code>、<code>TPU_TOPOLOGY_WRAP=true,true,true</code>；fsdp=512</td>
+</tr>
+<tr>
+<td>片与片之间</td>
+<td>DCN：eth1 / eth2</td>
+<td>建池附加网卡（02 §2.4）+ <code>hostNetwork: true</code></td>
+<td><code>--megascale_grpc_interface_prefixes=eth1,eth2,lo</code>；data=N</td>
+</tr>
+<tr>
+<td>整个 pod</td>
+<td><strong>没有</strong>整 pod ICI 大片</td>
+<td>—</td>
+<td><a href="pitfalls.html#l-7">经验教训第 7 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<figure class="img"><a href="../figs/f08-multislice-layout.svg" target="_blank" title="新窗口看原图"><img src="../figs/f08-multislice-layout.svg" alt="N 片 × 4x8x8（示意只画 8 片）：片内 512 路 FSDP 走 ICI，片间 N 路数据并行走 DCN" loading="lazy"></a><figcaption>N 片 × 4x8x8（示意只画 8 片）：片内 512 路 FSDP 走 ICI，片间 N 路数据并行走 DCN</figcaption></figure>
+<h3 id="52-用户需要写什么平台补什么">5.2 用户需要写什么、平台补什么</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>东西</th>
+<th>谁写</th>
+<th>在哪</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>replicas: N</code></td>
+<td>你</td>
+<td>JobSet</td>
+</tr>
+<tr>
+<td><code>cloud.google.com/gke-tpu-slice-topology: 4x8x8</code></td>
+<td>你</td>
+<td>pod 模板注解</td>
+</tr>
+<tr>
+<td><code>kueue.x-k8s.io/queue-name</code></td>
+<td>你</td>
+<td>JobSet label</td>
+</tr>
+<tr>
+<td><code>hostNetwork: true</code>、<code>nodeSelector gke-networking-dra-driver: 'true'</code></td>
+<td>你</td>
+<td>pod spec</td>
+</tr>
+<tr>
+<td><code>LIBTPU_INIT_ARGS=--megascale_grpc_interface_prefixes=eth1,eth2,lo</code></td>
+<td>你</td>
+<td>容器 env</td>
+</tr>
+<tr>
+<td><code>num_slices</code> / <code>dcn_data_parallelism = N</code></td>
+<td>你</td>
+<td>训练 overlay</td>
+</tr>
+<tr>
+<td><code>MEGASCALE_NUM_SLICES / SLICE_ID / COORDINATOR_ADDRESS / PORT</code></td>
+<td>平台</td>
+<td>建 pod 时注入（§3.2，注 1）</td>
+</tr>
+<tr>
+<td><code>TPU_WORKER_HOSTNAMES / TPU_TOPOLOGY / TPU_HOST_BOUNDS …</code></td>
+<td>平台</td>
+<td>同上</td>
+</tr>
+<tr>
+<td>TAS 三条注解和 4x4x4-state 亲和</td>
+<td>kueue-slice-controller webhook</td>
+<td>按你的 topology 注解加（05 §5.2）</td>
+</tr>
+<tr>
+<td>拼片（per-slice workload policy + Multi-MIG + OCS）</td>
+<td>slice controller</td>
+<td>准入后（05 §5.1）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：按书复跑核对（实测集群按书复跑任务的 worker-0-0）：JobSet 里 <code>MEGASCALE</code> 0 次、pod 里 4 个都在，<code>COORDINATOR_ADDRESS</code> = <code>&lt;jobset&gt;-worker-0-0.&lt;jobset&gt;:9915</code>。</li>
+<li><code>spec.coordinator</code>、<code>spec.network</code> 这个作业没写照样连通，<strong>不是连通必要条件</strong>；训练里的作用没单独测。</li>
+</ul>
+<h3 id="53-最小证据更大规模纯-device-check">5.3 最小证据：更大规模纯 device check</h3>
+<p>整份 110 行逐字（名单截短）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jobset.x-k8s.io/v1alpha2</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">JobSet</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;作业名&gt;</span>
+<span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">kueue.x-k8s.io/queue-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">multislice-queue</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">failurePolicy</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">maxRestarts</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">  </span><span class="nt">replicatedJobs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">worker</span>
+<span class="w">    </span><span class="nt">replicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;片数&gt;</span>
+<span class="w">    </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">backoffLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">        </span><span class="nt">completionMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Indexed</span>
+<span class="w">        </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<span class="w">        </span><span class="nt">completions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">64</span>
+<span class="w">        </span><span class="nt">template</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-tpu-slice-topology</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4x8x8</span>
+<span class="w">          </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">restartPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span>
+<span class="w">            </span><span class="nt">hostNetwork</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">            </span><span class="nt">dnsPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterFirstWithHostNet</span>
+<span class="w">            </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-tpu-accelerator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tpu7x</span>
+<span class="w">              </span><span class="nt">cloud.google.com/gke-networking-dra-driver</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;true&#39;</span>
+<span class="w">            </span><span class="nt">tolerations</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">google.com/tpu</span>
+<span class="w">              </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
+<span class="w">              </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NoSchedule</span>
+<span class="w">            </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">main</span>
+<span class="w">              </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mirror.gcr.io/library/python@sha256:4d1caded1f729ae443eb803f26ffde7b61e696aeaef62f099abb6dd6b14257c7</span>
+<span class="w">              </span><span class="nt">securityContext</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">privileged</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">              </span><span class="nt">ports</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">containerPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8471</span>
+<span class="w">              </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EXPECT_DEVICES</span>
+<span class="w">                </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;&lt;片数</span><span class="nv"> </span><span class="s">×</span><span class="nv"> </span><span class="s">512&gt;&#39;</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LIBTPU_INIT_ARGS</span>
+<span class="w">                </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--megascale_grpc_interface_prefixes=eth1,eth2,lo</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_STDERR_LOG_LEVEL</span>
+<span class="w">                </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;0&#39;</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TPU_MIN_LOG_LEVEL</span>
+<span class="w">                </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;0&#39;</span>
+<span class="w">              </span><span class="nt">command</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bash</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">-c</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&#39;set</span><span class="nv"> </span><span class="s">-ex</span>
+
+<span class="w">                </span><span class="s">pip</span><span class="nv"> </span><span class="s">install</span><span class="nv"> </span><span class="s">-U</span><span class="nv"> </span><span class="s">--pre</span><span class="nv"> </span><span class="s">jax</span><span class="nv"> </span><span class="s">jaxlib</span><span class="nv"> </span><span class="s">libtpu</span><span class="nv"> </span><span class="s">requests</span><span class="nv"> </span><span class="s">-f</span><span class="nv"> </span><span class="s">https://storage.googleapis.com/jax-releases/libtpu_releases.html</span>
+
+<span class="w">                </span><span class="s">python</span><span class="nv"> </span><span class="s">-c</span><span class="nv"> </span><span class="se">&#39;&#39;</span><span class="s">import</span><span class="nv"> </span><span class="s">importlib.metadata</span><span class="nv"> </span><span class="s">as</span><span class="nv"> </span><span class="s">m;</span><span class="nv"> </span><span class="s">print(&quot;VER&quot;,</span><span class="nv"> </span><span class="s">m.version(&quot;jax&quot;),</span><span class="nv"> </span><span class="s">m.version(&quot;libtpu&quot;))</span><span class="se">&#39;&#39;</span>
+
+<span class="w">                </span><span class="s">timeout</span><span class="nv"> </span><span class="s">900</span><span class="nv"> </span><span class="s">python</span><span class="nv"> </span><span class="s">-c</span><span class="nv"> </span><span class="se">&#39;&#39;</span><span class="s">import</span><span class="nv"> </span><span class="s">jax,os,sys,time;</span><span class="nv"> </span><span class="s">t=time.time();</span><span class="nv"> </span><span class="s">n=jax.device_count();</span><span class="nv"> </span><span class="s">e=int(os.environ[&quot;EXPECT_DEVICES&quot;]);</span><span class="nv"> </span><span class="s">print(&quot;DEVICE_CHECK&quot;,</span><span class="nv"> </span><span class="s">&quot;OK&quot;</span><span class="nv"> </span><span class="s">if</span><span class="nv"> </span><span class="s">n==e</span><span class="nv"> </span><span class="s">else</span><span class="nv"> </span><span class="s">&quot;MISMATCH&quot;,</span><span class="nv"> </span><span class="s">n,</span><span class="nv"> </span><span class="s">e,</span><span class="nv"> </span><span class="s">&quot;init_s=%.1f&quot;%(time.time()-t));</span><span class="nv"> </span><span class="s">sys.exit(0</span><span class="nv"> </span><span class="s">if</span><span class="nv"> </span><span class="s">n==e</span><span class="nv"> </span><span class="s">else</span><span class="nv"> </span><span class="s">1)</span><span class="se">&#39;&#39;</span>
+
+<span class="w">                </span><span class="s">&#39;</span>
+<span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">requests</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;4&#39;</span>
+<span class="w">                </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">google.com/tpu</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;4&#39;</span>
+<span class="w">            </span><span class="nt">affinity</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">nodeAffinity</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">requiredDuringSchedulingIgnoredDuringExecution</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">nodeSelectorTerms</span><span class="p">:</span>
+<span class="w">                  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">matchExpressions</span><span class="p">:</span>
+<span class="w">                    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cloud.google.com/gke-tpu-slice</span>
+<span class="w">                      </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NotIn</span>
+<span class="w">                      </span><span class="nt">values</span><span class="p">:</span>
+<span class="w">                      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;手工片名&gt;</span>
+<span class="w">                      </span><span class="c1"># …（共 32 项，提交那一刻的手工 Slice 名单，照抄会过时；用 05-avoid-manual-slices.py 重新生成）</span>
+<span class="w">            </span><span class="nt">priorityClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">high</span>
+</code></pre></div>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># 在工作站上跑。当时的提交命令没存档，本书的约定是 kubectl apply -f（未实测逐字）</span>
+kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>&lt;你的清单&gt;.yaml
+</code></pre></div>
+<figure class="mermaid"><img src="../assets/mermaid/09de20782717.png" width="323" alt="示意图" loading="lazy"></figure><p>读图：现成的多片冒烟，与训练栈版本无关。期望每 pod <code>DEVICE_CHECK OK &lt;设备数&gt; &lt;设备数&gt; init_s=…</code>。</p>
+<p>实测：全部 pod 除 1 个外都 OK，init_s 最小约 17 s、中位约 58 s、p99 约 66 s、最大约 68 s；余 1 个是拉日志 i/o timeout，jobset Completed。jax 0.11.2 / libtpu 0.0.49。</p>
+<ul>
+<li>10+ 片同款（<code>4x8x8 × 10+ --multi-nic</code>）：<code>END &lt;作业名&gt; term=Completed elapsed=264s result=[DEVICE_CHECK OK &lt;设备数&gt; &lt;设备数&gt;]</code>。</li>
+<li><strong>对照</strong>：训练栈（jax 0.11.0 / libtpu 0.0.48 + 5 个 flag）更大规模挂在 <code>jax.devices()</code>；判别作业被抢占，<strong>未实测</strong>。</li>
+<li><strong>AOT 对照</strong>：更大规模的生产作业用提前编译（AOT）跑通过，所以挂住不是平台问题；嫌疑收窄到 flag 或 JIT 初始化路径 <span class="tg inf">[推断]</span>。</li>
+</ul>
+<h3 id="54-placement-policy-和-tas-各管什么-src-runbook02-2324-scripts03-kueue-topology-flavoryamltmpl">5.4 placement policy 和 TAS 各管什么 <span class="src" tabindex="0">源<span class="srci">runbook/02 §2.3–2.4; scripts/03-kueue-topology-flavor.yaml.tmpl</span></span></h3>
+<figure class="mermaid"><img src="../assets/mermaid/97fb05290f91.png" width="264" alt="示意图" loading="lazy"></figure><p>读图：只有黄色那层要每次提交前重新生成。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>在哪声明</th>
+<th>用户要做的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>①</td>
+<td><a href="02-cluster-bringup.html#step-2-3">02 §2.3</a>，建池 <code>--placement-policy</code>（注 1）</td>
+<td>无</td>
+</tr>
+<tr>
+<td>②</td>
+<td>slice controller 建目标拓扑 workload policy</td>
+<td>无（生命周期 05 §5.1；<strong>拼片失败</strong>看 05 §5.6）</td>
+</tr>
+<tr>
+<td>③</td>
+<td>webhook 按注解加（§3.2）</td>
+<td>只写注解；整 pod 1 个 <code>gce-topology-block</code>（<code>BLOCK=${RESERVATION}-block-0001</code>），必满足</td>
+</tr>
+<tr>
+<td>④</td>
+<td>你写的 nodeAffinity</td>
+<td>每次提交前重新生成（§3.1 ⑩）</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>注 1：<code>gcloud compute resource-policies create workload-policy ${CLUSTER}-ss-policy --type=HIGH_THROUGHPUT --accelerator-topology=4x4x4 --accelerator-topology-mode=provision_only</code>。</li>
+</ul>
+<blockquote class="co key">
+<p><span class="co-t"><i>💡</i><span>JobSet 里没有 placement 字段，也不需要有</span></span>「多片放一起」是 webhook 加的 block 约束；片间都走 DCN，步时里 DCN 暴露部分（数百 ms）由此而来。</p>
+</blockquote>
+<p><a id="step-6-6"></a></p>
+<h2 id="6-没弄清--未实测" class="hc5"><span class="hn">6.</span>没弄清 / 未实测</h2>
+<ul>
+<li>注入 <code>MEGASCALE_*</code> / <code>TPU_*</code> 的是 JobSet 还是 GKE 的 TPU webhook：<strong>未核实</strong>。</li>
+<li>不带 <code>--megascale_grpc_interface_prefixes=eth1,eth2,lo</code> 能不能跨片：<strong>未实测</strong>。</li>
+<li>10+ 片实测中的 <code>N−1 reused</code>：05 §5.2 说复用（<code>--reuse-slices=true</code>）两个集群都没开，条件<strong>没查</strong>（<span class="tg inf">[推断]</span> 可能是前一次提交留下的片）。</li>
+<li>下一档关 pipeliner 的运行没有步时；更大规模的训练栈挂住，根因没定位（判别作业没跑成）。</li>
+<li>10+ 片和更大规模两条提交命令是还原的，<strong>未实测</strong>。</li>
+</ul>
+<h2 id="检查点" class="hc0">检查点</h2>
+<p><strong>说得出</strong>（先自己答，再点开对答案）</p>
+<ul class="contains-task-list">
+<li class="task-list-item qa"><details><summary>多片互联要在 JobSet 里额外声明什么？</summary><div class="qa-a">不用：<code>replicas: N</code> + 拓扑注解 + 队列标签，<code>MEGASCALE_*</code> 由 GKE 侧注入、具体组件未核实，§5</div></details></li>
+<li class="task-list-item qa"><details><summary>一片 4x8x8 为什么是 64 个 pod、每 pod <code>google.com/tpu: 4</code>？</summary><div class="qa-a">256 芯 ÷ 每 host 4 芯 = 64 台，一 pod 一台，§3</div></details></li>
+<li class="task-list-item qa"><details><summary>片数定了意味着什么？</summary><div class="qa-a">= DCN 数据并行度，每多一片全局 batch 多一份；AOT 换片数要重编，§2</div></details></li>
+<li class="task-list-item qa"><details><summary>placement policy 在 JobSet 里写吗？</summary><div class="qa-a">不写：建节点池时就定了，§5.4</div></details></li>
+</ul>
+<p><strong>交棒</strong>：片数和 JobSet 定了，下一步把数据、编译缓存放到离卡近的地方 → <a href="06a-storage-anywhere-cache-gcsfuse.html">06a</a>；之后按 <a href="06b-public-config-recipe-dsv3.html">06b</a>（公开配置）或 <a href="06c-multislice-training.html">06c</a>（大号 MoE 模型 JIT 对照）跑起来。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="05-dynamic-slicing-operations.html"><small>← 上一页</small>05 动态切片日常操作</a><a class="next" href="06a-storage-anywhere-cache-gcsfuse.html"><small>下一页 →</small>06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#1-五个问题的短答案">1. 五个问题的短答案</a></li><li class="l2"><a href="#2-片数怎么选选了意味着什么">2. 片数怎么选、选了意味着什么</a></li><li class="l3"><a href="#21-片数改动哪些字段-src-runbookscripts06-jobsetsh">2.1 片数改动哪些字段</a></li><li class="l3"><a href="#22-片数和步时选片数时看这张表">2.2 片数和步时（选片数时看这张表）</a></li><li class="l2"><a href="#3-申请一片-256-芯1--4x8x8">3. 申请一片 256 芯（1 × 4x8x8）</a></li><li class="l3"><a href="#31-jobset-里决定要什么卡的字段">3.1 JobSet 里决定「要什么卡」的字段</a></li><li class="l3"><a href="#32-平台在-pod-上补了什么-src-worker-0-0-的真实-pod-对象">3.2 平台在 pod 上补了什么</a></li><li class="l3"><a href="#33-看它到底拿到了什么只读-src-runbookscripts06-jobsetsh-watch--verify-子命令">3.3 看它到底拿到了什么（只读）</a></li><li class="l2"><a href="#4-申请-10-片数千芯">4. 申请 10+ 片（数千芯）</a></li><li class="l3"><a href="#41-和-1-片的全部差别">4.1 和 1 片的全部差别</a></li><li class="l3"><a href="#42-两条提交路径都是实际用过的">4.2 两条提交路径（都是实际用过的）</a></li><li class="l2"><a href="#5-多片默认连通吗靠什么连">5. 多片默认连通吗？靠什么连？</a></li><li class="l3"><a href="#51-网络分层">5.1 网络分层</a></li><li class="l3"><a href="#52-用户需要写什么平台补什么">5.2 用户需要写什么、平台补什么</a></li><li class="l3"><a href="#53-最小证据更大规模纯-device-check">5.3 最小证据：更大规模纯 device check</a></li><li class="l3"><a href="#54-placement-policy-和-tas-各管什么-src-runbook02-2324-scripts03-kueue-topology-flavoryamltmpl">5.4 placement policy 和 TAS 各管什么</a></li><li class="l2"><a href="#6-没弄清--未实测">6. 没弄清 / 未实测</a></li><li class="l2"><a href="#检查点">检查点</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>一个 MoE 模型在 TPU v7x 上的训练优化 · MoE 训练优化</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="moe">
+<link rel="stylesheet" href="../../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="../..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../../index.html"><span class="crab">🦀</span><span class="bt">MoE 训练优化</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../../index.html" class="">首页</a><a class="on" href="README.html">专题</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（/ 聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="专题"><div class="side-h">专题</div><ol><li><a class="on" aria-current="page" href="README.html">一个 MoE 模型在 TPU v7x 上的训练优化</a></li><li><a href="01-model-and-baseline.html">01 · 量法与口径：这是个什么模型，时间花在哪，怎么量才不自欺</a></li><li><a href="02-collective-scheduling-and-overlap.html">02 · 集合通信调度与重叠：搬的时机比搬的速度更要命</a></li><li><a href="03-dcn-and-multislice.html">03 · DCN 与多切片：把单片的优化搬到 10+ 片</a></li><li><a href="04-fp8-quantization.html">04 · FP8：稠密乘法</a></li><li><a href="05-kernels-kda-mla-moe.html">05 · KDA / MLA / MoE kernel：手写的算子要过三关</a></li><li><a href="06-memory-remat-compile.html">06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</a></li><li><a href="07-data-and-checkpointing.html">07 · 数据与检查点：训练跑顺之后，时间从哪漏走</a></li><li><a href="08-open-problems.html">08 · 未解决问题：下一个集群的实验清单</a></li><li><a href="09-ablation-ladder.html">09 · 消融阶梯：一刀一刀拆掉，看每一刀值多少</a></li><li><a href="10-optimization-roadmap.html">10 · 优化依赖图：哪刀先哪刀后、为什么这个顺序</a></li><li><a href="11-porting-checklist.html">11 · 迁移清单</a></li><li><a href="12-multimodal-and-numerics-alignment.html">12 · 多模态版与精度对拍</a></li><li><a href="13-silent-errors.html">13 · 静默错误总表：跑通了，不等于对了</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../../index.html">首页</a> › <span>专题</span></nav><article class="md"><h1 id="一个-moe-模型在-tpu-v7x-上的训练优化">一个 MoE 模型在 TPU v7x 上的训练优化</h1>
+<blockquote>
+<p>一套 MLA + KDA 混合注意力 + MoE 的模型（小号 / 大号两个尺寸），在 MaxText 上从单 slice 调到 数千颗芯片跨 DCN。这本书只讲每一刀：做什么、依赖谁、值多少、为什么有效。</p>
+</blockquote>
+<blockquote class="co info">
+<p><span class="co-t"><i>ℹ️</i><span>本书主线的三个前提</span></span></p>
+<ul>
+<li><strong>EP=1、FSDP 拉满</strong>（大号模型 FSDP=512，专家权重按 FSDP 切、用时 all-gather）；<strong>序列 8K</strong>（8,192）。</li>
+<li>书里的收益、排序、开关取舍大多是在这三个前提下测的；<strong>换场景</strong>（EP&gt;1、序列变短、MLA 头配置不同、只用上游 MaxText）先看 <a href="11-porting-checklist.html#%E6%8D%A2%E5%9C%BA%E6%99%AF%E6%97%B6%E5%93%AA%E4%BA%9B%E7%BB%93%E8%AE%BA%E4%BC%9A%E7%BF%BB">11 · 换场景时哪些结论会翻</a>。</li>
+</ul>
+</blockquote>
+<p>概览：<a href="../../promo/moe/index.html">一页看懂 MoE 训练优化</a></p>
+<h2 id="给-gpu-背景读者的-tpu-速成" class="hc0">给 GPU 背景读者的 TPU 速成</h2>
+<ul>
+<li><strong>芯片与 device</strong>：一颗 v7x 芯片有两个 TensorCore，JAX 把每个当成一个 device，所以 1 芯片 = 2 device。本书的 TFLOP/s、tokens/s、MFU 都按 device 算，MFU 分母 1153.5 TFLOP/s/device = 每芯片 BF16 峰值 2307 ÷ 2。</li>
+<li><strong>TensorCore（TC）/ SparseCore（SC）</strong>：TC 跑矩阵乘和绝大部分计算。每芯片另有 4 颗 SparseCore（每 device 2 颗，<a href="https://docs.cloud.google.com/tpu/docs/tpu7x" target="_blank" rel="noopener">TPU7x</a>），原本做稀疏 gather / scatter；本书把集合通信卸到 SC 上跑，不占 TC（类比：一颗带归约能力的 DMA 引擎，接近 NVLS / SHARP 那种在网络侧做归约、不占 SM；不是同一种硬件）。</li>
+<li><strong>车道</strong>：书里把「一颗 SC 同一时刻只跑一个通信」叫一条车道。早发的通信占着车道，后面更急的只能排队，所以「发得早」不等于「藏住了」（<a href="02-collective-scheduling-and-overlap.html">02</a>）。GPU 上相当于同一个 process group 的 collective 共用一条 NCCL stream、按发起顺序执行。</li>
+<li><strong>两层网</strong>：一片（slice，4x8x8 = 256 芯片）内芯片之间是 ICI 直连，带宽高，作用类似 NVLink 域但大得多；片与片之间走数据中心网络 DCN，慢得多，而且每发起一次都有固定开销（单次 all-reduce 约 21 ms 地板，<a href="03-dcn-and-multislice.html">03</a>）。cube = 4x4x4 = 64 芯片，是片内的物理分块，一片 4 个。</li>
+<li><strong>通信排在哪是编译期定的</strong>：PyTorch eager 下 NCCL 在运行时按 stream 排队；TPU 上 XLA 编译时就把每个 all-gather / reduce-scatter 的开始和结束钉死。本书一大半优化（HLO 通信重排、cost profile、pipeliner）改的都是这个排序。HLO 通信重排是一组私有的 XLA HLO pass，未开源，改的是集合通信的切法、落点和调度顺序；本书只讲理念和判据，实现需读者自行开发（<a href="02-collective-scheduling-and-overlap.html">02</a>，图 <a href="figs/fig-t02-overlap.svg">AG 开始晚 vs 提前做完</a>）。</li>
+<li><strong>暴露 vs 执行</strong>：通信在 SC 上传多久（执行）和 TC 因它干等多久（暴露）是两个数，只有暴露那部分拖慢步时（<a href="figs/fig-t01-exposed-vs-busy.svg">图</a>、<a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a>）。</li>
+<li><strong>JIT / AOT</strong>：JIT 在 TPU 主机上现编现跑；AOT 在 CPU 机器上提前把整步编好存成 pickle，TPU 直接加载。生产数都是 AOT（<a href="06-memory-remat-compile.html">06</a>）。</li>
+<li><strong>存储</strong>：每 device 一块 HBM（显存，可用上限 94.74 GiB，<a href="06-memory-remat-compile.html">06</a>）；手写 kernel 用的片上暂存叫 VMEM（类比 GPU 的 shared memory，但容量和作用域都不同），kernel 一次搬进 VMEM 的块叫 tile。</li>
+</ul>
+<hr />
+<h2 id="步时指数全书三个底" class="hc1">步时指数：全书三个底</h2>
+<p>步时一律写成<strong>指数</strong>（整数），不写秒。大号、小号模型各一个底；多模态版另有一个底，只在 12 章用：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>模型</th>
+<th>指数 = 100 是哪一步</th>
+<th>读法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>大号模型</strong></td>
+<td>单片（256 芯片，512 device）BF16、JIT、无 HLO 通信重排的最初基线</td>
+<td>指数 37 ＝ 一步只要最初的 37%</td>
+</tr>
+<tr>
+<td><strong>小号模型</strong></td>
+<td>64 芯片（4x4x4）开发期起点</td>
+<td>指数 16 ＝ 一步只要起点的 16%</td>
+</tr>
+<tr>
+<td>多模态版（只在 <a href="12-multimodal-and-numerics-alignment.html">12</a> 和引用处）</td>
+<td>多模态版单片 BF16、JIT、未优化基线（中位）</td>
+<td>别章引用时注「多模态底」，不和上两行混比</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>多片的指数<strong>沿用大号模型同一个底</strong>，能放进同一张表；但算弱扩展要同代码、同口径：同代配置 1 → 10+ 片 83–87%（<a href="03-dcn-and-multislice.html">03</a>）。单片 37（pipeliner 开、单片满配）和 10+ 片 41（pipeliner 关、换过 profile）口径不同，不能直接相除。</li>
+<li>只在单个 A/B 里出现的数（JIT 消融、微基准、2 片对比、另一个配置）只给百分比，不给指数。</li>
+<li>百分比按档取整：≥10% 取到 5 的倍数，3–10% 取整数，2–3% 写「2–3%」或「约 2%」，1–2% 写「1–2%」，&lt;1% 写「不到 1%」；弱扩展等效率比值保留整数 %。</li>
+<li>百分比按原始步时算，指数是逐个取整的，拿两个指数相除可能和正文百分比差一档。</li>
+</ul>
+<hr />
+<h2 id="一段话讲完整条路" class="hc2">一段话讲完整条路</h2>
+<p>小号模型 64 芯片起步时算力大半闲着。瓶颈不是算力，是<strong>通信排错地方、kernel 被重算四遍、tile 选错</strong>。大号模型上把这三件事按依赖顺序一件件拆掉，单片从 100 走到 37（目标 36），再把同一套配方搬到 10+ 片、20+ 片，指数停在 41。</p>
+<figure class="mermaid"><img src="../../assets/mermaid/36cc19530df3.png" width="1204" alt="示意图" loading="lazy"></figure><ul>
+<li><strong>小号模型</strong>：先改成 explicit all-gather（专家矩阵乘里自己发专家权重的 all-gather，不让编译器自动插），反向随之变成 reduce-scatter；再让 remat 看见 kernel 内部、把 EP 降到 1、按微基准重选 tile。</li>
+<li><strong>大号模型单片</strong>：XLA 的 latency-hiding scheduler（编译时决定每个通信排在哪）不肯把层循环里的 all-gather 藏到计算底下，于是<strong>上了私有的 HLO 通信重排 pass</strong>（HLO 是 XLA 的中间表示）。这一刀之后最大的意外杠杆是<strong>喂给 pass 的 cost profile</strong>（上次运行的 profiler trace，pass 拿它估每个算子多久）：同一份代码换 profile 差 7–20%。单片满配（37）离目标 36 差 2–3%。</li>
+<li><strong>跨 DCN 的 JIT 基线</strong>：没开 HLO 通信重排，步时双峰，弱扩展约 71%（弱扩展：片数和总 batch 同比加时，单片步时 ÷ 多片步时；这里是单片 JIT 51 对 10+ 片 JIT 基线 71，按原始步时相除），目标 90%（<a href="03-dcn-and-multislice.html">03</a>）。把单片那套（AOT + HLO 通信重排）搬上去、关掉 XLA pipeliner、换上 10+ 片自己的 cost profile 后，10+ 片和 20+ 片都停在 41。</li>
+</ul>
+<hr />
+<h2 id="feature-依赖图" class="hc3">feature 依赖图</h2>
+<p>一条箭头 A → B 读作「B 要等 A 做完才有意义（或才做得出来）」。颜色按所在篇：蓝＝量法与编译，绿＝单片主线，紫＝多片，黄＝稳定性。</p>
+<figure class="mermaid"><img src="../../assets/mermaid/a11e2421791e.png" width="949" alt="示意图" loading="lazy"></figure><p>为什么是这个顺序，逐条讲在 <a href="10-optimization-roadmap.html">10 · 优化依赖图</a>。三条最硬的依赖：</p>
+<ul>
+<li><strong>HLO 通信重排离不开 CPU AOT 和 cost profile</strong>：pass 本身在 JIT 和 AOT 下都能跑，但要先在 CPU AOT 上试编、核对产物和训练是同一个程序（CI 的 JIT 校验模式还会强制关掉它）；没有按当前代码抓的 profile，pass 就在按过期的表排。</li>
+<li><strong>QAG 离不开 placement</strong>：先量化再 all-gather 之后，被搬的是 FP8 权重，placement 得认得它才会把它提前。</li>
+<li><strong>多片配方离不开单片配方</strong>：单片配方先调稳，10+ 片和单片的差距（同口径 1 → 10+ 片 83–87%）才能记在 DCN 头上；单片没调稳就上多片，两边的问题会搅在一起。</li>
+</ul>
+<hr />
+<h2 id="总轨迹指数" class="hc4">总轨迹（指数）</h2>
+<div class="x-stats">
+<ul>
+<li><strong>16</strong> 小号模型 64 芯片开发期终点（起点 100）</li>
+<li><strong>37</strong> 大号模型单片 FP8 最好点（HLO 通信重排那一刀前 73）</li>
+<li><strong>36</strong> 目标（单片口径，BF16 与 FP8 都要）</li>
+<li><strong>71</strong> 10+ 片 JIT 基线（HLO 通信重排关）</li>
+<li><strong>41</strong> 10+ 片生产配方（AOT）；稳态最好也是 41</li>
+<li><strong>41</strong> 20+ 片，弱扩展约 100% <span class="tg inf">[推断，见下表]</span></li>
+<li><strong>34</strong> 单片最快（RS 双 SC、新 profile、双 SC 通信搜索三样叠加；双 SC 通信搜索验证过、未进生产）；CI nightly 仍单 SC，step 900–999 窗口为 36，已贴近目标</li>
+</ul>
+</div>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>看数字前记住</span></span></p>
+<ul>
+<li>吞吐和 MFU 都按 device 算（1 芯片 = 2 device，见「TPU 速成」）。</li>
+<li><code>maxtext#NNNN</code> 是上游公开 PR；不在上游的改动没有编号。</li>
+</ul>
+</blockquote>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>轨道</th>
+<th>起点</th>
+<th>最好点</th>
+<th>变化</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>小号模型 64 芯片（4x4x4），GBS 256，seq 8K，BF16，开发期</td>
+<td><strong>100</strong></td>
+<td><strong>16</strong></td>
+<td>6.1×</td>
+</tr>
+<tr>
+<td>小号模型 64 芯片，CI 每日（固定配置，p50）</td>
+<td><strong>18</strong></td>
+<td><strong>14</strong></td>
+<td>约 −20%</td>
+</tr>
+<tr>
+<td>大号模型单片（4x8x8），GBS 1024，BF16，CI</td>
+<td><strong>100</strong></td>
+<td><strong>44</strong></td>
+<td>2.3×</td>
+</tr>
+<tr>
+<td>大号模型单片，FP8，CI</td>
+<td><strong>45</strong></td>
+<td><strong>39</strong></td>
+<td>约 −15%</td>
+</tr>
+<tr>
+<td>大号模型单片，FP8，手动（同一份代码只换 cost profile）</td>
+<td>—</td>
+<td><strong>37</strong>（换后即满配）</td>
+<td>约 −7%</td>
+</tr>
+<tr>
+<td>大号模型 10+ 片（10+ × 4x8x8，DCN DP=N），FP8</td>
+<td><strong>71</strong>（JIT 中位，双峰）</td>
+<td><strong>41</strong>（AOT，10+ 片生产配方长跑各段 p50）</td>
+<td>约 −40%；中间那一档 AOT + HLO 通信重排是 47</td>
+</tr>
+<tr>
+<td>大号模型 20+ 片（20+ × 4x8x8，DCN DP=N），FP8</td>
+<td>—</td>
+<td><strong>41</strong>（AOT，p50）</td>
+<td>和 10+ 片同；弱扩展约 100% [推断：10+ 片与 20+ 片 p50 之比约 1.00；两份 pickle 代码版本不同，差异未核]</td>
+</tr>
+<tr>
+<td>目标（BF16 与 FP8 都要）</td>
+<td>—</td>
+<td><strong>≤ 36</strong>（单片口径）</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="三个起点各指什么">三个起点各指什么</h3>
+<p>大号模型单片的「起点」有三个说法，量的不是同一样东西；三个都是 BF16、单片（512 device）、FSDP=512、EP=1。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>指数</th>
+<th>是什么</th>
+<th>配方</th>
+<th>PDB / GBS</th>
+<th>怎么量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>100</strong></td>
+<td>最早一条 BF16 CI 基线</td>
+<td>JIT，无 CPU AOT 和 HLO 通信重排；remat <code>custom</code>，只存 <code>context</code></td>
+<td>2 / 1024，seq 8192</td>
+<td>50 步 CI，第 3–49 步均值</td>
+</tr>
+<tr>
+<td><strong>75</strong></td>
+<td><a href="01-model-and-baseline.html#4-%E6%97%B6%E9%97%B4%E8%8A%B1%E5%9C%A8%E5%93%AA%E5%A4%A7%E5%8F%B7%E6%A8%A1%E5%9E%8B-256-%E8%8A%AF%E7%89%87%E5%88%86%E6%A8%A1%E5%9D%97">01 §4</a> 分模块表「BF16 base」列</td>
+<td>JIT，HLO 通信重排前；含没含 SC RS v2 未核</td>
+<td>跟踪口径 2 / 1024；这份 profile 的 batch 未核</td>
+<td>一次 profile 里 <code>jit_train_step</code> 两 device 均值；与 CI 同口径未核</td>
+</tr>
+<tr>
+<td><strong>73</strong></td>
+<td>HLO 通信重排前的 CI 基线</td>
+<td>比上一行多开 GMM v2，仍 JIT、无 HLO 通信重排；remat 仍 custom <span class="tg inf">[推断]</span></td>
+<td>2 / 1024</td>
+<td>同指数 100 那行</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>HLO 通信重排那一刀同时换了口径</strong>：CI 改成 CPU AOT + full remat + HLO 通信重排，跑 1000 步、仍取第 3–49 步。所以 73 → 55（约 −25%）里混着口径变化，不能全记在 HLO 通信重排头上。</li>
+<li><strong>10+ 片 JIT 起点也有两个数</strong>，指数都约 71：一个是含坏 cube 的 JIT 基线稳态中位，<strong>含双峰慢步</strong>（本页数字框、弱扩展约 71%）；另一个是排除坏 cube 后的<strong>干净 JIT 基线</strong>（慢步基本消失，<a href="10-optimization-roadmap.html">10</a>、<a href="03-dcn-and-multislice.html">03</a> 的「JIT → AOT + HLO 通信重排约 −35%」用它）。换成 AOT + HLO 通信重排后，两个都约快 35%，差在慢步和坏 cube 算不算（<a href="03-dcn-and-multislice.html">03</a>）。</li>
+<li><strong>算「相对提升」</strong>：起点终点要同精度、同编译方式、同统计窗口。100 → 37 中间换了 BF16 → FP8、JIT → AOT，只能当总轨迹看。</li>
+</ul>
+<hr />
+<h2 id="每刀收益最大的五刀" class="hc5">每刀收益：最大的五刀</h2>
+<p>按对大号模型单片的相对降幅排：</p>
+<figure class="mermaid"><img src="../../assets/mermaid/986cacfd5c84.png" width="845" alt="示意图" loading="lazy"></figure><p>读图：「第 N」<strong>按各刀的相对降幅排</strong>（约 −25%、−20%、−9%、−7%、−7%）；按指数点排则 KDA kernel（6 点）在换 profile（3 点）前，因为起点不同。</p>
+<p><strong>每刀为什么有效</strong>（一句话，原理展开在链接处）：</p>
+<ul>
+<li><strong>HLO 通信重排</strong>：通用调度器只凭估算决定通信提前多少发；pass 拿实测的 cost profile 把大 AG / RS 挪到够长的计算底下（<a href="02-collective-scheduling-and-overlap.html">02</a>）。和 PyTorch eager 的区别见「TPU 速成」；JAX / XLA 在 GPU 上同样有这步编译期调度。</li>
+<li><strong>换 cost profile</strong>：调度器只有一张「每个算子多久」的表；表过期，通信窗口就错位，编译不报错（<a href="02-collective-scheduling-and-overlap.html">02</a>）。GPU 上相当于 JAX 的 PGLE（拿 profile 校准调度的估时）。</li>
+<li><strong>FP8 + QAG</strong>：每元素 2 字节变 1 字节；先量化再收集，要求每块本地算的 scale 等于整张量的 scale，条件不满足就静默退回 BF16 收集（<a href="04-fp8-quantization.html">04</a>）。GPU 上相当于 FSDP2 的 float8 all-gather（torchao <code>enable_fsdp_float8_all_gather</code>；那边先对 amax 做一次 all-reduce，让各分片用同一个 scale）。</li>
+<li><strong>SC RS</strong>：RS 卸到 SparseCore（独立搬运线程）后，TensorCore 只管发起和收尾（<a href="02-collective-scheduling-and-overlap.html">02</a>）。</li>
+<li><strong>KDA kernel</strong>：把多个 kernel 拼成的老路径换成前向、反向各一个 mega-kernel，KDA core 时间约减半；省的应是 kernel 之间往返 HBM 的中间量 <span class="tg inf">[推断]</span>（<a href="05-kernels-kda-mla-moe.html">05</a>）。</li>
+<li><strong>黄框（多片关 pipeliner）</strong>：pipeliner 把本层通信推到下一层去藏，那份数据要多活一层；多片时显存余量被挤掉，成本表里又没有跨片时间（<a href="02-collective-scheduling-and-overlap.html">02</a>）。GPU 上相当于 FSDP 把本层梯度 reduce-scatter 放到独立 stream、与下一层反向重叠（类比）。</li>
+</ul>
+<p><strong>这几刀只有上游 MaxText 时拿不拿得到</strong>（「骨架拿回几成」都没人测过）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>刀</th>
+<th>要自己实现什么</th>
+<th>最小骨架在哪</th>
+<th>上游能替代到哪</th>
+<th>拿不到时少多少</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HLO 通信重排（第 1）</td>
+<td>需自研同类 pass：按 cost profile 重摆大 AG / RS 的 start / done，至少 placement</td>
+<td>理念见 <a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7</a>，最小版的约束与验收见 <a href="02-collective-scheduling-and-overlap.html#18-%E5%8F%AA%E6%9C%89%E4%B8%8A%E6%B8%B8%E6%97%B6%E8%87%AA%E7%A0%94%E4%B8%80%E4%B8%AA%E6%9C%80%E5%B0%8F%E7%89%88%E9%87%8D%E6%8E%92">02 §18</a></td>
+<td>只有 XLA 自带的 latency-hiding scheduler 和 collective pipeliner</td>
+<td>整套约 30%（单片）；只缺 placement 约 10%；最小版拿回几成未测</td>
+</tr>
+<tr>
+<td>换 cost profile（第 4）</td>
+<td>模型 / kernel / flag / 片数一变就重抓 trace、导成 pass 吃的格式</td>
+<td><a href="02-collective-scheduling-and-overlap.html#8-cost-profile%E6%8B%BF%E4%B8%8A%E4%B8%80%E6%AC%A1%E8%BF%90%E8%A1%8C%E7%9A%84-trace-%E7%BB%99%E8%B0%83%E5%BA%A6%E5%99%A8%E5%BD%93%E4%BB%B7%E7%9B%AE%E8%A1%A8">02 §8</a>、<a href="11-porting-checklist.html#a03--cost-profile-%E6%8C%89%E5%BD%93%E5%89%8D%E4%BB%A3%E7%A0%81%E9%87%8D%E6%8A%93%E5%AE%9A%E6%9C%9F%E5%88%B7%E6%96%B0">11 A03</a>；导出脚本没公开</td>
+<td>依附上一行的 pass，单独没有替代</td>
+<td>同代码不重抓约 7% 拿不到；过期 profile 反而慢约 20%</td>
+</tr>
+<tr>
+<td>FP8 + QAG（第 2）</td>
+<td>先 absmax 量化成 FP8 再 all-gather，并让 placement 认 FP8 权重</td>
+<td><a href="11-porting-checklist.html#a09--%E5%85%88%E9%87%8F%E5%8C%96%E5%86%8D-all-gatherabsmax-qag">11 A09</a></td>
+<td><code>fp8_full</code> 配方在上游；上游的先量化再 gather 要求 <code>fixed</code> 标定，而固定 scale 在长跑里出过尖刺（<a href="04-fp8-quantization.html">04</a>），这条路没人测过</td>
+<td>阶梯里 QAG 一级约 35%、knockout 单关约 25%；不带 QAG 的 FP8 反而慢（<a href="09-ablation-ladder.html">09</a>）</td>
+</tr>
+<tr>
+<td>SC RS v2 + ND + padding（第 3）</td>
+<td>不用写代码，三个 libtpu flag</td>
+<td><a href="11-porting-checklist.html#a06--sparsecore-reduce-scatter-v2--nd--padding">11 A06</a></td>
+<td>上游直接可用</td>
+<td>—</td>
+</tr>
+<tr>
+<td>KDA kernel 升版（第 5）</td>
+<td>只有模型里有 KDA 才相关；kernel 不在上游</td>
+<td><a href="11-porting-checklist.html">11 C01</a>、<a href="05-kernels-kda-mla-moe.html">05</a></td>
+<td>上游没有</td>
+<td>未测</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="feature-总表按依赖排序" class="hc0">feature 总表（按依赖排序）</h2>
+<p>收益写清在什么配置上量的。「阶梯」＝从满配逐级累积拆，一刀的值依赖前面拆了什么；「knockout 单关」＝在 knockout 基线上只关这一项。满配＝单片生产配置原样（AOT、pipeliner 开，指数 37）；knockout 基线＝满配再关 XLA pipeliner（指数 45）。两种值不同，见 <a href="09-ablation-ladder.html">09</a>。</p>
+<p><strong>① 量法与编译（一切优化的前置）</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>feature</th>
+<th>前置</th>
+<th>收益（配置）</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>口径：per device、BF16 等价 FLOPs、enclosing <code>jit_train_step</code> 为真值、分母 1153.5</td>
+<td>—</td>
+<td>不提速；不定口径时 MFU 能差约 12%、TFLOP/s 虚高 4–6 倍</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a></td>
+</tr>
+<tr>
+<td>profiler 不丢 device trace</td>
+<td>—</td>
+<td>不提速；修前 profile 里没有 TPU / SC 事件</td>
+<td><a href="10-optimization-roadmap.html">10</a>、<a href="13-silent-errors.html">13</a></td>
+</tr>
+<tr>
+<td>CPU 交叉 AOT；AOT 与训练加载同一套 XLA flags / libtpu 参数</td>
+<td>—</td>
+<td>不直接提速；是 HLO 通信重排和多片的前提</td>
+<td><a href="06-memory-remat-compile.html">06</a>、<a href="11-porting-checklist.html">11 A01</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>② 并行形状（小号模型上定，大号模型沿用）</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>feature</th>
+<th>前置</th>
+<th>收益（配置）</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>前缀层改四个 <code>nn.scan</code>；Muon scan 重构 + NS dtype / 分片修复；PDB=2 / GA=1、gate/up 融合开关等新默认</td>
+<td>—</td>
+<td>小号模型 100 → 85 → 43 → 33（这几项改动绑在一起，单项未拆）</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td><strong>EP 2 → 1、FSDP 64 → 128</strong>（大号模型 FSDP=512）；物理轴尽量不切</td>
+<td>—</td>
+<td>小号模型 EP 一项约 −8%；同策略换节点池拓扑差 50% 以上</td>
+<td><a href="01-model-and-baseline.html#2-%E5%B9%B6%E8%A1%8C%E6%96%B9%E5%BC%8F%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AFfsdp-%E6%8B%89%E6%BB%A1ep1">01 §2</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>③ kernel 与 remat（让计算本身先做对）</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>feature</th>
+<th>前置</th>
+<th>收益（配置）</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>remat 只存 <code>context</code> + <code>kda_residuals</code>；KDA <code>custom_vjp</code> 前向不在反向重跑</td>
+<td>—</td>
+<td>小号模型 31 → 28（约 −10%）；单 <code>kda_residuals=device</code> 约 7% <span class="tg inf">[推断：按该阶段步时折算]</span>。和下一行是同一阶段的改动，各自对自己的基线测，不是先后叠加</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+<tr>
+<td>KDA kernel 库升到 <code>f_fwd</code> 内自带 <code>kda_residuals</code> 标签的版本</td>
+<td>—</td>
+<td>小号模型 31 → 26（约 −15%）</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+<tr>
+<td>微基准选 GMM tile + Splash block；KDA kernel 库再升一版 + MoE 路由索引 remat 键；（同一刀里含上面的 EP 2 → 1）</td>
+<td>EP=1</td>
+<td>小号模型 25 → 20（约 −20%）</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+<tr>
+<td>Muon NS 展开开关 + VMEM 48 MiB</td>
+<td>—</td>
+<td>小号模型约 −4%，开发期终点 16；VMEM 48 MiB 在 256K 长上下文上触发 core halt，生产配置里没有</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td>大号模型 GMM tile 扫描（EP=1 下重扫 tile_m）</td>
+<td>EP=1</td>
+<td>大号模型 99 → 91（约 −8%）</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+<tr>
+<td>KDA kernel 库升到带 fused 反向 mega-kernel 和 CostEstimate 的版本</td>
+<td>—</td>
+<td>大号模型 90 → 84（约 −7%）；小号模型 CI 约 −6%</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+<tr>
+<td>Splash 块参数按序列长度 / head_dim / CP 重扫（外块 2048、fwd 1024、bwd 512，Q/K <code>SEQ_MINOR</code>）</td>
+<td>—</td>
+<td>kernel 微基准 fwd+bwd 约 −50%；阶梯第 12 级约 3%</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a>、<a href="11-porting-checklist.html">11 A12</a></td>
+</tr>
+<tr>
+<td>两个模型默认 Tokamax GMM v2</td>
+<td>—</td>
+<td>小号模型 CI 约 −4%；knockout 单关约 9%</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+<tr>
+<td>KDA 局部算子融进 Pallas kernel</td>
+<td>KDA kernel</td>
+<td>小号模型 CI 约 −4%</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>④ SC 卸载与调度 pass（最大的一刀在这层）</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>feature</th>
+<th>前置</th>
+<th>收益（配置）</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SparseCore RS v2 + ND + padding</td>
+<td>对应 libtpu</td>
+<td>大号模型 82 → 75（约 −9%）；knockout 单关约 20%、阶梯约 4%</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a>、<a href="11-porting-checklist.html">11 A06</a></td>
+</tr>
+<tr>
+<td><strong>私有 HLO 通信重排 pass</strong>（小 RS 合并、two-stage RS、placement pass），CI 同时改 CPU AOT + full remat</td>
+<td>CPU AOT；cost profile</td>
+<td>大号模型 BF16 73 → 55（约 −25%）；profile 上 MoE 省约 21 个指数点，其中 RS 约 11、AG 约 8</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>SC 非对称集合通信循环（libtpu 0.0.47 + <code>--xla_tpu_collective_asymmetric_loop=true</code>）</td>
+<td>libtpu 0.0.47</td>
+<td>条件不同数也不同：微基准单个 RS 快约 25%；placement 关时整步约 −10%；拿它<strong>替换</strong> two-stage 时反而略慢（叠在 two-stage 上才赚）；2 片 JIT 约 −7%。<strong>以单片 AOT、placement 开、叠在 two-stage 上为准</strong>：knockout 单关慢约 10%，阶梯约 10%</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a>、<a href="09-ablation-ladder.html">09</a></td>
+</tr>
+<tr>
+<td>bounded two-stage RS + KDA kernel 库新版；libtpu 钉 0.0.48</td>
+<td>HLO 通信重排</td>
+<td>小号模型 CI 约 −5%；大号模型 FP8 单片 AOT 到 39</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>placement 后继循环局部展开（尾部 RS 与后继计算重叠）</td>
+<td>反向 while 优化</td>
+<td>大号模型不到 1%</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a>、<a href="10-optimization-roadmap.html">10</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>⑤ FP8 与调度输入</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>feature</th>
+<th>前置</th>
+<th>收益（配置）</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>placement 认 FP8 权重，<strong>先量化再 all-gather（absmax QAG）</strong></td>
+<td>HLO 通信重排；<code>shard_exp_on_fsdp</code></td>
+<td>JIT 消融约 −15%；阶梯约 35%、knockout 单关约 25%</td>
+<td><a href="04-fp8-quantization.html">04</a>、<a href="11-porting-checklist.html">11 A09</a></td>
+</tr>
+<tr>
+<td>大号模型 FP8（Qwix <code>fp8_full</code>，末 2 层 BF16）</td>
+<td>absmax QAG</td>
+<td>BF16 AOT 55 → FP8 44（约 −20%，FP8 数取自单次 profile）；CI 54 vs 45</td>
+<td><a href="04-fp8-quantization.html">04</a></td>
+</tr>
+<tr>
+<td>Muon 批量 NS（<code>shard_map</code>）</td>
+<td>—</td>
+<td>小号模型 CI 1–2%；JIT 消融 HBM 降约 10%；knockout 单关 3%</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td>打开 MLA Splash 残差放置开关，只把 MLA Splash 输出和 LSE 存 device；大号模型 FP8 默认 remat <code>full</code> → <code>custom</code></td>
+<td>FP8</td>
+<td>不到 1%；阶梯退回 full 慢约 2%、temp 明显降</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a>、<a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td>刷新大号模型 BF16 默认 cost profile</td>
+<td>AOT + HLO 通信重排</td>
+<td>BF16 快约 20%（单次 A/B）</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>大号模型 FP8 默认换新 cost profile</td>
+<td>AOT + HLO 通信重排</td>
+<td>约 −7%（单次 A/B）；过期 profile 反而慢约 20%</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>fused MoE 训练集成：一处梯度修复前对齐过（修后未重验），没进生产</td>
+<td>—</td>
+<td>未量化；生产配置里 MoE 走非融合 GMM</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>⑥ 多片</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>feature</th>
+<th>前置</th>
+<th>收益（配置）</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DCN 上异步 all-gather 代替 all-reduce（<code>prefer_async_allgather_to_allreduce</code>）</td>
+<td>多片</td>
+<td>小号模型 2 片约 −20%，1 → 2 片效率约 80% <span class="tg inf">[推断]</span></td>
+<td><a href="03-dcn-and-multislice.html">03</a>、<a href="11-porting-checklist.html">11 B02</a></td>
+</tr>
+<tr>
+<td>XLA collective pipeliner ＋ <code>all_gather_decomposer</code>：多片关（跨 DCN DP 要关才过 AOT），单片 FP8 保持开</td>
+<td>—</td>
+<td>单片 FP8 关掉这组开关 nightly 慢约 15%，所以单片开、多片关</td>
+<td><a href="04-fp8-quantization.html#6-pipeliner-%E4%B8%8E-fp8%E5%8D%95%E7%89%87%E6%98%AF%E6%AF%92%E5%A4%9A%E7%89%87%E6%98%AF%E8%8D%AF">04 §6</a></td>
+</tr>
+<tr>
+<td>FP8 amax 只在 replica 内求 MAX</td>
+<td>FP8 + 多片</td>
+<td>DCN 上的 amax all-reduce 全部消掉（DP=2 AOT）</td>
+<td><a href="04-fp8-quantization.html">04</a>、<a href="11-porting-checklist.html">11 B03</a></td>
+</tr>
+<tr>
+<td>DCN 合并：libtpu combiner 设 0，合并交给 MaxText 侧的私有的 DCN all-reduce 合并 pass</td>
+<td>多片</td>
+<td>2 片 JIT 单独 A/B：combiner 1 GiB 快约 10%、HBM 多几 GiB；只关 <code>all_gather_decomposer</code> 装不下（各 1 样本）</td>
+<td><a href="03-dcn-and-multislice.html">03</a>、<a href="11-porting-checklist.html">11 B02</a></td>
+</tr>
+<tr>
+<td>HLO 通信重排加跨迭代 DCN 流水 + ICI→DCN 分区调度</td>
+<td>HLO 通信重排；多片 cost profile</td>
+<td>整套是建模估计、收益未兑现；作为参照，裁剪版不开这套时 1 片 → 5 片已只慢 2–3%（实测基线）</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td><strong>多片关 XLA pipeliner</strong></td>
+<td>单片满配 + 新 cost profile</td>
+<td>2 片、8 片都快约 9%；2 / 8 片弱扩展约 96% / 约 90% <span class="tg inf">[推断]</span></td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a>、<a href="11-porting-checklist.html">11 B01</a></td>
+</tr>
+<tr>
+<td>10+ 片 AOT 中间档（AOT + HLO 通信重排、pipeliner 关、以 10+ 片 JIT 基线的 trace 作 cost profile）</td>
+<td>上一行</td>
+<td>71 → 47（约 −35%），无 OOM；独立复现 47、0 慢步、loss 逐位一致</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>RS 用每 device 两颗 SparseCore</td>
+<td>SC RS</td>
+<td>单次 RS 快约 15%；单片最快到 34，但同时叠了新 profile 和双 SC 通信搜索（未进生产），不是单刀</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td><strong>换上 10+ 片自己的 cost profile</strong></td>
+<td>多片 cost profile</td>
+<td>46 → 41（约 −10%；46 用比 10+ 片小的另一个多片配置的 profile）；省下的几乎全是 TC 等 RS（降到约三分之一），RS 本身没变快，是被藏到计算底下了</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>20+ 片同配方，只改片数和 dcn_dp</td>
+<td>10+ 片 AOT 配方；20+ 片新编 pickle</td>
+<td>41，与 10+ 片持平</td>
+<td><a href="03-dcn-and-multislice.html">03</a>、<a href="08-open-problems.html">08</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>⑦ 稳定性（不提速，但决定 goodput）</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>feature</th>
+<th>前置</th>
+<th>收益（配置）</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>检查点保存不再等最慢 host 建存储目录</td>
+<td>—</td>
+<td>小号模型千芯片级生产上存档那步比平时慢一个数量级；128 芯片复现约 100 s → 约 12 s</td>
+<td><a href="07-data-and-checkpointing.html">07</a></td>
+</tr>
+<tr>
+<td>MTC（本地层每 100 步、远端每 200 步）</td>
+<td>检查点不阻塞</td>
+<td>10+ 片长跑、注入 11 次故障全恢复，步时不变（指数 41）；恢复 11–14 分钟，20+ 片一次 22 分钟</td>
+<td><a href="07-data-and-checkpointing.html">07</a>、<a href="08-open-problems.html">08</a></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="复现验证">复现验证</h3>
+<p><strong>单片原样复现</strong>：HLO 通信重排关 51、开 37，两边各差不到 1%；开 profiler 重跑也一样。loss 50 步 PASS、换节点逐位相同；JIT 1000 步 LM +0.0750% / MTP +0.1462%，过 FP8 门槛 0.1% / 0.2%（<a href="04-fp8-quantization.html">04</a>、<a href="09-ablation-ladder.html">09</a>）。</p>
+<p><strong>倒着拆，一次拆一样</strong>（「阶梯」13 级＋13 个单项 knockout，<a href="09-ablation-ladder.html">09</a>）：从 37 逐级拆，第 12 级退到 75（约 2.0 倍），第 13 级编不过。最值钱四刀：QAG、pipeliner × HLO 通信重排、SC 非对称 RS 循环、placement（按 cost profile 安放通信的 pass）；two-stage RS 与小 RS 合并的收益正负随别的开关变。</p>
+<p><strong>10+ 片 AOT 中间档</strong>：10+ 片 AOT + HLO 通信重排、pipeliner 关、以 10+ 片 JIT 基线的 trace 作 cost profile，指数 47。</p>
+<ul>
+<li><strong>同一份 pickle 换 cube 独立复现</strong>到 47；按编译配置清单从源码再编一份，逐字节相同。新编 pickle 的复现未完成。</li>
+<li><strong>10+ 片生产配方到 41</strong>：省下那一截几乎全是 TC 等 RS（降到约三分之一），算力不变。两步：RS 改用每 device 两颗 SparseCore（单次 RS 快约 15%）；代码不动，cost profile 从比 10+ 片小的另一个多片配置的换成同配置自己抓的 10+ 片 trace，46 → 41。</li>
+<li><strong>MTC 与 20+ 片</strong>（<a href="08-open-problems.html">08</a>、<a href="07-data-and-checkpointing.html">07</a>）：10+ 片带 MTC 长跑（16 次重启，其中 11 次人为注入），各段 p50 都是 41，最长一段里慢步占约 3%；20+ 片 p50 41、慢步占约 4%。10+ → 20+ 片弱扩展约 100% [推断：两边 p50 之比约 1.00；两份 pickle 代码版本不同（差异未核），20+ 片仍用 10+ 片 cost profile]。</li>
+<li><strong>弱扩展 96–97%</strong>（10+ 片 AOT 中间档及其独立复现）：单片 pipeliner 关 45 对 10+ 片 47 <span class="tg inf">[推断：两边代码和 cost profile 不同]</span>，多出来那截大头在跨片通信（<a href="03-dcn-and-multislice.html">03</a>）。
+<ul>
+<li>10+ 片生产配方到 41 后，单片 45 这个对照就过期了（比值超过 100%）。单片另有 nightly 单 SC 36、双 SC 34；同代配置 1 → 10+ 片 83–87% [推断：单片 nightly 单 SC 对 10+ 片约 87%，单片双 SC 实验配置对 10+ 片最好段约 83–84%]，<strong>弱扩展以这组同口径比为准</strong>（<a href="03-dcn-and-multislice.html">03</a>）。</li>
+</ul>
+</li>
+</ul>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>还没解决的</span></span>这组数要 AOT、HLO 通信重排、pipeliner 关三条同时成立；10+ 片以上只有 20+ 片一个点；单片 profile 搬到多片时，关 pipeliner 反而快约 9%；10+ 片自己的 profile 只在 pipeliner 关时用过（<a href="02-collective-scheduling-and-overlap.html">02</a>、<a href="08-open-problems.html">08</a>）。</p>
+</blockquote>
+<p><strong>搬到别的模型</strong>：按 <a href="11-porting-checklist.html">11 · 迁移清单</a>。接手方的主战场是 DCN 这一层：单次 all-reduce 21 ms 发起地板（含 Python 派发，程序内摊约 9.6 ms/个，<a href="03-dcn-and-multislice.html">03</a>）、跑不满网卡的 host-side reduction、共享网络。</p>
+<hr />
+<h2 id="文章地图" class="hc1">文章地图</h2>
+<figure class="mermaid"><img src="../../assets/mermaid/62cfd7c19f12.png" width="1153" alt="示意图" loading="lazy"></figure><div class="tbl"><table>
+<thead>
+<tr>
+<th>篇</th>
+<th>一句话问题</th>
+<th>带走的一句话</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="01-model-and-baseline.html">01 模型与量法</a></td>
+<td>什么模型，时间花在哪、怎么量才不自欺？</td>
+<td>口径：per device、BF16 等价、enclosing <code>jit_train_step</code> 为真值；步时用指数</td>
+</tr>
+<tr>
+<td><a href="02-collective-scheduling-and-overlap.html">02 集合通信调度与重叠</a></td>
+<td>FSDP=512 每层搬权重，为什么时机比速度要命？</td>
+<td>kernel 快了 step 不一定快；cost profile 会过期</td>
+</tr>
+<tr>
+<td><a href="03-dcn-and-multislice.html">03 DCN 与多切片</a></td>
+<td>1 片到 10+ 片，近三成效率去哪了？</td>
+<td>JIT 下丢在 DCN（21 ms 发起地板、约 35% 线速）；靠 AOT + HLO 通信重排和 10+ 片自己的 profile 把通信藏起来到 41，带宽没变</td>
+</tr>
+<tr>
+<td><a href="04-fp8-quantization.html">04 FP8</a></td>
+<td>稠密乘法（dot_general）只占约 6% 的时间（大号模型、已 FP8、不含专家 GMM），FP8 为什么还能快约 20%？</td>
+<td>FP8 真正省的是<strong>通信</strong>（QAG），不是算力</td>
+</tr>
+<tr>
+<td><a href="05-kernels-kda-mla-moe.html">05 KDA / MLA / MoE kernel</a></td>
+<td>custom_vjp kernel 为什么被跑四遍？</td>
+<td>remat 看不见 kernel 内部；fused MoE 一处梯度修复前对齐过（修后未重验），没进生产</td>
+</tr>
+<tr>
+<td><a href="06-memory-remat-compile.html">06 显存、remat、编译</a></td>
+<td>94.74 GiB 的 HBM 里，理论账为什么和实际峰值差那么多？</td>
+<td>靠异步重叠藏通信的配置里，HBM 余量就是调度余量；升 libtpu 就重量显存</td>
+</tr>
+<tr>
+<td><a href="07-data-and-checkpointing.html">07 数据与检查点</a></td>
+<td>训练跑顺之后，时间漏在哪？</td>
+<td>检查点停顿约 100 s → 约 12 s（128 芯片复现）；「exit 0」≠ 成功；恢复演练 9 次里 4 次挂在 TPU 初始化（不是 MTC 的问题）；另一组带 MTC 的注入测试 11 次全部原地恢复</td>
+</tr>
+<tr>
+<td><a href="08-open-problems.html">08 未解决问题</a></td>
+<td>接手先做哪几个实验？</td>
+<td>排序后的 11 个问题 + 大多配了第一个实验</td>
+</tr>
+<tr>
+<td><a href="09-ablation-ladder.html">09 消融阶梯</a></td>
+<td>每个优化单独拿掉，整步和 XProf 变了什么？</td>
+<td>一刀值多少看别的开没开：QAG 阶梯约 35%、knockout 单关约 25%；不带 QAG 的 FP8 反而慢（分项见 <a href="04-fp8-quantization.html">04</a>）</td>
+</tr>
+<tr>
+<td><a href="10-optimization-roadmap.html">10 优化依赖图</a></td>
+<td>哪刀先哪刀后、为什么这个顺序？别章没收的改动呢？</td>
+<td>先修尺子再动刀；最大的几刀都在改「通信什么时候发」，所以都排在调度 pass 之后</td>
+</tr>
+<tr>
+<td><a href="11-porting-checklist.html">11 迁移清单</a></td>
+<td>换集群或模型，几百条优化哪些值得搬、按什么顺序？</td>
+<td>先搭 CPU AOT 量法，再上 HLO 通信重排 + cost profile 和 FP8 + QAG；C 档有同类结构才做</td>
+</tr>
+<tr>
+<td><a href="12-multimodal-and-numerics-alignment.html">12 多模态版与精度对拍</a></td>
+<td>加上视觉编码器之后慢在哪？两套框架的数一直对不上怎么办？</td>
+<td>10+ 片的慢主要在数据读取和冷启动，计算代码零改动；对拍先校尺子：GPU 自己重跑一遍的差异就可能超门槛</td>
+</tr>
+<tr>
+<td><a href="13-silent-errors.html">13 静默错误总表</a></td>
+<td>哪些问题跑通、不报错、loss 正常，结果却是错的？上线前怎么五分钟查一遍？</td>
+<td>73 条按症状 → 根因 → 怎么抓排列；先校秤（profiler、FLOPs 计数、计时）再谈快慢；跨框架对拍的八个坑</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="术语与编号速查" class="hc2">术语与编号速查</h2>
+<p>「详讲」链到第一次展开的地方。</p>
+<p><strong>硬件与网络</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>一句话</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>chip / device</td>
+<td>一颗 v7x 芯片 = 2 个 TensorCore = 2 个 JAX device；吞吐、MFU 按 device 算</td>
+<td><a href="#%E7%BB%99-gpu-%E8%83%8C%E6%99%AF%E8%AF%BB%E8%80%85%E7%9A%84-tpu-%E9%80%9F%E6%88%90">TPU 速成</a></td>
+</tr>
+<tr>
+<td>TC / SC</td>
+<td>见 TPU 速成；SC 每芯片 4 颗（每 device 2 颗），本书专跑卸载的集合通信（RS / AG / AR）</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a></td>
+</tr>
+<tr>
+<td>TC 等 X / SC X</td>
+<td>「TC 等 X」＝ TC 上暴露出来的 X 通信等待；「SC X」＝ SC 上 X 实际在传的时间；只有前者拖慢步时</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a></td>
+</tr>
+<tr>
+<td>ICI / DCN</td>
+<td>片内直连的高带宽网 / 片间走主机网卡的数据中心网，慢且每次发起有固定开销</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>cube / slice（片）</td>
+<td>cube = 4x4x4 = 64 芯片，集群按 cube 分位置；片 = 4x8x8 = 256 芯片 = 4 个 cube</td>
+<td><a href="01-model-and-baseline.html#2-%E5%B9%B6%E8%A1%8C%E6%96%B9%E5%BC%8F%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AFfsdp-%E6%8B%89%E6%BB%A1ep1">01 §2</a></td>
+</tr>
+<tr>
+<td>子块 / 坏子块</td>
+<td>子块＝调度给作业的一个 cube；坏子块＝二分慢步时定位到的故障 cube（共 4 个有证据，另 2 个只被调换过、无证据）；「坏 cube」同义</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>pod</td>
+<td>v7x pod = 144 cube = 9,216 芯片（<a href="https://docs.cloud.google.com/tpu/docs/tpu7x" target="_blank" rel="noopener">TPU7x</a> 规格表写 9,216，144 = 9,216 ÷ 64 <span class="tg inf">[推断]</span>）；k8s 的写「k8s pod」或 worker</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>HBM / VMEM</td>
+<td>每 device 的显存 / 手写 kernel 用的片上暂存（见 TPU 速成）</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>编译与调度</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>一句话</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JIT / AOT</td>
+<td>定义见 TPU 速成。生产数都是 AOT；CI 的 JIT 校验模式强制关 HLO 通信重排（pass 本身 JIT 也能跑），JIT 数只当对照</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td>HLO 通信重排</td>
+<td>在 XLA 调度前后改集合通信切法、落点和顺序的一组 pass：小 RS 合并、two-stage RS、placement，外加只给下一份 profile 打标签的融合行为标注</td>
+<td><a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7</a></td>
+</tr>
+<tr>
+<td>placement</td>
+<td>placement pass 简称：按 cost profile 估耗时，决定每个大 AG / RS / AR 从哪发、在哪等</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>cost profile</td>
+<td>上次运行的 XProf trace，placement 拿它估各算子耗时；模型、kernel、flag、片数任一变就重抓</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>XLA collective pipeliner</td>
+<td>XLA 自带 pass，把层循环一圈末尾的通信挪进下一圈与计算重叠；全书写「pipeliner 开 / 关」。不是 HLO 通信重排里的「流水」</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>AB 流水</td>
+<td>HLO 通信重排把反向每层拆成 A（本层权重 AG）和 B（算出 RS 输入的计算），第 i 层 B 与第 i+1 层 A 并行</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>车道</td>
+<td>一颗 SC 同一时刻只跑一个通信，见 <a href="#%E7%BB%99-gpu-%E8%83%8C%E6%99%AF%E8%AF%BB%E8%80%85%E7%9A%84-tpu-%E9%80%9F%E6%88%90">TPU 速成</a></td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>AGRS</td>
+<td>一段计算两头各一次通信：进门 AG、出门 RS；FSDP、MoE 派发都是</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>ND 策略</td>
+<td>SparseCore RS v2 的一种分解方式（<code>use_n_dimension_strategy</code>），形状满足条件才自动启用</td>
+<td><a href="02-collective-scheduling-and-overlap.html">02</a></td>
+</tr>
+<tr>
+<td>remat（重算）</td>
+<td>反向重算前向中间结果，算力换显存；<code>full</code> 全重算，<code>custom</code> 指定几样存下</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td>Pallas kernel / tile</td>
+<td>Pallas 是 JAX 手写 TPU kernel 的接口；tile 是一次搬进片上的块，选错会慢或编不过</td>
+<td><a href="05-kernels-kda-mla-moe.html">05</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>并行、精度与训练</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>一句话</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FSDP / EP</td>
+<td>FSDP 权重切到所有 device，用时 all-gather、梯度 reduce-scatter；EP 专家分到不同 device，token 走 all-to-all。大号模型 FSDP=512、EP=1</td>
+<td><a href="01-model-and-baseline.html#2-%E5%B9%B6%E8%A1%8C%E6%96%B9%E5%BC%8F%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AFfsdp-%E6%8B%89%E6%BB%A1ep1">01 §2</a></td>
+</tr>
+<tr>
+<td>PDB / GA / GBS</td>
+<td>per-device batch（每 device 每微批几条序列）/ 梯度累积步数 / 全局 batch；GBS = PDB × device 数 × GA，如 2 × 512 × 1 = 1,024</td>
+<td><a href="01-model-and-baseline.html#3-%E6%80%8E%E4%B9%88%E9%87%8F%E4%BA%94%E6%9D%A1%E5%8F%A3%E5%BE%84">01 §3</a></td>
+</tr>
+<tr>
+<td>QAG</td>
+<td>专家权重先 absmax 量化成 FP8 再 all-gather，通信减半</td>
+<td><a href="04-fp8-quantization.html">04</a></td>
+</tr>
+<tr>
+<td>absmax / amax</td>
+<td>amax ＝ 张量当前的绝对值最大值；absmax 标定 ＝ 每步按 amax 现算 FP8 的 scale（对照 <code>fixed</code> 固定 scale）</td>
+<td><a href="04-fp8-quantization.html">04</a></td>
+</tr>
+<tr>
+<td>replica</td>
+<td>跨片数据并行里的一份完整模型副本；「amax 只在 replica 内求」＝ 不跨 DCN 求 MAX</td>
+<td><a href="04-fp8-quantization.html">04</a></td>
+</tr>
+<tr>
+<td>Muon / NS</td>
+<td>Muon：对二维权重的更新做正交化的优化器；NS ＝ Newton-Schulz 迭代，Muon 用它近似正交化</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td>MTP</td>
+<td>multi-token prediction：主 loss 外再预测后面 token 的辅助头，有自己的 loss（「LM / MTP」两列偏差即这两个 loss）</td>
+<td><a href="06-memory-remat-compile.html">06</a></td>
+</tr>
+<tr>
+<td>MTC</td>
+<td>多层检查点（multi-tier checkpointing）：本地 ramdisk 层高频存 + GCS 层低频备份</td>
+<td><a href="07-data-and-checkpointing.html">07</a></td>
+</tr>
+<tr>
+<td>RPO</td>
+<td>recovery point objective：出故障时最多退回到哪一步、丢多少训练进度</td>
+<td><a href="07-data-and-checkpointing.html">07</a></td>
+</tr>
+<tr>
+<td>goodput</td>
+<td>墙钟里真正推进训练的占比：完成步数 × 同配置稳态步时 ÷ 墙钟</td>
+<td><a href="07-data-and-checkpointing.html">07</a></td>
+</tr>
+<tr>
+<td>步时指数</td>
+<td>大号模型单片 BF16 最初基线 = 100，小号模型开发期起点 = 100；多片沿用大号模型的底；多模态版另有一个底（只在 12 章，引用处注「多模态底」）</td>
+<td><a href="#%E6%AD%A5%E6%97%B6%E6%8C%87%E6%95%B0%E5%85%A8%E4%B9%A6%E4%B8%89%E4%B8%AA%E5%BA%95">步时指数</a></td>
+</tr>
+<tr>
+<td>弱扩展效率</td>
+<td>片数与总 batch 同比加时，单片步时 ÷ 多片步时；要同代码、同口径</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>tiny</td>
+<td>几芯片就能跑的调试小配置，只测功能和编译</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>实验口径与条目编号</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>词</th>
+<th>一句话</th>
+<th>详讲</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>复现验证（文中也写独立复现）</td>
+<td>照生产配置在自己集群上重跑的几组实测：2 片 JIT 逐刀消融；JIT 对照（单片基线、2 片 DCN 开关 A/B）；单片 AOT 复现满配 + 阶梯 / knockout + 多片 pipeliner 开 / 关；单片真数据 loss 对齐（含 1000 步）；10+ 片独立复现 AOT 中间档那组</td>
+<td>单片与 2 片见 <a href="09-ablation-ladder.html">09</a>；10+ 片见 <a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>10+ 片生产配方</td>
+<td>指数 41（pipeliner 关、RS 双 SC、10+ 片自己的 cost profile）；单片对应的是「满配」（指数 37，见下文「满配 / knockout 基线」行）。<strong>不等于</strong>下一行的 10+ 片 AOT 中间档 47</td>
+<td><a href="09-ablation-ladder.html">09</a>、<a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>10+ 片 JIT 基线 / 10+ 片 AOT 中间档</td>
+<td>JIT 基线 ＝ JIT、HLO 通信重排关（指数 71）；AOT 中间档 ＝ AOT + HLO 通信重排、pipeliner 关、以 JIT 基线的 trace 作 cost profile（指数 47）</td>
+<td><a href="03-dcn-and-multislice.html">03</a></td>
+</tr>
+<tr>
+<td>阶梯 / knockout</td>
+<td>阶梯从满配逐级累积拆，每刀的值依赖顺序（单片 AOT 第 1–13 级，第 11 级在 CPU 上编不了、只有 knockout 数，第 13 级编不过）；knockout 在 knockout 基线上只关一项；另有一组 2 片 JIT 消融：从全部优化都开的 2 片 JIT 配置起，每级再关一项</td>
+<td><a href="09-ablation-ladder.html">09</a></td>
+</tr>
+<tr>
+<td>满配 / knockout 基线</td>
+<td>满配 ＝ 单片生产配置原样（也写作「1 片生产配方」；AOT ＋ HLO 通信重排、pipeliner 开，指数 37），阶梯第 0 级；knockout 基线 ＝ 满配再关 XLA pipeliner（阶梯第 1 级，指数 45），13 个 knockout 都相对它</td>
+<td><a href="09-ablation-ladder.html">09</a></td>
+</tr>
+<tr>
+<td>A01–C06</td>
+<td><a href="11-porting-checklist.html">11 迁移清单</a>条目编号：A 档通用必做、B 档按场景（多片 / 长上下文 / 优化器）、C 档绑模型结构（KDA / MLA）；数字是档内序号</td>
+<td><a href="11-porting-checklist.html">11 总览</a></td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="这本书的数据边界" class="hc3">这本书的数据边界</h2>
+<ul>
+<li><strong>覆盖面</strong>：所有性能相关的优化项；非性能项未展开。</li>
+<li><strong>kernel 内部没系统展开</strong>：Pallas kernel 与 Tokamax kernel 只讲各版本带来的变化，不讲内部实现。</li>
+<li><strong>10+ 片 JIT 只有一个配置</strong>（<a href="03-dcn-and-multislice.html">03</a>）。</li>
+<li><strong>多片 AOT 只有 10+ 片与 20+ 片的少量配置</strong>；另有 10+ 片 DCN all-reduce 外提版只做过短程。独立复现只覆盖 10+ 片 AOT 中间档那一个配置。</li>
+<li><strong>恢复演练规模小</strong>：复现验证只在 192 芯片小测试模型上做过；10+ 片故障注入的数字没有独立复跑（<a href="07-data-and-checkpointing.html">07</a>）。</li>
+</ul>
+</article><div class="srcline">源文件：<code>moe-public/topic/README.md</code></div><nav class="pn" aria-label="上一页 / 下一页"><span></span><a class="next" href="01-model-and-baseline.html"><small>下一页 →</small>01 · 量法与口径：这是个什么模型，时间花在哪，怎么量才不自欺</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#给-gpu-背景读者的-tpu-速成">给 GPU 背景读者的 TPU 速成</a></li><li class="l2"><a href="#步时指数全书三个底">步时指数：全书三个底</a></li><li class="l2"><a href="#一段话讲完整条路">一段话讲完整条路</a></li><li class="l2"><a href="#feature-依赖图">feature 依赖图</a></li><li class="l2"><a href="#总轨迹指数">总轨迹（指数）</a></li><li class="l3"><a href="#三个起点各指什么">三个起点各指什么</a></li><li class="l2"><a href="#每刀收益最大的五刀">每刀收益：最大的五刀</a></li><li class="l2"><a href="#feature-总表按依赖排序">feature 总表（按依赖排序）</a></li><li class="l3"><a href="#复现验证">复现验证</a></li><li class="l2"><a href="#文章地图">文章地图</a></li><li class="l2"><a href="#术语与编号速查">术语与编号速查</a></li><li class="l2"><a href="#这本书的数据边界">这本书的数据边界</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">Google Cloud · TPU v7x 训练优化</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../../assets/site.js"></script>
+</body></html>

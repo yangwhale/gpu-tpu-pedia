@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB · MoE 训练优化</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="moe">
+<link rel="stylesheet" href="../../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="../..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../../index.html"><span class="crab">🦀</span><span class="bt">MoE 训练优化</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../../index.html" class="">首页</a><a class="on" href="README.html">专题</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（/ 聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="专题"><div class="side-h">专题</div><ol><li><a href="README.html">一个 MoE 模型在 TPU v7x 上的训练优化</a></li><li><a href="01-model-and-baseline.html">01 · 量法与口径：这是个什么模型，时间花在哪，怎么量才不自欺</a></li><li><a href="02-collective-scheduling-and-overlap.html">02 · 集合通信调度与重叠：搬的时机比搬的速度更要命</a></li><li><a href="03-dcn-and-multislice.html">03 · DCN 与多切片：把单片的优化搬到 10+ 片</a></li><li><a href="04-fp8-quantization.html">04 · FP8：稠密乘法</a></li><li><a href="05-kernels-kda-mla-moe.html">05 · KDA / MLA / MoE kernel：手写的算子要过三关</a></li><li><a class="on" aria-current="page" href="06-memory-remat-compile.html">06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</a></li><li><a href="07-data-and-checkpointing.html">07 · 数据与检查点：训练跑顺之后，时间从哪漏走</a></li><li><a href="08-open-problems.html">08 · 未解决问题：下一个集群的实验清单</a></li><li><a href="09-ablation-ladder.html">09 · 消融阶梯：一刀一刀拆掉，看每一刀值多少</a></li><li><a href="10-optimization-roadmap.html">10 · 优化依赖图：哪刀先哪刀后、为什么这个顺序</a></li><li><a href="11-porting-checklist.html">11 · 迁移清单</a></li><li><a href="12-multimodal-and-numerics-alignment.html">12 · 多模态版与精度对拍</a></li><li><a href="13-silent-errors.html">13 · 静默错误总表：跑通了，不等于对了</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../../index.html">首页</a> › <a href="README.html">专题</a> › <span>06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</span></nav><article class="md"><h1 id="06--显存remat-与编译远低于上限的理论账怎么变成-92-gib">06 · 显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</h1>
+<p><strong>这章解决什么</strong>：每个 device 可用显存上限 94.74 GiB。按「权重 + 梯度 + 优化器 + 激活」算，大号模型的理论账远低于上限，实测却顶到 92 GiB。差出来的是三样账本外的东西：在途通信 buffer、碎片、被留得太久的临时量。贯穿全章：<strong>空出来的显存是调度器藏通信的地方</strong>（有前提，见 §1 末）。术语查 <a href="README.html">README 术语表</a>。</p>
+<p><strong>步时指数</strong>：大号模型以单片 BF16 最初基线 = 100，小号模型以开发期起点 = 100（越小越快）。只在单个 A/B 里出现的数只给百分比；显存给 GiB / GB 原值。</p>
+<div class="x-stats">
+<ul>
+<li><strong>92 GiB</strong> 实测（算上碎片）；理论账远低于上限</li>
+<li><strong>2.7 GiB</strong> 离可用上限的余量</li>
+<li><strong>84 GiB</strong> 10+ 片大号 FP8 JIT 基线的编译估计（每 device）</li>
+<li><strong>约 42 min</strong> 数千芯片 JIT 到 step 0 结束</li>
+</ul>
+</div>
+<p><strong>feature 依赖图</strong>：</p>
+<figure class="mermaid"><img src="../../assets/mermaid/81356c52747b.png" width="873" alt="示意图" loading="lazy"></figure><hr />
+<h2 id="1-显存账本9474-gib-里住着谁" class="hc0"><span class="hn">1.</span>显存账本：94.74 GiB 里住着谁</h2>
+<p><strong>先占后用</strong>：通信一发起，接收 buffer 就占上显存，发得越早同时占着的越多。理论账只数正在用的东西，没数这些接收区、碎片和留得太久的临时量；逐项见住户表，机理见本节末动图。</p>
+<figure class="img"><a href="figs/fig-t06-budget.svg" target="_blank" title="新窗口看原图"><img src="figs/fig-t06-budget.svg" alt="理论账远低于上限，实测峰值约八成，算上碎片 92，上限 94.74" loading="lazy"></a><figcaption>理论账远低于上限，实测峰值约八成，算上碎片 92，上限 94.74</figcaption></figure>
+<ul>
+<li>每 device 96 GiB HBM（192 GiB ÷ 2，<a href="https://docs.cloud.google.com/tpu/docs/tpu7x" target="_blank" rel="noopener">官方 TPU7x 规格表</a>），可用上限 <strong>94.74–94.75 GiB</strong>。</li>
+<li>日志「94.74 GB」其实是 GiB（<code>max_utils</code> 除 <code>2**30</code>，XLA 也是 1024 进制）。</li>
+</ul>
+<p><strong>92 和 94.74 别混：92 GiB 有三种意思</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>数</th>
+<th>是什么</th>
+<th>拿来干什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>94.74 GiB</strong></td>
+<td>运行时每 device 可分配的上限：<code>jax.local_devices()[k].memory_stats()[&quot;bytes_limit&quot;]</code> 换成 GiB，MaxText 启动日志「Using (GB) x / 94.74」的分母</td>
+<td><strong>硬上限</strong>。实机峰值过了它就 <code>RESOURCE_EXHAUSTED</code></td>
+</tr>
+<tr>
+<td><strong>92 GiB 实测峰值</strong>（本章开头）</td>
+<td>一次观测：大号模型早期 BF16 基线（1 片 256 芯片、PDB 2、<code>context</code> 存 device）一次 profile 的实机峰值约占上限八成，算上碎片约 92 GiB（这次 profile 的碎片没单独拆出；下表「4 → 9 GiB」是另一组对照）。和 §10.4 阶梯第 0 级（FP8 满配，含碎片约 80 GiB）不是同一配置</td>
+<td>不是门，只说明碎片能吃掉多少</td>
+</tr>
+<tr>
+<td><strong>92 GiB placement 准入线</strong></td>
+<td>placement 自己的显存准入上限：96 − 4（4 GiB 是它的显存安全余量配置），比的是它在调度后的显存估算，不是最终 temp，也不是实机峰值（<a href="02-collective-scheduling-and-overlap.html#132-%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E8%83%BD%E6%8B%BF%E5%88%B0%E5%B0%B1%E5%8F%91">02 §13.2</a>）</td>
+<td>只决定 placement 接不接受一次提前；超了它，那次移动被拒，编译照常通过</td>
+</tr>
+<tr>
+<td><strong>92 GiB 每日 AOT 闸</strong>（§7 表）</td>
+<td>试过的每日 AOT 显存检查门槛，量的是编译期 <code>CompiledMemoryStats</code> 的总量（arg + out − alias + temp），未进生产</td>
+<td>只借判据。总量比 temp 多出输入那一截，所以这个门比「temp ≤ 94.74」严得多，会拦下实机放得下的产物（§10 的 10+ 片 AOT 中间档就超了它，照样跑通）</td>
+</tr>
+</tbody>
+</table></div>
+<p>新模型用哪个：编译期先用 temp ≤ 94.74 GiB 初筛（§10），终判看实机峰值 ≤ 94.74 GiB。要不要再加一道 92 GiB 的每日 AOT 闸，看你们能不能接受它误拦。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>住户（大号模型 256 芯片；各行配置见行内）</th>
+<th>大小 / 现象</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>常驻（权重 + 梯度 + 优化器）+ 激活（按 remat 策略）</td>
+<td>理论合计远低于上限</td>
+</tr>
+<tr>
+<td>在途通信 buffer</td>
+<td>专家 AG buffer；placement 让同时存活 4 → 7 个（BF16 AOT 上 placement 开 / 关那组对照）</td>
+</tr>
+<tr>
+<td>碎片</td>
+<td>同上那组对照：placement 后约 4 → 9 GiB，高地址留下一大块空洞</td>
+</tr>
+<tr>
+<td>两个 logits buffer</td>
+<td>libtpu 0.0.48 把存活期从几百条指令拉到两万多条 → <strong>多占一截 HBM</strong></td>
+</tr>
+<tr>
+<td>数千芯片 10+ 片 JIT 基线</td>
+<td>编译估计 <strong>84 GiB/device</strong>，约占 90%</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>常驻那一项自己怎么估</strong>（通用口径，按自己的精度配置改；书里模型的参数量不公开，这里也不代入）</p>
+<ul>
+<li>常驻 ≈ 参数量 × 每参数字节 ÷（FSDP × CP × EP）；有 TP 切的再 ÷ TP。MaxText 默认切分规则里，非专家权重的 embed 维也切到 context / expert 轴，专家权重则 embed 维切 fsdp / context、专家维切 expert，两类分母一样——不是只有专家那部分 ÷ EP。</li>
+<li>每参数字节，按「权重 fp32、梯度按 <code>grad_dtype</code>（默认 float32）、优化器状态 fp32」这一常见配置（MaxText <code>weight_dtype</code> 默认 float32，<code>mu_dtype</code> 不设时跟随它）：
+<ul>
+<li><strong>AdamW</strong>：权重 4 ＋ 梯度 4 ＋ 一阶矩 m 4 ＋ 二阶矩 v 4 ＝ <strong>16 B</strong>；</li>
+<li><strong>Muon</strong>：权重 4 ＋ 梯度 4 ＋ 一个动量 4 ＝ <strong>12 B</strong>。MaxText 的 Muon 对没标 Muon 维度的叶子仍走它内带的 Adam（1D / 标量、norm 的 scale、嵌入、输出头；KDA 类模型的 <code>A_log</code>、<code>dt_bias</code>、<code>conv1d</code> 也归这边；<code>muon_include_routers=false</code> 时路由器同样走 AdamW），这部分按 16 B 算；</li>
+<li>权重存 bf16、或动量降精度时，按实际字节改。</li>
+</ul>
+</li>
+<li>常驻再加激活（§2.2）就是上表第一行的「理论账」；要和 94.74 GiB 比，还得留出下面这些账外住户。所以它只作开编前的初筛，终判同 §10。</li>
+</ul>
+<p><sub>把握：源码证实（字节数由 dtype 推出） · 出处：MaxText <code>configs/base.yml</code>（<code>weight_dtype</code>、<code>mu_dtype</code>、<code>grad_dtype</code>、<code>logical_axis_rules</code>）、<code>utils/muon_utils.py</code>、<code>optimizers/optimizers.py</code>（<code>opt_type=muon</code> 一支带 <code>adam_*</code> 参数）</sub></p>
+<p><strong>HBM 余量 = 调度余量</strong>（下图）。<strong>有前提</strong>：瓶颈得是「显存不够、调度器没法提前发 collective」；成立条件、反例（含本章 §2 的 <code>mlpwi_0/1</code> 变成正收益）和判据（换存法前后比暴露的 RS async-done 等待）见主场 <a href="05-kernels-kda-mla-moe.html#2-kda-custom_vjp%E5%8F%AA%E4%BA%A4%E5%87%BA-3-%E4%B8%AA%E5%91%BD%E5%90%8D%E6%AE%8B%E5%B7%AE%E8%AE%A9-remat-%E7%9C%8B%E5%BE%97%E8%A7%81-kernel-%E5%86%85%E9%83%A8">05 §2</a>。</p>
+<p><img class="inl" src="figs/ch06-anim-headroom.svg" alt="空出来的显存会被换成通信提前量：余量一小，AG 只能晚发、露出来" loading="lazy">
+<sub>示意。看右侧 HBM 竖条：上行住得下两个在途 AG，下行只放得下一个。</sub></p>
+<blockquote>
+<p><strong>为什么：空出来的显存不会闲着，调度器会自动把它换成通信的提前量</strong>（上图；实例：<code>context + kda_residuals</code> 上再多存 <code>mlpwi_0/1</code> 反而变慢，§2）。</p>
+<ul>
+<li><strong>调度器怎么用显存</strong>：开源调度器（LHS）的目标是让计算盖住通信的估计延迟，不是越早越好；显存用量过上限一半后，显存才进入它的打分，把在途窗口往短里推（细节见下方折叠）。</li>
+<li><strong>多片的硬门</strong>：真正卡住提前量的，更可能是 placement 准入线 96 − 4 = 92 GiB（<a href="02-collective-scheduling-and-overlap.html#162-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%A4%9A%E7%89%87%E4%B8%8A%E5%85%B3%E6%8E%89%E5%8F%8D%E8%80%8C%E5%BF%AB">02 §16.2</a>；和 §1 表里那道 92 GiB 每日 AOT 闸数值相同，但不是一回事）<span class="tg inf">[推断]</span>。</li>
+<li><strong>单片另算</strong>：单片 temp 约 93 GB（约 87 GiB），在准入线以下；单片满配下要是提前量也被它卡住，那就得是 placement 自己的估算比 temp 高 <span class="tg inf">[推断]</span>。</li>
+<li>TPU 后端是否用同一份代码、上限怎么设，未公开。</li>
+</ul>
+<p>GPU 上相当于：FSDP1 的 forward_prefetch／backward_prefetch 与 limit_all_gathers——PyTorch 让用户手调在途 AG 数，XLA 的调度器按 HBM 余量自动调（类比）。</p>
+<p><sub>把握：源码证实 · 出处：openxla/xla <code>xla/service/latency_hiding_scheduler.cc</code>（开源 XLA；TPU 后端未公开）；PyTorch <code>torch/distributed/fsdp/fully_sharded_data_parallel.py</code> 的参数说明</sub></p>
+</blockquote>
+<details><summary>开源 XLA 调度器的显存策略细节</summary>
+<ul>
+<li>到上限改为「不惜代价先降显存」（<code>kMemoryPeakOverLimit</code>）。</li>
+<li>若开了重排（<code>rerun</code>，开源默认 0），整张排完仍超限就按 0.9 倍上限重排。</li>
+<li>上限由 <code>GetMemoryLimit</code> 给出。</li>
+</ul>
+</details>
+<hr />
+<h2 id="2-remat-档位哪些中间量存着哪些重算" class="hc1"><span class="hn">2.</span>remat 档位：哪些中间量存着、哪些重算</h2>
+<p><strong>前置</strong>：§1（余量＝调度余量）。<strong>后续</strong>：§3（kernel 残差命名是 remat 生效的前提）、§10（每档要记 temp 和实机峰值）。</p>
+<p><strong>收益</strong>：没有一个固定值，正负随模型和基线变：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>档位</th>
+<th>结果</th>
+<th>口径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>小号模型：<code>context=device kda_residuals=device</code></td>
+<td>约 −10%（指数 31 → 28）；KDA 残差和 context 各占数 GB</td>
+<td>小号模型 64 芯片，PDB 2，FSDP64 / EP2</td>
+</tr>
+<tr>
+<td>小号模型 PDB≤2 再加 <code>mlpwi_0/1</code>、MoE 路由索引</td>
+<td>−6%（指数 20 → 18）；<strong>真实峰值 74 GiB，logical 报 112</strong></td>
+<td>小号模型 64 芯片，PDB 2（这组硬件型号未核实）；PDB &gt; 2 不改默认</td>
+</tr>
+<tr>
+<td>大号模型 AOT：HLO pass（remat 同为 <code>full</code>）</td>
+<td>指数 73 → 55（和 placement 一起，见 <a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7</a>）</td>
+<td>大号模型 BF16 CI，256 芯片，GBS 1024 / PDB 2</td>
+</tr>
+<tr>
+<td>大号模型 FP8：custom，只打开 MLA Splash 残差放置开关（残差存 device）</td>
+<td>快不到 1%</td>
+<td>大号模型 FP8，256 芯片，PDB 2</td>
+</tr>
+<tr>
+<td>10+ 片 JIT 基线（数千芯片）：打开 MLA Splash 残差放置开关，MoE 路由索引和 <code>decoder_layer_input</code> 存 device；<strong><code>context</code>、<code>kda_residuals</code> remat</strong></td>
+<td>84 GiB/device（§1）</td>
+<td>大号模型 FP8，10+ 片 × 256 芯片，PDB 2，编译估计</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>怎么考虑的</strong>：档位不是「越少 remat 越好」，而是逐键试、只留在当前基线上确实变快的。</p>
+<p><img class="inl" src="figs/ch06-anim-remat.svg" alt="remat 档位是在「存着」和「重算」之间挑：少重算的代价是 HBM 余量" loading="lazy">
+<sub>示意。看反向段有没有「重算」块，再看右侧余量格。</sub></p>
+<p><strong>原理</strong>：remat policy 只标记「哪些带名字的中间量允许存」，<code>full</code> 只存层输入；没名字的中间量策略看不见（§3）。</p>
+<div class="kp kc0"><div class="kp-t">怎么开</div>
+<ul>
+<li><strong>上游已有的键</strong>：MaxText 有 <code>remat_policy=custom</code>，再给每个带名字的张量单设一个同名键，取 <code>device | remat | offload</code>，例如 <code>remat_policy=custom context=device decoder_layer_input=device mlpwi_0=device</code>。上游 <code>configs/base.yml</code> 里有 <code>context</code>、<code>decoder_layer_input</code>、<code>mlpwi_0/1</code>、<code>query_proj</code> 等键。</li>
+<li><strong>自定义键</strong>（上游没有）：上表的 MLA Splash 残差放置开关和 MoE 路由索引键是这套方案自己加的，<strong>需自行实现</strong>。残差名 <code>kda_residuals</code> 与上游 Tokamax 的 KDA kernel 一致；区别在 kernel 本身：上游那份目前不可用，生产用的 kernel 库不公开，要自己实现（<a href="05-kernels-kda-mla-moe.html#5-kda-%E7%9A%84%E6%AD%A3%E7%A1%AE%E6%80%A7%E5%9D%91%E4%B8%8E%E4%B8%8A%E6%B8%B8%E6%B2%A1%E6%9C%89%E6%97%B6%E8%87%AA%E5%B7%B1%E5%81%9A%E7%9A%84%E9%AA%A8%E6%9E%B6">05 §5</a>）。</li>
+<li><strong>注入方式</strong>：remat 策略由启动脚本注入成上面这些配置键。</li>
+</ul></div>
+<div class="kp kc1"><div class="kp-t">坑（不奏效的）</div>
+<ul>
+<li><code>minimal</code> 系列 OOM。</li>
+<li><code>mlpwi=offload</code> 撞 scan+offload bitcast bug；<code>decoder_layer_input=offload</code> 编译崩溃。</li>
+<li>优化器卸 host：搬走的字节约 35% 被 temp 反涨吃回；<code>JAX_MEMORY_FITTING_LEVEL=O3</code> 字节级无变化。口径：多模态版 BF16、10+ 片 DP10+ / FSDP512、PDB 2，CPU AOT。</li>
+<li>同一组里<strong>关掉 latency-hiding scheduler 省一大截</strong>：张量没变小，是 logits 和梯度不再同时活着——「显存余量＝调度余量」的反面证据（代价是性能，没测）。</li>
+<li>激活全卸 host（<code>minimal_offloaded</code>）比 full 慢约 60%（指数 50 对 31）：小号模型 64 芯片、PDB 2。</li>
+<li>在 <code>context + kda_residuals</code> 上<strong>再加 <code>mlpwi_0/1</code> 存设备，反而慢约 9%</strong>（按原始步时、以 <code>context + kda_residuals</code> 基线折算；<a href="05-kernels-kda-mla-moe.html#2-kda-custom_vjp%E5%8F%AA%E4%BA%A4%E5%87%BA-3-%E4%B8%AA%E5%91%BD%E5%90%8D%E6%AE%8B%E5%B7%AE%E8%AE%A9-remat-%E7%9C%8B%E5%BE%97%E8%A7%81-kernel-%E5%86%85%E9%83%A8">05 §2</a> 的指数 28 → 31 是取整后的值，直接相除约 +11%，两处是同一组数）：多存的激活挤掉 RS 的异步余量（机理见 <a href="05-kernels-kda-mla-moe.html#2-kda-custom_vjp%E5%8F%AA%E4%BA%A4%E5%87%BA-3-%E4%B8%AA%E5%91%BD%E5%90%8D%E6%AE%8B%E5%B7%AE%E8%AE%A9-remat-%E7%9C%8B%E5%BE%97%E8%A7%81-kernel-%E5%86%85%E9%83%A8">05 §2</a>）；PDB≤2 新基线上又成正收益（上表第 2 行）。</li>
+<li>开 <code>mlpwi</code> remat 时 GMM 输出必须先 mask 再打 <code>checkpoint_name</code>，否则梯度 NaN。</li>
+<li>KDA <strong>17 个残差全存设备</strong>：OOM；只存三个局部量（<code>Aqk/Akk/g_cumsum</code>）就是上表约 −10% 那一档。</li>
+<li><strong><code>--xla_tpu_enable_ag_backward_pipelining=true</code> 想降 HBM</strong>：小号模型 64 芯片 <strong>step 1 起 loss / grad norm 全 NaN</strong>，不能用。另一个坑：看 flag 实验先核对实际生效的值（编译日志 / <code>LIBTPU_INIT_ARGS</code>），不信实验标签里写的值——标签与实际传入值可能不一致。</li>
+</ul></div>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>remat 越少不一定越快：大号模型实测反例</span></span>大号模型 FP8 256 芯片，<code>full</code> 换成 <code>custom (context=device)</code>：重算少约 20%，暴露的 RS 等待涨约 65%，整步慢不到 1%（下图）。两份不同的 cost profile 结果一致，排除 profile 影响。</p>
+<ul>
+<li><strong>判据</strong>：先看暴露的集合通信占比；通信受限时别指望减 remat——省掉的重算本来藏在通信底下，不缩短关键路径，多存的激活还吃掉调度余量。</li>
+<li>同一组对照里，每个 device 的两颗 SparseCore（每芯片 4 颗、每 device 2 颗，<a href="https://docs.cloud.google.com/tpu/docs/tpu7x" target="_blank" rel="noopener">官方 TPU7x 规格</a>）执行时间比从约 3:4 偏成约 6:1（<code>physical_core_indices</code> 放置失衡）：换 remat 会连带改 SC 分工，要一起看。</li>
+</ul>
+</blockquote>
+<p><img class="inl" src="figs/ch06-remat-tradeoff.svg" alt="少 remat 反而慢：重算省了约 20%，RS 暴露等待涨了约 65%，整步慢不到 1%" loading="lazy">
+<sub>示意。RS 两行等长；看重算变短、红色等待变长。</sub></p>
+<blockquote>
+<p><strong>为什么 SC 分工会跟着 remat 偏：通信活按核分派，一次 RS 不拆到两颗核上，RS 的数量和先后一变，活就可能挤到一颗核上</strong>，成了尾巴（上框 3:4 → 6:1）。分派规则未公开，「一次 RS 不拆到两颗核上」也是推断；判据：在 xprof 里看同一个 RS 是否同时出现在两条 SC 轨道上。</p>
+<p>GPU 上相当于：SC 卸载类似把搬运交给独立的 DMA 引擎／copy engine、不占 SM（NCCL 的 RS 默认以 kernel 形式跑在 SM 上，不算这一类）；这里是两台引擎分活不均（类比，推断）。</p>
+<p><sub>把握：推断 · 出处：本节上面 WARN 框的数据</sub></p>
+</blockquote>
+<blockquote>
+<p><strong>为什么 remat 在 knockout 基线上几乎不省显存：这时峰值贴着上限，remat 省出来的显存马上被调度器花在更早发通信上，峰值不动</strong>。</p>
+<ul>
+<li><strong>推导链</strong>：§1 调度器显存策略 → 余量变大 → 提前量变大 → 峰值不变；没比过两份 schedule 的在途 collective 数。对照 §10 两张表的「换 remat full」行与第 9 级（HLO 通信重排和 FP8 已拆）。</li>
+<li><strong>更简单的解释</strong>：temp 只看峰值那一刻活着的 buffer，峰值若落在优化器段或专家 AG buffer 上，<code>full</code> 少存的激活那一刻本来就不在 <span class="tg inf">[推断]</span>。</li>
+<li><strong>判据</strong>：用 <code>--xla_dump_to</code> 导出两版的 buffer assignment / 显存使用报告，比峰值时刻的活集。</li>
+</ul>
+<p><sub>把握：推断 · 出处：JAX 文档 Gradient checkpointing（<code>checkpoint_name</code>、policy）；本章 §10 两张表</sub></p>
+</blockquote>
+<h3 id="21-换模型怎么重扫-remat-档位">2.1 换模型怎么重扫 remat 档位</h3>
+<p>本章和 <a href="05-kernels-kda-mla-moe.html#2-kda-custom_vjp%E5%8F%AA%E4%BA%A4%E5%87%BA-3-%E4%B8%AA%E5%91%BD%E5%90%8D%E6%AE%8B%E5%B7%AE%E8%AE%A9-remat-%E7%9C%8B%E5%BE%97%E8%A7%81-kernel-%E5%86%85%E9%83%A8">05 §2</a> 的 remat 结论换模型、换基线<strong>正负都会翻</strong>（多存 <code>mlpwi_0/1</code> 在小号先慢后快；大号多存 context 反而 RS 多暴露），所以在新模型上按这个顺序重扫：</p>
+<ol>
+<li><strong>先 <code>remat_policy=full</code></strong>，保证跑得起来，记下基线。</li>
+<li><strong>看 profile 里暴露的集合通信占多少</strong>。通信受限时别指望靠少 remat 提速（§2 WARN）。</li>
+<li><strong>给自定义 kernel 的残差命名</strong>（§3）：<code>custom_vjp</code> 里的残差要在 <code>f_fwd</code> 内部打 <code>checkpoint_name</code>，否则 remat 策略看不见（05 §2）。GQA 用 Splash attention 时不用自己打：
+<ul>
+<li>上游 <code>layers/attention_op.py</code> 的 <code>tpu_flash_attention</code> 构造 Splash kernel 时传了 <code>residual_checkpoint_name=&quot;context&quot;</code>，JAX 的 Splash kernel 内部把输出和 logsumexp 都打上这个名字。要存就在 policy 里留 <code>context</code>（预设 <code>minimal_with_context</code>，或 custom 下 <code>context: device</code>）。</li>
+<li>投影在 <code>layers/attentions.py</code> 里另有名字：<code>query_proj</code>／<code>key_proj</code>／<code>value_proj</code>／<code>out_proj</code>；还有 custom 专用的 <code>attention_out</code>（attention 输出、<code>out_proj</code> 之前），预设档里没有它。</li>
+<li>怎么验证：每档用 <code>jax.ad_checkpoint.print_saved_residuals</code> 列出存下的残差，看有没有名为 <code>context</code> 的两项。再看编译后 HLO 里 Splash 前向 kernel 出现几次：存下来时反向不该再调一次前向 kernel，不存时会多一次 <span class="tg inf">[推断：按 remat 机制推，没在 Splash 上实测]</span>。</li>
+</ul>
+</li>
+<li><strong>一次只开一个键</strong>，大致从小到大 <span class="tg inf">[推断：各键大小没有逐项实测]</span>：attention 残差 → MoE 路由索引（<strong>上游没有</strong>这个键；上游相邻键是 <code>moe_routing_maps</code>，存 top-k 专家 id 和排序置换，未测）→ <code>decoder_layer_input</code> → 最后才是 <code>mlpwi_0/1</code>。<code>mlpwi</code> 最大，也是收益正负翻过的那个。</li>
+<li><strong>每档记四个数</strong>：编译期 temp、实机峰值、步时、暴露的 RS。只留在当前基线上确实变快的。</li>
+<li><strong>改了 placement / FP8 / PDB 之后重扫</strong>：基线一换，同一刀的收益正负可能翻过来。</li>
+</ol>
+<p>判断做对了：最终档位相对 full 步时确实下降，实机峰值离 94.74 GiB 还有余量，暴露的 RS 没有明显变长。</p>
+<h3 id="22-序列拉到-32k激活怎么估什么时候开-cp">2.2 序列拉到 32K：激活怎么估、什么时候开 CP</h3>
+<p><strong>激活显存的通用估法</strong>（每 device，scan 层，BF16 按 2 字节）</p>
+<ul>
+<li>记 t ＝ 每 device 的 token 数 ＝ PDB × S，L ＝ 层数，D ＝ hidden。</li>
+<li><code>full</code> 档：每层只存层输入，约 L × t × D × 2 字节；另加反向时正在重算的那一层的全部中间量（随 t 线性涨）。</li>
+<li>每多存一个键，加 L × 该键大小：
+<ul>
+<li>q／k／v 投影：t × (q 头数 ＋ 2 × kv 头数) × 每头维度 × 2；</li>
+<li><code>context</code>：t × q 头数 × 每头维度 × 2，外加 fp32 的 logsumexp（t × q 头数 × 4）；</li>
+<li>稠密 <code>mlpwi_0</code>／<code>mlpwi_1</code>：各 t × F × 2；路由专家的 <code>moe_mlpwi_*</code>：各约 t × top-k × 专家宽 × 2（不计 padding）；</li>
+<li>有 TP 切 hidden 或头时，对应那一维再除以 TP。</li>
+</ul>
+</li>
+<li><strong>上面 q／k／v 那行按 GQA 写，MLA 要换量</strong>：MLA 先把输入压成低秩 latent 再展开成每头的 q／k／v，所以多出两个带名字的中间量，展开后的每头维度也不一样（键名与形状按源码推，没在 MLA 上逐项量过 <span class="tg inf">[推断]</span>）：
+<ul>
+<li><code>mla_q</code>：q 的 latent，t × q_lora_rank × 2；<code>mla_kv</code>：kv 的 latent，t × kv_lora_rank × 2（kv 压缩时另切出一段各头共享的 rope 维 qk_rope_head_dim，不在 <code>mla_kv</code> 里）；</li>
+<li><code>query_proj</code>／<code>key_proj</code>：t × q 头数 ×（qk_nope_head_dim ＋ qk_rope_head_dim）× 2；<code>value_proj</code> 和 <code>context</code>：t × q 头数 × v_head_dim × 2（MLA 的 k／v 展开到每个 q 头，没有 kv 头数这一项）；</li>
+<li>这套方案的 MLA Splash 残差放置开关（<a href="11-porting-checklist.html#c04--mla-splash-%E6%AE%8B%E5%B7%AE%E6%94%BE%E7%BD%AE%E5%BC%80%E5%85%B3%E8%AE%BE%E4%B8%BA-device">11 C04</a>）存的是 MLA Splash 的 output 与 logsumexp，大小同上面 <code>context</code> 那项；</li>
+<li>套用前用 <code>jax.ad_checkpoint.print_saved_residuals</code> 核一遍实际存下的形状。</li>
+</ul>
+</li>
+<li>注意力用 Splash 时没有 S² 项；不用 flash 类 kernel 才会有 PDB × 头数 × S² 的打分矩阵，32K 下它先爆。</li>
+<li>loss 头的 t × 词表那一项也随 t 涨，见 §6。</li>
+</ul>
+<div class="kp kc2"><div class="kp-t">关键一步：S 涨了，先看 t 变没变</div>
+<ul>
+<li>8K → 32K 时把 PDB 降到原来的 1/4，t 不变，上面每一项都不变 <span class="tg inf">[推断：公式里只出现 t，没有单独的 S]</span>。所以先降 PDB，不急着开 CP。</li>
+<li>CP 本身不减少 t：PDB 固定时 t ＝ PDB × S 和 CP 无关 <span class="tg inf">[推断：和下面那组「HBM 不变」一致]</span>。CP 的用处是让一个 device 只拿一条序列的一段。</li>
+<li>上游 PDB &lt; 1 是按 PDB ＝ 1 读数据、只训其中一部分（<code>configs/types.py</code> 的 <code>calculate_global_batch_sizes</code>），读进来的有浪费。</li>
+</ul></div>
+<p><strong>什么时候才该开 CP</strong></p>
+<ol>
+<li>全局 batch 的序列条数少于 device 数，每个 device 分不到一整条序列；或者</li>
+<li>PDB 已经是 1，单层重算时的瞬时峰（随 S 线性涨）还是放不下。</li>
+</ol>
+<p>开之前过三道：</p>
+<ul>
+<li><a href="11-porting-checklist.html#b04--%E9%95%BF%E4%B8%8A%E4%B8%8B%E6%96%87-cp-%E7%9A%84%E9%85%8D%E5%A5%97%E4%B8%93%E5%AE%B6-fsdp-%E5%88%87%E5%88%86--cp-%E8%AE%A1%E6%95%B0%E4%BF%AE%E5%A4%8D">11 B04</a> 的计数修复在不在；有线性注意力层的，状态跨 rank 传没传（<a href="13-silent-errors.html#51-cp-%E4%B8%8B%E7%BA%BF%E6%80%A7%E6%B3%A8%E6%84%8F%E5%8A%9B%E7%8A%B6%E6%80%81%E5%9C%A8%E5%88%86%E7%89%87%E8%BE%B9%E7%95%8C%E6%96%AD%E5%BC%80">13 §5.1</a>）。</li>
+<li>Splash 的 <code>block_q</code> 能不能整除每分片长度（<a href="05-kernels-kda-mla-moe.html">05</a> tile 扫描规矩第 2 条）。</li>
+<li>CP 收 K/V 的通信在 profile 里能不能藏住。</li>
+</ul>
+<p>估算只作初筛，之后同 §10：temp 再筛，实机峰值终判。</p>
+<p><strong>书里唯一的 CP 证据，和它的局限</strong></p>
+<ul>
+<li>来源：<a href="11-porting-checklist.html">11 「试过不行」表</a>：另一个模型、256 device、seq 32k，CP=2 对 CP=1，HBM 不变，步时略慢，结论是「不需要 CP」。</li>
+<li>局限：
+<ul>
+<li>单次对照；</li>
+<li>不是这本书的两个模型；</li>
+<li>同时撞上 B04 的 GLA（门控线性注意力）状态静默错误，那组的数值本身就不对；</li>
+<li>只说明 PDB 不变时 CP=2 不省显存，没测「PDB 降不下去」的场景。</li>
+</ul>
+</li>
+</ul>
+<h3 id="23-序列变短如-8k--4kremat-往哪调">2.3 序列变短（如 8K → 4K）：remat 往哪调</h3>
+<p>书里没在短序列上测过，下面是判据和测法 <span class="tg inf">[推断]</span>。</p>
+<p><strong>先分清 S 变短时 t 变不变</strong>（t 同 §2.2）</p>
+<ul>
+<li><strong>PDB 加倍、t 不变</strong>：§2.2 那些按 t 算的激活项都不变；变的是注意力核心——每 token 的 softmax 注意力乘法随 S 线性缩，MLA 那份计算占比下降，打开 MLA Splash 残差放置开关能省的重算也跟着变少。KDA 每 token 的开销和 S 无关，基本不变。</li>
+<li><strong>PDB 不变、t 减半</strong>：激活减半，HBM 多出余量；但 FSDP 下每步搬权重的量和 t 无关，算的时间减半、通信不变，<strong>更容易变成通信受限</strong>。</li>
+</ul>
+<div class="kp kc3"><div class="kp-t">往哪调的判据</div>
+<ul>
+<li>新基线先跑 <code>remat_policy=full</code>（§2.1 第 1 步），看 profile 里暴露的集合通信占比。</li>
+<li><strong>暴露通信变大</strong>（t 减半时最可能）：多出来的 HBM 先别拿去多存激活，留给 placement／异步 collective 当调度余量（§1）；减 remat 很可能不降反升（§2 WARN）。</li>
+<li><strong>暴露通信没变、计算是大头</strong>：才按 §2.1 第 4 步的顺序逐个多存，每档记四个数。</li>
+<li><strong>8K 上调好的档位不能直接搬</strong>：基线一换同一刀的收益正负可能翻过来（§2.1 第 6 步）；MLA 那刀和 Splash 块参数尤其要重扫（<a href="05-kernels-kda-mla-moe.html#8-splash-block-%E9%87%8D%E6%89%AB%E4%B8%8E-mla-residual">05 §8</a> 的 4K 起点）。</li>
+</ul></div>
+<hr />
+<h2 id="3-自定义-kernel-的残差要显式命名fused-moe-反向不再重放前向" class="hc2"><span class="hn">3.</span>自定义 kernel 的残差要显式命名（fused MoE 反向不再重放前向）</h2>
+<p><strong>前置</strong>：§2。<strong>后续</strong>：§2.1 第 3 步。</p>
+<p><strong>收益</strong>：未量化（没有修前对照）；trace 里 fused 前向和 fused 反向次数一一对应，没有反向触发的重放；稳态无 OOM、无 hang。</p>
+<p><strong>怎么考虑的</strong>：fused MoE 前向是 remat 看不透的 custom call，<code>full</code> 下反向要它的中间结果就把整个 fused 前向<strong>再跑一遍</strong>。</p>
+<p><strong>原理</strong>：full remat 下只额外保存 <strong>route IDs 和 routing weights</strong>（Linen / NNX 两套 policy 都覆盖），反向直接跑 fused 反向。</p>
+<p><img class="inl" src="figs/ch06-kernel-residual.svg" alt="残差不命名，remat 只能把整个 fused 前向重放一遍；命名两样小东西就够" loading="lazy">
+<sub>示意。看反向段开头那块前向重放。</sub></p>
+<p><strong>怎么开</strong>：这套方案的 fused MoE 路径里已默认带上（上游 MaxText 的 fused MoE 只在推理侧，vllm_rpa 路径调 tpu-inference 的 kernel，没有这条训练路径）。</p>
+<p><strong>坑（通用规则）</strong>：自定义 kernel 一碰 remat，要<strong>显式命名它的 residual</strong>（<code>checkpoint_name</code> / 专门的 remat 键）。不命名，<code>full</code> 会重放整个 kernel，<code>custom</code> 会静默不生效（同类坑见 <a href="13-silent-errors.html">13</a> O09）。</p>
+<hr />
+<h2 id="4-专家权重-all-gather-占的显存五种修法" class="hc3"><span class="hn">4.</span>专家权重 all-gather 占的显存：五种修法</h2>
+<p>FSDP 下专家权重每层先 AG 再算；这块 buffer 活多久、同时活几份由 XLA 决定，不由模型代码决定。下面五种修法前两种针对 GA &gt; 1，后三种针对一层内 / 跨层的 buffer 寿命。</p>
+<h3 id="41-ga-循环里的权重外提屏障默认关">4.1 GA 循环里的权重外提屏障（默认关）</h3>
+<ul>
+<li><strong>前置</strong>：GA &gt; 1，且配逐层 remat（<code>prevent_cse=True</code>）。大号模型生产是 GA=1，用不上（<a href="11-porting-checklist.html">11 B05</a>）。</li>
+<li><strong>现象</strong>：XLA 的循环不变量外提（LICM）发现专家权重的 AG + concat 每个微批都一样，就提到 GA 循环外<strong>整份常驻</strong>（下图左）。</li>
+<li><strong>怎么开</strong>：打开防权重 AG 上提开关，用 <code>jax.lax.optimization_barrier</code> 给权重注入对循环变量的假依赖。</li>
+<li><strong>收益</strong>：被外提的 concat 缩到原来的一个零头；另一个模型 16 芯片 loss 校验的 OOM 消失。</li>
+</ul>
+<h3 id="42-同一个问题的梯度侧dw-的-rs-被挪出-ga-累加默认关">4.2 同一个问题的梯度侧：dW 的 RS 被挪出 GA 累加（默认关）</h3>
+<ul>
+<li><strong>前置</strong>：同 4.1，只在 GA &gt; 1 时有意义。</li>
+<li><strong>现象</strong>：XLA 利用线性（先 RS 再累加 ＝ 先累加再 RS）把专家权重梯度的 RS <strong>移到 GA 累加之外</strong>，carry 变成<strong>整份未切分</strong>，高 GA 下 AOT OOM（下图右）。</li>
+<li><strong>怎么开</strong>：打开防梯度 RS 上提开关，在权重梯度 RS 之后插 <code>optimization_barrier</code>。覆盖 FP8 / QAG 与 BF16 显式 gather 两条路径。</li>
+<li><strong>收益</strong>：让大号模型 BF16 高 GA 配置 AOT 编得过；无步时数据。小号模型 1000 步 loss 校验是 GA=1、开关关着，<strong>GA &gt; 1 路径没做数值对拍</strong>。</li>
+<li><strong>坑</strong>：
+<ul>
+<li><strong>静默无效</strong>：<code>shard_exp_on_fsdp=false</code>，或者既没开 QAG 也没开 force gather 时，开关什么都不做、也不报错；两阶段 AG 路径和 megablox 非 Tokamax 分支也不受保护（<a href="13-silent-errors.html#22-%E4%BC%98%E5%8C%96%E9%9D%99%E9%BB%98%E4%B8%8D%E7%94%9F%E6%95%88%E5%BC%80%E4%BA%86%E4%BD%86%E6%B2%A1%E5%BC%80%E4%B8%8A">13 §2.2</a>）。</li>
+<li>和 <code>use_batch_split_schedule</code> 互斥，同开直接报错。</li>
+</ul>
+</li>
+</ul>
+<p><img class="inl" src="figs/ch06-ga-hoist.svg" alt="GA &gt; 1 时 XLA 会把「每个微批都一样」的活挪出循环，挪出去的 buffer 就整份常驻" loading="lazy">
+<sub>示意。上排编译器外提，下排加屏障；红色整份块是多出来的显存。</sub></p>
+<h3 id="43-两阶段-ag试过没留下">4.3 两阶段 AG（试过，没留下）</h3>
+<ul>
+<li><strong>怎么开</strong>：<code>moe_fsdp_use_two_stage_all_gather</code>，专家权重 AG 拆两段 <code>with_sharding_constraint</code> + <code>optimization_barrier</code>，禁止跨层异步流水 AG。</li>
+<li><strong>收益（小号模型 64 芯片）</strong>：
+<ul>
+<li>GA=1 单开：峰值约 −20%（86 → 67 GiB），但每 device 吞吐<strong>约 −15%</strong>——AG 不能提前发，全暴露。</li>
+<li>GA=2 配合：吞吐持平、显存约 −20%；PDB 2 + GA=1 配合两阶段 AG 吞吐约 +20%（对照组未记录），峰值贴到 90 GiB 级，可能 <code>RESOURCE_EXHAUSTED</code>（碎片整理重试能救回）。</li>
+</ul>
+</li>
+<li><strong>坑</strong>：<strong>代码和编译器升级后省显存效果基本消失</strong>（GA=2 版 70 → 87 GiB），原因未定位到单个改动。判据：「禁止流水」换显存是拿步时付账；效果依赖 XLA 的调度，用之前要在当前版本上复测。</li>
+</ul>
+<h3 id="44-前缀层改四段-nnscan生产配置里有">4.4 前缀层改四段 <code>nn.scan</code>（生产配置里有）</h3>
+<ul>
+<li><strong>怎么开</strong>：dense 前缀和 MoE 前缀原来是 Python for 循环，改成四个 <code>nn.scan</code>。</li>
+<li><strong>收益（小号模型 64 芯片）</strong>：峰值约 <strong>−15%</strong>（91 → 77 GiB），步时约 −5%，8 步 loss 一致。拆项是 AG buffer 和 copy buffer 各省一大截，MLA splash 反向 buffer 涨一截。</li>
+<li><strong>原理</strong>：<strong>scan 后 XLA 跨迭代复用同一份 AG 后的专家权重 buffer</strong>（下图），不是「scan 轴上做了 FSDP」（那条规则映射为空）。</li>
+</ul>
+<p><img class="inl" src="figs/ch06-anim-scan-buffer.svg" alt="Python for 展开后多层 AG 一起提前、buffer 成倍；nn.scan 循环体只排一次，buffer 轮流复用" loading="lazy">
+<sub>示意。数右侧同时活着的 AG buffer 份数。</sub></p>
+<blockquote>
+<p><strong>为什么：循环体只排一次，AG 输出 buffer 只有一份、每轮复用</strong>。「复用」是结果，循环边界才是原因：跨层预取最多由 collective pipeliner 往前剥一轮。代价是跨层藏通信的余地变小。在本例上是推断，没比过两版 schedule。</p>
+<p><sub>把握：公开资料 · 出处：JAX 文档 <code>jax.lax.scan</code>（「lowered to a single WhileOp」）；openxla/xla <code>xla/service/collective_pipeliner.h</code></sub></p>
+</blockquote>
+<ul>
+<li><strong>坑</strong>：
+<ul>
+<li>层数如果刚好让 dense 前缀与周期对齐，会<strong>静默构造出错的 attention 类型</strong>；</li>
+<li>检查点转换映射要跟着改；</li>
+<li><code>nn.scan(length=1)</code> 会被 XLA 当单次 while 内联，scan 结构丢了，调度和显存管理跟着变。<strong>所有 <code>length=1</code> 的 scan 都要包 <code>set_xla_metadata(skip-simplify-while-loops_trip-count-one=true)</code></strong>（数值惰性，小号模型 1000 步对拍通过）。</li>
+</ul>
+</li>
+</ul>
+<h3 id="45-分片权重直接传进-gmm-的-custom-vjp只有-aot-验证未进生产">4.5 分片权重直接传进 GMM 的 custom VJP（只有 AOT 验证，未进生产）</h3>
+<ul>
+<li><strong>怎么开</strong>：BF16 显式 gather（GMM 内强制权重 gather 开关）原来先 AG 出完整权重再进 GMM，反向残差存<strong>完整权重</strong>。改成把 FSDP 分片权重传进 megablox GMM 的 custom VJP：残差只存分片，反向算 <code>dlhs</code> 前<strong>重新 AG</strong>，dW 由 TGMM 算完直接 RS 回分片。</li>
+<li><strong>原理</strong>：用一次额外 AG 换掉「整层完整权重从前向活到反向」。</li>
+<li><strong>收益</strong>：大号模型 AOT 峰值<strong>明显下降</strong>（仅模拟编译）。</li>
+<li><strong>坑</strong>：
+<ul>
+<li>只有 AOT 数字，<strong>没有运行时步时、没有数值验证</strong>。</li>
+<li>开 remat 后每层完整权重 AG 多出一半，而 remat 本已限制权重存活期，省下的显存在真实配置里可能打折。</li>
+<li>依赖 ICI AG pipelining 的配置。</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="5-muon-优化器数值编译通信三类修法" class="hc4"><span class="hn">5.</span>Muon 优化器：数值、编译、通信三类修法</h2>
+<p><strong>前置</strong>：§1（Muon 常驻 12 B/参数）。<strong>后续</strong>：§7 第一行 JAX 0.11 OOM 的修法在这里；§8 表里的 Muon 编译惩罚。</p>
+<p>Muon 的 Newton–Schulz（NS）正交化每步要做几次矩阵乘，本身就是一个小循环。通信那条（NS 前复制矩阵轴，optimizer 段约 −15%）主场在 <a href="02-collective-scheduling-and-overlap.html#3-%E6%98%BE%E5%BC%8F-all-gather%E5%88%AB%E8%AE%A9-gspmd-%E6%8A%8A%E6%9D%83%E9%87%8D%E6%94%B6%E9%9B%86%E9%80%80%E5%8C%96%E6%88%90%E5%85%A8%E7%BD%91%E6%A0%BC-ar">02 §3</a>。</p>
+<h3 id="51-数值">5.1 数值</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>问题</th>
+<th>原理</th>
+<th>修法 / 效果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NS 用 bf16</td>
+<td>每步十来个 GEMM（标准五次多项式 NS 每轮 3 个矩阵乘、5 轮约 15 个），bf16 误差层层累积，对 GPU 参考出现千分之一量级的 loss 漂移</td>
+<td>NS 默认改 fp32（<code>ns_dtype=bfloat16</code> 可选回去）；1000 步 loss 均值差不到万分之一，窗口内无累积漂移。代价是 NS 计算量变大，后面才有编译友好化</td>
+</tr>
+<tr>
+<td>MLA 投影在 Muon 按分量切分的配置（split 列表）里填了每头维度</td>
+<td>NS 按 split 分组正交化，填每头维度等于按错的块做正交化，scale 也算错；不报错</td>
+<td>改成总维度。属静默错误，只有长跑对拍能看出来</td>
+</tr>
+<tr>
+<td>启动脚本里写死的默认值把 NS 换回 bf16</td>
+<td>一组性能配置里带了把 NS 精度设回 bf16 等三个硬编码默认，对旧基线出现 loss 差</td>
+<td>删掉后对拍回到不到万分之一；<strong>步时慢约 2–3%</strong>（小号模型，<span class="tg inf">[推断：跨两次改动对比]</span>）。审性能配置时要逐个核默认值</td>
+</tr>
+<tr>
+<td>libtpu 0.0.44.1 → 0.0.47 后 NS 数值变了</td>
+<td>新版对小 batch 的 Gram dot 换了代码生成窗口，同一 TensorCore 内两个 MXU split-K 后再相加，累加括号变了，经 5 轮 NS 放大；<code>highest</code> 精度下两版一致</td>
+<td>只把 component-split 外层 <code>jax.vmap</code> 换成 <code>jax.lax.map</code> 即逐位恢复；scan 轴短时开销不到 1%、长时约 15% 到一倍多（单机微基准）；<strong>全局替换让路由 MoE 慢 5–8 倍</strong>。见表下</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>libtpu 版本那行：0.0.48 也没消除差异。结论是语义等价但非逐位，靠 loss 门禁兜底（大号模型 256 芯片 20 步 loss 通过）。</li>
+</ul>
+<h3 id="52-编译">5.2 编译</h3>
+<ul>
+<li><strong>编译友好化</strong>：NS 迭代默认不展开（loop lowering）、同形叶子分桶批量做（打开 Muon 批量 NS 开关，每批 16 个），HLO 里 dot / while 个数不再随叶子数增长（同形叶子 1 个和 8 个编出来一样多）。收益见 §8 表（无前后实测）。</li>
+<li><strong>Muon NS 展开开关打开后没生效</strong>：带按分量切分配置和 <code>scan_axis</code> 的参数（如 MLA 投影）递归 <code>vmap</code> 时漏传了这个开关，仍走 scan。修后小号模型再快不到 1%，是整体打开 Muon NS 展开开关（单项快 1–2%，按小号模型 64 芯片步时折算）的前置。开关类优化要在 HLO 里确认每类参数都走了新路径。</li>
+<li><strong>分块从 Python for 改 <code>lax.scan</code></strong>：所有块共用一个 NS 体，HLO 指令数大降；但接着撞上下一个坑 ↓</li>
+<li><strong>同形矩阵 concat 超 int32</strong>：scan 版把一大组同形矩阵 concat 成一个 buffer，word offset 超 <code>INT32_MAX</code> → <code>RET_CHECK allocation_size_words &lt;= INT32_MAX</code>。修法：按 <strong>2 GB 上限</strong>分桶，外层 Python for、内层 scan。全用 <code>lax.scan</code> 会让 slice-of-concat 折叠失效，所以外层保留 for。</li>
+<li><strong>JAX 0.11 下 NS 被复制到 OOM</strong>（§7 表第一行），修法是一条窄保护：
+<ul>
+<li>只对 CP &gt; 1、且 NS batch 轴复制后工作集超 256 MiB 的叶子不复制、保留原分片，叶子内用 <code>lax.scan</code> 按每块 ≤16 个矩阵顺序做 NS；CP=1 时图完全不变。</li>
+<li>大 Gram 中间量和它引出的 all-to-all 一起消失，小号模型 CP8 编译 heap 降约 60%（§7 的 115 → 44 GiB 是同一思路的另一实现测的）。</li>
+<li>未进生产，修改后没再长跑。</li>
+</ul>
+</li>
+</ul>
+<p><strong>批量做的显存方向</strong>（§10 两张表第 10 级与「关 Muon 批量」行）：Muon 批量在阶梯和 knockout 两种拆法里显存方向相反，步时同号（<a href="09-ablation-ladder.html">09 §4.9</a>）。「批量」＝把同形矩阵拼成一批一起做 Newton-Schulz 正交化。</p>
+<blockquote>
+<p><strong>为什么：批量做和逐个做各有一股抬峰的力，哪股赢看峰值落在哪段</strong>。整组同形矩阵拼起来做，整组中间量同时活着，会抬峰；逐叶子做时调度器把很多叶子交错并发，在途中间量反而更多。哪股赢看峰值落在哪段：两级的峰值若落在不同段，批量的中间量只在其中一级碰上峰值时刻 <span class="tg inf">[推断]</span>。换配置要重看峰值位置；没逐级找过峰值指令，判据同 §2 末框，比两版峰值时刻的活集。</p>
+<p><sub>把握：推断 · 出处：本章 §10 两张表；Muon 批量实现见本节</sub></p>
+</blockquote>
+<h3 id="53-通信细节见-02">5.3 通信（细节见 02）</h3>
+<ul>
+<li>NS 前把矩阵轴复制、batch 轴留在 FSDP 上，NS 循环里纯本地矩阵乘；带一个 1 GB 的复制预算，自动限 batch 防 OOM。</li>
+<li>还要处理三种边界：rank-2 参数在 <code>vmap</code> 下仍逐步 all-reduce、不兼容 batch 轴的回退成全复制、auto-cap 没对齐 FSDP 轴倍数导致 padding OOM。</li>
+</ul>
+<hr />
+<h2 id="6-loss-头和-mtp-的省显存改动" class="hc5"><span class="hn">6.</span>loss 头和 MTP 的省显存改动</h2>
+<p><strong>前置</strong>：§1。<strong>后续</strong>：§2.2（t × 词表那一项）。</p>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>「省显存」改动的估算经常对不上</span></span>整数 label CE 实测反涨，vocab tiling 只省一小截还带梯度 bug。动手前先在 HLO 里确认那个张量真的存在。</p>
+</blockquote>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>尝试</th>
+<th>做了什么</th>
+<th>结果</th>
+<th>为什么 / 坑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>整数标签 CE（MTP loss）</td>
+<td>dense one-hot 交叉熵改成 <code>logsumexp − target_logit</code></td>
+<td>大号模型 AOT 编译期总显存涨不到 1%；小号模型 64 芯片运行时峰值涨不到 1%（几乎全在 reserved，heap 高水位不变），步时快不到 1%：<strong>无收益</strong>，未进生产（两组成对实测，只差这一处代码）</td>
+<td>one-hot 本来就不物化，没东西可省（见表下）</td>
+</tr>
+<tr>
+<td>one-hot 改 bf16 构造</td>
+<td>主 loss、MTP、vocab tiling 四处 one-hot targets 用 bf16 建</td>
+<td>估算省一截（主 loss 与 MTP 各一半）；离线 loss / grad <code>array_equal</code> 逐位一致；未进生产</td>
+<td>依赖 <code>cast_logits_to_fp32=true</code> 才逐位一致；走 bf16 logits 时累加会降成 bf16</td>
+</tr>
+<tr>
+<td>MTP 也做 vocab tiling</td>
+<td>MTP 词表分块键设为 8，MTP 输出投影 + CE 分块，避免物化整个 <code>[batch, seq, vocab]</code></td>
+<td>实测<strong>峰值没变</strong>，未进生产</td>
+<td>主 loss 的 vocab tiling 也只省 1–2% HBM</td>
+</tr>
+<tr>
+<td>MTP scan + 分块 CE</td>
+<td>MTP 参数沿 scan 轴堆叠、每次只 AG 一层；CE 用 <code>lax.scan</code> + <code>remat</code> 按 2048 token 分块</td>
+<td>小号模型 64 芯片省一大截峰值、步时慢 1–2%；不分块代价略小（也在 1–2% 档），但显存回到原样</td>
+<td>拿步时换显存，余量够就不用开</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>为什么整数标签 CE 没收益：one-hot 本来就不落地，没东西可省</strong>。</p>
+<ul>
+<li><strong>one-hot 不落 HBM</strong>：直觉以为它会落一个 [t, V] 张量。其实 JAX 的 one-hot 是「标签 == iota」的比较，会和乘、求和融合在一起 [推断：融合是 XLA 行为，源码只证实它是比较，本例 HLO 未查]。</li>
+<li><strong>整数标签版涨的是零头</strong>：取 target logit 用 gather，它的反向在源码里是往全零 buffer 里 scatter-add；但实测多出的量远小于一整块 [t, V]（上表）。</li>
+<li><strong>两种可能</strong> <span class="tg inf">[推断]</span>：一是那块 buffer 也被融合掉了；二是 scatter 融不进下游的逐元素运算，全零 buffer 确实落了 HBM，只是不和峰值同时存活，所以峰值几乎不动。</li>
+<li><strong>判据</strong>：看 HLO 里有没有一个单独的 scatter 输出 [t, V]，有就是后者。</li>
+</ul>
+<p><sub>把握：源码证实 · 出处：JAX <code>jax/_src/nn/functions.py::one_hot</code>、<code>jax/_src/lax/slicing.py::_gather_transpose_fancy</code>；两个比例出自成对实测（见上表）</sub></p>
+</blockquote>
+<p><strong>两个静默算错，都是「loss 看着正常」</strong></p>
+<ul>
+<li><strong>Flax <code>sow</code> 默认是 APPEND</strong>：MTP 改 scan 后用 <code>self.sow(&quot;mtp_losses&quot;)</code> 收 loss，从检查点恢复时旧条目还在，新旧一平均，<strong>MTP loss 被对半除</strong>；没恢复的 run 则 raw MTP loss 乱跳（出现过负几十）。修法：<code>sow</code> 显式改成 REPLACE（<code>init_fn=()</code>、<code>reduce_fn=lambda c, v: (v,)</code>）。修后 500 步对 GPU 参考 MTP loss 中位差不到千分之一。</li>
+<li><strong>vocab tiling 的自定义反向漏乘 cotangent</strong>，默认 <code>num_vocab_tiling: 1</code> 所以生产里潜伏着，<strong>一开 tiling 就炸</strong>：
+<ul>
+<li>机理：<code>_chunked_cross_entropy_loss_bwd</code> 只给参数梯度乘了 <code>loss_cotangent</code>，hidden state 梯度没乘，上游梯度放大约 <code>total_weights</code> 倍（<code>raw_grad_norm</code> 到几十万量级，正确值不到 1）。</li>
+<li>修法一行：<code>grad_reshaped_hidden_states * loss_cotangent</code>。</li>
+<li>防法：自定义 VJP 都要拿 <code>jax.test_util.check_grads</code> 或对未分块版本比一次梯度。</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="7-显存突然爆了成因与修法" class="hc0"><span class="hn">7.</span>显存突然爆了：成因与修法</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>场景</th>
+<th>现象</th>
+<th>根因</th>
+<th>修法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JAX 0.11 升级</td>
+<td>小号模型 CP=4/8/16 OOM：111 / 115 / 111 GiB</td>
+<td>新 partitioner 为 Muon <code>P(&quot;fsdp&quot;,None,None)</code> 做 all-to-all，Gram 中间量一起活着（下图）</td>
+<td>leaf-only A2A（§5.2）</td>
+</tr>
+<tr>
+<td>同上，修后</td>
+<td>CP8：heap 115 → <strong>44 GiB</strong>；步时约 −45%（对 JAX 0.10 配置）</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>libtpu 0.0.48</td>
+<td>静态 heap 多占一截</td>
+<td>logits 存活期拉长；产物大小约翻倍</td>
+<td>未修；<strong>同时步时约 −15%</strong>，因果未证</td>
+</tr>
+<tr>
+<td>DCN DP</td>
+<td>大号模型 DP2 超出 HBM 上限</td>
+<td>AG 分解成更大的 AR 输入 + collective pipeliner（上游 pass）</td>
+<td><code>XLA_FLAGS=--xla_disable_hlo_passes=all_gather_decomposer,collective-pipeliner-forward</code>（单片 +3%）</td>
+</tr>
+<tr>
+<td>FP8 + 较小多片配置</td>
+<td>临时量 ≈ BF16 的 2.1×</td>
+<td>同上路径</td>
+<td>同上（10+ 片 JIT 基线对 FP8 也强制开）</td>
+</tr>
+<tr>
+<td>scoped VMEM 设 48 MiB</td>
+<td>64 芯片略快（幅度很小），128 芯片 256K CP8 即 E0200 core halt</td>
+<td>误编译 <code>jit_initialize_state</code></td>
+<td>删；公共值 65536</td>
+</tr>
+<tr>
+<td>KDA 256K CP8</td>
+<td>scoped SMEM 2,109,440 &gt; 1,048,576 B</td>
+<td>custom VJP 传了整张 <code>chunk_indices</code></td>
+<td>kernel 库新版的紧凑元数据（SMEM 只预取 O(序列) 边界表）</td>
+</tr>
+<tr>
+<td>多模态版 10+ 片</td>
+<td>BF16 106 / FP8 105 GiB &gt; 92 GiB 每日 AOT 闸</td>
+<td>logits buffer 在 MoE 反向期间一直活着</td>
+<td>关 LHS 79 GiB（性能未测）</td>
+</tr>
+<tr>
+<td>多模态版 FP8 上卡（2 片 512 芯片 AOT 作业）</td>
+<td>三次尝试都 <code>RESOURCE_EXHAUSTED</code>：<code>Attempting to allocate 1.39G … 1.38G free</code>，差约 10 MB <span class="tg inf">[推断：日志两位小数，实际差 0–20 MB]</span></td>
+<td>未核；运行时加了 <code>single_sparse_core_for_reduce_scatter_offload=true</code>（<a href="04-fp8-quantization.html">04 §10</a>）</td>
+<td>未解决</td>
+</tr>
+</tbody>
+</table></div>
+<div class="kp kc0"><div class="kp-t">各行口径</div>
+<ul>
+<li>JAX 0.11：<strong>小号模型</strong> 64 芯片 / 128 device，GBS 256、PDB 2、seq 8192；修前基线是 CP8 + JAX 0.10 配置的中位数。</li>
+<li>libtpu 0.0.48：大号模型 FP8、FSDP512、PDB 2、CPU AOT、<strong>HLO 通信重排关、未加载 cost profile</strong>；步时是大号模型 FP8 256 芯片 20 步、只跑一次、标「待复测」。</li>
+<li>DCN DP：大号模型 DP2 × FSDP256、PDB 2、remat full；超限的是 seq 8K，seq 6K 能跑。</li>
+<li>FP8 + 较小多片配置：大号模型比 10+ 片小的另一个多片配置（每片仍是 FSDP512）、HLO 通信重排关。</li>
+<li>scoped VMEM / KDA SMEM：<strong>小号模型</strong> 256K 长上下文 CP8。</li>
+<li>多模态版：10+ 片 DP10+ / FSDP512、PDB 2、CPU AOT。</li>
+</ul></div>
+<blockquote>
+<p><strong>为什么 0.0.48 那行显存涨、步时降：两块 logits buffer 唯一的晚期用户（输出投影的 dW）被挪到反向尾部去填通信空档</strong>（下图）。dW 位置是编译产物证实的；「约 −15% 来自这里」是推断，0.0.48 还有别的改动。GPU 上相当于 Zero Bubble 把权重梯度推后填空泡（类比）。</p>
+<p><sub>把握：推断 · 出处：0.0.48 编译产物（dW 位置）；arXiv 2401.10241</sub></p>
+</blockquote>
+<p><img class="inl" src="figs/ch06-logits-lifetime.svg" alt="libtpu 0.0.48：dW 被挪去填反向尾部的通信空档，logits buffer 跟着活到最后" loading="lazy">
+<sub>示意。比两行底下的绿条长度：存活期一长，静态 heap 就多占一截。</sub></p>
+<p><strong>scoped VMEM 那行</strong>（VMEM ＝ kernel 用的片上暂存；类比 GPU 的 shared memory，容量和作用域不同）。</p>
+<ul>
+<li>机制：公开文档未说明（参见 OpenXLA XLA Flags Guidance 的 <code>xla_tpu_scoped_vmem_limit_kib</code>、MaxText <code>benchmarks/xla_flags_library.py</code> 注释）。它们只说它定「每个 op 本地可用的 VMEM 草稿区」、剩下的留给后续 op 预取；调小为什么把初始化编错、导致 core halt，只有现象。</li>
+<li>判据：改这个值后，先在最长上下文、最大 CP 的配置上跑过初始化和前几步再推广（64 芯片上小赚，256K CP8 上 core halt）。</li>
+</ul>
+<figure class="mermaid"><img src="../../assets/mermaid/66a5103293b8.png" width="774" alt="示意图" loading="lazy"></figure><p>图里三个数口径不同，别互相比：<strong>约 70 GiB</strong> 只是同时活着的那批 Gram 中间量的合计；表里 <strong>111–115 GiB</strong> 是整个 heap 的编译需求（超上限所以 OOM）；<strong>44 GiB</strong> 是修后 CP8 整个 heap。</p>
+<hr />
+<h2 id="8-编译挪到-cpu-上交叉-aot" class="hc1"><span class="hn">8.</span>编译挪到 CPU 上：交叉 AOT</h2>
+<p><strong>前置</strong>：无硬依赖（但 HLO 通信重排的生产数都走这条路，见 <a href="02-collective-scheduling-and-overlap.html#161-%E5%85%88%E5%88%86%E6%B8%85%E4%B8%A4%E4%B8%AApipeliner">02 §16.1</a> 的 KEY 框）；§8.2 表里 Muon 编译惩罚那行的修法在 §5.2。<strong>后续</strong>：§9 编译提速、§10 编完怎么判。</p>
+<p><strong>收益</strong>：多片首步从 40–46 min 降到 7–8 min（去排队；2 / 8 / 16 片），每次故障重启（<a href="07-data-and-checkpointing.html">07 §6</a>）都省这半小时。</p>
+<p><img class="inl" src="figs/ch06-anim-aot-restart.svg" alt="AOT 把编译挪到不占卡的 CPU 机上：每次故障重启都省下首步那半小时" loading="lazy">
+<sub>示意，故障间隔随手取。比两行下方的累计训练条。</sub></p>
+<p><strong>怎么考虑的</strong>：数千芯片 JIT 光到 step 0 就约 42 min（大头在 Python），placement 搜索又要几十分钟。编译挪到 CPU 机上，产物存 GCS，TPU 作业直接加载。</p>
+<figure class="mermaid"><img src="../../assets/mermaid/8707aea98243.png" width="351" alt="示意图" loading="lazy"></figure><p><strong>原理</strong>：</p>
+<blockquote>
+<p><strong>为什么：AOT 能开更多变换，不是编译器看得更全，是把几小时的编译挪到了不占卡的地方</strong>。JAX 把 lower → compile → 序列化拆开，placement 搜索就能离线做、反复换 cost profile。所以同样关 HLO 通信重排两边只差不到 1%（§8.1）。JAX 文档只写了 lower / compile 分阶段，CPU 交叉编译和序列化是本书的做法。</p>
+<p><sub>把握：推断 · 出处：JAX 文档 Ahead-of-time lowering and compilation；本章 §8.1 的数据</sub></p>
+</blockquote>
+<p><strong>怎么开 / 怎么复现</strong>：流程见 <a href="11-porting-checklist.html#a01--cpu-%E4%BA%A4%E5%8F%89-aot-%E7%BC%96%E8%AF%91%E6%B5%81%E7%A8%8B%E5%9C%A8-cpu-%E4%B8%8A%E6%8A%8A-tpu-%E8%AE%AD%E7%BB%83%E6%AD%A5%E7%BC%96%E5%A5%BD%E5%86%8D%E4%B8%8A%E5%8D%A1%E5%8A%A0%E8%BD%BD">11 A01</a>（上游 MaxText 已有编译产物的写入和加载：<code>train_compile</code> 用 <code>compiled_trainstep_file</code> 写出，<code>train</code> 用同一个键加载。这套方案自己做的是 CPU 节点池上的交叉编译流程和 CI 衔接；配置指纹有设计、没进生产，见 §8.3）。</p>
+<h3 id="81-jit-还是-aot先选路">8.1 JIT 还是 AOT：先选路</h3>
+<ul>
+<li><strong>两条路的步时差主要差在 HLO 通信重排开没开，不是编译方式本身</strong>：生产和 CI 只在 AOT 开 HLO 通信重排（pass 本身 JIT 也能跑，见 <a href="02-collective-scheduling-and-overlap.html#161-%E5%85%88%E5%88%86%E6%B8%85%E4%B8%A4%E4%B8%AApipeliner">02 §16.1</a>）。</li>
+<li>证据：AOT 关 HLO 通信重排指数 51（<a href="09-ablation-ladder.html">09 §2</a> 的 HLO 通信重排关那行），和下表 JIT 真数据指数 52 差不到 1% [推断：相除；两边都是 HLO 通信重排关、1 片，其余配置未逐项对齐]。</li>
+<li>别拿 <a href="03-dcn-and-multislice.html">03</a> 常引的单片 JIT 指数 51 来比：那是合成数据、用 10+ 片 JIT 基线配置跑的单片对照，不是同口径（<a href="09-ablation-ladder.html">09 §6</a> JIT 对照：真实数据比合成数据慢 1–2%）。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th></th>
+<th>JIT</th>
+<th>AOT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 片 4x8x8 步时</td>
+<td>指数 52（长跑取稳态 p50；HLO 通信重排关）</td>
+<td><strong>指数 37</strong>（复现生产 CI 配方；HLO 通信重排开）</td>
+</tr>
+<tr>
+<td>提交到第 0 步</td>
+<td>约 1 h（含加载几百个数据集）</td>
+<td>约 6 min</td>
+</tr>
+<tr>
+<td>前期代价</td>
+<td>无</td>
+<td>CPU 编译提速前 1 片约 1.8–2.1 h、多片约 2–3.5 h，提速后约 17 min（§9）；每个「拓扑 × 片数 × 配置」一份，和代码、cost profile 绑死</td>
+</tr>
+<tr>
+<td>什么时候用</td>
+<td>改了配置 / 代码 / 片数想马上跑；对 CI 的 loss</td>
+<td>配置定了量生产步时；同一配置反复跑</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>JIT 验 loss，AOT 量性能</strong>：两者逐步 loss 差在 1e-5 量级，和同配置自己两次之间同级 <span class="tg inf">[推断：HLO 通信重排主要改调度和通信切法，不改模型数学]</span>。</li>
+</ul>
+<h3 id="82-编译耗时的几个数">8.2 编译耗时的几个数</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>数字</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>大号模型 BF16 tpu7x-512 AOT 耗时</td>
+<td>c4-highcpu-48 <strong>约 66 min</strong>（c3d 约 94 min，n2d 约 113 min）</td>
+</tr>
+<tr>
+<td>持久化编译缓存</td>
+<td>小号模型冷编译约 5 min vs 热缓存约 1 min（约 −80%）</td>
+</tr>
+<tr>
+<td>数千芯片 JIT（10+ 片 JIT 基线）</td>
+<td><code>jax.devices()</code> → step 0 结束约 42 min = <strong>第 1 次编译约 22 + 再编一遍约 18</strong> + 到 step 0 完成约 1 min；日志自报的编译时间只是后面那约 18 min；大头在 Python（见表下）</td>
+</tr>
+<tr>
+<td>增量 AOT（原型，未进生产）</td>
+<td>冷约 60 min → 热约 8 min；换 cost profile 仍要约 40 min</td>
+</tr>
+<tr>
+<td>scan vs unscan（tiny，4 芯片）</td>
+<td>编译+step0 57 vs 74 s；稳态 unscan 快约 4%；「≈130 步回本」</td>
+</tr>
+<tr>
+<td>Muon 编译友好化（§5.2）</td>
+<td>去掉约 20 分钟编译惩罚和 <code>BACKEND_PASSES</code> 崩溃；另：打开 Muon NS 展开开关，单项快 1–2%</td>
+</tr>
+<tr>
+<td>20+ 片 AOT</td>
+<td>编译配置清单只改编译拓扑的片数与 <code>dcn_data_parallelism</code> 两项；搜索约 53 min；cost profile 仍是 10+ 片那份 trace</td>
+</tr>
+<tr>
+<td>DCN all-reduce 外提版 10+ 片 AOT</td>
+<td>把层循环里的 DCN all-reduce 外提到循环外，并换成精简的 cost profile；搜索约 62 min；cost model 估层循环和跨片桥接段都明显缩短（<strong>只是估算</strong>）；只跑过短程（指数 45），没进生产</td>
+</tr>
+<tr>
+<td>启动加速镜像（10+ 片）</td>
+<td>稳态 p50 指数 45；启动快了多少无数据</td>
+</tr>
+</tbody>
+</table></div>
+<div class="kp kc1"><div class="kp-t">各行口径</div>
+<ul>
+<li>AOT 耗时：大号模型 BF16，<code>tpu7x-512</code> ＝ 512 device ＝ <strong>256 芯片</strong>（切片名按 device 数），同一份代码三种 CPU 机型。</li>
+<li>持久化编译缓存：<strong>小号模型</strong> 64 芯片。</li>
+<li>数千芯片 JIT：大号模型 FP8 JIT 基线，10+ 片 × 256 芯片，PDB 2。每次编译大头在 Python：在 1 个 cube 上测得 trace 约 3 + lowering 约 12 min，XLA 约 2 min。</li>
+<li>增量 AOT：大号模型 FP8 256 芯片 20 步 CI（原型，未进生产）。</li>
+<li>scan vs unscan：微型模型 4 芯片，900 步。</li>
+<li>Muon NS 展开开关：<strong>小号模型</strong> 64 芯片、PDB 2、单 pool 钉死。</li>
+</ul></div>
+<h3 id="83-坑">8.3 坑</h3>
+<blockquote class="co danger">
+<p><span class="co-t"><i>⛔</i><span>AOT 与运行时对不上：都能干净加载然后静默跑错</span></span></p>
+<ul>
+<li>AOT 带 <code>--xla_tpu_num_sparse_cores_for_gather_offloading=1</code> 等 flag，JobSet 没有 <code>LIBTPU_INIT_ARGS</code>。</li>
+<li>AOT 验证开了 HLO pass，训练脚本不用。</li>
+<li>pickle 名只编码模型、拓扑，remat / Muon 不同照样加载。</li>
+<li>AOT 静默编出 BF16、选成 JAX 参考 kernel（慢 2–3%；大号模型 FP8 256 芯片、GBS 1024、20 步）。</li>
+<li>配置指纹（pickle 名加配置 hash、旁挂 fingerprint 文件、加载时 assert）有设计，<strong>没进生产</strong>。上线前自己比对：AOT 时叠加的配置覆盖文件（overlay）和 flags 算一个 hash 写进产物旁，训练侧加载前重算一遍对上再跑。学习率曲线、步数这类配置是烘在 HLO 里的，对不上时训练跑的是编译时的配置。</li>
+</ul>
+</blockquote>
+<p><strong>AOT 加载两个坑</strong>（细节见 <a href="11-porting-checklist.html#a01--cpu-%E4%BA%A4%E5%8F%89-aot-%E7%BC%96%E8%AF%91%E6%B5%81%E7%A8%8B%E5%9C%A8-cpu-%E4%B8%8A%E6%8A%8A-tpu-%E8%AE%AD%E7%BB%83%E6%AD%A5%E7%BC%96%E5%A5%BD%E5%86%8D%E4%B8%8A%E5%8D%A1%E5%8A%A0%E8%BD%BD">11 A01</a>）：</p>
+<ul>
+<li>GA &gt; 1 时 <code>params_shardings</code> 算成 <code>None</code>（报 <code>Expected dict, got None</code>）：上游 maxtext#3872 已修，用 <code>maybe_update_params_sharding_with_opt</code> 算。</li>
+<li><code>load_compiled</code> 必须包在 <code>jax.set_mesh</code> 里，否则 Muon 报 <code>… requires an active mesh context</code>（来自 NS 矩阵复制开关）。</li>
+</ul>
+<p><strong>版本钉死</strong>：生产版本 <strong>jax 0.11.0 / libtpu 0.0.48</strong>；升 jax 或 libtpu 都要重量显存和数值。</p>
+<p>副作用：0.0.47 改 batched-dot 数值（NS 最大差千分之几，§5.1）；jax 0.11.1 BF16 谱范数失败；0.0.48 在 2x4x4 AG 带宽减半。</p>
+<hr />
+<h2 id="9-编译提速两小时到二十分钟以内" class="hc2"><span class="hn">9.</span>编译提速：两小时到二十分钟以内</h2>
+<p><strong>前置</strong>：§8、<a href="02-collective-scheduling-and-overlap.html#7-hlo-%E9%80%9A%E4%BF%A1%E9%87%8D%E6%8E%92%E8%B0%83%E5%BA%A6%E5%89%8D%E6%94%B9%E7%BB%93%E6%9E%84%E8%B0%83%E5%BA%A6%E5%90%8E%E9%87%8D%E6%91%86">02 §7</a>（改形状要多编一遍）。<strong>后续</strong>：AOT 迭代周期（改一刀到上卡）从小时级降到二十分钟以内。</p>
+<p><strong>收益</strong>：一次 HLO 通信重排全开的 CPU 编译 <strong>约 2 h → 约 17 min</strong>，产物逐字节不变。</p>
+<p><strong>怎么考虑的</strong>：placement 搜索看着最贵，其实只占十几分钟；大头是两遍 Python trace + lowering（同 §8.2 表 数千芯片 JIT 那行口径）。所以先砍 Python。</p>
+<p><img class="inl" src="figs/ch06-compile-cuts.svg" alt="两小时的编译大头在 Python trace + lowering，不在 placement 搜索：先砍 Python" loading="lazy">
+<sub>示意，块长不按比例。红圈编号对应下表四刀。</sub></p>
+<p><strong>三刀 + 一刀</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>刀</th>
+<th>原理</th>
+<th>效果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>① 反向 MoE kernel 里给空专家清零的 Python 循环改成 <code>fori_loop</code></td>
+<td>Python 循环 trace 时展开成大量指令</td>
+<td>每遍约 15–16 → 约 2 min，一刀省约 28 min</td>
+</tr>
+<tr>
+<td>② 探测那遍拿到形状清单就停</td>
+<td>那遍只为知道要借哪些后端配置（02 §7）</td>
+<td>省掉一遍后端编译</td>
+</tr>
+<tr>
+<td>③ 两遍 trace + lower 合成一遍（单遍优化）</td>
+<td>探测并进正式那遍编译里做</td>
+<td>再省约 2 min（约 10%，96 核独占整机）</td>
+</tr>
+<tr>
+<td>④ placement 搜索并行</td>
+<td>调度后重排（02 §7）里的搜索分支并行跑</td>
+<td>约 11 → 5 min（约一半，46 核调试 pod，单次）；模块逐字节相同。<strong>是编译时间，不是训练提速</strong></td>
+</tr>
+</tbody>
+</table></div>
+<div class="kp kc2"><div class="kp-t">坑</div>
+<ul>
+<li>持久化编译缓存对探测那遍无效：命中缓存会跳过编译，探测就拿不到东西（02 §7）。</li>
+<li>JIT 首步编两遍（step 0 输入 sharding 与 <code>lower()</code> 不一致），每遍 trace + lowering 约 15 min（profile 指向 megablox <code>tgmm_v2</code> 和 Pallas Mosaic lowering）；这两处没有验证过的修法（§11 第 5 条）。</li>
+</ul></div>
+<hr />
+<h2 id="10-编译期-temp-与实机峰值编得过不等于放得下" class="hc3"><span class="hn">10.</span>编译期 temp 与实机峰值：编得过不等于放得下</h2>
+<p><strong>前置</strong>：§8；§2。<strong>后续</strong>：每次换 remat / 拆 pass / 换片数都要过这道。</p>
+<h3 id="101-编完先看-hbm-闸要记余量不只记过没过">10.1 编完先看 HBM 闸：要记余量，不只记过没过</h3>
+<ul>
+<li>判据是编译日志 <code>Memory analysis</code> 行的 <code>temp_size_in_bytes</code>，≤ 94.74 GiB 才放得下：</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code>grep<span class="w"> </span>-o<span class="w"> </span><span class="s1">&#39;, temp_size_in_bytes=[0-9]*&#39;</span><span class="w"> </span>compile.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span>-F<span class="o">=</span><span class="w"> </span><span class="s1">&#39;{printf &quot;temp %.2f GiB (limit 94.74)\n&quot;, $2/2^30}&#39;</span>
+</code></pre></div>
+<ul>
+<li><strong>grep 要带前面的 <code>, </code></strong>：同一行有 <code>host_temp_size_in_bytes=0</code>，不带逗号再 <code>tail -1</code> 取到 0，闸永远「通过」。</li>
+<li><strong>编得过 ≠ 上卡放得下</strong>：有份 AOT 产物上卡差约 10 MB OOM（§7）。每份产物同时报 temp 和离上限的余量；余量不到约 1 GiB 的，先在 1 片上真跑一次再上大规模 <span class="tg inf">[推断：1 GiB 是经验线，没系统测过]</span>。</li>
+<li>temp 也不是上界（10.3 的 24 份对照）：真 OOM 以运行时 <code>peakBytesInUse</code> / <code>RESOURCE_EXHAUSTED</code> 为准，1 GiB 余量线挡不住 temp 偏低的那几个。</li>
+</ul>
+<h3 id="102-实测每拆一刀编译期-temp-和编译时间怎么变">10.2 实测：每拆一刀，编译期 temp 和编译时间怎么变</h3>
+<p>knockout 基线（第 1 级，满配只关 pipeliner）temp 约 93 GB，即约 87 GiB；单片上 pipeliner 开 / 关的 temp 几乎相同（第 0、1 级都约 93 GB）。下表统一用 GB。口径：</p>
+<ul>
+<li><code>temp_size_in_bytes</code> 取编译日志里最大那条（不含参数和优化器状态）；GB = 10⁹ B，与 <a href="09-ablation-ladder.html">09</a> 同口径。</li>
+<li>编译时间取作业墙钟（分钟），几十个作业并发，只看量级。</li>
+<li>temp 列填「—」的格不给原值，方向和幅度只看「相对」那一列。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>级</th>
+<th>在上一级基础上再拆</th>
+<th style="text-align:right">temp（GB）</th>
+<th style="text-align:right">相对上一级</th>
+<th style="text-align:right">编译墙钟</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>满配（指数 37，pipeliner 开）</td>
+<td style="text-align:right">93</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">未记</td>
+</tr>
+<tr>
+<td>1</td>
+<td>XLA pipeliner</td>
+<td style="text-align:right">93</td>
+<td style="text-align:right">不到 1</td>
+<td style="text-align:right">125 min</td>
+</tr>
+<tr>
+<td>2</td>
+<td>fusion 行为标注 pass</td>
+<td style="text-align:right">93</td>
+<td style="text-align:right">0（逐字节相同）</td>
+<td style="text-align:right">153 min</td>
+</tr>
+<tr>
+<td>3</td>
+<td>placement pass</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>明显降</strong></td>
+<td style="text-align:right">130 min</td>
+</tr>
+<tr>
+<td>4</td>
+<td>two-stage RS pass</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">不到 1（降）</td>
+<td style="text-align:right">68 min</td>
+</tr>
+<tr>
+<td>5</td>
+<td>小 RS 合并（HLO 通信重排全关）</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">不到 1（升）</td>
+<td style="text-align:right">63 min</td>
+</tr>
+<tr>
+<td>6</td>
+<td>FP8 absmax QAG</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">略升</td>
+<td style="text-align:right">64 min</td>
+</tr>
+<tr>
+<td>7</td>
+<td>整个 FP8 → BF16</td>
+<td style="text-align:right">78</td>
+<td style="text-align:right"><strong>明显降</strong></td>
+<td style="text-align:right">43 min</td>
+</tr>
+<tr>
+<td>8</td>
+<td>SC 非对称循环</td>
+<td style="text-align:right">78</td>
+<td style="text-align:right">0</td>
+<td style="text-align:right">44 min</td>
+</tr>
+<tr>
+<td>9</td>
+<td>MLA residual 存设备 → <code>remat_policy=full</code></td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>明显降</strong></td>
+<td style="text-align:right">45 min</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Muon 批量 Newton-Schulz</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>明显升</strong></td>
+<td style="text-align:right">64 min</td>
+</tr>
+<tr>
+<td>11</td>
+<td>SC reduce-scatter v2 / ND / padding</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right"><strong>多占一大截</strong></td>
+<td style="text-align:right">65 min</td>
+</tr>
+<tr>
+<td>—</td>
+<td>GMM v2 → v1</td>
+<td style="text-align:right">CPU 上编不了</td>
+<td style="text-align:right"></td>
+<td style="text-align:right">半分钟即报错</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Splash block / layout</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">−2</td>
+<td style="text-align:right">66 min</td>
+</tr>
+<tr>
+<td>13</td>
+<td>MoE GMM tile</td>
+<td style="text-align:right">SMEM 溢出，编不过</td>
+<td style="text-align:right"></td>
+<td style="text-align:right">125 min 后报错</td>
+</tr>
+</tbody>
+</table></div>
+<p>knockout（knockout 基线只关一项，相对第 1 级）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>knockout</th>
+<th style="text-align:right">temp（GB）</th>
+<th style="text-align:right">相对第 1 级</th>
+<th style="text-align:right">编译墙钟</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>关 placement</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">明显降（和第 3 级逐字节相同）</td>
+<td style="text-align:right">131 min</td>
+</tr>
+<tr>
+<td>关 two-stage RS pass</td>
+<td style="text-align:right">90</td>
+<td style="text-align:right">−3</td>
+<td style="text-align:right">95 min</td>
+</tr>
+<tr>
+<td>关小 RS 合并</td>
+<td style="text-align:right">100</td>
+<td style="text-align:right"><strong>+7</strong></td>
+<td style="text-align:right">159 min</td>
+</tr>
+<tr>
+<td>关反向 while 流水开关</td>
+<td style="text-align:right">92</td>
+<td style="text-align:right">−1</td>
+<td style="text-align:right">137 min</td>
+</tr>
+<tr>
+<td>关 placement 内 ICI 重搜</td>
+<td style="text-align:right">93</td>
+<td style="text-align:right">不到 1（降）</td>
+<td style="text-align:right">152 min</td>
+</tr>
+<tr>
+<td>关 placement 搜索</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">省一截</td>
+<td style="text-align:right">147 min</td>
+</tr>
+<tr>
+<td>关 QAG</td>
+<td style="text-align:right">超上限</td>
+<td style="text-align:right"><strong>多占一大截</strong></td>
+<td style="text-align:right">168 min</td>
+</tr>
+<tr>
+<td>FP8 → BF16</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">多占一截</td>
+<td style="text-align:right">125 min</td>
+</tr>
+<tr>
+<td>关 SC 非对称循环</td>
+<td style="text-align:right">93</td>
+<td style="text-align:right">0（逐字节相同）</td>
+<td style="text-align:right">153 min</td>
+</tr>
+<tr>
+<td>换 remat full</td>
+<td style="text-align:right">93</td>
+<td style="text-align:right">不到 1（降）</td>
+<td style="text-align:right">157 min</td>
+</tr>
+<tr>
+<td>关 Muon 批量</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">省一截</td>
+<td style="text-align:right">192 min</td>
+</tr>
+<tr>
+<td>关 SC RS v2</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">多占一截</td>
+<td style="text-align:right">156 min</td>
+</tr>
+<tr>
+<td>GMM v2 → v1</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">多占一截（最紧，仍在上限内）</td>
+<td style="text-align:right">106 min</td>
+</tr>
+</tbody>
+</table></div>
+<p>一句话看 knockout：关掉 QAG、SC RS v2、小 RS 合并、GMM v2 会多占（关 FP8 也多占一点）；关掉 placement、placement 搜索、Muon 批量、two-stage RS pass 会省；其余几项基本不动。（阶梯第 7 级换 BF16 时 QAG 和 HLO 通信重排已经拆掉，起点不同，所以方向和 knockout 相反。）</p>
+<ul>
+<li><strong>小 RS 合并关掉反而多占</strong>：合批把几百个小缓冲并成几十个。</li>
+<li>remat 在 knockout 基线上几乎不省、Muon 批量两种拆法方向相反：机理分别见 §2 末框、§5.2 末框。</li>
+</ul>
+<blockquote class="co data">
+<p><span class="co-t"><i>📊</i><span>编译墙钟</span></span>HLO 通信重排全开 2–3 h（几个 pass 里 placement 最贵；但整段编译的大头是 Python trace + lowering，见 §9），全关约 1 h，BF16 约 43 min。</p>
+</blockquote>
+<h3 id="103-只关-qag-超上限却跑通编译期-temp-高估">10.3 只关 QAG 超上限却跑通：编译期 temp 高估</h3>
+<ul>
+<li>XProf 实机峰值 <strong>89 GiB</strong>，temp 高估一截（<a href="09-ablation-ladder.html">09 §3.2</a> knockout）。</li>
+<li>10+ 片 AOT 中间档同样：temp 99 GiB，实机峰值 91 GiB，差 8 GiB。</li>
+<li>24 份程序（21 个不同程序，3 份与别的逐字节相同）逐一对照，<strong>实机峰值 − temp 在 −8 到 +4 GiB 之间，中位 −3 GiB</strong>：17 个低于、4 个高于（高零点几到 4 GiB）。<strong>temp 不是硬判据也不是上界</strong>。</li>
+<li>实机峰值含一截各程序几乎一样的常驻，temp 不含，所以差值不是单纯「高估」；从哪来<strong>未确认</strong>（xplane 也不含第 0 步和加载期）。</li>
+</ul>
+<p><img class="inl" src="figs/ch06-temp-vs-peak.svg" alt="temp 是编译器在纸上的摆法，实机峰值是分配器的真账：两者差 −8 到 +4 GiB" loading="lazy">
+<sub>示意。左边看堆模拟器怎么摆 buffer，右边看常驻那截 temp 里没有。</sub></p>
+<blockquote>
+<p><strong>为什么：temp 量的是编译器在纸上的摆法（上图左），不是实机分配器的真实峰值</strong>。JAX 官方对这个内存分析接口的说法就是「very limited guarantees」。</p>
+<p><sub>把握：文档证实 · 出处：openxla/xla <code>xla/service/buffer_assignment.cc</code>、<code>heap_simulator</code>；JAX 文档 Ahead-of-time lowering and compilation（<code>memory_analysis()</code>）</sub></p>
+</blockquote>
+<h3 id="104-实机峰值怎么量">10.4 实机峰值怎么量</h3>
+<ul>
+<li>开 profiler 跑几步，用 XProf 的 memory_profile 读 <code>peakStats</code> 里的 <code>peakBytesInUse</code>，<strong>各 device 取中位</strong>。device 0 常偏高，例如 10+ 片 AOT 中间档是 92 vs 其余 91 GiB（<a href="03-dcn-and-multislice.html">03</a>）。</li>
+<li>第 0 步和加载期不在 xplane 里，要另看（例如第 0 步后读一次 <code>memory_stats()</code>）。</li>
+<li>不开 profiler 时，每 N 步读一次 <code>jax.local_devices()[k].memory_stats()</code>，取 <code>peak_bytes_in_use</code>（上游 MaxText 读的就是它，XLA 从不重置的高水位）。</li>
+<li>参照：阶梯第 0 级（大号模型 FP8、1 片 256 芯片、PDB 2、指数 37）在 XProf memory viewer 里的 HBM 峰值约 76 GiB（含碎片约 80 GiB）。§1 表里「含碎片约 92 GiB」是早期 BF16 基线那次 profile，不是同一配置。</li>
+</ul>
+<hr />
+<h2 id="11-还没解决的" class="hc4"><span class="hn">11.</span>还没解决的</h2>
+<ol>
+<li>0.0.48 的显存与速度是否一笔交易，只跑单次（口径见 §7）；复测 A/B 只在微型多模态版 4 芯片上起过。</li>
+<li>多模态版 10+ 片只有关 LHS 能过；多模态版 FP8 在 2 片上差约 10 MB OOM（§7）。</li>
+<li>HLO placement 的碎片没有正式修法（大号模型 BF16 AOT 256 芯片，指数 55 的配置）；把反向 AG 流水做成 HLO pass 的实现，在完整层数上 OOM（单片 4×8×8；同一改动在 4×4×4 小配置上能过）。</li>
+<li>MoE 路由索引存不存 device 未定：大号模型 FP8 256 芯片上两边的数都只差不到 1%，在单次波动以内（PDB 未记录）。device 那边只有 profile 证据，remat 那边只有一次端到端对比，还混着别的配置改动，都不能当胜负。生产配置和 10+ 片 JIT 基线都用 device。怎么按自己的 HBM 余量取舍、怎么测见 <a href="05-kernels-kda-mla-moe.html#75-moe-%E8%B7%AF%E7%94%B1%E7%B4%A2%E5%BC%95%E5%AD%98%E8%BF%98%E6%98%AF%E9%87%8D%E7%AE%97">05 §7.5</a>。</li>
+<li>AOT/运行时指纹没落地（§8.3）；JIT 首步编两遍、每遍 trace + lowering 约 15 min（§9 坑），两处修法都没验证。</li>
+</ol>
+<p>这五件有个共同点：很多修法是拿显存换调度（多留几块缓冲，通信才叠得进计算），显存一紧最先被砍的就是这些缓冲；而验证大多只跑过一次，且常在小配置上。</p>
+<details><summary>考考自己</summary>
+<p><code>max_utils</code> 打印「Total memory size 112 GB」（量级），而 v7x 每 device 只有 94.74 GiB，作业却正常跑着。矛盾吗？
+答：不矛盾。logical 数不计 buffer 复用；同配置 XProf 峰值约 74 GiB。看 memory-usage report 或 XProf。</p>
+</details>
+</article><div class="srcline">源文件：<code>moe-public/topic/06-memory-remat-compile.md</code></div><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="05-kernels-kda-mla-moe.html"><small>← 上一页</small>05 · KDA / MLA / MoE kernel：手写的算子要过三关</a><a class="next" href="07-data-and-checkpointing.html"><small>下一页 →</small>07 · 数据与检查点：训练跑顺之后，时间从哪漏走</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#1-显存账本9474-gib-里住着谁">1. 显存账本：94.74 GiB 里住着谁</a></li><li class="l2"><a href="#2-remat-档位哪些中间量存着哪些重算">2. remat 档位：哪些中间量存着、哪些重算</a></li><li class="l3"><a href="#21-换模型怎么重扫-remat-档位">2.1 换模型怎么重扫 remat 档位</a></li><li class="l3"><a href="#22-序列拉到-32k激活怎么估什么时候开-cp">2.2 序列拉到 32K：激活怎么估、什么时候开 CP</a></li><li class="l3"><a href="#23-序列变短如-8k--4kremat-往哪调">2.3 序列变短（如 8K → 4K）：remat 往哪调</a></li><li class="l2"><a href="#3-自定义-kernel-的残差要显式命名fused-moe-反向不再重放前向">3. 自定义 kernel 的残差要显式命名（fused MoE 反向不再重放前向）</a></li><li class="l2"><a href="#4-专家权重-all-gather-占的显存五种修法">4. 专家权重 all-gather 占的显存：五种修法</a></li><li class="l3"><a href="#41-ga-循环里的权重外提屏障默认关">4.1 GA 循环里的权重外提屏障（默认关）</a></li><li class="l3"><a href="#42-同一个问题的梯度侧dw-的-rs-被挪出-ga-累加默认关">4.2 同一个问题的梯度侧：dW 的 RS 被挪出 GA 累加（默认关）</a></li><li class="l3"><a href="#43-两阶段-ag试过没留下">4.3 两阶段 AG（试过，没留下）</a></li><li class="l3"><a href="#44-前缀层改四段-nnscan生产配置里有">4.4 前缀层改四段 nn.scan（生产配置里有）</a></li><li class="l3"><a href="#45-分片权重直接传进-gmm-的-custom-vjp只有-aot-验证未进生产">4.5 分片权重直接传进 GMM 的 custom VJP（只有 AOT 验证，未进生产）</a></li><li class="l2"><a href="#5-muon-优化器数值编译通信三类修法">5. Muon 优化器：数值、编译、通信三类修法</a></li><li class="l3"><a href="#51-数值">5.1 数值</a></li><li class="l3"><a href="#52-编译">5.2 编译</a></li><li class="l3"><a href="#53-通信细节见-02">5.3 通信（细节见 02）</a></li><li class="l2"><a href="#6-loss-头和-mtp-的省显存改动">6. loss 头和 MTP 的省显存改动</a></li><li class="l2"><a href="#7-显存突然爆了成因与修法">7. 显存突然爆了：成因与修法</a></li><li class="l2"><a href="#8-编译挪到-cpu-上交叉-aot">8. 编译挪到 CPU 上：交叉 AOT</a></li><li class="l3"><a href="#81-jit-还是-aot先选路">8.1 JIT 还是 AOT：先选路</a></li><li class="l3"><a href="#82-编译耗时的几个数">8.2 编译耗时的几个数</a></li><li class="l3"><a href="#83-坑">8.3 坑</a></li><li class="l2"><a href="#9-编译提速两小时到二十分钟以内">9. 编译提速：两小时到二十分钟以内</a></li><li class="l2"><a href="#10-编译期-temp-与实机峰值编得过不等于放得下">10. 编译期 temp 与实机峰值：编得过不等于放得下</a></li><li class="l3"><a href="#101-编完先看-hbm-闸要记余量不只记过没过">10.1 编完先看 HBM 闸：要记余量，不只记过没过</a></li><li class="l3"><a href="#102-实测每拆一刀编译期-temp-和编译时间怎么变">10.2 实测：每拆一刀，编译期 temp 和编译时间怎么变</a></li><li class="l3"><a href="#103-只关-qag-超上限却跑通编译期-temp-高估">10.3 只关 QAG 超上限却跑通：编译期 temp 高估</a></li><li class="l3"><a href="#104-实机峰值怎么量">10.4 实机峰值怎么量</a></li><li class="l2"><a href="#11-还没解决的">11. 还没解决的</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">Google Cloud · TPU v7x 训练优化</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../../assets/site.js"></script>
+</body></html>

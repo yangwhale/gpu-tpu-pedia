@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>07 韧性与恢复 · 讲义 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="" href="../runbook/README.html">交付手册</a><a class="on" href="index.html">讲义</a><a class="" href="../runbook/pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="讲义"><div class="side-h">讲义</div><ol><li><a href="index.html">讲义总览</a></li><li><a href="00-overview.html">00 总览 · 讲义</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件 · 讲义</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池 · 讲义</a></li><li><a href="03-control-plane-addons.html">03 集群内组件 · 讲义</a></li><li><a href="04-functional-verification.html">04 功能验证 · 讲义</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作 · 讲义</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：九千芯同时读，桶扛不扛得住 · 讲义</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练 · 讲义</a></li><li><a class="on" aria-current="page" href="07-resilience-and-recovery.html">07 韧性与恢复 · 讲义</a></li><li><a href="08-day2-operations.html">08 日常运维 · 讲义</a></li><li><a href="09-customer-alignment.html">09 交付前对齐 · 讲义</a></li></ol></nav><aside class="lsplit" aria-label="并排的手册页"><iframe name="chap" title="手册页" loading="lazy" data-src="../runbook/07-resilience-and-recovery.html"></iframe></aside>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="index.html">讲义</a> › <span>07 韧性与恢复 · 讲义</span></nav><nav class="lbar" aria-label="手册与讲义"><a href="../runbook/07-resilience-and-recovery.html">📘 手册</a><a class="on" aria-current="page" href="07-resilience-and-recovery.html">📝 讲义 · 25.75′</a><button type="button" class="lsplit-btn" aria-pressed="false" title="左边讲义、右边手册；点 🖥 屏幕里的链接，右边跟着跳">⇆ 并排看手册</button></nav><article class="md lecture"><h1 id="07-韧性与恢复--讲义">07 韧性与恢复 · 讲义</h1><div class="lcard"><div class="lnums"><span><b>25.75′</b>计划</span><span><b>17.3′</b>地板</span><span><b>2,516</b>台词汉字</span><span><b>19</b>切屏</span><span><b>4</b>互动</span></div><ul class="lsecs"><li>一、问题：坏一台，从头再来 · 3.5′</li><li>二、走一遍：十几片里坏一个 cube，备件顶上 · 7′</li><li>三、这样不行：数据都在，怎么让它认得出来 · 3′</li><li>四、为什么难：最慢的一段不在你以为的地方 · 5.25′</li><li>五、怎么做：交付前的四件事 · 4′</li><li>六、代价和坑：丢步、退出码、备件 · 3′</li></ul><p class="lhow">黄底＝台词，照着念；蓝框＝🖥️ 切屏动作，点链接跳到手册里那张图；绿框＝💬 先问台下；红框＝⚠️ 别讲什么。地板＝台词一字不落念完＋切屏的时间，不含互动。<a href="index.html">全课计划与用法 →</a></p></div>
+<blockquote class="lkey">
+<p>🎯 这一章只留一句：重新编组只占一两分钟；恢复慢在挂住（pod 被撒到几个 cube、或落到降级的片上），以及十几片规模下的数据加载和程序载入。所以演练时先数 cube、看片状态，再等 step。</p>
+</blockquote>
+<h2 id="一问题坏一台从头再来35" class="hc0">一、问题：坏一台，从头再来（3.5′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-2">07 §7.2 失败策略表</a>，指 <code>maxRestarts</code> 那一行里「一次性基准 0」。</p>
+<p class="say">「前两讲把数千颗芯片的训练跑起来、把数据喂上了。现在问大家：跑了几个小时，有一台机器坏了，会怎么样？那个任务没开检查点，失败后的重启次数设的是零。答案是整个任务停下，从第零步重来，四十多分钟的编译也再等一遍。前面几个小时，白跑。」</p>
+<p class="ask"><b>💬 互动</b>「坏的只是一台机器，为什么不能只把这一台换掉、其余接着跑？」</p>
+<p class="say">「因为多片训练是同步的，全有或全无。还记得车辆段的规矩吗？同一个团里任何一列车出事，所有列车解散、重新编组。这就是第二条暗线：一处坏，整团重编。所以这一章补两样东西：任务倒下后能自己重编爬起来；爬起来以后不从头跑，从最近的存档接着跑。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-1">07 §7.1 的两层框图</a>，先指左框「本地层」，再指右框「持久层」。</p>
+<p class="say">「存档用的是多层检查点，简称 MTC。它存两份。一份放在每台机器自己的内存里，挂在一个叫 local 的目录下，好比车上的行李架，伸手就拿到。另一份寄到 GCS 桶里，好比总部仓库，慢一点，但换了列车也还在。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-1">07 §7.1 第 3、5 步</a>，指「HNS 建桶时就得开」和「≈ 本地检查点大小 × 2.2」。</p>
+<p class="say">「打开它有三处容易错。第一，仓库必须是有真目录的 HNS 桶，只能建桶时开，事后改不了。第二，行李架占的是主机内存，要划本地存档的二点二倍左右；演练那个小模型每台要三十一点五 G，划了一百 G。第三，装好后数 MTC 的驱动 pod，分母是它的选择器选中的节点：实测集群里 TPU 节点比带那个网络标签的多，驱动 pod 数对的是带标签的那批。卡在挂载、报四零三，就是桶权限没授对。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>容易说错：驱动版本要 0.8.4 以上，0.8.3 卸不掉节点上的 NFS 挂载，会把节点弄坏；「那个网络标签是控制器加的」是推断。</p>
+<h2 id="二走一遍十几片里坏一个-cube备件顶上7" class="hc1">二、走一遍：十几片里坏一个 cube，备件顶上（7′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4b">07 §7.4b 第一张图</a>（fig-mtc-columns-spare），先指黄框那一列，再指右边的备件 cube。</p>
+<p class="say">「拿交付时最常见的场景走一遍：十几片，每片四个 cube、六十四台主机，一共几十个 cube，主机数是片数乘六十四。平时每二十步，每台主机把自己那份分片写进本机内存：权重、优化器状态、步数、数据读到哪了。十几片做数据并行，片内同一个位置的那些主机（每片一台），手上的分片一模一样，这一组叫一列。复制组件把本地存档抄给同列邻居、定期备份到 GCS；MaxText 自己每四十步往 GCS 写一份标准检查点。」</p>
+<p class="board"><b>🖥️ 屏幕</b>往下切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4b">§7.4b 的五段流程图</a>，从第一格「发现与驱逐」顺着往下指到第三格。</p>
+<p class="say">「现在第七个 cube 里一台主机坏了。二十秒左右，那一片被判不可用，Kueue 驱逐整个任务，十几片全拆，不只坏的那片。接着重新挑几十个 cube，避开坏的，拿一个空闲的健康 cube 顶上，这就是备件。从驱逐算起，三片实测一到一分半，十几片按两分钟估。然后起 pod、初始化 TPU，一分钟出头。」</p>
+<p class="ask"><b>💬 互动</b>「换进来的备件 cube 是新机器，内存里什么都没有。它那十六台的分片从哪来？」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4b">§7.4b「其余各片为什么能落回原地」那张图</a>（fig-mtc-placement-chain），从左往右指四个框。</p>
+<p class="say">「从同一列的其它主机，或者 GCS 备份，灌回来。其余各片多半落回原来的 cube，存档也还在。这不是谁特意保证的：Kueue 按分区号从小到大挑 cube，空闲池没变，挑出来的还是那批；坏的那个只剩十五台、装不下一组，自动被跳过，由下一个分区号顶上；本地存档在节点的内存盘上，pod 删了它还在。」</p>
+<p class="board"><b>🖥️ 屏幕</b>同一张流程图第四、五格，再往下切到<a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4b">编号错位那张图</a>（fig-mtc-renumber-reject），从「换之前」那排指到黄色那一段。</p>
+<p class="say">「数据都到位了，按理可以几秒读本地。可 MaxText 读之前要问每台主机：你手上这份，是不是你这一列写的？编号按节点名排，新 cube 一插进来，排在后面的主机编号全挪了，三片换一个 cube 就有十到二十八台对不上。只要一台说不是，全体放弃本地层，回 GCS 找最近的四十步倍数。三片演练换了 cube 的六次，六次都这样，每次多丢十四到三十六步。」</p>
+<p class="say">「编号挪了就按设备号找回自己那份，这是个绕过办法，上游 MaxText 和 Orbax 都还没合入。所以交付时，换 cube 的恢复点先按 GCS 那一层的周期估。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>容易说错：各段耗时是三片实测（slice-controller <code>v0.8.0-200</code>，升级后须复测），十几片是推断；重切从驱逐起 63–94 s、从打断起 64–106 s，别混；三片演练里的拒收其实是误判：校验按模 16 认列，真正同分片的是模 4 相同的机器，严了四倍；补丁见 <a href="../runbook/07a-fault-recovery.html#s7a-3">07a §7a.3</a>。</p>
+<h2 id="三这样不行数据都在怎么让它认得出来3" class="hc2">三、这样不行：数据都在，怎么让它认得出来（3′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4b">§7.4b「这样不行」两条</a>。</p>
+<p class="say">「MTC 要换来两样东西：读回快，恢复点密。可硬件一坏就换 cube，没打补丁的本地层恰好在最常见的故障里失效，只在原地重启时生效。好消息是数据本来就在：坏 cube 那十六台的分片，同列其余各片里各有一份，问题只在按编号认领。」</p>
+<p class="ask"><b>💬 互动</b>「修好了，能省多少？」</p>
+<p class="say">「三片小模型，读回三秒对三十秒；一个更大的模型二百五十六芯实测，七分半对七秒半；恢复点也从仓库周期缩回本地周期。可到了十几片生产规模，读本地只要二十秒左右，读检查点已经不是大头。那大头在哪？」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>被问「上游怎么修」：§7.4b 三条修法图（fig-mtc-fix-options）——稳定编号（按第几片、片内第几台发号，存活主机的编号都不变，备件继承坏 cube 的号）、按分片认领（找不到原主就找同分片号的任意一片）、一片完整就广播（其余片走 DCN），后两条 Orbax 源码里有。⚠️ 容易说错：三条修法都没在集群上验证；第三条多一次 DCN 广播，十几片规模的耗时没量过；后两条看的是 Orbax 0.11.33 源码，新版本里是什么状态没核；按 mesh 认列、只补不过的那台，是离线推出来的。</p>
+<h2 id="四为什么难最慢的一段不在你以为的地方525" class="hc3">四、为什么难：最慢的一段不在你以为的地方（5.25′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-2">07 §7.2 列表里「workload 被驱逐或挂起」那一条</a>。</p>
+<p class="say">「先分清两种“重来”。整团被驱逐：删了切片、Kueue 超时、被抢占，所有切片删掉重切，这是重新编组。JobSet 自己重启：一个 pod 失败，在原来的切片上重建，这是原车厢换乘客。」</p>
+<p class="ask"><b>💬 互动</b>「坏一台之后到出第一个新 step，最慢的是重新编组，还是读检查点？」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4">07 §7.4 恢复分段横条图</a>，先指蓝段，再指红段。</p>
+<p class="say">「都不是。三列车的演练被打断了多次，重新编组反而最快，每次重建都在六十四到一百零六秒。顺利的时候六分钟出新 step。可有几次拖到半小时到一个多小时，全耗在新一代 pod 的 TPU 初始化挂住了：一代挂十二三分钟，自动重启一次，往往又挂。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07a-fault-recovery.html#s7a-5">07a §7a.5 分段总表</a>和下面那张甘特图，指两段红条。</p>
+<p class="say">「到十几片生产规模、载入提前编译好的程序，没挂住时是另一本账。原地重启了十几次，中位十一分钟左右。调度只占一分半；一半多花在两段：数据集加载三分多钟，载入编译好的程序三分钟。要缩短，先砍这两段。」</p>
+<p class="board"><b>🖥️ 屏幕</b>回到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4">rank 冲突动图</a>（anim-rank-scatter），转完一圈（约二十秒）再开讲。</p>
+<p class="say">「回到挂住。为什么挂？上一代 pod 还没删干净，新一代就被放行了。售票处本该按座位号把一列车的十六个人排进同一节车厢；这时它发现同一个座位号有两个人，一个是还没走的旧乘客。它就放弃按号分，哪有空坐哪，十六个人被撒到两三节车厢。车厢之间没有贯通道，这一片的 TPU 凑不齐，就卡在初始化。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到<a data-chap="1" href="../runbook/pitfalls.html#l-42">经验教训第 42 条</a>，指「驱逐 → 旧 pod 没删净 → rank 冲突」那串死循环。</p>
+<p class="say">「这是不是 Kueue 的 bug、升级能不能修？这一点没有定论；不管升不升级，都要从我们这边把旧乘客清走。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到同一节的<a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4">死循环那张图</a>（f06），从 core dump 那一格起顺着箭头指一圈。</p>
+<p class="say">「旧 pod 为什么删不干净？它们在写 core dump。进程一崩，几十 G 的转储往启动盘上写，要删两到六分钟，而 Kueue 重新放行只要一分多钟。盘写满，节点报磁盘压力，Kueue 又把整个任务驱逐。一次崩溃就这样绕成一个圈。中招的那几次，旧 pod 都还有一大批在写。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>容易说错：动态切片不是恢复的瓶颈，别讲成「重新编组慢」；十几片的实测里没再见到撒开，挂住的几次是落到降级片或分布式初始化报错，撒开是不是消失了未核；被追问「有没有一片一个 cube 也挂住的」：有一次，原因没查明，这个我不确定，会后查。</p>
+<h2 id="五怎么做交付前的四件事4" class="hc4">五、怎么做：交付前的四件事（4′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-3">07 §7.3 三种故障一览表</a>，指「停 / 删一台 VM」那一行。</p>
+<p class="say">「交付前做四件事。第一，打开 MTC，数驱动 pod。第二，查失败策略：backoffLimit 是零；最大重启次数恢复测试设十，pod 数上千的大规模建议三到五；Kueue 的 waitForPodsReady 一定要生效，我们见过整段被注释掉的，grep 出来行首是井号，就是没生效。」</p>
+<p class="say">「第三，在交付片数上做演练，别拿小规模外推。最接近真实的是直接停一台机器，或者用 GCE 的模拟维护事件，v7 上实测可用。十几片原地重启的建议目标是十五分钟；八分钟是优化目标，数据加载并行、关 core dump、程序载入提速，三件都做到才够。这些数是在旧版切片控制器上测的，交付前升到新版，升完重跑一遍。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-3">07 §7.3 注入脚本那段</a>，指「5 个 kubectl get -w」那一句。</p>
+<p class="say">「演练脚本默认只打印它挑中的目标，不动手。真注入时，它在后台开五路监听：任务、切片、JobSet、pod、事件，每行打时间戳，到点自动停。你要从里面读出故障、驱逐、新切片全部 ACTIVE、第一条恢复日志、第一个新 step 这几个时刻。」</p>
+<p class="say">「第四，也是最值钱的一条：新 pod 一起来，按每列车的那批 pod 数一下落在几个 cube 上，再看切片状态是不是 ACTIVE_DEGRADED，也就是能用但有毛病。cube 数大于一，或者片是降级的，立刻删掉 JobSet，确认旧 pod 一个不剩再重提，别等超时，也别指望自动重启。交付模板里写上 ulimit 杠 c 零，关掉 core dump，旧 pod 三十多秒就能删干净，这个圈就断了。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-4">07 §7.4「怎么读这些时间」表</a>，从第一行指到最后一行。</p>
+<p class="say">「日志里有几句话要认得：驱逐原因带 Evicted 前缀；准入检查从 Pending 变 Ready，就是新车编好了；最要紧的是 conflicting rank，看到它，下一代马上要撒开。恢复点看新的零号 worker 日志里 restoring step 那一行，后面写着从本地层还是持久层读的。还有个坑：驱逐原因和 conflicting rank 在 kubectl get events 里都看不到，Kueue 写事件的权限被拒了，要去翻它控制器三个副本的日志。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>切片控制器版本：上述数字在 v0.8.0-200 上测，交付前升到含修复的版本再复测。不讲 MTC 的 CR 字段怎么写，那是照手册敲的；被追问「杀一个 pod 会怎样」：切片不重切，只重启 JobSet，三片演练中新 pod 仍然跨 cube 挂住，十几片实测中十多次注入全部原地恢复；停机的机器先 start，不回来再 recreate，禁止 abandon；被追问「演练用什么 JobSet」：<code>07-jobset-mtc.yaml</code>，未实测，先在 2 片上过文件头的验证四步；交付前用 <code>kubectl auth can-i</code> 查 Kueue 写事件的权限，应回 yes；十一个时刻的完整清单见 <a href="../runbook/07a-fault-recovery.html#s7a-1">07a §7a.1</a>。</p>
+<h2 id="六代价和坑丢步退出码备件3" class="hc5">六、代价和坑：丢步、退出码、备件（3′）</h2>
+<p class="say">「最后三个代价。第一，丢步。别承诺「最多丢一个本地周期」：十几片原地重启实测丢掉的步数超过一个本地周期，存完不久就被杀，原因还没查清。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/07-resilience-and-recovery.html#step-7-6">07 §7.6</a>，指那两行 grep 命令。</p>
+<p class="say">「第二，第六章说过，退出码是零不等于训练成功，这里补原因：MTC 的复制组件初始化失败时，MaxText 把错误一包、正常退出，JobSet 显示 Completed，其实零步、零存档。所以每次任务结束，数一下日志里 completed step 有几行，要等于你设的步数。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/09-customer-alignment.html#d05">09 D05 维修预期</a>那张表，指「原地修」「时长」「爆炸半径」三行。</p>
+<p class="say">「第三，备件。坏机器是原地修，修好之前那节车厢就是少了；一台坏，整个 cube 都不能用，芯片故障还会传给同一 cube 里一到四台邻居。坏件会持续发生，备件要按会被吃掉来算。」</p>
+<p class="say">「所以每天数三样：健康的 cube 有几个；十六台里只剩十五台好的 cube 有几个，这是领先指标；维修超过十二小时的机器有几台。同一台反复坏，重建一次；还坏，带证据找 Google，维修由 Google 负责。别让自动化去删不健康的节点，会打断切片。备件一节一节被吃光、监控却显示达标的先例，第九章细讲。」</p>
+<p class="say">「这一章留下的问题：任务倒下能自己爬起来了，可车厢在一节一节变少、任务半夜倒下，谁来发现？下一章讲日常运维。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>⛔ 不讲 goodput 怎么算，本书的口径是我们推断的；⚠️ 容易说错：没打补丁时，换 cube 每次都会拒收本地存档，不是偶发；三片演练中的拒收是校验算严了的误判（第二节）；丢步超过一个本地周期的情况推断是邻居复制没完，未核；§7.6 那条 completed step 核对命令还标着待验证；被问具体故障率：以 Google 给的为准，这个我不确定，会后查。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="06c-multislice-training.html"><small>← 上一页</small>06c 起一个数千芯片多切片训练 · 讲义</a><a class="next" href="08-day2-operations.html"><small>下一页 →</small>08 日常运维 · 讲义</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#一问题坏一台从头再来35">一、问题：坏一台，从头再来（3.5′）</a></li><li class="l2"><a href="#二走一遍十几片里坏一个-cube备件顶上7">二、走一遍：十几片里坏一个 cube，备件顶上（7′）</a></li><li class="l2"><a href="#三这样不行数据都在怎么让它认得出来3">三、这样不行：数据都在，怎么让它认得出来（3′）</a></li><li class="l2"><a href="#四为什么难最慢的一段不在你以为的地方525">四、为什么难：最慢的一段不在你以为的地方（5.25′）</a></li><li class="l2"><a href="#五怎么做交付前的四件事4">五、怎么做：交付前的四件事（4′）</a></li><li class="l2"><a href="#六代价和坑丢步退出码备件3">六、代价和坑：丢步、退出码、备件（3′）</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

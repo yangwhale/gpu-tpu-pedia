@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="900" height="520" role="img" aria-label="动图示意。左：AG CP，每份只有自己那段 Q，但要先把所有段的 K/V 全部 all-gather 过来，每份都放齐完整长度的 K/V，显存 O(T·d) 不随 cp 变小。右：ring CP，各份排成一个环，每份手里只有一块 KV，每一步顺时针传给下一份，转一圈回到原位；每份同一时刻只经手一块，显存降到 O(T·d/cp)。"><style>
+@keyframes rot1 { 0% { transform: rotate(0deg) } 13.33% { transform: rotate(0deg) } 21.88% { transform: rotate(90deg) } 35.21% { transform: rotate(90deg) } 43.75% { transform: rotate(180deg) } 57.08% { transform: rotate(180deg) } 65.62% { transform: rotate(270deg) } 78.96% { transform: rotate(270deg) } 87.5% { transform: rotate(360deg) } 100% { transform: rotate(360deg) } }
+.rot1 { animation: rot1 12s ease-in-out infinite; transform-origin: 690px 290px; }
+@keyframes ctr2 { 0% { transform: rotate(-0deg) } 13.33% { transform: rotate(-0deg) } 21.88% { transform: rotate(-90deg) } 35.21% { transform: rotate(-90deg) } 43.75% { transform: rotate(-180deg) } 57.08% { transform: rotate(-180deg) } 65.62% { transform: rotate(-270deg) } 78.96% { transform: rotate(-270deg) } 87.5% { transform: rotate(-360deg) } 100% { transform: rotate(-360deg) } }
+.ctr2k0 { animation: ctr2 12s ease-in-out infinite; transform-origin: 690.0px 195.0px; }
+.ctr2k1 { animation: ctr2 12s ease-in-out infinite; transform-origin: 785.0px 290.0px; }
+.ctr2k2 { animation: ctr2 12s ease-in-out infinite; transform-origin: 690.0px 385.0px; }
+.ctr2k3 { animation: ctr2 12s ease-in-out infinite; transform-origin: 595.0px 290.0px; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+</style><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker><marker id="ahO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker><marker id="ahR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker><marker id="ahB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker></defs><rect width="900" height="520" fill="#fff"/><text x="450.0" y="30.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="17" text-anchor="middle" fill="#202124" font-weight="bold">AG CP 每份都要放完整 K/V；ring 每份只经手一块，KV 在环上逐块传</text>
+<text x="450.0" y="53.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#5f6368">示意；设计口径，没有 TPU 实测</text>
+<text x="40.0" y="92.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="15" text-anchor="start" fill="#202124" font-weight="bold">AG CP：先 all-gather 完整 K/V</text>
+<rect x="40.0" y="108.0" width="80.0" height="300.0" rx="6" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<text x="80.0" y="130.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">一份</text>
+<rect x="55.0" y="142.0" width="50.0" height="34.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/>
+<text x="80.0" y="165.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="55.0" y="196.0" width="50.0" height="40.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/>
+<text x="80.0" y="222.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="55.0" y="244.0" width="50.0" height="40.0" rx="3" fill="#fef0e3" stroke="#e8710a" stroke-width="2"/>
+<text x="80.0" y="270.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="55.0" y="292.0" width="50.0" height="40.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="2"/>
+<text x="80.0" y="318.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="55.0" y="340.0" width="50.0" height="40.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="2"/>
+<text x="80.0" y="366.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="135.0" y="108.0" width="80.0" height="300.0" rx="6" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<text x="175.0" y="130.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">一份</text>
+<rect x="150.0" y="142.0" width="50.0" height="34.0" rx="3" fill="#fef0e3" stroke="#e8710a" stroke-width="2"/>
+<text x="175.0" y="165.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="150.0" y="196.0" width="50.0" height="40.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/>
+<text x="175.0" y="222.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="150.0" y="244.0" width="50.0" height="40.0" rx="3" fill="#fef0e3" stroke="#e8710a" stroke-width="2"/>
+<text x="175.0" y="270.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="150.0" y="292.0" width="50.0" height="40.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="2"/>
+<text x="175.0" y="318.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="150.0" y="340.0" width="50.0" height="40.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="2"/>
+<text x="175.0" y="366.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="230.0" y="108.0" width="80.0" height="300.0" rx="6" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<text x="270.0" y="130.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">一份</text>
+<rect x="245.0" y="142.0" width="50.0" height="34.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="2"/>
+<text x="270.0" y="165.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="245.0" y="196.0" width="50.0" height="40.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/>
+<text x="270.0" y="222.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="245.0" y="244.0" width="50.0" height="40.0" rx="3" fill="#fef0e3" stroke="#e8710a" stroke-width="2"/>
+<text x="270.0" y="270.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="245.0" y="292.0" width="50.0" height="40.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="2"/>
+<text x="270.0" y="318.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="245.0" y="340.0" width="50.0" height="40.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="2"/>
+<text x="270.0" y="366.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="325.0" y="108.0" width="80.0" height="300.0" rx="6" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<text x="365.0" y="130.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">一份</text>
+<rect x="340.0" y="142.0" width="50.0" height="34.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="2"/>
+<text x="365.0" y="165.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="340.0" y="196.0" width="50.0" height="40.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/>
+<text x="365.0" y="222.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="340.0" y="244.0" width="50.0" height="40.0" rx="3" fill="#fef0e3" stroke="#e8710a" stroke-width="2"/>
+<text x="365.0" y="270.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="340.0" y="292.0" width="50.0" height="40.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="2"/>
+<text x="365.0" y="318.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<rect x="340.0" y="340.0" width="50.0" height="40.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="2"/>
+<text x="365.0" y="366.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+<text x="210.0" y="432.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#d93025" font-weight="bold">每份都放齐全部 KV（完整长度）</text>
+<text x="210.0" y="454.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#5f6368">显存 O(T·d)，不随 cp 变小</text>
+<text x="480.0" y="92.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="15" text-anchor="start" fill="#202124" font-weight="bold">ring CP：KV 顺时针一块一块传</text>
+<circle cx="690" cy="290" r="95" fill="none" stroke="#e8710a" stroke-width="1.5" stroke-dasharray="5 4"/>
+<path d="M 737.5 207.7 A 95 95 0 0 1 772.3 242.5" stroke="#e8710a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M 772.3 337.5 A 95 95 0 0 1 737.5 372.3" stroke="#e8710a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M 642.5 372.3 A 95 95 0 0 1 607.7 337.5" stroke="#e8710a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<path d="M 607.7 242.5 A 95 95 0 0 1 642.5 207.7" stroke="#e8710a" stroke-width="2.5" fill="none" marker-end="url(#ah)"/>
+<rect x="666.0" y="122.0" width="48.0" height="34.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2"/>
+<text x="690.0" y="145.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="666.0" y="175.0" width="48.0" height="40.0" rx="3" fill="none" stroke="#bdc1c6" stroke-width="1.2" stroke-dasharray="3 3"/>
+<rect x="817.0" y="273.0" width="48.0" height="34.0" rx="3" fill="#fef0e3" stroke="#e8710a" stroke-width="2"/>
+<text x="841.0" y="296.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="761.0" y="270.0" width="48.0" height="40.0" rx="3" fill="none" stroke="#bdc1c6" stroke-width="1.2" stroke-dasharray="3 3"/>
+<rect x="666.0" y="424.0" width="48.0" height="34.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="2"/>
+<text x="690.0" y="447.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="666.0" y="365.0" width="48.0" height="40.0" rx="3" fill="none" stroke="#bdc1c6" stroke-width="1.2" stroke-dasharray="3 3"/>
+<rect x="515.0" y="273.0" width="48.0" height="34.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="2"/>
+<text x="539.0" y="296.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" text-anchor="middle" fill="#202124" font-weight="bold">Q</text>
+<rect x="571.0" y="270.0" width="48.0" height="40.0" rx="3" fill="none" stroke="#bdc1c6" stroke-width="1.2" stroke-dasharray="3 3"/>
+<g class="rot1">
+<rect x="670.0" y="179.0" width="40.0" height="32.0" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2.5"/>
+<g class="ctr2k0">
+<text x="690.0" y="200.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+</g>
+<rect x="765.0" y="274.0" width="40.0" height="32.0" rx="3" fill="#fef0e3" stroke="#e8710a" stroke-width="2.5"/>
+<g class="ctr2k1">
+<text x="785.0" y="295.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+</g>
+<rect x="670.0" y="369.0" width="40.0" height="32.0" rx="3" fill="#e6f4ea" stroke="#188038" stroke-width="2.5"/>
+<g class="ctr2k2">
+<text x="690.0" y="390.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+</g>
+<rect x="575.0" y="274.0" width="40.0" height="32.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="2.5"/>
+<g class="ctr2k3">
+<text x="595.0" y="295.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">KV</text>
+</g>
+</g>
+<text x="690.0" y="284.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124">每份同时</text>
+<text x="690.0" y="304.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#202124" font-weight="bold">只经手一块</text>
+<text x="690.0" y="500.0" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" font-size="13" text-anchor="middle" fill="#5f6368">显存 O(T·d/cp)；颜色 ＝ 哪一段 KV</text></svg>

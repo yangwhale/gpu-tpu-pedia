@@ -1,0 +1,45 @@
+# =============================================================================
+# 06-gcsfuse-smoke-pod.yaml —— 06c §6.1 验证：在 CPU 池起一个小 pod，经同一个 PVC 挂桶，列一下目录就退出
+#
+# 出处：挂载写法与 06-jobset.sh 生成的 JobSet 相同（注解 gke-gcsfuse/volumes、PVC、内存型 gke-gcsfuse-cache）；跑在 CPU 池的写法同构建 pod。
+#   本文件本身是新写的验证手段，实测集群没有用过 [推断]。
+# 前置检查（必做）：放 pod 的池必须开 Workload Identity，否则 gcsfuse CSI 挂载失败：
+#   gcloud container node-pools describe $SYSTEM_POOL --cluster $CLUSTER --location $ZONE --project $PROJECT \
+#     --format='value(config.workloadMetadataConfig.mode)'          # 必须是 GKE_METADATA
+#   实测集群：default-pool 与单网卡池为空（只有双网卡池为 GKE_METADATA），pod 卡 Init:0/1，事件：
+#   MountVolume.SetUp failed for volume "..." : rpc error: code = FailedPrecondition desc = Workload Identity Federation
+#   is not enabled on node. Please make sure this is enabled on both cluster and node pool level
+#   （实测）。修：node-pools update $SYSTEM_POOL --workload-metadata=GKE_METADATA（会滚动重建该池节点 [推断]）。
+#   因此下面「实测集群可见 configs/ pretrain/」这句不是在 default-pool 上实测得到的，挂载成功后的目录列表本书还没有实测。
+# 用法：
+#   envsubst '$NS $DATA_PVC $SYSTEM_POOL' < 06-gcsfuse-smoke-pod.yaml | kubectl apply -f -
+#   kubectl -n $NS wait pod gcsfuse-smoke --for=jsonpath='{.status.phase}'=Succeeded --timeout=5m
+#   kubectl -n $NS logs gcsfuse-smoke -c main       # 期望：桶顶层目录（实测集群可见 configs/ pretrain/ …）和 SMOKE_OK
+#   kubectl -n $NS delete pod gcsfuse-smoke          # 清理（重跑前必须先删：Pod 不能原地 apply 改）
+# ⚠️ 在 $NS 里这个 pod 会被 Kueue 永远挂 SchedulingGated（06c §6.1 警告框）。实际用 $INSPECT_NS 版（未实测）：
+#   先按 06-data-pv-pvc.yaml 头注释建 inspect 版 PV/PVC，再
+#   NS=$INSPECT_NS DATA_PVC=${DATA_PVC}-inspect envsubst '$NS $DATA_PVC $SYSTEM_POOL' < 06-gcsfuse-smoke-pod.yaml | kubectl apply -f -
+#   后面三条把 -n $NS 换成 -n $INSPECT_NS。
+# =============================================================================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gcsfuse-smoke
+  namespace: ${NS}
+  annotations:
+    gke-gcsfuse/volumes: "true"
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    cloud.google.com/gke-nodepool: ${SYSTEM_POOL}
+  containers:
+  - name: main
+    image: mirror.gcr.io/library/python@sha256:4d1caded1f729ae443eb803f26ffde7b61e696aeaef62f099abb6dd6b14257c7
+    command: [bash, -c, "ls /models/ && echo SMOKE_OK"]
+    resources:
+      requests: {cpu: 100m, memory: 256Mi}
+    volumeMounts:
+    - {mountPath: /models, name: data}
+  volumes:
+  - {name: gke-gcsfuse-cache, emptyDir: {medium: Memory}}
+  - {name: data, persistentVolumeClaim: {claimName: "${DATA_PVC}"}}

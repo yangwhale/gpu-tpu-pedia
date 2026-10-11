@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>01 容量核对与前置条件 · 讲义 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="" href="../runbook/README.html">交付手册</a><a class="on" href="index.html">讲义</a><a class="" href="../runbook/pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="讲义"><div class="side-h">讲义</div><ol><li><a href="index.html">讲义总览</a></li><li><a href="00-overview.html">00 总览 · 讲义</a></li><li><a class="on" aria-current="page" href="01-capacity-and-prereqs.html">01 容量核对与前置条件 · 讲义</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池 · 讲义</a></li><li><a href="03-control-plane-addons.html">03 集群内组件 · 讲义</a></li><li><a href="04-functional-verification.html">04 功能验证 · 讲义</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作 · 讲义</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：九千芯同时读，桶扛不扛得住 · 讲义</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练 · 讲义</a></li><li><a href="07-resilience-and-recovery.html">07 韧性与恢复 · 讲义</a></li><li><a href="08-day2-operations.html">08 日常运维 · 讲义</a></li><li><a href="09-customer-alignment.html">09 交付前对齐 · 讲义</a></li></ol></nav><aside class="lsplit" aria-label="并排的手册页"><iframe name="chap" title="手册页" loading="lazy" data-src="../runbook/01-capacity-and-prereqs.html"></iframe></aside>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="index.html">讲义</a> › <span>01 容量核对与前置条件 · 讲义</span></nav><nav class="lbar" aria-label="手册与讲义"><a href="../runbook/01-capacity-and-prereqs.html">📘 手册</a><a class="on" aria-current="page" href="01-capacity-and-prereqs.html">📝 讲义 · 13′</a><button type="button" class="lsplit-btn" aria-pressed="false" title="左边讲义、右边手册；点 🖥 屏幕里的链接，右边跟着跳">⇆ 并排看手册</button></nav><article class="md lecture"><h1 id="01-容量核对与前置条件--讲义">01 容量核对与前置条件 · 讲义</h1><div class="lcard"><div class="lnums"><span><b>13′</b>计划</span><span><b>11.8′</b>地板</span><span><b>1,866</b>台词汉字</span><span><b>10</b>切屏</span><span><b>4</b>互动</span></div><ul class="lsecs"><li>一、问题：拿到名字那天先干什么 · 3.25′</li><li>二、为什么难：错了不报错，有的还改不了 · 3′</li><li>三、怎么做：数车厢、读配额、钉版本 · 3′</li><li>四、代价和坑：有些答案要使用方先给 · 3.75′</li></ul><p class="lhow">黄底＝台词，照着念；蓝框＝🖥️ 切屏动作，点链接跳到手册里那张图；绿框＝💬 先问台下；红框＝⚠️ 别讲什么。地板＝台词一字不落念完＋切屏的时间，不含互动。<a href="index.html">全课计划与用法 →</a></p></div>
+<blockquote class="lkey">
+<p>🎯 这一章只留一句：这一章的坑都不当场报错；动手前把车厢数清、把建完就改不了的东西写死。</p>
+</blockquote>
+<h2 id="一问题拿到名字那天先干什么325" class="hc0">一、问题：拿到名字那天先干什么（3.25′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-1">01 §1.1 reservation 字段核对表</a>，指 <code>status</code> 和 <code>acceleratorCount</code> 两行。</p>
+<p class="say">「上一章留下的问题是：一百四十四不等于一百四十四，那到底有几个能用？拿到 reservation 名字那天，控制台写着 READY、九千二百一十六颗芯片。先别急着建池。这一章的坑有一个共同点：当场一个都不报错，全都等到后面，装成『缺货』或者『悄悄算错』回来找你。」</p>
+<p class="say">「READY 只说明这张单子生效了，里面车厢健不健康、配额够不够，它一概不管。所以第一件事，是把这张单子逐个字段对一遍：是不是包下整个车辆段、芯片总数对不对、什么时候到期、电力保护是哪一档。」</p>
+<p class="board"><b>🖥️ 屏幕</b>还是这张表，指表下面「失败多半是名字填错」那条，链到<a data-chap="1" href="../runbook/pitfalls.html#l-1">经验教训第 1 条</a>。</p>
+<p class="ask"><b>💬 互动</b>「名字填成另一个真实存在、也是 READY 的 reservation，你觉得会在哪一步报错？」</p>
+<p class="say">「先看名字。答案是：哪一步都不报。先例里，配置里填的是一个占位名，偏偏这个名字真实存在、也是 READY，只不过是别的集群的容量。所有检查全绿，池建出来却永远填不满，要过很久才发现。还有人在路径里写了项目编号而不是项目 ID，结果 sub-block 明明健康，每个池都报缺货。」</p>
+<p class="say">「再看芯片数。整段包下来的单子，总数记在汇总那一栏；先例常查的那个计数字段在这里恒为空；汇总那栏空着或对不上约定数，才是总数没确认，要升级去问，别自己默认是九千二百一十六。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到<a data-chap="1" href="../runbook/pitfalls.html#l-8">经验教训第 8 条</a>，即第九节表格里电力事件那一行。</p>
+<p class="say">「最隐蔽的是电力保护那一档。密集集群默认可能不受电力保护：机房限电时，整批先被砍掉。有先例：限电时整 pod 掉线，所有任务失败。更糟的是电回来以后，两套系统对这个 pod 能不能砍的记录对不上，车厢显示十六台全健康，每次建池却都报缺货。这时候千万别删池，删了可能就回不来了。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>被问字段细节：期望值 <code>ALL_CAPACITY</code> / <code>DENSE</code> / <code>GROUPED</code> / <code>specificReservationRequired=true</code> / <code>VM_FAMILY_CLOUD_TPU_POD_SLICE_TPU7X</code> / <code>acceleratorCount=9216</code>；All Capacity 的 describe 里没有 <code>specificReservation</code> 块，先例那条查询恒为空；判据改看 aggregate <code>acceleratorCount</code>，空或不等于约定数 → escalate，不假设 9216（已有经验的意图，换字段为推断）。占位名 = 参考集群的一个真实预留名，project number 路径的写法见 经验教训第 1 条。限电先例：电回来后部分池一段时间建不起来；电力保护档位记录对不上时，车厢 16/16 健康仍报缺货。</p>
+<h2 id="二为什么难错了不报错有的还改不了3" class="hc1">二、为什么难：错了不报错，有的还改不了（3′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-7">01 §1.7 网络设计表</a>，先指「Pod CIDR」和「Cloud NAT」两行，再指网卡那张小图（IAM / API 的清单在 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-5">01 §1.5</a>，屏幕上不展开）。</p>
+<p class="say">「我们要两千三百多台机器。先例里真出过两件事：Pod 网段开小了，集群长到一千零一十一个节点就再也加不进去，而且不能就地扩。Cloud NAT 只给了两个手工 IP，八百二十五个节点里只有一百三十八个能出公网。建的时候，这两件事都不报任何错。」</p>
+<p class="say">「先看网卡。每台机器四颗芯片，分在两个 NUMA 节点上，每边两颗芯片配一块两百 G 的物理网卡；一台合计四百 G，摊到每颗芯片一百 G。」</p>
+<p class="say">「这就带出一个很实际的上限。主网那个接口只挂在一块物理卡上，一个接口不可能同时用两块卡。所以凡是走主网的流量，读写 GCS、拉镜像、出公网，Lustre 如果也接在主 VPC 上也算，一台机器最多就是两百 G，用不上四百 G。所以存检查点、加载数据时，要按每台两百 G 封顶来估时间。」</p>
+<p class="say">「更麻烦的是有些东西建完就改不了。节点池挂几个网络接口，建池时写死；Pod 网段也一样。发现不对，就得把一百四十四个池全部重建。」</p>
+<p class="say">「还有一个小坑：reservation 有个到期时间，一定要写进运维日历。到期那一刻 reservation 被删，GKE 会立刻删掉全部 TPU 节点。这是设计行为，删了不能自己恢复，只能提前读日期、提前续。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，这一章里哪一项的交期最长，得第一天就去申请？等台下押出「配额」或「权限」再往下。</p>
+<p class="say">「两个都对。启动盘那份 Hyperdisk 配额，交期八到十四周，比不少项目从定下交付日期到真正交付还长；运维角色要人工审批，也要好几天。所以不能等拿到 reservation 名字再提：交付时间点一定下来、手里还没有卡，就按启动盘大小把总量算好提上去。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>网卡口径：每 VM 4 芯 / 2 NUMA / <strong>2 块物理 NIC</strong>（官方机型表 tpu7x-standard-4t：Physical NIC count 2、最大 400 Gbps；每 NUMA 1 块 + 2 芯）；DCN 每芯 100 Gbps→ 每 host 400 Gbps = 2 × 200G（其他整 pod 部署：单 NIC 200 Gbps、多 NIC 400 Gbps；实测集群裸 ppermute 约九成线速）。最容易说错：手册里「三张网卡」指三个接口，被问「是不是 3 × 200G」要答不是。三个接口的归属是<strong>推断</strong>：实测集群双网卡池的节点 nic-info 里 eth0 = PCI 00:05.0、eth1 = 00:06.0、eth2 = c0:04.0，单网卡池只有 eth0 + c0:04.0；按 PCI 总线号推 eth0/eth1 在 NUMA0 同一块卡、eth2 在 NUMA1，未经 Google 确认。芯片走哪块卡由 libtpu NUMA-aware transmit 决定（较新版本起默认开，以发布说明为准），不是硬连线。主网接口（eth0）只在一块物理卡上 → GCS / 镜像 / 公网 / 接在主 VPC 的 Lustre 每 host 上限 200 Gbps，不是 400（这条不依赖「哪两个接口同卡」的推断：任何单个接口都只在一块卡上）；按 PCI 推断它还和 eth1 同卡，所以检查点 / 数据流量和一路 DCN 互相挤。Lustre 走哪个接口取决于实例接在哪个 VPC，本手册未记录，接主 VPC 才算这条。HDB 配额：交期 8–14 周，要在定交付时间点时就提，不是拿到 reservation 名字才提。容易说错：「建完不能改」指的是节点池附加网卡和 Pod 网段，不是所有网络设置；NAT 可以事后 update，别删了重建。</p>
+<h2 id="三怎么做数车厢读配额钉版本3" class="hc2">三、怎么做：数车厢、读配额、钉版本（3′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-2">01 §1.2 的「16/16、15/15、15/16」小表</a>，先遮住右边「意思」那一列（这一节的数都能用 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-0">01 §1.0 一键预检</a>一次跑出来）。</p>
+<p class="say">「先跑一遍预检，每一项打 PASS、FAIL、WARN 或者要人工确认。拿到名字那天跑一次，交付当天再跑一次，因为配额和车厢健康都会变。重点看 sub-block 那张表，每行两个数：前一个是健康的机器数，后一个是在用的机器数。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，15/16 和 15/15，哪一个是开着的机器里有一台坏了？等台下押出答案再揭开右列。</p>
+<p class="say">「15/16，是十六台都开着、其中一台不健康；15/15，是只开起来十五台，这十五台都好。两种都不算可用。我们的操作口径是：HEALTHY，而且健康机器数是十六，才算一节能用的车厢。Google 的口径把降级也算健康，两个数都记，按我们的口径做计划。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-3">01 §1.3 维护状态</a>，指那段「实测」引用框。</p>
+<p class="say">「预检本身也会骗人。我们在真集群上实测过：查维护状态那条命令，输出外面多包了一层，旧的检查读不到字段，就报了『进行中零个、PASS』，实际上有三个维护正在进行。所以看到一个全绿的结果，先问一句：它真的读到数了吗？」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-4">01 §1.4 配额表</a>，指 TPU、HDB、multi-MIG 配额三行。</p>
+<p class="say">「配额读上限，不读用量，TPU 和 Hyperdisk 两项要单独查。车厢档案是固定的：每个 cube 一个 MIG，共一百四十四个。随列车变的是编组单：每编一列车，调度员新建一张编组单，也就是 Multi-MIG，外加一张带拓扑的规格单，也就是 workload policy。这两项跟着编组次数走，而且删除是异步的，来回拆编要留余量；编组单那项只能开 case，要 Google 书面确认。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-6">01 §1.6 版本表</a>，指 kueue-slice-controller 那行。</p>
+<p class="say">「版本出一份清单逐项对下限，有一条记住：传令员那个镜像别用 latest 标签，它指向的是缺关键参数的旧版。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>交付前，能自己提前触发的维护全部先做完（这个 reservation 是全段统一检修：约 90 天通知一次、到期强制，不提前做就会插进使用方训练里）。每台机器内存 960 GB。配额细节（被问再说）：TPU、Hyperdisk 在 <code>regions describe</code> 里看不到；MIG 是车厢档案、每 cube 一个固定 144（INSTANCE_GROUPS ≥144+CPU 池）；每编一列车新建的是一张 <strong>MMIG</strong>（编组单，不是 MIG）和一张 resource policy（规格单）；容易说错：别说「列车多了 MIG 配额消耗多」，所以 multi-MIG 配额和 resource policy 配额留余量；multi-MIG 配额和 GCE 读配额只能开 case 书面确认。被追问「1.37 那个 GKE 版本含不含两个关键修复」时：我们的判断是很可能含、还没证实，要 Google 书面确认。</p>
+<h2 id="四代价和坑有些答案要使用方先给375" class="hc3">四、代价和坑：有些答案要使用方先给（3.75′）</h2>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/09-customer-alignment.html#s9-0">09 §9.0 一张总表</a>，依次指 D01「健康 cube」、D03「DEGRADED cube」、D04「备件与配额」三行（配额公式在 <a data-chap="1" href="../runbook/09-customer-alignment.html#d04">09 D04</a>）；再指 D02「SLO」、D18「支持通道」、D19 / D20「交付日期 / zone」几行。</p>
+<p class="say">「最后一类坑不在机器上，在纸面上。这一章有九件事要跟使用方书面定下来，完整清单在第九章，一共二十三项。其中日期、zone、配额和启动盘、网络这四项，本章就必须有答案，否则配额提不了，网络也冻结不了。」</p>
+<p class="say">「先说健康车厢怎么算。Google 的 SLO 口径把降级也算健康；可我们建池、给 Kueue 算配额时，降级的不算。使用方的大任务如果只用 HEALTHY 的车厢，能用的可能掉到一百三十以下，Google 那边却照样报达标。这个口径不白纸黑字写下来，交付那天双方数出来的车厢数就对不上。」</p>
+<p class="say">「和它连着的是降级车厢让不让调度。传令员有个开关：只用 HEALTHY，或者 HEALTHY 和降级都用，两个集群都选了后者。原因是一个 OCS 机箱坏了，一百四十四节车厢会同时变成降级；要是只认 HEALTHY，整个车站一下子就停了。」</p>
+<p class="say">「再看配额。Kueue 的配额每天按健康车厢数重算；每天留几节空着当缓冲，要书面约定，我们建议先留二到四节，交付两周后按实测再调。」</p>
+<p class="say">「支持模式也要先讲明白：出了问题找谁、夜里怎么升级，工单模板提前写好。最后是交付日期和 zone：日期和 zone 一天不定，这一章就一天做不完。」</p>
+<p class="board"><b>🖥️ 屏幕</b>切到 <a data-chap="1" href="../runbook/01-capacity-and-prereqs.html#step-1-8">01 §1.8 存储</a>，指「tpu7x 无 Local SSD」那格和「交付门槛」那行。</p>
+<p class="say">「存储也要早定。这一代机器没有本地 SSD，文件缓存、检查点的内存盘，用的都是每台机器自己那九百六十 G 内存。加起来超了，进程就被 OOM 杀掉。容器默认的共享内存只有六十四 MB，模板里没挂内存盘，数据加载就会莫名其妙地崩。检查点工具还从来不删 GCS 上的备份，保留策略得自己做。」</p>
+<p class="say">「如果用 Managed Lustre，要和 pod 放在同一个 zone；先钉 pod 的 zone，再定存储位置。存储跨了 zone，带宽和延迟都要打折，所以交付门槛写的是：在同一个 zone，按整 pod 规模跑三小时的 FIO 和检查点模拟。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，车厢数清了，网络冻结了，接下来要照着设计一口气开一百四十四个节点池。这个规模下，你猜会有几个起不全？起不全的时候，是真的缺货吗？</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>⛔ 不逐行念配额表和版本表，让台下会后照表查；⚠️ 容易说错：DEGRADED「算健康」只是 Google SLO 口径，建池和算 Kueue 配额时不算；被追问「要对齐哪些」时：09 章扩成 23 项，照那张表逐项书面确认；被追问「每日留空取几个」时：建议先取 2–4（09 D04），最终要和使用方书面约定；规划备件（144 − 128 = 16）是另一个数，见 09 D04。被追问「训练前还要备什么」时：01 §1.5 ④列了数据桶、MTC 桶、环境包 <code>ENV_TAR</code>、<code>GITHUB_SECRET</code> 四样，各有负责人和时间，排进 09 时间线「输入就绪①②」；Anywhere Cache 由交付方建、使用方 SRE 给权限，最长 48 h，20 Tbps 配额要使用方 SRE 经 Google TAM 申请（01 §1.8、06a）。配额公式（台上不念）：130 = SLO 保证线；单任务最大 128；S = 每天留空的健康车厢数，不是规划备件 16；Kueue 配额 = min(健康 cube − S, 128) × 64 芯，每天重算。网卡被问「三张网卡是不是 3 × 200G」：物理卡 2 块，三个接口（1 主网 + 2 DCN）挂在这两块上，不是三块也不是 3 × 200G。SLO 数字只认书面原文。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="00-overview.html"><small>← 上一页</small>00 总览 · 讲义</a><a class="next" href="02-cluster-bringup.html"><small>下一页 →</small>02 建集群与 144 个节点池 · 讲义</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#一问题拿到名字那天先干什么325">一、问题：拿到名字那天先干什么（3.25′）</a></li><li class="l2"><a href="#二为什么难错了不报错有的还改不了3">二、为什么难：错了不报错，有的还改不了（3′）</a></li><li class="l2"><a href="#三怎么做数车厢读配额钉版本3">三、怎么做：数车厢、读配额、钉版本（3′）</a></li><li class="l2"><a href="#四代价和坑有些答案要使用方先给375">四、代价和坑：有些答案要使用方先给（3.75′）</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

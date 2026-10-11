@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 430" width="900" height="430" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="左：前向 4 个 device 各持一个权重分片，沿两根轴联合 all-gather 成完整权重。反向完整梯度要 reduce-scatter 回去。两次按前向顺序的单轴 RS，每个 device 拿回自己的梯度分片；一次多轴 RS 顺序被打乱，D1、D2 拿到彼此的分片。右：lm_loss 相对差随训练步变化，第 0 步逐位一致，之后单调漂，第 1000 步约 −5%。">
+<title>联合 all-gather 的反向：一次多轴 reduce-scatter 把分片顺序弄乱，梯度落到别的 device</title>
+<defs>
+<marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker>
+<marker id="ab" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker>
+<marker id="ao" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker>
+<marker id="ar" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker>
+<marker id="ag" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#188038"/></marker>
+<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#fce8e6"/><line x1="0" y1="0" x2="0" y2="8" stroke="#d93025" stroke-width="2"/></pattern>
+</defs>
+<style>
+@keyframes m0 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(74px,-82px); opacity: 0 } 13% { transform: translate(74px,-82px); opacity: 0 } 15% { transform: translate(74px,-82px); opacity: 1 } 37% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m0 { animation: m0 10s infinite ease-in-out }
+@keyframes m1 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(24px,-82px); opacity: 0 } 13% { transform: translate(24px,-82px); opacity: 0 } 15% { transform: translate(24px,-82px); opacity: 1 } 37% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m1 { animation: m1 10s infinite ease-in-out }
+@keyframes m2 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(-26px,-82px); opacity: 0 } 13% { transform: translate(-26px,-82px); opacity: 0 } 15% { transform: translate(-26px,-82px); opacity: 1 } 37% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m2 { animation: m2 10s infinite ease-in-out }
+@keyframes m3 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(-76px,-82px); opacity: 0 } 13% { transform: translate(-76px,-82px); opacity: 0 } 15% { transform: translate(-76px,-82px); opacity: 1 } 37% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m3 { animation: m3 10s infinite ease-in-out }
+@keyframes m4 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(74px,-162px); opacity: 0 } 40% { transform: translate(74px,-162px); opacity: 0 } 43% { transform: translate(74px,-162px); opacity: 1 } 65% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m4 { animation: m4 10s infinite ease-in-out }
+@keyframes m5 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(84px,-162px); opacity: 0 } 40% { transform: translate(84px,-162px); opacity: 0 } 43% { transform: translate(84px,-162px); opacity: 1 } 65% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m5 { animation: m5 10s infinite ease-in-out }
+@keyframes m6 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(-86px,-162px); opacity: 0 } 40% { transform: translate(-86px,-162px); opacity: 0 } 43% { transform: translate(-86px,-162px); opacity: 1 } 65% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m6 { animation: m6 10s infinite ease-in-out }
+@keyframes m7 { 0% { transform: translate(0px,0px); opacity: 1 } 8% { transform: translate(0px,0px); opacity: 1 } 11% { transform: translate(0px,0px); opacity: 0 } 12% { transform: translate(-76px,-162px); opacity: 0 } 40% { transform: translate(-76px,-162px); opacity: 0 } 43% { transform: translate(-76px,-162px); opacity: 1 } 65% { transform: translate(0px,0px); opacity: 1 } 100% { transform: translate(0px,0px); opacity: 1 } }
+.m7 { animation: m7 10s infinite ease-in-out }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+</style>
+<rect width="900" height="430" fill="#ffffff"/>
+<text x="24" y="34" font-size="19" font-weight="700" fill="#202124">联合 all-gather 的反向：一次多轴 reduce-scatter 把分片顺序弄乱，梯度落到别的 device</text>
+<text x="30" y="96" font-size="14" fill="#5f6368" text-anchor="start" font-weight="700" >前向</text>
+<rect x="90" y="80" width="70" height="30" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="125" y="100" font-size="13" fill="#174ea6" text-anchor="middle" >D0: w0</text>
+<rect x="200" y="80" width="70" height="30" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="235" y="100" font-size="13" fill="#174ea6" text-anchor="middle" >D1: w1</text>
+<rect x="310" y="80" width="70" height="30" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="345" y="100" font-size="13" fill="#174ea6" text-anchor="middle" >D2: w2</text>
+<rect x="420" y="80" width="70" height="30" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="455" y="100" font-size="13" fill="#174ea6" text-anchor="middle" >D3: w3</text>
+<line x1="285" y1="114" x2="285" y2="132" stroke="#5f6368" stroke-width="2" marker-end="url(#a)"/>
+<text x="300" y="128" font-size="13" fill="#5f6368" text-anchor="start" >联合 all-gather（两根轴）</text>
+<rect x="170" y="138" width="58" height="26" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="199" y="156" font-size="13" fill="#174ea6" text-anchor="middle" >w0</text>
+<rect x="230" y="138" width="58" height="26" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="259" y="156" font-size="13" fill="#174ea6" text-anchor="middle" >w1</text>
+<rect x="290" y="138" width="58" height="26" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="319" y="156" font-size="13" fill="#174ea6" text-anchor="middle" >w2</text>
+<rect x="350" y="138" width="58" height="26" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<text x="379" y="156" font-size="13" fill="#174ea6" text-anchor="middle" >w3</text>
+<text x="30" y="206" font-size="14" fill="#5f6368" text-anchor="start" font-weight="700" >反向</text>
+<rect x="170" y="188" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="199" y="206" font-size="13" fill="#0d652d" text-anchor="middle" >g0</text>
+<rect x="230" y="188" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="259" y="206" font-size="13" fill="#0d652d" text-anchor="middle" >g1</text>
+<rect x="290" y="188" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="319" y="206" font-size="13" fill="#0d652d" text-anchor="middle" >g2</text>
+<rect x="350" y="188" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="379" y="206" font-size="13" fill="#0d652d" text-anchor="middle" >g3</text>
+<text x="420" y="206" font-size="13" fill="#5f6368" text-anchor="start" >完整梯度</text>
+<rect x="86" y="266" width="78" height="38" rx="6" fill="none" stroke="#188038" stroke-width="1.5" />
+<text x="125" y="320" font-size="13" fill="#5f6368" text-anchor="middle" >D0</text>
+<rect x="196" y="266" width="78" height="38" rx="6" fill="none" stroke="#188038" stroke-width="1.5" />
+<text x="235" y="320" font-size="13" fill="#5f6368" text-anchor="middle" >D1</text>
+<rect x="306" y="266" width="78" height="38" rx="6" fill="none" stroke="#188038" stroke-width="1.5" />
+<text x="345" y="320" font-size="13" fill="#5f6368" text-anchor="middle" >D2</text>
+<rect x="416" y="266" width="78" height="38" rx="6" fill="none" stroke="#188038" stroke-width="1.5" />
+<text x="455" y="320" font-size="13" fill="#5f6368" text-anchor="middle" >D3</text>
+<rect x="86" y="346" width="78" height="38" rx="6" fill="none" stroke="#188038" stroke-width="1.5" />
+<text x="125" y="400" font-size="13" fill="#5f6368" text-anchor="middle" >D0</text>
+<rect x="196" y="346" width="78" height="38" rx="6" fill="none" stroke="#d93025" stroke-width="2" />
+<text x="235" y="400" font-size="13" fill="#a50e0e" text-anchor="middle" >D1：拿错</text>
+<rect x="306" y="346" width="78" height="38" rx="6" fill="none" stroke="#d93025" stroke-width="2" />
+<text x="345" y="400" font-size="13" fill="#a50e0e" text-anchor="middle" >D2：拿错</text>
+<rect x="416" y="346" width="78" height="38" rx="6" fill="none" stroke="#188038" stroke-width="1.5" />
+<text x="455" y="400" font-size="13" fill="#5f6368" text-anchor="middle" >D3</text>
+<g class="m0">
+<rect x="96" y="270" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="125" y="288" font-size="13" fill="#0d652d" text-anchor="middle" font-weight="700" >g0</text>
+</g>
+<g class="m1">
+<rect x="206" y="270" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="235" y="288" font-size="13" fill="#0d652d" text-anchor="middle" font-weight="700" >g1</text>
+</g>
+<g class="m2">
+<rect x="316" y="270" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="345" y="288" font-size="13" fill="#0d652d" text-anchor="middle" font-weight="700" >g2</text>
+</g>
+<g class="m3">
+<rect x="426" y="270" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="455" y="288" font-size="13" fill="#0d652d" text-anchor="middle" font-weight="700" >g3</text>
+</g>
+<g class="m4">
+<rect x="96" y="350" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="125" y="368" font-size="13" fill="#0d652d" text-anchor="middle" font-weight="700" >g0</text>
+</g>
+<g class="m5">
+<rect x="206" y="350" width="58" height="26" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.5" />
+<text x="235" y="368" font-size="13" fill="#a50e0e" text-anchor="middle" font-weight="700" >g2</text>
+</g>
+<g class="m6">
+<rect x="316" y="350" width="58" height="26" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.5" />
+<text x="345" y="368" font-size="13" fill="#a50e0e" text-anchor="middle" font-weight="700" >g1</text>
+</g>
+<g class="m7">
+<rect x="426" y="350" width="58" height="26" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="455" y="368" font-size="13" fill="#0d652d" text-anchor="middle" font-weight="700" >g3</text>
+</g>
+<text x="30" y="256" font-size="14" fill="#0d652d" text-anchor="start" font-weight="700" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">两次单轴 RS（按前向顺序）</text>
+<text x="30" y="336" font-size="14" fill="#a50e0e" text-anchor="start" font-weight="700" stroke="#ffffff" stroke-width="5" stroke-linejoin="round" paint-order="stroke">一次多轴 RS（顺序乱）</text>
+<rect x="590" y="80" width="290" height="330" rx="8" fill="none" stroke="#dadce0" stroke-width="1.5" />
+<text x="600" y="100" font-size="13" fill="#5f6368" text-anchor="start" >lm_loss 相对差（示意，无刻度）</text>
+<line x1="610" y1="150" x2="610" y2="340" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="610" y1="180" x2="860" y2="180" stroke="#5f6368" stroke-width="1.2"/>
+<text x="860" y="200" font-size="13" fill="#5f6368" text-anchor="end" >训练步 →</text>
+<path d="M610 180 C 680 190, 760 250, 856 310" stroke="#d93025" stroke-width="2.5" fill="none"/>
+<text x="620" y="144" font-size="13" fill="#202124" text-anchor="start" >第 0 步逐位一致（起点重合）</text>
+<text x="856" y="332" font-size="13" fill="#a50e0e" text-anchor="end" font-weight="700" >第 1000 步约 −5%</text>
+<text x="600" y="376" font-size="13" fill="#202124" text-anchor="start" >第 0 步前向不依赖梯度，</text>
+<text x="600" y="396" font-size="13" fill="#202124" text-anchor="start" >所以对拍第 0 步看不出</text>
+</svg>

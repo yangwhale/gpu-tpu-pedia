@@ -1,0 +1,99 @@
+# =============================================================================
+# 06a-jobset-dsv3.yaml —— 06b：10+ × 4x8x8 = 数千芯片的 DeepSeek-V3 671B（上游公开 MaxText 配置）训练 JobSet 模板
+#
+# 不要直接 kubectl apply 这个文件：用 `RECIPE=dsv3 runbook/scripts/06-jobset.sh render` 渲染
+#   （envsubst 填下表的占位，再按 SLICES / TOPO / STEPS / EXTRA_LIBTPU_ARGS / POD_PRIORITY 改片数、形状、步数、flag、优先级）。
+#   ${RECIPE_*} 四个占位来自 06a-dsv3-recipe.env——AOT 脚本读的也是它，所以「体检的」就是「要跑的」。
+#
+# 骨架出处：06-jobset.sh 生成的 JobSet（参考 JIT 基线作业在本集群 10+ 片上跑通的那份：hostNetwork、双网卡 nodeSelector、
+#   coordinator、失败策略）＋ DeepSeek-V3 单片基准的参考作业（镜像、命令、flag）。
+#   和 JIT 基线作业比少了：env tar、gcsfuse PVC、config overlay、GitHub Secret——公开镜像里代码和依赖都有了，只要镜像能拉。
+#
+# 占位：
+#   | 占位                    | 说明 |
+#   |-------------------------|------|
+#   | <JOBSET_NAME>          | K8s 名；Pod 名 = <名>-worker-<i>-<j>-xxxxx；≤ 本书 经验教训第 13 条 的长度限制 |
+#   | <NS> <LOCAL_QUEUE>    | env.sh；03 §3.5 建的 LocalQueue |
+#   | <RUN_NAME>             | MaxText run_name（输出子目录名） |
+#   | <OUTPUT_DIR>           | MaxText base_output_directory。默认 /tmp/maxtext-out（pod 本地，不依赖任何桶）；
+#   |                         | 要把 tensorboard / 指标留下来就写 gs://<桶>/<前缀>，并按 01 §1.5 ③ 给 ns/<NS>/sa/<KSA> 桶的 objectUser |
+#   | <RECIPE_IMAGE>         | 06a-dsv3-recipe.env（按 digest 钉死） |
+#   | <RECIPE_MODEL_ARGS>    | 同上：模型 / 并行 / 显存 / kernel 参数 |
+#   | <RECIPE_LIBTPU_ARGS>   | = RECIPE_XLA_FLAGS + RECIPE_RUNTIME_FLAGS（+ EXTRA_LIBTPU_ARGS），06-jobset.sh 拼好 |
+#   | <RECIPE_XLA_FLAGS_ENV> | XLA_FLAGS 环境变量：关 all_gather_decomposer / collective-pipeliner-forward，**多片不带就 OOM**（06b §5） |
+#   片数、步数由 06-jobset.sh 写进 dcn_data_parallelism=<SLICES> 与 steps=<STEPS>（replicas 同步改）。
+# =============================================================================
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: ${JOBSET_NAME}
+  namespace: ${NS}
+  labels:
+    app: dsv3-671b-recipe
+    kueue.x-k8s.io/queue-name: ${LOCAL_QUEUE}
+spec:
+  ttlSecondsAfterFinished: 86400         # 结束 1 天后自动删：留出 verify / 取日志的时间（pod 本地输出也随之消失）
+  coordinator: {replicatedJob: worker, jobIndex: 0, podIndex: 0}
+  failurePolicy:
+    maxRestarts: 0                       # 验收跑法：不开检查点，重启 = 从头来；正式训练按 07 §7.2 改，并同时开检查点
+    rules:
+    - {name: restart_on_failure, action: RestartJobSet, onJobFailureReasons: [BackoffLimitExceeded]}
+  network: {enableDNSHostnames: true, publishNotReadyAddresses: true}
+  replicatedJobs:
+  - name: worker
+    replicas: N                         # = 片数 = dcn_data_parallelism
+    template:
+      metadata:
+        labels: {app: dsv3-671b-recipe}
+      spec:
+        backoffLimit: 0
+        completionMode: Indexed
+        completions: 64                  # 4x8x8 = 256 chip ÷ 4 chip/pod
+        parallelism: 64
+        template:
+          metadata:
+            annotations:
+              cloud.google.com/gke-tpu-slice-topology: 4x8x8
+            labels: {app: dsv3-671b-recipe}
+          spec:
+            hostNetwork: true
+            dnsPolicy: ClusterFirstWithHostNet
+            restartPolicy: Never
+            terminationGracePeriodSeconds: 30
+            nodeSelector:
+              cloud.google.com/gke-networking-dra-driver: "true"   # 只有 双网卡节点有 eth2；LIBTPU 里的 eth1,eth2 要用到（02 §2.7）
+              cloud.google.com/gke-tpu-accelerator: tpu7x
+            tolerations:
+            - {effect: NoSchedule, key: google.com/tpu, operator: Exists}
+            containers:
+            - name: jax-tpu
+              image: ${RECIPE_IMAGE}
+              imagePullPolicy: IfNotPresent
+              securityContext: {privileged: true}
+              ports: [{containerPort: 8471}, {containerPort: 8080}, {containerPort: 8431}]
+              workingDir: /deps/src
+              command:
+              - bash
+              - -c
+              - |
+                set -eo pipefail
+                ulimit -c 0     # 不落 core：几十 GB 的 core 写满启动盘 → DiskPressure 驱逐
+                python3 -c 'import importlib.metadata as m; print("TPU runtime versions:", "jax=" + m.version("jax"), "jaxlib=" + m.version("jaxlib"), "libtpu=" + m.version("libtpu"))'
+                echo "LIBTPU_INIT_ARGS: $LIBTPU_INIT_ARGS"
+                echo "XLA_FLAGS: $XLA_FLAGS"
+                python3 -u -m maxtext.trainers.pre_train.train maxtext/configs/base.yml \
+                  ${RECIPE_MODEL_ARGS} \
+                  dcn_data_parallelism=N steps=50 \
+                  run_name=${RUN_NAME} base_output_directory=${OUTPUT_DIR}
+              env:
+              - {name: LIBTPU_INIT_ARGS, value: "${RECIPE_LIBTPU_ARGS}"}
+              - {name: XLA_FLAGS, value: "${RECIPE_XLA_FLAGS_ENV}"}     # 不带：2 片起 temp 95.87 GiB > 94.74，编译 OOM（06b §5 AOT 实测）
+              - {name: JAX_PLATFORMS, value: "tpu,cpu"}
+              - {name: ENABLE_PJRT_COMPATIBILITY, value: "true"}
+              resources:
+                requests: {google.com/tpu: "4"}
+                limits:   {google.com/tpu: "4"}
+              volumeMounts:
+              - {mountPath: /dev/shm, name: dshm}
+            volumes:
+            - {name: dshm, emptyDir: {medium: Memory}}

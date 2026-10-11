@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>03 集群内组件 · 讲义 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="" href="../runbook/README.html">交付手册</a><a class="on" href="index.html">讲义</a><a class="" href="../runbook/pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="讲义"><div class="side-h">讲义</div><ol><li><a href="index.html">讲义总览</a></li><li><a href="00-overview.html">00 总览 · 讲义</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件 · 讲义</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池 · 讲义</a></li><li><a class="on" aria-current="page" href="03-control-plane-addons.html">03 集群内组件 · 讲义</a></li><li><a href="04-functional-verification.html">04 功能验证 · 讲义</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作 · 讲义</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：九千芯同时读，桶扛不扛得住 · 讲义</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练 · 讲义</a></li><li><a href="07-resilience-and-recovery.html">07 韧性与恢复 · 讲义</a></li><li><a href="08-day2-operations.html">08 日常运维 · 讲义</a></li><li><a href="09-customer-alignment.html">09 交付前对齐 · 讲义</a></li></ol></nav><aside class="lsplit" aria-label="并排的手册页"><iframe name="chap" title="手册页" loading="lazy" data-src="../runbook/03-control-plane-addons.html"></iframe></aside>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="index.html">讲义</a> › <span>03 集群内组件 · 讲义</span></nav><nav class="lbar" aria-label="手册与讲义"><a href="../runbook/03-control-plane-addons.html">📘 手册</a><a class="on" aria-current="page" href="03-control-plane-addons.html">📝 讲义 · 15.5′</a><button type="button" class="lsplit-btn" aria-pressed="false" title="左边讲义、右边手册；点 🖥 屏幕里的链接，右边跟着跳">⇆ 并排看手册</button></nav><article class="md lecture"><h1 id="03-集群内组件--讲义">03 集群内组件 · 讲义</h1><div class="lcard"><div class="lnums"><span><b>15.5′</b>计划</span><span><b>14.5′</b>地板</span><span><b>2,144</b>台词汉字</span><span><b>15</b>切屏</span><span><b>3</b>互动</span></div><ul class="lsecs"><li>一、问题：pod 为什么不能自己上车 · 3′</li><li>二、为什么难：闸机坏了，整个车站都进不了人 · 5′</li><li>三、怎么做：四样东西按顺序装，最后问一次 API · 5.5′</li><li>四、代价和坑：票不能卖超，拆也要按顺序 · 2′</li></ul><p class="lhow">黄底＝台词，照着念；蓝框＝🖥️ 切屏动作，点链接跳到手册里那张图；绿框＝💬 先问台下；红框＝⚠️ 别讲什么。地板＝台词一字不落念完＋切屏的时间，不含互动。<a href="index.html">全课计划与用法 →</a></p></div>
+<blockquote class="lkey">
+<p>🎯 这一章只留一句：这一章装的是「编好才开闸」的闸门；它自己不能挂，关键配置也不能悄悄关掉。</p>
+</blockquote>
+<h2 id="一问题pod-为什么不能自己上车3" class="hc0">一、问题：pod 为什么不能自己上车（3′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#kueue-%E4%BA%94%E5%88%86%E9%92%9F%E6%A8%A1%E5%9E%8B%E6%9C%AC%E7%AB%A0%E6%AF%8F%E4%B8%80%E8%8A%82%E8%A3%85%E7%9A%84%E6%98%AF%E5%93%AA%E4%B8%80%E6%A0%BC">03 开头的「Kueue 五分钟模型」流程图</a>，只指 ① JobSet 和 ⑥「去掉 gate，交给 kube-scheduler」两格，中间四格先不讲。</p>
+<p class="say">「上一章结尾说：一百四十四节车厢进段了，售票处和检票闸机还没装。不装会怎样？你提一个训练任务，原生的 kube-scheduler 看节点 Ready、TPU 数也够，就把 pod 放上去了。可车厢之间的线还没接，人上了车，车根本开不动。」</p>
+<p class="say">「所以这一章要装一道闸。它要管两件原生调度器不懂的事：第一，pod 必须等切片连好才能起；第二，一个任务要的几列车，必须一起到位，不能到一半就先开。这就是全课第一条暗线：芯片不会自己连起来，跑之前先编组。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#kueue-%E4%BA%94%E5%88%86%E9%92%9F%E6%A8%A1%E5%9E%8B%E6%9C%AC%E7%AB%A0%E6%AF%8F%E4%B8%80%E8%8A%82%E8%A3%85%E7%9A%84%E6%98%AF%E5%93%AA%E4%B8%80%E6%A0%BC">同一张流程图</a>，从 ① 一格一格指到 ⑥，指到黄色那格 ⑤ 时停一下。</p>
+<p class="say">「整条链用车辆段来记。你提交的 JobSet 是一个团；Kueue 是售票处，给它开一张票；ClusterQueue 管总座位数；TAS 按车厢号分座，挑出具体哪几节车厢。然后传令员，也就是 kueue-slice-controller，按票给信号楼的调度员下编组单。整列编好，检票闸机才开，pod 才交给调度器上车。」</p>
+<p class="say">「黄色那格是全图唯一碰 Google 托管组件的一步，两个名字很像，要分清。传令员是我们自己装进集群的；信号楼的调度员是 Google 托管的切片控制器，真正去接线。传令员挂了是我们的事，调度员挂了要找 Google。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html">03 章首「前置」那几条</a>，指「kubectl 上下文名须含 <code>$CLUSTER</code>」和「default-pool ≥2 个 Ready 节点」两条。</p>
+<p class="say">「动手之前还有两条前置。第一，所有控制器都放在 CPU 的系统池上，不放 TPU 节点，而且系统池至少两台，因为传令员要分两台放。第二，脚本先看 kubectl 上下文的名字里有没有这个集群名，没有就停。不查的话，同一个项目里有别的集群时，清单会干干净净地装到错的集群上，一个报错都没有。」</p>
+<h2 id="二为什么难闸机坏了整个车站都进不了人5" class="hc1">二、为什么难：闸机坏了，整个车站都进不了人（5′）</h2>
+<p class="ask"><b>💬 互动</b>大家先想一想，传令员这个控制器要是挂了，最坏会怎样——只是建不了新切片吗？等台下押出「只影响切片」或「全集群都受影响」再往下。</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-3">03 §3.3 开头的 webhook 流程图</a>，指红色那格「拒绝创建，全集群无一例外」；讲到「按高可用装」时往下滚到「两个集群一致的要求」表，指「副本」「PDB」「优先级」三行。</p>
+<p class="say">「比想的更糟。它装了三道准入钩子，也就是 webhook，挂在全集群所有 Job 类任务的创建路径上，而且是 fail-closed：它不回话，请求就被拒。所以它一挂，全集群一个 Job 都建不出来，跑不跑 TPU 都一样。闸机坏了，整个车站进不了人。」</p>
+<p class="say">「所以它按高可用装：两个副本，分在两台节点上；驱逐预算 PDB 保证升级时至少留一个；优先级给 system-cluster-critical，还得配一份资源配额，不然这个优先级的 pod 根本建不出来；镜像按 digest 钉死，不许用 latest。验收时看一眼 PDB，允许中断数是一才算过；是零，说明第二个副本没起来，先别往下走。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-7">03 §3.7 下面「按书复跑」那段</a>，指「slice-controller 只剩 1 个 pod」那一句。</p>
+<p class="say">「这不是纸上谈兵。同一个实测集群隔半天再查，传令员的镜像（原来只有版本标签没有 digest）已经被人换成了另一个版本，只剩一个 pod，PDB 允许中断数是零。也就是说，那一刻只要这一个 pod 被挪走，整个集群就建不了任何 Job。所以验证的结果要逐项和上一次比，别默认它没变。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-3">03 §3.3「做法」下面那个黄框</a>，指标题「apply 到 pod Ready 之间，全集群 Job/JobSet/LWS 创建被拒」。</p>
+<p class="say">「装它本身也有个窗口。按清单看，它的 webhook 证书是控制器起来以后自己生成、自己写回去的。所以从 apply 到 pod Ready 这段时间，全集群的 Job 创建都会被拒。挑没人提交任务的时候装。反过来拆的时候，要先删 webhook 配置，再删控制器；顺序反了，控制器没了、钩子还在，又是全集群建不了 Job。」</p>
+<p class="ask"><b>💬 互动</b>大家先想一想，实测集群把「pod 迟迟起不齐就请整团下车」那个开关，也就是 waitForPodsReady，整段注释掉了，平时一切正常。那它什么时候会出事？等台下说出「运行中有 cube 坏了」再往下。</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-2">03 §3.2「限时上车，掉队整团重排」状态图</a>，指「运行中 → 重新排队」那条箭头上的「掉的 pod 10m 没恢复，驱逐」。</p>
+<p class="say">「运行中坏了一节车厢的时候。排除坏 cube 的规则只在调度那一刻生效；已经在跑的任务，pod 掉了，只能靠 recoveryTimeout 这个计时器：十分钟没恢复，就驱逐、整团重排。这段被注释掉，任务就一直挂在坏车厢上，没人叫它下车。」</p>
+<p class="say">「麻烦的是，它关着的时候什么都不报，看起来和开着一模一样。更讽刺的是，我们自己写的验证脚本第一次在实测集群上跑，正好撞上这种情况：找那一行找不到，脚本在严格模式下直接退出了，后面的检查一项都没跑。本该报警的时候，它自己先哑了。所以验证脚本找不到这一行时要打印警告、接着查。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-2">03 §3.2「唯一改掉的参考集群值」那一段</a>。</p>
+<p class="say">「同一段配置里还有一个数，是我们唯一改掉的先例值：重排的次数上限。先例里写的是不限，因为它跑的是另一种恢复模型。可一个本身就坏的十几片任务，比如编译出来内存超了、第一步就挂，会无限地驱逐、全量重切、再挂，每一轮都在烧编组配额和 GCE 读配额。所以改回五次，五次还起不来就让它失败出来，由人看。这一条是推断，没实测过。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>容易说错：被追问「传令员挂了怎么急救」时：只删它那一个 webhook 配置就能恢复建 Job，这条是推断，没实测过。被追问「只删 recoveryTimeout 那一行会怎样」时：按 Kueue 公开文档，不写时默认等于 timeout（三十分钟），写 0s 才是关掉；整段注释掉才是全关（<a href="../runbook/03-control-plane-addons.html#step-3-2">03 §3.2</a>）。按书复跑时实测集群 slice-controller 镜像是 <code>:v0.9</code>，第一次查时是 <code>:v0.8.0-200</code> 无 digest。被追问「钉早期版本就够了吗」：不够。早期版本是本书实测用的版本，<strong>不含恢复路径修复</strong>，要 ≥<code>v0.8.0-203</code> ＋ kueue-tpu-ac 新版本（版本号以 Google 确认为准） 才修（07 §7.2）；交付前须升级并重跑 07 恢复演练，这是待办不是已完成（单一来源 09 D10；升级步骤 03 §3.3「升级到含修复的版本」，未实测，含修复版本的 digest 向 Google 获取）。</p>
+<h2 id="三怎么做四样东西按顺序装最后问一次-api55" class="hc2">三、怎么做：四样东西按顺序装，最后问一次 API（5.5′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-1">03 §3.1 装 JobSet</a>，指黄框「helm upgrade 不升 JobSet 的 CRD」。</p>
+<p class="say">「装的顺序是：先 JobSet，再 Kueue，再传令员，最后是队列对象。前两样用 Helm 装。JobSet 有个坑：Helm 安装时会装它的 CRD，升级时却从不碰，而 JobSet 的 CRD 恰好就放在那个目录里。所以升级时脚本先手工把 CRD 更新一遍，再做 Helm 升级。不然控制器升了，CRD 还是旧的。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-2">03 §3.2 装 Kueue 并写配置</a>，指「Feature gates」和 <code>manageJobsWithoutQueueName</code> 那两条。</p>
+<p class="say">「Kueue 给了三个副本，每个十六核、六十四 G 内存。为什么这么多？因为开了按拓扑分座以后，它要盯住集群里每一个 pod 和每一个节点，两千多台 TPU 节点的整 pod，内存小了扛不住。配置里还有一条：没写队列名的 Job 也归它管，会一直挂起。我们故意不建默认队列，就是要让所有任务都必须走闸门，谁也绕不过去。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-4">03 §3.4 Topology 那棵树</a>，从 block 一层层往下指到 hostname。</p>
+<p class="say">「队列对象里最容易装错的是 Topology，就是这棵树：最上面是整套机器，往下是 cube，再往下一半、再一半，一直切到单台 host，一共七层。为什么要七层？TAS 靠这棵树点名要哪几块。树里缺一层，那一层的形状就点不了名。实测集群只有三层，我们在上面提比整个 cube 小的形状，准入时就被拒，报的是「不包含请求的层级」。」</p>
+<p class="say">「所以看到这句报错，先别查硬件，先数 Topology 有几层。这棵树还不能改，线上也别删了重建，会弄坏调度缓存，出现两个 pod 挤一个节点。要改就新建一份并行存在。另外两个对象各一句：ResourceFlavor 说这批节点是什么货，AdmissionCheck 把闸机登记到 Kueue。闸机登记要是没激活，整个队列里的任务都会卡着，而且任务身上看不出原因。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-5">03 §3.5 配额规则</a>，先只指「Σ nominalQuota ≤ min(128, 健康 cube − 备件 S) × 64」那一行，下面「S = 每天留几个健康 cube 不准入」那条揭晓时再指。</p>
+<p class="say">「然后是配额：健康的 cube 减去每天留空的几节，书里叫 S，封顶一百二十八节，再乘六十四，每天重算。」</p>
+<p class="ask"><b>💬 互动</b>一百四十四减一百二十八，规划时就空出了十六节。有人顺手把这十六节填成 S。到了健康一百三十节那天，一个一百二十八节的任务排得进吗？等台下算出「一百一十四，排不进」再往下。</p>
+<p class="say">「排不进。那十六节已经算在「最大任务一百二十八节」里了，再当 S 扣一次，配额只剩一百一十四节，一百二十八节的任务永远排不进来。所以 S 一般只取二到四节。」</p>
+<p class="say">「还有一条纪律：每天改配额，只能用当天脚本算出来的数。因为隔离坏车厢的脚本也会改同一个字段，手填一个昨天的旧值，会把隔离时扣掉的配额悄悄抹回去。Kueue 和 JobSet 的配置也一样，改 values 文件再跑一遍，线上手工 patch 不在 Helm 历史里，哪天一回滚就被抹掉。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-7">03 §3.7 验证</a>，指第 1 条下面「期望」那两个注解，再指下面「带注解的探针」。</p>
+<p class="say">「装完怎么证明闸门接上了？做一次服务端 dry-run：用下一章的脚本生成一个真实的 JobSet，去问 API server，只问不建。返回的注解里要有三条：整组落在同一套机器里，按四乘四乘四分区切，每片十六台。有，说明传令员的 webhook 真被调到了。」</p>
+<h2 id="四代价和坑票不能卖超拆也要按顺序2" class="hc3">四、代价和坑：票不能卖超，拆也要按顺序（2′）</h2>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-5">03 §3.5 配额规则</a>，指「实测集群」那一条末尾的「没扣备件」，再指下面积木账图的读图句「配额按右边（实测物理状态）算」。</p>
+<p class="say">「票卖超的代价，实测集群就是现成的例子。它把一百多个池全算了进去，配额是池数乘六十四，没扣备件，而当时 K8s 标签上健康的只有一百二十八节，超卖了十来个 cube 的芯片。票卖得比能开的车厢多，平时看不出来，坏一节就没车可补，任务排上了却切不出来。票数要跟着能开的车厢走，不跟着池的个数走。」</p>
+<p class="board"><b>🖥️ 屏幕</b><a data-chap="1" href="../runbook/03-control-plane-addons.html#step-3-8">03 §3.8 整章拆除</a>，指 1–4 步。</p>
+<p class="say">「拆的时候也有讲究：倒着拆，而且每一步都要趁它依赖的控制器还活着。先删完任务，再按队列、货品、闸机、拓扑树的顺序删 Kueue 对象，再拆传令员，最后卸 Kueue 和 JobSet。顺序反了，对象上的锁没人摘，卸载就卡在正在销毁那一步，一句错都不报。这时候看有没有 pod，别盯着对象看。」</p>
+<p class="say">「这一章留下的问题：闸门装好了，dry-run 也说它接上了。可 dry-run 什么都没建——它真能放行一台机器、一个 cube、十几列车吗？下一章，我们一级一级爬上去看。」</p>
+<p class="lwarn"><b>⚠️ 最容易跑偏</b>dry-run 探针用 04 的 <code>04-gen-jobset.sh</code> 生成的 JobSet（带切片形状注解）。最容易跑偏：⛔ 不念 Kueue 配置全文（并发参数、二十二个排除 namespace、六个 integrations），不讲 Kyverno（<a href="../runbook/03-control-plane-addons.html#step-3-6">§3.6</a> 可选）；⚠️ 容易说错：实测集群配额 = 池数 × 64、当时 K8s HEALTHY 128（超了十来个 cube 的量）是实测（09 D04）；拆除卡住时：要保留的集群上 Kueue 对象的 finalizer 不要手摘，整集群销毁时由清理流程统一摘除；被追问「activation-timeout 设多少」时：默认 3 分钟太短，建片高峰会反复驱逐，先例用 60 分钟，也有部署用过 6/10/15 分钟；「证书由控制器自签」是按清单推断的，见 §3.3；被追问「Kueue 该钉哪个版本」时：以 01 的 BOM 为准，建议 0.18.x 且不低于 0.18.5；「Kueue 内存大是因为 TAS」出自 Kueue 公开文档，整 pod 需要这么多是推断。探针细节（台上不念）：先例那个探针在没装策略引擎的集群上什么都不输出（实测集群上就是空的），不代表 webhook 坏了——传令员只认模板上带形状注解的任务，所以必须用 04-gen-jobset.sh 产出的骨架去问。128 是 K8s 标签上的 HEALTHY 数，和 GCE 侧数出来的健康 cube 不是同一个口径，被问对不上就这么答。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="02-cluster-bringup.html"><small>← 上一页</small>02 建集群与 144 个节点池 · 讲义</a><a class="next" href="04-functional-verification.html"><small>下一页 →</small>04 功能验证 · 讲义</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#一问题pod-为什么不能自己上车3">一、问题：pod 为什么不能自己上车（3′）</a></li><li class="l2"><a href="#二为什么难闸机坏了整个车站都进不了人5">二、为什么难：闸机坏了，整个车站都进不了人（5′）</a></li><li class="l2"><a href="#三怎么做四样东西按顺序装最后问一次-api55">三、怎么做：四样东西按顺序装，最后问一次 API（5.5′）</a></li><li class="l2"><a href="#四代价和坑票不能卖超拆也要按顺序2">四、代价和坑：票不能卖超，拆也要按顺序（2′）</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

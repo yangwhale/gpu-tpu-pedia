@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>05 动态切片日常操作 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a class="on" aria-current="page" href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>05 动态切片日常操作</span></nav><nav class="lbar" aria-label="手册与讲义"><a class="on" aria-current="page" href="05-dynamic-slicing-operations.html">📘 手册</a><a href="../lectures/05-dynamic-slicing-operations.html">📝 讲义 · 19′</a><span class="lbar-tip">讲课的人看讲义，投屏放这一页</span></nav><article class="md"><h1 id="05-动态切片日常操作">05 动态切片日常操作</h1>
+<blockquote>
+<ul>
+<li><strong>要解决什么</strong>：切片底层做了什么、按什么顺序拆、卡住去哪层找原因。</li>
+<li><strong>为什么难</strong>：切片横跨三层（Kueue、托管 Slice Controller、GCE/OCS），症状和原因常不在一层；删错顺序留下孤儿 MIG，表现成假缺货（§5.5）。</li>
+</ul>
+</blockquote>
+<blockquote class="co danger">
+<p><span class="co-t"><i>⛔</i><span>两条红线</span></span></p>
+<ul>
+<li><strong>要保留的集群上，Slice 的 finalizer 默认不要手摘；不要删还被 Slice 占着的节点池</strong>（见<a href="pitfalls.html#l-40">经验教训第 40 条</a>）。</li>
+<li><a href="00-overview.html#g-finalizer">finalizer</a> 守「MMIG 里的 cube 全摘干净」；唯一例外是 MMIG 成员已为 0、且已开 Google case 时，按 §5.5 第 5–6 步摘；整集群销毁时由清理流程统一摘除。</li>
+</ul>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>11 s</strong> GCE 挂完 4 个 cube 的 MIG</li>
+<li><strong>33 s</strong> 多 cube 片删除 p50</li>
+<li><strong>约 3 min</strong> 10+ 片任务激活 p50</li>
+<li><strong>近半</strong>失败来自两个方向抢 cube</li>
+</ul>
+</div>
+<p><strong>开工前</strong>（每个终端一次）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nb">source</span><span class="w"> </span>~/runbook-env.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>rb_env_check<span class="w"> </span>PROJECT<span class="w"> </span>REGION<span class="w"> </span>ZONE<span class="w"> </span>CLUSTER
+</code></pre></div>
+<ul>
+<li>变量：<code>$PROJECT $REGION $ZONE $CLUSTER $NS $CLUSTER_QUEUE $TPU_FLAVOR $POLICY_NAME $STATE_DIR</code>；可选 <code>CLUSTER_HASH</code>（8 位）、<code>SPARE_CUBES</code>。</li>
+<li><code>kubectl</code>（集群管理员）、<code>gcloud</code>（含 alpha/beta）、<code>jq</code>、<code>curl</code>；GCE 要 <code>compute.instanceGroupManagers.update</code>、<code>compute.resourcePolicies.delete</code>。</li>
+<li>已过 <a href="03-control-plane-addons.html">03</a> 出口（<code>kubectl get crd slices.accelerator.gke.io</code> 有结果）。</li>
+<li>本章脚本（<code>scripts/</code>，默认 dry-run / 只读）：</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>脚本</th>
+<th>节</th>
+<th>做什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>05-list-partitions.sh</code></td>
+<td>5.3 / 5.7</td>
+<td>按 cube 列状态与占用；<code>--free</code> 只列可用；<code>--emit</code> 出 Slice YAML</td>
+</tr>
+<tr>
+<td><code>05-slice.yaml</code></td>
+<td>5.3</td>
+<td>手动 Slice 模板</td>
+</tr>
+<tr>
+<td><code>05-delete-slice-chain.sh</code></td>
+<td>5.5</td>
+<td>删 Slice → 等 → 查 MMIG 成员 → 核对；<code>--scan-orphans</code> 找孤儿</td>
+</tr>
+<tr>
+<td><code>05-triage-slice.sh</code></td>
+<td>5.6</td>
+<td>一次抓全三层现场</td>
+</tr>
+<tr>
+<td><code>05-isolate-cube.sh</code></td>
+<td>5.7</td>
+<td>taint 坏 cube + 按公式重算 Kueue 配额，<code>--undo</code> 反向</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<p><a id="step-5-1"></a></p>
+<h2 id="51-一个切片在底层做了什么" class="hc0"><span class="hn">5.1</span>一个切片在底层做了什么</h2>
+<p>术语：<a href="00-overview.html#g-super-sub">super-slice</a> · <a href="00-overview.html#g-slice">Slice</a> · <a href="00-overview.html#g-workload-policy">workload policy</a> · <a href="00-overview.html#g-mig">MIG / MMIG</a> · <a href="00-overview.html#g-ocs">OCS</a>。</p>
+<figure class="img"><a href="../figs/f03-slice-lifecycle-timeline.svg" target="_blank" title="新窗口看原图"><img src="../figs/f03-slice-lifecycle-timeline.svg" alt="一个 4x8x8 切片的建与删：GCE 真实调用时间线" loading="lazy"></a><figcaption>一个 4x8x8 切片的建与删：GCE 真实调用时间线</figcaption></figure>
+<p><strong>读图</strong>：GCE 11 s 挂完 4 个 cube、删除 2 s；其余几十秒在 GCE 外（<span class="tg inf">[推断]</span> OCS 接光纤、ICI 形成、打 <code>gke-tpu-slice</code> 标签）。</p>
+<figure class="vid"><video id="v-e600cfff" autoplay loop muted playsinline controls preload="metadata" poster="../figs/anim/anim-slice-lifecycle.poster.jpg" aria-label="动图：切片的一生（时钟按实测秒数走）" aria-describedby="v-e600cfff-cap"><source src="../figs/anim/anim-slice-lifecycle.mp4" type="video/mp4"><img src="../figs/anim/anim-slice-lifecycle.gif" alt="动图：切片的一生（时钟按实测秒数走）"></video><figcaption id="v-e600cfff-cap">▶ 动图：切片的一生（时钟按实测秒数走）</figcaption></figure>
+<p>（17 秒循环，<a href="../figs/anim/anim-slice-lifecycle.mp4">mp4</a>；摘标签 14 s、删 MMIG 32–34 s、对象消失 37 s。）</p>
+<p>四类 GCE 调用，量大打满读写配额（见<a href="pitfalls.html#l-52">经验教训第 52 条</a>）。一次约 12 小时巡检窗口内的审计条目量级：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>GCE 调用</th>
+<th>审计条目（量级）</th>
+<th>作用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>resourcePolicies.insert</code> / <code>.delete</code></td>
+<td>各数百次</td>
+<td>每 super-slice 建/删 workload policy</td>
+</tr>
+<tr>
+<td><code>regionMultiMigs.insert</code> / <code>.delete</code></td>
+<td>各数百次</td>
+<td>建/删 MMIG（名 = <code>&lt;Slice名&gt;-&lt;集群 hash 前 8 位&gt;</code>）</td>
+</tr>
+<tr>
+<td><code>instanceGroupManagers.patch</code></td>
+<td>数千次</td>
+<td>MIG attach / detach MMIG</td>
+</tr>
+<tr>
+<td><code>instanceGroupManagers.configureAcceleratorTopologies</code></td>
+<td>上万次</td>
+<td>cube 内 sub-slice ACTIVATE / DEACTIVATE</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><code>configureAcceleratorTopologies</code> = 开关 cube 内那段 <a href="00-overview.html#g-ici">ICI</a> <span class="tg inf">[推断：由 PROVISION_ONLY「请求时才配网络」归纳]</span>；<strong>GKE 控制器发，运维别手发</strong>。</li>
+<li>MMIG 命名见上表；成员够了 OCS 自动重接。</li>
+</ul>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>状态（Ready.reason）</th>
+<th>正常</th>
+<th>超过即异常</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SliceNotCreated</td>
+<td>约 1–2 s</td>
+<td>—</td>
+</tr>
+<tr>
+<td>ACTIVATING</td>
+<td>单片安静 26–63 s（本书实测）、各形状 42–81 s（实测集群），与形状几乎无关（1 cube 约 42 s，32 cube 8x16x16 约 1 min 是另一个 8x16x16 作业），阈值以 <a href="04-functional-verification.html#card-a">04 卡 A</a> 为准；2x2x1 约 22 s；任务级 p50：1 片 54 s、3 片 51 s、<strong>10+ 片约 3 min</strong>（慢的约 7 min、最长约 12 min，多数次有重试）</td>
+<td>&gt;10 min（≥32 cube 片 &gt;15 min）</td>
+</tr>
+<tr>
+<td>ACTIVE</td>
+<td>运行期</td>
+<td>—</td>
+</tr>
+<tr>
+<td>ACTIVE_DEGRADED</td>
+<td>不是正常运行态：实测一天出现二十多次，没有一次回到 ACTIVE（<a href="#step-5-6">§5.6</a>）</td>
+<td>出现即告警</td>
+</tr>
+<tr>
+<td>DEACTIVATING</td>
+<td>多 cube 片 <code>Deleting Slice</code> 到消失 p50 <strong>33 s</strong>（p90 38 s，max 46 s）；2x2x1 约 20 s</td>
+<td>&gt;10 min</td>
+</tr>
+<tr>
+<td>INCOMPLETE</td>
+<td>删除途中或 cube 不够，可停几分钟</td>
+<td>&gt;10 min</td>
+</tr>
+<tr>
+<td>SliceCreationFailed</td>
+<td>带 <code>slice.gke.io/retry-on-failure: &quot;true&quot;</code> 时自动重试（5–60 s 退避）</td>
+<td>反复出现</td>
+</tr>
+<tr>
+<td>FAILED</td>
+<td>终态，<strong>不会自愈</strong></td>
+<td>任何时候</td>
+</tr>
+</tbody>
+</table></div>
+<figure class="mermaid"><img src="../assets/mermaid/e7c8f75c6177.png" width="457" alt="示意图" loading="lazy"></figure><p><code>FAILED</code> 靠 Kueue 驱逐重切（§5.6）。<strong>查一个切片</strong>：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">SLICE</span><span class="o">=</span>&lt;切片名&gt;<span class="w">     </span><span class="c1"># kubectl get slices.accelerator.gke.io 的 NAME 列（Kueue 建的形如 &lt;ns&gt;-jobset-&lt;JobSet 名&gt;-&lt;hash&gt;-worker-&lt;i&gt;）</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>slice<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>-o<span class="w"> </span>yaml<span class="w">        </span><span class="c1"># 看 spec.partitionIds、status.conditions（Ready 的 reason/message、NodeLabeled）</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>slice<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.status.conditions[?(@.type==&quot;Ready&quot;)].reason}&#39;</span><span class="w">   </span><span class="c1"># 脚本里取状态用这条</span>
+</code></pre></div>
+<p><strong>没有 <code>.status.state</code></strong>（实测恒为空）。过渡态卡住 → 见<a href="pitfalls.html#l-39">经验教训第 39 条</a>。冒烟实测：2x2x1 到 10+ × 4x8x8 <strong>全在「正常」列</strong>（<a href="04-functional-verification.html#%E5%BD%A2%E7%8A%B6%E9%98%B6%E6%A2%AF%E6%80%BB%E8%A1%A8">04 形状阶梯总表</a>）。</p>
+<p><strong>激活时间</strong>：</p>
+<figure class="chart"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 470" width="880" role="img" aria-label="切片激活延迟分组散点：3 片中位约 1 分钟，10+ 片更久且有重试；本书脚本安静时 26–63 秒，与大任务同时激活时 161–172 秒；验收超时门槛建议不低于 5 分钟。" font-family='"Noto Sans CJK SC","PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif' class="chart"><title>切片激活要多久：看同时建几片、有没有人抢 cube —— 不看形状</title><desc>切片激活延迟分组散点：3 片中位约 1 分钟，10+ 片更久且有重试；本书脚本安静时 26–63 秒，与大任务同时激活时 161–172 秒；验收超时门槛建议不低于 5 分钟。</desc><style>.pt{cursor:default}.pt:hover>*:not(title),.pt:focus>*:not(title){stroke:#202124;stroke-width:2.2}.pt:focus{outline:none}</style><rect width="880" height="470" fill="#fff"/><text x="20.0" y="30.0" font-size="19" fill="#202124" font-weight="700">切片激活要多久：看同时建几片、有没有人抢 cube —— 不看形状</text><text x="20.0" y="52.0" font-size="14" fill="#5f6368">每个点 = 一个任务从建 Slice 到全部 ACTIVE（对数纵轴）；红点 = 有片重试过（多数是和手建子切片抢 cube）</text><circle cx="26" cy="73" r="5.5" fill="#1a73e8"/><text x="38.0" y="78.0" font-size="13.5" fill="#202124">实测任务，无重试</text><circle cx="174.0" cy="73" r="5.5" fill="#d93025"/><text x="186.0" y="78.0" font-size="13.5" fill="#202124">有片重试过</text><circle cx="281.5" cy="73" r="5.5" fill="#188038"/><text x="293.5" y="78.0" font-size="13.5" fill="#202124">本书脚本，安静时</text><circle cx="429.5" cy="73" r="5.5" fill="#e8710a"/><text x="441.5" y="78.0" font-size="13.5" fill="#202124">本书脚本，与更大规模任务同时激活</text><line x1="80" y1="387.0" x2="850" y2="387.0" stroke="#eceff1"/><text x="72.0" y="391.5" font-size="13" fill="#5f6368" text-anchor="end">20 s</text><line x1="80" y1="357.5" x2="850" y2="357.5" stroke="#eceff1"/><text x="72.0" y="362.0" font-size="13" fill="#5f6368" text-anchor="end">30 s</text><line x1="80" y1="307.0" x2="850" y2="307.0" stroke="#eceff1"/><text x="72.0" y="311.5" font-size="13" fill="#5f6368" text-anchor="end">1 min</text><line x1="80" y1="256.5" x2="850" y2="256.5" stroke="#eceff1"/><text x="72.0" y="261.0" font-size="13" fill="#5f6368" text-anchor="end">2 min</text><line x1="80" y1="189.7" x2="850" y2="189.7" stroke="#eceff1"/><text x="72.0" y="194.2" font-size="13" fill="#5f6368" text-anchor="end">5 min</text><line x1="80" y1="139.2" x2="850" y2="139.2" stroke="#eceff1"/><text x="72.0" y="143.7" font-size="13" fill="#5f6368" text-anchor="end">10 min</text><text x="24" y="255.0" font-size="13.5" fill="#5f6368" text-anchor="middle" transform="rotate(-90 24 255.0)">激活耗时（对数）</text><line x1="80" y1="408" x2="850" y2="408" stroke="#80868b"/><text x="176.2" y="428.0" font-size="13.5" fill="#202124" text-anchor="middle">3 片 × 4x4x4</text><text x="176.2" y="446.0" font-size="13" fill="#5f6368" text-anchor="middle">实测集群</text><text x="368.8" y="428.0" font-size="13.5" fill="#202124" text-anchor="middle">10+ 片 × 4x8x8</text><text x="368.8" y="446.0" font-size="13" fill="#5f6368" text-anchor="middle">实测集群</text><text x="561.2" y="428.0" font-size="13.5" fill="#202124" text-anchor="middle">本书脚本 · 安静时</text><text x="561.2" y="446.0" font-size="13" fill="#5f6368" text-anchor="middle">无人抢 cube</text><text x="753.8" y="428.0" font-size="13.5" fill="#202124" text-anchor="middle">本书脚本 · 繁忙时</text><text x="753.8" y="446.0" font-size="13" fill="#5f6368" text-anchor="middle">与更大规模任务同时</text><rect x="80" y="307.0" width="770" height="101.0" fill="#e6f4ea" fill-opacity="1.0"/><line x1="80.0" y1="189.7" x2="850.0" y2="189.7" stroke="#d93025" stroke-width="1.4" stroke-dasharray="6 4"/><text x="846.0" y="183.7" font-size="13" fill="#d93025" text-anchor="end">验收判超时的门槛别低于 5 min</text><text x="846.0" y="398.9" font-size="13" fill="#0d652d" text-anchor="end">安静基线 &lt; 1 min</text><g class="pt" tabindex="0"><title>57 s，3 片 4x4x4</title><circle cx="191.4" cy="310.4" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>51 s，3 片 4x4x4</title><circle cx="187.6" cy="319.0" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>51 s，3 片 4x4x4</title><circle cx="172.8" cy="318.6" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>56 s，3 片 4x4x4</title><circle cx="165.6" cy="312.3" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>45 s，3 片 4x4x4</title><circle cx="176.7" cy="328.1" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>56 s，3 片 4x4x4，有片重试</title><circle cx="172.1" cy="311.6" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>52 s，3 片 4x4x4</title><circle cx="188.7" cy="317.5" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>51 s，3 片 4x4x4</title><circle cx="167.6" cy="319.3" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>46 s，3 片 4x4x4</title><circle cx="175.2" cy="326.4" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><text x="210.2" y="323.6" font-size="13.5" fill="#202124">中位 51 s</text><g class="pt" tabindex="0"><title>约 2 min，10+ 片 4x8x8</title><circle cx="372.4" cy="255.4" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 3 min，10+ 片 4x8x8，有片重试</title><circle cx="386.7" cy="239.1" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 2 min，10+ 片 4x8x8，有片重试</title><circle cx="369.0" cy="261.6" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 12 min，10+ 片 4x8x8，有片重试</title><circle cx="359.2" cy="124.4" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 2 min，10+ 片 4x8x8</title><circle cx="380.0" cy="255.6" r="5.5" fill="#1a73e8" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 3 min，10+ 片 4x8x8，有片重试</title><circle cx="374.0" cy="232.7" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 3 min，10+ 片 4x8x8，有片重试</title><circle cx="357.8" cy="225.6" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 6 min，10+ 片 4x8x8，有片重试</title><circle cx="386.8" cy="174.5" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>约 3 min，10+ 片 4x8x8，有片重试</title><circle cx="390.0" cy="220.3" r="5.5" fill="#d93025" stroke="#fff" stroke-width="1.2"/></g><text x="402.8" y="237.7" font-size="13.5" fill="#202124">中位约 3 min</text><g class="pt" tabindex="0"><title>4x4x4：56 s</title><circle cx="572.4" cy="312.0" r="5.5" fill="#188038" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>4x4x4：26 s</title><circle cx="575.7" cy="367.9" r="5.5" fill="#188038" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>4x4x8：44 s</title><circle cx="554.4" cy="329.6" r="5.5" fill="#188038" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>4x4x8：41 s</title><circle cx="569.5" cy="334.7" r="5.5" fill="#188038" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>4x8x8：63 s</title><circle cx="575.6" cy="303.4" r="5.5" fill="#188038" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>2×4x4x4：52 s</title><circle cx="567.9" cy="317.4" r="5.5" fill="#188038" stroke="#fff" stroke-width="1.2"/></g><text x="591.2" y="328.3" font-size="13.5" fill="#202124">中位 48 s</text><g class="pt" tabindex="0"><title>4x4x4：163 s</title><circle cx="752.7" cy="234.2" r="5.5" fill="#e8710a" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>4x4x8：172 s</title><circle cx="739.4" cy="230.3" r="5.5" fill="#e8710a" stroke="#fff" stroke-width="1.2"/></g><g class="pt" tabindex="0"><title>8x8x8：161 s</title><circle cx="751.4" cy="235.1" r="5.5" fill="#e8710a" stroke="#fff" stroke-width="1.2"/></g><text x="783.8" y="239.2" font-size="13.5" fill="#202124">中位 163 s</text></svg><figcaption>激活延迟分组散点：10+ 片任务有重试时到 5–12 min；本书脚本安静时 26–63 s，与更大规模任务同时激活时 161–172 s<span class="hint">（悬停或点按数据点看原值）</span></figcaption><details class="chart-data"><summary>数据表与出处（27 行）</summary><div class="tbl"><table><thead><tr><th>组</th><th>形状</th><th>片数</th><th>激活耗时</th><th>有重试</th></tr></thead><tbody><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">57 s</td><td></td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">51 s</td><td></td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">51 s</td><td></td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">56 s</td><td></td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">45 s</td><td></td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">56 s</td><td>是</td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">52 s</td><td></td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">51 s</td><td></td></tr><tr><td>3 片 × 4x4x4</td><td>4x4x4</td><td>3</td><td class="num">46 s</td><td></td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 2 min</td><td></td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 3 min</td><td>是</td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 2 min</td><td>是</td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 12 min</td><td>是</td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 2 min</td><td></td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 3 min</td><td>是</td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 3 min</td><td>是</td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 6 min</td><td>是</td></tr><tr><td>10+ 片 × 4x8x8</td><td>4x8x8</td><td>10+</td><td class="num">约 3 min</td><td>是</td></tr><tr><td>本书脚本 · 安静时</td><td>4x4x4</td><td></td><td class="num">56 s</td><td></td></tr><tr><td>本书脚本 · 安静时</td><td>4x4x4</td><td></td><td class="num">26 s</td><td></td></tr><tr><td>本书脚本 · 安静时</td><td>4x4x8</td><td></td><td class="num">44 s</td><td></td></tr><tr><td>本书脚本 · 安静时</td><td>4x4x8</td><td></td><td class="num">41 s</td><td></td></tr><tr><td>本书脚本 · 安静时</td><td>4x8x8</td><td></td><td class="num">63 s</td><td></td></tr><tr><td>本书脚本 · 安静时</td><td>2×4x4x4</td><td></td><td class="num">52 s</td><td></td></tr><tr><td>本书脚本 · 繁忙时</td><td>4x4x4</td><td></td><td class="num">163 s</td><td></td></tr><tr><td>本书脚本 · 繁忙时</td><td>4x4x8</td><td></td><td class="num">172 s</td><td></td></tr><tr><td>本书脚本 · 繁忙时</td><td>8x8x8</td><td></td><td class="num">161 s</td><td></td></tr></tbody></table></div><p class="sub">出处：本书实测（控制器日志 1 s 精度的轮次）；本书实测的时间线表（Slice ACTIVE 列；≈ = Admitted − 1 s）。<a href="../figs/charts/c08-activation-latency.svg" target="_blank">单独打开 SVG</a></p><p class="sub">本书脚本的用例是否「繁忙」按表里「同时在建的切片」一列判：同时有大规模切片在建的算繁忙。</p></details></figure>
+<p>读图：<strong>任务级延迟由最慢那片决定</strong>，红点是和子切片抢 cube 的。10+ 片任务删完 1 s 就建，首轮 10+ 片全报 <code>already attached</code> / <code>not stable</code>，两分多钟才齐；大任务间留约 1 min <span class="tg inf">[推断]</span>。</p>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-9">多 cube 原子大池</a> · <a href="pitfalls.html#l-7">整 pod 没有单一 ICI 切片</a></p>
+</blockquote>
+<p><a id="step-5-2"></a></p>
+<h2 id="52-kueue-路径生产默认" class="hc1"><span class="hn">5.2</span>Kueue 路径（生产默认）</h2>
+<p><a href="00-overview.html#2-%E8%BD%AF%E4%BB%B6%E5%88%86%E5%B1%82%E8%B0%81%E7%AE%A1%E4%BB%80%E4%B9%88">00 §2 时序图</a>的操作版（<a href="00-overview.html#g-kueue">Kueue</a>、<a href="00-overview.html#g-tas">TAS</a>、<a href="00-overview.html#g-admissioncheck">AdmissionCheck</a>、<a href="00-overview.html#g-gate">scheduling gate</a>）：</p>
+<div class="x-steps">
+<ol>
+<li><strong>提交</strong> JobSet 带 <code>cloud.google.com/gke-tpu-slice-topology</code> 注解 → webhook 注入 TAS 注解、健康亲和、gate。</li>
+<li><strong>建 Slice</strong> TAS 选 cube → 每 replica 一个 Slice，名字 <code>{namespace}-jobset-{jobset}-{hash5}-{replicatedJob}-{index}</code>（≤59 字符）。</li>
+<li><strong>放行</strong> Slice 全 ACTIVE → AdmissionCheck Ready → 去 gate、放 pod。</li>
+<li><strong>回收</strong> 结束 → Kueue 删 Slice；<strong>它建的 Slice 别手改</strong>。</li>
+</ol>
+</div>
+<p><strong>全有或全无</strong></p>
+<figure class="mermaid"><img src="../assets/mermaid/16236e647cc3.png" width="1099" alt="示意图" loading="lazy"></figure><p>读图：<strong>驱逐 / 挂起触发全量重切</strong>，普通重启不碰切片；所以多片大任务必须留空闲健康 cube 当备件。</p>
+<ul>
+<li>比硬切片省掉「删建节点池 10–15 min」，但 TAS 不能只换坏 cube → 见<a href="pitfalls.html#l-38">经验教训第 38 条</a>。</li>
+<li>事件原文：<code>Slice has been deleted, evicting workload</code> → <code>AdmissionCheck is Retry, deleting all Slices</code>。</li>
+<li><code>RestartJobSetFailurePolicyAction</code>（JobSet 普通重启）实例：实测集群上一个 10+ 片任务重启 4 次，始终只建过 10+ 片；另一次韧性演练（第 2 次演练）重启两次也没重建切片。</li>
+</ul>
+<p><strong>准入两道闸与抢占</strong>（实测）：</p>
+<figure class="mermaid"><img src="../assets/mermaid/4ca6c31bc7b7.png" width="988" alt="示意图" loading="lazy"></figure><p>读图：<strong>先配额后拓扑</strong>，message 秒级写进 condition；Pending 几十秒没 message 才查别的 <span class="tg inf">[推断]</span>。</p>
+<ul>
+<li>配额闸实例：其他大任务占着配额时提交出 <code>insufficient unused quota for google.com/tpu in flavor &lt;池数&gt;xtpu7x-128, N more needed</code>；拓扑闸：8x8x16 要 16 cube 只剩 3，<code>allows to fit only 3 out of 16</code>（6 s 后 2/16）；8x16x16 只拼出 28/32 的案例见 <a href="04-functional-verification.html#step-4-7">04 §4.7</a>。</li>
+<li>抢占：没写优先级的验收任务准入约 2 min 后被抢（<code>Evicted</code> → <code>Preempted</code> → <code>Requeued</code>），见 <a href="04-functional-verification.html#acceptance-priority">04「验收任务的优先级」</a>。</li>
+<li><strong>验收任务别高过集群上已有的作业</strong>：<code>06-jobset.sh</code> 默认 <code>POD_PRIORITY=high</code>。本书 <a href="scripts/03-kueue-priority.yaml">03-kueue-priority.yaml</a> 建的 high 是 800；集群上常已有同名 PriorityClass，先 <code>kubectl get priorityclass</code> 看值，别撞名。用 <code>POD_PRIORITY=</code> 并 render 核对，集群上已有其他作业时验收任务用低优先级（<a href="06c-multislice-training.html#step-6-5-ladder">06c §6.5</a>）。</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code>kubectl<span class="w"> </span>get<span class="w"> </span>workloads<span class="w"> </span>-A
+kubectl<span class="w"> </span>describe<span class="w"> </span>workload<span class="w"> </span>&lt;wl&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;ns&gt;<span class="w">                     </span><span class="c1"># &lt;wl&gt; / &lt;ns&gt; = 上一条输出的 NAME / NAMESPACE 列；看 admissionChecks 状态、Evicted 条件与原因</span>
+</code></pre></div>
+<ul>
+<li>驱逐条件写明是运行时 FAILED、创建超时还是手动删除。卡住：<code>spec.active</code> 置 false 再置 true（<code>kubectl patch workload &lt;wl&gt; -n &lt;ns&gt; --type=merge -p '{&quot;spec&quot;:{&quot;active&quot;:false}}'</code>）；原文写成字符串 <code>&quot;false&quot;</code>，快照里是布尔 <code>true</code>。</li>
+<li>切片复用（两个集群都<strong>没开</strong>）：slice-controller 加 <code>--reuse-slices=true --add-preferred-node-affinity=true</code>；Kueue 开 <code>TASRespectNodeAffinityPreferred</code>（v0.18+，高效复用要 ≥0.19.0）。</li>
+</ul>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-35">切片激活慢或超时</a> · <a href="pitfalls.html#l-42">驱逐后重建时旧 pod 未删净，TAS rank 冲突把一片的 pod 撒到多个 cube</a></p>
+</blockquote>
+<p><a id="step-5-3"></a></p>
+<h2 id="53-手动-slice-路径byo不经-kueue" class="hc2"><span class="hn">5.3</span>手动 Slice 路径（BYO，不经 Kueue）</h2>
+<p>模板 <code>scripts/05-slice.yaml</code> 节选（字段取自 GA 用户指南与线上对象）：</p>
+<div class="code"><span class="lang">yaml</span><pre><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">accelerator.gke.io/v1beta1</span><span class="w">        </span><span class="c1"># v1alpha1 已弃用</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Slice</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-slice</span><span class="w">                                </span><span class="c1"># ≤49 字符，^[a-z]([-a-z0-9]*[a-z0-9])?$</span>
+<span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">slice.gke.io/retry-on-failure</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tpu7x</span>
+<span class="w">  </span><span class="nt">topology</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8x8x16</span><span class="w">                            </span><span class="c1"># 每维是 4 的倍数且非降序：4x4x8 合法，4x8x4 非法</span>
+<span class="w">  </span><span class="nt">partitionIds</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">&lt;16 个 4x4x4-id&gt;</span><span class="p p-Indicator">]</span><span class="w">            </span><span class="c1"># 个数 = A×B×C/64</span>
+</code></pre></div>
+<ul>
+<li><strong>不能直接 apply</strong>，用第 1 步 <code>--emit</code> 生成。取自线上一个用户手建的 Slice；模板注释里的命名与形状规则。</li>
+</ul>
+<figure class="mermaid"><img src="../assets/mermaid/a8a78ac3f082.png" width="803" alt="示意图" loading="lazy"></figure><p>读图：最后一格别忘——手工片不删，Kueue 会选中被占 cube。</p>
+<p><strong>1. 找可用 cube</strong>（只读）</p>
+<ul>
+<li><a href="00-overview.html#g-partition">partition</a> id = 节点标签 <code>cloud.google.com/gke-tpu-partition-4x4x4-id</code> 的值（<a href="02-cluster-bringup.html#step-2-7">02 §2.7</a> 第 2 条命令也能列）。</li>
+<li>可用 = 16/16 Ready、标签 HEALTHY（DEGRADED 不算可用，口径同 <a href="09-customer-alignment.html#d01">09 D01</a>；与 <a href="03-control-plane-addons.html#step-3-5">03 §3.5</a> 配额口径一致）、无 Slice CR 引用、无 <code>gke-tpu-slice</code> 标签（§5.4）、未隔离（§5.7）。</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-list-partitions.sh<span class="w"> </span>--free<span class="w">        </span><span class="c1"># 列：PARTITION_ID NODEPOOL MIG READY STATE TAINT SLICE_CR NODE_SLICE_LABEL</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-list-partitions.sh<span class="w"> </span>--emit<span class="w"> </span>my-slice<span class="w"> </span>8x8x16<span class="w"> </span>&gt;<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$STATE_DIR</span><span class="s2">/slice-my-slice.yaml&quot;</span><span class="w">   </span><span class="c1"># 取前 16 个可用 cube 填模板</span>
+</code></pre></div>
+<ul>
+<li>
+<p>实测集群快照离线跑：可用数十个 cube（其余被另一个多片作业或巡检片占）。</p>
+</li>
+<li>
+<p><strong>实测✓</strong>：空闲列表与挂 <code>gke-tpu-slice</code> 的交集 0；<code>--emit</code> 的 8x8x8 片 57 s ACTIVE。sub-cube 手工片 SLICE_CR 列显示 <code>-</code>，看 NODE_SLICE_LABEL。</p>
+</li>
+<li>
+<p><strong><code>partition-4x4x4-state</code> 标签</strong>：公开文档定义 HEALTHY / DEGRADED / UNHEALTHY（DEGRADED 只在 4x4x4 级，另有 UNSET / INCOMPLETE），webhook 默认注入的 affinity 是 HEALTHY + DEGRADED <span class="src" tabindex="0">源<span class="srci"><a href="https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing" target="_blank" rel="noopener">https://docs.cloud.google.com/kubernetes-engine/docs/how-to/use-gke-dynamic-slicing</a></span></span>。</p>
+<p>在实测集群上，GCE 报 DEGRADED(15/15) 的 cube 标的是 UNHEALTHY，没观察到 DEGRADED 值；<code>05-list-partitions.sh --free</code> 遇到 DEGRADED 一律不算可用。</p>
+</li>
+</ul>
+<p><strong>2. 建</strong>：</p>
+<div class="code"><span class="lang">bash</span><pre><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$STATE_DIR</span><span class="s2">/slice-my-slice.yaml&quot;</span>
+</code></pre></div>
+<p><strong>验证</strong>：<code>kubectl get slice my-slice -w</code> 到 <code>ACTIVE</code>（实测 46–81 s）；<code>kubectl get nodes -l cloud.google.com/gke-tpu-slice=my-slice --no-headers | wc -l</code> = 16 × cube 数；<code>kubectl get slice my-slice -o jsonpath='{.status.conditions[?(@.type==&quot;NodeLabeled&quot;)].status}'</code> = <code>True</code>。</p>
+<p>cube 不存在 / 被占 / 跨 superpod → <code>SliceCreationFailed</code>；topology 与 id 个数不符 → 拒绝 <span class="src" tabindex="0">源<span class="srci">同上「Note」</span></span>。</p>
+<p><strong>跑负载</strong>：<strong>单片用 headless Service + 普通 Indexed Job</strong>（本书的单片实测就是这样跑的；<a href="04-functional-verification.html#step-4-6">04 §4.6</a>），nodeSelector 按下表「单片钉切片」另加 <code>gke-tpu-accelerator: tpu7x</code>（即 <code>gke-tpu-slice: &lt;切片名&gt;</code> + <code>gke-tpu-topology: 8x8x8</code>）。</p>
+<p>实测集群 <code>default</code> ns 没被挂起是因 <code>manageJobsWithoutQueueName</code> 关着；本书配置（<code>manageJobsWithoutQueueName: true</code>）下放进排除的 <code>$INSPECT_NS</code>（<a href="04-functional-verification.html#step-4-1">04 §4.1</a>）。</p>
+<p><strong>幂等</strong>：同名 apply 不新建；换 cube 删掉重建，<strong>别</strong>原地改 <code>spec.partitionIds</code>。<strong>清理</strong>：<code>&quot;$RUNBOOK_DIR&quot;/scripts/05-delete-slice-chain.sh my-slice --execute</code>（§5.5）。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>约束</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>同 superpod</td>
+<td>且同 reservation；每 cube 16 节点全 Ready</td>
+</tr>
+<tr>
+<td><strong>不要求物理相邻</strong> <span class="tg inf">[推断]</span></td>
+<td>校验只有「cubes not in same superpod」，坏 cube 可「OCS can route around it」</td>
+</tr>
+<tr>
+<td>单片钉切片</td>
+<td>nodeSelector <code>cloud.google.com/gke-tpu-slice: &lt;slice名&gt;</code> + <code>cloud.google.com/gke-tpu-topology: &lt;形状&gt;</code> + pod 注解 <code>cloud.google.com/gke-tpu-slice-topology</code></td>
+</tr>
+<tr>
+<td>BYO 多片</td>
+<td>JobSet 注解 <code>alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-tpu-slice</code>，<strong>别</strong>手写 <code>gke-tpu-slice</code>；Kueue TAS 下禁用 exclusive-topology</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>手工 Slice 对 Kueue 隐形</span></span>Kueue 不知道 cube 被占，选中后 attach 失败（参考 JIT 基线作业重试 6–7 次）。</p>
+</blockquote>
+<figure class="img"><a href="../figs/f05-manual-slice-invisible.svg" target="_blank" title="新窗口看原图"><img src="../figs/f05-manual-slice-invisible.svg" alt="手工子切片 Kueue 看不见：JIT 基线作业最慢那一片的 8 次挂载尝试" loading="lazy"></a><figcaption>手工子切片 Kueue 看不见：JIT 基线作业最慢那一片的 8 次挂载尝试</figcaption></figure>
+<p>读图：红块是一个手建的 2x2x1 巡检片；JIT 基线作业 worker-4 的 <code>multiMig.insert</code> 退避到约 65 s，子切片删后约 6 min 才 ACTIVE。</p>
+<ul>
+<li><strong>冒烟实测</strong>：集群上有少量手工小切片占了若干 cube，本书的 4x8x8 / 8x8x8 / 8x8x16 走 Kueue 三次都撞上、不自愈 → 见<a href="pitfalls.html#l-33">经验教训第 33 条</a>。</li>
+<li><strong>使用规范</strong>（写进使用方约定）：① 手工 Slice 只在维护窗口、队列清空时用；② 用完即删；③ 长期留就按 §5.7 taint 并重算配额。</li>
+<li>绕法：<a href="scripts/05-avoid-manual-slices.py"><code>05-avoid-manual-slices.py</code></a> 注入 <code>gke-tpu-slice NotIn [手工片名]</code> 亲和（实测 2,048 / 数千芯一次过）。</li>
+</ul>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-32">切片模式与形状纪律</a></p>
+</blockquote>
+<p><a id="step-5-4"></a></p>
+<h2 id="54-防碎片" class="hc3"><span class="hn">5.4</span>防碎片</h2>
+<p>cube 上有活 <a href="00-overview.html#g-super-sub">sub-slice</a> 就进不了 super-slice（<code>has an active sub slice in it with external slice ID ...</code>），反之亦然 → 见<a href="pitfalls.html#l-33">经验教训第 33 条</a>。</p>
+<p>两向抢 cube 失败数百次、占<strong>近半</strong>，全在巡检开始后：2x2x1 被挡得最多，多 cube 片次之。</p>
+<ul>
+<li>实测期间的全量巡检只用 4–7 个 cube 那么多的主机，但同时最多碰到<strong>几十个 cube</strong>；另一任务反复重切时一度更多。最重：一个任务的第 2 轮某个 worker 重试十几次，<strong>约 12 min</strong> 才 Ready。</li>
+<li>TAS 优先把小任务塞进已切碎的 cube（bin-packing）。做法 <span class="tg inf">[推断]</span>：划固定「小任务 cube」（数量写进配额与 <a href="09-customer-alignment.html#d04">09 D04</a> 备件口径），<a href="04-functional-verification.html#step-4-1">04 §4.1</a> 巡检只在维护窗口跑。</li>
+<li>判碎片：Pending 且 <code>excluded: nodeSelector: N</code> = 全部节点数 → nodeSelector 不匹配（如遗留 placement-policy selector）；真碎片比「空闲整 cube 数」与「空闲芯片 ÷ 64」。</li>
+</ul>
+<p><a id="step-5-5"></a></p>
+<h2 id="55-删除与清理顺序" class="hc4"><span class="hn">5.5</span>删除与清理顺序</h2>
+<p>依赖关系从上到下是：JobSet / Workload 引用 Slice CR（Slice 带 finalizer）；Slice 对应一个 MMIG 和一份同名的 per-slice workload policy；每个 cube 的 MIG 通过字段 <code>multiMig</code> 挂在 MMIG 上；MIG 背后是节点池。<strong>删的时候从 JobSet 开始往下删，节点池最后删。</strong></p>
+<p>日常删 JobSet 让 Kueue 删 Slice，手动 Slice 直接 <code>kubectl delete slice</code>。回收 cube / 拆集群按下面顺序，第 3–7 步由 <code>scripts/05-delete-slice-chain.sh</code> 串起。</p>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>只回收几个 cube 时别做第 1 步</span></span>配额置 0 停<strong>全集群</strong>准入。部分回收先用 <a href="scripts/05-isolate-cube.sh"><code>05-isolate-cube.sh</code></a>（§5.7）隔离，再从第 2 步往下。</p>
+</blockquote>
+<ol>
+<li>停止准入：CQ <code>nominalQuota</code> 改 0，确认没人改回；先记原值，<code>test</code> 保证改的是 <code>$TPU_FLAVOR</code>（字段路径）：</li>
+</ol>
+<div class="code"><span class="lang">bash</span><pre><code>kubectl<span class="w"> </span>get<span class="w"> </span>clusterqueue<span class="w"> </span><span class="nv">$CLUSTER_QUEUE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.spec.resourceGroups[0].flavors[0].name} {.spec.resourceGroups[0].flavors[0].resources[0].nominalQuota}&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$STATE_DIR</span><span class="s2">/cq-quota-before.txt&quot;</span><span class="w">                                  </span><span class="c1"># 例：tpu7x-flavor-v2 &lt;配额芯片数&gt;</span>
+kubectl<span class="w"> </span>patch<span class="w"> </span>clusterqueue<span class="w"> </span><span class="nv">$CLUSTER_QUEUE</span><span class="w"> </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="w"> </span><span class="s2">&quot;[</span>
+<span class="s2">  {\&quot;op\&quot;:\&quot;test\&quot;,\&quot;path\&quot;:\&quot;/spec/resourceGroups/0/flavors/0/name\&quot;,\&quot;value\&quot;:\&quot;</span><span class="nv">$TPU_FLAVOR</span><span class="s2">\&quot;},</span>
+<span class="s2">  {\&quot;op\&quot;:\&quot;replace\&quot;,\&quot;path\&quot;:\&quot;/spec/resourceGroups/0/flavors/0/resources/0/nominalQuota\&quot;,\&quot;value\&quot;:\&quot;0\&quot;}]&quot;</span>
+</code></pre></div>
+<ul>
+<li><strong>验证</strong>：读回 <code>0</code>，新任务 pending（<code>kubectl get clusterqueue $CLUSTER_QUEUE -o jsonpath='{.status.pendingWorkloads}'</code>）。<strong>回滚</strong>：<code>&quot;0&quot;</code> 换回 <code>cq-quota-before.txt</code> 的数。<code>test</code> 失败（flavor 不在 0 号位）→ 照 <code>05-isolate-cube.sh</code> 按名字找下标。</li>
+</ul>
+<ol start="2">
+<li>删 JobSet（运行中删切片曾引发固件症状尖峰和丢容量）：<code>kubectl delete jobset &lt;name&gt; -n $NS</code>。<strong>验证</strong>：Workload 消失，<code>&lt;ns&gt;-jobset-&lt;name&gt;-*</code> Slice 进 DEACTIVATING。</li>
+<li>删剩余 Slice，等待：</li>
+</ol>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">SLICE</span><span class="o">=</span>&lt;切片名&gt;<span class="w">     </span><span class="c1"># kubectl get slices.accelerator.gke.io 的 NAME 列（Kueue 建的形如 &lt;ns&gt;-jobset-&lt;JobSet 名&gt;-&lt;hash&gt;-worker-&lt;i&gt;）</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-delete-slice-chain.sh<span class="w"> </span><span class="nv">$SLICE</span><span class="w">              </span><span class="c1"># dry-run：打印现状、将执行的命令、推定的 MMIG 名</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-delete-slice-chain.sh<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>--execute<span class="w">    </span><span class="c1"># kubectl delete slice，每 30 s 报一次 Ready.reason，最多等 --timeout（默认 900 s）</span>
+</code></pre></div>
+<p>Kueue 建的 Slice（带 <code>accelerator.gke.io/owner-workload-name</code> 注解）脚本拒删（除非 <code>--allow-kueue</code>），走第 2 步。</p>
+<ol start="4">
+<li>卡住看 GCE 侧（脚本超时自动做）：<code>gcloud alpha compute multi-migs describe &lt;slice&gt;-&lt;hash8&gt; --region=$REGION --project=$PROJECT</code>，看各 MIG 的 <code>multiMig</code> 与 <code>status.isStable</code>。
+<ul>
+<li>per-slice policy 与 MMIG 同名（如 <code>&lt;slice&gt;-&lt;hash8&gt;</code>）；hash 推不出就 <code>export CLUSTER_HASH=&lt;8位&gt;</code>。</li>
+<li>MMIG 成员：<code>GET compute/alpha/projects/$PROJECT/regions/$REGION/multiMigs/&lt;mmig&gt;/multiMigMembers</code>。</li>
+</ul>
+</li>
+<li><strong>第 5–6 步只在 Google case 开着时做</strong>（脚本强制 <code>--case &lt;号&gt;</code>，不自动 PATCH）。判据：</li>
+</ol>
+<figure class="mermaid"><img src="../assets/mermaid/449e65401e33.png" width="539" alt="示意图" loading="lazy"></figure><ul>
+<li>只剩 1 个时：</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># $SLICE 同第 3 步；&lt;号&gt; = 开着的 Google case / bug 号（脚本强制要）</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-delete-slice-chain.sh<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>--execute<span class="w"> </span>--case<span class="w"> </span>&lt;号&gt;<span class="w"> </span>--force-detach
+<span class="c1"># 实际发出：kubectl cordon -l cloud.google.com/gke-nodepool=&lt;池&gt;</span>
+<span class="c1">#          PATCH compute/alpha/projects/$PROJECT/zones/$ZONE/instanceGroupManagers/&lt;mig&gt;  {&quot;multiMig&quot;: null}   ← 只发一次</span>
+</code></pre></div>
+<ul>
+<li>PATCH 原文；gcloud 等价 <code>gcloud beta compute instance-groups managed update &lt;mig&gt; --zone=$ZONE --clear-multi-mig</code>。卡住或 412 交 MIG case，<strong>别</strong>反复重试。<strong>回滚</strong>：<code>kubectl uncordon -l cloud.google.com/gke-nodepool=&lt;池&gt;</code>（detach 不可逆）。</li>
+</ul>
+<ol start="6">
+<li>MMIG 无成员后才去 finalizer，再删 MMIG 与 workload policy（命令原文）：</li>
+</ol>
+<div class="code"><span class="lang">bash</span><pre><code><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-delete-slice-chain.sh<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>--execute<span class="w"> </span>--case<span class="w"> </span>&lt;号&gt;<span class="w"> </span>--remove-finalizer<span class="w">        </span><span class="c1"># $SLICE、&lt;号&gt; 同第 5 步</span>
+<span class="c1"># 实际发出（重新读一遍状态、确认 0 个 MIG 挂着之后）：</span>
+<span class="c1">#   kubectl patch slice &lt;slice&gt; --type merge -p &#39;{&quot;metadata&quot;:{&quot;finalizers&quot;:[]}}&#39;</span>
+<span class="c1">#   gcloud alpha compute multi-migs delete &lt;slice&gt;-&lt;hash8&gt; --region=$REGION --project=$PROJECT</span>
+<span class="c1">#   gcloud compute resource-policies delete &lt;slice&gt;-&lt;hash8&gt; --region=$REGION --project=$PROJECT</span>
+</code></pre></div>
+<ul>
+<li><code>gcloud alpha compute multi-migs</code> <strong>只对白名单项目可用</strong>，报权限错就把 <code>$STATE_DIR/05-delete-slice-chain-*.log</code> 交 case 让 Google 删。</li>
+<li>删的是 <strong>per-slice</strong> policy，不是 <a href="02-cluster-bringup.html#step-2-3">02 §2.3</a> 的 cube 级 <code>$POLICY_NAME</code>（第 9 步）。</li>
+</ul>
+<ol start="7">
+<li>核对（脚本自动，不干净 exit 1）：各 MIG <code>multiMig</code> 空、<code>isStable: true</code>，节点 <code>cloud.google.com/gke-tpu-slice</code> 标签消失，MMIG 与 per-slice policy 均 404。
+<ul>
+<li>全集群巡检孤儿（每 MIG 一次 GET，费读配额<a href="pitfalls.html#l-52">经验教训第 52 条</a>）：<code>&quot;$RUNBOOK_DIR&quot;/scripts/05-delete-slice-chain.sh --scan-orphans</code>。三类：<code>DANGLING(MMIG 404)</code>（需要 Google 支持处理）、<code>ORPHAN</code>（MMIG 在、无 Slice CR）、<code>ORPHAN-WP</code>（policy 无 Slice CR，可直接 <code>resource-policies delete</code>）。</li>
+</ul>
+</li>
+<li>最后删/缩节点池，停在 size 0 就再删一次，确认 MIG 没了：</li>
+</ol>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">POOL</span><span class="o">=</span>&lt;池名&gt;<span class="w">     </span><span class="c1"># 05-list-partitions.sh 的 NODEPOOL 列，或 gcloud container node-pools list --cluster=$CLUSTER --location=$ZONE --project=$PROJECT</span>
+gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>delete<span class="w"> </span><span class="nv">$POOL</span><span class="w"> </span>--cluster<span class="o">=</span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--quiet
+gcloud<span class="w"> </span>compute<span class="w"> </span>instance-groups<span class="w"> </span>managed<span class="w"> </span>list<span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--zones<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--filter<span class="o">=</span><span class="s2">&quot;name~</span><span class="nv">$POOL</span><span class="s2">&quot;</span><span class="w">     </span><span class="c1"># 期望空</span>
+</code></pre></div>
+<ol start="9">
+<li>拆集群：删全部 Slice → 删集群 → 删 <code>$POLICY_NAME</code>（<a href="02-cluster-bringup.html#step-2-3">02 §2.3</a>）→ 拆 VPC。Kueue 对象先删，否则卡在自己的 finalizer（<a href="pitfalls.html#l-40">经验教训第 40 条</a>）：</li>
+</ol>
+<div class="code"><span class="lang">bash</span><pre><code><span class="k">for</span><span class="w"> </span>k<span class="w"> </span><span class="k">in</span><span class="w"> </span>clusterqueue<span class="w"> </span>resourceflavor<span class="w"> </span>admissioncheck<span class="w"> </span>topology<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>kubectl<span class="w"> </span>delete<span class="w"> </span><span class="nv">$k</span><span class="w"> </span>--all<span class="w"> </span>--ignore-not-found<span class="w"> </span>--timeout<span class="o">=</span>90s
+<span class="k">done</span>
+</code></pre></div>
+<ul>
+<li>Slice 删完才能关切片控制器 → 删 CRD → 删标签；zonal 集群用 <code>--location=$ZONE</code>（GA 指南 <code>--location=${REGION}</code> 是 regional 写法）。</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code>kubectl<span class="w"> </span>get<span class="w"> </span>slices.accelerator.gke.io<span class="w"> </span>--no-headers<span class="w"> </span><span class="p">|</span><span class="w"> </span>wc<span class="w"> </span>-l<span class="w">                     </span><span class="c1"># 必须是 0；不是 0 回到第 3 步</span>
+gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>update<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--no-enable-slice-controller
+kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>slices.accelerator.gke.io
+gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>delete<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="o">=</span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--quiet
+gcloud<span class="w"> </span>compute<span class="w"> </span>resource-policies<span class="w"> </span>delete<span class="w"> </span><span class="nv">$POLICY_NAME</span><span class="w"> </span>--region<span class="o">=</span><span class="nv">$REGION</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--quiet<span class="w">   </span><span class="c1"># cube 级 policy，集群删完才能删</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/02-create-networks.sh<span class="w"> </span>--delete<span class="w">                               </span><span class="c1"># 拆 VPC（02 的脚本）</span>
+</code></pre></div>
+<p><strong>验证</strong>（<strong>不可回滚</strong>）：<code>gcloud compute resource-policies list --project=$PROJECT --regions=$REGION --filter=&quot;name~^$CLUSTER&quot;</code> 为空；<code>gcloud compute instance-groups managed list --project=$PROJECT --filter=&quot;name~gke-$CLUSTER&quot;</code> 为空。</p>
+<blockquote class="co danger">
+<p><span class="co-t"><i>⛔</i><span>违反顺序的后果</span></span>→ 见<a href="pitfalls.html#l-40">经验教训第 40 条</a></p>
+<ul>
+<li><code>...multi-MIG operating in raw capacity mode</code> 删池失败；或池记录删了、MIG 仍挂在 sub-block 上，表现为假 GCE_STOCKOUT；DANGLING 只能服务端清。</li>
+</ul>
+</blockquote>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-4">reservation 到期被删，GKE 跟着删掉全部 TPU 节点</a> · <a href="pitfalls.html#l-39">两个 Slice 抢同一个 partition</a> · <a href="pitfalls.html#l-41">泄漏与孤儿对象静默吃容量</a> · <a href="pitfalls.html#l-10">NAP / Cluster Autoscaler / ProvisioningRequest 在 All Capacity 整 pod 上的坑</a> · <a href="pitfalls.html#l-40">删除卡住</a></p>
+</blockquote>
+<p><a id="step-5-6"></a></p>
+<h2 id="56-故障切片分诊" class="hc5"><span class="hn">5.6</span>故障切片分诊</h2>
+<p><strong>先抓现场</strong>（只读，存 <code>$STATE_DIR/triage-&lt;slice&gt;-&lt;时间&gt;.txt</code>，升级时整份附上）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="nv">SLICE</span><span class="o">=</span>&lt;切片名&gt;<span class="w">     </span><span class="c1"># kubectl get slices.accelerator.gke.io 的 NAME 列（Kueue 建的形如 &lt;ns&gt;-jobset-&lt;JobSet 名&gt;-&lt;hash&gt;-worker-&lt;i&gt;）</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-triage-slice.sh<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>--since<span class="w"> </span>2h<span class="w">        </span><span class="c1"># --since 要盖住切片创建时间，见下</span>
+</code></pre></div>
+<ul>
+<li><strong><code>--since</code></strong>：第 7–9 段（Cloud Logging）只查此窗口；挡路的那个手工 Slice 建于 128 min 前，<code>--since 1h</code> 三段全空。</li>
+<li>第 4 段按形状选 partition 层级（2x2x1/2x2x2/2x2x4/2x4x4 用同名层级）。手工片第 6 段只有 <code>Slice is missing workload owner annotations, skipping event handling</code>。</li>
+</ul>
+<p>它依次做的：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># $SLICE 同上一个代码块</span>
+kubectl<span class="w"> </span>describe<span class="w"> </span>slice<span class="w"> </span><span class="nv">$SLICE</span><span class="w">                                                   </span><span class="c1"># Ready.reason/message、finalizers、deletionTimestamp</span>
+kubectl<span class="w"> </span>get<span class="w"> </span>events<span class="w"> </span>-A<span class="w"> </span>--field-selector<span class="w"> </span>involvedObject.name<span class="o">=</span><span class="nv">$SLICE</span><span class="w"> </span>--sort-by<span class="o">=</span>.lastTimestamp
+kubectl<span class="w"> </span>describe<span class="w"> </span>workload<span class="w"> </span>-n<span class="w"> </span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>slice<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.metadata.annotations.accelerator\.gke\.io/owner-workload-namespace}&#39;</span><span class="k">)</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>slice<span class="w"> </span><span class="nv">$SLICE</span><span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.metadata.annotations.accelerator\.gke\.io/owner-workload-name}&#39;</span><span class="k">)</span><span class="w">   </span><span class="c1"># Kueue 建的 Slice 才有这两个注解（同 05-triage-slice.sh）</span>
+kubectl<span class="w"> </span>logs<span class="w"> </span>deployment/slice-controller-controller-manager<span class="w"> </span>-n<span class="w"> </span>slice-controller-system<span class="w"> </span>-c<span class="w"> </span>manager<span class="w"> </span>--since<span class="o">=</span>2h<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="nv">$SLICE</span><span class="w">   </span><span class="c1"># kueue-slice-controller</span>
+gcloud<span class="w"> </span>logging<span class="w"> </span><span class="nb">read</span><span class="w"> </span><span class="s1">&#39;logName=&quot;projects/&#39;</span><span class="nv">$PROJECT</span><span class="s1">&#39;/logs/slice-controller&quot; AND textPayload=~&quot;&#39;</span><span class="nv">$SLICE</span><span class="s1">&#39;&quot;&#39;</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--freshness<span class="o">=</span>2h<span class="w">   </span><span class="c1"># GKE 托管 Slice Controller</span>
+gcloud<span class="w"> </span>logging<span class="w"> </span><span class="nb">read</span><span class="w"> </span><span class="s1">&#39;protoPayload.resourceName:&quot;accelerator.gke.io/v1beta1/slices/&#39;</span><span class="nv">$SLICE</span><span class="s1">&#39;&quot;&#39;</span><span class="w"> </span>--project<span class="o">=</span><span class="nv">$PROJECT</span><span class="w"> </span>--freshness<span class="o">=</span>2h<span class="w">     </span><span class="c1"># 谁建/删了它</span>
+</code></pre></div>
+<p><strong>「slice controller」有三个</strong>：<strong>GKE 托管的</strong>在控制面（下表多数 GCE 报错出自它）；<strong>kueue-slice-controller</strong> 在 <code>slice-controller-system</code>；第三个本方案不装。托管那份的日志使用方能否查到 <span class="tg inf">[需验证]</span>，查不到交脚本输出。术语见 <a href="00-overview.html#glossary">00 术语表</a>。</p>
+<figure class="mermaid"><img src="../assets/mermaid/9d2efdbbc1a3.png" width="771" alt="示意图" loading="lazy"></figure><div class="tbl"><table>
+<thead>
+<tr>
+<th>现象</th>
+<th>含义</th>
+<th>动作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Slice <code>FAILED</code>，Workload 已 Evicted 在重排</td>
+<td>正常恢复</td>
+<td>等重切；确认有空闲健康 cube</td>
+</tr>
+<tr>
+<td>Slice <code>FAILED</code> 超过 10 min 且 Workload 没被驱逐</td>
+<td>调度器没接住（不自愈）</td>
+<td>删 JobSet 重提或 toggle <code>spec.active</code>；kueue-slice-controller（别名 kueue-tpu-ac，见<a href="00-overview.html#g-ksc">术语表</a>）新版本起 20 min 周期 reconcile，版本看 <a href="03-control-plane-addons.html#step-3-3">03 §3.3 的镜像查询</a> → 见<a href="pitfalls.html#l-39">经验教训第 39 条</a></td>
+</tr>
+<tr>
+<td><code>SliceCreationFailed: step AttachMIGsToMMIG failed ... already attached to '...'</code></td>
+<td>cube 还被别的片占着</td>
+<td>通常自愈（实测集群一次 10+ 片运行里每片都报过这条，最后仍全部激活）；持续则重叠审计 → 见<a href="pitfalls.html#l-39">经验教训第 39 条</a>。实测上百次集中在同一段约 20 分钟内</td>
+</tr>
+<tr>
+<td><code>SliceCreationFailed ... active sub slice in it with external slice ID &lt;名&gt;-&lt;hash8&gt;</code>，<code>&lt;名&gt;</code> <strong>不是</strong> <code>default-jobset-...</code>（全文见注 1）</td>
+<td>TAS 选中<strong>手工 Slice</strong> 占的 cube；<strong>不自愈</strong>（retry-attempt 到 11 仍失败）</td>
+<td>删 JobSet 过 <code>05-avoid-manual-slices.py</code> 重提；找主人删片或 taint → 见<a href="pitfalls.html#l-33">经验教训第 33 条</a></td>
+</tr>
+<tr>
+<td>Workload <code>QuotaReserved=False</code>：<code>insufficient unused quota ... N more needed</code> / <code>topology &quot;...&quot; allows to fit only X out of Y slice(s)</code></td>
+<td>没到切片层：配额不够 / 整 cube 拼不出</td>
+<td>等或调配额（03 §3.5）/ 换形状（§5.2）</td>
+</tr>
+<tr>
+<td>Workload <code>Evicted</code> + <code>Preempted to accommodate a workload ... due to prioritization in the ClusterQueue</code> → <code>Requeued</code></td>
+<td>被更高优先级抢占</td>
+<td>不是故障；见 <a href="04-functional-verification.html#acceptance-priority">04</a></td>
+</tr>
+<tr>
+<td><code>FormSubsliceStep failed ... has an active sub slice</code> / <code>ConfigureAcceleratorTopology action is not supported for Managed Instance Groups attached to a Multi-MIG</code></td>
+<td>碎片：前者大片被 2x2x1 挡，后者反之</td>
+<td>删该 cube 上的 sub-slice（5.4）。实测数百次，各类失败里最多</td>
+</tr>
+<tr>
+<td><code>Error 412: ... multi-MIG on a managed instance group that is not stable</code> / <code>400 resourceNotReady</code></td>
+<td>与 GCE 后台操作竞争，或两片抢同一 partition</td>
+<td>等 2–5 min；重叠审计。实测 not stable 上百次、not ready 几十次</td>
+</tr>
+<tr>
+<td><code>Ready=Unknown</code> / &quot;Unexpected partition state&quot; / <code>MMIGHealthProbeFailed</code></td>
+<td>GCE 读配额打满，不是硬件</td>
+<td>查 429；<strong>别批量删</strong>（实测事故中批量删除反把 detach 卡死，五个高优作业停约 6–12 h） → 见<a href="pitfalls.html#l-52">经验教训第 52 条</a></td>
+</tr>
+<tr>
+<td>Slice <code>ACTIVE_DEGRADED</code>（从 ACTIVATING 直接进来）</td>
+<td>一种独立状态，不是 OCS 引起的 cube DEGRADED。实测一天出现二十多次，没有一次回到 ACTIVE：除 1 次转 FAILED 外都转 DEACTIVATING，碰上它的训练任务随后失败或被人工重建</td>
+<td>别让任务在上面等：出现即告警（08 告警 #4），删 JobSet 重提换片；向 Google 要状态定义 → 见<a href="pitfalls.html#l-37">经验教训第 37 条</a></td>
+</tr>
+<tr>
+<td>ACTIVATING 卡住且带 deletionTimestamp</td>
+<td>老控制器 bug</td>
+<td>由 Google 指导改 status 为 INCOMPLETE，<strong>别自己改</strong></td>
+</tr>
+<tr>
+<td><code>len(partitionIds)</code> 不足（如 31/32）、两 pod 挤一个节点</td>
+<td>TAS 缓存损坏（常因重建 Topology）</td>
+<td>CQ <code>stopPolicy: HoldAndDrain</code> → 重启 Kueue → 改回 <code>None</code>（<strong>驱逐该 CQ 全部运行任务</strong>） → 见<a href="pitfalls.html#l-32">经验教训第 32 条</a></td>
+</tr>
+<tr>
+<td>替换节点缺 <code>gke-tpu-slice</code>/<code>gke-tpu-topology</code> 标签但 Slice 仍 <code>NodeLabeled=True</code></td>
+<td>标签漂移</td>
+<td>向 Google 要 <code>force-relabel</code> 注解的 key → 见<a href="pitfalls.html#l-50">经验教训第 50 条</a></td>
+</tr>
+</tbody>
+</table></div>
+<p>注 1：完整报错 <code>SliceCreationFailed: step AttachMIGsToMMIG failed ... INVALID_FIELD_VALUE ... cannot be attached to the parent workload group because it has an active sub slice in it with external slice ID &lt;名&gt;-&lt;hash8&gt;</code>。</p>
+<p>HoldAndDrain（原始步骤，形式为推断；<code>spec.stopPolicy</code> 路径与 <code>None</code> 已对快照 CQ 核对）：</p>
+<div class="code"><span class="lang">bash</span><pre><code>kubectl<span class="w"> </span>patch<span class="w"> </span>clusterqueue<span class="w"> </span><span class="nv">$CLUSTER_QUEUE</span><span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;stopPolicy&quot;:&quot;HoldAndDrain&quot;}}&#39;</span><span class="w">   </span><span class="c1"># 取值以 Google 给的为准</span>
+kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deployment<span class="w"> </span>-n<span class="w"> </span>kueue-system<span class="w"> </span>kueue-controller-manager
+kubectl<span class="w"> </span>patch<span class="w"> </span>clusterqueue<span class="w"> </span><span class="nv">$CLUSTER_QUEUE</span><span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;stopPolicy&quot;:&quot;None&quot;}}&#39;</span><span class="w">           </span><span class="c1"># 快照 CQ 即 stopPolicy: None</span>
+</code></pre></div>
+<ul>
+<li><strong>验证</strong>：第 1 条后 <code>kubectl get clusterqueue $CLUSTER_QUEUE -o jsonpath='{.status.admittedWorkloads}'</code> 到 0 再重启，<code>kubectl rollout status deployment -n kueue-system kueue-controller-manager</code> 完成；第 3 条后读回 <code>None</code>、<code>status.conditions[?(@.type==&quot;Active&quot;)].status</code> = <code>True</code>。<strong>回滚</strong>即第 3 条。</li>
+</ul>
+<p>升级给谁、带什么：<a href="08-day2-operations.html#step-8-5">08 §8.5</a>。</p>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-5">multi-MIG 配额（MMIG）配额不够，super-slice 建不出来</a> · <a href="pitfalls.html#l-1">「缺货」多半不是缺货</a> · <a href="pitfalls.html#l-8">电力事件与 protection tier 错配</a> · <a href="pitfalls.html#l-40">删除卡住</a> · <a href="pitfalls.html#l-43">START_SESSION failed / barrier</a></p>
+</blockquote>
+<p><a id="step-5-7"></a></p>
+<h2 id="57-隔离坏-cube" class="hc0"><span class="hn">5.7</span>隔离坏 cube</h2>
+<p>原样：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># &lt;id1&gt;,&lt;id2&gt; = 要隔离的 cube 的 partition id：05-list-partitions.sh 第 1 列（或 kubectl get nodes -L cloud.google.com/gke-tpu-partition-4x4x4-id）</span>
+kubectl<span class="w"> </span>taint<span class="w"> </span>nodes<span class="w"> </span>-l<span class="w"> </span><span class="s1">&#39;cloud.google.com/gke-tpu-partition-4x4x4-id in (&lt;id1&gt;,&lt;id2&gt;)&#39;</span><span class="w"> </span><span class="nv">PartOfBrokenSlice</span><span class="o">=</span>true:NoSchedule
+</code></pre></div>
+<ul>
+<li>Google 确认清理后才去 taint。配额<strong>按 <a href="03-control-plane-addons.html#step-3-5">03 §3.5</a> 的公式重算</strong>，不是固定扣 64×cube 数：健康 − S 还 ≥ 128 时配额封顶 8,192，隔离不改变它 <span class="tg inf">[推断]</span>。使用方自动化<strong>别</strong>删/重建「不健康」节点，整 pod 的维修是原地的。</li>
+</ul>
+<p>脚本一次做 taint + 重算配额 + 台账（默认 dry-run）：</p>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># &lt;号&gt; = 报修的 bug 号，&lt;现象&gt; = 一句话描述（进台账）；&lt;id1&gt; &lt;id2&gt; = 05-list-partitions.sh 第 1 列</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-isolate-cube.sh<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;&lt;case 号&gt; &lt;现象&gt;&quot;</span><span class="w"> </span>&lt;id1&gt;<span class="w"> </span>&lt;id2&gt;<span class="w">             </span><span class="c1"># 看将执行什么</span>
+<span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts/05-isolate-cube.sh<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;&lt;case 号&gt; &lt;现象&gt;&quot;</span><span class="w"> </span>--execute<span class="w"> </span>&lt;id1&gt;<span class="w"> </span>&lt;id2&gt;
+<span class="c1"># 实际发出：kubectl taint nodes -l &#39;...-4x4x4-id in (&lt;id1&gt;,&lt;id2&gt;)&#39; PartOfBrokenSlice=true:NoSchedule --overwrite</span>
+<span class="c1">#          kubectl patch clusterqueue $CLUSTER_QUEUE --type=json -p &#39;[{&quot;op&quot;:&quot;test&quot;,...flavor 名...},{&quot;op&quot;:&quot;test&quot;,...旧值...},</span>
+<span class="c1">#                                                                     {&quot;op&quot;:&quot;replace&quot;,&quot;.../nominalQuota&quot;,&quot;value&quot;:&quot;&lt;重算值&gt;&quot;}]&#39;</span>
+<span class="c1">#          重算值 = 03-addons.sh quota --assume-isolated=&lt;id1&gt;,&lt;id2&gt; 的建议值（--undo 用 --assume-restored）；与现值相同就不 patch</span>
+</code></pre></div>
+<p>字段与字符串取值（<code>nominalQuota: &quot;&lt;芯片数&gt;&quot;</code>）按实测集群快照；按 <code>$TPU_FLAVOR</code> 找下标，两个 <code>test</code> 防并发写错。快照 dry-run（按每 cube 固定扣 64 颗的写法）：2 个 cube 配额减 128 颗芯片。</p>
+<ul>
+<li><strong>配额按重算给，不是照扣</strong>：调 <code>03-addons.sh quota</code>，公式只在那一处（DEGRADED 不算健康，封顶照算）；脚本要求 <code>SPARE_CUBES</code> 已填。<strong>这套逻辑未实测</strong>，验证见脚本头注释。</li>
+<li><strong>验证</strong>：<code>kubectl get nodes -l '...-4x4x4-id in (&lt;ids&gt;)' -o json | jq '[.items[]|select(.spec.taints[]?.key==&quot;PartOfBrokenSlice&quot;)]|length'</code> = 16 × cube 数；<code>nominalQuota</code> = 脚本打印的「重算」值（未封顶时少 64 × cube 数，封顶时不变）；TAINT 列 <code>TAINTED</code>；<code>--list</code> 看台账 <code>$STATE_DIR/isolated-cubes.tsv</code>。</li>
+</ul>
+<blockquote class="co data">
+<p><span class="co-t"><i>📊</i><span>实测（在线集群）✓，只做了 dry-run，集群没被改动</span></span>对一个 cube（16 个节点、64 颗芯片）做 server 端配额 dry-run，配额减 64 颗芯片（按每 cube 固定扣 64 颗的写法），路径与活对象一致；改成重算后还没在真集群上 dry-run <span class="tg inf">[需验证]</span>。<strong>换集群先核对 <code>TPU_FLAVOR</code></strong> 与 RF 名（本书 <code>tpu7x-flavor-v2</code>，实测集群 <code>&lt;池数&gt;xtpu7x-128</code>），不一致时脚本报错退出。</p>
+</blockquote>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>幂等</td>
+<td>台账已有的 id 不重复处理；配额每次重算绝对值；taint 带 <code>--overwrite</code></td>
+</tr>
+<tr>
+<td>中途失败</td>
+<td>先打 taint、后改配额。如果改配额那步失败（如 <code>03-addons.sh quota</code> 报错），就会停在半完成状态：cube 已经打了 taint，但配额没改，台账也没写。修好原因后<strong>原样重跑同一条命令</strong>即可补齐（taint 幂等）。在这段时间里，Kueue 仍按旧配额放行任务，未封顶时可放行的芯片比实际能用的多出 64 × cube 数，多放进来的任务会因为污点卡在 Pending <span class="tg inf">[推断，未实测]</span></td>
+</tr>
+<tr>
+<td>回滚（Google 修好后）</td>
+<td><code>05-isolate-cube.sh --undo --execute &lt;ids&gt;</code>：去 taint、按 quota 公式重算配额、删台账行</td>
+</tr>
+<tr>
+<td>在跑的 pod</td>
+<td>NoSchedule 不赶，靠 Slice FAILED → 驱逐（§5.6）或 <code>waitForPodsReady.recoveryTimeout</code>（<a href="07-resilience-and-recovery.html#step-7-2">07 §7.2</a>）</td>
+</tr>
+<tr>
+<td>前提</td>
+<td>TAS 选 cube 避开 pod 不容忍的 taint [需验证：使用方集群隔离后 dry-run 提交一次，确认没选中被隔离 cube]</td>
+</tr>
+<tr>
+<td>配额口径</td>
+<td>nominalQuota = min(128, 健康 cube − <code>$SPARE_CUBES</code>) × 64，健康只算 HEALTHY；脚本直接调 <code>03-addons.sh quota</code> 算（<a href="03-control-plane-addons.html#step-3-5">03 §3.5</a>）</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>本节可能踩到的问题</strong>：<a href="pitfalls.html#l-40">MMIG 孤儿与卡死</a> · <a href="pitfalls.html#l-51">主机维护不按 cube</a></p>
+</blockquote>
+<h2 id="检查点" class="hc1">检查点</h2>
+<p><strong>做完了</strong>（本章出口）</p>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 能用 <code>kubectl get slice &lt;name&gt; -o yaml</code> 读 Ready.reason，按 §5.1 状态表判超时。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 测试切片按 §5.5 演练过回收，无残留 Slice / 孤儿 MMIG。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> §5.7 隔离已在测试 cube 上 dry-run，写明去 taint 前提。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> <code>--scan-orphans</code> 跑过，没有 <code>DANGLING</code> / <code>ORPHAN</code> 行。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 真实报错能在 §5.6 分诊表对上层。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 手工 Slice（无 owner-workload-name 注解）已清点，各有主人和删除时间，或 cube 已 taint（见<a href="pitfalls.html#l-33">经验教训第 33 条</a>）。</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 小任务 cube 集合与巡检窗口已约定（§5.4）。</li>
+</ul>
+<p><strong>说得出</strong>（先自己答，再点开对答案）</p>
+<ul class="contains-task-list">
+<li class="task-list-item qa"><details><summary>为什么默认不要自己去掉 Slice 的 finalizer？</summary><div class="qa-a">cube 没摘干净就去掉会留孤儿 MMIG，表现成假缺货，只能 Google 服务端清；唯一例外是 MMIG 成员已为 0、且已开 Google case 时，按 §5.5 的步骤摘</div></details></li>
+<li class="task-list-item qa"><details><summary>手删 10+ 片任务里的 1 个 Slice 会怎样？</summary><div class="qa-a">整个 Workload 被驱逐，10+ 片全重建，约 2 min 恢复</div></details></li>
+<li class="task-list-item qa"><details><summary>一个 cube 上还有 2x2x1 巡检切片，能把它编进 4x8x8 吗？</summary><div class="qa-a">不能，GCE 报 <code>has an active sub slice</code>，先删 sub-slice</div></details></li>
+<li class="task-list-item qa"><details><summary>一批 Slice 同时 <code>Ready=Unknown</code>，该批量删吗？</summary><div class="qa-a">不该；多半是 GCE 读配额被打满，先查 429</div></details></li>
+<li class="task-list-item qa"><details><summary>回收的删除方向？</summary><div class="qa-a">从负载往下：JobSet → Slice → MMIG → MIG/节点池，池最后删</div></details></li>
+</ul>
+<p><strong>交棒</strong>：下一步先定要几片、JobSet 怎么声明 → <a href="06-slice-request-and-multislice.html">06</a>，再把数据和缓存备好 → <a href="06a-storage-anywhere-cache-gcsfuse.html">06a</a>，然后用 10+ 个 4x8x8 切片跑数千芯片的真实训练 → <a href="06b-public-config-recipe-dsv3.html">06b</a>（公开配置）/ <a href="06c-multislice-training.html">06c</a>（大号 MoE 模型 JIT 对照）。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="04-functional-verification.html"><small>← 上一页</small>04 功能验证阶梯</a><a class="next" href="06-slice-request-and-multislice.html"><small>下一页 →</small>06 申请 slice：数量、形状、placement、多片互联</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#51-一个切片在底层做了什么">5.1 一个切片在底层做了什么</a></li><li class="l2"><a href="#52-kueue-路径生产默认">5.2 Kueue 路径（生产默认）</a></li><li class="l2"><a href="#53-手动-slice-路径byo不经-kueue">5.3 手动 Slice 路径（BYO，不经 Kueue）</a></li><li class="l2"><a href="#54-防碎片">5.4 防碎片</a></li><li class="l2"><a href="#55-删除与清理顺序">5.5 删除与清理顺序</a></li><li class="l2"><a href="#56-故障切片分诊">5.6 故障切片分诊</a></li><li class="l2"><a href="#57-隔离坏-cube">5.7 隔离坏 cube</a></li><li class="l2"><a href="#检查点">检查点</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

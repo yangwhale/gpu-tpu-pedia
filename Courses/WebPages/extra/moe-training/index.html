@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>首页 · MoE 训练优化</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="moe">
+<link rel="stylesheet" href="assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root=".">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="index.html"><span class="crab">🦀</span><span class="bt">MoE 训练优化</span></a>
+  <nav class="secs" aria-label="栏目"><a href="index.html" class="on">首页</a><a class="" href="moe-public/topic/README.html">专题</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（/ 聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page home">
+
+<main id="main"><section class="hero"><div class="hwrap"><h1>混合注意力 MoE 模型在 TPU v7x 上的训练优化</h1><p class="hook">一套 MLA + KDA 混合注意力 + MoE 的模型（小号 / 大号两个尺寸），在 MaxText 上从单 slice 调到 数千颗芯片跨 DCN。这本书只讲每一刀：做什么、依赖谁、值多少、为什么有效。</p><p class="author">作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud AI Infra 架构师</p><a class="seccard" href="promo/moe/index.html" style="max-width:860px;margin:14px 0 4px;border-color:var(--blue);background:#fff"><b>一页看懂：我们为 MoE 训练准备了什么</b><span class="d">单片步时从指数 100 降到 37、从 1 片扩到 20+ 片，一路的数据、方法和可复用的东西</span></a><a class="seccard" href="moe-public/topic/README.html" style="max-width:860px;margin:14px 0 4px;border-color:var(--blue);background:#fff"><b>专题导读</b><span class="d">一段话讲完整条路、全部优化的总表</span></a></div></section>
+<section class="blk"><h2 id="g0">专题：每一刀改了什么、收益多少</h2><div class="chaps"><a class="chap" href="moe-public/topic/01-model-and-baseline.html"><span class="no">01</span><b>量法与口径：这是个什么模型，时间花在哪，怎么量才不自欺</b><span class="d">这章解决什么：这个模型一步的时间为什么大头花在「搬权重」而不是「算」，并行形状为什么定成 FSDP 拉满、EP=1，步时、MFU、HBM 各…</span></a><a class="chap" href="moe-public/topic/02-collective-scheduling-and-overlap.html"><span class="no">02</span><b>集合通信调度与重叠：搬的时机比搬的速度更要命</b><span class="d">这章解决什么：FSDP 拉满（EP=1）之后，每层前向要借一次专家权重（all-gather），反向再借一次、还一次梯度（reduce-sc…</span></a><a class="chap" href="moe-public/topic/03-dcn-and-multislice.html"><span class="no">03</span><b>DCN 与多切片：把单片的优化搬到 10+ 片</b><span class="d">这章解决什么：单片（一个 ICI slice）调顺以后，要把同一份训练铺到 10+ 片上。片与片之间只能走数据中心网络（DCN），它每次发起…</span></a><a class="chap" href="moe-public/topic/04-fp8-quantization.html"><span class="no">04</span><b>FP8：稠密乘法</b><span class="d">这章解决什么：大号模型每层都要先把专家权重从别的 device 收过来（all-gather）才能算，这段搬运比乘法本身贵。FP8 把每个数…</span></a><a class="chap" href="moe-public/topic/05-kernels-kda-mla-moe.html"><span class="no">05</span><b>KDA / MLA / MoE kernel：手写的算子要过三关</b><span class="d">这章解决什么：这个模型有三块要手写的算子——KDA（一种线性注意力，上游 MaxText 没有）、MoE 专家矩阵乘（GMM）、MLA 用的…</span></a><a class="chap" href="moe-public/topic/06-memory-remat-compile.html"><span class="no">06</span><b>显存、remat 与编译：远低于上限的理论账怎么变成 92 GiB</b><span class="d">这章解决什么：每个 device 可用显存上限 94.74 GiB。按「权重 + 梯度 + 优化器 + 激活」算，大号模型的理论账远低于上限…</span></a><a class="chap" href="moe-public/topic/07-data-and-checkpointing.html"><span class="no">07</span><b>数据与检查点：训练跑顺之后，时间从哪漏走</b><span class="d">这章解决什么：步时调快之后，墙钟时间还会从三处悄悄漏走：读数据、存档、出故障后的恢复。这三处都不在 TPU 上算，在主机、存储和调度这几层。…</span></a><a class="chap" href="moe-public/topic/08-open-problems.html"><span class="no">08</span><b>未解决问题：下一个集群的实验清单</b><span class="d">要解决的问题：前七章把大号模型 1 片调到指数 37、10+ 片调到指数 41，还有一批问题没弄清。换到下一个集群，先做哪几个实验最值？</span></a><a class="chap" href="moe-public/topic/09-ablation-ladder.html"><span class="no">09</span><b>消融阶梯：一刀一刀拆掉，看每一刀值多少</b><span class="d">这套配方叠了十几样优化，大号模型 1 片（256 芯片）一步从指数 100 降到 37。别的团队想照抄，先要知道哪几刀值钱、哪几刀只在特定前…</span></a><a class="chap" href="moe-public/topic/10-optimization-roadmap.html"><span class="no">10</span><b>优化依赖图：哪刀先哪刀后、为什么这个顺序</b><span class="d">这章回答：几百个改动里，哪些必须先做、哪些要等别的做完才有意义，顺序背后的理由是什么。</span></a><a class="chap" href="moe-public/topic/11-porting-checklist.html"><span class="no">11</span><b>迁移清单</b><span class="d">这章回答一件事：把这套 MoE 训练优化搬到别的模型、别的集群上，哪些该搬、按什么顺序搬、每样大约值多少、怎么判断搬对了。A 档 17 条与…</span></a><a class="chap" href="moe-public/topic/12-multimodal-and-numerics-alignment.html"><span class="no">12</span><b>多模态版与精度对拍</b><span class="d">这章解决什么：大号模型多模态版＝视觉编码器（ViT）＋ 大号模型主干，两段一起训。同一个模型加上看图，要在 1 片和 10+ 片上都跑得比对…</span></a><a class="chap" href="moe-public/topic/13-silent-errors.html"><span class="no">13</span><b>静默错误总表：跑通了，不等于对了</b><span class="d">要解决的问题：跑通、不报错、loss 看着正常，结果却是错的，或者优化根本没生效。这类错怎么分类、每类最便宜怎么抓、上线前查什么？01–12…</span></a></div></section></main>
+
+</div>
+<footer class="foot"><div class="inner">Google Cloud · TPU v7x 训练优化</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="assets/site.js"></script>
+</body></html>

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 400" width="1180" height="400" font-family="Noto Sans CJK SC, sans-serif" role="img" aria-label="四堵墙：显存靠关两个 XLA pass 过、编译靠上游 XLA 修复过、带宽 AR 只有三四成线速至今未拆、21 ms 发起地板靠 DCN AR 合并部分解决；坏节点二分到具体子块后避开">
+<rect width="1180" height="400" fill="#fff"/>
+<text x="20" y="32" font-size="20" font-weight="bold" fill="#202124">四堵墙（显存、编译、带宽、21 ms 地板）几乎同时出现，带宽那堵至今没拆</text>
+<text x="20" y="56" font-size="14" fill="#5f6368">每行：墙挡住了什么 → 怎么过的；坏节点不算墙，但把步时搅成双峰；最后一跳：10+ 片指数 71 → 47</text>
+<text x="176" y="106" font-size="15" font-weight="bold" fill="#202124" text-anchor="end">显存</text>
+<rect x="190" y="86" width="330" height="32" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="202" y="107" font-size="14" fill="#202124">一跨 DCN 就 OOM（DP2 要 104 GiB）</text>
+<polygon points="530,96 546,102 530,108" fill="#5f6368"/>
+<rect x="556" y="86" width="604" height="32" rx="6" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+<text x="568" y="107" font-size="14" fill="#202124">多片关 decomposer / pipeliner 过显存（§7）；多模态版仍过不了 92 GiB 每日 AOT 闸</text>
+<text x="176" y="158" font-size="15" font-weight="bold" fill="#202124" text-anchor="end">编译</text>
+<rect x="190" y="138" width="330" height="32" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="202" y="159" font-size="14" fill="#202124">HLO 通信重排在多片上编不过</text>
+<polygon points="530,148 546,154 530,160" fill="#5f6368"/>
+<rect x="556" y="138" width="604" height="32" rx="6" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+<text x="568" y="159" font-size="14" fill="#202124">上游 XLA 修复，随 libtpu 0.0.47 发布（§8）</text>
+<text x="176" y="210" font-size="15" font-weight="bold" fill="#202124" text-anchor="end">带宽</text>
+<rect x="190" y="190" width="330" height="32" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="202" y="211" font-size="14" fill="#202124">DCN AR 只有三四成线速</text>
+<polygon points="530,200 546,206 530,212" fill="#5f6368"/>
+<rect x="556" y="190" width="604" height="32" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="568" y="211" font-size="14" fill="#202124">根因未确认；卡在 host 侧归约，生产只用单网卡（§12）</text>
+<text x="176" y="262" font-size="15" font-weight="bold" fill="#202124" text-anchor="end">21 ms 地板</text>
+<rect x="190" y="242" width="330" height="32" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="202" y="263" font-size="14" fill="#202124">单独发起一次 AR 就要 21 ms</text>
+<polygon points="530,252 546,258 530,264" fill="#5f6368"/>
+<rect x="556" y="242" width="604" height="32" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="568" y="263" font-size="14" fill="#202124">DCN AR 合并把小包捆大（§5）；自研合并 pass 建模 ≠ 实测（§11）</text>
+<text x="176" y="314" font-size="15" font-weight="bold" fill="#5f6368" text-anchor="end">坏节点（不算墙）</text>
+<rect x="190" y="294" width="330" height="32" rx="6" fill="#feefe3" stroke="#e8710a" stroke-width="1.6"/>
+<text x="202" y="315" font-size="14" fill="#202124">步时双峰，每一刀都难量准</text>
+<polygon points="530,304 546,310 530,316" fill="#5f6368"/>
+<rect x="556" y="294" width="604" height="32" rx="6" fill="#e6f4ea" stroke="#188038" stroke-width="1.6"/>
+<text x="568" y="315" font-size="14" fill="#202124">二分到具体坏子块并避开（§14）；名单外仍有慢步</text>
+<text x="176" y="372" font-size="15" font-weight="bold" fill="#202124" text-anchor="end">10+ 片 AOT</text>
+<rect x="190" y="352" width="970" height="32" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="202" y="373" font-size="14" fill="#174ea6" font-weight="bold">显存、编译两堵过了、坏子块避开后：AOT + HLO 通信重排上 10+ 片，指数 71 → 47；再换多片自己的 profile 到 41</text>
+</svg>

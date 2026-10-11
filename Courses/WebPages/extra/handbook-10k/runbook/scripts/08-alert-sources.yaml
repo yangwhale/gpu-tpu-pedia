@@ -1,0 +1,313 @@
+# =============================================================================
+# 08-alert-sources.yaml —— 08 §8.1 告警表每一条的「数据从哪来」清单（29 条，编号与 08 §8.1 表一致；25–29 按恢复测试补）
+#
+# 这不是可以直接 apply 的 K8s 对象，是一份给搭监控的人用的清单：每条写数据源类型、查询、阈值和出处。
+# 把加粗 7 条 + ★ 3 条建成 Cloud Monitoring 策略的模板（gcloud monitoring policies create，未实测）见 08 §8.1「把 10 条必备告警建成策略」。
+#   type: promql   —— Cloud Monitoring 里用 PromQL 写告警策略（GKE 系统指标的 PromQL 名 =
+#                     把 kubernetes.io/ 换成 kubernetes_io: 、其余 / 换成 _，例：kubernetes.io/node_pool/status →
+#                     kubernetes_io:node_pool_status，见 https://cloud.google.com/kubernetes-engine/docs/how-to/tpus 里的示例查询）
+#   type: logging  —— Cloud Logging 过滤器 → 基于日志的告警或日志指标
+#   type: kubectl  —— 没有现成指标，要自己跑 kubectl（cron / CronJob），08-daily-check.sh 已覆盖一部分
+#   type: gcloud   —— 轮询 GCE / GKE API
+# 占位：$PROJECT $CLUSTER $ZONE $RESERVATION $BLOCK $NS 同 env.sh。
+#
+# 指标出处（公开文档）：
+#   GKE 系统指标全表（accelerator/slice/*、accelerator/partition/*、node_pool/*、node/interruption_count、
+#     container/restart_count、container/multislice/*）：https://cloud.google.com/monitoring/api/metrics_kubernetes
+#   TPU 节点/节点池健康指标与示例 PromQL：https://cloud.google.com/kubernetes-engine/docs/how-to/tpus
+#   kube-state 指标包（kube_deployment_* / kube_jobset_* / kube_pod_* / kube_persistentvolume_*）：
+#     https://cloud.google.com/kubernetes-engine/docs/how-to/kube-state-metrics ——实测集群开了 DEPLOYMENT/POD/JOBSET/STORAGE
+#   控制面指标 apiserver_request_total：https://cloud.google.com/kubernetes-engine/docs/how-to/control-plane-metrics
+#     ——实测集群**没开** API_SERVER 包，要用得先开
+#   serviceruntime（API 请求数 / 配额用量）：https://cloud.google.com/monitoring/api/metrics_gcp_p_z
+#   串口日志进 Cloud Logging：https://cloud.google.com/compute/docs/troubleshooting/viewing-serial-port-output ；
+#     GKE SYSTEM 日志会收节点串口输出，前提是 VM 元数据 serial-port-logging-enable=true
+#     （https://cloud.google.com/kubernetes-engine/docs/concepts/about-logs）
+#   Kueue 指标名：https://kueue.sigs.k8s.io/docs/reference/metrics/
+#   slice-controller 的 tpu_ac_* 只有名字没有语义；它在 :8443 暴露，但默认没有抓取它的 PodMonitoring
+#     → 凡依赖 tpu_ac_* / kueue_* 的条目都标了 [需验证]：要先有能通过 :8443 鉴权的抓取配置。
+# 通用注意：GKE 系统指标每 60 s 采样、最多 120 s 才可见——比 kubectl 慢 2–3 分钟；监控轮询间隔 ≥30 s。
+# 实测（逐条跑过一次）：
+#   - ⚠ kube_* 全空：实测集群上 DEPLOYMENT/POD/JOBSET/STORAGE 包都开着，但 GKE 托管的 gke-managed-cim/kube-state-metrics-0
+#     500Mi 内存上限，在两千多节点 / 几万 pod 上 OOMKilled 上百次（CrashLoopBackOff）→ 依赖 kube_* 的 #13 alt / #17 alt / #22 / #24
+#     查出来是 0 条 = 永远不报，和「一切正常」长得一样。上线前先查 `kubectl -n gke-managed-cim get pod kube-state-metrics-0`，
+#     再给它配一条 absent(kube_pod_status_phase{cluster="$CLUSTER"}) 的元告警；内存上限是 GKE 托管的，要 Google 调（开 case）。
+#   - 「min_over_time(x[W]) == 1」这种写法会误报：窗口里只有 1 个样本也成立（刚建 117 s 的 Slice 就进了 ACTIVATING>15m，
+#     删掉 10 min 的 Slice 仍报 INCOMPLETE>15m）。#4 / #6 / #16 已加 count_over_time 覆盖率条件（60 s 采样 → 15 min ≥14 个样本）。
+#   - k8s_node 资源上没有 node_pool_name 标签（#11 alt、#18 的 `by (node_pool_name)` 会塌成 1 条全集群序列），只有 node_name。
+# =============================================================================
+alerts:
+- id: 1
+  what: 健康 cube 数 < SLO 线+2（10 min）/ < SLO 线（page）
+  primary: {type: kubectl, run: "\"$RUNBOOK_DIR\"/scripts/08-daily-check.sh --probe（cron 每 5–10 min）"}
+  alt:
+    type: promql
+    query: |
+      count(max by (partition_id) (kubernetes_io:accelerator_partition_state{monitored_resource="k8s_node_pool",
+            cluster_name="$CLUSTER", partition_topology="4x4x4", state="HEALTHY"}) == 1)
+    note: >-
+      实测：同一时刻查出的健康 cube 数与 kubectl 口径（08-daily-check / 03-addons.sh quota）一致；实测集群节点标签只有 HEALTHY/UNHEALTHY。
+      原注：公开文档给的 state 例值是 HEALTHY/UNHEALTHY，与节点标签的 HEALTHY/DEGRADED 是否一一对应未核实；
+      且只反映分区标签，不含「16 节点 Ready」——Ready 那一半要么 kubectl，要么叠加 kubernetes_io:node_status_condition。
+- id: 2
+  what: sub-block healthyHostCount / degradedInfraCount 变化持续 ≥5 min
+  primary:
+    type: gcloud
+    run: |
+      gcloud compute reservations sub-blocks list $RESERVATION --block-name $BLOCK --zone $ZONE --project $PROJECT \
+        --format='csv[no-heading](name.basename(),healthInfo.healthStatus,healthInfo.healthyHostCount,healthInfo.degradedInfraCount)'
+      # 每 5 min 存一份，与上一份 diff；同一行连续两次不同才报（避开 4 h 一次的 gcp_health_status 抖动）
+- id: 3
+  what: 10 min 内 ≥20 个 cube 变状态 → 当重大事故级事件
+  primary:
+    type: logging
+    filter: |
+      protoPayload.methodName="io.k8s.core.v1.nodes.patch"
+      protoPayload.response.metadata.labels."cloud.google.com/gke-tpu-partition-4x4x4-state":*
+      resource.labels.cluster_name="$CLUSTER"
+    how: 建日志指标按 labels."cloud.google.com/gke-tpu-partition-4x4x4-id" 去重计数，10 min 窗口 ≥20 告警
+  alt:
+    type: promql
+    query: count(changes(kubernetes_io:accelerator_partition_state{cluster_name="$CLUSTER",partition_topology="4x4x4"}[10m]) > 0) >= 20
+    note: "[需验证] 指标值是 0/1 的「该 state 是否出现」，用 changes() 近似状态翻转"
+- id: 4
+  what: Slice 停在 DEACTIVATING / INCOMPLETE > 15 min（page）；ACTIVATING > 15 min（通知）、> activation-timeout（page）
+  # 分两档：DEACTIVATING / INCOMPLETE 不该等 60 min
+  primary:
+    type: promql
+    query: |
+      # page：拆不掉的片在吃容量（05 §5.1 正常 p50 33 s）
+      (min_over_time(kubernetes_io:accelerator_slice_state{monitored_resource="k8s_entity", cluster_name="$CLUSTER",
+                    state=~"DEACTIVATING|INCOMPLETE"}[15m]) == 1)
+      and on (entity_name, state)
+      (count_over_time(kubernetes_io:accelerator_slice_state{monitored_resource="k8s_entity", cluster_name="$CLUSTER",
+                    state=~"DEACTIVATING|INCOMPLETE"}[15m]) >= 14)
+      # ↑ 实测发现：没有这半句时，删掉 10 min 的 <作业名> 那 N 个 Slice 只有 1 个 INCOMPLETE 样本也照样报（每个 Slice 各误报一条）
+  secondary:
+    type: promql
+    query: |
+      # 通知（15m）；把窗口改成 [60m] 另建一条 page 规则 = activation-timeout
+      (min_over_time(kubernetes_io:accelerator_slice_state{monitored_resource="k8s_entity", cluster_name="$CLUSTER",
+                    state="ACTIVATING"}[15m]) == 1)
+      and on (entity_name, state)
+      (count_over_time(kubernetes_io:accelerator_slice_state{monitored_resource="k8s_entity", cluster_name="$CLUSTER",
+                    state="ACTIVATING"}[15m]) >= 14)
+      # ↑ 实测发现：没有这半句时，kubectl 显示才 ACTIVATING 117 s 的 3 个 Slice 被报成「>15 min」
+    note: "实测：实测集群 1 h 内该指标出现过的 state 值 = ACTIVATING / ACTIVE / DEACTIVATING / INCOMPLETE / SliceNotCreated / Unknown，1 d 内出现过 FAILED（5 条）——与 kubectl STATE 列一致（原注：公开文档只列 ACTIVE、FAILED）"
+  alt: {type: kubectl, run: "kubectl get slices.accelerator.gke.io --no-headers | awk '$4!=\"ACTIVE\"'   # 看 AGE"}
+  note: 'activation-timeout 实测集群是 60m，所以 ACTIVATING 的 page 线 = 60 min'
+- id: 5
+  what: Slice Ready=Unknown 或 MMIGHealthProbeFailed > 10 min
+  primary:
+    type: kubectl
+    run: |
+      kubectl get slices.accelerator.gke.io -o json | jq -r '.items[] | .metadata.name as $n | .status.conditions[]?
+        | select(.type=="Ready" and .status!="True") | [$n,.status,.reason,.lastTransitionTime] | @tsv'
+  alt:
+    type: logging
+    filter: |
+      resource.type="k8s_container" resource.labels.cluster_name="$CLUSTER"
+      resource.labels.namespace_name="slice-controller-system"
+      ("HealthProbeFailed" OR "Unexpected partition state" OR "Read requests per minute")
+    note: "slice-controller 日志是 JSON（字段 level/msg/ts…），语料里的采集窗口没有错误行，所以用全文检索；三个串取自已有记录原话，在 Cloud Logging 里能否命中 [需验证]"
+- id: 6
+  what: Slice FAILED 且 Workload 没被驱逐/重建 > 10 min
+  primary:
+    type: promql
+    query: |
+      (min_over_time(kubernetes_io:accelerator_slice_state{cluster_name="$CLUSTER",state="FAILED"}[10m]) == 1)
+      and on (entity_name, state) (count_over_time(kubernetes_io:accelerator_slice_state{cluster_name="$CLUSTER",state="FAILED"}[10m]) >= 9)
+      # 实测后加覆盖率条件，理由同 #4
+  alt: {type: kubectl, run: "kubectl get slices.accelerator.gke.io | grep FAILED；再 kubectl get workloads -A 看对应 Workload 是否仍 ADMITTED"}
+- id: 7
+  what: GCE API 429 / 读配额用量、multi-MIG 配额 用量 > 70%
+  primary:
+    type: promql
+    query: |
+      sum(rate(serviceruntime_googleapis_com:api_request_count{monitored_resource="consumed_api",
+          service="compute.googleapis.com", response_code="429"}[5m]))
+    note: 标签名 service/response_code 见 metrics_gcp_p_z；任何非零持续 5 min 就报
+  alt:
+    type: promql
+    query: |
+      serviceruntime_googleapis_com:quota_rate_net_usage{monitored_resource="consumer_quota",service="compute.googleapis.com",
+        quota_metric=~".*read.*"}   # 与 quota_limit 同 quota_metric 相除 > 0.7
+    note: "[需验证] 读配额和 multi-MIG 配额 的 quota_metric 实际名字（先在 Metrics Explorer 里列一次）"
+- id: 8
+  what: 串口/内核日志 NETDEV WATCHDOG 或 gve…Performing reset（任意一次）
+  primary:
+    type: logging
+    filter: |
+      resource.type="gce_instance"
+      logName="projects/$PROJECT/logs/serialconsole.googleapis.com%2Fserial_port_1_output"
+      (textPayload:"NETDEV WATCHDOG" OR textPayload=~"gve .*Performing reset")
+    prereq: >-
+      节点 VM 要有元数据 serial-port-logging-enable=true，且组织策略 constraints/compute.disableSerialPortLogging 未开。
+      项目级打开：gcloud compute project-info add-metadata --metadata serial-port-logging-enable=true --project $PROJECT
+      （公开文档写法；对已建 GKE 节点是否即时生效 [需验证]——先在一台上 gcloud compute instances describe 看 metadata）
+- id: 9
+  what: Ready 的 tpu7x 节点 google.com/tpu allocatable ≠ 4，或带 TPU_UNALLOCATABLE taint > 10 min
+  primary:
+    type: kubectl
+    run: |
+      kubectl get nodes -l cloud.google.com/gke-tpu-accelerator=tpu7x -o json | jq -r '.items[]
+        | select(any(.status.conditions[]; .type=="Ready" and .status=="True"))
+        | select((.status.allocatable["google.com/tpu"]//"0")!="4" or any(.spec.taints[]?; .key|test("TPU_UNALLOCATABLE")))
+        | .metadata.name'
+    note: 没有公开的 TPU allocatable 指标；08-daily-check.sh 汇总到「Ready 但 TPU≠4」一列。taint 键名只有已有经验的写法 [需验证]
+- id: 10
+  what: 节点 Ready+HEALTHY 但 unschedulable=true > 30 min
+  primary: {type: kubectl, run: "kubectl get nodes -l cloud.google.com/gke-tpu-accelerator=tpu7x -o json | jq -r '.items[]|select(.spec.unschedulable==true)|.metadata.name'"}
+- id: 11
+  what: GCE 实例 REPAIRING > 1 h；每池每天 AUTO_REPAIR > 5 次
+  primary: {type: gcloud, run: "gcloud compute instances list --project $PROJECT --filter='zone:($ZONE) AND status=REPAIRING' --format='value(name,lastStartTimestamp)'"}
+  alt:
+    type: promql
+    query: |
+      sum by (node_pool_name) (increase(kubernetes_io:node_interruption_count{monitored_resource="k8s_node",
+          cluster_name="$CLUSTER", interruption_reason="AutoRepair"}[1d])) > 5
+    note: >-
+      interruption_reason 例值含 AutoRepair（公开文档 tpus 页）。实测：k8s_node 上**没有** node_pool_name 标签（只有 node_name、
+      interruption_reason/type），`by (node_pool_name)` 会塌成 1 条全集群序列（24 h 全集群 increase 达数百）。按池统计要改 by (node_name)
+      再用 kubectl 的节点→池映射汇总，或直接用 primary 的 gcloud 轮询
+- id: 12
+  what: 缺 partition-id / gke-tpu-topology / tpu-chip-ids，或某 partition-id 下 ≠16 节点
+  primary: {type: kubectl, run: "08-daily-check.sh 的 cubes-*.tsv 第 4 列 ≠16；缺标签：kubectl get nodes -l 'cloud.google.com/gke-tpu-accelerator=tpu7x,!cloud.google.com/gke-tpu-partition-4x4x4-id'"}
+- id: 13
+  what: 控制器（Kueue、kueue-slice-controller、JobSet）重启/OOM/NotReady；tpu_ac_problem > 0
+  primary:
+    type: promql
+    query: |
+      sum by (namespace_name, container_name) (increase(kubernetes_io:container_restart_count{monitored_resource="k8s_container",
+          cluster_name="$CLUSTER", namespace_name=~"kueue-system|slice-controller-system|jobset-system"}[15m])) > 0
+  alt:
+    type: promql
+    query: |
+      kube_deployment_status_replicas_available{cluster="$CLUSTER",namespace=~"kueue-system|slice-controller-system|jobset-system"}
+        < kube_deployment_spec_replicas{cluster="$CLUSTER",namespace=~"kueue-system|slice-controller-system|jobset-system"}
+    note: 要集群开 DEPLOYMENT 包；tpu_ac_problem > 0 需先抓 :8443 [需验证]
+- id: 14
+  what: Workload 已准入但没 Slice，或 Pending 且 excluded 全部节点 > 15 min
+  primary: {type: kubectl, run: "kubectl get workloads -A -o wide；对 ADMITTED 的逐个 grep 同名 Slice（名字前缀 <ns>-jobset-<名>-，见 06-jobset.sh watch）；Pending 的看 kubectl describe workload 里 excluded: 行"}
+  alt: {type: promql, query: "kueue_pending_workloads{cluster_queue=\"cluster-queue\"}", note: "[需验证] 需先抓 Kueue metrics"}
+- id: 15
+  what: 泄漏对象（孤儿 Slice、悬空 multiMig、完成任务里卡 Terminating 的 pod）——夜间巡检
+  primary:
+    type: kubectl
+    run: |
+      # 孤儿 Slice：名字里的 workload 已不存在
+      comm -23 <(kubectl get slices.accelerator.gke.io -o name | sed -E 's#.*/[^-]+-(jobset-.*-[0-9a-f]{5})-worker-[0-9]+#\1#' | sort -u) \
+               <(kubectl get workloads -A -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort -u)
+      kubectl get pods -A --field-selector=status.phase!=Running -o wide | grep Terminating
+  alt: {type: logging, filter: "resource.type=\"gce_instance_group_manager\" protoPayload.methodName=\"v1.compute.instanceGroupManagers.patch\" protoPayload.request.multiMig=\"\""}
+  note: 手动建的 Slice（如参考作业）名字不带 jobset-，第一条命令会原样打印出来，人工判断
+- id: 16
+  what: 节点池 PROVISIONING / RECONCILING > 45 min
+  primary: {type: gcloud, run: "gcloud container node-pools list --cluster $CLUSTER --location $ZONE --project $PROJECT --filter='status!=RUNNING' --format='table(name,status)'"}
+  alt:
+    type: promql
+    query: |
+      (min_over_time(kubernetes_io:node_pool_status{monitored_resource="k8s_node_pool",cluster_name="$CLUSTER",status=~"Provisioning|Reconciling"}[45m]) == 1)
+      and on (node_pool_name, status) (count_over_time(kubernetes_io:node_pool_status{monitored_resource="k8s_node_pool",cluster_name="$CLUSTER",status=~"Provisioning|Reconciling"}[45m]) >= 40)
+    note: 公开文档说该指标「只对 multi-host TPU 节点池上报」。实测：实测集群上有数据（2 种 status 值），PROVISION_ONLY 池也上报；覆盖率条件理由同 #4
+- id: 17
+  what: 训练 N 分钟无新 step；JobSet Completed 但 0 步
+  primary:
+    type: logging
+    filter: |
+      resource.type="k8s_container" resource.labels.cluster_name="$CLUSTER" resource.labels.namespace_name="$NS"
+      resource.labels.container_name="jax-tpu" (textPayload:"completed step:" OR jsonPayload.message:"completed step:")
+      # MaxText 的 step 行在 jsonPayload.message，不在 textPayload，只过滤 textPayload 会一条都抓不到
+    how: 建计数型日志指标；「N 分钟内 0 条」做缺失告警，N = 2×(step+检查点耗时)。只在该 JobSet 出现第一条 completed step 之后上膛（或 pod 起来 60 min 后）：JIT 基线作业从 jax.devices() 到 step 0 结束四十多分钟，中间两段各约 20 min 无日志（06c §6.6）；step 0 自报的耗时只是后半段，按它压制会在每次启动 / 恢复时误报
+    src: "日志行格式"
+  alt: {type: promql, query: "kube_jobset_status_condition{cluster=\"$CLUSTER\",condition=\"Completed\"}", note: "JOBSET 包（kube-state-metrics 页示例：kube_jobset_status_condition{jobset_name=…, condition=\"Failed\"} == 1）；Completed 后再用 06-jobset.sh verify 核 step 数"}
+- id: 18
+  what: 单个切片 collective 延迟 / tensorcore 利用率离群 > 10 min
+  primary:
+    type: promql
+    query: |
+      avg by (node_pool_name) (kubernetes_io:node_accelerator_tensorcore_utilization{monitored_resource="k8s_node",cluster_name="$CLUSTER"})
+      # 与同一 JobSet 其他池的中位数比；collective：kubernetes_io:container_multislice_network_collective_end_to_end_latencies（分布型）
+    note: 指标名公开；「离群」的具体判法无出处，先按 ±3σ 起步 [推断]。实测：k8s_node 上没有 node_pool_name 标签，`by (node_pool_name)` 只出 1 条序列——要 by (node_name) 再映射到池
+- id: 19
+  what: 每 pod 每天中断次数 > 2（目标约 1.2）
+  primary:
+    type: promql
+    query: |
+      sum by (interruption_type, interruption_reason) (sum_over_time(kubernetes_io:node_interruption_count{
+          monitored_resource="k8s_node", cluster_name="$CLUSTER"}[1d]))
+    src: "https://cloud.google.com/kubernetes-engine/docs/how-to/tpus（示例查询原样，仅加 cluster_name）"
+- id: 20
+  what: 维护 scheduled / started / completed（reservation、block、sub-block、VM）
+  primary:
+    type: logging
+    filter: |
+      protoPayload.methodName=~"compute\.(reservations\.)?(reservations|reservations\.blocks|reservations\.blocks\.subblocks)\.(upcomingGroupMaintenance|startGroupMaintenance|completedGroupMaintenance)"
+      OR protoPayload.methodName="compute.instances.upcomingMaintenance"
+      OR protoPayload.methodName="compute.instances.blocks.terminateOnHostMaintenance"
+    note: 原始记录里 upcoming 写作 compute.CAPACITY_COMPONENT.upcomingGroupMaintenance、start 写作 compute.reservations.CAPACITY_COMPONENT.startGroupMaintenance，前缀不一致，所以用正则两种都收
+  alt: {type: gcloud, run: "见 08 §8.2「列出待办维护」三条命令"}
+- id: 21
+  what: 节点注册 CSR AutoDenied
+  primary: {type: kubectl, run: "kubectl get csr --no-headers | grep -i denied"}
+  note: "Cloud Logging 侧怎么过滤无出处 [需验证]；已有经验的修法要 Google 值班操作"
+- id: 22
+  what: 集群 pod 总数 > 100k / apiserver 5xx
+  primary: {type: promql, query: "count(kube_pod_status_phase{cluster=\"$CLUSTER\"} == 1)", note: POD 包}
+  alt: {type: promql, query: "sum(rate(apiserver_request_total{cluster=\"$CLUSTER\",code=~\"5..\"}[5m]))", note: "要开 API_SERVER 控制面指标包（实测集群没开）"}
+- id: 23
+  what: tpu-device-plugin / vbar-control-agent 重启数 1 h 内 >1% 节点增加
+  primary:
+    type: promql
+    query: |
+      count(increase(kubernetes_io:container_restart_count{cluster_name="$CLUSTER",namespace_name="kube-system",
+            container_name=~".*tpu-device-plugin.*"}[1h]) > 0)
+    note: "实测：容器名就是 tpu-device-plugin（两千二百多条序列 ≈ 每个 TPU 节点一条）；vbar-control-agent 是否是容器未知"
+- id: 24
+  what: Released PV / HDB 配额用量 > 80%
+  primary: {type: promql, query: "count(kube_persistentvolume_status_phase{cluster=\"$CLUSTER\",phase=\"Released\"} == 1)", note: STORAGE 包}
+  alt: {type: gcloud, run: "01-precheck.sh 第 6 段（gcloud quotas info describe HDB-TOTAL-GB-per-project-region）；usage 用 Console 配额页"}
+# ---- 25–29：按恢复测试补的。字段已对真实导出核对，
+#      过滤器原文没留存，下面是按字段重写的 [需验证：在使用方项目 Logs Explorer 里跑一次]。
+- id: 25
+  what: TPU 节点 NodeHasDiskPressure / EvictionThresholdMet（任意一次）
+  primary:
+    type: logging
+    filter: |
+      log_id("events") resource.labels.cluster_name="$CLUSTER"
+      jsonPayload.reason=("NodeHasDiskPressure" OR "EvictionThresholdMet")
+    src: "经验教训第 42 条；reason 原文（EvictionThresholdMet 后约 10 s 出现 NodeHasDiskPressure）；log_id(\"events\") 写法为经验做法"
+  alt: {type: kubectl, run: "kubectl get events -A --field-selector reason=NodeHasDiskPressure"}
+- id: 26
+  what: Kueue 驱逐（EvictedDueToNodeFailures / EvictedDueToAdmissionCheck / Preempted）——kubectl get events 可能看不到
+  primary:
+    type: logging
+    filter: |
+      resource.type="k8s_container" resource.labels.cluster_name="$CLUSTER"
+      resource.labels.namespace_name="kueue-system" resource.labels.container_name="manager"
+      jsonPayload.reason=~"^Evicted"
+    how: 通知级；同一 Workload 1 h 内 ≥3 次改 page [推断]
+    src: "经验教训第 54 条；字段（jsonPayload.reason 取值 EvictedDueToNodeFailures、EvictedDueToAdmissionCheck）"
+  alt: {type: kubectl, run: "kubectl logs -n kueue-system -l app.kubernetes.io/name=kueue --since=1h --tail=-1 | grep -E 'EvictedDueTo|Preempted'"}
+- id: 27
+  what: 一片的 pod 撒到多个 cube（Kueue TAS rank 冲突）——恢复后 TPU 初始化挂 12 min 前就能抓到
+  primary:
+    type: logging
+    filter: |
+      resource.type="k8s_container" resource.labels.cluster_name="$CLUSTER"
+      resource.labels.namespace_name="kueue-system" jsonPayload.error:"conflicting rank"
+    src: "经验教训第 42 条；字段（jsonPayload.error / caller tas/topology_ungater.go）"
+  alt: {type: kubectl, run: "经验教训第 42 条：每个 job-index 的 pod 所在节点 partition-4x4x4-id 去重计数 >1 即中招"}
+- id: 28
+  what: 手工 Slice（无 accelerator.gke.io/owner-workload-name 注解）存在
+  primary: {type: kubectl, run: "08-daily-check.sh 第 5 段；或 kubectl get slices -o json | jq -r '.items[]|select(.metadata.annotations[\"accelerator.gke.io/owner-workload-name\"]==null)|.metadata.name'"}
+  note: 阈值（存在 >24 h 或与 Kueue 任务共用一批 cube）是 [推断]
+- id: 29
+  what: Kueue 写 Event 被 RBAC 拒（events is forbidden）——一次性修掉，之后留作回归告警
+  primary:
+    type: logging
+    filter: |
+      resource.type="k8s_container" resource.labels.cluster_name="$CLUSTER"
+      resource.labels.namespace_name="kueue-system" jsonPayload.message:"events is forbidden"
+    src: "经验教训第 54 条；字段（jsonPayload.message 原文，多次打断共约二十条）"
+  alt: {type: kubectl, run: "kubectl auth can-i create events -n $NS --as=system:serviceaccount:kueue-system:kueue-controller-manager   # 应为 yes；实测集群上为 no，要补 RBAC（经验教训第 54 条）"}

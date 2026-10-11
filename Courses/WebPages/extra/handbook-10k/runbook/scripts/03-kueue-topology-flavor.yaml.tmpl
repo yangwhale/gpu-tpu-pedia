@@ -1,0 +1,72 @@
+# =============================================================================
+# 03-kueue-topology-flavor.yaml.tmpl —— §3.4 Topology（7 层）+ AdmissionCheck + ResourceFlavor
+# 模板变量：${RESERVATION}（只替换这一个：envsubst '${RESERVATION}'，由 03-addons.sh queues 渲染）
+#
+# 出处：参考集群蓝图的 flavor 部署模板中
+#   dynamic-slicing-topology-v2 / super-slice-topology / sub-slice-topology / dynamic-slicing-ac / tpu7x-flavor-v2 五个对象，
+#   ${accelerator_type} 渲染为 tpu7x
+# 故意没搬的：
+#   - v1 对象 dynamic-slicing-topology / tpu7x-flavor（3 层）：参考集群只为已准入的旧 workload 保留，新集群不需要 → 经验教训第 32 条
+#   - default-flavor、cpu-user（给 Pathways 专用 CPU 池用；本书集群没有这个池，可删）
+# 与实测集群线上对照：
+#   实测集群只有 3 层 super-slice-topology + RF <池数>xtpu7x-128（nodeLabels 只有 gke-tpu-accelerator，无 reservation-name、无 tolerations）
+#   + AC ss-kueue-operator（controllerName 同为 accelerator.gke.io/slice）。
+#
+# 铁律（§3.4）：Topology 的 levels 不可改；RF 设了 topologyName 后不可改；线上不要删了重建 Topology。
+#   要改层级 = 新建 -v3 对象并行存在，CQ 切过去。
+# =============================================================================
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: Topology
+metadata:
+  name: dynamic-slicing-topology-v2
+spec:
+  levels:
+  - nodeLabel: cloud.google.com/gce-topology-block
+  - nodeLabel: cloud.google.com/gke-tpu-partition-4x4x4-id
+  - nodeLabel: cloud.google.com/gke-tpu-partition-2x4x4-id
+  - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x4-id
+  - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x2-id
+  - nodeLabel: cloud.google.com/gke-tpu-partition-2x2x1-id   # 与 hostname 1:1 也不能省（Kueue 按字符串精确匹配层名）
+  - nodeLabel: kubernetes.io/hostname                        # 必须最后（Topology CRD 强制）
+---
+# XPK 兼容：XPK 按名字字符串判断是否开了 super/sub-slicing。不用 XPK 可以删掉这两个对象。
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: Topology
+metadata:
+  name: super-slice-topology
+spec:
+  levels:
+  - nodeLabel: cloud.google.com/gce-topology-block
+  - nodeLabel: cloud.google.com/gke-tpu-partition-4x4x4-id
+  - nodeLabel: kubernetes.io/hostname
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: Topology
+metadata:
+  name: sub-slice-topology
+spec:
+  levels:
+  - nodeLabel: cloud.google.com/gce-topology-block
+  - nodeLabel: cloud.google.com/gke-tpu-partition-4x4x4-id
+  - nodeLabel: kubernetes.io/hostname
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: AdmissionCheck
+metadata:
+  name: dynamic-slicing-ac
+spec:
+  controllerName: accelerator.gke.io/slice
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: tpu7x-flavor-v2
+spec:
+  nodeLabels:
+    cloud.google.com/gke-tpu-accelerator: tpu7x
+    cloud.google.com/reservation-name: "${RESERVATION}"
+  topologyName: dynamic-slicing-topology-v2
+  tolerations:
+  - effect: NoSchedule
+    key: google.com/tpu
+    value: "present"

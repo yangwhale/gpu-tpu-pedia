@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 360" width="900" height="360" font-family="Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif" role="img" aria-label="两行对比 GMM 沿 K 方向的最后一块。上：只 mask 了 RHS 越界部分为 0，LHS 越界部分读到 VMEM 上次留下的残值，可能是 NaN，NaN 乘 0 仍是 NaN，第 0 步 loss 正常、grad_norm 已是 NaN。下：LHS 也按 valid_k mask，0 乘 0 等于 0。">
+<title>K 不整除 tile_k：最后一块只把 RHS 越界部分清零，LHS 读到 VMEM 残值，NaN × 0 = NaN</title>
+<defs>
+<marker id="a" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker>
+<marker id="ab" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker>
+<marker id="ao" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker>
+<marker id="ar" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker>
+<marker id="ag" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#188038"/></marker>
+<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="#fce8e6"/><line x1="0" y1="0" x2="0" y2="8" stroke="#d93025" stroke-width="2"/></pattern>
+</defs>
+
+<rect width="900" height="360" fill="#ffffff"/>
+<text x="24" y="34" font-size="19" font-weight="700" fill="#202124">K 不整除 tile_k：最后一块只把 RHS 越界部分清零，LHS 读到 VMEM 残值，NaN × 0 = NaN</text>
+<text x="24" y="58" font-size="14" fill="#5f6368">看最后一块虚线右边：上面 LHS 那格是残值（红斜纹），下面修法把它也 mask 成 0</text>
+<text x="30" y="94" font-size="15" fill="#a50e0e" text-anchor="start" font-weight="700" >只 mask 了 RHS（bug）</text>
+<text x="70" y="134" font-size="14" fill="#5f6368" text-anchor="end" >LHS</text>
+<rect x="90" y="112" width="86" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="180" y="112" width="86" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="270" y="112" width="86" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="360" y="112" width="43" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="403" y="112" width="43" height="32" rx="2" fill="url(#hatch)" stroke="#d93025" stroke-width="1.5" />
+<text x="424" y="134" font-size="13" fill="#a50e0e" text-anchor="middle" font-weight="700" >残值</text>
+<text x="70" y="178" font-size="14" fill="#5f6368" text-anchor="end" >RHS</text>
+<rect x="90" y="156" width="86" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="180" y="156" width="86" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="270" y="156" width="86" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="360" y="156" width="43" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="403" y="156" width="43" height="32" rx="2" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.5" />
+<text x="424" y="178" font-size="13" fill="#202124" text-anchor="middle" >0</text>
+<line x1="403" y1="104" x2="403" y2="196" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="403" y="212" font-size="13" fill="#5f6368" text-anchor="middle" >valid_k</text>
+<line x1="460" y1="150" x2="520" y2="150" stroke="#5f6368" stroke-width="2" marker-end="url(#a)"/>
+<rect x="525" y="126" width="340" height="48" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.5" />
+<text x="695" y="148" font-size="15" fill="#a50e0e" text-anchor="middle" font-weight="700" >NaN × 0 = NaN → 累加器被污染</text>
+<text x="695" y="166" font-size="13" fill="#a50e0e" text-anchor="middle" >第 0 步 loss 正常、grad_norm 已经是 NaN</text>
+<text x="30" y="229" font-size="15" fill="#0d652d" text-anchor="start" font-weight="700" >两边都 mask（修法）</text>
+<text x="70" y="269" font-size="14" fill="#5f6368" text-anchor="end" >LHS</text>
+<rect x="90" y="247" width="86" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="180" y="247" width="86" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="270" y="247" width="86" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="360" y="247" width="43" height="32" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.5" />
+<rect x="403" y="247" width="43" height="32" rx="2" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.5" />
+<text x="424" y="269" font-size="13" fill="#202124" text-anchor="middle" >0</text>
+<text x="70" y="313" font-size="14" fill="#5f6368" text-anchor="end" >RHS</text>
+<rect x="90" y="291" width="86" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="180" y="291" width="86" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="270" y="291" width="86" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="360" y="291" width="43" height="32" rx="2" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<rect x="403" y="291" width="43" height="32" rx="2" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.5" />
+<text x="424" y="313" font-size="13" fill="#202124" text-anchor="middle" >0</text>
+<line x1="403" y1="239" x2="403" y2="331" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="403" y="347" font-size="13" fill="#5f6368" text-anchor="middle" >valid_k</text>
+<line x1="460" y1="285" x2="520" y2="285" stroke="#5f6368" stroke-width="2" marker-end="url(#a)"/>
+<rect x="525" y="261" width="340" height="48" rx="6" fill="#e6f4ea" stroke="#188038" stroke-width="1.5" />
+<text x="695" y="291" font-size="14" fill="#0d652d" text-anchor="middle" font-weight="700" >0 × 0 = 0：LHS 也按 iota &lt; valid_k mask</text>
+</svg>

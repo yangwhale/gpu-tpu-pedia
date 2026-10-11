@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TPU v7x 整 pod（All Capacity 模式）GKE 交付手册 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a class="on" aria-current="page" href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <span>交付手册</span></nav><article class="md"><h1 id="tpu-v7x-整-podall-capacity-模式gke-交付手册">TPU v7x 整 pod（All Capacity 模式）GKE 交付手册</h1>
+<p>给把 1 个 TPU v7x pod 交付给使用方的实操同学（1 block × 144 sub-block × 16 host × 4 chip = 9,216 chip），会 Kubernetes 就能看。</p>
+<ul>
+<li>每步：目标 → 命令 → 期望输出 → 经验教训。</li>
+<li>「实测」= 在实测集群上照本书脚本跑。</li>
+<li>实测集群上的生产作业：大号 MoE 模型、10+ 片（数千芯）稳态步时比本书首次跑通的 10+ 片 JIT 缩短约 40%，更大规模按同一基准也是约 40%。</li>
+<li>本手册只管交付与跑稳；模型怎么调快见配套文档《<a href="../../moe-training/index.html">混合注意力 MoE 模型在 TPU v7x 上的训练优化</a>》。</li>
+</ul>
+<div class="x-stats">
+<ul>
+<li><strong>9,216</strong> 颗芯片 / 144 cube</li>
+<li><strong>8</strong> 个交付阶段（A–H）</li>
+<li><strong>数千芯</strong> 10+ 片训练实测跑通</li>
+<li><strong>约 40%</strong> 10+ 片稳态步时比首跑 JIT 缩短（实测集群生产）</li>
+<li><strong>约 30%</strong> 1 片 AOT 生产步时比首跑 JIT 缩短</li>
+<li><strong>66</strong> 条经验教训</li>
+</ul>
+</div>
+<h2 id="先用三句话建立心智模型" class="hc0">先用三句话建立心智模型</h2>
+<ol>
+<li>一个 pod = 144 个 <strong>cube</strong>（16 台 VM、64 芯），一 cube 一个节点池；建好时芯片间<strong>没有连线</strong>。</li>
+<li>光交换（OCS）把几个 cube 临时连成 <strong>Slice（切片）</strong>：片内走 <strong>ICI</strong>，片间走 <strong>DCN</strong>。</li>
+<li><strong>Kueue</strong> 排队决定用哪几个 cube；坏一片全部重切，所以留<strong>备件 cube</strong>。</li>
+</ol>
+<figure class="mermaid"><img src="../assets/mermaid/a2c08edba5a5.png" width="745" alt="示意图" loading="lazy"></figure><blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>「pod」有两种意思</span></span>第 1 句是 TPU 物理 pod；后文大多数「pod」是 <strong>Kubernetes pod</strong>（一台 host 一个，1 片 64 个，N 片 N × 64 个）。见 <a href="00-overview.html#g-pod-two">00 术语表</a>（<a href="00-overview.html#glossary">全部术语</a>）。</p>
+</blockquote>
+<h2 id="交付流程" class="hc1">交付流程</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>章节</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A 容量与前置</td>
+<td><a href="01-capacity-and-prereqs.html">01</a>、<a href="09-customer-alignment.html">09</a></td>
+<td>部分</td>
+</tr>
+<tr>
+<td>B 建集群</td>
+<td><a href="02-cluster-bringup.html">02</a></td>
+<td>只读检查</td>
+</tr>
+<tr>
+<td>C 装组件</td>
+<td><a href="03-control-plane-addons.html">03</a></td>
+<td>只读检查</td>
+</tr>
+<tr>
+<td>D 功能验证</td>
+<td><a href="04-functional-verification.html">04</a></td>
+<td>实测到 10+ 片</td>
+</tr>
+<tr>
+<td>E 切片操作</td>
+<td><a href="05-dynamic-slicing-operations.html">05</a></td>
+<td>部分</td>
+</tr>
+<tr>
+<td>F 训练</td>
+<td><a href="06c-multislice-training.html">06c</a>、<a href="06b-public-config-recipe-dsv3.html">06b</a>、<a href="06-slice-request-and-multislice.html">06</a>、<a href="06a-storage-anywhere-cache-gcsfuse.html">06a</a></td>
+<td>06c 实测；06b、06、06a 部分</td>
+</tr>
+<tr>
+<td>G 韧性</td>
+<td><a href="07-resilience-and-recovery.html">07</a>、<a href="07a-fault-recovery.html">07a</a></td>
+<td>部分（07 有打断实测；故障演练本书脚本没跑，实测集群上有过一次 3 片演练可作参考）</td>
+</tr>
+<tr>
+<td>H 运维就绪</td>
+<td><a href="08-day2-operations.html">08</a>、<a href="08a-slow-node-sop.html">08a</a>、<a href="08b-observability.html">08b</a>、<a href="08c-production-incidents.html">08c</a></td>
+<td>08 部分；08a–c 只有文档</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="集群已经建好时">集群已经建好时</h3>
+<blockquote class="co tip">
+<p><span class="co-t"><i>✅</i><span>跳过 B、C，从 D 接着做</span></span>备好环境后做 <a href="02-cluster-bringup.html#step-2-7">02 §2.7</a>、<a href="03-control-plane-addons.html#step-3-7">03 §3.7</a> 两个只读检查。</p>
+</blockquote>
+<p><strong>最小依赖</strong>（版本要求同 <a href="01-capacity-and-prereqs.html#step-1-0">01 §1.0「工具前提」表</a>，<code>01-precheck.sh</code> 第 1 段会逐个查）：</p>
+<ul>
+<li><code>gcloud</code> + beta 组件、<code>gke-gcloud-auth-plugin</code>；</li>
+<li><code>kubectl</code>（与集群差 ≤1 个 minor）、<code>helm</code> ≥ 3.8.0；</li>
+<li><code>jq</code>、<code>python3</code>、<code>envsubst</code>（gettext）。</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code>cp<span class="w"> </span>&lt;解压目录&gt;/runbook/scripts/env.sh<span class="w"> </span>~/runbook-env.sh<span class="w">   </span><span class="c1"># 脚本整包在 scripts/ 目录页下载（runbook-scripts.tar）；编辑它：填 &lt;…&gt; 占位，另填 RUNBOOK_DIR=&lt;解压目录&gt;/runbook</span>
+<span class="nb">source</span><span class="w"> </span>~/runbook-env.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>rb_env_check<span class="w"> </span>PROJECT<span class="w"> </span>REGION<span class="w"> </span>ZONE<span class="w"> </span>CLUSTER<span class="w">   </span><span class="c1"># 期望：没有输出</span>
+gcloud<span class="w"> </span>container<span class="w"> </span>clusters<span class="w"> </span>get-credentials<span class="w"> </span><span class="nv">$CLUSTER</span><span class="w"> </span>--location<span class="w"> </span><span class="nv">$ZONE</span><span class="w"> </span>--project<span class="w"> </span><span class="nv">$PROJECT</span><span class="w"> </span>--dns-endpoint
+</code></pre></div>
+<ul>
+<li>已有集群的 <code>TPU_FLAVOR</code>、<code>CLUSTER_QUEUE</code> 等对象名要按现场填（实测集群 <code>TPU_FLAVOR=&lt;池数&gt;xtpu7x-128</code>），现场与本书的差异见 <a href="03-control-plane-addons.html#step-3-7">03 §3.7</a>。</li>
+</ul>
+<h3 id="训练怎么跑">训练怎么跑</h3>
+<p><strong>使用方路径</strong></p>
+<ol>
+<li>先跑公开配方 <a href="06b-public-config-recipe-dsv3.html">06b</a>（DeepSeek-V3，公开镜像）：验收基线用它的 JIT 阶梯（<a href="06b-public-config-recipe-dsv3.html#s06a-7">§7</a>），AOT（<a href="06b-public-config-recipe-dsv3.html#s06a-5">§5</a>）用来在 CPU 上先核 HBM。</li>
+<li>片数、形状：<a href="06-slice-request-and-multislice.html">06</a>。</li>
+<li>大规模作业建议提前编译（AOT），省掉每次重启时的编译时间；Google 可协助。</li>
+</ol>
+<p>JIT 逐级的判读样板见 <a href="06c-multislice-training.html#step-6-5-ladder">06c §6.5</a>。</p>
+<h2 id="章节目录" class="hc2">章节目录</h2>
+<p><strong>部分实测</strong>的范围见各章开头。</p>
+<figure class="mermaid"><img src="../assets/mermaid/bce3b54631bc.png" width="858" alt="示意图" loading="lazy"></figure><div class="tbl"><table>
+<thead>
+<tr>
+<th>章</th>
+<th>解决什么问题</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="00-overview.html">00 总览</a></td>
+<td>两个 slice controller；为何没有 144-cube 单片；128 + 备件与 SLO；术语表</td>
+</tr>
+<tr>
+<td><a href="01-capacity-and-prereqs.html">01 容量与前置</a></td>
+<td>sub-block 健康、配额、钉版本、冻结网络、存储、先拍板的 4 项决策（全表见 09）</td>
+</tr>
+<tr>
+<td><a href="02-cluster-bringup.html">02 建集群</a></td>
+<td>一 cube 一池、15/16 与 8/16 的池、CoreDNS、三方对账</td>
+</tr>
+<tr>
+<td><a href="03-control-plane-addons.html">03 集群内组件</a></td>
+<td>Kueue、kueue-slice-controller、7 层 Topology、配额</td>
+</tr>
+<tr>
+<td><a href="04-functional-verification.html">04 功能验证</a></td>
+<td>巡检逐级到 10+ × 4x8x8：激活基线、拆除检查、DCN 基准</td>
+</tr>
+<tr>
+<td><a href="05-dynamic-slicing-operations.html">05 动态切片操作</a></td>
+<td>生命周期、两条路径、防碎片、删除顺序、分诊、隔离坏 cube</td>
+</tr>
+<tr>
+<td><a href="06-slice-request-and-multislice.html">06 申请 slice</a></td>
+<td>片数、JobSet 逐字段、多片互联、placement 与 TAS</td>
+</tr>
+<tr>
+<td><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储</a></td>
+<td>Anywhere Cache、20 Tbps 缓存带宽配额、dashboard、gcsfuse 配置（实测集群实况）</td>
+</tr>
+<tr>
+<td><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方</a></td>
+<td>DeepSeek-V3 671B × 10+ 片 4x8x8；32+2 个编译器 flag；AOT 核 HBM（95.87 GiB OOM → 78.82）</td>
+</tr>
+<tr>
+<td><a href="06c-multislice-training.html">06c 数千芯片训练</a></td>
+<td>复现一个数百 B 级 MoE 模型的多片训练：loss 对齐、规模边界</td>
+</tr>
+<tr>
+<td><a href="07-resilience-and-recovery.html">07 韧性与恢复</a></td>
+<td>MTC、失败策略、多次打断实测、exit 0 ≠ 成功</td>
+</tr>
+<tr>
+<td><a href="07a-fault-recovery.html">07a 故障恢复专题</a></td>
+<td>演练梯子、注入手段与副作用、MTC 存取时间、自动 / 手动换片、10+ 片 / 更大规模逐段时间账、2 片演练能否代替大规模演练</td>
+</tr>
+<tr>
+<td><a href="08-day2-operations.html">08 日常运维</a></td>
+<td>7 种假象、29 条告警、14 条日志查询、自触发维护、升级顺序、7 本事故手册</td>
+</tr>
+<tr>
+<td><a href="08a-slow-node-sop.html">08a 慢节点标准流程</a></td>
+<td>三道关（准入 / 每周轮测 / 在岗按片盯）+ 离线复测定案；吸收一套现成的 cube-check / 跨片 probe</td>
+</tr>
+<tr>
+<td><a href="08b-observability.html">08b 可观测性</a></td>
+<td>看什么、看板怎么排、怎么靠它找到问题：拆解实测集群上可观测性平台的思路，5 个案例走查，设计原则与反模式，使用方最小版 / 完整版落地</td>
+</tr>
+<tr>
+<td><a href="08c-production-incidents.html">08c 上线周的生产事故</a></td>
+<td>九类问题按「会出什么 → 提前防 → 怎么判 → 怎么处理」</td>
+</tr>
+<tr>
+<td><a href="09-customer-alignment.html">09 交付前对齐清单</a></td>
+<td>和使用方书面定的 23 项；RACI；T−14 → T+14（T−14 起与 01 并行开始，不是读完 08 再看）</td>
+</tr>
+<tr>
+<td><a href="scripts/README.html">scripts/</a></td>
+<td>唯一变量块 <code>env.sh</code>（<code>rb_env_check</code> 拦空值）；脚本以章号开头，可 dry-run、幂等</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="交付清单按顺序勾" class="hc3">交付清单（按顺序勾）</h2>
+<p><strong>「实测」列怎么读</strong>（「实测」只算照本书脚本跑过的；用现有的程序或演练跑出来的写「可参考」，不算实测）：</p>
+<ul>
+<li><strong>实测通过</strong>：照本书脚本 / 清单在真集群上跑过，结果符合判据。</li>
+<li><strong>实测→已修 / 部分实测→已修</strong>：跑过，发现本书的错并已改。</li>
+<li><strong>部分实测</strong>：只验证了一部分，「在哪」那章开头写了哪部分。</li>
+<li><strong>观察到</strong>：没照本书步骤装或跑，只在实测集群看到了对应的配置或行为。</li>
+<li><strong>反向实测</strong>：本书配置没装过；在实测集群的不同配置上验证了「书里预测会失败的确实失败」。</li>
+<li><strong>实测发现</strong>：测试中撞到的问题，已写进经验教训；检查项本身没演练。</li>
+<li><strong>实测未过</strong>：照本书跑了，没达到判据。</li>
+<li><strong>未实测 / 空着</strong>：没跑过，按资料写的。</li>
+</ul>
+<p><strong>A. 容量与前置</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>reservation <code>READY</code>、<code>ALL_CAPACITY</code>、<code>DENSE</code>、9,216 chip</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-1">01 §1.1</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td><code>deleteAtTime</code> 进日历，30/14/3 天提醒</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-1">01 §1.1</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>1 block / 144 sub-block；≥130 个 HEALTHY 16/16，DEGRADED 已登记</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-2">01 §1.2</a></td>
+<td>实测→已修</td>
+</tr>
+<tr>
+<td>可触发的 pending 维护已做完</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-3">01 §1.3</a></td>
+<td>实测→已修</td>
+</tr>
+<tr>
+<td>配额 limit 全 ≥ 需求</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-4">01 §1.4</a></td>
+<td>部分实测</td>
+</tr>
+<tr>
+<td>IAM、API、数据桶与 MTC 桶权限</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-5">01 §1.5</a></td>
+<td>部分实测</td>
+</tr>
+<tr>
+<td>版本 BOM 经 Google 确认、全部 ≥ 下限</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-6">01 §1.6</a></td>
+<td>未实测</td>
+</tr>
+<tr>
+<td>网络设计冻结（3 VPC MTU 8896、NAT、Pod CIDR、DNS）</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-7">01 §1.7</a></td>
+<td>未实测</td>
+</tr>
+<tr>
+<td>存储方案与全规模检查点基准排期</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-8">01 §1.8</a></td>
+<td>未实测</td>
+</tr>
+<tr>
+<td>与使用方书面对齐 23 项</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-9">01 §1.9</a>、<a href="09-customer-alignment.html#s9-0">09 §9.0</a></td>
+<td>未实测</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>B. 建集群</strong>（本书未从零执行，只跑了只读检查）</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VPC/子网/NAT，节点可出公网</td>
+<td><a href="02-cluster-bringup.html#step-2-1">02 §2.1</a></td>
+<td></td>
+</tr>
+<tr>
+<td>Slice CRD 存在；<strong>系统池 <code>workloadMetadata=GKE_METADATA</code></strong></td>
+<td><a href="02-cluster-bringup.html#step-2-2">02 §2.2</a></td>
+<td>实测→已修</td>
+</tr>
+<tr>
+<td>workload policy <code>4x4x4 / PROVISION_ONLY / HIGH_THROUGHPUT</code> READY</td>
+<td><a href="02-cluster-bringup.html#step-2-3">02 §2.3</a></td>
+<td></td>
+</tr>
+<tr>
+<td>每 sub-block 一个 16 节点池，surge 0 / unavailable 16</td>
+<td><a href="02-cluster-bringup.html#step-2-4">02 §2.4</a></td>
+<td></td>
+</tr>
+<tr>
+<td>partial / ERROR 池处理并提单</td>
+<td><a href="02-cluster-bringup.html#step-2-5">02 §2.5</a></td>
+<td>部分实测</td>
+</tr>
+<tr>
+<td>DNS 切换并验证</td>
+<td><a href="02-cluster-bringup.html#step-2-6">02 §2.6</a></td>
+<td></td>
+</tr>
+<tr>
+<td>标签对账：partition id 节点 = 16×N、distinct id = N；allocatable 全 4；每 VM 3 网卡</td>
+<td><a href="02-cluster-bringup.html#step-2-7">02 §2.7</a></td>
+<td>实测通过</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>C. 集群内组件</strong>（本书未从零安装，安装步骤未实测）</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>JobSet</td>
+<td><a href="03-control-plane-addons.html#step-3-1">03 §3.1</a></td>
+<td></td>
+</tr>
+<tr>
+<td>Kueue，<code>waitForPodsReady</code> 已生效</td>
+<td><a href="03-control-plane-addons.html#step-3-2">03 §3.2</a></td>
+<td>实测→已修</td>
+</tr>
+<tr>
+<td>kueue-slice-controller：digest 钉死、2 副本、PDB、critical</td>
+<td><a href="03-control-plane-addons.html#step-3-3">03 §3.3</a></td>
+<td>观察到</td>
+</tr>
+<tr>
+<td>7 层 Topology + AdmissionCheck + ResourceFlavor</td>
+<td><a href="03-control-plane-addons.html#step-3-4">03 §3.4</a></td>
+<td>反向实测</td>
+</tr>
+<tr>
+<td>ClusterQueue 配额 = min(128, 健康 cube − 备件 S) × 64；LocalQueue；PriorityClass</td>
+<td><a href="03-control-plane-addons.html#step-3-5">03 §3.5</a></td>
+<td>观察到</td>
+</tr>
+<tr>
+<td>（可选）Kyverno 策略</td>
+<td><a href="03-control-plane-addons.html#step-3-6">03 §3.6</a></td>
+<td></td>
+</tr>
+<tr>
+<td>dry-run JobSet 出两条 TAS 注解；AdmissionCheck Active</td>
+<td><a href="03-control-plane-addons.html#step-3-7">03 §3.7</a></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>D. 功能验证</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主机巡检（维护窗口内）</td>
+<td><a href="04-functional-verification.html#step-4-1">04 §4.1</a></td>
+<td>部分实测</td>
+</tr>
+<tr>
+<td>2x2x1</td>
+<td><a href="04-functional-verification.html#step-4-2">04 §4.2</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>4x4x4</td>
+<td><a href="04-functional-verification.html#step-4-3">04 §4.3</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>4x4x8</td>
+<td><a href="04-functional-verification.html#step-4-4">04 §4.4</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>4x8x8</td>
+<td><a href="04-functional-verification.html#step-4-5">04 §4.5</a></td>
+<td>实测未过</td>
+</tr>
+<tr>
+<td>8x8x8</td>
+<td><a href="04-functional-verification.html#step-4-6">04 §4.6</a></td>
+<td>部分实测</td>
+</tr>
+<tr>
+<td>8x16x16</td>
+<td><a href="04-functional-verification.html#step-4-7">04 §4.7</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>10+ × 4x8x8 多片 + DCN 基准 + 网卡</td>
+<td><a href="04-functional-verification.html#step-4-8">04 §4.8</a></td>
+<td>部分实测</td>
+</tr>
+<tr>
+<td>拆除后无残留、无 partition 重叠</td>
+<td><a href="04-functional-verification.html#step-4-9">04 §4.9</a></td>
+<td>实测→已修</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>E. 切片操作演练</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>手动 Slice：<code>05-list-partitions.sh --free/--emit</code> 建片</td>
+<td><a href="05-dynamic-slicing-operations.html#step-5-3">05 §5.3</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>手工 Slice 有主人，不和 Kueue 共用 cube</td>
+<td><a href="pitfalls.html#l-33">经验教训第 33 条</a></td>
+<td>实测发现</td>
+</tr>
+<tr>
+<td>分诊脚本抓全现场</td>
+<td><a href="05-dynamic-slicing-operations.html#step-5-6">05 §5.6</a></td>
+<td>实测→已修</td>
+</tr>
+<tr>
+<td>演练删除顺序（开着 Google case）</td>
+<td><a href="05-dynamic-slicing-operations.html#step-5-5">05 §5.5</a></td>
+<td>未实测</td>
+</tr>
+<tr>
+<td>隔离坏 cube 脚本就绪</td>
+<td><a href="05-dynamic-slicing-operations.html#step-5-7">05 §5.7</a></td>
+<td>部分实测→已修</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>F. 数千芯片训练</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据桶 PV/PVC 与权限</td>
+<td><a href="06c-multislice-training.html#step-6-1">06c §6.1</a></td>
+<td>实测→已修</td>
+</tr>
+<tr>
+<td>环境 tar、钉版本、freeze 存档</td>
+<td><a href="06c-multislice-training.html#step-6-2">06c §6.2</a></td>
+<td>未实测</td>
+</tr>
+<tr>
+<td>训练阶梯 1–3 级（1 cube 小号模型 → 1 片 → 2 片，另加 4 / 8 片）</td>
+<td><a href="06c-multislice-training.html#ladder">06c 路线图</a>、<a href="06c-multislice-training.html#step-6-5-ladder">§6.5</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>10+ 片跑通 50 步，指标同量级</td>
+<td><a href="06c-multislice-training.html#step-6-4">06c §6.4</a>、<a href="06c-multislice-training.html#step-6-6">§6.6</a></td>
+<td>实测通过</td>
+</tr>
+<tr>
+<td>公开配方 10+ 片 HBM 装得下、按阶梯跑通</td>
+<td><a href="06b-public-config-recipe-dsv3.html">06b</a></td>
+<td>部分实测</td>
+</tr>
+<tr>
+<td>loss 对齐</td>
+<td><a href="06c-multislice-training.html#step-6-6-loss">06c §6.6 ⑥</a></td>
+<td>实测通过</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>G. 韧性</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MTC 开启、driver ≥0.8.4、HNS 桶</td>
+<td><a href="07-resilience-and-recovery.html#step-7-1">07 §7.1</a></td>
+<td></td>
+</tr>
+<tr>
+<td>失败策略设定</td>
+<td><a href="07-resilience-and-recovery.html#step-7-2">07 §7.2</a></td>
+<td></td>
+</tr>
+<tr>
+<td>故障演练：停一台 VM → 重切 → MTC 恢复出新 step，量 MTTR</td>
+<td><a href="07-resilience-and-recovery.html#step-7-3">07 §7.3</a></td>
+<td>未实测（实测集群上有过一次 3 片演练可作参考，<a href="07-resilience-and-recovery.html#step-7-4">07 §7.4</a>）</td>
+</tr>
+<tr>
+<td>完成判据不只看 exit 0</td>
+<td><a href="07-resilience-and-recovery.html#step-7-6">07 §7.6</a></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>H. 运维就绪</strong></p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>☐ 检查项</th>
+<th>在哪</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>告警加粗 7 条 + ★ 3 条上线</td>
+<td><a href="08-day2-operations.html#step-8-1">08 §8.1</a></td>
+<td>部分实测→已修</td>
+</tr>
+<tr>
+<td>自触发维护批次方案与 Google 确认</td>
+<td><a href="08-day2-operations.html#step-8-2">08 §8.2</a></td>
+<td></td>
+</tr>
+<tr>
+<td>TPU 池冻结自动升级，金丝雀集群</td>
+<td><a href="08-day2-operations.html#step-8-3">08 §8.3</a></td>
+<td></td>
+</tr>
+<tr>
+<td>每日容量报表</td>
+<td><a href="08-day2-operations.html#step-8-4">08 §8.4</a></td>
+<td>实测→已修</td>
+</tr>
+<tr>
+<td>case 模板、导出脚本、夜间升级路径</td>
+<td><a href="08-day2-operations.html#step-8-5">08 §8.5</a></td>
+<td></td>
+</tr>
+<tr>
+<td>事故手册 A–G 演练；JobSet 带 <code>ulimit -c 0</code> 与 <code>ttlSecondsAfterFinished</code></td>
+<td><a href="08-day2-operations.html#step-8-6">08 §8.6</a></td>
+<td>未实测</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="已知缺口" class="hc4">已知缺口</h2>
+<figure class="mermaid"><img src="../assets/mermaid/8ac1f67214c5.png" width="542" alt="示意图" loading="lazy"></figure><ul>
+<li><strong>原始创建命令</strong>：集群 / 节点池 / VPC 的没采集到，按已验证 flag 拼，标 <span class="tg inf">[需验证]</span>。</li>
+<li><strong>规模</strong>：本书 JIT 实测跑通到下一档（10+ 片之上一级）；再往上的更大规模挂在 <code>jax.devices()</code>，根因未定。更大规模的生产作业用提前编译（AOT）在实测集群上跑通过，所以这不是平台硬墙，更可能是作业侧问题 <span class="tg inf">[推断]</span>（<a href="06c-multislice-training.html#step-6-9-scale">06c「规模边界」</a>）。</li>
+<li><strong>使用方未定</strong>：zone、GKE 版本、交付日期、支持模式，见 <a href="09-customer-alignment.html">09</a>。</li>
+</ul>
+<div class="kp kc0"><div class="kp-t">恢复测试</div>
+<ul>
+<li><strong><a href="07-resilience-and-recovery.html#step-7-4">07 §7.4</a></strong>；TPU 初始化挂住：旧 pod 没删净 → rank 冲突撒 cube（见<a href="pitfalls.html#l-42">经验教训第 42 条</a>）。没有整规模（10+ × 4x8x8）演练。</li>
+</ul></div>
+<div class="kp kc1"><div class="kp-t">10+ 片训练的步时与双峰</div>
+<ul>
+<li>实测集群 10+ 片见 <a href="06c-multislice-training.html#step-6-6">06c §6.6</a>；JIT 基线作业和 AOT 运行都有部分步明显偏慢的<a href="00-overview.html#g-slow-step">双峰</a>（JIT 基线作业中慢步比快步慢 35–100%）。</li>
+<li>坏 cube：分到了计划外维护的节点；避开后 0 慢步（<a href="06c-multislice-training.html#step-6-6-bimodal">06c §6.6 ④</a>、§6.11.1）。</li>
+</ul></div>
+</article><nav class="pn" aria-label="上一页 / 下一页"><span></span><a class="next" href="00-overview.html"><small>下一页 →</small>00 总览：一个整 pod 是什么</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#先用三句话建立心智模型">先用三句话建立心智模型</a></li><li class="l2"><a href="#交付流程">交付流程</a></li><li class="l3"><a href="#集群已经建好时">集群已经建好时</a></li><li class="l3"><a href="#训练怎么跑">训练怎么跑</a></li><li class="l2"><a href="#章节目录">章节目录</a></li><li class="l2"><a href="#交付清单按顺序勾">交付清单（按顺序勾）</a></li><li class="l2"><a href="#已知缺口">已知缺口</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>

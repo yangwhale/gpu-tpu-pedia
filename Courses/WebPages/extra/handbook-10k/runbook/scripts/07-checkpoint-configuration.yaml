@@ -1,0 +1,33 @@
+# 07-checkpoint-configuration.yaml —— §7.1 MTC 的 CheckpointConfiguration（集群级 CR，建了它 GKE 才在 TPU 节点上起 multitier-driver DaemonSet）
+# 用法：envsubst < 07-checkpoint-configuration.yaml | kubectl apply -f -     （变量来自 env.sh：MTC_CONFIG_NAME MTC_BUCKET MTC_INMEM_SIZE）
+# 出处：
+#   - schema 与 gcsFuseMountOptions 原样：公开文档 https://docs.cloud.google.com/kubernetes-engine/docs/how-to/machine-learning/training/multi-tier-checkpointing
+#   - 实测集群 CR 生成的 DaemonSet 反推：bucket <数据桶>、
+#     toleration google.com/tpu Exists NoSchedule、nodeSelector cloud.google.com/gke-tpu-accelerator: tpu7x、
+#     --tmpfs-size-mib=102400（= inMemoryVolumeSize 100Gi）、mountOptions 与公开文档逐字相同。
+#     「CR 里就是这么写的」是由 DaemonSet 反推的 [推断]——CR 对象本身没采集到。
+#   - nodeSelector：公开文档写 node.kubernetes.io/instance-type: <MACHINE_TYPE>（Ironwood = tpu7x-standard-4t）；这里用实测集群
+#     DaemonSet 上实际出现的 gke-tpu-accelerator: tpu7x。本集群 TPU 节点全是 tpu7x-standard-4t，两种写法选中同一批节点。
+#   - inMemoryVolumeSize ≈ 本地检查点大小 × 2.2（TPU），从每台 host 内存里扣（公开文档）
+apiVersion: checkpointing.gke.io/v1
+kind: CheckpointConfiguration
+metadata:
+  name: ${MTC_CONFIG_NAME}
+spec:
+  cloudStorageBucketName: ${MTC_BUCKET}
+  nodeSelector:
+    cloud.google.com/gke-tpu-accelerator: tpu7x
+  tolerations:
+  - key: google.com/tpu
+    operator: Exists
+    effect: NoSchedule
+  inMemoryVolumeSize: ${MTC_INMEM_SIZE}
+  gcsFuseMountOptions:
+  - implicit-dirs
+  - metadata-cache:negative-ttl-secs:0
+  - metadata-cache:ttl-secs:-1
+  - metadata-cache:stat-cache-max-size-mb:-1
+  - metadata-cache:type-cache-max-size-mb:-1
+  - file-system:kernel-list-cache-ttl-secs:0
+  - read_ahead_kb=1024
+  - write:enable-streaming-writes:true

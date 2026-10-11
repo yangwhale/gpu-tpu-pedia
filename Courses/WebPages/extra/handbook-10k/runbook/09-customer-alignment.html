@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>09 交付前需要和你确认的决策 · TPU7x 集群交付参考手册</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%80%3C/text%3E%3C/svg%3E">
+<meta name="v7x-book" content="handbook-public">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var d=document.documentElement,w=localStorage.getItem('v7x-sidew');if(localStorage.getItem('v7x-side')==='off')d.classList.add('side-off');if(w)d.style.setProperty('--sidew',w+'px')}catch(e){}</script>
+<meta name="robots" content="noindex">
+</head><body data-root="..">
+<div class="progress"><i></i></div>
+<header class="top"><div class="inner">
+  <a class="brand" href="../index.html"><span class="crab">🦀</span><span class="bt">TPU7x 集群交付参考手册</span></a>
+  <nav class="secs" aria-label="栏目"><a href="../index.html" class="">首页</a><a class="on" href="README.html">交付手册</a><a class="" href="../lectures/index.html">讲义</a><a class="" href="pitfalls.html">经验教训</a></nav>
+  <div class="search"><input id="q" type="search" placeholder="搜索（聚焦）" aria-label="全站搜索" autocomplete="off">
+  <div id="qr" class="qr" role="listbox"></div></div>
+</div></header>
+<div class="page l3">
+<nav class="side" aria-label="交付手册"><div class="side-h">交付手册</div><ol><li><a href="README.html">目录与交付清单</a></li><li><a href="00-overview.html">00 总览：一个整 pod 是什么</a></li><li><a href="01-capacity-and-prereqs.html">01 容量核对与前置条件</a></li><li><a href="02-cluster-bringup.html">02 建集群与 144 个节点池</a></li><li><a href="03-control-plane-addons.html">03 集群内组件：JobSet、Kueue、kueue-slice-controller、队…</a></li><li><a href="04-functional-verification.html">04 功能验证阶梯</a></li><li><a href="05-dynamic-slicing-operations.html">05 动态切片日常操作</a></li><li><a href="06-slice-request-and-multislice.html">06 申请 slice：数量、形状、placement、多片互联</a></li><li><a href="06a-storage-anywhere-cache-gcsfuse.html">06a 存储：Anywhere Cache、带宽配额、gcsfuse 怎么配合</a></li><li><a href="06b-public-config-recipe-dsv3.html">06b 公开配置训练配方：DeepSeek-V3 671B × 10+ 片 4x8x8</a></li><li><a href="06c-multislice-training.html">06c 起一个数千芯片多切片训练</a></li><li><a href="07-resilience-and-recovery.html">07 韧性：检查点、故障演练、恢复</a></li><li><a href="07a-fault-recovery.html">07a 故障恢复专题：演练、MTC、换片与时间账</a></li><li><a href="08-day2-operations.html">08 日常运维：监控、维护、升级、巡检、找谁、事故手册</a></li><li><a href="08a-slow-node-sop.html">08a 慢节点 / 慢片标准流程</a></li><li><a href="08b-observability.html">08b 可观测性：看什么、怎么看、怎么靠它找到问题</a></li><li><a href="08c-production-incidents.html">08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a></li><li><a class="on" aria-current="page" href="09-customer-alignment.html">09 交付前需要和你确认的决策</a></li><li><a href="scripts/README.html">脚本参考</a></li></ol></nav>
+<main id="main"><nav class="crumb" aria-label="面包屑"><a href="../index.html">首页</a> › <a href="README.html">交付手册</a> › <span>09 交付前需要和你确认的决策</span></nav><nav class="lbar" aria-label="手册与讲义"><a class="on" aria-current="page" href="09-customer-alignment.html">📘 手册</a><a href="../lectures/09-customer-alignment.html">📝 讲义 · 17′</a><span class="lbar-tip">讲课的人看讲义，投屏放这一页</span></nav><article class="md"><h1 id="09-交付前需要和你确认的决策">09 交付前需要和你确认的决策</h1>
+<blockquote>
+<p><strong>要解决什么</strong>：「健康 cube」「可用」「备件」「维护」这几个词，双方理解不同，交付后就对不上账。每项列出问题、可选项、需要你提供或决定什么。
+<strong>01 就要开始</strong>：D19（日期）、D20（zone）不定，01 的配额和网络没法提。</p>
+</blockquote>
+<div class="x-stats">
+<ul>
+<li><strong>144</strong> 个物理 cube，全在你的 reservation 里</li>
+<li><strong>128</strong> cube：最大任务按它规划</li>
+<li><strong>2–4</strong> 个：每日留空 S 起步值</li>
+<li><strong>7</strong> 件：交付评审时必须定下</li>
+</ul>
+</div>
+<p><a id="s9-0"></a></p>
+<h2 id="90-一张总表" class="hc0"><span class="hn">9.0</span>一张总表</h2>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>决策</th>
+<th>你需要提供 / 决定</th>
+<th>书里在哪</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#d01">D01</a></td>
+<td>「健康 cube」怎么数</td>
+<td>日报和告警用哪个口径</td>
+<td><a href="00-overview.html#4-144-%E4%B8%AA-cube%E4%B8%8D%E7%AD%89%E4%BA%8E144-%E4%B8%AA%E9%83%BD%E8%83%BD%E7%94%A8">00 §4</a>、<a href="08-day2-operations.html#step-8-1">08 §8.1</a></td>
+</tr>
+<tr>
+<td><a href="#d02">D02</a></td>
+<td>SLO 线与量法</td>
+<td>量法；自建探针</td>
+<td><a href="00-overview.html#4-144-%E4%B8%AA-cube%E4%B8%8D%E7%AD%89%E4%BA%8E144-%E4%B8%AA%E9%83%BD%E8%83%BD%E7%94%A8">00 §4</a>、<a href="01-capacity-and-prereqs.html#step-1-2">01 §1.2</a></td>
+</tr>
+<tr>
+<td><a href="#d03">D03</a></td>
+<td>DEGRADED cube 能不能跑 大任务</td>
+<td>集群默认值；大任务是否只用 HEALTHY</td>
+<td><a href="03-control-plane-addons.html#step-3-3">03 §3.3</a></td>
+</tr>
+<tr>
+<td><a href="#d04">D04</a></td>
+<td>备件 cube 数 S 与 Kueue 配额</td>
+<td>S 初值；谁每天确认配额</td>
+<td><a href="03-control-plane-addons.html#step-3-5">03 §3.5</a>、<a href="07-resilience-and-recovery.html#step-7-5">07 §7.5</a></td>
+</tr>
+<tr>
+<td><a href="#d05">D05</a></td>
+<td>维修预期</td>
+<td>维修多久升级；15/16 清单多久过一次</td>
+<td><a href="07-resilience-and-recovery.html#step-7-5">07 §7.5</a>、<a href="08-day2-operations.html#step-8-5">08 §8.5</a></td>
+</tr>
+<tr>
+<td><a href="#d06">D06</a></td>
+<td>平台侧抢占</td>
+<td>看到时怎么排查</td>
+<td>本章</td>
+</tr>
+<tr>
+<td><a href="#d07">D07</a></td>
+<td>维护窗口与自触发维护</td>
+<td>谁触发、每批几个 cube、提前多久通知</td>
+<td><a href="08-day2-operations.html#step-8-2">08 §8.2</a></td>
+</tr>
+<tr>
+<td><a href="#d08">D08</a></td>
+<td>OCS 故障时怎么办</td>
+<td>出事时谁暂停提交、谁开 case</td>
+<td><a href="08-day2-operations.html#step-8-6">08 §8.6</a></td>
+</tr>
+<tr>
+<td><a href="#d09">D09</a></td>
+<td>电力事件</td>
+<td>事件期间冻结哪些操作</td>
+<td><a href="07-resilience-and-recovery.html#step-7-1">07 §7.1</a></td>
+</tr>
+<tr>
+<td><a href="#d10">D10</a></td>
+<td>版本钉死</td>
+<td>谁维护 BOM；生产用哪版 jax / libtpu</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-6">01 §1.6</a>、<a href="08-day2-operations.html#step-8-3">08 §8.3</a></td>
+</tr>
+<tr>
+<td><a href="#d11">D11</a></td>
+<td>功耗档</td>
+<td>是否偏离默认档</td>
+<td>本章</td>
+</tr>
+<tr>
+<td><a href="#d12">D12</a></td>
+<td>优先级、抢占、时长上限</td>
+<td>档位表；队列结构</td>
+<td><a href="03-control-plane-addons.html#step-3-5">03 §3.5</a>、<a href="04-functional-verification.html#acceptance-priority">04 验收优先级</a></td>
+</tr>
+<tr>
+<td><a href="#d13">D13</a></td>
+<td>手工 Slice 政策</td>
+<td>写进使用规范</td>
+<td><a href="05-dynamic-slicing-operations.html#step-5-3">05 §5.3</a></td>
+</tr>
+<tr>
+<td><a href="#d14">D14</a></td>
+<td>core dump 政策</td>
+<td>模板默认值</td>
+<td><a href="07-resilience-and-recovery.html#step-7-4">07 §7.4</a></td>
+</tr>
+<tr>
+<td><a href="#d15">D15</a></td>
+<td>配额与启动盘大小</td>
+<td>启动盘大小；谁提配额</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-4">01 §1.4</a></td>
+</tr>
+<tr>
+<td><a href="#d16">D16</a></td>
+<td>网络</td>
+<td>IP 段、出网方式、控制面访问网段</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-7">01 §1.7</a></td>
+</tr>
+<tr>
+<td><a href="#d17">D17</a></td>
+<td>存储</td>
+<td>数据桶位置、KSA、保留策略</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-8">01 §1.8</a></td>
+</tr>
+<tr>
+<td><a href="#d18">D18</a></td>
+<td>支持通道</td>
+<td>你方接口人；夜间升级路径</td>
+<td><a href="08-day2-operations.html#step-8-5">08 §8.5</a></td>
+</tr>
+<tr>
+<td><a href="#d19">D19</a></td>
+<td>交付日期</td>
+<td>以书面 ETA 排期</td>
+<td><a href="#s9-dates">§9.5</a></td>
+</tr>
+<tr>
+<td><a href="#d20">D20</a></td>
+<td>zone</td>
+<td>以书面 zone 提配额和网络</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-8">01 §1.8</a></td>
+</tr>
+<tr>
+<td><a href="#d21">D21</a></td>
+<td>验收项</td>
+<td>见 04</td>
+<td><a href="04-functional-verification.html#signoff">04 验收项</a></td>
+</tr>
+<tr>
+<td><a href="#d22">D22</a></td>
+<td>reservation 生命周期</td>
+<td>到期提醒；谁接受 future reservation</td>
+<td><a href="01-capacity-and-prereqs.html#step-1-1">01 §1.1</a></td>
+</tr>
+<tr>
+<td><a href="#d23">D23</a></td>
+<td>事故通知</td>
+<td>联系人、渠道、时限</td>
+<td><a href="08-day2-operations.html#step-8-5">08 §8.5</a></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>交付评审（T−7）必须定下的 7 件</strong>：D01、D02、D03、D04、D12、D13、D14。前四件决定配额和日报怎么算，后三件写进集群使用规范。</p>
+<hr />
+<h2 id="91-容量健康与备件" class="hc1"><span class="hn">9.1</span>容量、健康与备件</h2>
+<p><a id="d01"></a></p>
+<h3 id="d01健康-cube怎么数">D01「健康 cube」怎么数</h3>
+<p><strong>问题</strong>：SLA、Google 仪表盘、你的调度器数的「健康 cube」不是同一批。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>层</th>
+<th>叫法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Google SLO</td>
+<td>HEALTHY + <strong>DEGRADED 都算健康</strong>（前提是开着 ICI resiliency）</td>
+</tr>
+<tr>
+<td>GCE sub-block <code>healthInfo</code></td>
+<td>HEALTHY / DEGRADED（<code>healthyHostCount</code>、<code>degradedInfraCount</code>）</td>
+</tr>
+<tr>
+<td>GKE 节点标签 <code>partition-4x4x4-state</code></td>
+<td>实测只见到 <strong>HEALTHY / UNHEALTHY</strong>；GCE 的 DEGRADED(15/15) 在这里是 UNHEALTHY</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>健康数天天在动：同一个 pod 隔几小时读，HEALTHY 16/16 的个数就不一样。</li>
+<li><code>gcp_health_status</code> 会短暂假翻 DEGRADED，判定别用它（<a href="08-day2-operations.html#step-8-1">08 §8.1</a> 告警 #2）。</li>
+</ul>
+<p><strong>可选项</strong>：</p>
+<ol>
+<li>全按 Google SLO 口径：和 SLA 一致，大任务实际可用的 cube 可能更少。</li>
+<li>全按 K8s HEALTHY：和调度器一致，但 SLA 不按它算。</li>
+<li><strong>两个数都报</strong>（本书 <code>08-daily-check.sh</code> 的做法）：日报同报 K8s HEALTHY cube 数和 GCE DEGRADED sub-block 数。</li>
+</ol>
+<p><strong>你需要决定</strong>：日报和告警用哪个口径。不论选哪个，判定信号都建议用 <code>healthyHostCount</code> / <code>degradedInfraCount</code> <strong>持续 ≥5 min</strong>，不用 <code>gcp_health_status</code>。</p>
+<hr />
+<p><a id="d02"></a></p>
+<h3 id="d02-slo-线与量法">D02 SLO 线与量法</h3>
+<p><strong>问题</strong>：「至少 N 个 cube 可用」的 N 是多少？怎么量？</p>
+<ul>
+<li>144 个 cube 全在你的 reservation 里。资料里常见 130/144（per block），这是 Google 侧 SLO 目标，不是对外条款；以你拿到的书面 SLA 原文为准。</li>
+<li>其余 14 个不在 SLO 目标内，当热备，闲时跑低优先级任务。</li>
+<li>资料里维护窗口内的 cube 不计入 SLO，关掉 ICI resiliency 也属于免责（<a href="00-overview.html#4-144-%E4%B8%AA-cube%E4%B8%8D%E7%AD%89%E4%BA%8E144-%E4%B8%AA%E9%83%BD%E8%83%BD%E7%94%A8">00 §4</a>）；同样以书面原文为准。</li>
+</ul>
+<div class="kp kc0"><div class="kp-t">需要和你一起定的量法</div>
+<ul>
+<li>用哪个信号（D01）、统计窗口多长、维护窗口怎么排除。</li>
+<li>双方各记每次维护窗口，月底对账。</li>
+</ul></div>
+<p><strong>你可以自己建的探针</strong>（留证据）：</p>
+<ul>
+<li>每个 cube 16/16 Ready + <code>partition-4x4x4-state</code> 计数。</li>
+<li>备件 cube 上周期性跑一个 4x4x4 金丝雀任务。</li>
+<li>低于目标 ≥10 min 告警。</li>
+</ul>
+<hr />
+<p><a id="d03"></a></p>
+<h3 id="d03-degraded-cube-能不能跑-大任务">D03 DEGRADED cube 能不能跑 大任务</h3>
+<p><strong>问题</strong>：kueue-slice-controller 的 <code>--default-slice-health-node-affinity</code> 设 <code>HEALTHY</code> 还是 <code>HEALTHY_AND_DEGRADED</code>？</p>
+<figure class="mermaid"><img src="../assets/mermaid/8ca2aba3599c.png" width="810" alt="示意图" loading="lazy"></figure><p><strong>可选项</strong>：</p>
+<ol>
+<li><code>HEALTHY</code>：只用全好的 cube；一个 OCS 机箱故障就整 pod 不可调度。</li>
+<li><code>HEALTHY_AND_DEGRADED</code>（本书模板和公开 manifest 的默认值）：照常调度，训练日志记下是否用了 DEGRADED partition。</li>
+<li>按任务区分：集群默认 <code>HEALTHY_AND_DEGRADED</code>，大任务自带 nodeAffinity 只要 HEALTHY。</li>
+</ol>
+<p>这个 flag 的效果本书没实测：D01 里 GKE 标签只见到 HEALTHY / UNHEALTHY，两种取值在实际集群上可能没区别 <span class="tg inf">[推断]</span>。</p>
+<p><strong>你需要决定</strong>：集群默认值；大任务是否只用 HEALTHY。只用 HEALTHY 时，大任务可用的 cube 数会低于 SLO 计数（D02）。</p>
+<hr />
+<p><a id="d04"></a></p>
+<h3 id="d04-备件-cube-数-s-与-kueue-配额">D04 备件 cube 数 S 与 Kueue 配额</h3>
+<p><strong>问题</strong>：留几个 cube 给「坏一片、整任务重切」？配额怎么算、谁每天更新？</p>
+<div class="kp kc1"><div class="kp-t">为什么要紧</div>
+<ul>
+<li>坏机器原地修（D05）；多片任务坏一片 = 所有片重切，要有空闲的健康 cube。</li>
+<li>健康数天天在动，配额按固定数写会超卖：任务准入了，却拿不到卡。</li>
+</ul></div>
+<p><strong>两个数</strong>：<strong>规划空出</strong> = 144 − 128 = <strong>16</strong>（14 个不保证 + 2 个规划余量），一次性决定最大任务（例如 8 × 16-cube 或 4 × 32-cube）；<strong>每日留空 S</strong>，每天算配额时减掉。</p>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>别把 16 当成 S</span></span>那样只有 144 个全健康那天配额才够 128，<strong>128 cube 的任务基本永远准入不了</strong>。</p>
+</blockquote>
+<figure class="img"><a href="../figs/fig-spare-s-vs-quota.svg" target="_blank" title="新窗口看原图"><img src="../figs/fig-spare-s-vs-quota.svg" alt="每日留空 S 与主队列配额" loading="lazy"></a><figcaption>每日留空 S 与主队列配额</figcaption></figure>
+<p><strong>可选项</strong>（以当日健康 cube 刚好 130 为例）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>S</th>
+<th>配额</th>
+<th>能扛什么 <span class="tg inf">[推断]</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>16</td>
+<td>114 cube</td>
+<td>见上框</td>
+</tr>
+<tr>
+<td><strong>2–4</strong></td>
+<td><strong>126–128 cube</strong></td>
+<td>坏一片后有 2–4 个 cube 可重切；配额要满 128，当日健康数须 ≥ 128 + S</td>
+</tr>
+<tr>
+<td>按实测</td>
+<td>—</td>
+<td>交付后两周量出每日波动再定</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>本书的做法</strong>：</p>
+<ol>
+<li>最大任务 <strong>≤128 cube</strong>，配额 = <strong>min(128, 当日 HEALTHY − S) × 64</strong>，每天用 <code>03-addons.sh quota</code> 重算（<a href="03-control-plane-addons.html#step-3-5">03 §3.5</a>）。</li>
+<li>S <strong>先取 2–4</strong>，T+14 天按实测调 <span class="tg inf">[推断]</span>。</li>
+<li>备件给可回收的借用队列（D12）。</li>
+<li>盯<strong>备件深度</strong>和 <strong>15/16 cube 数</strong>，不只看「达标没有」。</li>
+</ol>
+<p><strong>每日重算</strong>（<strong>未实测</strong>）</p>
+<ul>
+<li>机器只算建议值，<strong>改配额要人确认</strong>，由你方运维值班确认。</li>
+<li>为什么不全自动：<code>queues</code> 带 <code>--force-conflicts</code>，会盖掉 <code>05-isolate-cube.sh</code> 当天 patch 的值；<code>08-daily-check.sh --probe</code> 只告警、不改配额。</li>
+<li>流程：cron 跑 <code>quota</code>（只读）→ 值班看建议值 → 手工跑 <code>queues</code>。</li>
+<li>前提：<code>~/runbook-env.sh</code>（或 env.sh）里先填好 <code>SPARE_CUBES</code>（每日留空 S）。没填时 <code>quota</code> 只打印健康 cube 数，不给建议值，并在 stderr 报一行警告（cron 落的文件里能看到）。</li>
+</ul>
+<div class="code"><span class="lang">bash</span><pre><code><span class="c1"># ① crontab（值班机，按机器本地时区；% 在 crontab 里要转义）：每天只读算一次建议值，落文件</span>
+<span class="m">0</span><span class="w"> </span><span class="m">9</span><span class="w"> </span>*<span class="w"> </span>*<span class="w"> </span>*<span class="w"> </span>bash<span class="w"> </span>-lc<span class="w"> </span><span class="s1">&#39;source ~/runbook-env.sh &amp;&amp; cd &quot;$RUNBOOK_DIR&quot;/scripts &amp;&amp; mkdir -p &quot;$STATE_DIR/03&quot; &amp;&amp; ./03-addons.sh quota &gt; &quot;$STATE_DIR/03/quota-$(date +\%F).txt&quot; 2&gt;&amp;1&#39;</span>
+<span class="c1"># ② 值班人工确认：和昨天比、和隔离清单（PartOfBrokenSlice）对得上；通知渠道自行接入</span>
+cat<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$STATE_DIR</span><span class="s2">/03/quota-</span><span class="k">$(</span>date<span class="w"> </span>+%F<span class="k">)</span><span class="s2">.txt&quot;</span>
+<span class="c1"># ③ 确认后才改（TPU_QUOTA 只用当天 ① 的建议值，别手填旧值）</span>
+<span class="nb">cd</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$RUNBOOK_DIR</span><span class="s2">&quot;</span>/scripts<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">TPU_QUOTA</span><span class="o">=</span>&lt;当天建议值&gt;<span class="w"> </span>./03-addons.sh<span class="w"> </span>queues
+</code></pre></div>
+<ul>
+<li>怎么验证：第一次挂上后，对比文件里的「建议 TPU_QUOTA」和手跑 <code>./03-addons.sh quota</code> 是否一致；cron 环境下 kubectl 凭据能不能用要先试（未核）。</li>
+</ul>
+<p><strong>你需要决定</strong>：S 初值；谁每天确认配额；最大任务按多少 cube 规划。</p>
+<hr />
+<p><a id="d05"></a></p>
+<h3 id="d05-维修预期原地修repairing-数天">D05 维修预期：原地修、REPAIRING 数天</h3>
+<p><strong>问题</strong>：机器坏了多久能回来？</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>现实</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原地修</td>
+<td>坏 VM 原地 REPAIRING，没有替换机；cube 在切片上时不许重建 VM</td>
+</tr>
+<tr>
+<td>时长</td>
+<td>维修时长没有固定预期，实际数小时到数天</td>
+</tr>
+<tr>
+<td>爆炸半径</td>
+<td>1 台坏 = 整 cube 出局；芯片故障可能影响 1–4 台邻居</td>
+</tr>
+</tbody>
+</table></div>
+<div class="kp kc2"><div class="kp-t">需要和你一起定的升级节奏</div>
+<ul>
+<li>REPAIRING 超过多久开 case（本书按 12 h）。</li>
+<li>多久过一次「15/16 cube 清单」，清单带 sub-block ID。</li>
+<li>报坏主机时附错误行和时间戳；同一台反复坏，在 case 里要求换件。</li>
+</ul></div>
+<p><strong>你需要决定</strong>：开 case 的阈值；清单评审的频率和参加人。</p>
+<hr />
+<p><a id="d06"></a></p>
+<h3 id="d06-平台侧抢占">D06 平台侧抢占</h3>
+<p>先例：别的（非整 pod）预留上出现过无通知的平台侧抢占。交付前向 Google 书面确认：你的整 pod 预留会不会被平台侧抢占。作业事件里真出现 <code>Preempted by [HIGHER_PRIORITY]</code>，先排除自己的自动化删节点，再开 case；别和 D12 的 Kueue 抢占混。</p>
+<hr />
+<p><a id="d07"></a></p>
+<h3 id="d07-维护窗口通知谁触发维护">D07 维护窗口、通知、谁触发维护</h3>
+<p><strong>问题</strong>：维护谁触发、一批几个 cube、提前多久通知谁？</p>
+<div class="kp kc3"><div class="kp-t">为什么要紧</div>
+<ul>
+<li>主机只有<strong>分组维护</strong>：约 90 天通知，到期<strong>强制</strong>；可在 host / sub-block / block / reservation 级提前触发（自触发维护）。主机的修复和回退只能靠自触发维护拿到。</li>
+<li>批太大，一批 cube 可能长时间回不来，可调度数跌到 SLO 线以下。</li>
+<li>节点维护通知不可靠，别只靠节点标签判断。</li>
+<li>GKE 侧的维护例外、冻结自动升级（<a href="08-day2-operations.html#step-8-3">08 §8.3</a>）<strong>挡不住</strong> GCE 主机维护。</li>
+</ul></div>
+<p><strong>可选项</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>候选</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>谁触发</td>
+<td>你方运维 / 交付团队代运维 / Google</td>
+</tr>
+<tr>
+<td>批大小</td>
+<td>小批（≤5 cube）/ 按余量算</td>
+</tr>
+<tr>
+<td>窗口</td>
+<td>你所在时区的白天（你方值班在岗）/ 美国白天（Google 支持在岗，见 D18）</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>本书的做法</strong>：按 <a href="08-day2-operations.html#step-8-2">08 §8.2</a> 触发；约 4–8 cube 一批 <span class="tg inf">[推断]</span>；批后逐台核 <code>node_sw</code>，15/16 的先 <code>--scope=all</code> 扫尾。</p>
+<p><strong>你需要决定</strong>：谁触发；每批多少；每次触发前提前多久通知 Google（建议至少 1 个工作日 <span class="tg inf">[推断]</span>），窗口记录留给 D02 对账。</p>
+<hr />
+<p><a id="d08"></a></p>
+<h3 id="d08-ocs-故障时怎么办">D08 OCS 故障时怎么办</h3>
+<p><strong>会出什么问题</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>故障</th>
+<th>表现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 个 OCS 机箱 drain</td>
+<td><strong>全部</strong> cube <code>DEGRADED (BAD_OCS)</code>；4x4x4 及以上受影响，sub-cube 照常</td>
+</tr>
+<tr>
+<td>一对 DCN / OCS 交换机都 drain</td>
+<td>全部 cube <code>UNHEALTHY</code>，整 pod 不可用</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>怎么认出来</strong>：任务报 <code>TPU backend initialization is taking more than 60.0 seconds</code>；sub-block 状态成片变 DEGRADED 或 UNHEALTHY。</p>
+<p><strong>谁来修</strong>：OCS 由 Google 修复，Google 侧有处理流程。</p>
+<div class="kp kc0"><div class="kp-t">你要配合</div>
+<ul>
+<li>起不来就暂停提交，<strong>别按 cube 连发</strong>，连发会让全 pod 变 UNHEALTHY。</li>
+<li>按 <a href="08-day2-operations.html#step-8-6">08 §8.6</a> 开 case，附报错行和时间。</li>
+<li>修好后是否要重建节点池，等 Google 书面判断再动。</li>
+</ul></div>
+<p><strong>你需要决定</strong>：机箱级故障时是否按 D03 照常调度；谁有权暂停提交。</p>
+<hr />
+<p><a id="d09"></a></p>
+<h3 id="d09-电力事件">D09 电力事件</h3>
+<p>交付前向 Google 了解所在机房的电力事件预案。事件期间别删池、缩容、删 reservation，等 Google 确认容量恢复；检查点频率按「可能停机数小时」设（<a href="07-resilience-and-recovery.html#step-7-1">07 §7.1</a>）。</p>
+<hr />
+<h2 id="92-版本性能与使用规范" class="hc2"><span class="hn">9.2</span>版本、性能与使用规范</h2>
+<p><a id="d10"></a></p>
+<h3 id="d10-版本钉死">D10 版本钉死</h3>
+<p>修复常先以 allowlist 版本发布，交付 zone 未必有；控制面升级可能打掉切片，还会滚动升级组件。版本要钉死、变动走变更单。</p>
+<p>BOM 草案（<a href="01-capacity-and-prereqs.html#step-1-6">01 §1.6</a>）：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>组件</th>
+<th>钉法 / 下限</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GKE 控制面 + 节点</td>
+<td>super-slicing ≥1.35.2-gke.1842000、sub-slicing ≥1.36.0-gke.3712000；先确认交付 zone 可用、要不要 allowlist</td>
+</tr>
+<tr>
+<td>GKE 托管 slice controller</td>
+<td>随控制面；修复下限 slice_controller 1.36.20-gke.0</td>
+</tr>
+<tr>
+<td>kueue-slice-controller</td>
+<td>钉 digest；<strong>交付用 ≥<code>v0.8.0-203</code></strong> ＋ 新版 kueue-tpu-ac（版本号以 Google 确认为准；见下框）；<strong>不用 <code>:latest</code></strong>（指向旧版本）</td>
+</tr>
+<tr>
+<td>Kueue</td>
+<td><strong>0.18.x，≥0.18.5</strong>（含大任务饿死修复与 TAS 剩余资源缓存修复），不跨 minor</td>
+</tr>
+<tr>
+<td>JobSet</td>
+<td>≥0.12.0（sub-slicing 要求）</td>
+</tr>
+<tr>
+<td>MTC driver</td>
+<td>≥0.8.4</td>
+</tr>
+<tr>
+<td>jax / libtpu / 镜像</td>
+<td><strong>每次运行钉死</strong>；换版本重测阈值（<a href="04-functional-verification.html#signoff">04 验收项</a>），也要重看 HBM 余量</td>
+</tr>
+<tr>
+<td>主机 bundle / ASIC-FW / BMC</td>
+<td>reservation 钉快照；逐台记 ASIC-FW 版本</td>
+</tr>
+</tbody>
+</table></div>
+<p><a id="d10-ksc"></a></p>
+<blockquote class="co warn">
+<p><span class="co-t"><i>⚠️</i><span>slice-controller 版本：实测用的版本带着已知恢复 bug</span></span></p>
+<ul>
+<li>本书 03 / 08 的 digest 和 <a href="07-resilience-and-recovery.html#step-7-4">07 §7.4</a> 的恢复演练基于 <code>v0.8.0-200</code>。</li>
+<li>恢复路径 bug 要 ≥<code>v0.8.0-203</code> ＋ 新版 kueue-tpu-ac 才修（<a href="07-resilience-and-recovery.html#step-7-2">07 §7.2</a>）。</li>
+<li>交付前升到含修复的版本，<strong>升级后重跑 <a href="07-resilience-and-recovery.html#step-7-3">07 §7.3</a> 恢复演练</strong>。时间槽：<a href="#s9-timeline">时间线</a> T−5，步骤见 <a href="03-control-plane-addons.html#ksc-upgrade">03 升级</a>。</li>
+</ul>
+</blockquote>
+<p><strong>你需要决定</strong>：BOM 谁维护；生产用哪版 jax / libtpu；变更流程（金丝雀、回滚，顺序按 <a href="08-day2-operations.html#step-8-3">08 §8.3</a>）。</p>
+<hr />
+<p><a id="d11"></a></p>
+<h3 id="d11-功耗档">D11 功耗档</h3>
+<p>训练是否使用非默认功耗档。本书的验收项和参考数字都按默认档；改档就要按新档重测 04 的阈值，9.6 节的数字也不能直接对照。</p>
+<hr />
+<p><a id="d12"></a></p>
+<h3 id="d12-优先级档位谁能抢谁运行时长上限">D12 优先级档位、谁能抢谁、运行时长上限</h3>
+<p><strong>问题</strong>：多团队共用 pod 时谁能挤掉谁？任务最长跑多久？</p>
+<p><strong>实测行为</strong>（<a href="04-functional-verification.html#acceptance-priority">04 验收优先级</a>）：</p>
+<ul>
+<li>被抢的任务<strong>立刻</strong>重排；多片任务被抢一片 = 全部重切。</li>
+<li>指向<strong>不存在</strong>的 WorkloadPriorityClass 时，JobSet 永远 suspend，没有 Event。</li>
+<li>大任务饿死的修复在 Kueue 0.18.5 / 0.19.1（D10）。</li>
+</ul>
+<p><strong>可选项</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>维度</th>
+<th>候选</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>队列结构</td>
+<td>一个持有 D04 配额的主队列（队内不互抢）+ 配额 0、可被回收的借用队列 / 单队列</td>
+</tr>
+<tr>
+<td>档位</td>
+<td>本书模板 <a href="scripts/03-kueue-priority.yaml">03-kueue-priority.yaml</a>：high 800 / medium 500 / low 100 / 自定</td>
+</tr>
+<tr>
+<td>时长上限</td>
+<td>不设（多日训练不被驱逐）/ 设上限</td>
+</tr>
+</tbody>
+</table></div>
+<div class="kp kc1"><div class="kp-t">落地要点</div>
+<ul>
+<li>PriorityClass 与<strong>同名同值</strong>的 WorkloadPriorityClass 一起建；可用 Kyverno 按 namespace 限档。</li>
+<li>已完成的 JobSet 用 <code>ttlSecondsAfterFinished</code> 清理。</li>
+<li>交付后的验收任务用低优先级或错开窗口。</li>
+</ul></div>
+<p><strong>你需要决定</strong>：档位表（档名、数值、namespace、谁抢谁）；队列结构；是否设时长上限。</p>
+<hr />
+<p><a id="d13"></a></p>
+<h3 id="d13-手工-slice-政策">D13 手工 Slice 政策</h3>
+<p><strong>问题</strong>：能不能绕过 Kueue，<code>kubectl apply</code> 一个 Slice 跑巡检、调试？</p>
+<figure class="mermaid"><img src="../assets/mermaid/40d7656ca298.png" width="1024" alt="示意图" loading="lazy"></figure><div class="kp kc2"><div class="kp-t">建议写进使用规范</div>
+<ul>
+<li>生产一律走 Kueue。</li>
+<li>手工 Slice 只在维护窗口、队列清空时用，带 owner 标注、<strong>当天删</strong>。</li>
+<li>要长期占用，先用 <a href="05-dynamic-slicing-operations.html#step-5-7">05-isolate-cube.sh</a> 拿掉 cube。</li>
+<li>日报第 5 段列无主手工片（<a href="08-day2-operations.html#step-8-4">08 §8.4</a>）。</li>
+<li>提交前过 <code>05-avoid-manual-slices.py</code>（<code>06-jobset.sh apply</code> 默认已做）。</li>
+</ul></div>
+<p><strong>你需要决定</strong>：是否采用这份规范；谁有权建手工 Slice。</p>
+<hr />
+<p><a id="d14"></a></p>
+<h3 id="d14-core-dump-政策">D14 core dump 政策</h3>
+<p><strong>问题</strong>：一次 abort，JAX 协调服务让全体进程退出，每个进程往启动盘写几十 GB core → 节点 DiskPressure → TAS 当节点故障驱逐整个 Workload。</p>
+<p><strong>可选项</strong>：</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>选项</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>全关（<code>ulimit -c 0</code>）</td>
+<td>最稳，丢崩溃现场；本书 JobSet 模板的默认（<a href="08-day2-operations.html#step-8-6">08 §8.6</a>）</td>
+</tr>
+<tr>
+<td>写到 gcsfuse 目录</td>
+<td><span class="tg inf">[推断：没实测写几十 GB 要多久]</span></td>
+</tr>
+<tr>
+<td>调试时单个 worker 开</td>
+<td>训练负责人临时批</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>你需要决定</strong>：模板默认值；谁能临时打开。</p>
+<hr />
+<h2 id="93-配额网络存储支持验收日期" class="hc3"><span class="hn">9.3</span>配额、网络、存储、支持、验收、日期</h2>
+<p><a id="d15"></a></p>
+<h3 id="d15-配额与启动盘大小">D15 配额与启动盘大小</h3>
+<p><strong>为什么要紧</strong>：非 TPU 配额是第一天的拦路虎，HDB 交期 8–14 周；Console 里改 preference 会悄悄把配额改小。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>配额</th>
+<th>需求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TPU7X 芯片</td>
+<td>≥9,216</td>
+</tr>
+<tr>
+<td>HDB 总 GB（启动盘）</td>
+<td>2,304 × 启动盘 GB（100 GB 时 230,400 GB）</td>
+</tr>
+<tr>
+<td>HDB IOPS</td>
+<td>见 <a href="01-capacity-and-prereqs.html#step-1-4">01 §1.4</a></td>
+</tr>
+<tr>
+<td>IN_USE_ADDRESSES</td>
+<td>≥2,336</td>
+</tr>
+<tr>
+<td>INSTANCES / INSTANCE_GROUPS</td>
+<td>≥2,304 + CPU 节点 / ≥154</td>
+</tr>
+<tr>
+<td>multi-MIG 配额</td>
+<td>要 Google 调高</td>
+</tr>
+<tr>
+<td>GCE 读 API（每分钟每区域）</td>
+<td>切片控制器最坏约 3,456 reads/min <span class="tg inf">[推断]</span>；限流会把健康切片标 Unknown</td>
+</tr>
+<tr>
+<td>Cloud Logging 摄入</td>
+<td>整 pod 规模会打满默认值</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>可选项</strong>（启动盘）：100 GB 起，环境走 gcsfuse 上的 tar <span class="tg inf">[推断]</span>，前提是关 core dump（D14）；或更大的启动盘，HDB 配额按比例加。</p>
+<p><strong>你需要决定</strong>：启动盘大小；谁提配额。交付当天 <code>01-precheck.sh</code> 再读一次。</p>
+<hr />
+<p><a id="d16"></a></p>
+<h3 id="d16-网络natmtu双网卡ip-段">D16 网络：NAT、MTU、双网卡、IP 段</h3>
+<p><strong>问题</strong>：VPC、子网、NAT、网卡数谁定？哪些建完改不了？</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>事实</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cloud NAT</td>
+<td><code>MANUAL_ONLY</code> + 2 个 IP：先例中大量节点断网、无告警</td>
+</tr>
+<tr>
+<td>双网卡</td>
+<td>每台 2 块物理网卡（共 400 Gbps）、3 个接口（主 + 2 × DCN）；附加网卡<strong>建池时写死</strong></td>
+</tr>
+<tr>
+<td>MTU</td>
+<td>两个 DCN VPC MTU 8896</td>
+</tr>
+<tr>
+<td>Pod CIDR</td>
+<td>/14 + 110 pods/node 在 1,011 节点耗尽；用 /12</td>
+</tr>
+</tbody>
+</table></div>
+<div class="kp kc3"><div class="kp-t">可选项</div>
+<ul>
+<li>NAT：自动分配 IP + 动态端口；要固定出网 IP（白名单）就得 <code>MANUAL_ONLY</code>，按节点数配足 IP 和端口。</li>
+<li>网卡：建池时带双网卡（建完加不了）；训练默认用哪块，按 <a href="01-capacity-and-prereqs.html#step-1-7">01 §1.7</a>。</li>
+</ul></div>
+<p><strong>你需要提供</strong>：不与内网重叠的 IP 段；是否需要固定出网 IP；控制面授权网段（私有 + DNS endpoint，别写会变的 /32）。<strong>网络设计建池前双方确认后冻结</strong>。</p>
+<hr />
+<p><a id="d17"></a></p>
+<h3 id="d17-存储gcsfuse--workload-identity检查点读带宽">D17 存储：gcsfuse + Workload Identity、检查点、读带宽</h3>
+<div class="kp kc0"><div class="kp-t">为什么要紧</div>
+<ul>
+<li>gcsfuse 走 Workload Identity：<strong>所有</strong>节点池（含系统池）要开 <code>GKE_METADATA</code>，漏一个就挂载失败。</li>
+<li>实测：单流 0.32 GB/s，16 台 × 32 路合计 56–60 GB/s，挂载到首字节约 4 s。</li>
+<li><strong>读带宽</strong>：训练数据桶在卡所在 zone 建 Anywhere Cache；缓存带宽配额（<code>anywhere_cache_egress_bandwidth</code>）使用方自助提不了，要经 Google 申请；桶出口配额自助提到 1 Tbps 兜底（<a href="06a-storage-anywhere-cache-gcsfuse.html">06a</a>）。</li>
+<li>没有 Local SSD，gcsfuse 缓存和 MTC ramdisk 都吃主机内存；MTC 要 HNS 桶，<strong>不会自动删 GCS 备份</strong>。</li>
+</ul></div>
+<p><strong>你需要提供 / 决定</strong>：数据桶位置（和 TPU 同区域）；给数据桶授权的<strong>专用 KSA</strong>（授 <code>default</code> = namespace 里任何 pod 都能读写 <span class="tg inf">[推断]</span>）；检查点保留策略；交付门槛要不要加「全 pod 规模 3 小时 FIO / 检查点模拟，同 zone」。</p>
+<hr />
+<p><a id="d18"></a></p>
+<h3 id="d18-支持通道">D18 支持通道</h3>
+<p>交付前确认：一线支持是谁、你所在时区的夜间谁接、P0 怎么升级、交付后谁负责容量 SLO。同时向 Google 要齐现有规程（维护指南、整机置换流程、巡检工具），直接引用、不重写——修复靠人手而规程不全，是生产事故里反复出现的规律（<a href="08c-production-incidents.html">08c 规律九</a>）。在此之前按 <a href="08-day2-operations.html#step-8-5">08 §8.5</a> 开 case。</p>
+<hr />
+<p><a id="d19"></a></p>
+<h3 id="d19-交付日期">D19 交付日期</h3>
+<p>见 <a href="#s9-dates">§9.5</a>。验收不按固定日期排，以书面 ETA 为准；T0 避开周五和周末。</p>
+<p><a id="d20"></a></p>
+<h3 id="d20-zone">D20 zone</h3>
+<p><strong>需要书面确认</strong>：zone、是否 AI zone（AI zone 的控制面在普通 zone）。zone 定了，再定存储位置、配额区域和 <a href="01-capacity-and-prereqs.html#step-1-7">01 §1.7</a> 的子网。</p>
+<hr />
+<p><a id="d21"></a></p>
+<h3 id="d21-验收项">D21 验收项</h3>
+<p>建议验收项见 <a href="04-functional-verification.html#signoff">04</a>。</p>
+<p><a id="d21-drill"></a>
+故障演练（<a href="07-resilience-and-recovery.html#step-7-3">07 §7.3</a>）是否列入验收项，由你方决定；前提是 MTC 模板先在 2 片上验证过（<a href="#s9-timeline">时间线</a> T−5 ～ T−3）。</p>
+<p>另外可以向 Google 要一份「健康但有待办维护」的 sub-block 清单（<a href="01-capacity-and-prereqs.html#step-1-2-pending">01 §1.2</a>），这些 cube 先不进主队列配额。</p>
+<p><strong>验收表带版本号冻结</strong>：交付后验收线可能被反复改（新增档位、换参考、放宽门槛）；每改一次，已交的数都要按新线重算，「达标」一词随日期变义。</p>
+<ul>
+<li>T0 前把验收表写成「版本 + 日期 + 模型 + 芯片数 + 序列长度 + 精度」。</li>
+<li>之后改一次线就升一次版本号，双方签字；旧版本留档，不覆盖。</li>
+</ul>
+<hr />
+<p><a id="d22"></a></p>
+<h3 id="d22-reservation-生命周期">D22 reservation 生命周期</h3>
+<ul>
+<li>reservation 按 <strong>144</strong> 个 cube 建，即使只到位 143（事后改 144 要删整个 reservation）。</li>
+<li><code>deleteAtTime</code> 与约定一致，30 / 14 / 3 天提醒；到期 GKE <strong>立刻</strong>删 TPU 节点。</li>
+<li>future reservation 以 Draft 开始，<strong>你方须在期限内点接受</strong>。</li>
+</ul>
+<p><strong>你需要决定</strong>：谁收到期提醒；谁负责点接受 future reservation。</p>
+<p><a id="d23"></a></p>
+<h3 id="d23-事故通知">D23 事故通知</h3>
+<p><strong>你需要提供</strong>：Google 通知你的联系人、渠道、时限（建议影响 ≥1 个 cube 的 1 h 内 <span class="tg inf">[推断]</span>）；你方发现的问题按 D18 开 case。</p>
+<hr />
+<p><a id="s9-raci"></a></p>
+<h2 id="94-你方分工与时间线" class="hc4"><span class="hn">9.4</span>你方分工与时间线</h2>
+<h3 id="分工">分工</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>你方角色</th>
+<th>拍板</th>
+<th>执行 / 参与</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>基础设施负责人</td>
+<td>D01、D04、D13、D15、D16、D17</td>
+<td>D02、D05、D07、D10、D18–D23</td>
+</tr>
+<tr>
+<td>训练 / 算法负责人</td>
+<td>D03、D11、D12、D14</td>
+<td>D04、D13</td>
+</tr>
+<tr>
+<td>运维值班</td>
+<td>—</td>
+<td>D04 每天确认配额、D07 触发维护、D08 出事暂停提交并开 case、D12–D14 落实规范</td>
+</tr>
+</tbody>
+</table></div>
+<p>D04、D12、D13、D14 必须由你方拍板，因为每天落实它们的是你方运维值班。</p>
+<p><a id="s9-timeline"></a></p>
+<h3 id="时间线t--交付当天">时间线（T = 交付当天）</h3>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>时间</th>
+<th>你方要做的事</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>交付日期有初步说法时</strong>（≈ T−8～14 周，不等 T−14 的书面 ETA）</td>
+<td>提 HDB 启动盘配额（交期 8–14 周）与运维角色审批（<a href="01-capacity-and-prereqs.html#step-1-4">01 §1.4</a>、<a href="01-capacity-and-prereqs.html#step-1-5">§1.5 ②</a>）</td>
+</tr>
+<tr>
+<td><strong>T−14 天</strong></td>
+<td>拿到 D19 / D20 书面答复；按 01 §1.4 复核配额缺口</td>
+</tr>
+<tr>
+<td>T−12 天</td>
+<td>确认 D10 版本 BOM（<a href="01-capacity-and-prereqs.html#step-1-6">01 §1.6</a>）；定 D15 启动盘；D16 网络设计初稿</td>
+</tr>
+<tr>
+<td>T−12 天</td>
+<td>经 Google 申请 Anywhere Cache 缓存带宽配额（周期未知）；出口配额自助提到 1 Tbps（<a href="06a-storage-anywhere-cache-gcsfuse.html#step-6a-2">06a 清单</a> #2、#3）</td>
+</tr>
+<tr>
+<td>T−10 天</td>
+<td>定 D03、D04、D11–D14</td>
+</tr>
+<tr>
+<td>T−10 天</td>
+<td><strong>输入就绪①</strong>（建集群前）：数据桶 <code>$DATA_BUCKET</code>（已有就跳过）→ 给训练 KSA 授 <code>roles/storage.objectUser</code>（<a href="01-capacity-and-prereqs.html#step-1-5-4">01 §1.5 ③④</a>）</td>
+</tr>
+<tr>
+<td><strong>T−10 ～ T−5 天</strong></td>
+<td><strong>建集群</strong>：02 → 03 → 04 L0–L2 冒烟；出口 144 池 Ready（或 15/16 清单已交 Google）</td>
+</tr>
+<tr>
+<td>T−10 ～ T−5 天</td>
+<td><strong>输入就绪②</strong>（集群建好后，按顺序）：<code>GITHUB_SECRET</code>（你方自己执行，token 不经他人）→ <a href="06b-public-config-recipe-dsv3.html#s06a-pull">镜像可拉验证</a> → MTC 桶（<code>07-mtc-setup.sh</code>）→ 环境包 <code>ENV_TAR</code>（<code>06-build-env.sh</code>）</td>
+</tr>
+<tr>
+<td>T−10 ～ T−5 天</td>
+<td><strong>L1 全量巡检窗口</strong>（<a href="04-functional-verification.html#step-4-1">04 §4.1</a>）：先 <code>plan --pool &lt;池名&gt;</code> + <code>apply --wave 1</code> 跑 1 池拿实测耗时，再排全量 2,304 台；独占，不能和多 cube 任务并行</td>
+</tr>
+<tr>
+<td>T−10 ～ T−7 天</td>
+<td><strong>建 Anywhere Cache</strong>（<a href="06a-storage-anywhere-cache-gcsfuse.html#step-6a-5">06a §5</a>）：zone 定了、配额批下就建；<strong>最长 48 h</strong>，要在训练前建好</td>
+</tr>
+<tr>
+<td><strong>T−7 天</strong></td>
+<td><strong>交付评审</strong>：本章决策逐项有结论或截止日 + 负责人</td>
+</tr>
+<tr>
+<td>T−7 ～ T−3 天</td>
+<td>训练阶梯跑到 2 片（<a href="06c-multislice-training.html">06c</a>）；前提：输入就绪② 已过</td>
+</tr>
+<tr>
+<td>T−5 天</td>
+<td><strong>slice-controller 升到 ≥<code>v0.8.0-203</code> ＋ 新版 kueue-tpu-ac</strong>（<a href="03-control-plane-addons.html#ksc-upgrade">03 升级</a>，<a href="#d10-ksc">D10</a>），升级后重跑 <a href="07-resilience-and-recovery.html#step-7-3">07 §7.3</a>；核对网络与 D16 一致</td>
+</tr>
+<tr>
+<td>T−5 天</td>
+<td><strong>建告警策略</strong>：按 <a href="08-day2-operations.html#step-8-1">08 §8.1</a> 那张表建；模板<strong>未实测</strong>，先在测试项目建一条看能否触发</td>
+</tr>
+<tr>
+<td>T−5 ～ T−3 天</td>
+<td><strong>MTC 模板 2 片验证</strong>：<a href="scripts/07-jobset-mtc.yaml"><code>07-jobset-mtc.yaml</code></a> 用 <code>SLICES=2</code> 过文件头的验证四步；没过就不订演练窗口</td>
+</tr>
+<tr>
+<td>T−5 ～ T−1 天</td>
+<td>支持通道就绪（D18、<a href="08-day2-operations.html#step-8-5">08 §8.5</a>）</td>
+</tr>
+<tr>
+<td>T−3 天</td>
+<td>订验收独占窗口（<a href="04-functional-verification.html#schedule">04 排期</a>）</td>
+</tr>
+<tr>
+<td>T−1 天</td>
+<td>重跑 <code>01-precheck.sh</code>；冻结变更；告警上线；模板带 <code>ulimit -c 0</code> 与 <code>ttlSecondsAfterFinished</code></td>
+</tr>
+<tr>
+<td><strong>T0</strong></td>
+<td>跑 <a href="04-functional-verification.html#signoff">04 验收项</a>；按 D04 设配额</td>
+</tr>
+<tr>
+<td>T+1 天</td>
+<td><code>08-daily-check.sh</code> 日报（HEALTHY 数、GCE DEGRADED 数、备件深度、15/16 数、REPAIRING &gt;12 h）</td>
+</tr>
+<tr>
+<td>T+3 天</td>
+<td>复盘抢占 / 驱逐 / 手工片；首个训练任务步时和 06c 参考值对照</td>
+</tr>
+<tr>
+<td><strong>T+7 天</strong></td>
+<td>按 7 天健康数分布初调 S；首份 15/16 清单交 Google；定首轮自触发维护日期</td>
+</tr>
+<tr>
+<td>（T+14 天）</td>
+<td>按两周实测定 S 与运维阈值</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li>网络设计双方确认后才建集群：<a href="02-cluster-bringup.html#step-2-1">02 §2.1</a> 的多网卡建后不可改。预期有少量池 partial，按 02 §2.5 排查 <span class="tg inf">[推断]</span>。</li>
+<li>T0 阈值冻结在签字当天，事后收紧只用于以后回归；改动要双签。</li>
+<li>没测过的时长一律写「待定」，先跑小规模拿实测再排窗口。</li>
+</ul>
+<figure class="mermaid"><img src="../assets/mermaid/ecf44769440b.png" width="1216" alt="示意图" loading="lazy"></figure><p>读图：红色是两个关口；前一节点没达到出口条件，后面顺延。</p>
+<hr />
+<p><a id="s9-dates"></a></p>
+<h2 id="95-交付日期" class="hc5"><span class="hn">9.5</span>交付日期</h2>
+<p>交付日期常同时流传几种说法：口头日期、容量评审阶段、测试环境截止日。<strong>以书面 ETA 为准</strong>；测试环境到期和 pod 到货之间可能有空窗，要提前排 <span class="tg inf">[推断]</span>。</p>
+<h2 id="96-可以对照的实测数字" class="hc0"><span class="hn">9.6</span>可以对照的实测数字</h2>
+<p>在实测集群（00 §6）上测得，默认功耗档。参考基线，不构成 SLA。</p>
+<div class="tbl"><table>
+<thead>
+<tr>
+<th>项</th>
+<th>实测</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>最大单片</td>
+<td>8x16x16 = 2,048 芯；Slice 46–68 s 进 ACTIVE；提交到全部 Completed ≤160 s</td>
+</tr>
+<tr>
+<td>多片</td>
+<td>10+ 片（数千芯）：提交到全部 Completed ≤230 s</td>
+</tr>
+<tr>
+<td>激活</td>
+<td>安静时 26–63 s；同时建更大规模任务 161–172 s；被手工 Slice 挡住时约 6 / 12 min（D13）</td>
+</tr>
+<tr>
+<td>每芯片算力</td>
+<td>bf16 1,808、fp8 3,282 TFLOP/s；HBM 5.38 TB/s</td>
+</tr>
+<tr>
+<td>gcsfuse 读</td>
+<td>单流 0.32 GB/s；16 台 × 32 路合计 56–60 GB/s</td>
+</tr>
+<tr>
+<td>core dump</td>
+<td>单容器 core 约 64 GiB，启动盘 94.3 GiB（kubelet 报的节点镜像文件系统大小，所在节点池启动盘配的是 100 GB）（D14、D15）</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="检查点" class="hc1">检查点</h2>
+<p><strong>做完了</strong></p>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 每项决策有结论，或有截止日 + 负责人</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> D01、D02 的口径与量法写下来；D04、D12–D14 进集群规范</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> T 已定，T−7 交付评审开过</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> 时间线各行你方负责人已明确</li>
+</ul>
+<p><strong>说得出</strong>（括号里是答案）</p>
+<ul class="contains-task-list">
+<li class="task-list-item qa"><details><summary>Google 说「达标」而你觉得「不够用」，最常见的原因是什么？</summary><div class="qa-a">DEGRADED 在 SLO 里算健康，而 大任务不用 DEGRADED</div></details></li>
+<li class="task-list-item qa"><details><summary>144 个 cube 怎么规划？</summary><div class="qa-a">最大任务 128，空出 16；130/144 是 Google 侧 SLO 目标，其余 14 个当热备</div></details></li>
+<li class="task-list-item qa"><details><summary>为什么备件数由你方拍板？</summary><div class="qa-a">每天按健康数改配额的是你方运维；S 取决于你方能接受的最大任务</div></details></li>
+</ul>
+<p><strong>交棒</strong>：决策定下后，回 <a href="01-capacity-and-prereqs.html">01</a> 按定下的 zone、配额、网络开工。</p>
+</article><nav class="pn" aria-label="上一页 / 下一页"><a class="prev" href="08c-production-incidents.html"><small>← 上一页</small>08c 上线周的生产事故：会出什么、怎么提前防、出了怎么判</a><a class="next" href="scripts/README.html"><small>下一页 →</small>脚本参考</a></nav></main>
+<nav class="ptoc" aria-label="本页目录"><div class="ptoc-h">本页</div><ol><li class="l2"><a href="#90-一张总表">9.0 一张总表</a></li><li class="l2"><a href="#91-容量健康与备件">9.1 容量、健康与备件</a></li><li class="l3"><a href="#d01健康-cube怎么数">D01「健康 cube」怎么数</a></li><li class="l3"><a href="#d02-slo-线与量法">D02 SLO 线与量法</a></li><li class="l3"><a href="#d03-degraded-cube-能不能跑-大任务">D03 DEGRADED cube 能不能跑 大任务</a></li><li class="l3"><a href="#d04-备件-cube-数-s-与-kueue-配额">D04 备件 cube 数 S 与 Kueue 配额</a></li><li class="l3"><a href="#d05-维修预期原地修repairing-数天">D05 维修预期：原地修、REPAIRING 数天</a></li><li class="l3"><a href="#d06-平台侧抢占">D06 平台侧抢占</a></li><li class="l3"><a href="#d07-维护窗口通知谁触发维护">D07 维护窗口、通知、谁触发维护</a></li><li class="l3"><a href="#d08-ocs-故障时怎么办">D08 OCS 故障时怎么办</a></li><li class="l3"><a href="#d09-电力事件">D09 电力事件</a></li><li class="l2"><a href="#92-版本性能与使用规范">9.2 版本、性能与使用规范</a></li><li class="l3"><a href="#d10-版本钉死">D10 版本钉死</a></li><li class="l3"><a href="#d11-功耗档">D11 功耗档</a></li><li class="l3"><a href="#d12-优先级档位谁能抢谁运行时长上限">D12 优先级档位、谁能抢谁、运行时长上限</a></li><li class="l3"><a href="#d13-手工-slice-政策">D13 手工 Slice 政策</a></li><li class="l3"><a href="#d14-core-dump-政策">D14 core dump 政策</a></li><li class="l2"><a href="#93-配额网络存储支持验收日期">9.3 配额、网络、存储、支持、验收、日期</a></li><li class="l3"><a href="#d15-配额与启动盘大小">D15 配额与启动盘大小</a></li><li class="l3"><a href="#d16-网络natmtu双网卡ip-段">D16 网络：NAT、MTU、双网卡、IP 段</a></li><li class="l3"><a href="#d17-存储gcsfuse--workload-identity检查点读带宽">D17 存储：gcsfuse + Workload Identity、检查点、读带宽</a></li><li class="l3"><a href="#d18-支持通道">D18 支持通道</a></li><li class="l3"><a href="#d19-交付日期">D19 交付日期</a></li><li class="l3"><a href="#d20-zone">D20 zone</a></li><li class="l3"><a href="#d21-验收项">D21 验收项</a></li><li class="l3"><a href="#d22-reservation-生命周期">D22 reservation 生命周期</a></li><li class="l3"><a href="#d23-事故通知">D23 事故通知</a></li><li class="l2"><a href="#94-你方分工与时间线">9.4 你方分工与时间线</a></li><li class="l3"><a href="#分工">分工</a></li><li class="l3"><a href="#时间线t--交付当天">时间线（T = 交付当天）</a></li><li class="l2"><a href="#95-交付日期">9.5 交付日期</a></li><li class="l2"><a href="#96-可以对照的实测数字">9.6 可以对照的实测数字</a></li><li class="l2"><a href="#检查点">检查点</a></li></ol></nav>
+</div>
+<footer class="foot"><div class="inner">万卡级 TPU7x 集群交付参考手册 · [推断] / [需验证] 标记表示结论强度，不构成承诺。</div></footer>
+<a class="totop" href="#" aria-label="回到顶部">↑</a>
+<script src="../assets/site.js"></script>
+</body></html>
