@@ -247,7 +247,16 @@ __FIG_AR_TWO_WAYS__
     所以 NCCL 这类通信库会按消息大小，在环形、树形等几种算法之间自己挑。
     NVLink 交换机（NVSwitch）还能在交换机里直接做加法，每张卡发出去的又能少将近一半。</p>
   <p>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
-    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</p></details>
+    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</p>
+  <p>环面还多给一样东西：一颗芯片有 X、Y、Z 三个方向的环。先沿 X 收、再沿 Y、再沿 Z，每一步只有一个方向在干活，最后一步还最重；
+    把数据切成三块、各挑一条轴起步（XYZ／YZX／ZXY），三个方向就一直满着，同样一次 AllGather 快三倍。
+    ReduceScatter 倒着走（大的一步在前），AllReduce 两段都快三倍。</p>
+__FIG_TORUS__
+<figure class="fbox fwide" id="anim-torus">
+<video src="media/topic05-torus.mp4" autoplay loop muted playsinline
+       aria-label="3D 环面三轴轮换动画。左边是 4×4×4 的立方体格点，X 往右下、Y 往左下、Z 往上；右边是块 A 蓝、块 B 橙、块 C 绿三行进度条，下面两根用时条，逐轴和轮换用同一把尺子。标题：3D 环面上的 AllGather：三块数据轮换着走，三条轴一起忙。字幕：4×4×4 切片，每颗芯片起手 1/64；每条线首尾相接成环（环回没画）。先看逐轴：三块挤在同一条轴上，X 走完才走 Y、再走 Z。第 1 步：只有 X 方向在忙，Y、Z 闲着，第 1 步完成：用时 3（这一步每块都涨到 4/64）。第 2 步：只有 Y 方向在忙，X、Z 闲着，第 2 步完成：用时 12（这一步每块都涨到 16/64）。第 3 步：只有 Z 方向在忙，X、Y 闲着，第 3 步完成：用时 48（这一步每块都涨到 64/64）。逐轴走完：用时 63，大部分时间只有一条轴在干活。再看轮换：三块各挑一条轴起步，A 走 XYZ、B 走 YZX、C 走 ZXY。第 1 步：X 搬 A，Y 搬 B，Z 搬 C，第 1 步完成：用时 1，三条轴全亮（每块都涨到 4/64）。第 2 步：X 搬 C，Y 搬 A，Z 搬 B，第 2 步完成：用时 4，三条轴全亮（每块都涨到 16/64）。第 3 步：X 搬 B，Y 搬 C，Z 搬 A，第 3 步完成：用时 16，三条轴全亮（每块都涨到 64/64）。轮换走完：用时 21 ＝ 逐轴的 1/3，三条轴的带宽全用上了。最后画面复位。"></video>
+<figcaption>同一个 4×4×4 立方体演两遍：逐轴时每一步只亮一个方向，轮换时三个方向全亮；右下两根用时条同一把尺子，63 对 21。
+  <span class="sub">（47 秒无声循环，Manim 渲染。）</span></figure></details>
 
   <h3>1.6　AllToAll：每人给每人一份不一样的</h3>
 __FIG_A2A__
@@ -1044,6 +1053,7 @@ __FIG_PANO__
     <tr><td>strong ／ weak scaling</td><td>Amdahl 1967；Gustafson 1988（Reevaluating Amdahl's Law）；临界 batch size：arXiv 1812.06162</td></tr>
     <tr><td>NVSwitch 在交换机里做加法（NVLS）</td><td>NCCL NVLS 算法（NVIDIA NCCL 文档）；「少将近一半」为按每卡发出约 S 对 2(n−1)/n·S 的本课推导</td></tr>
     <tr><td>TPU 切片何时首尾成环、小切片带宽约减半</td><td>How to Scale Your Model（scaling book）TPU 章节：只有整 cube（4 的倍数）才有环回；Google Cloud TPU7x 拓扑文档</td></tr>
+    <tr><td>3D 环面三块轮换、AllGather 快三倍</td><td>How to Scale Your Model（scaling book）sharding 章：多轴收集时可用带宽成倍增加；63 对 21 为本课按 4×4×4 只算带宽的推导，XLA 实际调度未核对</td></tr>
     <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv 2407.21783 sec. 3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
     <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 摘要与 sec. 4.1</td></tr>
     <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
@@ -1199,6 +1209,9 @@ FIGS = {
     "__FIG_AR_TWO_WAYS__": ("fig-ar-two-ways", "fig5-ar-two-ways.svg", "topic05-fig-coll.py",
         '<b>结果一样，差的是谁在干活。</b><br>'
         '<em>右边那张小表：班长那列跟着卡数涨，环那列永远不到 2。</em>'),
+    "__FIG_TORUS__": ("fig-torus-3ring", "fig5-torus-3ring.svg", "topic05-fig-torus.py",
+        '<b>同样的色块，左边排队，右边摆开。</b><br>'
+        '<em>4×4×4 切片；只按带宽算，不算每步延迟。</em>'),
     "__FIG_A2A__": ("fig-a2a", "fig5-a2a.svg", "topic05-fig-coll.py",
         '<b>派发乱射、合并原路回；每份一样大时才是转置。</b><br>'
         '<em>数目是示意；真实的每份多大，要等路由算完才知道。</em>'),
@@ -1233,7 +1246,8 @@ STEP_VIDEOS = {"topic05-ring.mp4": "Ring", "topic05-allreduce.mp4": "AllReduce",
                "topic05-a2a.mp4": "AllToAll", "topic05-broadcast.mp4": "Broadcast",
                "topic05-scatter.mp4": "Scatter", "topic05-gather.mp4": "Gather", "topic05-reduce.mp4": "Reduce",
                "topic05-meshmap.mp4": "MeshMap",
-               "topic05-ulysses.mp4": "UlyssesSteps", "topic05-usp.mp4": "USPSteps"}
+               "topic05-ulysses.mp4": "UlyssesSteps", "topic05-usp.mp4": "USPSteps",
+               "topic05-torus.mp4": "TorusRings"}
 
 
 def _steps(mp4):

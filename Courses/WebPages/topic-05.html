@@ -2549,7 +2549,91 @@ body.figonly section h3{margin-top:34px}
     所以 NCCL 这类通信库会按消息大小，在环形、树形等几种算法之间自己挑。
     NVLink 交换机（NVSwitch）还能在交换机里直接做加法，每张卡发出去的又能少将近一半。</p>
   <p>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
-    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</p></details>
+    更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</p>
+  <p>环面还多给一样东西：一颗芯片有 X、Y、Z 三个方向的环。先沿 X 收、再沿 Y、再沿 Z，每一步只有一个方向在干活，最后一步还最重；
+    把数据切成三块、各挑一条轴起步（XYZ／YZX／ZXY），三个方向就一直满着，同样一次 AllGather 快三倍。
+    ReduceScatter 倒着走（大的一步在前），AllReduce 两段都快三倍。</p>
+<figure class="fbox fwide" id="fig-torus-3ring"><svg viewBox="0 0 1400 534" width="100%" role="img" aria-label="3D 环面上的 AllGather，两种走法的甘特图，同一把时间尺子。4×4×4 切片，数据切成 A、B、C 三块。左边逐轴：三块都先走 X、再走 Y、最后走 Z，每一步只有一条轴在忙，另外两条闲着；三步用时 3、12、48，合计 63，最后一步占了大半。右边轮换：A 走 X Y Z、B 走 Y Z X、C 走 Z X Y，每一步三条轴各搬一块，三条轴从头忙到尾；每轴三步用时 1、4、16，合计 21，正好是逐轴的三分之一"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">3D 环面上的 AllGather　——　<tspan font-weight="700">三块数据错开路线，三条轴一起忙</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4×4×4 切片，每颗芯片起手 1/64。条长 ＝ 这条轴搬了多久（单位：1/64 份数据过一条轴），两边同一把尺子</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">块 A</text>
+<rect x="80.6" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="101" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">块 B</text>
+<rect x="161.2" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="182" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">块 C</text>
+<rect x="0" y="102" width="680" height="290" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="680" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="0" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="680" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">逐轴：X 走完才走 Y、再走 Z</tspan></text>
+<line x1="64.0" y1="158" x2="64.0" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="90.66666666666667" y1="158" x2="90.66666666666667" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="90" y="338" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">3</text>
+<line x1="197.33333333333334" y1="158" x2="197.33333333333334" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="197" y="338" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">15</text>
+<line x1="624.0" y1="158" x2="624.0" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="624" y="338" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">63</text>
+<text class="svgsm" x="22" y="191" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X 轴</tspan></text>
+<rect x="64.0" y="166" width="8.88888888888889" height="38" rx="2" fill="#1a73e8" stroke="#fff" stroke-width="1.0"/>
+<rect x="72.88888888888889" y="166" width="8.88888888888889" height="38" rx="2" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="81.77777777777777" y="166" width="8.88888888888889" height="38" rx="2" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="90.66666666666667" y="166" width="533.3333333333334" height="38" rx="2" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="357" y="190" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">闲</text>
+<text class="svgsm" x="22" y="245" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y 轴</tspan></text>
+<rect x="90.66666666666667" y="220" width="35.55555555555556" height="38" rx="2" fill="#1a73e8" stroke="#fff" stroke-width="1.0"/>
+<rect x="126.22222222222223" y="220" width="35.55555555555556" height="38" rx="2" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="161.77777777777777" y="220" width="35.55555555555556" height="38" rx="2" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="64.0" y="220" width="26.666666666666668" height="38" rx="2" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="197.33333333333334" y="220" width="426.6666666666667" height="38" rx="2" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="410" y="244" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">闲</text>
+<text class="svgsm" x="22" y="299" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Z 轴</tspan></text>
+<rect x="197.33333333333334" y="274" width="142.22222222222223" height="38" rx="2" fill="#1a73e8" stroke="#fff" stroke-width="1.0"/>
+<rect x="339.55555555555554" y="274" width="142.22222222222223" height="38" rx="2" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="481.77777777777777" y="274" width="142.22222222222223" height="38" rx="2" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="64.0" y="274" width="133.33333333333334" height="38" rx="2" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="130" y="298" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">闲</text>
+<text class="svgsm" x="632" y="156" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">用时 63</tspan></text>
+<text class="svgsm" x="22" y="384" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一步只有一条轴在忙；第 3 步一步就占了 48/63</tspan></text>
+<rect x="720" y="102" width="680" height="290" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="720" y="102" width="680" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="720" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="720" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="734" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">轮换：A 走 XYZ、B 走 YZX、C 走 ZXY</tspan></text>
+<line x1="784.0" y1="158" x2="784.0" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="792.8888888888889" y1="158" x2="792.8888888888889" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="792" y="338" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="828.4444444444445" y1="158" x2="828.4444444444445" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="828" y="338" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">5</text>
+<line x1="970.6666666666667" y1="158" x2="970.6666666666667" y2="320" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="970" y="338" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">21</text>
+<text class="svgsm" x="742" y="191" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">X 轴</tspan></text>
+<rect x="784.0" y="166" width="8.88888888888889" height="38" rx="2" fill="#1a73e8" stroke="#fff" stroke-width="1.0"/>
+<rect x="792.8888888888889" y="166" width="35.55555555555556" height="38" rx="2" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="828.4444444444445" y="166" width="142.22222222222223" height="38" rx="2" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="742" y="245" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Y 轴</tspan></text>
+<rect x="784.0" y="220" width="8.88888888888889" height="38" rx="2" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="792.8888888888889" y="220" width="35.55555555555556" height="38" rx="2" fill="#1a73e8" stroke="#fff" stroke-width="1.0"/>
+<rect x="828.4444444444445" y="220" width="142.22222222222223" height="38" rx="2" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="742" y="299" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Z 轴</tspan></text>
+<rect x="784.0" y="274" width="8.88888888888889" height="38" rx="2" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="792.8888888888889" y="274" width="35.55555555555556" height="38" rx="2" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="828.4444444444445" y="274" width="142.22222222222223" height="38" rx="2" fill="#1a73e8" stroke="#fff" stroke-width="1.0"/>
+<text class="svgsm" x="978" y="156" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">用时 21</tspan></text>
+<text class="svgsm" x="742" y="384" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同样的色块摆开了：三条轴从头忙到尾，用时 1/3</tspan></text>
+<rect x="0" y="412" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="412" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="412" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="439" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数据一样多，差的是有几条轴同时在干活</tspan></text>
+<text class="svgsm" x="20" y="470" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">X、Y、Z 各是一个环：逐轴走，每一步只用上一个方向；轮换走，三个方向一直满着，带宽翻三倍。</text>
+<text class="svgsm" x="20" y="494" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">ReduceScatter 倒着走（大的一步在前），AllReduce ＝ 两者接起来，同样快三倍。</text>
+</svg><figcaption><b>同样的色块，左边排队，右边摆开。</b><span class="capmore"><br><em>4×4×4 切片；只按带宽算，不算每步延迟。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 多轴收集带宽成倍：How to Scale Your Model（scaling book）sharding 章（中文版：沿多个轴收集时，可用带宽成倍增加）。</p>
+<p>⚠️ 本课推导：只按带宽算、不算每步延迟；三条轴带宽相同、每一维都是首尾相接的环（切片每一维是 4 的整倍数）。XLA 实际怎么切块、怎么排，没有核对过。</p></details></figure>
+<figure class="fbox fwide" id="anim-torus">
+<video src="media/topic05-torus.mp4?v=62f4c18d" data-pauses="7.40,12.90,18.40,21.50,29.20,34.70,40.20,43.30" autoplay loop muted playsinline
+       aria-label="3D 环面三轴轮换动画。左边是 4×4×4 的立方体格点，X 往右下、Y 往左下、Z 往上；右边是块 A 蓝、块 B 橙、块 C 绿三行进度条，下面两根用时条，逐轴和轮换用同一把尺子。标题：3D 环面上的 AllGather：三块数据轮换着走，三条轴一起忙。字幕：4×4×4 切片，每颗芯片起手 1/64；每条线首尾相接成环（环回没画）。先看逐轴：三块挤在同一条轴上，X 走完才走 Y、再走 Z。第 1 步：只有 X 方向在忙，Y、Z 闲着，第 1 步完成：用时 3（这一步每块都涨到 4/64）。第 2 步：只有 Y 方向在忙，X、Z 闲着，第 2 步完成：用时 12（这一步每块都涨到 16/64）。第 3 步：只有 Z 方向在忙，X、Y 闲着，第 3 步完成：用时 48（这一步每块都涨到 64/64）。逐轴走完：用时 63，大部分时间只有一条轴在干活。再看轮换：三块各挑一条轴起步，A 走 XYZ、B 走 YZX、C 走 ZXY。第 1 步：X 搬 A，Y 搬 B，Z 搬 C，第 1 步完成：用时 1，三条轴全亮（每块都涨到 4/64）。第 2 步：X 搬 C，Y 搬 A，Z 搬 B，第 2 步完成：用时 4，三条轴全亮（每块都涨到 16/64）。第 3 步：X 搬 B，Y 搬 C，Z 搬 A，第 3 步完成：用时 16，三条轴全亮（每块都涨到 64/64）。轮换走完：用时 21 ＝ 逐轴的 1/3，三条轴的带宽全用上了。最后画面复位。"></video>
+<figcaption>同一个 4×4×4 立方体演两遍：逐轴时每一步只亮一个方向，轮换时三个方向全亮；右下两根用时条同一把尺子，63 对 21。
+  <span class="sub">（47 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环。）</span></figure></details>
 
   <h3 id="s1-6">1.6　AllToAll：每人给每人一份不一样的</h3>
 <figure class="fbox fwide" id="fig-a2a"><svg viewBox="0 0 1400 1014" width="100%" role="img" aria-label="全交换的一般情形：每张卡给每张卡各寄一份，而且多少不一样。以专家并行为例，每张卡有 8 个 token，每个 token 由路由决定去哪张卡。派发时所有卡同时往所有方向寄，线越粗寄得越多；收件那边忙闲不均，卡 0 收了 11 个，卡 3 只收了 6 个。专家算完，再沿原路寄回出发的卡，这是合并，又一次全交换。每份一样大时，全交换正好是把一张表转置一次，这只是特例，Ulysses 用的就是它"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -7494,6 +7578,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>strong ／ weak scaling</td><td>Amdahl 1967；Gustafson 1988（Reevaluating Amdahl's Law）；临界 batch size：arXiv <a href="https://arxiv.org/abs/1812.06162" target="_blank" rel="noopener">1812.06162</a></td></tr>
     <tr><td>NVSwitch 在交换机里做加法（NVLS）</td><td>NCCL NVLS 算法（NVIDIA NCCL 文档）；「少将近一半」为按每卡发出约 S 对 2(n−1)/n·S 的本课推导</td></tr>
     <tr><td>TPU 切片何时首尾成环、小切片带宽约减半</td><td>How to Scale Your Model（scaling book）TPU 章节：只有整 cube（4 的倍数）才有环回；Google Cloud TPU7x 拓扑文档</td></tr>
+    <tr><td>3D 环面三块轮换、AllGather 快三倍</td><td>How to Scale Your Model（scaling book）sharding 章：多轴收集时可用带宽成倍增加；63 对 21 为本课按 4×4×4 只算带宽的推导，XLA 实际调度未核对</td></tr>
     <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv <a href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener">2407.21783</a> sec. 3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
     <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> 摘要与 sec. 4.1</td></tr>
     <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
