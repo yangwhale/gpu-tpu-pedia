@@ -951,9 +951,10 @@ def _media_dur(p):
                                 capture_output=True, text=True).stdout or 0)
 
 
-def audio_block(out_path, fname, label="本节讲课录音", video=None):
+def audio_block(out_path, fname, label="本节讲课录音", video=None, fold=False):
     """⭐ 2026-09-26：每节开头放讲课录音（文件不在就返回空串，页面不受影响）。
-    ⭐ 2026-09-27：有讲课视频（lecture-video skill 生成）时，录音和视频各占一半并排放。"""
+    ⭐ 2026-09-27：有讲课视频（lecture-video skill 生成）时，录音和视频各占一半并排放。
+    ⭐ 2026-10-14：fold=True 时整块收进默认合上的 <details>（录音还没按新讲法重录，先别摆出来）。"""
     media = os.path.join(os.path.dirname(out_path), "media")
     p = os.path.join(media, fname)
     if not os.path.exists(p):
@@ -969,8 +970,12 @@ def audio_block(out_path, fname, label="本节讲课录音", video=None):
         vid = ('<div class="lecvideo" style="flex:1 1 0;min-width:280px">'
                '<video controls preload="metadata" src="media/%s" style="width:100%%;border-radius:12px;'
                'border:2px solid #1a73e8;background:#000;display:block"></video></div>' % video)
-    return ('<div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
-            '%s%s</div>' % (aud, vid))
+    block = ('<div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap">'
+             '%s%s</div>' % (aud, vid))
+    if fold:
+        block = ('<details class="lecfold" style="margin:12px 0 22px"><summary style="cursor:pointer;color:#5f6368">'
+                 '🎧 本节讲课录音%s（旧版，点开）</summary>%s</details>' % ("与视频" if vid else "", block))
+    return block
 
 
 def finish(html, out_path, sections, label):
