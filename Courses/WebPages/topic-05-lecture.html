@@ -248,7 +248,7 @@ p.deepsay{background:#f8f9fa;border-left:3px solid #9aa0a6;padding:8px 14px;marg
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，<b>也不含等动画转完一圈的时间</b>（全讲约 3 分钟）。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第零节　开场：一张卡装不下</td><td>721</td><td>3</td><td>4.4′</td><td>5′</td></tr><tr><td>第一节　先认识五种通信</td><td>1,601</td><td>8</td><td>10.0′</td><td>10′</td></tr><tr><td>第二节　第一刀：切数据</td><td>1,613</td><td>8</td><td>10.1′</td><td>10′</td></tr><tr><td>第三节　第二刀：切权重</td><td>2,301</td><td>10</td><td>14.0′</td><td>14′</td></tr><tr><td>第四节　第三刀：切专家</td><td>1,634</td><td>7</td><td>9.9′</td><td>10′</td></tr><tr><td>第五节　第四刀：切序列</td><td>2,199</td><td>10</td><td>13.5′</td><td>13′</td></tr><tr><td>第六节　第五刀：不切张量，切工作</td><td>1,838</td><td>6</td><td>10.7′</td><td>11′</td></tr><tr><td>第七节　摆到机器上</td><td>1,081</td><td>6</td><td>6.9′</td><td>7′</td></tr><tr><td>第八节　全景与收尾</td><td>716</td><td>1</td><td>3.8′</td><td>4′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>83′</b></td><td><b>84′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第零节　开场：一张卡装不下</td><td>721</td><td>3</td><td>4.4′</td><td>5′</td></tr><tr><td>第一节　先认识五种通信</td><td>1,601</td><td>8</td><td>10.0′</td><td>10′</td></tr><tr><td>第二节　第一刀：切数据</td><td>1,627</td><td>8</td><td>10.1′</td><td>10′</td></tr><tr><td>第三节　第二刀：切权重</td><td>2,301</td><td>10</td><td>14.0′</td><td>14′</td></tr><tr><td>第四节　第三刀：切专家</td><td>1,634</td><td>7</td><td>9.9′</td><td>10′</td></tr><tr><td>第五节　第四刀：切序列</td><td>2,199</td><td>10</td><td>13.5′</td><td>13′</td></tr><tr><td>第六节　第五刀：不切张量，切工作</td><td>1,838</td><td>6</td><td>10.7′</td><td>11′</td></tr><tr><td>第七节　摆到机器上</td><td>1,081</td><td>6</td><td>6.9′</td><td>7′</td></tr><tr><td>第八节　全景与收尾</td><td>716</td><td>1</td><td>3.8′</td><td>4′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>83′</b></td><td><b>84′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把两条暗线记在心里</h3>
@@ -484,8 +484,8 @@ V3 的报告里，这一切就写成一行：PP 16、EP 64、ZeRO-1。现在看�
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-zero-step</code>，从左往右一格一格指：①、②、③。</p>
 
-<p class="say">「神奇的是前两级：通信一个字节都不多。还记得刚才那个等式吗？AllReduce 拆成两半：先 ReduceScatter，每人正好拿到自己那份梯度的总和，就地更新；再 AllGather，把更新好的权重拼回给大家。<br>
-活一点没多干，每人却只用替自己那份记账。」</p>
+<p class="say">「前两级的账很好算。账既然每人只记一段，梯度总和也只用拿自己那一段，所以不做 AllReduce，只做 ReduceScatter；就地更新完，再 AllGather 把新权重拼回给大家。<br>
+这两步加起来，正好就是一次 AllReduce 的量。所以从纯数据并行走到 ZeRO-1、ZeRO-2，通信一个字节都不多，每人却只替自己那份记账。」</p>
 
 <p class="say">「中间那一步「就地更新」为什么不用传？因为 Adam 是一个参数一个参数算的：第 i 个参数的新值，只看它自己的梯度、自己的两个动量、自己的主权重，跟别人没关系。所以四张卡各更新四分之一，跟一张卡全更新一遍，结果一模一样。<br>
 只有一个例外：梯度裁剪要看全体梯度有多长，这得凑一下。每张卡先算自己那段的平方和，再把这一个数加总一次，量小到可以忽略。」</p>
