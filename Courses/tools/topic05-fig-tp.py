@@ -380,7 +380,7 @@ def fig_pp():
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "气泡是纯损失，只能摊薄，不能消灭", [
         "stage 越多、micro-batch 越少，气泡越大：<tspan font-weight=\"700\">(p−1) ÷ m</tspan>。"
-        "　所以 PP 要配足够多的 micro-batch，而 micro-batch 多了，每张卡要攒的激活也多。",
+        "　所以 PP 要配足够多的 micro-batch；总批次不变时，份数越多每份越小，切过了头，卡就吃不饱。",
         "后来的调度都在跟这块空白较劲：交错式（VPP）把每段再切细，Zero Bubble 拿权重梯度去填缝，"
         "DualPipe 两头同时灌。<tspan font-weight=\"700\">代价都是更复杂的调度和更多的点对点通信</tspan>。",
     ])
