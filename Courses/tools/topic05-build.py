@@ -1265,7 +1265,7 @@ def _hook_steps(html):
         j = html.index("</figure>", i)
         fig = html[i:j]
         # ⚠️ 「N 秒」后 24 字内必须出现 Manim —— check-loop.py 靠这个正则认图注秒数，写长了它会静默跳过
-        fig2, n = re.subn(r"（\d+ 秒无声循环，(.*?)Manim 渲染", lambda m: "（%d 秒，Manim 渲染；点「开始」一步一步看，勾「连续播放」就无缝循环%s" % (round(st["duration"]), m.group(1).rstrip("，；")), fig, flags=re.S)
+        fig2, n = re.subn(r"（\d+ 秒无声循环，(.*?)Manim 渲染", lambda m: "（%d 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看%s" % (round(st["duration"]), m.group(1).rstrip("，；")), fig, flags=re.S)
         assert n == 1, "%s 的图注里没找到「N 秒无声循环」" % mp4
         html = html[:i] + fig2 + html[j:]
     return html
@@ -1283,11 +1283,13 @@ STEP_JS = """<style>
 //   手工模式第一步也得是让我准备好了，自己点按钮，再给我预备一个 reset 按钮。」
 //   所以手工模式下：一上来停在第 0 帧等「开始」；每一步落地停住等「下一步」；
 //   播完一圈绕回开头时也停在第 0 帧，不自己再跑一遍。勾「连续播放」才是原来的无缝循环。
+// ⭐ 2026-10-14：「把所有的连续播放的 Checkbox 都点上，让它是默认连续播放的样子。」
+//   所以默认勾上、一上来就无缝循环；取消勾选才进手工一步一步模式。
 document.querySelectorAll('video[data-pauses]').forEach(function(v){
-  var P=v.dataset.pauses.split(',').map(Number), i=0, last=0, auto=false;
+  var P=v.dataset.pauses.split(',').map(Number), i=0, last=0, auto=true;
   var bar=document.createElement('div'); bar.className='stepbar';
   bar.innerHTML='<button type="button" class="nx"></button><button type="button" class="rs gh">⟲ 重来</button>'+
-                '<span></span><label><input type="checkbox"> 连续播放</label>';
+                '<span></span><label><input type="checkbox" checked> 连续播放</label>';
   v.insertAdjacentElement('afterend', bar);
   var nx=bar.querySelector('.nx'), rs=bar.querySelector('.rs'), st=bar.querySelector('span'), au=bar.querySelector('input');
   function toStart(){ v.pause(); v.currentTime=0; i=0; last=0; }
@@ -1299,7 +1301,7 @@ document.querySelectorAll('video[data-pauses]').forEach(function(v){
     else if(i===0) st.textContent='准备好了就点「开始」';
     else st.textContent='停住了（'+i+' / '+P.length+'），看明白了再点';
   }
-  v.removeAttribute('autoplay'); toStart();
+  toStart(); v.play().catch(function(){});
   v.addEventListener('timeupdate',function(){
     if(v.currentTime < last-1){                 // 播完一圈绕回了开头
       if(auto){ i=0; } else { toStart(); show(); return; }
