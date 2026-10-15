@@ -563,7 +563,7 @@ Ring 是按行分：每张卡一段、全部头。列里的依赖跨了卡，只
 它的天花板是头数：换成按头切以后，每张卡至少得拿一个完整的头，所以并行度不能超过头数；KV 头比提问头少的模型，就卡在 KV 头数上。<br>
 Ring 没有这个上限，但每一步要等一段笔记传过来。」</p>
 
-<details class="deep"><summary>🔍 <b>讲深一点</b>：Ulysses 跟 TP 差在哪；拿 V3 一步一步走一遍；什么场景用 Ulysses、什么时候配成 USP<span class="sub">（被追问或时间富余时用；不计入地板）</span></summary>
+<details class="deep"><summary>🔍 <b>讲深一点</b>：Ulysses 跟 TP 差在哪；拿 V3 一步一步走一遍；什么场景用 Ulysses、什么时候配成 USP；Ulysses 跟 Ring 各好在哪<span class="sub">（被追问或时间富余时用；不计入地板）</span></summary>
 <p class="deephd">一、注意力里面，跟 TP 一模一样</p>
 <p class="deepsay">「换完以后，每张卡算几个头、全部序列，这跟 TP 切注意力确实是同一个样子。也别想着「序列只切一段就退化成 TP」：Ulysses 里序列切几段、头就分几组，两个数都等于卡数，绑在一起，没法只切头不切序列。」</p>
 <p class="deephd">二、区别全在注意力外面</p>
@@ -595,9 +595,18 @@ Ring 没有这个上限，但每一步要等一段笔记传过来。」</p>
 卡数比头数多：USP 论文的例子，Llama 3 8B 只有 8 个 KV 头，想开 16 路，就配 Ulysses 8 × Ring 2。<br>
 头数除不尽：上面那个 12 头的模型，README 推荐纯 Ring；按 USP 的规则也可以配 Ulysses 4 × Ring 2，12 能被 4 整除。这一条是按规则推的，README 里没写。<br>
 跨机器：AllToAll 最怕慢线，Ulysses 那一维留在一台机器的 8 张卡里走 NVLink；Ring 只跟邻居说话、能边算边传，放到机器之间。」</p>
-<p class="deepsay">「回到 V3 的例子，按字节算一遍（每卡每层前向，头维照前面假设）：纯 Ring 128 路，每张卡要收齐另外 127 段的 K、V，约 63.5 GiB；纯 Ulysses 128 路约 1 GiB，其中跨机器的约 0.94 GiB；USP 机器里 Ulysses 8、机器之间 Ring 16，跨机器那段环约 7.5 GiB。<br>
-所以 128 个头够分、网络的 AllToAll 吃得住时，纯 Ulysses 反而传得最少；USP 是头不够分、或者 AllToAll 跨机器跑不满时的退路。这笔账是按公式推的，没有实测。」</p>
+<p class="deepsay">「回到 V3 的例子，按字节算（每卡每层前向，头维照前面假设）：纯 Ulysses 128 路约 1 GiB，跨机器的不到 1 GiB；USP 机器里 Ulysses 8、机器之间 Ring 16，光跨机器那段环就约 7 GiB 半。<br>
+所以 128 个头够分、网络的 AllToAll 吃得住时，纯 Ulysses 反而传得最少；USP 是头不够分、或者 AllToAll 跨机器跑不满时的退路。这笔账按公式推，没有实测。」</p>
 <p class="deepsay">「一句话：一条样本自己塞不下、又想让一个请求变快，用 Ulysses；头不够分或者要跨机器，配成 USP；权重一律交给 FSDP 或 ZeRO-3。」</p>
+<p class="deephd">六、Ulysses 到底好在哪：跟 Ring 比一比</p>
+<p class="deepsay">「常见的误会是 AllToAll 传得多。其实反过来：还是 V3 那个例子，每卡每层前向，Ring 每张卡要收齐另外 127 段的 K、V，约 64 GiB；Ulysses 约 1 GiB，差六十多倍。<br>
+原因看卡数加倍：Ring 每张卡总得把整条序列的 K、V 见一遍，卡再多这个量也不变，约 2Nh；Ulysses 每张卡只换自己那份的卡数分之一，4Nh 除以卡数，卡越多传得越少。」</p>
+<p class="deepsay">「Ulysses 另外三个长处。<br>
+注意力整块算：换完手每张卡是一个头的整条序列，直接调现成的 FlashAttention，稀疏、滑动窗口这些变体也不用改；Ring 要把注意力拆成小块、一块块合 softmax，得专门写 kernel，块小了算力吃不满。<br>
+天然不偏科：每张卡都算一个头的整条序列，活一样多；Ring 碰上因果遮罩，后面的段看得多、前面的段闲着，得把序列打乱重排才拉得平。<br>
+步数少：每层前后两次 AllToAll；Ring 要一步一步传 127 次。」</p>
+<p class="deepsay">「Ring 的长处两条：没有头数上限；能边算边传。注意力的计算量跟序列长度的平方涨，序列很长时每一步算的比传的大得多，那六十多 GiB 能藏在计算后面。Ulysses 的 AllToAll 藏不了，卡在关键路径上，传完才能算。<br>
+所以 128 卡、一百万 token 直接上 Ring 能跑，计算多半盖得住通信；代价是网卡上多跑六十多倍的字节，还要跟数据并行、专家并行抢同一根线。头够分、AllToAll 吃得住，Ulysses 更省。」</p>
 </details>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-usp</code>，先 ① 左表到右表那一步，再指右表里的红色上下箭头；最后 ② 那张对比表。</p>
