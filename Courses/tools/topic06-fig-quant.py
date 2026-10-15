@@ -320,28 +320,39 @@ def fig_cap():
 # 回答：KV 存 FP8 为什么不是严格减半？
 # 数字：FlashMLA README（2e5429f 之前版本「FP8 with scale」）给 DeepSeek-V3.2 的每 token 每层布局：
 #   512 个 FP8 ＋ 4 个 FP32 缩放 ＋ 64 维 BF16 RoPE ＝ 656 B；BF16 是 (512＋64) × 2 ＝ 1,152 B（台账 12.7 行）。
-#   1,152 ÷ 656 ≈ 1.76 为本课推导。⛔ 「严格减半」那条线只画位置不写数（576 正文没有）。
-KVQ_BF16 = [("512 维压缩 KV", 512 * 2, PU), ("64 维位置编码", 64 * 2, CY)]
-KVQ_FP8 = [("512 维压缩 KV", 512 * 1, PU), ("4 个 FP32 缩放", 4 * 4, OR), ("64 维位置编码", 64 * 2, CY)]
-assert sum(b for _, b, _ in KVQ_BF16) == 1152 and sum(b for _, b, _ in KVQ_FP8) == 656
-assert round(1152 / 656, 2) == 1.76
+#   R42：DSA 每 token 每层还有一条 indexer key（index_head_dim＝128，HF config.json），
+#   DeepSeek 参考实现 inference/model.py 存 FP8 k_cache ＋ 每 128 维一个 FP32 k_scale_cache ＝ 128 ＋ 4 ＝ 132 B；
+#   vLLM（deepseek_v2.py Indexer，dtype=torch.uint8 写死）和 SGLang（DSATokenToKVPool.index_k_with_scale_buffer_dtype＝uint8）
+#   不随 --kv-cache-dtype 变，所以 BF16 和 FP8 两边都是 132 B。
+#   倍数（本课推导）：(1,152 ＋ 132) ÷ (656 ＋ 132) ＝ 1,284 ÷ 788 ≈ 1.63；只算 MLA 是 1.76（旧数，已弃）。
+#   ⛔ 「严格减半」那条线只管 MLA 那截，只画位置不写数（576 正文没有）。
+IDX_B = 128 * 1 + 128 // 128 * 4
+KVQ_BF16 = [("512 维压缩 KV", 512 * 2, PU), ("64 维位置编码", 64 * 2, CY), ("indexer key", IDX_B, GY)]
+KVQ_FP8 = [("512 维压缩 KV", 512 * 1, PU), ("4 个 FP32 缩放", 4 * 4, OR), ("64 维位置编码", 64 * 2, CY),
+           ("indexer key", IDX_B, GY)]
+assert IDX_B == 132
+assert sum(b for _, b, _ in KVQ_BF16) == 1284 and sum(b for _, b, _ in KVQ_FP8) == 788
+assert round(1284 / 788, 2) == 1.63
 
 
 def fig_kvlayout():
     f = Fig(W, "DeepSeek-V3.2 一个 token 在一层里存的 KV，条长按字节画。"
                "BF16：512 维压缩 KV 每维 2 字节，加 64 维位置编码每维 2 字节，共 1,152 字节。"
-               "FP8：512 维压缩 KV 每维 1 字节，加 4 个 FP32 缩放共 16 字节，位置编码仍是 BF16 的 128 字节，共 656 字节。"
-               "虚线标出严格减半该到的位置，FP8 那条越过了它，多出来的是没量化的位置编码和缩放。"
-               "同显存能装的请求约是 BF16 的 1.76 倍（本课推）")
+               "FP8：512 维压缩 KV 每维 1 字节，加 4 个 FP32 缩放共 16 字节，位置编码仍是 BF16 的 128 字节。"
+               "两条末尾都接一段 132 字节的 indexer key，它本来就存 FP8。合计 1,284 字节对 788 字节。"
+               "虚线标出 MLA 那截严格减半该到的位置，FP8 那条越过了它，多出来的是没量化的位置编码和缩放。"
+               "同显存能装的请求约是 BF16 的 1.63 倍（本课推）")
     y0 = f.header("KV 存 FP8 不是严格减半　——　<tspan font-weight=\"700\">位置编码那截没压</tspan>",
                   "DeepSeek-V3.2 一个 token、一层的 KV；条长按字节数画",
-                  [(PU, "512 维压缩 KV"), (OR, "缩放（FP32）"), (CY, "64 维位置编码（留在 BF16）")])
+                  [(PU, "512 维压缩 KV"), (OR, "缩放（FP32）"), (CY, "64 维位置编码（留在 BF16）"),
+                   (GY, "indexer key（两边都存 FP8）")])
     PH = 262
     py = f.panel(0, y0, W, PH, "每 token 每层存多少字节", INK)
-    X0, SC, BH = 110, 1.0, 46
-    xh = X0 + 1152 * SC / 2                         # 严格减半的位置（只画线，不写数）
-    assert X0 + 1152 * SC + 110 < W
-    LBL = {"512 维压缩 KV": ("512 × 2 B", "512 × 1 B"), "64 维位置编码": ("64 × 2 B", "64 × 2 B")}
+    X0, SC, BH = 110, 0.85, 46
+    xh = X0 + 1152 * SC / 2                         # MLA 那截严格减半的位置（只画线，不写数）
+    assert X0 + 1284 * SC + 110 < W
+    LBL = {"512 维压缩 KV": ("512 × 2 B", "512 × 1 B"), "64 维位置编码": ("64 × 2 B", "64 × 2 B"),
+           "indexer key": ("128 ＋ 4 B", "128 ＋ 4 B")}
     rows = (("BF16", KVQ_BF16, 0), ("FP8", KVQ_FP8, 1))
     for j, (name, segs, k) in enumerate(rows):
         yy = py + 50 + j * 104
@@ -349,7 +360,7 @@ def fig_kvlayout():
         x = X0
         for lab, b, col in segs:
             w = b * SC
-            tint = {PU: "#f3e8fd", CY: "#e0f7fa", OR: "#fde7d4"}[col]
+            tint = {PU: "#f3e8fd", CY: "#e0f7fa", OR: "#fde7d4", GY: "#f1f3f4"}[col]
             f.box(x, yy, w, BH, tint, col, 3, 1.4)
             if lab in LBL:
                 cx = x + w / 2
@@ -361,17 +372,23 @@ def fig_kvlayout():
                 f.t(x + w / 2 + 2, yy - 10, lab, col, True, 14, "end")
             x += w
         tot = sum(b for _, b, _ in segs)
+        mla = tot - IDX_B                           # MLA 小计标在 indexer key 那段的左上角
+        xm = X0 + mla * SC
+        f.line(xm, yy - 6, xm, yy - 1, INK, 1.2, arrow=False)
+        f.t(xm + 4, yy - 10, "MLA 小计 {:,} B".format(mla), INK, False, 13)
         f.t(x + 14, yy + 30, "{:,} B".format(tot), INK, True, 18)
         if k == 1:
-            f.t(x + 110, yy + 30, "同显存能装的请求约是 BF16 的 1.76 倍（本课推）", GR, True, 16)
+            f.t(x + 110, yy + 30, "同显存能装的请求约是 BF16 的 1.63 倍（本课推）", GR, True, 16)
     yl = py + 50 + 104 + BH + 12
     f.line(xh, py + 40, xh, yl, RD, 1.6, dash="6,4", arrow=False)
-    f.t(xh, yl + 20, "严格减半该到这里", RD, True, 14, "middle")
+    f.t(xh, yl + 20, "MLA 那截严格减半该到这里", RD, True, 14, "middle")
     f._pan = None
     yb = f.src(py + PH + 6,
                "布局：github.com/deepseek-ai/FlashMLA README，2026-09-30 提交 2e5429f 之前的版本「FP8 with scale」一节："
                "每 token 每层 512 个 FP8 ＋ 4 个 FP32 缩放 ＋ 64 维 BF16 RoPE ＝ 656 B（现版只剩 V4.1 的格式）。",
-               "本课推导：BF16 ＝ (512 ＋ 64) × 2 ＝ 1,152 B；1,152 ÷ 656 ≈ 1.76，只算 KV 字节，没算权重和激活占的那部分显存。")
+               "indexer key：HF config index_head_dim＝128；DeepSeek-V3.2-Exp inference/model.py 存 FP8 ＋ 每 128 维一个 FP32 缩放，"
+               "vLLM、SGLang 的 indexer 缓存固定 uint8，不随 --kv-cache-dtype 变。",
+               "本课推导：BF16 ＝ (512 ＋ 64) × 2 ＋ 132 ＝ 1,284 B，FP8 ＝ 656 ＋ 132 ＝ 788 B；1,284 ÷ 788 ≈ 1.63。没算权重和激活占的显存。")
     f.save("fig6-quant-kvlayout.svg", yb + 14)
 
 

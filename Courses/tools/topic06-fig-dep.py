@@ -224,7 +224,7 @@ def fig_dep_state():
     f = Fig(W, "Kimi K3 的 69 层 KDA 线性注意力，每个请求一块固定状态，按头存。左边 DEP8：8 个 rank 各算各的请求，"
                "每个 rank 的状态池都是完整的一整池，所有头、所有请求槽都要存，两次加载都 OOM。"
                "右边 TP8：一池状态按头切给 8 张卡，每张卡只存自己那几个头，8 张卡拼起来才是一整池。"
-               "DP、EP、DCP 都不切头这一维，只有 TP 切")
+               "TP 按头切这一维，DP、EP、DCP 都不切")
     y0 = f.header("KDA 状态按头存：DEP 每个 rank 复制一整池，TP 每卡只存自己的头",
                   "Kimi K3：69 层 KDA，每个请求一块固定状态。一格 ＝ 一个请求槽在一个头上的状态；头数、槽数是示意，不按实际",
                   [(PU, "KDA 状态"), (RD, "加载时 OOM 的卡")])
@@ -251,7 +251,7 @@ def fig_dep_state():
                      else ("每卡只亮自己那几列，8 张卡拼起来才是一整池", GR))
         f.t(x0 + 20, y0 + PH - 22, msg, mcol, True, 16)
         f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "切头这一维的只有 TP：DP、EP、DCP 都不动它", [
+    yb = f.band(y0 + PH + 20, "ok", "TP 按头切这一维；DP、EP、DCP 都不动它", [
         "所以 DEP 开得再宽，每个 rank 还是一整池；本课推导，与官方说法一致。"])
     yb = f.src(yb + 10,
                "K3 共 93 层、69 层 KDA，DEP8 两次加载 OOM、官方改推 TP 与 DCP：SGLANG-K3-RUNBOOK.md（见第六、七节与文末台账）。",
