@@ -205,7 +205,7 @@ def fig_pareto():
                "Interactivity Since Day-0」：~11,200 tok/s/GPU at roughly 50 tok/s/user，Day-0 无 MTP 曲线约 2,200。",
                "⚠️ 11,200 用的是 output ÷ decode GPU 还是 (in＋out) ÷ 全部 GPU，公开材料没钉死"
                "（SGLANG-V4PRO-RUNBOOK.md:745）。本图按前者画，若是后者，这个点要往下挪。",
-               "本仓库实测 9,168：SGLANG-V4PRO-RUNBOOK.md:595（conc600，TPOT 59–61 ms）、723-725。横坐标 1000 ÷ 60 ≈ 17 是本课推导。",
+               "本仓库实测 9,168：SGLANG-V4PRO-RUNBOOK.md:596（conc600，TPOT 59–61 ms）、723-725。横坐标 1000 ÷ 60 ≈ 17 是本课推导。",
                "goodput：DistServe（arXiv 2401.09670）。")
     f.save("fig6-pareto.svg", yb + 14)
 

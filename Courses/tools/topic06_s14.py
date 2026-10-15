@@ -27,8 +27,8 @@ __FIG_S14_EIGHT__
     <tr><td>2022</td><td>调度</td><td>四</td><td>Orca 连续批：同延迟吞吐 36.9 倍（对 FasterTransformer 静态批）</td></tr>
     <tr><td>2022</td><td>解码提速</td><td>十一</td><td>投机解码：单请求快 2–3 倍（对不投机，小模型当草稿）</td></tr>
     <tr><td>2023</td><td>KV 与注意力</td><td>三</td><td>PagedAttention：同延迟吞吐 2–4 倍（对 FasterTransformer 和论文自己复现的 Orca）</td></tr>
-    <tr><td>2023</td><td>复用与下放</td><td>三</td><td>RadixAttention 前缀复用：吞吐最多 6.4 倍（对不复用）</td></tr>
-    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：每层 KV 是同形状 MHA 的约 1/57，对 2023 年已普及的 GQA（Llama-3.1-70B）约 1/3.6（本课推导）</td></tr>
+    <tr><td>2023</td><td>复用与下放</td><td>三</td><td>SGLang（含 RadixAttention 前缀复用）：吞吐最多 6.4 倍（对当时其他推理系统）</td></tr>
+    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：按每层算，KV 是同形状 MHA 的约 1/57、2023 年已普及的 GQA（Llama-3.1-70B）的约 1/3.6（本课推导）</td></tr>
     <tr><td>2024</td><td>调度</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时能接的请求量 2.6–3.7 倍（对 vLLM）</td></tr>
     <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同样的延迟要求下多接 7.4 倍请求（对不拆的系统）</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：命中按十分之一计价；2025-02 线上 56.3% 输入命中</td></tr>
