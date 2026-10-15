@@ -9,7 +9,7 @@ BODY = '''
   <h3 id="s12-1">12.1　位数减半，下限减半</h3>
   <p>batch 小时一步几乎全在读权重：8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.2 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>
 __FIG_S12_BYTES__
-  <p>实测接近这个比例：vLLM 2024 年 7 月接入 FP8 权重，稠密的 Llama 3 70B 每字间隔最多快 2 倍，MoE 的 Mixtral 8x7B 最多 1.6 倍（对 BF16）。MoE 赚得少，因为只读选中的专家，读权重在一步里占比本来就低（本课推导）。</p>
+  <p>实测接近这个比例：vLLM 2024 年 7 月接入 FP8 权重，稠密的 Llama 3 70B 每字间隔最多降到 BF16 的 1/2，MoE 的 Mixtral 8x7B 最多降到 BF16 的 1/1.6。MoE 赚得少，因为只读选中的专家，读权重在一步里占比本来就低（本课推导）。</p>
   <p>省下的显存多放 KV、多接请求（3.2），一趟搬运分给更多人。</p>
 
   <h3 id="s12-2">12.2　同叫 4 bit，差在缩放</h3>
@@ -43,6 +43,7 @@ __FIG_S12_FUSE__
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
+  <p>缩放给多细看 checkpoint：vLLM 只设 <code>fp8</code> 不校准时，缩放全取 1.0；用 llm-compressor 拿数据校准，可以每个 K、V 张量一个，或每个 KV 头一个（后者目前只有 FlashAttention 后端支持）。开了 FP8 KV 掉精度，先查有没有校准过的缩放。</p>
   <p>实际布局不是严格一半，差在哪看图里那条红虚线。V3.2 每层还多存一条挑 token 用的索引键（indexer key），它本来就存 FP8，两边一样大，所以同显存多接的请求是六成多，比只算 MLA 时少。</p>
 __FIG_S12_KVLAYOUT__
   <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节；多出的容量留住更多前缀，命中率比 FP8 KV 高 20%、首字延迟最多降到约三分之一。2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读 NVFP4 KV 的 kernel，比原先的 FP8 KV 小 45%。</p>

@@ -51,6 +51,7 @@ __FIG_S3_POOL__
     <li><b>RadixAttention。</b>SGLang 2023 年把前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多是当时其他系统的 6.4 倍（整套运行时）。</li>
     <li><b>默认就开。</b>vLLM 早先的前缀缓存命中率低时反而拖慢，默认关；2025 年 1 月 V1 改了数据结构，命中率为 0 也只掉不到 1%，才默认打开。</li>
     <li><b>命中率可以很高。</b>DeepSeek 线上过半输入命中磁盘上的 KV。128K 输入、大半重复的请求，首字从 13 s 降到 0.5 s（DeepSeek API 文档 2024-08）。</li>
+    <li><b>命中只认一字不差的前缀。</b>vLLM 每块的哈希连着前面所有块一起算，开头改一个 token，后面整段都对不上；LMCache 论文报业界常用的截断上下文能让前缀命中率掉一半。</li>
   </ul>
 __FIG_S3_DISK__
 <figure class="fbox fwide" id="anim-kvstore">
@@ -70,9 +71,9 @@ __FIG_S3_OFFLOAD__
   <p>V3 的盈亏带宽只要 2.19 GB/s；GQA 的 Llama-3.1-70B 每 FLOP 摊到的 KV 字节多，链路至少 5.35 GB/s 才划算。</p>
   <ul>
     <li><b>llm-d</b> 2026 年在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 → 0.56 s，P90 2.1 → 0.5 s，总吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。</li>
-    <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
+    <li><b>Mooncake Store</b>：集群各机的内存拼成一个 KV 池，按块哈希存取，冷数据可再下放到 SSD；Master 只管元数据和分配，字节由 Transfer Engine 走 RDMA（网卡直接读写对方内存，不经 CPU）搬。SGLang HiCache（2025-09）、vLLM（2026-05）都已能接它当后端。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下分层存 KV；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.3。</li>
-    <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储）；官方博客报长上下文和多轮对话下吞吐最多 6 倍、首字最多降 80%（对全部重算）。vLLM 0.11 也自带了 CPU 下放（OffloadingConnector），下放成了两大引擎的标配。</li>
+    <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储）；官方博客报长上下文和多轮对话下吞吐最多是全部重算的 6 倍、首字最多降 80%。vLLM 0.11 也自带了 CPU 下放（OffloadingConnector），下放成了两大引擎的标配。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>

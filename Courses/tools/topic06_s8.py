@@ -7,7 +7,7 @@
 """
 
 BODY = '''
-  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，2023、2024 年由 Splitwise、DistServe 先后提出。Splitwise 报同成本同功耗下吞吐 2.35 倍，DistServe 报同样延迟要求下能接的请求是 7.4 倍（都对不拆的系统）。</p>
+  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，2023、2024 年由 Splitwise、DistServe 先后提出。Splitwise 报同成本同功耗下吞吐是不拆系统的 2.35 倍，DistServe 报同样延迟要求下能接的请求是不拆系统的 7.4 倍。</p>
   <p>Mooncake 连同 KV 池把 PD 分离做进 Kimi 线上，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
     <b>难的是 KV 从 prefill 机传到 decode 机的那一趟。</b></p>
 
