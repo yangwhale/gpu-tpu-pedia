@@ -257,7 +257,7 @@ def fig_cold():
 def fig_route():
     f = Fig(W, "四个副本，三个请求共用同一段长前缀、各带一小截新问题。上面是轮询：三个请求撒到三个副本，每个副本都要把前缀重算一遍。"
                "下面是 KV 感知路由：三个请求都送到已经存着这段前缀的副本 2，只算各自新的那一截。"
-               "右边是 Red Hat 用 llm-d 的实测：对照的最坏情况首字延迟 2,850 毫秒，命中缓存时 340 毫秒，命中率 87.4%")
+               "右边是 Red Hat 用 llm-d 的实测：对照的最坏情况首字延迟 2,850 毫秒，命中缓存时 340 毫秒，命中率 87.4%；原文只给最坏情况、没给平均，不能读成路由快八倍")
     y0 = f.header("路由把「少算」搬到集群层　——　<tspan font-weight=\"700\">同前缀送同一个副本，前缀只算一次</tspan>",
                   "左是示意；右是 Red Hat 用 llm-d 的公开实测（TTFT 含排队与 prefill）",
                   [(GY2, "共用的长前缀"), (BL, "各自的新问题"), (RD, "前缀要重算"), (GR, "前缀已在 KV 里")])
@@ -290,15 +290,17 @@ def fig_route():
     X2 = PW1 + 20
     PW2 = W - X2
     py2 = f.panel(X2, y0, PW2, PH, "Red Hat · llm-d 实测首字延迟", GR)
-    AX, AY, AH = X2 + 70, py2 + 60, 290
-    for k, (v, col, lab) in enumerate(((TTFT_COLD, RD, "最坏情况"), (TTFT_HIT, GR, "命中缓存"))):
+    AX, AY, AH = X2 + 70, py2 + 60, 260
+    for k, (v, col, lab, sub) in enumerate(((TTFT_COLD, RD, "最坏情况", "不路由"), (TTFT_HIT, GR, "命中缓存", "路由后"))):
         bx = AX + k * 170
         bh = AH * v / 3000
         f.box(bx, AY + AH - bh, 110, bh, col, col, 3)
         f.t(bx + 55, AY + AH - bh - 10, format(v, ",") + " ms", col, True, 18, "middle")
         f.t(bx + 55, AY + AH + 26, lab, INK, True, 16, "middle")
+        f.t(bx + 55, AY + AH + 46, sub, GY, False, 13, "middle")
     f.line(AX - 10, AY + AH, AX + 300, AY + AH, GY2, 1.2, arrow=False)
-    f.t(X2 + 20, py2 + PH - 42, "命中率 %.1f%%" % HIT, GR, True, 17)
+    f.t(X2 + 20, py2 + PH - 68, "命中率 %.1f%%" % HIT, GR, True, 17)
+    f.t(X2 + 20, py2 + PH - 40, "红柱是最坏情况：原文没给平均，别读成快八倍", RD, True, 14)
     f._pan = None
     yb = f.src(y0 + PH + 6,
                "📌 Red Hat Developer，2025-10-07，「Master KV cache aware routing with llm-d」：warm cache hit TTFT 340 ms，"

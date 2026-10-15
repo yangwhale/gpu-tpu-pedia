@@ -28,7 +28,7 @@ __FIG_S3_BATCH__
   <p>早先按最大长度给每条序列预留一整段连续显存。PagedAttention 把 KV 切成固定大小的块，用页表记每块住在哪。</p>
 __FIG_S3_PAGED__
   <ul>
-    <li><b>按需领块，</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer 和 Orca 的 2–4 倍（SOSP 2023，Orca 为作者复现版）。</li>
+    <li><b>按需领块，</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer 和 Orca 的 2–4 倍（SOSP 2023，Orca 为作者复现版；Orca 见 <a href="#s4-1">4.1</a>）。</li>
   </ul>
 <figure class="fbox fwide" id="anim-paged">
 <video src="media/topic06-paged.mp4" autoplay loop muted playsinline

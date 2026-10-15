@@ -2,7 +2,7 @@
 """专题六 · 第六节「切专家与注意力：TEP 和 DEP」。图在 topic06-fig-dep.py；另复用专题五两张图。"""
 
 BODY = '''
-  <p class="lead">V3 一张卡装不下，切到多卡时，专家那一半大家都用 EP，分歧全在注意力：几张卡合算同一批请求，还是各算各的。2024 年 12 月 SGLang 先给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP 部署也走这一条。SGLang 在 96 张 H100 上复现了 PD 分离加大 EP 的整套做法，输出吞吐最多是同卡数纯 TP 的 5 倍（几招叠起来的数，不全归注意力切法）。
+  <p class="lead">V3 一张卡装不下，切多卡时，专家那一半都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP 部署也走这一条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离，不全归注意力切法。
     <b>选哪个，看模型有几个 KV 头、你要多大的 batch。</b></p>
 
   <h3 id="s6-1">6.1　一句回顾</h3>
