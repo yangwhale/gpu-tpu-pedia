@@ -7,7 +7,8 @@
 
 BODY = '''
   <p class="lead">decode 每一步都要把权重搬一趟，同一步里拼进来的人越多，每人分摊到的那一份越小。
-    <b>调度决定这一趟能坐满几个人。</b>这一节的两招：2022 年 Orca 让每一步都能有人进出，2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里。</p>
+    <b>调度决定这一趟能坐满几个人。</b>这一节的两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer 的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–5.6 倍。
+    Orca 比分页早一年，可放新人要有空位，空位靠第三节的分页腾，所以先讲显存。</p>
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
 __FIG_S4_GANTT__
@@ -32,11 +33,11 @@ __FIG_S4_CONC__
   <p>Little 定律把三个数绑在一起：批里的人数 ≈ 吞吐 × TPOT。反过来就是<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
     8 张卡合计 9,032 × 8 × 0.060 s，反推 decode 批里约 4,335 个请求，每卡约 540。
-    并发按客户端计，是另一个数：这组基线每个前端 600 路、共 14 个前端，合计 8,400 路，没进批的都在 prefill 那边排队。</p>
-  <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 ms：每一步要算的人多了，这一步就长了。</p>
+    客户端并发是另一个数：这组基线共 8,400 路，没进批的都在 prefill 那边排队。</p>
+  <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），端到端只多 0.8%、峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 ms：每一步要算的人多了，这一步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
-    XLA 按静态形状编译，batch 大小也是形状的一部分。SGLang-JAX 的做法是为几种 batch 大小提前编译好计算图；
-    实际人数不在档位上时，通常补到最近的一档，补出来的行照样参与计算。来由见
+    XLA 按静态形状编译，batch 大小也是形状的一部分。SGLang-JAX 为几种 batch 大小提前编译好计算图，
+    人数不在档位上就补到最近一档，补出来的行照样参与计算。来由见
     <a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>。</div>
 
   <h3 id="s4-4">4.4　CPU 那几毫秒也要藏起来</h3>
@@ -44,18 +45,17 @@ __FIG_S4_OVERLAP__
   <p>每一步之前，CPU 要挑人、拼 batch、准备输入。串着走的话，加速器每一步都要等它一下。</p>
 
   <h3 id="s4-5">4.5　显存不够时踢谁</h3>
-  <p>批开大了，KV cache 可能在中途装不下，只能先请出去几个请求。被请出去的请求有两种回法：
-    把它的 KV 换到主机内存再搬回来（swap），或者丢掉 KV、回来时重算一遍 prefill（recompute）。</p>
+  <p>批开大了，KV cache 可能中途装不下，只能先请出去几个请求。回来有两种办法：
+    KV 换到主机内存再搬回（swap），或丢掉 KV、回来重算 prefill（recompute）。</p>
   <p>vLLM 文档的原话是：In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture。</p>
-  <p>谁先被踢还牵涉公平和负载均衡，见 VTC（arXiv 2401.00588，按用户已用 token 排队）与 Llumnix（arXiv 2406.03243，请求跨实例迁移）。</p>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。
-    chunked prefill 只摊平了 prefill 对 decode 的打扰，两种活还挤在同一批卡上；把它们拆到不同机器是第八节的事。</div>
+    chunked prefill 只摊平打扰，两种活还挤在同一批卡上，拆开是第八节的事。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐就钉在约 300 × 1000 ÷ 50 ＝ 6,000，再加并发只会让首字等待变长；
-    要么少搬（第十二节的量化让 KV 变小），要么换个交互档。</p></details>
+    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 减半），要么换个交互档。</p></details>
 '''
 
 FIGS = {

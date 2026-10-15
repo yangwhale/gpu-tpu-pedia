@@ -16,7 +16,7 @@ fig6-pareto.svg —— 回答：为什么不能光比「每卡吞吐」？
     68 → 9,759、121 → 3,816、173 → 895（gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:683-695）。
   · PyTorch 博客 2026-06-23「Serving DeepSeek-V4 on GB300 with SGLang」：约 50 tok/s/user 处 ~11,200 tok/s/GPU
     （2026-06 MTP 曲线），Day-0 无 MTP 曲线约 2,200。
-  · 本仓库实测：SGLang dep8 conc600 ＝ 9,168（output ÷ decode GPU），TPOT 59–61 ms ≈ 每用户 16 tok/s
+  · 本仓库实测：SGLang dep8 conc600 ＝ 9,168（output ÷ decode GPU），TPOT 59–61 ms ≈ 每用户 17 tok/s（1000 ÷ 60）
     （gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:595、723-725）。
   · 刻意没画：把这几个点连成一条线（它们分属不同框架、不同配置）。只有 InferenceX 那三个点是同一条曲线。
 
@@ -144,7 +144,7 @@ def fig_pareto():
     f = Fig(W, "横轴是每个用户每秒拿到多少字，纵轴是每张 GPU 每秒出多少字，都是 GB300 上跑 DeepSeek-V4-Pro、8K 进 1K 出。"
                "InferenceX 的 vLLM 曲线三个点：每用户 68 时每卡 9,759，121 时 3,816，173 时只剩 895。"
                "PyTorch 博客的 SGLang 在每用户 50 处报每卡约 11,200，同一位置首发时只有约 2,200。"
-               "本仓库实测的 9,168 落在每用户约 16 处。同一套系统沿着曲线往左走，每卡吞吐就往上涨；"
+               "本仓库实测的 9,168 落在每用户约 17 处。同一套系统沿着曲线往左走，每卡吞吐就往上涨；"
                "所以先定交互档，再在这一档上比吞吐")
     y0 = f.header("吞吐和交互性是一条曲线　——　<tspan font-weight=\"700\">先定档，再比吞吐</tspan>",
                   "GB300 · DeepSeek-V4-Pro · 8K 进 1K 出 · 纵轴按 output ÷ decode GPU 计（11,200 的口径官方未写明，见出处）",

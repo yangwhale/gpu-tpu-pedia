@@ -143,8 +143,8 @@ SEC = {num: title for _, num, title in _ns["SECTIONS"]}
 # 杠杆：(名字, 颜色, 节号, 作用在场景的哪个部件)
 LEVERS = [
     ("开两个仓库", OR, ["八", "九", "十", "十三"], "wh2"),
-    ("货变轻", GR, ["三", "七", "十二"], "cargo"),
-    ("车上多坐人", BL, ["四", "五", "六", "十一"], "seats"),
+    ("货变轻", GR, ["三", "十二"], "cargo"),
+    ("车上多坐人", BL, ["四", "五", "六", "七", "十一"], "seats"),
 ]
 BASE = [("一", "road"), ("二", "ruler")]           # 地基：这一趟本身、量这一趟的尺子
 _placed = [n for n, _ in BASE] + [n for _, _, ns, _ in LEVERS for n in ns]

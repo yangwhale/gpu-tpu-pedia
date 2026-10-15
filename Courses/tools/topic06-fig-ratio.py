@@ -51,9 +51,11 @@ assert [round(v) for _, v in PER_D] == [307, 597, 1115, 1546, 2202, 2679, 3188, 
 assert round(PER_ALL[0][1]) == 204 and round(PER_ALL[-1][1]) == 415
 BEST_ALL = max(PER_ALL, key=lambda p: p[1])
 assert BEST_ALL[0] == 12 and round(BEST_ALL[1]) == 455
-GROW_D = PER_D[-1][1] / PER_D[0][1]
+D12 = 3187                                   # runbook 原表 12 个 prefill 那格（25,500 ÷ 8 截断）
+assert int(dict(PER_D)[12]) == D12
+GROW_D = D12 / PER_D[0][1]                  # 两条线都取 12 个 prefill 那档，和正文 9.4 同一组
 GROW_ALL = BEST_ALL[1] / PER_ALL[0][1]
-assert round(GROW_D, 1) == 10.8 and round(GROW_ALL, 1) == 2.2
+assert round(GROW_D, 1) == 10.4 and round(GROW_ALL, 1) == 2.2
 
 # ── 配比公式（SGLang V4-Pro runbook §12.2，官方 11,200 那个点）
 DEC_RPS = 8 * 11200 / 1024
@@ -65,7 +67,7 @@ assert round(DEC_RPS, 1) == 87.5 and round(NEED_IN / 1e4) == 72 and 8 <= NEED_IN
 MIMO = dict(nonpd64=11.70, pd1_64=10.55, pd2_64=10.83, nonpd128=12.78, pd1_128=13.64, pd2_128=15.31)
 assert round((MIMO["pd1_128"] / MIMO["nonpd128"] - 1) * 100) == 7     # README 写「约 6.8%」，按表算 6.7%
 assert round((MIMO["pd2_128"] / MIMO["nonpd128"] - 1) * 100, 1) == 19.8
-assert MIMO["pd2_128"] / 3 < MIMO["nonpd128"] / 2            # 2P1D 多一个 pod，按每 pod 算反而低
+assert round((MIMO["pd2_128"] / 3) / (MIMO["nonpd128"] / 2) * 100 - 100) == -20   # 2P1D 多一个 pod，按每 pod 算低 20%
 QC_TTFT = (95, 281)                                            # Qwen3-Coder 1024/1024 c1，单实例 → 1P1D（ms）
 
 # ── AFD 插件（tokens/s/die）
@@ -114,7 +116,7 @@ def fig_2p1d():
 
 def fig_prefill_sweep():
     f = Fig(W, "vLLM 跑 DeepSeek-V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个，每个 prefill 4 张卡。"
-               "蓝线按每张 decode 卡算，从 307 一路涨到 3,321，涨了 10.8 倍。"
+               "蓝线按每张 decode 卡算，从 307 涨到 12 个 prefill 时的 3,187，涨了 10.4 倍，14 个时还在涨。"
                "橙线把 prefill 的卡也算进分母，从 204 涨到 12 个 prefill 时的 455 就到顶，只涨 2.2 倍，14 个时回落到 415")
     y0 = f.header("只除 decode 卡，加 prefill 像白捡；全部卡都算上，到 12 个就到顶",
                   "同一组实测（vLLM，DeepSeek-V4-Pro，GB300；decode ＝ dep8 共 8 卡，每个 prefill TP4 共 4 卡；8K 输入 1K 输出，并发 1,024）。纵轴是每卡 output tok/s",
@@ -142,19 +144,21 @@ def fig_prefill_sweep():
         for n, v in pts:
             f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="%s"/>' % (X(n), Y(v), col))
     f.t(X(1) + 10, Y(PER_D[0][1]) - 12, "%d" % round(PER_D[0][1]), BL, True, 14)
-    f.t(X(14) + 12, Y(PER_D[-1][1]) + 5, "{:,}".format(round(PER_D[-1][1])), BL, True, 15)
+    f.t(X(12), Y(D12) - 16, "12 个时 {:,}".format(D12), BL, True, 15, "middle")
     f.t(X(1), Y(PER_ALL[0][1]) + 26, "%d" % round(PER_ALL[0][1]), OR, True, 14, "middle")
     f.t(X(12), Y(BEST_ALL[1]) - 14, "12 个时 %d，到顶" % round(BEST_ALL[1]), OR, True, 14, "middle")
     f.t(X(14) + 12, Y(PER_ALL[-1][1]) + 5, "%d" % round(PER_ALL[-1][1]), OR, True, 15)
     f.t(PX + PW + 70, Y(2600), "×%.1f" % GROW_D, BL, True, 22, "middle")
+    f.t(PX + PW + 70, Y(2600) + 22, "1 → 12 个", BL, size=15, anchor="middle")
     f.t(PX + PW + 70, Y(900), "×%.1f" % GROW_ALL, OR, True, 22, "middle")
+    f.t(PX + PW + 70, Y(900) + 22, "1 → 12 个", OR, size=15, anchor="middle")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "两条线都说加 prefill 是杠杆，只是杠杆长短差了五倍", [
         "蓝线的分母里没有 prefill 的卡：喂一个小 decode 的 prefill 越多，它越好看。算整机成本要看橙线。",
         "橙线在 12 个 prefill 时到顶，再加就开始稀释每卡产出，配比到这里就够了。",
     ])
     yb = f.src(yb + 10,
-               "📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md §12.3（2026-07-24 实测，runbook 注明本文未重测；12 个时原表写 3,187，脚本按 25,500 ÷ 8 算出 3,188）；prefill 为 TP4 见同文件 §0。",
+               "📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md §12.3（2026-07-24 实测，runbook 注明本文未重测；12 个时取原表的 3,187，25,500 ÷ 8 ＝ 3,187.5）；prefill 为 TP4 见同文件 §0。",
                "⚠️ 本课推导：橙线 ＝ output ÷（4 × prefill 个数 ＋ 8）。16 个 prefill 那档撞上失效模式 B、只跑出部分结果，没画。"
                "同一 runbook 的 4K 输入重扫显示每个 prefill 喂料约翻倍（1 个 prefill 时 2.06 倍），曲线形状随输入长度变。")
     f.save("fig6-prefill-sweep.svg", yb + 14)

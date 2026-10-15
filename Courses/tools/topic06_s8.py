@@ -23,7 +23,8 @@ __FIG_S8_PD_T5__
   <h3 id="s8-2">8.2　回顾：那一趟要多久</h3>
   <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过一个 8K prompt：KV 约 1.04 GB，走 100 Gbps 的数据中心网络约 83 ms，前后两段 PCIe 各约 16 ms（按 Gen5 x16 单向约 64 GB/s 估，本课推导）。</p>
 __FIG_S8_KV_TRIP_T5__
-  <p>和 1–2 s 的 prefill 比，这一趟只占一成上下。这个结论有两个前提：网络真跑在设计带宽上；KV 本身没有大到离谱。8.4 讲第一个前提怎么被打破，8.8 讲第二个。</p>
+  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 是保守算：现役 A4X 每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（本课推导）。</p>
+  <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
   <p>「KV 传输」其实是三件事，<b>分清层，出了问题才知道去哪找。</b></p>
@@ -33,14 +34,14 @@ __FIG_S8_STACK__
     <li><b>调度</b>：决定哪个请求先去哪台 prefill、算完交给哪台 decode。tpu-inference 的代理先把请求截成只出一个字发给 prefill，再让 decode 端去拉 KV。</li>
     <li><b>存储</b>：KV 不一定只在显存里。Mooncake Store、LMCache、Dynamo KVBM 把它放到主机内存、SSD 乃至远端，让下一个同前缀的请求直接取。</li>
   </ul>
-  <p>TPU 这边组件少得多。TPU Sync 刚开源，自己写明还不建议通用场景使用；tpu-inference 的 TPUConnector 是目前能直接用的那条路。</p>
+  <p>TPU 这边组件少得多：TPU Sync 刚开源、自称还不宜通用，能直接用的是 tpu-inference 的 TPUConnector。</p>
   <p>排查按层找：带宽掉到几百 MB/s 是搬运层没走对通道；请求接不上、握手失败多半在调度层；前缀命中率低看存储层。</p>
 
   <h3 id="s8-4">8.4　GPU 实战：配错一个开关，慢两个数量级</h3>
-  <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s。按 1.04 GB 这把尺子算，一趟要 5,201 ms，比 prefill 本身还长。1.04 GB 沿用专题五的统一尺子（Qwen3-Coder-480B 一条 8K prompt 的 KV），不是 V4-Pro 的实际 KV。</p>
+  <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s。按 1.04 GB 算（专题五的统一尺子，Qwen3-Coder-480B 一条 8K prompt 的 KV），一趟要 5,201 ms，比 prefill 还长。</p>
 __FIG_S8_BW__
-  <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。cuda_ipc 只在同一个 NVLink 域里成立：一组用 NVLink 全互联、能直接读彼此显存的 GPU，NVL72 就是 72 张。补上三样配置后实测 7–167 GB/s，同一份 KV 一趟 149 ms 到 6.2 ms。</p>
-  <p>配错时什么都不报错，只是 TTFT 慢得说不清原因，上线前先量一次 KV 传输带宽。</p>
+  <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。cuda_ipc 只在同一个 NVLink 域（全互联、能直接读彼此显存的一组 GPU，如 NVL72）里成立。补上三样配置后实测 7–167 GB/s，同一份 KV 一趟 149 ms 到 6.2 ms。</p>
+  <p>配错不报错，只是 TTFT 慢；上线前先量一次 KV 传输带宽。</p>
   <details class="foldfig"><summary><b>那三样配置</b>：vLLM ＋ NIXL 在 GB300 上走 NVLink</summary>
   <ul>
     <li><code>UCX_TLS=cuda_copy,cuda_ipc,tcp</code>：只留 cuda_ipc（NVLink）和必要的拷贝、控制通道，去掉 RDMA。</li>
@@ -57,12 +58,12 @@ __FIG_S8_BW__
     <tr><td>SGLang · DeepSeek-R1 · GB300</td><td>NIXL 走 RoCE</td><td>GKE 上调不通，请求 60 s 超时</td></tr>
     <tr><td>SGLang · R1 ／ Kimi K3 · GB300</td><td>Mooncake 走 NVLink</td><td>能用，K3 的部署沿用了这条</td></tr>
   </table>
-  <p>所以别问「NIXL 和 Mooncake 哪个好」，要问「在这个引擎、这张网上，哪条路真的通」。两边的共同点只有一个：<b>同一个 NVLink 域里，KV 就别出域。</b></p>
+  <p>别问「NIXL 和 Mooncake 哪个好」，要问「这个引擎、这张网上哪条路通」。共同点只有一个：<b>同一个 NVLink 域里，KV 就别出域。</b></p>
 
   <h3 id="s8-5">8.5　混合模型：尾巴不能让 decode 端重算</h3>
   <p>纯注意力模型的 KV 按 token 一格一格存。老的 connector 只传填满的整块，最后那截不满一块的尾巴让 decode 端自己补算，省一点传输。</p>
 __FIG_S8_HYBRID__
-  <p>GDN、Mamba 这类层存的是一份递归状态，它已经把整段 prompt 吃进去了。decode 端再补算尾巴，等于把这几个 token 喂了两遍，输出就偏了，而且不报错。</p>
+  <p>GDN、Mamba 这类层存的递归状态已吃下整段 prompt，decode 端再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>
     <li><b>修法</b>：全部 block 都传，状态也跟着传，decode 端一个 token 都不重算。tpu-inference 为此单独写了 HMA 版的 connector。</li>
     <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文，没给分解）；单并发每请求吞吐是单机的 0.95 倍，4 并发是 0.92 倍。</li>
@@ -75,24 +76,23 @@ __FIG_S8_HYBRID__
   <ul>
     <li><b>两边上下文长度要一致</b>：只改 decode 的 <code>--context-length</code>，KV 布局对不上，握手失败；单条请求能过，压测才暴露。</li>
     <li><b>失败策略两头都疼</b>：vLLM 的 <code>kv_load_failure_policy</code> 设 fail，一次瞬时拒收就让引擎死掉；设 recompute 稳，但 12 个 prefill 时每卡 3,187 掉到 2,645，约交 17% 的税。</li>
-    <li><b>出了 NVLink 域就慢</b>：SGLang 用 Mooncake 走 NVLink，跨域就退到 RDMA；vLLM 的 cuda_ipc 干脆只在域内成立。</li>
     <li><b>表面报错可能是假的</b>：vLLM 开 14 个 prefill 时 decode 的 pod 接连被驱逐，真因是崩溃留下的 core dump 撑爆了临时盘。</li>
     <li><b>编排层和 connector 要配套</b>：Dynamo 的 SGLang 集成能传 Mooncake 握手地址，vLLM 集成不能。</li>
   </ul>
-  <details class="foldfig"><summary><b>出处</b>：五条坑各在哪</summary>
-  <p>上下文长度：SGLang V4-Pro runbook:941。失败策略：vLLM V4-Pro runbook:760。出域：SGLang V4-Pro runbook:63、vLLM V4-Pro runbook:106。core dump 驱逐：vLLM V4-Pro runbook 12.4 节。编排层：vLLM V4-Pro runbook:703。两份 runbook 都在 gpu/inference/a4x-max/deepseek-v4/。</p></details>
+  <details class="foldfig"><summary><b>出处</b>：四条坑各在哪</summary>
+  <p>上下文长度：SGLang V4-Pro runbook:941。失败策略：vLLM V4-Pro runbook:760。core dump 驱逐：vLLM V4-Pro runbook 12.4 节。编排层：vLLM V4-Pro runbook:703。两份 runbook 都在 gpu/inference/a4x-max/deepseek-v4/。</p></details>
 
   <h3 id="s8-7">8.7　正确性：拆了以后先比字</h3>
-  <p>PD 出错最常见的样子是「能跑、输出看着通顺、但和不拆时不一样」。<b>所以上线前先比字，再比速度。</b></p>
+  <p>PD 出错最常见的样子是「能跑、通顺，但和不拆时不一样」。<b>所以上线前先比字，再比速度。</b></p>
   <ul>
     <li><b>怎么比</b>：temperature 设 0，同一批 prompt 拆与不拆各跑一遍，逐个 token 对。</li>
-    <li><b>前几个 token 就分叉</b>：多半是 bug，尤其是多条 prompt 都在头几个 token 分叉时，比如尾巴被重算、递归状态没传、两边上下文长度不同。</li>
-    <li><b>几百个 token 后才分叉</b>：可能只是批大小不同带来的浮点差异。Thinking Machines 的文章《Defeating Nondeterminism in LLM Inference》讲过，kernel 不做批不变时，同一个 prompt 换个批就会出不同的字。</li>
+    <li><b>前几个 token 就分叉</b>：多半是 bug，比如尾巴被重算、递归状态没传、两边上下文长度不同。</li>
+    <li><b>几百个 token 后才分叉</b>：可能只是批大小不同带来的浮点差异：kernel 不做批不变时，同一个 prompt 换个批就会出不同的字（Thinking Machines《Defeating Nondeterminism in LLM Inference》）。</li>
   </ul>
-  <p>后一种要靠批不变的 kernel 才能完全消掉；前一种必须修。分辨不清时，把并发降到 1 再比一次。</p>
+  <p>后一种要靠批不变的 kernel 消掉；前一种必须修。分不清时把并发降到 1 再比。</p>
 
   <h3 id="s8-8">8.8　跨数据中心：KV 够薄才敢走远路</h3>
-  <p>专题五那个「网络不是瓶颈」只在同一个机房成立。Moonshot AI 和清华的 PrFaaS 论文把 prefill 放到另一个数据中心，前提是混合模型的 KV 薄了很多。</p>
+  <p>「网络不是瓶颈」只在同一个机房成立。Moonshot AI 和清华的 PrFaaS 论文把 prefill 放到另一个数据中心，靠的是混合模型的 KV 薄得多。</p>
 __FIG_S8_PRFAAS__
   <ul>
     <li><b>全注意力太胖</b>：32K 输入时，一台 8×H200 做 prefill，Qwen3-235B 每秒要外送 33.35 Gbps，MiniMax-M2.5 接近 60。</li>
@@ -104,7 +104,7 @@ __FIG_S8_PRFAAS__
   <h3 id="s8-9">8.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
     PD 分离不改变这一趟搬多少，它保证的是这一趟不被 prefill 打断，decode 才敢把 batch 攒满。
-    代价是每个请求多一趟 KV 传输，所以要先确认它真跑在设计带宽上、输出和不拆时一字不差。</div>
+    上线前先确认那一趟跑在设计带宽上、输出和不拆时一字不差。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：PD 上线后 TTFT 比不拆时还高，TPOT 倒是稳了。先查哪一层？</summary>
   <p>先查搬运层：量一次 KV 传输带宽。如果只有几百 MB/s，多半是退回了 cuda_copy 或跨出了 NVLink 域；带宽正常再看调度层有没有排队。</p></details>

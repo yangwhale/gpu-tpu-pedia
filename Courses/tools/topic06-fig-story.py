@@ -23,27 +23,28 @@ LANES = [
     (CY, "少搬字节", "权重量化"),
 ]
 
-# (泳道, 年份小数, 名字, 原文倍数与口径, 本课节)
+# (泳道, 年份小数, 名字, 原文倍数与口径, 本课节[, 模型侧])
+# ⛔ 卡上的倍数必须在它指向的那一节正文或图里找得到；找不到的只写做法，不写倍数（R5 起）。
 CARDS = [
     (0, 2022.54, "Orca 连续批", "36.9×，同延迟吞吐 vs FT", "四"),
     (0, 2024.20, "Sarathi-Serve 分块", "2.6–5.6×，达标容量 vs vLLM", "四"),
-    (1, 2023.38, "GQA", "KV ÷8（64 头 8 组，推导）", "三"),
+    (1, 2023.38, "GQA", "KV ÷8（64 头 8 组，推导）", "三", True),
     (1, 2023.47, "PagedAttention", "KV 有效占用 20–38%→96%", "三"),
     (1, 2023.78, "Flash-Decoding", "超长序列解码最多 8×", "五"),
-    (1, 2024.37, "MLA（DeepSeek-V2）", "KV −93.3%，对稠密 67B", "三"),
+    (1, 2024.37, "MLA（DeepSeek-V2）", "同形状 KV ÷57（推导）", "三", True),
     (2, 2023.95, "RadixAttention", "吞吐最多 6.4×", "三"),
-    (2, 2024.47, "Mooncake KV 池", "真实负载多接 75% 请求", "八"),
-    (2, 2025.70, "llm-d 前缀感知路由", "P90 首字快 57×，vs 近似调度", "十三"),
+    (2, 2024.47, "Mooncake KV 池", "内存＋SSD 拼成 KV 池", "三"),
+    (2, 2025.77, "llm-d KV 感知路由", "命中 340 ms，不路由最坏 2,850", "十三"),
     (3, 2022.87, "投机解码", "2–3×，单请求延迟", "十一"),
     (3, 2024.07, "EAGLE", "2.7–3.5×，单请求延迟", "十一"),
     (3, 2024.97, "DeepSeek-V3 MTP", "第 2 个字接受 85–90%，1.8×", "十一"),
-    (4, 2023.88, "Splitwise", "同成本吞吐 2.35×", "八"),
+    (4, 2023.88, "Splitwise", "prefill、decode 分两批机器", "八"),
     (4, 2024.05, "DistServe", "7.4× 请求，或 SLO 紧 12.6×", "八"),
-    (4, 2025.17, "DeepSeek 大 EP", "每节点 decode 14.8k tok/s", "六"),
+    (4, 2025.17, "DeepSeek 大 EP", "每节点 decode 14.8k tok/s", "二"),
     (4, 2025.34, "SGLang 大 EP 复现", "对同卡数 TP 最多 5×", "六"),
-    (5, 2022.80, "GPTQ 4 bit", "3.25–4.5×，vs FP16", "十二"),
-    (5, 2023.45, "AWQ 4 bit", "3× 以上，vs FP16", "十二"),
-    (5, 2025.45, "NVFP4／MXFP4", "显存比 FP8 再省 1.8×", "十二"),
+    (5, 2022.80, "GPTQ 4 bit", "逐层补偿误差，只压权重", "十二"),
+    (5, 2023.45, "AWQ 4 bit", "按激活护住重要通道", "十二"),
+    (5, 2025.45, "NVFP4／MXFP4", "每数 4.25–4.5 bit", "十二"),
 ]
 
 
@@ -53,11 +54,11 @@ def xof(yr):
 
 def fig_story():
     f = Fig(W, "2022 年以来的推理优化：六条泳道按时间排出 2022 到 2025 年的关键优化，"
-               "每张卡写原文报告的提升和口径：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，"
-               "投机解码 2 到 3 倍，DistServe 多服务 7.4 倍请求，Mooncake 真实负载多接 75%，"
+               "每张卡写原文报告的提升或做法：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，"
+               "GQA 和 MLA 是模型侧的进步，用虚线卡标出；投机解码 2 到 3 倍，DistServe 多服务 7.4 倍请求，"
                "DeepSeek 大 EP 每节点 decode 1.48 万 token 每秒；倍数基线互相包含，不能连乘")
     y0 = f.header("2022 年以来　——　<tspan font-weight=\"700\">每一步补一个洞</tspan>",
-                  "卡片落在首次公开的年月上；卡上是原文报告的提升和比的是谁；右下角是本课讲它的那一节")
+                  "卡片落在首次公开的年月上；卡上是原文报告的提升或做法；右上角是本课讲它的那一节；虚线卡是模型侧的进步")
     # 时间轴
     ya = y0 + 6
     ticks = [(xof(Y0), "2022 年中")] + [(xof(yr), str(yr)) for yr in (2023, 2024, 2025, 2026)]
@@ -84,12 +85,14 @@ def fig_story():
         f.box(0, y, 4, h, col, col, 0)
         f.t(16, y + h / 2 - 4, name, col, True, 16)
         f.t(16, y + h / 2 + 16, what, GY, False, 13)
-        for ri, x, (_, yr, nm, gain, sec) in place:
+        for ri, x, (_, yr, nm, gain, sec, *model) in place:
             cy = y + 8 + ri * (CH + 8)
-            f.box(x, cy, CW, CH, "#fff", col, 6, 1.4)
+            f.box(x, cy, CW, CH, "#fff", col, 6, 1.4, dash="6 4" if model else None)
             f.t(x + 10, cy + 21, nm, INK, True, 15)
             f.t(x + 10, cy + 43, gain, col, False, 14)
             f.t(x + CW - 8, cy + 21, "第" + sec + "节", GY, False, 12, "end")
+            if model:
+                f.t(x + CW - 8, cy + 43, "模型侧", GY, True, 12, "end")
         y += h + 8
     # 网格线插到泳道底框之后、卡片之前会被泳道白底盖住，所以插在最前面并让泳道底透明
     grid = []
@@ -102,8 +105,8 @@ def fig_story():
         "口径也不同：有的是吞吐，有的是单请求延迟，有的是达标请求数，有的只是显存。",
     ])
     y = f.src(y + 6, "Orca OSDI'22；vLLM arXiv 2309.06180 图 2；GQA arXiv 2305.13245（÷8 本课推导）；"
-              "DeepSeek-V2 arXiv 2405.04434（−93.3% 同时含 MoE、FP8 权重、6 bit KV）；SGLang arXiv 2312.07104；"
-              "Mooncake arXiv 2407.00079（模拟场景最多 +525%，真实负载 +75%）；llm-d 博客 2025-09（厂商自测）；"
+              "DeepSeek-V2 arXiv 2405.04434（论文对稠密 67B 报 KV −93.3%，混着 6 bit KV 等改动；卡上 ÷57 是第三节同形状 3,997,696 → 70,272 B，本课推导）；SGLang arXiv 2312.07104；"
+              "Mooncake arXiv 2407.00079；llm-d：Red Hat Developer 2025-10-07（厂商自测）；"
               "Leviathan arXiv 2211.17192；Flash-Decoding 斯坦福 CRFM 2023-10；EAGLE arXiv 2401.15077；"
               "DeepSeek-V3 arXiv 2412.19437 §5.4.3；Splitwise arXiv 2311.18677；DistServe arXiv 2401.09670；"
               "DeepSeek open-infra-index Day 6；SGLang 大 EP 博客 2025-05；Sarathi-Serve arXiv 2403.02310；"
