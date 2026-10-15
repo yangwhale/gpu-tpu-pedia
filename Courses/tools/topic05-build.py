@@ -233,7 +233,6 @@ __FIG_AR_SPLIT__
 
   <h3>1.5　没有班长，怎么做到的：环</h3>
   <p>班长模式下卡 0 要收 n−1 份、发 n−1 份，成了全场的瓶颈。换个办法：首尾相连排成一圈，谁都不当班长。</p>
-__FIG_RING__
 <figure class="fbox fwide" id="anim-ring">
 <video src="media/topic05-ring.mp4" autoplay loop muted playsinline
        aria-label="环形 AllReduce 动画。四张卡排成一排，卡 0 蓝、卡 1 橙、卡 2 绿、卡 3 紫，每张卡四块，虚线框是空位，条纹块是加过的。卡名之间有往右的箭头，卡片下面一条虚线车道表示卡 3 绕回卡 0。字幕依次是：ReduceScatter，每一步人人同时往右发一块，收到的加到自己那块上；第 1、2、3 步各自写明 0→1、1→2、2→3、卡 3 从右边绕回卡 0，落地后写「第几步完成：粗框那块又多加进了一个人」并停住。三步之后每张卡恰好握着一块完整总和，其余中间结果淡出。接着 AllGather，把总和往右再传三步，只替换不相加。最后人人一份总和，画面复位。"></video>
@@ -1203,9 +1202,6 @@ FIGS = {
     "__FIG_AR_SPLIT__": ("fig-ar-split", "fig5-ar-split.svg", "topic05-fig-coll.py",
         '<b>先加后拼，跟一步到位的结果完全一样。</b><br>'
         '<em>拆开之后，两半可以放在不同的时间点去做。</em>'),
-    "__FIG_RING__": ("fig-ring", "fig5-ring.svg", "topic05-fig-coll.py",
-        '<b>盯着条纹看：每一步，每张卡都有一块多加进一个人。</b><br>'
-        '<em>一行一张卡；「右边」就是下一号卡，卡 3 的右边是卡 0。条纹看不清加了谁，就看下面那支动画，一步一停。</em>'),
     "__FIG_AR_TWO_WAYS__": ("fig-ar-two-ways", "fig5-ar-two-ways.svg", "topic05-fig-coll.py",
         '<b>结果一样，差的是谁在干活。</b><br>'
         '<em>右边那张小表：班长那列跟着卡数涨，环那列永远不到 2。</em>'),
