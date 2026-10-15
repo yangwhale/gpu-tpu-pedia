@@ -82,7 +82,7 @@ CH = [
 
 <p class="board"><b>🖥 屏幕</b>：课件 <code>s十二</code>，停在节标题下那段导语。</p>
 
-<p class="say">「这一节拉第二根杠杆，货变轻。三年图上「少搬字节」那一行：二〇二二年底 GPTQ 只压权重；同年 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，4 bit 浮点也进了张量核。」</p>
+<p class="say">「这一节拉第二根杠杆，货变轻。三年图上「少搬字节」那一行：二〇二二年底 GPTQ 只压权重，压到三 bit 的大模型一张卡就比五张卡跑 FP16 快三倍多；同年 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，4 bit 浮点也进了张量核。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s12-bytes</code> 整张。</p>
 
