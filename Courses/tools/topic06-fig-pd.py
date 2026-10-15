@@ -77,7 +77,7 @@ def fig_kv_stack():
                "GPU 上是 Mooncake Store、LMCache、Dynamo KVBM，TPU 上是 TPU Sync 的主机内存层")
     y0 = f.header("那一趟 KV 像一次搬家　——　<tspan font-weight=\"700\">路和车、路口调度、路边仓库各是一层</tspan>",
                   "小字是各层常见的公开组件：蓝字 GPU，青字 TPU",
-                  [(OR, "搬运层"), (PU, "调度层"), (GR, "存储层")])
+                  [(OR, "搬运层"), (GY, "调度层"), (GR, "存储层"), (PU, "车上运的 KV")])
     PH = 440
     py = f.panel(0, y0, W, PH, "prefill 机 → decode 机", OR)
     RD_W = 48                                   # 路宽
@@ -97,7 +97,7 @@ def fig_kv_stack():
     # 车：两辆，往右开
     for cx in (300, 700):
         f.icon("cart", cx, ry - 4, 76, 52, OR, "#fef7e0")
-        f.box(cx + 14, ry + 6, 30, 18, OR, OR, 2)
+        f.box(cx + 14, ry + 6, 30, 18, PU, PU, 2)
     f.line(800, ry + RD_W / 2, 880, ry + RD_W / 2, OR, 2.5)
     # 搬运层标签：路下方左段
     f.t(260, ry + RD_W + 44, "搬运层 ＝ 路和车", OR, True, 18)
@@ -106,8 +106,8 @@ def fig_kv_stack():
     # 调度员：路口旁
     f.t(JX - RD_W / 2 - 12, py + 50, "新请求", GY, True, 15, "end")
     f.line(JX, py + 26, JX, py + 92, GY2, 2)
-    f.icon("person", JX + RD_W / 2 + 14, ry - 74, 56, 64, PU, "#f3e8fd")
-    f.t(JX + 110, py + 40, "调度层 ＝ 路口调度员", PU, True, 18)
+    f.icon("person", JX + RD_W / 2 + 14, ry - 74, 56, 64, GY, "#f1f3f4")
+    f.t(JX + 110, py + 40, "调度层 ＝ 路口调度员", GY, True, 18)
     f.t(JX + 110, py + 70, "Dynamo · vllm-router · 引擎里的 connector", BL, True, 15)
     f.t(JX + 110, py + 96, "tpu-inference 的代理 · TPUConnector", CY, True, 15)
     # 仓库：岔路尽头
@@ -175,14 +175,14 @@ def fig_hybrid_kv():
                "修法是全部格子连同余额原样传过去，decode 端一个 token 都不补算")
     y0 = f.header("混合模型不能「传整块、尾巴自己算」　——　<tspan font-weight=\"700\">GDN 的状态会把尾巴记两遍</tspan>",
                   "示意，不按真实大小。Qwen3.5-397B 的 60 层里 45 层 GDN、15 层注意力",
-                  [(BL, "注意力层的 KV"), (PU, "GDN 层的状态"), (RD, "decode 端补算的尾巴")])
+                  [(PU, "注意力层的 KV"), ("#d7aefb", "GDN 层的状态"), (RD, "decode 端补算的尾巴")])
     PH = 312
     py = f.panel(0, y0, W, PH, "老办法：只传整块，尾巴让 decode 端补算", PU)
     NB, CW, CH = 7, 62, 40
     TAIL = 0.45                                 # 最后一块填了多少（示意）
     LX, RX = 40, 730
     BW_, TW = 400, round(CW * TAIL) + 30        # 余额条长度、尾巴那一截
-    f.t(LX, py + 22, "注意力层（%d 层）＝ 逐格账本" % ATT, BL, True, 18)
+    f.t(LX, py + 22, "注意力层（%d 层）＝ 逐格账本" % ATT, PU, True, 18)
     f.t(RX, py + 22, "GDN 层（%d 层）＝ 存折余额" % GDN, PU, True, 18)
     f.line(RX - 40, py + 4, RX - 40, py + 210, LINE, 1, arrow=False)
 
@@ -190,9 +190,9 @@ def fig_hybrid_kv():
         for i in range(NB):
             x = LX + i * CW
             if i < NB - 1:
-                f.box(x, y, CW - 6, CH, BL, BL, 4)
+                f.box(x, y, CW - 6, CH, PU, PU, 4)
             else:
-                f.box(x, y, CW - 6, CH, "none", BL, 4, sw=1.6, dash=None if tail else "4,3")
+                f.box(x, y, CW - 6, CH, "none", PU, 4, sw=1.6, dash=None if tail else "4,3")
                 if tail:
                     f.box(x, y, (CW - 6) * TAIL, CH, RD, RD, 4)
     for k, (lab, tail) in enumerate((("prefill 端传来", False), ("decode 端补算尾巴后", True))):
@@ -200,9 +200,9 @@ def fig_hybrid_kv():
         f.t(LX, y - 10, lab, INK, True, 15)
         cells(y, tail)
         f.t(RX, y - 10, lab, INK, True, 15)
-        f.box(RX, y, BW_, CH, PU, PU, 4)
-        f.line(RX + BW_ - TW, y + 6, RX + BW_ - TW, y + CH - 6, "#ffffff", 1.6, arrow=False)
-        f.t(RX + BW_ - TW / 2, y + 26, "尾巴", "#ffffff", True, 15, "middle")
+        f.box(RX, y, BW_, CH, "#d7aefb", PU, 4)
+        f.line(RX + BW_ - TW, y + 6, RX + BW_ - TW, y + CH - 6, "#681da8", 1.6, arrow=False)
+        f.t(RX + BW_ - TW / 2, y + 26, "尾巴", "#681da8", True, 15, "middle")
         if tail:
             f.box(RX + BW_ + 4, y, TW, CH, RD, RD, 4)
             f.t(RX + BW_ + TW + 16, y + 27, "重复入账", RD, True, 17)

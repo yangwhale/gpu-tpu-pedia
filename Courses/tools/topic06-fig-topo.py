@@ -393,7 +393,7 @@ def fig_slice():
                "128K 256 并发要 2821 GiB，纸面 16.54 颗，要 32 颗")
     y0 = f.header("DeepSeek-V3 在 TPU v7 上最少几颗芯片　——　<tspan font-weight=\"700\">权重是地板，KV 决定往上加多少</tspan>",
                   "本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GiB（可用 189.5 GiB，预留一成给激活值），向上取到切片档位",
-                  [(BL, "FP8 权重 625 GiB"), (OR, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档芯片能放多少")])
+                  [(BL, "FP8 权重 625 GiB"), (PU, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档芯片能放多少")])
     PH = 470
     py = f.panel(0, y0, W, PH, "要多少 HBM（GiB），取几颗芯片", INK)
     RCOL = W - 210
@@ -414,7 +414,7 @@ def fig_slice():
         yy = AY + i * RH + (RH - bh) / 2
         f.t(X0 - 14, yy + bh / 2 + 6, "%s × %d" % key, INK, True, 15, "end")
         f.box(X0, yy, W_FP8 * sx, bh, BL, BL, 3)
-        f.box(X0 + W_FP8 * sx, yy, max(kv * sx, 2), bh, OR, OR, 3)
+        f.box(X0 + W_FP8 * sx, yy, max(kv * sx, 2), bh, PU, PU, 3)
         # 总量写在条右边；底下垫一块白，把穿过去的竖虚线断开
         lab = format(round(tot), ",")
         lx = X0 + tot * sx + 6

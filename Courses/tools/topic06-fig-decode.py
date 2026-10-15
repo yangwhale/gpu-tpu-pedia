@@ -147,7 +147,7 @@ assert OCC_C == USEFUL                                        # 一个字节都�
 assert OCC_C[1] * 2 == OCC_C[2]                               # FP8 真省一半
 
 
-def _carton(f, x, y, w, h, data=None, lane_w=None, col=BL):
+def _carton(f, x, y, w, h, data=None, lane_w=None, col=PU):
     """一只标准箱（＝一块 tile）：箱体 ＋ 箱盖缝 ＋ 封条。data＝从箱底填满的比例；lane_w＝只在左边填一条窄缝。"""
     f.box(x, y, w, h, "#fbf6ee", "#a1887f", 3, 1.6)
     if lane_w is not None:
@@ -166,7 +166,7 @@ def fig_tile():
                "C 把 K、V 并起来、换成小箱，正好 1 KiB")
     y0 = f.header("布局像装箱：一双袜子装进标准箱，空的也占地方　——　<tspan font-weight=\"700\">FP8 可能一个字节都没省</tspan>",
                   "要装的：一个 token、一层的 K＋V（2 个头 × 128 维，bf16，共 1 KiB）。TPU 显存按「标准箱」存：一箱 4 KiB，横 128 格 × 竖 16 行，装不满也算一整箱",
-                  [(BL, "真数据（袜子）"), ("#a1887f", "一只 4 KiB 的标准箱")])
+                  [(PU, "真数据（袜子）"), ("#a1887f", "一只 4 KiB 的标准箱")])
     PW, GAP, PH = 448, 28, 500
     BXW, BXH = 92, 76                          # 一箱的画法：三格里同一个尺寸，箱数可以直接比
     cases = [
@@ -210,7 +210,7 @@ def fig_tile():
             yy = area_t + area_h / 2 - (nC * hh + (nC - 1) * 6) / 2
             for i in range(nC):
                 yb_ = yy + i * (hh + 6)
-                f.box(gx, yb_, BXW, hh, BL, "#a1887f", 2, 1.6)
+                f.box(gx, yb_, BXW, hh, PU, "#a1887f", 2, 1.6)
             f.t(px + PW / 2, yy + nC * (hh + 6) + 24, "小箱 ＝ 标准箱的 1/%d" % (rows_per_tile(nb) // ru), GY, size=15, anchor="middle")
             n_s = "%d 只小箱" % nC
         ratio = occ[key] // USEFUL[nb]
@@ -347,17 +347,17 @@ def fig_dense():
                "FP8：读权重 11.95 微秒，256 个 token 全算 9.77 微秒。两种精度下，全算都比读权重快，比值都是 256 除以 313")
     y0 = f.header("decode 的 MoE：多算一遍比读一遍权重还便宜　——　<tspan font-weight=\"700\">那就别排序了，全算</tspan>",
                   "DeepSeek-V3 的一个路由专家（3 块 7168×2048），TPU v7 单 device。条长 ＝ 微秒，同一把尺子；一批 256 个 token，平均每个专家只分到 8 个",
-                  [(GY2, "从显存读一遍这个专家的权重"), (OR, "256 个 token 全过一遍（没路由到的乘 0）"), (GR, "只算路由到的 8 个")])
+                  [(BL, "从显存读一遍这个专家的权重"), (GR, "256 个 token 全过一遍（没路由到的乘 0）"), ("#9aa0a6", "只算路由到的 8 个")])
     PH = 348
-    py = f.panel(0, y0, W, PH, "一个专家、一步 decode", OR)
+    py = f.panel(0, y0, W, PH, "一个专家、一步 decode", GR)
     x0, sc = 230, 900 / 24.0
     for k, (name, lab) in enumerate((("bf16", "BF16"), ("fp8", "FP8"))):
         yy = py + 34 + k * 140
         f.t(30, yy + 22, lab, INK, True, 17)
         v = T[name]
-        rows = [(GY2, v["read"], "读权重 %.4g µs" % v["read"]),
-                (OR, v["dense"], "全算 %.3g µs" % v["dense"]),
-                (GR, v["routed"], "只算 8 个 %.2g µs" % v["routed"])]
+        rows = [(BL, v["read"], "读权重 %.4g µs" % v["read"]),
+                (GR, v["dense"], "全算 %.3g µs" % v["dense"]),
+                ("#9aa0a6", v["routed"], "只算 8 个 %.2g µs" % v["routed"])]
         for j, (col, val, txt) in enumerate(rows):
             by = yy + j * 38
             f.box(x0, by, max(val * sc, 3), 28, col, col, 3)

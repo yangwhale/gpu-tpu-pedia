@@ -312,13 +312,13 @@ def fig_moe():
                "运算强度约 8，离屋脊点 313 很远")
     y0 = f.header("MoE 把一批人拆散：<tspan font-weight=\"700\">256 人进来，每个专家只分到 8 行</tspan>",
                   "同一批 256 人解码一步。方块是 v7 的 MXU（一边 256），填色的是这一步真正喂进去的行",
-                  [(GR, "喂进 MXU 的行：填满一边"), (OR, "喂进 MXU 的行：只填一小截")])
+                  [(GR, "这一步喂进 MXU 的行（decode 的 token）")])
     PH = 410
     py = f.panel(0, y0, W, PH, "稠密层 vs 一个专家", INK)
     S = 256                                   # 1 px ＝ 1 行
     for i, (x0, title, rows, sub, intensity, col) in enumerate((
             (110, "稠密层：256 人共用一块权重", 256, "256 行，填满一边", AI_DENSE256, GR),
-            (770, "MoE 层：一个专家", ROWS, "平均 8 行，占一边的 1/32", AI_EXP, OR))):
+            (770, "MoE 层：一个专家", ROWS, "平均 8 行，占一边的 1/32", AI_EXP, GR))):
         top = py + 70
         f.t(x0, top - 22, title, INK, True, 17)
         f.box(x0, top, S, S, "none", GY2, 2, dash="4,3")

@@ -98,9 +98,9 @@ def fig_dep_kv():
                "按全部卡算总吞吐每卡 1319 到 2758，2.09 倍")
     y0 = f.header("V4-Pro 换 DEP，赢在每一步读得少　——　<tspan font-weight=\"700\">步时 46.8 → 11.8 ms</tspan>",
                   "同样 3 台 TP4 prefill、并发 512，只换 decode。条长 ＝ 这一步这张卡要读的 KV，按卡上在飞的请求数画（本课推导）",
-                  [(GR, "自己那批请求的 KV"), (RD, "同一份 KV 的重复读")])
+                  [(PU, "自己那批请求的 KV"), (RD, "同一份 KV 的重复读")])
     PH = 560
-    py = f.panel(0, y0, W, PH, "这一步，每张卡要读多少 KV", GR)
+    py = f.panel(0, y0, W, PH, "这一步，每张卡要读多少 KV", PU)
     X0, BW, RH, BH = 210, 860, 34, 24
     unit = BW / IN_TP4
     yy = py + 46
@@ -111,16 +111,16 @@ def fig_dep_kv():
         for c in range(n):
             y = yy + c * RH
             dup = name == "TP4" and c > 0
-            col = RD if dup else GR
+            col = RD if dup else PU
             f.t(X0 - 12, y + 18, "卡 %d" % c, GY, size=15, anchor="end")
-            f.box(X0, y, per * unit, BH, "#fce8e6" if dup else "#e6f4ea", col, 4)
+            f.box(X0, y, per * unit, BH, "#fce8e6" if dup else "#f3e8fd", col, 4)
         if name == "TP4":
             f.t(X0 + BW + 20, yy + 30, "约 %d 个请求" % round(IN_TP4), RD, True, 20)
             f.t(X0 + BW + 20, yy + 56, "每张卡读一遍，", GY, size=15)
             f.t(X0 + BW + 20, yy + 78, "4 遍里 3 遍是重复", GY, size=15)
             f.t(X0 + BW + 20, yy + 106, extra, GY, size=15)
         else:
-            f.t(X0 + 16 + per * unit, yy + 4 * RH - 2, "每张卡约 %d 个请求，各读一遍" % round(IN_DEP / 8), GR, True, 20)
+            f.t(X0 + 16 + per * unit, yy + 4 * RH - 2, "每张卡约 %d 个请求，各读一遍" % round(IN_DEP / 8), PU, True, 20)
         yy += n * RH + 30
     f.t(X0, y0 + PH - 22, "副本让出的显存，理论上能多放 4 倍请求（TP 度数 4 ÷ KV 头数 1）；实测在飞的请求没变多，见下表。",
         GY, size=15)
@@ -175,9 +175,9 @@ def fig_dep_tpu():
                "并发越高，DP 注意力赢得越多。1K 进 8K 出并发 512 时，输出吞吐 TP 是 4266、DP 是 6914")
     y0 = f.header("TPU 上同一个模型：并发越高，DP 注意力比 TP 赢得越多　——　<tspan font-weight=\"700\">512 并发 +62%</tspan>",
                   "tpu-inference PR #2577 · Qwen3.5-397B-A17B-FP8 · TPU v7x-8（4 颗芯片、8 个 device）· TP=8 对 DP=8，专家都走 EP。纵轴：DP 的输出吞吐比 TP 多多少",
-                  [(BL, "1K 进 8K 出（decode 为主）"), (OR, "8K 进 1K 出（prefill 为主）")])
+                  [(GR, "1K 进 8K 出（decode 为主）"), (OR, "8K 进 1K 出（prefill 为主）")])
     PH = 440
-    py = f.panel(0, y0, W, PH, "并发 → DP 注意力相对 TP 的输出吞吐（端点标的是输出 tok/s，TP → DP）", BL)
+    py = f.panel(0, y0, W, PH, "并发 → DP 注意力相对 TP 的输出吞吐（端点标的是输出 tok/s，TP → DP）", GR)
     X0, PW, PY, PHH = 100, 1000, py + 40, PH - 130
     YMAX = 70
     _axes(f, X0, PY, PW, PHH, YMAX, [0, 20, 40, 60], lambda v: "+%d%%" % v if v else "打平")
@@ -190,13 +190,13 @@ def fig_dep_tpu():
     for i, c in enumerate(CONC):
         f.t(px(i), PY + PHH + 24, str(c), GY, size=15, anchor="middle")
     f.t(X0 + PW / 2, PY + PHH + 50, "并发", GY, size=15, anchor="middle")
-    for adv, pr, col in ((ADV_A, PR_A, BL), (ADV_B, PR_B, OR)):
+    for adv, pr, col in ((ADV_A, PR_A, GR), (ADV_B, PR_B, OR)):
         f.path([(px(i), py_(v)) for i, v in enumerate(adv)], col, 2.8, arrow=False)
         for i, v in enumerate(adv):
             f.box(px(i) - 6, py_(v) - 6, 12, 12, col, col, 6)
             if 0 < i < 3:
-                f.t(px(i) + (12 if col == BL else -12), py_(v) + (26 if col == BL else -12),
-                    "+%d%%" % v, col, True, 16, None if col == BL else "end")
+                f.t(px(i) + (12 if col == GR else -12), py_(v) + (26 if col == GR else -12),
+                    "+%d%%" % v, col, True, 16, None if col == GR else "end")
         # 右端点：百分比 ＋ 绝对值
         t, d = pr[3]
         f.t(px(3) + 18, py_(adv[3]) + 2, "+%d%%" % adv[3], col, True, 26)
@@ -204,7 +204,7 @@ def fig_dep_tpu():
         # 左端点：绝对值
         t, d = pr[0]
         lab = ("打平　" if adv[0] == 0 else "+%d%%　" % adv[0]) + "%s → %s" % (format(t, ","), format(d, ","))
-        f.t(px(0) - 16, py_(adv[0]) + (-8 if col == BL else 6), lab, col, True, 15, "end")
+        f.t(px(0) - 16, py_(adv[0]) + (-8 if col == GR else 6), lab, col, True, 15, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "PR 同时改了调度：prefill 攒在一起派，免得一条长 prefill 混进 DP 批里拖慢所有 rank", [])
     yb = f.src(yb + 10,

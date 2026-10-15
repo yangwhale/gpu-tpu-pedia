@@ -187,17 +187,17 @@ def fig_step():
 
 # ════════════════════════════════════════════════════════════════════════
 def fig_bytes():
-    f = Fig(W, "左图：DeepSeek-V3 一步验证 n 个 token 要读多少权重，FP8 每参数一字节。灰色是每个 token 都要经过的部分，"
-               "约 171 亿参数，验证几个 token 都只读一遍；橙色是路由专家，每个 token 挑自己的 8 个，"
+    f = Fig(W, "左图：DeepSeek-V3 一步验证 n 个 token 要读多少权重，FP8 每参数一字节。浅蓝是每个 token 都要经过的部分，"
+               "约 171 亿参数，验证几个 token 都只读一遍；深蓝是路由专家，每个 token 挑自己的 8 个，"
                "验证的 token 越多，碰到的专家并起来越多。验证 1 个读约 37.5 GB，验证 8 个约 163.8 GB，是 4.4 倍。"
                "右图：Kimi K3 实测的时间账。不开投机，搬一趟权重 11.1 毫秒，带回 1 个字；开投机，搬一趟变成约 16.1 毫秒，"
                "慢了 1.45 倍，但平均带回 6.96 个字。摊到每个字，从 11.1 毫秒降到 2.31 毫秒，快 4.81 倍")
     y0 = f.header("多验证几个 token 贵不贵　——　<tspan font-weight=\"700\">稠密部分白送，MoE 专家不白送</tspan>",
                   "左：V3 验证一步要读的权重（本课推导，FP8）。右：Kimi K3 实测，搬一趟变慢了，但一趟带回的字多得多",
-                  [(GY2, "每个 token 都经过的部分"), (OR, "路由专家（各挑各的）"), (BL, "开投机后的一趟")])
+                  [("#aecbfa", "每个 token 都经过的部分"), (BL, "路由专家（各挑各的）"), (GR, "开投机后的一趟")])
     PH = 470
     LW = 640
-    py = f.panel(0, y0, LW, PH, "V3 验证 n 个 token，一步读多少 GB", OR)
+    py = f.panel(0, y0, LW, PH, "V3 验证 n 个 token，一步读多少 GB", BL)
     PX, PY0, PW, PHH = 90, py + 50, 500, 320
     GMAX = 180
     f.box(PX, PY0, PW, PHH, "none", LINE, 4)
@@ -210,19 +210,19 @@ def fig_bytes():
         x = PX + (n - 1) * bw + 10
         h_o = PHH * (OTHER / 1e9) / GMAX
         h_t = PHH * step_gb(n) / GMAX
-        f.box(x, PY0 + PHH - h_o, bw - 20, h_o, "#bdc1c6", GY2, 2)
-        f.box(x, PY0 + PHH - h_t, bw - 20, h_t - h_o, OR, OR, 2)
+        f.box(x, PY0 + PHH - h_o, bw - 20, h_o, "#aecbfa", "#669df6", 2)
+        f.box(x, PY0 + PHH - h_t, bw - 20, h_t - h_o, BL, BL, 2)
         f.t(x + (bw - 20) / 2, PY0 + PHH + 24, str(n), GY, size=15, anchor="middle")
         if n in (1, 8):
             f.t(x + (bw - 20) / 2, PY0 + PHH - h_t - 8, "%.1f" % step_gb(n), INK, True, 15, "middle")
     f.t(PX + PW / 2, PY0 + PHH + 52, "一步验证的 token 数 n", GY, True, 15, anchor="middle")
     f.t(PX + 16, PY0 + 30, "验证 8 个 ＝ 验证 1 个的 %.1f 倍" % BYTES_X8, RD, True, 17)
-    f.t(PX + 16, PY0 + 56, "灰色 %.1f GB 不随 n 变" % (OTHER / 1e9), GY, False, 15)
+    f.t(PX + 16, PY0 + 56, "浅蓝 %.1f GB 不随 n 变" % (OTHER / 1e9), GY, False, 15)
 
     # 右：K3 一趟的时间账
     RX = LW + 20
     RW = W - RX
-    py2 = f.panel(RX, y0, RW, PH, "Kimi K3 实测：搬一趟，带回几个字", BL)
+    py2 = f.panel(RX, y0, RW, PH, "Kimi K3 实测：搬一趟，带回几个字", GR)
     TX = RX + 150                      # 时间零点
     MS = 30.0                          # 每毫秒多少像素
     assert TX + 17 * MS < W - 20
@@ -232,13 +232,13 @@ def fig_bytes():
         f.box(TX, yy, ms * MS, 40, fill, col, 6)
         f.t(TX + 14, yy + 26, "搬一趟 %.1f ms" % ms, col, True, 16)
         for k in range(n_tok):
-            f.box(TX + k * 36, yy + 56, 30, 30, BL, BL, 5)
+            f.box(TX + k * 36, yy + 56, 30, 30, GR, GR, 5)
         f.t(TX + n_tok * 36 + 10, yy + 78, tok_lab, INK, True, 16)
 
     ya = py2 + 40
     lane(ya, "不开投机", K3_TPOT_NS, GY2, "#e8eaed", 1, "带回 1 个字")
     yb_ = ya + 140
-    lane(yb_, "开投机", K3_STEP_SP, BL, "#e8f0fe", 7, "平均带回 %.2f 个字" % K3_AL)
+    lane(yb_, "开投机", K3_STEP_SP, GR, "#e6f4ea", 7, "平均带回 %.2f 个字" % K3_AL)
     # 多花的那一截：从 11.1 ms 到 16.1 ms
     x1, x2 = TX + K3_TPOT_NS * MS, TX + K3_STEP_SP * MS
     f.path("M%d,%d L%d,%d" % (x1, ya + 44, x1, yb_ + 44), GY2, 1.2, dash="4,4", arrow=False)
@@ -249,14 +249,14 @@ def fig_bytes():
     yc = yb_ + 150
     f.path("M%d,%d L%d,%d" % (RX + 24, yc - 30, W - 24, yc - 30), LINE, 1, arrow=False)
     f.t(RX + 24, yc, "摊到每个字", GY, True, 16)
-    f.t(RX + 24, yc + 36, "%.1f ms → %.2f ms，快 %.2f 倍" % (K3_TPOT_NS, K3_TPOT_SP, K3_TPOT_X), BL, True, 22)
+    f.t(RX + 24, yc + 36, "%.1f ms → %.2f ms，快 %.2f 倍" % (K3_TPOT_NS, K3_TPOT_SP, K3_TPOT_X), GR, True, 22)
     f.t(RX + 24, yc + 66, "一趟慢一点不要紧，带回的字多得多", GY, size=15)
     yb = f.src(y0 + PH + 6,
                "V3 结构取自 HF deepseek-ai/DeepSeek-V3 config.json：hidden 7,168、moe_intermediate 2,048、61 层中前 3 层稠密、256 个路由专家挑 8 个。"
                "每个专家 3 × 7,168 × 2,048 ≈ 4,404 万参数。",
                "⚠️ 本课推导：其余部分 ＝ 671B − 256 × 58 × 专家大小 ≈ %.1fB；由此推出每 token 激活 ≈ %.1fB，与技术报告的 37B 差 2%% 以内（外部锚点）。"
                % (OTHER / 1e9, ACTIVE_DERIVED / 1e9),
-               "⚠️ 本课推导：n 个 token 独立、均匀地挑专家时，一层平均碰到 256 × (1 − (1 − 8/256)^n) 个；实际路由不均匀、相邻 token 常挑同一批专家，所以橙色那段是偏高的估计。",
+               "⚠️ 本课推导：n 个 token 独立、均匀地挑专家时，一层平均碰到 256 × (1 − (1 − 8/256)^n) 个；实际路由不均匀、相邻 token 常挑同一批专家，所以深蓝那段是偏高的估计。",
                "K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089（GB300 TP8 跨两节点，ISL 4096／OSL 1024，temperature 0，bs=1，TPOT 11.1 → 2.31 ms）、:979（accept len 6.96，block 7）。",
                "⚠️ 本课推导：开投机后一趟耗时 ＝ 2.31 ms × 6.96 ≈ 16.1 ms；每字间隔快 11.1 ÷ 2.31 ≈ 4.81 倍。runbook 报的端到端 4.22× 含首字时间，所以比 4.81 小。"
                "右图第 7 个方块代表平均值里的 0.96 个，示意。",

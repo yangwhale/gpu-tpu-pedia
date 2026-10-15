@@ -363,10 +363,10 @@ def fig_kvlayout():
             tint = {PU: "#f3e8fd", CY: "#e0f7fa", OR: "#fde7d4", GY: "#d5d8dc"}[col]   # R43：原 #f1f3f4 近白，和图例深灰对不上
             f.box(x, yy, w, BH, tint, col, 3, 1.4)
             if lab in LBL:
-                cx = x + w / 2
-                if x < xh < x + w:                  # 虚线穿过这一格：字挪到虚线右边
-                    cx = (xh + x + w) / 2
-                f.t(cx, yy + 29, LBL[lab][k], col, True, 15, "middle")
+                cx, fs = x + w / 2, 15
+                if x < xh < x + w:                  # 虚线穿过这一格：字挪到虚线右边，降一档让两侧都留出空隙
+                    cx, fs = (xh + x + w) / 2, 14
+                f.t(cx, yy + 29, LBL[lab][k], col, True, fs, "middle")
             else:                                   # 缩放只有 16px 宽，字写在左上方
                 f.line(x + w / 2, yy - 4, x + w / 2, yy - 1, col, 1.2, arrow=False)
                 f.t(x + w / 2 + 2, yy - 10, lab, col, True, 14, "end")

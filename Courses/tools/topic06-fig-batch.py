@@ -29,7 +29,7 @@ fig6-overlap.svg —— 回答：CPU 排下一批的那几毫秒，为什么也�
   · 时间线长短是示意；只有 12 ms 与 38 µs 两个数是原文的。
 """
 
-from topic03_draw import Fig, wpx, MONO_K, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, wpx, MONO_K, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, CY
 
 W = 1400
 
@@ -282,7 +282,7 @@ def fig_overlap():
                "SGLang-JAX 在 Qwen3-32B 上把 prefill 和 decode 之间的空档从约 12 毫秒压到 38 微秒")
     y0 = f.header("CPU 排下一批，别让加速器干等　——　<tspan font-weight=\"700\">12 ms → 38 µs</tspan>",
                   "示意时间线。只有 12 ms、38 µs 两个数是原文的（SGLang-JAX，Qwen3-32B，prefill 与 decode 之间的空档）",
-                  [(BL, "CPU：调度、拼 batch、准备输入"), (OR, "TPU：跑这一批")])
+                  [(BL, "CPU：调度、拼 batch、准备输入"), (CY, "TPU：跑这一批")])
     PH = 330
     py = f.panel(0, y0, W, PH, "两条泳道：CPU 和 TPU", INK)
     X0, U = 200, 40
@@ -291,14 +291,14 @@ def fig_overlap():
         yc = py + 40 + row * 140
         f.t(30, yc + 50, lab, INK, True, 16)
         f.t(X0 - 14, yc + 22, "CPU", BL, True, 13.5, "end")
-        f.t(X0 - 14, yc + 72, "TPU", OR, True, 13.5, "end")
+        f.t(X0 - 14, yc + 72, "TPU", CY, True, 13.5, "end")
         if row == 0:
             x = X0
             for n in range(3):
                 f.box(x, yc, CPU * U - 4, 34, BL, BL, 4)
                 f.t(x + CPU * U / 2, yc + 23, "排 N+%d" % n if n else "排 N", "#ffffff", True, 13, "middle")
                 x += CPU * U
-                f.box(x, yc + 50, TPU * U - 4, 34, OR, OR, 4)
+                f.box(x, yc + 50, TPU * U - 4, 34, CY, CY, 4)
                 f.t(x + TPU * U / 2, yc + 73, "算 N+%d" % n if n else "算 N", "#ffffff", True, 13, "middle")
                 if n < 2:
                     f.box(x + TPU * U, yc + 50, CPU * U - 4, 34, "#fce8e6", RD, 4, dash="4,3")
@@ -309,7 +309,7 @@ def fig_overlap():
             f.t(X0 + CPU * U / 2, yc + 23, "排 N", "#ffffff", True, 13, "middle")
             for n in range(3):
                 xt = X0 + CPU * U + n * TPU * U
-                f.box(xt, yc + 50, TPU * U - 6, 34, OR, OR, 4)
+                f.box(xt, yc + 50, TPU * U - 6, 34, CY, CY, 4)
                 f.t(xt + TPU * U / 2, yc + 73, "算 N+%d" % n if n else "算 N", "#ffffff", True, 13, "middle")
                 if n < 2:
                     f.box(xt, yc, CPU * U - 4, 34, BL, BL, 4)

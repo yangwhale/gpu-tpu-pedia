@@ -134,7 +134,7 @@ def fig_batch():
     sc = SPAN / USABLE
     segs = [(W_CHIP, BL, "V3 权重的 1/8（FP8）：78.1 GiB"),
             (RESERVE, GY2, "留 10%：19.0 GiB"),
-            (POOL, GR, "KV 池：92.4 GiB")]
+            (POOL, PU, "KV 池：92.4 GiB")]
     x = X0
     for v, col, lab in segs:
         w = v * sc

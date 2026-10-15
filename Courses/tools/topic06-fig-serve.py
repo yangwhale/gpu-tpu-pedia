@@ -75,7 +75,7 @@ assert sum(v for _, v in MIMO) == 52      # 原表总计写 ~50 min
 BARS = [("GLM-5.1 · v7x-8 · 未优化", "原表 ~10 分 44 秒", GLM, GLM_STATED),
         ("Qwen3-Coder · 两机 ICI 切片 · 首次", "原表 ~40 分钟", CODER, 40),
         ("MiMo-V2.5-Pro · 2× v7x-8", "原表 ~50 分钟（分项和 52）", MIMO, 50)]
-CAT = {"init": ("初始化", GY2), "load": ("权重加载", BL), "fake": ("名义加载，实为重编译", PU),
+CAT = {"init": ("初始化", GY2), "load": ("权重加载", BL), "fake": ("名义加载，实为重编译", "#f28b82"),
        "conv": ("反量化", OR), "comp": ("XLA 编译", RD), "warm": ("预编译 ／ warmup", OR), "gap": ("未拆", LINE)}
 R1_FIX = (215.7, 21.4)
 assert round(R1_FIX[0] / R1_FIX[1], 1) == 10.1
@@ -191,9 +191,9 @@ def fig_cold():
                "MiMo-V2.5-Pro 在两台 v7x-8 上约 50 分钟，权重加载 25、反量化 5、编译 15、decode 预编译 7")
     y0 = f.header("TPU 冷启动的大头常常是编译　——　<tspan font-weight=\"700\">连「权重加载」那一段也可能是</tspan>",
                   "tpu-inference 公开记录。上：GLM-5.1 一次冷启动放大看；下：另外两次，只看构成，不比快慢",
-                  [(BL, "权重加载"), (PU, "账面加载，实为重编译"), (RD, "XLA 编译"), (OR, "反量化 ／ 预编译 ／ warmup"), (GY2, "初始化"), (LINE, "未拆：总时长减分项和")])
+                  [(BL, "权重加载"), ("#f28b82", "账面加载，实为重编译"), (RD, "XLA 编译"), (OR, "反量化 ／ 预编译 ／ warmup"), (GY2, "初始化"), (LINE, "未拆：总时长减分项和")])
     PH = 250
-    py = f.panel(0, y0, W, PH, "GLM-5.1 · v7x-8 · 未优化 · 约 10 分 44 秒", PU)
+    py = f.panel(0, y0, W, PH, "GLM-5.1 · v7x-8 · 未优化 · 约 10 分 44 秒", RD)
     X0, AW = 40, W - 80
     sx = AW / GLM_STATED
     yy = py + 80
@@ -204,7 +204,7 @@ def fig_cold():
         f.box(x, yy, w, 54, col, "#fff", 3, 1.5)
         txt = GLM_LAB[cat]
         if cat == "fake":
-            f.t(x + w / 2, yy + 34, txt, "#fff", True, 18, "middle")
+            f.t(x + w / 2, yy + 34, txt, "#a50e0e", True, 18, "middle")
         elif wpx(txt, 15) + 12 < w:
             f.t(x + w / 2, yy + 33, txt, "#fff", True, 15, "middle")
         x += w
@@ -221,8 +221,8 @@ def fig_cold():
         f.t(cx + 6, yy + 84 + k * 24, txt, GY, True, 15, "end" if cx > W - 200 else None)
     xf0 = X0 + GLM[0][1] * sx
     xf1 = xf0 + GLM[1][1] * sx
-    f.path("M%d,%d L%d,%d L%d,%d L%d,%d" % (xf0, yy - 8, xf0, yy - 16, xf1, yy - 16, xf1, yy - 8), PU, 1.6, arrow=False)
-    f.t((xf0 + xf1) / 2, yy - 26, "实际在干：每加载一个 tensor 清一次编译缓存，下一个从头编", PU, True, 17, "middle")
+    f.path("M%d,%d L%d,%d L%d,%d L%d,%d" % (xf0, yy - 8, xf0, yy - 16, xf1, yy - 16, xf1, yy - 8), RD, 1.6, arrow=False)
+    f.t((xf0 + xf1) / 2, yy - 26, "实际在干：每加载一个 tensor 清一次编译缓存，下一个从头编", RD, True, 17, "middle")
     f._pan = None
     # 下：另外两次
     py2 = y0 + PH + 14
