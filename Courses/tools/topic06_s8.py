@@ -7,12 +7,12 @@
 """
 
 BODY = '''
-  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，2023、2024 年由 Splitwise、DistServe 先后提出。Splitwise 报同成本同功耗下吞吐 2.35 倍，DistServe 报同样延迟要求下多接 7.4 倍请求（都对不拆的系统）。</p>
+  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，2023、2024 年由 Splitwise、DistServe 先后提出。Splitwise 报同成本同功耗下吞吐 2.35 倍，DistServe 报同样延迟要求下能接的请求是 7.4 倍（都对不拆的系统）。</p>
   <p>Mooncake 连同 KV 池把 PD 分离做进 Kimi 线上，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
     <b>难的是 KV 从 prefill 机传到 decode 机的那一趟。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
-  <p><a href="topic-05.html#s6-1">专题五 §6.1</a> 讲过：decode 每步只出一个字，所以要凑大 batch。</p>
+  <p><a href="topic-05.html#s6-1">专题五 §6.1</a> 讲过：decode 每步只出一个字却要读一遍权重，所以要凑大 batch。</p>
 __FIG_S8_DECODE_AI_T5__
   <p>这时插进来一个长 prompt：</p>
 __FIG_S8_PD_T5__
@@ -67,7 +67,7 @@ __FIG_S8_HYBRID__
   <p>GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>
     <li><b>修法</b>：全传，tpu-inference 的 TPUConnectorHMA 就这么做。</li>
-    <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文，没给分解）；单并发每请求吞吐是单机的 0.95 倍，4 并发是 0.92 倍。</li>
+    <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文，没给分解）；单并发每请求吞吐是不拆单机的 0.95 倍，4 并发是 0.92 倍。</li>
     <li><b>GPU 上同理</b>：SGLang 跑 Kimi K3 时，PD 的 decode 端每个请求只有一个状态槽，前缀缓存不起作用。</li>
   </ul>
   <details class="foldfig"><summary><b>Qwen3.5 PD 的启动要点</b>：tpu-inference</summary>
@@ -87,7 +87,7 @@ __FIG_S8_HYBRID__
   <ul>
     <li><b>怎么比</b>：temperature 设 0，同一批 prompt 拆与不拆各跑一遍，逐 token 对。</li>
     <li><b>前几个 token 就分叉</b>：多半是 bug，如尾巴被重算、两边上下文长度不同。</li>
-    <li><b>几百个 token 后才分叉</b>：可能只是浮点差异。kernel 若不是批不变的，同一个 prompt 换个批拼就会出不同的字（Thinking Machines《Defeating Nondeterminism in LLM Inference》）。</li>
+    <li><b>几百个 token 后才分叉</b>：可能只是浮点差异。kernel 若不是批不变的，同一个 prompt 和不同的请求拼进一批，就会出不同的字（Thinking Machines《Defeating Nondeterminism in LLM Inference》）。</li>
   </ul>
   <p>后一种靠批不变的 kernel 消掉，前一种必须修；分不清时把并发降到 1 再比。</p>
 

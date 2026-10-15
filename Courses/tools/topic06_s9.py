@@ -28,7 +28,7 @@ __FIG_S9_RATIO_T5__
   <ul>
     <li><b>9.8 个</b>：公式的起点。runbook 实测 prefill 单卡峰值只有 15,196（官方的 83%），照实测还要更多。</li>
     <li><b>8 个</b>：官方高并发配方（high-conc-8p1d）的取值。</li>
-    <li><b>14 个</b>：runbook 早期自己扫的，prefill 8 个时每张 decode 卡输出 6,788，14 个时 8,809，16 个时 8,993；14 到 16 只涨 2%，已喂饱，于是定为默认（runbook:43、1117）。</li>
+    <li><b>14 个</b>：runbook 早期自己扫的，prefill 8 个时每张 decode 卡输出 6,788 tok/s，14 个时 8,809，16 个时 8,993；14 到 16 只涨 2%，已喂饱，于是定为默认（runbook:43、1117）。</li>
   </ul>
   <p>上线时用公式定起点，上下扫，取每卡输出不再涨的那一档。</p>
 
@@ -44,7 +44,7 @@ __FIG_S9_2P1D__
   <h3 id="s9-4">9.4　换个分母，10.4 倍变 2.2 倍</h3>
   <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。</p>
 __FIG_S9_SWEEP__
-  <p>只除 decode 卡是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只涨 2.2 倍。曲线是 2026-07-24 的历史实测，只看趋势。</p>
+  <p>只除 decode 卡，每卡涨到 10.4 倍，这是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只到 2.2 倍。曲线是 2026-07-24 的历史实测，只看趋势。</p>
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
   <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b>图是 MiMo-V2-Flash 在 TPU 上的三种摆法（pod＝一组 4 颗芯片）：</p>
@@ -61,7 +61,7 @@ __FIG_S9_DECIDE__
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
   <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上。</p>
 __FIG_S9_AFD_T5__
-  <p>字节的 MegaScale-Infer 报告每卡吞吐最多高 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
+  <p>字节的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
   <p>开源实现没这么顺：vLLM 的 AFD 是外部插件，主仓库 RFC 已因不活跃被关闭；插件博客在 Ascend 910C 上的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
@@ -75,7 +75,7 @@ __FIG_S9_AFD_ASCEND__
   <p>多模态模型在 prefill 前要把图片、视频编码成 token，图一多就和 prefill 抢资源。</p>
   <ul>
     <li><b>做法</b>：编码器单独一批机器，视觉 token 交给 prefill，KV 再交给 decode。</li>
-    <li><b>论文的数</b>：arXiv 2501.05460 报告峰值显存最多降 15 倍，batch 最多大 22 倍，TTFT 最多降 71%。</li>
+    <li><b>论文的数</b>：arXiv 2501.05460 报告峰值显存最多降到 1/15，batch 最多是原来的 22 倍，TTFT 最多降 71%。</li>
     <li><b>什么时候值得</b>：请求带很多图或大图时；纯文本用不上（专题五 §6.6）。</li>
   </ul>
 
