@@ -50,7 +50,7 @@ __FIG_S3_POOL__
   <ul>
     <li><b>RadixAttention。</b>SGLang 2023 年把前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多是当时其他系统的 6.4 倍（整套运行时）。</li>
     <li><b>默认就开。</b>vLLM 早先的前缀缓存命中率低时反而拖慢，默认关；2025 年 1 月 V1 改了数据结构，命中率为 0 也只掉不到 1%，才默认打开。</li>
-    <li><b>命中率可以很高。</b>DeepSeek 线上过半输入命中磁盘上的 KV。命中部分按十分之一计价（DeepSeek API 文档 2024-08）。</li>
+    <li><b>命中率可以很高。</b>DeepSeek 线上过半输入命中磁盘上的 KV。128K 输入、大半重复的请求，首字从 13 s 降到 0.5 s（DeepSeek API 文档 2024-08）。</li>
   </ul>
 __FIG_S3_DISK__
 <figure class="fbox fwide" id="anim-kvstore">
