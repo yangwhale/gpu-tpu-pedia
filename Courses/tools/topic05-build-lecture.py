@@ -595,7 +595,8 @@ Ring 没有这个上限，但每一步要等一段笔记传过来。」</p>
 卡数比头数多：USP 论文的例子，Llama 3 8B 只有 8 个 KV 头，想开 16 路，就配 Ulysses 8 × Ring 2。<br>
 头数除不尽：上面那个 12 头的模型，README 推荐纯 Ring；按 USP 的规则也可以配 Ulysses 4 × Ring 2，12 能被 4 整除。这一条是按规则推的，README 里没写。<br>
 跨机器：AllToAll 最怕慢线，Ulysses 那一维留在一台机器的 8 张卡里走 NVLink；Ring 只跟邻居说话、能边算边传，放到机器之间。」</p>
-<p class="deepsay">「回到 V3 的例子：128 个头，头数够开 128 路 Ulysses；可 128 张卡是 16 台机器，128 路的 AllToAll 要横跨整个网络。更顺的配法是机器里 Ulysses 8、机器之间 Ring 16。这也是按两种通信的脾气推的，不是实测。」</p>
+<p class="deepsay">「回到 V3 的例子，按字节算一遍（每卡每层前向，头维照前面假设）：纯 Ring 128 路，每张卡要收齐另外 127 段的 K、V，约 63.5 GiB；纯 Ulysses 128 路约 1 GiB，其中跨机器的约 0.94 GiB；USP 机器里 Ulysses 8、机器之间 Ring 16，跨机器那段环约 7.5 GiB。<br>
+所以 128 个头够分、网络的 AllToAll 吃得住时，纯 Ulysses 反而传得最少；USP 是头不够分、或者 AllToAll 跨机器跑不满时的退路。这笔账是按公式推的，没有实测。」</p>
 <p class="deepsay">「一句话：一条样本自己塞不下、又想让一个请求变快，用 Ulysses；头不够分或者要跨机器，配成 USP；权重一律交给 FSDP 或 ZeRO-3。」</p>
 </details>
 
