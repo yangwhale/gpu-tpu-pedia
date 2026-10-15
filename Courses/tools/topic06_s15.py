@@ -85,7 +85,7 @@ BODY = '''
     <tr><td>prefill 台数扫描（扫到 14 个 prefill）：12 个时按每张 decode 卡算 307 → 3,187，10.4×；按全部卡算 204 → 455，2.2×</td><td>VLLM-V4PRO-RUNBOOK.md §12.3；全卡 ＝ output ÷ (4n＋8) 本课推导</td></tr>
     <tr><td>MiMo batch 128：同样 2 个 pod，1P1D 13.64K 对不分离 12.78K，＋6.7%（README 写约 6.8%）；2P1D 用 3 个 pod 到 15.31K，按 pod 算 5.10K 对 6.39K，低 20%；按 pod 另算 batch 64 不拆／1P1D／2P1D 5.85／5.28／3.61K、batch 128 的 1P1D 6.82K；Qwen3-Coder 1P1D TTFT 95 → 281 ms</td><td>tpu/sglang-jax/mimo/README.md:8-12、81-88；6.7%、按 pod 各值（总吞吐 ÷ pod 数）与 20% 本课推导；tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005-1021</td></tr>
     <tr><td>AFD：MegaScale-Infer 每卡吞吐 1.90×、Step-3 4,039 对 2,324；vLLM AFD 插件 16K／32K 实测；EPD 把多模态编码再拆出去（15×、22×、71%）</td><td>概念沿用专题五台账第 24、51 行；arXiv 2504.02263；arXiv 2507.19427；vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin（RFC #22799 于 2026-05-31 关闭）；EPD arXiv 2501.05460；Step-3 对 V3 不是同一模型，差距含模型侧设计，正文已注明</td></tr>
-    <tr><td>同一模型五种部署 14,563／16,459／21,100／55,153／65,132；调参 ＋45%，换拓扑 ＋347%（并发 1,536）</td><td>VLLM-V4PRO-RUNBOOK.md:446、448、449、465、468；:489（另 :476 的 2.47×、:487 的 ＋28%）</td></tr>
+    <tr><td>同一模型五种部署 14,563／16,459／21,100／55,153／65,132；调参 ＋45%，换拓扑 ＋347%（并发 1,536）</td><td>VLLM-V4PRO-RUNBOOK.md:446、448、449、465、468；:489（另 :476 的 2.47× 为 DEP 并发 1,536，正文 2.09× 同为 512；:487 的 ＋28%）</td></tr>
     <tr><td>每卡 1,820／1,319／3,257；对 1p1d 起点 1.79×</td><td>本课推导：总吞吐 ÷ 卡数</td></tr>
     <tr><td>Qwen3-Coder TP16：跨 DCN c=1 −22%、c=16 −63%；同 ICI 切片 −15～−21%（c=16 总 513.8 对单机 602）</td><td>Qwen3-Coder-480B/README-multinode.md:441-445；README-TPU-VM.md:1000-1009</td></tr>
     <tr><td>V4-Pro dep8 要一整柜 NVL72；拓扑与频率的一般讨论</td><td>SGLANG-V4PRO-RUNBOOK.md:34、:63；沿用专题五台账第 19、26 行</td></tr>
