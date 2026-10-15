@@ -43,8 +43,8 @@ __FIG_S12_FUSE__
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
-  <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码为精度留在 BF16。
-    BF16 是 1,152 B，同样显存能装约 1.76 倍的请求（本课推导）。</p>
+  <p>实际布局不是严格一半，差在哪看图里那条红虚线。</p>
+__FIG_S12_KVLAYOUT__
   <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节；多出的容量留住更多前缀，命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍。2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读 NVFP4 KV 的 kernel，比原先的 FP8 KV 小 45%。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
@@ -52,6 +52,9 @@ __FIG_S12_FUSE__
 '''
 
 FIGS = {
+    "__FIG_S12_KVLAYOUT__": ("fig-s12-kvlayout", "fig6-quant-kvlayout.svg", "topic06-fig-quant.py",
+        '<b>看下面那条比红虚线多出的部分：都是没压的。</b><br>'
+        '<em>FlashMLA 给 DeepSeek-V3.2 的布局，条长按字节比例；倍数为本课推导。</em>'),
     "__FIG_S12_BYTES__": ("fig-s12-bytes", "fig6-quant-bytes.svg", "topic06-fig-quant.py",
         '<b>看下限随位数怎么缩。</b><br>'
         '<em>本课推导：V3 激活参数、8 颗 v7、batch 1、带宽跑满，不含 KV 与通信。</em>'),
@@ -76,4 +79,6 @@ NUM_LOCK = [
     ("770", "fig6-quant-fuse.svg"),
     ("101.8", "fig6-quant-cap.svg"),
     ("94.75", "fig6-quant-cap.svg"),
+    ("656", "fig6-quant-kvlayout.svg"),
+    ("1.76", "fig6-quant-kvlayout.svg"),
 ]

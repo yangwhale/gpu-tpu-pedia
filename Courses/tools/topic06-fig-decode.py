@@ -429,8 +429,82 @@ def fig_allreduce():
     f.save("fig6-s5-allreduce.svg", yb + 14)
 
 
+# ════════════════════════════════════════════════════════════════════
+# ⑥ fig6-s5-rpa（R38 加，5.2）：一个 kernel 怎么同时吃 prefill 和 decode；KV 页大小这个旋钮
+# 数从哪来：RPA arXiv 2604.15464 §3.4–3.5（一批按 decode／prefill 成分分段，每段派给三份预编译版本之一，
+#   每份各配一组块大小）；页 16 → 256 token、并发 512 时这个 kernel 的 decode 一步 428 → 283 µs：
+#   Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」（台账 5.2 行）。
+# ⛔ 刻意没画：段怎么切、每段几条请求、块大小取多少 —— 全是示意；页的格数也是示意（256 ÷ 16 ＝ 16 只是比例）。
+# ════════════════════════════════════════════════════════════════════
+RPA_PAGE = [(16, 428), (256, 283)]                            # (页大小 token, decode 一步 µs)
+
+
+def fig_rpa():
+    f = Fig(W, "左半：同一批里混着 decode 请求和 prefill 请求，decode 每条只有 1 个新 token，prefill 是一整段。"
+               "RPA 把这一批按成分切成三段：全是 decode 的一段派给纯 decode 版，两种都有的一段派给混合版，全是 prefill 的一段派给纯 prefill 版；"
+               "三份版本都是预编译好的，各配一组块大小。"
+               "右半：KV 页大小。页 16 个 token 时，读同样的 KV 要查很多页，并发 512 时这个 kernel 的 decode 一步 428 微秒；"
+               "页调到 256 个 token，页数少，降到 283 微秒")
+    y0 = f.header("一个 kernel 装下 prefill 和 decode　——　<tspan font-weight=\"700\">先分段，再派给三份预编译版本</tspan>",
+                  "左：一批怎么拆给三份版本（示意）；右：KV 页大小这个旋钮（Qwen3.5-397B，TPU7x）",
+                  [(GR, "decode 请求：1 个新 token"), (OR, "prefill 请求：一整段"), (PU, "KV 页")])
+    PH = 300
+    LW = 820
+    # ── 左：分段派发 ──────────────────────────────────────────────
+    py = f.panel(0, y0, LW, PH, "同一批，按成分分三段", INK)
+    D, P = 26, 92                                             # decode、prefill 块宽（示意）
+    segs = [("纯 decode 版", "D" * 5), ("混合版", "DDP"), ("纯 prefill 版", "PP")]
+    gap_seg, gap = 34, 5
+    widths = [sum(D if c == "D" else P for c in pat) + gap * (len(pat) - 1) for _, pat in segs]
+    x = (LW - (sum(widths) + gap_seg * 2)) / 2.0
+    by = py + 52
+    f.t(24, by + 22, "一批", INK, True, 16)
+    kw, ky = 214, py + 168
+    for i, ((kname, pat), w) in enumerate(zip(segs, widths)):
+        xx = x
+        for c in pat:
+            bw = D if c == "D" else P
+            col, tint = (GR, "#e6f4ea") if c == "D" else (OR, "#fde7d4")
+            f.box(xx, by, bw, 34, tint, col, 3, 1.4)
+            xx += bw + gap
+        # 段的方括号
+        f.path([(x, by + 44), (x, by + 52), (x + w, by + 52), (x + w, by + 44)], GY2, 1.4, arrow=False)
+        kx = 30 + i * (kw + 34)
+        f.path([(x + w / 2, by + 52), (x + w / 2, ky - 40), (kx + kw / 2, ky - 40), (kx + kw / 2, ky - 4)],
+               GY2, 1.4, arrow=True)
+        col = {0: GR, 1: INK, 2: OR}[i]
+        f.box(kx, ky, kw, 74, "none", col, 8, 1.6)
+        f.t(kx + kw / 2, ky + 30, kname, col, True, 17, "middle")
+        f.t(kx + kw / 2, ky + 56, "预编译 · 自带一组块大小", GY, size=14, anchor="middle")
+        x += w + gap_seg
+    # ── 右：页大小 ────────────────────────────────────────────────
+    RX, RW = LW + 16, W - LW - 16
+    py = f.panel(RX, y0, RW, PH, "KV 页大小：另一个便宜的旋钮", PU)
+    SC = 0.85                                                  # px／µs
+    for j, (pg, us) in enumerate(RPA_PAGE):
+        yy = py + 30 + j * 122
+        f.t(RX + 20, yy + 18, "页 %d 个 token" % pg, INK, True, 16)
+        if pg == 16:
+            f.t(RX + 150, yy + 18, "页太小：查索引让向量单元频频停顿", RD, size=14)
+        n = 256 // pg                                          # 同一段 KV 切成几页（示意比例）
+        cell = 320.0 / n
+        for k in range(n):
+            f.box(RX + 20 + k * cell, yy + 30, cell - (2 if n > 1 else 0), 22, "#f3e8fd", PU, 2, 1.2)
+        col = RD if pg == 16 else GR
+        f.box(RX + 20, yy + 64, us * SC, 26, col, col, 3)
+        f.t(RX + 20 + us * SC + 10, yy + 83, "%d µs" % us, col, True, 16)
+    f.t(RX + 20, py + 262, "并发 512 · 这个 kernel 的 decode 一步，不是整步", GY, size=14)
+    f._pan = None
+    yb = f.src(y0 + PH + 6,
+               "分段与三份预编译版本：Ragged Paged Attention，arXiv 2604.15464 §3.4–3.5。段的切法、每段几条请求、块大小都是示意。",
+               "页大小：Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」，"
+               "原文 decode step latency under Concurrency-512 from 428µs to 283µs（kernel-level）。页的格数只表示 16 与 256 的比例。")
+    f.save("fig6-s5-rpa.svg", yb + 14)
+
+
 fig_amortize()
 fig_tile()
 fig_mla()
 fig_dense()
 fig_allreduce()
+fig_rpa()

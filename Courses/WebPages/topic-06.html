@@ -3647,9 +3647,81 @@ body.figonly section h3{margin-top:34px}
   <p>名字来自 2022 年的 FlashAttention：注意力切块放进片上 SRAM 算，不再把整张分数表写回显存。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention，按页存 KV、一批里长短不齐也能一起算的注意力 kernel）把两者放进同一个 kernel，一批按 decode／prefill 成分分段，每段派给三份预编译版本之一：纯 decode、纯 prefill、混合（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
+  <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention）把两者放进同一个注意力 kernel（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
+<figure class="fbox fwide" id="fig-s5-rpa"><svg viewBox="0 0 1400 422" width="100%" role="img" aria-label="左半：同一批里混着 decode 请求和 prefill 请求，decode 每条只有 1 个新 token，prefill 是一整段。RPA 把这一批按成分切成三段：全是 decode 的一段派给纯 decode 版，两种都有的一段派给混合版，全是 prefill 的一段派给纯 prefill 版；三份版本都是预编译好的，各配一组块大小。右半：KV 页大小。页 16 个 token 时，读同样的 KV 要查很多页，并发 512 时这个 kernel 的 decode 一步 428 微秒；页调到 256 个 token，页数少，降到 283 微秒"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个 kernel 装下 prefill 和 decode　——　<tspan font-weight="700">先分段，再派给三份预编译版本</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：一批怎么拆给三份版本（示意）；右：KV 页大小这个旋钮（Qwen3.5-397B，TPU7x）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">decode 请求：1 个新 token</text>
+<rect x="256.44000000000005" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="277" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">prefill 请求：一整段</text>
+<rect x="447.9200000000001" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="468" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">KV 页</text>
+<rect x="0" y="102" width="820" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="820" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="820" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一批，按成分分三段</tspan></text>
+<text class="svgsm" x="24" y="206" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一批</tspan></text>
+<rect x="129.5" y="184" width="26" height="34" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="160.5" y="184" width="26" height="34" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="191.5" y="184" width="26" height="34" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="222.5" y="184" width="26" height="34" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="253.5" y="184" width="26" height="34" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<path d="M 129.50 228.00 L 129.50 236.00 L 279.50 236.00 L 279.50 228.00" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<path d="M 204.50 236.00 L 204.50 260.00 L 137.00 260.00 L 137.00 296.00" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="30" y="300" width="214" height="74" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="137" y="330" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯 decode 版</tspan></text>
+<text class="svgsm" x="137" y="356" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">预编译 · 自带一组块大小</text>
+<rect x="313.5" y="184" width="26" height="34" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="344.5" y="184" width="26" height="34" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="375.5" y="184" width="92" height="34" rx="3" fill="#fde7d4" stroke="#e8710a" stroke-width="1.0"/>
+<path d="M 313.50 228.00 L 313.50 236.00 L 467.50 236.00 L 467.50 228.00" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<path d="M 390.50 236.00 L 390.50 260.00 L 385.00 260.00 L 385.00 296.00" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="278" y="300" width="214" height="74" rx="8" fill="none" stroke="#202124" stroke-width="1.6"/>
+<text class="svgsm" x="385" y="330" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">混合版</tspan></text>
+<text class="svgsm" x="385" y="356" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">预编译 · 自带一组块大小</text>
+<rect x="501.5" y="184" width="92" height="34" rx="3" fill="#fde7d4" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="598.5" y="184" width="92" height="34" rx="3" fill="#fde7d4" stroke="#e8710a" stroke-width="1.0"/>
+<path d="M 501.50 228.00 L 501.50 236.00 L 690.50 236.00 L 690.50 228.00" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<path d="M 596.00 236.00 L 596.00 260.00 L 633.00 260.00 L 633.00 296.00" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="526" y="300" width="214" height="74" rx="8" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="633" y="330" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯 prefill 版</tspan></text>
+<text class="svgsm" x="633" y="356" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">预编译 · 自带一组块大小</text>
+<rect x="836" y="102" width="564" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="836" y="102" width="564" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="836" y="104" width="564" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="836" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="850" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 页大小：另一个便宜的旋钮</tspan></text>
+<text class="svgsm" x="856" y="180" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">页 16 个 token</tspan></text>
+<text class="svgsm" x="986" y="180" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums">页太小：查索引让向量单元频频停顿</text>
+<rect x="856.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="876.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="896.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="916.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="936.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="956.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="976.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="996.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1016.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1036.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1056.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1076.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1096.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1116.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1136.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1156.0" y="192" width="18.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="856" y="226" width="363.8" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1229" y="245" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">428 µs</tspan></text>
+<text class="svgsm" x="856" y="302" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">页 256 个 token</tspan></text>
+<rect x="856.0" y="314" width="320.0" height="22" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="856" y="348" width="240.54999999999998" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1106" y="367" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">283 µs</tspan></text>
+<text class="svgsm" x="856" y="394" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">并发 512 · 这个 kernel 的 decode 一步，不是整步</text>
+</svg><figcaption><b>左边看箭头：一批切成三段，各走一份版本；右边比两根条。</b><span class="capmore"><br><em>段的切法和请求数是示意；页的格数只表示比例。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>分段与三份预编译版本：Ragged Paged Attention，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5。段的切法、每段几条请求、块大小都是示意。</p>
+<p>页大小：Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」，原文 decode step latency under Concurrency-512 from 428µs to 283µs（kernel-level）。页的格数只表示 16 与 256 的比例。</p></details></figure>
   <p>RPA 在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。</p>
-  <p>每份版本各配一组块大小；KV 页大小是另一个便宜的旋钮：页太小，索引开销让向量单元在 decode 时频频停顿。Qwen3.5-397B 在 TPU7x 上的公开调优（Google 开发者博客）把 KV 页从 16 个 token 调到 256 个，并发 512 时这个 kernel 的 decode 一步从 428 µs 降到 283 µs（kernel 级，不是整步）。</p>
+  <p>图右的页大小数据来自 Qwen3.5-397B 在 TPU7x 上的公开调优（Google 开发者博客）。</p>
 
   <h3 id="s5-3">5.3　布局：窄维被补成整块</h3>
   <p>TPU 的显存按 4 KiB 一块的 tile 存：最内层（内存里连续排的那一维）补齐到 128 格，次内层 bf16 补齐到 16 行、fp8 补齐到 32 行。</p>
@@ -8037,8 +8109,41 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
-  <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码为精度留在 BF16。
-    BF16 是 1,152 B，同样显存能装约 1.76 倍的请求（本课推导）。</p>
+  <p>实际布局不是严格一半，差在哪看图里那条红虚线。</p>
+<figure class="fbox fwide" id="fig-s12-kvlayout"><svg viewBox="0 0 1400 414" width="100%" role="img" aria-label="DeepSeek-V3.2 一个 token 在一层里存的 KV，条长按字节画。BF16：512 维压缩 KV 每维 2 字节，加 64 维位置编码每维 2 字节，共 1,152 字节。FP8：512 维压缩 KV 每维 1 字节，加 4 个 FP32 缩放共 16 字节，位置编码仍是 BF16 的 128 字节，共 656 字节。虚线标出严格减半该到的位置，FP8 那条越过了它，多出来的是没量化的位置编码和缩放。同显存能装的请求约是 BF16 的 1.76 倍（本课推）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KV 存 FP8 不是严格减半　——　<tspan font-weight="700">位置编码那截没压</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3.2 一个 token、一层的 KV；条长按字节数画</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">512 维压缩 KV</text>
+<rect x="155.64000000000001" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="176" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">缩放（FP32）</text>
+<rect x="300.08000000000004" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="321" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">64 维位置编码（留在 BF16）</text>
+<rect x="0" y="102" width="1400" height="262" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每 token 每层存多少字节</tspan></text>
+<text class="svgsm" x="24" y="212" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">BF16</tspan></text>
+<rect x="110" y="182" width="1024.0" height="46" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="910" y="211" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">512 × 2 B</tspan></text>
+<rect x="1134.0" y="182" width="128.0" height="46" rx="3" fill="#e0f7fa" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1198" y="211" fill="#007b83" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64 × 2 B</tspan></text>
+<text class="svgsm" x="1276" y="212" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,152 B</tspan></text>
+<text class="svgsm" x="24" y="316" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP8</tspan></text>
+<rect x="110" y="286" width="512.0" height="46" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="366" y="315" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">512 × 1 B</tspan></text>
+<rect x="622.0" y="286" width="16.0" height="46" rx="3" fill="#fde7d4" stroke="#e8710a" stroke-width="1.0"/>
+<line x1="630.0" y1="282" x2="630.0" y2="285" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="632" y="276" fill="#b06000" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 个 FP32 缩放</tspan></text>
+<rect x="638.0" y="286" width="128.0" height="46" rx="3" fill="#e0f7fa" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="726" y="315" fill="#007b83" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64 × 2 B</tspan></text>
+<text class="svgsm" x="780" y="316" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">656 B</tspan></text>
+<text class="svgsm" x="876" y="316" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同显存能装的请求约是 BF16 的 1.76 倍（本课推）</tspan></text>
+<line x1="686.0" y1="172" x2="686.0" y2="344" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text class="svgsm" x="686" y="364" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">严格减半该到这里</tspan></text>
+</svg><figcaption><b>看下面那条比红虚线多出的部分：都是没压的。</b><span class="capmore"><br><em>FlashMLA 给 DeepSeek-V3.2 的布局，条长按字节比例；倍数为本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>布局：github.com/deepseek-ai/FlashMLA README，2026-09-30 提交 2e5429f 之前的版本「FP8 with scale」一节：每 token 每层 512 个 FP8 ＋ 4 个 FP32 缩放 ＋ 64 维 BF16 RoPE ＝ 656 B（现版只剩 V4.1 的格式）。</p>
+<p>本课推导：BF16 ＝ (512 ＋ 64) × 2 ＝ 1,152 B；1,152 ÷ 656 ≈ 1.76，只算 KV 字节，没算权重和激活占的那部分显存。</p></details></figure>
   <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节；多出的容量留住更多前缀，命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍。2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读 NVFP4 KV 的 kernel，比原先的 FP8 KV 小 45%。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
