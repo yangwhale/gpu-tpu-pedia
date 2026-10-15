@@ -50,6 +50,7 @@ __FIG_S3_POOL__
   <p>很多请求开头一样：同一段 system prompt、同一份文档、多轮对话的前几轮。</p>
   <ul>
     <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀，满了按最近最少使用淘汰；论文报吞吐最多高 6.4 倍（对当时其他推理系统，是整套运行时的结果）。</li>
+    <li><b>默认就开。</b>vLLM 早先的前缀缓存在命中率低时 CPU 开销反而拖慢，所以默认关；2025 年 1 月的 V1 改了数据结构，命中率为 0 时吞吐只掉不到 1%，于是默认打开。</li>
     <li><b>命中率可以很高。</b>DeepSeek 线上过半输入命中磁盘上的 KV（下图）。命中部分按十分之一计价（DeepSeek API 文档 2024-08）。</li>
   </ul>
 __FIG_S3_DISK__
@@ -75,6 +76,7 @@ __FIG_S3_OFFLOAD__
     <li><b>llm-d</b> 在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。排障说明写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
     <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下，把 KV 分层放到显存、主机内存、磁盘和远端；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.3。</li>
+    <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（显存、主机内存、远端存储三层，后端可接 Mooncake、3FS、NIXL）；官方博客报长上下文和多轮对话下吞吐最多 6 倍、首字最多降 80%（对全部重算）。下放从外挂变成了引擎自带的选项。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
