@@ -26,7 +26,7 @@ __FIG_S6_KV__
   <p>DEP 下每个 rank 是台小推理机，注意力权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
 __FIG_S6_STATE__
   <ul>
-    <li><b>K3 上 DEP8 起不来</b>：每 rank 存整池 KDA 状态，加载即 OOM，故官方改推 TP、DCP（<a href="#s7-1">第七节</a>）。</li>
+    <li><b>K3 上 DEP8 起不来</b>：每 rank 存整池 KDA 状态，加载即 OOM；官方改推 TP、DCP（<a href="#s7-1">第七节</a>）。</li>
     <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。</li>
   </ul>
 
