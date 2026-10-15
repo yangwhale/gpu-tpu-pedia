@@ -120,7 +120,7 @@ BODY = '''
     <tr><td>冷启动拆账：GLM-5.1 名义加载里藏 6 分 29 秒重编译（原表总计 ~10 分 44 秒，分项和 10 分 29 秒）；Qwen3-Coder 40 分钟里编译 29；MiMo-V2.5-Pro 编译 15 ＋ 预热 7（原表总计 ~50 分钟，分项和 52 分钟）</td><td>GLM-5.1 README:470-476；Qwen3-Coder README-TPU-VM.md:1011；MiMo-V2.5-Pro README:184-188</td></tr>
     <tr><td>R1 加载 215.7 → 21.4 s（1,367 个张量只有 25 种形状）；K2.6 57 分钟 → 6 分 8 秒（9.3×）；持久编译缓存</td><td>R1 README:1202-1223、:1238-1259；K2.6 README:23、39-40；JAX 文档「Persistent compilation cache」</td></tr>
     <tr><td>KV 感知路由：命中缓存首字 340 ms，不路由的最坏情况 2,850 ms（原文 worst case，与冷推理同值），命中率 87.4%（4,176／4,776）</td><td>Red Hat Developer 2025-10-07「Master KV cache aware routing with llm-d」</td></tr>
-    <tr><td>JetStream 停止维护：核心功能并入 tpu-inference、宣布 2026-02-01 起归档，最后提交 2026-01-05</td><td>github.com/AI-Hypercomputer/JetStream README 公告与提交记录，2026-10 核对</td></tr>
+    <tr><td>JetStream 停止维护：核心功能并入 tpu-inference、宣布 2026-02-01 起归档，最后提交 2026-01-05；截至 2026-10-15 仓库 archived 标记仍为 false</td><td>github.com/AI-Hypercomputer/JetStream README 公告与提交记录，2026-10 核对</td></tr>
     <tr><td>同等 GPT-3.5 水平推理价格 2022-11 → 2024-10 降 280 多倍，主要归给小模型</td><td>斯坦福 HAI《AI Index Report 2025》</td></tr>
     <tr><td>llm-d 分层卸载（TPU7x、Qwen3-32B，KV 卸到主机内存）：平均 TTFT 0.98 → 0.56 s，P90 TTFT 2.1 → 0.5 s，输入输出合计吞吐 67,262 → 73,178 tok/s（＋8.9%）</td><td>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md:436-439（HBM-only 对 HBM ＋ CPU RAM 那张表）。2026-10-15 核对</td></tr>
     <tr><td>Kimi K2 Thinking：QAT、MoE 原生 INT4，生成约快 2 倍</td><td>Hugging Face 模型卡 moonshotai/Kimi-K2-Thinking</td></tr>

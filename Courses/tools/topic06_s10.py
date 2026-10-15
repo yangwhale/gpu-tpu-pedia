@@ -21,14 +21,14 @@ __FIG_S10_WIRE__
   <p>GPU 上同理。V4-Pro 的 SGLang 部署要求 16 个节点都在同一个 NVL72 域：PD 之间传 KV 走 NVLink，跨域退化成 RDMA，原文只说「显著变慢」。</p>
 
   <h3 id="s10-4">10.4　TPU 上，device 编号就是拓扑</h3>
-  <p>JAX 的 mesh 是一张 device 列表排成的网格。<b>列表里谁挨着谁，集合通信就把谁当邻居。</b></p>
+  <p>JAX 的 mesh 是一张 device 列表排成的网格。<b>列表怎么排，决定了沿哪一轴通信时哪几个 device 一组。</b></p>
 __FIG_S10_RANK__
   <p>所以 mesh 交给 <code>mesh_utils.create_device_mesh</code> 按物理位置生成，跨切片用 <code>create_hybrid_device_mesh</code> 把 ICI 和 DCN 分成两层。</p>
 
   <h3 id="s10-5">10.5　最小切片怎么定</h3>
   <p>一个引擎最少几颗芯片，先算纸面账：权重 ＋ KV ＋ 激活值（中间结果）的显存。拿 DeepSeek-V3 在 TPU v7 上算（口径同 3.2）。</p>
 __FIG_S10_SLICE__
-  <p>到 128K、256 并发，KV 约 2,196 GiB，是权重的 3.5 倍。硬账只有三条路：加芯片；KV 存 FP8（第十二节末尾）；冷 KV 下放主机内存（3.6）。DCP 帮不上：它只把一条序列摊开，总量不变，而一条 128K 才 8.58 GiB。</p>
+  <p>到 128K、256 并发，KV 约 2,196 GiB，是权重的 3.5 倍。硬账只有三条路：加芯片；KV 存 FP8（第十二节末尾）；冷 KV 下放主机内存（3.6）。DCP 帮不上：这里 KV 本就只存一份（DP 注意力），DCP 只把一条序列摊开，而一条 128K 才 8.58 GiB。</p>
   <p>实测 4 颗却放不下：R1（和 V3 同结构）的 FP8 专家每个 device 要约 101.8 GB，比本课推导的 81.7 GB 多约 20 GB（README 没给分解），v7x-8 上实际用 FP4（§12.4）。</p>
   <div class="note warn"><span class="t">本课推导的边界</span>纸面账只给下限，激活值预留 10% 也是假设；用一次真实启动看实测的 HBM 峰值。</div>
 

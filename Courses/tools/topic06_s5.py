@@ -8,18 +8,18 @@ BODY = '''
   <p>长上下文贵的第二个原因：每个人每步要读的 KV 也更长。</p>
   <p>decode 注意力每读 1 字节只做 G 次运算（G ＝ 几个查询头共用一个 KV 头），推导见<a href="topic-03.html#s3-1">专题三 §3.1</a>。Llama-3.1-70B 64 个查询头配 8 个 KV 头，G＝8，离 v7 的屋脊 313 差了近 40 倍。</p>
 __FIG_S5_AMORTIZE__
-  <p>batch 小、序列长时，一条序列的注意力只占一个计算单元，其余闲着。
+  <p>batch 小、序列长时，注意力只按 batch 和头分给计算单元，大半闲着。
     Flash-Decoding（斯坦福 CRFM 博客，2023-10）把它的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。博客报长上下文下 decode 最多提速 8 倍。</p>
   <p>名字来自 2022 年的 FlashAttention：注意力切块放进片上 SRAM 算，不再把整张分数表写回显存。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention，按页存 KV、一批里长短不齐也能一起算的注意力 kernel）把两者放进同一个 kernel，按这一批的成分挑三份预编译版本之一：纯 decode、纯 prefill、混合（arXiv 2604.15464 §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
+  <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention，按页存 KV、一批里长短不齐也能一起算的注意力 kernel）把两者放进同一个 kernel，一批按成分分段，每段派给三份预编译版本之一：纯 decode、纯 prefill、混合（arXiv 2604.15464 §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
   <p>RPA 在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。</p>
-  <p>每份版本各配一组块大小，这是最便宜的旋钮：块太小，向量单元反复停下来算地址。Qwen3.5-397B 在 TPU7x 上的公开调优（Google 开发者博客）把 KV 页从 16 个 token 调到 256 个，并发 512 时这个 kernel 的 decode 一步从 428 µs 降到 283 µs（kernel 级，不是整步）。</p>
+  <p>每份版本各配一组块大小；KV 页大小是另一个便宜的旋钮：页太小，索引开销让向量单元在 decode 时频频停顿。Qwen3.5-397B 在 TPU7x 上的公开调优（Google 开发者博客）把 KV 页从 16 个 token 调到 256 个，并发 512 时这个 kernel 的 decode 一步从 428 µs 降到 283 µs（kernel 级，不是整步）。</p>
 
   <h3 id="s5-3">5.3　布局：窄维被补成整块</h3>
   <p>TPU 的显存按 4 KiB 一块的 tile 存：最内层（内存里连续排的那一维）补齐到 128 格，次内层 bf16 补齐到 16 行、fp8 补齐到 32 行。</p>
-  <p>KV 头只有 1–2 个，若把头数放进这两维，就被补成整块，多出的全是空位。</p>
+  <p>KV 头只有 1–2 个，若把头数放进这两维，就可能被补成整块，多出的全是空位。</p>
 __FIG_S5_TILE__
   <p>RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（论文 3.1 节）。量化压不掉空位。</p>
 
