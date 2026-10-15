@@ -256,7 +256,7 @@ DistServe 把「先定档」做成一个指标，叫 goodput：一定比例请�
 
 <p class="say">「再补二〇二二年另一个洞：一批里最慢的不写完，谁也走不了。<br>
 同样四个槽位、同一串请求，只换排法：上面十五步做完，下面十二步。<br>
-静态 batch 最慢的跑完才整批返回。看 C：第二步就写完了，还得陪 B 跑到第八步。它空着的每一格照样搬一趟权重，白搬。」</p>
+看 C：第二步就写完了，还得陪 B 跑到第八步。它空着的每一格照样搬一趟权重，白搬。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：往下放 <code>anim-contbatch</code>，<b>先闭嘴看完一圈</b>（18 秒）。</p>
 
@@ -267,7 +267,7 @@ DistServe 把「先定档」做成一个指标，叫 goodput：一定比例请�
 
 <p class="board"><b>🖥 屏幕</b>：滚到「4.2　新人进门那一步：chunked prefill」，<code>fig-s4-chunk</code>，先上一行再下一行。</p>
 
-<p class="say">「长 prompt 一口吞下，那一步特别长，正在出字的人都卡一下。Sarathi 把 prompt 切成小块，每步带一块，跟 decode 拼在一起。<br>
+<p class="say">「长 prompt 一口吞下，那一步特别长，正在出字的人都卡一下。Sarathi 把 prompt 切成小块，每步只带一块、跟 decode 拼着走，哪步都不会被拉长。<br>
 最长间隔九格变三格，新人首字晚三格。二〇二四年 Sarathi-Serve 报，延迟达标时能接的请求是 vLLM 的两倍多到三倍多。它只摊平打扰，拆开是第八节的事。」</p>
 
 <p class="say">「槽位就是 KV 池装得下几个人。Little 定律：批里的人数约等于吞吐乘字间隔。<br>
@@ -285,7 +285,7 @@ DistServe 把「先定档」做成一个指标，叫 goodput：一定比例请�
 
 <p class="board"><b>🖥 屏幕</b>：往下到 <code>fig-s4-overlap</code>。</p>
 
-<p class="say">「CPU 每步前要挑人、拼 batch。SGLang-JAX 让加速器算这一批时 CPU 排下一批，空档从十几毫秒压到几十微秒。GPU 上 SGLang 的零开销调度是同一招；vLLM V1 吞吐最多是旧版的一点七倍，原因之一也是把分词、回传这些杂活挪到了别的进程。」</p>
+<p class="say">「CPU 每步前要挑人、拼 batch。SGLang-JAX 让加速器算这一批时 CPU 排下一批，空档从十几毫秒压到几十微秒。GPU 上 SGLang 的零开销调度是同一招；vLLM V1 吞吐最多是旧版的一点七倍，原因之一也是分词、回传这些杂活挪到了别的进程。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「4.5　显存不够时踢谁」。</p>
 
@@ -302,7 +302,7 @@ DistServe 把「先定档」做成一个指标，叫 goodput：一定比例请�
 🧑‍🎓 新人「continuous batching 和 chunked prefill 什么关系？」→ 前者决定每一步谁上车，后者把新人的长 prompt 切块混进 decode 的步里；先有前者，才有后者要解决的打扰。<br>
 🛠 GPU 老兵「Sarathi-Serve 报了多少？」→ 达标容量是 vLLM 的 2.6–3.7 倍，基线是 vLLM，别和 Orca 对 FasterTransformer 的倍数连乘。<br>
 💰 管预算的「并发开多少合适？」→ 用 Little 定律反推：每卡 10,000 tok/s、字间隔 50 ms，在飞约 500 人；只装得下 300 人，吞吐就钉在 6,000，再加只加排队。<br>
-🛠 GPU 老兵「vLLM 显存不够踢人，默认 swap 还是重算？」→ V1 默认重算：丢掉 KV、回来重跑 prefill；文档说在 V1 架构里重算开销更低（4.5）。<br>
+🛠 GPU 老兵「vLLM 显存不够踢人，默认 swap 还是重算？」→ V1 默认重算：丢掉 KV、回来重跑 prefill；文档说 V1 里重算开销更低（4.5）。<br>
 🛠 GPU 老兵「SGLang 零开销调度省了多少？」→ 把下一批的 CPU 准备和这一批的计算重叠，吞吐 1.1 倍；TPU 上 SGLang-JAX 在 prefill 与 decode 之间的空档从 12 ms 降到 38 µs（4.4）。<br>
 🛠 GPU 老兵「chunked prefill 每块切多大？」→ vLLM V1 默认开，由 max_num_batched_tokens 控制；TPU 上 Gemma4-31B 的公开记录设 16,384，256K prompt 切 16 块（4.2）。
 """),
