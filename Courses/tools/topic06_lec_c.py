@@ -133,7 +133,7 @@ TPU 这边，Inferact 用 Pallas 写了 megakernel。十六颗 v7 跑 Kimi K3，
 """, """
 ⛔ <b>不要讲 E2M1、E8M0、E4M3 的位布局</b>，只说「块大小和缩放精度不同」。<em>细节在专题八 §2。</em><br>
 ⚠️ <b>Inferact 那个七百多是 megakernel 加 DSpark 投机一起换来的</b>，别说成量化或单靠 megakernel 的功劳。<br>
-⚠️ v7 没有 FP4 算力通路，<b>别说「FP4 在 TPU 上算得更快」</b>：省的是字节和容量，算之前要解开。<br>
+⚠️ v7 规格没列 FP4 峰值，<b>别说「FP4 在 TPU 上算得更快」</b>：省的是字节和容量，算之前要解开。<br>
 ⚠️ R1 那几个容量数单位混着（README 记 GB、上限是 GiB），<code>fig-s12-cap</code> 已把三根条画出来；台上只指红条说「不管单位怎么读都放不下」，不口播三个数。<br>
 ⛔ 12.7 只讲三句：KV 存 FP8 多六成多（1.63 倍），不校准缩放全取 1.0，NVFP4 再省约一半；656 B 的布局账、20%、首字三分之一不念。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
@@ -221,7 +221,7 @@ SGLang 二〇二四年底先放进开源路由，吞吐是上一版的一点九�
 
 <p class="board"><b>🖥 屏幕</b>：指着年份表，只停「Orca 连续批」、PagedAttention、MLA 三行，再扫一眼 2025 年「vLLM V1」「EAGLE-3」两行，再跳到「2026」的 llm-d 那行停住。</p>
 
-<p class="say">「二〇二二年，Orca 连续批，同延迟吞吐是 FasterTransformer 的三十六点九倍。二〇二三年，分页管 KV，是 FasterTransformer 和 Orca 的两到四倍。二〇二四年 MLA，KV 是同形状 MHA 的约五十七分之一；跟当年普及的 GQA 比，约五分之一，本课推的。<br>
+<p class="say">「二〇二二年，Orca 连续批，同延迟吞吐是 FasterTransformer 的三十六点九倍。二〇二三年，分页管 KV，是 FasterTransformer 和 Orca 的两到四倍。二〇二四年 MLA，KV 是同形状 MHA 的约五十七分之一；跟当年普及的 GQA 比，约四分之一，本课推的。<br>
 二〇二五年，vLLM V1 重写引擎，吞吐最多是 V0 的一点七倍。<br>
 二〇二六年：llm-d 把 KV 卸到主机内存，P90 首字从二点一秒降到零点五秒。」</p>
 
