@@ -35,7 +35,7 @@ __FIG_S9_RATIO_T5__
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
   <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上加一台 prefill。</p>
 __FIG_S9_2P1D__
-  <p>用户那头变化大：P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 看是赚。</b></p>
+  <p>每卡吞吐跌了，用户那头却变化大：P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 看是赚。</b></p>
   <ul>
     <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph，TPOT 偏高，不比。</li>
     <li><b>为什么吞吐不涨</b>：固定并发压测下每个请求从发出到收完约 65 s（报告的平均端到端延迟），平均首字省下的 0.67 s（2.40 → 1.73 s）摊进去几乎看不出。</li>
@@ -59,13 +59,13 @@ __FIG_S9_SPLIT__
 __FIG_S9_DECIDE__
 
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
-  <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上。</p>
+  <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，多台注意力机喂同一批专家。</p>
 __FIG_S9_AFD_T5__
   <p>字节 2025 年的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
   <p>开源实现没这么顺：vLLM 的 AFD 是外部插件，主仓库 RFC 已因不活跃被关闭；插件博客在 Ascend 910C 上的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
-    <li><b>配比是关键</b>：作者说 64 配 16 时专家侧仍有余力，再加注意力可能还涨。</li>
+    <li><b>配比是关键</b>：作者说注意力 64 块配专家 16 块时专家侧仍有余力，再加注意力可能还涨。</li>
     <li><b>只能看趋势</b>：实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：AFD 的几个数</summary>

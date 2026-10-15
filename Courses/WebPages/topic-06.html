@@ -3499,7 +3499,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="1278" y="422.4814814814815" width="110" height="215.5185185185185" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="1333" y="412" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">253 秒</tspan></text>
 <text class="svgsm" x="1333" y="662" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">并发 1,800</tspan></text>
-</svg><figcaption><b>左边绿柱几乎一样高，右边红柱越来越高。</b><span class="capmore"><br><em>GB300 上 SGLang 跑 V4-Pro 的公开实测；TTFT 只记三档；排队人数按比例示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:593-609（并发 ＝ 每路 conc × 14 个 frontend；ISL 8192、OSL 1024；--max-running-requests 8192；TTFT 只记了三档）。</p>
+</svg><figcaption><b>左边绿柱几乎一样高，右边红柱越来越高。</b><span class="capmore"><br><em>GB300 上 SGLang 跑 V4-Pro 的公开实测；TTFT 只记三档；排队人数按比例示意；并发按每个前端计，共 14 个。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:593-609（并发 ＝ 每路 conc × 14 个 frontend；ISL 8192、OSL 1024；--max-running-requests 8192；TTFT 只记了三档）。</p>
 <p>⚠️ 餐厅里的人数是示意：14 个座位、门口排的人数按 TTFT 的比例画（45 : 150 : 253 秒 → 2 : 7 : 11 人，三档各画一排）。</p>
 <p>Little 定律核对与「槽位不白给」实验（batch 886 → 999、TPOT 77.7 → 85.3 ms）见正文；出处同文件 794-801、849-858、885-894。</p></details></figure>
   <p>槽位就是 KV 池装得下几个人。Little 定律（见词表）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
@@ -3566,7 +3566,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 一步越短，CPU 那几毫秒占得越多</tspan></text>
 <text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">批开得越大，CPU 要拼的东西越多；TPU 一步本来才几十毫秒，串着走就白白空掉一截。</text>
 <text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">SGLang-JAX 的做法是 TPU 跑第 N 批时 CPU 先排第 N+1 批，并提前为不同 batch 大小编译好计算图。</text>
-</svg><figcaption><b>比两行 TPU：上面的「空等」格在下面没了。</b><span class="capmore"><br><em>时间线是示意，只有空档 12 ms 与 38 µs 是原文数字。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>SGLang-JAX 博客（lmsys.org/blog/2025-10-29-sglang-jax）原文：For Qwen/Qwen3-32B, we reduced the time gap between prefilling and decoding from approximately 12ms to 38us, and from approximately 7ms to 24us。同文：The scheduler pre-compiles Jax computation graphs for different batch sizes。</p>
+</svg><figcaption><b>比两行 TPU：上面的「空等」格在下面没了。</b><span class="capmore"><br><em>时间线是示意，只有空档 12 ms 与 38 µs 是 SGLang-JAX 原文数字。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>SGLang-JAX 博客（lmsys.org/blog/2025-10-29-sglang-jax）原文：For Qwen/Qwen3-32B, we reduced the time gap between prefilling and decoding from approximately 12ms to 38us, and from approximately 7ms to 24us。同文：The scheduler pre-compiles Jax computation graphs for different batch sizes。</p>
 <p>⚠️ 示意：格子长短是编排的，CPU 与 TPU 段的比例不对应任何实测。</p></details></figure>
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
   <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐是原来的 1.1 倍。2025 年 vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是把分词、回传这些 CPU 活挪到别的进程同时跑。</p>
@@ -3577,7 +3577,7 @@ body.figonly section h3{margin-top:34px}
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。
-    chunked prefill 只摊平打扰，拆开是第八节的事。</div>
+    chunked prefill 只摊平打扰，拆到两批机器上是第八节的事。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000；
@@ -4036,7 +4036,7 @@ body.figonly section h3{margin-top:34px}
 <p>NVLink 5：每 GPU 1.8 TB/s（NVIDIA GB200 NVL72 公开规格，双向合计）。</p>
 <p>本课推导：消息 ＝ 7168 × 2 字节 ＝ 14,336 字节（V3、batch 1、bf16）；环形 AllReduce 每卡发出 2(n−1)/n 份（NCCL PERFORMANCE.md，专题五第一节），n＝4 时 1.5 份，按单向 900 GB/s ＝ 约 24 ns。只算带宽项，没算任何启动和同步。</p>
 <p>TPU 的 ICI 上同口径的小消息延迟，没有找到公开数据。</p></details></figure>
-  <p>带宽项只是零头，加带宽救不回来，要省的是同步次数（arXiv <a href="https://arxiv.org/abs/2607.16100" target="_blank" rel="noopener">2607.16100</a>）。</p>
+  <p>消息小，固定延迟占大头，带宽项只是零头，加带宽救不回来，要省的是同步次数（arXiv <a href="https://arxiv.org/abs/2607.16100" target="_blank" rel="noopener">2607.16100</a>）。</p>
 
   <p class="landing">⭐ 从 2022 年的 FlashAttention 到 2026 年的 RPA，单卡 kernel 一直在做同一件事：<b>「少搬」从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行都是没人要的字节，先去掉它们，再谈量化和加卡。</p>
 
@@ -5803,7 +5803,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="589" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PR 同时改了调度：prefill 攒在一起派，免得一条长 prefill 混进 DP 批里拖慢所有 rank</tspan></text>
 </svg><figcaption><b>两条线在 256 到 512 之间交叉：decode 为主的那条后来居上。</b><span class="capmore"><br><em>输出吞吐；折线两端标 TP → DP 的绝对值。专家都走 EP，只换注意力的切法。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>github.com/vllm-project/tpu-inference/pull/2577「Enable correct DP attention for hybrid attention＋mamba models」，2026-05-15 合入；PR 正文表格给输出／总吞吐两个数，本图用输出吞吐现算百分比，与 PR 的「DP Advantage」一列一致。正确性：mmlu_pro DP=8 0.8129 对 TP=8 0.8271（PR 原话：limit=50 时在 1σ 内）。</p>
 <p>v7x 一颗芯片对软件显示成 2 个 device，TP=8、DP=8 按 device 数。KV 头数取自 HF Qwen/Qwen3.5-397B-A17B-FP8 config.json（num_key_value_heads 2，60 层里每 4 层一层全注意力）。「复制 4 份卡住 batch」是本课解读，PR 没有单独归因。</p></details></figure>
-  <p>可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 1K 进 8K 出打平，KV 放得下，复制无妨；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>原因可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 1K 进 8K 出打平，KV 放得下，复制无妨；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
   <p>tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 
@@ -5827,7 +5827,7 @@ body.figonly section h3{margin-top:34px}
     <b>DCP 管前一件，PCP 管后一件，两者都是沿序列切。</b></p>
 
   <h3 id="s7-1">7.1　一句回顾</h3>
-  <p><a href="topic-05.html#s5-4">专题五 §5.4</a> 讲过：KV 头比 TP 路数少时，DCP 把 KV 按 token 轮流存到这几张卡上，合并时再统一除分母。</p>
+  <p><a href="topic-05.html#s5-4">专题五 §5.4</a> 讲过：KV 头比 TP 路数少时，DCP 把 KV 按 token 轮流存到这几张卡上，合并时再统一除 softmax 的分母。</p>
 <figure class="fbox fwide" id="fig-s7-kv-dup-t5"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。每个 token 的 KV 是 70272 字节，12 万 8 千个 token 就是约 8.58 GiB。TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">推理时切序列：KV cache 被 TP 复制了几份　——　<tspan font-weight="700">DCP 把复制变回容量</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，一个 128K 上下文的请求。每 token 的 KV ＝ (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节</text>
@@ -6685,7 +6685,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s8-9">8.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    PD 分离不改变这一趟搬多少，它保证这一趟不被 prefill 打断，decode 才敢把 batch 攒满。</div>
+    PD 分离不改变 decode 每一趟搬多少，只保证它不被 prefill 打断，才敢把 batch 攒满。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：PD 上线后 TTFT 比不拆时还高，TPOT 倒是稳了。先查哪一层？</summary>
   <p>先量 KV 传输带宽。只有几百 MB/s，多半是退回了 cuda_copy 或跨出了 NVLink 域；带宽正常再看调度层有没有排队。</p></details>
@@ -6823,7 +6823,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这台 prefill 让排队的请求更快开始，总输出几乎没动。拿每卡吞吐评估 2P1D 一定吃亏，该拿 TTFT 的 SLO 来评。</text>
 </svg><figcaption><b>左边一高一低，右边两组都在降。</b><span class="capmore"><br><em>B200，并发 128；每卡 ＝ 总输出 ÷ 全部卡数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4/deepseek-v3/REPORT-2P1D-DeepSeek-V3.md：表在 :69、:85，对比在 :100–142（每卡 ＝ 总输出 ÷ 卡数，报告原算法，脚本复算）。c256：1,798.1 → 1,775.6。</p>
 <p>⚠️ TTFT 是客户端测的，含排队。两边都开了 --disable-cuda-graph（REPORT-1P1D :129），所以没画 TPOT。</p></details></figure>
-  <p>用户那头变化大：P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 看是赚。</b></p>
+  <p>每卡吞吐跌了，用户那头却变化大：P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 看是赚。</b></p>
   <ul>
     <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph，TPOT 偏高，不比。</li>
     <li><b>为什么吞吐不涨</b>：固定并发压测下每个请求从发出到收完约 65 s（报告的平均端到端延迟），平均首字省下的 0.67 s（2.40 → 1.73 s）摊进去几乎看不出。</li>
@@ -7030,7 +7030,7 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 两组 TPU 例子都是单点测量，不是扫描。</p></details></figure>
 
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
-  <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上。</p>
+  <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，多台注意力机喂同一批专家。</p>
 <figure class="fbox fwide" id="fig-s9-afd-t5"><svg viewBox="0 0 1400 614" width="100%" role="img" aria-label="attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。为了把这来回两趟藏起来，把一批请求切成三个小批轮着跑：一个在算 attention，一个在路上，一个在算专家，三条道每一格都有活"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">再拆一层：attention 和专家也分开　——　<tspan font-weight="700">专家那边一次接好几家的 token</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，三个小批轮着跑</text>
@@ -7615,7 +7615,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>同样拆开，橙柱亏、绿柱赚。</b><span class="capmore"><br><em>每 die 吞吐的分母是部署的全部 die。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 vllm.ai/blog/2026-07-23-vllm-afd-plugin ／ github.com/vllm-project/afd-plugin：AFD 是外部插件，不是 vLLM 原生功能；vLLM 的 AFD RFC #22799 于 2026-05-31 被机器人以长期不活跃关闭，没有合入。博客原话：只拆开，不保证吞吐提升；测过的配比下 FFN 还有余力，没测更高的 attention 比例。</p>
 <p>⚠️ 48A16F ／ 64A16F 模拟的是逻辑上的 192A64F ／ 256A64F（博客原文）；专家路由换成了强制均衡（输出会变）。只能看趋势。「专家这边吃不饱」是按博客「FFN 还有余力」的定性说法画的，没有利用率数字。</p></details></figure>
   <ul>
-    <li><b>配比是关键</b>：作者说 64 配 16 时专家侧仍有余力，再加注意力可能还涨。</li>
+    <li><b>配比是关键</b>：作者说注意力 64 块配专家 16 块时专家侧仍有余力，再加注意力可能还涨。</li>
     <li><b>只能看趋势</b>：实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：AFD 的几个数</summary>

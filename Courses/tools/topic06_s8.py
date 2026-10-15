@@ -101,7 +101,7 @@ __FIG_S8_PRFAAS__
 
   <h3 id="s8-9">8.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    PD 分离不改变这一趟搬多少，它保证这一趟不被 prefill 打断，decode 才敢把 batch 攒满。</div>
+    PD 分离不改变 decode 每一趟搬多少，只保证它不被 prefill 打断，才敢把 batch 攒满。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：PD 上线后 TTFT 比不拆时还高，TPOT 倒是稳了。先查哪一层？</summary>
   <p>先量 KV 传输带宽。只有几百 MB/s，多半是退回了 cuda_copy 或跨出了 NVLink 域；带宽正常再看调度层有没有排队。</p></details>

@@ -37,7 +37,7 @@ __FIG_S6_STATE__
   <p>tpu-inference 一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
     Qwen3.5-397B 在 v7x-8 上，<b>1K 进 8K 出、并发 512 时，DP=8 比 TP=8 的输出吞吐多 62%</b>。</p>
 __FIG_S6_TPU__
-  <p>可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 1K 进 8K 出打平，KV 放得下，复制无妨；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>原因可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 1K 进 8K 出打平，KV 放得下，复制无妨；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
   <p>tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 

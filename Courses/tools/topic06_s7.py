@@ -6,7 +6,7 @@ BODY = '''
     <b>DCP 管前一件，PCP 管后一件，两者都是沿序列切。</b></p>
 
   <h3 id="s7-1">7.1　一句回顾</h3>
-  <p><a href="topic-05.html#s5-4">专题五 §5.4</a> 讲过：KV 头比 TP 路数少时，DCP 把 KV 按 token 轮流存到这几张卡上，合并时再统一除分母。</p>
+  <p><a href="topic-05.html#s5-4">专题五 §5.4</a> 讲过：KV 头比 TP 路数少时，DCP 把 KV 按 token 轮流存到这几张卡上，合并时再统一除 softmax 的分母。</p>
 __FIG_S7_KVDUP_T5__
 __FIG_S7_MERGE_T5__
   <p>代价是每层多几次通信（vLLM 默认后端每层 3 次），度数（切成几份，DCP8 就是 8 份）最多开到 TP ÷ KV 头数。</p>

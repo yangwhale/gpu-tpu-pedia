@@ -47,7 +47,7 @@ __FIG_S4_OVERLAP__
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。
-    chunked prefill 只摊平打扰，拆开是第八节的事。</div>
+    chunked prefill 只摊平打扰，拆到两批机器上是第八节的事。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000；
@@ -63,10 +63,10 @@ FIGS = {
         '<em>示意单位；混合步按相加计时，偏保守。</em>'),
     "__FIG_S4_CONC__": ("fig-s4-conc", "fig6-conc.svg", "topic06-fig-batch.py",
         '<b>左边绿柱几乎一样高，右边红柱越来越高。</b><br>'
-        '<em>GB300 上 SGLang 跑 V4-Pro 的公开实测；TTFT 只记三档；排队人数按比例示意。</em>'),
+        '<em>GB300 上 SGLang 跑 V4-Pro 的公开实测；TTFT 只记三档；排队人数按比例示意；并发按每个前端计，共 14 个。</em>'),
     "__FIG_S4_OVERLAP__": ("fig-s4-overlap", "fig6-overlap.svg", "topic06-fig-batch.py",
         '<b>比两行 TPU：上面的「空等」格在下面没了。</b><br>'
-        '<em>时间线是示意，只有空档 12 ms 与 38 µs 是原文数字。</em>'),
+        '<em>时间线是示意，只有空档 12 ms 与 38 µs 是 SGLang-JAX 原文数字。</em>'),
 }
 
 NUM_LOCK = []
