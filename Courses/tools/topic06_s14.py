@@ -15,7 +15,7 @@ __FIG_S14_EIGHT__
   <ul>
     <li><b>attention 怎么切</b>：先切法后参数（第六、十节）。</li>
     <li><b>拆不拆 PD</b>：有尖峰先试分块 prefill，压不住再拆；拆了按两边吞吐配台数（第九节）。</li>
-    <li><b>量化和投机开不开</b>：投机在并发小时最赚（K3 并发 1 是 4.22×），量化总在减字节（FP8 KV 下请求容量约是 BF16 KV 的 1.63 倍）（第十一、十二节）。</li>
+    <li><b>量化和投机开不开</b>：投机在并发小时最赚（K3 并发 1 是 4.22×），量化总在减字节（第十一、十二节）。</li>
     <li><b>上线前跑通了吗</b>：没预编译，首个用户要等一分钟（第十三节）。</li>
   </ul>
   <p class="landing">⭐ 八问归到一句话：<b>decode 每一步都要搬一趟。</b>前四问算清这一趟有多重、能分给多少人；后四问要么让更多人分，要么让它变轻。</p>
@@ -32,10 +32,10 @@ __FIG_S14_EIGHT__
     <tr><td>2023</td><td>复用与下放</td><td>三</td><td>SGLang（含 RadixAttention）：吞吐最多 6.4 倍（对当时其他系统）</td></tr>
     <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同等延迟要求下能接的请求是不拆的 7.4 倍</td></tr>
     <tr><td>2024</td><td>调度</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求 2.6–3.7 倍（对 vLLM）</td></tr>
-    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：每层 KV 是同形状 MHA 的约 1/57、GQA（Llama-3.1-70B）的约 1/3.6（本课推导）</td></tr>
-    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 线上多接 115%（A800）、107%（H800）请求（对此前系统，FAST'25）</td></tr>
+    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：每层 KV 约是同形状 MHA 的 1/57（本课推导）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 线上多接 107%–115% 请求（对此前系统）</td></tr>
     <tr><td>2024</td><td>少搬字节</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多快 2 倍（对 BF16）</td></tr>
-    <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K 高复用 prompt 首字 13 s → 0.5 s（对不用缓存）；2025-02 线上 56.3% 输入命中</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
     <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 的 MTP：约快 1.8 倍（对不开）</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>十三</td><td>KV 感知路由：SGLang v0.4 命中率 20% → 75%、吞吐 1.9 倍（对轮询）</td></tr>
     <tr><td>2025</td><td>调度</td><td>四</td><td>vLLM V1 重写引擎，对 V0 吞吐最多 1.7 倍</td></tr>
@@ -43,10 +43,10 @@ __FIG_S14_EIGHT__
     <tr><td>2025</td><td>拆开放</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
     <tr><td>2025</td><td>KV 与注意力</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（对 V3.1-Terminus 全读）</td></tr>
     <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约 1.63 倍（对 BF16 KV，本课推导）</td></tr>
-    <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：模型卡称低延迟模式生成约快 2 倍（未写对照精度）</td></tr>
-    <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>NVFP4 KV：比 FP8 KV 再省约一半，前缀命中率高 20%（对 FP8 KV）</td></tr>
-    <tr><td>2026</td><td>复用与下放</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90 首字 2.1 s → 0.5 s（对不卸载）</td></tr>
-    <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变：每卡从 Day-0（首发当天）约 2,200 到约 11,200，5.1 倍，全来自软件栈（含 MTP；PyTorch 博客 2026-06-23）</b></td></tr>
+    <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照）</td></tr>
+    <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>NVFP4（4 bit 格式）KV：比 FP8 KV 再省约一半，前缀命中率高 20%</td></tr>
+    <tr><td>2026</td><td>复用与下放</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
+    <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变：每卡从首发日约 2,200 到约 11,200，全靠软件（含 MTP；PyTorch 博客）</b></td></tr>
   </table>
   <p>落到真实账上：DeepSeek 2025-03 公布的一天（2025-02-27～28），平均 226.75 个 H800 节点（8 卡一节点，合 1,814 卡）处理输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950 token（全天平均，本课推导：7,760 亿 ÷ 86,400 s ÷ 1,814 卡），近八成是输入。</p>
   <p>这套服务用的正是表里几行：MLA、大 EP 加 PD 分离、磁盘 KV 缓存，外加 FP8（第十二节）。<b>便宜不归哪一招，每一行都让同一趟搬运分给更多 token，或搬得更少。</b></p>
