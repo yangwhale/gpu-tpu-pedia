@@ -282,7 +282,7 @@ V3 一个 token 七万字节出头，照这个池子推，4K 装得下三百四�
 
 <p class="board"><b>🖥 屏幕</b>：往下到 <code>fig-s4-overlap</code>。</p>
 
-<p class="say">「CPU 每步前要挑人、拼 batch。SGLang-JAX 让加速器算这一批时 CPU 排下一批，空档从十几毫秒压到几十微秒。GPU 上 SGLang 的零开销调度是同一招；vLLM V1 也把分词、回传这些 CPU 活拆进了别的进程。」</p>
+<p class="say">「CPU 每步前要挑人、拼 batch。SGLang-JAX 让加速器算这一批时 CPU 排下一批，空档从十几毫秒压到几十微秒。GPU 上 SGLang 的零开销调度是同一招；vLLM V1 也把分词、回传这些 CPU 活拆进了别的进程，这是它吞吐最多到 V0 一点七倍的原因之一。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「4.5　显存不够时踢谁」。</p>
 
