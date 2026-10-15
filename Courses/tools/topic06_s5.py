@@ -13,7 +13,7 @@ __FIG_S5_AMORTIZE__
   <p>名字借自 2022 年的 FlashAttention：注意力切块放进 SRAM（小而快的片上存储）算，不再把整张分数表写回显存。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 的速度最多是 FlashAttention 等旧实现的 8 倍。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention）把两者放进同一个注意力 kernel（arXiv 2604.15464 §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
+  <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention，2025 年进 vLLM 的 TPU 后端）把两者放进同一个注意力 kernel（arXiv 2604.15464 §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
 __FIG_S5_RPA__
   <p>RPA 在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。图右数据出自 Google 开发者博客的公开调优。</p>
 

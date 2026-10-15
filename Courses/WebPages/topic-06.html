@@ -3648,7 +3648,7 @@ body.figonly section h3{margin-top:34px}
   <p>名字借自 2022 年的 FlashAttention：注意力切块放进 SRAM（小而快的片上存储）算，不再把整张分数表写回显存。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 的速度最多是 FlashAttention 等旧实现的 8 倍。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention）把两者放进同一个注意力 kernel（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
+  <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention，2025 年进 vLLM 的 TPU 后端）把两者放进同一个注意力 kernel（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
 <figure class="fbox fwide" id="fig-s5-rpa"><svg viewBox="0 0 1400 422" width="100%" role="img" aria-label="左半：同一批里混着 decode 请求和 prefill 请求，decode 每条只有 1 个新 token，prefill 每条一段多个 token。RPA 把这一批按下标切成三段：全是 decode 的一段派给纯 decode 版，定长分块的 prefill 派给纯 prefill 版，长度不定的其余请求派给混合版；三份版本都是预编译好的，各配一组块大小。右半：KV 页大小。页 16 个 token 时，读同样的 KV 要查很多页，并发 512 时这个 kernel 的 decode 一步 428 微秒；页调到 256 个 token，页数少，降到 283 微秒"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个 kernel 装下 prefill 和 decode　——　<tspan font-weight="700">先分段，再派给三份预编译版本</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：一批怎么拆给三份版本（示意）；右：KV 页大小这个旋钮（Qwen3.5-397B，TPU7x）</text>
@@ -5820,7 +5820,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>切序列：DCP 和 PCP</h2></div>
-  <p class="lead">第六节切的是头和请求，一条序列本身变长时还剩两件事。上下文一长，KV 在 TP 下被复制几份，卡很快就满；prompt 一长，第一个字就要等很久。
+  <p class="lead">第六节切的是头和请求，一条序列变长时还剩两件事。DEP 起不来时（如 6.3 的 K3）只能用 TP，上下文一长，KV 被复制几份，卡很快就满；prompt 一长，第一个字就要等很久。
     <b>DCP 管前一件，PCP 管后一件，两者都是沿序列切。</b></p>
 
   <h3 id="s7-1">7.1　一句回顾</h3>
@@ -6604,7 +6604,7 @@ body.figonly section h3{margin-top:34px}
 <p>📌 非 HMA 版把 prompt 长度按 block 向下取整，尾巴由 D 端重算。存折、账本只是比方：GDN 状态是固定大小的递归摘要，「多一截」指多喂了一遍，不是状态变大。</p>
 <p>📌 45 GDN ＋ 15 注意力与开关：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:375–389；PrFaaS（arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a>）写 Qwen3.5-397B 线性对全注意力 3:1，一致。</p>
 <p>📌 Kimi K3（GPU）：gpu/inference/kimi-k3/SGLANG-K3-RUNBOOK.md:1319（PD decode 的状态池一请求一 slot，--mamba-radix-cache-strategy 在 PD 下失效）。</p></details></figure>
-  <p>混合模型（3.4）里 GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
+  <p>混合模型（3.1）里 GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>
     <li><b>修法</b>：全传，tpu-inference 的 TPUConnectorHMA 就这么做。</li>
     <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文）；单并发每请求吞吐是不拆单机的 0.95 倍，4 并发是 0.92 倍。</li>
@@ -9253,7 +9253,7 @@ body.figonly section h3{margin-top:34px}
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>缩放给多细看 checkpoint：vLLM 只设 <code>fp8</code> 不校准时，缩放全取 1.0；用 llm-compressor 拿数据校准，可以每个 K、V 张量一个，或每个 KV 头一个（后者目前只有 FlashAttention 后端支持）。开了 FP8 KV 掉精度，先查有没有校准过的缩放。</p>
-  <p>实际布局不是严格一半。V3.2 每层还多存一条挑 token 用的索引键（indexer key），它本来就存 FP8，换了也不变小，所以同显存多接的请求比只算 MLA 时少。</p>
+  <p>实际布局不是严格一半。V3.2 每层还多存一条索引键（indexer key，3.1 那个小打分器挑 token 时读的），它本来就存 FP8，换了也不变小，所以同显存多接的请求比只算 MLA 时少。</p>
 <figure class="fbox fwide" id="fig-s12-kvlayout"><svg viewBox="0 0 1400 414" width="100%" role="img" aria-label="DeepSeek-V3.2 一个 token 在一层里存的 KV，条长按字节画。BF16：512 维压缩 KV 每维 2 字节，加 64 维位置编码每维 2 字节，共 1,152 字节。FP8：512 维压缩 KV 每维 1 字节，加 4 个 FP32 缩放共 16 字节，位置编码仍是 BF16 的 128 字节。两条末尾都接一段 132 字节的 indexer key，它本来就存 FP8。合计 1,284 字节对 788 字节。虚线标出 MLA 那截严格减半该到的位置，FP8 那条越过了它，多出来的是没量化的位置编码和缩放。同显存能装的请求约是 BF16 的 1.63 倍（本课推）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KV 存 FP8 不是严格减半　——　<tspan font-weight="700">位置编码那截没压</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3.2 一个 token、一层的 KV；条长按字节数画</text>
@@ -9660,7 +9660,7 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 本课示意：左栏的副本与请求是示意。</p>
 <p>正文里的健康检查那句（8 个副本坏 1 个，1/8 的请求白等）是本课推导示意：12.5% ＝ 1 ÷ 8，只在纯轮询、坏副本照常收请求时成立。</p></details></figure>
   <p>KV 感知路由把同前缀的请求送到已经存着它的副本。SGLang 2024 年 12 月把它放进开源路由，命中率 20% → 75%、吞吐是 v0.3 的 1.9 倍；之后 NVIDIA Dynamo（2025-03）、llm-d（2025-05）、GKE Inference Gateway 都做了，图右是 Red Hat 2025-10 用 llm-d 的实测。</p>
-  <p>容量规划沿用 goodput 的思路（<a href="#s2-2">§2.2</a>）：先定交互档，再看这一档每卡扛多少人（2.2 图里那一档约 224 人），decode 卡数 ＝ 同时在生成的请求数 ÷ 每卡人数；分母的坑见 2.3。</p>
+  <p>容量规划沿用 goodput 的思路（<a href="#s2-2">2.2</a>）：先定交互档，再看这一档每卡扛多少人（2.2 图里那一档约 224 人），decode 卡数 ＝ 同时在生成的请求数 ÷ 每卡人数；分母的坑见 2.3。</p>
 
   <p class="landing">⭐ 路由把「少算」搬到集群层：<b>前缀只算一次</b>，后面的请求都来复用。</p>
 
@@ -9839,7 +9839,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s14-cost">14.3　回到时间轴：系统这一侧省了多少</h3>
   <p>0.1 的 1/280 是市场价，混着更强的小模型、硬件换代和系统招数；报告主要归给小模型，硬件每年成本降 30%、能效升 40%，系统那份拆不出来。</p>
   <p>Epoch AI（2025）固定一档能力看：推理价格每年降到上一年的 1/9 到 1/900，中位 1/50；2024 年以后中位 1/200，提速恰与第八到十二节那批招数进生产同期（本课观察，Epoch 没归因）。</p>
-  <p>每行基线不同，不能连乘去凑 280；同口径的只有末行。</p>
+  <p>每行基线不同，不能连乘去凑 280；只有末行是同一硬件、同一模型上叠满软件招数的总账。</p>
   <div class="tbl-wrap"><table>
     <tr><th>年份</th><th>泳道</th><th>节</th><th>一个实测（对照谁）</th></tr>
     <tr><td>2022</td><td>调度</td><td>四</td><td>Orca 连续批：同延迟吞吐是 FasterTransformer 静态批的 36.9 倍</td></tr>

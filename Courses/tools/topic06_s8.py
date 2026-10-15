@@ -64,7 +64,7 @@ __FIG_S8_BW__
   <h3 id="s8-5">8.5　混合模型：尾巴不能让 decode 端重算</h3>
   <p>KV 按块存（3.3）。老的 connector 只传填满的整块，不满一块的尾巴让 decode 端补算。</p>
 __FIG_S8_HYBRID__
-  <p>混合模型（3.4）里 GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
+  <p>混合模型（3.1）里 GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>
     <li><b>修法</b>：全传，tpu-inference 的 TPUConnectorHMA 就这么做。</li>
     <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文）；单并发每请求吞吐是不拆单机的 0.95 倍，4 并发是 0.92 倍。</li>
