@@ -61,7 +61,7 @@ __FIG_S9_DECIDE__
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
   <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上。</p>
 __FIG_S9_AFD_T5__
-  <p>字节的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
+  <p>字节 2025 年的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
   <p>开源实现没这么顺：vLLM 的 AFD 是外部插件，主仓库 RFC 已因不活跃被关闭；插件博客在 Ascend 910C 上的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
