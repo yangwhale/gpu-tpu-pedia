@@ -26,7 +26,7 @@ LANES = [
 # (泳道, 年份小数, 名字, 原文倍数与口径, 本课节[, 模型侧])
 # ⛔ 卡上的倍数必须在它指向的那一节正文或图里找得到；找不到的只写做法，不写倍数（R5 起）。
 CARDS = [
-    (0, 2022.54, "Orca 连续批", "36.9×，同延迟吞吐 vs FT", "四"),
+    (0, 2022.54, "Orca 连续批", "36.9×，同延迟吞吐 vs FasterTransformer", "四"),
     (0, 2024.20, "Sarathi-Serve 分块", "2.6–5.6×，达标容量 vs vLLM", "四"),
     (1, 2023.38, "GQA", "KV ÷8（64 头 8 组，推导）", "三", True),
     (1, 2023.47, "PagedAttention", "KV 有效占用 20–38%→96%", "三"),
@@ -116,7 +116,7 @@ def fig_story():
     f.box(xs, y, XR - xs, CH, "#fff", INK, 6, 2.2)
     f.t(xs + 12, y + 22, "叠起来：GB300 跑 V4-Pro，硬件模型都不换", INK, True, 15)
     f.t(xs + 12, y + 44, "软件栈合计，同一交互档每卡 5.1×（Day-0 → 2026-06）", INK, False, 14)
-    f.t(XR - 8, y + 22, "第十四节", GY, False, 12, "end")
+    f.t(XR - 8, y + 22, "第二、十四节", GY, False, 12, "end")
     y += CH + 8
     y = f.band(y + 6, "warn", "这些倍数不能连乘", [
         "后一个的基线已经吃掉了前一个的收益：Orca 比的是 FT，vLLM 比的是已有连续批的 Orca，Sarathi-Serve 比的是 vLLM。",

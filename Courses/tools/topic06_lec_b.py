@@ -105,9 +105,9 @@ Kimi K3 就栽在这：69 层线性注意力，每个请求一块固定状态，
 <p class="say">「一步变短了，就得有人喂。dep8 不动，每加一台 prefill，decode 吞吐就涨，说明它一直在等料。<br>
 换回 TP4 decode，加第 4 台 prefill，总吞吐纹丝不动。所以别人调好的 PD 配比，换了拓扑就得重扫。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「6.5　TPU 上也一样」。</p>
+<p class="board"><b>🖥 屏幕</b>：滚到「6.5　TPU 上也一样」，<code>fig-s6-dep-tpu</code>，沿上面那条线指到最右端「+62%」。</p>
 
-<p class="say">「TPU 上一样。tpu-inference 的一个公开 PR 给 Qwen3.5 接上 DP 注意力，v7x-8 上长输出时多出六成。它只有 2 个 KV 头，8 路 TP 就是 4 份副本，这是本课的推算，PR 没归因。<br>
+<p class="say">「TPU 上一样。tpu-inference 的一个公开 PR 给 Qwen3.5 接上 DP 注意力，v7x-8 上长输出、并发最高那档多出六成。它只有 2 个 KV 头，8 路 TP 就是 4 份副本，这是本课的推算，PR 没归因。<br>
 读 TPU 启动命令要留心：写着 tensor-parallel-size 8，其实是总 device 数，切法在 additional-config 里。」</p>
 
 <p class="say">「这一节归在车上多坐人：专家那头，大 EP 让每个专家一趟分到更多行。注意力那头，DEP 省掉每一步白读的副本，同并发每卡两倍多。<br>

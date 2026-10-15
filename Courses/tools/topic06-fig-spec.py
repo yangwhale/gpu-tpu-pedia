@@ -27,9 +27,9 @@ fig6-spec-temp.svg —— 回答：为什么压测必须写明温度？
   · 数字：GB300 V4-Pro vLLM gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:406-410；
     K3 官方接受长度 gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:233-237。
 
-fig6-spec-tree.svg —— 回答：这么多投机解码的名字，各自把草稿从哪里拿？
-  · 年份按 arXiv 首版；每个方法都核过 arXiv 摘要页（2026-10-15）。Prompt Lookup 只有 GitHub 仓库。
-  · 刻意没画各家加速倍数：都是原作者在自己设定下报的，放在一张图里会被横着比。
+fig6-spec-tree.svg —— 回答：这么多投机解码的名字，按时间排，各自把草稿从哪里拿？
+  · 真时间轴 2022–2026，日期与 s11.5 列表同一套；年份按 arXiv 首版，每个方法都核过 arXiv 摘要页（2026-10-15）。Prompt Lookup 只有 GitHub 仓库。
+  · 图上只写「草稿从哪来」，倍数留在正文列表（各家口径不同，不横比）。
 """
 
 from topic03_draw import Fig, wpx, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
@@ -367,107 +367,78 @@ def fig_temp():
 
 
 # ════════════════════════════════════════════════════════════════════════
-# 草稿离大模型越来越近：四格主线 ＋ 一格侧枝。论文年份按 arXiv 首版（2026-10-15 核过摘要页）；Prompt Lookup 按 GitHub 仓库创建时间 2023-11。
+# 真时间轴 2022–2026：六张主线卡 ＋ 一张侧枝卡。日期与 s11.5 列表同一套（2026-10-15 核过 arXiv 摘要页）；
+# Prompt Lookup 没有论文，按 GitHub 仓库创建时间 2023-11。每卡只写「草稿从哪来」，⛔ 不写倍数（倍数在正文列表）。
 TREE = [
-    # (年份角标, 名字, 一句话, 出处)
-    ("2022–23", "独立小模型", "旁边另放一个小模型", "Leviathan 等 2211.17192；Chen 等 2302.01318"),
-    ("2024", "Medusa", "大模型头上挂几个小头", "2401.10774"),
-    ("2024–25", "EAGLE 1–3", "读大模型内部的状态", "EAGLE 2401.15077、EAGLE-2 2406.16858、EAGLE-3 2503.01840"),
-    ("2024 末", "MTP · DeepSeek-V3", "多训一整层，共享输出头", "2412.19437"),
-    ("2023–24", "Prompt Lookup／Suffix", "直接从 prompt 里抄", "Prompt Lookup 只有 GitHub 仓库；SuffixDecoding 2411.04975"),
+    # (时间轴位置, 角标, 名字, 一句话（可两行）, 出处)
+    (2022.87, "2022-11", "投机解码", ["另放一个独立小模型", "打草稿"], "Leviathan 等 2211.17192；Chen 等 2302.01318"),
+    (2024.04, "2024 初", "Medusa", ["大模型头上", "加几个解码头"], "2401.10774"),
+    (2024.08, "2024 初", "EAGLE", ["小模型读大模型的", "隐状态来猜"], "EAGLE 2401.15077、EAGLE-2 2406.16858"),
+    (2024.96, "2024-12", "MTP · DeepSeek-V3", ["预训练时就多带一层，", "共享输出头"], "2412.19437"),
+    (2025.17, "2025-03", "EAGLE-3", ["把大模型几层的隐状态", "拼在一起来猜"], "2503.01840"),
+    (2026.53, "2026", "DSpark", ["半自回归一次出一小段，", "按置信度定验几个"], "2607.05147"),
 ]
-assert len(TREE) == 5
+SIDE = (2023.87, "2023", "Prompt Lookup", ["不用草稿模型：", "直接从 prompt 里抄"],
+        "GitHub apoorvumang/prompt-lookup-decoding（2023-11）")
+assert [t[0] for t in TREE] == sorted(t[0] for t in TREE)
 
 
 def fig_tree():
-    f = Fig(W, "草稿离大模型越来越近，四格加一个侧枝。第一格 2022 到 2023 年：旁边另放一个独立的小模型打草稿。"
-               "第二格 2024 年 Medusa：在大模型头上挂几个小预测头。第三格 2024 到 2025 年 EAGLE 1 到 3：草稿读大模型内部的状态。"
-               "第四格 2024 年末 DeepSeek-V3 的 MTP：主干后面多训一整层 transformer，共享词表和输出头。"
-               "侧枝 2023 到 2024 年：不要模型，Prompt Lookup 和 SuffixDecoding 直接从 prompt 或历史输出里抄")
+    f = Fig(W, "投机解码的草稿从哪来，按时间排在 2022 到 2026 年的轴上。2022 年 11 月投机解码：另放一个独立小模型打草稿。"
+               "2024 年初 Medusa：大模型头上加几个解码头；同期 EAGLE：小模型读大模型的隐状态来猜。"
+               "2024 年 12 月 DeepSeek-V3 的 MTP：预训练时就多带一层，共享输出头。2025 年 3 月 EAGLE-3：把大模型几层的隐状态拼在一起来猜。"
+               "2026 年 DSpark：半自回归一次出一小段，按置信度决定验几个。侧枝 2023 年 Prompt Lookup：不用草稿模型，直接从 prompt 里抄")
     y0 = f.header("草稿从哪来　——　<tspan font-weight=\"700\">一步步长进大模型身上，或者干脆不要模型</tspan>",
-                  "灰色大块 ＝ 大模型，紫色小块 ＝ 草稿。角标是首次公开的年份：论文按 arXiv 首版，Prompt Lookup 没有论文，按 GitHub 仓库",
-                  [(GY2, "大模型"), (PU, "草稿"), (OR, "侧枝：不要模型")])
-    CW, CH, GAP = 250, 340, 20
-    ya = y0 + 34                                    # 顶上留一条「越来越近」的箭头
-    f.line(30, y0 + 12, 4 * CW + 3 * GAP - 30, y0 + 12, PU, 2.2)
-    f.t(4 * CW + 3 * GAP - 40, y0 + 4, "草稿离大模型越来越近", PU, True, 16, "end")
-    BX, BY, BS = 72, 96, 110                        # 格内：大模型方块的位置和边长
+                  "横轴是首次公开的时间：论文按 arXiv 首版，Prompt Lookup 没有论文，按 GitHub 仓库。每张卡只写草稿从哪来",
+                  [(PU, "主线：草稿模型"), (OR, "侧枝：不用草稿模型")])
+    X0, X1, Y_LO, Y_HI = 60, 1340, 2022.0, 2027.0
 
-    def big(x, y, layers=False):
-        f.box(x + BX, y + BY, BS, BS, "#e8eaed", GY2, 8)
-        if layers:
-            for k in range(1, 4):
-                yy = y + BY + BS * k / 4
-                f.path("M%d,%d L%d,%d" % (x + BX + 8, yy, x + BX + BS - 8, yy), GY2, 1, arrow=False)
-        f.t(x + BX + BS / 2, y + BY + BS + 26, "大模型", GY, True, 15, "middle")
+    def xf(yr):
+        return X0 + (X1 - X0) * (yr - Y_LO) / (Y_HI - Y_LO)
 
-    def draft(x, y, w=58, h=34, lab="草稿"):
-        f.box(x, y, w, h, "#f3e8fd", PU, 6)
-        f.t(x + w / 2, y + h / 2 + 6, lab, PU, True, 15, "middle")
+    CW, CH, GAP = 210, 132, 18
+    cx0 = (W - (6 * CW + 5 * GAP)) / 2
+    f.line(cx0 + 20, y0 + 12, cx0 + 6 * CW + 5 * GAP - 20, y0 + 12, PU, 2.2)
+    f.t(cx0 + 6 * CW + 5 * GAP - 30, y0 + 4, "草稿越来越贴着大模型自己长", PU, True, 16, "end")
+    ya = y0 + 30
+    AY = ya + CH + 70                               # 时间轴的 y
 
-    def card(i, x, col, dash=None):
-        yr, nm, desc, _ = TREE[i]
-        f.box(x, ya, CW, CH, "none", col if dash else LINE, 10, 1.2, dash=dash)
-        f.badge(x + 12, ya + 12, i + 1, col if dash else INK, 14)
-        f.box(x + CW - 82, ya + 14, 70, 26, "#fff", LINE, 13)
-        f.t(x + CW - 47, ya + 32, yr, GY, True, 14, "middle")
-        f.t(x + CW / 2, ya + CH - 62, nm, INK if not dash else col, True, 17, "middle")
-        f.t(x + CW / 2, ya + CH - 30, desc, GY, False, 15, "middle")
+    def card(x, y, yr, nm, desc, col, dash=None):
+        f.box(x, y, CW, CH, "none", col if dash else LINE, 10, 1.2, dash=dash)
+        pw = wpx(yr, 14) + 22
+        f.box(x + 12, y + 12, pw, 26, "#fff", col, 13)
+        f.t(x + 12 + pw / 2, y + 30, yr, col, True, 14, "middle")
+        f.t(x + 14, y + 66, nm, INK if not dash else col, True, 17)
+        for k, ln in enumerate(desc):
+            f.t(x + 14, y + 94 + 22 * k, ln, GY, False, 15)
 
-    # ① 旁边另放一个小模型
-    x = 0
-    card(0, x, PU)
-    f.box(x + 30, ya + BY + 10, BS - 10, BS - 10, "#e8eaed", GY2, 8)
-    f.t(x + 30 + (BS - 10) / 2, ya + BY + BS + 26, "大模型", GY, True, 15, "middle")
-    draft(x + 158, ya + BY + 30, 62, 50)
-    f.t(x + 189, ya + BY + 104, "小模型", PU, True, 15, "middle")
-    # ② 头上挂几个小头
-    x = CW + GAP
-    card(1, x, PU)
-    big(x, ya)
-    for k in range(3):
-        f.box(x + BX + 8 + k * 34, ya + BY - 22, 28, 30, "#f3e8fd", PU, 5)
-    f.t(x + BX + BS / 2, ya + BY - 30, "小头", PU, True, 15, "middle")
-    # ③ 读大模型内部的状态
-    x = 2 * (CW + GAP)
-    card(2, x, PU)
-    big(x - 30, ya, layers=True)
-    hy = ya + BY + BS * 2 / 4
-    draft(x + 182, hy - 17)
-    f.line(x + BX - 30 + BS - 10, hy, x + 178, hy, PU, 1.8)
-    # ④ 训练时就长在模型里
-    x = 3 * (CW + GAP)
-    card(3, x, PU)
-    big(x, ya, layers=True)
-    draft(x + BX + (BS - 58) / 2, ya + BY + BS - 44, 58, 34, "MTP")
-    # ⑤ 侧枝：从 prompt 里抄
-    x5 = 4 * CW + 3 * GAP + 40
-    W5 = W - x5
-    yr, nm, desc, _ = TREE[4]
-    f.box(x5, ya, W5, CH, "none", OR, 10, 1.2, dash="6,4")
-    f.badge(x5 + 12, ya + 12, 5, OR, 14)
-    f.box(x5 + W5 - 82, ya + 14, 70, 26, "#fff", LINE, 13)
-    f.t(x5 + W5 - 47, ya + 32, yr, GY, True, 14, "middle")
-    px = x5 + 24
-    f.t(px, ya + 84, "prompt 里已经有：", GY, True, 15)
-    f.box(px, ya + 96, W5 - 48, 36, "#fff", LINE, 6)
-    f.t(px + 10, ya + 120, "x = <tspan fill=\"#b06000\" font-weight=\"700\">np.zeros(</tspan>n)", INK, size=16, mono=True)
-    f.t(px, ya + 168, "下文又写到：", GY, True, 15)
-    f.box(px, ya + 180, W5 - 48, 36, "#fff", LINE, 6)
-    f.t(px + 10, ya + 204, "y = <tspan fill=\"#b06000\" font-weight=\"700\">np.zeros(</tspan>…", INK, size=16, mono=True)
-    f.path("M%d,%d C%d,%d %d,%d %d,%d" % (px + 150, ya + 134, px + 190, ya + 150, px + 190, ya + 160, px + 150, ya + 178),
-           OR, 1.8)
-    f.t(px + 196, ya + 162, "照抄", OR, True, 15)
-    f.t(x5 + W5 / 2, ya + CH - 62, nm, OR, True, 17, "middle")
-    f.t(x5 + W5 / 2, ya + CH - 30, desc, GY, False, 15, "middle")
-    yb = f.src(ya + CH + 6,
-               "论文年份取 arXiv 首版（2026-10-15 逐个核过摘要页）："
-               + "；".join("%s %s" % (nm, ref) for _, nm, _, ref in TREE) + "。"
-               "Prompt Lookup 没有论文，年份按 GitHub 仓库 apoorvumang/prompt-lookup-decoding 的创建时间（2023-11，GitHub API 核过；已集成进 vLLM 与 transformers）。",
-               "没画进图的（正文里提到）：SpecInfer 2305.09781 把草稿排成树；DSpark（DeepSeek，2607.05147）半自回归、按置信度定验几个，"
-               "摘要说吞吐相同条件下单用户生成速度比线上 MTP-1 快 60–85%；扩散草稿 DiffuSpec 2510.02358、DFlash 2602.06036（ICML 2026，摘要说无损加速超过 6 倍）；"
-               "Lookahead 2402.02057。P-EAGLE、PARD、LayerSkip 等也没画。",
-               "注：各家报的加速倍数都是原作者在自己的模型和负载上测的，彼此不能横比，所以图上不画倍数。")
+    # 主线卡：一排，按时间顺序；引线落到轴上各自的日期
+    for i, (pos, yr, nm, desc, _) in enumerate(TREE):
+        x = cx0 + i * (CW + GAP)
+        card(x, ya, yr, nm, desc, PU)
+        px = xf(pos)
+        f.line(x + CW / 2, ya + CH, px, AY - 6, PU, 1.4, arrow=False)
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="6" fill="%s"/>' % (px, AY, PU))
+    # 轴与年份刻度
+    f.line(X0 - 20, AY, X1 + 10, AY, GY2, 1.6)
+    for yr in range(2022, 2027):
+        f.line(xf(yr), AY - 6, xf(yr), AY + 6, GY2, 1.4, arrow=False)
+        f.t(xf(yr) + 6, AY + 26, str(yr), GY, True, 15)
+    # 侧枝：轴下方，虚线橙框
+    pos, yr, nm, desc, _ = SIDE
+    px = xf(pos)
+    sx, sy = px - CW / 2 + 60, AY + 60
+    f.p.append('<circle cx="%.1f" cy="%.1f" r="6" fill="%s"/>' % (px, AY, OR))
+    f.line(px, AY + 6, sx + CW / 2, sy, OR, 1.4, dash="5 4", arrow=False)
+    card(sx, sy, yr, nm, desc, OR, dash="6,4")
+    yb = f.src(sy + CH + 6,
+               "时间取 arXiv 首版（2026-10-15 逐个核过摘要页）："
+               + "；".join("%s %s" % (nm, ref) for _, _, nm, _, ref in TREE) + "。"
+               "Prompt Lookup 没有论文，年份按 GitHub 仓库 apoorvumang/prompt-lookup-decoding 的创建时间（2023-11，GitHub API 核过；已集成进 vLLM 与 transformers）。"
+               "Medusa 与 EAGLE 都是 2024-01，轴上两点挨着。",
+               "没画进图的（正文里提到）：SpecInfer 2305.09781 把草稿排成树；SuffixDecoding 2411.04975 从历史输出里抄；"
+               "扩散草稿 DiffuSpec 2510.02358、DFlash 2602.06036；Lookahead 2402.02057。P-EAGLE、PARD、LayerSkip 等也没画。",
+               "注：各家倍数见正文列表；都是原作者在自己的模型和负载上测的，口径不同，不横比。")
     f.save("fig6-spec-tree.svg", yb + 14)
 
 

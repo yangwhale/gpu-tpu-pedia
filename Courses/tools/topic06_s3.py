@@ -16,7 +16,7 @@ BODY = '''
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
-  <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），两个池见 3.4。</p>
+  <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩（两种压缩层：一种压 4 倍后只挑一部分读，DeepSeek 叫 CSA；一种压 128 倍后全读，叫 HCA），两个池见 3.4。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
   <p>一颗 v7 芯片可用约 189.5 GiB，留一成给激活值，按 170.55 GiB 算（与 10.5 同一口径）。
@@ -50,7 +50,10 @@ __FIG_S3_POOL__
   <p>很多请求开头一样：同一段 system prompt、同一份文档、多轮对话的前几轮。算好的 KV 留着，命中前缀就接着算。</p>
   <ul>
     <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀，满了按最近最少使用淘汰；论文报吞吐最多高 6.4 倍。</li>
-    <li><b>命中率可以很高。</b>DeepSeek 24 小时线上统计：6,080 亿输入 token 里 56.3% 命中磁盘上的 KV。命中部分按十分之一计价，128K 高复用 prompt 的首字从 13 s 降到 0.5 s（DeepSeek API 文档 2024-08）。</li>
+    <li><b>命中率可以很高。</b>DeepSeek 24 小时线上统计：6,080 亿输入 token 里 56.3% 命中磁盘上的 KV（open-infra-index 2025-02）。命中部分按十分之一计价（DeepSeek API 文档 2024-08）。</li>
+  </ul>
+__FIG_S3_DISK__
+  <ul>
     <li><b>线性注意力和滑窗难复用。</b>线性层的状态是整段压出来的，截不回任意位置；滑窗层早先的 KV 已经丢了。</li>
   </ul>
   <p>所以 vLLM、SGLang 在块边界另存状态快照；tpu-inference 跑 Qwen3.5 得显式关掉（<code>--no-enable-prefix-caching</code>），否则断言错误（同一 README:95）。</p>
@@ -62,7 +65,7 @@ __FIG_S3_POOL__
     两者相等时：<b>带宽 ＝ 每 token KV 字节 × 有效算力 ÷ 每 token FLOP</b>。链路比它慢，就不如重算。<br>
     公式只算线性部分：注意力那项随 L² 涨，越长越该下放（图里算进了它）。负载高时重算挤占别人的算力、搬回能和计算重叠，盈亏点再往慢链路那边移。</div>
 __FIG_S3_OFFLOAD__
-  <p>GQA 的 Llama-3.1-70B 每 FLOP 的 KV 多，盈亏带宽要 5.35 GB/s。</p>
+  <p>V3 只要 2.19 GB/s；GQA 的 Llama-3.1-70B 每 FLOP 的 KV 多，链路至少 5.35 GB/s 才划算，门槛高一倍多。</p>
   <ul>
     <li><b>llm-d</b> 在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。排障说明写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
     <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
@@ -71,7 +74,7 @@ __FIG_S3_OFFLOAD__
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
     <b>① KV 池定了 batch 上限。</b><br>
-    <b>② 复用和卸载是少算、少搬。</b>下放之前算清搬回来是不是比重算快。</div>
+    <b>② 复用和卸载是少算、少搬。</b>分页把 KV 有效占用从两到四成提到 96%，DeepSeek 线上过半输入命中缓存。下放之前算清搬回来是不是比重算快。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 92.4 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
   <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.7 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
@@ -87,6 +90,9 @@ FIGS = {
     "__FIG_S3_POOL__": ("fig-s3-pool", "fig6-swa-ratio.svg", "topic06-fig-kv.py",
         '<b>隔板挪到两池一起快满时最快；一边先满，另一边就空转。</b><br>'
         '<em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计；前两格输入 4K、第三格 8K，输出 1K，关前缀缓存。</em>'),
+    "__FIG_S3_DISK__": ("fig-s3-disk", "fig6-disk-cache.svg", "topic06-fig-kv.py",
+        '<b>同一条 128K prompt，命中只剩读盘那一小段。</b><br>'
+        '<em>首字延迟出自 DeepSeek API 文档 2024-08，命中比例出自 open-infra-index 2025-02，两次统计不同时；1/26 为本课推导。</em>'),
     "__FIG_S3_OFFLOAD__": ("fig-s3-offload", "fig6-offload.svg", "topic06-fig-kv.py",
         '<b>绿线始终在红线下面：链路够快，多长都该搬。</b><br>'
         '<em>灰虚线是盈亏带宽 2.19 GB/s；每芯片口径；有效算力按 FP8 峰值 50% 假设，两档带宽是示意值。本课推导。</em>'),

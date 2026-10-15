@@ -164,7 +164,8 @@ def fig_batch():
         f.t(xf(L), YB + 24, "%dK" % L, GY, L in (4, 32, 128), 14, "middle")
     for L in (4, 32, 128):
         f.line(xf(L), YT, xf(L), YB, GY2, 1, dash="4 4", arrow=False)
-    f.t((AX0 + AX1) / 2, YB + 50, "上下文长度（对数，每格翻倍；1K ＝ 1024 token）", GY, size=14, anchor="middle")
+    # x 轴标题：居中于绘图区（横轴线从 AX0 画到 AX1＋10），比原先上移 6px，离开面板下沿
+    f.t((AX0 + AX1 + 10) / 2, YB + 44, "上下文长度（对数，每格翻倍；1K ＝ 1024 token）", GY, size=14, anchor="middle")
     f.t(AX0 - 12, YT - 12, "条", GY, size=13, anchor="end")
 
     LABS = {  # 在 4K / 32K 上写数的上下偏移：{L: dy}；128K 的数并进右侧标签
@@ -413,7 +414,62 @@ def fig_offload():
     f.save("fig6-offload.svg", yb + 14)
 
 
+# ══════════════════════════════════════════════════════════════════════
+# fig6-disk-cache：DeepSeek 磁盘缓存的实测案例。
+#   首字 13 s → 0.5 s：api-docs.deepseek.com/news/news0802（2024-08，128K 高复用 prompt）。
+#   6,080 亿 / 56.3%：open-infra-index 202502OpenSourceWeek day_6（24 小时统计 2025-02-27～28，608B 输入里 342B 命中）。
+#   ⛔ 两个数出自两份文档，别合并成一个出处；⛔ 不画价格。
+T_MISS, T_HIT = 13.0, 0.5
+assert T_MISS / T_HIT == 26
+IN_TOK, HIT_TOK, HIT_PCT = 608e9, 342e9, 56.3     # 56.3 是原文给的百分比（342 ÷ 608 ＝ 56.25，原文进位到 56.3）
+assert abs(HIT_TOK / IN_TOK * 100 - HIT_PCT) < 0.06
+
+
+def fig_disk():
+    f = Fig(W, "DeepSeek 磁盘缓存。128K 的高复用 prompt，首字延迟不命中要 13 秒，命中磁盘上的 KV 只要 0.5 秒，约二十六分之一。"
+               "另一份统计：24 小时 6,080 亿输入 token 里 56.3% 命中磁盘缓存")
+    y0 = f.header("命中的前缀不用重算　——　<tspan font-weight=\"700\">首字只剩读盘那一段</tspan>",
+                  "DeepSeek 线上服务，把算好的 KV 存在磁盘上。上：一条 128K 高复用 prompt 的首字延迟（线性，0–14 s）；下：一天的输入里有多少命中",
+                  [(GY2, "不命中：prefill 重算整段前缀"), (GR, "命中：从磁盘读回 KV")])
+    PH = 210
+    py = f.panel(0, y0, W, PH, "128K prompt 的首字延迟", GY)
+    AX0, AX1 = 220, 1300
+    sc = (AX1 - AX0) / 14.0
+    yb1, yb2, BH = py + 30, py + 90, 38
+    for s_ in range(0, 15, 2):
+        xx = AX0 + s_ * sc
+        f.line(xx, yb1 - 8, xx, yb2 + BH + 8, LINE, 1, dash="3 4", arrow=False)
+        f.t(xx, yb2 + BH + 32, "%d s" % s_, GY, size=14, anchor="middle")
+    f.t(AX0 - 16, yb1 + 25, "不命中", INK, True, 16, "end")
+    f.t(AX0 - 16, yb2 + 25, "命中", INK, True, 16, "end")
+    f.box(AX0, yb1, T_MISS * sc, BH, GY2, GY2, 3)
+    f.t(AX0 + 16, yb1 + 25, "重算 128K 前缀", "#fff", True, 15)
+    f.t(AX0 + T_MISS * sc + 10, yb1 + 25, "13 s", INK, True, 16)
+    f.box(AX0, yb2, T_HIT * sc, BH, GR, GR, 3)
+    f.t(AX0 + T_HIT * sc + 10, yb2 + 25, "0.5 s　读盘", GR, True, 16)
+    f.t(AX0 + T_HIT * sc + 160, yb2 + 25, "≈ 1/26（本课推导：13 ÷ 0.5）", GR, True, 15)
+
+    PH2 = 130
+    py = f.panel(0, y0 + PH + 16, W, PH2, "24 小时的输入 token（另一份统计，2025-02）", GY)
+    BW_ = AX1 - AX0
+    hit = HIT_PCT / 100
+    by = py + 26
+    f.t(AX0 - 16, by + 25, "6,080 亿", INK, True, 16, "end")
+    f.box(AX0, by, BW_ * hit, BH, GR, GR, 3)
+    f.box(AX0 + BW_ * hit, by, BW_ * (1 - hit), BH, "#e8eaed", GY2, 3)
+    f.t(AX0 + 16, by + 25, "56.3% 命中磁盘上的 KV", "#fff", True, 15)
+    f.t(AX0 + BW_ * hit + 16, by + 25, "43.7% 不命中（本课推导：100 − 56.3）", INK, True, 15)
+    f.t(AX0, by + BH + 28, "0%", GY, size=14, anchor="middle")
+    f.t(AX1, by + BH + 28, "100%", GY, size=14, anchor="middle")
+    yb = f.src(y0 + PH + 16 + PH2 + 10,
+               "出处：首字 13 s → 0.5 s 取自 DeepSeek API 文档的磁盘缓存公告（api-docs.deepseek.com/news/news0802，2024-08，原文 128K prompt with high reference）。",
+               "出处：6,080 亿输入 token、56.3% 命中取自 DeepSeek open-infra-index 202502OpenSourceWeek day_6（统计窗口 2025-02-27 12:00 到 02-28 12:00 UTC+8，608B 里 342B 命中，V3 与 R1 合计）。",
+               "本课推导：13 ÷ 0.5 ＝ 26；100% − 56.3% ＝ 43.7%。两个数来自两份文档、两个时间点，不是同一次测量。价格不画。")
+    f.save("fig6-disk-cache.svg", yb + 14)
+
+
 fig_batch()
 fig_paged()
 fig_pool()
 fig_offload()
+fig_disk()

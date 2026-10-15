@@ -107,9 +107,15 @@ def fig_dcp_gain():
             x, y = pts[0]
             f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="#fff" stroke="%s" stroke-width="2.5"/>' % (x + 24, y, col))
             continue
-        for x, y in pts:
+        for (x, y), isl in zip(pts, [i for i in ISLS if (i, c) in RATIO]):
+            if (isl, c) == ("4K", 32):
+                continue          # 这个点被并发 8 的大蓝点盖住，挪到最后单独画（见下）
             r = 7 if hot else 4
             f.box(x - r, y - r, 2 * r, 2 * r, col, col, r)
+    # 4K、并发 32（0.89，−11%）：和并发 8 的 0.91 几乎重合，画在大蓝点之后、往右偏 6px，白描边让它浮在上面
+    x32, y32 = px("4K") + 6, py_(RATIO[("4K", 32)])
+    f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="%s" stroke="#fff" stroke-width="1.5"/>' % (x32, y32, FAINT[32]))
+    f.t(x32 + 12, y32 + 22, "−%d%%" % -PCT[("4K", 32)], "#b06000", True, 14)
     # 淡色线只标一个：同是 8K，并发一高就赚
     f.t(px("8K"), py_(RATIO[("8K", 32)]) - 14, "并发 32：+%d%%" % PCT[("8K", 32)], "#b06000", True, 15, "middle")
     # 并发 8 的三个亏点

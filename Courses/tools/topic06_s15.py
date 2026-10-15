@@ -124,7 +124,7 @@ BODY = '''
     <tr><td>13.5 栈对比表</td><td>tpu-inference 支持矩阵；SGLang-JAX 模型列表</td></tr>
     <tr><td>上下文变长：GPT-4 Turbo 128K（2023-11-06），Gemini 1.5 Pro 1M 私有预览（2024-02-15）</td><td>openai.com/index/new-models-and-developer-products-announced-at-devday；blog.google「Our next-generation model: Gemini 1.5」。2026-10-16 核对</td></tr>
     <tr><td>Mooncake 真实负载下 Kimi 多接 75% 请求；模拟场景守 SLO 吞吐最多 +525%</td><td>arXiv 2407.00079 摘要</td></tr>
-    <tr><td>DeepSeek 磁盘缓存：命中按十分之一计价；128K 高复用 prompt 首字 13 s → 0.5 s</td><td>api-docs.deepseek.com/news/news0802（2024-08）；价格只取比例</td></tr>
+    <tr><td>DeepSeek 磁盘缓存：命中按十分之一计价；128K 高复用 prompt 首字 13 s → 0.5 s（≈ 1/26 本课推导）；24 小时 6,080 亿输入 token 里 56.3% 命中磁盘 KV</td><td>api-docs.deepseek.com/news/news0802（2024-08），价格只取比例；6,080 亿／56.3% 取自 github.com/deepseek-ai/open-infra-index 202502OpenSourceWeek day_6（统计窗口 2025-02-27～28，608B 中 342B 命中）。2026-10-15 核对</td></tr>
     <tr><td>PagedAttention 同延迟吞吐 2–4×（对 FasterTransformer、Orca）</td><td>arXiv 2309.06180 摘要</td></tr>
     <tr><td>Medusa-1 2.2×、Medusa-2 2.3–3.6×（正文合写 2.2–3.6 倍）</td><td>arXiv 2401.10774 摘要</td></tr>
     <tr><td>AI Index：硬件成本每年降 30%、能效每年升 40%</td><td>Stanford HAI AI Index 2025 要点第 7 条</td></tr>

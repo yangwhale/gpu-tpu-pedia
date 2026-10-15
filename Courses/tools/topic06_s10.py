@@ -48,11 +48,11 @@ __FIG_S10_CONC__
   </ul>
 
   <h3 id="s10-8">10.8　五步选法落到两个例子</h3>
-  <p>专题五 <a href="topic-05.html#s7-4">§7.4</a> 的五关（装得下、快线多大、序列、PP、DP），推理时照样走一遍。</p>
+  <p>专题五 <a href="topic-05.html#s7-4">§7.4</a> 的五关（装得下、快线多大、序列、PP（流水线并行：按层切给几组卡）、DP），推理时照样走一遍。</p>
   <table>
     <tr><th>关</th><th>DeepSeek-V3 · TPU v7</th><th>DeepSeek-V4-Pro · GB300</th></tr>
     <tr><td>① 装得下</td><td>纸面 4 颗（v7x-8）够；实测 FP8 放不下，用 8 颗或专家换 FP4</td><td>806 GB 权重，一个 4 卡节点放得下（TP4 跑通过）</td></tr>
-    <tr><td>② 快线多大</td><td>一个 ICI 切片；TP 跨 DCN 高并发慢到 63%</td><td>一个 NVL72 域 72 卡；SGLang 部署要求全部节点同域</td></tr>
+    <tr><td>② 快线多大</td><td>一个 ICI 切片；TP 跨 DCN，并发 16 时吞吐少 63%</td><td>一个 NVL72 域 72 卡；SGLang 部署要求全部节点同域</td></tr>
     <tr><td>③ 序列</td><td>128K × 256 时 KV 是权重的 3.5 倍；单条装得下，DCP 帮不上（10.5）</td><td>只有一个 KV 头，TP 只复制 KV，改用 DEP（第六节）</td></tr>
     <tr><td>④ PP</td><td>不用：一个切片放得下</td><td>不用</td></tr>
     <tr><td>⑤ DP</td><td>剩下的卡开副本，每份留在自己的切片里</td><td>先定 P:D（第九节），再按目标用户数加 decode 副本</td></tr>

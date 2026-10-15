@@ -2,7 +2,7 @@
 """专题六 · 第一节「两个阶段：prefill 吃算力，decode 吃带宽」。图在 topic06-fig-phases.py。"""
 
 BODY = '''
-  <p class="lead">0.1 里的每一招都冲着这个事实：prefill 一次喂几千行，decode 每人只喂一行。
+  <p class="lead">0.1 里的每一招都冲着这个事实：prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
     <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b></p>
 
   <h3 id="s1-1">1.1　一次喂几行，决定卡在哪</h3>
