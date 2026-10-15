@@ -6,7 +6,7 @@
 """
 
 BODY = '''
-  <p class="lead">decode 每一步都搬一趟权重，同一步拼进来的人越多，每人分摊越少。
+  <p class="lead">第三节算的是有几个座位，这一节管座位别空着：decode 每一步都搬一趟权重，同一步拼进来的人越多，每人分摊越少。
     <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–3.7 倍；配流水线并行跑 Falcon-180B 最多 5.6 倍。</p>
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
@@ -27,7 +27,7 @@ __FIG_S4_CHUNK__
 
   <h3 id="s4-3">4.3　槽位满了以后</h3>
 __FIG_S4_CONC__
-  <p>槽位就是 KV 池装得下几个人。Little 定律（排队论的一条恒等式：系统里的人数 ＝ 到达速率 × 每人停留时间）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
+  <p>槽位就是 KV 池装得下几个人。Little 定律（见词表）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
     客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 那边排队。</p>
   <details class="foldfig"><summary><b>Little 定律核一遍</b>：批里到底几个人？</summary>
@@ -51,7 +51,7 @@ __FIG_S4_OVERLAP__
     chunked prefill 只摊平打扰，拆开是第八节的事。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
-  <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000，再加并发只让首字等待变长；
+  <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000；
     要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 约减到 57%），要么换个交互档。</p></details>
 '''
 

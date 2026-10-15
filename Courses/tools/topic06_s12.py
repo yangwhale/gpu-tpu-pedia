@@ -35,7 +35,7 @@ __FIG_S12_R1__
   <h3 id="s12-6">12.6　kernel 融合：边界上不再干等</h3>
   <p>一次前向要发上百个 kernel。每个 kernel 收尾、下一个开场时，没人在读权重。</p>
 __FIG_S12_FUSE__
-  <p>图是 Hazy Research 2025-05 的算例：Llama-3.2-1B（16 层）在 H100 上，每个 kernel 边界的空等让每秒前向次数掉了一大截。</p>
+  <p>图是 Hazy Research 2025-05 的算例：Llama-3.2-1B（16 层）在 H100 上。</p>
   <p>生产里先上的是 CUDA Graph 和 PDL：前者省掉 CPU 逐个发射 kernel 的开销，后者让下一个 kernel 在上一个收尾前先做准备。
     megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读。</p>
   <p>Hazy 的实测里，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型越小、batch 越小，空等占比越大，这招赚得越多。</p>

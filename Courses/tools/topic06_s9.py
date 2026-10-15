@@ -6,7 +6,7 @@
 """
 
 BODY = '''
-  <p class="lead">Dynamo、llm-d 这类框架出来以后，PD 配比成了上线要填的参数。要回答两件事：P、D 各配几台；这个负载该不该拆。
+  <p class="lead">决定拆了（第八节），接着要填两个数：P、D 各配几台；这个负载到底该不该拆。
     <b>两件都要拿自己的负载去量，别照搬别人的配比。</b></p>
 
   <h3 id="s9-1">9.1　回顾：配比从哪来</h3>
@@ -44,7 +44,7 @@ __FIG_S9_2P1D__
   <h3 id="s9-4">9.4　换个分母，10.4 倍变 2.2 倍</h3>
   <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。</p>
 __FIG_S9_SWEEP__
-  <p>只除 decode 卡是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只涨 2.2 倍。<b>看到每卡吞吐，先问分母里有没有 prefill 的卡。</b>曲线是 2026-07-24 的历史实测，看趋势。</p>
+  <p>只除 decode 卡是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只涨 2.2 倍。曲线是 2026-07-24 的历史实测，看趋势。</p>
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
   <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b></p>
@@ -71,7 +71,6 @@ __FIG_S9_AFD_ASCEND__
   <ul>
     <li><b>配比是关键</b>：注意力给少了，专家就在等（图）；作者说 64 配 16 时专家侧仍有余力，注意力再加可能还涨。</li>
     <li><b>只能看趋势</b>：实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
-    <li><b>TPU 侧</b>：没找到公开实现或实测。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：AFD 的几个数</summary>
   <p>MegaScale-Infer：arXiv 2504.02263。Step-3：arXiv 2507.19427（4K 上下文、FP8、不开 MTP）。vLLM AFD 插件：vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin；RFC #22799 于 2026-05-31 被机器人关闭。</p></details>
@@ -86,11 +85,8 @@ __FIG_S9_AFD_ASCEND__
 
   <h3 id="s9-9">9.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    拆开是为了让这一趟不再等 prefill，两边切法各选各的；AFD 让每个专家一趟分到更多 token。
-    拆不拆、怎么配，看负载，不看潮流。</div>
+    AFD 让每个专家一趟分到更多 token。拆不拆、怎么配，看负载，不看潮流。</div>
 
-  <details class="foldfig"><summary><b>考考自己</b>：一份报告说「加到 12 个 prefill，每卡吞吐涨了 10 倍」。你先问什么？</summary>
-  <p>先问分母：除的是 decode 卡还是全部卡。V4-Pro 那组，12 个 prefill 按 decode 卡算涨 10 倍多，按全部卡只涨 2.2 倍。</p></details>
 '''
 
 FIGS = {

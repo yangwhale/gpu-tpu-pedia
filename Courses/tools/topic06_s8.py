@@ -7,7 +7,7 @@
 """
 
 BODY = '''
-  <p class="lead">prefill 和 decode 放在同一批卡上会互相拖。PD 分离把它们拆到两批机器上，代价是每个请求多搬一趟 KV。这招 2023、2024 年由 Splitwise、DistServe 先后提出，DistServe 报告同样的延迟要求下多接 7.4 倍请求；Mooncake 把它连同 KV 池做进了 Kimi 的线上服务，论文报真实负载下多接 75% 的请求（模拟场景守住延迟要求时吞吐最多 +525%）。
+  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，代价是每个请求多搬一趟 KV。这招 2023、2024 年由 Splitwise、DistServe 先后提出，DistServe 报告同样的延迟要求下多接 7.4 倍请求；Mooncake 把它连同 KV 池做进了 Kimi 的线上服务，论文报真实负载下多接 75% 的请求。
     <b>难的是那一趟 KV。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
@@ -18,7 +18,7 @@ __FIG_S8_PD_T5__
 <figure class="fbox fwide" id="anim-pdsplit">
 <video src="media/topic06-pdsplit.mp4" autoplay loop muted playsinline
        aria-label="PD 分离动画。标题：PD 分离：prefill 挪走，decode 的字不再被卡住。上下两组时间轴共用一条往右走的黄色竖线，一格是一步 decode 的时间。上组叫「混部：prefill 和 decode 挤在一台机器上」，行是整机在算、新请求、请求 A、请求 B、请求 C；下组叫「PD 分离：prefill 机只算 prefill，decode 机只出字」，行是 prefill 机，以及 decode 机上的新请求、请求 A、请求 B、请求 C。底下写「一格＝一步 decode 的时间，只表相对长短（示意）」。前 4 步两组一样：A、B、C 每步各出一个字，蓝格等间距。接着一段橙色长块「长 prompt 的 prefill」占了 5 格：上组它占住整台机器，A、B、C 这 5 格一个字都没出，被红框圈出，右边红字「下一个字被推迟」；下组它在 prefill 机上算，decode 机上 A、B、C 照常每步出字。prefill 算完，上组新请求的绿格直接接在后面；下组一支黄色箭头标「传 KV」从 prefill 机指向 decode 机，新请求在下一步加入 decode 批，右边绿字「字距始终均匀」。字幕依次是：三条请求在 decode：每一步，每条请求出一个字，格子等间距。来了一个长 prompt：prefill 一次算完整段的 KV。混部时整台机器被它占住。分离时它在 prefill 机上算，算完把 KV 传给 decode 机（传的是 KV，不是权重）。新请求带着 prefill 给的第一个字进 decode 批，之后一步一个字。最后：拆开后 decode 的字距始终均匀；代价是多一批机器、每个请求多传一趟 KV。画面复位。"></video>
-<figcaption>看红框：混部时整批人的下一个字都在等 prefill；拆开后 decode 机一格不断，多出来的只是那支「传 KV」。
+<figcaption>看红框：混部时整批人都在等 prefill；拆开后只多出那支「传 KV」。
   <span class="sub">（22 秒无声循环，Manim 渲染。示意：时间格只表相对长短，不是实测毫秒；传 KV 画得比 prefill 短，量级见 8.2。）</span></figcaption></figure>
   <ul>
     <li><b>换来的</b>：出字不被打断，TPOT 稳；两边还能各挑切法（第六、七节）。</li>
@@ -105,8 +105,7 @@ __FIG_S8_PRFAAS__
 
   <h3 id="s8-9">8.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    PD 分离不改变这一趟搬多少，它保证这一趟不被 prefill 打断，decode 才敢把 batch 攒满。
-    上线前确认那一趟跑在设计带宽上、输出和不拆时一字不差。</div>
+    PD 分离不改变这一趟搬多少，它保证这一趟不被 prefill 打断，decode 才敢把 batch 攒满。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：PD 上线后 TTFT 比不拆时还高，TPOT 倒是稳了。先查哪一层？</summary>
   <p>先查搬运层：量一次 KV 传输带宽。只有几百 MB/s，多半是退回了 cuda_copy 或跨出了 NVLink 域；带宽正常再看调度层有没有排队。</p></details>
