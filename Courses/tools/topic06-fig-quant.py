@@ -270,8 +270,7 @@ def fig_fuse():
                "每层 7 个 kernel × 16 层 × 约 5 µs ≈ 770 次／秒；实测基线都开了 CUDA Graph 和 torch.compile。"
                "实测：vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%；比 vLLM 快约 2.5 倍、比 SGLang 快 1.5 倍以上；B200 上一次前向不到 680 µs。",
                "⚠️ 示意：第一行把每层 7 个空当合成一段画，第二行才按真实位置分开；7 个 kernel 等长是简化。",
-               "正文里另两组数的出处 —— Mirage Persistent Kernel：arXiv 2512.22219 摘要，「up to 1.7×」端到端延迟。",
-               "Inferact「700 TPS on Kimi K3」（https://inferact.ai/blog/tpu-megakernels，2026-09-23）：16 颗 TPU v7（32 个 TensorCore）、Pallas 编写、每 TensorCore 64 MiB VMEM；一步约 8.5 ms、每步接受约 6 个；GB200 对照为 16 张卡的 vLLM 配方，452 tok/s。"
+               "正文里 TPU 那组数的出处 —— Inferact「700 TPS on Kimi K3」（https://inferact.ai/blog/tpu-megakernels，2026-09-23）：16 颗 TPU v7（32 个 TensorCore）、Pallas 编写、每 TensorCore 64 MiB VMEM；一步约 8.5 ms、每步接受约 6 个；GB200 对照为 16 张卡的 vLLM 配方，452 tok/s。"
                "⚠️ 本课推导：每步接受 6 个 ÷ 8.5 ms ≈ 706 tok/s，与博客的「700 多」对得上。")
     f.save("fig6-quant-fuse.svg", yb + 14)
 
