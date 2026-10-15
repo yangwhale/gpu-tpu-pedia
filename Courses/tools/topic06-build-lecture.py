@@ -50,16 +50,23 @@ CH = LA.CH + LB.CH + LC.CH
 def _chapter(i, title, sid, fig, body, dont):
     figline = ("　·　主图 <code>%s</code>" % fig) if fig else \
               "　·　<b>本节无图</b>（故意的）"
+    # L35（只改展示）：① 节标题旁挂「计划 · 含互动」小字，数在下面时间账算完后回填；
+    # ② 「本节主屏」挪到节首，讲师一进这节就能点过去；③ ❓ 备答从 ⚠️ 框里拆成独立的框。
+    plan = re.search(r"（(\d+)′", title).group(1)
+    warn, _, ask = dont.partition("<b>❓")
+    askbox = ('<div class="ask6"><b>❓' + ask + '</div>') if ask else ""
     return """
-<h3 class="sec" id="c%d">%s</h3>
+<h3 class="sec" id="c%d">%s<span class="tm6">计划 %s′ · @@IA%02d@@</span></h3>
 %s
 <div class="say">
+<p class="board sub">🖥 本节主屏：课件 <a href="%s#%s">%s</a>%s</p>
 %s
 <div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>%s</div>
-<p class="board sub">🖥 本节主屏：课件 <a href="%s#%s">%s</a>%s</p>
+%s
 </div>
-""" % (i, title, P.audio_block(OUT, "topic06-lecture-s%d.mp3" % i, "这一节的讲课录音（照着讲的示范）", video="topic06-video-s%d.mp4" % i),
-       body, dont, DECK, sid, title.split("（")[0], figline)
+""" % (i, title, plan, i,
+       P.audio_block(OUT, "topic06-lecture-s%d.mp3" % i, "这一节的讲课录音（照着讲的示范）", video="topic06-video-s%d.mp4" % i),
+       DECK, sid, title.split("（")[0], figline, body, warn, askbox)
 
 
 PLAN = LA.PLAN + LB.PLAN + LC.PLAN
@@ -84,6 +91,18 @@ details.deep{margin:18px 0;border:1.5px dashed #9aa0a6;border-radius:10px;paddin
 details.deep summary{cursor:pointer;padding:6px 0}
 p.deephd{font-weight:700;color:#174ea6;margin:14px 0 4px}
 p.deepsay{background:#f8f9fa;border-left:3px solid #9aa0a6;padding:8px 14px;margin:8px 0;line-height:1.9}
+/* L35 讲师现场用：只在本讲义生效，不动共用样式 */
+h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transform:none;
+  color:#174ea6;background:#e8f0fe;border-radius:10px;padding:1px 10px;white-space:nowrap}
+.say .board:before{content:none}   /* 每条 cue 自带「🖥 屏幕」，共用样式再前缀一遍「屏幕 ·」就重了 */
+.say .board.sub{margin-top:10px}
+.say > p.board.sub ~ p:nth-of-type(2){text-indent:0}   /* 主屏挪到节首后，🎯 那段仍是首段，不缩进 */
+.say p.ia6{text-indent:0;background:#e8f0fe;border-left:3px solid #1a73e8;border-radius:0 8px 8px 0;
+  padding:8px 14px;font-family:system-ui,sans-serif;font-size:14.5px;line-height:1.85}
+.say .skip6{display:inline-block;text-indent:0;background:#fef7e0;color:#7a4f00;border:1px solid #f9ab00;
+  border-radius:10px;padding:0 8px;margin:0 2px;font-weight:700;font-style:normal}
+.ask6{background:#f3e8fd;border-left:4px solid #9334e6;border-radius:0 10px 10px 0;
+  padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
 </style>
 </head>
 <body>
@@ -265,6 +284,13 @@ _cstart = [m.start() for m in re.finditer(r'<h3 class="sec" id="c\d+"', html)]
 _early = sorted({w for m in re.finditer(r'<p class="say">(.*?)</p>', html, re.S)
                  for w in _CURTAIN if w in m.group(1) and m.start() < _cstart[-1]})
 assert not _early, "收尾语气出现在最后一节之前：%s" % "、".join(_early)
+
+# L35：节标题小字回填；互动和 ⏭ 加 class 只为好认（放在所有统计之后，不影响任何计数）
+for _i, (_nm, _fa, _fs, _pl) in enumerate(_ia_rows):
+    html = html.replace("@@IA%02d@@" % _i, ("含互动 %.1f′" % _fa) + ((" · 跳后 %.1f′" % _fs) if _fs < _fa else ""))
+assert "@@IA" not in html
+html = html.replace("<p>💬 <b>互动</b>", '<p class="ia6">💬 <b>互动</b>')
+html = html.replace("⏭ <b>时间紧可跳</b>", '<span class="skip6">⏭ 时间紧可跳</span>')
 
 html = P.bust_media(html, OUT)          # 录音地址挂内容指纹，重生成后不被缓存成旧的
 io.open(OUT, "w", encoding="utf-8").write(html)
