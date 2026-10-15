@@ -12,7 +12,7 @@ fig6-b1.svg —— 回答：DeepSeek-V3 一个人解码一步，在一颗 v7 上
     ÷ 7.37 TB/s ＝ 5.02 ms；运算 2 × 37B ＝ 74 GFLOP ÷ FP8 峰值 4,614 TFLOP/s ＝ 0.016 ms。
     算力利用率 ＝ 0.016 ÷ 5.02 ＝ 0.32%，恰好是 1/313（本课推导）。
   · 刻意没画：KV 的读取（一个人、短上下文时不到 1%，见 fig6-wkv）；
-    671 GB 权重一颗 192 GB 的芯片装不下，至少要 4 颗 —— 摊到 N 颗上两条时间都 ÷N，比例不变。
+    671 GB（≈ 625 GiB）权重一颗 192 GiB 的芯片装不下，至少要 4 颗 —— 摊到 N 颗上两条时间都 ÷N，比例不变。
 
 fig6-wkv.svg —— 回答：上下文变长、并发变大时，每出一个字要搬的字节里，KV 占多少？
   · 数字：权重部分 W(b) ÷ b，W(b) 是 b 个 token 同一步里一共要读的权重字节（FP8），
@@ -68,7 +68,8 @@ assert round(B1_T_CMP * 1e3, 3) == 0.016
 assert round(B1_UTIL * 100, 2) == 0.32
 assert abs(B1_UTIL - 1 / RIDGE) < 1e-6      # 恰好 1/313：FP8 屋脊 626，FP8 解码强度 2
 MIN_CHIPS = math.ceil(V3_TOTAL / V7_HBM)
-assert MIN_CHIPS == 4                        # 671 GB ÷ 192 GB ＝ 3.5 → 4 颗（还没算 KV）
+assert MIN_CHIPS == 4                        # 671e9 B ÷ (192 × 2^30 B) ＝ 3.3 → 4 颗（还没算 KV）
+assert round(V3_TOTAL / 2**30) == 625
 
 # ── MoE 权重模型（config.json：hidden 7168、moe_intermediate 2048、61 层里前 3 层稠密）──
 EXPERT = 3 * H * 2048                        # 一个专家：gate / up / down 三块
@@ -184,7 +185,7 @@ def fig_ai():
             (1, AI_B1, GR, "decode 1 人：1.0", 16, 26, None),
             (64, AI_B64, GR, "decode 64 人：63", 14, 22, None),
             (256, AI_B256, GR, "decode 256 人：239", 56, 62, None),
-            (4096, AI_PRE, OR, "prefill 4K prompt：1,911", -14, -16, "end")):
+            (4096, AI_PRE, OR, "prefill 4K prompt：1,911", -16, -6, "end")):
         f.p.append('<circle cx="%.1f" cy="%.1f" r="8" fill="%s"/>' % (X(m), Y(v), col))
         f.t(X(m) + dx, Y(v) + dy, lab, col, True, 15, anc)
         if m == 256:                     # 标签挪到交点竖线右侧，拉一根引线
@@ -246,7 +247,7 @@ def fig_b1():
                "v7 每芯片 FP8 4,614 TFLOP/s、HBM 7.37 TB/s：Google Cloud 公开规格。",
                "📌 本课推导：37e9 ÷ 7.37e12 ＝ 5.02 ms；2 × 37e9 ÷ 4,614e12 ＝ 0.016 ms；比值 0.32% ＝ 2 ÷ (4,614 ÷ 7.37) ＝ 1/313。",
                "⚠️ 理想下限：只算权重，不算 KV、激活、通信和 kernel 开销，实测只会更慢。",
-               "⚠️ 671 GB 一颗 192 GB 的芯片放不下，至少 4 颗（还没算 KV）。摊到 N 颗上，两根条都 ÷N，0.32% 不变。")
+               "⚠️ 671 GB（≈ 625 GiB）一颗 192 GiB 的芯片放不下，至少 4 颗（还没算 KV）。摊到 N 颗上，两根条都 ÷N，0.32% 不变。")
     f.save("fig6-b1.svg", yb + 14)
 
 
@@ -311,7 +312,7 @@ def fig_moe():
                "运算强度约 8，离屋脊点 313 很远")
     y0 = f.header("MoE 把一批人拆散：<tspan font-weight=\"700\">256 人进来，每个专家只分到 8 行</tspan>",
                   "同一批 256 人解码一步。方块是 v7 的 MXU（一边 256），填色的是这一步真正喂进去的行",
-                  [(GR, "喂进 MXU 的行"), (RD, "屋脊点")])
+                  [(GR, "喂进 MXU 的行：填满一边"), (OR, "喂进 MXU 的行：只填一小截"), (RD, "屋脊点")])
     PH = 410
     py = f.panel(0, y0, W, PH, "稠密层 vs 一个专家", INK)
     S = 256                                   # 1 px ＝ 1 行

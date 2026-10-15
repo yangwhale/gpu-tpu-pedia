@@ -16,10 +16,11 @@ V3_KV_PER_TOKEN = (V3_KV_LORA + V3_ROPE) * 2 * V3_LAYERS     # bf16，字节
 assert V3_KV_PER_TOKEN == 70272
 assert abs(V3_KV_PER_TOKEN * 131072 / GIB - 8.58) < 0.01      # 专题五 fig-kv-dup 的 8.58 GiB
 
-# ── TPU v7（Ironwood，Google Cloud 公开规格：每芯片 FP8 4,614 TFLOP/s、HBM 192 GB、7.37 TB/s）──
+# ── TPU v7（Ironwood，Google Cloud 公开规格：每芯片 FP8 4,614 TFLOP/s、HBM 192 GiB、7.37 TB/s）──
 V7_FP8 = 4614e12
 V7_BF16 = V7_FP8 / 2            # 2,307 TFLOP/s（本课推导：BF16 是 FP8 的一半）
-V7_HBM = 192 * GB
+V7_HBM = 192 * GIB              # 规格表的 192 是 GiB：≈ 206.2e9 字节（JAX tpu_info 记 206e9）。对外写 GiB
+assert round(V7_HBM / GB, 1) == 206.2
 V7_BW = 7.37 * TB
 V7_RIDGE = V7_BF16 / V7_BW      # BF16 屋脊点：每搬 1 字节要做多少次运算才不被带宽拖住
 assert round(V7_RIDGE) == 313   # 专题二的 313

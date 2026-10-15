@@ -366,7 +366,7 @@ def fig_temp():
 
 
 # ════════════════════════════════════════════════════════════════════════
-# 草稿离大模型越来越近：四格主线 ＋ 一格侧枝。年份按 arXiv 首版（2026-10-15 核过摘要页）。
+# 草稿离大模型越来越近：四格主线 ＋ 一格侧枝。论文年份按 arXiv 首版（2026-10-15 核过摘要页）；Prompt Lookup 按 GitHub 仓库创建时间 2023-11。
 TREE = [
     # (年份角标, 名字, 一句话, 出处)
     ("2022–23", "独立小模型", "旁边另放一个小模型", "Leviathan 等 2211.17192；Chen 等 2302.01318"),
@@ -384,7 +384,7 @@ def fig_tree():
                "第四格 2024 年末 DeepSeek-V3 的 MTP：预测头训练时就长在模型里。"
                "侧枝 2023 到 2024 年：不要模型，Prompt Lookup 和 SuffixDecoding 直接从 prompt 或历史输出里抄")
     y0 = f.header("草稿从哪来　——　<tspan font-weight=\"700\">一步步长进大模型身上，或者干脆不要模型</tspan>",
-                  "灰色大块 ＝ 大模型，紫色小块 ＝ 草稿。角标是 arXiv 首版年份",
+                  "灰色大块 ＝ 大模型，紫色小块 ＝ 草稿。角标是首次公开的年份：论文按 arXiv 首版，Prompt Lookup 没有论文，按 GitHub 仓库",
                   [(GY2, "大模型"), (PU, "草稿"), (OR, "侧枝：不要模型")])
     CW, CH, GAP = 250, 340, 20
     ya = y0 + 34                                    # 顶上留一条「越来越近」的箭头
@@ -460,9 +460,9 @@ def fig_tree():
     f.t(x5 + W5 / 2, ya + CH - 62, nm, OR, True, 17, "middle")
     f.t(x5 + W5 / 2, ya + CH - 30, desc, GY, False, 15, "middle")
     yb = f.src(ya + CH + 6,
-               "年份取 arXiv 首版（2026-10-15 逐个核过摘要页）："
+               "论文年份取 arXiv 首版（2026-10-15 逐个核过摘要页）："
                + "；".join("%s %s" % (nm, ref) for _, nm, _, ref in TREE) + "。"
-               "Prompt Lookup 仓库 apoorvumang/prompt-lookup-decoding（已集成进 vLLM 与 transformers）。",
+               "Prompt Lookup 没有论文，年份按 GitHub 仓库 apoorvumang/prompt-lookup-decoding 的创建时间（2023-11，GitHub API 核过；已集成进 vLLM 与 transformers）。",
                "没画进图的（正文里提到）：SpecInfer 2305.09781 把草稿排成树；DSpark（DeepSeek，2607.05147）半自回归、按置信度定验几个，"
                "摘要说吞吐相同条件下单用户生成速度比线上 MTP-1 快 60–85%；扩散草稿 DiffuSpec 2510.02358、DFlash 2602.06036（ICML 2026，摘要说无损加速超过 6 倍）；"
                "Lookahead 2402.02057。P-EAGLE、PARD、LayerSkip 等也没画。",

@@ -27,7 +27,7 @@ fig6-rulers.svg —— 回答：同一次测量，换分子分母能差多少？
   · 自洽检查：8K 进 1K 出，in+out 约是 output 的 9 倍；11,880 × 64 ＝ 760,320 ≈ 9 × 84,321。
 
 fig6-traps.svg —— 回答：除了分母，还有哪几个坑会让同一套系统报出差很远的数？
-  · 池子比例没调：SGLANG-V4PRO-RUNBOOK.md:611-615、849-858（ISL 4096 下 ratio 0.20 → 0.15 → 再加 mem-frac）。
+  · 2026-10 R3：拿掉「池子比例没调」那格 —— 两个 KV 池要到 3.4 才讲，第二节用它举例太早（6,887 → 10,614 留在 fig6-swa-ratio）。
   · 峰值 vs 稳态：同上 #7（端到端 10,704、峰值 12,070）；Gemma4-31B README:460（4,495 vs peak 6,144）。
   · 温度：VLLM-V4PRO-RUNBOOK.md:394-420（接受率 1.16% vs 34%）。只对 greedy 草稿成立：
     gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:226-230 的 draft 是 probabilistic，官方就用 1.0。
@@ -67,8 +67,6 @@ assert round(SPREAD) == 36
 OFFICIAL = 11200
 
 # ── 四个坑 ──────────────────────────────────────────────────────
-CEIL = [("ratio 0.20", 6887), ("ratio 0.15", 10614), ("0.15 ＋ mem-frac 0.88", 10704)]
-assert round(CEIL[1][1] / CEIL[0][1] - 1, 2) == 0.54
 PEAK = [("V4-Pro dep8 · 端到端", 10704, "峰值", 12070), ("Gemma4-31B · 并发 256", 4495, "峰值", 6144)]
 assert round(PEAK[0][3] / PEAK[0][1] - 1, 3) == 0.128 and round(PEAK[1][3] / PEAK[1][1] - 1, 2) == 0.37
 TEMP = dict(acc=(1.16, 34), out=(944, 2911), tpot=(232, 48.6))
@@ -296,25 +294,22 @@ def fig_rulers():
 
 TRAPS = [
     # (坑名, 坑里: (标签, 值), 改对: (标签, 值), 大数, 大数下面一句)
-    ("池子比例没调", ("ratio 0.20", CEIL[0][1]), ("ratio 0.15", CEIL[1][1]),
-     "+%d%%" % round((CEIL[1][1] / CEIL[0][1] - 1) * 100), "只改 KV 池的一个比例"),
     ("峰值当稳态", ("峰值", PEAK[0][3]), ("端到端", PEAK[0][1]),
      "虚高 %d%%" % round((PEAK[0][3] / PEAK[0][1] - 1) * 100), "同一轮，换个读数"),
     ("没预热", ("第一轮", WARM[1][1]), ("第二轮", WARM[1][3]),
      "×%.2f" % (WARM[1][3] / WARM[1][1]), "同一套配置，跑第二遍"),
 ]
-assert [t[3] for t in TRAPS] == ["+54%", "虚高 13%", "×2.05"]
+assert [t[3] for t in TRAPS] == ["虚高 13%", "×2.05"]
 
 
 def fig_traps():
-    f = Fig(W, "尺子以外的三个坑，每个都是同一套系统的两次实测。池子比例没调：只改 KV 池的划分比例，同为 4K 输入，"
-               "端到端从 6,887 涨到 10,614，涨 54%。峰值当稳态：引擎自报的峰值 12,070，端到端稳态 10,704，峰值虚高 13%。"
+    f = Fig(W, "尺子以外的两个坑，每个都是同一套系统的两次实测。峰值当稳态：引擎自报的峰值 12,070，端到端稳态 10,704，峰值虚高 13%。"
                "没预热：vLLM 一组第一轮 13,585，第二轮 27,803，差 2.05 倍")
     y0 = f.header("尺子以外的坑　——　<tspan font-weight=\"700\">每一个都能单独让数字差出一截</tspan>",
-                  "GB300 上的 DeepSeek-V4-Pro，三组各自独立的实测；每组上面是坑里的数，下面是改对之后的数",
+                  "GB300 上的 DeepSeek-V4-Pro，两组各自独立的实测；每组上面是坑里的数，下面是改对之后的数",
                   [(GY2, "坑里的数"), (GR, "改对之后的数")])
     GAP = 20
-    CW = (W - 2 * GAP) / 3.0
+    CW = (W - GAP * (len(TRAPS) - 1)) / float(len(TRAPS))
     PH = 30 + 260
     for i, (name, (la, va), (lb, vb), big, how) in enumerate(TRAPS):
         x = i * (CW + GAP)
@@ -331,10 +326,9 @@ def fig_traps():
             f.t(BX + bw + 10, yy + 26, format(v, ","), GY if col == GY2 else col, True, 17)
     f._pan = None
     yb = f.src(y0 + PH + 4,
-               "池子比例与峰值：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:611-615、849-858"
-               "（ISL 4096，#1 ratio 0.20 → 6,887；#3 0.15 → 10,614；#7 加 mem-frac 0.88 → 10,704、峰值 12,070）。"
+               "峰值：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:849-858"
+               "（ISL 4096，#7 端到端 10,704、峰值 12,070）。"
                "峰值是 decode 引擎自报的瞬时 gen throughput，按 DP rank 计（同文件 835-845）。"
-               "ISL 8192 下扫并发得到的 9,200–9,400 是另一个负载，不能和这里的 4K 比。",
                "另一组峰值稳态：tpu/tpu-inference/Gemma4-31B/README.md:460（TPU v7x，并发 256，输出 4,495、peak 6,144）。",
                "预热：VLLM-V4PRO-RUNBOOK.md:431-433（2P1D conc256，13,585 → 27,803）；另一组 SGLANG-V4PRO-RUNBOOK.md:480-494"
                "（8,520 → 9,118，+7.0%）。闭环：SGLANG-V4PRO-RUNBOOK.md:478、1135（闭环比开环低 13%）。",

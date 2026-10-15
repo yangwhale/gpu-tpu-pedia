@@ -18,7 +18,8 @@ r"""专题六 · 第十节「先选拓扑，再调参数」的五张静态图。
     README-TPU-VM.md:1000-1009（ICI slice，Workload Policy）。
   · V4-Pro SGLang 必须同一 NVL72 域：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:34、63。
   · DeepSeek-V3 结构与 TPU v7 规格：topic06_numbers.py（HF config.json ＋ 官方规格）；
-    每 device 可用 HBM 94.75 GB、FP8 MoE 实测约 101.8 GB/device：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、73。
+    每 device 可用 HBM 94.75 GiB、FP8 MoE 实测约 101.8/device：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、73
+    （README 正文写 GB，运行日志里 94.75 带的单位是 GiB；本图容量统一按 GiB 算，内部全用字节）。
   · R1 / SGLang / GB300 3P2D（20 GPU）并发扫描（总吞吐，1024 进 512 出）与「~288 并发」估算：
     gpu/inference/a4x-max/deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md:401、405-413。
 
@@ -68,13 +69,14 @@ assert ICI == [-21, -19, -15, -16, None], ICI
 assert (min(DCN), max(DCN)) == (-63, -17) and (min(i for i in ICI if i), max(i for i in ICI if i)) == (-21, -15)
 
 # ══ ④ DeepSeek-V3 在 TPU v7 上的最小切片（本课推导）════════════════════
-GB = 1e9
-W_FP8 = N.V3_TOTAL * 1 / GB                         # FP8：每参数 1 字节（忽略 block scale）
-assert round(W_FP8) == 671
+GIB = N.GIB                                          # 本图容量一律按 GiB 显示；下面的量都以 GiB 为单位
+W_FP8 = N.V3_TOTAL * 1 / GIB                         # FP8：每参数 1 字节（忽略 block scale）＝ 671 GB
+assert round(W_FP8) == 625 and round(N.V3_TOTAL / 1e9) == 671
 KVT = N.V3_KV_PER_TOKEN                              # 70,272 B / token（bf16 MLA，61 层）
 assert KVT == 70272
-DEV_USABLE = 94.75                                   # GB / device，实测可用（R1 README:59）
-CHIP_USABLE = DEV_USABLE * N.V7_DEVICES_PER_CHIP     # 189.5 GB / chip
+DEV_USABLE = 94.75                                   # GiB / device，实测可用（R1 README:59；日志单位 GiB）
+CHIP_USABLE = DEV_USABLE * N.V7_DEVICES_PER_CHIP     # 189.5 GiB / chip（物理 192 GiB）
+assert CHIP_USABLE * GIB < N.V7_HBM and round(CHIP_USABLE * GIB / 1e9, 1) == 203.5
 RESERVE = 0.10                                       # 本课假设：激活 ＋ 编译临时区
 CHIP_FOR_DATA = CHIP_USABLE * (1 - RESERVE)
 assert round(CHIP_USABLE, 1) == 189.5 and round(CHIP_FOR_DATA, 2) == 170.55
@@ -84,7 +86,7 @@ CONCS = [64, 256]
 
 
 def need(ctx, conc):
-    kv = ctx * conc * KVT / GB
+    kv = ctx * conc * KVT / GIB
     tot = W_FP8 + kv
     raw = tot / CHIP_FOR_DATA
     chips = next(s for s in SLICES if s >= raw)
@@ -94,21 +96,25 @@ def need(ctx, conc):
 GRID = {(c, n): need(t, n) for c, t in CTX for n in CONCS}
 TOTS = {k: round(v[1]) for k, v in GRID.items()}
 CHIPS = {k: v[3] for k, v in GRID.items()}
-assert TOTS == {("4K", 64): 689, ("4K", 256): 745, ("32K", 64): 818, ("32K", 256): 1260,
-                ("128K", 64): 1260, ("128K", 256): 3029}, TOTS
-assert CHIPS == {("4K", 64): 8, ("4K", 256): 8, ("32K", 64): 8, ("32K", 256): 8,
+assert TOTS == {("4K", 64): 642, ("4K", 256): 694, ("32K", 64): 762, ("32K", 256): 1174,
+                ("128K", 64): 1174, ("128K", 256): 2821}, TOTS
+RAWS = {k: round(v[2], 2) for k, v in GRID.items()}
+assert (RAWS[("4K", 64)], RAWS[("4K", 256)], RAWS[("32K", 256)], RAWS[("128K", 256)]) == (3.76, 4.07, 6.88, 16.54), RAWS
+assert round(GRID[("128K", 256)][0] / W_FP8, 1) == 3.5          # KV 是权重的 3.5 倍
+assert CHIPS == {("4K", 64): 4, ("4K", 256): 8, ("32K", 64): 8, ("32K", 256): 8,
                  ("128K", 64): 8, ("128K", 256): 32}, CHIPS
 LEFT4 = 4 * CHIP_FOR_DATA - W_FP8                     # 4 颗芯片放完权重还剩多少给 KV
-LEFT4_TOK = LEFT4 * GB / KVT
-assert round(LEFT4) == 11 and round(LEFT4_TOK / 1000) == 159
+LEFT4_TOK = LEFT4 * GIB / KVT
+assert round(LEFT4) == 57 and round(LEFT4 * GIB / 1e9, 1) == 61.5 and round(LEFT4_TOK / 1000) == 875
 MAX4_AT_4K = int(LEFT4_TOK // 4096)
-assert MAX4_AT_4K == 38
+assert MAX4_AT_4K == 213
 # 纸面的 FP8 MoE 每 device：路由专家 256 × 58 层 × 3 个矩阵 × 7168 × 2048
 ROUTED = N.V3_EXPERTS * 58 * 3 * N.V3_HIDDEN * 2048
 assert round(ROUTED / 1e9, 1) == 653.9
-PAPER_MOE_DEV = ROUTED / GB / 8
-assert round(PAPER_MOE_DEV, 1) == 81.7
-REAL_MOE_DEV = 101.8                                  # 实测记录（R1 README:73）
+PAPER_MOE_DEV = ROUTED / GIB / 8
+assert round(PAPER_MOE_DEV, 1) == 76.1 and round(ROUTED / 1e9 / 8, 1) == 81.7
+REAL_MOE_DEV = 101.8                                  # 实测记录（R1 README:73，正文写 GB）
+assert REAL_MOE_DEV > DEV_USABLE and REAL_MOE_DEV > DEV_USABLE * GIB / 1e9   # 按 GB 还是 GiB 读都超
 
 # ══ ⑤ R1 3P2D 并发扫描（总吞吐 tok/s，20 GPU）══════════════════════════
 SWEEP = [(8, 854), (32, 4635), (64, 5265), (128, 6878), (192, 9975),
@@ -379,16 +385,17 @@ def fig_rank():
 
 # ─────────────────────────────────────────────────────────────────────────
 def fig_slice():
-    f = Fig(W, "DeepSeek-V3 用 FP8 权重 671 GB，每个 token 的 KV 70272 字节。TPU v7 每颗芯片可用约 189.5 GB，"
-               "预留一成给激活后按 170.55 GB 算。竖虚线是 4、8、16、32 颗芯片各能放多少。"
-               "4K 上下文 64 并发要 689 GB，纸面 4.04 颗，可切片只有 4、8、16、32 颗几档，所以取 8 颗；"
-               "4K 256 并发 745 GB，32K 64 并发 818 GB，32K 256 并发和 128K 64 并发都是 1260 GB，都是 8 颗；"
-               "128K 256 并发要 3029 GB，纸面 17.76 颗，要 32 颗")
+    f = Fig(W, "DeepSeek-V3 用 FP8 权重 671 GB，即 625 GiB，每个 token 的 KV 70272 字节。TPU v7 每颗芯片可用约 189.5 GiB，"
+               "预留一成给激活后按 170.55 GiB 算。竖虚线是 4、8、16、32 颗芯片各能放多少。"
+               "4K 上下文 64 并发要 642 GiB，纸面 3.76 颗，取 4 颗；"
+               "4K 256 并发 694 GiB，纸面 4.07 颗，可切片只有 4、8、16、32 颗几档，所以取 8 颗；"
+               "32K 64 并发 762 GiB，32K 256 并发和 128K 64 并发都是 1174 GiB，都是 8 颗；"
+               "128K 256 并发要 2821 GiB，纸面 16.54 颗，要 32 颗")
     y0 = f.header("DeepSeek-V3 在 TPU v7 上最少几颗芯片　——　<tspan font-weight=\"700\">权重是地板，KV 决定往上加多少</tspan>",
-                  "本课推导：FP8 权重 671 GB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GB（可用 189.5 GB，预留一成给激活），向上取到切片档位",
-                  [(BL, "权重 671 GB"), (OR, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档芯片能放多少")])
+                  "本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GiB（可用 189.5 GiB，预留一成给激活），向上取到切片档位",
+                  [(BL, "FP8 权重 625 GiB"), (OR, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档芯片能放多少")])
     PH = 470
-    py = f.panel(0, y0, W, PH, "要多少 HBM（GB），取几颗芯片", INK)
+    py = f.panel(0, y0, W, PH, "要多少 HBM（GiB），取几颗芯片", INK)
     RCOL = W - 210
     X0, AY = 150, py + 34
     AW = RCOL - 40 - X0
@@ -416,16 +423,16 @@ def fig_slice():
         f.t(RCOL, yy + bh / 2 + 6, "%.2f 颗 → %d 颗" % (raw, chips), RD if chips > 8 else INK, True, 15)
     f.t(RCOL, AY - 10, "纸面 → 取档", GY, True, 15)
     f.t(20, AY + AH + 64, "切片只有 4 / 8 / 16 / 32 颗这几档：纸面 %.2f 颗也只能取 8 颗，%.2f 颗就得取 32 颗"
-        % (GRID[("4K", 64)][2], GRID[("128K", 256)][2]), INK, True, 16)
+        % (GRID[("4K", 256)][2], GRID[("128K", 256)][2]), INK, True, 16)
     f._pan = None
     yb = y0 + PH
     yb = f.src(yb + 10,
                "📌 DeepSeek-V3 结构（671B、61 层、MLA kv_lora_rank 512 ＋ rope 64、256 专家）：topic06_numbers.py，来自 HF config.json。"
                "每 token KV 70,272 B ＝ (512 ＋ 64) × 2 B × 61 层。",
-               "📌 每 device 可用 94.75 GB、FP8 MoE 约 101.8 GB/device 超 HBM 所以用 FP4：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、:72-73（R1 与 V3 同架构）。",
+               "📌 每 device 可用 94.75 GiB（README 写 GB，运行日志为 GiB；v7 每芯片物理 192 GiB）、FP8 MoE 实测约 101.8/device 超 HBM 所以用 FP4：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、:72-73（R1 与 V3 同架构）。",
                "⚠️ 本课推导与假设：FP8 每参数 1 字节、不计 block scale；激活预留 10% 是假设；KV 不重复（DP 注意力或 EP），"
                "没算 DP 注意力在每个 device 上各放一份约 17B 非专家权重的开销；切片档位取 4／8／16／32 颗（v7x-8／16／32／64）。"
-               "纸面 MoE 81.7 GB/device ＝ 256 × 58 层 × 3 × 7168 × 2048 字节 ÷ 8 device。")
+               "纸面 MoE 76.1 GiB/device ＝ 256 × 58 层 × 3 × 7168 × 2048 字节 ÷ 8 device。")
     f.save("fig6-s10-slice.svg", yb + 14)
 
 
@@ -459,8 +466,8 @@ def fig_conc():
         f.t(px(c), AY + AH + 22, str(c), GY, size=12, anchor="middle")
     f.t(X0 + AW / 2, AY + AH + 48, "并发（压测端发的）", GY, size=13, anchor="middle")
     f.t(px(8) + 14, pyv(854) - 6, "854", RD, True, 15)
-    f.t(px(256), pyv(10390) - 16, "10,390（甜点，TTFT 12 s）", BL, True, 13.5, "middle")
-    f.t(px(512) - 6, pyv(10715) + 28, "10,715（峰值，TTFT 30 s）", BL, True, 13.5, "end")
+    f.t(px(256) + 54, pyv(10390) + 36, "10,390（甜点，TTFT 12 s）", BL, True, 14, "end")
+    f.t(px(512) - 6, pyv(10715) + 28, "10,715（峰值，TTFT 30 s）", BL, True, 14, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "容量要扫出来：一直加并发，直到吞吐不涨、延迟开始爆", [
         "conc=8 时 decode 每一趟只分给 8 个请求，测到的是「这套机器闲着时多快」，不是它能扛多少。",

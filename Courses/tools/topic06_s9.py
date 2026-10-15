@@ -12,7 +12,7 @@ BODY = '''
   <h3 id="s9-1">9.1　回顾：配比从哪来</h3>
   <p><a href="topic-05.html#s6-3">专题五 §6.3</a> 用 DistServe 的例子讲过：两边各有一张卡能接的上限，按上限把两边配到差不多同时忙满。</p>
 __FIG_S9_RATIO_T5__
-  <p>那里的 2:1 来自两个上限之比。换到真实部署，要把「一张接几个」换成能量出来的吞吐。</p>
+  <p>真实部署里，要把「一张接几个」换成量出来的吞吐。</p>
 
   <h3 id="s9-2">9.2　配比公式：先算一个起点</h3>
   <p><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b>
@@ -25,7 +25,7 @@ __FIG_S9_RATIO_T5__
     <tr><td>一个 prefill（4 卡）</td><td>4 × 每卡 18,200 input tok/s（官方的 prefill 单卡吞吐）</td><td>约 7.28 万 tok/s</td></tr>
     <tr><td>要几个</td><td>71.7 ÷ 7.28</td><td>约 9.8，取 8–10 个</td></tr>
   </table>
-  <p>官方的高并发配置用 8 个 prefill，落在估算区间（约 9.8）的下沿。18,200 是官方给的单卡 prefill 吞吐；runbook 自己测的单卡峰值是 15,196，只有它的 83%，照实测算要的 prefill 更多。</p>
+  <p>官方的高并发配置用 8 个，落在区间下沿。18,200 是官方给的单卡 prefill 吞吐；runbook 自己测的单卡峰值是 15,196，只有它的 83%，照实测算要的 prefill 更多。</p>
   <p>实测也印证了公式给的只是起点。同一份 runbook 早期扫过 prefill 个数（历史数据，之后没重测），每张 decode 卡的输出：8 个时 6,788，14 个时 8,809，16 个时 8,993。14 到 16 只涨 2%，已经喂饱，runbook 因此把 14 定为默认（runbook:43、1117）。</p>
 
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
@@ -40,13 +40,8 @@ __FIG_S9_2P1D__
   <h3 id="s9-4">9.4　换个分母，结论差五倍</h3>
   <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。按 decode 卡算，每卡输出从 307 涨到 3,321；把 prefill 的卡也算进分母，最多只到 455。</p>
 __FIG_S9_SWEEP__
-  <ul>
-    <li><b>只除 decode 卡</b>：prefill 的成本被藏了起来，配得越多越好看。这是不少 PD 报告的默认口径。</li>
-    <li><b>除全部卡</b>：12 个 prefill 时到顶，第 14 个开始稀释。要算整机成本，看这条。</li>
-    <li><b>同是 12 个 prefill</b>：按 decode 卡算是起点的 10.4 倍（307 → 3,187），按全部卡算只有 2.2 倍（204 → 455）。</li>
-    <li><b>看到每卡吞吐先问</b>：分母里有没有 prefill 的卡（第二节）。</li>
-  </ul>
-  <p>这条曲线是 2026-07-24 的历史实测，runbook 注明之后没有重测，只当趋势看。输入换成 4K 后，每个 prefill 能喂的 decode 约翻倍，曲线形状随输入长度变。</p>
+  <p>只除 decode 卡是不少 PD 报告的默认口径，prefill 的成本被藏了起来。同是 12 个 prefill，按 decode 卡算是起点的 10.4 倍（307 → 3,187），按全部卡算只有 2.2 倍（204 → 455）。<b>看到每卡吞吐，先问分母里有没有 prefill 的卡。</b></p>
+  <p>这条曲线是 2026-07-24 的历史实测，之后没有重测，只当趋势看。输入换成 4K 后，同样台数的 prefill 喂出约 2 倍的 decode 吞吐。</p>
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
   <p>拆开多一趟传输、多一套机器。<b>prefill 和 decode 本来就没怎么打架时，这些代价换不回东西。</b></p>
@@ -56,25 +51,14 @@ __FIG_S9_SWEEP__
     <tr><td>同上，batch 128</td><td>12.78K</td><td>1P1D 13.64K；2P1D 15.31K</td><td>并发上来，拆开开始赚</td></tr>
     <tr><td>Qwen3-Coder-480B，两台 v7x-8，1K 进 1K 出，单并发</td><td>一台：TTFT 中位数 95 ms</td><td>1P1D：281 ms</td><td>多了一趟传输；用了两倍机器，输出只多 12%</td></tr>
   </table>
-  <p>同一个 MiMo，batch 64 时不拆好，batch 128 时拆开好。<b>拆不拆跟着负载走，同一个模型可以两种答案。</b></p>
+  <p><b>拆不拆跟着负载走，同一个模型可以两种答案。</b></p>
   <details class="foldfig"><summary><b>出处与口径</b>：两组 TPU 例子</summary>
   <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%。
     Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量，不是扫描。</p></details>
 
   <h3 id="s9-6">9.6　决策树：三个问题</h3>
-  <p>把上面几节压成三问，从上往下问；第一问答「否」，后面就不用问了。</p>
+  <p>从上往下问，答「否」就停。分块 prefill 见第四节，KV 薄不薄见 8.8。</p>
 __FIG_S9_DECIDE__
-  <ul>
-    <li><b>先问打不打架</b>：看不拆时 TPOT 有没有被长 prompt 撑出尖峰。没有尖峰就不用拆；有尖峰，先试分块 prefill（第四节），压不住再拆。</li>
-    <li><b>再问 KV 走哪条线</b>：同一个 NVLink 域或同一个 TPU 切片最省心；出了域，就要算清 KV 有多大（8.8）。</li>
-    <li><b>最后问缺什么</b>：TTFT 先破就加 prefill，TPOT 或吞吐先破就加 decode，或者换 decode 的切法（第六节）。</li>
-  </ul>
-  <p>几个实测例子：</p>
-  <ul>
-    <li>混合模型的 KV 比全注意力薄 4–13 倍，才敢跨数据中心（按 8.8 的外送带宽相除，本课推导）。</li>
-    <li>GPU 跨出 NVLink 域，KV 就退到 RDMA（8.6）。</li>
-    <li>MiMo batch 128 时，2P1D 比不拆多 19.8%（15.31K ÷ 12.78K，9.5 的表）。</li>
-  </ul>
 
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
   <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，每一层来回一趟，靠几个小批轮流跑把通信藏住。</p>
@@ -100,7 +84,7 @@ __FIG_S9_AFD_ASCEND__
 
   <h3 id="s9-9">9.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    decode 每一步都要把权重和 KV 搬一趟。拆开是为了让这一趟不再等 prefill，两边的切法也能各选各的；AFD 让专家那头一趟分给更多机器的 token。
+    拆开是为了让这一趟不再等 prefill，两边的切法也能各选各的；AFD 让专家那头一趟分给更多机器的 token。
     拆不拆、怎么配，看负载，不看潮流。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一份报告说「加到 12 个 prefill，每卡吞吐涨了 10 倍」。你先问什么？</summary>
@@ -115,7 +99,7 @@ FIGS = {
     "__FIG_S9_SWEEP__": ("fig-s9-prefill-sweep", "fig6-prefill-sweep.svg", "topic06-fig-ratio.py",
         '<b>同一组实测，两条线。</b><br><em>蓝线是 runbook 原口径，橙线是本课换了分母重算的。</em>'),
     "__FIG_S9_DECIDE__": ("fig-s9-decide", "fig6-decide.svg", "topic06-fig-ratio.py",
-        '<b>三问，从上往下。</b><br><em>阈值没画，要拿自己的负载量；实测例子见正文。</em>'),
+        '<b>三问，从上往下。</b><br><em>阈值没画，要拿自己的负载量。</em>'),
     "__FIG_S9_AFD_T5__": ("fig-s9-afd-t5", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>一层里的两种活，分到两批机器。</b><br><em>专题五原图，机器数是示意。</em>'),
     "__FIG_S9_AFD_ASCEND__": ("fig-s9-afd-ascend", "fig6-afd-ascend.svg", "topic06-fig-ratio.py",

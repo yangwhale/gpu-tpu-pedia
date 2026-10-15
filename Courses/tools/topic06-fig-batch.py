@@ -29,7 +29,7 @@ fig6-overlap.svg —— 回答：CPU 排下一批的那几毫秒，为什么也�
   · 时间线长短是示意；只有 12 ms 与 38 µs 两个数是原文的。
 """
 
-from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, wpx, MONO_K, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 
 W = 1400
 
@@ -128,7 +128,16 @@ def fig_gantt():
                "空转 11 格全在最后队列空了之后")
     y0 = f.header("每一步都重新排一次　——　<tspan font-weight=\"700\">谁跑完谁让位，槽位不空等</tspan>",
                   "示意：4 个槽位 × 8 个请求，每个请求一种颜色、字母标在它的第一格。每一列是一步 decode",
-                  [(BL, "实心格 ＝ 某个请求这一步出一个字"), (GY2, "虚线格 ＝ 槽位空转，这一趟白搬")])
+                  None)
+    # 图例手画：实心格有 8 种颜色，单色色块会被读成「只有蓝色是」；虚线格画成虚线框
+    ly = y0 - 8
+    for i, c in enumerate((BL, OR, GR)):
+        f.box(i * 17, ly - 11, 14, 14, c, c, 3)
+    f.t(3 * 17 + 4, ly, "彩色实心格 ＝ 这个请求这一步出一个字", GY, size=14)
+    lx2 = 3 * 17 + 4 + wpx("彩色实心格 ＝ 这个请求这一步出一个字", 14) * MONO_K + 26
+    f.box(lx2, ly - 11, 14, 14, "#fff", GY2, 3, 1.2, dash="3 2")
+    f.t(lx2 + 21, ly, "虚线格 ＝ 槽位空转，这一趟白搬", GY, size=14)
+    y0 += 20
     CW, RH = 56, 30
     X0 = 220
     PH = 4 * (RH + 8) + 100
@@ -305,8 +314,8 @@ def fig_overlap():
                 if n < 2:
                     f.box(xt, yc, CPU * U - 4, 34, BL, BL, 4)
                     f.t(xt + CPU * U / 2, yc + 23, "排 N+%d" % (n + 1), "#ffffff", True, 13, "middle")
-    f.t(X0 + 3 * (CPU + TPU) * U + 20, py + 112, "≈ 12 ms 一次", RD, True, 16)
-    f.t(X0 + 3 * (CPU + TPU) * U + 20, py + 252, "≈ 38 µs 一次", GR, True, 16)
+    f.t(X0 + 3 * (CPU + TPU) * U + 20, py + 112, "空档 ≈ 12 ms", RD, True, 16)
+    f.t(X0 + 3 * (CPU + TPU) * U + 20, py + 252, "空档 ≈ 38 µs", GR, True, 16)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "decode 一步越短，CPU 那几毫秒占得越多", [
         "批开得越大，CPU 要拼的东西越多；TPU 一步本来才几十毫秒，串着走就白白空掉一截。",

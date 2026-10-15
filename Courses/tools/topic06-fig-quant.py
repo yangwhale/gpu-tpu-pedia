@@ -2,7 +2,7 @@
 r"""专题六 · 第十二节「少搬字节：量化与 kernel 融合」的四张静态图。
 
 fig6-quant-bytes.svg —— 回答：权重从 BF16 降到 FP8、FP4，decode 一步的搬运下限缩多少？
-  · 数字：V3 每 token 激活 37B、总 671B（技术报告摘要）；TPU v7 每芯片 7.37 TB/s、192 GB（Google Cloud 公开规格），
+  · 数字：V3 每 token 激活 37B、总 671B（技术报告摘要）；TPU v7 每芯片 7.37 TB/s、HBM 192 GiB（Google Cloud 公开规格；＝ 206.2 GB），
     都从 topic06_numbers 取。MXFP4 4.25 bit（OCP MX v1.0），NVFP4 4.5 bit（NVIDIA NVFP4 技术博客）。
   · 本课推导：下限 ＝ 激活权重字节 ÷ 8 颗芯片带宽合计。假设 batch=1、权重均匀摊在 8 颗芯片上、带宽跑满；
     不含 KV、激活值和通信。
@@ -41,8 +41,8 @@ assert round(ACT_GB["BF16"]) == 74 and round(ACT_GB["FP8"]) == 37
 assert round(ACT_GB["MXFP4"], 2) == 19.66 and round(ACT_GB["NVFP4"], 2) == 20.81
 assert [round(T_MS[n], 2) for n, _, _ in FORMATS] == [1.26, 0.63, 0.33, 0.35], T_MS
 assert round(ALL_GB["BF16"]) == 1342 and round(ALL_GB["FP8"]) == 671
-HBM8 = CHIPS * V7_HBM / 1e9
-assert HBM8 == 1536
+HBM8 = CHIPS * V7_HBM / 1e9                       # 这张图统一用十进制 GB，和权重字节同一把尺
+assert CHIPS * V7_HBM / 2 ** 30 == 1536 and round(HBM8) == 1649
 
 # ══ fig6-quant-mx ═══════════════════════════════════════════════════════
 MX_BLOCK, MX_SCALE = 32, 8
@@ -59,6 +59,11 @@ INT4_OFFSET = 8
 SIGNED = list(range(-8, 8))
 STORED = [v + INT4_OFFSET for v in SIGNED]
 assert STORED == list(range(16))
+# K2.6 那个 bug 的读法：解包后不减 8，直接 bitcast 成有符号 int4（README.md:266）。
+#   4 bit 补码里「加 8」正好等于翻转最高位，所以读回来的是「符号位翻了」的原值，差 ±8（本课推导）。
+AS_SIGNED = [u if u < 8 else u - 16 for u in STORED]
+assert all((a & 15) == ((v & 15) ^ 8) for a, v in zip(AS_SIGNED, SIGNED))   # 位模式＝原值翻最高位
+assert all(abs(a - v) == 8 for a, v in zip(AS_SIGNED, SIGNED))
 
 # ══ fig6-quant-fuse：Hazy 算例 ════════════════════════════════════════════
 H100_BW, L1B_BYTES = 3.35e12, 2.48e9
@@ -80,7 +85,7 @@ assert INF_AL / (INF_STEP_MS / 1e3) > INF_TPS      # 6 ÷ 8.5 ms ≈ 706
 def fig_bytes():
     f = Fig(W, "DeepSeek-V3 每个 token 激活 370 亿参数。按 BF16 存要读 74 GB，FP8 37 GB，MXFP4 约 19.66 GB，NVFP4 约 20.81 GB。"
                "放在 8 颗 TPU v7 上、合计带宽 58.96 TB/s，decode 一步只读权重的时间下限分别是 1.26、0.63、0.33、0.35 毫秒。"
-               "右边是全部 671B 参数要占多少 HBM：BF16 1,342 GB，FP8 671 GB，8 颗芯片合计 1,536 GB")
+               "右边是全部 671B 参数要占多少 HBM：BF16 1,342 GB，FP8 671 GB，8 颗芯片合计 1,649 GB（＝ 1,536 GiB）")
     y0 = f.header("位数减半，一步的搬运下限就减半　——　<tspan font-weight=\"700\">FP4 只要 BF16 的四分之一多一点</tspan>",
                   "DeepSeek-V3 · 8 颗 TPU v7 · batch 1 · 只算权重（本课推导）",
                   [(GY2, "BF16"), (BL, "FP8"), (GR, "MXFP4"), (CY, "NVFP4")])
@@ -111,7 +116,7 @@ def fig_bytes():
     f.path("M%d,%d L%d,%d" % (xh, pr + 36, xh, pr + 296), RD, 1.6, dash="5,4", arrow=False)
     f.t(xh, pr + 26, "8 颗合计 {:,} GB".format(round(HBM8)), RD, True, 15, "end")
     yb = f.src(y0 + PH + 6,
-               "V3：技术报告 arXiv 2412.19437 摘要，总参数 671B、每 token 激活 37B。TPU v7：Google Cloud 公开规格，每芯片 HBM 192 GB、带宽 7.37 TB/s。",
+               "V3：技术报告 arXiv 2412.19437 摘要，总参数 671B、每 token 激活 37B。TPU v7：Google Cloud 公开规格，每芯片 HBM 192 GiB、带宽 7.37 TB/s。右图统一用十进制 GB：8 × 192 GiB ＝ 1,536 GiB ≈ 1,649 GB（本课推导）。",
                "MXFP4：OCP Microscaling Formats (MX) Specification v1.0。NVFP4：NVIDIA 技术博客「Introducing NVFP4 for Efficient and Accurate Low-Precision Inference」。",
                "⚠️ 本课推导：下限 ＝ 激活参数 × 每参数位数 ÷ 8 ÷ (8 × 7.37 TB/s)。假设权重均匀摊开、带宽跑满；不含 KV、激活值和通信，实际一步更慢。",
                "注：真实部署很少整模型都降到 FP4：DeepSeek-V4 只把专家放 FP4、其余多为 FP8（HF 模型卡）。")
@@ -161,8 +166,9 @@ assert EX_S == 5
 def fig_r1():
     f = Fig(W, "INT4 的存法和读法。INT4 和 FP4 一样每个数占 4 bit、只有 16 个值：INT4 是负 8 到 7 的等距整数，FP4 是浮点。"
                "对称 INT4 的权重是负 8 到 7，存进文件时整体加 8 变成 0 到 15，比如负 3 存成 5。"
-               "加载时减 8，负 3 原样回来，模型正常；忘了减 8，负 3 被读成 5，每个权重都偏大 8，模型输出崩成重复的乱词")
-    y0 = f.header("INT4：存的时候加了 8，读的时候要减回来　——　<tspan font-weight=\"700\">少减一次，每个权重都错</tspan>",
+               "加载时减 8，负 3 原样回来，模型正常；不减 8、直接当有符号 4 位整数读，0 到 7 读成 0 到 7、8 到 15 读成负 8 到负 1，"
+               "负 3 被读成 5，每个权重都差 8、符号位反了，模型输出崩成重复的乱词")
+    y0 = f.header("INT4：存的时候加了 8，读的时候要减回来　——　<tspan font-weight=\"700\">直接当有符号数读，每个权重都错</tspan>",
                   "INT4 和 FP4 一样每个数 4 bit、16 个值；INT4 是 −8 到 7 的等距整数，FP4 是浮点（0、0.5、1、1.5、2、3、4、6 及其负值）",
                   [(BL, "模型里的权重"), (OR, "文件里存的"), (GR, "读对了"), (RD, "读错了")])
     PH = 470
@@ -191,14 +197,15 @@ def fig_r1():
     f.t(xi - 12, y2 + 80, "加载时 −8", GR, True, 16, "end")
     row(y3, "读对了", [s - INT4_OFFSET for s in STORED], GR, "#e6f4ea", "和第一行一样")
     y4 = y3 + 100
-    row(y4, "忘了减 8", STORED, RD, "#fce8e6", "每个都大了 8")
+    row(y4, "当有符号读", AS_SIGNED, RD, "#fce8e6", "差 ±8，符号位反了")
     xg = X0 + SIGNED.index(EX_V) * CW + CW - 3          # 两格之间那条 6px 的缝
     f.path("M%d,%d L%d,%d L%d,%d" % (xg - 6, y2 + 44, xg, y2 + 54, xg, y4 - 6), RD, 1.8)
-    f.t(xg + 14, y3 + 76, "直接当原值读", RD, True, 16)
+    f.t(xg + 14, y3 + 76, "不减 8，按有符号解", RD, True, 16)
     f._pan = None
     f.t(X0, y4 + 74, "结果：读对了模型正常；读错了，输出崩成重复的「foss foss foss」", INK, True, 17)
     yb = f.src(y4 + 90,
-               "INT4：tpu/tpu-inference/Kimi-K2.6-1T-A32B-INT4/README.md:265-266。对称 int4 [−8, 7] 以无符号 [0, 15] 存放，加载时须减 8；直接按位转换会让模型崩溃，输出重复的「foss foss foss」。",
+               "INT4：tpu/tpu-inference/Kimi-K2.6-1T-A32B-INT4/README.md:265-266。对称 int4 [−8, 7] 以无符号 [0, 15] 存放，解包后须减 8；原文：直接 bitcast 成有符号 int4 会让符号位错位，模型崩溃，输出重复的「foss foss foss」。"
+               "最下一行由脚本逐个算出（本课推导）：4 bit 补码里加 8 正好翻转最高位，所以每个权重都差 8、符号位反了。",
                "⚠️ 示意：跟着走的「−3」是随手挑的一个值。FP4 (E2M1) 的取值按 OCP MX v1.0 由脚本算出：1 位符号、2 位指数、1 位尾数。",
                "正文里 R1 的容量数：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；FP8 专家约 101.8、FP4 专家约 60.9、连同注意力约 70，均为每 device）；"
                "上限 94.75 出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。94.75 GiB ≈ 101.7 GB，101.8 无论按哪个单位都不剩余量。")

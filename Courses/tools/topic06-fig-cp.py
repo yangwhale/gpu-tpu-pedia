@@ -71,7 +71,7 @@ def fig_dcp_gain():
     f = Fig(W, "Kimi K3 在 GB300 上用 SGLang，比较 TP8 和 TP8 加 DCP8 的输出吞吐比值，纵轴是对数刻度，1 倍是盈亏线。"
                "输入 4K 时四档并发 DCP 都亏，亏 7% 到 26%。突出画的是并发 8 那条线：4K、8K、32K 都在盈亏线下面，"
                "到 128K 一下跳到 365 对 108，多 237%。其余并发画成淡色：8K 并发 32 赚 24%，32K 并发 32 赚 7%，128K 并发 1 赚 12%")
-    FAINT = {1: "#cdb8ef", 8: BL, 32: "#f3c79e", 64: "#c3c6cb"}
+    FAINT = {1: "#cdb8ef", 8: BL, 32: "#f3c79e", 64: "#9aa0a6"}
     y0 = f.header("DCP 只在长上下文赚　——　<tspan font-weight=\"700\">128K、8 并发：365 对 108，+237%</tspan>",
                   "Kimi K3 · GB300 · SGLang · TP8 跨 2 节点，输出 1K。纵轴：DCP8 ÷ TP8 的输出吞吐（对数刻度），一条线一个并发",
                   [(BL, "并发 8"), (FAINT[1], "并发 1"), (FAINT[32], "并发 32"), (FAINT[64], "并发 64")])
@@ -102,6 +102,11 @@ def fig_dcp_gain():
         pts = [(px(isl), py_(RATIO[(isl, c)])) for isl in ISLS if (isl, c) in RATIO]
         if len(pts) > 1:
             f.path(pts, col, 3.6 if hot else 2, arrow=False)
+        if len(pts) == 1:
+            # 并发 64 只有 4K 一个点，比值 0.93 和并发 8 的 0.91 几乎重合：往右错开画成空心圈，免得被大蓝点盖住
+            x, y = pts[0]
+            f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="#fff" stroke="%s" stroke-width="2.5"/>' % (x + 24, y, col))
+            continue
         for x, y in pts:
             r = 7 if hot else 4
             f.box(x - r, y - r, 2 * r, 2 * r, col, col, r)

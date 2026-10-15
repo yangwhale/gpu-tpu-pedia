@@ -50,6 +50,9 @@ T = {k: KV_8K / v * 1e3 for k, v in (("bad", BW_BAD), ("lo", BW_LO), ("hi", BW_H
 assert round(T["bad"]) == 5201 and round(T["lo"]) == 149 and round(T["hi"], 1) == 6.2 and round(T["dcn"]) == 83
 PREFILL_MS = (1000, 2000)           # 专题五：8K prompt 的 prefill 1–2 s
 assert T["bad"] > PREFILL_MS[1] * 2.5          # 配错时，搬一趟比 prefill 本身还长两倍半以上
+# 标题里的倍数：对 prefill 2.6–5.2 倍；对配对两档 35–835 倍（＝ 带宽之比 7/0.2、167/0.2）
+assert "%.1f" % (T["bad"] / PREFILL_MS[1]) == "2.6" and "%.1f" % (T["bad"] / PREFILL_MS[0]) == "5.2"
+assert round(T["bad"] / T["lo"]) == 35 and round(T["bad"] / T["hi"]) == 835
 XFER_BEFORE, XFER_AFTER = (200, 800), (2, 10)  # runbook 实测单次传输（ms）
 assert XFER_BEFORE[0] / XFER_AFTER[0] == 100 and XFER_BEFORE[1] / XFER_AFTER[1] == 80   # 单次传输快约两个数量级
 
@@ -128,7 +131,7 @@ def fig_kv_bw():
                "200 MB/s 是 vLLM 在 GB300 上配错时的实测带宽，搬一趟约 5.2 秒，比 1 到 2 秒的 prefill 还长。"
                "专题五那条 100 Gbps 数据中心网络约 83 毫秒。按对三个开关之后实测 7 到 167 GB/s，一趟只要 149 到 6 毫秒。"
                "runbook 里单次传输从 200 到 800 毫秒降到 2 到 10 毫秒")
-    y0 = f.header("同一个库，配错一个开关，搬一趟比 prefill 还慢　——　<tspan font-weight=\"700\">慢了两个数量级</tspan>",
+    y0 = f.header("配错一个开关，搬一趟比 prefill 本身还慢 2.6–5.2 倍　——　<tspan font-weight=\"700\">比配对慢 35–835 倍</tspan>",
                   "横轴是对数时间。每根条是同一份 1.04 GB 的 KV（专题五那个 8K prompt）按这一档带宽搬一趟；灰带是这个 prompt 的 prefill 本身",
                   [(RD, "配错：实测 200 MB/s"), (GY2, "专题五：100 Gbps ＝ 12.5 GB/s"), (GR, "配对：实测 7–167 GB/s")])
     PH = 400

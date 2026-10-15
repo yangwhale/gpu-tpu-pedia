@@ -151,11 +151,11 @@ def _axes(f, x0, y0, w, h, ymax, yticks, fmt):
 def fig_dep_feed():
     f = Fig(W, "GB300 上 V4-Pro 用 vLLM，decode 固定为 DEP8 共 8 块卡，8K 进 1K 出、并发 1024，逐台加 prefill。"
                "1 台 prefill 时每块 decode 卡每秒只输出 307 个 token，出字间隔 5.4 毫秒；加到 14 台涨到 3321，几乎是一条直线。"
-               "16 台时撞上一个崩溃模式，只测到 2799。输入减半成 4K 时，同样台数的 prefill 喂出约两倍。"
+               "16 台时撞上一个失效模式，只测到 2799。输入减半成 4K 时，同样台数的 prefill 喂出约两倍。"
                "出字间隔一直只有 5 到 15 毫秒，说明 decode 一直在等 prefill 喂料")
     y0 = f.header("DEP8 的 decode 一直在等喂料　——　<tspan font-weight=\"700\">prefill 1 → 14 台，每卡 307 → 3,321</tspan>",
                   "GB300 · V4-Pro · vLLM。decode 固定 DEP8（8 块卡），并发 1,024。纵轴：每块 decode 卡每秒输出多少 token",
-                  [(BL, "8K 进 1K 出"), (OR, "4K 进 1K 出（同一套 decode 不重启）"), (RD, "崩溃模式，数不完整")])
+                  [(BL, "8K 进 1K 出"), (OR, "4K 进 1K 出（同一套 decode 不重启）"), (RD, "失效模式，数不完整")])
     PH = 430
     py = f.panel(0, y0, W, PH, "prefill 台数 → 每块 decode 卡的输出吞吐", BL)
     X0, PW, PY, PHH = 110, 1240, py + 30, PH - 110
@@ -175,7 +175,7 @@ def fig_dep_feed():
         f.box(px(n) - 5, py_(v) - 5, 10, 10, BL, BL, 5)
     f.path([(px(14), py_(3321)), (px(16), py_(FEED_BAD[1]))], RD, 1.6, "5 4", arrow=False)
     f.box(px(16) - 5, py_(FEED_BAD[1]) - 5, 10, 10, RD, RD, 5)
-    f.t(px(16) - 8, py_(FEED_BAD[1]) + 26, "16 台：崩", RD, True, 15, "end")
+    f.t(px(16) - 8, py_(FEED_BAD[1]) + 26, "16 台：失效", RD, True, 15, "end")
     f.path([(px(n), py_(v)) for n, v in FEED4K], OR, 2.4, arrow=False)
     for n, v in FEED4K:
         f.box(px(n) - 5, py_(v) - 5, 10, 10, OR, OR, 5)

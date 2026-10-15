@@ -2,8 +2,9 @@
 """专题六 · 第三节「KV cache：账、池、复用」。图在 topic06-fig-kv.py。"""
 
 BODY = '''
-  <p class="lead">2023 年 vLLM 的 PagedAttention 把这块地方分页，有效占用从两到四成提到 96%；同年 GQA 让 Llama-2-70B 的 KV 头数砍到八分之一。每条在跑的序列，都要在显存里单独占一块 KV，这块地方不能和别人共用。
-    <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b></p>
+  <p class="lead">每条在跑的序列，都要在显存里单独占一块 KV，不能和别人共用。
+    <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b>
+    于是 2023 年起的几招都在同样的显存里多装人：vLLM 的 PagedAttention 把这块地方分页，有效占用从两到四成提到 96%；同年 GQA 让 Llama-2-70B 的 KV 头数砍到八分之一（本节例子用结构相同的 Llama-3.1-70B）。</p>
 
   <h3 id="s3-1">3.1　一个 token 留下多少字节：四种记法</h3>
   <p>KV cache 是每个处理过的 token 在每一层留下的 K 和 V，后面的 token 算注意力时要回头读。
@@ -19,15 +20,10 @@ BODY = '''
   <p>DeepSeek-V4 不在这张表的任何一行：它每层只存一条所有头共用的 KV，再按层压缩 4 倍或 128 倍（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），3.4 节讲它的两个池。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
-  <p>一颗 v7 芯片 192 GB，放下 V3 的八分之一 FP8 权重，再留一成余量，剩 88.9 GB 给 KV。
-    V3 的每个 token 占 70,272 字节，4K 上下文能装 308 条，32K 只剩 38 条。</p>
+  <p>一颗 v7 芯片 HBM 192 GiB，放下 V3 的八分之一 FP8 权重（83.9 GB，即 78.1 GiB），再留一成余量，剩 94.7 GiB 给 KV。
+    这是本课按整颗芯片推的池子，和第十、十二节每个 device 实测可用的 94.75 GiB 不是一个量。</p>
   <p>权重切成 8 份，KV 却不切：注意力走数据并行，每条序列的 KV 只住在一个 device 上（第六节讲）。</p>
 __FIG_S3_BATCH__
-  <ul>
-    <li><b>上下文翻几倍，人数就除几倍。</b>KV 和上下文长度成正比，池子是固定的。</li>
-    <li><b>记法决定起点。</b>同样 4K，GQA 每 token 327,680 字节，只装得下 66 条，不到 MLA 的四分之一。</li>
-    <li><b>线性注意力是一笔固定成本。</b>短上下文时吃亏，长上下文时占便宜。</li>
-  </ul>
   <p>人数少了，同一趟权重搬运分给的 token 也少了。这就是长上下文贵的第一个原因。</p>
 
   <h3 id="s3-3">3.3　PagedAttention：像操作系统那样分页</h3>
@@ -37,7 +33,6 @@ __FIG_S3_PAGED__
   <ul>
     <li><b>按需领块。</b>序列长一点就多领一块，浪费只剩最后一块没写满的尾巴。vLLM 论文测过，旧系统 KV 显存里真正存着 token 的只有 20.4%–38.2%，分页后到 96.3%。</li>
     <li><b>共享与写时复制。</b>并行采样的几条序列共用 prompt 的块，各记一个引用数；谁要往共享块里写，先给自己复制一份。</li>
-    <li><b>块大小跟 kernel 一起定。</b>attention kernel 每读一块查一次页表。TPU 上 Qwen3.5 把块从 16 个 token 调到 256，512 并发时 decode 一步从 428 µs 降到 283 µs。</li>
   </ul>
 <figure class="fbox fwide" id="anim-paged">
 <video src="media/topic06-paged.mp4" autoplay loop muted playsinline
@@ -46,11 +41,10 @@ __FIG_S3_PAGED__
   <span class="sub">（18 秒无声循环，Manim 渲染。每块 4 个 token、16 块显存、请求长度都是示意；共享前缀与写时复制见上图。）</span></figcaption></figure>
 
   <h3 id="s3-4">3.4　混合模型有两个池，预算要分</h3>
-  <p>DeepSeek-V4 每层有两种 KV：滑窗（滑动窗口注意力，只看最近一段）那份只留最近 128 个 token，另一份存压缩后的整段。
+  <p>DeepSeek-V4 每层有两种 KV：滑窗池存最近 128 个 token 的原始 KV（滑动窗口注意力，只看最近一段），全长池存 3.1 说的 CSA／HCA 压缩后的整段。
     SGLang 给它们开两个池，共用一份预算，用 <code>--swa-full-tokens-ratio</code> 定两边怎么分。</p>
 __FIG_S3_POOL__
-  <p>4K 输入时，比例 0.20 让全长池先满，每张 decode GPU 只跑出 6,887 tok/s；调到 0.15 两边一起满，到 10,614，高 54%。
-    再多给显存、多装 13% 的人，只到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
+  <p>两边一起满之后，再多给显存、多装 13% 的人，只到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
     tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX <b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃，看不出是池子的账错了（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
@@ -73,25 +67,24 @@ __FIG_S3_POOL__
     两者相等时：<b>带宽 ＝ 每 token KV 字节 × 有效算力 ÷ 每 token FLOP</b>。链路比它慢，就不如重算。<br>
     这是只看单个请求的账。负载高时重算会挤占别人的算力，搬回又能和计算重叠，盈亏点会往慢链路那边移。</div>
 __FIG_S3_OFFLOAD__
-  <p>V3 按 v7 FP8 峰值的一半算，盈亏带宽约 2.19 GB/s；GQA 的 Llama-3.1-70B 每个 FLOP 对应的 KV 多，要 5.35 GB/s。
-    前缀越长，注意力的平方项让重算越贵，1 GB/s 的慢链路过了约 35K token 也能赢。</p>
+  <p>GQA 的 Llama-3.1-70B 每个 FLOP 对应的 KV 多，盈亏带宽要 5.35 GB/s，是 V3 的两倍多。</p>
   <ul>
-    <li><b>llm-d</b>（开源的 Kubernetes 推理调度）在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>，当前 main 已删此表）。它的排障说明也写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
+    <li><b>llm-d</b>（开源的 Kubernetes 推理调度）在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。它的排障说明也写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
     <li><b>Mooncake Store</b>：把集群各机的内存和 SSD 拼成一个 KV 池，机器之间用 RDMA 互取。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下面的 KV 缓存层，往主机内存、本地盘、远端存储里放；Google 的 TPU Sync 在 TPU 侧做类似的事，还在开发中。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
-    <b>① KV 一人一份，它定了 batch 上限，也就定了一趟搬运最多分给几个人。</b>记法、分页、两池分账，都是在同样的显存里多装几条序列。<br>
+    <b>① KV 一人一份，它定了 batch 上限，也就定了一趟搬运最多分给几个人。</b><br>
     <b>② 复用和卸载是少算、少搬。</b>命中的前缀不再 prefill；放到下层的 KV 要算清搬回来是不是比重算快。</div>
 
-  <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 88.9 GB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
-  <p>每条 70,272 × 65,536 ≈ 4.6 GB，装 19 条。fp8 字节减半，装 38 条。</p></details>
+  <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 94.7 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
+  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 22 条。fp8 字节减半，装 44 条。</p></details>
 '''
 
 FIGS = {
     "__FIG_S3_BATCH__": ("fig-s3-batch", "fig6-kv-batch.svg", "topic06-fig-kv.py",
-        '<b>每条线往右一格，能装的人就少一半；红线到 32K 就一条都装不下了。</b><br>'
+        '<b>纯注意力的三条线往右一格，能装的人就少一半；紫线每条先交一份固定状态，少得慢；红线到 32K 就一条都装不下了。</b><br>'
         '<em>一颗 v7 芯片，V3 权重 FP8 铺 8 颗芯片，可用显存 90%；KV 按 bf16、attention 数据并行。本课推导。</em>'),
     "__FIG_S3_PAGED__": ("fig-s3-paged", "fig6-paged.svg", "topic06-fig-kv.py",
         '<b>绿色两块两条序列共用，橙色那块是 B 要改时复制出来的。</b><br>'
@@ -105,15 +98,7 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("88.9", "fig6-kv-batch.svg"),
+    ("94.7", "fig6-kv-batch.svg"),
     ("70,272", "fig6-kv-batch.svg"),
-    ("308", "fig6-kv-batch.svg"),
-    ("38", "fig6-kv-batch.svg"),
     ("327,680", "fig6-kv-batch.svg"),
-    ("66", "fig6-kv-batch.svg"),
-    ("6,887", "fig6-swa-ratio.svg"),
-    ("10,614", "fig6-swa-ratio.svg"),
-    ("54%", "fig6-swa-ratio.svg"),
-    ("2.19", "fig6-offload.svg"),
-    ("35K", "fig6-offload.svg"),
 ]

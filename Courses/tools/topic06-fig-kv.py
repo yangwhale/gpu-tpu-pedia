@@ -31,7 +31,7 @@ from math import log10, log2, floor
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, GY2, PU, INK, LINE
 from topic06_numbers import (V3_LAYERS, V3_KV_PER_TOKEN, V3_TOTAL, V3_ACTIVE,
-                             V7_HBM, V7_FP8, GB)
+                             V7_HBM, V7_FP8, GB, GIB)
 
 W = 1400
 K = 1024
@@ -54,8 +54,10 @@ W_CHIP = V3_TOTAL * 1 / N_CHIP                    # FP8 每参数 1 字节
 assert W_CHIP == 83.875e9
 RESERVE = V7_HBM * 0.1
 POOL = V7_HBM * 0.9 - W_CHIP
-assert abs(POOL - 88.925e9) < 1
-assert "%.1f" % (POOL / GB) == "88.9" and "%.1f" % (W_CHIP / GB) == "83.9"
+assert abs(POOL - 101.6676e9) < 1e5               # 192 GiB × 0.9 − 83.875 GB，按字节算
+assert "%.1f" % (POOL / GIB) == "94.7" and "%.1f" % (POOL / GB) == "101.7"
+assert "%.1f" % (W_CHIP / GIB) == "78.1" and "%.1f" % (W_CHIP / GB) == "83.9"
+assert "%.1f" % (RESERVE / GIB) == "19.2"
 
 
 def nseq(per_tok, L, fixed=0):
@@ -69,10 +71,10 @@ MODELS = [  # (名字, 每 token 字节, 固定字节, 颜色)
     ("MHA · V3 形状（假想）", KV_MHA, 0, RD),
 ]
 TAB = {m[0]: {L: nseq(m[1], L * K, m[2]) for L in (1, 2, 4, 8, 16, 32, 64, 128)} for m in MODELS}
-assert [TAB["MLA · DeepSeek-V3"][L] for L in (4, 32, 128)] == [308, 38, 9]
-assert [TAB["GQA · Llama-3.1-70B"][L] for L in (4, 32, 128)] == [66, 8, 2]
-assert [TAB["线性＋全注意力 · Qwen3.5 形状"][L] for L in (4, 32, 128)] == [282, 74, 21]
-assert [TAB["MHA · V3 形状（假想）"][L] for L in (1, 4, 16, 32)] == [21, 5, 1, 0]
+assert [TAB["MLA · DeepSeek-V3"][L] for L in (4, 32, 128)] == [353, 44, 11]
+assert [TAB["GQA · Llama-3.1-70B"][L] for L in (4, 32, 128)] == [75, 9, 2]
+assert [TAB["线性＋全注意力 · Qwen3.5 形状"][L] for L in (4, 32, 128)] == [323, 85, 24]
+assert [TAB["MHA · V3 形状（假想）"][L] for L in (1, 4, 16, 32)] == [24, 6, 1, 0]
 
 # ══ ③ V4-Pro 两池实验（runbook §11.5，每张 decode GPU） ══════════════════
 RUNS = [  # (ISL, 配置, e2e tok/s, full 占用, swa 占用, 每 rank 请求数, 结论)
@@ -117,21 +119,21 @@ assert abs(t_re(LSTAR) - t_ld(LSTAR, SLOW)) < 1e-9
 
 # ══════════════════════════════════════════════════════════════════════
 def fig_batch():
-    f = Fig(W, "一颗 TPU v7 芯片 192 GB：V3 的八分之一 FP8 权重 83.9 GB，留 10%，剩 88.9 GB 放 KV。"
-               "上下文从 1K 到 128K，四种注意力能同时装的序列数：MLA 在 4K、32K、128K 分别是 308、38、9 条；"
-               "GQA 66、8、2 条；线性加全注意力混合 282、74、21 条；MHA 到 32K 一条都装不下")
-    y0 = f.header("上下文长 8 倍，能同时服务的人就少 8 倍　——　"
+    f = Fig(W, "一颗 TPU v7 芯片 192 GiB：V3 的八分之一 FP8 权重 78.1 GiB（83.9 GB），留 10%，剩 94.7 GiB 放 KV。"
+               "上下文从 1K 到 128K，四种注意力能同时装的序列数：MLA 在 4K、32K、128K 分别是 353、44、11 条；"
+               "GQA 75、9、2 条；线性加全注意力混合 323、85、24 条；MHA 到 32K 一条都装不下")
+    y0 = f.header("上下文长 8 倍，纯注意力少装 8 倍，线性混合只少不到 4 倍　——　"
                   "<tspan font-weight=\"700\">KV 的记账方式决定 batch 上限</tspan>",
-                  "一颗 v7 芯片，V3 权重铺 8 颗芯片后剩下的空间全给 KV。横轴上下文长度，纵轴能同时装下几条序列（对数）",
+                  "一颗 v7 芯片，V3 权重铺 8 颗芯片后剩下的空间全给 KV。横轴上下文长度，纵轴能同时装下几条序列（对数，向下取整）",
                   [(m[3], m[0]) for m in MODELS])
 
-    # 顶部：192 GB 怎么分
-    py = f.panel(0, y0, W, 104, "一颗芯片的 192 GB", GY)
+    # 顶部：192 GiB 怎么分
+    py = f.panel(0, y0, W, 104, "一颗芯片的 192 GiB", GY)
     X0, SPAN = 40, W - 80
     sc = SPAN / V7_HBM
-    segs = [(W_CHIP, BL, "V3 权重的 1/8（FP8）：83.9 GB"),
-            (RESERVE, GY2, "留 10%：19.2 GB"),
-            (POOL, GR, "KV 池：88.9 GB")]
+    segs = [(W_CHIP, BL, "V3 权重的 1/8（FP8）：78.1 GiB"),
+            (RESERVE, GY2, "留 10%：19.2 GiB"),
+            (POOL, GR, "KV 池：94.7 GiB")]
     x = X0
     for v, col, lab in segs:
         w = v * sc
@@ -141,7 +143,7 @@ def fig_batch():
 
     # 主图
     PH = 470
-    py = f.panel(0, y0 + 104 + 16, W, PH, "能同时装几条序列", GR, sub="（向下取整；1K ＝ 1024 token）")
+    py = f.panel(0, y0 + 104 + 16, W, PH, "能同时装几条序列", GR)
     AX0, AX1 = 130, 1010
     YT, YB = py + 30, py + PH - 80
     LO, HI = 1.0, 2000.0
@@ -161,7 +163,7 @@ def fig_batch():
         f.t(xf(L), YB + 24, "%dK" % L, GY, L in (4, 32, 128), 14, "middle")
     for L in (4, 32, 128):
         f.line(xf(L), YT, xf(L), YB, GY2, 1, dash="4 4", arrow=False)
-    f.t((AX0 + AX1) / 2, YB + 50, "上下文长度（对数，每格翻倍）", GY, size=14, anchor="middle")
+    f.t((AX0 + AX1) / 2, YB + 50, "上下文长度（对数，每格翻倍；1K ＝ 1024 token）", GY, size=14, anchor="middle")
     f.t(AX0 - 12, YT - 12, "条", GY, size=13, anchor="end")
 
     LABS = {  # 在 4K / 32K 上写数的上下偏移：{L: dy}；128K 的数并进右侧标签
@@ -190,19 +192,19 @@ def fig_batch():
             f.line(xx - 8, yy - 8, xx + 8, yy + 8, col, 3, arrow=False)
             f.line(xx - 8, yy + 8, xx + 8, yy - 8, col, 3, arrow=False)
             f.t(xx + 14, yy - 10, "MHA：32K 起一条都装不下", col, True, 14)
-            f.t(xf(1) + 10, yf(21) - 12, "21", col, True, 15)
-            f.t(xf(4) + 10, yf(5) - 10, "5", col, True, 15)
+            f.t(xf(1) + 10, yf(24) - 12, "24", col, True, 15)
+            f.t(xf(4) + 10, yf(6) - 10, "6", col, True, 15)
     yb = y0 + 104 + 16 + PH + 20
     yb = f.band(yb, "ok", "装得下几条序列，每趟搬运就分给几个人", [
-        "MLA 在 4K 装 308 条，32K 只剩 38 条。线性层每条序列先交 180 MiB 固定状态：",
-        "4K 时反而比 MLA 少装（282 &lt; 308），128K 时多装一倍还多（21 &gt; 9）。",
+        "MLA 在 4K 装 353 条，32K 只剩 44 条。线性层每条序列先交 180 MiB 固定状态：",
+        "4K 时反而比 MLA 少装（323 &lt; 353），128K 时多装一倍还多（24 &gt; 11）。",
     ])
     yb = f.src(yb + 10,
                "出处：每 token KV：V3 (512+64)×61×2 B ＝ 70,272（config.json）；Llama-3.1-70B 2×8×128×80×2 ＝ 327,680（HF config.json）；"
                "Qwen3.5 全注意力 15 层 × 2 头 × 256 维 × K、V × 2 B ＝ 30,720，线性层状态 45×64×128×128×4 B ＝ 180 MiB（HF config.json，mamba_ssm_dtype float32）。",
                "口径：MHA 一行是 V3 形状的假想（128 头 × 128 维，专题三第一题）：3,997,696 B/token。",
-               "本课推导：V3 权重全按 FP8 1 B/参数算 671 GB ÷ 8 芯片 ＝ 83.9 GB；可用显存 90%（照 tpu-inference README 的 --gpu-memory-utilization 0.9）；"
-               "KV 池 ＝ 192×0.9 − 83.9 ＝ 88.9 GB。假设 attention 走数据并行（每颗芯片只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每颗芯片复制一份（专题五）。",
+               "本课推导：V3 权重全按 FP8 1 B/参数算 671 GB ÷ 8 芯片 ＝ 83.9 GB ＝ 78.1 GiB；可用显存 90%（照 tpu-inference README 的 --gpu-memory-utilization 0.9）；"
+               "KV 池 ＝ 192 GiB × 0.9 − 78.1 GiB ＝ 94.7 GiB（v7 每芯片 HBM 192 GiB，Google Cloud 公开规格）。假设 attention 走数据并行（每颗芯片只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每颗芯片复制一份（专题五）。",
                "口径：没算激活与通信缓冲（归入那 10%）、线性层卷积状态、引擎实际的状态 dtype（可能不是 fp32）。")
     f.save("fig6-kv-batch.svg", yb + 14)
 
@@ -214,7 +216,7 @@ def fig_paged():
     f = Fig(W, "PagedAttention 示意：两条序列共用 prompt「请写一首关于秋天的诗」，每块 4 个 token。"
                "左边是每条序列眼里连续的 KV，中间是两张页表，右边是显存里零散的物理块。"
                "A 的页表是 1、3、4、6，B 的页表是 1、3、7。物理块 1 和 3 被两条序列共享；"
-               "第三块原本共享，A 要往里写，B 先把它复制到块 7，即写时复制")
+               "第三块原本共享，B 要往里写，先把它复制到块 7 再写，A 留在块 4，即写时复制")
     y0 = f.header("页表让 KV 不必连续存放　——　"
                   "<tspan font-weight=\"700\">共用的前缀只存一份，谁要改谁复制</tspan>",
                   "两条采样共用同一个 prompt。每块 4 个 token（仅为示意）",
@@ -282,8 +284,8 @@ def fig_paged():
     f.path("M %.1f %.1f C %.1f %.1f %.1f %.1f %.1f %.1f"
            % (PX + BW_ + 50, rowy[4], xa, rowy[4], xa, rowy[7], PX + BW_ + 110, rowy[7]),
            OR, 1.8, dash="5 4", arrow=True)
-    f.t(xa + 2, (rowy[4] + rowy[7]) / 2 - 6, "A 要往里写，", OR, True, 14)
-    f.t(xa + 2, (rowy[4] + rowy[7]) / 2 + 14, "B 先复制一份", OR, True, 14)
+    f.t(xa + 2, (rowy[4] + rowy[7]) / 2 - 6, "B 要往里写，", OR, True, 14)
+    f.t(xa + 2, (rowy[4] + rowy[7]) / 2 + 14, "先复制一份", OR, True, 14)
     f._pan = None
     yb = f.src(y0 + PH + 10,
                "出处：Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention（SOSP'23, arXiv 2309.06180）—— "
@@ -304,7 +306,7 @@ def fig_pool():
                   "<tspan font-weight=\"700\">分水阀拧到两边一起满，吞吐高 54%</tspan>",
                   "V4-Pro 每层两个 KV 池，共用一份显存预算：滑窗池只留最近 128 个 token，全长池存压缩后的整段。"
                   "ratio ＝ 滑窗池 ÷ 全长池，就是分水阀",
-                  [(BL, "已用"), (RD, "用到九成，满了")])
+                  [(BL, "已用"), (RD, "约九成以上，算满")])
     STATES = [RUNS[0], RUNS[1], RUNS[3]]
     TITLES = ["全长池先满", "两个一起快满", "滑窗池先满"]
     PH, PWD, GAP = 470, 430, 25

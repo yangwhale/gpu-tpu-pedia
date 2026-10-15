@@ -12,7 +12,7 @@ BODY = '''
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>DeepSeek-V3：总参数 6,710 亿、每 token 激活 370 亿；61 层、hidden 7168、256 个路由专家选 8、kv_lora 512 ＋ rope 64、moe_intermediate 2048</td><td>DeepSeek-V3 Technical Report（arXiv 2412.19437）摘要；形状取 Hugging Face deepseek-ai/DeepSeek-V3 的 config.json</td></tr>
     <tr><td>MLA 每 token KV 70,272 字节；128K 一条序列 8.58 GiB（9.21 GB）</td><td>本课推导：(512＋64) × 2 B × 61 层；× 131,072</td></tr>
-    <tr><td>TPU v7：FP8 4,614 TFLOP/s、HBM 192 GB、7.37 TB/s，每芯片 2 个 device；BF16 2,307 TFLOP/s，屋脊点 ≈313 FLOP/字节</td><td>Google Cloud TPU7x 公开规格页；BF16 与屋脊点本课推导：4,614 ÷ 2，2,307 TFLOP/s ÷ 7.37 TB/s</td></tr>
+    <tr><td>TPU v7：FP8 4,614 TFLOP/s、HBM 192 GiB（≈ 206.2 GB）、7.37 TB/s，每芯片 2 个 device；BF16 2,307 TFLOP/s，屋脊点 ≈313 FLOP/字节</td><td>Google Cloud TPU7x 公开规格页；JAX jax/_src/pallas/mosaic/tpu_info.py 记每芯片 HBM 206e9 字节（≈ 191.9 GiB），即规格表的 192 GiB；BF16 与屋脊点本课推导：4,614 ÷ 2，2,307 TFLOP/s ÷ 7.37 TB/s</td></tr>
     <tr><td>TTFT、TPOT／ITL 的定义</td><td>vLLM 仓库 vllm/benchmarks/serve.py；NVIDIA NIM 的 LLM benchmarking 文档页（写明 ITL also known as TPOT）</td></tr>
     <tr><td>decode 一步：读 37 GB 要 5.02 ms，算 74 GFLOP 只要 0.016 ms，算力用上 0.32%</td><td>本课推导：37 GB ÷ 7.37 TB/s；2 × 37e9 ÷ 4,614 TFLOP/s；1 ÷ 313</td></tr>
     <tr><td>算术强度 M·H ÷ (H＋2M)：M＝256 时 239，M≈343 过屋脊，4K prompt 到 1,911</td><td>本课推导：H＝7168 的方阵乘，bf16</td></tr>
@@ -21,23 +21,23 @@ BODY = '''
     <tr><td>Gemma4-31B 并发 1 TTFT 86 ms，并发 256 涨到 7,756 ms（多出来的是排队）</td><td>本课程作者实测：gpu-tpu-pedia tpu/tpu-inference/Gemma4-31B/README.md:453-486</td></tr>
     <tr><td>InferenceX 三点 68→9,759、121→3,816、173→895 tok/s/GPU</td><td>gpu-tpu-pedia VLLM-V4PRO-RUNBOOK.md:683-695</td></tr>
     <tr><td>V4 on GB300：交互 ~50 tok/s/user 时每卡 ~11,200（开 MTP；分母是 decode 卡还是全部卡，官方未写明），Day-0 ~2,200（5.1×）；每卡同时服务约 224 个用户</td><td>PyTorch 博客 2026-06-23「Serving DeepSeek-V4 on GB300 with SGLang: 5x Higher Throughput at the Same Interactivity Since Day-0」；224 ＝ 11,200 ÷ 50 本课推导</td></tr>
-    <tr><td>同一次跑：output÷decode 卡 5,270，(in＋out)÷decode 卡 11,880，换口径 1,318 到 47,520，差 36×</td><td>gpu-tpu-pedia SGLANG-V4PRO-RUNBOOK.md:794-809，字段定义 :731-735；1,318、47,520、36× 本课推导</td></tr>
+    <tr><td>同一次跑：output÷decode 卡 5,270，(in＋out)÷全部卡 11,880，换口径 1,318 到 47,520，差 36×</td><td>gpu-tpu-pedia SGLANG-V4PRO-RUNBOOK.md:794-809，字段定义 :731-735；1,318、47,520、36× 本课推导</td></tr>
     <tr><td>假天花板：6,887 → 10,614（＋54%）→ 10,704，峰值 12,070</td><td>SGLANG-V4PRO-RUNBOOK.md:611-615、849-858（§11.5 L849-896）</td></tr>
-    <tr><td>temperature 0 与非 0：投机接受率 1.16% 对 34%，吞吐 944 对 2,911；K3 上方向相反</td><td>VLLM-V4PRO-RUNBOOK.md:394-420；反例 VLLM-K3-RUNBOOK.md:226-230</td></tr>
-    <tr><td>预热与否差 7%；闭环压测低估 13%</td><td>SGLANG-V4PRO-RUNBOOK.md:480-494；:478、1135</td></tr>
+    <tr><td>temperature 0 与非 0：投机接受率 1.16% 对 34%，吞吐 944 对 2,911；K3 的草稿按概率抽，官方就用温度 1.0 压测</td><td>VLLM-V4PRO-RUNBOOK.md:394-420；K3 见 VLLM-K3-RUNBOOK.md:226-230</td></tr>
+    <tr><td>没预热：第一轮 13,585、第二轮 27,803（×2.05）；闭环压测低估 13%</td><td>VLLM-V4PRO-RUNBOOK.md:431-433；闭环 SGLANG-V4PRO-RUNBOOK.md:478、1135</td></tr>
     <tr><td>goodput 比吞吐更能比系统：7.4× 请求率、12.6× 更紧 SLO</td><td>DistServe，arXiv 2401.09670</td></tr>
     <tr><td>vLLM 压测工具的 goodput ＝ 每秒达标请求数（与 DistServe 口径不同）</td><td>vLLM 仓库 vllm/benchmarks/serve.py 的 --goodput 参数</td></tr>
     <tr><td>DeepSeek 线上成本账：226.75 节点、$2/h、日成本 87,072、日收入 562,027、利润率 545%、每节点 14,800 tok/s、20–22 tok/s/user</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
     <tr><td>每 token KV：MHA 3,997,696 B、GQA（Llama-3.1-70B）327,680 B、Qwen3.5 全注意力 30,720 B ＋ 线性状态 180 MiB／序列；Qwen3.5 KV 头数 2</td><td>本课推导，形状取各自 Hugging Face config.json</td></tr>
-    <tr><td>8 颗 v7 放 V3：KV 池 88.9 GB／芯片，4K 装 308 条、32K 装 38 条；Llama 4K 66 条</td><td>本课推导：192 × 0.9 − 83.9；0.9 取 tpu/tpu-inference Qwen3.5 README:99 的显存利用率</td></tr>
+    <tr><td>8 颗 v7 放 V3：KV 池 94.7 GiB／芯片，4K 装 353 条、32K 装 44 条；Llama 4K 75 条</td><td>本课推导：192 GiB × 0.9 − 78.1 GiB（671 GB ÷ 8）；0.9 取 tpu/tpu-inference Qwen3.5 README:99 的显存利用率</td></tr>
     <tr><td>PagedAttention：KV 有效利用率 20.4–38.2% → 96.3%</td><td>vLLM 论文，arXiv 2309.06180</td></tr>
     <tr><td>Qwen3.5 一处 kernel 428 → 283 µs</td><td>gpu-tpu-pedia tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/BLOG-systems-engineering-playbook.md L395-405，即 Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」</td></tr>
     <tr><td>V4 两个池（full／swa）预算比改 0.20 → 0.15：吞吐 ＋54%、每 rank 请求 ＋13%（886 → 999）</td><td>SGLANG-V4PRO-RUNBOOK.md §11.5 L849-896；swa_tokens 比例 L946（引 pool_configurator.py:387）；sliding_window 128 见 HF config</td></tr>
     <tr><td>Qwen3.5 混合池的 bug 与 prefix caching 断言</td><td>tpu/tpu-inference Qwen3.5 README:77、:95</td></tr>
-    <tr><td>KV 外存回读的盈亏带宽：V3 2.19 GB/s、Llama 5.35 GB/s，前缀长于 ~35K 回读才划算</td><td>本课推导：重算 ＝ (2 × 37e9 × L ＋ 4,997,120 × L²/2) ÷ (4,614 T × 50%)；Llama 激活 70.6B 取 HF 模型页</td></tr>
+    <tr><td>KV 外存回读的盈亏带宽：V3 2.19 GB/s、Llama 5.35 GB/s，1 GB/s 的慢链路在前缀长于 ~35K 时也比重算快</td><td>本课推导：重算 ＝ (2 × 37e9 × L ＋ 4,997,120 × L²/2) ÷ (4,614 T × 50%)；Llama 激活 70.6B 取 HF 模型页</td></tr>
     <tr><td>Orca 迭代级调度：比 FasterTransformer 高 36.9×</td><td>Orca，OSDI'22</td></tr>
     <tr><td>chunked prefill；Gemma4 一次 prefill 16,384 token、切 16 块</td><td>Sarathi arXiv 2308.16369；Sarathi-Serve arXiv 2403.02310；vLLM 文档 Optimization and Tuning 页；Gemma4-31B/README.md:225-226</td></tr>
-    <tr><td>并发 400 → 600：总负载 4.5×，每卡只多 11%（8,777 → 9,168 tok/s），TTFT 涨 5.6× 到 45 s</td><td>SGLANG-V4PRO-RUNBOOK.md:593-609（9,168 另见 :723-725）；倍数本课推导</td></tr>
+    <tr><td>并发 400 → 1,800：总负载 4.5×，每卡只多 11%（8,777 → 9,745 tok/s）；有记录的 TTFT 从并发 600 的 45 s 涨到 1,800 的 253 s</td><td>SGLANG-V4PRO-RUNBOOK.md:593-609</td></tr>
     <tr><td>Little 定律核对：dep8 4,335、dep16 2,783</td><td>SGLANG-V4PRO-RUNBOOK.md:794-801；本课推导 9,032 × 8 × 0.060、84,321 × 0.033</td></tr>
     <tr><td>多给槽位：并发 886 → 999，峰值只 12,063 → 12,070，TPOT 77.7 → 85.3 ms</td><td>SGLANG-V4PRO-RUNBOOK.md:849-858、885-894</td></tr>
     <tr><td>SGLang-JAX 调度开销 12 ms → 38 µs；按 batch 尺寸预编译</td><td>lmsys.org/blog/2025-10-29-sglang-jax</td></tr>
@@ -52,7 +52,7 @@ BODY = '''
     <tr><td>V4-Pro 只有 1 个 KV 头，TP 切注意力会复制 KV</td><td>VLLM-V4PRO-RUNBOOK.md:298-302</td></tr>
     <tr><td>并发 512 时 TP4 21,100（16 卡）对 DEP 55,153（20 卡）：每卡 1,319 对 2,758，2.09×；DEP 并发 1,536 时 65,132、每卡 3,257、2.47×，TTFT 95 s</td><td>VLLM-V4PRO-RUNBOOK.md:449、464-468、476；每卡与 2.09× 本课推导</td></tr>
     <tr><td>DEP 每卡吞吐随 prefill 喂料 307 → 3,321；TP4 停在 20,479</td><td>VLLM-V4PRO-RUNBOOK.md:711-724（4k1k 重跑 :727-734）、:488，2026-07-24 记录</td></tr>
-    <tr><td>tpu-inference DEP：并发 512 时领先 62%（1k/8k）、40%（8k/1k）；mmlu_pro 0.8129 对 0.8271；TP 过 256 只再涨 3%</td><td>github.com/vllm-project/tpu-inference/pull/2577（2026-05-15 合入）</td></tr>
+    <tr><td>tpu-inference DEP：并发 512 时领先 62%（1k/8k）、40%（8k/1k）；mmlu_pro 0.8129 对 0.8271</td><td>github.com/vllm-project/tpu-inference/pull/2577（2026-05-15 合入）</td></tr>
     <tr><td>TEP／DEP 的定义；Megatron 命名；Folding</td><td>沿用专题五台账第 43、44、18 行</td></tr>
     <tr><td>K3 DCP：128K 并发 8 吞吐 108 → 365（＋237%）；4K 并发 8 −9%；8K 并发 8 −11%、并发 32 ＋24%</td><td>gpu-tpu-pedia SGLANG-K3-RUNBOOK.md §11.0.3 :1010-1023、宽表 :921-938；百分比本课推导</td></tr>
     <tr><td>DCP 让 KV 容量 1.5M → 12.2M token；单流 −26% 来自丢掉 symm-mem</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962</td></tr>
@@ -74,10 +74,10 @@ BODY = '''
     <tr><td>Qwen3-Coder 跨 DCN 掉 17–63%，同 ICI 只掉 15–21%</td><td>Qwen3-Coder-480B/README-multinode.md:441-445；README-TPU-VM.md:1000-1009</td></tr>
     <tr><td>V4-Pro dep8 要一整柜 NVL72；拓扑与频率的一般讨论</td><td>SGLANG-V4PRO-RUNBOOK.md:34、:63；沿用专题五台账第 19、26 行</td></tr>
     <tr><td>v7x-8 是 4 颗芯片（名字按 device 数）；mesh 构造</td><td>tpu/tpu-inference/README.md:41；JAX mesh_utils 文档</td></tr>
-    <tr><td>v7 每 device 实测可用 94.75 GiB；R1 FP8 MoE 每 device 101.8 GB 放不下</td><td>tpu/tpu-inference R1 FP4 README:59、72-73</td></tr>
-    <tr><td>v7 切片按 4、8、16、32 颗成档（2x2x1、2x2x2、2x2x4、2x4x4），4.04 颗取 8</td><td>Google Cloud TPU7x 文档 Supported configurations 表（cloud.google.com/tpu/docs/tpu7x）</td></tr>
-    <tr><td>V3 FP8 切片表：4K×64 要 689 GB／8 颗，128K×256 要 3,029 GB／32 颗，KV 是权重 3.5×；4 颗放完权重只剩 11 GB，4K 只装 38 条</td><td>本课推导：每芯片 189.5 GB × 0.9 ＝ 170.55 GB 可用；0.9 为本课假设</td></tr>
-    <tr><td>GB300 R1：并发 8 只用上 ~3% 容量；854 → 10,715 tok/s，12.5×；并发 256 → 512 首字 12 s → 30 s</td><td>gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md :401、:405-413、:415</td></tr>
+    <tr><td>v7 每 device 实测可用 94.75 GiB（每 device 物理 96 GiB）；R1 FP8 MoE 每 device 101.8 放不下（README 写 GB，按 GB、GiB 读都超）</td><td>tpu/tpu-inference R1 FP4 README:59、72-73</td></tr>
+    <tr><td>v7 切片按 4、8、16、32 颗成档（2x2x1、2x2x2、2x2x4、2x4x4），4.07 颗取 8</td><td>Google Cloud TPU7x 文档 Supported configurations 表（cloud.google.com/tpu/docs/tpu7x）</td></tr>
+    <tr><td>V3 FP8 切片表：4K×64 要 642 GiB／纸面 4 颗，4K×256 要 694 GiB／8 颗，128K×256 要 2,821 GiB／32 颗，KV 是权重 3.5×；4 颗放完权重剩 57 GiB，4K 纸面装 213 条，但实测 FP8 放不下</td><td>本课推导：权重 671 GB ＝ 625 GiB；每芯片 189.5 GiB × 0.9 ＝ 170.55 GiB 可用；0.9 为本课假设；实测见上一行</td></tr>
+    <tr><td>GB300 R1：并发 8 只用上 ~3% 容量；854 → 10,715 tok/s，12.5×；并发 256 → 512 总吞吐只再涨 3%（10,390 → 10,715，本课推导），首字 12 s → 30 s</td><td>gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md :401、:405-413、:415</td></tr>
     <tr><td>投机解码原理（按标准拒绝采样实现时分布无损）</td><td>Leviathan 等 arXiv 2211.17192；Chen 等 arXiv 2302.01318</td></tr>
     <tr><td>K3 开投机：TPOT 11.1 → 2.31 ms，接受长度 6.96；一步变慢 1.45×，每字快 4.81×</td><td>SGLANG-K3-RUNBOOK.md:1089、:979；本课推导：2.31 × 6.96 ≈ 16.1 ms，16.1 ÷ 11.1 ≈ 1.45，11.1 ÷ 2.31 ≈ 4.81</td></tr>
     <tr><td>并发升高收益收窄：4.22× → 1.74×；32K 只剩 1.32×</td><td>SGLANG-K3-RUNBOOK.md:1089-1092、:1057-1058</td></tr>
@@ -91,7 +91,7 @@ BODY = '''
     <tr><td>MXFP4 每 32 个数一个 E8M0 scale（只能取 2 的幂），合 4.25 bit；NVFP4 每 16 个一个 E4M3（可取非 2 的幂），合 4.5 bit；E2M1 有 16 个编码、15 个值（±0）</td><td>OCP Microscaling Formats (MX) v1.0 规范；NVIDIA 技术博客「Introducing NVFP4」</td></tr>
     <tr><td>v7 的矩阵单元没有 FP4 通路（公开规格只列 BF16、FP8 峰值）</td><td>Google Cloud TPU7x 公开规格页</td></tr>
     <tr><td>V4 专家权重为 FP4</td><td>Hugging Face DeepSeek-V4 模型卡</td></tr>
-    <tr><td>R1 FP4 每 device 60.9 GB，FP8 101.8 GB 放不下；上限 94.75（README 写 GB，日志为 GiB）；K2.6 INT4 存储偏移 8，加载漏减就崩</td><td>R1 FP4 README:59、72-73、:875-878（README 实测值）；K2.6 README:217、:265-266</td></tr>
+    <tr><td>R1 FP4 每 device 60.9，FP8 101.8 放不下（README 写 GB）；上限 94.75 GiB（运行日志单位）；K2.6 INT4 存成无符号 0–15，加载时直接当有符号读（没减 8）就崩</td><td>R1 FP4 README:59、72-73、:875-878（README 实测值）；K2.6 README:217、:265-266</td></tr>
     <tr><td>kernel 气泡：H100 理想 1,350 次前向／秒，实际 770；megakernel 带宽利用 50% → 78%，比 vLLM 快约 2.5×、比 SGLang 快 1.5× 多</td><td>hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles；1,350 ＝ 3.35 TB/s ÷ 2.48 GB 本课推导</td></tr>
     <tr><td>Mirage MPK 编译成 megakernel：1.7×</td><td>arXiv 2512.22219</td></tr>
     <tr><td>TPU megakernel：16 颗 v7 单用户 700＋ tok/s（GB200 452），一步 ~8.5 ms、每步接受 3–6 个，编译 &lt;90 s；博客写的是 megakernel ＋ DSpark 投机，未提量化</td><td>https://inferact.ai/blog/tpu-megakernels（2026-09-23）；6 ÷ 8.5 ms ≈ 706 本课推导</td></tr>

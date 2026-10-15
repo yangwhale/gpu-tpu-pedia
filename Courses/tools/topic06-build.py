@@ -144,6 +144,12 @@ FOOT = '''
 
 _html = head + HERO + BODY + FOOT
 _html = P.place_figs(_html, FIGS)
+# 复用的专题五图里带着专题五自己的编号（「第五刀」、第三节＝TP），在本课对不上。
+#   专题五已定稿、不动它的图脚本，内联后在这里改字；命中次数不对就挂，免得专题五改图后静默失效。
+for _old, _new in (("第五刀：把两种活拆到两批机器上", "把两种活拆到两批机器上"),
+                   ("对比第三节的 TP：", "对比 TP：")):
+    assert _html.count(_old) == 1, "复用图改字：「%s」命中 %d 次（应为 1）" % (_old, _html.count(_old))
+    _html = _html.replace(_old, _new)
 _leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
 assert not _leak, "占位符没落地：%s" % "、".join(_leak)
 for _tag in ("h2", "h3", "section", "div"):

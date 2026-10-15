@@ -2,7 +2,7 @@
 """专题六 · 第十节「先选拓扑，再调参数」。"""
 
 BODY = '''
-  <p class="lead">换一次拓扑，抵得上把参数调遍。decode 每一步搬一趟权重和 KV，<b>拓扑定了这一趟走哪条线、能分给多少个请求</b>；参数只在这个上限底下挪动。</p>
+  <p class="lead">换一次拓扑，抵得上把参数调遍。decode 每一步搬一趟权重和 KV，<b>拓扑定了这一趟走哪条线、能分给多少个请求</b>；参数只在这个上限底下挪动。这一节的主角 DEP，是 2025 年 DeepSeek 公开大 EP 部署（第六节）之后才成了主流选项。</p>
 
   <h3 id="s10-1">10.1　回顾：线有快慢，切法先定</h3>
   <p>专题五 <a href="topic-05.html#s7-1">§7.1</a> 讲过：通信勤的切法要放在快线里，懒的才能跨慢线。
@@ -30,37 +30,31 @@ __FIG_S10_RANK__
   <p>所以 mesh 交给 <code>mesh_utils.create_device_mesh</code> 按物理位置生成，跨切片用 <code>create_hybrid_device_mesh</code> 把 ICI 和 DCN 分成两层。还有一个常见的口径错：TPU v7 一颗芯片是 2 个 device，切片名按 device 数，v7x-8 是 4 颗芯片。</p>
 
   <h3 id="s10-5">10.5　最小切片怎么定</h3>
-  <p>一个引擎最少要几颗芯片，先算纸面账：权重 ＋ KV ＋ 激活余量。拿 DeepSeek-V3 在 TPU v7 上算（本课推导）：FP8 权重 671 GB，每 token 的 KV 70,272 字节，每颗芯片可用约 189.5 GB，留一成给激活后按 170.55 GB 算。</p>
+  <p>一个引擎最少要几颗芯片，先算纸面账：权重 ＋ KV ＋ 激活余量。拿 DeepSeek-V3 在 TPU v7 上算（本课推导）：FP8 权重 671 GB，即 625 GiB；每 token 的 KV 70,272 字节；每颗芯片物理 192 GiB，可用约 189.5 GiB，留一成给激活后按 170.55 GiB 算。下面容量都写 GiB。</p>
 __FIG_S10_SLICE__
-  <table>
-    <tr><th>上下文 × 并发</th><th>权重 ＋ KV</th><th>纸面芯片数</th><th>取切片</th></tr>
-    <tr><td>4K × 64</td><td>689 GB</td><td>4.04</td><td>8 颗（v7x-16）</td></tr>
-    <tr><td>32K × 256</td><td>1,260 GB</td><td>7.39</td><td>8 颗</td></tr>
-    <tr><td>128K × 256</td><td>3,029 GB</td><td>17.76</td><td>32 颗（v7x-64）</td></tr>
-  </table>
-  <p>上下文短时，权重就是下限，前两行都是 8 颗。4K × 64 纸面只要 4.04 颗，也得取到 8，因为这一段的切片只有 4、8、16、32 颗几档（2x2x1、2x2x2、2x2x4、2x4x4）。到 128K、256 并发，KV 涨到权重的 3.5 倍，需要 32 颗。这时与其加芯片，不如考虑第七节的 DCP，把一个长请求的 KV 摊到多个 device 上。</p>
-  <p>4 颗芯片放完权重只剩约 11 GB 给 KV，纸面上能放 38 个 4K 请求。实际更紧：公开记录里 FP8 的 MoE 每个 device 要 101.8 GB，比可用的 94.75 GB 还多，所以 v7x-8 上实际用的是 FP4。</p>
-  <div class="note warn"><span class="t">本课推导的边界</span>纸面账只给下限。激活预留 10% 是假设；KV 按不重复算（注意力走 DP），没算 DP 注意力在每个 device 上各放一份非专家权重的开销。定下限之后，用一次真实启动看实测的 HBM 峰值。</div>
+  <p>4K × 64 纸面 3.76 颗，4 颗刚好够；并发翻到 256 是 4.07 颗，只多一点也得取到 8，因为切片只有几档。到 128K、256 并发，KV 是权重的 3.5 倍，与其加芯片，不如用第七节的 DCP 把一个长请求的 KV 摊开。</p>
+  <p>实测 4 颗却放不下：纸面账按注意力走 DP、KV 不重复算，没算每个 device 各放一份非专家权重。公开记录里 FP8 的专家每个 device 要 101.8，超过可用的 94.75 GiB，所以 v7x-8 上实际用 FP4（§12.4）。</p>
+  <div class="note warn"><span class="t">本课推导的边界</span>纸面账只给下限，激活预留 10% 也是假设。定下限之后，用一次真实启动看实测的 HBM 峰值。</div>
 
   <h3 id="s10-6">10.6　容量别拿小并发估</h3>
   <p>R1 在 GB300 上的部署记录里有一句估算：这套 DEP8 decode 理论上能扛约 288 个并发。拿 conc=8 的数去汇报，只用到它的约 3%。</p>
 __FIG_S10_CONC__
   <p>conc=8 时，decode 每搬一趟只分给 8 个请求，测到的是「机器闲着时多快」。往上扫，总吞吐从 854 涨到峰值 10,715，是 12.5 倍；过了 256 只再涨 3%，首字延迟却从 12 s 涨到 30 s。</p>
-  <p>该停在哪一档，由延迟目标决定。容量规划时先扫出这条曲线，再按 SLA 在曲线上取点。</p>
+  <p>停在哪一档由延迟目标定：先扫出曲线，再按 SLA 取点。</p>
 
   <h3 id="s10-7">10.7　对照实验的纪律</h3>
   <ul>
     <li><b>先固定拓扑，再扫参数。</b>拓扑一变瓶颈就换边：TP4 decode 时加 prefill 不涨，换成 dep8 后又成了 prefill 受限（第六节）。在错的拓扑上调出的最优参数，搬不到对的拓扑上。</li>
     <li><b>一次只动一个变量。</b>同时改并发和 prefill 台数，涨了也说不清是谁的功劳。</li>
     <li><b>记全口径。</b>卡数、并发、输入输出长度、吞吐算不算 prompt，每一行都写上（第二节）。</li>
-    <li><b>压测固定 temperature=0。</b>压测工具没发这个参数时，投机解码的接受率塌掉，V4-Pro 那套服务因此差了 3.1 倍（第十一节）。</li>
+    <li><b>温度写明，并和线上对齐。</b>压测工具不发 temperature，投机解码的接受率会悄悄塌掉（第十一节）。</li>
   </ul>
 
   <h3 id="s10-8">10.8　五步选法落到两个例子</h3>
   <p>专题五 <a href="topic-05.html#s7-4">§7.4</a> 的五关（装得下、快线多大、序列、PP、DP），推理时照样走一遍。</p>
   <table>
     <tr><th>关</th><th>DeepSeek-V3 · TPU v7</th><th>DeepSeek-V4-Pro · GB300</th></tr>
-    <tr><td>① 装得下</td><td>FP8 至少 8 颗芯片（v7x-16）；要留在 v7x-8，就把 MoE 换成 FP4</td><td>806 GB 权重，一个 4 卡节点放得下（TP4 跑通过）</td></tr>
+    <tr><td>① 装得下</td><td>纸面 4 颗（v7x-8）够；实测 FP8 放不下，要么用 8 颗，要么专家换 FP4</td><td>806 GB 权重，一个 4 卡节点放得下（TP4 跑通过）</td></tr>
     <tr><td>② 快线多大</td><td>一个 ICI 切片；TP 跨 DCN 会慢 17–63%</td><td>一个 NVL72 域 72 卡；dep8 跨两个节点走 NVLink，SGLang 部署要求全部节点同域</td></tr>
     <tr><td>③ 序列</td><td>128K × 256 时 KV 是权重的 3.5 倍，加芯片或上 DCP（第七节）</td><td>只有一个 KV 头，TP 只会复制 KV，改用 DEP（第六节）</td></tr>
     <tr><td>④ PP</td><td>不用：一个切片放得下</td><td>不用</td></tr>
@@ -73,7 +67,7 @@ __FIG_S10_CONC__
 
 FIGS = {
     "__FIG_FREQ_T5__": ("fig-freq-t5", "fig5-freq.svg", "topic05-fig-map.py",
-        '<b>通信越勤的切法，越要放在快线里。</b><br><em>专题五原图，复用。</em>'),
+        '<b>通信越勤的切法，越要放在快线里。</b><br><em>专题五原图，复用。这是训练口径；推理只有前向，FSDP 和梯度那几行不适用。</em>'),
     "__FIG_S10_LENS__": ("fig-s10-lens", "fig6-s10-lens.svg", "topic06-fig-topo.py",
         '<b>同一组实测，分母从总量换成每卡，「调参」那一步由涨变跌。</b><br><em>口径：总吞吐把输入和输出 token 都算上；卡数含 prefill 与 decode。</em>'),
     "__FIG_S10_WIRE__": ("fig-s10-wire", "fig6-s10-wire.svg", "topic06-fig-topo.py",
@@ -81,7 +75,7 @@ FIGS = {
     "__FIG_S10_RANK__": ("fig-s10-rank", "fig6-s10-rank.svg", "topic06-fig-topo.py",
         '<b>mesh 里的相邻关系，就是集合通信的收发对象。</b><br><em>示意：4 颗芯片成环、每颗 2 个 device；真实 v7 是 3D torus。</em>'),
     "__FIG_S10_SLICE__": ("fig-s10-slice", "fig6-s10-slice.svg", "topic06-fig-topo.py",
-        '<b>短上下文看权重，长上下文看 KV；切片只有 4/8/16/32 颗几档。</b><br><em>本课推导：FP8 权重、bf16 MLA 的 KV、每芯片按 170.55 GB 计；纸面下限。</em>'),
+        '<b>短上下文看权重，长上下文看 KV；切片只有 4/8/16/32 颗几档。</b><br><em>本课推导：FP8 权重、bf16 MLA 的 KV、每芯片按 170.55 GiB 计；纸面下限。</em>'),
     "__FIG_S10_CONC__": ("fig-s10-conc", "fig6-s10-conc.svg", "topic06-fig-topo.py",
         '<b>容量要一路扫到吞吐见顶。</b><br><em>口径：并发是压测客户端同时挂着的请求数，不是服务端实际批大小。</em>'),
 }
@@ -91,7 +85,8 @@ NUM_LOCK = [
     ("1,820", "fig6-s10-lens.svg"), ("1,319", "fig6-s10-lens.svg"), ("3,257", "fig6-s10-lens.svg"),
     ("2.47", "fig6-s10-lens.svg"), ("1.79", "fig6-s10-lens.svg"), ("+28%", "fig6-s10-lens.svg"),
     ("15–21%", "fig6-s10-wire.svg"),
-    ("170.55", "fig6-s10-slice.svg"), ("3,029", "fig6-s10-slice.svg"), ("17.76", "fig6-s10-slice.svg"),
+    ("170.55", "fig6-s10-slice.svg"), 
+    ("3.76", "fig6-s10-slice.svg"), ("4.07", "fig6-s10-slice.svg"),
     ("70,272", "fig6-s10-slice.svg"),
     ("854", "fig6-s10-conc.svg"), ("10,715", "fig6-s10-conc.svg"), ("12.5", "fig6-s10-conc.svg"),
 ]

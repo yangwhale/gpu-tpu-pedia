@@ -7,8 +7,8 @@
 """
 
 BODY = '''
-  <p class="lead">2023 年底 Splitwise、2024 年初 DistServe 先后提出拆开 prefill 和 decode，DistServe 报告同样的延迟要求下多接 7.4 倍请求；同年 Mooncake 把它做进了 Kimi 的线上服务。prefill 和 decode 放在同一批卡上会互相拖。PD 分离把它们拆到两批机器上，代价是每个请求多搬一趟 KV。
-    <b>这一节讲那一趟怎么搬、谁来搬、搬错了是什么样子。</b></p>
+  <p class="lead">prefill 和 decode 放在同一批卡上会互相拖。PD 分离把它们拆到两批机器上，代价是每个请求多搬一趟 KV。这招是 2023 年底 Splitwise、2024 年初 DistServe 先后提出的，DistServe 报告同样的延迟要求下多接 7.4 倍请求；同年 Mooncake 把它做进了 Kimi 的线上服务。
+    <b>难的是那一趟 KV。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
   <p><a href="topic-05.html#s6-1">专题五 §6.1</a> 讲过：decode 每步只出一个字，读一遍权重只够这一批用一次，所以它拼命凑大 batch。</p>
@@ -26,7 +26,7 @@ __FIG_S8_KV_TRIP_T5__
   <p>和 1–2 s 的 prefill 比，这一趟只占一成上下。这个结论有两个前提：网络真跑在设计带宽上；KV 本身没有大到离谱。8.4 讲第一个前提怎么被打破，8.8 讲第二个。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
-  <p>一说「KV 传输」，人们常常把三件事混在一起。<b>先分清层，出了问题才知道去哪一层找。</b></p>
+  <p>「KV 传输」其实是三件事，<b>分清层，出了问题才知道去哪找。</b></p>
 __FIG_S8_STACK__
   <ul>
     <li><b>搬运</b>：只管把字节从这块显存挪到那块。GPU 上是 NIXL、Mooncake Transfer Engine；TPU 上是 TPU Sync 和 JAX 自带的 transfer server。</li>
@@ -40,7 +40,7 @@ __FIG_S8_STACK__
   <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s。按 1.04 GB 这把尺子算，一趟要 5,201 ms，比 prefill 本身还长。1.04 GB 沿用专题五的统一尺子（Qwen3-Coder-480B 一条 8K prompt 的 KV），不是 V4-Pro 的实际 KV。</p>
 __FIG_S8_BW__
   <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。cuda_ipc 只在同一个 NVLink 域里成立：一组用 NVLink 全互联、能直接读彼此显存的 GPU，NVL72 就是 72 张。补上三样配置后实测 7–167 GB/s，同一份 KV 一趟 149 ms 到 6.2 ms。</p>
-  <p>runbook 里单次传输从 200–800 ms 降到 2–10 ms。配错时什么都不报错，只是 TTFT 慢得说不清原因，上线前先量一次 KV 传输带宽。</p>
+  <p>配错时什么都不报错，只是 TTFT 慢得说不清原因，上线前先量一次 KV 传输带宽。</p>
   <details class="foldfig"><summary><b>那三样配置</b>：vLLM ＋ NIXL 在 GB300 上走 NVLink</summary>
   <ul>
     <li><code>UCX_TLS=cuda_copy,cuda_ipc,tcp</code>：只留 cuda_ipc（NVLink）和必要的拷贝、控制通道，去掉 RDMA。</li>
@@ -48,7 +48,7 @@ __FIG_S8_BW__
     <li><code>--enable-cumem-allocator</code>：显存用 cuMem 分配，cuda_ipc 才认得出来。</li>
   </ul>
   <p>另外 prefill 和 decode 必须在同一个 NVLink 域（GKE 上用 subblock 标签做 podAffinity）。出处：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:106、180–194。</p></details>
-  <p>更麻烦的是，<b>同一个库在两个引擎上的结论正好相反</b>。runbook 里试过的几条路：</p>
+  <p>更麻烦的是，<b>同一个库在两个引擎上的结论正好相反</b>：</p>
   <table>
     <tr><th>引擎 · 场景</th><th>试了什么</th><th>结果</th></tr>
     <tr><td>vLLM · V4-Pro · GB300</td><td>NIXL 走 NVLink cuda_ipc</td><td>能用，这是唯一活路</td></tr>
@@ -76,7 +76,7 @@ __FIG_S8_HYBRID__
     <li><b>两边上下文长度要一致</b>：只改 decode 的 <code>--context-length</code>，KV 布局对不上，握手失败；单条请求能过，压测才暴露。</li>
     <li><b>失败策略两头都疼</b>：vLLM 的 <code>kv_load_failure_policy</code> 设 fail，一次瞬时拒收就让引擎死掉；设 recompute 稳，但 12 个 prefill 时每卡 3,187 掉到 2,645，约交 17% 的税。</li>
     <li><b>出了 NVLink 域就慢</b>：SGLang 用 Mooncake 走 NVLink，跨域就退到 RDMA；vLLM 的 cuda_ipc 干脆只在域内成立。</li>
-    <li><b>表面报错可能是假的</b>：vLLM 开 14 个 prefill 时 decode 的 pod 接连被驱逐，真因是崩溃留下的 core dump 撑爆了临时盘。它和第十三节 SGLang 那次「14 台 prefill 全崩、注册表还显示在线」是两件事。</li>
+    <li><b>表面报错可能是假的</b>：vLLM 开 14 个 prefill 时 decode 的 pod 接连被驱逐，真因是崩溃留下的 core dump 撑爆了临时盘。</li>
     <li><b>编排层和 connector 要配套</b>：Dynamo 的 SGLang 集成能传 Mooncake 握手地址，vLLM 集成不能。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：五条坑各在哪</summary>
@@ -103,7 +103,7 @@ __FIG_S8_PRFAAS__
 
   <h3 id="s8-9">8.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    decode 每一步都要把权重和 KV 搬一趟。PD 分离不改变这一趟搬多少，它保证的是这一趟不被 prefill 打断，decode 才敢把 batch 攒满。
+    PD 分离不改变这一趟搬多少，它保证的是这一趟不被 prefill 打断，decode 才敢把 batch 攒满。
     代价是每个请求多一趟 KV 传输，所以要先确认它真跑在设计带宽上、输出和不拆时一字不差。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：PD 上线后 TTFT 比不拆时还高，TPOT 倒是稳了。先查哪一层？</summary>
