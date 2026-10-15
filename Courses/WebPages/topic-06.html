@@ -3349,7 +3349,7 @@ body.figonly section h3{margin-top:34px}
 <p>本课程作者实测：gpu-tpu-pedia tpu/tpu-inference/Gemma4-31B/README.md:225-226（TPU v7x 上 --max-num-batched-tokens 16384，256K prompt 切成 16 块 16K）。</p>
 <p>⚠️ 示意：格子数是编排的。混合步按相加计时偏保守，Sarathi 的观察是 decode 搭在 prefill 上几乎不额外花时间。</p></details></figure>
   <p>新请求的长 prompt 一口吞下，那一步就特别长，正在出字的人都卡一下。</p>
-  <p>Sarathi（arXiv <a href="https://arxiv.org/abs/2308.16369" target="_blank" rel="noopener">2308.16369</a>）和 Sarathi-Serve（arXiv <a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener">2403.02310</a>）把 prompt 切成小块，每步带一块，和 decode 拼在一起。
+  <p>Sarathi（arXiv <a href="https://arxiv.org/abs/2308.16369" target="_blank" rel="noopener">2308.16369</a>）和 Sarathi-Serve（arXiv <a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener">2403.02310</a>）把 prompt 切成小块，每步只带一块和 decode 拼着走，哪步都不会被拉长。
     vLLM V1 默认打开，decode 先上车；每步塞多少 token 由 max_num_batched_tokens 控制。</p>
   <p>TPU v7x 上跑 Gemma4-31B 的公开记录把它设成 16,384，256K 的 prompt 切成 16 块。</p>
 
@@ -3504,7 +3504,7 @@ body.figonly section h3{margin-top:34px}
 <p>Little 定律核对与「槽位不白给」实验（batch 886 → 999、TPOT 77.7 → 85.3 ms）见正文；出处同文件 794-801、849-858、885-894。</p></details></figure>
   <p>槽位就是 KV 池装得下几个人。Little 定律（见词表）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（第六节）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
-    客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 那边排队。</p>
+    客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 端排队。</p>
   <details class="foldfig"><summary><b>Little 定律核一遍</b>：批里到底几个人？</summary>
   <p>9,032 × 8 张 decode 卡 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 542。</p></details>
   <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），端到端吞吐只多 0.8%，TPOT 从 77.7 拖到 85.3 ms：人多了，每步就长了。</p>
@@ -3569,11 +3569,11 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>比两行 TPU：上面的「空等」格在下面没了。</b><span class="capmore"><br><em>时间线是示意，只有空档 12 ms 与 38 µs 是 SGLang-JAX 原文数字。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>SGLang-JAX 博客（lmsys.org/blog/2025-10-29-sglang-jax）原文：For Qwen/Qwen3-32B, we reduced the time gap between prefilling and decoding from approximately 12ms to 38us, and from approximately 7ms to 24us。同文：The scheduler pre-compiles Jax computation graphs for different batch sizes。</p>
 <p>⚠️ 示意：格子长短是编排的，CPU 与 TPU 段的比例不对应任何实测。</p></details></figure>
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
-  <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐是原来的 1.1 倍。2025 年 vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是把分词、回传这些 CPU 活挪到别的进程同时跑。</p>
+  <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐是原来的 1.1 倍。2025 年 vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是分词、回传等 CPU 活挪到了别的进程。</p>
 
   <h3 id="s4-5">4.5　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
-  <p>vLLM V1 默认重算，文档说在 V1 架构里重算开销更低。</p>
+  <p>vLLM V1 默认重算，文档说 V1 里重算开销更低。</p>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。
@@ -3588,8 +3588,8 @@ body.figonly section h3{margin-top:34px}
   <p class="lead">座位排满以后，剩下的是每一步本身。一张卡上的 decode 有两块最难啃：注意力读的是每个人自己的 KV（5.1–5.4），MoE 的每个专家只分到几行（5.5）。<b>两块都是搬运问题。</b>最后补一条小 AllReduce（把各卡的部分和加起来再发回每张卡，5.6），它卡的是延迟。</p>
 
   <h3 id="s5-1">5.1　注意力：攒 batch 救不了它</h3>
-  <p>长上下文贵的第二个原因：每个人每步要读的 KV 也更长。</p>
-  <p>decode 注意力每读 1 字节只做 G 次运算（G ＝ 几个查询头共用一个 KV 头），推导见<a href="topic-03.html#s3-1">专题三 §3.1</a>。Llama-3.1-70B 64 个查询头配 8 个 KV 头，G＝8，v7 的屋脊 313 是它的近 40 倍。</p>
+  <p>长上下文除了占座位（第三节），每人每步要读的 KV 也更长，且各读各的，攒 batch 摊不薄。</p>
+  <p>decode 注意力每读 1 字节只做 G 次运算（G ＝ 几个查询头共用一个 KV 头），推导见<a href="topic-03.html#s3-1">专题三 §3.1</a>。Llama-3.1-70B 64 个查询头配 8 个 KV 头，G＝8，v7 的屋脊点 313 是它的近 40 倍。</p>
 <figure class="fbox fwide" id="fig-s5-amortize"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="攒 batch 时一步要读的字节。横轴是 batch 1、16、64、128，每根柱子是这一步全模型要读的字节，蓝色是权重 141 GB，四根柱子一样高；紫色是 KV，每条序列 2.68 GB，跟着 batch 线性长。柱顶写着摊到每个 token 的字节：143.8、11.5、4.89、3.79 GB。batch 约 53 时两块一样重，之后 KV 占大头"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">攒 batch：权重一趟分给所有人，KV 每人一份　——　<tspan font-weight="700">batch 越大，KV 越成主角</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">柱高 ＝ decode 一步要从显存读的字节（全模型合计，不分卡）；柱顶 ＝ 摊到每个 token 的字节。Llama-3.1-70B，bf16，每条序列上下文 8K</text>
@@ -3646,11 +3646,11 @@ body.figonly section h3{margin-top:34px}
 <p>本课推导：每 token 的 KV ＝ 2（K、V）× 8 头 × 128 维 × 2 字节 × 80 层 ＝ 327,680 字节；上下文 8K 时每条序列 2.68 GB；141.1 ÷ 2.68 ≈ 52.6，就是两块一样重的 batch。没算激活值、logits 和读进来就丢的东西；模型实际要切到好几张卡上，这里是全模型合计。</p>
 <p>注意力每字节 8 次运算的推导见专题三 §3.1 图下：读 4·S·d 字节、算 4·G·S·d 次，比值 ＝ G。</p></details></figure>
   <p>batch 小、序列长时，注意力的活只按 batch 和头分给计算单元，份数太少，单元大半闲着。
-    Flash-Decoding（斯坦福 CRFM 博客，2023-10）把每条序列的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。博客在 CodeLlama-34B 单请求上报，序列很长时 decode 速度最多是 FlashAttention 等旧注意力实现的 8 倍。</p>
-  <p>名字来自 2022 年的 FlashAttention：注意力切块放进片上 SRAM 算，不再把整张分数表写回显存。</p>
+    Flash-Decoding（斯坦福 CRFM 博客，2023-10）把每条序列的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。</p>
+  <p>名字借自 2022 年的 FlashAttention：注意力切块放进 SRAM（小而快的片上存储）算，不再把整张分数表写回显存。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 的速度最多是 FlashAttention 等旧实现的 8 倍。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention）把两者放进同一个注意力 kernel（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
+  <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention）把两者放进同一个注意力 kernel（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
 <figure class="fbox fwide" id="fig-s5-rpa"><svg viewBox="0 0 1400 422" width="100%" role="img" aria-label="左半：同一批里混着 decode 请求和 prefill 请求，decode 每条只有 1 个新 token，prefill 每条一段多个 token。RPA 把这一批按下标切成三段：全是 decode 的一段派给纯 decode 版，定长分块的 prefill 派给纯 prefill 版，长度不定的其余请求派给混合版；三份版本都是预编译好的，各配一组块大小。右半：KV 页大小。页 16 个 token 时，读同样的 KV 要查很多页，并发 512 时这个 kernel 的 decode 一步 428 微秒；页调到 256 个 token，页数少，降到 283 微秒"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个 kernel 装下 prefill 和 decode　——　<tspan font-weight="700">先分段，再派给三份预编译版本</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：一批怎么拆给三份版本（示意）；右：KV 页大小这个旋钮（Qwen3.5-397B，TPU7x）</text>
@@ -3723,11 +3723,10 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="856" y="394" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">并发 512 · 这个 kernel 的 decode 一步，不是整步</text>
 </svg><figcaption><b>左边看箭头：一批切成三段，各走一份版本；右边比两根条。</b><span class="capmore"><br><em>段的切法和请求数是示意；页的格数只表示比例。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>分段与三份预编译版本：Ragged Paged Attention，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5，段序按原文：纯 decode、定长分块 prefill、长度不定的混合段。每段几条请求、块大小都是示意。</p>
 <p>页大小：Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」，原文 decode step latency under Concurrency-512 from 428µs to 283µs（kernel-level）。页的格数只表示 16 与 256 的比例。</p></details></figure>
-  <p>RPA 在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。</p>
-  <p>图右的页大小数据来自 Qwen3.5-397B 在 TPU7x 上的公开调优（Google 开发者博客）。</p>
+  <p>RPA 在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。图右数据出自 Google 开发者博客的公开调优。</p>
 
   <h3 id="s5-3">5.3　布局：窄维被补成整块</h3>
-  <p>TPU 的显存按 4 KiB 一块的 tile 存：最内层（内存里连续排的那一维）补齐到 128 格，次内层 bf16 补齐到 16 行、fp8 补齐到 32 行。</p>
+  <p>TPU 的显存按 tile（图里的「标准箱」）存：最内层（内存里连续排的那一维）和次内层都要补齐，fp8 的次内层补到 32 行。</p>
   <p>KV 头只有 1–2 个，若头这一维落在这两维上，就可能被补成整块，多出的全是空位。</p>
 <figure class="fbox fwide" id="fig-s5-tile"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="同一份 KV 的三种摆法，画成装箱。TPU 显存按标准箱存，一箱 4 KiB，横 128 格、竖 16 行（bf16），装不满也按整箱算。要装的是一个 token、一层的 K 和 V，2 个头 × 128 维，bf16 共 1 KiB。A 让头数占了 128 格那一维，每行只用 2 格，要 16 箱、64 KiB，是真数据的 64 倍。B 让头数占了按行凑整那一维，每箱 16 行只用 2 行，要 2 箱、8 KiB，是真数据的 8 倍；换成 FP8 还是 2 箱 8 KiB，一个字节都没省。C 把 K、V 并起来、换成小箱，正好 1 KiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">布局像装箱：一双袜子装进标准箱，空的也占地方　——　<tspan font-weight="700">FP8 可能一个字节都没省</tspan></text>
@@ -3844,10 +3843,10 @@ body.figonly section h3{margin-top:34px}
 <p>窄头数被补齐、加 packing 维逼 XLA 选最小 tile T(packing,128)、把 K 和 V 沿头维并起来：Ragged Paged Attention，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a>，§2.1.2、§3.1.1、§3.1.3、§3.5。</p>
 <p>本课推导：占用 ＝ ⌈次内层 ÷ 每块行数⌉ × 每块行数 × ⌈最内层 ÷ 128⌉ × 128 × 每元素字节。A：头数在最内层（128 格），⌈128÷16⌉＝8 块 ×2（K、V）；B：头数在次内层，K、V 各 1 块；C：4 行 ÷ 每块 2 行。FP8 时：A 32 KiB（仍 64 倍）、B 8 KiB（16 倍）、C 512 B。</p>
 <p>XLA 对次内层只有 1–2 的数组有时会改用 2×128 的小 tile（同一份 openxla 文档的 Compact 2nd Minor Layout），具体选哪种由 XLA 的 layout assignment 决定；进到 kernel 里，向量寄存器仍是固定的 8×128×32 位。本图按默认 tile 画。</p></details></figure>
-  <p>RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（论文 3.1 节）。量化压不掉空位。</p>
+  <p>RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（论文 3.1 节）。</p>
 
   <h3 id="s5-4">5.4　V3 的 MLA：一个阶段一套算法</h3>
-  <p><a href="topic-03.html#s5-2">专题三 §5.2</a> 推过「吸收」：把投影并进查询，128 个头直接对同一条 576 维潜向量算，K/V 不展开。那是 decode 用的，prefill 呢？</p>
+  <p><a href="topic-03.html#s5-2">专题三 §5.2</a> 推过「吸收」：把投影并进查询，所有头直接对同一条压缩后的潜向量算，K/V 不展开。那是 decode 用的，prefill 呢？</p>
 <figure class="fbox fwide" id="fig-s5-mla"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="MLA 两种算法的数据流。吸收：缓存里每个 token 只有一条 576 维的压缩 KV，128 个头一起读这一条，每读 1 字节做 242 次运算，decode 用它。展开：先把这一条复制还原成 128 份、每个头一份，各读各的，每读 1 字节只做 1 次运算；prefill 有成千上万个查询，复制的开销被摊薄，用它"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">MLA 的两种算法：一条大家共读，还是先复制 128 份　——　<tspan font-weight="700">decode 用吸收，prefill 用展开</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，一层、一个缓存 token。右边的大数：每从显存读 1 字节，做几次运算</text>
@@ -3943,10 +3942,10 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>上下两栏的头一样多，差别只在箭头从哪条数据出发。</b><span class="capmore"><br><em>乘加按 2 次运算计，bf16；没算把查询吸收进去、把输出投影回来的那两次矩阵乘。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DeepSeek-V3 config.json：128 头、kv_lora_rank 512、qk_nope_head_dim 128、qk_rope_head_dim 64、v_head_dim 128、num_key_value_heads 128。吸收的做法与「只在 decode 划算」出自 DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a> §2.1.2；专题三第五章讲过推导。</p>
 <p>本课推导（只数注意力本身的乘加，乘加算 2 次运算，bf16）：吸收 ＝ 2 × 128 × (576 ＋ 512) ＝ 278,528 次，读 576 × 2 ＝ 1,152 字节，比值约 242；展开 ＝ 2 × 128 × (192 ＋ 128) ＝ 81,920 次，读 128 × 320 × 2 ＝ 81,920 字节，比值 1。prefill 里每对（查询，历史 token）吸收的运算是展开的 3.4 倍。没算把查询吸收进去、把输出投影回来的那两次矩阵乘（每个查询做一次，跟历史长度无关），也没算 prefill 展开 K/V 的一次性开销（每个历史 token 一次，被所有查询分摊）。</p>
 <p>画法：576 维画成一条，展开后每份 K＋V 共 320 维按同一比例；128 个头只画 6 个。</p></details></figure>
-  <p>decode 缺带宽，用吸收；prefill 缺算力，要的是少算。每个头对每个历史 token，吸收要和 576 维的潜向量做点积、再按其中 512 维加权求和，共 1,088 次乘加；展开后每头 K 192 维、V 128 维，共 320 次，吸收的乘加是它的 3.4 倍（V3 config 推导）。展开多读的字节，prefill 有富余带宽兜着。</p>
+  <p>decode 缺带宽，用吸收；prefill 缺算力，要的是少算。每个头对每个历史 token，吸收要和 576 维的潜向量做点积、再按其中 512 维加权求和，共 1,088 次乘加；展开后每头 K 192 维、V 128 维，共 320 次，吸收是展开的 3.4 倍（V3 config 推导）。展开多读的字节，prefill 有富余带宽兜着。</p>
 
   <h3 id="s5-5">5.5　decode 的 MoE：全算比排序便宜</h3>
-  <p>1.4 算过，每个专家平均只分到 8 行；与其按专家把 token 排序分组，不如让所有 token 都过一遍，没选中的乘 0。</p>
+  <p>1.4 算过，decode 时每个专家平均只分到几行；与其按专家把 token 排序分组，不如让所有 token 都过一遍，没选中的乘 0。</p>
 <figure class="fbox fwide" id="fig-s5-dense"><svg viewBox="0 0 1400 592" width="100%" role="img" aria-label="DeepSeek-V3 一个路由专家，在 TPU v7 的一个 device 上。两组横条，同一把时间尺子。BF16：读一遍权重 23.9 微秒，让 256 个 token 全部过一遍这个专家 19.5 微秒，只算路由到的 8 个 token 0.61 微秒。FP8：读权重 11.95 微秒，256 个 token 全算 9.77 微秒。两种精度下，全算都比读权重快，比值都是 256 除以 313"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">decode 的 MoE：多算一遍比读一遍权重还便宜　——　<tspan font-weight="700">那就别排序了，全算</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3 的一个路由专家（3 块 7168×2048），TPU v7 单 device。条长 ＝ 微秒，同一把尺子；一批 256 个 token，平均每个专家只分到 8 个</text>
@@ -4036,9 +4035,9 @@ body.figonly section h3{margin-top:34px}
 <p>NVLink 5：每 GPU 1.8 TB/s（NVIDIA GB200 NVL72 公开规格，双向合计）。</p>
 <p>本课推导：消息 ＝ 7168 × 2 字节 ＝ 14,336 字节（V3、batch 1、bf16）；环形 AllReduce 每卡发出 2(n−1)/n 份（NCCL PERFORMANCE.md，专题五第一节），n＝4 时 1.5 份，按单向 900 GB/s ＝ 约 24 ns。只算带宽项，没算任何启动和同步。</p>
 <p>TPU 的 ICI 上同口径的小消息延迟，没有找到公开数据。</p></details></figure>
-  <p>消息小，固定延迟占大头，带宽项只是零头，加带宽救不回来，要省的是同步次数（arXiv <a href="https://arxiv.org/abs/2607.16100" target="_blank" rel="noopener">2607.16100</a>）。</p>
+  <p>消息小，时间几乎全是固定延迟，加带宽救不回来（arXiv <a href="https://arxiv.org/abs/2607.16100" target="_blank" rel="noopener">2607.16100</a>）。</p>
 
-  <p class="landing">⭐ 从 2022 年的 FlashAttention 到 2026 年的 RPA，单卡 kernel 一直在做同一件事：<b>「少搬」从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行都是没人要的字节，先去掉它们，再谈量化和加卡。</p>
+  <p class="landing">⭐ 从 2022 年的 FlashAttention 到 2026 年的 RPA，单卡 kernel 一直在做一件事：<b>「少搬」从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行都是没人要的字节，先去掉它们，再谈量化和加卡。</p>
 
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>切专家与注意力：TEP 和 DEP</h2></div>
