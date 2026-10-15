@@ -136,6 +136,7 @@ python3 topic04-build-lecture.py
   rm -f fig6-*.svg fig6-*.src.html
   for s in topic06-fig-*.py; do python3 "$s"; done
   python3 topic06-build.py
+  python3 topic06-build-lecture.py
 
   step "专题八 教材"
   python3 topic08-build.py

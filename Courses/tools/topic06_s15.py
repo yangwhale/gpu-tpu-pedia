@@ -89,7 +89,7 @@ BODY = '''
     <tr><td>草稿模型谱系（MTP、DSpark 的定义）</td><td>SpecInfer 2305.09781、Medusa 2401.10774、EAGLE 2401.15077／2406.16858、MTP 2412.19437、EAGLE-3 2503.01840、DSpark 2607.05147、Lookahead 2402.02057、SuffixDecoding 2411.04975、DiffuSpec 2510.02358、DFlash 2602.06036（均 arXiv）；github.com/apoorvumang/prompt-lookup-decoding。2026-10-15 核对</td></tr>
     <tr><td>8 颗 v7 读一遍 V3 激活权重：BF16 1.26 ms、FP8 0.63、MXFP4 0.33、NVFP4 0.35</td><td>本课推导：37e9 × 位数 ÷ 8 ÷ (8 × 7.37 TB/s)</td></tr>
     <tr><td>MXFP4 每 32 个数一个 E8M0 scale（只能取 2 的幂），合 4.25 bit；NVFP4 每 16 个一个 E4M3（可取非 2 的幂），合 4.5 bit；E2M1 有 16 个编码、15 个值（±0）</td><td>OCP Microscaling Formats (MX) v1.0 规范；NVIDIA 技术博客「Introducing NVFP4」</td></tr>
-    <tr><td>v7 的矩阵单元没有 FP4 通路（公开规格只列 BF16、FP8 峰值）</td><td>Google Cloud TPU7x 公开规格页</td></tr>
+    <tr><td>v7 公开规格只列 BF16、FP8 峰值，没写 FP4 算力</td><td>Google Cloud TPU7x 公开规格页</td></tr>
     <tr><td>V4 专家权重为 FP4</td><td>Hugging Face DeepSeek-V4 模型卡</td></tr>
     <tr><td>R1 FP4 每 device 60.9，FP8 101.8 放不下（README 写 GB）；上限 94.75 GiB（运行日志单位）；K2.6 INT4 存成无符号 0–15，加载时直接当有符号读（没减 8）就崩</td><td>R1 FP4 README:59、72-73、:875-878（README 实测值）；K2.6 README:217、:265-266</td></tr>
     <tr><td>kernel 气泡：H100 理想 1,350 次前向／秒，实际 770；megakernel 带宽利用 50% → 78%，比 vLLM 快约 2.5×、比 SGLang 快 1.5× 多</td><td>hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles；1,350 ＝ 3.35 TB/s ÷ 2.48 GB 本课推导</td></tr>

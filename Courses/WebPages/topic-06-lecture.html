@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题六 · 讲义（授课稿）</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<meta property="og:title" content="推理 · 讲义">
+<meta name="theme-color" content="#5f6368">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6; --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea; --purple:#9334e6;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --paper:#fdfcfa; --bg2:#f6f5f2;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:78px}
+body{background:var(--paper);color:var(--ink);
+  font:400 16px/1.8 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+b,strong{font-weight:600}
+code{font:600 .88em/1.4 var(--mono);background:#eeece7;padding:2px 6px;border-radius:4px;
+     color:var(--blue-d);white-space:nowrap}
+
+/* ── 顶栏 + tab ─────────────────────── */
+.top{position:sticky;top:0;z-index:50;background:rgba(253,252,250,.95);
+     backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1240px;margin:0 auto;padding:10px 24px;display:flex;
+         align-items:center;gap:18px;flex-wrap:wrap}
+.top .who{font-size:14px;color:var(--gray);white-space:nowrap}
+.top .who b{color:var(--ink)}
+.tabs{display:flex;gap:4px;background:#eeece7;padding:3px;border-radius:9px}
+.tabs a{font-size:13.5px;font-weight:600;padding:7px 16px;border-radius:7px;
+        text-decoration:none;color:var(--gray)}
+.tabs a.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tabs a:hover:not(.on){color:var(--ink)}
+.top .meta{margin-left:auto;font:600 12px var(--mono);color:var(--gray2)}
+
+/* ── 布局 ───────────────────────────── */
+.shell{max-width:1240px;margin:0 auto;padding:0 24px;display:grid;
+       grid-template-columns:238px 1fr;gap:44px;align-items:start}
+.side{position:sticky;top:78px;padding:28px 0 40px;max-height:calc(100vh - 78px);overflow-y:auto}
+.side h4{font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--gray2);
+         text-transform:uppercase;margin:0 0 12px}
+.side ol{list-style:none}
+.side li{margin-bottom:1px}
+.side a{display:flex;gap:9px;padding:6px 10px;border-radius:7px;font-size:13.5px;
+        text-decoration:none;color:var(--gray);line-height:1.45}
+.side a:hover{background:#eeece7;color:var(--ink)}
+.side a.on{background:var(--blue-l);color:var(--blue-d);font-weight:600}
+.side a i{font:700 10.5px/1.5 var(--mono);font-style:normal;color:var(--gray2);flex:0 0 20px}
+.side a.on i{color:var(--blue)}
+.side a.todo{opacity:.5}
+.side .grp{font:700 10.5px/1 var(--mono);letter-spacing:.1em;color:var(--gray2);
+           margin:16px 0 7px;padding-left:10px;text-transform:uppercase}
+main{padding:28px 0 90px;min-width:0}
+
+/* ── 讲次 ───────────────────────────── */
+.lec{border-top:1px solid var(--line);padding:36px 0 12px}
+.lec:first-child{border-top:none;padding-top:8px}
+.lh{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.lh .no{font:700 12px/1 var(--mono);color:#fff;background:var(--ink);
+        border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.lh h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lh .t{margin-left:auto;font:600 12px var(--mono);color:var(--gray2);
+       background:var(--bg2);padding:5px 11px;border-radius:6px;white-space:nowrap}
+.goal{background:var(--green-l);border-left:4px solid var(--green);border-radius:0 10px 10px 0;
+      padding:14px 18px;margin:16px 0;font-size:16px;line-height:1.7}
+.goal b{color:#0b6b30}
+.goal .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#0b6b30;
+         text-transform:uppercase;margin-bottom:5px}
+
+h3.sec{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--gray2);
+       text-transform:uppercase;margin:26px 0 10px;display:flex;align-items:center;gap:9px}
+h3.sec:after{content:"";flex:1;height:1px;background:var(--line2)}
+
+/* 讲稿 —— 排成一本书，不是一份脚本
+   ⛔⛔ 2026-09-06 整段重写。现场反馈：「那个讲义能不能不要看上去跟一个脚本一样，
+        要看上去像一个故事书一样。」
+   ⭐ 原来那一版之所以像脚本，**不是因为内容，是因为版式**：
+      ① 每隔一两段就横插一个整宽蓝框（屏幕提示），叙述被切成碎片；
+      ② `<em>` 是荧光笔黄底，一页十几处，看着像别人划过的考卷；
+      ③ 无衬线 16.5px 顶着一个白卡片，读起来是「文档」不是「书」。
+   ⭐ 三条对策，逐条对应：
+      ① **舞台指示挪到页边**（宽屏时浮到右侧留白里），正文一条不断；
+      ② 荧光笔换成**细下划线**，强调还在，喧宾夺主没了；
+      ③ 正文换**衬线体、17.5px、行高 2.05、首行缩进两字**，去掉外框和阴影。
+   ⚠️ 这份 CSS 被两份讲义共用（专题二那份 `_css()` 原样抽这里的 <style>）——
+      改这里等于两边一起改，那是有意的。 */
+.say{background:transparent;border:0;border-radius:0;box-shadow:none;
+     padding:6px 0 20px;margin:4px 0;position:relative}
+.say p{margin:0 0 1.05em;font-size:17.5px;line-height:2.05;text-indent:2em;
+  font-family:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",Georgia,serif;
+  color:#1b1b1d;max-width:38em}
+.say p:first-child{margin-top:10px}
+/* 每一讲的头一段不缩进 —— 中文书的惯例，也让「这一讲开始了」一眼看得出来 */
+.say > p:first-of-type{text-indent:0}
+.say > p:first-of-type:first-letter{font-size:1.05em;font-weight:600}
+.say h4{margin:30px 0 6px;font-size:15px;color:var(--blue);
+  border-left:3px solid var(--blue);padding-left:10px}
+/* 强调：细下划线，不用荧光笔 */
+.say em{font-style:normal;background:none;font-weight:600;color:#111;
+        border-bottom:1.5px solid #e8c46a;padding-bottom:1px}
+/* ── 舞台指示：宽屏浮到右边页边，窄屏退回行内 ──────────────────────
+   它们是「怎么演」，不是「讲什么」。读故事的人应该能一路顺下来，
+   眼角瞥见就行。 */
+.say .pause,.say .board{display:block;font-size:13px;line-height:1.72;
+  color:var(--gray);margin:2px 0 14px;padding-left:12px;
+  border-left:2px solid var(--line);max-width:38em;
+  font-family:"Noto Sans CJK SC","PingFang SC",sans-serif;text-indent:0}
+.say .board{border-left-color:#9ab7e8}
+.say .pause{border-left-color:#d9d2c2;font-style:italic}
+.say .board:before{content:"屏幕 · ";font-weight:700;color:#5b7fc7}
+.say .pause:before{content:"停 · ";font-weight:700;color:#a89a76;font-style:normal}
+/* ⛔ 2026-09-06 这里试过「宽屏时把舞台指示浮到右侧页边」——&nbsp;**塌了，已撤**。
+   position:absolute 把它们移出文档流之后，相邻的两三条会**落在同一个 y 上互相叠字**
+   （原因很简单：absolute 元素的静态位置是它原来的位置，而后面的兄弟节点向上收缩，
+   于是好几条挤到一起）。
+   ⭐ 判据：**边注要真的排成一栏，得用双栏 grid，不能靠一个负的 right 值。**
+   现在两个宽度用同一套行内样式 ——&nbsp;安静、不断流，已经够书感了。 */
+
+/* 问答 */
+.qa{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0}
+.qa details{border-top:1px solid var(--line2)}
+.qa details:first-child{border-top:none}
+.qa summary{padding:13px 18px;cursor:pointer;font-size:15px;font-weight:600;
+            list-style:none;display:flex;gap:9px;background:#fff}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary:before{content:"Q";font:700 11px/1.5 var(--mono);color:#fff;background:var(--purple);
+                   border-radius:50%;width:19px;height:19px;text-align:center;flex:0 0 19px;
+                   margin-top:3px}
+.qa summary:hover{background:var(--bg2)}
+.sub{font-size:.92em;color:var(--gray)}
+.qa .a{padding:2px 18px 16px 46px;font-size:15px;line-height:1.85;color:#3c4043;background:#fff}
+.qa .a p{margin:10px 0}
+
+/* 边界 / 提示 */
+.warn{background:var(--red-l);border-left:4px solid var(--red);border-radius:0 10px 10px 0;
+      padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.warn .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#a50e0e;
+         text-transform:uppercase;margin-bottom:5px}
+.tip{background:var(--yellow-l);border-left:4px solid var(--yellow);border-radius:0 10px 10px 0;
+     padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.tip .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#8a5a00;
+        text-transform:uppercase;margin-bottom:5px}
+
+.num{font-family:var(--mono);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:14px 0}
+th{text-align:left;font-size:11.5px;font-weight:700;color:var(--gray2);letter-spacing:.06em;
+   text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.7}
+td.n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+
+.todo-box{border:1px dashed var(--line);border-radius:12px;padding:22px 24px;
+          color:var(--gray);font-size:15px;background:#fff}
+.todo-box b{color:var(--ink)}
+
+.plan{background:var(--bg2);border-radius:14px;padding:24px 26px;margin:0 0 8px}
+.plan h2{font-size:22px;margin-bottom:6px}
+.plan p{font-size:15px;color:var(--gray);margin-bottom:16px}
+.plan table{margin:0}
+.plan td:first-child{width:44px;font:700 11px var(--mono);color:var(--gray2)}
+/* 时间表要比上面那张图例表宽一点的首列（"12–27" 塞不进 44px），单独覆盖 */
+.plan .sched{margin:10px 0 0}
+.plan .sched td:first-child{width:64px;font:700 12.5px var(--mono);color:var(--blue)}
+.plan h3{font-size:16px;margin:22px 0 2px}
+
+footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);font-size:14px;
+       line-height:1.8;grid-column:1/-1}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr;gap:0}
+  .side{position:static;max-height:none;padding:18px 0 4px;
+        border-bottom:1px solid var(--line)}
+  .side ol{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .lh h2{font-size:21px}.lh .t{margin-left:0}
+  .say{padding:2px 16px 14px}.say p{font-size:15.5px}
+  .qa .a{padding-left:18px}
+}
+</style>
+<style>
+.shell > main{grid-column:1 / -1}
+.plan table td:first-child, .plan table th:first-child{white-space:nowrap}
+p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
+      margin:12px 0;line-height:1.95}
+details.deep{margin:18px 0;border:1.5px dashed #9aa0a6;border-radius:10px;padding:6px 14px;background:#fafafa}
+details.deep summary{cursor:pointer;padding:6px 0}
+p.deephd{font-weight:700;color:#174ea6;margin:14px 0 4px}
+p.deepsay{background:#f8f9fa;border-left:3px solid #9aa0a6;padding:8px 14px;margin:8px 0;line-height:1.9}
+</style>
+</head>
+<body>
+
+<!-- ⛔ 这个文件由 Courses/tools/topic06-build-lecture.py 生成，不要手改。 -->
+
+<div class="top"><div class="in">
+  <span class="who">专题六 · <b>推理</b></span>
+  <nav class="tabs">
+    <a href="topic-06.html">课件</a>
+    <a href="topic-06-lecture.html" class="on">讲义</a>
+    <a href="topic-05.html">专题五（并行那几刀）</a>
+    <a href="index.html">课程总纲</a>
+  </nav>
+</div></div>
+
+<div class="shell">
+<main>
+
+<div class="plan">
+  <h2>这份讲义怎么用</h2>
+  <p><b>两个用法。</b><br>
+    <b>① 上台讲</b>：照着念，台词、切图、每段几分钟都写着。<br>
+    <b>② 自学</b>：把这一整份丢给 AI，你会得到一个既有全部背景、
+    也知道该怎么讲的助教，让它带你走一遍。</p>
+  <p>内容本身在<a href="topic-06.html">课件</a>那边，这一份只管「怎么讲」。<br>
+    课程作者 <b>Chris Yang</b> · Google Cloud AI Infra 架构师。</p>
+  <table><tbody>
+    <tr><td>🎯</td><td><b>这一节要留下什么</b>　讲完之后台下脑子里该剩的那一句。</td></tr>
+    <tr><td>🗣</td><td><b>讲稿</b>　<em>黄底</em>的可以照着念。</td></tr>
+    <tr><td>🖥</td><td><b>屏幕</b>　该滚到课件的哪张图、放哪段动画。
+      <em>⭐ 这些提示挂了 <code>class="board"</code>，构建时逐条对账，
+      指了不存在的图或小节号会当场报出来。</em></td></tr>
+    <tr><td>⚠️</td><td><b>别讲什么</b>　这一节最容易跑偏的方向。</td></tr>
+  </tbody></table>
+</div>
+
+<div class="plan">
+  <h2>⏱ 时间：主线 113′</h2>
+<p>⛔ <b>第零、一节不能砍，第三节那张「能装几条」也不能砍。</b>
+  <em>第零节立住「decode 每一步都搬一趟」，第一节把这一趟的账算清楚，后面每一节都拿这一趟开头。
+  要压时间，压每一节中间的例子（实测数、旁支的坑），<b>别压首尾</b>：每节开头那句「这一招对付的是那一趟里的哪一块」和末尾交棒的那句，时间再紧也要念。</em><br>
+  讲义共十五节（第零到第十四节），第十五节出处台账不进课堂，被追问时翻。全讲约 110 分钟，<b>建议第七节讲完后中场休息</b>。</p>
+  <table>
+<thead><tr><th>段落</th><th>分钟</th><th>能不能砍</th><th>说明</th></tr></thead><tbody>
+<tr><td>零　开场</td><td>5</td><td>不能</td><td>⭐ 开场两道题（价格降了多少倍、算力用了百分之几）必须做；立住「搬一趟」那一句</td></tr>
+<tr><td>一　两个阶段</td><td>10</td><td>不能</td><td>⭐ 揭晓第二题（5 毫秒对 0.016 毫秒）；KV 接过主角；MoE 拆散 batch</td></tr>
+<tr><td>二　校准尺子</td><td>7</td><td>可压到 6</td><td>四把尺子那张图必须放；2.4 的坑、2.5 的钱可各只点一句</td></tr>
+<tr><td>三　KV cache</td><td>10</td><td>不能</td><td>⭐ batch 上限那张图一定要放；分页、两池、复用、卸载各一段</td></tr>
+<tr><td>四　批处理与调度</td><td>8</td><td>可压到 7</td><td>⭐ 静态批对逐步调度、坐满的餐厅；TPU 档位与 CPU 重叠可合成一句</td></tr>
+<tr><td>五　两块硬骨头</td><td>8</td><td>可压到 6</td><td>行李跟人走，攒 batch 只摊权重；装箱补齐、MLA 两套、全算专家；小 AllReduce 省次数</td></tr>
+<tr><td>六　TEP 与 DEP</td><td>8</td><td>可压到 5</td><td>TP ÷ KV 头数判副本；DEP 的状态池代价；放得下以后瓶颈换到 prefill；TPU 参数名</td></tr>
+<tr><td>七　切序列</td><td>7</td><td>可压到 5</td><td>DCP 盈亏看 KV 总量；PCP 两个不报错的陷阱；末尾中场休息</td></tr>
+<tr><td>八　拆工作</td><td>9</td><td>可压到 6</td><td>那一趟 KV 的两个前提；三层排查；配错开关慢两个数量级；混合模型尾巴；先比字</td></tr>
+<tr><td>九　配比与拆不拆</td><td>7</td><td>可压到 5</td><td>公式只是起点；多一台 prefill 换首字；分母差五倍；不拆的时候；AFD／EPD 一句</td></tr>
+<tr><td>十　先选拓扑</td><td>6</td><td>可压到 4</td><td>+45% 对 +347% 先看分母；线是硬约束；容量扫到见顶；交棒投机解码</td></tr>
+<tr><td>十一　投机解码</td><td>8</td><td>不能</td><td>⭐ 动画两次停顿各讲一步（出 3 个、出 5 个）；收益会缩、温度坑必讲；谱系扫一眼</td></tr>
+<tr><td>十二　量化与融合</td><td>8</td><td>不能</td><td>位数减半下限减半；同叫 4 bit 差在缩放；v7 无 FP4 算力；megakernel 捡回交接空当</td></tr>
+<tr><td>十三　落地</td><td>6</td><td>不能</td><td>分桶与预编译；冷启动拆账看编译；KV 感知路由；栈对照表不讲</td></tr>
+<tr><td>十四　八问与收尾</td><td>6</td><td>收尾不能砍</td><td>只挑第三、五、八问；便宜了多少说清不全是系统功劳；回到 0.3 那一句</td></tr>
+<tr><td><b>合计</b></td><td><b>113</b></td><td></td><td>第九节（出处台账）不进课堂，被追问时翻</td></tr>
+</tbody></table>
+  <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
+  <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，<b>也不含等动画转完一圈的时间</b>（全讲约 3 分钟）。每次 build 现数。</em></p>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第零节　一次请求走一遍</td><td>590</td><td>4</td><td>4.0′</td><td>5′</td></tr><tr><td>第一节　prefill 吃算力，decode 吃带宽</td><td>762</td><td>4</td><td>4.8′</td><td>10′</td></tr><tr><td>第二节　先校准尺子</td><td>706</td><td>4</td><td>4.5′</td><td>7′</td></tr><tr><td>第三节　KV cache：账、池、复用</td><td>969</td><td>5</td><td>6.1′</td><td>10′</td></tr><tr><td>第四节　批处理与调度</td><td>753</td><td>4</td><td>4.8′</td><td>8′</td></tr><tr><td>第五节　两块硬骨头</td><td>841</td><td>6</td><td>5.7′</td><td>8′</td></tr><tr><td>第六节　TEP 还是 DEP</td><td>573</td><td>4</td><td>3.9′</td><td>8′</td></tr><tr><td>第七节　切序列：DCP 和 PCP</td><td>576</td><td>5</td><td>4.1′</td><td>7′</td></tr><tr><td>第八节　拆工作：那一趟 KV</td><td>744</td><td>6</td><td>5.2′</td><td>9′</td></tr><tr><td>第九节　配几台、拆不拆</td><td>630</td><td>6</td><td>4.7′</td><td>7′</td></tr><tr><td>第十节　先选拓扑，再调参数</td><td>434</td><td>4</td><td>3.2′</td><td>6′</td></tr><tr><td>第十一节　投机解码</td><td>873</td><td>7</td><td>6.1′</td><td>8′</td></tr><tr><td>第十二节　量化与 kernel 融合</td><td>731</td><td>4</td><td>4.7′</td><td>8′</td></tr><tr><td>第十三节　落地：服务化与编排</td><td>674</td><td>3</td><td>4.1′</td><td>6′</td></tr><tr><td>第十四节　第一天的八问</td><td>523</td><td>3</td><td>3.4′</td><td>6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>69′</b></td><td><b>113′</b></td></tr></tbody></table>
+</div>
+
+<h3 class="sec">🧵 上台之前：把两条暗线记在心里</h3>
+<div class="say">
+  <p><b>① 每一招都对着 decode 那「搬一趟」。</b>
+    <em>讲每一招时都点一次名：它是让这一趟分给更多 token（连续批、PagedAttention、投机解码），还是让这一趟少搬（量化、MLA、融合）；
+    还有一类不碰这一趟本身，把 prefill 和 decode 拆开各放各的机器（PD 分离）。第零节那张三根杠杆的图，就是这条线的地图。
+    ⛔ 一旦讲成「接下来再介绍一个优化」，这条线就断了。</em></p>
+  <p><b>② 三年的故事线：每一步都补一个洞。</b>
+    <em>2022 年还在一批一批地跑，最慢的写完全批才退出，KV 按最大长度预留；之后先补调度和显存，再补「一趟只出一个字」，再拆开放，最后把 KV 当成存储。
+    同等 GPT-3.5 水平的推理价格，2022 年 11 月到 2024 年 10 月降了 280 多倍（斯坦福 AI Index 2025，课件 0.1 与 14.3），两个多数量级。
+    ⚠️ 这个数里有模型变小变强、硬件换代和定价，不全是推理系统的功劳，提到它时这半句不能省。</em></p>
+  <span class="pause">⭐ <b>如果只能让台下带走一句话</b>：
+  <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b></span>
+</div>
+
+<h3 class="sec">🖥 投屏怎么放</h3>
+<div class="say">
+  <p>⭐ <b>这一讲有三段动画（连续批、分页 KV、投机解码），全是无声循环。</b>
+    <em>放动画时<b>先闭嘴看一遍</b>，等它转完一圈再开口；边放边讲，台下眼睛和耳朵会打架。
+    投机解码那段会在每步结束时自己停住，停住的时候再开口。</em></p>
+  <p>⭐ <b>课件右下角有个「折叠讲解」按钮（或按 T），投屏前按一下。</b>
+    <em>不开的话，台下会低头读字，不听你讲。</em></p>
+</div>
+
+<h3 class="sec" id="c0">第零节　一次请求走一遍（5′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：decode 每一步都要把权重和 KV 搬一趟；每一招要么让这一趟分给更多 token，要么少搬。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：课件封面，先不往下滚；热身两道题是口头问的。</p>
+
+<p class="say">「上课先做一道题。同等 GPT-3.5 水平的推理，价格从二〇二二年十一月到二〇二四年十月，降了多少倍？十倍、五十倍，还是两百多倍？」</p>
+
+<p>💬 <b>互动</b>：举手投票，三个选项各数一下人头，再揭晓。</p>
+
+<p class="say">「两百八十多倍，斯坦福 AI Index 的统计。这里面有模型变小变强，有硬件换代，也有定价，推理系统只是其中一条路。今天讲的就是这条路。<br>
+再留一道，先猜，第一节揭晓：一个人用一颗 TPU v7 跑 DeepSeek-V3，出一个字，芯片的算力用上了百分之几？一半，十分之一，还是更少？」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「0.1　2022 年以来，推理怎么变便宜」，<code>fig-s0-story</code> 整张，从左往右扫一遍，最后指「这些倍数不能连乘」那段。</p>
+
+<p class="say">「二〇二二年的推理服务，一批请求要等最长的那个写完才能一起退出，新人只能在外面排队；KV 按最大长度预留，显存里真正存着字的只有两到四成。<br>
+这张图每一行是一类洞，每张卡是一次补洞：先补调度和显存，再补「一趟只出一个字」，同时压字节，然后拆开放，最后把 KV 当成存储。」</p>
+
+<p class="say">「卡上的倍数别连乘：后一个比的往往就是前一个，而且有的比吞吐，有的比延迟，有的只比显存。每张卡右下角写着讲它的那一节，今天都会走到。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「0.2　一个请求的一生」，<code>fig-s0-life</code>，先指红点，再指最下面那行「从显存读什么」。</p>
+
+<p class="say">「一个请求的一生就两段。先是 prefill，整段 prompt 一次算完，顺手吐出第一个字；然后是 decode，一步出一个字。用户只感觉得到两个数：等第一个字多久，叫 TTFT；之后每个字隔多久，叫 TPOT。<br>
+看最下面一行：decode 每一步都要读一整份权重，再读这个人全部的 KV。prefill 读一遍权重，分给几千个 token；decode 读一遍，只出一个字。前后两段要的硬件正好相反。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「0.3　全课一句话」，停在那个绿框，再往下放 <code>fig-s0-map</code>。</p>
+
+<p class="say">「所以全课就一句话：<b>decode 每一步都要把权重和 KV 从显存里搬一趟；推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
+图上仓库是显存，工位是算力，每出一个字拉一趟货。车上多坐人，就是一趟分给更多 token；货变轻，就是少搬；开两个仓库，就是把吞 prompt 和吐字拆开放。后面每一节，我都先说它拉的是哪根杠杆。」</p>
+
+<p class="say">「这一趟到底有多重？搬多少字节，花多少时间，算力闲了多少？第一节先把账算清楚，刚才那道题也在那儿揭晓。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要逐张念 0.1 那张图上的倍数。</b><br>
+<em>它们的基线各不相同，念出来台下会自己连乘。只说「每行一类洞」，倍数留给讲到那一节时再说。</em><br>
+⚠️ 两百八十多倍<b>不全是推理系统的功劳</b>，揭晓时一定要说（课件 14.3 也这么写）。<br>
+⚠️ 第二道题这里不揭晓，答案在第一节那根几乎看不见的橙条上。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s零">第零节　一次请求走一遍</a>　·　主图 <code>fig-s0-map</code></p>
+</div>
+
+<h3 class="sec" id="c1">第一节　prefill 吃算力，decode 吃带宽（10′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留三样：decode 一步几乎全在读；人多、上下文长了，KV 接过主角；MoE 把拼好的 batch 又拆散。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「1.1　一次喂几行，决定卡在哪」，<code>fig-s1-ai</code>，先指红色横线，再指绿点，最后指橙点。</p>
+
+<p class="say">「开场第二道题先放着，揭晓之前得先拿出一把尺子。专题二讲过屋脊点：每从显存读一个字节，要做多少次运算，算力才不闲着。v7 按 bf16 算是三百一十三，就是红线。<br>
+横轴是一次喂进去几行，也就是几个 token；行越多，同一块权重分给的人越多，点就越往上。」</p>
+
+<p class="say">「绿点是 decode：每人每步只喂一行，二百五十六个人拼在一起也才两百三十九，还在线下。橙点是 prefill：一段 4K 的 prompt 一次就是四千多行，远远过线。<br>
+过线点其实是三百四十三，不是三百一十三，因为输入输出也要读写，这是本课推的。记住方向就够：decode 再怎么拼人也难过线，prefill 一段就过。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「1.2　一个人解码一步：5 毫秒在读，0.016 毫秒在算」，<code>fig-s1-b1</code>，指那根几乎看不见的橙条。</p>
+
+<p class="say">「现在揭晓开场那道题。V3 每个字激活三百七十亿参数，FP8 存，一步要读三十七 GB。按一颗 v7 的规格推，读完要五毫秒，算完只要零点零一六毫秒。<br>
+算力利用率百分之零点三二，正好是三百一十三分之一。刚才猜十分之一的，猜高了三十倍。」</p>
+
+<p class="say">「换更快的算力毫无用处，这一步的下限是显存带宽定的。而且这还是理想情况：只算了权重，没算 KV、通信和各种开销，实测只会更慢。<br>
+所以 decode 有个字节下限：步时离它越近，带宽用得越满。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「1.3　上下文一长，KV 接过主角」，<code>fig-s1-wkv</code>，先指最上面一组，再指最下面一组 128K 那根。</p>
+
+<p class="say">「一个人用不满，那就拼人。权重读一遍能分给一整批人；KV 不行，它是每个人自己的历史，谁也替不了谁。<br>
+蓝段是每个字分到的权重，人越多越短；紫段是这个人自己的 KV，只跟上下文走。128K 时每个字要读自己的九点二一 GB，拼多少人都不变。」</p>
+
+<p class="say">「看最下面这根：两百五十六个人、128K，KV 已经占了七成八。再往后光拼人摊不动了，得让 KV 本身变小。<br>
+还有个小坑：六十四个人时，每人摊到的权重不是三十七除以六十四。每人挑的专家不一样，一步里八成七的专家都会被碰到，都得读。这几个数都是本课按均匀路由推的。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「1.4　MoE 把拼好的 batch 又拆散」，<code>fig-s1-moe</code>，先左后右。</p>
+
+<p class="say">「MoE 还要再拆一刀。拼 batch 是为了让一块权重多分几行。可 V3 每个人只挑两百五十六个专家里的八个，两百五十六个人进来，到每个专家手里平均只剩八行。<br>
+左边稠密层，两百五十六行填满 MXU 的一边；右边一个专家，只剩一条细线，大约只用上三十二分之一。要让专家吃饱，得把很多卡上的人收到一起，那是第五、六节的事。」</p>
+
+<p class="say">「这一节就带走一句：<b>prefill 卡算力，decode 卡带宽；decode 每一步都要把权重和 KV 搬一趟。</b><br>
+后面每一节都要拿数说话：快了几倍，每卡多少吞吐。可同一次测量，换一种算法能报出两倍多的差距。所以讲招数之前，先校准尺子。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要推运算强度的式子</b>（M·H ÷ (H ＋ 2M) 那条）。<br>
+<em>只说「输入输出也要读写，所以过线点往右挪一点」。式子在图的出处里，被问到再翻。</em><br>
+⚠️ 五毫秒、百分之零点三二是<b>按规格推的理想下限</b>，不是实测，台上要说出来。<br>
+⚠️ 「八成七的专家被碰到」是均匀路由下的推算；被问「真实路由呢」，答「不均时更差，第五、六节讲」。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s一">第一节　prefill 吃算力，decode 吃带宽</a>　·　主图 <code>fig-s1-b1</code></p>
+</div>
+
+<h3 class="sec" id="c2">第二节　先校准尺子（7′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：报一个吞吐，要连同口径一起报；先定交互档，再比吞吐。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「2.1　四个时间指标，各量哪一段」，<code>fig-s2-metrics</code>，先指 TTFT 那段，再指带 3 个字的那一格。</p>
+
+<p class="say">「先卖个关子：同一次测量，一个字段报每卡五千二百七十，另一个报一万一千八百八十。谁报错了？都没错。<br>
+先把时间指标认全。TTFT 是进门到第一个字，含排队；压测时它往往大半是在排队，有人量过，同一个模型并发一个人时不到一百毫秒，并发两百五十六时七秒多。」</p>
+
+<p class="say">「TPOT 是首字以后平均每个字隔多久，一个请求一个数。ITL 是每一次的间隔：开了投机解码，一次可能吐好几个字，带三个字的那一次间隔就最长，看 p99 要看它。<br>
+同一个词两家工具定义还可能不一样：NVIDIA 的 ITL 就是平均值，vLLM 的是逐次的列表。比之前先查定义。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「2.2　吞吐和交互性是一条曲线」，<code>fig-s2-pareto</code>，先指绿色三点，再指「先定档：每用户 50 tok/s」那条线。</p>
+
+<p class="say">「横轴是每个用户每秒拿到几个字，越右越跟手；竖轴是每张卡每秒出几个字。只有绿色三点在同一条曲线上：每用户从六十八提到一百七十三，每卡吞吐掉到不到十分之一。<br>
+让每个人等久一点，同一趟就能分给更多人。所以先定交互档，再在这一档上比吞吐。单报一个每卡吞吐，等于没报。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「2.3　同一次测量，四把尺子」，<code>fig-s2-rulers</code>，从上往下四根条，最后指「最大 ÷ 最小 ＝ 36 倍」。</p>
+
+<p class="say">「回到开场那两个数。分子数输出还是输入加输出，分母数 decode 卡还是全部卡，排列组合就是四个数。实心两根是公开基准真报的两个字段；虚线两根是本课补全的，没有工具这样报。同一组原始数，最大最小差三十六倍。」</p>
+
+<p class="say">「所以看到每卡吞吐，先问两句。分母是谁？只数 decode 卡，就把 prefill 的成本藏起来了。卡按什么数？一颗 TPU v7 芯片对软件显示成两个 device，按 device 报的只有按芯片报的一半。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「2.4　尺子以外的四个坑」，<code>fig-s2-traps</code>，两格各指一下下面那根。</p>
+
+<p class="say">「尺子以外还有坑，两格各是一组独立实测：拿峰值当稳态，虚高一成多；没预热，第一轮只有第二轮的一半。另外两个：负载换了，扫出来的上限就变；压测温度跟线上不对齐，投机解码的接受率差出一大截。这两个分别在第三节和第十一节看。」</p>
+
+<p class="say">「最后落到钱上。DeepSeek 公布过一天的账：按 R1 定价全收的话，理论成本利润率百分之五百四十五，它自己也写明实际收入低得多；同一份文档里，每用户每秒只有二十来个字。便宜是拿交互档换来的。」</p>
+
+<p class="say">「所以报一个吞吐，要连同五样一起报：分子分母、交互档、峰值还是稳态、温度和采样、有没有预热和是不是开环。<br>
+尺子对齐了，回到那一趟。一趟能分给几个人，先得看显存里装得下几个人的 KV。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要逐个解释四把尺子的算法</b>（760,320、47,520 那几个推导数）。<br>
+<em>只说「分子两种、分母两种，排出四个数」，台下自己就懂了；推导在图的出处里。</em><br>
+⚠️ 温度那个坑这里只点名，图在第十一节，别在这里讲接受率为什么掉。<br>
+⚠️ 百分之五百四十五是<b>理论</b>利润率，DeepSeek 自己写了实际收入低得多，这半句不能省。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s二">第二节　先校准尺子</a>　·　主图 <code>fig-s2-rulers</code></p>
+</div>
+
+<h3 class="sec" id="c3">第三节　KV cache：账、池、复用（10′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留两样：KV 一人一份，它定了一趟最多分给几个人；复用和卸载是少算、少搬。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「3.1　一个 token 留下多少字节：四种记法」，指表里「每 token 字节」那一列，从上往下。</p>
+
+<p class="say">「先给个钩子：同一颗芯片、同样 4K 上下文，只换一种存 KV 的记法，能同时服务的人差四倍多。<br>
+KV 是每个 token 在每一层留下的 K 和 V，后面的字算注意力时要回头读。表里四行从上往下越来越省：每个头各存一份，几个头共用一份，所有头共用一条压缩向量，最后一行干脆不按 token 存，每条序列一个固定大小的状态。专题三逐项算过。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV」，<code>fig-s3-batch</code>，先指「KV 池：94.7 GiB」那一段，再指 MLA 那条线上的 353 和 44。</p>
+
+<p class="say">「一颗 v7 芯片一百九十二 GiB，放下 V3 八分之一的权重，留一成余量，剩九十四点七 GiB 给 KV，这是本课推的。V3 一个 token 七万字节出头，4K 上下文装得下三百五十三条，32K 只剩四十四条。<br>
+上下文长八倍，人就少八倍：池子是固定的，KV 跟长度成正比。」</p>
+
+<p class="say">「看另外几条线。GQA 同样 4K 只装七十五条，MHA 到 32K 一条都装不下。线性注意力那条最有意思：每条序列先交一笔固定的状态，短上下文反而比 MLA 少装，128K 时多装一倍还多。<br>
+人少了，同一趟权重分给的 token 就少了。这就是长上下文贵的第一个原因。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「3.3　PagedAttention：像操作系统那样分页」，<code>anim-paged</code>，<b>先闭嘴看完一圈</b>（18 秒）；再往上指静图 <code>fig-s3-paged</code> 里绿色两块和橙色那块。</p>
+
+<p class="say">「早先按最大长度给每条序列预留一整段，没写到的全浪费，真正存着字的只有两到四成。PagedAttention 学操作系统：切成固定大小的块，写满一块才领下一块，请求一结束块就还回去，每条序列一张页表记着块住在哪。有人量过，分页之后到九成六。」</p>
+
+<p class="say">「静图上还有一招：两条采样共用同一段 prompt，那两块只存一份；谁要往共享块里写，先给自己复制一份，就是橙色那块。<br>
+图上每块四个 token 只为画得下，真实系统 GPU 上常用十六个一块，TPU 上这个模型用两百五十六个一块。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「3.4　混合模型有两个池，预算要分」，<code>fig-s3-pool</code>，先左后中；第三格输入长度不同，不跟前两格比。</p>
+
+<p class="say">「混合模型更麻烦。DeepSeek-V4 每层两种 KV：滑窗那份只留最近一百二十八个 token，另一份存压缩后的整段。SGLang 给它们开两个池，共用一份显存预算，一个比例定两边怎么分。<br>
+就像两个水箱共用一根进水管，比例就是分水阀。拧偏了，一边先满，新人就进不来，另一边的空间白放着；拧到两边一起快满，同样的卡吞吐高五成多。」</p>
+
+<p class="say">「再多给显存、多装一成多的人，吞吐几乎不动：每张卡近九百条之后，瓶颈已经从装不下换成了算不动。<br>
+图下面还有个警告框，记一句就行：池子算错不一定报错，越界的块号被静默截断，几个请求写进同一块，症状是胡言乱语。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「3.5　前缀复用：算过的不再算」，再往下到 <code>fig-s3-offload</code>，指「重算」那条线和「交点 ≈ 35K token」。</p>
+
+<p class="say">「另一半是少算、少搬。很多请求开头一样：同一段 system prompt、同一份文档、多轮对话的前几轮。算好的 KV 留着，下一个请求命中前缀就接着算，prefill 省掉一大段。DeepSeek 公开过一天的统计，输入里五成六命中了存在磁盘上的 KV。<br>
+可线性层和滑窗难复用：线性层的状态是整段压出来的，截不回任意位置；滑窗早先的 KV 已经丢了。」</p>
+
+<p class="say">「显存放不下的 KV 可以往下放：主机内存、本机磁盘、远端存储。可命中以后要搬回来，搬回来比重算还慢，就白存了。<br>
+图上比的就是这两样。V3 的 KV 很省，本课推出来，链路每秒两 GB 多就比重算快；前缀越长重算越贵，连每秒 1 GB 的慢链路，过了约三万五千个 token 也能赢。」</p>
+
+<p class="say">「这一节两件事：KV 一人一份，它定了一趟最多分给几个人；复用和卸载是少算、少搬。<br>
+可池子装得下几百人，不等于每一步真坐满了几百人。谁什么时候进、什么时候出，是调度的事。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要念 3.1 那张表的字节数</b>（3,997,696、327,680……）。<br>
+<em>只说「从上往下越来越省」，具体数在下一张图里会变成「能装几条」，那才是台下能记住的。</em><br>
+⚠️ 94.7 GiB、353 条、2.19 GB/s、35K 都是<b>本课推导</b>，台上要说「推出来的」。<br>
+⚠️ 盈亏带宽那个公式不推；被问「负载高时呢」，答框里最后一句：重算会挤占别人的算力，盈亏点往慢链路那边移。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s三">第三节　KV cache：账、池、复用</a>　·　主图 <code>fig-s3-batch</code></p>
+</div>
+
+<h3 class="sec" id="c4">第四节　批处理与调度（8′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：逐步调度是「一趟分给更多人」的地基；槽位满了，吞吐就钉死，再加并发只加排队。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「4.1　每一步都重新排一次」，<code>fig-s4-gantt</code>，先上后下，指「C 第 2 步就写完」那句；再放 <code>anim-contbatch</code>，<b>先闭嘴看完一圈</b>（18 秒）。</p>
+
+<p class="say">「反直觉的一条：同样四个槽位、同一串请求，只换一种排法，同样的步数里做完的活差将近一倍。<br>
+静态 batch 凑满一批一起跑，最慢的那个跑完才整批返回。看 C：第二步就写完了，还得陪 B 跑到第八步。它空着的那几格，每一步照样搬一趟权重，这一趟白搬。」</p>
+
+<p class="say">「Orca 改成每一步结束都看一次：谁跑完谁让位，排队的人下一步就补进来。论文报的是同等延迟下吞吐三十多倍。今天的 vLLM、SGLang 都是这么调度的。<br>
+代价是每一步都要重新拼 batch，新人进门那一步还得做 prefill。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「4.2　新人进门那一步：chunked prefill」，<code>fig-s4-chunk</code>，先上一行再下一行。</p>
+
+<p class="say">「一段长 prompt 一口吞下，那一步就特别长，正在出字的每个人都卡一下。Sarathi 的办法是把 prompt 切成小块，每步只带一块，跟 decode 拼在一起。<br>
+看两行：正在出字的人，最长的间隔从九格变三格；代价是新人的第一个字晚了三格。每步塞多少 token 是个旋钮：调小字间隔稳，调大首字快。」</p>
+
+<p class="say">「它只摊平了打扰，两种活还挤在同一批卡上抢算力。彻底分开，是第八节的事。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「4.3　槽位满了以后」，<code>fig-s4-conc</code>，先指上面那排吞吐，再指门口那排人。</p>
+
+<p class="say">「槽位就是 KV 池装得下几个人。有条老定律叫 Little 定律：批里的人数，大约等于吞吐乘每个字的间隔。反过来，吞吐大约等于槽位数乘一千、再除以 TPOT 的毫秒数。座位数和翻台速度定了，吞吐就定了。」</p>
+
+<p class="say">「看这家坐满的餐厅：总负载拉到四倍半，每卡吞吐只多一成；多来的人全在门口排队，首字等待从四十五秒涨到两百五十三秒。<br>
+槽位也不白给：有人把每卡的 batch 再加一成多，峰值几乎没动，每个字的间隔反而拖长了。每一步要算的人多了，这一步就长了。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：停在「TPU 上多一层：batch 大小要落在档位上」，然后往下到 <code>fig-s4-overlap</code>。</p>
+
+<p class="say">「TPU 上还多一层：XLA 按静态形状编译，batch 大小也是形状的一部分。所以要提前给几档 batch 编好图，实际人数不在档位上就补到最近一档，补出来的行照样要算。<br>
+还有 CPU 那几毫秒：每步之前要挑人、拼 batch，串着走加速器就得等它。SGLang-JAX 让加速器算这一批时，CPU 同时排下一批，空档从十几毫秒压到几十微秒。」</p>
+
+<p class="say">「最后，批开大了，KV 中途可能装不下，只能先请出去几个人。回来有两种办法：把 KV 换到主机内存再搬回来，或者扔掉、回来重算一遍 prefill。vLLM V1 默认选重算，文档说这样开销更低。」</p>
+
+<p class="say">「这一节带走一句：<b>逐步调度是「一趟分给更多人」的地基；槽位满了，再加并发只加排队。</b><br>
+可槽位坐满了，一步里还有两样东西拼了人也不省：注意力读的是每个人自己的 KV，人越多读得越多；MoE 又把拼好的人拆散到各个专家。这就是第五节，单卡里的两块硬骨头。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要在台上做 Little 定律的反推</b>（9,032 × 8 × 0.060 ＝ 4,335 那段）。<br>
+<em>只说「座位数和翻台速度定了，吞吐就定了」。反推和「并发按客户端计是另一个数」留给课件，台上一讲就要解释前端、路数、prefill 排队三件事。</em><br>
+⚠️ 4.5 的公平性（VTC、Llumnix）不讲，被问再翻课件。<br>
+⚠️ chunked prefill 别讲成「解决了 prefill 打扰」：它只是摊平，彻底分开是第八节。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s四">第四节　批处理与调度</a>　·　主图 <code>fig-s4-gantt</code></p>
+</div>
+
+<h3 class="sec" id="c5">第五节　两块硬骨头（8′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留一句：攒人只摊得薄共用的权重；每人自己那份 KV、MoE 拆散后的那几行，要靠布局和算法把没人要的字节去掉。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到课件第五节标题。</p>
+
+<p class="say">「还是那句话：decode 每出一个字，车就要把权重和 KV 从仓库拉到工位一趟。上一节的办法是车上多坐人。<br>
+这一节还在这一组里，讲的是坐再多人也摊不薄的两块：注意力读的 KV，和 MoE 里每个专家分到的那几行。<br>
+2023 年 Flash-Decoding 把长序列的 decode 注意力切开并行，2024 年 DeepSeek-V2 的 MLA 又从模型结构上把 KV 压薄，都是冲着第一块去的。」</p>
+
+<p>💬 <b>互动</b>：图出来之前问「batch 从 1 攒到 100，注意力每读一个字节做的运算，会多几倍？」举手猜「多很多」还是「不变」，不点人答。</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s5-amortize</code>，先指权重那段，再指 KV 那段。</p>
+
+<p class="say">「不变。车上的货分两种：权重是大家共用的货，拉一趟，车上坐几个人都能用；KV 是每个人自己的行李，多上一个人，车上就多一份。<br>
+所以攒 batch 摊薄的只有权重。Llama-3.1-70B 每个 KV 头带 8 个查询头，注意力每读一个字节只做 8 次运算，离 v7 的屋脊差了近四十倍，攒多少人都是这个数。<br>
+本课按它的 config 推过：8K 上下文时，batch 五十出头，行李就和共用的货一样重；再往上，车里大半是行李。」</p>
+
+<p class="say">「一步里常常混着新来的 prompt 和正在出字的请求。TPU 上的 RPA 把两种放进同一个注意力 kernel，按这一批的成分挑一份预先编译好的版本，有人量过，decode 能用到峰值带宽的八成多。<br>
+它最便宜的旋钮是块大小：Qwen3.5 那次调优，KV 页从 16 个 token 调到 256 个，decode 一步少了三分之一。块太小，向量单元老停下来算地址。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s5-tile</code>，从 A 列指到 C 列，最后停在 B 列。</p>
+
+<p class="say">「行李还有一层浪费，藏在装箱上。TPU 显存按 4 KiB 一块存，最里面那一维要补满 128 格；KV 头只有一两个，头数又恰好放在这一维，就是一点真数据占一整块。<br>
+量化只压得动真数据，压不掉空位，所以先把布局摆对，再谈量化。RPA 的办法是把 K 和 V 拼在一起，逼编译器选最小的块。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s5-mla</code>，先指左边「吸收」，再指右边「展开」。</p>
+
+<p class="say">「MLA 把每个人的行李压成一条 576 维的向量，128 个头一起读这一条。decode 缺带宽，就这么读，每个字节做两百多次运算；prefill 缺的是算力，就先展开成 128 份，运算反而少三倍多。<br>
+所以引擎里两套算法都留着，按阶段挑。专题三留的那句「两套怎么装进一个引擎」，答案就是这个。」</p>
+
+<p>💬 <b>互动</b>：图出来之前问「256 个 token、每个挑 8 个专家，256 个专家平均每个分到几行？」等台下算出 8。</p>
+
+<p class="say">「8 行。为了这 8 行，要按专家排序、把行搬过去、算完再搬回来，搬的比算的还贵。<br>
+换个办法：让 256 个 token 全过这个专家，没选中的乘 0。车反正得把这个专家的权重拉来一趟，拉的这段时间里，全算一遍还有富余。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s5-dense</code>，先指「读权重」那根，再指「全算」那根。</p>
+
+<p class="say">「两根柱子的比值，就是 batch 比屋脊。所以这招只在小 batch 成立，batch 涨到三百出头两边打平。<br>
+有个坑当场记住：没选中的 token 要是算出了 NaN，乘 0 还是 NaN。合并时得用选择把它们清掉，不能只靠乘 0。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s5-allreduce</code>，只指最高那根和最矮那根。</p>
+
+<p class="say">「最后一块卡的不是字节，是次数。batch 1 时每层 TP 要做一次 AllReduce，V3 只有 14 KiB，按带宽算是几十纳秒的事；有人在 4 张 GB200 上量出来，平均十一微秒，差了几百倍。<br>
+这种同步要省次数，加带宽没用。」</p>
+
+<p class="say">「补齐的空位、展开的 K/V、搬来搬去的行，都是没人要的字节，先去掉它们，再谈量化和加卡。<br>
+可一张卡总会装满。KV 只有一个头的模型切到八张卡上，那份行李会不会被复制八遍？下一节就算这笔账。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>别把 KV 也算进「攒 batch 能摊薄」</b>：这一节的立足点就是行李跟人走。说成「batch 够大注意力也会算力受限」，后面 DEP、DCP 全立不住。<br>
+⚠️ <b>「batch 五十出头两块一样重」是本课按 config 推的</b>，台上要说出「推过」。它是全模型合计、没算激活，别当成实测。<br>
+⚠️ <b>全算专家那招有前提</b>：两边都按峰值算，且 FP8 那组要求激活也是 FP8；只有权重 FP8 时就不划算了（图下有）。被问到别说成「永远更快」。<br>
+⚠️ 这一节六个小节、八分钟，<em>5.2 和 5.6 只各留一句</em>，细节都在课件上。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s五">第五节　两块硬骨头</a>　·　主图 <code>fig-s5-amortize</code></p>
+</div>
+
+<h3 class="sec" id="c6">第六节　TEP 还是 DEP（8′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留一句：KV 头比 TP 路数少，TP 就只会复制 KV；DEP 把副本的位置让给别的请求。放得下以后，瓶颈换到 prefill。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到课件第六节标题。</p>
+
+<p class="say">「这一节还是车上多坐人：不让每一趟搬得更少，让同样大的仓库住进更多人。<br>
+2025 年初 DeepSeek 公开大 EP 部署，每个 H800 节点 decode 每秒出一万四千多个 token；两个月后 SGLang 公开复现，比同卡数的 TP 最多快五倍。<br>
+专家那一半大家都用 EP，分歧全在注意力：几张卡合算同一批请求，还是各算各的。专题五给过名字，合算的叫 TEP，各算各的叫 DEP。」</p>
+
+<p>💬 <b>互动</b>：图出来之前问「一个模型每层只有 1 个 KV 头，TP 开 4 路、按头切，每张卡分到几个头？」让台下自己发现切不开。</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s6-dep-kv</code>，先指左边 32 格，再指右边。</p>
+
+<p class="say">「切不开。1 个头分不给 4 张卡，于是每张卡都放一整份，TP 开几路，同一个人的行李就复制几份。<br>
+DEP 各存各的，省下的地方拿去多收请求。DeepSeek-V4-Pro 就是这种：它不是 MLA，可每层同样只存一条所有头共享的 KV。有人在 GB300 上从 TP4 换成 dep8，同样的并发，每卡吞吐翻了一倍多。」</p>
+
+<p class="say">「反过来也要会算。8 个 KV 头的模型开 TEP8，每卡正好一个头，没有副本，DEP 在 KV 上就不占便宜。<br>
+判据就一句：TP 路数除以 KV 头数，大于一就在复制。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到 6.3。</p>
+
+<p class="say">「DEP 也有代价：每张卡像一台小推理机，调度器、请求状态各有一份。不随 DP 切的状态，DEP 一宽就成倍涨。<br>
+Kimi K3 就栽在这：93 层里有 69 层是线性注意力，每个请求一块固定大小的状态。DEP8 让每张卡复制一整份状态池，两次加载都 OOM。TP 反而切得开，因为这种状态按头存，一个头一块。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到 6.4。</p>
+
+<p class="say">「放得下了，就得有人喂。dep8 不动，每加一台 prefill，decode 的吞吐就跟着涨，说明 decode 一直在等料，不是自己算不过来。那条曲线第九节再看。<br>
+同一套机器换回 TP4 decode，加第 4 台 prefill，总吞吐纹丝不动。所以别人那句「prefill 三台就够」，换了拓扑就得重扫一遍配比。」</p>
+
+<p class="say">「TPU 上一样。tpu-inference 的一个公开 PR 给 Qwen3.5 接上 DP 注意力，v7x-8 上长输出时多出六成。它的全注意力层只有 2 个 KV 头，8 路 TP 就是 4 份副本，这是本课的推算，PR 没单独归因。<br>
+读 TPU 的启动命令还要多一步：里面写的 tensor-parallel-size 8 其实是总 device 数，真正的切法写在 additional-config 里，往往就是 DEP8。」</p>
+
+<p class="say">「DEP 用别的请求填掉了副本。还有一种填法：副本的位置不给别人，留给同一个请求更长的上下文。下一节，沿序列切。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>别说「DEP 让每一趟搬得更少」</b>：每个请求的 KV 一个字节没少，它只是让同样的显存多放请求。课件 6.6 末句就是这么落的。<br>
+⚠️ <b>「翻了一倍多」那组数口径杂</b>：吞吐算 prompt 加输出、分母含 prefill 卡，而且这一步同时去掉了 KV 副本和改了注意力切法。被追问时照图下口径答，别说成「纯 KV 容量带来的 2 倍」。<br>
+⚠️ <b>Qwen3.5 那 4 份副本是本课解读</b>，台上要带「PR 没单独归因」。<br>
+⚠️ TEP／DEP 是 TRT-LLM 的叫法，被问到 Megatron 的 ETP／EDP，<em>答「不是一回事」就够</em>（课件 6.6）。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s六">第六节　TEP 还是 DEP</a>　·　主图 <code>fig-s6-dep-kv</code></p>
+</div>
+
+<h3 class="sec" id="c7">第七节　切序列：DCP 和 PCP（7′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留一句：DCP 只在 KV 放不下时赚，盈亏看 KV 总量；PCP 买的是首字延迟，切开以后先查对不对。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到课件第七节标题。</p>
+
+<p class="say">「上一节用别的请求填副本，这一节换个填法。三根杠杆里它算货变轻：同一个请求的 KV 按 token 分到几张卡上，每张卡每一步只搬自己那一段。<br>
+2024 年底 Meta 公开上下文并行，把 Llama-3 405B 一个一百万 token 的 prefill 拆到最多 16 台机器上，77 秒算完。<br>
+沿序列切有两件：DCP 管 decode 时 KV 装不下，PCP 管 prefill 时首字等太久。」</p>
+
+<p class="say">「专题五讲过 DCP 的机制：KV 按 token 轮流存，每张卡算完自己那段，连分母一起交出来，合并时再统一归一。代价是每层多几次通信。」</p>
+
+<p>💬 <b>互动</b>：图出来之前问「同一个 Kimi K3，4K 输入和 128K 输入，DCP8 在哪边赚、哪边亏？」举手二选一。</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s7-dcp-gain</code>，先指 128K 那个突出的点，再指 4K 那一段。</p>
+
+<p class="say">「128K、8 并发时，DCP8 的输出是 TP8 的三倍多；4K 时各档并发都亏，最多亏四分之一。<br>
+长了为什么赚：DCP8 把能放的 KV 从一百五十万 token 撑到一千二百多万，TP8 放不下，只能让请求排队。<br>
+短了为什么亏：KV 本来放得下，DCP 只剩代价，还顺带关掉了一条更快的 AllReduce 路径；有人查过，那份亏损正好等于关掉它的损失。」</p>
+
+<p class="say">「盈亏点看 KV 总量，不是单看长度：同是 8K，并发 8 还亏，并发 32 已经赚了。<br>
+还有一条要防：K3 官方给过两个 PD 数，配 TP8 decode 的每卡高一点，配 DCP8 的低一点，别把高的那个记成 DCP 的成绩。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s7-pcp-dcp-t5</code>，一眼带过。</p>
+
+<p class="say">「PCP 切的是 prefill 的计算，让几台机器合算同一个 prompt。Meta 那篇用 128 张 H100 给 405B 做 prefill，并行效率九成以上。<br>
+它出错时往往不报错。第一个陷阱：少算会「更快」。某张卡漏了一截 K、V，算量少了，速度反而好看。切完速度好得反常，先核输出。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s7-pcp-linear</code>，先指锯齿那条，再指平滑那条。</p>
+
+<p class="say">「第二个陷阱在线性注意力。GDN、KDA 这类层带着一份状态，像存折余额：每来一个 token，先把上一笔余额打个折，再加上新存的。<br>
+切开以后，每张卡要是从零余额起步，后面每一段都错。玩具例子里最后一段差了 58%，程序照常跑完。修法是把前一段的末余额传过来。」</p>
+
+<p class="say">「两节合起来看：DEP 把副本换成别的请求，DCP 换成同一个请求更长的上下文，都是让同样的显存多放 token；PCP 是另一件事，买的是首字。<br>
+到这里，所有切法都还在同一批卡上。下半场把 prefill 和 decode 拆到两批机器上，代价是多搬一趟 KV。先休息十分钟。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：中场休息，画面停在课件第八节标题。</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>别把 DCP 讲成「总是更快」</b>：短输入实测各档都亏。这一节要带走的是盈亏点，不是 +237%。<br>
+⚠️ <b>首字 32.1 s 对 2.3 s 含排队</b>，台上没念；被问到要说清，不是 prefill 本身快了十倍。<br>
+⚠️ <b>存折比方只管「状态要接力」</b>：余额「打折再加新存的」对应课件的「乘上一步状态再加新东西」；真实状态是矩阵、带门控，别往利率、复利上延伸。<br>
+⚠️ 这一节主图是 DCP 那张，<em>PCP 两个陷阱比 Ring／Ulysses／USP 的名字重要</em>，名字留在课件上。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s七">第七节　切序列：DCP 和 PCP</a>　·　主图 <code>fig-s7-dcp-gain</code></p>
+</div>
+
+<h3 class="sec" id="c8">第八节　拆工作：那一趟 KV（9′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留一句：PD 分离不改变这一趟搬多少，它保证这一趟不被 prefill 打断；代价是那一趟 KV，上线前先量带宽、再比字。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到课件第八节标题。</p>
+
+<p class="say">「下半场换第三根杠杆：开两个仓库。吞 prompt 的和吐字的分到两批机器上，decode 那边每一趟车不再被 prefill 拦下。<br>
+2023 年底 Splitwise、2024 年初 DistServe 先后提出这么拆，同年 Mooncake 把它做进了 Kimi 的线上服务。<br>
+为什么拆，专题五讲过。这一节讲拆开以后多出来的那一趟 KV：怎么搬，谁来搬，搬错了是什么样。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s8-kv-trip-t5</code>，指下面那根三色细条。</p>
+
+<p class="say">「专题五算过这一趟：一个 8K prompt 的 KV 约 1.04 GB，走数据中心网络八十多毫秒，跟一两秒的 prefill 比只占一成上下。<br>
+这个结论靠两个前提：网络真跑在设计带宽上，KV 也没大到离谱。后面两个故事，各打破一个。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s8-kv-stack</code>，从上到下指三层。</p>
+
+<p class="say">「先分清三层，出了事才知道去哪找。带宽掉到几百 MB/s，是搬运层没走对通道；请求接不上、握手失败，多半在调度层；前缀命中率低，看存储层。<br>
+TPU 这边组件少得多，TPU Sync 刚开源、自己写明还不建议通用，目前能直接用的是 tpu-inference 里的 TPUConnector。」</p>
+
+<p>💬 <b>互动</b>：图出来之前问「一趟 KV 要是从八十毫秒变成五秒，你觉得系统会报错吗？」举手。</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s8-kv-bw</code>，先指那根红条，再指灰带。</p>
+
+<p class="say">「不会。vLLM 在 GB300 上跑 V4-Pro 的 PD，起初 KV 每秒只走 200 MB，拿 1.04 GB 那把尺子量，一趟五秒多，比 prefill 本身还长。什么都不报错，只是首字慢得说不清。<br>
+原因是该直接读对端显存的那条路没走上，退回了经主机内存中转。补上三个配置以后，有人量到每秒几 GB 到一百多 GB。上线前先量一次 KV 带宽。」</p>
+
+<p class="say">「更难受的是，同一个库换个引擎，结论就反过来。vLLM 上 NIXL 是唯一活路，换 Mooncake 整体反而慢；SGLang 上 NIXL 走 RoCE 调不通，Mooncake 走 NVLink 能用。<br>
+所以别问哪个好，问在这个引擎、这张网上哪条路真的通。两边只有一条共同点：同一个 NVLink 域里，KV 别出域。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s8-hybrid-kv</code>，先指注意力那排格子，再指存折。</p>
+
+<p class="say">「混合模型还有个不报错的坑。老的 connector 只传填满的整块，不满一块的尾巴让 decode 端补算。注意力层补算只是把空格填上；GDN 的余额里，prefill 那边早把尾巴记进去了，再补算一遍就是记了两次，输出偏了也不报错。<br>
+修法是全传，decode 端一个 token 都不重算，tpu-inference 为此单独写了 HMA 版的 connector。」</p>
+
+<p class="say">「所以拆完先比字，再比速度。temperature 设 0，拆和不拆各跑一遍，逐个 token 对。<br>
+头几个 token 就分叉，多半是 bug，比如尾巴被重算、状态没传；几百个 token 以后才分叉，可能只是批大小不同带来的浮点差异。分不清时，把并发降到 1 再比一次。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s8-prfaas</code>，先指橙柱，再指绿柱。</p>
+
+<p class="say">「第二个前提是 KV 别太胖。有篇论文把 prefill 放到另一个数据中心，前提是混合模型的 KV 薄了很多：几台 prefill 合起来，一条专线放得下。<br>
+光薄还不够，还要挑请求，只把长 prompt 送去远端，短的就地算。论文的案例吞吐多了一半。」</p>
+
+<p class="say">「PD 分离不改变这一趟搬多少，它保证这一趟不被 prefill 打断，decode 才敢把车坐满。<br>
+拆完马上要答下一个问题：prefill 配几台、decode 配几台，这个负载到底该不该拆。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>别把 1.04 GB 说成 V4-Pro 的 KV</b>：它是专题五那把统一尺子（Qwen3-Coder-480B 一条 8K prompt），只用来换算时间。<br>
+⚠️ <b>「每秒几 GB 到一百多 GB」是一个区间</b>（7–167 GB/s），别报成单个数；runbook 自己的口径是单次传输 200–800 ms 降到 2–10 ms。<br>
+⚠️ <b>「哪个库好」不要下结论</b>：表里五行是一份 runbook 在两张网、两个引擎上的试错记录，换了集群可能又不一样。<br>
+⚠️ 8.6 的坑清单台上不讲，<em>被问到时翻课件 8.6</em>；重算策略那条约 17% 的税最常被问。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s八">第八节　拆工作：那一趟 KV</a>　·　主图 <code>fig-s8-kv-bw</code></p>
+</div>
+
+<h3 class="sec" id="c9">第九节　配几台、拆不拆（7′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留一句：配比公式只给起点，要拿自己的负载去扫；看每卡吞吐先问分母；拆不拆跟着负载走。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到课件第九节标题。</p>
+
+<p class="say">「还是开两个仓库这一组。2025 年 Dynamo、llm-d 这类框架出来以后，PD 配比成了上线时要填的一个参数。<br>
+两个仓库各配几台，配错了，一边忙死一边闲着。这一节回答两件事：配几台，以及到底该不该拆。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到 9.2。</p>
+
+<p class="say">「起点有个公式：decode 那头每秒要多少料，除以一台 prefill 每秒能备多少料。拿 V4-Pro 的官方数代进去，大约要十台，官方配了 8 台，落在估算的下沿。<br>
+可这只是起点。同一份 runbook 早先实测扫过，加到 14 台才喂饱，于是把 14 定成默认；它自己量的 prefill 单卡吞吐，也只有官方数的八成多。」</p>
+
+<p>💬 <b>互动</b>：图出来之前问「1P1D 再加一台 prefill，每张卡的吞吐会涨还是跌？」举手。</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-2p1d</code>，先左边，再右边。</p>
+
+<p class="say">「跌了。B200 上一份 V3 的报告，加一台 prefill，总输出几乎没动，每卡掉了三成；可用户那头，最慢那一档的首字从十二秒降到六秒。<br>
+同一组数，按每卡吞吐看是亏，按首字的延迟目标看是赚。瓶颈在 decode 时，多出来的 prefill 只是让排队的请求早一点开始。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-prefill-sweep</code>，先指蓝线，再指橙线。</p>
+
+<p class="say">「再看分母。这就是第六节提过的那组：decode 固定 8 张卡，prefill 一台台往上加。同是 12 台 prefill，只除 decode 卡，是起点的十倍多；把 prefill 的卡也算进去，只有两倍多。<br>
+不少 PD 报告默认只除 decode 卡，prefill 的成本就藏起来了，配得越多越好看。看到每卡吞吐，先问分母里有没有 prefill 的卡。」</p>
+
+<p class="say">「也有不拆更好的时候。同一个 MiMo 在 TPU v7x 上，batch 64 时不拆吞吐最高，batch 128 时拆开才开始赚。<br>
+拆开要多一趟传输、多一套机器，两种活本来就不怎么打架时，这些代价换不回东西。同一个模型，可以有两种答案。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-decide</code>，只指第一问。</p>
+
+<p class="say">「三问里最常被跳过的是第一问：先看不拆时出字间隔有没有被长 prompt 撑出尖峰。没有尖峰就不用拆；有尖峰，先试分块 prefill，压不住再拆。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-afd-ascend</code>，先指橙柱，再指绿柱。</p>
+
+<p class="say">「decode 里面还能再拆一层：注意力和专家分到两批机器，叫 AFD。论文报告每卡最多快近一倍；可开源这边，vLLM 的 AFD 是外部插件，主仓库那份提案已经关了。插件在昇腾上给的数，配比一错就比不拆还慢。TPU 上我们没找到公开实现。<br>
+多模态还能把图片编码也拆出去，叫 EPD，图多、图大时才值得。」</p>
+
+<p class="say">「拆完、配完，还剩最后一个问题：这些机器之间走哪条线。线没选对，前面省下来的都会被网络吃回去。下一节，先选拓扑，再调参数。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>别拿「官方配 8 台」当公式验证成功</b>：它落在估算下沿，而 runbook 自己实测要 14 台才喂饱。这一节要带走的恰恰是「公式只是起点」。<br>
+⚠️ <b>「十倍多 对 两倍多」</b>：课件小节标题写「差五倍」，是两个倍数相除（约 10.4 ÷ 2.2）。被问「五倍在哪」时这样答。<br>
+⚠️ <b>B200 那组 TTFT 是客户端测的，含排队</b>；两边都关了 CUDA Graph，所以没比 TPOT。<br>
+⚠️ AFD 的 MegaScale-Infer 1.90×、Step-3 4,039 是论文数，<em>别和插件实测放在一起比高低</em>。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s九">第九节　配几台、拆不拆</a>　·　主图 <code>fig-s9-prefill-sweep</code></p>
+</div>
+
+<h3 class="sec" id="c10">第十节　先选拓扑，再调参数（6′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节留一句：换一次拓扑，抵得上把参数调遍；报一个提升百分比，先写清分母。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到课件第十节标题。</p>
+
+<p class="say">「这一节收拢拆开放那一组。PD 分了家，专家铺满几十台机器，招数一多，先挑哪几刀、各放在哪条线上，反倒成了第一道题。这一节的主角是第六节那个 DEP，2025 年 DeepSeek 公开大 EP 部署以后，它才成了主流选项。<br>
+拓扑定了这一趟车走哪条线、能分给多少人；参数只在这个上限底下挪。」</p>
+
+<p>💬 <b>互动</b>：图出来之前问「有份记录说：调参 +45%，换拓扑 +347%。你先问什么？」等台下说出「分母」。</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s10-lens</code>，先指左边总量，再指右边每卡。</p>
+
+<p class="say">「先问分母。那组 V4-Pro 的数，三档用的卡数各不相同。+45% 里大半是加卡换来的，每卡反而跌了；只把并发调高那一下，才是纯调参，二十几个点。<br>
+换拓扑在两种口径下都赢：同样的并发，每卡两倍多。原因第六节讲过，一个 KV 头，TP4 把它复制了四份。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s10-wire</code>，先指左图，再指右栏。</p>
+
+<p class="say">「拓扑约束是硬的。同样 16 个 device 跑 TP16，两台 v7x-8 走数据中心网络，比单机慢得多；编进同一个 ICI 切片，只慢一两成。张量并行每层都要把部分和加一次，放在慢线上，每出一个字就多等一次。<br>
+TPU 上再记一条：mesh 里谁挨着谁，集合通信就把谁当邻居。顺序交给 create_device_mesh 按物理位置生成，别自己手排。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s10-conc</code>，沿曲线从左指到见顶那一档。</p>
+
+<p class="say">「最后是容量。并发 8 时，车上只坐了 8 个人，测到的是机器闲着时有多快。有人一路往上扫，总吞吐涨了十二倍多才见顶，首字却从十二秒拖到三十秒。该停在哪一档，由延迟目标定。」</p>
+
+<p class="say">「从第五节到这里：前面在一辆车上多坐人、减轻货，后面开两个仓库、拆开放对地方。<br>
+下一节回到车上多坐人，换一种坐法：车跑一趟，带回好几个字。第十一节，投机解码。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>别把 +45% 讲成调参的功劳</b>：大半是卡数翻倍换来的，每卡反而跌了。这一节的整个论点就靠这一下拆开。<br>
+⚠️ <b>「每卡两倍多」是同并发 512 的 2.09 倍</b>；dep8 拉到并发 1,536 的 2.47 倍代价是首字 95 s，别只报 2.47。<br>
+⚠️ <b>10.5 最小切片台上不讲</b>，被问到翻课件 10.5；那张表是本课推导的纸面下限，实测 FP8 在 v7x-8 上放不下。<br>
+⚠️ 10.7 对照纪律<em>留给学员自己读</em>；temperature=0 那条第十一节会再讲。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s十">第十节　先选拓扑，再调参数</a>　·　主图 <code>fig-s10-lens</code></p>
+</div>
+
+<h3 class="sec" id="c11">第十一节　投机解码（8′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：搬一趟权重，猜对几个就出几个；人一多、温度一错，白送的就没了。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：课件 <code>s十一</code>，停在节标题上，先别往下滚。</p>
+
+<p>💬 <b>互动</b>：先问一句「让一个小模型先猜，猜错了，会不会比不开还慢？」听两三个答案，不揭晓，放动画。</p>
+
+<p class="say">「上一节把拓扑定下来了，这一节回到那一趟车本身。它最憋屈的地方是：把全部权重从仓库拉到工位一趟，只换回一个字。<br>
+2022 年底到 2023 年初，Google 和 DeepMind 各自想出了同一招，叫投机解码：先便宜地猜几个字，再让大模型搬一趟，一次验完。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>anim-spec</code>。<b>先取消勾选动画下方的「连续播放」</b>（默认是勾上的，勾着它不会停），再点「开始」；<b>先闭嘴</b>，等它第一次自己停住（第 1 步完成）再开口。</p>
+
+<p class="say">「第一步，小模型猜了四个字，前两个对，第三个错。<br>
+错的那个位置，大模型这一趟本来就算出了它自己会写的字，直接换上；错字后面的全扔掉，因为前面已经错了，后面算了也作废。<br>
+所以这一步出了三个字：猜对两个，加大模型补的一个。大模型只搬了一趟，跟平常出一个字花的力气差不多。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：点「下一步」，等动画第二次自己停住（第 2 步完成）。讲完可以重新勾上「连续播放」让它循环。</p>
+
+<p class="say">「第二步运气好，四个全对。第五个位置大模型本来也算了，白送一个，一共五个字。<br>
+规则就一条：从左往右比，碰到第一个错就停，猜对几个出几个，再加一个。所以最差也出一个字，不会比不开少，这就是开头那道题的答案。<br>
+还有一点动画里看不出：按标准的拒绝采样来收，输出的分布跟大模型自己一个个写完全一样。它改速度，不改答案。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s11-bytes</code>，先左后右。</p>
+
+<p class="say">「那能快多少？两个数一除：每步平均出几个字，除以这一步变慢了多少。<br>
+左边是本课推出来的：注意力这些人人都过的部分，验几个都只读一遍，白送；MoE 的专家不白送，每个字各挑各的，验八个字要读的权重是验一个的四倍多。按均匀路由算，偏高。<br>
+右边有人在 GB300 上量过 Kimi K3：一趟慢了四成多，可平均带回将近七个字，摊到每个字，快了差不多五倍。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s11-conc</code>，从最左那根柱一路往右，最后看右边单独那根。</p>
+
+<p class="say">「可这笔便宜会缩。人一多，工位先忙满了，草稿里每个字都得真算一遍，不再是搭便车。K3 从一个人加到六十四个人，加速从四倍多掉到不到两倍。<br>
+上下文拉长也一样：读 KV 的时间变长，草稿省下的那块占比就小了。<br>
+最极端的是本来就为大 batch 配的 DEP：有人在 B200 上开了 MTP，十档并发全部变慢。投机解码是小 batch 的招，batch 一大，它从白送变成纯开销。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s11-temp</code>，整张。</p>
+
+<p class="say">「最后一个坑最阴。贪心的草稿永远交最可能的那个字；服务端默认温度 1.0，大模型每次掷骰子定答案，自然常对不上。<br>
+有人压 V4-Pro，压测工具没发温度，接受率只剩百分之一点多；请求里写明温度 0，回到三成多，吞吐差了三倍。<br>
+接受率掉了不会报错，只让每个字的间隔慢慢变长。所以线上要把它当一级指标告警；跨框架比投机解码，先对齐两边发没发温度。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s11-tree</code>，扫一眼就走。</p>
+
+<p class="say">「草稿从哪来？一条线是越长越贴近大模型：独立的小模型，挂在头上的小头，读大模型内部的状态，到 DeepSeek-V3 干脆训进模型里的 MTP。另一支不要模型，直接从 prompt 里抄，改代码、写摘要这种重复多的活最管用。<br>
+草稿也不是免费的：它要占显存，K3 开了之后，KV 池少了将近两成。」</p>
+
+<p class="say">「投机解码让一趟车拉回好几个字，可车上的货还是那么重。下一节换个方向：让货变轻。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要推拒绝采样的公式</b>（min(1, p/q) 那套），只说「分布无损」。<em>公式在 11.1 的折叠里，被追问再翻。</em><br>
+⚠️ <b>4.81 倍和 4.22 倍别混</b>：前者是每字间隔（fig-s11-bytes），后者是端到端吞吐、含首字时间（fig-s11-conc）。台上只说「差不多五倍」「四倍多」，被问到就这样解释。<br>
+⚠️ <code>fig-s11-step</code> 和动画是两个不同的例子（一个一轮出 4 个、一个出 3 个），<b>只放动画</b>，静图留给自学，免得台下对数。<br>
+⚠️ 草稿谱系图上不画倍数是故意的：各家倍数在自己的模型上测，不能横比。<br>
+⛔ 11.6 那串「接进系统的代价」只讲占显存一条，其余（引擎默认值、线性注意力回滚、DeepEP 缓冲、PD 补齐）留给会后。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s十一">第十一节　投机解码</a>　·　主图 <code>anim-spec</code></p>
+</div>
+
+<h3 class="sec" id="c12">第十二节　量化与 kernel 融合（8′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：量化让货变轻，融合让车不在半路停；同叫 4 bit，差在缩放，还得跟硬件对上。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：课件 <code>s十二</code>，<code>fig-s12-bytes</code> 整张。</p>
+
+<p class="say">「上一节让一趟车多拉几个字，这一节让车上的货变轻：每个权重少占几个字节。2022 年底 GPTQ、2023 年 AWQ 把权重压到 4 bit；到了 Blackwell，4 bit 浮点直接进了张量核。<br>
+batch 小的时候，一步的时间几乎全花在读权重上，所以位数减半，下限就减半。拿 V3 放在八颗 TPU v7 上推，BF16 一步至少一毫秒多，FP4 只要三分之一毫秒左右。这是本课只算权重推出来的。」</p>
+
+<p class="say">「货轻了还有个副作用：省下的显存能多放 KV、多接几个人，等于顺带走了第四节车上多坐人那条路。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s12-mx</code>，先上后下。</p>
+
+<p class="say">「4 bit 只有十六个编码，一个数自己装不下量级，只能几个数共用一个缩放。<br>
+MXFP4 三十二个一块，NVFP4 十六个一块。块越小，越贴合那一小段的数值，精度越好，摊下来的字节也越多。NVFP4 的缩放还能取非二的幂，MXFP4 只能取二的幂。<br>
+所以同叫 4 bit，不能当成一回事。」</p>
+
+<p class="say">「现在的趋势是，模型发布时就是低精度。Kimi K2 Thinking 在后训练里做了量化感知训练，专家直接是 INT4；DeepSeek-V4 专家用 FP4，其余大多 FP8。专家正是 decode 读得最多的那部分。<br>
+训练时就适应舍入误差，比训完再压更稳，部署的人也不用自己再量化一遍。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s12-r1</code>，整张。</p>
+
+<p class="say">「在 TPU 上，FP4 一开始是被容量逼出来的：DeepSeek-R1 放上 v7x-8，专家用 FP8，每个 device 装不下；转成 FP4，才放得下。<br>
+同叫 4 bit，FP4 是浮点，INT4 是整数。这张图跟着一个权重走一遍：INT4 存的时候加了八，读的时候必须减回来。K2.6 的记录里就少减过一次，模型输出崩成重复的乱词。」</p>
+
+<p class="say">「格式还得跟硬件对上。v7 的矩阵单元，公开规格里只有 BF16 和 FP8 的峰值，FP4 只能当权重存着，算之前在片上先解开。<br>
+字节省了，解开的功夫加上了，净赚多少只能实测。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s12-fuse</code>，先上后下。</p>
+
+<p class="say">「还有一种少搬，是让车别在半路停。一次前向要发上百个 kernel，每个收尾、下一个开场的那一下，没人在读权重。<br>
+Hazy Research 拿一个十亿参数的小模型在 H100 上算过：光读权重，每秒能跑一千三百多次前向；每个交接处空等几微秒，加起来只剩七百多次。<br>
+CUDA Graph 只省 CPU 发射那一侧，GPU 上交接的空当还在。megakernel 把整次前向写成一个 kernel，上一段在算，下一段的权重已经在读。」</p>
+
+<p class="say">「有人量过：vLLM、SGLang 最多用到 H100 带宽的一半，megakernel 到将近八成。TPU 这边，Inferact 用 Pallas 写了 megakernel，十六颗 v7 跑 Kimi K3，单用户每秒超过七百个字，对照的十六张 GB200 是四百五十多。<br>
+注意这个数是 megakernel 加投机解码一起换来的，博客没提量化。这几招能叠着用。」</p>
+
+<p class="say">「到这儿，让一趟分给更多人、让货变轻，招数都齐了。可 kernel 调好了，服务还可能第一分钟就卡住。下一节讲落地。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要讲 E2M1、E8M0、E4M3 的位布局</b>，只说「块大小和缩放精度不同」。<em>细节在专题八 §2。</em><br>
+⚠️ <b>Inferact 那个七百多是 megakernel 加 DSpark 投机一起换来的</b>，别说成量化或单靠 megakernel 的功劳。<br>
+⚠️ v7 没有 FP4 算力通路，<b>别说「FP4 在 TPU 上算得更快」</b>：省的是字节和容量，算之前要解开。<br>
+⚠️ R1 那几个容量数单位混着（正文记 GB、上限是 GiB），台上只说「装不下 / 放得下」，不报数。<br>
+⛔ 12.4 末尾 KV 存 FP8 的布局问题跳过，它属于第五节那笔账。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s十二">第十二节　量化与 kernel 融合</a>　·　主图 <code>fig-s12-bytes</code></p>
+</div>
+
+<h3 class="sec" id="c13">第十三节　落地：服务化与编排（6′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：TPU 上推理服务的大部分活在形状、编译和冷启动；路由让前缀只算一次。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：课件 <code>s十三</code>，<code>fig-s13-bucket</code> 整张。</p>
+
+<p class="say">「前面十二节都在让那一趟更划算，这一节管的是车能不能按时开出来。2025 年 llm-d 把前缀感知路由做进了 Kubernetes，推理服务从一个引擎，变成了一群副本加一个路由。<br>
+先说一件吓人的事：Qwen3.5-397B 在 TPU 上，遇到没见过的形状，第一个请求要等一到一分半钟编译；之后同样的形状，不到一秒。」</p>
+
+<p class="say">「原因专题二讲过：XLA 按形状编译，变长的请求只能分桶补零。桶分得细，补的零少，编译次数多。<br>
+这张图是本课拿一份示意分布算的，要看的不是哪个数，是切法比桶数要紧：请求长度大致是对数形状，按根号二倍一档切十三个桶，比每五百一十二一档切十六个桶还省。<br>
+定好的桶写进启动参数，开服前编好，别让第一个用户替你等。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s13-cold</code>，先上后下。</p>
+
+<p class="say">「编好的程序能落盘复用，可缓存的键里有库版本、编译参数、切片形状，升一次镜像就全部重编；有人把缓存放在内存盘上，机器一重启就没了。<br>
+冷启动拆开看，编译常常是最大的一块，还会藏在别的名字底下。上面这条，账面上叫加载非 MoE 权重，六分半钟，其实是每加载一个 tensor 就清一次编译缓存。R1 上是同样的毛病，删掉清缓存那一行，这段快了十倍。<br>
+判据就一句：这段时间在搬字节，还是在等编译器。」</p>
+
+<p class="say">「上线以后还有两个坑。起来了不等于活着：有人的十四台 prefill 全崩了，注册表还显示十四台在线，判活要真发一个请求。<br>
+切片报硬件故障，别反复重试，每次都在同一处崩；有一份公开的训练记录里，重试一用完，节点池被缩到零，卡就没了。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s13-route</code>，先左后右。</p>
+
+<p class="say">「最后把少算搬到集群层。前缀缓存只在一个副本里有效，路由要是不知道哪个副本存着哪段前缀，副本越多，命中率越被摊薄。<br>
+KV 感知路由把同前缀的请求送到已经存着它的副本。Red Hat 用 llm-d 量过：命中时首字三百多毫秒，对照的最坏情况将近三秒。注意那是最坏情况，不是轮询的平均。<br>
+路由还得把坏副本摘掉：八个副本坏一个还照常轮询，就有八分之一的请求白等，这是本课推的示意。」</p>
+
+<p class="say">「十三节走完了。接手一个推理服务的第一天，这么多招，先问什么？最后一节收成八个问题。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⚠️ <b>2,850 ms 是对照的最坏情况，不是轮询的平均值</b>，台上已经说了，被问「路由能快八倍」时要纠正。<br>
+⚠️ 分桶那张图是示意分布，<b>不是真实流量</b>；只讲「切法比桶数要紧」，别报六种分法的百分比。<br>
+⛔ 13.3 权重加载、13.4 第三条（GB300 上 <code>pkill -9</code> 漏显存）、13.5 栈怎么选那张表，台上不讲，留给会后。<em>被问「TPU 上用哪个栈」就说「先看模型在不在支持列表，再看拓扑搭不搭得出来」。</em><br>
+⛔ 不要念 <code>--precompile-bs-paddings</code> 那串参数。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s十三">第十三节　落地：服务化与编排</a>　·　主图 <code>fig-s13-cold</code></p>
+</div>
+
+<h3 class="sec" id="c14">第十四节　第一天的八问（6′）</h3>
+
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：decode 每一步都要搬一趟；先算清这一趟多重、能分给几个人，再挑让更多人分、或者让它变轻的招。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：课件 <code>s十四</code>，<code>fig-s14-eight</code> 整张。</p>
+
+<p class="say">「这一节不加新招。从 2022 年到今天的这些招数，全钉回第零节那一趟车上。<br>
+八个问题分两半：前四问是纸上的账，负载长什么样、用哪把尺子、一步至少搬多少字节、放得下几条序列；后四问才是挑招数。<br>
+顺序不能反：尺子没定，后面比出来的快慢，可能只是分母换了。」</p>
+
+<p class="say">「两问最容易被跳过。第三问，字节下限：实测一步要是下限的好几倍，先查布局和调度，别急着加卡。<br>
+第五问，attention 怎么切：先切法后参数。第十节有人量过，换拓扑是两倍多，调并发不到三成。<br>
+还有第八问，上线前跑通了吗：编译和冷启动没准备好，第一个用户就得等上一分钟。」</p>
+
+<p>💬 <b>互动</b>：「你接手的服务开了投机解码，压测反而变慢了。八问里先查哪一问？」等台下说出「先看负载：并发多高、请求里写没写温度」，回扣第十一节那两个坑。</p>
+
+<p class="board"><b>🖥 屏幕</b>：往下滚到 14.3，停在「回到时间轴：系统这一侧省了多少」那张表。</p>
+
+<p class="say">「最后算一笔大账。第零节那个二百八十多倍是市场价，里面混着更小更强的模型和硬件换代，不能全算给系统。<br>
+系统这一侧最干净的一笔在第二节：同一套 GB300、同一个 V4-Pro、同一个每用户五十 token 的档，首发那天每卡两千二，到 2026 年 6 月一万一千二，五点一倍。」</p>
+
+<p class="say">「卡没换，模型没换，这五倍全是软件：调度、KV、拆开放、投机解码一起叠出来的。<br>
+表里每条泳道各挑了本课一个实测，大家扫一眼就行，它们的基线各不相同，不能连乘。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：切回第零节的 <code>fig-s0-story</code>，整张。</p>
+
+<p class="say">「回到开场那三年。2022 年，一批请求要等最长的那个写完，KV 只用上两到四成。<br>
+然后一步补一个洞：先补调度和显存，再补一趟只出一个字，然后把 prefill、decode、专家拆开放，最后把 KV 当成一种存储。」</p>
+
+<p class="say">「所以整门课只有一句话：<b>decode 每一步都要把权重和 KV 从显存里搬一趟；每一招，要么让这一趟分给更多 token，要么干脆少搬。</b>还有一类不碰这一趟：把吞 prompt 和吐字拆开，各放到合适的机器上。<br>
+型号会换，数字会过期，这一句不会。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⚠️ <b>二百八十多倍是市场价</b>，别说成「推理系统优化了二百八十倍」；系统那笔只认 5.1 倍，口径是同卡、同模型、同交互档。<br>
+⚠️ 被问 545%：那是 DeepSeek 假设<b>全部按 R1 定价收费</b>算出的理论利润率，反映定价，不是成本降了多少；台上不主动提。<br>
+⚠️ <code>fig-s0-story</code> 卡上那些倍数<b>不能连乘</b>：后一个的基线常常就是前一个。被问「加起来快了多少倍」就这么答。<br>
+⛔ 不要逐条念八问，图上都有。台上只挑第三、五、八问讲。<br>
+⚠️ 收尾那一句念完就停，别再补「还有什么问题」之外的话。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s十四">第十四节　第一天的八问</a>　·　主图 <code>fig-s14-eight</code></p>
+</div>
+
+<h3 class="sec">🚧 这份讲义还薄的地方</h3>
+<div class="say">
+  <ul>
+    <li>[ ] <b>没真讲过，第十一到十四节的时间是估的。</b>第十一节还要等投机解码动画走到两个停顿点，地板没算这段，第一次讲完按实际用时回来改。</li>
+    <li>[ ] <b>没有课前题、也没有课后题。</b>
+      <em>第十一节末尾很适合留一道：「Kimi K3 开投机后一趟慢了 1.45 倍、每步平均接受 6.96 个字，每个字快了几倍？」（答案 4.81 倍，在课件 11.2 和 <code>fig-s11-bytes</code>；顺带追问一句为什么端到端只有 4.22 倍：含首字时间。）</em></li>
+    <li>[ ] <b>第十三节砍得最狠。</b>13.3 权重加载（本机内存盘 vs 共享存储差 38 倍）、13.5 栈对照表、GB300 上 <code>pkill -9</code> 漏显存那个坑，台上都没讲；要是听众偏运维，可以拿它们换掉分桶那段。</li>
+    <li>[ ] <b>第十四节的互动题答案不唯一。</b>「投机解码开了反而变慢先查哪一问」，台下也可能答第七问（开不开）或第二问（尺子），都说得通，要现场接住，回扣到第十一节的并发和温度两个坑。</li>
+  </ul>
+</div>
+
+</main>
+</div>
+</body></html>
