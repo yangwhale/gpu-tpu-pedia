@@ -814,7 +814,7 @@ Ring 是按行分：每张卡一段、全部头。列里的依赖跨了卡，只
 它的天花板是头数：换成按头切以后，每张卡至少得拿一个完整的头，所以并行度不能超过头数；KV 头比提问头少的模型，就卡在 KV 头数上。<br>
 Ring 没有这个上限，但每一步要等一段笔记传过来。」</p>
 
-<details class="deep"><summary>🔍 <b>讲深一点</b>：Ulysses 跟 TP 差在哪；拿 V3 一步一步走一遍<span class="sub">（被追问或时间富余时用；不计入地板）</span></summary>
+<details class="deep"><summary>🔍 <b>讲深一点</b>：Ulysses 跟 TP 差在哪；拿 V3 一步一步走一遍；什么场景用 Ulysses、什么时候配成 USP<span class="sub">（被追问或时间富余时用；不计入地板）</span></summary>
 <p class="deephd">一、注意力里面，跟 TP 一模一样</p>
 <p class="deepsay">「换完以后，每张卡算几个头、全部序列，这跟 TP 切注意力确实是同一个样子。也别想着「序列只切一段就退化成 TP」：Ulysses 里序列切几段、头就分几组，两个数都等于卡数，绑在一起，没法只切头不切序列。」</p>
 <p class="deephd">二、区别全在注意力外面</p>
@@ -835,6 +835,19 @@ Ring 没有这个上限，但每一步要等一段笔记传过来。」</p>
 <p class="deepsay">「每张卡每层往外寄：Q、K、V 三份加输出一份，每份 256 MiB 寄走 127 块，合起来约 1 GiB，正好是 4Nh 除以 128。反向沿同一条路倒着走，按对称再来这么多。<br>
 换成 TP 128 路：每张卡要拿着完整的一百万 token，一层的输入激活就是 14 GiB；每次 AllReduce 加的也是这 14 GiB，走环每张卡要发将近两倍，注意力和 MLP 各一次。」</p>
 <p class="deepsay">「一句话：注意力里面，Ulysses 就是 TP 那种按头分；区别是它先投影再换手，投影要用全部头的权重，注意力外面每人只管自己那一段，代价是前后各换一次手，每张卡只换卡数分之一。」</p>
+<p class="deephd">五、什么场景用 Ulysses，什么时候配成 USP</p>
+<p class="deepsay">「先说权重：Ulysses 自己不省权重，但这事本来就交给 ZeRO-3 或 FSDP。论文 3.3 节把序列并行那组卡直接并进 ZeRO-3 的分片组；下面那个视频生成的例子，配的也是 FSDP 加 USP。所以它受限不在权重，在头数和网络。」</p>
+<p class="deepsay">「适合的场景：batch 很小、序列很长，说准一点，是<b>一条样本自己就塞不进一张卡</b>。数据并行按样本分，最多分到一张卡一条，再往下分不动，只能在样本里面切。序列不长、batch 很大，直接数据并行就够了，轮不到它。」</p>
+<p class="deepsay">「场景一，长上下文训练：把模型从几千 token 续训到几十万、上百万，每张卡连一条样本的激活都放不下。Ulysses 管激活，ZeRO-3 管权重。<br>
+场景二，视频生成推理。Wan 2.1 的 README 里，八卡推理就是 FSDP 加 USP，14B 模型写的是 Ulysses 等于 8。一个请求只出一段视频，batch 是 1；高清视频切成 token，序列很长；注意力是双向的，没有因果遮罩，也没有 KV cache。用户要的是这一个请求快，数据并行帮不上，只能把这一条序列拆到八张卡上。<br>
+同一个 README 里还有反面例子：1.3B 模型只有 12 个头，除不尽 8，README 写的是八卡改用 Ring。」</p>
+<p class="deepsay">「不适合的：LLM 推理的 decode，每步只出一个 token，没有长序列可切，切 KV cache 走的是本节后面的 DCP。已经开了 TP 的，TP 也按头切，头先被分掉一轮，留给 Ulysses 的就少了。」</p>
+<p class="deepsay">「什么时候配成 USP，三种情况。<br>
+卡数比头数多：USP 论文的例子，Llama 3 8B 只有 8 个 KV 头，想开 16 路，就配 Ulysses 8 × Ring 2。<br>
+头数除不尽：上面那个 12 头的模型，README 推荐纯 Ring；按 USP 的规则也可以配 Ulysses 4 × Ring 2，12 能被 4 整除。这一条是按规则推的，README 里没写。<br>
+跨机器：AllToAll 最怕慢线，Ulysses 那一维留在一台机器的 8 张卡里走 NVLink；Ring 只跟邻居说话、能边算边传，放到机器之间。」</p>
+<p class="deepsay">「回到 V3 的例子：128 个头，头数够开 128 路 Ulysses；可 128 张卡是 16 台机器，128 路的 AllToAll 要横跨整个网络。更顺的配法是机器里 Ulysses 8、机器之间 Ring 16。这也是按两种通信的脾气推的，不是实测。」</p>
+<p class="deepsay">「一句话：一条样本自己塞不下、又想让一个请求变快，用 Ulysses；头不够分或者要跨机器，配成 USP；权重一律交给 FSDP 或 ZeRO-3。」</p>
 </details>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-usp</code>，先 ① 左表到右表那一步，再指右表里的红色上下箭头；最后 ② 那张对比表。</p>
