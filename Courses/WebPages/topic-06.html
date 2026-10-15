@@ -1082,7 +1082,7 @@ body.figonly section h3{margin-top:34px}
   <div class="note ok"><span class="t">一句话</span>
     <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
     还有一类不碰这一趟：把两段拆开，各放合适的机器。</div>
-<figure class="fbox fwide" id="fig-s0-map"><svg viewBox="0 0 1400 632" width="100%" role="img" aria-label="这一课的路线图，画成一个搬货场景。仓库是显存，里面放着权重和 KV；工位是算力。decode 每出一个字，就要用一辆车把权重和 KV 从仓库拉到工位一趟，这是第一节；第二节是量这一趟的尺子。后面的招数是三根杠杆。车上多坐人：一趟分给更多请求，第四、五、六、十一节。货变轻：每一趟的字节变少，第三、七、十二节。开两个仓库：吞 prompt 和吐字分开放，第八、九、十、十三节"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s0-map"><svg viewBox="0 0 1400 632" width="100%" role="img" aria-label="这一课的路线图，画成一个搬货场景。仓库是显存，里面放着权重和 KV；工位是算力。decode 每出一个字，就要用一辆车把权重和 KV 从仓库拉到工位一趟，这是第一节；第二节是量这一趟的尺子。后面的招数是三根杠杆。车上多坐人：一趟分给更多请求，第四、五、六、七、十一节。货变轻：每一趟的字节变少，第三、十二节。开两个仓库：吞 prompt 和吐字分开放，第八、九、十、十三节"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">后面每一节都在这一趟上做文章　——　<tspan font-weight="700">三根杠杆</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">decode 每出一个字，就要把权重和 KV 从仓库拉到工位一趟</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -1479,8 +1479,6 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">喂进 MXU 的行：填满一边</text>
 <rect x="237.4" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="258" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">喂进 MXU 的行：只填一小截</text>
-<rect x="490.48" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="511" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">屋脊点</text>
 <rect x="0" y="102" width="1400" height="410" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -4195,7 +4193,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="2" y="952" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="979" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在飞的请求反而少了 34%：收益不来自多装，来自每一步变短，再加上 decode 卡翻倍</tspan></text>
 <text class="svgsm" x="20" y="1010" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">按全部卡（含 12 张 prefill 卡）算总吞吐，每卡 1,319 → 2,758，是 2.09 倍；按 decode 卡算输出只有 1.31 倍。</text>
-<text class="svgsm" x="20" y="1034" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">两边投机接受率 34% 对 35.7%，可以排除投机。原始记录把收益归给容量，这里按 Little 定律推导，结论不同。</text>
+<text class="svgsm" x="20" y="1034" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">两边投机解码接受率相近（35% 上下），步时变短不是投机带来的。</text>
 </svg><figcaption><b>对比两列：在飞请求没变多，步时短了 4 倍。</b><span class="capmore"><br><em>实测为 GB300、vLLM、并发 512；在飞请求按 Little 定律推导，条长是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。</p>
 <p>实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；GPU 数 16 和 20 见 :476；投机接受率 34% 与 35.7% 见 :480。</p>
 <p>本课推导：在飞请求 ＝ 输出 tok/s × 出字间隔（Little 定律）；条长按卡上在飞请求数画，假设两边每个请求的 KV 一样长（同为 4K 进 1K 出）；TP4 里哪张卡算「原件」是示意。容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。</p></details></figure>
@@ -4810,6 +4808,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价只是多一趟 KV 传输：KV 从 prefill 机器的显存走到 decode 机器的显存。</text>
 </svg><figcaption><b>拆开以后，绿线一格不少。</b><span class="capmore"><br><em>专题五原图；时间线是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DistServe arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>：prefill 偏算力、decode 受显存带宽约束；拆开后多服务 7.4 倍请求或把 SLO 收紧 12.6 倍。</p>
 <p>📌 本课程作者 TPU v7x 1P1D 部署（Qwen3-Coder-480B）：KV 三段传输按带宽估算约 100 ms，占 1–2 s prefill 的 5–10%。8K prompt 的 KV ≈ 1.04 GB（FP8，按 config 现算），过 100 Gbps 网络约 83 ms；长 prompt 宜 2P:1D，长输出宜 1P:2D。</p></details></figure>
+<figure class="fbox fwide" id="anim-pdsplit">
+<video src="media/topic06-pdsplit.mp4?v=29f1f5cf" autoplay loop muted playsinline
+       aria-label="PD 分离动画。标题：PD 分离：prefill 挪走，decode 的字不再被卡住。上下两组时间轴共用一条往右走的黄色竖线，一格是一步 decode 的时间。上组叫「混部：prefill 和 decode 挤在一台机器上」，行是整机在算、新请求、请求 A、请求 B、请求 C；下组叫「PD 分离：prefill 机只算 prefill，decode 机只出字」，行是 prefill 机，以及 decode 机上的新请求、请求 A、请求 B、请求 C。底下写「一格＝一步 decode 的时间，只表相对长短（示意）」。前 4 步两组一样：A、B、C 每步各出一个字，蓝格等间距。接着一段橙色长块「长 prompt 的 prefill」占了 5 格：上组它占住整台机器，A、B、C 这 5 格一个字都没出，被红框圈出，右边红字「下一个字被推迟」；下组它在 prefill 机上算，decode 机上 A、B、C 照常每步出字。prefill 算完，上组新请求的绿格直接接在后面；下组一支黄色箭头标「传 KV」从 prefill 机指向 decode 机，新请求在下一步加入 decode 批，右边绿字「字距始终均匀」。字幕依次是：三条请求在 decode：每一步，每条请求出一个字，格子等间距。来了一个长 prompt：prefill 一次算完整段的 KV。混部时整台机器被它占住。分离时它在 prefill 机上算，算完把 KV 传给 decode 机（传的是 KV，不是权重）。新请求带着 prefill 给的第一个字进 decode 批，之后一步一个字。最后：拆开后 decode 的字距始终均匀；代价是多一批机器、每个请求多传一趟 KV。画面复位。"></video>
+<figcaption>看红框：混部时整批人的下一个字都在等 prefill；拆开后 decode 机一格不断，多出来的只是那支「传 KV」。
+  <span class="sub">（22 秒无声循环，Manim 渲染。示意：时间格只表相对长短，不是实测毫秒；传 KV 画得比 prefill 短，量级见 8.2。）</span></figcaption></figure>
   <ul>
     <li><b>换来的</b>：出字不被打断，TPOT 稳；两边还能各挑切法（第六、七节）。</li>
     <li><b>要付的</b>：一趟 KV 传输、两套机器、一份要调的配比（第九节）。</li>
@@ -5246,7 +5249,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
   <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上再加一台 prefill：总输出只从 1,118.8 到 1,159.0 tok/s，每张卡反倒从 69.9 掉到 48.3。</p>
-<figure class="fbox fwide" id="fig-s9-2p1d"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="同一组实测，两种看法。DeepSeek-V3 在 B200 上，从 1 台 prefill 加 1 台 decode，变成 2 台 prefill 加 1 台 decode，并发 128。左边按机器看：总输出只从 1,118.8 涨到 1,159.0，多 3.6%；每张卡从 69.9 掉到 48.3，少 31%。右边按用户看：平均首字延迟从 2.40 秒降到 1.73 秒，少 28%；P99 首字延迟从 12.07 秒降到 6.23 秒，少 48%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s9-2p1d"><svg viewBox="0 0 1400 550" width="100%" role="img" aria-label="同一组实测，两种看法。DeepSeek-V3 在 B200 上，从 1 台 prefill 加 1 台 decode，变成 2 台 prefill 加 1 台 decode，并发 128。左边按机器看：总输出只从 1,118.8 涨到 1,159.0，多 3.6%；每张卡从 69.9 掉到 48.3，少 31%。右边按用户看：平均首字延迟从 2.40 秒降到 1.73 秒，少 28%；P99 首字延迟从 12.07 秒降到 6.23 秒，少 48%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">多一台 prefill，买的是首字快，不是吞吐　——　<tspan font-weight="700">每张卡反而少了三成</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，B200（每台 8 卡），SGLang ＋ NIXL；1P1D（16 卡）→ 2P1D（24 卡）；输入 3,000–4,000、输出 400–600，并发 128</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -5287,12 +5290,11 @@ body.figonly section h3{margin-top:34px}
 <rect x="910.0" y="348" width="161.5791938330752" height="28" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="1081" y="368" fill="#174ea6" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.23</tspan></text>
 <text class="svgsm" x="1380" y="350" fill="#0d652d" text-anchor="end" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-48%</tspan></text>
-<rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<rect x="0" y="452" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">加 prefill 前先问：缺的是首字速度，还是每秒出的字</tspan></text>
-<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这台 prefill 让排队的请求更快开始，总输出几乎没动；并发再往上到 256，2P1D 的总输出反而少 1.3%，瓶颈已经换到 decode。</text>
-<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以拿每卡吞吐评估 2P1D 一定吃亏；它该拿 TTFT 的 SLO 来评。</text>
+<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这台 prefill 让排队的请求更快开始，总输出几乎没动。拿每卡吞吐评估 2P1D 一定吃亏，该拿 TTFT 的 SLO 来评。</text>
 </svg><figcaption><b>左边一高一低，右边两组都在降。</b><span class="capmore"><br><em>B200，并发 128；每卡 ＝ 总输出 ÷ 全部卡数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4/deepseek-v3/REPORT-2P1D-DeepSeek-V3.md：表在 :69、:85，对比在 :100–142（每卡 ＝ 总输出 ÷ 卡数，报告原算法，脚本复算）。c256：1,798.1 → 1,775.6。</p>
 <p>⚠️ TTFT 是客户端测的，含排队。两边都开了 --disable-cuda-graph（REPORT-1P1D :129），所以没画 TPOT。</p></details></figure>
   <p>用户那头变化却大：平均 TTFT 少了 28%，P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 的 SLO（对用户承诺的延迟上限）看是赚。</b></p>
@@ -7469,7 +7471,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1242" y="509" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-2</tspan></text>
 <rect x="1280" y="482" width="64" height="40" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="1312" y="509" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-1</tspan></text>
-<path d="M641,316 L647,326 L647,476" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<path d="M641,316 L647,326 L647,460 L631,478" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
 <text class="svgsm" x="661" y="458" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不减 8，按有符号解</tspan></text>
 <text class="svgsm" x="230" y="556" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结果：读对了模型正常；读错了，输出崩成重复的「foss foss foss」</tspan></text>
 </svg><figcaption><b>跟着一个权重走：存时加 8，读时不减，就差 8。</b><span class="capmore"><br><em>示意；12.4 里 R1 的占用数字和单位见出处。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>INT4：tpu/tpu-inference/Kimi-K2.6-1T-A32B-INT4/README.md:265-266。对称 int4 [−8, 7] 以无符号 [0, 15] 存放，解包后须减 8；原文：直接 bitcast 成有符号 int4 会让符号位错位，模型崩溃，输出重复的「foss foss foss」。最下一行由脚本逐个算出（本课推导）：4 bit 补码里加 8 正好翻转最高位，所以每个权重都差 8、符号位反了。</p>

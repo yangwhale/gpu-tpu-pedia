@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""专题六「推理」的三支动画：连续批处理（第四节）、投机解码一步（第十一节）、分页 KV（第三节）。
+r"""专题六「推理」的四支动画：连续批处理（第四节）、投机解码一步（第十一节）、分页 KV（第三节）、PD 分离（第八节）。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间或第三维）
   · ContBatch —— 静态甘特图（fig6-gantt）画得出结果，画不出「同一时刻两边各走到哪」。
@@ -10,6 +10,7 @@ r"""专题六「推理」的三支动画：连续批处理（第四节）、投�
     碰到第一个错就停」这个顺序，而「猜对几个就出几个」正是这个顺序的直接结果。
   · PagedKV —— 分页的要点是「按需」：写满一块才去领下一块、请求一结束块立刻还回、新人马上用上。
     静态图（fig6-paged）只有一个时刻的页表快照，「领」和「还」两个动作都在时间里。
+  · PDSplit —— 卡顿是时间现象：同一时刻上面所有人停笔、下面照常出字。静态图（fig5-pd）画得出结果，画不出「同一把时钟下两边各走到哪」。
 
 ⛔ 数据从哪来（当场算，断言钉住）
   · ContBatch：4 个槽位、16 个请求，长度 REQ 是**示意**（前 8 个与 fig6-gantt 的 3/8/2/5/6/2/7/4 相同，
@@ -27,11 +28,13 @@ r"""专题六「推理」的三支动画：连续批处理（第四节）、投�
     每一步的时长随批里人数变化（这里每步等长）。
   · SpecStep：拒绝采样的概率细节；树形草稿；草稿模型和大模型的真实耗时比（底下的用时条只表达「猜很便宜、验是搬一趟」）。
   · PagedKV：共享前缀与写时复制（静态图 fig6-paged 已画）；连续预留不画第二套，只在字幕里对照一句。
+  · PDSplit：KV 缓存池命中那一拍（画面已两组十行，再加就挤）；chunked prefill（4.2 节的事，混部也能缓解卡顿）；传 KV 的真实耗时（8.2 节按带宽估）。
 
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py ContBatch WebPages/media/topic06-contbatch.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py SpecStep  WebPages/media/topic06-spec.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py PagedKV   WebPages/media/topic06-paged.mp4
+   构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py PDSplit   WebPages/media/topic06-pdsplit.mp4
    SpecStep 每一步落地的停顿时刻写进 steps/SpecStep.json（课件挂 data-pauses）。
 """
 import json
@@ -608,4 +611,159 @@ class PagedKV(Scene):
         self.play(clock.animate.set_value(TP), run_time=TP * 1.0, rate_func=linear)
         self.wait(4.0)
         self.play(clock.animate.set_value(0.0), run_time=1 / 30, rate_func=linear)
+        self.wait(0.5)
+
+
+# ════════════════════════════════════════════════════════════════
+# ④ PDSplit：混部时 prefill 把 decode 卡住；拆开以后字距均匀
+# ════════════════════════════════════════════════════════════════
+# ⚠️ 全是示意（不标毫秒）：时间以「一步 decode」为一格，只表相对长短。
+#   混部：一台机器，第 0–3 步三条请求在 decode；长 prompt 的 prefill 占住 [PF0, PF1)；之后新请求加进批。
+#   分离：prefill 机算同一段 [PF0, PF1)，算完传 KV（XFER 格，短于 prefill，对应正文「只占一成上下」的量级关系），
+#         decode 机上 A/B/C 每一步都出字，新请求在 KV 到达后的下一步加入。
+PD_T = 14                                        # 一共演 14 格
+PF0, PF1 = 4, 9                                  # 长 prompt 的 prefill 占的时间段
+XFER = 0.5                                       # 传 KV 的那一小段
+PD_OLD = ["A", "B", "C"]
+
+
+def pd_sched():
+    """逐步排：返回 {模式: {请求: [出字的步号 k，表示 [k, k+1) 这一格]}} 及机器忙的段。
+    混部：机器在 [PF0, PF1) 只算 prefill，这几步没人出字；prefill 一次算完整段 KV，并给出新请求的第一个字，之后它跟大家一起一步一个字。
+    分离：decode 机每步都出字；新请求在 KV 到达（PF1 + XFER）之后的第一个整步加入。"""
+    mix = {n: [k for k in range(PD_T) if not (PF0 <= k < PF1)] for n in PD_OLD}
+    mix["new"] = list(range(PF1, PD_T))
+    split = {n: list(range(PD_T)) for n in PD_OLD}
+    join = int(math.ceil(PF1 + XFER))
+    split["new"] = list(range(join, PD_T))
+    return {"mix": mix, "split": split}, join
+
+
+PD, PD_JOIN = pd_sched()
+_gaps_mix = [b - a for a, b in zip(PD["mix"]["A"], PD["mix"]["A"][1:])]
+_gaps_split = [b - a for a, b in zip(PD["split"]["A"], PD["split"]["A"][1:])]
+assert max(_gaps_mix) == PF1 - PF0 + 1 and set(_gaps_split) == {1}      # 混部有一处字距拉长到 6 格；分离处处 1 格
+assert XFER < (PF1 - PF0) / 5 + 1e-9                                     # 传 KV 比 prefill 短得多（示意）
+assert PD["split"]["new"][0] == PF1 + 1 and PD["mix"]["new"][0] == PF1
+
+
+class PDSplit(Scene):
+    def construct(self):
+        clock = ValueTracker(0.0)
+        U, CH = 0.66, 0.3                          # 一格宽、格高
+        X0 = -4.4                                  # 第 0 格左边
+        XL = -5.65                                 # 行标签中心
+        # 上半（混部）与下半（分离）的行 y
+        YM = {"bus": 1.66, "new": 1.27, "A": 0.9, "B": 0.54, "C": 0.18}
+        YS = {"pf": -0.9, "new": -1.32, "A": -1.7, "B": -2.06, "C": -2.42}
+
+        def xc(k):
+            return X0 + (k + 0.5) * U
+
+        title = tx("PD 分离：prefill 挪走，decode 的字不再被卡住", 30).to_edge(UP)
+        self.add(title)
+        heads = VGroup(tx("混部：prefill 和 decode 挤在一台机器上", 22, GREY_B).move_to([0, 2.1, 0]),
+                       tx("PD 分离：prefill 机只算 prefill，decode 机只出字", 22, GREY_B).move_to([0, -0.47, 0]))
+        for h in heads:
+            h.align_to([-6.6, 0, 0], LEFT)
+        labs = VGroup(
+            tx("整机在算", 20, GREY_B).move_to([XL, YM["bus"], 0]),
+            tx("新请求", 20, GREEN).move_to([XL, YM["new"], 0]),
+            *[tx("请求 " + n, 20, BLUE).move_to([XL, YM[n], 0]) for n in PD_OLD],
+            tx("prefill 机", 20, ORANGE).move_to([XL, YS["pf"], 0]),
+            tx("decode 机", 18, GREY_B).rotate(math.pi / 2).move_to([XL - 0.95, (YS["new"] + YS["C"]) / 2, 0]),
+            tx("新请求", 20, GREEN).move_to([XL, YS["new"], 0]),
+            *[tx("请求 " + n, 20, BLUE).move_to([XL, YS[n], 0]) for n in PD_OLD],
+        )
+        self.add(heads, labs)
+
+        # 所有随时间出现的格子：(mobject, 出现时刻 t0)。不透明度 = clip01(t − t0)，在 [t0, t0+1) 里淡入
+        items = []
+
+        def cell(k, y, col, h=CH):
+            r = Rectangle(width=U - 0.1, height=h, stroke_width=0, fill_color=col, fill_opacity=0)
+            r.move_to([xc(k), y, 0])
+            items.append((r, k, 0.9))
+
+        for mode, Y in (("mix", YM), ("split", YS)):
+            for n, ks in PD[mode].items():
+                for k in ks:
+                    cell(k, Y[n], GREEN if n == "new" else BLUE)
+        for k in range(PD_T):                      # 上半「整机在算」：decode 的步是细蓝条
+            if not (PF0 <= k < PF1):
+                cell(k, YM["bus"], BLUE, 0.14)
+        for Y, key in ((YM, "bus"), (YS, "pf")):   # prefill 块：逐格淡入、格与格无缝，长成一整块
+            for k in range(PF0, PF1):
+                r = Rectangle(width=U + 0.005, height=0.36, stroke_width=0, fill_color=ORANGE, fill_opacity=0)
+                r.move_to([xc(k), Y[key], 0])
+                items.append((r, k, 0.85))
+        cells = VGroup(*[m for m, _, _ in items])
+
+        # 一次性出现的标注：(mobject, 淡入起点, 是否 stroke 类)
+        pf_lab_m = tx("长 prompt 的 prefill", 18, WHITE, True).move_to([(xc(PF0) + xc(PF1 - 1)) / 2, YM["bus"], 0])
+        pf_lab_s = tx("长 prompt 的 prefill", 18, WHITE, True).move_to([(xc(PF0) + xc(PF1 - 1)) / 2, YS["pf"], 0])
+        gap = Rectangle(width=(PF1 - PF0) * U, height=YM["A"] - YM["C"] + 0.5,
+                        stroke_color=RED, stroke_width=4, fill_color=RED, fill_opacity=0)
+        gap.move_to([X0 + (PF0 + PF1) / 2 * U, (YM["A"] + YM["C"]) / 2, 0])
+        late = VGroup(*[tx(s, 22, RED, True) for s in ("下一个字", "被推迟")]).arrange(DOWN, buff=0.1)
+        late.move_to([5.85, (YM["A"] + YM["C"]) / 2, 0])
+        even = VGroup(*[tx(s, 22, GREEN, True) for s in ("字距", "始终均匀")]).arrange(DOWN, buff=0.1)
+        even.move_to([5.85, (YS["A"] + YS["C"]) / 2, 0])
+        from manim import Arrow
+        x_from, x_to = X0 + PF1 * U, X0 + PD_JOIN * U
+        arrow = Arrow([x_from, YS["pf"] - 0.18, 0], [x_to + 0.05, YS["new"] + 0.2, 0], buff=0,
+                      color=YELLOW, stroke_width=5, max_tip_length_to_length_ratio=0.35)
+        kv_lab = tx("传 KV", 22, YELLOW, True).next_to(arrow, RIGHT, buff=0.12).shift(0.12 * UP)
+        notes = [(pf_lab_m, PF0 + 0.6), (pf_lab_s, PF0 + 0.6), (late, PF0 + 0.8), (arrow, PF1), (kv_lab, PF1),
+                 (even, PF1 + 1.2)]
+        GAP_T = PF0 + 0.8
+
+        def upd(_m):
+            t = clock.get_value()
+            for m, t0, op in items:
+                m.set_fill(opacity=op * clip01(t - t0))
+            for m, t0 in notes:
+                m.set_opacity(clip01((t - t0) / 0.5))
+            a = clip01((t - GAP_T) / 0.5)
+            gap.set_stroke(opacity=a)              # ⛔ 不用 set_opacity：它连 fill 一起设成实心红
+            gap.set_fill(opacity=0.14 * a)
+        layer = VGroup(cells, gap, *[m for m, _ in notes])
+        upd(layer)
+        layer.add_updater(upd)
+        self.add(layer)
+
+        from manim import always_redraw
+
+        def cursor():
+            x = X0 + clock.get_value() * U
+            return VGroup(Line([x, YM["bus"] + 0.25, 0], [x, YM["C"] - 0.25, 0], color=YELLOW, stroke_width=3),
+                          Line([x, YS["pf"] + 0.25, 0], [x, YS["C"] - 0.25, 0], color=YELLOW, stroke_width=3))
+        cur = always_redraw(cursor)
+        self.add(cur)
+
+        note = tx("一格＝一步 decode 的时间，只表相对长短（示意）", 20, GREY).move_to([0, -3.25, 0])
+        self.add(note)
+
+        CAPS = [
+            (lambda t: t < PF0, "三条请求在 decode：每一步，每条请求出一个字，格子等间距", GREY_B),
+            (lambda t: PF0 <= t < PF1, "来了一个长 prompt：prefill 一次算完整段的 KV。混部时整台机器被它占住", GREY_B),
+            (lambda t: PF1 <= t < PD_JOIN + 1, "分离时它在 prefill 机上算，算完把 KV 传给 decode 机（传的是 KV，不是权重）", GREY_B),
+            (lambda t: PD_JOIN + 1 <= t < PD_T - 1e-6, "新请求带着 prefill 给的第一个字进 decode 批，之后一步一个字", GREY_B),
+            (lambda t: t >= PD_T - 1e-6, "拆开后 decode 的字距始终均匀；代价是多一批机器、每个请求多传一趟 KV", YELLOW),
+        ]
+        caps = [tx(s, 24, c).next_to(title, DOWN, buff=0.18) for _, s, c in CAPS]
+
+        def upd_caps(_m):
+            t = clock.get_value()
+            for (f, _, _), m in zip(CAPS, caps):
+                m.set_opacity(1 if f(t) else 0)
+        cap_g = VGroup(*caps)
+        upd_caps(cap_g)
+        cap_g.add_updater(upd_caps)
+        self.add(cap_g)
+
+        self.wait(2.0)
+        self.play(clock.animate.set_value(PD_T), run_time=PD_T * 1.1, rate_func=linear)
+        self.wait(4.0)
+        self.play(clock.animate.set_value(0.0), run_time=1 / 30, rate_func=linear)    # 复位：拨回时钟
         self.wait(0.5)

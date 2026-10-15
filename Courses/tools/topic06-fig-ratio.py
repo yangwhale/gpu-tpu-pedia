@@ -105,8 +105,7 @@ def fig_2p1d():
             y += 130
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "加 prefill 前先问：缺的是首字速度，还是每秒出的字", [
-        "这台 prefill 让排队的请求更快开始，总输出几乎没动；并发再往上到 256，2P1D 的总输出反而少 1.3%，瓶颈已经换到 decode。",
-        "所以拿每卡吞吐评估 2P1D 一定吃亏；它该拿 TTFT 的 SLO 来评。",
+        "这台 prefill 让排队的请求更快开始，总输出几乎没动。拿每卡吞吐评估 2P1D 一定吃亏，该拿 TTFT 的 SLO 来评。",
     ])
     yb = f.src(yb + 10,
                "📌 gpu/inference/a4/deepseek-v3/REPORT-2P1D-DeepSeek-V3.md：表在 :69、:85，对比在 :100–142（每卡 ＝ 总输出 ÷ 卡数，报告原算法，脚本复算）。c256：1,798.1 → 1,775.6。",

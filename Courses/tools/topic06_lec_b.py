@@ -170,6 +170,11 @@ Kimi K3 就栽在这：69 层线性注意力，每个请求一块固定状态，
 <p class="say">「下半场换一根杠杆：开两个仓库。吞 prompt 的和吐字的分到两批机器上，decode 的车不再被 prefill 拦下。<br>
 这个拆法 2023、2024 年几家先后提出，Mooncake 把它做进了 Kimi 的线上服务。这一节讲拆开后多出的那一趟 KV。」</p>
 
+<p class="board"><b>🖥 屏幕</b>：滚到 8.1，<code>fig-s8-pd-t5</code> 一带而过；停在 <code>anim-pdsplit</code>，等它播完一圈（22 秒）。</p>
+
+<p class="say">「上面红框里，三条请求一个字都没出，全在等那段 prefill；下面拆开后，decode 机一格不断。<br>
+代价就是那支黄箭头：每个请求多传一趟 KV。」</p>
+
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-kv-trip-t5</code>，指下面那根三色细条。</p>
 
 <p class="say">「专题五算过这一趟：一个 8K prompt 的 KV 约 1.04 GB，走数据中心网络八十多毫秒，跟一两秒的 prefill 比只占一成上下。<br>

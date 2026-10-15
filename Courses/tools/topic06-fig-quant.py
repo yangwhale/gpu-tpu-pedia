@@ -199,7 +199,8 @@ def fig_r1():
     y4 = y3 + 100
     row(y4, "当有符号读", AS_SIGNED, RD, "#fce8e6", "差 ±8，符号位反了")
     xg = X0 + SIGNED.index(EX_V) * CW + CW - 3          # 两格之间那条 6px 的缝
-    f.path("M%d,%d L%d,%d L%d,%d" % (xg - 6, y2 + 44, xg, y2 + 54, xg, y4 - 6), RD, 1.8)
+    # 下行沿缝走（避开第三行的 −3），最后一段拐回第四行的「5」格里，免得箭头落在 5 和 6 之间
+    f.path("M%d,%d L%d,%d L%d,%d L%d,%d" % (xg - 6, y2 + 44, xg, y2 + 54, xg, y4 - 22, xg - 16, y4 - 4), RD, 1.8)
     f.t(xg + 14, y3 + 76, "不减 8，按有符号解", RD, True, 16)
     f._pan = None
     f.t(X0, y4 + 74, "结果：读对了模型正常；读错了，输出崩成重复的「foss foss foss」", INK, True, 17)

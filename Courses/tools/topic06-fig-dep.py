@@ -149,7 +149,7 @@ def fig_dep_kv():
                 "在飞的请求反而少了 34%：收益不来自多装，来自每一步变短，再加上 decode 卡翻倍", [
                     "按全部卡（含 12 张 prefill 卡）算总吞吐，每卡 %s → %s，是 %.2f 倍；按 decode 卡算输出只有 %.2f 倍。"
                     % (format(round(TP4_PER), ","), format(round(DEP_PER), ","), RATIO, PD_DEP / PD_TP4),
-                    "两边投机接受率 34% 对 35.7%，可以排除投机。原始记录把收益归给容量，这里按 Little 定律推导，结论不同。"])
+                    "两边投机解码接受率相近（35% 上下），步时变短不是投机带来的。"])
     yb = f.src(yb + 10,
                "V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。",
                "实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；"
