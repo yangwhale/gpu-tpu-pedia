@@ -6237,7 +6237,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>拆工作：PD 分离与那一趟 KV</h2></div>
   <p class="lead">分块 prefill（4.2）只能把打扰摊平：两段还挤在同一批卡上，长 prompt 一来，正在出字的人照样要等。PD 分离把两段拆到两批机器上。Splitwise（2023）、DistServe（2024）先后提出它：前者报同成本同功耗下吞吐是不拆的 2.35 倍，后者报同样延迟要求下能接的请求是不拆的 7.4 倍。</p>
-  <p>Mooncake 连同 KV 池（3.6）把 PD 分离做进 Kimi 线上，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
+  <p>Kimi 的线上系统 Mooncake 连同 KV 池（3.6）把 PD 分离做进了生产，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
     <b>难的是 KV 从 prefill 机传到 decode 机的那一趟。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
@@ -6413,7 +6413,7 @@ body.figonly section h3{margin-top:34px}
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
-<figure class="fbox fwide" id="fig-s8-kv-stack"><svg viewBox="0 0 1400 602" width="100%" role="img" aria-label="把那一趟 KV 画成一次搬家：左边 prefill 机，右边 decode 机，中间一条路。路和车是搬运层，GPU 上是 NIXL、Mooncake Transfer Engine，TPU 上是 TPU Sync 和 JAX 的 transfer server。路口的调度员是调度层，决定请求先去哪台 prefill、算完交给哪台 decode：GPU 上是 Dynamo、vllm-router 和引擎里的 connector，TPU 上是 tpu-inference 的代理和 TPUConnector。路边的仓库是存储层，KV 可以先存到主机内存、SSD 或远端：GPU 上是 Mooncake Store、LMCache、Dynamo KVBM，TPU 上是 TPU Sync 的主机内存层"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s8-kv-stack"><svg viewBox="0 0 1400 628" width="100%" role="img" aria-label="把那一趟 KV 画成一次搬家：左边 prefill 机，右边 decode 机，中间一条路。路和车是搬运层，GPU 上是 NIXL、Mooncake 的搬运库 Transfer Engine，TPU 上是 TPU Sync 和 JAX 的 transfer server。路口的调度员是调度层，决定请求先去哪台 prefill、算完交给哪台 decode：GPU 上是 Dynamo、vllm-router 和引擎里的 connector，TPU 上是 tpu-inference 的代理和 TPUConnector。路边的仓库是存储层，KV 可以先存到主机内存、SSD 或远端：GPU 上是 Mooncake 的 KV 池 Mooncake Store、LMCache、Dynamo KVBM，TPU 上是 TPU Sync 的主机内存层"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">那一趟 KV 像一次搬家　——　<tspan font-weight="700">路和车、路口调度、路边仓库各是一层</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">小字是各层常见的公开组件：蓝字 GPU，青字 TPU</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -6424,7 +6424,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="209" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">存储层</text>
 <rect x="282.12" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="303" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">车上运的 KV</text>
-<rect x="0" y="102" width="1400" height="440" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="466" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
@@ -6457,7 +6457,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="714" y="328" width="30" height="18" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <line x1="800" y1="346.0" x2="880" y2="346.0" stroke="#e8710a" stroke-width="2.5" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
 <text class="svgsm" x="260" y="414" fill="#b06000" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">搬运层 ＝ 路和车</tspan></text>
-<text class="svgsm" x="260" y="444" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">NIXL · Mooncake Transfer Engine</tspan></text>
+<text class="svgsm" x="260" y="444" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">NIXL · Mooncake 搬运库（Transfer Engine）</tspan></text>
 <text class="svgsm" x="260" y="470" fill="#007b83" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU Sync · JAX transfer server</tspan></text>
 <text class="svgsm" x="484" y="182" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新请求</tspan></text>
 <line x1="520" y1="158" x2="520" y2="224" stroke="#80868b" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
@@ -6470,10 +6470,11 @@ body.figonly section h3{margin-top:34px}
 <line x1="884.0" y1="446.0" x2="976.0" y2="446.0" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
 <line x1="884.0" y1="474.0" x2="976.0" y2="474.0" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="1004" y="444" fill="#0d652d" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">存储层 ＝ 路边仓库</tspan></text>
-<text class="svgsm" x="1004" y="474" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Mooncake Store · LMCache · Dynamo KVBM</tspan></text>
-<text class="svgsm" x="1004" y="500" fill="#007b83" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU Sync 的主机内存层</tspan></text>
-<text class="svgsm" x="1004" y="526" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">放主机内存、SSD 或远端</text>
-</svg><figcaption><b>先认层，再认组件。</b><span class="capmore"><br><em>只列公开组件；横跨两层的按主要角色放。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 NIXL：github.com/ai-dynamo/nixl（插件 UCX、GDS、Mooncake、POSIX 等）。Mooncake：github.com/kvcache-ai/Mooncake（Transfer Engine ＋ Store）。</p>
+<text class="svgsm" x="1004" y="474" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Mooncake Store（KV 池）</tspan></text>
+<text class="svgsm" x="1004" y="500" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">LMCache · Dynamo KVBM</tspan></text>
+<text class="svgsm" x="1004" y="526" fill="#007b83" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU Sync 的主机内存层</tspan></text>
+<text class="svgsm" x="1004" y="552" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">放主机内存、SSD 或远端</text>
+</svg><figcaption><b>先认层，再认组件。</b><span class="capmore"><br><em>只列公开组件；横跨两层的按主要角色放。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 NIXL：github.com/ai-dynamo/nixl（插件 UCX、GDS、Mooncake 搬运库、POSIX 等）。Mooncake 开源仓库：github.com/kvcache-ai/Mooncake（含 Transfer Engine 搬运库 ＋ Store KV 池）。</p>
 <p>📌 LMCache：arXiv <a href="https://arxiv.org/abs/2510.09665" target="_blank" rel="noopener">2510.09665</a>。Dynamo KVBM：docs.nvidia.com/dynamo 的 KVBM 页（GPU、主机、SSD、远端存储，经 NIXL）。</p>
 <p>📌 TPU Sync：github.com/google/tpu-sync（C++，零拷贝 PJRT buffer，约 200 GB/s 双向 PCIe，支持 v7x ／ v6e，not yet recommended for general use）。</p>
 <p>📌 tpu-inference：vllm-project/tpu-inference 的 kv_transfer 目录（TPUConnector 用 jax.experimental.transfer，decode 端去拉；HMA 版按 MambaSpec 分组）。</p>
@@ -6540,7 +6541,7 @@ body.figonly section h3{margin-top:34px}
     <li><code>--enable-cumem-allocator</code>：显存用 cuMem 分配，cuda_ipc 才认得出来。</li>
   </ul>
   <p>prefill 和 decode 还必须在同一个 NVLink 域（GKE 上用 subblock 标签做 podAffinity）。出处：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:106、180–194。</p></details>
-  <p><b>同一个库在两个引擎上结论相反</b>（表里的 Mooncake 指它开源的搬运库）：</p>
+  <p><b>同一个库在两个引擎上结论相反</b>（表里的 Mooncake 指它开源的搬运库 Transfer Engine）：</p>
   <div class="tbl-wrap"><table>
     <tr><th>引擎 · 场景</th><th>试了什么</th><th>结果</th></tr>
     <tr><td>vLLM · V4-Pro · GB300</td><td>NIXL 走 NVLink cuda_ipc</td><td>能用，唯一活路</td></tr>

@@ -71,14 +71,14 @@ assert EGRESS / LINK == 0.13
 
 def fig_kv_stack():
     f = Fig(W, "把那一趟 KV 画成一次搬家：左边 prefill 机，右边 decode 机，中间一条路。"
-               "路和车是搬运层，GPU 上是 NIXL、Mooncake Transfer Engine，TPU 上是 TPU Sync 和 JAX 的 transfer server。"
+               "路和车是搬运层，GPU 上是 NIXL、Mooncake 的搬运库 Transfer Engine，TPU 上是 TPU Sync 和 JAX 的 transfer server。"
                "路口的调度员是调度层，决定请求先去哪台 prefill、算完交给哪台 decode：GPU 上是 Dynamo、vllm-router 和引擎里的 connector，"
                "TPU 上是 tpu-inference 的代理和 TPUConnector。路边的仓库是存储层，KV 可以先存到主机内存、SSD 或远端："
-               "GPU 上是 Mooncake Store、LMCache、Dynamo KVBM，TPU 上是 TPU Sync 的主机内存层")
+               "GPU 上是 Mooncake 的 KV 池 Mooncake Store、LMCache、Dynamo KVBM，TPU 上是 TPU Sync 的主机内存层")
     y0 = f.header("那一趟 KV 像一次搬家　——　<tspan font-weight=\"700\">路和车、路口调度、路边仓库各是一层</tspan>",
                   "小字是各层常见的公开组件：蓝字 GPU，青字 TPU",
                   [(OR, "搬运层"), (GY, "调度层"), (GR, "存储层"), (PU, "车上运的 KV")])
-    PH = 440
+    PH = 466
     py = f.panel(0, y0, W, PH, "prefill 机 → decode 机", OR)
     RD_W = 48                                   # 路宽
     ry = py + 190                               # 路的上沿
@@ -101,7 +101,7 @@ def fig_kv_stack():
     f.line(800, ry + RD_W / 2, 880, ry + RD_W / 2, OR, 2.5)
     # 搬运层标签：路下方左段
     f.t(260, ry + RD_W + 44, "搬运层 ＝ 路和车", OR, True, 18)
-    f.t(260, ry + RD_W + 74, "NIXL · Mooncake Transfer Engine", BL, True, 15)
+    f.t(260, ry + RD_W + 74, "NIXL · Mooncake 搬运库（Transfer Engine）", BL, True, 15)
     f.t(260, ry + RD_W + 100, "TPU Sync · JAX transfer server", CY, True, 15)
     # 调度员：路口旁
     f.t(JX - RD_W / 2 - 12, py + 50, "新请求", GY, True, 15, "end")
@@ -113,12 +113,13 @@ def fig_kv_stack():
     # 仓库：岔路尽头
     f.icon("shelf", WX - 50, ry + RD_W + 40, 100, 100, GR, "#e6f4ea")
     f.t(WX + 74, ry + RD_W + 74, "存储层 ＝ 路边仓库", GR, True, 18)
-    f.t(WX + 74, ry + RD_W + 104, "Mooncake Store · LMCache · Dynamo KVBM", BL, True, 15)
-    f.t(WX + 74, ry + RD_W + 130, "TPU Sync 的主机内存层", CY, True, 15)
-    f.t(WX + 74, ry + RD_W + 156, "放主机内存、SSD 或远端", GY, size=15)
+    f.t(WX + 74, ry + RD_W + 104, "Mooncake Store（KV 池）", BL, True, 15)
+    f.t(WX + 74, ry + RD_W + 130, "LMCache · Dynamo KVBM", BL, True, 15)
+    f.t(WX + 74, ry + RD_W + 156, "TPU Sync 的主机内存层", CY, True, 15)
+    f.t(WX + 74, ry + RD_W + 182, "放主机内存、SSD 或远端", GY, size=15)
     f._pan = None
     yb = f.src(py + PH + 16,
-               "📌 NIXL：github.com/ai-dynamo/nixl（插件 UCX、GDS、Mooncake、POSIX 等）。Mooncake：github.com/kvcache-ai/Mooncake（Transfer Engine ＋ Store）。",
+               "📌 NIXL：github.com/ai-dynamo/nixl（插件 UCX、GDS、Mooncake 搬运库、POSIX 等）。Mooncake 开源仓库：github.com/kvcache-ai/Mooncake（含 Transfer Engine 搬运库 ＋ Store KV 池）。",
                "📌 LMCache：arXiv 2510.09665。Dynamo KVBM：docs.nvidia.com/dynamo 的 KVBM 页（GPU、主机、SSD、远端存储，经 NIXL）。",
                "📌 TPU Sync：github.com/google/tpu-sync（C++，零拷贝 PJRT buffer，约 200 GB/s 双向 PCIe，支持 v7x ／ v6e，not yet recommended for general use）。",
                "📌 tpu-inference：vllm-project/tpu-inference 的 kv_transfer 目录（TPUConnector 用 jax.experimental.transfer，decode 端去拉；HMA 版按 MambaSpec 分组）。",
