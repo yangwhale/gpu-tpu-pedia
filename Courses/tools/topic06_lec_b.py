@@ -222,7 +222,7 @@ Splitwise、DistServe 二三、二四年先后提出，Mooncake 连同 KV 池做
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-hybrid-kv</code>，先指左边注意力那排格子，再指右边的存折。</p>
 
-<p class="say">「混合模型还有个不报错的坑。老的 connector 只传填满的整块，尾巴让 decode 端补算。注意力层补算只是填空格；GDN 的余额里 prefill 早把尾巴记进去了，再补就记了两次。<br>
+<p class="say">「混合模型还有个不报错的坑。老的 connector 只传填满的整块，尾巴让 decode 端补算。注意力层补算只是填空格；GDN 像存折，prefill 早把尾巴那几笔记进余额，decode 再补，同一笔就记了两次。<br>
 修法是全传，decode 端一个 token 都不重算。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到 8.7。</p>
