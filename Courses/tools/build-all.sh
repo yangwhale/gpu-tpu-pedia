@@ -131,6 +131,12 @@ python3 topic04-build-lecture.py
   # ⛔ 必须排在教材之后 —— 讲义的 board cue 和动画 id 要跟成品 topic-05.html 对账。
   python3 topic05-build-lecture.py
 
+  # 专题六：2026-10-15 开工。⛔ 必须排在专题五之后 —— 第六到十节直接复用 fig5-*.svg。
+  step "专题六 教材"
+  rm -f fig6-*.svg fig6-*.src.html
+  for s in topic06-fig-*.py; do python3 "$s"; done
+  python3 topic06-build.py
+
   step "专题八 教材"
   python3 topic08-build.py
 
