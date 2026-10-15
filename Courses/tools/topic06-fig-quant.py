@@ -275,8 +275,49 @@ def fig_fuse():
                "⚠️ 本课推导：每步接受 6 个 ÷ 8.5 ms ≈ 706 tok/s，与博客的「700 多」对得上。")
     f.save("fig6-quant-fuse.svg", yb + 14)
 
+# ══ fig6-quant-cap：R1 放进 v7x-8 的容量账（README 原值）══════════════════
+CAP_GIB = 94.75                                   # 运行日志 hbm=(…, 94.75) GiB
+CAP_GB = CAP_GIB * 2**30 / 1e9
+assert abs(CAP_GB - 101.74) < 0.01
+R1_BARS = [("FP8 专家", 101.8, RD), ("FP4 专家", 60.9, GR), ("FP4 连同注意力", 70.0, BL)]   # README 每 device，GB
+R1_FP8_AS_GIB = 101.8 * 2**30 / 1e9               # 101.8 若按 GiB 读
+assert abs(R1_FP8_AS_GIB - 109.3) < 0.05
+
+
+def fig_cap():
+    f = Fig(W, "DeepSeek-R1 放进 TPU v7x-8，每个 device 要多少显存。竖虚线是可用上限 94.75 GiB，约 101.7 GB。"
+               "专家权重用 FP8 是 101.8 GB，正好越过上限；README 单位写的是 GB，要是按 GiB 读就是约 109.3 GB，超得更多。"
+               "转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，离上限还有三十 GB 上下")
+    y0 = f.header("FP4 先是被容量逼的　——　<tspan font-weight=\"700\">FP8 差一点放不下，FP4 才腾出余量</tspan>",
+                  "每个 device 的权重占用（README 原值，单位 GB）；竖虚线 ＝ 可用上限 94.75 GiB ≈ 101.7 GB",
+                  [(RD, "放不下"), (GR, "放得下"), (BL, "连同注意力")])
+    PH = 270
+    py = f.panel(0, y0, W, PH, "DeepSeek-R1 · TPU v7x-8 · 每 device", INK)
+    X0, SC = 260, 9.2                              # 0 GB 的横坐标、每 GB 多少像素
+    assert X0 + 112 * SC < W - 30
+    yy = py + 40
+    for lab, gb, col in R1_BARS:
+        f.t(24, yy + 25, lab, INK, True, 16)
+        f.box(X0, yy + 4, gb * SC, 32, col, col, 4)
+        if gb > CAP_GB:
+            f.box(X0 + gb * SC, yy + 4, (R1_FP8_AS_GIB - gb) * SC, 32, "#fce8e6", RD, 4, 1, dash="4,3")
+            f.t(X0 + R1_FP8_AS_GIB * SC + 8, yy + 26, "按 GiB 读约 109.3", RD, size=13)
+            f.t(X0 + gb * SC - 10, yy + 26, "101.8", "#ffffff", True, 15, "end")
+        else:
+            f.t(X0 + gb * SC + 10, yy + 26, ("约 %g" if gb == 70.0 else "%g") % gb, col, True, 15)
+        yy += 56
+    xc = X0 + CAP_GB * SC
+    f.line(xc, py + 28, xc, yy + 4, INK, 1.6, dash="6,4", arrow=False)
+    f.t(xc, yy + 24, "上限 94.75 GiB ≈ 101.7 GB", INK, True, 14, "middle")
+    f._pan = None
+    yb = f.src(py + PH + 12,
+               "tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；数为每 device，README 写 GB）；"
+               "上限出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。换算 94.75 GiB ≈ 101.7 GB、101.8 GiB ≈ 109.3 GB 为本课推导。")
+    f.save("fig6-quant-cap.svg", yb + 14)
+
 
 fig_bytes()
 fig_mx()
 fig_r1()
 fig_fuse()
+fig_cap()

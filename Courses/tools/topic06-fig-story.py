@@ -10,7 +10,7 @@ r"""专题六 · 第零节「2022 年以来」：从 2022 年的静态批到 202
 from topic03_draw import Fig, BL, OR, GR, PU, CY, RD, GY, INK, LINE
 
 W = 1400
-Y0, Y1 = 2022.5, 2026.0
+Y0, Y1 = 2022.5, 2027.0
 XL, XR = 196, W - 8
 CW, CH = 232, 54
 
@@ -20,7 +20,7 @@ LANES = [
     (GR, "复用与下放", "算过的不再算"),
     (PU, "解码提速", "搬一趟出几个字"),
     (OR, "拆开放", "prefill／decode／专家分家"),
-    (CY, "少搬字节", "权重量化"),
+    (CY, "少搬字节", "量化、合并 kernel"),
 ]
 
 # (泳道, 年份小数, 名字, 原文倍数与口径, 本课节[, 模型侧])
@@ -33,11 +33,12 @@ CARDS = [
     (1, 2023.78, "Flash-Decoding", "超长序列解码最多 8×", "五"),
     (1, 2024.37, "MLA（DeepSeek-V2）", "同形状 KV ÷57（推导）", "三", True),
     (2, 2023.95, "RadixAttention", "吞吐最多 6.4×", "三"),
-    (2, 2024.47, "Mooncake KV 池", "内存＋SSD 拼成 KV 池", "三"),
+    (2, 2024.47, "Mooncake KV 池", "Kimi 线上多接 75% 请求", "八"),
     (2, 2025.77, "llm-d KV 感知路由", "命中 340 ms，不路由最坏 2,850", "十三"),
     (3, 2022.87, "投机解码", "2–3×，单请求延迟", "十一"),
     (3, 2024.07, "EAGLE", "2.7–3.5×，单请求延迟", "十一"),
     (3, 2024.97, "DeepSeek-V3 MTP", "第 2 个字接受 85–90%，1.8×", "十一"),
+    (3, 2026.53, "DSpark 半自回归", "一次出一小段，按置信度验", "十一"),
     (4, 2023.88, "Splitwise", "prefill、decode 分两批机器", "八"),
     (4, 2024.05, "DistServe", "7.4× 请求，或 SLO 紧 12.6×", "八"),
     (4, 2025.17, "DeepSeek 大 EP", "每节点 decode 14.8k tok/s", "二"),
@@ -45,6 +46,7 @@ CARDS = [
     (5, 2022.80, "GPTQ 4 bit", "逐层补偿误差，只压权重", "十二"),
     (5, 2023.45, "AWQ 4 bit", "按激活护住重要通道", "十二"),
     (5, 2025.45, "NVFP4／MXFP4", "每数 4.25–4.5 bit", "十二"),
+    (5, 2026.73, "TPU megakernel", "整次前向一个 kernel", "十二"),
 ]
 
 
@@ -53,7 +55,7 @@ def xof(yr):
 
 
 def fig_story():
-    f = Fig(W, "2022 年以来的推理优化：六条泳道按时间排出 2022 到 2025 年的关键优化，"
+    f = Fig(W, "2022 年以来的推理优化：六条泳道按时间排出 2022 到 2026 年的关键优化，"
                "每张卡写原文报告的提升或做法：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，"
                "GQA 和 MLA 是模型侧的进步，用虚线卡标出；投机解码 2 到 3 倍，DistServe 多服务 7.4 倍请求，"
                "DeepSeek 大 EP 每节点 decode 1.48 万 token 每秒；倍数基线互相包含，不能连乘")
@@ -110,7 +112,7 @@ def fig_story():
               "Leviathan arXiv 2211.17192；Flash-Decoding 斯坦福 CRFM 2023-10；EAGLE arXiv 2401.15077；"
               "DeepSeek-V3 arXiv 2412.19437 §5.4.3；Splitwise arXiv 2311.18677；DistServe arXiv 2401.09670；"
               "DeepSeek open-infra-index Day 6；SGLang 大 EP 博客 2025-05；Sarathi-Serve arXiv 2403.02310；"
-              "GPTQ arXiv 2210.17323；AWQ arXiv 2306.00978；NVFP4 NVIDIA 博客 2025-06。")
+              "GPTQ arXiv 2210.17323；AWQ arXiv 2306.00978；NVFP4 NVIDIA 博客 2025-06；DSpark arXiv 2607.05147；TPU megakernel：Inferact 博客 2026-09。")
     f.save("fig6-story.svg", y + 14)
 
 

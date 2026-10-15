@@ -28,11 +28,11 @@ __FIG_S4_CHUNK__
 
   <h3 id="s4-3">4.3　槽位满了以后</h3>
 __FIG_S4_CONC__
-  <p>槽位就是 KV 池装得下几个人。Little 定律：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
+  <p>槽位就是 KV 池装得下几个人。Little 定律（排队论的一条恒等式：系统里的人数 ＝ 到达速率 × 每人停留时间）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
     客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 那边排队。</p>
   <details class="foldfig"><summary><b>Little 定律核一遍</b>：批里到底几个人？</summary>
-  <p>9,032 × 8 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 540。</p></details>
+  <p>9,032 × 8 张 decode 卡 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 540。</p></details>
   <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），端到端只多 0.8%，TPOT 从 77.7 拖到 85.3 ms：人多了，每步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
     XLA（JAX 背后的编译器）按静态形状编译，batch 大小也是形状。SGLang-JAX 为几档 batch 提前编译，
@@ -41,10 +41,11 @@ __FIG_S4_CONC__
   <h3 id="s4-4">4.4　CPU 那几毫秒也要藏起来</h3>
 __FIG_S4_OVERLAP__
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
+  <p>SGLang-JAX 的做法是加速器跑第 N 批时，CPU 先排好第 N＋1 批；Qwen3-32B 上 prefill 和 decode 之间的空档从约 12 ms 降到 38 µs。</p>
 
   <h3 id="s4-5">4.5　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
-  <p>vLLM 文档的原话是：In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture。</p>
+  <p>vLLM 文档的原话是：In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture。意思是：V1 默认丢掉重算，不换出，因为在 V1 里重算更便宜。</p>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。
@@ -52,7 +53,7 @@ __FIG_S4_OVERLAP__
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000，再加并发只让首字等待变长；
-    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 约减半），要么换个交互档。</p></details>
+    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 约减到 57%），要么换个交互档。</p></details>
 '''
 
 FIGS = {

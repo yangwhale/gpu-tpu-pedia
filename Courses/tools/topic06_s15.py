@@ -122,6 +122,13 @@ BODY = '''
     <tr><td>R1 传输程序缓存：1 分 48 秒对 3 分 17 秒～3 分 51 秒</td><td>R1 FP4 README:1237-1250</td></tr>
     <tr><td>K2.6 共享存储每层读取慢 38 倍；V4-Pro 本地 SSD 14 GB/s、估算加载不到 1 分钟</td><td>K2.6 README:259；README.vllm/README:55、gb300-local-ssd-raid0-SETUP.md:111</td></tr>
     <tr><td>13.5 栈对比表</td><td>tpu-inference 支持矩阵；SGLang-JAX 模型列表</td></tr>
+    <tr><td>上下文变长：GPT-4 Turbo 128K（2023-11-06），Gemini 1.5 Pro 1M 私有预览（2024-02-15）</td><td>openai.com/index/new-models-and-developer-products-announced-at-devday；blog.google「Our next-generation model: Gemini 1.5」。2026-10-16 核对</td></tr>
+    <tr><td>Mooncake 真实负载下 Kimi 多接 75% 请求；模拟场景守 SLO 吞吐最多 +525%</td><td>arXiv 2407.00079 摘要</td></tr>
+    <tr><td>DeepSeek 磁盘缓存：命中按十分之一计价；128K 高复用 prompt 首字 13 s → 0.5 s</td><td>api-docs.deepseek.com/news/news0802（2024-08）；价格只取比例</td></tr>
+    <tr><td>PagedAttention 同延迟吞吐 2–4×（对 FasterTransformer、Orca）</td><td>arXiv 2309.06180 摘要</td></tr>
+    <tr><td>Medusa-1 2.2×、Medusa-2 2.3–3.6×（正文合写 2.2–3.6 倍）</td><td>arXiv 2401.10774 摘要</td></tr>
+    <tr><td>AI Index：硬件成本每年降 30%、能效每年升 40%</td><td>Stanford HAI AI Index 2025 要点第 7 条</td></tr>
+    <tr><td>Hopper 张量核支持 FP8；DeepSeek-V3 FP8 混合精度训练</td><td>NVIDIA H100 发布（2022-03）；arXiv 2412.19437 §3.3</td></tr>
     <tr><td>第十四节八问的顺序</td><td>本课归纳</td></tr>
   </table>'''
 

@@ -38,7 +38,7 @@ __FIG_S6_KV__
   <p>tpu-inference 的一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
     Qwen3.5-397B 在 v7x-8 上，<b>1K 进 8K 出、并发 512 时，DP=8 比 TP=8 的输出吞吐多 62%</b>；8K 进 1K 出时多 40%。</p>
 __FIG_S6_TPU__
-  <p>一种解读：8 路 TP 下同一份 KV 各放 4 份（6.2，本课推导，PR 没归因）。也可能是 PR 命令里的 --max-num-seqs=64 限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>一种解读：Qwen3.5 的全注意力层只有 2 个 KV 头，8 路 TP 下每个头要在 4 张卡上各存一份（6.2，本课推导，PR 没归因）。另一种：PR 命令里的 --max-num-seqs=64（同时最多跑 64 条）可能限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
   <p>读 TPU 启动参数要多一步：tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 

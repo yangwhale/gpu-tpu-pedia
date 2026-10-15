@@ -11,9 +11,9 @@ BODY = '''
   <table>
     <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 实际 57%，见 12.7）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
-    <tr><td>MHA</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
-    <tr><td>GQA</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
-    <tr><td>MLA</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层；存 FP8 约 40,016 B，是 57%，布局见 12.7）</td></tr>
+    <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
+    <tr><td>GQA（2023）</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
+    <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层；存 FP8 约 40,016 B，是 57%，布局见 12.7）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
   <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩 4 倍或 128 倍（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），两个池见 3.4。</p>
@@ -29,7 +29,7 @@ __FIG_S3_BATCH__
   <p>早先按最大长度给每条序列预留一整段连续显存。PagedAttention 把 KV 切成固定大小的块，每条序列用一张页表记下「第几块住在哪个物理块」。</p>
 __FIG_S3_PAGED__
   <ul>
-    <li><b>按需领块。</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%。</li>
+    <li><b>按需领块。</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer、Orca 的 2–4 倍。</li>
     <li><b>共享与写时复制。</b>并行采样的几条序列共用 prompt 的块，谁要改先复制一份。</li>
   </ul>
 <figure class="fbox fwide" id="anim-paged">
@@ -42,7 +42,7 @@ __FIG_S3_PAGED__
   <p>DeepSeek-V4 每层两种 KV：滑窗池存最近 128 个 token 的原始 KV（滑动窗口注意力，只看最近一段），全长池存 CSA／HCA 压缩后的整段。
     SGLang 开两个池共用一份预算，用 <code>--swa-full-tokens-ratio</code> 定怎么分。</p>
 __FIG_S3_POOL__
-  <p>两边一起满之后，再多装 13% 的人，端到端只从 10,614 到 10,704：每卡近 900 条之后，瓶颈从装不下换成了算不动。</p>
+  <p>两边一起满之后，再多装 13% 的人，端到端每张 decode 卡只从 10,614 到 10,704 tok/s：每卡近 900 条之后，瓶颈从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
     tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX（Google 的数值计算库）<b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
@@ -51,10 +51,10 @@ __FIG_S3_POOL__
   <p>很多请求开头一样：同一段 system prompt、同一份文档、多轮对话的前几轮。算好的 KV 留着，命中前缀就接着算。</p>
   <ul>
     <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀，满了按最近最少使用淘汰；论文报吞吐最多高 6.4 倍。</li>
-    <li><b>命中率可以很高。</b>DeepSeek 24 小时线上统计：6,080 亿输入 token 里 56.3% 命中磁盘上的 KV。</li>
+    <li><b>命中率可以很高。</b>DeepSeek 24 小时线上统计：6,080 亿输入 token 里 56.3% 命中磁盘上的 KV。命中部分按十分之一计价，128K 高复用 prompt 的首字从 13 s 降到 0.5 s（DeepSeek API 文档 2024-08）。</li>
     <li><b>线性注意力和滑窗难复用。</b>线性层的状态是整段压出来的，截不回任意位置；滑窗层早先的 KV 已经丢了。</li>
   </ul>
-  <p>vLLM、SGLang 在块边界另存状态快照；tpu-inference 跑 Qwen3.5 得显式关掉（<code>--no-enable-prefix-caching</code>），否则断言错误（同一 README:95）。</p>
+  <p>所以 vLLM、SGLang 在块边界另存状态快照；tpu-inference 跑 Qwen3.5 得显式关掉（<code>--no-enable-prefix-caching</code>），否则断言错误（同一 README:95）。</p>
 
   <h3 id="s3-6">3.6　分层卸载：搬回来，还是重算</h3>
   <p>HBM 放不下的 KV 可以往下放：主机内存、本机磁盘、远端存储，一层比一层大也慢。搬回来比重算慢就白存了。</p>

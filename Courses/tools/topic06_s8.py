@@ -7,7 +7,7 @@
 """
 
 BODY = '''
-  <p class="lead">prefill 和 decode 放在同一批卡上会互相拖。PD 分离把它们拆到两批机器上，代价是每个请求多搬一趟 KV。这招 2023、2024 年由 Splitwise、DistServe 先后提出，DistServe 报告同样的延迟要求下多接 7.4 倍请求；Mooncake 把它做进了 Kimi 的线上服务。
+  <p class="lead">prefill 和 decode 放在同一批卡上会互相拖。PD 分离把它们拆到两批机器上，代价是每个请求多搬一趟 KV。这招 2023、2024 年由 Splitwise、DistServe 先后提出，DistServe 报告同样的延迟要求下多接 7.4 倍请求；Mooncake 把它连同 KV 池做进了 Kimi 的线上服务，论文报真实负载下多接 75% 的请求（模拟场景守住延迟要求时吞吐最多 +525%）。
     <b>难的是那一趟 KV。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
@@ -28,7 +28,7 @@ __FIG_S8_PD_T5__
   <h3 id="s8-2">8.2　回顾：那一趟要多久</h3>
   <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过 Qwen3-Coder-480B 的一个 8K prompt：KV 约 1.04 GB，走 100 Gbps（每秒 100 吉比特，约 12.5 GB/s）的数据中心网络约 83 ms，前后两段 PCIe（卡和主机之间的总线）各约 16 ms（按 Gen5 x16 单向约 64 GB/s 估，本课推导）。</p>
 __FIG_S8_KV_TRIP_T5__
-  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X 每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算，多卡并行还更快；本课推导）。</p>
+  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X（Google Cloud 的 GB200 机型）每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算，多卡并行还更快；本课推导）。</p>
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
@@ -65,11 +65,11 @@ __FIG_S8_BW__
   <p>别问 NIXL 和 Mooncake 哪个好，要问这个引擎、这张网上哪条路通。共同点只有一个：<b>同一个 NVLink 域里，KV 别出域。</b></p>
 
   <h3 id="s8-5">8.5　混合模型：尾巴不能让 decode 端重算</h3>
-  <p>纯注意力模型的 KV 按 token 一格一格存。老的 connector 只传填满的整块，不满一块的尾巴让 decode 端补算。</p>
+  <p>纯注意力模型的 KV 按 token 一格一格存。老的 connector（引擎里负责收发 KV 的插件）只传填满的整块，不满一块的尾巴让 decode 端补算。</p>
 __FIG_S8_HYBRID__
   <p>GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>
-    <li><b>修法</b>：全部 block 连同状态都传，decode 端一个 token 都不重算。tpu-inference 为此写了 HMA 版的 connector。</li>
+    <li><b>修法</b>：全部 block 连同状态都传，decode 端一个 token 都不重算。tpu-inference 为此写了支持混合模型的 connector（TPUConnectorHMA）。</li>
     <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文，没给分解）；单并发每请求吞吐是单机的 0.95 倍，4 并发是 0.92 倍。</li>
     <li><b>GPU 上同理</b>：SGLang 跑 Kimi K3 时，PD 的 decode 端每个请求只有一个状态槽，前缀缓存在 PD 下不起作用。</li>
   </ul>
@@ -90,7 +90,7 @@ __FIG_S8_HYBRID__
   <ul>
     <li><b>怎么比</b>：temperature 设 0，同一批 prompt 拆与不拆各跑一遍，逐个 token 对。</li>
     <li><b>前几个 token 就分叉</b>：多半是 bug，如尾巴被重算、状态没传、两边上下文长度不同。</li>
-    <li><b>几百个 token 后才分叉</b>：可能只是浮点差异：kernel 不做批不变时，同一个 prompt 换个批就会出不同的字（Thinking Machines《Defeating Nondeterminism in LLM Inference》）。</li>
+    <li><b>几百个 token 后才分叉</b>：可能只是浮点差异：kernel 不做批不变（同一个请求不管和谁拼批，算出的数都一样）时，同一个 prompt 换个批就会出不同的字（Thinking Machines《Defeating Nondeterminism in LLM Inference》）。</li>
   </ul>
   <p>后一种要靠批不变的 kernel 消掉；前一种必须修。分不清时把并发降到 1 再比。</p>
 

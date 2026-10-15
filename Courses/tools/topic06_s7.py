@@ -25,7 +25,7 @@ __FIG_S7_GAIN__
   <ul>
     <li><b>缓存层没跟上</b>：SGLang 的分层 KV 缓存 HiCache（L1 显存、L2 主机内存、L3 远端存储）开 L3，或 L1＋L2 叠投机解码，就得退回纯 TP。</li>
     <li><b>状态池它不管</b>：K3 的 KDA 状态池 DCP 不切（6.3）。</li>
-    <li><b>官方 PD 配置里也是 TP8 略高</b>：K3 官方两组 PD 数（1P1D 配 TP8、2P2D 配 DCP8，P:D 都是 1:1，每 GPU 口径官方没写死）：TP8 2,808 tok/s，DCP8 2,633。</li>
+    <li><b>官方 PD 吞吐端的数是 TP8 略高</b>：1P1D 用 TP8 是 2,808 tok/s，2P2D 用 DCP8 是 2,633（P:D 都是 1:1；每 GPU 怎么数官方没写死，原文也没给输入长度，不能拿来和 7.2 的 128K 比）。</li>
   </ul>
 
   <h3 id="s7-4">7.4　PCP：超长 prompt 的首字延迟</h3>
