@@ -29,7 +29,7 @@ __FIG_S13_COLD__
   <h3 id="s13-4">13.4　运维的两个坑</h3>
   <ul>
     <li><b>「起来了」不等于「活着」。</b>V4-Pro 的 SGLang 部署里 14 台 prefill 全崩了，服务注册表还显示 14 台在线。判活要看显存、真发一个请求。</li>
-    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存，SGLang 按 <code>mem-fraction-static</code>（预留给权重和 KV 池的显存比例）0.85 做的静态预留就再也够不着。</li>
+    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存，SGLang 按 <code>mem-fraction-static</code>（预留给权重和 KV 池的显存比例）0.85 做的静态预留（每卡 284 GB 里要占 241）就再也够不着，只能整个删 pod（K8s 里装这组进程的容器）重建。</li>
   </ul>
 __FIG_S13_LEAK__
 

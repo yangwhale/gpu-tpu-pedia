@@ -134,6 +134,7 @@ BODY = '''
     <tr><td>Hopper 张量核支持 FP8；DeepSeek-V3 FP8 混合精度训练</td><td>NVIDIA H100 发布（2022-03）；arXiv 2412.19437 §3.3</td></tr>
     <tr><td>第十四节八问的顺序</td><td>本课归纳</td></tr>
     <tr><td>R16 补充：FlashAttention 2022；FlashInfer MLSys 2025；DSA 每字读 2,048 个 token、API 降价五成以上；NVFP4 KV 省约一半、损失 &lt;1%、命中率 +20%、首字最多 3 倍；LMCache 15 倍、截断让命中率减半；RadixAttention 6.4 倍；投机解码 2–3 倍；GQA 每层 4,096 B ÷ MLA 1,152 B ≈ 3.6（本课推导）；Ring 2023-10、Ulysses 2023-09、Meta CP 2024-11；Kimi K2 Thinking「low-latency mode」</td><td>arXiv 2205.14135、2501.01005；api-docs.deepseek.com/news/news250929、arXiv 2512.02556；developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache；arXiv 2510.09665、2312.07104、2211.17192、2310.01889、2309.14509、2411.01783；huggingface.co/moonshotai/Kimi-K2-Thinking。2026-10-16 核对</td></tr>
+    <tr><td>R18 补充：DeepSeek-V4 的 CSA 每 4 个 token 压成一条 KV、HCA 每 128 个压成一条，另留最近 128 个 token 的滑窗 KV；DeepSeek 一天的 token 近八成是输入（6,080 ÷ 7,760，本课推导）；226.75 节点 × 8 卡 ≈ 1,814 卡（本课推导）</td><td>DeepSeek-V4 技术报告 §2.3（CSA／HCA「every m tokens into one entry」）；Hugging Face deepseek-ai/DeepSeek-V4-Pro config.json 的 compress_ratios（4／128）与 sliding_window 128；open-infra-index day_6</td></tr>
   </table>'''
 
 FIGS = {}

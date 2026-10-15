@@ -30,7 +30,8 @@ __FIG_S7_GAIN__
   <h3 id="s7-4">7.4　PCP：超长 prompt 的首字延迟</h3>
   <p>prefill 要吞整段 prompt，算量随长度涨。PCP 在 prefill 阶段沿序列切，<b>让几台机器合算同一个 prompt</b>（<a href="topic-05.html#s5-5">专题五 §5.5</a>）。</p>
 __FIG_S7_PCPDCP_T5__
-  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100 给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。Meta 用的是 <b>Ring</b>（2023-10，为训练提出）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V 还是传 Q，看哪个小，都无损。另有 Ulysses（DeepSpeed，2023-09）用 AllToAll 换成按头切，度数受头数限制。</p>
+  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100 给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。Meta 用的是 <b>Ring</b>（2023-10，为训练提出）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V 还是传 Q，看哪个小（前缀已缓存、新 token 少时 Q 小），结果都和不切一样。</p>
+  <p>另有 Ulysses（DeepSpeed，2023-09）用 AllToAll（每张卡给其余每张卡各发一份）换成按头切，切的份数不能超过头数。</p>
 
   <h3 id="s7-5">7.5　PCP 的两个正确性陷阱</h3>
   <p>PCP 出错往往不报错，形状全对、数不对。</p>

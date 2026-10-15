@@ -345,8 +345,8 @@ def fig_leak():
     xa, xb = X(LEAK_FREE), X(LEAK_NEED)
     yk = y1 + BH + 14
     f.path("M%.1f,%d L%.1f,%d L%.1f,%d L%.1f,%d" % (xa, yk - 6, xa, yk, xb, yk, xb, yk - 6), RD, 2, arrow=False)
-    f.t((xa + xb) / 2, yk + 24, "差 %d → 必然 OOM" % LEAK_GAP, RD, True, 16, "middle")
-    f.t((xa + xb) / 2, yk + 44, "推导：%d − %d" % (LEAK_NEED, LEAK_FREE), RD, size=13, anchor="middle")
+    f.t(xb - 10, yk + 24, "差 %d → 必然显存不足（OOM）" % LEAK_GAP, RD, True, 16, "end")
+    f.t(xb - 10, yk + 44, "推导：%d − %d" % (LEAK_NEED, LEAK_FREE), RD, size=13, anchor="end")
     # 报错气泡：劝你调大 ＝ 线往右挪
     bx, bw, by_, bh = X0, 520, yk + 4, 62
     f.box(bx, by_, bw, bh, "#fff", RD, 8, 1.4)

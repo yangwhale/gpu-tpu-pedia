@@ -47,9 +47,9 @@ __FIG_S9_SWEEP__
   <p>只除 decode 卡是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只涨 2.2 倍。曲线是 2026-07-24 的历史实测，看趋势。</p>
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
-  <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b></p>
+  <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b>图是 MiMo-V2-Flash 在 TPU 上的三种摆法（pod＝一组 4 颗芯片，2P1D＝2 组 prefill 配 1 组 decode）：</p>
 __FIG_S9_SPLIT__
-  <p>Qwen3-Coder（两台 v7x-8，1K 进 1K 出）单并发拆成 1P1D，首字中位数 95 → 281 ms，机器翻倍，输出只多 12%。</p>
+  <p>Qwen3-Coder（两台 v7x-8，1K 进 1K 出）单并发拆成 1P1D，首字中位数 95 → 281 ms，机器翻倍、首字反而慢了，输出只多 12%：单并发时两段本来不抢资源。</p>
   <details class="foldfig"><summary><b>出处与口径</b>：两组 TPU 例子</summary>
   <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%；2P1D 每 pod 5.10K 对不拆的 6.39K（本课推导）。</p>
   <p>Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量。</p></details>
