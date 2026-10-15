@@ -6529,7 +6529,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="314" y="406" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">配对，高端</tspan></text>
 <text class="svgsm" x="314" y="427" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">167 GB/s</text>
 <rect x="330" y="390" width="190.65482742869267" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="530" y="411" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.2 ms</tspan></text>
+<text class="svgsm" x="530" y="411" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.23 ms</tspan></text>
 </svg><figcaption><b>红条比灰带还长。</b><span class="capmore"><br><em>带宽是 GB300 实测，时间是本课用 1.04 GB 统一换算的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 带宽和单次传输时间：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:194（GB300，vLLM，NixlConnector）：单次传输 200–800 ms 降到 2–10 ms。</p>
 <p>⚠️ 本课推导：1.04 GB ＝ 2 × 62 × 8 × 128 × 8,192 × 1 字节（Qwen3-Coder-480B，FP8），只当一把统一的尺子，不是 V4-Pro 的 KV。时间 ＝ 1.04 GB ÷ 带宽；没算握手和排队。prefill 1–2 s 与 100 Gbps 取自专题五 §6.2。</p></details></figure>
   <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）；补上三样配置就回到绿条。配错不报错，只是 TTFT 慢，上线前先量一次 KV 传输带宽。</p>
@@ -6901,7 +6901,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="542" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="542" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="542" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="569" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两条线都说加 prefill 是杠杆，只是杠杆长短差了五倍</tspan></text>
+<text class="svglbl" x="20" y="569" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两条线都说加 prefill 是杠杆，只是长短不同：×10.4 对 ×2.2，差约五倍</tspan></text>
 <text class="svgsm" x="20" y="600" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">蓝线的分母里没有 prefill 的卡：喂一个小 decode 的 prefill 越多，它越好看。算整机成本要看橙线。</text>
 <text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">橙线在 12 个 prefill 时到顶，再加就开始稀释每卡产出，配比到这里就够了。</text>
 </svg><figcaption><b>同一组实测，两条线。</b><span class="capmore"><br><em>蓝线是 runbook 原口径，橙线是本课换了分母重算的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md §12.3（2026-07-24 实测，runbook 注明本文未重测；12 个时取原表的 3,187，25,500 ÷ 8 ＝ 3,187.5）；prefill 为 TP4 见同文件 §0。</p>
@@ -6993,50 +6993,52 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s9-6">9.6　决策树：三个问题</h3>
   <p>答「否」就停。分块 prefill 见第四节，KV 薄不薄见 8.8。</p>
-<figure class="fbox fwide" id="fig-s9-decide"><svg viewBox="0 0 1400 620" width="100%" role="img" aria-label="拆不拆的决策树。第一问：不拆时 TPOT 有没有被长 prompt 撑出尖峰；没有就不拆，拆了多一趟传输、多一套机器。有尖峰，先开分块 prefill，把长 prompt 切成小块夹在 decode 步之间；压住了就不拆，仍有尖峰才往下问。第二问：KV 能不能走快线，同一个 NVLink 域或同一个 TPU 切片里传；不能就要 KV 足够薄，或者只把长 prompt 外送。第三问：缺的是首字还是吞吐；缺首字加 prefill，缺吞吐加 decode"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s9-decide"><svg viewBox="0 0 1400 704" width="100%" role="img" aria-label="拆不拆的决策树。先做一步，不算问题：开分块 prefill，把长 prompt 切成小块夹在 decode 步之间。然后三问，答否就停。第一问：开了分块，TPOT 还有没有被长 prompt 撑出尖峰；没有就不拆，拆了多一趟传输、多一套机器。第二问：KV 能不能走快线，同一个 NVLink 域或同一个 TPU 切片里传；不能就先停，除非 KV 足够薄，或者只把长 prompt 外送。第三问：拆完，SLO 还有缺口吗；没有就停，有就看缺的是首字还是吞吐，缺首字加 prefill，缺吞吐加 decode"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">拆不拆，看负载，不看潮流　——　<tspan font-weight="700">先试分块，压不住再拆</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">多长算长、多严算严没有通用阈值，要拿自己的负载量</text>
-<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">问题</text>
-<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">拆</text>
-<rect x="141.04" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="162" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">不拆或慎拆</text>
-<rect x="30" y="112" width="500" height="88" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="50" y="150" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 不拆时，TPOT 有 prefill 尖峰吗？</tspan></text>
-<text class="svgsm" x="50" y="180" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 一进来，别人出字就卡一下</text>
-<path d="M530,156 L604,156" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<rect x="610" y="112" width="760" height="88" rx="10" fill="none" stroke="#e8710a" stroke-width="1.6"/>
-<text class="svgsm" x="630" y="150" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">否 → 不拆</tspan></text>
-<text class="svgsm" x="630" y="180" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">拆了多一趟传输、多一套机器，换不回东西</text>
-<path d="M280,200 L280,240" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="292" y="228" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是</tspan></text>
-<rect x="30" y="244" width="500" height="88" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="50" y="282" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先开分块 prefill：仍有尖峰吗？</tspan></text>
-<text class="svgsm" x="50" y="312" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 切成小块，夹在 decode 步之间</text>
-<path d="M530,288 L604,288" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<rect x="610" y="244" width="760" height="88" rx="10" fill="none" stroke="#e8710a" stroke-width="1.6"/>
-<text class="svgsm" x="630" y="282" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">否 → 不拆，分块就够</tspan></text>
-<text class="svgsm" x="630" y="312" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">压得住，就省下拆开那套代价</text>
-<path d="M280,332 L280,372" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="292" y="360" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是 → 才拆，接着问怎么拆</tspan></text>
-<rect x="30" y="376" width="500" height="88" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="50" y="414" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② KV 能走快线吗？</tspan></text>
-<text class="svgsm" x="50" y="444" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一个 NVLink 域 ／ 同一个 TPU 切片</text>
-<path d="M530,420 L604,420" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<rect x="610" y="376" width="760" height="88" rx="10" fill="none" stroke="#e8710a" stroke-width="1.6"/>
-<text class="svgsm" x="630" y="414" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">否 → KV 要够薄，或只把长 prompt 外送</tspan></text>
-<text class="svgsm" x="630" y="444" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">出了快线，KV 越厚越慢</text>
-<path d="M280,464 L280,504" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="292" y="492" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是</tspan></text>
-<rect x="30" y="508" width="500" height="88" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="50" y="546" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 缺的是首字，还是吞吐？</tspan></text>
-<text class="svgsm" x="50" y="576" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">看哪个 SLO 先破</text>
-<path d="M530,552 L604,552" fill="none" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<rect x="610" y="508" width="760" height="88" rx="10" fill="none" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="630" y="546" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">缺首字 → 加 prefill；缺吞吐 → 加 decode</tspan></text>
-<text class="svgsm" x="630" y="576" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">配比先用公式起个头，再往先破的那边加</text>
-</svg><figcaption><b>三问，从上往下。</b><span class="capmore"><br><em>阈值没画，要拿自己的负载量。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88（TPU v7x 每 pod 4 芯片，16K 进 4K 出，request_rate=inf，total tok/s）。Qwen3-Coder-480B：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021（两台 v7x-8，TTFT 中位数）。</p>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">先做一步，再问三个问题，答否就停。多长算长、多严算严没有通用阈值，要拿自己的负载量</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">先做的动作（不是问题）</text>
+<rect x="219.48000000000002" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="240" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">问题</text>
+<rect x="297.84000000000003" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="318" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">拆</text>
+<rect x="360.52000000000004" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="381" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">不拆或停</text>
+<rect x="30" y="112" width="500" height="64" rx="32" fill="none" stroke="#80868b" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text class="svgsm" x="58" y="139" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先做一步：开分块 prefill</tspan></text>
+<text class="svgsm" x="58" y="164" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 切成小块，夹在 decode 步之间</text>
+<path d="M280,176 L280,212" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="30" y="216" width="500" height="88" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="50" y="254" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 开了分块，TPOT 还有 prefill 尖峰吗？</tspan></text>
+<text class="svgsm" x="50" y="284" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 一进来，别人出字仍卡一下</text>
+<path d="M530,260 L604,260" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="610" y="216" width="760" height="88" rx="10" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="630" y="254" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">否 → 停：不拆，分块就够</tspan></text>
+<text class="svgsm" x="630" y="284" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">拆了多一趟传输、多一套机器，换不回东西</text>
+<path d="M280,304 L280,344" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="292" y="332" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是 → 才拆，接着问怎么拆</tspan></text>
+<rect x="30" y="348" width="500" height="88" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="50" y="386" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② KV 能走快线吗？</tspan></text>
+<text class="svgsm" x="50" y="416" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一个 NVLink 域 ／ 同一个 TPU 切片</text>
+<path d="M530,392 L604,392" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="610" y="348" width="760" height="88" rx="10" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="630" y="386" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">否 → 停：除非 KV 够薄，或只把长 prompt 外送</tspan></text>
+<text class="svgsm" x="630" y="416" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">出了快线，KV 越厚越慢</text>
+<path d="M280,436 L280,476" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="292" y="464" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是</tspan></text>
+<rect x="30" y="480" width="500" height="88" rx="10" fill="none" stroke="#1a73e8" stroke-width="2"/>
+<text class="svgsm" x="50" y="518" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 拆完，SLO 还有缺口吗？</tspan></text>
+<text class="svgsm" x="50" y="548" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">看哪个 SLO 先破</text>
+<path d="M530,524 L604,524" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="610" y="480" width="760" height="88" rx="10" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="630" y="518" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">否 → 停：配比够了</tspan></text>
+<text class="svgsm" x="630" y="548" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">不缺就别再加机器</text>
+<path d="M280,568 L280,608" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="292" y="596" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是</tspan></text>
+<rect x="30" y="612" width="1340" height="68" rx="10" fill="none" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="50" y="642" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">缺首字 → 加 prefill；缺吞吐 → 加 decode</tspan></text>
+<text class="svgsm" x="50" y="668" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">配比先用公式起个头，再往先破的那边加</text>
+</svg><figcaption><b>灰框是先做的一步，蓝框才是那三问。</b><span class="capmore"><br><em>阈值没画，要拿自己的负载量。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88（TPU v7x 每 pod 4 芯片，16K 进 4K 出，request_rate=inf，total tok/s）。Qwen3-Coder-480B：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021（两台 v7x-8，TTFT 中位数）。</p>
 <p>📌 配比公式：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §12.2（8 × 11,200 ÷ 1,024 ≈ 87.5 req/s，× 8,192 ≈ 71.7 万 tok/s，÷ 7.28 万 ≈ 9.8）。跨域退化：同文件 :63。PrFaaS：arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a>。</p>
 <p>⚠️ 两组 TPU 例子都是单点测量，不是扫描。</p></details></figure>
 
@@ -7164,9 +7166,9 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>一层里的两种活，分到两批机器。</b><span class="capmore"><br><em>专题五原图，机器数是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 MegaScale-Infer arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a>（disaggregated expert parallelism、ping-pong pipeline、每 GPU 吞吐最高 1.90×）；Step-3 arXiv <a href="https://arxiv.org/abs/2507.19427" target="_blank" rel="noopener">2507.19427</a>；vLLM 于 2026-07 发布实验性 AFD 插件。</p></details></figure>
   <p>字节 2025 年的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
   <p>开源实现没这么顺：vLLM 的 AFD 是外部插件，主仓库的提案（RFC）已因不活跃被关闭；插件博客在 Ascend 910C 上的数，配比一错就比不拆还慢。</p>
-<figure class="fbox fwide" id="fig-s9-afd-ascend"><svg viewBox="0 0 1400 629" width="100%" role="img" aria-label="vLLM 的 AFD 插件在昇腾 910C 上跑 DeepSeek-V3.2 的饱和 decode 吞吐，按每块 die 算。三行是三种部署，左边的小人一个代表一块 die，蓝色算注意力、紫色算专家。不拆：64 块 die 每块两样都干。拆开一：48 块算注意力、16 块算专家，专家那边吃不饱，16K 输入每块 die 220.3，比不拆的 232.6 少 5.3%，32K 少 10%。拆开二：注意力加到 64 块、专家还是 16 块，16K 涨到 258.9，多 11.3%，32K 多 9%。注意力给少了，拆开反而慢"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s9-afd-ascend"><svg viewBox="0 0 1400 629" width="100%" role="img" aria-label="vLLM 的 AFD 插件在昇腾 910C 上跑 DeepSeek-V3.2 的饱和 decode 吞吐，按每块 die 算。三行是三种部署，左边的小人一个代表一块 die，蓝色算注意力、紫色算专家。不拆：64 块 die 每块两样都干。拆开一：48 块算注意力、16 块算专家，专家那边吃不饱，16K 输入每块 die 220.3，比不拆的 232.6 少 5.3%，32K 少 10%。拆开二：注意力加到 64 块、专家还是 16 块，16K 涨到 258.9，多 11.3%，32K 多 9%。注意力给少了，拆开反而慢"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">AFD 拆开不保证更快　——　<tspan font-weight="700">算注意力的给少了，算专家的就在等</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">vLLM AFD 插件，昇腾 910C，DeepSeek-V3.2（权重和激活值都压成 8 位），decode 跑满。die 是芯片上的一块计算单元，这里当一张卡数；分母是部署的全部 die</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">vLLM AFD 插件，昇腾 910C，DeepSeek-V3.2（权重和激活值都压成 8 位），decode 跑满。die 是芯片上的一块计算单元，这里当一张卡数</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">小人：算注意力的 die</text>
 <rect x="203.8" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -7181,8 +7183,8 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每块 die 每秒出多少 token（左：怎么分工；右：16K 和 32K 输入两种长度）</tspan></text>
-<text class="svgsm" x="24" y="168" fill="#80868b" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不拆：64 块，每块两样都干</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每块 die 每秒出多少 token ＝ 总输出 ÷ 该行全部 die（左：怎么分工；右：16K 和 32K 输入两种长度）</tspan></text>
+<text class="svgsm" x="24" y="168" fill="#80868b" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不拆：共 64 块，每块两样都干</tspan></text>
 <circle cx="31.5" cy="186.8" r="2.9" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <path d="M 26.7 197.6 a 4.8 7.1 0 0 1 9.6 0 z" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <circle cx="50.5" cy="186.8" r="2.9" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -7318,7 +7320,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="620" y="225.0" width="358.82666666666665" height="30" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="988" y="246" fill="#80868b" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">168.2</tspan></text>
 <line x1="16" y1="280" x2="1384" y2="280" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="24" y="308" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆开：48 块算注意力 ＋ 16 块算专家</tspan></text>
+<text class="svgsm" x="24" y="308" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆开：48 块算注意力 ＋ 16 块算专家 ＝ 共 64 块</tspan></text>
 <circle cx="31.5" cy="326.8" r="2.9" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <path d="M 26.7 337.6 a 4.8 7.1 0 0 1 9.6 0 z" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <circle cx="50.5" cy="326.8" r="2.9" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -7455,7 +7457,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="620" y="369.0" width="322.9866666666667" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="952" y="390" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">151.4（-10.0%）</tspan></text>
 <line x1="16" y1="428" x2="1384" y2="428" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="24" y="456" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆开：64 块算注意力 ＋ 16 块算专家</tspan></text>
+<text class="svgsm" x="24" y="456" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆开：64 块算注意力 ＋ 16 块算专家 ＝ 共 80 块</tspan></text>
 <circle cx="31.5" cy="474.8" r="2.9" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <path d="M 26.7 485.6 a 4.8 7.1 0 0 1 9.6 0 z" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <circle cx="50.5" cy="474.8" r="2.9" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>

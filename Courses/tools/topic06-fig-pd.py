@@ -150,7 +150,7 @@ def fig_kv_bw():
     bars = [("配错（cuda_copy）", "200 MB/s", T["bad"], RD, "%s ms" % "{:,}".format(round(T["bad"]))),
             ("专题五：数据中心网络", "100 Gbps ＝ 12.5 GB/s", T["dcn"], GY2, "%.0f ms" % T["dcn"]),
             ("配对，低端", "7 GB/s", T["lo"], GR, "%.0f ms" % T["lo"]),
-            ("配对，高端", "167 GB/s", T["hi"], GR, "%.1f ms" % T["hi"])]
+            ("配对，高端", "167 GB/s", T["hi"], GR, "%.2f ms" % T["hi"])]
     by = py + 84
     for lab, bw, ms, col, txt in bars:
         f.t(BX - 16, by + 4, lab, INK, True, 15, "end")

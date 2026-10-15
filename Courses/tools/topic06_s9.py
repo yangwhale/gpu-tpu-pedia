@@ -95,7 +95,7 @@ FIGS = {
     "__FIG_S9_SPLIT__": ("fig-s9-split-pod", "fig6-split-pod.svg", "topic06-fig-ratio.py",
         '<b>总量看 2P1D 最高；按 pod 算，只有 batch 128 的 1P1D 赢一点。</b><br><em>README 原值；每 pod 吞吐为本课推导（总吞吐 ÷ pod 数）。</em>'),
     "__FIG_S9_DECIDE__": ("fig-s9-decide", "fig6-decide.svg", "topic06-fig-ratio.py",
-        '<b>三问，从上往下。</b><br><em>阈值没画，要拿自己的负载量。</em>'),
+        '<b>灰框是先做的一步，蓝框才是那三问。</b><br><em>阈值没画，要拿自己的负载量。</em>'),
     "__FIG_S9_AFD_T5__": ("fig-s9-afd-t5", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>一层里的两种活，分到两批机器。</b><br><em>专题五原图，机器数是示意。</em>'),
     "__FIG_S9_AFD_ASCEND__": ("fig-s9-afd-ascend", "fig6-afd-ascend.svg", "topic06-fig-ratio.py",

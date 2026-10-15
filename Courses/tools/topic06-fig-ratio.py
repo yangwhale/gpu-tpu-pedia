@@ -61,6 +61,7 @@ assert int(dict(PER_D)[12]) == D12
 GROW_D = D12 / PER_D[0][1]                  # 两条线都取 12 个 prefill 那档，和正文 9.4 同一组
 GROW_ALL = BEST_ALL[1] / PER_ALL[0][1]
 assert round(GROW_D, 1) == 10.4 and round(GROW_ALL, 1) == 2.2
+assert round(GROW_D / GROW_ALL) == 5           # 底部落点带「差约五倍」＝ 10.4 ÷ 2.2 ≈ 4.7
 
 # ── 配比公式（SGLang V4-Pro runbook §12.2，官方 11,200 那个点）
 DEC_RPS = 8 * 11200 / 1024
@@ -164,7 +165,7 @@ def fig_prefill_sweep():
     f.t(PX + PW + 70, Y(900), "×%.1f" % GROW_ALL, OR, True, 22, "middle")
     f.t(PX + PW + 70, Y(900) + 22, "1 → 12 个", OR, size=15, anchor="middle")
     f._pan = None
-    yb = f.band(py + PH - 10, "ok", "两条线都说加 prefill 是杠杆，只是杠杆长短差了五倍", [
+    yb = f.band(py + PH - 10, "ok", "两条线都说加 prefill 是杠杆，只是长短不同：×%.1f 对 ×%.1f，差约五倍" % (GROW_D, GROW_ALL), [
         "蓝线的分母里没有 prefill 的卡：喂一个小 decode 的 prefill 越多，它越好看。算整机成本要看橙线。",
         "橙线在 12 个 prefill 时到顶，再加就开始稀释每卡产出，配比到这里就够了。",
     ])
@@ -176,28 +177,32 @@ def fig_prefill_sweep():
 
 
 def fig_decide():
-    f = Fig(W, "拆不拆的决策树。第一问：不拆时 TPOT 有没有被长 prompt 撑出尖峰；没有就不拆，拆了多一趟传输、多一套机器。"
-               "有尖峰，先开分块 prefill，把长 prompt 切成小块夹在 decode 步之间；压住了就不拆，仍有尖峰才往下问。"
-               "第二问：KV 能不能走快线，同一个 NVLink 域或同一个 TPU 切片里传；不能就要 KV 足够薄，或者只把长 prompt 外送。"
-               "第三问：缺的是首字还是吞吐；缺首字加 prefill，缺吞吐加 decode")
+    f = Fig(W, "拆不拆的决策树。先做一步，不算问题：开分块 prefill，把长 prompt 切成小块夹在 decode 步之间。"
+               "然后三问，答否就停。第一问：开了分块，TPOT 还有没有被长 prompt 撑出尖峰；没有就不拆，拆了多一趟传输、多一套机器。"
+               "第二问：KV 能不能走快线，同一个 NVLink 域或同一个 TPU 切片里传；不能就先停，除非 KV 足够薄，或者只把长 prompt 外送。"
+               "第三问：拆完，SLO 还有缺口吗；没有就停，有就看缺的是首字还是吞吐，缺首字加 prefill，缺吞吐加 decode")
     y0 = f.header("拆不拆，看负载，不看潮流　——　<tspan font-weight=\"700\">先试分块，压不住再拆</tspan>",
-                  "多长算长、多严算严没有通用阈值，要拿自己的负载量",
-                  [(BL, "问题"), (GR, "拆"), (OR, "不拆或慎拆")])
-    QX, QW, QH = 30, 500, 92
+                  "先做一步，再问三个问题，答否就停。多长算长、多严算严没有通用阈值，要拿自己的负载量",
+                  [(GY2, "先做的动作（不是问题）"), (BL, "问题"), (GR, "拆"), (OR, "不拆或停")])
+    QX, QW, QH = 30, 500, 88
     LX, LW = 610, 760
-    rows = [
-        ("① 不拆时，TPOT 有 prefill 尖峰吗？", "长 prompt 一进来，别人出字就卡一下",
-         OR, "否 → 不拆", "拆了多一趟传输、多一套机器，换不回东西"),
-        ("先开分块 prefill：仍有尖峰吗？", "长 prompt 切成小块，夹在 decode 步之间",
-         OR, "否 → 不拆，分块就够", "压得住，就省下拆开那套代价"),
-        ("② KV 能走快线吗？", "同一个 NVLink 域 ／ 同一个 TPU 切片",
-         OR, "否 → KV 要够薄，或只把长 prompt 外送", "出了快线，KV 越厚越慢"),
-        ("③ 缺的是首字，还是吞吐？", "看哪个 SLO 先破",
-         GR, "缺首字 → 加 prefill；缺吞吐 → 加 decode", "配比先用公式起个头，再往先破的那边加"),
-    ]
     STEP = 132
-    QH = 88
-    y = y0 + 10
+    # 前置动作：灰色虚线胶囊，无编号、无分支
+    AH = 64
+    ay = y0 + 10
+    f.box(QX, ay, QW, AH, "none", GY2, AH // 2, sw=1.6, dash="6 4")
+    f.t(QX + 28, ay + 27, "先做一步：开分块 prefill", INK, True, 17)
+    f.t(QX + 28, ay + 52, "长 prompt 切成小块，夹在 decode 步之间", GY, size=15)
+    f.path("M%d,%d L%d,%d" % (QX + QW / 2, ay + AH, QX + QW / 2, ay + AH + 36), GY2, 2)
+    rows = [
+        ("① 开了分块，TPOT 还有 prefill 尖峰吗？", "长 prompt 一进来，别人出字仍卡一下",
+         OR, "否 → 停：不拆，分块就够", "拆了多一趟传输、多一套机器，换不回东西"),
+        ("② KV 能走快线吗？", "同一个 NVLink 域 ／ 同一个 TPU 切片",
+         OR, "否 → 停：除非 KV 够薄，或只把长 prompt 外送", "出了快线，KV 越厚越慢"),
+        ("③ 拆完，SLO 还有缺口吗？", "看哪个 SLO 先破",
+         OR, "否 → 停：配比够了", "不缺就别再加机器"),
+    ]
+    y = ay + AH + 40
     for i, (q, qs, col, ans, why) in enumerate(rows):
         f.box(QX, y, QW, QH, "none", BL, 10, sw=2)
         f.t(QX + 20, y + 38, q, BL, True, 17)
@@ -206,10 +211,15 @@ def fig_decide():
         f.box(LX, y, LW, QH, "none", col, 10, sw=1.6)
         f.t(LX + 20, y + 38, ans, col, True, 17)
         f.t(LX + 20, y + 68, why, INK, size=15)
-        if i < len(rows) - 1:
-            f.path("M%d,%d L%d,%d" % (QX + QW / 2, y + QH, QX + QW / 2, y + STEP - 4), BL, 2)
-            f.t(QX + QW / 2 + 12, y + QH + 28, "是 → 才拆，接着问怎么拆" if i == 1 else "是", BL, True, 15)
+        f.path("M%d,%d L%d,%d" % (QX + QW / 2, y + QH, QX + QW / 2, y + STEP - 4), BL, 2)
+        f.t(QX + QW / 2 + 12, y + QH + 28, "是 → 才拆，接着问怎么拆" if i == 0 else "是", BL, True, 15)
         y += STEP
+    # ③ 答「是」的落点：缺什么补什么
+    f.box(QX, y, LX + LW - QX, QH - 20, "none", GR, 10, sw=1.6)
+    f.t(QX + 20, y + 30, "缺首字 → 加 prefill；缺吞吐 → 加 decode", GR, True, 17)
+    f.t(QX + 20, y + 56, "配比先用公式起个头，再往先破的那边加", INK, size=15)
+    y += STEP
+    QH = QH - 20
     f._pan = None
     yb = y - STEP + QH
     yb = f.src(yb + 10,
@@ -228,11 +238,12 @@ def fig_afd_ascend():
                "拆开二：注意力加到 64 块、专家还是 16 块，16K 涨到 258.9，多 11.3%，32K 多 9%。注意力给少了，拆开反而慢")
     y0 = f.header("AFD 拆开不保证更快　——　<tspan font-weight=\"700\">算注意力的给少了，算专家的就在等</tspan>",
                   "vLLM AFD 插件，昇腾 910C，DeepSeek-V3.2（权重和激活值都压成 8 位），decode 跑满。"
-                  "die 是芯片上的一块计算单元，这里当一张卡数；分母是部署的全部 die",
+                  "die 是芯片上的一块计算单元，这里当一张卡数",
                   [(BL, "小人：算注意力的 die"), (PU, "小人：算专家（FFN）的 die"), (GY2, "小人：两样都干 ／ 柱：不拆"), (OR, "柱：比不拆慢"), (GR, "柱：比不拆快")])
-    CFG_ = [("不拆：64 块，每块两样都干", GY2, [(64, GY2)], None),
-            ("拆开：48 块算注意力 ＋ 16 块算专家", OR, [(48, BL), (16, PU)], ("专家这边吃不饱", OR)),
-            ("拆开：64 块算注意力 ＋ 16 块算专家", GR, [(64, BL), (16, PU)], ("专家更忙，仍有余力", GR))]
+    CFG_ = [("不拆：共 64 块，每块两样都干", GY2, [(64, GY2)], None),
+            ("拆开：48 块算注意力 ＋ 16 块算专家 ＝ 共 64 块", OR, [(48, BL), (16, PU)], ("专家这边吃不饱", OR)),
+            ("拆开：64 块算注意力 ＋ 16 块算专家 ＝ 共 80 块", GR, [(64, BL), (16, PU)], ("专家更忙，仍有余力", GR))]
+    assert [sum(n for n, _ in g) for _, _, g, _ in CFG_] == [64, 64, 80]   # 行名里的「共 N 块」
     S, G = 15, 4                    # 小人尺寸、间距；每排 16 个
     RS = S + G + 2                  # 行距
 
@@ -241,7 +252,7 @@ def fig_afd_ascend():
 
     RH = [max(30 + group_h(g), 22 + 46 + 30) + 30 for _, _, g, _ in CFG_]
     PH = 30 + 16 + sum(RH)
-    py = f.panel(0, y0, W, PH, "每块 die 每秒出多少 token（左：怎么分工；右：16K 和 32K 输入两种长度）", GR)
+    py = f.panel(0, y0, W, PH, "每块 die 每秒出多少 token ＝ 总输出 ÷ 该行全部 die（左：怎么分工；右：16K 和 32K 输入两种长度）", GR)
     BX, BW = 620, 640
     VMAX = 300.0
     y = py + 20
