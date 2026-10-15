@@ -67,7 +67,7 @@ BODY = '''
     <tr><td>TEP／DEP 的定义；Megatron 命名；Folding</td><td>沿用专题五台账第 43、44、18 行</td></tr>
     <tr><td>Meta 上下文并行：128 张 H100（16 节点）跑 Llama3 405B，prefill 1M token 77 s、128K 3.8 s，并行效率 93%</td><td>arXiv 2411.01783 摘要</td></tr>
     <tr><td>K3 DCP：128K 并发 8 吞吐 108 → 365（＋237%）、并发 1 ＋12%；4K 并发 8 −9%；8K 并发 8 −11%、并发 32 ＋24%；32K 并发 8 −17%、并发 32 ＋7%</td><td>gpu-tpu-pedia SGLANG-K3-RUNBOOK.md §11.0.3 :1010-1023、宽表 :921-938；百分比本课推导</td></tr>
-    <tr><td>DCP 让 KV 容量 1.5M → 12.2M token；单流 −26% 来自丢掉 symm-mem</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962</td></tr>
+    <tr><td>DCP 让 KV 容量 1.5M → 12.2M token（官方逻辑容量）；单流 −26% 来自丢掉 symm-mem；R63 补充：TP8 开投机后实测 max_total_num_tokens 637,504（约 64 万），128K × 8 ＝ 1,048,576（100 多万）放不下</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962；实测值 :1171；乘积本课推导</td></tr>
     <tr><td>K3 128K 并发 8 首字中位：TP8 32.1 s，DCP8 2.3 s（含排队）；官方 PD 吞吐：1P1D（TP8 decode）2,808 对 2P2D（DCP8 decode）2,633 tok/s/GPU</td><td>SGLANG-K3-RUNBOOK.md:939（TP8 r060-isl128k）、:941（dcp8-isl128k）；:609-610、:707-708（官方原文引于 :1323）</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
     <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP</td><td>沿用专题五台账第 23、29、45、21 行</td></tr>

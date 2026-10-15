@@ -6005,7 +6005,7 @@ body.figonly section h3{margin-top:34px}
 <p>各点比值：4K c1 −26%、c8 −9%、c32 −11%、c64 −7%；8K c8 −11%、c32 +24%；32K c8 −17%、c32 +7%；128K c1 +12%、c8 +237%。</p>
 <p>吞吐是输出 tok/s，热轮；32K c32 按 §11.0.3 取 TP8 408.2（宽表 ratio 0.4 那行是 420，比值变 1.04，不改结论）。K3 的 MLA 层只有一个 KV 头，它的 69 层 KDA 状态池 DCP 不切（同文件 :725-726）。横轴没换成「KV 总量」：原表只给输入长度和并发，没有实测的 KV 占用。</p></details></figure>
   <ul>
-    <li><b>为什么长了才赚</b>：DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。TP8 放不下，只能少收请求，128K、8 并发下首字延迟中位数 32.1 s，DCP8 是 2.3 s（含排队）。</li>
+    <li><b>为什么长了才赚</b>：官方说 DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。实测 TP8 开投机后只装得下约 64 万 token，128K 乘 8 并发要 100 多万，放不下，只能少收请求，128K、8 并发下首字延迟中位数 32.1 s，DCP8 是 2.3 s（含排队）。</li>
     <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了。</li>
     <li><b>看的是总量</b>：同是 8K，并发 8 还亏，并发 32 已赚。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
   </ul>
@@ -9955,7 +9955,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>TEP／DEP 的定义；Megatron 命名；Folding</td><td>沿用专题五台账第 43、44、18 行</td></tr>
     <tr><td>Meta 上下文并行：128 张 H100（16 节点）跑 Llama3 405B，prefill 1M token 77 s、128K 3.8 s，并行效率 93%</td><td>arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a> 摘要</td></tr>
     <tr><td>K3 DCP：128K 并发 8 吞吐 108 → 365（＋237%）、并发 1 ＋12%；4K 并发 8 −9%；8K 并发 8 −11%、并发 32 ＋24%；32K 并发 8 −17%、并发 32 ＋7%</td><td>gpu-tpu-pedia SGLANG-K3-RUNBOOK.md §11.0.3 :1010-1023、宽表 :921-938；百分比本课推导</td></tr>
-    <tr><td>DCP 让 KV 容量 1.5M → 12.2M token；单流 −26% 来自丢掉 symm-mem</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962</td></tr>
+    <tr><td>DCP 让 KV 容量 1.5M → 12.2M token（官方逻辑容量）；单流 −26% 来自丢掉 symm-mem；R63 补充：TP8 开投机后实测 max_total_num_tokens 637,504（约 64 万），128K × 8 ＝ 1,048,576（100 多万）放不下</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962；实测值 :1171；乘积本课推导</td></tr>
     <tr><td>K3 128K 并发 8 首字中位：TP8 32.1 s，DCP8 2.3 s（含排队）；官方 PD 吞吐：1P1D（TP8 decode）2,808 对 2P2D（DCP8 decode）2,633 tok/s/GPU</td><td>SGLANG-K3-RUNBOOK.md:939（TP8 r060-isl128k）、:941（dcp8-isl128k）；:609-610、:707-708（官方原文引于 :1323）</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
     <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP</td><td>沿用专题五台账第 23、29、45、21 行</td></tr>
