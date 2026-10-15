@@ -5740,7 +5740,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>比同一位置的两张卡：左边格子全满，右边每卡只亮两列。</b><span class="capmore"><br><em>格子是示意，头数、槽数不按实际；「切头只有 TP」为本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>K3 共 93 层、69 层 KDA，DEP8 两次加载 OOM、官方改推 TP 与 DCP：SGLANG-K3-RUNBOOK.md（见第六、七节与文末台账）。</p>
 <p>「DP、EP、DCP 都不切」状态池、attention-TP 8 时「状态池 8 路切分」为 runbook 引的官方说法；「按头切」为本课推导；格子数只表示整池与按头切的对比。</p></details></figure>
   <ul>
-    <li><b>K3 上 DEP8 起不来</b>：每 rank 存整池 KDA 状态，加载即 OOM；官方改推 TP、DCP（<a href="#s7-1">第七节</a>）。</li>
+    <li><b>K3 上 DEP8 起不来</b>：每 rank 存整池 KDA 状态，加载即显存不足（OOM）；官方改推 TP、DCP（<a href="#s7-1">第七节</a>）。</li>
     <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。</li>
   </ul>
 
@@ -6619,7 +6619,7 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li><b>两边上下文长度要一致</b>：只改 decode 的 <code>--context-length</code>，KV 布局对不上，握手失败；单条能过，压测才暴露。</li>
     <li><b>失败策略两头疼</b>：vLLM 的 <code>kv_load_failure_policy</code> 设 fail，一次瞬时拒收引擎就死；设 recompute 稳，但 12 个 prefill 时每卡 3,187 掉到 2,645，约交 17% 的税。</li>
-    <li><b>表面报错可能是假的</b>：vLLM 开 14 个 prefill 时 decode 的 pod 接连被驱逐，真因是 core dump 撑爆临时盘。</li>
+    <li><b>表面报错可能是假的</b>：vLLM 开 14 个 prefill 时 decode 所在的 pod（K8s 里一组一起调度的容器）接连被驱逐，真因是 core dump 撑爆临时盘。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：三条坑和 8.4 表第三行</summary>
   <p>上下文长度：SGLang V4-Pro runbook:941。失败策略：vLLM V4-Pro runbook:760。core dump 驱逐：vLLM V4-Pro runbook 12.4 节。Dynamo 握手：vLLM V4-Pro runbook:703。两份 runbook 都在 gpu/inference/a4x-max/deepseek-v4/。</p></details>

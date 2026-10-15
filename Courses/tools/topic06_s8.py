@@ -77,7 +77,7 @@ __FIG_S8_HYBRID__
   <ul>
     <li><b>两边上下文长度要一致</b>：只改 decode 的 <code>--context-length</code>，KV 布局对不上，握手失败；单条能过，压测才暴露。</li>
     <li><b>失败策略两头疼</b>：vLLM 的 <code>kv_load_failure_policy</code> 设 fail，一次瞬时拒收引擎就死；设 recompute 稳，但 12 个 prefill 时每卡 3,187 掉到 2,645，约交 17% 的税。</li>
-    <li><b>表面报错可能是假的</b>：vLLM 开 14 个 prefill 时 decode 的 pod 接连被驱逐，真因是 core dump 撑爆临时盘。</li>
+    <li><b>表面报错可能是假的</b>：vLLM 开 14 个 prefill 时 decode 所在的 pod（K8s 里一组一起调度的容器）接连被驱逐，真因是 core dump 撑爆临时盘。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：三条坑和 8.4 表第三行</summary>
   <p>上下文长度：SGLang V4-Pro runbook:941。失败策略：vLLM V4-Pro runbook:760。core dump 驱逐：vLLM V4-Pro runbook 12.4 节。Dynamo 握手：vLLM V4-Pro runbook:703。两份 runbook 都在 gpu/inference/a4x-max/deepseek-v4/。</p></details>
