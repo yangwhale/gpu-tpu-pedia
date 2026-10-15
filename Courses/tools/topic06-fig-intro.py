@@ -116,7 +116,7 @@ def fig_life():
         kv_h = KV_READ[i] * 7
         f.box(x + 22, RB - WH, BW - 44, WH, BL, BL, 2)
         f.box(x + 22, RB - WH - kv_h - 2, BW - 44, kv_h, PU, PU, 2)
-    f.t(xs[0] - 14, RB - 20, "权重：每步整份", BL, True, 13, "end")
+    f.t(xs[0] - 14, RB - 20, "权重：每步读一遍", BL, True, 13, "end")
     f.t(xs[0] - 14, RB - WH - 18, "KV：每步全部", PU, True, 13, "end")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "两段的账正好相反", [
