@@ -27,7 +27,7 @@ BODY = '''
     <tr><td>没预热：第一轮 13,585、第二轮 27,803（×2.05）；闭环压测低估 13%</td><td>VLLM-V4PRO-RUNBOOK.md:431-433；闭环 SGLANG-V4PRO-RUNBOOK.md:478、1135</td></tr>
     <tr><td>goodput 比吞吐更能比系统：7.4× 请求率、12.6× 更紧 SLO</td><td>DistServe，arXiv 2401.09670</td></tr>
     <tr><td>vLLM 压测工具的 goodput ＝ 每秒达标请求数（与 DistServe 口径不同）</td><td>vLLM 仓库 vllm/benchmarks/serve.py 的 --goodput 参数</td></tr>
-    <tr><td>DeepSeek 线上成本账：226.75 节点、$2/h、日成本 87,072、日收入 562,027、利润率 545%、每节点 14,800 tok/s、20–22 tok/s/user</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
+    <tr><td>DeepSeek 线上实测：226.75 节点、理论成本利润率 545%（全按 R1 定价收费的假设）、每节点 14,800 tok/s、20–22 tok/s/user</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
     <tr><td>每 token KV：MHA 3,997,696 B、GQA（Llama-3.1-70B）327,680 B、Qwen3.5 全注意力 30,720 B ＋ 线性状态 180 MiB／序列；Qwen3.5 KV 头数 2</td><td>本课推导，形状取各自 Hugging Face config.json</td></tr>
     <tr><td>8 颗 v7 放 V3：KV 池 92.4 GiB／芯片，4K 装 344 条、32K 装 43 条、64K 装 21 条（FP8 KV 43 条）；Llama 4K 73 条</td><td>本课推导：每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，R1 FP4 README:59，同台账里「V3 FP8 切片表」那一行）× 0.9 ＝ 170.55 GiB，− 78.1 GiB（671 GB ÷ 8）；0.9 为本课假设；先按权重全切分粗算，DP attention 下非专家权重每 device 复制，实际更小（10.5）</td></tr>
     <tr><td>PagedAttention：KV 有效利用率 20.4–38.2% → 96.3%</td><td>vLLM 论文，arXiv 2309.06180</td></tr>
@@ -90,7 +90,7 @@ BODY = '''
     <tr><td>V3 batch 8 一步要读的字节是 batch 1 的 4.4×</td><td>本课推导：均匀路由下命中专家 8 → 57.5 个，37.5 → 163.8 GB</td></tr>
     <tr><td>B200 V4-Flash（vLLM，DEP8）开 MTP 反而降 3–37%</td><td>gpu-tpu-pedia gpu/inference/a4/deepseek-v4/README.vllm.md:266-275</td></tr>
     <tr><td>V4-Pro MTP：峰值 −13%，端到端 ＋28%</td><td>SGLANG-V4PRO-RUNBOOK.md:900-911</td></tr>
-    <tr><td>temperature 与接受率（V4-Pro 贪心 DSpark 草稿在温度 1.0 下实测 1.16%）；K3 4.73／2.61</td><td>VLLM-V4PRO-RUNBOOK.md:398-410；VLLM-K3-RUNBOOK.md:226-237；告警见 kimi-k3/PD-BACKLOG.md:175</td></tr>
+    <tr><td>temperature 与接受率（V4-Pro 贪心 DSpark 草稿在温度 1.0 下实测 1.16%）；K3 4.73／2.61；1.16% 低于单字理论值：接受率 ＝ 收下 ÷ 猜的草稿字、每步猜 7 个、第一个被拒后面作废</td><td>VLLM-V4PRO-RUNBOOK.md:398-410（num_speculative_tokens=7、接受率 ＝ accepted ÷ draft 均为原文；低于理论值的解释为本课推导，未拆分）；VLLM-K3-RUNBOOK.md:226-237；告警见 kimi-k3/PD-BACKLOG.md:175</td></tr>
     <tr><td>PD 碰上投机解码：新交接请求 1 个 token 对 1＋N，掉出整图 CUDA Graph；补齐后 TPOT ~40 → ~22 ms</td><td>vLLM 博客 vllm.ai/blog/2026-07-23-glm-5.2-nvfp4-b300-pd；转述见 kimi-k3/PD-BACKLOG.md:52-59</td></tr>
     <tr><td>草稿模型谱系（MTP、DSpark 的定义；V3 的 MTP 是一整层 transformer，共享 embedding 和输出头；EAGLE-3 2025-03 融合多层状态，SGLang batch 64 吞吐 1.38×）</td><td>SpecInfer 2305.09781、Medusa 2401.10774、EAGLE 2401.15077／2406.16858、MTP 2412.19437、EAGLE-3 2503.01840、DSpark 2607.05147、Lookahead 2402.02057、SuffixDecoding 2411.04975、DiffuSpec 2510.02358、DFlash 2602.06036（均 arXiv）；github.com/apoorvumang/prompt-lookup-decoding；MTP 结构见 DeepSeek-V3 技术报告 §2.2 MTP Modules；EAGLE-3 摘要页（v1 2025-03-03）。2026-10-15 核对</td></tr>
     <tr><td>8 颗 v7 读一遍 V3 激活权重：BF16 1.26 ms、FP8 0.63、MXFP4 0.33、NVFP4 0.35</td><td>本课推导：37e9 × 位数 ÷ 8 ÷ (8 × 7.37 TB/s)</td></tr>

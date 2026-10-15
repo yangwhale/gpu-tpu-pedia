@@ -4,7 +4,7 @@
 BODY = '''
   <p class="lead">每条在跑的序列，都要在显存里单独占一块 KV，不能和别人共用。
     <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b>
-    于是 2023 年起的几招都在同样的显存里多装人、少重算：vLLM 的 PagedAttention 把这块地方分页；同年 GQA 让 Llama-2-70B 的 KV 头数砍到八分之一（本节用同结构的 Llama-3.1-70B）；年底 SGLang 的 RadixAttention 留着算过的前缀复用，吞吐最多 6.4 倍；2024 年 Mooncake 把 KV 池铺到主机内存和 SSD。</p>
+    于是 2023 年起的几招都在同样的显存里多装人、少重算：分页存（PagedAttention）、少存 KV 头（GQA）、复用算过的前缀（RadixAttention）、把 KV 池铺到主机内存和 SSD（Mooncake）。</p>
 
   <h3 id="s3-1">3.1　一个 token 留下多少字节：四种记法</h3>
   <p>KV cache 是每个处理过的 token 在每一层留下的 K 和 V，后面的 token 算注意力时要回头读。
@@ -14,15 +14,16 @@ BODY = '''
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
     <tr><td>MHA</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
-    <tr><td>MLA</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512＋64) 维 × 61 层（不含 MTP 层；KV 存 FP8 时减半为 35,136 B）</td></tr>
+    <tr><td>MLA</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层；KV 存 FP8 时减半为 35,136 B）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
   <p>DeepSeek-V4 不在这张表的任何一行：它每层只存一条所有头共用的 KV，再按层压缩 4 倍或 128 倍（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），3.4 节讲它的两个池。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
-  <p>一颗 v7 芯片可用约 189.5 GiB，留一成给激活按 170.55 GiB 算（与 10.5 同一口径），放下 V3 的八分之一 FP8 权重（78.1 GiB），剩 92.4 GiB 给 KV。
+  <p>一颗 v7 芯片可用约 189.5 GiB，留一成给激活值（中间结果）的显存，按 170.55 GiB 算（与 10.5 同一口径）。
+    V3 的 FP8 权重约 671 GB，铺到 8 颗芯片上每颗放八分之一（78.1 GiB），每颗剩 92.4 GiB 给 KV，一半多。本节都按每芯片记账。</p>
+  <p>权重切成 8 份，KV 却不切：注意力走数据并行（DP attention），每条序列的 KV 只住在一个 device 上（第六节讲）。
     这里先按权重全切粗算；DP attention 下非专家权重每个 device 各要一份，池子实际更小，见 10.5。</p>
-  <p>权重切成 8 份，KV 却不切：注意力走数据并行，每条序列的 KV 只住在一个 device 上（第六节讲）。</p>
 __FIG_S3_BATCH__
   <p>人数少了，同一趟权重搬运分给的 token 也少了。这就是长上下文贵的第一个原因。</p>
 
@@ -47,13 +48,13 @@ __FIG_S3_POOL__
   <p>两边一起满之后，再多给显存、多装 13% 的人，端到端只从 10,614 到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
-    tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX <b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃，看不出是池子的账错了（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
+    tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX（Google 的数值计算库）<b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃，看不出是池子的账错了（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
 
   <h3 id="s3-5">3.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样：同一段 system prompt、同一份文档、多轮对话的前几轮。
     把算好的 KV 留着，下一个请求命中前缀就直接接着算，prefill 省掉一大段。</p>
   <ul>
-    <li><b>RadixAttention。</b>SGLang 把所有缓存的前缀存成一棵基数树，新请求沿树往下匹配最长前缀，满了按最近最少使用淘汰。</li>
+    <li><b>RadixAttention。</b>SGLang 把所有缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树往下匹配最长前缀，满了按最近最少使用淘汰。</li>
     <li><b>命中率可以很高。</b>DeepSeek 公开过 24 小时的线上统计：6,080 亿输入 token 里 56.3% 命中了存在磁盘上的 KV。</li>
     <li><b>线性注意力和滑窗难复用。</b>线性层的状态是整段压出来的，截不回任意位置；滑窗层早先位置的 KV 已经丢了。</li>
   </ul>
@@ -63,14 +64,14 @@ __FIG_S3_POOL__
   <p>HBM 放不下的 KV 可以往下放：主机内存、本机磁盘、远端存储，一层比一层大、一层比一层慢。
     命中之后要搬回来，搬回来比重算慢就白存了。</p>
   <div class="note ok"><span class="t">盈亏带宽</span>
-    搬回 ＝ 每 token KV 字节 × L ÷ 带宽；重算 ≈ 每 token FLOP × L ÷ 有效算力。<br>
+    搬回 ＝ 每 token KV 字节 × L ÷ 带宽；重算 ≈ 每 token FLOP × L ÷ 有效算力。L 是命中的前缀长度（token 数），有效算力是峰值乘上实际利用率。<br>
     两者相等时：<b>带宽 ＝ 每 token KV 字节 × 有效算力 ÷ 每 token FLOP</b>。链路比它慢，就不如重算。<br>
     公式只算线性部分：注意力那项随 L² 涨，上下文越长重算越贵，下放越划算（图里算进了它）。负载高时重算挤占别人的算力、搬回能和计算重叠，盈亏点再往慢链路那边移。</div>
 __FIG_S3_OFFLOAD__
   <p>GQA 的 Llama-3.1-70B 每个 FLOP 对应的 KV 多，盈亏带宽要 5.35 GB/s，是 V3 的两倍多。</p>
   <ul>
     <li><b>llm-d</b>（开源的 Kubernetes 推理调度）在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。它的排障说明也写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
-    <li><b>Mooncake Store</b>：把集群各机的内存和 SSD 拼成一个 KV 池，机器之间用 RDMA 互取。</li>
+    <li><b>Mooncake Store</b>：把集群各机的内存和 SSD 拼成一个 KV 池，机器之间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下面的分层 KV 缓存。TPU 侧有 TPU Sync（传输层，见 8.3）。</li>
   </ul>
 

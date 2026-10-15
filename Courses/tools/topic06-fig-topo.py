@@ -386,13 +386,13 @@ def fig_rank():
 # ─────────────────────────────────────────────────────────────────────────
 def fig_slice():
     f = Fig(W, "DeepSeek-V3 用 FP8 权重 671 GB，即 625 GiB，每个 token 的 KV 70272 字节。TPU v7 每颗芯片可用约 189.5 GiB，"
-               "预留一成给激活后按 170.55 GiB 算。竖虚线是 4、8、16、32 颗芯片各能放多少。"
+               "预留一成给激活值后按 170.55 GiB 算。竖虚线是 4、8、16、32 颗芯片各能放多少。"
                "4K 上下文 64 并发要 642 GiB，纸面 3.76 颗，取 4 颗；"
                "4K 256 并发 694 GiB，纸面 4.07 颗，可切片只有 4、8、16、32 颗几档，所以取 8 颗；"
                "32K 64 并发 762 GiB，32K 256 并发和 128K 64 并发都是 1174 GiB，都是 8 颗；"
                "128K 256 并发要 2821 GiB，纸面 16.54 颗，要 32 颗")
     y0 = f.header("DeepSeek-V3 在 TPU v7 上最少几颗芯片　——　<tspan font-weight=\"700\">权重是地板，KV 决定往上加多少</tspan>",
-                  "本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GiB（可用 189.5 GiB，预留一成给激活），向上取到切片档位",
+                  "本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GiB（可用 189.5 GiB，预留一成给激活值），向上取到切片档位",
                   [(BL, "FP8 权重 625 GiB"), (OR, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档芯片能放多少")])
     PH = 470
     py = f.panel(0, y0, W, PH, "要多少 HBM（GiB），取几颗芯片", INK)
@@ -430,7 +430,7 @@ def fig_slice():
                "📌 DeepSeek-V3 结构（671B、61 层、MLA kv_lora_rank 512 ＋ rope 64、256 专家）：topic06_numbers.py，来自 HF config.json。"
                "每 token KV 70,272 B ＝ (512 ＋ 64) × 2 B × 61 层。",
                "📌 每 device 可用 94.75 GiB（README 写 GB，运行日志为 GiB；v7 每芯片物理 192 GiB）、FP8 MoE 实测约 101.8/device 超 HBM 所以用 FP4：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、:72-73（R1 与 V3 同架构）。",
-               "⚠️ 本课推导与假设：FP8 每参数 1 字节、不计 block scale；激活预留 10% 是假设；KV 不重复（DP 注意力或 EP），"
+               "⚠️ 本课推导与假设：FP8 每参数 1 字节、不计 block scale；激活值预留 10% 是假设；KV 不重复（DP 注意力或 EP），"
                "没算 DP 注意力在每个 device 上各放一份约 17B 非专家权重的开销；切片档位取 4／8／16／32 颗（v7x-8／16／32／64）。"
                "纸面 MoE 76.1 GiB/device ＝ 256 × 58 层 × 3 × 7168 × 2048 字节 ÷ 8 device。")
     f.save("fig6-s10-slice.svg", yb + 14)

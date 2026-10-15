@@ -4,11 +4,11 @@
 BODY = '''
   <p class="lead">上一节让搬一趟出更多字，这一节让每一趟少搬一点、少停一会。
     <b>量化</b>让每个权重和 KV 占更少的字节，<b>kernel 融合</b>去掉 kernel 交接时的空等。
-    这条路先走到 4 bit：2022 年底的 GPTQ、2023 年的 AWQ 只压权重，算时再还原。2024 年底 DeepSeek-V3 直接用 FP8 训练、按 FP8 发布；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核。</p>
+    这条路先走到 4 bit：2022 年底的 GPTQ、2023 年的 AWQ 只压权重，算时再还原。2024 年底 DeepSeek-V3 直接用 FP8 训练、按 FP8 发布；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核（GPU 上专做矩阵乘的单元）。</p>
 
   <h3 id="s12-1">12.1　位数减半，下限减半</h3>
   <p>batch 小时，一步的时间几乎全花在读权重上。
-    DeepSeek-V3 每个 token 激活 37B 参数，放在 8 颗 TPU v7 上，BF16 一步至少 1.26 ms，FP8 0.63 ms，FP4 约 0.33 ms（本课推导，只算权重）。</p>
+    DeepSeek-V3 每个 token 激活 37B 参数，放在 8 颗 TPU v7 上分着读，BF16 一步至少 1.26 ms，FP8 0.63 ms，FP4 约 0.33 ms（本课推导，只算权重）。FP8 这个数是 1.2 节按一颗芯片算的 5 毫秒的八分之一。</p>
 __FIG_S12_BYTES__
   <p>省下的显存能多放 KV、多接请求，顺带走了第四节分摊的路。</p>
 
@@ -16,7 +16,7 @@ __FIG_S12_BYTES__
   <p>4 bit 只有 16 个编码，必须几个数共用一个缩放。
     MXFP4 每 32 个数共用一个 E8M0 缩放，平均 4.25 bit；NVFP4 每 16 个数共用一个 E4M3 缩放，平均 4.5 bit。</p>
 __FIG_S12_MX__
-  <p>块越小越贴合局部数值，精度越好，字节也越多。E4M3 有尾数，缩放能取非 2 的幂；E8M0 全是指数，只能取 2 的幂。格式的细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
+  <p>块越小越贴合局部数值，精度越好，字节也越多。格式的细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
 
   <h3 id="s12-3">12.3　低精度直接训出来</h3>
   <p>发布时就是低精度，正在变成默认做法。
@@ -42,13 +42,13 @@ __FIG_S12_FUSE__
     megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读。</p>
   <p>Hazy 的实测里，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%，比 vLLM 快约 2.5 倍、比 SGLang 快 1.5 倍多。模型越小、batch 越小，空等占比越大，这招赚得越多。
     Mirage MPK（2025-06 开源，论文 2025-12）让编译器自动把模型变成一个 megakernel，论文报的端到端延迟最多降 1.7 倍。</p>
-  <p>TPU 这边，Inferact 2026-09 用 Pallas 写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；对照的 16 张 GB200（vLLM）是 452，两边都按接受长度 6 换算。
+  <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；对照的 16 张 GB200（vLLM）是 452 token，两边都按接受长度 6（每步平均收下 6 个字，见 11.2）换算。
     它一步约 8.5 ms，下一层的权重提前搬进片上内存，整套从零编译不到 90 秒；不开投机时，batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
   <p>KV 存成 FP8，每 token 的字节约减半，同样显存多装近一倍请求；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数（K3 的 SGLang 配方写 fp8_e4m3）。
     K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
-  <p>实际布局不是严格一半。FlashMLA 给 V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码部分为了精度留在 BF16。
+  <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码（告诉模型每个字排第几）部分为了精度留在 BF16。
     BF16 是 1,152 B，656 B 是它的 57%，同样显存多装约 1.76 倍（本课推导）。</p>
 
   <div class="note ok"><span class="t">回到主线</span>

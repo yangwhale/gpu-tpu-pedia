@@ -25,15 +25,20 @@ __FIG_S9_RATIO_T5__
     <tr><td>一个 prefill（4 卡）</td><td>4 × 每卡 18,200 input tok/s（官方的 prefill 单卡吞吐）</td><td>约 7.28 万 tok/s</td></tr>
     <tr><td>要几个</td><td>71.7 ÷ 7.28</td><td>约 9.8</td></tr>
   </table>
-  <p>官方高并发配置用 8 个，比公式少；而 runbook 实测单卡峰值 15,196，只有 18,200 的 83%，照实测要的 prefill 更多。</p>
-  <p>公式只是起点。同一份 runbook 早期扫过 prefill 个数（历史数据），每张 decode 卡的输出：8 个时 6,788，14 个时 8,809，16 个时 8,993。14 到 16 只涨 2%，已经喂饱，runbook 因此把 14 定为默认（runbook:43、1117）。</p>
+  <p>同一个部署，三处出现了三个 prefill 个数，条件各不相同：</p>
+  <ul>
+    <li><b>9.8 个</b>：上表公式代官方 prefill 单卡 18,200 算出的起点。runbook 实测单卡峰值只有 15,196（83%），照实测还要更多。</li>
+    <li><b>8 个</b>：官方高并发配方（high-conc-8p1d）的取值，比公式少。</li>
+    <li><b>14 个</b>：runbook 早期自己扫出来的（历史数据）。每张 decode 卡输出 8 个时 6,788，14 个时 8,809，16 个时 8,993；14 到 16 只涨 2%，已经喂饱，runbook 因此把 14 定为默认（runbook:43、1117）。</li>
+  </ul>
+  <p>自己上线时，用公式算起点，再在起点上下扫，取每卡输出不再涨的那一档。</p>
 
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
-  <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D 上再加一台 prefill：总输出只从 1,118.8 到 1,159.0 tok/s，每张卡反倒从 69.9 掉到 48.3。</p>
+  <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上再加一台 prefill：总输出只从 1,118.8 到 1,159.0 tok/s，每张卡反倒从 69.9 掉到 48.3。</p>
 __FIG_S9_2P1D__
-  <p>用户那头却变化很大：平均 TTFT 少了 28%，P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 的 SLO 看是赚。</b></p>
+  <p>用户那头却变化很大：平均 TTFT 少了 28%，P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 的 SLO（对用户承诺的延迟上限）看是赚。</b></p>
   <ul>
-    <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph，所以 TPOT 偏高，没拿来比。</li>
+    <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph（把一串 GPU 调用录好、整段重放），所以 TPOT 偏高，没拿来比。</li>
     <li><b>为什么吞吐不涨</b>：瓶颈在 decode，排队的请求只是开始得早了。</li>
   </ul>
 
@@ -53,8 +58,8 @@ __FIG_S9_SWEEP__
   </table>
   <p><b>拆不拆跟着负载走，同一个模型可以两种答案。</b></p>
   <details class="foldfig"><summary><b>出处与口径</b>：两组 TPU 例子</summary>
-  <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%；2P1D 每 pod 5.10K 对不拆的 6.39K（本课推导）。
-    Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量，不是扫描。</p></details>
+  <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%；2P1D 每 pod 5.10K 对不拆的 6.39K（本课推导）。</p>
+  <p>Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量，不是扫描。</p></details>
 
   <h3 id="s9-6">9.6　决策树：三个问题</h3>
   <p>从上往下问，答「否」就停。分块 prefill 见第四节，KV 薄不薄见 8.8。</p>
@@ -67,7 +72,7 @@ __FIG_S9_AFD_T5__
   <p>开源实现就没这么顺。vLLM 的 AFD 是外部插件，主仓库的 RFC 已因长期不活跃被关闭；插件博客在 Ascend 910C 上给的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
-    <li><b>配比是关键</b>：16K 输入时 48 个注意力配 16 个专家，每 die 220.3，比不拆少 5.3%；注意力加到 64 个，涨到 258.9。博客作者也说，测过的配比下 FFN 还有余力，注意力再加可能还涨。</li>
+    <li><b>配比是关键</b>：16K 输入时 48 个注意力配 16 个专家，每 die（芯片上的一块计算单元）220.3，比不拆少 5.3%；注意力加到 64 个，涨到 258.9。博客作者也说，测过的配比下 FFN 还有余力，注意力再加可能还涨。</li>
     <li><b>只能看趋势</b>：这组实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
     <li><b>TPU 侧</b>：我们没找到公开的 AFD 实现或实测。</li>
   </ul>

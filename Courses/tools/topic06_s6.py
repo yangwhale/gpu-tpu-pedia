@@ -17,7 +17,7 @@ __FIG_S6_TEPDEP_T5__
     同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐从 1,319 涨到 2,758，是 <b>2.09 倍</b>。</p>
   <p>原始记录把功劳记给容量：副本让出的显存多收了请求。拿 Little 定律核一下（在飞请求 ＝ 每秒输出 × 出字间隔）：</p>
 __FIG_S6_KV__
-  <p>在飞的请求反而少了，<b>变的是步时</b>：TP4 的 4 张卡每步各读一遍整份 KV，每层还多一次 AllReduce。这个归因是本课推导，runbook 没拆分。</p>
+  <p>容量没帮上忙，<b>变的是步时</b>：TP4 的 4 张卡每步各读一遍整份 KV，每层还多一次 AllReduce。这个归因是本课推导，runbook 没拆分。</p>
   <ul>
     <li><b>口径</b>：2.09 倍是 prompt 加输出的总 token 除以全部卡（16 张和 20 张，各含 12 张 prefill 卡）。decode 卡同时从 4 张翻到 8 张，只算 decode 卡的输出是 1.31 倍。</li>
     <li><b>换个模型</b>：MLA 开 TEP8 是 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，是 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</li>
@@ -26,7 +26,7 @@ __FIG_S6_KV__
   <h3 id="s6-3">6.3　DEP 的代价：每个 rank 都得自己备一份</h3>
   <p>DEP 下每个 rank 像一台小推理机，注意力权重、调度器、请求状态各一份。<b>状态按请求开、又不随 DP 切的东西，DEP 一宽就成倍涨。</b></p>
   <ul>
-    <li><b>K3 上 DEP8 起不来</b>：Kimi K3 的 93 层里有 69 层 KDA（线性注意力），每个请求一块固定状态。DEP8 下每个 rank 复制整个状态池，两次加载都 OOM；runbook 认为官方因此改推 TP 和 DCP。</li>
+    <li><b>K3 上 DEP8 起不来</b>：Kimi K3 的 93 层里有 69 层 KDA（线性注意力），每个请求一块固定状态。DEP8 下每个 rank 复制整个状态池，两次加载都 OOM；runbook 认为官方因此改推 TP 和 DCP（把一个请求的 KV 按 token 分存到几张卡上，见<a href="#s7-1">第七节</a>）。</li>
     <li><b>TP 反而切得开</b>：KDA 状态按头存，TP 按头切，每张卡只存自己那几个头；DP、EP、DCP 都不动头这一维（本课推导，与 runbook 所引官方说法一致）。</li>
     <li><b>每 rank 的 batch 会撞上实现上限</b>：SGLang 跑 V4-Pro dep8 时，一个注意力 kernel 写死每 rank 最多 1,024 个请求。实测 batch 到 999 时算力先到顶，上限没真正卡住。</li>
     <li><b>忙闲不均</b>：各 rank 的请求长短不一，专家那一步要等最慢的 rank；没请求的 rank 也得陪跑空前向（专题五 §4.4）。热门专家多复制几份就是 EPLB（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。</li>
@@ -44,14 +44,14 @@ __FIG_S6_TPU__
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，也就是 DEP8。</p>
 
   <h3 id="s6-6">6.6　名字别照字面套</h3>
-  <p>TEP／DEP 是 TRT-LLM 的叫法，不等于 Megatron 的 ETP／EDP。连「prefill 用哪个、decode 用哪个」，vLLM 部署 K3 和 TRT-LLM 的例子都正好相反（<a href="topic-05.html#s8-6">专题五 §8.6</a>）。</p>
+  <p>TEP／DEP 是 TRT-LLM（NVIDIA 的推理引擎）的叫法，不等于 Megatron（NVIDIA 的训练框架）的 ETP／EDP，那是专家层内部再分的 TP 组和数据并行组。连「prefill 用哪个、decode 用哪个」，vLLM 部署 K3 和 TRT-LLM 的例子都正好相反（<a href="topic-05.html#s8-6">专题五 §8.6</a>）。</p>
 
   <h3 id="s6-7">6.7　大 EP 为什么省</h3>
   <p>DeepSeek 的 decode 把专家铺到 144 张卡（18 个节点），每张卡只放 2 个路由专家加 1 个共享专家：</p>
   <ul>
     <li><b>读得少</b>：每张卡只读几个专家，一步更快，空出的显存给 KV。</li>
     <li><b>车坐得满</b>：上百张卡的请求汇到同一个专家，每个专家每步分到的行数往拐点（5.5）靠。</li>
-    <li><b>通信藏起来</b>：all-to-all 用 DeepEP，一批拆两个微批，一个传、一个算。</li>
+    <li><b>通信藏起来</b>：把每个 token 送到它选中专家所在的卡，这一步 all-to-all 用 DeepEP（DeepSeek 开源的专家通信库）；一批再拆成两个微批，一个传、一个算。</li>
   </ul>
   <p>所以专家那头，大 EP 让一趟分给更多行；注意力那头，DEP 省掉每步白读的 KV 副本。</p>
 

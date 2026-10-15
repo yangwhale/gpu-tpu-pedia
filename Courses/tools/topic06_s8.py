@@ -21,7 +21,7 @@ __FIG_S8_PD_T5__
   </ul>
 
   <h3 id="s8-2">8.2　回顾：那一趟要多久</h3>
-  <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过一个 8K prompt：KV 约 1.04 GB，走 100 Gbps 的数据中心网络约 83 ms，前后两段 PCIe 各约 16 ms（按 Gen5 x16 单向约 64 GB/s 估，本课推导）。</p>
+  <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过 Qwen3-Coder-480B 的一个 8K prompt：KV 约 1.04 GB，走 100 Gbps（每秒 100 吉比特，约 12.5 GB/s）的数据中心网络约 83 ms，前后两段 PCIe（卡和主机之间的总线）各约 16 ms（按 Gen5 x16 单向约 64 GB/s 估，本课推导）。</p>
 __FIG_S8_KV_TRIP_T5__
   <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 是保守算：现役 A4X 每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（本课推导）。</p>
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
@@ -38,17 +38,17 @@ __FIG_S8_STACK__
   <p>排查按层找：带宽掉到几百 MB/s 是搬运层没走对通道；请求接不上、握手失败多半在调度层；前缀命中率低看存储层。</p>
 
   <h3 id="s8-4">8.4　GPU 实战：配错一个开关，慢两个数量级</h3>
-  <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s。按 1.04 GB 算（专题五的统一尺子，Qwen3-Coder-480B 一条 8K prompt 的 KV），一趟要 5,201 ms，比 prefill 还长。</p>
+  <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s。按 8.2 那条 1.04 GB 的尺子算，一趟要 5,201 ms，比 prefill 还长。</p>
 __FIG_S8_BW__
   <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。cuda_ipc 只在同一个 NVLink 域（全互联、能直接读彼此显存的一组 GPU，如 NVL72）里成立。补上三样配置后实测 7–167 GB/s，同一份 KV 一趟 149 ms 到 6.2 ms。</p>
   <p>配错不报错，只是 TTFT 慢；上线前先量一次 KV 传输带宽。</p>
   <details class="foldfig"><summary><b>那三样配置</b>：vLLM ＋ NIXL 在 GB300 上走 NVLink</summary>
   <ul>
     <li><code>UCX_TLS=cuda_copy,cuda_ipc,tcp</code>：只留 cuda_ipc（NVLink）和必要的拷贝、控制通道，去掉 RDMA。</li>
-    <li><code>UCX_CUDA_IPC_ENABLE_MNNVL=y</code>：允许跨节点的 cuda_ipc。</li>
+    <li><code>UCX_CUDA_IPC_ENABLE_MNNVL=y</code>：允许跨节点的 cuda_ipc（MNNVL 即跨机箱的 NVLink）。</li>
     <li><code>--enable-cumem-allocator</code>：显存用 cuMem 分配，cuda_ipc 才认得出来。</li>
   </ul>
-  <p>另外 prefill 和 decode 必须在同一个 NVLink 域（GKE 上用 subblock 标签做 podAffinity）。出处：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:106、180–194。</p></details>
+  <p>另外 prefill 和 decode 必须在同一个 NVLink 域（GKE 上用 subblock 标签做 podAffinity；pod 是 GKE 调度的一组容器）。出处：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:106、180–194。</p></details>
   <p>更麻烦的是，<b>同一个库在两个引擎上的结论正好相反</b>：</p>
   <table>
     <tr><th>引擎 · 场景</th><th>试了什么</th><th>结果</th></tr>

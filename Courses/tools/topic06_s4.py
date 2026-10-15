@@ -7,8 +7,7 @@
 
 BODY = '''
   <p class="lead">decode 每一步都要把权重搬一趟，同一步里拼进来的人越多，每人分摊到的那一份越小。
-    <b>调度决定这一趟能坐满几个人。</b>这一节的两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer 的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–5.6 倍。
-    Orca 比分页早一年，可放新人要有空位，空位靠第三节的分页腾，所以先讲显存。</p>
+    <b>调度决定这一趟能坐满几个人。</b>这一节的两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–5.6 倍。</p>
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
 __FIG_S4_GANTT__
@@ -36,7 +35,7 @@ __FIG_S4_CONC__
     客户端并发是另一个数：这组基线共 8,400 路，没进批的都在 prefill 那边排队。</p>
   <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），端到端只多 0.8%、峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 ms：每一步要算的人多了，这一步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
-    XLA 按静态形状编译，batch 大小也是形状的一部分。SGLang-JAX 为几种 batch 大小提前编译好计算图，
+    XLA（JAX 背后的编译器）按静态形状编译，batch 大小也是形状的一部分。SGLang-JAX 为几种 batch 大小提前编译好计算图，
     人数不在档位上就补到最近一档，补出来的行照样参与计算。来由见
     <a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>。</div>
 
