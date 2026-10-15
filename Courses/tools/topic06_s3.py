@@ -2,7 +2,7 @@
 """专题六 · 第三节「KV cache：账、池、复用」。图在 topic06-fig-kv.py。"""
 
 BODY = '''
-  <p class="lead">尺子有了，回到第一节那一趟：每条在跑的序列都在显存里单独占一块 KV。
+  <p class="lead">回到第一节那一趟：每条在跑的序列都在显存里单独占一块 KV。
     <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b>
     2023 年起的几招都在同样的显存里多装人、少重算。</p>
 
@@ -15,14 +15,13 @@ BODY = '''
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
-  <p>DeepSeek 自家这条线后来又改了三代，省的地方不一样：看黄框落在哪一排。V4 的两个池怎么分预算见 3.4。</p>
+  <p>DeepSeek 自家这条线后来又改了三代。V3.2 的 DSA 存的一点没少，省的是读：先用小打分器扫一遍历史，只读挑中的。V4 改的是存：沿 token 方向把相邻几个 token 并成一条，另开滑窗池原样留最近一段（分预算见 3.4）。</p>
 __FIG_S3_LINEAGE__
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
-  <p>一颗 v7 芯片扣掉一成激活值，再扣 V3 FP8 权重铺 8 颗芯片后分到的 1/8，剩 92.4 GiB 给 KV（拆法见图，口径同 10.5）。</p>
-  <p>KV 不切：注意力走数据并行（DP attention），每条序列的 KV 只住一个 device（第六节）。这里按权重全切粗算，实际非专家权重每个 device 各要一份，池子更小。</p>
+  <p>一颗 v7 芯片扣掉激活值和分到的那份 V3 权重，剩下的给 KV（拆法见图，口径同 10.5）。每条序列的 KV 整条住一个 device（注意力走数据并行，见第六节），所以池子除以每条的 KV 就是装几条。权重这里按全切粗算；实际非专家权重每个 device 各存一份，池子更小。</p>
 __FIG_S3_BATCH__
-  <p>人少了，一趟搬运分给的 token 也少：这是长上下文贵的第一个原因。</p>
+  <p>上下文越长人越少，一趟搬运分到的 token 越少：这是长上下文贵的第一个原因。</p>
 
   <h3 id="s3-3">3.3　PagedAttention：像操作系统那样分页</h3>
   <p>早先按最大长度给每条序列预留一整段连续显存。PagedAttention 把 KV 切成固定大小的块，用页表记每块住在哪。</p>
@@ -37,21 +36,20 @@ __FIG_S3_PAGED__
   <span class="sub">（18 秒无声循环，Manim 渲染。块大小、块数、请求长度都是示意。）</span></figcaption></figure>
 
   <h3 id="s3-4">3.4　混合模型有两个池，预算要分</h3>
-  <p>V4 的滑窗池存最近 128 个 token 的原始 KV，全长池存压缩后的整段。
-    SGLang 开两个池共用一份预算，用 <code>--swa-full-tokens-ratio</code> 定怎么分。</p>
+  <p>SGLang 让 V4 两个池共用一份显存预算，用 <code>--swa-full-tokens-ratio</code> 定隔板。滑窗池每条用量封顶，全长池随输入变长一直涨，隔板因此跟着输入长度挪。</p>
 __FIG_S3_POOL__
   <p>两边一起满之后再多装人，吞吐几乎不涨（4.3）：瓶颈从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
-    tpu-inference 跑 Qwen3.5 时块编号池算成了实际该有的约 3.5 倍，越界的编号被 JAX <b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
+    tpu-inference 跑 Qwen3.5 时块编号池算成了实际该有的约 3.5 倍，多出的编号没有对应的显存；JAX 对越界下标<b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
 
   <h3 id="s3-5">3.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样（同一段 system prompt、多轮对话的前几轮），这段的 KV 留着，下一个直接接着算。</p>
   <ul>
     <li><b>RadixAttention。</b>SGLang 2023 年把前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多是当时其他系统的 6.4 倍（整套运行时）。</li>
     <li><b>默认就开。</b>vLLM 早先的前缀缓存命中率低时反而拖慢，默认关；2025 年 1 月 V1 改了数据结构，命中率为 0 也只掉不到 1%，才默认打开。</li>
-    <li><b>命中率可以很高。</b>DeepSeek 线上过半输入命中磁盘上的 KV。128K 输入、前缀高度复用的请求，首字从 13 s 降到 0.5 s（DeepSeek API 文档 2024-08）。</li>
-    <li><b>命中只认一字不差的前缀。</b>vLLM 每块的哈希连着前面所有块一起算，开头改一个 token，后面整段都对不上；LMCache 论文报业界常用的截断上下文能让前缀命中率掉一半。</li>
+    <li><b>命中率可以很高。</b>DeepSeek 线上把 KV 存在磁盘上，过半输入能命中，免去重算。</li>
+    <li><b>命中只认一字不差的前缀。</b>vLLM 每块的哈希连着前面所有块一起算，开头改一个 token，后面整段都对不上；LMCache 论文报业界常用的截断上下文（删掉早先几轮，开头就变了）能让前缀命中率掉一半。</li>
   </ul>
 __FIG_S3_DISK__
 <figure class="fbox fwide" id="anim-kvstore">
@@ -62,18 +60,18 @@ __FIG_S3_DISK__
   <p><b>线性注意力和滑窗难复用：</b>线性层的状态是整段压出来的，截不回任意位置；滑窗层早先的 KV 已经丢了。vLLM、SGLang 于是在块边界另存状态快照；tpu-inference 跑 Qwen3.5 得显式关掉（<code>--no-enable-prefix-caching</code>），否则断言错误（同一 README:95）。</p>
 
   <h3 id="s3-6">3.6　分层卸载：搬回来，还是重算</h3>
-  <p>KV 还能往下放到主机内存、磁盘乃至远端存储。</p>
+  <p>显存留不下所有想复用的 KV，就往下放到主机内存、磁盘乃至远端存储，用时搬回。</p>
   <div class="note ok"><span class="t">盈亏带宽</span>
     搬回 ＝ 每 token KV 字节 × L ÷ 带宽；重算 ≈ 每 token FLOP × L ÷ 有效算力。L 是命中的前缀长度，有效算力是峰值乘利用率。<br>
     两者相等时：<b>带宽 ＝ 每 token KV 字节 × 有效算力 ÷ 每 token FLOP</b>。链路比它慢，就不如重算。<br>
     公式只算线性部分，注意力那项随 L² 涨，越长越该下放（图里算进了它）。负载高时重算挤占别人的算力、搬回能和计算重叠，盈亏点再往慢链路移。</div>
 __FIG_S3_OFFLOAD__
-  <p>V3 的盈亏带宽只要 2.19 GB/s；GQA 的 Llama-3.1-70B 每 FLOP 摊到的 KV 字节多，链路至少 5.35 GB/s 才划算。</p>
+  <p>V3 的 KV 省，盈亏线很低；GQA 的 Llama-3.1-70B 每 FLOP 摊到的 KV 字节多，链路至少 5.35 GB/s 才划算。</p>
   <ul>
     <li><b>llm-d</b> 2026 年在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 → 0.56 s，P90 2.1 → 0.5 s，总吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。</li>
-    <li><b>Mooncake Store</b>：集群各机的内存拼成一个 KV 池，按块哈希存取，冷数据可再下放到 SSD；Master 只管元数据和分配，字节由 Transfer Engine 走 RDMA（网卡直接读写对方内存，不经 CPU）搬。SGLang HiCache（2025-09）、vLLM（2026-05）都已能接它当后端。</li>
+    <li><b>Mooncake Store</b>：集群各机的内存拼成一个 KV 池，按块哈希存取，冷数据可再下放到 SSD；字节走 RDMA（网卡直接读写对方内存，不经 CPU）搬。SGLang HiCache（2025-09）、vLLM（2026-05）都已能接它当后端。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下分层存 KV；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.3。</li>
-    <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储）；官方博客报长上下文和多轮对话下吞吐最多是全部重算的 6 倍、首字最多降 80%。vLLM 0.11 也自带了 CPU 下放（OffloadingConnector），下放成了两大引擎的标配。</li>
+    <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储）；官方博客报长上下文和多轮对话下吞吐最多是全部重算的 6 倍、首字最多降 80%。vLLM 0.11 也自带 CPU 下放（OffloadingConnector），两大引擎都有了。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
