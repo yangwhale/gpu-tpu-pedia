@@ -8609,7 +8609,7 @@ body.figonly section h3{margin-top:34px}
   <p>上下文变长也会缩（图最右柱）。
     验证本不该因此变贵：不开投机时每字间隔只从 11.1 涨到 11.4 ms，多验的位置又共用同一份 KV。
     更可能是接受长度掉了，或草稿读长 KV 变慢（没实测，本课推导）。</p>
-  <p>DEP（第六节）本为大 batch 而设，开投机正碰上算力先满：B200 上 DeepSeek-V4-Flash 用 vLLM、DEP8 开 MTP，十档并发全变慢，−3% 到 −37%。</p>
+  <p>DEP（第六节）本为大 batch 而设，高并发时算力已满，投机成了纯开销：B200 上 DeepSeek-V4-Flash 用 vLLM、DEP8 开 MTP，十档并发全变慢（−3% 到 −37%），并发 1 也慢 12%。</p>
   <p>峰值和端到端还可能反向：GB300 上 V4-Pro 把 MTP 从 1 步加到 2 步，decode 峰值掉 13%，端到端反涨 28%。真实负载 batch 多半没那么大，白送的那部分还在。</p>
 
   <h3 id="s11-4">11.4　温度：压测怎么发，结果就怎么变</h3>
@@ -9494,7 +9494,7 @@ body.figonly section h3{margin-top:34px}
   <p>R1 上也有图里 GLM-5.1 那个问题：名义上在加载权重，实际在反复重编译。加载代码每搬完一个 tensor 就清一次编译缓存（<code>jax.clear_caches()</code>），1,367 个 tensor 只有 25 种形状，去掉清缓存那一行，这段从 215.7 s 降到 21.4 s。</p>
 
   <h3 id="s13-3">13.3　权重加载：别让几十个引擎抢一根管子</h3>
-  <p>Kimi K2.6 把 MoE 权重缓存放在本机内存盘，缓存还在时冷启动 6 分 8 秒；机器一重启缓存就丢，又是 57 分钟。放在共享文件系统上，每层读取耗时是内存盘的 38 倍。</p>
+  <p>Kimi K2.6 把 MoE 权重缓存放在本机内存盘，缓存还在时冷启动 6 分 8 秒；机器一重启缓存就丢，要回到没缓存时的 57 分钟上下（60 层那档实测）。放在共享文件系统上，每层读取耗时是内存盘的 38 倍。</p>
   <p>扩容时几十个引擎一起起，平分共享存储的总带宽（本课推导）。GPU 这边 V4-Pro 的做法是放本地：806 GB 权重放本地 SSD RAID，14 GB/s，估算加载不到 1 分钟。</p>
   <div class="note"><span class="t">一条经验</span>搬字节那段用本地缓存省，编译那段用持久化缓存省；都省不掉，就提前起好备用副本。</div>
 
@@ -9863,7 +9863,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照）</td></tr>
     <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>NVFP4（4 bit 格式）KV：大小约是 FP8 KV 的一半，前缀命中率高 20%</td></tr>
     <tr><td>2026</td><td>复用与下放</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
-    <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变，光改软件：每卡从首发日约 2,200 到约 11,200（含 MTP；PyTorch 博客）</b></td></tr>
+    <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变，光改软件：每卡从首发日约 2,200 到约 11,200（后者开 MTP、首发日没开；PyTorch 博客）</b></td></tr>
   </table></div>
   <p>落到真实账上，看 DeepSeek 公开的一天：</p>
 <figure class="fbox fwide" id="fig-s14-day"><svg viewBox="0 0 1400 368" width="100%" role="img" aria-label="DeepSeek 2025-03 公开的一天。一根横条是全天 7,760 亿 token：输入命中缓存 3,420 亿，占 44.1%；输入未命中 2,660 亿，占 34.3%；输出 1,680 亿，占 21.6%。输入合计 6,080 亿，占 78.4%，其中 56.3% 命中缓存。右边：平均 226.75 个 H800 节点，合 1,814 张卡，全天平均每卡每秒约 4,950 token"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -9921,7 +9921,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>decode MoE 每专家平均 8 行，MXU 一边 256，只用上 1/32</td><td>本课推导：256 × 8 ÷ 256；MXU 尺寸见 JAX jax/_src/pallas/mosaic/tpu_info.py 的 mxu_column_size</td></tr>
     <tr><td>Gemma4-31B 并发 1 TTFT 86 ms，并发 256 涨到 7,756 ms（多出来的是排队）</td><td>本课程作者实测：gpu-tpu-pedia tpu/tpu-inference/Gemma4-31B/README.md:453-486</td></tr>
     <tr><td>InferenceX 三点 68→9,759、121→3,816、173→895 tok/s/GPU</td><td>gpu-tpu-pedia VLLM-V4PRO-RUNBOOK.md:683-695</td></tr>
-    <tr><td>V4 on GB300：交互 ~50 tok/s/user 时每卡 ~11,200（开 MTP；分母是 decode 卡还是全部卡，官方未写明），Day-0 ~2,200（5.1×）；每卡同时服务约 224 个用户</td><td>PyTorch 博客 2026-06-23「Serving DeepSeek-V4 on GB300 with SGLang: 5x Higher Throughput at the Same Interactivity Since Day-0」；224 ＝ 11,200 ÷ 50 本课推导</td></tr>
+    <tr><td>V4 on GB300：交互 ~50 tok/s/user 时每卡 ~11,200（开 MTP；分母是 decode 卡还是全部卡，官方未写明），Day-0 ~2,200（未开 MTP，5.1×）；每卡同时服务约 224 个用户</td><td>PyTorch 博客 2026-06-23「Serving DeepSeek-V4 on GB300 with SGLang: 5x Higher Throughput at the Same Interactivity Since Day-0」；224 ＝ 11,200 ÷ 50 本课推导</td></tr>
     <tr><td>同一次跑：output÷decode 卡 5,270，(in＋out)÷全部卡 11,880，换口径 1,318 到 47,520，差 36×</td><td>gpu-tpu-pedia SGLANG-V4PRO-RUNBOOK.md:794-809，字段定义 :731-735；1,318、47,520、36× 本课推导</td></tr>
     <tr><td>假天花板：6,887 → 10,614（＋54%）→ 10,704，峰值 12,070</td><td>SGLANG-V4PRO-RUNBOOK.md:611-615、849-858（§11.5 L849-896）</td></tr>
     <tr><td>temperature 0 与非 0：投机接受率 1.16% 对 34%，吞吐 944 对 2,911；K3 的草稿按概率抽，官方就用温度 1.0 压测</td><td>VLLM-V4PRO-RUNBOOK.md:394-420；K3 见 VLLM-K3-RUNBOOK.md:226-230</td></tr>
@@ -10081,6 +10081,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R53 补充 · 12.7：FP8 KV 不校准时缩放全取 1.0；校准后可按张量或按 KV 头给缩放，按头只支持 FlashAttention 后端且须经 llm-compressor 校准</td><td>docs.vllm.ai/en/latest/features/quantization/quantized_kvcache.html（「No calibration (default scales): All quantization scales are set to 1.0」「Per-attention-head quantization is currently available only with the Flash Attention backend and requires the calibration pathway provided by llm-compressor」）</td></tr>
     <tr><td>R56 复核 · 3 ／ 4 ／ 5.1 ／ 11 ／ 12 ／ 13 ／ 14.3 ／ 故事图：SGLang 路由 20%→75%、1.9 倍改记「对 v0.3」；DeepSeek 13 s → 0.5 s 的条件是「128K、高复用 prompt」，正文去掉「大半重复」；megakernel 2.5 倍／1.5 倍是 H100、Llama-1B，B200 上对 vLLM 超 3.5 倍；Flash-Decoding 8 倍、EAGLE-3 6.5 倍与 1.38 倍、llm-d 340／2,850 ms、Orca 36.9× 与原文一致</td><td>lmsys.org/blog/2024-12-04-sglang-v0-4（「up to 1.9x throughput increase and 3.8x hit rate improvement」，表「Cache hit rate; SGLang v0.3: 20%; SGLang v0.4: 75%」）；api-docs.deepseek.com/news/news0802（「For a 128K prompt with high reference, the first token latency is cut from 13s to just 500ms」）；hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles（「On an H100, our megakernel runs almost 2.5x faster than vLLM and over 1.5x faster than SGLang」「On a B200, the gap with vLLM rises to over 3.5x」）；arXiv <a href="https://arxiv.org/abs/2512.22219" target="_blank" rel="noopener">2512.22219</a>（「up to 1.7× lower end-to-end inference latency」）；crfm.stanford.edu/2023/10/12/flashdecoding.html（「up to 8x speedups in decoding speed for very large sequences」，batch size 1）；arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a>（「speedup ratio up to 6.5x」「1.38x throughput improvement at a batch size of 64」，表 3 基线为不投机的 SGLang，H100、LLaMA-3.1 8B）；Red Hat Developer 2025-10-07（「Warm cache hit; Without cache routing: 2,850 ms TTFT (worst case); With KV cache routing: 340 ms TTFT」）。2026-10-15 核对</td></tr>
     <tr><td>R59 补充 · 14.3 图「DeepSeek 一天的账」：输入未命中 2,660 亿；命中缓存、未命中、输出三段分别占全天 7,760 亿 token 的 44.1%、34.3%、21.6%；输入占 78.4%</td><td>本课推导：6,080 − 3,420 ＝ 2,660；3,420 ÷ 7,760、2,660 ÷ 7,760、1,680 ÷ 7,760；6,080 ÷ 7,760（6,080／3,420／1,680 同第 137、30 行；1,814 卡与每卡每秒约 4,950 同第 144、30 行）</td></tr>
+    <tr><td>R76 复核 · 11.3 ／ 14.3：B200 V4-Flash 开 MTP 并发 1 也慢 12%（72 → 63 tok/s），高并发变慢归因于算力已满（原文）；PyTorch 博客 11,200 是 2026-06 开 MTP 曲线、2,200 是 Day-0（2026-04）不开 MTP 曲线</td><td>gpu/inference/a4/deepseek-v4/README.vllm.md:268、:283（「高并发下 EP+DP=8 已充分利用 GPU 算力，MTP 的投机计算变成纯开销」）；pytorch.org/blog/serving-deepseek-v4-on-gb300-with-sglang-5x-higher-throughput-at-the-same-interactivity-since-day-0（「the June 2026 MTP curve delivers ~11,200 tok/s/GPU … versus ~2,200 tok/s/GPU for the Day-0 (April 2026) no-MTP curve」）。2026-10-15 核对</td></tr>
   </table></div>
 </div></section>
 
