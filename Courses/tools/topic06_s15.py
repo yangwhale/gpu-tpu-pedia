@@ -67,10 +67,10 @@ BODY = '''
     <tr><td>TEP／DEP 的定义；Megatron 命名；Folding</td><td>沿用专题五台账第 43、44、18 行</td></tr>
     <tr><td>Meta 上下文并行：128 张 H100（16 节点）跑 Llama3 405B，prefill 1M token 77 s、128K 3.8 s，并行效率 93%</td><td>arXiv 2411.01783 摘要</td></tr>
     <tr><td>K3 DCP：128K 并发 8 吞吐 108 → 365（＋237%）、并发 1 ＋12%；4K 并发 8 −9%；8K 并发 8 −11%、并发 32 ＋24%；32K 并发 8 −17%、并发 32 ＋7%</td><td>gpu-tpu-pedia SGLANG-K3-RUNBOOK.md §11.0.3 :1010-1023、宽表 :921-938；百分比本课推导</td></tr>
-    <tr><td>DCP 让 KV 容量 1.5M → 12.2M token（官方逻辑容量）；单流 −26% 来自丢掉 symm-mem；R63 补充：TP8 开投机后实测 max_total_num_tokens 637,504（约 64 万），128K × 8 ＝ 1,048,576（100 多万）放不下</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962；实测值 :1171；乘积本课推导</td></tr>
+    <tr><td>DCP 让 KV 容量 1.5M → 12.2M token（官方逻辑容量）；单流 −26% 来自丢掉 symm-mem；TP8 默认配置不开投机实测 max_total_num_tokens 787,504（约 79 万；128K 宽表 TP8 行均未开投机），开投机降到 637,504（−19%），128K × 8 ＝ 1,048,576（100 多万）放不下</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962；实测值 :1171、未开投机见宽表 :934-938；乘积本课推导</td></tr>
     <tr><td>K3 128K 并发 8 首字中位：TP8 32.1 s，DCP8 2.3 s（含排队）；官方 PD 吞吐：1P1D（TP8 decode）2,808 对 2P2D（DCP8 decode）2,633 tok/s/GPU</td><td>SGLANG-K3-RUNBOOK.md:939（TP8 r060-isl128k）、:941（dcp8-isl128k）；:609-610、:707-708（官方原文引于 :1323）</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
-    <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP</td><td>沿用专题五台账第 23、29、45、21 行</td></tr>
+    <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP；pass-KV／pass-Q 按通信能否藏进注意力计算来选（10% 未命中仍选 pass-KV，低于 3.25% 才换 pass-Q）</td><td>沿用专题五台账第 23、29、45、21 行；arXiv 2411.01783 §3.4、§4.2.4</td></tr>
     <tr><td>KV 传输软件栈</td><td>github.com/ai-dynamo/nixl；github.com/kvcache-ai/Mooncake；LMCache arXiv 2510.09665；docs.nvidia.com/dynamo 的 KVBM；github.com/google/tpu-sync（~200 GB/s，not yet recommended for general use）；tpu-inference kv_transfer（jax.experimental.transfer）</td></tr>
     <tr><td>PD 传输带宽从 200 MB/s 调到 7–167 GB/s</td><td>VLLM-V4PRO-RUNBOOK.md:194，配置见 :106、180-194</td></tr>
     <tr><td>Qwen3-Coder 一条 8K 请求 KV 1.04 GB；各链路传完要 5,201／149／6.2 ms</td><td>本课推导：2 × 62 × 8 × 128 × 8192 字节（FP8）；83 ms 与 PCIe 数沿用专题五台账第 25 行</td></tr>
@@ -125,7 +125,7 @@ BODY = '''
     <tr><td>llm-d 分层卸载（TPU7x、Qwen3-32B，KV 卸到主机内存）：平均 TTFT 0.98 → 0.56 s，P90 TTFT 2.1 → 0.5 s，输入输出合计吞吐 67,262 → 73,178 tok/s（＋8.9%）</td><td>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md:436-439（HBM-only 对 HBM ＋ CPU RAM 那张表，2026-06-11 随 #1561 加入，故 14.3 表记 2026）。2026-10-15 核对</td></tr>
     <tr><td>Kimi K2 Thinking：QAT、MoE 原生 INT4，生成约快 2 倍</td><td>Hugging Face 模型卡 moonshotai/Kimi-K2-Thinking</td></tr>
     <tr><td>年份：GPTQ 2022、Splitwise 2023；批不变 kernel</td><td>arXiv 2210.17323；arXiv 2311.18677；Thinking Machines 博客「Defeating Nondeterminism in LLM Inference」</td></tr>
-    <tr><td>Mooncake 对 NIXL：并发 64 输出 1,333 对 1,693 tok/s</td><td>VLLM-V4PRO-RUNBOOK.md:705</td></tr>
+    <tr><td>Mooncake 对 NIXL：并发 64 输出 1,333 对 1,693 tok/s；SGLang R1 改走 Mooncake NVLink 后跑通，K3 的 PD 尝试同样选 mooncake，但因 PP8 prefill 的 kernel 报错未跑通</td><td>VLLM-V4PRO-RUNBOOK.md:705；sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md:57、:570；SGLANG-K3-RUNBOOK.md:1286-1291、:1049</td></tr>
     <tr><td>14 台 prefill 扫描 6,788／8,809／8,993；14 台全崩、注册表仍显示 14</td><td>SGLANG-V4PRO-RUNBOOK.md:43、1117；同文约束 #8</td></tr>
     <tr><td>Qwen3-Coder ＋12%</td><td>Qwen3-Coder-480B/README.md:1005-1021</td></tr>
     <tr><td>K3：KV 池 787,504 → 637,504；max-running 回调到 48；PD 下 decode 每请求一个状态槽</td><td>SGLANG-K3-RUNBOOK.md:1171、:76、:1318</td></tr>
