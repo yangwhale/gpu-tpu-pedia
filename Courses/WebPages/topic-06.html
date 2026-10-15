@@ -7649,7 +7649,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s十"><div class="wrap"><div class="stn"><span class="badge">第 十 节</span><h2>先选拓扑，再调参数</h2></div>
-  <p class="lead">第六到九节换的都是拓扑。换一次拓扑，抵得上把参数调遍：V4-Pro 换 DEP 每卡是 TP4 的 2.09 倍（第六节），只调并发是 +28%。</p>
+  <p class="lead">第六到九节换的都是拓扑。换一次拓扑，抵得上把参数调遍：V4-Pro 换 DEP 每卡是 TP4 的 2.09 倍（第六节），卡数不变只调并发是 +28%。</p>
 
   <h3 id="s10-1">10.1　回顾：线有快慢，切法先定</h3>
   <p>专题五 <a href="topic-05.html#s7-1">§7.1</a> 讲过：通信勤的切法要放在快线里，懒的才能跨慢线。</p>
@@ -7714,7 +7714,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>通信越勤的切法，越要放在快线里。</b><span class="capmore"><br><em>专题五原图，复用。这是训练口径；推理只有前向，FSDP 和梯度那几行不适用。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 次数为本课推导：TP 每层前反向各 2 次 all-reduce（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a> sec. 3）；FSDP 每层 3 次（ZeRO 的 3Ψ，arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a> sec. 7）；EP、PP、DP 按调度数出；叠上 PP 时 TP 的次数要除以 PP 段数，开重算时 TP 每层是 6 次。链路：GB300 NVLink 5 每 GPU 1.8 TB/s；A4X Max 每节点 4 块 GPU、4 × CX-8 800 Gb/s。</p></details></figure>
 
   <h3 id="s10-2">10.2　「+45% 对 +347%」：先看分母</h3>
-  <p>这两个数出自 V4-Pro 的部署记录，都是<b>总吞吐</b>，可三档用的卡数各不相同。</p>
+  <p>这两个数出自 V4-Pro 的部署记录，都是<b>总吞吐</b>，可图里三档配置用的卡数各不相同。</p>
 <figure class="fbox fwide" id="fig-s10-lens"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="同一组 V4-Pro 实测数，左边画总吞吐，右边画每张卡的吞吐。总吞吐看：1p1d 14563，3p1d 调到最好 21100 是加 45%，换 dep8 到 65132 是加 347%。但这三档分别用了 8、16、20 张卡，柱子下面每个小方块是一张卡，空心是 prefill，实心是 decode。换成每卡：1p1d 1820，3p1d 最好 1319，反而少 28%；dep8 最好 3257，是 3p1d 的 2.47 倍、1p1d 的 1.79 倍。同为 3p1d，只把并发从 256 调到 512，总吞吐加 28%"><defs><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一组数，换个分母结论就变　——　<tspan font-weight="700">「调参 +45%」按每卡算是 -28%</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · DeepSeek-V4-Pro · vLLM · 4K 进 1K 出。吞吐 ＝ prompt ＋ 输出 token 每秒。柱下每个小方块是一张卡（空心 prefill，实心 decode），柱里是并发</text>
@@ -7960,8 +7960,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="730" y="616" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换拓扑：3,257 ＝ 3p1d 最好的 2.47×，1p1d 起点的 1.79×</tspan></text>
 </svg><figcaption><b>左右两栏只换了分母，看「调参」那一步。</b><span class="capmore"><br><em>卡数含 prefill 与 decode。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:446（1p1d 并发 256，14,563）、:448（3p1d 并发 256，16,459）、:449（3p1d 并发 512，21,100）、:465（3p ＋ dep8 并发 512，55,153）、:468（并发 1,536，65,132）。「+45% / +347%」原话见 :489；「每卡 2.47×」见 :476；「256→512 涨 28%」见 :487。</p>
 <p>⚠️ 本课推导：每卡数 ＝ 总吞吐 ÷ GPU 数（1p1d 8 卡、3p1d 16 卡、3p ＋ dep8 20 卡，后两个数见 :476）；-28% 与 1.79× 是现算，原文没有。吞吐口径是 prompt 加输出的总 token，sa-bench、temperature=0。</p></details></figure>
-  <p>拆开看，+45% 里大半是加卡：prefill 从 1 台加到 3 台，卡数翻倍，每卡反而掉了 28%。卡数不变（仍是 3p1d），只把并发从 256 调到 512，总吞吐 +28%，这才是纯调参。</p>
-  <p>换拓扑在两种口径下都赢。同并发 512 第六节拆过；dep8 拉到并发 1,536 时每卡最高，但首字 95 s，已出了交互档。</p>
+  <p>拆开看，+45% 里大半是加卡：prefill 从 1 台加到 3 台，卡数翻倍，每卡反而变少。卡数不变、只调并发的那一步才是纯调参。</p>
+  <p>换拓扑在两种口径下都赢。同并发下为什么赢，第六节拆过；dep8 再拉高并发时每卡最高，但首字 95 s，已出了交互档。</p>
 
   <h3 id="s10-3">10.3　拓扑约束是硬的</h3>
   <p>16 个 device 跑 TP16，机间走 DCN 还是 ICI，结果差出一截。即便走 ICI，两台的总输出 513.8 tok/s 也不如单机 602。</p>
@@ -8251,7 +8251,7 @@ body.figonly section h3{margin-top:34px}
   <div class="note warn"><span class="t">本课推导的边界</span>纸面账只给下限，激活值预留 10% 也是假设；用一次真实启动看实测的 HBM 峰值。</div>
 
   <h3 id="s10-6">10.6　容量别拿小并发估</h3>
-  <p>R1 在 GB300 上的部署记录估算这套 DEP8 decode 能扛约 288 个并发，起初却只拿并发 8 去量。</p>
+  <p>R1 在 GB300 上的部署记录先估了这套 DEP8 decode 的容量，起初却只拿并发 8 去量。</p>
 <figure class="fbox fwide" id="fig-s10-conc"><svg viewBox="0 0 1400 664" width="100%" role="img" aria-label="DeepSeek-R1 在 GB300 上用 SGLang 跑 3P2D，共 20 张卡，1024 进 512 出。并发 8 时总吞吐 854，32 时 4635，64 时 5265，128 时 6878，192 时 9975，256 时 10390，384 时 10438，512 时 10715。文档估算这套 DEP8 decode 能扛约 288 个并发，并发 8 只用到约 3%。峰值是并发 8 的 12.5 倍，256 之后基本见顶"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">拿 conc=8 的数估容量，只看到了 3%　——　<tspan font-weight="700">峰值是它的 12.5 倍</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · DeepSeek-R1 · SGLang · 3P2D（20 卡）· 1024 进 512 出。纵轴：总吞吐（prompt ＋ 输出 token 每秒）</text>
@@ -8565,11 +8565,11 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 本课推导：开投机后一趟耗时 ＝ 2.31 ms × 6.96 ≈ 16.1 ms；每字间隔降到 1/4.81（11.1 ÷ 2.31 ≈ 4.81）。runbook 报的端到端 4.22× 含首字时间，所以比 4.81 小。右图第 7 个方块代表平均值里的 0.96 个，示意。</p>
 <p>注：K3 是 8 张卡跑 bs=1，一步里除了读权重还有通信和 kernel 之间的空转，所以「用时 1.45×」不能全归给多读的专家。</p></details></figure>
   <p>MoE 不白送：每个 token 挑自己的专家，验得越多读的专家越多（图左；估算，偏高）。</p>
-  <p>图右是 K3 在 GB300 上的实测：接受长度 6.96 ÷ 一步变慢 1.45 倍，每字快到 4.81 倍。</p>
+  <p>图右是 K3 在 GB300 上的实测：一步慢了一截，接受长度却大得多，相除仍是好几倍。</p>
 
   <h3 id="s11-3">11.3　收益会缩：并发、上下文、DEP</h3>
   <p>并发一高算力先满，草稿里每个 token 都得真算。
-    K3 输出吞吐是不投机的几倍：并发 1 时 4.22 倍，并发 64 只剩 1.74 倍。4.22 倍低于 4.81 倍，因为端到端含不受加速的 prefill。</p>
+    K3 输出吞吐对不投机的倍数，并发从 1 加到 64 一路往下缩。并发 1 的倍数也低于 11.2 的每字提速，因为端到端含不受加速的 prefill。</p>
 <figure class="fbox fwide" id="fig-s11-conc"><svg viewBox="0 0 1400 522" width="100%" role="img" aria-label="Kimi K3 在 GB300 上开 DSpark 投机解码，输出吞吐的加速比随并发下降：并发 1 是 4.22 倍，8 是 2.86 倍，32 是 1.89 倍，64 是 1.74 倍；同样并发 1，上下文从 4K 拉到 32K，只剩 1.32 倍"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">投机解码的收益会缩　——　<tspan font-weight="700">人一多、上下文一长，白送的那部分就变少</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Kimi K3 · GB300 · SGLang TP8。柱高 ＝ 开投机后的输出吞吐 ÷ 不开；虚线 ＝ 1，不赚不赔</text>
@@ -8607,8 +8607,8 @@ body.figonly section h3{margin-top:34px}
 <p>注：K3 并发 64 时开投机的 TPOT 仍只有不开的 40%，这一档吞吐和延迟同时变好。</p>
 <p>正文里另两组数的出处 —— B200：gpu/inference/a4/deepseek-v4/README.vllm.md:265-277（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%；十档并发 −3% 到 −37%）。</p>
 <p>V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%；decode 峰值 −13%、端到端 +28%）。B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。</p></details></figure>
-  <p>上下文变长也会缩：并发 1 时 prompt 从 4K 拉到 32K，吞吐掉到不投机的 1.32 倍。
-    验证不该因此变贵：不开投机时每字间隔只从 11.1 涨到 11.4 ms，多验的位置又共用同一份 KV。
+  <p>上下文变长也会缩（图最右柱）。
+    验证本不该因此变贵：不开投机时每字间隔只从 11.1 涨到 11.4 ms，多验的位置又共用同一份 KV。
     更可能是接受长度掉了，或草稿读长 KV 变慢（没实测，本课推导）。</p>
   <p>DEP（第六节）本为大 batch 而设，开投机正碰上算力先满：B200 上 DeepSeek-V4-Flash 用 vLLM、DEP8 开 MTP，十档并发全变慢，−3% 到 −37%。</p>
   <p>峰值和端到端还可能反向：GB300 上 V4-Pro 把 MTP 从 1 步加到 2 步，decode 峰值掉 13%，端到端反涨 28%。真实负载 batch 多半没那么大，白送的那部分还在。</p>
@@ -8704,8 +8704,8 @@ body.figonly section h3{margin-top:34px}
 <p>正文里 K3 的数（接受长度：代码类约 4.73、创作类约 2.61）：gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:226-237（官方压测 temperature 1.0、top-p 0.95；DSpark 用 probabilistic 草稿，草稿自己也掷骰子，所以温度 1.0 也对得上；接受长度为官方参考值，本仓库未复测）。</p>
 <p>告警：gpu/inference/a4x-max/kimi-k3/PD-BACKLOG.md:175。</p></details></figure>
   <p>GB300 上 V4-Pro 用的 DSpark 草稿（11.5）是贪心的，服务端默认温度 1.0。
-    压测工具不发温度，就按 1.0 采样，接受率只剩 1.16%。</p>
-  <p>1.16% 远低于理论值：它是收下的 ÷ 猜的，每步猜 7 个，第 1 个被拒，后 6 个跟着作废（本课推导）。</p>
+    压测工具不发温度，就按 1.0 采样。
+    实测接受率（图）远低于理论值：它是收下的 ÷ 猜的，每步猜 7 个，第 1 个被拒，后 6 个跟着作废（本课推导）。</p>
   <div class="note warn"><span class="t">接受率掉了不会报错</span>
     它只让 TPOT 慢慢变差。线上要把接受率和接受长度当一级指标告警；跨框架比先对齐两边发不发 temperature。</div>
 
