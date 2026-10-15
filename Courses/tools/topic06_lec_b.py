@@ -188,11 +188,11 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 <p>💬 <b>互动</b>：听两三个答案，不揭晓，<code>anim-pdsplit</code> 播完再收。</p>
 
 <p class="say">「下半场拉第三根杠杆：开两个仓库。吞 prompt 的和吐字的分到两批机器上。<br>
-DistServe 先做成，Mooncake 连同 KV 池做进了 Kimi 的线上服务。开场说的「KV 当存储」从这来：反正要搬，算过的就存着。」</p>
+Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上。第三节的 KV 当存储，到这里铺满集群：反正要搬，算过的就存着。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到 8.1，<code>fig-s8-pd-t5</code> 一带而过；停在 <code>anim-pdsplit</code>，等它播完一圈（22 秒）。</p>
 
-<p class="say">「上面红框里，整批请求全在等那段 prefill，一个字都没出；下面拆开，decode 机一格不断：休息前那道题的答案。<br>
+<p class="say">「上面红框里，整批请求都在等那段 prefill，一个字都没出；下面拆开，decode 机一格不断：休息前那道题的答案。<br>
 代价是那支黄箭头：每个请求多传一趟 KV。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-kv-trip-t5</code>，指下面那根三色细条。</p>
@@ -214,7 +214,7 @@ DistServe 先做成，Mooncake 连同 KV 池做进了 Kimi 的线上服务。开
 
 <p class="board"><b>🖥 屏幕</b>：滚到「8.4　GPU 实战」下面那张五行表。</p>
 
-<p class="say">「更难受的是，同一个库换个引擎，结论就反过来：vLLM 上 NIXL 是唯一活路，SGLang 上反而是 Mooncake 能用。<br>
+<p class="say">「同一个库换个引擎，结论就反过来：vLLM 上 NIXL 是唯一活路，SGLang 上反而是 Mooncake 能用。<br>
 所以别问哪个好，问这个引擎、这张网上哪条路真的通。共同点只有一条：同一个 NVLink 域里，KV 别出域。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-hybrid-kv</code>，先指注意力那排格子，再指存折。</p>
@@ -229,7 +229,7 @@ DistServe 先做成，Mooncake 连同 KV 池做进了 Kimi 的线上服务。开
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-prfaas</code>，先指橙柱，再指绿柱，最后指那条约 100 Gbps 的线。</p>
 
 <p class="say">「第二个前提是 KV 别太胖。有篇论文把 prefill 放到另一个数据中心。橙柱是全注意力，一条专线只够并一两台；绿柱是混合模型，能并十几二十台，台数本课推的。而且只把长 prompt 送去远端。<br>
-论文的案例吞吐多了一半；按同等成本算，只多一成半左右。」</p>
+论文推算的案例吞吐多了一半；按同等成本算，只多一成半左右。」</p>
 
 <p class="say">「这一趟搬多少没变，变的是 decode 不再被 prefill 打断。开两个仓库这一步：DistServe 同样延迟多接七点四倍请求，Mooncake 线上多接一倍多。<br>
 所以接下来第九节：prefill、decode 各配几台，这个负载到底该不该拆。」</p>
@@ -240,10 +240,10 @@ DistServe 先做成，Mooncake 连同 KV 池做进了 Kimi 的线上服务。开
 ⚠️ <b>「十几 Gbps」是案例的平均出口 13 Gbps</b>；+54% 和「同等成本约 +15%」要一起说，别只报前一个。<br>
 ⚠️ 8.6 坑清单台上不讲，<em>被问到翻课件</em>；最常被问的是重算策略约 17% 的税。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
-🧑‍🎓 新人「connector 是什么？」→ 负责把 KV 从 prefill 机搬到 decode 机的那一层，NIXL、Mooncake、TPUConnector 都是。<br>
+🧑‍🎓 新人「connector 是什么？」→ 推理引擎里在 prefill、decode 两端收发 KV 的插件，课件 0.3 词表就这么写；TPU 上用的是 TPUConnector，8.3 有。<br>
 🛠 GPU 老兵「Mooncake 和 NIXL 到底谁快？」→ vLLM 上 Mooncake 走 NVLink 加简易代理，KV 是快了，整体反而更慢：并发 64 输出 1,333 对 NIXL 的 1,693。换到 SGLang 又是 Mooncake 能用，所以只问这个引擎上哪条路通。<br>
 🛠 GPU 老兵「DistServe 那个 7.4 倍怎么读？」→ 同样的延迟要求下多接 7.4 倍请求，是论文在自己负载上的数；拿到自己的集群要重扫配比，第九节。<br>
-💰 管预算的「要不要上 RDMA 网卡？」→ 一条 8K prompt 的 KV 约 1.04 GB：800 Gbps 网卡约 10 ms，跌到每秒 200 MB 就要五秒多。先确认带宽真跑到设计值，再谈加卡。
+💰 管预算的「要不要上 RDMA 网卡？」→ 一条 8K prompt 的 KV 约 1.04 GB：800 Gbps 网卡约 10 ms（本课推的），跌到每秒 200 MB 就要五秒多。先确认带宽真跑到设计值，再谈加卡。
 """),
 
 # ════════════════════════════════════════════════════════════════════
@@ -252,7 +252,7 @@ DistServe 先做成，Mooncake 连同 KV 池做进了 Kimi 的线上服务。开
 
 <p class="board"><b>🖥 屏幕</b>：滚到课件第九节标题，再往下到 9.2 那张表。</p>
 
-<p class="say">「还是开两个仓库。拆完先填两个数：prefill 几台，decode 几台，一配一就叫 1P1D。配错了，一边忙死，一边闲着。<br>
+<p class="say">「还是开两个仓库。拆完先填两个数：prefill 几台，decode 几台，一配一叫 1P1D，二配一叫 2P1D。配错了，一边忙死，一边闲着。<br>
 起点有个公式：decode 每秒要的料，除以一台 prefill 每秒能备的。V4-Pro 的官方数代进去，约要十个 prefill；官方配方只配了八个，同一份手册早先实测要十四个才喂饱。」</p>
 
 <p>💬 <b>互动</b>：图出来之前问「1P1D 再加一台 prefill，每张卡的吞吐会涨还是跌？」举手。期望答案：<b>跌</b>，可首字快了。多数人会猜涨。</p>
