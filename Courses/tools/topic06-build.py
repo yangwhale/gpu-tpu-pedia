@@ -173,10 +173,46 @@ _html = _html.replace("</table>", "</table></div>")
 assert _html.count('<div class="tbl-wrap"><table>') == _nt == _html.count("</table></div>"), "表格套 .tbl-wrap 对不上"
 # 复用的专题五图里带着专题五自己的编号（「第五刀」、第三节＝TP），在本课对不上。
 #   专题五已定稿、不动它的图脚本，内联后在这里改字；命中次数不对就挂，免得专题五改图后静默失效。
-for _old, _new in (("第五刀：把两种活拆到两批机器上", "把两种活拆到两批机器上"),
-                   ("对比第三节的 TP：", "对比 TP：")):
-    assert _html.count(_old) == 1, "复用图改字：「%s」命中 %d 次（应为 1）" % (_old, _html.count(_old))
-    _html = _html.replace(_old, _new)
+# R82（2026-10-15）：改成只在指定 <figure id> 的 SVG 里改，别的图、正文、图注一个字不碰。
+#   每条写明预期命中次数（含 aria-label），对不上就挂。
+#   ⭐ attention → 注意力：本课正文统一叫「注意力」，复用图里还是英文。
+#     紧挨汉字的那个空格一并去掉（「一份 attention，」→「一份注意力，」），挨着英文／数字的保留。
+#     「Attention-FFN 分离」是 AFD 的全称，不改（大写 A 不匹配）。
+#   ⭐ 字变长的只有两处（「刀」→「切法」+1、+2 字），都在宽 1400 的整行标题里，截图看过不溢出。
+_ATT = re.compile(r"(?<![A-Za-z-])( ?)attention( ?)(?![A-Za-z-])")
+
+
+def _att(m):
+    _s, _e = m.start(), m.end()
+    _l = " " if m.group(1) and m.string[_s - 1:_s].isascii() and m.string[_s - 1:_s].isalnum() else ""
+    _r = " " if m.group(2) and m.string[_e:_e + 1].isascii() and m.string[_e:_e + 1].isalnum() else ""
+    return _l + "注意力" + _r
+
+
+_T5_FIX = {
+    "fig-freq-t5": [("每一刀多久说一次话", "每种切法多久说一次话", 1),        # 「刀」是专题五对并行维度的叫法
+                    ("每一刀一步要通信多少次", "每种切法一步要通信多少次", 1)],  # aria-label
+    "fig-s6-fold-t5": [(_ATT, _att, 5)],
+    "fig-s6-tep-dep-t5": [(_ATT, _att, 10)],
+    "fig-s7-pcp-dcp-t5": [("对等的另一刀，", "对等的另一种切法，", 1)],
+    "fig-s8-decode-ai-t5": [(_ATT, _att, 2)],
+    "fig-s8-pd-t5": [("第五刀：把两种活拆到两批机器上", "把两种活拆到两批机器上", 1)],  # 专题五的编号
+    "fig-s8-kv-trip-t5": [("对比第三节的 TP：", "对比 TP：", 1)],  # 专题五第三节＝TP；本课第三节是 KV cache
+    "fig-s9-afd-t5": [(_ATT, _att, 14)],
+}
+for _fid, _rules in _T5_FIX.items():
+    _m = re.search(r'(<figure[^>]*\sid="%s"[^>]*>\s*)(<svg\b.*?</svg>)' % re.escape(_fid), _html, re.S)
+    assert _m, "复用图改字：页面里没有 <figure id=%s>" % _fid
+    _svg = _m.group(2)
+    for _old, _new, _n in _rules:
+        if isinstance(_old, str):
+            _k = _svg.count(_old)
+            _svg = _svg.replace(_old, _new)
+        else:
+            _svg, _k = _old.subn(_new, _svg)
+        assert _k == _n, "复用图改字（%s）：「%s」命中 %d 次（应为 %d）—— 专题五改图了？" % (
+            _fid, getattr(_old, "pattern", _old), _k, _n)
+    _html = _html[:_m.start(2)] + _svg + _html[_m.end(2):]
 _leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
 assert not _leak, "占位符没落地：%s" % "、".join(_leak)
 for _tag in ("h2", "h3", "section", "div"):

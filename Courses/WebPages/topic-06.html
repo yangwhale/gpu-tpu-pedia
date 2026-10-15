@@ -4056,7 +4056,7 @@ body.figonly section h3{margin-top:34px}
   <p><a href="topic-05.html#s4-4">专题五 §4.4</a> 讲过：同一批卡进注意力和进专家时可用两套切法。
     <b>TEP</b> 是注意力用 TP、专家用 EP；<b>DEP</b> 是注意力用数据并行、专家用 EP。</p>
 <figure class="fbox fwide" id="fig-s6-fold-t5"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="同一批卡，两套切法。左边是注意力层眼里的这 8 张卡：按张量并行 4 路、数据并行 2 路来组。右边是专家层眼里的同样 8 张卡：按专家并行 8 路，每张卡放 32 个专家。注意力和专家的形状完全不同，所以一个模型里两者各配各的切法。训练里 Megatron 叫它并行折叠，推理里叫 DEP 和 TEP：前一个字母说注意力怎么切，后面的 EP 说专家怎么切"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">attention 和专家，各配各的切法　——　<tspan font-weight="700">同一批卡，两套映射</tspan></text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">注意力和专家，各配各的切法　——　<tspan font-weight="700">同一批卡，两套映射</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">8 张卡的示意。同一张卡在注意力层里是某个 TP 组的一员，到了专家层就换一个身份</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">第一组：管请求 A</text>
@@ -4069,7 +4069,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一层 Transformer 里，同一张卡换两次身份</tspan></text>
-<text class="svgsm" x="40" y="166" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力层：4 张卡一组切一份 attention，两组各管一批请求</tspan></text>
+<text class="svgsm" x="40" y="166" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力层：4 张卡一组切一份注意力，两组各管一批请求</tspan></text>
 <rect x="40" y="188" width="130" height="96" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
 <text class="svgsm" x="48" y="206" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
 <rect x="62" y="216" width="20" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -4398,12 +4398,12 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 是一块大矩阵，专家是一堆小矩阵：各切各的</tspan></text>
-<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">attention 那块大矩阵切成条，4 张卡一组合起来算；两组各管一批请求。专家本来就是 256 个小块，<tspan font-weight="700">整个分出去就行</tspan>。</text>
-<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">训练里 Megatron 叫它 Parallel Folding；推理里 attention 用 TP 的叫 TEP，用数据并行的叫 DEP，图里这种一半一半的也有。</text>
+<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力是一块大矩阵，专家是一堆小矩阵：各切各的</tspan></text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">注意力那块大矩阵切成条，4 张卡一组合起来算；两组各管一批请求。专家本来就是 256 个小块，<tspan font-weight="700">整个分出去就行</tspan>。</text>
+<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">训练里 Megatron 叫它 Parallel Folding；推理里注意力用 TP 的叫 TEP，用数据并行的叫 DEP，图里这种一半一半的也有。</text>
 </svg><figcaption><b>同样 8 张卡：注意力按 TP 组算，专家层每卡管 32 个专家。</b><span class="capmore"><br><em>专题五原图，以 V3 为例。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Megatron-Core moe/README.md（MoE Parallel Folding，例子 TP4·CP2·DP8·PP4 → ETP1·EP64·EDP1）；论文 arXiv <a href="https://arxiv.org/abs/2504.14960" target="_blank" rel="noopener">2504.14960</a>。TEP ／ DEP 定义：TensorRT-LLM tech blog 26。</p></details></figure>
-<figure class="fbox fwide" id="fig-s6-tep-dep-t5"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="同样四张卡，推理时 attention 那一半的两种切法。左边 TEP4：四张卡一起算同一批请求，每张卡算四分之一的头；V3 这类 MLA 模型只有一个 KV 头切不开，所以每张卡都存一整份全部请求的 KV；每层 attention 出口做一次 AllReduce，之后每张卡都有全部 token，专家那一步各算本卡的专家，再 AllReduce 合起来。右边 DEP4：每张卡各管一批自己的请求，只存自己请求的 KV，attention 不用通信，attention 权重每张卡一整份；专家那一步要 AllToAll 把 token 派发到专家所在的卡，算完再合并回来。TEP 让单个请求更快，代价是 KV 复制；DEP 吞吐大、KV 不重复，代价是忙闲不均，没请求的卡也得陪着跑"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TEP 和 DEP：attention 那一半怎么切　——　<tspan font-weight="700">一起算同一批，还是各算各的一批</tspan></text>
+<figure class="fbox fwide" id="fig-s6-tep-dep-t5"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="同样四张卡，推理时注意力那一半的两种切法。左边 TEP4：四张卡一起算同一批请求，每张卡算四分之一的头；V3 这类 MLA 模型只有一个 KV 头切不开，所以每张卡都存一整份全部请求的 KV；每层注意力出口做一次 AllReduce，之后每张卡都有全部 token，专家那一步各算本卡的专家，再 AllReduce 合起来。右边 DEP4：每张卡各管一批自己的请求，只存自己请求的 KV，注意力不用通信，注意力权重每张卡一整份；专家那一步要 AllToAll 把 token 派发到专家所在的卡，算完再合并回来。TEP 让单个请求更快，代价是 KV 复制；DEP 吞吐大、KV 不重复，代价是忙闲不均，没请求的卡也得陪着跑"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TEP 和 DEP：注意力那一半怎么切　——　<tspan font-weight="700">一起算同一批，还是各算各的一批</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同样 4 张卡、同样 4 批请求（颜色 ＝ 哪一批）；专家那一半两边一样：8 个专家铺在 4 张卡上，每卡 2 个</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">请求 1</text>
@@ -4417,7 +4417,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="102" width="680" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="680" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TEP4：attention 用 TP，四张卡一起算同一批</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TEP4：注意力用 TP，四张卡一起算同一批</tspan></text>
 <text class="svgsm" x="20" y="166" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">请求</tspan></text>
 <text class="svgsm" x="20" y="224" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力</tspan></text>
 <text class="svgsm" x="20" y="282" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 笔记</tspan></text>
@@ -4490,7 +4490,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="567" y="358" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专6</tspan></text>
 <rect x="596" y="336" width="42" height="34" rx="4" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="617" y="358" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专7</tspan></text>
-<text class="svgsm" x="20" y="442" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 出口</tspan></text>
+<text class="svgsm" x="20" y="442" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力出口</tspan></text>
 <text class="svgsm" x="130" y="442" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums">AllReduce：四份部分结果加起来</text>
 <text class="svgsm" x="20" y="472" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家那一步</tspan></text>
 <text class="svgsm" x="130" y="472" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums">token 本来人人都有，各算本卡专家，再 AllReduce</text>
@@ -4502,7 +4502,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="720" y="102" width="680" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="720" y="104" width="680" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="720" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="734" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DEP4：attention 用数据并行，各算各的一批</tspan></text>
+<text class="svglbl" x="734" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DEP4：注意力用数据并行，各算各的一批</tspan></text>
 <text class="svgsm" x="740" y="166" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">请求</tspan></text>
 <text class="svgsm" x="740" y="224" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力</tspan></text>
 <text class="svgsm" x="740" y="282" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 笔记</tspan></text>
@@ -4551,7 +4551,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1287" y="358" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专6</tspan></text>
 <rect x="1316" y="336" width="42" height="34" rx="4" fill="#fef7e0" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1337" y="358" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专7</tspan></text>
-<text class="svgsm" x="740" y="442" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention</tspan></text>
+<text class="svgsm" x="740" y="442" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力</tspan></text>
 <text class="svgsm" x="850" y="442" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums">各算各的，不用通信</text>
 <text class="svgsm" x="740" y="472" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家那一步</tspan></text>
 <text class="svgsm" x="850" y="472" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums">AllToAll 派发到专家所在的卡，算完合并回来</text>
@@ -4562,7 +4562,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="592" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="592" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="592" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差别全在 attention 那一半：一起算同一批，还是各算各的一批</tspan></text>
+<text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差别全在注意力那一半：一起算同一批，还是各算各的一批</tspan></text>
 <text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TEP：同一批请求四张卡一起算，单个请求快；可 MLA 这类只有一个 KV 头的模型，KV 在每张卡上都得存一整份。</text>
 <text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DEP：每张卡只管自己那批请求，KV 不重复、batch 能开大；代价是专家那一步换成 AllToAll，还要防各卡忙闲不均。</text>
 </svg><figcaption><b>只看注意力那一半。</b><span class="capmore"><br><em>专题五原图。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TensorRT-LLM 定义：TEP<N> shards both attention (TP) and experts (EP) across N ranks；DEP<N> keeps attention data-parallel (ADP) while distributing experts across N ranks。</p>
@@ -6038,7 +6038,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s7-4">7.4　PCP：超长 prompt 的首字延迟</h3>
   <p>PCP 在 prefill 阶段沿序列切，<b>让几台机器合算同一个 prompt</b>（<a href="topic-05.html#s5-5">专题五 §5.5</a>）。</p>
 <figure class="fbox fwide" id="fig-s7-pcp-dcp-t5"><svg viewBox="0 0 1400 774" width="100%" role="img" aria-label="注意力可以看成一张表：一行是一个提问，也就是新来的 token；一列是一条笔记，也就是前面某个 token 留下的 K 和 V。prefill 一口气有很多提问，表又高又宽，因为只看前面，是个三角。PCP 按行切，把提问分给四张卡：每一行在一张卡上算完，结果不用合，但每张卡要把它那几行左边的笔记收齐，还要另外加卡。decode 每个请求这一步只有一个提问，表只有一行，没法按行切，只能按列切：DCP 把笔记按 token 轮流存到原来那几张卡上，每张卡只算这一行的一部分，最后按先别除的办法把部分结果合起来。PCP 为了算得快，DCP 为了装得下"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PCP 和 DCP：先按行切，行切到只剩一行，再把这一行切开　——　<tspan font-weight="700">DCP 不是跟 PCP 对等的另一刀，是行切到头以后的下一步</tspan></text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">PCP 和 DCP：先按行切，行切到只剩一行，再把这一行切开　——　<tspan font-weight="700">DCP 不是跟 PCP 对等的另一种切法，是行切到头以后的下一步</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">注意力是一张「提问 × 笔记」表：一行 ＝ 一个新 token 的提问（Q），一列 ＝ 前面一个 token 的笔记（K、V）；只看前面，所以是三角</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">卡 0</text>
@@ -6290,8 +6290,8 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="552" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="552" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以 decode 的各种做法，都在凑一个大 batch</tspan></text>
-<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PD 分离让 decode 机器只管出字，一批能攒得更大；DEP 让 attention 各管各的请求，专家那边收齐所有卡的 token。</text>
-<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">Wide-EP 把专家铺到更多卡上、每张卡只放几个，AFD 干脆让一组专家机器同时接好几组 attention 机器的 token。</text>
+<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PD 分离让 decode 机器只管出字，一批能攒得更大；DEP 让注意力各管各的请求，专家那边收齐所有卡的 token。</text>
+<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">Wide-EP 把专家铺到更多卡上、每张卡只放几个，AFD 干脆让一组专家机器同时接好几组注意力机器的 token。</text>
 </svg><figcaption><b>batch 越大，读一遍权重换来的计算越多。</b><span class="capmore"><br><em>专题五原图。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推导：稠密层一步读 2P 字节（bf16）、算 2Pb 次，每字节 ＝ b；MoE 每个专家平均分到 b × 8 ÷ 256 个 token。只算读权重，读 KV 会让门槛更高。</p>
 <p>📌 v7：每芯片 bf16 2,307 TFLOP/s；HBM 每 TensorCore 3,433 GiB/s、每芯片两个（wiki entities/tpu-v7）。V3 的 8／256 取自 config.json。</p></details></figure>
   <p>这时插进来一个长 prompt：</p>
@@ -7053,11 +7053,11 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
   <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，多台注意力机喂同一批专家，专家那边就凑得出大 batch。</p>
-<figure class="fbox fwide" id="fig-s9-afd-t5"><svg viewBox="0 0 1400 614" width="100%" role="img" aria-label="attention 和 FFN 也拆开。左边 M 台机器只算 attention，右边 N 台机器只放专家。每一层 attention 算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。专家那边同时接好几台 attention 机器的 token，专家的 batch 就大了。为了把这来回两趟藏起来，把一批请求切成三个小批轮着跑：一个在算 attention，一个在路上，一个在算专家，三条道每一格都有活"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">再拆一层：attention 和专家也分开　——　<tspan font-weight="700">专家那边一次接好几家的 token</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">AFD（Attention-FFN 分离）。示意：M 台 attention 机器、N 台专家机器，三个小批轮着跑</text>
+<figure class="fbox fwide" id="fig-s9-afd-t5"><svg viewBox="0 0 1400 614" width="100%" role="img" aria-label="注意力和 FFN 也拆开。左边 M 台机器只算注意力，右边 N 台机器只放专家。每一层注意力算完，把 token 发给专家那边，这一步叫 M 到 N；专家算完再送回来，叫 N 到 M。专家那边同时接好几台注意力机器的 token，专家的 batch 就大了。为了把这来回两趟藏起来，把一批请求切成三个小批轮着跑：一个在算注意力，一个在路上，一个在算专家，三条道每一格都有活"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">再拆一层：注意力和专家也分开　——　<tspan font-weight="700">专家那边一次接好几家的 token</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">AFD（Attention-FFN 分离）。示意：M 台注意力机器、N 台专家机器，三个小批轮着跑</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">attention 机器</text>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">注意力机器</text>
 <rect x="154.52" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="175" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专家机器</text>
 <rect x="264.24" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -7072,11 +7072,11 @@ body.figonly section h3{margin-top:34px}
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一层都要跑一趟 M → N → M</tspan></text>
 <rect x="40" y="182" width="180" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="130" y="216" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 1</tspan></text>
+<text class="svgsm" x="130" y="216" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力机器 1</tspan></text>
 <rect x="40" y="258" width="180" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="130" y="292" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 2</tspan></text>
+<text class="svgsm" x="130" y="292" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力机器 2</tspan></text>
 <rect x="40" y="334" width="180" height="56" rx="8" fill="none" stroke="#1a73e8" stroke-width="2"/>
-<text class="svgsm" x="130" y="368" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 机器 3</tspan></text>
+<text class="svgsm" x="130" y="368" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力机器 3</tspan></text>
 <rect x="460" y="212" width="180" height="56" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
 <text class="svgsm" x="550" y="246" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家机器 1</tspan></text>
 <rect x="460" y="308" width="180" height="56" rx="8" fill="none" stroke="#e8710a" stroke-width="2"/>
@@ -7091,7 +7091,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="340" y="166" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">去（M → N）：token 发给专家</tspan></text>
 <text class="svgsm" x="340" y="432" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回（N → M）：算完送回来</tspan></text>
 <text class="svgsm" x="690" y="168" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三个小批轮着跑：去、回各占半格</tspan></text>
-<text class="svgsm" x="690" y="210" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention</tspan></text>
+<text class="svgsm" x="690" y="210" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力</tspan></text>
 <rect x="782" y="188" width="560" height="32" rx="3" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="783.0" y="189" width="67.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="816" y="209" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
@@ -7164,13 +7164,13 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1202" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">6</text>
 <text class="svgsm" x="1272" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">7</text>
 <text class="svgsm" x="1342" y="384" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">8</text>
-<text class="svgsm" x="690" y="414" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">看 A：第 0 格算 attention，去半格，专家一格，回半格，第 3 格又轮到它。</text>
+<text class="svgsm" x="690" y="414" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">看 A：第 0 格算注意力，去半格，专家一格，回半格，第 3 格又轮到它。</text>
 <text class="svgsm" x="690" y="436" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">单程通信超过半格，一圈就超过 3 格，得四个小批（MegaScale-Infer）。</text>
 <rect x="0" y="492" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="492" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="492" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="519" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆得越细，每一边越能挑适合自己的机器和切法</tspan></text>
-<text class="svgsm" x="20" y="550" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">专家那边同时接几台 attention 机器的 token，<tspan font-weight="700">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。</text>
+<text class="svgsm" x="20" y="550" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">专家那边同时接几台注意力机器的 token，<tspan font-weight="700">凑出来的 batch 比单台大得多</tspan>；两边的机器数也能分开调。</text>
 <text class="svgsm" x="20" y="574" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价是每一层都有一趟来回，得靠几个小批轮着跑藏住（论文里要三四个才藏得住）；两边之间的网络要够快。</text>
 </svg><figcaption><b>一层里的两种活，分到两批机器。</b><span class="capmore"><br><em>专题五原图，机器数是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 MegaScale-Infer arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a>（disaggregated expert parallelism、ping-pong pipeline、每 GPU 吞吐最高 1.90×）；Step-3 arXiv <a href="https://arxiv.org/abs/2507.19427" target="_blank" rel="noopener">2507.19427</a>；vLLM 于 2026-07 发布实验性 AFD 插件。</p></details></figure>
   <p>字节 2025 年的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
@@ -7662,8 +7662,8 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s10-1">10.1　回顾：线有快慢，切法先定</h3>
   <p>专题五 <a href="topic-05.html#s7-1">§7.1</a> 讲过：通信勤的切法要放在快线里，懒的才能跨慢线。</p>
-<figure class="fbox fwide" id="fig-freq-t5"><svg viewBox="0 0 1400 868" width="100%" role="img" aria-label="每一刀一步要通信多少次，按实际比例画成横条。示意配置是 60 层、8 个 micro-batch。TP 和 EP 每步约 1920 次，FSDP 1440 次，都是每一层都要来几次；PP 每步 16 次，只在段边界上；DP 每步只有 1 次。下面是两种线的带宽：GB300 上一块 GPU 的 NVLink 双向 1.8 TB/s，一整柜 72 块 GPU 都连在这张网上；出了这一柜就只能走网卡，双向 200 GB/s，差 9 倍。规则是频率高的放快线，频率低的才走慢线"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每一刀多久说一次话　——　<tspan font-weight="700">说得勤的放快线，说得少的才走慢线</tspan></text>
+<figure class="fbox fwide" id="fig-freq-t5"><svg viewBox="0 0 1400 868" width="100%" role="img" aria-label="每种切法一步要通信多少次，按实际比例画成横条。示意配置是 60 层、8 个 micro-batch。TP 和 EP 每步约 1920 次，FSDP 1440 次，都是每一层都要来几次；PP 每步 16 次，只在段边界上；DP 每步只有 1 次。下面是两种线的带宽：GB300 上一块 GPU 的 NVLink 双向 1.8 TB/s，一整柜 72 块 GPU 都连在这张网上；出了这一柜就只能走网卡，双向 200 GB/s，差 9 倍。规则是频率高的放快线，频率低的才走慢线"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每种切法多久说一次话　——　<tspan font-weight="700">说得勤的放快线，说得少的才走慢线</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每步通信次数（按实际比例，本课推导）。示意配置：60 层、8 个 micro-batch、每层都是 MoE</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">放在最快的那一层线上</text>
