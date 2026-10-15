@@ -24,7 +24,8 @@ CH = [
 
 <p class="say">「不变。车上的货分两种：权重是大家共用的货，拉一趟，车上坐几个人都能用；KV 是每个人自己的行李，多上一个人就多一份。<br>
 所以攒 batch 摊薄的只有权重。Llama-3.1-70B 注意力每读一个字节只做八次运算，攒多少人都是这个数，离 v7 的屋脊差近四十倍。<br>
-本课按它的 config 推过：8K 上下文时，batch 五十出头，行李就和共用的货一样重。」</p>
+本课按它的 config 推过：8K 上下文时，batch 五十出头，行李就和共用的货一样重。<br>
+这条线的地基是二〇二二年的 FlashAttention：注意力切块放进片上算，显存不再随长度平方涨，长上下文这才跑得起来。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「5.2　一个 kernel 装下 prefill 和 decode」。</p>
 
@@ -48,11 +49,11 @@ CH = [
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s5-dense</code>，先指「读权重」那根，再指「全算」那根。</p>
 
 <p class="say">「全算便宜。为八行去排序、搬过去、再搬回来，搬的比算的还贵。车反正要把这个专家的权重拉来一趟，这段时间里全算一遍还有富余。<br>
-全算和读权重的时间比，就是 batch 除以屋脊点；batch 到三百出头，两边才打平。有个坑：没选中的 token 算出了 NaN，乘 0 还是 NaN，得用选择清掉。」</p>
+全算和读权重的时间比，就是 batch 除以屋脊点；batch 到三百出头，两边才打平。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s5-allreduce</code>，只指最长那根和最短那根。</p>
 
-<p class="say">「最后一块卡的不是字节，是次数。batch 1 时每层 TP 一次 AllReduce，V3 只有十四 KiB，按带宽算二十几纳秒，实测平均十一微秒，差四百多倍。这种同步要省次数，加带宽没用。」</p>
+<p class="say">「最后一块卡的不是字节，是次数。batch 1 时每层 TP 一次 AllReduce，消息才十四 KiB。按带宽算几乎不花时间，实测却要十一微秒，差四百多倍。这种同步要省次数，加带宽没用。」</p>
 
 <p class="say">「地图上这一节挂在车上多坐人；可它干的活是少搬：补齐的空位、展开的 K/V、搬来搬去的行，都是没人要的字节，先去掉再谈加卡。这一步的账是 kernel 级的：一步少三分之一。<br>
 可 KV 只有一个头的模型切到八张卡上，那份行李会不会被复制八遍？所以接下来第六节，算这笔账。」</p>
@@ -65,6 +66,8 @@ CH = [
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
 🧑‍🎓 新人「KV 头、GQA 是什么？」→ 查询头负责发问，KV 头存着被查的历史；几个查询头共用一个 KV 头就是 GQA，Llama-3.1-70B 是 64 个配 8 个。<br>
 🛠 GPU 老兵「GPU 上有 Flash-Decoding，不是解决了吗？」→ Flash-Decoding 把一条长序列切开并行读，解决的是带宽用不满；每读一字节只做 G 次运算这个比值，它改不了。<br>
+🛠 GPU 老兵「GPU 上对应 RPA 的是什么？」→ FlashInfer：按页存 KV、按需生成 kernel 变体，已经是 SGLang、vLLM 的注意力后端之一。<br>
+🛠 全算专家那招有个坑：没选中的 token 算出 NaN，乘 0 还是 NaN，得用选择清掉。<br>
 🛠 GPU 老兵「全算专家在 GPU 上也划算吗？」→ 课件只按峰值算了一笔，前提是激活值也是 FP8；没有同口径实测，不下结论。<br>
 💰 管预算的「这一节先做哪一招？」→ 最便宜的是块大小这个旋钮：KV 页从 16 调到 256，RPA 这个 kernel 的 decode 一步少三分之一，不用换卡。
 """),
@@ -131,7 +134,7 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 <p class="board"><b>🖥 屏幕</b>：滚到课件第七节标题。</p>
 
 <p class="say">「上一节说，副本还能让给同一个请求更长的上下文，这一节就做这件事。<br>
-二〇二四年底，Meta 公开了上下文并行，把 Llama-3 最大那个模型一百万 token 的 prefill 拆到十六个节点上，七十七秒算完。开场那条变长的上下文，就靠这类切法接住。<br>
+二〇二四年底，Meta 把训练里切序列的办法搬到推理，把 Llama-3 最大那个模型一百万 token 的 prefill 拆到十六个节点上，七十七秒算完。开场那条变长的上下文，就靠这类切法接住。<br>
 沿序列切有两件：DCP 管 decode 时 KV 装不下，PCP 管 prefill 时首字等太久。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s7-kv-dup-t5</code>，再滚到 <code>fig-s7-softmax-merge-t5</code>。</p>
@@ -171,7 +174,7 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 ⚠️ 休息十分钟不计入计划时长。PCP 两个陷阱比 Ring／Ulysses／USP 的名字重要，<em>名字留在课件上</em>。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
 🧑‍🎓 新人「DCP 和 PCP 一字之差，差在哪？」→ D 是 decode，切的是 KV 的存放；P 是 prefill，切的是一个长 prompt 的计算。<br>
-🛠 GPU 老兵「Ring、Ulysses 选哪个？」→ Ring 传 K、V 或 Q，都无损；Ulysses 用 AllToAll 换成按头切，度数受头数限制；USP 两者叠用。Meta 那篇用的是 Ring。<br>
+🛠 GPU 老兵「Ring、Ulysses 选哪个？」→ 两个都是二〇二三年为训练提出的，Ulysses 九月、Ring 十月；Ring 传 K、V 或 Q，都无损；Ulysses 用 AllToAll 换成按头切，度数受头数限制；USP 两者叠用。Meta 那篇用的是 Ring。<br>
 🛠 GPU 老兵「DCP 能和 HiCache 一起开吗？」→ 课件 7.3 记的坑：HiCache 开 L3，或 L1＋L2 叠投机解码，就得退回纯 TP。<br>
 💰 管预算的「长上下文要多付多少？」→ 先是人少：第三节 4K 装 344 条，32K 只剩 43 条。DCP 能把 K3 的 KV 容量从一百五十万撑到一千二百多万 token，但短输入会亏。
 """),
@@ -183,7 +186,7 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 <p class="board"><b>🖥 屏幕</b>：滚到课件第八节标题。</p>
 
 <p class="say">「欢迎回来。第四节的分块 prefill 只能摊平打扰，两段在同一批卡上还是互相拖。下半场换一根杠杆：开两个仓库。吞 prompt 的和吐字的分到两批机器上，decode 的车不再被 prefill 拦下。<br>
-这个拆法 2023、2024 年几家先后提出。DistServe 同样延迟多接七点四倍请求。Mooncake 把它连同 KV 池做进 Kimi 的线上服务，真实负载下多接七成五的请求。开场说的「KV 当存储」就从这来：反正要搬，算过的就存着。」</p>
+这个拆法二〇二三、二〇二四年几家先后提出。DistServe 同样延迟多接七点四倍请求。Mooncake 把它连同 KV 池做进 Kimi 的线上服务，真实负载下多接七成五的请求。开场说的「KV 当存储」就从这来：反正要搬，算过的就存着。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到 8.1，<code>fig-s8-pd-t5</code> 一带而过；停在 <code>anim-pdsplit</code>，等它播完一圈（22 秒）。</p>
 
@@ -260,10 +263,10 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 
 <p class="say">「再看分母。decode 固定 8 张卡，prefill 从一个加到十二个。只除 decode 的卡，每卡涨了十倍多；把 prefill 的卡也算进去，只涨两倍多。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-split-pod</code>，先指左边 batch 64 那组，再指右边 batch 128 那根蓝柱。</p>
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-split-pod</code>，先指左边 batch 128 那根最高的橙柱，再指右边同一根变成最矮，最后指蓝柱上的 +6.7%。</p>
 
-<p class="say">「也有不拆更好的时候。MiMo 在 TPU v7x 上，batch 六十四时，不拆最高。<br>
-到一百二十八，同样两个 pod，拆开多百分之六点七。」</p>
+<p class="say">「也有不拆更好的时候。MiMo 在 TPU v7x 上，batch 六十四，不拆最好。<br>
+到一百二十八，左边总量最高的是 2P1D；可它多用了一个 pod，按 pod 一除，成了同组最矮。拆了还赢的只有 1P1D，多不到一成。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s9-decide</code>，只指第一问。</p>
 
