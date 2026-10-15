@@ -147,7 +147,7 @@ def fig_pareto():
                "本仓库实测的 9,168 落在每用户约 17 处。同一套系统沿着曲线往左走，每卡吞吐就往上涨；"
                "所以先定交互档，再在这一档上比吞吐")
     y0 = f.header("吞吐和交互性是一条曲线　——　<tspan font-weight=\"700\">先定档，再比吞吐</tspan>",
-                  "GB300 · DeepSeek-V4-Pro · 8K 进 1K 出 · 纵轴按 output ÷ decode GPU 计（11,200 的口径官方未写明，见出处）",
+                  "GB300 · DeepSeek-V4-Pro · 8K 进 1K 出 · 纵轴只数输出 token、只除以 decode 卡（11,200 官方没写怎么数）",
                   [(GR, "InferenceX：Dynamo ＋ vLLM（同一条曲线）"), (BL, "PyTorch 博客：SGLang"),
                    (OR, "本仓库实测：SGLang dep8")])
     PH = 520
@@ -253,8 +253,8 @@ def fig_rulers():
                "8K 进 1K 出，每个输出 token 对应约 8 个输入 token。每把尺子都是圈一堆 token、除以圈中的卡。"
                "只圈输出、除以 16 张 decode 卡是 5,270；输入输出都圈、除以全部 64 张是 11,880，超过官方标称的 11,200。"
                "另外两种是本课推出来的：只圈输出除以 64 张是 1,318，输入输出除以 16 张是 47,520。最大是最小的 36 倍")
-    y0 = f.header("同一次测量，四把尺子　——　<tspan font-weight=\"700\">圈哪堆 token，除以圈哪些卡</tspan>",
-                  "GB300 · SGLang · V4-Pro · 8K 进 1K 出。实心条是 InferenceX 真报的两个字段，虚线条是本课补全的另两种组合",
+    y0 = f.header("同一次测量，四把尺子　——　<tspan font-weight=\"700\">换个数法，最大差 36 倍</tspan>",
+                  "GB300 · SGLang · V4-Pro · 8K 进 1K 出。实心条是 InferenceX 实际报出的两个数，虚线条是本课补算的另两种数法",
                   [(GR, "输出 token"), (OR, "输入 token"), (BL, "decode 卡 16 张"), ("#bdc1c6", "prefill 卡 48 张")])
     RH = 86
     PH = 30 + 44 + 4 * RH + 30

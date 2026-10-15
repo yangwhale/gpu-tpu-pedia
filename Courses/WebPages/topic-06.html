@@ -1552,7 +1552,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算力利用率 0.32%：一个人解码，芯片几乎全在等显存</tspan></text>
-<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">0.016 ÷ 5.02 ＝ 0.32%，正好是 1/313：FP8 每读 1 字节只做 2 次运算，FP8 的屋脊点约 626，是它的 313 倍。</text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">0.016 ÷ 5.02 ＝ 0.32%，正好是 1/313：FP8 每读 1 字节要做约 626 次运算才不用等显存，这里只做 2 次，差 313 倍。</text>
 <text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">换更快的 MXU 毫无用处，这一步的下限是显存带宽定的。</text>
 </svg><figcaption><b>橙条细到几乎看不见。</b><span class="capmore"><br><em>理想下限：只算权重，不算 KV、通信和 kernel 开销；按每芯片规格，摊到多颗上比例不变。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 37B 激活参数、671B 总参数：DeepSeek-V3 技术报告摘要。FP8 权重每参数 1 字节（V3 原生发布 FP8）。v7 每芯片 FP8 4,614 TFLOP/s、HBM 7.37 TB/s：Google Cloud 公开规格。</p>
 <p>📌 本课推导：37e9 ÷ 7.37e12 ＝ 5.02 ms；2 × 37e9 ÷ 4,614e12 ＝ 0.016 ms；比值 0.32% ＝ 2 ÷ (4,614 ÷ 7.37) ＝ 1/313。</p>
@@ -1677,7 +1677,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="562" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="562" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="589" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼来的 256 人，到了专家这里又被拆成 256 份</tspan></text>
-<text class="svgsm" x="20" y="620" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">每人只挑 8 个专家，一个专家平均只分到 8 行，强度约 8，稠密层是它的 30 倍。</text>
+<text class="svgsm" x="20" y="620" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">每人只挑 8 个专家，一个专家平均只分到 8 行，强度约 8；稠密层约 239，差 30 倍。</text>
 <text class="svgsm" x="20" y="644" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">要让专家吃饱，得把很多卡上的人收到一起：这是第五、六节的事。</text>
 </svg><figcaption><b>左边填满一边，右边只剩一条细线。</b><span class="capmore"><br><em>8 是均匀路由下的平均数；共享专家不受影响。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 256 个路由专家、每 token 挑 8 个：DeepSeek-V3 config.json（n_routed_experts、num_experts_per_tok）。MXU 一边 256：JAX 公开源码 jax/_src/pallas/mosaic/tpu_info.py，TPU 7 的 mxu_column_size＝256。</p>
 <p>📌 本课推导：专家矩阵 7168×2048，M＝8 时强度 ＝ 2·8·7168·2048 ÷ 2·(7168·2048 ＋ 8·(7168 ＋ 2048)) ≈ 8。稠密层 239 来自本节第一张图。</p>
@@ -1762,7 +1762,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s2-2">2.2　吞吐和交互性是一条曲线</h3>
 <figure class="fbox fwide" id="fig-s2-pareto"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="横轴是每个用户每秒拿到多少字，纵轴是每张 GPU 每秒出多少字，都是 GB300 上跑 DeepSeek-V4-Pro、8K 进 1K 出。InferenceX 的 vLLM 曲线三个点：每用户 68 时每卡 9,759，121 时 3,816，173 时只剩 895。PyTorch 博客的 SGLang 在每用户 50 处报每卡约 11,200，同一位置首发时只有约 2,200。本仓库实测的 9,168 落在每用户约 17 处。同一套系统沿着曲线往左走，每卡吞吐就往上涨；所以先定交互档，再在这一档上比吞吐"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">吞吐和交互性是一条曲线　——　<tspan font-weight="700">先定档，再比吞吐</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · DeepSeek-V4-Pro · 8K 进 1K 出 · 纵轴按 output ÷ decode GPU 计（11,200 的口径官方未写明，见出处）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · DeepSeek-V4-Pro · 8K 进 1K 出 · 纵轴只数输出 token、只除以 decode 卡（11,200 官方没写怎么数）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">InferenceX：Dynamo ＋ vLLM（同一条曲线）</text>
 <rect x="381.88000000000005" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -1836,8 +1836,8 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s2-3">2.3　同一次测量，四把尺子</h3>
 <figure class="fbox fwide" id="fig-s2-rulers"><svg viewBox="0 0 1400 560" width="100%" role="img" aria-label="同一次测量：GB300 上 SGLang 跑 DeepSeek-V4-Pro，decode 用 16 张卡，prefill 用 48 张，共 64 张；8K 进 1K 出，每个输出 token 对应约 8 个输入 token。每把尺子都是圈一堆 token、除以圈中的卡。只圈输出、除以 16 张 decode 卡是 5,270；输入输出都圈、除以全部 64 张是 11,880，超过官方标称的 11,200。另外两种是本课推出来的：只圈输出除以 64 张是 1,318，输入输出除以 16 张是 47,520。最大是最小的 36 倍"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一次测量，四把尺子　——　<tspan font-weight="700">圈哪堆 token，除以圈哪些卡</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · SGLang · V4-Pro · 8K 进 1K 出。实心条是 InferenceX 真报的两个字段，虚线条是本课补全的另两种组合</text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一次测量，四把尺子　——　<tspan font-weight="700">换个数法，最大差 36 倍</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · SGLang · V4-Pro · 8K 进 1K 出。实心条是 InferenceX 实际报出的两个数，虚线条是本课补算的另两种数法</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">输出 token</text>
 <rect x="128.76" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
