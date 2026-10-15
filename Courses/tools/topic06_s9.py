@@ -84,7 +84,7 @@ __FIG_S9_AFD_ASCEND__
 
   <h3 id="s9-9">9.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    拆开是为了让这一趟不再等 prefill，两边的切法也能各选各的；AFD 让专家那头一趟分给更多机器的 token。
+    拆开是为了让这一趟不再等 prefill，两边的切法也能各选各的；AFD 让每个专家一趟分到更多 token。
     拆不拆、怎么配，看负载，不看潮流。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一份报告说「加到 12 个 prefill，每卡吞吐涨了 10 倍」。你先问什么？</summary>

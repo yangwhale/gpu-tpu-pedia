@@ -90,7 +90,7 @@ FIGS = {
         '<b>绿色两块两条序列共用，橙色那块是 B 要改时复制出来的。</b><br>'
         '<em>每块 4 个 token 只为画得下；机制见 vLLM 论文（arXiv 2309.06180）。</em>'),
     "__FIG_S3_POOL__": ("fig-s3-pool", "fig6-swa-ratio.svg", "topic06-fig-kv.py",
-        '<b>分水阀拧到两个水箱一起快满时最快；一边先满，另一边的预算就在空转。</b><br>'
+        '<b>隔板挪到两个池一起快满时最快；一边先满，另一边的预算就在空转。</b><br>'
         '<em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计，前两格输入 4K、第三格输入 8K，输出 1K，关前缀缓存。</em>'),
     "__FIG_S3_OFFLOAD__": ("fig-s3-offload", "fig6-offload.svg", "topic06-fig-kv.py",
         '<b>绿线始终在红线下面：链路够快，命中多长都该搬。</b><br>'

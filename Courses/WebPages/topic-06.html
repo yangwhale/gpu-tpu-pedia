@@ -825,7 +825,7 @@ body.figonly section h3{margin-top:34px}
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 113 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 85 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -2513,9 +2513,9 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s3-4">3.4　混合模型有两个池，预算要分</h3>
   <p>DeepSeek-V4 每层有两种 KV：滑窗池存最近 128 个 token 的原始 KV（滑动窗口注意力，只看最近一段），全长池存 3.1 说的 CSA／HCA 压缩后的整段。
     SGLang 给它们开两个池，共用一份预算，用 <code>--swa-full-tokens-ratio</code> 定两边怎么分。</p>
-<figure class="fbox fwide" id="fig-s3-pool"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="V4-Pro 的两个 KV 池画成两个水箱，共用一根进水管，ratio 是分水阀。4K 输入、ratio 0.20：全长池用到 93% 先满，滑窗池只用 63%，每张 decode GPU 6,887 tok/s。ratio 0.15：两个池都用到九成左右，10,614 tok/s，高 54%。换成 8K 输入、ratio 0.10：反过来滑窗池先满（96%），全长池 78%，9,354 tok/s"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两个水箱一根进水管　——　<tspan font-weight="700">分水阀拧到两边一起满，吞吐高 54%</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">V4-Pro 每层两个 KV 池，共用一份显存预算：滑窗池只留最近 128 个 token，全长池存压缩后的整段。ratio ＝ 滑窗池 ÷ 全长池，就是分水阀</text>
+<figure class="fbox fwide" id="fig-s3-pool"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="V4-Pro 的两个 KV 池画成一个仓位被隔板分成两格，仓位就是那份显存预算，ratio 决定隔板放哪。4K 输入、ratio 0.20：全长池用到 93% 先满，滑窗池只用 63%，每张 decode GPU 6,887 tok/s。ratio 0.15：两个池都用到九成左右，10,614 tok/s，高 54%。换成 8K 输入、ratio 0.10：反过来滑窗池先满（96%），全长池 78%，9,354 tok/s"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一份预算一块隔板　——　<tspan font-weight="700">隔板挪到两边一起满，吞吐高 54%</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">V4-Pro 每层两个 KV 池，共用一份显存预算：滑窗池只留最近 128 个 token，全长池存压缩后的整段。ratio ＝ 滑窗池 ÷ 全长池，就是隔板的位置</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">已用</text>
 <rect x="78.36" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -2525,24 +2525,21 @@ body.figonly section h3{margin-top:34px}
 <rect x="0" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="430" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 4K · 全长池先满</tspan></text>
-<rect x="208.0" y="146" width="14" height="56" rx="2" fill="#e8eaed" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="231" y="166" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份预算</text>
-<path d="M 215.0 202.0 H 110.0 V 278.0" fill="none" stroke="#80868b" stroke-width="9" stroke-linecap="round"/>
-<path d="M 215.0 202.0 H 320.0 V 278.0" fill="none" stroke="#80868b" stroke-width="9" stroke-linecap="round"/>
-<circle cx="215.0" cy="202.0" r="22" fill="#fff" stroke="#202124" stroke-width="2.5"/>
-<line x1="201.0" y1="202" x2="229.0" y2="202" stroke="#202124" stroke-width="3" stroke-linecap="round"/>
-<text class="svgsm" x="215" y="248" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ratio 0.20</tspan></text>
-<rect x="50" y="293.9" width="120" height="158.1" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="52" y1="293.9" x2="168" y2="293.9" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 50.0 282.0 V 452.0 H 170.0 V 282.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="110" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">93%</tspan></text>
-<text class="svgsm" x="110" y="478" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
-<text class="svgsm" x="178" y="300" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
-<rect x="260" y="344.9" width="120" height="107.1" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
-<line x1="262" y1="344.9" x2="378" y2="344.9" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 260.0 282.0 V 452.0 H 380.0 V 282.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="320" y="406" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">63%</tspan></text>
-<text class="svgsm" x="320" y="478" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
+<path d="M 87.0 206.0 V 198.0 H 343.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="215" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
+<rect x="210.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="215" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.20</tspan></text>
+<rect x="89.0" y="243.9" width="120" height="158.1" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="91.0" y1="243.9" x2="207.0" y2="243.9" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 89.0 232.0 V 402.0 H 209.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="149" y="330" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">93%</tspan></text>
+<text class="svgsm" x="149" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
+<text class="svgsm" x="149" y="256" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<rect x="221.0" y="294.9" width="120" height="107.1" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
+<line x1="223.0" y1="294.9" x2="339.0" y2="294.9" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 221.0 232.0 V 402.0 H 341.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="281" y="356" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">63%</tspan></text>
+<text class="svgsm" x="281" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
 <text class="svgsm" x="215" y="532" fill="#174ea6" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6,887</tspan></text>
 <text class="svgsm" x="215" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
 <rect x="455" y="102" width="430" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -2550,25 +2547,22 @@ body.figonly section h3{margin-top:34px}
 <rect x="455" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="455" y1="132" x2="885" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="469" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 4K · 两个一起快满</tspan></text>
-<rect x="663.0" y="146" width="14" height="56" rx="2" fill="#e8eaed" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="686" y="166" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份预算</text>
-<path d="M 670.0 202.0 H 565.0 V 278.0" fill="none" stroke="#80868b" stroke-width="9" stroke-linecap="round"/>
-<path d="M 670.0 202.0 H 775.0 V 278.0" fill="none" stroke="#80868b" stroke-width="9" stroke-linecap="round"/>
-<circle cx="670.0" cy="202.0" r="22" fill="#fff" stroke="#202124" stroke-width="2.5"/>
-<line x1="656.0" y1="202" x2="684.0" y2="202" stroke="#202124" stroke-width="3" stroke-linecap="round"/>
-<text class="svgsm" x="670" y="248" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ratio 0.15</tspan></text>
-<rect x="505" y="295.6" width="120" height="156.4" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="507" y1="295.6" x2="623" y2="295.6" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 505.0 282.0 V 452.0 H 625.0 V 282.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="565" y="381" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">92%</tspan></text>
-<text class="svgsm" x="565" y="478" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
-<text class="svgsm" x="633" y="300" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
-<rect x="715" y="300.7" width="120" height="151.3" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="717" y1="300.7" x2="833" y2="300.7" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 715.0 282.0 V 452.0 H 835.0 V 282.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="775" y="384" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">89%</tspan></text>
-<text class="svgsm" x="775" y="478" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
-<text class="svgsm" x="843" y="300" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<path d="M 542.0 206.0 V 198.0 H 798.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="670" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
+<rect x="665.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="670" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.15</tspan></text>
+<rect x="544.0" y="245.6" width="120" height="156.4" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="546.0" y1="245.6" x2="662.0" y2="245.6" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 544.0 232.0 V 402.0 H 664.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="604" y="331" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">92%</tspan></text>
+<text class="svgsm" x="604" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
+<text class="svgsm" x="604" y="256" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<rect x="676.0" y="250.7" width="120" height="151.3" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="678.0" y1="250.7" x2="794.0" y2="250.7" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 676.0 232.0 V 402.0 H 796.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="736" y="334" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">89%</tspan></text>
+<text class="svgsm" x="736" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
+<text class="svgsm" x="736" y="256" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
 <text class="svgsm" x="670" y="532" fill="#174ea6" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10,614</tspan></text>
 <text class="svgsm" x="670" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
 <rect x="925" y="102" width="430" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -2576,32 +2570,29 @@ body.figonly section h3{margin-top:34px}
 <rect x="925" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="925" y1="132" x2="1355" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="939" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 8K · 滑窗池先满</tspan></text>
-<rect x="1133.0" y="146" width="14" height="56" rx="2" fill="#e8eaed" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="1156" y="166" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份预算</text>
-<path d="M 1140.0 202.0 H 1035.0 V 278.0" fill="none" stroke="#80868b" stroke-width="9" stroke-linecap="round"/>
-<path d="M 1140.0 202.0 H 1245.0 V 278.0" fill="none" stroke="#80868b" stroke-width="9" stroke-linecap="round"/>
-<circle cx="1140.0" cy="202.0" r="22" fill="#fff" stroke="#202124" stroke-width="2.5"/>
-<line x1="1126.0" y1="202" x2="1154.0" y2="202" stroke="#202124" stroke-width="3" stroke-linecap="round"/>
-<text class="svgsm" x="1140" y="248" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">ratio 0.10</tspan></text>
-<rect x="975" y="319.4" width="120" height="132.6" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
-<line x1="977" y1="319.4" x2="1093" y2="319.4" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 975.0 282.0 V 452.0 H 1095.0 V 282.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="1035" y="393" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">78%</tspan></text>
-<text class="svgsm" x="1035" y="478" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
-<rect x="1185" y="288.8" width="120" height="163.2" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="1187" y1="288.8" x2="1303" y2="288.8" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 1185.0 282.0 V 452.0 H 1305.0 V 282.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="1245" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">96%</tspan></text>
-<text class="svgsm" x="1245" y="478" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
-<text class="svgsm" x="1313" y="300" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<path d="M 1012.0 206.0 V 198.0 H 1268.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="1140" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
+<rect x="1135.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="1140" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.10</tspan></text>
+<rect x="1014.0" y="269.4" width="120" height="132.6" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
+<line x1="1016.0" y1="269.4" x2="1132.0" y2="269.4" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 1014.0 232.0 V 402.0 H 1134.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="1074" y="343" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">78%</tspan></text>
+<text class="svgsm" x="1074" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
+<rect x="1146.0" y="238.8" width="120" height="163.2" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="1148.0" y1="238.8" x2="1264.0" y2="238.8" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 1146.0 232.0 V 402.0 H 1266.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="1206" y="328" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">96%</tspan></text>
+<text class="svgsm" x="1206" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
+<text class="svgsm" x="1206" y="256" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
 <text class="svgsm" x="1140" y="532" fill="#b06000" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9,354</tspan></text>
 <text class="svgsm" x="1140" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
 <line x1="285.0" y1="520" x2="600.0" y2="520" stroke="#d93025" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
 <text class="svgsm" x="525" y="510" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+54%</tspan></text>
-</svg><figcaption><b>分水阀拧到两个水箱一起快满时最快；一边先满，另一边的预算就在空转。</b><span class="capmore"><br><em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计，前两格输入 4K、第三格输入 8K，输出 1K，关前缀缓存。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5 消融表（约 L849–866）与结论（L872–896）：ISL 4096／8192、OSL 1024、--disable-radix-cache；吞吐是每张 decode GPU 的 e2e 输出 tok/s；占用是 full／swa 两池峰值；每 rank 请求数 727／886／999／588／410。</p>
+</svg><figcaption><b>隔板挪到两个池一起快满时最快；一边先满，另一边的预算就在空转。</b><span class="capmore"><br><em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计，前两格输入 4K、第三格输入 8K，输出 1K，关前缀缓存。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5 消融表（约 L849–866）与结论（L872–896）：ISL 4096／8192、OSL 1024、--disable-radix-cache；吞吐是每张 decode GPU 的 e2e 输出 tok/s；占用是 full／swa 两池峰值；每 rank 请求数 727／886／999／588／410。</p>
 <p>出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。</p>
 <p>本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。</p>
-<p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；水箱一样大、管子一样粗是示意，不代表两池的真实字节数。</p></details></figure>
+<p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；两格画得一样宽是示意，不代表两池的真实字节数。</p></details></figure>
   <p>两边一起满之后，再多给显存、多装 13% 的人，端到端只从 10,614 到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
@@ -6057,7 +6048,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s9-9">9.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    拆开是为了让这一趟不再等 prefill，两边的切法也能各选各的；AFD 让专家那头一趟分给更多机器的 token。
+    拆开是为了让这一趟不再等 prefill，两边的切法也能各选各的；AFD 让每个专家一趟分到更多 token。
     拆不拆、怎么配，看负载，不看潮流。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一份报告说「加到 12 个 prefill，每卡吞吐涨了 10 倍」。你先问什么？</summary>
@@ -7335,7 +7326,7 @@ body.figonly section h3{margin-top:34px}
   <p>QAT 让模型训练时就适应舍入误差，部署方也不用再量化一遍。</p>
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
-  <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 要约 101.8，超过可用的 94.75 GiB；转成 FP4 后专家约 60.9，连同注意力约 70，才放得下。</p>
+  <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 要约 101.8 GB（README 原文单位，按 GiB 读也超），超过可用的 94.75 GiB；转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，才放得下。</p>
   <p>可 v7 的公开规格只列 BF16 和 FP8 峰值，没写 FP4 算力；按公开资料 FP4 只能当权重存，算之前在片上解成 FP8 或 BF16。字节省下了，转换的功夫加上了，净收益只能实测。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>

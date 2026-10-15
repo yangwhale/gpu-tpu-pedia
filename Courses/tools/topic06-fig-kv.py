@@ -297,14 +297,14 @@ def fig_paged():
 
 # ══════════════════════════════════════════════════════════════════════
 def fig_pool():
-    f = Fig(W, "V4-Pro 的两个 KV 池画成两个水箱，共用一根进水管，ratio 是分水阀。"
+    f = Fig(W, "V4-Pro 的两个 KV 池画成一个仓位被隔板分成两格，仓位就是那份显存预算，ratio 决定隔板放哪。"
                "4K 输入、ratio 0.20：全长池用到 93% 先满，滑窗池只用 63%，每张 decode GPU 6,887 tok/s。"
                "ratio 0.15：两个池都用到九成左右，10,614 tok/s，高 54%。"
                "换成 8K 输入、ratio 0.10：反过来滑窗池先满（96%），全长池 78%，9,354 tok/s")
-    y0 = f.header("两个水箱一根进水管　——　"
-                  "<tspan font-weight=\"700\">分水阀拧到两边一起满，吞吐高 54%</tspan>",
+    y0 = f.header("一份预算一块隔板　——　"
+                  "<tspan font-weight=\"700\">隔板挪到两边一起满，吞吐高 54%</tspan>",
                   "V4-Pro 每层两个 KV 池，共用一份显存预算：滑窗池只留最近 128 个 token，全长池存压缩后的整段。"
-                  "ratio ＝ 滑窗池 ÷ 全长池，就是分水阀",
+                  "ratio ＝ 滑窗池 ÷ 全长池，就是隔板的位置",
                   [(BL, "已用"), (RD, "约九成以上，算满")])
     STATES = [RUNS[0], RUNS[1], RUNS[3]]
     TITLES = ["全长池先满", "两个一起快满", "滑窗池先满"]
@@ -315,19 +315,14 @@ def fig_pool():
     for k, ((isl, cfg, tps, full, swa, req, verdict), ttl, px) in enumerate(zip(STATES, TITLES, xs)):
         py = f.panel(px, y0, PWD, PH, "输入 %s · %s" % (isl, ttl), BL if isl == "4K" else OR)
         cx = px + PWD / 2
-        # 进水管 → 分水阀 → 两根支管 → 两个水箱
-        vy = py + 70
-        f.box(cx - 7, py + 14, 14, vy - py - 14, "#e8eaed", GY2, 2, 1.2)
-        f.t(cx + 16, py + 34, "一份预算", GY, size=14)
-        lx, rx = px + 50, px + PWD - 50 - TKW
-        ty = py + 150
-        for tx in (lx, rx):
-            mx = tx + TKW / 2
-            f.path("M %.1f %.1f H %.1f V %.1f" % (cx, vy, mx, ty - 4), GY2, 9, arrow=False)
-        f.p.append('<circle cx="%.1f" cy="%.1f" r="22" fill="#fff" stroke="%s" stroke-width="2.5"/>'
-                   % (cx, vy, INK))
-        f.line(cx - 14, vy, cx + 14, vy, INK, 3, arrow=False)
-        f.t(cx, vy + 46, cfg, INK, True, 16, "middle")
+        # 一份显存预算 ＝ 一个仓位，中间一块隔板把它分成两个池；ratio 决定隔板放哪
+        lx = cx - TKW - 6
+        rx = cx + 6
+        ty = py + 100
+        f.path("M %.1f %.1f V %.1f H %.1f V %.1f" % (lx - 2, ty - 26, ty - 34, rx + TKW + 2, ty - 26), GY2, 2, arrow=False)
+        f.t(cx, ty - 44, "一份显存预算", GY, size=14, anchor="middle")
+        f.box(cx - 5, ty - 14, 10, TKH + 14, INK, "none", 2)
+        f.t(cx, ty + TKH + 60, "隔板 " + cfg, INK, True, 16, "middle")
         for tx, occ, nm in ((lx, full, "全长池"), (rx, swa, "滑窗池")):
             hot = occ >= 0.885
             c = RD if hot else BL
@@ -338,7 +333,7 @@ def fig_pool():
             f.t(tx + TKW / 2, ty + TKH - hw / 2 + 8, "%d%%" % round(occ * 100), c, True, 22, "middle")
             f.t(tx + TKW / 2, ty + TKH + 26, nm, INK, True, 16, "middle")
             if hot:
-                f.t(tx + TKW + 8, ty + 18, "满", RD, True, 17)
+                f.t(tx + TKW / 2, ty + 24, "满", RD, True, 17, "middle")
         f.t(cx, py + PH - 70, format(tps, ","), BL if isl == "4K" else OR, True, 34, "middle", big=True)
         f.t(cx, py + PH - 42, "tok/s（每张 decode GPU）", GY, size=14, anchor="middle")
         bottoms.append(py + PH - 70)
@@ -354,7 +349,7 @@ def fig_pool():
                "出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。",
                "本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），"
                "8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。",
-               "口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；水箱一样大、管子一样粗是示意，不代表两池的真实字节数。")
+               "口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；两格画得一样宽是示意，不代表两池的真实字节数。")
     f.save("fig6-swa-ratio.svg", yb + 14)
 
 
