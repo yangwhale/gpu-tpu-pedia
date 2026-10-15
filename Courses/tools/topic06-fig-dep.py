@@ -4,6 +4,7 @@ r"""专题六 · 第六节「切专家与注意力：TEP 和 DEP」的三张静�
 回答的问题
   · fig6-dep-kv   V4-Pro 从 TP4 换 DEP8，每卡 2.09× 从哪来？多装了请求，还是每一步变短？（Little 定律对账）
   · fig6-dep-tpu  TPU 上换成 DP 注意力，赢多少？跟并发什么关系？
+  · fig6-dep-state K3 的 KDA 状态池：DEP 为什么每个 rank 都得备一整份，TP 为什么切得开？（示意）
 
 数从哪来
   · V4-Pro 只有 1 个 KV 头（num_key_value_heads 1，CSA/HCA，不是 MLA）：
@@ -214,5 +215,50 @@ def fig_dep_tpu():
     f.save("fig6-dep-tpu.svg", yb + 14)
 
 
+# ── K3 的 KDA 状态池：DEP8 每 rank 一整池，TP8 按头切（示意）──────────────
+HEADS, SLOTS, NR = 16, 4, 8                    # 头数、请求槽数都是示意，不按实际
+assert HEADS % NR == 0
+
+
+def fig_dep_state():
+    f = Fig(W, "Kimi K3 的 69 层 KDA 线性注意力，每个请求一块固定状态，按头存。左边 DEP8：8 个 rank 各算各的请求，"
+               "每个 rank 的状态池都是完整的一整池，所有头、所有请求槽都要存，两次加载都 OOM。"
+               "右边 TP8：一池状态按头切给 8 张卡，每张卡只存自己那几个头，8 张卡拼起来才是一整池。"
+               "DP、EP、DCP 都不切头这一维，只有 TP 切")
+    y0 = f.header("KDA 状态按头存：DEP 每个 rank 复制一整池，TP 每卡只存自己的头",
+                  "Kimi K3：69 层 KDA，每个请求一块固定状态。一格 ＝ 一个请求槽在一个头上的状态；头数、槽数是示意，不按实际",
+                  [(PU, "KDA 状态"), (RD, "加载时 OOM 的卡")])
+    PW, GAP, PH = 690, 20, 344
+    CW, CH, CX, CY = 7, 14, 140, 104            # 格子宽高；卡片框宽高
+    for side, (name, col) in enumerate((("DEP8：8 个 rank 各开一整池", RD), ("TP8：一池按头切给 8 张卡", GR))):
+        x0 = side * (PW + GAP)
+        py = f.panel(x0, y0, PW, PH, name, col)
+        for r in range(NR):
+            cx = x0 + 20 + (r % 4) * (CX + 30)
+            cy = py + 22 + (r // 4) * (CY + 26)
+            f.box(cx, cy, CX, CY, "none", RD if side == 0 else LINE, 6, 1.6 if side == 0 else 1)
+            f.t(cx + 12, cy + 24, ("rank %d" if side == 0 else "卡 %d") % r, INK, True, 15)
+            gx, gy = cx + (CX - HEADS * CW) / 2.0, cy + 40
+            per = HEADS // NR
+            for h in range(HEADS):
+                mine = side == 0 or r * per <= h < (r + 1) * per
+                for s_ in range(SLOTS):
+                    if mine:
+                        f.box(gx + h * CW, gy + s_ * CH, CW - 1, CH - 1, "#f3e8fd", PU, 1, 1)
+                    else:
+                        f.box(gx + h * CW, gy + s_ * CH, CW - 1, CH - 1, "none", "#e0e3e7", 1, 1)
+        msg, mcol = (("每个 rank 都要装下全部头的状态：两次加载都 OOM", RD) if side == 0
+                     else ("每卡只亮自己那几列，8 张卡拼起来才是一整池", GR))
+        f.t(x0 + 20, y0 + PH - 22, msg, mcol, True, 16)
+        f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "切头这一维的只有 TP：DP、EP、DCP 都不动它", [
+        "所以 DEP 开得再宽，每个 rank 还是一整池；本课推导，与官方说法一致。"])
+    yb = f.src(yb + 10,
+               "K3 共 93 层、69 层 KDA，DEP8 两次加载 OOM、官方改推 TP 与 DCP：SGLANG-K3-RUNBOOK.md（见第六、七节与文末台账）。",
+               "「按头切」「DP／EP／DCP 不切头」为本课推导；格子数只表示整池与按头切的对比。")
+    f.save("fig6-dep-state.svg", yb + 14)
+
+
 fig_dep_kv()
 fig_dep_tpu()
+fig_dep_state()

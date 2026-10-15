@@ -23,11 +23,11 @@ __FIG_S6_KV__
   </ul>
 
   <h3 id="s6-3">6.3　DEP 的代价：每个 rank 都得自己备一份</h3>
-  <p>DEP 下每个 rank 像台小推理机，注意力权重、调度器、请求状态各一份。<b>状态按请求开、又不随 DP 切的东西，DEP 一宽就成倍涨。</b></p>
+  <p>DEP 下每个 rank 是台小推理机，权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
+__FIG_S6_STATE__
   <ul>
-    <li><b>K3 上 DEP8 起不来</b>：Kimi K3 的 93 层里 69 层是 KDA（线性注意力），每个请求一块固定状态。DEP8 下每个 rank 复制整个状态池，两次加载都 OOM；runbook 认为官方因此改推 TP 和 DCP（<a href="#s7-1">第七节</a>）。</li>
-    <li><b>TP 反而切得开</b>：KDA 状态按头存，TP 按头切，每卡只存自己的头；DP、EP、DCP 都不动头这一维（本课推导，与官方说法一致）。</li>
-    <li><b>忙闲不均</b>：专家那步等最慢的 rank，闲着的 rank 也得陪跑空前向（专题五 §4.4）；热门专家多复制几份是 EPLB（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。</li>
+    <li><b>K3 上 DEP8 起不来</b>，runbook 认为官方因此改推 TP 和 DCP（<a href="#s7-1">第七节</a>）。</li>
+    <li><b>忙闲不均</b>：专家那步等最慢的 rank，闲的也陪跑空前向（专题五 §4.4）；热门专家多复制几份是 EPLB（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。</li>
   </ul>
 
   <h3 id="s6-4">6.4　DEP 吃得快了，就得有人喂</h3>
@@ -64,6 +64,9 @@ FIGS = {
     "__FIG_S6_KV__": ("fig-s6-dep-kv", "fig6-dep-kv.svg", "topic06-fig-dep.py",
         '<b>对比两列：在飞请求没变多，步时只剩约四分之一。</b><br>'
         '<em>实测为 GB300、vLLM、并发 512；在飞请求按 Little 定律推导，条长是示意。</em>'),
+    "__FIG_S6_STATE__": ("fig-s6-dep-state", "fig6-dep-state.svg", "topic06-fig-dep.py",
+        '<b>比同一位置的两张卡：左边格子全满，右边每卡只亮两列。</b><br>'
+        '<em>格子是示意，头数、槽数不按实际；「切头只有 TP」为本课推导。</em>'),
     "__FIG_S6_TPU__": ("fig-s6-dep-tpu", "fig6-dep-tpu.svg", "topic06-fig-dep.py",
         '<b>两条线在 256 到 512 之间交叉：decode 为主的那条后来居上。</b><br>'
         '<em>输出吞吐；折线两端标 TP → DP 的绝对值。专家都走 EP，只换注意力的切法。</em>'),
@@ -72,5 +75,6 @@ FIGS = {
 NUM_LOCK = [
     ("1,319", "fig6-dep-kv.svg"), ("2,758", "fig6-dep-kv.svg"), ("2.09", "fig6-dep-kv.svg"),
     ("1.31", "fig6-dep-kv.svg"),
+    ("69 层", "fig6-dep-state.svg"),
     ("62%", "fig6-dep-tpu.svg"), ("40%", "fig6-dep-tpu.svg"),
 ]
