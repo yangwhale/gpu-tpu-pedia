@@ -19,7 +19,7 @@ fig6-spec-bytes.svg —— 回答：验证 n 个 token 比验证 1 个多读多�
 
 fig6-spec-conc.svg —— 回答：为什么并发一高、上下文一长、一开 EP+DP，收益就缩甚至变负？
   · 数字：K3 SGLANG-K3-RUNBOOK.md:1089-1092（conc 1/8/32/64）、:1057-1058（32K）；
-    B200 V4-Flash vLLM gpu/inference/a4/deepseek-v4/README.vllm.md:266-275；
+    B200 V4-Flash vLLM gpu/inference/a4/deepseek-v4/README.vllm.md:265-277；
     GB300 V4-Pro SGLang gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-903。
   · 刻意没画：K3 32K 的 conc 8/32（runbook 说集群被删、没测）。
 
@@ -93,7 +93,7 @@ K3_X = [round(sp / ns, 2) for _, ns, sp in K3_CONC]
 assert K3_X == [4.22, 2.86, 1.89, 1.74], K3_X
 K3_32K = (83.3, 109.8)
 assert round(K3_32K[1] / K3_32K[0], 2) == 1.32
-# B200 V4-Flash vLLM EP+DP8，MTP n=2 vs 无 MTP（README.vllm.md:266-275）
+# B200 V4-Flash vLLM EP+DP8，MTP n=2 vs 无 MTP（README.vllm.md:265-277）
 B200 = [(1, 63, 72), (8, 212, 219), (40, 620, 883), (60, 1175, 1664), (80, 1466, 1960),
         (100, 1602, 2546), (200, 2407, 3053), (300, 2881, 3874), (400, 3217, 4052), (600, 3700, 4424)]
 B200_PCT = [round((m / b - 1) * 100) for _, m, b in B200]
@@ -298,7 +298,7 @@ def fig_conc():
     yb = f.src(y0 + PH + 6,
                "K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089-1092（GB300，TP8 跨两节点，ISL 4096／OSL 1024，random，temperature 0，开环，只报热轮；输出 tok/s 总量）、:1057-1058（32K，只测了并发 1；8／32 没测，集群已删）。",
                "注：K3 并发 64 时开投机的 TPOT 仍只有不开的 40%，这一档吞吐和延迟同时变好。",
-               "正文里另两组数的出处 —— B200：gpu/inference/a4/deepseek-v4/README.vllm.md:266-275（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%；十档并发 −3% 到 −37%）。",
+               "正文里另两组数的出处 —— B200：gpu/inference/a4/deepseek-v4/README.vllm.md:265-277（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%；十档并发 −3% 到 −37%）。",
                "V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%；decode 峰值 −13%、端到端 +28%）。"
                "B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。")
     f.save("fig6-spec-conc.svg", yb + 14)
