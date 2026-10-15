@@ -8812,7 +8812,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s十二"><div class="wrap"><div class="stn"><span class="badge">第 十二 节</span><h2>少搬字节：量化与 kernel 融合</h2></div>
-  <p class="lead">上一节让搬一趟出更多字，这一节让每趟少搬一点、少停一会。
+  <p class="lead">上一节让搬一趟出更多字，这一节让每趟少搬、少停。
     <b>量化</b>让权重和 KV 占更少字节，<b>kernel 融合</b>去掉交接时的空等。
     2022 年底的 GPTQ 只压权重、算时还原，3 bit 的 OPT-175B 在 1 张 A100 上逐字速度是 5 张卡跑 FP16 的 3.25 倍；同年 Hopper 的张量核（GPU 里做矩阵乘的单元）直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，4 bit 浮点（NVFP4）也进了张量核。</p>
 
@@ -8958,11 +8958,11 @@ body.figonly section h3{margin-top:34px}
   <p>块越小越贴合局部数值，精度越好，字节越多。格式细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
 
   <h3 id="s12-3">12.3　低精度直接训出来</h3>
-  <p>2025 年的 Kimi K2 Thinking 在后训练做量化感知训练（QAT），MoE 部分原生 INT4 权重，模型卡称低延迟模式生成约快 2 倍，没写对照精度。</p>
-  <p>DeepSeek-V4 模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占参数的绝大部分，也是 decode 读得最多的部分。</p>
+  <p>2025 年的 Kimi K2 Thinking 在后训练做量化感知训练（QAT，训练时就模拟低精度），MoE 部分原生 INT4 权重，模型卡称低延迟模式生成约快 2 倍，没写对照精度。</p>
+  <p>DeepSeek-V4 模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占参数的绝大部分，也是 decode 读得最多的部分，压它省得最多。</p>
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
-  <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 要约 101.8 GB，越过可用的 94.75 GiB。</p>
+  <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 放不下，换 FP4 才腾出余量。</p>
 <figure class="fbox fwide" id="fig-s12-cap"><svg viewBox="0 0 1400 428" width="100%" role="img" aria-label="DeepSeek-R1 放进 TPU v7x-8，每个 device 要多少显存。竖虚线是可用上限 94.75 GiB，约 101.7 GB。专家权重用 FP8 是 101.8 GB，越过上限；README 单位写的是 GB，要是按 GiB 读就是约 109.3 GB，超得更多。转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，离上限还有三十 GB 上下"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FP4 先是被容量逼的　——　<tspan font-weight="700">FP8 放不下，FP4 才腾出余量</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个 device 的权重占用（README 原值，单位 GB）；竖虚线 ＝ 可用上限 94.75 GiB ≈ 101.7 GB</text>
@@ -8992,7 +8992,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1195" y="364" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上限 94.75 GiB ≈ 101.7 GB</tspan></text>
 <text class="svgsm" x="1187" y="168" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">哪种单位读都超（最少 0.06 GB）</tspan></text>
 </svg><figcaption><b>看虚线右边那截淡红：换成 GiB 读，越界更多。</b><span class="capmore"><br><em>README 原值，每 device；两种单位都超。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；数为每 device，README 写 GB）；上限出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。换算 94.75 GiB ≈ 101.7 GB、101.8 GiB ≈ 109.3 GB 为本课推导。</p></details></figure>
-  <p>可 v7 公开规格只列 BF16 和 FP8 峰值，推测 FP4 只能当权重存，算前在片上解成 FP8 或 BF16。字节省了，多了转换，净收益只能实测。</p>
+  <p>但 v7 公开规格只列 BF16 和 FP8 峰值，推测 FP4 只能当权重存，算前在片上解成 FP8 或 BF16。字节省了，多了转换，净收益只能实测。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>
   <p>R1 的 FP4（E2M1）是浮点，值在 0 附近密、远处疏，靠块缩放对齐量级；Kimi K2.6 的 INT4 是 −8 到 7 等距排开的整数。</p>
@@ -9255,7 +9255,7 @@ body.figonly section h3{margin-top:34px}
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>缩放给多细看 checkpoint：vLLM 只设 <code>fp8</code> 不校准时，缩放全取 1.0；用 llm-compressor 拿数据校准，可以每个 K、V 张量一个，或每个 KV 头一个（后者目前只有 FlashAttention 后端支持）。开了 FP8 KV 掉精度，先查有没有校准过的缩放。</p>
-  <p>实际布局不是严格一半，差在哪看图里那条红虚线。V3.2 每层还多存一条挑 token 用的索引键（indexer key），它本来就存 FP8，两边一样大，所以同显存多接的请求是六成多，比只算 MLA 时少。</p>
+  <p>实际布局不是严格一半。V3.2 每层还多存一条挑 token 用的索引键（indexer key），它本来就存 FP8，换了也不变小，所以同显存多接的请求比只算 MLA 时少。</p>
 <figure class="fbox fwide" id="fig-s12-kvlayout"><svg viewBox="0 0 1400 414" width="100%" role="img" aria-label="DeepSeek-V3.2 一个 token 在一层里存的 KV，条长按字节画。BF16：512 维压缩 KV 每维 2 字节，加 64 维位置编码每维 2 字节，共 1,152 字节。FP8：512 维压缩 KV 每维 1 字节，加 4 个 FP32 缩放共 16 字节，位置编码仍是 BF16 的 128 字节。两条末尾都接一段 132 字节的 indexer key，它本来就存 FP8。合计 1,284 字节对 788 字节。虚线标出 MLA 那截严格减半该到的位置，FP8 那条越过了它，多出来的是没量化的位置编码和缩放。同显存能装的请求约是 BF16 的 1.63 倍（本课推）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KV 存 FP8 不是严格减半　——　<tspan font-weight="700">位置编码那截没压</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3.2 一个 token、一层的 KV；条长按字节数画</text>
@@ -9301,7 +9301,8 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>看下面那条的 MLA 部分比红虚线多出的那截：没压的位置编码，加上缩放。</b><span class="capmore"><br><em>FlashMLA 给 DeepSeek-V3.2 的布局，加上 indexer key，条长按字节比例；倍数为本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>布局：github.com/deepseek-ai/FlashMLA README，2026-09-30 提交 2e5429f 之前的版本「FP8 with scale」一节：每 token 每层 512 个 FP8 ＋ 4 个 FP32 缩放 ＋ 64 维 BF16 RoPE ＝ 656 B（现版只剩 V4.1 的格式）。</p>
 <p>indexer key：HF config index_head_dim＝128；DeepSeek-V3.2-Exp inference/model.py 存 FP8 ＋ 每 128 维一个 FP32 缩放，vLLM、SGLang 的 indexer 缓存固定 uint8，不随 --kv-cache-dtype 变。</p>
 <p>本课推导：BF16 ＝ (512 ＋ 64) × 2 ＋ 132 ＝ 1,284 B，FP8 ＝ 656 ＋ 132 ＝ 788 B；1,284 ÷ 788 ≈ 1.63。没算权重和激活占的显存。</p></details></figure>
-  <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节；多出的容量留住更多前缀，命中率比 FP8 KV 高 20%、首字延迟最多降到约三分之一。2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读 NVFP4 KV 的 kernel，比原先的 FP8 KV 小 45%。</p>
+  <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节。同样显存多存了前缀，Qwen3-Coder-480B 上命中率比 FP8 KV 高 20%，首字延迟最多降到其约三分之一。</p>
+  <p>2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小 45%。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数来自 megakernel 加 DSpark 投机，博客没提量化。</div>
@@ -9420,7 +9421,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>比绿条和第一根橙条：桶更少，浪费也更少。</b><span class="capmore"><br><em>本课推导示意：每步整批 token 总数取对数正态，非真实流量；浪费 ＝ 补零 token ÷ 实算 token。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课推导示意：2,000 步的整批 token 总数取对数正态分位点（中位 700、σ ＝ 0.9、截到 8,192），确定性生成；√2 档取 128 × 2^(k/2) 并取整到 16 的倍数。左下角 560／700／900 三批是随手挑的例子。补齐按整批总数（RPA ragged 布局），不是每条请求各补一次。</p>
 <p>📌 新形状首个请求编译 60–90 s、之后 <1 s：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:794。</p>
 <p>📌 预编译参数 --precompile-bs-paddings 1 4 8 16 32 64 128 256、--precompile-token-paddings 4096：tpu/sglang-jax/mimo/README.md:269-270。</p></details></figure>
-  <p>切法比桶数要紧：按 √2 倍一档的 13 个桶，补零反而比每 512 一档的 16 个桶少。</p>
+  <p>切法比桶数要紧：按 √2 倍一档切，桶比每 512 一档少，补零也更少。</p>
   <p>没编过的桶，第一个撞上的请求就得等编译：Qwen3.5-397B 在 TPU 上要等 60–90 s，之后同形状不到 1 s。</p>
   <p>所以桶要写进启动参数预编译。SGLang-JAX 的写法是 <code>--precompile-bs-paddings 1 4 8 16 32 64 128 256</code> 加 <code>--precompile-token-paddings 4096</code>：prefill 按 token 档各编一份，decode 按 batch 档各编一份，两组相加就是开服前要编的份数。</p>
 
@@ -9502,7 +9503,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s13-4">13.4　运维的两个坑</h3>
   <ul>
     <li><b>「起来了」不等于「活着」。</b>V4-Pro 的 SGLang 部署里 14 台 prefill 全崩了，服务注册表还显示 14 台在线。判活要看显存、真发一个请求。</li>
-    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存，SGLang 按 <code>mem-fraction-static</code>（预留给权重和 KV 池的显存比例）0.85 做的静态预留（每卡 284 GB 里要占 241）就再也够不着，只能整个删 pod（K8s 里装这组进程的容器）重建。</li>
+    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀满载的 decode，显存不还。SGLang 启动时要按 <code>mem-fraction-static</code>（留给权重和 KV 池的显存比例）一次占满，剩下的不够，重启必报显存不足（OOM）；报错还劝你调大这个比例，方向正好反了。该做的是整个删 pod（K8s 里一组一起调度的容器）让它重建，等显存归零再起。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s13-leak"><svg viewBox="0 0 1400 534" width="100%" role="img" aria-label="GB300 每卡显存 284 GB。强杀一个满载的 decode 之后，每卡还有 97 GB 没释放，runbook 推测是跨机器 NVLink 那部分；能用的只剩 187 GB。SGLang 的 mem-fraction-static 0.85 要静态占 241 GB，差 54 GB，下次启动必然 OOM。报错却劝你调大这个比例，那等于把要占的线往右挪，差得更多。删 pod 重建，56 秒后 284 GB 全都能用，241 落在里面，起得来"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">pkill -9 漏掉的显存　——　<tspan font-weight="700">97 GB 没还，241 GB 的预留永远够不着</tspan></text>
@@ -9660,7 +9661,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>看同前缀的请求落到哪个副本。</b><span class="capmore"><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是不路由的最坏情况、不是轮询的平均值。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Red Hat Developer，2025-10-07，「Master KV cache aware routing with llm-d」：warm cache hit TTFT 340 ms，对照为无 KV 感知路由的最坏情况 2,850 ms；命中率 87.4%（4,776 次查询中 4,176 次）。⚠️ 2,850 是最坏情况，不是轮询的平均值。</p>
 <p>⚠️ 本课示意：左栏的副本与请求是示意。</p>
 <p>正文里的健康检查那句（8 个副本坏 1 个，1/8 的请求白等）是本课推导示意：12.5% ＝ 1 ÷ 8，只在纯轮询、坏副本照常收请求时成立。</p></details></figure>
-  <p>KV 感知路由把同前缀的请求送到已经存着它的副本。SGLang 2024 年 12 月把它放进开源路由，命中率 20% → 75%、吞吐是 v0.3 的 1.9 倍；之后 NVIDIA Dynamo（2025-03）、llm-d（2025-05）、GKE Inference Gateway 都做了，图右是 Red Hat 2025-10 用 llm-d 的实测：命中缓存首字 340 ms，对照是<b>不路由的最坏情况</b> 2,850 ms；原文没给平均或中位数对照，所以不能读成「路由快八倍」。</p>
+  <p>KV 感知路由把同前缀的请求送到已经存着它的副本。SGLang 2024 年 12 月把它放进开源路由，命中率 20% → 75%、吞吐是 v0.3 的 1.9 倍；之后 NVIDIA Dynamo（2025-03）、llm-d（2025-05）、GKE Inference Gateway 都做了，图右是 Red Hat 2025-10 用 llm-d 的实测。</p>
   <p>容量规划沿用 goodput 的思路（<a href="#s2-2">§2.2</a>）：先定交互档，再看这一档每卡扛多少人（2.2 图里那一档约 224 人），decode 卡数 ＝ 同时在生成的请求数 ÷ 每卡人数；分母的坑见 2.3。</p>
 
   <p class="landing">⭐ 路由把「少算」搬到集群层：<b>前缀只算一次</b>，后面的请求都来复用。</p>
