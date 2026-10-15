@@ -15,8 +15,8 @@ BODY = '''
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
-  <p>2025 年 9 月的 DeepSeek-V3.2-Exp KV 照 MLA 存，但每个字先用一个小打分器只挑 2,048 个历史 token 去读（DSA，DeepSeek 稀疏注意力），注意力从随长度平方涨变成线性涨；上线同时 API 降价五成以上（是定价，不是成本）。</p>
-  <p>DeepSeek-V4 不在表里：每层只存一条所有头共用的 KV，再沿 token 方向压缩（CSA 每 4 个 token 并成一条、只挑一部分读；HCA 每 128 个并成一条后全读），另留最近 128 个 token 不压，分两个池（3.4）。2026-09 的 V4.1-Flash 再让几层共用一份 KV、主 KV 存 FP4，全局 KV 每 token 只剩 890 B，约 V4-Flash 的 1/4。</p>
+  <p>DeepSeek 自家这条线后来又改了三代，省的地方不一样：看黄框落在哪一排。V4 的两个池怎么分预算见 3.4。</p>
+__FIG_S3_LINEAGE__
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
   <p>一颗 v7 芯片扣掉一成激活值和 1/8 份 V3 FP8 权重，剩 92.4 GiB 给 KV（拆法见图，口径同 10.5）。</p>
@@ -84,6 +84,9 @@ __FIG_S3_OFFLOAD__
 '''
 
 FIGS = {
+    "__FIG_S3_LINEAGE__": ("fig-s3-lineage", "fig6-kv-lineage.svg", "topic06-fig-kvlineage.py",
+        '<b>只有 DSA 那一列是下排变少，后两列变少的是上排。</b><br>'
+        '<em>方块示意，不按比例；各数出处见文末台账（V3.2-Exp、V4 技术报告与 V4.1-Flash 模型卡）。</em>'),
     "__FIG_S3_BATCH__": ("fig-s3-batch", "fig6-kv-batch.svg", "topic06-fig-kv.py",
         '<b>纯注意力三条线往右一格人数减半；紫线先交固定状态，少得慢；红线 32K 起装不下。</b><br>'
         '<em>口径同正文；KV 按 bf16、attention 数据并行。本课推导。</em>'),
