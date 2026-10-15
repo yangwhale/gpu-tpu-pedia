@@ -70,12 +70,13 @@ assert all(abs(x - y) < 1e-12 for x, y in zip(fixed, ENDS))
 def fig_dcp_gain():
     f = Fig(W, "Kimi K3 在 GB300 上用 SGLang，比较 TP8 和 TP8 加 DCP8 的输出吞吐比值，纵轴是对数刻度，1 倍是盈亏线。"
                "输入 4K 时四档并发 DCP 都亏，亏 7% 到 26%。突出画的是并发 8 那条线：4K、8K、32K 都在盈亏线下面，"
-               "到 128K 一下跳到 365 对 108，多 237%。其余并发画成淡色：8K 并发 32 赚 24%，32K 并发 32 赚 7%，128K 并发 1 赚 12%")
+               "到 128K 一下跳到 365 对 108，多 237%。其余并发画成淡色：8K 并发 32 赚 24%，32K 并发 32 赚 7%；"
+               "并发 1 只测了 4K 和 128K，两点之间用虚线相连，128K 赚 12%。并发 64 只测了 4K 一个点，亏 7%")
     FAINT = {1: "#cdb8ef", 8: BL, 32: "#f3c79e", 64: "#9aa0a6"}
     y0 = f.header("DCP 只在长上下文赚　——　<tspan font-weight=\"700\">128K、8 并发：365 对 108，+237%</tspan>",
                   "Kimi K3 · GB300 · SGLang · TP8 跨 2 节点，输出 1K。纵轴：DCP8 ÷ TP8 的输出吞吐（对数刻度），一条线一个并发",
                   [(BL, "并发 8"), (FAINT[1], "并发 1"), (FAINT[32], "并发 32"), (FAINT[64], "并发 64")])
-    PH = 470
+    PH = 510
     py = f.panel(0, y0, W, PH, "输入长度 → DCP8 相对 TP8", BL)
     X0, PW, PY, PHH = 110, 1240, py + 34, PH - 124
     LO, HI = math.log(0.6), math.log(4.0)
@@ -91,43 +92,48 @@ def fig_dcp_gain():
         f.line(X0, py_(v), X0 + PW, py_(v), GY2 if v == 1 else "#eceff1", 1.8 if v == 1 else 1, None, arrow=False)
         f.t(X0 - 10, py_(v) + 5, lab, INK if v == 1 else GY, v == 1, 14, "end")
     f.t(X0 + 14, PY + 26, "DCP 赚", GR, True, 17)
-    f.t(X0 + 14, PY + PHH - 14, "DCP 亏", RD, True, 17)
+    f.t(X0 + PW - 14, PY + PHH - 14, "DCP 亏", RD, True, 17, "end")
     for isl in ISLS:
         f.t(px(isl), PY + PHH + 24, isl, GY, size=15, anchor="middle")
     f.t(X0 + PW / 2, PY + PHH + 50, "输入长度（token）", GY, size=15, anchor="middle")
     # 先画淡色的三条，再画突出的并发 8
+    # 4K 那四个点挤在 0.74～0.93：并发 64／8／32 三点只差 4%，同一横坐标上会叠成一团。
+    # 水平错开（64 往左、32 往右各 22px），每个点在左边配一条带引线的标签，读者不用猜哪个点是哪档。
+    DX = {1: 0, 8: 0, 32: 22, 64: -22}
     for c, _ in sorted(CONCS, key=lambda t: t[0] == 8):
         col = FAINT[c]
         hot = c == 8
-        pts = [(px(isl), py_(RATIO[(isl, c)])) for isl in ISLS if (isl, c) in RATIO]
-        if len(pts) > 1:
-            f.path(pts, col, 3.6 if hot else 2, arrow=False)
-        if len(pts) == 1:
-            # 并发 64 只有 4K 一个点，比值 0.93 和并发 8 的 0.91 几乎重合：往右错开画成空心圈，免得被大蓝点盖住
-            x, y = pts[0]
-            f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="#fff" stroke="%s" stroke-width="2.5"/>' % (x + 24, y, col))
-            continue
-        for (x, y), isl in zip(pts, [i for i in ISLS if (i, c) in RATIO]):
-            if (isl, c) == ("4K", 32):
-                continue          # 这个点被并发 8 的大蓝点盖住，挪到最后单独画（见下）
-            r = 7 if hot else 4
-            f.box(x - r, y - r, 2 * r, 2 * r, col, col, r)
-    # 4K、并发 32（0.89，−11%）：和并发 8 的 0.91 几乎重合，画在大蓝点之后、往右偏 6px，白描边让它浮在上面
-    x32, y32 = px("4K") + 6, py_(RATIO[("4K", 32)])
-    f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="%s" stroke="#fff" stroke-width="1.5"/>' % (x32, y32, FAINT[32]))
-    f.t(x32 + 12, y32 + 22, "−%d%%" % -PCT[("4K", 32)], "#b06000", True, 14)
+        isls = [isl for isl in ISLS if (isl, c) in RATIO]
+        pts = [(px(isl) + (DX[c] if isl == "4K" else 0), py_(RATIO[(isl, c)])) for isl in isls]
+        # 只连相邻两档都测过的段；中间有没测的长度（并发 1：8K、32K 都没测）就画虚线
+        for (p0, i0), (p1, i1) in zip(zip(pts, isls), zip(pts[1:], isls[1:])):
+            gap = ISLS.index(i1) - ISLS.index(i0) > 1
+            f.path([p0, p1], col, 3.6 if hot else 2, "6 6" if gap else None, arrow=False)
+        for x, y in pts:
+            r = 7 if hot else 5
+            if c == 64:   # 只有一个点，画成空心圈和实心点区分开
+                f.p.append('<circle cx="%.1f" cy="%.1f" r="6" fill="#fff" stroke="%s" stroke-width="2.5"/>' % (x, y, col))
+            else:
+                f.box(x - r, y - r, 2 * r, 2 * r, col, col, r)
+    # 4K：四档各一条标签，按点的上下顺序排在左边，引线连到各自的点，引线互不交叉
+    LBL = {64: GY, 8: BL, 32: OR, 1: PU}
+    order = sorted((c for c, _ in CONCS), key=lambda c: -RATIO[("4K", c)])
+    lx = px("4K") - 62
+    f.t(lx, py_(1.0) + 22, "4K：四档并发全亏", RD, True, 16, "end")
+    for k, c in enumerate(order):
+        ly = py_(1.0) + 42 + 18 * k
+        tx, ty = px("4K") + DX[c], py_(RATIO[("4K", c)])
+        f.t(lx, ly, "并发 %d：−%d%%" % (c, -PCT[("4K", c)]), LBL[c], True, 14, "end")
+        f.line(lx + 4, ly - 5, tx - (8 if c == 8 else 6), ty, FAINT[c] if c != 8 else BL, 1.2, arrow=False)
     # 淡色线只标一个：同是 8K，并发一高就赚
     f.t(px("8K"), py_(RATIO[("8K", 32)]) - 14, "并发 32：+%d%%" % PCT[("8K", 32)], "#b06000", True, 15, "middle")
-    # 并发 8 的三个亏点
+    # 并发 8 的两个亏点
     for isl, dy in (("8K", 30), ("32K", 30)):
         f.t(px(isl), py_(RATIO[(isl, 8)]) + dy, "−%d%%" % -PCT[(isl, 8)], BL, True, 16, "middle")
-    # 4K：一个括号代替四个小标签
-    lo = min(RATIO[("4K", c)] for c, _ in CONCS)
-    hi = max(RATIO[("4K", c)] for c, _ in CONCS)
-    bx = px("4K") - 26
-    f.path([(bx + 8, py_(hi)), (bx, py_(hi)), (bx, py_(lo)), (bx + 8, py_(lo))], RD, 1.8, arrow=False)
-    f.t(bx - 10, (py_(hi) + py_(lo)) / 2 - 4, "4K：四档并发全亏", RD, True, 16, "end")
-    f.t(bx - 10, (py_(hi) + py_(lo)) / 2 + 20, "−7% ～ −26%", RD, True, 16, "end")
+    # 并发 1 的 128K 端点 ＋ 说明虚线中间没有数据
+    x1, y1 = px("128K"), py_(RATIO[("128K", 1)])
+    f.t(x1 + 14, y1 + 20, "并发 1：+%d%%" % PCT[("128K", 1)], PU, True, 14)
+    f.t(px("32K") + 72, py_(1.0) + 26, "并发 1 的 8K、32K 没测，虚线只连两端", PU, False, 14)
     # 128K 的跳变
     x8, y8 = px("128K"), py_(RATIO[("128K", 8)])
     f.t(x8 + 22, y8 + 6, "+%d%%" % PCT[("128K", 8)], BL, True, 34)
