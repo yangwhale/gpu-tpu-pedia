@@ -37,7 +37,7 @@ __FIG_S5_DENSE__
 __FIG_S5_ALLREDUCE__
   <p>消息小，时间几乎全是固定延迟，加带宽救不回来（arXiv 2607.16100）。</p>
 
-  <p class="landing">⭐ 从 2022 年的 FlashAttention 到 2026 年的 RPA，单卡 kernel 一直在做一件事：<b>「少搬」从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行都是没人要的字节，先去掉它们，再谈量化和加卡。</p>
+  <p class="landing">⭐ 从 2022 年的 FlashAttention 到 2025 年进 vLLM 的 RPA，单卡 kernel 一直在做一件事：<b>「少搬」从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行都是没人要的字节，先去掉它们，再谈量化和加卡。</p>
 '''
 
 FIGS = {
