@@ -83,7 +83,7 @@ CH = [
 
 <p class="board"><b>🖥 屏幕</b>：课件 <code>s十二</code>，停在节标题下那段导语。</p>
 
-<p class="say">「货变轻，看时间线上「少搬字节」那一行。二〇二二年底， GPTQ 只压权重，压到三 bit，大模型一张卡就能跑，比五张卡跑半精度还快三倍多。<br>
+<p class="say">「看时间线上「少搬字节」那一行。二〇二二年底，GPTQ 只压权重，压到三 bit，大模型一张卡就能跑，比五张卡跑半精度还快三倍多。<br>
 同年 Hopper 能直接拿 FP8 做矩阵乘，DeepSeek-V3 连训练都用 FP8。到 Blackwell，四 bit 浮点也能直接算了。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s12-bytes</code> 整张。</p>
@@ -129,7 +129,7 @@ TPU 这边，Inferact 用 Pallas 写了 megakernel。十六颗 v7 跑 Kimi K3，
 这个七百多是 megakernel 加投机解码一起换来的，博客没提量化。这几招能叠着用。」</p>
 
 <p class="say">「货变轻这一步补了多少：二〇二四年 vLLM 接入 FP8 权重，对照 BF16，稠密模型出字最多快到两倍，MoE 快到一点六倍；K2 Thinking 原生 INT4，模型卡称生成快约两倍。<br>
-到这儿，车上多坐人、货变轻，招数都齐了。可 kernel 调好了，服务还可能第一分钟就卡住。所以接下来第十三节，讲落地。」</p>
+到这儿，三根杠杆都拉过了。可 kernel 调好了，服务不一定开得出来。所以接下来第十三节，讲落地。」</p>
 """, """
 ⛔ <b>不要讲 E2M1、E8M0、E4M3 的位布局</b>，只说「块大小和缩放精度不同」。<em>细节在专题八 §2。</em><br>
 ⚠️ <b>Inferact 那个七百多是 megakernel 加 DSpark 投机一起换来的</b>，别说成量化或单靠 megakernel 的功劳。<br>
