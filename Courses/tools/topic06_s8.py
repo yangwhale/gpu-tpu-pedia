@@ -2,7 +2,7 @@
 """专题六 · 第八节「拆工作：PD 分离与那一趟 KV」。
 
 新图在 topic06-fig-pd.py（fig6-kv-stack / kv-bw / hybrid-kv / prfaas）；
-另复用专题五 §6.1、§6.2 的三张图（topic05-fig-pd.py，id 加 -t5）。
+另复用专题五 §6.1、§6.2 的两张图（topic05-fig-pd.py，id 加 -t5）。
 ⛔ 本节不用 Kimi K3 在 TPU 上的任何 PD 数；K3 只引 GPU runbook。
 """
 
@@ -15,7 +15,6 @@ BODY = '''
   <p><a href="topic-05.html#s6-1">专题五 §6.1</a> 讲过：decode 每步只出一个字却要读一遍权重，所以要凑大 batch。batch 越大，一次 prefill 卡住的人越多。</p>
 __FIG_S8_DECODE_AI_T5__
   <p>这时插进来一个长 prompt：</p>
-__FIG_S8_PD_T5__
 <figure class="fbox fwide" id="anim-pdsplit">
 <video src="media/topic06-pdsplit.mp4" autoplay loop muted playsinline
        aria-label="PD 分离动画。标题：PD 分离：prefill 挪走，decode 的字不再被卡住。上下两组时间轴共用一条往右走的黄色竖线，一格是一步 decode 的时间。上组叫「混部：prefill 和 decode 挤在一台机器上」，行是整机在算、新请求、请求 A、请求 B、请求 C；下组叫「PD 分离：prefill 机只算 prefill，decode 机只出字」，行是 prefill 机，以及 decode 机上的新请求、请求 A、请求 B、请求 C。底下写「一格＝一步 decode 的时间，只表相对长短（示意）」。前 4 步两组一样：A、B、C 每步各出一个字，绿格等间距。接着一段橙色长块「长 prompt 的 prefill」占了 5 格：上组它占住整台机器，A、B、C 这 5 格一个字都没出，被红框圈出，右边红字「下一个字被推迟」；下组它在 prefill 机上算，decode 机上 A、B、C 照常每步出字。prefill 算完，上组新请求的绿格直接接在后面；下组一支紫色箭头标「传 KV」从 prefill 机指向 decode 机，新请求在下一步加入 decode 批，右边绿字「字距始终均匀」。字幕依次是：三条请求在 decode：每一步，每条请求出一个字，格子等间距。来了一个长 prompt：prefill 一次算完整段的 KV。混部时整台机器被它占住。分离时它在 prefill 机上算，算完把 KV 传给 decode 机（传的是 KV，不是权重）。新请求带着 prefill 给的第一个字进 decode 批，之后一步一个字。最后：拆开后 decode 的字距始终均匀；代价是多一批机器、每个请求多传一趟 KV。画面复位。"></video>
@@ -110,8 +109,6 @@ __FIG_S8_PRFAAS__
 FIGS = {
     "__FIG_S8_DECODE_AI_T5__": ("fig-s8-decode-ai-t5", "fig5-decode-ai.svg", "topic05-fig-pd.py",
         '<b>batch 越大，读一遍权重换来的计算越多。</b><br><em>专题五原图。</em>'),
-    "__FIG_S8_PD_T5__": ("fig-s8-pd-t5", "fig5-pd.svg", "topic05-fig-pd.py",
-        '<b>拆开以后，绿线一格不少。</b><br><em>专题五原图；时间线是示意。</em>'),
     "__FIG_S8_KV_TRIP_T5__": ("fig-s8-kv-trip-t5", "fig5-kv-trip.svg", "topic05-fig-pd.py",
         '<b>三色细条就是代价。</b><br><em>专题五原图；KV 用时按带宽估算，不是计时。</em>'),
     "__FIG_S8_STACK__": ("fig-s8-kv-stack", "fig6-kv-stack.svg", "topic06-fig-pd.py",

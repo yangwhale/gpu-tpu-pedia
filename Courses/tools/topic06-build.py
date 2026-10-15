@@ -196,7 +196,6 @@ _T5_FIX = {
     "fig-s6-tep-dep-t5": [(_ATT, _att, 10)],
     "fig-s7-pcp-dcp-t5": [("对等的另一刀，", "对等的另一种切法，", 1)],
     "fig-s8-decode-ai-t5": [(_ATT, _att, 2)],
-    "fig-s8-pd-t5": [("第五刀：把两种活拆到两批机器上", "把两种活拆到两批机器上", 1)],  # 专题五的编号
     "fig-s8-kv-trip-t5": [("对比第三节的 TP：", "对比 TP：", 1)],  # 专题五第三节＝TP；本课第三节是 KV cache
     "fig-s9-afd-t5": [(_ATT, _att, 14)],
 }
