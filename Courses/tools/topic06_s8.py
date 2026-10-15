@@ -68,7 +68,7 @@ __FIG_S8_HYBRID__
   <ul>
     <li><b>修法</b>：全传，tpu-inference 的 TPUConnectorHMA 就这么做。</li>
     <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文，没给分解）；单并发每请求吞吐是不拆单机的 0.95 倍，4 并发是 0.92 倍。</li>
-    <li><b>GPU 上同理</b>：SGLang 跑 Kimi K3 时，PD 的 decode 端每个请求只有一个状态槽，前缀缓存不起作用。</li>
+    <li><b>GPU 上同理</b>：SGLang 跑 K3 时，PD 的 decode 端每请求一个状态槽，留不住前缀的状态，前缀缓存失效。</li>
   </ul>
   <details class="foldfig"><summary><b>Qwen3.5 PD 的启动要点</b>：tpu-inference</summary>
   <p>connector 选 <code>TPUConnectorHMA</code>，并显式加 <code>--no-disable-hybrid-kv-cache-manager</code>。出处：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:375–389；吞吐表见同目录 README-TPU-VM.md:859–867（XLA 缓存已热的第二轮）。</p></details>
