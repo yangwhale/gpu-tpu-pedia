@@ -131,7 +131,7 @@ def fig_kv_bw():
                "200 MB/s 是 vLLM 在 GB300 上配错时的实测带宽，搬一趟约 5.2 秒，比 1 到 2 秒的 prefill 还长。"
                "专题五那条 100 Gbps 数据中心网络约 83 毫秒。按对三个开关之后实测 7 到 167 GB/s，一趟只要 149 到 6 毫秒。"
                "runbook 里单次传输从 200 到 800 毫秒降到 2 到 10 毫秒")
-    y0 = f.header("配错一个开关，搬一趟比 prefill 本身还慢 2.6–5.2 倍　——　<tspan font-weight=\"700\">比配对慢 35–835 倍</tspan>",
+    y0 = f.header("配错一个开关，搬一趟要 prefill 本身的 2.6–5.2 倍时间　——　<tspan font-weight=\"700\">是配对时的 35–835 倍</tspan>",
                   "横轴是对数时间。每根条是同一份 1.04 GB 的 KV（专题五那个 8K prompt）按这一档带宽搬一趟；灰带是这个 prompt 的 prefill 本身",
                   [(RD, "配错：实测 200 MB/s"), (GY2, "专题五：100 Gbps ＝ 12.5 GB/s"), (GR, "配对：实测 7–167 GB/s")])
     PH = 400
@@ -222,10 +222,10 @@ def fig_hybrid_kv():
 
 def fig_prfaas():
     f = Fig(W, "四个模型在 32K 输入时，一台 8 卡 H200 做 prefill，每秒要往外送多少 KV。"
-               "全注意力的 Qwen3-235B 要 33.35 Gbps，混合的 Qwen3.5-397B 只要 8.25，差 4 倍。"
-               "全注意力的 MiniMax-M2.5 要 59.93，混合的 MiMo-V2-Flash 只要 4.66，差 13 倍。"
+               "全注意力的 Qwen3-235B 要 33.35 Gbps，混合的 Qwen3.5-397B 只要 8.25，前者是后者的 4 倍。"
+               "全注意力的 MiniMax-M2.5 要 59.93，混合的 MiMo-V2-Flash 只要 4.66，前者是后者的 13 倍。"
                "红虚线是案例里整条跨集群专线约 100 Gbps，整个 prefill 集群共用：Qwen3-235B 只够并 2 台，MiniMax 只够 1 台，Qwen3.5 能并 12 台，MiMo 21 台。案例里整个 prefill 集群平均出口只有 13 Gbps")
-    y0 = f.header("KV 变薄，PD 才敢跨数据中心　——　<tspan font-weight=\"700\">混合模型要送的字节少 4 到 13 倍</tspan>",
+    y0 = f.header("KV 变薄，PD 才敢跨数据中心　——　<tspan font-weight=\"700\">混合模型要送的字节降到全注意力的 1/4 到 1/13</tspan>",
                   "PrFaaS 论文 Table 3：32K 输入，一台 8×H200（SGLang v0.5.9）做 prefill 时每秒要外送的 KV，单位 Gbps",
                   [(OR, "全注意力"), (GR, "混合（线性或滑窗 ＋ 少量全注意力）")])
     PH = 390

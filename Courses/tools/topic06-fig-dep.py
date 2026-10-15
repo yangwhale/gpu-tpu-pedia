@@ -122,7 +122,7 @@ def fig_dep_kv():
         else:
             f.t(X0 + 16 + per * unit, yy + 4 * RH - 2, "每张卡约 %d 个请求，各读一遍" % round(IN_DEP / 8), PU, True, 20)
         yy += n * RH + 30
-    f.t(X0, y0 + PH - 22, "副本让出的显存，理论上能多放 4 倍请求（TP 度数 4 ÷ KV 头数 1）；实测在飞的请求没变多，见下表。",
+    f.t(X0, y0 + PH - 22, "副本让出的显存，理论上能放的请求是原来的 4 倍（TP 度数 4 ÷ KV 头数 1）；实测在飞的请求没变多，见下表。",
         GY, size=15)
     f._pan = None
     # ── Little 定律对账 ──

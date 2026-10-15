@@ -127,8 +127,8 @@ def fig_2p1d():
 
 def fig_prefill_sweep():
     f = Fig(W, "vLLM 跑 DeepSeek-V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个，每个 prefill 4 张卡。"
-               "蓝线按每张 decode 卡算，从 307 涨到 12 个 prefill 时的 3,187，涨了 10.4 倍，14 个时还在涨。"
-               "橙线把 prefill 的卡也算进分母，从 204 涨到 12 个 prefill 时的 455 就到顶，只涨 2.2 倍，14 个时回落到 415")
+               "蓝线按每张 decode 卡算，从 307 涨到 12 个 prefill 时的 3,187，是起点的 10.4 倍，14 个时还在涨。"
+               "橙线把 prefill 的卡也算进分母，从 204 涨到 12 个 prefill 时的 455 就到顶，只是起点的 2.2 倍，14 个时回落到 415")
     y0 = f.header("只除 decode 卡，加 prefill 像白捡；全部卡都算上，到 12 个就到顶",
                   "同一组实测（vLLM，DeepSeek-V4-Pro，GB300；decode ＝ dep8 共 8 卡，每个 prefill TP4 共 4 卡；8K 输入 1K 输出，并发 1,024）。纵轴是每卡 output tok/s",
                   [(BL, "÷ decode 卡（runbook 原口径）"), (OR, "÷ 全部卡（本课推导）")])
