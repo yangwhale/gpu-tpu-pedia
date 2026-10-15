@@ -28,7 +28,7 @@ __FIG_S8_PD_T5__
   <h3 id="s8-2">8.2　回顾：那一趟要多久</h3>
   <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过 Qwen3-Coder-480B 的一个 8K prompt：KV 约 1.04 GB，走 100 Gbps（每秒 100 吉比特，约 12.5 GB/s）的数据中心网络约 83 ms，前后两段 PCIe（卡和主机之间的总线）各约 16 ms（按 Gen5 x16 单向约 64 GB/s 估，本课推导）。</p>
 __FIG_S8_KV_TRIP_T5__
-  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X 每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（本课推导）。</p>
+  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X 每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算，多卡并行还更快；本课推导）。</p>
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
@@ -101,7 +101,7 @@ __FIG_S8_PRFAAS__
     <li><b>全注意力太胖</b>：32K 输入时，一台 8×H200 做 prefill，Qwen3-235B 每秒要外送 33.35 Gbps，MiniMax-M2.5 接近 60。</li>
     <li><b>混合模型能走</b>：Qwen3.5-397B 只要 8.25，MiMo-V2-Flash 只要 4.66，几台 prefill 合起来一条专线放得下。</li>
     <li><b>还要挑请求</b>：只把超过长度阈值的 prompt 送去远端，短的就地算。</li>
-    <li><b>论文案例</b>：Moonshot 的 1T 混合模型，32 张 H200 做 prefill 加 64 张 H20 做本地 PD，比 96 张 H20 同构 PD 吞吐 +54%、P90 TTFT −64%（同等成本吞吐约 +15%）；跨集群平均出口 13 Gbps。</li>
+    <li><b>论文案例</b>：Moonshot 的 1T 混合模型，32 张 H200 做 prefill 加 64 张 H20 做本地 PD，比 96 张 H20 同构 PD 吞吐 +54%、P90 TTFT −64%（同等成本吞吐约 +15%）；跨集群平均出口 13 Gbps。这几个数是论文把实测 profile 代进吞吐模型推算的，不是端到端实测。</li>
   </ul>
 
   <h3 id="s8-9">8.9　落点</h3>

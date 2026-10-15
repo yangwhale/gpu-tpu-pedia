@@ -30,8 +30,9 @@ __FIG_S4_CHUNK__
 __FIG_S4_CONC__
   <p>槽位就是 KV 池装得下几个人。Little 定律：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
-    9,032 × 8 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 540。
-    客户端并发是另一个数：共 8,400 路，没进批的在 prefill 那边排队。</p>
+    客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 那边排队。</p>
+  <details class="foldfig"><summary><b>Little 定律核一遍</b>：批里到底几个人？</summary>
+  <p>9,032 × 8 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 540。</p></details>
   <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），端到端只多 0.8%，TPOT 从 77.7 拖到 85.3 ms：人多了，每步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
     XLA（JAX 背后的编译器）按静态形状编译，batch 大小也是形状。SGLang-JAX 为几档 batch 提前编译，
@@ -51,7 +52,7 @@ __FIG_S4_OVERLAP__
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000，再加并发只让首字等待变长；
-    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 减半），要么换个交互档。</p></details>
+    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 约减半），要么换个交互档。</p></details>
 '''
 
 FIGS = {

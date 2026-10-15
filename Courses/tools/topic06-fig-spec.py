@@ -39,13 +39,13 @@ W = 1400
 # ══ fig6-spec-step：示意几何 ═══════════════════════════════════════════
 K = 4                       # 每轮草稿猜 4 个（示意）
 T_STEP, T_DRAFT, T_VERIFY = 10, 1, 11      # 普通一步 10 格；草稿每个 1 格；验证一步 11 格（示意）
-ROUNDS = [3, 1]             # 第 1 轮接受 3 个，第 2 轮接受 1 个（示意）
+ROUNDS = [2, 4]             # 第 1 轮接受 2 个，第 2 轮 4 个全对（示意，和 anim-spec 同一组数）
 ADV = [a + 1 for a in ROUNDS]               # 每轮前进 ＝ 接受个数 ＋ 1
-assert ADV == [4, 2]
+assert ADV == [3, 5]
 T_SPEC = len(ROUNDS) * (K * T_DRAFT + T_VERIFY)
 assert T_SPEC == 30
 N_PLAIN = T_SPEC // T_STEP                  # 同样 30 格时间，普通 decode 出几个字
-assert N_PLAIN == 3 and sum(ADV) == 6
+assert N_PLAIN == 3 and sum(ADV) == 8
 
 # ══ fig6-spec-bytes：V3 字节账（本课推导）══════════════════════════════
 V3_H, V3_MOE_I, V3_LAYERS, V3_DENSE = 7168, 2048, 61, 3
@@ -117,11 +117,11 @@ K3_AL_LOW, K3_AL_HIGH = 4.73, 2.61          # K3 官方：低熵 / 高熵任务�
 def fig_step():
     f = Fig(W, "投机解码一步做了什么，示意时间线。上面一条是普通 decode：每一步把权重读一遍，出一个字，"
                "三十格时间出三个字。下面一条是投机解码：先用便宜的草稿连猜四个字，再让大模型读一遍权重、"
-               "一次把四个字都验掉。第一轮前三个对、第四个错，大模型在第四个位置给出自己的字，于是一轮前进四个；"
-               "第二轮只对了第一个，前进两个。同样三十格时间出了六个字")
+               "一次把四个字都验掉。第一轮前两个对、第三个错，大模型在第三个位置给出自己的字，后面的扔掉，于是一轮前进三个；"
+               "第二轮四个全对，大模型顺手算出的第五个也白送，前进五个。同样三十格时间出了八个字")
     y0 = f.header("先猜后验　——　<tspan font-weight=\"700\">大模型读一遍权重，验掉一整串草稿</tspan>",
                   "横轴是时间（示意，不按比例）。每一格字：绿 ＝ 草稿猜对、被收下；红 ＝ 猜错、连同后面的全扔掉；"
-                  "蓝 ＝ 大模型在第一个错的位置自己给的字",
+                  "蓝 ＝ 大模型自己给的字（第一个错的位置补上；全对时白送下一个）",
                   [(GY2, "大模型读一遍权重"), (PU, "草稿猜一个字"), (GR, "收下"), (RD, "扔掉"), (BL, "大模型补的字")])
     PH = 400
     py = f.panel(0, y0, W, PH, "同样长的时间，两种走法", INK)
@@ -160,9 +160,9 @@ def fig_step():
         for j in range(K):
             col = GR if j < acc else RD
             tok(tx + j * 34, ry2 + 52, col, "✓" if j < acc else "✕")
-        tok(tx + acc * 34, ry2 + 88, BL, "补")
+        tok(tx + acc * 34, ry2 + 88, BL, "补" if acc < K else "送")
         made += acc + 1
-        f.t(xv + T_VERIFY * U - 8, ry2 + 140, "这一轮前进 %d 个（收下 %d ＋ 补 1）" % (acc + 1, acc),
+        f.t(xv + T_VERIFY * U - 8, ry2 + 140, "这一轮前进 %d 个（收下 %d ＋ %s 1）" % (acc + 1, acc, "补" if acc < K else "白送"),
             INK, True, 13.5, "end")
         x = xv + T_VERIFY * U
     assert made == sum(ADV)

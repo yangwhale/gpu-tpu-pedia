@@ -839,7 +839,7 @@ body.figonly section h3{margin-top:34px}
     <b>一次请求里，前后两段要的硬件正好相反。</b></p>
 
   <h3 id="s0-1">0.1　2022 年以来，推理怎么变便宜</h3>
-  <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出；KV（已读内容的缓存）按最大长度预留，显存里真正存着 token（大致一个字或半个词，本课常直接叫“字”）的只有两到四成。</p>
+  <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出；KV（已读内容的缓存）按最大长度预留，显存里真正存着 token（大致一个字或半个词，本课常直接叫“字”）的只有两到四成（vLLM 论文对按最大长度预留的估算）。</p>
 <figure class="fbox fwide" id="fig-s0-story"><svg viewBox="0 0 1400 1016" width="100%" role="img" aria-label="2022 年以来的推理优化：六条泳道按时间排出 2022 到 2025 年的关键优化，每张卡写原文报告的提升或做法：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，GQA 和 MLA 是模型侧的进步，用虚线卡标出；投机解码 2 到 3 倍，DistServe 多服务 7.4 倍请求，DeepSeek 大 EP 每节点 decode 1.48 万 token 每秒；倍数基线互相包含，不能连乘"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">2022 年以来　——　<tspan font-weight="700">每一步补一个洞</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡片落在首次公开的年月上；卡上是原文报告的提升或做法；右上角是本课讲它的那一节；虚线卡是模型侧的进步</text>
@@ -1517,7 +1517,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>先校准尺子：指标与口径</h2></div>
-  <p class="lead">2024 年 DistServe 提出 goodput，各家从此比「满足延迟要求的吞吐」。同一次测量，一种算法每卡 5,270，另一种 11,880。
+  <p class="lead">2024 年 DistServe 提出 goodput，此后越来越多的基准按「满足延迟要求的吞吐」来比。同一次测量，一种算法每卡 5,270，另一种 11,880。
     <b>先把尺子对齐，后面每一节的数才能放在一起比。</b></p>
 
   <h3 id="s2-1">2.1　四个时间指标，各量哪一段</h3>
@@ -2164,7 +2164,7 @@ body.figonly section h3{margin-top:34px}
 <p>预热：VLLM-V4PRO-RUNBOOK.md:431-433（2P1D conc256，13,585 → 27,803）；另一组 SGLANG-V4PRO-RUNBOOK.md:480-494（8,520 → 9,118，+7.0%）。闭环：SGLANG-V4PRO-RUNBOOK.md:478、1135（闭环比开环低 13%）。</p>
 <p>温度这个坑（接受率 1.16% 对 34%）画在第十一节的图里，这里不重复；出处 VLLM-V4PRO-RUNBOOK.md:394-420。</p></details></figure>
   <ul>
-    <li><b>上限依赖负载</b>：8K 输入的并发扫描在 9,200–9,400 涨不动，换负载或旋钮就变（3.4）。</li>
+    <li><b>上限依赖负载</b>：8K 输入的并发从 400 加到 1,800，只从 8,777 涨到 9,745，换负载或旋钮就变（3.4）。</li>
     <li><b>峰值和稳态</b>：引擎自报的峰值是某一刻的最高值。</li>
     <li><b>温度</b>：温度是选字时的随机程度，0 就是永远挑最可能的那个字。压测温度和线上不对齐，投机解码的接受率（草稿被大模型收下的比例）会差一大截（11.4）。</li>
     <li><b>预热和闭环</b>：第一轮要编译、热缓存，报第二轮。闭环是「答完一个才发下一个」，开环按固定节奏发；这组实测闭环低 13%，对标要用同一种。</li>
@@ -2183,18 +2183,18 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>KV cache：账、池、复用</h2></div>
-  <p class="lead">每条在跑的序列，都要在显存里单独占一块 KV，不能和别人共用。
+  <p class="lead">每条在跑的序列，都要在显存里单独占一块 KV，不能像权重那样整批共用。
     <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b>
     2023 年起的几招都在同样的显存里多装人、少重算：分页存、少存 KV 头、复用前缀、把 KV 池铺到主机内存和 SSD。</p>
 
   <h3 id="s3-1">3.1　一个 token 留下多少字节：四种记法</h3>
   <p>每个 token 留多少字节 KV，看注意力怎么存 K、V（专题三逐项算过）。</p>
   <table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 再减半。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 实际 57%，见 12.7）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
     <tr><td>MHA</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
-    <tr><td>MLA</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层；KV 存 FP8 时减半为 35,136 B）</td></tr>
+    <tr><td>MLA</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层；存 FP8 约 40,016 B，是 57%，布局见 12.7）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
   <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩 4 倍或 128 倍（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），两个池见 3.4。</p>
@@ -2594,7 +2594,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s3-5">3.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样：同一段 system prompt、同一份文档、多轮对话的前几轮。算好的 KV 留着，命中前缀就接着算。</p>
   <ul>
-    <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀，满了按最近最少使用淘汰。</li>
+    <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀，满了按最近最少使用淘汰；论文报吞吐最多高 6.4 倍。</li>
     <li><b>命中率可以很高。</b>DeepSeek 24 小时线上统计：6,080 亿输入 token 里 56.3% 命中磁盘上的 KV。</li>
     <li><b>线性注意力和滑窗难复用。</b>线性层的状态是整段压出来的，截不回任意位置；滑窗层早先的 KV 已经丢了。</li>
   </ul>
@@ -2671,7 +2671,7 @@ body.figonly section h3{margin-top:34px}
     <b>② 复用和卸载是少算、少搬。</b>下放之前算清搬回来是不是比重算快。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 92.4 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
-  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。fp8 字节减半，装 43 条。</p></details>
+  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.7 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
 
 </div></section>
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>批处理与调度：一趟分给更多人</h2></div>
@@ -3120,8 +3120,9 @@ body.figonly section h3{margin-top:34px}
 <p>Little 定律核对与「槽位不白给」实验（batch 886 → 999、TPOT 77.7 → 85.3 ms）见正文；出处同文件 794-801、849-858、885-894。</p></details></figure>
   <p>槽位就是 KV 池装得下几个人。Little 定律：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
-    9,032 × 8 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 540。
-    客户端并发是另一个数：共 8,400 路，没进批的在 prefill 那边排队。</p>
+    客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 那边排队。</p>
+  <details class="foldfig"><summary><b>Little 定律核一遍</b>：批里到底几个人？</summary>
+  <p>9,032 × 8 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 540。</p></details>
   <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），端到端只多 0.8%，TPOT 从 77.7 拖到 85.3 ms：人多了，每步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
     XLA（JAX 背后的编译器）按静态形状编译，batch 大小也是形状。SGLang-JAX 为几档 batch 提前编译，
@@ -3196,7 +3197,7 @@ body.figonly section h3{margin-top:34px}
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000，再加并发只让首字等待变长；
-    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 减半），要么换个交互档。</p></details>
+    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 约减半），要么换个交互档。</p></details>
 
 </div></section>
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>单卡里的两块硬骨头：decode 注意力与 MoE</h2></div>
@@ -3263,11 +3264,11 @@ body.figonly section h3{margin-top:34px}
 <p>注意力每字节 8 次运算的推导见专题三 §3.1 图下：读 4·S·d 字节、算 4·G·S·d 次，比值 ＝ G。</p></details></figure>
   <p>batch 过了 53，一步的字节大半是 KV，注意力就成了主角。</p>
   <p>batch 小、序列长时，一条序列的注意力只占一个计算单元，其余闲着。
-    Flash-Decoding（斯坦福 CRFM 博客，2023-10）把它的 KV 切成几段同时读，每段交出部分结果和自己的分母（softmax 先取指数、再除以总和，这个总和就是分母），最后加齐分母统一除，见 <a href="#s7-1">7.1</a>。</p>
+    Flash-Decoding（斯坦福 CRFM 博客，2023-10）把它的 KV 切成几段同时读，每段交出部分结果和自己的分母（softmax 先取指数、再除以总和，这个总和就是分母），最后加齐分母统一除（各段连同自己的最大值一起交，合并前先对齐），见 <a href="#s7-1">7.1</a>。博客报长上下文下 decode 最多提速 8 倍。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
   <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention，按页存 KV、一批里长短不齐也能一起算的注意力 kernel）把两者放进同一个 kernel，按这一批的成分挑三份预编译版本之一：纯 decode、纯 prefill、混合（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。</p>
-  <p>它在 TPU7x 上跑 Llama 3 8B，decode 用到峰值带宽的 86%，prefill 用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。</p>
+  <p>它在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。</p>
   <p>每份版本各配一组块大小，这是最便宜的旋钮：块太小，向量单元反复停下来算地址。Qwen3.5-397B 在 TPU7x 上的公开调优（Google 开发者博客）把 KV 页从 16 个 token 调到 256 个，并发 512 时这个 kernel 的 decode 一步从 428 µs 降到 283 µs（kernel 级，不是整步）。</p>
 
   <h3 id="s5-3">5.3　布局：窄维被补成整块</h3>
@@ -3391,7 +3392,7 @@ body.figonly section h3{margin-top:34px}
   <p>RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（论文 3.1 节）。换成 FP8，B 还是 8 KiB：量化压不掉空位。</p>
 
   <h3 id="s5-4">5.4　V3 的 MLA：一个阶段一套算法</h3>
-  <p><a href="topic-03.html#s5-2">专题三 §5.2</a> 推过「吸收」：把投影并进查询，128 个头直接对同一条 576 维潜向量算，K/V 不展开。那里留了一句「两套怎么装进一个引擎，留到专题六」。</p>
+  <p><a href="topic-03.html#s5-2">专题三 §5.2</a> 推过「吸收」：把投影并进查询，128 个头直接对同一条 576 维潜向量算，K/V 不展开。那里只推了 decode 用的吸收，prefill 怎么办没展开。</p>
 <figure class="fbox fwide" id="fig-s5-mla"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="MLA 两种算法的数据流。吸收：缓存里每个 token 只有一条 576 维的压缩 KV，128 个头一起读这一条，每读 1 字节做 242 次运算，decode 用它。展开：先把这一条复制还原成 128 份、每个头一份，各读各的，每读 1 字节只做 1 次运算；prefill 有成千上万个查询，复制的开销被摊薄，用它"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">MLA 的两种算法：一条大家共读，还是先复制 128 份　——　<tspan font-weight="700">decode 用吸收，prefill 用展开</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，一层、一个缓存 token。右边的大数：每从显存读 1 字节，做几次运算</text>
@@ -3578,7 +3579,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="471" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 的 AllReduce 比的是步数，不是带宽</tspan></text>
 <text class="svgsm" x="20" y="502" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">batch 1 时每层一次只有 hidden × 2 字节（V3 是 14 KiB），时间几乎全花在启动和互相等待上。</text>
 <text class="svgsm" x="20" y="526" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以小 batch 下 TP 切得越细、每层的同步越多，加带宽也救不回来；这条账留到第六节比 TEP 和 DEP。</text>
-</svg><figcaption><b>14 KiB：带宽项约 24 ns，实测 11.0 µs。</b><span class="capmore"><br><em>4 张 GB200，小消息平均延迟（论文实测）；带宽项为本课推导，对数轴。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Shen 等，Every Microsecond Matters: Achieving Near Speed-of-Light Latency in GPU Collectives，arXiv <a href="https://arxiv.org/abs/2607.16100" target="_blank" rel="noopener">2607.16100</a>（2026-07）：4 张 GB200 上小消息平均延迟 NCCL 环形 11.0 µs → 低延迟实现 2.37 µs，Llama-3.1-70B 的 inter-token latency 降 8.7%；AllReduce 的 SoL 下限 1.404 µs。论文没给「小消息」的确切字节范围。</p>
+</svg><figcaption><b>14 KiB：带宽项约 24 ns；小消息实测平均 11.0 µs。</b><span class="capmore"><br><em>4 张 GB200，小消息平均延迟（论文实测）；带宽项为本课推导，对数轴。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Shen 等，Every Microsecond Matters: Achieving Near Speed-of-Light Latency in GPU Collectives，arXiv <a href="https://arxiv.org/abs/2607.16100" target="_blank" rel="noopener">2607.16100</a>（2026-07）：4 张 GB200 上小消息平均延迟 NCCL 环形 11.0 µs → 低延迟实现 2.37 µs，Llama-3.1-70B 的 inter-token latency 降 8.7%；AllReduce 的 SoL 下限 1.404 µs。论文没给「小消息」的确切字节范围。</p>
 <p>NVLink 5：每 GPU 1.8 TB/s（NVIDIA GB200 NVL72 公开规格，双向合计）。</p>
 <p>本课推导：消息 ＝ 7168 × 2 字节 ＝ 14,336 字节（V3、batch 1、bf16）；环形 AllReduce 每卡发出 2(n−1)/n 份（NCCL PERFORMANCE.md，专题五第一节），n＝4 时 1.5 份，按单向 900 GB/s ＝ 约 24 ns。只算带宽项，没算任何启动和同步。</p>
 <p>TPU 的 ICI 上同口径的小消息延迟，没有找到公开数据。</p></details></figure>
@@ -4197,7 +4198,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>对比两列：在飞请求没变多，步时短了 4 倍。</b><span class="capmore"><br><em>实测为 GB300、vLLM、并发 512；在飞请求按 Little 定律推导，条长是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。</p>
 <p>实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；GPU 数 16 和 20 见 :476；投机接受率 34% 与 35.7% 见 :480。</p>
 <p>本课推导：在飞请求 ＝ 输出 tok/s × 出字间隔（Little 定律）；条长按卡上在飞请求数画，假设两边每个请求的 KV 一样长（同为 4K 进 1K 出）；TP4 里哪张卡算「原件」是示意。容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。</p></details></figure>
-  <p>容量没帮上忙，<b>变的是步时</b>：TP4 的 4 张卡每步各读一遍整份 KV，每层还多一次 AllReduce（本课推导，runbook 没拆分）。</p>
+  <p>容量没帮上忙，<b>变的是步时</b>：TP4 的 4 张卡每步各读一遍整份 KV、每层多一次 AllReduce；EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
   <ul>
     <li><b>口径</b>：2.09 倍是总 token（prompt 加输出）除以全部卡（16 张和 20 张，各含 12 张 prefill 卡）。decode 卡同时从 4 张翻到 8 张，只算 decode 卡的输出是 1.31 倍。</li>
     <li><b>换个模型</b>：MLA 开 TEP8 是 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，是 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</li>
@@ -4269,7 +4270,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="589" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PR 同时改了调度：prefill 攒在一起派，免得一条长 prefill 混进 DP 批里拖慢所有 rank</tspan></text>
 </svg><figcaption><b>并发越高，DP 注意力赢得越多。</b><span class="capmore"><br><em>输出吞吐；折线两端标 TP → DP 的绝对值。专家都走 EP，只换注意力的切法。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>github.com/vllm-project/tpu-inference/pull/2577「Enable correct DP attention for hybrid attention＋mamba models」，2026-05-15 合入；PR 正文表格给输出／总吞吐两个数，本图用输出吞吐现算百分比，与 PR 的「DP Advantage」一列一致。正确性：mmlu_pro DP=8 0.8129 对 TP=8 0.8271（PR 原话：limit=50 时在 1σ 内）。</p>
 <p>v7x 一颗芯片对软件显示成 2 个 device，TP=8、DP=8 按 device 数。KV 头数取自 HF Qwen/Qwen3.5-397B-A17B-FP8 config.json（num_key_value_heads 2，60 层里每 4 层一层全注意力）。「复制 4 份卡住 batch」是本课解读，PR 没有单独归因。</p></details></figure>
-  <p>一种解读：8 路 TP 下同一份 KV 各放 4 份（6.2，本课推导，PR 没归因）。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>一种解读：8 路 TP 下同一份 KV 各放 4 份（6.2，本课推导，PR 没归因）。也可能是 PR 命令里的 --max-num-seqs=64 限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
   <p>读 TPU 启动参数要多一步：tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 
@@ -4290,7 +4291,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>切序列：DCP 和 PCP</h2></div>
-  <p class="lead">上下文一长，一个请求的 KV 就能占满一张卡；prompt 一长，第一个字就要等很久。
+  <p class="lead">上下文一长，KV 在 TP 下被复制几份，卡很快就满；prompt 一长，第一个字就要等很久。
     <b>DCP 管前一件，PCP 管后一件，两者都是沿序列切。</b></p>
 
   <h3 id="s7-1">7.1　一句回顾</h3>
@@ -4482,7 +4483,7 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li><b>缓存层没跟上</b>：SGLang 的分层 KV 缓存 HiCache（L1 显存、L2 主机内存、L3 远端存储）开 L3，或 L1＋L2 叠投机解码，就得退回纯 TP。</li>
     <li><b>状态池它不管</b>：K3 的 KDA 状态池 DCP 不切（6.3）。</li>
-    <li><b>官方 PD 配置里也是 TP8 略高</b>：K3 官方两组 PD 数，prefill 相同、分母都是 decode 卡，配 TP8 decode 每卡 2,808 tok/s，配 DCP8 decode 2,633。</li>
+    <li><b>官方 PD 配置里也是 TP8 略高</b>：K3 官方两组 PD 数（1P1D 配 TP8、2P2D 配 DCP8，P:D 都是 1:1，每 GPU 口径官方没写死）：TP8 2,808 tok/s，DCP8 2,633。</li>
   </ul>
 
   <h3 id="s7-4">7.4　PCP：超长 prompt 的首字延迟</h3>
@@ -4873,7 +4874,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="502" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">对比 TP：它每一层都要通信，只能待在最快那一圈；这里一个请求就一趟，跨机器也藏得住。</text>
 </svg><figcaption><b>三色细条就是代价。</b><span class="capmore"><br><em>专题五原图；KV 用时按带宽估算，不是计时。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。</p>
 <p>⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gbps ＝ 12.5 GB/s → 约 83 ms。</p></details></figure>
-  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X 每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（本课推导）。</p>
+  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X 每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算，多卡并行还更快；本课推导）。</p>
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
@@ -5152,7 +5153,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>全注意力太胖</b>：32K 输入时，一台 8×H200 做 prefill，Qwen3-235B 每秒要外送 33.35 Gbps，MiniMax-M2.5 接近 60。</li>
     <li><b>混合模型能走</b>：Qwen3.5-397B 只要 8.25，MiMo-V2-Flash 只要 4.66，几台 prefill 合起来一条专线放得下。</li>
     <li><b>还要挑请求</b>：只把超过长度阈值的 prompt 送去远端，短的就地算。</li>
-    <li><b>论文案例</b>：Moonshot 的 1T 混合模型，32 张 H200 做 prefill 加 64 张 H20 做本地 PD，比 96 张 H20 同构 PD 吞吐 +54%、P90 TTFT −64%（同等成本吞吐约 +15%）；跨集群平均出口 13 Gbps。</li>
+    <li><b>论文案例</b>：Moonshot 的 1T 混合模型，32 张 H200 做 prefill 加 64 张 H20 做本地 PD，比 96 张 H20 同构 PD 吞吐 +54%、P90 TTFT −64%（同等成本吞吐约 +15%）；跨集群平均出口 13 Gbps。这几个数是论文把实测 profile 代进吞吐模型推算的，不是端到端实测。</li>
   </ul>
 
   <h3 id="s8-9">8.9　落点</h3>
@@ -5300,7 +5301,7 @@ body.figonly section h3{margin-top:34px}
   <p>用户那头变化却大：平均 TTFT 少了 28%，P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 的 SLO（对用户承诺的延迟上限）看是赚。</b></p>
   <ul>
     <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph（把一串 GPU 调用录好、整段重放），TPOT 偏高，不比。</li>
-    <li><b>为什么吞吐不涨</b>：瓶颈在 decode，排队的请求只是开始得早。</li>
+    <li><b>为什么吞吐不涨</b>：固定并发压测下每个请求要跑约 65 s，首字省下的 0.67 s 摊进整轮周转几乎看不出来。</li>
   </ul>
 
   <h3 id="s9-4">9.4　换个分母，10.4 倍变 2.2 倍</h3>
@@ -6362,7 +6363,7 @@ body.figonly section h3{margin-top:34px}
   <div class="note"><span class="t">口径</span>报提升百分比写清分母：总量还是每卡、卡数变没变、并发多少。缺一样，加卡的收益就会被当成调参的。</div>
 
   <h3 id="s10-3">10.3　拓扑约束是硬的</h3>
-  <p>同样 16 个 device 跑 TP16，线换了，结果差出一截。Qwen3-Coder-480B 两台 v7x-8，机间走数据中心网络（DCN）比单机 TP8 慢 17–63%，编进同一个 ICI 切片只慢 15–21%。</p>
+  <p>同样 16 个 device 跑 TP16，线换了，结果差出一截。Qwen3-Coder-480B 两台 v7x-8，并发 1 时，机间走数据中心网络（DCN）和编进同一个 ICI 切片都比单机 TP8 慢两成上下；并发 16 才分开：DCN 慢 63%，ICI 全程只慢 15–21%。即便走 ICI，两台的总吞吐 513.8 也不如单机 602。</p>
 <figure class="fbox fwide" id="fig-s10-wire"><svg viewBox="0 0 1400 581" width="100%" role="img" aria-label="Qwen3-Coder-480B 在 TPU v7 上，单机 v7x-8 跑 TP8 作对照。换成两台机器拼成 v7x-16 跑 TP16：如果两台之间走数据中心网络 DCN，输出吞吐低 17% 到 63%，并发越高越惨；如果两台被编进同一个 ICI 切片，只低 15% 到 21%。右边画的是两种连法：每台机器里 4 颗芯片之间都是粗管 ICI；上面那种，两台之间只有一根细管 DCN；下面那种，两台的芯片之间也接上粗管"><defs><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">卡数一样，线不一样　——　<tspan font-weight="700">TP16 跨 DCN 最多慢 63%，同一 ICI 切片只慢 15–21%</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Qwen3-Coder-480B · TPU v7 · vLLM（tpu-inference）。纵轴：多机 TP16 的输出吞吐相对单机 v7x-8 TP8 差多少</text>
@@ -6646,7 +6647,7 @@ body.figonly section h3{margin-top:34px}
 <p>📌 每 device 可用 94.75 GiB（README 写 GB，运行日志为 GiB；v7 每芯片物理 192 GiB）、FP8 MoE 实测约 101.8/device 超 HBM 所以用 FP4：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、:72-73（R1 与 V3 同架构）。</p>
 <p>⚠️ 本课推导与假设：FP8 每参数 1 字节、不计 block scale；激活值预留 10% 是假设；KV 不重复（DP 注意力或 EP），没算 DP 注意力在每个 device 上各放一份约 17B 非专家权重的开销；切片档位取 4／8／16／32 颗（v7x-8／16／32／64）。纸面 MoE 76.1 GiB/device ＝ 256 × 58 层 × 3 × 7168 × 2048 字节 ÷ 8 device。</p></details></figure>
   <p>4K × 64 纸面 3.76 颗，4 颗刚好够；并发翻到 256 是 4.07 颗，只多一点也得取到 8：切片只有几档。到 128K、256 并发，KV 约 2,196 GiB，是权重的 3.5 倍。硬账只有三条路：加芯片；KV 存 FP8（第十二节末尾）；冷 KV 下放主机内存（3.6）。DCP 帮不上：它只把一条序列摊开，总量不变，而一条 128K 才 8.58 GiB。</p>
-  <p>实测 4 颗却放不下：纸面账按注意力走 DP、KV 不重复算，没算每个 device 各放一份非专家权重。公开记录里 FP8 的专家每个 device 要约 101.8 GB（README 原文单位），超过可用的 94.75 GiB，所以 v7x-8 上实际用 FP4（§12.4）。</p>
+  <p>实测 4 颗却放不下。公开记录里 FP8 的专家每个 device 要约 101.8 GB（README 原文单位），超过可用的 94.75 GiB，所以 v7x-8 上实际用 FP4（§12.4）。专家权重均摊到 8 个 device 本课推导只有约 81.7 GB，多出的约 20 GB README 没给分解。</p>
   <div class="note warn"><span class="t">本课推导的边界</span>纸面账只给下限，激活值预留 10% 也是假设；用一次真实启动看实测的 HBM 峰值。</div>
 
   <h3 id="s10-6">10.6　容量别拿小并发估</h3>
@@ -6705,7 +6706,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">过了 256 吞吐只再涨 3%，首字延迟从 12 s 涨到 30 s。甜点由延迟目标定，不由吞吐峰值定。</text>
 </svg><figcaption><b>容量要一路扫到吞吐见顶。</b><span class="capmore"><br><em>口径：并发是压测客户端同时挂着的请求数，不是服务端实际批大小。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md:401（「conc=8 只用到 DEP8 decode 容量的 ~3%，GB300 DEP8 理论可扛 ~288 并发」，是估算不是实测）、:405-413（并发扫描表：总吞吐、TTFT median）、:415（峰值是 conc8 的 12.5×）。</p>
 <p>⚠️ 横轴是压测端设的并发；表中「实际并发」更低（512 时实测 416），原因是开环压测里有请求在排队。8 ÷ 288 ＝ 2.8%，原文写约 3%。</p></details></figure>
-  <p>总吞吐从 854 一路扫到 10,715 才见顶，是 12.5 倍。先扫出曲线，再按延迟目标取点。</p>
+  <p>总吞吐从并发 8 的 854 一路扫到 10,715 才见顶，是 12.5 倍；过了 256 只再多 3%。先扫出曲线，再按延迟目标取点。</p>
 
   <h3 id="s10-7">10.7　对照实验的纪律</h3>
   <ul>
@@ -6720,7 +6721,7 @@ body.figonly section h3{margin-top:34px}
   <table>
     <tr><th>关</th><th>DeepSeek-V3 · TPU v7</th><th>DeepSeek-V4-Pro · GB300</th></tr>
     <tr><td>① 装得下</td><td>纸面 4 颗（v7x-8）够；实测 FP8 放不下，用 8 颗或专家换 FP4</td><td>806 GB 权重，一个 4 卡节点放得下（TP4 跑通过）</td></tr>
-    <tr><td>② 快线多大</td><td>一个 ICI 切片；TP 跨 DCN 会慢 17–63%</td><td>一个 NVL72 域 72 卡；SGLang 部署要求全部节点同域</td></tr>
+    <tr><td>② 快线多大</td><td>一个 ICI 切片；TP 跨 DCN 高并发慢到 63%</td><td>一个 NVL72 域 72 卡；SGLang 部署要求全部节点同域</td></tr>
     <tr><td>③ 序列</td><td>128K × 256 时 KV 是权重的 3.5 倍；单条装得下，DCP 帮不上（10.5）</td><td>只有一个 KV 头，TP 只复制 KV，改用 DEP（第六节）</td></tr>
     <tr><td>④ PP</td><td>不用：一个切片放得下</td><td>不用</td></tr>
     <tr><td>⑤ DP</td><td>剩下的卡开副本，每份留在自己的切片里</td><td>先定 P:D（第九节），再按目标用户数加 decode 副本</td></tr>
@@ -6733,13 +6734,13 @@ body.figonly section h3{margin-top:34px}
 <section id="s十一"><div class="wrap"><div class="stn"><span class="badge">第 十一 节</span><h2>投机解码：搬一趟，出好几个字</h2></div>
   <p class="lead">decode 一步把权重搬一趟，只换来一个字。
     投机解码先便宜地猜几个字，再让大模型搬一趟、一次验完，<b>猜对几个就出几个</b>。
-    这招是 2022 年底到 2023 年初 Google 和 DeepMind 各自提出的，2024 年底 DeepSeek-V3 把它训进了模型。</p>
+    这招是 2022 年底到 2023 年初 Google 和 DeepMind 各自提出的，2024 年底 DeepSeek-V3 把 MTP 训进主模型并用在推理上，成了主流做法。</p>
 
   <h3 id="s11-1">11.1　先猜后验</h3>
   <p>大模型把草稿当成一段输入，一步算出每个位置自己想出的字，和草稿逐个对。</p>
-<figure class="fbox fwide" id="fig-s11-step"><svg viewBox="0 0 1400 670" width="100%" role="img" aria-label="投机解码一步做了什么，示意时间线。上面一条是普通 decode：每一步把权重读一遍，出一个字，三十格时间出三个字。下面一条是投机解码：先用便宜的草稿连猜四个字，再让大模型读一遍权重、一次把四个字都验掉。第一轮前三个对、第四个错，大模型在第四个位置给出自己的字，于是一轮前进四个；第二轮只对了第一个，前进两个。同样三十格时间出了六个字"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s11-step"><svg viewBox="0 0 1400 670" width="100%" role="img" aria-label="投机解码一步做了什么，示意时间线。上面一条是普通 decode：每一步把权重读一遍，出一个字，三十格时间出三个字。下面一条是投机解码：先用便宜的草稿连猜四个字，再让大模型读一遍权重、一次把四个字都验掉。第一轮前两个对、第三个错，大模型在第三个位置给出自己的字，后面的扔掉，于是一轮前进三个；第二轮四个全对，大模型顺手算出的第五个也白送，前进五个。同样三十格时间出了八个字"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">先猜后验　——　<tspan font-weight="700">大模型读一遍权重，验掉一整串草稿</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴是时间（示意，不按比例）。每一格字：绿 ＝ 草稿猜对、被收下；红 ＝ 猜错、连同后面的全扔掉；蓝 ＝ 大模型在第一个错的位置自己给的字</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴是时间（示意，不按比例）。每一格字：绿 ＝ 草稿猜对、被收下；红 ＝ 猜错、连同后面的全扔掉；蓝 ＝ 大模型自己给的字（第一个错的位置补上；全对时白送下一个）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">大模型读一遍权重</text>
 <rect x="172.44" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -6785,13 +6786,13 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="370" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
 <rect x="390" y="359" width="28" height="28" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="404" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
-<rect x="424" y="359" width="28" height="28" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="438" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
+<rect x="424" y="359" width="28" height="28" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="438" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕</tspan></text>
 <rect x="458" y="359" width="28" height="28" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="472" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕</tspan></text>
-<rect x="458" y="395" width="28" height="28" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="472" y="414" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">补</tspan></text>
-<text class="svgsm" x="712" y="447" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一轮前进 4 个（收下 3 ＋ 补 1）</tspan></text>
+<rect x="424" y="395" width="28" height="28" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="438" y="414" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">补</tspan></text>
+<text class="svgsm" x="712" y="447" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一轮前进 3 个（收下 2 ＋ 补 1）</tspan></text>
 <rect x="722" y="315" width="30" height="34" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="737" y="337" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">猜</tspan></text>
 <rect x="756" y="315" width="30" height="34" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
@@ -6804,19 +6805,19 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1043" y="337" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">读一遍权重，验 4 个</text>
 <rect x="866" y="359" width="28" height="28" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="880" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
-<rect x="900" y="359" width="28" height="28" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="914" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕</tspan></text>
-<rect x="934" y="359" width="28" height="28" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="948" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕</tspan></text>
-<rect x="968" y="359" width="28" height="28" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="982" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕</tspan></text>
-<rect x="900" y="395" width="28" height="28" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="914" y="414" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">补</tspan></text>
-<text class="svgsm" x="1222" y="447" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一轮前进 2 个（收下 1 ＋ 补 1）</tspan></text>
+<rect x="900" y="359" width="28" height="28" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="914" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
+<rect x="934" y="359" width="28" height="28" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="948" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
+<rect x="968" y="359" width="28" height="28" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="982" y="378" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
+<rect x="1002" y="395" width="28" height="28" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1016" y="414" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">送</tspan></text>
+<text class="svgsm" x="1222" y="447" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一轮前进 5 个（收下 4 ＋ 白送 1）</tspan></text>
 <line x1="210" y1="492" x2="1230" y2="492" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <text class="svgsm" x="1230" y="482" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">同一段时间</text>
 <text class="svgsm" x="200" y="497" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">时间 →</text>
-<text class="svgsm" x="720" y="482" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">普通 decode 出 3 个字，投机解码出 6 个字</tspan></text>
+<text class="svgsm" x="720" y="482" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">普通 decode 出 3 个字，投机解码出 8 个字</tspan></text>
 <rect x="0" y="548" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="548" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="548" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -6964,7 +6965,7 @@ body.figonly section h3{margin-top:34px}
 <p>V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%；decode 峰值 −13%、端到端 +28%）。B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。</p></details></figure>
   <p>上下文变长也会缩：并发 1 时 prompt 从 4K 拉到 32K，加速比掉到 1.32×。
     不开投机时每字间隔只从 11.1 ms 涨到 11.4 ms，多读的 KV 不怎么费时。</p>
-  <p>慢在验证本身：K3 的全注意力是 MLA，所有 query 头共用一个 KV 头，每读 1 字节本来就要算很多次；一次验 7 个字、上下文又长，就撞上算力墙。草稿读长 KV、接受率下降也有份，各占多少没拆开测（本课推导）。</p>
+  <p>原因没实测：runbook 没记 32K 的接受长度，也只测了并发 1。验证本身不像瓶颈，按 ≤128 个头粗算，32K 下验 8 个位置每步只多约 0.1 ms。更可能是长上下文里接受长度掉了，或草稿读长 KV 变慢（本课推导）。</p>
   <p>DEP（第六节）本来就是给大 batch 配的。B200 上 DeepSeek-V4-Flash 用 vLLM、DEP8 开 MTP，十档并发全变慢，−3% 到 −37%。</p>
   <p>峰值和端到端还可能反向：GB300 上 V4-Pro 把 MTP 从 1 步加到 2 步，decode 峰值掉 13%，端到端反涨 28%。真实负载下 batch 多数时间没那么大，读权重的便车还在。</p>
 
@@ -7054,12 +7055,13 @@ body.figonly section h3{margin-top:34px}
 <p>告警：gpu/inference/a4x-max/kimi-k3/PD-BACKLOG.md:175。</p></details></figure>
   <p>GB300 上 V4-Pro 的 DSpark 草稿是贪心的，服务端默认温度 1.0。
     压测工具不发温度，接受率只剩 1.16%，输出 944 tok/s；发温度 0 是 34%、2,911 tok/s，差 3.1 倍。</p>
-  <p>1.16% 比理论值还低得多：它是收下的 ÷ 猜的，每步猜 7 个，第 1 个被拒，后 6 个跟着作废（本课推导，各因素没拆）。</p>
+  <p>1.16% 比理论值还低得多：它是收下的 ÷ 猜的，每步猜 7 个，第 1 个被拒，后 6 个跟着作废；压测用的 random 数据集是高熵 prompt，可能也有份（本课推导，各因素没拆）。</p>
   <div class="note warn"><span class="t">接受率掉了不会报错</span>
     它只让 TPOT 慢慢变差。线上要把接受率和接受长度当一级指标告警；跨框架比，先对齐两边发不发 temperature。</div>
 
   <h3 id="s11-5">11.5　草稿从哪来</h3>
-  <p>DeepSeek-V3 的 MTP 是挂在主干后面的一整层 transformer，共享词表和输出头。
+  <p>DeepSeek-V3 的 MTP 是挂在主干后面的一整层 transformer，共享词表和输出头，第 2 个字接受率 85–90%，约快 1.8 倍。
+    早先的独立小草稿（2022）报单请求快 2–3 倍，EAGLE（2024）2.7–3.5 倍；口径各异，不能横比。
     EAGLE-3（2025-03）融合大模型浅、中、深三层的状态，batch 64 时吞吐仍高 1.38 倍（SGLang）。最新一步是 2026 年 DeepSeek 的 DSpark：半自回归（普通 decode 每个字要等前一个，它一次出一小段），按置信度决定验几个。</p>
 <figure class="fbox fwide" id="fig-s11-tree"><svg viewBox="0 0 1400 496" width="100%" role="img" aria-label="草稿离大模型越来越近，四格加一个侧枝。第一格 2022 到 2023 年：旁边另放一个独立的小模型打草稿。第二格 2024 年 Medusa：在大模型头上挂几个小预测头。第三格 2024 到 2025 年 EAGLE 1 到 3：草稿读大模型内部的状态。第四格 2024 年末 DeepSeek-V3 的 MTP：主干后面多训一整层 transformer，共享词表和输出头。侧枝 2023 到 2024 年：不要模型，Prompt Lookup 和 SuffixDecoding 直接从 prompt 或历史输出里抄"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">草稿从哪来　——　<tspan font-weight="700">一步步长进大模型身上，或者干脆不要模型</tspan></text>
@@ -7311,7 +7313,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
   <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 要约 101.8 GB（README 原文单位，按 GiB 读也超），超过可用的 94.75 GiB；转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，才放得下。</p>
-  <p>可 v7 的公开规格只列 BF16 和 FP8 峰值，FP4 只能当权重存，算之前在片上解成 FP8 或 BF16。字节省了，转换的功夫加上了，净收益只能实测。</p>
+  <p>可 v7 的公开规格只列 BF16 和 FP8 峰值，没写 FP4，推测 FP4 只能当权重存，算之前在片上解成 FP8 或 BF16。字节省了，转换的功夫加上了，净收益只能实测。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>
   <p>R1 的 FP4（E2M1）是浮点，值在 0 附近密、远处疏，靠块缩放对齐量级；Kimi K2.6 的 INT4 是 −8 到 7 等距排开的整数。</p>
@@ -7570,7 +7572,7 @@ body.figonly section h3{margin-top:34px}
     megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读。</p>
   <p>Hazy 的实测里，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型越小、batch 越小，空等占比越大，这招赚得越多。</p>
   <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；对照的 16 张 GB200（vLLM）是 452 token，两边都按接受长度 6 换算。
-    不开投机时，batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
+    不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（接受长度博客称通常 3–6，按 6 换算是最好情况）（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
   <p>KV 存成 FP8，每 token 的字节约减半，同样显存多装近一倍请求；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
@@ -7695,7 +7697,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>桶数等于编译次数；按分布的形状切，比等距切划算。</b><span class="capmore"><br><em>本课推导示意：每步整批 token 总数取对数正态，非真实流量；浪费 ＝ 补零 token ÷ 实算 token。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课推导示意：2,000 步的整批 token 总数取对数正态分位点（中位 700、σ ＝ 0.9、截到 8,192），确定性生成；√2 档取 128 × 2^(k/2) 并取整到 16 的倍数。左下角 560／700／900 三批是随手挑的例子。补齐按整批总数（RPA ragged 布局），不是每条请求各补一次。</p>
 <p>📌 新形状首个请求编译 60–90 s、之后 <1 s：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:794。</p>
 <p>📌 预编译参数 --precompile-bs-paddings 1 4 8 16 32 64 128 256、--precompile-token-paddings 4096：tpu/sglang-jax/mimo/README.md:269-270。</p></details></figure>
-  <p>示意分布下，一个 8K 桶时 87.3% 是补的零，32 个桶降到 10.8%；切法比桶数要紧。</p>
+  <p>示意分布下，一个 8K 桶时 87.3% 是补的零，32 个桶降到 10.8%。切法比桶数要紧：按 √2 倍一档的 13 个桶是 16.0%，反而比每 512 一档的 16 个桶（19.7%）少。</p>
   <p>没编过的桶，第一个撞上的请求就得等编译：Qwen3.5-397B 在 TPU 上要等 60–90 s，之后同形状不到 1 s。</p>
   <p>所以桶要写进启动参数预编译。SGLang-JAX 的写法是 <code>--precompile-bs-paddings 1 4 8 16 32 64 128 256</code> 加 <code>--precompile-token-paddings 4096</code>：batch 档和 token 档两维相乘，就是开服前要编的份数。</p>
 
@@ -7771,20 +7773,20 @@ body.figonly section h3{margin-top:34px}
   <p>拆账的判据很简单：这段时间在搬字节，还是在等编译器。</p>
 
   <h3 id="s13-3">13.3　权重加载：别让几十个引擎抢一根管子</h3>
-  <p>Kimi K2.6 把 MoE 权重缓存放在本机内存盘，冷启动 6 分 8 秒；没有缓存时要 57 分钟。放在共享文件系统上，每层读取比内存盘慢 38 倍。</p>
-  <p>扩容时几十个引擎一起起，平分共享存储的总带宽（本课推导）。GPU 这边 V4-Pro 也一样：806 GB 权重放本地 SSD RAID，14 GB/s，加载不到 1 分钟。</p>
+  <p>Kimi K2.6 把 MoE 权重缓存放在本机内存盘，缓存还在时冷启动 6 分 8 秒；机器一重启缓存就丢，又是 57 分钟。放在共享文件系统上，每层读取比内存盘慢 38 倍。</p>
+  <p>扩容时几十个引擎一起起，平分共享存储的总带宽（本课推导）。GPU 这边 V4-Pro 也一样：806 GB 权重放本地 SSD RAID，14 GB/s，估算加载不到 1 分钟。</p>
   <div class="note"><span class="t">一条经验</span>搬字节那段用本地缓存省，编译那段用持久化缓存省；都省不掉，就提前起好备用副本。</div>
 
   <h3 id="s13-4">13.4　运维的两个坑</h3>
   <ul>
     <li><b>「起来了」不等于「活着」。</b>V4-Pro 的 SGLang 部署里 14 台 prefill 全崩了，服务注册表还显示 14 台在线。判活要看显存、真发一个请求。</li>
-    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，经跨机器的 NVLink（MNNVL）每卡漏掉约 97 GB 显存：284 GB 只剩 187 GB，而 <code>mem-fraction-static 0.85</code>（SGLang 预留给权重和 KV 池的显存比例）要静态占 241 GB，下次启动必然 OOM。报错还劝你调大这个比例，正好反了。删 pod 重建，56 秒显存归零。</li>
+    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存（runbook 推测是跨机器 NVLink，即 MNNVL，没释放）：284 GB 只剩 187 GB，而 <code>mem-fraction-static 0.85</code>（SGLang 预留给权重和 KV 池的显存比例）要静态占 241 GB，下次启动必然 OOM。报错还劝你调大这个比例，正好反了。删 pod 重建，56 秒显存归零。</li>
   </ul>
 
   <h3 id="s13-5">13.5　栈怎么选</h3>
   <table>
     <tr><th>栈</th><th>现状（截至 2026-10）</th></tr>
-    <tr><td>JetStream</td><td>已停止维护，2026-02-01 起归档（最后提交 2026-01-05）</td></tr>
+    <tr><td>JetStream</td><td>已停止维护，宣布 2026-02-01 起归档（最后提交 2026-01-05）</td></tr>
     <tr><td>tpu-inference</td><td>vLLM 的 TPU 后端，JAX 和 PyTorch（Torchax）两条模型路径；支持矩阵里前缀缓存、走 DCN 的 PD 分离、KV 下放、Eagle3 投机均标通过</td></tr>
     <tr><td>SGLang-JAX</td><td>SGLang 的 JAX 实现，原生跑在 TPU 上；基数树前缀共享；支持 Qwen、Llama、DeepSeek V2/V3、GLM-4 MoE、MiMo 等</td></tr>
   </table>
@@ -7882,7 +7884,7 @@ body.figonly section h3{margin-top:34px}
 <p>正文里的健康检查那句（8 个副本坏 1 个，1/8 的请求白等）是本课推导示意：12.5% ＝ 1 ÷ 8，只在纯轮询、坏副本照常收请求时成立。</p></details></figure>
   <p>KV 感知路由把同前缀的请求送到已经存着它的副本。Red Hat 2025-10 用 llm-d 实测，命中率 87.4%，首字 340 ms 对最坏 2,850 ms。</p>
   <p>llm-d、NVIDIA Dynamo、GKE Inference Gateway 都在做这件事，也都得摘掉坏副本：8 个副本坏 1 个而照常轮询，1/8 的请求白等（本课推导）。</p>
-  <p>容量规划沿用 goodput 的思路（<a href="#s2-2">§2.2</a>）：先定交互档，再看这一档每卡扛多少。按 2.2 那一档，每卡约 11,200 tok/s ÷ 每人 50 tok/s ≈ 224 人，decode 卡数 ＝ 同时在线用户数 ÷ 224；分母的坑见 2.3。</p>
+  <p>容量规划沿用 goodput 的思路（<a href="#s2-2">§2.2</a>）：先定交互档，再看这一档每卡扛多少。按 2.2 那一档，每卡约 11,200 tok/s ÷ 每人 50 tok/s ≈ 224 人，decode 卡数 ＝ 同时在生成的请求数 ÷ 224；分母的坑见 2.3。</p>
 
   <p class="landing">⭐ TPU 上推理服务的大部分活不在 kernel 里，在形状、编译和冷启动。路由是把「少算」搬到集群层：<b>前缀只算一次</b>，后面的请求都来复用。</p>
 
@@ -8091,13 +8093,15 @@ body.figonly section h3{margin-top:34px}
     <tr><td>vLLM 压测工具的 goodput ＝ 每秒达标请求数（与 DistServe 口径不同）</td><td>vLLM 仓库 vllm/benchmarks/serve.py 的 --goodput 参数</td></tr>
     <tr><td>DeepSeek 线上实测：226.75 节点、理论成本利润率 545%（全按 R1 定价收费的假设）、每节点 14,800 tok/s、20–22 tok/s/user</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
     <tr><td>每 token KV：MHA 3,997,696 B、GQA（Llama-3.1-70B）327,680 B、Qwen3.5 全注意力 30,720 B ＋ 线性状态 180 MiB／序列；Qwen3.5 KV 头数 2</td><td>本课推导，形状取各自 Hugging Face config.json</td></tr>
-    <tr><td>8 颗 v7 放 V3：KV 池 92.4 GiB／芯片，4K 装 344 条、32K 装 43 条、64K 装 21 条（FP8 KV 43 条）；Llama 4K 73 条</td><td>本课推导：每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，R1 FP4 README:59，同台账里「V3 FP8 切片表」那一行）× 0.9 ＝ 170.55 GiB，− 78.1 GiB（671 GB ÷ 8）；0.9 为本课假设；先按权重全切分粗算，DP attention 下非专家权重每 device 复制，实际更小（10.5）</td></tr>
+    <tr><td>8 颗 v7 放 V3：KV 池 92.4 GiB／芯片，4K 装 344 条、32K 装 43 条、64K 装 21 条（FP8 KV 按 656 B/层约 37 条）；Llama 4K 73 条</td><td>本课推导：每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，R1 FP4 README:59，同台账里「V3 FP8 切片表」那一行）× 0.9 ＝ 170.55 GiB，− 78.1 GiB（671 GB ÷ 8）；0.9 为本课假设；先按权重全切分粗算，DP attention 下非专家权重每 device 复制，实际更小（10.5）</td></tr>
     <tr><td>PagedAttention：KV 有效利用率 20.4–38.2% → 96.3%</td><td>vLLM 论文，arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a></td></tr>
     <tr><td>Qwen3.5 RPA KV 页 16→256 token：并发 512 时这个 kernel 的 decode 一步 428 → 283 µs（原文称 kernel 级提速 33.8%，不是整步）</td><td>原文「reduced the decode step latency under Concurrency-512 from 428µs to 283µs, achieving a 33.8% kernel-level speedup」；gpu-tpu-pedia tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/BLOG-systems-engineering-playbook.md L395-405，即 Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」</td></tr>
     <tr><td>V4 两个池（full／swa）预算比改 0.20 → 0.15：每 rank 请求 727 → 886，端到端每 decode 卡 6,887 → 10,614（＋54%）</td><td>SGLANG-V4PRO-RUNBOOK.md:855-857（§11.5 L849-896）；swa_tokens 比例 L946（引 pool_configurator.py:387）；sliding_window 128 见 HF config</td></tr>
     <tr><td>再把 mem-fraction-static 0.85 → 0.88：每 rank 请求 886 → 999（＋13%），端到端 10,614 → 10,704</td><td>SGLANG-V4PRO-RUNBOOK.md:857-858、887-892</td></tr>
     <tr><td>Qwen3.5 混合池的 bug 与 prefix caching 断言</td><td>tpu/tpu-inference Qwen3.5 README:77、:95</td></tr>
     <tr><td>RadixAttention 吞吐最多 6.4×</td><td>SGLang arXiv <a href="https://arxiv.org/abs/2312.07104" target="_blank" rel="noopener">2312.07104</a> 摘要</td></tr>
+    <tr><td>Flash-Decoding：长上下文 decode 最多提速 8 倍</td><td>斯坦福 CRFM 博客 2023-10「Flash-Decoding for long-context inference」</td></tr>
+    <tr><td>投机解码 2–3×；EAGLE 2.7–3.5×；V3 MTP 第 2 个 token 接受 85–90%、1.8×（均单请求延迟／TPS 口径）</td><td>Leviathan 等 arXiv <a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a> 摘要；EAGLE arXiv <a href="https://arxiv.org/abs/2401.15077" target="_blank" rel="noopener">2401.15077</a> 摘要；DeepSeek-V3 报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a>（MTP 评估一节）</td></tr>
     <tr><td>KV 外存回读的盈亏带宽：V3 2.19 GB/s、Llama 5.35 GB/s，1 GB/s 的慢链路在前缀长于 ~35K 时也比重算快</td><td>本课推导：重算 ＝ (2 × 37e9 × L ＋ 4,997,120 × L²/2) ÷ (4,614 T × 50%)；Llama 激活 70.6B 取 HF 模型页</td></tr>
     <tr><td>Orca 迭代级调度：同延迟下吞吐是 FasterTransformer 的 36.9×</td><td>Orca，OSDI'22</td></tr>
     <tr><td>chunked prefill；Sarathi-Serve 达标容量是 vLLM 的 2.6–5.6×；Gemma4 一次 prefill 16,384 token、切 16 块</td><td>Sarathi arXiv <a href="https://arxiv.org/abs/2308.16369" target="_blank" rel="noopener">2308.16369</a>；Sarathi-Serve arXiv <a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener">2403.02310</a>；vLLM 文档 Optimization and Tuning 页；Gemma4-31B/README.md:225-226</td></tr>
@@ -8128,9 +8132,9 @@ body.figonly section h3{margin-top:34px}
     <tr><td>PD 传输带宽从 200 MB/s 调到 7–167 GB/s</td><td>VLLM-V4PRO-RUNBOOK.md:194，配置见 :106、180-194</td></tr>
     <tr><td>Qwen3-Coder 一条 8K 请求 KV 1.04 GB；各链路传完要 5,201／149／6.2 ms</td><td>本课推导：2 × 62 × 8 × 128 × 8192 字节（FP8）；83 ms 与 PCIe 数沿用专题五台账第 25 行</td></tr>
     <tr><td>scale-out 网卡：A4X（GB200）每 GPU 400 Gbps（每节点 4 GPU、4×CX-7 400G）；A4X Max（GB300）每 GPU 800 Gbps（CX-8 双端口）；1.04 GB KV 一趟约 21 ms／10 ms</td><td>gpu/a4x/01-environment-setup/README.md:35；gpu/a4x-max/05-rdma-test/README.md:197-200；时间 ＝ 1.04 GB × 8 ÷ 400 或 800 Gbps 本课推导</td></tr>
-    <tr><td>Qwen3.5 混合模型 PD：45 层 GDN ＋ 15 层注意力，状态 349 MB；单请求吞吐是单机的 0.95 倍（单并发）／0.92 倍（4 并发）</td><td>tpu_connector_hma.py 注释；Qwen3.5 README:375-389；README-TPU-VM.md:859-867</td></tr>
+    <tr><td>Qwen3.5 混合模型 PD：45 层 GDN ＋ 15 层注意力，每请求传输约 349 MB（未分解）；单请求吞吐是单机的 0.95 倍（单并发）／0.92 倍（4 并发）</td><td>tpu_connector_hma.py 注释；Qwen3.5 README:375-389；README-TPU-VM.md:859-867</td></tr>
     <tr><td>PD 踩坑清单</td><td>SGLANG-V4PRO-RUNBOOK.md:941、:63；VLLM-V4PRO-RUNBOOK.md:760、:106、:703、§12.4</td></tr>
-    <tr><td>跨数据中心 PD：链路 33.35／8.25／59.93／4.66 Gbps；案例 ＋54%、P90 −64%、13 Gbps、阈值 19.4K</td><td>PrFaaS，arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a> Table 3 与案例节</td></tr>
+    <tr><td>跨数据中心 PD：链路 33.35／8.25／59.93／4.66 Gbps；案例 ＋54%、P90 −64%、13 Gbps（论文吞吐模型推算）、阈值 19.4K</td><td>PrFaaS，arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a> Table 3 与案例节</td></tr>
     <tr><td>P:D 配比公式：87.5 req/s、要 71.7 万 tok/s prefill、一台 7.28 万，约 9.8 台</td><td>SGLANG-V4PRO-RUNBOOK.md §12.2 :1082-1091</td></tr>
     <tr><td>B200 1P1D → 2P1D：输出 1,118.8 → 1,159.0，每卡 69.9 → 48.3，TTFT 2.40 → 1.73 s（−28%），P99 12.07 → 6.23</td><td>gpu-tpu-pedia gpu/inference/a4/deepseek-v3/REPORT-2P1D-DeepSeek-V3.md :69、:85、:100-142；cuda graph 说明 REPORT-1P1D :129</td></tr>
     <tr><td>prefill 台数扫描（扫到 12 个 prefill）：按每张 decode 卡算 307 → 3,187，10.4×；按全部卡算 204 → 455，2.2×</td><td>VLLM-V4PRO-RUNBOOK.md §12.3；全卡 ＝ output ÷ (4n＋8) 本课推导</td></tr>
@@ -8138,7 +8142,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>AFD：MegaScale-Infer、Step-3；vLLM AFD 插件 16K／32K 实测；EPD 把多模态编码再拆出去</td><td>概念沿用专题五台账第 24、51 行；arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a>；arXiv <a href="https://arxiv.org/abs/2507.19427" target="_blank" rel="noopener">2507.19427</a>；vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin（RFC #22799 于 2026-05-31 关闭）；EPD arXiv <a href="https://arxiv.org/abs/2501.05460" target="_blank" rel="noopener">2501.05460</a>；Step-3 对 V3 不是同一模型，差距含模型侧设计，正文已注明</td></tr>
     <tr><td>同一模型五种部署 14,563／16,459／21,100／55,153／65,132；调参 ＋45%，换拓扑 ＋347%（并发 1,536）</td><td>VLLM-V4PRO-RUNBOOK.md:446、448、449、465、468；:489（另 :476 的 2.47×、:487 的 ＋28%）</td></tr>
     <tr><td>每卡 1,820／1,319／3,257；对 1p1d 起点 1.79×</td><td>本课推导：总吞吐 ÷ 卡数</td></tr>
-    <tr><td>Qwen3-Coder 跨 DCN 掉 17–63%，同 ICI 只掉 15–21%</td><td>Qwen3-Coder-480B/README-multinode.md:441-445；README-TPU-VM.md:1000-1009</td></tr>
+    <tr><td>Qwen3-Coder TP16：跨 DCN c=1 −22%、c=16 −63%；同 ICI 切片 −15～−21%（c=16 总 513.8 对单机 602）</td><td>Qwen3-Coder-480B/README-multinode.md:441-445；README-TPU-VM.md:1000-1009</td></tr>
     <tr><td>V4-Pro dep8 要一整柜 NVL72；拓扑与频率的一般讨论</td><td>SGLANG-V4PRO-RUNBOOK.md:34、:63；沿用专题五台账第 19、26 行</td></tr>
     <tr><td>v7x-8 是 4 颗芯片（名字按 device 数）；mesh 构造</td><td>tpu/tpu-inference/README.md:41；JAX mesh_utils 文档</td></tr>
     <tr><td>v7 每 device 实测可用 94.75 GiB（每 device 物理 96 GiB）；R1 FP8 MoE 每 device 101.8 放不下（README 写 GB，按 GB、GiB 读都超）</td><td>tpu/tpu-inference R1 FP4 README:59、72-73</td></tr>
@@ -8170,7 +8174,18 @@ body.figonly section h3{margin-top:34px}
     <tr><td>冷启动拆账：GLM-5.1 名义加载里藏 6 分 29 秒重编译（原表总计 ~10 分 44 秒，分项和 10 分 29 秒）；Qwen3-Coder 40 分钟里编译 29；MiMo-V2.5-Pro 编译 15 ＋ 预热 7（原表总计 ~50 分钟，分项和 52 分钟）</td><td>GLM-5.1 README:470-476；Qwen3-Coder README-TPU-VM.md:1011；MiMo-V2.5-Pro README:184-188</td></tr>
     <tr><td>R1 加载 215.7 → 21.4 s（1,367 个张量只有 25 种形状）；K2.6 57 分钟 → 6 分 8 秒（9.3×）；持久编译缓存</td><td>R1 README:1202-1223、:1238-1259；K2.6 README:23、39-40；JAX 文档「Persistent compilation cache」</td></tr>
     <tr><td>KV 感知路由：命中缓存首字 340 ms，冷启动（不命中）2,850 ms，命中率 87.4%（4,176／4,776）</td><td>Red Hat Developer 2025-10-07「Master KV cache aware routing with llm-d」</td></tr>
-    <tr><td>JetStream 停止维护：核心功能并入 tpu-inference、2026-02-01 起归档，最后提交 2026-01-05</td><td>github.com/AI-Hypercomputer/JetStream README 公告与提交记录，2026-10 核对</td></tr>
+    <tr><td>JetStream 停止维护：核心功能并入 tpu-inference、宣布 2026-02-01 起归档，最后提交 2026-01-05</td><td>github.com/AI-Hypercomputer/JetStream README 公告与提交记录，2026-10 核对</td></tr>
+    <tr><td>同等 GPT-3.5 水平推理价格 2022-11 → 2024-10 降 280 多倍，主要归给小模型</td><td>斯坦福 HAI《AI Index Report 2025》</td></tr>
+    <tr><td>llm-d 分层卸载：P90 TTFT 2.1 → 0.5 s</td><td>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</td></tr>
+    <tr><td>Kimi K2 Thinking：QAT、MoE 原生 INT4，生成约快 2 倍</td><td>Hugging Face 模型卡 moonshotai/Kimi-K2-Thinking</td></tr>
+    <tr><td>年份：GPTQ 2022、Splitwise 2023；批不变 kernel</td><td>arXiv <a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener">2210.17323</a>；arXiv <a href="https://arxiv.org/abs/2311.18677" target="_blank" rel="noopener">2311.18677</a>；Thinking Machines 博客「Defeating Nondeterminism in LLM Inference」</td></tr>
+    <tr><td>Mooncake 对 NIXL：并发 64 输出 1,333 对 1,693 tok/s</td><td>VLLM-V4PRO-RUNBOOK.md:705</td></tr>
+    <tr><td>14 台 prefill 扫描 6,788／8,809／8,993；14 台全崩、注册表仍显示 14</td><td>SGLANG-V4PRO-RUNBOOK.md:43、1117；同文约束 #8</td></tr>
+    <tr><td>Qwen3-Coder ＋12%</td><td>Qwen3-Coder-480B/README.md:1005-1021</td></tr>
+    <tr><td>K3：KV 池 787,504 → 637,504；max-running 回调到 48；PD 下 decode 每请求一个状态槽</td><td>SGLANG-K3-RUNBOOK.md:1171、:76、:1318</td></tr>
+    <tr><td>R1 传输程序缓存：1 分 48 秒对 3 分 17 秒～3 分 51 秒</td><td>R1 FP4 README:1237-1250</td></tr>
+    <tr><td>K2.6 共享存储每层读取慢 38 倍；V4-Pro 本地 SSD 14 GB/s、估算加载不到 1 分钟</td><td>K2.6 README:259；README.vllm/README:55、gb300-local-ssd-raid0-SETUP.md:111</td></tr>
+    <tr><td>13.5 栈对比表</td><td>tpu-inference 支持矩阵；SGLang-JAX 模型列表</td></tr>
     <tr><td>第十四节八问的顺序</td><td>本课归纳</td></tr>
   </table>
 </div></section>

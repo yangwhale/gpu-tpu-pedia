@@ -25,7 +25,7 @@ __FIG_S12_MX__
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
   <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 要约 101.8 GB（README 原文单位，按 GiB 读也超），超过可用的 94.75 GiB；转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，才放得下。</p>
-  <p>可 v7 的公开规格只列 BF16 和 FP8 峰值，FP4 只能当权重存，算之前在片上解成 FP8 或 BF16。字节省了，转换的功夫加上了，净收益只能实测。</p>
+  <p>可 v7 的公开规格只列 BF16 和 FP8 峰值，没写 FP4，推测 FP4 只能当权重存，算之前在片上解成 FP8 或 BF16。字节省了，转换的功夫加上了，净收益只能实测。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>
   <p>R1 的 FP4（E2M1）是浮点，值在 0 附近密、远处疏，靠块缩放对齐量级；Kimi K2.6 的 INT4 是 −8 到 7 等距排开的整数。</p>
@@ -40,7 +40,7 @@ __FIG_S12_FUSE__
     megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读。</p>
   <p>Hazy 的实测里，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型越小、batch 越小，空等占比越大，这招赚得越多。</p>
   <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；对照的 16 张 GB200（vLLM）是 452 token，两边都按接受长度 6 换算。
-    不开投机时，batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
+    不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（接受长度博客称通常 3–6，按 6 换算是最好情况）（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
   <p>KV 存成 FP8，每 token 的字节约减半，同样显存多装近一倍请求；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。

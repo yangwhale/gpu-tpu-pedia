@@ -17,7 +17,7 @@ __FIG_S6_TEPDEP_T5__
     同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐从 1,319 涨到 2,758，是 <b>2.09 倍</b>。</p>
   <p>原始记录把功劳记给容量：副本让出的显存多收了请求。拿 Little 定律核一下（在飞请求 ＝ 每秒输出 × 出字间隔）：</p>
 __FIG_S6_KV__
-  <p>容量没帮上忙，<b>变的是步时</b>：TP4 的 4 张卡每步各读一遍整份 KV，每层还多一次 AllReduce（本课推导，runbook 没拆分）。</p>
+  <p>容量没帮上忙，<b>变的是步时</b>：TP4 的 4 张卡每步各读一遍整份 KV、每层多一次 AllReduce；EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
   <ul>
     <li><b>口径</b>：2.09 倍是总 token（prompt 加输出）除以全部卡（16 张和 20 张，各含 12 张 prefill 卡）。decode 卡同时从 4 张翻到 8 张，只算 decode 卡的输出是 1.31 倍。</li>
     <li><b>换个模型</b>：MLA 开 TEP8 是 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，是 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</li>
@@ -38,7 +38,7 @@ __FIG_S6_KV__
   <p>tpu-inference 的一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
     Qwen3.5-397B 在 v7x-8 上，<b>1K 进 8K 出、并发 512 时，DP=8 比 TP=8 的输出吞吐多 62%</b>；8K 进 1K 出时多 40%。</p>
 __FIG_S6_TPU__
-  <p>一种解读：8 路 TP 下同一份 KV 各放 4 份（6.2，本课推导，PR 没归因）。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>一种解读：8 路 TP 下同一份 KV 各放 4 份（6.2，本课推导，PR 没归因）。也可能是 PR 命令里的 --max-num-seqs=64 限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
   <p>读 TPU 启动参数要多一步：tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 
