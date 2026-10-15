@@ -255,7 +255,7 @@ def fig_dep_state():
         "所以 DEP 开得再宽，每个 rank 还是一整池；本课推导，与官方说法一致。"])
     yb = f.src(yb + 10,
                "K3 共 93 层、69 层 KDA，DEP8 两次加载 OOM、官方改推 TP 与 DCP：SGLANG-K3-RUNBOOK.md（见第六、七节与文末台账）。",
-               "「按头切」「DP／EP／DCP 不切头」为本课推导；格子数只表示整池与按头切的对比。")
+               "「DP、EP、DCP 都不切」状态池、attention-TP 8 时「状态池 8 路切分」为 runbook 引的官方说法；「按头切」为本课推导；格子数只表示整池与按头切的对比。")
     f.save("fig6-dep-state.svg", yb + 14)
 
 

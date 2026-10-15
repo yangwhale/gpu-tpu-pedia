@@ -53,7 +53,7 @@ __FIG_S12_KVLAYOUT__
 
 FIGS = {
     "__FIG_S12_KVLAYOUT__": ("fig-s12-kvlayout", "fig6-quant-kvlayout.svg", "topic06-fig-quant.py",
-        '<b>看下面那条比红虚线多出的部分：都是没压的。</b><br>'
+        '<b>看下面那条比红虚线多出的部分：没压的位置编码，加上缩放。</b><br>'
         '<em>FlashMLA 给 DeepSeek-V3.2 的布局，条长按字节比例；倍数为本课推导。</em>'),
     "__FIG_S12_BYTES__": ("fig-s12-bytes", "fig6-quant-bytes.svg", "topic06-fig-quant.py",
         '<b>看下限随位数怎么缩。</b><br>'
