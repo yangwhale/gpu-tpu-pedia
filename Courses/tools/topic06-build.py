@@ -63,6 +63,16 @@ head += """
 /* R40（2026-10-15）：出处台账里有一串串不带空格的仓库路径和 URL，表格 min-content 被撑到
    1112 px，比 1080 的版心还宽、390 宽手机上把整页 scrollWidth 顶到 1136。只在这一节放开断行。 */
 #s十五 td { overflow-wrap:anywhere }
+/* R81（2026-10-15）：76 张图全按 viewBox 1400 画，最小字号 12–14 px。390 宽手机上
+   图被缩到 308 px（缩放 0.22），字只剩 2.6–3.1 px，截图确认完全读不出。
+   窄屏下改成：图保持 1050 px 宽，在 figure 里横向滑动（.fwide 本来就是 overflow-x:auto）。
+   1050 = 1400 × 9 ÷ 12 —— 让最小的 12 px 字显示成 9 px；13.5 px 的字显示成 10.1 px。
+   同时把 figure 两侧 24 px 内边距收到 10 px，多给图留一点可视宽度。
+   ⛔ 只在 max-width:700px 生效，桌面／投影版式一个像素都不变；只选 `> svg`，不碰 video。 */
+@media (max-width:1100px) {
+  figure.fwide { padding-left:10px; padding-right:10px }
+  figure.fwide > svg { width:1050px; max-width:none }
+}
 </style>"""
 
 SECTIONS = [
