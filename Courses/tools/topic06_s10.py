@@ -68,9 +68,9 @@ FIGS = {
     "__FIG_S10_RANK__": ("fig-s10-rank", "fig6-s10-rank.svg", "topic06-fig-topo.py",
         '<b>看编号顺序怎么决定环的走法。</b><br><em>真实 v7 是 3D torus。</em>'),
     "__FIG_S10_SLICE__": ("fig-s10-slice", "fig6-s10-slice.svg", "topic06-fig-topo.py",
-        '<b>短上下文看权重，长上下文看 KV；切片只有 4/8/16/32 颗几档。</b><br><em>KV 按 bf16 计；纸面下限。</em>'),
+        '<b>六种配置里四种落在 8 颗；最长最满那行跳过 16，要取 32。</b><br><em>KV 按 bf16 计；纸面下限。</em>'),
     "__FIG_S10_CONC__": ("fig-s10-conc", "fig6-s10-conc.svg", "topic06-fig-topo.py",
-        '<b>容量要一路扫到吞吐见顶。</b><br><em>口径：并发是压测客户端同时挂着的请求数，不是服务端实际批大小。</em>'),
+        '<b>看红点离灰虚线多远，再看虚线右边那段线有多平。</b><br><em>口径：并发是压测客户端同时挂着的请求数，不是服务端实际批大小。</em>'),
 }
 
 NUM_LOCK = [

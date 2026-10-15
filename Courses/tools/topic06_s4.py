@@ -62,10 +62,10 @@ FIGS = {
         '<b>看正在出字的人最长间隔，和新人首字晚了几格。</b><br>'
         '<em>示意单位；混合步按相加计时，偏保守。</em>'),
     "__FIG_S4_CONC__": ("fig-s4-conc", "fig6-conc.svg", "topic06-fig-batch.py",
-        '<b>座位满了，翻台速度不变，多来的人只在门口排队。</b><br>'
+        '<b>左边绿柱几乎一样高，右边红柱越来越高。</b><br>'
         '<em>GB300 上 SGLang 跑 V4-Pro 的公开实测；TTFT 只记三档；排队人数按比例示意。</em>'),
     "__FIG_S4_OVERLAP__": ("fig-s4-overlap", "fig6-overlap.svg", "topic06-fig-batch.py",
-        '<b>CPU 提前排好下一批，加速器不再等。</b><br>'
+        '<b>比两行 TPU：上面的「空等」格在下面没了。</b><br>'
         '<em>时间线是示意，只有空档 12 ms 与 38 µs 是原文数字。</em>'),
 }
 

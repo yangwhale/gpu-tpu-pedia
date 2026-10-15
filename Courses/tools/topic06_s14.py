@@ -51,7 +51,7 @@ __FIG_S14_EIGHT__
 
 FIGS = {
     "__FIG_S14_EIGHT__": ("fig-s14-eight", "fig6-eight.svg", "topic06-fig-eight.py",
-        '<b>先定尺子和账，再挑招数。</b><br><em>颜色对主线：灰 ＝ 校准尺子／上线，蓝 ＝ 分给更多 token，绿 ＝ 少搬，橙 ＝ 拆开放对地方。</em>'),
+        '<b>八问里有四问钉在那辆车上：3、4、7、8。</b><br><em>颜色对主线：灰 ＝ 校准尺子／上线，蓝 ＝ 分给更多 token，绿 ＝ 少搬，橙 ＝ 拆开放对地方。</em>'),
 }
 
 NUM_LOCK = []

@@ -70,7 +70,7 @@ __FIG_S11_TREE__
 
 FIGS = {
     "__FIG_S11_STEP__": ("fig-s11-step", "fig6-spec-step.svg", "topic06-fig-spec.py",
-        '<b>猜错只浪费草稿那点功夫，每轮至少前进 1 个。</b><br>'
+        '<b>对齐上下两行的灰条：投机这行少读一遍权重，出的字反而多。</b><br>'
         '<em>示意时间线，格子长短不按比例。</em>'),
     "__FIG_S11_BYTES__": ("fig-s11-bytes", "fig6-spec-bytes.svg", "topic06-fig-spec.py",
         '<b>看左边：稠密部分验几个都只读一遍，专家却越验越多。</b><br><em>左为本课推导（FP8、均匀路由）；右为 K3 在 GB300 上 bs=1 的实测时间账。</em>'),

@@ -62,7 +62,7 @@ FIGS = {
     "__FIG_S12_R1__": ("fig-s12-r1", "fig6-quant-r1.svg", "topic06-fig-quant.py",
         '<b>跟着一个权重走：存时加 8，读时不减，就差 8。</b><br><em>示意；12.4 里 R1 的占用数字和单位见出处。</em>'),
     "__FIG_S12_CAP__": ("fig-s12-cap", "fig6-quant-cap.svg", "topic06-fig-quant.py",
-        '<b>红条越过虚线：不管单位怎么读都放不下。</b><br><em>README 原值，每 device；两种单位都超。</em>'),
+        '<b>看虚线右边那截淡红：换成 GiB 读，越界更多。</b><br><em>README 原值，每 device；两种单位都超。</em>'),
     "__FIG_S12_FUSE__": ("fig-s12-fuse", "fig6-quant-fuse.svg", "topic06-fig-quant.py",
         '<b>每次 kernel 交接都要空等，加起来四成多；megakernel 把它捡回来。</b><br><em>时间轴按比例画。</em>'),
 }

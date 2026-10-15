@@ -42,19 +42,19 @@ __FIG_S5_ALLREDUCE__
 
 FIGS = {
     "__FIG_S5_AMORTIZE__": ("fig-s5-amortize", "fig6-s5-amortize.svg", "topic06-fig-decode.py",
-        '<b>batch 越大橙段越高：过了约 53，一步的字节大半是 KV。</b>'
+        '<b>柱顶的数越降越慢：权重摊薄了，紫段摊不薄。</b>'
         '<br><em>只记读显存的字节，没算激活值和 logits（给词表里每个字打的分）。</em>'),
     "__FIG_S5_TILE__": ("fig-s5-tile", "fig6-s5-tile.svg", "topic06-fig-decode.py",
         '<b>同一份 KV，看三种摆法各占多大地方。</b>'
         '<br><em>按默认 tile 推导；编译器对极窄的数组有时改用更小的 tile，见出处。</em>'),
     "__FIG_S5_MLA__": ("fig-s5-mla", "fig6-s5-mla.svg", "topic06-fig-decode.py",
-        '<b>吸收每字节 242 次运算，给 decode；展开每字节 1 次，给 prefill。</b>'
+        '<b>上下两栏的头一样多，差别只在箭头从哪条数据出发。</b>'
         '<br><em>乘加按 2 次运算计，bf16；没算把查询吸收进去、把输出投影回来的那两次矩阵乘。</em>'),
     "__FIG_S5_DENSE__": ("fig-s5-dense", "fig6-s5-dense.svg", "topic06-fig-decode.py",
         '<b>比两根条：全算短于读权重，就藏得住。</b>'
         '<br><em>DeepSeek-V3 一个路由专家，TPU v7 单 device，按峰值带宽和峰值算力推导。</em>'),
     "__FIG_S5_ALLREDUCE__": ("fig-s5-allreduce", "fig6-s5-allreduce.svg", "topic06-fig-decode.py",
-        '<b>14 KiB：带宽项约 24 ns；小消息实测平均 11.0 µs。</b>'
+        '<b>比灰条和红条：就算做到硬件下限，带宽项也只是零头。</b>'
         '<br><em>4 张 GB200，小消息平均延迟（论文实测）；带宽项为本课推导，对数轴。</em>'),
 }
 

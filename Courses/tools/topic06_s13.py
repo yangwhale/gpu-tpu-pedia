@@ -53,13 +53,13 @@ __FIG_S13_ROUTE__
 
 FIGS = {
     "__FIG_S13_BUCKET__": ("fig-s13-bucket", "fig6-s13-bucket.svg", "topic06-fig-serve.py",
-        '<b>桶数等于编译次数；按分布的形状切，比等距切划算。</b><br><em>本课推导示意：每步整批 token 总数取对数正态，非真实流量；浪费 ＝ 补零 token ÷ 实算 token。</em>'),
+        '<b>比绿条和第一根橙条：桶更少，浪费也更少。</b><br><em>本课推导示意：每步整批 token 总数取对数正态，非真实流量；浪费 ＝ 补零 token ÷ 实算 token。</em>'),
     "__FIG_S13_COLD__": ("fig-s13-cold", "fig6-s13-cold.svg", "topic06-fig-serve.py",
-        '<b>拆开冷启动，编译常常占大头，连「加载权重」那段也可能是。</b><br><em>上为 GLM-5.1 一次冷启动放大，下为另外两次的构成；各段时长取自原记录的日志拆账。</em>'),
+        '<b>看三次里最长那段：GLM 和 Qwen3-Coder 是编译，MiMo 是权重加载。</b><br><em>上为 GLM-5.1 一次冷启动放大，下为另外两次的构成；各段时长取自原记录的日志拆账。</em>'),
     "__FIG_S13_ROUTE__": ("fig-s13-route", "fig6-s13-route.svg", "topic06-fig-serve.py",
         '<b>看同前缀的请求落到哪个副本。</b><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是不路由的最坏情况、不是轮询的平均值。</em>'),
     "__FIG_S13_LEAK__": ("fig-s13-leak", "fig6-mem-leak.svg", "topic06-fig-serve.py",
-        '<b>报错劝你调大比例，方向正好反了。</b><br><em>runbook 原值，每卡，单位 GB；差 54 为本课推导。删 pod 重建后 56 秒显存归零。</em>'),
+        '<b>比上下两行：同一条虚线，上面落进红框，下面落在绿条里。</b><br><em>runbook 原值，每卡，单位 GB；差 54 为本课推导。删 pod 重建后 56 秒显存归零。</em>'),
 }
 
 NUM_LOCK = [

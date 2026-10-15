@@ -61,11 +61,11 @@ assert abs(PER_TOK[1] - 143.8) < 0.1 and abs(PER_TOK[128] - 3.79) < 0.01
 
 def fig_amortize():
     f = Fig(W, "攒 batch 时一步要读的字节。横轴是 batch 1、16、64、128，每根柱子是这一步全模型要读的字节，"
-               "蓝色是权重 141 GB，四根柱子一样高；橙色是 KV，每条序列 2.68 GB，跟着 batch 线性长。"
+               "蓝色是权重 141 GB，四根柱子一样高；紫色是 KV，每条序列 2.68 GB，跟着 batch 线性长。"
                "柱顶写着摊到每个 token 的字节：143.8、11.5、4.89、3.79 GB。batch 约 53 时两块一样重，之后 KV 占大头")
     y0 = f.header("攒 batch：权重一趟分给所有人，KV 每人一份　——　<tspan font-weight=\"700\">batch 越大，KV 越成主角</tspan>",
                   "柱高 ＝ decode 一步要从显存读的字节（全模型合计，不分卡）；柱顶 ＝ 摊到每个 token 的字节。Llama-3.1-70B，bf16，每条序列上下文 8K",
-                  [(BL, "权重：一步读一遍，所有序列共用"), (OR, "KV：每条序列读自己的")])
+                  [(BL, "权重：一步读一遍，所有序列共用"), (PU, "KV：每条序列读自己的")])
     PH = 500
     py = f.panel(0, y0, W, PH, "一步要读多少字节", BL)
     base = py + PH - 72
@@ -85,22 +85,22 @@ def fig_amortize():
         kv = b * L_KV_SEQ / NB.GB
         hk = kv * sc
         f.box(x, base - hw, bw, hw, BL, BL, 3)
-        f.box(x, base - hw - hk, bw, max(hk, 2), OR, OR, 3)
+        f.box(x, base - hw - hk, bw, max(hk, 2), PU, PU, 3)
         f.t(x + bw / 2, base + 28, "batch %d" % b, INK, True, 16, anchor="middle")
         f.t(x + bw / 2, base - hw - hk - 32, "每 token", GY, size=14, anchor="middle")
         f.t(x + bw / 2, base - hw - hk - 10, ("%.1f GB" if b == 1 else "%.3g GB") % PER_TOK[b], INK, True, 17, anchor="middle")
         if i == 0:
             f.t(x + bw / 2, base - hw / 2 + 5, "141 GB", "#fff", True, 16, anchor="middle")
             # KV 只有 2.68 GB，柱子里放不下字：画到右边
-            f.line(x + bw + 4, base - hw - 1, x + bw + 22, base - hw - 1, OR, 1.4, arrow=False)
-            f.t(x + bw + 26, base - hw + 5, "KV %.2f GB" % kv, OR, True, 15)
+            f.line(x + bw + 4, base - hw - 1, x + bw + 22, base - hw - 1, PU, 1.4, arrow=False)
+            f.t(x + bw + 26, base - hw + 5, "KV %.2f GB" % kv, PU, True, 15)
         else:
             f.t(x + bw / 2, base - hw - hk / 2 + 6, "KV %d GB" % round(kv), "#fff", True, 15,
                 anchor="middle")
     # 交叉点标注
     xr = x0 + 4 * bw + 3 * gap + 44
-    f.t(xr, top + 40, "batch ≈ %d 时" % round(B_CROSS), OR, True, 16)
-    f.t(xr, top + 64, "两块一样重", OR, True, 16)
+    f.t(xr, top + 40, "batch ≈ %d 时" % round(B_CROSS), INK, True, 16)
+    f.t(xr, top + 64, "两块一样重", INK, True, 16)
     f._pan = None
     yb = f.src(py + PH - 20,
                "📌 Llama-3.1-70B config.json：hidden 8192、80 层、64 查询头、8 KV 头、每头 128 维、intermediate 28672、vocab 128256、词表不共享。"
@@ -256,7 +256,7 @@ def fig_mla():
                "每读 1 字节只做 1 次运算；prefill 有成千上万个查询，复制的开销被摊薄，用它")
     y0 = f.header("MLA 的两种算法：一条大家共读，还是先复制 128 份　——　<tspan font-weight=\"700\">decode 用吸收，prefill 用展开</tspan>",
                   "DeepSeek-V3，一层、一个缓存 token。右边的大数：每从显存读 1 字节，做几次运算",
-                  [(BL, "吸收：压缩 KV 不展开"), (OR, "展开：还原成每个头一份")])
+                  [(GR, "吸收：压缩 KV 不展开"), (OR, "展开：还原成每个头一份")])
     PH = 240
     NHEAD = 6                                       # 128 个头画 6 个，后面写「共 128 个」
     BARW = 180                                      # 576 维画 180 px；展开后每份 K＋V 320 维按同一比例
@@ -264,7 +264,7 @@ def fig_mla():
     HX0, HSTEP = 300, 112
     bottoms = []
     for k, (mode, col, title, tag, ai) in enumerate((
-            ("abs", BL, "吸收：一条压缩 KV，128 个头一起读", "decode 用它", ABS_AI),
+            ("abs", GR, "吸收：一条压缩 KV，128 个头一起读", "decode 用它", ABS_AI),
             ("naive", OR, "展开：先复制成 128 份，每个头读自己那份", "prefill 用它", NAIVE_AI))):
         top = y0 + k * (PH + 18)
         py = f.panel(0, top, W, PH, title, col)

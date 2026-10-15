@@ -47,16 +47,16 @@ __FIG_S2_TRAPS__
 
 FIGS = {
     "__FIG_S2_METRICS__": ("fig-s2-metrics", "fig6-metrics.svg", "topic06-fig-metrics.py",
-        '<b>TTFT 含排队，TPOT 是平均，ITL 是逐次；带字多的那次间隔最长。</b><br>'
+        '<b>比三根横杠的起点：只有 TTFT 从进门算起。</b><br>'
         '<em>时间线是示意，绿块宽度按字数画。</em>'),
     "__FIG_S2_PARETO__": ("fig-s2-pareto", "fig6-pareto.svg", "topic06-fig-metrics.py",
         '<b>沿着曲线往左走，每卡吞吐就往上涨。</b><br>'
         '<em>只有绿色三点是同一条曲线；其余点分属不同框架和配置。</em>'),
     "__FIG_S2_RULERS__": ("fig-s2-rulers", "fig6-rulers.svg", "topic06-fig-metrics.py",
-        '<b>同一组原始数，最大和最小差 36 倍。</b><br>'
+        '<b>先比框住的格子再看结果条：分子框得越多、分母框得越少，数越大。</b><br>'
         '<em>虚线两条是本课推导，没有工具这样报。</em>'),
     "__FIG_S2_TRAPS__": ("fig-s2-traps", "fig6-traps.svg", "topic06-fig-metrics.py",
-        '<b>换个读数、换个时机，数就差出一截。</b><br>'
+        '<b>左边的坑让数虚高，右边的坑让数虚低。</b><br>'
         '<em>两格各是独立实测。</em>'),
 }
 

@@ -97,7 +97,7 @@ FIGS = {
         '<b>隔板挪到两池一起快满时最快；一边先满，另一边就空转。</b><br>'
         '<em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计；前两格输入 4K、第三格 8K，输出 1K，关前缀缓存。</em>'),
     "__FIG_S3_DISK__": ("fig-s3-disk", "fig6-disk-cache.svg", "topic06-fig-kv.py",
-        '<b>同一条 128K prompt，命中后首字只要 0.5 s。</b><br>'
+        '<b>上栏是一条请求能省多少，下栏是一天的输入里多少能这样省。</b><br>'
         '<em>首字延迟出自 DeepSeek API 文档 2024-08，命中比例出自 open-infra-index 2025-02，两次统计不同时；1/26 为本课推导。</em>'),
     "__FIG_S3_OFFLOAD__": ("fig-s3-offload", "fig6-offload.svg", "topic06-fig-kv.py",
         '<b>绿线始终在红线下面：链路够快，多长都该搬。</b><br>'
