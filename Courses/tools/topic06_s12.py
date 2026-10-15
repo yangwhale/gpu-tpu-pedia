@@ -2,54 +2,53 @@
 """专题六 · 第十二节「少搬字节：量化与 kernel 融合」。图在 topic06-fig-quant.py。"""
 
 BODY = '''
-  <p class="lead">上一节让搬一趟出更多字，这一节让每一趟少搬一点、少停一会。
-    <b>量化</b>让每个权重和 KV 占更少的字节，<b>kernel 融合</b>去掉 kernel 交接时的空等。
-    这条路先走到 4 bit：2022 年底的 GPTQ 只压权重，算时再还原，3 bit 的 OPT-175B 在 1 张 A100 上逐字比 5 张卡跑 FP16 快 3.25 倍；同年的 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核。</p>
+  <p class="lead">上一节让搬一趟出更多字，这一节让每趟少搬一点、少停一会。
+    <b>量化</b>让权重和 KV 占更少字节，<b>kernel 融合</b>去掉交接时的空等。
+    2022 年底的 GPTQ 只压权重、算时还原，3 bit 的 OPT-175B 在 1 张 A100 上逐字比 5 张卡跑 FP16 快 3.25 倍；同年 Hopper 的张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，4 bit 浮点（NVFP4）也进了张量核。</p>
 
   <h3 id="s12-1">12.1　位数减半，下限减半</h3>
   <p>batch 小时一步几乎全在读权重：8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.2 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>
 __FIG_S12_BYTES__
-  <p>实测也接近这个比例：vLLM 2024 年 7 月接入 FP8 权重，稠密的 Llama 3 70B 每字间隔最多快 2 倍，MoE 的 Mixtral 8x7B 最多 1.6 倍（对 BF16）。MoE 赚得少，因为每步只读选中的几个专家，读权重在一步里的占比本来就低（本课推导）。</p>
-  <p>省下的显存能多放 KV、多接请求（3.2），一趟搬运就分给更多人。</p>
+  <p>实测接近这个比例：vLLM 2024 年 7 月接入 FP8 权重，稠密的 Llama 3 70B 每字间隔最多快 2 倍，MoE 的 Mixtral 8x7B 最多 1.6 倍（对 BF16）。MoE 赚得少，因为只读选中的专家，读权重在一步里占比本来就低（本课推导）。</p>
+  <p>省下的显存多放 KV、多接请求（3.2），一趟搬运分给更多人。</p>
 
   <h3 id="s12-2">12.2　同叫 4 bit，差在缩放</h3>
   <p>4 bit 只有 16 个编码，必须几个数共用一个缩放倍数；MXFP4 和 NVFP4 差在块大小和缩放格式。</p>
 __FIG_S12_MX__
-  <p>块越小越贴合局部数值，精度越好，字节也越多。格式的细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
+  <p>块越小越贴合局部数值，精度越好，字节越多。格式细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
 
   <h3 id="s12-3">12.3　低精度直接训出来</h3>
-  <p>发布时就是低精度，正在变成默认做法。
-    Kimi K2 Thinking 在后训练阶段做量化感知训练（QAT），MoE 部分原生 INT4 权重，模型卡称低延迟模式下生成速度约提升 2 倍，没写对照的是哪种精度。</p>
-  <p>DeepSeek-V4 的模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占了参数的绝大部分，也是 decode 时读得最多的那部分。</p>
+  <p>Kimi K2 Thinking 在后训练做量化感知训练（QAT），MoE 部分原生 INT4 权重，模型卡称低延迟模式生成约快 2 倍，没写对照精度。</p>
+  <p>DeepSeek-V4 模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占参数的绝大部分，也是 decode 读得最多的部分。</p>
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
   <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 要约 101.8 GB，越过可用的 94.75 GiB。</p>
 __FIG_S12_CAP__
-  <p>可 v7 的公开规格只列 BF16 和 FP8 峰值，没写 FP4，推测 FP4 只能当权重存，算之前在片上解成 FP8 或 BF16。字节省了，转换的功夫加上了，净收益只能实测。</p>
+  <p>可 v7 公开规格只列 BF16 和 FP8 峰值，推测 FP4 只能当权重存，算前在片上解成 FP8 或 BF16。字节省了，多了转换，净收益只能实测。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>
   <p>R1 的 FP4（E2M1）是浮点，值在 0 附近密、远处疏，靠块缩放对齐量级；Kimi K2.6 的 INT4 是 −8 到 7 等距排开的整数。</p>
 __FIG_S12_R1__
-  <p>K2.6 的记录里，加载时漏了图里「减 8」那一步，模型输出崩成重复的乱词。</p>
+  <p>K2.6 的记录里，加载时漏了图里「减 8」一步，模型输出崩成重复的乱词。</p>
 
   <h3 id="s12-6">12.6　kernel 融合：边界上不再干等</h3>
   <p>一次前向（模型从头算到尾一遍）要发上百个 kernel。每个 kernel 收尾、下一个开场时，没人在读权重。</p>
 __FIG_S12_FUSE__
-  <p>生产里先上的是 CUDA Graph 和 PDL：前者省掉 CPU 逐个发射 kernel 的开销，后者让下一个 kernel 在上一个收尾前先做准备。
-    megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读。</p>
-  <p>Hazy Research（2025-05）的实测里，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型越小、batch 越小，空等占比越大，这招赚得越多。</p>
-  <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；对照的 16 张 GB200（vLLM）是 452 token。这两个数都按接受长度 6 换算。
+  <p>生产里先上的是 CUDA Graph 和 PDL：前者省掉 CPU 逐个发射 kernel 的开销，后者让下一个 kernel 提前准备。
+    megakernel 把整次前向写成一个 kernel，下一段权重在上一段计算时就开始读。</p>
+  <p>Hazy Research（2025-05）实测，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型和 batch 越小，空等占比越大，赚得越多。</p>
+  <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；16 张 GB200（vLLM）是 452 token。两个数都按接受长度 6 换算。
     不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
-  <p>KV 存成 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
-    K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
-  <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码部分为了精度留在 BF16。
-    BF16 是 1,152 B，所以同样显存能装的请求是 BF16 的约 1.76 倍（本课推导）。</p>
-  <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍先解回 FP8，省的是容量和读的字节。省下的容量变成能留住的前缀：命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍。2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生就存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读 NVFP4 KV 的 kernel，比原先的 FP8 KV 小 45%。</p>
+  <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
+    K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
+  <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码为精度留在 BF16。
+    BF16 是 1,152 B，同样显存能装约 1.76 倍的请求（本课推导）。</p>
+  <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节；多出的容量留住更多前缀，命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍。2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读 NVFP4 KV 的 kernel，比原先的 FP8 KV 小 45%。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
-    <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数是 megakernel 加 DSpark 投机一起换来的，博客没提量化。</div>
+    <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数来自 megakernel 加 DSpark 投机，博客没提量化。</div>
 '''
 
 FIGS = {
