@@ -60,6 +60,9 @@ head += """
 .lecbtn { display:inline-block; margin-left:14px; font-size:13px; padding:4px 12px; border-radius:14px;
           background:#fff; border:1px solid var(--line); color:var(--blue); text-decoration:none }
 .lecbtn:hover { background:var(--blue-l); border-color:var(--blue) }
+/* R40（2026-10-15）：出处台账里有一串串不带空格的仓库路径和 URL，表格 min-content 被撑到
+   1112 px，比 1080 的版心还宽、390 宽手机上把整页 scrollWidth 顶到 1136。只在这一节放开断行。 */
+#s十五 td { overflow-wrap:anywhere }
 </style>"""
 
 SECTIONS = [
@@ -145,6 +148,12 @@ FOOT = '''
 
 _html = head + HERO + BODY + FOOT
 _html = P.place_figs(_html, FIGS)
+# R40（2026-10-15）：表格套共用的 .tbl-wrap（overflow-x:auto），窄屏下在表格自己里面横滚，
+#   不再撑破整页。s 文件里的 <table> 都是裸的，所以在这里统一套；已经套过的不重复套。
+_nt = _html.count("<table>")
+_html = re.sub(r'(?<!<div class="tbl-wrap">)<table>', '<div class="tbl-wrap"><table>', _html)
+_html = _html.replace("</table>", "</table></div>")
+assert _html.count('<div class="tbl-wrap"><table>') == _nt == _html.count("</table></div>"), "表格套 .tbl-wrap 对不上"
 # 复用的专题五图里带着专题五自己的编号（「第五刀」、第三节＝TP），在本课对不上。
 #   专题五已定稿、不动它的图脚本，内联后在这里改字；命中次数不对就挂，免得专题五改图后静默失效。
 for _old, _new in (("第五刀：把两种活拆到两批机器上", "把两种活拆到两批机器上"),
