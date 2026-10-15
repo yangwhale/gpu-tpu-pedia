@@ -11,7 +11,7 @@ BODY = '''
 __FIG_S0_TWOLONG__
 __FIG_S0_STORY__
   <ul>
-    <li><b>先补调度和显存（泳道：调度；第三、四节）。</b>Orca（逐步调度，又叫连续批）让每一步都能有人进出，PagedAttention（KV 分页）腾出空位，分块 prefill 把长 prompt 切开塞进 decode 的步里。</li>
+    <li><b>先补调度和显存（泳道：调度、KV 与注意力；第三、四节）。</b>Orca（逐步调度，又叫连续批）让每一步都能有人进出，PagedAttention（KV 分页）腾出空位，分块 prefill 把长 prompt 切开塞进 decode 的步里。</li>
     <li><b>同时把 KV 压薄（泳道：KV 与注意力；第三节、<a href="#s12-kv">12.7</a>）。</b>GQA（多个头共用 KV）、MLA（KV 压成一条）从结构上少存，部署时再存 FP8。</li>
     <li><b>KV 当成存储（泳道：复用与下放；3.5–3.6、第八节）。</b>先在单机里复用前缀；PD 分离以后 KV 反正要离开 prefill 机，Mooncake 顺势把集群的内存和 SSD 拼成 KV 池。</li>
     <li><b>再拆开放（泳道：拆开放；第六至九节）。</b>prefill 和 decode 分家（PD 分离），MoE 的专家分到许多张卡上（大 EP）。</li>

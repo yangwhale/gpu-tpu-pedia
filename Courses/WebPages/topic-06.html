@@ -1037,7 +1037,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="16" y="649" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">算过的不再算</text>
 <rect x="506.622222222232" y="544" width="232" height="54" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="516" y="565" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">RadixAttention</tspan></text>
-<text class="svgsm" x="516" y="587" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums">吞吐最多 6.4×</text>
+<text class="svgsm" x="516" y="587" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums">吞吐最多 6.4×，对其他系统</text>
 <text class="svgsm" x="730" y="565" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">第三节</text>
 <rect x="618.0177777777835" y="606" width="232" height="54" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="628" y="627" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Mooncake KV 池</tspan></text>
@@ -1131,7 +1131,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="1308" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">口径也不同：有的是吞吐，有的是单请求延迟，有的是达标请求数，有的只是显存。</text>
 </svg><figcaption><b>每张卡是一步：写原文报告的提升和基线，没有倍数就写做法。</b><span class="capmore"><br>后一个的基线常是前一个，所以这些倍数不能连乘。</span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Orca OSDI'22；vLLM arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a> 图 2；GQA arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>（÷8 本课推导）；DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>（论文对稠密 67B 报 KV −93.3%，混着 6 bit KV 等改动；卡上 ÷57 是第三节同形状 3,997,696 → 70,272 B，本课推导）；SGLang arXiv <a href="https://arxiv.org/abs/2312.07104" target="_blank" rel="noopener">2312.07104</a>；Mooncake FAST'25（Kimi 线上 A800／H800）；llm-d：Red Hat Developer 2025-10-07（厂商自测）；Leviathan arXiv <a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a>；Flash-Decoding 斯坦福 CRFM 2023-10；EAGLE arXiv <a href="https://arxiv.org/abs/2401.15077" target="_blank" rel="noopener">2401.15077</a>；DeepSeek-V3 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §5.4.3；Splitwise arXiv <a href="https://arxiv.org/abs/2311.18677" target="_blank" rel="noopener">2311.18677</a>；DistServe arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>；DeepSeek open-infra-index Day 6；SGLang 大 EP 博客 2025-05；Sarathi-Serve arXiv <a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener">2403.02310</a>；GPTQ arXiv <a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener">2210.17323</a>；AWQ arXiv <a href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener">2306.00978</a>；NVFP4 NVIDIA 博客 2025-06；上下文台阶：OpenAI DevDay 2023-11-06、Google 2024-02-15；输出变长：OpenAI 2024-09-12、DeepSeek-R1 arXiv <a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="noopener">2501.12948</a>；vLLM V1 博客 2025-01-27；SGLang v0.4 博客 2024-12-04；EAGLE-3 arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a>；DSA：DeepSeek-V3.2-Exp 技术报告 §2.1；叠加 5.1×：PyTorch 博客 2026-06-23；DSpark arXiv <a href="https://arxiv.org/abs/2607.05147" target="_blank" rel="noopener">2607.05147</a>；TPU megakernel：Inferact 博客 2026-09。</p></details></figure>
   <ul>
-    <li><b>先补调度和显存（泳道：调度；第三、四节）。</b>Orca（逐步调度，又叫连续批）让每一步都能有人进出，PagedAttention（KV 分页）腾出空位，分块 prefill 把长 prompt 切开塞进 decode 的步里。</li>
+    <li><b>先补调度和显存（泳道：调度、KV 与注意力；第三、四节）。</b>Orca（逐步调度，又叫连续批）让每一步都能有人进出，PagedAttention（KV 分页）腾出空位，分块 prefill 把长 prompt 切开塞进 decode 的步里。</li>
     <li><b>同时把 KV 压薄（泳道：KV 与注意力；第三节、<a href="#s12-kv">12.7</a>）。</b>GQA（多个头共用 KV）、MLA（KV 压成一条）从结构上少存，部署时再存 FP8。</li>
     <li><b>KV 当成存储（泳道：复用与下放；3.5–3.6、第八节）。</b>先在单机里复用前缀；PD 分离以后 KV 反正要离开 prefill 机，Mooncake 顺势把集群的内存和 SSD 拼成 KV 池。</li>
     <li><b>再拆开放（泳道：拆开放；第六至九节）。</b>prefill 和 decode 分家（PD 分离），MoE 的专家分到许多张卡上（大 EP）。</li>
@@ -2350,7 +2350,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>KV cache：账、池、复用</h2></div>
-  <p class="lead">每条在跑的序列都在显存里单独占一块 KV。
+  <p class="lead">尺子有了，回到第一节那一趟：每条在跑的序列都在显存里单独占一块 KV。
     <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b>
     2023 年起的几招都在同样的显存里多装人、少重算。</p>
 
@@ -2919,7 +2919,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s3-5">3.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样（同一段 system prompt、多轮对话的前几轮），这段的 KV 留着，下一个直接接着算。</p>
   <ul>
-    <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多高 6.4 倍（对当时其他系统，整套运行时的结果）。</li>
+    <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多是当时其他系统的 6.4 倍（整套运行时的结果）。</li>
     <li><b>默认就开。</b>vLLM 早先的前缀缓存命中率低时反而拖慢，默认关；2025 年 1 月 V1 改了数据结构，命中率为 0 也只掉不到 1%，才默认打开。</li>
     <li><b>命中率可以很高。</b>DeepSeek 线上过半输入命中磁盘上的 KV。命中部分按十分之一计价（DeepSeek API 文档 2024-08）。</li>
   </ul>
@@ -3566,7 +3566,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>比两行 TPU：上面的「空等」格在下面没了。</b><span class="capmore"><br><em>时间线是示意，只有空档 12 ms 与 38 µs 是原文数字。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>SGLang-JAX 博客（lmsys.org/blog/2025-10-29-sglang-jax）原文：For Qwen/Qwen3-32B, we reduced the time gap between prefilling and decoding from approximately 12ms to 38us, and from approximately 7ms to 24us。同文：The scheduler pre-compiles Jax computation graphs for different batch sizes。</p>
 <p>⚠️ 示意：格子长短是编排的，CPU 与 TPU 段的比例不对应任何实测。</p></details></figure>
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
-  <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐 1.1 倍。vLLM V1 把分词、回传这些 CPU 活挪到别的进程同时跑，也是它比 V0 快的原因之一。</p>
+  <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐 1.1 倍。vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是把分词、回传这些 CPU 活挪到别的进程同时跑。</p>
 
   <h3 id="s4-5">4.5　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
@@ -4668,7 +4668,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>切序列：DCP 和 PCP</h2></div>
-  <p class="lead">上下文一长，KV 在 TP 下被复制几份，卡很快就满；prompt 一长，第一个字就要等很久。
+  <p class="lead">第六节切的是头和请求，一条序列本身变长时还剩两件事。上下文一长，KV 在 TP 下被复制几份，卡很快就满；prompt 一长，第一个字就要等很久。
     <b>DCP 管前一件，PCP 管后一件，两者都是沿序列切。</b></p>
 
   <h3 id="s7-1">7.1　一句回顾</h3>
@@ -8398,7 +8398,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>看同前缀的请求落到哪个副本。</b><span class="capmore"><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是不路由的最坏情况、不是轮询的平均值。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Red Hat Developer，2025-10-07，「Master KV cache aware routing with llm-d」：warm cache hit TTFT 340 ms，对照为无 KV 感知路由的最坏情况 2,850 ms；命中率 87.4%（4,776 次查询中 4,176 次）。⚠️ 2,850 是最坏情况，不是轮询的平均值。</p>
 <p>⚠️ 本课示意：左栏的副本与请求是示意。</p>
 <p>正文里的健康检查那句（8 个副本坏 1 个，1/8 的请求白等）是本课推导示意：12.5% ＝ 1 ÷ 8，只在纯轮询、坏副本照常收请求时成立。</p></details></figure>
-  <p>KV 感知路由把同前缀的请求送到已经存着它的副本。SGLang 2024 年 12 月把它放进开源路由，命中率 20% → 75%、吞吐 1.9 倍；之后 NVIDIA Dynamo（2025-03）、llm-d（2025-05）、GKE Inference Gateway 都做了，图右是 Red Hat 2025-10 用 llm-d 的实测。</p>
+  <p>KV 感知路由把同前缀的请求送到已经存着它的副本。SGLang 2024 年 12 月把它放进开源路由，命中率 20% → 75%、吞吐 1.9 倍（对轮询）；之后 NVIDIA Dynamo（2025-03）、llm-d（2025-05）、GKE Inference Gateway 都做了，图右是 Red Hat 2025-10 用 llm-d 的实测。</p>
   <p>容量规划沿用 goodput 的思路（<a href="#s2-2">§2.2</a>）：先定交互档，再看这一档每卡扛多少人（2.2 图里那一档约 224 人），decode 卡数 ＝ 同时在生成的请求数 ÷ 每卡人数；分母的坑见 2.3。</p>
 
   <p class="landing">⭐ 路由把「少算」搬到集群层：<b>前缀只算一次</b>，后面的请求都来复用。</p>
