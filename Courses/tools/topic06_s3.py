@@ -44,7 +44,7 @@ __FIG_S3_PAGED__
   <p>DeepSeek-V4 每层有两种 KV：滑窗池存最近 128 个 token 的原始 KV（滑动窗口注意力，只看最近一段），全长池存 3.1 说的 CSA／HCA 压缩后的整段。
     SGLang 给它们开两个池，共用一份预算，用 <code>--swa-full-tokens-ratio</code> 定两边怎么分。</p>
 __FIG_S3_POOL__
-  <p>两边一起满之后，再多给显存、多装 13% 的人，只到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
+  <p>两边一起满之后，再多给显存、多装 13% 的人，端到端只从 10,614 到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
     tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX <b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃，看不出是池子的账错了（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>

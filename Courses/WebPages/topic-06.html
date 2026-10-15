@@ -838,7 +838,7 @@ body.figonly section h3{margin-top:34px}
   <p class="lead">同一个模型，吞 prompt 那一段吃算力，往外吐字那一段吃带宽。
     <b>一次请求里，前后两段要的硬件正好相反。</b></p>
 
-  <h3 id="s0-0">0.1　2022 年以来，推理怎么变便宜</h3>
+  <h3 id="s0-1">0.1　2022 年以来，推理怎么变便宜</h3>
   <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出；KV 按最大长度预留，显存里真正存着 token 的只有两到四成。</p>
 <figure class="fbox fwide" id="fig-s0-story"><svg viewBox="0 0 1400 1016" width="100%" role="img" aria-label="2022 年以来的推理优化：六条泳道按时间排出 2022 到 2025 年的关键优化，每张卡写原文报告的提升和口径：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，投机解码 2 到 3 倍，DistServe 多服务 7.4 倍请求，Mooncake 真实负载多接 75%，DeepSeek 大 EP 每节点 decode 1.48 万 token 每秒；倍数基线互相包含，不能连乘"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">2022 年以来　——　<tspan font-weight="700">每一步补一个洞</tspan></text>
@@ -969,7 +969,7 @@ body.figonly section h3{margin-top:34px}
   </ul>
   <p>模型侧的进步不算系统优化，全课的账却都建在它上面：DeepSeek-V3（2024 年 12 月）用 MoE，总参数 6,710 亿，每个 token 只激活约 370 亿。
     同等 GPT-3.5 水平的推理价格，2022 年 11 月到 2024 年 10 月降了 280 多倍（斯坦福 AI Index 2025）；报告把它主要归给越来越强的小模型，硬件另算，本课认为上面这条路也在里面。</p>
-  <h3 id="s0-1">0.2　一个请求的一生</h3>
+  <h3 id="s0-2">0.2　一个请求的一生</h3>
 <figure class="fbox fwide" id="fig-s0-life"><svg viewBox="0 0 1400 824" width="100%" role="img" aria-label="一个请求的一生，示意时间线。请求进门后可能先排队；然后 prefill 一次把整段 prompt 算完，同时把 prompt 每个 token 的 KV 写进显存，算完吐出第一个字。从进门到第一个字的时间叫 TTFT。之后进入 decode：每一步只出一个字，每一步都要把全部权重和到目前为止的全部 KV 从显存读一遍，KV 每一步长一格。相邻两个字之间的时间叫 TPOT。出到结束符为止。prefill 一次读权重分给整段 prompt，吃的是算力；decode 一次读权重只出一个字，吃的是带宽"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个请求的一生　——　<tspan font-weight="700">一大块 prefill，接一长串一步一字的 decode</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意时间线，格子长短不按比例。上：在做什么、何时出字；中：显存里的 KV 有多长；下：decode 每一步要从显存读什么</text>
@@ -1076,7 +1076,7 @@ body.figonly section h3{margin-top:34px}
   <p>用户只感觉得到两个数：等第一个字等了多久（TTFT），之后每个字隔多久（TPOT）。
     这两个数分别由 prefill 和 decode 决定，第二节再把它们的口径校准。</p>
 
-  <h3 id="s0-2">0.3　全课一句话</h3>
+  <h3 id="s0-3">0.3　全课一句话</h3>
   <div class="note ok"><span class="t">一句话</span>
     <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
     还有一类招数不碰这一趟本身：把吞 prompt 和吐字拆开，各放到合适的机器上。</div>
@@ -2498,7 +2498,6 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1282" y="440" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 要往里写，</tspan></text>
 <text class="svgsm" x="1282" y="460" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先复制一份</tspan></text>
 </svg><figcaption><b>绿色两块两条序列共用，橙色那块是 B 要改时复制出来的。</b><span class="capmore"><br><em>每块 4 个 token 只为画得下；机制见 vLLM 论文（arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a>）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention（SOSP'23, arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a>）—— 块级写时复制、并行采样与 beam search 共享块；原文统计既有系统 KV 显存里真正存 token 状态的只有 20.4%–38.2%，vLLM 达 96.3%。</p>
-<p>出处：428 → 283 µs：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/BLOG-systems-engineering-playbook.md L395–405，原文 Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」；512 并发 decode 步时。</p>
 <p>口径：每块 4 个 token 只为画得下；真实系统常用 16（GPU）或 256（TPU 上这个模型）。物理块编号是示意。</p></details></figure>
   <ul>
     <li><b>按需领块。</b>序列长一点就多领一块，浪费只剩最后一块没写满的尾巴。vLLM 论文测过，旧系统 KV 显存里真正存着 token 的只有 20.4%–38.2%，分页后到 96.3%。</li>
@@ -2602,7 +2601,7 @@ body.figonly section h3{margin-top:34px}
 <p>出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。</p>
 <p>本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。</p>
 <p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；水箱一样大、管子一样粗是示意，不代表两池的真实字节数。</p></details></figure>
-  <p>两边一起满之后，再多给显存、多装 13% 的人，只到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
+  <p>两边一起满之后，再多给显存、多装 13% 的人，端到端只从 10,614 到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
     tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX <b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃，看不出是池子的账错了（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
@@ -3141,7 +3140,7 @@ body.figonly section h3{margin-top:34px}
   <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
     8 张卡合计 9,032 × 8 × 0.060 s，反推 decode 批里约 4,335 个请求，每卡约 540。
     并发按客户端计，是另一个数：这组基线每个前端 600 路、共 14 个前端，合计 8,400 路，没进批的都在 prefill 那边排队。</p>
-  <p>槽位也不白给。换成 4K 输入那组（3.4），每卡 batch 从 886 加到 999，峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 ms：每一步要算的人多了，这一步就长了。</p>
+  <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 ms：每一步要算的人多了，这一步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
     XLA 按静态形状编译，batch 大小也是形状的一部分。SGLang-JAX 的做法是为几种 batch 大小提前编译好计算图；
     实际人数不在档位上时，通常补到最近的一档，补出来的行照样参与计算。来由见
@@ -4533,7 +4532,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ring 在路上一段一段这样合并，DCP 在终点这样合并，是同一招。</text>
 </svg><figcaption><b>分块算注意力，合并时先别除。</b><span class="capmore"><br><em>每张卡除了结果，还要交出自己的分母。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 讲法：Ring Attention（Liu 等，arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>）附录实现按分子、分母分别累加；分块 softmax 的数值稳定写法见 FlashAttention（arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>）。</p>
 <p>⚠️ 本课示例：数字是随手取的，按定义现算并断言。</p></details></figure>
-  <p>代价是每层多几次通信，度数最多开到 TP ÷ KV 头数。</p>
+  <p>代价是每层多几次通信（vLLM 默认后端每层 3 次），度数最多开到 TP ÷ KV 头数。</p>
 
   <h3 id="s7-2">7.2　DCP 只在长上下文赚</h3>
   <p>Kimi K3 在 GB300 上，<b>128K 输入、8 并发，DCP8 的输出吞吐 365 对 TP8 的 108，多 237%</b>。输入 4K 时各档并发都亏，最多亏 26%。</p>
@@ -5367,9 +5366,9 @@ body.figonly section h3{margin-top:34px}
     <tr><td>decode 每秒完成</td><td>8 卡 × 11,200 ÷ 1,024 个输出 token</td><td>约 87.5 个请求</td></tr>
     <tr><td>prefill 要供的料</td><td>87.5 × 8,192 个输入 token</td><td>约 71.7 万 tok/s</td></tr>
     <tr><td>一个 prefill（4 卡）</td><td>4 × 每卡 18,200 input tok/s（官方的 prefill 单卡吞吐）</td><td>约 7.28 万 tok/s</td></tr>
-    <tr><td>要几个</td><td>71.7 ÷ 7.28</td><td>约 9.8，取 8–10 个</td></tr>
+    <tr><td>要几个</td><td>71.7 ÷ 7.28</td><td>约 9.8</td></tr>
   </table>
-  <p>官方的高并发配置用 8 个，落在区间下沿。18,200 是官方给的单卡 prefill 吞吐；runbook 自己测的单卡峰值是 15,196，只有它的 83%，照实测算要的 prefill 更多。</p>
+  <p>官方的高并发配置用 8 个，比公式的 9.8 少。18,200 是官方给的单卡 prefill 吞吐；runbook 自己测的单卡峰值是 15,196，只有它的 83%，照实测算要的 prefill 更多。</p>
   <p>实测也印证了公式给的只是起点。同一份 runbook 早期扫过 prefill 个数（历史数据，之后没重测），每张 decode 卡的输出：8 个时 6,788，14 个时 8,809，16 个时 8,993。14 到 16 只涨 2%，已经喂饱，runbook 因此把 14 定为默认（runbook:43、1117）。</p>
 
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
@@ -5429,7 +5428,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>为什么吞吐不涨</b>：瓶颈在 decode，并发 128 时排队的请求只是开始得早了。</li>
   </ul>
 
-  <h3 id="s9-4">9.4　换个分母，结论差五倍</h3>
+  <h3 id="s9-4">9.4　换个分母，10.4 倍变 2.2 倍</h3>
   <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。按 decode 卡算，每卡输出从 307 涨到 3,321；把 prefill 的卡也算进分母，最多只到 455。</p>
 <figure class="fbox fwide" id="fig-s9-prefill-sweep"><svg viewBox="0 0 1400 694" width="100%" role="img" aria-label="vLLM 跑 DeepSeek-V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个，每个 prefill 4 张卡。蓝线按每张 decode 卡算，从 307 一路涨到 3,321，涨了 10.8 倍。橙线把 prefill 的卡也算进分母，从 204 涨到 12 个 prefill 时的 455 就到顶，只涨 2.2 倍，14 个时回落到 415"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">只除 decode 卡，加 prefill 像白捡；全部卡都算上，到 12 个就到顶</text>

@@ -17,7 +17,6 @@ r"""专题六 · 第三节「KV cache：账、池、复用」的四张图。
    · 「留 10%」照 gpu/../tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:99 的 --gpu-memory-utilization 0.9。
    · V4-Pro 两池实验：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5（约 L849–896，
      每张 decode GPU 的 e2e 输出吞吐，ISL 4096／8192，OSL 1024，关 radix cache）。
-   · block 16→256 步时 428→283 µs：tpu/tpu-inference/.../BLOG-systems-engineering-playbook.md L395–405
      （原文 Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood」）。
    · 其余（batch 上限、搬回 vs 重算的交点）都是本课推导，下面每个数一条断言。
 
@@ -290,8 +289,6 @@ def fig_paged():
     yb = f.src(y0 + PH + 10,
                "出处：Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention（SOSP'23, arXiv 2309.06180）—— "
                "块级写时复制、并行采样与 beam search 共享块；原文统计既有系统 KV 显存里真正存 token 状态的只有 20.4%–38.2%，vLLM 达 96.3%。",
-               "出处：428 → 283 µs：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/BLOG-systems-engineering-playbook.md L395–405，"
-               "原文 Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」；512 并发 decode 步时。",
                "口径：每块 4 个 token 只为画得下；真实系统常用 16（GPU）或 256（TPU 上这个模型）。物理块编号是示意。")
     f.save("fig6-paged.svg", yb + 14)
 

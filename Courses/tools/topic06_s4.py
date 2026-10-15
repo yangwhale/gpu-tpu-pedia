@@ -33,7 +33,7 @@ __FIG_S4_CONC__
   <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
     8 张卡合计 9,032 × 8 × 0.060 s，反推 decode 批里约 4,335 个请求，每卡约 540。
     并发按客户端计，是另一个数：这组基线每个前端 600 路、共 14 个前端，合计 8,400 路，没进批的都在 prefill 那边排队。</p>
-  <p>槽位也不白给。换成 4K 输入那组（3.4），每卡 batch 从 886 加到 999，峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 ms：每一步要算的人多了，这一步就长了。</p>
+  <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 ms：每一步要算的人多了，这一步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
     XLA 按静态形状编译，batch 大小也是形状的一部分。SGLang-JAX 的做法是为几种 batch 大小提前编译好计算图；
     实际人数不在档位上时，通常补到最近的一档，补出来的行照样参与计算。来由见

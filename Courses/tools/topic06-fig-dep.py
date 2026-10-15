@@ -3,7 +3,6 @@ r"""专题六 · 第六节「切专家与注意力：TEP 和 DEP」的三张静�
 
 回答的问题
   · fig6-dep-kv   同样 8 张卡、同样每卡的 KV 预算，TEP 和 DEP 各放得下几个请求？倍数由什么决定？
-  · fig6-dep-feed DEP8 的 decode 为什么光加 decode 卡没用？（prefill 台数 → 每块 decode 卡吞吐）
   · fig6-dep-tpu  TPU 上换成 DP 注意力，赢多少？跟并发什么关系？
 
 数从哪来
@@ -148,49 +147,6 @@ def _axes(f, x0, y0, w, h, ymax, yticks, fmt):
     f.line(x0, y0 + h, x0 + w, y0 + h, GY2, 1.2, arrow=False)
 
 
-def fig_dep_feed():
-    f = Fig(W, "GB300 上 V4-Pro 用 vLLM，decode 固定为 DEP8 共 8 块卡，8K 进 1K 出、并发 1024，逐台加 prefill。"
-               "1 台 prefill 时每块 decode 卡每秒只输出 307 个 token，出字间隔 5.4 毫秒；加到 14 台涨到 3321，几乎是一条直线。"
-               "16 台时撞上一个失效模式，只测到 2799。输入减半成 4K 时，同样台数的 prefill 喂出约两倍。"
-               "出字间隔一直只有 5 到 15 毫秒，说明 decode 一直在等 prefill 喂料")
-    y0 = f.header("DEP8 的 decode 一直在等喂料　——　<tspan font-weight=\"700\">prefill 1 → 14 台，每卡 307 → 3,321</tspan>",
-                  "GB300 · V4-Pro · vLLM。decode 固定 DEP8（8 块卡），并发 1,024。纵轴：每块 decode 卡每秒输出多少 token",
-                  [(BL, "8K 进 1K 出"), (OR, "4K 进 1K 出（同一套 decode 不重启）"), (RD, "失效模式，数不完整")])
-    PH = 430
-    py = f.panel(0, y0, W, PH, "prefill 台数 → 每块 decode 卡的输出吞吐", BL)
-    X0, PW, PY, PHH = 110, 1240, py + 30, PH - 110
-    XMAX, YMAX = 16, 3600
-    _axes(f, X0, PY, PW, PHH, YMAX, [0, 1000, 2000, 3000], lambda v: format(v, ","))
-
-    def px(n):
-        return X0 + PW * n / XMAX
-
-    def py_(v):
-        return PY + PHH - PHH * v / YMAX
-    for n in (1, 2, 4, 6, 8, 10, 12, 14, 16):
-        f.t(px(n), PY + PHH + 22, str(n), GY, size=14, anchor="middle")
-    f.t(X0 + PW / 2, PY + PHH + 48, "prefill 台数（每台 TP4，4 块卡）", GY, size=15, anchor="middle")
-    f.path([(px(n), py_(v)) for n, v, _ in FEED], BL, 2.6, arrow=False)
-    for n, v, _ in FEED:
-        f.box(px(n) - 5, py_(v) - 5, 10, 10, BL, BL, 5)
-    f.path([(px(14), py_(3321)), (px(16), py_(FEED_BAD[1]))], RD, 1.6, "5 4", arrow=False)
-    f.box(px(16) - 5, py_(FEED_BAD[1]) - 5, 10, 10, RD, RD, 5)
-    f.t(px(16) - 8, py_(FEED_BAD[1]) + 26, "16 台：失效", RD, True, 15, "end")
-    f.path([(px(n), py_(v)) for n, v in FEED4K], OR, 2.4, arrow=False)
-    for n, v in FEED4K:
-        f.box(px(n) - 5, py_(v) - 5, 10, 10, OR, OR, 5)
-    f.t(px(4) + 12, py_(2222) - 8, "输入减半，同样台数喂出约 2 倍", OR, True, 15)
-    f.t(px(1) + 12, py_(307) - 12, "307", BL, True, 18)
-    f.t(px(14) - 4, py_(3321) - 14, "3,321", BL, True, 18, "end")
-    f._pan = None
-    yb = y0 + PH + 10
-    yb = f.src(yb + 10,
-               "gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:711-724（8k1k，并发 1,024，sa-bench 开环，表中 Output tok/s ÷ 8）、"
-               ":727-734（4k1k 重扫，倍数 2.06／2.07／1.90／1.99）、:736 起（16 台时的失效模式 B）。TP4 decode 加第 4 台 prefill，21,100 → 20,479，见同文件 :488。",
-               "这组是 2026-07-24 的旧记录，runbook 注明「本文未重测」；14 台那一点出字间隔原表没给。")
-    f.save("fig6-dep-feed.svg", yb + 14)
-
-
 def fig_dep_tpu():
     f = Fig(W, "tpu-inference 的一个公开 PR，在 TPU v7x-8 上跑 Qwen3.5-397B-A17B-FP8，比较 TP 等于 8 和 DP 注意力等于 8，专家都走 EP。"
                "1K 进 8K 出时，并发 64 打平，128 多 14%，256 多 22%，512 多 62%。8K 进 1K 出时依次多 14%、23%、36%、40%。"
@@ -238,5 +194,4 @@ def fig_dep_tpu():
 
 
 fig_dep_kv()
-fig_dep_feed()
 fig_dep_tpu()
