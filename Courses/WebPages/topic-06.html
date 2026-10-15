@@ -1143,7 +1143,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>最后看叠起来有多大（第二、十四节）。</b>同一套 GB300（NVIDIA 整柜 GPU）跑 DeepSeek-V4-Pro，光改软件，同一交互档（同样的出字速度）每卡吞吐是首发日的 5.1 倍（含 MTP，见 2.2）。</li>
   </ul>
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
-    同等 GPT-3.5 水平的推理价格，2024 年 10 月已不到 2022 年 11 月的 1/280（斯坦福 AI Index 2025），系统这一侧能不能单独拆出来，14.3 再说。</p>
+    同等 GPT-3.5 水平的推理价格，从 2022 年 11 月到 2024 年 10 月降到原来的 1/280 以下（斯坦福 AI Index 2025），系统这一侧能不能单独拆出来，14.3 再说。</p>
   <h3 id="s0-2">0.2　一个请求的一生</h3>
 <figure class="fbox fwide" id="fig-s0-life"><svg viewBox="0 0 1400 824" width="100%" role="img" aria-label="一个请求的一生，示意时间线。请求进门后可能先排队；然后 prefill 一次把整段 prompt 算完，同时把 prompt 每个 token 的 KV 写进显存，算完吐出第一个字。从进门到第一个字的时间叫 TTFT。之后进入 decode：每一步只出一个字，每一步都要把全部权重和到目前为止的全部 KV 从显存读一遍，KV 每一步长一格。相邻两个字之间的时间叫 TPOT。出到结束符为止。prefill 一次读权重分给整段 prompt，吃的是算力；decode 一次读权重只出一个字，吃的是带宽"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个请求的一生　——　<tspan font-weight="700">一大块 prefill，接一长串一步一字的 decode</tspan></text>
@@ -5818,7 +5818,7 @@ body.figonly section h3{margin-top:34px}
   </ul>
 
   <details class="foldfig"><summary><b>考考自己</b>：一个模型有 4 个 KV 头，8 张卡开 TEP8，换 DEP8 后 KV 容量最多是原来的几倍？什么情况下涨了也没用？</summary>
-  <p>是 TEP8 的 8 ÷ 4 ＝ 2 倍。prefill 喂不上、或 batch 大到算力先到顶时，放得下也换不来吞吐，6.2 的 V4-Pro 就是。</p></details>
+  <p>8 ÷ 4 ＝ 2，是 TEP8 的 2 倍。prefill 喂不上、或 batch 大到算力先到顶时，放得下也换不来吞吐，6.2 的 V4-Pro 就是。</p></details>
 
 </div></section>
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>切序列：DCP 和 PCP</h2></div>
@@ -6896,7 +6896,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">橙线在 12 个 prefill 时到顶，再加就开始稀释每卡产出，配比到这里就够了。</text>
 </svg><figcaption><b>同一组实测，两条线。</b><span class="capmore"><br><em>蓝线是 runbook 原口径，橙线是本课换了分母重算的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md §12.3（2026-07-24 实测，runbook 注明本文未重测；12 个时取原表的 3,187，25,500 ÷ 8 ＝ 3,187.5）；prefill 为 TP4 见同文件 §0。</p>
 <p>⚠️ 本课推导：橙线 ＝ output ÷（4 × prefill 个数 ＋ 8）。16 个 prefill 那档撞上失效模式 B、只跑出部分结果，没画。同一 runbook 的 4K 输入重扫显示每个 prefill 喂料约翻倍（1 个 prefill 时 2.06 倍），曲线形状随输入长度变。</p></details></figure>
-  <p>只除 decode 卡，每卡最多是 1 个 prefill 时的 10.4 倍，这是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只到 2.2 倍。曲线是 2026-07-24 的历史实测，只看趋势。</p>
+  <p>只除 decode 卡，12 个 prefill 时每卡是 1 个时的 10.4 倍，这是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只到 2.2 倍。曲线是 2026-07-24 的历史实测，只看趋势。</p>
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
   <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b>图是 MiMo-V2-Flash 在 TPU 上的三种摆法（pod＝一组 4 颗芯片）：</p>
@@ -8656,7 +8656,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>2022-11</b>：独立小模型当草稿，报单请求速度是不投机的 2–3 倍。</li>
     <li><b>2024-01</b>：Medusa 在大模型上加几个解码头，报速度是不投机的 2.2–3.6 倍；EAGLE 用大模型的隐状态（出字前那层的向量）猜，是不投机的 2.7–3.5 倍。</li>
     <li><b>2024-12</b>：DeepSeek-V3 的 MTP 第 2 个字接受率 85–90%，速度约是不开 MTP 的 1.8 倍。</li>
-    <li><b>2025-03</b>：EAGLE-3 融合大模型浅、中、深三层的状态，单请求速度最多是不投机的 6.5 倍，batch 64 时吞吐仍是 1.38 倍（SGLang）。</li>
+    <li><b>2025-03</b>：EAGLE-3 融合大模型浅、中、深三层的状态，单请求速度最多是不投机的 6.5 倍，batch 64 时吞吐仍是不投机的 1.38 倍（SGLang）。</li>
     <li><b>2026-07</b>：DeepSeek 的 DSpark 草稿每步出一小段，验几个看置信度；摘要报吞吐相同时单用户生成比线上 MTP-1 快 60–85%。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s11-tree"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="投机解码的草稿从哪来，按时间排在 2022 到 2026 年的轴上。2022 年 11 月投机解码：另放一个独立小模型打草稿。2024 年 1 月 Medusa：大模型头上加几个解码头；同期 EAGLE：小模型读大模型的隐状态来猜。2024 年 12 月 DeepSeek-V3 的 MTP：预训练时就多带一层，共享输出头。2025 年 3 月 EAGLE-3：把大模型几层的隐状态拼在一起来猜。2026 年 7 月 DSpark：半自回归一次出一小段，按置信度决定验几个。侧枝 2023 年 11 月 Prompt Lookup：不用草稿模型，直接从 prompt 里抄"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -9779,7 +9779,7 @@ body.figonly section h3{margin-top:34px}
   <p class="landing">⭐ 八问归到一句话：<b>decode 每一步都要搬一趟。</b>前四问算清这一趟有多重、能分给多少人；后四问要么让更多人分，要么让它变轻。</p>
   <h3 id="s14-cost">14.3　回到时间轴：系统这一侧省了多少</h3>
   <p>0.1 里降到 1/280 以下的是市场价，混着更强的小模型、硬件换代和系统招数，报告主要归给小模型，硬件账是每年成本降 30%、能效升 40%；系统那份拆不出来。</p>
-  <p>Epoch AI（2025）换个口径：固定一档能力，推理价格每年降到上一年的 1/9 到 1/900，中位 1/50；只看 2024 年以后，中位是每年降到 1/200。提速恰与第八到十二节那批招数进生产同期（本课观察，Epoch 没做归因）。</p>
+  <p>Epoch AI（2025）换个口径：固定一档能力，推理价格每年降到上一年的 1/9 到 1/900，中位是 1/50；只看 2024 年以后，中位变成 1/200。提速恰与第八到十二节那批招数进生产同期（本课观察，Epoch 没做归因）。</p>
   <p>每行对照对象不同，不能连乘去凑 280；同口径的只有最后一行。</p>
   <div class="tbl-wrap"><table>
     <tr><th>年份</th><th>泳道</th><th>节</th><th>一个实测（对照谁）</th></tr>

@@ -53,7 +53,7 @@ __FIG_S6_TPU__
   </ul>
 
   <details class="foldfig"><summary><b>考考自己</b>：一个模型有 4 个 KV 头，8 张卡开 TEP8，换 DEP8 后 KV 容量最多是原来的几倍？什么情况下涨了也没用？</summary>
-  <p>是 TEP8 的 8 ÷ 4 ＝ 2 倍。prefill 喂不上、或 batch 大到算力先到顶时，放得下也换不来吞吐，6.2 的 V4-Pro 就是。</p></details>
+  <p>8 ÷ 4 ＝ 2，是 TEP8 的 2 倍。prefill 喂不上、或 batch 大到算力先到顶时，放得下也换不来吞吐，6.2 的 V4-Pro 就是。</p></details>
 '''
 
 FIGS = {
