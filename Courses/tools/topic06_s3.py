@@ -48,7 +48,7 @@ __FIG_S3_POOL__
   <h3 id="s3-5">3.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样（同一段 system prompt、多轮对话的前几轮），这段的 KV 留着，下一个直接接着算。</p>
   <ul>
-    <li><b>RadixAttention。</b>SGLang 把缓存的前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多是当时其他系统的 6.4 倍（整套运行时的结果）。</li>
+    <li><b>RadixAttention。</b>SGLang 2023 年把前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多是当时其他系统的 6.4 倍（整套运行时）。</li>
     <li><b>默认就开。</b>vLLM 早先的前缀缓存命中率低时反而拖慢，默认关；2025 年 1 月 V1 改了数据结构，命中率为 0 也只掉不到 1%，才默认打开。</li>
     <li><b>命中率可以很高。</b>DeepSeek 线上过半输入命中磁盘上的 KV。命中部分按十分之一计价（DeepSeek API 文档 2024-08）。</li>
   </ul>
@@ -69,7 +69,7 @@ __FIG_S3_DISK__
 __FIG_S3_OFFLOAD__
   <p>V3 的盈亏带宽只要 2.19 GB/s；GQA 的 Llama-3.1-70B 每 FLOP 摊到的 KV 字节多，链路至少 5.35 GB/s 才划算。</p>
   <ul>
-    <li><b>llm-d</b> 在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。</li>
+    <li><b>llm-d</b> 2026 年在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 → 0.56 s，P90 2.1 → 0.5 s，总吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。</li>
     <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下分层存 KV；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.3。</li>
     <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储）；官方博客报长上下文和多轮对话下吞吐最多 6 倍、首字最多降 80%（对全部重算）。vLLM 0.11 也自带了 CPU 下放（OffloadingConnector），下放成了两大引擎的标配。</li>

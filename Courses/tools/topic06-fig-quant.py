@@ -360,7 +360,7 @@ def fig_kvlayout():
         x = X0
         for lab, b, col in segs:
             w = b * SC
-            tint = {PU: "#f3e8fd", CY: "#e0f7fa", OR: "#fde7d4", GY: "#f1f3f4"}[col]
+            tint = {PU: "#f3e8fd", CY: "#e0f7fa", OR: "#fde7d4", GY: "#d5d8dc"}[col]   # R43：原 #f1f3f4 近白，和图例深灰对不上
             f.box(x, yy, w, BH, tint, col, 3, 1.4)
             if lab in LBL:
                 cx = x + w / 2

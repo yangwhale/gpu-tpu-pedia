@@ -31,7 +31,7 @@ __FIG_S14_EIGHT__
     <tr><td>2023</td><td>复用与下放</td><td>三</td><td>SGLang（含 RadixAttention）：吞吐最多 6.4 倍（对当时其他系统）</td></tr>
     <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：每层 KV 是同形状 MHA 的约 1/57、GQA（Llama-3.1-70B）的约 1/3.6（本课推导）</td></tr>
     <tr><td>2024</td><td>调度</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求 2.6–3.7 倍（对 vLLM）</td></tr>
-    <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同等延迟要求下多接 7.4 倍请求（对不拆）</td></tr>
+    <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同等延迟要求下能接的请求是不拆的 7.4 倍</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：命中按十分之一计价；2025-02 线上 56.3% 输入命中</td></tr>
     <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 的 MTP：约快 1.8 倍（对不开）</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 线上多接 115%（A800）、107%（H800）请求（对此前系统，FAST'25）</td></tr>
@@ -41,8 +41,8 @@ __FIG_S14_EIGHT__
     <tr><td>2025</td><td>KV 与注意力</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（对 V3.1-Terminus 全读）</td></tr>
     <tr><td>2025</td><td>拆开放</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
     <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：模型卡称低延迟模式生成约快 2 倍（未写对照精度）</td></tr>
+    <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>NVFP4 KV：比 FP8 KV 再省约一半，前缀命中率高 20%（对 FP8 KV）</td></tr>
     <tr><td>2026</td><td>复用与下放</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90 首字 2.1 s → 0.5 s（对不卸载）</td></tr>
-    <tr><td>2026</td><td>解码提速</td><td>十一</td><td>K3 开投机：每字间隔 11.1 → 2.31 ms；并发 64 时吞吐只剩 1.74×（对不开）</td></tr>
     <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变：每卡从 Day-0（首发当天）约 2,200 到约 11,200，5.1 倍，全来自软件栈（含 MTP；PyTorch 博客 2026-06-23）</b></td></tr>
   </table>
   <p>落到真实账上：DeepSeek 2025-03 公布的一天（2025-02-27～28），平均 226.75 个 H800 节点（8 卡一节点，合 1,814 卡）处理输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950 token（全天平均，本课推导：7,760 亿 ÷ 86,400 s ÷ 1,814 卡），近八成是输入。</p>
