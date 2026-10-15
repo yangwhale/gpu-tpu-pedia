@@ -148,6 +148,13 @@ FOOT = '''
 
 _html = head + HERO + BODY + FOOT
 _html = P.place_figs(_html, FIGS)
+# R69（2026-10-15）：内联 SVG 的 id 全页共享，url(#x) 一律指向第一份定义。现在同名的
+#   （grid／sh／ah-<颜色>）内容逐字相同所以无害；哪天同名不同内容，后面的图会静默画错 —— 这里拦住。
+_defs = {}
+for _f, _s in re.findall(r'<figure[^>]*\sid="([^"]+)"[^>]*>\s*(<svg\b.*?</svg>)', _html, re.S):
+    for _m in re.finditer(r'<(\w+)\b[^>]*\sid="([^"]+)"(?:[^>]*/>|.*?</\1>)', _s, re.S):
+        _p = _defs.setdefault(_m.group(2), (_m.group(0), _f))
+        assert _p[0] == _m.group(0), "SVG id「%s」在 %s 和 %s 里定义不同，url(#%s) 会指错" % (_m.group(2), _p[1], _f, _m.group(2))
 # R40（2026-10-15）：表格套共用的 .tbl-wrap（overflow-x:auto），窄屏下在表格自己里面横滚，
 #   不再撑破整页。s 文件里的 <table> 都是裸的，所以在这里统一套；已经套过的不重复套。
 _nt = _html.count("<table>")
