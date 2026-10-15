@@ -139,7 +139,7 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s7-kv-dup-t5</code>，再滚到 <code>fig-s7-softmax-merge-t5</code>。</p>
 
-<p class="say">「专题五讲过 DCP：KV 按 token 轮流存，每张卡算完自己那段，连 softmax 的分母一起交出来，合并时统一归一。代价是每层多几次通信。」</p>
+<p class="say">「专题五讲过 DCP：KV 按 token 轮流存，每张卡算完自己那段，连 softmax 的分母一起交出来，合并时统一除分母。代价是每层多几次通信。」</p>
 
 <p>💬 <b>互动</b>：图出来之前问「同一个 Kimi K3，4K 输入和 128K 输入，DCP8 在哪边赚、哪边亏？」举手二选一。期望答案：<b>128K 赚，4K 亏</b>。答反了的，追问一句「4K 的 KV 放不放得下」。</p>
 
@@ -231,7 +231,7 @@ Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上
 <p class="say">「第二个前提是 KV 别太胖。有篇论文把 prefill 放到另一个数据中心。橙柱是全注意力，一条专线只够并一两台；绿柱是混合模型，能并十几二十台，台数本课推的。而且只把长 prompt 送去远端。<br>
 论文推算的案例吞吐多了一半；按同等成本算，只多一成半左右。」</p>
 
-<p class="say">「这一趟搬多少没变，变的是 decode 不再被 prefill 打断。开两个仓库这一步：DistServe 同样延迟多接七点四倍请求，Mooncake 线上多接一倍多。<br>
+<p class="say">「这一趟搬多少没变，变的是 decode 不再被 prefill 打断。开两个仓库这一步：DistServe 同样延迟请求能接七点四倍，Mooncake 线上多接一倍多。<br>
 所以接下来第九节：prefill、decode 各配几台，这个负载到底该不该拆。」</p>
 """, """
 ⛔ <b>别把 1.04 GB 说成 V4-Pro 的 KV</b>：它是专题五那把统一尺子（Qwen3-Coder-480B 一条 8K prompt），只用来换算。<br>
@@ -242,7 +242,7 @@ Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
 🧑‍🎓 新人「connector 是什么？」→ 推理引擎里在 prefill、decode 两端收发 KV 的插件，课件 0.3 词表就这么写；TPU 上用的是 TPUConnector，8.3 有。<br>
 🛠 GPU 老兵「Mooncake 和 NIXL 到底谁快？」→ vLLM 上 Mooncake 走 NVLink 加简易代理，KV 是快了，整体反而更慢：并发 64 输出 1,333 对 NIXL 的 1,693。换到 SGLang 又是 Mooncake 能用，所以只问这个引擎上哪条路通。<br>
-🛠 GPU 老兵「DistServe 那个 7.4 倍怎么读？」→ 同样的延迟要求下多接 7.4 倍请求，是论文在自己负载上的数；拿到自己的集群要重扫配比，第九节。<br>
+🛠 GPU 老兵「DistServe 那个 7.4 倍怎么读？」→ 同样的延迟要求下能接的请求是 7.4 倍，是论文在自己负载上的数；拿到自己的集群要重扫配比，第九节。<br>
 💰 管预算的「要不要上 RDMA 网卡？」→ 一条 8K prompt 的 KV 约 1.04 GB：800 Gbps 网卡约 10 ms（本课推的），跌到每秒 200 MB 就要五秒多。先确认带宽真跑到设计值，再谈加卡。
 """),
 
