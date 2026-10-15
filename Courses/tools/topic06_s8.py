@@ -26,9 +26,9 @@ __FIG_S8_PD_T5__
   </ul>
 
   <h3 id="s8-2">8.2　回顾：那一趟要多久</h3>
-  <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过 Qwen3-Coder-480B 的一个 8K prompt：KV 约 1.04 GB，走 100 Gbps（每秒 100 吉比特，约 12.5 GB/s）的数据中心网络约 83 ms，前后两段 PCIe（卡和主机之间的总线）各约 10 ms（部署记录里的带宽估算）。</p>
+  <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过 Qwen3-Coder-480B 的一个 8K prompt：KV 约 1.04 GB，走 100 Gbps（约 12.5 GB/s）的数据中心网络约 83 ms，前后两段 PCIe（卡和主机之间的总线）各约 10 ms（部署记录里的带宽估算）。</p>
 __FIG_S8_KV_TRIP_T5__
-  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X（Google Cloud 的 GB200 机型）每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算，多卡并行还更快；本课推导）。</p>
+  <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X（Google Cloud 的 GB200 机型）每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算；本课推导）。</p>
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
@@ -37,7 +37,7 @@ __FIG_S8_STACK__
   <ul>
     <li><b>搬运</b>：把字节从这块显存挪到那块。</li>
     <li><b>调度</b>：决定请求去哪台 prefill、算完交给哪台 decode。tpu-inference 的代理把请求截成只出一个字发给 prefill，再让 decode 端去拉 KV。</li>
-    <li><b>存储</b>：KV 反正已经离开 prefill 机，顺手存到主机内存、SSD 乃至远端，同前缀的下一个请求直接取，不用重算。Mooncake 把这层做成系统中心，接住了 Kimi 的线上流量。</li>
+    <li><b>存储</b>：KV 反正已经离开 prefill 机，顺手存到主机内存、SSD 乃至远端，同前缀的下一个请求直接取，不用重算。</li>
   </ul>
   <p>TPU 这边能直接用的是 tpu-inference 的 TPUConnector；TPU Sync 刚开源，自称还不宜通用。</p>
   <p><b>排查按层找</b>：带宽掉到几百 MB/s 是搬运层没走对通道；请求接不上、握手失败多半在调度层；前缀命中率低看存储层。</p>
@@ -45,14 +45,14 @@ __FIG_S8_STACK__
   <h3 id="s8-4">8.4　GPU 实战：配错一个开关，慢两个数量级</h3>
   <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s，搬一趟比 prefill 还长。</p>
 __FIG_S8_BW__
-  <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。cuda_ipc 只在同一个 NVLink 域里成立。补上三样配置后实测 7–167 GB/s。配错不报错，只是 TTFT 慢；上线前先量一次 KV 传输带宽。</p>
+  <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。补上三样配置后实测 7–167 GB/s。配错不报错，只是 TTFT 慢；上线前先量一次 KV 传输带宽。</p>
   <details class="foldfig"><summary><b>那三样配置</b>：vLLM ＋ NIXL 在 GB300 上走 NVLink</summary>
   <ul>
     <li><code>UCX_TLS=cuda_copy,cuda_ipc,tcp</code>：只留 cuda_ipc（NVLink）和必要的拷贝、控制通道，去掉 RDMA。</li>
     <li><code>UCX_CUDA_IPC_ENABLE_MNNVL=y</code>：允许跨节点的 cuda_ipc（MNNVL 即跨机箱的 NVLink）。</li>
     <li><code>--enable-cumem-allocator</code>：显存用 cuMem 分配，cuda_ipc 才认得出来。</li>
   </ul>
-  <p>prefill 和 decode 还必须在同一个 NVLink 域（GKE 上用 subblock 标签做 podAffinity；pod 是 GKE 调度的一组容器）。出处：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:106、180–194。</p></details>
+  <p>prefill 和 decode 还必须在同一个 NVLink 域（GKE 上用 subblock 标签做 podAffinity）。出处：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:106、180–194。</p></details>
   <p>更麻烦的是，<b>同一个库在两个引擎上结论相反</b>：</p>
   <table>
     <tr><th>引擎 · 场景</th><th>试了什么</th><th>结果</th></tr>
@@ -65,7 +65,7 @@ __FIG_S8_BW__
   <p>别问 NIXL 和 Mooncake 哪个好，要问这个引擎、这张网上哪条路通。共同点只有一个：<b>同一个 NVLink 域里，KV 别出域。</b></p>
 
   <h3 id="s8-5">8.5　混合模型：尾巴不能让 decode 端重算</h3>
-  <p>纯注意力模型的 KV 按 token 一格一格存。老的 connector（引擎里负责收发 KV 的插件）只传填满的整块，不满一块的尾巴让 decode 端补算。</p>
+  <p>纯注意力模型的 KV 按 token 一格一格存。老的 connector 只传填满的整块，不满一块的尾巴让 decode 端补算。</p>
 __FIG_S8_HYBRID__
   <p>GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>

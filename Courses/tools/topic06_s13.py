@@ -29,7 +29,7 @@ __FIG_S13_COLD__
   <h3 id="s13-4">13.4　运维的两个坑</h3>
   <ul>
     <li><b>「起来了」不等于「活着」。</b>V4-Pro 的 SGLang 部署里 14 台 prefill 全崩了，服务注册表还显示 14 台在线。判活要看显存、真发一个请求。</li>
-    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存（runbook 推测是跨机器 NVLink，即 MNNVL，没释放）。<code>mem-fraction-static</code> 是 SGLang 预留给权重和 KV 池的显存比例，设 0.85 时这份预留就再也够不着。</li>
+    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存，SGLang 按 <code>mem-fraction-static</code>（预留给权重和 KV 池的显存比例）0.85 做的静态预留就再也够不着。</li>
   </ul>
 __FIG_S13_LEAK__
 
@@ -45,7 +45,7 @@ __FIG_S13_LEAK__
   <h3 id="s13-6">13.6　编排：把「少算」落到集群层</h3>
   <p>前缀缓存只在一个副本里有效。<b>路由不知道哪个副本存着哪段前缀，命中率就随副本数摊薄。</b></p>
 __FIG_S13_ROUTE__
-  <p>KV 感知路由把同前缀的请求送到已经存着它的副本。图右是 Red Hat 2025-10 用 llm-d 的实测。</p>
+  <p>KV 感知路由把同前缀的请求送到已经存着它的副本（图右，Red Hat 2025-10）。</p>
   <p>llm-d、NVIDIA Dynamo、GKE Inference Gateway 都在做这件事，也都得摘掉坏副本：8 个副本坏 1 个而照常轮询，1/8 的请求白等（本课推导）。</p>
   <p>容量规划沿用 goodput 的思路（<a href="#s2-2">§2.2</a>）：先定交互档，再看这一档每卡扛多少人（2.2 图里那一档约 224 人），decode 卡数 ＝ 同时在生成的请求数 ÷ 每卡人数；分母的坑见 2.3。</p>
 

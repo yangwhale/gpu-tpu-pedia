@@ -17,7 +17,7 @@ __FIG_S9_RATIO_T5__
   <h3 id="s9-2">9.2　配比公式：先算一个起点</h3>
   <p><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b></p>
   <table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">DeepSeek-V4-Pro，SGLang，GB300，8K 进 1K 出，每张 decode 卡 11,200 output tok/s 的官方点（官方未写明分母，按 output ÷ decode 卡读；若是全部卡，此表不成立）；推导见 gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:1082–1091。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">DeepSeek-V4-Pro，SGLang，GB300，8K 进 1K 出，每张 decode 卡 11,200 output tok/s 的官方点（分母按 output ÷ decode 卡读，见 2.2；若是全部卡，此表不成立）；推导见 gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:1082–1091。</caption>
     <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
     <tr><td>decode 每秒完成</td><td>8 卡 × 11,200 ÷ 1,024 个输出 token</td><td>约 87.5 个请求</td></tr>
     <tr><td>prefill 要供的料</td><td>87.5 × 8,192 个输入 token</td><td>约 71.7 万 tok/s</td></tr>
@@ -28,16 +28,16 @@ __FIG_S9_RATIO_T5__
   <ul>
     <li><b>9.8 个</b>：上表公式的起点。runbook 实测 prefill 单卡峰值只有 15,196（官方的 83%），照实测还要更多。</li>
     <li><b>8 个</b>：官方高并发配方（high-conc-8p1d）的取值，比公式少。</li>
-    <li><b>14 个</b>：runbook 早期自己扫的（历史数据）：prefill 8 个时每张 decode 卡输出 6,788，14 个时 8,809，16 个时 8,993；14 到 16 只涨 2%，已喂饱，于是定为默认（runbook:43、1117）。</li>
+    <li><b>14 个</b>：runbook 早期自己扫的：prefill 8 个时每张 decode 卡输出 6,788，14 个时 8,809，16 个时 8,993；14 到 16 只涨 2%，已喂饱，于是定为默认（runbook:43、1117）。</li>
   </ul>
   <p>自己上线时，用公式算起点，在起点上下扫，取每卡输出不再涨的那一档。</p>
 
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
-  <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上再加一台 prefill：总输出几乎没动，每张卡反倒掉了。</p>
+  <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上再加一台 prefill。</p>
 __FIG_S9_2P1D__
-  <p>用户那头变化却大：P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 的 SLO（对用户承诺的延迟上限）看是赚。</b></p>
+  <p>用户那头变化却大：P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 看是赚。</b></p>
   <ul>
-    <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph（把一串 GPU 调用录好、整段重放），TPOT 偏高，不比。</li>
+    <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph，TPOT 偏高，不比。</li>
     <li><b>为什么吞吐不涨</b>：固定并发压测下每个请求要跑约 65 s，平均首字省下的 0.67 s（2.40 → 1.73 s） 摊进整轮周转几乎看不出来。</li>
   </ul>
 
@@ -65,7 +65,7 @@ __FIG_S9_AFD_T5__
   <p>开源实现没这么顺。vLLM 的 AFD 是外部插件，主仓库 RFC 已因不活跃被关闭；插件博客在 Ascend 910C 上的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
-    <li><b>配比是关键</b>：注意力给少了，专家就在等（图）；作者说 64 配 16 时专家侧仍有余力，注意力再加可能还涨。</li>
+    <li><b>配比是关键</b>：作者说 64 配 16 时专家侧仍有余力，注意力再加可能还涨。</li>
     <li><b>只能看趋势</b>：实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：AFD 的几个数</summary>

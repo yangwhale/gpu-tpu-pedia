@@ -17,7 +17,7 @@ __FIG_S6_TEPDEP_T5__
     同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐从 1,319 涨到 2,758，是 <b>2.09 倍</b>。</p>
   <p>原始记录把功劳记给容量：副本让出的显存多收了请求。拿 Little 定律（4.3）核一下：</p>
 __FIG_S6_KV__
-  <p>容量没帮上忙，<b>变的是步时</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
+  <p><b>变的是步时</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
   <ul>
     <li><b>换个模型</b>：MLA 开 TEP8 是 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，是 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</li>
   </ul>
@@ -37,19 +37,19 @@ __FIG_S6_KV__
   <p>tpu-inference 的一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
     Qwen3.5-397B 在 v7x-8 上，<b>1K 进 8K 出、并发 512 时，DP=8 比 TP=8 的输出吞吐多 62%</b>。</p>
 __FIG_S6_TPU__
-  <p>一种解读：Qwen3.5 的全注意力层只有 2 个 KV 头，8 路 TP 下每个头要在 4 张卡上各存一份（6.2，本课推导，PR 没归因）。另一种：PR 命令里的 --max-num-seqs=64（同时最多跑 64 条）可能限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>一种解读：8 路 TP 下全注意力层的 KV 复制 4 份（6.2，本课推导，PR 没归因）。另一种：PR 命令里的 --max-num-seqs=64（同时最多跑 64 条）可能限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
   <p>读 TPU 启动参数要多一步：tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 
   <h3 id="s6-6">6.6　名字别照字面套</h3>
-  <p>TEP／DEP 是 TRT-LLM（NVIDIA 的推理引擎）的叫法，不等于 Megatron（NVIDIA 的训练框架）的 ETP／EDP，那是专家层内部再分的 TP 组和数据并行组。连 prefill、decode 各用哪个，vLLM 部署 K3 和 TRT-LLM 的例子都正好相反（<a href="topic-05.html#s8-6">专题五 §8.6</a>）。</p>
+  <p>TEP／DEP 是 TRT-LLM 的叫法，不等于 Megatron（训练框架）的 ETP／EDP，那是专家层内部再分的 TP 组和数据并行组。连 prefill、decode 各用哪个，vLLM 部署 K3 和 TRT-LLM 的例子都正好相反（<a href="topic-05.html#s8-6">专题五 §8.6</a>）。</p>
 
   <h3 id="s6-7">6.7　大 EP 为什么省</h3>
   <p>DeepSeek 的 decode 把专家铺到 144 张卡（18 个节点），每张卡只放 2 个路由专家加 1 个共享专家：</p>
   <ul>
     <li><b>读得少</b>：每张卡只读几个专家，一步更快，空出显存给 KV。</li>
     <li><b>车坐得满</b>：上百张卡的请求汇到同一个专家，每步分到的行数从 1.4 算的平均 8 行往上涨，朝所在硬件的屋脊点靠近。</li>
-    <li><b>通信藏起来</b>：把每个 token 送到它选中专家所在的卡，这一步 all-to-all 用 DeepEP（DeepSeek 开源的专家通信库）；一批再拆成两个微批，一个传、一个算。</li>
+    <li><b>通信藏起来</b>：把每个 token 送到它选中专家所在的卡，这一步 all-to-all 用 DeepEP（DeepSeek 开源）；一批再拆成两个微批，一个传、一个算。</li>
   </ul>
   <p>所以专家那头，大 EP 让一趟分给更多行；注意力那头，DEP 省掉每步白读的 KV 副本。</p>
 

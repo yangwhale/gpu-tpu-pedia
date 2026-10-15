@@ -7,7 +7,7 @@
 
 BODY = '''
   <p class="lead">第三节算的是有几个座位，这一节管座位别空着：decode 每一步都搬一趟权重，同一步拼进来的人越多，每人分摊越少。
-    <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–3.7 倍；配流水线并行跑 Falcon-180B，达标容量最多 5.6 倍（摘要没写对照谁）。</p>
+    <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–3.7 倍。</p>
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
 __FIG_S4_GANTT__
@@ -28,19 +28,17 @@ __FIG_S4_CHUNK__
   <h3 id="s4-3">4.3　槽位满了以后</h3>
 __FIG_S4_CONC__
   <p>槽位就是 KV 池装得下几个人。Little 定律（见词表）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
-  <p>GB300 上 V4-Pro 的 dep8（8 路 DEP，第六节讲）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
+  <p>GB300 上 V4-Pro 的 dep8（第六节）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
     客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 那边排队。</p>
   <details class="foldfig"><summary><b>Little 定律核一遍</b>：批里到底几个人？</summary>
   <p>9,032 × 8 张 decode 卡 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 540。</p></details>
   <p>槽位也不白给。3.4 那组每卡多装 13% 的人（886 → 999），端到端只多 0.8%，TPOT 从 77.7 拖到 85.3 ms：人多了，每步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
-    XLA（JAX 背后的编译器）按静态形状编译，batch 大小也是形状。SGLang-JAX 为几档 batch 提前编译，
-    人数不在档位上就补到最近一档，补的行照样计算（<a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>）。</div>
+    XLA 按静态形状编译，batch 大小也是形状：人数不在预编译的档位上就补到最近一档，补的行照样计算（<a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>；选档见 <a href="#s13-1">13.1</a>）。</div>
 
   <h3 id="s4-4">4.4　CPU 那几毫秒也要藏起来</h3>
 __FIG_S4_OVERLAP__
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
-  <p>SGLang-JAX 让加速器算第 N 批时 CPU 先排第 N+1 批，两边重叠。</p>
 
   <h3 id="s4-5">4.5　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
