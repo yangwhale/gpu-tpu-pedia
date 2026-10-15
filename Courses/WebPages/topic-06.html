@@ -1432,7 +1432,7 @@ body.figonly section h3{margin-top:34px}
     <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b></p>
 
   <h3 id="s1-1">1.1　一次喂几行，决定卡在哪</h3>
-  <p>v7 按 bf16（每个数 2 字节）算，每读 1 字节要做满 313 次运算才不被带宽拖住，这叫屋脊点（见词表）。
+  <p>v7 按 bf16（每个数 2 字节）算，每读 1 字节要做满 313 次运算才不被带宽拖住，这叫屋脊点。
     矩阵乘一次喂进 M 行，每个权重就要做 M 次乘加（2M 次运算），而它只占 2 字节：只算读权重，每字节的运算次数（强度）就是 2M ÷ 2 ＝ M。</p>
 <figure class="fbox fwide" id="fig-s1-ai"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="运算强度随一次喂进的行数 M 变化的曲线，横纵都是对数轴。矩阵是 7168×7168 的 bf16 权重。M＝1 时强度约 1，远低于 v7 的屋脊点 313；decode 一次 64 个人是 63，256 个人是 239，仍在屋脊点下面；prefill 一段 4K 的 prompt，M＝4096，强度 1,911，远在屋脊点上面。曲线在 M≈343 处穿过屋脊点"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一次喂几行，决定卡在哪　——　<tspan font-weight="700">decode 在屋脊点下面，prefill 在上面</tspan></text>
@@ -1505,14 +1505,14 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="739" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 再多拼人也难过线，prefill 一段 prompt 就远远过线</tspan></text>
 <text class="svgsm" x="20" y="770" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">decode 一步每人只喂 1 行，256 个人拼一起也才 239；prefill 一段 4K prompt 一次就是 4,096 行。</text>
 <text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以同一块芯片，prefill 时算力是瓶颈，decode 时显存带宽是瓶颈。</text>
-</svg><figcaption><b>绿点全在红线下面，橙点在上面。</b><span class="capmore"><br><em>7168×7168 bf16 矩阵乘，读权重、读输入、写输出都算进字节；本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 7168 ＝ DeepSeek-V3 config.json 的 hidden_size。屋脊点 313 ＝ v7 每芯片 bf16 2,307 TFLOP/s ÷ HBM 7.37 TB/s（Google Cloud 公开规格；bf16 是 FP8 4,614 的一半，本课推导；专题二同一个数）。</p>
+</svg><figcaption><b>绿点全在红线下面，橙点在上面。</b><span class="capmore"><br><em>读权重、读输入、写输出都算进字节；本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 7168 ＝ DeepSeek-V3 config.json 的 hidden_size。屋脊点 313 ＝ v7 每芯片 bf16 2,307 TFLOP/s ÷ HBM 7.37 TB/s（Google Cloud 公开规格；bf16 是 FP8 4,614 的一半，本课推导；专题二同一个数）。</p>
 <p>📌 本课推导：运算 2·M·H²，字节 2·(H² ＋ 2·M·H)（权重读一遍、输入读一遍、输出写一遍，bf16 每数 2 字节），强度 ＝ M·H ÷ (H ＋ 2M)。令它等于 313 解出 M ≈ 343。</p>
 <p>⚠️ 只算权重时强度就是 M，过线点正好是 313（专题五 fig5-decode-ai 的口径）；这里把输入输出也算上，过线点往右挪到 343。</p>
 <p>⚠️ 刻意没画：注意力（它读的是 KV，强度不随人数涨，第五节讲）和 MoE 专家层（见本节专家行数那张图）。</p></details></figure>
-  <p>算上输入、输出的读写，M 要到 343 才过线；M 再大，这部分字节也跟着涨，强度最多到 hidden（每个字的向量长度，V3 是 7,168）的一半。</p>
+  <p>曲线比 M 低一点，是因为输入、输出也要读写；M 越大它们越多，强度最多到 hidden（每个字的向量长度，V3 是 7,168）的一半。</p>
 
   <h3 id="s1-2">1.2　一个人解码一步：5 毫秒在读，0.016 毫秒在算</h3>
-  <p>V3 的 370 亿激活参数按 FP8（每个 1 字节）存，一步要读 37 GB。</p>
+  <p>decode 每出一个字，都要把 V3 的 370 亿激活参数从显存读一遍；按 FP8（每个 1 字节）存，就是 37 GB。</p>
 <figure class="fbox fwide" id="fig-s1-b1"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="DeepSeek-V3 一个人解码一步，在一颗 TPU v7 上的时间账。要读的权重是 37 GB（370 亿激活参数，FP8 每个 1 字节），按 7.37 TB/s 读完要 5.02 毫秒；要做的运算是 740 亿次，按 FP8 峰值算只要 0.016 毫秒。算力只用了 0.32%，恰好是 313 分之一"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个人解码一步：<tspan font-weight="700">读权重 5.02 ms，算只要 0.016 ms</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，batch 1，一颗 TPU v7 的规格，只算权重。两根条用同一把时间尺</text>
@@ -1558,7 +1558,7 @@ body.figonly section h3{margin-top:34px}
 <p>📌 本课推导：37e9 ÷ 7.37e12 ＝ 5.02 ms；2 × 37e9 ÷ 4,614e12 ＝ 0.016 ms；比值 0.32% ＝ 2 ÷ (4,614 ÷ 7.37) ＝ 1/313。</p>
 <p>⚠️ 理想下限：只算权重，不算 KV、激活、通信和 kernel 开销，实测只会更慢。</p>
 <p>⚠️ 671 GB（≈ 625 GiB）一颗 192 GiB 的芯片放不下，至少 4 颗（还没算 KV）。摊到 N 颗上，两根条都 ÷N，0.32% 不变。</p></details></figure>
-  <p>算的一侧按 W8A8（权重和激活值都用 8 位）计。这 5 毫秒是 decode 的字节下限：实测每步用时离它越近，带宽用得越满。</p>
+  <p>算的一侧按 W8A8（权重和激活值都用 8 位）计。这 5 毫秒是每步用时的下限，实测离它越近，带宽用得越满。可这一趟只出了一个字。</p>
 
   <h3 id="s1-3">1.3　上下文一长，KV 接过主角</h3>
   <p>权重一次读完能分给一整批人，KV 却是每人自己的历史。</p>
@@ -1638,15 +1638,15 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="739" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">人越多、上下文越长，这一趟里 KV 越重</tspan></text>
 <text class="svgsm" x="20" y="770" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">权重一次读完分给所有人；KV 是每人自己的历史，128K 时每个字要读 9.21 GB，拼多少人都不变。</text>
 <text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">256 人、128K 时 KV 已占 78%：再往后，省的就得是 KV 本身（第三、七节）。</text>
-</svg><figcaption><b>蓝段随人数缩短，紫段只随上下文变长。</b><span class="capmore"><br><em>64 人时 87% 的专家被碰到（一个专家没人挑的概率 (1 − 8/256)<sup>64</sup> ≈ 13%），所以每人摊 9.14 GB，不是 37 ÷ 64。FP8 权重、bf16 KV，路由均匀、上下文等长；不含激活值与通信。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课推导：KV ＝ 70,272 字节／token（MLA 每层存 512 ＋ 64 个数，bf16，61 层，config.json）× 上下文。128K 时 9.21 GB ＝ 8.58 GiB，与专题五同一个数。</p>
+</svg><figcaption><b>蓝段随人数缩短，紫段只随上下文变长。</b><span class="capmore"><br><em>64 人时 87% 的专家被碰到（一个专家没人挑的概率 (1 − 8/256)<sup>64</sup> ≈ 13%），所以每人摊 9.14 GB，不是 37 ÷ 64。路由均匀、上下文等长；不含激活值与通信。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课推导：KV ＝ 70,272 字节／token（MLA 每层存 512 ＋ 64 个数，bf16，61 层，config.json）× 上下文。128K 时 9.21 GB ＝ 8.58 GiB，与专题五同一个数。</p>
 <p>📌 本课推导：b 人一步读的权重 ＝ 不经路由的部分 ＋ 653.9B 路由专家 × [1 − (1 − 8/256)^b]（FP8，每参数 1 字节）。b＝1 时恰好 37 GB，b 很大时趋近 670.5 GB，对上 671B。</p>
 <p>⚠️ 64 人时每人摊到 9.14 GB 而不是 37 ÷ 64：每人挑的专家不同，一步里 87% 的专家都被碰到、都要读。</p>
 <p>⚠️ 假设路由均匀、所有人上下文一样长；没算激活和通信字节。KV 改存 FP8 时紫段减半。</p></details></figure>
-  <p>图里 128K 那份 KV 是 9.21 GB，换成 GiB 就是专题五的 8.58，已经被 MLA 压过一轮。</p>
+  <p>这还是 MLA 压过的 KV（专题五 128K 那份 8.58 GiB）。</p>
 
   <h3 id="s1-4">1.4　MoE 把拼好的 batch 又拆散</h3>
-  <p>拼 batch 是为了让读一次的权重多喂几行。
-    V3 每层有 256 个路由专家，每人只挑 8 个；256 人进来，每个专家平均只分到 8 行，强度跌到约 8。</p>
+  <p>拼 batch，就是让读一次的权重多喂几行。
+    可 V3 每层有 256 个路由专家，每人只挑 8 个；256 人进来，每个专家平均只分到 8 行，按 1.1 强度也只有约 8。</p>
 <figure class="fbox fwide" id="fig-s1-moe"><svg viewBox="0 0 1400 684" width="100%" role="img" aria-label="256 个人一起解码。稠密层里这 256 行一起走同一块权重，正好填满 v7 MXU 256 的一边；MoE 层里每人挑 8 个专家，256 个专家平均每个只分到 8 行，只填满 MXU 一边的 32 分之一，运算强度约 8，离屋脊点 313 很远"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">MoE 把一批人拆散：<tspan font-weight="700">256 人进来，每个专家只分到 8 行</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一批 256 人解码一步。方块是 v7 的 MXU（一边 256），填色的是这一步真正喂进去的行</text>
@@ -1684,7 +1684,8 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 8 是平均数，路由不均时有的专家几十行、有的零行。共享专家每个 token 都过，不受影响。</p></details></figure>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
-    <b>prefill 卡算力，decode 卡带宽；decode 每一步都要把权重和 KV 搬一趟。</b></div>
+    <b>prefill 卡算力，decode 卡带宽；decode 每一步都要把权重和 KV 搬一趟。</b>
+    要让这一趟分给更多人，先得装下更多人的 KV（第三、四节），再把被 MoE 拆散的行收回来（第五、六节）。</div>
 
 </div></section>
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>先校准尺子：指标与口径</h2></div>
@@ -1756,7 +1757,7 @@ body.figonly section h3{margin-top:34px}
 <p>NIM 定义：NVIDIA NIM for LLMs 的 benchmarking 指标页（TTFT 含排队、prefill、网络；ITL also known as TPOT）。AIPerf 沿用同一套。两家对同一个词的口径不同，正文第 2.1 节对照。</p>
 <p>⚠️ 时间线是示意：chunk 带几个字、各段长短都是为了看得清，不对应任何实测；绿块宽度按字数画，表示这几个字是攒在一起才到手的。</p></details></figure>
   <p>TTFT 压测时往往大半是排队：同一个 Gemma4-31B，并发 1 时 86 ms，并发 256 时 7,756 ms。</p>
-    <p>同一个词两家定义可能不同：NVIDIA NIM 的 ITL 是平均值，注明「也叫 TPOT」；vLLM 的 ITL 是逐次间隔的列表。</p>
+  <p>同一个词两家定义可能不同：NVIDIA NIM 的 ITL 是平均值，注明「也叫 TPOT」；vLLM 的 ITL 是逐次间隔的列表。</p>
 
   <h3 id="s2-2">2.2　吞吐和交互性是一条曲线</h3>
 <figure class="fbox fwide" id="fig-s2-pareto"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="横轴是每个用户每秒拿到多少字，纵轴是每张 GPU 每秒出多少字，都是 GB300 上跑 DeepSeek-V4-Pro、8K 进 1K 出。InferenceX 的 vLLM 曲线三个点：每用户 68 时每卡 9,759，121 时 3,816，173 时只剩 895。PyTorch 博客的 SGLang 在每用户 50 处报每卡约 11,200，同一位置首发时只有约 2,200。本仓库实测的 9,168 落在每用户约 17 处。同一套系统沿着曲线往左走，每卡吞吐就往上涨；所以先定交互档，再在这一档上比吞吐"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -1830,8 +1831,8 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 11,200 用的是 output ÷ decode GPU 还是 (in＋out) ÷ 全部 GPU，公开材料没钉死（SGLANG-V4PRO-RUNBOOK.md:745）。本图按前者画，若是后者，这个点要往下挪。</p>
 <p>本仓库实测 9,168：SGLANG-V4PRO-RUNBOOK.md:596（conc600，TPOT 59–61 ms）、723-725。横坐标 1000 ÷ 60 ≈ 17 是本课推导。</p>
 <p>goodput：DistServe（arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）。</p></details></figure>
-  <p>每人等久一点，同一趟就分给更多人。所以先定交互档，再在这一档上比吞吐。GB300 跑 V4-Pro，PyTorch 博客报的每卡 11,200 和模型首发当天的约 2,200 同在每用户约 50 tok/s 这一档。</p>
-  <p>DistServe（2024，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）的 goodput：规定比例（如 90%）的请求同时满足 TTFT 和 TPOT 目标时，每张卡能扛的最大请求速率。</p>
+  <p>每人出字慢一点，一步就能多拼几个人，每卡吞吐就涨（1.3）。所以先定交互档，再在这一档上比吞吐。</p>
+  <p>把档位写进定义的指标叫 goodput（DistServe，2024，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）：规定比例（如 90%）的请求同时满足 TTFT 和 TPOT 目标时，每张卡能扛的最大请求速率。</p>
 
   <h3 id="s2-3">2.3　同一次测量，四把尺子</h3>
 <figure class="fbox fwide" id="fig-s2-rulers"><svg viewBox="0 0 1400 560" width="100%" role="img" aria-label="同一次测量：GB300 上 SGLang 跑 DeepSeek-V4-Pro，decode 用 16 张卡，prefill 用 48 张，共 64 张；8K 进 1K 出，每个输出 token 对应约 8 个输入 token。每把尺子都是圈一堆 token、除以圈中的卡。只圈输出、除以 16 张 decode 卡是 5,270；输入输出都圈、除以全部 64 张是 11,880，超过官方标称的 11,200。另外两种是本课推出来的：只圈输出除以 64 张是 1,318，输入输出除以 16 张是 47,520。最大是最小的 36 倍"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2291,7 +2292,7 @@ body.figonly section h3{margin-top:34px}
 <p>本课推导：(in＋out) ＝ 11,880 × 64 ＝ 760,320；output ÷ 64 ＝ 1,318；(in＋out) ÷ 16 ＝ 47,520。自洽检查：8K 进 1K 出时 in＋out 约为 output 的 9 倍，9 × 84,321 ＝ 758,889，与 760,320 差 0.2%。</p>
 <p>⚠️ token 和卡的小方块只画比例：输出 4 个对输入 32 个 ＝ 1 : 8；卡 16 : 48 是实数。</p>
 <p>⚠️ 一颗 TPU v7 芯片对软件显示成 2 个 device，按 device 报的每卡数是按芯片报的一半。</p></details></figure>
-  <p>PD 分离（第八节）下，分子数不数输入、分母算不算 prefill 卡，各有两种数法（InferenceX 是 SemiAnalysis 的公开基准）。</p>
+  <p>PD 分离（第八节）把 prefill 和 decode 放在不同的卡上，「每卡每秒多少 token」就有两处能挑：分子（token）数不数输入，分母（卡）算不算 prefill 卡（InferenceX 是 SemiAnalysis 的公开基准）。</p>
 
   <h3 id="s2-4">2.4　尺子以外的四个坑</h3>
 <figure class="fbox fwide" id="fig-s2-traps"><svg viewBox="0 0 1400 402" width="100%" role="img" aria-label="尺子以外的两个坑，每个都是同一套系统的两次实测。峰值当稳态：引擎自报的峰值 12,070，端到端稳态 10,704，峰值虚高 13%。没预热：vLLM 一组第一轮 13,585，第二轮 27,803，是第一轮的 2.05 倍"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2327,20 +2328,19 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="798" y="338" fill="#202124" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二轮</tspan></text>
 <rect x="810.0" y="312" width="490.0" height="38" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1310" y="338" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">27,803</tspan></text>
-</svg><figcaption><b>左边的坑让数虚高，右边的坑让数虚低。</b><span class="capmore"><br><em>两格各是独立实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>峰值：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:849-858（ISL 4096，#7 端到端 10,704、峰值 12,070）。峰值是 decode 引擎自报的瞬时 gen throughput，按 DP rank 计（同文件 835-845）。另一组峰值稳态：tpu/tpu-inference/Gemma4-31B/README.md:460（TPU v7x，并发 256，输出 4,495、peak 6,144）。</p>
+</svg><figcaption><b>左边的坑让数虚高，右边的坑让数虚低。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>峰值：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:849-858（ISL 4096，#7 端到端 10,704、峰值 12,070）。峰值是 decode 引擎自报的瞬时 gen throughput，按 DP rank 计（同文件 835-845）。另一组峰值稳态：tpu/tpu-inference/Gemma4-31B/README.md:460（TPU v7x，并发 256，输出 4,495、peak 6,144）。</p>
 <p>预热：VLLM-V4PRO-RUNBOOK.md:431-433（2P1D conc256，13,585 → 27,803）；另一组 SGLANG-V4PRO-RUNBOOK.md:480-494（8,520 → 9,118，+7.0%）。闭环：SGLANG-V4PRO-RUNBOOK.md:478、1135（闭环比开环低 13%）。</p>
 <p>温度这个坑（接受率 1.16% 对 34%）画在第十一节的图里，这里不重复；出处 VLLM-V4PRO-RUNBOOK.md:394-420。</p></details></figure>
   <ul>
-    <li><b>上限依赖负载</b>：换负载或旋钮，上限就变。3.4 只挪了两个 KV 池之间的隔板，每卡就涨 54%。</li>
+    <li><b>上限依赖负载</b>：换一组请求或一项配置，最大吞吐就变。3.4 只挪了两个 KV 池之间的隔板，每卡就涨 54%。</li>
     <li><b>峰值和稳态</b>：引擎自报的峰值是某一刻的最高值，比整轮端到端高一截；对标报端到端。</li>
     <li><b>温度</b>：选字的随机程度，0 即永远挑最可能的字。压测和线上不对齐，投机解码的接受率会差一大截（11.4）。</li>
-    <li><b>预热和闭环</b>：第一轮要编译、热缓存，报第二轮。闭环是「答完一个才发下一个」，开环按固定节奏发；这组实测闭环低 13%，对标要用同一种。</li>
+    <li><b>预热和闭环</b>：第一轮要编译、把缓存填热，报第二轮。闭环是「答完一个才发下一个」，开环按固定节奏发；这组实测闭环低 13%，对标要用同一种。</li>
   </ul>
 
   <h3 id="s2-5">2.5　落到钱上</h3>
-  <p>DeepSeek 公布过一天的账：全按 R1 定价收费，理论成本利润率 545%，它也写明实际收入低得多。
-    同一文档里，decode 时每节点输出约 14,800 tok/s，每用户只有 20–22 tok/s：便宜是拿交互档换来的。</p>
-  <p>换算到每个字：每百万输出 token 的成本 ＝ 每卡每小时的价 ÷（每卡 tok/s × 3,600）× 10⁶。这个价不变，2.2 那一档每卡从约 2,200 到约 11,200，每个字的成本就降到约五分之一（本课推导）。</p>
+  <p>每百万输出 token 的成本 ＝ 每卡每小时的价 ÷（每卡 tok/s × 3,600）× 10⁶。卡价不变，每卡 tok/s 涨几倍，每个字就便宜几倍：2.2 那一档每卡从约 2,200 到约 11,200，成本降到约五分之一（本课推导）。</p>
+  <p>交互档也能换钱。DeepSeek 公布过一天的账：decode 时每节点输出约 14,800 tok/s，每用户只有 20–22 tok/s；全按 R1 定价收费，理论成本利润率 545%，它也写明实际收入低得多。</p>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     报一个吞吐，要连同五样一起报：<b>分子分母、交互档、峰值还是稳态、温度和采样、有没有预热和是不是开环。</b>
