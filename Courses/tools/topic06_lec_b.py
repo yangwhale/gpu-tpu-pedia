@@ -278,7 +278,7 @@ Splitwise、DistServe 二三、二四年先后提出，Mooncake 连同 KV 池做
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s9-decide</code>，只指第一问。</p>
 
-<p class="say">「三问里最常被跳过的是第一问：不拆时出字间隔有没有被长 prompt 撑出尖峰。没有就不用拆；有，先试分块 prefill。」</p>
+<p class="say">「该不该拆，图上列了三问，最常被跳过的是第一问：不拆时出字间隔有没有被长 prompt 撑出尖峰。没有就不用拆；有，先试分块 prefill。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s9-afd-ascend</code>，先指橙柱，再指绿柱。</p>
 
