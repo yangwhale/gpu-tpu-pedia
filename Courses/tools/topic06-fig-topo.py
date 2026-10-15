@@ -29,7 +29,7 @@ r"""专题六 · 第十节「先选拓扑，再调参数」的五张静态图。
     也不画 DP 注意力把约 17B 非专家权重在每个 device 上各放一份的额外开销。
 """
 import math
-from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, wpx, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 import topic06_numbers as N
 
 W = 1400
@@ -131,47 +131,64 @@ def _axes(f, x0, y0, w, h, ymax, yticks, fmt):
 # ─────────────────────────────────────────────────────────────────────────
 def fig_lens():
     f = Fig(W, "同一组 V4-Pro 实测数，左边画总吞吐，右边画每张卡的吞吐。总吞吐看：1p1d 14563，"
-               "3p1d 调到最好 21100 是加 45%，换 dep8 到 65132 是加 347%。但这三档分别用了 8、16、20 张卡。"
+               "3p1d 调到最好 21100 是加 45%，换 dep8 到 65132 是加 347%。但这三档分别用了 8、16、20 张卡，"
+               "柱子下面每个小方块是一张卡，空心是 prefill，实心是 decode。"
                "换成每卡：1p1d 1820，3p1d 最好 1319，反而少 28%；dep8 最好 3257，是 3p1d 的 2.47 倍、1p1d 的 1.79 倍。"
                "同为 3p1d，只把并发从 256 调到 512，总吞吐加 28%")
     y0 = f.header("同一组数，换个分母结论就变　——　<tspan font-weight=\"700\">「调参 +45%」按每卡算是 -28%</tspan>",
-                  "GB300 · DeepSeek-V4-Pro · vLLM · 4K 进 1K 出。吞吐 ＝ prompt ＋ 输出 token 每秒；柱下是 GPU 数和并发",
+                  "GB300 · DeepSeek-V4-Pro · vLLM · 4K 进 1K 出。吞吐 ＝ prompt ＋ 输出 token 每秒。"
+                  "柱下每个小方块是一张卡（空心 prefill，实心 decode），柱里是并发",
                   [(GY2, "1p1d 起点"), (OR, "3p1d：加 prefill、调并发"), (BL, "换 decode 拓扑：dep8")])
-    PH = 460
+    PH = 528
     PW = (W - 20) // 2
     cols = [GY2, OR, OR, BL, BL]
+    DEC = {"1p1d": 4, "3p1d": 4, "3p＋dep8": 8}         # decode 卡数（见文件头：4＋4、3×4＋4、3×4＋8）
 
     def draw(px, title, vals, ymax, ticks, fmt, notes):
         py = f.panel(px, y0, PW, PH, title, INK)
-        X0, AW, AY, AH = px + 80, PW - 110, py + 40, PH - 200
+        X0, AW, AY, AH = px + 80, PW - 110, py + 50, 270
         _axes(f, X0, AY, AW, AH, ymax, ticks, fmt)
         bw = AW / len(vals)
+        tops = []
         for i, v in enumerate(vals):
             bx = X0 + i * bw + bw * 0.18
             bh = AH * v / ymax
+            cx = bx + bw * 0.32
             f.box(bx, AY + AH - bh, bw * 0.64, bh, cols[i], cols[i], 3)
-            f.t(bx + bw * 0.32, AY + AH - bh - 8, format(v, ","), cols[i], True, 13.5, "middle")
+            f.t(cx, AY + AH - bh - 8, format(v, ","), cols[i], True, 15, "middle")
+            tops.append((cx, AY + AH - bh))
             nm, _, g, c = CFG[i]
-            f.t(bx + bw * 0.32, AY + AH + 20, nm, INK, True, 12.5, "middle")
-            f.t(bx + bw * 0.32, AY + AH + 38, "%d 卡" % g, GY, size=12, anchor="middle")
-            f.t(bx + bw * 0.32, AY + AH + 55, "并发 %d" % c, GY, size=11.5, anchor="middle")
+            f.t(cx, AY + AH - 10, "并发 %d" % c, "#ffffff", True, 13, "middle")
+            # 卡：每排 4 张（一个 4 卡节点），先 prefill 后 decode
+            d = DEC[nm]
+            assert (g - d) % 4 == 0 and d % 4 == 0
+            f.t(cx, AY + AH + 22, "%d 卡" % g, cols[i], True, 15, "middle")
+            S, G = 11, 4
+            gx0 = cx - (4 * S + 3 * G) / 2.0
+            for k in range(g):
+                r, q = divmod(k, 4)
+                fill = "none" if k < g - d else cols[i]
+                f.box(gx0 + q * (S + G), AY + AH + 34 + r * (S + G), S, S, fill, cols[i], 2, 1.4)
         for k, (s, col) in enumerate(notes):
-            f.t(px + 20, py + PH - 70 + k * 24, s, col, True, 14)
+            f.t(px + 20, AY + AH + 138 + k * 26, s, col, True, 15)
         f._pan = None
-        return X0, AY, AW, AH, bw
+        return tops
 
-    draw(0, "总吞吐（tok/s）", [t for _, t, _, _ in CFG], 70000, [0, 20000, 40000, 60000],
-         lambda v: "%dK" % (v // 1000) if v else "0",
-         [("调参：14,563 → 21,100，+45%（8 卡 → 16 卡）", OR),
-          ("换拓扑：14,563 → 65,132，+347%（8 卡 → 20 卡）", BL)])
+    tops = draw(0, "总吞吐（tok/s）", [t for _, t, _, _ in CFG], 70000, [0, 20000, 40000, 60000],
+                lambda v: "%dK" % (v // 1000) if v else "0",
+                [("调参：14,563 → 21,100，+45%（8 卡 → 16 卡）", OR),
+                 ("换拓扑：14,563 → 65,132，+347%（8 卡 → 20 卡）", BL)])
+    # 同为 3p1d，只调并发：一道弧
+    (ax, ay), (bx, by) = tops[1], tops[2]
+    top = min(ay, by) - 40
+    f.path("M%.1f,%.1f C%.1f,%.1f %.1f,%.1f %.1f,%.1f" % (ax, ay - 28, ax, top - 18, bx, top - 18, bx, by - 30),
+           OR, 1.8)
+    f.t((ax + bx) / 2, top - 24, "只调并发 +%d%%" % PURE_CONC, OR, True, 15, "middle")
     draw(PW + 20, "每卡吞吐（tok/s/GPU，本课现算 ＝ 总吞吐 ÷ 卡数）", PER, 3600, [0, 1000, 2000, 3000],
          lambda v: format(v, ","),
          [("调参那一步：1,820 → 1,319，每卡 -28%", RD),
           ("换拓扑：3,257 ＝ 3p1d 最好的 2.47×，1p1d 起点的 1.79×", BL)])
-    yb = f.band(y0 + PH + 20, "ok", "比较两个配置之前，先问分母是不是同一个", [
-        "+45% 里大半是加卡：卡数翻倍，总量只涨一半。同为 3p1d 只调并发（256 → 512），总吞吐才是 +28%。",
-        "换拓扑在两种口径下都赢：不是加了卡才赢，每张卡搬一趟能分给的 token 变多了。",
-    ])
+    yb = y0 + PH
     yb = f.src(yb + 10,
                "📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:446（1p1d 并发 256，14,563）、:448（3p1d 并发 256，16,459）、"
                ":449（3p1d 并发 512，21,100）、:465（3p ＋ dep8 并发 512，55,153）、:468（并发 1,536，65,132）。"
@@ -185,132 +202,173 @@ def fig_lens():
 def fig_wire():
     f = Fig(W, "Qwen3-Coder-480B 在 TPU v7 上，单机 v7x-8 跑 TP8 作对照。换成两台机器拼成 v7x-16 跑 TP16："
                "如果两台之间走数据中心网络 DCN，输出吞吐低 17% 到 63%，并发越高越惨；"
-               "如果两台被编进同一个 ICI 切片，只低 15% 到 21%。GPU 这边，V4-Pro 的 SGLang 部署要求所有节点在同一个 NVL72 域里，"
-               "跨域时 PD 之间传 KV 会从 NVLink 退化到 RDMA")
+               "如果两台被编进同一个 ICI 切片，只低 15% 到 21%。右边画的是两种连法："
+               "每台机器里 4 颗芯片之间都是粗管 ICI；上面那种，两台之间只有一根细管 DCN；下面那种，两台的芯片之间也接上粗管")
     y0 = f.header("卡数一样，线不一样　——　<tspan font-weight=\"700\">TP16 跨 DCN 最多慢 63%，同一 ICI 切片只慢 15–21%</tspan>",
                   "Qwen3-Coder-480B · TPU v7 · vLLM（tpu-inference）。纵轴：多机 TP16 的输出吞吐相对单机 v7x-8 TP8 差多少",
                   [(RD, "两台 v7x-8 走 DCN"), (GR, "两台编进同一个 ICI 切片")])
-    PH = 420
-    LW = 900
+    PH = 455
+    LW = 880
     py = f.panel(0, y0, LW, PH, "多机 TP16 对单机 TP8（输出 tok/s）", INK)
     X0, AW, AY, AH = 110, LW - 150, py + 40, PH - 130
     for v in (0, 20, 40, 60):
         yy = AY + AH * v / 70
         f.line(X0, yy, X0 + AW, yy, "#eceff1" if v else GY2, 1.2 if not v else 1, arrow=False)
-        f.t(X0 - 10, yy + 4, "-%d%%" % v if v else "打平", GY, size=12, anchor="end")
+        f.t(X0 - 10, yy + 4, "-%d%%" % v if v else "打平", GY, size=13, anchor="end")
     gw = AW / len(WIRE)
     for i, (nm, s, d, ic) in enumerate(WIRE):
         gx = X0 + i * gw
         for j, (val, col) in enumerate(((-DCN[i], RD), (-ICI[i] if ICI[i] is not None else None, GR))):
             bx = gx + gw * 0.14 + j * gw * 0.38
             if val is None:
-                f.t(bx + gw * 0.17, AY + 24, "未测", GY, size=12, anchor="middle")
+                f.t(bx + gw * 0.17, AY + 26, "未测", GY, size=14, anchor="middle")
                 continue
             bh = AH * val / 70
             f.box(bx, AY, gw * 0.34, bh, col, col, 3)
-            f.t(bx + gw * 0.17, AY + bh + 18, "-%d%%" % val, col, True, 13.5, "middle")
-        f.t(gx + gw / 2, AY + AH + 24, nm, INK, True, 12.5, "middle")
-    f.t(X0 + AW / 2, AY + AH + 50, "柱子往下长：越长越慢", GY, size=12.5, anchor="middle")
+            f.t(bx + gw * 0.17, AY + bh + 20, "-%d%%" % val, col, True, 15, "middle")
+        f.t(gx + gw / 2, AY + AH + 26, nm, INK, True, 15, "middle")
+    f.t(X0 + AW / 2, AY + AH + 54, "柱子往下长：越长越慢", GY, size=14, anchor="middle")
     f._pan = None
+    # ── 右：两台 v7x-8，两种连法
     RX, RW = LW + 20, W - LW - 20
-    py2 = f.panel(RX, y0, RW, PH, "同样的规矩在 GPU 上", BL)
-    rows = [("TPU v7", "芯片之间：ICI", "切片之间：DCN"),
-            ("GB300", "NVL72 域内：NVLink", "域之间：RDMA")]
-    for k, (hw, fast, slow) in enumerate(rows):
-        yy = py2 + 30 + k * 100
-        f.t(RX + 18, yy + 14, hw, INK, True, 15)
-        f.box(RX + 18, yy + 28, 190, 36, "#e6f4ea", GR, 5)
-        f.t(RX + 113, yy + 51, fast, GR, True, 13, "middle")
-        f.box(RX + 226, yy + 28, 200, 36, "#fce8e6", RD, 5)
-        f.t(RX + 326, yy + 51, slow, RD, True, 13, "middle")
-    f.t(RX + 18, py2 + 248, "V4-Pro SGLang 部署：16 个节点", INK, True, 14)
-    f.t(RX + 18, py2 + 272, "必须同一 NVL72 域", RD, True, 14)
-    f.t(RX + 18, py2 + 300, "跨域后 PD 之间传 KV 退化到 RDMA，", GY, size=13)
-    f.t(RX + 18, py2 + 322, "原文说「显著变慢」，没给倍数", GY, size=13)
+    py2 = f.panel(RX, y0, RW, PH, "两台 v7x-8，两种连法", INK)
+    MW, MH, GAP = 180, 112, 80
+    mx = [RX + (RW - 2 * MW - GAP) / 2.0, RX + (RW - 2 * MW - GAP) / 2.0 + MW + GAP]
+    CW, CH = 44, 30
+    cxo, cyo = (24, MW - 24 - CW), (18, MH - 18 - CH)       # 2×2 芯片在机器里的偏移
+
+    def machine(x, y, label):
+        f.box(x, y, MW, MH, "none", GY2, 10, 1.4)
+        # 机内 ICI：2×2 一圈粗管
+        for r in range(2):
+            yy = y + cyo[r] + CH / 2
+            f.line(x + cxo[0] + CW, yy, x + cxo[1], yy, GR, 7, arrow=False)
+        for c in range(2):
+            xx = x + cxo[c] + CW / 2
+            f.line(xx, y + cyo[0] + CH, xx, y + cyo[1], GR, 7, arrow=False)
+        for r in range(2):
+            for c in range(2):
+                f.box(x + cxo[c], y + cyo[r], CW, CH, "#ffffff", INK, 5, 1.4)
+        if label:
+            f.t(x + MW / 2, y - 10, "v7x-8：4 颗芯片", INK, True, 15, "middle")
+
+    for k, (title, col) in enumerate((("两台各自一片，中间走 DCN", RD), ("两台编进同一个 ICI 切片", GR))):
+        top = py2 + 22 + k * 218
+        f.t(RX + 20, top + 12, title, col, True, 16)
+        my = top + (58 if k == 0 else 30)
+        for x in mx:
+            machine(x, my, k == 0)
+        if k == 0:
+            f.line(mx[0] + MW, my + MH / 2, mx[1], my + MH / 2, RD, 2.5, arrow=False)
+            f.t((mx[0] + MW + mx[1]) / 2, my + MH + 26, "机内粗管 ICI，机间只有细管 DCN", RD, True, 15, "middle")
+        else:
+            for r in range(2):
+                yy = my + cyo[r] + CH / 2
+                f.line(mx[0] + cxo[1] + CW, yy, mx[1] + cxo[0], yy, GR, 7, arrow=False)
+            f.t((mx[0] + MW + mx[1]) / 2, my + MH + 26, "机间也接上粗管 ICI", GR, True, 15, "middle")
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "快线多大，决定一个引擎最多铺多大", [
-        "TP 每出一个 token 都要做一次 all-reduce；这一步跨慢线，并发越高越吃亏（1K/1K 从 -22% 一路掉到 -63%）。",
-        "原记录的建议是：装得下就别跨，要扩容就开两份单机做 DP，让每份 TP 都留在快线里。",
-    ])
+    yb = y0 + PH
     yb = f.src(yb + 10,
                "📌 跨 DCN：tpu/tpu-inference/Qwen3-Coder-480B/README-multinode.md:441-445（单机 v7x-8 TP8 对多机 v7x-16 TP16，输出 tok/s）；"
                "原因与 DP 建议见同文件 :457 起。",
                "📌 ICI 切片：tpu/tpu-inference/Qwen3-Coder-480B/README-TPU-VM.md:1000-1009（Workload Policy 把两台编进 2x2x2 切片，"
                "表中 Aggregate tok/s；8K/1K c=16 没测，记作「未测」）。",
+               "⚠️ 右栏是示意：只画「机内粗、机间细」和「编进同一切片后机间也是 ICI」，不按真实链路条数和 3D torus 布局。",
                "📌 NVL72：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:34（必须同一 NVL72 域）、:63（跨域退化到 RDMA）。")
     f.save("fig6-s10-wire.svg", yb + 14)
 
 
 # ─────────────────────────────────────────────────────────────────────────
 def fig_rank():
-    f = Fig(W, "四颗芯片连成一个环，每颗芯片有两个 device，共 8 个 device。左：按物理相邻排的顺序，"
-               "环形 all-reduce 时每一步都只和隔壁说话，一跳就到。中：同样 8 个 device 但顺序打乱，"
-               "程序以为的「下一个」在物理上可能隔着两三跳，数据绕远路，还会和别人抢同一条线。"
+    f = Fig(W, "四颗芯片连成一个环，每颗芯片有两个 device，共 8 个 device。灰色粗线是芯片之间的物理链路。"
+               "左：按物理相邻排的顺序，环形 all-reduce 时每一步都只和隔壁说话，绿色箭头每段一跳。"
+               "中：同样 8 个 device 但顺序打乱，0 号在芯片 0、1 号在对角的芯片 2，两颗芯片之间没有直连，"
+               "数据要沿灰线从芯片 0 经芯片 3 走两段才到，还会和别人抢同一条线。"
                "右：如果不同进程算出来的顺序不一致，A 在等 B，B 在等 C，C 又在等 A，第一次集合通信就卡死，不报错")
     y0 = f.header("TPU 上的 device 顺序就是拓扑　——　<tspan font-weight=\"700\">顺序错了，数据发给错的对端</tspan>",
-                  "示意：4 颗芯片连成环，每颗 2 个 device（chip ≠ device）。方块里的数字是 mesh 里的编号，箭头是环形 all-reduce 的「下一个」",
+                  "示意：4 颗芯片连成环，每颗 2 个 device（chip ≠ device）。方块里的数字是 mesh 里的编号，灰色粗线是芯片之间的物理链路",
                   [(GR, "一跳到邻居"), (OR, "绕远路"), (RD, "互相等，卡死")])
-    PH = 400
+    PH = 420
     PW = (W - 40) // 3
+    CBW, CBH = 124, 70                  # 芯片框
 
-    def ring(px, py, order, col_of):
-        # 4 颗芯片放在正方形四角，物理环：左上 → 右上 → 右下 → 左下
-        cx = [px + 70, px + PW - 190, px + PW - 190, px + 70]
-        cy = [py + 40, py + 40, py + 210, py + 210]
+    def ring(px, py, order):
+        # 4 颗芯片放在正方形四角，物理环：芯片 0 左上 → 1 右上 → 2 右下 → 3 左下 → 0
+        cx = [px + 36, px + PW - 36 - CBW, px + PW - 36 - CBW, px + 36]
+        cy = [py + 50, py + 50, py + 232, py + 232]
         for k in range(4):
-            f.box(cx[k], cy[k], 120, 70, "none", GY2, 8, 1.4)
-            f.t(cx[k] + 4, cy[k] + 88, "芯片 %d" % k, GY, size=11.5)
+            f.box(cx[k], cy[k], CBW, CBH, "#f8f9fa", GY2, 8, 1.4)
+            ly = cy[k] - 10 if k < 2 else cy[k] + CBH + 22
+            f.t(cx[k] + CBW / 2, ly, "芯片 %d" % k, GY, True, 15, "middle")
         pos = []
         for k in range(4):
             for d in range(2):
-                pos.append((cx[k] + 10 + d * 56, cy[k] + 12))
-        # 物理链路（芯片之间）
-        for a, b in ((0, 1), (1, 2), (2, 3), (3, 0)):
-            ax, ay = cx[a] + 60, cy[a] + 35
-            bx, by = cx[b] + 60, cy[b] + 35
-            f.line(ax, ay, bx, by, LINE, 6, arrow=False)
+                pos.append((cx[k] + 12 + d * 56, cy[k] + 13))
         for phys, (x, y) in enumerate(pos):
             f.box(x, y, 44, 44, "#fff", INK, 6, 1.2)
-            f.t(x + 22, y + 29, str(order[phys]), INK, True, 16, "middle")
-        return pos
+            f.t(x + 22, y + 29, str(order[phys]), INK, True, 17, "middle")
+        # 物理链路：只画在芯片框之间的空隙里（框边到框边）
+        L = {(0, 1): (cx[0] + CBW, cy[0] + CBH / 2, cx[1], cy[1] + CBH / 2),
+             (1, 2): (cx[1] + CBW / 2, cy[1] + CBH, cx[2] + CBW / 2, cy[2]),
+             (3, 2): (cx[3] + CBW, cy[3] + CBH / 2, cx[2], cy[2] + CBH / 2),
+             (0, 3): (cx[0] + CBW / 2, cy[0] + CBH, cx[3] + CBW / 2, cy[3])}
+        for x1, y1, x2, y2 in L.values():
+            f.line(x1, y1, x2, y2, LINE, 8, arrow=False)
+        return pos, L
+
+    def hop(seg, col, rev=False, lab=None, side=1):
+        x1, y1, x2, y2 = seg
+        if rev:
+            x1, y1, x2, y2 = x2, y2, x1, y1
+        # 箭头画在灰线旁边一点，不压住灰线
+        dx, dy = (0, -14 * side) if y1 == y2 else (14 * side, 0)
+        sx = 6 if x2 > x1 else (-6 if x2 < x1 else 0)
+        sy = 6 if y2 > y1 else (-6 if y2 < y1 else 0)
+        f.line(x1 + dx + sx, y1 + dy + sy, x2 + dx - sx * 2, y2 + dy - sy * 2, col, 2.6)
+        if lab:
+            mx, my = (x1 + x2) / 2 + dx, (y1 + y2) / 2 + dy
+            if y1 == y2:
+                f.t(mx, my - 9 if side > 0 else my + 22, lab, col, True, 15, "middle")
+            else:
+                f.t(mx + 10 * side, my + 5, lab, col, True, 15, "start" if side > 0 else "end")
 
     # 左：正确顺序
     py = f.panel(0, y0, PW, PH, "按物理相邻编号", GR)
-    good = [0, 1, 2, 3, 4, 5, 6, 7]
-    pos = ring(0, py, good, None)
-    f.t(20, py + PH - 64, "mesh 里的「下一个」＝ 物理隔壁", GR, True, 14)
-    f.t(20, py + PH - 40, "环形 all-reduce 每步一跳", GY, size=13)
+    pos, L = ring(0, py, [0, 1, 2, 3, 4, 5, 6, 7])
+    hop(L[(0, 1)], GR, lab="1→2")
+    hop(L[(1, 2)], GR, lab="3→4")
+    hop(L[(3, 2)], GR, rev=True, side=-1, lab="5→6")
+    hop(L[(0, 3)], GR, rev=True, side=-1, lab="7→0")
+    f.t(20, py + PH - 48, "「下一个」都在隔壁：每步一跳", GR, True, 15)
     f._pan = None
     # 中：打乱
     X2 = PW + 20
     py = f.panel(X2, y0, PW, PH, "顺序打乱（同样 8 个 device）", OR)
     bad = [0, 4, 2, 6, 1, 5, 3, 7]
-    pos = ring(X2, py, bad, None)
+    pos, L = ring(X2, py, bad)
     inv = {v: i for i, v in enumerate(bad)}
-    a, b = pos[inv[0]], pos[inv[1]]
-    f.path([(a[0] + 22, a[1] + 44), (a[0] + 22, a[1] + 90), (b[0] + 22, b[1] + 90), (b[0] + 22, b[1] + 44)],
-           OR, 2.2)
-    f.t(X2 + 20, py + PH - 64, "0 的「下一个」1 远在对角", OR, True, 14)
-    f.t(X2 + 20, py + PH - 40, "数据绕两跳，还和别人抢同一条线", GY, size=13)
+    assert inv[0] // 2 == 0 and inv[1] // 2 == 2          # 0 在芯片 0、1 在芯片 2：对角，没有直连
+    for k in (inv[0], inv[1]):
+        x, y = pos[k]
+        f.box(x - 3, y - 3, 50, 50, "none", OR, 8, 2.6)
+    hop(L[(0, 3)], OR, side=-1, lab="第 1 段")
+    hop(L[(3, 2)], OR, side=-1, lab="第 2 段")
+    f.t(X2 + 20, py + PH - 48, "0 的「下一个」1 在对角：绕两段", OR, True, 15)
     f._pan = None
     # 右：各进程顺序不一致 → 循环等待
     X3 = 2 * (PW + 20)
     py = f.panel(X3, y0, PW, PH, "各进程算出的顺序不一致", RD)
-    nodes = [("进程 A", X3 + PW / 2 - 60, py + 30), ("进程 B", X3 + PW - 160, py + 180), ("进程 C", X3 + 40, py + 180)]
+    nodes = [("进程 A", X3 + PW / 2 - 60, py + 40), ("进程 B", X3 + PW - 160, py + 200), ("进程 C", X3 + 40, py + 200)]
     for nm, x, y in nodes:
-        f.box(x, y, 120, 50, "#fce8e6", RD, 8)
-        f.t(x + 60, y + 31, nm, RD, True, 14, "middle")
+        f.box(x, y, 120, 52, "#fce8e6", RD, 8)
+        f.t(x + 60, y + 32, nm, RD, True, 16, "middle")
     f.path([(nodes[0][1] + 120, nodes[0][2] + 40), (nodes[1][1] + 60, nodes[1][2])], RD, 2)
     f.path([(nodes[1][1], nodes[1][2] + 30), (nodes[2][1] + 120, nodes[2][2] + 30)], RD, 2)
     f.path([(nodes[2][1] + 60, nodes[2][2]), (nodes[0][1], nodes[0][2] + 40)], RD, 2)
-    f.t(X3 + PW / 2, py + 150, "都在等对方先发", RD, size=13, anchor="middle")
-    f.t(X3 + 20, py + PH - 64, "第一次集合通信就卡住", RD, True, 14)
-    f.t(X3 + 20, py + PH - 40, "不报错，只是不动", GY, size=13)
+    f.t(X3 + PW / 2, py + 160, "都在等对方先发", RD, True, 15, anchor="middle")
+    f.t(X3 + 20, py + PH - 48, "第一次集合通信就卡住，不报错", RD, True, 15)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "mesh 别手排：让框架按物理拓扑生成", [
-        "JAX 的 mesh_utils.create_device_mesh 按物理位置排 device，跨切片用 create_hybrid_device_mesh 分开 ICI 和 DCN 两层。",
-        "名字也别数错：v7x-8 是 4 颗芯片、8 个 device。按芯片数去配 mesh 形状，形状就对不上。",
-    ])
+    yb = y0 + PH
     yb = f.src(yb + 10,
                "📌 JAX 文档 jax.experimental.mesh_utils：create_device_mesh「creates a performant device mesh」，"
                "create_hybrid_device_mesh 分 ICI 与 DCN 两层。",
@@ -322,62 +380,45 @@ def fig_rank():
 # ─────────────────────────────────────────────────────────────────────────
 def fig_slice():
     f = Fig(W, "DeepSeek-V3 用 FP8 权重 671 GB，每个 token 的 KV 70272 字节。TPU v7 每颗芯片可用约 189.5 GB，"
-               "预留一成给激活后按 170.55 GB 算。4K 上下文 64 并发要 689 GB，4.04 颗芯片，切片取 8 颗；"
+               "预留一成给激活后按 170.55 GB 算。竖虚线是 4、8、16、32 颗芯片各能放多少。"
+               "4K 上下文 64 并发要 689 GB，纸面 4.04 颗，可切片只有 4、8、16、32 颗几档，所以取 8 颗；"
                "4K 256 并发 745 GB，32K 64 并发 818 GB，32K 256 并发和 128K 64 并发都是 1260 GB，都是 8 颗；"
-               "128K 256 并发要 3029 GB，要 32 颗。4 颗芯片放完权重只剩约 11 GB 给 KV，约 15.9 万个 token。"
-               "而实测记录里 FP8 的 MoE 每个 device 就要 101.8 GB，超过 94.75 GB，所以 v7x-8 上实际用 FP4")
+               "128K 256 并发要 3029 GB，纸面 17.76 颗，要 32 颗")
     y0 = f.header("DeepSeek-V3 在 TPU v7 上最少几颗芯片　——　<tspan font-weight=\"700\">权重是地板，KV 决定往上加多少</tspan>",
                   "本课推导：FP8 权重 671 GB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GB（可用 189.5 GB，预留一成给激活），向上取到切片档位",
-                  [(BL, "权重 671 GB"), (OR, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "切片档位")])
+                  [(BL, "权重 671 GB"), (OR, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档芯片能放多少")])
     PH = 470
-    LW = 930
-    py = f.panel(0, y0, LW, PH, "要多少 HBM（GB），取几颗芯片", INK)
-    X0, AW, AY, AH = 130, LW - 330, py + 30, PH - 90
-    YMAX = 3600
+    py = f.panel(0, y0, W, PH, "要多少 HBM（GB），取几颗芯片", INK)
+    RCOL = W - 210
+    X0, AY = 150, py + 34
+    AW = RCOL - 40 - X0
+    YMAX = 32 * CHIP_FOR_DATA * 1.04
     rows = [(c, n) for c, _ in CTX for n in CONCS]
-    bh = AH / len(rows) * 0.62
+    RH = 54
+    AH = RH * len(rows)
+    bh = 34
     sx = AW / YMAX
-    for s in SLICES[:3]:
+    for s in SLICES:
         gx = X0 + s * CHIP_FOR_DATA * sx
-        f.line(gx, AY - 6, gx, AY + AH, GY2, 1.1, "4 3", arrow=False)
-        f.t(gx, AY + AH + 18, "%d 颗" % s, GY, size=12, anchor="middle")
-    f.t(X0 + 16 * CHIP_FOR_DATA * sx + 40, AY + AH + 18, "虚线 ＝ 该档能放多少（32 颗在图外）", GY, size=11.5)
+        f.line(gx, AY - 6, gx, AY + AH, GY2, 1.2, "4 3", arrow=False)
+        f.t(gx, AY + AH + 22, "%d 颗" % s, GY, True, 15, "middle")
     for i, key in enumerate(rows):
         kv, tot, raw, chips = GRID[key]
-        yy = AY + i * AH / len(rows) + 6
-        f.t(X0 - 12, yy + bh / 2 + 5, "%s × %d" % key, INK, True, 13.5, "end")
+        yy = AY + i * RH + (RH - bh) / 2
+        f.t(X0 - 14, yy + bh / 2 + 6, "%s × %d" % key, INK, True, 15, "end")
         f.box(X0, yy, W_FP8 * sx, bh, BL, BL, 3)
         f.box(X0 + W_FP8 * sx, yy, max(kv * sx, 2), bh, OR, OR, 3)
-        f.t(X0 + tot * sx + 8, yy + bh / 2 + 5, format(round(tot), ","), INK, True, 13)
-        f.t(LW - 170, yy + bh / 2 + 5, "%.2f 颗 → %d 颗" % (raw, chips), RD if chips > 8 else INK, True, 14)
-    f.t(LW - 170, AY - 8, "纸面 → 取档", GY, True, 12.5)
+        # 总量写在条右边；底下垫一块白，把穿过去的竖虚线断开
+        lab = format(round(tot), ",")
+        lx = X0 + tot * sx + 6
+        f.box(lx - 2, yy + 4, wpx(lab, 15) + 8, bh - 8, "#ffffff", "none", 2)
+        f.t(lx + 2, yy + bh / 2 + 6, lab, INK, True, 15)
+        f.t(RCOL, yy + bh / 2 + 6, "%.2f 颗 → %d 颗" % (raw, chips), RD if chips > 8 else INK, True, 15)
+    f.t(RCOL, AY - 10, "纸面 → 取档", GY, True, 15)
+    f.t(20, AY + AH + 64, "切片只有 4 / 8 / 16 / 32 颗这几档：纸面 %.2f 颗也只能取 8 颗，%.2f 颗就得取 32 颗"
+        % (GRID[("4K", 64)][2], GRID[("128K", 256)][2]), INK, True, 16)
     f._pan = None
-    RX, RW = LW + 20, W - LW - 20
-    py2 = f.panel(RX, y0, RW, PH, "4 颗芯片（v7x-8）为什么不够", RD)
-    lines = [("4 颗能放的", "%.0f GB" % (4 * CHIP_FOR_DATA), INK),
-             ("减去 FP8 权重", "%d GB" % round(W_FP8), BL),
-             ("剩给 KV", "约 %d GB" % round(LEFT4), OR),
-             ("折合 token", "约 %.1f 万" % (LEFT4_TOK / 1e4), OR),
-             ("4K 请求最多", "%d 个" % MAX4_AT_4K, OR)]
-    for k, (a, b, col) in enumerate(lines):
-        yy = py2 + 36 + k * 36
-        f.t(RX + 18, yy, a, GY, size=13.5)
-        f.t(RX + RW - 18, yy, b, col, True, 15, "end")
-    yy = py2 + 36 + 5 * 36
-    f.line(RX + 16, yy - 14, RX + RW - 16, yy - 14, LINE, 1, arrow=False)
-    f.t(RX + 18, yy + 10, "实测比纸面更紧", RD, True, 14.5)
-    f.t(RX + 18, yy + 38, "纸面：FP8 MoE 每 device", GY, size=13)
-    f.t(RX + RW - 18, yy + 38, "约 %.1f GB" % PAPER_MOE_DEV, INK, True, 13.5, "end")
-    f.t(RX + 18, yy + 64, "实测记录", GY, size=13)
-    f.t(RX + RW - 18, yy + 64, "约 %.1f GB" % REAL_MOE_DEV, RD, True, 13.5, "end")
-    f.t(RX + 18, yy + 90, "每 device 可用", GY, size=13)
-    f.t(RX + RW - 18, yy + 90, "%.2f GB" % DEV_USABLE, INK, True, 13.5, "end")
-    f.t(RX + 18, yy + 124, "装不下 → v7x-8 上实际用 FP4", RD, True, 14)
-    f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "先用纸面账定下限，再用一次真实启动定上限", [
-        "短上下文时权重占九成，几档并发都落在 8 颗；128K × 256 时 KV 是权重的 3.5 倍，一下跳到 32 颗。",
-        "纸面账只是下限：同一个 FP8 MoE，实测每 device 比纸面多约 20 GB，原记录没拆来源。",
-    ])
+    yb = y0 + PH
     yb = f.src(yb + 10,
                "📌 DeepSeek-V3 结构（671B、61 层、MLA kv_lora_rank 512 ＋ rope 64、256 专家）：topic06_numbers.py，来自 HF config.json。"
                "每 token KV 70,272 B ＝ (512 ＋ 64) × 2 B × 61 层。",

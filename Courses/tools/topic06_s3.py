@@ -2,25 +2,26 @@
 """专题六 · 第三节「KV cache：账、池、复用」。图在 topic06-fig-kv.py。"""
 
 BODY = '''
-  <p class="lead">每条在跑的序列，都要在显存里单独占一块 KV，这块地方不能和别人共用。
+  <p class="lead">2023 年 vLLM 的 PagedAttention 把这块地方分页，有效占用从两到四成提到 96%；同年 GQA 让 Llama-2-70B 的 KV 头数砍到八分之一。每条在跑的序列，都要在显存里单独占一块 KV，这块地方不能和别人共用。
     <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b></p>
 
   <h3 id="s3-1">3.1　一个 token 留下多少字节：四种记法</h3>
   <p>KV cache 是每个处理过的 token 在每一层留下的 K 和 V，后面的 token 算注意力时要回头读。
     一个 token 留多少字节，由注意力怎么存 K、V 决定（专题三逐项算过）。</p>
   <table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">全部按 bf16（2 字节）、所有层加起来算；实际部署常把 KV 存成 fp8，字节再减半。字节数取自各模型 config.json，本课推导。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">全部按 bf16（2 字节）、所有层加起来算；实际部署常把 KV 存成 fp8，字节再减半。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
     <tr><td>MHA</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
-    <tr><td>MLA</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512＋64) 维 × 61 层</td></tr>
+    <tr><td>MLA</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512＋64) 维 × 61 层（不含 MTP 层；KV 存 FP8 时减半为 35,136 B）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
-  <p>DeepSeek-V4 不在这张表的任何一行：它每层只存一条所有头共用的 KV，再按层压缩 4 倍或 128 倍（CSA／HCA），3.4 节讲它的两个池。</p>
+  <p>DeepSeek-V4 不在这张表的任何一行：它每层只存一条所有头共用的 KV，再按层压缩 4 倍或 128 倍（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），3.4 节讲它的两个池。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
   <p>一颗 v7 芯片 192 GB，放下 V3 的八分之一 FP8 权重，再留一成余量，剩 88.9 GB 给 KV。
     V3 的每个 token 占 70,272 字节，4K 上下文能装 308 条，32K 只剩 38 条。</p>
+  <p>权重切成 8 份，KV 却不切：注意力走数据并行，每条序列的 KV 只住在一个 device 上（第六节讲）。</p>
 __FIG_S3_BATCH__
   <ul>
     <li><b>上下文翻几倍，人数就除几倍。</b>KV 和上下文长度成正比，池子是固定的。</li>
@@ -38,18 +39,21 @@ __FIG_S3_PAGED__
     <li><b>共享与写时复制。</b>并行采样的几条序列共用 prompt 的块，各记一个引用数；谁要往共享块里写，先给自己复制一份。</li>
     <li><b>块大小跟 kernel 一起定。</b>attention kernel 每读一块查一次页表。TPU 上 Qwen3.5 把块从 16 个 token 调到 256，512 并发时 decode 一步从 428 µs 降到 283 µs。</li>
   </ul>
+<figure class="fbox fwide" id="anim-paged">
+<video src="media/topic06-paged.mp4" autoplay loop muted playsinline
+       aria-label="分页 KV 动画。标题：分页 KV：写满一块才领下一块，用完立刻还。左边是 16 块显存，标着块 0 到块 15，每块 4 个 token 格；右边是页表，四行请求 1 到请求 4，每行列出它的第几块住在哪个物理块；底下写空闲块数和第几步，右下角写：每种颜色一个请求；灰框＝空闲块。字幕依次是：KV 显存切成固定大小的块，每块装 4 个 token（示意）。三个请求进来、边生成边长：写满一块，才去空闲池领一块新的。领到哪块算哪块：一个请求的块东一块西一块，页表记住先后。请求 2 结束：它的 2 块立刻还回空闲池（页表上请求 2 那行写：已结束：块已还回）。新请求 4 进来，马上用上刚还回来的那 2 块（块 2 和块 5）。最后第 12 步，页表是：请求 1 住块 0、1、6、8、11，请求 3 住块 3、4、7、9、12，请求 4 住块 2、5、10，空闲块 3。最后两行字幕：浪费只剩每个请求最后一块的空尾巴（此刻共 8 格）；对照：按最大长度连续预留，没写到的位置也一直占着。画面复位。"></video>
+<figcaption>写满一块才去领下一块，请求一结束块就还回去，下一个人马上用上；页表记着每个请求的块住在哪。
+  <span class="sub">（18 秒无声循环，Manim 渲染。每块 4 个 token、16 块显存、请求长度都是示意；共享前缀与写时复制见上图。）</span></figcaption></figure>
 
   <h3 id="s3-4">3.4　混合模型有两个池，预算要分</h3>
-  <p>DeepSeek-V4 每层有两种 KV：滑窗那份只留最近 128 个 token，另一份存压缩后的整段。
+  <p>DeepSeek-V4 每层有两种 KV：滑窗（滑动窗口注意力，只看最近一段）那份只留最近 128 个 token，另一份存压缩后的整段。
     SGLang 给它们开两个池，共用一份预算，用 <code>--swa-full-tokens-ratio</code> 定两边怎么分。</p>
 __FIG_S3_POOL__
   <p>4K 输入时，比例 0.20 让全长池先满，每张 decode GPU 只跑出 6,887 tok/s；调到 0.15 两边一起满，到 10,614，高 54%。
     再多给显存、多装 13% 的人，只到 10,704：每张卡近 900 条之后，瓶颈已经从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
-    tpu-inference 跑 Qwen3.5 时，vLLM 的混合分配器默认 4 层共用一块 KV 张量，而 TPU 上每层必须各存一份。
-    结果块编号的池子大了约 3.5 倍，编号越界后被 JAX 的 <code>dynamic_update_slice_in_dim</code> <b>静默截断</b>到边界上，多个请求写进同一块。
-    表面症状是胡言乱语、OOM 或引擎崩溃，看不出是 KV 池的账错了（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
+    tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX <b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃，看不出是池子的账错了（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
 
   <h3 id="s3-5">3.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样：同一段 system prompt、同一份文档、多轮对话的前几轮。
@@ -59,22 +63,22 @@ __FIG_S3_POOL__
     <li><b>命中率可以很高。</b>DeepSeek 公开过 24 小时的线上统计：6,080 亿输入 token 里 56.3% 命中了存在磁盘上的 KV。</li>
     <li><b>线性注意力和滑窗难复用。</b>线性层的状态是整段压出来的，截不回任意位置；滑窗层早先位置的 KV 已经丢了。想复用，就得在块边界另存一份状态快照。</li>
   </ul>
-  <p>tpu-inference 跑 Qwen3.5 目前要显式关掉前缀缓存（<code>--no-enable-prefix-caching</code>），否则触发一个断言错误（同一 README:95）。</p>
+  <p>vLLM、SGLang 已经按「块边界存状态快照」支持混合模型的前缀缓存，但 tpu-inference 跑 Qwen3.5 时还得显式关掉（<code>--no-enable-prefix-caching</code>），否则触发断言错误（同一 README:95）。</p>
 
   <h3 id="s3-6">3.6　分层卸载：搬回来，还是重算</h3>
   <p>HBM 放不下的 KV 可以往下放：主机内存、本机磁盘、远端存储，一层比一层大、一层比一层慢。
     命中之后要搬回来，搬回来比重算慢就白存了。</p>
   <div class="note ok"><span class="t">盈亏带宽</span>
     搬回 ＝ 每 token KV 字节 × L ÷ 带宽；重算 ≈ 每 token FLOP × L ÷ 有效算力。<br>
-    两者相等时：<b>带宽 ＝ 每 token KV 字节 × 有效算力 ÷ 每 token FLOP</b>。链路比它慢，就不如重算。</div>
+    两者相等时：<b>带宽 ＝ 每 token KV 字节 × 有效算力 ÷ 每 token FLOP</b>。链路比它慢，就不如重算。<br>
+    这是只看单个请求的账。负载高时重算会挤占别人的算力，搬回又能和计算重叠，盈亏点会往慢链路那边移。</div>
 __FIG_S3_OFFLOAD__
   <p>V3 按 v7 FP8 峰值的一半算，盈亏带宽约 2.19 GB/s；GQA 的 Llama-3.1-70B 每个 FLOP 对应的 KV 多，要 5.35 GB/s。
     前缀越长，注意力的平方项让重算越贵，1 GB/s 的慢链路过了约 35K token 也能赢。</p>
   <ul>
-    <li><b>llm-d</b>（开源的 Kubernetes 推理调度）在 TPU7x 上测过 Qwen3-32B 把 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，吞吐 +8.9%。它的排障说明里也写着另一面：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
-    <li><b>Mooncake Store</b>：开源的分布式 KV 存储，把集群各机的内存和 SSD 拼成一个池，机器之间用 RDMA 互取。</li>
-    <li><b>LMCache</b>：开源的 KV 缓存层，接在 vLLM、SGLang 下面，往主机内存、本地盘、远端存储里放 KV。</li>
-    <li><b>TPU Sync</b>：Google 开源的 TPU 侧 KV 编排，做多层存储和主机内存卸载，README 写明还在开发中、不建议通用。</li>
+    <li><b>llm-d</b>（开源的 Kubernetes 推理调度）在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>，当前 main 已删此表）。它的排障说明也写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
+    <li><b>Mooncake Store</b>：把集群各机的内存和 SSD 拼成一个 KV 池，机器之间用 RDMA 互取。</li>
+    <li><b>LMCache</b>：接在 vLLM、SGLang 下面的 KV 缓存层，往主机内存、本地盘、远端存储里放；Google 的 TPU Sync 在 TPU 侧做类似的事，还在开发中。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
@@ -93,11 +97,11 @@ FIGS = {
         '<b>绿色两块两条序列共用，橙色那块是 B 要改时复制出来的。</b><br>'
         '<em>每块 4 个 token 只为画得下；机制见 vLLM 论文（arXiv 2309.06180）。</em>'),
     "__FIG_S3_POOL__": ("fig-s3-pool", "fig6-swa-ratio.svg", "topic06-fig-kv.py",
-        '<b>只有红条一边满时，另一边的预算在空转；两边都红才最快。</b><br>'
-        '<em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计，输入 4K／8K、输出 1K，关前缀缓存。</em>'),
+        '<b>分水阀拧到两个水箱一起快满时最快；一边先满，另一边的预算就在空转。</b><br>'
+        '<em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计，前两格输入 4K、第三格输入 8K，输出 1K，关前缀缓存。</em>'),
     "__FIG_S3_OFFLOAD__": ("fig-s3-offload", "fig6-offload.svg", "topic06-fig-kv.py",
         '<b>绿线始终在红线下面：链路够快，命中多长都该搬。</b><br>'
-        '<em>每芯片口径；有效算力按 FP8 峰值 50% 假设，两档带宽是示意值。本课推导。</em>'),
+        '<em>灰虚线是盈亏带宽 2.19 GB/s；每芯片口径；有效算力按 FP8 峰值 50% 假设，两档带宽是示意值。本课推导。</em>'),
 }
 
 NUM_LOCK = [
@@ -107,13 +111,9 @@ NUM_LOCK = [
     ("38", "fig6-kv-batch.svg"),
     ("327,680", "fig6-kv-batch.svg"),
     ("66", "fig6-kv-batch.svg"),
-    ("428", "fig6-paged.svg"),
-    ("283", "fig6-paged.svg"),
     ("6,887", "fig6-swa-ratio.svg"),
     ("10,614", "fig6-swa-ratio.svg"),
-    ("10,704", "fig6-swa-ratio.svg"),
     ("54%", "fig6-swa-ratio.svg"),
     ("2.19", "fig6-offload.svg"),
-    ("5.35", "fig6-offload.svg"),
     ("35K", "fig6-offload.svg"),
 ]

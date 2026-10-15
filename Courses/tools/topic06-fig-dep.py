@@ -19,7 +19,7 @@ r"""专题六 · 第六节「切专家与注意力：TEP 和 DEP」的三张静�
 刻意没画
   · fig6-dep-kv 不画「EP 从 4 路变 8 路省下的专家权重」那一半：要权重分项才能算准，没现算就不画。
   · fig6-dep-kv 的「每卡 4 个槽」是示意，不是 V4-Pro 的真实容量。
-  · fig6-dep-tpu 不画 TP／DP 的绝对吞吐曲线，只画相对差；绝对数在出处里。
+  · fig6-dep-tpu 不画 TP／DP 的绝对吞吐曲线，只画相对差；绝对数只标在折线两端。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
 
@@ -85,27 +85,26 @@ assert round((PR_A[3][0] / PR_A[2][0] - 1) * 100) == 3 and round((PR_A[3][1] / P
 def fig_dep_kv():
     f = Fig(W, "同样 8 张卡，每张卡的 KV 池画成 4 个请求槽。TEP4 是两组各 4 张卡，V4-Pro 只有一个 KV 头，"
                "每组 4 张卡存的是同样 4 个请求的整份 KV，8 张卡一共只放下 8 个不同的请求，其余 24 格是副本。"
-               "DEP8 每张卡管自己的 4 个请求，8 张卡放下 32 个，是 4 倍。倍数等于 TP 度数除以 KV 头数："
-               "V4-Pro TEP4 是 4 倍，MLA 模型 TEP8 是 8 倍，2 个 KV 头的 Qwen3.5 全注意力层 TEP8 是 4 倍，8 个 KV 头的模型 TEP8 是 1 倍。"
+               "DEP8 每张卡管自己的 4 个请求，8 张卡放下 32 个，是 4 倍。"
                "实测 V4-Pro 从 TP4 换 DEP8，同并发 512，每卡吞吐从 1319 到 2758，2.09 倍")
     y0 = f.header("同样的 KV 预算，DEP 放下的请求多几倍　——　<tspan font-weight=\"700\">TP 度数 ÷ KV 头数</tspan>",
-                  "左：8 张卡，每张卡的 KV 池画成 4 个槽，格子里是请求编号（示意）。右：倍数怎么算，和一次实测",
+                  "8 张卡，每张卡的 KV 池画成 4 个槽，格子里是请求编号（示意）。V4-Pro 只有 1 个 KV 头",
                   [(GR, "不同的请求"), (RD, "同一请求的副本")])
-    PH = 450
-    LW = 820
-    py = f.panel(0, y0, LW, PH, "8 张卡能同时放下几个请求（V4-Pro：1 个 KV 头）", GR)
-    CW, GAP, SH = 70, 12, 30
-    X0 = 140
+    PH = 560
+    py = f.panel(0, y0, W, PH, "8 张卡能同时放下几个请求", GR)
+    CW, GAP, SH, SP = 96, 14, 34, 40
+    X0 = 190
+    GW = NCARD * (CW + GAP) - GAP
     rows = [("TEP4 × 2 组", 4), ("DEP8", 1)]
     for r, (name, tp) in enumerate(rows):
-        yy = py + 50 + r * 200
-        f.t(20, yy + 60, name, INK, True, 17)
-        f.t(20, yy + 84, "注意力 TP%d" % tp if tp > 1 else "注意力各算各的", GY, size=13)
+        yy = py + 46 + r * 250
+        f.t(24, yy + 66, name, INK, True, 19)
+        f.t(24, yy + 92, "注意力 TP4" if tp > 1 else "注意力各算各的", GY, size=15)
         for c in range(NCARD):
             x = X0 + c * (CW + GAP)
             if tp > 1 and c % tp == 0 and c:
-                f.line(x - GAP / 2, yy - 6, x - GAP / 2, yy + SLOT * (SH + 4) + 4, GY2, 1.2, "4 3", arrow=False)
-            f.box(x, yy - 4, CW, SLOT * (SH + 4) + 4, "none", LINE, 6)
+                f.line(x - GAP / 2, yy - 10, x - GAP / 2, yy + SLOT * SP + 6, GY2, 1.4, "5 4", arrow=False)
+            f.box(x, yy - 6, CW, SLOT * SP + 6, "none", LINE, 6)
             for s in range(SLOT):
                 if tp > 1:
                     req = (c // tp) * SLOT + s + 1
@@ -114,40 +113,29 @@ def fig_dep_kv():
                     req = c * SLOT + s + 1
                     dup = False
                 col = RD if dup else GR
-                f.box(x + 6, yy + s * (SH + 4), CW - 12, SH, "#fce8e6" if dup else "#e6f4ea", col, 4)
-                f.t(x + CW / 2, yy + s * (SH + 4) + 21, str(req), col, True, 13, "middle")
-            f.t(x + CW / 2, yy + SLOT * (SH + 4) + 22, "卡 %d" % c, GY, size=12, anchor="middle")
+                f.box(x + 7, yy + s * SP, CW - 14, SH, "#fce8e6" if dup else "#e6f4ea", col, 4)
+                f.t(x + CW / 2, yy + s * SP + 23, str(req), col, True, 16, "middle")
+            f.t(x + CW / 2, yy + SLOT * SP + 26, "卡 %d" % c, GY, size=14, anchor="middle")
         n = TEP_N if tp > 1 else DEP_N
-        f.t(LW - 20, yy - 14, "放下 %d 个请求" % n, RD if tp > 1 else GR, True, 16, "end")
+        f.t(X0 + GW + 30, yy + 70, "放下", GY, size=16)
+        f.t(X0 + GW + 30, yy + 108, "%d 个" % n, RD if tp > 1 else GR, True, 34)
+    # 右侧两个大号数
+    RX = X0 + GW + 150
+    f.line(RX - 20, py + 30, RX - 20, py + PH - 70, LINE, 1, arrow=False)
+    f.t(RX, py + 150, "KV 放得下的请求", GY, size=16)
+    f.t(RX, py + 206, "4 倍", GR, True, 52)
+    f.t(RX, py + 236, "TP 度数 4 ÷ KV 头数 1", GY, size=15)
+    f.t(RX, py + 350, "实测每卡吞吐", GY, size=16)
+    f.t(RX, py + 406, "%.2f 倍" % RATIO, BL, True, 52)
+    f.t(RX, py + 436, "%s → %s tok/s" % (format(round(TP4_PER), ","), format(round(DEP_PER), ",")), GY, size=15)
     f._pan = None
-
-    RX, RW = LW + 20, W - LW - 20
-    py2 = f.panel(RX, y0, RW, PH, "倍数 ＝ TP 度数 ÷ KV 头数", OR)
-    for i, ((nm, kv, tp, h), g) in enumerate(zip(MODELS, GAINS)):
-        yy = py2 + 36 + i * 58
-        f.t(RX + 16, yy + 6, nm, INK, True, 13.5)
-        f.t(RX + 16, yy + 26, "%s · TEP%d" % (kv, tp), GY, size=12)
-        bw = 20 * g
-        f.box(RX + 300, yy - 6, max(bw, 4), 22, OR if g > 1 else GY2, OR if g > 1 else GY2, 3)
-        f.t(RX + 300 + max(bw, 4) + 8, yy + 10, "%g 倍" % g if g > 1 else "1 倍（不省）", INK, True, 14)
-    yy = py2 + 36 + 4 * 58 + 6
-    f.line(RX + 16, yy - 8, RX + RW - 16, yy - 8, LINE, 1, arrow=False)
-    f.t(RX + 16, yy + 16, "实测：GB300 · V4-Pro · vLLM，并发 512", INK, True, 13.5)
-    f.t(RX + 16, yy + 44, "每卡吞吐", GY, size=13)
-    f.t(RX + 110, yy + 44, "TP4 %s → DEP8 %s" % (format(round(TP4_PER), ","), format(round(DEP_PER), ",")), INK, size=13.5)
-    f.t(RX + 16, yy + 70, "出字间隔", GY, size=13)
-    f.t(RX + 110, yy + 70, "%.1f ms → %.1f ms" % (TPOT_TP4, TPOT_DEP), INK, size=13.5)
-    f.t(RX + RW - 18, yy + 58, "%.2f 倍" % RATIO, GR, True, 22, "end")
-    f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "判据是 KV 头数和 batch，不是笼统的「decode 喜欢 TP」", [
-        "KV 头只有 1 个时，TP 每多一路就多一份副本；DEP 把这些副本换成了别的请求，batch 变大，那一趟搬运分给更多 token。",
-        "实测只到 2.09 倍、不到 4 倍：4 倍是 KV 容量的上限，实测还掺着 EP 摊薄专家、prefill 喂料，原始记录没有拆开归因。",
-    ])
+    yb = f.band(y0 + PH + 20, "ok", "4 倍是容量上限；实测 2.09 倍里还掺着 EP 和 prefill 喂料，原始记录没拆开归因", [])
     yb = f.src(yb + 10,
                "V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。",
                "实测：同文件 :449（3p1d 并发 512 总吞吐 21,100，出字间隔 46.8 ms）、:464-465（3p ＋ dep8 并发 512 为 55,153，11.8 ms）。"
                "吞吐是 prompt 加输出的总 token；GPU 数 16 和 20 见同文件 :476，每卡数本脚本现算。",
                "本课推导：每卡 4 个槽是示意；倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致。"
+               "其他模型：MLA 模型 TEP8 是 8 倍；Qwen3.5-397B 全注意力层 2 个 KV 头，TEP8 是 4 倍；8 个 KV 头的 GQA 模型 TEP8 是 1 倍。"
                "Qwen3.5-397B-A17B 的 num_key_value_heads ＝ 2 取自 HF config.json；它的线性注意力层（GDN）按头切得开，不在这个倍数里。")
     f.save("fig6-dep-kv.svg", yb + 14)
 
@@ -156,7 +144,7 @@ def _axes(f, x0, y0, w, h, ymax, yticks, fmt):
     for v in yticks:
         yy = y0 + h - h * v / ymax
         f.line(x0, yy, x0 + w, yy, "#eceff1", 1, arrow=False)
-        f.t(x0 - 10, yy + 4, fmt(v), GY, size=12, anchor="end")
+        f.t(x0 - 10, yy + 5, fmt(v), GY, size=14, anchor="end")
     f.line(x0, y0 + h, x0 + w, y0 + h, GY2, 1.2, arrow=False)
 
 
@@ -166,11 +154,11 @@ def fig_dep_feed():
                "16 台时撞上一个崩溃模式，只测到 2799。输入减半成 4K 时，同样台数的 prefill 喂出约两倍。"
                "出字间隔一直只有 5 到 15 毫秒，说明 decode 一直在等 prefill 喂料")
     y0 = f.header("DEP8 的 decode 一直在等喂料　——　<tspan font-weight=\"700\">prefill 1 → 14 台，每卡 307 → 3,321</tspan>",
-                  "GB300 · V4-Pro · vLLM。decode 固定 DEP8（8 块卡），并发 1,024。纵轴：每块 decode 卡每秒输出多少 token；点旁边是出字间隔",
+                  "GB300 · V4-Pro · vLLM。decode 固定 DEP8（8 块卡），并发 1,024。纵轴：每块 decode 卡每秒输出多少 token",
                   [(BL, "8K 进 1K 出"), (OR, "4K 进 1K 出（同一套 decode 不重启）"), (RD, "崩溃模式，数不完整")])
     PH = 430
     py = f.panel(0, y0, W, PH, "prefill 台数 → 每块 decode 卡的输出吞吐", BL)
-    X0, PW, PY, PHH = 110, 1060, py + 30, PH - 110
+    X0, PW, PY, PHH = 110, 1240, py + 30, PH - 110
     XMAX, YMAX = 16, 3600
     _axes(f, X0, PY, PW, PHH, YMAX, [0, 1000, 2000, 3000], lambda v: format(v, ","))
 
@@ -180,36 +168,25 @@ def fig_dep_feed():
     def py_(v):
         return PY + PHH - PHH * v / YMAX
     for n in (1, 2, 4, 6, 8, 10, 12, 14, 16):
-        f.t(px(n), PY + PHH + 22, str(n), GY, size=12, anchor="middle")
-    f.t(X0 + PW / 2, PY + PHH + 46, "prefill 台数（每台 TP4，4 块卡）", GY, size=13, anchor="middle")
+        f.t(px(n), PY + PHH + 22, str(n), GY, size=14, anchor="middle")
+    f.t(X0 + PW / 2, PY + PHH + 48, "prefill 台数（每台 TP4，4 块卡）", GY, size=15, anchor="middle")
     f.path([(px(n), py_(v)) for n, v, _ in FEED], BL, 2.6, arrow=False)
-    for n, v, tp in FEED:
+    for n, v, _ in FEED:
         f.box(px(n) - 5, py_(v) - 5, 10, 10, BL, BL, 5)
-        if tp:
-            f.t(px(n) + 10, py_(v) + 20, "%s ms" % tp, GY, size=12)
     f.path([(px(14), py_(3321)), (px(16), py_(FEED_BAD[1]))], RD, 1.6, "5 4", arrow=False)
     f.box(px(16) - 5, py_(FEED_BAD[1]) - 5, 10, 10, RD, RD, 5)
-    f.t(px(16) - 8, py_(FEED_BAD[1]) + 26, "16 台：崩", RD, True, 13, "end")
+    f.t(px(16) - 8, py_(FEED_BAD[1]) + 26, "16 台：崩", RD, True, 15, "end")
     f.path([(px(n), py_(v)) for n, v in FEED4K], OR, 2.4, arrow=False)
     for n, v in FEED4K:
         f.box(px(n) - 5, py_(v) - 5, 10, 10, OR, OR, 5)
-    f.t(px(4) + 12, py_(2222) - 8, "输入减半，同样台数喂出约 2 倍", OR, True, 13)
-    f.t(px(1) + 12, py_(307) - 12, "307", BL, True, 15)
-    f.t(px(14) - 4, py_(3321) - 14, "3,321", BL, True, 15, "end")
-    RX = X0 + PW + 30
-    f.t(RX, PY + 30, "decode 卡数", GY, size=13)
-    f.t(RX, PY + 54, "一直是 8 块", INK, True, 15)
-    f.t(RX, PY + 100, "出字间隔", GY, size=13)
-    f.t(RX, PY + 124, "5–15 ms", INK, True, 15)
-    f.t(RX, PY + 148, "远没到上限", GY, size=13)
+    f.t(px(4) + 12, py_(2222) - 8, "输入减半，同样台数喂出约 2 倍", OR, True, 15)
+    f.t(px(1) + 12, py_(307) - 12, "307", BL, True, 18)
+    f.t(px(14) - 4, py_(3321) - 14, "3,321", BL, True, 18, "end")
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "DEP 越宽、输入越长，越吃 prefill", [
-        "decode 这边每卡放得下的请求多了，就得有人把请求喂进来；扩 DEP8 的杠杆是加 prefill，不是加 decode 卡。",
-        "对照：TP4 decode 加第 4 台 prefill，21,100 → 20,479。",
-    ])
+    yb = y0 + PH + 10
     yb = f.src(yb + 10,
                "gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:711-724（8k1k，并发 1,024，sa-bench 开环，表中 Output tok/s ÷ 8）、"
-               ":727-734（4k1k 重扫，倍数 2.06／2.07／1.90／1.99）、:736 起（16 台时的失效模式 B）。TP4 decode 加第 4 台 prefill 不涨见同文件 :488。",
+               ":727-734（4k1k 重扫，倍数 2.06／2.07／1.90／1.99）、:736 起（16 台时的失效模式 B）。TP4 decode 加第 4 台 prefill，21,100 → 20,479，见同文件 :488。",
                "这组是 2026-07-24 的旧记录，runbook 注明「本文未重测」；14 台那一点出字间隔原表没给。")
     f.save("fig6-dep-feed.svg", yb + 14)
 
@@ -217,49 +194,41 @@ def fig_dep_feed():
 def fig_dep_tpu():
     f = Fig(W, "tpu-inference 的一个公开 PR，在 TPU v7x-8 上跑 Qwen3.5-397B-A17B-FP8，比较 TP 等于 8 和 DP 注意力等于 8，专家都走 EP。"
                "1K 进 8K 出时，并发 64 打平，128 多 14%，256 多 22%，512 多 62%。8K 进 1K 出时依次多 14%、23%、36%、40%。"
-               "并发越高，DP 注意力赢得越多；TP 在 1K 进 8K 出的并发 256 到 512 之间几乎不涨")
+               "并发越高，DP 注意力赢得越多。1K 进 8K 出并发 512 时，输出吞吐 TP 是 4266、DP 是 6914")
     y0 = f.header("TPU 上同一个模型：并发越高，DP 注意力比 TP 赢得越多　——　<tspan font-weight=\"700\">512 并发 +62%</tspan>",
                   "tpu-inference PR #2577 · Qwen3.5-397B-A17B-FP8 · TPU v7x-8（4 颗芯片、8 个 device）· TP=8 对 DP=8，专家都走 EP。纵轴：DP 的输出吞吐比 TP 多多少",
                   [(BL, "1K 进 8K 出（decode 为主）"), (OR, "8K 进 1K 出（prefill 为主）")])
-    PH = 420
-    LW = 900
-    py = f.panel(0, y0, LW, PH, "并发 → DP 注意力相对 TP 的输出吞吐", BL)
-    X0, PW, PY, PHH = 90, LW - 170, py + 30, PH - 130
+    PH = 440
+    py = f.panel(0, y0, W, PH, "并发 → DP 注意力相对 TP 的输出吞吐（端点标的是输出 tok/s，TP → DP）", BL)
+    X0, PW, PY, PHH = 100, 1000, py + 40, PH - 130
     YMAX = 70
     _axes(f, X0, PY, PW, PHH, YMAX, [0, 20, 40, 60], lambda v: "+%d%%" % v if v else "打平")
 
     def px(i):
-        return X0 + 40 + (PW - 80) * i / 3
+        return X0 + 270 + (PW - 330) * i / 3
 
     def py_(v):
         return PY + PHH - PHH * v / YMAX
     for i, c in enumerate(CONC):
-        f.t(px(i), PY + PHH + 22, str(c), GY, size=12, anchor="middle")
-    f.t(X0 + PW / 2, PY + PHH + 46, "并发", GY, size=13, anchor="middle")
-    for adv, col in ((ADV_A, BL), (ADV_B, OR)):
-        f.path([(px(i), py_(v)) for i, v in enumerate(adv)], col, 2.6, arrow=False)
+        f.t(px(i), PY + PHH + 24, str(c), GY, size=15, anchor="middle")
+    f.t(X0 + PW / 2, PY + PHH + 50, "并发", GY, size=15, anchor="middle")
+    for adv, pr, col in ((ADV_A, PR_A, BL), (ADV_B, PR_B, OR)):
+        f.path([(px(i), py_(v)) for i, v in enumerate(adv)], col, 2.8, arrow=False)
         for i, v in enumerate(adv):
-            f.box(px(i) - 5, py_(v) - 5, 10, 10, col, col, 5)
-            f.t(px(i) + (12 if col == BL else -12), py_(v) + (-10 if col == BL else 22),
-                "+%d%%" % v if v else "0%", col, True, 14, None if col == BL else "end")
+            f.box(px(i) - 6, py_(v) - 6, 12, 12, col, col, 6)
+            if 0 < i < 3:
+                f.t(px(i) + (12 if col == BL else -12), py_(v) + (26 if col == BL else -12),
+                    "+%d%%" % v, col, True, 16, None if col == BL else "end")
+        # 右端点：百分比 ＋ 绝对值
+        t, d = pr[3]
+        f.t(px(3) + 18, py_(adv[3]) + 2, "+%d%%" % adv[3], col, True, 26)
+        f.t(px(3) + 18, py_(adv[3]) + 26, "%s → %s" % (format(t, ","), format(d, ",")), col, size=15)
+        # 左端点：绝对值
+        t, d = pr[0]
+        lab = ("打平　" if adv[0] == 0 else "+%d%%　" % adv[0]) + "%s → %s" % (format(t, ","), format(d, ","))
+        f.t(px(0) - 16, py_(adv[0]) + (-8 if col == BL else 6), lab, col, True, 15, "end")
     f._pan = None
-    RX, RW = LW + 20, W - LW - 20
-    py2 = f.panel(RX, y0, RW, PH, "1K 进 8K 出的绝对数（输出 tok/s）", GY2)
-    f.t(RX + 20, py2 + 34, "并发", GY, True, 13)
-    f.t(RX + 170, py2 + 34, "TP=8", GY, True, 13, "end")
-    f.t(RX + 300, py2 + 34, "DP=8", GY, True, 13, "end")
-    for i, (c, (t, d)) in enumerate(zip(CONC, PR_A)):
-        yy = py2 + 70 + i * 44
-        f.t(RX + 20, yy, str(c), INK, size=14)
-        f.t(RX + 170, yy, format(t, ","), INK, size=14, anchor="end")
-        f.t(RX + 300, yy, format(d, ","), BL, True, 14, "end")
-    f.t(RX + 20, py2 + 270, "TP 从 256 到 512 只涨 3%，", RD, True, 13.5)
-    f.t(RX + 20, py2 + 294, "DP 还在涨 37%", BL, True, 13.5)
-    f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "并发低时 KV 放得下，复制不要紧；并发一高，谁能多放请求谁赢", [
-        "本课的解读：这个模型的全注意力层只有 2 个 KV 头，TP=8 时每份 KV 复制 4 份，batch 先被卡住；DP 每个 device 只存自己那批。",
-        "PR 同时改了调度：把 prefill 攒在一起派，免得一条长 prefill 混进 DP 批里拖慢所有 rank。DP 的代价就在这类「最慢的那个 rank」上。",
-    ])
+    yb = f.band(y0 + PH + 20, "ok", "PR 同时改了调度：prefill 攒在一起派，免得一条长 prefill 混进 DP 批里拖慢所有 rank", [])
     yb = f.src(yb + 10,
                "github.com/vllm-project/tpu-inference/pull/2577「Enable correct DP attention for hybrid attention＋mamba models」，2026-05-15 合入；"
                "PR 正文表格给输出／总吞吐两个数，本图用输出吞吐现算百分比，与 PR 的「DP Advantage」一列一致。正确性：mmlu_pro DP=8 0.8129 对 TP=8 0.8271（PR 原话：limit=50 时在 1σ 内）。",

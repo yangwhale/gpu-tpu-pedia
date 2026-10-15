@@ -32,7 +32,7 @@ fig6-spec-tree.svg —— 回答：这么多投机解码的名字，各自把草
   · 刻意没画各家加速倍数：都是原作者在自己设定下报的，放在一张图里会被横着比。
 """
 
-from topic03_draw import Fig, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
+from topic03_draw import Fig, wpx, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
 
 W = 1400
 
@@ -188,13 +188,13 @@ def fig_step():
 # ════════════════════════════════════════════════════════════════════════
 def fig_bytes():
     f = Fig(W, "左图：DeepSeek-V3 一步验证 n 个 token 要读多少权重，FP8 每参数一字节。灰色是每个 token 都要经过的部分，"
-               "约 171 亿参数，验证几个 token 都只读一遍；彩色是路由专家，每个 token 挑自己的 8 个，"
+               "约 171 亿参数，验证几个 token 都只读一遍；橙色是路由专家，每个 token 挑自己的 8 个，"
                "验证的 token 越多，碰到的专家并起来越多。验证 1 个读约 37.5 GB，验证 8 个约 163.8 GB，是 4.4 倍。"
-               "右图：加速比等于平均接受长度除以一步变慢的倍数。三条线分别是一步不变慢、慢 1.45 倍、慢 2 倍。"
-               "Kimi K3 实测点：一步从 11.1 毫秒变成约 16.1 毫秒，慢 1.45 倍，一步出 6.96 个字，每字间隔快 4.81 倍")
+               "右图：Kimi K3 实测的时间账。不开投机，搬一趟权重 11.1 毫秒，带回 1 个字；开投机，搬一趟变成约 16.1 毫秒，"
+               "慢了 1.45 倍，但平均带回 6.96 个字。摊到每个字，从 11.1 毫秒降到 2.31 毫秒，快 4.81 倍")
     y0 = f.header("多验证几个 token 贵不贵　——　<tspan font-weight=\"700\">稠密部分白送，MoE 专家不白送</tspan>",
-                  "左：V3 验证一步要读的权重（本课推导，FP8）。右：加速比 ＝ 平均接受长度 ÷ 一步变慢的倍数",
-                  [(GY2, "每个 token 都经过的部分"), (OR, "路由专家（各挑各的）"), (BL, "加速比曲线"), (RD, "K3 实测")])
+                  "左：V3 验证一步要读的权重（本课推导，FP8）。右：Kimi K3 实测，搬一趟变慢了，但一趟带回的字多得多",
+                  [(GY2, "每个 token 都经过的部分"), (OR, "路由专家（各挑各的）"), (BL, "开投机后的一趟")])
     PH = 470
     LW = 640
     py = f.panel(0, y0, LW, PH, "V3 验证 n 个 token，一步读多少 GB", OR)
@@ -203,8 +203,8 @@ def fig_bytes():
     f.box(PX, PY0, PW, PHH, "none", LINE, 4)
     for g in (0, 60, 120, 180):
         yy = PY0 + PHH - PHH * g / GMAX
-        f.t(PX - 10, yy + 5, str(g), GY, size=12.5, anchor="end")
-    f.t(PX - 60, PY0 - 14, "GB", GY, size=12.5)
+        f.t(PX - 10, yy + 5, str(g), GY, size=14, anchor="end")
+    f.t(PX - 60, PY0 - 14, "GB", GY, size=14)
     bw = PW / 8
     for n in range(1, 9):
         x = PX + (n - 1) * bw + 10
@@ -212,251 +212,261 @@ def fig_bytes():
         h_t = PHH * step_gb(n) / GMAX
         f.box(x, PY0 + PHH - h_o, bw - 20, h_o, "#bdc1c6", GY2, 2)
         f.box(x, PY0 + PHH - h_t, bw - 20, h_t - h_o, OR, OR, 2)
-        f.t(x + (bw - 20) / 2, PY0 + PHH + 22, str(n), GY, size=13, anchor="middle")
+        f.t(x + (bw - 20) / 2, PY0 + PHH + 24, str(n), GY, size=15, anchor="middle")
         if n in (1, 8):
-            f.t(x + (bw - 20) / 2, PY0 + PHH - h_t - 8, "%.1f" % step_gb(n), INK, True, 13.5, "middle")
-    f.t(PX + PW / 2, PY0 + PHH + 46, "一步验证的 token 数 n", GY, True, 13.5, anchor="middle")
-    f.t(PX + 16, PY0 + 26, "验证 8 个 ＝ 验证 1 个的 %.1f 倍" % BYTES_X8, RD, True, 14)
-    f.t(PX + 16, PY0 + 48, "灰色 %.1f GB 不随 n 变" % (OTHER / 1e9), GY, False, 13)
+            f.t(x + (bw - 20) / 2, PY0 + PHH - h_t - 8, "%.1f" % step_gb(n), INK, True, 15, "middle")
+    f.t(PX + PW / 2, PY0 + PHH + 52, "一步验证的 token 数 n", GY, True, 15, anchor="middle")
+    f.t(PX + 16, PY0 + 30, "验证 8 个 ＝ 验证 1 个的 %.1f 倍" % BYTES_X8, RD, True, 17)
+    f.t(PX + 16, PY0 + 56, "灰色 %.1f GB 不随 n 变" % (OTHER / 1e9), GY, False, 15)
 
-    # 右：AL vs 加速比
+    # 右：K3 一趟的时间账
     RX = LW + 20
-    py2 = f.panel(RX, y0, W - RX, PH, "加速比 ＝ 接受长度 ÷ 一步变慢的倍数", BL)
-    QX, QY, QW, QH = RX + 80, py2 + 50, W - RX - 200, 320
-    AMAX, SMAX = 8, 8
-    f.box(QX, QY, QW, QH, "none", LINE, 4)
+    RW = W - RX
+    py2 = f.panel(RX, y0, RW, PH, "Kimi K3 实测：搬一趟，带回几个字", BL)
+    TX = RX + 150                      # 时间零点
+    MS = 30.0                          # 每毫秒多少像素
+    assert TX + 17 * MS < W - 20
 
-    def X(a):
-        return QX + QW * a / AMAX
+    def lane(yy, lab, ms, col, fill, n_tok, tok_lab):
+        f.t(RX + 24, yy + 26, lab, INK, True, 17)
+        f.box(TX, yy, ms * MS, 40, fill, col, 6)
+        f.t(TX + 14, yy + 26, "搬一趟 %.1f ms" % ms, col, True, 16)
+        for k in range(n_tok):
+            f.box(TX + k * 36, yy + 56, 30, 30, BL, BL, 5)
+        f.t(TX + n_tok * 36 + 10, yy + 78, tok_lab, INK, True, 16)
 
-    def Y(s):
-        return QY + QH - QH * min(s, SMAX) / SMAX
-    for a in (0, 2, 4, 6, 8):
-        f.t(X(a), QY + QH + 22, str(a), GY, size=12.5, anchor="middle")
-    for s in (0, 2, 4, 6, 8):
-        f.t(QX - 10, Y(s) + 5, "%d×" % s, GY, size=12.5, anchor="end")
-    f.t(QX + QW / 2, QY + QH + 46, "平均每步出几个字（接受长度）", GY, True, 13.5, anchor="middle")
-    for r, dash, lab in ((1.0, None, "一步不变慢"), (K3_RATIO, "7,4", "慢 %.2f 倍" % K3_RATIO), (2.0, "2,4", "慢 2 倍")):
-        a_end = min(AMAX, SMAX * r)
-        f.path("M%d,%d L%d,%d" % (X(1), Y(1 / r), X(a_end), Y(a_end / r)), BL, 2.5, dash=dash, arrow=False)
-        f.t(X(a_end) + 8, Y(a_end / r) + 5, lab, BL, True, 13)
-    cx, cy = X(K3_AL), Y(K3_TPOT_X)
-    f.box(cx - 6, cy - 6, 12, 12, RD, RD, 6)
-    f.t(cx - 12, cy - 34, "K3 实测：一步 %.1f → %.1f ms" % (K3_TPOT_NS, K3_STEP_SP), RD, True, 13.5, "end")
-    f.t(cx - 12, cy - 14, "接受 %.2f 个 → 每字快 %.2f×" % (K3_AL, K3_TPOT_X), RD, True, 13.5, "end")
-    yb = f.band(y0 + PH + 16, "ok", "小 batch 时收益几乎全来自接受长度", [
-        "一步的时间主要花在读权重上；稠密部分验证几个都只读一遍，所以多验证几个几乎不加时间。",
-        "MoE 要打折：每个 token 挑自己的专家，验证得越多碰到的专家越多。K3 一步慢了 %.2f 倍，靠一步出 %.2f 个字仍净赚。" % (K3_RATIO, K3_AL),
-    ])
-    yb = f.src(yb + 10,
+    ya = py2 + 40
+    lane(ya, "不开投机", K3_TPOT_NS, GY2, "#e8eaed", 1, "带回 1 个字")
+    yb_ = ya + 140
+    lane(yb_, "开投机", K3_STEP_SP, BL, "#e8f0fe", 7, "平均带回 %.2f 个字" % K3_AL)
+    # 多花的那一截：从 11.1 ms 到 16.1 ms
+    x1, x2 = TX + K3_TPOT_NS * MS, TX + K3_STEP_SP * MS
+    f.path("M%d,%d L%d,%d" % (x1, ya + 44, x1, yb_ + 44), GY2, 1.2, dash="4,4", arrow=False)
+    f.path("M%d,%d L%d,%d L%d,%d L%d,%d" % (x1, yb_ - 8, x1, yb_ - 14, x2, yb_ - 14, x2, yb_ - 8),
+           RD, 1.6, arrow=False)
+    f.t((x1 + x2) / 2, yb_ - 22, "慢 %.2f 倍" % K3_RATIO, RD, True, 16, "middle")
+    # 摊到每个字
+    yc = yb_ + 150
+    f.path("M%d,%d L%d,%d" % (RX + 24, yc - 30, W - 24, yc - 30), LINE, 1, arrow=False)
+    f.t(RX + 24, yc, "摊到每个字", GY, True, 16)
+    f.t(RX + 24, yc + 36, "%.1f ms → %.2f ms，快 %.2f 倍" % (K3_TPOT_NS, K3_TPOT_SP, K3_TPOT_X), BL, True, 22)
+    f.t(RX + 24, yc + 66, "一趟慢一点不要紧，带回的字多得多", GY, size=15)
+    yb = f.src(y0 + PH + 6,
                "V3 结构取自 HF deepseek-ai/DeepSeek-V3 config.json：hidden 7,168、moe_intermediate 2,048、61 层中前 3 层稠密、256 个路由专家挑 8 个。"
                "每个专家 3 × 7,168 × 2,048 ≈ 4,404 万参数。",
                "⚠️ 本课推导：其余部分 ＝ 671B − 256 × 58 × 专家大小 ≈ %.1fB；由此推出每 token 激活 ≈ %.1fB，与技术报告的 37B 差 2%% 以内（外部锚点）。"
                % (OTHER / 1e9, ACTIVE_DERIVED / 1e9),
-               "⚠️ 本课推导：n 个 token 独立、均匀地挑专家时，一层平均碰到 256 × (1 − (1 − 8/256)^n) 个；实际路由不均匀、相邻 token 常挑同一批专家，所以彩色那段是偏高的估计。",
+               "⚠️ 本课推导：n 个 token 独立、均匀地挑专家时，一层平均碰到 256 × (1 − (1 − 8/256)^n) 个；实际路由不均匀、相邻 token 常挑同一批专家，所以橙色那段是偏高的估计。",
                "K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089（GB300 TP8 跨两节点，ISL 4096／OSL 1024，temperature 0，bs=1，TPOT 11.1 → 2.31 ms）、:979（accept len 6.96，block 7）。",
-               "⚠️ 本课推导：开投机后一步耗时 ＝ 2.31 ms × 6.96 ≈ 16.1 ms；每字间隔快 11.1 ÷ 2.31 ≈ 4.81 倍。runbook 报的端到端 4.22× 含首字时间，所以比 4.81 小。",
+               "⚠️ 本课推导：开投机后一趟耗时 ＝ 2.31 ms × 6.96 ≈ 16.1 ms；每字间隔快 11.1 ÷ 2.31 ≈ 4.81 倍。runbook 报的端到端 4.22× 含首字时间，所以比 4.81 小。"
+               "右图第 7 个方块代表平均值里的 0.96 个，示意。",
                "注：K3 是 8 张卡跑 bs=1，一步里除了读权重还有通信和 kernel 之间的空转，所以「慢 1.45 倍」不能全归给多读的专家。")
     f.save("fig6-spec-bytes.svg", yb + 14)
 
 
 # ════════════════════════════════════════════════════════════════════════
 def fig_conc():
-    f = Fig(W, "上图：Kimi K3 在 GB300 上开 DSpark 投机解码的加速比随并发下降：并发 1 是 4.22 倍，8 是 2.86 倍，"
-               "32 是 1.89 倍，64 是 1.74 倍；上下文拉到 32K、并发 1 只剩 1.32 倍。"
-               "左下：B200 上 DeepSeek-V4-Flash 用 vLLM、EP 加 DP 八路时开 MTP，所有并发档吞吐都下降，从负 3% 到负 37%。"
-               "右下：GB300 上 V4-Pro 把 MTP 从一步加到两步，decode 峰值掉 13%，端到端反而涨 28%")
-    y0 = f.header("投机解码的收益会缩　——　<tspan font-weight=\"700\">batch 一大，多验证的 token 就不再白送</tspan>",
-                  "柱高 ＝ 开投机后的吞吐 ÷ 不开（虚线 ＝ 1，不赚不赔）。三块面板是三套不同的硬件和模型，不要横着比",
-                  [(GR, "K3 4K 上下文"), (PU, "K3 32K 上下文"), (RD, "比不开还慢")])
-    PH = 330
-    py = f.panel(0, y0, W, PH, "Kimi K3 · GB300 · SGLang TP8 · DSpark（输出 tok/s 之比）", GR)
-    BX0, BY0, BH = 160, py + 40, 220
+    f = Fig(W, "Kimi K3 在 GB300 上开 DSpark 投机解码，输出吞吐的加速比随并发下降：并发 1 是 4.22 倍，8 是 2.86 倍，"
+               "32 是 1.89 倍，64 是 1.74 倍；同样并发 1，上下文从 4K 拉到 32K，只剩 1.32 倍")
+    y0 = f.header("投机解码的收益会缩　——　<tspan font-weight=\"700\">人一多、上下文一长，白送的那部分就变少</tspan>",
+                  "Kimi K3 · GB300 · SGLang TP8。柱高 ＝ 开投机后的输出吞吐 ÷ 不开；虚线 ＝ 1，不赚不赔",
+                  [(GR, "4K 上下文，并发 1 → 64"), (PU, "32K 上下文，并发 1")])
+    PH = 400
+    py = f.panel(0, y0, W, PH, "开投机后的吞吐是不开的几倍", GR)
+    BX0, BY0, BH = 150, py + 56, 260
     SMAX = 4.5
 
     def Yb(v):
         return BY0 + BH - BH * v / SMAX
-    f.path("M%d,%d L%d,%d" % (BX0 - 20, Yb(1), W - 120, Yb(1)), GY2, 1.4, dash="4,4", arrow=False)
-    f.t(BX0 - 30, Yb(1) + 5, "1×", GY, size=13, anchor="end")
-    bw, gap = 120, 70
+    f.path("M%d,%d L%d,%d" % (BX0 - 20, Yb(1), W - 40, Yb(1)), GY2, 1.4, dash="4,4", arrow=False)
+    f.t(BX0 - 30, Yb(1) + 6, "1×", GY, size=16, anchor="end")
+    bw, gap = 130, 60
     for i, ((c, ns, sp), x_) in enumerate(zip(K3_CONC, K3_X)):
         x = BX0 + i * (bw + gap)
         f.box(x, Yb(x_), bw, Yb(0) - Yb(x_), GR, GR, 4)
-        f.t(x + bw / 2, Yb(x_) - 8, "%.2f×" % x_, INK, True, 16, "middle")
-        f.t(x + bw / 2, BY0 + BH + 22, "并发 %d" % c, GY, True, 13.5, "middle")
-    x = BX0 + 4 * (bw + gap) + 40
+        f.t(x + bw / 2, Yb(x_) - 10, "%.2f×" % x_, INK, True, 20, "middle")
+        f.t(x + bw / 2, BY0 + BH + 28, "并发 %d" % c, GY, True, 16, "middle")
+    xs = BX0 + 4 * (bw + gap) + 60
+    f.path("M%d,%d L%d,%d" % (xs - 30, BY0 - 10, xs - 30, BY0 + BH + 40), LINE, 1, arrow=False)
     v32 = K3_32K[1] / K3_32K[0]
-    f.box(x, Yb(v32), bw, Yb(0) - Yb(v32), PU, PU, 4)
-    f.t(x + bw / 2, Yb(v32) - 8, "%.2f×" % v32, INK, True, 16, "middle")
-    f.t(x + bw / 2, BY0 + BH + 22, "32K · 并发 1", PU, True, 13.5, "middle")
-    f.t(x + bw + 20, Yb(3.6), "同样并发 1，", PU, True, 14)
-    f.t(x + bw + 20, Yb(3.6) + 20, "上下文 4K → 32K：", PU, True, 14)
-    f.t(x + bw + 20, Yb(3.6) + 40, "4.22× → 1.32×", PU, True, 14)
-
-    # 左下：B200 vLLM EP+DP8 MTP
-    py2 = y0 + PH + 14
-    PH2 = 300
-    LW = 860
-    pb = f.panel(0, py2, LW, PH2, "V4-Flash · B200 · vLLM EP+DP8 · MTP 2 个草稿（吞吐变化）", RD)
-    ZX, ZY, ZH = 70, pb + 40, 190
-    PMIN = -40
-
-    def Yp(p):
-        return ZY + ZH * (p / PMIN)
-    f.path("M%d,%d L%d,%d" % (ZX - 10, ZY, LW - 20, ZY), GY2, 1.4, arrow=False)
-    f.t(ZX - 16, ZY + 5, "0%", GY, size=12.5, anchor="end")
-    f.t(ZX - 16, Yp(-37) + 5, "-37%", GY, size=12.5, anchor="end")
-    cw = (LW - ZX - 30) / len(B200)
-    for i, ((c, m, b), p) in enumerate(zip(B200, B200_PCT)):
-        x = ZX + i * cw + 8
-        f.box(x, ZY, cw - 16, Yp(p) - ZY, RD, RD, 3)
-        f.t(x + (cw - 16) / 2, Yp(p) + 18, "%d%%" % p, INK, True, 13, "middle")
-        f.t(x + (cw - 16) / 2, ZY - 8, str(c), GY, size=12.5, anchor="middle")
-    f.t(ZX, pb + 252, "柱上方的数是并发；全部 10 档都比不开 MTP 慢，−3% 到 −37%", RD, True, 13.5)
-
-    # 右下：V4-Pro steps
-    RX = LW + 14
-    pr = f.panel(RX, py2, W - RX, PH2, "V4-Pro · GB300 · SGLang · MTP 1 步 → 2 步", OR)
-    gx = RX + 60
-    for j, (lab, (a, b)) in enumerate((("decode 峰值", V4_PEAK), ("端到端", V4_E2E))):
-        yy = pr + 50 + j * 110
-        p = round((b / a - 1) * 100)
-        f.t(gx - 30, yy + 4, lab, INK, True, 14.5)
-        sc = 300 / 12000
-        f.box(gx - 30, yy + 16, a * sc, 22, "#e8eaed", GY2, 3)
-        f.t(gx - 30 + a * sc + 8, yy + 33, "1 步 {:,}".format(a), GY, size=12.5)
-        col = RD if p < 0 else GR
-        f.box(gx - 30, yy + 44, b * sc, 22, col, col, 3)
-        f.t(gx - 30 + b * sc + 8, yy + 61, "2 步 {:,}（%+d%%）".format(b) % p, col, True, 13)
-    f.t(RX + 20, pr + 262, "单位 tok/s/GPU；两个指标方向相反", GY, size=13)
-    yb = f.band(py2 + PH2 + 16, "ok", "batch 一大，一步就被算力卡住", [
-        "小 batch 时多验证的 token 搭的是读权重的便车；batch 大了，每多验证一个 token 都要实打实多算一份。",
-        "EP+DP 本来就是为大 batch 配的，算力已经吃满，再加草稿就是纯开销；长上下文时注意力也在抢同一段时间。",
-    ])
-    yb = f.src(yb + 10,
-               "K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089-1092（GB300，TP8 跨两节点，ISL 4096／OSL 1024，random，temperature 0，开环，只报热轮；输出 tok/s 总量）、:1057-1058（32K，只测了并发 1）。",
-               "B200：gpu/inference/a4/deepseek-v4/README.vllm.md:266-275（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%）。",
-               "V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%）。"
-               "峰值是 batch 撑满时的 decode 吞吐；端到端受 prefill 喂不满拖累，batch 多数时间不在顶点。",
-               "注：K3 并发 64 时开投机的 TPOT 仍只有不开的 40%，这一档吞吐和延迟同时变好；B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。")
+    f.box(xs, Yb(v32), bw, Yb(0) - Yb(v32), PU, PU, 4)
+    f.t(xs + bw / 2, Yb(v32) - 10, "%.2f×" % v32, INK, True, 20, "middle")
+    f.t(xs + bw / 2, BY0 + BH + 28, "32K · 并发 1", PU, True, 16, "middle")
+    f.t(xs + bw + 24, Yb(3.4), "同样并发 1，", PU, True, 16)
+    f.t(xs + bw + 24, Yb(3.4) + 24, "上下文 4K → 32K：", PU, True, 16)
+    f.t(xs + bw + 24, Yb(3.4) + 48, "4.22× → 1.32×", PU, True, 18)
+    yb = f.src(y0 + PH + 6,
+               "K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089-1092（GB300，TP8 跨两节点，ISL 4096／OSL 1024，random，temperature 0，开环，只报热轮；输出 tok/s 总量）、:1057-1058（32K，只测了并发 1；8／32 没测，集群已删）。",
+               "注：K3 并发 64 时开投机的 TPOT 仍只有不开的 40%，这一档吞吐和延迟同时变好。",
+               "正文里另两组数的出处 —— B200：gpu/inference/a4/deepseek-v4/README.vllm.md:266-275（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%；十档并发 −3% 到 −37%）。",
+               "V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%；decode 峰值 −13%、端到端 +28%）。"
+               "B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。")
     f.save("fig6-spec-conc.svg", yb + 14)
 
 
 # ════════════════════════════════════════════════════════════════════════
 def fig_temp():
-    f = Fig(W, "左图：GB300 上的 DeepSeek-V4-Pro 用 vLLM 开 DSpark 投机，草稿是贪心的（每次只挑最可能的字）。"
-               "压测工具不发温度时，服务端按温度 1.0 随机采样，接受率只有 1.16%，吞吐 944 tok/s；"
-               "发温度 0 时接受率 34%，吞吐 2,911 tok/s，是 3.1 倍。"
-               "右图：Kimi K3 的草稿按概率抽样，官方就用温度 1.0 压测；接受长度随任务变，代码类约 4.73，创作类约 2.61")
-    y0 = f.header("温度：草稿怎么抽，压测就得怎么发　——　<tspan font-weight=\"700\">对不上，接受率就塌</tspan>",
-                  "同一套服务、同一份负载，只差请求里带不带 temperature=0",
-                  [(RD, "温度 1.0（服务端默认）"), (GR, "温度 0"), (BL, "K3 官方接受长度")])
-    PH = 330
-    LW = 860
-    py = f.panel(0, y0, LW, PH, "V4-Pro · GB300 · vLLM · 贪心草稿 · 4K/1K 并发 256", RD)
-    rows = [("接受率", T1_ACC, T0_ACC, 40, "%.2f%%", "%.0f%%"), ("输出 tok/s", T1_TPS, T0_TPS, 3200, "{:,}", "{:,}")]
-    for j, (lab, a, b, mx, fa, fb) in enumerate(rows):
-        yy = py + 50 + j * 130
-        f.t(24, yy + 34, lab, INK, True, 15)
-        sc = 560 / mx
-        f.box(150, yy + 8, max(a * sc, 3), 30, RD, RD, 3)
-        f.t(150 + max(a * sc, 3) + 10, yy + 30, (fa.format(a) if "{" in fa else fa % a), RD, True, 14)
-        f.box(150, yy + 48, b * sc, 30, GR, GR, 3)
-        f.t(150 + b * sc + 10, yy + 70, (fb.format(b) if "{" in fb else fb % b), GR, True, 14)
-    f.t(24, py + 290, "接受率差 %d 倍，吞吐差 %.1f 倍" % (round(T0_ACC / T1_ACC), T0_TPS / T1_TPS), INK, True, 15)
+    f = Fig(W, "用对答案打比方。题目是下一个字填什么，最可能的答案是「好」，草稿是贪心的，每次都写最可能的「好」。"
+               "上一行温度 1.0：大模型掷骰子决定标准答案，大多掷出别的字，和草稿对不上，被扔掉。"
+               "GB300 上的 DeepSeek-V4-Pro 实测接受率只有 1.16%，吞吐 944 tok/s。"
+               "下一行温度 0：骰子永远停在最可能的那个字，草稿只要猜的就是它就能对上。实测接受率 34%，吞吐 2,911 tok/s，是 3.1 倍")
+    y0 = f.header("温度：大模型出答案时掷不掷骰子　——　<tspan font-weight=\"700\">草稿总写最可能的字，骰子一掷就对不上</tspan>",
+                  "题目：「今天天气真＿」，最可能填「好」。草稿是贪心的，永远交「好」；大模型按温度决定标准答案（示意）",
+                  [(PU, "草稿交的答案"), (RD, "对不上，扔掉"), (GR, "对上，收下")])
+    LH = 190
+    WORDS1 = ["不错", "热", "好", "晴", "冷"]          # 示意：温度 1.0 掷出的五次
+    WORDS0 = ["好"] * 5
 
-    RX = LW + 14
-    pr = f.panel(RX, y0, W - RX, PH, "K3 · 概率草稿 · 官方温度 1.0", BL)
-    for j, (lab, v) in enumerate((("代码等低熵任务", K3_AL_LOW), ("创作等高熵任务", K3_AL_HIGH))):
-        yy = pr + 60 + j * 100
-        f.t(RX + 24, yy, lab, INK, True, 14.5)
-        f.box(RX + 24, yy + 14, v * 70, 30, BL, BL, 3)
-        f.t(RX + 24 + v * 70 + 10, yy + 36, "约 %.2f 个／步" % v, BL, True, 14)
-    f.t(RX + 24, pr + 270, "接受长度跟着负载走", GY, size=13.5)
-    yb = f.band(y0 + PH + 16, "warn", "接受率掉了不报错，只是变慢", [
-        "压测报告必须写明温度和草稿的抽样方式；跨框架比投机解码，先对齐两边的压测工具发不发 temperature。",
-        "线上要把接受率和平均接受长度做成告警：它们往下走时 TPOT 才慢慢变差，等用户察觉已经晚了。",
-    ])
-    yb = f.src(yb + 10,
-               "V4-Pro：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:398-410。generation_config 默认 temperature 1.0；DSpark 草稿 draft_sample_method 为 greedy，num_speculative_tokens=7。"
+    def die(x, y, s, col, dots):
+        f.box(x, y, s, s, "#fff", col, 10, 1.8)
+        for dx, dy in dots:
+            f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="%s"/>' % (x + s * dx, y + s * dy, col))
+
+    rows = [("温度 1.0", "服务端默认", "掷骰子", WORDS1, "%.2f%%" % T1_ACC, "{:,} tok/s".format(T1_TPS), RD,
+             [(.25, .25), (.75, .25), (.5, .5), (.25, .75), (.75, .75)]),
+            ("温度 0", "请求里写明", "只认最可能那个", WORDS0, "%.0f%%" % T0_ACC, "{:,} tok/s".format(T0_TPS), GR,
+             [(.5, .5)])]
+    yy = y0
+    for lab, sub_, how, words, acc, tps, col, dots in rows:
+        py = f.panel(0, yy, W, LH, lab + "　·　" + sub_, col)
+        cy = py + (LH - 30) / 2
+        # 草稿交的答案
+        f.box(30, cy - 34, 130, 68, "#f3e8fd", PU, 8)
+        f.t(95, cy - 6, "草稿交", PU, True, 15, "middle")
+        f.t(95, cy + 22, "「好」", PU, True, 20, "middle")
+        f.t(195, cy + 6, "对", GY, True, 16, "middle")
+        # 大模型的骰子
+        die(230, cy - 32, 64, GY, dots)
+        f.t(262, cy + 56, how, GY, True, 15, "middle")
+        f.line(310, cy, 360, cy, GY2, 1.6)
+        # 五次标准答案
+        for k, w in enumerate(words):
+            ok = (w == "好")
+            c = GR if ok else RD
+            x = 380 + k * 112
+            f.box(x, cy - 30, 96, 60, "#e6f4ea" if ok else "#fce8e6", c, 8)
+            f.t(x + 48, cy - 2, "「%s」" % w, c, True, 18, "middle")
+            f.t(x + 48, cy + 22, "✓ 收下" if ok else "✕ 扔掉", c, True, 14, "middle")
+        # 实测
+        rx = 1000
+        f.path("M%d,%d L%d,%d" % (rx - 20, py + 14, rx - 20, py + LH - 44), LINE, 1, arrow=False)
+        f.t(rx + 10, cy - 18, "V4-Pro 实测接受率", GY, True, 15)
+        f.t(rx + 10, cy + 20, acc, col, True, 30)
+        f.t(rx + 10 + (wpx(acc, 30) + 14), cy + 20, tps, col, True, 18)
+        yy += LH + 12
+    f._pan = None
+    f.t(0, yy + 22, "实测吞吐差 %.1f 倍；温度 0 那行没对上的，是草稿自己猜错了" % (T0_TPS / T1_TPS), INK, True, 17)
+    yb = f.src(yy + 36,
+               "⚠️ 示意：「今天天气真＿」和温度 1.0 那行掷出的五个字是举例，不是实测分布。",
+               "V4-Pro：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:398-410（GB300，vLLM，4K/1K，并发 256）。generation_config 默认 temperature 1.0；DSpark 草稿 draft_sample_method 为 greedy，num_speculative_tokens=7。"
                "vllm bench serve 不发 temperature；sa-bench 硬编码 0.0。",
-               "K3：gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:226-237（官方压测 temperature 1.0、top-p 0.95；DSpark 用 probabilistic 草稿；接受长度为官方参考值，本仓库未复测）。",
+               "正文里 K3 的数（接受长度：代码类约 %.2f、创作类约 %.2f）：gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:226-237（" % (K3_AL_LOW, K3_AL_HIGH) + "官方压测 temperature 1.0、top-p 0.95；DSpark 用 probabilistic 草稿，草稿自己也掷骰子，所以温度 1.0 也对得上；接受长度为官方参考值，本仓库未复测）。",
                "告警：gpu/inference/a4x-max/kimi-k3/PD-BACKLOG.md:175。")
     f.save("fig6-spec-temp.svg", yb + 14)
 
 
 # ════════════════════════════════════════════════════════════════════════
+# 草稿离大模型越来越近：四格主线 ＋ 一格侧枝。年份按 arXiv 首版（2026-10-15 核过摘要页）。
 TREE = [
-    # (泳道, 年, 名字, 一句话, arXiv / 出处)
-    (0, 2022.9, "独立小模型", "另一个小模型打草稿", "2211.17192"),
-    (0, 2023.4, "SpecInfer", "草稿排成树，一次验几条", "2305.09781"),
-    (0, 2024.0, "Medusa", "大模型头上挂几个预测头", "2401.10774"),
-    (0, 2024.08, "EAGLE 1／2", "读大模型的隐状态打草稿", "2401.15077"),
-    (0, 2024.95, "MTP", "预测头直接训进模型", "2412.19437"),
-    (0, 2025.2, "EAGLE-3", "融合多层特征", "2503.01840"),
-    (0, 2026.5, "DSpark", "半自回归，按置信度定验几个", "2607.05147"),
-    (1, 2023.8, "Prompt Lookup", "从 prompt 里抄", "GitHub"),
-    (1, 2024.1, "Lookahead", "Jacobi 迭代凑 n-gram", "2402.02057"),
-    (1, 2024.85, "SuffixDecoding", "后缀树查历史输出", "2411.04975"),
-    (2, 2025.75, "DiffuSpec", "现成扩散模型当草稿", "2510.02358"),
-    (2, 2026.1, "DFlash", "块扩散一次出一整块", "2602.06036"),
+    # (年份角标, 名字, 一句话, 出处)
+    ("2022–23", "独立小模型", "旁边另放一个小模型", "Leviathan 等 2211.17192；Chen 等 2302.01318"),
+    ("2024", "Medusa", "大模型头上挂几个小头", "2401.10774"),
+    ("2024", "EAGLE", "读大模型内部的状态", "2401.15077（EAGLE-2 2406.16858、EAGLE-3 2503.01840）"),
+    ("2024 末", "MTP · DeepSeek-V3", "训练时就长在模型里", "2412.19437"),
+    ("2023–24", "Prompt Lookup／Suffix", "直接从 prompt 里抄", "Prompt Lookup 只有 GitHub 仓库；SuffixDecoding 2411.04975"),
 ]
-assert len(TREE) == 12
+assert len(TREE) == 5
 
 
 def fig_tree():
-    f = Fig(W, "投机解码的谱系，横轴是年份。第一条泳道是有草稿模型的一支，草稿离大模型越来越近："
-               "2022 年用独立的小模型，2023 年 SpecInfer 把草稿排成树，2024 年 Medusa 在大模型头上挂预测头，"
-               "EAGLE 读大模型的隐状态，DeepSeek-V3 的 MTP 把预测头直接训进模型，2025 年 EAGLE-3，2026 年 DSpark。"
-               "第二条泳道不要草稿模型：Prompt Lookup 从 prompt 里抄，Lookahead 用 Jacobi 迭代，SuffixDecoding 查历史输出。"
-               "第三条是 2025 到 2026 年的扩散草稿：DiffuSpec、DFlash，一次并行出一整块草稿")
-    y0 = f.header("草稿从哪来　——　<tspan font-weight=\"700\">越来越贴近大模型，或者干脆不要模型</tspan>",
-                  "横轴 ＝ arXiv 首版年份。一个点一种方法，点下写它的草稿从哪来",
-                  [(BL, "有草稿模型"), (OR, "不要草稿模型"), (PU, "扩散／块并行草稿")])
-    LANES = [("有草稿模型", BL), ("不要草稿模型", OR), ("扩散草稿", PU)]
-    LH = [250, 190, 190]
-    X0, X1 = 200, W - 90
-    Y0, Y1 = 2022.5, 2026.9
+    f = Fig(W, "草稿离大模型越来越近，四格加一个侧枝。第一格 2022 到 2023 年：旁边另放一个独立的小模型打草稿。"
+               "第二格 2024 年 Medusa：在大模型头上挂几个小预测头。第三格 2024 年 EAGLE：草稿读大模型内部的状态。"
+               "第四格 2024 年末 DeepSeek-V3 的 MTP：预测头训练时就长在模型里。"
+               "侧枝 2023 到 2024 年：不要模型，Prompt Lookup 和 SuffixDecoding 直接从 prompt 或历史输出里抄")
+    y0 = f.header("草稿从哪来　——　<tspan font-weight=\"700\">一步步长进大模型身上，或者干脆不要模型</tspan>",
+                  "灰色大块 ＝ 大模型，紫色小块 ＝ 草稿。角标是 arXiv 首版年份",
+                  [(GY2, "大模型"), (PU, "草稿"), (OR, "侧枝：不要模型")])
+    CW, CH, GAP = 250, 340, 20
+    ya = y0 + 34                                    # 顶上留一条「越来越近」的箭头
+    f.line(30, y0 + 12, 4 * CW + 3 * GAP - 30, y0 + 12, PU, 2.2)
+    f.t(4 * CW + 3 * GAP - 40, y0 + 4, "草稿离大模型越来越近", PU, True, 16, "end")
+    BX, BY, BS = 72, 96, 110                        # 格内：大模型方块的位置和边长
 
-    def X(yr):
-        return X0 + (X1 - X0) * (yr - Y0) / (Y1 - Y0)
-    for yr in (2023, 2024, 2025, 2026):
-        f.t(X(yr), y0 + 14, str(yr), GY, True, 14, "middle")
-    y0 += 26
-    tops = []
-    yy = y0
-    for (name, col), h in zip(LANES, LH):
-        f.panel(0, yy, W, h, name, col)
-        tops.append(yy)
-        yy += h + 10
-    # 年份尺
-    for yr in (2023, 2024, 2025, 2026):
-        f.path("M%d,%d L%d,%d" % (X(yr), y0 + 32, X(yr), yy - 12), "#e8eaed", 1, arrow=False)
-    # 第一泳道两行错开，避免字撞
-    alt = {}
-    for lane, yr, nm, desc, ref in TREE:
-        col = LANES[lane][1]
-        base = tops[lane] + 30
-        k = alt.get(lane, 0)
-        alt[lane] = k + 1
-        if lane == 0:
-            cy = base + (60 if k % 2 == 0 else 150)
-        else:
-            cy = base + (40 if k % 2 == 0 else 105)
-        f.box(X(yr) - 7, cy - 7, 14, 14, col, col, 7)
-        f.t(X(yr) + 14, cy + 5, nm, col, True, 14.5)
-        f.t(X(yr) + 14, cy + 25, desc, GY, size=12.5)
-        f.t(X(yr) + 14, cy + 43, ref, GY2, size=11.5, mono=True)
-    # 第一泳道一条「越来越近」的箭头
-    yb = f.band(yy + 6, "ok", "草稿越贴近大模型，猜得越准", [
-        "独立小模型要单独训练、单独部署；挂头、读隐状态、训进模型，一步步把草稿变成大模型自己的一部分。",
-        "不要模型的一支靠「输出常常抄输入」：改代码、做摘要、agent 反复调用工具时最好用。",
-    ])
-    yb = f.src(yb + 10,
-               "每个点的 arXiv 号写在名字下面，年份取 arXiv 首版（2026-10-15 逐个核过摘要页）。Prompt Lookup 只有 GitHub 仓库 apoorvumang/prompt-lookup-decoding（已集成进 vLLM 与 transformers）。",
-               "DSpark：DeepSeek，arXiv 2607.05147，摘要说在吞吐相同的条件下单用户生成速度比线上 MTP-1 快 60–85%。DFlash：ICML 2026，摘要说无损加速超过 6 倍。",
-               "注：各家报的加速倍数都是原作者在自己的模型和负载上测的，彼此不能横比，所以图上不画倍数。",
-               "注：EAGLE 1 和 EAGLE-2 画成一个点（2401.15077、2406.16858）；P-EAGLE、PARD、LayerSkip 等没画。")
+    def big(x, y, layers=False):
+        f.box(x + BX, y + BY, BS, BS, "#e8eaed", GY2, 8)
+        if layers:
+            for k in range(1, 4):
+                yy = y + BY + BS * k / 4
+                f.path("M%d,%d L%d,%d" % (x + BX + 8, yy, x + BX + BS - 8, yy), GY2, 1, arrow=False)
+        f.t(x + BX + BS / 2, y + BY + BS + 26, "大模型", GY, True, 15, "middle")
+
+    def draft(x, y, w=58, h=34, lab="草稿"):
+        f.box(x, y, w, h, "#f3e8fd", PU, 6)
+        f.t(x + w / 2, y + h / 2 + 6, lab, PU, True, 15, "middle")
+
+    def card(i, x, col, dash=None):
+        yr, nm, desc, _ = TREE[i]
+        f.box(x, ya, CW, CH, "none", col if dash else LINE, 10, 1.2, dash=dash)
+        f.badge(x + 12, ya + 12, i + 1, col if dash else INK, 14)
+        f.box(x + CW - 82, ya + 14, 70, 26, "#fff", LINE, 13)
+        f.t(x + CW - 47, ya + 32, yr, GY, True, 14, "middle")
+        f.t(x + CW / 2, ya + CH - 62, nm, INK if not dash else col, True, 17, "middle")
+        f.t(x + CW / 2, ya + CH - 30, desc, GY, False, 15, "middle")
+
+    # ① 旁边另放一个小模型
+    x = 0
+    card(0, x, PU)
+    f.box(x + 30, ya + BY + 10, BS - 10, BS - 10, "#e8eaed", GY2, 8)
+    f.t(x + 30 + (BS - 10) / 2, ya + BY + BS + 26, "大模型", GY, True, 15, "middle")
+    draft(x + 158, ya + BY + 30, 62, 50)
+    f.t(x + 189, ya + BY + 104, "小模型", PU, True, 15, "middle")
+    # ② 头上挂几个小头
+    x = CW + GAP
+    card(1, x, PU)
+    big(x, ya)
+    for k in range(3):
+        f.box(x + BX + 8 + k * 34, ya + BY - 22, 28, 30, "#f3e8fd", PU, 5)
+    f.t(x + BX + BS / 2, ya + BY - 30, "小头", PU, True, 15, "middle")
+    # ③ 读大模型内部的状态
+    x = 2 * (CW + GAP)
+    card(2, x, PU)
+    big(x - 30, ya, layers=True)
+    hy = ya + BY + BS * 2 / 4
+    draft(x + 182, hy - 17)
+    f.line(x + BX - 30 + BS - 10, hy, x + 178, hy, PU, 1.8)
+    # ④ 训练时就长在模型里
+    x = 3 * (CW + GAP)
+    card(3, x, PU)
+    big(x, ya, layers=True)
+    draft(x + BX + (BS - 58) / 2, ya + BY + BS - 44, 58, 34, "MTP")
+    # ⑤ 侧枝：从 prompt 里抄
+    x5 = 4 * CW + 3 * GAP + 40
+    W5 = W - x5
+    yr, nm, desc, _ = TREE[4]
+    f.box(x5, ya, W5, CH, "none", OR, 10, 1.2, dash="6,4")
+    f.badge(x5 + 12, ya + 12, 5, OR, 14)
+    f.box(x5 + W5 - 82, ya + 14, 70, 26, "#fff", LINE, 13)
+    f.t(x5 + W5 - 47, ya + 32, yr, GY, True, 14, "middle")
+    px = x5 + 24
+    f.t(px, ya + 84, "prompt 里已经有：", GY, True, 15)
+    f.box(px, ya + 96, W5 - 48, 36, "#fff", LINE, 6)
+    f.t(px + 10, ya + 120, "x = <tspan fill=\"#b06000\" font-weight=\"700\">np.zeros(</tspan>n)", INK, size=16, mono=True)
+    f.t(px, ya + 168, "下文又写到：", GY, True, 15)
+    f.box(px, ya + 180, W5 - 48, 36, "#fff", LINE, 6)
+    f.t(px + 10, ya + 204, "y = <tspan fill=\"#b06000\" font-weight=\"700\">np.zeros(</tspan>…", INK, size=16, mono=True)
+    f.path("M%d,%d C%d,%d %d,%d %d,%d" % (px + 150, ya + 134, px + 190, ya + 150, px + 190, ya + 160, px + 150, ya + 178),
+           OR, 1.8)
+    f.t(px + 196, ya + 162, "照抄", OR, True, 15)
+    f.t(x5 + W5 / 2, ya + CH - 62, nm, OR, True, 17, "middle")
+    f.t(x5 + W5 / 2, ya + CH - 30, desc, GY, False, 15, "middle")
+    yb = f.src(ya + CH + 6,
+               "年份取 arXiv 首版（2026-10-15 逐个核过摘要页）："
+               + "；".join("%s %s" % (nm, ref) for _, nm, _, ref in TREE) + "。"
+               "Prompt Lookup 仓库 apoorvumang/prompt-lookup-decoding（已集成进 vLLM 与 transformers）。",
+               "没画进图的（正文里提到）：SpecInfer 2305.09781 把草稿排成树；DSpark（DeepSeek，2607.05147）半自回归、按置信度定验几个，"
+               "摘要说吞吐相同条件下单用户生成速度比线上 MTP-1 快 60–85%；扩散草稿 DiffuSpec 2510.02358、DFlash 2602.06036（ICML 2026，摘要说无损加速超过 6 倍）；"
+               "Lookahead 2402.02057。P-EAGLE、PARD、LayerSkip 等也没画。",
+               "注：各家报的加速倍数都是原作者在自己的模型和负载上测的，彼此不能横比，所以图上不画倍数。")
     f.save("fig6-spec-tree.svg", yb + 14)
 
 

@@ -209,20 +209,25 @@ def fig_batch():
 
 # ══════════════════════════════════════════════════════════════════════
 def fig_paged():
+    # 物理块编号是示意：挑成「两张页表各自单调递增」，连线只在两表之间交叉，不穿任何字
+    TBL = {"A": [1, 3, 4, 6], "B": [1, 3, 7]}
     f = Fig(W, "PagedAttention 示意：两条序列共用 prompt「请写一首关于秋天的诗」，每块 4 个 token。"
-               "A 的页表是 3、4、2、0，B 的页表是 3、4、6。物理块 3 和 4 被两条序列共享，引用计数 2；"
-               "第三块原本共享，A 先往里写，B 那份被复制到块 6，即写时复制")
+               "左边是每条序列眼里连续的 KV，中间是两张页表，右边是显存里零散的物理块。"
+               "A 的页表是 1、3、4、6，B 的页表是 1、3、7。物理块 1 和 3 被两条序列共享；"
+               "第三块原本共享，A 要往里写，B 先把它复制到块 7，即写时复制")
     y0 = f.header("页表让 KV 不必连续存放　——　"
                   "<tspan font-weight=\"700\">共用的前缀只存一份，谁要改谁复制</tspan>",
-                  "两条采样共用同一个 prompt。左边是每条序列眼里的「连续」KV，右边是它们在显存里真正住的块。每块 4 个 token（仅为示意）",
-                  [(GR, "两条共用（引用 2）"), (BL, "只属于 A"), (OR, "只属于 B"), (GY2, "空闲块")])
-    PH = 470
-    py = f.panel(0, y0, 640, PH, "逻辑上：每条序列以为自己是连续的", GY)
-    f.panel(680, y0, W - 680, PH, "物理上：显存里零散的块", GY)
+                  "两条采样共用同一个 prompt。每块 4 个 token（仅为示意）",
+                  [(GR, "两条共用"), (BL, "只属于 A"), (OR, "只属于 B"), (GY2, "空闲块")])
+    PH = 450
+    LW = 540
+    py = f.panel(0, y0, LW, PH, "逻辑上：每条序列以为自己是连续的", GY)
+    PX0 = 780
+    f.panel(PX0, y0, W - PX0, PH, "物理上：显存里零散的块", GY)
     SW_, SH_ = 30, 38
     BW_ = 4 * SW_
 
-    def block(x, y, toks, col, dash=None):
+    def block(x, y, toks, col):
         for i in range(4):
             tk = toks[i] if i < len(toks) else ""
             f.box(x + i * SW_, y, SW_, SH_, "#fff" if tk else "none", col if tk else GY2, 2,
@@ -231,107 +236,124 @@ def fig_paged():
                 f.t(x + i * SW_ + SW_ / 2, y + 25, tk, INK, False, 15, "middle")
 
     SEQ = {
-        "A": (["请写一首", "关于秋天", "的诗：落", "叶"], [3, 4, 2, 0], [GR, GR, BL, BL], py + 70),
-        "B": (["请写一首", "关于秋天", "的诗。枫"], [3, 4, 6], [GR, GR, OR], py + 260),
+        "A": (["请写一首", "关于秋天", "的诗：落", "叶"], [GR, GR, BL, BL], py + 66),
+        "B": (["请写一首", "关于秋天", "的诗。枫"], [GR, GR, OR], py + 276),
     }
-    LX = 40
+    LX, BG = 18, 10
+    CX, CW, CH, CS = 572, 160, 32, 42          # 页表卡片：左缘、宽、每格高、行距
     ends = []
-    for name, (blks, tbl, cols, y) in SEQ.items():
+    for name, (blks, cols, y) in SEQ.items():
         f.t(LX, y - 16, "序列 %s" % name, INK, True, 16)
-        for i, (tk, pb, col) in enumerate(zip(blks, tbl, cols)):
-            x = LX + i * (BW_ + 18)
+        for i, (tk, col) in enumerate(zip(blks, cols)):
+            x = LX + i * (BW_ + BG)
             block(x, y, list(tk), col)
-            f.box(x + BW_ / 2 - 26, y + SH_ + 18, 52, 30, "#fff", col, 4, 1.6)
-            f.t(x + BW_ / 2, y + SH_ + 39, "→ %d" % pb, col, True, 15, "middle")
-            ends.append((x + BW_ / 2 + 26, y + SH_ + 33, pb, col))
-        f.t(LX, y + SH_ + 76, "页表：第 0、1、2%s 块 → 物理块 %s"
-            % ("、3" if len(tbl) == 4 else "", "、".join(str(t) for t in tbl)), GY, size=13)
+            f.t(x + BW_ / 2, y + SH_ + 24, "第 %d 块" % i, GY, size=14, anchor="middle")
+        # 页表卡片：一格一行「第 i 块 → 物理块」
+        f.t(CX + CW / 2, y - 16, "%s 的页表" % name, INK, True, 16, "middle")
+        for i, (pb, col) in enumerate(zip(TBL[name], cols)):
+            cy = y + i * CS
+            f.box(CX, cy, CW, CH, "#fff", col, 4, 1.6)
+            f.t(CX + CW / 2, cy + 22, "第 %d 块 → %d" % (i, pb), col, True, 15, "middle")
+            ends.append((CX + CW, cy + CH / 2, pb, col))
 
     # 物理块：8 行
-    PX, PY0, RH = 820, py + 20, 52
-    PHYS = {3: ("请写一首", GR, "引用 2"), 4: ("关于秋天", GR, "引用 2"),
-            2: ("的诗：落", BL, "A"), 6: ("的诗。枫", OR, "B · 写时复制来的"),
-            0: ("叶", BL, "A · 末块没写满")}
+    PX, PY0, RH = 1000, py + 20, 50
+    PHYS = {1: ("请写一首", GR, "两条共用"), 3: ("关于秋天", GR, "两条共用"),
+            4: ("的诗：落", BL, "A"), 7: ("的诗。枫", OR, "B 的拷贝"),
+            6: ("叶", BL, "A · 没写满")}
     rowy = {}
     for k in range(8):
         y = PY0 + k * RH
         rowy[k] = y + SH_ / 2
-        f.t(PX - 14, y + 25, "块 %d" % k, GY, True, 14, "end")
+        f.t(PX - 14, y + 25, "块 %d" % k, GY, True, 15, "end")
         if k in PHYS:
             tk, col, note = PHYS[k]
             block(PX, y, list(tk), col)
-            f.t(PX + BW_ + 16, y + 25, note, col, True, 14)
+            f.t(PX + BW_ + 16, y + 25, note, col, True, 15)
         else:
             block(PX, y, [], GY2)
-            f.t(PX + BW_ + 16, y + 25, "空闲", GY2, size=14)
+            f.t(PX + BW_ + 16, y + 25, "空闲", GY2, size=15)
     for x1, y1, pb, col in ends:
-        x2, y2 = PX - 66, rowy[pb]
+        x2, y2 = PX - 64, rowy[pb]
         f.path("M %.1f %.1f C %.1f %.1f %.1f %.1f %.1f %.1f"
-               % (x1, y1, x1 + 120, y1, x2 - 120, y2, x2, y2), col, 1.8, arrow=True)
-    # 写时复制：块 2 → 块 6
-    xa = PX + BW_ + 230
+               % (x1 + 2, y1, x1 + 110, y1, x2 - 110, y2, x2, y2), col, 2, arrow=True)
+    # 写时复制：块 4 → 块 7
+    xa = PX + BW_ + 160
     f.path("M %.1f %.1f C %.1f %.1f %.1f %.1f %.1f %.1f"
-           % (PX + BW_ + 46, rowy[2], xa, rowy[2], xa, rowy[6], PX + BW_ + 178, rowy[6] - 4),
-           OR, 1.6, dash="5 4", arrow=True)
-    f.t(xa + 6, (rowy[2] + rowy[6]) / 2 + 5, "「的诗」原本共用；", OR, size=13)
-    f.t(xa + 6, (rowy[2] + rowy[6]) / 2 + 24, "A 先写，B 拿到一份拷贝", OR, size=13)
-    yb = f.band(y0 + PH + 20, "ok", "浪费只剩每条序列最后一块没写满的尾巴", [
-        "块越小尾巴越短，但 kernel 每块查一次页表。TPU 上块从 16 个 token 调到 256，",
-        "512 并发的 decode 一步从 428 µs 降到 283 µs：块大小要跟 kernel 一起定。",
-    ])
-    yb = f.src(yb + 10,
+           % (PX + BW_ + 50, rowy[4], xa, rowy[4], xa, rowy[7], PX + BW_ + 110, rowy[7]),
+           OR, 1.8, dash="5 4", arrow=True)
+    f.t(xa + 2, (rowy[4] + rowy[7]) / 2 - 6, "A 要往里写，", OR, True, 14)
+    f.t(xa + 2, (rowy[4] + rowy[7]) / 2 + 14, "B 先复制一份", OR, True, 14)
+    f._pan = None
+    yb = f.src(y0 + PH + 10,
                "出处：Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention（SOSP'23, arXiv 2309.06180）—— "
                "块级写时复制、并行采样与 beam search 共享块；原文统计既有系统 KV 显存里真正存 token 状态的只有 20.4%–38.2%，vLLM 达 96.3%。",
                "出处：428 → 283 µs：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/BLOG-systems-engineering-playbook.md L395–405，"
                "原文 Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」；512 并发 decode 步时。",
-               "口径：每块 4 个 token 只为画得下；真实系统常用 16（GPU）或 256（TPU 上这个模型）。")
+               "口径：每块 4 个 token 只为画得下；真实系统常用 16（GPU）或 256（TPU 上这个模型）。物理块编号是示意。")
     f.save("fig6-paged.svg", yb + 14)
 
 
 # ══════════════════════════════════════════════════════════════════════
 def fig_pool():
-    f = Fig(W, "V4-Pro 在 SGLang 上调滑窗池和全长池的比例：4K 输入时 ratio 0.20 全长池先满，每张 decode GPU 6,887 tok/s；"
-               "ratio 0.15 两个池同时满，10,614 tok/s，高 54%；再加大显存比例多装 13% 的请求，只多 0.8%。"
-               "8K 输入时 ratio 0.10 滑窗池先满，9,354 tok/s")
-    y0 = f.header("预算挪给先满的那个池　——　"
-                  "<tspan font-weight=\"700\">一个比例参数，吞吐差 54%</tspan>",
-                  "V4-Pro 每层有两个 KV 池：滑窗池只留最近 128 个 token，全长池存压缩后的整段。两池共用一份预算，ratio ＝ 滑窗池 ÷ 全长池",
-                  [(BL, "输入 4K"), (OR, "输入 8K"), (RD, "占用 ≥ 0.9，这个池满了")])
-    RH, PH = 66, 66 * 5 + 70
-    py = f.panel(0, y0, W, PH, "每张 decode GPU 的端到端输出吞吐（tok/s）", GY,
-                 tag="右边两根条：两个池各用了多少")
-    LX, BX, BS = 30, 330, 540 / 12000.0
-    GX = 1120
-    f.t(GX, py + 26, "全长池", GY, True, 13)
-    f.t(GX + 140, py + 26, "滑窗池", GY, True, 13)
-    for i, (isl, cfg, tps, full, swa, req, verdict) in enumerate(RUNS):
-        y = py + 44 + i * RH
-        col = BL if isl == "4K" else OR
-        f.t(LX, y + 24, "%s · %s" % (isl, cfg), INK, True, 14)
-        f.box(BX, y + 4, tps * BS, 30, col, col, 3)
-        f.t(BX + tps * BS + 12, y + 26, format(tps, ","), col, True, 16)
-        f.t(BX + tps * BS + 82, y + 26, verdict, GY, size=13)
-        for j, occ in enumerate((full, swa)):
-            gx = GX + j * 140
-            f.box(gx, y + 10, 90, 18, "none", LINE, 3)
-            c = RD if occ >= 0.885 else GY2
-            f.box(gx, y + 10, 90 * occ, 18, c, c, 3)
-            f.t(gx + 96, y + 25, "%.2f" % occ, c, occ >= 0.885, 13)
-    # +54% 括号
-    ya, yb_ = py + 44 + 19, py + 44 + RH + 19
-    xb = BX - 18
-    f.path("M %.1f %.1f H %.1f V %.1f H %.1f" % (BX - 4, ya, xb, yb_, BX - 6), RD, 1.6, arrow=True)
-    f.t(xb - 8, (ya + yb_) / 2 + 6, "+54%", RD, True, 17, "end")
-    yb = f.band(y0 + PH + 20, "ok", "两个池同时用到九成左右时最快", [
-        "哪个池先到 0.9，就把预算往它那边挪；8K 输入要的比例更小（0.10），因为全长池吃得更多。",
-        "多装 13% 的人只换来 0.8%：每张卡近 900 条之后，瓶颈已从 KV 容量换成算力。",
-    ])
-    yb = f.src(yb + 10,
+    f = Fig(W, "V4-Pro 的两个 KV 池画成两个水箱，共用一根进水管，ratio 是分水阀。"
+               "4K 输入、ratio 0.20：全长池用到 93% 先满，滑窗池只用 63%，每张 decode GPU 6,887 tok/s。"
+               "ratio 0.15：两个池都用到九成左右，10,614 tok/s，高 54%。"
+               "换成 8K 输入、ratio 0.10：反过来滑窗池先满（96%），全长池 78%，9,354 tok/s")
+    y0 = f.header("两个水箱一根进水管　——　"
+                  "<tspan font-weight=\"700\">分水阀拧到两边一起满，吞吐高 54%</tspan>",
+                  "V4-Pro 每层两个 KV 池，共用一份显存预算：滑窗池只留最近 128 个 token，全长池存压缩后的整段。"
+                  "ratio ＝ 滑窗池 ÷ 全长池，就是分水阀",
+                  [(BL, "已用"), (RD, "用到九成，满了")])
+    STATES = [RUNS[0], RUNS[1], RUNS[3]]
+    TITLES = ["全长池先满", "两个一起快满", "滑窗池先满"]
+    PH, PWD, GAP = 470, 430, 25
+    xs = [0, PWD + GAP, 2 * (PWD + GAP) + 15]
+    TKW, TKH = 120, 170
+    bottoms = []
+    for k, ((isl, cfg, tps, full, swa, req, verdict), ttl, px) in enumerate(zip(STATES, TITLES, xs)):
+        py = f.panel(px, y0, PWD, PH, "输入 %s · %s" % (isl, ttl), BL if isl == "4K" else OR)
+        cx = px + PWD / 2
+        # 进水管 → 分水阀 → 两根支管 → 两个水箱
+        vy = py + 70
+        f.box(cx - 7, py + 14, 14, vy - py - 14, "#e8eaed", GY2, 2, 1.2)
+        f.t(cx + 16, py + 34, "一份预算", GY, size=14)
+        lx, rx = px + 50, px + PWD - 50 - TKW
+        ty = py + 150
+        for tx in (lx, rx):
+            mx = tx + TKW / 2
+            f.path("M %.1f %.1f H %.1f V %.1f" % (cx, vy, mx, ty - 4), GY2, 9, arrow=False)
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="22" fill="#fff" stroke="%s" stroke-width="2.5"/>'
+                   % (cx, vy, INK))
+        f.line(cx - 14, vy, cx + 14, vy, INK, 3, arrow=False)
+        f.t(cx, vy + 46, cfg, INK, True, 16, "middle")
+        for tx, occ, nm in ((lx, full, "全长池"), (rx, swa, "滑窗池")):
+            hot = occ >= 0.885
+            c = RD if hot else BL
+            hw = TKH * occ
+            f.box(tx, ty + TKH - hw, TKW, hw, "#fce8e6" if hot else "#e8f0fe", "none", 3)
+            f.line(tx + 2, ty + TKH - hw, tx + TKW - 2, ty + TKH - hw, c, 2.5, arrow=False)
+            f.path("M %.1f %.1f V %.1f H %.1f V %.1f" % (tx, ty, ty + TKH, tx + TKW, ty), GY, 2.5, arrow=False)
+            f.t(tx + TKW / 2, ty + TKH - hw / 2 + 8, "%d%%" % round(occ * 100), c, True, 22, "middle")
+            f.t(tx + TKW / 2, ty + TKH + 26, nm, INK, True, 16, "middle")
+            if hot:
+                f.t(tx + TKW + 8, ty + 18, "满", RD, True, 17)
+        f.t(cx, py + PH - 70, format(tps, ","), BL if isl == "4K" else OR, True, 34, "middle", big=True)
+        f.t(cx, py + PH - 42, "tok/s（每张 decode GPU）", GY, size=14, anchor="middle")
+        bottoms.append(py + PH - 70)
+    # +54%：从第一格的吞吐指到第二格
+    ya = bottoms[0] - 12
+    x1, x2 = xs[0] + PWD / 2 + 70, xs[1] + PWD / 2 - 70
+    f.line(x1, ya, x2, ya, RD, 2, arrow=True)
+    f.t(xs[1] + 70, ya - 10, "+54%", RD, True, 20, "middle")
+    f._pan = None
+    yb = f.src(y0 + PH + 10,
                "出处：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5 消融表（约 L849–866）与结论（L872–896）：ISL 4096／8192、OSL 1024、--disable-radix-cache；"
                "吞吐是每张 decode GPU 的 e2e 输出 tok/s；占用是 full／swa 两池峰值；每 rank 请求数 727／886／999／588／410。",
                "出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。",
-               "本课推导：+54% ＝ 10,614 ÷ 6,887；+0.8% ＝ 10,704 ÷ 10,614；+13% ＝ 999 ÷ 886。",
-               "口径：8K · ratio 0.15 那一行两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。")
+               "本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），"
+               "8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。",
+               "口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；水箱一样大、管子一样粗是示意，不代表两池的真实字节数。")
     f.save("fig6-swa-ratio.svg", yb + 14)
 
 
@@ -339,12 +361,13 @@ def fig_pool():
 def fig_offload():
     f = Fig(W, "把存下来的 V3 KV 搬回来，和重新 prefill 一遍，各要多久：重算的时间随前缀长度先线性后平方增长；"
                "搬回的时间按链路带宽线性增长。链路 20 GB/s 时搬回始终更快；1 GB/s 时前缀约 35K token 以上搬回才更快；"
-               "盈亏带宽约 2.19 GB/s")
+               "盈亏带宽约 2.19 GB/s：这条线在短前缀处和重算几乎重合，越往右越比重算快")
     y0 = f.header("搬回来还是重算？比的是一个字节的 KV 值多少 FLOP　——　"
                   "<tspan font-weight=\"700\">V3 的 KV 很省，2.19 GB/s 就够</tspan>",
                   "横轴：命中的前缀有多长；纵轴：把这段前缀的 KV 准备好要多久（都是对数）。每芯片口径，DeepSeek-V3",
-                  [(RD, "重算（prefill 一遍）"), (GR, "从 20 GB/s 的地方搬回"), (OR, "从 1 GB/s 的地方搬回")])
-    PH = 520
+                  [(RD, "重算（prefill 一遍）"), (GR, "从 20 GB/s 的地方搬回"), (GY, "从 2.19 GB/s 的地方搬回（盈亏线）"),
+                   (OR, "从 1 GB/s 的地方搬回")])
+    PH = 540
     py = f.panel(0, y0, W, PH, "准备好一段前缀的 KV 要多久", GY)
     AX0, AX1 = 140, 1060
     YT, YB = py + 30, py + PH - 80
@@ -361,34 +384,33 @@ def fig_offload():
     f.line(AX0, YB, AX0, YT - 6, GY2, 1.2, arrow=False)
     for t, lab in ((1e-3, "1 ms"), (1e-2, "10 ms"), (1e-1, "100 ms"), (1, "1 s"), (10, "10 s")):
         f.line(AX0, yf(t), AX1, yf(t), LINE, 1, dash="3 4", arrow=False)
-        f.t(AX0 - 12, yf(t) + 5, lab, GY, size=13, anchor="end")
+        f.t(AX0 - 12, yf(t) + 5, lab, GY, size=14, anchor="end")
     for L, lab in ((256, "256"), (1024, "1K"), (4096, "4K"), (16384, "16K"), (65536, "64K"), (131072, "128K")):
-        f.t(xf(L), YB + 24, lab, GY, size=14, anchor="middle")
-    f.t((AX0 + AX1) / 2, YB + 50, "命中的前缀长度（token，对数）", GY, size=14, anchor="middle")
+        f.t(xf(L), YB + 24, lab, GY, size=15, anchor="middle")
+    f.t((AX0 + AX1) / 2, YB + 52, "命中的前缀长度（token，对数）", GY, size=15, anchor="middle")
 
     Ls = [XLO * (XHI / XLO) ** (i / 60.0) for i in range(61)]
-    for fn, col, lab in ((t_re, RD, "重算"),
-                         (lambda L: t_ld(L, FAST), GR, "20 GB/s 搬回"),
-                         (lambda L: t_ld(L, SLOW), OR, "1 GB/s 搬回")):
+    for fn, col, lab, dash in ((t_re, RD, "重算", None),
+                               (lambda L: t_ld(L, FAST), GR, "20 GB/s 搬回", None),
+                               (lambda L: t_ld(L, BSTAR), GY, "2.19 GB/s 搬回", "8 5"),
+                               (lambda L: t_ld(L, SLOW), OR, "1 GB/s 搬回", None)):
         d = "M " + " L ".join("%.1f %.1f" % (xf(L), yf(fn(L))) for L in Ls)
-        f.path(d, col, 3, arrow=False)
-        f.t(AX1 + 18, yf(fn(XHI)) + 5, lab, col, True, 15)
+        f.path(d, col, 3, dash=dash, arrow=False)
+        f.t(AX1 + 18, yf(fn(XHI)) + 5, lab, col, True, 16)
     # 交点
     xs, ys = xf(LSTAR), yf(t_re(LSTAR))
     f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="none" stroke="%s" stroke-width="2.5"/>' % (xs, ys, INK))
     f.line(xs, ys + 8, xs, YB, INK, 1, dash="4 4", arrow=False)
-    f.t(xs - 12, ys - 40, "交点 ≈ 35K token", INK, True, 15, "end")
-    f.t(xs - 12, ys - 20, "短于它，1 GB/s 不如重算", GY, size=13, anchor="end")
-    f.t(xf(600), yf(t_re(600)) - 18, "短前缀：重算按 token 数线性涨", RD, size=13)
-    f.t(xs + 18, ys + 42, "再往右重算变陡：", RD, size=13)
-    f.t(xs + 18, ys + 61, "注意力的平方项接管", RD, size=13)
-    yb = f.band(y0 + PH + 20, "ok", "每个 FLOP 对应的 KV 字节越少，搬回来越容易赢", [
-        "V3 是 70,272 × 2,307 T ÷ 74 G ≈ 2.19 GB/s；GQA 的 Llama-3.1-70B 要 5.35 GB/s。",
-        "链路比这慢，搬回来就比重算还慢：缓存命中了，首字反而更晚。",
-    ])
-    yb = f.src(yb + 10,
+    f.t(xs - 14, ys - 42, "交点 ≈ 35K token", INK, True, 16, "end")
+    f.t(xs - 14, ys - 20, "短于它，1 GB/s 不如重算", GY, size=15, anchor="end")
+    f.t(AX0 + 12, yf(t_ld(XLO, BSTAR)) + 28, "短前缀：两条重合", RD, True, 15)
+    f.t(xs + 18, ys + 46, "再往右重算变陡：", RD, size=15)
+    f.t(xs + 18, ys + 68, "注意力的平方项接管", RD, size=15)
+    f._pan = None
+    yb = f.src(y0 + PH + 10,
                "本课推导：重算 ＝ (2×37e9×L ＋ 4,997,120×L²/2) ÷ (4,614 T × 50%)；注意力每对 (q,k) ＝ 2×128 头×(192＋128)×61 层 ＝ 4,997,120 FLOP。"
-               "搬回 ＝ 70,272 B × L ÷ 带宽。",
+               "搬回 ＝ 70,272 B × L ÷ 带宽。盈亏带宽 ＝ 70,272 × 2,307 T ÷ 74 G ≈ 2.19 GB/s（只按线性项算，偏保守）；"
+               "GQA 的 Llama-3.1-70B 同法得 5.35 GB/s。",
                "假设：prefill 跑到 FP8 峰值的 50%；1 GB/s 与 20 GB/s 是示意档位，不对应具体硬件；只比带宽与算力，不含延迟、排队和与 decode 抢带宽。"
                "每芯片口径 ＝ 假设算力和 KV 字节按芯片数等比摊开。",
                "出处：Llama-3.1-70B 激活参数 70.6B 取自 HF 模型页；KV 327,680 B/token 取自 config.json。")

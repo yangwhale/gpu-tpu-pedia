@@ -893,7 +893,10 @@ def lint_ai_voice(html, label):
 
     # 破折号按**段**算：一段最多一个。⭐ 按段不按总量，因为它的毛病是「密」。
     over = [len(re.findall("——", _visible(m)))
-            for m in re.findall(r"<p\b.*?</p>", html, re.S)]
+            for m in re.findall(r"<p\b.*?</p>",
+                                re.sub(r"<(style|script)\b.*?</\1>", "", html, flags=re.S), re.S)]
+    # ⭐ 2026-10-16：先剥 style/script 再找段落 —— CSS 注释里写着「<p>」，会被当成一段开头，
+    #   一路吃进下一个 </p>，报出读者看不见的破折号（专题六撞上）。
     n_over = sum(1 for k in over if k > B["dash_per_para"])
     if n_over:
         bad.append("%d 个段落里破折号超过 %d 个（全篇共 %d 个）—— "

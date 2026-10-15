@@ -24,7 +24,7 @@ fig6-quant-fuse.svg —— 回答：kernel 边界上丢的时间有多少？mega
   · 刻意没画：CUDA Graph 单独一条（它省的是 CPU 发射开销，正文一句话交代）。
 """
 
-from topic03_draw import Fig, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
+from topic03_draw import Fig, wpx, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
 from topic06_numbers import V3_TOTAL, V3_ACTIVE, V7_BW, V7_HBM
 
 W = 1400
@@ -87,29 +87,30 @@ def fig_bytes():
     PH = 330
     LW = 860
     py = f.panel(0, y0, LW, PH, "每 token 要读的权重（37B 激活参数）", BL)
-    sc = 520 / 80
+    sc = 480 / 80
     for j, (n, b, col) in enumerate(FORMATS):
-        yy = py + 30 + j * 66
-        f.t(24, yy + 26, n, INK, True, 15)
-        f.t(24, yy + 46, "%g bit" % b, GY, size=12.5)
-        f.box(130, yy + 8, ACT_GB[n] * sc, 34, col, col, 4)
-        f.t(130 + ACT_GB[n] * sc + 12, yy + 31, "%.2f GB → 至少 %.2f ms" % (ACT_GB[n], T_MS[n]), INK, True, 14)
+        yy = py + 30 + j * 68
+        f.t(24, yy + 26, n, INK, True, 17)
+        f.t(24, yy + 48, "%g bit" % b, GY, size=15)
+        f.box(130, yy + 8, ACT_GB[n] * sc, 38, col, col, 4)
+        f.t(130 + ACT_GB[n] * sc + 12, yy + 33, "%.2f GB → 至少 %.2f ms" % (ACT_GB[n], T_MS[n]), INK, True, 16)
     RX = LW + 14
     pr = f.panel(RX, y0, W - RX, PH, "整个模型放得下吗（671B）", OR)
     sc2 = 360 / 1600
+    xh = RX + 90 + HBM8 * sc2
     for j, (n, b, col) in enumerate(FORMATS):
-        yy = pr + 30 + j * 66
-        f.t(RX + 20, yy + 30, n, INK, True, 14)
-        f.box(RX + 100, yy + 12, ALL_GB[n] * sc2, 28, col, col, 4)
-        f.t(RX + 100 + ALL_GB[n] * sc2 + 8, yy + 31, "{:,} GB".format(round(ALL_GB[n])), INK, True, 13)
-    xh = RX + 100 + HBM8 * sc2
-    f.path("M%d,%d L%d,%d" % (xh, pr + 30, xh, pr + 290), RD, 1.6, dash="5,4", arrow=False)
-    f.t(xh - 6, pr + 296, "8 颗合计 1,536 GB", RD, True, 13, "end")
-    yb = f.band(y0 + PH + 16, "ok", "batch 小时，时间几乎全花在读权重上", [
-        "每个权重少一半位数，一步就少搬一半字节；这是量化在 decode 上最直接的收益。",
-        "省下的 HBM 还能多放 KV、多接几路请求，这又回到「把一趟分给更多人」那条路上。",
-    ])
-    yb = f.src(yb + 10,
+        yy = pr + 44 + j * 64
+        f.t(RX + 20, yy + 30, n, INK, True, 16)
+        bwid = ALL_GB[n] * sc2
+        f.box(RX + 90, yy + 10, bwid, 30, col, col, 4)
+        lab = "{:,} GB".format(round(ALL_GB[n]))
+        if RX + 90 + bwid + 8 + wpx(lab, 15) > xh - 6:      # 标签会撞上 HBM 那条线 → 写进条里
+            f.t(RX + 90 + bwid - 8, yy + 31, lab, "#ffffff", True, 15, "end")
+        else:
+            f.t(RX + 90 + bwid + 8, yy + 31, lab, INK, True, 15)
+    f.path("M%d,%d L%d,%d" % (xh, pr + 36, xh, pr + 296), RD, 1.6, dash="5,4", arrow=False)
+    f.t(xh, pr + 26, "8 颗合计 {:,} GB".format(round(HBM8)), RD, True, 15, "end")
+    yb = f.src(y0 + PH + 6,
                "V3：技术报告 arXiv 2412.19437 摘要，总参数 671B、每 token 激活 37B。TPU v7：Google Cloud 公开规格，每芯片 HBM 192 GB、带宽 7.37 TB/s。",
                "MXFP4：OCP Microscaling Formats (MX) Specification v1.0。NVFP4：NVIDIA 技术博客「Introducing NVFP4 for Efficient and Accurate Low-Precision Inference」。",
                "⚠️ 本课推导：下限 ＝ 激活参数 × 每参数位数 ÷ 8 ÷ (8 × 7.37 TB/s)。假设权重均匀摊开、带宽跑满；不含 KV、激活值和通信，实际一步更慢。",
@@ -119,33 +120,29 @@ def fig_bytes():
 
 # ════════════════════════════════════════════════════════════════════════
 def fig_mx():
-    f = Fig(W, "两种 4 bit 格式的存法。MXFP4：32 个 4 bit 的数共用一个 8 bit 的指数缩放，平均每个数 4 加 8 除以 32，等于 4.25 bit。"
-               "NVFP4：16 个 4 bit 的数共用一个 8 bit 的 FP8 缩放，平均每个数 4.5 bit。块越小，缩放越贴合局部的数值范围，精度越好，多花的位数也越多")
+    f = Fig(W, "两种 4 bit 格式的存法。MXFP4：32 个 4 bit 的数共用一个 8 bit 的缩放，格式叫 E8M0，指数 8 位、尾数 0 位，只能表示 2 的幂；"
+               "平均每个数 4 加 8 除以 32，等于 4.25 bit。"
+               "NVFP4：16 个 4 bit 的数共用一个 8 bit 的 FP8 缩放，格式叫 E4M3，指数 4 位、尾数 3 位，是个小号浮点数；平均每个数 4.5 bit")
     y0 = f.header("同叫 4 bit　——　<tspan font-weight=\"700\">差在几个数共用一个缩放</tspan>",
-                  "每个小格是一个 4 bit 的数；带色的大格是这一块共用的缩放",
+                  "每个小格是一个 4 bit 的数；橙色大格是这一块共用的缩放（8 bit）",
                   [(GR, "MXFP4 的元素"), (CY, "NVFP4 的元素"), (OR, "块缩放（8 bit）")])
-    PH = 300
+    PH = 330
     py = f.panel(0, y0, W, PH, "一块的位布局", INK)
     cw = 30
-    for j, (name, blk, col, scl, bits) in enumerate((("MXFP4", MX_BLOCK, GR, "E8M0", MX_BITS),
-                                                     ("NVFP4", NV_BLOCK, CY, "E4M3", NV_BITS))):
-        yy = py + 40 + j * 120
-        f.t(24, yy + 24, name, INK, True, 16)
-        f.t(24, yy + 46, "%d 个一块" % blk, GY, size=13)
-        x0 = 140
-        f.box(x0, yy, 2 * cw, 36, OR, OR, 4)
-        f.t(x0 + cw, yy + 24, scl, "#ffffff", True, 13, "middle")
+    for j, (name, blk, col, scl, bits, plain) in enumerate((
+            ("MXFP4", MX_BLOCK, GR, "E8M0", MX_BITS, "E8M0 ＝ 指数 8 位、尾数 0 位：只能表示 2 的幂（½、1、2、4…）"),
+            ("NVFP4", NV_BLOCK, CY, "E4M3", NV_BITS, "E4M3 ＝ 指数 4 位、尾数 3 位：一个小号的浮点数"))):
+        yy = py + 44 + j * 140
+        f.t(24, yy + 26, name, INK, True, 18)
+        f.t(24, yy + 50, "%d 个一块" % blk, GY, size=15)
+        x0 = 150
+        f.box(x0, yy, 2 * cw, 40, OR, OR, 4)
+        f.t(x0 + cw, yy + 26, scl, "#ffffff", True, 15, "middle")
         for i in range(blk):
-            f.box(x0 + 2 * cw + 4 + i * cw, yy, cw - 3, 36, col, col, 3)
-        xe = x0 + 2 * cw + 4 + blk * cw
-        f.t(x0, yy + 62, "4 ＋ 8 ÷ %d ＝ %.2f bit／数" % (blk, bits), INK, True, 14.5)
-        if blk == NV_BLOCK:
-            f.t(xe + 20, yy + 24, "另有每张量一个 FP32 缩放，摊到每个数上可忽略", GY, size=13)
-    yb = f.band(y0 + PH + 16, "info", "块小一点，精度好一点，字节多一点", [
-        "块越小，一个缩放管的数越少，越能贴着局部的大小走；代价是平均每个数多 0.25 bit。",
-        "两种格式由不同硬件原生支持；选哪种不只看精度，还要看你的芯片的矩阵单元吃哪种。",
-    ])
-    yb = f.src(yb + 10,
+            f.box(x0 + 2 * cw + 4 + i * cw, yy, cw - 3, 40, col, col, 3)
+        f.t(x0, yy + 72, "4 ＋ 8 ÷ %d ＝ %.2f bit／数" % (blk, bits), INK, True, 17)
+        f.t(x0 + 290, yy + 72, plain, GY, size=15)
+    yb = f.src(y0 + PH + 6,
                "OCP Microscaling Formats (MX) Specification v1.0：块大小 32，共享缩放为 E8M0（8 bit，只有指数）。",
                "NVIDIA「Introducing NVFP4」：每 16 个 FP4 (E2M1) 共享一个 FP8 E4M3 缩放，另有每张量 FP32 二级缩放。",
                "⚠️ 本课推导：平均位数 ＝ 4 ＋ 缩放位数 ÷ 块大小，FP32 二级缩放摊到百万级元素上不计。")
@@ -153,117 +150,121 @@ def fig_mx():
 
 
 # ════════════════════════════════════════════════════════════════════════
-def fig_r1():
-    f = Fig(W, "左图：DeepSeek-R1 在 TPU v7x-8 上，每个 device 的 HBM 上限约 94.75。专家权重用 FP8 时每个 device 要约 101.8，放不下；"
-               "转成 FP4 后专家约 60.9，连同注意力约 70，放得下。右图：对称 INT4 的数是负 8 到 7，存的时候整体加 8 变成 0 到 15；"
-               "读的时候忘了减 8，每个权重都偏大 8，模型输出崩成重复的乱词")
-    y0 = f.header("FP4 先是被容量逼出来的　——　<tspan font-weight=\"700\">格式和读法都得对上</tspan>",
-                  "左：DeepSeek-R1 · TPU v7x-8 · 每 device 的权重占用。右：INT4 的存法与读法",
-                  [(RD, "放不下"), (GR, "放得下"), (OR, "存的值"), (BL, "该读出的值")])
-    PH = 320
-    LW = 700
-    py = f.panel(0, y0, LW, PH, "R1 每个 device 要放多少（单位见注）", RD)
-    sc = 520 / 110
-    rows = [("FP8 专家", R1_FP8_MOE, RD), ("FP4 专家", R1_FP4_MOE, GR), ("FP4 合计", R1_FP4_ALL, GR)]
-    for j, (lab, v, col) in enumerate(rows):
-        yy = py + 30 + j * 80
-        f.t(24, yy + 28, lab, INK, True, 14.5)
-        f.box(130, yy + 8, v * sc, 34, col, col, 4)
-        f.t(130 + v * sc - 10, yy + 31, ("约 %.1f" if v % 1 else "约 %d") % v, "#ffffff", True, 14, "end")
-    xc = 130 + DEV_CAP * sc
-    f.path("M%d,%d L%d,%d" % (xc, py + 20, xc, py + 270), INK, 2, dash="6,4", arrow=False)
-    f.t(xc + 6, py + 268, "上限 %.2f" % DEV_CAP, INK, True, 13.5)
+# FP4 (E2M1) 能表示的非负值：1 位符号、2 位指数（偏置 1）、1 位尾数（OCP MX v1.0）
+E2M1 = sorted({(m * 0.5) if e == 0 else 2 ** (e - 1) * (1 + m / 2.0) for e in range(4) for m in range(2)})
+assert E2M1 == [0, 0.5, 1, 1.5, 2, 3, 4, 6], E2M1
+EX_V = -3                                  # 示意：挑一个权重跟着走一遍
+EX_S = EX_V + INT4_OFFSET
+assert EX_S == 5
 
-    RX = LW + 14
-    pr = f.panel(RX, y0, W - RX, PH, "INT4：存的时候加了 8，读的时候要减回来", OR)
-    x0, cw = RX + 40, 38
-    for i, (s, st) in enumerate(zip(SIGNED, STORED)):
-        x = x0 + i * cw
-        f.box(x, pr + 40, cw - 4, 34, "#e8f0fe", BL, 3)
-        f.t(x + (cw - 4) / 2, pr + 63, str(s), BL, True, 13, "middle")
-        f.line(x + (cw - 4) / 2, pr + 78, x + (cw - 4) / 2, pr + 110, GY2, 1.2, arrow=True)
-        f.box(x, pr + 114, cw - 4, 34, "#fef7e0", OR, 3)
-        f.t(x + (cw - 4) / 2, pr + 137, str(st), OR, True, 13, "middle")
-    f.t(x0, pr + 180, "上排：模型里的权重（−8 到 7）。下排：文件里存的（0 到 15）", GY, size=13)
-    f.t(x0, pr + 212, "正确读法：存的值 − 8", GR, True, 14.5)
-    f.t(x0, pr + 240, "直接当原值读：每个权重都大了 8，输出崩成重复的乱词", RD, True, 14.5)
-    yb = f.band(y0 + PH + 16, "warn", "量化格式要和硬件、读法同时对上", [
-        "FP8 放不下才换 FP4，这一步是容量逼的；省下的字节顺带让每一步搬得更少。",
-        "如果矩阵单元不吃 FP4，就得先解回高精度再算；省了搬运，多了一道转换，实际快多少要实测。",
-    ])
-    yb = f.src(yb + 10,
-               "R1：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；FP8 专家约 101.8、FP4 专家约 60.9、连同注意力约 70，均为每 device）。",
-               "注：单位：README 正文写 GB，上限 94.75 出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。94.75 GiB ≈ 101.7 GB，101.8 无论按哪个单位都不剩余量。",
-               "INT4：tpu/tpu-inference/Kimi-K2.6-1T-A32B-INT4/README.md:265-266。对称 int4 [−8, 7] 以无符号 [0, 15] 存放，加载时须减 8；直接按位转换会让模型崩溃，输出重复的「foss foss foss」。")
+
+def fig_r1():
+    f = Fig(W, "INT4 的存法和读法。INT4 和 FP4 一样每个数占 4 bit、只有 16 个值：INT4 是负 8 到 7 的等距整数，FP4 是浮点。"
+               "对称 INT4 的权重是负 8 到 7，存进文件时整体加 8 变成 0 到 15，比如负 3 存成 5。"
+               "加载时减 8，负 3 原样回来，模型正常；忘了减 8，负 3 被读成 5，每个权重都偏大 8，模型输出崩成重复的乱词")
+    y0 = f.header("INT4：存的时候加了 8，读的时候要减回来　——　<tspan font-weight=\"700\">少减一次，每个权重都错</tspan>",
+                  "INT4 和 FP4 一样每个数 4 bit、16 个值；INT4 是 −8 到 7 的等距整数，FP4 是浮点（0、0.5、1、1.5、2、3、4、6 及其负值）",
+                  [(BL, "模型里的权重"), (OR, "文件里存的"), (GR, "读对了"), (RD, "读错了")])
+    PH = 470
+    py = f.panel(0, y0, W, PH, "跟着一个权重走一遍：−3 → 存成 5 → 读回来", OR)
+    X0, CW = 230, 70
+    assert X0 + 16 * CW < W - 20
+
+    def row(yy, lab, vals, col, tint, sub_=None):
+        f.t(24, yy + 28, lab, INK, True, 17)
+        if sub_:
+            f.t(24, yy + 50, sub_, GY, size=15)
+        for i, v in enumerate(vals):
+            x = X0 + i * CW
+            hi = (SIGNED[i] == EX_V)
+            f.box(x, yy, CW - 6, 40, col if hi else tint, col, 5, 1.8 if hi else 1)
+            f.t(x + (CW - 6) / 2, yy + 27, str(v), "#ffffff" if hi else col, True, 17, "middle")
+    xi = X0 + SIGNED.index(EX_V) * CW + (CW - 6) / 2
+    y1 = py + 30
+    row(y1, "模型里的权重", SIGNED, BL, "#e8f0fe", "−8 到 7")
+    y2 = y1 + 110
+    f.line(xi, y1 + 46, xi, y2 - 6, OR, 1.8)
+    f.t(xi + 12, y1 + 80, "存进文件：＋8", OR, True, 16)
+    row(y2, "文件里存的", STORED, OR, "#fef7e0", "0 到 15")
+    y3 = y2 + 110
+    f.line(xi, y2 + 46, xi, y3 - 6, GR, 1.8)
+    f.t(xi - 12, y2 + 80, "加载时 −8", GR, True, 16, "end")
+    row(y3, "读对了", [s - INT4_OFFSET for s in STORED], GR, "#e6f4ea", "和第一行一样")
+    y4 = y3 + 100
+    row(y4, "忘了减 8", STORED, RD, "#fce8e6", "每个都大了 8")
+    xg = X0 + SIGNED.index(EX_V) * CW + CW - 3          # 两格之间那条 6px 的缝
+    f.path("M%d,%d L%d,%d L%d,%d" % (xg - 6, y2 + 44, xg, y2 + 54, xg, y4 - 6), RD, 1.8)
+    f.t(xg + 14, y3 + 76, "直接当原值读", RD, True, 16)
+    f._pan = None
+    f.t(X0, y4 + 74, "结果：读对了模型正常；读错了，输出崩成重复的「foss foss foss」", INK, True, 17)
+    yb = f.src(y4 + 90,
+               "INT4：tpu/tpu-inference/Kimi-K2.6-1T-A32B-INT4/README.md:265-266。对称 int4 [−8, 7] 以无符号 [0, 15] 存放，加载时须减 8；直接按位转换会让模型崩溃，输出重复的「foss foss foss」。",
+               "⚠️ 示意：跟着走的「−3」是随手挑的一个值。FP4 (E2M1) 的取值按 OCP MX v1.0 由脚本算出：1 位符号、2 位指数、1 位尾数。",
+               "正文里 R1 的容量数：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；FP8 专家约 101.8、FP4 专家约 60.9、连同注意力约 70，均为每 device）；"
+               "上限 94.75 出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。94.75 GiB ≈ 101.7 GB，101.8 无论按哪个单位都不剩余量。")
     f.save("fig6-quant-r1.svg", yb + 14)
 
 
 # ════════════════════════════════════════════════════════════════════════
 def fig_fuse():
-    f = Fig(W, "上图：Hazy Research 的算例。Llama-3.2-1B 有 2.48 GB 权重，H100 带宽 3.35 TB/s，光读一遍要约 740 微秒，"
-               "上限每秒约 1,350 次前向。但一次前向要发上百个 kernel，每层 7 个、16 层、每个边界空等约 5 微秒，合计 560 微秒，"
-               "实际只能到每秒约 770 次。megakernel 把整次前向写成一个 kernel，让下一段的权重在上一段计算时就开始读。"
-               "下图左：GPU 上的实测，Hazy 带宽利用率从最多 50% 到 78%，比 vLLM 快约 2.5 倍；Mirage MPK 自动生成 megakernel，延迟最多降 1.7 倍。"
-               "下图右：Inferact 在 16 颗 TPU v7 上跑 Kimi K3，单用户每秒 700 多个 token，16 张 GB200 是 452")
-    y0 = f.header("kernel 之间的空当　——　<tspan font-weight=\"700\">每个边界都在等，加起来很可观</tspan>",
-                  "上：Hazy 的算例（H100 · Llama-3.2-1B · 单条序列）。下：公开实测",
-                  [(BL, "读权重"), (RD, "kernel 边界空等"), (GR, "megakernel：边算边预取")])
-    PH = 250
+    f = Fig(W, "Hazy Research 的算例。Llama-3.2-1B 有 2.48 GB 权重，H100 带宽 3.35 TB/s，光读一遍要约 740 微秒，"
+               "上限每秒约 1,350 次前向。但一次前向要发上百个 kernel，每层 7 个、16 层，每个交接处空等约 5 微秒，合计 560 微秒，"
+               "实际只能到每秒约 770 次。中间一行把一层放大，7 个 kernel 之间各空一段。"
+               "megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读，只剩读权重的 740 微秒")
+    y0 = f.header("kernel 之间的空当　——　<tspan font-weight=\"700\">每个交接处都在等，加起来很可观</tspan>",
+                  "Hazy Research 的算例：H100 · Llama-3.2-1B · 单条序列，一次前向的时间线，按比例",
+                  [(BL, "读权重"), (RD, "kernel 交接时空等"), (GR, "megakernel：边算边预取")])
+    PH = 420
     py = f.panel(0, y0, W, PH, "一次前向的时间线（微秒，按比例）", BL)
-    X0 = 200
-    sc = (W - X0 - 60) / (T_MOVE_US + T_STALL_US)
-    # 一排：分 16 层，每层读权重 + 7 个空当
-    yy = py + 30
-    f.t(24, yy + 22, "一层一层发 kernel", INK, True, 15)
-    f.t(24, yy + 42, "约 %d 次／秒" % round(FWD_REAL, -1), RD, True, 13.5)
-    x = X0
+    X0 = 230
+    sc = (W - X0 - 40) / (T_MOVE_US + T_STALL_US)
     per_move = T_MOVE_US / LAYERS
     per_stall = T_STALL_US / LAYERS
+    # ① 一层一层发 kernel：16 层，每层读权重 ＋ 7 个空当（层内合并画）
+    yy = py + 40
+    f.t(24, yy + 22, "一层一层发 kernel", INK, True, 17)
+    f.t(24, yy + 46, "约 {:,} 次／秒".format(int(round(FWD_REAL, -1))), RD, True, 16)
+    x = X0
     for _ in range(LAYERS):
-        f.box(x, yy + 8, per_move * sc, 30, BL, BL, 1)
+        f.box(x, yy, per_move * sc, 44, BL, BL, 1)
         x += per_move * sc
-        f.box(x, yy + 8, per_stall * sc, 30, RD, RD, 1)
+        f.box(x, yy, per_stall * sc, 44, RD, RD, 1)
         x += per_stall * sc
-    f.t(x, yy + 60, "读 %d ＋ 空等 %d ＝ %d 微秒" % (round(T_MOVE_US), T_STALL_US, round(T_MOVE_US) + T_STALL_US),
-        INK, True, 13.5, "end")
-    yy2 = py + 125
-    f.t(24, yy2 + 22, "整次前向一个 kernel", INK, True, 15)
-    f.t(24, yy2 + 42, "上限约 %d 次／秒" % round(FWD_IDEAL, -1), GR, True, 13.5)
-    f.box(X0, yy2 + 8, T_MOVE_US * sc, 30, GR, GR, 2)
-    f.t(X0 + T_MOVE_US * sc + 10, yy2 + 29, "只剩读权重 %d 微秒" % round(T_MOVE_US), GR, True, 13.5)
-
-    py2 = y0 + PH + 14
-    PH2 = 260
-    LW = 700
-    pg = f.panel(0, py2, LW, PH2, "GPU 上的实测", PU)
-    lines = [("Hazy · H100 · Llama-3.2-1B", "带宽利用：vLLM、SGLang 最多 50% → 78%"),
-             ("", "比 vLLM 快约 2.5 倍，比 SGLang 快 1.5 倍以上"),
-             ("Hazy · B200", "一次前向不到 680 微秒，比 vLLM 快 3.5 倍以上"),
-             ("Mirage MPK", "编译器自动生成 megakernel；端到端延迟降幅最高 1.7×")]
-    for j, (a, b) in enumerate(lines):
-        yy = pg + 30 + j * 52
-        if a:
-            f.t(24, yy, a, PU, True, 14)
-        f.t(24, yy + 22, b, INK, size=14)
-    RX = LW + 14
-    pt = f.panel(RX, py2, W - RX, PH2, "TPU 上的公开实测（Inferact）", GR)
-    tl = [("16 颗 TPU v7 · Kimi K3 · DSpark", ""),
-          ("一步约 %.1f 毫秒，每步接受约 %d 个" % (INF_STEP_MS, INF_AL), ""),
-          ("单用户每秒 700 多个 token；16 张 GB200 是 %d" % GB200_TPS, ""),
-          ("下一层权重在上一层计算时预取进片上内存", ""),
-          ("从头编译不到 90 秒（XLA 大模型要 30 分钟以上）", "")]
-    for j, (a, _) in enumerate(tl):
-        f.t(RX + 24, pt + 30 + j * 42, a, INK if j else GR, j == 0, 14)
-    yb = f.band(py2 + PH2 + 16, "ok", "融合也是少搬：边界上不再干等", [
-        "CUDA Graph 省的是 CPU 一个个发 kernel 的开销；kernel 之间那段谁也不读权重的空当，它省不掉。",
-        "megakernel 让读权重这条流水线一直不断，带宽利用率才贴近上限。",
-    ])
-    yb = f.src(yb + 10,
+    f.t(x, yy + 70, "读 %d ＋ 空等 %d ＝ {:,} 微秒".format(round(T_MOVE_US) + T_STALL_US) % (round(T_MOVE_US), T_STALL_US),
+        INK, True, 16, "end")
+    # ② 放大第一层：7 个 kernel，每个交接处空等约 5 微秒
+    yz = yy + 120
+    zx0, zw = X0, 760
+    zsc = zw / (per_move + per_stall)
+    f.path("M%d,%d L%d,%d" % (X0, yy + 46, zx0, yz - 4), GY2, 1, dash="3,3", arrow=False)
+    f.path("M%d,%d L%d,%d" % (X0 + (per_move + per_stall) * sc, yy + 46, zx0 + zw, yz - 4), GY2, 1, dash="3,3", arrow=False)
+    f.t(24, yz + 22, "放大其中一层", INK, True, 17)
+    f.t(24, yz + 46, "每层 %d 个 kernel" % KPL, GY, size=15)
+    km = per_move / KPL * zsc
+    ks = per_stall / KPL * zsc
+    x = zx0
+    for k in range(KPL):
+        f.box(x, yz, km, 44, BL, BL, 3)
+        f.t(x + km / 2, yz + 28, "k%d" % (k + 1), "#ffffff", True, 15, "middle")
+        x += km
+        f.box(x, yz, ks, 44, "#fce8e6", RD, 3)
+        x += ks
+    f.t(zx0 + km + ks / 2, yz + 70, "交接空等约 %d 微秒" % STALL_US, RD, True, 16, "middle")
+    f.t(zx0 + zw + 20, yz + 28, "交接时谁也不在读权重", RD, True, 16)
+    # ③ megakernel
+    ym = yz + 140
+    f.t(24, ym + 22, "整次前向一个 kernel", INK, True, 17)
+    f.t(24, ym + 46, "上限约 {:,} 次／秒".format(int(round(FWD_IDEAL, -1))), GR, True, 16)
+    f.box(X0, ym, T_MOVE_US * sc, 44, GR, GR, 2)
+    f.t(X0 + T_MOVE_US * sc + 12, ym + 28, "只剩读权重 %d 微秒" % round(T_MOVE_US), GR, True, 16)
+    yb = f.src(y0 + PH + 6,
                "Hazy Research「Look Ma, No Bubbles! Designing a Low-Latency Megakernel for Llama-1B」（hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles，2025-05-27）：算例 3.35 TB/s ÷ 2.48 GB ≈ 1,350 次／秒；"
-               "每层 7 个 kernel × 16 层 × 约 5 µs ≈ 770 次／秒；实测基线都开了 CUDA Graph 和 torch.compile。",
-               "Mirage Persistent Kernel：arXiv 2512.22219 摘要，「up to 1.7×」端到端延迟。",
-               "Inferact「700 TPS on Kimi K3」（https://inferact.ai/blog/tpu-megakernels，2026-09-23）：16 颗 TPU v7（32 个 TensorCore）、Pallas 编写、每 TensorCore 64 MiB VMEM；GB200 对照为 16 张卡的 vLLM 配方。",
-               "⚠️ 本课推导：每步接受 6 个 ÷ 8.5 ms ≈ 706 tok/s，与博客的「700 多」对得上。上面那条时间线是 Hazy 的算例按比例画的，空当在真实时间线上分散在 kernel 之间。")
+               "每层 7 个 kernel × 16 层 × 约 5 µs ≈ 770 次／秒；实测基线都开了 CUDA Graph 和 torch.compile。"
+               "实测：vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%；比 vLLM 快约 2.5 倍、比 SGLang 快 1.5 倍以上；B200 上一次前向不到 680 µs。",
+               "⚠️ 示意：第一行把每层 7 个空当合成一段画，第二行才按真实位置分开；7 个 kernel 等长是简化。",
+               "正文里另两组数的出处 —— Mirage Persistent Kernel：arXiv 2512.22219 摘要，「up to 1.7×」端到端延迟。",
+               "Inferact「700 TPS on Kimi K3」（https://inferact.ai/blog/tpu-megakernels，2026-09-23）：16 颗 TPU v7（32 个 TensorCore）、Pallas 编写、每 TensorCore 64 MiB VMEM；一步约 8.5 ms、每步接受约 6 个；GB200 对照为 16 张卡的 vLLM 配方，452 tok/s。"
+               "⚠️ 本课推导：每步接受 6 个 ÷ 8.5 ms ≈ 706 tok/s，与博客的「700 多」对得上。")
     f.save("fig6-quant-fuse.svg", yb + 14)
 
 

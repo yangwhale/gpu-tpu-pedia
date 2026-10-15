@@ -2,24 +2,25 @@
 """专题六 · 第五节「单卡里的两块硬骨头：decode 注意力与 MoE」。图全在 topic06-fig-decode.py。"""
 
 BODY = '''
-  <p class="lead">一张卡上的 decode 有两块最难啃：注意力读的是每个人自己的 KV，MoE 的每个专家只分到几行。<b>两块都是搬运问题，而且多出来的字节常常藏在布局里。</b></p>
+  <p class="lead">2023 年 Flash-Decoding 把长序列 decode 的注意力再切开并行，超长序列最多快 8 倍；2024 年 DeepSeek-V2 的 MLA 又从模型结构上把 KV 压薄。一张卡上的 decode 有两块最难啃：注意力读的是每个人自己的 KV（5.1–5.4），MoE 的每个专家只分到几行（5.5）。<b>两块都是搬运问题，而且多出来的字节常常藏在布局里。</b>最后补一条小 AllReduce（5.6），它卡的是延迟。</p>
 
   <h3 id="s5-1">5.1　注意力：攒 batch 救不了它</h3>
-  <p>decode 注意力每读 1 字节只做 G 次运算（G ＝ 每个 KV 头带几个查询头），推导见<a href="topic-03.html#s3-1">专题三 §3.1</a>。GQA-8 就是 8 次，离 v7 的屋脊 313 差了近 40 倍。</p>
+  <p>decode 注意力每读 1 字节只做 G 次运算（G ＝ 每个 KV 头带几个查询头），推导见<a href="topic-03.html#s3-1">专题三 §3.1</a>。Llama-3.1-70B 有 64 个查询头、8 个 KV 头，每个 KV 头带 8 个查询头，就是 8 次，离 v7 的屋脊 313 差了近 40 倍。</p>
   <p>攒 batch 分摊的是权重：读一遍，所有人共用。KV 是每条序列自己的历史，batch 翻倍它也翻倍。</p>
 __FIG_S5_AMORTIZE__
   <p>Llama-3.1-70B 的权重 141 GB，上下文 8K 时每条序列的 KV 是 2.68 GB，batch 53 左右两块一样重。再往上，一步的字节大半是 KV，注意力就成了主角。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>同一步里常常混着 prefill 和 decode 的请求。RPA 把两者放进同一个 kernel，按这一批的成分分派到三份预先编译的版本，每份各配一组块大小（arXiv 2604.15464 §3.4、§3.5）。</p>
+  <p>同一步里常常混着 prefill 和 decode 的请求。RPA（Ragged Paged Attention，按页存 KV、一批里长短不齐也能一起算的注意力 kernel）把两者放进同一个 kernel，按这一批的成分分派到三份预先编译的版本（论文 arXiv 2604.15464 的 3.4、3.5 节）。</p>
   <p>它在 TPU7x 上跑 Llama 3 8B，decode 用到峰值带宽的 86%，prefill 用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。</p>
-  <p>块大小是最便宜的一档旋钮。Google 开发者博客的 Ironwood 调优实录里，KV 页从 16 个 token 调到 256 个，并发 512 时 decode 一步从 428 µs 降到 283 µs。块太小，向量单元反复停下来算地址。</p>
+  <p>每份版本各配一组块大小，这是最便宜的一档旋钮。Google 开发者博客写 Qwen3.5-397B 在 Ironwood（TPU7x）上的调优实录里，KV 页从 16 个 token 调到 256 个，并发 512 时 decode 一步从 428 µs 降到 283 µs。块太小，向量单元反复停下来算地址。</p>
 
   <h3 id="s5-3">5.3　布局：窄维被补成整块</h3>
-  <p>TPU 的显存按 tile 存：最内层按 128 格对齐，次内层按 8 行 32 位对齐。bf16 一块是 16 行，fp8 是 32 行，每块都是 4 KiB。</p>
-  <p>KV 头只有 1–2 个时，把头数放进这两维，就被向上取整成整块。占用 ＝ ⌈次内层 ÷ 每块行数⌉ × 每块行数 × ⌈最内层 ÷ 128⌉ × 128 × 每元素字节。</p>
+  <p>TPU 的显存按 4 KiB 一块的 tile 存：最内层补齐到 128 格，次内层 bf16 补齐到 16 行、fp8 补齐到 32 行。</p>
+  <p>KV 头只有 1–2 个时，要是把头数放进这两维，它就被补成整块，多出来的全是空位。</p>
 __FIG_S5_TILE__
-  <p>B 那一列最伤：bf16 和 fp8 都占 8 KiB，换成 FP8 只是让空位变多。RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（§3.1）。</p>
+  <p>B 那一列最反直觉：bf16 和 fp8 都占 8 KiB，换成 FP8 只是让空位变多。RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（论文 3.1 节）。</p>
+  <p>换成 FP8，A 是 32 KiB，仍是真数据的 64 倍；B 还是 8 KiB，成了 16 倍；C 降到 512 B。</p>
 
   <h3 id="s5-4">5.4　MLA：一个阶段一套算法</h3>
   <p><a href="topic-03.html#s5-2">专题三 §5.2</a> 推过「吸收」：把投影并进查询，128 个头直接对着同一条 576 维的潜向量算，K/V 不展开。那里留了一句「两套怎么装进一个引擎，留到专题六」。</p>
@@ -32,13 +33,12 @@ __FIG_S5_MLA__
 __FIG_S5_DENSE__
   <p>v7 单 device 上，一个专家读一遍权重 BF16 要 23.9 µs、FP8 要 11.95 µs，全算分别是 19.5 µs 和 9.77 µs。比值都是 256 ÷ 313，batch 涨到 313 左右两边才打平。</p>
   <div class="note warn"><span class="t">⚠️ 0 × NaN 还是 NaN</span>没选中的 token 要是在这个专家里算出了 NaN 或 inf，乘以权重 0 盖不住。合并时要用选择（where）把它们清掉，不能只靠乘 0。</div>
-  <p>同一个思路也能用在搬行本身。tpu-inference#2674 在 batch 小时把排序和还原都换成「one-hot 矩阵 × 隐状态」，一次规整的矩阵乘代替按下标取行。</p>
-  <p>PR 里的实测：输入 1K、输出 8K、并发 64，总吞吐 2,211 → 2,531 token/s（+14.5%）；输入 8K、输出 1K、并发 64，+7.3%。合入的代码里这个开关默认关着，要用环境变量设阈值。</p>
+  <p>同一个思路也能用在搬行本身。tpu-inference#2674 在 batch 小时把排序和还原都换成「one-hot 矩阵 × 隐状态」，用一次规整的矩阵乘代替按下标取行。PR 里 Qwen3.5 并发 64 的实测：1K 进 8K 出总吞吐 +14.5%，8K 进 1K 出 +7.3%。合入后默认关着，要用环境变量设阈值。</p>
 
   <h3 id="s5-6">5.6　小 AllReduce 是延迟问题</h3>
-  <p>batch 1 时，每层 TP 的 AllReduce 只有 hidden × 2 字节，V3 是 14 KB。按带宽算，4 张 GB200 之间只要约 24 ns。</p>
+  <p>batch 1 时，每层 TP 的 AllReduce 只有 hidden × 2 字节，V3 是 14 KiB（14,336 B）。按带宽算，4 张 GB200 之间只要约 24 ns。</p>
 __FIG_S5_ALLREDUCE__
-  <p>实测平均 11.0 µs，是带宽项的约 460 倍；论文的低延迟实现做到 2.37 µs，硬件下限是 1.404 µs（arXiv 2607.16100）。小 decode 的同步要省次数，加带宽没用，第六节比 TEP 和 DEP 时会用到这条。</p>
+  <p>实测平均 11.0 µs，是带宽项的约 460 倍；论文的低延迟实现做到 2.37 µs，硬件下限是 1.404 µs（论文 arXiv 2607.16100）。小 decode 的同步要省次数，加带宽没用，第六节比 TEP 和 DEP 时会用到这条。</p>
 
   <p class="landing">⭐ 这一节的四处账都指向同一件事：<b>「少搬」要从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行，都是没人要的字节；先把它们去掉，再谈量化和加卡。</p>
 '''
@@ -48,16 +48,16 @@ FIGS = {
         '<b>攒 batch 只分摊权重；KV 跟着 batch 线性长，注意力每字节始终只做 8 次运算。</b>'
         '<br><em>只记读显存的字节，没算激活和 logits。</em>'),
     "__FIG_S5_TILE__": ("fig-s5-tile", "fig6-s5-tile.svg", "topic06-fig-decode.py",
-        '<b>同一份 KV，放错一维就占 8～64 倍的地方，FP8 也白省。</b>'
+        '<b>同一份 KV 装错箱就占 8～64 倍的地方；B 那种摆法换成 FP8 一个字节都不省。</b>'
         '<br><em>按默认 tile 推导；编译器对极窄的数组有时改用更小的 tile，见出处。</em>'),
     "__FIG_S5_MLA__": ("fig-s5-mla", "fig6-s5-mla.svg", "topic06-fig-decode.py",
-        '<b>decode 比每字节几次运算，吸收胜；prefill 比总运算量，展开胜。</b>'
+        '<b>吸收：一条压缩 KV 128 个头共读，每字节 242 次运算，decode 用；展开：先复制 128 份，每字节 1 次，prefill 用。</b>'
         '<br><em>乘加按 2 次运算计，bf16；没算把查询吸收进去、把输出投影回来的那两次矩阵乘。</em>'),
     "__FIG_S5_DENSE__": ("fig-s5-dense", "fig6-s5-dense.svg", "topic06-fig-decode.py",
         '<b>一批 256 个 token 全过一遍专家，仍比读一遍它的权重快。</b>'
         '<br><em>DeepSeek-V3 一个路由专家，TPU v7 单 device，按峰值带宽和峰值算力推导。</em>'),
     "__FIG_S5_ALLREDUCE__": ("fig-s5-allreduce", "fig6-s5-allreduce.svg", "topic06-fig-decode.py",
-        '<b>14 KB 的 AllReduce，搬数据约 24 ns，实测 11.0 µs。</b>'
+        '<b>14 KiB 的 AllReduce，搬数据约 24 ns，实测 11.0 µs。</b>'
         '<br><em>4 张 GB200，小消息平均延迟（论文实测）；带宽项为本课推导，对数轴。</em>'),
 }
 
@@ -66,7 +66,6 @@ NUM_LOCK = [
     ("2.68 GB", "fig6-s5-amortize.svg"),
     ("8 KiB", "fig6-s5-tile.svg"),
     ("242", "fig6-s5-mla.svg"),
-    ("3.4", "fig6-s5-mla.svg"),
     ("23.9 µs", "fig6-s5-dense.svg"),
     ("11.95 µs", "fig6-s5-dense.svg"),
     ("19.5 µs", "fig6-s5-dense.svg"),

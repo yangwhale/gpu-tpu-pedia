@@ -34,7 +34,7 @@ fig6-prfaas.svg —— 回答：PD 能不能跨数据中心？卡在哪个数上
 """
 import math
 
-from topic03_draw import Fig, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
+from topic03_draw import Fig, wpx, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
 
 W = 1400
 
@@ -58,8 +58,8 @@ GDN, ATT = 45, 15
 assert GDN + ATT == 60 and GDN / ATT == 3
 
 # ── PrFaaS Table 3（32K，Gbps，8×H200，SGLang v0.5.9）
-PHI = [("Qwen3-235B", "全注意力", 33.35, OR), ("Qwen3.5-397B", "混合 3:1", 8.25, GR),
-       ("MiniMax-M2.5", "全注意力", 59.93, OR), ("MiMo-V2-Flash", "混合 5:1（SWA）", 4.66, GR)]
+PHI = [("Qwen3-235B", "全注意力", 33.35, OR), ("Qwen3.5-397B", "每 4 层里 3 层线性", 8.25, GR),
+       ("MiniMax-M2.5", "全注意力", 59.93, OR), ("MiMo-V2-Flash", "每 6 层里 5 层只看近处", 4.66, GR)]
 assert round(PHI[0][2] / PHI[1][2]) == 4 and round(PHI[2][2] / PHI[3][2]) == 13
 LINK = 100                          # PrFaaS 案例的跨集群带宽约 100 Gbps
 EGRESS = 13                         # 案例里 PrFaaS 集群平均出口
@@ -67,63 +67,59 @@ assert EGRESS / LINK == 0.13
 
 
 def fig_kv_stack():
-    f = Fig(W, "PD 之间那一趟 KV，分三层软件在管。左列 GPU，右列 TPU。"
-               "第一层管搬运：GPU 上是 NIXL 和 Mooncake Transfer Engine，TPU 上是 TPU Sync 和 JAX 的 transfer server。"
-               "第二层管调度：谁决定哪个请求去哪台 prefill、算完什么时候搬；GPU 上是 Dynamo、vllm-router 和引擎里的 connector，"
-               "TPU 上是 tpu-inference 的代理和 TPUConnector。第三层管存储：KV 不只在显存里，还能落到主机内存、SSD、远端，"
+    f = Fig(W, "把那一趟 KV 画成一次搬家：左边 prefill 机，右边 decode 机，中间一条路。"
+               "路和车是搬运层，GPU 上是 NIXL、Mooncake Transfer Engine，TPU 上是 TPU Sync 和 JAX 的 transfer server。"
+               "路口的调度员是调度层，决定请求先去哪台 prefill、算完交给哪台 decode：GPU 上是 Dynamo、vllm-router 和引擎里的 connector，"
+               "TPU 上是 tpu-inference 的代理和 TPUConnector。路边的仓库是存储层，KV 可以先存到主机内存、SSD 或远端："
                "GPU 上是 Mooncake Store、LMCache、Dynamo KVBM，TPU 上是 TPU Sync 的主机内存层")
-    y0 = f.header("那一趟 KV 背后有三层软件　——　<tspan font-weight=\"700\">搬运、调度、存储各是一摊</tspan>",
-                  "每一格写的是这一层里常见的公开组件。同一个组件可能横跨两层（例如 NIXL 也给 KVBM 当搬运层），这里按它最主要的角色放",
-                  [(BL, "GPU 侧"), (CY, "TPU 侧")])
-    ROWS = [
-        ("搬运", "字节从哪块显存到哪块显存", OR,
-         [("NIXL", "NVIDIA 的传输库，插件式：UCX、GDS、Mooncake……"),
-          ("Mooncake Transfer Engine", "RDMA、NVLink、TCP 等多种通道，多网卡聚合")],
-         [("TPU Sync", "HBM、主机内存、远端 TPU 之间零拷贝搬 buffer"),
-          ("JAX transfer server", "tpu-inference 的 TPUConnector 用它：decode 端去拉")]),
-        ("调度", "哪个请求去哪台、什么时候搬", PU,
-         [("Dynamo ／ vllm-router", "前端路由：请求先进 prefill，再交给 decode"),
-          ("引擎里的 connector", "vLLM 的 NixlConnector；SGLang 的 transfer backend")],
-         [("tpu-inference 的代理", "先把请求以 max_tokens=1 发给 prefill"),
-          ("TPUConnector ／ TPUConnectorHMA", "后者给混合模型用，按层组分开传")]),
-        ("存储", "KV 不只放显存：主机内存、SSD、远端", GR,
-         [("Mooncake Store", "跨实例复用前缀，多层缓存"),
-          ("LMCache ／ Dynamo KVBM", "GPU 外的 KV 层；KVBM 管到 SSD 和远端存储")],
-         [("TPU Sync 的主机内存层", "主机内存当第二层前缀缓存，放 /dev/shm"),
-          ("", "服务重启后 KV 还在")]),
-    ]
-    LX, LW = 0, 250
-    GX, CW = 270, 555
-    TX = GX + CW + 20
-    f.t(GX + CW / 2, y0 + 16, "GPU", BL, True, 17, "middle")
-    f.t(TX + CW / 2, y0 + 16, "TPU", CY, True, 17, "middle")
-    y = y0 + 34
-    RH = 150
-    for lab, sub, col, g, t in ROWS:
-        f.box(LX, y, LW, RH - 14, "none", LINE, 9)
-        f.box(LX, y, 4, RH - 14, col, col, 2)
-        f.t(LX + 20, y + 44, lab, col, True, 22)
-        f.t(LX + 20, y + 74, sub, GY, size=13)
-        for x0, items, c2 in ((GX, g, BL), (TX, t, CY)):
-            f.box(x0, y, CW, RH - 14, "none", LINE, 9)
-            yy = y + 30
-            for name, desc in items:
-                if name:
-                    f.t(x0 + 18, yy, name, c2, True, 16)
-                    yy += 24
-                f.t(x0 + 18, yy, desc, INK, size=13.5)
-                yy += 34
-        y += RH
+    y0 = f.header("那一趟 KV 像一次搬家　——　<tspan font-weight=\"700\">路和车、路口调度、路边仓库各是一层</tspan>",
+                  "小字是各层常见的公开组件：蓝字 GPU，青字 TPU",
+                  [(OR, "搬运层"), (PU, "调度层"), (GR, "存储层")])
+    PH = 440
+    py = f.panel(0, y0, W, PH, "prefill 机 → decode 机", OR)
+    RD_W = 48                                   # 路宽
+    ry = py + 190                               # 路的上沿
+    RX0, RX1 = 50 + 170 * 0.84, W - 50 - 170 * 0.84
+    JX = 520                                    # 路口（调度员）
+    WX = 930                                    # 去仓库的岔路
+    ROAD = "#e8eaed"
+    # 路：主路 ＋ 路口往上的进口 ＋ 往下去仓库的岔路
+    f.box(RX0, ry, RX1 - RX0, RD_W, ROAD, "none", 0)
+    f.box(JX - RD_W / 2, py + 20, RD_W, ry - py - 20, ROAD, "none", 0)
+    f.box(WX - RD_W / 2, ry + RD_W, RD_W, 40, ROAD, "none", 0)
+    f.path("M%d,%d L%d,%d" % (RX0 + 20, ry + RD_W / 2, RX1 - 20, ry + RD_W / 2), "#ffffff", 2.5, dash="14,10", arrow=False)
+    # 两台机器
+    f.icon("house", 50, ry - 110, 170, 170, INK, label="prefill 机", lsize=17)
+    f.icon("house", W - 50 - 170, ry - 110, 170, 170, INK, label="decode 机", lsize=17)
+    # 车：两辆，往右开
+    for cx in (300, 700):
+        f.icon("cart", cx, ry - 4, 76, 52, OR, "#fef7e0")
+        f.box(cx + 14, ry + 6, 30, 18, OR, OR, 2)
+    f.line(800, ry + RD_W / 2, 880, ry + RD_W / 2, OR, 2.5)
+    # 搬运层标签：路下方左段
+    f.t(260, ry + RD_W + 44, "搬运层 ＝ 路和车", OR, True, 18)
+    f.t(260, ry + RD_W + 74, "NIXL · Mooncake Transfer Engine", BL, True, 15)
+    f.t(260, ry + RD_W + 100, "TPU Sync · JAX transfer server", CY, True, 15)
+    # 调度员：路口旁
+    f.t(JX - RD_W / 2 - 12, py + 50, "新请求", GY, True, 15, "end")
+    f.line(JX, py + 26, JX, py + 92, GY2, 2)
+    f.icon("person", JX + RD_W / 2 + 14, ry - 74, 56, 64, PU, "#f3e8fd")
+    f.t(JX + 110, py + 40, "调度层 ＝ 路口调度员", PU, True, 18)
+    f.t(JX + 110, py + 70, "Dynamo · vllm-router · 引擎里的 connector", BL, True, 15)
+    f.t(JX + 110, py + 96, "tpu-inference 的代理 · TPUConnector", CY, True, 15)
+    # 仓库：岔路尽头
+    f.icon("shelf", WX - 50, ry + RD_W + 40, 100, 100, GR, "#e6f4ea")
+    f.t(WX + 74, ry + RD_W + 74, "存储层 ＝ 路边仓库", GR, True, 18)
+    f.t(WX + 74, ry + RD_W + 104, "Mooncake Store · LMCache · Dynamo KVBM", BL, True, 15)
+    f.t(WX + 74, ry + RD_W + 130, "TPU Sync 的主机内存层", CY, True, 15)
+    f.t(WX + 74, ry + RD_W + 156, "放主机内存、SSD 或远端", GY, size=15)
     f._pan = None
-    yb = f.band(y + 6, "ok", "先认清一个故障出在哪一层", [
-        "带宽掉到几百 MB/s 是搬运层没走对通道；请求接不上、握手失败多半在调度层；前缀命中率低看存储层。",
-        "TPU 这一列组件少得多：TPU Sync 的 README 自己写着还不建议通用场景使用。",
-    ])
-    yb = f.src(yb + 10,
+    yb = f.src(py + PH + 16,
                "📌 NIXL：github.com/ai-dynamo/nixl（插件 UCX、GDS、Mooncake、POSIX 等）。Mooncake：github.com/kvcache-ai/Mooncake（Transfer Engine ＋ Store）。",
                "📌 LMCache：arXiv 2510.09665。Dynamo KVBM：docs.nvidia.com/dynamo 的 KVBM 页（GPU、主机、SSD、远端存储，经 NIXL）。",
                "📌 TPU Sync：github.com/google/tpu-sync（C++，零拷贝 PJRT buffer，约 200 GB/s 双向 PCIe，支持 v7x ／ v6e，not yet recommended for general use）。",
-               "📌 tpu-inference：vllm-project/tpu-inference 的 kv_transfer 目录（TPUConnector 用 jax.experimental.transfer；HMA 版按 MambaSpec 分组）。")
+               "📌 tpu-inference：vllm-project/tpu-inference 的 kv_transfer 目录（TPUConnector 用 jax.experimental.transfer，decode 端去拉；HMA 版按 MambaSpec 分组）。",
+               "⚠️ 同一个组件可能横跨两层（例如 NIXL 也给 KVBM 当搬运层），图上按它最主要的角色放；路和车只是比方，不代表真实拓扑。")
     f.save("fig6-kv-stack.svg", yb + 14)
 
 
@@ -134,7 +130,7 @@ def fig_kv_bw():
                "runbook 里单次传输从 200 到 800 毫秒降到 2 到 10 毫秒")
     y0 = f.header("同一个库，配错一个开关，搬一趟比 prefill 还慢　——　<tspan font-weight=\"700\">慢了两个数量级</tspan>",
                   "横轴是对数时间。每根条是同一份 1.04 GB 的 KV（专题五那个 8K prompt）按这一档带宽搬一趟；灰带是这个 prompt 的 prefill 本身",
-                  [(RD, "配错：实测 200 MB/s"), (GY2, "专题五：100 Gbps 网络"), (GR, "配对：实测 7–167 GB/s")])
+                  [(RD, "配错：实测 200 MB/s"), (GY2, "专题五：100 Gbps ＝ 12.5 GB/s"), (GR, "配对：实测 7–167 GB/s")])
     PH = 400
     py = f.panel(0, y0, W, PH, "搬一趟 1.04 GB 要多久（本课推导，带宽是实测）", OR)
     BX, BW = 330, 960
@@ -145,82 +141,77 @@ def fig_kv_bw():
     AX = py + PH - 78
     for v, s in ((1, "1 ms"), (10, "10 ms"), (100, "100 ms"), (1000, "1 s"), (10000, "10 s")):
         f.line(X(v), py + 40, X(v), AX, LINE, 1, arrow=False)
-        f.t(X(v), AX + 22, s, GY, size=13, anchor="middle")
+        f.t(X(v), AX + 24, s, GY, size=15, anchor="middle")
     f.box(X(PREFILL_MS[0]), py + 40, X(PREFILL_MS[1]) - X(PREFILL_MS[0]), AX - py - 40, "#e8eaed", "none", 0)
-    f.t(X(1414), py + 60, "prefill 1–2 s", GY, True, 13.5, "middle")
+    f.t(X(1414), py + 62, "prefill 1–2 s", GY, True, 15, "middle")
     bars = [("配错（cuda_copy）", "200 MB/s", T["bad"], RD, "%s ms" % "{:,}".format(round(T["bad"]))),
-            ("专题五：数据中心网络", "12.5 GB/s", T["dcn"], GY2, "%.0f ms" % T["dcn"]),
+            ("专题五：数据中心网络", "100 Gbps ＝ 12.5 GB/s", T["dcn"], GY2, "%.0f ms" % T["dcn"]),
             ("配对，低端", "7 GB/s", T["lo"], GR, "%.0f ms" % T["lo"]),
             ("配对，高端", "167 GB/s", T["hi"], GR, "%.1f ms" % T["hi"])]
     by = py + 84
     for lab, bw, ms, col, txt in bars:
         f.t(BX - 16, by + 4, lab, INK, True, 15, "end")
-        f.t(BX - 16, by + 24, bw, GY, size=13, anchor="end")
+        f.t(BX - 16, by + 25, bw, GY, size=15, anchor="end")
         f.box(BX, by - 12, X(ms) - BX, 30, col, col, 3)
         f.t(X(ms) + 10, by + 9, txt, col, True, 15)
         by += 62
     f._pan = None
-    yb = f.band(py + PH + 20, "bad", "专题五说「网络不是瓶颈」，前提是真跑在设计带宽上", [
-        "runbook 实测：单次传输 200–800 ms 降到 2–10 ms。差的只是三样配置：只留 NVLink 通道、允许跨节点 IPC、换 cuMem 分配器。",
-        "配错时什么都不报错，只是 TTFT 慢得说不清原因。上线前先量一次 KV 传输带宽。",
-    ])
+    yb = py + PH + 6
     yb = f.src(yb + 10,
-               "📌 带宽和单次传输时间：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:194（GB300，vLLM，NixlConnector）。",
+               "📌 带宽和单次传输时间：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:194（GB300，vLLM，NixlConnector）：单次传输 200–800 ms 降到 2–10 ms。",
                "⚠️ 本课推导：1.04 GB ＝ 2 × 62 × 8 × 128 × 8,192 × 1 字节（Qwen3-Coder-480B，FP8），只当一把统一的尺子，不是 V4-Pro 的 KV。"
                "时间 ＝ 1.04 GB ÷ 带宽；没算握手和排队。prefill 1–2 s 与 100 Gbps 取自专题五 §6.2。")
     f.save("fig6-kv-bw.svg", yb + 14)
 
 
 def fig_hybrid_kv():
-    f = Fig(W, "混合模型的 KV 有两种。注意力层的 KV 按 token 一格一格长，切成固定大小的 block，最后一块常常没填满。"
-               "GDN 或 Mamba 层只有一份固定大小的状态，是整段 prompt 的递归摘要，每个请求一块。"
-               "老办法把 prompt 长度按 block 向下取整，只传整块，尾巴让 decode 端自己重算：对注意力层没问题，"
-               "对递归状态就错了，尾巴那几个 token 会被喂进递归两次。混合模型版的 connector 每一块都传，包括没填满的最后一块和那份状态，decode 端一个 token 都不重算")
-    y0 = f.header("混合模型的 KV 不能「传整块、尾巴自己算」　——　<tspan font-weight=\"700\">递归状态里尾巴会被算两遍</tspan>",
-                  "示意格子，不按真实 block 大小。以 Qwen3.5-397B 为例：60 层里 45 层 GDN（递归状态）、15 层注意力（按 token 长的 KV）",
-                  [(BL, "注意力层的 KV block"), (PU, "GDN 层的递归状态"), (RD, "decode 端重算的尾巴")])
-    PH = 380
-    py = f.panel(0, y0, W, PH, "同一个请求，两种传法", PU)
-    CW, X0 = 62, 330
-    NB = 7                                      # 6 个满 block ＋ 1 个半满
+    f = Fig(W, "老办法只传填满的整块，最后那截尾巴让 decode 端自己补算。"
+               "左边是注意力层：KV 像一本逐格记的账，尾巴那格本来空着，decode 端补算只是把它填上，每格只记一次，结果不变。"
+               "右边是 GDN 层：状态像存折余额，prefill 端算完时尾巴已经记进余额里了；decode 端再补算尾巴，"
+               "等于同一笔钱又入账一次，余额多出一截，红色标着重复入账。"
+               "修法是全部格子连同余额原样传过去，decode 端一个 token 都不补算")
+    y0 = f.header("混合模型不能「传整块、尾巴自己算」　——　<tspan font-weight=\"700\">GDN 的状态会把尾巴记两遍</tspan>",
+                  "示意，不按真实大小。Qwen3.5-397B 的 60 层里 45 层 GDN、15 层注意力",
+                  [(BL, "注意力层的 KV"), (PU, "GDN 层的状态"), (RD, "decode 端补算的尾巴")])
+    PH = 312
+    py = f.panel(0, y0, W, PH, "老办法：只传整块，尾巴让 decode 端补算", PU)
+    NB, CW, CH = 7, 62, 40
+    TAIL = 0.45                                 # 最后一块填了多少（示意）
+    LX, RX = 40, 730
+    BW_, TW = 400, round(CW * TAIL) + 30        # 余额条长度、尾巴那一截
+    f.t(LX, py + 22, "注意力层（%d 层）＝ 逐格账本" % ATT, BL, True, 18)
+    f.t(RX, py + 22, "GDN 层（%d 层）＝ 存折余额" % GDN, PU, True, 18)
+    f.line(RX - 40, py + 4, RX - 40, py + 210, LINE, 1, arrow=False)
 
-    def row(y, label, sub, mode):
-        f.t(24, y + 24, label, INK, True, 16)
-        f.t(24, y + 48, sub, GY, size=13)
-        # 注意力
-        f.t(X0, y - 6, "注意力层（15 层）", BL, True, 13.5)
+    def cells(y, tail):
         for i in range(NB):
-            x = X0 + i * CW
+            x = LX + i * CW
             if i < NB - 1:
-                f.box(x, y + 4, CW - 6, 40, BL, BL, 4)
+                f.box(x, y, CW - 6, CH, BL, BL, 4)
             else:
-                f.box(x, y + 4, CW - 6, 40, "none", BL, 4, sw=1.6)
-                f.box(x, y + 4, (CW - 6) * 0.45, 40, RD if mode == "old" else BL, RD if mode == "old" else BL, 4)
-        # GDN
-        gx = X0 + NB * CW + 70
-        f.t(gx, y - 6, "GDN 层（45 层）", PU, True, 13.5)
-        f.box(gx, y + 4, 120, 40, PU, PU, 4)
-        f.t(gx + 60, y + 30, "整段摘要", "#ffffff", True, 13.5, "middle")
-        nx = gx + 150
-        if mode == "old":
-            f.t(nx, y + 18, "只传 6 个整块；红色尾巴在 decode 端重算", RD, True, 14.5)
-            f.t(nx, y + 42, "注意力层：重算没问题", GR, size=14)
-            f.t(nx, y + 64, "GDN 层：尾巴已经在摘要里，再喂一遍就错了", RD, True, 14.5)
-        else:
-            f.t(nx, y + 18, "7 块全传，包括没填满的最后一块", GR, True, 14.5)
-            f.t(nx, y + 42, "GDN 状态每个请求一块，跟着一起传", GR, size=14)
-            f.t(nx, y + 64, "decode 端零重算", GR, True, 14.5)
-    row(py + 60, "老办法", "非 HMA 的 connector", "old")
-    f.line(20, py + 200, W - 20, py + 200, LINE, 1, arrow=False)
-    row(py + 250, "混合模型版", "TPUConnectorHMA", "new")
+                f.box(x, y, CW - 6, CH, "none", BL, 4, sw=1.6, dash=None if tail else "4,3")
+                if tail:
+                    f.box(x, y, (CW - 6) * TAIL, CH, RD, RD, 4)
+    for k, (lab, tail) in enumerate((("prefill 端传来", False), ("decode 端补算尾巴后", True))):
+        y = py + 68 + k * 92
+        f.t(LX, y - 10, lab, INK, True, 15)
+        cells(y, tail)
+        f.t(RX, y - 10, lab, INK, True, 15)
+        f.box(RX, y, BW_, CH, PU, PU, 4)
+        f.line(RX + BW_ - TW, y + 6, RX + BW_ - TW, y + CH - 6, "#ffffff", 1.6, arrow=False)
+        f.t(RX + BW_ - TW / 2, y + 26, "尾巴", "#ffffff", True, 15, "middle")
+        if tail:
+            f.box(RX + BW_ + 4, y, TW, CH, RD, RD, 4)
+            f.t(RX + BW_ + TW + 16, y + 27, "重复入账", RD, True, 17)
+    f.t(LX + NB * CW + 10, py + 68 + 92 + 27, "空格填上，账不变", GR, True, 16)
+    f.t(LX + NB * CW + 10, py + 68 + 27, "尾巴那格空着", GY, size=15)
+    f.line(20, py + 222, W - 20, py + 222, LINE, 1, arrow=False)
+    f.t(LX, py + 256, "混合模型版（TPUConnectorHMA）：%d 格连同余额全传，decode 端一个 token 都不补算" % NB, GR, True, 17)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "混合模型要换 connector，还要打开一个默认关着的开关", [
-        "tpu-inference 跑 Qwen3.5 PD 要用 TPUConnectorHMA，并加 --no-disable-hybrid-kv-cache-manager；漏了它，两种层合不到一个池里，启动就报错。",
-        "GPU 上同理：SGLang 跑 Kimi K3 时，PD 的 decode 端每个请求只有一个状态槽，原来的前缀缓存策略在 PD 下不起作用。",
-    ])
-    yb = f.src(yb + 10,
+    yb = f.src(py + PH + 16,
                "📌 tpu-inference tpu_connector_hma.py 注释原文：No trim, no block-alignment rounding … Required for Mamba correctness. "
                "P's Mamba state is a recurrent summary of all prompt tokens. If D re-prefilled any tail tokens locally, they would be fed through the Mamba recurrence a second time on D.",
+               "📌 非 HMA 版把 prompt 长度按 block 向下取整，尾巴由 D 端重算。存折、账本只是比方：GDN 状态是固定大小的递归摘要，「多一截」指多喂了一遍，不是状态变大。",
                "📌 45 GDN ＋ 15 注意力与开关：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:375–389；PrFaaS（arXiv 2604.15039）写 Qwen3.5-397B 线性对全注意力 3:1，一致。",
                "📌 Kimi K3（GPU）：gpu/inference/kimi-k3/SGLANG-K3-RUNBOOK.md:1319（PD decode 的状态池一请求一 slot，--mamba-radix-cache-strategy 在 PD 下失效）。")
     f.save("fig6-hybrid-kv.svg", yb + 14)
@@ -244,24 +235,25 @@ def fig_prfaas():
     AX = py + PH - 72
     for v in (0, 20, 40, 60, 80, 100):
         f.line(X(v), py + 40, X(v), AX, LINE, 1, arrow=False)
-        f.t(X(v), AX + 22, str(v), GY, size=13, anchor="middle")
+        f.t(X(v), AX + 24, str(v), GY, size=15, anchor="middle")
+    f.path("M%.1f,%d L%.1f,%d" % (X(EGRESS), py + 40, X(EGRESS), AX), GR, 2, dash="5,4", arrow=False)
+    f.t(X(EGRESS) + 8, AX - 12, "PrFaaS 案例：平均出口 %d Gbps" % EGRESS, GR, True, 15)
     by = py + 70
     for i, (name, kind, v, col) in enumerate(PHI):
         f.t(BX - 16, by + 4, name, INK, True, 15, "end")
-        f.t(BX - 16, by + 24, kind, GY, size=13, anchor="end")
+        f.t(BX - 16, by + 25, kind, GY, size=15, anchor="end")
         f.box(BX, by - 12, X(v) - BX, 30, col, col, 3)
+        f.box(X(v) + 4, by - 8, wpx("%.2f" % v, 15) + 12, 24, "#ffffff", "none", 0)   # 白底：挡住穿过的虚线
         f.t(X(v) + 10, by + 9, "%.2f" % v, col, True, 15)
         by += 64 if i % 2 else 56
     f.path("M%.1f,%d L%.1f,%d" % (X(LINK), py + 40, X(LINK), AX), RD, 2, dash="5,4", arrow=False)
-    f.t(X(LINK) - 8, py + 58, "跨数据中心专线约 %d Gbps" % LINK, RD, True, 14, "end")
+    f.t(X(LINK) - 8, py + 58, "跨数据中心专线约 %d Gbps" % LINK, RD, True, 15, "end")
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "PrFaaS：只把长 prompt 送去远处的 prefill 集群", [
-        "内部 1T 混合模型：32 张 H200 做 prefill ＋ 64 张 H20 做本地 PD，对比 96 张 H20 同构 PD，吞吐 +54%，P90 TTFT −64%。",
-        "平均出口只有 %d Gbps，约占专线的 %d%%。光靠 KV 变薄不够，还要按长度和带宽挑哪些请求外送。" % (EGRESS, round(EGRESS / LINK * 100)),
-    ])
+    yb = py + PH + 6
     yb = f.src(yb + 10,
                "📌 PrFaaS，arXiv 2604.15039（Moonshot AI ＋ 清华）：Table 3 的 Φ_kv；案例吞吐 +54%、P90 TTFT −64%、同成本约 +15%、比不调度的朴素异构 +32%；"
                "长度阈值 19.4K，约一半请求外送；平均出口 13 Gbps。",
+               "📌 案例：内部 1T 混合模型，32 张 H200 做 prefill ＋ 64 张 H20 做本地 PD，对比 96 张 H20 同构 PD。「每 4 层里 3 层线性」即论文的混合 3:1；「每 6 层里 5 层只看近处」即 5:1 滑窗注意力（SWA）。",
                "⚠️ 那 4 倍、13 倍是两两同代对比（论文原文），不是同一参数量下的严格对照。")
     f.save("fig6-prfaas.svg", yb + 14)
 

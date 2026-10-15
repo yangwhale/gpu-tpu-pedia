@@ -6,8 +6,9 @@ fig6-metrics.svg —— 回答：TTFT、TPOT、ITL、每用户 tok/s 各量的�
     ITL 是逐个 chunk 的间隔列表，投机解码时一个 chunk 可以带好几个 token）；
     NVIDIA NIM 的 benchmarking 指标页（TTFT 含排队、prefill、网络；ITL ＝ (e2e − TTFT) ÷ (输出 token − 1)，
     并写明 "also known as TPOT"）。两家对同一个词的口径不同，图里两种都写。
-  · 锚点实测：gpu-tpu-pedia tpu/tpu-inference/Gemma4-31B/README.md:453-486（TPU v7x，TP=4，1K 进 1K 出）。
-    并发 1：TTFT 86 ms、TPOT 35 ms、28 tok/s；并发 256：TTFT 7,756 ms（脚注：含排队）、TPOT 49 ms。
+  · 2026-10 改稿：只留时间线并放大；两家工具口径、Gemma4-31B 实测锚点两块表移进正文 2.1（正文本来就写了）。
+    chunk 宽度按它带的字数画，带 3 个字那一次间隔最长 —— 这就是 ITL 的 p99 比 TPOT 长的来由。
+    Gemma 锚点常数 G_C1／G_C256 保留在下面（traps 的峰值稳态仍用 G_C256 对应的 4,495 / 6,144）。
   · 刻意没画：时间刻度（时间线是示意）、网络往返的单独一段（并进 TTFT 里说）。
 
 fig6-pareto.svg —— 回答：为什么不能光比「每卡吞吐」？
@@ -26,7 +27,7 @@ fig6-rulers.svg —— 回答：同一次测量，换分子分母能差多少？
   · 自洽检查：8K 进 1K 出，in+out 约是 output 的 9 倍；11,880 × 64 ＝ 760,320 ≈ 9 × 84,321。
 
 fig6-traps.svg —— 回答：除了分母，还有哪几个坑会让同一套系统报出差很远的数？
-  · 假天花板：SGLANG-V4PRO-RUNBOOK.md:611-615、849-858（ISL 4096 下 ratio 0.20 → 0.15 → 再加 mem-frac）。
+  · 池子比例没调：SGLANG-V4PRO-RUNBOOK.md:611-615、849-858（ISL 4096 下 ratio 0.20 → 0.15 → 再加 mem-frac）。
   · 峰值 vs 稳态：同上 #7（端到端 10,704、峰值 12,070）；Gemma4-31B README:460（4,495 vs peak 6,144）。
   · 温度：VLLM-V4PRO-RUNBOOK.md:394-420（接受率 1.16% vs 34%）。只对 greedy 草稿成立：
     gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:226-230 的 draft 是 probabilistic，官方就用 1.0。
@@ -34,7 +35,7 @@ fig6-traps.svg —— 回答：除了分母，还有哪几个坑会让同一套�
   · 闭环：SGLANG-V4PRO-RUNBOOK.md:478、1135（闭环 −13%）。
 """
 
-from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, wpx
 
 W = 1400
 
@@ -85,89 +86,60 @@ def bracket(f, x1, x2, y, col, lab, size=14):
 
 def fig_metrics():
     f = Fig(W, "一个请求的时间线，示意。请求进门后先排队，再做 prefill，吐出第一个字；之后 decode 一个 chunk 一个 chunk 往外推字，"
-               "开了投机解码时一个 chunk 可能带两三个字。TTFT 是进门到第一个字，含排队和 prefill。"
+               "有的 chunk 一次带两三个字，带的字越多，这一次间隔越长。TTFT 是进门到第一个字，含排队和 prefill。"
                "ITL 是相邻两个 chunk 之间的每一次间隔。TPOT 是首字之后的总时长除以字数减一，是每个请求的平均值。"
-               "每用户每秒多少字约等于一千除以 TPOT 的毫秒数。下方是 Gemma4-31B 在 TPU v7x 上的实测：并发 1 时 TTFT 86 毫秒，"
-               "并发 256 时 7,756 毫秒，多出来的几乎全是排队；TPOT 从 35 涨到 49 毫秒")
+               "每用户每秒多少字约等于一千除以 TPOT 的毫秒数")
     y0 = f.header("四个时间指标各量哪一段　——　<tspan font-weight=\"700\">先问含不含排队、含不含首字</tspan>",
-                  "一个请求的时间线（示意，长短不按比例）。TTFT 和 TPOT 是每个请求一个数；ITL 是每个间隔一个数",
-                  [(GY2, "排队"), (OR, "prefill"), (GR, "decode 推出的一个 chunk")])
-    PH = 300
-    py = f.panel(0, y0, W, PH, "一个请求的时间线", INK)
-    T0, RY, RH = 120, py + 80, 50
-    QW, PW_ = 190, 220
-    f.box(T0, RY, QW - 6, RH, "#f1f3f4", GY2, 4, dash="5,4")
-    f.t(T0 + (QW - 6) / 2, RY + 31, "排队", GY, True, 15, "middle")
-    XP = T0 + QW
-    f.box(XP, RY, PW_ - 6, RH, OR, OR, 4)
-    f.t(XP + (PW_ - 6) / 2, RY + 31, "prefill", "#ffffff", True, 15, "middle")
-    XD = XP + PW_
-    # 每个 chunk 带几个字（投机解码：有的 chunk 带 2、3 个）
-    CH = [1, 1, 2, 1, 3, 1, 2]
-    CW = 92
-    xs = [XD + i * CW for i in range(len(CH))]
-    for i, (x, n) in enumerate(zip(xs, CH)):
-        f.box(x, RY, CW - 8, RH, GR, GR, 4)
-        f.t(x + (CW - 8) / 2, RY + 31, "%d 个字" % n, "#ffffff", True, 13.5, "middle")
-    ends = [XD - 6] + [x + CW - 8 for x in xs]
-    for i, ex in enumerate(ends):
-        f.p.append('<circle cx="%.1f" cy="%.1f" r="6" fill="%s"/>' % (ex, RY - 14, RD if i == 0 else INK))
-    f.t(XD - 6, RY - 28, "第一个字", RD, True, 13.5, "middle")
-    f.line(T0, RY - 40, T0, RY - 4, GY2, 1.6)
-    f.t(T0, RY - 46, "请求进门", GY, True, 13.5, "middle")
+                  "一个请求的时间线（示意）。每个绿块是一次到手的一段字，宽度按它带的字数画",
+                  [(GY2, "排队"), (OR, "prefill"), (GR, "decode 推出的一段字（chunk）")])
+    T0, QW, PW_ = 30, 180, 210
+    U = 60                                   # 每个字占的宽度（示意）
+    CH = [1, 1, 2, 1, 3, 1, 2]               # 每个 chunk 带几个字
     N = 1 + sum(CH)                          # 首字 ＋ decode 推出的字
     assert N == 12
-    BY = RY + RH + 28
-    bracket(f, T0, XD - 6, BY, RD, "TTFT：进门 → 第一个字（含排队、prefill、网络）")
-    bracket(f, ends[4], ends[5], BY, BL, "ITL：这一次间隔")
-    BY2 = BY + 64
-    bracket(f, XD - 6, ends[-1], BY2, GR, "TPOT ＝ 这一段 ÷ (字数 − 1)，每个请求一个平均数")
-    f.t(ends[-1] + 24, RY + 22, "每用户 tok/s", INK, True, 15)
-    f.t(ends[-1] + 24, RY + 46, "≈ 1000 ÷ TPOT(ms)", INK, False, 14)
-    f.t(ends[-1] + 24, BY2 - 2, "这个请求共 %d 个字" % N, GY, size=13)
-    f.t(ends[4] + 4, RY - 28, "带 3 个字的 chunk：这次 ITL 比 TPOT 长", BL, False, 13)
-
-    # ② 两家工具的口径 ＋ 实测锚点
-    y2 = py + PH + 16
-    PH2 = 236
-    HW = (W - 20) // 2
-    p2 = f.panel(0, y2, HW, PH2, "同一个词，两家工具的口径", BL)
-    rows = [("vLLM bench", "TPOT 按请求平均，不含首字"),
-            ("", "ITL 是每个 chunk 的间隔，一个 chunk 可以带多个字"),
-            ("NVIDIA NIM", "TTFT 含排队、prefill、网络"),
-            ("", "ITL ＝ (e2e − TTFT) ÷ (字数 − 1)，即别家的 TPOT")]
-    for i, (a, b) in enumerate(rows):
-        yy = p2 + 40 + i * 40
-        f.t(22, yy, a, BL, True, 14.5)
-        f.t(170, yy, b, INK, size=14, w=HW - 190)
-    p3 = f.panel(HW + 20, y2, HW, PH2, "实测锚点：Gemma4-31B · TPU v7x · 1K 进 1K 出", OR)
-    X3 = HW + 40
-    f.t(X3 + 200, p3 + 34, "TTFT", GY, True, 14, "middle")
-    f.t(X3 + 360, p3 + 34, "TPOT", GY, True, 14, "middle")
-    f.t(X3 + 520, p3 + 34, "每用户", GY, True, 14, "middle")
-    for i, (lab, ttft, tpot, tps) in enumerate([("并发 1", "86 ms", "35 ms", "28 tok/s"),
-                                                ("并发 256", "7,756 ms", "49 ms", "≈ 20 tok/s")]):
-        yy = p3 + 72 + i * 42
-        f.t(X3, yy, lab, INK, True, 15)
-        f.t(X3 + 200, yy, ttft, RD if i else INK, True, 16, "middle")
-        f.t(X3 + 360, yy, tpot, INK, True, 16, "middle")
-        f.t(X3 + 520, yy, tps, GY if i else INK, i == 0, 15, "middle")
-    f.t(X3, p3 + 172, "TTFT 涨了 90 倍，多出来的几乎全是排队", RD, True, 14)
-    f.t(X3, p3 + 196, "并发 1 的 TTFT 才是纯 prefill；「≈ 20」是 1000 ÷ 49 推的", GY, size=13)
+    XP = T0 + QW
+    XD = XP + PW_
+    xs, x = [], XD
+    for n in CH:
+        xs.append(x)
+        x += n * U
+    ends = [XD - 6] + [xx + n * U - 6 for xx, n in zip(xs, CH)]
+    assert ends[-1] < 1110
+    PH = 30 + 346
+    py = f.panel(0, y0, W, PH, "一个请求的时间线", INK)
+    RY, RH = py + 96, 64
+    f.box(T0, RY, QW - 6, RH, "#f1f3f4", GY2, 4, dash="5,4")
+    f.t(T0 + (QW - 6) / 2, RY + 40, "排队", GY, True, 18, "middle")
+    f.box(XP, RY, PW_ - 6, RH, OR, OR, 4)
+    f.t(XP + (PW_ - 6) / 2, RY + 40, "prefill", "#ffffff", True, 18, "middle")
+    for xx, n in zip(xs, CH):
+        f.box(xx, RY, n * U - 6, RH, GR, GR, 4)
+        f.t(xx + (n * U - 6) / 2, RY + 40, "%d 字" % n, "#ffffff", True, 17, "middle")
+    for i, ex in enumerate(ends):
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="%s"/>' % (ex, RY - 16, RD if i == 0 else INK))
+    f.t(XD - 6, RY - 34, "第一个字", RD, True, 16, "middle")
+    f.line(T0, RY - 52, T0, RY - 4, GY2, 1.6)
+    f.t(T0, RY - 58, "请求进门", GY, True, 15)
+    BY = RY + RH + 34
+    bracket(f, T0, XD - 6, BY, RD, "TTFT：进门 → 第一个字", 17)
+    f.t((T0 + XD - 6) / 2, BY + 48, "含排队、prefill、网络", RD, False, 15, "middle")
+    bracket(f, ends[4], ends[5], BY, BL, "ITL：这一次间隔", 17)
+    f.t((ends[4] + ends[5]) / 2, BY + 48, "带 3 个字，所以最长", BL, False, 15, "middle")
+    BY2 = BY + 104
+    bracket(f, XD - 6, ends[-1], BY2, GR, "TPOT ＝ 这一段 ÷ (字数 − 1)，每个请求一个平均数", 17)
+    RX = ends[-1] + 30
+    f.t(RX, RY + 26, "每用户 tok/s", INK, True, 17)
+    f.t(RX, RY + 52, "≈ 1000 ÷ TPOT(ms)", INK, False, 16)
+    f.t(RX, BY2 + 6, "共 %d 个字" % N, GY, size=15)
     f._pan = None
-    yb = f.band(y2 + PH2 + 20, "ok", "看到一个延迟数，先问两句", [
-        "TTFT 含不含排队？压测时排队可以比 prefill 本身长几十倍。",
-        "TPOT 和 ITL 是哪家的定义？开了投机解码，逐次间隔会比平均间隔长，p99 看 ITL。",
-    ])
-    yb = f.src(yb + 10,
+    yb = f.src(py - 30 + PH + 4,
                "vLLM 定义：vllm/benchmarks/serve.py（TPOT ＝ (latency − ttft) ÷ (output_len − 1)；ITL 逐 chunk，"
                "源码注释写明 multiple output tokens may be bundled together）。",
                "NIM 定义：NVIDIA NIM for LLMs 的 benchmarking 指标页（TTFT 含排队、prefill、网络；ITL "
-               "also known as TPOT）。AIPerf 沿用同一套。",
-               "本课程作者实测：gpu-tpu-pedia tpu/tpu-inference/Gemma4-31B/README.md:453-486（并发 1 与 256；"
-               "TTFT 7,756 ms 的脚注写明含排队）。并发 256 的每用户 tok/s 没有实测值，「≈ 20」由 1000 ÷ 49 推得。",
-               "⚠️ 时间线是示意：chunk 带几个字、各段长短都是为了看得清，不对应任何实测。")
-    f.save("fig6-metrics.svg", yb + 14)
+               "also known as TPOT）。AIPerf 沿用同一套。两家对同一个词的口径不同，正文第 2.1 节对照。",
+               "⚠️ 时间线是示意：chunk 带几个字、各段长短都是为了看得清，不对应任何实测；"
+               "绿块宽度按字数画，表示这几个字是攒在一起才到手的。")
+    f.save("fig6-metrics.svg", yb + 6)
 
 
 def fig_pareto():
@@ -240,114 +212,134 @@ def fig_pareto():
     f.save("fig6-pareto.svg", yb + 14)
 
 
+IN_PER_OUT = round(INOUT / OUT - 1)               # 8K 进 1K 出：每个输出 token 对应约 8 个输入 token
+assert IN_PER_OUT == 8
+# 四把尺子各圈什么：(分子含不含输入, 分母含不含 prefill 卡)
+PICK = [(False, False), (True, True), (False, True), (True, False)]
+assert [round((INOUT if a else OUT) / (ALL if b else DEC)) for a, b in PICK] == [r[1] for r in RULERS]
+
+
+def _tokens(f, x, y, with_in, sq=11, gap=2):
+    """一小堆 token：输出 4 个（绿）竖一列，输入 4×8 个（橙）。圈中的那堆加框，没圈的淡掉。"""
+    n_out = 4
+    for k in range(n_out):
+        f.box(x, y + k * (sq + gap), sq, sq, GR, GR, 2)
+    ix = x + sq + 10
+    op = "" if with_in else ' opacity="0.25"'
+    f.p.append('<g%s>' % op)
+    for c in range(IN_PER_OUT):
+        for r in range(n_out):
+            f.box(ix + c * (sq + gap), y + r * (sq + gap), sq, sq, OR, OR, 2)
+    f.p.append('</g>')
+    H = n_out * (sq + gap) - gap
+    x1 = (ix + IN_PER_OUT * (sq + gap) - gap) if with_in else (x + sq)
+    f.box(x - 5, y - 5, x1 - x + 10, H + 10, "none", INK, 5, sw=2)
+    return ix + IN_PER_OUT * (sq + gap)
+
+
+def _cards(f, x, y, with_pf, sq=11, gap=2):
+    """64 张卡：16 列 × 4 行，前 4 列（16 张）是 decode（蓝），其余 48 张 prefill（灰）。"""
+    for c in range(ALL // 4):
+        for r in range(4):
+            dec = c < DEC // 4
+            col = BL if dec else "#bdc1c6"
+            f.box(x + c * (sq + gap), y + r * (sq + gap), sq, sq, col, col, 2)
+    H = 4 * (sq + gap) - gap
+    ncol = ALL // 4 if with_pf else DEC // 4
+    f.box(x - 5, y - 5, ncol * (sq + gap) - gap + 10, H + 10, "none", INK, 5, sw=2)
+    return x + (ALL // 4) * (sq + gap)
+
+
 def fig_rulers():
-    f = Fig(W, "同一次测量：GB300 上 SGLang 跑 DeepSeek-V4-Pro，decode 用 16 张卡，prefill 用 48 张，共 64 张。"
-               "聚合输出每秒 84,321 个 token。按输出除以 decode 卡算是每卡 5,270；按输入加输出除以全部卡算是 11,880，"
-               "超过官方标称的 11,200。另外两种组合是本课推出来的：输出除以全部卡 1,318，输入加输出除以 decode 卡 47,520。"
-               "最大和最小差 36 倍")
-    y0 = f.header("同一次测量，四把尺子　——　<tspan font-weight=\"700\">分子数什么，分母数谁</tspan>",
-                  "GB300 · SGLang · V4-Pro · decode dep16 ＋ 12 个 prefill 节点（共 64 张卡）· 8K 进 1K 出 · 聚合输出 84,321 tok/s",
-                  [(BL, "InferenceX 字段：只数输出"), (GR, "InferenceX 字段：输入输出合计"), (GY2, "本课推导")])
-    PH = 420
-    py = f.panel(0, y0, W, PH, "每张 GPU 每秒多少 token", INK)
-    BX, BWID = 420, 760
-    MX = 48000
-    for i, (lab, v, col, note) in enumerate(RULERS):
-        yy = py + 50 + i * 82
-        f.t(24, yy + 20, lab, INK, True, 15)
-        f.t(24, yy + 44, note, GY, size=13)
+    f = Fig(W, "同一次测量：GB300 上 SGLang 跑 DeepSeek-V4-Pro，decode 用 16 张卡，prefill 用 48 张，共 64 张；"
+               "8K 进 1K 出，每个输出 token 对应约 8 个输入 token。每把尺子都是圈一堆 token、除以圈中的卡。"
+               "只圈输出、除以 16 张 decode 卡是 5,270；输入输出都圈、除以全部 64 张是 11,880，超过官方标称的 11,200。"
+               "另外两种是本课推出来的：只圈输出除以 64 张是 1,318，输入输出除以 16 张是 47,520。最大和最小差 36 倍")
+    y0 = f.header("同一次测量，四把尺子　——　<tspan font-weight=\"700\">圈哪堆 token，除以圈哪些卡</tspan>",
+                  "GB300 · SGLang · V4-Pro · 8K 进 1K 出。实心条是 InferenceX 真报的两个字段，虚线条是本课补全的另两种组合",
+                  [(GR, "输出 token"), (OR, "输入 token"), (BL, "decode 卡 16 张"), ("#bdc1c6", "prefill 卡 48 张")])
+    RH = 86
+    PH = 30 + 44 + 4 * RH + 30
+    py = f.panel(0, y0, W, PH, "每张卡每秒多少 token", INK)
+    TX, CX, BX = 34, 250, 520
+    f.t(TX - 4, py + 30, "数哪些 token", GY, True, 15)
+    f.t(CX - 4, py + 30, "除以哪些卡", GY, True, 15)
+    BWID, MX = 640, 48000
+    for i, ((lab, v, col, note), (a, b)) in enumerate(zip(RULERS, PICK)):
+        yy = py + 58 + i * RH
+        _tokens(f, TX, yy, a)
+        f.t(CX - 34, yy + 34, "÷", INK, True, 26, "middle")
+        _cards(f, CX, yy, b)
+        f.t(BX - 20, yy + 34, "＝", INK, True, 22, "middle")
+        derived = col == GY2
         w = BWID * v / MX
-        f.box(BX, yy, w, 40, col, col, 4)
-        lx = BX + w + 12
-        f.t(lx, yy + 27, format(v, ","), col if col != GY2 else INK, True, 17)
+        if derived:
+            f.box(BX, yy + 6, w, 36, "#ffffff", GY2, 4, sw=1.6, dash="5,3")
+        else:
+            f.box(BX, yy + 6, w, 36, INK, INK, 4)
+        f.t(BX + w + 12, yy + 32, format(v, ","), INK if not derived else GY, True, 20, big=True)
     xo = BX + BWID * OFFICIAL / MX
-    f.line(xo, py + 40, xo, py + 50 + 4 * 82 - 20, RD, 1.6, dash="6,4", arrow=False)
-    f.t(xo + 8, py + 50 + 4 * 82 - 4, "官方标称 11,200", RD, True, 14)
+    f.line(xo, py + 50, xo, py + 58 + 4 * RH - 18, RD, 1.6, dash="6,4", arrow=False)
+    f.t(xo + 8, py + 58 + 4 * RH + 2, "官方标称 11,200", RD, True, 15)
+    f.t(W - 24, py + 58 + 4 * RH + 2, "最大 ÷ 最小 ＝ %d 倍" % round(SPREAD), INK, True, 17, "end")
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "同一组原始数，「腰斩」和「超标」只隔一个分母", [
-        "一个看着比官方低一半，一个看着超标，两个都没算错，只是回答的问题不一样。",
-        "见到每卡吞吐先问两句：分子含不含输入？分母含不含 prefill 的卡？TPU 上还要再问一句：按芯片还是按 device。",
-    ])
-    yb = f.src(yb + 10,
+    yb = f.src(py - 30 + PH + 4,
                "本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-809"
                "（dep16：聚合 output 84,321；÷16 ＝ 5,270；tput_per_gpu ＝ 11,880）；字段定义见同文件 731-735"
-               "（InferenceX process_result.py）。",
+               "（InferenceX process_result.py：output_tput_per_gpu ＝ output ÷ decode GPU，tput_per_gpu ＝ (输入＋输出) ÷ 全部 GPU）。",
                "本课推导：(in＋out) ＝ 11,880 × 64 ＝ 760,320；output ÷ 64 ＝ 1,318；(in＋out) ÷ 16 ＝ 47,520。"
                "自洽检查：8K 进 1K 出时 in＋out 约为 output 的 9 倍，9 × 84,321 ＝ 758,889，与 760,320 差 0.2%。",
+               "⚠️ token 和卡的小方块只画比例：输出 4 个对输入 32 个 ＝ 1 : 8；卡 16 : 48 是实数。",
                "⚠️ 一颗 TPU v7 芯片对软件显示成 2 个 device，按 device 报的每卡数是按芯片报的一半。")
-    f.save("fig6-rulers.svg", yb + 14)
+    f.save("fig6-rulers.svg", yb + 6)
 
 
-def _pairs(f, x, y, w, rows, mx, cols):
-    """rows: [(label, value, text)]，横条。"""
-    for i, (lab, v, txt) in enumerate(rows):
-        yy = y + i * 50
-        f.t(x, yy + 22, lab, INK, True, 14)
-        bw = (w - 340) * v / mx
-        f.box(x + 220, yy + 4, bw, 28, cols[i], cols[i], 4)
-        f.t(x + 228 + bw, yy + 24, txt, cols[i], True, 15)
+TRAPS = [
+    # (坑名, 坑里: (标签, 值), 改对: (标签, 值), 大数, 大数下面一句)
+    ("池子比例没调", ("ratio 0.20", CEIL[0][1]), ("ratio 0.15", CEIL[1][1]),
+     "+%d%%" % round((CEIL[1][1] / CEIL[0][1] - 1) * 100), "只改 KV 池的一个比例"),
+    ("峰值当稳态", ("峰值", PEAK[0][3]), ("端到端", PEAK[0][1]),
+     "虚高 %d%%" % round((PEAK[0][3] / PEAK[0][1] - 1) * 100), "同一轮，换个读数"),
+    ("没预热", ("第一轮", WARM[1][1]), ("第二轮", WARM[1][3]),
+     "×%.2f" % (WARM[1][3] / WARM[1][1]), "同一套配置，跑第二遍"),
+]
+assert [t[3] for t in TRAPS] == ["+54%", "虚高 13%", "×2.05"]
 
 
 def fig_traps():
-    f = Fig(W, "四个让同一套系统报出不同数的坑。左上：假天花板，同一个镜像，只改 KV 池的划分比例，端到端从 6,887 涨到 10,614，"
-               "再加显存比例到 10,704，之前扫并发得出的天花板约 9,200 到 9,400 是错的。右上：峰值和稳态，V4-Pro 峰值 12,070 对端到端 10,704，"
-               "Gemma4 峰值 6,144 对稳态 4,495。左下：温度，投机解码的草稿是 greedy 时，服务端按温度 1 采样，接受率只有 1.16%，"
-               "温度 0 时 34%，吞吐差 3.1 倍。右下：预热，冷启动 8,520 对热 9,118；vLLM 一组差两倍")
-    y0 = f.header("尺子以外的四个坑　——　<tspan font-weight=\"700\">每一个都能单独让数字差出一截</tspan>",
-                  "全部是本仓库公开 runbook 里的实测，GB300 上的 DeepSeek-V4-Pro，另有一组 TPU v7x 上的 Gemma4-31B",
+    f = Fig(W, "尺子以外的三个坑，每个都是同一套系统的两次实测。池子比例没调：只改 KV 池的划分比例，同为 4K 输入，"
+               "端到端从 6,887 涨到 10,614，涨 54%。峰值当稳态：引擎自报的峰值 12,070，端到端稳态 10,704，峰值虚高 13%。"
+               "没预热：vLLM 一组第一轮 13,585，第二轮 27,803，差 2.05 倍")
+    y0 = f.header("尺子以外的坑　——　<tspan font-weight=\"700\">每一个都能单独让数字差出一截</tspan>",
+                  "GB300 上的 DeepSeek-V4-Pro，三组各自独立的实测；每组上面是坑里的数，下面是改对之后的数",
                   [(GY2, "坑里的数"), (GR, "改对之后的数")])
-    HW = (W - 20) // 2
-    PH = 270
-    specs = []
-    p = f.panel(0, y0, HW, PH, "假天花板：参数没调对，扫出来的只是那组参数的上界", OR)
-    _pairs(f, 20, p + 20, HW - 20, [(lab, v, format(v, ",")) for lab, v in CEIL], 11000, [GY2, GR, GR])
-    f.t(20, p + 196, "同为 ISL 4096、端到端 per-decode-GPU。之前在 ISL 8192 上扫并发，", GY, size=13)
-    f.t(20, p + 216, "以为 ~9,200–9,400 就是天花板", GY, size=13)
-    p = f.panel(HW + 20, y0, HW, PH, "峰值 vs 稳态：峰值是某一刻的最高值", OR)
-    X = HW + 40
-    for i, (lab, e2e, _, pk) in enumerate(PEAK):
-        yy = p + 20 + i * 96
-        f.t(X, yy + 18, lab, INK, True, 14.5)
-        for j, (nm, v, col) in enumerate((("稳态", e2e, GR), ("峰值", pk, GY2))):
-            bw = 400 * v / 12500
-            f.box(X + 100, yy + 30 + j * 32, bw, 26, col, col, 4)
-            f.t(X + 108 + bw, yy + 49 + j * 32, "%s %s" % (nm, format(v, ",")), col, True, 14.5)
-    f.t(X, p + 226, "峰值比稳态高 13%～37%；报数要写清是哪个", GY, size=13)
-    y1 = y0 + PH + 16
-    p = f.panel(0, y1, HW, PH, "温度：greedy 草稿碰上默认温度 1.0", OR)
-    rows = [("接受率", "1.16%", "34%"), ("输出 tok/s", "944", "2,911"), ("TPOT", "232 ms", "48.6 ms")]
-    f.t(240, p + 34, "温度 1.0（默认）", GY, True, 14, "middle")
-    f.t(450, p + 34, "温度 0", GR, True, 14, "middle")
-    for i, (lab, a, b) in enumerate(rows):
-        yy = p + 74 + i * 40
-        f.t(24, yy, lab, INK, True, 15)
-        f.t(240, yy, a, RD, True, 17, "middle")
-        f.t(450, yy, b, GR, True, 17, "middle")
-    f.t(24, p + 210, "只对 greedy 草稿成立；草稿按概率采样时，官方就用温度 1.0", GY, size=13)
-    p = f.panel(HW + 20, y1, HW, PH, "预热和闭环：第一轮和闭环都偏低", OR)
-    for i, (lab, cold, _, warm) in enumerate(WARM):
-        yy = p + 24 + i * 92
-        f.t(X, yy + 18, lab, INK, True, 14.5)
-        for j, (nm, v, col) in enumerate((("冷", cold, GY2), ("热", warm, GR))):
-            bw = 400 * v / 30000
-            f.box(X + 130, yy + 28 + j * 30, bw, 24, col, col, 4)
-            f.t(X + 138 + bw, yy + 46 + j * 30, "%s %s" % (nm, format(v, ",")), col, True, 14.5)
-    f.t(X, p + 212, "闭环压测（限并发）又低 13%：对标要开环，跑两轮报第二轮", GY, size=13)
+    GAP = 20
+    CW = (W - 2 * GAP) / 3.0
+    PH = 30 + 260
+    for i, (name, (la, va), (lb, vb), big, how) in enumerate(TRAPS):
+        x = i * (CW + GAP)
+        p = f.panel(x, y0, CW, PH, name, OR)
+        f.t(x + CW / 2, p + 66, big, OR, True, 40, "middle", big=True)
+        f.t(x + CW / 2, p + 96, how, GY, False, 15, "middle")
+        mx = max(va, vb)
+        BX, BMAX = x + 100, CW - 100 - 100
+        for j, (lab, v, col) in enumerate(((la, va, GY2), (lb, vb, GR))):
+            yy = p + 124 + j * 56
+            f.t(BX - 12, yy + 26, lab, INK, True, 16, "end")
+            bw = BMAX * v / mx
+            f.box(BX, yy, bw, 38, col, col, 4)
+            f.t(BX + bw + 10, yy + 26, format(v, ","), GY if col == GY2 else col, True, 17)
     f._pan = None
-    yb = f.band(y1 + PH + 20, "ok", "四个坑，单独一个就能差出 7% 到 3 倍", [
-        "引擎一行代码没改，换个参数、换个读数、换个温度、换个时机，报出来的数就不一样。",
-        "对标别人的数之前，先把这四样和他对齐。",
-    ])
-    yb = f.src(yb + 10,
-               "假天花板与峰值：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:611-615、849-858"
+    yb = f.src(y0 + PH + 4,
+               "池子比例与峰值：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:611-615、849-858"
                "（ISL 4096，#1 ratio 0.20 → 6,887；#3 0.15 → 10,614；#7 加 mem-frac 0.88 → 10,704、峰值 12,070）。"
-               "峰值是 decode 引擎自报的瞬时 gen throughput，按 DP rank 计（同文件 835-845）。",
-               "Gemma4-31B：tpu/tpu-inference/Gemma4-31B/README.md:460（并发 256，输出 4,495、peak 6,144）。",
-               "温度：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:394-420（4k1k conc256，DSpark 草稿 "
-               "draft_sample_method 为 greedy）。反例：gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:226-230，草稿为 probabilistic。",
-               "预热：SGLANG-V4PRO-RUNBOOK.md:480-494（8,520 → 9,118，+7.0%）；VLLM-V4PRO-RUNBOOK.md:431-433（2P1D conc256，"
-               "13,585 → 27,803）。闭环：SGLANG-V4PRO-RUNBOOK.md:478、1135。")
-    f.save("fig6-traps.svg", yb + 14)
+               "峰值是 decode 引擎自报的瞬时 gen throughput，按 DP rank 计（同文件 835-845）。"
+               "ISL 8192 下扫并发得到的 9,200–9,400 是另一个负载，不能和这里的 4K 比。",
+               "另一组峰值稳态：tpu/tpu-inference/Gemma4-31B/README.md:460（TPU v7x，并发 256，输出 4,495、peak 6,144）。",
+               "预热：VLLM-V4PRO-RUNBOOK.md:431-433（2P1D conc256，13,585 → 27,803）；另一组 SGLANG-V4PRO-RUNBOOK.md:480-494"
+               "（8,520 → 9,118，+7.0%）。闭环：SGLANG-V4PRO-RUNBOOK.md:478、1135（闭环比开环低 13%）。",
+               "温度这个坑（接受率 1.16% 对 34%）画在第十一节的图里，这里不重复；出处 VLLM-V4PRO-RUNBOOK.md:394-420。")
+    f.save("fig6-traps.svg", yb + 6)
 
 
 fig_metrics()

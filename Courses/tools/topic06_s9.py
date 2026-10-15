@@ -6,7 +6,7 @@
 """
 
 BODY = '''
-  <p class="lead">决定拆以后，马上要回答两件事：prefill 配几台、decode 配几台；以及这个负载到底该不该拆。
+  <p class="lead">2025 年 Dynamo、llm-d 这类框架出来以后，PD 配比成了上线时要填的一个参数。决定拆以后，马上要回答两件事：prefill 配几台、decode 配几台；以及这个负载到底该不该拆。
     <b>两件事都要拿自己的负载去量，别照搬别人的配比。</b></p>
 
   <h3 id="s9-1">9.1　回顾：配比从哪来</h3>
@@ -22,10 +22,11 @@ __FIG_S9_RATIO_T5__
     <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
     <tr><td>decode 每秒完成</td><td>8 卡 × 11,200 ÷ 1,024 个输出 token</td><td>约 87.5 个请求</td></tr>
     <tr><td>prefill 要供的料</td><td>87.5 × 8,192 个输入 token</td><td>约 71.7 万 tok/s</td></tr>
-    <tr><td>一个 prefill（4 卡）</td><td>4 × 18,200</td><td>约 7.28 万 tok/s</td></tr>
+    <tr><td>一个 prefill（4 卡）</td><td>4 × 每卡 18,200 input tok/s（官方的 prefill 单卡吞吐）</td><td>约 7.28 万 tok/s</td></tr>
     <tr><td>要几个</td><td>71.7 ÷ 7.28</td><td>约 9.8，取 8–10 个</td></tr>
   </table>
-  <p>官方的高并发配置正好用 8 个 prefill。实测也印证了公式给的是起点：SGLang 上 prefill 从 14 加到 16，输出只从 8,809 涨到 8,993，约 2%，已经喂饱了。</p>
+  <p>官方的高并发配置用 8 个 prefill，落在估算区间（约 9.8）的下沿。18,200 是官方给的单卡 prefill 吞吐；runbook 自己测的单卡峰值是 15,196，只有它的 83%，照实测算要的 prefill 更多。</p>
+  <p>实测也印证了公式给的只是起点。同一份 runbook 早期扫过 prefill 个数（历史数据，之后没重测），每张 decode 卡的输出：8 个时 6,788，14 个时 8,809，16 个时 8,993。14 到 16 只涨 2%，已经喂饱，runbook 因此把 14 定为默认（runbook:43、1117）。</p>
 
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
   <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D 上再加一台 prefill：总输出只从 1,118.8 到 1,159.0 tok/s，每张卡反倒从 69.9 掉到 48.3。</p>
@@ -42,6 +43,7 @@ __FIG_S9_SWEEP__
   <ul>
     <li><b>只除 decode 卡</b>：prefill 的成本被藏了起来，配得越多越好看。这是不少 PD 报告的默认口径。</li>
     <li><b>除全部卡</b>：12 个 prefill 时到顶，第 14 个开始稀释。要算整机成本，看这条。</li>
+    <li><b>同是 12 个 prefill</b>：按 decode 卡算是起点的 10.4 倍（307 → 3,187），按全部卡算只有 2.2 倍（204 → 455）。</li>
     <li><b>看到每卡吞吐先问</b>：分母里有没有 prefill 的卡（第二节）。</li>
   </ul>
   <p>这条曲线是 2026-07-24 的历史实测，runbook 注明之后没有重测，只当趋势看。输入换成 4K 后，每个 prefill 能喂的 decode 约翻倍，曲线形状随输入长度变。</p>
@@ -63,19 +65,25 @@ __FIG_S9_SWEEP__
   <p>把上面几节压成三问，从上往下问；第一问答「否」，后面就不用问了。</p>
 __FIG_S9_DECIDE__
   <ul>
-    <li><b>先问打不打架</b>：看不拆时 TPOT 有没有被长 prompt 撑出尖峰。没有尖峰，先试分块 prefill（第四节）。</li>
+    <li><b>先问打不打架</b>：看不拆时 TPOT 有没有被长 prompt 撑出尖峰。没有尖峰就不用拆；有尖峰，先试分块 prefill（第四节），压不住再拆。</li>
     <li><b>再问 KV 走哪条线</b>：同一个 NVLink 域或同一个 TPU 切片最省心；出了域，就要算清 KV 有多大（8.8）。</li>
     <li><b>最后问缺什么</b>：TTFT 先破就加 prefill，TPOT 或吞吐先破就加 decode，或者换 decode 的切法（第六节）。</li>
+  </ul>
+  <p>几个实测例子：</p>
+  <ul>
+    <li>混合模型的 KV 比全注意力薄 4–13 倍，才敢跨数据中心（按 8.8 的外送带宽相除，本课推导）。</li>
+    <li>GPU 跨出 NVLink 域，KV 就退到 RDMA（8.6）。</li>
+    <li>MiMo batch 128 时，2P1D 比不拆多 19.8%（15.31K ÷ 12.78K，9.5 的表）。</li>
   </ul>
 
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
   <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，每一层来回一趟，靠几个小批轮流跑把通信藏住。</p>
 __FIG_S9_AFD_T5__
-  <p>论文里的收益很可观。字节的 MegaScale-Infer 报告每卡吞吐最多高 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324。</p>
+  <p>论文里的收益很可观。字节的 MegaScale-Infer 报告每卡吞吐最多高 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文按同一设定算的）。</p>
   <p>开源实现就没这么顺。vLLM 的 AFD 是外部插件，主仓库的 RFC 已因长期不活跃被关闭；插件博客在 Ascend 910C 上给的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
-    <li><b>配比是关键</b>：16K 输入时 48 个注意力配 16 个专家，每 die 220.3，比不拆少 5.3%；注意力加到 64 个，涨到 258.9。</li>
+    <li><b>配比是关键</b>：16K 输入时 48 个注意力配 16 个专家，每 die 220.3，比不拆少 5.3%；注意力加到 64 个，涨到 258.9。博客作者也说，测过的配比下 FFN 还有余力，注意力再加可能还涨。</li>
     <li><b>只能看趋势</b>：这组实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
     <li><b>TPU 侧</b>：我们没找到公开的 AFD 实现或实测。</li>
   </ul>
@@ -107,7 +115,7 @@ FIGS = {
     "__FIG_S9_SWEEP__": ("fig-s9-prefill-sweep", "fig6-prefill-sweep.svg", "topic06-fig-ratio.py",
         '<b>同一组实测，两条线。</b><br><em>蓝线是 runbook 原口径，橙线是本课换了分母重算的。</em>'),
     "__FIG_S9_DECIDE__": ("fig-s9-decide", "fig6-decide.svg", "topic06-fig-ratio.py",
-        '<b>三问，从上往下。</b><br><em>叶子上的例子口径各不相同，阈值没画，要拿自己的负载量。</em>'),
+        '<b>三问，从上往下。</b><br><em>阈值没画，要拿自己的负载量；实测例子见正文。</em>'),
     "__FIG_S9_AFD_T5__": ("fig-s9-afd-t5", "fig5-afd.svg", "topic05-fig-pd.py",
         '<b>一层里的两种活，分到两批机器。</b><br><em>专题五原图，机器数是示意。</em>'),
     "__FIG_S9_AFD_ASCEND__": ("fig-s9-afd-ascend", "fig6-afd-ascend.svg", "topic06-fig-ratio.py",

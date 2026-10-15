@@ -66,44 +66,43 @@ def fig_amortize():
     y0 = f.header("攒 batch：权重一趟分给所有人，KV 每人一份　——　<tspan font-weight=\"700\">batch 越大，KV 越成主角</tspan>",
                   "柱高 ＝ decode 一步要从显存读的字节（全模型合计，不分卡）；柱顶 ＝ 摊到每个 token 的字节。Llama-3.1-70B，bf16，每条序列上下文 8K",
                   [(BL, "权重：一步读一遍，所有序列共用"), (OR, "KV：每条序列读自己的")])
-    PH = 470
+    PH = 500
     py = f.panel(0, y0, W, PH, "一步要读多少字节", BL)
-    base = py + PH - 60
-    top = py + 70
-    vmax = (L_W_BYTES + 128 * L_KV_SEQ) / NB.GB
-    sc = (base - top) / vmax
+    base = py + PH - 72
+    top = py + 60
+    VMAX = 500
+    assert (L_W_BYTES + 128 * L_KV_SEQ) / NB.GB < VMAX       # 最高那根柱子要落在网格里
+    sc = (base - top) / VMAX
     x0, bw, gap = 230, 130, 150
     # 刻度
-    for v in (0, 100, 200, 300, 400):
+    for v in (0, 100, 200, 300, 400, 500):
         yv = base - v * sc
         f.line(x0 - 30, yv, x0 + 4 * bw + 3 * gap + 30, yv, LINE, 1, arrow=False)
-        f.t(x0 - 40, yv + 5, "%d GB" % v, GY, size=13, anchor="end")
+        f.t(x0 - 40, yv + 5, "%d GB" % v, GY, size=14, anchor="end")
     for i, b in enumerate(BATCHES):
         x = x0 + i * (bw + gap)
         hw = L_W_BYTES / NB.GB * sc
-        hk = b * L_KV_SEQ / NB.GB * sc
+        kv = b * L_KV_SEQ / NB.GB
+        hk = kv * sc
         f.box(x, base - hw, bw, hw, BL, BL, 3)
         f.box(x, base - hw - hk, bw, max(hk, 2), OR, OR, 3)
-        f.t(x + bw / 2, base + 26, "batch %d" % b, INK, True, 15, anchor="middle")
-        f.t(x + bw / 2, base - hw - hk - 30, "每 token", GY, size=13, anchor="middle")
-        f.t(x + bw / 2, base - hw - hk - 10, ("%.1f GB" if b == 1 else "%.3g GB") % PER_TOK[b], INK, True, 16, anchor="middle")
+        f.t(x + bw / 2, base + 28, "batch %d" % b, INK, True, 16, anchor="middle")
+        f.t(x + bw / 2, base - hw - hk - 32, "每 token", GY, size=14, anchor="middle")
+        f.t(x + bw / 2, base - hw - hk - 10, ("%.1f GB" if b == 1 else "%.3g GB") % PER_TOK[b], INK, True, 17, anchor="middle")
         if i == 0:
-            f.t(x + bw / 2, base - hw / 2 + 5, "141 GB", "#fff", True, 15, anchor="middle")
-        if b >= 64:
-            f.t(x + bw / 2, base - hw - hk / 2 + 5, "KV %d GB" % round(b * L_KV_SEQ / NB.GB), "#fff", True, 14,
+            f.t(x + bw / 2, base - hw / 2 + 5, "141 GB", "#fff", True, 16, anchor="middle")
+            # KV 只有 2.68 GB，柱子里放不下字：画到右边
+            f.line(x + bw + 4, base - hw - 1, x + bw + 22, base - hw - 1, OR, 1.4, arrow=False)
+            f.t(x + bw + 26, base - hw + 5, "KV %.2f GB" % kv, OR, True, 15)
+        else:
+            f.t(x + bw / 2, base - hw - hk / 2 + 6, "KV %d GB" % round(kv), "#fff", True, 15,
                 anchor="middle")
     # 交叉点标注
-    xr = x0 + 4 * bw + 3 * gap + 40
-    f.t(xr, top + 30, "batch ≈ %d 时" % round(B_CROSS), OR, True, 15)
-    f.t(xr, top + 54, "两块一样重", OR, True, 15)
-    f.t(xr, top + 92, "注意力每读 1 字节", GY, size=14)
-    f.t(xr, top + 114, "只做 %d 次运算，" % L_G, GY, size=14)
-    f.t(xr, top + 136, "batch 多大都一样", GY, size=14)
-    yb = f.band(py + PH - 10, "ok", "攒 batch 只分摊蓝色那块", [
-        "权重读一遍，被 batch 里每个 token 用一次，所以每 token 的份额是 141 GB ÷ batch。",
-        "KV 是每条序列自己的历史，没人能替别人读；batch 翻倍它也翻倍，注意力的「每字节几次运算」始终是 GQA 组大小 8。",
-    ])
-    yb = f.src(yb + 10,
+    xr = x0 + 4 * bw + 3 * gap + 44
+    f.t(xr, top + 40, "batch ≈ %d 时" % round(B_CROSS), OR, True, 16)
+    f.t(xr, top + 64, "两块一样重", OR, True, 16)
+    f._pan = None
+    yb = f.src(py + PH - 20,
                "📌 Llama-3.1-70B config.json：hidden 8192、80 层、64 查询头、8 KV 头、每头 128 维、intermediate 28672、vocab 128256、词表不共享。"
                "参数量按 config 现算 ＝ 70,553,706,496，×2 字节正好等于 safetensors index 的 total_size 141,107,412,992。",
                "本课推导：每 token 的 KV ＝ 2（K、V）× 8 头 × 128 维 × 2 字节 × 80 层 ＝ 327,680 字节；上下文 8K 时每条序列 2.68 GB；"
@@ -148,77 +147,84 @@ assert OCC_C == USEFUL                                        # 一个字节都�
 assert OCC_C[1] * 2 == OCC_C[2]                               # FP8 真省一半
 
 
-def tile_grid(f, x, y, w, h, nrows, filled, col, lanes_used=None):
-    """画一块 4 KiB tile：nrows 行，前 filled 行涂色；lanes_used 给了就只涂左边那几格（头放在最内层）。"""
-    f.box(x, y, w, h, "none", GY2, 3, sw=1)
-    rh = h / float(nrows)
-    for r in range(1, nrows):
-        f.line(x, y + r * rh, x + w, y + r * rh, LINE, 0.6, arrow=False)
-    if lanes_used is None:
-        if filled:
-            f.box(x + 1, y + 1, w - 2, filled * rh - 1, col, col, 1)
-    else:
-        lw = max(w * lanes_used / float(LANES), 3)
-        f.box(x + 1, y + 1, lw, h - 2, col, col, 1)
+def _carton(f, x, y, w, h, data=None, lane_w=None, col=BL):
+    """一只标准箱（＝一块 tile）：箱体 ＋ 箱盖缝 ＋ 封条。data＝从箱底填满的比例；lane_w＝只在左边填一条窄缝。"""
+    f.box(x, y, w, h, "#fbf6ee", "#a1887f", 3, 1.6)
+    if lane_w is not None:
+        f.box(x + 2, y + 2, lane_w, h - 4, col, col, 0)
+    elif data:
+        f.box(x + 2, y + h - 2 - (h - 4) * data, w - 4, (h - 4) * data, col, col, 1)
+    f.line(x, y + 12, x + w, y + 12, "#a1887f", 1.2, arrow=False)
+    f.line(x + w / 2, y, x + w / 2, y + 12, "#a1887f", 1.6, arrow=False)
 
 
 def fig_tile():
-    f = Fig(W, "同一份 KV，三种布局各占多少地方。每个方块是一块 4 KiB 的 tile，横向 128 格，"
-               "竖向 bf16 是 16 行、fp8 是 32 行，涂色的是真有数据的部分。"
-               "A 把 2 个头放在最内层：每行 128 格只用 2 格，bf16 和 fp8 都浪费 64 倍。"
-               "B 把 2 个头放在次内层：bf16 用 16 行里的 2 行，fp8 用 32 行里的 2 行，两种都占 8 KiB，FP8 一点没省。"
-               "C 加一个打包维、把 K 和 V 并在一起，用最小的 tile：bf16 1,024 字节、fp8 512 字节，一个字节都不补")
-    y0 = f.header("布局决定字节：窄维落进 tile，就被补成整块　——　<tspan font-weight=\"700\">FP8 可能一个字节都没省</tspan>",
-                  "一个 token、一层的 K＋V（2 个 KV 头 × 128 维）。方块 ＝ 一块 4 KiB 的 tile：横 128 格；竖着 bf16 16 行、fp8 32 行（32 位里拼 2 个／4 个）。涂色 ＝ 真数据",
-                  [(BL, "bf16 的真数据"), (GR, "fp8 的真数据"), (GY2, "补齐的空位")])
-    PW, GAP, PH = 448, 28, 400
-    TW, TH = 168, 192
+    f = Fig(W, "同一份 KV 的三种摆法，画成装箱。TPU 显存按标准箱存，一箱 4 KiB，横 128 格、竖 16 行（bf16），装不满也按整箱算。"
+               "要装的是一个 token、一层的 K 和 V，2 个头 × 128 维，bf16 共 1 KiB。"
+               "A 让头数占了 128 格那一维，每行只用 2 格，要 16 箱、64 KiB，是真数据的 64 倍。"
+               "B 让头数占了按行凑整那一维，每箱 16 行只用 2 行，要 2 箱、8 KiB，8 倍；换成 FP8 还是 2 箱 8 KiB，一个字节都没省。"
+               "C 把 K、V 并起来、换成小箱，正好 1 KiB")
+    y0 = f.header("布局像装箱：一双袜子装进标准箱，空的也占地方　——　<tspan font-weight=\"700\">FP8 可能一个字节都没省</tspan>",
+                  "要装的：一个 token、一层的 K＋V（2 个头 × 128 维，bf16，共 1 KiB）。TPU 显存按「标准箱」存：一箱 4 KiB，横 128 格 × 竖 16 行，装不满也算一整箱",
+                  [(BL, "真数据（袜子）"), ("#a1887f", "一只 4 KiB 的标准箱")])
+    PW, GAP, PH = 448, 28, 500
+    BXW, BXH = 92, 76                          # 一箱的画法：三格里同一个尺寸，箱数可以直接比
     cases = [
-        ("A　头数放在最内层", RD, "每行 128 格只用 2 格", OCC_A, "lane"),
-        ("B　头数放在次内层", OR, "16 行／32 行里只用 2 行", OCC_B, "sub"),
-        ("C　加打包维，K/V 并起来", GR, "最小 tile，正好装满", OCC_C, "min"),
+        ("A　头数占了「横 128 格」那一维", RD, "每行 128 格只用 2 格"),
+        ("B　头数占了「竖着凑行」那一维", OR, "每箱 16 行只用 2 行"),
+        ("C　K、V 并起来，换小箱", GR, "小箱正好装满"),
     ]
-    ys = []
-    for k, (title, col, sub, occ, mode) in enumerate(cases):
+    nb = 2                                     # 图里只画 bf16
+    occ = {"A": OCC_A[nb], "B": OCC_B[nb], "C": OCC_C[nb]}
+    nA = OCC_A[nb] // TILE_BYTES
+    nB = OCC_B[nb] // TILE_BYTES
+    ru = WORD // nb
+    nC = OCC_C[nb] // (ru * LANES * nb)
+    assert (nA, nB, nC) == (16, 2, 2)
+    for k, ((title, col, sub), key) in enumerate(zip(cases, "ABC")):
         px = k * (PW + GAP)
         py = f.panel(px, y0, PW, PH, title, col)
-        f.t(px + 20, py + 28, sub, GY, size=14)
-        for j, (nb, dcol, dname) in enumerate(((2, BL, "bf16"), (1, GR, "fp8"))):
-            tx = px + 40 + j * (TW + 40)
-            ty = py + 62
-            nrows = rows_per_tile(nb)
-            if mode == "lane":
-                tile_grid(f, tx, ty, TW, TH, nrows, 0, dcol, lanes_used=KVH)
-                nt = occ[nb] // TILE_BYTES
-                f.t(tx + TW / 2, ty + TH + 24, "× %d 块" % nt, INK, True, 14, anchor="middle")
-            elif mode == "sub":
-                tile_grid(f, tx, ty, TW, TH, nrows, KVH, dcol)
-                f.t(tx + TW / 2, ty + TH + 24, "K、V 各 1 块", INK, True, 14, anchor="middle")
-            else:
-                ru = WORD // nb
-                hh = TH * ru / float(nrows)          # 最小 tile 只有默认的 1/8 高
-                n = OCC_C[nb] // (ru * LANES * nb)
-                for r in range(n):
-                    tile_grid(f, tx, ty + r * (hh + 8), TW, hh, ru, ru, dcol)
-                f.t(tx + TW / 2, ty + TH + 24, "%d 块小 tile" % n, INK, True, 14, anchor="middle")
-            f.t(tx + TW / 2, ty - 8, dname, dcol, True, 14, anchor="middle")
-            occ_s = ("%d KiB" % (occ[nb] // 1024)) if occ[nb] >= 1024 and occ[nb] % 1024 == 0 and occ[nb] > 1024 \
-                else "{:,} B".format(occ[nb])
-            f.t(tx + TW / 2, ty + TH + 58, "占 " + occ_s, dcol, True, 16, anchor="middle")
-            ratio = occ[nb] // USEFUL[nb]
-            f.t(tx + TW / 2, ty + TH + 82, ("真数据 {:,} B".format(USEFUL[nb])) if ratio == 1
-                else "%d 倍于真数据" % ratio, GY, size=13, anchor="middle")
-        ys.append(py + PH - 30)
-    yb = f.band(max(ys) + 20, "ok", "「少搬」要从布局开始", [
-        "tile 的两维（最内层按 128 格、次内层按 8 行 32 位）都会向上取整；KV 头只有 1–2 个时，把它放进这两维就是成倍的空位。",
-        "B 里 bf16 和 fp8 都占一整块 4 KiB：数据类型变窄只是 tile 里空位变多。要让 FP8 真省一半，先换布局。",
-    ])
-    yb = f.src(yb + 10,
+        f.t(px + PW / 2, py + 30, sub, GY, True, 15, anchor="middle")
+        area_t, area_h = py + 52, 4 * BXH + 3 * 10
+        if key == "A":
+            gx = px + (PW - (4 * BXW + 3 * 10)) / 2
+            for i in range(nA):
+                _carton(f, gx + (i % 4) * (BXW + 10), area_t + (i // 4) * (BXH + 10), BXW, BXH,
+                        lane_w=max(BXW * KVH / float(LANES), 2))
+            n_s = "%d 箱" % nA
+        elif key == "B":
+            gx = px + (PW - (2 * BXW + 30)) / 2
+            yy = area_t + area_h / 2 - BXH / 2
+            for i in range(nB):
+                _carton(f, gx + i * (BXW + 30), yy, BXW, BXH, data=KVH / float(rows_per_tile(nb)))
+                f.t(gx + i * (BXW + 30) + BXW / 2, yy + BXH + 22, "KV"[i], GY, True, 15, "middle")
+            n_s = "%d 箱" % nB
+            # 为什么 B 最伤：换 FP8 还是这么多箱
+            f.box(px + 24, yy + BXH + 46, PW - 48, 64, "#fce8e6", RD, 6, 1.4)
+            f.t(px + PW / 2, yy + BXH + 72, "换成 FP8：还是 %d 箱、%d KiB" % (OCC_B[1] // TILE_BYTES, OCC_B[1] // 1024),
+                RD, True, 16, "middle")
+            f.t(px + PW / 2, yy + BXH + 96, "一个字节都没省", RD, True, 16, "middle")
+        else:
+            gx = px + (PW - BXW) / 2
+            hh = BXH * ru / float(rows_per_tile(nb))      # 小箱只有标准箱的 1/8 高
+            yy = area_t + area_h / 2 - (nC * hh + (nC - 1) * 6) / 2
+            for i in range(nC):
+                yb_ = yy + i * (hh + 6)
+                f.box(gx, yb_, BXW, hh, BL, "#a1887f", 2, 1.6)
+            f.t(px + PW / 2, yy + nC * (hh + 6) + 24, "小箱 ＝ 标准箱的 1/%d" % (rows_per_tile(nb) // ru), GY, size=15, anchor="middle")
+            n_s = "%d 只小箱" % nC
+        ratio = occ[key] // USEFUL[nb]
+        occ_s = ("%d KiB" % (occ[key] // 1024))
+        f.t(px + PW / 2, py + PH - 64, "%s · %s" % (n_s, occ_s), col, True, 24, "middle", big=True)
+        f.t(px + PW / 2, py + PH - 36, "是真数据的 %d 倍" % ratio if ratio > 1 else "一点不浪费", INK, True, 16, "middle")
+    f._pan = None
+    yb = f.src(y0 + PH + 10,
                "📌 tile 规则：openxla.org/xla/tiled_layout —— TPU 最常见的 tile 是 8×128，对应 8×128 个 32 位的向量寄存器；"
-               "16 位类型沿次内层把两个值拼进一个 32 位，8 位类型拼四个。于是默认 tile 的次内层 bf16 是 16 行、fp8 是 32 行，每块都是 8×128×4 ＝ 4,096 字节（本课推导）。",
+               "16 位类型沿次内层把两个值拼进一个 32 位，8 位类型拼四个。于是默认 tile 的次内层 bf16 是 16 行、fp8 是 32 行，每块都是 8×128×4 ＝ 4,096 字节（本课推导）。图里「标准箱」就是这块默认 tile。",
                "窄头数被补齐、加 packing 维逼 XLA 选最小 tile T(packing,128)、把 K 和 V 沿头维并起来：Ragged Paged Attention，arXiv 2604.15464，§2.1.2、§3.1.1、§3.1.3、§3.5。",
                "本课推导：占用 ＝ ⌈次内层 ÷ 每块行数⌉ × 每块行数 × ⌈最内层 ÷ 128⌉ × 128 × 每元素字节。"
-               "A：⌈128÷16⌉＝8 块（bf16）／⌈128÷32⌉＝4 块（fp8），各 ×2（K、V）；B：K、V 各 1 块；C：4 行 ÷ 每块 2 行（bf16）或 4 行（fp8）。",
+               "A：头数在最内层（128 格），⌈128÷16⌉＝8 块 ×2（K、V）；B：头数在次内层，K、V 各 1 块；C：4 行 ÷ 每块 2 行。"
+               "FP8 时：A 32 KiB（仍 64 倍）、B 8 KiB（16 倍）、C 512 B。",
                "XLA 对次内层只有 1–2 的数组有时会改用 2×128 的小 tile（同一份 openxla 文档的 Compact 2nd Minor Layout），"
                "具体选哪种由 XLA 的 layout assignment 决定；进到 kernel 里，向量寄存器仍是固定的 8×128×32 位。本图按默认 tile 画。")
     f.save("fig6-s5-tile.svg", yb + 14)
@@ -244,45 +250,65 @@ assert abs(PREFILL_RATIO - 3.4) < 0.01
 assert ABS_AI < NB.V7_RIDGE                                  # 242 仍在屋脊 313 左边，但已经很近
 
 
-def hbar(f, x, y, w, h, col, label, val, lw=230):
-    f.t(x - 16, y + h / 2 + 5, label, INK, True, 15, anchor="end")
-    f.box(x, y, max(w, 3), h, col, col, 3)
-    f.t(x + max(w, 3) + 12, y + h / 2 + 6, val, INK, True, 16)
-
-
 def fig_mla():
-    f = Fig(W, "MLA 两种算法的对比。左边 decode：每读一个字节做几次运算。展开 K/V 的算法 1 次，吸收算法 242 次，"
-               "旁边一条虚线是 TPU v7 的屋脊 313。右边 prefill：每一对查询和历史 token 要做多少次运算。"
-               "展开算法 81,920 次，吸收算法 278,528 次，是它的 3.4 倍")
-    y0 = f.header("MLA 的两种算法，一个阶段一个　——　<tspan font-weight=\"700\">decode 用吸收，prefill 用展开</tspan>",
-                  "DeepSeek-V3，一层、一个缓存 token。左边比「每读 1 字节做几次运算」（decode 缺带宽）；右边比「总共要做几次运算」（prefill 缺算力）",
-                  [(BL, "吸收：投影并进查询，K/V 不展开"), (OR, "展开：把潜向量还原成每头的 K/V")])
-    PW, GAP, PH = 686, 28, 266
-    py = f.panel(0, y0, PW, PH, "decode：每读 1 字节做几次运算（越高越好）", BL)
-    x0, sc = 170, 430 / 313.0
-    hbar(f, x0, py + 50, NAIVE_AI * sc, 40, OR, "展开", "%d" % NAIVE_AI)
-    hbar(f, x0, py + 120, ABS_AI * sc, 40, BL, "吸收", "%d" % round(ABS_AI))
-    xr = x0 + NB.V7_RIDGE * sc
-    f.line(xr, py + 40, xr, py + 176, RD, 1.4, dash="5,4", arrow=False)
-    f.t(xr, py + 200, "v7 屋脊 %d" % round(NB.V7_RIDGE), RD, True, 14, anchor="middle")
-    f.t(20, py + 232, "吸收后 128 个头共用一条 576 维的缓存，注意力第一次接近屋脊", GY, size=14)
-    px = PW + GAP
-    py2 = f.panel(px, y0, PW, PH, "prefill：每对（查询，历史 token）做几次运算（越低越好）", OR)
-    x1, sc2 = px + 150, 380 / float(ABS_FLOPS)
-    hbar(f, x1, py2 + 50, NAIVE_FLOPS * sc2, 40, OR, "展开", "{:,}".format(NAIVE_FLOPS))
-    hbar(f, x1, py2 + 120, ABS_FLOPS * sc2, 40, BL, "吸收", "{:,}".format(ABS_FLOPS))
-    f.t(px + 20, py2 + 200, "吸收后每个头按 576／512 维算，运算量是展开的 %.1f 倍" % PREFILL_RATIO, GY, size=14)
-    f.t(px + 20, py2 + 232, "prefill 本来就卡在算力上，多算就是多花时间", GY, size=14)
-    yb = f.band(y0 + PH + 20, "ok", "同一个公式，两套 kernel", [
-        "decode 一次只有一个查询，吸收把「每头展开一遍 K/V」省掉，读 1,152 字节换 278,528 次运算。",
-        "prefill 有成千上万个查询，展开 K/V 的一次性开销被摊薄，每对的运算少 3.4 倍更要紧。",
-    ])
-    yb = f.src(yb + 10,
+    f = Fig(W, "MLA 两种算法的数据流。吸收：缓存里每个 token 只有一条 576 维的压缩 KV，128 个头一起读这一条，"
+               "每读 1 字节做 242 次运算，decode 用它。展开：先把这一条复制还原成 128 份、每个头一份，各读各的，"
+               "每读 1 字节只做 1 次运算；prefill 有成千上万个查询，复制的开销被摊薄，用它")
+    y0 = f.header("MLA 的两种算法：一条大家共读，还是先复制 128 份　——　<tspan font-weight=\"700\">decode 用吸收，prefill 用展开</tspan>",
+                  "DeepSeek-V3，一层、一个缓存 token。右边的大数：每从显存读 1 字节，做几次运算",
+                  [(BL, "吸收：压缩 KV 不展开"), (OR, "展开：还原成每个头一份")])
+    PH = 240
+    NHEAD = 6                                       # 128 个头画 6 个，后面写「共 128 个」
+    BARW = 180                                      # 576 维画 180 px；展开后每份 K＋V 320 维按同一比例
+    CPW = BARW * (V3_NOPE + NB.V3_ROPE + V3_VHD) / float(LAT)
+    HX0, HSTEP = 300, 112
+    bottoms = []
+    for k, (mode, col, title, tag, ai) in enumerate((
+            ("abs", BL, "吸收：一条压缩 KV，128 个头一起读", "decode 用它", ABS_AI),
+            ("naive", OR, "展开：先复制成 128 份，每个头读自己那份", "prefill 用它", NAIVE_AI))):
+        top = y0 + k * (PH + 18)
+        py = f.panel(0, top, W, PH, title, col)
+        by = py + 54
+        f.t(30, by - 12, "缓存里的 1 个 token", GY, True, 15)
+        f.box(30, by, BARW, 30, col, col, 4)
+        f.t(30 + BARW / 2, by + 21, "%d 维" % LAT, "#fff", True, 16, "middle")
+        hy = py + 158                               # 头像顶
+        cxs = [HX0 + CPW / 2 + i * HSTEP for i in range(NHEAD)]
+        if mode == "abs":
+            # 一根总线：同一条数据，所有头从这一根上取
+            busy = by + 15
+            f.line(30 + BARW, busy, cxs[-1], busy, col, 3, arrow=False)
+            for cx in cxs:
+                f.line(cx, busy, cx, hy - 6, col, 2, arrow=True)
+            f.t(cxs[-1] + 40, busy + 6, "同一条，读一次", col, True, 16)
+        else:
+            cy = by + 40
+            f.line(30 + BARW, by + 15, HX0 - 40, by + 15, col, 2, arrow=False)
+            f.path("M %.1f %.1f V %.1f" % (HX0 - 40, by + 15, cy + 4), col, 2, arrow=False)
+            f.line(HX0 - 40, cy + 4, cxs[-1] + CPW / 2, cy + 4, col, 2, arrow=False)
+            f.t(HX0 - 40 + 4, by + 8, "复制、还原", col, True, 15)
+            for cx in cxs:
+                f.line(cx, cy + 4, cx, cy + 16, col, 2, arrow=False)
+                f.box(cx - CPW / 2, cy + 18, CPW, 24, "#fef7e0", col, 3, 1.6)
+                f.t(cx, cy + 36, "%d 维" % (V3_NOPE + NB.V3_ROPE + V3_VHD), col, True, 14, "middle")
+                f.line(cx, cy + 42, cx, hy - 6, col, 2, arrow=True)
+            f.t(cxs[-1] + CPW / 2 + 16, cy + 36, "128 份", col, True, 16)
+        for i, cx in enumerate(cxs):
+            f.icon("person", cx - 17, hy, 34, 38, col=col)
+        f.t(cxs[-1] + 40, hy + 30, "… 共 %d 个头" % V3_HEADS, GY, True, 15)
+        # 右边的大数
+        f.t(W - 130, py + 84, "%d" % round(ai), col, True, 60, "middle", big=True)
+        f.t(W - 130, py + 116, "次运算 ／ 每读 1 字节", GY, True, 15, "middle")
+        f.t(W - 130, py + 160, "→ " + tag, col, True, 18, "middle")
+        bottoms.append(py + PH - 30)
+    f._pan = None
+    yb = f.src(bottoms[-1] + 20,
                "📌 DeepSeek-V3 config.json：128 头、kv_lora_rank 512、qk_nope_head_dim 128、qk_rope_head_dim 64、v_head_dim 128、num_key_value_heads 128。"
                "吸收的做法与「只在 decode 划算」出自 DeepSeek-V2 arXiv 2405.04434 §2.1.2；专题三第五章讲过推导。",
-               "本课推导（只数注意力本身的乘加，乘加算 2 次运算，bf16）：吸收 ＝ 2 × 128 × (576 ＋ 512) ＝ 278,528 次，读 576 × 2 ＝ 1,152 字节；"
-               "展开 ＝ 2 × 128 × (192 ＋ 128) ＝ 81,920 次，读 128 × 320 × 2 ＝ 81,920 字节。"
-               "没算把查询吸收进去、把输出投影回来的那两次矩阵乘（每个查询做一次，跟历史长度无关），也没算 prefill 展开 K/V 的一次性开销（每个历史 token 一次，被所有查询分摊）。")
+               "本课推导（只数注意力本身的乘加，乘加算 2 次运算，bf16）：吸收 ＝ 2 × 128 × (576 ＋ 512) ＝ 278,528 次，读 576 × 2 ＝ 1,152 字节，比值约 242；"
+               "展开 ＝ 2 × 128 × (192 ＋ 128) ＝ 81,920 次，读 128 × 320 × 2 ＝ 81,920 字节，比值 1。prefill 里每对（查询，历史 token）吸收的运算是展开的 3.4 倍。"
+               "没算把查询吸收进去、把输出投影回来的那两次矩阵乘（每个查询做一次，跟历史长度无关），也没算 prefill 展开 K/V 的一次性开销（每个历史 token 一次，被所有查询分摊）。",
+               "画法：576 维画成一条，展开后每份 K＋V 共 320 维按同一比例；128 个头只画 6 个。")
     f.save("fig6-s5-mla.svg", yb + 14)
 
 
@@ -365,7 +391,7 @@ assert round(AR_RING / AR_BW_NS) == 460
 
 
 def fig_allreduce():
-    f = Fig(W, "小 decode 的 AllReduce 花在哪里，对数时间轴。按带宽算，4 张 GB200 之间对一份 14 KB 的数据做 AllReduce 只要约 24 纳秒；"
+    f = Fig(W, "小 decode 的 AllReduce 花在哪里，对数时间轴。按带宽算，4 张 GB200 之间对一份 14 KiB 的数据做 AllReduce 只要约 24 纳秒；"
                "论文算出的硬件下限是 1.404 微秒；NCCL 环形实测平均 11.0 微秒；论文的低延迟实现 2.37 微秒。实测是带宽项的约 460 倍")
     y0 = f.header("小 decode 的 AllReduce：搬数据只占一根头发丝　——　<tspan font-weight=\"700\">它是延迟问题</tspan>",
                   "对数时间轴，每一格 10 倍。4 张 GB200，NVLink 域内。灰条是本课按带宽算的；其余三条是论文实测或论文算出的下限",
@@ -379,7 +405,7 @@ def fig_allreduce():
     for e, lab in ((1, "10 ns"), (2, "100 ns"), (3, "1 µs"), (4, "10 µs"), (5, "100 µs")):
         f.line(X(10 ** e), py + 36, X(10 ** e), py + 236, LINE, 1, arrow=False)
         f.t(X(10 ** e), py + 258, lab, GY, size=13, anchor="middle")
-    rows = [(GY2, AR_BW_NS, "按带宽算：14 KB，环形", "%.0f ns" % AR_BW_NS),
+    rows = [(GY2, AR_BW_NS, "按带宽算：14 KiB，环形", "%.0f ns" % AR_BW_NS),
             (RD, AR_SOL, "硬件下限（论文推算）", "%.3f µs" % (AR_SOL / 1e3)),
             (OR, AR_NEW, "低延迟实现（论文）", "%.2f µs" % (AR_NEW / 1e3)),
             (OR, AR_RING, "NCCL 环形（论文实测）", "%.1f µs" % (AR_RING / 1e3))]
@@ -391,7 +417,7 @@ def fig_allreduce():
     f.t(30, py + PH - 46, "实测 11.0 µs 是带宽项的约 %d 倍：多给带宽几乎没用，要省的是同步的次数" % round(AR_RING / AR_BW_NS),
         GY, size=14)
     yb = f.band(py + PH - 10, "ok", "decode 的 AllReduce 比的是步数，不是带宽", [
-        "batch 1 时每层一次只有 hidden × 2 字节（V3 是 14 KB），时间几乎全花在启动和互相等待上。",
+        "batch 1 时每层一次只有 hidden × 2 字节（V3 是 14 KiB），时间几乎全花在启动和互相等待上。",
         "所以小 batch 下 TP 切得越细、每层的同步越多，加带宽也救不回来；这条账留到第六节比 TEP 和 DEP。",
     ])
     yb = f.src(yb + 10,

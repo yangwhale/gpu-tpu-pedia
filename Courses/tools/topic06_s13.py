@@ -2,7 +2,7 @@
 """专题六 · 第十三节「落地：TPU 服务化与编排」。"""
 
 BODY = '''
-  <p class="lead">kernel 调好了，服务还可能第一分钟就卡住。<b>TPU 上推理服务的大部分活，在形状、编译和冷启动里。</b></p>
+  <p class="lead">2025 年 llm-d 把前缀感知路由做进了 Kubernetes，推理服务从「一个引擎」变成了「一群副本加一个路由」。kernel 调好了，服务还可能第一分钟就卡住。<b>TPU 上推理服务的大部分活，在形状、编译和冷启动里。</b></p>
 
   <h3 id="s13-1">13.1　静态形状：服务侧怎么选桶</h3>
   <p>专题二<a href="topic-02-L300.html#s5">「谁做决定：运行时，还是编译期」</a>讲过：XLA 按形状编译，变长的请求只能分桶加补零。服务侧要定的是桶怎么切、哪些桶在开服前编好。</p>
@@ -22,7 +22,7 @@ __FIG_S13_BUCKET__
   <p>拆开冷启动的账，编译常常是最大的一块，有时还藏在别的名字底下。</p>
 __FIG_S13_COLD__
   <p>GLM-5.1 未优化时，「加载非 MoE 权重」用了 6 分 29 秒，其实是每加载一个 tensor 就清一次编译缓存，下一个 tensor 又从头编。R1 上同一个问题：1,367 个 tensor 只有 25 种形状，去掉清缓存那一行，这段从 215.7 s 降到 21.4 s。</p>
-  <p>Qwen3-Coder 两机首次启动约 40 分钟，29 分钟在编译；MiMo-V2.5-Pro 约 50 分钟，编译和预编译占了 22 分钟。拆账的判据很简单：这段时间在搬字节，还是在等编译器。</p>
+  <p>Qwen3-Coder 两机首次启动约 40 分钟，29 分钟在编译；MiMo-V2.5-Pro 原表总计约 50 分钟（分项加起来 52 分钟），编译和预编译占了 22 分钟。拆账的判据很简单：这段时间在搬字节，还是在等编译器。</p>
 
   <h3 id="s13-3">13.3　权重加载：别让几十个引擎抢一根管子</h3>
   <p>几百 GB 的权重，从哪读决定了要等多久。Kimi K2.6 把 MoE 权重缓存放在本机内存盘，冷启动 6 分 8 秒；没有缓存时要 57 分钟。放在共享文件系统上，每层读取比内存盘慢 38 倍。</p>
@@ -33,14 +33,14 @@ __FIG_S13_COLD__
   <ul>
     <li><b>「起来了」不等于「活着」。</b>Qwen3.5 的记录里有 EngineCore 静默崩溃；V4-Pro 的 SGLang 部署里 14 台 prefill 全崩了，服务注册表还显示 14 台在线，要等租约过期才消失。判活要看显存、真发一个请求，别只看进程和注册表。</li>
     <li><b>SLICE_FAILURE 不要反复重试。</b>这是切片的硬件故障，每次重启都在同一处崩；公开的训练记录里，重试次数一用完，作业判失败，节点池被自动缩到 0，卡直接没了。记录里把重试上限设成 3。</li>
-    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，经 MNNVL 每卡漏掉约 97 GB 显存：284 GB 只剩 187 GB，而参数要 241 GB，下次启动必然 OOM。报错还劝你「调大 mem-fraction」，方向正好相反。删 pod 重建，56 秒显存归零。</li>
+    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，经 MNNVL（多节点 NVLink：跨机器的 GPU 也用 NVLink 互联）每卡漏掉约 97 GB 显存：284 GB 只剩 187 GB，而参数要 241 GB，下次启动必然 OOM。报错还劝你「调大 mem-fraction」（SGLang 预留给权重和 KV 池的显存比例），方向正好相反。删 pod 重建，56 秒显存归零。</li>
   </ul>
 
   <h3 id="s13-5">13.5　栈怎么选</h3>
   <table>
     <tr><th>栈</th><th>现状（截至 2026-10）</th></tr>
-    <tr><td>JetStream</td><td>已归档：核心功能并入 tpu-inference，2026-02-01 起仓库只读</td></tr>
-    <tr><td>tpu-inference</td><td>vLLM 的 TPU 后端，JAX 和 PyTorch（Torchax）两条模型路径；支持矩阵里前缀缓存、走 DCN 的 PD 分离、KV 下放、Eagle3 投机均标通过</td></tr>
+    <tr><td>JetStream</td><td>已停止维护：官方宣布核心功能并入 tpu-inference、2026-02-01 起归档（最后提交 2026-01-05；截至 2026-10 GitHub 上尚未正式设为只读）</td></tr>
+    <tr><td>tpu-inference</td><td>vLLM 的 TPU 后端，JAX 和 PyTorch（Torchax）两条模型路径；支持矩阵里前缀缓存、走 DCN 的 PD 分离、KV 下放（把 KV 挪到主机内存，用时再搬回）、Eagle3 投机均标通过</td></tr>
     <tr><td>SGLang-JAX</td><td>SGLang 的 JAX 实现，原生跑在 TPU 上；基数树前缀共享；支持 Qwen、Llama、DeepSeek V2/V3、GLM-4 MoE、MiMo 等</td></tr>
   </table>
   <p>两条活跃的栈都有前缀缓存。选哪个先看模型在不在支持列表里，再看第十节那几张图里的拓扑能不能搭出来。</p>
@@ -48,32 +48,27 @@ __FIG_S13_COLD__
   <h3 id="s13-6">13.6　编排：把「少算」落到集群层</h3>
   <p>前缀缓存只在一个副本里有效。<b>路由不知道哪个副本存着哪段前缀，命中率就随副本数摊薄。</b></p>
 __FIG_S13_ROUTE__
-  <p>KV 感知路由把同前缀的请求送到已经存着它的副本。Red Hat 用 llm-d 实测：命中缓存时首字延迟 340 ms，对照的最坏情况 2,850 ms，命中率 87.4%。</p>
+  <p>KV 感知路由把同前缀的请求送到已经存着它的副本。Red Hat 用 llm-d 实测：命中缓存时首字 340 ms，冷启动（不命中）2,850 ms；不做路由时会落在两者之间。命中率 87.4%。</p>
   <p>llm-d、NVIDIA Dynamo、Kubernetes 的 Gateway API Inference Extension、GKE Inference Gateway 都在做这件事。它们还有一项共同的活：把坏副本摘掉。</p>
   <p>路由层必须做健康检查。8 个副本坏 1 个而路由照常轮询，1/8 的请求就送进一个不会回话的引擎白等（本课推导示意）。</p>
   <ul>
-    <li><b>SLA 与 goodput。</b>吞吐只数 token；goodput 只数同时满足首字延迟和出字间隔目标的请求（DistServe 提出）。容量按 goodput 规划，第十节那条并发曲线上取的点才有意义。</li>
-    <li><b>容量规划。</b>decode 卡数 ＝ 目标用户数 ÷ 每卡用户数。按 V4-Pro 官方 recipe 那一点，每卡每秒出 11,200 个字、每个用户要 50 字/秒，一张卡约服务 224 人。这个分母只算 decode 卡，把 prefill 的成本藏起来了。</li>
-    <li><b>成本趋势。</b>Epoch AI 统计：要达到同一能力，每 token 的价格每年降 9 到 900 倍，中位数约 50 倍。今天的成本账，一年后要重算。</li>
-    <li><b>多租户 LoRA。</b>S-LoRA 和 Punica 让一份底座权重同时服务成百上千个 LoRA 适配器，那一趟底座搬运分给了所有租户的请求。</li>
+    <li><b>SLA 与 goodput。</b>吞吐只数 token；goodput 是在规定比例（如 90%）的请求同时满足首字延迟和出字间隔目标的前提下，每张卡能扛的最大请求速率（DistServe 提出）。vLLM 压测工具的 goodput 是每秒达标请求数，口径不同。容量按 goodput 规划，第十节那条并发曲线上取的点才有意义。</li>
+    <li><b>容量规划。</b>decode 卡数 ＝ 目标用户数 ÷ 每卡用户数。按 PyTorch 博客报的 V4-Pro 那一点（开 MTP、每用户约 50 tok/s 那一档），每卡每秒约 11,200 个字、每个用户要 50 字/秒，一张卡约服务 224 人。11,200 的分母官方没写明，本仓库的配比推导按只算 decode 卡用它（第九节），那样 prefill 的成本就藏起来了。</li>
   </ul>
 
-  <p class="landing">⭐ TPU 上推理服务的大部分活不在 kernel 里，在形状、编译和冷启动。<b>路由是把「少算」搬到集群层：前缀只算一次，后面的请求都来复用。</b></p>
+  <p class="landing">⭐ TPU 上推理服务的大部分活不在 kernel 里，在形状、编译和冷启动。路由是把「少算」搬到集群层：<b>前缀只算一次</b>，后面的请求都来复用。</p>
 '''
 
 FIGS = {
     "__FIG_S13_BUCKET__": ("fig-s13-bucket", "fig6-s13-bucket.svg", "topic06-fig-serve.py",
         '<b>桶数等于编译次数；按长度分布的形状切，比等距切划算。</b><br><em>本课推导示意：对数正态长度分布，非真实流量；浪费 ＝ 补零 token ÷ 实算 token。</em>'),
     "__FIG_S13_COLD__": ("fig-s13-cold", "fig6-s13-cold.svg", "topic06-fig-serve.py",
-        '<b>拆开冷启动，编译常常占大头。</b><br><em>各段时长取自原记录的日志拆账；紫色那段名义上在加载，实际在反复编译。</em>'),
+        '<b>拆开冷启动，编译常常占大头，连「加载权重」那段也可能是。</b><br><em>上为 GLM-5.1 一次冷启动放大，下为另外两次的构成；各段时长取自原记录的日志拆账。</em>'),
     "__FIG_S13_ROUTE__": ("fig-s13-route", "fig6-s13-route.svg", "topic06-fig-serve.py",
-        '<b>同前缀送进同一个副本，前缀只算一次。</b><br><em>中栏是 Red Hat 用 llm-d 的实测，TTFT 含排队；左右两栏是示意。</em>'),
+        '<b>同前缀送进同一个副本，前缀只算一次。</b><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是最坏情况、不是轮询的平均值。</em>'),
 }
 
 NUM_LOCK = [
     ("87.3%", "fig6-s13-bucket.svg"), ("10.8%", "fig6-s13-bucket.svg"),
-    ("60–90 s", "fig6-s13-bucket.svg"),
-    ("215.7", "fig6-s13-cold.svg"), ("21.4", "fig6-s13-cold.svg"), ("3:17–3:51", "fig6-s13-cold.svg"),
-    ("6 分 8 秒", "fig6-s13-cold.svg"),
     ("2,850", "fig6-s13-route.svg"), ("340", "fig6-s13-route.svg"), ("87.4%", "fig6-s13-route.svg"),
 ]

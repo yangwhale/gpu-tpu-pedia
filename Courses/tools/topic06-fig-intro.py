@@ -8,16 +8,20 @@ fig6-life.svg —— 回答：一个请求从进门到结束，时间花在哪�
   · 刻意没画：排队里的调度细节、batch 里别的请求（第四节的事）、prefill 内部的分块（chunked prefill）。
     也没画时间刻度：画上刻度就是编。
 
-fig6-map.svg —— 回答：后面十二节各自在主线的哪一格？
+fig6-map.svg —— 回答：后面十二节各自在主线的哪一处？
+  · 画成「搬一趟」场景：仓库（显存）里放着权重和 KV，车把它们拉到工位（算力），decode 每出一个字搬一趟。
+    三根杠杆：车上多坐人（一趟分给更多 token，蓝）、货变轻（每趟字节变少，绿）、开两个仓库（吞 prompt 与吐字分开放，橙）。
+    节号做成小标签贴在杠杆上；第一节贴在路上（这一趟本身），第二节贴在尺子上（量这一趟）。
   · 节名取自 topic06-build.py 的 SECTIONS（脚本里 import 同一张表并 assert 一一对上）。
-  · 归类是本课的分法：按这一节主要贡献归一格；有的节两头都沾（例如 DEP 既让专家分到更多行，
-    也让 attention 各管各的请求），只放它最主要的那一格。
-  · 刻意没画：节与节之间的依赖箭头（会把路线图画成一团线）。
+  · 归类是本课的分法：按这一节主要贡献归一处；有的节两头都沾（例如 DEP 既让专家分到更多行，
+    也让 attention 各管各的请求），只放它最主要的那一处。投机解码按第十一节自己的说法「搬一趟，出好几个字」归蓝。
+  · scene() 是 map 和 fig6-eight（第十四节）共用的底图，eight 用 importlib 引进来，往同一个场景上钉图钉。
+  · 刻意没画：节与节之间的依赖箭头；每节的说明文字（节名在正文目录里）。
 """
 
 import os
 
-from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, wpx
 
 W = 1400
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -127,101 +131,168 @@ def fig_life():
     f.save("fig6-life.svg", yb + 14)
 
 
-# ── 路线图：三类归位 ──────────────────────────────────────────────
+
+
+# ── 路线图：「搬一趟」场景 ＋ 三根杠杆 ──────────────────────────────
 _src = open(os.path.join(HERE, "topic06-build.py"), encoding="utf-8").read()
 _secblock = _src[_src.index("SECTIONS = ["):_src.index("]\n", _src.index("SECTIONS = [")) + 1]
 _ns = {}
 exec(_secblock, _ns)
 SEC = {num: title for _, num, title in _ns["SECTIONS"]}
 
-BASE = [("一", "吞 prompt 卡算力，吐字卡带宽"), ("二", "指标和口径对齐了再比快慢")]
-GROUPS = [
-    ("让这一趟分给更多 token", BL, [
-        ("四", "一趟分给一整批请求"),
-        ("五", "单卡上把这一趟喂饱"),
-        ("六", "专家收齐所有卡的 token"),
-        ("十一", "一趟出好几个字"),
-    ]),
-    ("少搬", GR, [
-        ("三", "算过的前缀不再算、不重复存"),
-        ("七", "KV 不再每张卡各存一份"),
-        ("十二", "每个数少几位，中间结果不落显存"),
-    ]),
-    ("把活拆开，放对地方", OR, [
-        ("八", "吞 prompt 和吐字分两批机器"),
-        ("九", "按负载配比，再往细里拆"),
-        ("十", "同样的卡，摆法决定快慢"),
-        ("十三", "在 TPU 上跑成服务"),
-    ]),
+# 杠杆：(名字, 颜色, 节号, 作用在场景的哪个部件)
+LEVERS = [
+    ("开两个仓库", OR, ["八", "九", "十", "十三"], "wh2"),
+    ("货变轻", GR, ["三", "七", "十二"], "cargo"),
+    ("车上多坐人", BL, ["四", "五", "六", "十一"], "seats"),
 ]
-_placed = [n for n, _ in BASE] + [n for _, _, items in GROUPS for n, _ in items]
+BASE = [("一", "road"), ("二", "ruler")]           # 地基：这一趟本身、量这一趟的尺子
+_placed = [n for n, _ in BASE] + [n for _, _, ns, _ in LEVERS for n in ns]
 _want = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二", "十三"]
 assert sorted(_placed, key=_want.index) == _want, "第一到十三节必须各归一格、不重不漏"
 assert all(n in SEC for n in _want)
 
 
-def _short(title):
-    """节名里冒号后面的副题太长时，只留冒号前面那一截。"""
-    return title.split("：")[0]
+def _house(f, x, y_gnd, w, h, roof, col, dash=None, sw=2.0):
+    """一栋房子：墙 ＋ 不填实的屋顶。(x, y_gnd) 是左下角。"""
+    f.box(x, y_gnd - h, w, h, "none", col, 3, sw=sw, dash=dash)
+    f.p.append('<path d="M %.1f %.1f L %.1f %.1f L %.1f %.1f" fill="none" stroke="%s" '
+               'stroke-width="%s" stroke-linejoin="round"%s/>'
+               % (x - 10, y_gnd - h, x + w / 2.0, y_gnd - h - roof, x + w + 10, y_gnd - h, col, sw,
+                  ' stroke-dasharray="%s"' % dash if dash else ''))
+
+
+def scene(f, top):
+    """「搬一趟」底图：两个仓库 → 一辆车拉货 → 工位。map 和 eight 共用。
+    返回各部件的锚点（杠杆标签 / 图钉往这儿指）和场景下沿。"""
+    GND = top + 230                         # 地面线
+    A = {}
+    # 第二个仓库（橙，虚线）：专门吞 prompt
+    _house(f, 34, GND, 150, 100, 36, OR, dash="7,5")
+    f.t(109, GND - 60, "吞 prompt", OR, True, 15, "middle")
+    for k in range(3):
+        f.box(70 + k * 26, GND - 40, 22, 22, PU, PU, 3)
+    A["wh2"] = (109, GND - 140)
+    f.line(192, GND - 52, 238, GND - 52, PU, 2)
+    f.t(215, GND - 62, "KV", PU, True, 14, "middle")
+    # 主仓库 ＝ 显存
+    MX, MW = 250, 230
+    _house(f, MX, GND, MW, 160, 50, INK)
+    f.t(MX + MW / 2, GND - 175, "仓库 ＝ 显存", INK, True, 16, "middle")
+    f.box(MX + 18, GND - 100, 112, 76, BL, BL, 4)
+    f.t(MX + 74, GND - 56, "权重", "#ffffff", True, 16, "middle")
+    for k in range(3):
+        f.box(MX + 146, GND - 42 - k * 20, 66, 17, PU, PU, 3)
+    f.t(MX + 179, GND - 69, "KV", "#ffffff", True, 13, "middle")
+    A["kv"] = (MX + 179, GND - 84)
+    A["wh"] = (MX + MW / 2, GND - 210)
+    # 路
+    RX0, RX1 = MX + MW + 14, 1100
+    f.box(RX0, GND - 6, RX1 - RX0, 12, "#e8eaed", "#e8eaed", 2)
+    f.line(RX0 + 10, GND, RX1 - 10, GND, "#ffffff", 2, dash="14,10", arrow=False)
+    A["road"] = ((RX0 + RX1) / 2, GND + 6)
+    # 车：左边货斗，右边带四个窗的长驾驶室（座位）
+    TX = 560
+    BY0, BY1 = GND - 104, GND - 26          # 货斗上下沿
+    f.box(TX, BY0, 210, BY1 - BY0, "none", GY, 4, sw=2)
+    f.box(TX + 10, BY0 + 10, 108, BY1 - BY0 - 18, BL, BL, 3)
+    f.t(TX + 64, BY0 + 46, "权重", "#ffffff", True, 15, "middle")
+    for k in range(3):
+        f.box(TX + 128, BY1 - 26 - k * 22, 72, 18, PU, PU, 3)
+    A["cargo"] = (TX + 105, BY0)
+    CX0, CX1 = TX + 218, TX + 400
+    f.p.append('<path d="M %.1f %.1f V %.1f H %.1f Q %.1f %.1f %.1f %.1f V %.1f Z" fill="none" '
+               'stroke="%s" stroke-width="2"/>' % (CX0, BY1, BY0 - 18, CX1 - 26, CX1, BY0 - 18, CX1, BY0 + 20, BY1, GY))
+    for k in range(4):                      # 四个窗，每个窗里坐一个人
+        wx = CX0 + 12 + k * 40
+        f.box(wx, BY0 - 6, 32, 38, "none", GY2, 4)
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="%s"/>' % (wx + 16, BY0 + 8, BL))
+        f.p.append('<path d="M %.1f %.1f a 11 9 0 0 1 22 0 z" fill="%s"/>' % (wx + 5, BY0 + 30, BL))
+    A["seats"] = ((CX0 + CX1) / 2, BY0 - 18)
+    A["cab"] = (CX1 - 22, BY0 - 14)
+    for wxc in (TX + 50, TX + 170, CX1 - 50):
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="14" fill="#ffffff" stroke="%s" stroke-width="2.4"/>'
+                   % (wxc, GND - 18, INK))
+    for k in range(3):                      # 速度线
+        f.line(TX - 70 + k * 10, BY0 + 18 + k * 22, TX - 16, BY0 + 18 + k * 22, GY2, 1.6, arrow=False)
+    f.line(CX1 + 12, GND - 60, RX1 - 6, GND - 60, GY2, 2)
+    # 工位 ＝ 算力
+    WX, WW = 1120, 250
+    f.box(WX, GND - 96, WW, 14, INK, INK, 2)
+    f.line(WX + 20, GND - 82, WX + 20, GND, INK, 2.4, arrow=False)
+    f.line(WX + WW - 20, GND - 82, WX + WW - 20, GND, INK, 2.4, arrow=False)
+    for r in range(3):
+        for c in range(6):
+            f.box(WX + 44 + c * 28, GND - 176 + r * 26, 22, 22, "none", INK, 3, sw=1.6)
+    f.t(WX + WW / 2, GND - 190, "工位 ＝ 算力", INK, True, 16, "middle")
+    A["desk"] = (WX + WW / 2, GND - 212)
+    # 尺子：量这一趟要多久
+    RY = GND + 46
+    f.line(RX0, RY, RX1, RY, RD, 2, arrow=False)
+    f.line(RX0, RY - 8, RX0, RY + 8, RD, 2, arrow=False)
+    f.line(RX1, RY - 8, RX1, RY + 8, RD, 2, arrow=False)
+    for k in range(1, 12):
+        xx = RX0 + (RX1 - RX0) * k / 12.0
+        f.line(xx, RY - 4, xx, RY, RD, 1.6, arrow=False)
+    A["ruler"] = (RX0, RY)
+    A["ruler_mid"] = ((RX0 + RX1) / 2, RY)
+    return A, GND, RY + 46
+
+
+def _chips(f, x, y, nums, col):
+    """节号小标签。返回右沿。"""
+    for n in nums:
+        lab = "第%s节" % n
+        w = wpx(lab, 14) + 16
+        f.box(x, y, w, 26, "#ffffff", col, 13, sw=1.6)
+        f.t(x + w / 2, y + 18, lab, col, True, 14, "middle")
+        x += w + 6
+    return x - 6
+
+
+def _chips_w(nums):
+    return sum(wpx("第%s节" % n, 14) + 16 for n in nums) + 6 * (len(nums) - 1)
 
 
 def fig_map():
-    f = Fig(W, "这一课的路线图。第一、二节是地基：吞 prompt 卡算力、吐字卡带宽，指标和口径对齐了再比快慢。"
-               "后面十一节分三类。让 decode 那一趟分给更多 token：第四节批处理与调度、第五节单卡里的 decode 注意力与 MoE、"
-               "第六节 TEP 和 DEP、第十一节投机解码。少搬：第三节 KV cache、第七节切序列、第十二节量化与 kernel 融合。"
-               "把活拆开放对地方：第八节 PD 分离、第九节配比与 AFD、第十节先选拓扑、第十三节在 TPU 上落地")
-    y0 = f.header("后面每一节都在这一趟上做文章　——　<tspan font-weight=\"700\">分摊它、削减它，或者换个地方搬</tspan>",
-                  "每格是一节：上面一行节名，下面一行它对这一趟做了什么。有的节两头都沾，只放进它最主要的那一格",
-                  [(INK, "地基"), (BL, "分给更多 token"), (GR, "少搬"), (OR, "拆开放对地方")])
-    # 地基条
-    BH = 74
-    py = f.panel(0, y0, W, BH + 46, "地基：先认清这一趟", INK)
-    for i, (n, hook) in enumerate(BASE):
-        x = 24 + i * 691
-        f.box(x, py + 16, 661, BH - 10, "none", GY2, 8, sw=1.4)
-        f.t(x + 18, py + 44, "第%s节　%s" % (n, _short(SEC[n])), INK, True, 15)
-        f.t(x + 18, py + 68, hook, GY, size=13.5)
-    # 三栏
-    CW, GAP = 453, 20
-    top = py + BH + 16 + 20
-    CH = 4 * 92 + 120
-    for gi, (gname, col, items) in enumerate(GROUPS):
-        x = gi * (CW + GAP)
-        cy = f.panel(x, top, CW, CH, gname, col)
-        # 小图标：一趟（方块）→ 怎么处理
-        ix, iy = x + 24, cy + 22
-        if gi == 0:          # 一个箱子，箭头分给四个点
-            f.box(ix, iy, 40, 30, col, col, 4)
-            for k in range(4):
-                f.line(ix + 44, iy + 15, ix + 96, iy - 6 + k * 14, col, 1.4, arrow=False)
-                f.p.append('<circle cx="%d" cy="%d" r="5" fill="%s"/>' % (ix + 102, iy - 6 + k * 14, col))
-            f.t(ix + 124, iy + 21, "搬一趟，更多 token 分", GY, size=13.5)
-        elif gi == 1:        # 大箱子 → 小箱子
-            f.box(ix, iy - 4, 46, 38, "none", col, 4, sw=1.6)
-            f.line(ix + 54, iy + 15, ix + 84, iy + 15, col, 1.6)
-            f.box(ix + 92, iy + 6, 22, 18, col, col, 3)
-            f.t(ix + 130, iy + 21, "每趟的字节变少", GY, size=13.5)
-        else:                # 两台机器各干各的
-            f.box(ix, iy, 36, 30, OR, OR, 4)
-            f.box(ix + 56, iy, 36, 30, GR, GR, 4)
-            f.line(ix + 38, iy + 15, ix + 52, iy + 15, GY2, 1.4)
-            f.t(ix + 110, iy + 21, "两种活各放各的机器", GY, size=13.5)
-        for k, (n, hook) in enumerate(items):
-            yy = cy + 76 + k * 92
-            f.box(x + 16, yy, CW - 32, 78, "none", col, 8, sw=1.4)
-            f.box(x + 16, yy, 5, 78, col, col, 2)
-            f.t(x + 34, yy + 30, "第%s节　%s" % (n, _short(SEC[n])), INK, True, 15, w=CW - 60)
-            f.t(x + 34, yy + 56, hook, col, False, 13.5, w=CW - 60)
+    f = Fig(W, "这一课的路线图，画成一个搬货场景。仓库是显存，里面放着权重和 KV；工位是算力。"
+               "decode 每出一个字，就要用一辆车把权重和 KV 从仓库拉到工位一趟，这是第一节；第二节是量这一趟的尺子。"
+               "后面的招数是三根杠杆。车上多坐人：一趟分给更多请求，第四、五、六、十一节。"
+               "货变轻：每一趟的字节变少，第三、七、十二节。开两个仓库：吞 prompt 和吐字分开放，第八、九、十、十三节")
+    y0 = f.header("后面每一节都在这一趟上做文章　——　<tspan font-weight=\"700\">三根杠杆</tspan>",
+                  "decode 每出一个字，就要把权重和 KV 从仓库拉到工位一趟",
+                  [(BL, "车上多坐人"), (GR, "货变轻"), (OR, "开两个仓库")])
+    TOP = 120
+    PH = 30 + TOP + 230 + 46 + 46 + 18
+    py = f.panel(0, y0, W, PH, "搬一趟", INK)
+    A, GND, bot = scene(f, py + TOP)
+    assert bot + 18 == py - 30 + PH          # panel() 返回的是标题栏下沿，比面板顶低 30
+    # 三根杠杆：标签 ＋ 节号，一根引线指到它动的那个部件
+    LX = {"wh2": 24, "cargo": 470, "seats": 830}
+    for name, col, nums, key in LEVERS:
+        x = LX[key]
+        ly = py + 22
+        f.t(x, ly + 22, name, col, True, 19, big=True)
+        cw = _chips_w(nums)
+        _chips(f, x, ly + 36, nums, col)
+        tx, ty = A[key]
+        sx = min(max(tx, x + 20), x + cw - 20)
+        f.line(sx, ly + 66, tx, ty - 4, col, 2)
+    # 地基：路（第一节）和尺子（第二节）
+    rx, ry = A["road"]
+    f.t(rx + 60, GND + 30, "每出一个字，搬一趟", INK, True, 15, "middle")
+    _chips(f, rx + 160, GND + 12, ["一"], INK)
+    mx, my = A["ruler_mid"]
+    f.t(mx + 60, my + 34, "量这一趟", RD, True, 15, "middle")
+    _chips(f, mx + 120, my + 16, ["二"], RD)
     f._pan = None
-    yb = f.band(top + CH + 20, "ok", "三类招数，对着同一趟搬运", [
-        "前两类直接改这一趟：要么让同一趟服务更多 token，要么让每一趟的字节变少。",
-        "第三类不改这一趟本身，而是让吞 prompt 和吐字各自在合适的机器上跑，互不拖累。",
-    ])
-    yb = f.src(yb + 10,
-               "⚠️ 本课的分法：每节按它主要的贡献归一格。DEP 也让 attention 各管各的请求，KV 复用也省了 prefill 的计算，这类兼顾的地方只放一格。",
-               "📌 节名取自 topic06-build.py 的 SECTIONS，脚本里断言第一到十三节各归一格、不重不漏。")
-    f.save("fig6-map.svg", yb + 14)
+    yb = f.src(py + PH + 4,
+               "⚠️ 本课的分法：每节按它主要的贡献归一根杠杆。DEP 也让 attention 各管各的请求，KV 复用也省了 prefill 的计算，这类兼顾的地方只放一处。",
+               "⚠️ 投机解码放在「车上多坐人」：它让搬一趟换来好几个字，和批处理一样是把一趟分给更多 token。",
+               "📌 节名取自 topic06-build.py 的 SECTIONS，脚本里断言第一到十三节各归一处、不重不漏。")
+    f.save("fig6-map.svg", yb + 6)
 
 
-fig_life()
-fig_map()
+if __name__ == "__main__":
+    fig_life()
+    fig_map()

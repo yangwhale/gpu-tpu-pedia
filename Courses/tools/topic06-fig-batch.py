@@ -103,7 +103,9 @@ assert round((SLOT["tpot"][1] / SLOT["tpot"][0] - 1) * 100) == 10
 GAP_BEFORE_MS, GAP_AFTER_US = 12, 38
 assert round(GAP_BEFORE_MS * 1000 / GAP_AFTER_US) == 316
 
-COLS = {"A": BL, "B": OR, "C": GR, "D": PU, "E": BL, "F": GR, "G": OR, "H": PU}
+# 八个请求八种颜色，不重复（评审：A 和 E 同色会让人以为是同一个请求）
+COLS = {"A": BL, "B": OR, "C": GR, "D": PU, "E": "#00838f", "F": "#d01884", "G": "#795548", "H": "#9e9d24"}
+assert len(set(COLS.values())) == len(REQ)
 
 
 def _gantt(f, x0, y0, grid, CW, RH):
@@ -150,15 +152,11 @@ def fig_gantt():
     f.t(X0 + len(G_ST) * CW + 24, py2 + 106, "排队的人一来，", GY, size=13)
     f.t(X0 + len(G_ST) * CW + 24, py2 + 126, "下一步就有位子", GY, size=13)
     f._pan = None
-    yb = f.band(y1 + PH + 20, "ok", "同样的活，少搬三趟", [
-        "37 格活：静态 batch 搬了 15 趟权重，逐步调度 12 趟。有人在排队时，逐步调度一格都不空。",
-        "代价是每一步都要重新拼 batch，新请求还得在某一步里做 prefill，这就引出 chunked prefill。",
-    ])
-    yb = f.src(yb + 10,
+    yb = f.src(y1 + PH + 4,
                "逐步调度：Orca（Yu et al., OSDI'22）的 iteration-level scheduling；论文在 GPT-3 175B 上报告"
                "同等延迟下吞吐是 FasterTransformer 的 36.9 倍。",
                "⚠️ 示意：请求长度是编排的，假设一开始全在排队；两种调度的步数、空转格数由本脚本模拟得出。")
-    f.save("fig6-gantt.svg", yb + 14)
+    f.save("fig6-gantt.svg", yb + 6)
 
 
 def fig_chunk():
@@ -201,70 +199,72 @@ def fig_chunk():
     f.save("fig6-chunk.svg", yb + 14)
 
 
+QUEUE = [round(c[4] / 23) for c in CONC if c[4] is not None]   # 门口排队的人数，示意，与 TTFT 成比例
+assert QUEUE == [2, 7, 11]
+
+
 def fig_conc():
-    f = Fig(W, "GB300 上 SGLang 跑 DeepSeek-V4-Pro，8K 进 1K 出，decode 8 张卡。每路并发从 400 拉到 1,800，"
-               "总负载涨 4.5 倍，每张 decode 卡的吞吐只从 8,777 涨到 9,745，涨 11%；TPOT 一直钉在 58 到 63 毫秒。"
-               "首字等待却从 45 秒涨到 150 秒、253 秒。下方是 Little 定律的核对：批里的请求数约等于吞吐乘以 TPOT，"
-               "dep8 是 4,335，dep16 是 2,783。再往批里加槽位，batch 从 886 加到 999，峰值只多 0.06%，TPOT 从 77.7 拖到 85.3 毫秒")
+    f = Fig(W, "像一家座位坐满的餐厅：座位就是批里的槽位，已经坐满；翻台速度不变，每张卡的吞吐就几乎不动；"
+               "再来的客人只能在门口排队，队越排越长。实测：GB300 上 SGLang 跑 DeepSeek-V4-Pro，8K 进 1K 出，decode 8 张卡。"
+               "每路并发从 400 拉到 1,800，总负载涨 4.5 倍，每张 decode 卡的吞吐只从 8,777 涨到 9,745，涨 11%；"
+               "TPOT 一直钉在 58 到 63 毫秒。首字等待却从 45 秒涨到 150 秒、253 秒")
     y0 = f.header("槽位满了再加并发　——　<tspan font-weight=\"700\">吞吐几乎不动，多出来的人全在排队</tspan>",
-                  "GB300 · SGLang · DeepSeek-V4-Pro · dep8 decode ＋ 14 路 prefill · 8K 进 1K 出 · 吞吐按 output ÷ decode GPU",
+                  "GB300 · SGLang · DeepSeek-V4-Pro · dep8 decode · 8K 进 1K 出 · 吞吐按 output ÷ decode GPU",
                   [(GR, "每张 decode 卡的吞吐"), (RD, "TTFT 中位数（含排队）")])
+    # ① 餐厅：座位满了，翻台速度不变，门口排队变长
+    PH0 = 30 + 190
+    p0 = f.panel(0, y0, W, PH0, "像一家坐满的餐厅", INK)
+    RX, RW = 30, 470
+    f.box(RX, p0 + 24, RW, 120, "none", INK, 8, sw=2)
+    for r in range(2):
+        for c in range(7):
+            tx, ty = RX + 22 + c * 64, p0 + 40 + r * 52
+            f.box(tx + 6, ty + 30, 42, 8, GY2, GY2, 2)
+            f.icon("person", tx + 13, ty - 2, 28, 32, col=GR, tint=GR)
+    f.t(RX + RW / 2, p0 + 172, "座位 ＝ 槽位：全坐满了，翻台速度不变", GR, True, 16, "middle")
+    DX = RX + RW
+    f.box(DX - 3, p0 + 84, 6, 60, "#ffffff", "#ffffff", 0)       # 门口
+    QX0 = DX + 150
+    ROWS = [c for c in CONC if c[4] is not None]
+    for qi, (n, row) in enumerate(zip(QUEUE, ROWS)):
+        qy = p0 + 22 + qi * 42
+        f.t(QX0 - 16, qy + 26, "并发 %s" % format(row[0], ","), INK, True, 15, "end")
+        for k in range(n):
+            f.icon("person", QX0 + k * 40, qy, 28, 32, col=RD, tint="#fce8e6")
+    f.line(QX0 - 110, p0 + 106, DX + 10, p0 + 106, GY2, 1.6)
+    f.t(QX0, p0 + 172, "门口的队越排越长 ＝ 首字等待", RD, True, 16)
+    # ② 实测：吞吐 vs 首字等待
     HW = (W - 20) // 2
-    PH = 360
-    py = f.panel(0, y0, HW, PH, "吞吐：总负载 ×4.5，吞吐 +11%", GR)
+    PH = 30 + 340
+    y1 = y0 + PH0 + 16
+    py = f.panel(0, y1, HW, PH, "翻台速度：总负载 ×4.5，吞吐 +11%", GR)
     BX0, BW_, BH = 40, 110, 230
     base = py + 40 + BH
     for i, (c, o, thr, tpot, _) in enumerate(CONC):
         x = BX0 + i * (BW_ + 22)
         h = BH * thr / 10000
         f.box(x, base - h, BW_, h, GR, GR, 4)
-        f.t(x + BW_ / 2, base - h - 10, format(thr, ","), GR, True, 15, "middle")
-        f.t(x + BW_ / 2, base + 22, "并发 %s" % format(c, ","), INK, True, 13.5, "middle")
-        f.t(x + BW_ / 2, base + 44, "TPOT %s ms" % tpot, GY, size=13, anchor="middle")
-    p2 = f.panel(HW + 20, y0, HW, PH, "首字等待：45 秒 → 253 秒", RD)
+        f.t(x + BW_ / 2, base - h - 10, format(thr, ","), GR, True, 16, "middle")
+        f.t(x + BW_ / 2, base + 24, "并发 %s" % format(c, ","), INK, True, 15, "middle")
+        f.t(x + BW_ / 2, base + 48, "TPOT %s ms" % tpot, GY, size=14, anchor="middle")
+    f.panel(HW + 20, y1, HW, PH, "门口排队：首字等待 45 秒 → 253 秒", RD)
     X2 = HW + 60
     for i, (c, o, thr, tpot, ttft) in enumerate(CONC):
         x = X2 + i * (BW_ + 22)
         if ttft is None:
-            f.t(x + BW_ / 2, base - 10, "未记录", GY2, size=13, anchor="middle")
+            f.t(x + BW_ / 2, base - 10, "未记录", GY2, size=14, anchor="middle")
         else:
             h = BH * ttft / 270
             f.box(x, base - h, BW_, h, RD, RD, 4)
-            f.t(x + BW_ / 2, base - h - 10, "%d 秒" % ttft, RD, True, 15, "middle")
-        f.t(x + BW_ / 2, base + 22, "并发 %s" % format(c, ","), INK, True, 13.5, "middle")
-    y1 = y0 + PH + 16
-    PH2 = 216
-    p3 = f.panel(0, y1, HW, PH2, "Little 定律：批里有几个人 ≈ 吞吐 × TPOT", BL)
-    f.t(24, p3 + 44, "dep8", BL, True, 15)
-    f.t(110, p3 + 44, "9,032 × 8 张 × 0.060 s ≈ %s 个请求" % format(round(LITTLE8), ","), INK, size=15)
-    f.t(24, p3 + 84, "dep16", BL, True, 15)
-    f.t(110, p3 + 84, "84,321 × 0.033 s ≈ %s 个请求" % format(round(LITTLE16), ","), INK, size=15)
-    f.t(24, p3 + 124, "反过来用：吞吐 ≈ 批里人数 × 1000 ÷ TPOT(ms)", GY, True, 14)
-    f.t(24, p3 + 150, "槽位满了，人数不再涨；TPOT 不动，吞吐就不动", GY, size=13.5)
-    p4 = f.panel(HW + 20, y1, HW, PH2, "槽位不白给：再加 13% 的位子", OR)
-    rows = [("每卡 batch", "886", "999", "+13%"), ("峰值 tok/s", "12,063", "12,070", "+0.06%"),
-            ("TPOT", "77.7 ms", "85.3 ms", "+10%")]
-    X4 = HW + 44
-    for j, h in enumerate(("", "mem-frac 0.85", "0.88", "变化")):
-        f.t(X4 + [0, 260, 400, 530][j], p4 + 34, h, GY, True, 13.5, "middle" if j else None)
-    for i, (a, b, c, d) in enumerate(rows):
-        yy = p4 + 70 + i * 36
-        f.t(X4, yy, a, INK, True, 14.5)
-        f.t(X4 + 260, yy, b, INK, size=15, anchor="middle")
-        f.t(X4 + 400, yy, c, INK, True, 15, "middle")
-        f.t(X4 + 530, yy, d, RD if i == 2 else GY, True, 15, "middle")
-    f.t(X4, p4 + 180, "过了约 890 个/卡，decode 从缺显存变成缺算力", GY, size=13)
+            f.t(x + BW_ / 2, base - h - 10, "%d 秒" % ttft, RD, True, 16, "middle")
+        f.t(x + BW_ / 2, base + 24, "并发 %s" % format(c, ","), INK, True, 15, "middle")
     f._pan = None
-    yb = f.band(y1 + PH2 + 20, "ok", "吞吐 ≈ 槽位数 × 1000 ÷ TPOT：两个因子都被硬件钉住", [
-        "槽位满了再加并发，TPOT 不动、吞吐不动，首字等待翻 5.6 倍。对标取首字还能接受的那一档（这里是并发 600）。",
-        "槽位再加，每一步要算的人变多，TPOT 跟着变长；乘起来几乎不涨。",
-    ])
-    yb = f.src(yb + 10,
+    yb = f.src(y1 + PH + 4,
                "本课程作者实测：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:593-609"
                "（并发 ＝ 每路 conc × 14 个 frontend；ISL 8192、OSL 1024；--max-running-requests 8192；TTFT 只记了三档）。",
-               "Little 定律核对：同文件 794-801，runbook 自己的反推（dep8 4,335、dep16 2,783）。",
-               "槽位实验：同文件 849-858、885-894（ISL 4096，mem-fraction-static 0.85 → 0.88）。")
-    f.save("fig6-conc.svg", yb + 14)
+               "⚠️ 餐厅里的人数是示意：14 个座位、门口排的人数按 TTFT 的比例画（45 : 150 : 253 秒 → 2 : 7 : 11 人，三档各画一排）。",
+               "Little 定律核对与「槽位不白给」实验（batch 886 → 999、TPOT 77.7 → 85.3 ms）见正文；出处同文件 794-801、849-858、885-894。")
+    f.save("fig6-conc.svg", yb + 6)
 
 
 def fig_overlap():

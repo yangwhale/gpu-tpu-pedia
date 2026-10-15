@@ -161,48 +161,42 @@ def fig_prefill_sweep():
 
 
 def fig_decide():
-    f = Fig(W, "拆不拆的决策树。第一问：长 prompt 会不会打断别人的出字，也就是 prefill 和 decode 有没有真在打架；"
-               "没有就不拆，用分块 prefill。第二问：KV 能不能走快线，同一个 NVLink 域或同一个 TPU 切片里传；"
-               "不能就要 KV 足够薄，或者只把长 prompt 外送。第三问：缺的是首字还是吞吐；缺首字加 prefill，缺吞吐或并发上不去加 decode。"
-               "起步的配比用公式：prefill 个数等于 decode 每秒完成的请求数乘输入长度，除以一个 prefill 每秒能吞的 token")
-    y0 = f.header("拆不拆，看负载，不看潮流　——　<tspan font-weight=\"700\">三个问题，从上往下问</tspan>",
-                  "叶子上的例子都是公开实测，口径各不相同，只当路标。多长算长、多严算严没有通用阈值，要拿自己的负载量",
+    f = Fig(W, "拆不拆的决策树。第一问：不拆时 TPOT 有没有被长 prompt 撑出尖峰；没有就不拆，拆了多一趟传输、多一套机器。"
+               "有尖峰，先开分块 prefill，把长 prompt 切成小块夹在 decode 步之间；压住了就不拆，仍有尖峰才往下问。"
+               "第二问：KV 能不能走快线，同一个 NVLink 域或同一个 TPU 切片里传；不能就要 KV 足够薄，或者只把长 prompt 外送。"
+               "第三问：缺的是首字还是吞吐；缺首字加 prefill，缺吞吐加 decode")
+    y0 = f.header("拆不拆，看负载，不看潮流　——　<tspan font-weight=\"700\">先试分块，压不住再拆</tspan>",
+                  "多长算长、多严算严没有通用阈值，要拿自己的负载量",
                   [(BL, "问题"), (GR, "拆"), (OR, "不拆或慎拆")])
-    QX, QW, QH = 30, 470, 96
-    LX, LW = 590, 780
+    QX, QW, QH = 30, 500, 92
+    LX, LW = 610, 760
     rows = [
-        ("① 长 prompt 会打断别人出字吗？", "输入长、并发高、TPOT 有硬要求",
-         OR, "否 → 不拆，用分块 prefill",
-         ["MiMo（TPU v7x，16K 进 4K 出）：batch 64 时不拆 11.70K，1P1D 只有 10.55K。",
-          "Qwen3-Coder 1K 进 1K 出、单并发：TTFT 95 ms 变成 281 ms，多出一趟传输。"]),
+        ("① 不拆时，TPOT 有 prefill 尖峰吗？", "长 prompt 一进来，别人出字就卡一下",
+         OR, "否 → 不拆", "拆了多一趟传输、多一套机器，换不回东西"),
+        ("先开分块 prefill：仍有尖峰吗？", "长 prompt 切成小块，夹在 decode 步之间",
+         OR, "否 → 不拆，分块就够", "压得住，就省下拆开那套代价"),
         ("② KV 能走快线吗？", "同一个 NVLink 域 ／ 同一个 TPU 切片",
-         OR, "否 → KV 要够薄，或只把长 prompt 外送",
-         ["PrFaaS：混合模型 KV 薄 4–13 倍，才敢跨数据中心，按长度阈值挑请求外送。",
-          "GPU 跨了 NVLink 域就退到 RDMA，同一套配置明显变慢（V4-Pro runbook）。"]),
+         OR, "否 → KV 要够薄，或只把长 prompt 外送", "出了快线，KV 越厚越慢"),
         ("③ 缺的是首字，还是吞吐？", "看哪个 SLO 先破",
-         GR, "缺首字 → 加 prefill；缺吞吐 → 加 decode 或换 decode 切法",
-         ["MiMo batch 128：1P1D 比不拆多约 7%，2P1D 多 19.8%（但多一个 pod）。",
-          "起步配比：prefill 个数 ≈ decode 完成率 × 输入长度 ÷ 一个 prefill 的吞吐（V4-Pro 算出 8–10 个）。"]),
+         GR, "缺首字 → 加 prefill；缺吞吐 → 加 decode", "配比先用公式起个头，再往先破的那边加"),
     ]
+    STEP = 132
+    QH = 88
     y = y0 + 10
-    for i, (q, qs, col, ans, ex) in enumerate(rows):
+    for i, (q, qs, col, ans, why) in enumerate(rows):
         f.box(QX, y, QW, QH, "none", BL, 10, sw=2)
-        f.t(QX + 20, y + 40, q, BL, True, 17)
-        f.t(QX + 20, y + 70, qs, GY, size=13.5)
+        f.t(QX + 20, y + 38, q, BL, True, 17)
+        f.t(QX + 20, y + 68, qs, GY, size=15)
         f.path("M%d,%d L%d,%d" % (QX + QW, y + QH / 2, LX - 6, y + QH / 2), col, 2)
-        f.box(LX, y, LW, QH + 30, "none", col, 10, sw=1.6)
-        f.t(LX + 18, y + 30, ans, col, True, 16)
-        for j, e in enumerate(ex):
-            f.t(LX + 18, y + 60 + j * 26, e, INK, size=13.5)
+        f.box(LX, y, LW, QH, "none", col, 10, sw=1.6)
+        f.t(LX + 20, y + 38, ans, col, True, 17)
+        f.t(LX + 20, y + 68, why, INK, size=15)
         if i < len(rows) - 1:
-            f.path("M%d,%d L%d,%d" % (QX + QW / 2, y + QH, QX + QW / 2, y + 160), BL, 2)
-            f.t(QX + QW / 2 + 12, y + QH + 36, "是", BL, True, 15)
-        y += 160
+            f.path("M%d,%d L%d,%d" % (QX + QW / 2, y + QH, QX + QW / 2, y + STEP - 4), BL, 2)
+            f.t(QX + QW / 2 + 12, y + QH + 28, "是 → 才拆，接着问怎么拆" if i == 1 else "是", BL, True, 15)
+        y += STEP
     f._pan = None
-    yb = f.band(y + 6, "ok", "拆开换来两样：decode 那一趟不再被 prefill 打断，两边各用最合适的切法", [
-        "三个问题里只要第一问答「否」，后面两问都不用问；拆开多一趟传输、两套机器、一份配比要调。",
-        "配比先用公式起步，再按「哪个 SLO 先破」往哪边加卡。",
-    ])
+    yb = y - STEP + QH
     yb = f.src(yb + 10,
                "📌 MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88（TPU v7x 每 pod 4 芯片，16K 进 4K 出，request_rate=inf，total tok/s）。"
                "Qwen3-Coder-480B：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021（两台 v7x-8，TTFT 中位数）。",
@@ -213,35 +207,63 @@ def fig_decide():
 
 
 def fig_afd_ascend():
-    f = Fig(W, "vLLM 的 AFD 插件在昇腾 910C 上跑 DeepSeek-V3.2 的饱和 decode 吞吐，按每个 die 算。"
-               "16K 输入：不拆的 EP64 是 232.6，48 个 attention 配 16 个 FFN 是 220.3，少 5.3%；64 个 attention 配 16 个 FFN 是 258.9，多 11.3%。"
-               "32K 输入：168.2、151.4（少 10%）、183.3（多 9%）。attention 给少了，拆开反而慢")
-    y0 = f.header("AFD 拆开不保证更快　——　<tspan font-weight=\"700\">attention 和专家的配比给错了，反而慢</tspan>",
-                  "vLLM AFD 插件，Ascend 910C，DeepSeek-V3.2 W8A8，饱和 decode。tokens/s/die ＝ 总输出 ÷ 部署的全部 die（EP64、48A16F 是 64 个，64A16F 是 80 个）",
-                  [(GY2, "EP64（不拆）"), (OR, "48A16F：48 attention ＋ 16 FFN"), (GR, "64A16F：64 attention ＋ 16 FFN")])
-    PH = 330
-    py = f.panel(0, y0, W, PH, "每 die 输出 tokens/s", GR)
-    BX, BW = 200, 980
+    f = Fig(W, "vLLM 的 AFD 插件在昇腾 910C 上跑 DeepSeek-V3.2 的饱和 decode 吞吐，按每块 die 算。三行是三种部署，"
+               "左边的小人一个代表一块 die，蓝色算注意力、紫色算专家。不拆：64 块 die 每块两样都干。"
+               "拆开一：48 块算注意力、16 块算专家，专家那边吃不饱，16K 输入每块 die 220.3，比不拆的 232.6 少 5.3%，32K 少 10%。"
+               "拆开二：注意力加到 64 块、专家还是 16 块，16K 涨到 258.9，多 11.3%，32K 多 9%。注意力给少了，拆开反而慢")
+    y0 = f.header("AFD 拆开不保证更快　——　<tspan font-weight=\"700\">算注意力的给少了，算专家的就在等</tspan>",
+                  "vLLM AFD 插件，昇腾 910C，DeepSeek-V3.2（权重和激活都压成 8 位），decode 跑满。"
+                  "die 是芯片上的一块计算单元，这里当一张卡数；分母是部署的全部 die",
+                  [(BL, "小人：算注意力的 die"), (PU, "小人：算专家（FFN）的 die"), (GY2, "小人：两样都干")])
+    CFG_ = [("不拆：64 块，每块两样都干", GY2, [(64, GY2)], None),
+            ("拆开：48 块算注意力 ＋ 16 块算专家", OR, [(48, BL), (16, PU)], ("专家这边吃不饱", OR)),
+            ("拆开：64 块算注意力 ＋ 16 块算专家", GR, [(64, BL), (16, PU)], ("专家更忙，仍有余力", GR))]
+    S, G = 15, 4                    # 小人尺寸、间距；每排 16 个
+    RS = S + G + 2                  # 行距
+
+    def group_h(groups):
+        return sum(((n - 1) // 16) * RS + S + 2 + 12 for n, _ in groups) - 12
+
+    RH = [max(30 + group_h(g), 22 + 46 + 30) + 30 for _, _, g, _ in CFG_]
+    PH = 30 + 16 + sum(RH)
+    py = f.panel(0, y0, W, PH, "每块 die 每秒出多少 token（左：怎么分工；右：16K 和 32K 输入两种长度）", GR)
+    BX, BW = 620, 640
     VMAX = 300.0
-    y = py + 36
-    for k, vals in AFD.items():
-        f.t(BX - 20, y + 54, "%s 输入" % k, INK, True, 17, "end")
-        for i, (v, c) in enumerate(zip(vals, (GY2, OR, GR))):
-            f.box(BX, y + i * 38, BW * v / VMAX, 28, c, c, 3)
+    y = py + 20
+    for ci, (name, col, groups, note) in enumerate(CFG_):
+        f.t(24, y + 16, name, col, True, 16)
+        gy = y + 30
+        for n, c in groups:
+            for k in range(n):
+                r, q = divmod(k, 16)
+                f.icon("person", 24 + q * (S + G), gy + r * RS, S, S + 2, col=c, tint=c)
+            last = gy + ((n - 1) // 16) * RS
+            if c == PU and note:
+                f.t(24 + 16 * (S + G) + 14, last + 15, note[0], note[1], True, 15)
+            gy = last + S + 2 + 12
+        # 右：两根条，竖向居中
+        bt = y + (RH[ci] - 30 - (46 + 30)) / 2 + 10
+        for j, k in enumerate(("16K", "32K")):
+            vals = AFD[k]
+            v = vals[ci]
+            by = bt + j * 46
+            f.t(BX - 14, by + 21, "%s 输入" % k, INK, True, 15, "end")
+            f.box(BX, by, BW * v / VMAX, 30, col, col, 3)
             lab = "%.1f" % v
-            if i:
+            if ci:
                 lab += "（%+.1f%%）" % ((v / vals[0] - 1) * 100)
-            f.t(BX + BW * v / VMAX + 10, y + 20 + i * 38, lab, c, True, 14.5)
-        y += 140
+            f.t(BX + BW * v / VMAX + 10, by + 21, lab, col, True, 15)
+        if ci < 2:
+            f.line(16, y + RH[ci] - 12, W - 16, y + RH[ci] - 12, LINE, 1, arrow=False)
+        y += RH[ci]
     f._pan = None
-    yb = f.band(py + PH + 20, "warn", "博客原话：只拆开，不保证吞吐提升", [
-        "attention 卡给多了，专家那边才吃得饱；作者说测过的配比下 FFN 还有余力，没测更高的 attention 比例。",
-        "这组数把专家路由换成了强制均衡（输出会变），还用小部署模拟大规模；只能看趋势。",
-    ])
+    yb = y0 + PH
     yb = f.src(yb + 10,
                "📌 vllm.ai/blog/2026-07-23-vllm-afd-plugin ／ github.com/vllm-project/afd-plugin：AFD 是外部插件，不是 vLLM 原生功能；"
-               "vLLM 的 AFD RFC #22799 于 2026-05-31 被机器人以长期不活跃关闭，没有合入。",
-               "⚠️ 48A16F ／ 64A16F 模拟的是逻辑上的 192A64F ／ 256A64F（博客原文）。")
+               "vLLM 的 AFD RFC #22799 于 2026-05-31 被机器人以长期不活跃关闭，没有合入。博客原话：只拆开，不保证吞吐提升；"
+               "测过的配比下 FFN 还有余力，没测更高的 attention 比例。",
+               "⚠️ 48A16F ／ 64A16F 模拟的是逻辑上的 192A64F ／ 256A64F（博客原文）；专家路由换成了强制均衡（输出会变）。只能看趋势。"
+               "「专家这边吃不饱」是按博客「FFN 还有余力」的定性说法画的，没有利用率数字。")
     f.save("fig6-afd-ascend.svg", yb + 14)
 
 
