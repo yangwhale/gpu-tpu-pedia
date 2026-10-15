@@ -91,7 +91,7 @@ CH = [
 <p class="say">「batch 小的时候，一步几乎全在读权重，所以位数减半，下限就减半。左边是本课只算权重推的；右边看整个模型放不放得下。」</p>
 
 <p class="say">「省下的显存能多放 KV、多接人，顺带走了车上多坐人那条路。KV 自己也能压：存成 FP8，有一截没压，本课推的是多装六成多。<br>
-二〇二五年底 Blackwell 上的 KV 已到四 bit，比 FP8 再省一半，算之前照样解回 FP8。二〇二六年九月 DeepSeek 的 V4.1-Flash，主 KV 原生就存四 bit。」</p>
+二〇二五年底 Blackwell 上的 KV 已到四 bit，比 FP8 再省约一半，算之前照样解回 FP8。二〇二六年九月 DeepSeek 的 V4.1-Flash，主 KV 原生就存四 bit。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s12-mx</code>，先上后下。</p>
 
@@ -135,7 +135,7 @@ TPU 这边，Inferact 用 Pallas 写了 megakernel。十六颗 v7 跑 Kimi K3，
 ⚠️ <b>Inferact 那个七百多是 megakernel 加 DSpark 投机一起换来的</b>，别说成量化或单靠 megakernel 的功劳。<br>
 ⚠️ v7 没有 FP4 算力通路，<b>别说「FP4 在 TPU 上算得更快」</b>：省的是字节和容量，算之前要解开。<br>
 ⚠️ R1 那几个容量数单位混着（README 记 GB、上限是 GiB），<code>fig-s12-cap</code> 已把三根条画出来；台上只指红条说「不管单位怎么读都放不下」，不口播三个数。<br>
-⛔ 12.7 只讲两句：KV 存 FP8 多六成多（1.63 倍），NVFP4 再省一半；656 B 的布局账、20%、首字三分之一不念。<br>
+⛔ 12.7 只讲两句：KV 存 FP8 多六成多（1.63 倍），NVFP4 再省约一半；656 B 的布局账、20%、首字三分之一不念。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
 🧑‍🎓 新人「量化会不会掉精度？」→ 课件没给精度对比；代价一般有，所以现在倾向训练时就适应：K2 Thinking 做了量化感知训练，V4 专家直接用 FP4。自己量的模型要跑评测。<br>
 🛠 GPU 老兵「megakernel 能直接在 vLLM、SGLang 里用吗？」→ 生产里先上的是 CUDA Graph 和 PDL；megakernel 目前是 Hazy、Mirage MPK、Inferact 这类专门实现，MPK 报 1.7 倍。<br>
