@@ -41,7 +41,7 @@ __FIG_S3_POOL__
   <p>两边一起满之后再多装人，吞吐几乎不涨（4.3）：瓶颈从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
-    tpu-inference 跑 Qwen3.5 时块编号池算成了实际该有的约 3.5 倍，多出的编号没有对应的显存；JAX 对越界下标<b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
+    tpu-inference 跑 Qwen3.5 时块编号池算成了实际该有的约 3.5 倍，多出的编号没有对应的显存；JAX 写入时越界的起点被<b>静默钳回末尾</b>，多个请求写进同一块；症状是胡言乱语或崩溃（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
 
   <h3 id="s3-5">3.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样（同一段 system prompt、多轮对话的前几轮），这段的 KV 留着，下一个直接接着算。</p>
