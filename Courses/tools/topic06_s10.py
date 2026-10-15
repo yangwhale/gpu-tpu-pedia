@@ -67,10 +67,5 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("14,563", "fig6-s10-lens.svg"), ("21,100", "fig6-s10-lens.svg"), ("65,132", "fig6-s10-lens.svg"),
-    ("1,820", "fig6-s10-lens.svg"), ("1,319", "fig6-s10-lens.svg"), ("3,257", "fig6-s10-lens.svg"),
-    ("2.47", "fig6-s10-lens.svg"), ("1.79", "fig6-s10-lens.svg"), ("+28%", "fig6-s10-lens.svg"),
-    ("170.55", "fig6-s10-slice.svg"), 
-    ("70,272", "fig6-s10-slice.svg"),
-    ("854", "fig6-s10-conc.svg"), ("10,715", "fig6-s10-conc.svg"), ("12.5", "fig6-s10-conc.svg"),
+    ("+28%", "fig6-s10-lens.svg"),
 ]

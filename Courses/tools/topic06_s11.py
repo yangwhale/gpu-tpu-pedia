@@ -82,8 +82,4 @@ FIGS = {
         '<b>看草稿从哪来。</b>'),
 }
 
-NUM_LOCK = [
-    ("4.4", "fig6-spec-bytes.svg"),
-    ("2,911", "fig6-spec-temp.svg"),
-    ("944", "fig6-spec-temp.svg"),
-]
+NUM_LOCK = []

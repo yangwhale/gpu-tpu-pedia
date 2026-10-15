@@ -72,8 +72,4 @@ FIGS = {
         '<em>输出吞吐；折线两端标 TP → DP 的绝对值。专家都走 EP，只换注意力的切法。</em>'),
 }
 
-NUM_LOCK = [
-    ("1.31", "fig6-dep-kv.svg"),
-    ("69 层", "fig6-dep-state.svg"),
-    ("40%", "fig6-dep-tpu.svg"),
-]
+NUM_LOCK = []

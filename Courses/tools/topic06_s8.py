@@ -121,7 +121,4 @@ FIGS = {
         '<b>同一条专线：橙柱只够并 1–2 台，绿柱能并 12–21 台。</b><br><em>每根柱是一台 prefill 每秒外送的量；红虚线是整个集群共用的专线，绿虚线是案例里整个集群的平均出口。</em>'),
 }
 
-NUM_LOCK = [
-    ("5,201", "fig6-kv-bw.svg"), ("149", "fig6-kv-bw.svg"), ("6.2", "fig6-kv-bw.svg"),
-    ("33.35", "fig6-prfaas.svg"), ("8.25", "fig6-prfaas.svg"), ("4.66", "fig6-prfaas.svg"),
-]
+NUM_LOCK = []

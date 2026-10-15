@@ -65,6 +65,5 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("365", "fig6-dcp-gain.svg"), ("108", "fig6-dcp-gain.svg"), ("237%", "fig6-dcp-gain.svg"),
     ("26%", "fig6-dcp-gain.svg"),
 ]

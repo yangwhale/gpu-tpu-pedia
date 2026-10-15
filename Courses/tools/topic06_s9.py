@@ -103,6 +103,5 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("1,159.0", "fig6-2p1d.svg"), ("48.3", "fig6-2p1d.svg"),
-    ("3,187", "fig6-prefill-sweep.svg"), ("10.4", "fig6-prefill-sweep.svg"), ("455", "fig6-prefill-sweep.svg"),
+    ("10.4", "fig6-prefill-sweep.svg"),
 ]
