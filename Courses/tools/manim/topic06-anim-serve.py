@@ -678,11 +678,11 @@ class PDSplit(Scene):
         labs = VGroup(
             tx("整机在算", 20, GREY_B).move_to([XL, YM["bus"], 0]),
             tx("新请求", 20, GREEN).move_to([XL, YM["new"], 0]),
-            *[tx("请求 " + n, 20, BLUE).move_to([XL, YM[n], 0]) for n in PD_OLD],
+            *[tx("请求 " + n, 20, GREEN).move_to([XL, YM[n], 0]) for n in PD_OLD],
             tx("prefill 机", 20, ORANGE).move_to([XL, YS["pf"], 0]),
             tx("decode 机", 18, GREY_B).rotate(math.pi / 2).move_to([XL - 0.95, (YS["new"] + YS["C"]) / 2, 0]),
             tx("新请求", 20, GREEN).move_to([XL, YS["new"], 0]),
-            *[tx("请求 " + n, 20, BLUE).move_to([XL, YS[n], 0]) for n in PD_OLD],
+            *[tx("请求 " + n, 20, GREEN).move_to([XL, YS[n], 0]) for n in PD_OLD],
         )
         self.add(heads, labs)
 
@@ -697,10 +697,10 @@ class PDSplit(Scene):
         for mode, Y in (("mix", YM), ("split", YS)):
             for n, ks in PD[mode].items():
                 for k in ks:
-                    cell(k, Y[n], GREEN if n == "new" else BLUE)
-        for k in range(PD_T):                      # 上半「整机在算」：decode 的步是细蓝条
+                    cell(k, Y[n], GREEN)               # 全课约定：decode 绿、prefill 橙、KV 紫（新请求靠行区分，不另配色）
+        for k in range(PD_T):                      # 上半「整机在算」：decode 的步是细绿条
             if not (PF0 <= k < PF1):
-                cell(k, YM["bus"], BLUE, 0.14)
+                cell(k, YM["bus"], GREEN, 0.14)
         for Y, key in ((YM, "bus"), (YS, "pf")):   # prefill 块：逐格淡入、格与格无缝，长成一整块
             for k in range(PF0, PF1):
                 r = Rectangle(width=U + 0.005, height=0.36, stroke_width=0, fill_color=ORANGE, fill_opacity=0)
@@ -721,8 +721,8 @@ class PDSplit(Scene):
         from manim import Arrow
         x_from, x_to = X0 + PF1 * U, X0 + PD_JOIN * U
         arrow = Arrow([x_from, YS["pf"] - 0.18, 0], [x_to + 0.05, YS["new"] + 0.2, 0], buff=0,
-                      color=YELLOW, stroke_width=5, max_tip_length_to_length_ratio=0.35)
-        kv_lab = tx("传 KV", 22, YELLOW, True).next_to(arrow, RIGHT, buff=0.12).shift(0.12 * UP)
+                      color=PURPLE_B, stroke_width=5, max_tip_length_to_length_ratio=0.35)
+        kv_lab = tx("传 KV", 22, PURPLE_B, True).next_to(arrow, RIGHT, buff=0.12).shift(0.12 * UP)
         notes = [(pf_lab_m, PF0 + 0.6), (pf_lab_s, PF0 + 0.6), (late, PF0 + 0.8), (arrow, PF1), (kv_lab, PF1),
                  (even, PF1 + 1.2)]
         GAP_T = PF0 + 0.8
@@ -832,7 +832,7 @@ class KVStore(Scene):
         BY = [-2.0, -2.42, -2.84, -3.26]                # 首字条四行
         SEC = 0.45                                      # 首字条：1 秒 ＝ 0.45 个单位（只对 SSD 与重算两条有意义）
         BAR_W = [0.1, 0.17, KV_HIT_S * SEC, KV_MISS_S * SEC]   # ⚠️ 前两条是示意
-        BAR_C = [GREEN, BLUE, BLUE, ORANGE]
+        BAR_C = [GREEN, PURPLE_B, PURPLE_B, ORANGE]      # 搬回的是 KV → 紫；重算是 prefill → 橙
         BAR_T = ["HBM 里就有", "从主机内存拉回", "从 SSD 拉回", "重算 prefill"]
 
         def slot_xy(tier, k):
@@ -854,7 +854,7 @@ class KVStore(Scene):
         foot = tx("块数、层的大小都是示意；首字条只有 SSD 与重算两条按 DeepSeek 实测比例画", 18, GREY).move_to([0, -3.72, 0])
         self.add(tier_g, lru, strip_head, foot)
 
-        def make_block(name, col=BLUE):
+        def make_block(name, col=PURPLE_B):            # 全课约定：KV 紫
             g = VGroup(Rectangle(width=BW, height=BH, stroke_color=col, stroke_width=3, fill_color=col, fill_opacity=0.55),
                        tx(name, 26, WHITE, True))
             g[1].move_to(g[0].get_center())
@@ -912,9 +912,9 @@ class KVStore(Scene):
             if hit == 0:
                 say("前缀 %s 就在 HBM：直接用，接着往后算" % p, GREEN)
             elif hit == 1:
-                say("前缀 %s 在主机内存：拉回 HBM，比重算 prefill 快" % p, BLUE)
+                say("前缀 %s 在主机内存：拉回 HBM，比重算 prefill 快" % p, PURPLE_B)
             elif hit == 2:
-                say("前缀 %s 在 SSD：拉回来也比重算快（DeepSeek：首字 13 s → 0.5 s）" % p, BLUE)
+                say("前缀 %s 在 SSD：拉回来也比重算快（DeepSeek：首字 13 s → 0.5 s）" % p, PURPLE_B)
             else:
                 say("前缀 %s 哪层都没有：只能重算 prefill" % p, ORANGE)
             bar = Rectangle(width=BAR_W[r], height=0.28, stroke_width=0, fill_color=BAR_C[r], fill_opacity=0.9)
@@ -936,7 +936,7 @@ class KVStore(Scene):
             # ③ 放进 HBM 最前面（其余往右挪一格；超出容量的那块露在框外）
             self.play(*layout(states[0]), FadeOut(marks), run_time=0.6)     # 「命中／没有」先收掉：露在框外的那块会落在它的位置上
             self.remove(marks)
-            blocks[p][0].set_stroke(ORANGE if hit is None else BLUE, width=3)
+            blocks[p][0].set_stroke(ORANGE if hit is None else PURPLE_B, width=3)
             # ④ 满了：最冷的一块往下放，一层一层推
             for j, (x, a, b) in enumerate(moves):
                 if j == 0 and len(moves) == 1:
