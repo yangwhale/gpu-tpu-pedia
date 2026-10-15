@@ -4,7 +4,7 @@
 BODY = '''
   <p class="lead">上一节让搬一趟出更多字，这一节让每一趟少搬一点、少停一会。
     <b>量化</b>让每个权重和 KV 占更少的字节，<b>kernel 融合</b>去掉 kernel 交接时的空等。
-    这条路先走到 4 bit：2022 年底的 GPTQ 只压权重，算时再还原；同年的 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核。</p>
+    这条路先走到 4 bit：2022 年底的 GPTQ 只压权重，算时再还原，3 bit 的 OPT-175B 在 1 张 A100 上逐字比 5 张卡跑 FP16 快 3.25 倍；同年的 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核。</p>
 
   <h3 id="s12-1">12.1　位数减半，下限减半</h3>
   <p>batch 小时一步几乎全在读权重：8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.2 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>

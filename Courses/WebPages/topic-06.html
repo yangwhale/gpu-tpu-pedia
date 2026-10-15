@@ -3643,7 +3643,7 @@ body.figonly section h3{margin-top:34px}
 <p>本课推导：每 token 的 KV ＝ 2（K、V）× 8 头 × 128 维 × 2 字节 × 80 层 ＝ 327,680 字节；上下文 8K 时每条序列 2.68 GB；141.1 ÷ 2.68 ≈ 52.6，就是两块一样重的 batch。没算激活值、logits 和读进来就丢的东西；模型实际要切到好几张卡上，这里是全模型合计。</p>
 <p>注意力每字节 8 次运算的推导见专题三 §3.1 图下：读 4·S·d 字节、算 4·G·S·d 次，比值 ＝ G。</p></details></figure>
   <p>batch 小、序列长时，注意力只按 batch 和头分给计算单元，大半闲着。
-    Flash-Decoding（斯坦福 CRFM 博客，2023-10）把它的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。博客报长上下文下 decode 最多提速 8 倍。</p>
+    Flash-Decoding（斯坦福 CRFM 博客，2023-10）把它的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。博客在 CodeLlama-34B 单请求上报，序列很长时 decode 最多提速 8 倍（对 FlashAttention 等旧注意力实现）。</p>
   <p>名字来自 2022 年的 FlashAttention：注意力切块放进片上 SRAM 算，不再把整张分数表写回显存。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
@@ -5072,7 +5072,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>拆工作：PD 分离与那一趟 KV</h2></div>
-  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，2023、2024 年由 Splitwise、DistServe 先后提出，DistServe 报同样延迟要求下多接 7.4 倍请求。</p>
+  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，2023、2024 年由 Splitwise、DistServe 先后提出。Splitwise 报同成本同功耗下吞吐 2.35 倍，DistServe 报同样延迟要求下多接 7.4 倍请求（都对不拆的系统）。</p>
   <p>Mooncake 连同 KV 池把 PD 分离做进 Kimi 线上，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
     <b>难的是 KV 从 prefill 机传到 decode 机的那一趟。</b></p>
 
@@ -7598,7 +7598,7 @@ body.figonly section h3{margin-top:34px}
 <section id="s十二"><div class="wrap"><div class="stn"><span class="badge">第 十二 节</span><h2>少搬字节：量化与 kernel 融合</h2></div>
   <p class="lead">上一节让搬一趟出更多字，这一节让每一趟少搬一点、少停一会。
     <b>量化</b>让每个权重和 KV 占更少的字节，<b>kernel 融合</b>去掉 kernel 交接时的空等。
-    这条路先走到 4 bit：2022 年底的 GPTQ 只压权重，算时再还原；同年的 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核。</p>
+    这条路先走到 4 bit：2022 年底的 GPTQ 只压权重，算时再还原，3 bit 的 OPT-175B 在 1 张 A100 上逐字比 5 张卡跑 FP16 快 3.25 倍；同年的 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核。</p>
 
   <h3 id="s12-1">12.1　位数减半，下限减半</h3>
   <p>batch 小时一步几乎全在读权重：8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.2 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>
@@ -8758,6 +8758,9 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R25 补充 · 3.6：vLLM 0.11.0 起自带 KV 下放连接器（OffloadingConnector），附 CPU 后端</td><td>vllm.ai/blog/2026-01-08-kv-offloading-connector（「introduced in vLLM 0.11.0」「bundled with a CPU backend, enabling native CPU offloading of KV data in vLLM」）</td></tr>
     <tr><td>R25 补充 · 第八节：NVIDIA Dynamo 1.0 正式版 2026-03-16 发布</td><td>nvidianews.nvidia.com/news/dynamo-1-0（「NVIDIA Enters Production With Dynamo」，2026-03-16）</td></tr>
     <tr><td>R25 补充 · 11.5：DFlash 一次前向出一整块候选草稿；Gemma-4 31B 在单卡 DGX B300 上用 vLLM，单并发比自回归快 3.0（MT-Bench）–5.8 倍（Math500）；SGLang 上 Qwen3-8B 单卡 B200 最多 5.1 倍</td><td>developer.nvidia.com/blog/boost-inference-performance-up-to-15x-on-nvidia-blackwell-using-dflash-speculative-decoding（2026-06-23，表 2、表 3；「generates an entire block of candidate tokens in a single forward pass」）</td></tr>
+    <tr><td>R32 补充 · 5.1：Flash-Decoding 的 8 倍是 CodeLlama-34B、batch 1、序列 512 到 64k 的 decode 速度，对照为纯 PyTorch 注意力、FlashAttention v2（2.2 前）、FasterTransformer；注意力本身最多是 FlashAttention 的 50 倍</td><td>crfm.stanford.edu/2023/10/12/flashdecoding.html（「Flash-Decoding unlocks up to 8x speedups in decoding speed for very large sequences」「the attention itself is up to 50x faster than FlashAttention」）</td></tr>
+    <tr><td>R32 补充 · 第八节：Splitwise 同成本同功耗下吞吐 2.35 倍，或吞吐 1.4 倍、成本低 20%（对不拆阶段的现有集群设计）</td><td>arXiv <a href="https://arxiv.org/abs/2311.18677" target="_blank" rel="noopener">2311.18677</a> 摘要（「Splitwise clusters achieve up to 1.4× higher throughput at 20% lower cost. Alternatively, they can deliver 2.35× more throughput under the same power and cost budgets.」）</td></tr>
+    <tr><td>R32 补充 · 第十二节：GPTQ 3 bit OPT-175B，batch 1 逐字延迟 1 张 A100 71 ms 对 FP16 5 张 230 ms（3.24×，正文按原文取 3.25）；2 张 A6000 130 ms 对 FP16 8 张 589 ms（4.53×）</td><td>arXiv <a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener">2210.17323</a> 表 6（「the 3-bit OPT-175B model obtained via GPTQ running on a single A100 is about 3.25× faster than the FP16 version (running on 5 GPUs) in terms of average time per token」）</td></tr>
   </table>
 </div></section>
 

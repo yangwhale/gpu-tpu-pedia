@@ -159,6 +159,9 @@ BODY = '''
     <tr><td>R25 补充 · 3.6：vLLM 0.11.0 起自带 KV 下放连接器（OffloadingConnector），附 CPU 后端</td><td>vllm.ai/blog/2026-01-08-kv-offloading-connector（「introduced in vLLM 0.11.0」「bundled with a CPU backend, enabling native CPU offloading of KV data in vLLM」）</td></tr>
     <tr><td>R25 补充 · 第八节：NVIDIA Dynamo 1.0 正式版 2026-03-16 发布</td><td>nvidianews.nvidia.com/news/dynamo-1-0（「NVIDIA Enters Production With Dynamo」，2026-03-16）</td></tr>
     <tr><td>R25 补充 · 11.5：DFlash 一次前向出一整块候选草稿；Gemma-4 31B 在单卡 DGX B300 上用 vLLM，单并发比自回归快 3.0（MT-Bench）–5.8 倍（Math500）；SGLang 上 Qwen3-8B 单卡 B200 最多 5.1 倍</td><td>developer.nvidia.com/blog/boost-inference-performance-up-to-15x-on-nvidia-blackwell-using-dflash-speculative-decoding（2026-06-23，表 2、表 3；「generates an entire block of candidate tokens in a single forward pass」）</td></tr>
+    <tr><td>R32 补充 · 5.1：Flash-Decoding 的 8 倍是 CodeLlama-34B、batch 1、序列 512 到 64k 的 decode 速度，对照为纯 PyTorch 注意力、FlashAttention v2（2.2 前）、FasterTransformer；注意力本身最多是 FlashAttention 的 50 倍</td><td>crfm.stanford.edu/2023/10/12/flashdecoding.html（「Flash-Decoding unlocks up to 8x speedups in decoding speed for very large sequences」「the attention itself is up to 50x faster than FlashAttention」）</td></tr>
+    <tr><td>R32 补充 · 第八节：Splitwise 同成本同功耗下吞吐 2.35 倍，或吞吐 1.4 倍、成本低 20%（对不拆阶段的现有集群设计）</td><td>arXiv 2311.18677 摘要（「Splitwise clusters achieve up to 1.4× higher throughput at 20% lower cost. Alternatively, they can deliver 2.35× more throughput under the same power and cost budgets.」）</td></tr>
+    <tr><td>R32 补充 · 第十二节：GPTQ 3 bit OPT-175B，batch 1 逐字延迟 1 张 A100 71 ms 对 FP16 5 张 230 ms（3.24×，正文按原文取 3.25）；2 张 A6000 130 ms 对 FP16 8 张 589 ms（4.53×）</td><td>arXiv 2210.17323 表 6（「the 3-bit OPT-175B model obtained via GPTQ running on a single A100 is about 3.25× faster than the FP16 version (running on 5 GPUs) in terms of average time per token」）</td></tr>
   </table>'''
 
 FIGS = {}
