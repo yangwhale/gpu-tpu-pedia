@@ -130,6 +130,8 @@ p.deepsay{background:#f8f9fa;border-left:3px solid #9aa0a6;padding:8px 14px;marg
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，<b>也不含等动画转完一圈的时间</b>（全讲约 3 分钟）。每次 build 现数。</em></p>
+  <p>⏭ <b>互动另算：每个 💬 互动按 0.5′。</b>
+  <em>「含互动」＝ 地板 ＋ 全部互动；「跳后」＝ 标了「⏭ 时间紧可跳」的互动改成直接说答案。超时先跳这些，别删台词。</em></p>
 @@FLOOR@@
 </div>
 
@@ -165,6 +167,7 @@ _secs = [(m.start(), re.sub(r"<[^>]+>", "", m.group(1)))
 assert len(_secs) == len(CH) == len(PLAN), "节数对不上：%d / %d / %d" % (len(_secs), len(CH), len(PLAN))
 _secs.append((html.index("🚧 这份讲义还薄"), ""))
 _rows, _floor, _over = [], 0.0, []
+_ia_tot, _sk_tot, _ia_rows = 0, 0, []    # 只读统计：互动时长，不进任何 assert
 for _i in range(len(CH)):
     _t = html[_secs[_i][0]:_secs[_i + 1][0]]
     _cn = len(re.findall(r"[一-鿿]", "".join(re.sub(r"<[^>]+>", "", x)
@@ -173,15 +176,20 @@ for _i in range(len(CH)):
     _f = _cn / 200.0 + _cc * 0.25
     _floor += _f
     _plan = int(re.search(r"（(\d+)′", _secs[_i][1]).group(1))
+    _ias = re.findall(r"<p>💬 <b>互动</b>.*?</p>", _t, re.S)
+    _ia, _sk = len(_ias), sum("⏭" in x for x in _ias)
+    _ia_tot, _sk_tot = _ia_tot + _ia, _sk_tot + _sk
+    _ia_rows.append((_secs[_i][1].split("　")[0], _f + _ia * 0.5, _f + (_ia - _sk) * 0.5, _plan))
     if _f > _plan:
         _over.append((_secs[_i][1].split("　")[0], _f, _plan))
-    _rows.append("<tr><td>%s</td><td>%s</td><td>%d</td><td>%.1f′</td><td>%d′</td></tr>"
-                 % (_secs[_i][1].split("（")[0], format(_cn, ","), _cc, _f, _plan))
+    _rows.append("<tr><td>%s</td><td>%s</td><td>%d</td><td>%.1f′</td><td>%d′</td><td>%d / %d</td><td>%.1f′</td><td>%.1f′</td></tr>"
+                 % (_secs[_i][1].split("（")[0], format(_cn, ","), _cc, _f, _plan,
+                    _ia, _sk, _f + _ia * 0.5, _f + (_ia - _sk) * 0.5))
 html = html.replace("@@FLOOR@@",
-    '<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody>'
+    '<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th><th>互动 / 可跳</th><th>含互动</th><th>跳后</th></tr></thead><tbody>'
     + "".join(_rows)
-    + '<tr><td><b>合计</b></td><td colspan="2"></td><td><b>%.0f′</b></td><td><b>%d′</b></td></tr>'
-    % (_floor, PLAN_SUM) + "</tbody></table>")
+    + '<tr><td><b>合计</b></td><td colspan="2"></td><td><b>%.0f′</b></td><td><b>%d′</b></td><td><b>%d / %d</b></td><td><b>%.0f′</b></td><td><b>%.0f′</b></td></tr>'
+    % (_floor, PLAN_SUM, _ia_tot, _sk_tot, _floor + _ia_tot * 0.5, _floor + (_ia_tot - _sk_tot) * 0.5) + "</tbody></table>")
 
 # ⭐ 两套计划时长（节标题里的、时间表里的）必须一致 —— 专题四踩过「各自自洽、互相对不上」。
 _head_min = [int(m) for m in re.findall(r'<h3 class="sec" id="c\d+">第[零一二三四五六七八九十]+节[^（<]*（(\d+)′', html)]
@@ -192,6 +200,11 @@ for _p, _r in zip(PLAN, _rows):
     _m = re.match(r"可压到 (\d+)", _p[2])
     _fv = float(re.findall(r"<td>([\d.]+)′</td>", _r)[0])
     assert not _m or int(_m.group(1)) >= _fv, "%s 写「可压到 %s」但地板已经 %.1f′" % (_p[0], _m.group(1), _fv)
+_ia_over = [x for x in _ia_rows if x[2] > x[3]]
+if _ia_over:
+    print("   ℹ️  跳过 ⏭ 互动后仍超计划的节（只报告）：")
+    for _nm, _fa, _fs, _pl in _ia_over:
+        print("       %-16s 含互动 %5.1f′ · 跳后 %5.1f′ > 给 %2d′" % (_nm, _fa, _fs, _pl))
 if _over:
     print("   ⚠️  地板超过计划的节：")
     for _nm, _fl, _pl in _over:
@@ -255,5 +268,7 @@ assert not _early, "收尾语气出现在最后一节之前：%s" % "、".join(_
 
 html = P.bust_media(html, OUT)          # 录音地址挂内容指纹，重生成后不被缓存成旧的
 io.open(OUT, "w", encoding="utf-8").write(html)
+print("    互动 %d 个（⏭ 可跳 %d）× 0.5′：含互动 %.0f′ · 跳后 %.0f′（计划 %d′）"
+      % (_ia_tot, _sk_tot, _floor + _ia_tot * 0.5, _floor + (_ia_tot - _sk_tot) * 0.5, PLAN_SUM))
 print("ok  topic-06-lecture.html  %s 字符 · %d 节 · 台词 %s 字 ＋ %d 切图 ＝ 地板 %.0f′（计划 %d′）"
       % (format(os.path.getsize(OUT), ","), len(CH), format(_n, ","), _cuts, _tot, PLAN_SUM))
