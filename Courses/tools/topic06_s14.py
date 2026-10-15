@@ -37,7 +37,7 @@ __FIG_S14_EIGHT__
     <tr><td>2024</td><td>少搬字节</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多快 2 倍（对 BF16）</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
     <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 的 MTP：约快 1.8 倍（对不开）</td></tr>
-    <tr><td>2024</td><td>复用与下放</td><td>十三</td><td>KV 感知路由：SGLang v0.4 命中率 20% → 75%、吞吐 1.9 倍（对轮询）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>十三</td><td>KV 感知路由：SGLang v0.4 命中率 20% → 75%、吞吐 1.9 倍（对 v0.3）</td></tr>
     <tr><td>2025</td><td>调度</td><td>四</td><td>vLLM V1 重写引擎，对 V0 吞吐最多 1.7 倍</td></tr>
     <tr><td>2025</td><td>解码提速</td><td>十一</td><td>EAGLE-3：单请求最多快 6.5 倍、batch 64 吞吐仍高 1.38 倍（对不投机）</td></tr>
     <tr><td>2025</td><td>拆开放</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
