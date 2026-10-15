@@ -271,7 +271,7 @@ Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上
 
 <p class="say">「再看分母。decode 固定八张卡，prefill 从一个加到十二个。只除 decode 的卡，每卡涨到十倍多；把 prefill 的卡也算进去，只到两倍多。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-split-pod</code>，先指左边 batch 128 那根最高的橙柱，再指右边同一根变成最矮，最后指蓝柱上的 +6.7%。</p>
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-split-pod</code>，先指左边 batch 128 最高的橙柱，再指右边同一根成了同组最矮，最后指蓝柱上的 +6.7%。</p>
 
 <p class="say">「也有不拆更好的时候。MiMo 在 TPU v7x 上，batch 六十四，不拆最好。<br>
 到一百二十八，左边总量最高的是 2P1D；可它多用了一个 pod，本课按 pod 一除，成了同组最矮。拆了还赢的只有 1P1D，多不到一成。」</p>
