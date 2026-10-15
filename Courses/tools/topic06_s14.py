@@ -20,37 +20,38 @@ __FIG_S14_EIGHT__
   </ul>
   <p class="landing">⭐ 八问归到一句话：<b>decode 每一步都要搬一趟。</b>前四问算清这一趟有多重、能分给多少人；后四问要么让更多人分，要么让它变轻。</p>
   <h3 id="s14-cost">14.3　回到时间轴：系统这一侧省了多少</h3>
-  <p>0.1 里降到 1/280 以下的是市场价，混着更强的小模型、硬件换代和系统招数，报告主要归给小模型，硬件账是每年成本降 30%、能效升 40%；系统那份拆不出来。</p>
-  <p>Epoch AI（2025）换个口径：固定一档能力，推理价格每年降到上一年的 1/9 到 1/900，中位是 1/50；只看 2024 年以后，中位变成 1/200。提速恰与第八到十二节那批招数进生产同期（本课观察，Epoch 没做归因）。</p>
-  <p>每行对照对象不同，不能连乘去凑 280；同口径的只有最后一行。</p>
+  <p>0.1 的 1/280 是市场价，混着更强的小模型、硬件换代和系统招数；报告主要归给小模型，硬件每年成本降 30%、能效升 40%，系统那份拆不出来。</p>
+  <p>Epoch AI（2025）固定一档能力看：推理价格每年降到上一年的 1/9 到 1/900，中位 1/50；2024 年以后中位 1/200，提速恰与第八到十二节那批招数进生产同期（本课观察，Epoch 没归因）。</p>
+  <p>每行基线不同，不能连乘去凑 280；同口径的只有末行。</p>
   <table>
     <tr><th>年份</th><th>泳道</th><th>节</th><th>一个实测（对照谁）</th></tr>
-    <tr><td>2022</td><td>调度</td><td>四</td><td>Orca 连续批：同延迟吞吐 36.9 倍（对 FasterTransformer 静态批）</td></tr>
-    <tr><td>2022</td><td>少搬字节</td><td>十二</td><td>GPTQ 3 bit：OPT-175B 在 1 张 A100 上逐字快 3.25 倍（对 5 张卡跑 FP16）</td></tr>
-    <tr><td>2022</td><td>解码提速</td><td>十一</td><td>投机解码：单请求快 2–3 倍（对不投机，小模型当草稿）</td></tr>
-    <tr><td>2023</td><td>KV 与注意力</td><td>三</td><td>PagedAttention：同延迟吞吐 2–4 倍（对 FasterTransformer 和论文复现的 Orca）</td></tr>
-    <tr><td>2023</td><td>复用与下放</td><td>三</td><td>SGLang（含 RadixAttention）：吞吐最多 6.4 倍（对当时其他系统）</td></tr>
+    <tr><td>2022</td><td>调度</td><td>四</td><td>Orca 连续批：同延迟吞吐是 FasterTransformer 静态批的 36.9 倍</td></tr>
+    <tr><td>2022</td><td>少搬字节</td><td>十二</td><td>GPTQ 3 bit：1 张 A100 跑 OPT-175B，逐字速度是 5 卡 FP16 的 3.25 倍</td></tr>
+    <tr><td>2022</td><td>解码提速</td><td>十一</td><td>投机解码：单请求速度是不投机的 2–3 倍</td></tr>
+    <tr><td>2023</td><td>KV 与注意力</td><td>三</td><td>PagedAttention：同延迟吞吐是 FasterTransformer 和复现版 Orca 的 2–4 倍</td></tr>
+    <tr><td>2023</td><td>复用与下放</td><td>三</td><td>RadixAttention（SGLang）：吞吐最多是当时其他系统的 6.4 倍</td></tr>
     <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同等延迟要求下能接的请求是不拆的 7.4 倍</td></tr>
-    <tr><td>2024</td><td>调度</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求 2.6–3.7 倍（对 vLLM）</td></tr>
+    <tr><td>2024</td><td>调度</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
     <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：每层 KV 约是同形状 MHA 的 1/57（本课推导）</td></tr>
-    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 线上多接 107%–115% 请求（对此前系统）</td></tr>
-    <tr><td>2024</td><td>少搬字节</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多快 2 倍（对 BF16）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake KV 池：Kimi 线上可接请求比此前系统多 107%–115%</td></tr>
+    <tr><td>2024</td><td>少搬字节</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多降到 BF16 的 1/2</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
-    <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 的 MTP：约快 1.8 倍（对不开）</td></tr>
-    <tr><td>2024</td><td>复用与下放</td><td>十三</td><td>KV 感知路由：SGLang v0.4 命中率 20% → 75%、吞吐 1.9 倍（对 v0.3）</td></tr>
-    <tr><td>2025</td><td>调度</td><td>四</td><td>vLLM V1 重写引擎，对 V0 吞吐最多 1.7 倍</td></tr>
-    <tr><td>2025</td><td>解码提速</td><td>十一</td><td>EAGLE-3：单请求最多快 6.5 倍、batch 64 吞吐仍高 1.38 倍（对不投机）</td></tr>
+    <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 的 MTP：速度约是不开的 1.8 倍</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>十三</td><td>SGLang v0.4 KV 感知路由：命中率 20% → 75%，吞吐是 v0.3 的 1.9 倍</td></tr>
+    <tr><td>2025</td><td>调度</td><td>四</td><td>vLLM V1 引擎重写：吞吐最多是 V0 的 1.7 倍</td></tr>
+    <tr><td>2025</td><td>解码提速</td><td>十一</td><td>EAGLE-3：单请求最多是不投机的 6.5 倍，batch 64 吞吐仍是其 1.38 倍</td></tr>
     <tr><td>2025</td><td>拆开放</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
-    <tr><td>2025</td><td>KV 与注意力</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（对 V3.1-Terminus 全读）</td></tr>
-    <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约 1.63 倍（对 BF16 KV，本课推导）</td></tr>
+    <tr><td>2025</td><td>KV 与注意力</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（V3.1-Terminus 全读）</td></tr>
+    <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约是 BF16 KV 的 1.63 倍（本课推导）</td></tr>
     <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照）</td></tr>
-    <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>NVFP4（4 bit 格式）KV：比 FP8 KV 再省约一半，前缀命中率高 20%</td></tr>
+    <tr><td>2025</td><td>KV 与注意力</td><td>十二</td><td>NVFP4（4 bit 格式）KV：大小约是 FP8 KV 的一半，前缀命中率高 20%</td></tr>
     <tr><td>2026</td><td>复用与下放</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
-    <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变：每卡从首发日约 2,200 到约 11,200，全靠软件（含 MTP；PyTorch 博客）</b></td></tr>
+    <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变，光改软件：每卡从首发日约 2,200 到约 11,200（含 MTP；PyTorch 博客）</b></td></tr>
   </table>
   <p>落到真实账上，看 DeepSeek 公开的一天：</p>
 __FIG_S14_DAY__
-  <p>这套服务用的正是表里几行：MLA、大 EP 加 PD 分离、磁盘 KV 缓存，外加 FP8（第十二节）。<b>便宜不归哪一招，每一行都让同一趟搬运分给更多 token，或搬得更少。</b></p>
+  <p>这套服务用的正是表里的 MLA、大 EP 加 PD 分离、磁盘 KV 缓存和 FP8。</p>
+  <p class="landing">⭐ 回到 2022 年：一批人等最长的那个，显存只用上两到四成。<b>此后每一招都让同一趟搬运分给更多 token，或搬得更少；同一套硬件光改软件，每卡已是首发日的 5.1 倍。</b></p>
 '''
 
 FIGS = {
