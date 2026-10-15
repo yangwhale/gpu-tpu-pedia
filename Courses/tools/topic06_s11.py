@@ -32,7 +32,7 @@ __FIG_S11_BYTES__
 __FIG_S11_CONC__
   <p>上下文变长也会缩：并发 1 时 prompt 从 4K 拉到 32K，加速比掉到 1.32×。
     不开投机时每字间隔只从 11.1 ms 涨到 11.4 ms，多读的 KV 不怎么费时。</p>
-  <p>原因没实测；多验的 8 个位置共用同一份 KV，读的量多不了多少，更可能是接受长度掉了，或草稿读长 KV 变慢（本课推导）。</p>
+  <p>原因没实测；多验的那几个位置共用同一份 KV，读的量多不了多少，更可能是接受长度掉了，或草稿读长 KV 变慢（本课推导）。</p>
   <p>DEP（第六节）本来就是给大 batch 配的。B200 上 DeepSeek-V4-Flash 用 vLLM、DEP8 开 MTP，十档并发全变慢，−3% 到 −37%。</p>
   <p>峰值和端到端还可能反向：GB300 上 V4-Pro 把 MTP 从 1 步加到 2 步，decode 峰值掉 13%，端到端反涨 28%。真实负载下 batch 多数时间没那么大，读权重的便车还在。</p>
 
@@ -61,7 +61,7 @@ __FIG_S11_TREE__
   <ul>
     <li><b>草稿要占显存。</b>K3 开 DSpark 后 KV 池从 787,504 个 token 缩到 637,504 个，少了 19%。</li>
     <li><b>引擎默认值会跟着变。</b>K3 的 SGLang 配方里，开投机又没写 max-running-requests 时，它被重设成 48，batch 上限悄悄压低。</li>
-    <li><b>PD 碰上投机解码。</b>刚交接过来的请求只算 1 个 token，别人是 1＋N，批次形状不齐就用不上 CUDA Graph（9.3 讲过）；decode 端补齐到 1＋N 后，TPOT 约 40 ms 降到 22 ms（vLLM GLM-5.2 PD 博客）。</li>
+    <li><b>PD 碰上投机解码。</b>刚交接过来的请求只算 1 个 token，别人是 1＋N，批次形状不齐就用不上 CUDA Graph（把一串 kernel 录好一次发出，见 12.6）；decode 端补齐到 1＋N 后，TPOT 约 40 ms 降到 22 ms（vLLM GLM-5.2 PD 博客）。</li>
   </ul>
 
   <div class="note ok"><span class="t">回到主线</span>
