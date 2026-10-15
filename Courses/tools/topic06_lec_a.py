@@ -282,7 +282,7 @@ V3 一个 token 七万字节出头，4K 装得下三百四十四条。上下文�
 ⚠️ chunked prefill 别讲成「解决了 prefill 打扰」：它只是摊平，彻底分开是第八节。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
 🧑‍🎓 新人「continuous batching 和 chunked prefill 什么关系？」→ 前者决定每一步谁上车，后者把新人的长 prompt 切块混进 decode 的步里；先有前者，才有后者要解决的打扰。<br>
-🛠 GPU 老兵「Sarathi-Serve 报了多少？」→ 达标容量是 vLLM 的 2.6–5.6 倍；基线是 vLLM，别和 Orca 对 FasterTransformer 的倍数连乘。<br>
+🛠 GPU 老兵「Sarathi-Serve 报了多少？」→ 达标容量是 vLLM 的 2.6–3.7 倍，配流水线并行最多 5.6 倍；基线是 vLLM，别和 Orca 对 FasterTransformer 的倍数连乘。<br>
 💰 管预算的「并发开多少合适？」→ 用 Little 定律反推：每卡 10,000 tok/s、字间隔 50 ms，在飞约 500 人；只装得下 300 人，吞吐就钉在 6,000，再加只加排队。
 """),
 ]

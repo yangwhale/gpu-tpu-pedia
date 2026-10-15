@@ -50,7 +50,7 @@ __FIG_S7_LINEAR__
   <p>DCP 把 KV 副本让出来，换成同一个请求更长的上下文：<b>同样的显存多放 token，这一趟就分给了更多 token。</b>PCP 买的是首字延迟。</p>
 
   <details class="foldfig"><summary><b>考考自己</b>：4K 输入、并发 8 的线上服务，要不要开 DCP8？换成 128K 的 agent 长对话呢？</summary>
-  <p>4K 不开：KV 放得下，DCP 只带来通信和被关掉的 symm-mem，各档实测亏 7%～26%。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>
+  <p>4K 不开：KV 放得下，DCP 只带来通信和被关掉的 symm-mem，各档实测都亏，最多 26%。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>
 '''
 
 FIGS = {

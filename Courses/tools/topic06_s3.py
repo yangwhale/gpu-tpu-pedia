@@ -69,7 +69,7 @@ __FIG_S3_OFFLOAD__
   <ul>
     <li><b>llm-d</b> 在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。排障说明写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
     <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
-    <li><b>LMCache</b>：接在 vLLM、SGLang 下的分层 KV 缓存；TPU 侧传输层是 TPU Sync（8.3）。</li>
+    <li><b>LMCache</b>：接在 vLLM、SGLang 下的分层 KV 缓存，主要在 GPU 上用。TPU 上做同类事的是 Google 开源的 TPU Sync，官方说还不宜通用（8.3）。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>

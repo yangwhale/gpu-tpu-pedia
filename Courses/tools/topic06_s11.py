@@ -8,7 +8,7 @@ V4 两本在 gpu/inference/a4x-max/deepseek-v4/；B200 在 gpu/inference/a4/deep
 BODY = '''
   <p class="lead">decode 一步把权重搬一趟，只换来一个字。
     投机解码先便宜地猜几个字，再让大模型搬一趟、一次验完，<b>猜对几个就出几个</b>。
-    这招是 2022 年底到 2023 年初 Google 和 DeepMind 各自提出的，2024 年底 DeepSeek-V3 把 MTP 训进主模型并用在推理上，成了主流做法。</p>
+    这招是 2022 年底到 2023 年初 Google 和 DeepMind 各自提出的，2024 年底 DeepSeek-V3 把多 token 预测层（MTP）训进主模型、推理时直接当草稿，成了主流做法。</p>
 
   <h3 id="s11-1">11.1　先猜后验</h3>
   <p>大模型把草稿当成一段输入，一步算出每个位置自己想出的字，和草稿逐个对。</p>

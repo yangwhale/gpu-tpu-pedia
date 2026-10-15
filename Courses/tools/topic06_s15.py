@@ -12,7 +12,7 @@ BODY = '''
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>DeepSeek-V3：总参数 6,710 亿、每 token 激活 370 亿；61 层、hidden 7168、256 个路由专家选 8、kv_lora 512 ＋ rope 64、moe_intermediate 2048</td><td>DeepSeek-V3 Technical Report（arXiv 2412.19437）摘要；形状取 Hugging Face deepseek-ai/DeepSeek-V3 的 config.json</td></tr>
     <tr><td>MLA 每 token KV 70,272 字节；128K 一条序列 8.58 GiB（9.21 GB）</td><td>本课推导：(512＋64) × 2 B × 61 层；× 131,072</td></tr>
-    <tr><td>TPU v7：FP8 4,614 TFLOP/s、HBM 192 GiB（≈ 206.2 GB）、7.37 TB/s，每芯片 2 个 device；BF16 2,307 TFLOP/s，屋脊点 ≈313 FLOP/字节</td><td>Google Cloud TPU7x 公开规格页；JAX jax/_src/pallas/mosaic/tpu_info.py 记每芯片 HBM 206e9 字节（≈ 191.9 GiB），即规格表的 192 GiB；BF16 与屋脊点本课推导：4,614 ÷ 2，2,307 TFLOP/s ÷ 7.37 TB/s</td></tr>
+    <tr><td>TPU v7：FP8 4,614 TFLOP/s、HBM 192 GiB（≈ 206.2 GB）、7.37 TB/s，每芯片 2 个 device；BF16 2,307 TFLOP/s，屋脊点 ≈313 FLOP/字节</td><td>Google Cloud TPU7x 公开规格页（写 7,380 GB/s；7.37 TB/s 取 Google 博客 Ironwood: The first Google TPU for the age of inference，2025-04，差 0.14% 不影响屋脊点）；JAX jax/_src/pallas/mosaic/tpu_info.py 记每芯片 HBM 206e9 字节（≈ 191.9 GiB），即规格表的 192 GiB；BF16 与屋脊点本课推导：4,614 ÷ 2，2,307 TFLOP/s ÷ 7.37 TB/s</td></tr>
     <tr><td>TTFT、TPOT／ITL 的定义</td><td>vLLM 仓库 vllm/benchmarks/serve.py；NVIDIA NIM 的 LLM benchmarking 文档页（写明 ITL also known as TPOT）</td></tr>
     <tr><td>decode 一步：读 37 GB 要 5.02 ms，算 74 GFLOP 只要 0.016 ms，算力用上 0.32%</td><td>本课推导：37 GB ÷ 7.37 TB/s；2 × 37e9 ÷ 4,614 TFLOP/s；FP8 每参数 1 字节、每 token 2 FLOP，屋脊点 4,614 TFLOP/s ÷ 7.37 TB/s ≈ 626 FLOP/字节，2 ÷ 626 ≈ 0.32%</td></tr>
     <tr><td>算术强度 M·H ÷ (H＋2M)：M＝256 时 239，M≈343 过屋脊，4K prompt 到 1,911</td><td>本课推导：H＝7168 的方阵乘，bf16</td></tr>
@@ -40,7 +40,7 @@ BODY = '''
     <tr><td>投机解码 2–3×；EAGLE 2.7–3.5×；V3 MTP 第 2 个 token 接受 85–90%、1.8×（均单请求延迟／TPS 口径）</td><td>Leviathan 等 arXiv 2211.17192 摘要；EAGLE arXiv 2401.15077 摘要；DeepSeek-V3 报告 arXiv 2412.19437（MTP 评估一节）</td></tr>
     <tr><td>KV 外存回读的盈亏带宽：V3 2.19 GB/s、Llama 5.35 GB/s，1 GB/s 的慢链路在前缀长于 ~35K 时也比重算快</td><td>本课推导：重算 ＝ (2 × 37e9 × L ＋ 4,997,120 × L²/2) ÷ (4,614 T × 50%)；Llama 激活 70.6B 取 HF 模型页</td></tr>
     <tr><td>Orca 迭代级调度：同延迟下吞吐是 FasterTransformer 的 36.9×</td><td>Orca，OSDI'22</td></tr>
-    <tr><td>chunked prefill；Sarathi-Serve 达标容量是 vLLM 的 2.6–5.6×；Gemma4 一次 prefill 16,384 token、切 16 块</td><td>Sarathi arXiv 2308.16369；Sarathi-Serve arXiv 2403.02310；vLLM 文档 Optimization and Tuning 页；Gemma4-31B/README.md:225-226</td></tr>
+    <tr><td>chunked prefill；Sarathi-Serve 达标容量是 vLLM 的 2.6×（Mistral-7B）–3.7×（Yi-34B），配流水线并行跑 Falcon-180B 端到端最多 5.6×（摘要未写对照）；Gemma4 一次 prefill 16,384 token、切 16 块</td><td>Sarathi arXiv 2308.16369；Sarathi-Serve arXiv 2403.02310；vLLM 文档 Optimization and Tuning 页；Gemma4-31B/README.md:225-226</td></tr>
     <tr><td>并发 400 → 1,800：总负载 4.5×，每卡只多 11%（8,777 → 9,745 tok/s）；有记录的 TTFT 从并发 600 的 45 s 涨到 1,800 的 253 s</td><td>SGLANG-V4PRO-RUNBOOK.md:593-609</td></tr>
     <tr><td>Little 定律核对：dep8 4,335、dep16 2,783</td><td>SGLANG-V4PRO-RUNBOOK.md:794-801；本课推导 9,032 × 8 × 0.060、84,321 × 0.033</td></tr>
     <tr><td>多给槽位：并发 886 → 999，峰值只 12,063 → 12,070，TPOT 77.7 → 85.3 ms</td><td>SGLANG-V4PRO-RUNBOOK.md:849-858、885-894</td></tr>
@@ -48,6 +48,7 @@ BODY = '''
     <tr><td>vLLM 抢占默认 RECOMPUTE；公平调度 VTC；跨实例迁移 Llumnix</td><td>docs.vllm.ai「Optimization and Tuning」页；arXiv 2401.00588；arXiv 2406.03243</td></tr>
     <tr><td>Llama-3.1-70B 权重 141,107,412,992 字节；8K 一条 KV 2.68 GB；batch ≈52.6 时两者一样重</td><td>HF safetensors index 的 total_size；其余本课推导</td></tr>
     <tr><td>TPU 内存 tile 规则（每 KV 头补齐到整块）</td><td>openxla.org/xla/tiled_layout</td></tr>
+    <tr><td>RPA 在 TPU7x 跑 Llama 3 8B：decode 带宽利用最多 86%、prefill 算力利用 73%</td><td>arXiv 2604.15464 摘要</td></tr>
     <tr><td>Ragged Paged Attention 的布局与 kernel 设计</td><td>RPA，arXiv 2604.15464 §2.1.2、§3.1、§3.4、§3.5</td></tr>
     <tr><td>MLA 吸收后 decode 算术强度 242，prefill 每对运算量 3.4×</td><td>DeepSeek-V2 arXiv 2405.04434 §2.1.2；本课推导 278,528 ÷ 1,152、278,528 ÷ 81,920</td></tr>
     <tr><td>MLA 每 token KV 只有同形状 MHA 的约 1/57（故事图卡片 ÷57 同此）</td><td>本课推导：70,272 ÷ 3,997,696（3.1 表）</td></tr>
@@ -59,7 +60,9 @@ BODY = '''
     <tr><td>DEP 每卡吞吐随 prefill 喂料 307 → 12 个 prefill 时 3,187（14 个时 3,321）；TP4 停在 20,479</td><td>VLLM-V4PRO-RUNBOOK.md:711-724（4k1k 重跑 :727-734）、:488，2026-07-24 记录</td></tr>
     <tr><td>tpu-inference DEP：并发 512 时领先 62%（1k/8k）、40%（8k/1k）；mmlu_pro 0.8129 对 0.8271</td><td>github.com/vllm-project/tpu-inference/pull/2577（2026-05-15 合入）</td></tr>
     <tr><td>大 EP：DeepSeek decode 用 EP144（18 个节点），每卡 2 个路由专家 ＋ 1 个共享专家；EP 的两条理由（放大 batch 提高矩阵效率、每卡只读少数专家降低延迟）；一批拆两个微批交替藏通信；跨节点 all-to-all 用 DeepEP</td><td>github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md；「空出的显存给 KV」本课推导</td></tr>
+    <tr><td>SGLang 在 96 张 H100 上复现 PD 分离＋大 EP：输出吞吐最多是同卡数纯 TP 的 5×</td><td>lmsys.org/blog/2025-05-05-large-scale-ep</td></tr>
     <tr><td>TEP／DEP 的定义；Megatron 命名；Folding</td><td>沿用专题五台账第 43、44、18 行</td></tr>
+    <tr><td>Meta 上下文并行：128 张 H100（16 节点）跑 Llama3 405B，prefill 1M token 77 s、128K 3.8 s，并行效率 93%</td><td>arXiv 2411.01783 摘要</td></tr>
     <tr><td>K3 DCP：128K 并发 8 吞吐 108 → 365（＋237%）；4K 并发 8 −9%；8K 并发 8 −11%、并发 32 ＋24%</td><td>gpu-tpu-pedia SGLANG-K3-RUNBOOK.md §11.0.3 :1010-1023、宽表 :921-938；百分比本课推导</td></tr>
     <tr><td>DCP 让 KV 容量 1.5M → 12.2M token；单流 −26% 来自丢掉 symm-mem</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
@@ -75,7 +78,7 @@ BODY = '''
     <tr><td>B200 1P1D → 2P1D：输出 1,118.8 → 1,159.0，每卡 69.9 → 48.3，TTFT 2.40 → 1.73 s（−28%），P99 12.07 → 6.23</td><td>gpu-tpu-pedia gpu/inference/a4/deepseek-v3/REPORT-2P1D-DeepSeek-V3.md :69、:85、:100-142；cuda graph 说明 REPORT-1P1D :129</td></tr>
     <tr><td>prefill 台数扫描（扫到 12 个 prefill）：按每张 decode 卡算 307 → 3,187，10.4×；按全部卡算 204 → 455，2.2×</td><td>VLLM-V4PRO-RUNBOOK.md §12.3；全卡 ＝ output ÷ (4n＋8) 本课推导</td></tr>
     <tr><td>MiMo batch 128：同样 2 个 pod，1P1D 13.64K 对不分离 12.78K，＋6.7%（README 写约 6.8%）；2P1D 用 3 个 pod 到 15.31K，按 pod 算 5.10K 对 6.39K，低 20%；Qwen3-Coder 1P1D TTFT 95 → 281 ms</td><td>tpu/sglang-jax/mimo/README.md:8-12、81-88；6.7%、按 pod 与 20% 本课推导；tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005-1021</td></tr>
-    <tr><td>AFD：MegaScale-Infer、Step-3；vLLM AFD 插件 16K／32K 实测；EPD 把多模态编码再拆出去</td><td>概念沿用专题五台账第 24、51 行；arXiv 2504.02263；arXiv 2507.19427；vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin（RFC #22799 于 2026-05-31 关闭）；EPD arXiv 2501.05460；Step-3 对 V3 不是同一模型，差距含模型侧设计，正文已注明</td></tr>
+    <tr><td>AFD：MegaScale-Infer 每卡吞吐 1.90×、Step-3 4,039 对 2,324；vLLM AFD 插件 16K／32K 实测；EPD 把多模态编码再拆出去（15×、22×、71%）</td><td>概念沿用专题五台账第 24、51 行；arXiv 2504.02263；arXiv 2507.19427；vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin（RFC #22799 于 2026-05-31 关闭）；EPD arXiv 2501.05460；Step-3 对 V3 不是同一模型，差距含模型侧设计，正文已注明</td></tr>
     <tr><td>同一模型五种部署 14,563／16,459／21,100／55,153／65,132；调参 ＋45%，换拓扑 ＋347%（并发 1,536）</td><td>VLLM-V4PRO-RUNBOOK.md:446、448、449、465、468；:489（另 :476 的 2.47×、:487 的 ＋28%）</td></tr>
     <tr><td>每卡 1,820／1,319／3,257；对 1p1d 起点 1.79×</td><td>本课推导：总吞吐 ÷ 卡数</td></tr>
     <tr><td>Qwen3-Coder TP16：跨 DCN c=1 −22%、c=16 −63%；同 ICI 切片 −15～−21%（c=16 总 513.8 对单机 602）</td><td>Qwen3-Coder-480B/README-multinode.md:441-445；README-TPU-VM.md:1000-1009</td></tr>
@@ -123,7 +126,7 @@ BODY = '''
     <tr><td>K2.6 共享存储每层读取慢 38 倍；V4-Pro 本地 SSD 14 GB/s、估算加载不到 1 分钟</td><td>K2.6 README:259；README.vllm/README:55、gb300-local-ssd-raid0-SETUP.md:111</td></tr>
     <tr><td>13.5 栈对比表</td><td>tpu-inference 支持矩阵；SGLang-JAX 模型列表</td></tr>
     <tr><td>上下文变长：GPT-4 Turbo 128K（2023-11-06），Gemini 1.5 Pro 1M 私有预览（2024-02-15）</td><td>openai.com/index/new-models-and-developer-products-announced-at-devday；blog.google「Our next-generation model: Gemini 1.5」。2026-10-16 核对</td></tr>
-    <tr><td>Mooncake 真实负载下 Kimi 多接 75% 请求；模拟场景守 SLO 吞吐最多 +525%</td><td>arXiv 2407.00079 摘要</td></tr>
+    <tr><td>Mooncake 真实负载下 Kimi 多接 75% 请求（摘要未写对照系统）；模拟场景守 SLO 吞吐最多 +525%</td><td>arXiv 2407.00079 摘要</td></tr>
     <tr><td>DeepSeek 磁盘缓存：命中按十分之一计价；128K 高复用 prompt 首字 13 s → 0.5 s（≈ 1/26 本课推导）；24 小时 6,080 亿输入 token 里 56.3% 命中磁盘 KV</td><td>api-docs.deepseek.com/news/news0802（2024-08），价格只取比例；6,080 亿／56.3% 取自 github.com/deepseek-ai/open-infra-index 202502OpenSourceWeek day_6（统计窗口 2025-02-27～28，608B 中 342B 命中）。2026-10-15 核对</td></tr>
     <tr><td>PagedAttention 同延迟吞吐 2–4×（对 FasterTransformer、Orca）</td><td>arXiv 2309.06180 摘要</td></tr>
     <tr><td>Medusa-1 2.2×、Medusa-2 2.3–3.6×（正文合写 2.2–3.6 倍）</td><td>arXiv 2401.10774 摘要</td></tr>
