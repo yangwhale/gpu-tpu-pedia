@@ -2,7 +2,7 @@
 """专题六 · 第六节「切专家与注意力：TEP 和 DEP」。图在 topic06-fig-dep.py；另复用专题五两张图。"""
 
 BODY = '''
-  <p class="lead">V3 一张卡装不下；切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP 部署也走这条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。
+  <p class="lead">V3 一张卡装不下；切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention（即后者），decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP（<a href="#s6-7">6.7</a>）部署也走这条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。
     <b>选哪个，看模型有几个 KV 头、要多大 batch。</b></p>
 
   <h3 id="s6-1">6.1　一句回顾</h3>
@@ -14,7 +14,7 @@ __FIG_S6_TEPDEP_T5__
   <h3 id="s6-2">6.2　判据：KV 头数和 batch</h3>
   <p>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
-    同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐从 1,319 涨到 2,758，是 <b>2.09 倍</b>。</p>
+    同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐<b>翻了一倍多</b>。</p>
   <p>原记录归功于容量：副本让出的显存多收了请求。用 Little 定律（4.3）核一下：</p>
 __FIG_S6_KV__
   <p><b>变的是步时</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
@@ -35,9 +35,9 @@ __FIG_S6_STATE__
 
   <h3 id="s6-5">6.5　TPU 上也一样，而且要先读懂参数名</h3>
   <p>tpu-inference 一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
-    Qwen3.5-397B 在 v7x-8 上，<b>1K 进 8K 出、并发 512 时，DP=8 比 TP=8 的输出吞吐多 62%</b>。</p>
+    Qwen3.5-397B 在 v7x-8 上比了 DP=8 和 TP=8：</p>
 __FIG_S6_TPU__
-  <p>原因可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 1K 进 8K 出打平，KV 放得下，复制无妨；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>decode 为主那条在 512 猛涨，原因可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 decode 为主那条打平：KV 放得下，复制无妨；prefill 为主那条已领先，长 prompt 更早挤满显存。</p>
   <p>tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 
@@ -73,8 +73,7 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("1,319", "fig6-dep-kv.svg"), ("2,758", "fig6-dep-kv.svg"), ("2.09", "fig6-dep-kv.svg"),
     ("1.31", "fig6-dep-kv.svg"),
     ("69 层", "fig6-dep-state.svg"),
-    ("62%", "fig6-dep-tpu.svg"), ("40%", "fig6-dep-tpu.svg"),
+    ("40%", "fig6-dep-tpu.svg"),
 ]

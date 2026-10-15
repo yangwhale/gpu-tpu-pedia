@@ -4041,7 +4041,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>切专家与注意力：TEP 和 DEP</h2></div>
-  <p class="lead">V3 一张卡装不下；切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP 部署也走这条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。
+  <p class="lead">V3 一张卡装不下；切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention（即后者），decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP（<a href="#s6-7">6.7</a>）部署也走这条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。
     <b>选哪个，看模型有几个 KV 头、要多大 batch。</b></p>
 
   <h3 id="s6-1">6.1　一句回顾</h3>
@@ -4563,7 +4563,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s6-2">6.2　判据：KV 头数和 batch</h3>
   <p>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
-    同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐从 1,319 涨到 2,758，是 <b>2.09 倍</b>。</p>
+    同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐<b>翻了一倍多</b>。</p>
   <p>原记录归功于容量：副本让出的显存多收了请求。用 Little 定律（4.3）核一下：</p>
 <figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1074" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。同样 3 台 TP4 prefill、并发 512，只把 decode 从 TP4 换成 DEP8。上半张图画这一步每张卡要读的 KV：TP4 的 4 张卡各读一遍全部约 197 个在飞请求的 KV，其中 3 遍是重复读；DEP8 的 8 张卡各读自己那约 16 个请求。下半张用 Little 定律对账：在飞请求等于每秒输出字数乘出字间隔，TP4 是 4220 乘 0.0468 秒约 197 个，DEP8 是 11031 乘 0.0118 秒约 130 个，DEP8 反而少；出字间隔从 46.8 毫秒降到 11.8 毫秒。decode 卡从 4 张变 8 张，每张 decode 卡输出 1055 到 1379，1.31 倍；按全部卡算总吞吐每卡 1319 到 2758，2.09 倍"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">V4-Pro 换 DEP，赢在每一步读得少　——　<tspan font-weight="700">步时 46.8 → 11.8 ms</tspan></text>
@@ -5749,7 +5749,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s6-5">6.5　TPU 上也一样，而且要先读懂参数名</h3>
   <p>tpu-inference 一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
-    Qwen3.5-397B 在 v7x-8 上，<b>1K 进 8K 出、并发 512 时，DP=8 比 TP=8 的输出吞吐多 62%</b>。</p>
+    Qwen3.5-397B 在 v7x-8 上比了 DP=8 和 TP=8：</p>
 <figure class="fbox fwide" id="fig-s6-dep-tpu"><svg viewBox="0 0 1400 636" width="100%" role="img" aria-label="tpu-inference 的一个公开 PR，在 TPU v7x-8 上跑 Qwen3.5-397B-A17B-FP8，比较 TP 等于 8 和 DP 注意力等于 8，专家都走 EP。1K 进 8K 出时，并发 64 打平，128 多 14%，256 多 22%，512 多 62%。8K 进 1K 出时依次多 14%、23%、36%、40%。并发越高，DP 注意力赢得越多。1K 进 8K 出并发 512 时，输出吞吐 TP 是 4266、DP 是 6914"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 上同一个模型：并发越高，DP 注意力比 TP 赢得越多　——　<tspan font-weight="700">512 并发 +62%</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">tpu-inference PR #2577 · Qwen3.5-397B-A17B-FP8 · TPU v7x-8（4 颗芯片、8 个 device）· TP=8 对 DP=8，专家都走 EP。纵轴：DP 的输出吞吐比 TP 多多少</text>
@@ -5802,7 +5802,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="589" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PR 同时改了调度：prefill 攒在一起派，免得一条长 prefill 混进 DP 批里拖慢所有 rank</tspan></text>
 </svg><figcaption><b>两条线在 256 到 512 之间交叉：decode 为主的那条后来居上。</b><span class="capmore"><br><em>输出吞吐；折线两端标 TP → DP 的绝对值。专家都走 EP，只换注意力的切法。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>github.com/vllm-project/tpu-inference/pull/2577「Enable correct DP attention for hybrid attention＋mamba models」，2026-05-15 合入；PR 正文表格给输出／总吞吐两个数，本图用输出吞吐现算百分比，与 PR 的「DP Advantage」一列一致。正确性：mmlu_pro DP=8 0.8129 对 TP=8 0.8271（PR 原话：limit=50 时在 1σ 内）。</p>
 <p>v7x 一颗芯片对软件显示成 2 个 device，TP=8、DP=8 按 device 数。KV 头数取自 HF Qwen/Qwen3.5-397B-A17B-FP8 config.json（num_key_value_heads 2，60 层里每 4 层一层全注意力）。「复制 4 份卡住 batch」是本课解读，PR 没有单独归因。</p></details></figure>
-  <p>原因可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 1K 进 8K 出打平，KV 放得下，复制无妨；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>decode 为主那条在 512 猛涨，原因可能是 8 路 TP 把全注意力层的 KV 复制了 4 份（6.2，本课推导，PR 没归因），也可能 TP 基线撞了参数上限：TP 从并发 256 到 512 只涨 3%（4,130 → 4,266），PR 又没给 TP 的完整命令。并发 64 时 decode 为主那条打平：KV 放得下，复制无妨；prefill 为主那条已领先，长 prompt 更早挤满显存。</p>
   <p>tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 
@@ -5939,7 +5939,7 @@ body.figonly section h3{margin-top:34px}
   <p>代价是每层多几次通信（vLLM 默认后端每层 3 次），度数（切成几份，DCP8 就是 8 份）最多开到 TP ÷ KV 头数。</p>
 
   <h3 id="s7-2">7.2　DCP 只在长上下文赚</h3>
-  <p>Kimi K3 在 GB300 上，<b>128K 输入时 DCP8 大赚</b>；输入 4K 时各档并发都亏，最多亏 26%。</p>
+  <p>Kimi K3 在 GB300 上，<b>128K 输入时 DCP8 大赚</b>；输入 4K 时各档并发都亏。</p>
 <figure class="fbox fwide" id="fig-s7-dcp-gain"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="Kimi K3 在 GB300 上用 SGLang，比较 TP8 和 TP8 加 DCP8 的输出吞吐比值，纵轴是对数刻度，1 倍是盈亏线。输入 4K 时四档并发 DCP 都亏，亏 7% 到 26%。突出画的是并发 8 那条线：4K、8K、32K 都在盈亏线下面，到 128K 一下跳到 365 对 108，多 237%。其余并发画成淡色：8K 并发 32 赚 24%，32K 并发 32 赚 7%，128K 并发 1 赚 12%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">DCP 只在长上下文赚　——　<tspan font-weight="700">128K、8 并发：365 对 108，+237%</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Kimi K3 · GB300 · SGLang · TP8 跨 2 节点，输出 1K。纵轴：DCP8 ÷ TP8 的输出吞吐（对数刻度），一条线一个并发</text>
@@ -6006,8 +6006,8 @@ body.figonly section h3{margin-top:34px}
 <p>吞吐是输出 tok/s，热轮；32K c32 按 §11.0.3 取 TP8 408.2（宽表 ratio 0.4 那行是 420，比值变 1.04，不改结论）。K3 的 MLA 层只有一个 KV 头，它的 69 层 KDA 状态池 DCP 不切（同文件 :725-726）。横轴没换成「KV 总量」：原表只给输入长度和并发，没有实测的 KV 占用。</p></details></figure>
   <ul>
     <li><b>为什么长了才赚</b>：DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。TP8 放不下，只能少收请求，128K、8 并发下首字延迟中位数 32.1 s，DCP8 是 2.3 s（含排队）。</li>
-    <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现那 −26% 正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了。</li>
-    <li><b>看的是总量</b>：同是 8K，并发 8 还亏 11%，并发 32 已赚 24%。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
+    <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了。</li>
+    <li><b>看的是总量</b>：同是 8K，并发 8 还亏，并发 32 已赚。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
   </ul>
 
   <h3 id="s7-3">7.3　开 DCP 之前要知道的坑</h3>
@@ -6216,7 +6216,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1340" y="347" fill="#a50e0e" text-anchor="end" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.439（差 58%）</tspan></text>
 </svg><figcaption><b>各扫各的，锯齿；接力扫，平滑。</b><span class="capmore"><br><em>本课自造的玩具递推，真实的状态是矩阵、带门控，递推形状相同。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>本课自造的玩具递推，数值由本脚本现算并断言；真实 GDN／KDA 的状态是矩阵、带门控，递推形状一样都是「乘上一步状态再加新东西」。</p>
 <p>状态可结合合并的思路见线性注意力／状态空间模型的并行扫描写法（如 Mamba、GLA 的 chunkwise 算法）。</p></details></figure>
-  <p>玩具例子里最后一段差 58%，程序照常跑完。修法是把前一段的末状态传过来；或者利用结合律：各段并行算好自己对状态的映射，再从头合并出每段的起始状态。</p>
+  <p>修法是把前一段的末状态传过来；或者利用结合律：各段并行算好自己对状态的映射，再从头合并出每段的起始状态。</p>
 
   <h3 id="s7-6">7.6　落点：副本让出来，多放 token</h3>
   <p>DCP 让出 KV 副本，<b>同样的显存多放 token，这一趟就分给了更多 token；</b>PCP 买的是首字延迟。</p>
