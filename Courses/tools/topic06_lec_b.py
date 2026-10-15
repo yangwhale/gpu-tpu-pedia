@@ -189,12 +189,12 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 
 <p>💬 <b>互动</b>：听两三个答案，不揭晓，<code>anim-pdsplit</code> 播完再收。</p>
 
-<p class="say">「下半场拉第三根杠杆：开两个仓库。吞 prompt 的和吐字的分到两批机器上。<br>
-Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上。第三节的 KV 当存储，到这里铺满集群：反正要搬，算过的就存着。」</p>
+<p class="say">「下半场拉第三根杠杆：开两个仓库。分块 prefill 只是摊平打扰，长 prompt 一来，正在出字的人照样要等。吞 prompt 的和吐字的分到两批机器上。<br>
+Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上：KV 反正要搬，算过的就顺手存着。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到 8.1，<code>fig-s8-pd-t5</code> 一带而过；停在 <code>anim-pdsplit</code>，等它播完一圈（22 秒）。</p>
 
-<p class="say">「上面红框里，整批请求都在等那段 prefill，一个字都没出；下面拆开，decode 机一格不断：休息前那道题的答案。<br>
+<p class="say">「上面红框里，整批请求都在等那段 prefill，一个字都没出，batch 越大，卡住的越多。下面拆开，decode 机一格不断：休息前那道题的答案。<br>
 代价是那支紫箭头：每个请求多传一趟 KV。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-kv-trip-t5</code>，指下面那根三色细条。</p>
@@ -216,21 +216,21 @@ Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上
 
 <p class="board"><b>🖥 屏幕</b>：滚到「8.4　GPU 实战」下面那张五行表。</p>
 
-<p class="say">「同一个库换个引擎，结论就反过来：vLLM 上 NIXL 是唯一活路，SGLang 上反而是 Mooncake 能用。<br>
+<p class="say">「同一个库换个引擎，结论就反过来：vLLM 上 NIXL 是唯一活路，SGLang 上反而是 Mooncake 的搬运库能用。<br>
 别问哪个好，问这个引擎、这张网上哪条路真的通。共同点只有一条：同一个 NVLink 域里，KV 别出域。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-hybrid-kv</code>，先指左边注意力那排格子，再指右边的存折。</p>
 
-<p class="say">「混合模型还有个不报错的坑。老的 connector 只传填满的整块，尾巴让 decode 端补算。注意力层补算只是填空格；GDN 像存折，prefill 早把尾巴那几笔记进余额，decode 再补，同一笔就记了两次。<br>
+<p class="say">「混合模型还有个不报错的坑。KV 按块传，老的插件只传装满的块，尾巴让 decode 端补算。注意力层补算只是填空格；GDN 像存折，尾巴那几笔 prefill 早记过了，decode 再补就记了两次。<br>
 修法是全传，decode 端一个 token 都不重算。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到 8.7。</p>
 
-<p class="say">「拆完先比字再比速度：温度设零，逐个 token 对。头几个就分叉多半是 bug；几百个以后才分叉，先把并发降到一再比。」</p>
+<p class="say">「拆完先比字再比速度：温度设零，逐个 token 对。头几个就分叉多半是 bug；几百个以后才分叉，可能是浮点差，把并发降到一再比。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s8-prfaas</code>，先指橙柱，再指绿柱，最后指那条约 100 Gbps 的线。</p>
 
-<p class="say">「第二个前提是 KV 别太胖。有篇论文把 prefill 放到另一个数据中心。橙柱是全注意力，一条专线只够并一两台；绿柱是混合模型，能并十几二十台，台数本课推的。而且只把长 prompt 送去远端。<br>
+<p class="say">「第二个前提是 KV 别太胖。有篇论文把 prefill 放到别的机房、别的卡上。橙柱是全注意力，一条专线只够接一两台；绿柱是混合模型，能接十几二十台，台数本课推的。而且只把长 prompt 送去远端。<br>
 论文推算的案例吞吐多了一半；按同等成本算，只多一成半左右。」</p>
 
 <p class="say">「decode 每一趟搬多少没变，变的是它不再被 prefill 打断。开两个仓库这一步：DistServe 同延迟能接的请求是不拆的七点四倍，Mooncake 是此前系统的两倍多。<br>
@@ -268,7 +268,7 @@ Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s9-prefill-sweep</code>，先指蓝线，再指橙线。</p>
 
-<p class="say">「再看分母。decode 固定八张卡，prefill 从一个加到十二个。只除 decode 的卡，每卡涨到十倍多；把 prefill 的卡也算进去，只到两倍多。」</p>
+<p class="say">「再看分母。decode 固定八张卡，prefill 一个个往上加。到十二个，只除 decode 的卡，每卡涨到十倍多；把 prefill 的卡也算进去，只到两倍多。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s9-split-pod</code>，先指左边 batch 128 最高的橙柱，再指右边同一根成了同组最矮，最后指蓝柱上的 +6.7%。</p>
 
@@ -277,12 +277,12 @@ Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进了 Kimi 线上
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s9-decide</code>，只指第一问。</p>
 
-<p class="say">「该不该拆，图上列了三问，最常被跳过的是第一问：不拆时出字间隔有没有被长 prompt 撑出尖峰。没有就不用拆；有，先试分块 prefill。」</p>
+<p class="say">「该不该拆：先开分块 prefill，再问三问，最常被跳过的是第一问：开了分块，出字还被长 prompt 撑出尖峰吗？没有就不拆，分块就够。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s9-afd-ascend</code>，先指橙柱，再指绿柱。</p>
 
-<p class="say">「decode 里还能再拆一层，注意力和专家分开，叫 AFD。论文报告每卡吞吐最多是对照的近两倍；开源插件在昇腾上，配比一错就比不拆还慢。<br>
-开两个仓库这一步的账：prefill 加到十二个，只数 decode 卡，每卡是只配一个的十倍多；全部卡都算，只是两倍多。拆不拆，看负载。拆完还剩一个问题：机器之间走哪条线。接下来第十节，先选拓扑。」</p>
+<p class="say">「decode 里还能再拆一层，注意力和专家分开，叫 AFD，专家那边好凑大 batch。论文报告每卡吞吐最多是对照的近两倍；开源插件在昇腾上，配比一错就比不拆还慢。<br>
+开两个仓库这一步的账：只数 decode 卡涨十倍多，全算上只涨两倍多；拆不拆，看负载。拆完还剩一个问题：机器之间走哪条线。接下来第十节，先选拓扑。」</p>
 """, """
 ⛔ <b>别拿「官方配 8 台」当公式验证成功</b>：估算约 9.8 台，官方配得更少；runbook 实测要 14 台，它量的 prefill 单卡只有官方数的 83%。要带走的恰恰是「公式只是起点」。<br>
 ⚠️ <b>B200 那组 TTFT 含排队</b>；两边都关了 CUDA Graph，没比 TPOT。<br>
