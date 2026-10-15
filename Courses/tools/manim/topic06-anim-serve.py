@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""专题六「推理」的四支动画：连续批处理（第四节）、投机解码一步（第十一节）、分页 KV（第三节）、PD 分离（第八节）。
+r"""专题六「推理」的五支动画：连续批处理（第四节）、投机解码一步（第十一节）、分页 KV（第三节）、PD 分离（第八节）、KV 当存储（第三节）。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间或第三维）
   · ContBatch —— 静态甘特图（fig6-gantt）画得出结果，画不出「同一时刻两边各走到哪」。
@@ -11,6 +11,9 @@ r"""专题六「推理」的四支动画：连续批处理（第四节）、投�
   · PagedKV —— 分页的要点是「按需」：写满一块才去领下一块、请求一结束块立刻还回、新人马上用上。
     静态图（fig6-paged）只有一个时刻的页表快照，「领」和「还」两个动作都在时间里。
   · PDSplit —— 卡顿是时间现象：同一时刻上面所有人停笔、下面照常出字。静态图（fig5-pd）画得出结果，画不出「同一把时钟下两边各走到哪」。
+  · KVStore —— 前缀复用加分层下放的内容是两串动作：查找「从上往下一层层找、找到就停」，淘汰「满了把最冷的挤下一层、
+    下一层也满就接着往下推」。静态图（fig6-disk-cache、fig6-offload）只给命中前后的首字对比和盈亏带宽，
+    画不出「找了几层」和「块在层间搬来搬去」，而这两个动作正是「KV 当存储」的意思。
 
 ⛔ 数据从哪来（当场算，断言钉住）
   · ContBatch：4 个槽位、16 个请求，长度 REQ 是**示意**（前 8 个与 fig6-gantt 的 3/8/2/5/6/2/7/4 相同，
@@ -22,6 +25,9 @@ r"""专题六「推理」的四支动画：连续批处理（第四节）、投�
   · PagedKV：每块 4 个 token、16 块显存，请求的 prompt 长度与结束时刻是示意（REQS），
     分配器「从空闲池领编号最小的块」由 paged_sim 现模拟。参数是按条件筛出来的（见 REQS 上方注释），
     断言：请求 4 进来时领到的正好是请求 2 还回的那 2 块；每个请求的块都不连续；浪费只在每个请求最后一块里。
+  · KVStore：三层容量、初始摆放、四个请求的前缀是示意（KV_CAP / KV_INIT / KV_REQS），查找与 LRU 淘汰由 kv_sim 现模拟；
+    断言四个请求依次是 HBM 命中、主机内存命中、SSD 命中、全不中，最后一个把淘汰一路推到 SSD。首字条里只有
+    「SSD 拉回 : 重算 ＝ 0.5 : 13」有出处（DeepSeek 磁盘缓存，同 fig6-disk-cache），HBM／主机内存两条长短是示意。
 
 ⛔ 刻意没画
   · ContBatch：新请求进来那一步的 prefill 有多重（4.2 节 chunked prefill 那张图的事）；请求到达时间（假设一开始全在排队）；
@@ -29,12 +35,15 @@ r"""专题六「推理」的四支动画：连续批处理（第四节）、投�
   · SpecStep：拒绝采样的概率细节；树形草稿；草稿模型和大模型的真实耗时比（底下的用时条只表达「猜很便宜、验是搬一趟」）。
   · PagedKV：共享前缀与写时复制（静态图 fig6-paged 已画）；连续预留不画第二套，只在字幕里对照一句。
   · PDSplit：KV 缓存池命中那一拍（画面已两组十行，再加就挤）；chunked prefill（4.2 节的事，混部也能缓解卡顿）；传 KV 的真实耗时（8.2 节按带宽估）。
+  · KVStore：部分命中（只命中前缀的前一段，剩下的接着算）；远端存储那一层（Mooncake／LMCache，3.6 正文）；
+    盈亏带宽（搬回来比重算慢就不该存，fig6-offload 的事）；块大小与真实容量。
 
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py ContBatch WebPages/media/topic06-contbatch.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py SpecStep  WebPages/media/topic06-spec.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py PagedKV   WebPages/media/topic06-paged.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py PDSplit   WebPages/media/topic06-pdsplit.mp4
+   构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py KVStore   WebPages/media/topic06-kvstore.mp4
    SpecStep 每一步落地的停顿时刻写进 steps/SpecStep.json（课件挂 data-pauses）。
 """
 import json
@@ -767,3 +776,184 @@ class PDSplit(Scene):
         self.wait(4.0)
         self.play(clock.animate.set_value(0.0), run_time=1 / 30, rate_func=linear)    # 复位：拨回时钟
         self.wait(0.5)
+
+
+# ════════════════════════════════════════════════════════════════
+# ⑤ KVStore：KV 当存储 —— 先在 HBM 找，再往下找，都没有才重算；满了冷的往下放
+# ════════════════════════════════════════════════════════════════
+# ⚠️ 示意：三层容量、初始摆放、四个请求的前缀都是编排出来的，只为四个请求依次落在「HBM 命中 → 主机内存 →
+#   SSD → 哪层都没有」四种情形，且最后一个请求能把淘汰一路推到 SSD。每层内部从左到右＝最近用过 → 最久没用（LRU）。
+#   首字条只有「SSD 拉回」对「重算」的比例有出处：DeepSeek 磁盘缓存 128K prompt 首字 13 s → 0.5 s（同 fig6-disk-cache），
+#   HBM／主机内存两条的长短是示意。
+KV_TIERS = ["HBM", "主机内存", "SSD"]
+KV_CAP = [3, 5, 7]
+KV_INIT = [list("ABC"), list("DEFG"), list("HIJK")]
+KV_REQS = ["A", "D", "H", "L"]
+KV_MISS_S, KV_HIT_S = 13.0, 0.5                  # 同 topic06-fig-kv.py 的 T_MISS / T_HIT
+
+
+def kv_sim():
+    """逐个请求：找前缀在哪层（从上往下）→ 拿出来放到 HBM 最前面（没找到就是重算出一块新的）→
+    每层超出容量就把最冷的那块挪到下一层最前面，一路往下。
+    返回 [(请求, 命中层 or None, [插入后的状态, 每次挪完的状态...], [(挪的块, 从哪层, 到哪层)...])]。"""
+    tiers = [list(t) for t in KV_INIT]
+    out = []
+    for p in KV_REQS:
+        hit = next((i for i, t in enumerate(tiers) if p in t), None)
+        if hit is not None:
+            tiers[hit].remove(p)
+        tiers[0].insert(0, p)
+        states, moves = [[list(t) for t in tiers]], []
+        for i in range(len(tiers)):
+            if len(tiers[i]) > KV_CAP[i]:
+                assert i + 1 < len(tiers), "SSD 也满了：示意里不该发生"
+                x = tiers[i].pop()
+                tiers[i + 1].insert(0, x)
+                moves.append((x, i, i + 1))
+                states.append([list(t) for t in tiers])
+        out.append((p, hit, states, moves))
+    return out
+
+
+KV_RUN = kv_sim()
+assert [r[1] for r in KV_RUN] == [0, 1, 2, None]                       # 四种情形各一个
+assert [len(r[3]) for r in KV_RUN] == [0, 1, 1, 2]                     # 命中 HBM 不挪；最后一个一路挪到 SSD
+assert KV_RUN[-1][3][-1][1:] == (1, 2)
+assert all(len(t) <= c for t, c in zip(KV_RUN[-1][2][-1], KV_CAP))
+assert KV_MISS_S / KV_HIT_S == 26
+
+
+class KVStore(Scene):
+    def construct(self):
+        SX0, PITCH, BW, BH = -2.6, 1.0, 0.8, 0.56      # 第 0 格左边、格距、块宽高
+        TY = [1.7, 0.45, -0.8]                          # 三层的 y
+        XL = -4.0                                       # 层名中心
+        XR = -6.0                                       # 请求卡中心
+        BY = [-2.0, -2.42, -2.84, -3.26]                # 首字条四行
+        SEC = 0.45                                      # 首字条：1 秒 ＝ 0.45 个单位（只对 SSD 与重算两条有意义）
+        BAR_W = [0.1, 0.17, KV_HIT_S * SEC, KV_MISS_S * SEC]   # ⚠️ 前两条是示意
+        BAR_C = [GREEN, BLUE, BLUE, ORANGE]
+        BAR_T = ["HBM 里就有", "从主机内存拉回", "从 SSD 拉回", "重算 prefill"]
+
+        def slot_xy(tier, k):
+            return [SX0 + (k + 0.5) * PITCH, TY[tier], 0]
+
+        title = tx("KV 当存储：先找，找到就搬回，都没有才重算", 30).to_edge(UP)
+        self.add(title)
+        tier_g = VGroup()
+        outlines = []
+        SUBS = ["小、最快", "大一些、慢一些", "最大、最慢"]
+        for i, (nm, cap) in enumerate(zip(KV_TIERS, KV_CAP)):
+            o = Rectangle(width=cap * PITCH + 0.1, height=BH + 0.3, stroke_color=GREY, stroke_width=3)
+            o.move_to([SX0 + cap * PITCH / 2, TY[i], 0])
+            outlines.append(o)
+            tier_g.add(o, tx(nm, 24, WHITE, True).move_to([XL, TY[i] + 0.15, 0]),
+                       tx(SUBS[i], 18, GREY_B).move_to([XL, TY[i] - 0.22, 0]))
+        lru = tx("每层从左到右：最近用过 → 最久没用", 18, GREY).move_to([4.75, TY[0], 0])
+        strip_head = tx("首字要等多久", 20, GREY_B).move_to([XL, BY[0] + 0.42, 0])
+        foot = tx("块数、层的大小都是示意；首字条只有 SSD 与重算两条按 DeepSeek 实测比例画", 18, GREY).move_to([0, -3.72, 0])
+        self.add(tier_g, lru, strip_head, foot)
+
+        def make_block(name, col=BLUE):
+            g = VGroup(Rectangle(width=BW, height=BH, stroke_color=col, stroke_width=3, fill_color=col, fill_opacity=0.55),
+                       tx(name, 26, WHITE, True))
+            g[1].move_to(g[0].get_center())
+            return g
+
+        def place_init():
+            d = {}
+            for i, t in enumerate(KV_INIT):
+                for k, n in enumerate(t):
+                    d[n] = make_block(n).move_to(slot_xy(i, k))
+            return d
+
+        blocks = place_init()
+        self.add(*blocks.values())
+        INTRO = "每块是一段算好的前缀 KV；新请求先看自己的前缀存在哪一层"
+        cap0 = tx(INTRO, 24, GREY_B).next_to(title, DOWN, buff=0.18)
+        self.add(cap0)
+        self.cap = cap0
+        shown = VGroup()                                 # ⭐ 中途加进来的东西都收进这一组，收尾一并清掉
+
+        def say(s, color=GREY_B):
+            n = tx(s, 24, color).next_to(title, DOWN, buff=0.18)
+            self.play(FadeOut(self.cap), FadeIn(n), run_time=0.35)
+            self.cap = n
+
+        def layout(state):
+            return [blocks[n].animate.move_to(slot_xy(i, k)) for i, t in enumerate(state) for k, n in enumerate(t)]
+
+        self.wait(1.8)
+        card = None
+        for r, (p, hit, states, moves) in enumerate(KV_RUN):
+            new_card = VGroup(tx("请求 %d" % (r + 1), 24, YELLOW, True), tx("前缀 %s" % p, 24, WHITE)).arrange(DOWN, buff=0.12)
+            new_card.move_to([XR, TY[0], 0])
+            frame_c = Rectangle(width=1.5, height=1.05, stroke_color=YELLOW, stroke_width=3).move_to(new_card.get_center())
+            new_card.add(frame_c)
+            self.play(*([FadeOut(card)] if card else []), FadeIn(new_card, shift=0.2 * RIGHT), run_time=0.3)
+            if card:
+                self.remove(card)
+            card = new_card
+            # ① 从上往下逐层找
+            marks = VGroup()
+            last = hit if hit is not None else len(KV_TIERS) - 1
+            for i in range(last + 1):
+                ok = (i == hit)
+                probe = outlines[i].copy().set_stroke(YELLOW, width=5)
+                m = tx("命中" if ok else "没有", 22, GREEN if ok else RED, True).next_to(outlines[i], RIGHT, buff=0.2)
+                anims = [FadeIn(probe), FadeIn(m)]
+                if ok:
+                    anims.append(blocks[p][0].animate.set_stroke(YELLOW, width=6))
+                self.play(*anims, run_time=0.35)
+                self.play(FadeOut(probe), run_time=0.15)
+                self.remove(probe)
+                marks.add(m)
+            # ② 命中哪层决定首字等多久
+            if hit == 0:
+                say("前缀 %s 就在 HBM：直接用，接着往后算" % p, GREEN)
+            elif hit == 1:
+                say("前缀 %s 在主机内存：拉回 HBM，比重算 prefill 快" % p, BLUE)
+            elif hit == 2:
+                say("前缀 %s 在 SSD：拉回来也比重算快（DeepSeek：首字 13 s → 0.5 s）" % p, BLUE)
+            else:
+                say("前缀 %s 哪层都没有：只能重算 prefill" % p, ORANGE)
+            bar = Rectangle(width=BAR_W[r], height=0.28, stroke_width=0, fill_color=BAR_C[r], fill_opacity=0.9)
+            bar.move_to([SX0 + BAR_W[r] / 2, BY[r], 0])
+            blab = VGroup(tx("请求 %d" % (r + 1), 20, GREY_B).move_to([XL, BY[r], 0]),
+                          tx(BAR_T[r], 20, BAR_C[r]).next_to(bar, RIGHT, buff=0.15))
+            if hit is None:
+                # 重算条从左往右慢慢长出来：慢，是这一条的全部意思
+                blocks[p] = make_block(p, ORANGE).move_to([XR, TY[0] - 1.25, 0])
+                bar.stretch_to_fit_width(0.02).align_to([SX0, 0, 0], LEFT)
+                self.add(bar)
+                self.play(FadeIn(blab[0]), run_time=0.25)
+                self.play(bar.animate.stretch_to_fit_width(BAR_W[r]).align_to([SX0, 0, 0], LEFT),
+                          FadeIn(blocks[p]), run_time=1.8, rate_func=linear)
+                self.play(FadeIn(blab[1]), run_time=0.3)
+            else:
+                self.play(FadeIn(bar), FadeIn(blab), run_time=0.45)
+            shown.add(bar, blab)
+            # ③ 放进 HBM 最前面（其余往右挪一格；超出容量的那块露在框外）
+            self.play(*layout(states[0]), FadeOut(marks), run_time=0.6)     # 「命中／没有」先收掉：露在框外的那块会落在它的位置上
+            self.remove(marks)
+            blocks[p][0].set_stroke(ORANGE if hit is None else BLUE, width=3)
+            # ④ 满了：最冷的一块往下放，一层一层推
+            for j, (x, a, b) in enumerate(moves):
+                if j == 0 and len(moves) == 1:
+                    say("HBM 满了：最久没用的 %s 往下放到%s" % (x, KV_TIERS[b]))
+                elif j == 0:                             # 一路推到底的那次，一句字幕说完两跳
+                    say("HBM 满了，%s 往下放；主机内存也满了，%s 再推到 SSD" % (x, moves[1][0]))
+                self.play(Indicate(blocks[x], color=RED, scale_factor=1.12), run_time=0.35)
+                self.play(*layout(states[j + 1]), run_time=0.6)
+            self.wait(0.8)
+
+        say("先找、再搬、最后才算；显存满了，冷的 KV 一层层往下放", YELLOW)
+        self.wait(1.9)
+        # 收尾复位：清干净，再摆一个跟第 0 帧一模一样的静态件
+        everything = VGroup(shown, card, self.cap, *blocks.values())
+        self.play(FadeOut(everything), run_time=0.6)
+        self.remove(everything, shown, card, self.cap, *blocks.values())
+        fresh = place_init()
+        self.play(*[FadeIn(b) for b in fresh.values()], FadeIn(tx(INTRO, 24, GREY_B).next_to(title, DOWN, buff=0.18)),
+                  run_time=0.5)                  # ＝ 第 0 帧：初始摆放 ＋ 第一句字幕
+        self.wait(0.6)
