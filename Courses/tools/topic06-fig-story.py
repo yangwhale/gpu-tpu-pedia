@@ -69,7 +69,7 @@ def xof(yr):
 
 def fig_story():
     f = Fig(W, "2022 年以来的推理优化：六条泳道按时间排出 2022 到 2026 年的关键优化，"
-               "每张卡写原文报告的提升或做法：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，"
+               "每张卡写原文报告的提升或做法：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到近四成提到 96%，"
                "GQA 和 MLA 是模型侧的进步，用虚线卡标出；投机解码单请求是不投机的 2 到 3 倍，DistServe 能接的请求是不拆的 7.4 倍，拆开放泳道的卡名带前缀：Splitwise、DistServe 是「拆阶段」（PD 分离），DeepSeek 和 SGLang 的大 EP 都是「两样都拆」（大 EP 加 PD 分离），"
                "DeepSeek 大 EP decode 时每节点输出约 14,800 token 每秒；2024 末到 2025 年又添了 vLLM V1 吞吐最多 1.7 倍、SGLang KV 感知路由命中率 20% 到 75%、"
                "EAGLE-3 单请求最多 6.5 倍、DeepSeek-V3.2 的 DSA 每字只读 2,048 个历史 token；"
