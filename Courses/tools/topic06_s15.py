@@ -61,7 +61,7 @@ BODY = '''
     <tr><td>K3 DCP：128K 并发 8 吞吐 108 → 365（＋237%）；4K 并发 8 −9%；8K 并发 8 −11%、并发 32 ＋24%</td><td>gpu-tpu-pedia SGLANG-K3-RUNBOOK.md §11.0.3 :1010-1023、宽表 :921-938；百分比本课推导</td></tr>
     <tr><td>DCP 让 KV 容量 1.5M → 12.2M token；单流 −26% 来自丢掉 symm-mem</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
-    <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP；Helix</td><td>沿用专题五台账第 23、29、45、21、47 行（Helix 即 arXiv 2507.07120）</td></tr>
+    <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP</td><td>沿用专题五台账第 23、29、45、21 行</td></tr>
     <tr><td>KV 传输软件栈</td><td>github.com/ai-dynamo/nixl；github.com/kvcache-ai/Mooncake；LMCache arXiv 2510.09665；docs.nvidia.com/dynamo 的 KVBM；github.com/google/tpu-sync（~200 GB/s，not yet recommended for general use）；tpu-inference kv_transfer（jax.experimental.transfer）</td></tr>
     <tr><td>PD 传输带宽从 200 MB/s 调到 7–167 GB/s</td><td>VLLM-V4PRO-RUNBOOK.md:194，配置见 :106、180-194</td></tr>
     <tr><td>Qwen3-Coder 一条 8K 请求 KV 1.04 GB；各链路传完要 5,201／149／6.2 ms</td><td>本课推导：2 × 62 × 8 × 128 × 8192 字节（FP8）；83 ms 与 PCIe 数沿用专题五台账第 25 行</td></tr>
