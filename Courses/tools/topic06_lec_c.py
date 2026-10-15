@@ -135,7 +135,7 @@ TPU 这边，Inferact 用 Pallas 写了 megakernel。十六颗 v7 跑 Kimi K3，
 ⚠️ <b>Inferact 那个七百多是 megakernel 加 DSpark 投机一起换来的</b>，别说成量化或单靠 megakernel 的功劳。<br>
 ⚠️ v7 没有 FP4 算力通路，<b>别说「FP4 在 TPU 上算得更快」</b>：省的是字节和容量，算之前要解开。<br>
 ⚠️ R1 那几个容量数单位混着（README 记 GB、上限是 GiB），<code>fig-s12-cap</code> 已把三根条画出来；台上只指红条说「不管单位怎么读都放不下」，不口播三个数。<br>
-⛔ 12.7 只讲两句：KV 存 FP8 多六成多（1.63 倍），NVFP4 再省一半；656 B 的布局账、20%、3 倍不念。<br>
+⛔ 12.7 只讲两句：KV 存 FP8 多六成多（1.63 倍），NVFP4 再省一半；656 B 的布局账、20%、首字三分之一不念。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
 🧑‍🎓 新人「量化会不会掉精度？」→ 会有代价，所以现在倾向训练时就适应：K2 Thinking 做了量化感知训练，V4 专家直接用 FP4。自己量的模型要跑评测。<br>
 🛠 GPU 老兵「megakernel 能直接在 vLLM、SGLang 里用吗？」→ 生产里先上的是 CUDA Graph 和 PDL；megakernel 目前是 Hazy、Mirage MPK、Inferact 这类专门实现，MPK 报 1.7 倍。<br>
