@@ -50,6 +50,10 @@ CARDS = [
 ]
 
 
+# 上下文长度两个台阶：GPT-4 Turbo 2023-11、Gemini 1.5 Pro 预览 2024-02
+CTX = [(2023.85, "上下文 128K"), (2024.12, "1M")]
+
+
 def xof(yr):
     return XL + (yr - Y0) / (Y1 - Y0) * (XR - XL - CW)
 
@@ -58,7 +62,8 @@ def fig_story():
     f = Fig(W, "2022 年以来的推理优化：六条泳道按时间排出 2022 到 2026 年的关键优化，"
                "每张卡写原文报告的提升或做法：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，"
                "GQA 和 MLA 是模型侧的进步，用虚线卡标出；投机解码 2 到 3 倍，DistServe 多服务 7.4 倍请求，"
-               "DeepSeek 大 EP 每节点 decode 1.48 万 token 每秒；倍数基线互相包含，不能连乘")
+               "DeepSeek 大 EP 每节点 decode 1.48 万 token 每秒；时间轴上标着上下文 2023 年底到 128K、转年 2 月到 1M；"
+               "最下面一张实线卡是叠加：GB300 跑 V4-Pro 光换软件栈，同档每卡 5.1 倍；倍数基线互相包含，不能连乘")
     y0 = f.header("2022 年以来　——　<tspan font-weight=\"700\">每一步补一个洞</tspan>",
                   "卡片落在首次公开的年月上；卡上是原文报告的提升或做法；右上角是本课讲它的那一节；虚线卡是模型侧的进步")
     # 时间轴
@@ -66,7 +71,11 @@ def fig_story():
     ticks = [(xof(Y0), "2022 年中")] + [(xof(yr), str(yr)) for yr in (2023, 2024, 2025, 2026)]
     for x, lab in ticks:
         f.t(x, ya + 10, lab, GY, True, 15, "middle")
-    y = ya + 26
+    # 上下文长度：不是哪一招，是所有泳道共同的压力（第零节正文）
+    (y128, l128), (y1m, l1m) = CTX
+    f.t(xof(y128) + 6, ya + 32, l128 + " ▼", RD, True, 13, "end")
+    f.t(xof(y1m) - 6, ya + 32, "▼ " + l1m, RD, True, 13)
+    y = ya + 44
     ytop, gi = y, len(f.p)
     for li, (col, name, what) in enumerate(LANES):
         cards = [c for c in CARDS if c[0] == li]
@@ -102,6 +111,13 @@ def fig_story():
         f.line(x, ytop - 4, x, y - 8, LINE, 1, "4 4", arrow=False)
         grid.append(f.p.pop())
     f.p[gi:gi] = grid
+    # 叠加卡：实线粗框，跨在泳道外，表明它是合计，不和泳道卡相乘
+    xs = xof(2025.0)
+    f.box(xs, y, XR - xs, CH, "#fff", INK, 6, 2.2)
+    f.t(xs + 12, y + 22, "叠起来：GB300 跑 V4-Pro，硬件模型都不换", INK, True, 15)
+    f.t(xs + 12, y + 44, "软件栈合计，同一交互档每卡 5.1×（Day-0 → 2026-06）", INK, False, 14)
+    f.t(XR - 8, y + 22, "第十四节", GY, False, 12, "end")
+    y += CH + 8
     y = f.band(y + 6, "warn", "这些倍数不能连乘", [
         "后一个的基线已经吃掉了前一个的收益：Orca 比的是 FT，vLLM 比的是已有连续批的 Orca，Sarathi-Serve 比的是 vLLM。",
         "口径也不同：有的是吞吐，有的是单请求延迟，有的是达标请求数，有的只是显存。",
@@ -112,7 +128,7 @@ def fig_story():
               "Leviathan arXiv 2211.17192；Flash-Decoding 斯坦福 CRFM 2023-10；EAGLE arXiv 2401.15077；"
               "DeepSeek-V3 arXiv 2412.19437 §5.4.3；Splitwise arXiv 2311.18677；DistServe arXiv 2401.09670；"
               "DeepSeek open-infra-index Day 6；SGLang 大 EP 博客 2025-05；Sarathi-Serve arXiv 2403.02310；"
-              "GPTQ arXiv 2210.17323；AWQ arXiv 2306.00978；NVFP4 NVIDIA 博客 2025-06；DSpark arXiv 2607.05147；TPU megakernel：Inferact 博客 2026-09。")
+              "GPTQ arXiv 2210.17323；AWQ arXiv 2306.00978；NVFP4 NVIDIA 博客 2025-06；上下文台阶：OpenAI DevDay 2023-11-06、Google 2024-02-15；叠加 5.1×：PyTorch 博客 2026-06-23；DSpark arXiv 2607.05147；TPU megakernel：Inferact 博客 2026-09。")
     f.save("fig6-story.svg", y + 14)
 
 

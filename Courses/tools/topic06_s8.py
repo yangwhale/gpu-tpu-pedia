@@ -11,9 +11,9 @@ BODY = '''
     <b>难的是那一趟 KV。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
-  <p><a href="topic-05.html#s6-1">专题五 §6.1</a> 讲过：decode 每步只出一个字，读一遍权重只够这一批用一次，所以它拼命凑大 batch。</p>
+  <p><a href="topic-05.html#s6-1">专题五 §6.1</a> 讲过：decode 每步只出一个字，所以拼命凑大 batch。</p>
 __FIG_S8_DECODE_AI_T5__
-  <p>这时插进来一个长 prompt，它的 prefill 要整块占住算力好几步，这几步所有人都不出字。</p>
+  <p>这时插进来一个长 prompt：</p>
 __FIG_S8_PD_T5__
 <figure class="fbox fwide" id="anim-pdsplit">
 <video src="media/topic06-pdsplit.mp4" autoplay loop muted playsinline
@@ -26,7 +26,7 @@ __FIG_S8_PD_T5__
   </ul>
 
   <h3 id="s8-2">8.2　回顾：那一趟要多久</h3>
-  <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过 Qwen3-Coder-480B 的一个 8K prompt：KV 约 1.04 GB，走 100 Gbps（每秒 100 吉比特，约 12.5 GB/s）的数据中心网络约 83 ms，前后两段 PCIe（卡和主机之间的总线）各约 16 ms（按 Gen5 x16 单向约 64 GB/s 估，本课推导）。</p>
+  <p><a href="topic-05.html#s6-2">专题五 §6.2</a> 算过 Qwen3-Coder-480B 的一个 8K prompt：KV 约 1.04 GB，走 100 Gbps（每秒 100 吉比特，约 12.5 GB/s）的数据中心网络约 83 ms，前后两段 PCIe（卡和主机之间的总线）各约 10 ms（部署记录里的带宽估算）。</p>
 __FIG_S8_KV_TRIP_T5__
   <p>和 1–2 s 的 prefill 比只占一成上下。100 Gbps 还是保守算：A4X（Google Cloud 的 GB200 机型）每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算，多卡并行还更快；本课推导）。</p>
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
@@ -35,17 +35,17 @@ __FIG_S8_KV_TRIP_T5__
   <p>「KV 传输」其实是三件事。</p>
 __FIG_S8_STACK__
   <ul>
-    <li><b>搬运</b>：把字节从这块显存挪到那块。GPU 上是 NIXL、Mooncake Transfer Engine；TPU 上是 TPU Sync 和 JAX 自带的 transfer server。</li>
+    <li><b>搬运</b>：把字节从这块显存挪到那块。</li>
     <li><b>调度</b>：决定请求去哪台 prefill、算完交给哪台 decode。tpu-inference 的代理把请求截成只出一个字发给 prefill，再让 decode 端去拉 KV。</li>
-    <li><b>存储</b>：Mooncake Store、LMCache、Dynamo KVBM 把 KV 放到主机内存、SSD 乃至远端，让同前缀的下一个请求直接取。</li>
+    <li><b>存储</b>：把 KV 放到主机内存、SSD 乃至远端，让同前缀的下一个请求直接取。</li>
   </ul>
   <p>TPU 这边能直接用的是 tpu-inference 的 TPUConnector；TPU Sync 刚开源，自称还不宜通用。</p>
   <p><b>排查按层找</b>：带宽掉到几百 MB/s 是搬运层没走对通道；请求接不上、握手失败多半在调度层；前缀命中率低看存储层。</p>
 
   <h3 id="s8-4">8.4　GPU 实战：配错一个开关，慢两个数量级</h3>
-  <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s。按 8.2 那条 1.04 GB 的尺子算，一趟要 5,201 ms，比 prefill 还长。</p>
+  <p>vLLM 在 GB300 上跑 DeepSeek-V4-Pro 的 PD，起初 KV 传输只有 200 MB/s，搬一趟比 prefill 还长。</p>
 __FIG_S8_BW__
-  <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。cuda_ipc 只在同一个 NVLink 域（全互联、能直接读彼此显存的一组 GPU，如 NVL72）里成立。补上三样配置后实测 7–167 GB/s，一趟 149 ms 到 6.2 ms。配错不报错，只是 TTFT 慢；上线前先量一次 KV 传输带宽。</p>
+  <p>原因是 NIXL 没走 cuda_ipc（直接读对端 GPU 的显存），退回了 cuda_copy（经主机内存中转）。cuda_ipc 只在同一个 NVLink 域里成立。补上三样配置后实测 7–167 GB/s。配错不报错，只是 TTFT 慢；上线前先量一次 KV 传输带宽。</p>
   <details class="foldfig"><summary><b>那三样配置</b>：vLLM ＋ NIXL 在 GB300 上走 NVLink</summary>
   <ul>
     <li><code>UCX_TLS=cuda_copy,cuda_ipc,tcp</code>：只留 cuda_ipc（NVLink）和必要的拷贝、控制通道，去掉 RDMA。</li>
@@ -69,7 +69,7 @@ __FIG_S8_BW__
 __FIG_S8_HYBRID__
   <p>GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>
-    <li><b>修法</b>：全部 block 连同状态都传，decode 端一个 token 都不重算。tpu-inference 为此写了支持混合模型的 connector（TPUConnectorHMA）。</li>
+    <li><b>修法</b>：像图下半那样全传，tpu-inference 的 TPUConnectorHMA 就这么做。</li>
     <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文，没给分解）；单并发每请求吞吐是单机的 0.95 倍，4 并发是 0.92 倍。</li>
     <li><b>GPU 上同理</b>：SGLang 跑 Kimi K3 时，PD 的 decode 端每个请求只有一个状态槽，前缀缓存在 PD 下不起作用。</li>
   </ul>
@@ -90,7 +90,7 @@ __FIG_S8_HYBRID__
   <ul>
     <li><b>怎么比</b>：temperature 设 0，同一批 prompt 拆与不拆各跑一遍，逐个 token 对。</li>
     <li><b>前几个 token 就分叉</b>：多半是 bug，如尾巴被重算、状态没传、两边上下文长度不同。</li>
-    <li><b>几百个 token 后才分叉</b>：可能只是浮点差异：kernel 不做批不变（同一个请求不管和谁拼批，算出的数都一样）时，同一个 prompt 换个批就会出不同的字（Thinking Machines《Defeating Nondeterminism in LLM Inference》）。</li>
+    <li><b>几百个 token 后才分叉</b>：可能只是浮点差异。kernel 若不是批不变的，同一个 prompt 换个批拼就会出不同的字（Thinking Machines《Defeating Nondeterminism in LLM Inference》）。</li>
   </ul>
   <p>后一种要靠批不变的 kernel 消掉；前一种必须修。分不清时把并发降到 1 再比。</p>
 
@@ -98,8 +98,7 @@ __FIG_S8_HYBRID__
   <p>「网络不是瓶颈」只在同一个机房成立。Moonshot AI 和清华的 PrFaaS 论文把 prefill 放到另一个数据中心，靠的是混合模型的 KV 薄。</p>
 __FIG_S8_PRFAAS__
   <ul>
-    <li><b>全注意力太胖</b>：32K 输入时，一台 8×H200 做 prefill，Qwen3-235B 每秒要外送 33.35 Gbps，MiniMax-M2.5 接近 60。</li>
-    <li><b>混合模型能走</b>：Qwen3.5-397B 只要 8.25，MiMo-V2-Flash 只要 4.66，几台 prefill 合起来一条专线放得下。</li>
+    <li><b>全注意力太胖，混合模型能走</b>：几台混合模型的 prefill 合起来，一条专线放得下。</li>
     <li><b>还要挑请求</b>：只把超过长度阈值的 prompt 送去远端，短的就地算。</li>
     <li><b>论文案例</b>：Moonshot 的 1T 混合模型，32 张 H200 做 prefill 加 64 张 H20 做本地 PD，比 96 张 H20 同构 PD 吞吐 +54%、P90 TTFT −64%（同等成本吞吐约 +15%）；跨集群平均出口 13 Gbps。这几个数是论文把实测 profile 代进吞吐模型推算的，不是端到端实测。</li>
   </ul>
@@ -127,7 +126,7 @@ FIGS = {
     "__FIG_S8_HYBRID__": ("fig-s8-hybrid-kv", "fig6-hybrid-kv.svg", "topic06-fig-pd.py",
         '<b>先看格子，再看存折：补算尾巴伤的是哪一层。</b><br><em>示意，层数取自 Qwen3.5-397B。</em>'),
     "__FIG_S8_PRFAAS__": ("fig-s8-prfaas", "fig6-prfaas.svg", "topic06-fig-pd.py",
-        '<b>拿每根柱比专线：绿柱能走，橙柱太胖。</b><br><em>每根柱是一台 prefill 每秒外送的量；绿色虚线是案例的平均出口。</em>'),
+        '<b>同一条专线：橙柱只够并 1–2 台，绿柱能并 12–21 台。</b><br><em>每根柱是一台 prefill 每秒外送的量；红虚线是整个集群共用的专线，绿虚线是案例里整个集群的平均出口。</em>'),
 }
 
 NUM_LOCK = [

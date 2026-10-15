@@ -333,7 +333,7 @@ def fig_pool():
             f.t(tx + TKW / 2, ty + TKH - hw / 2 + 8, "%d%%" % round(occ * 100), c, True, 22, "middle")
             f.t(tx + TKW / 2, ty + TKH + 26, nm, INK, True, 16, "middle")
             if hot:
-                f.t(tx + TKW / 2, ty + 24, "满", RD, True, 17, "middle")
+                f.t(tx + TKW / 2, ty - 8, "满", RD, True, 17, "middle")
         f.t(cx, py + PH - 70, format(tps, ","), BL if isl == "4K" else OR, True, 34, "middle", big=True)
         f.t(cx, py + PH - 42, "tok/s（每张 decode GPU）", GY, size=14, anchor="middle")
         bottoms.append(py + PH - 70)

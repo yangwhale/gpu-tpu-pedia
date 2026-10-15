@@ -10,13 +10,12 @@ BODY = '''
     <b>两件都要拿自己的负载去量，别照搬别人的配比。</b></p>
 
   <h3 id="s9-1">9.1　回顾：配比从哪来</h3>
-  <p><a href="topic-05.html#s6-3">专题五 §6.3</a> 用 DistServe 的例子讲过：两边各有一张卡能接的上限，按上限配到差不多同时忙满。</p>
+  <p><a href="topic-05.html#s6-3">专题五 §6.3</a> 用 DistServe 的例子讲过：两边按各自上限配。</p>
 __FIG_S9_RATIO_T5__
   <p>真实部署里，要把「一张接几个」换成量出来的吞吐。</p>
 
   <h3 id="s9-2">9.2　配比公式：先算一个起点</h3>
-  <p><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b>
-    分子是 decode 每秒要的料，分母是一台 prefill 每秒能备的。</p>
+  <p><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b></p>
   <table>
     <caption class="sub" style="caption-side:bottom;text-align:left">DeepSeek-V4-Pro，SGLang，GB300，8K 进 1K 出，每张 decode 卡 11,200 output tok/s 的官方点（官方未写明分母，按 output ÷ decode 卡读；若是全部卡，此表不成立）；推导见 gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:1082–1091。</caption>
     <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
@@ -34,18 +33,18 @@ __FIG_S9_RATIO_T5__
   <p>自己上线时，用公式算起点，在起点上下扫，取每卡输出不再涨的那一档。</p>
 
   <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
-  <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上再加一台 prefill：总输出只从 1,118.8 到 1,159.0 tok/s，每张卡反倒从 69.9 掉到 48.3。</p>
+  <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上再加一台 prefill：总输出几乎没动，每张卡反倒掉了。</p>
 __FIG_S9_2P1D__
-  <p>用户那头变化却大：平均 TTFT 少了 28%，P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 的 SLO（对用户承诺的延迟上限）看是赚。</b></p>
+  <p>用户那头变化却大：P99 TTFT 从 12.07 s 降到 6.23 s。<b>同一组数，按每卡吞吐看是亏，按 TTFT 的 SLO（对用户承诺的延迟上限）看是赚。</b></p>
   <ul>
     <li><b>口径</b>：TTFT 是客户端测的，含排队；两边都关了 CUDA Graph（把一串 GPU 调用录好、整段重放），TPOT 偏高，不比。</li>
     <li><b>为什么吞吐不涨</b>：固定并发压测下每个请求要跑约 65 s，首字省下的 0.67 s 摊进整轮周转几乎看不出来。</li>
   </ul>
 
   <h3 id="s9-4">9.4　换个分母，10.4 倍变 2.2 倍</h3>
-  <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。按 decode 卡算，12 个 prefill 时每卡输出从 307 涨到 3,187。</p>
+  <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。</p>
 __FIG_S9_SWEEP__
-  <p>只除 decode 卡是不少 PD 报告的默认口径，藏起了 prefill 的成本；把 prefill 的卡也算进分母，只从 204 到 455，2.2 倍。<b>看到每卡吞吐，先问分母里有没有 prefill 的卡。</b>曲线是 2026-07-24 的历史实测，看趋势。</p>
+  <p>只除 decode 卡是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只涨 2.2 倍。<b>看到每卡吞吐，先问分母里有没有 prefill 的卡。</b>曲线是 2026-07-24 的历史实测，看趋势。</p>
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
   <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b></p>
@@ -55,7 +54,6 @@ __FIG_S9_SWEEP__
     <tr><td>同上，batch 128</td><td>12.78K</td><td>1P1D 13.64K；2P1D 用三个 pod 15.31K</td><td>同样两个 pod，1P1D 多 6.7%；2P1D 赢在多一个 pod，按 pod 算低 20%</td></tr>
     <tr><td>Qwen3-Coder-480B，两台 v7x-8，1K 进 1K 出，单并发</td><td>一台：TTFT 中位数 95 ms</td><td>1P1D：281 ms</td><td>多一趟传输；两倍机器，输出只多 12%</td></tr>
   </table>
-  <p><b>拆不拆跟着负载走，同一个模型可以两种答案。</b></p>
   <details class="foldfig"><summary><b>出处与口径</b>：两组 TPU 例子</summary>
   <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%；2P1D 每 pod 5.10K 对不拆的 6.39K（本课推导）。</p>
   <p>Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量。</p></details>
@@ -65,13 +63,13 @@ __FIG_S9_SWEEP__
 __FIG_S9_DECIDE__
 
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>
-  <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，每一层来回一趟，靠几个小批轮流跑把通信藏住。</p>
+  <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上。</p>
 __FIG_S9_AFD_T5__
-  <p>字节的 MegaScale-Infer 报告每卡吞吐最多高 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。</p>
+  <p>字节的 MegaScale-Infer 报告每卡吞吐最多高 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
   <p>开源实现没这么顺。vLLM 的 AFD 是外部插件，主仓库 RFC 已因不活跃被关闭；插件博客在 Ascend 910C 上的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
-    <li><b>配比是关键</b>：16K 输入时 48 个注意力配 16 个专家，每 die（芯片上的一块计算单元）220.3，比不拆少 5.3%；注意力加到 64 个，涨到 258.9。作者说专家侧还有余力，注意力再加可能还涨。</li>
+    <li><b>配比是关键</b>：注意力给少了，专家就在等（图）；作者说 64 配 16 时专家侧仍有余力，注意力再加可能还涨。</li>
     <li><b>只能看趋势</b>：实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
     <li><b>TPU 侧</b>：没找到公开实现或实测。</li>
   </ul>
@@ -113,5 +111,4 @@ FIGS = {
 NUM_LOCK = [
     ("1,159.0", "fig6-2p1d.svg"), ("48.3", "fig6-2p1d.svg"), ("6.23", "fig6-2p1d.svg"),
     ("3,187", "fig6-prefill-sweep.svg"), ("10.4", "fig6-prefill-sweep.svg"), ("455", "fig6-prefill-sweep.svg"),
-    ("258.9", "fig6-afd-ascend.svg"), ("220.3", "fig6-afd-ascend.svg"),
 ]

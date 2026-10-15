@@ -64,7 +64,7 @@ assert GDN + ATT == 60 and GDN / ATT == 3
 PHI = [("Qwen3-235B", "全注意力", 33.35, OR), ("Qwen3.5-397B", "每 4 层里 3 层线性", 8.25, GR),
        ("MiniMax-M2.5", "全注意力", 59.93, OR), ("MiMo-V2-Flash", "每 6 层里 5 层只看近处", 4.66, GR)]
 assert round(PHI[0][2] / PHI[1][2]) == 4 and round(PHI[2][2] / PHI[3][2]) == 13
-LINK = 100                          # PrFaaS 案例的跨集群带宽约 100 Gbps
+LINK = 100                          # PrFaaS 案例整条跨集群以太网（13 Gbps ＝ 13%，论文 §4.3.1）；整个 prefill 集群共用，不是单机网口
 EGRESS = 13                         # 案例里 PrFaaS 集群平均出口
 assert EGRESS / LINK == 0.13
 
@@ -224,7 +224,7 @@ def fig_prfaas():
     f = Fig(W, "四个模型在 32K 输入时，一台 8 卡 H200 做 prefill，每秒要往外送多少 KV。"
                "全注意力的 Qwen3-235B 要 33.35 Gbps，混合的 Qwen3.5-397B 只要 8.25，差 4 倍。"
                "全注意力的 MiniMax-M2.5 要 59.93，混合的 MiMo-V2-Flash 只要 4.66，差 13 倍。"
-               "跨数据中心的专线按 100 Gbps 画一条线。PrFaaS 的案例里，prefill 集群平均出口只有 13 Gbps")
+               "红虚线是案例里整条跨集群专线约 100 Gbps，整个 prefill 集群共用：Qwen3-235B 只够并 2 台，MiniMax 只够 1 台，Qwen3.5 能并 12 台，MiMo 21 台。案例里整个 prefill 集群平均出口只有 13 Gbps")
     y0 = f.header("KV 变薄，PD 才敢跨数据中心　——　<tspan font-weight=\"700\">混合模型要送的字节少 4 到 13 倍</tspan>",
                   "PrFaaS 论文 Table 3：32K 输入，一台 8×H200（SGLang v0.5.9）做 prefill 时每秒要外送的 KV，单位 Gbps",
                   [(OR, "全注意力"), (GR, "混合（线性或滑窗 ＋ 少量全注意力）")])
@@ -240,7 +240,7 @@ def fig_prfaas():
         f.line(X(v), py + 40, X(v), AX, LINE, 1, arrow=False)
         f.t(X(v), AX + 24, str(v), GY, size=15, anchor="middle")
     f.path("M%.1f,%d L%.1f,%d" % (X(EGRESS), py + 40, X(EGRESS), AX), GR, 2, dash="5,4", arrow=False)
-    f.t(X(EGRESS) + 8, AX - 12, "PrFaaS 案例：平均出口 %d Gbps" % EGRESS, GR, True, 15)
+    f.t(X(EGRESS) + 8, AX - 12, "案例：整个 prefill 集群平均出口 %d Gbps ＝ 专线的 13%%" % EGRESS, GR, True, 15)
     by = py + 70
     for i, (name, kind, v, col) in enumerate(PHI):
         f.t(BX - 16, by + 4, name, INK, True, 15, "end")
@@ -248,14 +248,15 @@ def fig_prfaas():
         f.box(BX, by - 12, X(v) - BX, 30, col, col, 3)
         f.box(X(v) + 4, by - 8, wpx("%.2f" % v, 15) + 12, 24, "#ffffff", "none", 0)   # 白底：挡住穿过的虚线
         f.t(X(v) + 10, by + 9, "%.2f" % v, col, True, 15)
+        f.t(X(v) + 10 + wpx("%.2f" % v, 15) + 14, by + 9, "专线够并 %d 台" % int(LINK // v), GY, size=14)
         by += 64 if i % 2 else 56
     f.path("M%.1f,%d L%.1f,%d" % (X(LINK), py + 40, X(LINK), AX), RD, 2, dash="5,4", arrow=False)
-    f.t(X(LINK) - 8, py + 58, "跨数据中心专线约 %d Gbps" % LINK, RD, True, 15, "end")
+    f.t(X(LINK) - 8, py + 58, "整条跨集群专线约 %d Gbps（集群共用）" % LINK, RD, True, 15, "end")
     f._pan = None
     yb = py + PH + 6
     yb = f.src(yb + 10,
                "📌 PrFaaS，arXiv 2604.15039（Moonshot AI ＋ 清华）：Table 3 的 Φ_kv；案例吞吐 +54%、P90 TTFT −64%、同成本约 +15%、比不调度的朴素异构 +32%；"
-               "长度阈值 19.4K，约一半请求外送；平均出口 13 Gbps。",
+               "长度阈值 19.4K，约一半请求外送；平均出口 13 Gbps，占整条以太网的 13%（§4.3.1，故专线约 100 Gbps）。「够并几台」＝ ⌊100 ÷ 每台外送⌋，本课推导。",
                "📌 案例：内部 1T 混合模型，32 张 H200 做 prefill ＋ 64 张 H20 做本地 PD，对比 96 张 H20 同构 PD。「每 4 层里 3 层线性」即论文的混合 3:1；「每 6 层里 5 层只看近处」即 5:1 滑窗注意力（SWA）。",
                "⚠️ 那 4 倍、13 倍是两两同代对比（论文原文），不是同一参数量下的严格对照。")
     f.save("fig6-prfaas.svg", yb + 14)

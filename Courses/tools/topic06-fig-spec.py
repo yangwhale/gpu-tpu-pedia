@@ -355,8 +355,9 @@ def fig_temp():
         f.t(rx + 10 + (wpx(acc, 30) + 14), cy + 20, tps, col, True, 18)
         yy += LH + 12
     f._pan = None
-    f.t(0, yy + 22, "实测吞吐差 %.1f 倍；温度 0 那行没对上的，是草稿自己猜错了" % (T0_TPS / T1_TPS), INK, True, 17)
-    yb = f.src(yy + 36,
+    yy = f.band(yy + 4, "ok", "实测吞吐差 %.1f 倍" % (T0_TPS / T1_TPS), [
+        "温度 0 那行也没全收：实测接受率 34%，其余是草稿自己没猜中大模型最可能的那个字。"])
+    yb = f.src(yy + 6,
                "⚠️ 示意：「今天天气真＿」和温度 1.0 那行掷出的五个字是举例，不是实测分布。",
                "V4-Pro：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:398-410（GB300，vLLM，4K/1K，并发 256）。generation_config 默认 temperature 1.0；DSpark 草稿 draft_sample_method 为 greedy，num_speculative_tokens=7。"
                "vllm bench serve 不发 temperature；sa-bench 硬编码 0.0。",

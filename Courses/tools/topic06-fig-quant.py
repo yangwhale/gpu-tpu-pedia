@@ -100,7 +100,7 @@ def fig_bytes():
         f.box(130, yy + 8, ACT_GB[n] * sc, 38, col, col, 4)
         f.t(130 + ACT_GB[n] * sc + 12, yy + 33, "%.2f GB → 至少 %.2f ms" % (ACT_GB[n], T_MS[n]), INK, True, 16)
     RX = LW + 14
-    pr = f.panel(RX, y0, W - RX, PH, "整个模型放得下吗（671B）", OR)
+    pr = f.panel(RX, y0, W - RX, PH, "整个模型放得下吗（671B，按 HBM 裸容量）", OR)
     sc2 = 360 / 1600
     xh = RX + 90 + HBM8 * sc2
     for j, (n, b, col) in enumerate(FORMATS):
@@ -309,6 +309,7 @@ def fig_cap():
     xc = X0 + CAP_GB * SC
     f.line(xc, py + 28, xc, yy + 4, INK, 1.6, dash="6,4", arrow=False)
     f.t(xc, yy + 24, "上限 94.75 GiB ≈ 101.7 GB", INK, True, 14, "middle")
+    f.t(xc - 8, py + 36, "只超约 0.06 GB：零余量", RD, True, 14, "end")
     f._pan = None
     yb = f.src(py + PH + 12,
                "tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；数为每 device，README 写 GB）；"

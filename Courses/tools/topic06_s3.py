@@ -13,15 +13,15 @@ BODY = '''
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
     <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA（2023）</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
-    <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层；存 FP8 约 40,016 B，是 57%，布局见 12.7）</td></tr>
+    <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
-  <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩 4 倍或 128 倍（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），两个池见 3.4。</p>
+  <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩（CSA 层压 4 倍后只挑一部分读，HCA 层压 128 倍全读），两个池见 3.4。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
   <p>一颗 v7 芯片可用约 189.5 GiB，留一成给激活值，按 170.55 GiB 算（与 10.5 同一口径）。
-    V3 的 FP8 权重约 671 GB 铺 8 颗芯片，每颗放 78.1 GiB，剩 92.4 GiB 给 KV。本节按每芯片记账。</p>
-  <p>权重切 8 份，KV 不切：注意力走数据并行（DP attention），每条序列的 KV 只住一个 device（第六节）。这里按权重全切粗算；DP attention 下非专家权重每个 device 各要一份，池子更小，见 10.5。</p>
+    V3 的 FP8 权重约 671 GB 铺 8 颗芯片，每颗放 78.1 GiB，剩 92.4 GiB 给 KV。</p>
+  <p>权重切 8 份，KV 不切：注意力走数据并行（DP attention），每条序列的 KV 只住一个 device（第六节）。这里按权重全切粗算，实际非专家权重每个 device 各要一份，池子更小。</p>
 __FIG_S3_BATCH__
   <p>人少了，一趟搬运分给的 token 也少了：这是长上下文贵的第一个原因。</p>
 
@@ -30,7 +30,6 @@ __FIG_S3_BATCH__
 __FIG_S3_PAGED__
   <ul>
     <li><b>按需领块。</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer、Orca 的 2–4 倍。</li>
-    <li><b>共享与写时复制。</b>并行采样的几条序列共用 prompt 的块，谁要改先复制一份。</li>
   </ul>
 <figure class="fbox fwide" id="anim-paged">
 <video src="media/topic06-paged.mp4" autoplay loop muted playsinline
@@ -42,7 +41,7 @@ __FIG_S3_PAGED__
   <p>DeepSeek-V4 每层两种 KV：滑窗池存最近 128 个 token 的原始 KV（滑动窗口注意力，只看最近一段），全长池存 CSA／HCA 压缩后的整段。
     SGLang 开两个池共用一份预算，用 <code>--swa-full-tokens-ratio</code> 定怎么分。</p>
 __FIG_S3_POOL__
-  <p>两边一起满之后，再多装 13% 的人，端到端每张 decode 卡只从 10,614 到 10,704 tok/s：每卡近 900 条之后，瓶颈从装不下换成了算不动。</p>
+  <p>两边一起满之后再多装人，吞吐几乎不涨（4.3）：瓶颈从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
     tpu-inference 跑 Qwen3.5 时块编号算多了约 3.5 倍，越界的编号被 JAX（Google 的数值计算库）<b>静默截断</b>，多个请求写进同一块；症状是胡言乱语或崩溃（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
@@ -71,7 +70,7 @@ __FIG_S3_OFFLOAD__
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
-    <b>① KV 一人一份，它定了 batch 上限，也就定了一趟搬运最多分给几个人。</b><br>
+    <b>① KV 池定了 batch 上限。</b><br>
     <b>② 复用和卸载是少算、少搬。</b>下放之前算清搬回来是不是比重算快。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 92.4 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>

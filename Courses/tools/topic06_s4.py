@@ -11,13 +11,12 @@ BODY = '''
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
 __FIG_S4_GANTT__
-  <p>静态 batch 凑满一批一起跑，最慢的跑完才整批返回；先跑完的槽位空着，每步照样搬一趟权重。</p>
 <figure class="fbox fwide" id="anim-contbatch">
 <video src="media/topic06-contbatch.mp4" autoplay loop muted playsinline
        aria-label="静态批与连续批动画。标题：同样 4 个槽位、同一串请求：两种排法。上下两组各 4 个槽位，标着槽 1 到槽 4；上组叫「静态批：凑满一批，等最长的做完」，下组叫「连续批：每一步都重新排，谁做完谁让位」。每一列是一步，每个请求一种颜色，字母 A 到 O 标在它的第一格；灰格是槽位空转。一条黄色竖线随时间往右走，右边两个计数器写「做完几个」，底下写「已走几步」，右下角写「请求长度是示意」。字幕依次是：16 个请求排队，长短不一；每一列是一步 decode，每一步都要搬一趟权重。上面：短的早做完了，槽位也得空等最长的那个（灰格＝这一趟白搬）。下面：谁做完，下一步就换排队的下一个进来，槽位一格不空。最后：同样 15 步：静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。画面复位。"></video>
 <figcaption>动画里队列一直不空，看两组各做完几个。
   <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill。）</span></figcaption></figure>
-  <p>Orca（OSDI'22）改成每步结束都看一次：谁跑完谁让位，排队的人下一步补进来。今天的 vLLM、SGLang 都这么调度。</p>
+  <p>Orca（OSDI'22）之后，今天的 vLLM、SGLang 都按步调度。</p>
 
   <h3 id="s4-2">4.2　新人进门那一步：chunked prefill</h3>
 __FIG_S4_CHUNK__
@@ -41,11 +40,11 @@ __FIG_S4_CONC__
   <h3 id="s4-4">4.4　CPU 那几毫秒也要藏起来</h3>
 __FIG_S4_OVERLAP__
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
-  <p>SGLang-JAX 的做法是加速器跑第 N 批时，CPU 先排好第 N＋1 批；Qwen3-32B 上 prefill 和 decode 之间的空档从约 12 ms 降到 38 µs。</p>
+  
 
   <h3 id="s4-5">4.5　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
-  <p>vLLM 文档的原话是：In vLLM V1, the default preemption mode is RECOMPUTE rather than SWAP, as recomputation has lower overhead in the V1 architecture。意思是：V1 默认丢掉重算，不换出，因为在 V1 里重算更便宜。</p>
+  <p>vLLM V1 默认丢掉重算、不换出，文档给的理由是在 V1 架构里重算开销更低。</p>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。
