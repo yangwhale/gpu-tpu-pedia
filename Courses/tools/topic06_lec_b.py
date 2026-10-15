@@ -233,7 +233,7 @@ DistServe 先做成，Mooncake 连同 KV 池做进了 Kimi 的线上服务。开
 <p class="say">「第二个前提是 KV 别太胖。有篇论文把 prefill 放到另一个数据中心。橙柱是全注意力，一条专线只够并一两台；绿柱是混合模型，能并十几二十台，台数本课推的。而且只把长 prompt 送去远端。<br>
 论文的案例吞吐多了一半；按同等成本算，只多一成半左右。」</p>
 
-<p class="say">「这一趟搬多少没变，变的是 decode 不再被 prefill 打断。开两个仓库这一步：DistServe 同样延迟多接七点四倍请求，Mooncake 线上多接七成五。<br>
+<p class="say">「这一趟搬多少没变，变的是 decode 不再被 prefill 打断。开两个仓库这一步：DistServe 同样延迟多接七点四倍请求，Mooncake 线上多接一倍多。<br>
 所以接下来第九节：prefill、decode 各配几台，这个负载到底该不该拆。」</p>
 """, """
 ⛔ <b>别把 1.04 GB 说成 V4-Pro 的 KV</b>：它是专题五那把统一尺子（Qwen3-Coder-480B 一条 8K prompt），只用来换算。<br>

@@ -34,7 +34,7 @@ __FIG_S14_EIGHT__
     <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同样的延迟要求下多接 7.4 倍请求（对不拆的系统）</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：命中按十分之一计价；2025-02 线上 56.3% 输入命中</td></tr>
     <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 把 MTP 训进主模型：约快 1.8 倍（对不开）</td></tr>
-    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 真实负载下多接 75% 请求（摘要未写对照系统）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 线上多接 115%（A800）、107%（H800）请求（对此前系统，FAST'25）</td></tr>
     <tr><td>2024</td><td>复用与下放</td><td>十三</td><td>KV 感知路由：SGLang v0.4 实测命中率 20% → 75%、吞吐 1.9 倍（对轮询）</td></tr>
     <tr><td>2025</td><td>调度</td><td>四</td><td>vLLM V1 重写引擎，对 V0 吞吐最多 1.7 倍</td></tr>
     <tr><td>2025</td><td>解码提速</td><td>十一</td><td>EAGLE-3：单请求最多快 6.5 倍、batch 64 吞吐仍高 1.38 倍（对不投机）</td></tr>

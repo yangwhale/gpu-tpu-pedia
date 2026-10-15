@@ -89,7 +89,7 @@ CH = [
 <p class="say">「batch 小的时候，一步几乎全在读权重，所以位数减半，下限就减半。左边是本课只算权重推的；右边看整个模型放不放得下。」</p>
 
 <p class="say">「省下的显存能多放 KV、多接人，顺带走了车上多坐人那条路。KV 自己也能压：存成 FP8，本课推的是能装的请求多出七成多，账在这一节末尾。<br>
-再往下是四 bit：二〇二五年底 NVIDIA 在 Blackwell 上放出 NVFP4 的 KV，比 FP8 再省一半，省下的容量能多留住前缀；算之前照样先解回 FP8，不省算力。」</p>
+四 bit 已经落地：二〇二五年底 NVIDIA 在 Blackwell 上放出 NVFP4 的 KV，比 FP8 再省一半，省下的容量能多留住前缀；算之前照样先解回 FP8，不省算力。二〇二六年九月 DeepSeek 的 V4.1-Flash，主 KV 原生就存四 bit。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-s12-mx</code>，先上后下。</p>
 

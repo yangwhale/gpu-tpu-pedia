@@ -46,7 +46,7 @@ __FIG_S12_FUSE__
     K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码部分为了精度留在 BF16。
     BF16 是 1,152 B，所以同样显存能装的请求是 BF16 的约 1.76 倍（本课推导）。</p>
-  <p>下一步是 4 bit：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍先解回 FP8，省的是容量和读的字节。省下的容量变成能留住的前缀：命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍，KV 量化和 KV 当存储（3.5–3.6）在这里接上了。</p>
+  <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍先解回 FP8，省的是容量和读的字节。省下的容量变成能留住的前缀：命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍。2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生就存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读 NVFP4 KV 的 kernel，比原先的 FP8 KV 小 45%。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数是 megakernel 加 DSpark 投机一起换来的，博客没提量化。</div>

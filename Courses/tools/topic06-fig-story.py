@@ -35,7 +35,7 @@ CARDS = [
     (1, 2024.37, "MLA（DeepSeek-V2）", "对同形状 MHA ÷57（推导）", "三", True),
     (1, 2025.74, "DSA（DeepSeek-V3.2）", "每字只读 2,048 条 KV", "三", True),
     (2, 2023.95, "RadixAttention", "吞吐最多 6.4×", "三"),
-    (2, 2024.47, "Mooncake KV 池", "Kimi 线上多接 75% 请求", "八"),
+    (2, 2024.47, "Mooncake KV 池", "多接 115%／107%，对此前系统", "八"),
     (2, 2024.92, "SGLang KV 感知路由", "命中 20%→75%，吞吐 1.9×", "十三"),
     (2, 2025.77, "llm-d 路由实测", "命中 340 ms，不路由最坏 2,850", "十三"),
     (3, 2022.87, "投机解码", "2–3×，单请求延迟", "十一"),
@@ -141,7 +141,7 @@ def fig_story():
     ])
     y = f.src(y + 6, "Orca OSDI'22；vLLM arXiv 2309.06180 图 2；GQA arXiv 2305.13245（÷8 本课推导）；"
               "DeepSeek-V2 arXiv 2405.04434（论文对稠密 67B 报 KV −93.3%，混着 6 bit KV 等改动；卡上 ÷57 是第三节同形状 3,997,696 → 70,272 B，本课推导）；SGLang arXiv 2312.07104；"
-              "Mooncake arXiv 2407.00079；llm-d：Red Hat Developer 2025-10-07（厂商自测）；"
+              "Mooncake FAST'25（Kimi 线上 A800／H800）；llm-d：Red Hat Developer 2025-10-07（厂商自测）；"
               "Leviathan arXiv 2211.17192；Flash-Decoding 斯坦福 CRFM 2023-10；EAGLE arXiv 2401.15077；"
               "DeepSeek-V3 arXiv 2412.19437 §5.4.3；Splitwise arXiv 2311.18677；DistServe arXiv 2401.09670；"
               "DeepSeek open-infra-index Day 6；SGLang 大 EP 博客 2025-05；Sarathi-Serve arXiv 2403.02310；"

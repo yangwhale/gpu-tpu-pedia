@@ -62,7 +62,7 @@ __FIG_S0_MAP__
   <details class="foldfig"><summary><b>出场角色</b>：本课反复出现的模型、硬件和软件，各一句话</summary>
   <ul style="line-height:1.9">
     <li><b>DeepSeek-V3 ／ R1</b>：MoE，注意力用 MLA；R1 是同架构的推理版。本课的账大多拿 V3 算。</li>
-    <li><b>DeepSeek-V4-Pro ／ V4-Flash</b>：DeepSeek 下一代 MoE；本课 GPU 实测大多来自 V4-Pro 在 GB300 上的部署记录。</li>
+    <li><b>DeepSeek-V4-Pro ／ V4-Flash</b>：DeepSeek 2026-04 的 MoE（2026-09 已出 V4.1-Flash）；本课 GPU 实测大多来自 V4-Pro 在 GB300 上的部署记录。</li>
     <li><b>Kimi K3 ／ K2.6</b>：Moonshot AI 的 MoE；K3 的注意力里混了 KDA（Kimi Delta Attention）线性注意力层。</li>
     <li><b>Qwen3.5-397B</b>：通义千问的混合模型，60 层里 45 层是 GDN（Gated DeltaNet）线性注意力，只有 15 层存传统 KV。</li>
     <li><b>其他模型</b>：Gemma4-31B、Qwen3-Coder-480B、GLM-5.2、MiMo-V2-Flash、MiniMax-M2.5 只在个别实测里出现。</li>

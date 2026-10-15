@@ -16,7 +16,7 @@ BODY = '''
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
   <p>2025 年 9 月 DeepSeek-V3.2-Exp 先走了一步：KV 照 MLA 存，但每个字先用一个小打分器只挑 2,048 个历史 token 去读（DSA，DeepSeek 稀疏注意力），注意力从随长度平方涨变成线性涨；上线同时 API 降价五成以上（是定价，不是成本）。</p>
-  <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再沿 token 方向压缩（两种压缩层：一种每 4 个 token 并成一条、再只挑一部分读，DeepSeek 叫 CSA；一种每 128 个并成一条后全读，叫 HCA），另留最近 128 个 token 不压，分两个池（3.4）。</p>
+  <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再沿 token 方向压缩（CSA 每 4 个 token 并成一条、只挑一部分读；HCA 每 128 个并成一条后全读），另留最近 128 个 token 不压，分两个池（3.4）。2026-09 的 V4.1-Flash 再让几层共用一份 KV、主 KV 存 FP4，全局 KV 每 token 只剩 890 B，约 V4-Flash 的 1/4。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
   <p>一颗 v7 芯片扣掉一成激活值和 1/8 份 V3 FP8 权重，剩 92.4 GiB 给 KV（拆法见图，口径同 10.5）。</p>
@@ -75,7 +75,7 @@ __FIG_S3_OFFLOAD__
     <li><b>llm-d</b> 在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。</li>
     <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下，把 KV 分层放到显存、主机内存、磁盘和远端；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.3。</li>
-    <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储，后端可接 Mooncake、3FS、NIXL）；官方博客报长上下文和多轮对话下吞吐最多 6 倍、首字最多降 80%（对全部重算）。下放从外挂变成了引擎自带的选项。</li>
+    <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储）；官方博客报长上下文和多轮对话下吞吐最多 6 倍、首字最多降 80%（对全部重算）。vLLM 0.11 也自带了 CPU 下放（OffloadingConnector）；下放从外挂变成了两大引擎的标配。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
