@@ -22,15 +22,15 @@ __FIG_S7_GAIN__
 
   <h3 id="s7-3">7.3　开 DCP 之前要知道的坑</h3>
   <ul>
-    <li><b>缓存层没跟上</b>：SGLang 的分层 KV 缓存 HiCache（L1 显存、L2 主机内存、L3 远端存储）开 L3，或 L1＋L2 叠投机解码，就得退回纯 TP。</li>
+    <li><b>缓存层没跟上</b>：SGLang 的 HiCache（3.6）开 L3（远端存储），或 L1＋L2 叠投机解码，就得退回纯 TP。</li>
     <li><b>状态池它不管</b>：K3 的 KDA 状态池 DCP 不切（6.3）。</li>
     <li><b>官方 PD 吞吐端的数是 TP8 略高</b>：1P1D 用 TP8 是 2,808 tok/s，2P2D 用 DCP8 是 2,633（P:D 都是 1:1；分母和输入长度官方都没写，不能和 7.2 比）。</li>
   </ul>
 
   <h3 id="s7-4">7.4　PCP：超长 prompt 的首字延迟</h3>
-  <p>prefill 要吞整段 prompt，算量随长度涨。PCP 在 prefill 阶段沿序列切，<b>让几台机器合算同一个 prompt</b>（<a href="topic-05.html#s5-5">专题五 §5.5</a>）。</p>
+  <p>PCP 在 prefill 阶段沿序列切，<b>让几台机器合算同一个 prompt</b>（<a href="topic-05.html#s5-5">专题五 §5.5</a>）。</p>
 __FIG_S7_PCPDCP_T5__
-  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100 给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。Meta 用的是 <b>Ring</b>（2023-10，为训练提出）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V 还是传 Q，看哪个小（前缀已缓存、新 token 少时 Q 小），结果都和不切一样。</p>
+  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100 给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。Meta 用的是 <b>Ring</b>（2023-10，为训练提出）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V 还是传 Q，看哪个小，结果都和不切一样。</p>
   <p>另有 Ulysses（DeepSpeed，2023-09）用 AllToAll（每张卡给其余每张卡各发一份）换成按头切，切的份数不能超过头数。</p>
 
   <h3 id="s7-5">7.5　PCP 的两个正确性陷阱</h3>
@@ -43,7 +43,7 @@ __FIG_S7_LINEAR__
   <p>玩具例子里最后一段差 58%，程序照常跑完。修法是把前一段的末状态传过来；或者利用结合律：各段并行算好自己对状态的映射，再从头合并出每段的起始状态。</p>
 
   <h3 id="s7-6">7.6　落点：副本让出来，多放 token</h3>
-  <p>DCP 把 KV 副本让出来，换成同一个请求更长的上下文：<b>同样的显存多放 token，这一趟就分给了更多 token。</b>PCP 买的是首字延迟。</p>
+  <p><b>同样的显存多放 token，这一趟就分给了更多 token；</b>PCP 买的是首字延迟。</p>
 
   <details class="foldfig"><summary><b>考考自己</b>：4K 输入、并发 8 的线上服务，要不要开 DCP8？换成 128K 的 agent 长对话呢？</summary>
   <p>4K 不开：KV 放得下，DCP 只剩代价（7.2）。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>

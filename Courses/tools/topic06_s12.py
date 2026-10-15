@@ -7,8 +7,7 @@ BODY = '''
     这条路先走到 4 bit：2022 年底的 GPTQ 只压权重，算时再还原；同年的 Hopper 让张量核直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，NVFP4 让 4 bit 浮点直接进了张量核。</p>
 
   <h3 id="s12-1">12.1　位数减半，下限减半</h3>
-  <p>batch 小时，一步的时间几乎全花在读权重上。
-    8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.2 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>
+  <p>batch 小时一步几乎全在读权重：8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.2 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>
 __FIG_S12_BYTES__
   <p>实测也接近这个比例：vLLM 2024 年 7 月接入 FP8 权重，稠密的 Llama 3 70B 每字间隔最多快 2 倍，MoE 的 Mixtral 8x7B 最多 1.6 倍（对 BF16）。MoE 赚得少，因为每步只读选中的几个专家，读权重在一步里的占比本来就低（本课推导）。</p>
   <p>省下的显存能多放 KV、多接请求，顺带走了第四节分摊的路。</p>
@@ -39,15 +38,15 @@ __FIG_S12_FUSE__
   <p>生产里先上的是 CUDA Graph 和 PDL：前者省掉 CPU 逐个发射 kernel 的开销，后者让下一个 kernel 在上一个收尾前先做准备。
     megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读。</p>
   <p>Hazy Research（2025-05）的实测里，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型越小、batch 越小，空等占比越大，这招赚得越多。</p>
-  <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；对照的 16 张 GB200（vLLM）是 452 token。这两个数都按接受长度 6 换算，实际接受长度更低时两边都会降。
+  <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；对照的 16 张 GB200（vLLM）是 452 token。这两个数都按接受长度 6 换算。
     不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
   <h3 id="s12-kv">12.7　KV 也能量化</h3>
-  <p>KV 存成 FP8，每个数从 2 字节变 1 字节，同样显存能多装不少请求；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
+  <p>KV 存成 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码部分为了精度留在 BF16。
     BF16 是 1,152 B，所以同样显存能装的请求是 BF16 的约 1.76 倍（本课推导）。</p>
-  <p>下一步是 4 bit：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍先解回 FP8，省的是容量和读的字节，不是算力。省下的容量直接变成能留住的前缀：同一篇博客报缓存命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍。KV 量化和 KV 当存储（3.5–3.6）在这里接上了。</p>
+  <p>下一步是 4 bit：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍先解回 FP8，省的是容量和读的字节。省下的容量变成能留住的前缀：命中率比 FP8 KV 高 20%、首字延迟最多低 3 倍，KV 量化和 KV 当存储（3.5–3.6）在这里接上了。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数是 megakernel 加 DSpark 投机一起换来的，博客没提量化。</div>

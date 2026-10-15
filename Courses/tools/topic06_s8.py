@@ -7,7 +7,7 @@
 """
 
 BODY = '''
-  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上，代价是每个请求多搬一趟 KV。这招 2023、2024 年由 Splitwise、DistServe 先后提出，DistServe 报告同样的延迟要求下多接 7.4 倍请求；Mooncake 把它连同 KV 池做进了 Kimi 的线上服务，论文报真实负载下多接 75% 的请求。2025 年 3 月 NVIDIA 把 PD 分离、KV 感知路由、KV 下放打包开源成 Dynamo，搬 KV 的那层叫 NIXL；PD 分离从论文变成了各家引擎都接得上的标准件。
+  <p class="lead">分块 prefill（4.2）只能把打扰摊平，prefill 和 decode 放在同一批卡上还是会互相拖。PD 分离把它们拆到两批机器上。这招 2023、2024 年由 Splitwise、DistServe 先后提出，DistServe 报告同样的延迟要求下多接 7.4 倍请求；Mooncake 把它连同 KV 池做进了 Kimi 的线上服务，论文报真实负载下多接 75% 的请求。2025 年 3 月 NVIDIA 开源 Dynamo（PD 分离、KV 感知路由、KV 下放，搬 KV 的那层叫 NIXL），PD 分离成了标准件。
     <b>难的是那一趟 KV。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
@@ -32,12 +32,11 @@ __FIG_S8_KV_TRIP_T5__
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
   <h3 id="s8-3">8.3　三层软件：谁搬、谁派、谁存</h3>
-  <p>「KV 传输」其实是三件事。</p>
 __FIG_S8_STACK__
   <ul>
     <li><b>搬运</b>：把字节从这块显存挪到那块。</li>
     <li><b>调度</b>：决定请求去哪台 prefill、算完交给哪台 decode。tpu-inference 的代理把请求截成只出一个字发给 prefill，再让 decode 端去拉 KV。</li>
-    <li><b>存储</b>：KV 反正已经离开 prefill 机，顺手存到主机内存、SSD 乃至远端，同前缀的下一个请求直接取，不用重算。</li>
+    <li><b>存储</b>：KV 反正已经离开 prefill 机，顺手存下，同前缀的下一个请求直接取（3.6）。</li>
   </ul>
   <p>TPU 这边能直接用的是 tpu-inference 的 TPUConnector；TPU Sync 刚开源，自称还不宜通用。</p>
   <p><b>排查按层找</b>：带宽掉到几百 MB/s 是搬运层没走对通道；请求接不上、握手失败多半在调度层；前缀命中率低看存储层。</p>
@@ -98,7 +97,6 @@ __FIG_S8_HYBRID__
   <p>「网络不是瓶颈」只在同一个机房成立。Moonshot AI 和清华的 PrFaaS 论文把 prefill 放到另一个数据中心，靠的是混合模型的 KV 薄。</p>
 __FIG_S8_PRFAAS__
   <ul>
-    <li><b>全注意力太胖，混合模型能走</b>：几台混合模型的 prefill 合起来，一条专线放得下。</li>
     <li><b>还要挑请求</b>：只把超过长度阈值的 prompt 送去远端，短的就地算。</li>
     <li><b>论文案例</b>：Moonshot 的 1T 混合模型，32 张 H200 做 prefill 加 64 张 H20 做本地 PD，比 96 张 H20 同构 PD 吞吐 +54%、P90 TTFT −64%（同等成本吞吐约 +15%）；跨集群平均出口 13 Gbps。这几个数是论文把实测 profile 代进吞吐模型推算的，不是端到端实测。</li>
   </ul>

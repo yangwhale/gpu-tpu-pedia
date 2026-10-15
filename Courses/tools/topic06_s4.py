@@ -6,7 +6,7 @@
 """
 
 BODY = '''
-  <p class="lead">第三节算的是有几个座位，这一节管座位别空着：decode 每一步都搬一趟权重，同一步拼进来的人越多，每人分摊越少。
+  <p class="lead">第三节算的是有几个座位，这一节管座位别空着。
     <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–3.7 倍。</p>
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
@@ -20,7 +20,7 @@ __FIG_S4_GANTT__
 
   <h3 id="s4-2">4.2　新人进门那一步：chunked prefill</h3>
 __FIG_S4_CHUNK__
-  <p>新请求要在某一步里做 prefill。长 prompt 一口吞下，那一步就特别长，正在出字的人都卡一下。</p>
+  <p>新请求的长 prompt 一口吞下，那一步就特别长，正在出字的人都卡一下。</p>
   <p>Sarathi（arXiv 2308.16369）和 Sarathi-Serve（arXiv 2403.02310）把 prompt 切成小块，每步带一块，和 decode 拼在一起。
     vLLM V1 默认打开，decode 先上车；每步塞多少 token 由 max_num_batched_tokens 控制。</p>
   <p>TPU v7x 上跑 Gemma4-31B 的公开记录把它设成 16,384，256K 的 prompt 切成 16 块。</p>
@@ -39,11 +39,11 @@ __FIG_S4_CONC__
   <h3 id="s4-4">4.4　CPU 那几毫秒也要藏起来</h3>
 __FIG_S4_OVERLAP__
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
-  <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐 1.1 倍。vLLM V1 把调度和模型执行单独放进一个进程，分词、回传这些 CPU 活在别的进程里同时跑，这是它比 V0 快的原因之一。</p>
+  <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐 1.1 倍。vLLM V1 把分词、回传这些 CPU 活挪到别的进程同时跑，也是它比 V0 快的原因之一。</p>
 
   <h3 id="s4-5">4.5　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
-  <p>vLLM V1 默认丢掉重算、不换出，文档给的理由是在 V1 架构里重算开销更低。</p>
+  <p>vLLM V1 默认重算，文档说在 V1 架构里重算开销更低。</p>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。

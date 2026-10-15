@@ -2,7 +2,7 @@
 """专题六 · 第六节「切专家与注意力：TEP 和 DEP」。图在 topic06-fig-dep.py；另复用专题五两张图。"""
 
 BODY = '''
-  <p class="lead">V3 一张卡装不下（第三节铺到 8 颗芯片），切到多卡时，专家那一半大家都用 EP，分歧全在注意力：几张卡合算同一批请求，还是各算各的。2024 年 12 月 SGLang 先给 DeepSeek 模型开了 DP attention，decode 吞吐最多 1.9 倍；2025 年初 DeepSeek 公开的大 EP 部署也走这一条。SGLang 在 96 张 H100 上复现了 PD 分离加大 EP 的整套做法，输出吞吐最多是同卡数纯 TP 的 5 倍；这是几招叠起来的数，不全是注意力切法的功劳。
+  <p class="lead">V3 一张卡装不下，切到多卡时，专家那一半大家都用 EP，分歧全在注意力：几张卡合算同一批请求，还是各算各的。2024 年 12 月 SGLang 先给 DeepSeek 模型开了 DP attention，decode 吞吐最多 1.9 倍；2025 年初 DeepSeek 公开的大 EP 部署也走这一条。SGLang 在 96 张 H100 上复现了 PD 分离加大 EP 的整套做法，输出吞吐最多是同卡数纯 TP 的 5 倍（几招叠起来的数，不全归注意力切法）。
     <b>选哪个，看模型有几个 KV 头、你要多大的 batch。</b></p>
 
   <h3 id="s6-1">6.1　一句回顾</h3>
@@ -26,7 +26,7 @@ __FIG_S6_KV__
   <p>DEP 下每个 rank 像一台小推理机，注意力权重、调度器、请求状态各一份。<b>状态按请求开、又不随 DP 切的东西，DEP 一宽就成倍涨。</b></p>
   <ul>
     <li><b>K3 上 DEP8 起不来</b>：Kimi K3 的 93 层里有 69 层 KDA（线性注意力），每个请求一块固定状态。DEP8 下每个 rank 复制整个状态池，两次加载都 OOM；runbook 认为官方因此改推 TP 和 DCP（<a href="#s7-1">第七节</a>）。</li>
-    <li><b>TP 反而切得开</b>：KDA 状态按头存，TP 按头切，每张卡只存自己那几个头；DP、EP、DCP 都不动头这一维（本课推导，与 runbook 所引官方说法一致）。</li>
+    <li><b>TP 反而切得开</b>：KDA 状态按头存，TP 按头切，每张卡只存自己那几个头；DP、EP、DCP 都不动头这一维（本课推导，与官方说法一致）。</li>
     <li><b>忙闲不均</b>：专家那一步要等最慢的 rank，没请求的 rank 也得陪跑空前向（专题五 §4.4）；热门专家多复制几份是 EPLB（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。</li>
   </ul>
 
@@ -37,7 +37,7 @@ __FIG_S6_KV__
   <p>tpu-inference 的一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
     Qwen3.5-397B 在 v7x-8 上，<b>1K 进 8K 出、并发 512 时，DP=8 比 TP=8 的输出吞吐多 62%</b>。</p>
 __FIG_S6_TPU__
-  <p>一种解读：8 路 TP 下全注意力层的 KV 复制 4 份（6.2，本课推导，PR 没归因）。另一种：PR 命令里的 --max-num-seqs=64（同时最多跑 64 条）可能限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
+  <p>一种解读：8 路 TP 下全注意力层的 KV 复制 4 份（6.2，本课推导，PR 没归因）。另一种：PR 命令里的 --max-num-seqs=64 可能限住了 TP 基线；PR 没给 TP 的完整命令，两种都排除不了。并发 64 时 1K 进 8K 出打平，KV 放得下，复制不要紧；8K 进 1K 出已多 14%，长 prompt 更早挤满显存。</p>
   <p>读 TPU 启动参数要多一步：tpu-inference 跑 DeepSeek-R1 的命令写着 <code>--tensor-parallel-size 8</code>，
     <b>那其实是总 device 数</b>；真正的切法在 additional-config 里：TP=1、开 DP 注意力、EP=8，即 DEP8。</p>
 
