@@ -248,7 +248,7 @@ def fig_prfaas():
         f.box(BX, by - 12, X(v) - BX, 30, col, col, 3)
         f.box(X(v) + 4, by - 8, wpx("%.2f" % v, 15) + 12, 24, "#ffffff", "none", 0)   # 白底：挡住穿过的虚线
         f.t(X(v) + 10, by + 9, "%.2f" % v, col, True, 15)
-        f.t(X(v) + 10 + wpx("%.2f" % v, 15) + 14, by + 9, "专线够并 %d 台" % int(LINK // v), GY, size=14)
+        f.t(X(LINK) + 16, by + 9, "够并 %d 台" % int(LINK // v), GY, size=14)        # 红线右边单列：台数 ＝ 100 ÷ 柱长
         by += 64 if i % 2 else 56
     f.path("M%.1f,%d L%.1f,%d" % (X(LINK), py + 40, X(LINK), AX), RD, 2, dash="5,4", arrow=False)
     f.t(X(LINK) - 8, py + 58, "整条跨集群专线约 %d Gbps（集群共用）" % LINK, RD, True, 15, "end")

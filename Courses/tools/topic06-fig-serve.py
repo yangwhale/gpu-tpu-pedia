@@ -5,6 +5,7 @@ r"""专题六 · 第十三节「落地：TPU 服务化与编排」的三张静�
   · fig6-s13-bucket  服务侧怎么选桶？一步里整批的 token 总数补到桶的上沿（RPA 的 ragged 布局下单条请求不再补齐）；桶越多 padding 越少，但每个桶都要编译一次。
   · fig6-s13-cold    TPU 上一个引擎从启动到能接请求，时间花在哪？为什么「权重加载」那一段常常其实是编译？
   · fig6-s13-route   路由层能做什么？KV 感知路由把首字延迟从多少降到多少？坏副本不摘掉会怎样？
+  · fig6-mem-leak    为什么强杀一个 decode 之后下次必然 OOM，而报错给的建议方向正好反了？
 
 数从哪来
   · fig6-s13-bucket：本课推导示意。每步一批的 token 总数取对数正态（中位 700 token、σ ＝ 0.9、截到 8,192），
@@ -307,7 +308,79 @@ def fig_route():
     f.save("fig6-s13-route.svg", yb + 14)
 
 
+# ══ ④ pkill -9 漏显存（SGLANG-V4PRO-RUNBOOK.md:960-978，单位照 runbook 写 GB ＝ nvidia-smi MiB ÷ 1000）══
+LEAK_TOT, LEAK_LOST, LEAK_NEED = 284, 97, 241     # 每卡总量、强杀后残留、mem-fraction-static 0.85 的静态预留
+LEAK_FREE = LEAK_TOT - LEAK_LOST
+assert LEAK_FREE == 187                           # runbook 原文「只剩 187 GB」
+assert round(LEAK_TOT * 0.85) == LEAK_NEED        # runbook：284 × 0.85 ≈ 241
+LEAK_GAP = LEAK_NEED - LEAK_FREE                  # 本课推导
+assert LEAK_GAP == 54
+
+
+def fig_leak():
+    f = Fig(W, "GB300 每卡显存 284 GB。强杀一个满载的 decode 之后，每卡还有 97 GB 没释放，runbook 推测是跨机器 NVLink 那部分；"
+               "能用的只剩 187 GB。SGLang 的 mem-fraction-static 0.85 要静态占 241 GB，差 54 GB，下次启动必然 OOM。"
+               "报错却劝你调大这个比例，那等于把要占的线往右挪，差得更多。删 pod 重建，56 秒后 284 GB 全都能用，241 落在里面，起得来")
+    y0 = f.header("pkill -9 漏掉的显存　——　<tspan font-weight=\"700\">97 GB 没还，241 GB 的预留永远够不着</tspan>",
+                  "GB300 每卡显存（nvidia-smi，单位 GB，照 runbook 写）；虚线 ＝ mem-fraction-static 0.85 要静态占的 241",
+                  [(GR, "还能用"), (RD, "没释放（runbook 推测是跨机 NVLink，即 MNNVL）"), (INK, "静态预留要占到这里")])
+    PH = 378
+    py = f.panel(0, y0, W, PH, "DeepSeek-V4-Pro · SGLang · GB300 · 每卡", INK)
+    X0, AW = 250, 1000
+    sc = AW / LEAK_TOT
+
+    def X(v):
+        return X0 + v * sc
+    BH = 46
+    y1 = py + 70
+    y2 = y1 + BH + 124
+    # 上条：pkill -9 之后
+    f.t(24, y1 + 20, "pkill -9 之后", INK, True, 17)
+    f.t(24, y1 + 42, "强杀一个满载的 decode", GY, size=14)
+    f.box(X0, y1, LEAK_FREE * sc, BH, GR, GR, 3)
+    f.t(X0 + 16, y1 + 30, "%d　还能用" % LEAK_FREE, "#fff", True, 16)
+    f.box(X(LEAK_FREE), y1, LEAK_LOST * sc, BH, "#fce8e6", RD, 3, 1.5)
+    f.t(X(LEAK_TOT) - 12, y1 + 30, "%d　没释放" % LEAK_LOST, RD, True, 16, "end")
+    # 差 54 的括号：187 → 241
+    xa, xb = X(LEAK_FREE), X(LEAK_NEED)
+    yk = y1 + BH + 14
+    f.path("M%.1f,%d L%.1f,%d L%.1f,%d L%.1f,%d" % (xa, yk - 6, xa, yk, xb, yk, xb, yk - 6), RD, 2, arrow=False)
+    f.t((xa + xb) / 2, yk + 24, "差 %d → 必然 OOM" % LEAK_GAP, RD, True, 16, "middle")
+    f.t((xa + xb) / 2, yk + 44, "推导：%d − %d" % (LEAK_NEED, LEAK_FREE), RD, size=13, anchor="middle")
+    # 报错气泡：劝你调大 ＝ 线往右挪
+    bx, bw, by_, bh = X0, 520, yk + 4, 62
+    f.box(bx, by_, bw, bh, "#fff", RD, 8, 1.4)
+    f.t(bx + 14, by_ + 25, "报错：请调大 mem-fraction-static", RD, True, 16)
+    f.t(bx + 14, by_ + 49, "调大 ＝ 虚线往右挪 →，差得更多；方向正好反了", GY, size=14)
+    f.line(xb + 8, y1 - 14, xb + 70, y1 - 14, RD, 2)
+    f.t(xb + 76, y1 - 9, "调大", RD, True, 14)
+    # 下条：删 pod 重建
+    f.t(24, y2 + 20, "删 pod 重建", INK, True, 17)
+    f.t(24, y2 + 42, "56 秒后显存归零", GY, size=14)
+    f.box(X0, y2, LEAK_TOT * sc, BH, GR, GR, 3)
+    f.t(X0 + 16, y2 + 30, "%d　都能用" % LEAK_TOT, "#fff", True, 16)
+    f.t(X(LEAK_TOT) + 12, y2 + 30, "起得来 ✓", GR, True, 16)
+    # 241 虚线：贯穿两条
+    f.line(xb, y1 - 34, xb, y2 + BH + 10, INK, 1.8, dash="6,4", arrow=False)
+    f.t(xb - 8, y1 - 22, "mem-fraction-static 0.85 要静态占 %d" % LEAK_NEED, INK, True, 15, "end")
+    # 横轴
+    ya = y2 + BH + 34
+    f.line(X0, ya - 12, X(LEAK_TOT), ya - 12, GY2, 1.2, arrow=False)
+    for v in (0, 50, 100, 150, 200, 250, LEAK_TOT):
+        f.line(X(v), ya - 16, X(v), ya - 8, GY2, 1.2, arrow=False)
+        f.t(X(v), ya + 8, str(v), GY, size=14, anchor="middle")
+    f.t(X(LEAK_TOT) + 30, ya + 8, "GB", GY, size=14)
+    f._pan = None
+    yb = f.src(py + PH + 10,
+               "📌 gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:960-978：pkill -9 后 nvidia-smi 每卡 97,486 MiB／284,208 MiB；"
+               "「284 GB 减掉 97 GB 只剩 187 GB，而 mem-fraction-static 0.85 要 241 GB」；报错原文 Not enough memory. Please try to increase --mem-fraction-static.；"
+               "推测原因 MNNVL/IMEX 导出的显存在 SIGKILL 时不走正常回收、容器 PID 1 不 reap；删 pod 到显存归零实测 56 秒。",
+               "单位照 runbook 写 GB（MiB ÷ 1000，三个数同一把尺）。差 54 ＝ 241 − 187，本课推导。")
+    f.save("fig6-mem-leak.svg", yb + 14)
+
+
 if __name__ == "__main__":
     fig_bucket()
     fig_cold()
     fig_route()
+    fig_leak()

@@ -260,7 +260,7 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 
 <p class="say">「再看分母。decode 固定 8 张卡，prefill 从一个加到十二个。只除 decode 的卡，每卡涨了十倍多；把 prefill 的卡也算进去，只涨两倍多。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「9.5　不拆反而更好的时候」。</p>
+<p class="board"><b>🖥 屏幕</b>：<code>fig-s9-split-pod</code>，先指左边 batch 64 那组，再指右边 batch 128 那根蓝柱。</p>
 
 <p class="say">「也有不拆更好的时候。MiMo 在 TPU v7x 上，batch 六十四时，不拆最高。<br>
 到一百二十八，同样两个 pod，拆开多百分之六点七。」</p>

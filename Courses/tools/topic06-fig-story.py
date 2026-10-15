@@ -31,7 +31,7 @@ CARDS = [
     (1, 2023.38, "GQA", "KV ÷8（64 头 8 组，推导）", "三", True),
     (1, 2023.47, "PagedAttention", "KV 有效占用 20–38%→96%", "三"),
     (1, 2023.78, "Flash-Decoding", "超长序列解码最多 8×", "五"),
-    (1, 2024.37, "MLA（DeepSeek-V2）", "同形状 KV ÷57（推导）", "三", True),
+    (1, 2024.37, "MLA（DeepSeek-V2）", "对同形状 MHA ÷57（推导）", "三", True),
     (2, 2023.95, "RadixAttention", "吞吐最多 6.4×", "三"),
     (2, 2024.47, "Mooncake KV 池", "Kimi 线上多接 75% 请求", "八"),
     (2, 2025.77, "llm-d KV 感知路由", "命中 340 ms，不路由最坏 2,850", "十三"),
@@ -110,6 +110,9 @@ def fig_story():
     grid = []
     for x, _ in ticks:
         f.line(x, ytop - 4, x, y - 8, LINE, 1, "4 4", arrow=False)
+        grid.append(f.p.pop())
+    for yr_, _ in CTX:                 # 上下文两个 ▼ 下面拉一根红虚线当刻度（同样垫在卡片底下）
+        f.line(xof(yr_), ya + 36, xof(yr_), y - 8, RD, 1, "2 3", arrow=False)
         grid.append(f.p.pop())
     f.p[gi:gi] = grid
     # 叠加卡：实线粗框，跨在泳道外，表明它是合计，不和泳道卡相乘

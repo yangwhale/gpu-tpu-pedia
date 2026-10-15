@@ -69,10 +69,12 @@ def fig_eight():
     # 编号对照：两行，每行四问
     f._pan = None
     ky = py - 30 + PH + 34
-    CW = W / 4.0
+    CW = (W - 90) / 4.0                          # 最左 90px 放行名：前四问算账、后四问挑招数（第十四节）
     for i, (col, q, key, _) in enumerate(Q):
         r, c = divmod(i, 4)
-        x, y = c * CW + 10, ky + r * 44
+        x, y = 90 + c * CW, ky + r * 44
+        if c == 0:
+            f.t(10, y - 1, "算账" if r == 0 else "挑招数", GY, True, 15)
         if i == 6:   # 7a 量化（绿）／7b 投机（蓝），与图上两颗钉一一对应
             f.badge(x, y - 20, "7a", GR, r=14)
             f.t(x + 38, y - 1, "量化、", INK, True, 17)

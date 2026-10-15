@@ -286,9 +286,9 @@ assert abs(R1_FP8_AS_GIB - 109.3) < 0.05
 
 def fig_cap():
     f = Fig(W, "DeepSeek-R1 放进 TPU v7x-8，每个 device 要多少显存。竖虚线是可用上限 94.75 GiB，约 101.7 GB。"
-               "专家权重用 FP8 是 101.8 GB，正好越过上限；README 单位写的是 GB，要是按 GiB 读就是约 109.3 GB，超得更多。"
+               "专家权重用 FP8 是 101.8 GB，越过上限；README 单位写的是 GB，要是按 GiB 读就是约 109.3 GB，超得更多。"
                "转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，离上限还有三十 GB 上下")
-    y0 = f.header("FP4 先是被容量逼的　——　<tspan font-weight=\"700\">FP8 差一点放不下，FP4 才腾出余量</tspan>",
+    y0 = f.header("FP4 先是被容量逼的　——　<tspan font-weight=\"700\">FP8 放不下，FP4 才腾出余量</tspan>",
                   "每个 device 的权重占用（README 原值，单位 GB）；竖虚线 ＝ 可用上限 94.75 GiB ≈ 101.7 GB",
                   [(RD, "放不下"), (GR, "放得下"), (BL, "连同注意力")])
     PH = 270
@@ -309,7 +309,7 @@ def fig_cap():
     xc = X0 + CAP_GB * SC
     f.line(xc, py + 28, xc, yy + 4, INK, 1.6, dash="6,4", arrow=False)
     f.t(xc, yy + 24, "上限 94.75 GiB ≈ 101.7 GB", INK, True, 14, "middle")
-    f.t(xc - 8, py + 36, "只超约 0.06 GB：零余量", RD, True, 14, "end")
+    f.t(xc - 8, py + 36, "哪种单位读都超（最少 0.06 GB）", RD, True, 14, "end")
     f._pan = None
     yb = f.src(py + PH + 12,
                "tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；数为每 device，README 写 GB）；"

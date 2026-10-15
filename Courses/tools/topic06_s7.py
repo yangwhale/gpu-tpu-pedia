@@ -30,10 +30,10 @@ __FIG_S7_GAIN__
   <h3 id="s7-4">7.4　PCP：超长 prompt 的首字延迟</h3>
   <p>prefill 要吞整段 prompt，算量随长度涨。PCP 在 prefill 阶段沿序列切，<b>让几台机器合算同一个 prompt</b>（<a href="topic-05.html#s5-5">专题五 §5.5</a>）。</p>
 __FIG_S7_PCPDCP_T5__
-  <p>Meta 2024 年底的论文用 128 张 H100（16 个节点）给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。沿序列切注意力有三种做法，Meta 用第一种：</p>
+  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100（16 个节点）给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。沿序列切注意力有三种做法，Meta 用第一种：</p>
   <ul>
-    <li><b>Ring</b>：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V（pass-KV）还是传 Q（pass-Q），看哪个小，都无损。</li>
-    <li><b>Ulysses</b>：用 AllToAll 把「按序列切」换成「按头切」，算完再换回来；度数受头数限制。</li>
+    <li><b>Ring</b>（2023-10，为训练提出）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V（pass-KV）还是传 Q（pass-Q），看哪个小，都无损。</li>
+    <li><b>Ulysses</b>（DeepSpeed，2023-09）：用 AllToAll 把「按序列切」换成「按头切」，算完再换回来；度数受头数限制。</li>
     <li><b>USP</b>：两者叠起来用，节点内 Ulysses、节点间 Ring。</li>
   </ul>
 

@@ -25,17 +25,22 @@ __FIG_S14_EIGHT__
   <table>
     <tr><th>年份</th><th>泳道</th><th>节</th><th>一个实测（对照谁）</th></tr>
     <tr><td>2022</td><td>调度</td><td>四</td><td>Orca 连续批：同延迟吞吐 36.9 倍（对 FasterTransformer 静态批）</td></tr>
-    <tr><td>2023</td><td>KV 与注意力</td><td>三</td><td>PagedAttention：同延迟吞吐 2–4 倍（对 FasterTransformer、Orca）</td></tr>
-    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：同形状下每 token KV 只剩 MHA 的约 1/57（本课推导）</td></tr>
+    <tr><td>2022</td><td>解码提速</td><td>十一</td><td>投机解码：单请求快 2–3 倍（对不投机，小模型当草稿）</td></tr>
+    <tr><td>2023</td><td>KV 与注意力</td><td>三</td><td>PagedAttention：同延迟吞吐 2–4 倍（对 FasterTransformer 和论文自己复现的 Orca）</td></tr>
+    <tr><td>2023</td><td>复用与下放</td><td>三</td><td>RadixAttention 前缀复用：吞吐最多 6.4 倍（对不复用）</td></tr>
+    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：每层 KV 是同形状 MHA 的约 1/57，对 2023 年已普及的 GQA（Llama-3.1-70B）约 1/3.6（本课推导）</td></tr>
     <tr><td>2024</td><td>调度</td><td>四</td><td>Sarathi-Serve 分块 prefill：达标容量 2.6–3.7 倍（对 vLLM）</td></tr>
     <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同样的延迟要求下多接 7.4 倍请求（对不拆的系统）</td></tr>
-    <tr><td>2024</td><td>KV 当存储</td><td>八</td><td>Mooncake：Kimi 真实负载下多接 75% 请求（摘要未写对照系统）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：命中按十分之一计价；2025-02 线上 56.3% 输入命中</td></tr>
+    <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 把 MTP 训进主模型：第 2 个字接受 85–90%，约快 1.8 倍（对不开）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 真实负载下多接 75% 请求（摘要未写对照系统）</td></tr>
     <tr><td>2025</td><td>拆开放</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
     <tr><td>2025</td><td>复用与下放</td><td>三</td><td>llm-d 把 KV 卸到主机内存：P90 首字 2.1 s → 0.5 s（对不卸载）</td></tr>
-    <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：模型卡称生成约快 2 倍</td></tr>
+    <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：模型卡称低延迟模式下生成约快 2 倍（未写对照精度）</td></tr>
     <tr><td>2026</td><td>解码提速</td><td>十一</td><td>K3 开投机：每字间隔 11.1 → 2.31 ms；并发 64 时输出吞吐只剩 1.74×（对不开）</td></tr>
     <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档都不换：每卡从 Day-0 约 2,200 到约 11,200，5.1 倍。这是软件栈全部改进的合计，含 MTP 投机（PyTorch 博客 2026-06-23）</b></td></tr>
   </table>
+  <p>落到一家的真实账上：DeepSeek 2025-02 公布的一天，平均 226.75 个 H800 节点处理输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950 个 token（输入输出合计、全天平均；本课推导：7,760 亿 ÷ 86,400 s ÷ 1,814 卡）。这套服务用的正是表里的几行：MLA、大 EP 加 PD 分离、磁盘 KV 缓存、FP8。<b>便宜不是哪一招的功劳，是每一行都让同一趟搬运分给更多 token，或者搬得更少。</b></p>
 '''
 
 FIGS = {

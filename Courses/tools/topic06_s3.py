@@ -16,6 +16,7 @@ BODY = '''
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
+  <p>2025 年 9 月 DeepSeek-V3.2 先走了一步：KV 照 MLA 存，但每个字只挑 2,048 个历史 token 去读（DSA），注意力从随长度平方涨变成线性涨；上线同时 API 降价五成以上，那是定价，不等于成本同比例降。</p>
   <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩（两种压缩层：一种压 4 倍后只挑一部分读，DeepSeek 叫 CSA；一种压 128 倍后全读，叫 HCA），两个池见 3.4。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
@@ -29,7 +30,7 @@ __FIG_S3_BATCH__
   <p>早先按最大长度给每条序列预留一整段连续显存。PagedAttention 把 KV 切成固定大小的块，每条序列用一张页表记下「第几块住在哪个物理块」。</p>
 __FIG_S3_PAGED__
   <ul>
-    <li><b>按需领块。</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer、Orca（第四节）的 2–4 倍。</li>
+    <li><b>按需领块。</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer 和 Orca 的 2–4 倍（SOSP 2023；Orca 是 2022 年的逐步调度，见第四节，论文用的是作者自己复现的版本）。</li>
   </ul>
 <figure class="fbox fwide" id="anim-paged">
 <video src="media/topic06-paged.mp4" autoplay loop muted playsinline
@@ -69,7 +70,7 @@ __FIG_S3_OFFLOAD__
   <ul>
     <li><b>llm-d</b> 在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。排障说明写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
     <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
-    <li><b>LMCache</b>：接在 vLLM、SGLang 下的分层 KV 缓存，主要在 GPU 上用；TPU 上的同类工具见 8.3。</li>
+    <li><b>LMCache</b>：接在 vLLM、SGLang 下，把 KV 分层放到显存、主机内存、磁盘和远端，主要在 GPU 上用；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍，还发现截断上下文会让前缀命中率掉一半；TPU 上的同类工具见 8.3。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
@@ -91,7 +92,7 @@ FIGS = {
         '<b>隔板挪到两池一起快满时最快；一边先满，另一边就空转。</b><br>'
         '<em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计；前两格输入 4K、第三格 8K，输出 1K，关前缀缓存。</em>'),
     "__FIG_S3_DISK__": ("fig-s3-disk", "fig6-disk-cache.svg", "topic06-fig-kv.py",
-        '<b>同一条 128K prompt，命中只剩读盘那一小段。</b><br>'
+        '<b>同一条 128K prompt，命中后首字只要 0.5 s。</b><br>'
         '<em>首字延迟出自 DeepSeek API 文档 2024-08，命中比例出自 open-infra-index 2025-02，两次统计不同时；1/26 为本课推导。</em>'),
     "__FIG_S3_OFFLOAD__": ("fig-s3-offload", "fig6-offload.svg", "topic06-fig-kv.py",
         '<b>绿线始终在红线下面：链路够快，多长都该搬。</b><br>'

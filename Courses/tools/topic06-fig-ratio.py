@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-r"""专题六 · 第九节「配几台、拆不拆：P:D 配比、AFD、EPD」的四张静态图。
+r"""专题六 · 第九节「配几台、拆不拆：P:D 配比、AFD、EPD」的五张静态图。
+
+fig6-split-pod.svg —— 回答：MiMo 拆成 PD 以后，总吞吐最高的 2P1D 按 pod 算还赢吗？
+  · 数从哪来：tpu/sglang-jax/mimo/README.md:81-88 总体结果表（TPU v7x，每 pod 4 芯片，16K 进 4K 出，total tok/s 含输入）。
+  · 本课推导：每 pod ＝ total ÷ pod 数（不拆 2、1P1D 2、2P1D 3）；+6.7%、−20% 同正文 9.5 与台账。
+  · 刻意没画：SLO。README 自己说这张表只看端到端趋势，没考虑 SLO。
 
 fig6-2p1d.svg —— 回答：在 1P1D 上再加一台 prefill，买到的到底是什么？
   · 数从哪来：gpu/inference/a4/deepseek-v3/REPORT-2P1D-DeepSeek-V3.md:69/85/100–142（B200，a4-highgpu-8g，
@@ -68,6 +73,13 @@ MIMO = dict(nonpd64=11.70, pd1_64=10.55, pd2_64=10.83, nonpd128=12.78, pd1_128=1
 assert round((MIMO["pd1_128"] / MIMO["nonpd128"] - 1) * 100) == 7     # README 写「约 6.8%」，按表算 6.7%
 assert round((MIMO["pd2_128"] / MIMO["nonpd128"] - 1) * 100, 1) == 19.8
 assert round((MIMO["pd2_128"] / 3) / (MIMO["nonpd128"] / 2) * 100 - 100) == -20   # 2P1D 多一个 pod，按每 pod 算低 20%
+# 每 pod 吞吐（本课推导：total ÷ pod 数），图上要标「推导」
+SPLIT = [("batch 64", [("不拆", MIMO["nonpd64"], 2), ("1P1D", MIMO["pd1_64"], 2), ("2P1D", MIMO["pd2_64"], 3)]),
+         ("batch 128", [("不拆", MIMO["nonpd128"], 2), ("1P1D", MIMO["pd1_128"], 2), ("2P1D", MIMO["pd2_128"], 3)])]
+from decimal import Decimal, ROUND_HALF_UP
+def _r2(v):
+    return str(Decimal(repr(v)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+assert [_r2(t / n) for _, rows in SPLIT for _, t, n in rows] == ["5.85", "5.28", "3.61", "6.39", "6.82", "5.10"]
 QC_TTFT = (95, 281)                                            # Qwen3-Coder 1024/1024 c1，单实例 → 1P1D（ms）
 
 # ── AFD 插件（tokens/s/die）
@@ -152,7 +164,7 @@ def fig_prefill_sweep():
     f.t(PX + PW + 70, Y(900), "×%.1f" % GROW_ALL, OR, True, 22, "middle")
     f.t(PX + PW + 70, Y(900) + 22, "1 → 12 个", OR, size=15, anchor="middle")
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "两条线都说加 prefill 是杠杆，只是杠杆长短差了五倍", [
+    yb = f.band(py + PH - 10, "ok", "两条线都说加 prefill 是杠杆，只是杠杆长短差了五倍", [
         "蓝线的分母里没有 prefill 的卡：喂一个小 decode 的 prefill 越多，它越好看。算整机成本要看橙线。",
         "橙线在 12 个 prefill 时到顶，再加就开始稀释每卡产出，配比到这里就够了。",
     ])
@@ -270,7 +282,55 @@ def fig_afd_ascend():
     f.save("fig6-afd-ascend.svg", yb + 14)
 
 
+def fig_split_pod():
+    f = Fig(W, "MiMo-V2-Flash 在 TPU v7x 上，16K 输入 4K 输出。左边是总吞吐：batch 64 时不拆 11.70K、1P1D 10.55K、2P1D 10.83K；"
+               "batch 128 时不拆 12.78K、1P1D 13.64K、2P1D 15.31K，2P1D 最高。但 2P1D 用了 3 个 pod，另外两种是 2 个。"
+               "右边按 pod 平均：batch 64 是 5.85、5.28、3.61；batch 128 是 6.39、6.82、5.10，1P1D 比不拆高 6.7%，2P1D 低 20%，"
+               "左边最高的那根，在右边成了同组最矮")
+    y0 = f.header("按 pod 算拆不拆　——　<tspan font-weight=\"700\">总量最高的 2P1D，按 pod 算成了同组最矮</tspan>",
+                  "MiMo-V2-Flash · TPU v7x（每 pod 4 芯片）· 16K 进 4K 出；单位 K tok/s（total，含输入）",
+                  [(GY2, "不拆（2 pod）"), (BL, "1P1D（2 pod）"), (OR, "2P1D（3 pod）")])
+    COLS = {"不拆": GY2, "1P1D": BL, "2P1D": OR}
+    PH, HW = 380, (W - 20) / 2
+    for side, (x0, title, col, vmax, per) in enumerate((
+            (0, "总吞吐（README 原值）", INK, 17.0, False),
+            (HW + 20, "每 pod 吞吐（本课推导：总吞吐 ÷ pod 数）", OR, 8.0, True))):
+        py = f.panel(x0, y0, HW, PH, title, col)
+        BASE, AH = py + PH - 92, PH - 170
+        BWD, BG = 70, 26
+        for g, (gname, rows) in enumerate(SPLIT):
+            gx = x0 + 60 + g * (HW - 80) / 2 + ((HW - 80) / 2 - (3 * BWD + 2 * BG)) / 2
+            for i, (nm, tot, npod) in enumerate(rows):
+                v = tot / npod if per else tot
+                bx = gx + i * (BWD + BG)
+                bh = AH * v / vmax
+                c = COLS[nm]
+                f.box(bx, BASE - bh, BWD, bh, c, c, 3)
+                lab = _r2(v) if per else "%.2fK" % v
+                ty = BASE - bh - 10
+                if per:
+                    f.t(bx + BWD / 2, ty, "推导", GY, size=12, anchor="middle")
+                    ty -= 18
+                f.t(bx + BWD / 2, ty, lab, c, True, 16, "middle")
+                if per and gname == "batch 128" and nm != "不拆":
+                    d = (v / (rows[0][1] / rows[0][2]) - 1) * 100
+                    f.t(bx + BWD / 2, ty - 22, ("%+.1f%%" % d if nm == "1P1D" else "%+.0f%%" % d).replace("-", "−"),
+                        GR if d > 0 else RD, True, 16, "middle")
+                f.t(bx + BWD / 2, BASE + 22, "%d pod" % npod, GY, size=14, anchor="middle")
+            f.t(gx + (3 * BWD + 2 * BG) / 2, BASE + 50, gname, INK, True, 16, "middle")
+        f.line(x0 + 30, BASE, x0 + HW - 30, BASE, GY2, 1.2, arrow=False)
+    f._pan = None
+    yb = f.band(y0 + PH + 16, "ok", "2P1D 多出来的总量，是多一个 pod 换来的", [
+        "batch 64 时，拆了不管按总量还是按 pod 都亏。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 tpu/sglang-jax/mimo/README.md:8-12、81-88（总体结果表；request_rate=inf，total tok/s 含输入；README 自注只看趋势、未考虑 SLO）。",
+               "本课推导：每 pod ＝ total ÷ pod 数；+6.7% ＝ 6.82 ÷ 6.39 − 1（README 写约 6.8%，按表算 6.7%）；−20% ＝ 5.10 ÷ 6.39 − 1。")
+    f.save("fig6-split-pod.svg", yb + 14)
+
+
 if __name__ == "__main__":
+    fig_split_pod()
     fig_2p1d()
     fig_prefill_sweep()
     fig_decide()

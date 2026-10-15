@@ -48,12 +48,8 @@ __FIG_S9_SWEEP__
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
   <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b></p>
-  <table>
-    <tr><th>负载</th><th>不拆</th><th>拆</th><th>怎么读</th></tr>
-    <tr><td>MiMo-V2-Flash，TPU v7x，16K 进 4K 出，batch 64</td><td>两个 pod 各跑一份：11.70K total tok/s</td><td>1P1D 10.55K；2P1D 用三个 pod 也只有 10.83K</td><td>并发不高，拆了亏</td></tr>
-    <tr><td>同上，batch 128</td><td>12.78K</td><td>1P1D 13.64K；2P1D 用三个 pod 15.31K</td><td>同样两个 pod，1P1D 多 6.7%；2P1D 赢在多一个 pod，按 pod 算低 20%</td></tr>
-    <tr><td>Qwen3-Coder-480B，两台 v7x-8，1K 进 1K 出，单并发</td><td>一台：TTFT 中位数 95 ms</td><td>1P1D：281 ms</td><td>多一趟传输；两倍机器，输出只多 12%</td></tr>
-  </table>
+__FIG_S9_SPLIT__
+  <p>Qwen3-Coder（两台 v7x-8，1K 进 1K 出）单并发拆成 1P1D，首字中位数 95 → 281 ms，机器翻倍，输出只多 12%。</p>
   <details class="foldfig"><summary><b>出处与口径</b>：两组 TPU 例子</summary>
   <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%；2P1D 每 pod 5.10K 对不拆的 6.39K（本课推导）。</p>
   <p>Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量。</p></details>
@@ -96,6 +92,8 @@ FIGS = {
         '<b>左边一高一低，右边两组都在降。</b><br><em>B200，并发 128；每卡 ＝ 总输出 ÷ 全部卡数。</em>'),
     "__FIG_S9_SWEEP__": ("fig-s9-prefill-sweep", "fig6-prefill-sweep.svg", "topic06-fig-ratio.py",
         '<b>同一组实测，两条线。</b><br><em>蓝线是 runbook 原口径，橙线是本课换了分母重算的。</em>'),
+    "__FIG_S9_SPLIT__": ("fig-s9-split-pod", "fig6-split-pod.svg", "topic06-fig-ratio.py",
+        '<b>总量看 2P1D 最高；按 pod 算，只有 batch 128 的 1P1D 赢一点。</b><br><em>README 原值；每 pod 吞吐为本课推导（总吞吐 ÷ pod 数）。</em>'),
     "__FIG_S9_DECIDE__": ("fig-s9-decide", "fig6-decide.svg", "topic06-fig-ratio.py",
         '<b>三问，从上往下。</b><br><em>阈值没画，要拿自己的负载量。</em>'),
     "__FIG_S9_AFD_T5__": ("fig-s9-afd-t5", "fig5-afd.svg", "topic05-fig-pd.py",

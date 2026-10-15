@@ -29,7 +29,7 @@ r"""专题六 · 第三节「KV cache：账、池、复用」的四张图。
 """
 from math import log10, log2, floor
 
-from topic03_draw import Fig, BL, OR, GR, RD, GY, GY2, PU, INK, LINE
+from topic03_draw import Fig, BL, OR, GR, RD, GY, GY2, PU, INK, LINE, wpx
 from topic06_numbers import (V3_LAYERS, V3_KV_PER_TOKEN, V3_TOTAL, V3_ACTIVE,
                              V7_FP8, GB, GIB)
 
@@ -309,22 +309,28 @@ def fig_pool():
                   [(BL, "已用"), (RD, "约九成以上，算满")])
     STATES = [RUNS[0], RUNS[1], RUNS[3]]
     TITLES = ["全长池先满", "两个一起快满", "滑窗池先满"]
-    PH, PWD, GAP = 470, 430, 25
-    xs = [0, PWD + GAP, 2 * (PWD + GAP) + 15]
-    TKW, TKH = 120, 170
+    PH, PWD, GAP = 470, 450, 25
+    xs = [0, 475, 950]
+    assert xs[2] + PWD == W
+    TKH = 170
+    # 示意：两池合计 240 不变，ratio 越小滑窗池越窄 ——&nbsp;隔板往滑窗池那边挪（不代表真实字节比）
+    TKW_FULL = [105, 120, 135]
+    TKW_SWA = [240 - w for w in TKW_FULL]
     bottoms = []
     for k, ((isl, cfg, tps, full, swa, req, verdict), ttl, px) in enumerate(zip(STATES, TITLES, xs)):
         py = f.panel(px, y0, PWD, PH, "输入 %s · %s" % (isl, ttl), BL if isl == "4K" else OR)
         cx = px + PWD / 2
         # 一份显存预算 ＝ 一个仓位，中间一块隔板把它分成两个池；ratio 决定隔板放哪
-        lx = cx - TKW - 6
-        rx = cx + 6
+        wf, ws = TKW_FULL[k], TKW_SWA[k]
+        lx = cx - (wf + ws + 12) / 2               # 预算框位置固定，只有隔板在动
+        dx = lx + wf + 6                           # 隔板中线
+        rx = dx + 6
         ty = py + 100
-        f.path("M %.1f %.1f V %.1f H %.1f V %.1f" % (lx - 2, ty - 26, ty - 34, rx + TKW + 2, ty - 26), GY2, 2, arrow=False)
+        f.path("M %.1f %.1f V %.1f H %.1f V %.1f" % (lx - 2, ty - 26, ty - 34, rx + ws + 2, ty - 26), GY2, 2, arrow=False)
         f.t(cx, ty - 44, "一份显存预算", GY, size=14, anchor="middle")
-        f.box(cx - 5, ty - 14, 10, TKH + 14, INK, "none", 2)
-        f.t(cx, ty + TKH + 60, "隔板 " + cfg, INK, True, 16, "middle")
-        for tx, occ, nm in ((lx, full, "全长池"), (rx, swa, "滑窗池")):
+        f.box(dx - 5, ty - 14, 10, TKH + 14, INK, "none", 2)
+        f.t(dx, ty + TKH + 60, "隔板 " + cfg, INK, True, 16, "middle")
+        for tx, TKW, occ, nm in ((lx, wf, full, "全长池"), (rx, ws, swa, "滑窗池")):
             hot = occ >= 0.885
             c = RD if hot else BL
             hw = TKH * occ
@@ -350,7 +356,7 @@ def fig_pool():
                "出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。",
                "本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），"
                "8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。",
-               "口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；两格画得一样宽是示意，不代表两池的真实字节数。")
+               "口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；隔板位置是示意，不代表真实字节比。")
     f.save("fig6-swa-ratio.svg", yb + 14)
 
 
@@ -428,7 +434,7 @@ assert abs(HIT_TOK / IN_TOK * 100 - HIT_PCT) < 0.06
 def fig_disk():
     f = Fig(W, "DeepSeek 磁盘缓存。128K 的高复用 prompt，首字延迟不命中要 13 秒，命中磁盘上的 KV 只要 0.5 秒，约二十六分之一。"
                "另一份统计：24 小时 6,080 亿输入 token 里 56.3% 命中磁盘缓存")
-    y0 = f.header("命中的前缀不用重算　——　<tspan font-weight=\"700\">首字只剩读盘那一段</tspan>",
+    y0 = f.header("命中的前缀不用重算　——　<tspan font-weight=\"700\">首字从 13 s 降到 0.5 s</tspan>",
                   "DeepSeek 线上服务，把算好的 KV 存在磁盘上。上：一条 128K 高复用 prompt 的首字延迟（线性，0–14 s）；下：一天的输入里有多少命中",
                   [(GY2, "不命中：prefill 重算整段前缀"), (GR, "命中：从磁盘读回 KV")])
     PH = 210
@@ -446,8 +452,8 @@ def fig_disk():
     f.t(AX0 + 16, yb1 + 25, "重算 128K 前缀", "#fff", True, 15)
     f.t(AX0 + T_MISS * sc + 10, yb1 + 25, "13 s", INK, True, 16)
     f.box(AX0, yb2, T_HIT * sc, BH, GR, GR, 3)
-    f.t(AX0 + T_HIT * sc + 10, yb2 + 25, "0.5 s　读盘", GR, True, 16)
-    f.t(AX0 + T_HIT * sc + 160, yb2 + 25, "≈ 1/26（本课推导：13 ÷ 0.5）", GR, True, 15)
+    f.t(AX0 + T_HIT * sc + 10, yb2 + 25, "0.5 s　首字（含读盘）", GR, True, 16)
+    f.t(AX0 + T_HIT * sc + 10 + wpx("0.5 s　首字（含读盘）", 16) + 24, yb2 + 25, "≈ 1/26（本课推导：13 ÷ 0.5）", GR, True, 15)
 
     PH2 = 130
     py = f.panel(0, y0 + PH + 16, W, PH2, "24 小时的输入 token（另一份统计，2025-02）", GY)

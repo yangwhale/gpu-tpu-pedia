@@ -19,7 +19,7 @@ __FIG_S12_MX__
 
   <h3 id="s12-3">12.3　低精度直接训出来</h3>
   <p>发布时就是低精度，正在变成默认做法。
-    Kimi K2 Thinking 在后训练阶段做量化感知训练（QAT，训练时就适应舍入误差），MoE 部分原生 INT4 权重，模型卡称生成速度约提升 2 倍。</p>
+    Kimi K2 Thinking 在后训练阶段做量化感知训练（QAT，训练时就适应舍入误差），MoE 部分原生 INT4 权重，模型卡称低延迟模式下生成速度约提升 2 倍，没写对照的是哪种精度。</p>
   <p>DeepSeek-V4 的模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占了参数的绝大部分，也是 decode 时读得最多的那部分。</p>
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
@@ -47,6 +47,7 @@ __FIG_S12_FUSE__
     K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码（告诉模型每个字排第几）部分为了精度留在 BF16。
     BF16 是 1,152 B，所以同样显存能装的请求是 BF16 的约 1.76 倍（本课推导）。</p>
+  <p>下一步是 4 bit：NVIDIA 2025 年底在 Blackwell 上放出 NVFP4 KV，显存比 FP8 KV 再省约一半，基准上精度损失不到 1%；Qwen3-Coder-480B 上缓存命中率高 20%、首字最多快 3 倍（NVIDIA 博客 2025-12）。算注意力前仍先解回 FP8，省的是容量和读的字节，不是算力。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数是 megakernel 加 DSpark 投机一起换来的，博客没提量化。</div>
@@ -62,7 +63,7 @@ FIGS = {
     "__FIG_S12_R1__": ("fig-s12-r1", "fig6-quant-r1.svg", "topic06-fig-quant.py",
         '<b>跟着一个权重走：存时加 8，读时不减，就差 8。</b><br><em>示意；12.4 里 R1 的占用数字和单位见出处。</em>'),
     "__FIG_S12_CAP__": ("fig-s12-cap", "fig6-quant-cap.svg", "topic06-fig-quant.py",
-        '<b>红条刚好越过虚线：差一点也放不下。</b><br><em>README 原值，每 device；两种单位都超。</em>'),
+        '<b>红条越过虚线：不管单位怎么读都放不下。</b><br><em>README 原值，每 device；两种单位都超。</em>'),
     "__FIG_S12_FUSE__": ("fig-s12-fuse", "fig6-quant-fuse.svg", "topic06-fig-quant.py",
         '<b>每次 kernel 交接都要空等，加起来四成多；megakernel 把它捡回来。</b><br><em>时间轴按比例画。</em>'),
 }

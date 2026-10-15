@@ -29,8 +29,9 @@ __FIG_S13_COLD__
   <h3 id="s13-4">13.4　运维的两个坑</h3>
   <ul>
     <li><b>「起来了」不等于「活着」。</b>V4-Pro 的 SGLang 部署里 14 台 prefill 全崩了，服务注册表还显示 14 台在线。判活要看显存、真发一个请求。</li>
-    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存（runbook 推测是跨机器 NVLink，即 MNNVL，没释放）：284 GB 只剩 187 GB，而 <code>mem-fraction-static 0.85</code>（SGLang 预留给权重和 KV 池的显存比例）要静态占 241 GB，下次启动必然 OOM。报错还劝你调大这个比例，正好反了。删 pod 重建，56 秒显存归零。</li>
+    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存（runbook 推测是跨机器 NVLink，即 MNNVL，没释放）。<code>mem-fraction-static</code> 是 SGLang 预留给权重和 KV 池的显存比例，设 0.85 时这份预留就再也够不着。</li>
   </ul>
+__FIG_S13_LEAK__
 
   <h3 id="s13-5">13.5　栈怎么选</h3>
   <table>
@@ -57,7 +58,9 @@ FIGS = {
     "__FIG_S13_COLD__": ("fig-s13-cold", "fig6-s13-cold.svg", "topic06-fig-serve.py",
         '<b>拆开冷启动，编译常常占大头，连「加载权重」那段也可能是。</b><br><em>上为 GLM-5.1 一次冷启动放大，下为另外两次的构成；各段时长取自原记录的日志拆账。</em>'),
     "__FIG_S13_ROUTE__": ("fig-s13-route", "fig6-s13-route.svg", "topic06-fig-serve.py",
-        '<b>看同前缀的请求落到哪个副本。</b><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是最坏情况、不是轮询的平均值。</em>'),
+        '<b>看同前缀的请求落到哪个副本。</b><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是不路由的最坏情况、不是轮询的平均值。</em>'),
+    "__FIG_S13_LEAK__": ("fig-s13-leak", "fig6-mem-leak.svg", "topic06-fig-serve.py",
+        '<b>漏掉的 97 GB 让 241 GB 的静态预留永远够不着；报错劝你调大比例，方向正好反了。</b><br><em>runbook 原值，每卡，单位 GB；差 54 为本课推导。删 pod 重建后 56 秒显存归零。</em>'),
 }
 
 NUM_LOCK = [

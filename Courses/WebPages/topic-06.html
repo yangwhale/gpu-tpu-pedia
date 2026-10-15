@@ -856,6 +856,8 @@ body.figonly section h3{margin-top:34px}
 <line x1="517.3333333333333" y1="128" x2="517.3333333333333" y2="1026" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
 <line x1="731.5555555555555" y1="128" x2="731.5555555555555" y2="1026" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
 <line x1="945.7777777777778" y1="128" x2="945.7777777777778" y2="1026" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
+<line x1="485.1999999999805" y1="124" x2="485.1999999999805" y2="1026" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
+<line x1="543.0399999999765" y1="124" x2="543.0399999999765" y2="1026" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
 <rect x="0" y="132" width="1400" height="70" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="132" width="4" height="70" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="16" y="163" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">调度</tspan></text>
@@ -887,7 +889,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="694" y="363" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">第五节</text>
 <rect x="596.5955555555322" y="404" width="232" height="54" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0" stroke-dasharray="6 4"/>
 <text class="svgsm" x="606" y="425" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MLA（DeepSeek-V2）</tspan></text>
-<text class="svgsm" x="606" y="447" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums">同形状 KV ÷57（推导）</text>
+<text class="svgsm" x="606" y="447" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums">对同形状 MHA ÷57（推导）</text>
 <text class="svgsm" x="820" y="425" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">第三节</text>
 <text class="svgsm" x="820" y="447" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">模型侧</tspan></text>
 <rect x="0" y="474" width="1400" height="132" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -988,7 +990,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>再拆开放（2023 底–2025，第六至九节）。</b>prefill（吞 prompt）和 decode（吐字）分家，MoE（每字只走几个专家）的专家分到许多张卡上（大 EP，专家并行）。</li>
     <li><b>再补「一趟只出一个字」（2022 底–2026，第十一节）。</b>投机解码（先猜后验）、MTP（模型自带猜字层）让大模型搬一趟验好几个字。</li>
     <li><b>同时压权重（2022–2026，第十二节）。</b>每个数从 16 bit 一路压到 4 bit，kernel 也一个个融成一整个。</li>
-    <li><b>最后看叠起来有多大（2025–2026，第二、十四节）。</b>同一套 GB300 跑 DeepSeek-V4-Pro，光靠软件栈，同一交互档的每卡吞吐涨了 5.1 倍（Day-0 → 2026-06）。</li>
+    <li><b>最后看叠起来有多大（2025–2026，第二、十四节）。</b>同一套 GB300 跑 DeepSeek-V4-Pro，光靠软件栈，同一交互档的每卡吞吐涨了 5.1 倍（Day-0 → 2026-06，含 MTP；每卡的分母官方没写明，见 2.2）。</li>
   </ul>
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
     同等 GPT-3.5 水平的推理价格，2022 年 11 月到 2024 年 10 月降了 280 多倍（斯坦福 AI Index 2025），系统这一侧能不能单独拆出来，14.3 再说。</p>
@@ -2217,6 +2219,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
+  <p>2025 年 9 月 DeepSeek-V3.2 先走了一步：KV 照 MLA 存，但每个字只挑 2,048 个历史 token 去读（DSA），注意力从随长度平方涨变成线性涨；上线同时 API 降价五成以上，那是定价，不等于成本同比例降。</p>
   <p>DeepSeek-V4 不在表里任何一行：每层只存一条所有头共用的 KV，再按层压缩（两种压缩层：一种压 4 倍后只挑一部分读，DeepSeek 叫 CSA；一种压 128 倍后全读，叫 HCA），两个池见 3.4。</p>
 
   <h3 id="s3-2">3.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
@@ -2514,7 +2517,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>绿色两块两条序列共用，橙色那块是 B 要改时复制的。</b><span class="capmore"><br><em>每块 4 个 token 只为画得下；机制见 vLLM 论文（arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a>）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：Kwon et al., Efficient Memory Management for LLM Serving with PagedAttention（SOSP'23, arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a>）—— 块级写时复制、并行采样与 beam search 共享块；原文统计既有系统 KV 显存里真正存 token 状态的只有 20.4%–38.2%，vLLM 达 96.3%。</p>
 <p>口径：每块 4 个 token 只为画得下；真实系统常用 16（GPU）或 256（TPU 上这个模型）。物理块编号是示意。</p></details></figure>
   <ul>
-    <li><b>按需领块。</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer、Orca（第四节）的 2–4 倍。</li>
+    <li><b>按需领块。</b>浪费只剩最后一块的空尾巴。vLLM 论文测得旧系统 KV 显存利用率 20.4%–38.2%，分页后 96.3%；同样延迟下吞吐是 FasterTransformer 和 Orca 的 2–4 倍（SOSP 2023；Orca 是 2022 年的逐步调度，见第四节，论文用的是作者自己复现的版本）。</li>
   </ul>
 <figure class="fbox fwide" id="anim-paged">
 <video src="media/topic06-paged.mp4?v=42cf9186" autoplay loop muted playsinline
@@ -2532,79 +2535,79 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">已用</text>
 <rect x="78.36" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">约九成以上，算满</text>
-<rect x="0" y="102" width="430" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="430" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="0" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="430" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="0" y="102" width="450" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="450" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="450" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="450" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 4K · 全长池先满</tspan></text>
-<path d="M 87.0 206.0 V 198.0 H 343.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
-<text class="svgsm" x="215" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
-<rect x="210.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
-<text class="svgsm" x="215" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.20</tspan></text>
-<rect x="89.0" y="243.9" width="120" height="158.1" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="91.0" y1="243.9" x2="207.0" y2="243.9" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 89.0 232.0 V 402.0 H 209.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="149" y="330" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">93%</tspan></text>
-<text class="svgsm" x="149" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
-<text class="svgsm" x="149" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
-<rect x="221.0" y="294.9" width="120" height="107.1" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
-<line x1="223.0" y1="294.9" x2="339.0" y2="294.9" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 221.0 232.0 V 402.0 H 341.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="281" y="356" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">63%</tspan></text>
-<text class="svgsm" x="281" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
-<text class="svgsm" x="215" y="532" fill="#174ea6" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6,887</tspan></text>
-<text class="svgsm" x="215" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
-<rect x="455" y="102" width="430" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="455" y="102" width="430" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="455" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="455" y1="132" x2="885" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="469" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 4K · 两个一起快满</tspan></text>
-<path d="M 542.0 206.0 V 198.0 H 798.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
-<text class="svgsm" x="670" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
-<rect x="665.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
-<text class="svgsm" x="670" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.15</tspan></text>
-<rect x="544.0" y="245.6" width="120" height="156.4" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="546.0" y1="245.6" x2="662.0" y2="245.6" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 544.0 232.0 V 402.0 H 664.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="604" y="331" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">92%</tspan></text>
-<text class="svgsm" x="604" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
-<text class="svgsm" x="604" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
-<rect x="676.0" y="250.7" width="120" height="151.3" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="678.0" y1="250.7" x2="794.0" y2="250.7" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 676.0 232.0 V 402.0 H 796.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="736" y="334" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">89%</tspan></text>
-<text class="svgsm" x="736" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
-<text class="svgsm" x="736" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
-<text class="svgsm" x="670" y="532" fill="#174ea6" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10,614</tspan></text>
-<text class="svgsm" x="670" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
-<rect x="925" y="102" width="430" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="925" y="102" width="430" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="925" y="104" width="430" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="925" y1="132" x2="1355" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="939" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 8K · 滑窗池先满</tspan></text>
-<path d="M 1012.0 206.0 V 198.0 H 1268.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
-<text class="svgsm" x="1140" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
-<rect x="1135.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
-<text class="svgsm" x="1140" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.10</tspan></text>
-<rect x="1014.0" y="269.4" width="120" height="132.6" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
-<line x1="1016.0" y1="269.4" x2="1132.0" y2="269.4" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 1014.0 232.0 V 402.0 H 1134.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="1074" y="343" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">78%</tspan></text>
-<text class="svgsm" x="1074" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
-<rect x="1146.0" y="238.8" width="120" height="163.2" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
-<line x1="1148.0" y1="238.8" x2="1264.0" y2="238.8" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
-<path d="M 1146.0 232.0 V 402.0 H 1266.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
-<text class="svgsm" x="1206" y="328" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">96%</tspan></text>
-<text class="svgsm" x="1206" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
-<text class="svgsm" x="1206" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
-<text class="svgsm" x="1140" y="532" fill="#b06000" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9,354</tspan></text>
-<text class="svgsm" x="1140" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
-<line x1="285.0" y1="520" x2="600.0" y2="520" stroke="#d93025" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="525" y="510" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+54%</tspan></text>
+<path d="M 97.0 206.0 V 198.0 H 353.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="225" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
+<rect x="205.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="210" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.20</tspan></text>
+<rect x="99.0" y="243.9" width="105" height="158.1" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="101.0" y1="243.9" x2="202.0" y2="243.9" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 99.0 232.0 V 402.0 H 204.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="151" y="330" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">93%</tspan></text>
+<text class="svgsm" x="151" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
+<text class="svgsm" x="151" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<rect x="216.0" y="294.9" width="135" height="107.1" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
+<line x1="218.0" y1="294.9" x2="349.0" y2="294.9" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 216.0 232.0 V 402.0 H 351.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="283" y="356" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">63%</tspan></text>
+<text class="svgsm" x="283" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
+<text class="svgsm" x="225" y="532" fill="#174ea6" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6,887</tspan></text>
+<text class="svgsm" x="225" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
+<rect x="475" y="102" width="450" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="475" y="102" width="450" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="475" y="104" width="450" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="475" y1="132" x2="925" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="489" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 4K · 两个一起快满</tspan></text>
+<path d="M 572.0 206.0 V 198.0 H 828.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="700" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
+<rect x="695.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="700" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.15</tspan></text>
+<rect x="574.0" y="245.6" width="120" height="156.4" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="576.0" y1="245.6" x2="692.0" y2="245.6" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 574.0 232.0 V 402.0 H 694.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="634" y="331" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">92%</tspan></text>
+<text class="svgsm" x="634" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
+<text class="svgsm" x="634" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<rect x="706.0" y="250.7" width="120" height="151.3" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="708.0" y1="250.7" x2="824.0" y2="250.7" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 706.0 232.0 V 402.0 H 826.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="766" y="334" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">89%</tspan></text>
+<text class="svgsm" x="766" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
+<text class="svgsm" x="766" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<text class="svgsm" x="700" y="532" fill="#174ea6" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10,614</tspan></text>
+<text class="svgsm" x="700" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
+<rect x="950" y="102" width="450" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="950" y="102" width="450" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="950" y="104" width="450" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="950" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="964" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入 8K · 滑窗池先满</tspan></text>
+<path d="M 1047.0 206.0 V 198.0 H 1303.0 V 206.0" fill="none" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="1175" y="188" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">一份显存预算</text>
+<rect x="1185.0" y="218" width="10" height="184" rx="2" fill="#202124" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="1190" y="462" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">隔板 ratio 0.10</tspan></text>
+<rect x="1049.0" y="269.4" width="135" height="132.6" rx="3" fill="#e8f0fe" stroke="none" stroke-width="1.0"/>
+<line x1="1051.0" y1="269.4" x2="1182.0" y2="269.4" stroke="#1a73e8" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 1049.0 232.0 V 402.0 H 1184.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="1116" y="343" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">78%</tspan></text>
+<text class="svgsm" x="1116" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全长池</tspan></text>
+<rect x="1196.0" y="238.8" width="105" height="163.2" rx="3" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="1198.0" y1="238.8" x2="1299.0" y2="238.8" stroke="#d93025" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 1196.0 232.0 V 402.0 H 1301.0 V 232.0" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round"/>
+<text class="svgsm" x="1248" y="328" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">96%</tspan></text>
+<text class="svgsm" x="1248" y="428" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">滑窗池</tspan></text>
+<text class="svgsm" x="1248" y="224" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">满</tspan></text>
+<text class="svgsm" x="1175" y="532" fill="#b06000" text-anchor="middle" style="font-size:34.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9,354</tspan></text>
+<text class="svgsm" x="1175" y="560" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">tok/s（每张 decode GPU）</text>
+<line x1="295.0" y1="520" x2="630.0" y2="520" stroke="#d93025" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="545" y="510" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+54%</tspan></text>
 </svg><figcaption><b>隔板挪到两池一起快满时最快；一边先满，另一边就空转。</b><span class="capmore"><br><em>V4-Pro 在 GB300 上的 SGLang 实测，按单卡计；前两格输入 4K、第三格 8K，输出 1K，关前缀缓存。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5 消融表（约 L849–866）与结论（L872–896）：ISL 4096／8192、OSL 1024、--disable-radix-cache；吞吐是每张 decode GPU 的 e2e 输出 tok/s；占用是 full／swa 两池峰值；每 rank 请求数 727／886／999／588／410。</p>
 <p>出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。</p>
 <p>本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。</p>
-<p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；两格画得一样宽是示意，不代表两池的真实字节数。</p></details></figure>
+<p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；隔板位置是示意，不代表真实字节比。</p></details></figure>
   <p>两边一起满之后再多装人，吞吐几乎不涨（4.3）：瓶颈从装不下换成了算不动。</p>
 
   <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
@@ -2617,7 +2620,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>命中率可以很高。</b>DeepSeek 24 小时线上统计：6,080 亿输入 token 里 56.3% 命中磁盘上的 KV（open-infra-index 2025-02）。命中部分按十分之一计价（DeepSeek API 文档 2024-08）。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s3-disk"><svg viewBox="0 0 1400 482" width="100%" role="img" aria-label="DeepSeek 磁盘缓存。128K 的高复用 prompt，首字延迟不命中要 13 秒，命中磁盘上的 KV 只要 0.5 秒，约二十六分之一。另一份统计：24 小时 6,080 亿输入 token 里 56.3% 命中磁盘缓存"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">命中的前缀不用重算　——　<tspan font-weight="700">首字只剩读盘那一段</tspan></text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">命中的前缀不用重算　——　<tspan font-weight="700">首字从 13 s 降到 0.5 s</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek 线上服务，把算好的 KV 存在磁盘上。上：一条 128K 高复用 prompt 的首字延迟（线性，0–14 s）；下：一天的输入里有多少命中</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">不命中：prefill 重算整段前缀</text>
@@ -2650,8 +2653,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="236" y="187" fill="#fff" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">重算 128K 前缀</tspan></text>
 <text class="svgsm" x="1232" y="187" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13 s</tspan></text>
 <rect x="220" y="222" width="38.57142857142857" height="38" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="268" y="247" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.5 s　读盘</tspan></text>
-<text class="svgsm" x="418" y="247" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≈ 1/26（本课推导：13 ÷ 0.5）</tspan></text>
+<text class="svgsm" x="268" y="247" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.5 s　首字（含读盘）</tspan></text>
+<text class="svgsm" x="458" y="247" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≈ 1/26（本课推导：13 ÷ 0.5）</tspan></text>
 <rect x="0" y="328" width="1400" height="130" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="328" width="1400" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <rect x="0" y="330" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -2664,7 +2667,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="844" y="409" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">43.7% 不命中（本课推导：100 − 56.3）</tspan></text>
 <text class="svgsm" x="220" y="450" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">0%</text>
 <text class="svgsm" x="1300" y="450" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">100%</text>
-</svg><figcaption><b>同一条 128K prompt，命中只剩读盘那一小段。</b><span class="capmore"><br><em>首字延迟出自 DeepSeek API 文档 2024-08，命中比例出自 open-infra-index 2025-02，两次统计不同时；1/26 为本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：首字 13 s → 0.5 s 取自 DeepSeek API 文档的磁盘缓存公告（api-docs.deepseek.com/news/news0802，2024-08，原文 128K prompt with high reference）。</p>
+</svg><figcaption><b>同一条 128K prompt，命中后首字只要 0.5 s。</b><span class="capmore"><br><em>首字延迟出自 DeepSeek API 文档 2024-08，命中比例出自 open-infra-index 2025-02，两次统计不同时；1/26 为本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：首字 13 s → 0.5 s 取自 DeepSeek API 文档的磁盘缓存公告（api-docs.deepseek.com/news/news0802，2024-08，原文 128K prompt with high reference）。</p>
 <p>出处：6,080 亿输入 token、56.3% 命中取自 DeepSeek open-infra-index 202502OpenSourceWeek day_6（统计窗口 2025-02-27 12:00 到 02-28 12:00 UTC+8，608B 里 342B 命中，V3 与 R1 合计）。</p>
 <p>本课推导：13 ÷ 0.5 ＝ 26；100% − 56.3% ＝ 43.7%。两个数来自两份文档、两个时间点，不是同一次测量。价格不画。</p></details></figure>
   <ul>
@@ -2735,7 +2738,7 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li><b>llm-d</b> 在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 s → 0.56 s，P90 2.1 s → 0.5 s，输入输出合计吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。排障说明写着：TTFT 比不卸载还差，就是搬回来比重算慢。</li>
     <li><b>Mooncake Store</b>：集群各机的内存和 SSD 拼成一个 KV 池，机器间用 RDMA（网卡直接读写对方内存，不经 CPU）互取。</li>
-    <li><b>LMCache</b>：接在 vLLM、SGLang 下的分层 KV 缓存，主要在 GPU 上用；TPU 上的同类工具见 8.3。</li>
+    <li><b>LMCache</b>：接在 vLLM、SGLang 下，把 KV 分层放到显存、主机内存、磁盘和远端，主要在 GPU 上用；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍，还发现截断上下文会让前缀命中率掉一半；TPU 上的同类工具见 8.3。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
@@ -2748,7 +2751,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>批处理与调度：一趟分给更多人</h2></div>
   <p class="lead">第三节算的是有几个座位，这一节管座位别空着：decode 每一步都搬一趟权重，同一步拼进来的人越多，每人分摊越少。
-    <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–3.7 倍；配流水线并行跑 Falcon-180B 最多 5.6 倍。</p>
+    <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，达标容量是 vLLM 的 2.6–3.7 倍；配流水线并行跑 Falcon-180B，达标容量最多 5.6 倍（摘要没写对照谁）。</p>
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
 <figure class="fbox fwide" id="fig-s4-gantt"><svg viewBox="0 0 1400 632" width="100%" role="img" aria-label="四个槽位、八个请求，各要 3、8、2、5、6、2、7、4 步。上：静态 batch，凑满四个一起跑，最长的 B 跑 8 步，其余三个早就跑完了，槽位空等；整批返回后才放下一批进来，总共 15 步，空转 23 格。下：逐步调度，每一步结束都看一次，哪个槽位空了就立刻塞进下一个排队的请求，总共 12 步，空转 11 格全在最后队列空了之后"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2977,7 +2980,7 @@ body.figonly section h3{margin-top:34px}
        aria-label="静态批与连续批动画。标题：同样 4 个槽位、同一串请求：两种排法。上下两组各 4 个槽位，标着槽 1 到槽 4；上组叫「静态批：凑满一批，等最长的做完」，下组叫「连续批：每一步都重新排，谁做完谁让位」。每一列是一步，每个请求一种颜色，字母 A 到 O 标在它的第一格；灰格是槽位空转。一条黄色竖线随时间往右走，右边两个计数器写「做完几个」，底下写「已走几步」，右下角写「请求长度是示意」。字幕依次是：16 个请求排队，长短不一；每一列是一步 decode，每一步都要搬一趟权重。上面：短的早做完了，槽位也得空等最长的那个（灰格＝这一趟白搬）。下面：谁做完，下一步就换排队的下一个进来，槽位一格不空。最后：同样 15 步：静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。画面复位。"></video>
 <figcaption>动画里队列一直不空，看两组各做完几个。
   <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill。）</span></figcaption></figure>
-  <p>Orca（OSDI'22）之后，今天的 vLLM、SGLang 都按步调度。</p>
+  <p>Orca（OSDI'22）管这叫迭代级调度，业界后来通称连续批（continuous batching）；今天的 vLLM、SGLang 都按步调度。</p>
 
   <h3 id="s4-2">4.2　新人进门那一步：chunked prefill</h3>
 <figure class="fbox fwide" id="fig-s4-chunk"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="示意单位：decode 一步算 1 格，一段长 prompt 的 prefill 算 8 格。上：不切，长 prompt 在某一步里一口吞下，这一步 9 格长，正在出字的所有人这一下都等了 9 格。下：切成 4 块，每步带一块，每步 3 格，12 格里出的字一样多，最长字间隔从 9 格降到 3 格；代价是新请求的首字从第 9 格推迟到第 12 格"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3334,9 +3337,10 @@ body.figonly section h3{margin-top:34px}
 <p>注意力每字节 8 次运算的推导见专题三 §3.1 图下：读 4·S·d 字节、算 4·G·S·d 次，比值 ＝ G。</p></details></figure>
   <p>batch 小、序列长时，一条序列的注意力只占一个计算单元，其余闲着。
     Flash-Decoding（斯坦福 CRFM 博客，2023-10）把它的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。博客报长上下文下 decode 最多提速 8 倍。</p>
+  <p>名字来自 2022 年的 FlashAttention：把注意力切块放进片上 SRAM 算，显存从随长度平方涨变成线性涨，长上下文这才跑得起来。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention，按页存 KV、一批里长短不齐也能一起算的注意力 kernel）把两者放进同一个 kernel，按这一批的成分挑三份预编译版本之一：纯 decode、纯 prefill、混合（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。</p>
+  <p>同一步常混着 prefill 和 decode。RPA（Ragged Paged Attention，按页存 KV、一批里长短不齐也能一起算的注意力 kernel）把两者放进同一个 kernel，按这一批的成分挑三份预编译版本之一：纯 decode、纯 prefill、混合（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025）：按页存 KV、按需生成 kernel 变体，已是 SGLang、vLLM 的注意力后端之一。</p>
   <p>它在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。</p>
   <p>每份版本各配一组块大小，这是最便宜的旋钮：块太小，向量单元反复停下来算地址。Qwen3.5-397B 在 TPU7x 上的公开调优（Google 开发者博客）把 KV 页从 16 个 token 调到 256 个，并发 512 时这个 kernel 的 decode 一步从 428 µs 降到 283 µs（kernel 级，不是整步）。</p>
 
@@ -3654,7 +3658,7 @@ body.figonly section h3{margin-top:34px}
 <p>TPU 的 ICI 上同口径的小消息延迟，没有找到公开数据。</p></details></figure>
   <p>消息这么小，时间花在启动和互相等待上，加带宽救不回来，要省的是同步次数（arXiv <a href="https://arxiv.org/abs/2607.16100" target="_blank" rel="noopener">2607.16100</a>）。</p>
 
-  <p class="landing">⭐ 5.3 到 5.5 指向同一件事：<b>「少搬」从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行都是没人要的字节，先去掉它们，再谈量化和加卡。</p>
+  <p class="landing">⭐ 从 2022 年的 FlashAttention 到 2026 年的 RPA，单卡 kernel 一直在做同一件事：<b>「少搬」从布局开始。</b>补齐的空位、展开的 K/V、搬来搬去的行都是没人要的字节，先去掉它们，再谈量化和加卡。</p>
 
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>切专家与注意力：TEP 和 DEP</h2></div>
@@ -4695,10 +4699,10 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="720" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PCP：prefill 一次有几千个 Q，按行切开，每行在一张卡上算完、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。</text>
 <text class="svgsm" x="20" y="744" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP：decode 每步只剩 1 个 Q，没行可切，只能进一步把这一行按列（笔记）切开，各算一段再按先别除合起来；为了装得下，用原来的卡。</text>
 </svg><figcaption><b>PCP 切 prefill 的计算，DCP 切 decode 的 KV。</b><span class="capmore"><br><em>专题五原图。</em></span></figcaption></figure>
-  <p>Meta 2024 年底的论文用 128 张 H100（16 个节点）给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。沿序列切注意力有三种做法，Meta 用第一种：</p>
+  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100（16 个节点）给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。沿序列切注意力有三种做法，Meta 用第一种：</p>
   <ul>
-    <li><b>Ring</b>：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V（pass-KV）还是传 Q（pass-Q），看哪个小，都无损。</li>
-    <li><b>Ulysses</b>：用 AllToAll 把「按序列切」换成「按头切」，算完再换回来；度数受头数限制。</li>
+    <li><b>Ring</b>（2023-10，为训练提出）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V（pass-KV）还是传 Q（pass-Q），看哪个小，都无损。</li>
+    <li><b>Ulysses</b>（DeepSpeed，2023-09）：用 AllToAll 把「按序列切」换成「按头切」，算完再换回来；度数受头数限制。</li>
     <li><b>USP</b>：两者叠起来用，节点内 Ulysses、节点间 Ring。</li>
   </ul>
 
@@ -5197,25 +5201,25 @@ body.figonly section h3{margin-top:34px}
 <rect x="330" y="190" width="272.8636363636364" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="606.8636363636364" y="194" width="49" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="612" y="211" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">33.35</tspan></text>
-<text class="svgsm" x="663" y="211" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专线够并 2 台</text>
+<text class="svgsm" x="1164" y="211" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 2 台</text>
 <text class="svgsm" x="314" y="262" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Qwen3.5-397B</tspan></text>
 <text class="svgsm" x="314" y="283" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">每 4 层里 3 层线性</text>
 <rect x="330" y="246" width="67.5" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="401.5" y="250" width="40" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="407" y="267" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8.25</tspan></text>
-<text class="svgsm" x="449" y="267" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专线够并 12 台</text>
+<text class="svgsm" x="1164" y="267" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 12 台</text>
 <text class="svgsm" x="314" y="326" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MiniMax-M2.5</tspan></text>
 <text class="svgsm" x="314" y="347" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">全注意力</text>
 <rect x="330" y="310" width="490.33636363636356" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="824.3363636363636" y="314" width="49" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="830" y="331" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">59.93</tspan></text>
-<text class="svgsm" x="881" y="331" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专线够并 1 台</text>
+<text class="svgsm" x="1164" y="331" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 1 台</text>
 <text class="svgsm" x="314" y="382" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MiMo-V2-Flash</tspan></text>
 <text class="svgsm" x="314" y="403" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">每 6 层里 5 层只看近处</text>
 <rect x="330" y="366" width="38.127272727272725" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="372.1272727272727" y="370" width="40" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="378" y="387" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.66</tspan></text>
-<text class="svgsm" x="420" y="387" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专线够并 21 台</text>
+<text class="svgsm" x="1164" y="387" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 21 台</text>
 <path d="M1148.2,172 L1148.2,450" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,4"/>
 <text class="svgsm" x="1140" y="190" fill="#a50e0e" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整条跨集群专线约 100 Gbps（集群共用）</tspan></text>
 </svg><figcaption><b>同一条专线：橙柱只够并 1–2 台，绿柱能并 12–21 台。</b><span class="capmore"><br><em>每根柱是一台 prefill 每秒外送的量；红虚线是整个集群共用的专线，绿虚线是案例里整个集群的平均出口。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 PrFaaS，arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a>（Moonshot AI ＋ 清华）：Table 3 的 Φ_kv；案例吞吐 +54%、P90 TTFT −64%、同成本约 +15%、比不调度的朴素异构 +32%；长度阈值 19.4K，约一半请求外送；平均出口 13 Gbps，占整条以太网的 13%（§4.3.1，故专线约 100 Gbps）。「够并几台」＝ ⌊100 ÷ 每台外送⌋，本课推导。</p>
@@ -5375,7 +5379,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s9-4">9.4　换个分母，10.4 倍变 2.2 倍</h3>
   <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。</p>
-<figure class="fbox fwide" id="fig-s9-prefill-sweep"><svg viewBox="0 0 1400 694" width="100%" role="img" aria-label="vLLM 跑 DeepSeek-V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个，每个 prefill 4 张卡。蓝线按每张 decode 卡算，从 307 涨到 12 个 prefill 时的 3,187，涨了 10.4 倍，14 个时还在涨。橙线把 prefill 的卡也算进分母，从 204 涨到 12 个 prefill 时的 455 就到顶，只涨 2.2 倍，14 个时回落到 415"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s9-prefill-sweep"><svg viewBox="0 0 1400 664" width="100%" role="img" aria-label="vLLM 跑 DeepSeek-V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个，每个 prefill 4 张卡。蓝线按每张 decode 卡算，从 307 涨到 12 个 prefill 时的 3,187，涨了 10.4 倍，14 个时还在涨。橙线把 prefill 的卡也算进分母，从 204 涨到 12 个 prefill 时的 455 就到顶，只涨 2.2 倍，14 个时回落到 415"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">只除 decode 卡，加 prefill 像白捡；全部卡都算上，到 12 个就到顶</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一组实测（vLLM，DeepSeek-V4-Pro，GB300；decode ＝ dep8 共 8 卡，每个 prefill TP4 共 4 卡；8K 输入 1K 输出，并发 1,024）。纵轴是每卡 output tok/s</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -5431,24 +5435,95 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1250" y="270" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">1 → 12 个</text>
 <text class="svgsm" x="1250" y="394" fill="#b06000" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×2.2</tspan></text>
 <text class="svgsm" x="1250" y="416" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">1 → 12 个</text>
-<rect x="0" y="572" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="572" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="572" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="599" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两条线都说加 prefill 是杠杆，只是杠杆长短差了五倍</tspan></text>
-<text class="svgsm" x="20" y="630" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">蓝线的分母里没有 prefill 的卡：喂一个小 decode 的 prefill 越多，它越好看。算整机成本要看橙线。</text>
-<text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">橙线在 12 个 prefill 时到顶，再加就开始稀释每卡产出，配比到这里就够了。</text>
+<rect x="0" y="542" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="542" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="542" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="569" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两条线都说加 prefill 是杠杆，只是杠杆长短差了五倍</tspan></text>
+<text class="svgsm" x="20" y="600" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">蓝线的分母里没有 prefill 的卡：喂一个小 decode 的 prefill 越多，它越好看。算整机成本要看橙线。</text>
+<text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">橙线在 12 个 prefill 时到顶，再加就开始稀释每卡产出，配比到这里就够了。</text>
 </svg><figcaption><b>同一组实测，两条线。</b><span class="capmore"><br><em>蓝线是 runbook 原口径，橙线是本课换了分母重算的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md §12.3（2026-07-24 实测，runbook 注明本文未重测；12 个时取原表的 3,187，25,500 ÷ 8 ＝ 3,187.5）；prefill 为 TP4 见同文件 §0。</p>
 <p>⚠️ 本课推导：橙线 ＝ output ÷（4 × prefill 个数 ＋ 8）。16 个 prefill 那档撞上失效模式 B、只跑出部分结果，没画。同一 runbook 的 4K 输入重扫显示每个 prefill 喂料约翻倍（1 个 prefill 时 2.06 倍），曲线形状随输入长度变。</p></details></figure>
   <p>只除 decode 卡是不少 PD 报告的默认口径（2.3）；把 prefill 的卡也算进分母，只涨 2.2 倍。曲线是 2026-07-24 的历史实测，看趋势。</p>
 
   <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
   <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b></p>
-  <table>
-    <tr><th>负载</th><th>不拆</th><th>拆</th><th>怎么读</th></tr>
-    <tr><td>MiMo-V2-Flash，TPU v7x，16K 进 4K 出，batch 64</td><td>两个 pod 各跑一份：11.70K total tok/s</td><td>1P1D 10.55K；2P1D 用三个 pod 也只有 10.83K</td><td>并发不高，拆了亏</td></tr>
-    <tr><td>同上，batch 128</td><td>12.78K</td><td>1P1D 13.64K；2P1D 用三个 pod 15.31K</td><td>同样两个 pod，1P1D 多 6.7%；2P1D 赢在多一个 pod，按 pod 算低 20%</td></tr>
-    <tr><td>Qwen3-Coder-480B，两台 v7x-8，1K 进 1K 出，单并发</td><td>一台：TTFT 中位数 95 ms</td><td>1P1D：281 ms</td><td>多一趟传输；两倍机器，输出只多 12%</td></tr>
-  </table>
+<figure class="fbox fwide" id="fig-s9-split-pod"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="MiMo-V2-Flash 在 TPU v7x 上，16K 输入 4K 输出。左边是总吞吐：batch 64 时不拆 11.70K、1P1D 10.55K、2P1D 10.83K；batch 128 时不拆 12.78K、1P1D 13.64K、2P1D 15.31K，2P1D 最高。但 2P1D 用了 3 个 pod，另外两种是 2 个。右边按 pod 平均：batch 64 是 5.85、5.28、3.61；batch 128 是 6.39、6.82、5.10，1P1D 比不拆高 6.7%，2P1D 低 20%，左边最高的那根，在右边成了同组最矮"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">按 pod 算拆不拆　——　<tspan font-weight="700">总量最高的 2P1D，按 pod 算成了同组最矮</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">MiMo-V2-Flash · TPU v7x（每 pod 4 芯片）· 16K 进 4K 出；单位 K tok/s（total，含输入）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">不拆（2 pod）</text>
+<rect x="155.64000000000001" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="176" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">1P1D（2 pod）</text>
+<rect x="318.0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="339" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">2P1D（3 pod）</text>
+<rect x="0" y="102" width="690.0" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="690.0" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="690.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="690.0" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">总吞吐（README 原值）</tspan></text>
+<rect x="81.5" y="275.47058823529414" width="70" height="144.52941176470588" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="116" y="265" fill="#80868b" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">11.70K</tspan></text>
+<text class="svgsm" x="116" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="177.5" y="289.6764705882353" width="70" height="130.3235294117647" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="212" y="279" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.55K</tspan></text>
+<text class="svgsm" x="212" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="273.5" y="286.21764705882356" width="70" height="133.78235294117647" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="308" y="276" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10.83K</tspan></text>
+<text class="svgsm" x="308" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">3 pod</text>
+<text class="svgsm" x="212" y="470" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch 64</tspan></text>
+<rect x="386.5" y="262.1294117647059" width="70" height="157.8705882352941" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="421" y="252" fill="#80868b" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">12.78K</tspan></text>
+<text class="svgsm" x="421" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="482.5" y="251.50588235294117" width="70" height="168.49411764705883" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="517" y="241" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13.64K</tspan></text>
+<text class="svgsm" x="517" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="578.5" y="230.8764705882353" width="70" height="189.1235294117647" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="613" y="220" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">15.31K</tspan></text>
+<text class="svgsm" x="613" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">3 pod</text>
+<text class="svgsm" x="517" y="470" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch 128</tspan></text>
+<line x1="30" y1="420" x2="660.0" y2="420" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="710.0" y="102" width="690.0" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="710.0" y="102" width="690.0" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="710.0" y="104" width="690.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="710.0" y1="132" x2="1400.0" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="724" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每 pod 吞吐（本课推导：总吞吐 ÷ pod 数）</tspan></text>
+<rect x="791.5" y="266.4375" width="70" height="153.5625" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="826" y="256" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">推导</text>
+<text class="svgsm" x="826" y="238" fill="#80868b" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.85</tspan></text>
+<text class="svgsm" x="826" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="887.5" y="281.53125" width="70" height="138.46875" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="922" y="271" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">推导</text>
+<text class="svgsm" x="922" y="253" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.28</tspan></text>
+<text class="svgsm" x="922" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="983.5" y="325.2375" width="70" height="94.7625" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1018" y="315" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">推导</text>
+<text class="svgsm" x="1018" y="297" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.61</tspan></text>
+<text class="svgsm" x="1018" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">3 pod</text>
+<text class="svgsm" x="922" y="470" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch 64</tspan></text>
+<rect x="1096.5" y="252.26250000000002" width="70" height="167.73749999999998" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1131" y="242" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">推导</text>
+<text class="svgsm" x="1131" y="224" fill="#80868b" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.39</tspan></text>
+<text class="svgsm" x="1131" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="1192.5" y="240.975" width="70" height="179.025" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1227" y="230" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">推导</text>
+<text class="svgsm" x="1227" y="212" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.82</tspan></text>
+<text class="svgsm" x="1227" y="190" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+6.7%</tspan></text>
+<text class="svgsm" x="1227" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 pod</text>
+<rect x="1288.5" y="286.0375" width="70" height="133.9625" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1323" y="276" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">推导</text>
+<text class="svgsm" x="1323" y="258" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.10</tspan></text>
+<text class="svgsm" x="1323" y="236" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−20%</tspan></text>
+<text class="svgsm" x="1323" y="442" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">3 pod</text>
+<text class="svgsm" x="1227" y="470" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">batch 128</tspan></text>
+<line x1="740.0" y1="420" x2="1370.0" y2="420" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="0" y="498" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="498" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="498" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="525" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2P1D 多出来的总量，是多一个 pod 换来的</tspan></text>
+<text class="svgsm" x="20" y="556" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">batch 64 时，拆了不管按总量还是按 pod 都亏。</text>
+</svg><figcaption><b>总量看 2P1D 最高；按 pod 算，只有 batch 128 的 1P1D 赢一点。</b><span class="capmore"><br><em>README 原值；每 pod 吞吐为本课推导（总吞吐 ÷ pod 数）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 tpu/sglang-jax/mimo/README.md:8-12、81-88（总体结果表；request_rate=inf，total tok/s 含输入；README 自注只看趋势、未考虑 SLO）。</p>
+<p>本课推导：每 pod ＝ total ÷ pod 数；+6.7% ＝ 6.82 ÷ 6.39 − 1（README 写约 6.8%，按表算 6.7%）；−20% ＝ 5.10 ÷ 6.39 − 1。</p></details></figure>
+  <p>Qwen3-Coder（两台 v7x-8，1K 进 1K 出）单并发拆成 1P1D，首字中位数 95 → 281 ms，机器翻倍，输出只多 12%。</p>
   <details class="foldfig"><summary><b>出处与口径</b>：两组 TPU 例子</summary>
   <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%；2P1D 每 pod 5.10K 对不拆的 6.39K（本课推导）。</p>
   <p>Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量。</p></details>
@@ -7055,6 +7130,7 @@ body.figonly section h3{margin-top:34px}
 <circle cx="278.0" cy="228.0" r="5" fill="#5f6368"/>
 <text class="svgsm" x="262" y="268" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">掷骰子</tspan></text>
 <line x1="310" y1="212.0" x2="360" y2="212.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="380" y="168" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">五道各自独立的题（举例；不是同一步的五个位置，格子数也不是比例）</text>
 <rect x="380" y="182.0" width="96" height="60" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="428" y="210" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「不错」</tspan></text>
 <text class="svgsm" x="428" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕ 扔掉</tspan></text>
@@ -7087,6 +7163,7 @@ body.figonly section h3{margin-top:34px}
 <circle cx="262.0" cy="414.0" r="5" fill="#5f6368"/>
 <text class="svgsm" x="262" y="470" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只认最可能那个</tspan></text>
 <line x1="310" y1="414.0" x2="360" y2="414.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="380" y="370" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同样是五道独立的题（举例）</text>
 <rect x="380" y="384.0" width="96" height="60" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="428" y="412" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
 <text class="svgsm" x="428" y="436" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓ 收下</tspan></text>
@@ -7125,18 +7202,18 @@ body.figonly section h3{margin-top:34px}
   <p>草稿一路往大模型身上长；各家倍数口径不同，不能横比。</p>
   <ul>
     <li><b>2022-11</b>：独立的小模型当草稿，报单请求快 2–3 倍。</li>
-    <li><b>2024 初</b>：Medusa 在大模型上直接加几个解码头，报 2.2–3.6 倍；EAGLE 用大模型的隐状态猜，2.7–3.5 倍。</li>
+    <li><b>2024-01</b>：Medusa 在大模型上直接加几个解码头，报 2.2–3.6 倍；EAGLE 用大模型的隐状态猜，2.7–3.5 倍。</li>
     <li><b>2024-12</b>：DeepSeek-V3 的 MTP（多训一整层 transformer，和主模型共用词表和输出头）第 2 个字接受率 85–90%，约快 1.8 倍。</li>
     <li><b>2025-03</b>：EAGLE-3 融合大模型浅、中、深三层的状态，batch 64 时吞吐仍高 1.38 倍（SGLang）。</li>
-    <li><b>2026</b>：DeepSeek 的 DSpark 半自回归（普通 decode 每个字要等前一个，它一次出一小段），按置信度决定验几个；摘要报吞吐相同时单用户生成比线上 MTP-1 快 60–85%。</li>
+    <li><b>2026-07</b>：DeepSeek 的 DSpark 半自回归（普通 decode 每个字要等前一个，它一次出一小段），按置信度决定验几个；摘要报吞吐相同时单用户生成比线上 MTP-1 快 60–85%。</li>
   </ul>
-<figure class="fbox fwide" id="fig-s11-tree"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="投机解码的草稿从哪来，按时间排在 2022 到 2026 年的轴上。2022 年 11 月投机解码：另放一个独立小模型打草稿。2024 年初 Medusa：大模型头上加几个解码头；同期 EAGLE：小模型读大模型的隐状态来猜。2024 年 12 月 DeepSeek-V3 的 MTP：预训练时就多带一层，共享输出头。2025 年 3 月 EAGLE-3：把大模型几层的隐状态拼在一起来猜。2026 年 DSpark：半自回归一次出一小段，按置信度决定验几个。侧枝 2023 年 Prompt Lookup：不用草稿模型，直接从 prompt 里抄"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s11-tree"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="投机解码的草稿从哪来，按时间排在 2022 到 2026 年的轴上。2022 年 11 月投机解码：另放一个独立小模型打草稿。2024 年 1 月 Medusa：大模型头上加几个解码头；同期 EAGLE：小模型读大模型的隐状态来猜。2024 年 12 月 DeepSeek-V3 的 MTP：预训练时就多带一层，共享输出头。2025 年 3 月 EAGLE-3：把大模型几层的隐状态拼在一起来猜。2026 年 7 月 DSpark：半自回归一次出一小段，按置信度决定验几个。侧枝 2023 年 11 月 Prompt Lookup：不用草稿模型，直接从 prompt 里抄"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">草稿从哪来　——　<tspan font-weight="700">一步步长进大模型身上，或者干脆不要模型</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴是首次公开的时间：论文按 arXiv 首版，Prompt Lookup 没有论文，按 GitHub 仓库。每张卡只写草稿从哪来</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">主线：草稿模型</text>
-<rect x="156.76" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="177" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">侧枝：不用草稿模型</text>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">主线：要训练的草稿（小模型／头／层）</text>
+<rect x="329.24" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="350" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">侧枝：不用草稿模型</text>
 <line x1="45.0" y1="114" x2="1355.0" y2="114" stroke="#9334e6" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
 <text class="svgsm" x="1345" y="106" fill="#681da8" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿越来越贴着大模型自己长</tspan></text>
 <rect x="25.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -7148,16 +7225,16 @@ body.figonly section h3{margin-top:34px}
 <line x1="130.0" y1="264" x2="282.71999999997206" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="282.7" cy="334.0" r="6" fill="#9334e6"/>
 <rect x="253.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="265.0" y="144" width="74" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="302" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024 初</tspan></text>
+<rect x="265.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="301" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01</tspan></text>
 <text class="svgsm" x="267" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Medusa</tspan></text>
 <text class="svgsm" x="267" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">大模型头上</text>
 <text class="svgsm" x="267" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">加几个解码头</text>
 <line x1="358.0" y1="264" x2="582.2399999999907" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="582.2" cy="334.0" r="6" fill="#9334e6"/>
 <rect x="481.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="493.0" y="144" width="74" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="530" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024 初</tspan></text>
+<rect x="493.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="529" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01</tspan></text>
 <text class="svgsm" x="495" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE</tspan></text>
 <text class="svgsm" x="495" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">小模型读大模型的</text>
 <text class="svgsm" x="495" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">隐状态来猜</text>
@@ -7180,8 +7257,8 @@ body.figonly section h3{margin-top:34px}
 <line x1="1042.0" y1="264" x2="871.5200000000186" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
 <circle cx="871.5" cy="334.0" r="6" fill="#9334e6"/>
 <rect x="1165.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="1177.0" y="144" width="52" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1203" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026</tspan></text>
+<rect x="1177.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1213" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-07</tspan></text>
 <text class="svgsm" x="1179" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DSpark</tspan></text>
 <text class="svgsm" x="1179" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">半自回归一次出一小段，</text>
 <text class="svgsm" x="1179" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">按置信度定验几个</text>
@@ -7201,8 +7278,8 @@ body.figonly section h3{margin-top:34px}
 <circle cx="538.7" cy="334.0" r="6" fill="#e8710a"/>
 <line x1="538.7199999999721" y1="340" x2="598.7199999999721" y2="394" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 4"/>
 <rect x="493.71999999997206" y="394" width="210" height="132" rx="10" fill="none" stroke="#e8710a" stroke-width="1.0" stroke-dasharray="6,4"/>
-<rect x="505.71999999997206" y="406" width="52" height="26" rx="13" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="531" y="424" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023</tspan></text>
+<rect x="505.71999999997206" y="406" width="73" height="26" rx="13" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="542" y="424" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023-11</tspan></text>
 <text class="svgsm" x="507" y="460" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Prompt Lookup</tspan></text>
 <text class="svgsm" x="507" y="488" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">不用草稿模型：</text>
 <text class="svgsm" x="507" y="510" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">直接从 prompt 里抄</text>
@@ -7370,13 +7447,13 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s12-3">12.3　低精度直接训出来</h3>
   <p>发布时就是低精度，正在变成默认做法。
-    Kimi K2 Thinking 在后训练阶段做量化感知训练（QAT，训练时就适应舍入误差），MoE 部分原生 INT4 权重，模型卡称生成速度约提升 2 倍。</p>
+    Kimi K2 Thinking 在后训练阶段做量化感知训练（QAT，训练时就适应舍入误差），MoE 部分原生 INT4 权重，模型卡称低延迟模式下生成速度约提升 2 倍，没写对照的是哪种精度。</p>
   <p>DeepSeek-V4 的模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占了参数的绝大部分，也是 decode 时读得最多的那部分。</p>
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
   <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 要约 101.8 GB，越过可用的 94.75 GiB；转成 FP4 才腾出余量。</p>
-<figure class="fbox fwide" id="fig-s12-cap"><svg viewBox="0 0 1400 428" width="100%" role="img" aria-label="DeepSeek-R1 放进 TPU v7x-8，每个 device 要多少显存。竖虚线是可用上限 94.75 GiB，约 101.7 GB。专家权重用 FP8 是 101.8 GB，正好越过上限；README 单位写的是 GB，要是按 GiB 读就是约 109.3 GB，超得更多。转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，离上限还有三十 GB 上下"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FP4 先是被容量逼的　——　<tspan font-weight="700">FP8 差一点放不下，FP4 才腾出余量</tspan></text>
+<figure class="fbox fwide" id="fig-s12-cap"><svg viewBox="0 0 1400 428" width="100%" role="img" aria-label="DeepSeek-R1 放进 TPU v7x-8，每个 device 要多少显存。竖虚线是可用上限 94.75 GiB，约 101.7 GB。专家权重用 FP8 是 101.8 GB，越过上限；README 单位写的是 GB，要是按 GiB 读就是约 109.3 GB，超得更多。转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，离上限还有三十 GB 上下"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FP4 先是被容量逼的　——　<tspan font-weight="700">FP8 放不下，FP4 才腾出余量</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个 device 的权重占用（README 原值，单位 GB）；竖虚线 ＝ 可用上限 94.75 GiB ≈ 101.7 GB</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">放不下</text>
@@ -7402,8 +7479,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="914" y="310" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 70</tspan></text>
 <line x1="1195.9807479808" y1="160" x2="1195.9807479808" y2="344" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
 <text class="svgsm" x="1195" y="364" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上限 94.75 GiB ≈ 101.7 GB</tspan></text>
-<text class="svgsm" x="1187" y="168" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只超约 0.06 GB：零余量</tspan></text>
-</svg><figcaption><b>红条刚好越过虚线：差一点也放不下。</b><span class="capmore"><br><em>README 原值，每 device；两种单位都超。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；数为每 device，README 写 GB）；上限出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。换算 94.75 GiB ≈ 101.7 GB、101.8 GiB ≈ 109.3 GB 为本课推导。</p></details></figure>
+<text class="svgsm" x="1187" y="168" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">哪种单位读都超（最少 0.06 GB）</tspan></text>
+</svg><figcaption><b>红条越过虚线：不管单位怎么读都放不下。</b><span class="capmore"><br><em>README 原值，每 device；两种单位都超。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；数为每 device，README 写 GB）；上限出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。换算 94.75 GiB ≈ 101.7 GB、101.8 GiB ≈ 109.3 GB 为本课推导。</p></details></figure>
   <p>可 v7 的公开规格只列 BF16 和 FP8 峰值，没写 FP4，推测 FP4 只能当权重存，算之前在片上解成 FP8 或 BF16。字节省了，转换的功夫加上了，净收益只能实测。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>
@@ -7670,6 +7747,7 @@ body.figonly section h3{margin-top:34px}
     K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>实际布局不是严格一半。FlashMLA 给 DeepSeek-V3.2 的 FP8 KV 每 token 每层 656 B：512 个 FP8 值、4 个 FP32 缩放，64 维位置编码（告诉模型每个字排第几）部分为了精度留在 BF16。
     BF16 是 1,152 B，所以同样显存能装的请求是 BF16 的约 1.76 倍（本课推导）。</p>
+  <p>下一步是 4 bit：NVIDIA 2025 年底在 Blackwell 上放出 NVFP4 KV，显存比 FP8 KV 再省约一半，基准上精度损失不到 1%；Qwen3-Coder-480B 上缓存命中率高 20%、首字最多快 3 倍（NVIDIA 博客 2025-12）。算注意力前仍先解回 FP8，省的是容量和读的字节，不是算力。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数是 megakernel 加 DSpark 投机一起换来的，博客没提量化。</div>
@@ -7870,8 +7948,61 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s13-4">13.4　运维的两个坑</h3>
   <ul>
     <li><b>「起来了」不等于「活着」。</b>V4-Pro 的 SGLang 部署里 14 台 prefill 全崩了，服务注册表还显示 14 台在线。判活要看显存、真发一个请求。</li>
-    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存（runbook 推测是跨机器 NVLink，即 MNNVL，没释放）：284 GB 只剩 187 GB，而 <code>mem-fraction-static 0.85</code>（SGLang 预留给权重和 KV 池的显存比例）要静态占 241 GB，下次启动必然 OOM。报错还劝你调大这个比例，正好反了。删 pod 重建，56 秒显存归零。</li>
+    <li><b>别一卡一个 <code>pkill -9</code>。</b>GB300 上强杀一个满载的 decode，每卡漏掉约 97 GB 显存（runbook 推测是跨机器 NVLink，即 MNNVL，没释放）。<code>mem-fraction-static</code> 是 SGLang 预留给权重和 KV 池的显存比例，设 0.85 时这份预留就再也够不着。</li>
   </ul>
+<figure class="fbox fwide" id="fig-s13-leak"><svg viewBox="0 0 1400 534" width="100%" role="img" aria-label="GB300 每卡显存 284 GB。强杀一个满载的 decode 之后，每卡还有 97 GB 没释放，runbook 推测是跨机器 NVLink 那部分；能用的只剩 187 GB。SGLang 的 mem-fraction-static 0.85 要静态占 241 GB，差 54 GB，下次启动必然 OOM。报错却劝你调大这个比例，那等于把要占的线往右挪，差得更多。删 pod 重建，56 秒后 284 GB 全都能用，241 落在里面，起得来"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">pkill -9 漏掉的显存　——　<tspan font-weight="700">97 GB 没还，241 GB 的预留永远够不着</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 每卡显存（nvidia-smi，单位 GB，照 runbook 写）；虚线 ＝ mem-fraction-static 0.85 要静态占的 241</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">还能用</text>
+<rect x="94.04" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">没释放（runbook 推测是跨机 NVLink，即 MNNVL）</text>
+<rect x="520.72" y="63" width="14" height="14" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="541" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">静态预留要占到这里</text>
+<rect x="0" y="102" width="1400" height="378" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DeepSeek-V4-Pro · SGLang · GB300 · 每卡</tspan></text>
+<text class="svgsm" x="24" y="222" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">pkill -9 之后</tspan></text>
+<text class="svgsm" x="24" y="244" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">强杀一个满载的 decode</text>
+<rect x="250" y="202" width="658.4507042253522" height="46" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="266" y="232" fill="#fff" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">187　还能用</tspan></text>
+<rect x="908.4507042253522" y="202" width="341.54929577464793" height="46" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+<text class="svgsm" x="1238" y="232" fill="#a50e0e" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">97　没释放</tspan></text>
+<path d="M908.5,256 L908.5,262 L1098.6,262 L1098.6,256" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="1003" y="286" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差 54 → 必然 OOM</tspan></text>
+<text class="svgsm" x="1003" y="306" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">推导：241 − 187</text>
+<rect x="250" y="266" width="520" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="264" y="291" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">报错：请调大 mem-fraction-static</tspan></text>
+<text class="svgsm" x="264" y="315" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">调大 ＝ 虚线往右挪 →，差得更多；方向正好反了</text>
+<line x1="1106.5915492957747" y1="188" x2="1168.5915492957747" y2="188" stroke="#d93025" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="1174" y="193" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">调大</tspan></text>
+<text class="svgsm" x="24" y="392" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">删 pod 重建</tspan></text>
+<text class="svgsm" x="24" y="414" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">56 秒后显存归零</text>
+<rect x="250" y="372" width="1000.0" height="46" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="266" y="402" fill="#fff" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">284　都能用</tspan></text>
+<text class="svgsm" x="1262" y="402" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">起得来 ✓</tspan></text>
+<line x1="1098.5915492957747" y1="168" x2="1098.5915492957747" y2="428" stroke="#202124" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text class="svgsm" x="1090" y="180" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">mem-fraction-static 0.85 要静态占 241</tspan></text>
+<line x1="250" y1="440" x2="1250.0" y2="440" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="250.0" y1="436" x2="250.0" y2="444" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="250" y="460" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="426.056338028169" y1="436" x2="426.056338028169" y2="444" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="426" y="460" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">50</text>
+<line x1="602.112676056338" y1="436" x2="602.112676056338" y2="444" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="602" y="460" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">100</text>
+<line x1="778.1690140845071" y1="436" x2="778.1690140845071" y2="444" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="778" y="460" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">150</text>
+<line x1="954.2253521126761" y1="436" x2="954.2253521126761" y2="444" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="954" y="460" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">200</text>
+<line x1="1130.281690140845" y1="436" x2="1130.281690140845" y2="444" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1130" y="460" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">250</text>
+<line x1="1250.0" y1="436" x2="1250.0" y2="444" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1250" y="460" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">284</text>
+<text class="svgsm" x="1280" y="460" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GB</text>
+</svg><figcaption><b>漏掉的 97 GB 让 241 GB 的静态预留永远够不着；报错劝你调大比例，方向正好反了。</b><span class="capmore"><br><em>runbook 原值，每卡，单位 GB；差 54 为本课推导。删 pod 重建后 56 秒显存归零。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:960-978：pkill -9 后 nvidia-smi 每卡 97,486 MiB／284,208 MiB；「284 GB 减掉 97 GB 只剩 187 GB，而 mem-fraction-static 0.85 要 241 GB」；报错原文 Not enough memory. Please try to increase --mem-fraction-static.；推测原因 MNNVL/IMEX 导出的显存在 SIGKILL 时不走正常回收、容器 PID 1 不 reap；删 pod 到显存归零实测 56 秒。</p>
+<p>单位照 runbook 写 GB（MiB ÷ 1000，三个数同一把尺）。差 54 ＝ 241 − 187，本课推导。</p></details></figure>
 
   <h3 id="s13-5">13.5　栈怎么选</h3>
   <table>
@@ -7969,7 +8100,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1235" y="508" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">命中缓存</tspan></text>
 <line x1="1000" y1="482" x2="1310" y2="482" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="960" y="560" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">命中率 87.4%</tspan></text>
-</svg><figcaption><b>看同前缀的请求落到哪个副本。</b><span class="capmore"><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是最坏情况、不是轮询的平均值。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Red Hat Developer，2025-10-07，「Master KV cache aware routing with llm-d」：warm cache hit TTFT 340 ms，对照为无 KV 感知路由的最坏情况 2,850 ms；命中率 87.4%（4,776 次查询中 4,176 次）。⚠️ 2,850 是最坏情况，不是轮询的平均值。</p>
+</svg><figcaption><b>看同前缀的请求落到哪个副本。</b><span class="capmore"><br><em>左为示意；右为 Red Hat 用 llm-d 的实测，TTFT 含排队，2,850 ms 是不路由的最坏情况、不是轮询的平均值。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Red Hat Developer，2025-10-07，「Master KV cache aware routing with llm-d」：warm cache hit TTFT 340 ms，对照为无 KV 感知路由的最坏情况 2,850 ms；命中率 87.4%（4,776 次查询中 4,176 次）。⚠️ 2,850 是最坏情况，不是轮询的平均值。</p>
 <p>⚠️ 本课示意：左栏的副本与请求是示意。</p>
 <p>正文里的健康检查那句（8 个副本坏 1 个，1/8 的请求白等）是本课推导示意：12.5% ＝ 1 ÷ 8，只在纯轮询、坏副本照常收请求时成立。</p></details></figure>
   <p>KV 感知路由把同前缀的请求送到已经存着它的副本。图右是 Red Hat 2025-10 用 llm-d 的实测。</p>
@@ -8105,33 +8236,35 @@ body.figonly section h3{margin-top:34px}
 <line x1="805.0" y1="310" x2="805.0" y2="284" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
 <circle cx="805.0" cy="267.0" r="17" fill="#1a73e8" stroke="#ffffff" stroke-width="2.5"/>
 <text class="svgsm" x="805" y="272" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7b</tspan></text>
-<circle cx="24.0" cy="582.0" r="14.0" fill="#5f6368"/>
-<text class="svgsm" x="24" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
-<text class="svgsm" x="48" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">负载长什么样？</tspan></text>
-<circle cx="374.0" cy="582.0" r="14.0" fill="#5f6368"/>
-<text class="svgsm" x="374" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<text class="svgsm" x="398" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">用哪把尺子？</tspan></text>
-<circle cx="724.0" cy="582.0" r="14.0" fill="#1e8e3e"/>
-<text class="svgsm" x="724" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
-<text class="svgsm" x="748" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步至少搬多少字节？</tspan></text>
-<circle cx="1074.0" cy="582.0" r="14.0" fill="#1a73e8"/>
-<text class="svgsm" x="1074" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
-<text class="svgsm" x="1098" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放得下几条序列？</tspan></text>
-<circle cx="24.0" cy="626.0" r="14.0" fill="#1a73e8"/>
-<text class="svgsm" x="24" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
-<text class="svgsm" x="48" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 怎么切？</tspan></text>
-<circle cx="374.0" cy="626.0" r="14.0" fill="#e8710a"/>
-<text class="svgsm" x="374" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
-<text class="svgsm" x="398" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆不拆 PD，配几台？</tspan></text>
-<circle cx="724.0" cy="626.0" r="14.0" fill="#1e8e3e"/>
-<text class="svgsm" x="724" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7a</tspan></text>
-<text class="svgsm" x="748" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">量化、</tspan></text>
-<circle cx="818.0" cy="626.0" r="14.0" fill="#1a73e8"/>
-<text class="svgsm" x="818" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7b</tspan></text>
-<text class="svgsm" x="842" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">投机开不开？</tspan></text>
-<circle cx="1074.0" cy="626.0" r="14.0" fill="#5f6368"/>
-<text class="svgsm" x="1074" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
-<text class="svgsm" x="1098" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上线前跑通了吗？</tspan></text>
+<text class="svgsm" x="10" y="587" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算账</tspan></text>
+<circle cx="104.0" cy="582.0" r="14.0" fill="#5f6368"/>
+<text class="svgsm" x="104" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="128" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">负载长什么样？</tspan></text>
+<circle cx="431.5" cy="582.0" r="14.0" fill="#5f6368"/>
+<text class="svgsm" x="431" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="455" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">用哪把尺子？</tspan></text>
+<circle cx="759.0" cy="582.0" r="14.0" fill="#1e8e3e"/>
+<text class="svgsm" x="759" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="783" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步至少搬多少字节？</tspan></text>
+<circle cx="1086.5" cy="582.0" r="14.0" fill="#1a73e8"/>
+<text class="svgsm" x="1086" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="1110" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放得下几条序列？</tspan></text>
+<text class="svgsm" x="10" y="631" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">挑招数</tspan></text>
+<circle cx="104.0" cy="626.0" r="14.0" fill="#1a73e8"/>
+<text class="svgsm" x="104" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="128" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 怎么切？</tspan></text>
+<circle cx="431.5" cy="626.0" r="14.0" fill="#e8710a"/>
+<text class="svgsm" x="431" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="455" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆不拆 PD，配几台？</tspan></text>
+<circle cx="759.0" cy="626.0" r="14.0" fill="#1e8e3e"/>
+<text class="svgsm" x="759" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7a</tspan></text>
+<text class="svgsm" x="783" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">量化、</tspan></text>
+<circle cx="853.0" cy="626.0" r="14.0" fill="#1a73e8"/>
+<text class="svgsm" x="853" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7b</tspan></text>
+<text class="svgsm" x="877" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">投机开不开？</tspan></text>
+<circle cx="1086.5" cy="626.0" r="14.0" fill="#5f6368"/>
+<text class="svgsm" x="1086" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<text class="svgsm" x="1110" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上线前跑通了吗？</tspan></text>
 </svg><figcaption><b>先定尺子和账，再挑招数。</b><span class="capmore"><br><em>颜色对主线：灰 ＝ 校准尺子／上线，蓝 ＝ 分给更多 token，绿 ＝ 少搬，橙 ＝ 拆开放对地方。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课归纳：顺序按「先校准、再算账、后调招数」排，各问拿什么回答、判据见第十四节正文和对应节。</p></details></figure>
   <h3 id="s14-1">14.1　前四问：算账</h3>
   <ul>
@@ -8154,17 +8287,22 @@ body.figonly section h3{margin-top:34px}
   <table>
     <tr><th>年份</th><th>泳道</th><th>节</th><th>一个实测（对照谁）</th></tr>
     <tr><td>2022</td><td>调度</td><td>四</td><td>Orca 连续批：同延迟吞吐 36.9 倍（对 FasterTransformer 静态批）</td></tr>
-    <tr><td>2023</td><td>KV 与注意力</td><td>三</td><td>PagedAttention：同延迟吞吐 2–4 倍（对 FasterTransformer、Orca）</td></tr>
-    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：同形状下每 token KV 只剩 MHA 的约 1/57（本课推导）</td></tr>
+    <tr><td>2022</td><td>解码提速</td><td>十一</td><td>投机解码：单请求快 2–3 倍（对不投机，小模型当草稿）</td></tr>
+    <tr><td>2023</td><td>KV 与注意力</td><td>三</td><td>PagedAttention：同延迟吞吐 2–4 倍（对 FasterTransformer 和论文自己复现的 Orca）</td></tr>
+    <tr><td>2023</td><td>复用与下放</td><td>三</td><td>RadixAttention 前缀复用：吞吐最多 6.4 倍（对不复用）</td></tr>
+    <tr><td>2024</td><td>KV 与注意力</td><td>三</td><td>MLA：每层 KV 是同形状 MHA 的约 1/57，对 2023 年已普及的 GQA（Llama-3.1-70B）约 1/3.6（本课推导）</td></tr>
     <tr><td>2024</td><td>调度</td><td>四</td><td>Sarathi-Serve 分块 prefill：达标容量 2.6–3.7 倍（对 vLLM）</td></tr>
     <tr><td>2024</td><td>拆开放</td><td>八</td><td>DistServe：同样的延迟要求下多接 7.4 倍请求（对不拆的系统）</td></tr>
-    <tr><td>2024</td><td>KV 当存储</td><td>八</td><td>Mooncake：Kimi 真实负载下多接 75% 请求（摘要未写对照系统）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：命中按十分之一计价；2025-02 线上 56.3% 输入命中</td></tr>
+    <tr><td>2024</td><td>解码提速</td><td>十一</td><td>DeepSeek-V3 把 MTP 训进主模型：第 2 个字接受 85–90%，约快 1.8 倍（对不开）</td></tr>
+    <tr><td>2024</td><td>复用与下放</td><td>八</td><td>Mooncake：Kimi 真实负载下多接 75% 请求（摘要未写对照系统）</td></tr>
     <tr><td>2025</td><td>拆开放</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
     <tr><td>2025</td><td>复用与下放</td><td>三</td><td>llm-d 把 KV 卸到主机内存：P90 首字 2.1 s → 0.5 s（对不卸载）</td></tr>
-    <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：模型卡称生成约快 2 倍</td></tr>
+    <tr><td>2025</td><td>少搬字节</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：模型卡称低延迟模式下生成约快 2 倍（未写对照精度）</td></tr>
     <tr><td>2026</td><td>解码提速</td><td>十一</td><td>K3 开投机：每字间隔 11.1 → 2.31 ms；并发 64 时输出吞吐只剩 1.74×（对不开）</td></tr>
     <tr><td><b>2026-06</b></td><td><b>叠起来</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档都不换：每卡从 Day-0 约 2,200 到约 11,200，5.1 倍。这是软件栈全部改进的合计，含 MTP 投机（PyTorch 博客 2026-06-23）</b></td></tr>
   </table>
+  <p>落到一家的真实账上：DeepSeek 2025-02 公布的一天，平均 226.75 个 H800 节点处理输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950 个 token（输入输出合计、全天平均；本课推导：7,760 亿 ÷ 86,400 s ÷ 1,814 卡）。这套服务用的正是表里的几行：MLA、大 EP 加 PD 分离、磁盘 KV 缓存、FP8。<b>便宜不是哪一招的功劳，是每一行都让同一趟搬运分给更多 token，或者搬得更少。</b></p>
 
 </div></section>
 <section id="s十五"><div class="wrap"><div class="stn"><span class="badge">第 十五 节</span><h2>出处台账</h2></div>
@@ -8188,7 +8326,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>没预热：第一轮 13,585、第二轮 27,803（×2.05）；闭环压测低估 13%</td><td>VLLM-V4PRO-RUNBOOK.md:431-433；闭环 SGLANG-V4PRO-RUNBOOK.md:478、1135</td></tr>
     <tr><td>goodput 比吞吐更能比系统：7.4× 请求率、12.6× 更紧 SLO</td><td>DistServe，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a></td></tr>
     <tr><td>vLLM 压测工具的 goodput ＝ 每秒达标请求数（与 DistServe 口径不同）</td><td>vLLM 仓库 vllm/benchmarks/serve.py 的 --goodput 参数</td></tr>
-    <tr><td>DeepSeek 线上实测：226.75 节点、理论成本利润率 545%（全按 R1 定价收费的假设）、每节点 14,800 tok/s、20–22 tok/s/user</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
+    <tr><td>DeepSeek 线上实测：226.75 节点、理论成本利润率 545%（全按 R1 定价收费的假设）、每节点 14,800 tok/s、20–22 tok/s/user；一天输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950（本课推导：7,760 亿 ÷ 86,400 ÷ 1,814 卡）</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
     <tr><td>每 token KV：MHA 3,997,696 B、GQA（Llama-3.1-70B）327,680 B、Qwen3.5 全注意力 30,720 B ＋ 线性状态 180 MiB／序列；Qwen3.5 KV 头数 2</td><td>本课推导，形状取各自 Hugging Face config.json</td></tr>
     <tr><td>8 颗 v7 放 V3：KV 池 92.4 GiB／芯片，4K 装 344 条、32K 装 43 条、64K 装 21 条（FP8 KV 按 656 B/层约 37 条）；Llama 4K 73 条</td><td>本课推导：每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，R1 FP4 README:59，同台账里「V3 FP8 切片表」那一行）× 0.9 ＝ 170.55 GiB，− 78.1 GiB（671 GB ÷ 8）；0.9 为本课假设；先按权重全切分粗算，DP attention 下非专家权重每 device 复制，实际更小（10.5）</td></tr>
     <tr><td>PagedAttention：KV 有效利用率 20.4–38.2% → 96.3%</td><td>vLLM 论文，arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a></td></tr>
@@ -8237,15 +8375,15 @@ body.figonly section h3{margin-top:34px}
     <tr><td>跨数据中心 PD：链路 33.35／8.25／59.93／4.66 Gbps；案例 ＋54%、P90 −64%、13 Gbps（论文吞吐模型推算）、阈值 19.4K</td><td>PrFaaS，arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a> Table 3 与案例节；整条跨集群以太网约 100 Gbps 由「13 Gbps 占 13%」（§4.3.1）得出</td></tr>
     <tr><td>P:D 配比公式：87.5 req/s、要 71.7 万 tok/s prefill、一台 7.28 万，约 9.8 台</td><td>SGLANG-V4PRO-RUNBOOK.md §12.2 :1082-1091</td></tr>
     <tr><td>B200 1P1D → 2P1D：输出 1,118.8 → 1,159.0，每卡 69.9 → 48.3，TTFT 2.40 → 1.73 s（−28%），P99 12.07 → 6.23</td><td>gpu-tpu-pedia gpu/inference/a4/deepseek-v3/REPORT-2P1D-DeepSeek-V3.md :69、:85、:100-142；cuda graph 说明 REPORT-1P1D :129</td></tr>
-    <tr><td>prefill 台数扫描（扫到 12 个 prefill）：按每张 decode 卡算 307 → 3,187，10.4×；按全部卡算 204 → 455，2.2×</td><td>VLLM-V4PRO-RUNBOOK.md §12.3；全卡 ＝ output ÷ (4n＋8) 本课推导</td></tr>
-    <tr><td>MiMo batch 128：同样 2 个 pod，1P1D 13.64K 对不分离 12.78K，＋6.7%（README 写约 6.8%）；2P1D 用 3 个 pod 到 15.31K，按 pod 算 5.10K 对 6.39K，低 20%；Qwen3-Coder 1P1D TTFT 95 → 281 ms</td><td>tpu/sglang-jax/mimo/README.md:8-12、81-88；6.7%、按 pod 与 20% 本课推导；tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005-1021</td></tr>
+    <tr><td>prefill 台数扫描（扫到 14 个 prefill）：12 个时按每张 decode 卡算 307 → 3,187，10.4×；按全部卡算 204 → 455，2.2×</td><td>VLLM-V4PRO-RUNBOOK.md §12.3；全卡 ＝ output ÷ (4n＋8) 本课推导</td></tr>
+    <tr><td>MiMo batch 128：同样 2 个 pod，1P1D 13.64K 对不分离 12.78K，＋6.7%（README 写约 6.8%）；2P1D 用 3 个 pod 到 15.31K，按 pod 算 5.10K 对 6.39K，低 20%；按 pod 另算 batch 64 不拆／1P1D／2P1D 5.85／5.28／3.61K、batch 128 的 1P1D 6.82K；Qwen3-Coder 1P1D TTFT 95 → 281 ms</td><td>tpu/sglang-jax/mimo/README.md:8-12、81-88；6.7%、按 pod 各值（总吞吐 ÷ pod 数）与 20% 本课推导；tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005-1021</td></tr>
     <tr><td>AFD：MegaScale-Infer 每卡吞吐 1.90×、Step-3 4,039 对 2,324；vLLM AFD 插件 16K／32K 实测；EPD 把多模态编码再拆出去（15×、22×、71%）</td><td>概念沿用专题五台账第 24、51 行；arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a>；arXiv <a href="https://arxiv.org/abs/2507.19427" target="_blank" rel="noopener">2507.19427</a>；vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin（RFC #22799 于 2026-05-31 关闭）；EPD arXiv <a href="https://arxiv.org/abs/2501.05460" target="_blank" rel="noopener">2501.05460</a>；Step-3 对 V3 不是同一模型，差距含模型侧设计，正文已注明</td></tr>
     <tr><td>同一模型五种部署 14,563／16,459／21,100／55,153／65,132；调参 ＋45%，换拓扑 ＋347%（并发 1,536）</td><td>VLLM-V4PRO-RUNBOOK.md:446、448、449、465、468；:489（另 :476 的 2.47×、:487 的 ＋28%）</td></tr>
     <tr><td>每卡 1,820／1,319／3,257；对 1p1d 起点 1.79×</td><td>本课推导：总吞吐 ÷ 卡数</td></tr>
     <tr><td>Qwen3-Coder TP16：跨 DCN c=1 −22%、c=16 −63%；同 ICI 切片 −15～−21%（c=16 总 513.8 对单机 602）</td><td>Qwen3-Coder-480B/README-multinode.md:441-445；README-TPU-VM.md:1000-1009</td></tr>
     <tr><td>V4-Pro dep8 要一整柜 NVL72；拓扑与频率的一般讨论</td><td>SGLANG-V4PRO-RUNBOOK.md:34、:63；沿用专题五台账第 19、26 行</td></tr>
     <tr><td>v7x-8 是 4 颗芯片（名字按 device 数）；mesh 构造</td><td>tpu/tpu-inference/README.md:41；JAX mesh_utils 文档</td></tr>
-    <tr><td>v7 每 device 实测可用 94.75 GiB（每 device 物理 96 GiB）；R1 FP8 MoE 每 device 101.8 放不下（README 写 GB，按 GB、GiB 读都超）</td><td>tpu/tpu-inference R1 FP4 README:59、72-73</td></tr>
+    <tr><td>v7 每 device 实测可用 94.75 GiB（每 device 物理 96 GiB）；R1 FP8 MoE 每 device 101.8 放不下（README 写 GB，按 GB、GiB 读都超，最少也超 0.06 GB）</td><td>tpu/tpu-inference R1 FP4 README:59、72-73；0.06 ＝ 101.8 − 101.74（94.75 GiB 换成 GB）本课推导</td></tr>
     <tr><td>v7 切片按 4、8、16、32 颗成档（2x2x1、2x2x2、2x2x4、2x4x4），4.07 颗取 8</td><td>Google Cloud TPU7x 文档 Supported configurations 表（cloud.google.com/tpu/docs/tpu7x）</td></tr>
     <tr><td>V3 FP8 切片表：4K×64 要 642 GiB／纸面 4 颗，4K×256 要 694 GiB／8 颗，128K×256 要 2,821 GiB／32 颗，KV 是权重 3.5×；4 颗放完权重剩 57 GiB，4K 纸面装 213 条，但实测 FP8 放不下</td><td>本课推导：权重 671 GB ＝ 625 GiB；每芯片 189.5 GiB × 0.9 ＝ 170.55 GiB 可用；0.9 为本课假设；实测见上一行</td></tr>
     <tr><td>128K × 256 并发：DeepSeek-V3 KV 约 2,196 GiB（权重 625 GiB 的 3.5 倍）；单条 128K 8.58 GiB</td><td>本课推导：70,272 B × 131,072 × 256 ÷ 2<sup>30</sup></td></tr>
@@ -8273,7 +8411,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>13.4：强杀后每卡剩 187 GB，mem-fraction-static 0.85 要静态占 241 GB（权重＋KV 池），下次启动 OOM</td><td>SGLANG-V4PRO-RUNBOOK.md:966（284 × 0.85 ≈ 241）</td></tr>
     <tr><td>冷启动拆账：GLM-5.1 名义加载里藏 6 分 29 秒重编译（原表总计 ~10 分 44 秒，分项和 10 分 29 秒）；Qwen3-Coder 40 分钟里编译 29；MiMo-V2.5-Pro 编译 15 ＋ 预热 7（原表总计 ~50 分钟，分项和 52 分钟）</td><td>GLM-5.1 README:470-476；Qwen3-Coder README-TPU-VM.md:1011；MiMo-V2.5-Pro README:184-188</td></tr>
     <tr><td>R1 加载 215.7 → 21.4 s（1,367 个张量只有 25 种形状）；K2.6 57 分钟 → 6 分 8 秒（9.3×）；持久编译缓存</td><td>R1 README:1202-1223、:1238-1259；K2.6 README:23、39-40；JAX 文档「Persistent compilation cache」</td></tr>
-    <tr><td>KV 感知路由：命中缓存首字 340 ms，冷启动（不命中）2,850 ms，命中率 87.4%（4,176／4,776）</td><td>Red Hat Developer 2025-10-07「Master KV cache aware routing with llm-d」</td></tr>
+    <tr><td>KV 感知路由：命中缓存首字 340 ms，不路由的最坏情况 2,850 ms（原文 worst case，与冷推理同值），命中率 87.4%（4,176／4,776）</td><td>Red Hat Developer 2025-10-07「Master KV cache aware routing with llm-d」</td></tr>
     <tr><td>JetStream 停止维护：核心功能并入 tpu-inference、宣布 2026-02-01 起归档，最后提交 2026-01-05</td><td>github.com/AI-Hypercomputer/JetStream README 公告与提交记录，2026-10 核对</td></tr>
     <tr><td>同等 GPT-3.5 水平推理价格 2022-11 → 2024-10 降 280 多倍，主要归给小模型</td><td>斯坦福 HAI《AI Index Report 2025》</td></tr>
     <tr><td>llm-d 分层卸载：P90 TTFT 2.1 → 0.5 s</td><td>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</td></tr>
@@ -8294,6 +8432,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>AI Index：硬件成本每年降 30%、能效每年升 40%</td><td>Stanford HAI AI Index 2025 要点第 7 条</td></tr>
     <tr><td>Hopper 张量核支持 FP8；DeepSeek-V3 FP8 混合精度训练</td><td>NVIDIA H100 发布（2022-03）；arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §3.3</td></tr>
     <tr><td>第十四节八问的顺序</td><td>本课归纳</td></tr>
+    <tr><td>R16 补充：FlashAttention 2022；FlashInfer MLSys 2025；DSA 每字读 2,048 个 token、API 降价五成以上；NVFP4 KV 省约一半、损失 &lt;1%、命中率 +20%、首字最多 3 倍；LMCache 15 倍、截断让命中率减半；RadixAttention 6.4 倍；投机解码 2–3 倍；GQA 每层 4,096 B ÷ MLA 1,152 B ≈ 3.6（本课推导）；Ring 2023-10、Ulysses 2023-09、Meta CP 2024-11；Kimi K2 Thinking「low-latency mode」</td><td>arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>、<a href="https://arxiv.org/abs/2501.01005" target="_blank" rel="noopener">2501.01005</a>；api-docs.deepseek.com/news/news250929、arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>；developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache；arXiv <a href="https://arxiv.org/abs/2510.09665" target="_blank" rel="noopener">2510.09665</a>、<a href="https://arxiv.org/abs/2312.07104" target="_blank" rel="noopener">2312.07104</a>、<a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a>、<a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>、<a href="https://arxiv.org/abs/2309.14509" target="_blank" rel="noopener">2309.14509</a>、<a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a>；huggingface.co/moonshotai/Kimi-K2-Thinking。2026-10-16 核对</td></tr>
   </table>
 </div></section>
 
