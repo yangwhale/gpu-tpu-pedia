@@ -45,15 +45,7 @@ __FIG_S10_CONC__
 
   <h3 id="s10-8">10.8　五步选法落到两个例子</h3>
   <p>专题五 <a href="topic-05.html#s7-4">§7.4</a> 的五关（装得下、快线多大、序列、PP（流水线并行：按层切给几组卡）、DP），推理时照样走一遍。</p>
-  <table>
-    <tr><th>关</th><th>DeepSeek-V3 · TPU v7</th><th>DeepSeek-V4-Pro · GB300</th></tr>
-    <tr><td>① 装得下</td><td>纸面 4 颗（v7x-8）够；实测 FP8 放不下，用 8 颗或专家换 FP4</td><td>806 GB 权重，一个 4 卡节点放得下（TP4 跑通过）</td></tr>
-    <tr><td>② 快线多大</td><td>一个 ICI 切片；TP 不要跨 DCN（10.3）</td><td>一个 NVL72 域 72 卡；SGLang 部署要求全部节点同域</td></tr>
-    <tr><td>③ 序列</td><td>KV 总量大但单条装得下，DCP 帮不上（10.5）</td><td>只有一个 KV 头，TP 只复制 KV，改用 DEP（第六节）</td></tr>
-    <tr><td>④ PP</td><td>不用：一个切片放得下</td><td>不用</td></tr>
-    <tr><td>⑤ DP</td><td>剩下的卡开副本，每份留在自己的切片里</td><td>先定 P:D（第九节），再按目标用户数加 decode 副本</td></tr>
-  </table>
-  <p>两列走出来的配置几乎不重合，因为两台机器的快线不一样长。</p>
+__FIG_S10_GATES__
 
   <p class="landing">⭐ 拓扑定了那一趟搬运走哪条线、能分给多少人，参数只在这个上限底下挪动。<b>先选拓扑，再调参数；比较时先看分母。</b></p>
 '''
@@ -69,6 +61,8 @@ FIGS = {
         '<b>看编号顺序怎么决定环的走法。</b><br><em>真实 v7 是 3D torus。</em>'),
     "__FIG_S10_SLICE__": ("fig-s10-slice", "fig6-s10-slice.svg", "topic06-fig-topo.py",
         '<b>六种配置里四种落在 8 颗；最长最满那行跳过 16，要取 32。</b><br><em>KV 按 bf16 计；纸面下限。</em>'),
+    "__FIG_S10_GATES__": ("fig-s10-gates", "fig6-s10-gates.svg", "topic06-fig-topo.py",
+        '<b>没有哪列更对：同一道关，硬件和模型变了，答案跟着变。</b><br><em>每格是本课按部署记录归纳的结论。</em>'),
     "__FIG_S10_CONC__": ("fig-s10-conc", "fig6-s10-conc.svg", "topic06-fig-topo.py",
         '<b>看红点离灰虚线多远，再看虚线右边那段线有多平。</b><br><em>口径：并发是压测客户端同时挂着的请求数，不是服务端实际批大小。</em>'),
 }

@@ -30,7 +30,7 @@ r"""专题六 · 第十节「先选拓扑，再调参数」的五张静态图。
     也不画 DP 注意力把约 17B 非专家权重在每个 device 上各放一份的额外开销。
 """
 import math
-from topic03_draw import Fig, wpx, BL, OR, GR, RD, PU, GY, INK, GY2, LINE
+from topic03_draw import Fig, wpx, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
 import topic06_numbers as N
 
 W = 1400
@@ -480,9 +480,72 @@ def fig_conc():
     f.save("fig6-s10-conc.svg", yb + 14)
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# R57：10.8 原是一张两列表格。五关是同一串问题，两台机器在每一关给出不同答案；
+#   画成两条并排走过五道关的路，比表格更容易看出「几乎不重合」。
+#   图里的数：4 颗／8 颗／FP4 见 10.5 正文与台账「V3 FP8 切片表」；806 GB 见台账第 133 行；
+#   TP4 跑通见台账第 62 行；NVL72 一域 72 卡见第零节词表；SGLang 同域要求见本文件头。
+GATES = [
+    ("①", "装得下", ["纸面 4 颗（v7x-8）够", "实测 FP8 放不下：用 8 颗，或专家换 FP4"],
+                   ["806 GB 权重", "一个 4 卡节点放得下（TP4 跑通过）"], True),
+    ("②", "快线多大", ["一个 ICI 切片", "TP 不跨 DCN（10.3）"],
+                    ["一个 NVL72 域，72 卡", "SGLang 部署要求全部节点同域"], True),
+    ("③", "序列", ["KV 总量大，但单条装得下", "DCP 帮不上（10.5）"],
+                 ["只有 1 个 KV 头，TP 只会复制 KV", "改用 DEP（第六节）"], True),
+    ("④", "PP", ["不用：一个切片放得下"], ["不用"], False),
+    ("⑤", "DP", ["剩下的卡开副本", "每份留在自己的切片里"],
+               ["先定 P:D（第九节）", "再按目标用户数加 decode 副本"], True),
+]
+
+
+def fig_gates():
+    f = Fig(W, "专题五的五关从上往下走：装得下、快线多大、序列、流水线并行、数据并行。"
+               "左列是 DeepSeek-V3 跑在 TPU v7 上，右列是 DeepSeek-V4-Pro 跑在 GB300 上。"
+               "装得下：左边纸面 4 颗够、实测 FP8 放不下，用 8 颗或专家换 FP4；右边 806 GB 权重一个 4 卡节点放得下。"
+               "快线：左边一个 ICI 切片，TP 不跨 DCN；右边一个 NVL72 域 72 卡，SGLang 要求同域。"
+               "序列：左边单条装得下，DCP 帮不上；右边只有一个 KV 头，改用 DEP。"
+               "流水线并行两边都不用。数据并行：左边每个副本留在自己的切片里；右边先定 P:D 再加 decode 副本。"
+               "五关里只有流水线那一关两边答案相同")
+    y0 = f.header("同样五关，两台机器走出两套配置　——　<tspan font-weight=\"700\">五关里只有一关答案相同</tspan>",
+                  "从上往下逐关回答；左列 DeepSeek-V3 跑在 TPU v7 上，右列 DeepSeek-V4-Pro 跑在 GB300 上",
+                  [(CY, "TPU 列"), (GY2, "GPU 列"), (RD, "≠ 两边答案不同")])
+    GW, GAP = 170, 46                     # 关名列宽；两列之间留给「≠」的缝
+    CW = (W - GW - 20 - GAP - 4) // 2
+    XL = GW + 20
+    XR = XL + CW + GAP
+    RH, RG = 76, 14
+    py = y0
+    f.t(XL + 14, py + 18, "DeepSeek-V3 · TPU v7", CY, True, 16)
+    f.t(XR + 14, py + 18, "DeepSeek-V4-Pro · GB300", INK, True, 16)
+    yy = py + 34
+    for num, name, lt, rt, diff in GATES:
+        f.box(0, yy, GW, RH, "#f8f9fa", LINE, 8)
+        f.t(GW / 2, yy + RH / 2 + 7, "%s %s" % (num, name), INK, True, 17, "middle")
+        for x, rows, col in ((XL, lt, CY), (XR, rt, GY2)):
+            f.box(x, yy, CW, RH, "#fff", col, 8, 1.6 if diff else 1)
+            n = len(rows)
+            y1 = yy + RH / 2 + 6 - (n - 1) * 13
+            for k, r in enumerate(rows):
+                f.t(x + 16, y1 + k * 26, r, INK, k == 0 and n > 1, 15, w=CW - 30)
+        mx = XL + CW + GAP / 2
+        if diff:
+            f.t(mx, yy + RH / 2 + 8, "≠", RD, True, 22, "middle")
+        else:
+            f.t(mx, yy + RH / 2 + 8, "＝", GY, True, 22, "middle")
+        yy += RH + RG
+    yb = yy - RG
+    yb = f.src(yb + 10,
+               "📌 TPU 列：10.3、10.5 正文；4 颗／8 颗／FP4 见台账「V3 FP8 切片表」与 R1 FP4 README:59、72-73（R1 与 V3 同结构）。",
+               "📌 GPU 列：806 GB 见 gpu/inference/a4x-max/deepseek-v4/README.md:55；TP4 跑通见 VLLM-V4PRO-RUNBOOK.md:449；"
+               "同一 NVL72 域见 SGLANG-V4PRO-RUNBOOK.md:34、63；只有一个 KV 头见第六节。",
+               "⚠️ 本课归纳：五关顺序取自专题五 §7.4，每格是本课按上述记录填的结论，不是某份 runbook 的原表。")
+    f.save("fig6-s10-gates.svg", yb + 14)
+
+
 if __name__ == "__main__":
     fig_lens()
     fig_wire()
     fig_rank()
     fig_slice()
     fig_conc()
+    fig_gates()

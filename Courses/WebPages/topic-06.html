@@ -8304,15 +8304,63 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s10-8">10.8　五步选法落到两个例子</h3>
   <p>专题五 <a href="topic-05.html#s7-4">§7.4</a> 的五关（装得下、快线多大、序列、PP（流水线并行：按层切给几组卡）、DP），推理时照样走一遍。</p>
-  <div class="tbl-wrap"><table>
-    <tr><th>关</th><th>DeepSeek-V3 · TPU v7</th><th>DeepSeek-V4-Pro · GB300</th></tr>
-    <tr><td>① 装得下</td><td>纸面 4 颗（v7x-8）够；实测 FP8 放不下，用 8 颗或专家换 FP4</td><td>806 GB 权重，一个 4 卡节点放得下（TP4 跑通过）</td></tr>
-    <tr><td>② 快线多大</td><td>一个 ICI 切片；TP 不要跨 DCN（10.3）</td><td>一个 NVL72 域 72 卡；SGLang 部署要求全部节点同域</td></tr>
-    <tr><td>③ 序列</td><td>KV 总量大但单条装得下，DCP 帮不上（10.5）</td><td>只有一个 KV 头，TP 只复制 KV，改用 DEP（第六节）</td></tr>
-    <tr><td>④ PP</td><td>不用：一个切片放得下</td><td>不用</td></tr>
-    <tr><td>⑤ DP</td><td>剩下的卡开副本，每份留在自己的切片里</td><td>先定 P:D（第九节），再按目标用户数加 decode 副本</td></tr>
-  </table></div>
-  <p>两列走出来的配置几乎不重合，因为两台机器的快线不一样长。</p>
+<figure class="fbox fwide" id="fig-s10-gates"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="专题五的五关从上往下走：装得下、快线多大、序列、流水线并行、数据并行。左列是 DeepSeek-V3 跑在 TPU v7 上，右列是 DeepSeek-V4-Pro 跑在 GB300 上。装得下：左边纸面 4 颗够、实测 FP8 放不下，用 8 颗或专家换 FP4；右边 806 GB 权重一个 4 卡节点放得下。快线：左边一个 ICI 切片，TP 不跨 DCN；右边一个 NVL72 域 72 卡，SGLang 要求同域。序列：左边单条装得下，DCP 帮不上；右边只有一个 KV 头，改用 DEP。流水线并行两边都不用。数据并行：左边每个副本留在自己的切片里；右边先定 P:D 再加 decode 副本。五关里只有流水线那一关两边答案相同"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同样五关，两台机器走出两套配置　——　<tspan font-weight="700">五关里只有一关答案相同</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">从上往下逐关回答；左列 DeepSeek-V3 跑在 TPU v7 上，右列 DeepSeek-V4-Pro 跑在 GB300 上</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU 列</text>
+<rect x="101.88" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="122" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 列</text>
+<rect x="204.88" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="225" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">≠ 两边答案不同</text>
+<text class="svgsm" x="204" y="120" fill="#007b83" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DeepSeek-V3 · TPU v7</tspan></text>
+<text class="svgsm" x="830" y="120" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DeepSeek-V4-Pro · GB300</tspan></text>
+<rect x="0" y="136" width="170" height="76" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="85" y="181" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 装得下</tspan></text>
+<rect x="190" y="136" width="580" height="76" rx="8" fill="#fff" stroke="#00838f" stroke-width="1.6"/>
+<text class="svgsm" x="206" y="167" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纸面 4 颗（v7x-8）够</tspan></text>
+<text class="svgsm" x="206" y="193" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">实测 FP8 放不下：用 8 颗，或专家换 FP4</text>
+<rect x="816" y="136" width="580" height="76" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<text class="svgsm" x="832" y="167" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">806 GB 权重</tspan></text>
+<text class="svgsm" x="832" y="193" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">一个 4 卡节点放得下（TP4 跑通过）</text>
+<text class="svgsm" x="793" y="182" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≠</tspan></text>
+<rect x="0" y="226" width="170" height="76" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="85" y="271" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 快线多大</tspan></text>
+<rect x="190" y="226" width="580" height="76" rx="8" fill="#fff" stroke="#00838f" stroke-width="1.6"/>
+<text class="svgsm" x="206" y="257" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个 ICI 切片</tspan></text>
+<text class="svgsm" x="206" y="283" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">TP 不跨 DCN（10.3）</text>
+<rect x="816" y="226" width="580" height="76" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<text class="svgsm" x="832" y="257" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个 NVL72 域，72 卡</tspan></text>
+<text class="svgsm" x="832" y="283" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">SGLang 部署要求全部节点同域</text>
+<text class="svgsm" x="793" y="272" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≠</tspan></text>
+<rect x="0" y="316" width="170" height="76" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="85" y="361" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 序列</tspan></text>
+<rect x="190" y="316" width="580" height="76" rx="8" fill="#fff" stroke="#00838f" stroke-width="1.6"/>
+<text class="svgsm" x="206" y="347" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 总量大，但单条装得下</tspan></text>
+<text class="svgsm" x="206" y="373" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP 帮不上（10.5）</text>
+<rect x="816" y="316" width="580" height="76" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<text class="svgsm" x="832" y="347" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只有 1 个 KV 头，TP 只会复制 KV</tspan></text>
+<text class="svgsm" x="832" y="373" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">改用 DEP（第六节）</text>
+<text class="svgsm" x="793" y="362" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≠</tspan></text>
+<rect x="0" y="406" width="170" height="76" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="85" y="451" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④ PP</tspan></text>
+<rect x="190" y="406" width="580" height="76" rx="8" fill="#fff" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="206" y="450" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">不用：一个切片放得下</text>
+<rect x="816" y="406" width="580" height="76" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="832" y="450" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">不用</text>
+<text class="svgsm" x="793" y="452" fill="#5f6368" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＝</tspan></text>
+<rect x="0" y="496" width="170" height="76" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="85" y="541" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑤ DP</tspan></text>
+<rect x="190" y="496" width="580" height="76" rx="8" fill="#fff" stroke="#00838f" stroke-width="1.6"/>
+<text class="svgsm" x="206" y="527" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">剩下的卡开副本</tspan></text>
+<text class="svgsm" x="206" y="553" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">每份留在自己的切片里</text>
+<rect x="816" y="496" width="580" height="76" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<text class="svgsm" x="832" y="527" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先定 P:D（第九节）</tspan></text>
+<text class="svgsm" x="832" y="553" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">再按目标用户数加 decode 副本</text>
+<text class="svgsm" x="793" y="542" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≠</tspan></text>
+</svg><figcaption><b>没有哪列更对：同一道关，硬件和模型变了，答案跟着变。</b><span class="capmore"><br><em>每格是本课按部署记录归纳的结论。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TPU 列：10.3、10.5 正文；4 颗／8 颗／FP4 见台账「V3 FP8 切片表」与 R1 FP4 README:59、72-73（R1 与 V3 同结构）。</p>
+<p>📌 GPU 列：806 GB 见 gpu/inference/a4x-max/deepseek-v4/README.md:55；TP4 跑通见 VLLM-V4PRO-RUNBOOK.md:449；同一 NVL72 域见 SGLANG-V4PRO-RUNBOOK.md:34、63；只有一个 KV 头见第六节。</p>
+<p>⚠️ 本课归纳：五关顺序取自专题五 §7.4，每格是本课按上述记录填的结论，不是某份 runbook 的原表。</p></details></figure>
 
   <p class="landing">⭐ 拓扑定了那一趟搬运走哪条线、能分给多少人，参数只在这个上限底下挪动。<b>先选拓扑，再调参数；比较时先看分母。</b></p>
 
