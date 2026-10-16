@@ -6,22 +6,17 @@ BODY = '''
     <b>一次请求里，前后两段要的硬件正好相反。</b></p>
 
   <h3 id="s0-1">0.1　2022 年以来，推理怎么变便宜</h3>
-  <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出；KV（已读内容的缓存）按最大长度预留，显存里真正存着 token（大致一个字，本课常叫“字”）的只有两到近四成（3.3）。</p>
-  <p>上下文和输出也一路变长：2023 年 11 月 GPT-4 Turbo 开到 128K，2024 年 2 月 Gemini 1.5 Pro 预览 1M，KV 随长度线性涨，显存先撑不住；2024 年 9 月的 OpenAI o1、2025 年 1 月的 DeepSeek-R1 先想再答，一题要写几百到几千个思考 token（R1 论文）。</p>
+  <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出。Orca 的连续批让每一步都能有人进出，同延迟下吞吐是老办法 FasterTransformer 静态批的 36.9 倍。可座位数由 KV（已读内容的缓存）定：KV 按最大长度预留，显存里真正存着 token（大致一个字，本课常叫“字”）的只有两到近四成（3.3）。</p>
+  <p>2023 年 PagedAttention 把 KV 分页，利用率到 96%。浪费省掉以后，坐几个人就看 KV 池装得下几条 KV，偏偏上下文一路变长：2023 年 11 月 GPT-4 Turbo 开到 128K，2024 年 2 月 Gemini 1.5 Pro 预览 1M。模型侧用 GQA、MLA 把每条压薄；系统侧让相同的开头不再重算（SGLang 的 RadixAttention），存不下的往内存、SSD 放（Mooncake，给 Kimi 线上用）。</p>
+  <p>座位坐满后，长 prompt 进门那一步会卡住所有正在出字的人。2024 年 Sarathi-Serve 把 prefill 切块塞进 decode 的步里，可这只摊平了打扰；Splitwise、DistServe 干脆把两段分到两批机器（PD 分离）。代价是每个请求多传一趟 KV，还多了一份 prefill 与 decode 的机器配比要调。</p>
+  <p>DeepSeek-V3 这类 MoE（每个字只走几个专家）又把拼好的 batch 拆散：256 个专家选 8 个，每个专家只分到几行。SGLang 的 DP attention、DeepSeek 的大 EP 把专家铺到上百张卡上，凑够行数。随之而来的是每个 rank 要自备一份状态，K3 上 DEP8 直接显存不足；decode 快了，prefill 又喂不上。</p>
+  <p>2024 年 9 月的 o1、2025 年 1 月的 DeepSeek-R1 一题要写几百到几千个思考 token（R1 论文），交互档（同样的出字速度）又限住 batch，“读一趟权重出一个字”成了硬上限。投机解码、MTP 让一趟验好几个字；剩下能省的是字节，FP8、FP4 和合并 kernel（芯片上调起的一个计算函数）接着压。同一套 GB300（NVIDIA 整柜 GPU）跑 DeepSeek-V4-Pro，光改软件，同一交互档每卡吞吐已是首发日（Day-0）的 5.1 倍（含 MTP）。</p>
+__FIG_S0_CHAIN__
 __FIG_S0_TWOLONG__
-__FIG_S0_STORY__
-  <p>图里每一横行叫一条泳道，装一类问题：</p>
-  <ul>
-    <li><b>先补调度和显存（泳道：调度、KV 与注意力；第三、四节）。</b>Orca 连续批让每一步都能有人进出，同延迟吞吐是老办法 FasterTransformer 静态批的 36.9 倍；PagedAttention（KV 分页）腾出预留的空位；Sarathi-Serve 的分块 prefill 把长 prompt 切开塞进 decode 的步里。</li>
-    <li><b>同时把 KV 压薄（泳道：KV 与注意力；第三节、<a href="#s12-kv">12.7</a>）。</b>GQA（多个头共用 KV）、MLA（KV 压成一条）从结构上少存，部署时再把 KV 存成 8 bit（FP8）。</li>
-    <li><b>KV 当成存储（泳道：复用与下放；3.5–3.6、第八节）。</b>先在单机里复用前缀（请求间相同的开头），如 SGLang 的 RadixAttention；再往更大更慢的存储下放，Mooncake 把整个集群的内存和 SSD 拼成 KV 池，给 Kimi 线上用。</li>
-    <li><b>再拆开放（泳道：拆开放；第六至九节）。</b>两段要的硬件相反，干脆把 prefill 和 decode 分到不同机器（PD 分离，图里叫拆阶段，如 DistServe）；MoE（每个字只走几个专家）的专家再分到许多张卡上（大 EP，图里叫拆模型）。</li>
-    <li><b>补「一趟只出一个字」（泳道：解码提速；第十一节）。</b>投机解码、MTP（模型自带的猜字头）让大模型读一趟权重验好几个字。投机解码 2022 年底就有，输出变长后才成主流。</li>
-    <li><b>同时压权重（泳道：少搬字节；第十二节）。</b>每个数从 16 bit 一路压到 4 bit，8 bit 的 FP8 权重让 Llama 3 70B 每字间隔最多降到 16 bit BF16 的 1/2。kernel（芯片上每次调起的一个计算函数）也越合越少。</li>
-    <li><b>最后看叠起来有多大（第二、十四节）。</b>同一套 GB300（NVIDIA 整柜 GPU）跑 DeepSeek-V4-Pro，光改软件，同一交互档（同样的出字速度）每卡吞吐是首发日（图里 Day-0）的 5.1 倍（含 MTP，见 2.2）。</li>
-  </ul>
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
     同等 GPT-3.5 水平的推理价格，从 2022 年 11 月到 2024 年 10 月降到原来的 1/280 以下（斯坦福 AI Index 2025），系统这一侧能不能单独拆出来，14.3 再说。</p>
+  <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
+__FIG_S0_ENGINES__
   <h3 id="s0-2">0.2　一个请求的一生</h3>
 __FIG_S0_LIFE__
   <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
@@ -74,9 +69,12 @@ __FIG_S0_MAP__
 '''
 
 FIGS = {
-    "__FIG_S0_STORY__": ("fig-s0-story", "fig6-story.svg", "topic06-fig-story.py",
-        '<b>每张卡是一步：写原文报告的提升和基线，没有倍数就写做法。</b><br>'
-        '后一个的基线常是前一个，所以这些倍数不能连乘。'),
+    "__FIG_S0_CHAIN__": ("fig-s0-chain", "fig6-chain.svg", "topic06-fig-chain.py",
+        '<b>红字是下一环的开头：每一招解决一个问题，也留下一个。</b><br>'
+        '<em>倍数各对各的基线，所以只能一环一环看。</em>'),
+    "__FIG_S0_ENGINES__": ("fig-s0-engines", "fig6-engines.svg", "topic06-fig-engines.py",
+        '<b>谁先做、谁跟进：蓝箭头是 vLLM 在前，红箭头是 SGLang 在前。</b><br>'
+        '<em>间隔按两边日期推算，往下取整；只凭推测的借鉴一律不连线。</em>'),
     "__FIG_S0_TWOLONG__": ("fig-s0-twolong", "fig6-twolong.svg", "topic06-fig-story.py",
         '<b>深紫只在 ② 变厚，③ 多出来的全是浅紫。</b><br>'
         '<em>格子数不是实测，只为三块能放在一起比。</em>'),
@@ -89,6 +87,7 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("36.9", "fig6-story.svg"),
-    ("5.1", "fig6-story.svg"),
+    ("36.9", "fig6-chain.svg"),
+    ("5.1", "fig6-chain.svg"),
+    ("96%", "fig6-chain.svg"),
 ]

@@ -7,7 +7,7 @@
 """
 
 BODY = '''
-  <p class="lead">分块 prefill（4.2）只能把打扰摊平：两段还挤在同一批卡上，长 prompt 一来，正在出字的人照样要等。PD 分离把两段拆到两批机器上。Splitwise（2023）、DistServe（2024）先后提出它：前者报同成本同功耗下吞吐是不拆的 2.35 倍，后者报九成请求达标时能接的请求是当时主流系统（都不拆）的 7.4 倍。</p>
+  <p class="lead">第六、七节把每张卡的批撑大了，一次 prefill 波及的人也跟着变多。分块 prefill（4.2）只能把打扰摊平：两段还挤在同一批卡上，长 prompt 一来，正在出字的人照样要等。PD 分离把两段拆到两批机器上。Splitwise（2023）、DistServe（2024）先后提出它：前者报同成本同功耗下吞吐是不拆的 2.35 倍，后者报九成请求达标时能接的请求是当时主流系统（都不拆）的 7.4 倍。</p>
   <p>Kimi 的线上系统 Mooncake 连同 KV 池（3.6）把 PD 分离做进了生产，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
     <b>难的是 KV 从 prefill 机传到 decode 机的那一趟。</b></p>
 
@@ -100,7 +100,8 @@ __FIG_S8_PRFAAS__
 
   <h3 id="s8-9">8.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    PD 分离不改变 decode 每一趟搬多少，只保证它不被 prefill 打断，才敢把 batch 攒满。</div>
+    PD 分离不改变 decode 每一趟搬多少，只保证它不被 prefill 打断，才敢把 batch 攒满。
+    留下的问题：每个请求多一趟 KV 传输，还多一批机器要配，P:D 比例得自己量（第九节）。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：PD 上线后 TTFT 比不拆时还高，TPOT 倒是稳了。先查哪一层？</summary>
   <p>先量 KV 传输带宽。只有几百 MB/s，多半是退回了 cuda_copy 或跨出了 NVLink 域；带宽正常再看调度层有没有排队。</p></details>

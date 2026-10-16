@@ -2,7 +2,7 @@
 """专题六 · 第六节「切专家与注意力：TEP 和 DEP」。图在 topic06-fig-dep.py；另复用专题五两张图。"""
 
 BODY = '''
-  <p class="lead">V3 一张卡装不下；切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention（即后者），decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP（<a href="#s6-7">6.7</a>）部署也走这条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。
+  <p class="lead">专家要多凑几行，就得铺到更多卡上，何况 V3 一张卡本来就装不下。切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention（即后者），decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP（<a href="#s6-7">6.7</a>）部署也走这条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。
     <b>选哪个，看模型有几个 KV 头、要多大 batch。</b></p>
 
   <h3 id="s6-1">6.1　一句回顾</h3>
@@ -51,6 +51,9 @@ __FIG_S6_TPU__
     <li><b>车坐得满</b>：上百张卡的请求汇到同一个专家，每步行数从 1.4 节算的平均 8 行往上涨，朝屋脊点靠近。</li>
     <li><b>通信藏起来</b>：把 token 送到所选专家所在的卡，这步 all-to-all 用 DeepEP（DeepSeek 开源）；一批拆成两个微批，一个传、一个算。</li>
   </ul>
+
+  <div class="note ok"><span class="t">回到主线</span>
+    <b>DEP 省下重复的 KV，大 EP 把专家那趟车坐满。</b>留下的问题：每个 rank 自备一份状态，K3 这类模型 DEP 起不来，退回 TP 后 KV 又被复制（第七节）。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一个模型有 4 个 KV 头，8 张卡开 TEP8，换 DEP8 后 KV 容量最多是原来的几倍？什么情况下涨了也没用？</summary>
   <p>8 ÷ 4 ＝ 2，是 TEP8 的 2 倍。prefill 喂不上、或 batch 大到算力先到顶时，放得下也换不来吞吐，6.2 的 V4-Pro 就是。</p></details>

@@ -6,7 +6,7 @@
 """
 
 BODY = '''
-  <p class="lead">第三节算的是有几个座位，这一节管座位别空着。
+  <p class="lead">座位腾出来还得一直坐满：每步都有人进出，长 prompt 进门也不卡住别人。
     <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍（GPT-3 175B）；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，延迟达标时能接的请求是 vLLM 的 2.6–3.7 倍。</p>
 
   <h3 id="s4-1">4.1　每一步都重新排一次</h3>
@@ -22,7 +22,7 @@ __FIG_S4_GANTT__
 __FIG_S4_CHUNK__
   <p>新请求的长 prompt 一口吞下，那一步就特别长，正在出字的人都卡一下。</p>
   <p>Sarathi（arXiv 2308.16369）和 Sarathi-Serve（arXiv 2403.02310）把 prompt 切成小块，每步只带一块和 decode 拼着走，哪步都不会被拉长。
-    vLLM V1 默认打开，decode 先上车；每步塞多少 token 由 max_num_batched_tokens 控制。</p>
+    引擎里 vLLM 2024 年 4 月先合入，SGLang 同年 7 月跟进；vLLM V1 默认打开，decode 先上车；每步塞多少 token 由 max_num_batched_tokens 控制。</p>
   <p>TPU v7x 上跑 Gemma4-31B 的公开记录把它设成 16,384，256K 的 prompt 切成 16 块。</p>
 
   <h3 id="s4-3">4.3　槽位满了以后</h3>
@@ -47,7 +47,8 @@ __FIG_S4_OVERLAP__
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>逐步调度是「一趟分给更多人」的地基。</b>槽位满了，吞吐就钉在槽位数 × 1000 ÷ TPOT 上，再加并发只加排队。
-    chunked prefill 只摊平打扰，拆到两批机器上是第八节的事。</div>
+    chunked prefill 只摊平打扰，拆到两批机器上是第八节的事。
+    留下的问题：坐满以后，一步本身的时间还压不下来，注意力和 MoE 是两块硬骨头（第五节）。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000；

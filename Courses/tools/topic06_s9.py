@@ -81,7 +81,8 @@ __FIG_S9_AFD_ASCEND__
 
   <h3 id="s9-9">9.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
-    AFD 让每个专家一趟分到更多 token。拆不拆、怎么配，看负载，不看潮流。</div>
+    AFD 让每个专家一趟分到更多 token。拆不拆、怎么配，看负载，不看潮流。
+    留下的问题：DEP、PD、AFD 摆在一起，先定哪种拓扑、再调哪些参数（第十节）？</div>
 
 '''
 
