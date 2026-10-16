@@ -2535,7 +2535,8 @@ body.figonly section h3{margin-top:34px}
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table></div>
-  <p>DeepSeek 自家这条线后来又改了三代。V3.2 的 DSA 存的一点没少，省的是读：先用小打分器扫一遍历史，只读挑中的。V4 存和读都改：沿 token 方向把相邻几个 token 并成一条，另开滑窗池原样留最近一段（分预算见 3.4）；其中压得轻的层还照 V3.2 只挑一部分读。</p>
+  <p>GQA 省下的不只是字节。原论文（2023）在 TPU v4 上把 T5-XXL 改成 8 组：每条样本的解码时间从 1.51 降到 0.28，约快 5.4 倍（本课推导，1.51 ÷ 0.28）；平均分 47.1，原版 MHA 是 47.2。所有头共用一组的 MQA 是 0.24、46.6，快一点，掉分多。</p>
+  <p>DeepSeek 自家这条线后来又改了三代。V3.2 的 DSA 存的一点没少，省的是读：先用小打分器扫一遍历史，只读挑中的。V3.2 报告说架构上只改了这一处，基准和改之前的 V3.1-Terminus 基本持平（MMLU-Pro 都是 85.0，HLE 21.7 对 19.8）；省多少只画了按租卡价算的成本曲线，没给比值。V4 存和读都改：沿 token 方向把相邻几个 token 并成一条，另开滑窗池原样留最近一段（分预算见 3.4）；其中压得轻的层还照 V3.2 只挑一部分读。</p>
 <figure class="fbox fwide" id="fig-s3-lineage"><svg viewBox="0 0 1400 550" width="100%" role="img" aria-label="DeepSeek 一条线上四代 KV，上排是每个 token 存多少，下排是生成一个字读多少。V3 的 MLA 每个 token 存 70,272 字节，每个字读全部历史。V3.2-Exp 的 DSA 照样全存，但每个字只读打分器挑出的 2,048 个历史 token，打分器自己仍扫全部。V4 每层只存一条所有头共用的 KV，再沿 token 压缩：CSA 每 4 个并一条、只挑一部分读，HCA 每 128 个并一条、全读，最近 128 个不压。V4.1-Flash 让各层共用主 KV、主 KV 存 FP4，每 token 只剩 890 字节，约 V4-Flash 的四分之一"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">DSA 省的是读　——　<tspan font-weight="700">V4、V4.1-Flash 省的是存</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek 一条线上的四代，每代一列。上排：每个 token 存下多少 KV；下排：生成一个字时读回多少。方块只是示意，不按比例</text>
@@ -6341,6 +6342,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="744" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP：decode 每步只剩 1 个 Q，没行可切，只能进一步把这一行按列（笔记）切开，各算一段再按先别除合起来；为了装得下，用原来的卡。</text>
 </svg><figcaption><b>PCP 切 prefill 的计算，DCP 切 decode 的 KV。</b><span class="capmore"><br><em>专题五原图。</em></span></figcaption></figure>
   <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100 给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。Meta 用的是 <b>Ring</b>（2023-10）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V 还是传 Q，看谁的通信藏得进计算：整段 prefill 传 K、V（GQA 下它小），新 token 很少时传 Q，结果都和不切一样。</p>
+  <p>同一篇里，长度不变、机器数翻倍，prefill 延迟约减半，8 台做 128K 是 5.85 s。对照是跨机切 TP：2 台时 TP16 和 CP2 延迟差约 15%，到 8 台差到约 100%，慢的是 TP。原文的解释是 H100 跨机带宽比机内低得多，而 TP 每层都要跨机通信。</p>
   <p>另有 Ulysses（DeepSpeed，2023-09）用 AllToAll（每张卡给其余每张卡各发一份）把按序列切换成按头切，切的份数不能超过头数。</p>
 
   <h3 id="s7-5">7.5　PCP 的两个正确性陷阱</h3>
@@ -8989,6 +8991,7 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 本课推导：下限 ＝ 激活参数 × 每参数位数 ÷ 8 ÷ (8 × 7.37 TB/s)。假设权重均匀摊开、带宽跑满；不含 KV、激活值和通信，实际一步更慢。</p>
 <p>注：真实部署很少整模型都降到 FP4：DeepSeek-V4 只把专家放 FP4、其余多为 FP8（HF 模型卡）。</p></details></figure>
   <p>实测接近这个比例：vLLM 2024 年 7 月接入 FP8 权重，稠密的 Llama 3 70B 每字间隔最多降到 BF16 的 1/2，MoE 的 Mixtral 8x7B 最多降到 BF16 的 1/1.6。MoE 赚得少，原文没给原因；本课推测是只读选中的专家，读权重在一步里占比本就低。</p>
+  <p>再减一半到 4 bit：AWQ（2023）在 RTX 4090、batch 1 上跑 Llama-2-7B，比已经融合过 kernel 的 FP16 再快 3.1 倍。精度看 WikiText-2 困惑度（越低越好）：FP16 是 5.47，AWQ 5.60，直接四舍五入取整是 5.73。</p>
   <p>省下的显存多放 KV、多接请求（3.2），一趟搬运分给更多人。</p>
 
   <h3 id="s12-2">12.2　同叫 4 bit，差在缩放</h3>
@@ -9071,9 +9074,11 @@ body.figonly section h3{margin-top:34px}
 <p>NVIDIA「Introducing NVFP4」：每 16 个 FP4 (E2M1) 共享一个 FP8 E4M3 缩放，另有每张量 FP32 二级缩放。</p>
 <p>⚠️ 本课推导：平均位数 ＝ 4 ＋ 缩放位数 ÷ 块大小，FP32 二级缩放摊到百万级元素上不计。</p></details></figure>
   <p>块越小越贴合局部数值，精度越好，字节越多。格式细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
+  <p>差多少有一组同条件的数：NVIDIA 2025-09 用 8B 的 Mamba 与 Transformer 混合模型训 1T token，训练 loss 比 BF16 高的幅度，MXFP4 约 2.5%，NVFP4 约 1.5%；MXFP4 要多训 36% 的 token 才追平。</p>
+  <p>推理侧，NVIDIA 博客称 DeepSeek-R1-0528 从 FP8 训后量化到 NVFP4，主要语言任务掉点在 1% 以内。同一张卡上 FP4 比 FP8 快多少，没找到官方同条件的数。</p>
 
   <h3 id="s12-3">12.3　低精度直接训出来</h3>
-  <p>2025 年的 Kimi K2 Thinking 在后训练做量化感知训练（QAT，训练时就模拟低精度），MoE 部分原生 INT4 权重，模型卡称低延迟模式生成约快 2 倍，没写对照精度。</p>
+  <p>2025 年的 Kimi K2 Thinking 在后训练做量化感知训练（QAT，训练时就模拟低精度），MoE 部分原生 INT4 权重，模型卡和官方博客称低延迟模式生成约快 2 倍、「无损」，但没写对照的是什么精度，也没给 INT4 对 FP8 的精度表，所有基准都只报 INT4 下的分。</p>
   <p>DeepSeek-V4 模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占参数的绝大部分，也是 decode 读得最多的部分，压它省得最多。</p>
 
   <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
@@ -9362,7 +9367,8 @@ body.figonly section h3{margin-top:34px}
 <p>正文里 TPU 那组数的出处 —— Inferact「700 TPS on Kimi K3」（https://inferact.ai/blog/tpu-megakernels，2026-09-23）：16 颗 TPU v7（32 个 TensorCore）、Pallas 编写、每 TensorCore 64 MiB VMEM；一步约 8.5 ms、每步接受约 6 个；GB200 对照为 16 张卡的 vLLM 配方，452 tok/s。⚠️ 本课推导：每步接受 6 个 ÷ 8.5 ms ≈ 706 tok/s，与博客的「700 多」对得上。</p></details></figure>
   <p>生产里先上的是 CUDA Graph 和 PDL：前者省掉 CPU 逐个发射 kernel 的开销，后者让下一个 kernel 提前准备。
     megakernel 把整次前向写成一个 kernel，下一段权重在上一段计算时就开始读。</p>
-  <p>Hazy Research（2025-05）实测，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型和 batch 越小，空等占比越大，赚得越多。</p>
+  <p>Hazy Research（2025-05）实测，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型和 batch 越小，空等占比越大，赚得越多。同一篇在 Llama-3.2-1B、batch 1 上，比 vLLM 快近 2.5 倍，比 SGLang 快 1.5 倍以上。</p>
+  <p>模型一大，融合单拎出来就赚得少。AWQ 那组测试里，光把 FP16 kernel 融合，Llama-2-7B 从每秒 52 到 62 token。TensorRT-LLM 在 8 张 B200 上跑 DeepSeek-R1，把 all-reduce 和 RMSNorm 融成一个，单用户每秒 164 到 168 token，是一串优化里逐步叠加的一步。</p>
   <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；16 张 GB200（vLLM）是 452 token。两个数都开了投机，按接受长度 6 换算。
     不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
@@ -10129,6 +10135,8 @@ body.figonly section h3{margin-top:34px}
     <tr><td>2022</td><td>⑪ 权重字节太多</td><td>论文</td><td>十二</td><td>GPTQ 3 bit：1 张 A100 跑 OPT-175B，逐字速度是 5 卡 FP16 的 3.25 倍</td></tr>
     <tr><td>2022</td><td>⑩ 一趟只出一个字</td><td>论文</td><td>十一</td><td>投机解码：单请求速度是不投机的 2–3 倍</td></tr>
     <tr><td>2023</td><td>② KV 预留浪费</td><td>vLLM</td><td>三</td><td>PagedAttention：同延迟吞吐是 FasterTransformer 和复现版 Orca 的 2–4 倍</td></tr>
+    <tr><td>2023</td><td>③ 每条 KV 太厚</td><td>论文</td><td>三</td><td>GQA-8：T5-XXL 每条样本解码约快 5.4 倍，平均分 47.1 对 47.2（对原版 MHA，本课推导）</td></tr>
+    <tr><td>2023</td><td>⑪ 权重字节太多</td><td>论文</td><td>十二</td><td>AWQ 4 bit：Llama-2-7B 单卡 RTX 4090 再快 3.1 倍（对已融合 kernel 的 FP16）</td></tr>
     <tr><td>2023</td><td>④ 同样开头重算</td><td>SGLang</td><td>三</td><td>RadixAttention：吞吐最多是当时其他系统的 6.4 倍</td></tr>
     <tr><td>2024</td><td>⑦ 两段抢同一批卡</td><td>论文</td><td>八</td><td>DistServe：同等延迟要求下能接的请求是不拆的 7.4 倍</td></tr>
     <tr><td>2024</td><td>⑥ 长 prompt 插队</td><td>论文</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
@@ -10138,16 +10146,19 @@ body.figonly section h3{margin-top:34px}
     <tr><td>2024</td><td>⑤ 前缀存不下</td><td>DeepSeek</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
     <tr><td>2024</td><td>⑩ 一趟只出一个字</td><td>DeepSeek</td><td>十一</td><td>DeepSeek-V3 的 MTP：速度约是不开的 1.8 倍</td></tr>
     <tr><td>2024</td><td>⑤ 前缀被副本摊薄</td><td>SGLang</td><td>十三</td><td>SGLang v0.4 KV 感知路由：命中率 20% → 75%，吞吐是 v0.3 的 1.9 倍</td></tr>
+    <tr><td>2024</td><td>⑨ KV 被复制、长 prompt 太慢</td><td>论文</td><td>七</td><td>Meta 跨机切序列：Llama3 405B 在 8 台 H100 上，跨机切 TP 的 prefill 延迟和它差约 100%（TP 慢）</td></tr>
     <tr><td>2025</td><td>调度占着 CPU</td><td>vLLM</td><td>四</td><td>vLLM V1 引擎重写：吞吐最多是 V0 的 1.7 倍</td></tr>
     <tr><td>2025</td><td>⑩ 一趟只出一个字</td><td>论文</td><td>十一</td><td>EAGLE-3：单请求最多是不投机的 6.5 倍，batch 64 吞吐仍是其 1.38 倍</td></tr>
     <tr><td>2025</td><td>⑧ MoE 拆散 batch</td><td>DeepSeek</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
-    <tr><td>2025</td><td>③ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（V3.1-Terminus 全读）</td></tr>
+    <tr><td>2025</td><td>③ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（V3.1-Terminus 全读），基准基本持平</td></tr>
     <tr><td>2025</td><td>⑪ KV 字节太多</td><td>DeepSeek</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约是 BF16 KV 的 1.63 倍（本课推导）</td></tr>
-    <tr><td>2025</td><td>⑪ 权重字节太多</td><td>Kimi</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照）</td></tr>
+    <tr><td>2025</td><td>⑪ 权重字节太多</td><td>Kimi</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照精度）</td></tr>
     <tr><td>2025</td><td>⑪ KV 字节太多</td><td>NVIDIA</td><td>十二</td><td>NVFP4（4 bit 格式）KV：大小约是 FP8 KV 的一半，前缀命中率高 20%</td></tr>
     <tr><td>2026</td><td>⑤ 前缀存不下</td><td>llm-d</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
     <tr><td><b>2026-06</b></td><td><b>①–⑪ 叠起来</b></td><td><b>SGLang</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变，光改软件：每卡从首发日约 2,200 到约 11,200（后者开 MTP、首发日没开；PyTorch 博客）</b></td></tr>
   </table></div>
+  <p>末行的 5.1 倍里 MTP 占多少，博客没拆。它只分开报了两条曲线各比自己首发日涨多少：不开 MTP 的在单用户每秒 40 token 那档涨到 2.1 倍，开 MTP 的在 80 那档涨到 2.6 倍，档位不同，不能相减。</p>
+  <p>别处有一组干净的拆法，换了模型和卡，只能当量级参考：TensorRT-LLM 在 8 张 B200 上跑 DeepSeek-R1，单用户每秒 111 token，开 1 层 MTP 到 198，开 3 层到 253，开 5 层反降到 239。</p>
 <figure class="fbox fwide" id="fig-s14-story"><svg viewBox="0 0 1400 1344" width="100%" role="img" aria-label="2022 年以来的推理优化：六条泳道按时间排出 2022 到 2026 年的关键优化，每张卡写原文报告的提升或做法：Orca 连续批 36.9 倍，PagedAttention 把 KV 有效占用从两到四成提到 96%，GQA 和 MLA 是模型侧的进步，用虚线卡标出；投机解码单请求是不投机的 2 到 3 倍，DistServe 能接的请求是不拆的 7.4 倍，拆开放泳道的卡名带前缀：Splitwise、DistServe 是「拆阶段」（PD 分离），DeepSeek 和 SGLang 的大 EP 都是「两样都拆」（大 EP 加 PD 分离），DeepSeek 大 EP decode 时每节点输出约 14,800 token 每秒；2024 末到 2025 年又添了 vLLM V1 吞吐最多 1.7 倍、SGLang KV 感知路由命中率 20% 到 75%、EAGLE-3 单请求最多 6.5 倍、DeepSeek-V3.2 的 DSA 每字只读 2,048 个历史 token；时间轴上标着两股压力：上下文 2023 年底到 128K、转年 2 月到 1M，输出随 o1（2024 年 9 月）和 R1（2025 年 1 月）这类推理模型变长；最下面一张实线卡是叠加：GB300 跑 V4-Pro 光换软件栈，同档每卡是首发日的 5.1 倍；倍数基线互相包含，不能连乘"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">2022 年以来　——　<tspan font-weight="700">每一步补一个洞</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡片落在首次公开的年月上；卡上是原文报告的提升或做法；右上角是本课讲它的那一节；虚线卡是模型侧的进步；顶上红、紫两条竖线是推着各泳道的两股压力：上下文变长、输出变长</text>
@@ -10587,6 +10598,16 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R89 补充 · 13.7：VMEM 分开放 90.67 MB、共用一块 31.29 MB；4 个专家槽轮转</td><td>本课推导：按 https://github.com/Inferact/tpu-megakernels（Apache-2.0）的 VMEM 分配逐项加总</td></tr>
     <tr><td>R89 补充 · 13.7：MXFP4 → FP8 专家字节 ×1.60（对 MXFP4）、向量单元缩放活约 1/8；batch 1 只到自身布局带宽上界五成上下</td><td>本课推导：按 https://github.com/Inferact/tpu-megakernels 的打包格式，MXFP4 4 ＋ 8/32 ＝ 4.25 bit，FP8 ＋ 每 256 个一个 bf16 ＝ 8.06 bit，三块合计 3 × 4.25 ＝ 12.75 → 2 × 8.06 ＋ 4.25 ＝ 20.37，比 1.60；256 ÷ 32 ＝ 8；带宽占比由公开 config 与博客吞吐推得 46%–56%，取整为五成上下</td></tr>
     <tr><td>R90 补充 · 第零节 fig6-engines：Dynamo 2025-03 开源，首发即支持 vLLM 与 SGLang</td><td>developer.nvidia.com/blog/introducing-nvidia-dynamo-a-low-latency-distributed-inference-framework-for-scaling-reasoning-ai-models/（「supports all major LLM frameworks including NVIDIA TensorRT-LLM, vLLM, and SGLang」）</td></tr>
+    <tr><td>R91 补充 · 3.1：GQA-8 每条样本解码 1.51 → 0.28（MHA-XXL → GQA-8-XXL），平均分 47.2 → 47.1；MQA 0.24、46.6</td><td>arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>v3 Table 1（TPU v4，8 颗，每颗 batch 至多 32；T5-XXL 以 5% 预训练量改造；「GQA achieves significant additional quality gains, achieving performance close to MHA-XXL with speed close to MQA」，2026-10-16 核对）；本课推导：1.51 ÷ 0.28 ≈ 5.4。原文单位为每条样本时间，正文只讲相对比</td></tr>
+    <tr><td>R91 补充 · 3.1 ／ 14.3：V3.2 架构上只改了 DSA；基准与 V3.1-Terminus 基本持平（MMLU-Pro 85.0 对 85.0，HLE 21.7 对 19.8）</td><td>arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a> §2.3（「the only architectural modification of DeepSeek-V3.2 is the introduction of DeepSeek Sparse Attention (DSA) through continued training」）；github.com/deepseek-ai/DeepSeek-V3.2-Exp 技术报告 PDF（「DeepSeek-V3.2-Exp does not show substantial performance degradation compared with DeepSeek-V3.1-Terminus」，2026-10-16 核对）。查过：成本降幅只有按 H800 租价画的每百万 token 成本图（Figure 3），正文无比值，本课不写价格，故不取</td></tr>
+    <tr><td>R91 补充 · 7.4 ／ 14.3：Llama3 405B、H100、机内 TP8 跨机 CP：机器数翻倍延迟约减半，CP8 做 128K 5.85 s；2 台 CP2 对 TP16 差约 15%，8 台差约 100%（TP 慢）</td><td>arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a>v3（MLSys 2025）（「While the latency is different by roughly 15% between CP2 and TP16 on 2 nodes, the difference drastically increases to 100% when scaled to 8 nodes」，2026-10-16 核对）。R87 那行「⑨ 无实测行」自本轮起不再成立。查过：vLLM PCP 文档与 RFC，无公开数字</td></tr>
+    <tr><td>R91 补充 · 12.1 ／ 12.6 ／ 14.3：AWQ，Llama-2-7B、RTX 4090、batch 1、4 token 输入 200 token 输出取中位延迟：FP16 融合 52 → 62 tok/s，INT4 再快 3.1 倍；WikiText-2 困惑度 FP16 5.47、RTN 5.73、AWQ 5.60（INT4 g128）</td><td>arXiv <a href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener">2306.00978</a>v5（「For Llama-2-7B, we improve the inference speed from 52 tokens/s to 62 tokens/s through FP16 kernel fusion. On top of the stronger FP16 baseline, we further harvest 3.1× additional speedup from the fast quantized linear kernels.」，2026-10-16 核对）</td></tr>
+    <tr><td>R91 补充 · 12.2：8B 混合 Mamba-Transformer 训 1T token，训练 loss 相对 BF16：MXFP4 约 2.5%、NVFP4 约 1.5%；MXFP4 多训 36% token 追平</td><td>arXiv <a href="https://arxiv.org/abs/2509.25149" target="_blank" rel="noopener">2509.25149</a>v2（「MXFP4 has a relative error of around 2.5% compared to 1.5% for NVFP4」「MXFP4 matches NVFP4 loss when trained on 36% more tokens」，2026-10-16 核对）</td></tr>
+    <tr><td>R91 补充 · 12.2：DeepSeek-R1-0528 从 FP8 训后量化到 NVFP4，主要语言任务掉点 ≤1%</td><td>developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference（2025-06，「1% or less accuracy degradation on key language modeling tasks for DeepSeek-R1-0528, when quantized from its original FP8 format to NVFP4 using post-training quantization」，2026-10-16 核对）。查过：NVIDIA 博客、NVFP4 预训练论文、TensorRT-LLM 文档，无同卡 FP4 对 FP8 的官方同条件吞吐对比</td></tr>
+    <tr><td>R91 补充 · 12.3：K2 Thinking 低延迟模式约快 2 倍、「无损」，基准全在 INT4 下报</td><td>huggingface.co/moonshotai/Kimi-K2-Thinking（「lossless 2x speed-up in low-latency mode」「All benchmark results are reported under INT4 precision」）；moonshotai.github.io/Kimi-K2/thinking.html（「roughly 2x generation speed improvement」），2026-10-16 核对。查过：模型卡、官方博客、K2.5 技术报告 arXiv <a href="https://arxiv.org/abs/2602.02276" target="_blank" rel="noopener">2602.02276</a>，无对照精度说明、无 INT4 对 FP8 精度表；一位 Moonshot 工程师的个人文章称对照为 block FP8，非官方，正文不取</td></tr>
+    <tr><td>R91 补充 · 12.6：Hazy megakernel，Llama-3.2-1B、batch 1、H100：比 vLLM 快近 2.5 倍、比 SGLang 快 1.5 倍以上；TensorRT-LLM DeepSeek-R1 8×B200 低延迟，「Fuse oneshotAR + RMSNorm」一步 164 → 168 TPS/user（逐步累加）</td><td>hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles（「On an H100, our megakernel runs almost 2.5x faster than vLLM and over 1.5x faster than SGLang」）；nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html 优化步骤表，2026-10-16 核对</td></tr>
+    <tr><td>R91 补充 · 14.3：5.1 倍里 MTP 的份额官方没拆；两条曲线各对自己首发日：不开 MTP 在 40 tok/s/user 档 2.1 倍，开 MTP 在 80 档 2.6 倍</td><td>PyTorch 博客 2026-06-23（「the June curves sustain 2.1x more throughput at 40 tok/s/user (no-MTP) and 2.6x more at 80 tok/s/user (MTP)」，2026-10-16 核对）。查过：该博客与 SGLang 文档，无 MTP 单项消融；两数档位不同，不相减不相除</td></tr>
+    <tr><td>R91 补充 · 14.3：TensorRT-LLM DeepSeek-R1 8×B200、输入 1k 输出 2k：不开 MTP 111 TPS/user，MTP1 198，MTP3 253（接受长度 2.82），MTP5 239</td><td>nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html（2026-10-16 核对）；与 5.1 倍模型、硬件都不同，只作量级参考</td></tr>
   </table></div>
 </div></section>
 
