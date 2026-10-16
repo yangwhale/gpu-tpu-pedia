@@ -26,29 +26,29 @@ __FIG_S14_EIGHT__
   <table>
     <tr><th>年份</th><th>补的哪个洞（0.1 的环）</th><th>首发</th><th>节</th><th>一个实测（对照谁）</th></tr>
     <tr><td>2022</td><td>① 整批等最长的</td><td>论文</td><td>四</td><td>Orca 连续批：同延迟吞吐是 FasterTransformer 静态批的 36.9 倍</td></tr>
-    <tr><td>2022</td><td>⑪ 权重字节太多</td><td>论文</td><td>十二</td><td>GPTQ 3 bit：1 张 A100 跑 OPT-175B，逐字速度是 5 卡 FP16 的 3.25 倍</td></tr>
-    <tr><td>2022</td><td>⑩ 一趟只出一个字</td><td>论文</td><td>十一</td><td>投机解码：单请求速度是不投机的 2–3 倍</td></tr>
-    <tr><td>2023</td><td>② KV 预留浪费</td><td>vLLM</td><td>三</td><td>PagedAttention：同延迟吞吐是 FasterTransformer 和复现版 Orca 的 2–4 倍</td></tr>
-    <tr><td>2023</td><td>③ 每条 KV 太厚</td><td>论文</td><td>三</td><td>GQA-8：T5-XXL 每条样本解码约快 5.4 倍，平均分 47.1 对 47.2（对原版 MHA，本课推导）</td></tr>
-    <tr><td>2023</td><td>⑪ 权重字节太多</td><td>论文</td><td>十二</td><td>AWQ 4 bit：Llama-2-7B 单卡 RTX 4090 再快 3.1 倍（对已融合 kernel 的 FP16）</td></tr>
-    <tr><td>2023</td><td>④ 同样开头重算</td><td>SGLang</td><td>三</td><td>RadixAttention：吞吐最多是当时其他系统的 6.4 倍</td></tr>
-    <tr><td>2024</td><td>⑦ 两段抢同一批卡</td><td>论文</td><td>八</td><td>DistServe：同等延迟要求下能接的请求是不拆的 7.4 倍</td></tr>
-    <tr><td>2024</td><td>⑥ 长 prompt 插队</td><td>论文</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
-    <tr><td>2024</td><td>③ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>MLA：每层 KV 约是同形状 MHA 的 1/57（本课推导）</td></tr>
-    <tr><td>2024</td><td>⑤ 前缀存不下</td><td>Kimi</td><td>八</td><td>Mooncake KV 池：Kimi 线上可接请求比此前系统多 107%–115%</td></tr>
-    <tr><td>2024</td><td>⑪ 权重字节太多</td><td>vLLM</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多降到 BF16 的 1/2</td></tr>
-    <tr><td>2024</td><td>⑤ 前缀存不下</td><td>DeepSeek</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
-    <tr><td>2024</td><td>⑩ 一趟只出一个字</td><td>DeepSeek</td><td>十一</td><td>DeepSeek-V3 的 MTP：速度约是不开的 1.8 倍</td></tr>
-    <tr><td>2024</td><td>⑤ 前缀被副本摊薄</td><td>SGLang</td><td>十三</td><td>SGLang v0.4 KV 感知路由：命中率 20% → 75%，吞吐是 v0.3 的 1.9 倍</td></tr>
-    <tr><td>2024</td><td>⑨ KV 被复制、长 prompt 太慢</td><td>论文</td><td>七</td><td>Meta 跨机切序列：Llama3 405B 在 8 台 H100 上，跨机切 TP 的 prefill 延迟和它差约 100%（TP 慢）</td></tr>
+    <tr><td>2022</td><td>② 权重字节太多</td><td>论文</td><td>十二</td><td>GPTQ 3 bit：1 张 A100 跑 OPT-175B，逐字速度是 5 卡 FP16 的 3.25 倍</td></tr>
+    <tr><td>2022</td><td>③ 一趟只出一个字</td><td>论文</td><td>十一</td><td>投机解码：单请求速度是不投机的 2–3 倍</td></tr>
+    <tr><td>2023</td><td>⑤ KV 预留浪费</td><td>vLLM</td><td>三</td><td>PagedAttention：同延迟吞吐是 FasterTransformer 和复现版 Orca 的 2–4 倍</td></tr>
+    <tr><td>2023</td><td>④ 每条 KV 太厚</td><td>论文</td><td>三</td><td>GQA-8：T5-XXL 每条样本解码约快 5.4 倍，平均分 47.1 对 47.2（对原版 MHA，本课推导）</td></tr>
+    <tr><td>2023</td><td>② 权重字节太多</td><td>论文</td><td>十二</td><td>AWQ 4 bit：Llama-2-7B 单卡 RTX 4090 再快 3.1 倍（对已融合 kernel 的 FP16）</td></tr>
+    <tr><td>2023</td><td>⑦ 同样开头重算</td><td>SGLang</td><td>三</td><td>RadixAttention：吞吐最多是当时其他系统的 6.4 倍</td></tr>
+    <tr><td>2024</td><td>⑥ 两段抢同一批卡</td><td>论文</td><td>八</td><td>DistServe：同等延迟要求下能接的请求是不拆的 7.4 倍</td></tr>
+    <tr><td>2024</td><td>⑧ 长 prompt 插队</td><td>论文</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
+    <tr><td>2024</td><td>④ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>MLA：每层 KV 约是同形状 MHA 的 1/57（本课推导）</td></tr>
+    <tr><td>2024</td><td>⑨ 前缀存不下</td><td>Kimi</td><td>八</td><td>Mooncake KV 池：Kimi 线上可接请求比此前系统多 107%–115%</td></tr>
+    <tr><td>2024</td><td>② 权重字节太多</td><td>vLLM</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多降到 BF16 的 1/2</td></tr>
+    <tr><td>2024</td><td>⑨ 前缀存不下</td><td>DeepSeek</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
+    <tr><td>2024</td><td>③ 一趟只出一个字</td><td>DeepSeek</td><td>十一</td><td>DeepSeek-V3 的 MTP：速度约是不开的 1.8 倍</td></tr>
+    <tr><td>2024</td><td>⑨ 前缀被副本摊薄</td><td>SGLang</td><td>十三</td><td>SGLang v0.4 KV 感知路由：命中率 20% → 75%，吞吐是 v0.3 的 1.9 倍</td></tr>
+    <tr><td>2024</td><td>⑩ KV 被复制、长 prompt 太慢</td><td>论文</td><td>七</td><td>Meta 跨机切序列：Llama3 405B 在 8 台 H100 上，跨机切 TP 的 prefill 延迟和它差约 100%（TP 慢）</td></tr>
     <tr><td>2025</td><td>调度占着 CPU</td><td>vLLM</td><td>四</td><td>vLLM V1 引擎重写：吞吐最多是 V0 的 1.7 倍</td></tr>
-    <tr><td>2025</td><td>⑩ 一趟只出一个字</td><td>论文</td><td>十一</td><td>EAGLE-3：单请求最多是不投机的 6.5 倍，batch 64 吞吐仍是其 1.38 倍</td></tr>
-    <tr><td>2025</td><td>⑧ MoE 拆散 batch</td><td>DeepSeek</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
-    <tr><td>2025</td><td>③ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（V3.1-Terminus 全读），基准基本持平</td></tr>
-    <tr><td>2025</td><td>⑪ KV 字节太多</td><td>DeepSeek</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约是 BF16 KV 的 1.63 倍（本课推导）</td></tr>
-    <tr><td>2025</td><td>⑪ 权重字节太多</td><td>Kimi</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照精度）</td></tr>
-    <tr><td>2025</td><td>⑪ KV 字节太多</td><td>NVIDIA</td><td>十二</td><td>NVFP4（4 bit 格式）KV：大小约是 FP8 KV 的一半，前缀命中率高 20%</td></tr>
-    <tr><td>2026</td><td>⑤ 前缀存不下</td><td>llm-d</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
+    <tr><td>2025</td><td>③ 一趟只出一个字</td><td>论文</td><td>十一</td><td>EAGLE-3：单请求最多是不投机的 6.5 倍，batch 64 吞吐仍是其 1.38 倍</td></tr>
+    <tr><td>2025</td><td>⑪ MoE 拆散 batch</td><td>DeepSeek</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
+    <tr><td>2025</td><td>④ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（V3.1-Terminus 全读），基准基本持平</td></tr>
+    <tr><td>2025</td><td>② KV 字节太多</td><td>DeepSeek</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约是 BF16 KV 的 1.63 倍（本课推导）</td></tr>
+    <tr><td>2025</td><td>② 权重字节太多</td><td>Kimi</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照精度）</td></tr>
+    <tr><td>2025</td><td>② KV 字节太多</td><td>NVIDIA</td><td>十二</td><td>NVFP4（4 bit 格式）KV：大小约是 FP8 KV 的一半，前缀命中率高 20%</td></tr>
+    <tr><td>2026</td><td>⑨ 前缀存不下</td><td>llm-d</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
     <tr><td><b>2026-06</b></td><td><b>①–⑪ 叠起来</b></td><td><b>SGLang</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变，光改软件：每卡从首发日约 2,200 到约 11,200（后者开 MTP、首发日没开；PyTorch 博客）</b></td></tr>
   </table>
   <p>末行的 5.1 倍里 MTP 占多少，博客没拆。它只分开报了两条曲线各比自己首发日涨多少：不开 MTP 的在单用户每秒 40 token 那档涨到 2.1 倍，开 MTP 的在 80 那档涨到 2.6 倍，档位不同，不能相减。</p>
