@@ -2511,7 +2511,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s2-5">2.5　落到钱上</h3>
   <p>每百万输出 token 的成本 ＝ 每卡每小时的价 ÷（每卡 tok/s × 3,600）× 10⁶。卡价不变，每卡 tok/s 涨几倍，每个字就便宜几倍：2.2 那一档每卡从约 2,200 到约 11,200，成本降到约五分之一（本课推导）。</p>
-  <p>交互档也能换钱。DeepSeek 公布过一天的账：decode 时每节点输出约 14,800 tok/s，每用户只有 20–22 tok/s；全按 R1 定价收费，理论成本利润率 545%，它也写明实际收入低得多。</p>
+  <p>线上真有人选吞吐那头。DeepSeek 公布过一天的线上数：decode 时每节点输出约 14,800 tok/s，每用户只有 20–22 tok/s。</p>
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     报一个吞吐，要连同五样一起报：<b>分子分母、交互档、峰值还是稳态、温度和采样、有没有预热和是不是开环。</b>
@@ -10385,7 +10385,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>没预热：第一轮 13,585、第二轮 27,803（×2.05）；闭环压测低估 13%</td><td>VLLM-V4PRO-RUNBOOK.md:431-433；闭环 SGLANG-V4PRO-RUNBOOK.md:478、1135</td></tr>
     <tr><td>goodput 比吞吐更能比系统：7.4× 请求率、12.6× 更紧 SLO</td><td>DistServe，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a></td></tr>
     <tr><td>vLLM 压测工具的 goodput ＝ 每秒达标请求数（与 DistServe 口径不同）</td><td>vLLM 仓库 vllm/benchmarks/serve.py 的 --goodput 参数</td></tr>
-    <tr><td>DeepSeek 线上实测（2025-03-01 公布，统计 2025-02-27～28）：226.75 节点、理论成本利润率 545%（全按 R1 定价收费的假设）、decode 时每节点输出约 14,800 tok/s（原文「~14.8k tokens/s output during decoding」；故事图卡片写 14.8k，同一数）、20–22 tok/s/user；一天输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950（本课推导：7,760 亿 ÷ 86,400 ÷ 1,814 卡）</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
+    <tr><td>DeepSeek 线上实测（2025-03-01 公布，统计 2025-02-27～28）：226.75 节点、理论成本利润率 545%（全按 R1 定价收费的假设；价格口径，课件正文不引用）、decode 时每节点输出约 14,800 tok/s（原文「~14.8k tokens/s output during decoding」；故事图卡片写 14.8k，同一数）、20–22 tok/s/user；一天输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950（本课推导：7,760 亿 ÷ 86,400 ÷ 1,814 卡）</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
     <tr><td>每 token KV：MHA 3,997,696 B、GQA（Llama-3.1-70B）327,680 B、Qwen3.5 全注意力 30,720 B ＋ 线性状态 180 MiB／序列；Qwen3.5 KV 头数 2</td><td>本课推导，形状取各自 Hugging Face config.json</td></tr>
     <tr><td>8 颗 v7 放 V3：KV 池 92.4 GiB／芯片，4K 装 344 条、32K 装 43 条、64K 装 21 条（FP8 KV 按 656 B/层约 37 条）；Llama 4K 73 条</td><td>本课推导：每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，R1 FP4 README:59，同台账里「V3 FP8 切片表」那一行）× 0.9 ＝ 170.55 GiB，− 78.1 GiB（671 GB ÷ 8）；0.9 为本课假设；先按权重全切分粗算，DP attention 下非专家权重每 device 复制，实际更小（10.5）</td></tr>
     <tr><td>PagedAttention：KV 有效利用率 20.4–38.2% → 96.3%（3.3 正文照录；故事图卡片取整写 20–38%→96%，第零节、第十四节落点与故事图 alt 口语写「两到近四成 → 96%」，同一组数，正文与图只是取整不同）</td><td>vLLM 论文，arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a></td></tr>
