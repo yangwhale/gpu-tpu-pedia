@@ -226,6 +226,19 @@ BODY = '''
     <tr><td>R86 补充 · 3 lead：PagedAttention 首发于 vLLM，2023 年（v0.1.0 与发布博客 2023-06-20；论文 SOSP 2023）；Orca 在前，OSDI'22</td><td>blog.vllm.ai/2023/06/20/vllm.html；arXiv 2309.06180；Orca 见本台账 Orca 那一行</td></tr>
     <tr><td>R87 补充 · 14.3 表：「补的哪个洞」列的环号 ①–⑪ 对应 0.1 的 11 环问题链（V1 重写不在链上，不标环号；⑨ DCP／PCP 无实测行）；「首发」列只标这一招最早由谁公开：Orca、GPTQ、投机解码、DistServe、Sarathi-Serve、EAGLE-3 为论文；PagedAttention、V1、FP8 权重博客为 vLLM；RadixAttention、KV 感知路由为 SGLang；MLA、磁盘 KV 缓存、MTP、大 EP（SGLang 那行是复现）、DSA、V3.2 FP8 KV 为 DeepSeek；Mooncake、K2 INT4 为 Kimi（Moonshot）；NVFP4 KV 为 NVIDIA 博客；末行 5.1 倍出自 SGLang 的 PyTorch 博客</td><td>本课归纳；各行原始出处见本表已录各条（Orca／PagedAttention／RadixAttention／DistServe／Sarathi-Serve／EAGLE-3 论文，vLLM V1 与 FP8 博客，lmsys.org/blog/2024-12-04-sglang-v0-4，DeepSeek-V3／V3.2 报告与 API 文档，Mooncake 论文，huggingface.co/moonshotai/Kimi-K2-Thinking，NVIDIA NVFP4 KV 博客，llm-d README，PyTorch 博客 2026-06-23）；首发先后另对照引擎时间线素材（GitHub release／博客，2026-10-15 调研）</td></tr>
     <tr><td>R88 补充 · 第零节 fig6-engines：SGLang v0.2 博客点名 vLLM 的 CPU 调度开销，是 SGLang 改用纯 Python 轻量调度的出发点</td><td>lmsys.org/blog/2024-07-25-sglang-llama3/（「vLLM suffers from high CPU scheduling overhead」）</td></tr>
+    <tr><td>R89 补充 · 13.7：Qwen3.5-397B prefill 时 MoE 约占八成时间</td><td>本课据私有实测指数化（取整到「约八成」）</td></tr>
+    <tr><td>R89 补充 · 13.7：Qwen3.5 全注意力层 2 个 KV 头、512 个专家选 10 个；注意力 DP=8 ＋ MoE EP=8；比过 all-to-all，选 all-gather ＋ reduce-scatter 是为了延迟可预测</td><td>https://developers.googleblog.com/systems-engineering-playbook-optimizing-qwen-35-397b-moe-on-ironwood-tpu7x/（§1、§3「Because deterministic latency is critical」）</td></tr>
+    <tr><td>R89 补充 · 13.7：SparseCore 合并把 HBM 读 20 → 10、写 15 → 5（原文未写单位）；reduce-scatter 切 4 块流水；线性层状态 FP32 → BF16</td><td>https://developers.googleblog.com/systems-engineering-playbook-optimizing-qwen-35-397b-moe-on-ironwood-tpu7x/（§B.3「reducing the HBM read requirements from 20 down to 10 and writes from 15 down to 5」「partitioned into 4 distinct chunks」；§C.2）</td></tr>
+    <tr><td>R89 补充 · 13.7 与 fig6-s13-ladder：DP8 prefill 指数 1.00 → 1.06 → 1.16 → 1.45 → 1.58，四刀各 ×1.06、×1.09、×1.26、×1.09；同期首尾实测 1.59；「只差半个百分点」；绿柱高过前两刀之积（1.26 &gt; 1.06 × 1.09 ≈ 1.16）</td><td>本课据私有实测指数化；连乘与差值为本课推导：1.0565 × 1.0945 × 1.2553 × 1.091 ≈ 1.584，1.592 ÷ 1.584 ≈ 1.005</td></tr>
+    <tr><td>R89 补充 · 13.7：整层融合之前 reduce-scatter 约占 device 时间两成；通信切块那一刀 XLA 仍不重叠</td><td>本课据私有实测指数化（取整到「约两成」）</td></tr>
+    <tr><td>R89 补充 · 13.7：SMEM 1 MiB；SparseCore 一块 512 行</td><td>硬件属性；本课据私有记录（路由表预取进 SMEM 的上限、SparseCore 块 ＝ lane × core × subcore）</td></tr>
+    <tr><td>R89 补充 · 13.7：decode 64K 上下文、几百条并发；TP2 后每 rank 1 个 KV 头，旧布局 FP8 页与 BF16 页一样大</td><td>本课推导：2 个 KV 头 ÷ TP2 ＝ 1；按头这一维打包时 ceil(1×2 ÷ 2) ＝ ceil(1×2 ÷ 4) ＝ 1；场景参数本课据私有实测指数化</td></tr>
+    <tr><td>R89 补充 · 13.7：one-hot 那一刀 decode 涨一成上下；线性层状态 BF16 让 KV 池多装约一成、decode 涨几个百分点到一成；换布局那天跳了好几倍（相对前一天，为修复退化）</td><td>本课据私有实测指数化（分档取整）</td></tr>
+    <tr><td>R89 补充 · 13.7：PCP 吞吐虚高源于 MoE 在 PCP 下静默跳过通信</td><td>本课据私有实测指数化（只取机制，不取数）</td></tr>
+    <tr><td>R89 补充 · 13.7：K3 每 token 不重复字节约 158 GB</td><td>本课推导：按 huggingface.co/moonshotai/Kimi-K3 config 逐项加总激活参数 104.2B（对官方 104B）后折算字节</td></tr>
+    <tr><td>R89 补充 · 13.7：92 个 MoE 层一次 Pallas 调用、不分 grid；16 颗 v7、32 个 TensorCore、TP4 × EP8；跨层预取；每 TensorCore 64 MiB VMEM；2×2×4 拓扑、换拓扑要重写集合通信；batch 1 → 8 后加残差流序列并行；一次验 1 锚点 ＋ 7 草稿，每步收下 3–6 个、一步 ~8.5 ms；编译 &lt;90 s 对 30＋ 分钟</td><td>https://inferact.ai/blog/tpu-megakernels（2026-09-23）</td></tr>
+    <tr><td>R89 补充 · 13.7：VMEM 分开放 90.67 MB、共用一块 31.29 MB；4 个专家槽轮转</td><td>本课推导：按 https://github.com/Inferact/tpu-megakernels（Apache-2.0）的 VMEM 分配逐项加总</td></tr>
+    <tr><td>R89 补充 · 13.7：MXFP4 → FP8 专家字节 ×1.60（对 MXFP4）、向量单元缩放活约 1/8；batch 1 只到自身布局带宽上界五成上下</td><td>本课推导：按 https://github.com/Inferact/tpu-megakernels 的打包格式，MXFP4 4 ＋ 8/32 ＝ 4.25 bit，FP8 ＋ 每 256 个一个 bf16 ＝ 8.06 bit，三块合计 3 × 4.25 ＝ 12.75 → 2 × 8.06 ＋ 4.25 ＝ 20.37，比 1.60；256 ÷ 32 ＝ 8；带宽占比由公开 config 与博客吞吐推得 46%–56%，取整为五成上下</td></tr>
   </table>'''
 
 FIGS = {}
