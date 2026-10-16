@@ -250,6 +250,8 @@ BODY = '''
     <tr><td>R91 补充 · 12.6：Hazy megakernel，Llama-3.2-1B、batch 1、H100：比 vLLM 快近 2.5 倍、比 SGLang 快 1.5 倍以上；TensorRT-LLM DeepSeek-R1 8×B200 低延迟，「Fuse oneshotAR + RMSNorm」一步 164 → 168 TPS/user（逐步累加）</td><td>hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles（「On an H100, our megakernel runs almost 2.5x faster than vLLM and over 1.5x faster than SGLang」）；nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html 优化步骤表，2026-10-16 核对</td></tr>
     <tr><td>R91 补充 · 14.3：5.1 倍里 MTP 的份额官方没拆；两条曲线各对自己首发日：不开 MTP 在 40 tok/s/user 档 2.1 倍，开 MTP 在 80 档 2.6 倍</td><td>PyTorch 博客 2026-06-23（「the June curves sustain 2.1x more throughput at 40 tok/s/user (no-MTP) and 2.6x more at 80 tok/s/user (MTP)」，2026-10-16 核对）。查过：该博客与 SGLang 文档，无 MTP 单项消融；两数档位不同，不相减不相除</td></tr>
     <tr><td>R91 补充 · 14.3：TensorRT-LLM DeepSeek-R1 8×B200、输入 1k 输出 2k：不开 MTP 111 TPS/user，MTP1 198，MTP3 253（接受长度 2.82），MTP5 239</td><td>nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html（2026-10-16 核对）；与 5.1 倍模型、硬件都不同，只作量级参考</td></tr>
+    <tr><td>R91 补充 · 0.1 ／ 14.3 ／ 讲稿：AI Index 的 280 倍、硬件成本每年降 30%、Epoch 的 9–900 倍／年都是价格口径，正文与讲稿改为定性（「便宜得很快」「年年在便宜，2024 年以后更快」），只留非价格的能效每年升 40%；开场竞猜改用同卡、同模型、同交互档的 5.1 倍。上面三行原始台账保留作出处</td><td>本课取舍；出处见本台账 AI Index 两行与 R21 Epoch 行</td></tr>
+    <tr><td>R91 补充 · 3.1：线性注意力首发 2020 年（Katharopoulos 等「Transformers are RNNs」，ICML 2020）</td><td>arXiv 2006.16236，v1 提交于 2020-06-29（「up to 4000x faster on autoregressive prediction of very long sequences」，2026-10-16 核对）</td></tr>
   </table>'''
 
 FIGS = {}

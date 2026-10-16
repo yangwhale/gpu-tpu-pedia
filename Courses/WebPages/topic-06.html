@@ -1094,7 +1094,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="449" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">推理模型走的就是 ③；长 prompt 再配上长回答，面积又高又长。</text>
 </svg><figcaption><b>深紫只在 ② 变厚，③ 多出来的全是浅紫。</b><span class="capmore"><br><em>格子数不是实测，只为三块能放在一起比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>示意图，无实测数。第 k 趟读的 KV ＝ prompt 长度 ＋ 已出字数（按定义）。没画权重：每趟都搬，但由 batch 里的人分摊；也没画 prefill：长 prompt 让它更贵，那是算力账。</p></details></figure>
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
-    同等 GPT-3.5 水平的推理价格，从 2022 年 11 月到 2024 年 10 月降到原来的 1/280 以下（斯坦福 AI Index 2025），系统这一侧能不能单独拆出来，14.3 再说。</p>
+    同等 GPT-3.5 水平的推理这两年便宜得很快（斯坦福 AI Index 2025 按市场价统计，本课不引价格口径的数），报告主要归给更强的小模型；系统这一侧能不能单独拆出来，14.3 再说。</p>
   <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
 <figure class="fbox fwide" id="fig-s0-engines"><svg viewBox="0 0 1400 936" width="100%" role="img" aria-label="vLLM 和 SGLang 的三泳道时间线，横轴按月从 2023 年 6 月到 2026 年 9 月，每张卡的左边缘对准它的月份；最左边断开的一格是 2022 年，放 Orca 论文的连续批。上面蓝色是 vLLM，下面红色是 SGLang，中间灰色细道是外部玩家：Orca、DeepSpeed-FastGen、DistServe、Sarathi-Serve、DeepSeek-V2、Mooncake（2024 年 6 月论文、11 月开源）、DeepSeek 开源周、NVIDIA Dynamo、DeepSeek-V3.2 和 V4，灰色竖虚线标出它们进了哪个引擎。vLLM 2024 年 3 月加前缀缓存 APC，V0 里默认关，V1 改成默认开；2025 年 4 月加可插拔的 KV Connector，LMCache、NIXL 等从这里接进来；2026 年 9 月 Inferact 发 TPU megakernel。跟进的一方卡片里有一条色条，颜色是先做的那一家。vLLM 2023 年 6 月首发 PagedAttention；SGLang 2024 年 1 月首发 RadixAttention，原文写着复用了 vLLM 的代码。分块 prefill 和接 Mooncake 都是 vLLM 先、SGLang 晚三个多月。SGLang 先做 MLA 优化，MTP 早 5 天、EAGLE-3 早 5 周、大 EP 早一个多月。vLLM 2025 年 1 月重写成 V1，原文说受 SGLang 等影响显著。2025 年 9 月 SGLang 推 HiCache，10 月 vLLM 0.11 自带 KV 下放到 CPU。DeepSeek-V3.2、V4 两家都在首日支持"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两大引擎　——　<tspan font-weight="700">你方唱罢我登场</tspan></text>
@@ -2533,7 +2533,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA（2023）</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
-    <tr><td>线性注意力</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
+    <tr><td>线性注意力（2020）</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table></div>
   <p>GQA 省下的不只是字节。原论文（2023）在 TPU v4 上把 T5-XXL 改成 8 组：每条样本的解码时间从 1.51 降到 0.28，约快 5.4 倍（本课推导，1.51 ÷ 0.28）；平均分 47.1，原版 MHA 是 47.2。所有头共用一组的 MQA 是 0.24、46.6，快一点，掉分多。</p>
   <p>DeepSeek 自家这条线后来又改了三代。V3.2 的 DSA 存的一点没少，省的是读：先用小打分器扫一遍历史，只读挑中的。V3.2 报告说架构上只改了这一处，基准和改之前的 V3.1-Terminus 基本持平（MMLU-Pro 都是 85.0，HLE 21.7 对 19.8）；省多少只画了按租卡价算的成本曲线，没给比值。V4 存和读都改：沿 token 方向把相邻几个 token 并成一条，另开滑窗池原样留最近一段（分预算见 3.4）；其中压得轻的层还照 V3.2 只挑一部分读。</p>
@@ -10126,9 +10126,9 @@ body.figonly section h3{margin-top:34px}
   </ul>
   <p class="landing">⭐ 八问归到一句话：<b>decode 每一步都要搬一趟。</b>前四问算清这一趟有多重、能分给多少人；后四问要么让更多人分，要么让它变轻。</p>
   <h3 id="s14-cost">14.3　回到时间轴：系统这一侧省了多少</h3>
-  <p>0.1 的 1/280 是市场价，混着更强的小模型、硬件换代和系统招数；报告主要归给小模型，硬件每年成本降 30%、能效升 40%，系统那份拆不出来。</p>
-  <p>Epoch AI（2025）固定一档能力看：推理价格每年降到上一年的 1/9 到 1/900，中位 1/50；2024 年以后中位 1/200，提速恰与第八到十二节那批招数进生产同期（本课观察，Epoch 没归因）。</p>
-  <p>每行基线不同，不能连乘去凑 280；只有末行是同一硬件、同一模型上叠满软件招数的总账。</p>
+  <p>0.1 说的降价是市场价，混着更强的小模型、硬件换代和系统招数；报告主要归给小模型，硬件那份给的是能效每年升 40%，系统那份拆不出来。</p>
+  <p>Epoch AI（2025）固定一档能力看，达到它的推理年年在便宜，2024 年以后降得更快，恰与第八到十二节那批招数进生产同期（本课观察，Epoch 没归因）。</p>
+  <p>每行基线不同，不能连乘去凑市场上的降幅；只有末行是同一硬件、同一模型上叠满软件招数的总账。</p>
   <div class="tbl-wrap"><table>
     <tr><th>年份</th><th>补的哪个洞（0.1 的环）</th><th>首发</th><th>节</th><th>一个实测（对照谁）</th></tr>
     <tr><td>2022</td><td>① 整批等最长的</td><td>论文</td><td>四</td><td>Orca 连续批：同延迟吞吐是 FasterTransformer 静态批的 36.9 倍</td></tr>
@@ -10608,6 +10608,8 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R91 补充 · 12.6：Hazy megakernel，Llama-3.2-1B、batch 1、H100：比 vLLM 快近 2.5 倍、比 SGLang 快 1.5 倍以上；TensorRT-LLM DeepSeek-R1 8×B200 低延迟，「Fuse oneshotAR + RMSNorm」一步 164 → 168 TPS/user（逐步累加）</td><td>hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles（「On an H100, our megakernel runs almost 2.5x faster than vLLM and over 1.5x faster than SGLang」）；nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html 优化步骤表，2026-10-16 核对</td></tr>
     <tr><td>R91 补充 · 14.3：5.1 倍里 MTP 的份额官方没拆；两条曲线各对自己首发日：不开 MTP 在 40 tok/s/user 档 2.1 倍，开 MTP 在 80 档 2.6 倍</td><td>PyTorch 博客 2026-06-23（「the June curves sustain 2.1x more throughput at 40 tok/s/user (no-MTP) and 2.6x more at 80 tok/s/user (MTP)」，2026-10-16 核对）。查过：该博客与 SGLang 文档，无 MTP 单项消融；两数档位不同，不相减不相除</td></tr>
     <tr><td>R91 补充 · 14.3：TensorRT-LLM DeepSeek-R1 8×B200、输入 1k 输出 2k：不开 MTP 111 TPS/user，MTP1 198，MTP3 253（接受长度 2.82），MTP5 239</td><td>nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html（2026-10-16 核对）；与 5.1 倍模型、硬件都不同，只作量级参考</td></tr>
+    <tr><td>R91 补充 · 0.1 ／ 14.3 ／ 讲稿：AI Index 的 280 倍、硬件成本每年降 30%、Epoch 的 9–900 倍／年都是价格口径，正文与讲稿改为定性（「便宜得很快」「年年在便宜，2024 年以后更快」），只留非价格的能效每年升 40%；开场竞猜改用同卡、同模型、同交互档的 5.1 倍。上面三行原始台账保留作出处</td><td>本课取舍；出处见本台账 AI Index 两行与 R21 Epoch 行</td></tr>
+    <tr><td>R91 补充 · 3.1：线性注意力首发 2020 年（Katharopoulos 等「Transformers are RNNs」，ICML 2020）</td><td>arXiv <a href="https://arxiv.org/abs/2006.16236" target="_blank" rel="noopener">2006.16236</a>，v1 提交于 2020-06-29（「up to 4000x faster on autoregressive prediction of very long sequences」，2026-10-16 核对）</td></tr>
   </table></div>
 </div></section>
 
@@ -10663,6 +10665,24 @@ document.querySelectorAll('video[data-pauses]').forEach(function(v){
   au.addEventListener('change',function(){ auto=au.checked; if(auto) v.play(); show(); });
   show();
 });
+</script>
+<style>
+.scrollhint{display:none;font-size:12px;color:#5f6368;margin:2px 0 4px;text-align:right;transition:opacity .4s}
+.scrollhint.on{display:block}
+.scrollhint.seen{opacity:0}
+</style>
+<script>
+(function(){
+  var els=[].slice.call(document.querySelectorAll('.tbl-wrap, figure.fwide'));
+  els.forEach(function(el){
+    var h=document.createElement('div'); h.className='scrollhint'; h.textContent='← 左右滑动看全 →';
+    el.insertAdjacentElement('beforebegin', h);
+    el.addEventListener('scroll',function(){ if(el.scrollLeft>8) h.classList.add('seen'); },{passive:true});
+    el._hint=h;
+  });
+  function check(){ els.forEach(function(el){ el._hint.classList.toggle('on', el.scrollWidth > el.clientWidth + 4); }); }
+  window.addEventListener('load',check); window.addEventListener('resize',check); check();
+})();
 </script>
 
 <div class="figbar">

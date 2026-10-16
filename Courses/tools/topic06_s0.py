@@ -14,7 +14,7 @@ BODY = '''
 __FIG_S0_CHAIN__
 __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
-    同等 GPT-3.5 水平的推理价格，从 2022 年 11 月到 2024 年 10 月降到原来的 1/280 以下（斯坦福 AI Index 2025），系统这一侧能不能单独拆出来，14.3 再说。</p>
+    同等 GPT-3.5 水平的推理这两年便宜得很快（斯坦福 AI Index 2025 按市场价统计，本课不引价格口径的数），报告主要归给更强的小模型；系统这一侧能不能单独拆出来，14.3 再说。</p>
   <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
 __FIG_S0_ENGINES__
   <h3 id="s0-2">0.2　一个请求的一生</h3>

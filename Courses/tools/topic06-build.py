@@ -296,8 +296,30 @@ document.querySelectorAll('video[data-pauses]').forEach(function(v){
 });
 </script>
 """
+# R91（2026-10-16）：窄屏下宽表（.tbl-wrap）和宽图（figure.fwide，R81 起保持 1050 px）都在自己里面横滚，
+#   但手机上没有滚动条提示，看着像被截断。只给「真的放不下」的那几块加一行小字提示，
+#   用户一滑就淡掉；桌面／投影版式不出现（放得下就不加 class）。专题二到八没有现成做法，这里是第一份。
+SCROLL_JS = """<style>
+.scrollhint{display:none;font-size:12px;color:#5f6368;margin:2px 0 4px;text-align:right;transition:opacity .4s}
+.scrollhint.on{display:block}
+.scrollhint.seen{opacity:0}
+</style>
+<script>
+(function(){
+  var els=[].slice.call(document.querySelectorAll('.tbl-wrap, figure.fwide'));
+  els.forEach(function(el){
+    var h=document.createElement('div'); h.className='scrollhint'; h.textContent='← 左右滑动看全 →';
+    el.insertAdjacentElement('beforebegin', h);
+    el.addEventListener('scroll',function(){ if(el.scrollLeft>8) h.classList.add('seen'); },{passive:true});
+    el._hint=h;
+  });
+  function check(){ els.forEach(function(el){ el._hint.classList.toggle('on', el.scrollWidth > el.clientWidth + 4); }); }
+  window.addEventListener('load',check); window.addEventListener('resize',check); check();
+})();
+</script>
+"""
 _html = _hook_steps(_html)
 assert _html.count("</body>") == 1
-_html = _html.replace("</body>", STEP_JS + "</body>")
+_html = _html.replace("</body>", STEP_JS + SCROLL_JS + "</body>")
 _html = P.add_figonly_toggle(_html)
 P.finish(_html, OUT, SECTIONS, "topic-06.html")
