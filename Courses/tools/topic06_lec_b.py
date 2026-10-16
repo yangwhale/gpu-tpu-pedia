@@ -190,7 +190,7 @@ Kimi K3 就栽在这：六十九层线性注意力，每个请求一块固定状
 <p>💬 <b>互动</b>：听两三个答案，不揭晓，<code>anim-pdsplit</code> 播完再收。</p>
 
 <p class="say">「下半场拉第三根杠杆：开两个仓库。每张卡带的人多了，长 prompt 一进门，卡住的也多；分块只是摊平。吞 prompt 的和吐字的分到两批机器上。<br>
-Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进 Kimi 线上：KV 反正要搬，算过的顺手存着。」</p>
+Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进 Kimi 线上。第三节的 KV 当存储，到这里铺满集群：KV 反正要搬，算过的顺手存着。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到 8.1，停在 <code>anim-pdsplit</code>，等它播完一圈（22 秒）。</p>
 

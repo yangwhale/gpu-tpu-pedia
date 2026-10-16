@@ -239,6 +239,7 @@ BODY = '''
     <tr><td>R89 补充 · 13.7：92 个 MoE 层一次 Pallas 调用、不分 grid；16 颗 v7、32 个 TensorCore、TP4 × EP8；跨层预取；每 TensorCore 64 MiB VMEM；2×2×4 拓扑、换拓扑要重写集合通信；batch 1 → 8 后加残差流序列并行；一次验 1 锚点 ＋ 7 草稿，每步收下 3–6 个、一步 ~8.5 ms；编译 &lt;90 s 对 30＋ 分钟</td><td>https://inferact.ai/blog/tpu-megakernels（2026-09-23）</td></tr>
     <tr><td>R89 补充 · 13.7：VMEM 分开放 90.67 MB、共用一块 31.29 MB；4 个专家槽轮转</td><td>本课推导：按 https://github.com/Inferact/tpu-megakernels（Apache-2.0）的 VMEM 分配逐项加总</td></tr>
     <tr><td>R89 补充 · 13.7：MXFP4 → FP8 专家字节 ×1.60（对 MXFP4）、向量单元缩放活约 1/8；batch 1 只到自身布局带宽上界五成上下</td><td>本课推导：按 https://github.com/Inferact/tpu-megakernels 的打包格式，MXFP4 4 ＋ 8/32 ＝ 4.25 bit，FP8 ＋ 每 256 个一个 bf16 ＝ 8.06 bit，三块合计 3 × 4.25 ＝ 12.75 → 2 × 8.06 ＋ 4.25 ＝ 20.37，比 1.60；256 ÷ 32 ＝ 8；带宽占比由公开 config 与博客吞吐推得 46%–56%，取整为五成上下</td></tr>
+    <tr><td>R90 补充 · 第零节 fig6-engines：Dynamo 2025-03 开源，首发即支持 vLLM 与 SGLang</td><td>developer.nvidia.com/blog/introducing-nvidia-dynamo-a-low-latency-distributed-inference-framework-for-scaling-reasoning-ai-models/（「supports all major LLM frameworks including NVIDIA TensorRT-LLM, vLLM, and SGLang」）</td></tr>
   </table>'''
 
 FIGS = {}
