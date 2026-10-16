@@ -1096,164 +1096,202 @@ body.figonly section h3{margin-top:34px}
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
     同等 GPT-3.5 水平的推理价格，从 2022 年 11 月到 2024 年 10 月降到原来的 1/280 以下（斯坦福 AI Index 2025），系统这一侧能不能单独拆出来，14.3 再说。</p>
   <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
-<figure class="fbox fwide" id="fig-s0-engines"><svg viewBox="0 0 1400 1351" width="100%" role="img" aria-label="vLLM 和 SGLang 的双泳道时间线，2023 年 6 月到 2026 年。上面蓝色是 vLLM，下面红色是 SGLang，中间灰色是外部玩家：Orca、DistServe、Sarathi-Serve 这些论文，DeepSeek 的 V2（MLA）、V3、开源周、V3.2、V4，Mooncake，NVIDIA Dynamo。箭头从先做的指向跟进的。2023 年 6 月 vLLM 首发 PagedAttention；2024 年 1 月 SGLang 首发 RadixAttention，原文写着复用了 vLLM 的代码。分块 prefill 和接 Mooncake 传输都是 vLLM 先、SGLang 晚三个多月。SGLang 2024 年 9 月先做 MLA 优化，12 月 DeepSeek-V3 首日可用，2025 年 2 月 MTP 比 vLLM 早 5 天，EAGLE-3 早 5 周，大 EP 也先做。vLLM 2025 年 1 月重写成 V1，原文说受 SGLang 等显著影响。DeepSeek-V3.2、V4 两家都在首日支持"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s0-engines"><svg viewBox="0 0 1400 790" width="100%" role="img" aria-label="vLLM 和 SGLang 的三泳道时间线，横轴按月从 2023 年 6 月到 2026 年 9 月，每张卡的左边缘对准它的月份。上面蓝色是 vLLM，下面红色是 SGLang，中间灰色细道是外部玩家：DeepSpeed-FastGen、DistServe、DeepSeek-V2、Mooncake 开源、DeepSeek 开源周、DeepSeek-V3.2 和 V4，灰色竖虚线标出它们进了哪个引擎。跟进的一方卡片里有一条色条，颜色是先做的那一家。vLLM 2023 年 6 月首发 PagedAttention；SGLang 2024 年 1 月首发 RadixAttention，原文写着复用了 vLLM 的代码。分块 prefill 和接 Mooncake 都是 vLLM 先、SGLang 晚三个多月。SGLang 先做 MLA 优化，MTP 早 5 天、EAGLE-3 早 5 周、大 EP 早一个多月。vLLM 2025 年 1 月重写成 V1，原文说受 SGLang 等影响显著。2025 年 9 月 SGLang 推 HiCache，10 月 vLLM 0.11 自带 KV 下放到 CPU。DeepSeek-V3.2、V4 两家都在首日支持"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两大引擎　——　<tspan font-weight="700">你方唱罢我登场</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡片落在首次公开的年月上，数字带对照对象；箭头从先做的指向跟进的，只画原文明说的复用、致谢和有日期的先后</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴按月等距，卡片左边缘就是首次公开的月份；卡里带底色的小条写的是跟进了谁、晚多久</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">vLLM 先</text>
-<rect x="108.60000000000001" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="129" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">SGLang 先</text>
-<rect x="235.12" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="256" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">外部玩家</text>
-<text class="svgsm" x="332" y="118" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024</tspan></text>
-<text class="svgsm" x="637" y="118" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025</tspan></text>
-<text class="svgsm" x="943" y="118" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026</tspan></text>
-<rect x="0" y="132" width="1400" height="409" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="132" width="4" height="409" rx="0" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="16" y="342" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">vLLM</tspan></text>
-<rect x="0" y="551" width="1400" height="333" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="551" width="4" height="333" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="16" y="723" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">外部玩家</tspan></text>
-<rect x="0" y="894" width="1400" height="443" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="894" width="4" height="443" rx="0" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="16" y="1121" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SGLang</tspan></text>
-<line x1="332.02298850575994" y1="128" x2="332.02298850575994" y2="1337" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
-<line x1="637.7701149425399" y1="128" x2="637.7701149425399" y2="1337" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
-<line x1="943.5172413793199" y1="128" x2="943.5172413793199" y2="1337" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
-<path d="M 206.9 189.0 C 206.9 543.5, 384.3 543.5, 384.3 898.0" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<path d="M 653.3 900.0 C 653.3 592.0, 699.2 592.0, 699.2 284.0" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<path d="M 460.7 265.0 C 460.7 628.0, 537.1 628.0, 537.1 991.0" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<path d="M 665.5 206.0 C 665.5 712.5, 760.3 712.5, 760.3 1219.0" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<path d="M 714.5 1162.0 C 714.5 790.5, 717.5 790.5, 717.5 419.0" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<path d="M 742.0 993.0 C 742.0 735.5, 775.6 735.5, 775.6 478.0" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<path d="M 781.7 1280.0 C 781.7 908.5, 812.3 908.5, 812.3 537.0" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<path d="M 332.3 557.0 C 332.3 412.0, 460.7 412.0, 460.7 267.0" fill="none" stroke="#5f6368" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="5 3" marker-end="url(#ah-5f6368)"/>
-<path d="M 485.1 819.0 C 485.1 960.0, 579.9 960.0, 579.9 1101.0" fill="none" stroke="#5f6368" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="5 3" marker-end="url(#ah-5f6368)"/>
-<path d="M 647.2 557.0 C 647.2 382.5, 665.5 382.5, 665.5 208.0" fill="none" stroke="#5f6368" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="5 3" marker-end="url(#ah-5f6368)"/>
-<rect x="166.91954022990984" y="140" width="202" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="175" y="158" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023-06 PagedAttention</tspan></text>
-<text class="svgsm" x="175" y="175" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">吞吐最多是 HF 的 24×</text>
-<rect x="396.2298850574948" y="140" width="188" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="405" y="158" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-03 前缀缓存 APC</tspan></text>
-<text class="svgsm" x="405" y="175" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">V0 里默认关</text>
-<rect x="420.689655172415" y="216" width="170" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="429" y="234" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-04 分块 prefill</tspan></text>
-<text class="svgsm" x="429" y="251" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">引擎里先落地</text>
-<rect x="539.9310344827898" y="292" width="178" height="64" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="548" y="310" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-09 v0.6.0</tspan></text>
-<text class="svgsm" x="548" y="327" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">自承 CPU 开销拖累 GPU</text>
-<text class="svgsm" x="548" y="344" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">吞吐 2.7×（对 v0.5.3）</text>
-<rect x="625.5402298850798" y="140" width="187" height="64" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="634" y="158" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-12 接 Mooncake</tspan></text>
-<text class="svgsm" x="634" y="175" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">传输引擎</text>
-<text class="svgsm" x="634" y="192" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">同月合入首批 PD 代码</text>
-<rect x="659.1724137930951" y="216" width="211" height="64" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="668" y="234" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-01 V1 重写</tspan></text>
-<text class="svgsm" x="668" y="251" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">原文：SGLang 等对它影响显著</text>
-<text class="svgsm" x="668" y="268" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">前缀缓存改成默认开</text>
-<rect x="677.5172413793547" y="368" width="125" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="686" y="386" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-02 MTP</tspan></text>
-<text class="svgsm" x="686" y="403" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">晚 SGLang 5 天</text>
-<rect x="726.436781609195" y="292" width="192" height="64" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="735" y="310" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-04 KV Connector</tspan></text>
-<text class="svgsm" x="735" y="327" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">可插拔的 KV 传输接口</text>
-<text class="svgsm" x="735" y="344" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">LMCache、NIXL 等接进来</text>
-<rect x="735.60919540229" y="427" width="149" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="744" y="445" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-04 EAGLE-3</tspan></text>
-<text class="svgsm" x="744" y="462" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">晚 SGLang 5 周</text>
-<rect x="772.2988505747397" y="486" width="196" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="504" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-06 接 DeepEP</tspan></text>
-<text class="svgsm" x="781" y="521" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">大 EP 晚 SGLang 1 个多月</text>
-<rect x="879.3103448275849" y="140" width="187" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="888" y="158" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-10 删掉 V0</tspan></text>
-<text class="svgsm" x="888" y="175" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">TPU 新后端 tpu-inference</text>
-<rect x="931.2873563218599" y="216" width="201" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="940" y="234" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-12 Wide-EP</tspan></text>
-<text class="svgsm" x="940" y="251" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">每 H200 1.5k → 2.2k tok/s</text>
-<rect x="1013.8390804597849" y="292" width="193" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1022" y="310" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-03 MRV2</tspan></text>
-<text class="svgsm" x="1022" y="327" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">吞吐 +56%（Qwen3-0.6B）</text>
-<rect x="1160.597701149445" y="140" width="213" height="47" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="158" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-09 TPU megakernel</tspan></text>
-<text class="svgsm" x="1169" y="175" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">Inferact</text>
-<rect x="118.0" y="559" width="139" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="127" y="577" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2022 Orca 论文</tspan></text>
-<text class="svgsm" x="127" y="594" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">连续批</text>
-<rect x="292.2758620689451" y="559" width="173" height="64" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="301" y="577" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023-11 DS-FastGen</tspan></text>
-<text class="svgsm" x="301" y="594" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">分块思路</text>
-<text class="svgsm" x="301" y="611" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">vLLM 回「已在路线图」</text>
-<rect x="344.25287356321996" y="635" width="197" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="353" y="653" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01 DistServe 论文</tspan></text>
-<text class="svgsm" x="353" y="670" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">PD 分离</text>
-<rect x="396.2298850574948" y="694" width="180" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="405" y="712" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-03 Sarathi 论文</tspan></text>
-<text class="svgsm" x="405" y="729" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">分块 prefill</text>
-<rect x="445.14942528733513" y="770" width="184" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="454" y="788" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-05 DeepSeek-V2</tspan></text>
-<text class="svgsm" x="454" y="805" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">MLA</text>
-<rect x="472.6666666666899" y="829" width="203" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="481" y="847" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-06 Mooncake 论文</tspan></text>
-<text class="svgsm" x="481" y="864" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">Kimi 的 KV 池</text>
-<rect x="607.1954022988898" y="559" width="203" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="616" y="577" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-11 Mooncake 开源</tspan></text>
-<text class="svgsm" x="616" y="594" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">传输引擎</text>
-<rect x="631.6551724138099" y="635" width="184" height="30" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="640" y="653" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-12 DeepSeek-V3</tspan></text>
-<rect x="683.6321839080848" y="694" width="216" height="64" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="692" y="712" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-02 DeepSeek 开源周</tspan></text>
-<text class="svgsm" x="692" y="729" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">FlashMLA、DeepEP、</text>
-<text class="svgsm" x="692" y="746" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">DeepGEMM</text>
-<rect x="701.9770114942748" y="770" width="188" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="710" y="788" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-03 Dynamo 开源</tspan></text>
-<text class="svgsm" x="710" y="805" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">首发即支持两家</text>
-<rect x="864.0229885057599" y="559" width="196" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="873" y="577" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-09 DeepSeek-V3.2</tspan></text>
-<text class="svgsm" x="873" y="594" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">DSA；两家同日 Day-0</text>
-<rect x="1032.183908045975" y="635" width="184" height="47" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
-<text class="svgsm" x="1041" y="653" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-04 DeepSeek-V4</tspan></text>
-<text class="svgsm" x="1041" y="670" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">两家都 Day-0</text>
-<rect x="344.25287356321996" y="902" width="204" height="81" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="353" y="920" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01 SGLang 首发</tspan></text>
-<text class="svgsm" x="353" y="937" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">RadixAttention</text>
-<text class="svgsm" x="353" y="954" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">吞吐最多 5×（对 vLLM 等）</text>
-<text class="svgsm" x="353" y="971" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">原文：复用了 vLLM 的代码</text>
-<rect x="497.12643678161" y="995" width="170" height="98" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="506" y="1013" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-07 v0.2</tspan></text>
-<text class="svgsm" x="506" y="1030" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">纯 Python 调度</text>
-<text class="svgsm" x="506" y="1047" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">3.1×（对 vLLM 0.5.2）</text>
-<text class="svgsm" x="506" y="1064" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">分块 prefill：晚 vLLM</text>
-<text class="svgsm" x="506" y="1081" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">3 个多月</text>
-<rect x="539.9310344827898" y="1105" width="197" height="47" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="548" y="1123" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-09 v0.3 MLA 优化</tspan></text>
-<text class="svgsm" x="548" y="1140" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">先手；3–7×（对基线）</text>
-<rect x="613.3103448276197" y="902" width="194" height="64" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="622" y="920" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-12 v0.4</tspan></text>
-<text class="svgsm" x="622" y="937" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">零开销调度、DP attention</text>
-<text class="svgsm" x="622" y="954" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">V3 Day-0，早 vLLM 一两天</text>
-<rect x="674.4597701149202" y="1164" width="119" height="47" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="683" y="1182" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-02 MTP</tspan></text>
-<text class="svgsm" x="683" y="1199" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">先手</text>
-<rect x="701.9770114942748" y="995" width="149" height="47" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="710" y="1013" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-03 EAGLE-3</tspan></text>
-<text class="svgsm" x="710" y="1030" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">自称首个支持</text>
-<rect x="720.321839080465" y="1223" width="187" height="47" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="729" y="1241" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-04 接 Mooncake</tspan></text>
-<text class="svgsm" x="729" y="1258" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">晚 vLLM 3 个多月</text>
-<rect x="741.7241379310201" y="1282" width="207" height="47" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="750" y="1300" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-05 大 EP＋PD 复现</tspan></text>
-<text class="svgsm" x="750" y="1317" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">最多纯 TP 的 5×</text>
-<rect x="848.7356321839347" y="902" width="215" height="47" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="857" y="920" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-09 HiCache 分层 KV</tspan></text>
-<text class="svgsm" x="857" y="937" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">KV 下放到 CPU 和远端存储</text>
-<rect x="888.4827586206801" y="995" width="175" height="47" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="897" y="1013" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-10 SGLang-JAX</tspan></text>
-<text class="svgsm" x="897" y="1030" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">上 TPU</text>
-<rect x="1084.1609195402498" y="902" width="188" height="64" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1093" y="920" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-06 V4 on GB300</tspan></text>
-<text class="svgsm" x="1093" y="937" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">5.1×（同交互档）</text>
-<text class="svgsm" x="1093" y="954" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums">对自家 Day-0</text>
-</svg><figcaption><b>谁先做、谁跟进：蓝箭头是 vLLM 在前，红箭头是 SGLang 在前。</b><span class="capmore"><br><em>间隔按两边日期推算，往下取整；只凭推测的借鉴一律不连线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>vLLM：blog.vllm.ai 2023-06-20（对 HF 24×）、2024-09-05（v0.6.0，2.7× 对 v0.5.3）、2025-01-27（V1）；PR #2762（APC）、#3884（分块 prefill，2024-04-11）、#10884（Mooncake，2024-12-15）、#10502（PD，2024-12-01）、#12755（MTP，2025-02-19）、#16937（EAGLE-3，2025-04-25）、#18434（DeepEP，2025-06-10）、#15960（KV Connector）；v0.11.0 release（删 V0）；blog.vllm.ai 2025-10-16（tpu-inference）；vllm.ai/blog 2025-12-17（Wide-EP）、2026-03-24（MRV2）；inferact.ai/blog/tpu-megakernels。SGLang：lmsys.org/blog 2024-01-17（5× 对 Guidance、vLLM；复用 vLLM 代码）、2024-07-25（v0.2，3.1× 对 vLLM 0.5.2）、2024-09-04（v0.3 MLA 3–7×）、2024-12-04（v0.4）、2025-05-05（大 EP，96×H100）、2025-09-10（HiCache）、2025-10-29（SGLang-JAX）；PR #800（分块 prefill，2024-07-29）、#3582（MTP，2025-02-14）、#4247（EAGLE-3，2025-03-18）；v0.4.1 release（V3 Day-0）；PyTorch 博客 2026-06-23（V4 on GB300）。外部：DeepSpeed-FastGen 博客与 vLLM 回应（2023-11-14）；DistServe arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>；Sarathi-Serve arXiv <a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener">2403.02310</a>；DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>；Mooncake arXiv <a href="https://arxiv.org/abs/2407.00079" target="_blank" rel="noopener">2407.00079</a> 与 GitHub README；DeepSeek open-infra-index；NVIDIA Dynamo 新闻稿 2025-03-18；DeepSeek-V3.2 两家 Day-0 博客 2025-09-29；V4 两家博客 2026-04-24／25。间隔（晚 5 天、5 周、1 个多月、3 个多月）按两边日期本课推导，往下取整。推测的借鉴不画箭头。</p></details></figure>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">vLLM</text>
+<rect x="85.08000000000001" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="106" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">SGLang</text>
+<rect x="186.96" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="207" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">外部玩家（竖虚线：进了哪个引擎）</text>
+<text class="svgsm" x="80" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2023-06</text>
+<line x1="80.0" y1="123" x2="80.0" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="111.4" y1="126" x2="111.4" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="142.8" y1="126" x2="142.8" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="174" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2023-09</text>
+<line x1="174.2" y1="123" x2="174.2" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="205.6" y1="126" x2="205.6" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="237.0" y1="126" x2="237.0" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="268" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2023-12</text>
+<line x1="268.4" y1="123" x2="268.4" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="299.79999999999995" y1="126" x2="299.79999999999995" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="331.2" y1="126" x2="331.2" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="362" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2024-03</text>
+<line x1="362.59999999999997" y1="123" x2="362.59999999999997" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="394.0" y1="126" x2="394.0" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="425.4" y1="126" x2="425.4" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="456" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2024-06</text>
+<line x1="456.79999999999995" y1="123" x2="456.79999999999995" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="488.2" y1="126" x2="488.2" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="519.5999999999999" y1="126" x2="519.5999999999999" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="551" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2024-09</text>
+<line x1="551.0" y1="123" x2="551.0" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="582.4" y1="126" x2="582.4" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="613.8" y1="126" x2="613.8" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="645" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2024-12</text>
+<line x1="645.1999999999999" y1="123" x2="645.1999999999999" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="676.6" y1="126" x2="676.6" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="708.0" y1="126" x2="708.0" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="739" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2025-03</text>
+<line x1="739.4" y1="123" x2="739.4" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="770.8" y1="126" x2="770.8" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="802.1999999999999" y1="126" x2="802.1999999999999" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="833" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2025-06</text>
+<line x1="833.5999999999999" y1="123" x2="833.5999999999999" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="865.0" y1="126" x2="865.0" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="896.4" y1="126" x2="896.4" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="927" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2025-09</text>
+<line x1="927.8" y1="123" x2="927.8" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="959.1999999999999" y1="126" x2="959.1999999999999" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="990.5999999999999" y1="126" x2="990.5999999999999" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1022" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2025-12</text>
+<line x1="1022.0" y1="123" x2="1022.0" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1053.4" y1="126" x2="1053.4" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1084.8" y1="126" x2="1084.8" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1116" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2026-03</text>
+<line x1="1116.2" y1="123" x2="1116.2" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1147.6" y1="126" x2="1147.6" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1179.0" y1="126" x2="1179.0" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1210" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2026-06</text>
+<line x1="1210.3999999999999" y1="123" x2="1210.3999999999999" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1241.8" y1="126" x2="1241.8" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1273.2" y1="126" x2="1273.2" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1304" y="118" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2026-09</text>
+<line x1="1304.6" y1="123" x2="1304.6" y2="130" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="80" y1="130" x2="1304.6" y2="130" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="0" y="138" width="1400" height="252" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="138" width="4" height="252" rx="0" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="14" y="270" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">vLLM</tspan></text>
+<rect x="0" y="400" width="1400" height="102" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="400" width="4" height="102" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="14" y="457" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">外部玩家</tspan></text>
+<rect x="0" y="512" width="1400" height="272" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="512" width="4" height="272" rx="0" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="14" y="654" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SGLang</tspan></text>
+<line x1="80.0" y1="138" x2="80.0" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="174.2" y1="138" x2="174.2" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="268.4" y1="138" x2="268.4" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="362.59999999999997" y1="138" x2="362.59999999999997" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="456.79999999999995" y1="138" x2="456.79999999999995" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="551.0" y1="138" x2="551.0" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="645.1999999999999" y1="138" x2="645.1999999999999" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="739.4" y1="138" x2="739.4" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="833.5999999999999" y1="138" x2="833.5999999999999" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="927.8" y1="138" x2="927.8" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="1022.0" y1="138" x2="1022.0" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="1116.2" y1="138" x2="1116.2" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="1210.3999999999999" y1="138" x2="1210.3999999999999" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="1304.6" y1="138" x2="1304.6" y2="784" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="404.0" y1="406" x2="404.0" y2="363" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-5f6368)"/>
+<line x1="561.0" y1="448" x2="561.0" y2="517" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-5f6368)"/>
+<line x1="655.1999999999999" y1="454" x2="655.1999999999999" y2="363" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-5f6368)"/>
+<line x1="780.8" y1="496" x2="780.8" y2="517" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-5f6368)"/>
+<line x1="843.5999999999999" y1="406" x2="843.5999999999999" y2="385" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-5f6368)"/>
+<rect x="80.0" y="318" width="191" height="42" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="88" y="333" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023-06 PagedAttention</tspan></text>
+<text class="svgsm" x="88" y="350" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">吞吐最多是 HF 的 24×</text>
+<rect x="394.0" y="318" width="161" height="42" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="402" y="333" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-04 分块 prefill</tspan></text>
+<text class="svgsm" x="402" y="350" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">引擎里先落地</text>
+<rect x="551.0" y="218" width="129" height="74" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="559" y="233" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-09 v0.6.0</tspan></text>
+<text class="svgsm" x="559" y="250" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">自承 CPU 开销</text>
+<text class="svgsm" x="559" y="266" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">拖累 GPU</text>
+<text class="svgsm" x="559" y="282" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">2.7×（对 v0.5.3）</text>
+<rect x="645.1999999999999" y="318" width="176" height="42" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="653" y="333" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-12 接 Mooncake</tspan></text>
+<text class="svgsm" x="653" y="350" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">同月合入首批 PD 代码</text>
+<rect x="676.6" y="146" width="198" height="64" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="684" y="161" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-01 V1 重写</tspan></text>
+<rect x="682.6" y="167.5" width="180" height="17" rx="3" fill="#fce8e6" stroke="none" stroke-width="0.75"/>
+<text class="svgsm" x="688" y="180" fill="#a50e0e" style="font-size:11.0px;font-variant-numeric:tabular-nums">原文：受 SGLang 等影响显著</text>
+<text class="svgsm" x="684" y="200" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">前缀缓存改成默认开</text>
+<rect x="708.0" y="218" width="140" height="92" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="716" y="233" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-02 MTP</tspan></text>
+<rect x="714.0" y="239.5" width="107" height="17" rx="3" fill="#fce8e6" stroke="none" stroke-width="0.75"/>
+<text class="svgsm" x="720" y="252" fill="#a50e0e" style="font-size:11.0px;font-variant-numeric:tabular-nums">晚 SGLang 5 天</text>
+<text class="svgsm" x="716" y="277" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-04 EAGLE-3</tspan></text>
+<rect x="714.0" y="283.5" width="107" height="17" rx="3" fill="#fce8e6" stroke="none" stroke-width="0.75"/>
+<text class="svgsm" x="720" y="296" fill="#a50e0e" style="font-size:11.0px;font-variant-numeric:tabular-nums">晚 SGLang 5 周</text>
+<rect x="833.5999999999999" y="318" width="160" height="64" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="841" y="333" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-06 接 DeepEP</tspan></text>
+<text class="svgsm" x="841" y="350" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">做大 EP</text>
+<rect x="839.5999999999999" y="355.5" width="132" height="17" rx="3" fill="#fce8e6" stroke="none" stroke-width="0.75"/>
+<text class="svgsm" x="845" y="368" fill="#a50e0e" style="font-size:11.0px;font-variant-numeric:tabular-nums">晚 SGLang 1 个多月</text>
+<rect x="959.1999999999999" y="218" width="181" height="58" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="967" y="233" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-10 v0.11 删掉 V0</tspan></text>
+<text class="svgsm" x="967" y="250" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">自带 KV 下放到 CPU</text>
+<text class="svgsm" x="967" y="266" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">TPU 新后端 tpu-inference</text>
+<rect x="1022.0" y="318" width="189" height="42" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1030" y="333" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-12 Wide-EP</tspan></text>
+<text class="svgsm" x="1030" y="350" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">每 H200 1.5k → 2.2k tok/s</text>
+<rect x="1116.2" y="146" width="182" height="42" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1124" y="161" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-03 MRV2</tspan></text>
+<text class="svgsm" x="1124" y="178" fill="#174ea6" style="font-size:11.5px;font-variant-numeric:tabular-nums">吞吐 +56%（Qwen3-0.6B）</text>
+<rect x="237.0" y="406" width="177" height="42" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="245" y="421" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023-11 DS-FastGen</tspan></text>
+<text class="svgsm" x="245" y="438" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">分块思路</text>
+<rect x="299.79999999999995" y="454" width="143" height="42" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="307" y="469" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01 DistServe</tspan></text>
+<text class="svgsm" x="307" y="486" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">PD 分离</text>
+<rect x="425.4" y="406" width="167" height="42" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="433" y="421" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-05 DeepSeek-V2</tspan></text>
+<text class="svgsm" x="433" y="438" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">MLA</text>
+<rect x="613.8" y="454" width="185" height="42" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="621" y="469" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-11 Mooncake 开源</tspan></text>
+<text class="svgsm" x="621" y="486" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">传输引擎</text>
+<rect x="708.0" y="406" width="197" height="42" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="716" y="421" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-02 DeepSeek 开源周</tspan></text>
+<text class="svgsm" x="716" y="438" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">FlashMLA、DeepEP</text>
+<rect x="927.8" y="406" width="179" height="42" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="935" y="421" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-09 DeepSeek-V3.2</tspan></text>
+<text class="svgsm" x="935" y="438" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">两家同日 Day-0</text>
+<rect x="1147.6" y="406" width="167" height="42" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="1155" y="421" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-04 DeepSeek-V4</tspan></text>
+<text class="svgsm" x="1155" y="438" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">两家都 Day-0</text>
+<rect x="299.79999999999995" y="520" width="193" height="80" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="307" y="535" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01 SGLang 首发</tspan></text>
+<text class="svgsm" x="307" y="552" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">RadixAttention</text>
+<text class="svgsm" x="307" y="568" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">吞吐最多 5×（对 vLLM 等）</text>
+<rect x="305.79999999999995" y="573.5" width="165" height="17" rx="3" fill="#e8f0fe" stroke="none" stroke-width="0.75"/>
+<text class="svgsm" x="311" y="586" fill="#174ea6" style="font-size:11.0px;font-variant-numeric:tabular-nums">原文：复用了 vLLM 的代码</text>
+<rect x="488.2" y="614" width="208" height="96" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="496" y="629" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-07 v0.2</tspan></text>
+<text class="svgsm" x="496" y="646" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">纯 Python 调度</text>
+<text class="svgsm" x="496" y="662" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">点名 vLLM 的 CPU 开销</text>
+<text class="svgsm" x="496" y="678" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">3.1×（对 vLLM 0.5.2）</text>
+<rect x="494.2" y="683.5" width="190" height="17" rx="3" fill="#e8f0fe" stroke="none" stroke-width="0.75"/>
+<text class="svgsm" x="500" y="696" fill="#174ea6" style="font-size:11.0px;font-variant-numeric:tabular-nums">分块 prefill 晚 vLLM 3 个多月</text>
+<rect x="551.0" y="520" width="186" height="42" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="559" y="535" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-09 v0.3 MLA 优化</tspan></text>
+<text class="svgsm" x="559" y="552" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">先手；3–7×（对基线）</text>
+<rect x="645.1999999999999" y="718" width="183" height="58" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="653" y="733" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-12 v0.4</tspan></text>
+<text class="svgsm" x="653" y="750" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">零开销调度、DP attention</text>
+<text class="svgsm" x="653" y="766" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">V3 Day-0，早 vLLM 一两天</text>
+<rect x="708.0" y="614" width="140" height="80" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="716" y="629" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-02 MTP</tspan></text>
+<text class="svgsm" x="716" y="646" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">先手</text>
+<text class="svgsm" x="716" y="667" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-03 EAGLE-3</tspan></text>
+<text class="svgsm" x="716" y="684" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">自称首个支持</text>
+<rect x="770.8" y="520" width="197" height="86" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="778" y="535" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-04 接 Mooncake</tspan></text>
+<rect x="776.8" y="541.5" width="117" height="17" rx="3" fill="#e8f0fe" stroke="none" stroke-width="0.75"/>
+<text class="svgsm" x="782" y="554" fill="#174ea6" style="font-size:11.0px;font-variant-numeric:tabular-nums">晚 vLLM 3 个多月</text>
+<text class="svgsm" x="778" y="579" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-05 大 EP＋PD 复现</tspan></text>
+<text class="svgsm" x="778" y="596" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">最多纯 TP 的 5×</text>
+<rect x="927.8" y="614" width="204" height="42" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="935" y="629" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-09 HiCache 分层 KV</tspan></text>
+<text class="svgsm" x="935" y="646" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">KV 下放到 CPU 和远端存储</text>
+<rect x="959.1999999999999" y="718" width="166" height="42" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="967" y="733" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-10 SGLang-JAX</tspan></text>
+<text class="svgsm" x="967" y="750" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">上 TPU</text>
+<rect x="1210.3999999999999" y="520" width="178" height="58" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1218" y="535" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-06 V4 on GB300</tspan></text>
+<text class="svgsm" x="1218" y="552" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">5.1×（同交互档）</text>
+<text class="svgsm" x="1218" y="568" fill="#a50e0e" style="font-size:11.5px;font-variant-numeric:tabular-nums">对自家 Day-0</text>
+</svg><figcaption><b>谁先做、谁跟进：蓝色小条是在跟 vLLM，红色小条是在跟 SGLang。</b><span class="capmore"><br><em>间隔按两边日期推算，往下取整；只凭推测的借鉴一律不标。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>vLLM：blog.vllm.ai 2023-06-20（对 HF 24×）、2024-09-05（v0.6.0，2.7× 对 v0.5.3）、2025-01-27（V1）；PR #3884（分块 prefill，2024-04-11）、#10884（Mooncake，2024-12-15）、#10502（PD，2024-12-01）、#12755（MTP，2025-02-19）、#16937（EAGLE-3，2025-04-25）、#18434（DeepEP，2025-06-10）；v0.11.0 release（删 V0）与 vllm.ai/blog 2026-01-08（OffloadingConnector「introduced in vLLM 0.11.0」）；blog.vllm.ai 2025-10-16（tpu-inference）；vllm.ai/blog 2025-12-17（Wide-EP）、2026-03-24（MRV2）。SGLang：lmsys.org/blog 2024-01-17（5× 对 Guidance、vLLM；复用 vLLM 代码）、2024-07-25（v0.2，3.1× 对 vLLM 0.5.2；原文评 vLLM 调度 CPU 开销高）、2024-09-04（v0.3 MLA 3–7×）、2024-12-04（v0.4）、2025-05-05（大 EP，96×H100）、2025-09-10（HiCache）、2025-10-29（SGLang-JAX）；PR #800（分块 prefill，2024-07-29）、#3582（MTP，2025-02-14）、#4247（EAGLE-3，2025-03-18）；v0.4.1 release（V3 Day-0）；PyTorch 博客 2026-06-23（V4 on GB300）。外部：DeepSpeed-FastGen 博客与 vLLM 回应（2023-11-14）；DistServe arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>；DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>；Mooncake GitHub README；DeepSeek open-infra-index；DeepSeek-V3.2 两家 Day-0 博客 2025-09-29；V4 两家博客 2026-04-24／25。间隔（晚 5 天、5 周、1 个多月、3 个多月）按两边日期本课推导，往下取整。推测的借鉴不标。</p></details></figure>
   <h3 id="s0-2">0.2　一个请求的一生</h3>
 <figure class="fbox fwide" id="fig-s0-life"><svg viewBox="0 0 1400 824" width="100%" role="img" aria-label="一个请求的一生，示意时间线。请求进门后可能先排队；然后 prefill 一次把整段 prompt 算完，同时把 prompt 每个 token 的 KV 写进显存，算完吐出第一个字。从进门到第一个字的时间叫 TTFT。之后进入 decode：每一步只出一个字，每一步都要把全部权重和到目前为止的全部 KV 从显存读一遍，KV 每一步长一格。相邻两个字之间的时间叫 TPOT。出到结束符为止。prefill 一次读权重分给整段 prompt，吃的是算力；decode 一次读权重只出一个字，吃的是带宽"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个请求的一生　——　<tspan font-weight="700">一大块 prefill，接一长串一步一字的 decode</tspan></text>
@@ -10346,6 +10384,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R86 补充 · 4.2：chunked prefill 在引擎里 vLLM 先合入（2024-04），SGLang 同年 7 月跟进；思路源头是 Sarathi 论文与 DeepSpeed-FastGen（2023-11）</td><td>vLLM PR #3884「Fully working chunked prefill e2e」，2024-04-11 合入（github.com/vllm-project/vllm/pull/3884）；SGLang PR #800，2024-07-29 合入（github.com/sgl-project/sglang/pull/800）；DeepSpeed-FastGen 博客（github.com/microsoft/DeepSpeed/blob/master/blogs/deepspeed-fastgen/README.md）</td></tr>
     <tr><td>R86 补充 · 3 lead：PagedAttention 首发于 vLLM，2023 年（v0.1.0 与发布博客 2023-06-20；论文 SOSP 2023）；Orca 在前，OSDI'22</td><td>blog.vllm.ai/2023/06/20/vllm.html；arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a>；Orca 见本台账 Orca 那一行</td></tr>
     <tr><td>R87 补充 · 14.3 表：「补的哪个洞」列的环号 ①–⑪ 对应 0.1 的 11 环问题链（V1 重写不在链上，不标环号；⑨ DCP／PCP 无实测行）；「首发」列只标这一招最早由谁公开：Orca、GPTQ、投机解码、DistServe、Sarathi-Serve、EAGLE-3 为论文；PagedAttention、V1、FP8 权重博客为 vLLM；RadixAttention、KV 感知路由为 SGLang；MLA、磁盘 KV 缓存、MTP、大 EP（SGLang 那行是复现）、DSA、V3.2 FP8 KV 为 DeepSeek；Mooncake、K2 INT4 为 Kimi（Moonshot）；NVFP4 KV 为 NVIDIA 博客；末行 5.1 倍出自 SGLang 的 PyTorch 博客</td><td>本课归纳；各行原始出处见本表已录各条（Orca／PagedAttention／RadixAttention／DistServe／Sarathi-Serve／EAGLE-3 论文，vLLM V1 与 FP8 博客，lmsys.org/blog/2024-12-04-sglang-v0-4，DeepSeek-V3／V3.2 报告与 API 文档，Mooncake 论文，huggingface.co/moonshotai/Kimi-K2-Thinking，NVIDIA NVFP4 KV 博客，llm-d README，PyTorch 博客 2026-06-23）；首发先后另对照引擎时间线素材（GitHub release／博客，2026-10-15 调研）</td></tr>
+    <tr><td>R88 补充 · 第零节 fig6-engines：SGLang v0.2 博客点名 vLLM 的 CPU 调度开销，是 SGLang 改用纯 Python 轻量调度的出发点</td><td>lmsys.org/blog/2024-07-25-sglang-llama3/（「vLLM suffers from high CPU scheduling overhead」）</td></tr>
   </table></div>
 </div></section>
 

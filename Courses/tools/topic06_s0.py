@@ -73,8 +73,8 @@ FIGS = {
         '<b>红字是下一环的开头：每一招解决一个问题，也留下一个。</b><br>'
         '<em>倍数各对各的基线，所以只能一环一环看。</em>'),
     "__FIG_S0_ENGINES__": ("fig-s0-engines", "fig6-engines.svg", "topic06-fig-engines.py",
-        '<b>谁先做、谁跟进：蓝箭头是 vLLM 在前，红箭头是 SGLang 在前。</b><br>'
-        '<em>间隔按两边日期推算，往下取整；只凭推测的借鉴一律不连线。</em>'),
+        '<b>谁先做、谁跟进：蓝色小条是在跟 vLLM，红色小条是在跟 SGLang。</b><br>'
+        '<em>间隔按两边日期推算，往下取整；只凭推测的借鉴一律不标。</em>'),
     "__FIG_S0_TWOLONG__": ("fig-s0-twolong", "fig6-twolong.svg", "topic06-fig-story.py",
         '<b>深紫只在 ② 变厚，③ 多出来的全是浅紫。</b><br>'
         '<em>格子数不是实测，只为三块能放在一起比。</em>'),
