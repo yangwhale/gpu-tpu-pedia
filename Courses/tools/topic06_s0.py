@@ -12,11 +12,68 @@ BODY = '''
   <p>DeepSeek-V3 这类 MoE（每个字只走几个专家）又把拼好的 batch 拆散：256 个专家选 8 个，每个专家只分到几行。SGLang 的 DP attention、DeepSeek 的大 EP 把专家铺到上百张卡上，凑够行数。随之而来的是每个 rank 要自备一份状态，K3 上 DEP8 直接显存不足；decode 快了，prefill 又喂不上。</p>
   <p>2024 年 9 月的 o1、2025 年 1 月的 DeepSeek-R1 一题要写几百到几千个思考 token（R1 论文），交互档（同样的出字速度）又限住 batch，“读一趟权重出一个字”成了硬上限。投机解码、MTP 让一趟验好几个字；剩下能省的是字节，FP8、FP4 和合并 kernel（芯片上调起的一个计算函数）接着压。同一套 GB300（NVIDIA 整柜 GPU）跑 DeepSeek-V4-Pro，光改软件，同一交互档每卡吞吐已是首发日（Day-0）的 5.1 倍（含 MTP）。</p>
 __FIG_S0_CHAIN__
+  <details class="foldfig"><summary><b>十一环展开</b>：每一招卡在哪、省了多少、又留下什么（按环号，也就是问题一个接一个冒出来的顺序）</summary>
+  <table>
+    <tr><th>环</th><th>首次公开</th><th>谁先做</th><th>卡在哪 → 怎么解</th><th>省了多少（对谁）</th><th>解完又冒出什么</th><th>节</th></tr>
+    <tr><td>①</td><td>2022</td><td>Orca 论文</td><td>整批人陪最慢的那个写完 → 连续批，每步都能进出</td><td>同延迟吞吐 36.9×（对 FasterTransformer）</td><td>座位数归 KV 管，按最长预留，真用上的两到近四成</td><td>四</td></tr>
+    <tr><td>②</td><td>2023</td><td>vLLM</td><td>KV 预留白占显存 → PagedAttention 分页存</td><td>KV 利用率 96%；吞吐 2–4×（对 FasterTransformer、Orca）</td><td>能坐几人 ＝ KV 池 ÷ 每条 KV，而上下文在变长</td><td>三</td></tr>
+    <tr><td>③</td><td>2023 → 2025</td><td>GQA 论文、DeepSeek</td><td>每条 KV 太厚 → GQA、MLA，再到 DSA 只挑一部分读</td><td>GQA 约 ÷8、MLA 约 ÷57（本课推导）；DSA 每字只读 2,048 条</td><td>MLA 全层一份 KV，TP 切不开，开几路就复制几份</td><td>三</td></tr>
+    <tr><td>④</td><td>2023</td><td>SGLang 论文</td><td>同样的开头一遍遍重算 → RadixAttention 复用前缀</td><td>最多 6.4×（对当时其他系统）</td><td>想复用的前缀多到显存放不下</td><td>三</td></tr>
+    <tr><td>⑤</td><td>2024 → 2025</td><td>Mooncake（Kimi）、DeepSeek</td><td>前缀放不下 → 分层下放到内存、SSD</td><td>Kimi 线上多接 107%–115%</td><td>副本一多，前缀只在自己那份里有；靠 KV 感知路由把命中率从 20% 拉到 75%</td><td>三、八</td></tr>
+    <tr><td>⑥</td><td>2024</td><td>Sarathi-Serve 论文；引擎里 vLLM 先合入</td><td>长 prompt 一进门全员卡住 → 分块 prefill</td><td>达标请求 2.6–3.7×（对 vLLM）</td><td>只把打扰摊薄，两段还挤在同一批卡上</td><td>四</td></tr>
+    <tr><td>⑦</td><td>2023 → 2025</td><td>Splitwise、DistServe → Mooncake → Dynamo</td><td>prefill 与 decode 抢卡 → PD 分离</td><td>DistServe 可接请求 7.4×（对不拆）</td><td>每请求多搬一趟 KV，还得调 P、D 配比</td><td>八</td></tr>
+    <tr><td>⑧</td><td>2024 → 2025</td><td>SGLang、DeepSeek</td><td>MoE 把 batch 拆碎，每专家约 8 行 → DP attention ＋ 大 EP</td><td>SGLang 复现：最多是同卡数纯 TP 的 5×</td><td>每个 rank 自带一份状态，K3 开 DEP8 显存不够；prefill 也追不上变快的 decode</td><td>六</td></tr>
+    <tr><td>⑨</td><td>2024 → 2025</td><td>Meta（CP）；vLLM 2025 合入 DCP</td><td>DEP 起不来、KV 被复制 → DCP／PCP 按序列切</td><td>DCP 把 KV 副本让出来，PCP 切 prompt 压首字</td><td>DCP 只在长上下文划算；PCP 遇上线性注意力，状态得一卡接一卡传</td><td>七</td></tr>
+    <tr><td>⑩</td><td>2022 → 2025</td><td>Google、DeepMind 论文；DeepSeek MTP、EAGLE-3</td><td>思考题动辄几千 token → 投机解码／MTP，一趟验几个字</td><td>MTP 约 1.8×；EAGLE-3 单请求最多 6.5×（都对不投机）</td><td>并发大、上下文长、开 DEP 时收益缩水，甚至倒亏</td><td>十一</td></tr>
+    <tr><td>⑪</td><td>2022 → 2026</td><td>GPTQ 等量化、megakernel</td><td>大 batch 下能省的只剩字节 → FP8／FP4、合 kernel</td><td>Llama 3 70B FP8 权重，每字间隔最好降到 BF16 的 1/2</td><td>v7 上 FP4 推测只能存不能算；INT4 少了「减 8」会吐乱词</td><td>十二</td></tr>
+  </table>
+  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。终点那颗菱形是 GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡到了首发日的 5.1 倍（含 MTP）。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十四节）。</p>
+  </details>
 __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
     同等 GPT-3.5 水平的推理这两年便宜得很快（斯坦福 AI Index 2025 按市场价统计，本课不引价格口径的数），报告主要归给更强的小模型；系统这一侧能不能单独拆出来，14.3 再说。</p>
   <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
 __FIG_S0_ENGINES__
+  <details class="foldfig"><summary><b>完整时间线</b>：图上只留八个时刻，其余都在这张表里</summary>
+  <table>
+    <tr><th>日期</th><th>谁</th><th>做了什么</th><th>跟进关系</th><th>出处</th></tr>
+    <tr><td>2022</td><td>外部</td><td>Orca 迭代级调度（连续批）</td><td>两家都建在它上面</td><td>Orca，OSDI'22</td></tr>
+    <tr><td>2023-06</td><td>vLLM</td><td>PagedAttention 首发，吞吐最多是 HF 的 24×</td><td>—</td><td>vLLM 博客 2023-06-20</td></tr>
+    <tr><td>2023-11</td><td>外部</td><td>DeepSpeed-FastGen 提出切块拼批</td><td>vLLM 回应「已在路线图」</td><td>vLLM 博客 2023-11-14</td></tr>
+    <tr><td>2024-01</td><td>SGLang</td><td>首发 RadixAttention，最多 5×（对 Guidance、vLLM 等）</td><td>原文写明复用了 vLLM 的部分代码</td><td>lmsys 博客 2024-01-17</td></tr>
+    <tr><td>2024-01</td><td>外部</td><td>DistServe 论文（PD 分离）</td><td>—</td><td>arXiv 2401.09670</td></tr>
+    <tr><td>2024-03</td><td>外部</td><td>Sarathi-Serve 论文（分块 prefill）</td><td>—</td><td>arXiv 2403.02310</td></tr>
+    <tr><td>2024-03</td><td>vLLM</td><td>前缀缓存 APC 合入，V0 里默认关</td><td>V1 改成默认开</td><td>vLLM 合入记录；V1 博客</td></tr>
+    <tr><td>2024-04</td><td>vLLM</td><td>分块 prefill 在引擎里先落地</td><td>SGLang 2024-07-29 跟进，晚 3 个多月</td><td>两家合入记录</td></tr>
+    <tr><td>2024-05</td><td>外部</td><td>DeepSeek-V2 提出 MLA</td><td>—</td><td>arXiv 2405.04434</td></tr>
+    <tr><td>2024-06</td><td>外部</td><td>Mooncake 论文</td><td>—</td><td>arXiv 2407.00079</td></tr>
+    <tr><td>2024-07</td><td>SGLang</td><td>v0.2 纯 Python 轻量调度，点名 vLLM 的 CPU 调度开销；最多 3.1×（对 vLLM 0.5.2）</td><td>—</td><td>lmsys 博客 2024-07-25</td></tr>
+    <tr><td>2024-09</td><td>vLLM</td><td>v0.6.0 承认 CPU 开销让 GPU 吃不饱，2.7×（对 v0.5.3）</td><td>原文没说是回应 v0.2，不标</td><td>vLLM 博客 2024-09-05</td></tr>
+    <tr><td>2024-09</td><td>SGLang</td><td>v0.3 先做 MLA 优化，3–7×（对基线系统）</td><td>—</td><td>lmsys 博客 2024-09-04</td></tr>
+    <tr><td>2024-11</td><td>外部</td><td>Mooncake 传输引擎开源</td><td>—</td><td>Mooncake README 时间线</td></tr>
+    <tr><td>2024-12</td><td>SGLang</td><td>v0.4：零开销调度、DP attention；V3 首发日支持</td><td>V3 首发日比 vLLM 早一两天</td><td>lmsys 博客 2024-12-04；两家 release</td></tr>
+    <tr><td>2024-12</td><td>vLLM</td><td>接 Mooncake（12-15），同月 12-01 合入首批 PD 代码</td><td>SGLang 2025-04-10 跟进，晚 3 个多月</td><td>vLLM 合入记录；Mooncake README</td></tr>
+    <tr><td>2025-01</td><td>vLLM</td><td>V1 重写，前缀缓存默认开</td><td>原文：SGLang 等引擎影响显著</td><td>vLLM 博客 2025-01-27</td></tr>
+    <tr><td>2025-02</td><td>SGLang</td><td>MTP 先合入（02-14）</td><td>vLLM 02-19 跟进，晚 5 天</td><td>两家合入记录</td></tr>
+    <tr><td>2025-02</td><td>外部</td><td>DeepSeek 开源周：FlashMLA、DeepEP、DeepGEMM</td><td>两家随后都接入</td><td>open-infra-index</td></tr>
+    <tr><td>2025-03</td><td>SGLang</td><td>EAGLE-3（03-18），自称首个支持</td><td>vLLM 04-25 跟进，晚 5 周</td><td>两家合入记录</td></tr>
+    <tr><td>2025-03</td><td>外部</td><td>NVIDIA Dynamo 开源</td><td>一上来就同时支持两家</td><td>NVIDIA 新闻稿 2025-03-18</td></tr>
+    <tr><td>2025-04</td><td>vLLM</td><td>KV Connector 接口（接 LMCache、NIXL）</td><td>—</td><td>vLLM 合入记录；LMCache 博客</td></tr>
+    <tr><td>2025-04</td><td>SGLang</td><td>接 Mooncake（04-10）</td><td>晚 vLLM 3 个多月</td><td>SGLang 合入记录</td></tr>
+    <tr><td>2025-05</td><td>SGLang</td><td>大 EP ＋ PD 复现（96 张 H100），最多是同卡数纯 TP 的 5×</td><td>vLLM 2025-06-10 接 DeepEP，晚 1 个多月</td><td>lmsys 博客 2025-05-05</td></tr>
+    <tr><td>2025-09</td><td>外部</td><td>DeepSeek-V3.2（DSA）</td><td>两家同一天首发日支持</td><td>两家博客 2025-09-29</td></tr>
+    <tr><td>2025-09</td><td>SGLang</td><td>HiCache 分层 KV 缓存</td><td>—</td><td>lmsys 博客 2025-09-10</td></tr>
+    <tr><td>2025-09</td><td>vLLM</td><td>合入 DCP（MLA）</td><td>—</td><td>vLLM v0.10.2 release</td></tr>
+    <tr><td>2025-10</td><td>vLLM</td><td>v0.11 删掉 V0；KV 可下放 CPU；TPU 新后端 tpu-inference</td><td>—</td><td>v0.11.0 release；vLLM 博客 2025-10-16</td></tr>
+    <tr><td>2025-10</td><td>SGLang</td><td>SGLang-JAX 跑 TPU</td><td>—</td><td>lmsys 博客 2025-10-29</td></tr>
+    <tr><td>2025-12</td><td>vLLM</td><td>Wide-EP，每张 H200 约 1.5k → 2.2k tok/s</td><td>—</td><td>vLLM 博客 2025-12-17</td></tr>
+    <tr><td>2026-03</td><td>vLLM</td><td>MRV2，吞吐 +56%（Qwen3-0.6B）</td><td>—</td><td>vLLM 博客 2026-03-24</td></tr>
+    <tr><td>2026-04</td><td>外部</td><td>DeepSeek-V4</td><td>vLLM 04-24、SGLang 04-25 首发日支持</td><td>两家博客</td></tr>
+    <tr><td>2026-06</td><td>SGLang</td><td>GB300 上跑 V4-Pro，同交互档 5.1×（对自家首发日）</td><td>—</td><td>PyTorch 博客 2026-06-23</td></tr>
+    <tr><td>2026-09</td><td>vLLM 生态</td><td>Inferact 的 TPU megakernel</td><td>—</td><td>Inferact 博客</td></tr>
+  </table>
+  <p>两家共用的外部部件：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。间隔都按两边日期本课推导，往下取整；全部出处见第十五节台账「R85 补充」「L80 补充」。</p>
+  </details>
   <h3 id="s0-2">0.2　一个请求的一生</h3>
 __FIG_S0_LIFE__
   <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
@@ -70,11 +127,11 @@ __FIG_S0_MAP__
 
 FIGS = {
     "__FIG_S0_CHAIN__": ("fig-s0-chain", "fig6-chain.svg", "topic06-fig-chain.py",
-        '<b>红字是下一环的开头：每一招解决一个问题，也留下一个。</b><br>'
-        '<em>倍数各对各的基线，所以只能一环一环看。</em>'),
+        '<b>点落在这一招首次公开的年份；圈里的环号是问题冒出来的先后，跟年份不完全同序。</b><br>'
+        '<em>每环卡在哪、省了多少、又留下什么，展开图下的表。</em>'),
     "__FIG_S0_ENGINES__": ("fig-s0-engines", "fig6-engines.svg", "topic06-fig-engines.py",
         '<b>谁先做、谁跟进：蓝色小条是在跟 vLLM，红色小条是在跟 SGLang。</b><br>'
-        '<em>间隔按两边日期推算，往下取整；只凭推测的借鉴一律不标。</em>'),
+        '<em>间隔按两边日期推算，往下取整；只凭推测的借鉴一律不标，其余时间点在图下的表里。</em>'),
     "__FIG_S0_TWOLONG__": ("fig-s0-twolong", "fig6-twolong.svg", "topic06-fig-story.py",
         '<b>深紫只在 ② 变厚，③ 多出来的全是浅紫。</b><br>'
         '<em>格子数不是实测，只为三块能放在一起比。</em>'),
@@ -87,7 +144,5 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("36.9", "fig6-chain.svg"),
     ("5.1", "fig6-chain.svg"),
-    ("96%", "fig6-chain.svg"),
 ]

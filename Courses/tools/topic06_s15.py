@@ -252,6 +252,9 @@ BODY = '''
     <tr><td>R91 补充 · 14.3：TensorRT-LLM DeepSeek-R1 8×B200、输入 1k 输出 2k：不开 MTP 111 TPS/user，MTP1 198，MTP3 253（接受长度 2.82），MTP5 239</td><td>nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html（2026-10-16 核对）；与 5.1 倍模型、硬件都不同，只作量级参考</td></tr>
     <tr><td>R91 补充 · 0.1 ／ 14.3 ／ 讲稿：AI Index 的 280 倍、硬件成本每年降 30%、Epoch 的 9–900 倍／年都是价格口径，正文与讲稿改为定性（「便宜得很快」「年年在便宜，2024 年以后更快」），只留非价格的能效每年升 40%；开场竞猜改用同卡、同模型、同交互档的 5.1 倍。上面三行原始台账保留作出处</td><td>本课取舍；出处见本台账 AI Index 两行与 R21 Epoch 行</td></tr>
     <tr><td>R91 补充 · 3.1：线性注意力首发 2020 年（Katharopoulos 等「Transformers are RNNs」，ICML 2020）</td><td>arXiv 2006.16236，v1 提交于 2020-06-29（「up to 4000x faster on autoregressive prediction of very long sequences」，2026-10-16 核对）</td></tr>
+    <tr><td>L80 补充 · 0.1 时间轴／图下两张表／讲稿：vLLM 2025-09 随 v0.10.2 合入解码上下文并行（DCP，先支持 MLA）</td><td>github.com/vllm-project/vllm/releases/tag/v0.10.2（2025-09，含「[attention][DCP]」「Support decode context parallelism on Blackwell with CUTLASS MLA」）；2026-10-16 核对</td></tr>
+    <tr><td>L80 补充 · 0.1 时间轴／讲稿：RadixAttention 首次公开于 SGLang 论文 2023-12，早于 2024-01 的引擎首发博客</td><td>arXiv 2312.07104（2023-12 首版）；lmsys.org/blog/2024-01-17-sglang/</td></tr>
+    <tr><td>L80 补充 · 0.1 时间轴：点按首次公开排，环号 ①–⑪ 沿用问题链（14.3 表引用这套号），故 ⑩ 投机解码、⑪ 量化落在 2022；跨年的环点下标末年（③ DSA 2025-09、⑤ HiCache 2025-09、⑦ Dynamo 2025-03、⑧ SGLang 复现 2025-05、⑨ vLLM DCP 2025-09、⑩ EAGLE-3 2025-03、⑪ V4.1-Flash FP4 KV 与 Inferact megakernel 2026-09）</td><td>本课归纳；各年份见本表已录各条（Orca、GPTQ arXiv 2210.17323、Leviathan 等 arXiv 2211.17192、GQA arXiv 2305.13245、Splitwise arXiv 2311.18677、Sarathi-Serve、Mooncake、第七节 Meta 上下文并行、R85 补充各行）</td></tr>
   </table>'''
 
 FIGS = {}
