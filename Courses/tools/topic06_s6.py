@@ -27,7 +27,7 @@ __FIG_S6_KV__
 __FIG_S6_STATE__
   <ul>
     <li><b>K3 上 DEP8 起不来</b>：每 rank 存整池 KDA 状态，加载即显存不足（OOM）；官方改推 TP、DCP（<a href="#s7-1">第七节</a>）。</li>
-    <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。</li>
+    <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-9">6.9</a>）。</li>
   </ul>
 
   <h3 id="s6-4">6.4　DEP 吃得快了，就得有人喂</h3>
@@ -61,6 +61,16 @@ __FIG_S6_TPU__
     <li><b>decode 拆得更细</b>：各步长短不一，DeepSeek 把注意力再切成两段，排成 5 段流水。</li>
   </ul>
 
+  <h3 id="s6-9">6.9　EPLB：热门专家多备几份</h3>
+  <p>哪个专家热门，要等路由算完才知道（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。专家那一步等最慢的卡，热门专家所在的卡拖住所有人。EPLB（专家并行负载均衡器，DeepSeek 开源）按过去一段的负载统计，把热门专家多复制几份放到别的卡上，再重新排座位。</p>
+  __FIG_S6_EPLB__
+  <ul>
+    <li><b>DeepSeek V3 怎么配</b>：prefill 多备 32 个冗余专家，每卡原有 8 个再加 1 个；按线上统计定期重算，例如每 10 分钟。</li>
+    <li><b>卡越多越要紧</b>：卡越多越不均。SGLang 在大规模 EP 上测，开 EPLB 后 prefill 吞吐是不开的 1.49 倍，decode 是 2.54 倍；作者提醒效果看负载分布，线上要拿真实流量重测。</li>
+    <li><b>顺带松开卡数</b>：256 个专家只能均分给 2 的幂张卡；加 32 份冗余凑成 288，12 张、72 张也分得开。</li>
+    <li><b>开关</b>：SGLang 是 <code>--enable-eplb</code> 加 <code>--ep-num-redundant-experts</code>；vLLM 是 <code>--enable-eplb</code>，冗余份数和重排间隔写在 <code>--eplb-config</code>，默认每 3,000 步按最近 1,000 步的统计重排。</li>
+  </ul>
+
   <div class="note ok"><span class="t">回到主线</span>
     <b>DEP 省下重复的 KV，大 EP 把专家那趟车坐满。</b>留下的问题：每个 rank 自备一份状态，K3 这类模型 DEP 起不来，退回 TP 后 KV 又被复制（第七节）。</div>
 
@@ -82,6 +92,9 @@ FIGS = {
     "__FIG_S6_TBO__": ("fig-s6-tbo", "fig6-tbo.svg", "topic06-fig-dep.py",
         '<b>看「算」那一行：上面有空档，下面排满。</b><br>'
         '<em>时长是示意，省下的比例不按实测；实测 prefill 快 27%～35%。</em>'),
+    "__FIG_S6_EPLB__": ("fig-s6-eplb", "fig6-eplb.svg", "topic06-fig-dep.py",
+        '<b>看红虚线：从 70 降到 52.5，总量没变。</b><br>'
+        '<em>8 个专家、4 张卡，负载数字是示意，不按实测。</em>'),
     "__FIG_S6_TPU__": ("fig-s6-dep-tpu", "fig6-dep-tpu.svg", "topic06-fig-dep.py",
         '<b>两条线在 256 到 512 之间交叉：decode 为主的那条后来居上。</b><br>'
         '<em>输出吞吐；折线两端标 TP → DP 的绝对值。专家都走 EP，只换注意力的切法。</em>'),

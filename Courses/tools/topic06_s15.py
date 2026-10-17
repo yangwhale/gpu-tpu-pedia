@@ -264,6 +264,7 @@ BODY = '''
     <tr><td>L88 补充 · 第三／四节：调度提到 KV 之前（先坐满、再问座位从哪来），两节编号、锚点、图 id 与全课交叉引用同步对调；数字未改</td><td>结构调整，无新数；2026-10-17 核对</td></tr>
     <tr><td>L89 补充 · 3.1：Orca 是 OSDI 2022 论文及其中实现的服务系统（论文原文「we have implemented a distributed serving system called ORCA」）</td><td>usenix.org/conference/osdi22/presentation/yu 摘要。2026-10-18 核对</td></tr>
 <tr><td>L90 补充 · 6.8 双微批：prefill 同 token 数快 27%～35%、每卡 16,384 token 时比不拆最优快 40.5%；decode 256 token/卡快 25.5%、32 token/卡慢 27%（小批 kernel 效率低）；DeepSeek decode 把注意力拆两段走 5 段流水；vLLM DBO 纯 decode 阈值默认 32 token</td><td>LMSYS 博客 2025-05-05「Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs」TBO 一节；DeepSeek open-infra-index「Day 6 · Inference System Overview」；vLLM vllm/config/parallel.py（enable_dbo、dbo_decode_token_threshold 默认 32、dbo_prefill_token_threshold 默认 512）；SGLang --enable-two-batch-overlap。2026-10-18 核对</td></tr>
+<tr><td>L91 补充 · 6.9 EPLB：V3 prefill 32 个冗余专家、每卡 8＋1、定期重算（例如每 10 分钟）；SGLang 大规模 EP 开 EPLB prefill 1.49×、decode 2.54×（作者注明看负载分布）；256＋32＝288 可用 12、72 路；vLLM eplb_config 默认 step_interval 3000、window_size 1000、num_redundant_experts 0</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.4；DeepSeek EPLB 仓库 README；LMSYS 博客 2025-05-05 大规模 EP 一文 EPLB 一节；vLLM vllm/config/parallel.py EPLBConfig；SGLang --enable-eplb、--ep-num-redundant-experts（server_arguments 文档）。2026-10-18 核对</td></tr>
   </table>'''
 
 FIGS = {}

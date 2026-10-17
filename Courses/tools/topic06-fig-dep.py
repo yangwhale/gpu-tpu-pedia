@@ -311,7 +311,54 @@ def fig_tbo():
     f.save("fig6-tbo.svg", yb + 14)
 
 
+def fig_eplb():
+    """EPLB：热门专家多复制一份放到别的卡，再重排座位。8 个专家、4 张卡，负载数字是示意。"""
+    f = Fig(W, "EPLB 示意。左边：8 个专家按编号两个一组放 4 张卡，专家 0 最热门，卡 0 的柱子最高，"
+               "专家那一步所有卡都要等它。右边：每卡多一个空位，热门的专家 0 和专家 7 各复制一份，"
+               "token 平分给两份，再重新排座位，最高的柱子从 70 降到 52.5。数字是示意")
+    y0 = f.header("EPLB：热门专家多备一份，再重新排座位",
+                  "8 个专家、4 张卡。柱高 ＝ 这张卡这一步要算的 token，一段一个专家；数字是示意",
+                  [(OR, "热门专家（及其副本）"), (BL, "其他专家"), (RD, "所有卡等到这条线")])
+    PW, GAP, PH = 690, 20, 430
+    SC, BW, BASE = 4.0, 92, 330                    # 每个 token 多高；柱宽；柱底离面板顶
+    before = [[("专家 0", 60, True), ("专家 1", 10, False)], [("专家 2", 15, False), ("专家 3", 15, False)],
+              [("专家 4", 20, False), ("专家 5", 20, False)], [("专家 6", 25, False), ("专家 7", 35, True)]]
+    after = [[("专家 0", 30, True), ("专家 4", 20, False)], [("专家 0′", 30, True), ("专家 5", 20, False)],
+             [("专家 6", 25, False), ("专家 7", 17.5, True), ("专家 1", 10, False)],
+             [("专家 7′", 17.5, True), ("专家 2", 15, False), ("专家 3", 15, False)]]
+    for side, (name, col, cards, msg) in enumerate((
+            ("开 EPLB 之前：按编号放", RD, before, "最慢的卡 70，平均 50"),
+            ("开 EPLB 之后：每卡多一个空位，热门的复制一份", GR, after, "最慢的卡 52.5，平均还是 50"))):
+        x0 = side * (PW + GAP)
+        py = f.panel(x0, y0, PW, PH, name, col)
+        yb0 = py + BASE
+        top = 0
+        for c, segs in enumerate(cards):
+            bx = x0 + 70 + c * (BW + 60)
+            y = yb0
+            for lab, v, hot in segs:
+                h = v * SC
+                f.box(bx, y - h, BW, h - 2, "#fef3e0" if hot else "#e8f0fe", OR if hot else BL, 3, 1.3)
+                if h >= 26:
+                    f.t(bx + BW / 2, y - h / 2 + 5, "%s · %g" % (lab, v), OR if hot else BL, True, 13, anchor="middle")
+                y -= h
+            tot = sum(v for _, v, _ in segs)
+            top = max(top, tot)
+            f.t(bx + BW / 2, yb0 + 22, "卡 %d：%g" % (c, tot), INK, True, 15, anchor="middle")
+        ly = yb0 - top * SC
+        f.line(x0 + 50, ly, x0 + PW - 20, ly, RD, 1.6, dash="6 4", arrow=False)
+        f.t(x0 + PW - 22, yb0 + 56, msg, RD if side == 0 else GR, True, 16, anchor="end")
+        f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "加的是空位，换的是等待", [
+        "副本占显存；token 怎么分给两份、多久重排一次，各家实现不同。"])
+    yb = f.src(yb + 10,
+               "做法：DeepSeek EPLB 仓库 README（按负载估计算出复制与摆放方案；负载估计常用历史统计的滑动平均，不在仓库范围内）；DeepSeek-V3 技术报告 sec. 3.4。",
+               "负载数字与「token 平分给两份」均为示意，本课自定；8 专家 4 卡只为画得下。")
+    f.save("fig6-eplb.svg", yb + 14)
+
+
 fig_dep_kv()
 fig_dep_tpu()
 fig_dep_state()
 fig_tbo()
+fig_eplb()
