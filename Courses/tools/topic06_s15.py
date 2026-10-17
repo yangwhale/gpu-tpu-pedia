@@ -258,6 +258,7 @@ BODY = '''
     <tr><td>L80 补充 · 0.1 时间轴／图下两张表／讲稿：vLLM 2025-09 随 v0.10.2 合入解码上下文并行（DCP，先支持 MLA）</td><td>github.com/vllm-project/vllm/releases/tag/v0.10.2（2025-09，含「[attention][DCP]」「Support decode context parallelism on Blackwell with CUTLASS MLA」）；2026-10-16 核对</td></tr>
     <tr><td>L80 补充 · 0.1 时间轴／讲稿：RadixAttention 首次公开于 SGLang 论文 2023-12，早于 2024-01 的引擎首发博客</td><td>arXiv 2312.07104（2023-12 首版）；lmsys.org/blog/2024-01-17-sglang/</td></tr>
     <tr><td>L80 补充 · 0.1 时间轴：点按首次公开排，投机解码、量化落在 2022；L81 起环号按时间重编，从左到右 ①–⑪ 连续（旧→新：①→① ⑪→② ⑩→③ ③→④ ②→⑤ ⑦→⑥ ④→⑦ ⑥→⑧ ⑤→⑨ ⑨→⑩ ⑧→⑪），0.1 图下表与 14.3 表同步；跨年的环点下标末年（④ DSA 2025-09、⑨ HiCache 2025-09、⑥ Dynamo 2025-03、⑪ SGLang 复现 2025-05、⑩ vLLM DCP 2025-09、③ EAGLE-3 2025-03、② V4.1-Flash FP4 KV 与 Inferact megakernel 2026-09）</td><td>本课归纳；各年份见本表已录各条（Orca、GPTQ arXiv 2210.17323、Leviathan 等 arXiv 2211.17192、GQA arXiv 2305.13245、Splitwise arXiv 2311.18677、Sarathi-Serve、Mooncake、第七节 Meta 上下文并行、R85 补充各行）</td></tr>
+    <tr><td>L84 补充 · 3.5：vLLM 前缀缓存只给写满的块算哈希（hash_block_size，默认等于 block_size，CacheConfig.DEFAULT_BLOCK_SIZE ＝ 16），增量计算并存在请求上；哈希输入为（父块哈希，本块 token 元组，extra_keys：LoRA／多模态／cache_salt）；默认算法 sha256（可选 sha256_cbor、xxhash）；SGLang RadixCache 按 page_size 对齐比对 token 编号</td><td>github.com/vllm-project/vllm main：vllm/v1/core/kv_cache_utils.py（hash_block_tokens、get_request_block_hasher「We only hash full blocks」）、vllm/config/cache.py（DEFAULT_BLOCK_SIZE、prefix_caching_hash_algo）；github.com/sgl-project/sglang main：python/sglang/srt/mem_cache/radix_cache.py（RadixKey.match）。2026-10-17 核对</td></tr>
   </table>'''
 
 FIGS = {}
