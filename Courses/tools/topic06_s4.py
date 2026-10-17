@@ -8,7 +8,7 @@ BODY = '''
 
   <h3 id="s4-1">4.1　一个 token 留下多少字节：四种记法</h3>
   <table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 见 12.7）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 见 12.8）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
     <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA（2023）</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
@@ -82,7 +82,7 @@ __FIG_S4_OFFLOAD__
     留下的问题：座位坐满以后，一步本身的时间还压不下来，注意力和 MoE 是两块硬骨头（第五节）。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 92.4 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
-  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.7 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
+  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.8 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
 '''
 
 FIGS = {

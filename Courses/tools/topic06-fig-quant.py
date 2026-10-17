@@ -316,10 +316,10 @@ def fig_cap():
     f.save("fig6-quant-cap.svg", yb + 14)
 
 
-# ══ fig6-quant-kvlayout（R38 加，12.7）════════════════════════════════════
+# ══ fig6-quant-kvlayout（R38 加，12.8）════════════════════════════════════
 # 回答：KV 存 FP8 为什么不是严格减半？
 # 数字：FlashMLA README（2e5429f 之前版本「FP8 with scale」）给 DeepSeek-V3.2 的每 token 每层布局：
-#   512 个 FP8 ＋ 4 个 FP32 缩放 ＋ 64 维 BF16 RoPE ＝ 656 B；BF16 是 (512＋64) × 2 ＝ 1,152 B（台账 12.7 行）。
+#   512 个 FP8 ＋ 4 个 FP32 缩放 ＋ 64 维 BF16 RoPE ＝ 656 B；BF16 是 (512＋64) × 2 ＝ 1,152 B（台账 12.8 行）。
 #   R42：DSA 每 token 每层还有一条 indexer key（index_head_dim＝128，HF config.json），
 #   DeepSeek 参考实现 inference/model.py 存 FP8 k_cache ＋ 每 128 维一个 FP32 k_scale_cache ＝ 128 ＋ 4 ＝ 132 B；
 #   vLLM（deepseek_v2.py Indexer，dtype=torch.uint8 写死）和 SGLang（DSATokenToKVPool.index_k_with_scale_buffer_dtype＝uint8）
@@ -392,9 +392,63 @@ def fig_kvlayout():
     f.save("fig6-quant-kvlayout.svg", yb + 14)
 
 
+# ══ fig6-quant-graph：CUDA Graph 省的是 CPU 发射（Fireworks 实测，按比例）═════
+FW_EAGER, FW_GRAPH = 30.0, 69.0                   # LLaMA-2-7B、A100-80GB、batch 1，tok/s
+MS_EAGER, MS_GRAPH = 1e3 / FW_EAGER, 1e3 / FW_GRAPH
+assert round(MS_EAGER, 1) == 33.3 and round(MS_GRAPH, 1) == 14.5
+
+
+def fig_graph():
+    f = Fig(W, "Fireworks 2023 年的实测：A100 上跑 LLaMA-2-7B、batch 1。上面两行是逐个发 kernel：CPU 一个一个发，"
+               "GPU 算完一个就等下一个，每个 token 约 33 毫秒。下面两行是录成 CUDA Graph：CPU 只发一次，"
+               "GPU 一口气算完，每个 token 约 14.5 毫秒。时间轴按比例；kernel 个数、每段长短是示意")
+    y0 = f.header("CUDA Graph：录一次，以后整串重放",
+                  "Fireworks 实测：A100 · LLaMA-2-7B · batch 1，每个 token 的时间线，总长按比例",
+                  [(PU, "CPU 发射 kernel"), (BL, "GPU 计算"), (RD, "GPU 空等")])
+    X0, RH = 200, 40
+    sc = (W - X0 - 110) / MS_EAGER
+    NK = 24                                       # 示意：画 24 个 kernel
+    def rows(py, title, col, total_ms, graph):
+        f.t(24, py + 26, title, col, True, 17)
+        f.t(X0 - 14, py + 26, "CPU", INK, True, 15, anchor="end")
+        f.t(X0 - 14, py + RH + 40, "GPU", INK, True, 15, anchor="end")
+        gy = py + RH + 14
+        f.box(X0, py, total_ms * sc, RH, "none", "#e0e3e7", 4, 1, dash="4 4")
+        if not graph:
+            f.box(X0, gy, total_ms * sc, RH, "#fce8e6", "none", 4, 0)
+        k_ms, slot = MS_GRAPH / NK, total_ms / NK
+        for i in range(NK):
+            if graph:
+                gx = X0 + i * k_ms * sc
+            else:
+                f.box(X0 + i * slot * sc + 1, py + 6, slot * sc * 0.55, RH - 12, "#f3e8fd", PU, 2, 1)
+                gx = X0 + (i * slot + slot * 0.55) * sc
+            f.box(gx, gy, k_ms * sc - (1 if graph else 0), RH, "#e8f0fe", BL, 2, 1)
+        if graph:
+            f.box(X0 + 1, py + 6, 26, RH - 12, "#f3e8fd", PU, 2, 1)
+            f.t(X0 + 36, py + 26, "只发一次：重放整张图", PU, True, 15)
+        f.t(X0 + total_ms * sc + 10, gy + 26, "%.1f ms" % total_ms if graph else "%.0f ms" % total_ms,
+            col, True, 17)
+    PH = 150
+    py = f.panel(0, y0, W, PH, "逐个发：每秒 30 个 token", RD)
+    rows(py + 16, "", RD, MS_EAGER, False)
+    f._pan = None
+    y1 = y0 + PH + 16
+    py = f.panel(0, y1, W, PH, "录成 CUDA Graph：每秒 69 个 token，2.3 倍", GR)
+    rows(py + 16, "", GR, MS_GRAPH, True)
+    f._pan = None
+    yb = f.band(y1 + PH + 20, "warn", "代价：形状写死", [
+        "录的时候批多大、张量在哪个地址都定了；批大小变了，就得换一张录好的图。"])
+    yb = f.src(yb + 10,
+               "Fireworks「Speed, Python: Pick Two. How CUDA Graphs Enable Fast Python Code for Deep Learning」（2023-08-29）：A100-SXM4-80GB、LLaMA-2-7B、batch_size=1，不开 30 tok/s、开 69 tok/s，2.3 倍，原文说提速全部来自 CPU 开销。",
+               "每 token 毫秒数 ＝ 1000 ÷ tok/s，本课换算；GPU 实际计算时长按开图后的 14.5 ms 近似，本课推导。kernel 个数（24）、发射与计算的长短比是示意。")
+    f.save("fig6-quant-graph.svg", yb + 14)
+
+
 fig_bytes()
 fig_mx()
 fig_r1()
 fig_fuse()
 fig_cap()
 fig_kvlayout()
+fig_graph()

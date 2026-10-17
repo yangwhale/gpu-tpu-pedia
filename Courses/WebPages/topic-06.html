@@ -3101,7 +3101,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s4-1">4.1　一个 token 留下多少字节：四种记法</h3>
   <div class="tbl-wrap"><table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 见 12.7）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 见 12.8）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
     <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA（2023）</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
@@ -3800,7 +3800,7 @@ body.figonly section h3{margin-top:34px}
     留下的问题：座位坐满以后，一步本身的时间还压不下来，注意力和 MoE 是两块硬骨头（第五节）。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 92.4 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
-  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.7 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
+  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.8 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
 
 </div></section>
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>单卡里的两块硬骨头：decode 注意力与 MoE</h2></div>
@@ -9172,7 +9172,7 @@ body.figonly section h3{margin-top:34px}
   <ul>
     <li><b>草稿要占显存。</b>K3 开 DSpark 后 KV 池从 787,504 token 缩到 637,504，少了 19%。</li>
     <li><b>引擎默认值会跟着变。</b>K3 的 SGLang 配方开投机又没写 max-running-requests，它就被重设成 48，batch 上限悄悄压低。</li>
-    <li><b>PD 碰上投机解码。</b>刚从 prefill 交接来的请求只算 1 个 token，别人是 1＋N（N 个草稿），形状不齐就用不上 CUDA Graph（一串 kernel 录好一次发出，见 12.6）；decode 端补齐到 1＋N 后，TPOT 约 40 ms 降到 22 ms（vLLM GLM-5.2 PD 博客）。</li>
+    <li><b>PD 碰上投机解码。</b>刚从 prefill 交接来的请求只算 1 个 token，别人是 1＋N（N 个草稿），形状不齐就用不上 CUDA Graph（一串 kernel 录好一次发出，见 <a href="#s12-graph">12.6</a>）；decode 端补齐到 1＋N 后，TPOT 约 40 ms 降到 22 ms（vLLM GLM-5.2 PD 博客）。</li>
   </ul>
 
   <div class="note ok"><span class="t">回到主线</span>
@@ -9532,7 +9532,126 @@ body.figonly section h3{margin-top:34px}
 <p>正文里 R1 的容量数：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；FP8 专家约 101.8、FP4 专家约 60.9、连同注意力约 70，均为每 device）；上限 94.75 出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。94.75 GiB ≈ 101.7 GB，101.8 无论按哪个单位都不剩余量。</p></details></figure>
   <p>K2.6 的记录里，加载时漏了图里「减 8」一步，模型输出崩成重复的乱词。</p>
 
-  <h3 id="s12-6">12.6　kernel 融合：边界上不再干等</h3>
+  <h3 id="s12-graph">12.6　CUDA Graph：录一次，整串重放</h3>
+  <p>batch 小时，GPU 算一个 kernel 很快，CPU 一个个发反倒跟不上：GPU 算完一个，就等下一个发过来。CUDA Graph 把一步要发的整串 kernel 录下来，以后每步只发一次「重放」。</p>
+<figure class="fbox fwide" id="fig-s12-graph"><svg viewBox="0 0 1400 536" width="100%" role="img" aria-label="Fireworks 2023 年的实测：A100 上跑 LLaMA-2-7B、batch 1。上面两行是逐个发 kernel：CPU 一个一个发，GPU 算完一个就等下一个，每个 token 约 33 毫秒。下面两行是录成 CUDA Graph：CPU 只发一次，GPU 一口气算完，每个 token 约 14.5 毫秒。时间轴按比例；kernel 个数、每段长短是示意"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">CUDA Graph：录一次，以后整串重放</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Fireworks 实测：A100 · LLaMA-2-7B · batch 1，每个 token 的时间线，总长按比例</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">CPU 发射 kernel</text>
+<rect x="172.44" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 计算</text>
+<rect x="291.12" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="312" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 空等</text>
+<rect x="0" y="102" width="1400" height="150" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">逐个发：每秒 30 个 token</tspan></text>
+<text class="svgsm" x="24" y="174" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
+<text class="svgsm" x="186" y="174" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">CPU</tspan></text>
+<text class="svgsm" x="186" y="228" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
+<rect x="200" y="148" width="1090.0" height="40" rx="4" fill="none" stroke="#e0e3e7" stroke-width="1.0" stroke-dasharray="4 4"/>
+<rect x="200" y="202" width="1090.0" height="40" rx="4" fill="#fce8e6" stroke="none" stroke-width="0.75"/>
+<rect x="201.0" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="224.97916666666666" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="246.41666666666666" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="270.3958333333333" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="291.8333333333333" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="315.8125" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="337.25" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="361.22916666666663" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="382.66666666666663" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="406.64583333333337" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="428.08333333333337" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="452.0625" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="473.5" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="497.4791666666667" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="518.9166666666667" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="542.8958333333333" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="564.3333333333333" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="588.3125" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="609.75" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="633.7291666666667" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="655.1666666666667" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="679.1458333333334" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="700.5833333333334" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="724.5625" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="746.0" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="769.9791666666666" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="791.4166666666666" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="815.3958333333334" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="836.8333333333334" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="860.8125" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="882.25" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="906.2291666666666" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="927.6666666666666" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="951.6458333333334" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="973.0833333333334" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="997.0625" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1018.5" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1042.4791666666667" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1063.9166666666665" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1087.8958333333335" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1109.3333333333335" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1133.3125" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1154.75" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1178.7291666666667" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1200.1666666666667" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1224.1458333333335" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1245.5833333333335" y="154" width="24.979166666666668" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1269.5625" y="202" width="19.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1300" y="228" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">33 ms</tspan></text>
+<rect x="0" y="268" width="1400" height="150" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="268" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="270" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="298" x2="1400" y2="298" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="288" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">录成 CUDA Graph：每秒 69 个 token，2.3 倍</tspan></text>
+<text class="svgsm" x="24" y="340" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
+<text class="svgsm" x="186" y="340" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">CPU</tspan></text>
+<text class="svgsm" x="186" y="394" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
+<rect x="200" y="314" width="473.9130434782608" height="40" rx="4" fill="none" stroke="#e0e3e7" stroke-width="1.0" stroke-dasharray="4 4"/>
+<rect x="200.0" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="219.7463768115942" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="239.4927536231884" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="259.2391304347826" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="278.9855072463768" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="298.731884057971" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="318.4782608695652" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="338.2246376811594" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="357.9710144927536" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="377.7173913043478" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="397.463768115942" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="417.21014492753625" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="436.9565217391304" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="456.7028985507246" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="476.4492753623188" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="496.195652173913" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="515.9420289855072" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="535.6884057971015" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="555.4347826086956" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="575.1811594202898" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="594.927536231884" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="614.6739130434783" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="634.4202898550725" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="654.1666666666666" y="368" width="18.7463768115942" height="40" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="201" y="320" width="26" height="28" rx="2" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="236" y="340" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只发一次：重放整张图</tspan></text>
+<text class="svgsm" x="683" y="394" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">14.5 ms</tspan></text>
+<rect x="0" y="438" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="438" width="4" height="74" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="438" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="465" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">代价：形状写死</tspan></text>
+<text class="svgsm" x="20" y="496" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">录的时候批多大、张量在哪个地址都定了；批大小变了，就得换一张录好的图。</text>
+</svg><figcaption><b>比两行 GPU：上面一格一格隔着粉色空等，下面挤成一条。</b><span class="capmore"><br><em>总长按比例；kernel 个数是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Fireworks「Speed, Python: Pick Two. How CUDA Graphs Enable Fast Python Code for Deep Learning」（2023-08-29）：A100-SXM4-80GB、LLaMA-2-7B、batch_size=1，不开 30 tok/s、开 69 tok/s，2.3 倍，原文说提速全部来自 CPU 开销。</p>
+<p>每 token 毫秒数 ＝ 1000 ÷ tok/s，本课换算；GPU 实际计算时长按开图后的 14.5 ms 近似，本课推导。kernel 个数（24）、发射与计算的长短比是示意。</p></details></figure>
+  <ul>
+    <li><b>代价是形状写死</b>，所以按批大小分档预先录。vLLM 默认录 1、2、4，8 到 248 每隔 8，256 往上每隔 16，最多到 512（数据中心 Blackwell 到 1,024）；SGLang 用 <code>--cuda-graph-max-bs</code> 定上限。人数不在档上就补到上一档。</li>
+    <li><b>prefill 形状千变万化</b>：vLLM V1 默认 decode 录整图，prefill 和混合批只把注意力以外的部分分段录。</li>
+    <li><b>和 TPU 是一件事的两头</b>：GPU 默认逐个发，录图是可选的加速，档外的批照样能跑；TPU 上 XLA 本来就按形状整图编译，档外的形状要现编，所以桶得开服前定好（<a href="#s13-1">13.1</a>）。11.6 里 PD 碰上投机掉出整图，也是形状不在档上。</li>
+  </ul>
+
+  <h3 id="s12-6">12.7　kernel 融合：边界上不再干等</h3>
   <p>一次前向（模型从头算到尾一遍）要发上百个 kernel。每个 kernel 收尾、下一个开场时，没人在读权重。</p>
 <figure class="fbox fwide" id="fig-s12-fuse"><svg viewBox="0 0 1400 542" width="100%" role="img" aria-label="Hazy Research 的算例。Llama-3.2-1B 有 2.48 GB 权重，H100 带宽 3.35 TB/s，光读一遍要约 740 微秒，上限每秒约 1,350 次前向。但一次前向要发上百个 kernel，每层 7 个、16 层，每个交接处空等约 5 微秒，合计 560 微秒，实际只能到每秒约 770 次。中间一行把一层放大，7 个 kernel 之间各空一段。megakernel 把整次前向写成一个 kernel，下一段的权重在上一段计算时就开始读，只剩读权重的 740 微秒"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">kernel 之间的空当　——　<tspan font-weight="700">每个交接处都在等，加起来很可观</tspan></text>
@@ -9617,14 +9736,14 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>每次 kernel 交接都要空等，加起来四成多；megakernel 把它捡回来。</b><span class="capmore"><br><em>时间轴按比例画。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Hazy Research「Look Ma, No Bubbles! Designing a Low-Latency Megakernel for Llama-1B」（hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles，2025-05-27）：算例 3.35 TB/s ÷ 2.48 GB ≈ 1,350 次／秒；每层 7 个 kernel × 16 层 × 约 5 µs ≈ 770 次／秒；实测基线都开了 CUDA Graph 和 torch.compile。实测：vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%；H100 上速度约是 vLLM 的 2.5 倍、SGLang 的 1.5 倍以上（B200 上对 vLLM 超 3.5 倍）；B200 上一次前向不到 680 µs。</p>
 <p>⚠️ 示意：第一行把每层 7 个空当合成一段画，第二行才按真实位置分开；7 个 kernel 等长是简化。</p>
 <p>正文里 TPU 那组数的出处 —— Inferact「700 TPS on Kimi K3」（https://inferact.ai/blog/tpu-megakernels，2026-09-23）：16 颗 TPU v7（32 个 TensorCore）、Pallas 编写、每 TensorCore 64 MiB VMEM；一步约 8.5 ms、每步接受约 6 个；GB200 对照为 16 张卡的 vLLM 配方，452 tok/s。⚠️ 本课推导：每步接受 6 个 ÷ 8.5 ms ≈ 706 tok/s，与博客的「700 多」对得上。</p></details></figure>
-  <p>生产里先上的是 CUDA Graph 和 PDL：前者省掉 CPU 逐个发射 kernel 的开销，后者让下一个 kernel 提前准备。
+  <p>CUDA Graph 省的是 CPU 那头；GPU 这头，生产里先上的是 PDL，让下一个 kernel 提前准备。
     megakernel 把整次前向写成一个 kernel，下一段权重在上一段计算时就开始读。</p>
   <p>Hazy Research（2025-05）实测，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型和 batch 越小，空等占比越大，赚得越多。同一篇在 Llama-3.2-1B、batch 1 上，比 vLLM 快近 2.5 倍，比 SGLang 快 1.5 倍以上。</p>
   <p>模型一大，融合单拎出来就赚得少。AWQ 那组测试里，光把 FP16 kernel 融合，Llama-2-7B 从每秒 52 到 62 token。TensorRT-LLM 在 8 张 B200 上跑 DeepSeek-R1，把 all-reduce 和 RMSNorm 融成一个，单用户每秒 164 到 168 token，是一串优化里逐步叠加的一步。</p>
   <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；16 张 GB200（vLLM）是 452 token。两个数都开了投机，按接受长度 6 换算。
     不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
-  <h3 id="s12-kv">12.7　KV 也能量化</h3>
+  <h3 id="s12-kv">12.8　KV 也能量化</h3>
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>缩放给多细看 checkpoint：vLLM 只设 <code>fp8</code> 不校准时，缩放全取 1.0；用 llm-compressor 拿数据校准，可以每个 K、V 张量一个，或每个 KV 头一个（后者目前只有 FlashAttention 后端支持）。开了 FP8 KV 掉精度，先查有没有校准过的缩放。</p>
@@ -10113,9 +10232,9 @@ body.figonly section h3{margin-top:34px}
     <li><b>线性层状态存 BF16</b>：每条序列的状态减半，KV 池多装约一成，计算时仍提回 FP32。decode 涨几个百分点到一成，看怎么量；精度验收还没收尾。公开实现也砍了这一刀。</li>
   </ul>
   <p>两个读数陷阱。换布局那天 decode 跳了好几倍（相对前一天），那是修好了前一版的退化，不能记成这一刀的收益。PCP 有一阵吞吐虚高，原因是 MoE 在 PCP 下静默跳过了通信，算错了才快（<a href="#s7-5">7.5</a>）。<b>台阶好看得离谱时，先比输出再记功。</b></p>
-  <p><b>Kimi K3 把整个模型写成一块。</b>结果在 <a href="#s12-6">12.6</a>，这里看刀。按 K3 的 config 推，一个 token 要读约 158 GB 不重复的字节（本课推导）；batch 1 到 8 时一步几乎全在读权重（<a href="#s1-2">1.2</a>）。Inferact 把 92 个 MoE 层装进一次不分 grid 的 Pallas 调用，跑在 16 颗 v7、32 个 TensorCore 上。</p>
+  <p><b>Kimi K3 把整个模型写成一块。</b>结果在 <a href="#s12-6">12.7</a>，这里看刀。按 K3 的 config 推，一个 token 要读约 158 GB 不重复的字节（本课推导）；batch 1 到 8 时一步几乎全在读权重（<a href="#s1-2">1.2</a>）。Inferact 把 92 个 MoE 层装进一次不分 grid 的 Pallas 调用，跑在 16 颗 v7、32 个 TensorCore 上。</p>
   <ul>
-    <li><b>层循环搬进 kernel</b>：第 N 层还在算 MoE，第 N+1 层的注意力权重已经在路上，层与层之间的空等没了。12.6 那张气泡图，在 TPU 上就是这么捡回来的。</li>
+    <li><b>层循环搬进 kernel</b>：第 N 层还在算 MoE，第 N+1 层的注意力权重已经在路上，层与层之间的空等没了。12.7 那张气泡图，在 TPU 上就是这么捡回来的。</li>
     <li><b>VMEM 分时复用</b>：每个 TensorCore 64 MiB VMEM，由程序自己管，放进去就一直在。KDA 投影、MLA 投影、4 个专家槽各占一块要 90.67 MB，放不下；三者时间上不重叠，共用一块 31.29 MB 就够（本课按公开代码推导）。代价是预取时机被锁死：下一层的投影要等本层专家腾出地方。</li>
     <li><b>专家槽轮转</b>：选完专家才知道读哪块权重（<a href="#s1-4">1.4</a>）。几个槽轮着用，算这个专家时下一个已经在读。</li>
     <li><b>集合通信手写</b>：每层几次小 AllReduce 是延迟问题（<a href="#s5-6">5.6</a>）。通信写进同一个 kernel，按 2×2×4 这套连线手写；博客也说，换拓扑就得重写。</li>
@@ -10764,18 +10883,18 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R21 补充 · 11.5 ／ 14.3：EAGLE-3 加速比最多 6.5 倍（对普通自回归），SGLang 中 batch 64 吞吐 1.38 倍</td><td>arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a> 摘要（「speedup ratio up to 6.5x」「1.38x throughput improvement at a batch size of 64」）</td></tr>
     <tr><td>R21 补充 · 12.1：vLLM FP8 权重（2024-07），Llama 3 70B 每字间隔最多降到 BF16 的 1/2、Mixtral 8x7B 最多降到 1/1.6（2×H100；原文「2x／1.6x ITL improvement」，按时间比读）</td><td>developers.redhat.com/articles/2024/07/15/vllm-brings-fp8-inference-open-source-community（「Up to 2x ITL improvement for serving dense models」「Up to 1.6x ITL improvement for serving Mixture of Experts」）</td></tr>
     <tr><td>R21 补充 · 12.1「MoE 赚得少」：只有读权重那份减半时，加速 ＝ 1 ÷ (1 − f／2)，f 为读权重占一步的比例；2 倍要 f ≈ 100%，1.6 倍对应 f ≈ 75%。MoE 每步只读选中的专家，权重字节少，KV、通信、kernel 调度这些不随位数变的部分占比就高，f 低</td><td>本课推导、推测（Red Hat 原文未给原因；12.1 正文按推测语气写）</td></tr>
-    <tr><td>R21 补充 · 12.7：NVFP4 KV 比 FP8 KV 缓存命中率高 20%、首字延迟最多降到约三分之一（Qwen3-Coder-480B-A35B 上分析）</td><td>developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache（「up to 3x lower latency and 20% higher cache hit rate compared to FP8 KV cache」）</td></tr>
+    <tr><td>R21 补充 · 12.8：NVFP4 KV 比 FP8 KV 缓存命中率高 20%、首字延迟最多降到约三分之一（Qwen3-Coder-480B-A35B 上分析）</td><td>developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache（「up to 3x lower latency and 20% higher cache hit rate compared to FP8 KV cache」）</td></tr>
     <tr><td>R21 补充 · 14.3：固定一档能力，达到它的推理每年便宜 9 到 900 倍、中位 50 倍；去掉 2024 年 1 月前的数据后中位升到每年 200 倍。与第八到十二节招数进生产时间重合是本课观察，Epoch 未归因</td><td>epoch.ai/data-insights/llm-inference-price-trends（2025；「between 9x per year and 900x per year, with a median of 50x per year」「the median rate increased from 50x per year to 200x per year」）</td></tr>
     <tr><td>R21 补充 · 14.3：DeepSeek-V3.2-Exp 相对 V3.1-Terminus 唯一的结构改动是 DSA；lightning indexer 仍对全部历史打分（O(L²) 但头少、可跑 FP8），主注意力每个 query 只取 top-k ＝ 2,048 个 KV，核心注意力复杂度 O(L²) → O(Lk)</td><td>DeepSeek-V3.2-Exp 技术报告（github.com/deepseek-ai/DeepSeek-V3.2-Exp，DeepSeek_V3_2.pdf §2.1、Inference Costs 一节）；Hugging Face 模型卡（「builds upon V3.1-Terminus」）</td></tr>
     <tr><td>R25 补充 · 0 ／ 4.1：DeepSeek-V4-Pro、V4-Flash 2026-04 发布（预览版）；V4.1-Flash 2026-09-10 开源，552B 主干；CSA2 让各层共用主 KV 和索引 K，主 KV 存 FP4（E2M1，每 16 通道一个 E4M3 缩放），全局 KV 每 token 890 B，约 V4-Flash 的 1/4</td><td>huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash（「share main KV and indexer K across layers」「reduce the global KV cache footprint to 890 bytes per token — roughly 1/4 of DeepSeek-V4-Flash」；HF 建库时间 2026-09-10）；huggingface.co/deepseek-ai/DeepSeek-V4-Pro（「a preview version of DeepSeek-V4 series」；建库 2026-04-22）</td></tr>
-    <tr><td>R25 补充 · 12.7：FlashMLA 新增读 NVFP4 压缩 KV 的 kernel，比原先的 FP8 KV 小 45%</td><td>vllm.ai/blog/2026-10-07-deepseek-v41-flash（「a new NVFP4 compressed KV format, which is 45% smaller than the previous FP8 KV cache」）</td></tr>
+    <tr><td>R25 补充 · 12.8：FlashMLA 新增读 NVFP4 压缩 KV 的 kernel，比原先的 FP8 KV 小 45%</td><td>vllm.ai/blog/2026-10-07-deepseek-v41-flash（「a new NVFP4 compressed KV format, which is 45% smaller than the previous FP8 KV cache」）</td></tr>
     <tr><td>R25 补充 · 4.6：vLLM 0.11.0 起自带 KV 下放连接器（OffloadingConnector），附 CPU 后端</td><td>vllm.ai/blog/2026-01-08-kv-offloading-connector（「introduced in vLLM 0.11.0」「bundled with a CPU backend, enabling native CPU offloading of KV data in vLLM」）</td></tr>
     <tr><td>R25 补充 · 第八节：NVIDIA Dynamo 1.0 正式版 2026-03-16 发布</td><td>nvidianews.nvidia.com/news/dynamo-1-0（「NVIDIA Enters Production With Dynamo」，2026-03-16）</td></tr>
     <tr><td>R25 补充 · 11.5：DFlash 一次前向出一整块候选草稿；Gemma-4 31B 在单卡 DGX B300 上用 vLLM，单并发比自回归快 3.0（MT-Bench）–5.8 倍（Math500）；SGLang 上 Qwen3-8B 单卡 B200 最多 5.1 倍</td><td>developer.nvidia.com/blog/boost-inference-performance-up-to-15x-on-nvidia-blackwell-using-dflash-speculative-decoding（2026-06-23，表 2、表 3；「generates an entire block of candidate tokens in a single forward pass」）</td></tr>
     <tr><td>R32 补充 · 5.1：Flash-Decoding 的 8 倍是 CodeLlama-34B、batch 1、序列 512 到 64k 的 decode 速度，对照为纯 PyTorch 注意力、FlashAttention v2（2.2 前）、FasterTransformer；注意力本身最多是 FlashAttention 的 50 倍</td><td>crfm.stanford.edu/2023/10/12/flashdecoding.html（「Flash-Decoding unlocks up to 8x speedups in decoding speed for very large sequences」「the attention itself is up to 50x faster than FlashAttention」）</td></tr>
     <tr><td>R32 补充 · 第八节：Splitwise 同成本同功耗下吞吐 2.35 倍，或吞吐 1.4 倍、成本低 20%（对不拆阶段的现有集群设计）</td><td>arXiv <a href="https://arxiv.org/abs/2311.18677" target="_blank" rel="noopener">2311.18677</a> 摘要（「Splitwise clusters achieve up to 1.4× higher throughput at 20% lower cost. Alternatively, they can deliver 2.35× more throughput under the same power and cost budgets.」）</td></tr>
     <tr><td>R32 补充 · 第十二节：GPTQ 3 bit OPT-175B，batch 1 逐字延迟 1 张 A100 71 ms 对 FP16 5 张 230 ms（3.24×，正文按原文取 3.25）；2 张 A6000 130 ms 对 FP16 8 张 589 ms（4.53×）</td><td>arXiv <a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener">2210.17323</a> 表 6（「the 3-bit OPT-175B model obtained via GPTQ running on a single A100 is about 3.25× faster than the FP16 version (running on 5 GPUs) in terms of average time per token」）</td></tr>
-    <tr><td>R44 补充 · 4.5 ／ 3.4 ／ 9.7 ／ 12.3 ／ 12.7：vLLM V1 alpha 公开于 2025-01（4.5「2025 年 1 月」、3.4「2025 年」）；MegaScale-Infer 首版 2025-04-03（9.7「2025 年」）；Kimi K2 Thinking 2025-11 发布（12.3「2025 年」）；NVFP4 KV 首字延迟「最多降到约三分之一」即原文 up to 3x lower latency；V3.2 FP8 KV 同显存多接六成多请求 ＝ 1,284 ÷ 788 ≈ 1.63 减 1（本课推导，同第 116 行）</td><td>blog.vllm.ai/2025/01/27/v1-alpha-release.html（2025-01-27）；arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a> 提交历史 v1「Thu, 3 Apr 2025」；huggingface.co/moonshotai/Kimi-K2-Thinking（HF API 仓库 createdAt 2025-11-04，首次 README 更新 2025-11-06；第三方报道均记 2025-11-06 发布，正文只写年份）；developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache 图 4 注「NVFP4 KV cache delivers up to 3x lower latency and 20% higher cache hit rate compared to FP8 KV cache」、正文「up to 3x better time-to-first-token (TTFT) latency」。2026-10-15 核对</td></tr>
+    <tr><td>R44 补充 · 4.5 ／ 3.4 ／ 9.7 ／ 12.3 ／ 12.8：vLLM V1 alpha 公开于 2025-01（4.5「2025 年 1 月」、3.4「2025 年」）；MegaScale-Infer 首版 2025-04-03（9.7「2025 年」）；Kimi K2 Thinking 2025-11 发布（12.3「2025 年」）；NVFP4 KV 首字延迟「最多降到约三分之一」即原文 up to 3x lower latency；V3.2 FP8 KV 同显存多接六成多请求 ＝ 1,284 ÷ 788 ≈ 1.63 减 1（本课推导，同第 116 行）</td><td>blog.vllm.ai/2025/01/27/v1-alpha-release.html（2025-01-27）；arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a> 提交历史 v1「Thu, 3 Apr 2025」；huggingface.co/moonshotai/Kimi-K2-Thinking（HF API 仓库 createdAt 2025-11-04，首次 README 更新 2025-11-06；第三方报道均记 2025-11-06 发布，正文只写年份）；developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache 图 4 注「NVFP4 KV cache delivers up to 3x lower latency and 20% higher cache hit rate compared to FP8 KV cache」、正文「up to 3x better time-to-first-token (TTFT) latency」。2026-10-15 核对</td></tr>
     <tr><td>R49 补充 · 1.2 图注：b ＝ 64 时专家覆盖率 87%、每人分到权重 9.14 GB</td><td>本课推导：第 19 行公式取 b ＝ 64，覆盖率 ＝ 1 − (31/32)<sup>64</sup> ≈ 0.87，[非路由 ＋ 653.9B × 0.87] ÷ 64 ≈ 9.14 GB；脚本断言见 topic06-fig-phases.py:93</td></tr>
     <tr><td>R49 补充 · 第四节：MHA（2017）；Qwen3.5 混合池块编号池算大约 3.5 倍；V3 一条 64K 序列 KV ≈ 4.29 GiB、FP8 每 token 40,016 字节</td><td>arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a>（Attention Is All You Need，2017-06）；tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77（「block_id pool ~3.5× 过大」）；本课推导：70,272 B × 65,536 ÷ 2<sup>30</sup> ≈ 4.29 GiB，656 B × 61 层 ＝ 40,016 B</td></tr>
     <tr><td>R49 补充 · 第三节：mem-fraction 调高后端到端吞吐只多 0.8%；Gemma4 256K 的 prompt 切成 16 块</td><td>本课推导：10,704 ÷ 10,614 ≈ 1.008（两数同第 36 行）；tpu/tpu-inference Gemma4-31B README.md:224-226（max-num-batched-tokens 16384，「将 256K 拆为 16 个 16K chunk」）</td></tr>
@@ -10790,7 +10909,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R51 补充 · 0.1 ／ 14.3 ／ 故事图：0.1 各泳道补上的倍数（36.9、2–4、2.6–3.7、1/57、1.63、6.4、107%–115%、7.4、5、2–3、1.8、3.25、2）均为既有台账行的数，原样搬用；14.3 新增 GPTQ 3.25 倍、vLLM FP8 权重 2 倍、V3.2 FP8 KV 1.63 倍三行，并按发表月份重排同年各行；故事图 GPTQ 卡改写 3.25×、Splitwise 卡改写 2.35×；第四节与 14.3 的 DeepSeek 磁盘缓存由计价比例改为首字 13 s → 0.5 s</td><td>同第 42、138、43、55、116、38、136、28、66、40、164、152、163、137 行</td></tr>
     <tr><td>R53 补充 · 4.5：vLLM 前缀缓存按块哈希，每块哈希含父块哈希与本块 token，只认完全相同的前缀；截断上下文能让前缀命中率掉一半</td><td>docs.vllm.ai/en/latest/design/prefix_caching.html（「we hash each kv-cache block by the tokens in the block and the tokens in the prefix before the block」）；LMCache arXiv <a href="https://arxiv.org/abs/2510.09665" target="_blank" rel="noopener">2510.09665</a> 摘要（「context truncation … can greatly reduce prefix cache hit ratio by half」）</td></tr>
     <tr><td>R53 补充 · 4.6：Mooncake Store 由 Master（空间分配、元数据）与 Client 组成，经 Transfer Engine 走 RDMA，可从内存下放到 SSD，按哈希前缀存取 KV 块；SGLang 2025-09-10、vLLM 2026-05-07 正式接入</td><td>kvcache-ai.github.io/Mooncake/design/mooncake-store.html（「Powered by the Transfer Engine」「supports offloading cached data from RAM to SSD」「responsible for object space allocation and metadata maintenance」）；github.com/kvcache-ai/Mooncake README 新闻栏（「store, retrieve, and reuse KV cache blocks based on hash-based prefix caching」）</td></tr>
-    <tr><td>R53 补充 · 12.7：FP8 KV 不校准时缩放全取 1.0；校准后可按张量或按 KV 头给缩放，按头只支持 FlashAttention 后端且须经 llm-compressor 校准</td><td>docs.vllm.ai/en/latest/features/quantization/quantized_kvcache.html（「No calibration (default scales): All quantization scales are set to 1.0」「Per-attention-head quantization is currently available only with the Flash Attention backend and requires the calibration pathway provided by llm-compressor」）</td></tr>
+    <tr><td>R53 补充 · 12.8：FP8 KV 不校准时缩放全取 1.0；校准后可按张量或按 KV 头给缩放，按头只支持 FlashAttention 后端且须经 llm-compressor 校准</td><td>docs.vllm.ai/en/latest/features/quantization/quantized_kvcache.html（「No calibration (default scales): All quantization scales are set to 1.0」「Per-attention-head quantization is currently available only with the Flash Attention backend and requires the calibration pathway provided by llm-compressor」）</td></tr>
     <tr><td>R56 复核 · 3 ／ 4 ／ 5.1 ／ 11 ／ 12 ／ 13 ／ 14.3 ／ 故事图：SGLang 路由 20%→75%、1.9 倍改记「对 v0.3」；DeepSeek 13 s → 0.5 s 的条件是「128K、高复用 prompt」，正文去掉「大半重复」；megakernel 2.5 倍／1.5 倍是 H100、Llama-1B，B200 上对 vLLM 超 3.5 倍；Flash-Decoding 8 倍、EAGLE-3 6.5 倍与 1.38 倍、llm-d 340／2,850 ms、Orca 36.9× 与原文一致</td><td>lmsys.org/blog/2024-12-04-sglang-v0-4（「up to 1.9x throughput increase and 3.8x hit rate improvement」，表「Cache hit rate; SGLang v0.3: 20%; SGLang v0.4: 75%」）；api-docs.deepseek.com/news/news0802（「For a 128K prompt with high reference, the first token latency is cut from 13s to just 500ms」）；hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles（「On an H100, our megakernel runs almost 2.5x faster than vLLM and over 1.5x faster than SGLang」「On a B200, the gap with vLLM rises to over 3.5x」）；arXiv <a href="https://arxiv.org/abs/2512.22219" target="_blank" rel="noopener">2512.22219</a>（「up to 1.7× lower end-to-end inference latency」）；crfm.stanford.edu/2023/10/12/flashdecoding.html（「up to 8x speedups in decoding speed for very large sequences」，batch size 1）；arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a>（「speedup ratio up to 6.5x」「1.38x throughput improvement at a batch size of 64」，表 3 基线为不投机的 SGLang，H100、LLaMA-3.1 8B）；Red Hat Developer 2025-10-07（「Warm cache hit; Without cache routing: 2,850 ms TTFT (worst case); With KV cache routing: 340 ms TTFT」）。2026-10-15 核对</td></tr>
     <tr><td>R59 补充 · 14.3 图「DeepSeek 一天的账」：输入未命中 2,660 亿；命中缓存、未命中、输出三段分别占全天 7,760 亿 token 的 44.1%、34.3%、21.6%；输入占 78.4%</td><td>本课推导：6,080 − 3,420 ＝ 2,660；3,420 ÷ 7,760、2,660 ÷ 7,760、1,680 ÷ 7,760；6,080 ÷ 7,760（6,080／3,420／1,680 同第 137、30 行；1,814 卡与每卡每秒约 4,950 同第 144、30 行）</td></tr>
     <tr><td>R76 复核 · 11.3 ／ 14.3：B200 V4-Flash 开 MTP 并发 1 也慢 12%（72 → 63 tok/s），高并发变慢归因于算力已满（原文）；PyTorch 博客 11,200 是 2026-06 开 MTP 曲线、2,200 是 Day-0（2026-04）不开 MTP 曲线</td><td>gpu/inference/a4/deepseek-v4/README.vllm.md:268、:283（「高并发下 EP+DP=8 已充分利用 GPU 算力，MTP 的投机计算变成纯开销」）；pytorch.org/blog/serving-deepseek-v4-on-gb300-with-sglang-5x-higher-throughput-at-the-same-interactivity-since-day-0（「the June 2026 MTP curve delivers ~11,200 tok/s/GPU … versus ~2,200 tok/s/GPU for the Day-0 (April 2026) no-MTP curve」）。2026-10-15 核对</td></tr>
@@ -10856,11 +10975,11 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R91 补充 · 4.1：GQA-8 每条样本解码 1.51 → 0.28（MHA-XXL → GQA-8-XXL），平均分 47.2 → 47.1；MQA 0.24、46.6</td><td>arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>v3 Table 1（TPU v4，8 颗，每颗 batch 至多 32；T5-XXL 以 5% 预训练量改造；「GQA achieves significant additional quality gains, achieving performance close to MHA-XXL with speed close to MQA」，2026-10-16 核对）；本课推导：1.51 ÷ 0.28 ≈ 5.4。原文单位为每条样本时间，正文只讲相对比</td></tr>
     <tr><td>R91 补充 · 4.1 ／ 14.3：V3.2 架构上只改了 DSA；基准与 V3.1-Terminus 基本持平（MMLU-Pro 85.0 对 85.0，HLE 21.7 对 19.8）</td><td>arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a> §2.3（「the only architectural modification of DeepSeek-V3.2 is the introduction of DeepSeek Sparse Attention (DSA) through continued training」）；github.com/deepseek-ai/DeepSeek-V3.2-Exp 技术报告 PDF（「DeepSeek-V3.2-Exp does not show substantial performance degradation compared with DeepSeek-V3.1-Terminus」，2026-10-16 核对）。查过：成本降幅只有按 H800 租价画的每百万 token 成本图（Figure 3），正文无比值，本课不写价格，故不取</td></tr>
     <tr><td>R91 补充 · 7.4 ／ 14.3：Llama3 405B、H100、机内 TP8 跨机 CP：机器数翻倍延迟约减半，CP8 做 128K 5.85 s；2 台 CP2 对 TP16 差约 15%，8 台差约 100%（TP 慢）</td><td>arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a>v3（MLSys 2025）（「While the latency is different by roughly 15% between CP2 and TP16 on 2 nodes, the difference drastically increases to 100% when scaled to 8 nodes」，2026-10-16 核对）。R87 那行「⑨ 无实测行」自本轮起不再成立。查过：vLLM PCP 文档与 RFC，无公开数字</td></tr>
-    <tr><td>R91 补充 · 12.1 ／ 12.6 ／ 14.3：AWQ，Llama-2-7B、RTX 4090、batch 1、4 token 输入 200 token 输出取中位延迟：FP16 融合 52 → 62 tok/s，INT4 再快 3.1 倍；WikiText-2 困惑度 FP16 5.47、RTN 5.73、AWQ 5.60（INT4 g128）</td><td>arXiv <a href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener">2306.00978</a>v5（「For Llama-2-7B, we improve the inference speed from 52 tokens/s to 62 tokens/s through FP16 kernel fusion. On top of the stronger FP16 baseline, we further harvest 3.1× additional speedup from the fast quantized linear kernels.」，2026-10-16 核对）</td></tr>
+    <tr><td>R91 补充 · 12.1 ／ 12.7 ／ 14.3：AWQ，Llama-2-7B、RTX 4090、batch 1、4 token 输入 200 token 输出取中位延迟：FP16 融合 52 → 62 tok/s，INT4 再快 3.1 倍；WikiText-2 困惑度 FP16 5.47、RTN 5.73、AWQ 5.60（INT4 g128）</td><td>arXiv <a href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener">2306.00978</a>v5（「For Llama-2-7B, we improve the inference speed from 52 tokens/s to 62 tokens/s through FP16 kernel fusion. On top of the stronger FP16 baseline, we further harvest 3.1× additional speedup from the fast quantized linear kernels.」，2026-10-16 核对）</td></tr>
     <tr><td>R91 补充 · 12.2：8B 混合 Mamba-Transformer 训 1T token，训练 loss 相对 BF16：MXFP4 约 2.5%、NVFP4 约 1.5%；MXFP4 多训 36% token 追平</td><td>arXiv <a href="https://arxiv.org/abs/2509.25149" target="_blank" rel="noopener">2509.25149</a>v2（「MXFP4 has a relative error of around 2.5% compared to 1.5% for NVFP4」「MXFP4 matches NVFP4 loss when trained on 36% more tokens」，2026-10-16 核对）</td></tr>
     <tr><td>R91 补充 · 12.2：DeepSeek-R1-0528 从 FP8 训后量化到 NVFP4，主要语言任务掉点 ≤1%</td><td>developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference（2025-06，「1% or less accuracy degradation on key language modeling tasks for DeepSeek-R1-0528, when quantized from its original FP8 format to NVFP4 using post-training quantization」，2026-10-16 核对）。查过：NVIDIA 博客、NVFP4 预训练论文、TensorRT-LLM 文档，无同卡 FP4 对 FP8 的官方同条件吞吐对比</td></tr>
     <tr><td>R91 补充 · 12.3：K2 Thinking 低延迟模式约快 2 倍、「无损」，基准全在 INT4 下报</td><td>huggingface.co/moonshotai/Kimi-K2-Thinking（「lossless 2x speed-up in low-latency mode」「All benchmark results are reported under INT4 precision」）；moonshotai.github.io/Kimi-K2/thinking.html（「roughly 2x generation speed improvement」），2026-10-16 核对。查过：模型卡、官方博客、K2.5 技术报告 arXiv <a href="https://arxiv.org/abs/2602.02276" target="_blank" rel="noopener">2602.02276</a>，无对照精度说明、无 INT4 对 FP8 精度表；一位 Moonshot 工程师的个人文章称对照为 block FP8，非官方，正文不取</td></tr>
-    <tr><td>R91 补充 · 12.6：Hazy megakernel，Llama-3.2-1B、batch 1、H100：比 vLLM 快近 2.5 倍、比 SGLang 快 1.5 倍以上；TensorRT-LLM DeepSeek-R1 8×B200 低延迟，「Fuse oneshotAR + RMSNorm」一步 164 → 168 TPS/user（逐步累加）</td><td>hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles（「On an H100, our megakernel runs almost 2.5x faster than vLLM and over 1.5x faster than SGLang」）；nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html 优化步骤表，2026-10-16 核对</td></tr>
+    <tr><td>R91 补充 · 12.7：Hazy megakernel，Llama-3.2-1B、batch 1、H100：比 vLLM 快近 2.5 倍、比 SGLang 快 1.5 倍以上；TensorRT-LLM DeepSeek-R1 8×B200 低延迟，「Fuse oneshotAR + RMSNorm」一步 164 → 168 TPS/user（逐步累加）</td><td>hazyresearch.stanford.edu/blog/2025-05-27-no-bubbles（「On an H100, our megakernel runs almost 2.5x faster than vLLM and over 1.5x faster than SGLang」）；nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html 优化步骤表，2026-10-16 核对</td></tr>
     <tr><td>R91 补充 · 14.3：5.1 倍里 MTP 的份额官方没拆；两条曲线各对自己首发日：不开 MTP 在 40 tok/s/user 档 2.1 倍，开 MTP 在 80 档 2.6 倍</td><td>PyTorch 博客 2026-06-23（「the June curves sustain 2.1x more throughput at 40 tok/s/user (no-MTP) and 2.6x more at 80 tok/s/user (MTP)」，2026-10-16 核对）。查过：该博客与 SGLang 文档，无 MTP 单项消融；两数档位不同，不相减不相除</td></tr>
     <tr><td>R91 补充 · 14.3：TensorRT-LLM DeepSeek-R1 8×B200、输入 1k 输出 2k：不开 MTP 111 TPS/user，MTP1 198，MTP3 253（接受长度 2.82），MTP5 239</td><td>nvidia.github.io/TensorRT-LLM/blogs/tech_blog/blog1_Pushing_Latency_Boundaries_Optimizing_DeepSeek-R1_Performance_on_NVIDIA_B200_GPUs.html（2026-10-16 核对）；与 5.1 倍模型、硬件都不同，只作量级参考</td></tr>
     <tr><td>R91 补充 · 0.1 ／ 14.3 ／ 讲稿：AI Index 的 280 倍、硬件成本每年降 30%、Epoch 的 9–900 倍／年都是价格口径，正文与讲稿改为定性（「便宜得很快」「年年在便宜，2024 年以后更快」），只留非价格的能效每年升 40%；开场竞猜改用同卡、同模型、同交互档的 5.1 倍。上面三行原始台账保留作出处</td><td>本课取舍；出处见本台账 AI Index 两行与 R21 Epoch 行</td></tr>
@@ -10875,6 +10994,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>L89 补充 · 3.1：Orca 是 OSDI 2022 论文及其中实现的服务系统（论文原文「we have implemented a distributed serving system called ORCA」）</td><td>usenix.org/conference/osdi22/presentation/yu 摘要。2026-10-18 核对</td></tr>
 <tr><td>L90 补充 · 6.8 双微批：prefill 同 token 数快 27%～35%、每卡 16,384 token 时比不拆最优快 40.5%；decode 256 token/卡快 25.5%、32 token/卡慢 27%（小批 kernel 效率低）；DeepSeek decode 把注意力拆两段走 5 段流水；vLLM DBO 纯 decode 阈值默认 32 token</td><td>LMSYS 博客 2025-05-05「Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs」TBO 一节；DeepSeek open-infra-index「Day 6 · Inference System Overview」；vLLM vllm/config/parallel.py（enable_dbo、dbo_decode_token_threshold 默认 32、dbo_prefill_token_threshold 默认 512）；SGLang --enable-two-batch-overlap。2026-10-18 核对</td></tr>
 <tr><td>L91 补充 · 6.9 EPLB：V3 prefill 32 个冗余专家、每卡 8＋1、定期重算（例如每 10 分钟）；SGLang 大规模 EP 开 EPLB prefill 1.49×、decode 2.54×（作者注明看负载分布）；256＋32＝288 可用 12、72 路；vLLM eplb_config 默认 step_interval 3000、window_size 1000、num_redundant_experts 0</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.4；DeepSeek EPLB 仓库 README；LMSYS 博客 2025-05-05 大规模 EP 一文 EPLB 一节；vLLM vllm/config/parallel.py EPLBConfig；SGLang --enable-eplb、--ep-num-redundant-experts（server_arguments 文档）。2026-10-18 核对</td></tr>
+<tr><td>L92 补充 · 12.6 CUDA Graph（原 12.6 融合、12.7 KV 量化顺延为 12.7、12.8）：A100、LLaMA-2-7B、batch 1，不开 30 tok/s、开 69 tok/s（2.3×），提速全来自 CPU 开销；vLLM 默认录 [1,2,4]＋8..248 步 8＋256 起步 16，上限 512（数据中心 Blackwell 1,024）；V1 默认 FULL_AND_PIECEWISE（decode 整图、prefill／混合分段）</td><td>Fireworks 博客「Speed, Python: Pick Two. How CUDA Graphs Enable Fast Python Code for Deep Learning」2023-08-29；vLLM vllm/config/compilation.py（max_cudagraph_capture_size、cudagraph_mode）；SGLang --cuda-graph-max-bs。2026-10-18 核对</td></tr>
   </table></div>
 </div></section>
 

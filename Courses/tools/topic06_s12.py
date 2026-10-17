@@ -34,17 +34,26 @@ __FIG_S12_CAP__
 __FIG_S12_R1__
   <p>K2.6 的记录里，加载时漏了图里「减 8」一步，模型输出崩成重复的乱词。</p>
 
-  <h3 id="s12-6">12.6　kernel 融合：边界上不再干等</h3>
+  <h3 id="s12-graph">12.6　CUDA Graph：录一次，整串重放</h3>
+  <p>batch 小时，GPU 算一个 kernel 很快，CPU 一个个发反倒跟不上：GPU 算完一个，就等下一个发过来。CUDA Graph 把一步要发的整串 kernel 录下来，以后每步只发一次「重放」。</p>
+__FIG_S12_GRAPH__
+  <ul>
+    <li><b>代价是形状写死</b>，所以按批大小分档预先录。vLLM 默认录 1、2、4，8 到 248 每隔 8，256 往上每隔 16，最多到 512（数据中心 Blackwell 到 1,024）；SGLang 用 <code>--cuda-graph-max-bs</code> 定上限。人数不在档上就补到上一档。</li>
+    <li><b>prefill 形状千变万化</b>：vLLM V1 默认 decode 录整图，prefill 和混合批只把注意力以外的部分分段录。</li>
+    <li><b>和 TPU 是一件事的两头</b>：GPU 默认逐个发，录图是可选的加速，档外的批照样能跑；TPU 上 XLA 本来就按形状整图编译，档外的形状要现编，所以桶得开服前定好（<a href="#s13-1">13.1</a>）。11.6 里 PD 碰上投机掉出整图，也是形状不在档上。</li>
+  </ul>
+
+  <h3 id="s12-6">12.7　kernel 融合：边界上不再干等</h3>
   <p>一次前向（模型从头算到尾一遍）要发上百个 kernel。每个 kernel 收尾、下一个开场时，没人在读权重。</p>
 __FIG_S12_FUSE__
-  <p>生产里先上的是 CUDA Graph 和 PDL：前者省掉 CPU 逐个发射 kernel 的开销，后者让下一个 kernel 提前准备。
+  <p>CUDA Graph 省的是 CPU 那头；GPU 这头，生产里先上的是 PDL，让下一个 kernel 提前准备。
     megakernel 把整次前向写成一个 kernel，下一段权重在上一段计算时就开始读。</p>
   <p>Hazy Research（2025-05）实测，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型和 batch 越小，空等占比越大，赚得越多。同一篇在 Llama-3.2-1B、batch 1 上，比 vLLM 快近 2.5 倍，比 SGLang 快 1.5 倍以上。</p>
   <p>模型一大，融合单拎出来就赚得少。AWQ 那组测试里，光把 FP16 kernel 融合，Llama-2-7B 从每秒 52 到 62 token。TensorRT-LLM 在 8 张 B200 上跑 DeepSeek-R1，把 all-reduce 和 RMSNorm 融成一个，单用户每秒 164 到 168 token，是一串优化里逐步叠加的一步。</p>
   <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；16 张 GB200（vLLM）是 452 token。两个数都开了投机，按接受长度 6 换算。
     不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
-  <h3 id="s12-kv">12.7　KV 也能量化</h3>
+  <h3 id="s12-kv">12.8　KV 也能量化</h3>
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。
     K3 官方高吞吐配方列为必开：BF16 的 KV 装不下每副本 128 个请求。</p>
   <p>缩放给多细看 checkpoint：vLLM 只设 <code>fp8</code> 不校准时，缩放全取 1.0；用 llm-compressor 拿数据校准，可以每个 K、V 张量一个，或每个 KV 头一个（后者目前只有 FlashAttention 后端支持）。开了 FP8 KV 掉精度，先查有没有校准过的缩放。</p>
@@ -72,6 +81,8 @@ FIGS = {
         '<b>跟着一个权重走：存时加 8，读时不减，就差 8。</b><br><em>示意。</em>'),
     "__FIG_S12_CAP__": ("fig-s12-cap", "fig6-quant-cap.svg", "topic06-fig-quant.py",
         '<b>看虚线右边那截淡红：换成 GiB 读，越界更多。</b><br><em>README 原值，每 device；两种单位都超。</em>'),
+    "__FIG_S12_GRAPH__": ("fig-s12-graph", "fig6-quant-graph.svg", "topic06-fig-quant.py",
+        '<b>比两行 GPU：上面一格一格隔着粉色空等，下面挤成一条。</b><br><em>总长按比例；kernel 个数是示意。</em>'),
     "__FIG_S12_FUSE__": ("fig-s12-fuse", "fig6-quant-fuse.svg", "topic06-fig-quant.py",
         '<b>每次 kernel 交接都要空等，加起来四成多；megakernel 把它捡回来。</b><br><em>时间轴按比例画。</em>'),
 }
