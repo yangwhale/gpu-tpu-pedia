@@ -3653,8 +3653,7 @@ body.figonly section h3{margin-top:34px}
 <p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；隔板位置是示意，不代表真实字节比。</p></details></figure>
   <p>两边一起满之后再多装人，吞吐几乎不涨（3.3）：瓶颈从装不下换成了算不动。</p>
 
-  <div class="note warn"><span class="t">⚠️ 池子算错不一定报错</span>
-    tpu-inference 跑 Qwen3.5 时块编号池算成了实际该有的约 3.5 倍，多出的编号没有对应的显存；JAX 写入时越界的起点被<b>静默钳回末尾</b>，多个请求写进同一块；症状是胡言乱语或崩溃（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</div>
+  <p>池子算错不一定报错：tpu-inference 跑 Qwen3.5 时块编号池大了约 3.5 倍，越界写入被静默钳回末尾，输出乱码（<a href="#s14-3">14.3</a>）。</p>
 
   <h3 id="s4-5">4.5　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样（同一段 system prompt、多轮对话的前几轮），这段的 KV 留着，下一个直接接着算。</p>
@@ -3721,8 +3720,7 @@ body.figonly section h3{margin-top:34px}
        aria-label="KV 当存储动画。标题：KV 当存储：先找，找到就搬回，都没有才重算。中间三层，从上到下是 HBM（小、最快，3 格）、主机内存（大一些、慢一些，5 格）、SSD（最大、最慢，7 格），每格一块带字母的前缀 KV；右上角写：每层从左到右：最近用过 → 最久没用。开始时 HBM 里是 A、B、C，主机内存里是 D、E、F、G，SSD 里是 H、I、J、K。底下是首字要等多久的四行条。第一句字幕：每块是一段算好的前缀 KV；新请求先看自己的前缀存在哪一层。请求 1，前缀 A：HBM 命中；字幕：前缀 A 就在 HBM：直接用，接着往后算；首字条最短，写 HBM 里就有。请求 2，前缀 D：HBM 没有，主机内存命中；字幕：前缀 D 在主机内存：拉回 HBM，比重算 prefill 快；首字条写从主机内存拉回。D 放进 HBM 最前面，C 被挤出框外；字幕：HBM 满了：最久没用的 C 往下放到主机内存。请求 3，前缀 H：HBM、主机内存都没有，SSD 命中；字幕：前缀 H 在 SSD：拉回来也比重算快（DeepSeek：首字 13 s → 0.5 s）；首字条写从 SSD 拉回；H 进 HBM，B 被放到主机内存。请求 4，前缀 L：三层都没有；字幕：前缀 L 哪层都没有：只能重算 prefill；橙色的重算条慢慢长到最长，写重算 prefill，同时算出一块新的 L。L 进 HBM 最前面；字幕：HBM 满了，A 往下放；主机内存也满了，G 再推到 SSD。最后一句字幕：先找、再搬、最后才算；显存满了，冷的 KV 一层层往下放。底注：块数、层的大小都是示意；首字条只有 SSD 与重算两条按 DeepSeek 实测比例画。画面复位。"></video>
 <figcaption>看每个请求往下找了几层，以及显存满时谁被挤下去。
   <span class="sub">（27 秒无声循环，Manim 渲染。层的容量、块的摆放和四个请求是示意，命中哪层由 LRU 现模拟。）</span></figcaption></figure>
-  <p><b>线性注意力和滑窗难复用：</b>线性层的状态是整段压出来的，截不回任意位置；滑窗层早先的 KV 已经丢了。vLLM、SGLang 于是在块边界另存状态快照；tpu-inference 跑 Qwen3.5 得显式关掉（<code>--no-enable-prefix-caching</code>），否则断言错误（同一 README:95）。</p>
-
+  <p><b>线性注意力和滑窗难复用：</b>线性层的状态截不回任意位置，滑窗层早先的 KV 已经丢了，只能隔一段存一份快照（第十三节）。</p>
   <h3 id="s4-6">4.6　分层卸载：搬回来，还是重算</h3>
   <p>显存留不下所有想复用的 KV，就往下放到主机内存、磁盘乃至远端存储，用时搬回。</p>
   <div class="note ok"><span class="t">盈亏带宽</span>
@@ -10101,7 +10099,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s13-5">13.5　同一个前提，前面已经撞了四次</h3>
   <ul>
-    <li><b>前缀复用</b>（<a href="#s4-5">4.5</a>）：tpu-inference 跑 Qwen3.5 得关掉前缀缓存，否则断言出错；看样子是还没接上这套快照（本课推测）。</li>
+    <li><b>前缀复用</b>（<a href="#s4-5">4.5</a>）：tpu-inference 跑 Qwen3.5 得关掉前缀缓存（<code>--no-enable-prefix-caching</code>，<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:95</code>），否则断言出错；看样子是还没接上这套快照（本课推测）。</li>
     <li><b>DEP</b>（<a href="#s6-3">6.3</a>）：状态按请求开、不随 DP 切，K3 每个 rank 存整池状态，DEP8 起不来。</li>
     <li><b>PCP</b>（<a href="#s7-5">7.5</a>）：序列切开后状态要从前一段接力，不能从空状态起步。</li>
     <li><b>PD 分离</b>（<a href="#s8-5">8.5</a>）：状态已吃下整段 prompt，尾巴不能让 decode 端重算，只能整份传。</li>
@@ -10283,7 +10281,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s14-3">14.3　跑得对：不报错的错</h3>
   <p>这一关最难，因为两个毛病都不报错。</p>
   <ul>
-    <li><b>块池算大了 3.5 倍</b>：vLLM 的混合分配器让 4 层共用一块 KV 张量，TPU 上每层得各存一份，账没对上，块编号池约是实际的 3.5 倍。越界的写入被<b>静默钳回末尾</b>，几个请求写进同一块，输出乱码或 OOM（<a href="#s4-4">4.4</a>）。</li>
+    <li><b>块池算大了 3.5 倍</b>：vLLM 的混合分配器让 4 层共用一块 KV 张量，TPU 上每层得各存一份，账没对上，块编号池约是实际的 3.5 倍。越界的写入被<b>静默钳回末尾</b>，几个请求写进同一块，输出乱码或 OOM（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</li>
     <li><b>线性层递推 bf16 不稳</b>：问「法国首都是哪」，输出「about about about…」停不下来。修法是递推里 5 处关键计算提到 FP32，分块从 64 减到 32。</li>
     <li><b>前缀缓存得关</b>：tpu-inference 还没有 13 节那套状态快照，开了就断言错误（<a href="#s13-5">13.5</a>）。</li>
   </ul>

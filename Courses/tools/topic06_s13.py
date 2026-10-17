@@ -39,7 +39,7 @@ __FIG_S13_SNAP__
 
   <h3 id="s13-5">13.5　同一个前提，前面已经撞了四次</h3>
   <ul>
-    <li><b>前缀复用</b>（<a href="#s4-5">4.5</a>）：tpu-inference 跑 Qwen3.5 得关掉前缀缓存，否则断言出错；看样子是还没接上这套快照（本课推测）。</li>
+    <li><b>前缀复用</b>（<a href="#s4-5">4.5</a>）：tpu-inference 跑 Qwen3.5 得关掉前缀缓存（<code>--no-enable-prefix-caching</code>，<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:95</code>），否则断言出错；看样子是还没接上这套快照（本课推测）。</li>
     <li><b>DEP</b>（<a href="#s6-3">6.3</a>）：状态按请求开、不随 DP 切，K3 每个 rank 存整池状态，DEP8 起不来。</li>
     <li><b>PCP</b>（<a href="#s7-5">7.5</a>）：序列切开后状态要从前一段接力，不能从空状态起步。</li>
     <li><b>PD 分离</b>（<a href="#s8-5">8.5</a>）：状态已吃下整段 prompt，尾巴不能让 decode 端重算，只能整份传。</li>
