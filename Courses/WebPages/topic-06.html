@@ -1621,8 +1621,20 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>两个阶段：prefill 吃算力，decode 吃带宽</h2></div>
-  <p class="lead">0.1 里的每一招都冲着这个事实：prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
-    <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b></p>
+  <p class="lead">专题五讲的是训练。推理和它差在哪？prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
+    <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b>0.1 里的每一招都冲着这个事实。</p>
+  <div class="tbl-wrap"><table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">训练每步约 6 次运算／参数／token，前向占 2 次，反向约 4 次；推理只有前向。</caption>
+    <tr><th></th><th>训练</th><th>prefill</th><th>decode</th></tr>
+    <tr><td>一步喂进去的</td><td>整批完整序列</td><td>一段 prompt，几千行</td><td>每人一行</td></tr>
+    <tr><td>算什么</td><td>前向＋反向＋更新</td><td>只有前向</td><td>只有前向</td></tr>
+    <tr><td>序列能不能并行</td><td>能：答案已知，整段一起算</td><td>能：prompt 已知</td><td>不能：下一个字要等上一个</td></tr>
+    <tr><td>卡在哪</td><td>算力、通信</td><td>算力</td><td>显存带宽</td></tr>
+    <tr><td>显存装什么</td><td>权重、梯度、优化器状态</td><td colspan="2">权重＋每人的 KV</td></tr>
+    <tr><td>看什么</td><td>吞吐</td><td>首字延迟</td><td>字间隔，以及同时服务多少人</td></tr>
+  </table></div>
+  <p><b>prefill 就是训练的前向。</b>同样是大矩阵乘、吃算力，专题五那套切法和 kernel 大多能直接搬过来。</p>
+  <p><b>decode 是另一个故事。</b>训练时答案已知，整段序列一起算；decode 每一步只能出一个字，却要把全部权重和每人的 KV 读一遍。请求又随时到、长短不一，还要守住延迟。一颗很贵的芯片，大半时间在等搬运。</p>
 
   <h3 id="s1-1">1.1　一次喂几行，决定卡在哪</h3>
   <p>v7 按 bf16（每个数 2 字节）算，每读 1 字节要做满 313 次运算才不被带宽拖住，这叫屋脊点。
@@ -4762,7 +4774,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差别全在注意力那一半：一起算同一批，还是各算各的一批</tspan></text>
 <text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TEP：同一批请求四张卡一起算，单个请求快；可 MLA 这类只有一个 KV 头的模型，KV 在每张卡上都得存一整份。</text>
 <text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DEP：每张卡只管自己那批请求，KV 不重复、batch 能开大；代价是专家那一步换成 AllToAll，还要防各卡忙闲不均。</text>
-</svg><figcaption><b>只看注意力那一半。</b><span class="capmore"><br><em>专题五原图。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TensorRT-LLM 定义：TEP<N> shards both attention (TP) and experts (EP) across N ranks；DEP<N> keeps attention data-parallel (ADP) while distributing experts across N ranks。</p>
+</svg><figcaption><b>只看注意力那一半。</b><span class="capmore"><br><em>专题五原图。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TensorRT-LLM 定义：TEP&lt;N&gt; shards both attention (TP) and experts (EP) across N ranks；DEP&lt;N&gt; keeps attention data-parallel (ADP) while distributing experts across N ranks。</p>
 <p>⚠️ 专家那一步的通信按常见实现画：attention 用 TP 时各卡 token 相同，专家输出用 AllReduce 合并；attention 用数据并行时各卡 token 不同，走 AllToAll。示意 4 张卡、8 个专家。</p></details></figure>
 
   <h3 id="s6-2">6.2　判据：KV 头数和 batch</h3>
@@ -6035,7 +6047,7 @@ body.figonly section h3{margin-top:34px}
 
   <h3 id="s7-1">7.1　一句回顾</h3>
   <p><a href="topic-05.html#s5-4">专题五 §5.4</a> 讲过：KV 头比 TP 路数少时，DCP 把 KV 按 token 轮流存到这几张卡上，合并时再统一除 softmax 的分母。</p>
-<figure class="fbox fwide" id="fig-s7-kv-dup-t5"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。每个 token 的 KV 是 70272 字节，12 万 8 千个 token 就是约 8.58 GiB。TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s7-kv-dup-t5"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。每个 token 的 KV 是 70272 字节，128K 也就是 131072 个 token，就是约 8.58 GiB。TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">推理时切序列：KV cache 被 TP 复制了几份　——　<tspan font-weight="700">DCP 把复制变回容量</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，一个 128K 上下文的请求。每 token 的 KV ＝ (512 ＋ 64) × 61 层 × 2 字节 ＝ 70,272 字节</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -6336,7 +6348,7 @@ body.figonly section h3{margin-top:34px}
 <rect x="1222" y="202" width="31" height="31" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="1256" y="202" width="31" height="31" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="1290" y="202" width="31" height="31" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="780" y="262" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">笔记按 token 轮流存：第 1 条卡 0、第 2 条卡 1……（原来那 4 张 TP 卡，不加卡）</text>
+<text class="svgsm" x="780" y="262" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">笔记按 token 轮流存：第 0 条卡 0、第 1 条卡 1……（原来那 4 张 TP 卡，不加卡）</text>
 <text class="svgsm" x="780" y="324" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
 <rect x="840" y="302" width="34" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="880" y="302" width="34" height="30" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -6574,7 +6586,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="256" y="364" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">① 显存 → 本机内存（PCIe）</text>
 <rect x="285.0" y="312" width="454.5" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="512" y="332" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">83 ms</tspan></text>
-<text class="svgsm" x="512" y="364" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">② 本机 → 对方（数据中心网络 100 Gbps）</text>
+<text class="svgsm" x="512" y="364" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">② 本机 → 对方（数据中心网络 100 Gb/s）</text>
 <rect x="741.5" y="312" width="53.0" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="768" y="332" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10 ms</tspan></text>
 <text class="svgsm" x="768" y="364" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">③ 对方内存 → 显存（PCIe）</text>
@@ -6585,7 +6597,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这个模型 KV 头少（8 个）又用 FP8 存，8K prompt 的 KV 约 1.04 GB；换一个 KV 大得多的模型、换网络，要重算。</text>
 <text class="svgsm" x="20" y="502" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">对比 TP：它每一层都要通信，只能待在最快那一圈；这里一个请求就一趟，跨机器也藏得住。</text>
 </svg><figcaption><b>三色细条就是代价。</b><span class="capmore"><br><em>专题五原图；KV 用时按带宽估算，不是计时。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。</p>
-<p>⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gbps ＝ 12.5 GB/s → 约 83 ms。</p></details></figure>
+<p>⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gb/s ＝ 12.5 GB/s → 约 83 ms。</p></details></figure>
   <p>100 Gbps 还是保守算：A4X（Google Cloud 的 GB200 机型）每张 GPU 配 400 Gbps 网卡，GB300 是 800 Gbps，一趟约 21 ms、10 ms（按单卡单网卡算；本课推导）。</p>
   <p>前提有两个：网络跑在设计带宽上（8.4），KV 不大得离谱（8.8）。</p>
 
@@ -6889,7 +6901,7 @@ body.figonly section h3{margin-top:34px}
   <p><a href="topic-05.html#s6-3">专题五 §6.3</a> 用 DistServe 的例子讲过：两边按各自上限配。</p>
 <figure class="fbox fwide" id="fig-s9-pd-ratio-t5"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="同样守住首字延迟和出字间隔两个要求。一张卡两样都做，每秒只接得住 1.6 个请求；只做 prefill 能接 5.6 个，只做 decode 能接 10 个。两张做 prefill、一张做 decode，三张卡每秒接 10 个请求，每张卡 3.3 个，是混着做的两倍多；混着做要接住 10 个，得 7 张卡"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">拆开以后，3 张卡顶混着做的 7 张　——　<tspan font-weight="700">各干各的，谁也不拖谁</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一套延迟要求下，一张卡每秒接得住几个请求（DistServe 论文的例子，OPT 模型）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一套延迟要求下，一张卡每秒接得住几个请求（DistServe 论文的例子，13B 模型、单张 A100）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">两样都做</text>
 <rect x="109.72" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -6941,7 +6953,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="451" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡接的请求翻了一倍多，配比就是这么算出来的</tspan></text>
 <text class="svgsm" x="20" y="482" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">两边各有各的上限：prefill 一张接 5.6 个，decode 一张接 10 个，所以配 2 比 1，两边差不多同时忙满。</text>
 <text class="svgsm" x="20" y="506" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 的业务 prefill 更累，就多配 prefill；长回答的业务多配 decode。</text>
-</svg><figcaption><b>两边按上限配，谁也不等谁。</b><span class="capmore"><br><em>专题五原图，DistServe 论文的 OPT 例子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DistServe（Zhong 等，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）作者博客「Throughput is Not All You Need」中的例子：同一 SLO 下单卡 goodput 1.6／5.6／10 rps。</p>
+</svg><figcaption><b>两边按上限配，谁也不等谁。</b><span class="capmore"><br><em>专题五原图，DistServe 论文的 OPT 例子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DistServe（Zhong 等，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）sec. 1 与图 1 的例子（13B 模型、单张 A100，90% 请求达标）：同一 SLO 下单卡 goodput 1.6／5.6／10 rps，2P1D 每卡 3.3 rps、2.1 倍；作者博客「Throughput is Not All You Need」用同一组数讲了一遍。</p>
 <p>⚠️ 本课推导：2P1D 每秒 min(2 × 5.6, 10) ＝ 10 个，每卡约 3.3 个；混着做接 10 个要 ⌈10 ÷ 1.6⌉ ＝ 7 张卡。</p></details></figure>
   <p>真实部署要把「一张接几个」换成量出来的吞吐。</p>
 

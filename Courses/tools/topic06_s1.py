@@ -2,8 +2,20 @@
 """专题六 · 第一节「两个阶段：prefill 吃算力，decode 吃带宽」。图在 topic06-fig-phases.py。"""
 
 BODY = '''
-  <p class="lead">0.1 里的每一招都冲着这个事实：prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
-    <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b></p>
+  <p class="lead">专题五讲的是训练。推理和它差在哪？prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
+    <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b>0.1 里的每一招都冲着这个事实。</p>
+  <table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">训练每步约 6 次运算／参数／token，前向占 2 次，反向约 4 次；推理只有前向。</caption>
+    <tr><th></th><th>训练</th><th>prefill</th><th>decode</th></tr>
+    <tr><td>一步喂进去的</td><td>整批完整序列</td><td>一段 prompt，几千行</td><td>每人一行</td></tr>
+    <tr><td>算什么</td><td>前向＋反向＋更新</td><td>只有前向</td><td>只有前向</td></tr>
+    <tr><td>序列能不能并行</td><td>能：答案已知，整段一起算</td><td>能：prompt 已知</td><td>不能：下一个字要等上一个</td></tr>
+    <tr><td>卡在哪</td><td>算力、通信</td><td>算力</td><td>显存带宽</td></tr>
+    <tr><td>显存装什么</td><td>权重、梯度、优化器状态</td><td colspan="2">权重＋每人的 KV</td></tr>
+    <tr><td>看什么</td><td>吞吐</td><td>首字延迟</td><td>字间隔，以及同时服务多少人</td></tr>
+  </table>
+  <p><b>prefill 就是训练的前向。</b>同样是大矩阵乘、吃算力，专题五那套切法和 kernel 大多能直接搬过来。</p>
+  <p><b>decode 是另一个故事。</b>训练时答案已知，整段序列一起算；decode 每一步只能出一个字，却要把全部权重和每人的 KV 读一遍。请求又随时到、长短不一，还要守住延迟。一颗很贵的芯片，大半时间在等搬运。</p>
 
   <h3 id="s1-1">1.1　一次喂几行，决定卡在哪</h3>
   <p>v7 按 bf16（每个数 2 字节）算，每读 1 字节要做满 313 次运算才不被带宽拖住，这叫屋脊点。
