@@ -12,7 +12,7 @@ HEAD = {
         'og:title': 'TPU vs GPU · focused edition (L200)',
         'og:description': 'Not a tour of spec sheets. Run the same FlashAttention on both chips '
                           'and watch where they start to diverge — every answer comes with a figure and a measurement.',
-        'zh': 'topic-02.html',
+        'zh': 'topic-02.html', 'fsa': 0.53,
     },
     'topic-02-L200-lecture': {
         'title': 'Topic 2 L200 · Instructor notes (lecture script)',
@@ -27,7 +27,7 @@ HEAD['topic-01'] = {
     'og:title': 'The Life of a Token',
     'og:description': 'Take DeepSeek V3 apart and follow one token end to end, doing the math at every step. '
                       'Every number on the page updates live with the parameters.',
-    'zh': 'topic-01.html',
+    'zh': 'topic-01.html', 'fsa': 0.53,
 }
 HEAD['topic-01-lecture'] = {
     'title': 'Topic 1 · Instructor notes (lecture script)',
@@ -55,11 +55,41 @@ HEAD['topic-03-lecture'] = {
     'zh': 'topic-03-lecture.html',
     'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
 }
+HEAD['topic-04'] = {
+    'title': 'Topic 4 · Backward Pass and Optimizers',
+    'og:title': 'Backward Pass and Optimizers · how one loss value becomes 671B parameter updates',
+    'og:description': 'What really happens in one training step: how the loss is computed, how that one number becomes '
+                      '671 billion derivatives, and how far each parameter should move once you have them. Three things, one chain.',
+    'zh': 'topic-04.html', 'fsa': 0.53,
+}
+HEAD['topic-04-lecture'] = {
+    'title': 'Topic 4 · Instructor notes (lecture script)',
+    'og:title': 'Backward Pass and Optimizers · instructor notes',
+    'og:description': "The teacher's draft: the spoken script, which figure to point at, likely questions, and what not to say.",
+    'zh': 'topic-04-lecture.html',
+    'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
+}
+HEAD['topic-05'] = {
+    'title': 'Topic 5 · Parallelism Strategies',
+    'og:title': 'Parallelism Strategies · trade one kind of communication for memory or compute',
+    'og:description': 'Meet the five collectives first, then cut one dimension at a time: data, weights, experts, sequence, '
+                      'and finally the work itself.',
+    'zh': 'topic-05.html', 'fsa': 0.53,
+}
+HEAD['topic-05-lecture'] = {
+    'title': 'Topic 5 · Instructor notes (lecture script)',
+    'og:title': 'Parallelism Strategies · instructor notes',
+    'og:description': "The teacher's draft: the spoken script, which figure to point at, likely questions, and what not to say.",
+    'zh': 'topic-05-lecture.html',
+    'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
+}
 # 有英文版的页面：中文 href → 英文 href（锚点保留）。其余中文页一律去链接。
 EN_MAP = {'index.html': 'index.en.html', 'topic-02.html': 'topic-02.en.html',
           'topic-02-L200-lecture.html': 'topic-02-L200-lecture.en.html',
           'topic-01.html': 'topic-01.en.html', 'topic-01-lecture.html': 'topic-01-lecture.en.html',
-          'topic-03.html': 'topic-03.en.html', 'topic-03-lecture.html': 'topic-03-lecture.en.html'}
+          'topic-03.html': 'topic-03.en.html', 'topic-03-lecture.html': 'topic-03-lecture.en.html',
+          'topic-04.html': 'topic-04.en.html', 'topic-04-lecture.html': 'topic-04-lecture.en.html',
+          'topic-05.html': 'topic-05.en.html', 'topic-05-lecture.html': 'topic-05-lecture.en.html'}
 # ⭐ 英文版字体用 Source Sans 3（Google Fonts）：Noto Sans CJK 的拉丁字形就是从它来的，
 #    所以图上标签的宽度跟检查时（本机 Noto CJK）一致；又避开了 CJK 字体把弯引号画成全角的问题，
 #    而且 iPhone / Mac 上不再回落到更宽的系统字体（作者 10-17 是在 iPhone 上看的）。
@@ -189,6 +219,20 @@ def main(topic, d):
     s = re.sub(r'(<nav class="tabs">.*?)(</nav>)', r'\1  <a href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>\n  \2' % zh, s, count=1, flags=re.S)
     if '🌐 中文' not in s:   # 没有讲义按钮可挂时，挂在面包屑末尾
         s = re.sub(r'(<div class="crumb">.*?)(</div>)', r'\1\n    <a class="lecbtn" href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>\2' % zh, s, count=1, flags=re.S)
+    # svgnum 是「数字」类（等宽），但不少图把纯文字标签也放进这个类：中文那里汉字落回无衬线，英文整串等宽。
+    # 按内容判断：以字母为主的 svgnum 标签改用无衬线（只在已复核的专题 fsa 开启时）
+    if h.get('fsa'):
+        def _wordnum(m):
+            tag, body = m.group(1), m.group(2)
+            txt = re.sub(r'<[^>]+>', '', body)
+            letters = len(re.findall(r'[A-Za-z]', txt)); digits = len(re.findall(r'[0-9]', txt))
+            if not re.search(r'[A-Za-z]{3,}', txt) or digits > letters * 0.3:
+                return m.group(0)
+            fam = 'font-family:' + LATIN.replace('"', "'") + ';'
+            if 'style="' in tag: tag = tag.replace('style="', 'style="' + fam, 1)
+            else: tag = tag[:-1] + ' style="' + fam + '">'
+            return tag + body + '</text>'
+        s = re.sub(r'(<text\b[^>]*\bclass="svgnum"[^>]*>)(.*?)</text>', _wordnum, s, flags=re.S)
     for a_, b_ in h.get('css', {}).items(): s = s.replace(a_, b_)
     # 讲义里「Section N」的页内链接按标题核对锚点（中文专题三讲义的 #cK 错了一位：#c2 写的是第二章，实为第一章）
     sec_id = {m.group(2): m.group(1) for m in re.finditer(r'id="(c\d+)"[^>]*>\s*Section (\d+)\b', s)}
