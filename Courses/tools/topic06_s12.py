@@ -33,6 +33,7 @@ __FIG_S12_CAP__
   <p>第三份最反直觉：v7 公开规格只列 BF16 和 FP8 峰值，没有 FP4 算力，照样能快。tpu-inference 的 MoE kernel 把 4 bit 权重块原样搬进片上，在 kernel 里和激活做点积，每块乘完再乘缩放；本课推测编译器在片上先解成更宽的格式再送进矩阵单元。贵的是从 HBM 搬，片上解一下便宜。</p>
   <p>GPU 上早算过同一笔账：Marlin（2024）让 4 bit 权重在寄存器里解回 FP16 再进张量核，batch 16 以内的矩阵乘接近 FP16 的 4 倍，接进 vLLM 端到端最多 2.8 倍。Blackwell 的张量核能直接算 FP4，那是另一条路。</p>
   <p>精度：本仓库在 v7x-8 上用 FP4 专家跑出 R1 的 GSM8K 94.9%（1319 题）、GLM-5.1 的 89.46%（5-shot，未调优）。两者口径不同，不横比；也都没有同条件的 FP8 分可对照，只能说跑出来了，不能说没掉点。同机 FP8 对 FP4 的吞吐也没有：R1 用 FP8 根本放不下。</p>
+__FIG_S12_LEDGER__
   <p>压完以后，专家那段缩了，注意力和 KV 原样不动，就成了一步里读得最多的部分。12.3 里 K2 Thinking 只称约快 2 倍、不是 4 倍，本课推测原因在这里。KV 怎么压见 12.8。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>
@@ -85,6 +86,8 @@ FIGS = {
         '<em>出自 OCP MX v1.0 规范与 NVIDIA NVFP4 博客。</em>'),
     "__FIG_S12_R1__": ("fig-s12-r1", "fig6-quant-r1.svg", "topic06-fig-quant.py",
         '<b>跟着一个权重走：存时加 8，读时不减，就差 8。</b><br><em>示意。</em>'),
+    "__FIG_S12_LEDGER__": ("fig-s12-ledger", "fig6-quant-ledger.svg", "topic06-fig-quant.py",
+        '<b>从上往下看橙段变短，蓝、灰两段一动不动。</b><br><em>按 config 推算，batch 1，只算权重。</em>'),
     "__FIG_S12_CAP__": ("fig-s12-cap", "fig6-quant-cap.svg", "topic06-fig-quant.py",
         '<b>看虚线右边那截淡红：换成 GiB 读，越界更多。</b><br><em>README 原值，每 device；两种单位都超。</em>'),
     "__FIG_S12_GRAPH__": ("fig-s12-graph", "fig6-quant-graph.svg", "topic06-fig-quant.py",

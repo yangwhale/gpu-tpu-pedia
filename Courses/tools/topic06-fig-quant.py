@@ -445,6 +445,58 @@ def fig_graph():
     f.save("fig6-quant-graph.svg", yb + 14)
 
 
+# ══ fig6-quant-ledger（L95 加，12.4）═══════════════════════════════════════
+# 回答：只压专家，一步要读的字节少多少？压完谁成了大头？
+# 数字：gpt-oss-120b config.json（hidden 2880、intermediate 2880、128 专家选 4、36 层、64 头、8 KV 头、head_dim 64、
+#   vocab 201,088）；模型卡 Table 1（Attention 0.96B、激活 5.13B）作锚点。专家权重 MXFP4 4.25 bit（模型卡）。
+# 本课推导（batch 1、每生成一个字、只算权重，不含 KV 和激活）：
+#   每个专家 3 × 2880² ≈ 24.9M（gate/up 合 2880×5760，down 2880×2880）；选中 4 个 × 36 层 ≈ 3.58B；
+#   注意力 2880 ×（4096＋512＋512＋4096）× 36 ≈ 0.955B，对上模型卡 0.96B；
+#   输出层 201,088 × 2880 ≈ 0.579B；三者合 5.12B，加路由约 13M，对上激活 5.13B。
+GO_H, GO_I, GO_L = 2880, 2880, 36
+GO_EXP = 4 * GO_L * 3 * GO_H * GO_I
+GO_ATT = GO_H * (64 * 64 + 2 * 8 * 64 + 64 * 64) * GO_L
+GO_OUT = 201088 * GO_H
+assert abs(GO_ATT / 1e9 - 0.96) < 0.01 and abs((GO_EXP + GO_ATT + GO_OUT + 128 * GO_H * GO_L) / 1e9 - 5.13) < 0.02
+LED = [("专家 BF16", 16.0), ("专家 FP8", 8.0), ("专家 MXFP4", 4.25)]
+LED_GB = [(lab, GO_EXP * b / 8 / 1e9, GO_ATT * 2 / 1e9, GO_OUT * 2 / 1e9) for lab, b in LED]
+assert round(LED_GB[0][1], 1) == 7.2 and round(LED_GB[2][1], 1) == 1.9 and round(LED_GB[0][2], 1) == 1.9
+LED_TOT = [e + a + o for _, e, a, o in LED_GB]
+assert round(LED_TOT[0] / LED_TOT[2], 2) == 2.06
+
+
+def fig_ledger():
+    f = Fig(W, "gpt-oss-120b 每生成一个字要读的权重字节，按组件堆成横条。三根条只有专家那段的格式不同。"
+               "专家 BF16 约 7.2 GB、FP8 约 3.6 GB、MXFP4 约 1.9 GB；注意力 BF16 约 1.9 GB、输出层约 1.2 GB 三根都一样。"
+               "合计约 10.2、6.7、5.0 GB。专家在整步里的占比从约七成降到不到四成（本课推导，batch 1，不含 KV）")
+    y0 = f.header("只压专家　——　<tspan font-weight=\"700\">整步字节约减半，不是减到四分之一</tspan>",
+                  "gpt-oss-120b · batch 1 · 每生成一个字读多少权重（GB，本课推导，不含 KV 和激活）",
+                  [(OR, "专家（选中的 4 个 × 36 层）"), (BL, "注意力 BF16"), (GY2, "输出层 BF16")])
+    PH = 268
+    py = f.panel(0, y0, W, PH, "三根条只换专家的格式", INK)
+    X0, SC = 230, 92.0
+    assert X0 + LED_TOT[0] * SC + 150 < W
+    yy = py + 40
+    for (lab, e, a, o), tot in zip(LED_GB, LED_TOT):
+        f.t(24, yy + 27, lab, INK, True, 16)
+        x = X0
+        for gb, col, txt in ((e, OR, "%.1f" % e), (a, BL, "%.1f" % a), (o, GY2, "%.1f" % o)):
+            f.box(x, yy + 4, gb * SC, 36, col, col, 4)
+            if gb * SC > wpx(txt, 15) + 12:
+                f.t(x + gb * SC / 2, yy + 28, txt, "#ffffff", True, 15, "middle")
+            x += gb * SC
+        f.t(x + 12, yy + 28, "合计 %.1f　专家占 %d%%" % (tot, round(e / tot * 100)), INK, True, 15)
+        yy += 74
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "BF16 → MXFP4：整步约 2.06 倍，FP8 → MXFP4 约 1.34 倍", [
+        "不动的那两段（蓝、灰）三根条一样长；上下文一长，还要再加一段 KV。"])
+    yb = f.src(yb + 10,
+               "gpt-oss-120b config.json（hidden 2880、intermediate 2880、128 专家选 4、36 层、64 头、8 个 KV 头、head_dim 64、词表 201,088）；"
+               "模型卡 Table 1（注意力 0.96B、激活 5.13B）作核对锚点；MXFP4 每参数 4.25 bit（模型卡）。",
+               "按 config 算的注意力 0.955B、激活 5.12B（另加路由约 0.01B）对上模型卡；字节、占比、倍数为本课推导，未计 KV、激活和缩放外的开销。")
+    f.save("fig6-quant-ledger.svg", yb + 14)
+
+
 fig_bytes()
 fig_mx()
 fig_r1()
@@ -452,3 +504,4 @@ fig_fuse()
 fig_cap()
 fig_kvlayout()
 fig_graph()
+fig_ledger()
