@@ -2554,7 +2554,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>批处理与调度：一趟分给更多人</h2></div>
   <p class="lead">第一节算过：decode 每一步把权重搬一遍，同一趟坐的人越多，每人摊到的越少。最早的服务一批人一起进、一起出，先答完的人座位空着，等最慢的那个。
-    <b>调度决定这一趟能坐满几个人。</b>两招：2022 年 Orca 让每一步都能有人进出，同延迟吞吐是 FasterTransformer（NVIDIA 早年的推理库）的 36.9 倍（GPT-3 175B）；2024 年 Sarathi-Serve 把长 prompt 切块塞进 decode 的步里，延迟达标时能接的请求是 vLLM 的 2.6–3.7 倍。</p>
+    <b>调度决定这一趟能坐满几个人。</b></p>
 
   <h3 id="s3-1">3.1　每一步都重新排一次</h3>
 <figure class="fbox fwide" id="fig-s3-gantt"><svg viewBox="0 0 1400 632" width="100%" role="img" aria-label="四个槽位、八个请求，各要 3、8、2、5、6、2、7、4 步。上：静态 batch，凑满四个一起跑，最长的 B 跑 8 步，其余三个早就跑完了，槽位空等；整批返回后才放下一批进来，总共 15 步，空转 23 格。下：逐步调度，每一步结束都看一次，哪个槽位空了就立刻塞进下一个排队的请求，总共 12 步，空转 11 格全在最后队列空了之后"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2783,13 +2783,12 @@ body.figonly section h3{margin-top:34px}
        aria-label="静态批与连续批动画。标题：同样 4 个槽位、同一串请求：两种排法。上下两组各 4 个槽位，标着槽 1 到槽 4；上组叫「静态批：凑满一批，等最长的做完」，下组叫「连续批：每一步都重新排，谁做完谁让位」。每一列是一步，每个请求一种颜色，字母 A 到 O 标在它的第一格；灰格是槽位空转。一条黄色竖线随时间往右走，右边两个计数器写「做完几个」，底下写「已走几步」，右下角写「请求长度是示意」。字幕依次是：16 个请求排队，长短不一；每一列是一步 decode，每一步都要搬一趟权重。上面：短的早做完了，槽位也得空等最长的那个（灰格＝这一趟白搬）。下面：谁做完，下一步就换排队的下一个进来，槽位一格不空。最后：同样 15 步：静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。画面复位。"></video>
 <figcaption>动画里队列一直不空，看两组各做完几个。
   <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill。）</span></figcaption></figure>
-  <p>Orca 是 2022 年 OSDI 上的一篇论文，也是论文里做的那套服务系统。今天没人直接跑它，跑的是它的招：论文叫迭代级调度，业界后来通称连续批（continuous batching），vLLM、SGLang 都按步调度。</p>
+  <p>Orca 是 2022 年 OSDI 上的一篇论文，也是论文里做的那套服务系统。今天没人直接跑它，跑的是它的招：论文叫迭代级调度，业界后来通称连续批（continuous batching），vLLM、SGLang 都按步调度。同延迟下，吞吐是 FasterTransformer（NVIDIA 早年的推理库）静态批的 36.9 倍（GPT-3 175B）。</p>
   <ul>
     <li><b>原来卡在哪：</b>老引擎对外只有「整批跑完」一个接口，调度器看不见中间的步；一批摞成「人数 × 最长长度」的方块，短的补零，中途换不掉一行。</li>
     <li><b>Orca 第一招，只跑一步就交回：</b>每步结束调度器都看一次，写完的马上返回、让座，排队的装得下就补进来。</li>
     <li><b>第二招，选择性批处理：</b>矩阵乘、归一化不管 token 属于谁，就把这一步所有人的 token 接成一长条，一起乘权重；只有注意力按人切开，各读各的 KV。</li>
     <li><b>挂不同 LoRA 的人也能拼：</b>基座权重照样共享一趟，只把各人的小矩阵另算。S-LoRA（2023）同时服务几千个适配器，吞吐最多是 HF PEFT、vLLM 简单做法的 4 倍；vLLM 用 <code>--enable-lora</code>、<code>--max-loras</code> 开。</li>
-    <li><b>还缺一半：</b>Orca 的 KV 仍按最大长度给每人预留连续一段，4.3 里利用率 20.4%–38.2% 的旧系统就是按它复现的。PagedAttention 改成按块领，配上按页表读的注意力 kernel，长短不一的一批一次算完，座位才多起来。</li>
   </ul>
 
   <h3 id="s3-2">3.2　新人进门那一步：chunked prefill</h3>
@@ -2849,11 +2848,11 @@ body.figonly section h3{margin-top:34px}
 <p>本课程作者实测：gpu-tpu-pedia tpu/tpu-inference/Gemma4-31B/README.md:225-226（TPU v7x 上 --max-num-batched-tokens 16384，256K prompt 切成 16 块 16K）。</p>
 <p>⚠️ 示意：格子数是编排的。混合步按相加计时偏保守，Sarathi 的观察是 decode 搭在 prefill 上几乎不额外花时间。</p></details></figure>
   <p>新请求的长 prompt 一口吞下，那一步就特别长，正在出字的人都卡一下。</p>
-  <p>Sarathi（arXiv <a href="https://arxiv.org/abs/2308.16369" target="_blank" rel="noopener">2308.16369</a>）和 Sarathi-Serve（arXiv <a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener">2403.02310</a>）把 prompt 切成小块，每步只带一块和 decode 拼着走，哪步都不会被拉长。
+  <p>Sarathi（arXiv <a href="https://arxiv.org/abs/2308.16369" target="_blank" rel="noopener">2308.16369</a>）和 Sarathi-Serve（arXiv <a href="https://arxiv.org/abs/2403.02310" target="_blank" rel="noopener">2403.02310</a>）把 prompt 切成小块，每步只带一块和 decode 拼着走，哪步都不会被拉长；延迟达标时能接的请求是 vLLM 的 2.6–3.7 倍。
     引擎里 vLLM 2024 年 4 月先合入，SGLang 同年 7 月跟进；vLLM V1 默认打开，decode 先上车；每步塞多少 token 由 max_num_batched_tokens 控制。</p>
   <p>TPU v7x 上跑 Gemma4-31B 的公开记录把它设成 16,384，256K 的 prompt 切成 16 块。</p>
   <ul>
-    <li><b>块多大，看每步的 token 预算。</b>decode 的人先占位，每人一个 token，剩下的额度才给 prefill，所以块长随 decode 人数浮动。vLLM 按显存定默认：160 GB 以上的卡 16,384；70 GB 以上（A100 除外，调大反而掉吞吐）起 API 服务 8,192；更小的卡 2,048。SGLang 也按显存分档：H100 一档 8,192，B200 一档 16,384。预算小，出字间隔稳，首字晚；预算大则相反。</li>
+    <li><b>块多大，看每步的 token 预算。</b>decode 的人先占位，每人一个 token，剩下的额度才给 prefill，所以块长随 decode 人数浮动。vLLM、SGLang 的默认都按显存分档，大显存卡 16,384，中档 8,192。预算小，出字间隔稳，首字晚；预算大则相反。</li>
     <li><b>后面的块要读前面全部的 KV，算得更慢。</b>矩阵乘部分每块一样重；注意力部分要和前面所有 token 配对，随位置线性涨。V3 粗算（本课推导）：线性部分每 token 约 740 亿次运算（激活 37B × 2）；注意力每多看一个历史 token 多约 500 万次（2 ×（192＋128）× 128 头 × 61 层）。历史超过约 1.5 万 token 后注意力反超；128K 的 prompt 切 8K 一块，末块约是首块的 7 倍，那一步也随之变长。</li>
     <li><b>切块不会多读 KV。</b>FlashAttention 本来就把 query 切成一百多个 token 的小块，每个小块各扫一遍前面的 KV；切不切块，扫的次数和内容都一样，只是分到不同的步里。注意力的总运算量也不变。</li>
     <li><b>块不能太小，代价在权重。</b>每走一步，权重都要从 HBM 读一遍。H100 每字节带宽配约 300 次运算（989 TFLOPS ÷ 3.35 TB/s），bf16 下一步至少约 300 个 token 矩阵乘才喂得饱（本课推导）。MoE 更苛刻：V3 每个 token 只去 256 个专家里的 8 个，要每个专家凑够 300 个，一步得有 9 千多个 token。默认预算落在 8K–16K，与此吻合。</li>
