@@ -74,11 +74,10 @@ __FIG_S0_ENGINES__
   </table>
   <p>两家共用的外部部件：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。间隔都按两边日期本课推导，往下取整；全部出处见第十五节台账「R85 补充」「L80 补充」。</p>
   </details>
-  <h3 id="s0-2">0.2　一个请求的一生</h3>
+  <h3 id="s0-2">0.2　一个请求的一生，和全课一句话</h3>
 __FIG_S0_LIFE__
   <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
-
-  <h3 id="s0-3">0.3　全课一句话</h3>
+  <p>几个人同时 decode 时，权重这一趟大家共用：读一遍，每人各出一个字。KV 不行，它是每个人自己的历史，各读各的（第一节）。</p>
   <div class="note ok"><span class="t">一句话</span>
     <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
     还有一类不碰这一趟：把两段拆开，各放合适的机器。</div>

@@ -1228,7 +1228,7 @@ body.figonly section h3{margin-top:34px}
   </table></div>
   <p>两家共用的外部部件：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。间隔都按两边日期本课推导，往下取整；全部出处见第十五节台账「R85 补充」「L80 补充」。</p>
   </details>
-  <h3 id="s0-2">0.2　一个请求的一生</h3>
+  <h3 id="s0-2">0.2　一个请求的一生，和全课一句话</h3>
 <figure class="fbox fwide" id="fig-s0-life"><svg viewBox="0 0 1400 824" width="100%" role="img" aria-label="一个请求的一生，示意时间线。请求进门后可能先排队；然后 prefill 一次把整段 prompt 算完，同时把 prompt 每个 token 的 KV 写进显存，算完吐出第一个字。从进门到第一个字的时间叫 TTFT。之后进入 decode：每一步只出一个字，每一步都要把全部权重和到目前为止的全部 KV 从显存读一遍，KV 每一步长一格。相邻两个字之间的时间叫 TPOT。出到结束符为止。prefill 一次读权重分给整段 prompt，吃的是算力；decode 一次读权重只出一个字，吃的是带宽"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个请求的一生　——　<tspan font-weight="700">一大块 prefill，接一长串一步一字的 decode</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意时间线，格子长短不按比例。上：在做什么、何时出字；中：显存里的 KV 有多长；下：decode 每一步要从显存读什么</text>
@@ -1333,8 +1333,7 @@ body.figonly section h3{margin-top:34px}
 <p>📌 TTFT、TPOT 的定义按 vLLM 的 benchmark_serving：TTFT 从请求发出算到第一个输出 token，TPOT 是除第一个 token 外平均每个输出 token 的时间。第二节会细讲它们的口径（含不含排队、平均还是 p99）。</p>
 <p>⚠️ 「第一个字由 prefill 产出」是标准实现：prefill 的最后一个位置直接给出第一个输出 token 的分布。</p></details></figure>
   <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
-
-  <h3 id="s0-3">0.3　全课一句话</h3>
+  <p>几个人同时 decode 时，权重这一趟大家共用：读一遍，每人各出一个字。KV 不行，它是每个人自己的历史，各读各的（第一节）。</p>
   <div class="note ok"><span class="t">一句话</span>
     <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
     还有一类不碰这一趟：把两段拆开，各放合适的机器。</div>

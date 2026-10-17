@@ -242,7 +242,7 @@ Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进 Kimi 线上。
 ⚠️ <b>「约 100 Gbps 的专线」是反推的</b>：案例平均出口 13 Gbps 占整条的 13%；+54% 和「同等成本约 +15%」要一起说，别只报前一个。<br>
 ⚠️ 8.6 坑清单台上不讲，<em>被问到翻课件</em>；最常被问的是重算策略约 17% 的税。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
-🧑‍🎓 新人「connector 是什么？」→ 推理引擎里在 prefill、decode 两端收发 KV 的插件，课件 0.3 词表就这么写；TPU 上用的是 TPUConnector，8.3 有。<br>
+🧑‍🎓 新人「connector 是什么？」→ 推理引擎里在 prefill、decode 两端收发 KV 的插件，课件 0.2 词表就这么写；TPU 上用的是 TPUConnector，8.3 有。<br>
 🛠 GPU 老兵「Mooncake 和 NIXL 到底谁快？」→ vLLM 上 Mooncake 走 NVLink 加简易代理，KV 是快了，整体反而更慢：并发 64 输出 1,333 对 NIXL 的 1,693。换到 SGLang 又是 Mooncake 能用，所以只问这个引擎上哪条路通。<br>
 🛠 GPU 老兵「DistServe 那个 7.4 倍怎么读？」→ 九成请求达标时，能接的是当时不拆的主流系统的 7.4 倍，是论文在自己负载上的数；拿到自己的集群要重扫配比，第九节。<br>
 💰 管预算的「要不要上 RDMA 网卡？」→ 一条 8K prompt 的 KV 约 1.04 GB：800 Gbps 网卡约 10 ms（本课推的），跌到每秒 200 MB 就要五秒多。先确认带宽真跑到设计值，再谈加卡。<br>
