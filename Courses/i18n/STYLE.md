@@ -88,3 +88,11 @@ about 1.7 × N Latin characters** (digits and spaces included).
 
 Do not silently fix facts. Write the issue into the chunk's notes file
 (`NOTES-<chunk>.md`) with the original sentence and why. Translate what is there.
+
+## 图内英文字号规范（2026-10-17 专题一并排审后定）
+- 同 px 下拉丁字看着比中文小约 20–25%，所以英文图字要比中文 class 字号略大，且**同一张图内统一**
+- 图标题 / 图内分区标题：14px 左右，成对标题（A/B、①/②、左右两栏）必须同号，最大不超过 15px
+- 正文标签：svglbl 12 → 13.5px；svgsm 10.5 → 11.5px；等宽数字可保持 class 字号；最小 11px（等宽 10.5px）
+- 放不下就**缩短英文**（保意思、保数字），不许再往小里缩；实在不行才挪位置
+- JS 画的图要在 序列 512/4K/128K/1M × batch 1/8/64 × bf16/fp8/fp32 全部组合下不溢出不重叠
+- 手机端：表头允许换行（assemble 已注入），关键列不能被挤出屏幕
