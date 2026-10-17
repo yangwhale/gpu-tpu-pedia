@@ -259,6 +259,59 @@ def fig_dep_state():
     f.save("fig6-dep-state.svg", yb + 14)
 
 
+def fig_tbo():
+    """双微批（DeepSeek 叫 dual-batch overlap，SGLang 叫 TBO）：拆两半，一个传、一个算。示意。"""
+    f = Fig(W, "双微批示意。上面一整批：每层先算注意力，再把 token 分发给专家所在的卡，算完专家再汇回来，"
+               "分发和汇回的时候计算单元空等。下面拆成 A、B 两个微批：A 在传的时候 B 在算，计算那一行一直排满，"
+               "整趟前向提前结束。时长是示意，通信取同一批计算时长的八成")
+    y0 = f.header("双微批：传的时候，别让算力干等",
+                  "两层 MoE 的一趟前向。每层四步：算注意力 → 分发给专家 → 算专家 → 汇回。时长是示意，不按实测",
+                  [(BL, "计算"), (OR, "卡间通信（all-to-all）")])
+    U, X0, RH = 62, 170, 46                       # 一个单位多宽；时间轴起点；行高
+    def lane(py, rows, segs, total):
+        for i, name in enumerate(rows):
+            f.t(X0 - 14, py + i * (RH + 14) + 29, name, INK, True, 16, anchor="end")
+            f.box(X0, py + i * (RH + 14), total * U, RH, "none", "#e0e3e7", 4, 1, dash="4 4")
+        for row, t0, dt, lab, col in segs:
+            yy = py + row * (RH + 14)
+            f.box(X0 + t0 * U, yy, dt * U - 3, RH, "#e8f0fe" if col == BL else "#fef3e0", col, 4, 1.4)
+            f.t(X0 + t0 * U + dt * U / 2 - 1.5, yy + 29, lab, col, True, 14, anchor="middle")
+    steps = ("注意力", "分发", "专家", "汇回")
+    # 上：一整批。计算 2 单位，通信 1.6 单位（示意）
+    PH = 158
+    py = f.panel(0, y0, W, PH, "不拆：传的时候，计算单元空等", RD)
+    segs, t = [], 0.0
+    for _ in range(2):
+        for k, st in enumerate(steps):
+            dt = 2.0 if k % 2 == 0 else 1.6
+            segs.append((k % 2, t, dt, st, BL if k % 2 == 0 else OR))
+            t += dt
+    lane(py + 14, ("算", "传"), segs, 14.4)
+    f.t(X0 + 14.4 * U + 14, py + 48, "结束", RD, True, 16)
+    f._pan = None
+    # 下：两个微批。每半批计算 1、通信 0.8
+    y1 = y0 + PH + 18
+    py = f.panel(0, y1, W, PH, "拆成 A、B 两半：A 传的时候 B 在算，计算那一行排满", GR)
+    segs = []
+    for i in range(8):
+        mb = "A" if i % 2 == 0 else "B"
+        st = steps[(i // 2) % 2 * 2]              # 注意力、注意力、专家、专家……
+        segs.append((0, i, 1.0, mb + " " + st, BL))
+        segs.append((1, i + 1, 0.8, mb + " " + steps[(i // 2) % 2 * 2 + 1], OR))
+    lane(py + 14, ("算", "传"), segs, 14.4)
+    f.t(X0 + 8.8 * U + 14, py + 48, "结束", GR, True, 16)
+    f.box(X0 + 8.8 * U + 70, py + 14, (14.4 - 8.8) * U - 70, 2 * RH + 14, "#f1f3f4", "none", 4, 0)
+    f.t(X0 + (8.8 + 14.4) / 2 * U + 35, py + 14 + RH + 12, "省下的这段", GR, True, 16, anchor="middle")
+    f._pan = None
+    yb = f.band(y1 + PH + 20, "warn", "前提：每半批还得够大", [
+        "拆开后每半批更难把计算喂饱。SGLang 实测 decode 每卡 32 个 token 时反而慢 27%，256 个时快 25.5%。"])
+    yb = f.src(yb + 10,
+               "做法：DeepSeek open-infra-index 第六天（Inference System Overview）：prefill 两个微批交替，一个的通信藏进另一个的计算；decode 各步时长不均，把注意力拆成两段，走 5 段流水。",
+               "数字：LMSYS 博客 2025-05-05（大规模 EP）的 TBO 消融；vLLM vllm/config/parallel.py 的 enable_dbo、dbo_decode_token_threshold（默认 32）。时长比例是示意，本课自定。")
+    f.save("fig6-tbo.svg", yb + 14)
+
+
 fig_dep_kv()
 fig_dep_tpu()
 fig_dep_state()
+fig_tbo()

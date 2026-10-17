@@ -49,7 +49,16 @@ __FIG_S6_TPU__
   <ul>
     <li><b>读得少</b>：每卡只读几个专家，一步更快，显存空给 KV。</li>
     <li><b>车坐得满</b>：上百张卡的请求汇到同一个专家，每步行数从 1.4 节算的平均 8 行往上涨，朝屋脊点靠近。</li>
-    <li><b>通信藏起来</b>：把 token 送到所选专家所在的卡，这步 all-to-all 用 DeepEP（DeepSeek 开源）；一批拆成两个微批，一个传、一个算。</li>
+    <li><b>通信藏起来</b>：把 token 送到所选专家所在的卡，这步 all-to-all 用 DeepEP（DeepSeek 开源）；一批拆成两个微批，一个传、一个算（6.8）。</li>
+  </ul>
+
+  <h3 id="s6-8">6.8　双微批：一批拆两半，一个传、一个算</h3>
+  <p>大 EP 每层要传两趟：先把 token 分发到专家所在的卡，算完再汇回。传的时候，计算单元空等。DeepSeek 把一批拆成两个微批：A 在传，B 就在算。SGLang 叫它 TBO，vLLM 叫 DBO，都是这一招。</p>
+  __FIG_S6_TBO__
+  <ul>
+    <li><b>prefill 最赚</b>：SGLang 实测，每卡 token 数相同时快 27%～35%；拆开还省显存，每卡能塞 16,384 个 token，比不拆时调到最好再快 40.5%。</li>
+    <li><b>decode 看批多大</b>：每卡 256 个 token 时快 25.5%，32 个时反而慢 27%，半批太小，kernel 吃不饱。vLLM 默认一批纯 decode 不超过 32 个 token 就不拆。</li>
+    <li><b>decode 拆得更细</b>：各步长短不一，DeepSeek 把注意力再切成两段，排成 5 段流水。</li>
   </ul>
 
   <div class="note ok"><span class="t">回到主线</span>
@@ -70,6 +79,9 @@ FIGS = {
     "__FIG_S6_STATE__": ("fig-s6-dep-state", "fig6-dep-state.svg", "topic06-fig-dep.py",
         '<b>比同一位置的两张卡：左边格子全满，右边每卡只亮两列。</b><br>'
         '<em>格子是示意，头数、槽数不按实际；「切头只有 TP」为本课推导。</em>'),
+    "__FIG_S6_TBO__": ("fig-s6-tbo", "fig6-tbo.svg", "topic06-fig-dep.py",
+        '<b>看「算」那一行：上面有空档，下面排满。</b><br>'
+        '<em>时长是示意，省下的比例不按实测；实测 prefill 快 27%～35%。</em>'),
     "__FIG_S6_TPU__": ("fig-s6-dep-tpu", "fig6-dep-tpu.svg", "topic06-fig-dep.py",
         '<b>两条线在 256 到 512 之间交叉：decode 为主的那条后来居上。</b><br>'
         '<em>输出吞吐；折线两端标 TP → DP 的绝对值。专家都走 EP，只换注意力的切法。</em>'),
