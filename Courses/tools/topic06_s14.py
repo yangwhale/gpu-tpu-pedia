@@ -7,6 +7,7 @@ Kimi K3 在三处做对照（装得下、跑得对、跑得快）。
 
 BODY = '''
   <p class="lead">前面十三节的招数，落到一个模型上要按顺序过关。主线是 Qwen3.5-397B（FP8）在一台 v7x-8 上：8 颗芯片，60 层里 45 层线性注意力、15 层全注意力，每层 512 个专家选 10 个。<b>六道关：装得下、起得来、跑得对、跑得快、拆得开、扛得住。</b>Kimi K3 在其中三关做对照。</p>
+__FIG_S14_CLIMB__
 
   <h3 id="s14-1">14.1　装得下：注意力和 MoE 各切各的</h3>
   <p>字节不是问题：8 颗芯片 1.5 TiB HBM，FP8 权重四百来 GB（本课按参数量估），KV 也存 FP8。<b>墙在切法：</b>全注意力层只有 2 个 KV 头，8 路 TP 切不开，每份 KV 要复制 4 份（<a href="#s6-2">6.2</a>）。</p>
@@ -69,6 +70,8 @@ __FIG_S13_ROUTE__
 '''
 
 FIGS = {
+    "__FIG_S14_CLIMB__": ("fig-s14-climb", "fig6-climb.svg", "topic06-fig-climb.py",
+        '<b>看红框那级：最难的一关是两个不报错的毛病。</b><br><em>台阶高度只表示先后；橙旗是 Kimi K3 在同一关走的另一条路。墙和修法出处见正文各小节。</em>'),
     "__FIG_S13_COLD__": ("fig-s13-cold", "fig6-s13-cold.svg", "topic06-fig-serve.py",
         '<b>看三次里最长那段：GLM 和 Qwen3-Coder 是编译，MiMo 是权重加载。</b><br><em>上为 GLM-5.1 一次冷启动放大，下为另外两次的构成；各段时长取自原记录的日志拆账。</em>'),
     "__FIG_S13_ROUTE__": ("fig-s13-route", "fig6-s13-route.svg", "topic06-fig-serve.py",

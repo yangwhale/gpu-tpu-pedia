@@ -10118,6 +10118,99 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 <section id="s十四"><div class="wrap"><div class="stn"><span class="badge">第 十四 节</span><h2>落地：TPU 服务化与编排</h2></div>
   <p class="lead">前面十三节的招数，落到一个模型上要按顺序过关。主线是 Qwen3.5-397B（FP8）在一台 v7x-8 上：8 颗芯片，60 层里 45 层线性注意力、15 层全注意力，每层 512 个专家选 10 个。<b>六道关：装得下、起得来、跑得对、跑得快、拆得开、扛得住。</b>Kimi K3 在其中三关做对照。</p>
+<figure class="fbox fwide" id="fig-s14-climb"><svg viewBox="0 0 1400 656" width="100%" role="img" aria-label="六级台阶从左往右升高，依次是装得下、起得来、跑得对、跑得快、拆得开、扛得住，台阶高度只表示先后。每级写着撞上的墙（红）和修法（绿）。第三级跑得对用红框突出：块编号池大了 3.5 倍被静默钳回、bf16 递推死循环，两个毛病都不报错。三面橙色旗挂在装得下、跑得对、跑得快上方，是 Kimi K3 走的另一条路：DEP8 加载即 OOM；KDA 不能按序列切；batch 1 到 8 时整个模型写成一次 Pallas 调用"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">落地六道关　——　<tspan font-weight="700">最难的一关不报错</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Qwen3.5-397B（FP8）在一台 v7x-8 上从零到上线。每级台阶 ＝ 撞上的墙 → 修法；台阶高度只表示先后</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">墙</text>
+<rect x="62.68" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="83" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">修法</text>
+<rect x="141.04" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="162" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">Kimi K3 的另一条路</text>
+<rect x="0" y="102" width="1400" height="500" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按顺序过关</tspan></text>
+<rect x="20.0" y="376" width="216.66666666666666" height="196" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="20.0" y="376" width="216.66666666666666" height="8" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="36" y="416" fill="#174ea6" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="64" y="416" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">装得下</tspan></text>
+<text class="svgsm" x="36" y="448" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
+<text class="svgsm" x="60" y="448" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">2 个 KV 头，</text>
+<text class="svgsm" x="60" y="469" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">8 路 TP 切不开</text>
+<text class="svgsm" x="36" y="504" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
+<text class="svgsm" x="60" y="504" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">注意力按请求切，</text>
+<text class="svgsm" x="60" y="525" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">MoE 按专家切</text>
+<line x1="44.0" y1="354" x2="44.0" y2="376" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="28.0" y="274" width="208.66666666666666" height="80" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="40" y="298" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">K3</tspan></text>
+<text class="svgsm" x="40" y="320" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">DEP8 每个 rank 存整池状态，</text>
+<text class="svgsm" x="40" y="339" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">加载即 OOM，退回 TP</text>
+<rect x="248.66666666666666" y="340" width="216.66666666666666" height="232" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="248.66666666666666" y="340" width="216.66666666666666" height="8" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="264" y="380" fill="#174ea6" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="292" y="380" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">起得来</tspan></text>
+<text class="svgsm" x="264" y="412" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
+<text class="svgsm" x="288" y="412" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">没编过的档，</text>
+<text class="svgsm" x="288" y="433" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">首个请求等 60–90 s</text>
+<text class="svgsm" x="264" y="468" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
+<text class="svgsm" x="288" y="468" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">开服前预编译；</text>
+<text class="svgsm" x="288" y="489" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">分清编译和搬字节</text>
+<rect x="477.3333333333333" y="304" width="216.66666666666666" height="268" rx="6" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<rect x="477.3333333333333" y="304" width="216.66666666666666" height="8" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="493" y="344" fill="#a50e0e" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="521" y="344" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">跑得对</tspan></text>
+<text class="svgsm" x="493" y="376" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
+<text class="svgsm" x="517" y="376" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">块池大 3.5 倍，</text>
+<text class="svgsm" x="517" y="397" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">越界被静默钳回；</text>
+<text class="svgsm" x="517" y="418" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">bf16 递推死循环</text>
+<text class="svgsm" x="493" y="453" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
+<text class="svgsm" x="517" y="453" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">每层各存一份池；</text>
+<text class="svgsm" x="517" y="474" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">5 处提到 FP32</text>
+<line x1="501.3333333333333" y1="282" x2="501.3333333333333" y2="304" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="485.3333333333333" y="202" width="208.66666666666666" height="80" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="497" y="226" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">K3</tspan></text>
+<text class="svgsm" x="497" y="248" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">手册写明 KDA 不能</text>
+<text class="svgsm" x="497" y="267" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">按序列切，切了数全错</text>
+<rect x="706.0" y="268" width="216.66666666666666" height="304" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="706.0" y="268" width="216.66666666666666" height="8" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="722" y="308" fill="#174ea6" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="750" y="308" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">跑得快</tspan></text>
+<text class="svgsm" x="722" y="340" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
+<text class="svgsm" x="746" y="340" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">MoE 占 prefill 八成，</text>
+<text class="svgsm" x="746" y="361" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">通信露在外面</text>
+<text class="svgsm" x="722" y="396" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
+<text class="svgsm" x="746" y="396" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">一层 MoE 融成</text>
+<text class="svgsm" x="746" y="417" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">一个 Pallas 程序</text>
+<line x1="730.0" y1="246" x2="730.0" y2="268" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="714.0" y="166" width="208.66666666666666" height="80" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="726" y="190" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">K3</tspan></text>
+<text class="svgsm" x="726" y="212" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">batch 只有 1–8：</text>
+<text class="svgsm" x="726" y="231" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">整个模型一次 Pallas 调用</text>
+<rect x="934.6666666666666" y="232" width="216.66666666666666" height="340" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="934.6666666666666" y="232" width="216.66666666666666" height="8" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="950" y="272" fill="#174ea6" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="978" y="272" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆得开</tspan></text>
+<text class="svgsm" x="950" y="304" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
+<text class="svgsm" x="974" y="304" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">每个请求整份</text>
+<text class="svgsm" x="974" y="325" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">要搬约 349 MB</text>
+<text class="svgsm" x="950" y="360" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
+<text class="svgsm" x="974" y="360" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">单机装得下就别拆：</text>
+<text class="svgsm" x="974" y="381" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">单并发只有 0.95 倍</text>
+<rect x="1163.3333333333333" y="196" width="216.66666666666666" height="376" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1163.3333333333333" y="196" width="216.66666666666666" height="8" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1179" y="236" fill="#174ea6" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="1207" y="236" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">扛得住</tspan></text>
+<text class="svgsm" x="1179" y="268" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
+<text class="svgsm" x="1203" y="268" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">注册表在线 ≠ 活着；</text>
+<text class="svgsm" x="1203" y="289" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">前缀被副本摊薄</text>
+<text class="svgsm" x="1179" y="324" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
+<text class="svgsm" x="1203" y="324" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">真发请求判活；</text>
+<text class="svgsm" x="1203" y="345" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">KV 感知路由</text>
+<line x1="20" y1="590" x2="1380" y2="590" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+</svg><figcaption><b>看红框那级：最难的一关是两个不报错的毛病。</b><span class="capmore"><br><em>台阶高度只表示先后；橙旗是 Kimi K3 在同一关走的另一条路。墙和修法出处见正文各小节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Qwen3.5 各关的墙与修法取自 tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md（块池约 3.5 倍、5 处提 FP32、冷启动约 7 min、PD 每请求约 349 MB、单并发 0.95 倍）；60–90 s 与「MoE 占 prefill 约八成」同正文出处。台阶高度是示意，不代表难度或收益。</p>
+<p>K3 三面旗：DEP8 加载 OOM、69 层 KDA 不能按序列切取自 SGLang 的 K3 部署手册；megakernel 取自 inferact.ai/blog/tpu-megakernels。</p></details></figure>
 
   <h3 id="s14-1">14.1　装得下：注意力和 MoE 各切各的</h3>
   <p>字节不是问题：8 颗芯片 1.5 TiB HBM，FP8 权重四百来 GB（本课按参数量估），KV 也存 FP8。<b>墙在切法：</b>全注意力层只有 2 个 KV 头，8 路 TP 切不开，每份 KV 要复制 4 份（<a href="#s6-2">6.2</a>）。</p>
