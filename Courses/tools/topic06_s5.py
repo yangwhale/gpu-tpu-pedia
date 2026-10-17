@@ -10,7 +10,7 @@ BODY = '''
 __FIG_S5_AMORTIZE__
   <p>batch 小、序列长时，注意力的活只按 batch 和头分给计算单元，份数太少，单元大半闲着。
     Flash-Decoding（斯坦福 CRFM 博客，2023-10）把每条序列的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。</p>
-  <p>名字借自 2022 年的 FlashAttention：注意力切块放进 SRAM（小而快的片上存储）算，不再把整张分数表写回显存。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 的速度最多是 FlashAttention 等旧实现的 8 倍。</p>
+  <p>名字借自 FlashAttention（0.1）。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 最多是旧实现的 8 倍。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
   <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention，2025 年进 vLLM 的 TPU 后端）把两者放进同一个注意力 kernel（arXiv 2604.15464 §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
@@ -31,7 +31,7 @@ __FIG_S5_MLA__
   <h3 id="s5-5">5.5　decode 的 MoE：全算比排序便宜</h3>
   <p>1.4 算过，decode 时每个专家平均只分到几行；与其按专家把 token 排序分组，不如让所有 token 都过一遍，没选中的乘 0。</p>
 __FIG_S5_DENSE__
-  <p>搬行本身也能这样换：tpu-inference#2674 在 batch 小时把排序和还原换成「one-hot 矩阵 × 隐状态」，一次规整的矩阵乘代替按下标取行。Qwen3.5 并发 64 实测总吞吐 +14.5%（1K 进 8K 出）、+7.3%（8K 进 1K 出）；合入后默认关，要用环境变量开。</p>
+  <p>搬行本身也能这样换：tpu-inference 2026 年 5 月合入的一项改动，在 batch 小时把排序和还原换成「one-hot 矩阵 × 隐状态」，一次规整的矩阵乘代替按下标取行。Qwen3.5 并发 64 实测总吞吐 +14.5%（1K 进 8K 出）、+7.3%（8K 进 1K 出）；合入后默认关，要用环境变量开（出处见第十六节台账）。</p>
 
   <h3 id="s5-6">5.6　小 AllReduce 是延迟问题</h3>
 __FIG_S5_ALLREDUCE__

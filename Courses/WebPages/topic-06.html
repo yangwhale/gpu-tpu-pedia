@@ -3860,7 +3860,7 @@ body.figonly section h3{margin-top:34px}
 <p>注意力每字节 8 次运算的推导见专题三 §3.1 图下：读 4·S·d 字节、算 4·G·S·d 次，比值 ＝ G。</p></details></figure>
   <p>batch 小、序列长时，注意力的活只按 batch 和头分给计算单元，份数太少，单元大半闲着。
     Flash-Decoding（斯坦福 CRFM 博客，2023-10）把每条序列的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。</p>
-  <p>名字借自 2022 年的 FlashAttention：注意力切块放进 SRAM（小而快的片上存储）算，不再把整张分数表写回显存。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 的速度最多是 FlashAttention 等旧实现的 8 倍。</p>
+  <p>名字借自 FlashAttention（0.1）。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 最多是旧实现的 8 倍。</p>
 
   <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
   <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention，2025 年进 vLLM 的 TPU 后端）把两者放进同一个注意力 kernel（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
@@ -4198,7 +4198,7 @@ body.figonly section h3{margin-top:34px}
 <p>TPU v7 每芯片 7.37 TB/s、FP8 4,614 TFLOP/s（Google Cloud 公开规格），一芯片对软件是 2 个 device，单 device 按一半算：3.685 TB/s、BF16 1,153.5、FP8 2,307 TFLOP/s。</p>
 <p>本课推导：一个专家 3 × 7168 × 2048 ＝ 44,040,192 个参数；全算 ＝ 2 × 256 × 44,040,192 次运算。两边都按峰值算，没算排序和搬行本身的耗时（取决于实现，没有公开的同口径数据）。均匀路由时 256 个 token 下每个专家被至少一个 token 选中的概率 ＞ 99.9%，所以权重本来就要读。</p>
 <p>FP8 那一组假设激活值也量化成 FP8 一起乘；只有权重是 FP8、激活值是 BF16 时，算力按 BF16 算，全算 19.5 µs 对读权重 11.95 µs，就不划算了。</p></details></figure>
-  <p>搬行本身也能这样换：tpu-inference#2674 在 batch 小时把排序和还原换成「one-hot 矩阵 × 隐状态」，一次规整的矩阵乘代替按下标取行。Qwen3.5 并发 64 实测总吞吐 +14.5%（1K 进 8K 出）、+7.3%（8K 进 1K 出）；合入后默认关，要用环境变量开。</p>
+  <p>搬行本身也能这样换：tpu-inference 2026 年 5 月合入的一项改动，在 batch 小时把排序和还原换成「one-hot 矩阵 × 隐状态」，一次规整的矩阵乘代替按下标取行。Qwen3.5 并发 64 实测总吞吐 +14.5%（1K 进 8K 出）、+7.3%（8K 进 1K 出）；合入后默认关，要用环境变量开（出处见第十六节台账）。</p>
 
   <h3 id="s5-6">5.6　小 AllReduce 是延迟问题</h3>
 <figure class="fbox fwide" id="fig-s5-allreduce"><svg viewBox="0 0 1400 566" width="100%" role="img" aria-label="小 decode 的 AllReduce 花在哪里，对数时间轴。按带宽算，4 张 GB200 之间对一份 14 KiB 的数据做 AllReduce 只要约 24 纳秒；论文算出的硬件下限是 1.404 微秒；NCCL 环形实测平均 11.0 微秒；论文的低延迟实现 2.37 微秒。实测是带宽项的约 460 倍"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
