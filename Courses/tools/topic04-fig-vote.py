@@ -286,9 +286,7 @@ def bright():
     py2 = f.panel(0, y0, W, PH2,
                   "同样加粗 <tspan font-weight=\"700\">0.1</tspan>，"
                   "接在亮的那根上<tspan font-weight=\"700\">回报大 20 倍</tspan>", GR,
-                  sub="⛔ 这一格是从 <tspan font-weight=\"700\">fig-vote</tspan> 里拆出来的"
-                      "　——　它另开一根轴（「哪根线改起来最划算」），"
-                      "所以不占主线")
+                  sub="这一格另开一根轴：<tspan font-weight=\"700\">哪根线改起来最划算</tspan>")
 
     OY, CX, OX = py2 + 60, 190, 760
     for k, (xv, col, lab) in enumerate(((X_HI, OR, "很亮"), (X_LO, GY2, "很暗"))):

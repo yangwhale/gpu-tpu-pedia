@@ -269,7 +269,7 @@ def main():
                "\"Note: updates, not the raw gradients\"</tspan>。",
                "⚠️ 曲线是我们自己跑的：两层 tanh MLP（8→16→4），"
                "纯 numpy 手写前向反向，固定随机种子，跑 %d 步。"
-               "「刚好」那个学习率是**扫出来的**（让稳态比值最贴 1e−3），不是挑的；"
+               "「刚好」那个学习率是<tspan font-weight=\"700\">扫出来的</tspan>（让稳态比值最贴 1e−3），不是挑的；"
                "「再乘 %.1f 就 NaN」是<tspan font-weight=\"700\">二分搜出来的</tspan>。"
                % (STEPS, CLIFF))
 

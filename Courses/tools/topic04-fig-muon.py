@@ -113,7 +113,7 @@ def main():
     f._pan = None
 
     # ══════════ Ⓑ 矩阵凭什么不能拍平 ═════════════════════════════
-    PH2 = 268
+    PH2 = 288       # ⛔ 2026-10-17：268 → 288，迹那段说明第二行原来被面板底边裁掉
     py2 = f.panel(0, py + PH + 22, W, PH2,
                   "Ⓑ ⭐⭐⭐ 「矩阵和向量不都是一堆数字吗」——　"
                   "<tspan font-weight=\"700\">一个例子就能说清</tspan>", PU,
@@ -192,7 +192,7 @@ def main():
     G1, G2 = 0.92, 0.26          # 示意梯度的两个奇异值（一大一小，差别要看得见）
     assert G1 > 3 * G2, "两个奇异值要差得够开，否则「拉平」这件事看不出来"
 
-    PH3 = 416
+    PH3 = 446       # ⛔ 2026-10-17：416 → 446，配合下面原点下移 20（区域顶边原来压住公式下那行小字）
     py3 = f.panel(0, py2 + PH2 + 22, W, PH3,
                   "Ⓒ ⭐⭐⭐ 换一把尺子，就换一个优化器　——　"
                   "<tspan font-weight=\"700\">而尺子的差别就是这两个形状</tspan>", GR,
@@ -213,7 +213,7 @@ def main():
          "得到的正是　Muon"),
     )
     for px, col, fill, shape, formula, formula2, where, what, who in PANES:
-        ox, oy = px + 40, py3 + 300           # 原点（左下）
+        ox, oy = px + 40, py3 + 320           # 原点（左下）
         # 坐标轴
         f.line(ox, oy, ox + AX + 44, oy, GY2, 1.2)
         f.line(ox, oy, ox, oy - AX - 44, GY2, 1.2)
@@ -239,7 +239,7 @@ def main():
         #   所以放到点的**下方**；方那边点在右上角，放右边就行。
         f.box(tx - 5, ty_ - 5, 10, 10, col, col, 5)
         if shape == "圆":
-            f.t(tx - 4, ty_ + 26, "这一步落在这儿", col, True, 12.5, anchor="middle")
+            f.t(tx - 16, ty_ + 24, "这一步落在这儿", col, True, 12.5, anchor="end")
         else:
             f.t(tx + 14, ty_ + 20, "这一步落在这儿", col, True, 12.5)
         if shape != "圆":
@@ -251,14 +251,14 @@ def main():
         f.t(px + 40, py3 + 48, shape, col, True, 22)
         f.t(px + 84, py3 + 48, formula, INK, True, 15)
         f.t(px + 84, py3 + 70, formula2, GY2, size=12)
-        f.t(px + 40, py3 + 336, where, GY, size=13)
-        f.t(px + 40, py3 + 358, what, col, size=13)
-        f.t(px + 40, py3 + 384, who, col, True, 17)
+        f.t(px + 40, py3 + 356, where, GY, size=13)
+        f.t(px + 40, py3 + 378, what, col, size=13)
+        f.t(px + 40, py3 + 404, who, col, True, 17)
 
-    f.t(700, py3 + 200, "同一个梯度", GY2, True, 14, "middle")
-    f.t(700, py3 + 224, "同一个问题", GY2, True, 14, "middle")
-    f.t(700, py3 + 252, "⬇", GY2, True, 18, "middle")
-    f.t(700, py3 + 278, "只换了区域的形状", INK, True, 14, "middle")
+    f.t(700, py3 + 220, "同一个梯度", GY2, True, 14, "middle")
+    f.t(700, py3 + 244, "同一个问题", GY2, True, 14, "middle")
+    f.t(700, py3 + 272, "⬇", GY2, True, 18, "middle")
+    f.t(700, py3 + 298, "只换了区域的形状", INK, True, 14, "middle")
     f._pan = None
 
     # ══════════ Ⓓ 为什么几乎不花时间 ═════════════════════════════
@@ -266,7 +266,7 @@ def main():
     py4 = f.panel(0, py3 + PH3 + 22, W, PH4,
                   "Ⓓ ⭐ 「每步多做十几次矩阵乘，不会很慢吗」——　"
                   "<tspan font-weight=\"700\">它塞进了一段本来就空着的时间</tspan>", OR,
-                  sub="⭐ 作者自己算过这笔账："
+                  sub="⭐ Muon 原作者在博客里算过这笔账："
                       "<tspan font-weight=\"700\">FLOP 开销低于 1%</tspan>"
                       "　——　⚠️ 但那是 FLOP 口径，不是墙钟口径")
 
@@ -313,14 +313,15 @@ def main():
                "Descent 已经提出过大致相同的算法</tspan>",
                "⛔ 本图<tspan font-weight=\"700\">不含任何收敛速度对照</tspan> ——&#160;"
                "本课没有这些优化器的对照实测，跟 fig4-optimizers 同一条规矩",
-               "⚠️ Ⓓ 那个「低于 1%」是<tspan font-weight=\"700\">作者按 Llama 405B 的"
+               "⚠️ Ⓓ 那个「低于 1%」<tspan font-weight=\"700\">不出自上面那篇，出自 Muon 原作者的博客</tspan>"
+               "（kellerjordan.github.io/posts/muon）：<tspan font-weight=\"700\">按 Llama 405B 的"
                "宽度和每批 token 数算出来的 FLOP 开销</tspan>，不是我们量的墙钟时间。"
                "⛔ <tspan font-weight=\"700\">Newton-Schulz 是一串互相依赖的小矩阵乘，"
                "FLOP 少不代表时间短</tspan> ——&#160;真要用请在目标配置上自己量"
                "（<tspan font-weight=\"700\">这正是本讲那条「不能跨规模照抄」</tspan>）",
                "⛔ 本图早先写的是「5% 以内 / 作者称 2%」，"
                "<tspan font-weight=\"700\">那个 2% 查无出处</tspan> ——&#160;"
-               "作者原文给的是 FLOP 开销低于 1%。2026-09-17 订正")
+               "Muon 原作者博客给的是 FLOP 开销低于 1%。2026-09-17 订正")
     f.save("fig4-muon.svg", yy + 6)
 
 

@@ -150,8 +150,10 @@ def main():
     f.path("M %.1f %.1f L %.1f %.1f" % (X(1024), Y(ATT_SLOPE * 1024),
                                         X(262144), Y(ATT_SLOPE * 262144)),
            PU, 3.2, arrow=False)
-    f.t(X(26000), Y(V3_SLOPE * 26000) - 18,
-        "V3 的 attention　＝　1.25 × 序列长度", PU, True, 15, "middle")
+    # ⛔ 2026-10-17：原来贴在斜线上方 X(26000) 处，先被交点框盖住，挪开框后又压在 GPT-3 最宽线性层
+    #   那条虚线上。斜线附近没有一块够放一整行的空地，挪到右侧 o_proj 线上方那块空白，靠紫色认线。
+    f.t(X(S_V3_LONG) - 10, Y(V3_WIDEST) - 8,
+        "V3 的 attention（紫线）　＝　1.25 × 序列长度", PU, True, 15, "end")
 
     f.path("M %.1f %.1f L %.1f %.1f" % (X(1024), Y(G3_SLOPE * 1024),
                                         X(262144), Y(G3_SLOPE * 262144)),
@@ -168,9 +170,14 @@ def main():
     cx, cy = X(CROSS), Y(V3_WIDEST)
     f.box(cx - 7, cy - 7, 14, 14, "#fff", INK, 7, 2.4)
     f.line(cx, cy + 10, cx, BOT, INK, 1.4, dash="4 4", arrow=False)
-    f.box(cx - 112, cy - 84, 224, 62, "#fff", INK, 8, 1.6)
-    f.t(cx, cy - 60, "⭐⭐ 交点　S ≈ 13,107", INK, True, 16, "middle")
-    f.t(cx, cy - 38, "左边 attention 还不是最贵的，右边它就是最贵的",
+    # ⛔ 2026-10-17：这个框原来画在交点正上方（cy−84），正好盖住「V3 的 attention ＝ 1.25 × 序列长度」
+    #   那行标签，框里第二行字也比框宽。挪到交点下方、gate/up 线与专家输出线之间那条空带里，
+    #   靠那根竖虚线跟交点连着。
+    _bt = Y(7168) + 7
+    assert _bt + 50 < Y(2048) - 3, "交点说明框放不进 gate/up 与专家输出之间的空带了"
+    f.box(cx + 14, _bt, 330, 50, "#fff", INK, 8, 1.6)
+    f.t(cx + 179, _bt + 21, "⭐⭐ 交点　S ≈ 13,107", INK, True, 15, "middle")
+    f.t(cx + 179, _bt + 40, "左边 attention 还不是最贵的，右边它就是最贵的",
         GY, size=12.5, anchor="middle")
 
     # ── 两个真实模型的竖线

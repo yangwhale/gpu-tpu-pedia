@@ -75,7 +75,7 @@ def main():
         f.t(114, yy + 5, lab, OR, True, 12.5, "middle")
         f.line(164, yy, xs[0] - 6, cy + 26, OR, 1.2, arrow=True)
     f.t(114, cy + 96, "⋮", OR, True, 22, "middle")
-    f.t(114, cy + 126, "共 <tspan font-weight=\"700\">3000 亿</tspan> 遍",
+    f.t(114, cy + 126, "共 <tspan font-weight=\"700\">6,710 亿</tspan> 遍",
         OR, True, 13.5, "middle")
 
     # 链上的方向箭头

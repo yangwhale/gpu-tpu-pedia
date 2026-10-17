@@ -58,7 +58,7 @@ def main():
         [(BL, "前向 1 次"), (RD, "反向 2 次"), (GR, "合计 3 次")])
 
     # ══════════ Ⓐ 一层里的三次矩阵乘 ═════════════════════════════
-    PH = 700
+    PH = 720
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 把一层摊开 ——　<tspan font-weight=\"700\">"
                  "总共只有三次矩阵乘，一次向前、两次向后</tspan>", BL,
@@ -108,6 +108,7 @@ def main():
     assert len(set(round(v) for v in _flops)) == 1, \
         "三次乘法的乘加次数必须相等，现在是 %s" % _flops
 
+    # ⛔ 2026-10-17：行起点 py+78 → py+98、面板 700 → 720 —— 原来①行网格顶压住了上面那行说明字。
     LX, MX0, ROW = 40, 300, 186
     # ⭐ 这一行是上面那条判据的「使用说明」——&#160;不写的话，
     #   读者仍然可能把「框变大了」读成「数变大了」。
@@ -118,7 +119,7 @@ def main():
         "<tspan font-weight=\"700\">转置 ＝ 同一批方格换个排法。</tspan>",
         GY, size=13)
     for i, (col, tag, what, A, B, C, out) in enumerate(MULS):
-        cy = py + 78 + i * ROW
+        cy = py + 98 + i * ROW
         f.t(LX, cy + 6, tag, col, True, 17)
         f.t(LX, cy + 30, what, GY, size=12.5)
 
@@ -176,13 +177,13 @@ def main():
     #   一样的是**乘加次数**，三次都是 T × d_in × d_out。
     #   ⭐ 判据：**别用一个读者能在画面上当场证伪的说法去撑结论。**
     #     他证伪的不是那句话，是整张图。
-    f.t(700, py + 78 + 3 * ROW - 40,
+    f.t(700, py + 98 + 3 * ROW - 40,
         "⭐⭐⭐ 三次乘法的<tspan font-weight=\"700\">乘加次数一模一样</tspan>"
         "（都是「位置数 × 进来的宽度 × 出去的宽度」）"
         "　——　所以 <tspan font-weight=\"700\">1 ＋ 2 ＝ 3</tspan> 不是个比喻，"
         "是<tspan font-weight=\"700\">数出来的</tspan>。",
         INK, size=15, anchor="middle")
-    f.t(700, py + 78 + 3 * ROW - 14,
+    f.t(700, py + 98 + 3 * ROW - 14,
         "⛔ ② 那块虚线的，就是<tspan font-weight=\"700\">激活扔不掉的全部原因</tspan>。"
         "　·　⭐ 那两个 <tspan font-weight=\"700\">ᵀ</tspan> 是怎么回事？"
         "<tspan font-weight=\"700\">另配了一格专讲它，在下面折叠着。</tspan>",

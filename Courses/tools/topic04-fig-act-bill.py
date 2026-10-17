@@ -146,7 +146,8 @@ def main():
     f.line(X0, BOT, X1 + 10, BOT, GY2, 2.0, arrow=False)
     f.line(X0, BOT, X0, TOP - 14, GY2, 2.0, arrow=False)
     f.t(X0 - 12, TOP - 24, "显存里的激活（GiB）", GY, True, 13, "end")
-    for v in (0, 40, 80, 120):                          # 真刻度，不是示意
+    # ⛔ 2026-10-17：原来刻度到 120，而 120 那一档落在纵轴标题的同一高度，两行字叠在一起。
+    for v in (0, 25, 50, 75, 100):                      # 真刻度，不是示意
         f.line(X0 - 6, SY(v), X1, SY(v), LINE2, 0.8, dash="3 6", arrow=False)
         f.t(X0 - 12, SY(v) + 5, "%d" % v, GY2, size=12, anchor="end")
 
@@ -193,11 +194,12 @@ def main():
     f.box(IX0 - 12, ITOP - 54, (IX1 - IX0) + 34, (IBOT - ITOP) + 80,
           "#fffaf2", OR, 8, 1.2)
     f.t(IX0 - 4, ITOP - 34,
-        "🔍 <tspan font-weight=\"700\">橙色那条 ＝ 开了全量重算之后的同一笔账</tspan>",
+        "🔍 <tspan font-weight=\"700\">橙色那条 ＝ 开了全量重算之后的同一笔账</tspan>"
+        "<tspan font-weight=\"400\" fill=\"#5f6368\">　·　单独放大，纵轴换了一把尺</tspan>",
         OR, True, 12.5)
     f.t(IX0 - 4, ITOP - 14,
         "同一条序列、同一个模型，只是<tspan font-weight=\"700\">中间结果不留，"
-        "反向要用时现算一遍</tspan>　·　这里单独放大（纵轴换了一把尺）",
+        "反向要用时现算一遍</tspan>",
         GY, size=11.5)
     iSX = lambda i: IX0 + (IX1 - IX0) * i / float(len(keep) - 1)
     iSY = lambda v: IBOT - (IBOT - ITOP) * v / (PEAK_KEEP * 1.18)
@@ -224,7 +226,7 @@ def main():
     f._pan = None
 
     # ══════════ Ⓑ 这座山有多高 ═══════════════════════════════════
-    PH2 = 344
+    PH2 = 404
     py2 = f.panel(0, py + PH + 22, W, PH2,
                   "Ⓑ 这座山有多高 ——　<tspan font-weight=\"700\">"
                   "一条 4K 序列（batch ＝ 1），V3 那个规模</tspan>", RD,
@@ -259,19 +261,21 @@ def main():
             f.t(x + 270, top - 12, num, col, True, 26, "middle")
             f.t(x + 270, top + h + 30, a, INK, True, 14.5, "middle")
             f.t(x + 270, top + h + 58, b, GY, size=13.5, anchor="middle")
-    f.t(700, py2 + 34 + HI + 96,
+    # ⛔ 2026-10-17：下面三行原来在 py2+224 / +252 / +302，前两行正好压在右边那张
+    #   薄卡片的两行说明（top+h+30 / +58）上。整体挪到卡片说明之下。
+    f.t(700, py2 + 300,
         "⭐ 两个框的<tspan font-weight=\"700\">高度是按真实比例画的</tspan> ——　"
         "右边那条薄片就是重算之后剩下的厚度", GY, size=14, anchor="middle")
-    f.t(700, py2 + 224,
+    f.t(700, py2 + 330,
         "⭐⭐ <tspan font-weight=\"700\">再往上就是乘 batch，线性的</tspan>："
         "per-device batch ＝ 8，两边就各是 "
         "<tspan font-weight=\"700\">%.0f GiB</tspan> 和 "
         "<tspan font-weight=\"700\">%.1f GiB</tspan>。"
         % (ACT_RAW_GIB * 8, ACT_REMAT_GIB * 8), INK, size=14.5, anchor="middle")
-    f.t(700, py2 + 252,
+    f.t(700, py2 + 358,
         "⛔ 这里全程按 <tspan font-weight=\"700\">4K</tspan> 算 ——&#160;"
         "<tspan font-weight=\"700\">训练用的就是 4K</tspan>，"
-        "长上下文是后训练阶段的事，不该拿来充这一节的门面。",
+        "长上下文扩展是预训练之后另加的一段（在后训练之前），不该拿来充这一节的门面。",
         GY, size=13.5, anchor="middle")
     f._pan = None
 

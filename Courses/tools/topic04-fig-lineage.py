@@ -17,7 +17,7 @@ r"""专题四 · §3.4「谱系」——&#160;AdaGrad → RMSProp → Adam，一
   · ⭐⭐⭐ 原文还顺手证了一件事：**AdaGrad 是 Adam 的一个特例**
     （β₁ ＝ 0、(1−β₂) 取无穷小、α 按 t^(−1/2) 退火）。
     ——&#160;**一条链最强的证据，就是后面那个能把前面那个当特例含进去。**
-  · 而同一段还点名了 RMSProp 的欠缺：**without bias correction, like in RMSProp**，
+  · 而 §5（相关工作）点名了 RMSProp 的欠缺（2026-10-17 核正：不在讲偏差的 §2/§3）：**without bias correction, like in RMSProp**，
     β₂ 越接近 1 偏差越大。
 
 ⭐ 按这一轮的判据画：**把文字全删掉，还剩四条 + 两组真算出来的曲线**。
@@ -285,8 +285,9 @@ def main():
                "⭐ 偏差校正那一条，原文的说法是：滑动平均<tspan font-weight=\"700\">从 0 起步</tspan>，"
                "于是估计 biased towards zero，<tspan font-weight=\"700\">especially during "
                "the initial timesteps</tspan>，而且 <tspan font-weight=\"700\">β 越接近 1 越严重</tspan>。"
-               "同一段还点名了 RMSProp：<tspan font-weight=\"700\">without bias correction, "
-               "like in RMSProp</tspan> ——&#160;Ⓒ 那条橙线画的就是这句话。",
+               "而点名 RMSProp 的在 §5（跟 AdaGrad、RMSProp 的关系那一节）：「RMSProp also lacks a bias-correction term」，"
+               "以及 <tspan font-weight=\"700\">without bias correction, like in RMSProp</tspan>"
+               " ——&#160;Ⓒ 那条橙线画的就是这句话。",
                "⚠️ <tspan font-weight=\"700\">李宏毅课上那页写的 Adagrad 是「均方根」形式</tspan>"
                "（分母里除了 t＋1），跟这里画的原版<tspan font-weight=\"700\">不一样</tspan>。"
                "⛔ 本讲按原版画，因为「有效学习率单调衰减」这个病"

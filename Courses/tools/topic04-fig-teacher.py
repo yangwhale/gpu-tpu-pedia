@@ -20,8 +20,8 @@ r"""专题四 · §1.3b「前面猜错了，会不会影响后面」——&#160;
 
 📌 出处（2026-09-22 现查，不是凭记忆）：
   · **teacher forcing** 这个词由 **Williams & Zipser（1989）** 提出，
-    在循环网络上；他们自己写的是 "We call this intuitively sensible
-    technique teacher forcing"。
+    在循环网络上；1989 原文写的是 "We call this technique teacher forcing"
+    （"intuitively sensible" 那个版本是两人 1995 年综述章节里的措辞；2026-10-17 核正）。
   · **scheduled sampling**（训练中按概率混入模型自己的预测，用来缓解
     曝光偏差）出自 **Bengio 等，arXiv 1506.03099（2015）**。
   ⚠️ 今天的大模型基本仍是**纯 teacher forcing** ——&#160;
@@ -32,10 +32,19 @@ from topic03_draw import Fig, BL, OR, GR, RD, PU, GY, INK, GY2
 W = 1400
 
 TRUE = ("今", "天", "天", "气", "很", "好")
-# 训练时每个位置的预测：第 3 个猜错了（猜成「空」）
-PRED = ("天", "天", "空", "气", "很", "好")
+# 训练时每个位置的预测 ＝ 它对**下一个**字的猜测：第 k 格该猜的是 TRUE[k+1]。
+# ⛔ 2026-10-17：原来写成 ("天","天","空","气","很","好")，后三格抄的是真值行本身
+#   （气/很/好 跟上一排同列一样），等于在「预测这一格的字」而不是「预测下一个字」。
+#   第 3 格该猜「气」，猜成了「空」（今天天空…，错得合情合理）；最后一格猜句号。
+PRED = ("天", "天", "空", "很", "好", "。")
 BAD = 2
-assert PRED[BAD] != TRUE[BAD], "示例里必须真有一个猜错的位置"
+assert PRED[BAD] != TRUE[BAD + 1], "示例里必须真有一个猜错的位置"
+assert all(PRED[k] == TRUE[k + 1] for k in range(len(TRUE) - 1) if k != BAD), \
+    "预测行除了那一个错，其余都该等于真值行的下一个字"
+# Ⓑ 推理：前文全是它自己生成的。开头「今」是给定的；第 4 个字生成成了「空」，
+#   于是后面顺着「天空」往下编 ——&#160;句子整个拐走了。
+GEN = ("今", "天", "天", "空", "很", "蓝")
+GEN_BAD = 3
 TGT = 4095
 
 
@@ -71,7 +80,7 @@ def main():
         f.t(x + BW / 2, py + 90, ch, INK, True, 20, "middle")
         f.line(x + BW / 2, py + 112, x + BW / 2, py + 142, GY2, 1.6)
 
-    f.t(96, py + 182, "预测", GY, True, 14, "end")
+    f.t(96, py + 182, "猜下一个字", GY, True, 14, "end")
     for k, ch in enumerate(PRED):
         x = BX + k * GAPX
         wrong = (k == BAD)
@@ -113,19 +122,19 @@ def main():
                   sub="⛔ 而且必须<tspan font-weight=\"700\">一个一个来</tspan>"
                       "　——　下一个字得等上一个字出来")
 
-    for k, ch in enumerate(PRED):
+    for k, ch in enumerate(GEN):
         x = BX + k * GAPX
-        bad = (k >= BAD)
+        bad = (k >= GEN_BAD)
         f.box(x, py2 + 66, BW, 48, "#fce8e6" if bad else "#f1f3f4",
               RD if bad else GY2, 6, sw=1.4)
         f.t(x + BW / 2, py2 + 98, ch, RD if bad else GY, True, 20, "middle")
-        if k < len(PRED) - 1:
+        if k < len(GEN) - 1:
             f.line(x + BW + 4, py2 + 90, x + GAPX - 4, py2 + 90,
                    RD if bad else GY2, 2.0)
-    f.t(BX + BAD * GAPX + BW / 2, py2 + 140, "✘ 从这儿错", RD, True, 13, "middle")
-    f.line(BX + BAD * GAPX, py2 + 158, BX + (len(PRED) - 1) * GAPX + BW,
+    f.t(BX + GEN_BAD * GAPX + BW / 2, py2 + 140, "✘ 从这儿错", RD, True, 13, "middle")
+    f.line(BX + GEN_BAD * GAPX, py2 + 158, BX + (len(GEN) - 1) * GAPX + BW,
            py2 + 158, RD, 2.0, arrow=False)
-    f.t(BX + (BAD + len(PRED) - 1) * GAPX / 2 + BW / 2, py2 + 182,
+    f.t(BX + (GEN_BAD + len(GEN) - 1) * GAPX / 2 + BW / 2, py2 + 182,
         "<tspan font-weight=\"700\">后面每一个，都建立在那个错的上面</tspan>",
         RD, True, 14.5, "middle")
 
@@ -199,7 +208,8 @@ def main():
     yb = f.src(yb + 10,
                "出处（2026-09-22 现查，不是凭记忆）：<tspan font-weight=\"700\">"
                "teacher forcing</tspan> 这个词由 Williams &amp; Zipser（1989）在循环网络上提出，"
-               "原文写的是 “We call this intuitively sensible technique teacher forcing”；",
+               "1989 年原文写的是 “We call this technique teacher forcing”"
+               "（多出 intuitively sensible 的那个版本出自两人 1995 年的综述章节）；",
                "<tspan font-weight=\"700\">scheduled sampling</tspan>"
                "（训练中按概率混入模型自己的预测，用来缓解曝光偏差）出自 Bengio 等，"
                "arXiv 1506.03099（2015）。⚠️ 今天的大模型基本仍是纯 teacher forcing　——　"

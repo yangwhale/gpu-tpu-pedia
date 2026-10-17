@@ -120,7 +120,7 @@ def fig_nn():
 
     yb = f.band(y2 + 20, "ok", "前三个是一家人，第四个是另一回事", [
         "AllGather 是拼，ReduceScatter 是加完再分，AllReduce 是加完人人一份。"
-        "<tspan font-weight=\"700\">拆开来看，AllReduce 正好等于前两个接起来。</tspan>",
+        "<tspan font-weight=\"700\">拆开来看，AllReduce 正好等于先 ReduceScatter、再 AllGather（顺序见 1.4）。</tspan>",
         "AllToAll 不加也不拼：每张卡给每张卡发一份<tspan font-weight=\"700\">不一样的</tspan>。"
         "任意两张卡之间都有流量，所以它对网络最挑剔。",
     ])

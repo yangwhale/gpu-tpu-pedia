@@ -51,6 +51,14 @@ assert all(POST[i] > POST[i + 1] for i in range(L)), "Post-LN 那条画反了"
 LO, HI = -4.2, 0.45                      # log10 纵轴
 
 
+
+_SUP = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+
+def _pow10(e):
+    """10 的 e 次方，指数整段上标（⛔ 2026-10-17：原来只把负号上标、数字没上标，渲染成「10⁻40」）。"""
+    return "10" + str(e).translate(_SUP)
+
 def main():
     f = Fig(W, "一张曲线图画了两遍，左右完全一样，只有下面的结论框不同。"
                "横轴是层号，从最靠输入的第零层到第二十四层；"
@@ -99,7 +107,7 @@ def main():
         for e in (0, -1, -2, -3, -4):
             yy = pyv(10.0 ** e)
             f.line(gx0 - 5, yy, gx1, yy, "#edeff1", 0.9, arrow=False)
-            f.t(gx0 - 9, yy + 4, "1" if e == 0 else "10⁻%d" % (-e),
+            f.t(gx0 - 9, yy + 4, "1" if e == 0 else _pow10(e),
                 GY2, size=11, anchor="end")
 
         for seq, col, sw in ((PRE, GR, 2.6), (POST, RD, 2.6)):

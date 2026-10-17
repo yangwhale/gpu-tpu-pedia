@@ -96,6 +96,9 @@ assert abs(TRAP[0] - SHALLOW) < 1.0, "挑的这一步要在浅坑附近"
 assert _GPULL * TRAP[3] < 0, \
     "这一步的看点是：梯度那一项和净移动**方向相反** ——　不成立就没什么可讲的"
 assert RATIO > 5, "惯性要压倒性地大过梯度那一项，现在只有 %.1f 倍" % RATIO
+# ⛔ 2026-10-17：「惯性赢了 N 倍」比的是**惯性那一项 vs 梯度那一项**，原来误用了
+#   RATIO（净移动 ÷ 梯度，13.2）。两支箭头本身之比是 14.2。
+RATIO_IN = abs(_MPULL) / max(abs(_GPULL), 1e-9)
 
 # Ⓒ：β 的记忆窗口
 B_ADAM = 0.9
@@ -247,7 +250,7 @@ def main():
             (_MPULL, BL, "惯性这一项", "β × 上一步的移动",
              "✅ 它要<tspan font-weight=\"700\">继续往前</tspan>"),
             (_mn, GR, "净移动", "两项加起来",
-             "⭐ <tspan font-weight=\"700\">惯性赢了 %.0f 倍</tspan>" % RATIO))
+             "⭐ <tspan font-weight=\"700\">惯性赢了 %.0f 倍</tspan>" % RATIO_IN))
     for i, (v, col, name, formula, note) in enumerate(ROWS):
         yy = VY + i * ROW
         f.t(CXV - 560, yy + 6, name, col, True, 16)
@@ -380,14 +383,14 @@ def main():
                "「The motion proceeds <tspan font-weight=\"700\">not in the direction of "
                "the force (i.e. antigradient) because of the presence of inertia</tspan>」"
                "——&#160;运动不沿着力（也就是负梯度）的方向走，<tspan font-weight=\"700\">因为有惯性</tspan>。"
-               "他还说那一项会让它「沿着<tspan font-weight=\"700\">谷底</tspan>走」。",
+               "他还说那一项会让它沿着<tspan font-weight=\"700\">谷底</tspan>走（转述；原文 along the bottom of the trough）。",
                "⭐⭐ 最有意思的一条：Polyak 在 1964 年给的经验取值是 "
                "<tspan font-weight=\"700\">ρ ＝ 0.8 – 0.99</tspan>，"
                "而今天 Adam 的默认 β₁ ＝ 0.9 ——&#160;"
                "<tspan font-weight=\"700\">六十年过去，还在这个区间里。</tspan>"
                "（脚本里拿这个区间 assert 了图上用的两个 β。）"
                "⭐ 他连调参顺序都写了：<tspan font-weight=\"700\">先把 ρ 设成 0 调好学习率，"
-               "等收敛慢下来再把动量加上</tspan>；并报告实测「多数情况下比梯度法快，最多十倍」。",
+               "等收敛慢下来再把动量加上</tspan>；并报告实测多数情况下比梯度法快，最多快到十倍（转述；原文 up to tenfold）。",
                "⛔ 有一条我<tspan font-weight=\"700\">没能核实，所以不写</tspan>："
                "常有人说 1986 年那篇反向传播的 Nature 论文里就带了动量项。"
                "<tspan font-weight=\"700\">这一轮没拿到原文</tspan>（链接 404），"

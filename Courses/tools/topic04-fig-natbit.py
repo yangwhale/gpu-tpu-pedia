@@ -170,7 +170,7 @@ def main():
                  "<tspan font-weight=\"700\">「平均每个 token 多少 nat」</tspan>。"))
 
     yb = f.src(yb + 16,
-               "⭐ Ⓐ 最左那档是<tspan font-weight=\"700\">自检</tspan>："
+               "⭐ 「刚初始化 · 瞎猜」那一档（Ⓐ 最右）是<tspan font-weight=\"700\">自检</tspan>："
                "困惑度必须正好回到词表 129,280、bit 必须正好等于 log₂(词表)。"
                "脚本里 assert 钉着，对不上就是换算写错了。",
                "⚠️ 「训练早中期 7.00」是<tspan font-weight=\"700\">示意档</tspan>，"

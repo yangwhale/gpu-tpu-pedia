@@ -15,7 +15,7 @@ r"""专题四 · §3「优化器谱系：每一代往每个参数身上挂了多
 
 ⭐⭐⭐ 于是这张图自己说出了一件别的排法说不出来的事：
   **Adam 是一个峰，而 Muon 是往回走的那一步。**
-  三十年里状态量一路加上去（0 →&#160;1 →&#160;2 份），
+  六十年里状态量一路加上去（0 →&#160;1 →&#160;2 份），
   2024 年有人把 v 那一份**整个拿掉了**，靠对更新矩阵做正交化补回来。
 
 ⛔⛔ 刻意没画的：
@@ -64,7 +64,7 @@ def main():
     # ══════════ Ⓐ 谱系：横轴先后，纵轴状态份数 ═════════════════════
     PH = 470
     py = f.panel(0, y0, W, PH,
-                 "Ⓐ 三十年只在加同一样东西 ——　"
+                 "Ⓐ 六十年只在加同一样东西 ——　"
                  "<tspan font-weight=\"700\">直到 2024 年有人把它拿掉一份</tspan>", BL,
                  sub="⭐ 「份数」指的是<tspan font-weight=\"700\">每个参数要额外存几个"
                      "跟它一样大的张量</tspan>")
@@ -105,12 +105,12 @@ def main():
     #     实际 y 算，不能按「看着没挨着」估** ——&#160;跟 fig3-gun 那条箭头同一个病。
     f.box(1040, py + 10, 304, 88, "#e6f4ea", GR, 8)
     f.t(1064, py + 38, "⭐⭐ Muon 是往回走的那一步", GR, True, 17)
-    f.t(1064, py + 62, "三十年一路加，2024 年", GY, size=14)
+    f.t(1064, py + 62, "六十年一路加，2024 年", GY, size=14)
     f.t(1064, py + 84, "有人把二阶矩那一份整个拿掉了", GY, size=14)
     f._pan = None
 
     yy = f.band(py + PH + 22, "warn", "AdamW 不是新算法 ——　它是在修一个 bug", [
-        "⭐ 论文摘要原话：<tspan font-weight=\"700\">L2 正则和 weight decay 对普通 SGD 是等价的，"
+        "⭐ 论文摘要开头就说：<tspan font-weight=\"700\">L2 正则和 weight decay 对普通 SGD 是等价的，"
         "但对 Adam 这种自适应方法<tspan text-decoration=\"underline\">不等价</tspan></tspan>。"
         "⛔ 因为 L2 那一项是<tspan font-weight=\"700\">混在梯度里</tspan>进去的，"
         "再被二阶矩的分母一除 ——&#160;"
@@ -197,7 +197,8 @@ def main():
                "Adam：Kingma & Ba，<tspan font-weight=\"700\">arXiv 1412.6980</tspan>"
                "（ICLR 2015）；AdamW：Loshchilov & Hutter，"
                "<tspan font-weight=\"700\">arXiv 1711.05101</tspan>（ICLR 2019）——&#160;"
-               "Ⓐ 那条带子里的说法是它摘要的转述",
+               "那条「AdamW 不是新算法」带子里的那句是它摘要首句的意译"
+               "（原文对 SGD 那半句还带个限定：按学习率换算之后才等价）",
                "Muon：Keller Jordan 等 2024，作者 writeup "
                "kellerjordan.github.io/posts/muon。"
                "「只用于 2D 参数」「标量 / 向量 / 输入输出层仍用 AdamW」"

@@ -71,6 +71,14 @@ assert FP16_MIN_SUB < SCALED < FP16_MIN_NORMAL
 X_LO, X_HI = -40.0, 0.0                # log10 数轴范围
 
 
+
+_SUP = str.maketrans("0123456789-", "⁰¹²³⁴⁵⁶⁷⁸⁹⁻")
+
+
+def _pow10(e):
+    """10 的 e 次方，指数整段上标（⛔ 2026-10-17：原来只把负号上标、数字没上标，渲染成「10⁻40」）。"""
+    return "10" + str(e).translate(_SUP)
+
 def main():
     f = Fig(W, "一根从十的负四十次方到 1 的对数数轴，上面标着三条边界线。"
                "最右边橙色那条是 fp16 的最小正规数，六点一乘十的负五次方；"
@@ -118,7 +126,7 @@ def main():
     for e in range(-40, 1, 5):
         xx = ax(10.0 ** e)
         f.line(xx, AY + 40, xx, AY + 47, GY2, 1, arrow=False)
-        f.t(xx, AY + 66, "10%s" % ("⁰" if e == 0 else "⁻%d" % -e),
+        f.t(xx, AY + 66, _pow10(e),
             GY2, size=11.5, anchor="middle")
     f.t(AX1 + 26, AY + 44, "大 →", GY2, size=12)
 
@@ -196,7 +204,7 @@ def main():
                "bf16 与 fp32 同为 8 位指数，下界 2⁻¹²⁶。"
                "「低于红线会被舍成 0」是<tspan font-weight=\"700\">真舍了一遍</tspan>验出来的。",
                "⭐ 这张图的<tspan font-weight=\"700\">讲法</tspan>取自混合精度那篇经典图"
-               "（梯度直方图 ＋ 一条 FP16 下界竖线，见 Narang &amp; Micikevicius et al., 2018）"
+               "（梯度直方图 ＋ 一条 FP16 下界竖线，见 Micikevicius, Narang et al., ICLR 2018）"
                "　——　⛔ <tspan font-weight=\"700\">但我们没有那份直方图数据，"
                "所以这里不画直方图</tspan>，只画真边界。")
 

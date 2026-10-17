@@ -70,7 +70,7 @@ def main():
                "这就是平均发生的全部地方")
 
     y0 = f.header(
-        "那 6,300 万个 loss，怎么变成<tspan font-weight=\"700\">一份</tspan>梯度",
+        "一整批 6,300 万个 loss（15,360 条 × 4,095 个位置），怎么变成<tspan font-weight=\"700\">一份</tspan>梯度",
         "⭐ 现场问：「错的那几个要不要推向 0，还是只推对的那个、"
         "其余算副作用？」——　<tspan font-weight=\"700\">答案是：都做，而且是同一个动作</tspan>",
         [(GR, "Ⓐ 一个位置"), (BL, "Ⓑ batch＝1"), (OR, "Ⓒ batch＝2")])

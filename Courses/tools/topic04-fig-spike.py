@@ -154,7 +154,8 @@ def main():
     f.line(X0, BOT + 14, X1 + 16, BOT + 14, GY2, 1.2)
     f.line(X0, BOT + 14, X0, TOP - 16, GY2, 1.2)
     f.t(X0 - 10, TOP - 24, "loss", GY2, size=12, anchor="end")
-    f.t(X1 + 20, BOT + 18, "步数 →", GY2, size=12)
+    # ⛔ 2026-10-17：原来放在 (X1+20, BOT+18)，跟右边「约 20 次」那行字叠在一起；挪到轴线下方、右端对齐。
+    f.t(X1 + 16, BOT + 32, "步数 →", GY2, size=12, anchor="end")
 
     def curve(top, bot, spikes, col, sw):
         """主干 ＋ 尖峰，一条 path 画完。"""

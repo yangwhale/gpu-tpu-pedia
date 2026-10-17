@@ -13,7 +13,7 @@ r"""专题四 · §3.5「两种学习率曲线，终点却撞在同一个数上�
 
 ⭐ 图上每一段都是论文里的原话换算来的：
   · GPT-3：头 3.75 亿 token 线性 warmup；2,600 亿 token 内余弦降到 10%；
-    之后一直保持 10%。总量 3,000 亿 token。arXiv 2005.14165 §2.3
+    之后一直保持 10%。总量 3,000 亿 token。arXiv 2005.14165 附录 B
   · V3：2,000 步线性升到 2.2e-4；恒定到 10T token；再用 4.3T token
     余弦降到 2.2e-5；最后 500B 里前 333B 保持 2.2e-5，后 167B 换 7.3e-6。
     总量 14.8T token。arXiv 2412.19437 §4.2
@@ -27,7 +27,7 @@ from topic03_draw import (Fig, BL, OR, GR, RD, PU, GY, INK, GY2, LINE, LINE2)
 
 W = 1400
 
-# ── GPT-3（arXiv 2005.14165 §2.3）
+# ── GPT-3（arXiv 2005.14165 附录 B；§2.3 只写「细节见附录 B」）
 G3_TOTAL, G3_WARM, G3_DECAY_END, G3_FLOOR = 300.0, 0.375, 260.0, 10.0
 # ── DeepSeek-V3（arXiv 2412.19437 §4.2），单位 T token
 V3_TOTAL, V3_STABLE_END, V3_DECAY_END = 14.8, 10.0, 14.3
@@ -177,7 +177,7 @@ def main():
     ], keep=True)
 
     yy = f.src(yy + 24,
-               "GPT-3：<tspan font-weight=\"700\">arXiv 2005.14165</tspan> §2.3 ——&#160;"
+               "GPT-3：<tspan font-weight=\"700\">arXiv 2005.14165</tspan> 附录 B ——&#160;"
                "「头 3.75 亿 token 线性 warmup」「2,600 亿 token 内余弦降到 10%，"
                "之后继续以 10% 训练」；总量 3,000 亿 token",
                "DeepSeek-V3：<tspan font-weight=\"700\">arXiv 2412.19437</tspan> §4.2 ——&#160;"
