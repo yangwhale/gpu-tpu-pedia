@@ -848,7 +848,8 @@ body.figonly section h3{margin-top:34px}
   <p style="color:var(--gray)">每个数字的出处在文末台账；自己推出来的数，都标了「本课推导」。</p>
 </div>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一次请求走一遍</h2></div>
-  <p class="lead">同一个模型，吞 prompt 那一段（prefill）吃算力，往外吐字那一段（decode）吃带宽。
+  <p class="lead">训练时答案已知，整段序列一起算，只看吞吐；推理得一个字一个字往外吐，还要守延迟。
+    吞 prompt 那一段（prefill）还像训练的前向，吃算力；往外吐字那一段（decode）每步只出一个字，吃带宽。
     <b>一次请求里，前后两段要的硬件正好相反。</b></p>
 
   <h3 id="s0-1">0.1　2022 年以来，推理怎么变便宜</h3>
@@ -1095,7 +1096,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="449" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">推理模型走的就是 ③；长 prompt 再配上长回答，面积又高又长。</text>
 </svg><figcaption><b>深紫只在 ② 变厚，③ 多出来的全是浅紫。</b><span class="capmore"><br><em>格子数不是实测，只为三块能放在一起比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>示意图，无实测数。第 k 趟读的 KV ＝ prompt 长度 ＋ 已出字数（按定义）。没画权重：每趟都搬，但由 batch 里的人分摊；也没画 prefill：长 prompt 让它更贵，那是算力账。</p></details></figure>
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
-    同等 GPT-3.5 水平的推理这两年便宜得很快（斯坦福 AI Index 2025 按市场价统计，本课不引价格口径的数），报告主要归给更强的小模型；系统这一侧能不能单独拆出来，15.3 再说。</p>
+    市面上推理这两年便宜得很快，斯坦福 AI Index 2025 主要归给更强的小模型；系统那一份单独拆不出来，15.3 再说。</p>
   <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
 <figure class="fbox fwide" id="fig-s0-engines"><svg viewBox="0 0 1400 502" width="100%" role="img" aria-label="vLLM 和 SGLang 你追我赶的八个时刻，横轴按月从 2023 年 6 月到 2026 年 10 月。上面蓝线是 vLLM：2023 年 6 月首发 PagedAttention；2024 年 9 月 v0.6.0，博客自己承认 CPU 开销拖累了 GPU；2024 年 12 月接上 Mooncake；2025 年 1 月重写成 V1，原文说受 SGLang 等影响显著。下面红线是 SGLang：2024 年 1 月首发 RadixAttention，原文写着复用了 vLLM 的代码；2024 年 7 月 v0.2 用纯 Python 调度，吞吐最多是 vLLM 0.5.2 的 3.1 倍；2025 年 4 月接 Mooncake，比 vLLM 晚三个多月；2025 年 5 月复现大 EP 加 PD 分离；2026 年 6 月在 GB300 上跑 V4-Pro，同交互档每卡比自家首发日涨了几倍，答案在最后一节。中间轴上两个灰色菱形是外部锚点：2024 年 11 月 Mooncake 开源，2025 年 2 月 DeepSeek 开源周。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两大引擎　——　<tspan font-weight="700">你方唱罢我登场</tspan></text>
@@ -1337,13 +1338,7 @@ body.figonly section h3{margin-top:34px}
   <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.2）。KV 每层每个 token 存 512 维压缩 KV（K、V 都从它解出）＋ 64 维位置编码那截 ＝ 576 个数，bf16 每个 2 字节 ＝ 1,152 B；61 层合计 70,272 B（4.1）。</p>
   <p><b>跟长度成正比。</b>上下文 1 万 token，一条 KV 约 0.70 GB；128K 是 8.58 GiB。它是这个人自己的历史，一人一份，不跟别人共享。</p>
   <p><b>出一个字，61 层逐层走一遍：</b></p>
-  <ul>
-    <li><b>进第 1 层</b>：新 token 带着一条 7,168 维的向量进来。</li>
-    <li><b>注意力</b>：它要和之前每个 token 的 K 算一遍相似度，再按相似度把各自的 V 加权求和，所以本层 KV 从头读到尾，一格都跳不过。</li>
-    <li><b>前馈</b>：第 1 到 3 层是稠密前馈，整块读；第 4 到 61 层是 MoE，只读本层挑中的 8 个路由专家和 1 个共享专家（config 里 first_k_dense_replace 是 3）。</li>
-    <li><b>留下两样</b>：本层 KV 末尾追加这个字的 576 个数（bf16 共 1,152 B）；一条 7,168 维向量交给下一层。其余中间结果算完就丢。</li>
-    <li><b>走完 61 层再过输出层</b>，这个字才出来；接着从第 1 层算下一个字，权重和 KV 再读一遍。</li>
-  </ul>
+  <p>注意力要跟之前每个 token 比一遍，所以本层 KV 一格都跳不过。前馈只有第 1 到 3 层是稠密的、整块读；第 4 到 61 层是 MoE，只读挑中的 8 个路由专家和 1 个共享专家（config 里 first_k_dense_replace 是 3）。</p>
 <figure class="fbox fwide" id="fig-s0-layer"><svg viewBox="0 0 1400 710" width="100%" role="img" aria-label="DeepSeek-V3 出一个字的逐层示意。新 token 带一条 7,168 维向量从第 1 层进去。每一层读两样：本层权重和本层全部 KV。第 1 到 3 层是稠密前馈，每层读注意力 187 MB 加稠密前馈 396 MB，共 583 MB；第 4 到 61 层是 MoE，每层读注意力 187 MB 加 8 个路由专家和 1 个共享专家 396 MB，再加路由 1.8 MB，共 585 MB。本层 KV 每个 token 是 512 维压缩 KV 加 64 维位置编码那截，共 576 个数，bf16 每个 2 字节，共 1,152 字节；上下文 1 万 token 时每层 11.5 MB，128K 时每层 151 MB，全部要读。每层写一样：KV 末尾追加 1,152 字节；传一样：一条 7,168 维向量交给下一层；其余中间结果丢掉。61 层走完再读输出层 0.93 GB，才出一个字。61 层权重合计 35.7 GB，加输出层 36.6 GB，就是第一节的 37 GB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">出一个字，61 层逐层走一遍：<tspan font-weight="700">每层读两样，写一格，传一条，其余丢掉</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，权重按 FP8 每参数 1 字节，KV 和传下去的向量按 bf16；条长按字节数同一比例画，数字由 config.json 推导</text>
@@ -1623,7 +1618,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>两个阶段：prefill 吃算力，decode 吃带宽</h2></div>
-  <p class="lead">专题五讲的是训练。推理和它差在哪？prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
+  <p class="lead">训练、prefill、decode 摆在一起比：prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
     <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b>0.1 里的每一招都冲着这个事实。</p>
   <div class="tbl-wrap"><table>
     <caption class="sub" style="caption-side:bottom;text-align:left">训练每步约 6 次运算／参数／token，前向占 2 次，反向约 4 次；推理只有前向。</caption>

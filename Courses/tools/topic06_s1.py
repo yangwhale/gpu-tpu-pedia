@@ -2,7 +2,7 @@
 """专题六 · 第一节「两个阶段：prefill 吃算力，decode 吃带宽」。图在 topic06-fig-phases.py。"""
 
 BODY = '''
-  <p class="lead">专题五讲的是训练。推理和它差在哪？prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
+  <p class="lead">训练、prefill、decode 摆在一起比：prefill 一次喂几千个 token（矩阵乘里每个 token 占一行），decode 每人每步只喂一个。
     <b>行数差了三个数量级，瓶颈就从算力换到了显存带宽。</b>0.1 里的每一招都冲着这个事实。</p>
   <table>
     <caption class="sub" style="caption-side:bottom;text-align:left">训练每步约 6 次运算／参数／token，前向占 2 次，反向约 4 次；推理只有前向。</caption>
