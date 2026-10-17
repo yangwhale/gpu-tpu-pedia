@@ -3036,6 +3036,7 @@ p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
     <a href="topic-04-lecture.html" class="on">讲义</a>
     <a href="topic-01.html">专题一（前向那半张账）</a>
     <a href="index.html">课程总纲</a>
+    <a href="topic-04-lecture.en.html" lang="en" hreflang="en">🌐 English</a>
   </nav>
 </div></div>
 

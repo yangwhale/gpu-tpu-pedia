@@ -5232,7 +5232,8 @@ HERO = '''
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题四
-    ／ <b>反向与优化器</b></div>
+    ／ <b>反向与优化器</b>
+    <a class="lecbtn" href="topic-04.en.html" lang="en" hreflang="en">🌐 English</a></div>
   <h1>反向与优化器</h1>
   <!-- ⛔ 2026-09-23 现场：「Completing the Bill: Backward, Recompute, and the
        Optimizer 这句说啥呢？乱七八糟的。」——&#160;对，两处都不成立：

@@ -430,7 +430,7 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic main" id="t4">
-    <div class="head"><span class="num">04</span><span class="name">Backward pass and optimizers</span><span class="pre">Prereq: 01 · some sections need 03</span><span class="wip">English edition coming</span></div>
+    <div class="head"><span class="num">04</span><span class="name"><a href="topic-04.en.html">Backward pass and optimizers</a></span><span class="pre">Prereq: 01 · some sections need 03</span><span class="rdy">English edition ✓ · core track</span></div>
     <div class="quote">Lecture 1 only costed the forward pass. The real bill is much larger, and its biggest item is neither the weights nor the activations.</div>
     <dl>
       <dt>Covers</dt><dd>How much compute the backward pass takes (answer: it triples the total). Why activations can't be thrown away once computed. And the surprise: <b>the largest thing in HBM is the optimizer state</b>, while the model itself is the smallest.</dd>
@@ -440,6 +440,10 @@ footer a{color:var(--blue);text-decoration:none}
         ⭐ Unlike Topic 3, <b>this lecture can be taught out of order</b> (it's a bill, not a storyline). Only one order is fixed: “why activations can't be discarded” must be established before the recomputation trade.</dd>
       <dt>Four tests</dt><dd>Numbers go stale; these four don't. ① <b>Whether a quantity needs high precision depends on its relative change per step versus the smallest step its mantissa can resolve</b> (moving averages forget a little every step, so their updates register; master weights accumulate over a hundred thousand steps, each moving them by a few thousandths, and rounding swallows the update whole); ② <b>whether to recompute depends on how many FLOPs you pay per byte saved</b>: for a linear layer that number equals the input width, while for attention it grows linearly with sequence length, so the two lines must cross; ③ <b>when two quantities grow at different rates in the same variable, and the faster one starts lower, their order must flip somewhere</b>. Any “A is cheaper than B” must come with the range where it holds. This one appears three times in the lecture: sequence length, model size, and the same switch whose benefit changes sign with scale; ④ <b>judge any stability technique on both “did it stabilize?” and “did quality drop?”</b> Check only the first, and a learning rate of zero is optimal.</dd>
     </dl>
+    <div class="docs">
+      <a class="pri" href="topic-04.en.html">Course page · core track →</a>
+      <a href="topic-04-lecture.en.html">📝 Instructor notes (lecture script)</a>
+    </div>
   </div>
 
   <div class="topic main" id="t5">
