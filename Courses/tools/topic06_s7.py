@@ -48,6 +48,34 @@ __FIG_S7_LINEAR__
 
   <details class="foldfig"><summary><b>考考自己</b>：4K 输入、并发 8 的线上服务，要不要开 DCP8？换成 128K 的 agent 长对话呢？</summary>
   <p>4K 不开：KV 放得下，DCP 只剩代价（7.2）。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>
+
+  <h3 id="s7-7">7.7　并排看：每张卡每层读多少、存多少</h3>
+  <p>把第六、七节的切法摆进同一本账：V3，8 颗 v7（16 个 device，v7x-16），上下文 128K。每格按 device 算，口径同 3.2、10.5：每 device 可用 94.75 GiB，留一成给激活值，剩 85.3 GiB；权重 FP8 每参数 1 字节，KV 按 bf16，一条 128K 是 8.58 GiB。</p>
+  <table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导，纸面账。非专家权重 ＝ 总参数 671.0B 减去 58 层 × 256 个路由专家（653.9B）＝ 17.1B；每层参数分项见 0.2 的图。实测 FP8 专家比均摊更占地方（10.5），真机余量只会更少。</caption>
+    <tr><th>切法</th><th>权重／device</th><th>剩给 KV</th><th>一条 128K 在每 device 占</th><th>16 个 device 装几条</th></tr>
+    <tr><td>DP：整套复制</td><td>625 GiB</td><td>放不下</td><td>—（一份权重就超了）</td><td>0</td></tr>
+    <tr><td>TP16：注意力、专家都切 16 片</td><td>39.1 GiB（全切）</td><td>46.2 GiB</td><td>8.58 GiB（每 device 一整份）</td><td>5</td></tr>
+    <tr><td>TEP16：注意力 TP、专家 EP</td><td>39.1 GiB（全切）</td><td>46.2 GiB</td><td>8.58 GiB（每 device 一整份）</td><td>5</td></tr>
+    <tr><td>DEP16：注意力 DP、专家 EP</td><td>54.0 GiB（非专家整份 15.9 ＋ 路由专家 1/16 是 38.1）</td><td>31.3 GiB</td><td>8.58 GiB（只在自己那个 device）</td><td>每 device 3 条，共 48</td></tr>
+    <tr><td>TEP16 ＋ DCP16</td><td>39.1 GiB（全切）</td><td>46.2 GiB</td><td>0.54 GiB（按 token 切 16 份）</td><td>86</td></tr>
+  </table>
+  <p>读的一侧取装满时的 batch，每层碰到几个专家按 1.3 的均匀路由算；只算从 HBM 读的字节，下限按每 device 3.685 TB/s（每芯片 7.37 ÷ 2）。</p>
+  <table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导。读权重取 MoE 层（第 4 到 61 层），每 device 每层；一步下限含 61 层与输出层，不含通信和计算。通信次数：TP 前向每层 2 次 AllReduce（Megatron-LM，arXiv 1909.08053）；TEP 同 2 次（专题五 §4.4 的图）；DEP 专家前后各 1 次 all-to-all（6.7）；DCP 另加每层 3 次（vLLM 默认后端，7.1）。</caption>
+    <tr><th>切法</th><th>整套 batch</th><th>每层读权重</th><th>每层读 KV</th><th>一步读完下限</th><th>每层通信</th><th>代价／适用</th></tr>
+    <tr><td>TP16</td><td>5</td><td>118 MB：注意力 1/16 ＋ 碰到的 37.6 个路由专家和共享专家各 1/16</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>单人出字快；KV 复制 16 份，长上下文装不下人</td></tr>
+    <tr><td>TEP16</td><td>5</td><td>118 MB（平均）：注意力 1/16 ＋ 本卡被碰到的整块专家</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>同 TP16；专家整块，热门专家那张卡要多读，大家等它</td></tr>
+    <tr><td>DEP16</td><td>48</td><td>784 MB：整份注意力 187 ＋ 本卡 12.5 个路由专家 ＋ 共享专家</td><td>453 MB：只读自己 3 条</td><td>20.6 ms</td><td>2 次 all-to-all（前 3 层不用）</td><td>KV 不复制，人多时最省；每 rank 一份状态，K3 这类起不来（6.3）</td></tr>
+    <tr><td>TEP16 ＋ DCP16</td><td>86</td><td>673 MB：注意力 1/16 ＋ 本卡 15 个整块专家</td><td>812 MB：86 条各读 1/16</td><td>24.1 ms</td><td>2 次 AllReduce ＋ 3 次</td><td>装得最多；通信最勤，只在长上下文划算（7.2）</td></tr>
+  </table>
+  <ul>
+    <li><b>TP 和 TEP 存、读都一样</b>：MLA 只有一份 KV，按头切不开，16 个 device 每个都存、都读全部 5 条（6.2）。两者只差在专家：TP 把每个专家切成 16 片，TEP 整块放一卡。</li>
+    <li><b>DEP 每卡各存一份非专家权重</b>，比全切多占 14.9 GiB（54.0 − 39.1），换来 KV 不复制：128K 装 48 条，以 TP16 的 5 条为基线约 9.6 倍。代价是每卡每层都读整份注意力权重 187 MB。</li>
+    <li><b>DCP 把一条序列的 KV 按 token 切 16 份</b>：每卡只存、只读每条的 1/16，权重仍全切，所以装 86 条；代价是每层多 3 次通信。DEP 上叠不了 DCP：度数最多 TP ÷ KV 头数，DEP 的 TP 是 1（7.1）。</li>
+    <li><b>下限只看了读</b>：TP16 读 14.4 ms 出 5 个字，DEP16 读 20.6 ms 出 48 个，TEP16 ＋ DCP16 读 24.1 ms 出 86 个。谁真赢，要把每层通信那一列也算进去。</li>
+    <li><b>和 10.5 对账</b>：那张图说 8 颗装得下 128K × 64，前提是 KV 不复制、非专家权重不重复。按 DEP 切只装 48 条；权重全切的 TEP16 ＋ DCP16 到 86，才兑现那个下限。</li>
+  </ul>
 '''
 
 FIGS = {
@@ -68,3 +96,40 @@ FIGS = {
 NUM_LOCK = [
     ("26%", "fig6-dcp-gain.svg"),
 ]
+
+# ── 7.7 两张表的数（本课推导；改表先改这里，跑不过就说明表和推导对不上）──────
+def _t77():
+    GIB, MB = 1024 ** 3, 1e6
+    H, D = 7168, 16                                   # V3 hidden；8 颗 v7 ＝ 16 个 device
+    ATTN, DENSE, EXP = 187105280, 3 * H * 18432, 3 * H * 2048   # 每层参数，推导见 topic06-fig-layerwalk.py
+    ROUTER, LM = 256 * H, 129280 * H
+    TOTAL = 61 * ATTN + 3 * DENSE + 58 * (257 * EXP + ROUTER) + 2 * LM
+    ROUTED = 58 * 256 * EXP
+    NONR = TOTAL - ROUTED
+    USE = 94.75 * GIB * 0.9                           # 每 device 可用 94.75 GiB，留一成（3.2、10.5 同口径）
+    SEQ, SEQL = 70272 * 131072, 1152 * 131072          # 一条 128K：全层／每层
+    assert round(TOTAL / GIB) == 625 and round(NONR / 1e9, 1) == 17.1 and round(NONR / GIB, 1) == 15.9
+    w_tp, w_dep = TOTAL / D, NONR + ROUTED / D
+    assert (round(w_tp / GIB, 1), round(w_dep / GIB, 1), round(ROUTED / D / GIB, 1)) == (39.1, 54.0, 38.1)
+    p_tp, p_dep = USE - w_tp, USE - w_dep
+    assert (round(USE / GIB, 1), round(p_tp / GIB, 1), round(p_dep / GIB, 1)) == (85.3, 46.2, 31.3)
+    n_tp, n_dep, n_dcp = int(p_tp // SEQ), int(p_dep // SEQ) * D, int(D * p_tp // SEQ)
+    assert (n_tp, n_dep, n_dcp) == (5, 48, 86) and round(SEQ / D / GIB, 2) == 0.54
+    assert round(n_dep / n_tp, 1) == 9.6 and round((w_dep - w_tp) / GIB, 1) == 14.9
+    hit = lambda b: 256 * (1 - (1 - 8 / 256) ** b)   # 1.3 的均匀路由
+    BW = 7.37e12 / 2
+    rows = {}
+    for k, b in (("tp", n_tp), ("dep", n_dep), ("dcp", n_dcp)):
+        if k == "dep":
+            a, m, d, kv, lm = ATTN, hit(b) / D * EXP + EXP + ROUTER, DENSE, b / D * SEQL, LM
+        else:
+            a, m, d, lm = ATTN / D, hit(b) / D * EXP + EXP / D + ROUTER / D, DENSE / D, LM / D
+            kv = b * SEQL if k == "tp" else b * SEQL / D
+        step = 61 * (a + kv) + 3 * d + 58 * m + lm
+        rows[k] = (round(hit(b), 1), round((a + m) / MB), round(kv / MB), round(step / BW * 1e3, 1))
+    assert rows == {"tp": (37.6, 118, 755, 14.4), "dep": (200.2, 784, 453, 20.6),
+                    "dcp": (239.3, 673, 812, 24.1)}, rows
+    assert round(hit(n_dep) / D, 1) == 12.5 and round(hit(n_dcp) / D) == 15
+
+
+_t77()

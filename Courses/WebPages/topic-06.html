@@ -1333,6 +1333,116 @@ body.figonly section h3{margin-top:34px}
 <p>📌 TTFT、TPOT 的定义按 vLLM 的 benchmark_serving：TTFT 从请求发出算到第一个输出 token，TPOT 是除第一个 token 外平均每个输出 token 的时间。第二节会细讲它们的口径（含不含排队、平均还是 p99）。</p>
 <p>⚠️ 「第一个字由 prefill 产出」是标准实现：prefill 的最后一个位置直接给出第一个输出 token 的分布。</p></details></figure>
   <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
+  <p><b>住在哪。</b>权重和 KV 都常驻 HBM（芯片自带的显存）。真正做乘加的地方旁边只有一小块片上存储：v7 每个 TensorCore 64 MiB VMEM，一颗芯片两个，合 128 MiB，约是 192 GiB HBM 的 1/1,500（13.7）。几十 GB 放不进去，所以每一步都得从 HBM 再流一遍。</p>
+  <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.2）。KV 每层每个 token 存 512 维压缩 KV（K、V 都从它解出）＋ 64 维位置编码那截 ＝ 576 个数，bf16 每个 2 字节 ＝ 1,152 B；61 层合计 70,272 B（3.1）。</p>
+  <p><b>跟长度成正比。</b>上下文 1 万 token，一条 KV 约 0.70 GB；128K 是 8.58 GiB。它是这个人自己的历史，一人一份，不跟别人共享。</p>
+  <p><b>出一个字，61 层逐层走一遍：</b></p>
+  <ul>
+    <li><b>进第 1 层</b>：新 token 带着一条 7,168 维的向量进来。</li>
+    <li><b>注意力</b>：它要和之前每个 token 的 K 算一遍相似度，再按相似度把各自的 V 加权求和，所以本层 KV 从头读到尾，一格都跳不过。</li>
+    <li><b>前馈</b>：第 1 到 3 层是稠密前馈，整块读；第 4 到 61 层是 MoE，只读本层挑中的 8 个路由专家和 1 个共享专家（config 里 first_k_dense_replace 是 3）。</li>
+    <li><b>留下两样</b>：本层 KV 末尾追加这个字的 576 个数（bf16 共 1,152 B）；一条 7,168 维向量交给下一层。其余中间结果算完就丢。</li>
+    <li><b>走完 61 层再过输出层</b>，这个字才出来；接着从第 1 层算下一个字，权重和 KV 再读一遍。</li>
+  </ul>
+<figure class="fbox fwide" id="fig-s0-layer"><svg viewBox="0 0 1400 710" width="100%" role="img" aria-label="DeepSeek-V3 出一个字的逐层示意。新 token 带一条 7,168 维向量从第 1 层进去。每一层读两样：本层权重和本层全部 KV。第 1 到 3 层是稠密前馈，每层读注意力 187 MB 加稠密前馈 396 MB，共 583 MB；第 4 到 61 层是 MoE，每层读注意力 187 MB 加 8 个路由专家和 1 个共享专家 396 MB，再加路由 1.8 MB，共 585 MB。本层 KV 每个 token 是 512 维压缩 KV 加 64 维位置编码那截，共 576 个数，bf16 每个 2 字节，共 1,152 字节；上下文 1 万 token 时每层 11.5 MB，128K 时每层 151 MB，全部要读。每层写一样：KV 末尾追加 1,152 字节；传一样：一条 7,168 维向量交给下一层；其余中间结果丢掉。61 层走完再读输出层 0.93 GB，才出一个字。61 层权重合计 35.7 GB，加输出层 36.6 GB，就是第一节的 37 GB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">出一个字，61 层逐层走一遍：<tspan font-weight="700">每层读两样，写一格，传一条，其余丢掉</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，权重按 FP8 每参数 1 字节，KV 和传下去的向量按 bf16；条长按字节数同一比例画，数字由 config.json 推导</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">注意力权重</text>
+<rect x="125.4" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="146" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">前馈／专家权重</text>
+<rect x="282.15999999999997" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="303" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">本层 KV</text>
+<rect x="387.4" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="408" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">写：KV 末尾 +1 格</text>
+<rect x="0" y="102" width="1400" height="450" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 一步：同一个新 token 从上往下走</tspan></text>
+<text class="svgsm" x="190" y="158" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读：本层权重</tspan></text>
+<text class="svgsm" x="190" y="180" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">每步都整块读一遍</text>
+<text class="svgsm" x="770" y="158" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读：本层全部 KV</tspan></text>
+<text class="svgsm" x="770" y="180" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">之前每个 token 一格</text>
+<text class="svgsm" x="1030" y="158" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">写：KV 末尾</tspan></text>
+<text class="svgsm" x="1030" y="180" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">576 个数 × 2 B</text>
+<text class="svgsm" x="1200" y="158" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">传：下一层</tspan></text>
+<text class="svgsm" x="1200" y="180" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">丢：其余中间结果</text>
+<line x1="14" y1="190" x2="1386" y2="190" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="20" y="220" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 层</tspan></text>
+<text class="svgsm" x="20" y="242" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">稠密前馈</text>
+<rect x="190" y="202" width="104.7789568" height="26" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="242" y="220" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力 187 MB</tspan></text>
+<rect x="296.7789568" y="202" width="221.96256768" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="407" y="220" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密前馈 396 MB</tspan></text>
+<text class="svgsm" x="528" y="220" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">583 MB</tspan></text>
+<text class="svgsm" x="190" y="250" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">共 583 MB</text>
+<rect x="770" y="202" width="84.55716864" height="26" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="862" y="220" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K：151 MB</tspan></text>
+<rect x="770" y="234" width="6.4512" height="8" rx="1" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="784" y="243" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums">1 万：11.5 MB</text>
+<rect x="1030" y="202" width="110" height="26" rx="4" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1085" y="220" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1,152 B</tspan></text>
+<text class="svgsm" x="1200" y="220" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 维 ↓</tspan></text>
+<text class="svgsm" x="1200" y="242" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">（bf16 14,336 B）</text>
+<text class="svgsm" x="1340" y="220" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">丢</tspan></text>
+<text class="svgsm" x="20" y="296" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2、3 层</tspan></text>
+<text class="svgsm" x="190" y="296" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同第 1 层：读、写、传、丢都一样</text>
+<text class="svgsm" x="1240" y="296" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↓</tspan></text>
+<text class="svgsm" x="20" y="334" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 4 层</tspan></text>
+<text class="svgsm" x="20" y="356" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">MoE</text>
+<rect x="190" y="316" width="104.7789568" height="26" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="242" y="334" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力 187 MB</tspan></text>
+<rect x="296.7789568" y="316" width="221.96256768" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="407" y="334" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8＋1 个专家 396 MB</tspan></text>
+<text class="svgsm" x="528" y="334" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">585 MB</tspan></text>
+<text class="svgsm" x="190" y="364" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">共 585 MB（含路由打分 1.8 MB）</text>
+<rect x="770" y="316" width="84.55716864" height="26" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="862" y="334" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K：151 MB</tspan></text>
+<rect x="770" y="348" width="6.4512" height="8" rx="1" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="784" y="357" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums">1 万：11.5 MB</text>
+<rect x="1030" y="316" width="110" height="26" rx="4" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1085" y="334" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1,152 B</tspan></text>
+<text class="svgsm" x="1200" y="334" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 维 ↓</tspan></text>
+<text class="svgsm" x="1200" y="356" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">（bf16 14,336 B）</text>
+<text class="svgsm" x="1340" y="334" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">丢</tspan></text>
+<text class="svgsm" x="20" y="410" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 5 到 60 层</tspan></text>
+<text class="svgsm" x="190" y="410" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同第 4 层：读、写、传、丢都一样</text>
+<text class="svgsm" x="1240" y="410" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↓</tspan></text>
+<text class="svgsm" x="20" y="448" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 61 层</tspan></text>
+<text class="svgsm" x="20" y="470" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">MoE</text>
+<rect x="190" y="430" width="104.7789568" height="26" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="242" y="448" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力 187 MB</tspan></text>
+<rect x="296.7789568" y="430" width="221.96256768" height="26" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="407" y="448" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8＋1 个专家 396 MB</tspan></text>
+<text class="svgsm" x="528" y="448" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">585 MB</tspan></text>
+<text class="svgsm" x="190" y="478" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">共 585 MB（含路由打分 1.8 MB）</text>
+<rect x="770" y="430" width="84.55716864" height="26" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="862" y="448" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K：151 MB</tspan></text>
+<rect x="770" y="462" width="6.4512" height="8" rx="1" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="784" y="471" fill="#681da8" style="font-size:13.0px;font-variant-numeric:tabular-nums">1 万：11.5 MB</text>
+<rect x="1030" y="430" width="110" height="26" rx="4" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1085" y="448" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1,152 B</tspan></text>
+<text class="svgsm" x="1200" y="448" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 维 ↓</tspan></text>
+<text class="svgsm" x="1200" y="470" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">（bf16 14,336 B）</text>
+<text class="svgsm" x="1340" y="448" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">丢</tspan></text>
+<text class="svgsm" x="20" y="524" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出层</tspan></text>
+<text class="svgsm" x="20" y="546" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">61 层走完</text>
+<rect x="190" y="506" width="518.9402624" height="26" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="200" y="524" fill="#ffffff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出层 0.93 GB：7,168 维 × 词表 129,280</tspan></text>
+<text class="svgsm" x="190" y="554" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">打分挑出下一个字，然后回到第 1 层</text>
+<text class="svgsm" x="1200" y="524" fill="#a50e0e" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">出一个字</tspan></text>
+<rect x="0" y="598" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="598" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="598" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="625" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">61 层走完才出一个字，下一个字从第 1 层重来</tspan></text>
+<text class="svgsm" x="20" y="656" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">权重：61 层合计 35.7 GB，加输出层 36.6 GB，就是第一节那 37 GB；人多时这一趟大家共用。</text>
+<text class="svgsm" x="20" y="680" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">KV：每层每 token 是 512 维压缩 KV（K、V 都从它解出）＋ 64 维位置编码那截 ＝ 576 个数，bf16 每个 2 B ＝ 1,152 B；跟长度成正比，一人一份。</text>
+</svg><figcaption><b>每一行都读两样：蓝绿那条大家共用，紫色那条跟着上下文变长、一人一份。</b><span class="capmore"><br><em>61 层加输出层的权重对上 37 GB；全部推导见第十五节台账「L83」。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 形状取 Hugging Face deepseek-ai/DeepSeek-V3 的 config.json：hidden 7,168、61 层、first_k_dense_replace 3、intermediate 18,432、moe_intermediate 2,048、256 个路由专家选 8 ＋ 1 个共享专家、128 头、q_lora 1,536、kv_lora 512、qk_nope 128、qk_rope 64、v_head 128、词表 129,280、输入输出词表不共享。</p>
+<p>📌 本课推导：注意力 ＝ 7168×1536 ＋ 1536×128×192 ＋ 7168×576 ＋ 512×128×256 ＋ 128×128×7168 ＝ 187,105,280；稠密前馈 ＝ 3×7168×18432 ＝ 396,361,728；单个专家 ＝ 3×7168×2048 ＝ 44,040,192，9 个正好 396,361,728；路由 256×7168。</p>
+<p>📌 锚点：同一套公式总参数 671.0B（技术报告 671B，不含 MTP 层）；激活 ＝ 3×583.5M ＋ 58×585.3M ＋ 输出层 0.93B ＝ 36.6B，取整即报告的 37B（输入词表查表只读一行，不计）。</p>
+<p>⚠️ 口径：权重全按 FP8 每参数 1 字节，忽略 block scale；路由打分和 norm 实际精度更高，量级可忽略。KV、传下去的向量按 bf16。丢掉的中间结果包括本层的 Q、注意力分数、前馈中间那 18,432 维（专家是 2,048 维）的结果。</p></details></figure>
+  <p>每层读的权重约 0.58 GB，61 层合计 35.7 GB，加上输出层 0.93 GB，就是 1.2 那 37 GB（本课按 config 推导）。KV 每层 1 万 token 约 11.5 MB，128K 约 151 MB，已和本层注意力权重 187 MB 一个量级。</p>
   <p>几个人同时 decode 时，权重这一趟大家共用：读一遍，每人各出一个字。KV 不行，它是每个人自己的历史，各读各的（第一节）。</p>
   <div class="note ok"><span class="t">一句话</span>
     <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
@@ -6320,6 +6430,34 @@ body.figonly section h3{margin-top:34px}
   <details class="foldfig"><summary><b>考考自己</b>：4K 输入、并发 8 的线上服务，要不要开 DCP8？换成 128K 的 agent 长对话呢？</summary>
   <p>4K 不开：KV 放得下，DCP 只剩代价（7.2）。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>
 
+  <h3 id="s7-7">7.7　并排看：每张卡每层读多少、存多少</h3>
+  <p>把第六、七节的切法摆进同一本账：V3，8 颗 v7（16 个 device，v7x-16），上下文 128K。每格按 device 算，口径同 3.2、10.5：每 device 可用 94.75 GiB，留一成给激活值，剩 85.3 GiB；权重 FP8 每参数 1 字节，KV 按 bf16，一条 128K 是 8.58 GiB。</p>
+  <div class="tbl-wrap"><table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导，纸面账。非专家权重 ＝ 总参数 671.0B 减去 58 层 × 256 个路由专家（653.9B）＝ 17.1B；每层参数分项见 0.2 的图。实测 FP8 专家比均摊更占地方（10.5），真机余量只会更少。</caption>
+    <tr><th>切法</th><th>权重／device</th><th>剩给 KV</th><th>一条 128K 在每 device 占</th><th>16 个 device 装几条</th></tr>
+    <tr><td>DP：整套复制</td><td>625 GiB</td><td>放不下</td><td>—（一份权重就超了）</td><td>0</td></tr>
+    <tr><td>TP16：注意力、专家都切 16 片</td><td>39.1 GiB（全切）</td><td>46.2 GiB</td><td>8.58 GiB（每 device 一整份）</td><td>5</td></tr>
+    <tr><td>TEP16：注意力 TP、专家 EP</td><td>39.1 GiB（全切）</td><td>46.2 GiB</td><td>8.58 GiB（每 device 一整份）</td><td>5</td></tr>
+    <tr><td>DEP16：注意力 DP、专家 EP</td><td>54.0 GiB（非专家整份 15.9 ＋ 路由专家 1/16 是 38.1）</td><td>31.3 GiB</td><td>8.58 GiB（只在自己那个 device）</td><td>每 device 3 条，共 48</td></tr>
+    <tr><td>TEP16 ＋ DCP16</td><td>39.1 GiB（全切）</td><td>46.2 GiB</td><td>0.54 GiB（按 token 切 16 份）</td><td>86</td></tr>
+  </table></div>
+  <p>读的一侧取装满时的 batch，每层碰到几个专家按 1.3 的均匀路由算；只算从 HBM 读的字节，下限按每 device 3.685 TB/s（每芯片 7.37 ÷ 2）。</p>
+  <div class="tbl-wrap"><table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导。读权重取 MoE 层（第 4 到 61 层），每 device 每层；一步下限含 61 层与输出层，不含通信和计算。通信次数：TP 前向每层 2 次 AllReduce（Megatron-LM，arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 同 2 次（专题五 §4.4 的图）；DEP 专家前后各 1 次 all-to-all（6.7）；DCP 另加每层 3 次（vLLM 默认后端，7.1）。</caption>
+    <tr><th>切法</th><th>整套 batch</th><th>每层读权重</th><th>每层读 KV</th><th>一步读完下限</th><th>每层通信</th><th>代价／适用</th></tr>
+    <tr><td>TP16</td><td>5</td><td>118 MB：注意力 1/16 ＋ 碰到的 37.6 个路由专家和共享专家各 1/16</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>单人出字快；KV 复制 16 份，长上下文装不下人</td></tr>
+    <tr><td>TEP16</td><td>5</td><td>118 MB（平均）：注意力 1/16 ＋ 本卡被碰到的整块专家</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>同 TP16；专家整块，热门专家那张卡要多读，大家等它</td></tr>
+    <tr><td>DEP16</td><td>48</td><td>784 MB：整份注意力 187 ＋ 本卡 12.5 个路由专家 ＋ 共享专家</td><td>453 MB：只读自己 3 条</td><td>20.6 ms</td><td>2 次 all-to-all（前 3 层不用）</td><td>KV 不复制，人多时最省；每 rank 一份状态，K3 这类起不来（6.3）</td></tr>
+    <tr><td>TEP16 ＋ DCP16</td><td>86</td><td>673 MB：注意力 1/16 ＋ 本卡 15 个整块专家</td><td>812 MB：86 条各读 1/16</td><td>24.1 ms</td><td>2 次 AllReduce ＋ 3 次</td><td>装得最多；通信最勤，只在长上下文划算（7.2）</td></tr>
+  </table></div>
+  <ul>
+    <li><b>TP 和 TEP 存、读都一样</b>：MLA 只有一份 KV，按头切不开，16 个 device 每个都存、都读全部 5 条（6.2）。两者只差在专家：TP 把每个专家切成 16 片，TEP 整块放一卡。</li>
+    <li><b>DEP 每卡各存一份非专家权重</b>，比全切多占 14.9 GiB（54.0 − 39.1），换来 KV 不复制：128K 装 48 条，以 TP16 的 5 条为基线约 9.6 倍。代价是每卡每层都读整份注意力权重 187 MB。</li>
+    <li><b>DCP 把一条序列的 KV 按 token 切 16 份</b>：每卡只存、只读每条的 1/16，权重仍全切，所以装 86 条；代价是每层多 3 次通信。DEP 上叠不了 DCP：度数最多 TP ÷ KV 头数，DEP 的 TP 是 1（7.1）。</li>
+    <li><b>下限只看了读</b>：TP16 读 14.4 ms 出 5 个字，DEP16 读 20.6 ms 出 48 个，TEP16 ＋ DCP16 读 24.1 ms 出 86 个。谁真赢，要把每层通信那一列也算进去。</li>
+    <li><b>和 10.5 对账</b>：那张图说 8 颗装得下 128K × 64，前提是 KV 不复制、非专家权重不重复。按 DEP 切只装 48 条；权重全切的 TEP16 ＋ DCP16 到 86，才兑现那个下限。</li>
+  </ul>
+
 </div></section>
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>拆工作：PD 分离与那一趟 KV</h2></div>
   <p class="lead">第六、七节把每张卡的批撑大了，一次 prefill 波及的人也跟着变多。分块 prefill（4.2）只能把打扰摊平：两段还挤在同一批卡上，长 prompt 一来，正在出字的人照样要等。PD 分离把两段拆到两批机器上。Splitwise（2023）、DistServe（2024）先后提出它：前者报同成本同功耗下吞吐是不拆的 2.35 倍，后者报九成请求达标时能接的请求是当时主流系统（都不拆）的 7.4 倍。</p>
@@ -10282,6 +10420,8 @@ body.figonly section h3{margin-top:34px}
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>DeepSeek-V3：总参数 6,710 亿、每 token 激活 370 亿；61 层、hidden 7168、256 个路由专家选 8、kv_lora 512 ＋ rope 64、moe_intermediate 2048</td><td>DeepSeek-V3 Technical Report（arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a>）摘要；形状取 Hugging Face deepseek-ai/DeepSeek-V3 的 config.json</td></tr>
     <tr><td>MLA 每 token KV 70,272 字节；128K 一条序列 8.58 GiB（9.21 GB）</td><td>本课推导：(512＋64) × 2 B × 61 层；× 131,072</td></tr>
+    <tr><td>L83 · 0.2 逐层走一遍：每层注意力 187,105,280 参数（FP8 约 187 MB）、稠密前馈 396,361,728、单个专家 44,040,192（8 路由＋1 共享正好 396,361,728）、路由打分 256 × 7168；前 3 层稠密、后 58 层 MoE；每层读权重约 583／585 MB，61 层合计 35.7B，加输出层 0.93B ＝ 36.6B，取整对上激活 37B；同一套公式总参数 671.0B，对上 671B（不含 MTP 层）；KV 每层每 token 512＋64 ＝ 576 个数 × 2 B ＝ 1,152 B，1 万 token 每层 11.5 MB、全层 0.70 GB，128K 每层 151 MB；传下一层 7,168 维 × 2 B ＝ 14,336 B</td><td>Hugging Face deepseek-ai/DeepSeek-V3 的 config.json（2026-10-17 读：first_k_dense_replace 3、intermediate_size 18432、moe_intermediate_size 2048、n_shared_experts 1、q_lora_rank 1536、qk_nope_head_dim 128、v_head_dim 128、vocab_size 129280、tie_word_embeddings false）；本课推导：注意力 ＝ 7168×1536 ＋ 1536×128×192 ＋ 7168×576 ＋ 512×128×256 ＋ 128×128×7168，前馈 3×7168×18432，专家 3×7168×2048，输出层 129,280×7168；输入词表查表只读一行，不计入每步读量；逐项 assert 在 topic06-fig-layerwalk.py</td></tr>
+    <tr><td>L83 · 0.2：v7 片上 VMEM 每 TensorCore 64 MiB、每芯片 2 个 TensorCore ＝ 128 MiB，约为 192 GiB HBM 的 1/1,500</td><td>JAX jax/_src/pallas/mosaic/tpu_info.py（TPU_7X：vmem_capacity_bytes 64 MiB per core、2 个 TensorCore）；inferact.ai/blog/tpu-megakernels（「64 MiB of VMEM per TensorCore」，13.7 已引）；1/1,500 本课推导：192 × 1024 ÷ 128 ＝ 1,536</td></tr>
     <tr><td>TPU v7：FP8 4,614 TFLOP/s、HBM 192 GiB（≈ 206.2 GB）、7.37 TB/s，每芯片 2 个 device；BF16 2,307 TFLOP/s，屋脊点 ≈313 FLOP/字节</td><td>Google Cloud TPU7x 公开规格页（写 7,380 GB/s；7.37 TB/s 取 Google 博客 Ironwood: The first Google TPU for the age of inference，2025-04，差 0.14% 不影响屋脊点）；JAX jax/_src/pallas/mosaic/tpu_info.py 记每芯片 HBM 206e9 字节（≈ 191.9 GiB），即规格表的 192 GiB；BF16 与屋脊点本课推导：4,614 ÷ 2，2,307 TFLOP/s ÷ 7.37 TB/s</td></tr>
     <tr><td>TTFT、TPOT／ITL 的定义</td><td>vLLM 仓库 vllm/benchmarks/serve.py；NVIDIA NIM 的 LLM benchmarking 文档页（写明 ITL also known as TPOT）</td></tr>
     <tr><td>decode 一步：读 37 GB 要 5.02 ms，算 74 GFLOP 只要 0.016 ms，算力用上 0.32%</td><td>本课推导：37 GB ÷ 7.37 TB/s；2 × 37e9 ÷ 4,614 TFLOP/s；FP8 每参数 1 字节、每 token 2 FLOP，屋脊点 4,614 TFLOP/s ÷ 7.37 TB/s ≈ 626 FLOP/字节，2 ÷ 626 ≈ 0.32%</td></tr>
@@ -10340,6 +10480,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>DCP 让 KV 容量 1.5M → 12.2M token（官方逻辑容量）；单流 −26% 来自丢掉 symm-mem；TP8 默认配置不开投机实测 max_total_num_tokens 787,504（约 79 万；128K 宽表 TP8 行均未开投机），开投机降到 637,504（−19%），128K × 8 ＝ 1,048,576（100 多万）放不下</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962；实测值 :1171、未开投机见宽表 :934-938；乘积本课推导</td></tr>
     <tr><td>K3 128K 并发 8 首字中位：TP8 32.1 s，DCP8 2.3 s（含排队）；官方 PD 吞吐：1P1D（TP8 decode）2,808 对 2P2D（DCP8 decode）2,633 tok/s/GPU</td><td>SGLANG-K3-RUNBOOK.md:939（TP8 r060-isl128k）、:941（dcp8-isl128k）；:609-610、:707-708（官方原文引于 :1323）</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
+    <tr><td>L83 · 7.7 并排表：8 颗 v7 ＝ 16 个 device、128K；每 device 可用 94.75 GiB × 0.9 ＝ 85.3 GiB；权重全切 39.1 GiB、剩 46.2 GiB；DEP 每 device 存非专家整份 17.1B（15.9 GiB）＋ 路由专家 1/16（38.1 GiB）＝ 54.0 GiB、剩 31.3 GiB；装几条：TP16／TEP16 5、DEP16 48（每 device 3）、TEP16＋DCP16 86；每层读权重（MoE 层）118／784／673 MB，读 KV 755／453／812 MB；一步读完下限 14.4／20.6／24.1 ms；碰到的路由专家 37.6／200.2／239.3 个</td><td>本课推导：非专家 ＝ 671.0B − 653.9B；一条 128K ＝ 70,272 × 131,072 B ＝ 8.58 GiB、每层 1,152 × 131,072 B ＝ 151 MB；碰到的专家 256 × [1 − (1 − 8/256)<sup>b</sup>]（1.3 同式）；下限 ＝ 每 device 每步字节 ÷ 3.685 TB/s（7.37 ÷ 2）；94.75 GiB 与 0.9 同 3.2、10.5；逐项 assert 在 topic06_s7.py 的 _t77()。通信次数：TP 前向每层 2 次 all-reduce 见 Megatron-LM（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 两次 AllReduce 沿用专题五 fig5-tep-dep 图注；DEP 两次 all-to-all 见 6.7 台账；DCP 每层 3 次沿用 7.1 正文（来源见下一行专题五台账）；DCP 度数 ≤ TP ÷ KV 头数沿用 7.1</td></tr>
     <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP；pass-KV／pass-Q 按通信能否藏进注意力计算来选（10% 未命中仍选 pass-KV，低于 3.25% 才换 pass-Q）</td><td>沿用专题五台账第 23、29、45、21 行；arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a> §3.4、§4.2.4</td></tr>
     <tr><td>KV 传输软件栈</td><td>github.com/ai-dynamo/nixl；github.com/kvcache-ai/Mooncake；LMCache arXiv <a href="https://arxiv.org/abs/2510.09665" target="_blank" rel="noopener">2510.09665</a>；docs.nvidia.com/dynamo 的 KVBM；github.com/google/tpu-sync（~200 GB/s，not yet recommended for general use）；tpu-inference kv_transfer（jax.experimental.transfer）</td></tr>
     <tr><td>PD 传输带宽从 200 MB/s 调到 7–167 GB/s</td><td>VLLM-V4PRO-RUNBOOK.md:194，配置见 :106、180-194</td></tr>
