@@ -27,11 +27,11 @@ __FIG_S0_CHAIN__
     <tr><td>⑩</td><td>2024 → 2025</td><td>Meta（CP）；vLLM 2025 合入 DCP</td><td>DEP 起不来、KV 被复制 → DCP／PCP 按序列切</td><td>DCP 把 KV 副本让出来，PCP 切 prompt 压首字</td><td>DCP 只在长上下文划算；PCP 遇上线性注意力，状态得一卡接一卡传</td><td>七</td></tr>
     <tr><td>⑪</td><td>2024 → 2025</td><td>SGLang、DeepSeek</td><td>MoE 把 batch 拆碎，每专家约 8 行 → DP attention ＋ 大 EP</td><td>SGLang 复现：最多是同卡数纯 TP 的 5×</td><td>每个 rank 自带一份状态，K3 开 DEP8 显存不够；prefill 也追不上变快的 decode</td><td>六</td></tr>
   </table>
-  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。终点那颗菱形是 GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡到了首发日的 5.1 倍（含 MTP）。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十四节）。</p>
+  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。终点那颗菱形是 GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡到了首发日的 5.1 倍（含 MTP）。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十五节）。</p>
   </details>
 __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
-    同等 GPT-3.5 水平的推理这两年便宜得很快（斯坦福 AI Index 2025 按市场价统计，本课不引价格口径的数），报告主要归给更强的小模型；系统这一侧能不能单独拆出来，14.3 再说。</p>
+    同等 GPT-3.5 水平的推理这两年便宜得很快（斯坦福 AI Index 2025 按市场价统计，本课不引价格口径的数），报告主要归给更强的小模型；系统这一侧能不能单独拆出来，15.3 再说。</p>
   <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
 __FIG_S0_ENGINES__
   <details class="foldfig"><summary><b>完整时间线</b>：图上只留八个时刻，其余都在这张表里</summary>
@@ -72,12 +72,12 @@ __FIG_S0_ENGINES__
     <tr><td>2026-06</td><td>SGLang</td><td>GB300 上跑 V4-Pro，同交互档 5.1×（对自家首发日）</td><td>—</td><td>PyTorch 博客 2026-06-23</td></tr>
     <tr><td>2026-09</td><td>vLLM 生态</td><td>Inferact 的 TPU megakernel</td><td>—</td><td>Inferact 博客</td></tr>
   </table>
-  <p>两家共用的外部部件：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。间隔都按两边日期本课推导，往下取整；全部出处见第十五节台账「R85 补充」「L80 补充」。</p>
+  <p>两家共用的外部部件：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。间隔都按两边日期本课推导，往下取整；全部出处见第十六节台账「R85 补充」「L80 补充」。</p>
   </details>
   <h3 id="s0-2">0.2　一个请求的一生，和全课一句话</h3>
 __FIG_S0_LIFE__
   <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
-  <p><b>住在哪。</b>权重和 KV 都常驻 HBM（芯片自带的显存）。真正做乘加的地方旁边只有一小块片上存储：v7 每个 TensorCore 64 MiB VMEM，一颗芯片两个，合 128 MiB，约是 192 GiB HBM 的 1/1,500（13.7）。几十 GB 放不进去，所以每一步都得从 HBM 再流一遍。</p>
+  <p><b>住在哪。</b>权重和 KV 都常驻 HBM（芯片自带的显存）。真正做乘加的地方旁边只有一小块片上存储：v7 每个 TensorCore 64 MiB VMEM，一颗芯片两个，合 128 MiB，约是 192 GiB HBM 的 1/1,500（14.7）。几十 GB 放不进去，所以每一步都得从 HBM 再流一遍。</p>
   <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.2）。KV 每层每个 token 存 512 维压缩 KV（K、V 都从它解出）＋ 64 维位置编码那截 ＝ 576 个数，bf16 每个 2 字节 ＝ 1,152 B；61 层合计 70,272 B（4.1）。</p>
   <p><b>跟长度成正比。</b>上下文 1 万 token，一条 KV 约 0.70 GB；128K 是 8.58 GiB。它是这个人自己的历史，一人一份，不跟别人共享。</p>
   <p><b>出一个字，61 层逐层走一遍：</b></p>
@@ -152,7 +152,7 @@ FIGS = {
         '<em>示意时间线，长短不按比例。</em>'),
     "__FIG_S0_LAYER__": ("fig-s0-layer", "fig6-layerwalk.svg", "topic06-fig-layerwalk.py",
         '<b>每一行都读两样：蓝绿那条大家共用，紫色那条跟着上下文变长、一人一份。</b><br>'
-        '<em>61 层加输出层的权重对上 37 GB；全部推导见第十五节台账「L83」。</em>'),
+        '<em>61 层加输出层的权重对上 37 GB；全部推导见第十六节台账「L83」。</em>'),
     "__FIG_S0_MAP__": ("fig-s0-map", "fig6-map.svg", "topic06-fig-intro.py",
         '<b>蓝色那组节最多：第四到第七节加第十一节，都在让一趟多坐几个人。</b><br>'
         '<em>归类是本课的分法，标签是讲这一招的节。</em>'),

@@ -8,7 +8,7 @@ r"""专题六 · 第零节 0.1「两大引擎你方唱罢我登场」（fig6-eng
 ⭐ L80 为什么精简：R90 版三条泳道 33 张卡，现场评语「跟一大篇一样贴在上面」。
    只留 8 个时刻（9 个点：接 Mooncake 两家各一个），其余三十多张卡的内容收进图下的折叠表
    （topic06_s0.py 的 ENGINE_TABLE），一条不丢。
-⛔ 8 个时刻与日期都取自第十五节台账「R85 补充」：
+⛔ 8 个时刻与日期都取自第十六节台账「R85 补充」：
    ① 2023-06-20 vLLM PagedAttention 博客　② 2024-01-17 SGLang 首发（原文写明复用 vLLM 代码）
    ③ 2024-07-25 SGLang v0.2（3.1×，对 vLLM 0.5.2）　④ 2024-09-05 vLLM v0.6.0（自承 CPU 开销）
    ⑤ 2025-01-27 vLLM V1（原文：SGLang 等显著影响）　⑥ 接 Mooncake：vLLM 2024-12-15、SGLang 2025-04-10
@@ -160,7 +160,7 @@ def fig_engines():
     assert xa - 10 <= xb + 10, "外部锚点顺序反了"
     bs = lane(f, "s", RD, "SGLang", SGL, ys, False)
     ybot = max(b[3] for b in bs) + 10
-    f.src(ybot, "全部日期见第十五节台账「R85 补充」：vLLM 博客 2023-06-20、2024-09-05（v0.6.0）、2025-01-27（V1，「These engines have significantly influenced our work」）；"
+    f.src(ybot, "全部日期见第十六节台账「R85 补充」：vLLM 博客 2023-06-20、2024-09-05（v0.6.0）、2025-01-27（V1，「These engines have significantly influenced our work」）；"
                 "vLLM 合入 Mooncake 2024-12-15、首批 PD 代码 2024-12-01；"
                 "SGLang lmsys 博客 2024-01-17（「reused some code from … vLLM」）、2024-07-25（v0.2，3.1× 对 vLLM 0.5.2）、"
                 "SGLang 支持 Mooncake 2025-04-10、大 EP 博客 2025-05-05（96×H100，5× 对同卡数纯 TP）；"

@@ -7,7 +7,7 @@ r"""专题六 · 3.1 的演进图：DeepSeek 一条线上四代 KV，各省在�
 
 📌 数字从哪来（只用课件已有的，一个不新编）：
    · MLA 70,272 B/token：3.1 表格（V3 config.json 推导），topic06_numbers.V3_KV_PER_TOKEN。
-   · DSA 每字只读 2,048 个历史 token、打分器仍扫全部（头少、FP8）：台账 R16（V3.2 报告 §2.1）、R21 · 14.3。
+   · DSA 每字只读 2,048 个历史 token、打分器仍扫全部（头少、FP8）：台账 R16（V3.2 报告 §2.1）、R21 · 15.3。
    · V4：每层一条所有头共用的 KV；CSA 每 4 个 token 并一条、只挑一部分读；HCA 每 128 个并一条、全读；
      最近 128 个 token 不压：台账 R18（V4 技术报告 §2.3；V4-Pro config.json compress_ratios 4／128、sliding_window 128）。
    · V4.1-Flash：各层共用主 KV 和索引 K、主 KV 存 FP4，全局 KV 890 B/token，约 V4-Flash 的 1/4：台账 R25 · 0／3.1（HF 模型卡）。

@@ -40,7 +40,7 @@ def _css():
 
 
 # ══════════════════════════════════════════════════════════════════
-# 十五节讲稿分三个文件写（topic06_lec_a/b/c.py），每个导出 CH 和 PLAN。
+# 十六节讲稿分三个文件写（topic06_lec_a/b/c.py），每个导出 CH 和 PLAN。
 # ⛔ 「屏幕」里的图 id 和小节号会被 topic02-lint-cues.py 逐个对账。
 # ══════════════════════════════════════════════════════════════════
 import topic06_lec_a as LA, topic06_lec_b as LB, topic06_lec_c as LC
@@ -145,7 +145,7 @@ h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transfo
 ''' + LA.TIME_NOTE + '''
   <table>
 <thead><tr><th>段落</th><th>分钟</th><th>能不能砍</th><th>说明</th></tr></thead><tbody>
-''' + "".join("<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td></tr>\n" % p for p in PLAN) + '''<tr><td><b>合计</b></td><td><b>''' + str(PLAN_SUM) + '''</b></td><td></td><td>第十五节（出处台账）不进课堂，被追问时翻</td></tr>
+''' + "".join("<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td></tr>\n" % p for p in PLAN) + '''<tr><td><b>合计</b></td><td><b>''' + str(PLAN_SUM) + '''</b></td><td></td><td>第十六节（出处台账）不进课堂，被追问时翻</td></tr>
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，<b>也不含等动画转完一圈的时间</b>（全讲约 3 分钟）。每次 build 现数。</em></p>
