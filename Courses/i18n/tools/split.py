@@ -13,7 +13,7 @@ MAX_CJK = int(os.environ.get("MAX_CJK", 15000))
 CJK = re.compile(r'[㐀-鿿＀-￯　-〿]')
 
 def main(topic, out):
-    src = pathlib.Path(__file__).resolve().parents[2] / 'WebPages' / f'{topic}.html'
+    src = pathlib.Path(os.environ['SPLIT_SRC']) if os.environ.get('SPLIT_SRC') else pathlib.Path(__file__).resolve().parents[2] / 'WebPages' / f'{topic}.html'
     s = src.read_text()
     # 注释只在 <style>/<script> 之外去
     parts = re.split(r'(<(?:style|script)\b.*?</(?:style|script)>)', s, flags=re.S)

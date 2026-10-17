@@ -620,6 +620,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p>So the default <b>fetches rows by index</b>:
         <em>same math, different algorithm, costs orders of magnitude apart.</em>
         FlashAttention is the same idea.</p>
+        <p class="sub">(<b>Don't say “always”</b>: the page's Expand block notes 34 MaxText production configs turn on <code>use_iota_embed</code>,
+        which really compiles to a one-hot matmul. The denominator is so large that it's only 0.46% of total compute.)</p>
       </div></details>
     <details><summary>What about position? Is “which token is this” encoded here?</summary>
       <div class="a">
@@ -773,7 +775,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>Last, how it changes with length. <b>X is sequence length, Y is KV cache, two lines.</b>
     Red is the traditional scheme; blue is MLA.</p>
 
-    <p><b>Both are straight, because both are linear. But their slopes differ by about 57×.</b>
+    <p><b>Both are straight, because both are linear. But their slopes differ by 56.9×.</b>
     So they start from the same origin and <em>keep spreading apart</em>.
     <b>The red gap between them is what a different storage scheme saves.</b></p>
 
@@ -894,7 +896,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>MQA, 2019.</b> A very short Shazeer paper: “One write-head is all you need.”
     Every head shares one copy, <b>so you divide straight by the head count</b>.</p>
 
-    <p>Say this detail; it explains the decade that followed.
+    <p>Say this; it explains the decade that followed.
     <b>Shazeer wasn't solving “it doesn't fit,” but “it can't move fast enough.”</b>
     Each generated token rereads K and V from HBM. <em>The bottleneck was bandwidth.</em>
     <b>“It doesn't fit” came later, with long context.</b></p>
@@ -915,7 +917,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">Back to the numbers on the four-generation cards.</span>
 
-    <p><b>576 sits between GQA's 2,048 and MQA's 256. Yet its quality beats both.</b></p>
+    <p><b>576 sits between GQA's 2,048 and MQA's 256. Yet its quality beats both.</b>
+    (Inferred from two tables: MHA beats GQA and MQA; MLA beats MHA.)</p>
 
     <p>Stop; let them find what's wrong with that.
     <b>On one axis, that's impossible.</b> Save more than GQA and beat its quality? No free lunch.
@@ -1148,7 +1151,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p><b>But the real reason is cost:</b> Q never enters the cache, <b>so sharing saves nothing, only loses expressiveness</b>.
         K does, <b>and sharing squeezes 8,192 to 64</b>, worth the loss.
         <em>Cost, not math, decides the asymmetry.</em>
-        <b>Derivation: the page's “Expand: why don't Q's 64 dims share one copy too?” Touch on it only.</b></p>
+        <b>Derivation: the page's “Expand: why Q's 64 dims aren't shared” Touch on it only.</b></p>
       </div></details>
     <details><summary>Q is low-rank too (1,536). Why?</summary>
       <div class="a">
@@ -1595,10 +1598,10 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <em>That's the whole story behind the 64 in 576.</em></p>
 
     <p>Run it the other way to see the deal: <b>if the path weren't shared, one copy per head,
-    you'd store an extra 128 times 64. That's 8,192.</b>
+    those 64 would become 128 times 64. That's 8,192.</b>
     <em>The cache would jump from 576 to 8,704, and MLA would be pointless.</em></p>
 
-    <span class="board">Below is a collapsed block titled “Expand: why don't Q's 64 dims share one copy too?”.
+    <span class="board">Below is a collapsed block titled “Expand: why Q's 64 dims aren't shared”.
     <b>Don't open it; cover it aloud</b>, unless pressed on details.</span>
 
     <p>Nine times out of ten, someone asks: <b>position belongs to the token, not to a head.
@@ -2300,7 +2303,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="board">Go to the closing green box, “What happened next,” then on to Step 3.</span>
 
     <p><b>Once this curve is computed, the next move is obvious:
-    if attention eats 90% of compute, stop every query from looking at every token.</b></p>
+    if attention eats over 80% of compute, stop every query from looking at every token.</b></p>
 
     <p><b>How to skip tokens, which ones to look at less, and what that costs: that's a whole lecture, Topic 3.</b>
     <em>This lecture only computes why change is unavoidable. That's the line on screen.</em></p>
@@ -2634,7 +2637,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p><b>But the section is about the four properties, not that 0.2%.</b>
         <em>It's a free teaching aid: simple enough to explain fully in one pass,
         and the same three-matrix SwiGLU the MoE experts use.</em></p>
-        <p><b>Four minutes here saves three next segment and buys a control group.</b></p>
+        <p><b>Seven minutes here saves three next segment and buys a control group.</b></p>
       </div></details>
     <details><summary>Is there anything else behind 18,432, beyond parameter parity?</summary>
       <div class="a">
@@ -2646,7 +2649,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         is as wide, matrix for matrix, as its 9 active experts in the other 58 layers.</b>
         <em>Per-token MLP compute is an almost flat line from first layer to last.</em></p>
         <p class="sub"><b>Keep the word “almost.”</b>
-        <em>An MoE layer also has a router, <code>7,168 × 256 = 1.84 M</code>,
+        <em>An MoE layer also has a router, <code>7,168 × 256 = 1.84M</code>,
         which is 0.46% of 396.36M.</em>
         <b>Say “the experts match exactly, plus 0.46% for the router.”
         Volunteer tails like this before someone drags them out.</b></p>
@@ -2754,7 +2757,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>The trick is to split one wide MLP into many narrow ones. V3 has 256 routed experts plus 1 shared expert.</b>
     <em>Each expert is still the same three-matrix SwiGLU. The intermediate width just drops from 18,432 to 2,048.</em></p>
 
-    <span class="board">Point at the figure “Each token takes its own path.”</span>
+    <span class="board">Scroll down to “⭐ Each token takes its own path” (below the red-and-green figure).</span>
 
     <p><b>For each token, a router picks just 8 routed experts.
     Add the shared expert that every token goes through, and that's 9.</b>
@@ -2764,7 +2767,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>⭐ The exact match</h4>
 
-    <span class="board">Scroll to the nine-segment bar figure, both red dashed lines on screen.</span>
+    <span class="board">Keep going to the nine-segment bar at the end of 4a, both red dashed lines on screen.</span>
 
     <p><b>Let's do the math. One layer holds 257 experts, 11.32B parameters.</b>
     <em>But each token activates only 9. That comes to 396,361,728 parameters.</em></p>
@@ -2787,7 +2790,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="pause">Half a second, but say it: it's the course's credibility.</span>
 
     <p><b>Strictly, it's a hair more. MoE first runs the router matrix, 7,168 by 256.
-    Next to 396M, that's half a percent.</b>
+    Next to 396M, that's 0.46%, about half a percent.</b>
     <em>So the precise version is: not one extra expert FLOP, plus a half-percent triage fee.</em></p>
 
     <span class="pause">Takeaway. Pause.</span>
@@ -2802,7 +2805,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>And each token actually uses only 3.5% of them.</b>
     <em>“A 671B model that computes only 37B per token”: this is where that line comes from.</em></p>
 
-    <span class="board">Switch to the three “Fine-grained” cards.</span>
+    <span class="board">Scroll back up a little to the three “Fine-grained” cards above it.</span>
 
     <p><b>Why are experts small and many?</b>
     <em>Same activation budget: pick 1 of 8 big experts and you have 8 options.
@@ -2825,7 +2828,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="pause">Don't stop at “I say it's not.” Go to the evidence: once a bare claim, now data.</span>
 
-    <span class="board">Scroll to the red-and-green two-panel figure. <b>Left panel only, first.</b></span>
+    <span class="board">Back up to the red-and-green figure under the dense-vs-MoE one. <b>Left panel only, first.</b></span>
 
     <p><b>Someone actually measured this. The Mixtral paper took routing apart and counted.</b></p>
 
@@ -2959,7 +2962,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     Clear it up unprompted before Segment 11.</b><br>
     <b>④ Don't make “not one extra FLOP” absolute.</b>
     <em>Once taught that way; fixed now.</em>
-    <b>The experts are exactly equal, but MoE also runs the router: an extra half a percent.</b>
+    <b>The experts are exactly equal, but MoE also runs the router: an extra 0.46%.</b>
     <em>Tiny, but it proves we did the math. Volunteer it.</em><br>
     <b>⑤ Don't state “experts don't split by subject” as a bare assertion.</b>
     <em>Measurements back it now. Point at the figure,
@@ -3037,7 +3040,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>Over two hundred experts can end up mostly idle, the compute piled on a handful.</b></p>
 
-    <span class="board">Scroll to the four-bar figure, “⭐ Imbalance: one device busy, all wait”: red top, green below.</span>
+    <span class="board">Scroll down to the four-bar figure at the end of 4b, “⭐ Imbalance: one device busy, all wait”: red top, green below.</span>
 
     <p><b>First, how expensive is this? Else the fix looks like overkill.</b></p>
 
@@ -3061,7 +3064,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <em>Now the model optimizes two unrelated things, answering correctly and spreading evenly.
     They pull against each other; both end up worse.</em></p>
 
-    <span class="board">Back to the routing dataflow figure. Point at the blue “bias b” box on the left; trace the blue arrows.</span>
+    <span class="board">Scroll back to the routing dataflow figure at the top of 4b. Point at the blue “bias b” box on the left; trace the blue arrows.</span>
 
     <p><b>V3's approach: give each expert a bias.</b>
     <em>Overloaded lately? Nudge its bias down so it loses a little in the competition.
@@ -3098,7 +3101,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>⭐ But “no auxiliary loss at all” overstates it</h4>
 
-    <span class="board">Scroll to the blue-and-yellow two-box figure: “V3 actually has two balancers, for two scales.”</span>
+    <span class="board">Scroll down to the blue-and-yellow two-box figure (above the four-bar one): “V3 actually has two balancers, for two scales.”</span>
 
     <p><b>The method is called auxiliary-loss-free: literally, no auxiliary loss.</b>
     <em>The name is tidy. The truth isn't quite.</em></p>
@@ -3128,7 +3131,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>The last piece: group limits, this segment's main takeaway</h4>
 
-    <span class="board">Point at the blue box “256 → 8 groups of 32; pick only 4 groups.”</span>
+    <span class="board">Scroll back up to the routing dataflow figure. Point at the blue box “256 → 8 groups of 32; pick only 4 groups.”</span>
 
     <p><b>The 256 experts are split into 8 groups of 32. Each token may touch at most 4 groups.</b></p>
 
@@ -3288,11 +3291,11 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   <div class="tip">
     <span class="k">This segment's two “Expand” blocks</span>
     <b>Normally, open neither.</b>
-    <em>The first is “Expand: the rule in the paper, and where the 2 in ‘top 2 per group’ comes from.”</em>
+    <em>The first is “Expand: sigmoid scores ‘don't sum to 1,’ yet the 8 final weights sum to 1. Contradiction?”</em>
+    <b>Experts will raise this. Inside: the two moments, and the 2.5.</b><br>
+    <em>The second is “Expand: the rule in the paper, and where the 2 in ‘top 2 per group’ comes from.”</em>
     <b>Open it if asked where the 2 comes from: K<sub>r</sub>/M = 8 ÷ 4,
-    plus the paper's “the box holds 13” passage.</b><br>
-    <em>The second is “Expand: sigmoid scores ‘don't sum to 1,’ yet the 8 final weights sum to 1. Contradiction?”</em>
-    <b>Experts will raise this. Inside: the two moments, and the 2.5.</b>
+    plus the paper's “the box holds 13” passage.</b>
 
   </div>
 </section>
@@ -3981,7 +3984,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>One last number. It only raises the question</h4>
 
-    <span class="board">Scroll to the box “1.75 GiB activations/layer × 61 layers, all kept = 106.75 GiB.”</span>
+    <span class="board">Scroll to the box “1.75 GiB/layer × 61, all kept = 106.75 GiB.”</span>
 
     <p><b>At 128K, the residual stream has to be kept once per layer: 131,072 times 7,168 times 2 bytes,
     exactly 1.75 GiB.</b></p>
@@ -4201,7 +4204,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>Three details that make the logits look worse</h4>
 
-    <p><b>First: this step is under half a percent of the forward pass's compute.</b></p>
+    <p><b>First: this step is just 0.46% of the forward pass's compute, under half a percent.</b></p>
 
     <p><b>242.92 TFLOP, out of 52.5 PFLOP for the whole forward pass.</b>
     <em>The cheapest step of the trip makes the trip's largest tensor.</em></p>
@@ -4221,7 +4224,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>Same op. Training and inference differ by 131,072×. That's exactly the sequence length.</b></p>
 
     <p><b>And that green line is lying to you. At true scale it's 1/131,072 the height of the dashed box:
-    0.0013 pixels. It can't be drawn, so it's drawn about 1,000 times thicker, just so you can see it.</b></p>
+    0.0013 pixels. It can't be drawn, so it's drawn about 2,300 times thicker, just so you can see it.</b></p>
 
     <span class="pause">That line is a memory hook. Pause.</span>
 
@@ -4278,7 +4281,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">Likely questions</h3>
   <div class="qa">
-    <details><summary>How can logits be over 30 GB? Isn't the output matrix just 7168 × 129280?</summary>
+    <details><summary>How can logits be over 30 GiB? Isn't the output matrix just 7168 × 129280?</summary>
     <div class="a">
     <p><b>The lecture's most common sticking point; someone will ask.</b>
     Root cause: “position” is used in two places, and listeners merge them.</p>
@@ -4479,7 +4482,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>13.3.</b></p>
 
-    <p><b>You can't have three-tenths of a device, so it's 14.</b></p>
+    <p><b>You can't have three-tenths of a device, so at least 14.</b></p>
 
     <span class="pause">Longer pause. Next line is the real point.</span>
 
@@ -4608,7 +4611,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>A wrong error message is more dangerous than none.</b>
     <em>It sends you confidently the wrong way.</em></p>
 
-    <h4>② The reported number isn't everything</h4>
+    <h4>② The number isn't everything</h4>
 
     <p><b>It's only temp buffers. Parameters and optimizer state are a separate ledger.</b></p>
 

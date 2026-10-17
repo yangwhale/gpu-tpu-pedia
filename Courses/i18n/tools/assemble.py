@@ -127,6 +127,8 @@ def main(topic, d):
             return v if v is not None else default
         rules = ''.join('%s{font-size:%gpx}' % (sel, base(sel, d) + 1) for sel, d in
                         (('table', 14.5), ('th', 12), ('.tbl-note', 13), ('.chip', 13), ('figcaption', 15)))
+        # 英文表头大写加字距、不许换行，手机上会把关键列挤出屏幕（专题一并排审 10-17）；进度条标签不折行
+        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){th{white-space:normal}.jstep span{font-size:9px}}'
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
     def put(m):

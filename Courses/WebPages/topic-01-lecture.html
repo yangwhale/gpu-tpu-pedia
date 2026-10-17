@@ -276,7 +276,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
       <tr><td>40–48</td><td><b>第 5、6 步 · 层间与出口</b>：残差流是总线；出口 logits 的爆点</td>
         <td>顺手立住「激活为什么不能全留」这个问题，不答</td></tr>
       <tr><td>48–60</td><td>⭐ <b>第 7 + 7.5 步 · 合账 + 我们真跑过</b></td>
-        <td>落到「至少 15 张卡」，然后抛钩子给专题二</td></tr>
+        <td>落到「至少 14 张卡」，然后抛钩子给专题二</td></tr>
     </tbody>
   </table>
   <p style="margin:12px 0 0"><b>现场怎么用课件</b>：投影时把浏览器开到
@@ -338,7 +338,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>五条。第一，<b>序列长度取 128K</b>，也就是十三万一千零七十二个 token ——
     差不多是一本小书。第二，<b>batch 等于一</b>，先把单独一条算清楚，要乘再乘。
     第三，<b>精度按 bf16</b>，每个数占两个字节。第四，<b>只算前向，不算反向</b>。
-    第五，参照物是<b>一个 TPU v7 device 的九十四点七四个 GB</b> ——
+    第五，参照物是<b>一个 TPU v7 device 的九十四点七四个 GiB</b> ——
     所有算出来的数，最后都要拿它去除一下，不然没有感觉。</p>
 
     <p>这五条里，最需要解释的是第四条。<em>为什么只算前向？</em></p>
@@ -573,7 +573,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>台下第一个反应通常是「129,280 这个数是怎么来的」。
     <b>先给结论：它一点都不特别。</b> 看这根轴 ——
     <em>Llama 2 是 3.2 万，Llama 3 是 12.8 万，V3 是 12.9 万，
-    Qwen3 15.2 万，gpt-oss 20 万，Gemma 2 是 25.6 万。</em>
+    Qwen3 15.2 万，gpt-oss 约 20 万，Gemma 2 是 25.6 万。</em>
     <b>V3 和 Llama 3 几乎就是同一个点。</b></p>
 
     <p><span class="k">指绿色那条</span><b>词表往大做，赚的是：同一句话切成更少的 token。</b>
@@ -590,7 +590,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="pause">停一下。下面这句是这一讲的第一个反直觉点。</span>
 
-    <p><b>从编号变成向量，用的不是乘法，是查表。</b></p>
+    <p><b>从编号变成向量，默认用的不是乘法，是查表。</b></p>
 
     <p>模型里存着一张 <code>129,280 × 7,168</code> 的大表。
     你的 token 编号是多少，就<em>直接把第几行抽出来</em>。
@@ -645,9 +645,11 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p><b>数学上完全等价，工程上差着天。</b> 一个 one-hot 向量长度是 129,280，
         128K 个 token 摞起来是 <code>131,072 × 129,280</code> 的矩阵 ——
         <b>光这个中间量就 31.56 GiB</b>，而且里面 99.999% 是 0。</p>
-        <p>所以实现上一律是<b>按下标取行</b>。这是个很好的例子：
+        <p>所以默认实现是<b>按下标取行</b>。这是个很好的例子：
         <em>同一个数学式子，换一种算法，代价差几个数量级。</em>
         后面 FlashAttention 也是同一个道理。</p>
+        <p class="sub">（<b>别说成「一律」</b>：课件那个展开块里写了，MaxText 有 34 份实跑配置把 <code>use_iota_embed</code> 打开，
+        真的编译成 one-hot 矩阵乘 —— 只是分母够大，那一步只占全程算力的 0.46%。）</p>
       </div></details>
     <details><summary>那位置信息呢？第几个 token 是在这里编进去的吗？</summary>
       <div class="a">
@@ -695,7 +697,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">别讲什么</h3>
   <div class="warn">
-    <span class="k">这一讲最容易跑偏的三个方向</span>
+    <span class="k">这一讲最容易跑偏的四个方向</span>
     <b>① 别讲分词算法。</b> BPE 怎么合并、词表怎么训出来 ——
     <b>跟这门课的主线（账怎么算）没有关系</b>，一讲就是十分钟。
     被问到答「分词器是单独训的，专题里不展开」。<br>
@@ -788,7 +790,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">指红色虚线，然后指下面那个红框里的数字。</span>
 
-    <p>把它换算成能感觉到的东西。<b>TPU v7 一张卡的显存是 94.74 GB</b>，
+    <p>把它换算成能感觉到的东西。<b>TPU v7 一张卡的显存是 94.74 GiB</b>，
     这堆东西要<b>五张多卡</b>才装得下。<em>而且这是一个用户、一段对话。
     你要同时服务一百个人，就得再乘一百。</em></p>
 
@@ -802,7 +804,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>最后看它随长度怎么变。<b>横轴是序列长度，纵轴是 KV cache，两条线</b> ——
     红的是传统存法，蓝的是 MLA。</p>
 
-    <p><b>两条都是直线，因为都是线性的。但斜率差 57 倍</b>，
+    <p><b>两条都是直线，因为都是线性的。但斜率差 56.9 倍</b>，
     于是它们从同一个原点出发，<em>越走越张开</em>。
     <b>中间那个红色的口子，就是换一种存法能省下来的。</b></p>
 
@@ -942,7 +944,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">让他们回头看四代对照表里那一列数字。</span>
 
-    <p><b>576 卡在 GQA 的 2,048 和 MQA 的 256 中间 —— 但质量比两个都好。</b></p>
+    <p><b>576 卡在 GQA 的 2,048 和 MQA 的 256 中间 —— 但质量比两个都好。</b>
+    （这是拼两张表推出来的：MHA 胜过 GQA 和 MQA，MLA 又胜过 MHA。）</p>
 
     <p>这句话说完要停，让他们自己想一下哪里不对。
     <b>在同一根轴上，这是不可能的</b> —— 省得比 GQA 多、质量还比 GQA 好？没这种好事。
@@ -1133,7 +1136,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <em>做除法总有除尽的那一天，拿掉就没有这个上限。</em></p>
 
     <p>收尾再占一个便宜：<b>那 64 维是 128 个头共用同一份的。</b>
-    <em>要是每个头存一份</em>，就得多存 128 × 64 = <b>8,192</b>，
+    <em>要是每个头存一份</em>，那 64 个就变成 128 × 64 = <b>8,192</b> 个，
     cache 从 576 涨到 <b>8,704</b> —— <b>MLA 就白做了。</b></p>
   </div>
 
@@ -1152,7 +1155,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p><b>涨了，但换的方向是对的。</b> 生成阶段卡的是<b>显存带宽</b>不是算力，
         <em>拿没那么缺的换更缺的，划算。</em></p>
         <p><b>但要顺手把上一讲那条边界再点一次：</b>
-        这说的是<b>推理</b>。训练前向里，升开的那份 K 和 V <b>还得留成激活给反向用</b> ——
+        这说的是<b>推理</b>。训练里，升开的那份 K 和 V <b>是重算、用完就扔的，MHA 和 MLA 留下的都是同一份残差流</b> ——
         <b>训练侧不省显存。</b></p>
       </div></details>
     <details><summary>为什么是 512？那个 64 又是怎么定的？</summary>
@@ -1287,7 +1290,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>两条的输入完全一样 —— 都是每个头读完整的 7,168。差别只在每个头输出多宽。</b></p>
 
-    <span class="pause">转折：那为什么八年来大家都选「正好等于」？</span>
+    <span class="pause">转折：那为什么这么多年大家都选「正好等于」？</span>
 
     <p><b>因为那是 2017 年那篇论文里的一个取值，然后被抄成了直觉。</b></p>
 
@@ -1311,7 +1314,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>所以在老框架下，<b>「注意力做多宽」和「缓存多贵」是同一个旋钮。</b>
     你想要表达力，就得掏显存。<em>大多数人选择不掏。</em></p>
 
-    <span class="board">指右边那条从实线变成打叉的链。</span>
+    <span class="board">指右边那条从实线变成打叉的链 —— 上面那个框写着「锁在一起：拼得越宽，cache 越大」，下面那个写着「这条关系断了：cache 跟头数、头宽都无关」。</span>
 
     <p><b>MLA 把这条链剪断了。</b> 上一讲说过它只缓存那个压缩向量，
     <b>cache 大小是「（压缩维度 + 位置那 64 维）乘层数」</b> ——
@@ -1345,17 +1348,17 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">指第一根红条。</span>
 
-    <p><b>第一笔，算力，2.29 倍。</b> 工作维度从 7,168 撑到 16,384，注意力的计算量跟着涨。
+    <p><b>第一笔，算力，2.86 倍。</b> 工作维度从 7,168 撑到 16,384，而且 QK 那一段每个头走的是 192 维，注意力的计算量跟着涨。
     <em>这笔跑不掉 —— 而原论文当年设成「正好等于」，图的正是省这笔钱。
     V3 是明确地拿算力换了表达力。</em></p>
 
-    <span class="board">指第二根红条 —— 长度跟第一根一模一样，这不是巧合。</span>
+    <span class="board">指第二根红条 —— 2.29 倍，比第一根短一截。</span>
 
     <p><b>第二笔，o_proj 的权重，也是 2.29 倍。</b>
     <em>它要跨 16,384 到 7,168 这道口子，一头宽了 2.29 倍，矩阵就大 2.29 倍。</em>
     <b>51.38 M 变成 117.44 M，占了一层 MLA 权重的 63%。这笔也跑不掉。</b></p>
 
-    <p><b>两根一样长，是因为它们涨的是同一件事：那个 16,384。</b></p>
+    <p><b>第二根是纯粹的撑宽。第一根更长，是因为 QK 那一段每个头走 192 维，不是 128。</b></p>
 
     <span class="board">指第三根 —— <b>黄色、虚线边框、最长的那根</b>。</span>
 
@@ -1385,7 +1388,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>q_lora 这个 1536，省的是权重</b> —— <em>Q 根本不进 cache</em>，
     <b>它压缩纯粹是为了让「把头做宽」这件事在参数上付得起。</b></p>
 
-    <p><b>图最底下那行绿字写的就是这句话</b> —— <em>如果时间紧，把那行念出来也行。</em></p>
+    <p><b>图最底下那行字写的就是这句话</b> —— <em>如果时间紧，把那行念出来也行。</em></p>
   </div>
 
   <h3 class="sec">可能被问到</h3>
@@ -1437,7 +1440,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <em>“due to the associative law of matrix multiplication, we can absorb
         W<sup>UK</sup> into W<sup>UQ</sup>, and W<sup>UV</sup> into W<sup>O</sup>.
         Therefore, we do not need to compute keys and values out for each query.”</em>
-        页面上那个展开块里有。）</p>
+        页面上「一句诚实的补充：上面那个『合并矩阵』是推理优化，不是模型定义」那个提示框里有。）</p>
         <p><em>这属于实现层面的优化，本课不展开</em> ——
         <b>答一句「可以吸收进相邻矩阵，不用真展开」就够，别往下讲。</b></p>
       </div></details>
@@ -1445,7 +1448,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">别讲什么</h3>
   <div class="warn">
-    <span class="k">这一讲最容易跑偏的三个方向</span>
+    <span class="k">这一讲最容易跑偏的四个方向</span>
     <b>① 别把「惯例」说成「错的」。</b> 等宽是个<b>合理且经过验证的默认值</b>，
     绝大多数模型这么做没有任何问题。<b>我们要拆的是「它是定律」这个误解，
     不是这个做法本身。</b><br>
@@ -1603,7 +1606,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>后果很具体：<b>每生成一个字，都得把前面所有 token 的 K 重新算一遍。</b>
     <em>省下来的显存，变成了重复计算。</em></p>
 
-    <span class="board">指那个「转 / 不转」的小表。</span>
+    <span class="board">指那张带「转 RoPE 吗」一列的小表。</span>
 
     <p><b>所以他们做了一件很干脆的事：把位置信息隔离到一条小路上。</b></p>
 
@@ -1625,7 +1628,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <em>576 里面那个 64，全部来历就是这个。</em></p>
 
     <p>反过来算一下就知道有多划算：<b>如果这条路不共享、每个头一份，
-    就要多存 128 乘 64，等于 8,192。</b>
+    这 64 个就要变成 128 乘 64，等于 8,192 个。</b>
     <em>cache 从 576 直接涨到 8,704 —— MLA 就白做了。</em></p>
 
     <span class="board">下面有个收起的块，标题就是「那个自然的追问 —— Q 那 64 维为什么不也共用一份」。
@@ -1745,7 +1748,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">别讲什么</h3>
   <div class="warn">
-    <span class="k">这一讲最容易失控的三个方向</span>
+    <span class="k">这一讲最容易失控的四个方向</span>
     <b>① 别逐个念 shape。</b> 图上有十几个方块，<em>照着念一定超时而且没人跟得上。</em>
     <b>只口述四个数：7,168 进、576 存、192 打分、7,168 出。</b>其余全靠指图。<br>
     <b>② 别展开 RoPE 本身是怎么转的。</b> 复数旋转、频率、外推 ——
@@ -1824,7 +1827,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="pause">马上会有人问：那为什么以前没人这么干？先自问自答，别等他问。</span>
 
-    <p><b>那为什么八年来没人只存输入呢？因为要重算。</b>
+    <p><b>那为什么这么多年没人只存输入呢？因为要重算。</b>
     <em>只存输入的话，每生成一个字，都得把前面所有 token 的 K 和 V 重新乘一遍。</em>
     <b>省了显存，赔了算力。</b></p>
 
@@ -2282,7 +2285,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">手指红色虚线。</span>
 
-    <p><b>这条红线是一张 TPU v7 device 的 94.74 GB。</b>
+    <p><b>这条红线是一张 TPU v7 device 的 94.74 GiB。</b>
     <em>MHA 那根柱子要五张多卡才放得下 —— 而模型权重还一个字节都没算进去。</em>
     <b>MLA 那根，一张卡还剩九成。</b></p>
 
@@ -2304,7 +2307,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>给两个对照，让它落地。</b>
     <em>第一，整个模型的权重是 1.22 TiB —— 这张一层一次的中间矩阵，是全部权重的三倍多。</em>
-    <b>第二，按一张卡 94.74 GB 算，它等于 47 张卡。</b></p>
+    <b>第二，按一张卡 94.74 GiB 算，它要 44 张卡才装得下。</b></p>
 
     <span class="board">指那片红方块。「屏幕上这一片，每一格是一张卡。」</span>
 
@@ -2340,7 +2343,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="board">切到最后那个绿框，然后过第 3 步。</span>
 
     <p><b>这条曲线一被算出来，接下来该干什么就很明显了：
-    如果注意力吃掉九成算力，那就别让每个 query 都去看全部 token。</b></p>
+    如果注意力吃掉八成以上的算力，那就别让每个 query 都去看全部 token。</b></p>
 
     <p><b>怎么不看、少看哪些、赔掉什么，那是专题三整整一课的事。</b>
     <em>这一课只负责把「为什么非改不可」算出来 —— 就是屏幕上这条线。</em></p>
@@ -2681,7 +2684,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p><b>但这一节讲的不是那 0.177%，是那四条性质。</b>
         <em>它是免费的教具 —— 结构简单到可以一次讲透，
         而且它跟 MoE 的专家用的是一模一样的三矩阵 SwiGLU。</em></p>
-        <p><b>在这儿花四分钟，下一讲能省下三分钟，还换来一个对照组。</b></p>
+        <p><b>在这儿花七分钟，下一讲能省下三分钟，还换来一个对照组。</b></p>
       </div></details>
     <details><summary>18,432 这个数，除了「参数持平」还有别的讲究吗？</summary>
       <div class="a">
@@ -2695,7 +2698,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p class="sub"><b>「几乎」这两个字别省。</b>
         <em>MoE 层还多一个路由器，<code>7,168 × 256 = 1.84 M</code>，
         相对 396.36 M 是 0.46%。</em>
-        <b>台上要说「专家那部分严格相等，路由多千分之五」——
+        <b>台上要说「专家那部分严格相等，加上路由多 0.46%」——
         这类小尾巴主动交代，比被人问出来强。</b></p>
         <p><b>② 对齐加速器：<code>18,432 ÷ 256 = 72</code>，整除。</b>
         <em>而论文那条 2/3 规则算出来是 19,114.67，连整数都不是。</em></p>
@@ -2808,7 +2811,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>做法是把一个宽 MLP 拆成很多个窄的。V3 是 256 个路由专家，加 1 个共享专家。</b>
     <em>每个专家还是刚才那套三矩阵 SwiGLU，只是中间宽度从 18,432 缩到 2,048。</em></p>
 
-    <span class="board">指那张「一个 token 的路径是它自己的」的图。</span>
+    <span class="board">往下滚到「⭐ 一个 token 的路径，是它自己的」那张图（在红绿两半那张图下面）。</span>
 
     <p><b>每个 token 进来，一个门控网络只挑 8 个路由专家给它，
     再加上那个所有 token 都要过的共享专家，一共 9 个。</b>
@@ -2818,7 +2821,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>⭐ 那个恰好相等</h4>
 
-    <span class="board">滚到那张九段拼一根的图，让两条红色虚线在屏幕里。</span>
+    <span class="board">继续往下，滚到 4a 末尾那张九段拼一根的图，让两条红色虚线在屏幕里。</span>
 
     <p><b>现在算笔账。一层里 257 个专家，参数是 11.32 B。</b>
     <em>但每个 token 只激活 9 个 —— 折算下来是 396,361,728 个参数。</em></p>
@@ -2841,7 +2844,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="pause">下面这句半秒钟带过，但要说 —— 它是这门课的信誉。</span>
 
     <p><b>严格说还多一点点：MoE 得先跑一遍门控矩阵，7,168 乘 256，
-    相对那 396 M 是千分之五。</b>
+    相对那 396 M 是 0.46%，差不多千分之五。</b>
     <em>所以准确的说法是「专家那部分一个都不多，外加千分之五的分诊费」。</em></p>
 
     <span class="pause">这就是落点。说完停一下再往下走。</span>
@@ -2856,7 +2859,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>而每个 token 只真的用到其中 3.5%。</b>
     <em>「671B 的模型，每个字只算 37B」——这句话的全部来源就在这儿。</em></p>
 
-    <span class="board">切到那个「细粒度」的三张卡片。</span>
+    <span class="board">往回滚一点，到九段图上面那个「细粒度」的三张卡片。</span>
 
     <p><b>顺带说一句为什么专家要做小做多。</b>
     <em>同样的激活预算，8 个大专家里选 1 个，只有 8 种可能；
@@ -2879,7 +2882,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="pause">这里别停在「我说不是」，直接把证据摆出来。这一段以前是空口说的，现在有数了。</span>
 
-    <span class="board">滚到那张红绿两半的图。<b>先只讲左边那半。</b></span>
+    <span class="board">再往上滚，回到 dense / MoE 并排图下面那张红绿两半的图。<b>先只讲左边那半。</b></span>
 
     <p><b>这件事有人真的量过。做 Mixtral 那篇论文，专门拆开数了路由。</b></p>
 
@@ -3013,7 +3016,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     宁可主动澄清一句，也别让它带着这个印象走到第 11 讲。</b><br>
     <b>④ 别把「一个 FLOP 都不多」讲成绝对的。</b>
     <em>这一条以前是这么讲的，现在改了</em> ——
-    <b>专家那部分确实严格相等，但 MoE 还要多跑一遍门控，多出千分之五。</b>
+    <b>专家那部分确实严格相等，但 MoE 还要多跑一遍门控，多出 0.46%。</b>
     <em>这个尾巴很小，可它是「我们真的自己算过」的证据，主动交代比被问出来强。</em><br>
     <b>⑤ 别把「专家不按学科分」讲成一句断言。</b>
     <em>它现在有实测撑着 —— 台上要把那张图指出来，
@@ -3092,7 +3095,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>最后可能两百多个专家基本闲着，算力全堆在几个上面。</b></p>
 
-    <span class="board">滚到那张四根条的图 —— 上下两半，上面红下面绿。</span>
+    <span class="board">往下滚到 4b 末尾「⭐ 负载不均会怎样：一张卡忙，全场陪着等」那张四根条的图 —— 上下两半，上面红下面绿。</span>
 
     <p><b>先看这件事到底有多贵，不然后面那套机制看起来会像小题大做。</b></p>
 
@@ -3116,7 +3119,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <em>问题是你在让模型同时优化两件不相干的事 —— 答得对，和分得匀。
     这两个目标会互相拉扯，最后两头都打折。</em></p>
 
-    <span class="board">指左边那个蓝色的「偏置 b」小框，再顺着蓝箭头走一遍。</span>
+    <span class="board">滚回 4b 开头的路由数据流图，指左边那个蓝色的「偏置 b」小框，再顺着蓝箭头走一遍。</span>
 
     <p><b>V3 的做法是给每个专家挂一个偏置。</b>
     <em>谁最近吃太饱，就把它的偏置往下调，让它在竞争里稍微吃亏；
@@ -3153,7 +3156,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>⭐ 但「完全不用辅助损失」这句话，说过头了</h4>
 
-    <span class="board">滚到下面那张蓝黄两个框的图。</span>
+    <span class="board">往下滚到蓝黄两个框那张图（在四根条那张图上面）。</span>
 
     <p><b>这套方法的名字叫 auxiliary-loss-free，直译就是「无辅助损失」。</b>
     <em>名字很干净，实情没那么干净。</em></p>
@@ -3183,7 +3186,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>最后一块：分组限制 —— 本讲的主落点</h4>
 
-    <span class="board">指那个「256 个分成 8 组，只准挑 4 组」的蓝框。</span>
+    <span class="board">再滚回上面的路由数据流图，指那个「256 个分成 8 组，每组 32 个 —— 只准挑 4 组」的蓝框。</span>
 
     <p><b>256 个专家被分成 8 组，每组 32 个。一个 token 最多只允许碰 4 组。</b></p>
 
@@ -3341,11 +3344,11 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   <div class="tip">
     <span class="k">这一讲的两个「展开」块</span>
     <b>正常讲一个都不用点开。</b>
-    <em>第一个是「node-limited routing 在论文里长什么样」</em> ——
+    <em>第一个是「sigmoid『加起来不等于 1』，可最后那 8 个权重又归一化到 1 —— 这不矛盾吗」</em> ——
+    <b>这是懂行的人一定会抓的一个点，点开里面有分时刻的写法和那个 2.5 是怎么回事。</b><br>
+    <em>第二个是「这条规则在论文里长什么样，以及『组内前 2 名』这个 2 是从哪来的」</em> ——
     <b>有人问那个 2 怎么来的就点开它，里面有 K<sub>r</sub>/M = 8÷4 的算式，
-    还有「盒子能装 13」那段原文。</b><br>
-    <em>第二个是「sigmoid 加起来不等于 1，最后又归一化到 1，矛盾吗」</em> ——
-    <b>这是懂行的人一定会抓的一个点，点开里面有分时刻的写法和那个 2.5 是怎么回事。</b>
+    还有「盒子能装 13」那段原文。</b>
   </div>
 </section>
 
@@ -3385,8 +3388,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="board">手指绿色那条水平线，再指蓝色那条斜线。</span>
 
     <p><b>第一条：把 token 送过去。</b>
-    <em>它选中了 8 个专家，就把它的激活值发到那 8 张卡上，算完再收回来。</em>
-    <b>发出去一次、收回来一次，每个 token 每层 224 KiB。</b></p>
+    <em>它选中了 8 个专家，可这 8 个最多落在 4 个节点上，所以它的激活值只要发 4 份出去，算完再收回来。</em>
+    <b>发出去一次、收回来一次，每个 token 每层 112 KiB。</b></p>
 
     <p><b>第二条：把权重搬过来。</b>
     <em>各张卡先把自己手上那份专家权重广播给大家，凑齐之后本地算，token 一步都不用动。</em>
@@ -3409,7 +3412,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">手指红圈那个拐点。</span>
 
-    <p><b>相交的地方，大概是 9 万 8 千个 token。</b></p>
+    <p><b>相交的地方，大概是 19 万 7 千个 token。</b></p>
 
     <h4>拐点两边住着谁</h4>
 
@@ -3420,19 +3423,19 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>训练一个 step，动辄上百万 token —— 远在右边。挪权重划算。</b></p>
 
-    <p><b>而一次 128K 的 prefill，13 万 1 千个 token —— 刚刚过拐点。</b></p>
+    <p><b>而一次 128K 的 prefill，13 万 1 千个 token —— 还在拐点左边，但已经贴得很近了。</b></p>
 
     <span class="pause">这句停两秒，它是给专题六埋的种子。</span>
 
     <p><b>所以你会看到一个很有意思的现象：同一个模型、同一次推理请求，
-    prefill 那一段和 decode 那一段，落在拐点的两边。</b>
+    decode 那一段离拐点差着好几个数量级，prefill 那一段却几乎就贴在拐点上。</b>
     <em>这两段为什么在很多事情上都是相反的，专题六会专门讲。这里先记住有这么回事。</em></p>
 
     <h4>把边界说清楚，这很重要</h4>
 
     <span class="board">指图下面那行灰字，和右边那个黄箭头。</span>
 
-    <p><b>这个 9 万 8 千，不是一个工程门槛，不要拿去用。</b></p>
+    <p><b>这个 19 万 7 千，不是一个工程门槛，不要拿去用。</b></p>
 
     <p><b>它是个粗口径 —— 我只比了「每层要搬多少字节」，
     没算 all-to-all 和 all-gather 的效率差异，那两种通信的代价本来就不一样。</b></p>
@@ -3482,7 +3485,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         问到就说「有很多种组合，取决于并行策略怎么切」，
         <b>不要现编一个具体方案</b>。）</p>
       </div></details>
-    <details><summary>那 9 万 8 千到底能不能拿去做判断？</summary>
+    <details><summary>那 19 万 7 千到底能不能拿去做判断？</summary>
       <div class="a">
         <p><b>不能当阈值用，但能当量级感用。</b></p>
         <p><b>它是「每层搬多少字节」的粗比</b> ——
@@ -3495,7 +3498,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
       <div class="a">
         <p><b>是同一条链上的两环，但不是同一件事。</b></p>
         <p><b>分组限制管的是「一个 token 最多打扰几台机器」</b> ——
-        <em>它把挪 token 那条线的斜率按住了，让它不至于更陡。</em></p>
+        <em>它把挪 token 那条线的斜率按住了（发 4 份，不是 8 份），让它不至于更陡。</em></p>
         <p><b>这一节管的是「要不要挪 token」这个更上层的选择。</b></p>
         <p><b>合起来看很清楚</b>：<em>4b 是先把这条路的代价压到可接受，
         4c 是再问一句「这条路本身该不该走」。</em></p>
@@ -3505,7 +3508,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   <h3 class="sec">别讲什么</h3>
   <div class="warn">
     <span class="k">三条红线</span>
-    <b>① 别把 98,688 说成一个工程门槛。</b>
+    <b>① 别把 197,376 说成一个工程门槛。</b>
     <em>粗口径、且会随专家摊几张卡移动</em> ——
     <b>它唯一能支撑的结论是「两个方案在同一个数量级」，
     多说一个字就是在给听众一个会害到他们的数。</b><br>
@@ -4068,7 +4071,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>残差流在 128K 长度上，每层要留一份：131,072 乘 7,168 乘 2 字节，
     正好 1.75 GiB。</b></p>
 
-    <p><b>61 层全留着，106.75 GiB。而一张卡是 88 GiB 出头。</b></p>
+    <p><b>61 层全留着，106.75 GiB。而一张卡是 94.74 GiB。</b></p>
 
     <span class="pause">停一下，然后补这句 —— 它比上面那个数更有冲击力。</span>
 
@@ -4286,27 +4289,27 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <h4>三个让它更难堪的细节</h4>
 
-    <p><b>第一，这一步的算力只占整个前向的千分之五。</b></p>
+    <p><b>第一，这一步的算力只占整个前向的 0.46%，不到千分之五。</b></p>
 
     <p><b>242.92 TFLOP，而整个前向是 52.5 PFLOP。</b>
     <em>全程算力最少的一步，产出了全程最大的张量。</em></p>
 
     <p><b>第二，算 cross-entropy 的时候，logits 通常要提到 fp32，不然数值不稳。</b></p>
 
-    <p><b>那就是 63.13 GiB —— 占单卡 88 GiB 的 72%。
-    一个纯临时的东西，吃掉四分之三张卡。</b></p>
+    <p><b>那就是 63.13 GiB —— 占单卡 94.74 GiB 的 67%。
+    一个纯临时的东西，吃掉三分之二张卡。</b></p>
 
     <p><b>第三个对照我觉得最有意思。这 31.56 是训练的账，
     因为训练每个位置都要算 loss。</b></p>
 
-    <p><b>推理的 prefill 只需要最后一个位置的 logits —— 252 KiB。</b></p>
+    <p><b>推理的 prefill 只需要最后一个位置的 logits —— 252.5 KiB。</b></p>
 
     <span class="board">滚到那张左右对照图：左边一整块红板，右边一条绿细线。</span>
 
     <p><b>同一个算子，训练和推理差 131,072 倍，正好就是序列长度。</b></p>
 
     <p><b>右边那条绿线其实是骗你们的 —— 按真实比例它只有那个虚线框的十三万分之一高，
-    合零点零零一三个像素，画不出来。为了让你们看见，它被放大了大概一千倍。</b></p>
+    合零点零零一三个像素，画不出来。为了让你们看见，它被放大了大概两千三百倍。</b></p>
 
     <span class="pause">这句话本身就是个记忆点，说完停一下。</span>
 
@@ -4363,7 +4366,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">可能被问到</h3>
   <div class="qa">
-    <details><summary>logits 怎么会有三十多个 GB？出口那个矩阵不就是 7168 × 129280 吗？</summary>
+    <details><summary>logits 怎么会有三十多个 GiB？出口那个矩阵不就是 7168 × 129280 吗？</summary>
     <div class="a">
     <p><b>这是全场最高频的一个卡点，几乎一定有人问。</b>
     根子在于「位置」这个词被用在了两个地方，听的人把它们叠一起了。</p>
@@ -4373,7 +4376,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>然后把维度掰开：<b>你喂进去的是十二万八千个字。</b>
     每一个字都要拿自己那 7168 维去乘同一个矩阵，各自拿到自己的 129280 个分数。
     所以结果不是一行，是<b>十二万八千行 × 十二万九千列的一张表</b>。
-    一行 252 KB，乘十二万八千行，31.56 GiB。</p>
+    一行 252.5 KiB，乘十二万八千行，31.56 GiB。</p>
     <p><span class="board">在白板上画两条边，横的写「词表 129,280」，竖的写「字数 131,072」，
     指着说「这两个数差不多大，是巧合」。</span>
     这句一定要说 —— <b>不说的话，一半人会以为它们是同一个东西</b>。</p>
@@ -4453,15 +4456,15 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p><b>所以结论是：MTP 不会让总账再多一份 926 M。</b>
         <em>如果对方是拿这个来质疑那张总表，这就是答案。</em></p>
       </div></details>
-    <details><summary>63.13 GiB 除以 94.74 我算出来是 67%，怎么会是 72%</summary>
+    <details><summary>63.13 GiB 除以 94.74 我算出来是 67%，页面上不是写过 72% 吗</summary>
       <div class="a">
-        <p><b>因为那两个数不是同一个进制，这是个非常常见的坑。</b></p>
+        <p><b>67% 是对的。72% 是页面上的旧错，现在留在那儿当警示。</b></p>
         <p><b>GiB 是 1024 的三次方，GB 是 1000 的三次方，差 7.4%。</b>
-        <em>63.13 GiB 换成十进制是 67.78 GB，除以 94.74 GB 才是 72%。</em></p>
-        <p><b>或者换个方向：94.74 GB 换成 GiB 是 88.23 GiB，63.13 ÷ 88.23 也是 72%。</b>
-        <em>怎么换都行，不能一头 GiB 一头 GB。</em></p>
+        <em>旧版以为 94.74 是十进制 GB，把 63.13 GiB 换成 67.78 GB 再去除，才得出 72%。</em></p>
+        <p><b>可 94.74 本来就是 GiB —— 编译器报错串里 95.38G − 94.74G = 656.93M，只有按 1024 算才对得上。</b>
+        <em>两个数本来同一个进制，直接相除：63.13 ÷ 94.74 = 67%。</em></p>
         <p><b>页面上所有百分比都是按字节算的，不是按显示出来的那两个数算的。</b>
-        <em>这一条值得当场说 —— 硬件厂商标 GB、框架报 GiB，这个坑几乎每个人都踩过一次。</em></p>
+        <em>这一条值得当场说 —— 坑不在于不知道进制，而在于知道有这个坑、却改错了那一头。先查分母是哪个进制。</em></p>
       </div></details>
     <details><summary>词表为什么要 129,280 这么大？做小一点不就省了</summary>
       <div class="a">
@@ -4517,7 +4520,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   <div class="goal">
     <span class="k">这一讲要留下什么</span>
     <b>主落点：「为什么需要并行」这句话，从今天起是个除法的结果，不是一句口号。</b>
-    <em>1.23 TiB ÷ 94.74 GB = 14.3。整堂课攒了六站零件，就是为了让这一除有意义。</em><br>
+    <em>1.23 TiB ÷ 94.74 GiB = 13.3。整堂课攒了六站零件，就是为了让这一除有意义。</em><br>
     <b>第二落点：静态分析靠得住，但它最不准的地方，恰好是你最需要它的地方。</b>
     <em>AOT 那三条是我们自己踩出来的，比任何一条公开结论都值钱。</em><br>
     <b>第三落点（钩子）：全课拿 94.74 当了一整天分母，却从没说过它从哪来。</b>
@@ -4561,13 +4564,13 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">手指第三张橙色的卡片。</span>
 
-    <p><b>1.23 TiB 除以单卡的 94.74 GB。</b></p>
+    <p><b>1.23 TiB 除以单卡的 94.74 GiB。</b></p>
 
     <span class="pause">停一拍，再报数。这是全课的收口。</span>
 
-    <p><b>14.3。</b></p>
+    <p><b>13.3。</b></p>
 
-    <p><b>你不能有零点三张卡，所以是 15 张。</b></p>
+    <p><b>你不能有零点三张卡，所以至少 14 张。</b></p>
 
     <span class="pause">这里停久一点，然后说下面这句 —— 这才是重点。</span>
 
@@ -4576,11 +4579,11 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>今天开场我没有说「大模型需要并行」这句话，一次都没说过。
     我们只是一步一步算，然后它自己出现了。</b></p>
 
-    <h4>⭐ 但请不要把 15 记成「答案」</h4>
+    <h4>⭐ 但请不要把 14 记成「答案」</h4>
 
     <span class="board">滚到下面那个黄色的警告框。</span>
 
-    <p><b>15 张卡是<u>最乐观的可能值</u>。它建立在五个假设上，
+    <p><b>14 张卡是<u>最乐观的可能值</u>。它建立在五个假设上，
     而每一个在真实训练里都不成立。</b></p>
 
     <p><b>只算前向、batch 等于一、不含激活、不含临时缓冲，
@@ -4588,7 +4591,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="board">滚到下面那张三条横杠的图，整张在屏幕里。</span>
 
-    <p><b>把峰值激活那 41.89 GiB 加进去，14.3 变成 14.7。</b>
+    <p><b>把峰值激活那 41.89 GiB 加进去，13.3 变成 13.7。</b>
     <em>就是图上第二条 —— 你们看，跟第一条几乎一样长。这一步还好。</em></p>
 
     <span class="pause">铺垫完了，下面这个数是这一段的落点。</span>
@@ -4603,15 +4606,15 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>请注意这五段的比例：模型本身只占最左边那两个字节，
     右边那 12 个字节全是优化器的。</b></p>
 
-    <p><b>671 B 乘 16，10.74 TB。除以 94.74，大概 113 个 device。</b></p>
+    <p><b>671 B 乘 16，9.76 TiB。除以 94.74，大概 105 个 device。</b></p>
 
     <p><b>比这里多将近八倍。</b>
     <em>那笔账是专题四的，这里只报个数 —— 但那三段橙紫红怎么砍，
     基本就是专题四的全部内容。</em></p>
 
-    <span class="pause">这张图真正的信息不是 113，是那个形状，值得点一句。</span>
+    <span class="pause">这张图真正的信息不是 105，是那个形状，值得点一句。</span>
 
-    <p><b>这张图想说的其实不是 113 这个数，是这个形状：
+    <p><b>这张图想说的其实不是 105 这个数，是这个形状：
     前两条几乎一样长，第三条长了八倍。</b></p>
 
     <p><b>因为①②③问的根本不是同一个问题。①问「权重放得下吗」，
@@ -4620,7 +4623,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>而这三个问题，平时经常被同一句「这个模型要几张卡」混在一起问。</b>
     <em>下次听到这句话，先反问一句是哪个口径。</em></p>
 
-    <p><b>所以这一页正确的读法是：连最省的口径都要 15 张，
+    <p><b>所以这一页正确的读法是：连最省的口径都要 14 张，
     而真实训练要八倍于此。</b></p>
 
     <h4>换个感觉：这些算力是多长时间</h4>
@@ -4635,24 +4638,24 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>理论极限，百分之百利用率：45.5 秒。</b></p>
 
-    <p><b>现实一点，按 35% 利用率：130 秒。</b></p>
+    <p><b>现实一点，按 35% 利用率：2.2 分钟。</b></p>
 
     <span class="pause">这句要慢，让它沉一下。</span>
 
     <p><b>两分多钟，就为了把一段 128K 的输入过一遍。
     而且这只是前向 —— 没有反向，没有参数更新。</b></p>
 
-    <p><b>摊到那 15 张卡上：8.7 秒。</b></p>
+    <p><b>摊到那 14 张卡上：9.3 秒。</b></p>
 
     <span class="board">手指第三张卡片下面那行小字。</span>
 
-    <p><b>但这个 8.7 后面跟着七个字：「假设并行完美无损」。</b></p>
+    <p><b>但这个 9.3 后面跟着八个字：「假设并行完美无损」。</b></p>
 
     <span class="pause">停两秒。这是整门课的入口，值得停。</span>
 
-    <p><b>那七个字，就是这门课剩下的全部内容。</b></p>
+    <p><b>那八个字，就是这门课剩下的全部内容。</b></p>
 
-    <p><b>把活分给 15 张卡，绝不等于快 15 倍。它们要互相传数据、
+    <p><b>把活分给 14 张卡，绝不等于快 14 倍。它们要互相传数据、
     要等最慢的那一个、要为了省显存把一部分重算一遍。</b></p>
 
     <p><b>那道差距有多大、从哪来、怎么缩小 —— 是专题五和专题七。</b></p>
@@ -4750,7 +4753,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><b>我们今天从头到尾都在拿 94.74 这个数当分母。</b></p>
 
     <p><b>算 KV cache 撞墙点用它，算激活装不装得下用它，
-    刚才算 15 张卡也用它。</b></p>
+    刚才算 14 张卡也用它。</b></p>
 
     <span class="pause">停一拍。</span>
 
@@ -4787,25 +4790,25 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     眼尖的人会发现这个不一致，正好顺势讲。</p>
     </div></details>
     
-    <details><summary>14.3 张卡，实际是不是就用 16 张？</summary>
+    <details><summary>13.3 张卡，实际是不是就用 16 张？</summary>
       <div class="a">
-        <p><b>实际几乎不会是 15，但原因不只是「凑整」。</b></p>
+        <p><b>实际几乎不会是 14，但原因不只是「凑整」。</b></p>
         <p><b>第一，切片拓扑有形状要求</b> ——
         <em>不是任意张数都能组成一个合法的互连拓扑，
         所以实际规模往往落在 2 的幂或者特定的长宽高组合上。</em></p>
-        <p><b>第二，也是更重要的：15 本来就是个不该被当真的下限。</b>
-        <em>前面那个黄框说了，训练态要 113 张。真实规划是从那个数起步的，
-        不是从 15。</em></p>
+        <p><b>第二，也是更重要的：14 本来就是个不该被当真的下限。</b>
+        <em>前面那个黄框说了，训练态要 105 张左右。真实规划是从那个数起步的，
+        不是从 14。</em></p>
         <p class="sub">（<b>别去讲具体拓扑规则</b> —— 那是专题二和专题五的内容，
         这里说「有形状要求」就够。）</p>
       </div></details>
-    <details><summary>8.7 秒那个数，实际能跑到多少？</summary>
+    <details><summary>9.3 秒那个数，实际能跑到多少？</summary>
       <div class="a">
         <p><b>诚实的回答是：这门课没有测过这个数，所以我不给。</b></p>
         <p><b>能说的是差距从哪来</b>：<em>卡之间要传数据、要同步、
         要等最慢的那一个，还要为了省显存把一部分计算重做一遍。
         这几项加起来不是几个百分点的量级。</em></p>
-        <p><b>而这恰恰是「假设并行完美无损」那七个字的价值</b> ——
+        <p><b>而这恰恰是「假设并行完美无损」那八个字的价值</b> ——
         <em>它把一个未知量明确地标了出来，而不是假装它不存在。</em></p>
         <p class="sub">（<b>被追问就把它交给专题七</b>，那一课专门讲怎么量、怎么归因。
         <b>不要随口给一个百分比</b>，这一课里所有数都是算出来或查出来的，
@@ -4821,13 +4824,13 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <p><b>一句话：参数量是静态的，算力是随输入变的。</b>
         <em>拿一本账去推另一本，一定出错 —— 这一课已经撞见三次了。</em></p>
       </div></details>
-    <details><summary>113 张卡、15 张卡 —— 这里的「张」到底是芯片还是 device</summary>
+    <details><summary>105 张卡、14 张卡 —— 这里的「张」到底是芯片还是 device</summary>
       <div class="a">
         <p><b>是 device，不是芯片。这个必须答准，因为差两倍。</b></p>
-        <p><b>原因很简单：94.74 GB 是<u>每个 device</u> 的容量，
+        <p><b>原因很简单：94.74 GiB 是<u>每个 device</u> 的容量，
         所以拿它做分母除出来的一切，单位都是 device。</b></p>
         <p><b>TPU v7 一颗芯片里有两个 device。</b>
-        <em>所以 113 个 device 换算成芯片是 57 颗；15 个 device 是 8 颗芯片。
+        <em>所以 105 个 device 换算成芯片是 53 颗；14 个 device 是 7 颗芯片。
         两个数都对，但说的不是一回事。</em></p>
         <p><b>刚才讲 1153 和 2307 的时候已经埋过这个 2 比 1 了，可以回指一下。</b>
         <em>这个 1:2 在后面几门课里会反复咬人 —— 现在讲清楚一次很值。</em></p>
@@ -4873,7 +4876,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   <h3 class="sec">别讲什么</h3>
   <div class="warn">
     <span class="k">三条红线</span>
-    <b>① 绝对不要把「14.3」说成「所以 15 张卡就能跑 V3」。</b>
+    <b>① 绝对不要把「13.3」说成「所以 14 张卡就能跑 V3」。</b>
     <em>它是前向、batch=1、不含激活的下限</em> ——
     <b>听众里一定有人会拿这个数回去做规划，而那会错八倍。
     每次报这个数，后面必须紧跟「这是最乐观的可能值」。</b><br>
@@ -4889,7 +4892,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>十三分钟，五段：三个问题 3 分 → 三种口径那张图 3 分 →
     时间换算 2 分半 → 静态分析三条 3 分 → 抛钩子 1 分半。</b><br>
     <b>这一讲有三个「必须停」的点，一个都不能省</b>：
-    <em>报「14.3」之前停一拍；说完「假设并行完美无损」停两秒；
+    <em>报「13.3」之前停一拍；说完「假设并行完美无损」停两秒；
     抛完三个「为什么」停两秒再收。</em>
     <b>这一讲的力量全在这三个停顿里，把它们讲连贯了反而弱。</b><br>
     <b>那张总表不要逐行念。</b>

@@ -504,16 +504,17 @@ footer a{text-decoration:none}
       后面每生成一个字，都要回头用到前面每一个字、在<b>每一层</b>算出来的 K 和 V。
       这就是 <b>KV cache</b>。<br>
       问的就是它：<b>这一次 prefill，留下了多大一份 KV cache？</b><br>
-      参照物 —— 一个 TPU v7 device 可用 HBM 约 <b>94.74 GiB</b>。</span></p>
+      参照物 —— 一个 TPU v7 device 可用 HBM 约 <b>94.74 GiB</b>。
+      <span class="sub">（下文说「一张卡」「几个」，指的都是这样一个 device，不是一颗芯片 —— 一颗 v7 芯片里有两个。）</span></span></p>
     <div class="opts">
-      <button data-g="0">约 4 GB</button>
-      <button data-g="1" data-right>约 9 GB</button>
-      <button data-g="2">约 30 GB</button>
-      <button data-g="3">约 500 GB</button>
+      <button data-g="0">约 4 GiB</button>
+      <button data-g="1" data-right>约 9 GiB</button>
+      <button data-g="2">约 30 GiB</button>
+      <button data-g="3">约 500 GiB</button>
     </div>
     <div class="rev" id="rev">
       <p>答案是 <b><span data-v="kvMla">8.58 GiB</span></b> ——
-        <b><span data-v="kvMlaCards">一张卡的 10%</span></b>。<br>
+        <b><span data-v="kvMlaCards">一张卡的 9%</span></b>。<br>
         <span class="qs">另外三个选项<b>每一个也都是真数字</b>，只是换了一种存法。
         这四个数其实就是<b>四代注意力</b>：同一个模型、同一篇文档，
         只因为「每个 token 每层存几个数」不一样，答案就跨了 <b>128 倍</b>。
@@ -531,7 +532,7 @@ footer a{text-decoration:none}
         <div class="card tint"><h4>③ <span data-v="tokens">131,072</span> 个 token</h4>
           <div class="stat green" data-v="kvMla">8.58 GiB</div>
           <p class="sub">× <span data-v="tokens">131,072</span>　
-            <b><span data-v="kvMlaCards">一张卡的 10%</span></b></p></div>
+            <b><span data-v="kvMlaCards">一张卡的 9%</span></b></p></div>
       </div>
 
       <div class="note warn">
@@ -549,17 +550,18 @@ footer a{text-decoration:none}
         <thead><tr><th>选项</th><th>存法</th><th style="text-align:right">每 token 每层</th>
           <th style="text-align:right">全长</th><th style="text-align:right">相对 MHA</th></tr></thead>
         <tbody>
-          <tr><td>约 500 GB</td><td><b>MHA</b> · <b>128 个头</b>各存一份（最传统）</td><td class="n">32,768</td>
+          <tr><td>约 500 GiB</td><td><b>MHA</b> · <b>128 个头</b>各存一份（最传统）</td><td class="n">32,768</td>
               <td class="n" data-v="kvMha">488.00 GiB</td><td class="n">1×</td></tr>
-          <tr><td>约 30 GB</td><td><b>GQA</b> · 128 个头分 <b>8 组</b>，每 16 个共用一份（Llama 那一类）</td><td class="n">2,048</td>
+          <tr><td>约 30 GiB</td><td><b>GQA</b> · 128 个头分 <b>8 组</b>，每 16 个共用一份（Llama 那一类）</td><td class="n">2,048</td>
               <td class="n" data-v="kvGqa">30.50 GiB</td><td class="n">16×</td></tr>
-          <tr class="sum"><td>约 9 GB ✓</td><td><b>MLA</b> · 压成一个 512 维的潜向量（V3）</td><td class="n">576</td>
+          <tr class="sum"><td>约 9 GiB ✓</td><td><b>MLA</b> · 压成一个 512 维的潜向量（V3）</td><td class="n">576</td>
               <td class="n" data-v="kvMla">8.58 GiB</td><td class="n" data-v="kvRatio">56.9×</td></tr>
-          <tr><td>约 4 GB</td><td><b>MQA</b> · 所有头共用一份（最省）</td><td class="n">256</td>
+          <tr><td>约 4 GiB</td><td><b>MQA</b> · 所有头共用一份（最省）</td><td class="n">256</td>
               <td class="n" data-v="kvMqa">3.81 GiB</td><td class="n">128×</td></tr>
         </tbody>
       </table></div>
-      <p class="qs"><b>MLA 落在 GQA 和 MQA 中间，但质量比这两个都好</b> ——
+      <p class="qs"><b>MLA 落在 GQA 和 MQA 中间，质量却应当比这两个都好</b>
+        <span class="sub">（论文没有让 MLA 跟 GQA、MQA 直接对打；这是把它的两张消融表拼起来推出来的，见第 2 步）</span> ——
         MQA 更省，可它是靠<b>让所有头共用一份</b>省出来的，表达力是真丢了、找不回来；
         MLA 省得几乎一样多，却<b>没让任何一个头做出牺牲</b>。<b>这就是第 2 步的主线。</b>
         <em>（GQA 那行按 Llama 系列常见的 8 组折算，不是 V3 的配置；
@@ -567,9 +569,9 @@ footer a{text-decoration:none}
 
       <div class="note danger">
         <span class="t">这 <span data-v="kvRatio">56.9×</span> 不是省了点显存，是换了一个量级</span>
-        488 GiB 意味着<b>光 KV cache 就要 <span data-v="kvCards">5.5 张卡</span></b> ——
+        488 GiB 意味着<b>光 KV cache 就要 <span data-v="kvCards">5.2 张卡</span></b> ——
         模型权重还一个字节都没放，而且这只是<b>一个用户</b>。<br>
-        8.58 GiB 则是<b><span data-v="kvMlaCards">一张卡的 10%</span></b>。<br>
+        8.58 GiB 则是<b><span data-v="kvMlaCards">一张卡的 9%</span></b>。<br>
         <b>一个是「先想办法凑机器」，一个是「顺手就放下了」。</b>
       </div>
 
@@ -605,7 +607,7 @@ footer a{text-decoration:none}
 
   <div class="note ok">
     <span class="t">⭐ 「它是标准」不是一句评价，是可以查证的事实</span>
-    2026 年腾讯开源的混元 3（295B/21B），MoE 那部分<b>是逐字段照着 V3 抄的</b> ——
+    2026 年腾讯开源的混元 3（官方英文名 Hy3，295B/21B），MoE 那部分<b>是逐字段照着 V3 抄的</b> ——
     sigmoid 路由、无辅助损失的专家偏置、共享专家、MTP、
     连「前 k 层保持 dense」这个字段的<b>名字都一样</b>。
     它只把注意力从 MLA 换成了 GQA。
@@ -621,10 +623,11 @@ footer a{text-decoration:none}
     <svg viewBox="0 0 1000 352" role="img" aria-label="主流大模型总参数与激活参数对比">
       <g id="modelbars"></g>
     </svg>
-    <figcaption><b>深色是总参数（显存要装的），浅色是激活参数（算力要花的）。</b>
+    <figcaption><b>整条长度是总参数（显存要装的），左端深色那一段是激活参数（算力要花的）。</b>
+    <span class="sub">（V3 那一行换成蓝、绿两色。）</span>
     稠密模型两者相等；MoE 模型把它们<b>掰开了</b> ——
     这一掰，就是过去两年大模型能一路做大的根本原因。
-    <br>⚠️ 最上面那条 <b>Kimi K3 总参数第一（2.8T），但稀疏比不是第一</b>：
+    <br>⚠️ 最下面那条 <b>Kimi K3 总参数第一（2.8T），但稀疏比不是第一</b>：
     <code>2800 ÷ 104 = 26.9×</code>，反而<b>低于</b> V4 的 32.7×。
     它把「更稀疏」花在了<b>专家粒度</b>上 ——&nbsp;896 个专家里选 16，
     <b>只点亮 1.8%</b>（V3 是 256 选 8，3.1%）。
@@ -684,7 +687,7 @@ footer a{text-decoration:none}
     <div class="tbl-wrap"><table>
       <thead><tr><th>骨架</th><th style="text-align:right">值</th><th>说明</th></tr></thead>
       <tbody>
-        <tr><td><code>hidden_size</code></td><td class="n">7168</td><td>残差流宽度，记作 <i>d</i></td></tr>
+        <tr><td><code>hidden_size</code></td><td class="n">7,168</td><td>残差流宽度，记作 <i>d</i></td></tr>
         <tr><td><code>num_hidden_layers</code></td><td class="n">61</td><td></td></tr>
         <tr><td><code>first_k_dense_replace</code></td><td class="n">3</td><td>前 3 层 dense，<b>后 58 层 MoE</b></td></tr>
         <tr><td><code>vocab_size</code></td><td class="n">129,280</td><td></td></tr>
@@ -749,7 +752,7 @@ footer a{text-decoration:none}
             拆成两个并排盒子会变成「先过 MLP 再过 MoE」，那是错的。 -->
     <rect x="264" y="150" width="556" height="34" rx="17" fill="url(#resid)"/>
     <text x="542" y="172" text-anchor="middle" class="svglbl" fill="#174ea6">
-      残差流 · 宽度 d = 7168 · 一路贯穿 61 层</text>
+      残差流 · 宽度 d = 7,168 · 一路贯穿 61 层</text>
 
     <!-- 步骤 -->
     <g class="svgtxt">
@@ -770,7 +773,7 @@ footer a{text-decoration:none}
       <!-- 第1步 嵌入 -->
       <rect x="264" y="62" width="112" height="70" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
       <text x="320" y="84" text-anchor="middle" class="svglbl" fill="#174ea6">① 嵌入</text>
-      <text x="320" y="102" text-anchor="middle" class="svgsm" fill="#174ea6">129,280 × 7168</text>
+      <text x="320" y="102" text-anchor="middle" class="svgsm" fill="#174ea6">129,280 × 7,168</text>
       <text x="320" y="118" text-anchor="middle" class="svgsm" fill="#174ea6">拿 id 查表</text>
       <line x1="320" y1="134" x2="320" y2="146" stroke="#1a73e8" stroke-width="1.4" marker-end="url(#ar)"/>
 
@@ -799,7 +802,7 @@ footer a{text-decoration:none}
       <!-- 第6步 出口 -->
       <rect x="692" y="62" width="122" height="70" rx="9" fill="#fef7e0" stroke="#f9ab00"/>
       <text x="753" y="84" text-anchor="middle" class="svglbl" fill="#b06000">⑥ lm_head</text>
-      <text x="753" y="102" text-anchor="middle" class="svgsm" fill="#b06000">7168 → 129,280</text>
+      <text x="753" y="102" text-anchor="middle" class="svgsm" fill="#b06000">7,168 → 129,280</text>
       <text x="753" y="118" text-anchor="middle" class="svgsm" fill="#b06000">独立的第二份</text>
       <line x1="753" y1="146" x2="753" y2="132" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
 
@@ -899,11 +902,11 @@ footer a{text-decoration:none}
     <p><b>词表矩阵的大小只跟「词表 × d」有关，跟层数一点关系都没有。</b>
     所以模型越深越大，这笔钱占比越小。</p>
     <div class="eq"><span class="c">// V3：嵌入表 + 出口表（两张表没有共享权重，tie_word_embeddings = false）</span>
-129,280 × 7,168 × 2 = 1.853 B  <span class="c">→ 占 671 B 的 </span><span class="r">0.28%</span>
+129,280 × 7,168 × 2 = 1.853B  <span class="c">→ 占 671B 的 </span><span class="r">0.28%</span>
 
 <span class="c">// 反例：同一张 129,280 词表，塞进一个 d = 2,048、12 层的小模型</span>
-129,280 × 2,048 × 2 = 529 M    <span class="c">// 两张表</span>
-12 × 12 × 2,048²     = 604 M    <span class="c">// 模型主体，按每层 12d² 估，只用来说明量级</span>
+129,280 × 2,048 × 2 = 530M    <span class="c">// 两张表</span>
+12 × 12 × 2,048²     = 604M    <span class="c">// 模型主体，按每层 12d² 估，只用来说明量级</span>
                                 <span class="c">→ 词表占掉快一半</span></div>
     <p>所以这张图上「往大做要赔钱」那一条，<b>在 V3 身上几乎不构成阻力</b> ——
     真正拉住它的是另外两条：<b>罕见词学不好</b>，以及<b>出口 softmax 变贵</b>。</p>
@@ -914,8 +917,8 @@ footer a{text-decoration:none}
       <b>「大多数 LLM 的词表都偏小」</b>：按它拟合的公式，Llama2-70B 的最优词表应该在
       <b>21.6 万</b> 以上，而它实际只有 3.2 万；同样算力预算下把词表从 32K 提到 43K，
       ARC-Challenge 从 <b>29.1 提到 32.0</b>。<br>
-      <b>⚠️ 但这条要留一个边界：</b>那篇文章是在 <b>33 M 到 3 B 的 dense 模型</b>上拟合的，
-      <em>直接外推到 671 B 的 MoE 上没有依据</em>。它能说明「方向是往大走」，
+      <b>⚠️ 但这条要留一个边界：</b>那篇文章是在 <b>33M 到 3B 的 dense 模型</b>上拟合的，
+      <em>直接外推到 671B 的 MoE 上没有依据</em>。它能说明「方向是往大走」，
       <b>不能用来论证 129,280 就是 V3 的最优解</b>。<br>
       至于「罕见词学成死词」，那类现象有个专门的名字叫
       <em>under-trained / glitch token</em>（arXiv 2405.05417，就是著名的
@@ -942,7 +945,7 @@ footer a{text-decoration:none}
       <span class="t">别把约束讲成理由</span>
       「对齐」只解释了<b>为什么不会是 7,000 或 7,200</b>，
       <b>没有解释为什么不是 6,144 或 8,192</b> —— 那两个也一样整除。
-      <em>讲台上把这两件事混成一句「所以他们选了 7168」，懂行的人会当场追问。</em>
+      <em>讲台上把这两件事混成一句「所以他们选了 7,168」，懂行的人会当场追问。</em>
     </div>
   </div>
   </details>
@@ -955,7 +958,7 @@ footer a{text-decoration:none}
       不过「一定是查表」这个直觉在真实框架里并不成立，展开看。</p>
 
       <div class="eq"><span class="c">// 嵌入矩阵参数量</span>
-129,280 × 7,168 = <span class="r" data-v="embedW">926.68 M</span>  <span class="c">→ <span data-v="embedWBytes">1.73 GiB</span></span>
+129,280 × 7,168 = <span class="r" data-v="embedW">926.68M</span>  <span class="c">→ <span data-v="embedWBytes">1.73 GiB</span></span>
 
 <span class="c">// 查完表，那个张量多大</span>
 <span data-v="tokens">131,072</span> × 7,168 × <span data-v="bytes">2</span> B = <span class="r" data-v="embedAct">1.75 GiB</span></div>
@@ -1059,7 +1062,7 @@ else:
             fill="none" marker-end="url(#ar)"/>
       <rect x="56" y="200" width="344" height="54" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
       <text x="228" y="222" text-anchor="middle" class="svgnum" fill="#b06000">o_proj　16,384 × 7,168</text>
-      <text x="228" y="242" text-anchor="middle" class="svgsm" fill="#b06000">117.44 M　一层 MLA 权重里最大的一块（63%）</text>
+      <text x="228" y="242" text-anchor="middle" class="svgsm" fill="#b06000">117.44M　一层 MLA 权重里最大的一块（63%）</text>
       <text x="640" y="248" text-anchor="middle" class="svgsm" fill="#b06000">↙ 把多出来的那 1.29 倍收回去</text>
 
       <rect x="40" y="280" width="380" height="28" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
@@ -1068,7 +1071,7 @@ else:
       <line x1="420" y1="34" x2="420" y2="320" stroke="#d93025" stroke-width="1.2" stroke-dasharray="5 4"/>
       <text x="428" y="334" class="svglbl" fill="#d93025">↑ d = 7,168　两行共用这条基准线，长度按真实比例画</text>
 
-      <text x="40" y="360" class="svgsm" fill="#0d652d">⭐ MLA 解除了「注意力内部宽度必须等于残差流宽度」这条老约束 —— 代价就是中间那块 117.44 M 的收口</text>
+      <text x="40" y="360" class="svgsm" fill="#0d652d">⭐ MLA 解除了「注意力内部宽度必须等于残差流宽度」这条老约束 —— 代价就是中间那块 117.44M 的收口</text>
     </g>
   </svg>
   <figcaption>两行共用同一条 <b>d = 7,168</b> 基准线，<b>长度按真实比例画，没有压缩</b>。
@@ -1078,11 +1081,11 @@ else:
 
   <details class="more"><summary>展开：这张图顺带解释了一件后面会反复撞到的事<span class="why">—— o_proj 为什么是一层里最大的一块</span></summary>
   <div class="body">
-    <p><b><code>o_proj</code> 是 MLA 一层里最大的那块权重（117.44 M，占一层的 63%）</b> ——
+    <p><b><code>o_proj</code> 是 MLA 一层里最大的那块权重（117.44M，占一层的 63%）</b> ——
     <em>不是它本身有什么特殊，纯粹是因为它跨着上图那道口子</em>：
     输入 16,384、输出 7,168，两头都很宽。</p>
-    <div class="eq">o_proj = 16,384 × 7,168 = <span class="r">117.44 M</span>
-一层 MLA 权重合计       = 187.11 M
+    <div class="eq">o_proj = 16,384 × 7,168 = <span class="r">117.44M</span>
+一层 MLA 权重合计       = 187.11M
                           <span class="c">→ 117.44 / 187.11 = </span><span class="r">62.76%</span></div>
     <p><b>更要紧的是这道口子放开之后的后果：头数和 d 从此可以各按各的道理定</b>，
     不必再互相迁就 —— <em>这是后面第 2 步能把 128 个头全部保留下来的前提。</em></p>
@@ -1143,11 +1146,11 @@ else:
       <p class="sub"><span data-v="kvMhaPerN">32,768</span> 个数 ×
         <span data-v="bytes">2</span> B　<b>微不足道</b></p></div>
     <div class="card"><h4>② 一个 token，走完 61 层</h4>
-      <div class="stat yellow" data-v="kvStep2">3.81 MiB</div>
+      <div class="stat yellow" data-v="kvStep2">3.8 MiB</div>
       <p class="sub">× 61　<b>还是不痛不痒</b></p></div>
     <div class="card tint"><h4>③ <span data-v="tokens">131,072</span> 个 token</h4>
       <div class="stat red" data-v="kvMha">488.00 GiB</div>
-      <p class="sub">× <span data-v="tokens">131,072</span>　<b>光这一项就占 <span data-v="kvCards">5.5 张卡</span></b></p></div>
+      <p class="sub">× <span data-v="tokens">131,072</span>　<b>光这一项就占 <span data-v="kvCards">5.2 张卡</span></b></p></div>
   </div>
 
   <div class="note danger">
@@ -1204,7 +1207,8 @@ else:
     <b>128 个头还是 128 个头，每头还是 128 维，61 层一层不少。</b>
     它换的是<b>「存什么」</b> —— 不存展开后的 K 和 V，
     改存一个 512 维的压缩向量，外加 64 维单独走的位置信息，一共 <b>576</b> 个数。<br>
-    <b>所以四代对照里，MLA 的 576 卡在 GQA 的 2,048 和 MQA 的 256 中间，质量却比两个都好。</b>
+    <b>所以四代对照里，MLA 的 576 卡在 GQA 的 2,048 和 MQA 的 256 中间，质量却比两个都好</b>
+    <span class="sub">（推论，不是直接实测：论文一张表显示 MHA 胜过 GQA 和 MQA，另一张显示 MLA 胜过 MHA）</span>。
     <em>在同一根轴上这不可能 —— 它做得到，正是因为它根本不在那根轴上。</em>
   </div>
 
@@ -1347,6 +1351,8 @@ else:
         所以必须额外告诉它「谁在前谁在后」。RoPE 的做法很巧：
         <b>不给向量加东西，而是按位置把它「转一个角度」</b> ——
         第 1 个 token 转 1 度，第 100 个转 100 度。
+        <span class="sub">（这是简化：实际是把向量的维度两两配对，每一对转速不同 ——
+        最快的一对每个位置转 1 弧度，越往后越慢，最慢的要走很多位置才转一圈。）</span>
         两个向量做点积时，<b>结果自然就带上了它们的角度差，也就是相对距离</b>。
       </div>
       <p><b>位置信息为什么必须单独走一路。</b>麻烦就出在这个「转角度」上 ——&nbsp;
@@ -1367,7 +1373,7 @@ else:
     <div>
       <figure class="fbox" style="margin-top:0">
       <svg viewBox="0 0 440 300" role="img" aria-label="MLA 压缩与升维路径">
-        <text x="10" y="18" class="svglbl">输入 h · 7168 维</text>
+        <text x="10" y="18" class="svglbl">输入 h · 7,168 维</text>
         <rect x="10" y="26" width="420" height="22" rx="4" fill="#e8f0fe" stroke="#1a73e8"/>
 
         <path d="M120 52 v22" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
@@ -1456,7 +1462,7 @@ else:
         is similar to that of single-head attention with full dimensionality.</em>」<br>
         <b>—— 理由是算力预算，不是数学必要。</b>
       </div>
-      <p>八年下来，这个取值被抄成了直觉。<b>但它从来只是个惯例。</b></p>
+      <p>七年下来，这个取值被抄成了直觉。<b>但它从来只是个惯例。</b></p>
     </div>
     <div>
       <h4 style="margin-bottom:8px">V3 为什么敢把它撑开</h4>
@@ -1496,20 +1502,20 @@ else:
       <text x="240" y="122" text-anchor="end" class="svgnum" fill="#a50e0e">② o_proj 权重</text>
       <rect x="250" y="104" width="458" height="26" rx="3" fill="#fce8e6" stroke="#d93025"/>
       <text x="264" y="122" class="svgnum" fill="#a50e0e">2.29×</text>
-      <text x="330" y="122" class="svgsm" fill="#a50e0e">51.38 M → 117.44 M　—— 这笔也跑不掉</text>
+      <text x="330" y="122" class="svgsm" fill="#a50e0e">51.38M → 117.44M　—— 这笔也跑不掉</text>
 
       <text x="240" y="178" text-anchor="end" class="svgnum" fill="#5f6368">③ Q 投影 · 一步投到位</text>
       <rect x="250" y="160" width="686" height="26" rx="3" fill="#fef7e0" stroke="#f9ab00"
             stroke-dasharray="5 4"/>
       <line x1="708" y1="160" x2="708" y2="186" stroke="#f9ab00" stroke-width="1.2"/>
       <text x="264" y="178" class="svgnum" fill="#b06000">3.43×</text>
-      <text x="330" y="178" class="svgsm" fill="#b06000">51.38 M → 176.16 M　撑宽 2.29×</text>
+      <text x="330" y="178" class="svgsm" fill="#b06000">51.38M → 176.16M　撑宽 2.29×</text>
       <text x="716" y="178" class="svgsm" fill="#b06000">× RoPE 分离 1.5×</text>
 
       <text x="240" y="222" text-anchor="end" class="svgnum" fill="#0d652d">③ Q 投影 · 实际</text>
       <rect x="250" y="204" width="190" height="26" rx="3" fill="#e6f4ea" stroke="#1e8e3e"/>
       <text x="264" y="222" class="svgnum" fill="#0d652d">0.95×</text>
-      <text x="462" y="222" class="svgsm" fill="#0d652d">48.76 M　走 q_lora：7,168 → 1,536 → 24,576　<tspan font-weight="700">比等宽还小 5.1%</tspan></text>
+      <text x="462" y="222" class="svgsm" fill="#0d652d">48.76M　走 q_lora：7,168 → 1,536 → 24,576　<tspan font-weight="700">比等宽还小 5.1%</tspan></text>
 
       <g stroke="#d93025" stroke-width="1.2" stroke-dasharray="5 4">
         <line x1="450" y1="36" x2="450" y2="48"/>
@@ -1533,7 +1539,7 @@ else:
   <b>⚠️ 别把两个「如果」搞混</b>：右边那一截<b>只有 MLA 才有</b>。
   如果 V3 压根不用 MLA、就用一个普通 MHA，RoPE 直接转在完整的 128 维上，
   <b>根本不会出现 192 这个数</b> —— Q 投影就是
-  <code>7,168 × (128×128) = 117.44 M</code>，跟 <code>o_proj</code> 一样是 2.29 倍，
+  <code>7,168 × (128×128) = 117.44M</code>，跟 <code>o_proj</code> 一样是 2.29 倍，
   <b>黄条走到竖线那儿就该结束了。</b></figcaption>
   </figure>
 
@@ -1551,15 +1557,15 @@ else:
           <span class="sub">真的多付了</span></td></tr>
       <tr><td><b>② <code>o_proj</code> 权重</b><br>
         <span class="sub">要跨 16,384 → 7,168 这道口子</span></td>
-        <td>7,168 × 7,168<br><span class="sub">51.38 M</span></td>
-        <td>16,384 × 7,168<br><span class="sub">117.44 M</span></td>
+        <td>7,168 × 7,168<br><span class="sub">51.38M</span></td>
+        <td>16,384 × 7,168<br><span class="sub">117.44M</span></td>
         <td class="n" style="color:#a50e0e">2.29×<br>
           <span class="sub">占一层的 63%</span></td></tr>
       <tr><td><b>③ Q 投影权重</b><br>
         <span class="sub">128 个头各要一个 7,168 × d 的矩阵</span></td>
-        <td>7,168 × (128×56)<br><span class="sub">51.38 M</span></td>
+        <td>7,168 × (128×56)<br><span class="sub">51.38M</span></td>
         <td><b>如果只是撑宽</b>（普通 MHA）<br>7,168 × (128×<b>128</b>)<br>
-          <span class="sub">117.44 M —— RoPE 就转在这 128 维里，
+          <span class="sub">117.44M —— RoPE 就转在这 128 维里，
           <b>没有 192 这个数</b></span></td>
         <td class="n" style="color:#a50e0e">2.29×<br>
           <span class="sub">纯撑宽的账</span></td></tr>
@@ -1567,12 +1573,12 @@ else:
         RoPE 不转在那 128 维里，另开 64 维走</span></td>
         <td>—</td>
         <td><b>V3 的真实形状</b>，一步投到位<br>7,168 × (128×<b>192</b>)<br>
-          <span class="sub">176.16 M</span></td>
+          <span class="sub">176.16M</span></td>
         <td class="n" style="color:#a50e0e">再 ×1.5<br>
           <span class="sub">合计本该 3.43×</span></td></tr>
       <tr class="sum"><td colspan="2"><b>③ 的实际做法：走 <code>q_lora</code> 绕一下</b><br>
         <span class="sub">7,168 → 1,536 → 128×192，中间掐一个窄腰</span></td>
-        <td>11.01 M + 37.75 M<br><span class="sub">= 48.76 M</span></td>
+        <td>11.01M + 37.75M<br><span class="sub">= 48.76M</span></td>
         <td class="n" style="color:#0d652d">比一步投到位省 3.61×<br>
           <span class="sub">比等宽还小 5.1%</span></td></tr>
     </tbody>
@@ -1611,7 +1617,7 @@ else:
     <span class="t">但第 ① 笔是真的，跑不掉</span>
     <b>注意力的计算量确实跟着涨了</b> —— 原论文当年设 <code>d_model/h</code>，
     图的就是省这笔算力。<b>V3 是明确地拿算力换了表达力</b>，不是免费午餐。<br>
-    ② 也是真的：<code>o_proj</code> <b>117.44 M，一层 MLA 权重里最大的一块</b>。
+    ② 也是真的：<code>o_proj</code> <b>117.44M，一层 MLA 权重里最大的一块</b>。
     <b>下面那张五行表里它为什么最大，答案就在这儿。</b>
   </div>
 
@@ -1865,7 +1871,7 @@ else:
 
   <figure class="fbox">
     <svg viewBox="0 0 1000 460" role="img"
-         aria-label="MHA 每个头直连 h，秩上限 7168；MLA 所有头共用一条 512 的总线，k_pe 从 h 旁路">
+         aria-label="MHA 每个头直连 h，秩上限 7,168；MLA 所有头共用一条 512 的总线，k_pe 从 h 旁路">
       <g id="rankbus"></g>
     </svg>
     <figcaption><b>把 <code>c_KV</code> 想成一条信息总线。</b>
@@ -1882,7 +1888,7 @@ else:
 
   <div class="note ok">
     <span class="t">⭐ 论文凭什么这么说？—— 它没说，它只给了实验，而实验赢得很干净</span>
-    <b>同规模、同架构，只换注意力机制</b>（V2 论文附录 D，250 B 的大号 MoE）：<br>
+    <b>同规模、同架构，只换注意力机制</b>（V2 论文附录 D，250B 的大号 MoE）：<br>
     <b>KV cache 从 860.2 K 掉到 34.6 K —— <span class="k">只有 MHA 的 4%</span>；
     BBH、MMLU、C-Eval、CMMLU <span class="k">四项全赢</span>。</b><br>
     <em>而它越过的 MHA，正是「不省 cache、质量最好」的那个基线。</em>
@@ -1903,8 +1909,8 @@ else:
       <th style="text-align:right">小号 MoE<br>MHA</th><th style="text-align:right">小号 MoE<br>MLA</th>
       <th style="text-align:right">大号 MoE<br>MHA</th><th style="text-align:right">大号 MoE<br>MLA</th></tr></thead>
     <tbody>
-      <tr><td>总参数</td><td class="n">15.8 B</td><td class="n">15.7 B</td>
-        <td class="n">250.8 B</td><td class="n">247.4 B</td></tr>
+      <tr><td>总参数</td><td class="n">15.8B</td><td class="n">15.7B</td>
+        <td class="n">250.8B</td><td class="n">247.4B</td></tr>
       <tr><td><b>KV cache / token</b><br><span class="sub">元素个数</span></td>
         <td class="n">110.6 K</td><td class="n" style="color:#0d652d">15.6 K</td>
         <td class="n">860.2 K</td><td class="n" style="color:#0d652d"><b>34.6 K</b><br>
@@ -1929,12 +1935,14 @@ else:
     MMLU：<b>MHA 45.2</b> ＞ GQA 41.2 ＞ MQA 37.9；
     C-Eval：<b>MHA 42.9</b> ＞ GQA 37.7 ＞ MQA 30.0。<br>
     <b>结论：省 cache 的传统办法（GQA / MQA）是真的会掉质量的。</b>
-    <em>MLA 越过的，是那个「不省 cache、质量最好」的 MHA。</em>
+    <em>MLA 越过的，是那个「不省 cache、质量最好」的 MHA。</em><br>
+    <span class="sub">⚠️ 注意这是<b>两张表拼出来的推论</b>：Table 8 是 7B 稠密模型比 MHA / GQA / MQA，
+    Table 9 是 MoE 模型比 MHA / MLA，<b>论文里没有一张表让 MLA 直接对上 GQA 或 MQA</b>。
+    「MLA 比 GQA、MQA 都好」靠的是「MHA 好过它们、MLA 又好过 MHA」这一步传递。</span>
   </div>
 
-  <h4>最难受的一问：压了 57 倍，质量为什么反而更好？</h4>
   <div class="note warn">
-    <span class="t">论文没有解释。以下两条是推测，请按推测听</span>
+    <span class="t">最难受的一问：压了 57 倍，质量为什么反而更好？—— 论文没有解释，以下两条是推测，请按推测听</span>
     <b>推测一 · 低秩瓶颈本身是一种正则化。</b>
     强迫所有头把信息挤过一个窄口，可能反而逼出更干净、更共享的表示。
     <em>这个现象在别处也见过，但这里没有对照实验支持。</em><br>
@@ -2030,7 +2038,7 @@ else:
     <div class="note info">
       <span class="t">④ softmax：把分数变成「取多少」</span>
       按行归一化，做完每一行加起来正好是 1。<b>这一行就是一个概率分布</b>：
-      「我这个位置的信息，30% 从第 1 个位置取，47% 从第 5 个位置取」。<br>
+      「我这个位置的信息，29% 从第 1 个位置取，47% 从第 5 个位置取」。<br>
       也正因为 softmax 是<b>逐行、逐头</b>做的非线性运算，
       128 个头到这一步就<b>再也合并不回去了</b>（上一节讲的就是这件事）。
     </div>
@@ -2039,7 +2047,7 @@ else:
   <p><b>⑤ 加权求和，⑥ 拼起来出去。</b>
   拿第 ④ 步那套权重去对 V 加权求和，每个头吐出一个 128 维的向量。
   128 个头拼成 16,384 维，过一次 <code>o_proj</code> 压回 7,168，汇回残差流。
-  <b>o_proj 是一层里最大的一块矩阵</b>（117.44 M，占了 MLA 一层的六成），
+  <b>o_proj 是一层里最大的一块矩阵</b>（117.44M，占了 MLA 一层的六成），
   也是 128 个头之间<b>唯一</b>交换信息的地方 —— 在那之前它们各算各的，谁也不看谁。</p>
 
   <div class="note warn">
@@ -2057,33 +2065,33 @@ else:
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 330" role="img"
-       aria-label="一层 MLA 五个投影矩阵的参数量对比，o_proj 117.44 M 占 62.8%，其余四块加起来不到四成">
+       aria-label="一层 MLA 五个投影矩阵的参数量对比，o_proj 117.44M 占 62.8%，其余四块加起来不到四成">
     <g>
-      <text x="150" y="26" class="svglbl">条长按参数量线性画　·　一层合计 187.11 M</text>
+      <text x="150" y="26" class="svglbl">条长按参数量线性画　·　一层合计 187.11M</text>
 
       <text x="140" y="58" text-anchor="end" class="svgnum" fill="#174ea6">o_proj</text>
       <rect x="150" y="42" width="754" height="24" rx="3" fill="#1a73e8"/>
-      <text x="163" y="59" class="svgsm" fill="#fff">117.44 M　　62.8%　—— 一块顶其余四块加起来还多</text>
+      <text x="163" y="59" class="svgsm" fill="#fff">117.44M　　62.8%　—— 一块顶其余四块加起来还多</text>
       <text x="140" y="74" text-anchor="end" class="svgsm">16,384 × 7,168</text>
 
       <text x="140" y="106" text-anchor="end" class="svgnum" fill="#5f6368">q_b_proj</text>
       <rect x="150" y="90" width="242" height="24" rx="3" fill="#c9defc"/>
-      <text x="402" y="107" class="svgsm">37.75 M　20.2%</text>
+      <text x="402" y="107" class="svgsm">37.75M　20.2%</text>
       <text x="140" y="122" text-anchor="end" class="svgsm">1,536 × 24,576</text>
 
       <text x="140" y="154" text-anchor="end" class="svgnum" fill="#5f6368">kv_b_proj</text>
       <rect x="150" y="138" width="108" height="24" rx="3" fill="#c9defc"/>
-      <text x="268" y="155" class="svgsm">16.78 M　9.0%</text>
+      <text x="268" y="155" class="svgsm">16.78M　9.0%</text>
       <text x="140" y="170" text-anchor="end" class="svgsm">512 × 32,768</text>
 
       <text x="140" y="202" text-anchor="end" class="svgnum" fill="#5f6368">q_a_proj</text>
       <rect x="150" y="186" width="71" height="24" rx="3" fill="#c9defc"/>
-      <text x="231" y="203" class="svgsm">11.01 M　5.9%</text>
+      <text x="231" y="203" class="svgsm">11.01M　5.9%</text>
       <text x="140" y="218" text-anchor="end" class="svgsm">7,168 × 1,536</text>
 
       <text x="140" y="250" text-anchor="end" class="svgnum" fill="#b06000">kv_a_proj</text>
       <rect x="150" y="234" width="27" height="24" rx="3" fill="#f9ab00"/>
-      <text x="187" y="251" class="svgsm" fill="#b06000">4.13 M　2.2%　⭐ 唯一决定 KV cache 的那块，却是最小的一块</text>
+      <text x="187" y="251" class="svgsm" fill="#b06000">4.13M　2.2%　⭐ 唯一决定 KV cache 的那块，却是最小的一块</text>
       <text x="140" y="266" text-anchor="end" class="svgsm">7,168 × 576</text>
 
       <line x1="150" y1="284" x2="904" y2="284" stroke="#dadce0"/>
@@ -2093,7 +2101,7 @@ else:
   </svg>
   <figcaption>一层 MLA 的五块权重，<b>条长按参数量线性画</b>。
   <b>最大的那块和最小的那块差 28 倍</b>，而<em>决定显存账的恰恰是最小的那块</em>。
-  <b>× 61 层 = 11.41 B</b>，这就是 671 B 里注意力占的全部。</figcaption>
+  <b>× 61 层 = 11.41B</b>，这就是 671B 里注意力占的全部。</figcaption>
   </figure>
 
   <details class="more"><summary>展开：五个矩阵各自的形状和分工<span class="why">—— 图上那五个数字的出处</span></summary>
@@ -2101,18 +2109,18 @@ else:
   <div class="tbl-wrap"><table>
     <thead><tr><th>矩阵</th><th>形状</th><th style="text-align:right">参数量</th><th>干什么</th></tr></thead>
     <tbody>
-      <tr><td><code>q_a_proj</code></td><td>7168 × 1536</td><td class="n">11.01 M</td><td>Q 降到低秩 —— 省参数，不省 cache</td></tr>
-      <tr><td><code>q_b_proj</code></td><td>1536 × (128×192)</td><td class="n">37.75 M</td><td>Q 升回 128 头</td></tr>
-      <tr><td><code>kv_a_proj</code></td><td>7168 × 576</td><td class="n">4.13 M</td><td>⭐ 压成 512 + 单出 64 维 RoPE</td></tr>
-      <tr><td><code>kv_b_proj</code></td><td>512 × (128×256)</td><td class="n">16.78 M</td><td>⭐ 升回 128 头的 K 和 V</td></tr>
-      <tr><td><code>o_proj</code></td><td>(128×128) × 7168</td><td class="n">117.44 M</td><td>输出投影。<b>一层里最大的一块</b> —— 因为它要把 128 头拼出来的 16,384 维压回 7168</td></tr>
-      <tr class="sum"><td colspan="2">一层合计</td><td class="n">187.11 M</td><td>× 61 层 = <b>11.41 B</b></td></tr>
+      <tr><td><code>q_a_proj</code></td><td>7,168 × 1,536</td><td class="n">11.01M</td><td>Q 降到低秩 —— 省参数，不省 cache</td></tr>
+      <tr><td><code>q_b_proj</code></td><td>1536 × (128×192)</td><td class="n">37.75M</td><td>Q 升回 128 头</td></tr>
+      <tr><td><code>kv_a_proj</code></td><td>7,168 × 576</td><td class="n">4.13M</td><td>⭐ 压成 512 + 单出 64 维 RoPE</td></tr>
+      <tr><td><code>kv_b_proj</code></td><td>512 × (128×256)</td><td class="n">16.78M</td><td>⭐ 升回 128 头的 K 和 V</td></tr>
+      <tr><td><code>o_proj</code></td><td>(128×128) × 7,168</td><td class="n">117.44M</td><td>输出投影。<b>一层里最大的一块</b> —— 因为它要把 128 头拼出来的 16,384 维压回 7,168</td></tr>
+      <tr class="sum"><td colspan="2">一层合计</td><td class="n">187.11M</td><td>× 61 层 = <b>11.41B</b></td></tr>
     </tbody>
   </table></div>
   <p class="sub"><b>验算：</b><code>16384×7168 = 117,440,512</code>；
   <code>1536×24576 = 37,748,736</code>；<code>512×32768 = 16,777,216</code>；
   <code>7168×1536 = 11,010,048</code>；<code>7168×576 = 4,128,768</code>。
-  合计 <code>187,105,280 = 187.11 M</code>，<code>117.44 / 187.11 = 62.76%</code>。</p>
+  合计 <code>187,105,280 = 187.11M</code>，<code>117.44 / 187.11 = 62.76%</code>。</p>
   </div>
   </details>
 
@@ -2150,13 +2158,13 @@ else:
     <div>
       <p>注意力要算每个 token 对每个 token 的分数，这是一个
       <span class="k">序列长度 × 序列长度</span> 的方阵，<b>而且每个头一份</b>。</p>
-      <div class="eq">128 头 × <span data-v="seqRaw">131,072</span> × <span data-v="seqRaw">131,072</span> × <span data-v="bytes">2</span> B
+      <div class="eq"><span data-v="batchMul"></span>128 头 × <span data-v="seqRaw">131,072</span> × <span data-v="seqRaw">131,072</span> × <span data-v="bytes">2</span> B
 = <span class="r" data-v="attnMatrix">4.00 TiB</span>  <span class="c">← 每层，一次</span></div>
       <div class="note danger">
         <span class="t">这就是 FlashAttention 必须存在的原因</span>
         注意它<b>不是为了快</b>，是为了<b>根本放得下</b>。
         FlashAttention 的做法是永远不把这个矩阵整个物化出来 ——
-        分块算、边算边累加、算完就扔。省下的不是时间，是这 <span data-v="attnMatrix">4 TiB</span>。
+        分块算、边算边累加、算完就扔。省下的不是时间，是这 <span data-v="attnMatrix">4.00 TiB</span>。
       </div>
     </div>
     <div>
@@ -2166,7 +2174,7 @@ else:
       </svg>
       <figcaption style="text-align:left;margin-top:4px">
         每个小方块 = 一个 TPU v7 device（94.74 GiB）。
-        <b>这还只是一层、一次、batch 1。</b></figcaption>
+        <b>这还只是一层、一次、batch <span data-v="batch">1</span>。</b></figcaption>
       </figure>
     </div>
   </div>
@@ -2193,7 +2201,7 @@ else:
 
   <div class="note ok">
     <span class="t">所以后面发生了什么</span>
-    这条曲线一旦被算出来，接下来该做什么就很明显了：<b>如果 attention 吃掉九成算力，
+    这条曲线一旦被算出来，接下来该做什么就很明显了：<b>如果 attention 吃掉八成以上的算力（128K 是 82%，1M 是 97%），
     那就别让每个 query 都看全部 token。</b>
     <b>V3.2 的做法叫 DSA</b>：给每个 query 先挑出最相关的
     <b>2,048 个</b> token 再算注意力（<code>index_topk = 2048</code>，
@@ -2227,7 +2235,7 @@ else:
       <h4>结构：三个矩阵 + 一个门</h4>
       <p><b>撑宽、开一个阀门、再压回来。</b>
       <em>三个矩阵，每个 <span class="k">7,168 × 18,432</span></em> ——
-      一层 <span class="num">396.36 M</span> 参数，三层合计 <span class="num">1.19 B</span>。</p>
+      一层 <span class="num">396.36M</span> 参数，三层合计 <span class="num">1.19B</span>。</p>
       <p class="sub"><b>这一步的形状是完全固定的</b>，
       跟输入内容、跟序列多长都没有关系。<em>下面那四条好处，全都是从这一句长出来的。</em></p>
 
@@ -2265,7 +2273,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
        所以「撑宽再压回」是看出来的，不是读出来的。 -->
   <figure class="fbox">
   <svg viewBox="0 0 1000 400" role="img"
-       aria-label="SwiGLU 数据流：x 分成 gate 和 up 两路各撑宽到 18432，gate 过 SiLU 后与 up 逐元素相乘，再由 down 压回 7168">
+       aria-label="SwiGLU 数据流：x 分成 gate 和 up 两路各撑宽到 18,432，gate 过 SiLU 后与 up 逐元素相乘，再由 down 压回 7,168">
     <defs>
       <marker id="ar3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
         <path d="M0,0 L0,6 L7,3 z" fill="#5f6368"/></marker>
@@ -2279,7 +2287,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <!-- 张量条：高度 ∝ 宽度。7168 → 58px，18,432 → 149px -->
     <rect x="40"  y="161" width="30" height="58"  rx="6" fill="#f1f3f4" stroke="#dadce0"/>
     <text x="55"  y="150" text-anchor="middle" class="svglbl" fill="#202124">输入 x</text>
-    <text x="55"  y="234" text-anchor="middle" class="svgsm">7168</text>
+    <text x="55"  y="234" text-anchor="middle" class="svgsm">7,168</text>
 
     <rect x="612" y="116" width="30" height="149" rx="6" fill="#f1f3f4" stroke="#dadce0"/>
     <text x="627" y="106" text-anchor="middle" class="svglbl" fill="#202124">工作空间</text>
@@ -2288,7 +2296,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
     <rect x="922" y="161" width="30" height="58"  rx="6" fill="#f1f3f4" stroke="#dadce0"/>
     <text x="937" y="150" text-anchor="middle" class="svglbl" fill="#202124">输出</text>
-    <text x="937" y="234" text-anchor="middle" class="svgsm">7168</text>
+    <text x="937" y="234" text-anchor="middle" class="svgsm">7,168</text>
 
     <!-- 分叉：同一个 x 同时喂给两个矩阵 -->
     <path d="M70 190 H118 V104 H168" fill="none" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
@@ -2298,7 +2306,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <!-- 上路：gate_proj → SiLU → 阀门 -->
     <rect x="172" y="76" width="136" height="56" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
     <text x="240" y="98"  text-anchor="middle" class="svglbl" fill="#174ea6">gate_proj</text>
-    <text x="240" y="115" text-anchor="middle" class="svgsm"  fill="#174ea6">7168 → 18,432</text>
+    <text x="240" y="115" text-anchor="middle" class="svgsm"  fill="#174ea6">7,168 → 18,432</text>
     <line x1="308" y1="104" x2="352" y2="104" stroke="#1a73e8" stroke-width="1.3" marker-end="url(#ar3)"/>
 
     <rect x="356" y="82" width="84" height="44" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
@@ -2309,7 +2317,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <!-- 下路：up_proj 原样过去 -->
     <rect x="172" y="248" width="136" height="56" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
     <text x="240" y="270" text-anchor="middle" class="svglbl" fill="#0d652d">up_proj</text>
-    <text x="240" y="287" text-anchor="middle" class="svgsm"  fill="#0d652d">7168 → 18,432</text>
+    <text x="240" y="287" text-anchor="middle" class="svgsm"  fill="#0d652d">7,168 → 18,432</text>
     <path d="M308 276 H556 V214" fill="none" stroke="#1e8e3e" stroke-width="1.3" marker-end="url(#ar3)"/>
     <text x="330" y="266" class="svgsm" fill="#0d652d">水流：不过非线性，原样的值</text>
 
@@ -2323,13 +2331,13 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <line x1="642" y1="190" x2="736" y2="190" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
     <rect x="740" y="162" width="136" height="56" rx="9" fill="#fce8e6" stroke="#d93025"/>
     <text x="808" y="184" text-anchor="middle" class="svglbl" fill="#a50e0e">down_proj</text>
-    <text x="808" y="201" text-anchor="middle" class="svgsm"  fill="#a50e0e">18,432 → 7168</text>
+    <text x="808" y="201" text-anchor="middle" class="svgsm"  fill="#a50e0e">18,432 → 7,168</text>
     <line x1="876" y1="190" x2="918" y2="190" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
 
     <text x="500" y="360" text-anchor="middle" class="svglbl" fill="#5f6368">
       三根灰条的高度是按真实宽度画的 —— 撑宽 2.57 倍，再原样压回来</text>
     <text x="500" y="380" text-anchor="middle" class="svgsm">
-      每个矩阵 7168 × 18,432 · 一层 396.36 M 参数 · 前 3 层合计 1.19 B</text>
+      每个矩阵 7,168 × 18,432 · 一层 396.36M 参数 · 前 3 层合计 1.19B</text>
   </svg>
   <figcaption><b>三个矩阵的分工：两个撑宽，一个压回。</b>
   上面那条过 SiLU 变成<b>阀门</b>，下面那条原样当<b>水流</b>，两者逐元素相乘。
@@ -2420,7 +2428,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <b>这张表能支撑的只有一件事：门控这一组确实赢，而且赢的不是激活函数。</b>
   </div>
 
-  <details class="more"><summary>展开：那张表的完整数据，以及它能不能推广到 671 B<span class="why">—— 图上只画了一列，还有一列</span></summary>
+  <details class="more"><summary>展开：那张表的完整数据，以及它能不能推广到 671B<span class="why">—— 图上只画了一列，还有一列</span></summary>
   <div class="body">
   <div class="tbl-wrap"><table>
     <thead><tr><th>写法</th><th>矩阵数</th>
@@ -2450,7 +2458,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
   <div class="note warn">
     <span class="t">这张表的适用范围，要说清楚</span>
-    <b>它跑在 T5 规模的 span-filling 任务上，不是 671 B 的因果语言模型。</b>
+    <b>它跑在 T5 规模的 span-filling 任务上，不是 671B 的因果语言模型。</b>
     <em>严格说，它证明的是「在那个设置下，门控这一组赢」。</em><br>
     <b>能支持我们的是另一件事：翻开今天主流模型的 config，全都在 GLU 家族里。</b>
     <em>这是很强的共识信号，但它是共识，不是这张表的直接外推。</em>
@@ -2483,40 +2491,40 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 310" role="img"
-       aria-label="三种写法的一层参数量对比：经典两矩阵 4 倍宽 411.04 M，三矩阵按 2/3 规则缩到 19115 宽也是 411.04 M，V3 实际用 18432 宽只有 396.36 M">
+       aria-label="三种写法的一层参数量对比：经典两矩阵 4 倍宽 411.04M，三矩阵按 2/3 规则缩到 19,114.67 宽（不取整）也是 411.04M，V3 实际用 18,432 宽只有 396.36M">
     <g>
       <text x="20" y="26" class="svglbl">每一小格 = 一个权重矩阵，格子长度 = 它的参数量　·　三行总长直接可比</text>
 
       <text x="216" y="86" text-anchor="end" class="svgnum" fill="#5f6368">经典 MLP</text>
       <text x="216" y="102" text-anchor="end" class="svgsm">2 个矩阵 · 宽 28,672（4×）</text>
       <rect x="230" y="72" width="318" height="34" rx="4" fill="#f1f3f4" stroke="#9aa0a6"/>
-      <text x="389" y="94" text-anchor="middle" class="svgsm">up　205.52 M</text>
+      <text x="389" y="94" text-anchor="middle" class="svgsm">up　205.52M</text>
       <rect x="550" y="72" width="318" height="34" rx="4" fill="#f1f3f4" stroke="#9aa0a6"/>
-      <text x="709" y="94" text-anchor="middle" class="svgsm">down　205.52 M</text>
-      <text x="880" y="94" class="svgnum" fill="#5f6368">411.04 M</text>
+      <text x="709" y="94" text-anchor="middle" class="svgsm">down　205.52M</text>
+      <text x="880" y="94" class="svgnum" fill="#5f6368">411.04M</text>
 
       <text x="216" y="156" text-anchor="end" class="svgnum" fill="#174ea6">论文的 2/3 规则</text>
-      <text x="216" y="172" text-anchor="end" class="svgsm" fill="#174ea6">3 个矩阵 · 宽 19,115</text>
+      <text x="216" y="172" text-anchor="end" class="svgsm" fill="#174ea6">3 个矩阵 · 宽 19,114.67（不取整）</text>
       <rect x="230" y="142" width="211" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8"
             stroke-dasharray="5 4"/>
-      <text x="335" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">gate　137.01 M</text>
+      <text x="335" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">gate　137.01M</text>
       <rect x="443" y="142" width="211" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8"
             stroke-dasharray="5 4"/>
-      <text x="548" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">up　137.01 M</text>
+      <text x="548" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">up　137.01M</text>
       <rect x="657" y="142" width="211" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8"
             stroke-dasharray="5 4"/>
-      <text x="762" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">down　137.01 M</text>
-      <text x="880" y="164" class="svgnum" fill="#174ea6">411.04 M</text>
+      <text x="762" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">down　137.01M</text>
+      <text x="880" y="164" class="svgnum" fill="#174ea6">411.04M</text>
 
       <text x="216" y="226" text-anchor="end" class="svgnum" fill="#0d652d">V3 实际</text>
       <text x="216" y="242" text-anchor="end" class="svgsm" fill="#0d652d">3 个矩阵 · 宽 18,432（2.57×）</text>
       <rect x="230" y="212" width="204" height="34" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
-      <text x="332" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">gate　132.12 M</text>
+      <text x="332" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">gate　132.12M</text>
       <rect x="436" y="212" width="204" height="34" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
-      <text x="538" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">up　132.12 M</text>
+      <text x="538" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">up　132.12M</text>
       <rect x="642" y="212" width="204" height="34" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
-      <text x="744" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">down　132.12 M</text>
-      <text x="880" y="234" class="svgnum" fill="#0d652d">396.36 M</text>
+      <text x="744" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">down　132.12M</text>
+      <text x="880" y="234" class="svgnum" fill="#0d652d">396.36M</text>
 
       <line x1="870" y1="46" x2="870" y2="256" stroke="#d93025" stroke-dasharray="5 4"/>
       <text x="870" y="40" text-anchor="middle" class="svglbl" fill="#d93025">参数持平线</text>
@@ -2567,7 +2575,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   参数量与算力<b>逐个矩阵地相等</b>。</em>
   <b>整个模型从头到尾，每个 token 走的 MLP 算力几乎是一条平线。</b></p>
   <p class="sub"><b>「几乎」这两个字要留着</b>：MoE 层还多一个路由器，
-  <code>7,168 × 256 = 1.84 M</code>，<em>相对 396.36 M 是 0.46%</em>。
+  <code>7,168 × 256 = 1.84M</code>，<em>相对 396.36M 是 0.46%</em>。
   <b>所以准确的说法是「专家那部分严格相等，加上路由多 0.46%」，不是「一个都不多」。</b></p>
   <p class="sub"><b>但请注意措辞。</b>「相等」是能验算的事实；
   <em>「所以他们是照着这个定的」是解读</em> ——
@@ -2603,7 +2611,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   <svg viewBox="0 0 1000 262" role="img"
        aria-label="三代论文对前几层保持 dense 的说法：DeepSeekMoE 给了负载均衡收敛慢的理由，V2 只说沿用，V3 改成前三层但没有给理由">
     <g>
-      <text x="20" y="26" class="svglbl">同一个设计，三篇论文各说了什么　·　按时间从上往下</text>
+      <text x="20" y="26" class="svglbl">同一个设计，三篇论文各说了什么　·　按时间从左往右</text>
 
       <rect x="30" y="44" width="300" height="86" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
       <text x="46" y="66" class="svgnum" fill="#0d652d">DeepSeekMoE · 2024</text>
@@ -2617,7 +2625,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
       <text x="386" y="66" class="svgnum" fill="#174ea6">DeepSeek-V2 · 2024</text>
       <text x="386" y="84" class="svgsm" fill="#174ea6">前 1 层保持 dense</text>
       <text x="386" y="106" class="svgsm" fill="#174ea6">↩ 只说「沿用上一篇」</text>
-      <text x="386" y="122" class="svgsm" fill="#174ea6">（原文：Following Dai et al. 2024）</text>
+      <text x="386" y="122" class="svgsm" fill="#174ea6">（原文：Following Dai et al. (2024)）</text>
 
       <path d="M640 87 H676" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar3)"/>
 
@@ -2675,8 +2683,8 @@ especially slower for the first layer</b>.</div>
     <tbody>
       <tr><td>DeepSeekMoE 16B</td><td class="n">28</td><td class="n">1</td>
         <td>论文原文 —— <b>唯一给了理由的那篇</b></td></tr>
-      <tr><td>DeepSeek-V2</td><td class="n">—</td><td class="n">1</td>
-        <td>论文原文「沿用上一篇」</td></tr>
+      <tr><td>DeepSeek-V2</td><td class="n">60</td><td class="n">1</td>
+        <td><code>first_k_dense_replace: 1</code>；论文原文「沿用上一篇」</td></tr>
       <tr><td>DeepSeek-V2-Lite</td><td class="n">27</td><td class="n">1</td>
         <td><code>first_k_dense_replace: 1</code></td></tr>
       <tr><td><b>DeepSeek-V3</b></td><td class="n">61</td><td class="n"><b>3</b></td>
@@ -2696,16 +2704,16 @@ especially slower for the first layer</b>.</div>
           <span class="sub">连共享专家都不要了</span></td></tr>
     </tbody>
   </table></div>
-  <p class="sub">除 DeepSeekMoE 16B 与 DeepSeek-V2 两行取自论文正文外，
-  其余每一行都是从各自 Hugging Face 仓库的 <code>config.json</code> 直接读的。
-  <b>V2 本体没读到 config，层数留空，不猜。</b></p>
+  <p class="sub">除 DeepSeekMoE 16B 一行取自论文正文外，
+  其余每一行都是从各自 Hugging Face 仓库的 <code>config.json</code> 直接读的
+  （DeepSeek-V2 那行另附论文原话）。</p>
 
   <div class="note warn">
     <span class="t">Kimi K2 那一行值得单独看三十秒</span>
     它的 <code>architectures</code> 字段写的就是 <code>DeepseekV3ForCausalLM</code>，
     并且 <code>hidden_size 7168</code>、<code>intermediate_size 18432</code>、
     <code>moe_intermediate_size 2048</code>、<code>q_lora_rank 1536</code>、
-    <code>kv_lora_rank 512</code>、<code>qk_nope 128</code>、<code>qk_rope 64</code>、
+    <code>kv_lora_rank 512</code>、<code>qk_nope_head_dim 128</code>、<code>qk_rope_head_dim 64</code>、
     <code>num_hidden_layers 61</code> —— <b>本页讲过的形状它一个没改</b>。<br>
     <b>偏偏把 <code>first_k_dense_replace</code> 从 3 改回了 1。</b>
     一个抄到这个程度的团队专门动了这个参数，
@@ -2724,11 +2732,12 @@ especially slower for the first layer</b>.</div>
     这些词会成批涌向同一个专家。<em>负载自然平不了，而且它平不了的原因是数据分布本身，
     aux loss 要跟这个分布对着拧，收敛慢就不奇怪。</em></p>
     <div class="note danger">
-      <span class="t">⚠️ 但有反证，所以别把它当定律</span>
-      也有实测工作报告的是<b>相反方向</b>：早期层路由还算均衡，
-      反而是<b>深层出现专家坍缩</b>、少数专家吃掉大部分 token。<br>
-      两边都是实测，说明<b>「哪一层难平衡」不是普遍规律</b>，
-      跟模型、数据、aux loss 系数都有关系。
+      <span class="t">⚠️ 但它只有一个出处，所以别把它当定律</span>
+      「第一层最难平衡」这条观察<b>只来自 DeepSeekMoE 自己那组实验</b>；
+      本课没有找到跨模型、跨数据的公开对照来确认它。<br>
+      所以能说的只是<b>「在那组设置下第一层最难平衡」</b>，
+      换一个模型、一份数据、一个 aux loss 系数，结论未必还成立 ——
+      <b>「哪一层难平衡」目前不能当普遍规律讲。</b>
       <em>这也正好解释了为什么各家留的层数从 0 到 3 都有 —— 大家试出来的结果本来就不一样。</em>
     </div>
   </div>
@@ -2779,7 +2788,7 @@ especially slower for the first layer</b>.</div>
     <rect x="20" y="46" width="66" height="150" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
     <text x="53" y="124" text-anchor="middle" class="svgsm" fill="#0d652d"
           transform="rotate(-90 53 124)">18,432 宽</text>
-    <text x="20" y="214" class="svgsm" fill="#0d652d">396.36 M · 100% 参与计算</text>
+    <text x="20" y="214" class="svgsm" fill="#0d652d">396.36M · 100% 参与计算</text>
     <text x="20" y="230" class="svgsm">每 token 都走完整一遍</text>
     <text x="20" y="246" class="svgsm">形状静态 · 无通信 · MXU 满载</text>
 
@@ -2792,27 +2801,27 @@ especially slower for the first layer</b>.</div>
     <!-- 门控 -->
     <rect x="160" y="52" width="94" height="42" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
     <text x="207" y="71" text-anchor="middle" class="svgsm" fill="#b06000">门控 · 分诊台</text>
-    <text x="207" y="86" text-anchor="middle" class="svgsm" fill="#b06000">7168 × 256</text>
+    <text x="207" y="86" text-anchor="middle" class="svgsm" fill="#b06000">7,168 × 256</text>
     <path d="M258 73 h28" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
     <text x="262" y="65" class="svgsm" fill="#b06000">打分</text>
 
     <!-- 专家网格 16x16 简化为 16列 x 4行 表示 256 -->
     <g id="expertgrid"></g>
 
-    <text x="300" y="248" class="svgsm" fill="#174ea6">■ 被选中的 8 个（每个 3×7168×2048 = 44.04 M）</text>
+    <text x="300" y="248" class="svgsm" fill="#174ea6">■ 被选中的 8 个（每个 3 × 7,168 × 2,048 = 44.04M）</text>
     <text x="580" y="248" class="svgsm" fill="#b06000">■ 共享专家</text>
     <text x="670" y="248" class="svgsm" fill="#80868b">□ 没被激活的 248 个 —— 参数还在显存里</text>
 
     <rect x="300" y="262" width="300" height="52" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
     <text x="450" y="282" text-anchor="middle" class="svgsm" fill="#174ea6">一层全部参数</text>
-    <text x="450" y="302" text-anchor="middle" class="svgnum" fill="#174ea6">11.32 B</text>
+    <text x="450" y="302" text-anchor="middle" class="svgnum" fill="#174ea6">11.32B</text>
 
     <rect x="620" y="262" width="300" height="52" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
     <text x="770" y="282" text-anchor="middle" class="svgsm" fill="#0d652d">一个 token 实际用到</text>
-    <text x="770" y="302" text-anchor="middle" class="svgnum" fill="#0d652d">396.36 M · 稀疏比 28.6×</text>
+    <text x="770" y="302" text-anchor="middle" class="svgnum" fill="#0d652d">396.36M · 稀疏比 28.6×</text>
   </svg>
   <figcaption>左边是 dense，一个大而宽的 MLP；右边是 MoE，256 个窄专家。
-  <b>两边一个 token 实际做的乘法一样多</b> —— 巧的是右边那 9 个小专家加起来正好也是 396.36 M。</figcaption>
+  <b>两边一个 token 实际做的乘法一样多</b> —— 巧的是右边那 9 个小专家加起来正好也是 396.36M。</figcaption>
   </figure>
 
   <div class="note ok">
@@ -2916,8 +2925,8 @@ especially slower for the first layer</b>.</div>
   </figure>
 
   <h4>为什么被稀疏化的是 MLP，不是 attention</h4>
-  <p>两个原因。一，<b>参数大头在 MLP</b> —— 上面那张表已经看到，MLA 一层 187 M，
-  MLP 一层 396 M，MoE 一层 11.32 B。二，<b>MLP 天然就是「一堆独立的问题」</b> ——
+  <p>两个原因。一，<b>参数大头在 MLP</b> —— 上面那张表已经看到，MLA 一层 187M，
+  MLP 一层 396M，MoE 一层 11.32B。二，<b>MLP 天然就是「一堆独立的问题」</b> ——
   它对每个 token 单独作用，token 之间不交互，所以可以放心地让不同 token 走不同的路。
   attention 的全部意义恰恰是让 token 互相看，切不开。</p>
 
@@ -3004,7 +3013,7 @@ especially slower for the first layer</b>.</div>
   中间宽度决定了三个矩阵的大小，所以宽度相等 ⇒ 参数相等 ⇒ 计算量相等 ——
   <b>MoE 那一层，每个 token 在<em>专家</em>上走过的 FLOPs 跟一层普通 dense MLP 严格相等。</b><br>
   <span class="sub">（<b>唯一的小尾巴</b>：MoE 还得先跑一遍门控矩阵，
-  <code>7,168 × 256 = 1.84 M</code>，相对 396.36 M 是 <b>0.46%</b>。
+  <code>7,168 × 256 = 1.84M</code>，相对 396.36M 是 <b>0.46%</b>。
   <em>所以是「专家那部分一个都不多，外加千分之五的分诊费」。</em>）</span></figcaption>
   </figure>
 
@@ -3019,8 +3028,8 @@ especially slower for the first layer</b>.</div>
   </div>
 
   <div class="punch">
-    同一层里躺着 <b>11.32 B</b> 参数，是 dense 层的 <b>28.6 倍</b>；
-    而每个 token 掏出来算的，<b>是同样的 396 M，外加千分之五的分诊费</b>。
+    同一层里躺着 <b>11.32B</b> 参数，是 dense 层的 <b>28.6 倍</b>；
+    而每个 token 掏出来算的，<b>是同样的 396M，外加千分之五的分诊费</b>。
     <small>这就是「参数量和计算量解耦」这句话的字面意思。
     模型可以一直变大，而每个字的账单不动 ——
     代价是那多出来的 28 倍必须<b>全程躺在显存里</b>，这一点在 4d 会算清楚。</small>
@@ -3068,7 +3077,7 @@ especially slower for the first layer</b>.</div>
     <rect x="270" y="92" width="430" height="56" rx="10" fill="#f1f3f4" stroke="#9aa0a6"/>
     <text x="485" y="116" text-anchor="middle" class="svglbl">gate 矩阵　7,168 × 256</text>
     <text x="485" y="136" text-anchor="middle" class="svgsm" fill="#5f6368">
-      184 万参数 —— 只占这一层 11.32 B 的 0.016%</text>
+      184 万参数 —— 只占这一层 11.32B 的 0.016%</text>
     <path d="M485 148 V170" stroke="#5f6368" stroke-width="1.6" marker-end="url(#arr)"/>
 
     <!-- ③ sigmoid：分叉点 -->
@@ -3434,9 +3443,9 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
     但它的名字是<b>「EP ＝ 1 ＋ FSDP」</b>，或者干脆叫「不用专家并行」。</b><br>
     <em>MoE 语境里的 <code>AG-RS</code> 指的是<b>另一件事</b>：它是 all-to-all 的替代品，
     搬的同样是 <b>token</b> —— 把全部 token 复制给每张卡，本地路由一遍，
-    算完再 reduce-scatter 回去。三个互相独立的实现口径一致：
-    Megatron-Core 的开关叫 <code>--moe-token-dispatcher-type</code>，两个取值
-    <code>allgather</code> / <code>alltoall</code> <b>都是 token dispatcher</b>；
+    算完再 reduce-scatter 回去。两个互相独立的实现口径一致：
+    Megatron-Core 的开关叫 <code>--moe-token-dispatcher-type</code>，三个取值
+    <code>allgather</code> / <code>alltoall</code> / <code>flex</code> <b>全都是 token dispatcher</b>；
     MaxText 里这条路叫 <b>ring of experts</b>。</em><br><br>
     <b>所以「挪 token 还是挪权重」这个二分是对的，只是第二条的标签之前写错了。</b>
     <em>三条路的机制、通信量、以及为什么 TPU 反而选字节最多的那条，
@@ -3743,7 +3752,7 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
     <tbody>
       <tr><td>专家数</td><td class="n">64</td><td class="n">256 + 1 共享</td></tr>
       <tr><td>每 token 选几个</td><td class="n"><b>top-1</b></td><td class="n"><b>top-8</b></td></tr>
-      <tr><td>模型规模</td><td>Transformer-Small 量级</td><td class="n">671 B</td></tr>
+      <tr><td>模型规模</td><td>Transformer-Small 量级</td><td class="n">671B</td></tr>
       <tr><td>均衡机制</td><td>常规辅助损失</td><td>动态偏置 + 极小辅助损失</td></tr>
     </tbody>
   </table></div>
@@ -3753,7 +3762,8 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
   <b>所以这三个数字能证明的是「容量系数这个旋钮本身是个麻烦」，
   不能直接换算成「V3 如果丢 token 会掉多少分」。</b>
   <em>课上就按前者讲。</em></p>
-  <p class="sub"><b>顺带记两个它的正面结果</b>（同样来自摘要，同一套设置）：
+  <p class="sub"><b>顺带记两个它的正面结果</b>（来自论文正文的实验节，同一套设置；
+  摘要里的说法是「比 Tutel 最多快 40%、比 Megatron-LM 的稠密模型快 2.4×」）：
   <em>相比用 padding 硬凑的做法，端到端训练快 1.38× / 2.0× / 4.35×（三个规模）；
   相比同质量的稠密 Transformer 快 1.8×–2.4×。</em></p>
   </div>
@@ -3795,13 +3805,13 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
   <div class="tbl-wrap"><table>
     <thead><tr><th>层级</th><th>算式</th><th style="text-align:right">参数量</th><th>占比</th></tr></thead>
     <tbody>
-      <tr><td>单个专家</td><td>3 × 7168 × 2048</td><td class="n">44.04 M</td><td>—</td></tr>
-      <tr><td>一层（256 路由 + 1 共享 + 门控）</td><td>257 × 44.04 M + 1.84 M</td><td class="n">11.32 B</td><td>—</td></tr>
-      <tr><td><b>58 层 MoE</b></td><td>58 × 11.32 B</td><td class="n">656.57 B</td><td><b>97.8%</b></td></tr>
-      <tr><td>61 层 MLA</td><td>61 × 187.11 M</td><td class="n">11.41 B</td><td>1.7%</td></tr>
-      <tr><td>3 层 dense MLP</td><td>3 × 396.36 M</td><td class="n">1.19 B</td><td>0.2%</td></tr>
-      <tr><td>嵌入 + lm_head</td><td>2 × 926.68 M</td><td class="n">1.85 B</td><td>0.3%</td></tr>
-      <tr class="sum"><td colspan="2">总计</td><td class="n">671.03 B</td><td>官方口径 671B ✓</td></tr>
+      <tr><td>单个专家</td><td>3 × 7,168 × 2,048</td><td class="n">44.04M</td><td>—</td></tr>
+      <tr><td>一层（256 路由 + 1 共享 + 门控）</td><td>257 × 44.04M + 1.84M</td><td class="n">11.32B</td><td>—</td></tr>
+      <tr><td><b>58 层 MoE</b></td><td>58 × 11.32B</td><td class="n">656.57B</td><td><b>97.8%</b></td></tr>
+      <tr><td>61 层 MLA</td><td>61 × 187.11M</td><td class="n">11.41B</td><td>1.7%</td></tr>
+      <tr><td>3 层 dense MLP</td><td>3 × 396.36M</td><td class="n">1.19B</td><td>0.2%</td></tr>
+      <tr><td>嵌入 + lm_head</td><td>2 × 926.68M</td><td class="n">1.85B</td><td>0.3%</td></tr>
+      <tr class="sum"><td colspan="2">总计</td><td class="n">671.03B</td><td>官方口径 671B ✓</td></tr>
     </tbody>
   </table></div>
 
@@ -3809,9 +3819,9 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 250" role="img"
-       aria-label="61 层 MLA 参数总和 11.41 B，与单独一层 MoE 的 11.32 B 几乎等长">
+       aria-label="61 层 MLA 参数总和 11.41B，与单独一层 MoE 的 11.32B 几乎等长">
     <text x="20" y="40" class="svglbl" fill="#174ea6">全部 61 层 MLA 加起来</text>
-    <text x="980" y="40" text-anchor="end" class="svgnum" font-size="16" fill="#174ea6">11.41 B</text>
+    <text x="980" y="40" text-anchor="end" class="svgnum" font-size="16" fill="#174ea6">11.41B</text>
       <rect x="20.0" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="35.4" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="50.8" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="66.2" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="81.6" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="97.0" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="112.5" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="127.9" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="143.3" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="158.7" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/>
       <rect x="174.1" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="189.5" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="204.9" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="220.3" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="235.7" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="251.1" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="266.6" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="282.0" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="297.4" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="312.8" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/>
       <rect x="328.2" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="343.6" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="359.0" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="374.4" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="389.8" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="405.2" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="420.7" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="436.1" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="451.5" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/><rect x="466.9" y="52" width="13.2" height="34" rx="2.5" fill="#1a73e8" opacity="0.9"/>
@@ -3822,7 +3832,7 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
     <text x="20" y="104" class="svgsm" fill="#5f6368">↑ 61 片，一片是一层</text>
 
     <text x="20" y="152" class="svglbl" fill="#0d652d">其中随便哪一层 MoE</text>
-    <text x="980" y="152" text-anchor="end" class="svgnum" font-size="16" fill="#0d652d">11.32 B</text>
+    <text x="980" y="152" text-anchor="end" class="svgnum" font-size="16" fill="#0d652d">11.32B</text>
     <rect x="20" y="164" width="932.3" height="34" rx="4" fill="#1e8e3e" opacity="0.9"/>
     <text x="20" y="216" class="svgsm" fill="#5f6368">↑ 1 块，就是一层</text>
 
@@ -3838,15 +3848,15 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
   <details class="more"><summary>展开：顺带一个反直觉的小发现 —— MLA 里最大的矩阵不是压缩用的那几个<span class="why">—— 第 2 步那笔账的另一面</span></summary>
   <div class="body">
   <div class="note info">
-    <span class="t">187.11 M 是怎么分的</span>
-    <div class="eq">q 降维 7168 × 1536              = 11.01 M
-q 升维 1536 × (128 × 192)       = 37.75 M
-kv 降维 7168 × (512 + 64)       =  4.13 M
-kv 升维 512 × (128 × 256)       = 16.78 M
+    <span class="t">187.11M 是怎么分的</span>
+    <div class="eq">q 降维 7168 × 1536              = 11.01M
+q 升维 1536 × (128 × 192)       = 37.75M
+kv 降维 7168 × (512 + 64)       =  4.13M
+kv 升维 512 × (128 × 256)       = 16.78M
 <span class="c">// 输出投影：把 128 个头拼回残差流</span>
-o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span>
+o_proj (128 × 128) × 7168       = <span class="r">117.44M ← 占 62.8%</span>
 <span class="c">// 合计</span>
-                                = <span class="r">187.11 M</span>（对上表格 ✓）</div>
+                                = <span class="r">187.11M</span>（对上表格 ✓）</div>
     <b>压了半天 KV 缓存，参数的大头其实在出口那一侧。</b>
     <em>这不矛盾 —— MLA 压的是<b>每个 token 要存多少</b>（那是显存账），
     不是<b>这一层有多少参数</b>（这是参数账）。又一次：不同的账，不同的答案。</em>
@@ -3856,18 +3866,18 @@ o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span
 
   <figure class="fbox">
     <svg viewBox="0 0 1000 200" role="img" aria-label="671B 总参数与 37B 激活参数的对比">
-      <text x="20" y="22" class="svglbl">全部参数 · 671.03 B · 显存要装下这些</text>
+      <text x="20" y="22" class="svglbl">全部参数 · 671.03B · 显存要装下这些</text>
       <rect x="20" y="32" width="960" height="44" rx="6" fill="#1a73e8"/>
       <text x="500" y="60" text-anchor="middle" class="svgsm" fill="#fff">
-        MoE 656.57 B（97.8%）· MLA 11.41 B · dense 1.19 B · 进出口 1.85 B</text>
+        MoE 656.57B（97.8%）· MLA 11.41B · dense 1.19B · 进出口 1.85B</text>
 
-      <text x="20" y="106" class="svglbl">一个 token 实际用到 · 36.62 B · 算力只花这些</text>
+      <text x="20" y="106" class="svglbl">一个 token 实际用到 · 36.62B · 算力只花这些</text>
       <rect x="20" y="116" width="52" height="44" rx="6" fill="#1e8e3e"/>
       <rect x="72" y="116" width="908" height="44" rx="6" fill="#f1f3f4" stroke="#dadce0"
             stroke-dasharray="4 3"/>
       <text x="46" y="144" text-anchor="middle" class="svgsm" fill="#fff">37B</text>
       <text x="526" y="144" text-anchor="middle" class="svgsm" fill="#80868b">
-        这 634 B 参数这一步没参与计算 —— 但它们一个字节都不能从显存里拿走</text>
+        这 634B 参数这一步没参与计算 —— 但它们一个字节都不能从显存里拿走</text>
 
       <text x="20" y="188" class="svglbl" fill="#d93025">
         ⚠️ MoE 省的是算力（18.3× ），不省显存（0×）</text>
@@ -3878,13 +3888,13 @@ o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span
   <div class="body">
   <div class="note info">
     <span class="t">两个都能算出来的数，官方那个落在中间</span>
-    <b>按上面那张表逐项加，一个 token 真正参与计算的是 36.62 B</b>
+    <b>按上面那张表逐项加，一个 token 真正参与计算的是 36.62B</b>
     <em>（58 层各 9 个专家 + 全部 61 层 MLA + 3 层 dense + 出口那个大矩阵）。
-    如果把嵌入表也算成「激活」，是 37.55 B。</em><br>
+    如果把嵌入表也算成「激活」，是 37.55B。</em><br>
     <b>官方口径的 37B 落在这两个数中间</b> ——
     <em>具体怎么归的，报告里没有细说，我也没有查到。
-    所以这门课统一用 36.62 B，需要跟官方对齐时就说「约 37B」。</em>
-    <b>差的这不到 1 B 不影响任何结论：18 倍还是 18 倍。</b>
+    所以这门课统一用 36.62B，需要跟官方对齐时就说「约 37B」。</em>
+    <b>差的这不到 1B 不影响任何结论：18 倍还是 18 倍。</b>
   </div>
   </div>
   </details>
@@ -3956,7 +3966,7 @@ decode          = batch × 1                 <span class="c">← 序列长度这
   <p>矩阵乘不是按行做的，是按块做的。TPU 上那个 grouped matmul kernel，
   bf16 情况下每块的高度是 <b>128 行</b> —— 这是公开源码里写死的常数：</p>
 
-  <div class="eq"><span class="c">// JAX / MaxText 的 megablox Pallas kernel，_get_tile_sizes()</span>
+  <div class="eq"><span class="c">// MaxText 的 megablox Pallas kernel（v2），calculate_tiling()</span>
 bf16_bf16_tile_m = <span class="r">128</span>
 <span class="c">// 注释原话：「128 is the largest tile_m value that is safe to use
 //            for most scenarios」（低位宽会往上调）</span></div>
@@ -4039,7 +4049,7 @@ bf16_bf16_tile_m = <span class="r">128</span>
     段边界很少正好落在 128 的整数倍上。GPU 那条路的解法是<b>补零</b>把段撑到块边界；
     TPU 的 megablox 选了另一条 —— <b>让跨界的那个块被执行两次</b>，
     一次用左边专家的权重、一次用右边的，累加进同一个输出。<br>
-    <em>所以代价的形式变了：不是「每段补 &lt; 127 行零」，是「总共多跑 &lt; 段数 − 1 个块」。
+    <em>所以代价的形式变了：不是「每段补 ≤ 127 行零」，是「总共多跑 ≤ 段数 − 1 个块」。
     源码注释直接给了上界。</em>
     机制细节见附录 <a href="topic-01-dropless.html#s11">§11 · TPU 那边不补齐</a>。
   </div>
@@ -4066,7 +4076,7 @@ B · FSDP   ≤ 512 + 255 = 767 块  → <span class="r">+49.8%</span>  <span cl
     <em>（注意：64 倍的是段长，不是效率。效率差是 0.59% 对上界 49.8%，
     大约 1.5 倍 —— 段长的改善远大于效率的改善，因为块内浪费本来就有上界。）</em><br>
     而 FSDP 那条路真正致命的代价在别处：每卡要凑齐全部 256 个专家的权重，
-    <b>一层就是 22.5 GB</b>（256 × 44.04 M × 2 B），EP 那边只要 352 MB。
+    <b>一层就是 21.00 GiB</b>（256 × 44.04M × 2 B），EP 那边只要 336 MiB。
   </div>
 </div></section>
 
@@ -4230,7 +4240,7 @@ B · FSDP   ≤ 512 + 255 = 767 块  → <span class="r">+49.8%</span>  <span cl
     <div>
       <h4>残差流是一条总线，不是一根管道</h4>
       <p>常见的误解是把网络想成流水线：数据从第 1 层流到第 2 层再到第 3 层。
-      <b>实际上更像一条总线</b> —— 有一个宽度 7168 的向量一路贯穿全程，
+      <b>实际上更像一条总线</b> —— 有一个宽度 7,168 的向量一路贯穿全程，
       每一层从它<b>读</b>一份、算出点东西、再<b>加</b>回去。</p>
       <div class="eq">x = x + MLA(norm(x))     <span class="c">// 加回去，不是替换</span>
 x = x + MoE(norm(x))
@@ -4275,7 +4285,7 @@ x = x + MoE(norm(x))
         </linearGradient></defs>
         <rect x="30" y="20" width="26" height="356" rx="13" fill="url(#bus)" opacity=".2"/>
         <line x1="43" y1="20" x2="43" y2="376" stroke="url(#bus)" stroke-width="3"/>
-        <text x="10" y="14" class="svglbl" fill="#174ea6">残差流 · d = 7168</text>
+        <text x="10" y="14" class="svglbl" fill="#174ea6">残差流 · d = 7,168</text>
 
         <g>
           <!-- 层 1 -->
@@ -4320,7 +4330,7 @@ x = x + MoE(norm(x))
   <div class="note warn">
     <span class="t">一个立住问题、只给半个答案的数字</span>
     在每一层的<b>边界</b>上把残差流存一份。61 个边界存满，光这一项就是
-    <b><span data-v="actAll61">106.75 GiB</span></b> —— <em>已经超过单张卡，而这还没算层内部的任何中间量。</em>
+    <b><span data-v="actAll61">106.75 GiB</span></b> —— <em><span data-v="actAll61Cmp">已经超过单张卡</span>，而这还没算层内部的任何中间量。</em>
     于是自然冒出一个问题：<b>凭什么要留着？</b><br>
     <b>半个答案就在 V3 论文里，而且它选择的是「不留」。</b>
     <em>原文：「We recompute all RMSNorm operations and MLA up-projections during back-propagation,
@@ -4338,7 +4348,7 @@ x = x + MoE(norm(x))
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 348" role="img"
-       aria-label="上排是 V3 的单条残差流，下排是 V4 的 mHC 四条残差流：X 先被 A 压回 7168 维进层，层的输出再被 C 写回四条流，另有一个 4×4 双随机矩阵 B 负责流之间的混合">
+       aria-label="上排是 V3 的单条残差流，下排是 V4 的 mHC 四条残差流：X 先被 A 压回 7,168 维进层，层的输出再被 C 写回四条流，另有一个 4×4 双随机矩阵 B 负责流之间的混合">
     <!-- ══ 上排：V3 ══ -->
     <text x="20" y="24" class="svglbl" fill="#174ea6">V3 · 一条残差流</text>
     <text x="168" y="24" class="svgsm" fill="#5f6368">x<tspan dy="3" font-size="10">ℓ+1</tspan><tspan dy="-3"> = x</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> + F</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">(norm(x</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">))</tspan></text>
@@ -4433,10 +4443,10 @@ x = x + MoE(norm(x))
     <b>V4-Flash</b> 是 43 层、hidden 4,096。<b>两个型号的 n<sub>hc</sub> 都是 4，Sinkhorn-Knopp 都迭 20 次。</b>
     所以上面那条 1.75 GiB 的总线，在 V4-Pro 上就是同一条。</p>
     <div class="eq"><span class="c">// 出处：DeepSeek-V4 技术报告（arXiv 2606.19348）§4.2.1 模型配置</span>
-V4-Pro    layers = 61   d = 7168   n_hc = <span class="r">4</span>   s_max = 20   1.6 T 总 / 49 B 激活
-V4-Flash  layers = 43   d = 4096   n_hc = <span class="r">4</span>   s_max = 20   284 B 总 / 13 B 激活
+V4-Pro    layers = 61   d = 7168   n_hc = <span class="r">4</span>   t_max = 20   1.6T 总 / 49B 激活
+V4-Flash  layers = 43   d = 4096   n_hc = <span class="r">4</span>   t_max = 20   284B 总 / 13B 激活
 <span class="c">// 出处：mHC 论文（arXiv 2512.24880）实验设置</span>
-HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
+HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27B</div>
     <p><b>那「4 倍宽」到底涨了多少显存？这门课不给这个数，因为给不出来。</b>
     <em>naive 的算法是 <code>1.75 GiB × 4 = 7.00 GiB</code> 每层</em> ——
     但那是<b>假设四条流的每层激活全部原样留着</b>。V4 论文对这一点的原话是：
@@ -4477,23 +4487,23 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
     </div>
   </div>
   <div class="stn"><span class="badge">第 6 步</span><h2>出口：从向量回到文字</h2><!--lec:s9--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 9 分 54 秒</span><audio controls preload="none" src="media/topic01-lecture-s9.mp3?v=7e56bd2a" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic01-video-s9.mp4?v=2223083d" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s9--></div>
-  <p class="lead">走完 61 层，手里是一个 7168 维的向量。要把它变回「下一个字是什么」。</p>
+  <p class="lead">走完 61 层，手里是一个 7,168 维的向量。要把它变回「下一个字是什么」。</p>
 
   <div class="grid g2">
     <div>
       <h4>反向嵌入</h4>
-      <p>最后一次 RMSNorm，然后一个 <span class="k">7168 → 129,280</span> 的矩阵，
+      <p>最后一次 RMSNorm，然后一个 <span class="k">7,168 → 129,280</span> 的矩阵，
       给词表里每一个词打一个分。这跟第 1 步的嵌入矩阵是<b>镜像</b>关系 ——
       而且一旦第 1 步也编译成 matmul（见那一节的展开），两边连 FLOP 都一样。</p>
       <div class="note warn">
         <span class="t"><code>tie_word_embeddings = false</code> —— 但另有一处是真共享的</span>
         很多模型让进出口<b>共享同一份权重</b>（省一份参数，而且「表示一个词」
         和「预测一个词」直觉上是一回事）。<b>V3 没有共享</b> ——
-        它认为读和写是两个不同的任务，各给一份权重。代价是多 926 M 参数。<br>
+        它认为读和写是两个不同的任务，各给一份权重。代价是多 926M 参数。<br>
         <b>容易混的是：V3 里确实有一处「共享 output head」，但共享的对象不是嵌入表，是 MTP 模块。</b>
         <em>论文把最浅的几层（含嵌入）和最深的几层（含 output head）摆在同一个流水线 rank 上，
         让 MTP 模块和主模型<b>物理上共用</b>这两份参数和梯度。</em>
-        <b>所以下面 MTP 那一段，不要再往总账里加一份 926 M。</b>
+        <b>所以下面 MTP 那一段，不要再往总账里加一份 926M。</b>
       </div>
       <h4>MTP：为训练造的东西，被推理捡了便宜</h4>
       <p><code>num_nextn_predict_layers = 1</code> —— <b>深度 1，就是额外多预测<em>一个</em>字</b>
@@ -4524,7 +4534,7 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
         <text x="210" y="41" text-anchor="middle" class="svgsm" fill="#174ea6">7,168</text>
 
         <path d="M210 52 v20" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
-        <text x="222" y="66" class="svgsm" fill="#b06000">lm_head · 926.68 M</text>
+        <text x="222" y="66" class="svgsm" fill="#b06000">lm_head · 926.68M</text>
 
         <text x="10" y="94" class="svglbl" fill="#d93025">logits 张量 —— 出口这一下</text>
         <rect x="10" y="102" width="400" height="150" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
@@ -4535,13 +4545,12 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
         <text x="210" y="172" text-anchor="middle" class="svgnum" fill="#a50e0e" font-size="19"
               data-v="logits">31.56 GiB</text>
         <text x="210" y="194" text-anchor="middle" class="svgsm" fill="#a50e0e">
-          <tspan data-v="seqLabel">128K</tspan> token × 129,280 词 × <tspan data-v="bytes">2</tspan> B</text>
+          <tspan data-v="tokens">131,072</tspan> token × 129,280 词 × <tspan data-v="bytes">2</tspan> B</text>
 
         <rect x="10" y="266" width="400" height="44" rx="6" fill="#fff" stroke="#dadce0"/>
         <text x="24" y="284" class="svgsm">对照：整个 MLA 权重（61 层）</text>
         <text x="24" y="300" class="svgsm"><tspan data-v="mlaWBytes">21.26 GiB</tspan>
-          —— <tspan fill="#d93025" font-weight="700">
-          比不过出口这一个临时张量（<tspan data-v="logitsVsMla">1.48×</tspan>）</tspan></text>
+          —— <tspan fill="#d93025" font-weight="700" data-v="logitsVsMlaWord">比不过出口这一个临时张量（1.48×）</tspan></text>
       </svg>
       </figure>
     </div>
@@ -4563,12 +4572,12 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
       <tr><td><b>算力小得离谱</b></td>
         <td class="n"><span data-v="headShare">0.46%</span></td>
         <td>lm_head 只花 <span data-v="headFlops">242.92 TFLOP</span>，
-          <b>不到</b>整个前向 <span data-v="totalFlops">52.50 PFLOP</span> 的<b>千分之五</b>。
+          是整个前向 <span data-v="totalFlops">52.50 PFLOP</span> 的<b><span data-v="headShareWord">不到千分之五</span></b>。
           <b>全程算力最少的一步，产出了全程最大的张量</b></td></tr>
       <tr><td><b>loss 还要 fp32</b></td>
         <td class="n"><span data-v="logitsFp32">63.13 GiB</span></td>
         <td>cross-entropy 在 bf16 下数值不稳，logits 通常要提到 fp32 再算。
-          于是这个<b>纯临时</b>的张量吃掉单卡 <b><span data-v="logitsCard">72%</span></b>。<br>
+          于是这个<b>纯临时</b>的张量吃掉 <b><span data-v="logitsCard">一张卡的 67%</span></b>。<br>
           <em>⚠️ <b>这一格曾经把单位讲反了，留在这里当反面教材。</b>
           旧版写的是：「63.13 GiB 对 94.74 <b>GB</b>，直接相除得 67% 是错的，
           换算成 67.78 GB ÷ 94.74 = 72% 才对。」
@@ -4583,7 +4592,7 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
         <td class="n"><span data-v="logitsLast">252.5 KiB</span></td>
         <td>训练每个位置都要算 loss，所以要全部；
           推理 prefill <b>只要最后一个位置</b>。
-          同一个算子，两边差 <span data-v="tokens">131,072</span> 倍</td></tr>
+          同一个算子，两边差 <span data-v="seqRaw">131,072</span> 倍</td></tr>
     </tbody>
   </table></div>
 
@@ -4592,7 +4601,7 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
        aria-label="训练与推理 prefill 的 logits 体积对比：训练是一整块 31.56 GiB 的板，推理只需要最后一个位置的 252.5 KiB，按比例细到画不出来">
     <!-- 左：训练 -->
     <text x="24" y="24" class="svglbl" fill="#a50e0e">训练 · 每个位置都要算 loss</text>
-    <text x="24" y="44" class="svgsm" fill="#5f6368">131,072 个位置，一个都不能少</text>
+    <text x="24" y="44" class="svgsm" fill="#5f6368"><tspan data-v="tokens">131,072</tspan> 个位置，一个都不能少</text>
     <rect x="24" y="58" width="404" height="170" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
     <g stroke="#f6c7c3">
       <line x1="24" y1="92" x2="428" y2="92"/><line x1="24" y1="126" x2="428" y2="126"/>
@@ -4600,14 +4609,14 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
     <text x="226" y="138" text-anchor="middle" class="svgnum" fill="#a50e0e" font-size="26"
           data-v="logits">31.56 GiB</text>
     <text x="226" y="162" text-anchor="middle" class="svgsm" fill="#a50e0e">
-      131,072 × 129,280 × 2 B</text>
-    <text x="24" y="252" class="svgsm" fill="#a50e0e" font-weight="700">bf16 就这么大；提到 fp32 算 loss 还要翻倍</text>
+      <tspan data-v="tokens">131,072</tspan> × 129,280 × <tspan data-v="bytes">2</tspan> B</text>
+    <text x="24" y="252" class="svgsm" fill="#a50e0e" font-weight="700" data-v="logitsPrecNote">bf16 就这么大；提到 fp32 算 loss 还要翻倍</text>
 
     <path d="M488 60 V250" stroke="#e8eaed" stroke-width="1.6"/>
 
     <!-- 右：推理 prefill -->
     <text x="530" y="24" class="svglbl" fill="#0d652d">推理 prefill · 只要最后一个位置</text>
-    <text x="530" y="44" class="svgsm" fill="#5f6368">前面 131,071 个位置的 logits，一个都不需要</text>
+    <text x="530" y="44" class="svgsm" fill="#5f6368">前面 <tspan data-v="seqM1">131,071</tspan> 个位置的 logits，一个都不需要</text>
     <rect x="530" y="58" width="404" height="170" rx="5" fill="none"
           stroke="#dadce0" stroke-width="1.4" stroke-dasharray="6 5"/>
     <text x="732" y="130" text-anchor="middle" class="svgsm" fill="#bdc1c6">
@@ -4618,14 +4627,14 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
       ↑ 就这一条 · <tspan data-v="logitsLast">252.5 KiB</tspan></text>
     <text x="530" y="272" class="svgsm" fill="#5f6368">
       <tspan font-weight="700" fill="#a50e0e">这条线是骗你的</tspan> ——
-      真实比例只有虚线框的 1/131,072 高，</text>
+      真实比例只有虚线框的 1/<tspan data-v="seqRaw">131,072</tspan> 高，</text>
     <text x="530" y="288" class="svgsm" fill="#5f6368">
-      <tspan font-weight="700">合 0.0013 像素</tspan>。为了画得出来，它放大了约 1,000 倍</text>
+      <tspan font-weight="700">合 <tspan data-v="logitsPx">0.0013</tspan> 像素</tspan>。为了画得出来，它放大了约 <tspan data-v="logitsZoom">2,300</tspan> 倍</text>
 
     <rect x="24" y="300" width="910" height="34" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
     <text x="479" y="322" text-anchor="middle" class="svgsm" fill="#174ea6">
-      同一个算子、同一份 <tspan font-weight="700">926.68 M</tspan> 权重、同一行代码 ——
-      <tspan font-weight="700">两边差 131,072 倍。</tspan>
+      同一个算子、同一份 <tspan font-weight="700">926.68M</tspan> 权重、同一行代码 ——
+      <tspan font-weight="700">两边差 <tspan data-v="seqRaw">131,072</tspan> 倍。</tspan>
       「训练贵」和「推理省」在这里说的是<tspan font-weight="700">同一个 lm_head</tspan></text>
   </svg>
   <figcaption><b>这张图有一半是画不出来的，而画不出来本身就是结论。</b>
@@ -4638,13 +4647,13 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
   <h4>⭐ 三个几乎人人都卡在这儿的问题</h4>
 
   <div class="note info">
-    <span class="t">① 训练的 logits 凭什么大十三万倍 —— 大的是「位置数」，不是词表</span>
+    <span class="t">① 训练的 logits 凭什么大 <span data-v="seqRaw">131,072</span> 倍 —— 大的是「位置数」，不是词表</span>
     <b>词表两边一模一样，都是 129,280。差的是「要为多少个位置各算一份」。</b><br>
     <em>训练是 teacher forcing：整条序列一次喂进去，
     <b>每一个位置同时都是一个预测点</b> —— 第 5 个位置的向量预测第 6 个字，
-    第 6 个预测第 7 个，全部并行，一次前向算出 131,072 个 loss。一个都不能省。</em><br>
-    <b>推理只在最后一个位置采样</b>，前面 131,071 个位置的 logits 一个都不需要。
-    <b>131,072 : 1 —— 差的就是这个。</b>
+    第 6 个预测第 7 个，全部并行，一次前向算出 <span data-v="tokens">131,072</span> 个 loss。一个都不能省。</em><br>
+    <b>推理只在最后一个位置采样</b>，前面 <span data-v="seqM1">131,071</span> 个位置的 logits 一个都不需要。
+    <b><span data-v="seqRaw">131,072</span> : 1 —— 差的就是这个。</b>
   </div>
 
   <div class="note ok">
@@ -4653,7 +4662,7 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
 129,280 ÷ 7,168 = <span class="r">18.04</span>
 
 <span class="c">// 于是</span>
-单层残差流 1.75 GiB × 18.04 = <span class="r">31.56 GiB</span>   <span class="c">← 正好是上面那个数</span></div>
+单层残差流 <span data-v="embedAct">1.75 GiB</span> × 18.04 = <span class="r" data-v="logits">31.56 GiB</span>   <span class="c">← 正好是上面那个数</span></div>
     <b>模型里所有别的东西都是「位置数 × 7,168」，只有出口这一步是「位置数 × 129,280」。</b>
     <em>同样的位置数，18 倍的宽度 —— 这就是它显得那么突兀的全部原因。</em>
   </div>
@@ -4662,7 +4671,7 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
     <span class="t">② 那推理常用的 top-k 呢 —— 反正小的那些也选不上</span>
     <b>观察是对的，但有个先后顺序：你必须先把 129,280 个分全算出来，才知道哪 64 个最大。</b>
     <em>top-k 是算完之后的挑选，不是省掉计算的手段。</em><br>
-    推理这边本来也不需要省 —— 一个位置的完整 logits 才 <b>252.5 KiB</b>。<br>
+    推理这边本来也不需要省 —— 一个位置的完整 logits 才 <b><span data-v="logitsPos">252.5 KiB</span></b>。<br>
     <b>真正有压力的是训练侧，而训练侧不能用 top-k</b> ——
     cross-entropy 的分母是<b>全词表</b>求和，少算一项分母就错了。
     <em>（历史上有 sampled softmax / hierarchical softmax 这类近似，代价是梯度有偏。）</em><br>
@@ -4672,7 +4681,7 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
 
   <h4>换一个真实配置算一遍 —— 顺便看清为什么非分块不可</h4>
 
-  <p>上面那个 31.56 GiB 用的是课程口径的 128K。换成一个更常见的训练形状
+  <p>上面那个 <span data-v="logits">31.56 GiB</span> 用的是顶上控制台的口径（<span data-v="seqLabel">128K</span>）。换成一个更常见的训练形状
   ——<b>序列 4,096、每 device batch 12</b>：</p>
 
   <div class="eq"><span class="c">// 这一步要算 logits 的位置数</span>
@@ -4689,7 +4698,7 @@ fp32   49,152 × 129,280 × 4 B = <span class="r">23.67 GiB</span>   <span class
     <span class="t">放到一张卡上看：这一个纯临时的张量吃掉四分之一显存</span>
     以单 device <b>94.74 GiB</b> 的 HBM 算 ——
     bf16 的 logits 占 <b>12.5%</b>，提到 fp32 算 loss 就是 <b>25.0%</b>。
-    <em>而它在参数表上不存在，在算力账上只占 0.46%，
+    <em>而它在参数表上不存在，在算力账上只占约 2.2%（这个 4K 形状下；128K 时是 0.46%），
     并且下一步就被丢掉。</em>
   </div>
 
@@ -4703,7 +4712,7 @@ fp32   49,152 × 129,280 × 4 B = <span class="r">23.67 GiB</span>   <span class
     （梯度就是 <span class="k">p − y</span>，逐元素，形状完全相同）——
     融合之后它也不落地：在这一小段里当场算出来，当场收缩回
     「1,024 × 7,168」的隐状态梯度。<br>
-    <em>代价几乎为零 —— lm_head 只占全程算力的 0.46%，需要时重算一遍根本不心疼。</em>
+    <em>代价几乎为零 —— lm_head 只占全程算力的约 2.2%，需要时重算一遍根本不心疼。</em>
   </div>
 
   <h4>「下一个字」到底是从哪来的 —— 一个几乎所有人都问过的问题</h4>
@@ -4999,21 +5008,21 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <thead><tr><th>部件</th><th style="text-align:right">权重</th>
       <th style="text-align:right">显存</th><th style="text-align:right">前向 FLOPs</th><th>备注</th></tr></thead>
     <tbody>
-      <tr><td>嵌入</td><td class="n">926.68 M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
+      <tr><td>嵌入</td><td class="n">926.68M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
         <td class="n">—</td><td>查表则为 0；编译成 matmul 则同 lm_head</td></tr>
-      <tr><td>MLA × 61</td><td class="n">11.41 B</td><td class="n">21.26 GiB</td>
-        <td class="n" data-v="mlaFlops">45.61 PFLOP</td><td>含 <span data-v="attnShare">81.8%</span> 的平方项</td></tr>
+      <tr><td>MLA × 61</td><td class="n">11.41B</td><td class="n" data-v="mlaWBytes">21.26 GiB</td>
+        <td class="n" data-v="mlaFlops">45.92 PFLOP</td><td>含 <span data-v="attnShare">81.8%</span> 的平方项</td></tr>
       <tr><td>KV cache</td><td class="n">—</td><td class="n" data-v="kvMla">8.58 GiB</td>
         <td class="n">—</td><td>随序列线性增长</td></tr>
-      <tr><td>Dense MLP × 3</td><td class="n">1.19 B</td><td class="n">2.21 GiB</td>
-        <td class="n" data-v="denseFlops">0.31 PFLOP</td><td></td></tr>
-      <tr><td>MoE × 58</td><td class="n">656.57 B</td><td class="n">1.19 TiB</td>
+      <tr><td>Dense MLP × 3</td><td class="n">1.19B</td><td class="n" data-v="denseWBytes">2.21 GiB</td>
+        <td class="n" data-v="denseFlops">311.71 TFLOP</td><td></td></tr>
+      <tr><td>MoE × 58</td><td class="n">656.57B</td><td class="n" data-v="moeWBytes">1.19 TiB</td>
         <td class="n" data-v="moeFlops">6.03 PFLOP</td><td>+ all-to-all <span data-v="a2aAll">812.00 GiB</span></td></tr>
-      <tr><td>lm_head</td><td class="n">926.68 M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
+      <tr><td>lm_head</td><td class="n">926.68M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
         <td class="n" data-v="headFlops">242.92 TFLOP</td><td>⚠️ logits <span data-v="logits">31.56 GiB</span></td></tr>
-      <tr class="sum"><td>合计</td><td class="n" data-v="totalW">671.03 B</td>
+      <tr class="sum"><td>合计</td><td class="n" data-v="totalW">671.03B</td>
         <td class="n" data-v="memResident">1.23 TiB</td>
-        <td class="n" data-v="totalFlops">52.50 PFLOP</td><td>激活参数仅 <span data-v="activeW">36.62 B</span></td></tr>
+        <td class="n" data-v="totalFlops">52.50 PFLOP</td><td>激活参数仅 <span data-v="activeW">36.62B</span></td></tr>
     </tbody>
   </table></div>
 
@@ -5022,7 +5031,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
       <g id="memstack"></g>
     </svg>
     <figcaption>常驻显存的构成。每一小格是<b>一个 TPU v7 device 的 94.74 GiB</b> ——
-    数一数要几个。而这还只是前向、batch=1、不含激活和临时缓冲。</figcaption>
+    数一数要几个。而这还只是前向、batch=<span data-v="batch">1</span>、不含激活和临时缓冲。</figcaption>
   </figure>
 
   <div class="grid g3">
@@ -5034,19 +5043,19 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
       <p class="sub">权重 <span data-v="memWeights">1.22 TiB</span> +
         KV <span data-v="kvMla">8.58 GiB</span></p></div>
     <div class="card tint"><h4>③ 要多少个 device</h4>
-      <div class="stat orange"><span data-v="devices">14.3</span> 个</div>
+      <div class="stat orange"><span data-v="devices">13.3</span> 个</div>
       <p class="sub">对着 94.74 GiB 一除。<b>而且这只是下限。</b></p></div>
   </div>
 
   <div class="note warn">
-    <span class="t">⚠️「<span data-v="devices">14.3</span> 张卡」是最乐观的可能值，不是答案</span>
+    <span class="t">⚠️「<span data-v="devices">13.3</span> 张卡」是最乐观的可能值，不是答案</span>
     这个数建立在五个假设上，而<b>每一个在真实训练里都不成立</b>：
     只算前向、batch = 1、不含激活、不含临时缓冲、还假设权重能完美打包。<br>
     把峰值激活 <b><span data-v="nonWeight">41.89 GiB</span></b> 也加进去，
-    <span data-v="devices">14.3</span> 变成 <b><span data-v="devicesAct">14.7</span></b> ——
+    <span data-v="devices">13.3</span> 变成 <b><span data-v="devicesAct">13.7</span></b> ——
     这一步还好。<b>但换成训练就不是一个量级了</b>：
     每参数 16 字节（权重 + 梯度 + fp32 主权重 + 两个动量），
-    671 B 就是 <b>9.76 TiB</b>，<b>约 105 张卡</b><span class="sub">（按本页一直用的 94.74 GiB／device；专题四为了好心算按 80 GiB 取整，同一笔账在那边是 125 张）</span> —— 比这里多将近<b>八倍</b>。
+    671B 就是 <b>9.76 TiB</b>，<b>约 105 张卡</b><span class="sub">（按本页一直用的 94.74 GiB／device；专题四为了好心算按 80 GiB 取整，同一笔账在那边是 125 张）</span> —— 比这里多将近<b>八倍</b>。
     <em>这笔账在<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a>。</em><br>
     <b>所以正确的读法是：连最省的口径都要 14 张，而真实训练要八倍于此。</b>
   </div>
@@ -5061,7 +5070,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     寿命是<b>整段对话</b>，<b>跟层数相乘</b>，随长度线性长大、中途不释放。<br>
     <b>激活 ＝ 算完就扔的。</b> 第 3 层的中间结果进了第 4 层就没用了，寿命<b>只有一层之内</b>。
     <b>所以它不跟层数相乘</b> —— 只看<b>最胖的那一层有多胖</b>。
-    这就是为什么 61 层的模型，激活峰值只有几十 GB。<br>
+    这就是为什么 61 层的模型，激活峰值只有几十 GiB。<br>
     <em>（训练时不一样：激活要留着做反向，于是反过来由激活主导显存。
     这门课只算前向，所以能把它们干净地分开。）</em>
   </div>
@@ -5074,9 +5083,9 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
           ＋ Q/K 各 <span data-v="actQ">6.00 GiB</span>
           ＋ V/输出各 <span data-v="actV">4.00 GiB</span> ＋ 残差流 ×2</td>
           <td class="n" data-v="peakMla">32.08 GiB</td></tr>
-      <tr><td>MoE 那一层</td><td>KV ＋ dispatch/combine 缓冲
-          <span data-v="a2aLayer">14.00 GiB</span> ＋ 残差流 ×2</td>
-          <td class="n" data-v="peakMoe">40.08 GiB</td></tr>
+      <tr><td>MoE 那一层</td><td>KV ＋ dispatch、combine 缓冲合计
+          <span data-v="a2aLayer">14.00 GiB</span>（各占一半）＋ 残差流 ×2</td>
+          <td class="n" data-v="peakMoe">26.08 GiB</td></tr>
       <tr class="sum"><td>出口那一下 ← 最大</td><td>KV ＋ logits
           <span data-v="logits">31.56 GiB</span> ＋ 残差流</td>
           <td class="n" data-v="peakHead">41.89 GiB</td></tr>
@@ -5114,17 +5123,17 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
   </div></details>
 
   <figure class="fbox">
-  <svg viewBox="0 0 1000 300" role="img"
-       aria-label="三种口径下 671B 模型需要的 TPU v7 device 数：只算前向权重 14.3 个、加上峰值激活 14.7 个、换成训练 105 张；第三条按每参数 16 字节拆成权重、梯度、fp32 主权重和两个动量">
+  <svg viewBox="0 0 1000 300" role="img" id="devfig"
+       aria-label="三种口径下 671B 模型需要的 TPU v7 device 数：只算前向权重 13.3 个、加上峰值激活 13.7 个、换成训练约 105 个；第三条按每参数 16 字节拆成权重、梯度、fp32 主权重和两个动量">
     <text x="24" y="22" class="svglbl">同一个模型，换一个口径，就换一个数量级。<tspan font-weight="700">条长 = 要几个 TPU v7 device</tspan></text>
 
     <text x="212" y="72" text-anchor="end" class="svgsm" fill="#3c4043">① 前向 · batch=1 · 只算权重</text>
     <rect x="220" y="56" width="81" height="24" rx="3" fill="#8ab4f8"/>
-    <text x="311" y="73" class="svgsm" fill="#174ea6" font-weight="700"><tspan data-v="devices">14.3</tspan> 个</text>
+    <text x="311" y="73" class="svgsm" fill="#174ea6" font-weight="700"><tspan data-v="devices">13.3</tspan> 个</text>
 
     <text x="212" y="118" text-anchor="end" class="svgsm" fill="#3c4043">② 再加上峰值激活 <tspan data-v="nonWeight">41.89 GiB</tspan></text>
     <rect x="220" y="102" width="83" height="24" rx="3" fill="#5b9bf5"/>
-    <text x="313" y="119" class="svgsm" fill="#174ea6" font-weight="700"><tspan data-v="devicesAct">14.7</tspan> 个</text>
+    <text x="313" y="119" class="svgsm" fill="#174ea6" font-weight="700"><tspan data-v="devicesAct">13.7</tspan> 个</text>
     <text x="378" y="119" class="svgsm" fill="#5f6368">← 跟①几乎看不出区别</text>
 
     <text x="212" y="167" text-anchor="end" class="svgsm" fill="#a50e0e" font-weight="700">③ 换成训练 · 每参数 16 字节</text>
@@ -5149,7 +5158,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <path d="M220 208 H861" stroke="#9aa0a6" stroke-width="1"/>
     <path d="M220 204 V212 M861 204 V212" stroke="#9aa0a6" stroke-width="1"/>
     <text x="540" y="228" text-anchor="middle" class="svgsm" fill="#3c4043">
-      671.03 B × 16 B = <tspan font-weight="700">9.76 TiB</tspan> ÷ 94.74 GiB/device <tspan fill="#5f6368">（两边都是二进制，可以直接除）</tspan></text>
+      671.03B × 16 B = <tspan font-weight="700">9.76 TiB</tspan> ÷ 94.74 GiB/device <tspan fill="#5f6368">（两边都是二进制，可以直接除）</tspan></text>
 
     <rect x="24" y="244" width="910" height="46" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
     <text x="44" y="264" class="svgsm" fill="#b06000" font-weight="700">
@@ -5175,17 +5184,17 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
       <div class="stat blue"><span data-v="timeIdeal">45.5 秒</span></div>
       <p class="sub">一个 device 跑完这一次前向。<b>现实里达不到。</b></p></div>
     <div class="card"><h4>现实一点（35% 利用率）</h4>
-      <div class="stat orange"><span data-v="timeReal">130 秒</span></div>
+      <div class="stat orange"><span data-v="timeReal">2.2 分钟</span></div>
       <p class="sub">大模型训练的实际利用率通常就在这个量级</p></div>
     <div class="card tint"><h4>摊到装得下它的那些卡上</h4>
-      <div class="stat green"><span data-v="timeMulti">8.7 秒</span></div>
-      <p class="sub">按 <span data-v="devicesCeil">15</span> 个 device（<span data-v="devices">14.3</span>
+      <div class="stat green"><span data-v="timeMulti">9.3 秒</span></div>
+      <p class="sub">按 <span data-v="devicesCeil">14</span> 个 device（<span data-v="devices">13.3</span>
         向上取整，卡不能切一半）、35% 利用率、<b>且假设并行完美无损</b>
         ——&nbsp;最后那半句是这门课剩下的全部内容。</p></div>
   </div>
   <div class="note warn">
-    <span class="t">「假设并行完美无损」这七个字，是整门课的入口</span>
-    把活分给 14 张卡，绝不等于快 14 倍 —— 它们要互相传数据、要等最慢的那个、
+    <span class="t">「假设并行完美无损」这八个字，是整门课的入口</span>
+    把活分给 <span data-v="devicesCeil">14</span> 张卡，绝不等于快 <span data-v="devicesCeil">14</span> 倍 —— 它们要互相传数据、要等最慢的那个、
     要为了省显存重算一部分。<b>那道差距有多大、从哪来、怎么缩小，
     就是专题五和专题七要回答的。</b>
   </div>
@@ -5327,7 +5336,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
       <h4>05 · 关于「专家」</h4>
       <p><b>目前唯一被公开测过的模型里，它不按领域分工。</b></p>
       <p class="sub">Mixtral 的作者试着按学科去找规律，结论是「没看出明显模式」；
-      反倒是同一个 token 连着两次选中同一个专家的比例，中层能到 26.4%，
+      反倒是相邻两个 token 选中同一个专家的比例，中层能到 26.4%，
       远高于随机的 12.5%。<b>看起来更贴语法和 token 本身，不是学科。</b><br>
       <b>⚠️ 但那是 8 选 2 的 Mixtral，V3 是 256 选 8 —— 不能直接搬。</b>
       <em>能确定的只有一条：每个 token 在 58 层里走的，是一条只属于它自己的路径。</em></p>
@@ -5352,7 +5361,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
       <b style="color:var(--ink)">但那张卡到底长什么样？为什么偏偏是这个数？</b><br>
       为什么有的卡叫 GPU、有的叫 TPU，它们看同一个模型的眼光有什么不同？<br><br>
       <span style="opacity:.75">第一课算出了「要什么」。第二课讲「机器能给什么」。</span><br>
-      <span style="opacity:.6;font-size:14px">（专题二的网页版已经写完了，四十张图；旁边那个链接是它的大纲）</span>
+      <span style="opacity:.6;font-size:14px">（专题二的网页版已经写完了，四十多张图；旁边那个链接是它的大纲）</span>
     </div>
     <div style="margin-top:22px">
       <a href="topic-02.html" style="display:inline-block;background:var(--blue);color:#fff;
@@ -5393,7 +5402,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
   <p>页面上所有数字由
     <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/tools/token-budget.py"><code>token-budget.py</code></a>
     的同一套公式实时算出，输入取自官方 <code>config.json</code>。
-    <b>没有一个数字是抄来的或估的</b> —— 总参数算出 671.03 B、激活 36.62 B，
+    <b>没有一个数字是抄来的或估的</b> —— 总参数算出 671.03B、激活 36.62B，
     与官方口径 671B / 37B 吻合，这就是公式正确性的验证。</p>
   <p><b>Chris Yang</b> · Google Cloud AI Infra 架构师　—— 文中观点与数据均为个人整理，
     不代表所属机构。</p>
@@ -5496,7 +5505,8 @@ function compute(seq, batch, B, causal=true){
   //   ② 推理 prefill 只要最后一个位置的 logits —— 训练要全部，差 T 倍
   //   ③ 它的算力占比极小，跟它的体积完全不成比例
   r.logitsFp32 = T*C.V*4;
-  r.logitsLast = C.V*B;
+  r.logitsLast = C.V*B*batch;              // 每条序列各要最后一个位置
+  r.logitsPos  = C.V*B;                    // 单个位置的一整行 logits
   r.logitsCard = r.logitsFp32/HBM;
 
   r.totalW  = r.embedW + r.mlaWAll + r.denseWAll + r.moeWAll + r.headW;
@@ -5538,14 +5548,23 @@ const flopH  = f => f>=1e18 ? (f/1e18).toFixed(2)+" EFLOP"
                   : f>=1e15 ? (f/1e15).toFixed(2)+" PFLOP"
                   : f>=1e12 ? (f/1e12).toFixed(2)+" TFLOP"
                   : (f/1e9).toFixed(1)+" GFLOP";
-const parH   = p => p>=1e12 ? (p/1e12).toFixed(2)+" T"
-                  : p>=1e9  ? (p/1e9).toFixed(2)+" B"
-                  : (p/1e6).toFixed(2)+" M";
+// 参数量单位紧贴数字（671.03B），字节单位带空格（576 B）—— 同一页里两种 B 不至于看混
+const parH   = p => p>=1e12 ? (p/1e12).toFixed(2)+"T"
+                  : p>=1e9  ? (p/1e9).toFixed(2)+"B"
+                  : (p/1e6).toFixed(2)+"M";
 const seqH   = s => s>=1048576 ? (s/1048576)+"M" : s>=1024 ? (s/1024)+"K" : ""+s;
 const fmtT = t => t>=3600 ? (t/3600).toFixed(1)+" 小时"
                 : t>=60   ? (t/60).toFixed(1)+" 分钟"
                 : t>=1    ? t.toFixed(1)+" 秒"
                 : (t*1000).toFixed(0)+" 毫秒";
+/* 「占几张卡」的统一写法。≥ 1 张写张数；不到一张写百分比，
+   小于 1% 保留一位小数，小于 0.1% 直接写「不到」—— 避免「一张卡的 0%」读成「不占地方」，
+   也避免「一张卡的 8529%」这种该写成张数的显示。 */
+const cardShare = x => x>=1 ? x.toFixed(1)+" 张卡"
+                  : x<0.001 ? "不到一张卡的 0.1%"
+                  : "一张卡的 "+(x*100).toFixed(x<0.01?1:0)+"%";
+/* 两位有效数字、带千分位（放大倍数这类只看量级的数） */
+const sig2 = n => n<10 ? String(Math.round(n)) : Number(n.toPrecision(2)).toLocaleString();
 const SVGNS  = "http://www.w3.org/2000/svg";
 const el = (n,a={},t)=>{const e=document.createElementNS(SVGNS,n);
   for(const k in a) e.setAttribute(k,a[k]);
@@ -5612,14 +5631,12 @@ function render(first){
     kvSpan:   r.kvSpan>=1e8 ? (r.kvSpan/1e8).toFixed(1)+" 亿"
               : r.kvSpan>=1e4 ? (r.kvSpan/1e4).toFixed(0)+" 万"
               : Math.round(r.kvSpan).toLocaleString(),
-    kvCards:  r.kvCards>=1 ? r.kvCards.toFixed(1)+" 张卡"
-              : "一张卡的 "+(r.kvCards*100).toFixed(0)+"%",
+    kvCards:  cardShare(r.kvCards),
     kvMlaStep1: bytesH(r.kvMlaStep1),
     kvMlaStep2: bytesH(r.kvMlaStep2),
     // 短序列下 KV 只占千分之几，toFixed(0) 会显示成「一张卡的 0%」——
     // 读起来像「不占地方」，其实是「占得少但不是零」。小于 1% 时保留一位小数。
-    kvMlaCards: r.kvMlaCards>=1 ? r.kvMlaCards.toFixed(1)+" 张卡"
-              : "一张卡的 "+(r.kvMlaCards*100).toFixed(r.kvMlaCards<0.01?1:0)+"%",
+    kvMlaCards: cardShare(r.kvMlaCards),
     mhaBreak: Math.round(r.mhaBreak).toLocaleString(),
     mlaBreak: Math.round(r.mlaBreak).toLocaleString(),
     attnMatrix: bytesH(r.attnMatrix),
@@ -5629,8 +5646,30 @@ function render(first){
     logits:   bytesH(r.logits),
     logitsFp32: bytesH(r.logitsFp32),
     logitsLast: bytesH(r.logitsLast),
-    logitsCard: (r.logitsCard*100).toFixed(0)+"%",
-    logitsVsMla:r.logitsVsMla.toFixed(2)+"×",
+    logitsCard: cardShare(r.logitsCard),
+    logitsPos:  bytesH(r.logitsPos),
+    seqM1:      (seq-1).toLocaleString(),
+    // 推理侧那一条的「真实高度」：虚线框 170 px 高，按 1/seq 缩；画出来的是 3 px
+    logitsPx:   (170/seq).toPrecision(2),
+    logitsZoom: sig2(3/(170/seq)),
+    logitsPrecNote: B===4 ? "fp32 就这么大 —— 这已经是算 loss 的精度"
+                  : B===2 ? "bf16 就这么大；提到 fp32 算 loss 还要翻倍"
+                  :         "fp8 就这么大；提到 fp32 算 loss 要变成 4 倍",
+    // 短序列时 logits 反而比 61 层 MLA 权重小 —— 措辞跟着倍数翻过来
+    logitsVsMlaWord: r.logitsVsMla>=1
+                  ? `比不过出口这一个临时张量（${r.logitsVsMla.toFixed(2)}×）`
+                  : `这回比临时张量大（logits 只有它的 ${r.logitsVsMla.toFixed(2)}×）`,
+    headShareWord: r.headShare<0.005 ? "不到千分之五"
+                 : r.headShare<0.01  ? "不到百分之一"
+                 : r.headShare<0.05  ? "不到百分之五"
+                 : "约 "+(r.headShare*100).toFixed(0)+"%",
+    // 61 个层边界的残差流，跟一张卡比（序列短时远小于一张卡）
+    actAll61Cmp: r.actAll61/HBM>=1.5 ? `已经要 ${(r.actAll61/HBM).toFixed(1)} 张卡`
+               : r.actAll61>=HBM ? "已经超过单张卡"
+               : "这回还装得下（占"+cardShare(r.actAll61/HBM)+"）",
+    batchMul:   batched ? `batch ${batch} × ` : "",
+    denseWBytes: bytesH(r.denseWAll*B),
+    moeWBytes:   bytesH(r.moeWAll*B),
     mlaWBytes:  bytesH(r.mlaWBytes),
     headShare:  (r.headShare*100).toFixed(2)+"%",
     mlaFlops:   flopH(r.mlaFlops),
@@ -5662,6 +5701,10 @@ function render(first){
     });
     prev[k]=s;
   }
+  const devfig = document.getElementById("devfig");
+  if(devfig) devfig.setAttribute("aria-label",
+    `三种口径下 671B 模型需要的 TPU v7 device 数：只算前向权重 ${V.devices} 个、`+
+    `加上峰值激活 ${V.devicesAct} 个、换成训练约 105 个；第三条按每参数 16 字节拆成权重、梯度、fp32 主权重和两个动量`);
   drawKvLadder(r); drawKvFlare(r); drawShapeChain(r);
   drawKvBars(r); drawFlopCurve(r); drawMemStack(r); drawCardGrid(r); drawJourney(r);
 }
@@ -5700,12 +5743,12 @@ function render(first){
       g.appendChild(el("line",{x1:X0+m[2]/max*W,y1:y-3,x2:X0+m[2]/max*W,y2:y+H+3,
         stroke:"#fff","stroke-width":2}));
       g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+12,class:"svgnum",
-        fill: hl?"#174ea6":"#5f6368"}, `${m[1]} B`));
+        fill: hl?"#174ea6":"#5f6368"}, `${m[1]}B`));
       g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+26,class:"svgsm",fill:"#0d652d"},
-        `激活 ${m[2]} B · 稀疏 ${(m[1]/m[2]).toFixed(1)}×`));
+        `激活 ${m[2]}B · 稀疏 ${(m[1]/m[2]).toFixed(1)}×`));
     } else {
       g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+18,class:"svgnum",fill:"#5f6368"},
-        `${m[1]} B · 全部都要算`));
+        `${m[1]}B · 全部都要算`));
     }
   });
   g.appendChild(el("rect",{x:X0,y:330,width:12,height:12,rx:2,fill:"#1a73e8"}));
@@ -5940,7 +5983,7 @@ function drawJourney(r){
   g.appendChild(el("text",{x:X0+14,y:206,class:"svglbl",fill:"#3c4043","font-size":"13"},
     "⑥ 128 个头拼起来 → [128K, 16384] → o_proj → [128K, 7168] → 汇回残差流"));
   g.appendChild(el("text",{x:X0+14,y:225,class:"svgsm","font-size":"11"},
-    "o_proj 117.44 M，一层里最大的一块 —— 也是 128 个头之间唯一交换信息的地方"));
+    "o_proj 117.44M，一层里最大的一块 —— 也是 128 个头之间唯一交换信息的地方"));
 
   // ── 下半：8×8 缩略方阵 ──
   const N = 8, CS = 30, GP = 2, MX = 150, MY = 348, HL = 4;   // HL = 高亮第 5 行（0 起）
@@ -6222,7 +6265,12 @@ function drawKvLadder(r){
   ];
   const Y0 = 262, Y1 = 46, HMAX = Y0-Y1;          // 柱子基线与顶
   const all = [...steps.map(s=>s[1]), r.kvMla];
-  const lgMin = Math.log10(Math.min(...all)), lgMax = Math.log10(Math.max(...all));
+  /* ⛔ KV 很小时（512 × batch 64、fp8 …）单卡线比最高的柱子还高，
+     原来按柱子定刻度，线就画到图顶外、压住「纵轴：对数刻度」那行字。
+     只要这条线要画，就把它也算进刻度范围。 */
+  const showHbm = HBM > Math.min(...all) && HBM < Math.max(...all)*4;
+  const scaleVals = showHbm ? [...all, HBM] : all;
+  const lgMin = Math.log10(Math.min(...scaleVals)), lgMax = Math.log10(Math.max(...scaleVals));
   const hi  = lgMax + .05, lo = lgMin - (hi-lgMin)*.16;   // 最矮的柱子占约 14% 高
   const h   = v => Math.max(10, (Math.log10(v)-lo)/(hi-lo)*HMAX);
 
@@ -6264,14 +6312,14 @@ function drawKvLadder(r){
     fill:"#1e8e3e","font-weight":"700"}, `小 ${r.kvRatio.toFixed(1)} 倍`));
 
   // 单卡容量参照线（横穿全图）
-  if(HBM > Math.min(...all) && HBM < Math.max(...all)*4){
+  if(showHbm){
     const hy = Y0-h(HBM);
     g.appendChild(el("line",{x1:60,y1:hy,x2:940,y2:hy,stroke:"#d93025",
       "stroke-dasharray":"6 4","stroke-width":1.2}));
     g.appendChild(el("text",{x:60,y:hy-8,class:"svgsm",fill:"#d93025"},
       "单个 TPU v7 device 的全部显存 94.74 GiB"));
   }
-  g.appendChild(el("text",{x:60,y:24,class:"svgsm",fill:"#80868b"},
+  g.appendChild(el("text",{x:940,y:24,"text-anchor":"end",class:"svgsm",fill:"#80868b"},
     "纵轴：对数刻度（每一格 10 倍）"));
 }
 
@@ -6341,8 +6389,11 @@ function drawKvFlare(r){
       g.appendChild(el("line",{x1:bx,y1:hy,x2:bx,y2:Y0,stroke:"#d93025",
         "stroke-dasharray":"3 3"}));
       g.appendChild(el("circle",{cx:bx,cy:hy,r:5,fill:"#d93025"}));
+      // bt 是「序列位置数」，已经乘过 batch：batch > 1 时要写明是每条这么长、共几条，
+      // 否则会跟正文「一段 N token 的对话」（单条口径）对不上。
       g.appendChild(el("text",{x:bx+9,y:hy+18,class:"svgnum",fill:"#a50e0e"},
-        `${Math.round(bt).toLocaleString()} token`));
+        r.batch>1 ? `每条 ${Math.round(bt).toLocaleString()} token × ${r.batch} 条`
+                  : `${Math.round(bt).toLocaleString()} token`));
       g.appendChild(el("text",{x:bx+9,y:hy+33,class:"svgsm",fill:"#a50e0e"},
         "就吃满一整张卡"));
     }
@@ -6514,15 +6565,24 @@ function drawCardGrid(r){
   g.appendChild(el("text",{x:138,y:37,class:"svgnum",fill:"#d93025","font-size":16},
     n>=1 ? `${Math.ceil(n)} 张卡` : `${(n*100).toFixed(1)}% 一张卡`));
 
-  const cols=20, cw=19, chh=13;
+  /* ⛔ 格子到 240 上限（1M，或 batch 64）时是 12 行，原来固定 13 px 行高 →
+     图例被挤出 viewBox（280 高）、「只画了前 240 张」那行被图例压住。
+     改成自下而上排：先留出图例和截断说明的位置，格子行高按剩下的空间缩。 */
+  const VBH = 280, cols=20, cw=19, GY0=52;
+  const rows = Math.max(1, Math.ceil(N/cols));
+  const trunc = Math.ceil(n) > 240;
+  const refH = 3*20, noteH = trunc ? 18 : 0;
+  const avail = VBH - GY0 - 8 - refH - noteH - 6;
+  const pitch = Math.min(16, Math.floor(avail/rows)), chh = pitch-3;
   for(let i=0;i<N;i++){
     const c=i%cols, rw=(i/cols)|0;
-    g.appendChild(el("rect",{x:10+c*(cw+2.4), y:52+rw*(chh+3), width:cw, height:chh, rx:2,
+    g.appendChild(el("rect",{x:10+c*(cw+2.4), y:GY0+rw*pitch, width:cw, height:chh, rx:2,
       fill:"#d93025", opacity: 0.32 + 0.68*(1-i/Math.max(N,1))}));
   }
-  const rows = Math.ceil(N/cols), by = 52 + rows*(chh+3) + 14;
-  if(Math.ceil(n) > 240)
-    g.appendChild(el("text",{x:10,y:by-2,class:"svgsm",fill:"#d93025"},"…（只画了前 240 张）"));
+  const gridEnd = GY0 + rows*pitch;
+  if(trunc)
+    g.appendChild(el("text",{x:10,y:gridEnd+13,class:"svgsm",fill:"#d93025"},"…（只画了前 240 张）"));
+  const by = gridEnd + noteH + 14;
 
   // 对照
   const ref = [["KV cache 全量", r.kvMla, "#1a73e8", bytesH(r.kvMla)],
@@ -6532,8 +6592,12 @@ function drawCardGrid(r){
     const y = by + i*20;
     g.appendChild(el("rect",{x:10,y:y-9,width:12,height:12,rx:2,fill:x[2]}));
     g.appendChild(el("text",{x:30,y:y+1,class:"svgsm"},`${x[0]} ${x[3]}`));
+    // 短序列时矩阵本身很小，这三样反而比它大 —— 那时改写成「它的几倍」，
+    // 不再显示「9474.00% 它」这种读不出意思的百分比。
+    const q = x[1]/r.attnMatrix;
     g.appendChild(el("text",{x:230,y:y+1,class:"svgsm",fill:INK(x[2])},
-      `${(x[1]/r.attnMatrix*100).toFixed(2)}% 它`));
+      q>=1 ? `是它的 ${q>=10 ? Math.round(q).toLocaleString() : q.toFixed(1)} 倍`
+           : q<0.0001 ? "不到它的 0.01%" : `${(q*100).toFixed(2)}% 它`));
   });
 }
 
