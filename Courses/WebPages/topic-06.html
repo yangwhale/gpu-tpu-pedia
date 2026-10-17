@@ -4254,7 +4254,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>切专家与注意力：TEP 和 DEP</h2></div>
-  <p class="lead">专家要多凑几行，就得铺到更多卡上，何况 V3 一张卡本来就装不下。切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。2024 年 12 月 SGLang 给 DeepSeek 模型开了 DP attention（即后者），decode 吞吐最多是原来的 1.9 倍；2025 年初 DeepSeek 公开的大 EP（<a href="#s6-7">6.7</a>）部署也走这条。SGLang 用 96 张 H100 复现大 EP，输出吞吐最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。
+  <p class="lead">专家要多凑几行，就得铺到更多卡上，何况 V3 一张卡本来就装不下。切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。
     <b>选哪个，看模型有几个 KV 头、要多大 batch。</b></p>
 
   <h3 id="s6-1">6.1　一句回顾</h3>
@@ -4864,9 +4864,7 @@ body.figonly section h3{margin-top:34px}
 <p>实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；GPU 数 16 和 20 见 :476；投机接受率 34% 与 35.7% 见 :480。</p>
 <p>本课推导：在飞请求 ＝ 输出 tok/s × 出字间隔（Little 定律）；条长按卡上在飞请求数画，假设两边每个请求的 KV 一样长（同为 4K 进 1K 出）；TP4 里哪张卡算「原件」是示意。容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。</p></details></figure>
   <p><b>变的是步时</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
-  <ul>
-    <li><b>换模型</b>：MLA 开 TEP8，KV 存 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，存 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</li>
-  </ul>
+  <p><b>换模型</b>：MLA 开 TEP8，KV 存 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，存 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</p>
 
   <h3 id="s6-3">6.3　DEP 的代价：每个 rank 都得自己备一份</h3>
   <p>DEP 下每个 rank 是台小推理机，注意力权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
@@ -6023,7 +6021,7 @@ body.figonly section h3{margin-top:34px}
   <p>TEP／DEP 是 TRT-LLM 的叫法，不等于 Megatron（训练框架）的 ETP／EDP，后者指专家层内再分的 TP 组和 DP 组。prefill、decode 各用哪个，vLLM 部署 K3 和 TRT-LLM 的例子正好相反（<a href="topic-05.html#s8-6">专题五 §8.6</a>）。</p>
 
   <h3 id="s6-7">6.7　大 EP 为什么省</h3>
-  <p>DeepSeek 的 decode 把专家铺到 144 张卡（18 个节点），每卡只放 2 个路由专家加 1 个共享专家：</p>
+  <p>DeepSeek 的 decode 把专家铺到 144 张卡（18 个节点），每卡只放 2 个路由专家加 1 个共享专家。SGLang 2024 年 12 月先给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；后来用 96 张 H100 复现大 EP，输出最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。省在三处：</p>
   <ul>
     <li><b>读得少</b>：每卡只读几个专家，一步更快，显存空给 KV。</li>
     <li><b>车坐得满</b>：上百张卡的请求汇到同一个专家，每步行数从 1.4 节算的平均 8 行往上涨，朝屋脊点靠近。</li>
