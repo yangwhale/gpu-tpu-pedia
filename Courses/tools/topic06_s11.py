@@ -55,7 +55,10 @@ __FIG_S11_TEMP__
     <li><b>2026-07</b>：DeepSeek 的 DSpark 草稿每步出一小段，验几个看置信度；摘要报吞吐相同时单用户生成比线上 MTP-1 快 60–85%。</li>
   </ul>
 __FIG_S11_TREE__
-  <p>还有一支不要草稿模型，从 prompt 和已写的文字里照抄重复片段（Prompt Lookup），改代码这类重复多的场景命中最多。扩散草稿（DFlash）一次并行出一整块，2026 年已上 vLLM、SGLang，B300 上单并发速度是不投机的 3.0–5.8 倍（Gemma-4 31B，NVIDIA 博客）。</p>
+  <p>还有一支不要草稿模型：n-gram（也叫 Prompt Lookup）拿已经写出的最后几个字，到提示词里找一样的片段，把后面几个字照抄成草稿。</p>
+__FIG_S11_NGRAM__
+  <p>vLLM 在 4 张 H100 上跑 Llama 3 70B、每秒 1 个请求，摘要数据集上最多快 2.8 倍；同条件换小草稿模型跑 ShareGPT 对话是 1.5 倍。开法：vLLM 的 <code>speculative_config</code> 里 <code>method</code> 写 <code>ngram</code>，SGLang 是 <code>--speculative-algorithm NGRAM</code>。</p>
+  <p>扩散草稿（DFlash）一次并行出一整块，2026 年已上 vLLM、SGLang，B300 上单并发速度是不投机的 3.0–5.8 倍（Gemma-4 31B，NVIDIA 博客）。</p>
 
   <h3 id="s11-6">11.6　接进系统的代价</h3>
   <ul>
@@ -79,6 +82,8 @@ FIGS = {
         '<b>看柱子往右怎么缩。</b><br><em>K3 输出 tok/s 总量；B200 与 V4-Pro 的对照见出处。</em>'),
     "__FIG_S11_TEMP__": ("fig-s11-temp", "fig6-spec-temp.svg", "topic06-fig-spec.py",
         '<b>看温度 1.0 那侧：草稿猜对也常被判错。</b><br><em>V4-Pro 为 4K/1K 并发 256 实测；五个候选字是举例。</em>'),
+    "__FIG_S11_NGRAM__": ("fig-s11-ngram", "fig6-spec-ngram.svg", "topic06-fig-spec.py",
+        '<b>顺着 ① 到 ④：橙色对上，绿色照抄，红色被拒处换成蓝色。</b><br><em>示例自拟，只说明机制。</em>'),
     "__FIG_S11_TREE__": ("fig-s11-tree", "fig6-spec-tree.svg", "topic06-fig-spec.py",
         '<b>看草稿从哪来。</b>'),
 }

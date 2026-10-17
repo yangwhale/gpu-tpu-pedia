@@ -444,8 +444,68 @@ def fig_tree():
     f.save("fig6-spec-tree.svg", yb + 14)
 
 
+def fig_ngram():
+    """n-gram 草稿（Prompt Lookup）：在提示词里找到和末尾几个字一样的片段，把后面几个字照抄成草稿。示例自拟。"""
+    f = Fig(W, "n-gram 草稿示例。用户贴了一段代码，要把 3.14 换成 math.pi。模型已经写出 def area(r，"
+               "末尾两个字 area、(r 在提示词里出现过，就把提示词里紧跟着的 4 个字照抄成草稿。"
+               "大模型一次验完：前两个对，第三个它要的是 math.pi，于是这一步前进 3 个字。示例是自拟的")
+    y0 = f.header("n-gram 草稿：不用草稿模型，从提示词里照抄",
+                  "用户：「把下面代码里的 3.14 换成 math.pi」。一格一个 token；示例自拟",
+                  [(OR, "和末尾对上的片段"), (GR, "照抄来的草稿"), (BL, "大模型自己出的字"), (RD, "被拒")])
+    LX, TX, TH, SZ = 24, 330, 44, 17
+    def toks(y, items):
+        x = TX
+        out = []
+        for txt, fill, stroke in items:
+            w = wpx(txt, SZ) + 28
+            f.box(x, y, w, TH, fill, stroke, 5, 2 if stroke in (OR, RD) else 1.2)
+            f.t(x + w / 2, y + 29, txt, INK if stroke == LINE else stroke, True, SZ, anchor="middle", mono=True)
+            out.append((x, w))
+            x += w + 8
+        return out
+    W0, P = ("#fff", LINE), "prompt"
+    prompt = ["def", " area", "(r", "):", " return", " 3.14", " *", " r", " *", " r"]
+    PH = 380
+    py = f.panel(0, y0, W, PH, "一次前向，前进 3 个字", GR)
+    rows = []
+    y = py + 24
+    f.t(LX, y + 29, "① 提示词里", INK, True, 17)
+    items = []
+    for i, t in enumerate(prompt):
+        if i in (1, 2):
+            items.append((t, "#fef3e0", OR))
+        elif 3 <= i <= 6:
+            items.append((t, "#e6f4ea", GR))
+        else:
+            items.append((t, "#fff", LINE))
+    pr = toks(y, items)
+    y += 84
+    f.t(LX, y + 29, "② 已经写出", INK, True, 17)
+    toks(y, [("def", "#fff", LINE), (" area", "#fef3e0", OR), ("(r", "#fef3e0", OR)])
+    f.t(TX + 260, y + 29, "← 末尾两个字在 ① 里找到了", OR, True, 16)
+    y += 84
+    f.t(LX, y + 29, "③ 草稿：照抄后面 4 个", INK, True, 17)
+    toks(y, [(t, "#e6f4ea", GR) for t in prompt[3:7]])
+    y += 84
+    f.t(LX, y + 29, "④ 大模型一次验完", INK, True, 17)
+    vr = toks(y, [("):", "#e6f4ea", GR), (" return", "#e6f4ea", GR), (" 3.14", "#fce8e6", RD), (" math.pi", "#e8f0fe", BL)])
+    for k, mark in enumerate(("✓", "✓", "✗")):
+        x, w = vr[k]
+        f.t(x + w / 2, y + TH + 24, mark, GR if mark == "✓" else RD, True, 18, anchor="middle")
+    x, w = vr[3]
+    f.t(x + w + 18, y + 29, "第一个被拒的位置，大模型自己出字", BL, True, 16)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "提示词里重复越多，抄中越多", [
+        "改代码、摘要、按文档回答这类「答案大段来自输入」的活最赚；闲聊几乎抄不中，白验一遍。"])
+    yb = f.src(yb + 10,
+               "做法：prompt-lookup-decoding 仓库 README（用提示词里的字符串匹配代替草稿模型，输入依赖型任务 2–4 倍）；vLLM vllm/config/speculative.py 的 method=\"ngram\"、prompt_lookup_min／max（都不填时默认取 5）；SGLang --speculative-algorithm NGRAM。",
+               "示例代码、匹配两个字、抄 4 个、验出 ✓✓✗ 都是自拟，只为说明机制；真实实现按 prompt_lookup_min～max 个 token 匹配。")
+    f.save("fig6-spec-ngram.svg", yb + 14)
+
+
 fig_step()
 fig_bytes()
 fig_conc()
 fig_temp()
 fig_tree()
+fig_ngram()

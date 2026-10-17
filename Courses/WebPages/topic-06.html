@@ -2792,6 +2792,7 @@ body.figonly section h3{margin-top:34px}
     <li><b>原来卡在哪：</b>老引擎对外只有「整批跑完」一个接口，调度器看不见中间的步；一批摞成「人数 × 最长长度」的方块，短的补零，中途换不掉一行。</li>
     <li><b>Orca 第一招，只跑一步就交回：</b>每步结束调度器都看一次，写完的马上返回、让座，排队的装得下就补进来。</li>
     <li><b>第二招，选择性批处理：</b>矩阵乘、归一化不管 token 属于谁，就把这一步所有人的 token 接成一长条，一起乘权重；只有注意力按人切开，各读各的 KV。</li>
+    <li><b>挂不同 LoRA 的人也能拼：</b>基座权重照样共享一趟，只把各人的小矩阵另算。S-LoRA（2023）同时服务几千个适配器，吞吐最多是 HF PEFT、vLLM 简单做法的 4 倍；vLLM 用 <code>--enable-lora</code>、<code>--max-loras</code> 开。</li>
     <li><b>还缺一半：</b>Orca 的 KV 仍按最大长度给每人预留连续一段，4.3 里利用率 20.4%–38.2% 的旧系统就是按它复现的。PagedAttention 改成按块领，配上按页表读的注意力 kernel，长短不一的一批一次算完，座位才多起来。</li>
   </ul>
 
@@ -9166,7 +9167,83 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>看草稿从哪来。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>时间取 arXiv 首版（2026-10-15 逐个核过摘要页）：投机解码 Leviathan 等 <a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a>；Chen 等 <a href="https://arxiv.org/abs/2302.01318" target="_blank" rel="noopener">2302.01318</a>；Medusa <a href="https://arxiv.org/abs/2401.10774" target="_blank" rel="noopener">2401.10774</a>；EAGLE EAGLE <a href="https://arxiv.org/abs/2401.15077" target="_blank" rel="noopener">2401.15077</a>、EAGLE-2 <a href="https://arxiv.org/abs/2406.16858" target="_blank" rel="noopener">2406.16858</a>；MTP · DeepSeek-V3 <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a>；EAGLE-3 <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a>；DSpark <a href="https://arxiv.org/abs/2607.05147" target="_blank" rel="noopener">2607.05147</a>。Prompt Lookup 没有论文，年份按 GitHub 仓库 apoorvumang/prompt-lookup-decoding 的创建时间（2023-11，GitHub API 核过；已集成进 vLLM 与 transformers）。Medusa 与 EAGLE 都是 2024-01，轴上两点挨着。</p>
 <p>没画进图的（正文里提到）：SpecInfer <a href="https://arxiv.org/abs/2305.09781" target="_blank" rel="noopener">2305.09781</a> 把草稿排成树；SuffixDecoding <a href="https://arxiv.org/abs/2411.04975" target="_blank" rel="noopener">2411.04975</a> 从历史输出里抄；扩散草稿 DiffuSpec <a href="https://arxiv.org/abs/2510.02358" target="_blank" rel="noopener">2510.02358</a>、DFlash <a href="https://arxiv.org/abs/2602.06036" target="_blank" rel="noopener">2602.06036</a>；Lookahead <a href="https://arxiv.org/abs/2402.02057" target="_blank" rel="noopener">2402.02057</a>。P-EAGLE、PARD、LayerSkip 等也没画。</p>
 <p>注：各家倍数见正文列表；都是原作者在自己的模型和负载上测的，口径不同，不横比。</p></details></figure>
-  <p>还有一支不要草稿模型，从 prompt 和已写的文字里照抄重复片段（Prompt Lookup），改代码这类重复多的场景命中最多。扩散草稿（DFlash）一次并行出一整块，2026 年已上 vLLM、SGLang，B300 上单并发速度是不投机的 3.0–5.8 倍（Gemma-4 31B，NVIDIA 博客）。</p>
+  <p>还有一支不要草稿模型：n-gram（也叫 Prompt Lookup）拿已经写出的最后几个字，到提示词里找一样的片段，把后面几个字照抄成草稿。</p>
+<figure class="fbox fwide" id="fig-s11-ngram"><svg viewBox="0 0 1400 600" width="100%" role="img" aria-label="n-gram 草稿示例。用户贴了一段代码，要把 3.14 换成 math.pi。模型已经写出 def area(r，末尾两个字 area、(r 在提示词里出现过，就把提示词里紧跟着的 4 个字照抄成草稿。大模型一次验完：前两个对，第三个它要的是 math.pi，于是这一步前进 3 个字。示例是自拟的"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">n-gram 草稿：不用草稿模型，从提示词里照抄</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">用户：「把下面代码里的 3.14 换成 math.pi」。一格一个 token；示例自拟</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">和末尾对上的片段</text>
+<rect x="172.44" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">照抄来的草稿</text>
+<rect x="313.52" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="334" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">大模型自己出的字</text>
+<rect x="485.96" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="506" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">被拒</text>
+<rect x="0" y="102" width="1400" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次前向，前进 3 个字</tspan></text>
+<text class="svgsm" x="24" y="185" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 提示词里</tspan></text>
+<rect x="330" y="156" width="53" height="44" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="356" y="185" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">def</tspan></text>
+<rect x="391" y="156" width="72" height="44" rx="5" fill="#fef3e0" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="427" y="185" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">area</tspan></text>
+<rect x="471" y="156" width="40" height="44" rx="5" fill="#fef3e0" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="491" y="185" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">(r</tspan></text>
+<rect x="519" y="156" width="38" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="538" y="185" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">):</tspan></text>
+<rect x="565" y="156" width="87" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="608" y="185" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">return</tspan></text>
+<rect x="660" y="156" width="70" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="695" y="185" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">3.14</tspan></text>
+<rect x="738" y="156" width="46" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="761" y="185" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">*</tspan></text>
+<rect x="792" y="156" width="43" height="44" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="813" y="185" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">r</tspan></text>
+<rect x="843" y="156" width="46" height="44" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="866" y="185" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">*</tspan></text>
+<rect x="897" y="156" width="43" height="44" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="918" y="185" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">r</tspan></text>
+<text class="svgsm" x="24" y="269" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 已经写出</tspan></text>
+<rect x="330" y="240" width="53" height="44" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="356" y="269" fill="#202124" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">def</tspan></text>
+<rect x="391" y="240" width="72" height="44" rx="5" fill="#fef3e0" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="427" y="269" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">area</tspan></text>
+<rect x="471" y="240" width="40" height="44" rx="5" fill="#fef3e0" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="491" y="269" fill="#b06000" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">(r</tspan></text>
+<text class="svgsm" x="590" y="269" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">← 末尾两个字在 ① 里找到了</tspan></text>
+<text class="svgsm" x="24" y="353" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 草稿：照抄后面 4 个</tspan></text>
+<rect x="330" y="324" width="38" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="349" y="353" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">):</tspan></text>
+<rect x="376" y="324" width="87" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="419" y="353" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">return</tspan></text>
+<rect x="471" y="324" width="70" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="506" y="353" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">3.14</tspan></text>
+<rect x="549" y="324" width="46" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="572" y="353" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">*</tspan></text>
+<text class="svgsm" x="24" y="437" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④ 大模型一次验完</tspan></text>
+<rect x="330" y="408" width="38" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="349" y="437" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">):</tspan></text>
+<rect x="376" y="408" width="87" height="44" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="419" y="437" fill="#0d652d" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">return</tspan></text>
+<rect x="471" y="408" width="70" height="44" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="506" y="437" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">3.14</tspan></text>
+<rect x="549" y="408" width="99" height="44" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="598" y="437" fill="#174ea6" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">math.pi</tspan></text>
+<text class="svgsm" x="349" y="476" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
+<text class="svgsm" x="419" y="476" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓</tspan></text>
+<text class="svgsm" x="506" y="476" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗</tspan></text>
+<text class="svgsm" x="666" y="437" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第一个被拒的位置，大模型自己出字</tspan></text>
+<rect x="0" y="502" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="502" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="502" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="529" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">提示词里重复越多，抄中越多</tspan></text>
+<text class="svgsm" x="20" y="560" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">改代码、摘要、按文档回答这类「答案大段来自输入」的活最赚；闲聊几乎抄不中，白验一遍。</text>
+</svg><figcaption><b>顺着 ① 到 ④：橙色对上，绿色照抄，红色被拒处换成蓝色。</b><span class="capmore"><br><em>示例自拟，只说明机制。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>做法：prompt-lookup-decoding 仓库 README（用提示词里的字符串匹配代替草稿模型，输入依赖型任务 2–4 倍）；vLLM vllm/config/speculative.py 的 method="ngram"、prompt_lookup_min／max（都不填时默认取 5）；SGLang --speculative-algorithm NGRAM。</p>
+<p>示例代码、匹配两个字、抄 4 个、验出 ✓✓✗ 都是自拟，只为说明机制；真实实现按 prompt_lookup_min～max 个 token 匹配。</p></details></figure>
+  <p>vLLM 在 4 张 H100 上跑 Llama 3 70B、每秒 1 个请求，摘要数据集上最多快 2.8 倍；同条件换小草稿模型跑 ShareGPT 对话是 1.5 倍。开法：vLLM 的 <code>speculative_config</code> 里 <code>method</code> 写 <code>ngram</code>，SGLang 是 <code>--speculative-algorithm NGRAM</code>。</p>
+  <p>扩散草稿（DFlash）一次并行出一整块，2026 年已上 vLLM、SGLang，B300 上单并发速度是不投机的 3.0–5.8 倍（Gemma-4 31B，NVIDIA 博客）。</p>
 
   <h3 id="s11-6">11.6　接进系统的代价</h3>
   <ul>
@@ -10995,6 +11072,7 @@ body.figonly section h3{margin-top:34px}
 <tr><td>L90 补充 · 6.8 双微批：prefill 同 token 数快 27%～35%、每卡 16,384 token 时比不拆最优快 40.5%；decode 256 token/卡快 25.5%、32 token/卡慢 27%（小批 kernel 效率低）；DeepSeek decode 把注意力拆两段走 5 段流水；vLLM DBO 纯 decode 阈值默认 32 token</td><td>LMSYS 博客 2025-05-05「Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs」TBO 一节；DeepSeek open-infra-index「Day 6 · Inference System Overview」；vLLM vllm/config/parallel.py（enable_dbo、dbo_decode_token_threshold 默认 32、dbo_prefill_token_threshold 默认 512）；SGLang --enable-two-batch-overlap。2026-10-18 核对</td></tr>
 <tr><td>L91 补充 · 6.9 EPLB：V3 prefill 32 个冗余专家、每卡 8＋1、定期重算（例如每 10 分钟）；SGLang 大规模 EP 开 EPLB prefill 1.49×、decode 2.54×（作者注明看负载分布）；256＋32＝288 可用 12、72 路；vLLM eplb_config 默认 step_interval 3000、window_size 1000、num_redundant_experts 0</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.4；DeepSeek EPLB 仓库 README；LMSYS 博客 2025-05-05 大规模 EP 一文 EPLB 一节；vLLM vllm/config/parallel.py EPLBConfig；SGLang --enable-eplb、--ep-num-redundant-experts（server_arguments 文档）。2026-10-18 核对</td></tr>
 <tr><td>L92 补充 · 12.6 CUDA Graph（原 12.6 融合、12.7 KV 量化顺延为 12.7、12.8）：A100、LLaMA-2-7B、batch 1，不开 30 tok/s、开 69 tok/s（2.3×），提速全来自 CPU 开销；vLLM 默认录 [1,2,4]＋8..248 步 8＋256 起步 16，上限 512（数据中心 Blackwell 1,024）；V1 默认 FULL_AND_PIECEWISE（decode 整图、prefill／混合分段）</td><td>Fireworks 博客「Speed, Python: Pick Two. How CUDA Graphs Enable Fast Python Code for Deep Learning」2023-08-29；vLLM vllm/config/compilation.py（max_cudagraph_capture_size、cudagraph_mode）；SGLang --cuda-graph-max-bs。2026-10-18 核对</td></tr>
+<tr><td>L93 补充 · 11.5 n-gram 草稿：Llama3-70B、4×H100、QPS=1，CNN/DailyMail 最多 2.8×，草稿模型（Qwama-0.5B）跑 ShareGPT 1.5×；vLLM method="ngram"，prompt_lookup_min／max 都不填默认 5；SGLang --speculative-algorithm NGRAM。3.1 multi-LoRA：S-LoRA 服务几千个适配器、吞吐最多是 HF PEFT 与 vLLM 简单 LoRA 支持的 4 倍</td><td>vLLM 博客 2024-10-17「How Speculative Decoding Boosts vLLM Performance by up to 2.8x」；prompt-lookup-decoding 仓库 README；vLLM vllm/config/speculative.py、vllm/config/lora.py（max_loras 默认 1）；S-LoRA arXiv <a href="https://arxiv.org/abs/2311.03285" target="_blank" rel="noopener">2311.03285</a> 摘要。2026-10-18 核对</td></tr>
   </table></div>
 </div></section>
 
