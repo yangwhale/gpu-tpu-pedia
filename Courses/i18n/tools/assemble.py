@@ -79,6 +79,9 @@ def english_only_links(s):
         zh_ext = href.startswith('http') and ('github.com' in href) and (re.search(r'[\u4e00-\u9fff]|%E[4-9]', href) is not None)
         if (href.startswith(('http', '#', 'mailto', 'data:')) and not zh_ext) or href.split('#')[0] in KEEP:
             return m.group(0)
+        # 按钮样式的链接（inline-block）指向没有英文版的页：整颗删，留下裸文字反而像坏掉的按钮
+        if 'display:inline-block' in m.group(0)[:m.group(0).find('>')]:
+            return ''
         inner = re.sub(r'\s*\(Chinese\)', '', inner)
         return '<span>' + inner + '</span>'
     s = re.sub(r'<a\b[^>]*?href="([^"]+)"[^>]*>(.*?)</a>', unlink, s, flags=re.S)
@@ -112,9 +115,19 @@ def main(topic, d):
       s = s.replace('</body>', fo_html + '</body>', 1)
     # ⭐ 英文小字号整体 +1px（作者 10-17：表格、图注等英文字看着偏小 —— 同字号下拉丁字母的
     #    x-height 比汉字小一截）。只动小字那几类，不动正文 16px 与版心。
-    if not topic.endswith('lecture'): s = s.replace('</body>', '<style id="en-size">'
-        'table{font-size:15.5px}th{font-size:13px}.tbl-note{font-size:14px}'
-        '.chip{font-size:14px}figcaption{font-size:16px}.sub{font-size:.95em}</style></body>', 1)
+    if not topic.endswith('lecture'):
+        # ⭐ 英文小字号 +1px（作者 10-17：表格、图注等英文字看着偏小）。基准从本页 CSS 里读（各专题不同：
+        #    专题二图注 15px、专题一 13.5px），不写死 —— 写死会让专题一的图注一下子大 2.5px。
+        css = ''.join(re.findall(r'<style\b[^>]*>(.*?)</style>', s, flags=re.S))
+        def base(sel, default):
+            v = None
+            for m in re.finditer(r'(?:^|[}\s])' + re.escape(sel) + r'\s*\{([^}]*)\}', css):
+                mm = re.search(r'font-size:\s*([\d.]+)px', m.group(1)) or re.search(r'font:\s*(?:\d{3}\s+)?([\d.]+)px', m.group(1))
+                if mm: v = float(mm.group(1))
+            return v if v is not None else default
+        rules = ''.join('%s{font-size:%gpx}' % (sel, base(sel, d) + 1) for sel, d in
+                        (('table', 14.5), ('th', 12), ('.tbl-note', 13), ('.chip', 13), ('figcaption', 15)))
+        s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
     def put(m):
         f = d / f'{m.group(1)}.en.html'
@@ -140,12 +153,15 @@ def main(topic, d):
     s = re.sub(r'(<a class="lecbtn" href="topic-\d+(?:-L200)?-lecture[^"]*">.*?</a>)',
                r'\1\n    <a class="lecbtn" href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>' % zh, s, count=1, flags=re.S)
     s = re.sub(r'(<nav class="tabs">.*?)(</nav>)', r'\1  <a href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>\n  \2' % zh, s, count=1, flags=re.S)
+    if '🌐 中文' not in s:   # 没有讲义按钮可挂时，挂在面包屑末尾
+        s = re.sub(r'(<div class="crumb">.*?)(</div>)', r'\1\n    <a class="lecbtn" href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>\2' % zh, s, count=1, flags=re.S)
     for a_, b_ in h.get('css', {}).items(): s = s.replace(a_, b_)
     # 图里的 class 样式和内联 style 也把 Source Sans 3 放到 Noto CJK 前面
     s = s.replace("'Noto Sans CJK SC'", "'Source Sans 3','Noto Sans CJK SC'")
     s = re.sub(r'(?<![\w\'])"Noto Sans CJK SC"(?!,"PingFang)', '"Source Sans 3","Noto Sans CJK SC"', s)
     s = s.replace('"Source Sans 3","Source Sans 3"', '"Source Sans 3"')
-    out = pathlib.Path(__file__).resolve().parents[2] / 'WebPages' / f'{topic}.en.html'
+    import os
+    out = pathlib.Path(os.environ['I18N_OUT']) if os.environ.get('I18N_OUT') else pathlib.Path(__file__).resolve().parents[2] / 'WebPages' / f'{topic}.en.html'
     out.write_text(s)
     print('wrote', out, len(s), 'missing:', missing or 'none')
     left = re.findall(r'[一-鿿]', re.sub(r'<(style|script)\b.*?</\1>', '', s, flags=re.S))
