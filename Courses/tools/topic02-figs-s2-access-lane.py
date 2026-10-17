@@ -7,7 +7,7 @@ BL,PU,OR,GR,RD,GY,YL="#1a73e8","#9334e6","#e8710a","#1e8e3e","#d93025","#5f6368"
 GPU=[("一个 warp 的 32 个线程各给出一个地址","",0),
      ("这些地址能合并成几条 cache line？","◆ 决策点 · coalescing",1),
      ("⇢ 落在同一个 bank 上吗？","支路 · bank conflict",4),
-     ("L1 命中吗？（与 shared 合计 256 KB／SM）","◆ 决策点 · 命中 / 未命中",1),
+     ("L1 命中吗？（与 shared 合计 256 KiB／SM）","◆ 决策点 · 命中 / 未命中",1),
      ("L2 命中吗？（126 MB，全 GPU 共享）","◆ 决策点 · 命中 / 未命中",1),
      ("换出谁？","◆ 决策点 · 替换策略",1),
      ("HBM","",0)]
@@ -20,7 +20,7 @@ TPU=[("编译期：XLA 决定每个数组切成 8 × 128 的块","☑ 已定死"
      ("HBM","",0)]
 RH,TOP=48,86
 H=TOP+RH*7+150
-p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" aria-label="同一次访存在 GPU 与 TPU 上经过的路径对比：GPU 有五个运行时决策点，TPU 一个都没有">',
+p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" aria-label="同一次访存在 GPU 与 TPU 上经过的路径对比：GPU 主路上有 4 个运行时决策点（走共享内存再加 1 个），TPU 一个都没有">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '同一次访存，两条路 —— 数一数路上有几个「运行时决策点」</text>',
    '<text class="svgsm" x="0" y="35">这是第 0 节那两种出身第一次变成具体机制</text>',

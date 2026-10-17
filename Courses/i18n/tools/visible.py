@@ -4,9 +4,12 @@
 输出：整块可见字符 zh / en / 比值，以及比值最高的 15 个可见段落。
 经验目标：en/zh 字符比 ≤ 1.55（好的中译英一般 1.5–1.7；超过 1.8 就是啰嗦）。
 """
+import os
+WORK = os.environ.get('I18N_WORK', '/tmp/t02en')
+TOPIC = os.environ.get('I18N_TOPIC', 'topic-02')
 import sys, re, pathlib
 from playwright.sync_api import sync_playwright
-D = pathlib.Path('/tmp/t02en/chunks')
+D = pathlib.Path(WORK+'/chunks')
 JS = """() => {
   const out=[];
   const blocks=document.querySelectorAll('p, li, figcaption, td, th, h2, h3, h4, summary, .lead, .note, .callout, div.k');

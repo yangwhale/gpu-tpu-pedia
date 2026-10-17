@@ -59,7 +59,7 @@ p.append(f'<rect x="0" y="{yb}" width="982" height="82" rx="8" fill="#f1f3f4" st
 p.append(f'<text class="svglbl" x="18" y="{yb+22}" fill="#202124">'
          f'③ 那「一块」该多大？—— 两边问的是同一个问题，答案交给不同的人</text>')
 p.append(f'<text class="svgsm" x="18" y="{yb+45}" fill="{BL}">'
-         f'<tspan font-weight="700">GPU</tspan>：kernel 作者自己定。预算 = shared memory 228 KB / SM，</text>')
+         f'<tspan font-weight="700">GPU</tspan>：kernel 作者自己定。预算 = shared memory 228 KiB / SM，</text>')
 p.append(f'<text class="svgsm" x="18" y="{yb+62}" fill="{BL}">'
          f'手写 Triton / CUTLASS，块大小是可调超参 —— 调错了也能跑，只是慢。</text>')
 p.append(f'<path d="M496 {yb+32} v40" stroke="#dadce0"/>')

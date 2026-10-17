@@ -7,11 +7,14 @@
   · 同一列（同 svg、同 class、同 x、同 anchor）的几行一起放，行距节奏不乱。
 只动基础字号 < 15px 的字（标题本来就够大）。结果以内联 style="font-size:…" 写回 NN.en.html。
 """
+import os
+WORK = os.environ.get('I18N_WORK', '/tmp/t02en')
+TOPIC = os.environ.get('I18N_TOPIC', 'topic-02')
 import sys, re, json, pathlib, importlib.util
 from playwright.sync_api import sync_playwright
 n = sys.argv[1]; MAX = float(sys.argv[sys.argv.index('--max')+1]) if '--max' in sys.argv else 1.25
 DRY = '--dry' in sys.argv
-D = pathlib.Path('/tmp/t02en/chunks'); T = pathlib.Path(__file__).resolve().parent
+D = pathlib.Path(WORK+'/chunks'); T = pathlib.Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('asm', T/'assemble.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 skel = (D/'skeleton.html').read_text(); head = skel[:skel.index('@@CHUNK')]
 head += ''.join(re.findall(r'<style\b.*?</style>', (D/'00.zh.html').read_text(), flags=re.S))
@@ -21,7 +24,7 @@ head = re.sub(r'font:400 16px/1.75 [^;]*;', 'font:400 16px/1.75 ' + m.LATIN + ';
 src = (D/f'{n}.en.html').read_text()
 # ⛔ 2026-10-17：基准必须是「放大之前」的字号，不能是当前字号 —— 否则每跑一次就在上一次的基础上再放，
 #    一列字跑三遍能到原来的 2 倍多（r11a 抓到的）。基准取自放大前的快照（同结构、同序号）。
-PRE = pathlib.Path('/tmp/t02en/rounds/R10b-prefit')/f'{n}.en.html'
+PRE = pathlib.Path(WORK+'/rounds/prefit')/f'{n}.en.html'
 def inline_fs(t):
     m_ = re.search(r'style="[^"]*font-size:([\d.]+)px', t); return float(m_.group(1)) if m_ else None
 orig = [inline_fs(t) for t in re.findall(r'<text\b[^>]*>', PRE.read_text())] if PRE.exists() else None

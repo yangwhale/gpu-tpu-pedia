@@ -68,7 +68,7 @@ for k in range(4):
                               '<tspan font-weight="700">1 个 Tensor Core</tspan>',
                               '64 KiB 寄存器 · 16 个 warp 槽')):
         t(x + 12, 146 + i * 15, line, fill="#202124")
-t(14, 226, '四个格子共用：<tspan font-weight="700">228 KB 的 L1 ＋ 共享内存</tspan>'
+t(14, 226, '四个格子共用：<tspan font-weight="700">228 KiB 的 L1 ＋ 共享内存</tspan>'
            '（单个线程块最多要走 227 KiB）· TMA 搬运引擎 · 通往 L2 的出口', fill="#202124")
 t(14, 243, '⛔ 一个 warp 一旦被分到某个格子，就在那儿待到死 ——&#160;不迁走。'
            '这条「钉死」是后面所有「除以 4」的前提。', fill=RD)
@@ -109,7 +109,7 @@ t(14, Y + 150, '⛔ 循环展开、把中间结果留在寄存器里 ——&#160
 
 box(CW + 12, Y + 6, CW, 158, "#fff", "#dadce0")
 t(CW + 26, Y + 28, '② 共享内存', "svglbl", "#202124", size=12)
-t(CW + 26, Y + 50, '一个 SM 一共 <tspan font-weight="700">228 KB</tspan>，'
+t(CW + 26, Y + 50, '一个 SM 一共 <tspan font-weight="700">228 KiB</tspan>，'
                    '单个线程块最多要走 227 KiB。', fill="#202124")
 t(CW + 26, Y + 70, '你的 block 要 100 KiB ——&#160;'
                    '<tspan font-weight="700">这个 SM 就只住得下 2 个 block</tspan>，', fill="#202124")

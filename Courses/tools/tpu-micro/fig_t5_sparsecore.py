@@ -176,7 +176,7 @@ def _granularity(f):
 
     para(f, LX + 16, GRAN_Y + 130, LW - 32,
          "<b>32 B 是 HBM 通道宽度，两颗核完全一样。</b>SparseCore 并没有更快的搬运器，"
-         "它只是允许你<r>按 32 B 为单位去要</r>；TensorCore 一开口就是一个 4 KB 的 tile。"
+         "它只是允许你<r>按 32 B 为单位去要</r>；TensorCore 一开口就是一个 4 KiB 的 tile。"
          "散落在词表里的几百行，用左边那种块去取，取回来的绝大部分都会被扔掉。", "xs", 16)
 
 

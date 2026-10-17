@@ -136,8 +136,8 @@ q.append(f'<rect x="0" y="56" width="376" height="306" rx="10" fill="#e8f0fe" st
 q.append(f'<text class="svglbl" x="16" y="82" fill={BL!r} {LB}>① 一张 GB200 GPU　'
          f'<tspan style="font-size:10.5px" fill="{GY}">（NVL72 里的那颗）</tspan></text>')
 for j,(t,v) in enumerate([("SM","148 个（第三方拆解，官方未公布）"),("每 SM","128 CUDA core · 4 Tensor Core · SFU"),
-                          ("每 SM 并发","最多 64 个 warp"),("寄存器堆","64K × 32 bit = 256 KB / SM"),
-                          ("shared","最多 228 KB / SM（含 L1 共 256 KB）"),
+                          ("每 SM 并发","最多 64 个 warp"),("寄存器堆","64K × 32 bit = 256 KiB / SM"),
+                          ("shared","最多 228 KiB / SM（含 L1 共 256 KiB）"),
                           ("L2","126 MB · 全 GPU 共享 · 自动管"),
                           ("HBM3e","186 GB · 8.0 TB/s"),
                           ("算力 dense","BF16 2.5 ｜ FP8 5 PFLOPS")]):

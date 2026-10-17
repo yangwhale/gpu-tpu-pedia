@@ -20,9 +20,12 @@
    `pltpu.get_tpu_info().sparse_core` 在 TPU 7x 上直接报
 
        SparseCoreInfo(num_cores=2, num_subcores=16, num_lanes=16,
-                      dma_granule_size_bytes=64)
+                      dma_granule_size_bytes=32)
 
-   —— **64 字节**。这是这张图的锚点数。
+   —— **32 字节**。这是这张图的锚点数。
+   ⛔ 2026-10-17 更正：这里原来写 64 —— 抄的是 JAX 文档页贴的那段输出（至今仍印 64）。
+      jax 0.11 的 pallas/mosaic/tpu_info.py 里 TPU_7 / TPU_7X 是 32，64 是 TPU 8i 的值。
+      **可执行口径以源码为准，文档页上的示例输出会过期。**
 
 📌 内存空间那一问的答案（JAX Pallas SparseCore 文档原话）：
    「Each vector subcore has its own VMEM and SMEM space. They also have
@@ -153,19 +156,19 @@ box(710, YG + 28, W - 710, 116, "#fef7e0", OR)
 #    包围盒差 3px 就压上了 —— 大字号的 bbox 比基线高出去很多，
 #    ⭐ 排大数字时**不能按基线间距估行距**，要按字号估。
 t(724, YG + 44, 'SparseCore 的 DMA 粒度', "svglbl", "#7a5000", size=12)
-t(724, YG + 84, '64', "svglbl", "#7a5000", size=30)
+t(724, YG + 84, '32', "svglbl", "#7a5000", size=30)
 t(772, YG + 84, '字节', "svglbl", "#7a5000", size=14)
-t(830, YG + 66, '——&#160;这是<tspan font-weight="700">可执行的官方口径</tspan>，不是文档里的形容词：',
+t(830, YG + 66, '——&#160;以<tspan font-weight="700">jax 0.11 源码</tspan>为准（文档页贴的旧输出还是 64）：',
   fill="#7a5000")
 t(830, YG + 84, '<tspan font-family="ui-monospace,monospace">'
                 'pltpu.get_tpu_info().sparse_core</tspan> 在 TPU 7x 上报', fill="#7a5000")
 t(830, YG + 101, '<tspan font-family="ui-monospace,monospace">'
                  'num_cores=2, num_subcores=16, num_lanes=16, '
-                 'dma_granule_size_bytes=<tspan font-weight="700">64</tspan></tspan>',
+                 'dma_granule_size_bytes=<tspan font-weight="700">32</tspan></tspan>',
   fill="#7a5000")
 t(724, YG + 130, '⭐ 所以回答「能不能不搬 (8,128)」：'
                  '<tspan font-weight="700">这个问题问的是两台机器的两套单位</tspan>'
-                 '——&#160;它按 64 字节走。', fill="#7a5000")
+                 '——&#160;它按 32 字节走。', fill="#7a5000")
 
 # ══ 下：gather 长什么样 ════════════════════════════════════════════
 YQ = YG + 160

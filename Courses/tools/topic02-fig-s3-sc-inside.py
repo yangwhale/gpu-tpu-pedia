@@ -24,7 +24,7 @@
 
 📌 规格与描述全部出自公开文档：
    - docs.jax.dev/en/latest/pallas/tpu/sparsecore.html
-     （子核构成、SIMD 宽度、`dma_granule_size_bytes=64`、擅长的操作清单、
+     （子核构成、SIMD 宽度、`dma_granule_size_bytes`——文档页示例输出印 64，jax 0.11 源码对 TPU 7x 是 32，以源码为准、擅长的操作清单、
        `ScalarSubcoreMesh` / `VectorSubcoreMesh`）
    - openxla.org/xla/sparsecore（SPMEM 命名）
 """
@@ -217,7 +217,7 @@ for x in (127, 400, 640, 902):
 box(0, HY, W, 80, "#e6f4ea", GR)
 t(16, HY + 24, 'HBM', "svglbl", "#0b6b30", size=13)
 t(70, HY + 24, '——&#160;<tspan font-weight="700">大表、权重、中间结果都在这儿</tspan>。'
-               '每次 DMA 的最小粒度 <tspan font-weight="700">64 字节</tspan>'
+               '每次 DMA 的最小粒度 <tspan font-weight="700">32 字节</tspan>'
                '（<tspan font-family="ui-monospace,monospace">'
                'pltpu.get_tpu_info().sparse_core</tspan> 直接报得出来）',
   fill="#0b6b30")
@@ -228,7 +228,7 @@ t(16, HY + 64, '⭐ 对照一下就知道这颗核为什么存在：'
                'TensorCore 那边按<tspan font-weight="700">向量寄存器的形状</tspan>'
                '（8 sublane × 128 lane）成块地取，'
                '要的若只是散落的几行，就得为整块付钱；'
-               '这边按 <tspan font-weight="700">64 字节</tspan>走。', fill="#0b6b30")
+               '这边按 <tspan font-weight="700">32 字节</tspan>走。', fill="#0b6b30")
 
 # ══ 一次 gather 在这张图上怎么走 ═══════════════════════════════════
 FY = HY + 98

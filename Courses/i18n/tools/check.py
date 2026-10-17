@@ -6,6 +6,9 @@
 结构对账：标签序列（含 id/class）必须一致；SVG 里除 <text>/<tspan> 的 font-size 外，
 几何属性必须一字不差。数字对账只报差异，换算类（6710亿→671B）由人判断。
 """
+import os
+WORK = os.environ.get('I18N_WORK', '/tmp/t02en')
+TOPIC = os.environ.get('I18N_TOPIC', 'topic-02')
 import re, sys, collections, pathlib
 from bs4 import BeautifulSoup, Comment
 
@@ -66,7 +69,7 @@ def main(zh, en, render=False):
     print('✓ 通过' if not bad else f'✗ {bad} 类问题')
     return bad
 
-SKEL = pathlib.Path('/tmp/t02en/chunks/skeleton.html')  # 默认；render_check 里按块文件所在目录改
+SKEL = pathlib.Path(WORK+'/chunks/skeleton.html')  # 默认；render_check 里按块文件所在目录改
 
 def render_check(zh, en, tol=1.08):
     from playwright.sync_api import sync_playwright
@@ -94,7 +97,7 @@ def render_check(zh, en, tol=1.08):
     if len(za) != len(ea):
         print(f'✗ SVG text 数量不一致 {len(za)} vs {len(ea)}'); return 1
     # 目检过、确认不压框不撞字的超宽标签，登记在 ACCEPTED-WIDTH.md（R7 起）
-    acc = pathlib.Path('/tmp/t02en/rounds/ACCEPTED-WIDTH.md')
+    acc = pathlib.Path(WORK+'/rounds/ACCEPTED-WIDTH.md')
     ok = set()
     if acc.exists():
         for line in acc.read_text().splitlines():

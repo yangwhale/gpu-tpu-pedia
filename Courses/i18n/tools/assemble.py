@@ -22,9 +22,24 @@ HEAD = {
         'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
     },
 }
+HEAD['topic-01'] = {
+    'title': 'Topic 1 · The Life of a Token',
+    'og:title': 'The Life of a Token',
+    'og:description': 'Take DeepSeek V3 apart and follow one token end to end, doing the math at every step. '
+                      'Every number on the page updates live with the parameters.',
+    'zh': 'topic-01.html',
+}
+HEAD['topic-01-lecture'] = {
+    'title': 'Topic 1 · Instructor notes (lecture script)',
+    'og:title': 'The Life of a Token · instructor notes',
+    'og:description': "The teacher's draft: the spoken script, which figure to point at, likely questions, and what not to say.",
+    'zh': 'topic-01-lecture.html',
+    'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
+}
 # 有英文版的页面：中文 href → 英文 href（锚点保留）。其余中文页一律去链接。
 EN_MAP = {'index.html': 'index.en.html', 'topic-02.html': 'topic-02.en.html',
-          'topic-02-L200-lecture.html': 'topic-02-L200-lecture.en.html'}
+          'topic-02-L200-lecture.html': 'topic-02-L200-lecture.en.html',
+          'topic-01.html': 'topic-01.en.html', 'topic-01-lecture.html': 'topic-01-lecture.en.html'}
 # ⭐ 英文版字体用 Source Sans 3（Google Fonts）：Noto Sans CJK 的拉丁字形就是从它来的，
 #    所以图上标签的宽度跟检查时（本机 Noto CJK）一致；又避开了 CJK 字体把弯引号画成全角的问题，
 #    而且 iPhone / Mac 上不再回落到更宽的系统字体（作者 10-17 是在 iPhone 上看的）。
@@ -34,20 +49,35 @@ FONT_LINK = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
 LATIN = '"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif'
 
 # 只保留本页（L200）和讲义；其余中文页面一律不链过去 —— 英文读者点过去是一屏中文（作者 2026-10-17）
+# 只链向「已发布」的英文页（git 已跟踪，或本次正在组装的页）——未上线的专题别出现死链
+import subprocess as _sp
+try:
+    _tracked = set(_sp.run(['git', 'ls-files', 'WebPages'], cwd=pathlib.Path(__file__).resolve().parents[2],
+                           capture_output=True, text=True).stdout.split())
+    _tracked = {t.split('/')[-1] for t in _tracked}
+except Exception:
+    _tracked = None
+PUBLISH_EXTRA = set()   # assemble 当前页时临时加入
+def _live(en):
+    return _tracked is None or en in _tracked or en in PUBLISH_EXTRA
 KEEP = tuple(EN_MAP.values())
 def english_only_links(s):
-    s = re.sub(r'href="([\w.-]+\.html)(#[^"]*)?"', lambda m: 'href="%s%s"' % (EN_MAP.get(m.group(1), m.group(1)), m.group(2) or ''), s)
+    s = re.sub(r'href="([\w.-]+\.html)(#[^"]*)?"', lambda m: 'href="%s%s"' % (EN_MAP[m.group(1)] if m.group(1) in EN_MAP and _live(EN_MAP[m.group(1)]) else m.group(1), m.group(2) or ''), s)
     # 讲义顶栏的「完整版 L300」标签整颗删（不是正文里的引用，是个跳转按钮）
-    s = re.sub(r'(<nav class="tabs">.*?)\s*<a href="topic-02-L300\.html">.*?</a>(.*?</nav>)', r'\1\2', s, flags=re.S)
+    s = re.sub(r'(<nav class="tabs">.*?)\s*<a href="topic-\d+-L300\.html">.*?</a>(.*?</nav>)', r'\1\2', s, flags=re.S)
+    # 页首的跳转按钮（.lecbtn）指向没有英文版的页面（附录等）：整颗删，不留一段裸文字
+    s = re.sub(r'\s*<a class="lecbtn" href="(?![^"]*\.en\.html)[^"]*">.*?</a>', '', s, flags=re.S)
     # 版本切换条：只留当前这一版
     s = re.sub(r'(<nav class="famnav"[^>]*>)(.*?)(</nav>)',
                lambda m: m.group(1) + ''.join(re.findall(r'<span class="famlab">.*?</span>|<span class="here".*?</span>', m.group(2), flags=re.S)) + m.group(3),
                s, flags=re.S)
     # 页首「完整版 L300 →」这类整颗 chip 就是个跳转按钮，去掉链接后只剩一句指向不存在页面的话 —— 整颗删
-    s = re.sub(r'<span class="chip">[^<]*<a href="(?!topic-02-L200-lecture)topic-[^"]*?(?<!\.en)\.html">.*?</a></span>', '', s, flags=re.S)
+    s = re.sub(r'<span class="chip">[^<]*<a href="topic-[^"]*?(?<!\.en)\.html">.*?</a></span>', '', s, flags=re.S)
     def unlink(m):
         href, inner = m.group(1), m.group(2)
-        if href.startswith(('http', '#', 'mailto', 'data:')) or href.split('#')[0] in KEEP:
+        # GitHub 上指向中文 md / 中文目录的外链也算中文页（文件名含中文或 URL 编码的中文）
+        zh_ext = href.startswith('http') and ('github.com' in href) and (re.search(r'[\u4e00-\u9fff]|%E[4-9]', href) is not None)
+        if (href.startswith(('http', '#', 'mailto', 'data:')) and not zh_ext) or href.split('#')[0] in KEEP:
             return m.group(0)
         inner = re.sub(r'\s*\(Chinese\)', '', inner)
         return '<span>' + inner + '</span>'
@@ -57,6 +87,8 @@ def english_only_links(s):
 
 def main(topic, d):
     d = pathlib.Path(d)
+    PUBLISH_EXTRA.add(topic + '.en.html')
+    for extra in sys.argv[3:]: PUBLISH_EXTRA.add(extra)   # 同批一起上线的页，如 topic-01-lecture.en.html
     s = (d / 'skeleton.html').read_text()
     h = HEAD[topic]
     s = s.replace('lang="zh-CN"', 'lang="en"')
@@ -105,7 +137,7 @@ def main(topic, d):
     s = english_only_links(s)
     # 中英互跳：课件页首讲义按钮旁 / 讲义顶栏末尾放「中文」
     zh = h['zh']
-    s = re.sub(r'(<a class="lecbtn" href="topic-02-L200-lecture[^"]*">.*?</a>)',
+    s = re.sub(r'(<a class="lecbtn" href="topic-\d+(?:-L200)?-lecture[^"]*">.*?</a>)',
                r'\1\n    <a class="lecbtn" href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>' % zh, s, count=1, flags=re.S)
     s = re.sub(r'(<nav class="tabs">.*?)(</nav>)', r'\1  <a href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>\n  \2' % zh, s, count=1, flags=re.S)
     for a_, b_ in h.get('css', {}).items(): s = s.replace(a_, b_)

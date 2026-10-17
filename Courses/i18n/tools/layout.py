@@ -16,7 +16,7 @@ JS = """(props) => { const els=[...document.body.querySelectorAll('*')].filter(e
             s:props.map(p=>cs.getPropertyValue(p)), txt:(e.innerText||'').trim().slice(0,50)}; }); }"""
 def grab(f, w):
     with sync_playwright() as p:
-        b = p.chromium.launch(); pg = b.new_page(viewport={'width': w, 'height': 900}); pg.add_init_script("try{for(const k of ['figonly:topic-02.en.html']) localStorage.setItem(k,'0')}catch(e){}")
+        b = p.chromium.launch(); pg = b.new_page(viewport={'width': w, 'height': 900}); pg.add_init_script("try{localStorage.setItem('figonly:'+location.pathname.split('/').pop(),'0')}catch(e){}")
         pg.goto('file://' + f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(1500)
         r = pg.evaluate(JS, PROPS); H = pg.evaluate('document.documentElement.scrollHeight'); b.close(); return r, H
 def main():

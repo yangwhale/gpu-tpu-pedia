@@ -61,14 +61,14 @@ SHAPES = [
 
 
 def build():
-    f = Fig(W, H, "Tensor Core 五代 MMA 指令与真实比例形状叠图：收缩维 K 始终是 16，"
+    f = Fig(W, H, "Tensor Core 五代 MMA 指令与真实比例形状叠图：收缩维 K 从 Ampere 起是 16（Volta 为 4、Turing 为 8），"
                   "与 TPU 的 256×256 脉动阵列对照")
     f.title("Tensor Core 一次吃多大矩阵　—— 五代演进，以及一张真实比例的叠图",
             "全部出自 PTX ISA")
     f.legend([(BL, "warp 级（32 线程）"), (PU, "warp 组级（128 线程）"),
               (RD, "双 SM 级（256 线程）"), (GN, "TPU MXU，同一把尺子")])
 
-    f.t(20, TOP + 18, "五代演进　—— 变的是「一次动员多少线程」，不变的是「K ＝ 16」", "sec")
+    f.t(20, TOP + 18, "五代演进　—— 变的是「一次动员多少线程」，K 从 Ampere 起固定为 16", "sec")
     for i, (c, name, gen, th, ins, quote, where) in enumerate(GEN):
         y = GEN_T + i * (GENH + GENG)
         f.rect(20, y, 1360, GENH, "#fff", c, 1.6, 9)

@@ -1,16 +1,19 @@
 """中英并排切片（按锚点对齐）：两页同宽渲染，取 h2/h3/figure 作锚点一一对应，
 相邻锚点之间为一段，左中右英拼图；超过 MAXH 的段再等分。 python3 sbs.py WIDTH"""
+import os
+WORK = os.environ.get('I18N_WORK', '/tmp/t02en')
+TOPIC = os.environ.get('I18N_TOPIC', 'topic-02')
 import sys, json
 from playwright.sync_api import sync_playwright
 from PIL import Image
 Image.MAX_IMAGE_PIXELS=None
 W=int(sys.argv[1]); MAXH=1500
-pages={'zh':'/tmp/t02en/zh-ref.html','en':'/home/chrisya/gpu-tpu-pedia/Courses/WebPages/topic-02.en.html'}
+pages={'zh':WORK+'/zh-ref.html','en':f'/home/chrisya/gpu-tpu-pedia/Courses/WebPages/{TOPIC}.en.html'}
 A={}
 with sync_playwright() as p:
     b=p.chromium.launch()
     for k,f in pages.items():
-        pg=b.new_page(viewport={'width':W,'height':900}); pg.add_init_script("try{for(const k of ['figonly:topic-02.en.html','figonly:zh-ref.html']) localStorage.setItem(k,'0')}catch(e){}"); pg.goto('file://'+f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(2000)
+        pg=b.new_page(viewport={'width':W,'height':900}); pg.add_init_script("try{localStorage.setItem('figonly:'+location.pathname.split('/').pop(),'0')}catch(e){}"); pg.goto('file://'+f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(2000)
         pg.screenshot(path=f'full-{k}-{W}.png', full_page=True)
         A[k]=pg.evaluate("[...document.querySelectorAll('section, h3, figure')].filter(h=>h.offsetParent!==null||h.tagName=='SECTION').map(h=>[Math.round(h.getBoundingClientRect().top+scrollY), h.tagName=='FIGURE'?('fig '+h.id):(h.tagName=='SECTION'?'section '+h.id:(h.innerText||'').slice(0,70))])")
         pg.close()

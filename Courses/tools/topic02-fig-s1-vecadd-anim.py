@@ -5,7 +5,7 @@ r"""图 1-7 · **一次向量加，从头到尾（会动）** —— 让 0.17 �
 ⭐⭐ 为什么要有这一张（2026-09-08 现场定）
 ════════════════════════════════════════════════════════════════════
 
-起因是看到 _How To Scale Your Model_ 里那张 `pointwise-product.gif`
+起因是看到 _How to Scale Your Model_ 里那张 `pointwise-product.gif`
 （公开原文 jax-ml.github.io/scaling-book，MIT 许可）：
 两个数组从 HBM 搬进 VMEM、切块进向量寄存器、向量单元做一次逐元素乘、
 结果原路写回。**动起来之后，「搬了一大堆、只算了一下」是能看见的。**
@@ -291,7 +291,7 @@ t(0, SY, '⚠️ <tspan font-weight="700">示意图：时间比例不代表真�
 t(0, SY + 18, '图上每个数都能当场复核：bf16 每元素 2 字节 → 读 a 2 ＋ 读 b 2 ＋ 写 y 2 ＝ 6；'
   'y ＝ a＋b 是 1 次加法 ＝ 1 个 FLOP（⛔ 不是乘加）；1 ÷ 6 ＝ 0.167 ≈ 0.17；'
   '312 ÷ 0.167 ＝ 1,872 倍。', GY2, 10.5)
-t(0, SY + 36, '⭐ 这张图的形式借自 How To Scale Your Model 的 pointwise-product 动图'
+t(0, SY + 36, '⭐ 这张图的形式借自 How to Scale Your Model 的 pointwise-product 动图'
   '（jax-ml.github.io/scaling-book，MIT）——&#160;'
   '站台词汇与配色沿用本课 T-6，内容换成本节那个 0.17 的例子。', GY2, 10.5)
 

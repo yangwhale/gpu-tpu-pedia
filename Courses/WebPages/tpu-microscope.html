@@ -984,7 +984,7 @@ text-align:center;color:#5f6368;font-size:14px;background:#f8f9fa}</style>
 <text x="966" y="282" class="xxs">没有线程概念，也就没有「切换到别的线程」这条退路</text>
 <rect x="934" y="308" width="432" height="60" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.1"/>
 <text x="946" y="328" class="box" fill="#d93025">✕</text>
-<text x="966" y="328" class="lbl" fill="#202124">256 KB 寄存器堆</text>
+<text x="966" y="328" class="lbl" fill="#202124">256 KiB 寄存器堆</text>
 <text x="966" y="346" class="xxs">GPU 那么大的寄存器堆主要是<tspan font-weight="700" fill="#202124">为了同时装下几十份上下文</tspan></text>
 <rect x="934" y="372" width="432" height="60" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.1"/>
 <text x="946" y="392" class="box" fill="#d93025">✕</text>
@@ -1299,7 +1299,7 @@ TPU v7 一颗 chip 是 VMEM 128 ＋ SMEM 2 ＋ 累加器 4 ＝ <b>约 134 MiB</b
 <text x="36" y="550" class="xxs">最小的、自带完整控制通路的硬件块</text>
 <text x="286" y="530" class="lbl" fill="#1a73e8">1 个 SM</text>
 <text x="586" y="530" class="xxs" fill="#1a73e8" text-anchor="end">×148</text>
-<text x="286" y="548" class="xxs">128 个 CUDA Core ＋ 4 个 Tensor Core ＋ 228 KB L1／共享内存 <tspan fill="#9aa0a6">（容</tspan></text>
+<text x="286" y="548" class="xxs">128 个 CUDA Core ＋ 4 个 Tensor Core ＋ 228 KiB L1／共享内存 <tspan fill="#9aa0a6">（容</tspan></text>
 <text x="286" y="561" class="xxs"><tspan fill="#9aa0a6">量为第三方）</tspan></text>
 <text x="668" y="530" class="lbl" fill="#1e8e3e">1 个 TensorCore</text>
 <text x="968" y="530" class="xxs" fill="#1e8e3e" text-anchor="end">×2</text>
@@ -1332,8 +1332,8 @@ TPU v7 一颗 chip 是 VMEM 128 ＋ SMEM 2 ＋ 累加器 4 ＝ <b>约 134 MiB</b
 <rect x="1064" y="392" width="302" height="172" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
 <text x="1076" y="416" class="lbl" fill="#d93025">空的第二格：没有「换一个跑」</text>
 <text x="1076" y="436" class="xxs">GPU 一个 warp 卡住就换下一个，这需要同时驻留几十份上下</text>
-<text x="1076" y="450" class="xxs">文 —— 那 256 KB 寄存器堆主要就是为它准备的。TPU 不留这</text>
-<text x="1076" y="464" class="xxs">些上下文，所以也省下了那片面积（见 §2）。</text>
+<text x="1076" y="450" class="xxs">文 —— 那 256 KiB 寄存器堆主要就是为它准备的。TPU 不留</text>
+<text x="1076" y="464" class="xxs">这些上下文，所以也省下了那片面积（见 §2）。</text>
 <rect x="1064" y="574" width="302" height="172" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
 <text x="1076" y="598" class="lbl" fill="#1e8e3e">于是 TPU 的层级全在描述「形状」</text>
 <text x="1076" y="618" class="xxs">lane、sublane、tile、slice —— 每一层说的都是<tspan font-weight="700" fill="#202124">数据长什</tspan></text>
@@ -2656,8 +2656,8 @@ MXU 个数错了 2 倍（4 应为 2），每 cell 的乘加数也错了 2 倍（
 <text x="394" y="668" class="numb" fill="#8430ce" text-anchor="middle">(8,) = 32 B</text>
 <text x="394" y="686" class="xxs" fill="#8430ce" text-anchor="middle">同一张图上按比例画就是左边的 1/128</text>
 <text x="36" y="712" class="xs"><tspan font-weight="700" fill="#202124">32 B 是 HBM 通道宽度，两颗核完全一样。</tspan>SparseCore 并没有更快的搬运器，它只是允许你<tspan font-weight="700" fill="#d93025">按 32 B 为单位去要</tspan>；</text>
-<text x="36" y="728" class="xs">TensorCore 一开口就是一个 4 KB 的 tile。散落在词表里的几百行，用左边那种块去取，取回来的绝大部分都会被扔</text>
-<text x="36" y="744" class="xs">掉。</text>
+<text x="36" y="728" class="xs">TensorCore 一开口就是一个 4 KiB 的 tile。散落在词表里的几百行，用左边那种块去取，取回来的绝大部分都会被</text>
+<text x="36" y="744" class="xs">扔掉。</text>
 <text x="664" y="110" class="sec">两种核逐项对照</text>
 <rect x="664" y="120" width="716" height="320" rx="10" fill="#fff" stroke="#202124" stroke-width="1.8"/>
 <rect x="664" y="120" width="716" height="32" rx="10" fill="#f1f3f4"/>
@@ -2846,11 +2846,9 @@ Hunyuan3 那个尺寸下（M＝7×4096，K＝120,832，N＝4096），这条 matm
 <text x="594" y="335" class="lbl" fill="#9aa0a6">一次多少</text>
 <text x="594" y="351" class="xxs">一条向量指令 ＝ 8 × 128 ＝ 1,024 个元素</text>
 <text x="594" y="384" class="lbl" fill="#9aa0a6">为什么画成虚线</text>
-<text x="594" y="400" class="xxs"><tspan fill="#9aa0a6">v2/v3 的论文给的是每 sublane 32 深；v7 </tspan></text>
-<text x="594" y="413" class="xxs"><tspan fill="#9aa0a6">这一层官方没有公开，本文不拿旧代的数字顶替。</tspan></text>
-<text x="594" y="426" class="xxs"><tspan font-weight="700" fill="#d93025">另外：矩阵操作数是从 VMEM 直接进 MXU、还</tspan></text>
-<text x="594" y="439" class="xxs"><tspan font-weight="700" fill="#d93025">是也要过这一层，公开资料同样没有明写 —— 本</tspan></text>
-<text x="594" y="452" class="xxs"><tspan font-weight="700" fill="#d93025">文不下结论。</tspan></text>
+<text x="594" y="400" class="xxs"><tspan fill="#9aa0a6">v2/v3 论文是每 sublane 32 深；v7 官方未</tspan></text>
+<text x="594" y="413" class="xxs"><tspan fill="#9aa0a6">公开，不拿旧代顶替。</tspan><tspan font-weight="700" fill="#d93025">矩阵操作数是否也过这一</tspan></text>
+<text x="594" y="426" class="xxs"><tspan font-weight="700" fill="#d93025">层，公开资料没写。</tspan></text>
 <rect x="860" y="178" width="240" height="262" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2"/>
 <text x="874" y="204" class="box" fill="#1e8e3e">④ MXU 阵列</text>
 <text x="1086" y="204" class="xxs" text-anchor="end">256 × 256，权重驻留</text>
@@ -3080,9 +3078,9 @@ HBM ↔ VMEM 的每一次搬运都由 DMA 完成，而 DMA 的描述符是<b>标
 <line x1="1114.0" y1="126" x2="1114.0" y2="294" stroke="#e8eaed" stroke-width="1.2"/>
 <text x="864" y="152" class="box" fill="#1a73e8">GPU：运行时换一个跑</text>
 <text x="864" y="172" class="xxs">warp 卡住 → 调度器立刻挑一个能跑的。<tspan font-weight="700" fill="#202124">代价是要同</tspan></text>
-<text x="864" y="186" class="xxs"><tspan font-weight="700" fill="#202124">时驻留几十份上下文</tspan>，那 256 KB 寄存器堆就是为它</text>
-<text x="864" y="200" class="xxs">准备的。 好处：形状不规则也能跑得不太难看。 坏</text>
-<text x="864" y="214" class="xxs">处：同一份代码，两次跑的耗时可以差很多。</text>
+<text x="864" y="186" class="xxs"><tspan font-weight="700" fill="#202124">时驻留几十份上下文</tspan>，那 256 KiB 寄存器堆就是为</text>
+<text x="864" y="200" class="xxs">它准备的。 好处：形状不规则也能跑得不太难看。 </text>
+<text x="864" y="214" class="xxs">坏处：同一份代码，两次跑的耗时可以差很多。</text>
 <text x="1130.0" y="152" class="box" fill="#1e8e3e">TPU：编译期提前挪</text>
 <text x="1130.0" y="172" class="xxs">编译器把独立的活挪进空拍。<tspan font-weight="700" fill="#202124">不需要驻留上下文，那</tspan></text>
 <text x="1130.0" y="186" class="xxs"><tspan font-weight="700" fill="#202124">片硅省下来给了 MXU 和 VMEM</tspan>。 好处：耗时高度可</text>

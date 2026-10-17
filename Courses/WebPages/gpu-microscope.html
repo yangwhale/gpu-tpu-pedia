@@ -1255,7 +1255,7 @@ NVIDIA 没有公布确切值。反过来说，如果每 SM 确实是 8,192，那
 <h2><span class="n">4</span>Tensor Core 一次能吃多大一块矩阵</h2>
 <p class="sub">五代演进＋一张真实比例的叠图。专治「GPU 是不是也要喂 128×128」这个误解。</p>
 <figure class="figwide" id="g4">
-<svg viewBox="0 0 1400 1228" width="1400" height="1228" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tensor Core 五代 MMA 指令与真实比例形状叠图：收缩维 K 始终是 16，与 TPU 的 256×256 脉动阵列对照">
+<svg viewBox="0 0 1400 1228" width="1400" height="1228" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Tensor Core 五代 MMA 指令与真实比例形状叠图：收缩维 K 从 Ampere 起是 16（Volta 为 4、Turing 为 8），与 TPU 的 256×256 脉动阵列对照">
 <defs><style>
 .ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
 .sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
@@ -1285,7 +1285,7 @@ NVIDIA 没有公布确切值。反过来说，如果每 SM 确实是 8,192，那
 <text x="349.02500000000003" y="58" class="sm">双 SM 级（256 线程）</text>
 <rect x="490.62500000000006" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
 <text x="507.62500000000006" y="58" class="sm">TPU MXU，同一把尺子</text>
-<text x="20" y="102" class="sec">五代演进　—— 变的是「一次动员多少线程」，不变的是「K ＝ 16」</text>
+<text x="20" y="102" class="sec">五代演进　—— 变的是「一次动员多少线程」，K 从 Ampere 起固定为 16</text>
 <rect x="20" y="110" width="1360" height="92" rx="9" fill="#fff" stroke="#5f6368" stroke-width="1.6"/>
 <rect x="20" y="110" width="176" height="92" rx="9" fill="#f1f3f4"/>
 <rect x="187" y="110" width="9" height="92" rx="0" fill="#f1f3f4"/>
@@ -3570,7 +3570,7 @@ TPU 这边：WAIT 放早了纯空转，放晚了 MXU 干等，而且<b>没有别
 <rect x="936.0" y="747.0" width="444.0" height="9" rx="0" fill="#fce8e6"/>
 <text x="950.0" y="728.0" class="box" fill="#d93025">所以什么形状喂得满</text>
 <text x="950.0" y="745.0" class="xs">回到图 G-4 那个例子</text>
-<text x="950.0" y="776.0" class="xs">GPU 的收缩维 K 一直是 16，几乎什么形状都是它的整数倍，喂满很容易。TPU 的 </text>
+<text x="950.0" y="776.0" class="xs">GPU 的收缩维 K 只有 16，几乎什么形状都是它的整数倍，喂满很容易。TPU 的 </text>
 <text x="950.0" y="792.0" class="xs">MXU 收缩边是 256 —— 注意力里常见的 <tspan class="mono" fill="#1967d2">head_dim=128</tspan> 只能喂满一半。<tspan font-weight="700" fill="#202124">同一个模</tspan></text>
 <text x="950.0" y="808.0" class="xs"><tspan font-weight="700" fill="#202124">型配置，在两边的「浪费」完全不在同一个位置</tspan>，这就是为什么调优经验不能直接搬。</text>
 <rect x="20" y="874.0" width="1360" height="76" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>

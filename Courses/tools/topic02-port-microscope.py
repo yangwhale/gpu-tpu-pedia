@@ -19,7 +19,7 @@
 3. **TPU 侧必须用公开模式导出。** 这个仓库是公开的。
    脚本里写死 `gate.set_mode("public")`，并在最后跑一遍禁字自检。
 """
-import io, os, re, sys, subprocess
+import io, json, os, re, sys, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
@@ -60,6 +60,53 @@ T02 = [(1, "mindset"), (2, "framework"), (3, "boundary"),
        (39, "flash_walk"), (40, "who_moves")]
 
 
+# ── 显微镜图里的「§N」是**显微镜自己的节号** ─────────────────────────────
+# ⛔ 2026-10-17：T-6 写「（见 §4）」指显微镜的 MXU 那节，搬进专题二后读者会翻到
+#    本页的 §4 ——&nbsp;那是互联。图脚本是两份显微镜和专题二共用的，不能改原文
+#    （在显微镜里 §4 就是对的），所以在**搬运时**改：
+#    本页有同一内容的 → 改指本页小节（§3.2 / §3.3 / §3.4）；没有的 → 前缀「显微镜」。
+#    英文版 R9 已按同一张表改过（/tmp/t02en/rounds/LOG-R9.md）。
+#    替换发生在 para() 断行**之前**，所以多出来的字会正常换行，不会顶出框。
+#    ⭐ 每一条都必须真的命中 —— 原文改了措辞时宁可构建挂掉，也别静默漏掉。
+MS_REFS = {
+    "gpu-micro": [
+        ("完整对账表见正文 §2。", "完整对账表见显微镜 §2。"),                    # G-2
+        ("（见图 G-5）", "（见显微镜图 G-5）"),                                  # G-4
+        ("推导链与它的验尸见正文 §2 / §8", "推导链与它的验尸见显微镜 §2 / §8"),  # G-8
+        ("返工记录见正文 §8", "返工记录见显微镜 §8"),                            # G-8
+    ],
+    "tpu-micro": [
+        ("代价见 §7", "代价见显微镜 §7"),                                        # T-2
+        ("顶上来（见 §7）", "顶上来（见显微镜 §7）"),                            # T-3
+        ("所以也省下了那片面积（见 §2）", "所以也省下了那片面积（见 §3.2）"),    # T-3
+        ("这是 §7 那条", "这是显微镜 §7 那条"),                                  # T-4
+        ("激活按拍推进（见 §4）", "激活按拍推进（见 §3.4）"),                    # T-6
+        # 「（见 §3.3）」多出两个字会把「§」和「3.3」拆到两行，所以这一句顺手收短
+        ("喂不满就是空转，<b>没有别的活能顶上来</b>（见 §3）",
+         "喂不满就空转，<b>没有别的活顶上来</b>（§3.3）"),                       # T-6
+        ("这解释了 §2 里那个", "这解释了 §3.2 里那个"),                          # T-6
+        ("这也是为什么 §7 那张图", "这也是为什么显微镜 §7 那张图"),              # T-6
+        ("把 §2 那句话补完整", "把 §3.2 那句话补完整"),                          # T-7
+        ("§2 说 TPU「省下了", "§3.2 说 TPU「省下了"),                            # T-7
+    ],
+}
+_REF_PATCH = (
+    "import common as _c, json as _j\n"
+    "_R = %r\n"
+    "_hit = [0] * len(_R)\n"
+    "def _sub(s):\n"
+    "    if isinstance(s, str):\n"
+    "        for i, (a, b) in enumerate(_R):\n"
+    "            if a in s:\n"
+    "                s = s.replace(a, b); _hit[i] += 1\n"
+    "    return s\n"
+    "_t0, _p0 = _c.Fig.t, _c.para\n"
+    "_c.Fig.t = lambda self, x, y, s, *a, **k: _t0(self, x, y, _sub(s), *a, **k)\n"
+    "_c.para = lambda f, x, y, w, text, *a, **k: _p0(f, x, y, w, _sub(text), *a, **k)\n"
+    "import atexit\n"
+    "atexit.register(lambda: _j.dump(_hit, open('/tmp/port/_refs_%s.json', 'w')))\n")
+
+
 def _harvest():
     """两棵树各有一个同名的 common.py，同进程 import 会打架 —— 各起一个子进程。"""
     svg = {}
@@ -76,8 +123,14 @@ def _harvest():
             ("t02-figs", "", [("p%d" % n, "fig_p%d_%s" % (n, s)) for n, s in T02])]
     os.makedirs("/tmp/port", exist_ok=True)
     for tree, pre, mods in jobs:
+        if tree in MS_REFS:
+            pre += "\n" + _REF_PATCH % (MS_REFS[tree], tree)
         subprocess.run([sys.executable, "-c", code % (pre, mods)],
                        cwd=os.path.join(HERE, tree), check=True)
+        if tree in MS_REFS:
+            hit = json.load(io.open("/tmp/port/_refs_%s.json" % tree))
+            miss = [a for (a, _), n in zip(MS_REFS[tree], hit) if not n]
+            assert not miss, "%s 里这几条节号改写没命中（原文改了？）：%r" % (tree, miss)
     for k in [j[0] for job in jobs for j in job[2]]:
         svg[k] = io.open("/tmp/port/%s.svg" % k, encoding="utf-8").read()
     return svg
@@ -159,7 +212,7 @@ CAP = {
  "t6": "<b>v7 侧这条路（到累加器为止），中间那站不是缓存，是暂存。</b>每一站只问一个问题："
        "<b>这一步是谁决定的</b>。从头到尾没有一站的答案是「硬件自己看着办」—— "
        "这张图是 2.1 里「TPU 侧 0 个红框」的逐站展开。",
-"g2": "<b>一个 SM 拆开。</b>warp 调度器、256 KB 寄存器堆、228 KB L1／共享内存、记分板 ——<b>这些部件加起来只干一件事：在运行时动态地藏住延迟和分支。</b>",
+"g2": "<b>一个 SM 拆开。</b>warp 调度器、256 KiB 寄存器堆、228 KiB L1／共享内存、记分板 ——<b>这些部件加起来只干一件事：在运行时动态地藏住延迟和分支。</b>",
  "t2": "<b>一个 TensorCore 拆开，重点在右边那一栏。</b>"
        "上面那五样在这里<b>一样都没有</b>。而它们不是五个独立的取舍，是同一个决定的五个后果："
        "一旦你决定<b>不在运行时换任务</b>，这五样同时失去存在理由。",
@@ -376,7 +429,7 @@ def sections(F):
   <!-- ⭐⭐ 2026-09-02 从 L200 §3.2b / §3.2c 回填。回填理由有两条，第二条才是硬的：
        ① 三口径披露：L300 已经在图里写了「容量差 289 倍（227 KiB vs 64 MiB）」，
           也反复说「省下的面积变成了更大的 VMEM」，但**从没交代这两句用的是
-          同一张表的不同读法**。同一份数据按总量读 GPU 赢 73%、按「软件显式管的
+          同一张表的不同读法**。同一份数据按总量读 GPU 赢 72%、按「软件显式管的
           暂存」那一行读 TPU 赢 3.5 倍、按「谁说了算」整列读只有 1.8 倍、
           按连续工作台读 289 倍。不摊开就是一个歧义数字在全文流通。
        ② L300 §1 的落地图里有一句「为什么这条不能算「量级相同」，见 3.2b」——
@@ -391,7 +444,7 @@ def sections(F):
              也一并去掉 —— L300 的 3.1 没有那句话。 -->
   <p class="lead">拆完部件，<b>下一个必然要问的是片上那块地</b> —&nbsp;
     3.6 那趟 FlashAttention 的全部收益，就来自「中间结果留在片上」。
-    <b>这个问题只有两半：多大、多快</b>，下面两小节各答一半。</p>
+    <b>这个问题有三问：多大、多快、等多久</b>，下面三小节各答一问。</p>
 
   <h3>3.2b　那 GPU 片上存储明明更多啊 ——&nbsp;先说清楚在比什么</h3>
   <p>这是个必须正面回答的反问。<b>把两颗芯片的片上 SRAM 全列出来</b>，
@@ -417,7 +470,7 @@ def sections(F):
     <code>64×2＋1×2＋1×2×2 ＝ 134 MiB</code>。</p>
 
   <div class="note ok"><span class="t">同一张表，三种口径，三个方向相反的结论</span>
-    <b>① 比总量 ——&nbsp;GPU 赢，231 对 134，多出 73%。</b>
+    <b>① 比总量 ——&nbsp;GPU 赢，231 对 134，多出 72%。</b>
     <em>这一条是对的，别嘴硬。</em><br>
     <!-- ⛔ 原文写「比『软件说了算的那部分』」，而表的第二列列名就叫「谁说了算」，
          「矩阵操作数暂存」那行两边写的还是「指令显式搬」—— 顺着这个词按列读，
@@ -463,7 +516,7 @@ def sections(F):
     <em>它是<b>一个线程块</b>能申请到的上限；而这个 SM 上有 <b>4 个 Tensor Core</b>，
     还可能同时驻着别的线程块 ——&nbsp;<b>它们抢的是同一块。</b></em>
     <span class="sub">（每 SM 的共享内存只能取几个固定档：
-    0／8／16／32／64／100／132／164／196／228 KB。<b>228 是最大档</b>，
+    0／8／16／32／64／100／132／164／196／228 KiB。<b>228 是最大档</b>，
     线程块能显式管到 227。）</span><br>
     <b>TPU 那 64 MiB，也不是全归你。</b>
     <em>官方说得很清楚：Ironwood <b>每个 TensorCore 64 MB VMEM</b>
@@ -507,7 +560,7 @@ def sections(F):
     <tr><td>L2　跨到对面 die</td><td>16.8 TB/s</td><td>2.1×</td><td>第三方实测</td></tr>
     <tr><td><b>L1 ＋ 共享内存（全片合计）</b></td><td><b>≈ 35 TB/s</b></td><td><b>≈ 4.3×</b></td>
         <td>每 SM 128 B/周期<br><b>有实测</b>，见折叠</td></tr>
-    <tr><td><b>TPU VMEM</b></td><td colspan="2"><b>官方未公开 ——&nbsp;公开资料只说得到「比 HBM 高约一个数量级」</b></td>
+    <tr><td><b>TPU VMEM</b></td><td colspan="2"><b>官方未公开 ——&nbsp;Google 只说它到 MXU 的带宽“significantly higher”于 HBM；约高一个数量级是本课的估计</b></td>
         <td>只给量级，原因见下</td></tr>
   </table></div>
   <p class="tbl-note">⚠️ <b>≈ 35 TB/s 是推导值，128 B/周期是上限不是保证</b>
@@ -537,7 +590,8 @@ def sections(F):
        只能停在「约一个数量级」。要讲具体数字，得放在这个仓库之外的内部材料里。 -->
   <div class="note warn"><span class="t">⚠️ 为什么 TPU 那一行只给量级，不给数</span>
     <b>VMEM 的带宽属于未公开规格</b> ——&nbsp;官方规格页只给容量，不给带宽。
-    本课能说的到此为止：<b>它比 HBM 高约一个数量级</b>，
+    官方原话只到这里：<b>“significantly higher bandwidth to the MXU than HBM”</b>（Google 开发者社区的 Ironwood 调优文章）；
+    本课按此估计<b>约高一个数量级</b>，
     <em>而 GPU 的共享内存是 4.3 倍</em>。
     <br>——&nbsp;<b>所以能确定的结论只有一句：各跟各的 HBM 比，TPU 这一层甩开得更多。</b>
     这一句不依赖具体数值。<b>不要往这里填一个精确数字</b>，也不要写成某个整数倍
@@ -975,7 +1029,7 @@ def sections(F):
     发出去加一、写回来减一。老那块牌子只是挂个「忙」的旗子。</em></p>
   <p><b>更要紧的是别把两块板当成同一个东西。</b>
     CDC 那块是<b>一张集中的大表</b>，管全部寄存器的读写冲突，
-    连「后写的别把先写的盖了」这类反向冲突也归它仲裁，<b>依赖判断全在运行时做</b>。
+    连「先发的写别把后发的写盖了」这类写后写（WAW）冲突也归它仲裁，<b>依赖判断全在运行时做</b>。
     <br>NVIDIA 这块只有<b>每个 warp 六个计数器</b>，只回答「我等的那件事回来了没有」；
     <b>定长指令的依赖压根不经过它</b> ——&nbsp;那部分是编译器提前写进控制位排掉的。
     <br>——&nbsp;<b>名字继承下来了，机制小了一大圈。</b>
@@ -987,7 +1041,7 @@ def sections(F):
 
   <figure class="fbox fwide" id="s012-fig3-4">
   <svg viewBox="0 0 1400 736" width="100%"></svg>
-  <figcaption>⭐ <b>四行里只有中转那一列在变，两头是同一个东西</b>。
+  <figcaption>⭐ <b>前三行两头是同一个东西，变的只有中转那一列</b>（第四行 Blackwell 和第五行 TPU 两头也换了）。
     第一行数据要在寄存器里过一道，而且地址和循环全靠线程自己跑；
     <code>cp.async</code> 砍掉了寄存器那一道，地址仍要自己算；
     到 TMA 才把地址生成整个接管过去 ——&nbsp;一个线程填张描述符发出去就走。
@@ -1241,7 +1295,7 @@ def sections(F):
   <svg viewBox="0 0 1400 796" width="100%"></svg>
   <figcaption>⭐ <b>难点有两处，它对着两处各配了一个解法</b>：
     地址由数据算出来 → <b>原生支持数据相关的控制流与访存</b>；
-    要的只是散落的几行 → <b>粒度做细</b>（v7 上 DMA granule <b>64 字节</b>，
+    要的只是散落的几行 → <b>粒度做细</b>（v7 上 DMA granule <b>32 字节</b>，
     出自 <code>pltpu.get_tpu_info().sparse_core</code>）。
     ⚠️ <b>「操作 VMEM 还是 HBM」是个陷阱二选一</b> ——&nbsp;两块都碰，
     但它碰的那块 VMEM 是<b>它自己的</b>（每个子核一份 ＋ 一份共享，
@@ -1499,7 +1553,8 @@ def sections(F):
       <tr><td>Blackwell</td><td><b>一个线程</b>发出去就不管了</td>
           <td>共享内存 ＋ <b>Tensor Memory</b>，累加器也在里面</td></tr>
     </table></div>
-    <p class="tbl-note">Blackwell 那一行的「必须由单个线程发起」是官方文档的措辞，
+    <p class="tbl-note">Blackwell 那一行的「必须由单个线程发起」出自 Colfax Research 的 Blackwell Tensor Memory 教程
+      （原文 “can and must be issued by a single thread”；PTX ISA 官方的说法是这条指令具有 “single thread semantics”），
       理由很干脆：<b>这条指令要用的数据一个字节都不在私有寄存器里</b>，
       全在 CTA 共享的内存空间中 ——&nbsp;<em>所以矩阵单元跟 warp 调度器解耦了。</em></p>
 

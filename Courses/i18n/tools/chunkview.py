@@ -1,11 +1,14 @@
 """单块中英并排渲染（改完自查用）：python3 chunkview.py NN WIDTH OUTDIR
 产出 OUTDIR/cvNN-WIDTH-kkk.png（按锚点对齐的并排切片）。只用当前块文件，不碰整页。"""
+import os
+WORK = os.environ.get('I18N_WORK', '/tmp/t02en')
+TOPIC = os.environ.get('I18N_TOPIC', 'topic-02')
 import sys, re, pathlib, importlib.util
 from playwright.sync_api import sync_playwright
 from PIL import Image
 Image.MAX_IMAGE_PIXELS=None
 n, W, out = sys.argv[1], int(sys.argv[2]), pathlib.Path(sys.argv[3]); out.mkdir(parents=True, exist_ok=True)
-D = pathlib.Path('/tmp/t02en/chunks'); T = pathlib.Path('/home/chrisya/gpu-tpu-pedia/Courses/i18n/tools')
+D = pathlib.Path(WORK+'/chunks'); T = pathlib.Path('/home/chrisya/gpu-tpu-pedia/Courses/i18n/tools')
 spec = importlib.util.spec_from_file_location('asm', T/'assemble.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 skel = (D/'skeleton.html').read_text(); head = skel[:skel.index('@@CHUNK')]
 head += ''.join(re.findall(r'<style\b.*?</style>', (D/'00.zh.html').read_text(), flags=re.S))

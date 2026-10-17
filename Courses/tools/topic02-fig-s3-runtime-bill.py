@@ -74,7 +74,7 @@ ROWS = [
     #    出处（都在图脚）：tcgen05 由**单个线程代表整个 CTA 发**、TMEM 256 KB/SM
     #    由软件在 MMA 作用域显式管理。
     ("Blackwell 起", "<tspan font-weight=\"700\">tcgen05</tspan> ＋ 一块专用矩阵暂存",
-     "共享内存", "TMEM 256 KB/SM", "操作数与累加器都住这儿", PU, "矩阵暂存", "Tensor Core",
+     "共享内存", "TMEM 256 KiB/SM", "操作数与累加器都住这儿", PU, "矩阵暂存", "Tensor Core",
      ["<tspan font-weight=\"700\">仍是硬件算</tspan>；而这一代",
       "<tspan font-weight=\"700\">连结果都不回寄存器堆</tspan>"],
      ["<tspan font-weight=\"700\">一个线程代表整个 CTA 发</tspan>；",
@@ -223,8 +223,8 @@ p.append('<text class="svgsm" x="16" y="%d" fill="#174ea6">'
          % (L2_Y + 45))
 p.append('<text class="svgsm" x="16" y="%d" fill="#174ea6">'
          '⛔ <tspan font-weight="700">别把共享内存当成 L2</tspan>：'
-         '<tspan font-weight="700">共享内存在 SM 里，和 L1 是同一块 228 KB</tspan>；'
-         'L2 在 SM 外、大三个数量级。'
+         '<tspan font-weight="700">共享内存在 SM 里，和 L1 是同一块 228 KiB</tspan>；'
+         'L2 在 SM 外、大两个多数量级（约 550 倍）。'
          '<tspan fill="%s">TMA 引擎也在 SM 里（Hopper 起每 SM 一个），'
          '它的目的地同样是共享内存。</tspan></text>'
          % (L2_Y + 64, GY))
@@ -255,7 +255,7 @@ p.append('<text class="svgsm" x="0" y="%d" fill="%s">'
          % (SRC_Y + 12, DIM))
 p.append('<text class="svgsm" x="0" y="%d" fill="%s">'
          'Blackwell 那一行：<tspan font-weight="700">tcgen05 由单个线程代表整个 CTA 发射</tspan>、'
-         '<tspan font-weight="700">TMEM 256 KB/SM 且由软件在 MMA 作用域显式管理</tspan>'
+         '<tspan font-weight="700">TMEM 256 KiB/SM 且由软件在 MMA 作用域显式管理</tspan>'
          ' ——&#160;出自 PTX ISA 与第三方微基准，本图不额外推导。</text>'
          % (SRC_Y + 32, DIM))
 p.append('</svg>')

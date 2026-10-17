@@ -1,7 +1,10 @@
 """把 NN.en.html 里每个 <text> 的内联字号恢复成放大前快照（R10b-prefit）里的值，文字保持当前。
 python3 resetfs.py NN ..."""
+import os
+WORK = os.environ.get('I18N_WORK', '/tmp/t02en')
+TOPIC = os.environ.get('I18N_TOPIC', 'topic-02')
 import re, sys, pathlib
-D = pathlib.Path('/tmp/t02en/chunks'); P = pathlib.Path('/tmp/t02en/rounds/R10b-prefit')
+D = pathlib.Path(WORK+'/chunks'); P = pathlib.Path(WORK+'/rounds/prefit')
 def fs(t):
     m = re.search(r'font-size:([\d.]+)px', t); return m.group(1) if m else None
 for n in sys.argv[1:]:

@@ -187,21 +187,21 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 <aside class="side">
   <h4>Segments</h4>
   <ol id="toc">
-    <div class="grp">Opening · 4 min</div>
+    <div class="grp">Opening · 8 min</div>
     <li><a href="#L0"><i>00</i><span>Opening: two warm-ups + two origins</span></a></li>
-    <div class="grp">The dividing line · 5 min</div>
+    <div class="grp">The dividing line · 10 min</div>
     <li><a href="#L1"><i>01</i><span>The dividing line: same appetite</span></a></li>
-    <div class="grp">Where they split · 7 min</div>
+    <div class="grp">Where they split · 10 min</div>
     <li><a href="#L2"><i>02</i><span>⭐ Where they split: 4 vs. 0</span></a></li>
-    <div class="grp">Taking it apart · 24 min</div>
+    <div class="grp">Taking it apart · 42 min</div>
     <li><a href="#L3"><i>03a</i><span>⭐ Taking it apart: chip → core → one instruction</span></a></li>
-    <div class="grp">Rebuilt · 16 min (the climax)</div>
+    <div class="grp">Rebuilt · 10 min (the climax)</div>
     <li><a href="#L3b"><i>03b</i><span>⭐⭐ Rebuilt: FlashAttention on both sides</span></a></li>
-    <div class="grp">Wiring 64 chips · 6 min</div>
+    <div class="grp">Wiring 64 chips · 4 min</div>
     <li><a href="#L4"><i>04</i><span>⭐ Wiring 64 chips: one hop vs. six</span></a></li>
-    <div class="grp">Wrap-up · 9 min</div>
+    <div class="grp">Wrap-up · 12 min</div>
     <li><a href="#L5"><i>05</i><span>⭐ Unpacking the word</span></a></li>
-    <div class="grp">Landing · 11 min</div>
+    <div class="grp">Landing · 13 min</div>
     <li><a href="#L6"><i>06</i><span>After the run: can we compare?</span></a></li>
     <li><a href="#L9"><i>09</i><span>Close: what each is good at</span></a></li>
   </ol>
@@ -290,7 +290,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
       <tr><td>18–28</td><td>⭐ <b>Section 2</b>: the same load, <b>4</b> runtime decisions on one side, <b>0</b> on the other</td><td>The claim becomes visible. <b>Also the strongest fusion demo</b>:
           same attention, same FLOPs, 1,000× apart in intensity</td></tr>
       <tr><td>28–70</td><td>⭐ <b>Section 3a</b>: chip → core → floor plan inside the core → parallel hierarchy → how big a bite one instruction takes</td><td><b>Parts, not conclusions.</b> At each level, point at “what differs, and whose decision caused it.” Conclusions come in 3b</td></tr>
-      <tr><td>70–80</td><td>⭐⭐ <b>Section 3b</b>: <b>FlashAttention walked through on both sides</b> + paying off Section 1's peak coincidence</td><td><b>The climax is in these 16 minutes.</b> Cut anything else first.
+      <tr><td>70–80</td><td>⭐⭐ <b>Section 3b</b>: <b>FlashAttention walked through on both sides</b> + paying off Section 1's peak coincidence</td><td><b>The climax is in these 10 minutes.</b> Cut anything else first.
           Cut this and the lecture becomes a spec comparison</td></tr>
       <tr><td>80–84</td><td>⭐ <b>Section 4</b>: 64 chips each. One NVL72 domain (<b>one hop</b>) vs. a 4×4×4 torus (<b>up to 6 hops</b>)</td><td><b>Prerequisite for Section 6's measurements:</b> those two numbers ran on different network structures, never measured apart here</td></tr>
       <tr><td>84–96</td><td>⭐ <b>Section 5 · Unpacking the word</b>: runtime, or compile time</td><td>The opening claim <b>closes</b>: <b>four appearances, one thing</b>. That is: <b>who each side handed fusion to</b></td></tr>
@@ -380,7 +380,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="pause">⛔ <b>The classic mistake is explaining it on the spot.</b>
       That turns a <b>hook</b> into a <b>spoiler</b>,
-      and Section 3's 24 minutes lose their question.
+      and all of Section 3 loses its question.
       <em>You want them carrying “why hundreds vs. single digits?” through the first two sections.
       At the §3.7 count, someone will call out the answer.</em></span>
 
@@ -412,7 +412,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p>So what did it save? <b>Complexity itself.</b>
     <em>No cache, no scheduler, layout fixed at compile time.
     The same compute in four big blocks, not five hundred ninety-two small ones.
-    That's a hundred forty-eight fewer sets of control circuitry.</em></p>
+    That's a hundred forty-eight times fewer sets of control circuitry.</em></p>
 
     <span class="pause">⚠️ Someone will likely ask <b>“So is it more power-efficient?”</b>
       <b>There's a solid official answer. Give it with its caveats.</b></span>
@@ -492,20 +492,20 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
       <div class="a">
         <p><b>It meets two conditions that rarely hold together.</b></p>
         <p>First, <b>it runs on one chip</b>. No inter-chip communication,
-        so the story runs on one line (also why Section 4 was drawn as a detour).</p>
+        so the story runs on one line (which is why Section 4, on inter-chip links, never mentions it).</p>
         <p>Second, <b>it hits four things at once</b>: memory access, shapes, on-chip capacity, kernel authorship.
         A pure GEMM is too clean to touch the last three. A whole model is too messy:
         every step changes the subject, and nothing lands.</p>
       </div></details>
 
-    <details><summary>Why is Section 4 drawn as a detour? Doesn't inter-chip communication matter?</summary>
+    <details><summary>Section 4 has nothing to do with FlashAttention. Why is it in the core track?</summary>
       <div class="a">
-        <p><b>It matters, but it's off this thread.</b> The test is hard:
+        <p><b>It really is off the FlashAttention thread.</b> The test is hard:
         FlashAttention appears <b>0 times</b> in Section 4's main text (grepped).
         It finishes on one chip and <b>never touches inter-chip links</b>.</p>
-        <p>Rather than have readers wonder why we went off topic, <b>mark it as a detour on the map</b>.
-        It's collapsed in L200. Short on time, skip it whole;
-        Section 5 is unaffected.</p>
+        <p><b>But it underpins Section 6's measurements</b>: those two numbers come from 64 vs. 64 chips,
+        and the way each side wires 64 chips together is structurally different. Without this section, Section 6's ratio can't be read.
+        So it stays in the core track; <b>don't skip it whole</b>. Short on time, cut it to two sentences per the emergency list at the top.</p>
       </div></details>
   </div>
 
@@ -516,14 +516,14 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     “The two are nearly identical” only lands once the line is drawn. Spoil it now and Section 1 is wasted.<br>
     <b>② No company history.</b> The origins take two sentences (“doesn't know what you'll run” / “knows from day one”).
     Anything more is lost time.<br>
-    <b>③ Don't explain MXUs or warps here.</b> Section 3 has eight microscope figures for that.
+    <b>③ Don't explain MXUs or warps here.</b> Section 3 has thirteen microscope figures for that.
     <b>An opening glossary is the costliest drift.</b> It eats ten minutes.<br>
     <b>④ Don't say “which is better.”</b> If someone steers toward chip selection, deflect with the course page's line:
     only “who decides this, on this side.”
   </div>
   <div class="tip">
     <span class="k">Pacing</span>
-    <b>Two minutes, max.</b> This is the foundation, not the content.
+    <b>Eight minutes, max.</b> This is the foundation, not the content.
     The sit-up moment is at the end of Section 1 (<b>312.9 vs. 312.5</b>).
     <b>Get there early.</b><br>
     If the audience is very mixed, <b>cut origin detail, but always say
@@ -546,7 +546,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">Script</h3>
   <div class="say">
-    <span class="board">Scroll to Section 1. Two figures only. Keep it brisk.</span>
+    <span class="board">Scroll to Section 1. Three figures (the 312 one, the three-panel one, and Figure 1-8 in §1.2). Keep it brisk.</span>
 
     <p>I just said there's only one root cause. <em>But before comparing anything, we need this machine's exchange rate between computing and moving data.</em>
     That's all this section does: <b>get that number, no conclusions</b>.</p>
@@ -582,7 +582,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     FP8 too: 625.8 versus 625.0.</p>
 
 
-    <span class="pause">⛔ <b>Never say “a relative difference of three in ten thousand.”</b>
+    <span class="pause">⛔ <b>Never say “a relative difference of 0.13%.”</b>
       <em>That third digit is fake.</em> GB200's “8 TB/s” has no stated basis,
       and the decimal and binary readings differ by <b>2.4%</b>.<br>
       <b>Say this instead: “Two companies, two architectures, two philosophies.
@@ -748,7 +748,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <h3 class="sec">1.2&emsp;Square is a special case: the smallest dimension sets intensity (Figure 1-8)</h3>
 
     <span class="board">Scroll to <b>Figure 1-8</b>. ⏱ <b>3 min</b> here,
-      so §1 goes from 10 minutes to 13.</span>
+      already counted in §1's 10 minutes.</span>
 
     <div class="dont">⭐ <b>Forced by live follow-up questions on 2026-09-10; not in the original design.</b>
       Verbatim: “What about M×K · K×N? Intensity should depend on the contraction dimension K; longer K, higher, right?
@@ -867,7 +867,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         <em>The back-check line at the bottom of the course page does exactly this: 2,500 ÷ 64 = 39 TB/s for the chip;
         divide by 148 × 128 and the clock is <b>2.06 GHz</b>.
         <b>That's GB200</b> (all of §1 uses it).</em></p>
-        <p>⛔ <b>This used to say “matches B200.” Wrong label</b>
+        <p>⛔ <b>The course's back-check line used to say “matches B200.” Wrong label; it now says GB200</b>
         (caught re-checking §3 on 2026-09-10). <b>2.06 GHz is GB200</b>:
         2,500 ÷ (606,208 × 2) = 2.062.<br>
         <b>The HGX B200 has different numbers</b>: peak about <b>2,250 TFLOPS</b>,
@@ -962,8 +962,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   </div>
   <div class="tip">
     <span class="k">Pacing</span>
-    <b>Six minutes: two figures + two bits of arithmetic + one name. Three key moments, not one.</b><br>
-    <b>One</b>: the pause on 312.9 vs. 312.5. After reading them, hold thirty seconds of silence
+    <b>Ten minutes: §1.1 seven (two figures + two bits of arithmetic + one name), §1.2's Figure 1-8 three. Three key moments, not one.</b><br>
+    <b>One</b>: the pause on 312.9 vs. 312.5. After reading them, stop and count two beats in your head,
     and let the room discover it. It's the course's first sit-up moment; rush it and it's gone.<br>
     <b>Two</b>: the two bits of arithmetic at the end. <b>Many skim them as a wrap-up. That's the costliest mistake.</b>
     Without them, 312 is a memorized number. With them, students can measure any op on the spot.
@@ -973,7 +973,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     It must come <b>right after the arithmetic</b>, nowhere else.
     The room has just worked out that the denominator decides everything; “so shrink the denominator” then
     feels like their own conclusion. <b>Anywhere else, it's a slogan to memorize.</b><br>
-    <b>This segment has only one figure</b> (the 312 one). On 2026-09-03 we deleted the old
+    <b>This segment uses three figures</b> (the 312 one, the three-panel one, Figure 1-8). On 2026-09-03 we deleted the old
     “three-panel takeaway figure”: two panels repeated earlier content, one said “nothing to see here.”
     The time saved goes to the last forty seconds (naming fusion).
 
@@ -1105,7 +1105,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="board">Point at panel ③. <b>It's the bridge to Section 3.</b></span>
 
     <p>Panel ③ asks: how big should a tile be? <b>Same question on both sides; different people answer it.</b><br>
-    GPU: <b>the kernel author</b>. The budget is 228 KB of shared memory,
+    GPU: <b>the kernel author</b>. The budget is 228 KiB of shared memory,
     and tile size is a tunable hyperparameter. <em>Get it wrong and it still runs, just slower.</em><br>
     TPU: <b>the compiler</b>. The budget is 64 MiB of VMEM, but shapes <b>must</b> align to 8 by 128.
     <em>Otherwise they're zero-padded, and the padding still takes VMEM and still goes through the MXU.</em></p>
@@ -1270,7 +1270,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         and backward recomputes 1 more. <b>7 vs. 6: 85.7% useful.</b>
         <b>Pay 17% extra compute, save three orders of magnitude of movement.</b></p>
         <p><b>On the course page this is collapsed (under the orange box). Don't open it unprompted.</b>
-        Only if asked. The full answer takes three minutes; Section 2 has seven.</p>
+        Only if asked. The full answer takes three minutes; Section 2 has ten.</p>
       </div></details>
 
     <details><summary>Does the TPU have FlashAttention, or not need it?</summary>
@@ -1292,20 +1292,20 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     Red means <b>one thing: known only at runtime</b>.<br>
     <b>② Don't explain how caches work.</b> Set associativity, replacement, TLB:
     <b>touch none of it</b>. All we need: “there's a layer, and its answers don't exist at compile time.”<br>
-    <b>③ Max one minute on lane / sublane.</b> It's <b>vocabulary</b>,
-    issued early for Section 3. Explain 8 × 128 fully here and Section 3 has nothing left.<br>
+    <b>③ Don't teach lane / sublane here.</b> It moved to <b>the start of §3.3</b>,
+    where it's first actually used. Explain 8 × 128 fully here and Section 3 has nothing left.<br>
     <b>④ No online-softmax math.</b> “It keeps a running max and a running sum”
     is enough. <b>The recurrence takes five minutes and has nothing to do with the hardware.</b>
   </div>
   <div class="tip">
     <span class="k">Pacing</span>
-    <b>Seven minutes, four figures, not split evenly: the first gets the most.</b><br>
+    <b>Ten minutes, three figures + one green box, not split evenly: the first gets the most.</b><br>
     <b>fig2-1: three minutes</b>, with room for the “4 vs. 0” pause.
     <b>It's the center of the course</b>: Section 0's thesis gets its first evidence here.
     Section 3's fourteen figures and all of Section 5 are footnotes to it.<br>
-    fig2-2: <b>one minute</b>. Vocabulary; move on.<br>
     fig2-3 plus fig2-4: <b>three minutes</b>. Pause on 32 GiB,
     on 64 vs. 65,536, <b>and on “not one FLOP saved.”</b><br>
+    The green box under fig2-4: <b>two minutes</b>. The remaining two go to the closing orange box and transitions.<br>
     ⚠️ <b>Most likely overrun: fig2-3's panel ③.</b> It's dense
     and slides easily into Section 3. <b>Its only job here is to raise the question, not answer it.</b><br>
     ⚠️ <b>Second: the final collapsible</b> (fusion's cost / MFU vs. HFU).
@@ -1599,7 +1599,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <em>Three named items. <b>Changing the innermost dimension moves data</b> (tiling binds the last two dimensions,
     so a transpose or some reshapes are physical moves, not stride changes). <b>Uneven sizes get padded</b>;
     the zeros take VMEM, pass the MXU and count as FLOPs. <b>Outside handoffs need a relayout</b>.</em>
-    <b>Section 3 pays this bill later.</b></p>
+    <b>§3.4 (transposes) and §3.6 (padding) pay this bill later.</b></p>
 
     <span class="pause">⭐ <b>Add a contrast; it ties this back to the main thread</b>:
       <em>“GPU coalescing wants contiguity too, but as a <b>soft constraint</b>.
@@ -1785,7 +1785,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
       <em>“One: who can issue now. Two: who syncs with whom.
       Three: how data gets into place without tying up threads.”</em></span>
 
-    <span class="board">Last: point at the generations figure in 3.3b. <b>It's the subsection's hook. Don't skip it.</b></span>
+    <span class="board">Last: point at the data-path figure in 3.3b (four GPU rows + one TPU row),
+      <b>only the first three rows for now</b>. <b>It's the subsection's hook. Don't skip it.</b></span>
 
     <p><b>The thread's job as a data mover is retiring.</b> Three generations, one layer peeled off each time.</p>
 
@@ -1807,7 +1808,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <p><em>With the thread hollowed out, what sets “how big a bite you take” isn't the thread.
     <b>It's the instruction.</b></em> There, the two sides differ by 16×. <b>3.4 measures it in front of you.</b></p>
 
-    <span class="board">But don't jump ahead. <b>3.3b first has to open the bill.</b></span>
+    <span class="board">But don't jump to 3.4. <b>This subsection first has to open the bill.</b></span>
 
     <p>All that: you write scalar code, hardware assembles it into SIMD, queues you when you diverge,
     and swaps you among dozens of batches of work. <b>So what does “runtime adaptation” actually cost?</b>
@@ -1842,9 +1843,9 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><b>The third one gets a figure.</b></p>
 
-    <span class="board">Scroll to the four-row data-path figure. <b>Point only at the staging column. Don't read row by row.</b></span>
+    <span class="board">Back to that data-path figure. <b>Point only at the staging column of the first three rows. Don't read row by row.</b></span>
 
-    <p><b>Four rows, both ends identical: global memory on the left, shared memory plus compute on the right.
+    <p><b>The first three rows, both ends identical: global memory on the left, shared memory plus compute on the right.
     Only the middle column changes.</b><br>
     At first, data passed through <b>registers</b>, and the thread computed every address and ran the loop.<br>
     From Ampere, <code>cp.async</code> <b>cuts out</b> the register hop. Addresses are still the thread's job.<br>
@@ -2027,7 +2028,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="pause">⚠️ <b>Someone will almost surely do the math aloud</b>:
       “One instruction is only sixteen deep. That can't add up to 2,250 TFLOPS.”<br>
       <b>Head it off: instruction shape is how much work you hand over at once; MACs per cycle is separate.</b>
-      To reconcile, quote the page: <em>4,096 × 2 × 148 SM × 1.83 GHz = 2,218, official 2,250, a 1.4% gap.</em>
+      To reconcile, quote the page: <em>4,096 × 2 × 148 SM × 1.83 GHz = 2,219, official 2,250, a 1.4% gap.</em>
       <b>⛔ Don't follow their broken derivation.</b></span>
 
     <span class="board">Point at the peak chain ending this subsection. <b>It's for the people who check the math.
@@ -2052,7 +2053,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   <div class="say">
 
     <span class="board"><b>No figure yet.</b> The question fits in one sentence.
-      Ask it, then scroll to ms-p37. <b>Ninety seconds total. Don't expand.</b></span>
+      Ask it, then scroll on. <b>Ninety seconds total. Don't expand.</b></span>
 
     <p>So far, the first half has counted what “one side has and the other doesn't.”
     <b>Two pieces are left: each side grew one of its own.</b></p>
@@ -2063,8 +2064,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p><em>Just two examples, one per side.</em></p>
 
-    <span class="board">Now scroll to ms-p37. <b>One example left, one right,
-      two thresholds on the bottom half.</b></span>
+    <span class="board">Now scroll to the block-scaling paragraph in the main text. <b>The course has no side-by-side figure for these two examples;
+      you say them: one example, one threshold each.</b></span>
 
     <p><b>The first is on the GPU side: block-scaled quantization.</b> The marketing line: “B200 supports FP4.”</p>
 
@@ -2076,10 +2077,10 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     The marketing line: “the TPU has a core just for embedding lookups.”</p>
 
     <p><b>Also true.</b> The catch: <b>it only pays off when the same rows get looked up over and over.</b>
-    <em>The duplication factor in the figure measures exactly that.</em></p>
+    <em>The number that measures it is called the duplication factor.</em></p>
 
     <span class="pause">Stop. <b>This one's for this room</b>:
-      <b>“For language models, the duplication factor is about 1.01. Each row is looked up about once.
+      <b>“For language models, the duplication factor is very low, about 1.01. Not zero repetition, but nowhere near enough to pay off.
       The compiler never sends work there. In production it has never looked up a single table.”</b></span>
 
 
@@ -2101,8 +2102,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <span class="pause">⛔ <b>If pressed on granularity, get these two right</b>:<br>
       <b>“(8,128) is the vector register's shape, not the minimum DMA size.”</b><br>
-      <b>“SparseCore's DMA granularity on v7 is 64 bytes.
-      That's read straight from get_tpu_info, not an adjective from the docs.”</b><br>
+      <b>“SparseCore's DMA granularity on v7 is 32 bytes.
+      Go by get_tpu_info in the JAX source; the docs page still shows an old 64, so don't read that out.”</b><br>
       <em>Trick question: “Does it work on VMEM or HBM?”
       Answer: “Both. But the VMEM it touches is its own, not the TensorCore's.”</em></span>
 
@@ -2255,7 +2256,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
     <p>⭐ Now apply Section 1's test and <b>count</b>: <b>of the six stops, only these two are
     “one side has it, the other has none.”</b> <b>The other four do the same job on both sides.</b>
-    <em>The rest do differ, but only by a few percent, and that changes next generation.</em></p>
+    <em>The rest do differ, but only in parameters such as capacity and naming (the largest is the 289× at stop ③), and that changes next generation.</em></p>
 
     <span class="board">Point at the green area mid-figure.</span>
 
@@ -2453,7 +2454,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">What not to say</h3>
   <div class="warn">
-    <span class="k">The five easiest ways this segment goes off track</span>
+    <span class="k">The six easiest ways this segment goes off track</span>
     <b>① Don't make the first half a spec tour.</b> Those subsections <b>all set up 3.6</b>.
     Land each back on “so 3.6 will use this.”
     <b>Lose that thread and fourteen figures become fourteen isolated facts.</b><br>
@@ -2474,11 +2475,11 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     and the closing takeaway.</b>
   </div>
   <div class="tip">
-    <span class="k">⏱ Timing: this segment measures 42 minutes (re-measured 2026-09-06)</span>
-    <b>Method</b>: count the spoken characters in this segment's script (the <code>&lt;p&gt;</code> lines and “Pause” lines)
+    <span class="k">⏱ Timing: Section 3's first half (03a) measures 42 minutes (re-measured 2026-09-06); the second half (03b), same method, 10</span>
+    <b>Method</b>: count the spoken characters in the script (the <code>&lt;p&gt;</code> lines and “Pause” lines)
     and divide by <b>205 characters/min</b> (a pace derived from §5 and §6, already delivered: 201 and 213).
     <b>Board cues aren't counted</b>, <em>nor is time pointing at figures, so it's a lower bound.</em>
-    <br>⚠️ <b>History: 24 → 31 → 40 → 42.</b>
+    <br>⚠️ <b>History: 24 → 31 → 40 → 42</b> (the first three are for all of Section 3, before it was split).
     <em>Every rise was added content: 3.2b / 3.2c, 3.3b, then on 2026-09-06
     <b>3.2d (the latency ladder) and 3.3c (three ways to lay out a matmul)</b>.</em>
     <br>⛔ <b>Adding a core-track subsection means updating the minute count in <code>lec()</code>.</b>
@@ -2533,11 +2534,15 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <span class="pause">⭐⭐ The key line of this segment. Slow down:
       <b>“On one side, location doesn't matter. On the other, location sets the cost.”</b></span>
 
-    <span class="board">Point at the link math in Figure T-8 (“Chip to pod”).</span>
+    <span class="board">Scroll to Figure T-8 (the “Chip to pod” one) and point at the <b>“6 ports per chip”</b> block.</span>
 
-    <p><b>The totals are in the same ballpark</b>: ICI 1,200, NVLink 1,800, <b>both bidirectional</b>.
-    <em>Break them down and it flips. ICI is six links at 200. NVLink is eighteen at 100.
-    <b>Per link, ICI is twice as wide.</b> NVIDIA wins on count: three times the links.</em></p>
+    <p><b>First, the per-chip totals</b>: ICI is six links at 200, 1,200 in all; NVLink is 1,800 per GPU.
+    <b>Both bidirectional</b>.
+    <em>So within 72 chips, <b>NVLink actually has more bandwidth per chip</b>. This figure compares reach, not which single chip is faster.</em></p>
+
+    <span class="pause">⚠️ <b>Make clear that “200 per link” is the course's reading, not the official wording</b>:
+      <em>the official text says “200 GB/s bidirectional per axis,” but three axes × 200 is 600, which doesn't match the 1,200 in the same page's table;
+      only “200 per link” is self-consistent.</em><b>The course flags this contradiction next to the figure. If asked, point there; don't pick a reading on the vendor's behalf.</b></span>
 
     <span class="pause">⛔ <b>Brake here. Two things:</b><br>
       <b>One: 9,216 ÷ 72 = 128.
@@ -2582,12 +2587,12 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">Likely questions</h3>
   <div class="qa">
-    <details><summary>Why is this section collapsed? Doesn't chip-to-chip communication matter?</summary>
+    <details><summary>This section has nothing to do with FlashAttention. Why is it in the core track?</summary>
       <div class="a">
-        <p><b>It matters, but it's off this storyline, by a hard test</b>:
+        <p><b>It really is off the FlashAttention storyline, by a hard test</b>:
         FlashAttention appears <b>zero times</b> in its main text.</p>
-        <p>Rather than let readers think “why the tangent?”, <b>mark it as a detour on the map</b>.
-        <em>That's what the lead-in and collapsed layout are for.</em></p>
+        <p><b>But it underpins Section 6's measurements</b>: those two numbers come from 64 vs. 64,
+        and the two sides wire 64 chips in structurally different ways. <em>Skip this section and those two numbers hang in the air.</em></p>
       </div></details>
 
     <details><summary>So what does that 128× actually mean?</summary>
@@ -2611,20 +2616,19 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   <h3 class="sec">Don't say</h3>
   <div class="warn">
     <span class="k">Two easy ways off track</span>
-    <b>① ⛔ Don't compare per-link bandwidth.</b> Same ballpark; it <b>proves nothing and burns time</b>,
+    <b>① ⛔ Don't compare per-link bandwidth.</b> Same ballpark, and the official ICI per-link wording is itself ambiguous; it <b>proves nothing and burns time</b>,
     and shifts the room from “how far” to “who's faster.” <b>That's the exact mistake this section prevents.</b><br>
     <b>② Don't drift into topology.</b> How the torus wraps, how NVL72 is cabled:
-    <b>that's ten minutes, against a three-minute budget.</b>
+    <b>that's ten minutes, against a four-minute budget.</b>
   </div>
   <div class="tip">
     <span class="k">Pacing</span>
-    <b>Three minutes, all of them optional.</b><br>
-    <b>Simple test: check the clock when Section 3b ends.</b>
-    Past <b>45 minutes</b>? <b>Skip this section</b>.
+    <b>Four minutes. Never skip it whole</b>: it underpins Section 6's measurements.<br>
+    <b>Check the clock when Section 3b ends.</b>
+    Running over? <b>Cut it to two sentences per the emergency list at the top</b>: a glance at each of the two figures, and say “one hop vs. six.”
     <em>Give the time to Sections 5 and 6; they close the argument.</em><br>
-    ⚠️ If you skip, <b>say so</b>: “We'll skip chip-to-chip. It's collapsed on the page; read it after class.”
-    <b>Don't skip silently.</b> It's a top-level section in the contents; people will look for it.
-    ⚠️ <b>Nothing warns the audience that this is a detour.</b> Your one sentence is all they get.
+    ⚠️ <b>Even when cutting, keep the opening line</b> (“the next section's two numbers ran on two kinds of wiring”);
+    without it, Section 6's ratio can't be read.
   </div>
 </section>
 <section class="lec" id="L5">
@@ -2924,9 +2928,9 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   </div>
   <div class="tip">
     <span class="k">Pacing</span>
-    <b>Nine minutes, five figures, weight on 5.3.</b><br>
+    <b>Twelve minutes, five figures, weight on 5.3.</b><br>
     5.1 <b>three minutes</b> (two figures; lands on “opposite failure conditions”),
-    5.2 <b>one</b>, <b>5.3 three and a half</b>, 5.4 <b>one and a half</b>.<br>
+    5.2 <b>one</b>, <b>5.3 three and a half</b>, 5.4 <b>two</b>, 5.4b <b>two</b>; the last half minute is transitions.<br>
     ⭐ <b>5.3's “two kinds of fusion” box closes the course's fusion thread.</b>
     §1 names it, §2 demos it, §3.6 grounds it, <b>it finishes here</b>.
     <em>Never skip it, however tight.</em> If you must cut, cut 5.4.<br>
@@ -2999,7 +3003,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
   <h3 class="sec">Script · 6.2 ⭐ The numerator side: MFU vs. HFU</h3>
   <div class="say">
-    <span class="board">This subsection has <b>no figure</b>: one box, one table, two boxes.
+    <span class="board">This subsection has <b>only one figure</b> (P-13): one box before it, two boxes after.
       <b>Only your pacing gives breathing room. Don't run four yellow screens together.</b></span>
 
     <p>That ticket figure was all about which peak goes in the <b>denominator</b>. <b>But the numerator has two flavors too</b>,
@@ -3026,7 +3030,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
       <b>⭐ 6.2's main figure. Give it time.</b> Start with <b>panel A</b> only.</span>
 
     <p><b>Panel A's three rows are three numerator choices.</b>
-    <em>The first is a slip we actually made (the FLOP formula missed a whitelist, about 5×).
+    <em>The first is a hit we actually took while porting (the FLOP formula missed a whitelist entry, about 5×), a different incident from 6.1's 2,700.
     The second is our topic, HFU vs. MFU. The third depends on sequence length.</em></p>
 
     <p><b>How big is the second? Work it out for this lecture's kernel</b>: FlashAttention's backward recomputes
@@ -3167,7 +3171,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
         “two dies” against “one whole card.” <em>That's one of P-18's two
         “favors v7” items.</em></p>
         <p>Per device is worst for v7: 662.3 ÷ 2 = <b>331</b>,
-        and the ratio goes from 1.31 to <b>2.6</b>.</p>
+        and on TFLOP/s the ratio goes from 1.29 to <b>2.58</b>.</p>
 
         <p>⚠️ <b>“Per chip, per device, or per core?” is the third of the four questions.</b>
         <em>If asked, that question just paid off live.</em></p>
@@ -3198,10 +3202,10 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   </div>
   <div class="tip">
     <span class="k">Pacing</span>
-    <b>Nine minutes, three figures. But 6.2 has none, and that's where this section most easily slips away.</b><br>
+    <b>Eight minutes, four figures. But 6.2 has just one figure among text boxes, and that's where this section most easily slips away.</b><br>
     6.1 <b>three minutes</b> (one for the figure, two for the 2,700 red box; worth it),
-    <b>6.2 three</b>, 6.3 <b>three</b>.<br>
-    ⚠️ <b>6.2 runs box, table, box, box. All text, no natural pause.</b>
+    <b>6.2 two and a half</b>, 6.3 <b>two and a half</b>.<br>
+    ⚠️ <b>6.2 runs box, figure, box, box. Text apart from the figure, no natural pause.</b>
     <b>Make your own pauses</b>: <b>once</b> after the 🍳 knife analogy,
     <b>again</b> after 7/6 and 4/3. <em>Otherwise you lose the room by the third box.</em><br>
     ⭐ <b>The 6.3 figure's order is fixed: red segments first, then the two big numbers.</b>
