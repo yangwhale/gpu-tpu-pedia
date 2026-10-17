@@ -919,6 +919,7 @@ p.deepsay{background:#f8f9fa;border-left:3px solid #9aa0a6;padding:8px 14px;marg
     <a href="topic-05-lecture.html" class="on">讲义</a>
     <a href="topic-04.html">专题四（那张 16 字节的账）</a>
     <a href="index.html">课程总纲</a>
+    <a href="topic-05-lecture.en.html" lang="en" hreflang="en">🌐 English</a>
   </nav>
 </div></div>
 
