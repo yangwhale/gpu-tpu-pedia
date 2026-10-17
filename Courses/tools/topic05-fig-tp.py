@@ -25,7 +25,7 @@ RD_ = RD
 W = 1400
 C_V7 = 2307e12                  # v7 每芯片 bf16 FLOP/s
 B_V7 = 0.6e12                   # v7 每芯片 ICI 单方向（6 条链路 × 100 GB/s；收发合计才是 1,200）。环上每张卡收多少就发多少
-HBM_V7 = 7.37e12                # v7 每芯片显存带宽（跟 topic05-fig-pd.py 同一个数）
+HBM_V7 = 7.38e12                # v7 每芯片显存带宽：Google TPU7x 文档规格表 7,380 GB/s（topic05-fig-pd.py 按 2 × 3,433 GiB/s ≈ 7.37 现算，脊点同为约 313）
 RIDGE_HBM = C_V7 / HBM_V7
 assert 310 < RIDGE_HBM < 316 and 12 < HBM_V7 / B_V7 < 13     # 显存比网络快十二倍多
 # ⭐ 2026-09-26 现场：「是每张卡收多少字节来参与计算……卡在网络带宽上而不是 HBM 上，差了十几倍」
@@ -104,7 +104,7 @@ def fig_intensity():
     yb = f.src(yb + 10,
                "⚠️ 推导，非论文原话：FSDP 一步搬 ≈ 6Ψ 字节（2 次 AG 拼 bf16 权重 ＋ 1 次 RS 分 bf16 梯度）、算 6ΨT FLOPs；"
                "TP 一层 4 次 AllReduce 各发 ≈ 4Th 字节、算 72h²T／n。都按稠密层、通信与计算完全重叠算。",
-               "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，单方向按 600 GB/s 算（环上每张卡收多少就发多少，所以按「每秒收进来」讲也是 600）；显存 7.37 TB/s，比网络快十二倍多，所以这里卡的是网络线（Inferact TPU megakernel 博客规格表、wiki ici-dcn，"
+               "📌 v7：每芯片 bf16 2,307 TFLOP/s；ICI 1,200 GB/s 是 6 条链路收发合计，单方向按 600 GB/s 算（环上每张卡收多少就发多少，所以按「每秒收进来」讲也是 600）；显存 7.38 TB/s，比网络快十二倍多，所以这里卡的是网络线（Inferact TPU megakernel 博客规格表、wiki ici-dcn，"
                "来源为 Google TPU7x 文档；6 条链路的拆分与发出方向 600 是推导）。只用一根轴时硬件线约高 3 倍。V3 隐藏维 7,168 取自 config.json。",
                "⚠️ 分母该用实测带宽：在自己的网络上跑一次 AllGather（GPU 上用 nccl-tests），取它报的 busbw（按 AllGather 口径 ＝ 数据量 ÷ 用时 × (n−1)/n）。"
                "细虚线假设实测只有标称的 70%，门槛升到约 5,493；70% 不是 v7 的实测数。")

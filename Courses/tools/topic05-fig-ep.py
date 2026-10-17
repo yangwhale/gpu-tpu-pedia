@@ -40,7 +40,7 @@ def fig_params():
     f.t(BX, py + 124, "一个专家 ≈ %.0f 万参数 × 256 个 × 58 层" % (EXPERT / 1e4), INK, True, 14)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "V3 训练时一点 TP 都没用", [
-        "技术报告的理由是显存抠得够细，用不着代价高的 TP；专家只有 2,048 宽，TP 更不划算，而专家有 256 个，<tspan font-weight=\"700\">天然就是一维可以切的</tspan>。",
+        "技术报告的理由是显存抠得够细，用不着代价高的 TP。本课补一句：专家只有 2,048 宽，切 TP 更不划算；而专家有 256 个，<tspan font-weight=\"700\">天然就是一维可以切的</tspan>。",
         "V3 的训练配置：16 路 PP ＋ 64 路专家并行 ＋ ZeRO-1 数据并行，<tspan font-weight=\"700\">不用 TP</tspan>（技术报告 sec. 3.2）。",
     ])
     yb = f.src(yb + 10, "📌 config.json：hidden_size 7,168、moe_intermediate_size 2,048、n_routed_experts 256、"
@@ -226,7 +226,7 @@ def fig_ep_bias():
         "V3 的偏置只加在「挑谁」的分数上，算出来的权重不动：只管排号，不管诊断。训练最后 500B token 连偏置也停了。",
     ])
     yb = f.src(yb + 10,
-               "📌 无辅助损失均衡：Wang 等，arXiv 2408.15664；V3 技术报告 arXiv 2412.19437 sec. 2.1.2、sec. 4.2（u ＝ 0.001，最后 500B token 置 0）。",
+               "📌 无辅助损失均衡：Wang 等，arXiv 2408.15664；V3 技术报告 arXiv 2412.19437 sec. 2.1.2、sec. 4.2（报告里这个步长叫偏置更新速度 γ，前 14.3T token 取 0.001，最后 500B token 置 0）。步长记作 u 是 Wang 等论文 Algorithm 1 的写法（bias update rate u，实验里也取 0.001），本图沿用。",
                "⚠️ 本图为示意模拟（固定随机种子，8 选 2、u ＝ 0.02），不是 V3 的实测负载。")
     f.save("fig5-ep-bias.svg", yb + 14)
 
@@ -309,7 +309,7 @@ def fig_tep_dep():
         "DEP：每张卡只管自己那批请求，KV 不重复、batch 能开大；代价是专家那一步换成 AllToAll，还要防各卡忙闲不均。",
     ])
     yb = f.src(yb + 10,
-               "📌 TensorRT-LLM 定义：TEP<N> shards both attention (TP) and experts (EP) across N ranks；DEP<N> keeps attention data-parallel (ADP) while distributing experts across N ranks。",
+               "📌 TensorRT-LLM 定义：TEP&lt;N&gt; shards both attention (TP) and experts (EP) across N ranks；DEP&lt;N&gt; keeps attention data-parallel (ADP) while distributing experts across N ranks。",
                "⚠️ 专家那一步的通信按常见实现画：attention 用 TP 时各卡 token 相同，专家输出用 AllReduce 合并；attention 用数据并行时各卡 token 不同，走 AllToAll。示意 4 张卡、8 个专家。")
     f.save("fig5-tep-dep.svg", yb + 14)
 

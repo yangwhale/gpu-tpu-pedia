@@ -248,8 +248,8 @@ __FIG_AR_TWO_WAYS__
   <p>TPU 这边更直接：芯片之间的 ICI 本身就连成环面，切片够大（每一维都是 4 的整倍数）时，每一维天然就是一个首尾相接的环；
     更小的切片某一维只是一条线，环要在线上折返，带宽约减半。</p>
   <p>环面还多给一样东西：一颗芯片有 X、Y、Z 三个方向的环。先沿 X 收、再沿 Y、再沿 Z，每一步只有一个方向在干活，最后一步还最重；
-    把数据切成三块、各挑一条轴起步（XYZ／YZX／ZXY），三个方向就一直满着，同样一次 AllGather 快三倍。
-    ReduceScatter 倒着走（大的一步在前），AllReduce 两段都快三倍。</p>
+    把数据切成三块、各挑一条轴起步（XYZ／YZX／ZXY），三个方向就一直满着，同样一次 AllGather <b>只按带宽算</b>能快到三倍。
+    ReduceScatter 倒着走（大的一步在前），AllReduce 两段同理。⚠️ 这是本课推导：没算每一步的固定延迟，XLA 实际怎么切块、怎么排也没核对。</p>
 __FIG_TORUS__
 <figure class="fbox fwide" id="anim-torus">
 <video src="media/topic05-torus.mp4" autoplay loop muted playsinline
@@ -324,7 +324,7 @@ __FIG_FSDP_STEP__
        aria-label="FSDP 一步的动画。四张卡，每张卡三层，每层只长期持有自己那一段（四分之一）。标题：FSDP：每层用之前把别人那几段复制过来，用完就扔。字幕一：前向：每层先 AllGather，把别人那几段复制过来拼成整层，算完扔掉复制件。第 1、2、3 层依次：别人那三段各复制一份飞进来拼成整层（原件留在原处），整层亮一下，再把复制来的三段扔掉。底部计数一次次加一。字幕二：反向：扔掉的权重要再拼一次；算出的梯度 ReduceScatter 给各自的主人。从第 3 层往回：再拼一次整层、亮一下、扔掉，然后黄色的梯度小块飞回各自的主人。字幕三：每层三次：前向拼一次，反向再拼一次、散一次。计数停在 9。最后复位。"></video>
 <figcaption>整层只在用的那一刻出现；平时每张卡只拿着每层的四分之一。
   <span class="sub">（14 秒无声循环，Manim 渲染。）</span></figcaption></figure>
-  <p>通信是 3Ψ，<b>数据并行的 1.5 倍</b>；换来的是每卡常驻从 9.76 TiB 降到 78.11 GiB（约 84 GB，还不含激活）。可 V3 用的 H800 一张才 80 GB，放进去就满了 —— 光切数据还不够，后面几刀就是这么来的。</p>
+  <p>通信是 3Ψ，<b>数据并行的 1.5 倍</b>；换来的是每卡常驻从 9.76 TiB 降到 78.11 GiB（约 84 GB，还不含激活）。可 V3 用的 H800 一张才 80 GB，光这些就已经放不下，更别说激活 —— 光切数据还不够，后面几刀就是这么来的。</p>
   <div class="note warn"><span class="t">⚠️ 哪几级白送，哪一级要付钱</span>
     ZeRO-1、ZeRO-2 白送（切 micro-batch 时只剩 ZeRO-1，原因见「ZeRO 的一步」那张图的出处）；ZeRO-3 多付一半，对大模型来说非付不可。</div>
 
@@ -370,13 +370,13 @@ __FIG_FSDP_STEP__
   <p>打个比方：一间做门的工坊，卡是师傅，网络是跑腿的小工。小工搬两样东西：一样是<b>工具</b>（电刨、模具），就是权重；一样是<b>门板</b>，一块块正在加工、一道工序做完递给下一道，就是激活，每个 token 一块。
     FSDP 让小工搬工具：一件工具送到，这个师傅手上的每块门板都拿它过一遍，门板越多，这趟越值。</p>
 __FIG_INTENSITY__
-  <p>红虚线约 3,845：<b>每颗芯片一步分不到三千八百多个 token，FSDP 就被拖住</b>。</p>
+  <p>红虚线约 3,845：<b>每张卡一步分不到三千八百多个 token，FSDP 就被拖住</b>。这里的卡是 device，v7 一颗芯片是 2 个，按芯片数就是约 7,700。</p>
   <p>分母要当心：<b>该用你在自己网络上实测的带宽，不是规格表上的数</b>。门槛 ＝ 每秒能算多少次 ÷ 每秒实际拼得动多少字节的权重。
     测法是真跑一次 AllGather（GPU 上用 nccl-tests），看它报的 busbw。它按 AllGather 的口径算：数据量 ÷ 用时 × (n−1)/n，扣掉了自己那份本来就有、不用收的部分，正好对上每张卡每秒实际收到的字节。
     实测只跑到标称的七成，门槛就从 3,845 抬到约 5,493（图上细虚线，七成是假设的）。FSDP 那根轴要是只占几根链路、还跟别的轴抢线，这个数还得往上走。</p>
   <details class="foldfig"><summary><b>细一点</b>：3,845 怎么来的，什么情况下门槛更高</summary>
   <p>红虚线 3,845 ＝ v7 每芯片 2,307 TFLOP/s（bf16）÷ 每芯片每秒收进来约 0.6 TB/s（常说的 1.2 TB/s 是收发合计，环上每张卡收多少就发多少；⚠️ 这个拆分是推算，见台账）。
-    注意这里卡的是<b>网络</b>：权重收进来以后还要从显存读，可显存每秒 7.37 TB，比网络快十二倍多，那条线只有约 313（图最下面的灰虚线），远不是瓶颈。
+    注意这里卡的是<b>网络</b>：权重收进来以后还要从显存读，可显存每秒 7.38 TB，比网络快十二倍多，那条线只有约 313（图最下面的灰虚线），远不是瓶颈。
     这还是最乐观的线：只走一根轴，高约 3 倍；
     MoE 只靠 FSDP、不配专家并行，搬的是全部参数、算的只有被选中的那部分，再乘约 18 倍（V3 的 6,710 亿 ÷ 370 亿）。</p></details>
   <details class="foldfig"><summary><b>细一点</b>：「藏在计算后面」具体是怎么藏的</summary>
@@ -514,10 +514,10 @@ __FIG_EP_BIAS__
   <p>一层 Transformer 里，attention 和专家是两种完全不同的形状（对不是 MoE 的那部分来说，EP 那一维其实就是数据并行）：attention 的负担跟序列和 KV 有关，
     专家的负担是那一大堆参数。<b>所以同一批卡，在这两部分可以用两套切法。</b></p>
 __FIG_FOLD__
-  <p>挑哪种配法，差别大到什么程度？我们自己测过一次：</p>
+  <p>挑哪种配法，差别大到什么程度？先认两个简称，再看我们自己测过的一次（图后「一次实测」那一框）。</p>
   <p>推理里最常见的两种配法有简称：<b>TEP</b>（attention 用 TP、专家用 EP）和 <b>DEP</b>（attention 用数据并行、专家用 EP），后面的数字是总卡数。专家那一半两者一样，差别全在 attention：<b>一起算同一批请求，还是各算各的一批</b>。</p>
 __FIG_TEP_DEP__
-  <p>TEP 的每个请求有几张卡一起算，单个请求出字快；可 attention 是按头切的，V3 这类笔记只有一个头的模型切不开，KV 在每张卡上都是整份（§5.4）。DEP 每张卡只存自己那批请求的 KV，同样的显存装得下更多请求，专家那一步分到的 batch 也更大；代价是：专家那一步改走 AllToAll，各卡请求长短不一时会忙闲不均，没请求的卡也得陪着跑一遍空前向。上面 fig-fold 左边那种配法，算两者中间。别和 Megatron 的 ETP／EDP 混，见 §8.6。</p>
+  <p>TEP 的每个请求有几张卡一起算，单个请求出字快；可 attention 是按头切的，V3 这类笔记只有一个头的模型切不开，KV 在每张卡上都是整份（§5.4）。DEP 每张卡只存自己那批请求的 KV，同样的显存装得下更多请求，专家那一步分到的 batch 也更大；代价是：专家那一步改走 AllToAll，各卡请求长短不一时会忙闲不均，没请求的卡也得陪着跑一遍空前向。上面「各配各的」那张图左边那种配法（attention 用 TP 4 路 × 数据并行 2 路），算两者中间。别和 Megatron 的 ETP／EDP 混，见 §8.6。</p>
   <div class="note ok"><span class="t">一次实测：换一种切法，每张卡的吞吐翻一倍</span>
     GB300 上跑 DeepSeek-V4-Pro（vLLM），decode 从 TP4 换成 DEP8（attention 数据并行 8 路、专家 EP8），同样并发下<b>每张卡的吞吐是调完参的 TP4 的 2.09 倍</b>。
     最属于「换切法」的一笔在 attention 那一半：KV 不再在 4 张卡上各存一份（§5.4 讲为什么）。attention 权重虽然每张卡要存一份，但在 MoE 模型里只占几个百分点。注意上面的图画的是 V3（每卡 32 个专家），实测用的是 V4-Pro。<br>
@@ -537,7 +537,7 @@ __FIG_TEP_DEP__
   <ul>
     <li><b>训练</b>：每层要存的激活至少跟序列长度成正比；不用 FlashAttention 时还有一项跟长度的平方成正比（Megatron 序列并行论文的式 1）。</li>
     <li><b>推理</b>：KV cache 每个 token 都要存一份。V3 的 MLA 每 token 存一份压缩后的 KV（512 维）加一小段位置信息（64 维），(512 ＋ 64) × 61 层 × 2 字节（BF16）＝ 70,272 字节；再乘 131,072 个 token，
-      <b>一个 128K 的请求就是约 8.58 GiB</b>，差不多是一张 80 GB 显卡的九分之一，这还只是一个请求。把 KV 想成每个字留下的「笔记」，后面的字都要回头翻它。</li>
+      <b>一个 128K 的请求就是约 8.58 GiB</b>（约 9.2 GB），差不多是一张 80 GB 显卡的九分之一，这还只是一个请求。把 KV 想成每个字留下的「笔记」，后面的字都要回头翻它。</li>
   </ul>
 
   <h3>5.2　训练：CP 把激活沿序列切开</h3>
@@ -582,7 +582,7 @@ __FIG_CP_ZIGZAG__
 
   <h3>5.4　推理：KV cache 被 TP 复制了</h3>
   <p>长上下文、高并发的推理（decode 阶段）里，KV 常常是最大的一块。先记住一句：<b>TP 按头切，DCP 按字切</b>，下面两段就是这句话的展开。TP 在注意力里是按头分卡的：V3 的查询头有 128 个，分得开；MLA 把 KV 压成所有头共用的一份，只剩一个头，切不开。</p>
-  <p>很多模型把 KV 头定成 8 个，TP 8 路时每张卡正好分一组（Llama 2 70B 就是 8 个 KV 头）。一般地，TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated tp_size / H times）。
+  <p>很多模型把 KV 头定成 8 个，TP 8 路时每张卡正好分一组（Llama 2 70B 就是 8 个 KV 头）。一般地，TP 一旦超过 KV 头数 H，KV 就切不开了：每个头被复制 TP ÷ H 次（vLLM 文档原话：duplicated for tp_size / H times）。
     MLA 模型只有一个 KV 头，TP 8 路就是每张卡一整份、8 份一模一样的 KV。4.4 里 V4-Pro 在 TP4 上白存 3 份，毛病就在这儿。</p>
 __FIG_KV_DUP__
   <p><b>DCP（decode 上下文并行）</b>让 KV 按 token 轮流存到几张卡上，用的还是原来那几张卡。按 token 轮流而不是一段一段地存，是因为笔记一直在长：新来的字也会均摊到每张卡上。</p>
@@ -641,12 +641,12 @@ __FIG_KV_TRIP__
   <table>
     <tr><th>段</th><th>路径</th><th>估算</th></tr>
     <tr><td>①</td><td>HBM → 本机内存（PCIe）</td><td>约 10 ms</td></tr>
-    <tr><td>②</td><td>本机内存 → 对方内存（数据中心网络，按单颗芯片的 100 Gbps 份额保守估）</td><td>约 80 ms</td></tr>
+    <tr><td>②</td><td>本机内存 → 对方内存（数据中心网络，按单颗芯片的 100 Gb/s 份额保守估）</td><td>约 83 ms</td></tr>
     <tr><td>③</td><td>对方内存 → HBM（PCIe），接进 decode 的 KV 池</td><td>约 10 ms</td></tr>
-    <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b></td></tr>
+    <tr><td></td><td><b>合计</b></td><td><b>约 100 ms</b>（10 ＋ 83 ＋ 10）</td></tr>
   </table>
   <p>中间那段：8K prompt 的 KV 是 2（K、V 各一份）× 62 层 × 8 个 KV 头 × 128（每头维度）× 8,192 × 1 字节（FP8）≈ 1.04 GB，
-    100 Gbps 就是每秒 12.5 GB，走一趟约 83 ms。另有一个 CPU 上的转发代理负责把请求分给两边。</p></details>
+    100 Gb/s 就是每秒 12.5 GB，走一趟约 83 ms。另有一个 CPU 上的转发代理负责把请求分给两边。</p></details>
   <p>这一趟用的是第一节那个一对一收发，而且跨机器、走数据中心网络这根慢线；它敢跨出去，是因为一个请求只传一次。
     从这一刀往后，调度的中心其实是那份笔记：KV 跟着请求搬家。Kimi 的 Mooncake 干脆把整套推理系统叫作「以 KV cache 为中心」。</p>
   <p>反过来说，请求都很短、量也不大的时候，拆开多出来的这趟传输和两套机器就不一定划算，放在一起、用分块 prefill 缓解就够了。</p>
@@ -963,7 +963,7 @@ __FIG_PANO__
   <p>其它常听到的组合说法：</p>
   <ul>
     <li><b>3D / 4D / 5D 并行</b>：只是说「同时用了几种」，<b>各家算哪几维不一样</b>。
-      torchtitan 把 FSDP ＋ TP ＋ CP ＋ PP 叫 4D，Megatron 的 Parallel Folding 论文把 TP / EP / CP / DP / PP 叫 5D。
+      TorchTitan 论文把 FSDP ＋ TP ＋ CP ＋ PP 叫 4D，Megatron 的 Parallel Folding 论文把 TP / EP / CP / DP / PP 叫 5D。
       引用时要把具体是哪几维说出来。</li>
     <li><b>TRT-LLM 的「Hybrid ETP」</b>：指专家层 TP 和 EP 混用，跟 Megatron 的 ETP 又不是一回事。</li>
   </ul>
@@ -976,7 +976,7 @@ __FIG_PANO__
     <tr><td>Async TP、TP 通信重叠、collective matmul</td><td>还是 TP，只是把通信和矩阵乘切成小块交错着做</td></tr>
     <tr><td>EPLB、冗余专家</td><td>负载均衡：把热门专家多复制几份再重新摆放。修的是 EP 的病，本身不切新维度</td></tr>
     <tr><td>Offload、重计算</td><td>拿时间换显存，或者拿主机内存换显存</td></tr>
-    <tr><td>分块 prefill（chunked prefill）</td><td>推理调度：把长 prompt 切成小块跟 decode 拼着跑，缓解互相卡住（§6.1）；别跟训练里的 Chunked PP 混</td></tr>
+    <tr><td>分块 prefill（chunked prefill）</td><td>推理调度：把长 prompt 切成小块跟 decode 拼着跑，缓解互相卡住（§6.1）；别跟 §8.3 的 Chunked PP 混：那个也用在推理 prefill，但块是灌进流水线并行的，真的多切了一维</td></tr>
   </table>
 
   <h3>8.8　同名不同义</h3>
@@ -989,7 +989,7 @@ __FIG_PANO__
     <tr><td>ETP</td><td>Megatron 指专家内部的 TP；TensorRT-LLM 的 Hybrid ETP 指专家层 TP 和 EP 混用</td></tr>
     <tr><td>hierarchical</td><td>ZeRO++ 的分层分片、Megatron 的分层 CP，是两件不同的事</td></tr>
     <tr><td>卡／芯片／device</td><td>GPU 上一张卡就是一个 device；TPU v7 一颗芯片对软件显示成 2 个 device，并行度按 device 数</td></tr>
-    <tr><td>带宽</td><td>有的按单向报、有的按收发合计报：本讲的 1.8 TB/s（NVLink）、1.2 TB/s（ICI）是收发合计，800 Gb/s、100 Gbps（网卡）是单向</td></tr>
+    <tr><td>带宽</td><td>有的按单向报、有的按收发合计报：本讲的 1.8 TB/s（NVLink）、1.2 TB/s（ICI）是收发合计，800 Gb/s、100 Gb/s（网卡）是单向</td></tr>
     <tr><td>并发与 batch</td><td>并发是在排队的请求数，batch 是同时在算的请求数</td></tr>
   </table>
 
@@ -1018,7 +1018,7 @@ __FIG_PANO__
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>各集合通信每卡发出的量（第一节的表）</td><td>NVIDIA/nccl-tests：doc/PERFORMANCE.md 的 bus bandwidth 修正系数：AllReduce 2(n−1)/n，ReduceScatter / AllGather / AlltoAll (n−1)/n，Broadcast / Reduce 1</td></tr>
     <tr><td>环形 ReduceScatter 的逐步推演、班长模式</td><td>wanghonglei《分布式深度学习集体通信原语——从零到精通》（2026-06-27）第 1–2 章；图里每一步由脚本按调度现算并断言。块号比原文挪了一位，让卡 k 最后拿第 k 块</td></tr>
-    <tr><td>开场题：常规混合精度每参数 16 字节；V3 实际把 m、v 存成 bf16，主权重与累积梯度留 fp32</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.3.3（原文：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32）；常规做法里优化器状态与参数同精度（PyTorch 默认）；Megatron Core 需显式开启 --use-precision-aware-optimizer --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16（Megatron Core MoE 文档）；Megatron 的「精度感知优化器」参数组里并列 --main-grads-dtype、--main-params-dtype、--exp-avg-dtype、--exp-avg-sq-dtype（arguments.py），本课口径仍把梯度单列；V3 每参数约 14 字节为本课推导（计算用权重的精度报告未写，按 BF16 计）；bf16 训练时 Megatron 默认把梯度累加与 all-reduce 放 fp32（megatron/training/arguments.py：「bfloat16 requires gradient accumulation and all-reduce to be done in fp32」），此时梯度 4 字节、每参数 18 字节</td></tr>
+    <tr><td>开场题：常规混合精度每参数 16 字节；V3 实际把 m、v 存成 bf16，主权重与累积梯度留 fp32</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.3.3（原文：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32）；常规做法里优化器状态与参数同精度（PyTorch 默认）；Megatron-LM 需显式开启 --use-precision-aware-optimizer 再配 --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16（Megatron Core MoE 文档；命令行参数在 megatron/training/arguments.py，不开精度感知优化器时 megatron/core/optimizer/optimizer_config.py 断言两者只能是 fp32）；Megatron 的「精度感知优化器」参数组里并列 --main-grads-dtype、--main-params-dtype、--exp-avg-dtype、--exp-avg-sq-dtype（arguments.py），本课口径仍把梯度单列；V3 每参数约 14 字节为本课推导（计算用权重的精度报告未写，按 BF16 计）；bf16 训练时 Megatron 默认把梯度累加与 all-reduce 放 fp32（megatron/training/arguments.py：「bfloat16 requires gradient accumulation and all-reduce to be done in fp32」），此时梯度 4 字节、每参数 18 字节</td></tr>
     <tr><td>V3 的 FP8 方案整体验证：损失相对误差低于 0.25%</td><td>同上 sec. 3.3 与附录 B.1：约 16B、230B 两个规模各训约一万亿 token，整套 FP8 方案（含 bf16 优化器状态）对 BF16 基线；报告未单独消融「动量用 bf16」这一项</td></tr>
     <tr><td>动量能不能用 bf16，要看 β₂</td><td>V3 的 AdamW β₁＝0.9、β₂＝0.95（技术报告 sec. 4.2）；PyTorch AdamW 默认 β₂＝0.999。⚠️ 本课推导：bf16 有效位 8 位，相邻两数的相对间隔 2⁻⁷～2⁻⁸，四舍五入丢掉小于半个间隔（最小约 0.2%）的改动；β₂＝0.999 时新值每步只占 0.1%。独立证据：Dettmers 等 arXiv 2110.02861，分块量化的 8 比特优化器状态能追平 32 比特</td></tr>
     <tr><td>V3 全部训练 278.8 万 H800 卡时；一块卡约 318 年</td><td>DeepSeek-V3 技术报告摘要（含预训练、长上下文扩展与后训练）；318 年 ＝ 2.788M ÷ 8,760 小时，本课推导</td></tr>
@@ -1040,7 +1040,7 @@ __FIG_PANO__
     <tr><td>CP 的之字形切法</td><td>Megatron-LM megatron/core/utils.py（2×cp 块，rank r 拿第 r 与 2·cp−r−1 块）；docs/user-guide/features/context_parallel.md</td></tr>
     <tr><td>KV 被 TP 复制 tp/H 次；DCP 复用 TP rank</td><td>vLLM context parallel 部署文档；vllm/config/parallel.py docstring。V3 每 token KV 70,272 字节按 config.json 现算。config 里 num_key_value_heads=128 是 MLA 解压后的头数，推理缓存的是压缩后那一份，vLLM 当作 1 个 KV 头</td></tr>
     <tr><td>PD 分离的动机与收益（第六节）</td><td>DistServe arXiv 2401.09670（prefill 偏算力、decode 受带宽约束；7.4 倍请求是对 DeepSpeed-MII，12.6 倍更紧的 SLO 是对 vLLM）</td></tr>
-    <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gbps 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
+    <tr><td>v7x 上 1P1D 的 KV 三段约 100 ms（带宽估算）；2P:1D ／ 1P:2D</td><td>本课程作者的部署记录（KV 用时为按带宽估算，非计时）：wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425。8K KV ≈ 1.04 GB、过 100 Gb/s 约 83 ms 为本课推导（Qwen3-Coder config：62 层、8 个 KV 头、head_dim 128）</td></tr>
     <tr><td>每一刀每步的通信次数（第七节）</td><td>⚠️ 本课推导（60 层、8 个 micro-batch 的示意配置）：TP 每层 4 次（arXiv 1909.08053 sec. 3），FSDP 每层 3 次（arXiv 1910.02054 sec. 7），EP ／ PP ／ DP 按调度数出</td></tr>
     <tr><td>GB300 NVLink 1.8 TB/s ／ 每 GPU 800 Gb/s 网卡；9 倍</td><td>wiki sources/nvidia-gpu-comparison-20260311、analyses/gb300-a4x-max-network-congestion-control（A4X Max 每节点 4 GPU、4 × CX-8 800 Gb/s）；9 倍为本课按双向口径换算</td></tr>
     <tr><td>混元 3 的 scaling 与五步对照</td><td>本课程作者实测：gpu-tpu-pedia tpu/Hunyuan3-295B-Pretraining/TUNING-v7 sec. 3.7（五种分法 404 ／ 450 ／ 453 ／ OOM ／ OOM）、sec. 4.1（64 与 256 芯片同为 580）、sec. 3.6（DP2 × FSDP256、pdbs 16 得 599）、EP 4 路在 16 芯片上 −71%（单次）。sec. 4.1 一步 23.54 s；组间 all-reduce 占不到百分之一为本课推导（原文 12 ms 的算式前后不一致）；换配法 EP 掉 37% 与 FSDP 加宽只慢不到 1%（450 对 453）见 TUNING-v7 sec. 3.7</td></tr>
@@ -1055,9 +1055,9 @@ __FIG_PANO__
     <tr><td>3D 环面三块轮换、AllGather 快三倍</td><td>How to Scale Your Model（scaling book）sharding 章：多轴收集时可用带宽成倍增加；63 对 21 为本课按 4×4×4 只算带宽的推导，XLA 实际调度未核对</td></tr>
     <tr><td>Llama 3 把 FSDP 放在最外层</td><td>Llama 3 技术报告 arXiv 2407.21783 sec. 3.3.2（并行维度顺序 [TP, CP, PP, DP]）</td></tr>
     <tr><td>V3 每 token 激活 370 亿参数、预训练 4K</td><td>DeepSeek-V3 技术报告 arXiv 2412.19437 摘要与 sec. 4.1</td></tr>
-    <tr><td>torchtitan 的「4D」</td><td>pytorch/torchtitan README（FSDP2 ＋ TP ＋ PP ＋ CP）</td></tr>
+    <tr><td>TorchTitan 的「4D」</td><td>TorchTitan 论文 arXiv 2410.06511 sec. 2.1.5 与表 6（4D parallelism ＝ FSDP ＋ TP ＋ PP ＋ CP）；摘要只写到 3D（Llama 3.1 405B、512 卡），现 pytorch/torchtitan README 已不用「4D」这个说法</td></tr>
     <tr><td>「最大的一块卡显存也就两三百 GB」</td><td>NVIDIA B300 每卡 288 GB HBM3e；Google TPU7x 每芯片 192 GiB HBM（源码写十进制 206 × 10⁹ 字节 ≈ 191.85 GiB）；9.76 TiB ≈ 10,700 GB（十进制）</td></tr>
-    <tr><td>DCN 每芯片 100 Gbps；跨切片同口径慢约 50 倍</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）；100 Gbps 按单向计、×2 得双向约 25 GB/s，对 ICI 双向 1,200 GB/s 约 48 倍，为本课推导（只按单向比则约 96 倍）</td></tr>
+    <tr><td>DCN 每芯片 100 Gb/s；跨切片同口径慢约 50 倍</td><td>Google Cloud TPU7x 文档（第五轮 TPU 专家评审核对）；100 Gb/s 按单向计、×2 得双向约 25 GB/s，对 ICI 双向 1,200 GB/s 约 48 倍，为本课推导（只按单向比则约 96 倍）</td></tr>
     <tr><td>TEP / DEP 的定义</td><td>TensorRT-LLM tech blog 26（DeepSeek V4 on Blackwell）原文；vLLM Kimi K3 blog（2026-07-27）</td></tr>
     <tr><td>Megatron 里没有 TEP / DEP；ETP / EDP / Parallel Folding</td>
       <td>NVIDIA/Megatron-LM main：megatron/core/transformer/moe/README.md；论文 arXiv 2504.14960</td></tr>

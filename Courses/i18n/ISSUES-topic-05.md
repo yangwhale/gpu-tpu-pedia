@@ -1,0 +1,23 @@
+# 专题五：翻英文时发现的中文原文问题（2026-10-17 夜起）
+
+## 课件（topic-05）
+1. ✅ 序列并行 fig-kv-dup 的 aria-label 写「12 万 8 千 token」（128,000），计算用的是 131,072（小）
+2. ✅ 第四节 fig-moe-params：同一句里把「技术报告给出的不用 TP 的理由」和「专家只有 2,048 宽」的论证连在一起，后者像本课自己的推理，归属需写清
+3. ✅ §4.4「我们自己实测过一次：」后面紧跟 TEP/DEP 定义和图，实测结果隔两块才出现（冒号悬空）
+4. ✅ 正文里写出了内部图 id「fig-fold」
+5. ⏭ （原已核为非问题，未动）（已核：出处台账确有约 48× 换算，非问题）
+6. ✅ KV 传输中段：图与推导写 ~83 ms，表格与 wiki 注写 ~80 ms（口径不一）
+7. ✅ 第一节 torus「快 3 倍」写成定论，实为只算带宽的本课推导（未计每步延迟、未核 XLA 调度）
+8. ✅ §8.3 表把 Chunked PP 标成推理技术，§8.7 却说「别跟训练里的 Chunked PP 混淆」——出处（LMSYS、Mooncake）都指推理 prefill，§8.7 疑为笔误
+9. ✅ §5.1「约 8.58 GiB，差不多是一张 80 GB 显卡的九分之一」同句混用 GiB 与 GB（结论仍成立，小）
+10. ✅ DCP 图标签「第 1 条卡 0、第 2 条卡 1」，动画里 token 从 0 编号（差一）
+11. ✅ 网卡速率同时写 Gb/s 与 Gbps（小）
+12. ✅ ⚠️ §3.1「每颗芯片一步分不到三千八百多个 token，FSDP 就被拖住」：图的横轴、标签与推导都是「每卡（device）」，v7 一颗芯片 = 2 张卡，阈值差 2 倍，应为「每张卡」
+13. ✅ ⚠️ ZeRO-3 的 78.11 GiB 与 80 GB H800 比较说「放进去就满了」，同段换算 ≈ 84 GB > 80 GB，实际是放不下
+14. ✅ 第二节 Megatron 只写 `--exp-avg-dtype bf16 --exp-avg-sq-dtype bf16`：这两个 flag 需配合 `--use-precision-aware-optimizer` 才生效（否则断言须为 fp32）；且 flag 属 Megatron-LM（arguments.py），不是 Megatron Core
+15. ✅ 第四节 TEP/DEP「出处与假设」块里 `TEP<N>` `DEP<N>` 未转义，浏览器当成标签吞掉，读者看不到 <N>（应写 &lt;N&gt;）
+16. ✅ 第三节 v7「出处与假设」HBM 写 7.37 TB/s，所引 Inferact 博客与 Google TPU7x 文档现为 7,380 GB/s（结论「>12× 网络」不变）
+17. ✅ 第四节负载均衡出处写 V3 §4.2「u = 0.001」，V3 报告里该参数叫 γ（bias update speed）；u 疑出自 Wang et al. 论文，需写清
+18. ✅ 第五节 vLLM 引文标「原话」但漏了 for：原文 "duplicated for `tp_size / H` times"
+19. ✅ 第七节称 torchtitan README 自称「4D」：现 README 已不写 4D，TorchTitan 论文摘要（arXiv 2410.06511）写的是 3D parallelism，出处或说法需更新
+20. ⏭ 核实后原说法成立（算例在论文 sec. 1、图 1：13B、单张 A100，1.6/5.6/10 rps、2.1×），只把图出处补成「论文 sec. 1 ＋ 作者博客」、副标题 OPT 改 13B/A100 —— 第六节图出处称「多一倍以上」是「论文里的单卡算例」：2P1D 约 2× goodput 的算例出自 DistServe 作者博客，不是论文

@@ -90,7 +90,7 @@ def fig_mem():
         "ZeRO-1、ZeRO-2 通信量跟数据并行<tspan font-weight=\"700\">一个字节都不多</tspan>（一步只同步一次时），却已经把 16 字节削到约 2 字节。"
         "　可 V3 按这个算每卡还要 1.29 TiB，一张卡照样装不下。",
         "只有 ZeRO-3 能降到每卡 78.11 GiB，代价是通信从 2Ψ 变成 <tspan font-weight=\"700\">3Ψ，多一半</tspan>。"
-        "　可一张 H800 才 80 GB，放进去就满了，激活没地方放：光切数据还不够。",
+        "　可一张 H800 才 80 GB，约 84 GB 装不进去，激活更没地方放：光切数据还不够。",
     ])
     yb = f.src(yb + 10,
                "📌 出处：Rajbhandari 等，ZeRO，arXiv 1910.02054 sec. 5、sec. 7。原文：Pos、Pos+g 通信量与数据并行相同（2Ψ），"
@@ -300,7 +300,7 @@ def fig_bf16_beta():
     ])
     yb = f.src(yb + 10,
                "📌 DeepSeek-V3 技术报告 arXiv 2412.19437 sec. 3.3.3：用 BF16 代替 FP32 追踪 AdamW 一、二阶矩，「未观察到性能退化」；主权重与用于 batch 累积的梯度仍保留 FP32。sec. 4.2：β₁＝0.9、β₂＝0.95。",
-               "📌 这不是默认做法：常规做法里优化器状态与参数同精度；Megatron Core 要显式开启 --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16。PyTorch AdamW 默认 β₂＝0.999。",
+               "📌 这不是默认做法：常规做法里优化器状态与参数同精度；Megatron-LM 要显式开启 --use-precision-aware-optimizer，再配 --exp-avg-dtype bf16 --exp-avg-sq-dtype bf16（命令行参数在 megatron/training/arguments.py；不开前者时 megatron/core/optimizer/optimizer_config.py 断言两者只能是 fp32）。PyTorch AdamW 默认 β₂＝0.999。",
                "⚠️ 本课推导：刻度与舍入按 bf16（8 位有效位、就近舍入）真算。V3 报告的验证是整套 FP8 方案（含 bf16 动量）对 BF16 基线，16B 与 230B 两个规模损失相对误差低于 0.25%；未单独消融 bf16 动量。")
     f.save("fig5-bf16-beta.svg", yb + 14)
 

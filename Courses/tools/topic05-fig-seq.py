@@ -73,7 +73,7 @@ def fig_zigzag():
 
 def fig_kv_dup():
     f = Fig(W, "一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。"
-               "每个 token 的 KV 是 70272 字节，12 万 8 千个 token 就是约 8.58 GiB。"
+               "每个 token 的 KV 是 70272 字节，128K 也就是 131072 个 token，就是约 8.58 GiB。"
                "TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。"
                "DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB")
     y0 = f.header("推理时切序列：KV cache 被 TP 复制了几份　——　<tspan font-weight=\"700\">DCP 把复制变回容量</tspan>",
@@ -385,7 +385,7 @@ def fig_pcp_dcp():
     f.t(rx, ry - 16, "这一步：每个请求只有 1 个新提问（表只有一行），前面存了一长串笔记", INK, True, 13.5)
     for j in range(N_):
         f.box(rx + j * CC, ry, CC - 3, CC - 3, COLS[j % 4], COLS[j % 4], 3)
-    f.t(rx, ry + 60, "笔记按 token 轮流存：第 1 条卡 0、第 2 条卡 1……（原来那 4 张 TP 卡，不加卡）", GY, size=13)
+    f.t(rx, ry + 60, "笔记按 token 轮流存：第 0 条卡 0、第 1 条卡 1……（原来那 4 张 TP 卡，不加卡）", GY, size=13)
     by = ry + 100
     for c in range(4):
         cy_ = by + c * 44

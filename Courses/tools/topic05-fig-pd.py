@@ -13,7 +13,7 @@ from topic03_draw import Fig, BL, OR, GR, RD, PU, CY, GY, INK, GY2, LINE
 W = 1400
 # Qwen3-Coder-480B（config.json：62 层、8 个 KV 头、head_dim 128），8K prompt、FP8 每元素 1 字节
 KV_8K = 2 * 62 * 8 * 128 * 8192
-DCN = 100e9 / 8                          # 100 Gbps 以太网 ＝ 12.5 GB/s
+DCN = 100e9 / 8                          # 100 Gb/s 以太网 ＝ 12.5 GB/s
 T_DCN = KV_8K / DCN
 assert abs(KV_8K / 1e9 - 1.04) < 0.01 and abs(T_DCN * 1e3 - 83) < 1
 
@@ -62,7 +62,7 @@ def fig_pd():
     ])
     yb = f.src(yb + 10, "📌 DistServe arXiv 2401.09670：prefill 偏算力、decode 受显存带宽约束；拆开后多服务 7.4 倍请求或把 SLO 收紧 12.6 倍。",
                         "📌 本课程作者 TPU v7x 1P1D 部署（Qwen3-Coder-480B）：KV 三段传输按带宽估算约 100 ms，占 1–2 s prefill 的 5–10%%。"
-                        "8K prompt 的 KV ≈ %.2f GB（FP8，按 config 现算），过 100 Gbps 网络约 %.0f ms" % (KV_8K / 1e9, T_DCN * 1e3) + "；长 prompt 宜 2P:1D，长输出宜 1P:2D。")
+                        "8K prompt 的 KV ≈ %.2f GB（FP8，按 config 现算），过 100 Gb/s 网络约 %.0f ms" % (KV_8K / 1e9, T_DCN * 1e3) + "；长 prompt 宜 2P:1D，长输出宜 1P:2D。")
     f.save("fig5-pd.svg", yb + 14)
 
 
@@ -195,7 +195,7 @@ def fig_decode_ai():
 
 
 # ── fig-kv-trip：一趟 KV 传输对一次 prefill，按同一把尺子画（2026-09-25 讲后：6.2 那张表是证据不是图） ──
-SEG = [("① 显存 → 本机内存（PCIe）", 10, BL), ("② 本机 → 对方（数据中心网络 100 Gbps）", round(T_DCN * 1e3), OR),
+SEG = [("① 显存 → 本机内存（PCIe）", 10, BL), ("② 本机 → 对方（数据中心网络 100 Gb/s）", round(T_DCN * 1e3), OR),
        ("③ 对方内存 → 显存（PCIe）", 10, GR)]
 TRIP_MS = sum(m for _, m, _ in SEG)
 PREFILL_MS = (1000, 2000)                 # 8K prompt 的 prefill 1–2 s（wiki 实测页）
@@ -246,7 +246,7 @@ def fig_kv_trip():
     ])
     yb = f.src(yb + 10,
                "📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。",
-               "⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gbps ＝ 12.5 GB/s → 约 83 ms。")
+               "⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gb/s ＝ 12.5 GB/s → 约 83 ms。")
     f.save("fig5-kv-trip.svg", yb + 14)
 
 
@@ -264,7 +264,7 @@ def fig_pd_ratio():
     f = Fig(W, "同样守住首字延迟和出字间隔两个要求。一张卡两样都做，每秒只接得住 1.6 个请求；只做 prefill 能接 5.6 个，只做 decode 能接 10 个。"
                "两张做 prefill、一张做 decode，三张卡每秒接 10 个请求，每张卡 3.3 个，是混着做的两倍多；混着做要接住 10 个，得 7 张卡")
     y0 = f.header("拆开以后，3 张卡顶混着做的 7 张　——　<tspan font-weight=\"700\">各干各的，谁也不拖谁</tspan>",
-                  "同一套延迟要求下，一张卡每秒接得住几个请求（DistServe 论文的例子，OPT 模型）",
+                  "同一套延迟要求下，一张卡每秒接得住几个请求（DistServe 论文的例子，13B 模型、单张 A100）",
                   [(GY2, "两样都做"), (OR, "只做 prefill"), (GR, "只做 decode")])
     PH = 272
     py = f.panel(0, y0, W, PH, "每张卡每秒接得住几个请求", INK)
@@ -287,7 +287,7 @@ def fig_pd_ratio():
         "两边各有各的上限：prefill 一张接 5.6 个，decode 一张接 10 个，所以配 2 比 1，两边差不多同时忙满。",
         "长 prompt 的业务 prefill 更累，就多配 prefill；长回答的业务多配 decode。",
     ])
-    yb = f.src(yb + 10, "📌 DistServe（Zhong 等，arXiv 2401.09670）作者博客「Throughput is Not All You Need」中的例子：同一 SLO 下单卡 goodput 1.6／5.6／10 rps。",
+    yb = f.src(yb + 10, "📌 DistServe（Zhong 等，arXiv 2401.09670）sec. 1 与图 1 的例子（13B 模型、单张 A100，90% 请求达标）：同一 SLO 下单卡 goodput 1.6／5.6／10 rps，2P1D 每卡 3.3 rps、2.1 倍；作者博客「Throughput is Not All You Need」用同一组数讲了一遍。",
                "⚠️ 本课推导：2P1D 每秒 min(2 × 5.6, 10) ＝ 10 个，每卡约 3.3 个；混着做接 10 个要 ⌈10 ÷ 1.6⌉ ＝ 7 张卡。")
     f.save("fig5-pd-ratio.svg", yb + 14)
 
