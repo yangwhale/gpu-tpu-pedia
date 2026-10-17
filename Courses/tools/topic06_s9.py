@@ -55,7 +55,7 @@ __FIG_S9_SPLIT__
   <p>Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量。</p></details>
 
   <h3 id="s9-6">9.6　决策树：三个问题</h3>
-  <p>答「否」就停。分块 prefill 见第四节，KV 薄不薄见 8.8。</p>
+  <p>答「否」就停。分块 prefill 见第三节，KV 薄不薄见 8.8。</p>
 __FIG_S9_DECIDE__
 
   <h3 id="s9-7">9.7　AFD：再拆一层</h3>

@@ -194,7 +194,7 @@ DEP16 每个 device 多背一份非专家权重，比全切多占十五 GiB 左�
 🧑‍🎓 新人「DCP 和 PCP 一字之差，差在哪？」→ D 是 decode，切的是 KV 的存放；P 是 prefill，切的是一个长 prompt 的计算。<br>
 🛠 GPU 老兵「Ring、Ulysses 选哪个？」→ 两个都是二〇二三年提出的，Ulysses 九月、Ring 十月；Ring 传 K、V 还是 Q，看谁的通信藏得进计算，结果都和不切一样；Ulysses 用 AllToAll 换成按头切，切的份数不能超过头数。Meta 那篇用的是 Ring。<br>
 🛠 GPU 老兵「DCP 能和 HiCache 一起开吗？」→ 课件 7.3 记的坑：HiCache 开 L3，或 L1＋L2 叠投机解码，就得退回纯 TP。<br>
-💰 管预算的「长上下文要多付多少？」→ 先是人少：第三节 4K 装 344 条，32K 只剩 43 条。DCP 能把 K3 的 KV 容量从一百五十万撑到一千二百多万 token（官方口径；TP8 默认实测约七十九万），但短输入会亏。
+💰 管预算的「长上下文要多付多少？」→ 先是人少：第四节 4K 装 344 条，32K 只剩 43 条。DCP 能把 K3 的 KV 容量从一百五十万撑到一千二百多万 token（官方口径；TP8 默认实测约七十九万），但短输入会亏。
 """),
 
 # ════════════════════════════════════════════════════════════════════
@@ -206,7 +206,7 @@ DEP16 每个 device 多背一份非专家权重，比全切多占十五 GiB 左�
 <p>💬 <b>互动</b>：听两三个答案，不揭晓，<code>anim-pdsplit</code> 播完再收。</p>
 
 <p class="say">「下半场拉第三根杠杆：开两个仓库。每张卡带的人多了，长 prompt 一进门，卡住的也多；分块只是摊平。吞 prompt 的和吐字的分到两批机器上。<br>
-Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进 Kimi 线上。第三节的 KV 当存储，到这里铺满集群：KV 反正要搬，算过的顺手存着。」</p>
+Splitwise、DistServe 先后提出，Mooncake 连同 KV 池做进 Kimi 线上。第四节的 KV 当存储，到这里铺满集群：KV 反正要搬，算过的顺手存着。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到 8.1，停在 <code>anim-pdsplit</code>，等它播完一圈（22 秒）。</p>
 

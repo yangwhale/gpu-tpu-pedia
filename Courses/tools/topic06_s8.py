@@ -7,8 +7,8 @@
 """
 
 BODY = '''
-  <p class="lead">第六、七节把每张卡的批撑大了，一次 prefill 波及的人也跟着变多。分块 prefill（4.2）只能把打扰摊平：两段还挤在同一批卡上，长 prompt 一来，正在出字的人照样要等。PD 分离把两段拆到两批机器上。Splitwise（2023）、DistServe（2024）先后提出它：前者报同成本同功耗下吞吐是不拆的 2.35 倍，后者报九成请求达标时能接的请求是当时主流系统（都不拆）的 7.4 倍。</p>
-  <p>Kimi 的线上系统 Mooncake 连同 KV 池（3.6）把 PD 分离做进了生产，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
+  <p class="lead">第六、七节把每张卡的批撑大了，一次 prefill 波及的人也跟着变多。分块 prefill（3.2）只能把打扰摊平：两段还挤在同一批卡上，长 prompt 一来，正在出字的人照样要等。PD 分离把两段拆到两批机器上。Splitwise（2023）、DistServe（2024）先后提出它：前者报同成本同功耗下吞吐是不拆的 2.35 倍，后者报九成请求达标时能接的请求是当时主流系统（都不拆）的 7.4 倍。</p>
+  <p>Kimi 的线上系统 Mooncake 连同 KV 池（4.6）把 PD 分离做进了生产，FAST'25 正式版报比此前系统多接 115%（A800）、107%（H800）请求。NVIDIA 2025 年 3 月开源 Dynamo（搬 KV 的那层叫 NIXL），2026 年 3 月出 1.0 正式版，PD 分离成了标准件。
     <b>难的是 KV 从 prefill 机传到 decode 机的那一趟。</b></p>
 
   <h3 id="s8-1">8.1　回顾：为什么要拆</h3>
@@ -33,7 +33,7 @@ __FIG_S8_STACK__
   <ul>
     <li><b>搬运</b>：把字节从一块显存挪到另一块。</li>
     <li><b>调度</b>：决定请求去哪台 prefill、交给哪台 decode。tpu-inference 的代理把请求改成只要一个输出字发给 prefill（prefill 本来就顺手出首字），再让 decode 端拉 KV。</li>
-    <li><b>存储</b>：KV 反正已离开 prefill 机，顺手存下，同前缀的下一个请求直接取（3.6）。</li>
+    <li><b>存储</b>：KV 反正已离开 prefill 机，顺手存下，同前缀的下一个请求直接取（4.6）。</li>
   </ul>
   <p>TPU 上能直接用的是 TPUConnector；TPU Sync 刚开源，自称还不宜通用。</p>
   <p><b>排查按层找</b>：带宽掉到几百 MB/s 是搬运层没走对通道；请求接不上、握手失败多半在调度层；前缀命中率低看存储层。</p>
@@ -55,15 +55,15 @@ __FIG_S8_BW__
     <tr><td>vLLM · V4-Pro · GB300</td><td>NIXL 走 NVLink cuda_ipc</td><td>能用，唯一活路</td></tr>
     <tr><td>vLLM · V4-Pro · GB300</td><td>Mooncake 走 NVLink ＋ 简易代理</td><td>KV 快了，整体更慢：并发 64 输出 1,333 对 NIXL 的 1,693 tok/s</td></tr>
     <tr><td>vLLM · V4-Pro · GB300</td><td>Dynamo ＋ vLLM ＋ MooncakeConnector</td><td>接不上：Dynamo 的 vLLM 集成没有传 Mooncake 握手地址的通路</td></tr>
-    <tr><td>SGLang · DeepSeek-R1 · GB300</td><td>NIXL 走 RoCE（以太网上的 RDMA，3.6）</td><td>GKE 上调不通，请求 60 s 超时</td></tr>
+    <tr><td>SGLang · DeepSeek-R1 · GB300</td><td>NIXL 走 RoCE（以太网上的 RDMA，4.6）</td><td>GKE 上调不通，请求 60 s 超时</td></tr>
     <tr><td>SGLang · R1 ／ Kimi K3 · GB300</td><td>Mooncake 走 NVLink</td><td>R1 上能用；K3 的 PD 尝试也选了这条</td></tr>
   </table>
   <p>别问 NIXL 和 Mooncake 哪个好，要问这个引擎、这张网上哪条路通。共同点只有一个：<b>同一个 NVLink 域里，KV 别出域。</b></p>
 
   <h3 id="s8-5">8.5　混合模型：尾巴不能让 decode 端重算</h3>
-  <p>KV 按块存（3.3）。老的 connector 只传填满的整块，不满一块的尾巴让 decode 端补算。</p>
+  <p>KV 按块存（4.3）。老的 connector 只传填满的整块，不满一块的尾巴让 decode 端补算。</p>
 __FIG_S8_HYBRID__
-  <p>混合模型（3.1）里 GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
+  <p>混合模型（4.1）里 GDN、Mamba 这类层的递归状态已吃下整段 prompt，再补算尾巴，这几个 token 就喂了两遍，输出偏了也不报错。</p>
   <ul>
     <li><b>修法</b>：全传，tpu-inference 的 TPUConnectorHMA 就这么做。</li>
     <li><b>代价</b>：Qwen3.5-397B 在 TPU v7x 上 1K 进 1K 出，每个请求搬约 349 MB（README 原文）；单并发每请求吞吐是不拆单机的 0.95 倍，4 并发是 0.92 倍。</li>

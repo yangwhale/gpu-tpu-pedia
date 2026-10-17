@@ -10,8 +10,8 @@ _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
     零  一次请求走一遍
     一  两个阶段：prefill 吃算力，decode 吃带宽（字节账）
     二  先校准尺子：指标与口径
-    三  KV cache：账、池、复用
-    四  批处理与调度：把一趟分给更多人
+    三  批处理与调度：把一趟分给更多人
+    四  KV cache：账、池、复用
     五  单卡里的两块硬骨头：decode 注意力与 decode MoE
     六  切专家与注意力：TEP ／ DEP
     七  切序列：DCP ／ PCP
@@ -79,8 +79,8 @@ SECTIONS = [
     ("s零", "零", "一次请求走一遍"),
     ("s一", "一", "两个阶段：prefill 吃算力，decode 吃带宽"),
     ("s二", "二", "先校准尺子：指标与口径"),
-    ("s三", "三", "KV cache：账、池、复用"),
-    ("s四", "四", "批处理与调度：一趟分给更多人"),
+    ("s三", "三", "批处理与调度：一趟分给更多人"),
+    ("s四", "四", "KV cache：账、池、复用"),
     ("s五", "五", "单卡里的两块硬骨头：decode 注意力与 MoE"),
     ("s六", "六", "切专家与注意力：TEP 和 DEP"),
     ("s七", "七", "切序列：DCP 和 PCP"),
@@ -196,7 +196,7 @@ _T5_FIX = {
     "fig-s6-tep-dep-t5": [(_ATT, _att, 10)],
     "fig-s7-pcp-dcp-t5": [("对等的另一刀，", "对等的另一种切法，", 1)],
     "fig-s8-decode-ai-t5": [(_ATT, _att, 2)],
-    "fig-s8-kv-trip-t5": [("对比第三节的 TP：", "对比 TP：", 1)],  # 专题五第三节＝TP；本课第三节是 KV cache
+    "fig-s8-kv-trip-t5": [("对比第三节的 TP：", "对比 TP：", 1)],  # 专题五第三节＝TP；本课第四节是 KV cache
     "fig-s9-afd-t5": [(_ATT, _att, 14)],
 }
 for _fid, _rules in _T5_FIX.items():

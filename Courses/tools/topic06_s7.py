@@ -22,7 +22,7 @@ __FIG_S7_GAIN__
 
   <h3 id="s7-3">7.3　开 DCP 之前要知道的坑</h3>
   <ul>
-    <li><b>缓存层没跟上</b>：SGLang 的 HiCache（3.6）开 L3（远端存储），或 L1＋L2 叠投机解码，就得退回纯 TP。</li>
+    <li><b>缓存层没跟上</b>：SGLang 的 HiCache（4.6）开 L3（远端存储），或 L1＋L2 叠投机解码，就得退回纯 TP。</li>
     <li><b>状态池它不管</b>：K3 的 KDA 状态池 DCP 不切（6.3）。</li>
     <li><b>官方 PD 分离的吞吐数反而是 TP8 略高</b>：1P1D、decode 用 TP8 是 2,808 tok/s，2P2D、decode 用 DCP8 是 2,633（P:D 都是 1:1；分母和输入长度官方都没写，不能和 7.2 比）。</li>
   </ul>
@@ -50,7 +50,7 @@ __FIG_S7_LINEAR__
   <p>4K 不开：KV 放得下，DCP 只剩代价（7.2）。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>
 
   <h3 id="s7-7">7.7　并排看：每张卡每层读多少、存多少</h3>
-  <p>把第六、七节的切法摆进同一本账：V3，8 颗 v7（16 个 device，v7x-16），上下文 128K。每格按 device 算，口径同 3.2、10.5：每 device 可用 94.75 GiB，留一成给激活值，剩 85.3 GiB；权重 FP8 每参数 1 字节，KV 按 bf16，一条 128K 是 8.58 GiB。</p>
+  <p>把第六、七节的切法摆进同一本账：V3，8 颗 v7（16 个 device，v7x-16），上下文 128K。每格按 device 算，口径同 4.2、10.5：每 device 可用 94.75 GiB，留一成给激活值，剩 85.3 GiB；权重 FP8 每参数 1 字节，KV 按 bf16，一条 128K 是 8.58 GiB。</p>
   <table>
     <caption class="sub" style="caption-side:bottom;text-align:left">本课推导，纸面账。非专家权重 ＝ 总参数 671.0B 减去 58 层 × 256 个路由专家（653.9B）＝ 17.1B；每层参数分项见 0.2 的图。实测 FP8 专家比均摊更占地方（10.5），真机余量只会更少。</caption>
     <tr><th>切法</th><th>权重／device</th><th>剩给 KV</th><th>一条 128K 在每 device 占</th><th>16 个 device 装几条</th></tr>
@@ -106,7 +106,7 @@ def _t77():
     TOTAL = 61 * ATTN + 3 * DENSE + 58 * (257 * EXP + ROUTER) + 2 * LM
     ROUTED = 58 * 256 * EXP
     NONR = TOTAL - ROUTED
-    USE = 94.75 * GIB * 0.9                           # 每 device 可用 94.75 GiB，留一成（3.2、10.5 同口径）
+    USE = 94.75 * GIB * 0.9                           # 每 device 可用 94.75 GiB，留一成（4.2、10.5 同口径）
     SEQ, SEQL = 70272 * 131072, 1152 * 131072          # 一条 128K：全层／每层
     assert round(TOTAL / GIB) == 625 and round(NONR / 1e9, 1) == 17.1 and round(NONR / GIB, 1) == 15.9
     w_tp, w_dep = TOTAL / D, NONR + ROUTED / D

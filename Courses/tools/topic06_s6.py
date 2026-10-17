@@ -15,7 +15,7 @@ __FIG_S6_TEPDEP_T5__
   <p>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
     同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐<b>翻了一倍多</b>。</p>
-  <p>原记录归功于容量：副本让出的显存多收了请求。用 Little 定律（4.3）核一下：</p>
+  <p>原记录归功于容量：副本让出的显存多收了请求。用 Little 定律（3.3）核一下：</p>
 __FIG_S6_KV__
   <p><b>变的是步时</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
   <ul>

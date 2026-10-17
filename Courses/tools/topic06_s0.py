@@ -6,7 +6,7 @@ BODY = '''
     <b>一次请求里，前后两段要的硬件正好相反。</b></p>
 
   <h3 id="s0-1">0.1　2022 年以来，推理怎么变便宜</h3>
-  <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出。Orca 的连续批让每一步都能有人进出，同延迟下吞吐是老办法 FasterTransformer 静态批的 36.9 倍。可座位数由 KV（已读内容的缓存）定：KV 按最大长度预留，显存里真正存着 token（大致一个字，本课常叫“字”）的只有两到近四成（3.3）。同年的 FlashAttention 把注意力切块放进片上 SRAM 算，不再把整张分数表写回显存（5.1）。</p>
+  <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出。Orca 的连续批让每一步都能有人进出，同延迟下吞吐是老办法 FasterTransformer 静态批的 36.9 倍。可座位数由 KV（已读内容的缓存）定：KV 按最大长度预留，显存里真正存着 token（大致一个字，本课常叫“字”）的只有两到近四成（4.3）。同年的 FlashAttention 把注意力切块放进片上 SRAM 算，不再把整张分数表写回显存（5.1）。</p>
   <p>2023 年 PagedAttention 把 KV 分页，利用率到 96%。浪费省掉以后，坐几个人就看 KV 池装得下几条 KV，偏偏上下文一路变长：2023 年 11 月 GPT-4 Turbo 开到 128K，2024 年 2 月 Gemini 1.5 Pro 预览 1M。模型侧用 GQA、MLA 把每条压薄；系统侧让相同的开头不再重算（SGLang 的 RadixAttention），存不下的往内存、SSD 放（Mooncake，给 Kimi 线上用）。</p>
   <p>座位坐满后，长 prompt 进门那一步会卡住所有正在出字的人。2024 年 Sarathi-Serve 把 prefill 切块塞进 decode 的步里，可这只摊平了打扰；Splitwise、DistServe 干脆把两段分到两批机器（PD 分离）。代价是每个请求多传一趟 KV，还多了一份 prefill 与 decode 的机器配比要调。</p>
   <p>DeepSeek-V3 这类 MoE（每个字只走几个专家）又把拼好的 batch 拆散：256 个专家选 8 个，每个专家只分到几行。SGLang 的 DP attention、DeepSeek 的大 EP 把专家铺到上百张卡上，凑够行数。随之而来的是每个 rank 要自备一份状态，K3 上 DEP8 直接显存不足；decode 快了，prefill 又喂不上。</p>
@@ -23,7 +23,7 @@ __FIG_S0_CHAIN__
     <tr><td>⑥</td><td>2023 → 2025</td><td>Splitwise、DistServe → Mooncake → Dynamo</td><td>prefill 与 decode 抢卡 → PD 分离</td><td>DistServe 可接请求 7.4×（对不拆）</td><td>每请求多搬一趟 KV，还得调 P、D 配比</td><td>八</td></tr>
     <tr><td>⑦</td><td>2023</td><td>SGLang 论文</td><td>同样的开头一遍遍重算 → RadixAttention 复用前缀</td><td>最多 6.4×（对当时其他系统）</td><td>想复用的前缀多到显存放不下</td><td>三</td></tr>
     <tr><td>⑧</td><td>2024</td><td>Sarathi-Serve 论文；引擎里 vLLM 先合入</td><td>长 prompt 一进门全员卡住 → 分块 prefill</td><td>达标请求 2.6–3.7×（对 vLLM）</td><td>只把打扰摊薄，两段还挤在同一批卡上</td><td>四</td></tr>
-    <tr><td>⑨</td><td>2024 → 2025</td><td>Mooncake（Kimi）、DeepSeek</td><td>前缀放不下 → 分层下放到内存、SSD</td><td>Kimi 线上多接 107%–115%</td><td>副本一多，前缀只在自己那份里有；靠 KV 感知路由把命中率从 20% 拉到 75%</td><td>三、八</td></tr>
+    <tr><td>⑨</td><td>2024 → 2025</td><td>Mooncake（Kimi）、DeepSeek</td><td>前缀放不下 → 分层下放到内存、SSD</td><td>Kimi 线上多接 107%–115%</td><td>副本一多，前缀只在自己那份里有；靠 KV 感知路由把命中率从 20% 拉到 75%</td><td>四、八</td></tr>
     <tr><td>⑩</td><td>2024 → 2025</td><td>Meta（CP）；vLLM 2025 合入 DCP</td><td>DEP 起不来、KV 被复制 → DCP／PCP 按序列切</td><td>DCP 把 KV 副本让出来，PCP 切 prompt 压首字</td><td>DCP 只在长上下文划算；PCP 遇上线性注意力，状态得一卡接一卡传</td><td>七</td></tr>
     <tr><td>⑪</td><td>2024 → 2025</td><td>SGLang、DeepSeek</td><td>MoE 把 batch 拆碎，每专家约 8 行 → DP attention ＋ 大 EP</td><td>SGLang 复现：最多是同卡数纯 TP 的 5×</td><td>每个 rank 自带一份状态，K3 开 DEP8 显存不够；prefill 也追不上变快的 decode</td><td>六</td></tr>
   </table>
@@ -78,7 +78,7 @@ __FIG_S0_ENGINES__
 __FIG_S0_LIFE__
   <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
   <p><b>住在哪。</b>权重和 KV 都常驻 HBM（芯片自带的显存）。真正做乘加的地方旁边只有一小块片上存储：v7 每个 TensorCore 64 MiB VMEM，一颗芯片两个，合 128 MiB，约是 192 GiB HBM 的 1/1,500（13.7）。几十 GB 放不进去，所以每一步都得从 HBM 再流一遍。</p>
-  <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.2）。KV 每层每个 token 存 512 维压缩 KV（K、V 都从它解出）＋ 64 维位置编码那截 ＝ 576 个数，bf16 每个 2 字节 ＝ 1,152 B；61 层合计 70,272 B（3.1）。</p>
+  <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.2）。KV 每层每个 token 存 512 维压缩 KV（K、V 都从它解出）＋ 64 维位置编码那截 ＝ 576 个数，bf16 每个 2 字节 ＝ 1,152 B；61 层合计 70,272 B（4.1）。</p>
   <p><b>跟长度成正比。</b>上下文 1 万 token，一条 KV 约 0.70 GB；128K 是 8.58 GiB。它是这个人自己的历史，一人一份，不跟别人共享。</p>
   <p><b>出一个字，61 层逐层走一遍：</b></p>
   <ul>
@@ -105,7 +105,7 @@ __FIG_S0_MAP__
     <li><b>TPOT 与 ITL</b>：TPOT 是首字之后平均每个 token 的时间；ITL 是相邻两个 token 的间隔，看 p99 用它。</li>
     <li><b>goodput</b>：满足延迟要求的那部分吞吐（第二节）。</li>
     <li><b>交互档</b>：按每个用户看到的出字速度分档；只在同一档里比每卡吞吐（第二节）。</li>
-    <li><b>Little 定律</b>：系统里的人数 ＝ 到达速率 × 每人停留时间（第四节）。</li>
+    <li><b>Little 定律</b>：系统里的人数 ＝ 到达速率 × 每人停留时间（第三节）。</li>
     <li><b>connector</b>：推理引擎里在 prefill、decode 两端收发 KV 的插件（第八节）。</li>
     <li><b>batch 与并发</b>：并发是同时在服务的请求数；batch 是引擎这一步实际拼在一起算的数，通常不超过并发。</li>
     <li><b>吞吐</b>：每秒出多少 token；要写清总量还是每卡、分母含不含 prefill 卡、分子含不含输入。</li>
@@ -134,7 +134,7 @@ __FIG_S0_MAP__
     <li><b>GB200 ／ GB300</b>：NVIDIA Blackwell 代整柜系统（NVL72）。H100、H200、H800、H20 是上一代 Hopper，后两种是出口受限版。</li>
     <li><b>vLLM、SGLang</b>：两大开源推理引擎；tpu-inference 是 vLLM 在 TPU 上的后端。</li>
     <li><b>Dynamo、llm-d</b>：多机编排层，管路由、PD 分离和扩缩容；前者出自 NVIDIA，后者跑在 Kubernetes 上。</li>
-    <li><b>Mooncake、NIXL、LMCache</b>：搬 KV、存 KV 的库（第三、八节）。</li></ul></details>
+    <li><b>Mooncake、NIXL、LMCache</b>：搬 KV、存 KV 的库（第四、八节）。</li></ul></details>
 '''
 
 FIGS = {

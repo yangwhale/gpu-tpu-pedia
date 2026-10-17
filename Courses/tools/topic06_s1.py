@@ -40,7 +40,7 @@ __FIG_S1_MOE__
 
   <div class="note ok"><span class="t">这一节只要带走一件事</span>
     <b>prefill 卡算力，decode 卡带宽；decode 每一步都要把权重和 KV 搬一趟。</b>
-    要让这一趟分给更多人，先得装下更多人的 KV（第三、四节），再把被 MoE 拆散的行收回来（第五、六节）。</div>
+    要让这一趟分给更多人，先得让批一直坐满、装下更多人的 KV（第三、四节），再把被 MoE 拆散的行收回来（第五、六节）。</div>
 '''
 
 FIGS = {
