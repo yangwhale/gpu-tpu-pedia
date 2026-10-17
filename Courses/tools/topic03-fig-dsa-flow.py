@@ -141,12 +141,13 @@ def main():
                   "#e6f4ea" if on else "#f8f9fa", GR if on else "#eceff1", 3)
     f.t(RX + 16, ay + 214, "⭐ 贵的那一步，只在 1.56% 的格子上做", GR, True, 17)
 
-    f.box(RX, ay + 244, RWD, 68, BG2, LINE2, 8)
-    f.t(RX + 16, ay + 270, "所以整段注意力的账", INK, True, 17)
-    f.t(RX + 16, ay + 292,
+    # 10-17（ISSUES #63）：框 ay+244/h68 → ay+236/h80，末行「长文越长」原来压在框底线上
+    f.box(RX, ay + 236, RWD, 80, BG2, LINE2, 8)
+    f.t(RX + 16, ay + 262, "所以整段注意力的账", INK, True, 17)
+    f.t(RX + 16, ay + 285,
         "从 <tspan font-weight=\"700\">L × L</tspan> 变成 "
         "<tspan font-weight=\"700\">L × 2048</tspan>", GY, size=16)
-    f.t(RX + 16, ay + 312, "⭐ 长文越长，赚得越多", GR, True, 16)
+    f.t(RX + 16, ay + 306, "⭐ 长文越长，赚得越多", GR, True, 16)
 
     # ══════════════════════════════════════════════════════════════
     # ② 2048 到底有多大：按真比例画一条带子

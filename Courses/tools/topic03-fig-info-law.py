@@ -36,7 +36,7 @@ def main():
          (OR, "三个旋钮站在哪")])
 
     # ══════════ ① 两句话之间：幂律 vs 指数 ══════════════════════
-    PH = 340
+    PH = 354   # 10-17：340 → 354（轴下多了「隔得越远」一行）
     py = f.panel(0, y0, W, PH, "① 隔得越远的两句话，关系越弱 ——　但弱得有多快",
                  BL, sub="这是 log-log 坐标，换成普通坐标就看不出区别了")
 
@@ -56,7 +56,8 @@ def main():
     f.line(X0, Y0, X0, Y1 - 10, LINE, 1.4, arrow=False)
     f.t(X0 - 12, Y1 + 4, "强", GY2, size=15, anchor="end")
     f.t(X0 - 12, Y0 + 4, "弱", GY2, size=15, anchor="end")
-    f.t(X1 + 26, Y0 + 6, "隔得越远 →", GY2, size=15)
+    # 10-17（ISSUES #57）：原在轴端右侧 (X1+26, Y0+6)，压进右边说明框的左下角 —— 挪到轴端下方、右对齐
+    f.t(X1 + 20, Y0 + 22, "隔得越远 →", GY2, size=15, anchor="end")
 
     for lab, fn, col in (("真实的语言：慢慢变弱", lambda d: d ** -0.55, BL),
                          ("只记上一句：断崖式忘掉",
@@ -81,13 +82,13 @@ def main():
     f.t(784, ay + 172, "而真实语言是<tspan font-weight=\"700\">幂律</tspan>的 ——&#160;"
         "一直有一点。", GY, size=17)
     f.t(784, ay + 210, "⚠️ 「有限状态」这个限定不能省", GY2, size=15)
-    f.t(120, ay + 262, "⭐ 注意这是 <tspan font-weight=\"700\">log-log 坐标</tspan>"
+    f.t(120, ay + 280, "⭐ 注意这是 <tspan font-weight=\"700\">log-log 坐标</tspan>"
         " ——&#160;换成普通坐标，两条线都长成「往下掉的一条线」，"
         "这张图要说的区别就看不见了。", GY, size=17)
 
     # ══════════ ② 把书劈成两半 ══════════════════════════════════
     y1 = y0 + PH + 18
-    PH2 = 316
+    PH2 = 328   # 10-17：316 → 328，L2M 那个紫框原来伸出面板 6px
     py2 = f.panel(0, y1, W, PH2, "② 可是把书从中间劈开，两半之间的关联反而在变大",
                   GR, sub="不矛盾 ——　单对越来越弱，成对的数量越来越多")
 
@@ -169,13 +170,14 @@ def main():
     ], fold=True)
 
     yy = f.src(yy + 16,
-               "① 出自 Lin ＆ Tegmark《Criticality in Formal Languages and "
-               "Statistical Physics》（Entropy 2017, arXiv 1606.06737）",
-               "⚠️ arXiv v1 的旧题名是《Critical Behavior in Physics and Probabilistic "
-               "Formal Languages》，两者是同一篇 ——&#160;标了正式出处就用正式题名",
+               "① 出自 Lin ＆ Tegmark《Critical Behavior in Physics and Probabilistic "
+               "Formal Languages》（Entropy 19(7):299, 2017；arXiv 1606.06737）",
+               "⚠️ 同一篇在 arXiv 上换过题名：v1/v2 是《Critical Behavior from Deep Dynamics: "
+               "A Hidden Dimension in Natural Language》，现行 v3 是《Criticality in Formal "
+               "Languages and Statistical Physics》——&#160;标了期刊出处就用期刊题名",
                "原文口径：互信息在任何<tspan font-weight=\"700\">概率正则文法</tspan>下"
                "指数衰减，而<tspan font-weight=\"700\">上下文无关文法</tspan>下可以是幂律",
-               "② 出自 L2M（arXiv 2503.04725, ICML 2025）：双部互信息幂律 scaling、"
+               "② 出自 L2M（arXiv 2503.04725, NeurIPS 2025）：双部互信息幂律 scaling、"
                "「状态维度必须至少同阶增长」的定理、以及 Transformer 自动满足的那段分析",
                "⚠️ 「书 / 笔记本」是<tspan font-weight=\"700\">本课的比喻</tspan>；"
                "③ 为本课推导，非论文结论")

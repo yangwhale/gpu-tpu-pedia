@@ -123,7 +123,8 @@ def main():
     # 紫块想往左搬，撞在闸上
     f.line(XU + 50, ty - 18, GX + 140, ty - 18, PU, 2.0)
     f.t(GX + 128, ty - 10, "✕", RD, True, 26, "middle")
-    f.t(GX + 66, ty - 30, "想搬，搬不动", PU, True, 15, "middle")
+    # 10-17：原来居中在闸上方 ty-30，跟 ② 的标题行叠在一起 —— 挪到箭头尾巴右边
+    f.t(XU + 60, ty - 12, "想搬，搬不动", PU, True, 15)
     f.t(RX + 16, ty + CH + 30,
         "⛔ <tspan font-weight=\"700\">紫块过不去</tspan>，"
         "那 W_UK c 就只能<tspan font-weight=\"700\">在仓库里先算出来</tspan>"

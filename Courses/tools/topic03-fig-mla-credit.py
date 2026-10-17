@@ -254,8 +254,8 @@ f.t(28, py2 + 26 + 128,
     " ——&#160;<tspan font-weight=\"700\">多存的那 %d 个维度，一分没换回来。</tspan>"
     % (MLA_LOSS, RATIO, MHA_CACHE - MLA_CACHE), INK, False, 17)
 f.t(28, py2 + 26 + 152,
-    "📌 这跟 DeepSeek-V2 论文里「MLA 甚至优于 MHA」是同一件事的两种说法。"
-    "原文对这个现象的猜测是：被比的那个 MHA，head_dims 只有 128。",
+    "📌 DeepSeek-V2 论文原话是「MLA achieves better performance than MHA」；"
+    "苏剑林的猜测是：被比的那个 MHA，head_dims 只有 128。",
     GY, False, 15)
 
 # ══════════════════════════════════════════════════════════════

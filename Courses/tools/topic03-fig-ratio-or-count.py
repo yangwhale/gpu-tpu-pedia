@@ -146,7 +146,7 @@ def main():
         [(BL, "Qwen 系"), (OR, "Kimi 系"), (GY2, "其他各家")])
 
     # ══════════ ① 两个假说 ══════════════════════════════════════
-    PH1 = 180
+    PH1 = 194   # 10-17：180 → 194，两个假说框原来伸出面板 10px
     top = f.panel(0, y0, W_, PH1, "① 先把两个假说写清楚，它们的预测不一样", PU,
                   sub="能被数据分开的问题才值得问")
 
@@ -211,7 +211,7 @@ def main():
     def tag(nm, n, k, dx, dy, col, anchor=None):
         f.t(sx(n) + dx, sy(k) + dy, nm, col, True, 14, anchor)
 
-    tag("Kimi Linear　27 层 / 7 条", 27, 7, 12, -12, OR)
+    tag("Kimi Linear　27 层 / 7 条", 27, 7, -12, 5, OR, "end")   # 10-17：原 (12, -12) 往右写，压在 (32, 8) 那个 Qwen 点上 —— 挪到点左边
     tag("Kimi K3　93 层 / 24 条", 93, 24, -12, -14, OR, "end")
     tag("Qwen3.5-27B　64 / 16", 64, 16, -12, -14, BL, "end")
     tag("Qwen3.5-0.8B　24 / 6", 24, 6, 14, 22, BL)
@@ -241,7 +241,7 @@ def main():
         "<tspan font-weight=\"700\">r = %.3f</tspan>。" % R_KQ,
         "",
         "⛔ <tspan font-weight=\"700\">假说 B 被否掉了</tspan> ——&#160;"
-        "而它就是本课",
+        "而它正是",   # 10-17（ISSUES #17）：原「而它就是本课 / 本课那句话…」跨行重复了「本课」
         "本课那句话的字面读法。",
     ], size=15, lh=25)
 
@@ -300,7 +300,7 @@ def main():
         "　（27 层，那一个摊不开）" % _R_KL,
         "Kimi K3　　　69 : 24 = <tspan font-weight=\"700\">%.3f</tspan>"
         "　（93 层，同一个 +1 被摊得更薄）" % _R_K3,
-        "",
+        # 10-17（ISSUES #58）：去掉这里的空行 —— 末行「是这一家的通用排法。」原来落在框外
         "⛔ 本课那张配比表只给 K3 加了「别写成 3:1」的警告 ——",
         "<tspan font-weight=\"700\">同一句对 Kimi Linear 一样成立</tspan>。",
         "而且「末层补一个」<tspan font-weight=\"700\">不是 K3 的花样</tspan>，",

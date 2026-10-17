@@ -140,8 +140,9 @@ def main():
     f.t(978, ry + 64, "直接拿 q′ 去跟压缩包点积", GY, size=15)
 
     # 代数：括号挪了一下
-    f.box(30, top + 152, 1340, 62, "none", LINE, 8)
-    f.t(52, top + 190,
+    # 10-17：框 62 → 88 高，右边第三行原来压在框底线上
+    f.box(30, top + 144, 1340, 88, "none", LINE, 8)
+    f.t(52, top + 196,
         "q<tspan font-size=\"13\">ᵀ</tspan> "
         "<tspan fill=\"#5f6368\">(</tspan> "
         "<tspan fill=\"#9334e6\" font-weight=\"700\">W_UK</tspan> c "
@@ -152,17 +153,17 @@ def main():
         "<tspan font-size=\"13\">ᵀ</tspan> q "
         "<tspan fill=\"#5f6368\">)</tspan>"
         "<tspan font-size=\"13\">ᵀ</tspan> c", INK, size=22, mono=True)
-    f.t(660, top + 170, "同一个乘法。只是括号挪了个位置。", GY, size=15)
-    f.t(660, top + 194,
+    f.t(660, top + 168, "同一个乘法。只是括号挪了个位置。", GY, size=15)
+    f.t(660, top + 192,
         "⭐ 左边括号在 c 那边 ——&#160;有几个 c 就算几次。", INK, size=15)
     f.t(660, top + 216,
         "⭐ 右边括号在 q 那边 ——&#160;只有一个 q，所以只算一次。", GR, size=15)
 
-    f.t(30, top + 248,
+    f.t(30, top + 260,
         "🏠 生活版就是一句话：<tspan font-weight=\"700\">"
         "与其把一万本外文书全翻译过来，不如把你的搜索词翻译过去。</tspan>",
         INK, size=17)
-    f.t(30, top + 276,
+    f.t(30, top + 288,
         "⭐ V 那一侧同理：W_UV 可以吸进输出投影 W_O ——&#160;"
         "所以 K 和 V <tspan font-weight=\"700\">两边都不用拆</tspan>。", GY,
         size=16)
@@ -237,8 +238,9 @@ def main():
         "<tspan font-weight=\"700\">⛔ 挡住结合律的，永远是「中间被塞了个东西」。</tspan>",
     ])
     yy = f.src(yy + 16,
-               "「吸收」与「RoPE 挡住它」两处原文均出自 DeepSeek-V2，"
-               "arXiv 2405.04434（§2.1.2、§2.1.3）；超参 d_c=512 / d_h=128 / "
+               "两处原文均出自 DeepSeek-V2（arXiv 2405.04434）：「due to the associative law"
+               " … we can absorb」那句在论文附录 C（完整公式），§2.1.2 正文只有更短的"
+               "「W^UK can be absorbed into W^Q」；「RoPE 挡住它」在 §2.1.3。超参 d_c=512 / d_h=128 / "
                "n_h=128 是 DeepSeek-V3 的口径",
                "⭐ ③ 那笔账是<tspan font-weight=\"700\">本课自己算的</tspan>，"
                "脚本里带断言：天真 ＝ S×(d_h·d_c ＋ d_h)，吸收 ＝ d_h·d_c ＋ S·d_c；"
@@ -246,8 +248,7 @@ def main():
                "<tspan font-weight=\"700\">没算访存</tspan> ——&#160;"
                "真机上访存往往才是瓶颈，所以这是个下界不是实测",
                "⚠️ 吸收<tspan font-weight=\"700\">只在 decode 用得上</tspan>："
-               "prefill 时一批里有很多个 q，「只变换一次」这个便宜就没了"
-               "（这也是 §五 表里「压缩不生效」那一行的意思）")
+               "prefill 时一批里有很多个 q，「只变换一次」这个便宜就没了")
     f.save("fig3-absorb.svg", yy + 6)
 
 

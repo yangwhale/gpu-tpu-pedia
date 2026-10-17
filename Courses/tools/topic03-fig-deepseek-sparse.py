@@ -83,11 +83,11 @@ def main():
     f.line(700, py + 262, 700, py + 292, GY2, 1.6)
     f.t(700, py + 318, "一个 token 的输出", INK, True, 17, "middle")
 
-    f.box(70, py + 296, 300, 76, "#fef7e0", OR, 6)
+    f.box(70, py + 294, 300, 74, "#fef7e0", OR, 6)
     f.t(86, py + 320, "⭐ 三条里只有一条是动态的", OR, True, 16)
     f.t(86, py + 344, "后面三步，动的全是这一条", GY, size=13)
 
-    f.box(1000, py + 296, 330, 76, "#e6f4ea", GR, 6)
+    f.box(1000, py + 294, 330, 74, "#e6f4ea", GR, 6)
     f.t(1016, py + 320, "⭐ 训练时就用", GR, True, 16)
     f.t(1016, py + 344, "不是训完再稀疏，所以模型是「长在稀疏上」的", GY, size=13)
     f._pan = None
@@ -109,8 +109,9 @@ def main():
 
     AX = py2 + 330
     f.line(110, AX, 1310, AX, GY2, 2.0)
-    f.t(110, AX + 32, "不压", GY, True, 15)
-    f.t(1310, AX + 32, "压得最狠", GY, True, 15, "end")
+    # 10-17（ISSUES #64）：两端标签 AX+32 → AX+60（跟轴标题同一行），给 HCA 的出处行让位
+    f.t(110, AX + 60, "不压", GY, True, 15)
+    f.t(1310, AX + 60, "压得最狠", GY, True, 15, "end")
     f.t(700, AX + 60, "压　缩　比　（4 个 token 合 1 条 →　128 个合 1 条）", GY,
         size=14, anchor="middle")
 
@@ -141,8 +142,13 @@ def main():
         f.t(x, y + 34, name, col, True, 22, "middle")
         f.t(x, y + 58, sub_, INK, size=13.5, anchor="middle")
         f.t(x, y + 80, l1, GY, size=12.5, anchor="middle")
-        f.t(x, y + 118, l2, GY2, size=12, anchor="middle")
-        f.line(x, y + 128, x, AX - 8, col, 1.2, "3 3")
+        if y + 128 < AX - 8:
+            f.t(x, y + 118, l2, GY2, size=12, anchor="middle")
+            f.line(x, y + 128, x, AX - 8, col, 1.2, "3 3")
+        else:
+            # ⛔ 10-17（ISSUES #64）：HCA 的框就坐在轴上，出处行原来压在圆点和一截
+            #   往上的虚线上 —— 不画虚线，出处挪到轴下面圆点正下方
+            f.t(x, AX + 30, l2, GY2, size=12, anchor="middle")
         f.box(x - 6, AX - 6, 12, 12, col, col, 6)
 
     # ⛔ 这行字原来放在 (1030, py2+196)，**正好压在 CSA 那行出处上**（y 差 6px）。

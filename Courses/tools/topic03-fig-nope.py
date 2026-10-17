@@ -273,7 +273,9 @@ def main():
                       dash=PHANTOM)
             else:
                 f.box(ox + CX0, cy - CHH / 2, CW, CHH, "#fce8e6", RD, 8, 1.2)
-            f.badge(ox + CX0 + 18, cy, i + 1, GH if ghost else lc)
+            # ⛔ 10-17（ISSUES #74）：badge(x, y) 的 (x, y) 是**外接方框左上角**，不是圆心 ——
+            #   原来把行中线 cy 传进去，圆心落在 cy+13，压在行框下沿、盖住标签。
+            f.badge(ox + CX0 + 7, cy - 13, i + 1, GH if ghost else lc)
             if not ghost:
                 f.t(ox + CX0 + 38, cy + 6, lab, lc, bold=True, size=15)
             # 徽章②里那条 576：⛔ 512 段两栏**同起点、同长度**，
@@ -327,7 +329,7 @@ def main():
     f.t(30, RY0 - 8, "右边那三个空槽，分别变成了：", INK, bold=True, size=16)
     for i, (ttl, body, colr) in enumerate(ROWS):
         by = RY0 + 6 + i * RH
-        f.badge(46, by + 14, i + 1, colr)
+        f.badge(39, by + 1, i + 1, colr)   # 10-17：同上，圆心对齐标题行（原来低 13px、压住标题开头）
         f.t(70, by + 20, ttl, colr, bold=True, size=17, cls="svglbl")
         rows_ = wrap_rich(body, W - 250, 16 * 1.12)
         # ⛔ 一行放不下就是布局没算对 ——&#160;这一格的收益全来自「一行一条」
@@ -352,7 +354,7 @@ def main():
         "⭐ 本讲这样的连接已经出现过好几次："
         "MLA 那次是「为了保住一个代数变换，把功能拆成两路」；"
         "这里是它的反面 ——&#160;<tspan font-weight=\"700\">"
-        "为了不再需要那个变换，干脆换个人来提供它的前提</tspan>。",
+        "为了不再需要那个挡路的旋转 R，干脆换个人（线性层）来提供它原本负责的东西 ——&#160;顺序</tspan>。",
         "⭐⭐ 所以看到一个约束的时候，除了问「怎么绕过」，"
         "还要问一句：<tspan font-weight=\"700\">它凭什么在那儿？"
         "有没有别人能把它那份活接走？</tspan>",

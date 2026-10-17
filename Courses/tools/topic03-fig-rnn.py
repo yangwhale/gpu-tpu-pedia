@@ -122,7 +122,7 @@ def fig_unroll():
 
     # ── 左：折叠 ────────────────────────────────────────────────
     PW = 400
-    PT = f.panel(0, y, PW, 300, "① 折叠着看", tint="#f1f3f4",
+    PT = f.panel(0, y, PW, 320, "① 折叠着看", tint="#f1f3f4",
                  sub="Elman 1990 原始画法", tag="Cognitive Science 14")
     cx = 96
     f.cell(cx, PT + 16, 150, 42, "输出 y", "y = W_y · h", BL, "#e8f0fe")
@@ -136,10 +136,13 @@ def fig_unroll():
                                         380, PT + 182), PU, 1.4, "4 3")
     f.t(252, PT + 76, "原样复制一份", PU, True, _sz(11))
     f.t(252, PT + 92, "固定权重 1.0，不训练", GY, size=_sz(14))
-    f.t(14, PT + 250, '⭐ 那条<tspan font-weight="700">虚线不是学出来的</tspan>'
-                      '——&#160;原文写死「one-for-one basis,', GY, size=_sz(14))
-    f.t(14, PT + 266, 'with fixed weight of 1.0」。<tspan font-weight="700">'
-                      '整个循环就靠这一条硬接线。</tspan>', GY, size=_sz(14))
+    # ⛔ 2026-10-17：原来两行，第二行伸出面板右沿（400）——&#160;拆成三行。
+    f.t(14, PT + 246, '⭐ 那条<tspan font-weight="700">虚线不是学出来的</tspan>'
+                      '——&#160;原文写死', GY, size=_sz(14))
+    f.t(14, PT + 264, '「one-for-one basis, with fixed weight of 1.0」',
+        GY, size=_sz(13))
+    f.t(14, PT + 282, '<tspan font-weight="700">整个循环就靠这一条硬接线。</tspan>',
+        GY, size=_sz(14))
 
     # ── 右：展开 ────────────────────────────────────────────────
     QX = 420
@@ -212,7 +215,9 @@ def fig_unroll():
         f.box(x, p3 + 26, CW, 214, "#fff", col, 8)
         f.box(x, p3 + 26, CW, 4, col, col, 2)
         f.t(x + CW / 2.0, p3 + 58, name, col, True, 16, "middle")
-        f.box(x + CW / 2.0 - 78, p3 + 76, 156, 34, "#f8f9fa", col, 17)
+        # ⛔ 2026-10-17：胶囊原来定宽 156，「有，而且还多一条」那条字溢出胶囊 —— 按字数放宽
+        pw = 156 if len(has) <= 2 else 262
+        f.box(x + CW / 2.0 - pw / 2.0, p3 + 76, pw, 34, "#f8f9fa", col, 17)
         f.t(x + CW / 2.0, p3 + 99, "y → 下一个 x：%s" % has, col, True, 14, "middle")
         for j, ln in enumerate(lines):
             f.t(x + 18, p3 + 138 + j * 24, ln, GY, size=13.5)
@@ -392,7 +397,7 @@ def fig_hw():
     # ── 地板那一头：全图唯一的粗竖线 ───────────────────────────
     f.line(RIDGE, AXY + 74, RIDGE, AXY - 58, BR, 4.0, arrow=False)
     f.t(RIDGE + 12, AXY - 62, "TPU v7 屋脊线　313 FLOP/byte", BR, True, 18)
-    f.t(RIDGE + 12, AXY - 42, "＝ 2307 TFLOP/s ÷ 7.37 TB/s（BF16）", GY2, size=14)
+    f.t(RIDGE + 12, AXY - 42, "＝ 2,307 TFLOP/s ÷ 7.37 TB/s（BF16）", GY2, size=14)
 
     # ── 轴本身，以及 RNN 站在上面的位置（算术强度 ＝ batch）─────────
     f.line(AX0, AXY, AX1, AXY, GY2, 1.6)
@@ -443,7 +448,7 @@ def fig_hw():
         "<tspan font-weight=\"700\">S 一长它必然往左走，早晚越过 313</tspan>。",
         GY2, size=15, w=1288)
     f.t(56, AXY + 204, "⛔ 横轴是<tspan font-weight=\"700\">线性</tspan>的，不是双对数："
-        "换成 log，1 和 313 会挤在一起，「差两个数量级」当场就看不见了。",
+        "换成 log，1 和 313 会挤在一起，「差两个半数量级」当场就看不见了。",
         GY2, size=15, w=1288)
 
     yy = CY + CH + 16
@@ -693,7 +698,7 @@ def fig_pain():
         "⭐ 后面三十年的路线图，<tspan font-weight=\"700\">"
         "就是这三条各自的解药</tspan>")
 
-    PH = 364   # ⭐ 三条「解药」框画到了声明高度以外，补上
+    PH = 382   # ⭐ 三条「解药」框画到了声明高度以外，补上（10-17 再 +18：框底原来正压在面板下沿上）
     py = f.panel(0, y, W, PH, "三个痛点，三个画面", RD, sub="一个一个看")
     ay = py + 22
 
@@ -717,7 +722,7 @@ def fig_pain():
         x = 500 + i * 56
         alpha = 1.0 - i * 0.14
         g = int(255 - 140 * alpha)
-        f.box(x, ay + 70, 44, 44, "#%02x%02x%02x" % (255, g + 30, g), OR
+        f.box(x, ay + 70, 44, 44, "#%02x%02x%02x" % (255, min(255, g + 30), g), OR
               if i < 2 else LINE2, 6)
         f.t(x + 22, ay + 98, "话", OR if i < 3 else GY2, True, 17, "middle")
     f.t(500, ay + 146, "⛔ 反传要连乘 n 次", OR, True, 19)

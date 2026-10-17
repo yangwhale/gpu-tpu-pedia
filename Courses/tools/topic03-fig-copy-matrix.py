@@ -214,7 +214,8 @@ def main():
 
     f.elbow(X_GQA + OUT * CS + 10, MTOP + 2 * CS,
             X_MLA - 16, MTOP + 2 * CS, OR, 2)
-    f.t((X_GQA + OUT * CS + X_MLA) / 2.0, MTOP - 68,
+    # 10-17：MTOP-68 → -58、x +6 —— 原来压在 ② 标题栏下面那条分隔线上（ISSUES #55）
+    f.t((X_GQA + OUT * CS + X_MLA) / 2.0 + 6, MTOP - 58,
         "把 0 和 1 换成学出来的实数", OR, True, 15, "middle")
 
     # ══════════ ③ 落点 ════════════════════════════════════════════
@@ -223,7 +224,8 @@ def main():
     top = f.panel(0, y2, W_, PH3, "③ 所以分界线在哪", OR,
                   sub="不是「有没有低秩」，是「那个矩阵是写死的还是学出来的」")
 
-    f.box(40, top + 16, 640, 208, "#fff", LINE, 8, 1.2)
+    # 10-17：两框 208 → 226，末行原来压在框底线上（ISSUES #55）
+    f.box(40, top + 16, 640, 226, "#fff", LINE, 8, 1.2)
     f.t(64, top + 46, "低秩区分不了这两个", INK, True, 16)
     f.lines(64, top + 72, 592, [
         "把 GQA 所有的 K、V 叠在一起，<tspan font-weight=\"700\">"
@@ -236,14 +238,14 @@ def main():
         "MLA 只是把这个写死的变换，换成一个一般的、可学的。",
     ], size=15, lh=25)
 
-    f.box(720, top + 16, W_ - 760, 208, "#fff", LINE, 8, 1.2)
+    f.box(720, top + 16, W_ - 760, 226, "#fff", LINE, 8, 1.2)
     f.t(744, top + 46, "⛔ 但这么一换，KV cache 会涨回去", RD, True, 16)
     f.lines(744, top + 72, W_ - 808, [
         "矩阵一放开，<tspan font-weight=\"700\">四个头的 K 又各不相同了</tspan> ——",
         "要是照常缓存 K，cache 就退回 MHA 那么大，",
         "<tspan font-weight=\"700\">省的初衷当场作废</tspan>。",
         "",
-        "⭐ MLA 能成立，靠的是下一小节那个恒等变换：",
+        "⭐ MLA 能成立，靠的是后面要讲的那个恒等变换：",
         "<tspan font-weight=\"700\">只缓存 c，把上投影矩阵挪到 q 那一侧去</tspan>。",
         "这张图是「吸收」那一步的<tspan font-weight=\"700\">前提</tspan>，不是它的替代。",
     ], size=15, lh=25)

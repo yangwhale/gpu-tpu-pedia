@@ -57,7 +57,7 @@ def main():
 
     # ══════════ ② 分批办 ════════════════════════════════════════
     y1 = y0 + PH + 18
-    PH2 = 360   # ⚠️ R40 +24：交接单那块塞进 S 方块后长到 124 高
+    PH2 = 376   # ⚠️ R40 +24：交接单那块塞进 S 方块后长到 124 高；10-17 再 +16（框底仍伸出面板 14px）
     py2 = f.panel(0, y1, W, PH2, "② chunkwise ——　分批办：一批同时办，只把交接单传下去",
                   GR, sub="块内并行，块间串行")
 
@@ -172,7 +172,7 @@ def main():
         "⭐⭐⭐ <tspan font-weight=\"700\">chunkwise 做的事，一句话："
         "把那个 1 变成了 C。</tspan>"
         "串行步数从 L 步降到 L÷C 步，而每一步都变成了一把胖矩阵乘。"
-        "⭐ 论文原话是「块间递归、块内并行，以<tspan font-weight=\"700\">"
+        "⭐ Kimi Linear 论文原话是「块间递归、块内并行，以<tspan font-weight=\"700\">"
         "最大化矩阵乘吞吐</tspan>，从而吃满 Tensor Core」。",
     ])
 
@@ -313,6 +313,10 @@ def main():
     yy = f.src(yy + 16,
                "chunkwise 的形式与并行度 / 串行步数的改变出自 DeltaNet 并行化那篇 "
                "Yang 等 arXiv 2406.06484（WY 表示 ＋ 分块）",
+               "图里那句「块间递归、块内并行……吃满 Tensor Core」出自 Kimi Linear，"
+               "arXiv 2510.26692 §3.1（原文 \u201can inter-block recurrent and intra-block parallel "
+               "strategy to maximize matrix multiplication throughput, thereby fully utilizing "
+               "the computational potential of Tensor Cores\u201d）",
                "⚠️ 图里的 %d 个 token / 每块 %d 个是<tspan font-weight=\"700\">示意</tspan>，"
                "真实实现的块长在几十到几百之间，随硬件变" % (L, C),
                "⚠️ 「排队办事 / 交接单」是<tspan font-weight=\"700\">本课的比喻</tspan>")

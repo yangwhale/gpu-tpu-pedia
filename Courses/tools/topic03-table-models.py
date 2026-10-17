@@ -8,7 +8,7 @@
       就是这个表格上边那四个 title，你点哪个就按哪个排序。」
 
    ⛔ **SVG 做不到** ——&nbsp;它的 `<text>` 是死的：点不了、Ctrl+F 搜不到、
-     复制不出来、屏幕阅读器也读不了。39 行的参照表本来就不该是一张图。
+     复制不出来、屏幕阅读器也读不了。几十行的参照表本来就不该是一张图。
 
    ⭐ 换成 HTML 之后白拿的四样：**可搜、可复制、可无障碍、可排序**。
      代价只有一个：布局不像 SVG 那样像素级可控 ——&nbsp;而对一张表来说，
@@ -168,7 +168,7 @@ CSS = """
 #mtbl .hint{font-weight:400;color:#9aa0a6;font-size:11px}
 
 /* ── Highlight ／ Boom 两态开关 ────────────────────────────────────
-   ⭐ 只藏行、不动数据：隐藏是 CSS 干的，排序 JS 照常按 data-* 重排全部 39 行，
+   ⭐ 只藏行、不动数据：隐藏是 CSS 干的，排序 JS 照常按 data-* 重排全部行（10-17 时 44 行，以 len(ROWS) 为准），
      两个功能互不知道对方存在 ——&nbsp;所以「先排序再切模式」和「先切模式再排序」
      结果一样。⛔ 别改成 JS 里 removeChild，那样一切模式排序状态就丢了。 */
 .hlbar{display:flex;align-items:center;gap:10px;margin:0 0 10px}
@@ -180,7 +180,7 @@ CSS = """
 .hlbtns button[aria-pressed="true"]{background:#1a73e8;color:#fff}
 .hlbtns button[aria-pressed="true"]:hover{background:#1a73e8;color:#fff}
 .hlnote{color:#5f6368;font-size:12px}
-/* 默认（Boom）：全部 39 行，备注给这一行独有的那句 */
+/* 默认（Boom）：全部 __NALL__ 行，备注给这一行独有的那句 */
 #mtbl .n-hl{display:none}
 /* Highlight：非入选行整行不出现，备注换成「它凭什么在这条线上」 */
 #mtbl.hl tbody tr:not([data-hl]){display:none}
@@ -246,7 +246,7 @@ JS = """
     : '全部 __NALL__ 行。备注是这一行独有的那句话';
  }
  bs.forEach(function(b){b.addEventListener('click',function(){setMode(b.dataset.m==='hl');});});
- setMode(true);          // ⭐ 默认 Highlight：39 行是参照物，18 行才是一条读得下来的线
+ setMode(true);          // ⭐ 默认 Highlight：__NALL__ 行是参照物，__NHL__ 行才是一条读得下来的线
 })();
 </script>
 """
@@ -367,8 +367,9 @@ LAND = ("""<p class="tbltip">⭐ 这张表的一句话落点：同一个 128K �
 数来自各家 config 的 max_position_embeddings，而这个字段各家含义并不一样——
 MiniMax-01 那格 config 写着 <b>10,240,000</b>，官方只声称训练 1M、外推 4M；
 Llama 4 Scout 声称 <b>10M</b> 也是同一回事。
-声明和能用之间还隔着一整个 benchmark 的落差：小米自己的模型卡就写着
-MiMo-V2.5-Pro「到 1M 时塌到 0.00」。⭐ 看到「支持 N 万上下文」，<b>先问是谁、在什么任务上、测出多少分</b>。</li>
+声明和能用之间还隔着一整个 benchmark 的落差：小米 MiMo-V2.5-Pro 的模型卡就写着，
+上一代 <b>V2 Pro</b> 过了 128K 迅速变差、到 1M 两项子任务都<b>塌到 0.00</b>；
+新的 V2.5 Pro 到 1M 也只剩 0.37 / 0.62。⭐ 看到「支持 N 万上下文」，<b>先问是谁、在什么任务上、测出多少分</b>。</li>
 <li>⭐⭐ <b>最反直觉的一条：MLA 之后，KV cache 跟「模型多大」<u>脱钩</u>了。</b>
 DeepSeek-V2 是 236B、V3 是 671B，<b>参数差 2.8 倍，KV 却只差 %.1f%%</b>（%s vs %s）。
 因为 MLA 的 KV 只跟「层数 × (kv_lora_rank ＋ rope 维)」走——

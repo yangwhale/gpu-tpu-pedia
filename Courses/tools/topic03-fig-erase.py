@@ -25,7 +25,7 @@ r"""专题三 · §7.2「查 / 擦 / 写」—— 三个动作，三代模型各
 📌 比喻出处（都不是本课原创，逐条记明）：
    · 「除旧迎新」——&#160;苏剑林 kexue.fm/archives/11033
    · 「手术刀橡皮 ＋ 高压水枪」——&#160;Towards AI《Gated DeltaNet: The Surgical Eraser》
-   · 「整屋一个调光开关 vs 每个灯泡一个调光器」——&#160;Amit Kapoor《Inside Kimi K3》
+   · 「整屋一个调光开关 vs 每个灯泡一个调光器」——&#160;Amita Kapoor《The Sparse Giant》
    · 「记忆的敌人不是时间，是别的记忆」——&#160;Eagleman《Livewired》，
      经 Songlin Yang 的 DeltaNet 博客引用
 """
@@ -226,9 +226,11 @@ def main():
                "的 KDA（arXiv 2510.26692）",
                "⚠️ 图里的比喻<tspan font-weight=\"700\">都不是本课原创</tspan>，"
                "逐条记明：「除旧迎新」——&#160;苏剑林 kexue.fm/archives/11033；"
-               "「手术刀橡皮 ＋ 高压水枪」——&#160;Towards AI《Gated DeltaNet: "
-               "The Surgical Eraser》；「整屋一个调光开关 vs 每个灯泡一个调光器」"
-               "——&#160;Amit Kapoor《Inside Kimi K3》；「记忆的敌人不是时间，"
+               "「手术刀橡皮 ＋ 高压水枪」（原文 Surgical Eraser / Power Washer）——&#160;"
+               "Towards AI《Gated DeltaNet: The Surgical Eraser》；"
+               "「整屋一个调光开关 vs 每个灯泡一个调光器」（原文 one dimmer switch for the "
+               "whole house / a dimmer on every bulb）——&#160;Amita Kapoor《The Sparse Giant: "
+               "How Kimi K3 Runs Like a Model Ten Times Smaller Than It Is》；「记忆的敌人不是时间，"
                "是别的记忆」——&#160;Eagleman《Livewired》，"
                "经 Songlin Yang 的 DeltaNet 博客引用",
                "⭐ 抽屉里的颜色深浅是<tspan font-weight=\"700\">示意</tspan>，"

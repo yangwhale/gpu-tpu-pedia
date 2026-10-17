@@ -527,22 +527,67 @@ LY = AXY + 14
 #    还装得下的行；行数按需要长。以后再加事件也不会撞。
 # ⛔ 别再改回固定行数。
 def _rows(evs):
-    """把事件按实际宽度贪心分行，返回 [(事件, 行号)] 和总行数。"""
-    ends, out = [], []
+    """把事件按实际宽度分行，返回 [(年, 标签, 行号, 标签在竖线左边?)] 和总行数。
+
+    ⛔ 2026-10-17 第四轮：贪心装箱只管「同一行的标签不互撞」，没管**竖线**。
+       每个事件的竖线从泳道顶上的圆点一直拉到它那一行 ——&#160;**沿途穿过上面每一行**。
+       于是 '25、'26 两根线正好从「可并行 DeltaNet」「KDA · Lightning」字上穿过去（ISSUES #53）。
+    ⭐ 现在改成小规模穷举：每个事件选（行号, 标签放竖线右边还是左边），约束三条 ——
+       ① 同一行标签不重叠；② 不出左右边界；③ **竖线不穿过它上面任何一行的标签**。
+       目标：放左边的最少 → 行数最少 → 行号总和最小。一条泳道最多六个事件，穷举很快。
+    """
+    items = []
     for (yr, lab) in evs:
         x = xf(yr)
         w = wpx(lab, FS_DEF)
-        right = x + w + 10 > W - 30
-        x0 = (x - 6 - w) if right else (x + 6)
-        for r, e in enumerate(ends):
-            if x0 > e + 10:
-                ends[r] = x0 + w
-                out.append((yr, lab, r, right))
-                break
-        else:
-            ends.append(x0 + w)
-            out.append((yr, lab, len(ends) - 1, right))
-    return out, len(ends)
+        items.append((yr, lab, x, w))
+    n = len(items)
+    best = [None]
+
+    def ok_row(placed, r, a, b):
+        for (rr, aa, bb, _x) in placed:
+            if rr == r and not (b + 16 < aa or a > bb + 16):
+                return False
+        return True
+
+    def stem_clear(placed, x, r):
+        # 新事件的竖线穿过 0..r-1 行；已放好的、行号更高的事件，竖线穿过新标签所在行
+        for (rr, aa, bb, _x) in placed:
+            if rr < r and aa - 4 <= x <= bb + 4:
+                return False
+        return True
+
+    def label_clear(placed, r, a, b):
+        for (rr, aa, bb, xx) in placed:
+            if rr > r and a - 4 <= xx <= b + 4:
+                return False
+        return True
+
+    def dfs(i, placed, choice, nrow, nleft, rsum):
+        if best[0] is not None and (nleft, nrow, rsum) >= best[0][0]:
+            return
+        if i == n:
+            best[0] = ((nleft, nrow, rsum), list(choice))
+            return
+        yr, lab, x, w = items[i]
+        for r in range(4):
+            for left in (False, True):
+                a, b = ((x - 6 - w, x - 6) if left else (x + 6, x + 6 + w))
+                if a < 12 or b > W - 30:
+                    continue
+                if not (ok_row(placed, r, a, b) and stem_clear(placed, x, r)
+                        and label_clear(placed, r, a, b)):
+                    continue
+                placed.append((r, a, b, x))
+                choice.append((yr, lab, r, left))
+                dfs(i + 1, placed, choice, max(nrow, r + 1),
+                    nleft + left, rsum + r)
+                placed.pop()
+                choice.pop()
+
+    dfs(0, [], [], 0, 0, 0)
+    assert best[0] is not None, "泳道排不下：%r" % (evs,)
+    return best[0][1], best[0][0][1]
 
 
 LANE_Y, ly = [], LY
@@ -558,7 +603,9 @@ for (name, col, fill, evs), (y, h, placed) in zip(LANES, LANE_Y):
     box(4, y, W - 28, h, "#fff", "#dadce0", 5)
     box(4, y, 4, h, col, col, 2)
     box(6, y, 2, h, "#fff", "#fff", 0)
-    t(14, y + 15, name, fill=col, bold=True)
+    # ⛔ 2026-10-17：「前史 · 注意力是 RNN 的补丁」实际渲染比 wpx 估的宽，压住了 2014 那个圆点
+    #   （ISSUES #73）——&#160;泳道名统一降到 14px，这条再降到 13px。
+    t(14, y + 15, name, fill=col, bold=True, size=13 if name.startswith("前史") else 14)
     for (yr, lab, r, right) in placed:
         x = xf(yr)
         ty = y + 28 + r * 17
@@ -601,7 +648,7 @@ for i, (who, arc) in enumerate((
     t(16, y, who, fill=BR, bold=True)
     t(118, y, arc, fill=BR)
 
-t(16, FY + 122, '⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线',
+t(16, FY + 122, '⭐⭐ 再看一眼 ② 那条泳道：这次补完混元和 GLM，多出来一条原先看不见的线',
   "svglbl", "#174ea6", size=12)
 # ⛔ 字号从 10.5 抬到 15 之后这一行放不下了 —— 拆两行，别缩回去
 t(16, FY + 142, '混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 '

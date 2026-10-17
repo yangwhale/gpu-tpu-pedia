@@ -120,9 +120,11 @@ def fig_swap():
                       '　·　最长路径 <tspan font-weight="700">O(n)</tspan>'
                       '　·　连线数 <tspan font-weight="700">n − 1</tspan>', RD, size=_sz(15))
     f.t(14, LT + 152, '⭐ 信息走得越远越容易被冲淡 ——&#160;'
-                      '<tspan font-weight="700">这同时也是痛点 ② 梯度消失的几何解释</tspan>：'
-                      '梯度也得沿着同一条链爬回去。', GY, size=_sz(15))
-    f.t(14, LT + 178, '⭐ 而且这条链一次只能动一格，'
+                      '<tspan font-weight="700">这同时也是痛点 ② 梯度消失的几何解释</tspan>：',
+        GY, size=_sz(15))
+    # ⛔ 2026-10-17：原来一行写完，伸出 Ⓐ 面板右沿 —— 拆成两行
+    f.t(14, LT + 176, '梯度也得沿着同一条链爬回去。', GY, size=_sz(15))
+    f.t(14, LT + 204, '⭐ 而且这条链一次只能动一格，'
                       '<tspan font-weight="700">加速器上再多的并行单元也用不上</tspan>。',
         GY, size=_sz(15))
 
@@ -405,7 +407,7 @@ def fig_heads():
     # ⭐⭐ 于是画成向量合成：三根细线各指一个目标，一根粗线是它们的平均 ——
     #   **关键是让那根粗线落在一片空地上**（三个目标摆成三角形，重心不等于任何一个）。
     #   「谁都没真正指到」这件事，就从「读出来」变成了「看出来」。
-    AT = f.panel(0, y, 470, 320, "Ⓐ 单头", GY, BG2,
+    AT = f.panel(0, y, 470, 340, "Ⓐ 单头", GY, BG2,   # 10-17：320 → 340，末行原来压在下沿上
                  sub="一个 query，三个想去的地方", tint="#eceff1")
     QX, QY = 70, AT + 150
     # 刻意排成「两上一下」而不是上中下 —— 均匀铺开时三者重心会正好落在中间那个
@@ -428,7 +430,10 @@ def fig_heads():
             f"平均落点 ({ex:.0f},{ey - AT:.0f}) 压在某个目标框上了"
         assert bx + bw <= 462, f"目标框「{_}」右沿 {bx + bw} 越出面板"
     f.line(QX + 26, QY, ex, ey, RD, 4.0, arrow=True)
-    f.spot(ex + 6, ey, 9, RD)
+    # ⛔ 2026-10-17：这里原来是 f.spot(ex + 6, ey, 9, RD) —— spot 的签名是 (x, y, w, h, col)，
+    #   于是 RD 被当成了 height，产物是 height="#d93025"（浏览器报错、什么都不画，ISSUES #67）。
+    #   本意是在落点画一个记号：一个空心红圈 ——&#160;「落在空地上」。
+    f.box(ex - 1, ey - 7, 14, 14, "#fff", RD, 7, 2)
     f.t(ex + 4, ey + 32, "平均之后", RD, True, 15, "middle")
     f.t(ex + 4, ey + 54, "落在这儿", RD, True, 15, "middle")
     f.t(24, AT + 292, '⛔ 只有<tspan font-weight="700">一组</tspan>权重 ——&#160;'

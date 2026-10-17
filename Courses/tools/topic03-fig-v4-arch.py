@@ -66,7 +66,7 @@ def main():
          (OR, "要运行时挑（indexer）")])
 
     # ══════════ Ⓐ 一条 KV 的内部构造：V3.2 对照 V4 ═══════════════
-    PH = 448
+    PH = 458   # 10-17：448 → 458，「看上去跟 MLA 一样」那块蓝框原来伸出 Ⓐ 下沿 2px
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 一个 token 在 KV cache 里占多少 ——　"
                  "<tspan font-weight=\"700\">V3.2 的 MLA</tspan>　对照　"
@@ -251,7 +251,7 @@ def main():
     ])
 
     # ══════════ Ⓑ 三种层，KV 序列各自长什么样 ═══════════════════
-    PH2 = 486   # ⛔ 470 时层表黄底压住 HCA 行脚注，加高并把黄底下移
+    PH2 = 536   # ⛔ 470 时层表黄底压住 HCA 行脚注，加高并把黄底下移；10-17 层表改两行（ISSUES #39/#65），再加到 536
     py2 = f.panel(0, yy + 26, W, PH2,
                   "Ⓑ 三种层：<tspan font-weight=\"700\">纯滑窗</tspan>　·　"
                   "<tspan font-weight=\"700\">CSA（m＝4）</tspan>　·　"
@@ -263,7 +263,11 @@ def main():
     SWX, SWW = 150, 250
     ROWS = (
         (0, "纯滑窗层　compress_ratio ＝ 0", GY2, None, None,
-         "只有近处这 128 条　·　V4-Pro 61 层里只有最后 1 层是它"),
+         # ⛔ 2026-10-17（ISSUES #39）：原写「V4-Pro 61 层里只有最后 1 层是它」。
+         #   HF config.json 的 compress_ratios 有 62 项（31×128 ＋ 30×4 ＋ 1×0），
+         #   num_hidden_layers ＝ 61：前 61 项全是 4 或 128，那个 0 是第 62 项 ——
+         #   应是 1 层 MTP（num_nextn_predict_layers ＝ 1；官方没写明，属推断）。
+         "只有近处这 128 条　·　V4-Pro 主干 61 层里一层都没有"),
         (1, "CSA 层　m ＝ 4", OR, "压缩块　N/4 条",
          "Lightning Indexer 挑 top-k ＝ 1024 条",
          # ⭐⭐ 2026-09-16：同一处被现场问了**两次**「CSA 怎么也有滑窗」。
@@ -291,12 +295,13 @@ def main():
             f.t(SWX + SWW + 24, ry + 52, "（后面什么都不拼）", GY2, size=14)
         f.t(SWX, ry + 92, foot, GY, size=13.5)
 
-    f.box(72, py2 + 424, 1256, 44, "#fef7e0", OR, 6)
-    f.t(96, py2 + 452, "⭐ V4-Pro 的层表（61 层，直接抄自 config.json）："
+    f.box(72, py2 + 424, 1256, 70, "#fef7e0", OR, 6)
+    f.t(96, py2 + 450, "⭐ V4-Pro 的 compress_ratios（直接抄自 config.json，62 项）："
                        "<tspan font-family=\"ui-monospace,monospace\">"
-                       "[128, 128, 4, 128, 4, 128, …, 4, 128, 0]</tspan>"
-                       "　——　<tspan font-weight=\"700\">开头两层 HCA 打底，中间 CSA 与 HCA 交替，"
-                       "最后一层纯滑窗</tspan>", INK, size=15)
+                       "[128, 128, 4, 128, 4, 128, …, 4, 128, 4, 0]</tspan>", INK, size=15)
+    f.t(96, py2 + 476, "——　<tspan font-weight=\"700\">主干 61 层：开头两层 HCA 打底，之后 CSA 与 HCA 交替"
+                       "（30 层 CSA ＋ 31 层 HCA），没有纯滑窗层</tspan>；"
+                       "末尾那个 0 是第 62 项，应是 1 层 MTP（推断，官方未写明）", INK, size=15)
     f._pan = None
 
     # ⛔⛔⛔ 2026-09-16 现场：「这个 CSA 它居然也有一个 SWA 吗？好像不对吧，
@@ -362,7 +367,7 @@ def main():
     f._pan = None
 
     # ══════════ Ⓓ 取用时恢复成什么 ═══════════════════════════════
-    PH4 = 412   # ⛔ 396 时 ④ 那块红底说明顶出下沿 8px（探针抓到），加到 412
+    PH4 = 420   # 10-17：412 → 420，红底说明仍伸出 2px； ⛔ 396 时 ④ 那块红底说明顶出下沿 8px（探针抓到），加到 412
     py4 = f.panel(0, py3 + PH3 + 26, W, PH4,
                   "Ⓓ 查询来了之后 ——　<tspan font-weight=\"700\">"
                   "全程没有任何一步叫「解压缩」</tspan>", BL,
@@ -414,7 +419,7 @@ def main():
                "论文：<tspan font-weight=\"700\">arXiv 2606.19348</tspan>"
                "《DeepSeek-V4: Towards Highly Efficient Million-Token Context "
                "Intelligence》(DeepSeek-AI, 2026-04-26)。"
-               "§2.3.1 CSA：式 9–12 是压缩（<tspan font-weight=\"700\">每条摘要由 2m 个 entry "
+               "论文 §2.3.1 CSA：式 9–12 是压缩（<tspan font-weight=\"700\">每条摘要由 2m 个 entry "
                "加权求和而来，softmax 在这 2m 个上归一，相邻两条来源重叠，"
                "所以序列压到 1/m</tspan>），式 13–14 是 indexer 的低秩查询；"
                "§2.3.2 HCA；§2.3.3 Other Details 含 Partial RoPE、"

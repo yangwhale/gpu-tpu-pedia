@@ -33,7 +33,7 @@ from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
 
 W = 1400
 NH = 4                     # 画四个头 —— 少了看不出分组，多了挤
-PW = 338                   # 每格宽
+PW = 336                   # 每格宽（10-17：338 → 336，四格加间距原来是 1402，伸出图右沿 2px）
 GAP = 12
 
 

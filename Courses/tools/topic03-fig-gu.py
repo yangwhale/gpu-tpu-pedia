@@ -30,7 +30,7 @@ W = 1400
 
 
 def main():
-    f = Fig(W, "把前面七章重新安放一遍：所有自回归模型都是状态模型，"
+    f = Fig(W, "把前面六章重新安放一遍：所有自回归模型都是状态模型，"
                "区别只在状态长什么样。全注意力把历史每一条原样留着，"
                "线性注意力压成一个固定大小的东西，而滑窗和 DSA 在这条轴上"
                "原地不动。于是 KV cache 不是状态的上位概念，"
@@ -145,7 +145,7 @@ def main():
     pill(160, py2 + 126, 360, 86, "线性注意力的状态",
          "「它是一种 KV cache」", RD)
     f.t(60, py2 + 266, "⛔ 这么说的问题：", RD, True, 15)
-    f.t(60, py2 + 288, "它把「最不压缩的那一种」当成了整个类别的名字。", GY,
+    f.t(60, py2 + 288, "它把最不压缩的那一种，当成了整个类别的名字。", GY,
         size=13.5)
 
     # 右：Gu 的说法
@@ -223,10 +223,13 @@ def main():
     ])
 
     yy = f.src(yy + 24,
-               "三段引文均出自 Albert Gu《On the Tradeoffs of SSMs and "
-               "Transformers》(goombalab.github.io/blog/2025/tradeoffs)："
-               "①「每个自回归模型都持有一个状态」②「KV cache 才是状态的一种，"
-               "而且是最不压缩的那一种」③「数据库 vs 大脑」",
+               "三处说法出自 Albert Gu《On the Tradeoffs of SSMs and "
+               "Transformers》(goombalab.github.io/blog/2025/tradeoffs)，图里都是"
+               "<tspan font-weight=\"700\">本课的转述</tspan>：①自回归模型都持有一个状态；"
+               "② 原文是 \u201ccalling the KV cache a type of state, which IMO is much more "
+               "accurate and descriptive\u201d ——&#160;「最不压缩的那一种」是本课按原文"
+               "「Transformer 的状态缓存历史的每一个元素、SSM 的状态压缩全部历史」补的定语，"
+               "不是原话；③ 原文 \u201cTransformers are like databases … SSMs are like brains\u201d",
                "⚠️ Ⓐ 那条轴<tspan font-weight=\"700\">没有刻度，而且不该有</tspan>"
                " ——&#160;GQA 砍的是头数、MLA 压的是维度、线性换的是整个数据结构，"
                "三者之间没有一个可比的标量。四个点的横坐标只表达先后，不表达倍数",

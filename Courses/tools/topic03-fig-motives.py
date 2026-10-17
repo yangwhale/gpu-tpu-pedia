@@ -83,7 +83,8 @@ def main():
     #    「488 装不进一块卡、8.58 装得进」——&nbsp;对数会把这件事压平。
     #    ⭐ 改成**换单位**：一格 ＝ 一块 v7 的 HBM。于是它天然是线性的，
     #      而且「小的那两个只占一格里的一小条」本身就是结论，不是缺陷。
-    f.t(20, ay + 10, "拿 DeepSeek V3 砸体感（61 层 · 128 头 · 每头 128 维 · 128K · bf16）",
+    # 10-17：ay+10 → ay+22，原来字顶压在面板标题栏的分隔线上
+    f.t(20, ay + 22, "拿 DeepSeek V3 砸体感（61 层 · 128 头 · 每头 128 维 · 128K · bf16）",
         GY, size=16)
 
     # ── 种子：一个 token 有多小，乘出来有多大 ──────────────────
@@ -109,8 +110,14 @@ def main():
     X0 = 340
     REF = [("这一个用户的 KV cache", mha, RD, "⛔ 一个人就要 5.2 块"),
            ("V3 全部权重（671B，原生 FP8）", wgt, BL, "所有人共享这一份"),
-           ("换成 GQA-8", gqa, OR, "省 16 倍 ——　还是装不进一块"),
-           ("换成 MLA（V3 真实方案）", mla, GR, "省 56.9 倍 ——　这才塞得下")]
+           # ⛔ 2026-10-17（ISSUES #31）：原写「省 16 倍 —— 还是装不进一块」，
+           #   可 30.50 GiB < 94.74 GiB，一块是装得进的 —— 自相矛盾。
+           #   真正的差别是「一块卡能放几个用户」：按可分配 HBM 当场算（不计权重）。
+           ("换成 GQA-8", gqa, OR,
+            "省 16 倍 ——　一块卡只放得下 %d 个人" % int(hbm // gqa)),
+           ("换成 MLA（V3 真实方案）", mla, GR,
+            "省 56.9 倍 ——　一块卡放得下 %d 个人" % int(hbm // mla))]
+    assert int(hbm // gqa) == 3 and int(hbm // mla) == 11
     assert max(v for _, v, _, _ in REF) / hbm < SLOT, "最长那条超出 7 格了"
     for i, (nm, v, c_, note) in enumerate(REF):
         yy_ = cy + 36 + i * (CHH + 10)
@@ -122,7 +129,7 @@ def main():
             if frac > 0:
                 f.box(X0 + k * (CW_ + CG), yy_, max(CW_ * frac, 2), CHH,
                       c_, "none", 4)
-        VX = X0 + SLOT * (CW_ + CG) + 84
+        VX = X0 + SLOT * (CW_ + CG) + 96   # 10-17：+84 → +96，「30.50 GiB」原来贴着格子右沿
         f.t(VX, yy_ + CHH / 2 + 6,
             "%.2f GiB" % v if v < 100 else "%.0f GiB" % v,
             c_, bold=True, size=16, mono=True, anchor="end")
@@ -139,7 +146,7 @@ def main():
     PH2 = 384
     by = f.panel(0, y2, W, PH2, "线索 B · 信息本身不需要那么多", GR,
                  sub="结论：可以省，而且不太亏")
-    f.t(20, by + 10, "128K 的序列，真需要 128K 份独立的 KV 吗？三个观察 ——",
+    f.t(20, by + 22, "128K 的序列，真需要 128K 份独立的 KV 吗？三个观察 ——",
         GY, size=16)
 
     CW2 = 452

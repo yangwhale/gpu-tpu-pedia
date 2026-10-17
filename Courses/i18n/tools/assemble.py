@@ -42,6 +42,7 @@ HEAD['topic-03'] = {
     'og:description': 'From RNNs to today\'s hybrid ratios, told as one timeline: each step answers only '
                       '"what did the last step leave unpaid, and what does this one pay with?" Many figures, few words, plain language.',
     'zh': 'topic-03.html',
+    'fsa': 0.53,
     # 模型表按 data-v 排序；中文公司名在英文页上排出来的顺序看着是乱的，换成英文名（不可见，只影响排序）
     'css': {'data-v="%s|' % k: 'data-v="%s|' % v for k, v in {
         '小米': 'Xiaomi', '智谱': 'Zhipu', '月之暗面': 'Moonshot', '腾讯 混元': 'Tencent Hunyuan',
@@ -148,6 +149,16 @@ def main(topic, d):
         rules = ''.join('%s{font-size:%gpx}' % (sel, base(sel, d) + 1) for sel, d in
                         (('table', 14.5), ('th', 12), ('.tbl-note', 13), ('.chip', 13), ('figcaption', 15)))
         # 英文表头大写加字距、不许换行，手机上会把关键列挤出屏幕（专题一并排审 10-17）；进度条标签不折行
+        # ⭐ 等宽字体：中文页里这些类装的是汉字（落回无衬线），英文整串按等宽画，看着像代码、也更宽
+        #    （作者 10-17：版式要一眼看去跟中文一样）。只改「装文字」的类；数字、公式、编号类保持等宽。
+        TEXT_MONO = ['.svgsm', '.svgtxt', '.tocbar a', '.tocbar-lb', '.console .tag', '.hero .en', '.jstep span', '.stn .badge']
+        present = [c for c in TEXT_MONO if re.search(r'(^|[},\s])' + re.escape(c) + r'\s*[,{][^}]*?var\(--mono\)', css)]
+        # 只对已按新字体逐图复核过的专题启用（HEAD 里带 fsa 的；专题一二待复核，暂保持原样）
+        if present and h.get('fsa'):
+            rules += ','.join(present) + '{font-family:' + LATIN.replace("'", '"') + '}'
+            # 同 px 下拉丁字比汉字小约两成；Source Sans 3 的 x-height 比 0.486，调到 0.53 ≈ 放大 9%，
+            # 对内联 style 定过字号的标签同样生效（按等宽字体留的宽度足够装下）
+            if h.get('fsa'): rules += '.svgsm,.svgtxt,.svglbl{font-size-adjust:%s}' % h['fsa']
         rules += '.figsrc>summary{font-family:'+LATIN.replace("'",'"')+'}'   # 出处折叠标题：中文落回无衬线，英文别显示成等宽
         rules += '.jstep span{white-space:nowrap}@media(max-width:600px){th{white-space:normal}.jstep span{font-size:9px}}'
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)

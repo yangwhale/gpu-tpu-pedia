@@ -162,7 +162,7 @@ def main():
 
     # ══════════ ③ 拣货小队 ══════════════════════════════════════
     y2 = y1 + PH2 + 18
-    PH3 = 312
+    PH3 = 328   # 10-17：312 → 328，底下红框原来伸出面板 10px（ISSUES #75）
     py3 = f.panel(0, y2, W, PH3, "③ 那 SparseCore 能不能干这个",
                   PU, sub="一支专门跑腿拣货的小队")
 
@@ -203,8 +203,8 @@ def main():
     # ══════════ 落点 ════════════════════════════════════════════
     yy = y2 + PH3 + 20
     yy = f.band(yy, "warn", "⛔ 第三格这条要留在「看起来很对、但还没被公开验证」上", [
-        "SparseCore 的公开资料说它是「为<tspan font-weight=\"700\">不规则、稀疏访存"
-        "</tspan>做的专用处理器」，并且<tspan font-weight=\"700\">原生支持"
+        "按 SparseCore 的公开资料（转述，非原句），它是为<tspan font-weight=\"700\">不规则、稀疏访存"
+        "</tspan>做的专用处理器，并且<tspan font-weight=\"700\">原生支持"
         "数据相关的控制流与访存</tspan>、能做跨 lane 的排序 / 过滤 / 前缀和。",
         "⛔ 但<tspan font-weight=\"700\">没有公开材料</tspan>说有人用它跑注意力的 top-k。"
         "⭐ 所以这一条的准确说法是：<tspan font-weight=\"700\">硬件条件看起来对得上，"
@@ -228,8 +228,9 @@ def main():
     yy = f.src(yy + 16,
                "三招、「SREG 在计算密集阶段欠用」、以及 MBU 86% / MFU 73%，"
                "均出自 Ragged Paged Attention（Jiang 等 arXiv 2604.15464）§3–§5",
-               "SparseCore 的定位与「必须声明静态上界、超了就 mini-batch 或丢 ID」"
-               "出自 openxla.org 的 SparseCore 公开文档",
+               "SparseCore 的定位、以及必须声明静态上界（超了就 mini-batch 或丢 ID）"
+               "这两条，是本课对 openxla.org SparseCore 公开文档的<tspan font-weight=\"700\">转述</tspan>，"
+               "不是原句",
                "⚠️ 「中央厨房 / 前台后厨 / 拣货小队」是"
                "<tspan font-weight=\"700\">本课的比喻</tspan>；"
                "⚠️ 跨层共享在 TPU 上更值钱那一条是<tspan font-weight=\"700\">本课的推导"
