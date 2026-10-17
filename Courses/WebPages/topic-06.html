@@ -8011,7 +8011,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s十"><div class="wrap"><div class="stn"><span class="badge">第 十 节</span><h2>先选拓扑，再调参数</h2></div>
-  <p class="lead">第六到九节给出了一串拓扑，每换一个，调好的参数就得重找。换一次拓扑，抵得上把参数调遍：V4-Pro 换 DEP 每卡是 TP4 的 2.09 倍（第六节），卡数不变只调并发是 +28%。</p>
+  <p class="lead">第六到九节给出了一串拓扑，每换一个，调好的参数就得重找。<b>换一次拓扑，抵得上把参数调遍。</b></p>
 
   <h3 id="s10-1">10.1　回顾：线有快慢，切法先定</h3>
   <p>专题五 <a href="topic-05.html#s7-1">§7.1</a> 讲过：通信勤的切法要放在快线里，懒的才能跨慢线。</p>
@@ -8323,7 +8323,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>左右两栏只换了分母，看「调参」那一步。</b><span class="capmore"><br><em>卡数含 prefill 与 decode。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:446（1p1d 并发 256，14,563）、:448（3p1d 并发 256，16,459）、:449（3p1d 并发 512，21,100）、:465（3p ＋ dep8 并发 512，55,153）、:468（并发 1,536，65,132）。「+45% / +347%」原话见 :489；「每卡 2.47×」见 :476；「256→512 涨 28%」见 :487。</p>
 <p>⚠️ 本课推导：每卡数 ＝ 总吞吐 ÷ GPU 数（1p1d 8 卡、3p1d 16 卡、3p ＋ dep8 20 卡，后两个数见 :476）；-28% 与 1.79× 是现算，原文没有。吞吐口径是 prompt 加输出的总 token，sa-bench、temperature=0。</p></details></figure>
   <p>拆开看，+45% 里大半是加卡：prefill 从 1 台加到 3 台，卡数翻倍，每卡反而变少。卡数不变、只调并发的那一步才是纯调参。</p>
-  <p>换拓扑在两种口径下都赢。同并发下为什么赢，第六节拆过；dep8 再拉高并发时每卡最高，但首字 95 s，已出了交互档。</p>
+  <p>换拓扑在两种口径下都赢：按每卡算，换 DEP 是 TP4 的 2.09 倍（第六节拆过为什么），只调并发是 +28%。dep8 再拉高并发时每卡最高，但首字 95 s，已出了交互档。</p>
 
   <h3 id="s10-3">10.3　拓扑约束是硬的</h3>
   <p>16 个 device 跑 TP16，机间走 DCN 还是 ICI，结果差出一截。即便走 ICI，两台的总输出 513.8 tok/s 也不如单机 602。</p>
