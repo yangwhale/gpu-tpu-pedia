@@ -2760,7 +2760,8 @@ out = [head, '''
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题三
-    ／ <b>注意力演进</b></div>
+    ／ <b>注意力演进</b>
+    <a class="lecbtn" href="topic-03.en.html" lang="en" hreflang="en">🌐 English</a></div>
   <h1>注意力演进</h1>
 
   <!-- ⛔ 2026-09-23 现场：「这英文副标题都挺二的，全都删了。」

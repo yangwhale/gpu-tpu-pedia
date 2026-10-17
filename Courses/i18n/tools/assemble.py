@@ -36,10 +36,29 @@ HEAD['topic-01-lecture'] = {
     'zh': 'topic-01-lecture.html',
     'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
 }
+HEAD['topic-03'] = {
+    'title': 'Topic 3 · The Evolution of Attention',
+    'og:title': 'The Evolution of Attention · a chain, cut, and looped back',
+    'og:description': 'From RNNs to today\'s hybrid ratios, told as one timeline: each step answers only '
+                      '"what did the last step leave unpaid, and what does this one pay with?" Many figures, few words, plain language.',
+    'zh': 'topic-03.html',
+    # 模型表按 data-v 排序；中文公司名在英文页上排出来的顺序看着是乱的，换成英文名（不可见，只影响排序）
+    'css': {'data-v="%s|' % k: 'data-v="%s|' % v for k, v in {
+        '小米': 'Xiaomi', '智谱': 'Zhipu', '月之暗面': 'Moonshot', '腾讯 混元': 'Tencent Hunyuan',
+        '蚂蚁 百灵': 'Ant Ling', '阿里 千问': 'Alibaba Qwen'}.items()},
+}
+HEAD['topic-03-lecture'] = {
+    'title': 'Topic 3 · Instructor notes (lecture script)',
+    'og:title': 'The Evolution of Attention · instructor notes',
+    'og:description': "The teacher's draft: the spoken script, which figure to point at, likely questions, and what not to say.",
+    'zh': 'topic-03-lecture.html',
+    'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
+}
 # 有英文版的页面：中文 href → 英文 href（锚点保留）。其余中文页一律去链接。
 EN_MAP = {'index.html': 'index.en.html', 'topic-02.html': 'topic-02.en.html',
           'topic-02-L200-lecture.html': 'topic-02-L200-lecture.en.html',
-          'topic-01.html': 'topic-01.en.html', 'topic-01-lecture.html': 'topic-01-lecture.en.html'}
+          'topic-01.html': 'topic-01.en.html', 'topic-01-lecture.html': 'topic-01-lecture.en.html',
+          'topic-03.html': 'topic-03.en.html', 'topic-03-lecture.html': 'topic-03-lecture.en.html'}
 # ⭐ 英文版字体用 Source Sans 3（Google Fonts）：Noto Sans CJK 的拉丁字形就是从它来的，
 #    所以图上标签的宽度跟检查时（本机 Noto CJK）一致；又避开了 CJK 字体把弯引号画成全角的问题，
 #    而且 iPhone / Mac 上不再回落到更宽的系统字体（作者 10-17 是在 iPhone 上看的）。
@@ -109,7 +128,8 @@ def main(topic, d):
     s = s.replace('</title>', '</title><style>' + ff + '</style>', 1)
     # ⭐ 「折叠讲解」开关（移植自专题三/四/五/六的 figbar）。英文版**默认折叠**：只留图，
     #    想细读的人点「Show narration」或按 T 展开（作者 2026-10-17）。中文专题二原本没有这个开关。
-    if not topic.endswith('lecture'):
+    # 中文页自带折叠开关（专题三起）就不再注入，开关文案与默认值在块里翻译/设定
+    if not topic.endswith('lecture') and 'figonly-css' not in s:
       fo_css, fo_html = (pathlib.Path(__file__).resolve().parents[1] / 'figonly.html').read_text().split('@@SPLIT@@')
       s = s.replace('</title>', '</title>' + fo_css.strip(), 1)
       s = s.replace('</body>', fo_html + '</body>', 1)
@@ -128,6 +148,7 @@ def main(topic, d):
         rules = ''.join('%s{font-size:%gpx}' % (sel, base(sel, d) + 1) for sel, d in
                         (('table', 14.5), ('th', 12), ('.tbl-note', 13), ('.chip', 13), ('figcaption', 15)))
         # 英文表头大写加字距、不许换行，手机上会把关键列挤出屏幕（专题一并排审 10-17）；进度条标签不折行
+        rules += '.figsrc>summary{font-family:'+LATIN.replace("'",'"')+'}'   # 出处折叠标题：中文落回无衬线，英文别显示成等宽
         rules += '.jstep span{white-space:nowrap}@media(max-width:600px){th{white-space:normal}.jstep span{font-size:9px}}'
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
@@ -158,6 +179,9 @@ def main(topic, d):
     if '🌐 中文' not in s:   # 没有讲义按钮可挂时，挂在面包屑末尾
         s = re.sub(r'(<div class="crumb">.*?)(</div>)', r'\1\n    <a class="lecbtn" href="%s" lang="zh-CN" hreflang="zh-CN">🌐 中文</a>\2' % zh, s, count=1, flags=re.S)
     for a_, b_ in h.get('css', {}).items(): s = s.replace(a_, b_)
+    # 讲义里「Section N」的页内链接按标题核对锚点（中文专题三讲义的 #cK 错了一位：#c2 写的是第二章，实为第一章）
+    sec_id = {m.group(2): m.group(1) for m in re.finditer(r'id="(c\d+)"[^>]*>\s*Section (\d+)\b', s)}
+    s = re.sub(r'href="#(c\d+)">Section (\d+)\b', lambda m: 'href="#%s">Section %s' % (sec_id.get(m.group(2), m.group(1)), m.group(2)), s)
     # 图里的 class 样式和内联 style 也把 Source Sans 3 放到 Noto CJK 前面
     s = s.replace("'Noto Sans CJK SC'", "'Source Sans 3','Noto Sans CJK SC'")
     s = re.sub(r'(?<![\w\'])"Noto Sans CJK SC"(?!,"PingFang)', '"Source Sans 3","Noto Sans CJK SC"', s)

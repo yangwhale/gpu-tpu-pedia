@@ -15,6 +15,8 @@ from bs4 import BeautifulSoup, Comment
 CJK = re.compile(r'[㐀-鿿　-〿＀-￯]')
 GEOM_FREE = {'font-size'}
 TEXT_ATTRS = {'title', 'alt', 'aria-label', 'placeholder'}
+# 修图里文字压框/撞线时允许改的 SVG 几何属性（如 I18N_GEOM_FREE=x,y,height），只在明确授权的轮次打开
+GEOM_EXTRA = {x for x in os.environ.get('I18N_GEOM_FREE', '').split(',') if x}
 
 def soup(p):
     return BeautifulSoup(pathlib.Path(p).read_text(), 'html.parser')
@@ -24,6 +26,8 @@ def tagseq(sp):
     for t in sp.find_all(True):
         a = {k: (' '.join(v) if isinstance(v, list) else v) for k, v in t.attrs.items()
              if k not in TEXT_ATTRS}
+        if GEOM_EXTRA and t.find_parent('svg') is not None:
+            for k in GEOM_EXTRA: a.pop(k, None)
         if t.name in ('text', 'tspan'):
             a.pop('font-size', None)
             if 'style' in a:

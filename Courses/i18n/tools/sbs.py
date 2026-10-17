@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 from PIL import Image
 Image.MAX_IMAGE_PIXELS=None
 W=int(sys.argv[1]); MAXH=1500
-pages={'zh':WORK+'/zh-ref.html','en':f'/home/chrisya/gpu-tpu-pedia/Courses/WebPages/{TOPIC}.en.html'}
+pages={'zh':WORK+'/zh-ref.html','en':os.environ.get('I18N_EN') or f'/home/chrisya/gpu-tpu-pedia/Courses/WebPages/{TOPIC}.en.html'}
 A={}
 with sync_playwright() as p:
     b=p.chromium.launch()

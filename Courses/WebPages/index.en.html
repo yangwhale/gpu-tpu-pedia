@@ -414,15 +414,19 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic main" id="t3">
-    <div class="head"><span class="num">03</span><span class="name">The evolution of attention</span><span class="wip">English edition coming</span></div>
+    <div class="head"><span class="num">03</span><span class="name"><a href="topic-03.en.html">The evolution of attention</a></span><span class="rdy">English edition ✓ · core track</span></div>
     <div class="quote">MLA, GQA, SWA, DSA, linear attention… so many names it looks like everyone is doing their own thing. But they all solve the same problem, and there are only three knobs to turn.</div>
     <dl>
       <dt>Covers</dt><dd>First, separate the two motivations: <b>the hardware cost</b> (the KV cache can outgrow the weights, and without a fix you can't ship) and <b>the information argument</b> (the attention matrix is extremely sparse to begin with, so most of what you compute is wasted). Then one table sorts every name onto three knobs: <b>how much each token stores · how much each query looks at · different math altogether</b>.</dd>
       <dt>Why third</dt><dd>Lecture 1 computed a curve: at 4K context, attention is <b>12%</b> of compute; at 128K, <b>82%</b>; at 1M, <b>97%</b>. <b>Nothing about the model changes; the input just gets longer, and the bottleneck moves somewhere else entirely.</b> Lecture 1 only shows why a change is unavoidable; this lecture shows how people made it. It comes right after, while the numbers are fresh.</dd>
       <dt>Sets up</dt><dd>Every later lecture uses it: how to split the sequence dimension in parallelism, why prefill and decode have opposite bottlenecks in inference, how to read the “attention scheme” column in the open-model comparison. All of it grows out of these three knobs.</dd>
-      <dt>Two editions</dt><dd><b>Core track</b> (rewrite finished 2026-09-14): one story along a <b>timeline</b>. How RNNs remember → 2017 cuts the chain and replaces it with a table → long contexts make the table unaffordable → cut heads (MQA/GQA) → store a compressed form instead of K/V (MLA) → don't read everything (sliding window → DSA) → back to a fixed-size state → hybrid ratios. Many figures, few words; each chapter answers only “what did the last chapter leave unpaid, and how does this one pay it?”<br><b>L300 full edition</b>: the earlier version, kept whole as an archive. Every derivation, ablation table and primary source, plus our own measurements on v7, <b>58 figures</b> in all. Use it to look things up.</dd>
+      <dt>Two editions</dt><dd><b>Core track</b> (rewrite finished 2026-09-14): one story along a <b>timeline</b>. How RNNs remember → 2017 cuts the chain and replaces it with a table → long contexts make the table unaffordable → cut heads (MQA/GQA) → store a compressed form instead of K/V (MLA) → don't read everything (sliding window → DSA) → back to a fixed-size state → hybrid ratios. Many figures, few words; each chapter answers only “what did the last chapter leave unpaid, and how does this one pay it?”<br><b>L300 full edition</b>: the earlier version, kept whole as an archive. Every derivation, ablation table and primary source, plus our own measurements on v7, <b>58 figures</b> in all. Use it to look things up. The English edition covers the core track.</dd>
       <dt>In L300</dt><dd><b>Every core section is drafted</b> (2026-09-13). The focus isn't which schemes exist but <b>how each was conceived and why it works</b>: for example, <b>how MLA can get away with compressing 32,768 down to 576</b>, <b>how DSA escapes the chicken-and-egg problem that judging what matters requires computing attention first</b>, and <b>why dropping four tokens from a sliding window sends perplexity from 5.40 to 5158</b>.<br><b>Added 2026-09-16</b>: the core track gained a full block on <b>DeepSeek-V4</b>. NSA / DSA / CSA / HCA are four steps along <b>one road</b>, and V4-Pro's KV looks nothing like what you'd guess (<b>it isn't MLA but Shared K=V MQA</b>; the 64-dim RoPE sits inside the 512, not outside).<br>Two threads also run through the whole lecture: <b>compressing after the fact vs training compressed from scratch</b> (it comes up four times), and <b>hardware dictating the formula</b> (from “dot products won because they can be written as matmuls” to “select by block, not by token”).</dd>
     </dl>
+    <div class="docs">
+      <a class="pri" href="topic-03.en.html">Course page · core track →</a>
+      <a href="topic-03-lecture.en.html">📝 Instructor notes (lecture script)</a>
+    </div>
   </div>
 
   <div class="topic main" id="t4">
@@ -542,7 +546,7 @@ footer a{color:var(--blue);text-decoration:none}
 </div></section>
 
 <footer><div class="wrap">
-  <p><b>Modern AI Accelerators: GPU / TPU Systems Course</b> · <b>English edition: Topics 1 and 2 so far</b> (course page and instructor notes for each). More topics will follow; Topics 7 and 9–14 are still outlines.</p>
+  <p><b>Modern AI Accelerators: GPU / TPU Systems Course</b> · <b>English edition: Topics 1–3 so far</b> (course page and instructor notes for each). More topics will follow; Topics 7 and 9–14 are still outlines.</p>
   <p style="margin-top:10px"><b>Chris Yang</b> · Google Cloud AI Infra architect.
      The views and data here are my own compilation and do not represent my employer.</p>
   <p style="margin-top:10px">This course is licensed under <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>

@@ -14,6 +14,7 @@ with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={'width': 1280, 'height': 900})
     pg.add_init_script("try{localStorage.setItem('figonly:'+location.pathname.split('/').pop(),'0')}catch(e){}")
     pg.goto('file://' + str(tmp)); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(1500)
+    pg.evaluate("document.body.classList.remove('figonly'); document.querySelectorAll('details').forEach(d=>d.open=true)"); pg.wait_for_timeout(300)
     figs = pg.query_selector_all('figure')
     for a in sys.argv[1:]:
         i = int(a); f = figs[i]; f.scroll_into_view_if_needed(); pg.wait_for_timeout(100)
