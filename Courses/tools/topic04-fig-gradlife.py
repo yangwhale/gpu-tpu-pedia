@@ -19,13 +19,13 @@ W = 1400
 
 # (编号, 名字, 一句话, 能不能藏进计算里, 藏不了的原因 / 备注)
 STEPS = (
-    ("①", "算出来", "反向走到哪层，哪层的梯度就出来", "—",
+    ("①", "算出来", "反向走到哪层，\n哪层的梯度就出来", "—",
      "⭐ 从后往前<tspan font-weight=\"700\">陆续</tspan>出来，不是最后一起出", BL),
-    ("②", "跨卡汇总", "每张卡看的数据不同，得取平均", "✅ 能藏",
+    ("②", "跨卡汇总", "每张卡看的数据不同，\n得取平均", "✅ 能藏",
      "⭐ 前面几层还在算，后面的梯度已经能传了", GR),
     ("③", "裁剪", "按全局范数，超了整体缩回去", "⛔ 藏不了",
      "⛔ 要等<tspan font-weight=\"700\">所有卡所有层</tspan>都到齐，强制一次同步", RD),
-    ("④", "累积", "几个 micro-batch 先加起来（可选）", "—",
+    ("④", "累积", "几个 micro-batch\n先加起来（可选）", "—",
      "⭐ 它改的是<tspan font-weight=\"700\">时间线</tspan>，不是总量", GY2),
     ("⑤", "用掉就扔", "交给优化器，这一份就没用了", "—",
      "⭐ 正因为用完就扔，它才敢用 bf16 存", PU),
@@ -111,13 +111,33 @@ def main():
 def _wrap(t, n):
     """按汉字数粗切几行 ——&#160;标签短，不值得上排版器。"""
     import re
+    if '\n' in t:                    # 调用方手工断好的行，原样用
+        return t.split('\n')
     plain = re.sub(r'<[^>]+>', '', t)
-    if len(plain) <= n:
+    if sum(0.55 if ord(c) < 128 else 1 for c in plain) <= n:
         return [t]
     # 有标签时不切，交给调用方保证够短
     if '<' in t:
         return [t]
-    return [t[i:i + n] for i in range(0, len(t), n)]
+    # ⛔ 不在英文词中间断行（原来「micro-batch」被切成「micro-batc / h」）：
+    #   按「汉字宽」计数（西文字母、数字、空格算半个），
+    #   切点落在字母串中间时，退到这串字母的开头再切。
+    lat = r'[A-Za-z0-9\-]'
+    out, i = [], 0
+    while i < len(t):
+        w, j = 0.0, i
+        while j < len(t) and w + (0.55 if ord(t[j]) < 128 else 1) <= n:
+            w += 0.55 if ord(t[j]) < 128 else 1
+            j += 1
+        if j < len(t):
+            k = j
+            while k > i and re.match(lat, t[k - 1]) and re.match(lat, t[k]):
+                k -= 1
+            if k > i:
+                j = k
+        out.append(t[i:j].strip())
+        i = j
+    return out
 
 
 if __name__ == "__main__":

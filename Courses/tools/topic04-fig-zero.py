@@ -154,7 +154,9 @@ def main():
         f.t(sx(n), OY + 24, lab, GY2, size=12, anchor="middle")
     for bb in (2, 12):
         f.line(OX - 5, sy(bb), OX + 5, sy(bb), GY2, 1, arrow=False)
-        f.t(OX - 14, sy(bb) - 12, "%d B" % bb, GY2, size=12, anchor="end")
+        # ⛔ 原来贴在 OX − 14：「12 B」碰到泡泡、「2 B」撞上「2｜梯度」——&#160;
+        #   刻度字再往左让一点，左侧那组标签也跟着往左让（见下面 PLACE）
+        f.t(OX - 25, sy(bb) - 12, "%d B" % bb, GY2, size=12, anchor="end")
 
     pts = []
     for col, name, byt, freq, when, when2, comm in ITEMS:
@@ -180,7 +182,8 @@ def main():
             rows = ((name_ := "%d｜%s" % (k + 1, name), 0), (when, 22), (comm, 42))
         else:
             sgn = 1 if side == "right" else -1
-            ax, base, anc = x + sgn * 34, yy - 16, ("start" if sgn > 0 else "end")
+            ax, base, anc = (x + sgn * (34 if sgn > 0 else 52), yy - 16,
+                             ("start" if sgn > 0 else "end"))
             rows = (("%d｜%s" % (k + 1, name), 0), (when, 22), (comm, 42))
         for txt, off in rows:
             bold = txt.startswith("⛔") or off == 0

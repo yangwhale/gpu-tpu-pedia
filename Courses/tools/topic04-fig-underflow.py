@@ -136,8 +136,9 @@ def main():
             (FP16_MIN_NORMAL, OR, "fp16 正规数下界", "%.2e" % FP16_MIN_NORMAL, -128)):
         xx = ax(v)
         f.line(xx, AY + 40, xx, AY + dy + 16, col, 2.2, arrow=False)
-        f.t(xx, AY + dy, name, col, True, 13.5, "middle")
-        f.t(xx, AY + dy + 20, note, col, size=11.5, anchor="middle")
+        # ⛔ 字要整个落在竖线顶端之上（原来竖线从数字中间穿过去）
+        f.t(xx, AY + dy - 14, name, col, True, 13.5, "middle")
+        f.t(xx, AY + dy + 6, note, col, size=11.5, anchor="middle")
 
     f.t(700, py + 306,
         "⭐⭐⭐ 所以 fp16 的问题从来不是<tspan font-weight=\"700\">「16 位不够细」</tspan>"

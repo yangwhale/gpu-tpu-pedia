@@ -439,7 +439,7 @@ deviation 是「偏差」（standard deviation 那个），跟这里不是一个
 一次一次砍半下去，<b>要问将近十七次</b>。<br>
 右边是<b>训练到后期</b>：候选只剩<b>等效七个</b>，<b>三次就到头了</b>。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：平移到 <b>Ⓑ</b>。</p>
+<p class="board"><b>🖥 屏幕</b>：展开下面折叠的 <code>fig-bits-more</code>，放 <b>Ⓐ</b>。</p>
 <p>⭐⭐⭐ <b>这一格是重点，讲慢。台下最容易以为「是这个词变简单了」。</b></p>
 
 <p class="say">「那候选<b>凭什么</b>变少了？<br>
@@ -455,7 +455,7 @@ deviation 是「偏差」（standard deviation 那个），跟这里不是一个
 ——&nbsp;<b>候选就是缩小了这么多。</b><br>
 这十四个 bit，<b>就是模型学会的全部东西</b>。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：平移到 <b>Ⓒ</b>。<em>⚠️ 这一格三十秒，说准就走。</em></p>
+<p class="board"><b>🖥 屏幕</b>：平移到 <code>fig-bits-more</code> 的 <b>Ⓑ</b>。<em>⚠️ 这一格三十秒，说准就走。</em></p>
 <p class="say">「最后把「<b>等效</b>」这个词说准，别留个错印象。<br>
 ⛔ 困惑度七，<b>不是说真的只剩七个候选</b> ——&nbsp;<b>词表一直是十二万九千多个</b>。<br>
 ⭐ 它的意思是：<b>这份高低不齐的分布，跟在七个等概率的候选里挑，一样难。</b><br>

@@ -75,8 +75,9 @@ def main():
     f.t(OX + AW * KNEE * 0.5, OY - AH * F0 - 42, "几乎是平的", GR, True, 17, "middle")
     f.t(OX + AW * KNEE * 0.5, OY - AH * F0 - 18,
         "batch 翻倍，时间几乎不变", GY, size=13, anchor="middle")
-    f.t(OX + AW * 0.74, OY - AH * 0.62, "正比于 batch", RD, True, 17, "middle")
-    f.t(OX + AW * 0.74, OY - AH * 0.62 + 24,
+    # ⛔ 原来放在 0.74 处，第二行碰到红线 ——&#160;往右下挪，整块落在线的下方
+    f.t(OX + AW * 0.845, OY - AH * 0.62 + 23, "正比于 batch", RD, True, 17, "middle")
+    f.t(OX + AW * 0.845, OY - AH * 0.62 + 47,
         "batch 翻倍，时间也翻倍", GY, size=13, anchor="middle")
 
     f.t(OX + AW * KNEE * 0.5, OY + 30, "⭐ 卡还没喂饱", GR, True, 14, "middle")

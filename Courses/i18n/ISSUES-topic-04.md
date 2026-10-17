@@ -69,13 +69,13 @@
 64. ✅ fig-act-bill Ⓐ 橙色放大框副标题（纵轴换了一把尺）超出框右边
 65. ✅ fig-act-bill 纵轴标题「激活（GiB）」压在 120 刻度下方几乎重叠（英文同）
 ✅ 66. 第七节页脚称专题五「未上线」，topic-05.html 早已上线
-67. 图注仍按拆分前的面板字母描述：fig-bits 图注提 Ⓑ/Ⓒ（现在 fig-bits-more 里叫 Ⓐ/Ⓑ）；fig-settle、fig-levels 图注提的 Ⓓ 已移到折叠的后续图
+✅ 67. 图注仍按拆分前的面板字母描述：fig-bits 图注提 Ⓑ/Ⓒ（现在 fig-bits-more 里叫 Ⓐ/Ⓑ）；fig-settle、fig-levels 图注提的 Ⓓ 已移到折叠的后续图
 ✅ 68. fig-bits-more 的 aria-label 与图内灰字仍写「正好 17,496 倍」（#37 只改了图注；14.09 取整后是 17,439）
 ✅ 69. 6.5「1.6 那条残差」应指 1.4（残差在 1.4 引入）
 ✅ 70. 3.4 谱系「3.5 那两条轨迹」应指 3.3b（两条轨迹图在 3.3b）
-71. fig-settle Ⓐ 右侧表头注被截断在「…7,168 进 → 2,04」
-72. fig-gradlife ④「micro-batch」在词中折行成「micro-batc / h」
-73. 图内文字被线穿过 / 压色块（英文已挪开）：fig-underflow 竖线穿过 1.18e-38 / 5.96e-08 / 6.10e-05；fig-muon「这一步落在这儿」压红色梯度线；fig-batch「batch 翻倍，时间也翻倍」碰红线；fig-lineage「RMSProp（无校正）」压 8× 虚线；fig-zero「2 B」刻度撞「2｜梯度」、「12 B」碰圆
+✅ 71. fig-settle Ⓐ 右侧表头注被截断在「…7,168 进 → 2,04」
+✅ 72. fig-gradlife ④「micro-batch」在词中折行成「micro-batc / h」
+✅ 73. 图内文字被线穿过 / 压色块（英文已挪开）：fig-underflow 竖线穿过 1.18e-38 / 5.96e-08 / 6.10e-05；fig-muon「这一步落在这儿」压红色梯度线；fig-batch「batch 翻倍，时间也翻倍」碰红线；fig-lineage「RMSProp（无校正）」压 8× 虚线；fig-zero「2 B」刻度撞「2｜梯度」、「12 B」碰圆
 
 ## 讲义（topic-04-lecture）
 L1. ✅ ⚠️ 第零节讲义还是旧开场（「装不下」「优化器状态是权重的六倍」「按大小讲不按训练顺序」），同文件的时间表与课件第零节已改成「一个数 → 6,710 亿个导数」这条链；线索 ①、「只说一句」停顿、第五节总账图（fig-step，现已折叠）的屏幕提示也还按旧框架——需作者重写

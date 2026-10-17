@@ -240,8 +240,14 @@ def main():
         _t = 1 + (NT - 1) * at
         _lx = OX3 + AW3 * (_t - 1) / (NT - 1)
         _ly = OY3 - AH3 * min(fn(_t), YMAX) / YMAX
-        f.line(_lx, _ly, _lx + 30, _ly - 34, col, 1.4)
-        f.t(_lx + 36, _ly - 38, lab, col, True, 14)
+        _ty = _ly - 38
+        # ⛔ 标签别骑在「8×」那条虚线上（原来 RMSProp 那行字正好被它穿过）：
+        #   撞上了就整行抬到虚线上方，引线跟着拉长。
+        _gy = OY3 - AH3
+        if _ty - 15 < _gy + 3 and _ty + 4 > _gy:
+            _ty = _gy - 7
+        f.line(_lx, _ly, _lx + 30, _ty + 4, col, 1.4)
+        f.t(_lx + 36, _ty, lab, col, True, 14)
 
     f.t(OX3 + AW3 + 20, OY3 - AH3 - 6,
         "⛔ 第一步被放大 <tspan font-weight=\"700\">%.0f 倍</tspan>（冲出画面）"
