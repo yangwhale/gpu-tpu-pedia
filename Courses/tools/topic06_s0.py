@@ -10,7 +10,7 @@ BODY = '''
   <p>2023 年 PagedAttention 把 KV 分页，利用率到 96%。浪费省掉以后，坐几个人就看 KV 池装得下几条 KV，偏偏上下文一路变长：2023 年 11 月 GPT-4 Turbo 开到 128K，2024 年 2 月 Gemini 1.5 Pro 预览 1M。模型侧用 GQA、MLA 把每条压薄；系统侧让相同的开头不再重算（SGLang 的 RadixAttention），存不下的往内存、SSD 放（Mooncake，给 Kimi 线上用）。</p>
   <p>座位坐满后，长 prompt 进门那一步会卡住所有正在出字的人。2024 年 Sarathi-Serve 把 prefill 切块塞进 decode 的步里，可这只摊平了打扰；Splitwise、DistServe 干脆把两段分到两批机器（PD 分离）。代价是每个请求多传一趟 KV，还多了一份 prefill 与 decode 的机器配比要调。</p>
   <p>DeepSeek-V3 这类 MoE（每个字只走几个专家）又把拼好的 batch 拆散：256 个专家选 8 个，每个专家只分到几行。SGLang 的 DP attention、DeepSeek 的大 EP 把专家铺到上百张卡上，凑够行数。随之而来的是每个 rank 要自备一份状态，K3 上 DEP8 直接显存不足；decode 快了，prefill 又喂不上。</p>
-  <p>2024 年 9 月的 o1、2025 年 1 月的 DeepSeek-R1 一题要写几百到几千个思考 token（R1 论文），交互档（同样的出字速度）又限住 batch，“读一趟权重出一个字”成了硬上限。投机解码、MTP 让一趟验好几个字；剩下能省的是字节，FP8、FP4 和合并 kernel（芯片上调起的一个计算函数）接着压。同一套 GB300（NVIDIA 整柜 GPU）跑 DeepSeek-V4-Pro，光改软件，同一交互档每卡吞吐已是首发日（Day-0）的 5.1 倍（含 MTP）。</p>
+  <p>2024 年 9 月的 o1、2025 年 1 月的 DeepSeek-R1 一题要写几百到几千个思考 token（R1 论文），交互档（同样的出字速度）又限住 batch，“读一趟权重出一个字”成了硬上限。投机解码、MTP 让一趟验好几个字；剩下能省的是字节，FP8、FP4 和合并 kernel（芯片上调起的一个计算函数）接着压。同一套 GB300（NVIDIA 整柜 GPU）跑 DeepSeek-V4-Pro，光改软件，同一交互档每卡吞吐比首发日（Day-0）涨了几倍？先猜一个数，答案在 <a href="#s15-cost">15.3</a>。</p>
 __FIG_S0_CHAIN__
   <details class="foldfig"><summary><b>十一环展开</b>：每一招卡在哪、省了多少、又留下什么（按环号，也就是首次公开的先后）</summary>
   <table>
@@ -27,7 +27,7 @@ __FIG_S0_CHAIN__
     <tr><td>⑩</td><td>2024 → 2025</td><td>Meta（CP）；vLLM 2025 合入 DCP</td><td>DEP 起不来、KV 被复制 → DCP／PCP 按序列切</td><td>DCP 把 KV 副本让出来，PCP 切 prompt 压首字</td><td>DCP 只在长上下文划算；PCP 遇上线性注意力，状态得一卡接一卡传</td><td>七</td></tr>
     <tr><td>⑪</td><td>2024 → 2025</td><td>SGLang、DeepSeek</td><td>MoE 把 batch 拆碎，每专家约 8 行 → DP attention ＋ 大 EP</td><td>SGLang 复现：最多是同卡数纯 TP 的 5×</td><td>每个 rank 自带一份状态，K3 开 DEP8 显存不够；prefill 也追不上变快的 decode</td><td>六</td></tr>
   </table>
-  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。终点那颗菱形是 GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡到了首发日的 5.1 倍（含 MTP）。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十五节）。</p>
+  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。终点那颗菱形是 GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡涨到首发日的几倍，留到 15.3 揭晓。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十五节）。</p>
   </details>
 __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
@@ -69,7 +69,7 @@ __FIG_S0_ENGINES__
     <tr><td>2025-12</td><td>vLLM</td><td>Wide-EP，每张 H200 约 1.5k → 2.2k tok/s</td><td>—</td><td>vLLM 博客 2025-12-17</td></tr>
     <tr><td>2026-03</td><td>vLLM</td><td>MRV2，吞吐 +56%（Qwen3-0.6B）</td><td>—</td><td>vLLM 博客 2026-03-24</td></tr>
     <tr><td>2026-04</td><td>外部</td><td>DeepSeek-V4</td><td>vLLM 04-24、SGLang 04-25 首发日支持</td><td>两家博客</td></tr>
-    <tr><td>2026-06</td><td>SGLang</td><td>GB300 上跑 V4-Pro，同交互档 5.1×（对自家首发日）</td><td>—</td><td>PyTorch 博客 2026-06-23</td></tr>
+    <tr><td>2026-06</td><td>SGLang</td><td>GB300 上跑 V4-Pro，同交互档对自家首发日涨了几倍（15.3 揭晓）</td><td>—</td><td>PyTorch 博客 2026-06-23</td></tr>
     <tr><td>2026-09</td><td>vLLM 生态</td><td>Inferact 的 TPU megakernel</td><td>—</td><td>Inferact 博客</td></tr>
   </table>
   <p>两家共用的外部部件：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。间隔都按两边日期本课推导，往下取整；全部出处见第十六节台账「R85 补充」「L80 补充」。</p>
@@ -159,5 +159,4 @@ FIGS = {
 }
 
 NUM_LOCK = [
-    ("5.1", "fig6-chain.svg"),
 ]

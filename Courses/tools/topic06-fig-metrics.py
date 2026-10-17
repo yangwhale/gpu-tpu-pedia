@@ -191,7 +191,7 @@ def fig_pareto():
     f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="%s"/>' % (x, y, OR))
     f.t(x + 12, y + 26, "9,168 @ ≈ 17", OR, True, 14)
     f.t(x + 12, y + 46, "（TPOT 约 60 ms）", OR, size=13)
-    f.t(X0 + PW - 10, Y0 - PHH + 50, "同一档上：11,200 是 2,200 的 5.1 倍", BL, True, 14, "end")
+    f.t(X0 + PW - 10, Y0 - PHH + 50, "同一档上：11,200 对 2,200，几倍？", BL, True, 14, "end")
     f.t(X0 + PW - 10, Y0 - PHH + 74, "每卡约 224 个用户同时在线（11,200 ÷ 50）", GY, size=13, anchor="end")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "单报一个每卡吞吐，等于没报", [

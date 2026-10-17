@@ -91,7 +91,7 @@ def fig_chain():
                "2025 年没有新起头的环，都是前面几环在往下做。"
                "上方两条细带是外力：上下文变长从 2023 年 11 月的 128K 起，2024 年 2 月到 1M；"
                "输出变长从 2024 年 9 月的 o1 起，2025 年 1 月有 R1。"
-               "轴的右端，2026 年 6 月是终点：GB300 跑 V4-Pro 的 5.1 倍。")
+               "轴的右端，2026 年 6 月是终点：GB300 跑 V4-Pro，光改软件涨了几倍，标成问号，答案在最后一节。")
     y0 = f.header("问题链　——　<tspan font-weight=\"700\">十一招各是哪年冒出来的</tspan>",
                   "点落在首次公开的那一年，年内只排先后、不按月比例；点下的「→」是一直做到哪年；圈里的数是环号，从左到右按先后编",
                   [(INK, "系统侧"), (GY, "空心：模型侧"), (OR, "外力：上下文变长"), (PU, "外力：输出变长")])
@@ -157,7 +157,7 @@ def fig_chain():
     f.line(xe, ya + 16, xe, ya + 22, LINE, 1, arrow=False)
     f.t(xe, ya + 36, "2026-06　终点", GY, False, 12, "middle")
     f.t(xe, ya + 56, "GB300 × V4-Pro", INK, True, 14, "middle")
-    f.t(xe, ya + 76, "5.1×", INK, True, 15, "middle")
+    f.t(xe, ya + 76, "涨了几倍？", INK, True, 15, "middle")
     for b in boxes:
         if not b[2]:
             assert b[1] + 8 <= xe - 70 or b[0] >= xe + 70, "终点标签撞车：%s" % b[3]
@@ -169,7 +169,7 @@ def fig_chain():
                 "SGLang 大 EP 博客 2025-05-05；vLLM v0.10.2 release（DCP，2025-09）；EAGLE-3 arXiv 2503.01840；"
                 "Inferact TPU megakernel 博客 2026-09、vLLM DeepSeek-V4.1-Flash 博客 2026-10-07（FP4 KV）。"
                 "外力：OpenAI DevDay 2023-11-06、Google 2024-02-15；OpenAI 2024-09-12、DeepSeek-R1 arXiv 2501.12948。"
-                "终点 5.1×：PyTorch 博客 2026-06-23。年内等距排，只表先后。")
+                "终点：PyTorch 博客 2026-06-23，倍数留到最后一节揭晓。年内等距排，只表先后。")
     f.save("fig6-chain.svg", ybot + 4)
 
 
