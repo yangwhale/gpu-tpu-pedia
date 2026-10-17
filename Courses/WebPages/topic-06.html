@@ -6557,8 +6557,8 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="720" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">PCP：prefill 一次有几千个 Q，按行切开，每行在一张卡上算完、结果不用合，但要收齐前面的笔记；为了第一个字早出来，另外加卡。</text>
 <text class="svgsm" x="20" y="744" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP：decode 每步只剩 1 个 Q，没行可切，只能进一步把这一行按列（笔记）切开，各算一段再按先别除合起来；为了装得下，用原来的卡。</text>
 </svg><figcaption><b>PCP 切 prefill 的计算，DCP 切 decode 的 KV。</b><span class="capmore"><br><em>专题五原图。</em></span></figcaption></figure>
-  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill，用 128 张 H100 给 Llama3 405B 做 prefill：1M token 77 s，128K 3.8 s，并行效率 93%。Meta 用的是 <b>Ring</b>（2023-10）：各卡拿一段，别人那段沿环一站站传来，边传边算；传 K、V 还是传 Q，看谁的通信藏得进计算：整段 prefill 传 K、V（GQA 下它小），新 token 很少时传 Q，结果都和不切一样。</p>
-  <p>同一篇里，长度不变、机器数翻倍，prefill 延迟约减半，8 台做 128K 是 5.85 s。对照是跨机切 TP：2 台时 TP16 和 CP2 延迟差约 15%，到 8 台差到约 100%，慢的是 TP。原文的解释是 H100 跨机带宽比机内低得多，而 TP 每层都要跨机通信。</p>
+  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill：128 张 H100 给 Llama3 405B 做 prefill，1M token 77 s，128K 3.8 s，并行效率 93%。用的是 <b>Ring</b>（2023-10）：各卡拿一段，别人那段沿环一站站传来，边传边算。整段 prefill 传 K、V（GQA 下它小），新 token 很少时改传 Q，结果都和不切一样。</p>
+  <p>同一篇里，机器数翻倍，prefill 延迟约减半，8 台做 128K 是 5.85 s。跨机切 TP 就不行：2 台时 TP16 比 CP2 慢约 15%，8 台慢约 100%。原文的解释：TP 每层都要走跨机带宽，而它比机内低得多。</p>
   <p>另有 Ulysses（DeepSpeed，2023-09）用 AllToAll（每张卡给其余每张卡各发一份）把按序列切换成按头切，切的份数不能超过头数。</p>
 
   <h3 id="s7-5">7.5　PCP 的两个正确性陷阱</h3>
@@ -6618,13 +6618,7 @@ body.figonly section h3{margin-top:34px}
 <p>状态可结合合并的思路见线性注意力／状态空间模型的并行扫描写法（如 Mamba、GLA 的 chunkwise 算法）。</p></details></figure>
   <p>修法是把前一段的末状态传过来；或者利用结合律：各段并行算好自己对状态的映射，再从头合并出每段的起始状态。</p>
 
-  <h3 id="s7-6">7.6　落点：副本让出来，多放 token</h3>
-  <p>DCP 让出 KV 副本，<b>同样的显存多放 token，这一趟就分给了更多 token；</b>PCP 买的是首字延迟。留下的问题：一张卡上同时出字的人越多，长 prompt 进门那一步耽误的人也越多（第八节）。</p>
-
-  <details class="foldfig"><summary><b>考考自己</b>：4K 输入、并发 8 的线上服务，要不要开 DCP8？换成 128K 的 agent 长对话呢？</summary>
-  <p>4K 不开：KV 放得下，DCP 只剩代价（7.2）。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>
-
-  <h3 id="s7-7">7.7　并排看：每张卡每层读多少、存多少</h3>
+  <h3 id="s7-6">7.6　并排看：每张卡每层读多少、存多少</h3>
   <p>把第六、七节的切法摆进同一本账：V3，8 颗 v7（16 个 device，v7x-16），上下文 128K。每格按 device 算，口径同 4.2、10.5：每 device 可用 94.75 GiB，留一成给激活值，剩 85.3 GiB；权重 FP8 每参数 1 字节，KV 按 bf16，一条 128K 是 8.58 GiB。</p>
   <div class="tbl-wrap"><table>
     <caption class="sub" style="caption-side:bottom;text-align:left">本课推导，纸面账。非专家权重 ＝ 总参数 671.0B 减去 58 层 × 256 个路由专家（653.9B）＝ 17.1B；每层参数分项见 0.2 的图。实测 FP8 专家比均摊更占地方（10.5），真机余量只会更少。</caption>
@@ -6645,12 +6639,18 @@ body.figonly section h3{margin-top:34px}
     <tr><td>TEP16 ＋ DCP16</td><td>86</td><td>673 MB：注意力 1/16 ＋ 本卡 15 个整块专家</td><td>812 MB：86 条各读 1/16</td><td>24.1 ms</td><td>2 次 AllReduce ＋ 3 次</td><td>装得最多；通信最勤，只在长上下文划算（7.2）</td></tr>
   </table></div>
   <ul>
-    <li><b>TP 和 TEP 存、读都一样</b>：MLA 只有一份 KV，按头切不开，16 个 device 每个都存、都读全部 5 条（6.2）。两者只差在专家：TP 把每个专家切成 16 片，TEP 整块放一卡。</li>
-    <li><b>DEP 每卡各存一份非专家权重</b>，比全切多占 14.9 GiB（54.0 − 39.1），换来 KV 不复制：128K 装 48 条，以 TP16 的 5 条为基线约 9.6 倍。代价是每卡每层都读整份注意力权重 187 MB。</li>
-    <li><b>DCP 把一条序列的 KV 按 token 切 16 份</b>：每卡只存、只读每条的 1/16，权重仍全切，所以装 86 条；代价是每层多 3 次通信。DEP 上叠不了 DCP：度数最多 TP ÷ KV 头数，DEP 的 TP 是 1（7.1）。</li>
-    <li><b>下限只看了读</b>：TP16 读 14.4 ms 出 5 个字，DEP16 读 20.6 ms 出 48 个，TEP16 ＋ DCP16 读 24.1 ms 出 86 个。谁真赢，要把每层通信那一列也算进去。</li>
-    <li><b>和 10.5 对账</b>：那张图说 8 颗装得下 128K × 64，前提是 KV 不复制、非专家权重不重复。按 DEP 切只装 48 条；权重全切的 TEP16 ＋ DCP16 到 86，才兑现那个下限。</li>
+    <li><b>TP 和 TEP 只差在专家</b>（切片还是整块）：MLA 只有一份 KV，按头切不开，每个 device 都存、都读全部 5 条（6.2）。</li>
+    <li><b>DEP 多背 14.9 GiB 非专家权重</b>（54.0 − 39.1），换来 KV 不复制：48 条，以 TP16 的 5 条为基线约 9.6 倍；代价是每层整读一遍注意力权重。</li>
+    <li><b>DCP 每卡只存、只读每条的 1/16</b>，装 86 条，代价是每层多 3 次通信。DEP 上叠不了：度数最多 TP ÷ KV 头数，DEP 的 TP 是 1（7.1）。</li>
+    <li><b>下限只看了读</b>，谁真赢要把通信那一列也算进去。</li>
+    <li><b>和 10.5 对账</b>：那张图说 8 颗装得下 128K × 64，前提是 KV 不复制、非专家权重不重复。DEP 只到 48 条，TEP16 ＋ DCP16 到 86 才兑现。</li>
   </ul>
+
+  <h3 id="s7-7">7.7　落点：副本让出来，多放 token</h3>
+  <p>DCP 让出 KV 副本，<b>同样的显存多放 token，这一趟就分给了更多 token；</b>PCP 买的是首字延迟。留下的问题：一张卡上同时出字的人越多，长 prompt 进门那一步耽误的人也越多（第八节）。</p>
+
+  <details class="foldfig"><summary><b>考考自己</b>：4K 输入、并发 8 的线上服务，要不要开 DCP8？换成 128K 的 agent 长对话呢？</summary>
+  <p>4K 不开：KV 放得下，DCP 只剩代价（7.2）。128K 开：TP8 放不下，只能少收请求、排长队。</p></details>
 
 </div></section>
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>拆工作：PD 分离与那一趟 KV</h2></div>
@@ -11018,7 +11018,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>DCP 让 KV 容量 1.5M → 12.2M token（官方逻辑容量）；单流 −26% 来自丢掉 symm-mem；TP8 默认配置不开投机实测 max_total_num_tokens 787,504（约 79 万；128K 宽表 TP8 行均未开投机），开投机降到 637,504（−19%），128K × 8 ＝ 1,048,576（100 多万）放不下</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962；实测值 :1171、未开投机见宽表 :934-938；乘积本课推导</td></tr>
     <tr><td>K3 128K 并发 8 首字中位：TP8 32.1 s，DCP8 2.3 s（含排队）；官方 PD 吞吐：1P1D（TP8 decode）2,808 对 2P2D（DCP8 decode）2,633 tok/s/GPU</td><td>SGLANG-K3-RUNBOOK.md:939（TP8 r060-isl128k）、:941（dcp8-isl128k）；:609-610、:707-708（官方原文引于 :1323）</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
-    <tr><td>L83 · 7.7 并排表：8 颗 v7 ＝ 16 个 device、128K；每 device 可用 94.75 GiB × 0.9 ＝ 85.3 GiB；权重全切 39.1 GiB、剩 46.2 GiB；DEP 每 device 存非专家整份 17.1B（15.9 GiB）＋ 路由专家 1/16（38.1 GiB）＝ 54.0 GiB、剩 31.3 GiB；装几条：TP16／TEP16 5、DEP16 48（每 device 3）、TEP16＋DCP16 86；每层读权重（MoE 层）118／784／673 MB，读 KV 755／453／812 MB；一步读完下限 14.4／20.6／24.1 ms；碰到的路由专家 37.6／200.2／239.3 个</td><td>本课推导：非专家 ＝ 671.0B − 653.9B；一条 128K ＝ 70,272 × 131,072 B ＝ 8.58 GiB、每层 1,152 × 131,072 B ＝ 151 MB；碰到的专家 256 × [1 − (1 − 8/256)<sup>b</sup>]（1.3 同式）；下限 ＝ 每 device 每步字节 ÷ 3.685 TB/s（7.37 ÷ 2）；94.75 GiB 与 0.9 同 4.2、10.5；逐项 assert 在 topic06_s7.py 的 _t77()。通信次数：TP 前向每层 2 次 all-reduce 见 Megatron-LM（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 两次 AllReduce 沿用专题五 fig5-tep-dep 图注；DEP 两次 all-to-all 见 6.7 台账；DCP 每层 3 次沿用 7.1 正文（来源见下一行专题五台账）；DCP 度数 ≤ TP ÷ KV 头数沿用 7.1</td></tr>
+    <tr><td>L83 · 7.6 并排表：8 颗 v7 ＝ 16 个 device、128K；每 device 可用 94.75 GiB × 0.9 ＝ 85.3 GiB；权重全切 39.1 GiB、剩 46.2 GiB；DEP 每 device 存非专家整份 17.1B（15.9 GiB）＋ 路由专家 1/16（38.1 GiB）＝ 54.0 GiB、剩 31.3 GiB；装几条：TP16／TEP16 5、DEP16 48（每 device 3）、TEP16＋DCP16 86；每层读权重（MoE 层）118／784／673 MB，读 KV 755／453／812 MB；一步读完下限 14.4／20.6／24.1 ms；碰到的路由专家 37.6／200.2／239.3 个</td><td>本课推导：非专家 ＝ 671.0B − 653.9B；一条 128K ＝ 70,272 × 131,072 B ＝ 8.58 GiB、每层 1,152 × 131,072 B ＝ 151 MB；碰到的专家 256 × [1 − (1 − 8/256)<sup>b</sup>]（1.3 同式）；下限 ＝ 每 device 每步字节 ÷ 3.685 TB/s（7.37 ÷ 2）；94.75 GiB 与 0.9 同 4.2、10.5；逐项 assert 在 topic06_s7.py 的 _t76()。通信次数：TP 前向每层 2 次 all-reduce 见 Megatron-LM（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 两次 AllReduce 沿用专题五 fig5-tep-dep 图注；DEP 两次 all-to-all 见 6.7 台账；DCP 每层 3 次沿用 7.1 正文（来源见下一行专题五台账）；DCP 度数 ≤ TP ÷ KV 头数沿用 7.1</td></tr>
     <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP；pass-KV／pass-Q 按通信能否藏进注意力计算来选（10% 未命中仍选 pass-KV，低于 3.25% 才换 pass-Q）</td><td>沿用专题五台账第 23、29、45、21 行；arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a> §3.4、§4.2.4</td></tr>
     <tr><td>KV 传输软件栈</td><td>github.com/ai-dynamo/nixl；github.com/kvcache-ai/Mooncake；LMCache arXiv <a href="https://arxiv.org/abs/2510.09665" target="_blank" rel="noopener">2510.09665</a>；docs.nvidia.com/dynamo 的 KVBM；github.com/google/tpu-sync（~200 GB/s，not yet recommended for general use）；tpu-inference kv_transfer（jax.experimental.transfer）</td></tr>
     <tr><td>PD 传输带宽从 200 MB/s 调到 7–167 GB/s</td><td>VLLM-V4PRO-RUNBOOK.md:194，配置见 :106、180-194</td></tr>
