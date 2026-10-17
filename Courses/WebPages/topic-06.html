@@ -9410,8 +9410,10 @@ body.figonly section h3{margin-top:34px}
   <p>2025 年的 Kimi K2 Thinking 在后训练做量化感知训练（QAT，训练时就模拟低精度），MoE 部分原生 INT4 权重，模型卡和官方博客称低延迟模式生成约快 2 倍、「无损」，但没写对照的是什么精度，也没给 INT4 对 FP8 的精度表，所有基准都只报 INT4 下的分。</p>
   <p>DeepSeek-V4 模型卡写明，MoE 专家用 FP4，其余大部分用 FP8。专家占参数的绝大部分，也是 decode 读得最多的部分，压它省得最多。</p>
 
-  <h3 id="s12-4">12.4　FP4 先是被容量逼的</h3>
-  <p>DeepSeek-R1 放到 TPU v7x-8 上，专家权重用 FP8 时每个 device 放不下，换 FP4 才腾出余量。</p>
+  <h3 id="s12-4">12.4　专家压到 4 bit，注意力不动</h3>
+  <p>先按组件数参数。gpt-oss-120b 的模型卡分开列：MoE 专家 114.71B、注意力 0.96B、嵌入和输出层 1.16B。专家约占 98%，注意力不到 1%（本课推导：114.71 ÷ 116.83）。OpenAI 只把专家压成 MXFP4，120b 就装进了一张 80 GB 的卡。</p>
+  <p>注意力不压，头一条原因是省不了多少：不到 1% 的参数，压掉一半也只省半个百分点。各家做法一致：Kimi K2 Thinking 的配置里，注意力、共享专家、稠密层 FFN 和输出层都在不量化名单上，INT4 只给路由专家；本仓库在 TPU 上跑 R1 和 GLM-5.1，也是专家 FP4、注意力 FP8。</p>
+  <p>压专家的第一份好处是放得下。R1 放上 v7x-8，专家用 FP8 每个 device 约 101.8 GB，越过 HBM 上限；换成 FP4 约 60.9 GB，剩下的留给 KV。</p>
 <figure class="fbox fwide" id="fig-s12-cap"><svg viewBox="0 0 1400 428" width="100%" role="img" aria-label="DeepSeek-R1 放进 TPU v7x-8，每个 device 要多少显存。竖虚线是可用上限 94.75 GiB，约 101.7 GB。专家权重用 FP8 是 101.8 GB，越过上限；README 单位写的是 GB，要是按 GiB 读就是约 109.3 GB，超得更多。转成 FP4 后专家约 60.9 GB，连同注意力约 70 GB，离上限还有三十 GB 上下"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FP4 先是被容量逼的　——　<tspan font-weight="700">FP8 放不下，FP4 才腾出余量</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每个 device 的权重占用（README 原值，单位 GB）；竖虚线 ＝ 可用上限 94.75 GiB ≈ 101.7 GB</text>
@@ -9441,7 +9443,11 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1195" y="364" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上限 94.75 GiB ≈ 101.7 GB</tspan></text>
 <text class="svgsm" x="1187" y="168" fill="#a50e0e" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">哪种单位读都超（最少 0.06 GB）</tspan></text>
 </svg><figcaption><b>看虚线右边那截淡红：换成 GiB 读，越界更多。</b><span class="capmore"><br><em>README 原值，每 device；两种单位都超。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:72-73、:875-878（v7x-8 ＝ 4 颗芯片 ＝ 8 个 device；数为每 device，README 写 GB）；上限出自运行日志 hbm=(…, 94.75) GiB（Kimi-K2.6-1T-A32B-INT4/README.md:217）。换算 94.75 GiB ≈ 101.7 GB、101.8 GiB ≈ 109.3 GB 为本课推导。</p></details></figure>
-  <p>但 v7 公开规格只列 BF16 和 FP8 峰值，推测 FP4 只能当权重存，算前在片上解成 FP8 或 BF16。字节省了，多了转换，净收益只能实测。</p>
+  <p>第二份是少读。decode 每一步都要把选中的专家从 HBM 读一遍，batch 不大时读权重的时间就是一步的时间，4 bit 比 8 bit 少读一半。</p>
+  <p>第三份最反直觉：v7 公开规格只列 BF16 和 FP8 峰值，没有 FP4 算力，照样能快。tpu-inference 的 MoE kernel 把 4 bit 权重块原样搬进片上，在 kernel 里和激活做点积，每块乘完再乘缩放；本课推测编译器在片上先解成更宽的格式再送进矩阵单元。贵的是从 HBM 搬，片上解一下便宜。</p>
+  <p>GPU 上早算过同一笔账：Marlin（2024）让 4 bit 权重在寄存器里解回 FP16 再进张量核，batch 16 以内的矩阵乘接近 FP16 的 4 倍，接进 vLLM 端到端最多 2.8 倍。Blackwell 的张量核能直接算 FP4，那是另一条路。</p>
+  <p>精度：本仓库在 v7x-8 上用 FP4 专家跑出 R1 的 GSM8K 94.9%（1319 题）、GLM-5.1 的 89.46%（5-shot，未调优）。两者口径不同，不横比；也都没有同条件的 FP8 分可对照，只能说跑出来了，不能说没掉点。同机 FP8 对 FP4 的吞吐也没有：R1 用 FP8 根本放不下。</p>
+  <p>压完以后，专家那段缩了，注意力和 KV 原样不动，就成了一步里读得最多的部分。12.3 里 K2 Thinking 只称约快 2 倍、不是 4 倍，本课推测原因在这里。KV 怎么压见 12.8。</p>
 
   <h3 id="s12-5">12.5　INT4 不是另一种 FP4</h3>
   <p>R1 的 FP4（E2M1）是浮点，值在 0 附近密、远处疏，靠块缩放对齐量级；Kimi K2.6 的 INT4 是 −8 到 7 等距排开的整数。</p>
@@ -11073,6 +11079,7 @@ body.figonly section h3{margin-top:34px}
 <tr><td>L91 补充 · 6.9 EPLB：V3 prefill 32 个冗余专家、每卡 8＋1、定期重算（例如每 10 分钟）；SGLang 大规模 EP 开 EPLB prefill 1.49×、decode 2.54×（作者注明看负载分布）；256＋32＝288 可用 12、72 路；vLLM eplb_config 默认 step_interval 3000、window_size 1000、num_redundant_experts 0</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.4；DeepSeek EPLB 仓库 README；LMSYS 博客 2025-05-05 大规模 EP 一文 EPLB 一节；vLLM vllm/config/parallel.py EPLBConfig；SGLang --enable-eplb、--ep-num-redundant-experts（server_arguments 文档）。2026-10-18 核对</td></tr>
 <tr><td>L92 补充 · 12.6 CUDA Graph（原 12.6 融合、12.7 KV 量化顺延为 12.7、12.8）：A100、LLaMA-2-7B、batch 1，不开 30 tok/s、开 69 tok/s（2.3×），提速全来自 CPU 开销；vLLM 默认录 [1,2,4]＋8..248 步 8＋256 起步 16，上限 512（数据中心 Blackwell 1,024）；V1 默认 FULL_AND_PIECEWISE（decode 整图、prefill／混合分段）</td><td>Fireworks 博客「Speed, Python: Pick Two. How CUDA Graphs Enable Fast Python Code for Deep Learning」2023-08-29；vLLM vllm/config/compilation.py（max_cudagraph_capture_size、cudagraph_mode）；SGLang --cuda-graph-max-bs。2026-10-18 核对</td></tr>
 <tr><td>L93 补充 · 11.5 n-gram 草稿：Llama3-70B、4×H100、QPS=1，CNN/DailyMail 最多 2.8×，草稿模型（Qwama-0.5B）跑 ShareGPT 1.5×；vLLM method="ngram"，prompt_lookup_min／max 都不填默认 5；SGLang --speculative-algorithm NGRAM。3.1 multi-LoRA：S-LoRA 服务几千个适配器、吞吐最多是 HF PEFT 与 vLLM 简单 LoRA 支持的 4 倍</td><td>vLLM 博客 2024-10-17「How Speculative Decoding Boosts vLLM Performance by up to 2.8x」；prompt-lookup-decoding 仓库 README；vLLM vllm/config/speculative.py、vllm/config/lora.py（max_loras 默认 1）；S-LoRA arXiv <a href="https://arxiv.org/abs/2311.03285" target="_blank" rel="noopener">2311.03285</a> 摘要。2026-10-18 核对</td></tr>
+<tr><td>L94 补充 · 12.4 重写：gpt-oss-120b MLP 114.71B／Attention 0.96B／Embed+Unembed 1.16B／总 116.83B，只 MoE 权重 MXFP4、单张 80 GB；K2 Thinking quantization_config ignore 含 self_attn、shared_experts、稠密层 mlp、lm_head，INT4 group 32；R1 v7x-8 FP4 专家 60.9 GB/device、FP8 101.8 GB/device；GSM8K R1 94.92%（1319 题）、GLM-5.1 89.46%（5-shot）；TPU MoE kernel 4 bit 块进片上点积、按块乘 scale；Marlin batch 16–32 内近 4×、vLLM 端到端最多 2.8×</td><td>gpt-oss 模型卡 Table 1；huggingface.co/moonshotai/Kimi-K2-Thinking config.json；tpu/tpu-inference/DeepSeek-R1-671B-FP4、GLM-5.1-754B-FP4 README；vllm-project/tpu-inference tpu_inference/kernels/megablox/gmm.py（jnp.dot 后乘 rhs_scale）、common.py（支持 float4_e2m1fn）；Marlin README、arXiv <a href="https://arxiv.org/abs/2408.11743" target="_blank" rel="noopener">2408.11743</a>。2026-10-18 核对</td></tr>
   </table></div>
 </div></section>
 
