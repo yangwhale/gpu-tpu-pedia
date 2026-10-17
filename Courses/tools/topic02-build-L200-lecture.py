@@ -3423,6 +3423,7 @@ def main():
     <a href="''' + DECK + '''">课件 L200</a>
     <a href="topic-02-L200-lecture.html" class="on">讲义</a>
     <a href="''' + FULL + '''">完整版 L300</a>
+    <a href="topic-02-L200-lecture.en.html" lang="en" hreflang="en">🌐 English</a>
   </nav>
   <span class="meta" id="meta"></span>
 </div></div>

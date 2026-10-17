@@ -283,7 +283,11 @@ def fig(key, wide=None):
     m2 = re.match(r'ms-([gtp])(\d+)$', key)
     if m2:
         badge = '<b class="fno">图 %s-%s</b>　' % (m2.group(1).upper(), m2.group(2))
-        block = block.replace("<figcaption>", "<figcaption>" + badge, 1)
+        # ⛔ 2026-10-17：有的图注（CAP_OVERRIDE 或 L300 原文）本来就带着这个号，
+        #    再印一次就成了「图 G-1　图 G-1」—— 21 张图在线上这样挂着没人发现，
+        #    是翻英文版时逐句读才撞见的。已经有了就不再加。
+        if not re.match(r'\s*<b class="fno">', block.split("<figcaption>", 1)[1]):
+            block = block.replace("<figcaption>", "<figcaption>" + badge, 1)
 
     if wide is True and "fwide" not in block[:120]:
         block = block.replace('class="fbox"', 'class="fbox fwide"', 1)
@@ -1711,7 +1715,7 @@ def body():
     由目标芯片加上一个可调的编译选项共同决定
     （<code>xla_tpu_scoped_vmem_limit_kib</code>，遇到 VMEM 放不下时调它是常规操作）。
     <em>编译器切块的时候，除的是<b>这个额度</b>，不是那 64 MiB。</em>
-    <br>而且这块地还有别的用户：**决定哪些张量常驻 VMEM 的那个编译阶段**跟它抢同一块，
+    <br>而且这块地还有别的用户：<b>决定哪些张量常驻 VMEM 的那个编译阶段</b>跟它抢同一块，
     <b>双缓冲</b>（预取下一块）也要占一份。
     <br><br>⭐ <b>所以正确的读法是：64 MiB 决定了「你有可能开多大的块」，
     scoped 额度决定了「这一次实际开多大」。</b>
@@ -1949,7 +1953,7 @@ def body():
     ⭐ 所以这两小节真正的结论不是「谁的片上存储更好」。<br>
     <b>两边都在处理同一个东西 ——&nbsp;不确定性，只是把它放在了不同的地方。</b><br>
     GPU 花硅去兜住不确定：缓存、替补、调度器。<br>
-    TPU 把不确定性消灭在编译期，省下的硅**没有**变成更多算力（3.7 会数给你看），变成的是更少的电路 ——&nbsp;
+    TPU 把不确定性消灭在编译期，省下的硅<b>没有</b>变成更多算力（3.7 会数给你看），变成的是更少的电路 ——&nbsp;
     代价是要求你（或者编译器）提前把话说死。<br>
     ——&nbsp;<b>落到选型上就一句话：形状规整、可预测的活，TPU 这套换算得过来；
     形状不规则、长度动态变的活，GPU 那笔保险费就花得值。</b>
@@ -4308,7 +4312,8 @@ HERO = '''
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题二
     ／ <b>L200 · 精讲版</b>
-    <a class="lecbtn" href="topic-02-L200-lecture.html">📝 讲义（授课稿）</a></div>
+    <a class="lecbtn" href="topic-02-L200-lecture.html">📝 讲义（授课稿）</a>
+    <a class="lecbtn" href="topic-02.en.html" lang="en" hreflang="en">🌐 English</a></div>
   ''' + nav("topic-02.html") + '''
   <h1>TPU 与 GPU</h1>
 
