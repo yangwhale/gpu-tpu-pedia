@@ -262,6 +262,7 @@ BODY = '''
     <tr><td>L85 补充 · 3.1：Orca 两招为迭代级调度（引擎每次只跑一步，调度器在步间返回已完成请求、加入新请求）与选择性批处理（非注意力算子把各请求 token 拉平成一长条批处理，注意力按请求拆开）；Orca 按最大长度为每个请求预留 KV；vLLM 论文 20.4%–38.2% 的对照为作者复现的 Orca（Max／Pow2／Oracle）</td><td>Orca，OSDI 2022（Yu 等）第 3–4 节；vLLM，SOSP 2023（arXiv 2309.06180）图 2 与第 6 节基线说明。2026-10-17 核对</td></tr>
     <tr><td>L86 补充 · 3.2：vLLM max_num_batched_tokens 默认按设备分档（≥160 GB GPU 16,384；≥70 GB 且非 A100：LLM 类 16,384、API 服务 8,192；其余 GPU 8,192／2,048；TPU V6E 2,048／1,024）；SGLang chunked_prefill_size 按显存分档（<20 GB 2,048；<60 GB 4,096；<160 GB 8,192；其余 16,384）；V3 注意力每对约 5.0 MFLOP、线性部分约 74 GFLOP/token、交叉点约 1.5 万、末块／首块约 7 倍、H100 平衡点约 300 token、MoE 约 9,400 token 均为本课推导</td><td>github.com/vllm-project/vllm main：vllm/engine/arg_utils.py（默认 max_num_batched_tokens 分档）；github.com/sgl-project/sglang main：python/sglang/srt/arg_groups/memory_hook.py；DeepSeek-V3 config.json（qk_nope_head_dim 128、qk_rope_head_dim 64、v_head_dim 128、128 头、61 层、256 专家取 8）；FlashAttention-2（arXiv 2307.08691）外层按 query 分块。2026-10-17 核对</td></tr>
     <tr><td>L88 补充 · 第三／四节：调度提到 KV 之前（先坐满、再问座位从哪来），两节编号、锚点、图 id 与全课交叉引用同步对调；数字未改</td><td>结构调整，无新数；2026-10-17 核对</td></tr>
+    <tr><td>L89 补充 · 3.1：Orca 是 OSDI 2022 论文及其中实现的服务系统（论文原文「we have implemented a distributed serving system called ORCA」）</td><td>usenix.org/conference/osdi22/presentation/yu 摘要。2026-10-18 核对</td></tr>
   </table>'''
 
 FIGS = {}
