@@ -7,6 +7,13 @@ import sys, json
 from playwright.sync_api import sync_playwright
 from PIL import Image
 Image.MAX_IMAGE_PIXELS=None
+def fullshot(pg, path, W):
+    """整页截图；Chromium 单张上限约 16K/65K px，长页分段 clip 再拼（专题三 1600 宽 > 10 万 px 曾被截成空白）"""
+    H = pg.evaluate('document.documentElement.scrollHeight'); img = Image.new('RGB', (W, H), 'white'); y = 0
+    while y < H:
+        h = min(8000, H - y); pg.screenshot(path='/tmp/_fs.png', clip={'x': 0, 'y': y, 'width': W, 'height': h}, full_page=True)
+        img.paste(Image.open('/tmp/_fs.png'), (0, y)); y += h
+    img.save(path)
 W=int(sys.argv[1]); MAXH=1500
 pages={'zh':WORK+'/zh-ref.html','en':os.environ.get('I18N_EN') or f'/home/chrisya/gpu-tpu-pedia/Courses/WebPages/{TOPIC}.en.html'}
 A={}
@@ -14,7 +21,7 @@ with sync_playwright() as p:
     b=p.chromium.launch()
     for k,f in pages.items():
         pg=b.new_page(viewport={'width':W,'height':900}); pg.add_init_script("try{localStorage.setItem('figonly:'+location.pathname.split('/').pop(),'0')}catch(e){}"); pg.goto('file://'+f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(2000)
-        pg.screenshot(path=f'full-{k}-{W}.png', full_page=True)
+        fullshot(pg, f'full-{k}-{W}.png', W)
         A[k]=pg.evaluate("[...document.querySelectorAll('section, h3, figure')].filter(h=>h.offsetParent!==null||h.tagName=='SECTION').map(h=>[Math.round(h.getBoundingClientRect().top+scrollY), h.tagName=='FIGURE'?('fig '+h.id):(h.tagName=='SECTION'?'section '+h.id:(h.innerText||'').slice(0,70))])")
         pg.close()
     b.close()
