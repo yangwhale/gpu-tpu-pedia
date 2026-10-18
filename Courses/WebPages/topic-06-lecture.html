@@ -241,11 +241,11 @@ h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transfo
 </div>
 
 <div class="plan">
-  <h2>⏱ 时间：主线 344′</h2>
+  <h2>⏱ 时间：主线 342′</h2>
 <p>⛔ <b>第零、一节不能砍，第四节那张「能装几条」也不能砍。</b>
   <em>第零节立住「decode 每一步都搬一趟」，第一节算清这一趟的账，后面每节都拿它开头。
   要压时间，压中间的例子（实测数、旁支的坑），<b>别压首尾</b>：开头那句「这一招对付那一趟的哪一块」和末尾交棒句，再紧也要念。</em><br>
-  讲义共十六节（第零到第十五节），第十六节出处台账不进课堂，被追问时翻。按地板算全讲约 344 分钟（台词 200 字/分钟、每次切屏 15 秒、每个互动半分钟）；讲义按「每个小节都讲全」写，一次课从哪讲到哪由主讲人定。<b>第七节讲完后中场休息</b>（不计入）。<br>
+  讲义共十六节（第零到第十五节），第十六节出处台账不进课堂，被追问时翻。按地板算全讲约 342 分钟（台词 200 字/分钟、每次切屏 15 秒、每个互动半分钟）；讲义按「每个小节都讲全」写，一次课从哪讲到哪由主讲人定。<b>第七节讲完后中场休息</b>（不计入）。<br>
   台词里的 4K、8K、32K、128K 这类长度，K 读作「千」。</p>
   <table>
 <thead><tr><th>段落</th><th>分钟</th><th>能不能砍</th><th>说明</th></tr></thead><tbody>
@@ -258,20 +258,20 @@ h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transfo
 <tr><td>六　TEP 与 DEP</td><td>29</td><td>可压到 27</td><td>Parallel Folding 两套切法；TEP／DEP 定义与各自好处、坑；1 个 KV 头切不开（互动）；V4-Pro TP4→DEP8 翻倍；Little 定律核在飞请求 197→130：步时变短，不是多装（互动）；三条原因（本课推导）、2.09× 与 1.31× 口径；换模型与 TP÷KV 头数判据；DEP 每 rank 自备、K3 KDA 状态池 OOM、只有 TP 切头；忙闲不均；瓶颈换到 prefill、P:D 重扫；TPU PR：并发 512 +62%、两种解读、低并发打平、正确性、调度改动；R1 命令参数名、TEP／DEP≠ETP／EDP；大 EP 定义（EP>8）、EP8 放不下、EP144 每卡 2＋1、prefill EP32、两份资料对不上；⛔ 8＋1 只对单 token 成立，一批几乎碰到所有专家；大 EP 读少 16 倍（互动＋动画）：行数式、1.41 GB→88 MB、81.7 对 5.1 GB；SGLang 1.9×、5×（含 PD）；网络：每 token 57／115 KB、DeepEP 卡数 ×32 每趟 ×2.5～3.2、32 ms 上限；不是非 NVL72 不可（8 卡＋IB＋IBGDA、llm-d／vLLM 门槛）；最多 4 节点、量小难在延迟（10 MB 对 288 MB、116 次）；NVL72 余量；TPU 环面、DCN、公开只有 DEP8；五笔代价（通信、大批、最慢卡、爆炸半径、两套 kernel）；双微批原理、prefill 27～35%／+40.5%、decode 看批、5 段流水、跨层错拍、通信不占 SM、权重多读一遍、单批跨层预取；EPLB 70→52.5、V3 配置、1.49×／2.54×、288 松开卡数、开关；考考自己（互动）</td></tr>
 <tr><td>七　切序列</td><td>16</td><td>可压到 15</td><td>两件事：KV 复制与首字；DCP 回顾（8.58→1.07 GiB 每卡、不加卡）；先别除合并分母（LSE）、每层 3 次通信、度数上限；4K 亏 128K 赚（互动）：+237%、79 万 token 放不下、首字含排队、−26%＝关 symm-mem；盈亏看 KV 总量；三个坑（HiCache、状态池、PD 部署口径）；PCP 按行切、DCP 是切到只剩一行后的下一步；Meta 405B 1M 77 s、Ring、TP 跨机慢、Ulysses；两个正确性陷阱、存折玩具递推差 58%、两种修法；7.3 纸面账：DP 放不下、TP16／TEP16 5 条、DEP16 48 条（9.6 倍）、TEP16＋DCP16 86 条、DCP 叠不到 DEP（互动）；读的下限 14.4／20.6／24.1 ms 与通信列；和 10.2 对账；考考自己答案；末尾中场休息（不计入）</td></tr>
 <tr><td>八　拆工作</td><td>22</td><td>可压到 21</td><td>为什么非凑大 batch（313 / 约一万）；混部红框与传 KV；Splitwise、DistServe、Mooncake、Dynamo 的来历；那一趟约 100 ms 与 1.04 GB 怎么算、两个前提；搬家三层与按层排查；配错开关慢两个数量级、三样配置、五行表；混合模型尾巴与 TPUConnectorHMA 的代价、K3 前缀缓存；三条 PD 坑；先比字（批不变 kernel、并发降到 1）；PrFaaS 四根柱、专线反推、同等成本约 +15%；考考自己</td></tr>
-<tr><td>九　配比与拆不拆</td><td>18</td><td>可压到 17</td><td>Rubin CPX 与 Groq 3 LPX；DistServe 2P1D 例子；配比公式四步到 9.8；三个 prefill 个数（9.8 / 8 / 14）；多一台 prefill 换首字（每卡 −31%、P99 −48%）与口径；换分母 10.4 倍变 2.2 倍；MiMo 按 pod 算、Qwen3-Coder 单并发；决策树三问；AFD 原理与小批轮转、论文数、昇腾插件配比；EPD</td></tr>
+<tr><td>九　配比与拆不拆</td><td>17</td><td>可压到 16</td><td>DistServe 2P1D 例子；配比公式四步到 9.8；三个 prefill 个数（9.8 / 8 / 14）；多一台 prefill 换首字（每卡 −31%、P99 −48%）与口径；换分母 10.4 倍变 2.2 倍；MiMo 按 pod 算、Qwen3-Coder 单并发；决策树三问；AFD 原理与小批轮转、论文数、昇腾插件配比；EPD</td></tr>
 <tr><td>十　先选拓扑</td><td>15</td><td>可压到 14</td><td>通信频率与快慢线；+45% 对 +347% 先看分母、只调并发 +28%、每卡 2.09 倍；TP16 跨 DCN 与 ICI、NVL72 同域；device 编号就是拓扑、mesh_utils；最小切片纸面账、KV 三条路、DCP 帮不上、实测放不下用 FP4；容量扫到见顶由延迟定；两条对照纪律；五关落到两个例子；交棒投机解码</td></tr>
-<tr><td>十一　投机解码</td><td>28</td><td>可压到 27</td><td>⭐ 先猜后验、只搬一趟；动画两次停顿各讲一步（出 3 个、出 5 个）；拒绝采样保分布；fig-s11-step 时间线与「只说字数」；收益账＝接受长度÷变慢倍数；V3 专家不白送（4.4 倍，偏高）；K3 实测 4.81 倍；并发、上下文、DEP 三种缩法与 V4-Pro 峰值和端到端反向；温度坑（1.16% 对 34%，3.1 倍）与概率草稿；告警；草稿五代谱系、tree 图、n-gram 四格与 2.8 倍、DFlash；MTP→DFlash→DSpark 一条线（KV 注入、of problem、两刀、替下 MTP-1、占 MTP 的位子）；DiffusionGemma；11.4 三笔代价（占显存、默认值被改、PD 形状不齐）</td></tr>
-<tr><td>十二　量化与融合</td><td>25</td><td>不能</td><td>GPTQ→FP8→NVFP4 年份；位数减半下限减半（fig-s12-bytes 左右两半）；vLLM FP8 实测与 AWQ 精度；MXFP4 与 NVFP4 块大小和缩放格式、训练 loss 对比；QAT 与 V4 发布格式；gpt-oss 参数账与专家压 4 bit；fig-s12-cap 放得下；少读；v7 没有 FP4 算力照样快、Marlin；FP4 精度只能说跑出来；ledger 整步只省一半；INT4 减 8 全崩；CUDA Graph 与分档、和 TPU 桶是两头；kernel 交接空等四成多、PDL、megakernel 与 Inferact；KV 存 FP8 的缩放校准、V3.2 布局 1.63 倍、NVFP4 KV 与 V4.1-Flash；SmoothQuant；KV 淘汰与两堵墙</td></tr>
+<tr><td>十一　投机解码</td><td>29</td><td>可压到 27</td><td>⭐ 先猜后验、只搬一趟；动画两次停顿各讲一步（出 3 个、出 5 个）；拒绝采样保分布；fig-s11-step 时间线与「只说字数」；收益账＝接受长度÷变慢倍数；V3 专家不白送（4.4 倍，偏高）；K3 实测 4.81 倍；并发、上下文、DEP 三种缩法与 V4-Pro 峰值和端到端反向；温度坑（1.16% 对 34%，3.1 倍）与概率草稿；告警；草稿五代谱系、tree 图、n-gram 四格与 2.8 倍、DFlash；MTP→DFlash→DSpark 一条线（fig-s11-three 三行；MTP-1 为何只验 2 个、KV 注入、of problem、两刀、替下 MTP-1、占 MTP 的位子）；11.4 三笔代价（占显存、默认值被改、PD 形状不齐）</td></tr>
+<tr><td>十二　量化与融合</td><td>23</td><td>不能</td><td>GPTQ→FP8→NVFP4 年份；位数减半下限减半（fig-s12-bytes 左右两半）；vLLM FP8 实测与 AWQ 精度；MXFP4 与 NVFP4 块大小和缩放格式、训练 loss 对比；QAT 与 V4 发布格式；gpt-oss 参数账与专家压 4 bit；fig-s12-cap 放得下；少读；v7 没有 FP4 算力照样快、Marlin；FP4 精度只能说跑出来；ledger 整步只省一半；INT4 减 8 全崩；CUDA Graph 与分档、和 TPU 桶是两头；kernel 交接空等四成多、PDL、megakernel 与 Inferact；KV 存 FP8 的缩放校准、V3.2 布局 1.63 倍、NVFP4 KV 与 V4.1-Flash</td></tr>
 <tr><td>十三　状态没法按 token 切</td><td>10</td><td>不能</td><td>三种层能从哪儿接着算；PyTorch 博客三条难处；快照与退到 512、重算 88；拷到自己槽里；统一前缀树；SGLang 与 vLLM 存法、块被撑大；一份快照 183 MiB 顶 6,250 字 KV（本课推导，含卷积状态）；右下三档间隔的显存与重算；密与疏的取舍；int8 快照；前面撞过的四回</td></tr>
 <tr><td>十四　落地</td><td>25</td><td>可压到 24</td><td>导语（Qwen3.5 配置、六道关、K3 三处对照）；climb 图（台阶高度只表先后、红框）。14.1 装得下（768 GiB 字节不是问题；2 个 KV 头 8 路切不开 → DP 注意力＋EP、prefill DP8／decode DP4×TP2；统一池；K3 对照① DEP8 OOM）、起得来（7 分钟、档位 60–90 s、预编译两参数、RPA；cold 图 GLM 账面加载实为编译、另两次构成；三坑：缓存命不中、R1 清缓存 215.7→21.4 s、/dev/shm 残留 7 分钟→2 小时）、跑得对（PCP 漏算 2.07→0.85，互动；状态槽垃圾按头切；tpu-inference 块池 3.5 倍、about about；K3 对照② 不能按序列切、58%；先比输出）。14.2 跑得快（布局税 2.2 倍、366→87；三条理由＋XLA；ladder 四刀 ×1.06/1.09/1.26/1.09、SMEM 墙、1.58 对 1.59；decode 三刀；读数陷阱；K3 对照③ 158 GB、92 层、三刀＋MXFP4 换 FP8 互动、另几刀、编译 &lt;90 s；map 图）、拆得开（PCP 0.89、PD 349 MB、0.95／0.92）。14.3 扛得住（判活、别 pkill、route 图 340 对 2,850 最坏、87.4%；SGLang／Dynamo／llm-d／GKE；goodput 容量；选栈）；落点：先看 batch 在哪一侧</td></tr>
 <tr><td>十五　八问与收尾</td><td>20</td><td>收尾不能砍</td><td>导语两半；eight 图（图钉、四色、3/4/7/8 钉在车上）；15.1 前四问逐条（档位、尺子 36 倍、字节下限、KV 定 batch）；15.2 后四问逐条（切法 2.09 倍对 +28%、拆 PD、量化与投机 4.22 倍、预编译），互动（投机变慢先查负载和尺子）；八问一句话。15.3 市场降价三分、Epoch 观察、年份表按年全过、不能连乘（互动）、5.1 倍揭晓开场悬念、MTP 拆不开与 TensorRT-LLM 量级、story 图六泳道＋两股压力＋不能连乘框、DeepSeek 一天 78.4%／4,950；课后题；问题链回收、留口子（线性层状态、前缀缓存得关）、回到 0.2 那一句</td></tr>
-<tr><td><b>合计</b></td><td><b>344</b></td><td></td><td>第十六节（出处台账）不进课堂，被追问时翻</td></tr>
+<tr><td><b>合计</b></td><td><b>342</b></td><td></td><td>第十六节（出处台账）不进课堂，被追问时翻</td></tr>
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，<b>也不含等动画转完一圈的时间</b>（全讲约 3 分钟）。每次 build 现数。</em></p>
   <p>⏭ <b>互动另算：每个 💬 互动按 0.5′。</b>
   <em>「含互动」＝ 地板 ＋ 全部互动；「跳后」＝ 标了「⏭ 时间紧可跳」的互动改成直接说答案。超时先跳这些，别删台词。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th><th>互动 / 可跳</th><th>含互动</th><th>跳后</th></tr></thead><tbody><tr><td>第零节　一次请求走一遍</td><td>4,866</td><td>16</td><td>28.3′</td><td>29′</td><td>1 / 0</td><td>28.8′</td><td>28.8′</td></tr><tr><td>第一节　prefill 吃算力，decode 吃带宽</td><td>1,710</td><td>7</td><td>10.3′</td><td>11′</td><td>1 / 0</td><td>10.8′</td><td>10.8′</td></tr><tr><td>第二节　先校准尺子</td><td>1,723</td><td>10</td><td>11.1′</td><td>13′</td><td>2 / 0</td><td>12.1′</td><td>12.1′</td></tr><tr><td>第三节　批处理与调度</td><td>3,728</td><td>35</td><td>27.4′</td><td>30′</td><td>4 / 1</td><td>29.4′</td><td>28.9′</td></tr><tr><td>第四节　KV cache：账、池、复用</td><td>3,999</td><td>35</td><td>28.7′</td><td>31′</td><td>4 / 3</td><td>30.7′</td><td>29.2′</td></tr><tr><td>第五节　两块硬骨头</td><td>2,939</td><td>22</td><td>20.2′</td><td>22′</td><td>2 / 1</td><td>21.2′</td><td>20.7′</td></tr><tr><td>第六节　TEP 还是 DEP</td><td>4,252</td><td>20</td><td>26.3′</td><td>29′</td><td>4 / 2</td><td>28.3′</td><td>27.3′</td></tr><tr><td>第七节　切序列：DCP 和 PCP</td><td>2,280</td><td>13</td><td>14.7′</td><td>16′</td><td>2 / 1</td><td>15.7′</td><td>15.2′</td></tr><tr><td>第八节　拆工作：那一趟 KV</td><td>3,202</td><td>16</td><td>20.0′</td><td>22′</td><td>3 / 1</td><td>21.5′</td><td>21.0′</td></tr><tr><td>第九节　配几台、拆不拆</td><td>2,563</td><td>15</td><td>16.6′</td><td>18′</td><td>1 / 1</td><td>17.1′</td><td>16.6′</td></tr><tr><td>第十节　先选拓扑，再调参数</td><td>2,202</td><td>11</td><td>13.8′</td><td>15′</td><td>2 / 2</td><td>14.8′</td><td>13.8′</td></tr><tr><td>第十一节　投机解码</td><td>4,016</td><td>24</td><td>26.1′</td><td>28′</td><td>3 / 2</td><td>27.6′</td><td>26.6′</td></tr><tr><td>第十二节　量化与 kernel 融合</td><td>3,564</td><td>24</td><td>23.8′</td><td>25′</td><td>1 / 1</td><td>24.3′</td><td>23.8′</td></tr><tr><td>第十三节　新架构出难题：状态没法按 token 切</td><td>1,374</td><td>9</td><td>9.1′</td><td>10′</td><td>1 / 1</td><td>9.6′</td><td>9.1′</td></tr><tr><td>第十四节　落地：把 Qwen3.5 在 TPU 上跑起来</td><td>3,537</td><td>24</td><td>23.7′</td><td>25′</td><td>2 / 2</td><td>24.7′</td><td>23.7′</td></tr><tr><td>第十五节　第一天的八问</td><td>2,912</td><td>14</td><td>18.1′</td><td>20′</td><td>2 / 1</td><td>19.1′</td><td>18.6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>318′</b></td><td><b>344′</b></td><td><b>35 / 19</b></td><td><b>336′</b></td><td><b>326′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th><th>互动 / 可跳</th><th>含互动</th><th>跳后</th></tr></thead><tbody><tr><td>第零节　一次请求走一遍</td><td>4,866</td><td>16</td><td>28.3′</td><td>29′</td><td>1 / 0</td><td>28.8′</td><td>28.8′</td></tr><tr><td>第一节　prefill 吃算力，decode 吃带宽</td><td>1,710</td><td>7</td><td>10.3′</td><td>11′</td><td>1 / 0</td><td>10.8′</td><td>10.8′</td></tr><tr><td>第二节　先校准尺子</td><td>1,723</td><td>10</td><td>11.1′</td><td>13′</td><td>2 / 0</td><td>12.1′</td><td>12.1′</td></tr><tr><td>第三节　批处理与调度</td><td>3,728</td><td>35</td><td>27.4′</td><td>30′</td><td>4 / 1</td><td>29.4′</td><td>28.9′</td></tr><tr><td>第四节　KV cache：账、池、复用</td><td>3,958</td><td>35</td><td>28.5′</td><td>31′</td><td>4 / 3</td><td>30.5′</td><td>29.0′</td></tr><tr><td>第五节　两块硬骨头</td><td>2,939</td><td>22</td><td>20.2′</td><td>22′</td><td>2 / 1</td><td>21.2′</td><td>20.7′</td></tr><tr><td>第六节　TEP 还是 DEP</td><td>4,252</td><td>20</td><td>26.3′</td><td>29′</td><td>4 / 2</td><td>28.3′</td><td>27.3′</td></tr><tr><td>第七节　切序列：DCP 和 PCP</td><td>2,280</td><td>13</td><td>14.7′</td><td>16′</td><td>2 / 1</td><td>15.7′</td><td>15.2′</td></tr><tr><td>第八节　拆工作：那一趟 KV</td><td>3,202</td><td>16</td><td>20.0′</td><td>22′</td><td>3 / 1</td><td>21.5′</td><td>21.0′</td></tr><tr><td>第九节　配几台、拆不拆</td><td>2,464</td><td>14</td><td>15.8′</td><td>17′</td><td>1 / 1</td><td>16.3′</td><td>15.8′</td></tr><tr><td>第十节　先选拓扑，再调参数</td><td>2,202</td><td>11</td><td>13.8′</td><td>15′</td><td>2 / 2</td><td>14.8′</td><td>13.8′</td></tr><tr><td>第十一节　投机解码</td><td>4,184</td><td>25</td><td>27.2′</td><td>29′</td><td>3 / 2</td><td>28.7′</td><td>27.7′</td></tr><tr><td>第十二节　量化与 kernel 融合</td><td>3,311</td><td>22</td><td>22.1′</td><td>23′</td><td>1 / 1</td><td>22.6′</td><td>22.1′</td></tr><tr><td>第十三节　新架构出难题：状态没法按 token 切</td><td>1,374</td><td>9</td><td>9.1′</td><td>10′</td><td>1 / 1</td><td>9.6′</td><td>9.1′</td></tr><tr><td>第十四节　落地：把 Qwen3.5 在 TPU 上跑起来</td><td>3,537</td><td>24</td><td>23.7′</td><td>25′</td><td>2 / 2</td><td>24.7′</td><td>23.7′</td></tr><tr><td>第十五节　第一天的八问</td><td>2,912</td><td>14</td><td>18.1′</td><td>20′</td><td>2 / 1</td><td>19.1′</td><td>18.6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>316′</b></td><td><b>342′</b></td><td><b>35 / 19</b></td><td><b>334′</b></td><td><b>324′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把两条暗线记在心里</h3>
@@ -972,7 +972,7 @@ chunked prefill 只摊平打扰，拆到两批机器上是第八节的事。<br>
 </div>
 </div>
 
-<h3 class="sec" id="c4">第四节　KV cache：账、池、复用（31′）<span class="tm6">计划 31′ · 含互动 30.7′ · 跳后 29.2′</span></h3>
+<h3 class="sec" id="c4">第四节　KV cache：账、池、复用（31′）<span class="tm6">计划 31′ · 含互动 30.5′ · 跳后 29.0′</span></h3>
 
 <div class="say">
 <p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s四">第四节　KV cache：账、池、复用</a>　·　主图 <code>fig-s4-batch</code></p>
@@ -1011,8 +1011,7 @@ Orca 已经能每步换人，座位却卡在 KV 上：按最长预留，只用�
 
 <p class="say">「MLA 之后，DeepSeek 自家这条线又改了三代。<br>
 V3.2 的 DSA 存的一点没少，省的是读：先用小打分器扫一遍历史，只读挑中的。<br>
-V3.2 报告说架构上只改了这一处，基准和改之前的 V3.1-Terminus 基本持平：MMLU-Pro 都是八十五点零，HLE 二十一点七对十九点八。省了多少，报告只画了按租卡价算的成本曲线，没给比值。<br>
-常被混的一个名字是 NSA：那是 DeepSeek 二〇二五年二月的稀疏注意力论文，上线的是 DSA，两者什么继承关系，官方没说。」</p>
+V3.2 报告说架构上只改了这一处，基准和改之前的 V3.1-Terminus 基本持平：MMLU-Pro 都是八十五点零，HLE 二十一点七对十九点八。省了多少，报告只画了按租卡价算的成本曲线，没给比值。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：往下到 <code>fig-s4-lineage</code>，先指图例「黄框：这一代改的是这一排」，再指最左两列。</p>
 
@@ -1946,7 +1945,7 @@ KV 从 prefill 机搬到 decode 机分三段：显存到本机内存约十毫秒
 </div>
 </div>
 
-<h3 class="sec" id="c9">第九节　配几台、拆不拆（18′）<span class="tm6">计划 18′ · 含互动 17.1′ · 跳后 16.6′</span></h3>
+<h3 class="sec" id="c9">第九节　配几台、拆不拆（17′）<span class="tm6">计划 17′ · 含互动 16.3′ · 跳后 15.8′</span></h3>
 
 <div class="say">
 <p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s九">第九节　配几台、拆不拆</a>　·　主图 <code>fig-s9-prefill-sweep</code></p>
@@ -2065,10 +2064,6 @@ README 自己写的是约百分之六点八，按表算是六点七。这里的�
 <p class="say">「论文报告峰值显存最多降到十五分之一，batch 最多是原来的二十二倍，首字最多降百分之七十一。<br>
 什么时候值得？请求带很多图，或者图很大的时候；纯文本用不上。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「拆到芯片上。」，先指 Rubin CPX，再指 Groq 3 LPX。</p>
-
-<p class="say">「拆分甚至拆到了芯片上。NVIDIA 二〇二五年九月公布 Rubin CPX，用便宜的 GDDR7 不用 HBM，专吃长上下文的 prefill，因为 prefill 吃算力不吃带宽。它后来是否照常出货，只有二手说法，不下结论。<br>
-今年八月，NVIDIA 又宣布 Groq 3 LPX 量产，挂在 Vera Rubin 平台上，专做极快出字。⭐ prefill、decode 各配各的硬件，就是第八节那笔账落到了硅片上。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：停在本节末尾「回到主线」那条绿框。</p>
 
@@ -2217,7 +2212,7 @@ DCP 帮不上。这里 KV 本来就只存一份，用的是 DP 注意力；DCP �
 </div>
 </div>
 
-<h3 class="sec" id="c11">第十一节　投机解码（28′）<span class="tm6">计划 28′ · 含互动 27.6′ · 跳后 26.6′</span></h3>
+<h3 class="sec" id="c11">第十一节　投机解码（29′）<span class="tm6">计划 29′ · 含互动 28.7′ · 跳后 27.7′</span></h3>
 
 <div class="say">
 <p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s十一">第十一节　投机解码</a>　·　主图 <code>anim-spec</code></p>
@@ -2369,42 +2364,48 @@ DCP 帮不上。这里 KV 本来就只存一份，用的是 DP 注意力；DCP �
 有一组数：vLLM 在四张 H100 上跑 Llama 3 70B，每秒一个请求，摘要数据集上最多快二点八倍；同条件换小草稿模型跑 ShareGPT 对话，只有一点五倍。<br>
 开法很简单：vLLM 在投机配置里把方法写成 ngram，SGLang 是一个 NGRAM 参数。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「MTP、DFlash、DSpark 是一条线上的三步」，再下一段指「注入草稿每一层的 KV」。</p>
+<p class="board"><b>🖥 屏幕</b>：滚到「MTP、DFlash、DSpark 是一条线上的三步」，读完这段就下到 <code>fig-s11-three</code>，先只指第一行。</p>
 
-<p class="say">「常有人问：DSpark、DFlash、MTP 到底什么关系？⭐ 一句话：一条线上的三步。<br>
-三个都是贴着大模型隐状态猜字的小草稿，差在怎么出字。MTP 和 EAGLE 一个字一个字猜，猜五个就得跑五趟；DFlash 一趟出整块，猜五个和猜一个差不多贵。」</p>
+<p class="say">「常有人问：DSpark、DFlash、MTP 到底什么关系？⭐ 一句话：一条线上的三步。三个都是贴着大模型隐状态猜字的小草稿，差在怎么出字、每步验几个。<br>
+看图第一行。MTP 是 DeepSeek-V3 预训练时就多带的一层，EAGLE 是外挂的小模型，猜法一样：一个字一个字猜。猜第二个字时看得见第一个猜了啥，所以越往后也不太掉。代价是猜五个就得跑五趟。」</p>
 
-<p class="say">「DFlash 还挪了一个地方：大模型的隐状态喂在哪。EAGLE-3 只喂在草稿的入口，草稿一做深，这个信号走几层就淡了；DFlash 把它注入草稿每一层的 KV，每层都看得见。<br>
-二〇二六年它已经进了 vLLM 和 SGLang，NVIDIA 博客报在 B300 上跑 Gemma-4 31B，一个人用时快到三到五点八倍。」</p>
+<p class="say">「DeepSeek 线上原先开的叫 MTP-1：只多猜一个字，连大模型自己那个，每步验两个。<br>
+为什么不多猜几个？他们自己在论文里说了：固定猜三个、五个，在高并发下验证太贵，总吞吐反而掉。就是 11.2 那个坑，batch 一大，多验的字要付真钱。记住这个，后面 DSpark 就是来解它的。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「一趟出整块的病：越往块尾越不准」，指「of problem」。</p>
+<p class="board"><b>🖥 屏幕</b>：指 <code>fig-s11-three</code> 第二行，再回正文指「注入草稿每一层的 KV」。</p>
+
+<p class="say">「第二行，DFlash。草稿只跑一趟，五个位置并行出来，猜五个和猜一个差不多贵，这是它快的地方。<br>
+它还挪了一处：大模型的隐状态喂在哪。EAGLE-3 只喂在草稿入口，草稿一做深，信号走几层就淡了；DFlash 注入草稿每一层的 KV，层层都看得见。二〇二六年它进了 vLLM 和 SGLang，B300 上跑 Gemma-4 31B，一个人用时快到三到五点八倍。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：停在第二行的红格「problem」，再回正文滚到「一趟出整块的病：越往块尾越不准」。</p>
 
 <p class="ia6">💬 <b>互动</b>：问台下「一趟并行出五个字，什么时候会出错？」 期望答案：<b>每个位置各猜各的，看不到同块前一位选了谁，两种说法会拼串</b>。<span class="skip6">⏭ 时间紧可跳</span></p>
 
 <p class="say">「一趟出整块有个病：每个位置各猜各的，看不到同一块里前一位到底选了哪个字。<br>
-上文既能接 of course、又能接 no problem，第一位选了 of，第二位却可能押 problem，拼出 of problem，验到这就断了。<br>
-所以 DFlash 越往块尾接受率一路往下掉，EAGLE-3 一个一个猜，反而持平。」</p>
+上文既能接 of course、又能接 no problem。第一位选了 of，第二位却押了 problem，拼出 of problem，验到这就断了，后面三个跟着作废。<br>
+所以 DFlash 越往块尾接受率一路往下掉；第一行那种一个一个猜的，反而持平。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「DSpark 第一刀补草稿」，再下一段「第二刀补验证」。</p>
+<p class="board"><b>🖥 屏幕</b>：指 <code>fig-s11-three</code> 第三行上半：五个「小头」和它们之间的横箭头；再回正文「DSpark 第一刀补草稿」。</p>
 
-<p class="say">「DSpark 补了两刀。第一刀补草稿：DFlash 照旧一趟出整块，上面加一个很轻的顺序小头，按前一位选的字调下一位的分数。选了 of，就把 course 抬起来。<br>
-Qwen3 四到十四 B 上，平均接受长度比 DFlash 高一成六到一成八，比 EAGLE-3 高近三成；batch 一百二十八时草稿从四个加到十六个，整轮只比 DFlash 慢百分之零点二到一点三。」</p>
+<p class="say">「第三行，DSpark。⭐ 它就是拿 DFlash 当骨干，补了两刀。<br>
+第一刀补草稿：照旧一趟出整块，上面加一排很轻的顺序小头，从左往右传，按前一位选的字调下一位的分数。选了 of，就把 course 抬起来。<br>
+这样既保住一趟出整块的速度，又补回了第一行那种前后照应。」</p>
 
-<p class="say">「⭐ 第二刀补验证，这才是它线上好用的主因。另一个小头估每一位被收下的概率，连乘起来，就是这串前缀活到第几位的概率。<br>
-调度器把整批请求的候选前缀按这个概率排队，再查一张引擎吞吐表，定这一步总共验多少。负载轻就多验，负载重就少验，没把握的字不占验证名额。」</p>
+<p class="say">「效果：Qwen3 四到十四 B 上，平均接受长度比 DFlash 高一成六到一成八，比 EAGLE-3 高近三成。<br>
+小头有多便宜？batch 一百二十八时草稿从四个加到十六个，整轮只比 DFlash 慢百分之零点二到一点三，大模型验证那一下才是大头。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：指 <code>fig-s11-three</code> 第三行下半：绿柱从左往右变矮，再指红、蓝两条虚线；回正文「第二刀补验证」。</p>
+
+<p class="say">「⭐ 第二刀补验证，这才是它在线上好用的主因。另一个小头给每一位估一个被收下的概率，连乘起来，就是这串草稿活到第几位的概率，图上绿柱越往右越矮。<br>
+调度器把整批请求的候选字按这个概率排队，再查一张引擎吞吐表，定这一步总共验多少：负载重，只验前两个，红线；负载轻，验到第四个，蓝线。没把握的字不占验证名额。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「这正好解了 11.2 的坑」，再下一段「它在 V4 上占的正是 MTP 的位子」。</p>
 
-<p class="say">「这正好接上前面那个坑：batch 一大，多验的字要付真金白银。DeepSeek 自己说，固定猜三个、五个的 MTP 在高并发下验证太贵，会拉低总吞吐，所以线上一直只开 MTP-1，每次只验两个字。<br>
-换成 DSpark，最多猜五个，并发不到两百时每个请求能验到四到六个。V4 预览版上线两周，它就替下了 MTP-1。」</p>
+<p class="say">「这就回到刚才 MTP-1 那个坑：固定多猜，高并发下验证太贵。DSpark 不固定，忙时少验、闲时多验。<br>
+DeepSeek 线上最多猜五个，并发不到两百时每个请求能验到四到六个，比 MTP-1 的两个多了一倍多。吞吐相同时，用户看到的出字速度快了六到八成五。V4 预览版上线两周，它就替下了 MTP-1。」</p>
 
-<p class="say">「它在 V4 上占的正是 MTP 的位子：vLLM 就是按 mtp 零到二这几个名字，从主模型的 checkpoint 里读它的权重。<br>
-⭐ 所以说 DSpark 是 DeepSeek 线上 MTP 的接班人，出字方法却走的是 DFlash 那一路。这条线还在往前跑：八月的 DFlash 2 又拿 DSpark 当对手来比。」</p>
-
-<p class="board"><b>🖥 屏幕</b>：停在「扩散模型也能直接当主模型」。</p>
-
-<p class="say">「顺带一句：扩散模型不只能当草稿，也能直接当主模型。Google 的 DiffusionGemma，二百六十亿参数，每次对二百五十六个 token 的一块画布反复去噪，是 vLLM 第一个原生支持的扩散模型。<br>
-它拿算力换带宽，所以 batch 小、算力闲着的时候最划算，跟投机解码赚钱的场景是同一个。」</p>
+<p class="say">「最后一个细节把关系钉死：它在 V4 上占的正是 MTP 的位子，vLLM 就是按 mtp 零到二这几个名字，从主模型 checkpoint 里读它的权重。<br>
+⭐ 所以三者的关系一句话：DSpark 是 DeepSeek 线上 MTP 的接班人，出字方法走的是 DFlash 那一路，再加上按把握、按负载决定验几个。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「11.4　接进系统的代价」，三条一条一条指。</p>
 
@@ -2436,7 +2437,7 @@ Qwen3 四到十四 B 上，平均接受长度比 DFlash 高一成六到一成八
 </div>
 </div>
 
-<h3 class="sec" id="c12">第十二节　量化与 kernel 融合（25′）<span class="tm6">计划 25′ · 含互动 24.3′ · 跳后 23.8′</span></h3>
+<h3 class="sec" id="c12">第十二节　量化与 kernel 融合（23′）<span class="tm6">计划 23′ · 含互动 22.6′ · 跳后 22.1′</span></h3>
 
 <div class="say">
 <p class="board sub">🖥 本节主屏：课件 <a href="topic-06.html#s十二">第十二节　量化与 kernel 融合</a>　·　主图 <code>fig-s12-bytes</code></p>
@@ -2472,10 +2473,6 @@ MoE 为什么赚得少？原文没说。本课推测：MoE 只读选中的专家
 精度看困惑度，越低越好：半精度五点四七，AWQ 五点六零，直接四舍五入取整五点七三。⭐ 同样四 bit，取整取得聪明不聪明，差出来一截。<br>
 省下的显存能多放 KV、多接人，顺带走了车上多坐人那条路。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「激活更难压」那段，指 SmoothQuant。</p>
-
-<p class="say">「权重好压，激活难压：少数几个通道的值能大出几十倍，一个缩放顾不过来，要么大的溢出，要么小的全压成零。<br>
-二〇二二年的 SmoothQuant 想了个办法：按通道把激活的幅度挪一部分到权重上，两边都压成 INT8。这是那几年 8 bit 的标准答案；FP8、NVFP4 进了张量核以后，它就不是主流了。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「同叫 4 bit，差在缩放。」，再下到 <code>fig-s12-mx</code>，先上后下。</p>
 
@@ -2605,13 +2602,6 @@ prefill 的形状千变万化，所以 vLLM 默认 decode 录整图，prefill �
 
 <p class="say">「二〇二六年九月 DeepSeek 的 V4.1-Flash，主 KV 原生就存四 bit，每十六个数一个缩放，FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小四成五。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：滚到「还有一派不压而扔：KV 淘汰」，再下一段「两堵墙」。</p>
-
-<p class="say">「还有一派不压，直接扔，叫 KV 淘汰。StreamingLLM 只留开头几个 token 和最近一段；H2O、SnapKV 看注意力分数，没人看的就扔。<br>
-论文里省得很多，生产里却少见。NVIDIA 研究院今年六月的博客点了两堵墙。」</p>
-
-<p class="say">「第一堵：看分数的方法得读注意力分数，可 FlashAttention 是分块在片上算的，从来不把分数写回显存，没地方读。<br>
-第二堵：解码中反复扔的，扔掉的是零零星星的位置。分页 KV 一块要整块空了才能还，⭐ 东一个西一个地扔，算力省了，显存一点没省。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：停在绿框「回到主线」。</p>
 

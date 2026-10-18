@@ -11,7 +11,6 @@ BODY = '''
 __FIG_S12_BYTES__
   <p>实测接近这个比例：vLLM 2024 年 7 月接入 FP8 权重，稠密的 Llama 3 70B 每字间隔最多降到 BF16 的 1/2，MoE 的 Mixtral 8x7B 最多降到 BF16 的 1/1.6。MoE 赚得少，原文没给原因；本课推测是只读选中的专家，读权重在一步里占比本就低。</p>
   <p>再减一半到 4 bit：AWQ（2023）在 RTX 4090、batch 1 上跑 Llama-2-7B，比已经融合过 kernel 的 FP16 再快 3.1 倍。精度看 WikiText-2 困惑度（越低越好）：FP16 是 5.47，AWQ 5.60，直接四舍五入取整是 5.73。</p>
-  <p>激活更难压：少数通道的值大出几十倍，一个缩放顾不过来。SmoothQuant（2022）按通道把激活的幅度挪一部分给权重，权重和激活都压成 INT8。到 FP8、NVFP4 进了张量核，这类 INT8 方案已不是主流。</p>
   <p>省下的显存多放 KV、多接请求（4.1），一趟搬运分给更多人。</p>
 
   <p><b>同叫 4 bit，差在缩放。</b>4 bit 只有 16 个编码，必须几个数共用一个缩放倍数；MXFP4 和 NVFP4 差在块大小和缩放格式。</p>
@@ -65,8 +64,6 @@ __FIG_S12_FUSE__
 __FIG_S12_KVLAYOUT__
   <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节。同样显存多存了前缀，Qwen3-Coder-480B 上命中率比 FP8 KV 高 20%，首字延迟最多降到其约三分之一。</p>
   <p>2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小 45%。</p>
-  <p><b>还有一派不压而扔：KV 淘汰。</b>StreamingLLM 只留开头几个 token 和最近一段；H2O、SnapKV 看注意力分数，扔没人看的。论文里省得多，生产里少见。</p>
-  <p>NVIDIA 研究院 2026-06 的博客点了两堵墙。看分数的方法撞第一堵：FlashAttention 分块在片上算，从不把分数写回显存，没地方读。解码中反复扔的撞第二堵：分页 KV 一块要整块空了才能还，零星扔掉的位置省了算力，省不下显存。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数来自 megakernel 加 DSpark 投机，博客没提量化。

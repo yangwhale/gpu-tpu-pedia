@@ -503,9 +503,110 @@ def fig_ngram():
     f.save("fig6-spec-ngram.svg", yb + 14)
 
 
+# ════════════════════════════════════════════════════════════════════════
+def fig_three():
+    """MTP、DFlash、DSpark 三种草稿怎么出字、怎么定验几个。字与概率都是示意。"""
+    f = Fig(W, "三种草稿并排。第一行 MTP 和 EAGLE：草稿一个字一个字猜，猜五个要跑五趟，每趟都看得见前面猜了什么。"
+               "第二行 DFlash：草稿跑一趟就并行出五个字，但每个位置各猜各的，第一位选了 of，第二位却押了 no problem 里的 problem，"
+               "拼出 of problem，验到第二位就断了。第三行 DSpark：同样跑一趟出整块，再加一个很轻的顺序小头，"
+               "前一位选了 of，就把下一位的 course 抬起来；另一个小头给每一位估一个存活概率，负载轻时验到第四位，负载重时只验前两位。"
+               "字和概率都是示意")
+    y0 = f.header("三种草稿：<tspan font-weight=\"700\">怎么出字，验几个</tspan>",
+                  "一格一个草稿字。三种都贴着大模型的隐状态猜；差在出字方式和每步验多少",
+                  [(PU, "草稿跑一趟"), (GR, "能被收下"), (RD, "被拒"), (GY2, "跟着作废")])
+    TX, TW, TG, TH = 330, 104, 16, 40
+    def tokx(i):
+        return TX + i * (TW + TG)
+    def tok(i, y, txt, col, fill):
+        f.box(tokx(i), y, TW, TH, fill, col, 6, 1.6)
+        f.t(tokx(i) + TW / 2, y + 26, txt, col if col != LINE else INK, True, 16, "middle", mono=True)
+    NX = tokx(5) + 20                     # 右侧注释起点
+    WORDS = ["of", "course", ",", "I", "can"]
+    PH = 196
+
+    # ① MTP / EAGLE：串行
+    py = f.panel(0, y0, W, PH, "MTP、EAGLE：一个字一个字猜", PU)
+    f.t(24, py + 50, "草稿", INK, True, 17)
+    f.t(24, py + 74, "跑 5 趟", PU, True, 15)
+    by, ty = py + 26, py + 106
+    for i in range(5):
+        f.box(tokx(i) + 12, by, TW - 24, 34, "#f3e8fd", PU, 5)
+        f.t(tokx(i) + TW / 2, by + 22, "跑一趟", PU, True, 13, "middle")
+        f.line(tokx(i) + TW / 2, by + 34, tokx(i) + TW / 2, ty - 2, PU, 1.4)
+        tok(i, ty, WORDS[i], GR, "#e6f4ea")
+        if i < 4:
+            f.line(tokx(i) + TW - 4, ty + 6, tokx(i + 1) + 14, by + 34, PU, 1.2, dash="4 3")
+    f.t(NX, py + 52, "每趟都看得见前面猜了啥，", INK, size=15)
+    f.t(NX, py + 74, "所以越往后也不太掉；", INK, size=15)
+    f.t(NX, py + 104, "代价：猜几个就跑几趟。", PU, True, 15)
+    f.t(NX, py + 126, "MTP 是训进主模型的那一层。", GY, size=13.5)
+
+    # ② DFlash：一趟一整块
+    py = f.panel(0, py + PH + 14, W, PH, "DFlash：一趟出一整块", OR)
+    f.t(24, py + 50, "草稿", INK, True, 17)
+    f.t(24, py + 74, "跑 1 趟", OR, True, 15)
+    bw = tokx(4) + TW - TX
+    f.box(TX, by := py + 26, bw, 34, "#f3e8fd", PU, 5)
+    f.t(TX + bw / 2, by + 22, "跑一趟，5 个位置并行出（大模型隐状态注入草稿每一层）", PU, True, 13, "middle")
+    ty = py + 106
+    for i in range(5):
+        f.line(tokx(i) + TW / 2, by + 34, tokx(i) + TW / 2, ty - 2, PU, 1.4)
+    tok(0, ty, "of", GR, "#e6f4ea")
+    tok(1, ty, "problem", RD, "#fce8e6")
+    for i, w in enumerate(["is", "fine", "."], 2):
+        tok(i, ty, w, GY2, "#f1f3f4")
+    f.t(tokx(1) + TW / 2, ty + TH + 22, "✗ 拼成了 of problem", RD, True, 13.5, "middle")
+    f.t(NX, py + 52, "各位各猜各的，看不到", INK, size=15)
+    f.t(NX, py + 74, "同块前一位选了哪个字：", INK, size=15)
+    f.t(NX, py + 104, "两种说法拼了串。", OR, True, 15)
+    f.t(NX, py + 126, "越往块尾，接受率掉得越快。", GY, size=13.5)
+
+    # ③ DSpark：一整块 ＋ 顺序小头 ＋ 按把握验
+    PH3 = 280
+    py = f.panel(0, py + PH + 14, W, PH3, "DSpark：DFlash 当骨干，补两刀", GR)
+    f.t(24, py + 50, "第一刀", INK, True, 17)
+    f.t(24, py + 74, "顺序小头补依赖", GR, True, 15)
+    f.t(24, py + 168, "第二刀", INK, True, 17)
+    f.t(24, py + 192, "按把握和负载定验几个", GR, True, 15)
+    f.box(TX, by := py + 22, bw, 30, "#f3e8fd", PU, 5)
+    f.t(TX + bw / 2, by + 20, "同样跑一趟出整块", PU, True, 13, "middle")
+    hy, ty = py + 64, py + 104
+    for i in range(5):
+        f.box(tokx(i) + 22, hy, TW - 44, 24, "#e6f4ea", GR, 5)
+        f.t(tokx(i) + TW / 2, hy + 17, "小头", GR, True, 12, "middle")
+        f.line(tokx(i) + TW / 2, hy + 24, tokx(i) + TW / 2, ty - 2, GR, 1.3)
+        if i < 4:
+            f.line(tokx(i) + TW - 22, hy + 12, tokx(i + 1) + 22, hy + 12, GR, 1.6)
+    SURV = [95, 86, 60, 24, 5]                  # 示意：前缀存活概率 %
+    assert SURV == sorted(SURV, reverse=True)
+    for i in range(5):
+        tok(i, ty, WORDS[i], GR, "#e6f4ea")
+        bh = 40 * SURV[i] / 100
+        f.box(tokx(i) + 14, py + 196 - bh, TW - 28, bh, "#a8dab5", GR, 3)
+        f.t(tokx(i) + TW / 2, py + 216, "活到这 %d%%" % SURV[i], INK, True, 13, "middle")
+    for cut, lab, col in ((2, "负载重：只验前 2 个", RD), (4, "负载轻：验到第 4 个", BL)):
+        x = tokx(cut) - TG / 2
+        f.line(x, ty - 6, x, py + 226, col, 2, dash="6 4", arrow=False)
+        f.t(x, py + 246, lab, col, True, 13.5, "middle")
+    f.t(NX, py + 50, "前一位选了 of，", INK, size=15)
+    f.t(NX, py + 72, "就把下一位的 course 抬起来。", GR, True, 15)
+    f.t(NX, py + 160, "绿柱：草稿活到这一位的概率，", INK, size=15)
+    f.t(NX, py + 182, "越往后越矮。截在哪，", INK, size=15)
+    f.t(NX, py + 204, "看这一刻机器忙不忙。", GR, True, 15)
+    f._pan = None
+    yb = f.band(py + PH3 + 16, "ok", "DSpark ＝ DFlash 的出字速度 ＋ 补回块内依赖 ＋ 按把握验", [
+        "从上往下：第二行换来速度，第三行把第一行的前后照应补回来，再把验几个交给调度。",
+    ])
+    yb = f.src(yb + 10,
+               "⚠️ 示意：例句、各行猜 5 个、存活概率 95／86／60／24／5% 和两条截断位置都是举例；of course／no problem 的例子出自 DSpark 论文 §3。",
+               "DFlash：arXiv 2602.06036；KV 注入与 EAGLE-3 对比见 LMSYS 博客 2026-06-15。DSpark：arXiv 2607.05147（Markov 顺序头、置信度头、前缀存活概率、全批贪心调度；MTP-3/5 高并发拉低吞吐）；vLLM dspark.py 从 mtp.{0,1,2}.* 读权重。")
+    f.save("fig6-spec-three.svg", yb + 14)
+
+
 fig_step()
 fig_bytes()
 fig_conc()
 fig_temp()
 fig_tree()
 fig_ngram()
+fig_three()

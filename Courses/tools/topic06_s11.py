@@ -57,13 +57,13 @@ __FIG_S11_TREE__
 __FIG_S11_NGRAM__
   <p>vLLM 在 4 张 H100 上跑 Llama 3 70B、每秒 1 个请求，摘要数据集上最多快 2.8 倍；同条件换小草稿模型跑 ShareGPT 对话是 1.5 倍。开法：vLLM 的 <code>speculative_config</code> 里 <code>method</code> 写 <code>ngram</code>，SGLang 是 <code>--speculative-algorithm NGRAM</code>。</p>
   <p><b>MTP、DFlash、DSpark 是一条线上的三步。</b>三者都是贴着大模型隐状态猜字的小草稿，差在怎么出字。MTP 和 EAGLE 一个字一个字猜，猜 5 个跑 5 趟；DFlash 一趟出整块，猜 5 个和猜 1 个差不多贵。</p>
+__FIG_S11_THREE__
   <p>DFlash 还挪了喂隐状态的位置：EAGLE-3 只在草稿入口喂，草稿一深信号就淡；DFlash 注入草稿每一层的 KV（LMSYS 博客）。2026 年已上 vLLM、SGLang，B300 上单并发速度是不投机的 3.0–5.8 倍（Gemma-4 31B，NVIDIA 博客）。</p>
   <p><b>一趟出整块的病：越往块尾越不准。</b>每个位置各猜各的，看不到同块前一位到底选了哪个字。上文既能接「of course」又能接「no problem」时，它会拼出「of problem」。DSpark 论文里，EAGLE-3 的逐位接受率持平，DFlash 一路往下掉。</p>
   <p><b>DSpark 第一刀补草稿。</b>DFlash 照旧一趟出整块，上面加一个很轻的顺序小头，按前一位选的字调下一位的分数：选了「of」，就抬高「course」。Qwen3 4B–14B 上平均接受长度比 DFlash 高 16–18%，比 EAGLE-3 高 27–31%；batch 128 时草稿从 4 个加到 16 个，整轮只比 DFlash 慢 0.2–1.3%。</p>
   <p><b>第二刀补验证，这才是它线上好用的主因。</b>另一个小头估每一位被收下的概率，连乘成前缀存活概率。调度器把整批请求的候选前缀按存活概率排队，再查引擎吞吐表，定这一步总共验多少。负载轻多验，负载重少验，没把握的字不占名额。</p>
   <p>这正好解了 11.2 的坑：固定猜 3 个、5 个的 MTP 在高并发下验证太贵、拉低总吞吐，所以 DeepSeek 线上一直只开 MTP-1（每次验 2 个字）。换成最多猜 5 个的 DSpark，并发不到 200 时每请求验到约 4–6 个；V4 预览版上线两周后，它替下了 MTP-1。</p>
-  <p>它在 V4 上占的正是 MTP 的位子：vLLM 按 <code>mtp.0–2</code> 的名字从主模型 checkpoint 读它的权重。所以说 DSpark 是 DeepSeek 线上 MTP 的接班人，出字方法却走 DFlash 那一路。8 月的 DFlash 2 又拿 DSpark 当对手比（Inco AI 博客）。</p>
-  <p><b>扩散模型也能直接当主模型。</b>DiffusionGemma（26B，2026-06）每次对 256 个 token 的画布反复去噪，是 vLLM 第一个原生支持的扩散 LLM。它拿算力换带宽，batch 小、算力闲着时最划算（vLLM 博客）。</p>
+  <p>它在 V4 上占的正是 MTP 的位子：vLLM 按 <code>mtp.0–2</code> 的名字从主模型 checkpoint 读它的权重。所以说 DSpark 是 DeepSeek 线上 MTP 的接班人，出字方法却走 DFlash 那一路。</p>
 
   <h3 id="s11-4">11.4　接进系统的代价</h3>
   <ul>
@@ -89,6 +89,8 @@ FIGS = {
         '<b>看温度 1.0 那侧：草稿猜对也常被判错。</b><br><em>V4-Pro 为 4K/1K 并发 256 实测；五个候选字是举例。</em>'),
     "__FIG_S11_NGRAM__": ("fig-s11-ngram", "fig6-spec-ngram.svg", "topic06-fig-spec.py",
         '<b>顺着 ① 到 ④：橙色对上，绿色照抄，红色被拒处换成蓝色。</b><br><em>示例自拟，只说明机制。</em>'),
+    "__FIG_S11_THREE__": ("fig-s11-three", "fig6-spec-three.svg", "topic06-fig-spec.py",
+        '<b>从上往下三行：串行猜、一趟出整块、一趟出整块再补两刀。</b><br><em>例句和概率是示意。</em>'),
     "__FIG_S11_TREE__": ("fig-s11-tree", "fig6-spec-tree.svg", "topic06-fig-spec.py",
         '<b>看草稿从哪来。</b>'),
 }
