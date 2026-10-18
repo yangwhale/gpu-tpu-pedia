@@ -68,7 +68,7 @@ __FIG_S6_BIGEP_NET__
     <li><b>开源栈写明的门槛</b>：llm-d 要求 InfiniBand 或 RoCE 全互连、GPU 发起 RDMA；vLLM 文档的排障一节专门列了 IBGDA 初始化失败。</li>
     <li><b>少跨机器</b>：V3 训练时就限定每个 token 最多去 4 个节点，先过 IB 到目标节点，再走 NVLink 转发给机内各卡；同一节点挑中几个专家，IB 上只走一份。共享专家每卡一份，本地算，不用发。</li>
     <li><b>量不大，难在延迟</b>：一个 token 一步最多发收约 172 KB × 58 层 ≈ 10 MB（本课推导），比它 4K 上下文一步要读的 288 MB KV 小一个多量级。难的是每层都要等一去一回，出一个字要等 116 次。</li>
-    <li><b>NVL72 换来的是余量</b>：72 张卡一个 NVLink 域，SGLang 说延迟低到可以关掉双微批（6.5）；后续测试 decode 用 48 张卡，比一个域的 72 张还少。</li>
+    <li><b>NVL72 换来的是余量</b>：72 张卡一个 NVLink 域，EP 铺到几十张卡也不出柜、不走网卡。这份余量怎么用，见本小节末尾。</li>
   </ul>
   <p><b>TPU</b>：Ironwood 64 颗一组，用 ICI 直连成 3D 环面，每颗只连 6 个邻居，远处的芯片要经中间芯片转发（本课推导）；组之间靠光交换拼成最多 9,216 颗的系统，更大就得走 DCN。MaxText 有 <code>dcn_expert_parallelism</code> 这个配置项，但跨 DCN 推荐的只有数据并行。</p>
   <p>公开的 TPU 推理目前是 DEP8，专家那步用 all-gather 加 reduce-scatter，不是 all-to-all；跨切片的大 EP 推理还没有公开结果。</p>
@@ -82,6 +82,17 @@ __FIG_S6_BIGEP_NET__
     <li><b>两套 kernel 不能混</b>：DeepEP 的常规模式（吞吐优先）和低延迟模式不能在同一个通信组里同时用，SGLang 因此必须 PD 分离；decode 批小、kernel 启动开销显眼，要靠 CUDA Graph，而常规模式用不了它；TensorRT-LLM 也因 DeepEP 并非所有场景都兼容 CUDA Graph，在 GB200 上自写了通信 kernel。</li>
   </ul>
 
+  <p><b>整柜当一个 EP 域：SGLang 在 GB200 NVL72 上怎么还这几笔账。</b>两篇博客跑的都是 DeepSeek V3/R1、2K 输入，PD 分离（<a href="#s8-1">第八节</a>）。decode 用 48 张卡，命令写 <code>--tp-size 48 --dp-size 48 --enable-dp-attention</code>，其实是 48 路 DP 注意力加 EP48，和 6.2 一样别照字面读。</p>
+  <ul>
+    <li><b>网络</b>：DeepEP 加了纯 NVLink 模式，把别的卡的显存映射进本卡的虚拟地址空间。延迟低到双微批可以关掉：整批算，kernel 更快；也不会再出现通信比计算长、重叠了还要空等的浪费。</li>
+    <li><b>大批</b>：decode 每卡一次跑 768 个请求，48 卡共 36,864 个（复现命令）。原文把「显存大、KV 放得多、批更大」列为提速原因之一；batch 消融也是越大吞吐越高。</li>
+    <li><b>再挤 KV</b>：第二篇把 KV 存成 FP8，decode 注意力的访存约减半，KV 里也多装了 token。batch 选到 KV 基本占满：2K 输入 1408、4K 输入 768；2K 输入从 1408 降到 768，性能约掉一成。</li>
+    <li><b>少传</b>：专家改用 NVFP4，DeepEP 发出前就量化成 NVFP4，分发流量比 FP8 再减半；汇回和专家的下投影、共享专家细粒度重叠（6.5）。</li>
+    <li><b>反着缩</b>：prefill 不往大铺。显存不够时，借 GB200 CPU 与 GPU 之间 900 GB/s（双向）把权重卸到主机内存、提前取回；每个 prefill 实例只用 4 张卡（原精度）或 2 张（低精度）。原文列的好处：通信少、出事波及的卡少、少等最慢那张；最优 EP 大小要看 kernel 和模型。</li>
+  </ul>
+  <p><b>换来多少（每卡，对 H100 上的大 EP 部署）</b>：第一篇 decode 7,583 tok/s，2.7 倍；第二篇用 FP8 注意力加 NVFP4 专家，prefill 26,156、decode 13,386 tok/s，3.8 倍和 4.8 倍，原精度也有 18,471 和 9,087。</p>
+  <p>这些倍数混着显存、精度、kernel、PD 分离，不全是大 EP 的功劳；decode 是先压慢、攒满请求再放开测的。H100 基线有一组开了模拟 MTP、GB200 没开；原文还说许多 kernel 没吃满带宽和算力。</p>
+
   <h3 id="s6-5">6.5　双微批：一批拆两半，一个传、一个算</h3>
   <p>大 EP 每层要传两趟：先把 token 分发到专家所在的卡，算完再汇回。传的时候，计算单元空等。DeepSeek 把一批拆成两个微批：A 在传，B 就在算。SGLang 叫它 TBO，vLLM 叫 DBO，都是这一招。</p>
   __FIG_S6_TBO__
@@ -92,6 +103,7 @@ __FIG_S6_BIGEP_NET__
     <li><b>各自仍是串行</b>：一个微批内部，路由、分发、专家、汇回一环扣一环。重叠靠两个微批错开半拍，错着就跨了层：A 还在收第 N 层，B 已在算第 N＋1 层的注意力。</li>
     <li><b>decode 的通信不占计算单元</b>：DeepSeek 的 profile 说明，RDMA 发出后 SM 全部还给计算，算完再等通信收尾；prefill 的通信要占 SM。</li>
     <li><b>权重不多存，但多读一遍</b>：两个微批用同一份常驻 HBM 的权重，可各自做矩阵乘时都要把这层权重流一遍，一步读两次（本课推导）。EP144 每卡每层专家 88 MB，读两遍不贵；每卡 32 个专家的 1.41 GB 就肉疼（6.3）。</li>
+    <li><b>NVL72 上换细粒度重叠</b>：通信变短后，拆半批反而亏（6.4 末尾）。SGLang 第二篇不拆批，只把汇回通信和专家的下投影 GEMM、共享专家叠在一起：在 GEMM 里埋信号，通信不必等整个 GEMM 结束。</li>
     <li><b>单批也能跨层藏</b>：本层在算时，先把下一层权重往片上搬。这不靠拆批，<a href="#s14-2">14.2</a> 里 K3 的 megakernel 就让下一层权重提前在路上。</li>
   </ul>
 
@@ -102,7 +114,7 @@ __FIG_S6_BIGEP_NET__
     <li><b>DeepSeek V3 怎么配</b>：prefill 多备 32 个冗余专家，每卡原有 8 个再加 1 个；按线上统计定期重算，例如每 10 分钟。</li>
     <li><b>卡越多越要紧</b>：卡越多越不均。SGLang 在大规模 EP 上测，开 EPLB 后 prefill 吞吐是不开的 1.49 倍，decode 是 2.54 倍；作者提醒效果看负载分布，线上要拿真实流量重测。</li>
     <li><b>顺带松开卡数</b>：256 个专家只能均分给 2 的幂张卡；加 32 份冗余凑成 288，12 张、72 张也分得开。</li>
-    <li><b>开关</b>：SGLang 是 <code>--enable-eplb</code> 加 <code>--ep-num-redundant-experts</code>；vLLM 是 <code>--enable-eplb</code>，冗余份数和重排间隔写在 <code>--eplb-config</code>，默认每 3,000 步按最近 1,000 步的统计重排。</li>
+    <li><b>开关</b>：SGLang 是 <code>--enable-eplb</code> 加 <code>--ep-num-redundant-experts</code>；vLLM 是 <code>--enable-eplb</code>，冗余份数和重排间隔写在 <code>--eplb-config</code>，默认每 3,000 步按最近 1,000 步的统计重排。SGLang 在 GB200 上的复现命令就带着 <code>--ep-num-redundant-experts 32</code>。</li>
   </ul>
 
   <div class="note ok"><span class="t">回到主线</span>

@@ -96,6 +96,20 @@ __FIG_S8_PRFAAS__
     <li><b>论文案例</b>：Moonshot 的 1T 混合模型，32 张 H200 做 prefill 加 64 张 H20 做本地 PD，比 96 张 H20 同构 PD 吞吐 +54%、P90 TTFT −64%（同等成本吞吐约 +15%）。这几个数是把实测 profile 代进吞吐模型推算的，不是端到端实测。</li>
   </ul>
 
+  <h3 id="s8-5">8.5　一柜 NVL72 怎么拆：SGLang 的两次实测</h3>
+  <p>SGLang 2025 年在 GB200 NVL72 上把这些零件拼成了一套：DeepSeek-V3/R1（671B），PD 分离加大 EP（第六节）。一柜 18 个计算节点、每节点 4 张 GPU，同在一个 NVLink 域；KV 用 Mooncake 走 NVLink，守住 8.2 那条「KV 别出域」。</p>
+  <table>
+    <caption class="sub" style="caption-side:bottom;text-align:left">输入 2,000 token。H100 基线是 SGLang 2025 年 5 月 96 张 H100 的大 EP 实验，原数照抄；Part I 的 H100 柱开了模拟 MTP、GB200 柱没开，原文说同条件下倍数还会更高。并行配置取自两篇的复现命令。出处：lmsys.org/blog/2025-06-16-gb200-part-1、2025-09-25-gb200-part-2。</caption>
+    <tr><th></th><th>Part I（2025-06）</th><th>Part II（2025-09）</th></tr>
+    <tr><td>decode</td><td>12 节点 48 卡，DP attention ＋ EP48</td><td>同样 48 卡；batch 1,408（按每卡读；KV 基本占满；4K 输入时 768）</td></tr>
+    <tr><td>prefill</td><td>剩下 2 节点 8 卡，一个实例</td><td>每实例 4 卡（BF16 注意力＋FP8 MoE）或 2 卡（FP8 注意力＋NVFP4 MoE）</td></tr>
+    <tr><td>每卡吞吐</td><td>decode 7,583 output tok/s，H100 的 2.7 倍</td><td>低精度：prefill 26,156 input、decode 13,386 output tok/s，H100 的 3.8、4.8 倍；原精度 18,471／9,087</td></tr>
+  </table>
+  <p><b>两边是分开量的。</b>测哪一边，就假设另一边资源无限。量 decode 时先让 decode 每步故意睡一会儿（slow-down 接口），请求堆满再放开，测的是 decode 吃饱时的吞吐。所以 Part I 的 2 节点对 12 节点只是测试配法；原文说真实部署更像 18 节点里 6 个 prefill、12 个 decode。</p>
+  <p><b>两个每卡数拼不成一套集群。</b>代 Part II 的数（本课推导）：2,000 进 100 出，一个请求在 prefill 上花约 2,000 ÷ 26,156 ≈ 0.076 卡·秒，在 decode 上约 100 ÷ 13,386 ≈ 0.0075 卡·秒，prefill 卡要是 decode 的约 10 倍。输出 1,000 字才约 1:1，还没算上下文变长后 decode 每卡会降。配比跟着输出长度走（第九节）。</p>
+  <p><b>prefill 的 3.8 倍从哪来。</b>Part I 只优化了 decode，prefill 写在待办里。Part II 补的招，机制第六节都讲过：EP 反着缩到每实例 2–4 卡、放不下的权重卸到主机内存（6.4），NVFP4 让分发流量减半（6.4），双微批换成细粒度重叠（6.5）。</p>
+  <p>另外两招是降精度和换 Blackwell 版 kernel：原文一个典型案例里，注意力 kernel 快 1.8 倍，GEMM 最多快 1.9 倍。原文也提醒，高低精度两条路径的差距不全来自精度，辅助 kernel 和专家负载都不一样。</p>
+
   <div class="note ok"><span class="t">回到主线</span>
     PD 分离不改变 decode 每一趟搬多少，只保证它不被 prefill 打断，才敢把 batch 攒满。
     留下的问题：每个请求多一趟 KV 传输，还多一批机器要配，P:D 比例得自己量（第九节）。</div>
