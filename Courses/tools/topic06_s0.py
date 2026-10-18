@@ -34,6 +34,8 @@ __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
     市面上推理这两年便宜得很快，斯坦福 AI Index 2025 主要归给更强的小模型；系统那一份单独拆不出来，15.3 再说。</p>
   <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
+  <p><b>其他耳熟的名字落在哪。</b>TensorRT-LLM 是 NVIDIA 自家引擎，和这两家同一层。Triton Inference Server 2025 年改名 Dynamo-Triton，是不限于 LLM 的通用模型服务器；LLM 的 PD 分离、前缀缓存、KV 落存储，NVIDIA 交给它上面的 Dynamo。</p>
+  <p>Hugging Face 的 TGI 已进入维护模式，官方改推 vLLM、SGLang；LMDeploy 是上海 AI 实验室的引擎。llama.cpp、Ollama 跑单机和端侧，本课讲数据中心，不展开。</p>
 __FIG_S0_ENGINES__
   <details class="foldfig"><summary><b>完整时间线</b>：图上只留八个时刻，其余都在这张表里</summary>
   <table>
@@ -127,7 +129,7 @@ __FIG_S0_MAP__
     <li><b>Qwen3.5-397B</b>：通义千问的混合模型，60 层里 45 层是 GDN（Gated DeltaNet）线性注意力，只有 15 层存传统 KV。</li>
     <li><b>TPU v7</b>：芯片间用 ICI 直连成 3D torus。</li>
     <li><b>GB200 ／ GB300</b>：NVIDIA Blackwell 代整柜系统（NVL72）。H100、H200、H800、H20 是上一代 Hopper，后两种是出口受限版。</li>
-    <li><b>vLLM、SGLang</b>：两大开源推理引擎；tpu-inference 是 vLLM 在 TPU 上的后端。</li>
+    <li><b>vLLM、SGLang</b>：两大开源推理引擎；tpu-inference 是 vLLM 在 TPU 上的后端。TensorRT-LLM 是 NVIDIA 的引擎，Dynamo-Triton（原 Triton Inference Server）是它的通用模型服务器。</li>
     <li><b>Dynamo、llm-d</b>：多机编排层，管路由、PD 分离和扩缩容；前者出自 NVIDIA，后者跑在 Kubernetes 上。</li>
     <li><b>Mooncake、NIXL、LMCache</b>：搬 KV、存 KV 的库（第四、八节）。</li></ul></details>
 '''

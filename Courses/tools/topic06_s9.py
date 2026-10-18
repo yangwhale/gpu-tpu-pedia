@@ -74,6 +74,7 @@ __FIG_S9_AFD_ASCEND__
     <li><b>论文的数</b>：arXiv 2501.05460 报告峰值显存最多降到 1/15，batch 最多是原来的 22 倍，TTFT 最多降 71%。</li>
     <li><b>什么时候值得</b>：请求带很多图或大图时；纯文本用不上（专题五 §6.6）。</li>
   </ul>
+  <p><b>拆到芯片上。</b>NVIDIA 2025-09 公布 Rubin CPX，用 GDDR7 而非 HBM，专吃长上下文的 prefill；后来是否照常出货，只有二手说法。2026-08 它宣布 Groq 3 LPX 量产，挂在 Vera Rubin 平台上专做极快出字。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     AFD 让每个专家一趟分到更多 token。拆不拆、怎么配，看负载，不看潮流。

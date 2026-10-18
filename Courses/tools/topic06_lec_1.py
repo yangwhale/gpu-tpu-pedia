@@ -8,7 +8,7 @@ r"""专题六讲义 · 第 1 段：第零–二节。
 
 CH = [
 
-("第零节　一次请求走一遍（28′）", "s零", "fig-s0-map", """
+("第零节　一次请求走一遍（29′）", "s零", "fig-s0-map", """
 <p>🎯 <b>这一节只留一句：decode 每一步都要把权重和 KV 搬一趟；每一招要么让这一趟分给更多 token，要么少搬。</b></p>
 
 <p>💬 开场停在课件封面，先不往下滚；两道题都口头问。</p>
@@ -102,6 +102,14 @@ CH = [
 
 <p class="say">「分工也看得出来：分块 prefill、接 Mooncake，是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP，是 SGLang 先。<br>
 更多零件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 和 FlashMLA、Mooncake、NIXL。你追我赶，零件却多半出自同一个货架。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：滚到「其他耳熟的名字落在哪」，再下一段指 TGI 和 llama.cpp。</p>
+
+<p class="say">「其他耳熟的名字落在哪？TensorRT-LLM 是 NVIDIA 自家的引擎，和这两家同一层。<br>
+Triton Inference Server 二〇二五年改名叫 Dynamo-Triton，它是通用的模型服务器，不只管 LLM；LLM 那些专门的活，PD 分离、前缀缓存、KV 落到存储，NVIDIA 交给它上面的 Dynamo。」</p>
+
+<p class="say">「Hugging Face 的 TGI 已经进入维护模式，官方自己改推 vLLM 和 SGLang。LMDeploy 是上海 AI 实验室的引擎。<br>
+llama.cpp、Ollama 是跑单机、跑端侧的，本课讲数据中心，不展开。⭐ 所以全课用 vLLM 和 SGLang 当主线，不是漏了别家，是这两家代表了数据中心推理的主流。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「完整时间线」，展开表，从上往下按日期指图上没有的那几行。</p>
 
@@ -399,7 +407,7 @@ TPU 上还多一层：一颗 v7 芯片显示成两个 device，按 device 报的
 ]
 
 PLAN = [
-    ('零　开场', 28, '不能', '⭐ 开场两道题必须做；时间轴 2022→2026 每年一段（Orca、FlashAttention、GPTQ、投机解码、Hopper FP8；分页、GQA、AWQ、RadixAttention、Splitwise；分块 prefill、PD 分离、MLA、Mooncake、CP、大 EP、o1、MTP；R1、开源周、EAGLE-3、DSA、DCP/PCP、NVFP4），2026 右端菱形只留问号（5.1 倍第十五节揭晓）；两股外力那张图三格；十一环表逐环走「卡在哪 → 省多少（对谁）→ 又冒出什么」，念完「不能乘」；V3 的 6,710 亿／370 亿与 AI Index；双引擎按图上的点走＋分工＋共用货架；完整时间线补图上没有的行；0.2 请求一生三行、住在哪／多大／跟长度成正比；逐层图（187＋396 MB、KV 一万字 11.5 MB／128K 151 MB、写 1,152 B、传 7,168 维、前三层稠密、MoE 8＋1、输出层 0.93 GB、合计约 37 GB）；几人同时 decode；立住「搬一趟」那一句＋地图三根杠杆和各节；词表按组过一遍；出场角色'),
+    ('零　开场', 29, '不能', '其他引擎落点（TensorRT-LLM、Dynamo-Triton、TGI 维护、端侧）；⭐ 开场两道题必须做；时间轴 2022→2026 每年一段（Orca、FlashAttention、GPTQ、投机解码、Hopper FP8；分页、GQA、AWQ、RadixAttention、Splitwise；分块 prefill、PD 分离、MLA、Mooncake、CP、大 EP、o1、MTP；R1、开源周、EAGLE-3、DSA、DCP/PCP、NVFP4），2026 右端菱形只留问号（5.1 倍第十五节揭晓）；两股外力那张图三格；十一环表逐环走「卡在哪 → 省多少（对谁）→ 又冒出什么」，念完「不能乘」；V3 的 6,710 亿／370 亿与 AI Index；双引擎按图上的点走＋分工＋共用货架；完整时间线补图上没有的行；0.2 请求一生三行、住在哪／多大／跟长度成正比；逐层图（187＋396 MB、KV 一万字 11.5 MB／128K 151 MB、写 1,152 B、传 7,168 维、前三层稠密、MoE 8＋1、输出层 0.93 GB、合计约 37 GB）；几人同时 decode；立住「搬一趟」那一句＋地图三根杠杆和各节；词表按组过一遍；出场角色'),
     ('一　两个阶段', 11, '不能', '⭐ 训练／prefill／decode 对比表逐行；1.1 屋脊点 313、强度 2M÷2＝M、三个绿点 1／63／239、约 343 人过线、prefill 4K 远过线；揭晓第二题（5.02 毫秒对 0.016 毫秒、0.32%＝1/313、W8A8、理想下限）；1.2 三组条（1 人、64 人 9.14 GB 与 87% 的来历、256 人 2.62 GB 与 KV 78%、128K 每字 9.21 GB）；MoE 拆散 batch（239 对 8、1/32、差 30 倍）；带走一句与第三到六节的去向'),
     ('二　校准尺子', 13, '可压到 12', '⭐ 开头 5,270 对 11,880 的关子；四个时间指标（TTFT 含排队、86 ms 对 7,756 ms；TPOT 公式与 1000÷TPOT；ITL 与 p99；NIM 与 vLLM 定义不同）；曲线三点 68→173、50 档上 2,200 → 11,200 必须讲（第十五节要回扣）、224 人、本仓库 9,168 @ 17 不可直比；goodput；四把尺子逐根（16＋48 卡、实心与虚线、36＝约 9×4）；chip 与 device；四个坑（峰值 13%、预热 2.05 倍、负载 54%、温度、闭环 13%）；成本式子与 DeepSeek 线上数；五样口径；考考自己'),
 ]
