@@ -11482,12 +11482,38 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
         el = el.nextElementSibling;
       }
       if (!grp.length) return;
+      // ⛔ 2026-10-18 现场原话：「这个按钮点了以后也没有什么反应……是不是冗余的？」
+      //   按钮其实生效了，但 0.2 这类小节**开头是一张大图**，藏起来的字全在图下面，
+      //   离按钮八百像素，屏幕上什么都没变。⭐ 两处补：
+      //   ① 按钮上写明藏了多少，点之前就知道它不是空的；
+      //   ② 点开后，第一处冒出来的字要是不在屏幕里，滚过去给人看。
+      var nTxt = 0, nCap = 0;
+      grp.forEach(function(x){
+        [x].concat([].slice.call(x.querySelectorAll(HID))).forEach(function(e){
+          // 收着的 <details> 里的字，点了这个按钮也看不见 ——&#160;不算。
+          if (!e.matches(HID) || (e.closest("details:not([open])") && !e.closest("summary"))) return;
+          if (e.tagName === "FIGCAPTION") nCap++; else if (!e.parentElement.closest(HID)) nTxt++;
+        });
+      });
+      // 一个看得见的都放不出来，按钮就是空按钮，不挂。
+      if (!nTxt && !nCap) return;
+      var what = [nTxt ? nTxt + " 段文字" : "", nCap ? nCap + " 条图注" : ""]
+                   .filter(Boolean).join("、");
       var b = document.createElement("button");
-      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ 展开这一小节";
+      var closed = "▸ 展开这一小节（" + what + "）";
+      b.type = "button"; b.className = "peekbtn"; b.textContent = closed;
       b.addEventListener("click", function(){
         var on = !grp[0].classList.contains("peek");
         grp.forEach(function(x){ x.classList.toggle("peek", on); });
-        b.textContent = on ? "▾ 收起这一小节" : "▸ 展开这一小节";
+        b.textContent = on ? "▾ 收起这一小节" : closed;
+        if (!on) return;
+        var first = null;
+        grp.some(function(x){
+          var c = x.matches(HID) ? x : x.querySelector(HID);
+          if (c && c.getClientRects().length){ first = c; return true; }
+        });
+        if (first && first.getBoundingClientRect().top > innerHeight * 0.85)
+          first.scrollIntoView({behavior: "smooth", block: "center"});
       });
       h.insertAdjacentElement("afterend", b);
     });
