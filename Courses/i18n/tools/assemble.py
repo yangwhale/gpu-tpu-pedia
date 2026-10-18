@@ -119,7 +119,7 @@ def english_only_links(s):
     s = re.sub(r'\s*<a class="lecbtn" href="(?![^"]*\.en\.html)[^"]*">.*?</a>', '', s, flags=re.S)
     # 版本切换条：只留当前这一版
     s = re.sub(r'(<nav class="famnav"[^>]*>)(.*?)(</nav>)',
-               lambda m: m.group(1) + ''.join(re.findall(r'<span class="famlab">.*?</span>|<span class="here".*?</span>', m.group(2), flags=re.S)) + m.group(3),
+               lambda m: m.group(1) + re.sub(r'(<span class="famlab">).*?(</span>)', r'\1English edition:\2', ''.join(re.findall(r'<span class="famlab">.*?</span>|<span class="here".*?</span>', m.group(2), flags=re.S)), count=1) + m.group(3),   # 其他版本都没英文，标签别再说「有四个版本」
                s, flags=re.S)
     # 页首「完整版 L300 →」这类整颗 chip 就是个跳转按钮，去掉链接后只剩一句指向不存在页面的话 —— 整颗删
     s = re.sub(r'<span class="chip">[^<]*<a href="topic-[^"]*?(?<!\.en)\.html">.*?</a></span>', '', s, flags=re.S)
@@ -178,6 +178,11 @@ def main(topic, d):
             return v if v is not None else default
         rules = ''.join('%s{font-size:%gpx}' % (sel, base(sel, d) + 1) for sel, d in
                         (('table', 14.5), ('th', 12), ('.tbl-note', 13), ('.chip', 13), ('figcaption', 15)))
+        # 表格里的代码（flag 名、配置键）不跟着放大：放大是为英文正文；代码串本来就宽，跟着放大会把列撑开（PAR10 专题二 R1）
+        _tb = base('table', 14.5)
+        _ce = re.findall(r'(?:^|[}\s,])code\s*(?:,[^{]*)?\{[^}]*?(?:font-size:\s*|font:\s*(?:\d{3}\s+)?)([\d.]+)em', css)   # 本页 code 的基准 em（专题二 font:600 .88em）
+        _ce = float(_ce[-1]) if _ce else 1.0
+        rules += 'table code{font-size:%.4fem}' % (_ce * _tb / (_tb + 1))
         # 英文表头大写加字距、不许换行，手机上会把关键列挤出屏幕（专题一并排审 10-17）；进度条标签不折行
         # ⭐ 等宽字体：中文页里这些类装的是汉字（落回无衬线），英文整串按等宽画，看着像代码、也更宽
         #    （作者 10-17：版式要一眼看去跟中文一样）。只改「装文字」的类；数字、公式、编号类保持等宽。
@@ -190,10 +195,11 @@ def main(topic, d):
             # 对内联 style 定过字号的标签同样生效（按等宽字体留的宽度足够装下）
             if h.get('fsa'): rules += '.svgsm,.svgtxt,.svglbl{font-size-adjust:%s}' % h['fsa']
         rules += '.figsrc>summary{font-family:'+LATIN.replace("'",'"')+'}'   # 出处折叠标题：中文落回无衬线，英文别显示成等宽
+        if '.msfrom' in css: rules += '.msfrom{white-space:nowrap}'   # 「— from the … Microscope」出处别拆成两行
         # 卡片小标题：中文 12px 粗体灰字读起来是「标题」；英文同样式会变成大写加字距的小标签，显得又轻又小（PAR10 专题一 R6）
         if re.search(r'\.card h4\s*\{[^}]*text-transform:\s*uppercase', css):
             rules += '.card h4{text-transform:none;letter-spacing:0;font-size:13px}'
-        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){th{white-space:normal;letter-spacing:0}.jstep span{font-size:9px}}'
+        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0}.jstep span{font-size:9px}}'
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
     def put(m):
