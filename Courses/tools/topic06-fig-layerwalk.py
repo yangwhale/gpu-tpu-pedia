@@ -90,7 +90,7 @@ def fig_layerwalk():
             ("第 61 层", "MoE", "moe"), ("输出层", "61 层走完", "out")]
     HEAD = 64
     PH = HEAD + sum(FULL if r[2] in ("dense", "moe") else OUTR if r[2] == "out" else SLIM for r in rows) + 12
-    py = f.panel(0, y0, W, PH, "decode 一步：同一个新 token 从上往下走", INK)
+    py = f.panel(0, y0, W, PH, "只有一个人 decode：他的新 token 从上往下走一步", INK)
 
     X0, X1, X2, X3, X4 = 20, 190, 770, 1030, 1200      # 列：层名 ／ 读权重 ／ 读 KV ／ 写 ／ 传与丢
     SC = 560 / 1000e6                                   # 1,000 MB 画 560 px（权重和 KV 同一比例）
