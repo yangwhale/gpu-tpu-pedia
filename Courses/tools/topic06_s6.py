@@ -71,7 +71,8 @@ __FIG_S6_BIGEP_NET__
   <ul>
     <li><b>DeepSeek 跑在普通 8 卡机器上</b>：机内 NVLink，全集群 InfiniBand 全互连（DeepEP 的测试机每卡一张 400 Gb 网卡）；decode 用 IBGDA，由 GPU 直接发起 RDMA，不经 CPU。</li>
     <li><b>开源栈写明的门槛</b>：llm-d 要求 InfiniBand 或 RoCE 全互连、GPU 发起 RDMA；vLLM 文档的排障一节专门列了 IBGDA 初始化失败。</li>
-    <li><b>少跨机器</b>：V3 训练时就限定每个 token 最多去 4 个节点，先过 IB 到目标节点，再走 NVLink 转发给机内各卡。</li>
+    <li><b>少跨机器</b>：V3 训练时就限定每个 token 最多去 4 个节点，先过 IB 到目标节点，再走 NVLink 转发给机内各卡；同一节点挑中几个专家，IB 上只走一份。共享专家每卡一份，本地算，不用发。</li>
+    <li><b>量不大，难在延迟</b>：一个 token 一步最多发收约 172 KB × 58 层 ≈ 10 MB（本课推导），比它 4K 上下文一步要读的 288 MB KV 小一个多量级。难的是每层都要等一去一回，出一个字要等 116 次。</li>
     <li><b>NVL72 换来的是余量</b>：72 张卡一个 NVLink 域，SGLang 说延迟低到可以关掉双微批（6.11）；后续测试 decode 用 48 张卡，比一个域的 72 张还少。</li>
   </ul>
   <p><b>TPU</b>：Ironwood 64 颗一组，用 ICI 直连成 3D 环面，每颗只连 6 个邻居，远处的芯片要经中间芯片转发（本课推导）；组之间靠光交换拼成最多 9,216 颗的系统，更大就得走 DCN。MaxText 有 <code>dcn_expert_parallelism</code> 这个配置项，但跨 DCN 推荐的只有数据并行。</p>
@@ -93,6 +94,10 @@ __FIG_S6_BIGEP_NET__
     <li><b>prefill 最赚</b>：SGLang 实测，每卡 token 数相同时快 27%～35%；拆开还省显存，每卡能塞 16,384 个 token，比不拆时调到最好再快 40.5%。</li>
     <li><b>decode 看批多大</b>：每卡 256 个 token 时快 25.5%，32 个时反而慢 27%，半批太小，kernel 吃不饱。vLLM 默认一批纯 decode 不超过 32 个 token 就不拆。</li>
     <li><b>decode 拆得更细</b>：各步长短不一，DeepSeek 把注意力再切成两段，排成 5 段流水。</li>
+    <li><b>各自仍是串行</b>：一个微批内部，路由、分发、专家、汇回一环扣一环。重叠靠两个微批错开半拍，错着就跨了层：A 还在收第 N 层，B 已在算第 N＋1 层的注意力。</li>
+    <li><b>decode 的通信不占计算单元</b>：DeepSeek 的 profile 说明，RDMA 发出后 SM 全部还给计算，算完再等通信收尾；prefill 的通信要占 SM。</li>
+    <li><b>权重不多存，但多读一遍</b>：两个微批用同一份常驻 HBM 的权重，可各自做矩阵乘时都要把这层权重流一遍，一步读两次（本课推导）。EP144 每卡每层专家 88 MB，读两遍不贵；每卡 32 个专家的 1.41 GB 就肉疼（6.8）。</li>
+    <li><b>单批也能跨层藏</b>：本层在算时，先把下一层权重往片上搬。这不靠拆批，14.7 的 MoE megakernel 就跨层预取。</li>
   </ul>
 
   <h3 id="s6-12">6.12　EPLB：热门专家多备几份</h3>
