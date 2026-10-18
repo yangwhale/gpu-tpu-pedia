@@ -2,9 +2,9 @@
 """专题六 · 第五节「单卡里的两块硬骨头：decode 注意力与 MoE」。图全在 topic06-fig-decode.py。"""
 
 BODY = '''
-  <p class="lead">座位坐满后，权重一趟已分给几百人，每一步本身却还慢。一张卡上的 decode 有两块最难啃：注意力读的是每个人自己的 KV（5.1–5.5），MoE 的每个专家只分到几行（5.6）。<b>两块都是搬运问题。</b>最后补一条小 AllReduce（把各卡的部分和加起来再发回每张卡，5.7），它卡的是延迟。</p>
+  <p class="lead">座位坐满后，权重一趟已分给几百人，每一步本身却还慢。一张卡上的 decode 有两块最难啃：注意力读的是每个人自己的 KV（5.1、5.2），MoE 的每个专家只分到几行（5.2）。<b>两块都是搬运问题。</b>最后补一条小 AllReduce（把各卡的部分和加起来再发回每张卡，5.3），它卡的是延迟。</p>
 
-  <h3 id="s5-1">5.1　注意力：攒 batch 救不了它</h3>
+  <h3 id="s5-1">5.1　注意力 kernel：攒 batch 救不了，只能把搬运做顺</h3>
   <p>长上下文除了占座位（第四节），每人每步要读的 KV 也更长，且各读各的，攒 batch 摊不薄。</p>
   <p>decode 注意力每读 1 字节只做 G 次运算（G ＝ 几个查询头共用一个 KV 头），推导见<a href="topic-03.html#s3-1">专题三 §3.1</a>。Llama-3.1-70B 64 个查询头配 8 个 KV 头，G＝8，v7 的屋脊点 313 是它的近 40 倍。</p>
 __FIG_S5_AMORTIZE__
@@ -12,13 +12,11 @@ __FIG_S5_AMORTIZE__
     Flash-Decoding（斯坦福 CRFM 博客，2023-10）把每条序列的 KV 切成几段同时读，最后合并（<a href="#s7-1">7.1</a> 有图）。</p>
   <p>名字借自 FlashAttention（0.1）。博客在 CodeLlama-34B 单请求上报，序列很长时 Flash-Decoding 最多是旧实现的 8 倍。</p>
 
-  <h3 id="s5-2">5.2　一个 kernel 装下 prefill 和 decode</h3>
-  <p>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention，2025 年进 vLLM 的 TPU 后端）把两者放进同一个注意力 kernel（arXiv 2604.15464 §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
+  <p><b>一个 kernel 装下 prefill 和 decode。</b>chunked prefill 让一步里混着 prefill 和 decode。RPA（Ragged Paged Attention，2025 年进 vLLM 的 TPU 后端）把两者放进同一个注意力 kernel（arXiv 2604.15464 §3.4–3.5）。GPU 上做同一件事的是 FlashInfer（MLSys 2025），已是 SGLang、vLLM 的注意力后端之一。</p>
 __FIG_S5_RPA__
   <p>RPA 在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。图右数据出自 Google 开发者博客的公开调优。</p>
 
-  <h3 id="s5-3">5.3　KV 一页页怎么搬上芯片</h3>
-  <p>MLP 和专家那边，一批里的 token 不分是谁的，都是矩阵的一行，权重搬一次全员算完。注意力不行：每条序列的 KV 是它自己的私货，并发 512 就是 512 份，谁也替不了谁。所以注意力 kernel 能做的只剩一件：<b>每个字节只搬一次，搬的时候别让计算单元等。</b></p>
+  <p><b>KV 一页页怎么搬上芯片。</b>MLP 和专家那边，一批里的 token 不分是谁的，都是矩阵的一行，权重搬一次全员算完。注意力不行：每条序列的 KV 是它自己的私货，并发 512 就是 512 份，谁也替不了谁。所以注意力 kernel 能做的只剩一件：<b>每个字节只搬一次，搬的时候别让计算单元等。</b></p>
 __FIG_S5_KVLOAD__
 <figure class="fbox fwide" id="anim-kvload">
 <video src="media/topic06-kvload.mp4" autoplay loop muted playsinline
@@ -33,26 +31,24 @@ __FIG_S5_KVLOAD__
     <li><b>一块喂一组头。</b>同组的 G 个查询头摞成 G 行，对同一块 K、V 算。KV 搬上来一次，用 G 次（§3.1.2）。</li>
     <li><b>新 KV 顺路写回。</b>本步新算的 K、V 拼进同一块参与计算，同时异步写回页池，不另起一趟（§3.3）。</li>
   </ul>
-  <p>拿并发 512、每条 2K 到 8K 算一笔：平均 5K 的话，decode 一步每层要把约 256 万个 token 的 KV 过一遍（本课推导：512 × 5,000）。这个量躲不掉，能抠的是每趟搬运的效率。每趟 DMA 都有起步开销，所以块要够大：页调大（5.2 图右，428 → 283 µs），K 和 V 并进一趟（5.4，论文 §3.1.3）。</p>
+  <p>拿并发 512、每条 2K 到 8K 算一笔：平均 5K 的话，decode 一步每层要把约 256 万个 token 的 KV 过一遍（本课推导：512 × 5,000）。这个量躲不掉，能抠的是每趟搬运的效率。每趟 DMA 都有起步开销，所以块要够大：页调大（5.1 图右，428 → 283 µs），K 和 V 并进一趟（5.1，论文 §3.1.3）。</p>
   <p>prefill 是另一回事：一块查询有几百行，同一块 KV 被这么多行共用，每读一字节的运算跟着多出几百倍（本课推导：G × 查询行数），瓶颈回到算力，走的是 FlashAttention 的路数。所以 RPA 给 decode 和 prefill 各调一套块大小：decode 调到吃满带宽，prefill 调到矩阵单元不空（§3.5）。</p>
 
-  <h3 id="s5-4">5.4　布局：窄维被补成整块</h3>
-  <p>TPU 的显存按 tile（图里的「标准箱」）存：最内层（内存里连续排的那一维）和次内层都要补齐，fp8 的次内层补到 32 行。</p>
+  <p><b>布局：窄维被补成整块。</b>TPU 的显存按 tile（图里的「标准箱」）存：最内层（内存里连续排的那一维）和次内层都要补齐，fp8 的次内层补到 32 行。</p>
   <p>KV 头只有 1–2 个，若头这一维落在这两维上，就可能被补成整块，多出的全是空位。</p>
 __FIG_S5_TILE__
   <p>RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（论文 3.1 节）。</p>
 
-  <h3 id="s5-5">5.5　V3 的 MLA：一个阶段一套算法</h3>
+  <h3 id="s5-2">5.2　V3 专用：MLA 一个阶段一套算法，MoE 全算比排序便宜</h3>
   <p><a href="topic-03.html#s5-2">专题三 §5.2</a> 推过「吸收」：把投影并进查询，所有头直接对同一条压缩后的潜向量算，K/V 不展开。那是 decode 用的，prefill 呢？</p>
 __FIG_S5_MLA__
   <p>decode 缺带宽，用吸收；prefill 缺算力，要的是少算。每个头对每个历史 token，吸收要和 576 维的潜向量做点积、再按其中 512 维加权求和，共 1,088 次乘加；展开后每头 K 192 维、V 128 维，共 320 次，吸收是展开的 3.4 倍（V3 config 推导）。展开多读的字节，prefill 有富余带宽兜着。</p>
 
-  <h3 id="s5-6">5.6　decode 的 MoE：全算比排序便宜</h3>
-  <p>1.4 算过，decode 时每个专家平均只分到几行；与其按专家把 token 排序分组，不如让所有 token 都过一遍，没选中的乘 0。</p>
+  <p><b>decode 的 MoE：全算比排序便宜。</b>1.2 算过，decode 时每个专家平均只分到几行；与其按专家把 token 排序分组，不如让所有 token 都过一遍，没选中的乘 0。</p>
 __FIG_S5_DENSE__
   <p>搬行本身也能这样换：tpu-inference 2026 年 5 月合入的一项改动，在 batch 小时把排序和还原换成「one-hot 矩阵 × 隐状态」，一次规整的矩阵乘代替按下标取行。Qwen3.5 并发 64 实测总吞吐 +14.5%（1K 进 8K 出）、+7.3%（8K 进 1K 出）；合入后默认关，要用环境变量开（出处见第十六节台账）。</p>
 
-  <h3 id="s5-7">5.7　小 AllReduce 是延迟问题</h3>
+  <h3 id="s5-3">5.3　小 AllReduce 是延迟问题</h3>
 __FIG_S5_ALLREDUCE__
   <p>消息小，时间几乎全是固定延迟，加带宽救不回来（arXiv 2607.16100）。</p>
 

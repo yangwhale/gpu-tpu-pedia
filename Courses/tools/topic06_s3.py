@@ -15,7 +15,7 @@ __FIG_S3_GANTT__
 <video src="media/topic06-contbatch.mp4" autoplay loop muted playsinline
        aria-label="静态批与连续批动画。标题：同样 4 个槽位、同一串请求：两种排法。上下两组各 4 个槽位，标着槽 1 到槽 4；上组叫「静态批：凑满一批，等最长的做完」，下组叫「连续批：每一步都重新排，谁做完谁让位」。每一列是一步，每个请求一种颜色，字母 A 到 O 标在它的第一格；灰格是槽位空转。一条黄色竖线随时间往右走，右边两个计数器写「做完几个」，底下写「已走几步」，右下角写「请求长度是示意」。字幕依次是：16 个请求排队，长短不一；每一列是一步 decode，每一步都要搬一趟权重。上面：短的早做完了，槽位也得空等最长的那个（灰格＝这一趟白搬）。下面：谁做完，下一步就换排队的下一个进来，槽位一格不空。最后：同样 15 步：静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。画面复位。"></video>
 <figcaption>动画里队列一直不空，看两组各做完几个。
-  <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill，3.3 那支补上。）</span></figcaption></figure>
+  <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill，3.2 那支补上。）</span></figcaption></figure>
   <p>Orca 是 2022 年 OSDI 上的一篇论文，也是论文里做的那套服务系统。今天没人直接跑它，跑的是它的招：论文叫迭代级调度，业界后来通称连续批（continuous batching），vLLM、SGLang 都按步调度。同延迟下，吞吐是 FasterTransformer（NVIDIA 早年的推理库）静态批的 36.9 倍（GPT-3 175B）。</p>
   <ul>
     <li><b>原来卡在哪：</b>老引擎对外只有「整批跑完」一个接口，调度器看不见中间的步；一批摞成「人数 × 最长长度」的方块，短的补零，中途换不掉一行。</li>
@@ -24,7 +24,7 @@ __FIG_S3_GANTT__
     <li><b>挂不同 LoRA 的人也能拼：</b>基座权重照样共享一趟，只把各人的小矩阵另算。S-LoRA（2023）同时服务几千个适配器，吞吐最多是 HF PEFT、vLLM 简单做法的 4 倍；vLLM 用 <code>--enable-lora</code>、<code>--max-loras</code> 开。</li>
   </ul>
 
-  <h3 id="s3-2">3.2　新人进门那一步：chunked prefill</h3>
+  <h3 id="s3-2">3.2　新人进门：chunked prefill，一步里装了什么</h3>
 __FIG_S3_CHUNK__
   <p>新请求的长 prompt 一口吞下，那一步就特别长，正在出字的人都卡一下。</p>
   <p>Sarathi（arXiv 2308.16369）和 Sarathi-Serve（arXiv 2403.02310）把 prompt 切成小块，每步只带一块和 decode 拼着走，哪步都不会被拉长；延迟达标时能接的请求是 vLLM 的 2.6–3.7 倍。
@@ -37,7 +37,7 @@ __FIG_S3_CHUNK__
     <li><b>块不能太小，代价在权重。</b>每走一步，权重都要从 HBM 读一遍。H100 每字节带宽配约 300 次运算（989 TFLOPS ÷ 3.35 TB/s），bf16 下一步至少约 300 个 token 矩阵乘才喂得饱（本课推导）。MoE 更苛刻：V3 每个 token 只去 256 个专家里的 8 个，要每个专家凑够 300 个，一步得有 9 千多个 token。默认预算落在 8K–16K，与此吻合。</li>
   </ul>
 
-  <h3 id="s3-3">3.3　一步里装了什么：新人怎么接上</h3>
+  <p><b>一步里装了什么：新人怎么接上。</b></p>
 __FIG_S3_STEPMIX__
 <figure class="fbox fwide" id="anim-stepmix">
 <video src="media/topic06-stepmix.mp4" autoplay loop muted playsinline
@@ -47,32 +47,32 @@ __FIG_S3_STEPMIX__
   <p>一步就是一趟前向。每步开头调度器排一次：车上的人各占一格，剩下的格子按排队顺序切给新 prompt（3.2）。拼好的这一行一起乘权重，只有注意力各读各的 KV（<a href="#s3-1">3.1</a> 的选择性批处理）。</p>
   <ul>
     <li><b>新人不用「等着上车」。</b>prompt 最后一块算完那一步，前向末尾已经得到下一个字的概率，首字当步采样。下一步它就是一格普通 decode，中间没有停靠站。</li>
-    <li><b>真要等，是 KV 池满了。</b>格子有剩、KV 装不下，新人只能在门口排；连车上的人都装不下，就按 3.6 请人下车。</li>
+    <li><b>真要等，是 KV 池满了。</b>格子有剩、KV 装不下，新人只能在门口排；连车上的人都装不下，就按 3.4 请人下车。</li>
     <li><b>只有 PD 分离才有交接。</b>prefill 机器出了首字，KV 要整段搬到 decode 机器，搬完才接着出字（第八节）。混部时 KV 本来就在同一个池里，不用搬。</li>
     <li><b>门口一步只进一两个，车上怎么坐满三百人？</b>prefill 一个人只占一步，decode 一个人要坐几百上千步。设每人输出 1,000 字，要让车上一直有 300 人，平均每 3 步补进 1 人就够；8K 的预算一步能进两条 4K。门口不是瓶颈，KV 池才是（下一条）。</li>
     <li><b>预算里一格算一格，搬的 KV 不一样。</b>矩阵乘那部分，每格的运算一样、权重共用一趟，decode 搭车几乎白搭。注意力那部分不一样：prefill 的 KV 块读上芯片，一组一百多个 query 一起用（3.2）；decode 一块只喂一个人。两条 4K prefill 加 300 人 4K 上下文的 decode，同一步里前者读约 9.5 GB 的 KV，后者约 86 GB；摊到每格差约 250 倍（本课推导）。预算是调度旋钮，不是耗时模型。</li>
     <li><b>混着跑能凑够屋脊点，吐字还是看 decode 人数。</b>1.1 那约 343 行，数的是这一步乘权重的总行数，prefill 块的几千行也算：decode 只有几十人，这一步也过线。可 prefill 那几千行不出字，每步出几个字还是车上几个人；decode 的注意力照样卡带宽。</li>
     <li><b>引擎不全都混。</b>vLLM V1 照图里这样混。SGLang 默认一步只跑一种，要么一块 prefill，要么全员 decode，开 <code>--enable-mixed-chunk</code> 才混。不混也不用等：prefill 那步照样出首字，下一个 decode 步就带上它。</li>
-    <li><b>TPU 上同一套规则。</b>长短不一的 prefill 块和 decode 进同一个注意力 kernel（RPA，<a href="#s5-2">5.2</a>）；这一步的格数也要落在预编译的档位上，差的补空（3.4 末尾）。</li>
+    <li><b>TPU 上同一套规则。</b>长短不一的 prefill 块和 decode 进同一个注意力 kernel（RPA，<a href="#s5-1">5.1</a>）；这一步的格数也要落在预编译的档位上，差的补空（3.3 末尾）。</li>
   </ul>
 
-  <h3 id="s3-4">3.4　槽位满了以后</h3>
+  <h3 id="s3-3">3.3　槽位满了以后</h3>
 __FIG_S3_CONC__
   <p>槽位就是 KV 池装得下几个人。Little 定律（见词表）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（第六节）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
     客户端并发 8,400 路，进 decode 批的只有约一半，其余在 prefill 端排队。</p>
   <details class="foldfig"><summary><b>Little 定律核一遍</b>：批里到底几个人？</summary>
   <p>9,032 × 8 张 decode 卡 × 0.060 s 反推 decode 批里约 4,335 个请求，每卡约 542。</p></details>
-  <p>槽位也不白给。同一组实测把两个 KV 池的隔板挪一下（4.4），每卡多装 13% 的人（886 → 999），端到端吞吐只多 0.8%，TPOT 从 77.7 拖到 85.3 ms：人多了，每步就长了。</p>
+  <p>槽位也不白给。同一组实测把两个 KV 池的隔板挪一下（4.2），每卡多装 13% 的人（886 → 999），端到端吞吐只多 0.8%，TPOT 从 77.7 拖到 85.3 ms：人多了，每步就长了。</p>
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
-    XLA 按静态形状编译，batch 大小也是形状：人数不在预编译的档位上就补到最近一档，补的行照样计算（<a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>；选档见 <a href="#s14-2">14.2</a>）。</div>
+    XLA 按静态形状编译，batch 大小也是形状：人数不在预编译的档位上就补到最近一档，补的行照样计算（<a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>；选档见 <a href="#s14-1">14.1</a>）。</div>
 
-  <h3 id="s3-5">3.5　CPU 那几毫秒也要藏起来</h3>
+  <p><b>CPU 那几毫秒也要藏起来。</b></p>
 __FIG_S3_OVERLAP__
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
   <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐是原来的 1.1 倍。2025 年 vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是分词、回传等 CPU 活挪到了别的进程。</p>
 
-  <h3 id="s3-6">3.6　显存不够时踢谁</h3>
+  <h3 id="s3-4">3.4　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
   <p>vLLM V1 默认重算，文档说 V1 里重算开销更低。</p>
 
@@ -83,7 +83,7 @@ __FIG_S3_OVERLAP__
 
   <details class="foldfig"><summary><b>考考自己</b>：TPOT 稳定在 50 ms，想让每张卡出 10,000 tok/s，每张卡的批里至少要同时坐多少人？显存只装得下 300 人时会怎样？</summary>
   <p>10,000 × 0.05 ＝ 500 人。只装得下 300 人，吞吐钉在约 300 × 1000 ÷ 50 ＝ 6,000；
-    要么少搬（<a href="#s12-kv">第十二节末尾的 FP8 KV</a> 让每条 KV 约减到 61%，含索引键），要么换个交互档。</p></details>
+    要么少搬（<a href="#s12-4">第十二节末尾的 FP8 KV</a> 让每条 KV 约减到 61%，含索引键），要么换个交互档。</p></details>
 '''
 
 FIGS = {

@@ -9,15 +9,14 @@ BODY = '''
   <p class="lead">拆开以后多出一个旋钮：P、D 各配几台。在它前面还有一问：这个负载该不该拆。
     <b>都要拿自己的负载去量，别照搬别人的配比。</b></p>
 
-  <h3 id="s9-1">9.1　回顾：配比从哪来</h3>
+  <h3 id="s9-1">9.1　配比：先算一个起点</h3>
   <p><a href="topic-05.html#s6-3">专题五 §6.3</a> 用 DistServe 的例子讲过：两边按各自上限配。</p>
 __FIG_S9_RATIO_T5__
   <p>真实部署要把「一张接几个」换成量出来的吞吐。</p>
 
-  <h3 id="s9-2">9.2　配比公式：先算一个起点</h3>
-  <p><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b></p>
+  <p><b>配比公式：先算一个起点。</b><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b></p>
   <table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">DeepSeek-V4-Pro，SGLang，GB300，8K 进 1K 出，每张 decode 卡 11,200 output tok/s 的官方点（分母按 output ÷ decode 卡读，见 2.2；若是全部卡，此表不成立）；推导见 gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:1082–1091。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">DeepSeek-V4-Pro，SGLang，GB300，8K 进 1K 出，每张 decode 卡 11,200 output tok/s 的官方点（分母按 output ÷ decode 卡读，见 2.1；若是全部卡，此表不成立）；推导见 gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:1082–1091。</caption>
     <tr><th>步骤</th><th>算式</th><th>结果</th></tr>
     <tr><td>decode 每秒完成</td><td>8 卡 × 11,200 ÷ 1,024 个输出 token</td><td>约 87.5 个请求</td></tr>
     <tr><td>prefill 要供的料</td><td>87.5 × 8,192 个输入 token</td><td>约 71.7 万 tok/s</td></tr>
@@ -32,8 +31,7 @@ __FIG_S9_RATIO_T5__
   </ul>
   <p>公式定起点，上下扫，取每卡输出不再涨的那一档。</p>
 
-  <h3 id="s9-3">9.3　多一台 prefill，换来的是首字</h3>
-  <p>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上加一台 prefill。</p>
+  <p><b>多一台 prefill，换来的是首字。</b>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上加一台 prefill。</p>
 __FIG_S9_2P1D__
   <p><b>同一组数，按每卡吞吐看是亏，按 TTFT 看是赚。</b></p>
   <ul>
@@ -41,24 +39,23 @@ __FIG_S9_2P1D__
     <li><b>为什么吞吐不涨</b>：固定并发压测下每个请求从发出到收完约 65 s（报告的平均端到端延迟），平均首字省下的 0.67 s 摊进去几乎看不出。</li>
   </ul>
 
-  <h3 id="s9-4">9.4　换个分母，10.4 倍变 2.2 倍</h3>
+  <h3 id="s9-2">9.2　换个分母，不拆反而更好的时候</h3>
   <p>vLLM 跑 V4-Pro，decode 固定 8 张卡，prefill 从 1 个加到 14 个。</p>
 __FIG_S9_SWEEP__
-  <p>蓝线只除 decode 卡，是不少 PD 报告的默认口径（2.3）；橙线把 prefill 的卡也算进分母，12 个以后就不涨了。曲线是 2026-07-24 的历史实测，只看趋势。</p>
+  <p>蓝线只除 decode 卡，是不少 PD 报告的默认口径（2.1）；橙线把 prefill 的卡也算进分母，12 个以后就不涨了。曲线是 2026-07-24 的历史实测，只看趋势。</p>
 
-  <h3 id="s9-5">9.5　不拆反而更好的时候</h3>
-  <p><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b>图是 MiMo-V2-Flash 在 TPU 上的三种摆法：</p>
+  <p><b>不拆反而更好的时候。</b><b>prefill 和 decode 本来没怎么打架时，拆开是白付代价。</b>图是 MiMo-V2-Flash 在 TPU 上的三种摆法：</p>
 __FIG_S9_SPLIT__
   <p>Qwen3-Coder（两台 v7x-8，1K 进 1K 出）单并发拆成 1P1D，首字中位数 95 → 281 ms，输出只多 12%：单并发时两段本不抢资源。</p>
   <details class="foldfig"><summary><b>出处与口径</b>：两组 TPU 例子</summary>
   <p>MiMo：tpu/sglang-jax/mimo/README.md:8–12、81–88，每 pod 4 颗芯片，request_rate=inf，total tok/s 含输入。README 写 1P1D 比不拆高「约 6.8%」，按表算是 6.7%；2P1D 每 pod 5.10K 对不拆的 6.39K（本课推导）。</p>
   <p>Qwen3-Coder：tpu/tpu-inference/Qwen3-Coder-480B/README.md:1005–1021，TTFT 与 TPOT 都是中位数。两组都是单点测量。</p></details>
 
-  <h3 id="s9-6">9.6　决策树：三个问题</h3>
-  <p>答「否」就停。分块 prefill 见第三节，KV 薄不薄见 8.8。</p>
+  <h3 id="s9-3">9.3　决策树：三个问题</h3>
+  <p>答「否」就停。分块 prefill 见第三节，KV 薄不薄见 8.4。</p>
 __FIG_S9_DECIDE__
 
-  <h3 id="s9-7">9.7　AFD：再拆一层</h3>
+  <h3 id="s9-4">9.4　再拆一层：AFD 与 EPD</h3>
   <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，多台注意力机喂同一批专家，专家那边就凑得出大 batch。</p>
 __FIG_S9_AFD_T5__
   <p>字节 2025 年的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
@@ -71,15 +68,13 @@ __FIG_S9_AFD_ASCEND__
   <details class="foldfig"><summary><b>出处</b>：AFD 的几个数</summary>
   <p>MegaScale-Infer：arXiv 2504.02263。Step-3：arXiv 2507.19427（4K 上下文、FP8、不开 MTP）。vLLM AFD 插件：vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin；RFC #22799 于 2026-05-31 被机器人关闭。</p></details>
 
-  <h3 id="s9-8">9.8　EPD：多模态把编码也拆出去</h3>
-  <p>多模态模型在 prefill 前要把图片、视频编码成 token，图一多就和 prefill 抢资源。</p>
+  <p><b>EPD：多模态把编码也拆出去。</b>多模态模型在 prefill 前要把图片、视频编码成 token，图一多就和 prefill 抢资源。</p>
   <ul>
     <li><b>做法</b>：编码器单独一批机器，视觉 token 交给 prefill，KV 再交给 decode。</li>
     <li><b>论文的数</b>：arXiv 2501.05460 报告峰值显存最多降到 1/15，batch 最多是原来的 22 倍，TTFT 最多降 71%。</li>
     <li><b>什么时候值得</b>：请求带很多图或大图时；纯文本用不上（专题五 §6.6）。</li>
   </ul>
 
-  <h3 id="s9-9">9.9　落点</h3>
   <div class="note ok"><span class="t">回到主线</span>
     AFD 让每个专家一趟分到更多 token。拆不拆、怎么配，看负载，不看潮流。
     留下的问题：DEP、PD、AFD 摆在一起，先定哪种拓扑、再调哪些参数（第十节）？</div>

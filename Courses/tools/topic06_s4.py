@@ -6,9 +6,9 @@ BODY = '''
     <b>KV 池装得下几条序列，decode 每一趟搬运最多就分给几个人。</b>
     2023 年 vLLM 的 PagedAttention 起，几招都在同样的显存里多装人、少重算。</p>
 
-  <h3 id="s4-1">4.1　一个 token 留下多少字节：四种记法</h3>
+  <h3 id="s4-1">4.1　一个 token 留下多少字节，batch 就能坐多少人</h3>
   <table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 见 12.8）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 见 12.4）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
     <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
     <tr><td>GQA（2023）</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
@@ -16,15 +16,14 @@ BODY = '''
     <tr><td>线性注意力（2020）</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
   </table>
   <p>GQA 省下的不只是字节。原论文（2023）在 TPU v4 上把 T5-XXL 改成 8 组：每条样本的解码时间从 1.51 降到 0.28，约快 5.4 倍（本课推导，1.51 ÷ 0.28）；平均分 47.1，原版 MHA 是 47.2。所有头共用一组的 MQA 是 0.24、46.6，快一点，掉分多。</p>
-  <p>DeepSeek 自家这条线后来又改了三代。V3.2 的 DSA 存的一点没少，省的是读：先用小打分器扫一遍历史，只读挑中的。V3.2 报告说架构上只改了这一处，基准和改之前的 V3.1-Terminus 基本持平（MMLU-Pro 都是 85.0，HLE 21.7 对 19.8）；省多少只画了按租卡价算的成本曲线，没给比值。V4 存和读都改：沿 token 方向把相邻几个 token 并成一条，另开滑窗池原样留最近一段（分预算见 4.4）；其中压得轻的层还照 V3.2 只挑一部分读。</p>
+  <p>DeepSeek 自家这条线后来又改了三代。V3.2 的 DSA 存的一点没少，省的是读：先用小打分器扫一遍历史，只读挑中的。V3.2 报告说架构上只改了这一处，基准和改之前的 V3.1-Terminus 基本持平（MMLU-Pro 都是 85.0，HLE 21.7 对 19.8）；省多少只画了按租卡价算的成本曲线，没给比值。V4 存和读都改：沿 token 方向把相邻几个 token 并成一条，另开滑窗池原样留最近一段（分预算见 4.2）；其中压得轻的层还照 V3.2 只挑一部分读。</p>
 __FIG_S4_LINEAGE__
 
-  <h3 id="s4-2">4.2　batch 上限 ＝ KV 池 ÷ 每条序列的 KV</h3>
-  <p>一颗 v7 芯片扣掉激活值和分到的那份 V3 权重，剩下的给 KV（拆法见图，口径同 10.5）。每条序列的 KV 整条住一个 device（注意力走数据并行，见第六节），所以池子除以每条的 KV 就是装几条。权重这里按全切粗算；实际非专家权重每个 device 各存一份，池子更小。</p>
+  <p><b>batch 上限 ＝ KV 池 ÷ 每条序列的 KV。</b>一颗 v7 芯片扣掉激活值和分到的那份 V3 权重，剩下的给 KV（拆法见图，口径同 10.2）。每条序列的 KV 整条住一个 device（注意力走数据并行，见第六节），所以池子除以每条的 KV 就是装几条。权重这里按全切粗算；实际非专家权重每个 device 各存一份，池子更小。</p>
 __FIG_S4_BATCH__
   <p>上下文越长人越少，一趟搬运分到的 token 越少：这是长上下文贵的第一个原因。</p>
 
-  <h3 id="s4-3">4.3　PagedAttention：像操作系统那样分页</h3>
+  <h3 id="s4-2">4.2　PagedAttention 分页，混合模型分两个池</h3>
   <p>早先按最大长度给每条序列预留一整段连续显存。PagedAttention 把 KV 切成固定大小的块，用页表记每块住在哪。</p>
 __FIG_S4_PAGED__
   <ul>
@@ -36,14 +35,13 @@ __FIG_S4_PAGED__
 <figcaption>盯住块 2 和块 5：请求 2 一还，请求 4 就住进去；再看同一个请求的块散在各处。
   <span class="sub">（18 秒无声循环，Manim 渲染。块大小、块数、请求长度都是示意。）</span></figcaption></figure>
 
-  <h3 id="s4-4">4.4　混合模型有两个池，预算要分</h3>
-  <p>SGLang 让 V4 两个池共用一份显存预算，用 <code>--swa-full-tokens-ratio</code> 定隔板。滑窗池每条用量封顶，全长池随输入变长一直涨，隔板因此跟着输入长度挪。</p>
+  <p><b>混合模型有两个池，预算要分。</b>SGLang 让 V4 两个池共用一份显存预算，用 <code>--swa-full-tokens-ratio</code> 定隔板。滑窗池每条用量封顶，全长池随输入变长一直涨，隔板因此跟着输入长度挪。</p>
 __FIG_S4_POOL__
-  <p>两边一起满之后再多装人，吞吐几乎不涨（3.4）：瓶颈从装不下换成了算不动。</p>
+  <p>两边一起满之后再多装人，吞吐几乎不涨（3.3）：瓶颈从装不下换成了算不动。</p>
 
-  <p>池子算错不一定报错：tpu-inference 跑 Qwen3.5 时块编号池大了约 3.5 倍，越界写入被静默钳回末尾，输出乱码（<a href="#s14-3">14.3</a>）。</p>
+  <p>池子算错不一定报错：tpu-inference 跑 Qwen3.5 时块编号池大了约 3.5 倍，越界写入被静默钳回末尾，输出乱码（<a href="#s14-1">14.1</a>）。</p>
 
-  <h3 id="s4-5">4.5　前缀复用：算过的不再算</h3>
+  <h3 id="s4-3">4.3　前缀复用：算过的不再算</h3>
   <p>很多请求开头一样（同一段 system prompt、多轮对话的前几轮），这段的 KV 留着，下一个直接接着算。</p>
   <ul>
     <li><b>RadixAttention。</b>SGLang 2023 年把前缀存成一棵基数树（开头相同的共用一段树枝），新请求沿树匹配最长前缀；论文报吞吐最多是当时其他系统的 6.4 倍（整套运行时）。</li>
@@ -59,7 +57,7 @@ __FIG_S4_DISK__
 <figcaption>看每个请求往下找了几层，以及显存满时谁被挤下去。
   <span class="sub">（27 秒无声循环，Manim 渲染。层的容量、块的摆放和四个请求是示意，命中哪层由 LRU 现模拟。）</span></figcaption></figure>
   <p><b>线性注意力和滑窗难复用：</b>线性层的状态截不回任意位置，滑窗层早先的 KV 已经丢了，只能隔一段存一份快照（第十三节）。</p>
-  <h3 id="s4-6">4.6　分层卸载：搬回来，还是重算</h3>
+  <h3 id="s4-4">4.4　分层卸载：搬回来，还是重算</h3>
   <p>显存留不下所有想复用的 KV，就往下放到主机内存、磁盘乃至远端存储，用时搬回。</p>
   <div class="note ok"><span class="t">盈亏带宽</span>
     搬回 ＝ 每 token KV 字节 × L ÷ 带宽；重算 ≈ 每 token FLOP × L ÷ 有效算力。L 是命中的前缀长度，有效算力是峰值乘利用率。<br>
@@ -70,7 +68,7 @@ __FIG_S4_OFFLOAD__
   <ul>
     <li><b>llm-d</b> 2026 年在 TPU7x 上把 Qwen3-32B 的 KV 卸到主机内存：平均 TTFT 0.98 → 0.56 s，P90 2.1 → 0.5 s，总吞吐 +8.9%（<code>llm-d/llm-d@accc6c5:guides/tiered-prefix-cache/README.md</code>）。</li>
     <li><b>Mooncake Store</b>：集群各机的内存拼成一个 KV 池，按块哈希存取，冷数据可再下放到 SSD；字节走 RDMA（网卡直接读写对方内存，不经 CPU）搬。SGLang HiCache（2025-09）、vLLM（2026-05）都已能接它当后端。</li>
-    <li><b>LMCache</b>：接在 vLLM、SGLang 下分层存 KV；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.3。</li>
+    <li><b>LMCache</b>：接在 vLLM、SGLang 下分层存 KV；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.2。</li>
     <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 远端存储）；官方博客报长上下文和多轮对话下吞吐最多是全部重算的 6 倍、首字最多降 80%。vLLM 0.11 也自带 CPU 下放（OffloadingConnector），两大引擎都有了。</li>
   </ul>
 
@@ -80,7 +78,7 @@ __FIG_S4_OFFLOAD__
     留下的问题：座位坐满以后，一步本身的时间还压不下来，注意力和 MoE 是两块硬骨头（第五节）。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 92.4 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
-  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.8 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
+  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.4 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
 '''
 
 FIGS = {
