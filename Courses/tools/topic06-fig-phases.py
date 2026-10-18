@@ -172,7 +172,7 @@ def fig_ai():
     f.path(pts, INK, 2.4, arrow=False)
     # 上限
     f.line(X(1024), Y(AI_CAP), X1, Y(AI_CAP), GY2, 1.2, dash="2,4", arrow=False)
-    f.t(X1 - 6, Y(AI_CAP) - 10, "喂再多行也到不了 3,584 次（＝ 7168 ÷ 2）：输入输出跟着行数一起变多", GY, size=13, anchor="end")
+    f.t(X1 - 6, Y(AI_CAP) - 10, "封顶线 3,584 次（怎么来的见右下框）", GY, size=13, anchor="end")
 
     # 交点
     f.line(X(M_CROSS), Y(RIDGE), X(M_CROSS), Y1, RD, 1.2, dash="3,3", arrow=False)
@@ -190,6 +190,24 @@ def fig_ai():
         f.t(X(m) + dx, Y(v) + dy, lab, col, True, 15, anc)
         if m == 256:                     # 标签挪到交点竖线右侧，拉一根引线
             f.line(X(m) + 6, Y(v) + 6, X(m) + dx - 4, Y(v) + dy - 14, col, 1.2, arrow=False)
+    # ⛔ 2026-10-18 现场：「1,911 怎么来的忘了」「3,584 那句不懂」——&#160;推导只写在图下小字里，
+    #   看图的人够不着。⭐ 把账直接摆在图里空着的右下角。
+    PRE_OPS = 2 * 4096 * H * H
+    PRE_BYTES = 2 * (H * H + 2 * 4096 * H)
+    assert round(PRE_OPS / 1e8) == 4209 and round(PRE_BYTES / 1e8, 2) == 2.20
+    assert round(PRE_OPS / PRE_BYTES) == round(AI_PRE)
+    bx, by, bw = 884, Y(100) + 40, 446
+    rows = [("这些数怎么算：7168×7168 的权重，bf16 每个数 2 字节", INK, True),
+            ("运算 ＝ M 行 × 7168 × 7168 × 2（乘加各算一次）", GY, False),
+            ("搬的 ＝（权重 7168² ＋ 输入 M×7168 ＋ 输出 M×7168）× 2", GY, False),
+            ("M＝4,096：4,209 亿次 ÷ 2.20 亿字节 ≈ 1,911", OR, True),
+            ("M 很大时权重分摊到几乎为零，每行只剩：算 7168×7168×2 次，", GY, False),
+            ("读进写出各 7168 个数（7168×4 字节）→ 比值 7168÷2 ＝ 3,584", GY, False)]
+    bh = 16 + 21 * len(rows)
+    assert by + bh < Y1 - 30, "推导框压到过线标签了"
+    f.box(bx, by, bw, bh, "#fff", LINE, 6)
+    for i, (txt, col, bold) in enumerate(rows):
+        f.t(bx + 12, by + 24 + 21 * i, txt, col, bold, 12)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "decode 再多拼人也难过线，prefill 一段 prompt 就远远过线", [
         "decode 一步每人只喂 1 行，256 个人拼一起也才每字节算 239 次；prefill 一段 4K prompt 一次就是 4,096 行。",
