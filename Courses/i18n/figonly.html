@@ -14,7 +14,7 @@
 
 @media (max-width:720px){.figbar{right:70px;bottom:18px}
   .figbar .hint{display:none}
-  .figbar button{padding:8px 13px;font-size:13px}}
+  .figbar button{padding:6px 11px;font-size:12px;opacity:.88}}
 body.figonly section p:not(.lead):not(.landing),
 body.figonly section ul,
 body.figonly section ol,
@@ -31,12 +31,13 @@ body.figonly section .card p:not(.lead):not(.landing){display:revert}
 body.figonly .toc ol{display:grid}
 body.figonly .toc ul{display:revert}
 body.figonly .fo-empty{display:none}
+body.figonly section p.tbl-note:not(.lead):not(.landing){display:revert}
 
 body.figonly section blockquote{display:none}
 
 
 body.figonly figcaption{display:none}
-body.figonly section h3{margin-top:34px}
+body.figonly section h3:not(.guess h3){margin-top:34px}
 </style>
 @@SPLIT@@
 <div class="figbar">
@@ -70,8 +71,11 @@ body.figonly section h3{margin-top:34px}
       if (!vis) h.classList.add("fo-empty");
     });
     // 折叠后展开块里什么都不剩（正文全被藏了）：整颗藏掉，免得点开是空的
-    document.querySelectorAll("section details").forEach(function(d){
-      d.classList.remove("fo-empty"); if (!on) return;
+    // 由内向外查：内层空块先藏掉，外层才能看出自己也空了
+    var dl = Array.prototype.slice.call(document.querySelectorAll("section details"));
+    dl.forEach(function(d){ d.classList.remove("fo-empty"); });
+    dl.reverse().forEach(function(d){
+      if (!on) return;
       var was = d.open; d.open = true; var vis = false;
       for (var c = d.firstElementChild; c; c = c.nextElementSibling) {
         if (c.tagName === "SUMMARY") continue;

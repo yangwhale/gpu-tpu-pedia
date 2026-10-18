@@ -195,11 +195,13 @@ def main(topic, d):
             # 对内联 style 定过字号的标签同样生效（按等宽字体留的宽度足够装下）
             if h.get('fsa'): rules += '.svgsm,.svgtxt,.svglbl{font-size-adjust:%s}' % h['fsa']
         rules += '.figsrc>summary{font-family:'+LATIN.replace("'",'"')+'}'   # 出处折叠标题：中文落回无衬线，英文别显示成等宽
+        # 已是粗体的父元素里再套 <b>（b 是 600）：英文可变字体下反而比周围更细 —— 统一提到 800（PAR10 专题二 R6）
+        rules += 'h1 b,h2 b,h3 b,h4 b,th b,summary b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}'
         if '.msfrom' in css: rules += '.msfrom{white-space:nowrap}'   # 「— from the … Microscope」出处别拆成两行
         # 卡片小标题：中文 12px 粗体灰字读起来是「标题」；英文同样式会变成大写加字距的小标签，显得又轻又小（PAR10 专题一 R6）
         if re.search(r'\.card h4\s*\{[^}]*text-transform:\s*uppercase', css):
             rules += '.card h4{text-transform:none;letter-spacing:0;font-size:13px}'
-        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0}.jstep span{font-size:9px}}'
+        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}'
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
     def put(m):
@@ -255,6 +257,8 @@ def main(topic, d):
     s = s.replace('"Source Sans 3","Source Sans 3"', '"Source Sans 3"')
     import os
     out = pathlib.Path(os.environ['I18N_OUT']) if os.environ.get('I18N_OUT') else pathlib.Path(__file__).resolve().parents[2] / 'WebPages' / f'{topic}.en.html'
+    # 节号后的间距：中文标题「3.1　…」用全角空格（1em），英文普通空格显得挤 —— 换成 en space（PAR10 专题二 R6）
+    s = re.sub(r'(<h[234]\b[^>]*>(?:<[^>]+>)*)(\d+(?:\.\d+)*[a-z]?) (?=\S)', lambda m: m.group(1) + m.group(2) + '\u2002', s)
     out.write_text(s)
     print('wrote', out, len(s), 'missing:', missing or 'none')
     left = re.findall(r'[一-鿿]', re.sub(r'<(style|script)\b.*?</\1>', '', s, flags=re.S))
