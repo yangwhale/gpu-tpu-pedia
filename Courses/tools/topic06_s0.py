@@ -28,7 +28,7 @@ __FIG_S0_CHAIN__
     <tr><td>⑩</td><td>2024 → 2025</td><td>Meta（CP）；vLLM 2025 合入 DCP</td><td>DEP 起不来、KV 被复制 → DCP／PCP 按序列切</td><td>DCP 把 KV 副本让出来，PCP 切 prompt 压首字</td><td>DCP 只在长上下文划算；PCP 遇上线性注意力，状态得一卡接一卡传</td><td>七</td></tr>
     <tr><td>⑪</td><td>2024 → 2025</td><td>SGLang、DeepSeek</td><td>MoE 把 batch 拆碎，每专家约 8 行 → DP attention ＋ 大 EP</td><td>SGLang 复现：最多是同卡数纯 TP 的 5×</td><td>每个 rank 自带一份状态，K3 开 DEP8 显存不够；prefill 也追不上变快的 decode</td><td>六</td></tr>
   </table>
-  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。终点那颗菱形是 GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡涨到首发日的几倍，留到 15.3 揭晓。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十五节）。</p>
+  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。右端那颗菱形是眼下最新的一环， GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡涨到首发日的几倍，留到 15.3 揭晓。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十五节）。</p>
   </details>
 __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
