@@ -156,7 +156,7 @@ def fig_ai():
 
     # 屋脊点
     f.line(X0, Y(RIDGE), X1, Y(RIDGE), RD, 1.8, dash="7,5", arrow=False)
-    f.t(X1 - 6, Y(RIDGE) - 10, "v7 屋脊点 313（bf16）", RD, True, 15, "end")
+    f.t(X1 - 6, Y(RIDGE) - 10, "v7 屋脊点：每字节要算 313 次才不用等显存（bf16）", RD, True, 15, "end")
     f.t(X0 + 16, Y(RIDGE) - 14, "↑ 这一侧卡在算力", GY, size=14)
     f.t(X0 + 16, Y(RIDGE) + 26, "↓ 这一侧卡在显存带宽", GY, size=14)
 
@@ -172,27 +172,27 @@ def fig_ai():
     f.path(pts, INK, 2.4, arrow=False)
     # 上限
     f.line(X(1024), Y(AI_CAP), X1, Y(AI_CAP), GY2, 1.2, dash="2,4", arrow=False)
-    f.t(X1 - 6, Y(AI_CAP) - 10, "上限 3,584：输入输出也要读写", GY, size=13, anchor="end")
+    f.t(X1 - 6, Y(AI_CAP) - 10, "喂再多行也到不了 3,584 次（＝ 7168 ÷ 2）：输入输出跟着行数一起变多", GY, size=13, anchor="end")
 
     # 交点
     f.line(X(M_CROSS), Y(RIDGE), X(M_CROSS), Y1, RD, 1.2, dash="3,3", arrow=False)
     f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="#fff" stroke="%s" stroke-width="2"/>'
                % (X(M_CROSS), Y(RIDGE), RD))
-    f.t(X(M_CROSS) + 10, Y1 - 12, "M ≈ 343 才过线", RD, True, 14)
+    f.t(X(M_CROSS) + 10, Y1 - 12, "一次喂到约 343 行才过屋脊点", RD, True, 14)
 
     # 四个点
     for m, v, col, lab, dx, dy, anc in (
-            (1, AI_B1, GR, "decode 1 人：1.0", 16, 26, None),
-            (64, AI_B64, GR, "decode 64 人：63", 14, 22, None),
-            (256, AI_B256, GR, "decode 256 人：239", 56, 62, None),
-            (4096, AI_PRE, OR, "prefill 4K prompt：1,911", -16, -6, "end")):
+            (1, AI_B1, GR, "decode 1 人：每字节算 1 次", 16, 26, None),
+            (64, AI_B64, GR, "decode 64 人：每字节算 63 次", -14, -14, "end"),
+            (256, AI_B256, GR, "decode 256 人：每字节算 239 次", 56, 62, None),
+            (4096, AI_PRE, OR, "prefill 一段 4K prompt：每字节算 1,911 次", -16, -6, "end")):
         f.p.append('<circle cx="%.1f" cy="%.1f" r="8" fill="%s"/>' % (X(m), Y(v), col))
         f.t(X(m) + dx, Y(v) + dy, lab, col, True, 15, anc)
         if m == 256:                     # 标签挪到交点竖线右侧，拉一根引线
             f.line(X(m) + 6, Y(v) + 6, X(m) + dx - 4, Y(v) + dy - 14, col, 1.2, arrow=False)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "decode 再多拼人也难过线，prefill 一段 prompt 就远远过线", [
-        "decode 一步每人只喂 1 行，256 个人拼一起也才 239；prefill 一段 4K prompt 一次就是 4,096 行。",
+        "decode 一步每人只喂 1 行，256 个人拼一起也才每字节算 239 次；prefill 一段 4K prompt 一次就是 4,096 行。",
         "所以同一块芯片，prefill 时算力是瓶颈，decode 时显存带宽是瓶颈。",
     ])
     yb = f.src(yb + 10,
