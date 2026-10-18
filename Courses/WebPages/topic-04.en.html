@@ -10527,12 +10527,32 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
         el = el.nextElementSibling;
       }
       if (!grp.length) return;
+      // Label says what is hidden, and opening scrolls to the first revealed text if it is off-screen
+      // (author, 2026-10-18: under a big figure the button seemed to do nothing). Text inside closed <details> isn't counted.
+      var nTxt = 0, nCap = 0;
+      grp.forEach(function(x){
+        [x].concat([].slice.call(x.querySelectorAll(HID))).forEach(function(e){
+          if (!e.matches(HID) || (e.closest("details:not([open])") && !e.closest("summary"))) return;
+          if (e.tagName === "FIGCAPTION") nCap++; else if (!e.parentElement.closest(HID)) nTxt++;
+        });
+      });
+      if (!nTxt && !nCap) return;
+      function pl(k, w){ return k ? k + " " + w + (k > 1 ? "s" : "") : ""; }
+      var closed = "▸ Show " + [pl(nTxt, "paragraph"), pl(nCap, "caption")].filter(Boolean).join(", ");
       var b = document.createElement("button");
-      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ Show this part";
+      b.type = "button"; b.className = "peekbtn"; b.textContent = closed;
       b.addEventListener("click", function(){
         var on = !grp[0].classList.contains("peek");
         grp.forEach(function(x){ x.classList.toggle("peek", on); });
-        b.textContent = on ? "▾ Hide this part" : "▸ Show this part";
+        b.textContent = on ? "▾ Hide this part" : closed;
+        if (!on) return;
+        var first = null;
+        grp.some(function(x){
+          var c = x.matches(HID) ? x : x.querySelector(HID);
+          if (c && c.getClientRects().length){ first = c; return true; }
+        });
+        if (first && first.getBoundingClientRect().top > innerHeight * 0.85)
+          first.scrollIntoView({behavior: "smooth", block: "center"});
       });
       h.insertAdjacentElement("afterend", b);
     });
@@ -10574,4 +10594,4 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   document.querySelectorAll(SR).forEach(function(d){
    d.open=d.dataset.wasopen==="1";});});
 })();</script>
-<style id="en-size">table{font-size:15.5px}th{font-size:13px}.tbl-note{font-size:14px}.chip{font-size:14px}figcaption{font-size:16px}table code{font-size:0.8232em}.svgsm,.svgtxt,.tocbar a,.tocbar-lb,.console .tag,.hero .en,.jstep span,.stn .badge{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}.svgsm,.svgtxt,.svglbl{font-size-adjust:0.53}.figsrc>summary{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}h1 b,h2 b,h3 b,h4 b,th b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}.msfrom{white-space:nowrap}@media(max-width:1000px){th{white-space:normal}main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}.card h4{text-transform:none;letter-spacing:0;font-size:13px}.jstep span{white-space:nowrap}@media(max-width:600px){main table,section table,details table,.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}.sub{font-size:.95em}</style></body></html>
+<style id="en-size">table{font-size:15.5px}th{font-size:13px}.tbl-note{font-size:14px}.chip{font-size:14px}figcaption{font-size:16px}table code{font-size:0.8232em}.svgsm,.svgtxt,.tocbar a,.tocbar-lb,.console .tag,.hero .en,.jstep span,.stn .badge{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}.svgsm,.svgtxt,.svglbl{font-size-adjust:0.53}.figsrc>summary{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}h1 b,h2 b,h3 b,h4 b,th b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}.msfrom{white-space:nowrap}@media(max-width:1000px){th{white-space:normal}main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}@media(max-width:600px){td,th{padding-left:8px;padding-right:8px}}.peekbtn{font-family:inherit}.card h4{text-transform:none;letter-spacing:0;font-size:13px}.jstep span{white-space:nowrap}@media(max-width:600px){main table,section table,details table,.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}.sub{font-size:.95em}</style></body></html>

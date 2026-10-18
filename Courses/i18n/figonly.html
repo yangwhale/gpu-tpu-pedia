@@ -91,13 +91,32 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
         el = el.nextElementSibling;
       }
       if (!grp.length) return;
+      // 按钮写明藏了多少；点开后若第一处文字在屏幕外就滚过去（作者 10-18 第二版：小节开头是大图时按钮像没反应）
+      var nTxt = 0, nCap = 0;
+      grp.forEach(function(x){
+        [x].concat([].slice.call(x.querySelectorAll(HID))).forEach(function(e){
+          if (!e.matches(HID) || (e.closest("details:not([open])") && !e.closest("summary"))) return;
+          if (e.tagName === "FIGCAPTION") nCap++; else if (!e.parentElement.closest(HID)) nTxt++;
+        });
+      });
+      if (!nTxt && !nCap) return;
+      function pl(k, w){ return k ? k + " " + w + (k > 1 ? "s" : "") : ""; }
+      var closed = "▸ Show " + [pl(nTxt, "paragraph"), pl(nCap, "caption")].filter(Boolean).join(", ");
       var b = document.createElement("button");
-      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ Show this part";
+      b.type = "button"; b.className = "peekbtn"; b.textContent = closed;
       b.addEventListener("click", function(){
         var on = !grp[0].classList.contains("peek");
         grp.forEach(function(x){ x.classList.toggle("peek", on); });
-        b.textContent = on ? "▾ Hide this part" : "▸ Show this part";
+        b.textContent = on ? "▾ Hide this part" : closed;
         markEmpty(document.body.classList.contains("figonly"));
+        if (!on) return;
+        var first = null;
+        grp.some(function(x){
+          var c = x.matches(HID) ? x : x.querySelector(HID);
+          if (c && c.getClientRects().length){ first = c; return true; }
+        });
+        if (first && first.getBoundingClientRect().top > innerHeight * 0.85)
+          first.scrollIntoView({behavior: "smooth", block: "center"});
       });
       h.insertAdjacentElement("afterend", b);
     });

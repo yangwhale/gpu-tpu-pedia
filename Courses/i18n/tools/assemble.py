@@ -203,6 +203,8 @@ def main(topic, d):
         rules += 'h1 b,h2 b,h3 b,h4 b,th b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}'
         if '.msfrom' in css: rules += '.msfrom{white-space:nowrap}'
         rules += '@media(max-width:1000px){th{white-space:normal}main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}'   # 英文表头大写加字距又不换行，820 平板宽度下把表格撑出版心（PAR10 专题四 R7）
+        rules += '@media(max-width:600px){td,th{padding-left:8px;padding-right:8px}}'   # 手机上表格框内滚动后，左右 12px 内边距吃掉一截列宽，英文单词断不开就被裁（PAR10 专题四/五 R2、R5 两次报）
+        rules += '.peekbtn{font-family:inherit}'   # 「Show this part」小按钮不设字体会落回系统 Arial，英文正文是 Source Sans（PAR10 专题五 R4）
         if '.hlbtns' in css: rules += '.hlbtns{flex-shrink:0}'   # 手机上 Highlight/All 按钮组被旁边说明挤到只剩「A」（PAR10 专题三 R8）   # 「— from the … Microscope」出处别拆成两行
         # 卡片小标题：中文 12px 粗体灰字读起来是「标题」；英文同样式会变成大写加字距的小标签，显得又轻又小（PAR10 专题一 R6）
         if re.search(r'\.card h4\s*\{[^}]*text-transform:\s*uppercase', css):
