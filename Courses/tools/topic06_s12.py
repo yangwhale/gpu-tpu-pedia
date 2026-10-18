@@ -53,8 +53,7 @@ __FIG_S12_FUSE__
     megakernel 把整次前向写成一个 kernel，下一段权重在上一段计算时就开始读。</p>
   <p>Hazy Research（2025-05）实测，vLLM、SGLang 最多用到 H100 带宽的 50%，megakernel 到 78%。模型和 batch 越小，空等占比越大，赚得越多。同一篇在 Llama-3.2-1B、batch 1 上，比 vLLM 快近 2.5 倍，比 SGLang 快 1.5 倍以上。</p>
   <p>模型一大，融合单拎出来就赚得少：AWQ 那组测试里，光把 FP16 kernel 融合，Llama-2-7B 只从每秒 52 到 62 token。</p>
-  <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；16 张 GB200（vLLM）是 452 token。两个数都开了投机，按接受长度 6 换算。
-    不开投机时，K3 和 Qwen 3.8 27B 在 batch 1 到 8 约是 GB200 的 1.4–2 倍（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
+  <p>TPU 这边，Inferact 2026-09 用 Pallas（JAX 里手写 TPU kernel 的语言）写了 megakernel。16 颗 TPU v7 跑 Kimi K3，单用户超过每秒 700 token；16 张 GB200（vLLM）是 452 token。两个数都开了投机，按接受长度 6 换算（<a href="https://inferact.ai/blog/tpu-megakernels">Inferact 博客</a>）。</p>
 
   <h3 id="s12-4">12.4　KV 也能量化</h3>
   <p>KV 存 FP8，每个数从 2 字节变 1 字节；vLLM 和 SGLang 都是一个 <code>--kv-cache-dtype</code> 参数。

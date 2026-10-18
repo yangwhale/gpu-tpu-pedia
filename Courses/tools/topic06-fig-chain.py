@@ -13,11 +13,13 @@ r"""专题六 · 第零节 0.1「问题链」（fig6-chain）。R85 首版，L80
    所以投机解码、量化排在 2022（论文 2022 年底），不再按「问题什么时候卡脖子」放到链尾。
    L81 起环号跟着时间重编，从左到右 ①–⑪ 连续；0.1 图下表、15.3 表、讲稿、台账同步改过。
    旧→新：①→① ⑪→② ⑩→③ ③→④ ②→⑤ ⑦→⑥ ④→⑦ ⑥→⑧ ⑤→⑨ ⑨→⑩ ⑧→⑪。
+   L87（2026-10-18）：分块 prefill 的首次公开按 SARATHI（arXiv 2308.16369，2023-08）算，不按 Sarathi-Serve（2024-03），
+   于是从 2024 挪进 2023，环号再动一次：⑧→⑥ ⑥→⑦ ⑦→⑧，其余不变。
    月份只用来排年内先后（Orca OSDI'22 七月、GPTQ 2022-10、投机解码 2022-11、GQA 2023-05、
-   PagedAttention 2023-06、Splitwise 2023-11、RadixAttention 2023-12、Sarathi-Serve 2024-03、
+   PagedAttention 2023-06、SARATHI 2023-08、Splitwise 2023-11、RadixAttention 2023-12、
    Mooncake 2024-06、Meta 上下文并行 2024-11、SGLang DP attention／DeepSeek-V3 大 EP 2024-12），
    **年内等距排，不按月比例**；图上只印年份。
-⛔ 末年：④ DSA 2025-09；⑨ HiCache 2025-09；⑥ Dynamo 2025-03；⑪ SGLang 复现 2025-05；
+⛔ 末年：④ DSA 2025-09；⑨ HiCache 2025-09；⑦ Dynamo 2025-03；⑪ SGLang 复现 2025-05；
    ⑩ vLLM 合入 DCP 2025-09（台账「L80 补充」）；③ EAGLE-3 2025-03；② megakernel、V4.1-Flash FP4 KV 2026-09。
 ⛔ 刻意没画：倍数（连乘会出错，基线互相包含）；每环之间的红箭头（时间顺序和「解完又冒出什么」的因果顺序不一致，
    硬连会在轴上来回折返；链的先后写在折叠表里）。
@@ -36,9 +38,9 @@ RINGS = [
     (3, 2022, 11, "投机解码", 2025, False),
     (4, 2023, 5, "GQA 压薄 KV", 2025, True),
     (5, 2023, 6, "PagedAttention", None, False),
-    (6, 2023, 11, "PD 分离", 2025, False),
-    (7, 2023, 12, "RadixAttention", None, False),
-    (8, 2024, 3, "分块 prefill", None, False),
+    (6, 2023, 8, "分块 prefill", None, False),
+    (7, 2023, 11, "PD 分离", 2025, False),
+    (8, 2023, 12, "RadixAttention", None, False),
     (9, 2024, 6, "KV 分层下放", 2025, False),
     (10, 2024, 11, "切序列 CP", 2025, False),
     (11, 2024, 12, "MoE 大 EP", 2025, False),
@@ -86,8 +88,8 @@ def xdate(y, m):
 def fig_chain():
     f = Fig(W, "推理的十一招放在一条时间轴上，从左往右是 2022 到 2026 年。"
                "2022 年：① Orca 连续批，② GPTQ 量化（一直做到 2026），③ 投机解码（到 2025）。"
-               "2023 年：④ GQA 压薄 KV（模型侧，到 2025），⑤ PagedAttention，⑥ PD 分离（到 2025），⑦ RadixAttention。"
-               "2024 年：⑧ 分块 prefill，⑨ KV 分层下放，⑩ 切序列（到 2025），⑪ MoE 大 EP（到 2025）。"
+               "2023 年：④ GQA 压薄 KV（模型侧，到 2025），⑤ PagedAttention，⑥ 分块 prefill，⑦ PD 分离（到 2025），⑧ RadixAttention。"
+               "2024 年：⑨ KV 分层下放，⑩ 切序列（到 2025），⑪ MoE 大 EP（到 2025）。"
                "2025 年没有新起头的环，都是前面几环在往下做。"
                "上方两条细带是外力：上下文变长从 2023 年 11 月的 128K 起，2024 年 2 月到 1M；"
                "输出变长从 2024 年 9 月的 o1 起，2025 年 1 月有 R1。"
@@ -163,7 +165,7 @@ def fig_chain():
             assert b[1] + 8 <= xe - 70 or b[0] >= xe + 70, "右端标签撞车：%s" % b[3]
     f.src(ybot, "首次公开：Orca OSDI'22；GPTQ arXiv 2210.17323；投机解码 Leviathan 等 arXiv 2211.17192；"
                 "GQA arXiv 2305.13245；PagedAttention 博客 2023-06-20；Splitwise arXiv 2311.18677；"
-                "RadixAttention arXiv 2312.07104；Sarathi-Serve arXiv 2403.02310；Mooncake arXiv 2407.00079；"
+                "RadixAttention arXiv 2312.07104；SARATHI arXiv 2308.16369；Mooncake arXiv 2407.00079；"
                 "Meta 上下文并行 arXiv 2411.01783；SGLang v0.4 博客 2024-12-04（DP attention）、DeepSeek-V3 arXiv 2412.19437。"
                 "末年：DeepSeek-V3.2-Exp 技术报告（DSA，2025-09）；SGLang HiCache 博客 2025-09-10；NVIDIA Dynamo 新闻稿 2025-03-18；"
                 "SGLang 大 EP 博客 2025-05-05；vLLM v0.10.2 release（DCP，2025-09）；EAGLE-3 arXiv 2503.01840；"

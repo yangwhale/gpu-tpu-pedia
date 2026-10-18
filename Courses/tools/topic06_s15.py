@@ -31,9 +31,9 @@ __FIG_S14_EIGHT__
     <tr><td>2023</td><td>⑤ KV 预留浪费</td><td>vLLM</td><td>四</td><td>PagedAttention：同延迟吞吐是 FasterTransformer 和复现版 Orca 的 2–4 倍</td></tr>
     <tr><td>2023</td><td>④ 每条 KV 太厚</td><td>论文</td><td>四</td><td>GQA-8：T5-XXL 每条样本推理约快 5.4 倍，平均分 47.1 对 47.2（对原版 MHA，本课推导）</td></tr>
     <tr><td>2023</td><td>② 字节太多：权重</td><td>论文</td><td>十二</td><td>AWQ 4 bit：Llama-2-7B 单卡 RTX 4090 再快 3.1 倍（对已融合 kernel 的 FP16）</td></tr>
-    <tr><td>2023</td><td>⑦ 同样开头重算</td><td>SGLang</td><td>四</td><td>RadixAttention：吞吐最多是当时其他系统的 6.4 倍</td></tr>
-    <tr><td>2024</td><td>⑥ 两段抢同一批卡</td><td>论文</td><td>八</td><td>DistServe：同样的延迟要求下，每卡能接的请求最多是不拆的 DeepSpeed-MII 的 7.4 倍</td></tr>
-    <tr><td>2024</td><td>⑧ 长 prompt 插队</td><td>论文</td><td>三</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
+    <tr><td>2023</td><td>⑧ 同样开头重算</td><td>SGLang</td><td>四</td><td>RadixAttention：吞吐最多是当时其他系统的 6.4 倍</td></tr>
+    <tr><td>2024</td><td>⑦ 两段抢同一批卡</td><td>论文</td><td>八</td><td>DistServe：同样的延迟要求下，每卡能接的请求最多是不拆的 DeepSpeed-MII 的 7.4 倍</td></tr>
+    <tr><td>2024</td><td>⑥ 长 prompt 插队</td><td>论文</td><td>三</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
     <tr><td>2024</td><td>④ 每条 KV 太厚</td><td>DeepSeek</td><td>四</td><td>MLA：每层 KV 约是同形状 MHA 的 1/57（本课推导）</td></tr>
     <tr><td>2024</td><td>⑨ 前缀存不下</td><td>Kimi</td><td>八</td><td>Mooncake KV 池：Kimi 线上可接请求比此前系统多 107%–115%</td></tr>
     <tr><td>2024</td><td>② 字节太多：权重</td><td>vLLM</td><td>十二</td><td>vLLM FP8（权重和激活都 8 bit）：2 张 H100 跑 Llama 3 70B，每字间隔最多降到未量化的 1/2</td></tr>

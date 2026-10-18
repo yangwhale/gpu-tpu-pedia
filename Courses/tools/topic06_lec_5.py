@@ -363,7 +363,7 @@ prefill 的形状千变万化，所以 vLLM 默认 decode 录整图，prefill �
 <p class="board"><b>🖥 屏幕</b>：停在「TPU 这边，Inferact 2026-09 用 Pallas」。</p>
 
 <p class="say">「TPU 这边，Inferact 二〇二六年九月用 Pallas，就是 JAX 里手写 TPU kernel 的语言，写了 megakernel。十六颗 v7 跑 Kimi K3，单用户每秒超过七百个字；同样数量的 GB200 跑 vLLM 是四百五十多。<br>
-⛔ 两边都开了投机，都按接受长度六、也就是每步出六个字换算；真实负载要是接受长度不到六，两边都会降。不开投机时，博客自报 K3 和 Qwen 3.8 27B 在一到八个人用时，约是 GB200 的一点四到两倍。」</p>
+⛔ 两边都开了投机，都按接受长度六、也就是每步出六个字换算；真实负载要是接受长度不到六，两边都会降。」</p>
 
 <p class="say">「⭐ 这个七百多是 megakernel 加 DSpark 投机一起换来的，博客没提量化。这几招能叠着用：投机让一趟多拉几个字，量化让货变轻，融合让车不在半路停。」</p>
 
@@ -395,7 +395,7 @@ prefill 的形状千变万化，所以 vLLM 默认 decode 录整图，prefill �
 到这儿，三根杠杆都拉过了。可这些招数都默认一件事：每个 token 留一份 KV，想截在哪就截在哪。新架构把这件事拆了，这是第十三节。」</p>
 """, """
 ⚠️ E8M0、E4M3 只讲到「指数几位、尾数几位、能不能表示非二的幂」；E2M1 内部编码不展开，<em>细节在专题八 §2。</em><br>
-⚠️ <b>Inferact 那个七百多是 megakernel 加 DSpark 投机一起换来的</b>，别说成量化或单靠 megakernel 的功劳；GB200 一侧的数和不开投机的 1.4–2 倍都是 Inferact 博客自报。<br>
+⚠️ <b>Inferact 那个七百多是 megakernel 加 DSpark 投机一起换来的</b>，别说成量化或单靠 megakernel 的功劳；GB200 一侧的数也是 Inferact 博客自报。<br>
 ⚠️ v7 规格没列 FP4 峰值，<b>别说「FP4 在 TPU 上算得更快」</b>：省的是字节和容量，算之前要解开。<br>
 ⚠️ R1 那几个容量数单位混着（README 记 GB、上限是 GiB），<code>fig-s12-cap</code> 两种读法都画了；口播落在「不管单位怎么读都放不下」。<br>
 ⚠️ 1.63 倍、四成多、gpt-oss 字节账都是本课推导，台上已说「推的」。<br>
