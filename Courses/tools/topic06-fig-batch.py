@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""专题六 · 第三节「批处理与调度：一趟分给更多人」的四张静态图。
+r"""专题六 · 第三节「批处理与调度：一趟分给更多人」的五张静态图。
 
 fig6-gantt.svg —— 回答：静态 batch 和逐步调度（continuous batching）差在哪？
   · 示意：4 个槽位、8 个请求，各要 3/8/2/5/6/2/7/4 步。两种调度都由下面的代码模拟出来，
@@ -22,6 +22,13 @@ fig6-conc.svg —— 回答：槽位满了以后再加并发，换来的是什�
   · Little 定律核对：同文件 794-801（dep8 9,032 × 8 × 0.060 s ≈ 4,335 个请求在批里；dep16 84,321 × 0.033 ≈ 2,783）。
   · 槽位不白给：同文件 849-858、885-894（ISL 4096：batch 886 → 999，峰值 12,063 → 12,070，TPOT 77.7 → 85.3 ms）。
   · 刻意没画：并发 400 / 900 的 TTFT（runbook 没记）。
+
+fig6-stepmix.svg —— 回答：一步里到底装了什么？新人的 prompt 和老人的 decode 怎么拼进同一趟？
+  · 示意：每步 token 预算 10 格（真实部署常见 8K–16K）；车上 A/B/C/D 四人在出字，门口排着 E（prompt 13）和 F（prompt 4）。
+  · 规则照 vLLM V1 文档（Optimization 页）：先把所有 decode 排进来，预算有剩再排 prefill，装不下就切块。
+    由 mix_sim 现模拟，断言四步的内容：第 1 步 E 切 6 不出字、D 出完下车；第 2 步 E 最后 7 格、当步出首字；
+    第 3 步 F 一块装完出首字、空 2 格；第 4 步全是 decode、空 5 格。
+  · 刻意没画：KV 池满了的情况（3.4、3.6 的事）；每步耗时随格数变化；SGLang 默认不混批（正文交代）。
 
 fig6-overlap.svg —— 回答：CPU 排下一批的那几毫秒，为什么也要藏起来？
   · SGLang-JAX 博客（lmsys.org/blog/2025-10-29-sglang-jax）：Qwen3-32B 上 prefill 与 decode 之间的空档
@@ -329,7 +336,111 @@ def fig_overlap():
     f.save("fig6-overlap.svg", yb + 14)
 
 
+# ── 一步里装了什么：decode 先占位，剩下的切给 prompt ─────────────────
+MIX_B = 10                                                   # ⚠️ 示意：每步 token 预算（真实 8K–16K）
+MIX_RUN0 = [("A", 40, 9), ("B", 12, 9), ("C", 25, 9), ("D", 7, 1)]   # 名字, 已有 KV, 还要出几个字
+MIX_Q0 = [("E", 13, 6), ("F", 4, 5)]                         # 名字, prompt 长度, 一共要出几个字
+MIX_T = 4
+
+
+def mix_sim():
+    """每步：车上每人 1 个 decode token 先占预算；剩下的按排队顺序切 prompt 块。
+    prompt 最后一块那步就吐出首字，下一步起跟着 decode；出完最后一个字的这步结束后下车。"""
+    run = [list(r) for r in MIX_RUN0]
+    q = [[n, p, 0, o] for n, p, o in MIX_Q0]                 # 名字, prompt 还剩, 已进 KV, 要出几个字
+    steps = []
+    for _ in range(MIX_T):
+        cells, out, ctx, budget = [], {}, {}, MIX_B
+        for r in run:
+            cells.append((r[0], "d", 1))
+            budget -= 1
+            r[1] += 1
+            r[2] -= 1
+            ctx[r[0]], out[r[0]] = r[1], "tok"
+        joined = []
+        for e in q:
+            if budget == 0:
+                break
+            n = min(budget, e[1])
+            budget -= n
+            e[1] -= n
+            e[2] += n
+            cells.append((e[0], "p", n))
+            ctx[e[0]] = e[2]
+            out[e[0]] = "first" if e[1] == 0 else "none"
+            if e[1] == 0:
+                joined.append(e)
+        left = [r[0] for r in run if r[2] == 0]
+        run = [r for r in run if r[2] > 0]
+        for e in joined:
+            q.remove(e)
+            run.append([e[0], e[2], e[3] - 1])
+        steps.append(dict(cells=cells, out=out, ctx=ctx, free=budget, left=left,
+                          joined=[e[0] for e in joined], wait=[e[0] for e in q]))
+    return steps
+
+
+MIX = mix_sim()
+assert [c[:2] + (c[2],) for c in MIX[0]["cells"]][-1] == ("E", "p", 6) and MIX[0]["out"]["E"] == "none"
+assert MIX[0]["left"] == ["D"] and MIX[0]["free"] == 0
+assert MIX[1]["cells"][-1] == ("E", "p", 7) and MIX[1]["out"]["E"] == "first" and MIX[1]["wait"] == ["F"]
+assert MIX[2]["cells"][-1] == ("F", "p", 4) and MIX[2]["out"]["F"] == "first" and MIX[2]["free"] == 2
+assert all(k == "d" for _, k, _ in MIX[3]["cells"]) and MIX[3]["free"] == 5
+MIXCOL = {"A": BL, "B": GR, "C": OR, "D": GY, "E": PU, "F": CY}
+
+
+def _tint(c, a=0.22):
+    r, g, b = (int(c[i:i + 2], 16) for i in (1, 3, 5))
+    return "#%02x%02x%02x" % tuple(round(255 - (255 - v) * a) for v in (r, g, b))
+
+
+def fig_stepmix():
+    f = Fig(W, "四步，每步 10 格预算，每格一个 token。车上 A、B、C、D 四人在出字，门口排着 E（prompt 13 个）和 F（prompt 4 个）。"
+               "每一步先给车上每人 1 格 decode，剩下的格子切给排队的 prompt。第 1 步：E 切走 6 格，不出字；D 出完最后一个字下车。"
+               "第 2 步：E 剩下 7 格正好装完，这一步就出首字；F 排不上。第 3 步：E 上车 decode，F 的 4 格一块装完、出首字，空 2 格。"
+               "第 4 步：没人排队，5 格全是 decode，空 5 格")
+    y0 = f.header("一步里装了什么　——　<tspan font-weight=\"700\">decode 先占位，剩下的格子切给 prompt</tspan>",
+                  "示意：每步预算 10 格（真实 8K–16K），每格 ＝ 一个 token；同一个人同一种颜色",
+                  [(BL, "实心：decode，每人 1 格、出 1 个字"), (PU, "浅色：prompt 块，最后一块那步出首字")])
+    CW, CH, X0 = 66, 46, 200
+    PH = 56 + MIX_T * 78
+    py = f.panel(0, y0, W, PH, "每一行 ＝ 一趟前向（一步）", INK)
+    notes = ["E 切走 6 格，不出字　·　D 出完最后一字，下车",
+             "E 剩下 7 格装完 → 这一步就出首字　·　F 排不上",
+             "E 上车 decode　·　F 一块装完 → 出首字　·　空 2 格",
+             "没人排队：全是 decode　·　空 5 格"]
+    for s, st in enumerate(MIX):
+        yy = py + 34 + s * 78
+        f.t(X0 - 20, yy + 29, "第 %d 步" % (s + 1), INK, True, 15, "end")
+        x = X0
+        for name, kind, n in st["cells"]:
+            col = MIXCOL[name]
+            for _ in range(n):
+                if kind == "d":
+                    f.box(x + 2, yy, CW - 4, CH, col, col, 4)
+                    f.t(x + CW / 2, yy + 29, name, "#ffffff", True, 16, "middle")
+                else:
+                    f.box(x + 2, yy, CW - 4, CH, _tint(col), col, 4, sw=1.4)
+                    f.t(x + CW / 2, yy + 29, name, col, True, 16, "middle")
+                x += CW
+        for _ in range(st["free"]):
+            f.box(x + 2, yy, CW - 4, CH, "#fff", LINE, 4, dash="4,3")
+            x += CW
+        f.t(X0 + MIX_B * CW + 24, yy + 29, notes[s], INK, size=14.5)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "新人没有「等着上车」那一下", [
+        "看 E：第 2 步出首字，第 3 步已经是实心格。从门口到车上，没有哪一步空等。",
+        "看第 4 步：空着 5 格也照跑。预算是上限，没人排队就不凑。",
+    ])
+    yb = f.src(yb + 10,
+               "调度规则：vLLM 文档 Optimization 页（V1 默认开 chunked prefill；先排全部 decode，预算有剩再排 prefill，装不下就切）。",
+               "SGLang 默认一步只跑一种：要么一块 prefill，要么全员 decode；开 --enable-mixed-chunk 才混（Server Arguments 页）。",
+               "⚠️ 示意：预算、人数、长度都是编排的；格子由 mix_sim 现算。")
+    f.save("fig6-stepmix.svg", yb + 14)
+
+
 fig_gantt()
 fig_chunk()
 fig_conc()
 fig_overlap()
+fig_stepmix()

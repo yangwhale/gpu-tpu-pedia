@@ -15,7 +15,7 @@ __FIG_S3_GANTT__
 <video src="media/topic06-contbatch.mp4" autoplay loop muted playsinline
        aria-label="静态批与连续批动画。标题：同样 4 个槽位、同一串请求：两种排法。上下两组各 4 个槽位，标着槽 1 到槽 4；上组叫「静态批：凑满一批，等最长的做完」，下组叫「连续批：每一步都重新排，谁做完谁让位」。每一列是一步，每个请求一种颜色，字母 A 到 O 标在它的第一格；灰格是槽位空转。一条黄色竖线随时间往右走，右边两个计数器写「做完几个」，底下写「已走几步」，右下角写「请求长度是示意」。字幕依次是：16 个请求排队，长短不一；每一列是一步 decode，每一步都要搬一趟权重。上面：短的早做完了，槽位也得空等最长的那个（灰格＝这一趟白搬）。下面：谁做完，下一步就换排队的下一个进来，槽位一格不空。最后：同样 15 步：静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。画面复位。"></video>
 <figcaption>动画里队列一直不空，看两组各做完几个。
-  <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill。）</span></figcaption></figure>
+  <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill，3.3 那支补上。）</span></figcaption></figure>
   <p>Orca 是 2022 年 OSDI 上的一篇论文，也是论文里做的那套服务系统。今天没人直接跑它，跑的是它的招：论文叫迭代级调度，业界后来通称连续批（continuous batching），vLLM、SGLang 都按步调度。同延迟下，吞吐是 FasterTransformer（NVIDIA 早年的推理库）静态批的 36.9 倍（GPT-3 175B）。</p>
   <ul>
     <li><b>原来卡在哪：</b>老引擎对外只有「整批跑完」一个接口，调度器看不见中间的步；一批摞成「人数 × 最长长度」的方块，短的补零，中途换不掉一行。</li>
@@ -37,7 +37,23 @@ __FIG_S3_CHUNK__
     <li><b>块不能太小，代价在权重。</b>每走一步，权重都要从 HBM 读一遍。H100 每字节带宽配约 300 次运算（989 TFLOPS ÷ 3.35 TB/s），bf16 下一步至少约 300 个 token 矩阵乘才喂得饱（本课推导）。MoE 更苛刻：V3 每个 token 只去 256 个专家里的 8 个，要每个专家凑够 300 个，一步得有 9 千多个 token。默认预算落在 8K–16K，与此吻合。</li>
   </ul>
 
-  <h3 id="s3-3">3.3　槽位满了以后</h3>
+  <h3 id="s3-3">3.3　一步里装了什么：新人怎么接上</h3>
+__FIG_S3_STEPMIX__
+<figure class="fbox fwide" id="anim-stepmix">
+<video src="media/topic06-stepmix.mp4" autoplay loop muted playsinline
+       aria-label="一步里装了什么的动画。标题：一步里装了什么：新人怎么接上。左边六行标签：在车上、排队、这一步、乘权重、注意力、出字。车上一开始有 A 还差 9 字、B 还差 9 字、C 还差 9 字、D 还差 1 字；门口排着 E prompt 13、F prompt 4。「这一步」是 10 个空格子。底部两行：实心＝decode：每人 1 格、出 1 字；浅色＝prompt 块：最后一块那步出首字；每步预算 10 格、每格 1 个 token（真实部署是 8K 到 16K）；人数和长度都是示意。每一步先从车上飞下实心格，再从门口飞下浅色格，然后整条下面出现「矩阵乘：不管谁是谁」，每人一段下划线标着读多少 KV，最底下标出字、首字或不出字。字幕依次是：第 1 步：车上 4 人，各占 1 格 decode；剩 6 格切给 E：13 个 prompt 先算 6 个；整条 10 格拼成一个矩阵，一起乘权重；只有注意力分开算：各读各的 KV；第 1 步完成：D 出完最后一字下车；E 这步不出字。第 2 步：车上 3 人，各占 1 格 decode；剩 7 格：E 剩下的 7 个正好装完；F 这步排不上；第 2 步完成：E 最后一块当步出首字，下一步直接 decode。第 3 步：车上 4 人，各占 1 格 decode；剩 6 格：F 的 4 个一块装完，空着 2 格；第 3 步完成：F 也当步出首字；没人在门口等着上车。第 4 步：车上 5 人，各占 1 格 decode；没人排队：空着 5 格。预算是上限，不必塞满；第 4 步完成：5 人各出 1 字，车上始终没断。最后：一步 ＝ 一趟前向：decode 先占位，剩下的格子切给 prompt。画面复位。"></video>
+<figcaption>盯住 E：从门口到车上，中间没有停靠。
+  <span class="sub">（42 秒无声循环，Manim 渲染。规则照 vLLM V1；预算、人数、长度是示意，格子由脚本模拟。）</span></figcaption></figure>
+  <p>一步就是一趟前向。每步开头调度器排一次：车上的人各占一格，剩下的格子按排队顺序切给新 prompt（3.2）。拼好的这一行一起乘权重，只有注意力各读各的 KV（<a href="#s3-1">3.1</a> 的选择性批处理）。</p>
+  <ul>
+    <li><b>新人不用「等着上车」。</b>prompt 最后一块算完那一步，前向末尾已经得到下一个字的概率，首字当步采样。下一步它就是一格普通 decode，中间没有停靠站。</li>
+    <li><b>真要等，是 KV 池满了。</b>格子有剩、KV 装不下，新人只能在门口排；连车上的人都装不下，就按 3.6 请人下车。</li>
+    <li><b>只有 PD 分离才有交接。</b>prefill 机器出了首字，KV 要整段搬到 decode 机器，搬完才接着出字（第八节）。混部时 KV 本来就在同一个池里，不用搬。</li>
+    <li><b>引擎不全都混。</b>vLLM V1 照图里这样混。SGLang 默认一步只跑一种，要么一块 prefill，要么全员 decode，开 <code>--enable-mixed-chunk</code> 才混。不混也不用等：prefill 那步照样出首字，下一个 decode 步就带上它。</li>
+    <li><b>TPU 上同一套规则。</b>长短不一的 prefill 块和 decode 进同一个注意力 kernel（RPA，<a href="#s5-2">5.2</a>）；这一步的格数也要落在预编译的档位上，差的补空（3.4 末尾）。</li>
+  </ul>
+
+  <h3 id="s3-4">3.4　槽位满了以后</h3>
 __FIG_S3_CONC__
   <p>槽位就是 KV 池装得下几个人。Little 定律（见词表）：批里的人数 ≈ 吞吐 × TPOT，反过来<b>吞吐 ≈ 槽位数 × 1000 ÷ TPOT(ms)</b>。</p>
   <p>GB300 上 V4-Pro 的 dep8（第六节）实测每张 decode 卡 9,032 tok/s、TPOT 60 ms（<code>gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:794-801</code>，ISL 8K 的基线）。
@@ -48,12 +64,12 @@ __FIG_S3_CONC__
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
     XLA 按静态形状编译，batch 大小也是形状：人数不在预编译的档位上就补到最近一档，补的行照样计算（<a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>；选档见 <a href="#s14-2">14.2</a>）。</div>
 
-  <h3 id="s3-4">3.4　CPU 那几毫秒也要藏起来</h3>
+  <h3 id="s3-5">3.5　CPU 那几毫秒也要藏起来</h3>
 __FIG_S3_OVERLAP__
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
   <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐是原来的 1.1 倍。2025 年 vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是分词、回传等 CPU 活挪到了别的进程。</p>
 
-  <h3 id="s3-5">3.5　显存不够时踢谁</h3>
+  <h3 id="s3-6">3.6　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
   <p>vLLM V1 默认重算，文档说 V1 里重算开销更低。</p>
 
@@ -74,6 +90,9 @@ FIGS = {
     "__FIG_S3_CHUNK__": ("fig-s3-chunk", "fig6-chunk.svg", "topic06-fig-batch.py",
         '<b>看正在出字的人最长间隔，和新人首字晚了几格。</b><br>'
         '<em>示意单位；混合步按相加计时，偏保守。</em>'),
+    "__FIG_S3_STEPMIX__": ("fig-s3-stepmix", "fig6-stepmix.svg", "topic06-fig-batch.py",
+        '<b>每一行先排实心，剩下的才轮到浅色。</b><br>'
+        '<em>示意：规则照 vLLM V1 文档；预算、人数、prompt 长度是编排的，格子由脚本模拟。</em>'),
     "__FIG_S3_CONC__": ("fig-s3-conc", "fig6-conc.svg", "topic06-fig-batch.py",
         '<b>左边绿柱几乎一样高，右边红柱越来越高。</b><br>'
         '<em>GB300 上 SGLang 跑 V4-Pro 的公开实测；TTFT 只记三档；排队人数按比例示意；并发按每个前端计，共 14 个。</em>'),

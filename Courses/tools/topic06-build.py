@@ -226,7 +226,7 @@ for _n, _svg in NUM_LOCK:
     assert _n.replace(",", "") in _g, "正文写 %s，而 %s 里没有这个数 —— 图脚本改了，正文没跟上" % (_n, _svg)
 # 一步一停的播放器：照抄 topic05-build.py（那边有来由注释）。动画脚本在每一步落地后打点，
 #   写进 manim/steps/<Scene>.json；这里挂到 <video data-pauses>，图注秒数也从同一份 json 取。
-STEP_VIDEOS = {"topic06-spec.mp4": "SpecStep"}
+STEP_VIDEOS = {"topic06-spec.mp4": "SpecStep", "topic06-stepmix.mp4": "StepMix"}
 
 
 def _steps(mp4):

@@ -2782,7 +2782,7 @@ body.figonly section h3{margin-top:34px}
 <video src="media/topic06-contbatch.mp4?v=f9bb1ad0" autoplay loop muted playsinline
        aria-label="静态批与连续批动画。标题：同样 4 个槽位、同一串请求：两种排法。上下两组各 4 个槽位，标着槽 1 到槽 4；上组叫「静态批：凑满一批，等最长的做完」，下组叫「连续批：每一步都重新排，谁做完谁让位」。每一列是一步，每个请求一种颜色，字母 A 到 O 标在它的第一格；灰格是槽位空转。一条黄色竖线随时间往右走，右边两个计数器写「做完几个」，底下写「已走几步」，右下角写「请求长度是示意」。字幕依次是：16 个请求排队，长短不一；每一列是一步 decode，每一步都要搬一趟权重。上面：短的早做完了，槽位也得空等最长的那个（灰格＝这一趟白搬）。下面：谁做完，下一步就换排队的下一个进来，槽位一格不空。最后：同样 15 步：静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。画面复位。"></video>
 <figcaption>动画里队列一直不空，看两组各做完几个。
-  <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill。）</span></figcaption></figure>
+  <span class="sub">（18 秒无声循环，Manim 渲染。请求长度是示意，每步按等长算，没画进门那步的 prefill，3.3 那支补上。）</span></figcaption></figure>
   <p>Orca 是 2022 年 OSDI 上的一篇论文，也是论文里做的那套服务系统。今天没人直接跑它，跑的是它的招：论文叫迭代级调度，业界后来通称连续批（continuous batching），vLLM、SGLang 都按步调度。同延迟下，吞吐是 FasterTransformer（NVIDIA 早年的推理库）静态批的 36.9 倍（GPT-3 175B）。</p>
   <ul>
     <li><b>原来卡在哪：</b>老引擎对外只有「整批跑完」一个接口，调度器看不见中间的步；一批摞成「人数 × 最长长度」的方块，短的补零，中途换不掉一行。</li>
@@ -2858,7 +2858,124 @@ body.figonly section h3{margin-top:34px}
     <li><b>块不能太小，代价在权重。</b>每走一步，权重都要从 HBM 读一遍。H100 每字节带宽配约 300 次运算（989 TFLOPS ÷ 3.35 TB/s），bf16 下一步至少约 300 个 token 矩阵乘才喂得饱（本课推导）。MoE 更苛刻：V3 每个 token 只去 256 个专家里的 8 个，要每个专家凑够 300 个，一步得有 9 千多个 token。默认预算落在 8K–16K，与此吻合。</li>
   </ul>
 
-  <h3 id="s3-3">3.3　槽位满了以后</h3>
+  <h3 id="s3-3">3.3　一步里装了什么：新人怎么接上</h3>
+<figure class="fbox fwide" id="fig-s3-stepmix"><svg viewBox="0 0 1400 642" width="100%" role="img" aria-label="四步，每步 10 格预算，每格一个 token。车上 A、B、C、D 四人在出字，门口排着 E（prompt 13 个）和 F（prompt 4 个）。每一步先给车上每人 1 格 decode，剩下的格子切给排队的 prompt。第 1 步：E 切走 6 格，不出字；D 出完最后一个字下车。第 2 步：E 剩下 7 格正好装完，这一步就出首字；F 排不上。第 3 步：E 上车 decode，F 的 4 格一块装完、出首字，空 2 格。第 4 步：没人排队，5 格全是 decode，空 5 格"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一步里装了什么　——　<tspan font-weight="700">decode 先占位，剩下的格子切给 prompt</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意：每步预算 10 格（真实 8K–16K），每格 ＝ 一个 token；同一个人同一种颜色</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">实心：decode，每人 1 格、出 1 个字</text>
+<rect x="324.76000000000005" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="345" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">浅色：prompt 块，最后一块那步出首字</text>
+<rect x="0" y="102" width="1400" height="368" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一行 ＝ 一趟前向（一步）</tspan></text>
+<text class="svgsm" x="180" y="195" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步</tspan></text>
+<rect x="202" y="166" width="62" height="46" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="233" y="195" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="268" y="166" width="62" height="46" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="299" y="195" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="334" y="166" width="62" height="46" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="365" y="195" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="400" y="166" width="62" height="46" rx="4" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="431" y="195" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">D</tspan></text>
+<rect x="466" y="166" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="497" y="195" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="532" y="166" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="563" y="195" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="598" y="166" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="629" y="195" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="664" y="166" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="695" y="195" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="730" y="166" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="761" y="195" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="796" y="166" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="827" y="195" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<text class="svgsm" x="884" y="195" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">E 切走 6 格，不出字　·　D 出完最后一字，下车</text>
+<text class="svgsm" x="180" y="273" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 步</tspan></text>
+<rect x="202" y="244" width="62" height="46" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="233" y="273" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="268" y="244" width="62" height="46" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="299" y="273" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="334" y="244" width="62" height="46" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="365" y="273" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="400" y="244" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="431" y="273" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="466" y="244" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="497" y="273" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="532" y="244" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="563" y="273" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="598" y="244" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="629" y="273" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="664" y="244" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="695" y="273" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="730" y="244" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="761" y="273" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="796" y="244" width="62" height="46" rx="4" fill="#e7d2fa" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="827" y="273" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<text class="svgsm" x="884" y="273" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">E 剩下 7 格装完 → 这一步就出首字　·　F 排不上</text>
+<text class="svgsm" x="180" y="351" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 3 步</tspan></text>
+<rect x="202" y="322" width="62" height="46" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="233" y="351" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="268" y="322" width="62" height="46" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="299" y="351" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="334" y="322" width="62" height="46" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="365" y="351" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="400" y="322" width="62" height="46" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="431" y="351" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="466" y="322" width="62" height="46" rx="4" fill="#c7e4e6" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="497" y="351" fill="#007b83" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">F</tspan></text>
+<rect x="532" y="322" width="62" height="46" rx="4" fill="#c7e4e6" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="563" y="351" fill="#007b83" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">F</tspan></text>
+<rect x="598" y="322" width="62" height="46" rx="4" fill="#c7e4e6" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="629" y="351" fill="#007b83" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">F</tspan></text>
+<rect x="664" y="322" width="62" height="46" rx="4" fill="#c7e4e6" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="695" y="351" fill="#007b83" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">F</tspan></text>
+<rect x="730" y="322" width="62" height="46" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="796" y="322" width="62" height="46" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="884" y="351" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">E 上车 decode　·　F 一块装完 → 出首字　·　空 2 格</text>
+<text class="svgsm" x="180" y="429" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 4 步</tspan></text>
+<rect x="202" y="400" width="62" height="46" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="233" y="429" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A</tspan></text>
+<rect x="268" y="400" width="62" height="46" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="299" y="429" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B</tspan></text>
+<rect x="334" y="400" width="62" height="46" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="365" y="429" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C</tspan></text>
+<rect x="400" y="400" width="62" height="46" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="431" y="429" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">E</tspan></text>
+<rect x="466" y="400" width="62" height="46" rx="4" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="497" y="429" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">F</tspan></text>
+<rect x="532" y="400" width="62" height="46" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="598" y="400" width="62" height="46" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="664" y="400" width="62" height="46" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="730" y="400" width="62" height="46" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="796" y="400" width="62" height="46" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="884" y="429" fill="#202124" style="font-size:14.5px;font-variant-numeric:tabular-nums">没人排队：全是 decode　·　空 5 格</text>
+<rect x="0" y="520" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="520" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="520" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="547" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">新人没有「等着上车」那一下</tspan></text>
+<text class="svgsm" x="20" y="578" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">看 E：第 2 步出首字，第 3 步已经是实心格。从门口到车上，没有哪一步空等。</text>
+<text class="svgsm" x="20" y="602" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">看第 4 步：空着 5 格也照跑。预算是上限，没人排队就不凑。</text>
+</svg><figcaption><b>每一行先排实心，剩下的才轮到浅色。</b><span class="capmore"><br><em>示意：规则照 vLLM V1 文档；预算、人数、prompt 长度是编排的，格子由脚本模拟。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>调度规则：vLLM 文档 Optimization 页（V1 默认开 chunked prefill；先排全部 decode，预算有剩再排 prefill，装不下就切）。</p>
+<p>SGLang 默认一步只跑一种：要么一块 prefill，要么全员 decode；开 --enable-mixed-chunk 才混（Server Arguments 页）。</p>
+<p>⚠️ 示意：预算、人数、长度都是编排的；格子由 mix_sim 现算。</p></details></figure>
+<figure class="fbox fwide" id="anim-stepmix">
+<video src="media/topic06-stepmix.mp4?v=299f8d74" data-pauses="7.95,17.40,26.85,35.50" autoplay loop muted playsinline
+       aria-label="一步里装了什么的动画。标题：一步里装了什么：新人怎么接上。左边六行标签：在车上、排队、这一步、乘权重、注意力、出字。车上一开始有 A 还差 9 字、B 还差 9 字、C 还差 9 字、D 还差 1 字；门口排着 E prompt 13、F prompt 4。「这一步」是 10 个空格子。底部两行：实心＝decode：每人 1 格、出 1 字；浅色＝prompt 块：最后一块那步出首字；每步预算 10 格、每格 1 个 token（真实部署是 8K 到 16K）；人数和长度都是示意。每一步先从车上飞下实心格，再从门口飞下浅色格，然后整条下面出现「矩阵乘：不管谁是谁」，每人一段下划线标着读多少 KV，最底下标出字、首字或不出字。字幕依次是：第 1 步：车上 4 人，各占 1 格 decode；剩 6 格切给 E：13 个 prompt 先算 6 个；整条 10 格拼成一个矩阵，一起乘权重；只有注意力分开算：各读各的 KV；第 1 步完成：D 出完最后一字下车；E 这步不出字。第 2 步：车上 3 人，各占 1 格 decode；剩 7 格：E 剩下的 7 个正好装完；F 这步排不上；第 2 步完成：E 最后一块当步出首字，下一步直接 decode。第 3 步：车上 4 人，各占 1 格 decode；剩 6 格：F 的 4 个一块装完，空着 2 格；第 3 步完成：F 也当步出首字；没人在门口等着上车。第 4 步：车上 5 人，各占 1 格 decode；没人排队：空着 5 格。预算是上限，不必塞满；第 4 步完成：5 人各出 1 字，车上始终没断。最后：一步 ＝ 一趟前向：decode 先占位，剩下的格子切给 prompt。画面复位。"></video>
+<figcaption>盯住 E：从门口到车上，中间没有停靠。
+  <span class="sub">（42 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。规则照 vLLM V1；预算、人数、长度是示意，格子由脚本模拟。）</span></figcaption></figure>
+  <p>一步就是一趟前向。每步开头调度器排一次：车上的人各占一格，剩下的格子按排队顺序切给新 prompt（3.2）。拼好的这一行一起乘权重，只有注意力各读各的 KV（<a href="#s3-1">3.1</a> 的选择性批处理）。</p>
+  <ul>
+    <li><b>新人不用「等着上车」。</b>prompt 最后一块算完那一步，前向末尾已经得到下一个字的概率，首字当步采样。下一步它就是一格普通 decode，中间没有停靠站。</li>
+    <li><b>真要等，是 KV 池满了。</b>格子有剩、KV 装不下，新人只能在门口排；连车上的人都装不下，就按 3.6 请人下车。</li>
+    <li><b>只有 PD 分离才有交接。</b>prefill 机器出了首字，KV 要整段搬到 decode 机器，搬完才接着出字（第八节）。混部时 KV 本来就在同一个池里，不用搬。</li>
+    <li><b>引擎不全都混。</b>vLLM V1 照图里这样混。SGLang 默认一步只跑一种，要么一块 prefill，要么全员 decode，开 <code>--enable-mixed-chunk</code> 才混。不混也不用等：prefill 那步照样出首字，下一个 decode 步就带上它。</li>
+    <li><b>TPU 上同一套规则。</b>长短不一的 prefill 块和 decode 进同一个注意力 kernel（RPA，<a href="#s5-2">5.2</a>）；这一步的格数也要落在预编译的档位上，差的补空（3.4 末尾）。</li>
+  </ul>
+
+  <h3 id="s3-4">3.4　槽位满了以后</h3>
 <figure class="fbox fwide" id="fig-s3-conc"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="像一家座位坐满的餐厅：座位就是批里的槽位，已经坐满；翻台速度不变，每张卡的吞吐就几乎不动；再来的客人只能在门口排队，队越排越长。实测：GB300 上 SGLang 跑 DeepSeek-V4-Pro，8K 进 1K 出，decode 8 张卡。每路并发从 400 拉到 1,800，总负载是原来的 4.5 倍，每张 decode 卡的吞吐只从 8,777 涨到 9,745，涨 11%；TPOT 一直钉在 58 到 63 毫秒。首字等待却从 45 秒涨到 150 秒、253 秒"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">槽位满了再加并发　——　<tspan font-weight="700">吞吐几乎不动，多出来的人全在排队</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · SGLang · DeepSeek-V4-Pro · dep8 decode · 8K 进 1K 出 · 吞吐按 output ÷ decode GPU</text>
@@ -3016,7 +3133,7 @@ body.figonly section h3{margin-top:34px}
   <div class="note warn"><span class="t">TPU 上多一层：batch 大小要落在档位上</span>
     XLA 按静态形状编译，batch 大小也是形状：人数不在预编译的档位上就补到最近一档，补的行照样计算（<a href="topic-02.html#s5">专题二「运行时，还是编译期」</a>；选档见 <a href="#s14-2">14.2</a>）。</div>
 
-  <h3 id="s3-4">3.4　CPU 那几毫秒也要藏起来</h3>
+  <h3 id="s3-5">3.5　CPU 那几毫秒也要藏起来</h3>
 <figure class="fbox fwide" id="fig-s3-overlap"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="上：串行。CPU 排好第 N 批交给 TPU，TPU 算完再回来等 CPU 排第 N+1 批，每一步中间都夹着一段 TPU 空闲。下：重叠。TPU 算第 N 批的同时，CPU 已经在排第 N+1 批，TPU 一步接一步几乎不停。SGLang-JAX 在 Qwen3-32B 上把 prefill 和 decode 之间的空档从约 12 毫秒压到 38 微秒"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">CPU 排下一批，别让加速器干等　——　<tspan font-weight="700">12 ms → 38 µs</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意时间线。只有 12 ms、38 µs 两个数是原文的（SGLang-JAX，Qwen3-32B，prefill 与 decode 之间的空档）</text>
@@ -3076,7 +3193,7 @@ body.figonly section h3{margin-top:34px}
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
   <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐是原来的 1.1 倍。2025 年 vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是分词、回传等 CPU 活挪到了别的进程。</p>
 
-  <h3 id="s3-5">3.5　显存不够时踢谁</h3>
+  <h3 id="s3-6">3.6　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
   <p>vLLM V1 默认重算，文档说 V1 里重算开销更低。</p>
 
@@ -3651,7 +3768,7 @@ body.figonly section h3{margin-top:34px}
 <p>出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。</p>
 <p>本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。</p>
 <p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；隔板位置是示意，不代表真实字节比。</p></details></figure>
-  <p>两边一起满之后再多装人，吞吐几乎不涨（3.3）：瓶颈从装不下换成了算不动。</p>
+  <p>两边一起满之后再多装人，吞吐几乎不涨（3.4）：瓶颈从装不下换成了算不动。</p>
 
   <p>池子算错不一定报错：tpu-inference 跑 Qwen3.5 时块编号池大了约 3.5 倍，越界写入被静默钳回末尾，输出乱码（<a href="#s14-3">14.3</a>）。</p>
 
@@ -4777,7 +4894,7 @@ body.figonly section h3{margin-top:34px}
   <p>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
     同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐<b>翻了一倍多</b>。</p>
-  <p>原记录归功于容量：副本让出的显存多收了请求。用 Little 定律（3.3）核一下：</p>
+  <p>原记录归功于容量：副本让出的显存多收了请求。用 Little 定律（3.4）核一下：</p>
 <figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1074" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。同样 3 台 TP4 prefill、并发 512，只把 decode 从 TP4 换成 DEP8。上半张图画这一步每张卡要读的 KV：TP4 的 4 张卡各读一遍全部约 197 个在飞请求的 KV，其中 3 遍是重复读；DEP8 的 8 张卡各读自己那约 16 个请求。下半张用 Little 定律对账：在飞请求等于每秒输出字数乘出字间隔，TP4 是 4220 乘 0.0468 秒约 197 个，DEP8 是 11031 乘 0.0118 秒约 130 个，DEP8 反而少；出字间隔从 46.8 毫秒降到 11.8 毫秒。decode 卡从 4 张变 8 张，每张 decode 卡输出 1055 到 1379，1.31 倍；按全部卡算总吞吐每卡 1319 到 2758，2.09 倍"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">V4-Pro 换 DEP，赢在每一步读得少　——　<tspan font-weight="700">步时 46.8 → 11.8 ms</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同样 3 台 TP4 prefill、并发 512，只换 decode。条长 ＝ 这一步这张卡要读的 KV，按卡上在飞的请求数画（本课推导）</text>
@@ -11095,8 +11212,8 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R16 补充：FlashAttention 2022；FlashInfer MLSys 2025；DeepSeek-V3.2-Exp（2025-09）的 DSA 每字读 2,048 个 token、API 降价五成以上（2,048 见 V3.2 报告 §2.1）；NVFP4 KV 省约一半、损失 &lt;1%、命中率 +20%、首字延迟最多降到约三分之一；LMCache 15 倍、截断让命中率减半；SGLang（含 RadixAttention）6.4 倍（对当时其他推理系统）；投机解码 2–3 倍；GQA 每层 4,096 B ÷ MLA 1,152 B ≈ 3.6（本课推导；按每层，按每 token 是 327,680 ÷ 70,272 ≈ 4.7，因层数 80 对 61，第十五节表只给每层口径）；Ring 2023-10、Ulysses 2023-09、Meta CP 2024-11；Kimi K2 Thinking「low-latency mode」</td><td>arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>、<a href="https://arxiv.org/abs/2501.01005" target="_blank" rel="noopener">2501.01005</a>；api-docs.deepseek.com/news/news250929、arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>；developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache；arXiv <a href="https://arxiv.org/abs/2510.09665" target="_blank" rel="noopener">2510.09665</a>、<a href="https://arxiv.org/abs/2312.07104" target="_blank" rel="noopener">2312.07104</a>、<a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a>、<a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>、<a href="https://arxiv.org/abs/2309.14509" target="_blank" rel="noopener">2309.14509</a>、<a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a>；huggingface.co/moonshotai/Kimi-K2-Thinking。2026-10-16 核对</td></tr>
     <tr><td>R18 补充：DeepSeek-V4 的 CSA 每 4 个 token 压成一条 KV、HCA 每 128 个压成一条，另留最近 128 个 token 的滑窗 KV；CSA 层再由索引器从压缩条目里挑 top-k 读，HCA 层不挑（4.1「存和读都改」）；DeepSeek 一天的 token 近八成是输入（6,080 ÷ 7,760，本课推导）；226.75 节点 × 8 卡 ≈ 1,814 卡（本课推导）</td><td>DeepSeek-V4 技术报告 §2.3（CSA／HCA「every m tokens into one entry」）；Hugging Face deepseek-ai/DeepSeek-V4-Pro config.json 的 compress_ratios（4／128）、sliding_window 128 与 index_topk；VLLM-V4PRO-RUNBOOK.md:300（「CSA…再由索引器挑 top-1024」「HCA…不挑」）；open-infra-index day_6</td></tr>
     <tr><td>R21 补充 · 0.1：o1 2024-09 发布，先想再答（思维链）；DeepSeek-R1 2025-01，原文「ranges from generating hundreds to thousands of reasoning tokens」</td><td>openai.com/index/learning-to-reason-with-llms（2024-09-12）；arXiv <a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="noopener">2501.12948</a> §2.2.4</td></tr>
-    <tr><td>R21 补充 · 4.5 ／ 3.4 ／ 15.3：vLLM V1 前缀缓存 V0 默认关（命中率低时 CPU 开销拖慢）、V1 改数据结构后命中率 0% 时吞吐降不到 1%、默认开；V1 吞吐最多 1.7 倍（对 V0，原文注明不开 multi-step scheduling）；V1 的 EngineCore 进程只跑调度和模型执行，分词、多模态输入处理、反分词、流式回传与之重叠</td><td>blog.vllm.ai/2025/01/27/v1-alpha-release.html（博客日期 2025-01-27，见 URL 与页内署日；「less than 1% decrease in throughput even when the cache hit rate is 0%」「up to 1.7x higher throughput compared to V0」）。2026-10-15 核对</td></tr>
-    <tr><td>R21 补充 · 3.4 ／ 6 ／ 14.6 ／ 15.3：SGLang v0.4（2024-12）零开销调度吞吐 1.1 倍；DeepSeek 模型的 DP attention decode 吞吐最多 1.9 倍；cache-aware 路由命中率 20% → 75%、吞吐 82,665 → 158,596 tok/s（≈1.9 倍；原文表头是 v0.3 对 v0.4，测试负载为多组长前缀、各组完全均衡）</td><td>lmsys.org/blog/2024-12-04-sglang-v0-4（「1.1x increase in throughput」「up to 1.9x decoding throughput improvement」；1.9 ＝ 158,596 ÷ 82,665 本课推导，原文也写 up to 1.9x）</td></tr>
+    <tr><td>R21 补充 · 4.5 ／ 3.5 ／ 15.3：vLLM V1 前缀缓存 V0 默认关（命中率低时 CPU 开销拖慢）、V1 改数据结构后命中率 0% 时吞吐降不到 1%、默认开；V1 吞吐最多 1.7 倍（对 V0，原文注明不开 multi-step scheduling）；V1 的 EngineCore 进程只跑调度和模型执行，分词、多模态输入处理、反分词、流式回传与之重叠</td><td>blog.vllm.ai/2025/01/27/v1-alpha-release.html（博客日期 2025-01-27，见 URL 与页内署日；「less than 1% decrease in throughput even when the cache hit rate is 0%」「up to 1.7x higher throughput compared to V0」）。2026-10-15 核对</td></tr>
+    <tr><td>R21 补充 · 3.5 ／ 6 ／ 14.6 ／ 15.3：SGLang v0.4（2024-12）零开销调度吞吐 1.1 倍；DeepSeek 模型的 DP attention decode 吞吐最多 1.9 倍；cache-aware 路由命中率 20% → 75%、吞吐 82,665 → 158,596 tok/s（≈1.9 倍；原文表头是 v0.3 对 v0.4，测试负载为多组长前缀、各组完全均衡）</td><td>lmsys.org/blog/2024-12-04-sglang-v0-4（「1.1x increase in throughput」「up to 1.9x decoding throughput improvement」；1.9 ＝ 158,596 ÷ 82,665 本课推导，原文也写 up to 1.9x）</td></tr>
     <tr><td>R21 补充 · 4.6：SGLang HiCache（2025-09）三层分层缓存，后端 Mooncake、3FS、NIXL；长上下文与多轮对话基准吞吐最多 6 倍、TTFT 最多降 80%（对全部重算）</td><td>lmsys.org/blog/2025-09-10-sglang-hicache（「up to 6× throughput improvement and up to 80% reduction in TTFT」）</td></tr>
     <tr><td>R21 补充 · 第八节：NVIDIA Dynamo 2025-03-18 开源，含 PD 分离、KV 感知路由（Smart Router）、KV 下放（Memory Manager）；传输库 NIXL</td><td>nvidianews.nvidia.com/news/nvidia-dynamo-open-source-library-accelerates-and-scales-ai-reasoning-models；NIXL 名字见 NVIDIA 技术博客「NVIDIA Dynamo, A Low-Latency Distributed Inference Framework for Scaling Reasoning AI Models」</td></tr>
     <tr><td>R21 补充 · 14.6：llm-d 2025-05-20 发布，含 AI-aware 路由（送到最可能有热缓存的服务器）</td><td>redhat.com 新闻稿「Red Hat Launches the llm-d Community」（Boston，2025-05-20）</td></tr>
@@ -11114,7 +11231,7 @@ body.figonly section h3{margin-top:34px}
     <tr><td>R32 补充 · 5.1：Flash-Decoding 的 8 倍是 CodeLlama-34B、batch 1、序列 512 到 64k 的 decode 速度，对照为纯 PyTorch 注意力、FlashAttention v2（2.2 前）、FasterTransformer；注意力本身最多是 FlashAttention 的 50 倍</td><td>crfm.stanford.edu/2023/10/12/flashdecoding.html（「Flash-Decoding unlocks up to 8x speedups in decoding speed for very large sequences」「the attention itself is up to 50x faster than FlashAttention」）</td></tr>
     <tr><td>R32 补充 · 第八节：Splitwise 同成本同功耗下吞吐 2.35 倍，或吞吐 1.4 倍、成本低 20%（对不拆阶段的现有集群设计）</td><td>arXiv <a href="https://arxiv.org/abs/2311.18677" target="_blank" rel="noopener">2311.18677</a> 摘要（「Splitwise clusters achieve up to 1.4× higher throughput at 20% lower cost. Alternatively, they can deliver 2.35× more throughput under the same power and cost budgets.」）</td></tr>
     <tr><td>R32 补充 · 第十二节：GPTQ 3 bit OPT-175B，batch 1 逐字延迟 1 张 A100 71 ms 对 FP16 5 张 230 ms（3.24×，正文按原文取 3.25）；2 张 A6000 130 ms 对 FP16 8 张 589 ms（4.53×）</td><td>arXiv <a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener">2210.17323</a> 表 6（「the 3-bit OPT-175B model obtained via GPTQ running on a single A100 is about 3.25× faster than the FP16 version (running on 5 GPUs) in terms of average time per token」）</td></tr>
-    <tr><td>R44 补充 · 4.5 ／ 3.4 ／ 9.7 ／ 12.3 ／ 12.8：vLLM V1 alpha 公开于 2025-01（4.5「2025 年 1 月」、3.4「2025 年」）；MegaScale-Infer 首版 2025-04-03（9.7「2025 年」）；Kimi K2 Thinking 2025-11 发布（12.3「2025 年」）；NVFP4 KV 首字延迟「最多降到约三分之一」即原文 up to 3x lower latency；V3.2 FP8 KV 同显存多接六成多请求 ＝ 1,284 ÷ 788 ≈ 1.63 减 1（本课推导，同第 116 行）</td><td>blog.vllm.ai/2025/01/27/v1-alpha-release.html（2025-01-27）；arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a> 提交历史 v1「Thu, 3 Apr 2025」；huggingface.co/moonshotai/Kimi-K2-Thinking（HF API 仓库 createdAt 2025-11-04，首次 README 更新 2025-11-06；第三方报道均记 2025-11-06 发布，正文只写年份）；developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache 图 4 注「NVFP4 KV cache delivers up to 3x lower latency and 20% higher cache hit rate compared to FP8 KV cache」、正文「up to 3x better time-to-first-token (TTFT) latency」。2026-10-15 核对</td></tr>
+    <tr><td>R44 补充 · 4.5 ／ 3.5 ／ 9.7 ／ 12.3 ／ 12.8：vLLM V1 alpha 公开于 2025-01（4.5「2025 年 1 月」、3.5「2025 年」）；MegaScale-Infer 首版 2025-04-03（9.7「2025 年」）；Kimi K2 Thinking 2025-11 发布（12.3「2025 年」）；NVFP4 KV 首字延迟「最多降到约三分之一」即原文 up to 3x lower latency；V3.2 FP8 KV 同显存多接六成多请求 ＝ 1,284 ÷ 788 ≈ 1.63 减 1（本课推导，同第 116 行）</td><td>blog.vllm.ai/2025/01/27/v1-alpha-release.html（2025-01-27）；arXiv <a href="https://arxiv.org/abs/2504.02263" target="_blank" rel="noopener">2504.02263</a> 提交历史 v1「Thu, 3 Apr 2025」；huggingface.co/moonshotai/Kimi-K2-Thinking（HF API 仓库 createdAt 2025-11-04，首次 README 更新 2025-11-06；第三方报道均记 2025-11-06 发布，正文只写年份）；developer.nvidia.com/blog/optimizing-inference-for-long-context-and-large-batch-sizes-with-nvfp4-kv-cache 图 4 注「NVFP4 KV cache delivers up to 3x lower latency and 20% higher cache hit rate compared to FP8 KV cache」、正文「up to 3x better time-to-first-token (TTFT) latency」。2026-10-15 核对</td></tr>
     <tr><td>R49 补充 · 1.2 图注：b ＝ 64 时专家覆盖率 87%、每人分到权重 9.14 GB</td><td>本课推导：第 19 行公式取 b ＝ 64，覆盖率 ＝ 1 − (31/32)<sup>64</sup> ≈ 0.87，[非路由 ＋ 653.9B × 0.87] ÷ 64 ≈ 9.14 GB；脚本断言见 topic06-fig-phases.py:93</td></tr>
     <tr><td>R49 补充 · 第四节：MHA（2017）；Qwen3.5 混合池块编号池算大约 3.5 倍；V3 一条 64K 序列 KV ≈ 4.29 GiB、FP8 每 token 40,016 字节</td><td>arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a>（Attention Is All You Need，2017-06）；tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77（「block_id pool ~3.5× 过大」）；本课推导：70,272 B × 65,536 ÷ 2<sup>30</sup> ≈ 4.29 GiB，656 B × 61 层 ＝ 40,016 B</td></tr>
     <tr><td>R49 补充 · 第三节：mem-fraction 调高后端到端吞吐只多 0.8%；Gemma4 256K 的 prompt 切成 16 块</td><td>本课推导：10,704 ÷ 10,614 ≈ 1.008（两数同第 36 行）；tpu/tpu-inference Gemma4-31B README.md:224-226（max-num-batched-tokens 16384，「将 256K 拆为 16 个 16K chunk」）</td></tr>
@@ -11222,6 +11339,7 @@ body.figonly section h3{margin-top:34px}
 <tr><td>L97 补充 · 13.2 图 fig-s13-snap：int8 快照 ≈48 MiB = 45 ×（64×128×128×1 B ＋ 72 KiB），只压递归状态；32K 前缀快照全留时，间隔 64／256／1,024 → 512／128／32 份、91.6／22.9／5.7 GiB，平均重算 32／128／512 token；同段 KV 32,768 × 30 KiB ≈ 0.94 GiB。全部本课推导，「全留」是假设</td><td>Qwen3.5-397B-A17B config.json；SGLang mem_cache/mamba_checkpoint_pool.py（conv 状态保持原 dtype）。2026-10-18 核对</td></tr>
     <tr><td>L98 补充 · 14 节里 tpu-inference 的对照数：冷启动约 7 min；混合分配器 4 层共用一块 KV 张量致块池约 3.5 倍；GDN 递推 bf16 死循环；/dev/shm 残留每分片 2 s→80 s、7 min→约 2 h；PD 每请求约 349 MB、单并发 0.95 倍</td><td>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:20-33、50-54、60-70、750、789-791。2026-10-18 核对</td></tr>
     <tr><td>L99 补充 · 14 节主线（vLLM 的 PyTorch TPU 后端，写作时尚未公开）：v7x-8 ＝ 4 芯片 8 TensorCore、768 GiB；GDN 状态约 189 MB/序列（FP32）；统一池上线 PCP8 约 −18.6%；统一池 prefill 慢 2.2 倍、换视图后指令包 366→87；PCP8 假点约 2.07、真实约 0.85（起点 ＝ 1）；prefill 四刀 1.0565 × 1.0945 × 1.2553 × 1.091 ≈ 1.58、实测约 1.59；收尾 PCP8 ÷ DP8 ≈ 0.89；不排序 MoE daily 约 +12.5%；BF16 状态 KV 池 +12%、同时在跑 208→232</td><td>私有实测，按起点 ＝ 1.00 换算成指数；768 GiB ＝ 4 × 192 GiB、189 MB ＝ 45 层 × 64 头 × 128 × 128 × 4 B、四百来 GB 按 397B × 1 字节估，本课推导；「PCP 为延迟」为本课推测。栈公开后补名字与链接。2026-10-18 核对</td></tr>
+    <tr><td>L100 补充 · 3.3 新增「一步里装了什么」（原 3.3–3.5 顺延为 3.4–3.6）：vLLM V1 开 chunked prefill 时先排全部 decode、预算有剩再排 prefill、装不下就切；SGLang --enable-mixed-chunk 默认关，即一步不混 prefill 和 decode；图与动画的预算、人数、长度均为示意</td><td>docs.vllm.ai Optimization and Tuning 页 Chunked Prefill 一节；docs.sglang.ai Server Arguments 页。2026-10-18 核对</td></tr>
   </table></div>
 </div></section>
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""专题六「推理」的五支动画：连续批处理（第四节）、投机解码一步（第十一节）、分页 KV（第三节）、PD 分离（第八节）、KV 当存储（第三节）。
+r"""专题六「推理」的六支动画：连续批处理（第三节）、投机解码一步（第十一节）、分页 KV（第四节）、PD 分离（第八节）、KV 当存储（第四节）、一步里装了什么（第三节）。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间或第三维）
   · ContBatch —— 静态甘特图（fig6-gantt）画得出结果，画不出「同一时刻两边各走到哪」。
@@ -14,6 +14,8 @@ r"""专题六「推理」的五支动画：连续批处理（第四节）、投�
   · KVStore —— 前缀复用加分层下放的内容是两串动作：查找「从上往下一层层找、找到就停」，淘汰「满了把最冷的挤下一层、
     下一层也满就接着往下推」。静态图（fig6-disk-cache、fig6-offload）只给命中前后的首字对比和盈亏带宽，
     画不出「找了几层」和「块在层间搬来搬去」，而这两个动作正是「KV 当存储」的意思。
+  · StepMix —— 「新人怎么接上」是跨步的事：E 的 prompt 第 1 步切一块、第 2 步装完当步出首字、第 3 步已经是一格 decode。
+    静态图（fig6-stepmix）把四行摆在一起，看得出每行装了什么，看不出格子从哪来、人怎么从门口挪到车上。
 
 ⛔ 数据从哪来（当场算，断言钉住）
   · ContBatch：4 个槽位、16 个请求，长度 REQ 是**示意**（前 8 个与 fig6-gantt 的 3/8/2/5/6/2/7/4 相同，
@@ -29,6 +31,9 @@ r"""专题六「推理」的五支动画：连续批处理（第四节）、投�
     断言四个请求依次是 HBM 命中、主机内存命中、SSD 命中、全不中，最后一个把淘汰一路推到 SSD。首字条里只有
     「SSD 拉回 : 重算 ＝ 0.5 : 13」有出处（DeepSeek 磁盘缓存，同 fig6-disk-cache），HBM／主机内存两条长短是示意。
 
+  · StepMix：预算 10 格、车上 4 人、门口 2 人都是示意（MIX_B / MIX_RUN0 / MIX_Q0），规则照 vLLM V1 文档
+    （先排全部 decode，预算有剩再排 prefill，装不下就切），由 mix_sim 现模拟；与 topic06-fig-batch.py 同一组数、同一组断言。
+
 ⛔ 刻意没画
   · ContBatch：新请求进来那一步的 prefill 有多重（4.2 节 chunked prefill 那张图的事）；请求到达时间（假设一开始全在排队）；
     每一步的时长随批里人数变化（这里每步等长）。
@@ -38,20 +43,23 @@ r"""专题六「推理」的五支动画：连续批处理（第四节）、投�
   · KVStore：部分命中（只命中前缀的前一段，剩下的接着算）；远端存储那一层（Mooncake／LMCache，3.6 正文）；
     盈亏带宽（搬回来比重算慢就不该存，fig6-offload 的事）；块大小与真实容量。
 
+  · StepMix：KV 池满了的情况（3.4、3.6）；每步耗时随格数变化；SGLang 默认不混批（正文交代）；PD 分离的 KV 交接（第八节）。
+
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py ContBatch WebPages/media/topic06-contbatch.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py SpecStep  WebPages/media/topic06-spec.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py PagedKV   WebPages/media/topic06-paged.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py PDSplit   WebPages/media/topic06-pdsplit.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py KVStore   WebPages/media/topic06-kvstore.mp4
-   SpecStep 每一步落地的停顿时刻写进 steps/SpecStep.json（课件挂 data-pauses）。
+   构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py StepMix   WebPages/media/topic06-stepmix.mp4
+   SpecStep、StepMix 每一步落地的停顿时刻写进 steps/<Scene>.json（课件挂 data-pauses）。
 """
 import json
 import math
 import os
 
 from manim import (Scene, VGroup, Rectangle, Line, Text, ValueTracker, FadeIn, FadeOut, Indicate,
-                   WHITE, GREY, GREY_B, BLUE, GREEN, RED, YELLOW, ORANGE, PURPLE_B,
+                   WHITE, GREY, GREY_B, BLUE, GREEN, RED, YELLOW, ORANGE, PURPLE_B, TEAL,
                    UP, DOWN, LEFT, RIGHT, linear)
 
 STEPS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "steps")
@@ -957,3 +965,210 @@ class KVStore(Scene):
         self.play(*[FadeIn(b) for b in fresh.values()], FadeIn(tx(INTRO, 24, GREY_B).next_to(title, DOWN, buff=0.18)),
                   run_time=0.5)                  # ＝ 第 0 帧：初始摆放 ＋ 第一句字幕
         self.wait(0.6)
+
+
+# ════════════════════════════════════════════════════════════════
+# ⑥ StepMix：一步里装了什么（第三节 3.3）
+# ════════════════════════════════════════════════════════════════
+MIX_B = 10                                                   # ⚠️ 示意：每步 token 预算（真实 8K–16K）
+MIX_RUN0 = [("A", 40, 9), ("B", 12, 9), ("C", 25, 9), ("D", 7, 1)]   # 名字, 已有 KV, 还要出几个字
+MIX_Q0 = [("E", 13, 6), ("F", 4, 5)]                         # 名字, prompt 长度, 一共要出几个字
+MIX_T = 4
+MIXCOL = {"A": BLUE, "B": GREEN, "C": ORANGE, "D": GREY_B, "E": PURPLE_B, "F": TEAL}
+
+
+def mix_sim():
+    """与 topic06-fig-batch.py 的 mix_sim 同一套规则（vLLM V1：先排全部 decode，预算有剩再切 prefill），
+    这里多记每步开始时车上／门口的状态，给画面用。"""
+    run = [list(r) for r in MIX_RUN0]
+    q = [[n, p, 0, o] for n, p, o in MIX_Q0]
+    steps = []
+    for _ in range(MIX_T):
+        st = dict(run=[(r[0], r[2]) for r in run], queue=[(e[0], e[1]) for e in q])
+        cells, out, ctx, budget = [], {}, {}, MIX_B
+        for r in run:
+            cells.append((r[0], "d", 1))
+            budget -= 1
+            r[1] += 1
+            r[2] -= 1
+            ctx[r[0]], out[r[0]] = r[1], "tok"
+        joined = []
+        for e in q:
+            if budget == 0:
+                break
+            n = min(budget, e[1])
+            budget -= n
+            e[1] -= n
+            e[2] += n
+            cells.append((e[0], "p", n))
+            ctx[e[0]] = e[2]
+            out[e[0]] = "first" if e[1] == 0 else "none"
+            if e[1] == 0:
+                joined.append(e)
+        left = [r[0] for r in run if r[2] == 0]
+        run = [r for r in run if r[2] > 0]
+        for e in joined:
+            q.remove(e)
+            run.append([e[0], e[2], e[3] - 1])
+        st.update(cells=cells, out=out, ctx=ctx, free=budget, left=left,
+                  joined=[e[0] for e in joined], wait=[e[0] for e in q],
+                  run_after=[(r[0], r[2]) for r in run], queue_after=[(e[0], e[1]) for e in q])
+        steps.append(st)
+    return steps
+
+
+MIX = mix_sim()
+assert MIX[0]["cells"][-1] == ("E", "p", 6) and MIX[0]["out"]["E"] == "none" and MIX[0]["left"] == ["D"]
+assert MIX[1]["cells"][-1] == ("E", "p", 7) and MIX[1]["out"]["E"] == "first" and MIX[1]["wait"] == ["F"]
+assert MIX[2]["cells"][-1] == ("F", "p", 4) and MIX[2]["out"]["F"] == "first" and MIX[2]["free"] == 2
+assert all(k == "d" for _, k, _ in MIX[3]["cells"]) and MIX[3]["free"] == 5
+assert MIX[0]["ctx"] == {"A": 41, "B": 13, "C": 26, "D": 8, "E": 6} and MIX[1]["ctx"]["E"] == 13
+MIX_SAY = [
+    ("剩 6 格切给 E：13 个 prompt 先算 6 个", "第 1 步完成：D 出完最后一字下车；E 这步不出字"),
+    ("剩 7 格：E 剩下的 7 个正好装完；F 这步排不上", "第 2 步完成：E 最后一块当步出首字，下一步直接 decode"),
+    ("剩 6 格：F 的 4 个一块装完，空着 2 格", "第 3 步完成：F 也当步出首字；没人在门口等着上车"),
+    ("没人排队：空着 5 格。预算是上限，不必塞满", "第 4 步完成：5 人各出 1 字，车上始终没断"),
+]
+
+
+class StepMix(Scene):
+    def construct(self):
+        marks = []
+        CW, CX0, YS = 0.82, -3.6, -0.25              # 预算格宽、第 0 格左边、这一步那条的 y
+        YR, YQ, YW, YA, YO = 1.85, 0.85, -1.05, -1.72, -2.6   # 车上 ／ 排队 ／ 乘权重 ／ 注意力 ／ 出字
+        LX = -5.3
+
+        def cx(k):
+            return CX0 + (k + 0.5) * CW
+
+        def chip(name, s):
+            col = MIXCOL[name]
+            g = VGroup(Rectangle(width=1.62, height=0.6, stroke_color=col, stroke_width=3,
+                                 fill_color=col, fill_opacity=0.25),
+                       tx("%s  %s" % (name, s), 19, WHITE))
+            g[1].move_to(g[0].get_center())
+            return g
+
+        def chips(run, queue):
+            d = {}
+            for i, (n, left) in enumerate(run):
+                d[n] = chip(n, "还差 %d 字" % left).move_to([CX0 + 0.81 + i * 1.78, YR, 0])
+            for i, (n, p) in enumerate(queue):
+                d[n] = chip(n, "prompt %d" % p).move_to([CX0 + 0.81 + i * 1.78, YQ, 0])
+            return d
+
+        def cell(name, kind, k):
+            col = MIXCOL[name]
+            g = VGroup(Rectangle(width=CW - 0.08, height=0.62, stroke_color=col, stroke_width=3,
+                                 fill_color=col, fill_opacity=0.9 if kind == "d" else 0.3),
+                       tx(name, 24, WHITE, True))
+            g[1].move_to(g[0].get_center())
+            return g.move_to([cx(k), YS, 0])
+
+        title = tx("一步里装了什么：新人怎么接上", 30).to_edge(UP)
+        labs = VGroup(*[tx(s, 22, GREY_B).move_to([LX, y, 0]) for s, y in
+                        (("在车上", YR), ("排队", YQ), ("这一步", YS), ("乘权重", YW), ("注意力", YA), ("出字", YO))])
+        slots = VGroup(*[Rectangle(width=CW - 0.08, height=0.62, stroke_color=GREY, stroke_width=1.5)
+                         .set_stroke(opacity=0.6).move_to([cx(k), YS, 0]) for k in range(MIX_B)])
+        legend = VGroup(tx("实心＝decode：每人 1 格、出 1 字　　浅色＝prompt 块：最后一块那步出首字", 18, GREY_B).move_to([0, -3.3, 0]),
+                        tx("每步预算 10 格、每格 1 个 token（真实部署是 8K 到 16K）；人数和长度都是示意", 18, GREY).move_to([0, -3.68, 0]))
+        cap0 = tx(" ", 26, GREY_B).next_to(title, DOWN, buff=0.18)
+        st0 = chips(MIX[0]["run"], MIX[0]["queue"])
+        self.add(title, labs, slots, legend, cap0, *st0.values())
+        self.cap = cap0
+        cur = dict(st0)
+
+        def say(s, color=GREY_B, after=0.5):
+            n = tx(s, 26, color).next_to(title, DOWN, buff=0.18)
+            self.play(FadeOut(self.cap), FadeIn(n), run_time=0.35)
+            self.cap = n
+            if after:
+                self.wait(after)
+
+        def hold(t=2.0):
+            marks.append(round(self.renderer.time + 0.3, 2))
+            self.wait(t)
+
+        self.wait(0.6)
+        for s, st in enumerate(MIX):
+            step_g = VGroup()
+            # ① decode 先占位：车上每人飞下来 1 格
+            say("第 %d 步：车上 %d 人，各占 1 格 decode" % (s + 1, len(st["run"])))
+            k, groups, flies = 0, [], []
+            for name, kind, n in st["cells"]:
+                g0 = k
+                for _ in range(n):
+                    c = cell(name, kind, k)
+                    tgt = c.get_center()
+                    c.move_to(cur[name].get_center())
+                    flies.append((kind, c, tgt))
+                    k += 1
+                groups.append((name, kind, g0, k))
+            used = k
+            dec = [(c, t) for kd, c, t in flies if kd == "d"]
+            self.play(*[c.animate.move_to(t) for c, t in dec], run_time=0.7)
+            step_g.add(*[c for c, _ in dec])
+            # ② 剩下的切给 prompt
+            say(MIX_SAY[s][0], PURPLE_B if st["free"] < MIX_B - len(st["run"]) else GREY_B)
+            pre = [(c, t) for kd, c, t in flies if kd == "p"]
+            if pre:
+                anims = [c.animate.move_to(t) for c, t in pre]
+                for n, p in st["queue"]:                 # 门口那张卡上的剩余数跟着减
+                    took = sum(m for nm, kd, m in st["cells"] if nm == n)
+                    if took and p - took > 0:
+                        nc = chip(n, "prompt %d" % (p - took)).move_to(cur[n].get_center())
+                        anims += [FadeOut(cur[n]), FadeIn(nc)]
+                        cur[n] = nc
+                self.play(*anims, run_time=0.8)
+                step_g.add(*[c for c, _ in pre])
+            # ③ 整条一起乘权重；注意力各读各的
+            say("整条 %d 格拼成一个矩阵，一起乘权重" % used, BLUE, after=0.2)
+            bar = VGroup(Rectangle(width=used * CW - 0.08, height=0.4, stroke_width=0, fill_color=BLUE, fill_opacity=0.5),
+                         tx("矩阵乘：不管谁是谁", 20, WHITE))
+            bar.move_to([CX0 + used * CW / 2, YW, 0])
+            bar[1].move_to(bar[0].get_center())
+            self.play(FadeIn(bar), run_time=0.5)
+            say("只有注意力分开算：各读各的 KV", after=0.2)
+            attn = VGroup()
+            for name, kind, a, b in groups:
+                col = MIXCOL[name]
+                ln = Line([CX0 + a * CW + 0.08, YA + 0.15, 0], [CX0 + b * CW - 0.08, YA + 0.15, 0], color=col, stroke_width=5)
+                attn.add(ln, tx("读 %d" % st["ctx"][name], 18, col).move_to([CX0 + (a + b) * CW / 2, YA - 0.14, 0]))
+            self.play(FadeIn(attn), run_time=0.5)
+            outs = VGroup()
+            for name, kind, a, b in groups:
+                o = st["out"][name]
+                t, col = {"tok": ("出字", GREEN), "first": ("首字", YELLOW), "none": ("不出字", GREY)}[o]
+                outs.add(tx(t, 20 if o != "none" else 18, col, o == "first").move_to([CX0 + (a + b) * CW / 2, YO, 0]))
+            self.play(FadeIn(outs), run_time=0.5)
+            step_g.add(bar, attn, outs)
+            # ④ 下车、上车、剩余数更新
+            new = chips(st["run_after"], st["queue_after"])
+            anims = []
+            for n, c in cur.items():
+                if n in st["joined"]:
+                    anims.append(c.animate.move_to(new[n].get_center()))
+                else:
+                    anims.append(FadeOut(c))
+            self.play(*anims, run_time=0.6)
+            self.remove(*cur.values())
+            self.play(*[FadeIn(c) for c in new.values()], run_time=0.3)
+            cur = new
+            say(MIX_SAY[s][1], GREEN, after=0)
+            hold(2.0)
+            self.play(FadeOut(step_g), run_time=0.4)
+            self.remove(step_g)
+
+        say("一步 ＝ 一趟前向：decode 先占位，剩下的格子切给 prompt", YELLOW, after=0)
+        self.wait(2.2)
+        # 收尾复位：清干净，再摆一套跟第 0 帧一模一样的
+        self.play(FadeOut(VGroup(*cur.values())), FadeOut(self.cap), run_time=0.5)
+        self.remove(*cur.values(), self.cap)
+        fresh = chips(MIX[0]["run"], MIX[0]["queue"])
+        self.play(*[FadeIn(c) for c in fresh.values()], run_time=0.5)
+        self.add(tx(" ", 26, GREY_B).next_to(title, DOWN, buff=0.18))    # ＝ 第 0 帧那个空字幕
+        self.wait(0.6)
+
+        os.makedirs(STEPS_DIR, exist_ok=True)
+        with open(os.path.join(STEPS_DIR, "StepMix.json"), "w") as fh:
+            json.dump({"pauses": marks, "duration": round(self.renderer.time, 2)}, fh)
