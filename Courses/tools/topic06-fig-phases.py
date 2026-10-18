@@ -124,7 +124,7 @@ def fmt(x):
 def fig_ai():
     f = Fig(W, "运算强度随一次喂进的行数 M 变化的曲线，横纵都是对数轴。矩阵是 7168×7168 的 bf16 权重。"
                "M＝1 时强度约 1，远低于 v7 的屋脊点 313；decode 一次 64 个人是 63，256 个人是 239，仍在屋脊点下面；"
-               "prefill 一段 4K 的 prompt，M＝4096，强度 1,911，远在屋脊点上面。曲线在 M≈343 处穿过屋脊点")
+               "prefill 一段 4K 的 prompt，M＝4096，远在屋脊点上面。曲线在 M≈343 处穿过屋脊点")
     y0 = f.header("一次喂几行，决定卡在哪　——　<tspan font-weight=\"700\">decode 在屋脊点下面，prefill 在上面</tspan>",
                   "一个 7168×7168 的 bf16 矩阵乘：横轴是一次喂进去的行数 M（token 数），纵轴是每搬 1 字节做几次运算。两轴都是对数",
                   [(GR, "decode：M ＝ 同时解码的人数"), (OR, "prefill：M ＝ prompt 长度"), (RD, "v7 屋脊点")])
@@ -170,9 +170,6 @@ def fig_ai():
         pts.append((round(X(m), 1), round(Y(ai(m)), 1)))
         k += 1
     f.path(pts, INK, 2.4, arrow=False)
-    # 上限
-    f.line(X(1024), Y(AI_CAP), X1, Y(AI_CAP), GY2, 1.2, dash="2,4", arrow=False)
-    f.t(X1 - 6, Y(AI_CAP) - 10, "封顶线 3,584 次（怎么来的见右下框）", GY, size=13, anchor="end")
 
     # 交点
     f.line(X(M_CROSS), Y(RIDGE), X(M_CROSS), Y1, RD, 1.2, dash="3,3", arrow=False)
@@ -185,29 +182,13 @@ def fig_ai():
             (1, AI_B1, GR, "decode 1 人：每字节算 1 次", 16, 26, None),
             (64, AI_B64, GR, "decode 64 人：每字节算 63 次", -14, -14, "end"),
             (256, AI_B256, GR, "decode 256 人：每字节算 239 次", 56, 62, None),
-            (4096, AI_PRE, OR, "prefill 一段 4K prompt：每字节算 1,911 次", -16, -6, "end")):
+            (4096, AI_PRE, OR, "prefill 一段 4K prompt：远在线上", -16, -6, "end")):
         f.p.append('<circle cx="%.1f" cy="%.1f" r="8" fill="%s"/>' % (X(m), Y(v), col))
         f.t(X(m) + dx, Y(v) + dy, lab, col, True, 15, anc)
         if m == 256:                     # 标签挪到交点竖线右侧，拉一根引线
             f.line(X(m) + 6, Y(v) + 6, X(m) + dx - 4, Y(v) + dy - 14, col, 1.2, arrow=False)
-    # ⛔ 2026-10-18 现场：「1,911 怎么来的忘了」「3,584 那句不懂」——&#160;推导只写在图下小字里，
-    #   看图的人够不着。⭐ 把账直接摆在图里空着的右下角。
-    PRE_OPS = 2 * 4096 * H * H
-    PRE_BYTES = 2 * (H * H + 2 * 4096 * H)
-    assert round(PRE_OPS / 1e8) == 4209 and round(PRE_BYTES / 1e8, 2) == 2.20
-    assert round(PRE_OPS / PRE_BYTES) == round(AI_PRE)
-    bx, by, bw = 884, Y(100) + 40, 446
-    rows = [("这些数怎么算：7168×7168 的权重，bf16 每个数 2 字节", INK, True),
-            ("运算 ＝ M 行 × 7168 × 7168 × 2（乘加各算一次）", GY, False),
-            ("搬的 ＝（权重 7168² ＋ 输入 M×7168 ＋ 输出 M×7168）× 2", GY, False),
-            ("M＝4,096：4,209 亿次 ÷ 2.20 亿字节 ≈ 1,911", OR, True),
-            ("M 很大时权重分摊到几乎为零，每行只剩：算 7168×7168×2 次，", GY, False),
-            ("读进写出各 7168 个数（7168×4 字节）→ 比值 7168÷2 ＝ 3,584", GY, False)]
-    bh = 16 + 21 * len(rows)
-    assert by + bh < Y1 - 30, "推导框压到过线标签了"
-    f.box(bx, by, bw, bh, "#fff", LINE, 6)
-    for i, (txt, col, bold) in enumerate(rows):
-        f.t(bx + 12, by + 24 + 21 * i, txt, col, bold, 12)
+    # ⛔ 2026-10-18 现场：「这个上界没有任何用处……超过 313 才是人关心的东西。1911 也去掉，别让人分心」
+    #   ⭐ 图上只留跟屋脊线比的东西：prefill 的点照画（它在线上面就够了），不标数；封顶线不画。
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "decode 再多拼人也难过线，prefill 一段 prompt 就远远过线", [
         "decode 一步每人只喂 1 行，256 个人拼一起也才每字节算 239 次；prefill 一段 4K prompt 一次就是 4,096 行。",

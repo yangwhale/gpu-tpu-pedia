@@ -18,7 +18,7 @@ BODY = '''
     <tr><td>TPU v7：FP8 4,614 TFLOP/s、HBM 192 GiB（≈ 206.2 GB）、7.37 TB/s，每芯片 2 个 device；BF16 2,307 TFLOP/s，屋脊点 ≈313 FLOP/字节</td><td>Google Cloud TPU7x 公开规格页（写 7,380 GB/s；7.37 TB/s 取 Google 博客 Ironwood: The first Google TPU for the age of inference，2025-04，差 0.14% 不影响屋脊点）；JAX jax/_src/pallas/mosaic/tpu_info.py 记每芯片 HBM 206e9 字节（≈ 191.9 GiB），即规格表的 192 GiB；BF16 与屋脊点本课推导：4,614 ÷ 2，2,307 TFLOP/s ÷ 7.37 TB/s</td></tr>
     <tr><td>TTFT、TPOT／ITL 的定义</td><td>vLLM 仓库 vllm/benchmarks/serve.py；NVIDIA NIM 的 LLM benchmarking 文档页（写明 ITL also known as TPOT）</td></tr>
     <tr><td>decode 一步：读 37 GB 要 5.02 ms，算 74 GFLOP 只要 0.016 ms，算力用上 0.32%</td><td>本课推导：37 GB ÷ 7.37 TB/s；2 × 37e9 ÷ 4,614 TFLOP/s；FP8 每参数 1 字节、每 token 2 FLOP，屋脊点 4,614 TFLOP/s ÷ 7.37 TB/s ≈ 626 FLOP/字节，2 ÷ 626 ≈ 0.32%</td></tr>
-    <tr><td>算术强度 M·H ÷ (H＋2M)：M＝256 时 239，M≈343 过屋脊，4K prompt 到 1,911</td><td>本课推导：H＝7168 的方阵乘，bf16</td></tr>
+    <tr><td>算术强度 M·H ÷ (H＋2M)：M＝256 时 239，M≈343 过屋脊</td><td>本课推导：H＝7168 的方阵乘，bf16</td></tr>
     <tr><td>256 用户、128K 时 KV 占一步字节的 78%；权重项 ＝ 非路由部分 ＋ 653.9B × [1 − (1 − 8/256)<sup>b</sup>]</td><td>本课推导：路由专家 256 × 58 层 × 3 × 7168 × 2048 ＝ 653.9B</td></tr>
     <tr><td>decode MoE 每专家平均 8 行，MXU 一边 256，只用上 1/32</td><td>本课推导：256 × 8 ÷ 256；MXU 尺寸见 JAX jax/_src/pallas/mosaic/tpu_info.py 的 mxu_column_size</td></tr>
     <tr><td>Gemma4-31B 并发 1 TTFT 86 ms，并发 256 涨到 7,756 ms（多出来的是排队）</td><td>本课程作者实测：gpu-tpu-pedia tpu/tpu-inference/Gemma4-31B/README.md:453-486</td></tr>
