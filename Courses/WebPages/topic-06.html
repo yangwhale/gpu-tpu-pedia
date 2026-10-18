@@ -853,7 +853,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 334 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 335 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -3780,6 +3780,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>出处：swa_tokens ＝ full_tokens × ratio（runbook L946 引 pool_configurator.py:387）；V4 是 CSA＋HCA 混合注意力，不是 MLA；sliding_window 128 取自 HF config.json。</p>
 <p>本课推导：+54% ＝ 10,614 ÷ 6,887。图里只画三个状态；同表另两行：4K · ratio 0.15 ＋ mem-frac 0.88 为 10,704（多装 13% 的人，只快 0.8%），8K · ratio 0.15 两池都没满（0.80／0.37）、每 rank 只有 410 条，runbook 没有解释原因，这里照录不推断。</p>
 <p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；隔板位置是示意，不代表真实字节比。</p></details></figure>
+  <p><b>第三格为什么反过来是滑窗池先满？</b>因为隔板已经不在原处。输入翻到 8K，每条在全长池里的用量跟着涨，滑窗池每条仍只留 128 个，所以隔板往滑窗池那边挪，从 0.20 挪到 0.10，把预算让给全长池。这一下挪得稍多，滑窗池先满，但两边已接近平衡。同样 8K 放在 0.15，两池都没满（全长池 80%、滑窗池 37%），每卡只装 410 条、9,053 tok/s；实测 8K 的甜点在 0.10–0.12。</p>
   <p>两边一起满之后再多装人，吞吐几乎不涨（3.3）：瓶颈从装不下换成了算不动。</p>
 
   <p>池子算错不一定报错：tpu-inference 跑 Qwen3.5 时块编号池大了约 3.5 倍，越界写入被静默钳回末尾，输出乱码（<a href="#s14-1">14.1</a>）。</p>
