@@ -853,7 +853,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 99 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 334 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -970,15 +970,15 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>十一环展开</b>：每一招卡在哪、省了多少、又留下什么（按环号，也就是首次公开的先后）</summary>
   <div class="tbl-wrap"><table>
     <tr><th>环</th><th>首次公开</th><th>谁先做</th><th>卡在哪 → 怎么解</th><th>省了多少（对谁）</th><th>解完又冒出什么</th><th>节</th></tr>
-    <tr><td>①</td><td>2022</td><td>Orca 论文</td><td>整批人陪最慢的那个写完 → 连续批，每步都能进出</td><td>同延迟吞吐 36.9×（对 FasterTransformer）</td><td>座位数归 KV 管，按最长预留，真用上的两到近四成</td><td>四</td></tr>
+    <tr><td>①</td><td>2022</td><td>Orca 论文</td><td>整批人陪最慢的那个写完 → 连续批，每步都能进出</td><td>同延迟吞吐 36.9×（对 FasterTransformer）</td><td>座位数归 KV 管，按最长预留，真用上的两到近四成</td><td>三</td></tr>
     <tr><td>②</td><td>2022 → 2026</td><td>GPTQ 等量化、megakernel</td><td>大 batch 下能省的只剩字节 → FP8／FP4、合 kernel</td><td>Llama 3 70B FP8 权重，每字间隔最好降到 BF16 的 1/2</td><td>v7 上 FP4 推测只能存不能算；INT4 少了「减 8」会吐乱词</td><td>十二</td></tr>
     <tr><td>③</td><td>2022 → 2025</td><td>Google、DeepMind 论文；DeepSeek MTP、EAGLE-3</td><td>思考题动辄几千 token → 投机解码／MTP，一趟验几个字</td><td>MTP 约 1.8×；EAGLE-3 单请求最多 6.5×（都对不投机）</td><td>并发大、上下文长、开 DEP 时收益缩水，甚至倒亏</td><td>十一</td></tr>
-    <tr><td>④</td><td>2023 → 2025</td><td>GQA 论文、DeepSeek</td><td>每条 KV 太厚 → GQA、MLA，再到 DSA 只挑一部分读</td><td>GQA 约 ÷8、MLA 约 ÷57（本课推导）；DSA 每字只读 2,048 条</td><td>MLA 全层一份 KV，TP 切不开，开几路就复制几份</td><td>三</td></tr>
-    <tr><td>⑤</td><td>2023</td><td>vLLM</td><td>KV 预留白占显存 → PagedAttention 分页存</td><td>KV 利用率 96%；吞吐 2–4×（对 FasterTransformer、Orca）</td><td>能坐几人 ＝ KV 池 ÷ 每条 KV，而上下文在变长</td><td>三</td></tr>
+    <tr><td>④</td><td>2023 → 2025</td><td>GQA 论文、DeepSeek</td><td>每条 KV 太厚 → GQA、MLA，再到 DSA 只挑一部分读</td><td>GQA 约 ÷8、MLA 约 ÷57（本课推导）；DSA 每字只读 2,048 条</td><td>MLA 全层一份 KV，TP 切不开，开几路就复制几份</td><td>四</td></tr>
+    <tr><td>⑤</td><td>2023</td><td>vLLM</td><td>KV 预留白占显存 → PagedAttention 分页存</td><td>KV 利用率 96%；吞吐 2–4×（对 FasterTransformer、Orca）</td><td>能坐几人 ＝ KV 池 ÷ 每条 KV，而上下文在变长</td><td>四</td></tr>
     <tr><td>⑥</td><td>2023 → 2025</td><td>Splitwise、DistServe → Mooncake → Dynamo</td><td>prefill 与 decode 抢卡 → PD 分离</td><td>DistServe 可接请求 7.4×（对不拆）</td><td>每请求多搬一趟 KV，还得调 P、D 配比</td><td>八</td></tr>
-    <tr><td>⑦</td><td>2023</td><td>SGLang 论文</td><td>同样的开头一遍遍重算 → RadixAttention 复用前缀</td><td>最多 6.4×（对当时其他系统）</td><td>想复用的前缀多到显存放不下</td><td>三</td></tr>
-    <tr><td>⑧</td><td>2024</td><td>Sarathi-Serve 论文；引擎里 vLLM 先合入</td><td>长 prompt 一进门全员卡住 → 分块 prefill</td><td>达标请求 2.6–3.7×（对 vLLM）</td><td>只把打扰摊薄，两段还挤在同一批卡上</td><td>四</td></tr>
-    <tr><td>⑨</td><td>2024 → 2025</td><td>Mooncake（Kimi）、DeepSeek</td><td>前缀放不下 → 分层下放到内存、SSD</td><td>Kimi 线上多接 107%–115%</td><td>副本一多，前缀只在自己那份里有；靠 KV 感知路由把命中率从 20% 拉到 75%</td><td>四、八</td></tr>
+    <tr><td>⑦</td><td>2023</td><td>SGLang 论文</td><td>同样的开头一遍遍重算 → RadixAttention 复用前缀</td><td>最多 6.4×（对当时其他系统）</td><td>想复用的前缀多到显存放不下</td><td>四</td></tr>
+    <tr><td>⑧</td><td>2024</td><td>Sarathi-Serve 论文；引擎里 vLLM 先合入</td><td>长 prompt 一进门全员卡住 → 分块 prefill</td><td>达标请求 2.6–3.7×（对 vLLM）</td><td>只把打扰摊薄，两段还挤在同一批卡上</td><td>三</td></tr>
+    <tr><td>⑨</td><td>2024 → 2025</td><td>Mooncake（Kimi）、DeepSeek</td><td>前缀放不下 → 分层下放到内存、SSD</td><td>Kimi 线上多接 107%–115%</td><td>副本一多，前缀只在自己那份里有；靠 KV 感知路由把命中率从 20% 拉到 75%</td><td>四、八、十四</td></tr>
     <tr><td>⑩</td><td>2024 → 2025</td><td>Meta（CP）；vLLM 2025 合入 DCP</td><td>DEP 起不来、KV 被复制 → DCP／PCP 按序列切</td><td>DCP 把 KV 副本让出来，PCP 切 prompt 压首字</td><td>DCP 只在长上下文划算；PCP 遇上线性注意力，状态得一卡接一卡传</td><td>七</td></tr>
     <tr><td>⑪</td><td>2024 → 2025</td><td>SGLang、DeepSeek</td><td>MoE 把 batch 拆碎，每专家约 8 行 → DP attention ＋ 大 EP</td><td>SGLang 复现：最多是同卡数纯 TP 的 5×</td><td>每个 rank 自带一份状态，K3 开 DEP8 显存不够；prefill 也追不上变快的 decode</td><td>六</td></tr>
   </table></div>
@@ -1588,7 +1588,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="857" y="562" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">量这一趟</tspan></text>
 <rect x="917.0" y="544" width="58" height="26" rx="13" fill="#ffffff" stroke="#d93025" stroke-width="1.6"/>
 <text class="svgsm" x="946" y="562" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二节</tspan></text>
-</svg><figcaption><b>蓝色那组节最多：第四到第七节加第十一节，都在让一趟多坐几个人。</b><span class="capmore"><br><em>归类是本课的分法，标签是讲这一招的节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课的分法：每节按它主要的贡献归一根杠杆。DEP 也让 attention 各管各的请求，KV 复用也省了 prefill 的计算，这类兼顾的地方只放一处。</p>
+</svg><figcaption><b>蓝色那组节最多：第四到第七节加第十一、十三节，都在让一趟多坐几个人。</b><span class="capmore"><br><em>归类是本课的分法，标签是讲这一招的节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课的分法：每节按它主要的贡献归一根杠杆。DEP 也让 attention 各管各的请求，KV 复用也省了 prefill 的计算，这类兼顾的地方只放一处。</p>
 <p>⚠️ 投机解码放在「车上多坐人」：它让搬一趟换来好几个字，和批处理一样是把一趟分给更多 token。</p></details></figure>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b></summary>
@@ -7970,7 +7970,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </table></div>
   <ul>
     <li><b>TP 和 TEP 只差在专家</b>（切片还是整块）：MLA 只有一份 KV，按头切不开，每个 device 都存、都读全部 5 条（6.1）。</li>
-    <li><b>DEP 多背 14.9 GiB 非专家权重</b>（54.0 − 39.1），换来 KV 不复制：48 条，以 TP16 的 5 条为基线约 9.6 倍；代价是每层整读一遍注意力权重。</li>
+    <li><b>DEP 多背 14.9 GiB 非专家权重</b>（54.0 − 39.1，比全切多出来的那份；表里 15.9 GiB 是非专家权重整份），换来 KV 不复制：48 条，以 TP16 的 5 条为基线约 9.6 倍；代价是每层整读一遍注意力权重。</li>
     <li><b>DCP 每卡只存、只读每条的 1/16</b>，装 86 条，代价是每层多 3 次通信。DEP 上叠不了：度数最多 TP ÷ KV 头数，DEP 的 TP 是 1（7.1）。</li>
     <li><b>下限只看了读</b>，谁真赢要把通信那一列也算进去。</li>
     <li><b>和 10.2 对账</b>：那张图说 8 颗装得下 128K × 64，前提是 KV 不复制、非专家权重不重复。DEP 只到 48 条，TEP16 ＋ DCP16 到 86 才兑现。</li>
@@ -12005,7 +12005,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <circle cx="1086.5" cy="626.0" r="14.0" fill="#5f6368"/>
 <text class="svgsm" x="1086" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
 <text class="svgsm" x="1110" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上线前跑通了吗？</tspan></text>
-</svg><figcaption><b>八问里有四问钉在车上：3、4、7、8。</b><span class="capmore"><br><em>颜色对主线：灰 ＝ 校准尺子／上线，蓝 ＝ 分给更多 token，绿 ＝ 少搬，橙 ＝ 拆开放对地方。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课归纳：顺序按「先校准、再算账、后调招数」排，各问拿什么回答、判据见第十五节正文和对应节。</p></details></figure>
+</svg><figcaption><b>八问里有四问钉在车上（车 ＝ 每步从显存往工位搬的那一趟）：3、4、7、8。</b><span class="capmore"><br><em>颜色对主线：灰 ＝ 校准尺子／上线，蓝 ＝ 分给更多 token，绿 ＝ 少搬，橙 ＝ 拆开放对地方。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课归纳：顺序按「先校准、再算账、后调招数」排，各问拿什么回答、判据见第十五节正文和对应节。</p></details></figure>
   <h3 id="s15-1">15.1　前四问：算账</h3>
   <ul>
     <li><b>负载长什么样</b>：输入输出多长、要哪个交互档；换档位结论能反过来（第二节）。</li>
@@ -12027,30 +12027,30 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>每行基线不同，不能连乘去凑市场上的降幅；只有末行是同一硬件、同一模型上叠满软件招数的总账。</p>
   <div class="tbl-wrap"><table>
     <tr><th>年份</th><th>补的哪个洞（0.1 的环）</th><th>首发</th><th>节</th><th>一个实测（对照谁）</th></tr>
-    <tr><td>2022</td><td>① 整批等最长的</td><td>论文</td><td>四</td><td>Orca 连续批：同延迟吞吐是 FasterTransformer 静态批的 36.9 倍</td></tr>
-    <tr><td>2022</td><td>② 权重字节太多</td><td>论文</td><td>十二</td><td>GPTQ 3 bit：1 张 A100 跑 OPT-175B，逐字速度是 5 卡 FP16 的 3.25 倍</td></tr>
+    <tr><td>2022</td><td>① 整批等最长的</td><td>论文</td><td>三</td><td>Orca 连续批：同延迟吞吐是 FasterTransformer 静态批的 36.9 倍</td></tr>
+    <tr><td>2022</td><td>② 字节太多：权重</td><td>论文</td><td>十二</td><td>GPTQ 3 bit：1 张 A100 跑 OPT-175B，逐字速度是 5 卡 FP16 的 3.25 倍</td></tr>
     <tr><td>2022</td><td>③ 一趟只出一个字</td><td>论文</td><td>十一</td><td>投机解码：单请求速度是不投机的 2–3 倍</td></tr>
-    <tr><td>2023</td><td>⑤ KV 预留浪费</td><td>vLLM</td><td>三</td><td>PagedAttention：同延迟吞吐是 FasterTransformer 和复现版 Orca 的 2–4 倍</td></tr>
-    <tr><td>2023</td><td>④ 每条 KV 太厚</td><td>论文</td><td>三</td><td>GQA-8：T5-XXL 每条样本解码约快 5.4 倍，平均分 47.1 对 47.2（对原版 MHA，本课推导）</td></tr>
-    <tr><td>2023</td><td>② 权重字节太多</td><td>论文</td><td>十二</td><td>AWQ 4 bit：Llama-2-7B 单卡 RTX 4090 再快 3.1 倍（对已融合 kernel 的 FP16）</td></tr>
-    <tr><td>2023</td><td>⑦ 同样开头重算</td><td>SGLang</td><td>三</td><td>RadixAttention：吞吐最多是当时其他系统的 6.4 倍</td></tr>
+    <tr><td>2023</td><td>⑤ KV 预留浪费</td><td>vLLM</td><td>四</td><td>PagedAttention：同延迟吞吐是 FasterTransformer 和复现版 Orca 的 2–4 倍</td></tr>
+    <tr><td>2023</td><td>④ 每条 KV 太厚</td><td>论文</td><td>四</td><td>GQA-8：T5-XXL 每条样本解码约快 5.4 倍，平均分 47.1 对 47.2（对原版 MHA，本课推导）</td></tr>
+    <tr><td>2023</td><td>② 字节太多：权重</td><td>论文</td><td>十二</td><td>AWQ 4 bit：Llama-2-7B 单卡 RTX 4090 再快 3.1 倍（对已融合 kernel 的 FP16）</td></tr>
+    <tr><td>2023</td><td>⑦ 同样开头重算</td><td>SGLang</td><td>四</td><td>RadixAttention：吞吐最多是当时其他系统的 6.4 倍</td></tr>
     <tr><td>2024</td><td>⑥ 两段抢同一批卡</td><td>论文</td><td>八</td><td>DistServe：同等延迟要求下能接的请求是不拆的 7.4 倍</td></tr>
-    <tr><td>2024</td><td>⑧ 长 prompt 插队</td><td>论文</td><td>四</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
-    <tr><td>2024</td><td>④ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>MLA：每层 KV 约是同形状 MHA 的 1/57（本课推导）</td></tr>
+    <tr><td>2024</td><td>⑧ 长 prompt 插队</td><td>论文</td><td>三</td><td>Sarathi-Serve 分块 prefill：延迟达标时可接请求是 vLLM 的 2.6–3.7 倍</td></tr>
+    <tr><td>2024</td><td>④ 每条 KV 太厚</td><td>DeepSeek</td><td>四</td><td>MLA：每层 KV 约是同形状 MHA 的 1/57（本课推导）</td></tr>
     <tr><td>2024</td><td>⑨ 前缀存不下</td><td>Kimi</td><td>八</td><td>Mooncake KV 池：Kimi 线上可接请求比此前系统多 107%–115%</td></tr>
-    <tr><td>2024</td><td>② 权重字节太多</td><td>vLLM</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多降到 BF16 的 1/2</td></tr>
-    <tr><td>2024</td><td>⑨ 前缀存不下</td><td>DeepSeek</td><td>三</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
+    <tr><td>2024</td><td>② 字节太多：权重</td><td>vLLM</td><td>十二</td><td>vLLM FP8 权重：Llama 3 70B 每字间隔最多降到 BF16 的 1/2</td></tr>
+    <tr><td>2024</td><td>⑨ 前缀存不下</td><td>DeepSeek</td><td>四</td><td>DeepSeek 磁盘 KV 缓存：128K prompt 首字 13 s → 0.5 s（对不用缓存）</td></tr>
     <tr><td>2024</td><td>③ 一趟只出一个字</td><td>DeepSeek</td><td>十一</td><td>DeepSeek-V3 的 MTP：速度约是不开的 1.8 倍</td></tr>
-    <tr><td>2024</td><td>⑨ 前缀被副本摊薄</td><td>SGLang</td><td>十三</td><td>SGLang v0.4 KV 感知路由：命中率 20% → 75%，吞吐是 v0.3 的 1.9 倍</td></tr>
+    <tr><td>2024</td><td>⑨ 前缀存不下：副本摊薄</td><td>SGLang</td><td>十四</td><td>SGLang v0.4 KV 感知路由：命中率 20% → 75%，吞吐是 v0.3 的 1.9 倍</td></tr>
     <tr><td>2024</td><td>⑩ KV 被复制、长 prompt 太慢</td><td>论文</td><td>七</td><td>Meta 跨机切序列：Llama3 405B 在 8 台 H100 上，跨机切 TP 的 prefill 延迟和它差约 100%（TP 慢）</td></tr>
-    <tr><td>2025</td><td>调度占着 CPU</td><td>vLLM</td><td>四</td><td>vLLM V1 引擎重写：吞吐最多是 V0 的 1.7 倍</td></tr>
+    <tr><td>2025</td><td>调度占着 CPU</td><td>vLLM</td><td>三</td><td>vLLM V1 引擎重写：吞吐最多是 V0 的 1.7 倍</td></tr>
     <tr><td>2025</td><td>③ 一趟只出一个字</td><td>论文</td><td>十一</td><td>EAGLE-3：单请求最多是不投机的 6.5 倍，batch 64 吞吐仍是其 1.38 倍</td></tr>
     <tr><td>2025</td><td>⑪ MoE 拆散 batch</td><td>DeepSeek</td><td>六</td><td>SGLang 复现大 EP＋PD 分离：输出吞吐最多是同卡数纯 TP 的 5 倍</td></tr>
-    <tr><td>2025</td><td>④ 每条 KV 太厚</td><td>DeepSeek</td><td>三</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（V3.1-Terminus 全读），基准基本持平</td></tr>
-    <tr><td>2025</td><td>② KV 字节太多</td><td>DeepSeek</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约是 BF16 KV 的 1.63 倍（本课推导）</td></tr>
-    <tr><td>2025</td><td>② 权重字节太多</td><td>Kimi</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照精度）</td></tr>
-    <tr><td>2025</td><td>② KV 字节太多</td><td>NVIDIA</td><td>十二</td><td>NVFP4（4 bit 格式）KV：大小约是 FP8 KV 的一半，前缀命中率高 20%</td></tr>
-    <tr><td>2026</td><td>⑨ 前缀存不下</td><td>llm-d</td><td>三</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
+    <tr><td>2025</td><td>④ 每条 KV 太厚</td><td>DeepSeek</td><td>四</td><td>DeepSeek-V3.2 稀疏注意力（DSA）：每字只读 2,048 个历史 token（V3.1-Terminus 全读），基准基本持平</td></tr>
+    <tr><td>2025</td><td>② 字节太多：KV</td><td>DeepSeek</td><td>十二</td><td>V3.2 存 FP8 KV：同显存请求容量约是 BF16 KV 的 1.63 倍（本课推导）</td></tr>
+    <tr><td>2025</td><td>② 字节太多：权重</td><td>Kimi</td><td>十二</td><td>Kimi K2 Thinking 原生 INT4 权重：低延迟模式生成约快 2 倍（模型卡未写对照精度）</td></tr>
+    <tr><td>2025</td><td>② 字节太多：KV</td><td>NVIDIA</td><td>十二</td><td>NVFP4（4 bit 格式）KV：大小约是 FP8 KV 的一半，前缀命中率高 20%</td></tr>
+    <tr><td>2026</td><td>⑨ 前缀存不下</td><td>llm-d</td><td>四</td><td>llm-d 卸 KV 到主机内存：P90（九成请求）首字 2.1 s → 0.5 s（对不卸载）</td></tr>
     <tr><td><b>2026-06</b></td><td><b>①–⑪ 叠起来</b></td><td><b>SGLang</b></td><td><b>二</b></td><td><b>GB300 跑 V4-Pro，硬件、模型、交互档不变，光改软件：每卡从首发日约 2,200 到约 11,200（后者开 MTP、首发日没开；PyTorch 博客）</b></td></tr>
   </table></div>
   <p class="landing">⭐ 开场那道题的答案就是末行：<b>5.1 倍</b>（约 11,200 ÷ 约 2,200，本课推导；博客标题写 5 倍）。卡、模型、交互档都没换，涨出来的每个字都是软件挣的。</p>

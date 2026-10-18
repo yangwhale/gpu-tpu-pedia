@@ -14,7 +14,7 @@ r"""专题六 · 第三节「KV cache：账、池、复用」的四张图。
    · Llama-3.1-70B：HF config.json（80 层、8 个 KV 头、head_dim 128）；激活参数 70.6B 取自 HF 模型页。
    · Qwen3.5-397B-A17B：HF config.json（60 层 = 45 层线性注意力 ＋ 15 层全注意力；全注意力 2 个 KV 头 × 256；
      线性层 64 个 value 头 × key 128 × value 128，mamba_ssm_dtype float32）。
-   · 可用 189.5 GiB ＝ 每 device 实测可用 94.75 GiB × 2（tpu/tpu-inference R1 FP4 README:59，与第十节 10.5 同一口径）；
+   · 可用 189.5 GiB ＝ 每 device 实测可用 94.75 GiB × 2（tpu/tpu-inference R1 FP4 README:59，与第十节 10.2 同一口径）；
      「留 10% 给激活」是本课假设。
    · V4-Pro 两池实验：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5（约 L849–896，
      每张 decode GPU 的 e2e 输出吞吐，ISL 4096／8192，OSL 1024，关 radix cache）。
@@ -52,7 +52,7 @@ assert STATE_HYB == 188743680 and STATE_HYB / 2**20 == 180
 N_CHIP = 8                                        # 671 GB FP8 权重铺 8 颗芯片（2×2×2）
 W_CHIP = V3_TOTAL * 1 / N_CHIP                    # FP8 每参数 1 字节
 assert W_CHIP == 83.875e9
-USABLE = 189.5 * GIB                              # 每 device 实测可用 94.75 GiB × 2，同 10.5
+USABLE = 189.5 * GIB                              # 每 device 实测可用 94.75 GiB × 2，同 10.2
 RESERVE = USABLE * 0.1
 POOL = USABLE * 0.9 - W_CHIP
 assert "%.2f" % (USABLE * 0.9 / GIB) == "170.55"
@@ -206,7 +206,7 @@ def fig_batch():
                "Qwen3.5 全注意力 15 层 × 2 头 × 256 维 × K、V × 2 B ＝ 30,720，线性层状态 45×64×128×128×4 B ＝ 180 MiB（HF config.json，mamba_ssm_dtype float32）。",
                "口径：MHA 一行是 V3 形状的假想（128 头 × 128 维，专题三第一题）：3,997,696 B/token。",
                "本课推导：V3 权重全按 FP8 1 B/参数算 671 GB ÷ 8 芯片 ＝ 83.9 GB ＝ 78.1 GiB；每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，tpu-inference R1 FP4 README），再留 10% 给激活（本课假设）；"
-               "KV 池 ＝ 189.5 GiB × 0.9 − 78.1 GiB ＝ 92.4 GiB，与第十节 10.5 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.5）。假设 attention 走数据并行（每颗芯片只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每颗芯片复制一份（专题五）。",
+               "KV 池 ＝ 189.5 GiB × 0.9 − 78.1 GiB ＝ 92.4 GiB，与第十节 10.2 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.2）。假设 attention 走数据并行（每颗芯片只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每颗芯片复制一份（专题五）。",
                "口径：没算激活与通信缓冲（归入那 10%）、线性层卷积状态、引擎实际的状态 dtype（可能不是 fp32）。")
     f.save("fig6-kv-batch.svg", yb + 14)
 

@@ -40,11 +40,13 @@ def _css():
 
 
 # ══════════════════════════════════════════════════════════════════
-# 十六节讲稿分三个文件写（topic06_lec_a/b/c.py），每个导出 CH 和 PLAN。
+# 十六节讲稿分六个文件写（topic06_lec_1…6.py），每个导出 CH、PLAN、JUDGED；节以外的部分在 topic06_lec_meta.py。
 # ⛔ 「屏幕」里的图 id 和小节号会被 topic02-lint-cues.py 逐个对账。
 # ══════════════════════════════════════════════════════════════════
-import topic06_lec_a as LA, topic06_lec_b as LB, topic06_lec_c as LC
-CH = LA.CH + LB.CH + LC.CH
+import importlib
+import topic06_lec_meta as LM
+_LS = [importlib.import_module("topic06_lec_%d" % _k) for _k in range(1, 7)]
+CH = sum((L.CH for L in _LS), [])
 
 
 def _chapter(i, title, sid, fig, body, dont):
@@ -69,7 +71,7 @@ def _chapter(i, title, sid, fig, body, dont):
        DECK, sid, title.split("（")[0], figline, body, warn, askbox)
 
 
-PLAN = LA.PLAN + LB.PLAN + LC.PLAN
+PLAN = sum((L.PLAN for L in _LS), [])
 PLAN_SUM = sum(p[1] for p in PLAN)
 
 html = ('''<!doctype html>
@@ -142,7 +144,7 @@ h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transfo
 
 <div class="plan">
   <h2>⏱ 时间：主线 ''' + str(PLAN_SUM) + '''′</h2>
-''' + LA.TIME_NOTE + '''
+''' + LM.TIME_NOTE + '''
   <table>
 <thead><tr><th>段落</th><th>分钟</th><th>能不能砍</th><th>说明</th></tr></thead><tbody>
 ''' + "".join("<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td></tr>\n" % p for p in PLAN) + '''<tr><td><b>合计</b></td><td><b>''' + str(PLAN_SUM) + '''</b></td><td></td><td>第十六节（出处台账）不进课堂，被追问时翻</td></tr>
@@ -154,7 +156,7 @@ h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transfo
 @@FLOOR@@
 </div>
 
-''' + LA.DARK + '''
+''' + LM.DARK + '''
 
 <h3 class="sec">🖥 投屏怎么放</h3>
 <div class="say">
@@ -168,7 +170,7 @@ h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transfo
         + "".join(_chapter(i, t, sid, fig, body, dont)
                   for i, (t, sid, fig, body, dont) in enumerate(CH))
         + '''
-''' + LC.THIN + '''
+''' + LM.THIN + '''
 
 </main>
 </div>
@@ -239,7 +241,7 @@ assert _chip and int(_chip.group(1)) == PLAN_SUM, \
 # ② 台词数字密度（从专题四搬来，只报告）：一串数从耳朵进去台下留不住。
 #   判据：这个数是「内容」还是「内容的证据」？证据说「有人量过」就够。
 # 已判定「数就是内容」的块登记在各 topic06_lec_*.JUDGED，写明为什么。
-_JUDGED = LA.JUDGED + LB.JUDGED + LC.JUDGED
+_JUDGED = sum((tuple(L.JUDGED) for L in _LS), ())
 _noisy = []
 for _b in re.findall(r'<p class="say">(.*?)</p>', html, re.S):
     _t = re.sub(r"<[^>]+>", "", _b).replace("&nbsp;", " ")
