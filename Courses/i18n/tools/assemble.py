@@ -118,9 +118,13 @@ def english_only_links(s):
     # 页首的跳转按钮（.lecbtn）指向没有英文版的页面（附录等）：整颗删，不留一段裸文字
     s = re.sub(r'\s*<a class="lecbtn" href="(?![^"]*\.en\.html)[^"]*">.*?</a>', '', s, flags=re.S)
     # 版本切换条：只留当前这一版
-    s = re.sub(r'(<nav class="famnav"[^>]*>)(.*?)(</nav>)',
-               lambda m: m.group(1) + re.sub(r'(<span class="famlab">).*?(</span>)', r'\1English edition:\2', ''.join(re.findall(r'<span class="famlab">.*?</span>|<span class="here".*?</span>', m.group(2), flags=re.S)), count=1) + m.group(3),   # 其他版本都没英文，标签别再说「有四个版本」
-               s, flags=re.S)
+    # 已有英文版的兄弟页（如专题四「讲义」）要留着；只剩当前一版时标签改成 English edition（PAR10 专题四 R1 发现讲义链接被误删）
+    def _fam(m):
+        kept = re.findall(r'<span class="famlab">.*?</span>|<span class="here".*?</span>|<a href="[\w.-]+\.en\.html(?:#[^"]*)?"[^>]*>.*?</a>', m.group(2), flags=re.S)
+        body = ''.join(kept)
+        if '<a ' not in body: body = re.sub(r'(<span class="famlab">).*?(</span>)', r'\1English edition:\2', body, count=1)
+        return m.group(1) + body + m.group(3)
+    s = re.sub(r'(<nav class="famnav"[^>]*>)(.*?)(</nav>)', _fam, s, flags=re.S)
     # 页首「完整版 L300 →」这类整颗 chip 就是个跳转按钮，去掉链接后只剩一句指向不存在页面的话 —— 整颗删
     s = re.sub(r'<span class="chip">[^<]*<a href="topic-[^"]*?(?<!\.en)\.html">.*?</a></span>', '', s, flags=re.S)
     def unlink(m):
@@ -195,14 +199,15 @@ def main(topic, d):
             # 对内联 style 定过字号的标签同样生效（按等宽字体留的宽度足够装下）
             if h.get('fsa'): rules += '.svgsm,.svgtxt,.svglbl{font-size-adjust:%s}' % h['fsa']
         rules += '.figsrc>summary{font-family:'+LATIN.replace("'",'"')+'}'   # 出处折叠标题：中文落回无衬线，英文别显示成等宽
-        # 已是粗体的父元素里再套 <b>（b 是 600）：英文可变字体下反而比周围更细 —— 统一提到 800（PAR10 专题二 R6）
-        rules += 'h1 b,h2 b,h3 b,h4 b,th b,summary b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}'
+        # 已是粗体的父元素里再套 <b>（b 是 600）：英文可变字体下反而比周围更细 —— 统一提到 800（PAR10 专题二 R6）；summary 本身就是 600，不在此列（专题三四 R6 报英文折叠标题比中文重）
+        rules += 'h1 b,h2 b,h3 b,h4 b,th b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}'
         if '.msfrom' in css: rules += '.msfrom{white-space:nowrap}'
+        rules += '@media(max-width:1000px){th{white-space:normal}main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}'   # 英文表头大写加字距又不换行，820 平板宽度下把表格撑出版心（PAR10 专题四 R7）
         if '.hlbtns' in css: rules += '.hlbtns{flex-shrink:0}'   # 手机上 Highlight/All 按钮组被旁边说明挤到只剩「A」（PAR10 专题三 R8）   # 「— from the … Microscope」出处别拆成两行
         # 卡片小标题：中文 12px 粗体灰字读起来是「标题」；英文同样式会变成大写加字距的小标签，显得又轻又小（PAR10 专题一 R6）
         if re.search(r'\.card h4\s*\{[^}]*text-transform:\s*uppercase', css):
             rules += '.card h4{text-transform:none;letter-spacing:0;font-size:13px}'
-        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}'
+        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){main table,section table,details table,.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}'
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
     def put(m):
