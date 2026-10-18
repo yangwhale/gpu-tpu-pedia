@@ -10106,8 +10106,8 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s十四"><div class="wrap"><div class="stn"><span class="badge">第 十四 节</span><h2>落地：TPU 服务化与编排</h2></div>
-  <p class="lead">前面十三节的招数，落到一个模型上要按顺序过关。主线是 Qwen3.5-397B（FP8）在一台 v7x-8 上：8 颗芯片，60 层里 45 层线性注意力、15 层全注意力，每层 512 个专家选 10 个。<b>六道关：装得下、起得来、跑得对、跑得快、拆得开、扛得住。</b>Kimi K3 在其中三关做对照。</p>
-<figure class="fbox fwide" id="fig-s14-climb"><svg viewBox="0 0 1400 656" width="100%" role="img" aria-label="六级台阶从左往右升高，依次是装得下、起得来、跑得对、跑得快、拆得开、扛得住，台阶高度只表示先后。每级写着撞上的墙（红）和修法（绿）。第三级跑得对用红框突出：块编号池大了 3.5 倍被静默钳回、bf16 递推死循环，两个毛病都不报错。三面橙色旗挂在装得下、跑得对、跑得快上方，是 Kimi K3 走的另一条路：DEP8 加载即 OOM；KDA 不能按序列切；batch 1 到 8 时整个模型写成一次 Pallas 调用"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p class="lead">前面十三节的招数，落到一个模型上要按顺序过关。主线是 Qwen3.5-397B（FP8）在一台 v7x-8 上：4 颗芯片、8 个 TensorCore，60 层里 45 层线性注意力（GDN）、15 层全注意力，每层 512 个专家选 10 个。栈是 vLLM 的 PyTorch TPU 后端，写作时尚未公开，所以只给相对起点那天的倍数。<b>六道关：装得下、起得来、跑得对、跑得快、拆得开、扛得住。</b>Kimi K3 在其中三关做对照。</p>
+<figure class="fbox fwide" id="fig-s14-climb"><svg viewBox="0 0 1400 656" width="100%" role="img" aria-label="六级台阶从左往右升高，依次是装得下、起得来、跑得对、跑得快、拆得开、扛得住，台阶高度只表示先后。每级写着撞上的墙（红）和修法（绿）。第三级跑得对用红框突出：MoE 漏算别的 rank 的专家、PCP 吞吐显示为起点的 2 倍，线性层状态槽全是垃圾，两个毛病都不报错。三面橙色旗挂在装得下、跑得对、跑得快上方，是 Kimi K3 走的另一条路：DEP8 加载即 OOM；KDA 不能按序列切；batch 1 到 8 时整个模型写成一次 Pallas 调用"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">落地六道关　——　<tspan font-weight="700">最难的一关不报错</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Qwen3.5-397B（FP8）在一台 v7x-8 上从零到上线。每级台阶 ＝ 撞上的墙 → 修法；台阶高度只表示先后</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -10151,12 +10151,12 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="493" y="344" fill="#a50e0e" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
 <text class="svgsm" x="521" y="344" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">跑得对</tspan></text>
 <text class="svgsm" x="493" y="376" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
-<text class="svgsm" x="517" y="376" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">块池大 3.5 倍，</text>
-<text class="svgsm" x="517" y="397" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">越界被静默钳回；</text>
-<text class="svgsm" x="517" y="418" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">bf16 递推死循环</text>
+<text class="svgsm" x="517" y="376" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">MoE 漏算别人的专家，</text>
+<text class="svgsm" x="517" y="397" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">PCP 显示起点 2 倍；</text>
+<text class="svgsm" x="517" y="418" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">状态槽全是垃圾</text>
 <text class="svgsm" x="493" y="453" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
-<text class="svgsm" x="517" y="453" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">每层各存一份池；</text>
-<text class="svgsm" x="517" y="474" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">5 处提到 FP32</text>
+<text class="svgsm" x="517" y="453" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">补回显式通信；</text>
+<text class="svgsm" x="517" y="474" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">按头切、整条序列扫</text>
 <line x1="501.3333333333333" y1="282" x2="501.3333333333333" y2="304" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round"/>
 <rect x="485.3333333333333" y="202" width="208.66666666666666" height="80" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="497" y="226" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">K3</tspan></text>
@@ -10182,11 +10182,12 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="950" y="272" fill="#174ea6" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
 <text class="svgsm" x="978" y="272" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆得开</tspan></text>
 <text class="svgsm" x="950" y="304" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">墙</tspan></text>
-<text class="svgsm" x="974" y="304" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">每个请求整份</text>
-<text class="svgsm" x="974" y="325" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">要搬约 349 MB</text>
-<text class="svgsm" x="950" y="360" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
-<text class="svgsm" x="974" y="360" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">单机装得下就别拆：</text>
-<text class="svgsm" x="974" y="381" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">单并发只有 0.95 倍</text>
+<text class="svgsm" x="974" y="304" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">切序列只到 DP8 的</text>
+<text class="svgsm" x="974" y="325" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">约 0.89；PD 每请求</text>
+<text class="svgsm" x="974" y="346" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">要搬约 349 MB</text>
+<text class="svgsm" x="950" y="381" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修</tspan></text>
+<text class="svgsm" x="974" y="381" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">切序列为延迟；</text>
+<text class="svgsm" x="974" y="402" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">单机装得下就别拆</text>
 <rect x="1163.3333333333333" y="196" width="216.66666666666666" height="376" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="1163.3333333333333" y="196" width="216.66666666666666" height="8" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="1179" y="236" fill="#174ea6" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
@@ -10198,16 +10199,17 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1203" y="324" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">真发请求判活；</text>
 <text class="svgsm" x="1203" y="345" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">KV 感知路由</text>
 <line x1="20" y1="590" x2="1380" y2="590" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-</svg><figcaption><b>看红框那级：最难的一关是两个不报错的毛病。</b><span class="capmore"><br><em>台阶高度只表示先后；橙旗是 Kimi K3 在同一关走的另一条路。墙和修法出处见正文各小节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Qwen3.5 各关的墙与修法取自 tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md（块池约 3.5 倍、5 处提 FP32、冷启动约 7 min、PD 每请求约 349 MB、单并发 0.95 倍）；60–90 s 与「MoE 占 prefill 约八成」同正文出处。台阶高度是示意，不代表难度或收益。</p>
+</svg><figcaption><b>看红框那级：最难的一关是两个不报错的毛病。</b><span class="capmore"><br><em>台阶高度只表示先后；橙旗是 Kimi K3 在同一关走的另一条路。墙和修法出处见正文各小节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 跑得对、跑得快与 PCP8 一行据 vLLM 的 PyTorch TPU 后端私有实测（写作时尚未公开），倍数相对起点那天；60–90 s、约 349 MB 取自 tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md。台阶高度是示意，不代表难度或收益。</p>
 <p>K3 三面旗：DEP8 加载 OOM、69 层 KDA 不能按序列切取自 SGLang 的 K3 部署手册；megakernel 取自 inferact.ai/blog/tpu-megakernels。</p></details></figure>
 
   <h3 id="s14-1">14.1　装得下：注意力和 MoE 各切各的</h3>
-  <p>字节不是问题：8 颗芯片 1.5 TiB HBM，FP8 权重四百来 GB（本课按参数量估），KV 也存 FP8。<b>墙在切法：</b>全注意力层只有 2 个 KV 头，8 路 TP 切不开，每份 KV 要复制 4 份（<a href="#s6-2">6.2</a>）。</p>
-  <p>修法是两段各切各的：注意力按请求切成 8 份（DP 注意力），MoE 按专家切成 8 份（EP），中间先 all-gather 收齐 token，算完 reduce-scatter 发回（<a href="#s6-5">6.5</a>）。公开实现比过 all-to-all，选这条图的是延迟可预测。</p>
+  <p>字节不是问题：4 颗芯片共 768 GiB HBM，FP8 权重四百来 GB（本课按参数量估），KV 也存 FP8。<b>墙在切法：</b>全注意力层只有 2 个 KV 头，8 路 TP 切不开，每份 KV 要复制 4 份（<a href="#s6-2">6.2</a>）。</p>
+  <p>修法是两段各切各的：注意力按请求切（DP 注意力），MoE 按专家切成 8 份（EP），中间先 all-gather 收齐 token，算完 reduce-scatter 发回（<a href="#s6-5">6.5</a>）。prefill 用 DP8；decode 用 DP4×TP2，每个 rank 正好分到 1 个 KV 头。</p>
+  <p><b>第二堵墙是两种缓存抢地方。</b>KV 随上下文变长，GDN 状态每条序列固定约 189 MB（FP32）。分两个池各自预留，并发和长度一变总有一个闲着。修法是统一池：两者共用可互换的页、按需领取，还为前缀缓存留了路（<a href="#s13-5">13.5</a>）。</p>
   <div class="note"><span class="t">K3 对照①</span>同样按请求切，K3 撞墙了：线性层状态按请求开，DEP8 每个 rank 存一整池 KDA 状态，加载即 OOM，只好退回 TP（<a href="#s6-3">6.3</a>、<a href="#s13-5">13.5</a>）。Qwen3.5 在 v7x-8 上 DP=8 实测跑通（6.5）。</div>
 
   <h3 id="s14-2">14.2　起得来：冷启动拆成编译和搬字节</h3>
-  <p>按公开 README 的配置，冷启动约 7 分钟：加载权重、MoE 重新量化、初始化 KV 池。<b>墙在形状：</b>XLA 按形状编译（专题二<a href="topic-02-L300.html#s5">「谁做决定」</a>），一批的 token 总数补到预编译的几档；没编过的档，第一个撞上的请求要等 60–90 s，之后同形状不到 1 s。</p>
+  <p>这一关跟栈关系不大，下面的数取自 tpu-inference 的公开 README 和别的模型。按 README 的配置，冷启动约 7 分钟：加载权重、MoE 重新量化、初始化 KV 池。<b>墙在形状：</b>XLA 按形状编译（专题二<a href="topic-02-L300.html#s5">「谁做决定」</a>），一批的 token 总数补到预编译的几档；没编过的档，第一个撞上的请求要等 60–90 s，之后同形状不到 1 s。</p>
   <p>所以档要写进启动参数、开服前编好。SGLang-JAX 的写法是 <code>--precompile-bs-paddings</code> 加 <code>--precompile-token-paddings</code>；单条请求长短不齐交给 RPA（<a href="#s5-2">5.2</a>）。</p>
 <figure class="fbox fwide" id="fig-s13-cold"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="上面把 GLM-5.1 在 v7x-8 上未优化时的冷启动放大，约 10 分 44 秒：初始化 1 分 44 秒，紫色那段 6 分 29 秒账面上是加载非 MoE 权重，实际是每加载一个 tensor 就清一次编译缓存、下一个又从头编；真正的 MoE 权重加载只有 1 分 51 秒。下面是另外两次冷启动的构成：Qwen3-Coder 两台机器编进一个 ICI 切片第一次启动约 40 分钟，其中 XLA 编译 29 分钟；MiMo-V2.5-Pro 在两台 v7x-8 上约 50 分钟，权重加载 25、反量化 5、编译 15、decode 预编译 7"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 冷启动的大头常常是编译　——　<tspan font-weight="700">连「权重加载」那一段也可能是</tspan></text>
@@ -10277,19 +10279,19 @@ body.figonly section h3{margin-top:34px}
   </ul>
 
   <h3 id="s14-3">14.3　跑得对：不报错的错</h3>
-  <p>这一关最难：下面的毛病都不报错。</p>
+  <p>这一关最难：下面两个毛病都不报错，其中一个还让吞吐更好看。</p>
   <ul>
-    <li><b>块池算大了 3.5 倍</b>：vLLM 的混合分配器让 4 层共用一块 KV 张量，TPU 上每层得各存一份，账没对上，块编号池约是实际的 3.5 倍。越界的写入被<b>静默钳回末尾</b>，几个请求写进同一块，输出乱码或 OOM（<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:77</code>）。</li>
-    <li><b>线性层递推 bf16 不稳</b>：问「法国首都是哪」，输出「about about about…」停不下来。修法是递推里 5 处关键计算提到 FP32，分块从 64 减到 32。</li>
-    <li><b>前缀缓存得关</b>：tpu-inference 还没有 13 节那套状态快照，开了就断言错误（<a href="#s13-5">13.5</a>）。</li>
+    <li><b>算错了才快</b>：上游 vLLM 一次重构挪了 PCP 下 MoE 收发 token 的位置，这条栈的 MoE kernel 只算本 rank 的专家，别的 rank 那份贡献被静默丢掉。PCP8 一度显示起点的约 2.07 倍；补回显式 all-gather / reduce-scatter，真实值只有约 0.85（<a href="#s7-5">7.5</a>）。</li>
+    <li><b>线性层状态从空起步</b>：统一池上开 PCP，每个 rank 从空状态扫自己那段 prompt，原话是每个 GDN 状态槽最后都是垃圾。修法是把按 token 切换成按头切，在完整序列上扫完再写回（<a href="#s7-5">7.5</a>）。</li>
   </ul>
-  <p><b>怎么知道毛病在栈里不在模型：</b>同模型、同 TP=8、同 FP8，GPU 上答出「巴黎」。更阴的是跑分用的 5-shot 格式一度能绕开这个毛病，分数正常，聊天却死循环。修好后 GSM8K 全集 93.93%。</p>
-  <p>Qwen3.5 还撞过第三种：PCP 有一阵吞吐虚高，查下来是 MoE 在 PCP 下静默跳过了通信，算错了才快（<a href="#s7-5">7.5</a>）。</p>
+  <p>第一例是拿一个分支单独跑了一次 PCP8 才揭穿的，前后三个假点全部作废。<b>少算了还更快</b>：吞吐跳一大截，先跑正确性（GSM8K、长 prompt 比输出），再记功。</p>
+  <p>tpu-inference 上也撞过同类：块编号池按共享张量记账，约是实际的 3.5 倍，越界写入被静默钳回末尾；线性层递推 bf16 不稳，问「法国首都是哪」答「about about…」。</p>
   <div class="note"><span class="t">K3 对照②</span>K3 的部署手册直接写明：69 层 KDA 线性注意力不能按序列切。硬切又不接力，每段从空状态起步，形状全对、数全错；7.5 的玩具递推里状态差 58%。</div>
   <p class="landing">⭐ <b>先比输出，再看速度。</b>别信跑分，拿同一个问题和另一套栈对一遍。</p>
 
   <h3 id="s14-4">14.4　跑得快：Qwen3.5 先砍 MoE，K3 整个写成一块</h3>
-  <p>按公开 README 的配置，单用户 1K 进 1K 出 49.7 tok/s，并发 128 峰值 2,097 tok/s。再往上砍，三条理由跟前面一样：<b>HBM 在空等，通信露在外面，布局把窄维补成整块。</b>TPU 多一条：XLA 未必把通信藏到你想藏的地方，所以最大的一刀都是手写 Pallas 拿回调度权。</p>
+  <p>先还一笔自己欠的税：统一池上线那天 PCP8 掉了约一成八。kernel 每个 tile 都把 GDN 状态的布局换一遍，每条序列换一次其实就够，统一池 prefill 因此慢 2.2 倍（同一 kernel 比不用池）。修法是在引用上换视图（bitcast 加 reshape），只改元数据不搬数据，指令包 366 → 87。</p>
+  <p>再往上砍，三条理由跟前面一样：<b>HBM 在空等，通信露在外面，布局把窄维补成整块。</b>TPU 多一条：XLA 未必把通信藏到你想藏的地方，所以最大的一刀都是手写 Pallas 拿回调度权。</p>
   <p><b>prefill 先砍 MoE</b>，它占了约八成时间。四刀依次是：SparseCore 合并（<a href="#s5-5">5.5</a>）、通信切块（<a href="#s5-6">5.6</a>）、整层融合（<a href="#s6-7">6.7</a>）、修剪 kernel。</p>
 <figure class="fbox fwide" id="fig-s13-ladder"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="Qwen3.5-397B 在单机 TPU v7x-8 上 DP8 prefill 吞吐的四级台阶，按私有实测指数化，起点记 1.00。SparseCore 合并这一刀乘 1.06，到 1.06；通信切块乘 1.09，到 1.16；整层 MoE 融合成一个 Pallas 程序乘 1.26，到 1.45，是最大的一级；修剪 kernel 内部乘 1.09，到 1.58。虚线是同期首尾实测之比 1.59，四刀几乎解释了全部涨幅"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">Qwen3.5-397B prefill 刀谱　——　<tspan font-weight="700">最大的一级是整层融合</tspan></text>
@@ -10346,8 +10348,8 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>看绿柱比左右两根高出多少：通信藏到矩阵乘后面，是一次就顶前两刀加起来的一级。</b><span class="capmore"><br><em>本课据私有实测指数化，起点那天 ＝ 1.00；只画 prefill，decode 中途换过口径，连不成一条梯子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课据私有实测指数化：起点那天的 DP8 prefill 吞吐 ＝ 1.00；四级倍数取紧邻台阶前后两次日常基准。</p>
 <p>连乘 1.0565 × 1.0945 × 1.2553 × 1.091 ≈ 1.584，同期首尾实测之比 ≈ 1.592，均为本课推导；差的 0.5% 是台阶之间的日间漂移，与起点那段小幅回落相抵后的余数。绝对吞吐与对外对比口径不画。</p></details></figure>
   <p>整层融合是最大一级：改前 reduce-scatter 约占两成时间、没东西和它重叠；写成一个 Pallas 程序后，kernel 自己选专家、把每行推给持有它的 rank，通信藏到矩阵乘后面。它撞过一次墙：路由表整份放进 1 MiB 的 SMEM，token 一多装不下，改成按窗口流进去才放开档位。</p>
-  <p>四级连乘和同期实测只差半个百分点。拆得这么干净，靠每刀先合进代码、默认关、用环境变量打开，开关前后天然一组 A/B（<a href="#s10-7">10.7</a>）。</p>
-  <p><b>decode 砍布局和小 batch</b>：KV 让序列维放最内层，FP8 才真省字节（<a href="#s5-3">5.3</a>）；小 batch 的 MoE 不排序，改 one-hot 矩阵乘，涨一成上下（<a href="#s5-5">5.5</a>）；线性层状态存 BF16、计算时提回 FP32，KV 池多装约一成，精度验收还没收尾。</p>
+  <p>四级连乘约 1.58，同期实测约 1.59，只差半个百分点。拆得这么干净，靠每刀先合进代码、默认关、用环境变量打开，开关前后天然一组 A/B（<a href="#s10-7">10.7</a>）。</p>
+  <p><b>decode 砍布局和小 batch</b>：KV 让序列维放最内层，FP8 才真省字节（<a href="#s5-3">5.3</a>）；小 batch 的 MoE 不排序，每个被选中的专家只读一次，daily 涨约一成二（<a href="#s5-5">5.5</a>）；线性层状态存 BF16、计算时提回 FP32，KV 池多装约一成二，同时在跑的请求 208 → 232，精度验收还没收尾。</p>
   <p>读数陷阱：换布局那天 decode 快了好几倍（相对前一天），那是修好了前一版的退化，不能记给这一刀。<b>台阶好看得离谱时，先查基线那天是不是本来就坏着。</b></p>
   <div class="note"><span class="t">K3 对照③</span>K3 只追 1 到 8 条，一步几乎全在读权重，按 config 推一个 token 读约 158 GB（本课推导，<a href="#s1-2">1.2</a>）。Inferact 把 92 个 MoE 层装进一次 Pallas 调用，跑在 16 颗 v7 上。挑三刀：
   <ul>
@@ -10435,8 +10437,9 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>看实心点扎堆在哪一列：上表在通信和形状，下表在 HBM 读写。</b><span class="capmore"><br><em>定性归类，点的大小不代表收益；K3 一侧依据 Inferact 公开博客与代码。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Qwen3.5 各刀的机制归类依据私有记录，只取机制不取数。K3 依据 inferact.ai/blog/tpu-megakernels（2026-09-23）与其 Apache-2.0 公开代码 github.com/Inferact/tpu-megakernels。</p>
 <p>「MXFP4 换 FP8」的代价与收益为本课按公开代码推导：专家每元素位数 12.75 → 20.37（三块合计），即 ×1.60；缩放从每 32 个元素一次变成每 256 个一次，向量单元上这部分活约为原来的 1/8。</p></details></figure>
 
-  <h3 id="s14-5">14.5　拆得开：PD 分离要搬多少</h3>
-  <p>拆成 1 台 prefill、1 台 decode 能跑通，代价是每个请求整份搬约 349 MB（1K 进 1K 出）：KV 之外还有线性层状态，尾巴不能让 decode 端重算（<a href="#s8-5">8.5</a>）。单并发每请求吞吐是不拆的 0.95 倍，4 并发 0.92 倍。<b>一台机器装得下时，拆开先亏；要等两边负载真打架再拆（<a href="#s8-1">8.1</a>）。</b></p>
+  <h3 id="s14-5">14.5　拆得开：切序列和拆 PD 都先亏</h3>
+  <p><b>切序列：</b>PCP8 把一条请求的序列摊到 8 个 device 上，收尾时吞吐是 DP8 的约 0.89 倍。它省的是长 prompt 的首 token 延迟，不是吞吐（本课推测，<a href="#s7-5">7.5</a>）。</p>
+  <p><b>拆 PD</b>（tpu-inference 的公开数）：拆成 1 台 prefill、1 台 decode 能跑通，代价是每个请求整份搬约 349 MB（1K 进 1K 出）：KV 之外还有线性层状态，尾巴不能让 decode 端重算（<a href="#s8-5">8.5</a>）。单并发每请求吞吐是不拆的 0.95 倍，4 并发 0.92 倍。<b>一台机器装得下时，拆开先亏；要等两边负载真打架再拆（<a href="#s8-1">8.1</a>）。</b></p>
 
   <h3 id="s14-6">14.6　扛得住：判活、别强杀、路由</h3>
   <ul>
@@ -10536,7 +10539,7 @@ body.figonly section h3{margin-top:34px}
 <p>⚠️ 本课示意：左栏的副本与请求是示意。</p>
 <p>正文里的健康检查那句（8 个副本坏 1 个，1/8 的请求白等）是本课推导示意：12.5% ＝ 1 ÷ 8，只在纯轮询、坏副本照常收请求时成立。</p></details></figure>
   <p>KV 感知路由把同前缀的请求送到已经存着它的副本。SGLang 2024 年 12 月放进开源路由，命中率 20% → 75%、吞吐是 v0.3 的 1.9 倍；之后 NVIDIA Dynamo（2025-03）、llm-d（2025-05）、GKE Inference Gateway 都做了。容量规划沿用 goodput（<a href="#s2-2">2.2</a>）：decode 卡数 ＝ 同时在生成的请求数 ÷ 每卡人数。</p>
-  <p>选栈：JetStream 已停止维护；本节主线用的 tpu-inference 是 vLLM 的 TPU 后端，SGLang-JAX 是 SGLang 的 JAX 实现。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
+  <p>选栈：JetStream 已停止维护；本节主线是 vLLM 的 PyTorch TPU 后端，tpu-inference 是 vLLM 的 JAX 后端，SGLang-JAX 是 SGLang 的 JAX 实现。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
 
   <p class="landing">⭐ 六关的刀落在哪，取决于 batch：Qwen3.5 并发几百，刀落在通信和形状；K3 只有 1 到 8 条，刀落在 HBM 读写。<b>先看 batch 落在 <a href="#s1-1">1.1</a> 的哪一侧，再决定刀往哪砍。</b>接手一个服务的第一天怎么问，收成第十五节的八问。</p>
 
@@ -10949,7 +10952,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>输入占大头；紫色那段就是磁盘 KV 缓存替 prefill 省下的。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 github.com/deepseek-ai/open-infra-index 202502OpenSourceWeek/day_6（2025-03-01 公布，统计 2025-02-27～28）：226.75 节点、输入 6,080 亿（其中 3,420 亿命中磁盘 KV，56.3%）、输出 1,680 亿。</p>
 <p>⚠️ 本课推导：未命中 ＝ 6,080 − 3,420 ＝ 2,660 亿；各段占比 ＝ 段 ÷ 7,760 亿；1,814 ＝ 226.75 × 8；每卡每秒 ＝ 7,760 亿 ÷ 86,400 s ÷ 1,814 卡。分母是全部卡、全天平均，不是 decode 卡的峰值。</p></details></figure>
   <p>这套服务用的正是表里的 MLA、大 EP 加 PD 分离、磁盘 KV 缓存和 FP8。</p>
-  <p class="landing">⭐ 回到 2022 年那一批人：等最长的那个 → 每步换人，座位却不够 → 分页、压薄、复用 → 长 prompt 插队 → 切块，再拆成两批机器 → MoE 拆散 batch → 大 EP → prefill 喂不上，重配台数 → 输出变长 → 投机 → 再少搬字节。<b>同一套硬件光改软件，每卡已是首发日的 5.1 倍。</b>下一个洞已经露出来，就是第十三节那件事：线性层的状态截不开，前缀难复用；TPU 上跑 Qwen3.5，前缀缓存至今还得关（14.3）。</p>
+  <p class="landing">⭐ 回到 2022 年那一批人：等最长的那个 → 每步换人，座位却不够 → 分页、压薄、复用 → 长 prompt 插队 → 切块，再拆成两批机器 → MoE 拆散 batch → 大 EP → prefill 喂不上，重配台数 → 输出变长 → 投机 → 再少搬字节。<b>同一套硬件光改软件，每卡已是首发日的 5.1 倍。</b>下一个洞已经露出来，就是第十三节那件事：线性层的状态截不开，前缀难复用；tpu-inference 上跑 Qwen3.5，前缀缓存至今还得关（13.5）。</p>
 
 </div></section>
 <section id="s十六"><div class="wrap"><div class="stn"><span class="badge">第 十六 节</span><h2>出处台账</h2></div>
@@ -11217,7 +11220,8 @@ body.figonly section h3{margin-top:34px}
 <tr><td>L95 补充 · 12.4 字节账图 fig-s12-ledger：gpt-oss-120b batch 1 每字权重字节，专家 BF16 7.2／FP8 3.6／MXFP4 1.9 GB，注意力 1.9、输出层 1.2 GB 不变；合计 10.2／6.7／5.0，整步 2.06×、FP8→MXFP4 1.34×，专家占比 70%→38%（本课推导）</td><td>huggingface.co/openai/gpt-oss-120b config.json；gpt-oss 模型卡 Table 1（Attention 0.96B、激活 5.13B 作锚点，均对上）。2026-10-18 核对</td></tr>
 <tr><td>L96 补充 · 第十三节：三种层的复用边界（全注意力任意位置、滑窗最后一窗、线性层只在快照处）；SGLang decode 每 256 token 存一份（--mamba-track-interval 默认 256）、--mamba-max-states-per-path、--enable-int8-mamba-checkpoint 默认关「~2x cached-prefix capacity」及选 int8 不选 fp8 的理由；vLLM mamba_cache_mode=align 只在块边界存、prefix_cache_retention_interval 默认 0；Nemotron-Nano-12B-v2 块放大到 672 token；Qwen3.5 一份快照 ≈183 MiB = 45 ×（64×128×128×4 B ＋ 12,288×3×2 B），KV 30 KiB/token = 2×2×256×2 B×15，183 MiB ÷ 30 KiB ≈ 6,250，÷ 7.5 MiB（256 token）≈ 24，本课推导；平均多重算约半个间隔，本课推导</td><td>LMSYS《Unified Radix Cache》2026-08-11；PyTorch 博客《Hybrid Models Meet SGLang》2025-12-03、《Hybrid Models as First-Class Citizens in vLLM》2025-11-05；SGLang 源码 arg_groups/fields/exec_.py、hybrid_linear_attn_backend.py、mem_cache/mamba_checkpoint_pool.py；vLLM 源码 vllm/config/cache.py、docs/design/hybrid_kv_cache_manager.md、docs/features/automatic_prefix_caching.md；Qwen3.5-397B-A17B config.json。2026-10-18 核对</td></tr>
 <tr><td>L97 补充 · 13.2 图 fig-s13-snap：int8 快照 ≈48 MiB = 45 ×（64×128×128×1 B ＋ 72 KiB），只压递归状态；32K 前缀快照全留时，间隔 64／256／1,024 → 512／128／32 份、91.6／22.9／5.7 GiB，平均重算 32／128／512 token；同段 KV 32,768 × 30 KiB ≈ 0.94 GiB。全部本课推导，「全留」是假设</td><td>Qwen3.5-397B-A17B config.json；SGLang mem_cache/mamba_checkpoint_pool.py（conv 状态保持原 dtype）。2026-10-18 核对</td></tr>
-    <tr><td>L98 补充 · 14 节改成六道关：冷启动约 7 min；单用户 1K/1K 49.7 tok/s；并发 128 峰值 2,097 tok/s；GSM8K 全集 93.93%；混合分配器 4 层共用一块 KV 张量致块池约 3.5 倍；GDN 递推 5 处提 FP32、分块 64→32；GPU 同配置答对、5-shot 一度绕开；/dev/shm 残留每分片 2 s→80 s、7 min→约 2 h</td><td>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:20-33、50-54、60-70、750、789-791；1.5 TiB ＝ 8 × 192 GiB、四百来 GB 按 397B × 1 字节估，本课推导。2026-10-18 核对</td></tr>
+    <tr><td>L98 补充 · 14 节里 tpu-inference 的对照数：冷启动约 7 min；混合分配器 4 层共用一块 KV 张量致块池约 3.5 倍；GDN 递推 bf16 死循环；/dev/shm 残留每分片 2 s→80 s、7 min→约 2 h；PD 每请求约 349 MB、单并发 0.95 倍</td><td>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:20-33、50-54、60-70、750、789-791。2026-10-18 核对</td></tr>
+    <tr><td>L99 补充 · 14 节主线（vLLM 的 PyTorch TPU 后端，写作时尚未公开）：v7x-8 ＝ 4 芯片 8 TensorCore、768 GiB；GDN 状态约 189 MB/序列（FP32）；统一池上线 PCP8 约 −18.6%；统一池 prefill 慢 2.2 倍、换视图后指令包 366→87；PCP8 假点约 2.07、真实约 0.85（起点 ＝ 1）；prefill 四刀 1.0565 × 1.0945 × 1.2553 × 1.091 ≈ 1.58、实测约 1.59；收尾 PCP8 ÷ DP8 ≈ 0.89；不排序 MoE daily 约 +12.5%；BF16 状态 KV 池 +12%、同时在跑 208→232</td><td>私有实测，按起点 ＝ 1.00 换算成指数；768 GiB ＝ 4 × 192 GiB、189 MB ＝ 45 层 × 64 头 × 128 × 128 × 4 B、四百来 GB 按 397B × 1 字节估，本课推导；「PCP 为延迟」为本课推测。栈公开后补名字与链接。2026-10-18 核对</td></tr>
   </table></div>
 </div></section>
 
