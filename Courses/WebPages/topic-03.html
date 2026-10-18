@@ -743,11 +743,11 @@ h4 { margin:18px 0 6px; font-size:15px }
 @media (max-width:720px){.figbar{right:70px;bottom:18px}
   .figbar .hint{display:none}
   .figbar button{padding:8px 13px;font-size:13px}}
-body.figonly section p:not(.lead):not(.landing),
-body.figonly section ul,
-body.figonly section ol,
-body.figonly section pre,
-body.figonly section .note{display:none}
+body.figonly section p:not(.lead):not(.landing):not(.peek, .peek *, details[open] *),
+body.figonly section ul:not(.peek, .peek *, details[open] *),
+body.figonly section ol:not(.peek, .peek *, details[open] *),
+body.figonly section pre:not(.peek, .peek *, details[open] *),
+body.figonly section .note:not(.peek, .peek *, details[open] *){display:none}
 /* ⛔ 防守：这两类里的 p 都不该被上面那条误伤 */
 body.figonly section figure p{display:revert}
 /* ⛔⛔ 2026-09-16：题目的题干是 <p class="q">，会被上面那条连题一起藏掉 ——&#160;
@@ -762,7 +762,7 @@ body.figonly .guess p{display:revert}
      引文是「故事」，不是「主线」，而折叠模式的定义就是只留主线。
    ⭐ 判据（上一次是 .guess p，这次反过来）：**一条写得太宽的全局规则，
      既会误伤该留的，也会留下该走的空壳 ——&#160;而空壳是静默的，更难发现。** */
-body.figonly section blockquote{display:none}
+body.figonly section blockquote:not(.peek, .peek *, details[open] *){display:none}
 /* ⭐⭐ 2026-09-16：图注是折叠模式下最大的一块字（48 条共 4960 字，占露出来
    的六成四）。⛔ 但图注不能整条藏 ——&#160;它是「看图该看什么」的指路。
    ⭐ 折中：**只留第一个 <br> 之前那一段**，后面的收起来。
@@ -773,8 +773,23 @@ body.figonly section blockquote{display:none}
    ⚠️ 上一轮留图注的理由是「它是看图该看什么的指路」——&#160;那条理由没错，
      但它跟「投屏时小字看不见」这条冲突，而讲课场景优先。
      展开模式下图注一个字没少。 */
-body.figonly figcaption{display:none}
+body.figonly figcaption:not(.peek, .peek *, details[open] *){display:none}
 body.figonly section h3{margin-top:34px}
+/* ⛔⛔ 2026-10-18 现场原话：「被你折起来的章节就那丢着，内容凭空消失了」
+   「有些地方点开以后里边还是空的」。两个病一个根：上面那几条写的是
+   「section 里所有 p／ul」，**连 <details> 里面的也一起藏** ——&#160;
+   读者亲手点开的折叠框，壳开了、内容还是被这层规则压着。
+   ⭐ 判据：**读者亲手点开的东西，优先级高于全局折叠。** 两种点开都要赢：
+     ① <details open>（考考自己、出处台账这类）；
+     ② 每个小节标题旁的「展开这一小节」（.peek，JS 按需挂上）。
+   ⭐ 做法是在每条隐藏规则后面加 :not(.peek, .peek *, details[open] *) ——&#160;
+     **让藏的规则不命中**，而不是再写一条 display:revert 去顶：revert 会退回浏览器默认，
+     把作者写的 flex／grid 一起冲掉。 */
+.peekbtn{display:none}
+body.figonly .peekbtn{display:inline-block;margin:0 0 6px;padding:2px 10px;font-size:13px;
+  color:var(--muted,#5f6368);background:none;border:1px dashed var(--line,#dadce0);
+  border-radius:12px;cursor:pointer}
+body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </style>
 <style>
 /* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
@@ -850,7 +865,7 @@ body.figonly section h3{margin-top:34px}
 </div></div>
 
 
-<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>先把这八年整个摊开看一眼</h2><!--lec:s0--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音 · 开场</span><span class="sub">约 7 分 20 秒</span><audio controls preload="none" src="media/topic03-lecture-s0.mp3?v=628467a7" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s0.mp4?v=e2a3887c" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s0--></div>
+<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>先把这八年整个摊开看一眼</h2></div>
 
 <!-- ⭐⭐⭐ 2026-09-16 现场定的全课主线：「人类的大脑怎么思考 —&#160;
      模型什么样、人脑什么样、差别在哪、从里面学到了什么、又产生了什么。
@@ -1129,7 +1144,7 @@ body.figonly section h3{margin-top:34px}
 
 <figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1460 665" width="100%" role="img" aria-label="Attention 编年史时间轴：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉、只留下这个补丁，此后分成四条支线演化 ——&#160;KV 存多少、每个 query 看多少、换一套数学、只改怎么算">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">Attention 编年史 ——&#160;<tspan font-weight="700">从 RNN 的一个补丁，到今天各家的混合配比</tspan></text>
-<text class="svgsm" x="0" y="39" style="font-size:15px">⭐ 从 2014 年到今天，这一路在干的其实是一件事 ——&#160;<tspan fill="#5f6368">现在不用懂，最后一章会回来收这句</tspan>：</text>
+<text class="svgsm" x="0" y="39" style="font-size:15px">从 2014 年到今天，这一路在干的其实是一件事 ——&#160;<tspan fill="#5f6368">现在不用懂，最后一章会回来收这句</tspan>：</text>
 <text class="svgsm" x="0" y="58" style="font-size:15px"><tspan font-weight="700">Transformer 当初做的交易是「用平方的计算量，买来完全的并行度」——&#160;而这段历史，是在把那笔交易<tspan style="text-decoration:underline">往回赎</tspan>，但不能把并行度还回去。</tspan>　<tspan fill="#5f6368">（信息截至 2026-09-07，全部现搜）</tspan></text>
 <rect x="0" y="72" width="1460" height="361" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
 <text class="svglbl" x="16" y="96" fill="#202124" style="font-size:13px">一、编年史 ——&#160;四条支线，各修各的毛病<tspan fill="#5f6368" font-weight="400" style="font-size:11px">　（横轴按每年的内容疏密压缩过：没有事件的年份收窄、事件多的年份放宽 ——&#160;<tspan font-weight="700">间距不代表时间长短</tspan>）</tspan></text>
@@ -1169,7 +1184,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="196" y="160" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">Bahdanau 注意力</tspan></text>
 <circle cx="341" cy="136" r="4" fill="#5f6368"/>
 <line x1="341" y1="136" x2="341" y2="151" stroke="#5f6368" stroke-width="1.2"/>
-<text class="svgsm" x="347" y="160" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">⭐ Transformer / MHA</tspan></text>
+<text class="svgsm" x="347" y="160" fill="#5f6368" style="font-size:15px"><tspan font-weight="700"> Transformer / MHA</tspan></text>
 <rect x="4" y="177" width="1432" height="58" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
 <rect x="4" y="177" width="4" height="58" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
 <rect x="6" y="177" width="2" height="58" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
@@ -1236,19 +1251,19 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="14" y="395" fill="#1e8e3e" style="font-size:14px"><tspan font-weight="700">⊘ 不在旋钮上：实现层（不改数学，只改怎么算）</tspan></text>
 <circle cx="718" cy="384" r="4" fill="#1e8e3e"/>
 <line x1="718" y1="384" x2="718" y2="399" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="724" y="408" fill="#1e8e3e" style="font-size:15px"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
+<text class="svgsm" x="724" y="408" fill="#1e8e3e" style="font-size:15px"><tspan font-weight="700"> FlashAttention</tspan></text>
 <rect x="0" y="449" width="1460" height="204" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/><rect x="0" y="449" width="4" height="204" rx="2" fill="#e8710a"/><rect x="2" y="449" width="3" height="204" fill="#fff"/>
-<text class="svglbl" x="16" y="473" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
+<text class="svglbl" x="16" y="473" fill="#7a5000" style="font-size:13px">全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
 <text class="svgsm" x="16" y="497" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">MiniMax</tspan></text>
 <text class="svgsm" x="118" y="497" fill="#7a5000" style="font-size:15px">线性（01）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
 <text class="svgsm" x="16" y="516" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">腾讯混元</tspan></text>
 <text class="svgsm" x="118" y="516" fill="#7a5000" style="font-size:15px">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
 <text class="svgsm" x="16" y="535" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">智谱 GLM</tspan></text>
 <text class="svgsm" x="118" y="535" fill="#7a5000" style="font-size:15px">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
-<text class="svglbl" x="16" y="571" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼 ② 那条泳道：这次补完混元和 GLM，多出来一条原先看不见的线</text>
+<text class="svglbl" x="16" y="571" fill="#174ea6" style="font-size:12px">再看一眼 ② 那条泳道：这次补完混元和 GLM，多出来一条原先看不见的线</text>
 <text class="svgsm" x="16" y="591" fill="#174ea6" style="font-size:15px">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan></text>
 <text class="svgsm" x="16" y="613" fill="#174ea6" style="font-size:15px">稳态四层一循环（前几层各家不同）——&#160;每 4 层只有 1 层自己算索引。</text>
-<text class="svgsm" x="16" y="635" fill="#174ea6" style="font-size:15px">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
+<text class="svgsm" x="16" y="635" fill="#174ea6" style="font-size:15px">所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
 </svg><figcaption>⭐ <b>这是从 2014 年到今天真实发生过的事，四条支线各修各的毛病。</b><em>不用现在看懂 ——&nbsp;先看清一件事：<b>它有多乱。</b></em><span class="capmore"><br>⭐⭐ <em>这一讲要做的，就是把这团乱麻理成<b>一条能从头读到尾的线</b>；而读完之后你再回来看它，<b>会看见完全不同的东西。</b></em></span></figcaption></figure>
 
 <!-- ⛔ 2026-09-14 R14：这一块原来有三句，**两句是图注的改写**
@@ -1824,7 +1839,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>一条链 ——&nbsp;最早的模型是怎么记事的</h2><!--lec:s1--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 9 分 03 秒</span><audio controls preload="none" src="media/topic03-lecture-s1.mp3?v=2c9977d6" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s1.mp4?v=ad2a2a05" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s1--></div>
+<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>一条链 ——&nbsp;最早的模型是怎么记事的</h2></div>
 
 <p class="lead">这本书里后面出场的每一个名词，解的都是同一道题：
   <b>话是有先后的，模型总得有个地方放「刚才说了什么」。</b>
@@ -2622,7 +2637,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>2017 年那一刀 ——&nbsp;把链剪断，换成一张表</h2><!--lec:s2--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 11 分 35 秒</span><audio controls preload="none" src="media/topic03-lecture-s2.mp3?v=4088f890" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s2.mp4?v=76e37fb6" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s2--></div>
+<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>2017 年那一刀 ——&nbsp;把链剪断，换成一张表</h2></div>
 
 <!-- ⛔ 原稿这里把上一章图注那句问话**逐字**抄了一遍。跨章呼应是好事，
      但逐字重复读起来就是页面结巴 ——&nbsp;换成自己的话说一遍，还更冲。 -->
@@ -3497,7 +3512,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <figure class="fbox fwide" id="fig-tx-base"><svg viewBox="0 0 1400 1388" width="100%" role="img" aria-label="主线图 · 一层 Transformer，每一步的张量形状">
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:19px">主线图 · 一层 Transformer，每一步的张量形状</text>
-<text class="svgsm" x="0" y="48" fill="#5f6368" style="font-size:15px">⭐ 这张图会在整个专题里反复出现。每讲一个方案，就把它重画一遍，只把被改动的那一处点亮 —— 你永远知道自己在图上的哪儿。</text>
+<text class="svgsm" x="0" y="48" fill="#5f6368" style="font-size:15px">这张图会在整个专题里反复出现。每讲一个方案，就把它重画一遍，只把被改动的那一处点亮 —— 你永远知道自己在图上的哪儿。</text>
 <rect x="0" y="62" width="1400" height="30" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
 <text class="None" x="12" y="82" fill="#80868b" style="font-size:15px">读这张图先认字母：</text>
 <text class="None" x="150" y="82" fill="#5f6368" style="font-size:15px">B 批量 · T query 长度 · <tspan font-weight="700">S KV 长度</tspan> · D d_model · F MLP 隐层 · H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K</text>
@@ -3619,10 +3634,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="22" y="1236" fill="#a50e0e" style="font-size:21px">★ 先只看一件事：图上什么东西需要留到下一个 token</text>
 <text class="None" x="22" y="1274" fill="#5f6368" style="font-size:17px"><tspan font-weight="700">➜</tspan></text>
 <text class="None" x="62" y="1274" fill="#5f6368" style="font-size:17px"><tspan font-weight="700">这笔账在后面四张图里一直挂着</tspan> ——&#160;每张会说清它把这笔账动到了哪一格。</text>
-<text class="None" x="1378" y="1300" fill="#80868b" text-anchor="end" style="font-size:15px">📌 这一格的完整讲解在图下面的正文里</text>
+<text class="None" x="1378" y="1300" fill="#80868b" text-anchor="end" style="font-size:15px">这一格的完整讲解在图下面的正文里</text>
 <text class="None" x="210" y="978" fill="#a50e0e" style="font-size:17px">⬆ 红底那两处就是它 ——　全图只有这两个输出要跨 token 留下来</text>
 <rect x="0" y="1330" width="1400" height="48" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="16" y="1360" fill="#174ea6" style="font-size:15px">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。</text>
+<text class="svgsm" x="16" y="1360" fill="#174ea6" style="font-size:15px">形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。</text>
 </svg><figcaption>⭐ <b>别急着看懂整张 ——&nbsp;现在只做一件事</b>：<em>在这一堆字母里，把那个<b>会随对话越变越长</b>的找出来。</em><span class="capmore"><br>⭐⭐ 找到它，你就找到了后面<b>所有招数共同的靶子</b> ——&nbsp;<em>剩下七章，全是在想办法拿它开刀。</em></span></figcaption></figure>
 
 </details>
@@ -3659,7 +3674,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>账单到期 ——&nbsp;上下文一长，那张表就付不起了</h2><!--lec:s3--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 8 分 55 秒</span><audio controls preload="none" src="media/topic03-lecture-s3.mp3?v=3f1a97f8" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s3.mp4?v=2f1e00bb" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s3--></div>
+<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>账单到期 ——&nbsp;上下文一长，那张表就付不起了</h2></div>
 
 <p class="lead">上一章欠下一份<b>会一直长下去</b>的 KV cache。
   <em>可这件事一点都不新鲜 ——&nbsp;那篇论文发表的那天，它就已经在那儿了。
@@ -4218,7 +4233,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第一次省：把头砍掉 ——&nbsp;MQA 砍过了头，GQA 停在半路</h2><!--lec:s4--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 8 分 21 秒</span><audio controls preload="none" src="media/topic03-lecture-s4.mp3?v=47e85cd5" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s4.mp4?v=f20fd142" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s4--></div>
+<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>第一次省：把头砍掉 ——&nbsp;MQA 砍过了头，GQA 停在半路</h2></div>
 
 <p class="lead">账摆在那儿了：<b>一人一份，而且随着话越说越长</b>。
   <em><b>这一章就去试。</b></em></p>
@@ -4983,7 +4998,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>第二次省：干脆不存 K 和 V ——&nbsp;MLA 存的是一份压缩件</h2><!--lec:s5--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 13 分 21 秒</span><audio controls preload="none" src="media/topic03-lecture-s5.mp3?v=2fd966dc" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s5.mp4?v=33e3a029" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s5--></div>
+<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>第二次省：干脆不存 K 和 V ——&nbsp;MLA 存的是一份压缩件</h2></div>
 
 <p class="lead">上一章最后停在一块矩阵上（<a href="#fig-copy-matrix">收在 4.3 里</a>）：GQA 的那块是写死的，格子里只有几个 1。
   <em>那把它松开、交给模型自己去填，会怎么样？<b>——&nbsp;那就是 MLA。</b>
@@ -5676,7 +5691,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>换个方向：不是存得少，是别全读 ——&nbsp;从滑窗到 DSA</h2><!--lec:s6--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 14 分 40 秒</span><audio controls preload="none" src="media/topic03-lecture-s6.mp3?v=75421294" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s6.mp4?v=c4ce5c0f" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s6--></div>
+<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>换个方向：不是存得少，是别全读 ——&nbsp;从滑窗到 DSA</h2></div>
 
 <p class="lead"><em>这一章换一个完全没碰过的方向 ——&nbsp;每一份多大都不改，
   改的是每走一步到底读进来几份。</em><br>
@@ -7905,7 +7920,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>绕回原点 ——&nbsp;还是那块固定大小的记事板</h2><!--lec:s7--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 12 分 18 秒</span><audio controls preload="none" src="media/topic03-lecture-s7.mp3?v=36db0dfd" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s7.mp4?v=ee0af264" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s7--></div>
+<section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>绕回原点 ——&nbsp;还是那块固定大小的记事板</h2></div>
 
 <p class="lead">前两条路：一条改「一份有多大」，一条改「每步读几份」。
   <em>这一条最狠 ——&nbsp;<b>它干脆不存。</b></em><br>
@@ -9464,7 +9479,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>谁也赢不了，那就都要 ——&nbsp;混合配比</h2><!--lec:s8--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 8 分 56 秒</span><audio controls preload="none" src="media/topic03-lecture-s8.mp3?v=f809fdda" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s8.mp4?v=0a5d418d" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s8--></div>
+<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>谁也赢不了，那就都要 ——&nbsp;混合配比</h2></div>
 
 <p class="lead">三条路都走完了。<b>今天几乎所有人的答案都一样 ——&nbsp;
   <em>不选了，掺着用。</em></b><br>
@@ -10540,7 +10555,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </div></section>
 
 
-<section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>落到机器上 ——&nbsp;以及那 512 倍是怎么换来的</h2><!--lec:s9--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 11 分 11 秒</span><audio controls preload="none" src="media/topic03-lecture-s9.mp3?v=b5b90947" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic03-video-s9.mp4?v=26a575ab" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s9--></div>
+<section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>落到机器上 ——&nbsp;以及那 512 倍是怎么换来的</h2></div>
 
 <p class="lead">八章的想法讲完了。<b>最后一件事：它们真搬到机器上，兑现了多少？</b><br>
   ⭐ <em>这一章给三样东西：一张换算成毫秒的账、一场还没打完的仗，
@@ -11454,6 +11469,29 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
                           : ("全展开　·　按 T 切换");
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
   }
+  // ⭐ 2026-10-18：折叠不能折得「凭空消失」。每个小节标题后面挂一个小按钮，
+  //   只在折叠模式显示；点了只展开这一小节，别的照旧收着。
+  //   小节 ＝ 一个标题到下一个标题之间的兄弟元素；里面没有会被藏的东西就不挂。
+  var HID = "p:not(.lead):not(.landing), ul, ol, pre, .note, blockquote, figcaption";
+  //   节标题在 .stn 里（h2 包在 div 中），小节标题是 .wrap 下的 h3。
+  document.querySelectorAll("section").forEach(function(sec){
+    sec.querySelectorAll(".stn, h3").forEach(function(h){
+      var grp = [], el = h.nextElementSibling;
+      while (el && el.tagName !== "H3" && !el.classList.contains("stn")){
+        if (el.matches(HID) || el.querySelector(HID)) grp.push(el);
+        el = el.nextElementSibling;
+      }
+      if (!grp.length) return;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ 展开这一小节";
+      b.addEventListener("click", function(){
+        var on = !grp[0].classList.contains("peek");
+        grp.forEach(function(x){ x.classList.toggle("peek", on); });
+        b.textContent = on ? "▾ 收起这一小节" : "▸ 展开这一小节";
+      });
+      h.insertAdjacentElement("afterend", b);
+    });
+  });
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
   // ⛔ 默认**展开**。2026-09-17 麻瓜审：默认折叠会让第一次点进来的人
   //   看到一份被挖空的教材（整节正文不见、九张图的图注全不见）。

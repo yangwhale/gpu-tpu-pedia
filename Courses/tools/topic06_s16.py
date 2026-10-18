@@ -7,7 +7,8 @@ topic06_numbers.py 里已经写明的出处；沿用专题五的图写「沿用�
 """
 
 BODY = '''
-  <p class="lead">按「结论 ← 材料」排，顺序跟正文各节走。2026-10-15 核对。</p>
+  <p class="lead">正文每个数字、每句结论的来源都记在这里，供核对用，平时不必看。按「结论 ← 材料」排，顺序跟正文各节走。2026-10-15 核对。</p>
+  <details class="foldfig ledger"><summary><b>点开出处台账</b>（核对用，很长）</summary>
   <table>
     <tr><th>结论</th><th>材料</th></tr>
     <tr><td>DeepSeek-V3：总参数 6,710 亿、每 token 激活 370 亿；61 层、hidden 7168、256 个路由专家选 8、kv_lora 512 ＋ rope 64、moe_intermediate 2048</td><td>DeepSeek-V3 Technical Report（arXiv 2412.19437）摘要；形状取 Hugging Face deepseek-ai/DeepSeek-V3 的 config.json</td></tr>
@@ -276,7 +277,8 @@ BODY = '''
     <tr><td>L98 补充 · 14 节里 tpu-inference 的对照数：冷启动约 7 min；混合分配器 4 层共用一块 KV 张量致块池约 3.5 倍；GDN 递推 bf16 死循环；/dev/shm 残留每分片 2 s→80 s、7 min→约 2 h；PD 每请求约 349 MB、单并发 0.95 倍</td><td>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:20-33、50-54、60-70、750、789-791。2026-10-18 核对</td></tr>
     <tr><td>L99 补充 · 14 节主线（vLLM 的 PyTorch TPU 后端，写作时尚未公开）：v7x-8 ＝ 4 芯片 8 TensorCore、768 GiB；GDN 状态约 189 MB/序列（FP32）；统一池上线 PCP8 约 −18.6%；统一池 prefill 慢 2.2 倍、换视图后指令包 366→87；PCP8 假点约 2.07、真实约 0.85（起点 ＝ 1）；prefill 四刀 1.0565 × 1.0945 × 1.2553 × 1.091 ≈ 1.58、实测约 1.59；收尾 PCP8 ÷ DP8 ≈ 0.89；不排序 MoE daily 约 +12.5%；BF16 状态 KV 池 +12%、同时在跑 208→232</td><td>私有实测，按起点 ＝ 1.00 换算成指数；768 GiB ＝ 4 × 192 GiB、189 MB ＝ 45 层 × 64 头 × 128 × 128 × 4 B、四百来 GB 按 397B × 1 字节估，本课推导；「PCP 为延迟」为本课推测。栈公开后补名字与链接。2026-10-18 核对</td></tr>
     <tr><td>L100 补充 · 3.3 新增「一步里装了什么」（原 3.3–3.5 顺延为 3.4–3.6）：vLLM V1 开 chunked prefill 时先排全部 decode、预算有剩再排 prefill、装不下就切；SGLang --enable-mixed-chunk 默认关，即一步不混 prefill 和 decode；图与动画的预算、人数、长度均为示意</td><td>docs.vllm.ai Optimization and Tuning 页 Chunked Prefill 一节；docs.sglang.ai Server Arguments 页。2026-10-18 核对</td></tr>
-  </table>'''
+  </table>
+  </details>'''
 
 FIGS = {}
 NUM_LOCK = []

@@ -781,11 +781,11 @@ h4 { margin:18px 0 6px; font-size:15px }
 @media (max-width:720px){.figbar{right:70px;bottom:18px}
   .figbar .hint{display:none}
   .figbar button{padding:8px 13px;font-size:13px}}
-body.figonly section p:not(.lead):not(.landing),
-body.figonly section ul,
-body.figonly section ol,
-body.figonly section pre,
-body.figonly section .note{display:none}
+body.figonly section p:not(.lead):not(.landing):not(.peek, .peek *, details[open] *),
+body.figonly section ul:not(.peek, .peek *, details[open] *),
+body.figonly section ol:not(.peek, .peek *, details[open] *),
+body.figonly section pre:not(.peek, .peek *, details[open] *),
+body.figonly section .note:not(.peek, .peek *, details[open] *){display:none}
 /* ⛔ 防守：这两类里的 p 都不该被上面那条误伤 */
 body.figonly section figure p{display:revert}
 /* ⛔⛔ 2026-09-16：题目的题干是 <p class="q">，会被上面那条连题一起藏掉 ——&#160;
@@ -800,7 +800,7 @@ body.figonly .guess p{display:revert}
      引文是「故事」，不是「主线」，而折叠模式的定义就是只留主线。
    ⭐ 判据（上一次是 .guess p，这次反过来）：**一条写得太宽的全局规则，
      既会误伤该留的，也会留下该走的空壳 ——&#160;而空壳是静默的，更难发现。** */
-body.figonly section blockquote{display:none}
+body.figonly section blockquote:not(.peek, .peek *, details[open] *){display:none}
 /* ⭐⭐ 2026-09-16：图注是折叠模式下最大的一块字（48 条共 4960 字，占露出来
    的六成四）。⛔ 但图注不能整条藏 ——&#160;它是「看图该看什么」的指路。
    ⭐ 折中：**只留第一个 <br> 之前那一段**，后面的收起来。
@@ -811,8 +811,23 @@ body.figonly section blockquote{display:none}
    ⚠️ 上一轮留图注的理由是「它是看图该看什么的指路」——&#160;那条理由没错，
      但它跟「投屏时小字看不见」这条冲突，而讲课场景优先。
      展开模式下图注一个字没少。 */
-body.figonly figcaption{display:none}
+body.figonly figcaption:not(.peek, .peek *, details[open] *){display:none}
 body.figonly section h3{margin-top:34px}
+/* ⛔⛔ 2026-10-18 现场原话：「被你折起来的章节就那丢着，内容凭空消失了」
+   「有些地方点开以后里边还是空的」。两个病一个根：上面那几条写的是
+   「section 里所有 p／ul」，**连 <details> 里面的也一起藏** ——&#160;
+   读者亲手点开的折叠框，壳开了、内容还是被这层规则压着。
+   ⭐ 判据：**读者亲手点开的东西，优先级高于全局折叠。** 两种点开都要赢：
+     ① <details open>（考考自己、出处台账这类）；
+     ② 每个小节标题旁的「展开这一小节」（.peek，JS 按需挂上）。
+   ⭐ 做法是在每条隐藏规则后面加 :not(.peek, .peek *, details[open] *) ——&#160;
+     **让藏的规则不命中**，而不是再写一条 display:revert 去顶：revert 会退回浏览器默认，
+     把作者写的 flex／grid 一起冲掉。 */
+.peekbtn{display:none}
+body.figonly .peekbtn{display:inline-block;margin:0 0 6px;padding:2px 10px;font-size:13px;
+  color:var(--muted,#5f6368);background:none;border:1px dashed var(--line,#dadce0);
+  border-radius:12px;cursor:pointer}
+body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </style>
 <style>
 /* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
@@ -902,7 +917,7 @@ body.figonly section h3{margin-top:34px}
     也知道该怎么讲的助教，让它带你走一遍。</p>
 </div></div>
 
-<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一个数，和 6,710 亿个参数</h2><!--lec:s0--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 3 分 54 秒</span><audio controls preload="none" src="media/topic04-lecture-s0.mp3?v=b2187c6a" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s0.mp4?v=59e84827" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s0--></div>
+<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一个数，和 6,710 亿个参数</h2></div>
 
 
 <details class="foldfig" id="qzbox"><summary><b>🎯 开场热身：上一讲那四个模型，各自走的是哪条路？</b>
@@ -1045,7 +1060,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 
 
-<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>一个数怎么变成 6,710 亿个导数 ——&nbsp;反向传播的原理</h2><!--lec:s1a--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 第一节讲课录音 · 上</span><span class="sub">约 13 分 22 秒</span><audio controls preload="none" src="media/topic04-lecture-s1a.mp3?v=e7b0de29" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s1a.mp4?v=525792a2" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s1a--></div>
+<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>一个数怎么变成 6,710 亿个导数 ——&nbsp;反向传播的原理</h2></div>
 
 <p class="lead">反向传播不是「再跑一遍」。<em>它要付两样东西：
   <b>大约两倍于前向的算力</b>，以及 ——&nbsp;更要命的。<b>一路累加、不能提前扔掉的中间激活</b>。</em></p>
@@ -3284,7 +3299,7 @@ body.figonly section h3{margin-top:34px}
      ⭐ 而他自己推到的前一步**是对的**，也逐字记下来，因为它点到了要害：
        「我当前的这个 token 得用生成我这个 token 的激活，也就是说我前面的
          所有的 token 都参与计算之后的激活来做偏导数。」 -->
-<h3 id="s1-2d">1.2d　「结账」——&nbsp;<u>权重梯度是在哪一步相加的</u></h3><!--lec:s1b--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 第一节讲课录音 · 下</span><span class="sub">约 12 分 35 秒</span><audio controls preload="none" src="media/topic04-lecture-s1b.mp3?v=d09e4e1a" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s1b.mp4?v=23c9467b" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s1b-->
+<h3 id="s1-2d">1.2d　「结账」——&nbsp;<u>权重梯度是在哪一步相加的</u></h3>
 
 <div class="note ok"><p>⭐ <b>再往下一层：<u>「结账」到底发生在哪一步？</u></b>
   <em>——&nbsp;现场问得很准：「是每个函数各做一次，还是把这一层算完再做？」</em></p>
@@ -6039,7 +6054,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 
 
-<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>代价：那些中间结果扔不掉 ——&nbsp;以及第一个真正的取舍</h2><!--lec:s2--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 7 分 49 秒</span><audio controls preload="none" src="media/topic04-lecture-s2.mp3?v=d2fd5a4e" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s2.mp4?v=24bc3e2f" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s2--></div>
+<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>代价：那些中间结果扔不掉 ——&nbsp;以及第一个真正的取舍</h2></div>
 
 <p class="lead">这是全课第一次出现<b>真正的取舍</b>：
   <em>不是「有没有更好的办法」，而是两样东西只能选一样，你选哪个。</em></p>
@@ -6705,7 +6720,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 
 
-<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>有了导数，那一步该迈多大 ——&nbsp;梯度下降与优化器</h2><!--lec:s3a--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 第三节讲课录音 · 上</span><span class="sub">约 10 分 34 秒</span><audio controls preload="none" src="media/topic04-lecture-s3a.mp3?v=053ce0fb" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s3a.mp4?v=b2616605" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s3a--></div>
+<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>有了导数，那一步该迈多大 ——&nbsp;梯度下降与优化器</h2></div>
 
 <p class="lead">前面两节都在跟激活较劲。<em>可把账摊开一看 ——&nbsp;
   那个从头到尾一言不发的角色，才是最大的一块。</em></p>
@@ -7942,7 +7957,7 @@ body.figonly section h3{margin-top:34px}
      ⭐ 而 3.3b 开头第三次问「这一行凭什么成立」。
      ⛔ 判据：**收尾不是复述。** 上面那句 lead 已经把交棒做完了。 -->
 
-<h3 id="s3-3b">3.3b　那一步<u>该迈多大</u> ——&nbsp;从一个量纲问题说起</h3><!--lec:s3b--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 第三节讲课录音 · 中</span><span class="sub">约 10 分 21 秒</span><audio controls preload="none" src="media/topic04-lecture-s3b.mp3?v=2f023cb0" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s3b.mp4?v=61c89719" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s3b-->
+<h3 id="s3-3b">3.3b　那一步<u>该迈多大</u> ——&nbsp;从一个量纲问题说起</h3>
 
 <!-- ⭐⭐⭐ 2026-09-19 T16 从 <a href="#s3-3">§3.3</a> 里切出来。
      ⛔ 原来 <a href="#s3-3">§3.3</a> 一节 8,900 字塞了四个独立主题（为什么能下降 / 鞍点 / 动量 /
@@ -9123,7 +9138,7 @@ body.figonly section h3{margin-top:34px}
   <em>而且回想 <a href="#s二">2.6</a> 那条判据：这类结论换规模要重验。</em>
   <b>至今仍未核实的一条</b>：Muon 下主权重是否仍需 fp32。</span></p>
 
-<h3 id="s3-5">3.5　学习率：那条曲线到底怎么画</h3><!--lec:s3c--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 第三节讲课录音 · 下</span><span class="sub">约 10 分 01 秒</span><audio controls preload="none" src="media/topic04-lecture-s3c.mp3?v=100a0e8b" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s3c.mp4?v=a24089ca" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s3c-->
+<h3 id="s3-5">3.5　学习率：那条曲线到底怎么画</h3>
 
 <!-- ⭐⭐⭐ 2026-09-16 现场原话：「学习率这个是个非常高深的手艺，该怎么调？
      有哪些方法？下降的速度是多少？一开始是多少？**这些都得讲。**」
@@ -10201,7 +10216,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 
 
-<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账交给专题五（本讲不展开）</h2><!--lec:s4--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 2 分 17 秒</span><audio controls preload="none" src="media/topic04-lecture-s4.mp3?v=f5256f7e" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s4.mp4?v=8402cf9a" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s4--></div>
+<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>这张账交给专题五（本讲不展开）</h2></div>
 
 <p class="lead">这一节是通向<b>专题五</b>的桥。
   <em>把上面几项按大小排一遍，你会发现 ——&nbsp;
@@ -10407,7 +10422,7 @@ body.figonly section h3{margin-top:34px}
 </div></section>
 
 
-<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>把这三件事，放到一台你摸得到的机器上</h2><!--lec:s5--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 6 分 41 秒</span><audio controls preload="none" src="media/topic04-lecture-s5.mp3?v=fe957108" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s5.mp4?v=0e71c2f3" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s5--></div>
+<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>把这三件事，放到一台你摸得到的机器上</h2></div>
 
 <p class="lead">前面讲的都对，<b>但全是 6,710 亿参数、TiB 级的数</b>。
   <em>——&nbsp;它们没有分母。这一节把同一件事缩到<b>一个你能自己算一遍的模型</b>上。</em></p>
@@ -10823,7 +10838,7 @@ body.figonly section h3{margin-top:34px}
 </details>
 </div></section>
 
-<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>训不崩 ——&nbsp;<u>loss 飞了怎么办，以及怎么让它别飞</u></h2><!--lec:s6--><div class="lecmedia" style="margin:12px 0 22px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap"><div class="lecaudio" style="flex:1 1 0;min-width:280px;padding:14px 18px;border:2px solid #1a73e8;background:#e8f0fe;border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:10px"><span style="font-weight:700;font-size:1.15em;color:#174ea6">🎧 本节讲课录音</span><span class="sub">约 10 分 14 秒</span><audio controls preload="none" src="media/topic04-lecture-s6.mp3?v=fdacb8d9" style="width:100%"></audio></div><div class="lecvideo" style="flex:1 1 0;min-width:280px"><video controls preload="metadata" src="media/topic04-video-s6.mp4?v=8492e3a7" style="width:100%;border-radius:12px;border:2px solid #1a73e8;background:#000;display:block"></video></div></div><!--/lec:s6--></div>
+<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>训不崩 ——&nbsp;<u>loss 飞了怎么办，以及怎么让它别飞</u></h2></div>
 
 <!-- ⭐⭐⭐ 2026-09-16 加。这一节是**扫完十四份大纲之后补的**：
      「loss spike」「z-loss」「scaling law」三个关键词在整套课程里**零命中**，
@@ -11722,6 +11737,29 @@ body.figonly section h3{margin-top:34px}
                           : ("全展开　·　按 T 切换");
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
   }
+  // ⭐ 2026-10-18：折叠不能折得「凭空消失」。每个小节标题后面挂一个小按钮，
+  //   只在折叠模式显示；点了只展开这一小节，别的照旧收着。
+  //   小节 ＝ 一个标题到下一个标题之间的兄弟元素；里面没有会被藏的东西就不挂。
+  var HID = "p:not(.lead):not(.landing), ul, ol, pre, .note, blockquote, figcaption";
+  //   节标题在 .stn 里（h2 包在 div 中），小节标题是 .wrap 下的 h3。
+  document.querySelectorAll("section").forEach(function(sec){
+    sec.querySelectorAll(".stn, h3").forEach(function(h){
+      var grp = [], el = h.nextElementSibling;
+      while (el && el.tagName !== "H3" && !el.classList.contains("stn")){
+        if (el.matches(HID) || el.querySelector(HID)) grp.push(el);
+        el = el.nextElementSibling;
+      }
+      if (!grp.length) return;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ 展开这一小节";
+      b.addEventListener("click", function(){
+        var on = !grp[0].classList.contains("peek");
+        grp.forEach(function(x){ x.classList.toggle("peek", on); });
+        b.textContent = on ? "▾ 收起这一小节" : "▸ 展开这一小节";
+      });
+      h.insertAdjacentElement("afterend", b);
+    });
+  });
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
   // ⛔ 默认**展开**。2026-09-17 麻瓜审：默认折叠会让第一次点进来的人
   //   看到一份被挖空的教材（整节正文不见、九张图的图注全不见）。
