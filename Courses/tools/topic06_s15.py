@@ -66,7 +66,7 @@ FIGS = {
         '<b>八问里有四问钉在车上（车 ＝ 每步从显存往工位搬的那一趟）：3、4、7、8。</b><br><em>颜色对主线：灰 ＝ 校准尺子／上线，蓝 ＝ 分给更多 token，绿 ＝ 少搬，橙 ＝ 拆开放对地方。</em>'),
     "__FIG_S14_STORY__": ("fig-s14-story", "fig6-story.svg", "topic06-fig-story.py",
         '<b>分类账：上表按年记流水，这张图把同一批招数按六类分户。</b><br>'
-        '<em>图上比表多几张卡，如 Flash-Decoding、AWQ、TPU megakernel。</em>'),
+        '<em>图上比表多几张卡，如 Flash-Decoding、Splitwise、TPU megakernel。</em>'),
     "__FIG_S14_DAY__": ("fig-s14-day", "fig6-s14-day.svg", "topic06-fig-eight.py",
         '<b>输入占大头；紫色那段就是磁盘 KV 缓存替 prefill 省下的。</b>'),
 }

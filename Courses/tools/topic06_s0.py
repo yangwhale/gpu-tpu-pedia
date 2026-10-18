@@ -33,9 +33,9 @@ __FIG_S0_CHAIN__
 __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。
     市面上推理这两年便宜得很快，斯坦福 AI Index 2025 主要归给更强的小模型；系统那一份单独拆不出来，15.3 再说。</p>
-  <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，博客反过来说受 SGLang 等引擎显著影响。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
+  <p>这几年的引擎主要是 vLLM 和 SGLang 两家轮流领先。SGLang 2024 年 1 月首发时，博客写明用了 vLLM 的部分代码；一年后 vLLM 重写成 V1，致谢里点名的五家引擎就有 SGLang，原话是「显著影响」。分块 prefill、接 Mooncake 是 vLLM 先；MLA 优化、MTP、EAGLE-3、大 EP 是 SGLang 先。更多部件两家从同一个货架上拿：FlashInfer、xgrammar、DeepEP 与 FlashMLA、Mooncake、NIXL。</p>
   <p><b>其他耳熟的名字落在哪。</b>TensorRT-LLM 是 NVIDIA 自家引擎，和这两家同一层。Triton Inference Server 2025 年改名 Dynamo-Triton，是不限于 LLM 的通用模型服务器；LLM 的 PD 分离、前缀缓存、KV 落存储，NVIDIA 交给它上面的 Dynamo。</p>
-  <p>Hugging Face 的 TGI 已进入维护模式，官方改推 vLLM、SGLang；LMDeploy 是上海 AI 实验室的引擎。llama.cpp、Ollama 跑单机和端侧，本课讲数据中心，不展开。</p>
+  <p>Hugging Face 的 TGI 已进入维护模式，官方改推 vLLM、SGLang 等引擎；LMDeploy 是上海 AI 实验室的引擎。llama.cpp、Ollama 跑单机和端侧，本课讲数据中心，不展开。</p>
 __FIG_S0_ENGINES__
   <details class="foldfig"><summary><b>完整时间线</b>：图上只留八个时刻，其余都在这张表里</summary>
   <table>
@@ -79,9 +79,9 @@ __FIG_S0_ENGINES__
   </details>
   <h3 id="s0-2">0.2　一个请求的一生，和全课一句话</h3>
 __FIG_S0_LIFE__
-  <p>用户只感觉得到两个数：等第一个字多久（TTFT），之后每个字隔多久（TPOT）。前者由 prefill 定，后者由 decode 定（第二节）。</p>
+  <p>用户只感觉得到两个数：等第一个字多久（TTFT，含排队），之后平均每个字隔多久（TPOT）。前者看排队和 prefill，后者看 decode（第二节）。</p>
   <p><b>住在哪。</b>权重和 KV 都常驻 HBM（芯片自带的显存）。真正做乘加的地方旁边只有一小块片上存储：v7 每个 TensorCore 64 MiB VMEM，一颗芯片两个，合 128 MiB，约是 192 GiB HBM 的 1/1,500（14.2）。几十 GB 放不进去，所以每一步都得从 HBM 再流一遍。</p>
-  <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.1）。KV 每层每个 token 存 512 维压缩 KV（K、V 都从它解出）＋ 64 维位置编码那截 ＝ 576 个数，bf16 每个 2 字节 ＝ 1,152 B；61 层合计 70,272 B（4.1）。</p>
+  <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.1）。KV 每层每个 token 存 1,152 B（怎么来的见下面逐层图），61 层合计 70,272 B（4.1）。</p>
   <p><b>跟长度成正比。</b>上下文 1 万 token，一条 KV 约 0.70 GB；128K 是 8.58 GiB。它是这个人自己的历史，一人一份，不跟别人共享。</p>
   <p><b>出一个字，61 层逐层走一遍：</b></p>
   <p>注意力要跟之前每个 token 比一遍，所以本层 KV 一格都跳不过。前馈只有第 1 到 3 层是稠密的、整块读；第 4 到 61 层是 MoE，一个人只读他挑中的 8 个路由专家和 1 个共享专家（config 里 first_k_dense_replace 是 3）。</p>
@@ -151,7 +151,7 @@ FIGS = {
         '<b>每一行都读两样：蓝绿那条大家共用，紫色那条跟着上下文变长、一人一份。</b><br>'
         '<em>61 层加输出层的权重对上 37 GB；全部推导见第十六节台账「L83」。</em>'),
     "__FIG_S0_MAP__": ("fig-s0-map", "fig6-map.svg", "topic06-fig-intro.py",
-        '<b>蓝色那组节最多：第四到第七节加第十一、十三节，都在让一趟多坐几个人。</b><br>'
+        '<b>蓝色那组节最多：批处理、切专家、切序列、投机解码、新架构，都在让一趟多坐几个人。</b><br>'
         '<em>归类是本课的分法，标签是讲这一招的节。</em>'),
 }
 

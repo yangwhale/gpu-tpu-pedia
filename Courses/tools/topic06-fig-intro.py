@@ -87,7 +87,7 @@ def fig_life():
     f.line(a, BY, b, BY, BL, 2, arrow=False)
     f.line(a, BY - 7, a, BY + 7, BL, 2, arrow=False)
     f.line(b, BY - 7, b, BY + 7, BL, 2, arrow=False)
-    f.t((a + b) / 2, BY + 24, "TPOT：相邻两个字的间隔", BL, True, 14, "middle")
+    f.t((a + b) / 2, BY + 24, "TPOT：平均每字间隔", BL, True, 14, "middle")
 
     # ② KV 有多长：阶梯
     KY0 = py + 330                         # 阶梯底线
@@ -143,8 +143,8 @@ SEC = {num: title for _, num, title in _ns["SECTIONS"]}
 # 杠杆：(名字, 颜色, 节号, 作用在场景的哪个部件)
 LEVERS = [
     ("开两个仓库", OR, ["八", "九", "十", "十四"], "wh2"),
-    ("货变轻", GR, ["三", "十二"], "cargo"),
-    ("车上多坐人", BL, ["四", "五", "六", "七", "十一", "十三"], "seats"),
+    ("货变轻", GR, ["四", "五", "十二"], "cargo"),
+    ("车上多坐人", BL, ["三", "六", "七", "十一", "十三"], "seats"),
 ]
 BASE = [("一", "road"), ("二", "ruler")]           # 地基：这一趟本身、量这一趟的尺子
 _placed = [n for n, _ in BASE] + [n for _, _, ns, _ in LEVERS for n in ns]
