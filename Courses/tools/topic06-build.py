@@ -122,7 +122,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 94 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 97 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -226,7 +226,7 @@ for _n, _svg in NUM_LOCK:
     assert _n.replace(",", "") in _g, "正文写 %s，而 %s 里没有这个数 —— 图脚本改了，正文没跟上" % (_n, _svg)
 # 一步一停的播放器：照抄 topic05-build.py（那边有来由注释）。动画脚本在每一步落地后打点，
 #   写进 manim/steps/<Scene>.json；这里挂到 <video data-pauses>，图注秒数也从同一份 json 取。
-STEP_VIDEOS = {"topic06-spec.mp4": "SpecStep", "topic06-stepmix.mp4": "StepMix", "topic06-kvload.mp4": "KVLoad"}
+STEP_VIDEOS = {"topic06-spec.mp4": "SpecStep", "topic06-stepmix.mp4": "StepMix", "topic06-kvload.mp4": "KVLoad", "topic06-bigep.mp4": "BigEP"}
 
 
 def _steps(mp4):

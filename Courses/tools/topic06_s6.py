@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""专题六 · 第六节「切专家与注意力：TEP 和 DEP」。图在 topic06-fig-dep.py；另复用专题五两张图。"""
+"""专题六 · 第六节「切专家与注意力：TEP 和 DEP」。图在 topic06-fig-dep.py 和 topic06-fig-bigep.py（大 EP 两张）；动画 BigEP 在 manim/topic06-anim-serve.py；另复用专题五两张图。"""
 
 BODY = '''
   <p class="lead">专家要多凑几行，就得铺到更多卡上，何况 V3 一张卡本来就装不下。切多卡时专家都用 EP，分歧在注意力：几张卡合算一批请求，还是各算各的。
@@ -25,7 +25,7 @@ __FIG_S6_KV__
 __FIG_S6_STATE__
   <ul>
     <li><b>K3 上 DEP8 起不来</b>：每 rank 存整池 KDA 状态，加载即显存不足（OOM）；官方改推 TP、DCP（<a href="#s7-1">第七节</a>）。</li>
-    <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-9">6.9</a>）。</li>
+    <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-12">6.12</a>）。</li>
   </ul>
 
   <h3 id="s6-4">6.4　DEP 吃得快了，就得有人喂</h3>
@@ -42,15 +42,51 @@ __FIG_S6_TPU__
   <h3 id="s6-6">6.6　名字别照字面套</h3>
   <p>TEP／DEP 是 TRT-LLM 的叫法，不等于 Megatron（训练框架）的 ETP／EDP，后者指专家层内再分的 TP 组和 DP 组。prefill、decode 各用哪个，vLLM 部署 K3 和 TRT-LLM 的例子正好相反（<a href="topic-05.html#s8-6">专题五 §8.6</a>）。</p>
 
-  <h3 id="s6-7">6.7　大 EP 为什么省</h3>
-  <p>DeepSeek 的 decode 把专家铺到 144 张卡（18 个节点），每卡只放 2 个路由专家加 1 个共享专家。SGLang 2024 年 12 月先给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；后来用 96 张 H100 复现大 EP，输出最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。省在三处：</p>
+  <h3 id="s6-7">6.7　什么是大 EP</h3>
+  <p>EP 是把专家分给不同的卡（<a href="topic-05.html#s4-4">专题五 §4.4</a>）。一台 8 卡机器里分完就是 EP8，token 走机内 NVLink。<b>出了一台机器还在分，就是大 EP</b>；TensorRT-LLM 划的线是 EP 超过 8。注意力不跟着切专家，各卡各管自己那批请求，所以大 EP 就是放大版的 DEP。</p>
+__FIG_S6_BIGEP_WHAT__
   <ul>
-    <li><b>读得少</b>：每卡只读几个专家，一步更快，显存空给 KV。</li>
-    <li><b>车坐得满</b>：上百张卡的请求汇到同一个专家，每步行数从 1.4 节算的平均 8 行往上涨，朝屋脊点靠近。</li>
-    <li><b>通信藏起来</b>：把 token 送到所选专家所在的卡，这步 all-to-all 用 DeepEP（DeepSeek 开源）；一批拆成两个微批，一个传、一个算（6.8）。</li>
+    <li><b>DeepSeek 线上 decode</b>：EP144，18 个节点；256 个专家加 32 份冗余共 288 份，每卡 2 个路由专家加 1 个共享专家。</li>
+    <li><b>DeepSeek 线上 prefill</b>：EP32，4 个节点，每卡 9 个路由专家加 1 个共享专家。</li>
+    <li><b>两份资料对不上</b>：V3 技术报告写的 decode 是 EP320、40 个节点、每卡 1 个专家；上面是 2025 年 2 月 Day 6 公布的线上配置。</li>
   </ul>
 
-  <h3 id="s6-8">6.8　双微批：一批拆两半，一个传、一个算</h3>
+  <h3 id="s6-8">6.8　大 EP 为什么省</h3>
+  <p>DeepSeek 自己的说法两句话：EP 把批做大，矩阵算得更有效率；每卡只管一小撮专家，访存少，延迟低。V3 每层 256 个专家只激活 8 个，<b>不铺大，总批凑不起来</b>。动画把这条链拆开：</p>
+<figure class="fbox fwide" id="anim-bigep">
+<video src="media/topic06-bigep.mp4" autoplay loop muted playsinline
+       aria-label="动画：上下两条泳道，上面 EP8、8 张卡，一张卡里摆着 32 个路由专家的小格子；下面 EP144、144 张卡，一张卡里只有 2 个大格子。四列依次长出条形：每个专家分到几行，EP8 是 8 行、EP144 约 128 行；每层读多少权重，1.41 GB 对 88 MB；接着标出每字节用 8 次对 128 次；路由专家占显存，EP8 的 81.7 GB 越过 80 GB 的红线，EP144 只有 5.1 GB，旁边写着剩下装 KV。最后一拍，下面那张卡的 token 跑去其余 143 张卡再跑回来，字幕说代价是每层都要跨机器去一趟、回一趟。结尾打出：专家铺开，每卡读得少，读一次用得多。"></video>
+<figcaption>上下两条泳道比同一列：行数越多，每卡读得越少。
+  <span class="sub">（24 秒无声循环，Manim 渲染。专家大小、层数照 V3 配置；每卡 32 个请求、负载均匀是示意。）</span></figcaption></figure>
+  <ul>
+    <li><b>车坐得满</b>：每份专家分到的行数 ＝ 卡数 × 每卡请求数 × 8 ÷ 专家份数（本课推导，负载均匀时）。每卡 32 个请求，EP8 是 8 行，正是 1.4 节算的平均数；EP144 涨到约 128 行。</li>
+    <li><b>读得少</b>：V3 一个路由专家约 44 MB（3 × 7168 × 2048，FP8）。每层每卡要读的专家权重从 1.41 GB 降到 88 MB，读进来的每个字节从用 8 次变成用 128 次。</li>
+    <li><b>腾出显存</b>：光放路由专家，EP8 每卡要 81.7 GB，80 GB 的卡根本放不下；EP144 只要 5.1 GB，剩下的装 KV，批还能再大。</li>
+  </ul>
+  <p>实测：SGLang 2024 年 12 月先给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；后来用 96 张 H100 复现大 EP，输出最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。</p>
+
+  <h3 id="s6-9">6.9　对网络要什么：不是非 NVL72 不可</h3>
+  <p>大 EP 每层传两趟：先把 token 分发到专家所在的卡（FP8），算完再汇回（BF16）。按 V3 的 7168 维、选 8 个专家，每个 token 最多发出约 57 KB、收回约 115 KB（本课推导，上限）。卡越多，每趟越慢：</p>
+__FIG_S6_BIGEP_NET__
+  <ul>
+    <li><b>DeepSeek 跑在普通 8 卡机器上</b>：机内 NVLink，全集群 InfiniBand 全互连（DeepEP 的测试机每卡一张 400 Gb 网卡）；decode 用 IBGDA，由 GPU 直接发起 RDMA，不经 CPU。</li>
+    <li><b>开源栈写明的门槛</b>：llm-d 要求 InfiniBand 或 RoCE 全互连、GPU 发起 RDMA；vLLM 文档的排障一节专门列了 IBGDA 初始化失败。</li>
+    <li><b>少跨机器</b>：V3 训练时就限定每个 token 最多去 4 个节点，先过 IB 到目标节点，再走 NVLink 转发给机内各卡。</li>
+    <li><b>NVL72 换来的是余量</b>：72 张卡一个 NVLink 域，SGLang 说延迟低到可以关掉双微批（6.11）；后续测试 decode 用 48 张卡，比一个域的 72 张还少。</li>
+  </ul>
+  <p><b>TPU</b>：Ironwood 64 颗一组，用 ICI 直连成 3D 环面，每颗只连 6 个邻居，远处的芯片要经中间芯片转发（本课推导）；组之间靠光交换拼成最多 9,216 颗的系统，更大就得走 DCN。MaxText 有 <code>dcn_expert_parallelism</code> 这个配置项，但跨 DCN 推荐的只有数据并行。</p>
+  <p>公开的 TPU 推理目前是 DEP8，专家那步用 all-gather 加 reduce-scatter，不是 all-to-all；跨切片的大 EP 推理还没有公开结果。</p>
+
+  <h3 id="s6-10">6.10　代价：要大批，要藏通信，一张卡出事全组陪着</h3>
+  <ul>
+    <li><b>通信露在外面</b>：EP256 一去一回约 554 µs，乘 58 个 MoE 层约 32 ms（本课推导，不重叠的上限）。不藏起来，省下的读权重时间全赔进去，所以要双微批（6.11）。</li>
+    <li><b>批必须够大</b>：行数靠总批撑，批小了凑不满车，传的开销照付。SGLang 实测 decode 每卡 32 个 token 时，双微批反而慢 27%。</li>
+    <li><b>等最慢的那张卡</b>：DeepSeek 原话，一张卡过载就拖慢整个系统、其余卡空等；热门专家多备几份是 EPLB（6.12）。</li>
+    <li><b>爆炸半径大</b>：一个实例上百张卡。Anyscale 指出，一个 DP rank 出故障，整个 DP 组都得下线，最多 128 张卡；TensorRT-LLM 也提醒，没有容错就会抬高线上故障率。</li>
+    <li><b>两套 kernel 不能混</b>：DeepEP 的常规模式（吞吐优先）和低延迟模式不能在同一个通信组里同时用，SGLang 因此必须 PD 分离；TensorRT-LLM 指出 PD 分离的 decode 硬性要求 CUDA Graph，而 DeepEP 并非所有场景都兼容。</li>
+  </ul>
+
+  <h3 id="s6-11">6.11　双微批：一批拆两半，一个传、一个算</h3>
   <p>大 EP 每层要传两趟：先把 token 分发到专家所在的卡，算完再汇回。传的时候，计算单元空等。DeepSeek 把一批拆成两个微批：A 在传，B 就在算。SGLang 叫它 TBO，vLLM 叫 DBO，都是这一招。</p>
   __FIG_S6_TBO__
   <ul>
@@ -59,7 +95,7 @@ __FIG_S6_TPU__
     <li><b>decode 拆得更细</b>：各步长短不一，DeepSeek 把注意力再切成两段，排成 5 段流水。</li>
   </ul>
 
-  <h3 id="s6-9">6.9　EPLB：热门专家多备几份</h3>
+  <h3 id="s6-12">6.12　EPLB：热门专家多备几份</h3>
   <p>哪个专家热门，要等路由算完才知道（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。专家那一步等最慢的卡，热门专家所在的卡拖住所有人。EPLB（专家并行负载均衡器，DeepSeek 开源）按过去一段的负载统计，把热门专家多复制几份放到别的卡上，再重新排座位。</p>
   __FIG_S6_EPLB__
   <ul>
@@ -87,6 +123,12 @@ FIGS = {
     "__FIG_S6_STATE__": ("fig-s6-dep-state", "fig6-dep-state.svg", "topic06-fig-dep.py",
         '<b>比同一位置的两张卡：左边格子全满，右边每卡只亮两列。</b><br>'
         '<em>格子是示意，头数、槽数不按实际；「切头只有 TP」为本课推导。</em>'),
+    "__FIG_S6_BIGEP_WHAT__": ("fig-s6-bigep-what", "fig6-bigep-what.svg", "topic06-fig-bigep.py",
+        '<b>比右边那张放大的卡：EP8 每卡 32 个专家，EP144 每卡只剩 2 个。</b><br>'
+        '<em>机器、卡、专家份数照 DeepSeek 公开配置；机内摆法是示意。</em>'),
+    "__FIG_S6_BIGEP_NET__": ("fig-s6-bigep-net", "fig6-bigep-net.svg", "topic06-fig-bigep.py",
+        '<b>看左图横轴：卡数涨 32 倍，延迟只涨两到三倍，但每层都要付。</b><br>'
+        '<em>32 ms 为本课推导的不重叠上限；三张卡片的规格来自各家公开资料。</em>'),
     "__FIG_S6_TBO__": ("fig-s6-tbo", "fig6-tbo.svg", "topic06-fig-dep.py",
         '<b>看「算」那一行：上面有空档，下面排满。</b><br>'
         '<em>时长是示意，省下的比例不按实测；实测 prefill 快 27%～35%。</em>'),

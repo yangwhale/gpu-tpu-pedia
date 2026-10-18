@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""专题六「推理」的七支动画：连续批处理（第三节）、投机解码一步（第十一节）、分页 KV（第四节）、PD 分离（第八节）、KV 当存储（第四节）、一步里装了什么（第三节）、KV 一页页怎么搬上芯片（第五节）。
+r"""专题六「推理」的八支动画：连续批处理（第三节）、投机解码一步（第十一节）、分页 KV（第四节）、PD 分离（第八节）、KV 当存储（第四节）、一步里装了什么（第三节）、KV 一页页怎么搬上芯片（第五节）、大 EP 为什么省（第六节）。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间或第三维）
   · ContBatch —— 静态甘特图（fig6-gantt）画得出结果，画不出「同一时刻两边各走到哪」。
@@ -18,6 +18,8 @@ r"""专题六「推理」的七支动画：连续批处理（第三节）、投�
     静态图（fig6-stepmix）把四行摆在一起，看得出每行装了什么，看不出格子从哪来、人怎么从门口挪到车上。
   · KVLoad —— 「边算边搬」本身就是两件事在同一时刻发生：一个槽在算、另一个槽在装下一块，序列交界也不停。
     静态图（fig6-s5-kvload）只能摆出某一刻的两个槽和一条时间轴，看不出页怎么按页表一页页飞上片、槽怎么轮换。
+  · BigEP —— 「省」是一条因果链：专家铺开 → 每个专家分到的行变多 → 每卡读的权重变少、读一次用得多 → 显存腾出来装 KV，
+    最后才轮到代价（网络）。静态图（fig6-bigep-what）摆得出两种铺法，摆不出这条链一环扣一环地出来。
 
 ⛔ 数据从哪来（当场算，断言钉住）
   · ContBatch：4 个槽位、16 个请求，长度 REQ 是**示意**（前 8 个与 fig6-gantt 的 3/8/2/5/6/2/7/4 相同，
@@ -35,6 +37,9 @@ r"""专题六「推理」的七支动画：连续批处理（第三节）、投�
 
   · KVLoad：每页 4 个 token、每块 2 页、3 条序列和页号是示意（KVL_*），与 topic06-fig-decode.py 同一组数；
     规则照 RPA 论文（arXiv 2604.15464 §3.3、算法 1）：按页表取页拼成片上一块、双缓冲、只搬有效长度、同组查询头共用一块 K/V。
+  · BigEP：DeepSeek-V3 一个路由专家 3 × 7168 × 2048 参数、FP8 每参数 1 字节、58 个 MoE 层（config.json）；
+    EP144 每卡 2 份、共 288 份（DeepSeek Day 6）。每卡 32 个请求是示意，负载均匀是假设。bep_row 现算，断言钉住：
+    每份专家 8 行 vs 128 行；每层每卡读 1409 MB vs 88 MB（16 倍）；路由专家占显存 81.7 GB（＞80）vs 5.1 GB。
   · StepMix：预算 10 格、车上 4 人、门口 2 人都是示意（MIX_B / MIX_RUN0 / MIX_Q0），规则照 vLLM V1 文档
     （先排全部 decode，预算有剩再排 prefill，装不下就切），由 mix_sim 现模拟；与 topic06-fig-batch.py 同一组数、同一组断言。
 
@@ -48,6 +53,7 @@ r"""专题六「推理」的七支动画：连续批处理（第三节）、投�
     盈亏带宽（搬回来比重算慢就不该存，fig6-offload 的事）；块大小与真实容量。
 
   · KVLoad：本步新 KV 异步写回页池（正文交代）；两个 TensorCore 怎么分序列（论文没写）；每块耗时随 token 数变化（这里等长）。
+  · BigEP：共享专家、注意力和稠密层的权重（各卡都有，两边一样）；负载不均（6.12 EPLB 的事）；网络耗时的数字（fig6-bigep-net）。
   · StepMix：KV 池满了的情况（3.4、3.6）；每步耗时随格数变化；SGLang 默认不混批（正文交代）；PD 分离的 KV 交接（第八节）。
 
 📌 渲染（在 Courses/ 下）：
@@ -58,13 +64,14 @@ r"""专题六「推理」的七支动画：连续批处理（第三节）、投�
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py KVStore   WebPages/media/topic06-kvstore.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py StepMix   WebPages/media/topic06-stepmix.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py KVLoad    WebPages/media/topic06-kvload.mp4
-   SpecStep、StepMix、KVLoad 每一步落地的停顿时刻写进 steps/<Scene>.json（课件挂 data-pauses）。
+   构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py BigEP     WebPages/media/topic06-bigep.mp4
+   SpecStep、StepMix、KVLoad、BigEP 每一步落地的停顿时刻写进 steps/<Scene>.json（课件挂 data-pauses）。
 """
 import json
 import math
 import os
 
-from manim import (Scene, VGroup, Rectangle, Line, Text, ValueTracker, FadeIn, FadeOut, Indicate,
+from manim import (Scene, VGroup, Rectangle, Line, Text, ValueTracker, FadeIn, FadeOut, Indicate, GrowFromEdge,
                    WHITE, GREY, GREY_B, BLUE, GREEN, RED, YELLOW, ORANGE, PURPLE_B, TEAL,
                    UP, DOWN, LEFT, RIGHT, linear)
 
@@ -1341,4 +1348,149 @@ class KVLoad(Scene):
 
         os.makedirs(STEPS_DIR, exist_ok=True)
         with open(os.path.join(STEPS_DIR, "KVLoad.json"), "w") as fh:
+            json.dump({"pauses": marks, "duration": round(self.renderer.time, 2)}, fh)
+
+
+# ── BigEP：大 EP 为什么省 ────────────────────────────────────
+# 同一个 DeepSeek-V3：每个路由专家 3 个 7168×2048 矩阵，FP8 每参数 1 字节；58 个 MoE 层；每卡 32 个请求、每个 token 选 8 个专家。
+BEP_EXP = 3 * 7168 * 2048                       # 一个专家的参数个数 ≈ 44 M
+BEP_B, BEP_TOPK, BEP_LAYERS = 32, 8, 58
+BEP_LANES = [("EP8", 8, 32, 256), ("EP144", 144, 2, 288)]   # (名字, 卡数, 每卡路由专家份数, 专家总份数含冗余)
+
+
+def bep_row(ep, per, copies):
+    rows = ep * BEP_B * BEP_TOPK / copies       # 负载均匀时每份专家分到几行
+    read_mb = per * BEP_EXP / 1e6               # 每层每卡要读的路由专家权重
+    hold_gb = per * BEP_LAYERS * BEP_EXP / 1e9  # 每卡放路由专家要多少显存
+    return rows, read_mb, hold_gb
+
+
+BEP = [bep_row(ep, per, cp) for _, ep, per, cp in BEP_LANES]
+assert [round(r[0]) for r in BEP] == [8, 128]
+assert [round(r[1]) for r in BEP] == [1409, 88] and round(BEP[0][1] / BEP[1][1]) == 16
+assert [round(r[2], 1) for r in BEP] == [81.7, 5.1] and BEP[0][2] > 80 > BEP[1][2]
+BEP_SAY = ["同一个 V3，每张卡都带着自己的 32 个请求",
+           "每个专家分到几行：EP8 只有 8 行，EP144 约 128 行",
+           "每层要读的专家权重：1.41 GB 对 88 MB，差 16 倍",
+           "读进来的每个字节：一个用 8 次，一个用 128 次",
+           "光放路由专家：82 GB 放不下，5 GB 还剩一大块装 KV",
+           "代价：token 每层都要跨机器去一趟、回一趟"]
+
+
+class BigEP(Scene):
+    def construct(self):
+        marks = []
+        LY = [1.15, -1.55]
+        COLS = [BLUE, ORANGE]
+        title = tx("大 EP 为什么省", 30).to_edge(UP)
+        heads = VGroup(tx("一张卡上的专家", 20, GREY_B).move_to([-4.3, 2.3, 0]),
+                       tx("每个专家分到几行", 20, GREY_B).move_to([-0.35, 2.3, 0]),
+                       tx("每层读多少权重", 20, GREY_B).move_to([2.75, 2.3, 0]),
+                       tx("路由专家占显存", 20, GREY_B).move_to([5.55, 2.3, 0]))
+        lanes = VGroup()
+        for li, (nm, ep, per, cp) in enumerate(BEP_LANES):
+            y, col = LY[li], COLS[li]
+            lab = VGroup(tx(nm, 26, col, True), tx("%d 张卡" % ep, 18, GREY_B)).arrange(DOWN, buff=0.12).move_to([-6.45, y, 0])
+            card = Rectangle(width=2.5, height=1.9, stroke_color=col, stroke_width=2.5).move_to([-4.3, y, 0])
+            exps = VGroup()
+            if per > 4:
+                for e in range(per):
+                    exps.add(Rectangle(width=0.22, height=0.3, stroke_color=col, stroke_width=1.2,
+                                       fill_color=col, fill_opacity=0.25).move_to([-5.25 + (e % 8) * 0.27, y + 0.68 - (e // 8) * 0.34, 0]))
+            else:
+                for e in range(per):
+                    exps.add(Rectangle(width=0.8, height=1.2, stroke_color=col, stroke_width=2,
+                                       fill_color=col, fill_opacity=0.25).move_to([-4.8 + e * 1.0, y + 0.1, 0]))
+            ctext = tx("%d 个路由专家" % per, 17, col).move_to([-4.3, y - 0.75, 0])
+            lanes.add(VGroup(lab, card, exps, ctext))
+        lim = Line([5.55 - 1.0 + 2.0 * 80 / 82, 2.0, 0], [5.55 - 1.0 + 2.0 * 80 / 82, -2.6, 0], color=RED, stroke_width=2).set_stroke(opacity=0.8)
+        limlab = tx("80 GB 卡", 16, RED).next_to(lim, DOWN, buff=0.08)
+        legend = tx("示意：每卡 32 个请求、每 token 选 8 个专家、负载均匀；EP144 含 32 份冗余专家（共 288 份）", 17, GREY).move_to([0, -3.6, 0])
+        cap0 = tx(BEP_SAY[0], 26, GREY_B).next_to(title, DOWN, buff=0.18)
+        self.add(title, heads, lanes, legend, cap0)
+        self.cap = cap0
+
+        def say(s, color=GREY_B, after=0.3):
+            n = tx(s, 26, color).next_to(title, DOWN, buff=0.18)
+            self.play(FadeOut(self.cap), FadeIn(n), run_time=0.35)
+            self.cap = n
+            if after:
+                self.wait(after)
+
+        def hold(t=1.8):
+            marks.append(round(self.renderer.time + 0.3, 2))
+            self.wait(t)
+
+        def bar(x0, y, w, col, h=0.42):
+            return Rectangle(width=max(w, 0.04), height=h, stroke_width=0, fill_color=col, fill_opacity=0.85).move_to([x0 + max(w, 0.04) / 2, y, 0])
+
+        added = VGroup()
+        self.wait(0.6)
+        hold(1.4)
+        # 1 行数
+        say(BEP_SAY[1])
+        an = []
+        for li, (rows, rd, hg) in enumerate(BEP):
+            y, col = LY[li], COLS[li]
+            b = bar(-1.55, y, 1.9 * rows / 128, col)
+            t = tx("%d 行" % round(rows), 20, col, True).next_to(b, RIGHT, buff=0.12)
+            added.add(b, t)
+            an += [GrowFromEdge(b, LEFT), FadeIn(t)]
+        self.play(*an, run_time=1.0)
+        hold()
+        # 2 读权重
+        say(BEP_SAY[2])
+        an = []
+        for li, (rows, rd, hg) in enumerate(BEP):
+            y, col = LY[li], COLS[li]
+            b = bar(1.75, y, 1.9 * rd / BEP[0][1], col)
+            t = tx("%.2f GB" % (rd / 1000) if rd > 1000 else "%d MB" % round(rd), 20, col, True).next_to(b, DOWN, buff=0.12).align_to(b, LEFT)
+            added.add(b, t)
+            an += [GrowFromEdge(b, LEFT), FadeIn(t)]
+        self.play(*an, run_time=1.0)
+        hold()
+        # 3 每字节用几次
+        say(BEP_SAY[3], YELLOW)
+        uses = VGroup(*[tx("每字节用 %d 次" % round(BEP[li][0]), 22, COLS[li], True).move_to([-0.35, LY[li] - 0.62, 0]) for li in range(2)])
+        added.add(uses)
+        self.play(FadeIn(uses), *[Indicate(e, color=YELLOW, scale_factor=1.08) for e in lanes[1][2]], run_time=1.0)
+        hold()
+        # 4 显存
+        say(BEP_SAY[4])
+        an = [FadeIn(lim), FadeIn(limlab)]
+        added.add(lim, limlab)
+        for li, (rows, rd, hg) in enumerate(BEP):
+            y, col = LY[li], COLS[li]
+            b = bar(4.55, y, 2.0 * hg / 82, RED if hg > 80 else col)
+            t = tx("%.1f GB" % hg, 20, RED if hg > 80 else col, True).next_to(b, DOWN, buff=0.12).align_to(b, LEFT)
+            added.add(b, t)
+            an += [GrowFromEdge(b, LEFT), FadeIn(t)]
+        kv = tx("剩下装 KV", 18, GREEN, True).move_to([5.65, LY[1], 0])
+        added.add(kv)
+        self.play(*an, run_time=1.0)
+        self.play(FadeIn(kv), run_time=0.4)
+        hold()
+        # 5 代价：网络
+        say(BEP_SAY[5], RED)
+        others = Rectangle(width=3.1, height=0.55, stroke_color=ORANGE, stroke_width=2).move_to([-4.3, -3.0, 0])
+        olab = tx("其余 143 张卡（跨 18 台机器）", 16, ORANGE).move_to(others.get_center())
+        dots = VGroup(*[Rectangle(width=0.14, height=0.14, stroke_width=0, fill_color=WHITE, fill_opacity=0.9)
+                        .move_to([-5.0 + k * 0.35, LY[1] - 0.95, 0]) for k in range(5)])
+        added.add(others, olab)
+        self.play(FadeIn(others), FadeIn(olab), FadeIn(dots), run_time=0.4)
+        self.play(*[d.animate.move_to([-5.0 + k * 0.35, -2.85, 0]) for k, d in enumerate(dots)], run_time=0.7)
+        self.play(*[d.animate.move_to([-5.0 + k * 0.35, LY[1] - 0.95, 0]) for k, d in enumerate(dots)], run_time=0.7)
+        self.remove(dots)
+        hold()
+        say("专家铺开：每卡读得少，读一次用得多", YELLOW, after=0)
+        self.wait(2.2)
+        # 收尾复位：回到第 0 帧
+        self.play(FadeOut(added), FadeOut(self.cap), run_time=0.5)
+        self.remove(added, self.cap)
+        self.play(FadeIn(cap0), run_time=0.35)
+        self.cap = cap0
+        self.wait(0.6)
+
+        os.makedirs(STEPS_DIR, exist_ok=True)
+        with open(os.path.join(STEPS_DIR, "BigEP.json"), "w") as fh:
             json.dump({"pauses": marks, "duration": round(self.renderer.time, 2)}, fh)

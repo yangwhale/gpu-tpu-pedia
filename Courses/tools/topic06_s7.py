@@ -56,7 +56,7 @@ __FIG_S7_LINEAR__
   </table>
   <p>读的一侧取装满时的 batch，每层碰到几个专家按 1.3 的均匀路由算；只算从 HBM 读的字节，下限按每 device 3.685 TB/s（每芯片 7.37 ÷ 2）。</p>
   <table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导。读权重取 MoE 层（第 4 到 61 层），每 device 每层；一步下限含 61 层与输出层，不含通信和计算。通信次数：TP 前向每层 2 次 AllReduce（Megatron-LM，arXiv 1909.08053）；TEP 同 2 次（专题五 §4.4 的图）；DEP 专家前后各 1 次 all-to-all（6.7）；DCP 另加每层 3 次（vLLM 默认后端，7.1）。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导。读权重取 MoE 层（第 4 到 61 层），每 device 每层；一步下限含 61 层与输出层，不含通信和计算。通信次数：TP 前向每层 2 次 AllReduce（Megatron-LM，arXiv 1909.08053）；TEP 同 2 次（专题五 §4.4 的图）；DEP 专家前后各 1 次 all-to-all（6.9）；DCP 另加每层 3 次（vLLM 默认后端，7.1）。</caption>
     <tr><th>切法</th><th>整套 batch</th><th>每层读权重</th><th>每层读 KV</th><th>一步读完下限</th><th>每层通信</th><th>代价／适用</th></tr>
     <tr><td>TP16</td><td>5</td><td>118 MB：注意力 1/16 ＋ 碰到的 37.6 个路由专家和共享专家各 1/16</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>单人出字快；KV 复制 16 份，长上下文装不下人</td></tr>
     <tr><td>TEP16</td><td>5</td><td>118 MB（平均）：注意力 1/16 ＋ 本卡被碰到的整块专家</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>同 TP16；专家整块，热门专家那张卡要多读，大家等它</td></tr>

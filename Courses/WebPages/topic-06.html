@@ -853,7 +853,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 94 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 97 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -6243,7 +6243,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>「DP、EP、DCP 都不切」状态池、attention-TP 8 时「状态池 8 路切分」为 runbook 引的官方说法；「按头切」为本课推导；格子数只表示整池与按头切的对比。</p></details></figure>
   <ul>
     <li><b>K3 上 DEP8 起不来</b>：每 rank 存整池 KDA 状态，加载即显存不足（OOM）；官方改推 TP、DCP（<a href="#s7-1">第七节</a>）。</li>
-    <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-9">6.9</a>）。</li>
+    <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-12">6.12</a>）。</li>
   </ul>
 
   <h3 id="s6-4">6.4　DEP 吃得快了，就得有人喂</h3>
@@ -6311,15 +6311,1063 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s6-6">6.6　名字别照字面套</h3>
   <p>TEP／DEP 是 TRT-LLM 的叫法，不等于 Megatron（训练框架）的 ETP／EDP，后者指专家层内再分的 TP 组和 DP 组。prefill、decode 各用哪个，vLLM 部署 K3 和 TRT-LLM 的例子正好相反（<a href="topic-05.html#s8-6">专题五 §8.6</a>）。</p>
 
-  <h3 id="s6-7">6.7　大 EP 为什么省</h3>
-  <p>DeepSeek 的 decode 把专家铺到 144 张卡（18 个节点），每卡只放 2 个路由专家加 1 个共享专家。SGLang 2024 年 12 月先给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；后来用 96 张 H100 复现大 EP，输出最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。省在三处：</p>
+  <h3 id="s6-7">6.7　什么是大 EP</h3>
+  <p>EP 是把专家分给不同的卡（<a href="topic-05.html#s4-4">专题五 §4.4</a>）。一台 8 卡机器里分完就是 EP8，token 走机内 NVLink。<b>出了一台机器还在分，就是大 EP</b>；TensorRT-LLM 划的线是 EP 超过 8。注意力不跟着切专家，各卡各管自己那批请求，所以大 EP 就是放大版的 DEP。</p>
+<figure class="fbox fwide" id="fig-s6-bigep-what"><svg viewBox="0 0 1400 690" width="100%" role="img" aria-label="EP 和大 EP 对照，同一个 DeepSeek-V3，256 个路由专家。左边 EP8：一台机器 8 张卡，每张卡放 32 个专家，专家之间传 token 走机内 NVLink；按每参数 1 字节，V3 约 671 GB，8 张 80 GB 的卡放不下。右边是 DeepSeek 线上 decode 的大 EP：18 台机器共 144 张卡，256 个专家加 32 个冗余副本共 288 份，每张卡只放 2 个路由专家加 1 个共享专家，跨机器走 InfiniBand，每张卡一张网卡。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">EP 和大 EP：同样 256 个专家，铺多宽</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一个 DeepSeek-V3。左：一台 8 卡机器；右：DeepSeek 线上 decode，18 台机器、144 张卡</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">路由专家</text>
+<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">共享专家</text>
+<rect x="219.44" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="240" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">跨机器的 RDMA 网络</text>
+<rect x="0" y="102" width="540" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="540" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="540" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="540" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP8：一台机器里铺开</tspan></text>
+<rect x="18" y="146" width="504" height="300" rx="10" fill="none" stroke="#1a73e8" stroke-width="1.0" stroke-dasharray="6 4"/>
+<text class="svgsm" x="30" y="170" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一台机器 · 机内 NVLink</tspan></text>
+<rect x="34" y="186" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="44" y="206" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 0</tspan></text>
+<rect x="44.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="44.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="44.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="44.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="44" y="292" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<rect x="158" y="186" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="168" y="206" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 1</tspan></text>
+<rect x="168.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="168.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="168.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="168.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="168" y="292" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<rect x="282" y="186" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="292" y="206" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 2</tspan></text>
+<rect x="292.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="292.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="292.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="292.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="292" y="292" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<rect x="406" y="186" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="416" y="206" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 3</tspan></text>
+<rect x="416.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="218" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="416.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="231" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="416.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="244" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="416.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="257" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="416" y="292" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<rect x="34" y="316" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="44" y="336" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 4</tspan></text>
+<rect x="44.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="44.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="44.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="44.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="55.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="67.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="78.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="101.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="124.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="44" y="422" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<rect x="158" y="316" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="168" y="336" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 5</tspan></text>
+<rect x="168.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="168.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="168.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="168.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="179.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="191.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="202.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="214.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="237.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="168" y="422" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<rect x="282" y="316" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="292" y="336" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 6</tspan></text>
+<rect x="292.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="292.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="292.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="292.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="303.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="326.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="338.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="349.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="361.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="372.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="292" y="422" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<rect x="406" y="316" width="112" height="118" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="416" y="336" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡 7</tspan></text>
+<rect x="416.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="348" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="416.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="361" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="416.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="374" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="416.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="427.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="439.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="450.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="462.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="473.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="485.0" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="496.5" y="387" width="9" height="10" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svgsm" x="416" y="422" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 个专家</tspan></text>
+<text class="svgsm" x="24" y="476" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡 32 个专家，每步都要把它们读一遍</tspan></text>
+<text class="svgsm" x="24" y="504" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">按每参数 1 字节，V3 约 671 GB；</text>
+<text class="svgsm" x="24" y="528" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 张 80 GB 的卡加起来 640 GB，放不下</tspan></text>
+<rect x="560" y="102" width="840" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="560" y="102" width="840" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="560" y="104" width="840" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="560" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="574" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大 EP（EP144）：铺到 18 台机器</tspan></text>
+<line x1="641.0" y1="176.0" x2="641.0" y2="368" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="773.0" y1="176.0" x2="773.0" y2="368" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="905.0" y1="176.0" x2="905.0" y2="368" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1037.0" y1="176.0" x2="1037.0" y2="368" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1169.0" y1="176.0" x2="1169.0" y2="368" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1301.0" y1="176.0" x2="1301.0" y2="368" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="582" y="150" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="590" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="593" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="599" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="605" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="616" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="619" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="625" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="631" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="642" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="645" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="651" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="657" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="668" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="671" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="677" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="683" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="590" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="593" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="599" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="605" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="616" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="619" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="625" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="631" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="642" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="645" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="651" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="657" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="668" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="671" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="677" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="683" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="714" y="150" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="722" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="725" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="731" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="737" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="748" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="751" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="757" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="763" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="774" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="777" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="783" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="789" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="800" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="803" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="809" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="815" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="722" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="725" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="731" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="737" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="748" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="751" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="757" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="763" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="774" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="777" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="783" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="789" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="800" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="803" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="809" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="815" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="846" y="150" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="854" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="857" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="863" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="869" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="880" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="883" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="889" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="895" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="906" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="909" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="915" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="921" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="932" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="935" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="941" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="947" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="854" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="857" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="863" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="869" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="880" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="883" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="889" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="895" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="906" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="909" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="915" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="921" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="932" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="935" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="941" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="947" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="978" y="150" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="986" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="989" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="995" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1001" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1012" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1015" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1021" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1027" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1038" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1041" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1047" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1053" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1064" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1067" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1073" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1079" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="986" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="989" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="995" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1001" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1012" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1015" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1021" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1027" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1038" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1041" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1047" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1053" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1064" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1067" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1073" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1079" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1110" y="150" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1118" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1121" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1127" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1133" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1144" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1147" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1153" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1159" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1170" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1173" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1179" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1185" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1196" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1199" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1205" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1211" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1118" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1121" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1127" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1133" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1144" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1147" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1153" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1159" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1170" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1173" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1179" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1185" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1196" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1199" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1205" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1211" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1242" y="150" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1250" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1253" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1259" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1265" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1276" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1279" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1285" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1291" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1302" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1305" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1311" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1317" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1328" y="158" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1331" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1337" y="162" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1343" y="162" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1250" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1253" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1259" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1265" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1276" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1279" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1285" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1291" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1302" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1305" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1311" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1317" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1328" y="177" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1331" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1337" y="181" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1343" y="181" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="582" y="218" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="590" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="593" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="599" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="605" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="616" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="619" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="625" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="631" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="642" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="645" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="651" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="657" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="668" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="671" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="677" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="683" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="590" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="593" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="599" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="605" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="616" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="619" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="625" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="631" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="642" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="645" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="651" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="657" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="668" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="671" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="677" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="683" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="714" y="218" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="722" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="725" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="731" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="737" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="748" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="751" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="757" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="763" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="774" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="777" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="783" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="789" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="800" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="803" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="809" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="815" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="722" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="725" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="731" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="737" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="748" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="751" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="757" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="763" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="774" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="777" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="783" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="789" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="800" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="803" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="809" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="815" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="846" y="218" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="854" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="857" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="863" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="869" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="880" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="883" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="889" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="895" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="906" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="909" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="915" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="921" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="932" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="935" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="941" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="947" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="854" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="857" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="863" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="869" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="880" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="883" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="889" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="895" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="906" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="909" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="915" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="921" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="932" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="935" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="941" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="947" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="978" y="218" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="986" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="989" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="995" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1001" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1012" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1015" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1021" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1027" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1038" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1041" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1047" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1053" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1064" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1067" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1073" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1079" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="986" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="989" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="995" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1001" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1012" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1015" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1021" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1027" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1038" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1041" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1047" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1053" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1064" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1067" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1073" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1079" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1110" y="218" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1118" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1121" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1127" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1133" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1144" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1147" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1153" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1159" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1170" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1173" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1179" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1185" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1196" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1199" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1205" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1211" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1118" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1121" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1127" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1133" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1144" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1147" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1153" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1159" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1170" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1173" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1179" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1185" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1196" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1199" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1205" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1211" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1242" y="218" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1250" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1253" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1259" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1265" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1276" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1279" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1285" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1291" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1302" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1305" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1311" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1317" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1328" y="226" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1331" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1337" y="230" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1343" y="230" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1250" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1253" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1259" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1265" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1276" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1279" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1285" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1291" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1302" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1305" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1311" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1317" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1328" y="245" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1331" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1337" y="249" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1343" y="249" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="582" y="286" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="590" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="593" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="599" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="605" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="616" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="619" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="625" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="631" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="642" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="645" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="651" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="657" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="668" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="671" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="677" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="683" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="590" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="593" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="599" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="605" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="616" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="619" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="625" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="631" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="642" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="645" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="651" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="657" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="668" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="671" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="677" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="683" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="714" y="286" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="722" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="725" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="731" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="737" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="748" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="751" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="757" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="763" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="774" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="777" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="783" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="789" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="800" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="803" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="809" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="815" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="722" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="725" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="731" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="737" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="748" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="751" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="757" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="763" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="774" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="777" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="783" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="789" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="800" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="803" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="809" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="815" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="846" y="286" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="854" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="857" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="863" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="869" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="880" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="883" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="889" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="895" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="906" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="909" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="915" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="921" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="932" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="935" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="941" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="947" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="854" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="857" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="863" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="869" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="880" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="883" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="889" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="895" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="906" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="909" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="915" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="921" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="932" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="935" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="941" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="947" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="978" y="286" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="986" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="989" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="995" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1001" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1012" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1015" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1021" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1027" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1038" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1041" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1047" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1053" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1064" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1067" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1073" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1079" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="986" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="989" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="995" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1001" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1012" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1015" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1021" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1027" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1038" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1041" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1047" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1053" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1064" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1067" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1073" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1079" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1110" y="286" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1118" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1121" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1127" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1133" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1144" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1147" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1153" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1159" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1170" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1173" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1179" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1185" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1196" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1199" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1205" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1211" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1118" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1121" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1127" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1133" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1144" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1147" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1153" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1159" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1170" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1173" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1179" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1185" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1196" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1199" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1205" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1211" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1242" y="286" width="118" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1250" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1253" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1259" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1265" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1276" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1279" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1285" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1291" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1302" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1305" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1311" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1317" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1328" y="294" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1331" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1337" y="298" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1343" y="298" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1250" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1253" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1259" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1265" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1276" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1279" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1285" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1291" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1302" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1305" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1311" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1317" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="1328" y="313" width="22" height="15" rx="2" fill="none" stroke="#80868b" stroke-width="0.75"/>
+<rect x="1331" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1337" y="317" width="5" height="7" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="1343" y="317" width="4" height="7" rx="1" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.75"/>
+<rect x="582" y="368" width="778" height="26" rx="6" fill="#fef3e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="971" y="386" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">InfiniBand 全互连 · 每张卡一张网卡 · GPU 直接发起 RDMA</tspan></text>
+<rect x="590" y="418" width="230" height="92" rx="8" fill="none" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="604" y="442" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放大一张卡</tspan></text>
+<rect x="604" y="456" width="58" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="633" y="480" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">路由</tspan></text>
+<rect x="670" y="456" width="58" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="699" y="480" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">路由</tspan></text>
+<rect x="736" y="456" width="70" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="771" y="480" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">共享</tspan></text>
+<text class="svgsm" x="844" y="444" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡只放 2 个路由专家 ＋ 1 个共享专家</tspan></text>
+<text class="svgsm" x="844" y="470" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">256 个专家 ＋ 32 份热门专家的副本 ＝ 288 份，</text>
+<text class="svgsm" x="844" y="492" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">288 ÷ 144 ＝ 每卡 2 份</text>
+<text class="svgsm" x="582" y="532" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力不跟着切专家：144 张卡各管自己那批请求（数据并行）</tspan></text>
+<rect x="0" y="592" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="592" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="592" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家铺出一台机器，就叫大 EP</tspan></text>
+<text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek 线上：prefill 用 EP32（4 台），decode 用 EP144（18 台）；注意力各卡各管自己的请求。</text>
+</svg><figcaption><b>比右边那张放大的卡：EP8 每卡 32 个专家，EP144 每卡只剩 2 个。</b><span class="capmore"><br><em>机器、卡、专家份数照 DeepSeek 公开配置；机内摆法是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>DeepSeek open-infra-index Day 6「Inference System Overview」：decode EP144／DP144，每单元 18 个节点、32 个冗余专家，每卡 2 路由 ＋ 1 共享；prefill EP32、4 个节点。DeepSeek-V3 技术报告 §3.4：机内 NVLink，全集群 IB 全互连，decode 用 IBGDA。TensorRT-LLM 博客「Scaling Expert Parallelism」：large-scale EP 指 EP > 8。</p>
+<p>本课推导：671B 参数按 FP8 每个 1 字节约 671 GB（不含缩放因子），8 × 80 GB ＝ 640 GB；288 ÷ 144 ＝ 2。卡内专家格子数照实，机器内 8 张卡的摆法是示意。</p></details></figure>
   <ul>
-    <li><b>读得少</b>：每卡只读几个专家，一步更快，显存空给 KV。</li>
-    <li><b>车坐得满</b>：上百张卡的请求汇到同一个专家，每步行数从 1.4 节算的平均 8 行往上涨，朝屋脊点靠近。</li>
-    <li><b>通信藏起来</b>：把 token 送到所选专家所在的卡，这步 all-to-all 用 DeepEP（DeepSeek 开源）；一批拆成两个微批，一个传、一个算（6.8）。</li>
+    <li><b>DeepSeek 线上 decode</b>：EP144，18 个节点；256 个专家加 32 份冗余共 288 份，每卡 2 个路由专家加 1 个共享专家。</li>
+    <li><b>DeepSeek 线上 prefill</b>：EP32，4 个节点，每卡 9 个路由专家加 1 个共享专家。</li>
+    <li><b>两份资料对不上</b>：V3 技术报告写的 decode 是 EP320、40 个节点、每卡 1 个专家；上面是 2025 年 2 月 Day 6 公布的线上配置。</li>
   </ul>
 
-  <h3 id="s6-8">6.8　双微批：一批拆两半，一个传、一个算</h3>
+  <h3 id="s6-8">6.8　大 EP 为什么省</h3>
+  <p>DeepSeek 自己的说法两句话：EP 把批做大，矩阵算得更有效率；每卡只管一小撮专家，访存少，延迟低。V3 每层 256 个专家只激活 8 个，<b>不铺大，总批凑不起来</b>。动画把这条链拆开：</p>
+<figure class="fbox fwide" id="anim-bigep">
+<video src="media/topic06-bigep.mp4?v=be13a8bf" data-pauses="0.90,3.95,7.40,10.85,14.70,18.95" autoplay loop muted playsinline
+       aria-label="动画：上下两条泳道，上面 EP8、8 张卡，一张卡里摆着 32 个路由专家的小格子；下面 EP144、144 张卡，一张卡里只有 2 个大格子。四列依次长出条形：每个专家分到几行，EP8 是 8 行、EP144 约 128 行；每层读多少权重，1.41 GB 对 88 MB；接着标出每字节用 8 次对 128 次；路由专家占显存，EP8 的 81.7 GB 越过 80 GB 的红线，EP144 只有 5.1 GB，旁边写着剩下装 KV。最后一拍，下面那张卡的 token 跑去其余 143 张卡再跑回来，字幕说代价是每层都要跨机器去一趟、回一趟。结尾打出：专家铺开，每卡读得少，读一次用得多。"></video>
+<figcaption>上下两条泳道比同一列：行数越多，每卡读得越少。
+  <span class="sub">（24 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。专家大小、层数照 V3 配置；每卡 32 个请求、负载均匀是示意。）</span></figcaption></figure>
+  <ul>
+    <li><b>车坐得满</b>：每份专家分到的行数 ＝ 卡数 × 每卡请求数 × 8 ÷ 专家份数（本课推导，负载均匀时）。每卡 32 个请求，EP8 是 8 行，正是 1.4 节算的平均数；EP144 涨到约 128 行。</li>
+    <li><b>读得少</b>：V3 一个路由专家约 44 MB（3 × 7168 × 2048，FP8）。每层每卡要读的专家权重从 1.41 GB 降到 88 MB，读进来的每个字节从用 8 次变成用 128 次。</li>
+    <li><b>腾出显存</b>：光放路由专家，EP8 每卡要 81.7 GB，80 GB 的卡根本放不下；EP144 只要 5.1 GB，剩下的装 KV，批还能再大。</li>
+  </ul>
+  <p>实测：SGLang 2024 年 12 月先给 DeepSeek 模型开了 DP attention，decode 吞吐最多是原来的 1.9 倍；后来用 96 张 H100 复现大 EP，输出最多是同卡数纯 TP 的 5 倍，但含<a href="#s8-1">第八节</a>的 PD 分离。</p>
+
+  <h3 id="s6-9">6.9　对网络要什么：不是非 NVL72 不可</h3>
+  <p>大 EP 每层传两趟：先把 token 分发到专家所在的卡（FP8），算完再汇回（BF16）。按 V3 的 7168 维、选 8 个专家，每个 token 最多发出约 57 KB、收回约 115 KB（本课推导，上限）。卡越多，每趟越慢：</p>
+<figure class="fbox fwide" id="fig-s6-bigep-net"><svg viewBox="0 0 1400 720" width="100%" role="img" aria-label="左边：DeepEP 低延迟 kernel 的实测，H800、每卡一张 400 Gb InfiniBand 网卡，每批 128 个 token。卡数从 8 涨到 256，分发从 77 微秒涨到 194 微秒，汇回从 114 微秒涨到 360 微秒；卡数涨了 32 倍，延迟涨两到三倍。按 EP256 算，每层一去一回、58 个 MoE 层，不藏起来约 32 毫秒。右边：三种互连域。8 卡机器加 InfiniBand，DeepSeek 的 EP144 就跑在这上面；GB200 NVL72 是 72 张卡一个 NVLink 域，SGLang 因此能关掉双微批；TPU Ironwood 64 颗一组用 ICI 连成 3D 环面，光交换再连到 9216 颗。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">大 EP 吃网络：卡越多，每趟越慢</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：DeepEP 低延迟 kernel 实测（H800，每卡一张 400 Gb InfiniBand 网卡；每批 128 个 token）。右：三种互连域</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">分发：token 送到专家所在的卡</text>
+<rect x="269.88" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="290" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">汇回：专家算完送回来</text>
+<rect x="0" y="102" width="760" height="500" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="760" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="760" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="760" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每趟传送多久（微秒）</tspan></text>
+<line x1="90" y1="462.0" x2="700" y2="462.0" stroke="#e8eaed" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="78" y="467" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="90" y1="389.5" x2="700" y2="389.5" stroke="#e8eaed" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="78" y="394" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">100</text>
+<line x1="90" y1="317.0" x2="700" y2="317.0" stroke="#e8eaed" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="78" y="322" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">200</text>
+<line x1="90" y1="244.5" x2="700" y2="244.5" stroke="#e8eaed" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="78" y="249" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">300</text>
+<line x1="90" y1="172.0" x2="700" y2="172.0" stroke="#e8eaed" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="78" y="177" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">400</text>
+<text class="svgsm" x="90" y="486" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP8</tspan></text>
+<text class="svgsm" x="212" y="486" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP16</tspan></text>
+<text class="svgsm" x="334" y="486" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP32</tspan></text>
+<text class="svgsm" x="456" y="486" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP64</tspan></text>
+<text class="svgsm" x="578" y="486" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP128</tspan></text>
+<text class="svgsm" x="700" y="486" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EP256</tspan></text>
+<line x1="90.0" y1="406.175" x2="212.0" y2="376.45" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="212.0" y1="376.45" x2="334.0" y2="349.625" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="334.0" y1="349.625" x2="456.0" y2="336.575" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="456.0" y1="336.575" x2="578.0" y2="322.8" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="578.0" y1="322.8" x2="700.0" y2="321.35" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="85.0" y="401.175" width="10" height="10" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="90" y="430" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">77</tspan></text>
+<rect x="207.0" y="371.45" width="10" height="10" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="212" y="400" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">118</tspan></text>
+<rect x="329.0" y="344.625" width="10" height="10" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="334" y="373" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">155</tspan></text>
+<rect x="451.0" y="331.575" width="10" height="10" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="456" y="360" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">173</tspan></text>
+<rect x="573.0" y="317.8" width="10" height="10" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="578" y="346" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">192</tspan></text>
+<rect x="695.0" y="316.35" width="10" height="10" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="700" y="345" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">194</tspan></text>
+<line x1="90.0" y1="379.35" x2="212.0" y2="320.625" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="212.0" y1="320.625" x2="334.0" y2="264.075" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="334.0" y1="264.075" x2="456.0" y2="234.35" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="456.0" y1="234.35" x2="578.0" y2="194.47500000000002" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="578.0" y1="194.47500000000002" x2="700.0" y2="201.0" stroke="#d93025" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="85.0" y="374.35" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="90" y="367" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">114</tspan></text>
+<rect x="207.0" y="315.625" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="212" y="308" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">195</tspan></text>
+<rect x="329.0" y="259.075" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="334" y="252" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">273</tspan></text>
+<rect x="451.0" y="229.35" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="456" y="222" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">314</tspan></text>
+<rect x="573.0" y="189.47500000000002" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="578" y="182" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">369</tspan></text>
+<rect x="695.0" y="196.0" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="700" y="189" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">360</tspan></text>
+<text class="svgsm" x="90" y="522" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡数 ×32：分发 77 → 194（×2.5），汇回 114 → 360（×3.2）</tspan></text>
+<text class="svgsm" x="90" y="550" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按 EP256：每层一去一回 × 58 个 MoE 层 ≈ 32 毫秒，不藏起来就全露在每一步里</tspan></text>
+<text class="svgsm" x="90" y="574" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">（本课推导；线上把它藏进计算，靠的是双微批）</text>
+<rect x="780" y="102" width="620" height="500" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="780" y="102" width="620" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="780" y="104" width="620" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="780" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="794" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三种互连域</tspan></text>
+<rect x="798" y="148" width="584" height="128" rx="8" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="814" y="178" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 卡机器 ＋ InfiniBand</tspan></text>
+<text class="svgsm" x="814" y="210" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">机内 NVLink 约 160 GB/s，机间每卡约 50 GB/s</text>
+<text class="svgsm" x="814" y="236" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DeepSeek 的 EP144 就跑在这上面：跨 18 台</tspan></text>
+<rect x="798" y="300" width="584" height="128" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="814" y="330" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GB200 NVL72</tspan></text>
+<text class="svgsm" x="814" y="362" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">72 张卡在同一个 NVLink 域里</text>
+<text class="svgsm" x="814" y="388" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SGLang：延迟低到可以关掉双微批</tspan></text>
+<rect x="798" y="452" width="584" height="128" rx="8" fill="none" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="814" y="482" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU Ironwood</tspan></text>
+<text class="svgsm" x="814" y="514" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">64 颗一组，ICI 直连成 3D 环面，每颗连 6 个邻居</text>
+<text class="svgsm" x="814" y="540" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">光交换连到 9,216 颗，再往外走数据中心网络</tspan></text>
+<rect x="0" y="622" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="622" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="622" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="649" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不是非 NVL72 不可</tspan></text>
+<text class="svgsm" x="20" y="680" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">普通 8 卡机器，只要每张卡一张 RDMA 网卡、全互连、GPU 能直接发起传送，就跑得起；域越大，每趟越快，越不用藏。</text>
+</svg><figcaption><b>看左图横轴：卡数涨 32 倍，延迟只涨两到三倍，但每层都要付。</b><span class="capmore"><br><em>32 ms 为本课推导的不重叠上限；三张卡片的规格来自各家公开资料。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>左：DeepEP v1.2.1 README 低延迟 kernel 表（H800 NVLink 约 160 GB/s；CX7 400 Gb/s IB 约 50 GB/s；128 token/批、hidden 7168、top-8、FP8 分发、BF16 汇回）。右：DeepSeek-V3 技术报告 §3.4；LMSYS 2025-06-16「GB200 NVL72 Part I」（pure-NVLink … allows two-batch overlap to be disabled）；Google Cloud「Inside the Ironwood TPU codesigned AI stack」（64-chip cube、3D torus、9,216 颗、DCN）。</p>
+<p>本课推导：(194 ＋ 360) µs × 58 层 ≈ 32 ms，是不重叠时的上限；V3 61 层中前 3 层稠密，MoE 58 层（config.json first_k_dense_replace 3）。NVL72、ICI 的带宽没写数字。</p></details></figure>
+  <ul>
+    <li><b>DeepSeek 跑在普通 8 卡机器上</b>：机内 NVLink，全集群 InfiniBand 全互连（DeepEP 的测试机每卡一张 400 Gb 网卡）；decode 用 IBGDA，由 GPU 直接发起 RDMA，不经 CPU。</li>
+    <li><b>开源栈写明的门槛</b>：llm-d 要求 InfiniBand 或 RoCE 全互连、GPU 发起 RDMA；vLLM 文档的排障一节专门列了 IBGDA 初始化失败。</li>
+    <li><b>少跨机器</b>：V3 训练时就限定每个 token 最多去 4 个节点，先过 IB 到目标节点，再走 NVLink 转发给机内各卡。</li>
+    <li><b>NVL72 换来的是余量</b>：72 张卡一个 NVLink 域，SGLang 说延迟低到可以关掉双微批（6.11）；后续测试 decode 用 48 张卡，比一个域的 72 张还少。</li>
+  </ul>
+  <p><b>TPU</b>：Ironwood 64 颗一组，用 ICI 直连成 3D 环面，每颗只连 6 个邻居，远处的芯片要经中间芯片转发（本课推导）；组之间靠光交换拼成最多 9,216 颗的系统，更大就得走 DCN。MaxText 有 <code>dcn_expert_parallelism</code> 这个配置项，但跨 DCN 推荐的只有数据并行。</p>
+  <p>公开的 TPU 推理目前是 DEP8，专家那步用 all-gather 加 reduce-scatter，不是 all-to-all；跨切片的大 EP 推理还没有公开结果。</p>
+
+  <h3 id="s6-10">6.10　代价：要大批，要藏通信，一张卡出事全组陪着</h3>
+  <ul>
+    <li><b>通信露在外面</b>：EP256 一去一回约 554 µs，乘 58 个 MoE 层约 32 ms（本课推导，不重叠的上限）。不藏起来，省下的读权重时间全赔进去，所以要双微批（6.11）。</li>
+    <li><b>批必须够大</b>：行数靠总批撑，批小了凑不满车，传的开销照付。SGLang 实测 decode 每卡 32 个 token 时，双微批反而慢 27%。</li>
+    <li><b>等最慢的那张卡</b>：DeepSeek 原话，一张卡过载就拖慢整个系统、其余卡空等；热门专家多备几份是 EPLB（6.12）。</li>
+    <li><b>爆炸半径大</b>：一个实例上百张卡。Anyscale 指出，一个 DP rank 出故障，整个 DP 组都得下线，最多 128 张卡；TensorRT-LLM 也提醒，没有容错就会抬高线上故障率。</li>
+    <li><b>两套 kernel 不能混</b>：DeepEP 的常规模式（吞吐优先）和低延迟模式不能在同一个通信组里同时用，SGLang 因此必须 PD 分离；TensorRT-LLM 指出 PD 分离的 decode 硬性要求 CUDA Graph，而 DeepEP 并非所有场景都兼容。</li>
+  </ul>
+
+  <h3 id="s6-11">6.11　双微批：一批拆两半，一个传、一个算</h3>
   <p>大 EP 每层要传两趟：先把 token 分发到专家所在的卡，算完再汇回。传的时候，计算单元空等。DeepSeek 把一批拆成两个微批：A 在传，B 就在算。SGLang 叫它 TBO，vLLM 叫 DBO，都是这一招。</p>
   <figure class="fbox fwide" id="fig-s6-tbo"><svg viewBox="0 0 1400 554" width="100%" role="img" aria-label="双微批示意。上面一整批：每层先算注意力，再把 token 分发给专家所在的卡，算完专家再汇回来，分发和汇回的时候计算单元空等。下面拆成 A、B 两个微批：A 在传的时候 B 在算，计算那一行一直排满，整趟前向提前结束。时长是示意，通信取同一批计算时长的八成"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">双微批：传的时候，别让算力干等</text>
@@ -6411,7 +7459,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>decode 拆得更细</b>：各步长短不一，DeepSeek 把注意力再切成两段，排成 5 段流水。</li>
   </ul>
 
-  <h3 id="s6-9">6.9　EPLB：热门专家多备几份</h3>
+  <h3 id="s6-12">6.12　EPLB：热门专家多备几份</h3>
   <p>哪个专家热门，要等路由算完才知道（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。专家那一步等最慢的卡，热门专家所在的卡拖住所有人。EPLB（专家并行负载均衡器，DeepSeek 开源）按过去一段的负载统计，把热门专家多复制几份放到别的卡上，再重新排座位。</p>
   <figure class="fbox fwide" id="fig-s6-eplb"><svg viewBox="0 0 1400 650" width="100%" role="img" aria-label="EPLB 示意。左边：8 个专家按编号两个一组放 4 张卡，专家 0 最热门，卡 0 的柱子最高，专家那一步所有卡都要等它。右边：每卡多一个空位，热门的专家 0 和专家 7 各复制一份，token 平分给两份，再重新排座位，最高的柱子从 70 降到 52.5。数字是示意"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">EPLB：热门专家多备一份，再重新排座位</text>
@@ -6922,7 +7970,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </table></div>
   <p>读的一侧取装满时的 batch，每层碰到几个专家按 1.3 的均匀路由算；只算从 HBM 读的字节，下限按每 device 3.685 TB/s（每芯片 7.37 ÷ 2）。</p>
   <div class="tbl-wrap"><table>
-    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导。读权重取 MoE 层（第 4 到 61 层），每 device 每层；一步下限含 61 层与输出层，不含通信和计算。通信次数：TP 前向每层 2 次 AllReduce（Megatron-LM，arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 同 2 次（专题五 §4.4 的图）；DEP 专家前后各 1 次 all-to-all（6.7）；DCP 另加每层 3 次（vLLM 默认后端，7.1）。</caption>
+    <caption class="sub" style="caption-side:bottom;text-align:left">本课推导。读权重取 MoE 层（第 4 到 61 层），每 device 每层；一步下限含 61 层与输出层，不含通信和计算。通信次数：TP 前向每层 2 次 AllReduce（Megatron-LM，arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 同 2 次（专题五 §4.4 的图）；DEP 专家前后各 1 次 all-to-all（6.9）；DCP 另加每层 3 次（vLLM 默认后端，7.1）。</caption>
     <tr><th>切法</th><th>整套 batch</th><th>每层读权重</th><th>每层读 KV</th><th>一步读完下限</th><th>每层通信</th><th>代价／适用</th></tr>
     <tr><td>TP16</td><td>5</td><td>118 MB：注意力 1/16 ＋ 碰到的 37.6 个路由专家和共享专家各 1/16</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>单人出字快；KV 复制 16 份，长上下文装不下人</td></tr>
     <tr><td>TEP16</td><td>5</td><td>118 MB（平均）：注意力 1/16 ＋ 本卡被碰到的整块专家</td><td>755 MB：5 条全读</td><td>14.4 ms</td><td>2 次 AllReduce</td><td>同 TP16；专家整块，热门专家那张卡要多读，大家等它</td></tr>
@@ -10583,7 +11631,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s14-4">14.4　跑得快：Qwen3.5 先砍 MoE，K3 整个写成一块</h3>
   <p>先还一笔自己欠的税：统一池上线那天 PCP8 掉了约一成八。kernel 每个 tile 都把 GDN 状态的布局换一遍，每条序列换一次其实就够，统一池 prefill 因此慢 2.2 倍（同一 kernel 比不用池）。修法是在引用上换视图（bitcast 加 reshape），只改元数据不搬数据，指令包 366 → 87。</p>
   <p>再往上砍，三条理由跟前面一样：<b>HBM 在空等，通信露在外面，布局把窄维补成整块。</b>TPU 多一条：XLA 未必把通信藏到你想藏的地方，所以最大的一刀都是手写 Pallas 拿回调度权。</p>
-  <p><b>prefill 先砍 MoE</b>，它占了约八成时间。四刀依次是：SparseCore 合并（<a href="#s5-6">5.6</a>）、通信切块（<a href="#s5-7">5.7</a>）、整层融合（<a href="#s6-7">6.7</a>）、修剪 kernel。</p>
+  <p><b>prefill 先砍 MoE</b>，它占了约八成时间。先在片上按目的地累加，再把通信切成小块跟计算叠起来，接着整层 MoE 融成一个程序，最后修剪 kernel 本身。</p>
 <figure class="fbox fwide" id="fig-s13-ladder"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="Qwen3.5-397B 在单机 TPU v7x-8 上 DP8 prefill 吞吐的四级台阶，按私有实测指数化，起点记 1.00。SparseCore 合并这一刀乘 1.06，到 1.06；通信切块乘 1.09，到 1.16；整层 MoE 融合成一个 Pallas 程序乘 1.26，到 1.45，是最大的一级；修剪 kernel 内部乘 1.09，到 1.58。虚线是同期首尾实测之比 1.59，四刀几乎解释了全部涨幅"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">Qwen3.5-397B prefill 刀谱　——　<tspan font-weight="700">最大的一级是整层融合</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">私有实测指数化：单机 v7x-8、DP8 注意力 ＋ EP8 专家，prefill 吞吐，起点那天 ＝ 1.00。柱内大字是累计值，小字是这一刀相对上一级的倍数</text>
@@ -11315,7 +12363,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>DCP 让 KV 容量 1.5M → 12.2M token（官方逻辑容量）；单流 −26% 来自丢掉 symm-mem；TP8 默认配置不开投机实测 max_total_num_tokens 787,504（约 79 万；128K 宽表 TP8 行均未开投机），开投机降到 637,504（−19%），128K × 8 ＝ 1,048,576（100 多万）放不下</td><td>SGLANG-K3-RUNBOOK.md:721-723；:1024-1026、:962；实测值 :1171、未开投机见宽表 :934-938；乘积本课推导</td></tr>
     <tr><td>K3 128K 并发 8 首字中位：TP8 32.1 s，DCP8 2.3 s（含排队）；官方 PD 吞吐：1P1D（TP8 decode）2,808 对 2P2D（DCP8 decode）2,633 tok/s/GPU</td><td>SGLANG-K3-RUNBOOK.md:939（TP8 r060-isl128k）、:941（dcp8-isl128k）；:609-610、:707-708（官方原文引于 :1323）</td></tr>
     <tr><td>69 层 KDA 线性注意力不能按序列切；切了状态差 58%</td><td>SGLANG-K3-RUNBOOK.md:725-726；58% 为本课玩具递推 S<sub>t</sub> ＝ 0.9·S<sub>t−1</sub> ＋ 1</td></tr>
-    <tr><td>L83 · 7.6 并排表：8 颗 v7 ＝ 16 个 device、128K；每 device 可用 94.75 GiB × 0.9 ＝ 85.3 GiB；权重全切 39.1 GiB、剩 46.2 GiB；DEP 每 device 存非专家整份 17.1B（15.9 GiB）＋ 路由专家 1/16（38.1 GiB）＝ 54.0 GiB、剩 31.3 GiB；装几条：TP16／TEP16 5、DEP16 48（每 device 3）、TEP16＋DCP16 86；每层读权重（MoE 层）118／784／673 MB，读 KV 755／453／812 MB；一步读完下限 14.4／20.6／24.1 ms；碰到的路由专家 37.6／200.2／239.3 个</td><td>本课推导：非专家 ＝ 671.0B − 653.9B；一条 128K ＝ 70,272 × 131,072 B ＝ 8.58 GiB、每层 1,152 × 131,072 B ＝ 151 MB；碰到的专家 256 × [1 − (1 − 8/256)<sup>b</sup>]（1.3 同式）；下限 ＝ 每 device 每步字节 ÷ 3.685 TB/s（7.37 ÷ 2）；94.75 GiB 与 0.9 同 4.2、10.5；逐项 assert 在 topic06_s7.py 的 _t76()。通信次数：TP 前向每层 2 次 all-reduce 见 Megatron-LM（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 两次 AllReduce 沿用专题五 fig5-tep-dep 图注；DEP 两次 all-to-all 见 6.7 台账；DCP 每层 3 次沿用 7.1 正文（来源见下一行专题五台账）；DCP 度数 ≤ TP ÷ KV 头数沿用 7.1</td></tr>
+    <tr><td>L83 · 7.6 并排表：8 颗 v7 ＝ 16 个 device、128K；每 device 可用 94.75 GiB × 0.9 ＝ 85.3 GiB；权重全切 39.1 GiB、剩 46.2 GiB；DEP 每 device 存非专家整份 17.1B（15.9 GiB）＋ 路由专家 1/16（38.1 GiB）＝ 54.0 GiB、剩 31.3 GiB；装几条：TP16／TEP16 5、DEP16 48（每 device 3）、TEP16＋DCP16 86；每层读权重（MoE 层）118／784／673 MB，读 KV 755／453／812 MB；一步读完下限 14.4／20.6／24.1 ms；碰到的路由专家 37.6／200.2／239.3 个</td><td>本课推导：非专家 ＝ 671.0B − 653.9B；一条 128K ＝ 70,272 × 131,072 B ＝ 8.58 GiB、每层 1,152 × 131,072 B ＝ 151 MB；碰到的专家 256 × [1 − (1 − 8/256)<sup>b</sup>]（1.3 同式）；下限 ＝ 每 device 每步字节 ÷ 3.685 TB/s（7.37 ÷ 2）；94.75 GiB 与 0.9 同 4.2、10.5；逐项 assert 在 topic06_s7.py 的 _t76()。通信次数：TP 前向每层 2 次 all-reduce 见 Megatron-LM（arXiv <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener">1909.08053</a>）；TEP 两次 AllReduce 沿用专题五 fig5-tep-dep 图注；DEP 两次 all-to-all 见 6.9 台账；DCP 每层 3 次沿用 7.1 正文（来源见下一行专题五台账）；DCP 度数 ≤ TP ÷ KV 头数沿用 7.1</td></tr>
     <tr><td>KV 复制；DCP 通信；PCP／DCP 分工；Ring／Ulysses／USP；pass-KV／pass-Q 按通信能否藏进注意力计算来选（10% 未命中仍选 pass-KV，低于 3.25% 才换 pass-Q）</td><td>沿用专题五台账第 23、29、45、21 行；arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a> §3.4、§4.2.4</td></tr>
     <tr><td>KV 传输软件栈</td><td>github.com/ai-dynamo/nixl；github.com/kvcache-ai/Mooncake；LMCache arXiv <a href="https://arxiv.org/abs/2510.09665" target="_blank" rel="noopener">2510.09665</a>；docs.nvidia.com/dynamo 的 KVBM；github.com/google/tpu-sync（~200 GB/s，not yet recommended for general use）；tpu-inference kv_transfer（jax.experimental.transfer）</td></tr>
     <tr><td>PD 传输带宽从 200 MB/s 调到 7–167 GB/s</td><td>VLLM-V4PRO-RUNBOOK.md:194，配置见 :106、180-194</td></tr>
@@ -11506,8 +12554,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>L86 补充 · 3.2：vLLM max_num_batched_tokens 默认按设备分档（≥160 GB GPU 16,384；≥70 GB 且非 A100：LLM 类 16,384、API 服务 8,192；其余 GPU 8,192／2,048；TPU V6E 2,048／1,024）；SGLang chunked_prefill_size 按显存分档（<20 GB 2,048；<60 GB 4,096；<160 GB 8,192；其余 16,384）；V3 注意力每对约 5.0 MFLOP、线性部分约 74 GFLOP/token、交叉点约 1.5 万、末块／首块约 7 倍、H100 平衡点约 300 token、MoE 约 9,400 token 均为本课推导</td><td>github.com/vllm-project/vllm main：vllm/engine/arg_utils.py（默认 max_num_batched_tokens 分档）；github.com/sgl-project/sglang main：python/sglang/srt/arg_groups/memory_hook.py；DeepSeek-V3 config.json（qk_nope_head_dim 128、qk_rope_head_dim 64、v_head_dim 128、128 头、61 层、256 专家取 8）；FlashAttention-2（arXiv <a href="https://arxiv.org/abs/2307.08691" target="_blank" rel="noopener">2307.08691</a>）外层按 query 分块。2026-10-17 核对</td></tr>
     <tr><td>L88 补充 · 第三／四节：调度提到 KV 之前（先坐满、再问座位从哪来），两节编号、锚点、图 id 与全课交叉引用同步对调；数字未改</td><td>结构调整，无新数；2026-10-17 核对</td></tr>
     <tr><td>L89 补充 · 3.1：Orca 是 OSDI 2022 论文及其中实现的服务系统（论文原文「we have implemented a distributed serving system called ORCA」）</td><td>usenix.org/conference/osdi22/presentation/yu 摘要。2026-10-18 核对</td></tr>
-<tr><td>L90 补充 · 6.8 双微批：prefill 同 token 数快 27%～35%、每卡 16,384 token 时比不拆最优快 40.5%；decode 256 token/卡快 25.5%、32 token/卡慢 27%（小批 kernel 效率低）；DeepSeek decode 把注意力拆两段走 5 段流水；vLLM DBO 纯 decode 阈值默认 32 token</td><td>LMSYS 博客 2025-05-05「Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs」TBO 一节；DeepSeek open-infra-index「Day 6 · Inference System Overview」；vLLM vllm/config/parallel.py（enable_dbo、dbo_decode_token_threshold 默认 32、dbo_prefill_token_threshold 默认 512）；SGLang --enable-two-batch-overlap。2026-10-18 核对</td></tr>
-<tr><td>L91 补充 · 6.9 EPLB：V3 prefill 32 个冗余专家、每卡 8＋1、定期重算（例如每 10 分钟）；SGLang 大规模 EP 开 EPLB prefill 1.49×、decode 2.54×（作者注明看负载分布）；256＋32＝288 可用 12、72 路；vLLM eplb_config 默认 step_interval 3000、window_size 1000、num_redundant_experts 0</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.4；DeepSeek EPLB 仓库 README；LMSYS 博客 2025-05-05 大规模 EP 一文 EPLB 一节；vLLM vllm/config/parallel.py EPLBConfig；SGLang --enable-eplb、--ep-num-redundant-experts（server_arguments 文档）。2026-10-18 核对</td></tr>
+<tr><td>L90 补充 · 6.11 双微批：prefill 同 token 数快 27%～35%、每卡 16,384 token 时比不拆最优快 40.5%；decode 256 token/卡快 25.5%、32 token/卡慢 27%（小批 kernel 效率低）；DeepSeek decode 把注意力拆两段走 5 段流水；vLLM DBO 纯 decode 阈值默认 32 token</td><td>LMSYS 博客 2025-05-05「Deploying DeepSeek with PD Disaggregation and Large-Scale Expert Parallelism on 96 H100 GPUs」TBO 一节；DeepSeek open-infra-index「Day 6 · Inference System Overview」；vLLM vllm/config/parallel.py（enable_dbo、dbo_decode_token_threshold 默认 32、dbo_prefill_token_threshold 默认 512）；SGLang --enable-two-batch-overlap。2026-10-18 核对</td></tr>
+<tr><td>L91 补充 · 6.12 EPLB：V3 prefill 32 个冗余专家、每卡 8＋1、定期重算（例如每 10 分钟）；SGLang 大规模 EP 开 EPLB prefill 1.49×、decode 2.54×（作者注明看负载分布）；256＋32＝288 可用 12、72 路；vLLM eplb_config 默认 step_interval 3000、window_size 1000、num_redundant_experts 0</td><td>DeepSeek-V3 技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.4；DeepSeek EPLB 仓库 README；LMSYS 博客 2025-05-05 大规模 EP 一文 EPLB 一节；vLLM vllm/config/parallel.py EPLBConfig；SGLang --enable-eplb、--ep-num-redundant-experts（server_arguments 文档）。2026-10-18 核对</td></tr>
 <tr><td>L92 补充 · 12.6 CUDA Graph（原 12.6 融合、12.7 KV 量化顺延为 12.7、12.8）：A100、LLaMA-2-7B、batch 1，不开 30 tok/s、开 69 tok/s（2.3×），提速全来自 CPU 开销；vLLM 默认录 [1,2,4]＋8..248 步 8＋256 起步 16，上限 512（数据中心 Blackwell 1,024）；V1 默认 FULL_AND_PIECEWISE（decode 整图、prefill／混合分段）</td><td>Fireworks 博客「Speed, Python: Pick Two. How CUDA Graphs Enable Fast Python Code for Deep Learning」2023-08-29；vLLM vllm/config/compilation.py（max_cudagraph_capture_size、cudagraph_mode）；SGLang --cuda-graph-max-bs。2026-10-18 核对</td></tr>
 <tr><td>L93 补充 · 11.5 n-gram 草稿：Llama3-70B、4×H100、QPS=1，CNN/DailyMail 最多 2.8×，草稿模型（Qwama-0.5B）跑 ShareGPT 1.5×；vLLM method="ngram"，prompt_lookup_min／max 都不填默认 5；SGLang --speculative-algorithm NGRAM。3.1 multi-LoRA：S-LoRA 服务几千个适配器、吞吐最多是 HF PEFT 与 vLLM 简单 LoRA 支持的 4 倍</td><td>vLLM 博客 2024-10-17「How Speculative Decoding Boosts vLLM Performance by up to 2.8x」；prompt-lookup-decoding 仓库 README；vLLM vllm/config/speculative.py、vllm/config/lora.py（max_loras 默认 1）；S-LoRA arXiv <a href="https://arxiv.org/abs/2311.03285" target="_blank" rel="noopener">2311.03285</a> 摘要。2026-10-18 核对</td></tr>
 <tr><td>L94 补充 · 12.4 重写：gpt-oss-120b MLP 114.71B／Attention 0.96B／Embed+Unembed 1.16B／总 116.83B，只 MoE 权重 MXFP4、单张 80 GB；K2 Thinking quantization_config ignore 含 self_attn、shared_experts、稠密层 mlp、lm_head，INT4 group 32；R1 v7x-8 FP4 专家 60.9 GB/device、FP8 101.8 GB/device；GSM8K R1 94.92%（1319 题）、GLM-5.1 89.46%（5-shot）；TPU MoE kernel 4 bit 块进片上点积、按块乘 scale；Marlin batch 16–32 内近 4×、vLLM 端到端最多 2.8×</td><td>gpt-oss 模型卡 Table 1；huggingface.co/moonshotai/Kimi-K2-Thinking config.json；tpu/tpu-inference/DeepSeek-R1-671B-FP4、GLM-5.1-754B-FP4 README；vllm-project/tpu-inference tpu_inference/kernels/megablox/gmm.py（jnp.dot 后乘 rhs_scale）、common.py（支持 float4_e2m1fn）；Marlin README、arXiv <a href="https://arxiv.org/abs/2408.11743" target="_blank" rel="noopener">2408.11743</a>。2026-10-18 核对</td></tr>
@@ -11517,6 +12565,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>L98 补充 · 14 节里 tpu-inference 的对照数：冷启动约 7 min；混合分配器 4 层共用一块 KV 张量致块池约 3.5 倍；GDN 递推 bf16 死循环；/dev/shm 残留每分片 2 s→80 s、7 min→约 2 h；PD 每请求约 349 MB、单并发 0.95 倍</td><td>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:20-33、50-54、60-70、750、789-791。2026-10-18 核对</td></tr>
     <tr><td>L99 补充 · 14 节主线（vLLM 的 PyTorch TPU 后端，写作时尚未公开）：v7x-8 ＝ 4 芯片 8 TensorCore、768 GiB；GDN 状态约 189 MB/序列（FP32）；统一池上线 PCP8 约 −18.6%；统一池 prefill 慢 2.2 倍、换视图后指令包 366→87；PCP8 假点约 2.07、真实约 0.85（起点 ＝ 1）；prefill 四刀 1.0565 × 1.0945 × 1.2553 × 1.091 ≈ 1.58、实测约 1.59；收尾 PCP8 ÷ DP8 ≈ 0.89；不排序 MoE daily 约 +12.5%；BF16 状态 KV 池 +12%、同时在跑 208→232</td><td>私有实测，按起点 ＝ 1.00 换算成指数；768 GiB ＝ 4 × 192 GiB、189 MB ＝ 45 层 × 64 头 × 128 × 128 × 4 B、四百来 GB 按 397B × 1 字节估，本课推导；「PCP 为延迟」为本课推测。栈公开后补名字与链接。2026-10-18 核对</td></tr>
     <tr><td>L100 补充 · 3.3 新增「一步里装了什么」（原 3.3–3.5 顺延为 3.4–3.6）：vLLM V1 开 chunked prefill 时先排全部 decode、预算有剩再排 prefill、装不下就切；SGLang --enable-mixed-chunk 默认关，即一步不混 prefill 和 decode；图与动画的预算、人数、长度均为示意</td><td>docs.vllm.ai Optimization and Tuning 页 Chunked Prefill 一节；docs.sglang.ai Server Arguments 页。2026-10-18 核对</td></tr>
+    <tr><td>L101 补充 · 6.7 大 EP 定义：TensorRT-LLM 口径 EP &gt; 8；DeepSeek 线上 decode EP144／DP144、18 节点、32 个冗余专家、每卡 2 路由 ＋ 1 共享；prefill EP32、4 节点、每卡 9 ＋ 1；V3 技术报告 decode 写 EP320、40 节点、每卡 1 个专家</td><td>TensorRT-LLM 博客「Scaling Expert Parallelism in TensorRT-LLM」（「large-scale EP (here means EP &gt; 8)」）；DeepSeek open-infra-index「Day 6 · Inference System Overview」；arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §3.4.2。2026-10-18 核对</td></tr>
+    <tr><td>L102 补充 · 6.8 大 EP 为什么省（含动画 BigEP）：每份专家行数 ＝ EP × 32 × 8 ÷ 份数，EP8 8 行、EP144 128 行；一个路由专家 44.0M 参数（FP8 44 MB）；每层每卡读 1,409 对 88 MB（16×）；路由专家占显存 81.7 对 5.1 GB；V3 671 GB ＞ 8 × 80 GB；两条好处为 DeepSeek 原话</td><td>本课推导：3 × 7168 × 2048 ＝ 44,040,192；8 × 32 × 8 ÷ 256、144 × 32 × 8 ÷ 288；32 × 44.04、2 × 44.04 MB；× 58 层；断言在 manim/topic06-anim-serve.py 的 bep_row 与 topic06-fig-bigep.py。DeepSeek-V3 config.json（hidden 7168、moe_intermediate_size 2048、first_k_dense_replace 3、61 层）；Day 6（「EP significantly scales the batch size…」「reducing memory access demands」）</td></tr>
+    <tr><td>L103 补充 · 6.9 网络：DeepEP 低延迟 kernel EP8→256 分发 77→194 µs、汇回 114→360 µs；(194 ＋ 360) × 58 ≈ 32 ms；每 token 最多发约 57 KB（FP8）、收约 115 KB（BF16）；机内 NVLink、全集群 IB 全互连、decode 用 IBGDA；训练限每 token 最多 4 个节点；llm-d 要求 IB／RoCE 全互连与 GPU 发起 RDMA；SGLang GB200 纯 NVLink 可关双微批、decode 48 卡；Ironwood 64 颗 3D 环面、每颗 6 邻居、光交换到 9,216 颗、再往外 DCN；MaxText dcn_expert_parallelism 存在但未推荐；公开 TPU 推理为 DEP8、all-gather ＋ reduce-scatter</td><td>DeepEP v1.2.1 README 表格；arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §2.1.2、§3.2.2、§3.4；llm-d wide-expert-parallelism 文档；vLLM expert_parallel_deployment 文档排障一节；LMSYS 2025-06-16「GB200 NVL72 Part I」、2025-09-25「Part II」（「For decode, we use 48 ranks」）；Google Cloud 博客「Inside the Ironwood TPU codesigned AI stack」；MaxText base.yml；SemiAnalysis「TPU InferenceX」。本课推导：8 × 7168 × 1 B、× 2 B；环面远处要转发。2026-10-18 核对</td></tr>
+    <tr><td>L104 补充 · 6.10 代价：decode 每卡 32 token 时双微批慢 27%；一张卡过载拖慢全系统；一个 DP rank 故障整组下线、最多 128 卡；没有容错会抬高故障率；DeepEP 常规与低延迟模式不能同组 → PD 分离；PD decode 硬性要求 CUDA Graph、DeepEP 并非全兼容</td><td>LMSYS 2025-05-05 大规模 EP 一文（TBO 一节、PD 一节）；Day 6；Anyscale 博客「dp-group-fault-tolerance-vllm-wideep-ray-serve-llm」（「up to 128 GPUs」）；TensorRT-LLM 博客 blog4（容错与 CUDA Graph 两段）。2026-10-18 核对</td></tr>
   </table></div>
   </details>
 </div></section>
