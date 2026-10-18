@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""专题六「推理」的六支动画：连续批处理（第三节）、投机解码一步（第十一节）、分页 KV（第四节）、PD 分离（第八节）、KV 当存储（第四节）、一步里装了什么（第三节）。
+r"""专题六「推理」的七支动画：连续批处理（第三节）、投机解码一步（第十一节）、分页 KV（第四节）、PD 分离（第八节）、KV 当存储（第四节）、一步里装了什么（第三节）、KV 一页页怎么搬上芯片（第五节）。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间或第三维）
   · ContBatch —— 静态甘特图（fig6-gantt）画得出结果，画不出「同一时刻两边各走到哪」。
@@ -16,6 +16,8 @@ r"""专题六「推理」的六支动画：连续批处理（第三节）、投�
     画不出「找了几层」和「块在层间搬来搬去」，而这两个动作正是「KV 当存储」的意思。
   · StepMix —— 「新人怎么接上」是跨步的事：E 的 prompt 第 1 步切一块、第 2 步装完当步出首字、第 3 步已经是一格 decode。
     静态图（fig6-stepmix）把四行摆在一起，看得出每行装了什么，看不出格子从哪来、人怎么从门口挪到车上。
+  · KVLoad —— 「边算边搬」本身就是两件事在同一时刻发生：一个槽在算、另一个槽在装下一块，序列交界也不停。
+    静态图（fig6-s5-kvload）只能摆出某一刻的两个槽和一条时间轴，看不出页怎么按页表一页页飞上片、槽怎么轮换。
 
 ⛔ 数据从哪来（当场算，断言钉住）
   · ContBatch：4 个槽位、16 个请求，长度 REQ 是**示意**（前 8 个与 fig6-gantt 的 3/8/2/5/6/2/7/4 相同，
@@ -31,6 +33,8 @@ r"""专题六「推理」的六支动画：连续批处理（第三节）、投�
     断言四个请求依次是 HBM 命中、主机内存命中、SSD 命中、全不中，最后一个把淘汰一路推到 SSD。首字条里只有
     「SSD 拉回 : 重算 ＝ 0.5 : 13」有出处（DeepSeek 磁盘缓存，同 fig6-disk-cache），HBM／主机内存两条长短是示意。
 
+  · KVLoad：每页 4 个 token、每块 2 页、3 条序列和页号是示意（KVL_*），与 topic06-fig-decode.py 同一组数；
+    规则照 RPA 论文（arXiv 2604.15464 §3.3、算法 1）：按页表取页拼成片上一块、双缓冲、只搬有效长度、同组查询头共用一块 K/V。
   · StepMix：预算 10 格、车上 4 人、门口 2 人都是示意（MIX_B / MIX_RUN0 / MIX_Q0），规则照 vLLM V1 文档
     （先排全部 decode，预算有剩再排 prefill，装不下就切），由 mix_sim 现模拟；与 topic06-fig-batch.py 同一组数、同一组断言。
 
@@ -43,6 +47,7 @@ r"""专题六「推理」的六支动画：连续批处理（第三节）、投�
   · KVStore：部分命中（只命中前缀的前一段，剩下的接着算）；远端存储那一层（Mooncake／LMCache，3.6 正文）；
     盈亏带宽（搬回来比重算慢就不该存，fig6-offload 的事）；块大小与真实容量。
 
+  · KVLoad：本步新 KV 异步写回页池（正文交代）；两个 TensorCore 怎么分序列（论文没写）；每块耗时随 token 数变化（这里等长）。
   · StepMix：KV 池满了的情况（3.4、3.6）；每步耗时随格数变化；SGLang 默认不混批（正文交代）；PD 分离的 KV 交接（第八节）。
 
 📌 渲染（在 Courses/ 下）：
@@ -52,7 +57,8 @@ r"""专题六「推理」的六支动画：连续批处理（第三节）、投�
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py PDSplit   WebPages/media/topic06-pdsplit.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py KVStore   WebPages/media/topic06-kvstore.mp4
    构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py StepMix   WebPages/media/topic06-stepmix.mp4
-   SpecStep、StepMix 每一步落地的停顿时刻写进 steps/<Scene>.json（课件挂 data-pauses）。
+   构建手册/脚本/render.sh tools/manim/topic06-anim-serve.py KVLoad    WebPages/media/topic06-kvload.mp4
+   SpecStep、StepMix、KVLoad 每一步落地的停顿时刻写进 steps/<Scene>.json（课件挂 data-pauses）。
 """
 import json
 import math
@@ -1171,4 +1177,168 @@ class StepMix(Scene):
 
         os.makedirs(STEPS_DIR, exist_ok=True)
         with open(os.path.join(STEPS_DIR, "StepMix.json"), "w") as fh:
+            json.dump({"pauses": marks, "duration": round(self.renderer.time, 2)}, fh)
+
+
+# ════════════════════════════════════════════════════════════════
+# ⑦ KVLoad：KV 一页页怎么搬上芯片（第五节）
+# ════════════════════════════════════════════════════════════════
+# ⚠️ 示意：与 topic06-fig-decode.py 的 fig6-s5-kvload 同一组数（每页 4 个 token、每块 2 页、3 条序列）
+KVL_PAGE, KVL_BLK, KVL_POOL, KVL_G = 4, 2, 16, 4
+KVL_SEQS = [("A", 15, [6, 1, 11, 4]), ("B", 10, [9, 14, 2]), ("C", 3, [7])]
+KVL_COL = {"A": BLUE, "B": ORANGE, "C": GREEN}
+
+
+def kvl_blocks():
+    out = []
+    for name, n, pages in KVL_SEQS:
+        for b in range(0, len(pages), KVL_BLK):
+            pg = pages[b:b + KVL_BLK]
+            out.append((name, b // KVL_BLK + 1, pg, min(n, (b + len(pg)) * KVL_PAGE) - b * KVL_PAGE))
+    return out
+
+
+KVL_B = kvl_blocks()
+assert [(b[0], b[1], b[3]) for b in KVL_B] == [("A", 1, 8), ("A", 2, 7), ("B", 1, 8), ("B", 2, 2), ("C", 1, 3)]
+KVL_SAY = ["先按 A 的页表取两页，拼成一块搬上片",
+           "算 A 块 1；同时 A 块 2 已经在路上",
+           "算 A 块 2；A 还没算完，B 块 1 已经在路上",
+           "算 B 块 1；B 块 2 只有 2 个 token，就只搬 2 个",
+           "算 B 块 2；同时取 C：只有 3 个 token",
+           "算 C 块 1；没有下一块了"]
+assert len(KVL_SAY) == len(KVL_B) + 1
+
+
+class KVLoad(Scene):
+    def construct(self):
+        marks = []
+        PW, PH_ = 0.95, 0.42
+        where = {p: (name, i + 1, min(KVL_PAGE, n - i * KVL_PAGE)) for name, n, ps in KVL_SEQS for i, p in enumerate(ps)}
+
+        def ppos(k):
+            return [-6.3 + (k % 4) * 1.05, 1.5 - (k // 4) * 0.52, 0]
+
+        def page(name, i, ntok):
+            col = KVL_COL[name]
+            box = Rectangle(width=PW, height=PH_, stroke_color=col, stroke_width=2.5)
+            fill = Rectangle(width=PW * ntok / KVL_PAGE, height=PH_, stroke_width=0, fill_color=col, fill_opacity=0.35)
+            fill.align_to(box, LEFT)
+            return VGroup(box, fill, tx("%s 第%d页" % (name, i), 17, WHITE))
+
+        title = tx("KV 一页页怎么搬上芯片", 30).to_edge(UP)
+        heads = VGroup(tx("显存：KV 页池", 22, GREY_B).move_to([-4.73, 2.12, 0]),
+                       tx("片上：两个槽", 22, PURPLE_B).move_to([-0.4, 2.12, 0]),
+                       tx("一块喂一组查询头", 22, GREEN).move_to([3.9, 2.12, 0]))
+        pool = VGroup()
+        for k in range(KVL_POOL):
+            if k in where:
+                pool.add(page(*where[k]).move_to(ppos(k)))
+            else:
+                pool.add(VGroup(Rectangle(width=PW, height=PH_, stroke_color=GREY, stroke_width=1.2).set_stroke(opacity=0.5),
+                                tx("空", 16, GREY)).move_to(ppos(k)))
+        tables = VGroup(*[tx("%s 的页表：%s" % (nm, " → ".join("格%d" % (p + 1) for p in ps)), 18, KVL_COL[nm])
+                          for nm, n, ps in KVL_SEQS])
+        for j, t in enumerate(tables):
+            t.move_to([-6.8, -0.62 - j * 0.38, 0], aligned_edge=LEFT)
+        SY = [1.05, -0.3]
+        slots = VGroup(*[Rectangle(width=3.3, height=0.95, stroke_color=GREY_B, stroke_width=2).move_to([-0.4, y, 0]) for y in SY])
+        slab = VGroup(*[tx("槽 %d" % (i + 1), 20, GREY_B).move_to([-1.75, y, 0]) for i, y in enumerate(SY)])
+
+        def chip_pos(si, q):
+            return [-0.85 + q * 1.05, SY[si], 0]
+
+        def status(si, s, col):
+            return tx(s, 18, col).move_to([-0.4, SY[si] + 0.62, 0])
+
+        st = [status(0, "空着", GREY), status(1, "空着", GREY)]
+        rows = VGroup(*[VGroup(Rectangle(width=1.5, height=0.4, stroke_color=WHITE, stroke_width=1.5),
+                               tx("查询头 %d" % (h + 1), 17, WHITE)).move_to([2.5, 1.5 - h * 0.5, 0]) for h in range(KVL_G)])
+        kvbox = Rectangle(width=2.2, height=1.9, stroke_color=GREY, stroke_width=2).move_to([4.9, 0.75, 0])
+        kvlab0 = tx("等第一块", 18, GREY).move_to(kvbox.get_center())
+        rnote = tx("4 个头摞成 4 行，共用这一块 K、V", 18, GREY_B).move_to([3.9, -0.55, 0])
+        TX0, TW = -4.5, 1.85
+        tl_lab = VGroup(tx("搬", 20, GREY_B).move_to([-6.0, -2.0, 0]), tx("算", 20, GREY_B).move_to([-6.0, -2.68, 0]))
+        tl_slot = VGroup(*[Rectangle(width=TW - 0.1, height=0.5, stroke_color=GREY, stroke_width=1.2).set_stroke(opacity=0.5)
+                           .move_to([TX0 + c * TW, y, 0]) for c in range(len(KVL_B) + 1) for y in (-2.0, -2.68)])
+        legend = tx("示意：每页 4 个 token、每块 2 页；浅色多长＝页里写了几个 token", 18, GREY).move_to([0, -3.55, 0])
+        cap0 = tx(" ", 26, GREY_B).next_to(title, DOWN, buff=0.18)
+        self.add(title, heads, pool, tables, slots, slab, *st, rows, kvbox, kvlab0, rnote, tl_lab, tl_slot, legend, cap0)
+        self.cap = cap0
+        kvlab = kvlab0
+
+        def say(s, color=GREY_B, after=0.4):
+            n = tx(s, 26, color).next_to(title, DOWN, buff=0.18)
+            self.play(FadeOut(self.cap), FadeIn(n), run_time=0.35)
+            self.cap = n
+            if after:
+                self.wait(after)
+
+        def hold(t=1.8):
+            marks.append(round(self.renderer.time + 0.3, 2))
+            self.wait(t)
+
+        def tcell(c, r, blk):
+            name, bi, pg, ntok = blk
+            col = KVL_COL[name]
+            g = VGroup(Rectangle(width=TW - 0.1, height=0.5, stroke_color=col, stroke_width=2.5,
+                                 fill_color=col, fill_opacity=0.3 if r == 0 else 0.9),
+                       tx("%s 块%d · %d 个" % (name, bi, ntok) if r == 0 else "%s 块%d" % (name, bi), 18, WHITE))
+            g[1].move_to(g[0].get_center())
+            return g.move_to([TX0 + c * TW, -2.0 if r == 0 else -2.68, 0])
+
+        inslot = [None, None]
+        timeline = VGroup()
+        self.wait(0.6)
+        for t in range(len(KVL_B) + 1):
+            say(KVL_SAY[t], after=0.2)
+            anims = []
+            # 算：上一块（在 (t-1)%2 号槽里）
+            if t >= 1:
+                ci = (t - 1) % 2
+                name, bi, pg, ntok = KVL_B[t - 1]
+                col = KVL_COL[name]
+                ns = status(ci, "在算：%s 块%d" % (name, bi), col)
+                nl = tx("%s 块%d 的 K、V" % (name, bi), 20, col, True).move_to(kvbox.get_center())
+                tc = tcell(t, 1, KVL_B[t - 1])
+                timeline.add(tc)
+                anims += [FadeOut(st[ci]), FadeIn(ns), FadeOut(kvlab), FadeIn(nl), kvbox.animate.set_stroke(color=col),
+                          FadeIn(tc), slots[ci].animate.set_stroke(color=col, width=3.5)]
+                st[ci], kvlab = ns, nl
+            # 搬：第 t 块进 t%2 号槽，和「算」同时进行
+            if t < len(KVL_B):
+                si = t % 2
+                name, bi, pg, ntok = KVL_B[t]
+                col = KVL_COL[name]
+                flies = VGroup()
+                for q, p in enumerate(pg):
+                    c = page(*where[p]).move_to(ppos(p))
+                    flies.add(c)
+                    anims.append(c.animate.move_to(chip_pos(si, q)))
+                inslot[si] = flies
+                ns = status(si, "在装下一块：%s 块%d" % (name, bi), GREY_B)
+                tc = tcell(t, 0, KVL_B[t])
+                timeline.add(tc)
+                anims += [FadeOut(st[si]), FadeIn(ns), FadeIn(tc), Indicate(tables[[s[0] for s in KVL_SEQS].index(name)], scale_factor=1.06)]
+                st[si] = ns
+            self.play(*anims, run_time=1.1)
+            if t >= 1:
+                self.play(*[Indicate(r, color=KVL_COL[KVL_B[t - 1][0]], scale_factor=1.08) for r in rows], run_time=0.6)
+            hold()
+            if t >= 1:                                   # 算完腾槽
+                ci = (t - 1) % 2
+                ns = status(ci, "空着", GREY)
+                self.play(FadeOut(inslot[ci]), FadeOut(st[ci]), FadeIn(ns), slots[ci].animate.set_stroke(color=GREY_B, width=2), run_time=0.4)
+                self.remove(inslot[ci])
+                st[ci], inslot[ci] = ns, None
+        say("每个字节只搬一次，算的时候下一块已在路上", YELLOW, after=0)
+        self.wait(2.2)
+        # 收尾复位：回到第 0 帧
+        self.play(FadeOut(timeline), FadeOut(kvlab), FadeOut(self.cap), kvbox.animate.set_stroke(color=GREY), run_time=0.5)
+        self.remove(timeline, kvlab, self.cap)
+        self.play(FadeIn(kvlab0), run_time=0.3)
+        self.add(tx(" ", 26, GREY_B).next_to(title, DOWN, buff=0.18))
+        self.wait(0.6)
+
+        os.makedirs(STEPS_DIR, exist_ok=True)
+        with open(os.path.join(STEPS_DIR, "KVLoad.json"), "w") as fh:
             json.dump({"pauses": marks, "duration": round(self.renderer.time, 2)}, fh)

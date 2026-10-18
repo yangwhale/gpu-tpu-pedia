@@ -53,6 +53,8 @@ BODY = '''
     <tr><td>TPU 内存 tile 规则（每 KV 头补齐到整块）</td><td>openxla.org/xla/tiled_layout</td></tr>
     <tr><td>RPA 在 TPU7x 跑 Llama 3 8B：decode 带宽利用最多 86%、prefill 算力利用 73%</td><td>arXiv 2604.15464 摘要</td></tr>
     <tr><td>Ragged Paged Attention 的布局与 kernel 设计</td><td>RPA，arXiv 2604.15464 §2.1.2、§3.1、§3.4、§3.5</td></tr>
+    <tr><td>5.3 KV 怎么搬上芯片：按页表从显存取页、拼成片上一块；Q、KV、输出都双缓冲，算第 j 块时第 j＋1 块已在搬，一条序列算完接着取下一条的第一块；只搬有效长度；同组查询头摞成一个矩阵共用一块 K、V；K、V 合成一趟搬；新 KV 异步写回；decode 调块大小冲带宽、prefill 冲算力利用</td><td>RPA，arXiv 2604.15464 §3.3、算法 1 第 7–13 行、§3.4 开头、§3.1.2、§3.1.3、§3.5。2026-10-18 核对</td></tr>
+    <tr><td>5.3 一层 decode 一步要搬约 256 万 token 的 KV（512 条 × 平均约 5,000）；prefill 同一块 KV 被 G × 查询行数次复用，所以是几百倍</td><td>本课推导：512 × 5,000 ＝ 2,560,000；每块复用次数 ＝ GQA 组大小 G × 一块里的查询行数</td></tr>
     <tr><td>MLA 吸收后 decode 算术强度 242，prefill 每对运算量 3.4×</td><td>DeepSeek-V2 arXiv 2405.04434 §2.1.2；本课推导 278,528 ÷ 1,152、278,528 ÷ 81,920</td></tr>
     <tr><td>MLA 每 token KV 只有同形状 MHA 的约 1/57（故事图卡片 ÷57 同此）</td><td>本课推导：70,272 ÷ 3,997,696（4.1 表）</td></tr>
     <tr><td>故事图：GQA 卡「KV ÷8」；DeepSeek-V2 卡与脚注「KV −93.3%」（对稠密 67B）</td><td>GQA arXiv 2305.13245，÷8 本课推导：64 个查询头分 8 组、每组共用一份 KV；DeepSeek-V2 arXiv 2405.04434 摘要（论文的 −93.3% 混着 6 bit KV 等改动）</td></tr>

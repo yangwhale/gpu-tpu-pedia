@@ -838,7 +838,7 @@ body.figonly section h3{margin-top:34px}
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 93 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 94 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -3915,7 +3915,7 @@ body.figonly section h3{margin-top:34px}
 
 </div></section>
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>单卡里的两块硬骨头：decode 注意力与 MoE</h2></div>
-  <p class="lead">座位坐满后，权重一趟已分给几百人，每一步本身却还慢。一张卡上的 decode 有两块最难啃：注意力读的是每个人自己的 KV（5.1–5.4），MoE 的每个专家只分到几行（5.5）。<b>两块都是搬运问题。</b>最后补一条小 AllReduce（把各卡的部分和加起来再发回每张卡，5.6），它卡的是延迟。</p>
+  <p class="lead">座位坐满后，权重一趟已分给几百人，每一步本身却还慢。一张卡上的 decode 有两块最难啃：注意力读的是每个人自己的 KV（5.1–5.5），MoE 的每个专家只分到几行（5.6）。<b>两块都是搬运问题。</b>最后补一条小 AllReduce（把各卡的部分和加起来再发回每张卡，5.7），它卡的是延迟。</p>
 
   <h3 id="s5-1">5.1　注意力：攒 batch 救不了它</h3>
   <p>长上下文除了占座位（第四节），每人每步要读的 KV 也更长，且各读各的，攒 batch 摊不薄。</p>
@@ -4055,7 +4055,166 @@ body.figonly section h3{margin-top:34px}
 <p>页大小：Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」，原文 decode step latency under Concurrency-512 from 428µs to 283µs（kernel-level）。页的格数只表示 16 与 256 的比例。</p></details></figure>
   <p>RPA 在 TPU7x 上跑 Llama 3 8B，decode 最多用到峰值带宽的 86%，prefill 最多用到峰值算力的 73%，三招拆解见<a href="topic-03.html#s9-2">专题三 §9.2</a>。图右数据出自 Google 开发者博客的公开调优。</p>
 
-  <h3 id="s5-3">5.3　布局：窄维被补成整块</h3>
+  <h3 id="s5-3">5.3　KV 一页页怎么搬上芯片</h3>
+  <p>MLP 和专家那边，一批里的 token 不分是谁的，都是矩阵的一行，权重搬一次全员算完。注意力不行：每条序列的 KV 是它自己的私货，并发 512 就是 512 份，谁也替不了谁。所以注意力 kernel 能做的只剩一件：<b>每个字节只搬一次，搬的时候别让计算单元等。</b></p>
+<figure class="fbox fwide" id="fig-s5-kvload"><svg viewBox="0 0 1400 788" width="100%" role="img" aria-label="左：显存里的 KV 页池，每页 4 个 token，A、B、C 三条序列的页散在各处，各有一张页表。中：片上两个槽，一个装着正在算的块，另一个装着正在搬来的下一块；每块是按页表取来的两页，拼成连续的一块。右：同组 4 个查询头摞成 4 行，对同一块 K、V 算，这块 KV 只搬一次。下：时间轴，搬总比算早一格：算 A 块 1 时搬 A 块 2，算 A 块 2 时已经在搬 B 块 1，序列交界不停；B 块 2 只有 2 个 token、C 只有 3 个 token，就只搬这么多"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KV 一页页怎么搬上芯片　——　<tspan font-weight="700">按页表取，边算边搬，一块喂一组头</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意：每页 4 个 token、每块 2 页、3 条序列；同一条序列同一种颜色</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">A：15 个 token</text>
+<rect x="164.60000000000002" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="185" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">B：10 个 token</text>
+<rect x="329.20000000000005" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="350" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">C：3 个 token</text>
+<rect x="0" y="102" width="540" height="344" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="540" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="540" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="540" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">显存（HBM）：KV 页池</tspan></text>
+<rect x="22" y="150" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="80" y="176" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<rect x="148" y="150" width="116" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="149" y="151" width="114.0" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="206" y="176" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 2 页</tspan></text>
+<rect x="274" y="150" width="116" height="40" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="275" y="151" width="57.0" height="38" rx="3" fill="#fde7d4" stroke="#fde7d4" stroke-width="1.0"/>
+<text class="svgsm" x="332" y="176" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 第 3 页</tspan></text>
+<rect x="400" y="150" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="458" y="176" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<rect x="22" y="200" width="116" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="23" y="201" width="85.5" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="80" y="226" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 4 页</tspan></text>
+<rect x="148" y="200" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="206" y="226" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<rect x="274" y="200" width="116" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="275" y="201" width="114.0" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="332" y="226" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 1 页</tspan></text>
+<rect x="400" y="200" width="116" height="40" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="401" y="201" width="85.5" height="38" rx="3" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1.0"/>
+<text class="svgsm" x="458" y="226" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 第 1 页</tspan></text>
+<rect x="22" y="250" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="80" y="276" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<rect x="148" y="250" width="116" height="40" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="149" y="251" width="114.0" height="38" rx="3" fill="#fde7d4" stroke="#fde7d4" stroke-width="1.0"/>
+<text class="svgsm" x="206" y="276" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 第 1 页</tspan></text>
+<rect x="274" y="250" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="332" y="276" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<rect x="400" y="250" width="116" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="401" y="251" width="114.0" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="458" y="276" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 3 页</tspan></text>
+<rect x="22" y="300" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="80" y="326" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<rect x="148" y="300" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="206" y="326" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<rect x="274" y="300" width="116" height="40" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="275" y="301" width="114.0" height="38" rx="3" fill="#fde7d4" stroke="#fde7d4" stroke-width="1.0"/>
+<text class="svgsm" x="332" y="326" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 第 2 页</tspan></text>
+<rect x="400" y="300" width="116" height="40" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<text class="svgsm" x="458" y="326" fill="#80868b" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">空</text>
+<text class="svgsm" x="22" y="368" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 的页表：格 7 → 格 2 → 格 12 → 格 5</tspan></text>
+<text class="svgsm" x="22" y="394" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 的页表：格 10 → 格 15 → 格 3</tspan></text>
+<text class="svgsm" x="22" y="420" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 的页表：格 8</tspan></text>
+<rect x="558" y="102" width="360" height="344" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="558" y="102" width="360" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="558" y="104" width="360" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="558" y1="132" x2="918" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="572" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片上（VMEM）：两个槽</tspan></text>
+<rect x="578" y="154" width="320" height="104" rx="8" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="594" y="180" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">槽 1　正在算：A 块 1（8 个 token）</tspan></text>
+<rect x="594" y="198" width="132" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="595" y="199" width="130.0" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="660" y="224" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 1 页</tspan></text>
+<rect x="734" y="198" width="132" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="735" y="199" width="130.0" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="800" y="224" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 2 页</tspan></text>
+<rect x="578" y="282" width="320" height="104" rx="8" fill="none" stroke="#80868b" stroke-width="1.6" stroke-dasharray="5,4"/>
+<text class="svgsm" x="594" y="308" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">槽 2　正在搬来：A 块 2（7 个 token）</tspan></text>
+<rect x="594" y="326" width="132" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="595" y="327" width="130.0" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="660" y="352" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 3 页</tspan></text>
+<rect x="734" y="326" width="132" height="40" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="735" y="327" width="97.5" height="38" rx="3" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1.0"/>
+<text class="svgsm" x="800" y="352" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 第 4 页</tspan></text>
+<text class="svgsm" x="738" y="422" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">两页挨着放：散页拼成连续的一块</text>
+<line x1="536" y1="334" x2="574" y2="334" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="936" y="102" width="464" height="344" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="936" y="102" width="464" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="936" y="104" width="464" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="936" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="950" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一块 KV 喂一组查询头</tspan></text>
+<rect x="958" y="162" width="150" height="34" rx="4" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1033" y="185" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">查询头 1</tspan></text>
+<line x1="1112" y1="179" x2="1164" y2="179" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="958" y="204" width="150" height="34" rx="4" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1033" y="227" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">查询头 2</tspan></text>
+<line x1="1112" y1="221" x2="1164" y2="221" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="958" y="246" width="150" height="34" rx="4" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1033" y="269" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">查询头 3</tspan></text>
+<line x1="1112" y1="263" x2="1164" y2="263" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="958" y="288" width="150" height="34" rx="4" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1033" y="311" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">查询头 4</tspan></text>
+<line x1="1112" y1="305" x2="1164" y2="305" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1170" y="162" width="210" height="160" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="1275" y="236" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 块 1 的 K、V</tspan></text>
+<text class="svgsm" x="1275" y="260" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">片上只放一份</text>
+<text class="svgsm" x="958" y="362" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 个头摞成 4 行，一起乘这一块</tspan></text>
+<text class="svgsm" x="958" y="390" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">搬一次，用 4 次：每读 1 字节做 G 次运算</text>
+<rect x="0" y="464" width="1400" height="184" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="464" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="466" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="494" x2="1400" y2="494" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="484" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">时间轴：搬总比算早一格</tspan></text>
+<text class="svgsm" x="136" y="540" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">搬（显存 → 片上）</tspan></text>
+<text class="svgsm" x="136" y="592" fill="#202124" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算（注意力）</tspan></text>
+<rect x="153" y="516" width="190" height="38" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="248" y="541" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 块 1 · 8 个</tspan></text>
+<rect x="153" y="568" width="190" height="38" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="349" y="516" width="190" height="38" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="444" y="541" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 块 2 · 7 个</tspan></text>
+<rect x="349" y="568" width="190" height="38" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="444" y="593" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 块 1</tspan></text>
+<rect x="545" y="516" width="190" height="38" rx="4" fill="#fde7d4" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="640" y="541" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 块 1 · 8 个</tspan></text>
+<rect x="545" y="568" width="190" height="38" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="640" y="593" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 块 2</tspan></text>
+<rect x="741" y="516" width="190" height="38" rx="4" fill="#fde7d4" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="836" y="541" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 块 2 · 2 个</tspan></text>
+<rect x="741" y="568" width="190" height="38" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="836" y="593" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 块 1</tspan></text>
+<rect x="937" y="516" width="190" height="38" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1032" y="541" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 块 1 · 3 个</tspan></text>
+<rect x="937" y="568" width="190" height="38" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1032" y="593" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 块 2</tspan></text>
+<rect x="1133" y="516" width="190" height="38" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="1133" y="568" width="190" height="38" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1228" y="593" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 块 1</tspan></text>
+<text class="svgsm" x="640" y="630" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">↑ A 还没算完，B 块 1 已经在路上</tspan></text>
+<rect x="0" y="666" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="666" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="666" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="693" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每个字节只搬一次，算的时候下一块已在路上</tspan></text>
+<text class="svgsm" x="20" y="724" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">看页池和槽：散页按页表拼成一块搬上片；C 只有 3 个 token，就只搬 3 个。</text>
+<text class="svgsm" x="20" y="748" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">看时间轴：搬总比算早一格，序列交界也不停；右边 4 个头共用同一块 K、V。</text>
+</svg><figcaption><b>先看中间两个槽：一个在算，一个在装下一块；再看时间轴，搬总比算早一格。</b><span class="capmore"><br><em>页、块、序列长度、G＝4 都是示意；规则照 RPA 论文。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>搬运规则：Ragged Paged Attention，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a>。按页表从显存取页、和本步新算的 KV 拼成片上连续的一块（§3.3「Fetch B_kv」）；Q、KV、输出三类块都双缓冲，算第 j 块时已发起第 j＋1 块的 DMA，一条序列算完就接着取下一条的第一块（算法 1 第 7–13 行）；DMA 只搬有效长度（§3.4 开头）；同组查询头摞成 c_q·h_g 行，对同一块 K、V 算（§3.1.2）。</p>
+<p>本步新算的 KV 也在流水线里异步写回页池（§3.3「Update U_kv」），图里没画。</p>
+<p>⚠️ 示意：页大小、块大小、序列长度、页号、G＝4 都是编排的；时间轴每格等宽，真实耗时随 token 数变。</p></details></figure>
+<figure class="fbox fwide" id="anim-kvload">
+<video src="media/topic06-kvload.mp4?v=fde90720" data-pauses="2.55,6.60,11.05,15.50,19.95,24.40" autoplay loop muted playsinline
+       aria-label="动画：左边是显存里的 KV 页池，A、B、C 三条序列的页散在 16 个格子里，下面是三张页表。中间是片上两个槽，右边是四个查询头和一块 K、V，底部是一条两行时间轴：上行搬，下行算。开头按 A 的页表取两页，拼成一块飞进槽 1。之后每一步，一个槽在算、另一个槽同时在装下一块：算 A 块 1 时 A 块 2 飞进槽 2；算 A 块 2 时 A 还没算完，B 块 1 已经飞进槽 1；B 块 2 只有 2 个 token、C 只有 3 个 token，就只搬这么多。每算一块，四个查询头一起亮一下，共用这一块 K、V。时间轴上，搬的那一行总比算的那一行早一格。最后打出一句：每个字节只搬一次，算的时候下一块已在路上。"></video>
+<figcaption>盯住两个槽：一个在算，另一个总在装下一块。
+  <span class="sub">（30 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。规则照 RPA 论文的流水线；页、块、长度是示意。）</span></figcaption></figure>
+  <p>RPA 的做法（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.3、算法 1）拆开是五件事：</p>
+  <ul>
+    <li><b>按页表取。</b>一条序列的 KV 散在页池里不连号的页上。kernel 按页表把几页取来，在片上 VMEM 拼成连续的一块，再交给计算。</li>
+    <li><b>只搬有效长度。</b>长短不齐不靠补齐：最后一页没写满、这一块只有 3 个 token，就只搬 3 个（§3.4）。</li>
+    <li><b>边算边搬。</b>TPU 只有一条指令流，并行全靠异步 DMA。片上留两个槽，算这一块时下一块已在路上；一条序列算完，接着取下一条的第一块，交界处不停。</li>
+    <li><b>一块喂一组头。</b>同组的 G 个查询头摞成 G 行，对同一块 K、V 算。KV 搬上来一次，用 G 次（§3.1.2）。</li>
+    <li><b>新 KV 顺路写回。</b>本步新算的 K、V 拼进同一块参与计算，同时异步写回页池，不另起一趟（§3.3）。</li>
+  </ul>
+  <p>拿并发 512、每条 2K 到 8K 算一笔：平均 5K 的话，decode 一步每层要把约 256 万个 token 的 KV 过一遍（本课推导：512 × 5,000）。这个量躲不掉，能抠的是每趟搬运的效率。每趟 DMA 都有起步开销，所以块要够大：页调大（5.2 图右，428 → 283 µs），K 和 V 并进一趟（5.4，论文 §3.1.3）。</p>
+  <p>prefill 是另一回事：一块查询有几百行，同一块 KV 被这么多行共用，每读一字节的运算跟着多出几百倍（本课推导：G × 查询行数），瓶颈回到算力，走的是 FlashAttention 的路数。所以 RPA 给 decode 和 prefill 各调一套块大小：decode 调到吃满带宽，prefill 调到矩阵单元不空（§3.5）。</p>
+
+  <h3 id="s5-4">5.4　布局：窄维被补成整块</h3>
   <p>TPU 的显存按 tile（图里的「标准箱」）存：最内层（内存里连续排的那一维）和次内层都要补齐，fp8 的次内层补到 32 行。</p>
   <p>KV 头只有 1–2 个，若头这一维落在这两维上，就可能被补成整块，多出的全是空位。</p>
 <figure class="fbox fwide" id="fig-s5-tile"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="同一份 KV 的三种摆法，画成装箱。TPU 显存按标准箱存，一箱 4 KiB，横 128 格、竖 16 行（bf16），装不满也按整箱算。要装的是一个 token、一层的 K 和 V，2 个头 × 128 维，bf16 共 1 KiB。A 让头数占了 128 格那一维，每行只用 2 格，要 16 箱、64 KiB，是真数据的 64 倍。B 让头数占了按行凑整那一维，每箱 16 行只用 2 行，要 2 箱、8 KiB，是真数据的 8 倍；换成 FP8 还是 2 箱 8 KiB，一个字节都没省。C 把 K、V 并起来、换成小箱，正好 1 KiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -4175,7 +4334,7 @@ body.figonly section h3{margin-top:34px}
 <p>XLA 对次内层只有 1–2 的数组有时会改用 2×128 的小 tile（同一份 openxla 文档的 Compact 2nd Minor Layout），具体选哪种由 XLA 的 layout assignment 决定；进到 kernel 里，向量寄存器仍是固定的 8×128×32 位。本图按默认 tile 画。</p></details></figure>
   <p>RPA 的解法是加一个打包维、把 K 和 V 沿头维并起来，逼编译器选最小的 tile（论文 3.1 节）。</p>
 
-  <h3 id="s5-4">5.4　V3 的 MLA：一个阶段一套算法</h3>
+  <h3 id="s5-5">5.5　V3 的 MLA：一个阶段一套算法</h3>
   <p><a href="topic-03.html#s5-2">专题三 §5.2</a> 推过「吸收」：把投影并进查询，所有头直接对同一条压缩后的潜向量算，K/V 不展开。那是 decode 用的，prefill 呢？</p>
 <figure class="fbox fwide" id="fig-s5-mla"><svg viewBox="0 0 1400 634" width="100%" role="img" aria-label="MLA 两种算法的数据流。吸收：缓存里每个 token 只有一条 576 维的压缩 KV，128 个头一起读这一条，每读 1 字节做 242 次运算，decode 用它。展开：先把这一条复制还原成 128 份、每个头一份，各读各的，每读 1 字节只做 1 次运算；prefill 有成千上万个查询，复制的开销被摊薄，用它"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">MLA 的两种算法：一条大家共读，还是先复制 128 份　——　<tspan font-weight="700">decode 用吸收，prefill 用展开</tspan></text>
@@ -4274,7 +4433,7 @@ body.figonly section h3{margin-top:34px}
 <p>画法：576 维画成一条，展开后每份 K＋V 共 320 维按同一比例；128 个头只画 6 个。</p></details></figure>
   <p>decode 缺带宽，用吸收；prefill 缺算力，要的是少算。每个头对每个历史 token，吸收要和 576 维的潜向量做点积、再按其中 512 维加权求和，共 1,088 次乘加；展开后每头 K 192 维、V 128 维，共 320 次，吸收是展开的 3.4 倍（V3 config 推导）。展开多读的字节，prefill 有富余带宽兜着。</p>
 
-  <h3 id="s5-5">5.5　decode 的 MoE：全算比排序便宜</h3>
+  <h3 id="s5-6">5.6　decode 的 MoE：全算比排序便宜</h3>
   <p>1.4 算过，decode 时每个专家平均只分到几行；与其按专家把 token 排序分组，不如让所有 token 都过一遍，没选中的乘 0。</p>
 <figure class="fbox fwide" id="fig-s5-dense"><svg viewBox="0 0 1400 592" width="100%" role="img" aria-label="DeepSeek-V3 一个路由专家，在 TPU v7 的一个 device 上。两组横条，同一把时间尺子。BF16：读一遍权重 23.9 微秒，让 256 个 token 全部过一遍这个专家 19.5 微秒，只算路由到的 8 个 token 0.61 微秒。FP8：读权重 11.95 微秒，256 个 token 全算 9.77 微秒。两种精度下，全算都比读权重快，比值都是 256 除以 313"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">decode 的 MoE：多算一遍比读一遍权重还便宜　——　<tspan font-weight="700">那就别排序了，全算</tspan></text>
@@ -4317,7 +4476,7 @@ body.figonly section h3{margin-top:34px}
 <p>FP8 那一组假设激活值也量化成 FP8 一起乘；只有权重是 FP8、激活值是 BF16 时，算力按 BF16 算，全算 19.5 µs 对读权重 11.95 µs，就不划算了。</p></details></figure>
   <p>搬行本身也能这样换：tpu-inference 2026 年 5 月合入的一项改动，在 batch 小时把排序和还原换成「one-hot 矩阵 × 隐状态」，一次规整的矩阵乘代替按下标取行。Qwen3.5 并发 64 实测总吞吐 +14.5%（1K 进 8K 出）、+7.3%（8K 进 1K 出）；合入后默认关，要用环境变量开（出处见第十六节台账）。</p>
 
-  <h3 id="s5-6">5.6　小 AllReduce 是延迟问题</h3>
+  <h3 id="s5-7">5.7　小 AllReduce 是延迟问题</h3>
 <figure class="fbox fwide" id="fig-s5-allreduce"><svg viewBox="0 0 1400 566" width="100%" role="img" aria-label="小 decode 的 AllReduce 花在哪里，对数时间轴。按带宽算，4 张 GB200 之间对一份 14 KiB 的数据做 AllReduce 只要约 24 纳秒；论文算出的硬件下限是 1.404 微秒；NCCL 环形实测平均 11.0 微秒；论文的低延迟实现 2.37 微秒。实测是带宽项的约 460 倍"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">小 decode 的 AllReduce：搬数据只占一根头发丝　——　<tspan font-weight="700">它是延迟问题</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">对数时间轴，每一格 10 倍。4 张 GB200，NVLink 域内。灰条是本课按带宽算的；其余三条是论文实测或论文算出的下限</text>
@@ -10409,7 +10568,7 @@ body.figonly section h3{margin-top:34px}
   <h3 id="s14-4">14.4　跑得快：Qwen3.5 先砍 MoE，K3 整个写成一块</h3>
   <p>先还一笔自己欠的税：统一池上线那天 PCP8 掉了约一成八。kernel 每个 tile 都把 GDN 状态的布局换一遍，每条序列换一次其实就够，统一池 prefill 因此慢 2.2 倍（同一 kernel 比不用池）。修法是在引用上换视图（bitcast 加 reshape），只改元数据不搬数据，指令包 366 → 87。</p>
   <p>再往上砍，三条理由跟前面一样：<b>HBM 在空等，通信露在外面，布局把窄维补成整块。</b>TPU 多一条：XLA 未必把通信藏到你想藏的地方，所以最大的一刀都是手写 Pallas 拿回调度权。</p>
-  <p><b>prefill 先砍 MoE</b>，它占了约八成时间。四刀依次是：SparseCore 合并（<a href="#s5-5">5.5</a>）、通信切块（<a href="#s5-6">5.6</a>）、整层融合（<a href="#s6-7">6.7</a>）、修剪 kernel。</p>
+  <p><b>prefill 先砍 MoE</b>，它占了约八成时间。四刀依次是：SparseCore 合并（<a href="#s5-6">5.6</a>）、通信切块（<a href="#s5-7">5.7</a>）、整层融合（<a href="#s6-7">6.7</a>）、修剪 kernel。</p>
 <figure class="fbox fwide" id="fig-s13-ladder"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="Qwen3.5-397B 在单机 TPU v7x-8 上 DP8 prefill 吞吐的四级台阶，按私有实测指数化，起点记 1.00。SparseCore 合并这一刀乘 1.06，到 1.06；通信切块乘 1.09，到 1.16；整层 MoE 融合成一个 Pallas 程序乘 1.26，到 1.45，是最大的一级；修剪 kernel 内部乘 1.09，到 1.58。虚线是同期首尾实测之比 1.59，四刀几乎解释了全部涨幅"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">Qwen3.5-397B prefill 刀谱　——　<tspan font-weight="700">最大的一级是整层融合</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">私有实测指数化：单机 v7x-8、DP8 注意力 ＋ EP8 专家，prefill 吞吐，起点那天 ＝ 1.00。柱内大字是累计值，小字是这一刀相对上一级的倍数</text>
@@ -10466,7 +10625,7 @@ body.figonly section h3{margin-top:34px}
 <p>连乘 1.0565 × 1.0945 × 1.2553 × 1.091 ≈ 1.584，同期首尾实测之比 ≈ 1.592，均为本课推导；差的 0.5% 是台阶之间的日间漂移，与起点那段小幅回落相抵后的余数。绝对吞吐与对外对比口径不画。</p></details></figure>
   <p>整层融合是最大一级：改前 reduce-scatter 约占两成时间、没东西和它重叠；写成一个 Pallas 程序后，kernel 自己选专家、把每行推给持有它的 rank，通信藏到矩阵乘后面。它撞过一次墙：路由表整份放进 1 MiB 的 SMEM，token 一多装不下，改成按窗口流进去才放开档位。</p>
   <p>四级连乘约 1.58，同期实测约 1.59，只差半个百分点。拆得这么干净，靠每刀先合进代码、默认关、用环境变量打开，开关前后天然一组 A/B（<a href="#s10-7">10.7</a>）。</p>
-  <p><b>decode 砍布局和小 batch</b>：KV 让序列维放最内层，FP8 才真省字节（<a href="#s5-3">5.3</a>）；小 batch 的 MoE 不排序，每个被选中的专家只读一次，daily 涨约一成二（<a href="#s5-5">5.5</a>）；线性层状态存 BF16、计算时提回 FP32，KV 池多装约一成二，同时在跑的请求 208 → 232，精度验收还没收尾。</p>
+  <p><b>decode 砍布局和小 batch</b>：KV 让序列维放最内层，FP8 才真省字节（<a href="#s5-4">5.4</a>）；小 batch 的 MoE 不排序，每个被选中的专家只读一次，daily 涨约一成二（<a href="#s5-6">5.6</a>）；线性层状态存 BF16、计算时提回 FP32，KV 池多装约一成二，同时在跑的请求 208 → 232，精度验收还没收尾。</p>
   <p>读数陷阱：换布局那天 decode 快了好几倍（相对前一天），那是修好了前一版的退化，不能记给这一刀。<b>台阶好看得离谱时，先查基线那天是不是本来就坏着。</b></p>
   <div class="note"><span class="t">K3 对照③</span>K3 只追 1 到 8 条，一步几乎全在读权重，按 config 推一个 token 读约 158 GB（本课推导，<a href="#s1-2">1.2</a>）。Inferact 把 92 个 MoE 层装进一次 Pallas 调用，跑在 16 颗 v7 上。挑三刀：
   <ul>
@@ -11119,6 +11278,8 @@ body.figonly section h3{margin-top:34px}
     <tr><td>TPU 内存 tile 规则（每 KV 头补齐到整块）</td><td>openxla.org/xla/tiled_layout</td></tr>
     <tr><td>RPA 在 TPU7x 跑 Llama 3 8B：decode 带宽利用最多 86%、prefill 算力利用 73%</td><td>arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> 摘要</td></tr>
     <tr><td>Ragged Paged Attention 的布局与 kernel 设计</td><td>RPA，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §2.1.2、§3.1、§3.4、§3.5</td></tr>
+    <tr><td>5.3 KV 怎么搬上芯片：按页表从显存取页、拼成片上一块；Q、KV、输出都双缓冲，算第 j 块时第 j＋1 块已在搬，一条序列算完接着取下一条的第一块；只搬有效长度；同组查询头摞成一个矩阵共用一块 K、V；K、V 合成一趟搬；新 KV 异步写回；decode 调块大小冲带宽、prefill 冲算力利用</td><td>RPA，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a> §3.3、算法 1 第 7–13 行、§3.4 开头、§3.1.2、§3.1.3、§3.5。2026-10-18 核对</td></tr>
+    <tr><td>5.3 一层 decode 一步要搬约 256 万 token 的 KV（512 条 × 平均约 5,000）；prefill 同一块 KV 被 G × 查询行数次复用，所以是几百倍</td><td>本课推导：512 × 5,000 ＝ 2,560,000；每块复用次数 ＝ GQA 组大小 G × 一块里的查询行数</td></tr>
     <tr><td>MLA 吸收后 decode 算术强度 242，prefill 每对运算量 3.4×</td><td>DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a> §2.1.2；本课推导 278,528 ÷ 1,152、278,528 ÷ 81,920</td></tr>
     <tr><td>MLA 每 token KV 只有同形状 MHA 的约 1/57（故事图卡片 ÷57 同此）</td><td>本课推导：70,272 ÷ 3,997,696（4.1 表）</td></tr>
     <tr><td>故事图：GQA 卡「KV ÷8」；DeepSeek-V2 卡与脚注「KV −93.3%」（对稠密 67B）</td><td>GQA arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>，÷8 本课推导：64 个查询头分 8 组、每组共用一份 KV；DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a> 摘要（论文的 −93.3% 混着 6 bit KV 等改动）</td></tr>

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""专题六 · 第五节「单卡里的两块硬骨头」的五张图。
+r"""专题六 · 第五节「单卡里的两块硬骨头」的七张图。
 
 回答的问题（一张图一个）：
   ① fig6-s5-amortize  攒 batch 为什么只救得了权重、救不了注意力？
@@ -8,6 +8,9 @@ r"""专题六 · 第五节「单卡里的两块硬骨头」的五张图。
   ③ fig6-s5-mla       MLA 的两种算法为什么各占一个阶段？（decode 看每字节几次运算，prefill 看总运算量）
   ④ fig6-s5-dense     decode 时 MoE 为什么可以「让所有 token 都过这个专家」？
   ⑤ fig6-s5-allreduce 小 decode 的 AllReduce 为什么是延迟问题？
+  ⑥ fig6-s5-rpa       一个 kernel 怎么同时装下 prefill 和 decode？KV 页调大为什么便宜？
+  ⑦ fig6-s5-kvload    散在显存里的 KV 页，怎么一块块搬上片、边算边搬、一块喂一组查询头？
+                      动画版是 manim/topic06-anim-serve.py 的 KVLoad，同一组示意数。
 
 数从哪来：
   · Llama-3.1-70B config.json（hidden 8192、80 层、64 查询头、8 KV 头、intermediate 28672、vocab 128256、
@@ -25,6 +28,8 @@ r"""专题六 · 第五节「单卡里的两块硬骨头」的五张图。
     所以这张图用稠密的 Llama-3.1-70B，不用 V3。
   · ② 只画 K/V 的一个 token 一层；没画 XLA 在某些形状上会选的「compact 2nd minor」小 tile（见出处）。
   · ④ 没画排序和搬行本身花多久：那取决于实现，没有公开的同口径分解数据。
+  · ⑦ 页号、序列长度、每页 4 个 token、每块 2 页、G＝4 都是示意；规则照 RPA 论文 §3.3、算法 1 第 7–13 行、
+    §3.4、§3.1.2。没画两个 TensorCore 怎么分序列（论文没写），新 KV 写回只在底注一句带过。
   · ⑤ TPU 的 ICI 小消息延迟没有找到公开数据，所以全图是 GPU 的数。
 """
 import math
@@ -505,9 +510,134 @@ def fig_rpa():
     f.save("fig6-s5-rpa.svg", yb + 14)
 
 
+# ════════════════════════════════════════════════════════════════════
+# ⑦ KV 一页页怎么搬上芯片（示意；规则照 RPA 论文的流水线）
+# ════════════════════════════════════════════════════════════════════
+# ⚠️ 示意：每页 4 个 token、每块 2 页、3 条序列、页号都是编排的，与 topic06-anim-serve.py 的 KVLoad 同一组数。
+KVL_PAGE, KVL_BLK, KVL_POOL, KVL_G = 4, 2, 16, 4
+KVL_SEQS = [("A", 15, [6, 1, 11, 4]), ("B", 10, [9, 14, 2]), ("C", 3, [7])]
+KVL_COL = {"A": BL, "B": OR, "C": GR}
+KVL_TINT = {"A": "#e8f0fe", "B": "#fde7d4", "C": "#e6f4ea"}
+
+
+def kvl_blocks():
+    """按序列先后、每块 KVL_BLK 页切块；每块只算有效 token（最后一页可能没满）。"""
+    out = []
+    for name, n, pages in KVL_SEQS:
+        assert len(pages) == -(-n // KVL_PAGE)
+        for b in range(0, len(pages), KVL_BLK):
+            pg = pages[b:b + KVL_BLK]
+            out.append((name, b // KVL_BLK + 1, pg, min(n, (b + len(pg)) * KVL_PAGE) - b * KVL_PAGE))
+    return out
+
+
+KVL_B = kvl_blocks()
+assert [(b[0], b[1], b[3]) for b in KVL_B] == [("A", 1, 8), ("A", 2, 7), ("B", 1, 8), ("B", 2, 2), ("C", 1, 3)]
+_used = [p for _, _, ps in KVL_SEQS for p in ps]
+assert len(set(_used)) == len(_used) and max(_used) < KVL_POOL
+assert all(any(b - a != 1 for a, b in zip(ps, ps[1:])) for _, _, ps in KVL_SEQS if len(ps) > 1)   # 每条的页都不连号
+
+
+def fig_kvload():
+    f = Fig(W, "左：显存里的 KV 页池，每页 4 个 token，A、B、C 三条序列的页散在各处，各有一张页表。"
+               "中：片上两个槽，一个装着正在算的块，另一个装着正在搬来的下一块；每块是按页表取来的两页，拼成连续的一块。"
+               "右：同组 4 个查询头摞成 4 行，对同一块 K、V 算，这块 KV 只搬一次。"
+               "下：时间轴，搬总比算早一格：算 A 块 1 时搬 A 块 2，算 A 块 2 时已经在搬 B 块 1，序列交界不停；"
+               "B 块 2 只有 2 个 token、C 只有 3 个 token，就只搬这么多")
+    y0 = f.header("KV 一页页怎么搬上芯片　——　<tspan font-weight=\"700\">按页表取，边算边搬，一块喂一组头</tspan>",
+                  "示意：每页 4 个 token、每块 2 页、3 条序列；同一条序列同一种颜色",
+                  [(BL, "A：15 个 token"), (OR, "B：10 个 token"), (GR, "C：3 个 token")])
+    PH = 344
+    where = {p: (name, i + 1, min(KVL_PAGE, n - i * KVL_PAGE)) for name, n, ps in KVL_SEQS for i, p in enumerate(ps)}
+    # ── 左：页池 ────────────────────────────────────────────────
+    LW = 540
+    py = f.panel(0, y0, LW, PH, "显存（HBM）：KV 页池", INK)
+    PW, PHh, GX, GY_ = 116, 40, 10, 10
+    for k in range(KVL_POOL):
+        x, y = 22 + (k % 4) * (PW + GX), py + 18 + (k // 4) * (PHh + GY_)
+        if k in where:
+            name, i, ntok = where[k]
+            col = KVL_COL[name]
+            f.box(x, y, PW, PHh, "#fff", col, 4, 1.4)
+            f.box(x + 1, y + 1, (PW - 2) * ntok / KVL_PAGE, PHh - 2, KVL_TINT[name], KVL_TINT[name], 3)
+            f.t(x + PW / 2, y + 26, "%s 第 %d 页" % (name, i), col, True, 15, "middle")
+        else:
+            f.box(x, y, PW, PHh, "#fff", LINE, 4, dash="4,3")
+            f.t(x + PW / 2, y + 26, "空", GY2, size=13, anchor="middle")
+    ty = py + 18 + 4 * (PHh + GY_) + 18
+    for j, (name, n, ps) in enumerate(KVL_SEQS):
+        f.t(22, ty + j * 26, "%s 的页表：%s" % (name, " → ".join("格 %d" % (p + 1) for p in ps)), KVL_COL[name], True, 15)
+    # ── 中：片上两个槽 ──────────────────────────────────────────
+    MX, MW = LW + 18, 360
+    py2 = f.panel(MX, y0, MW, PH, "片上（VMEM）：两个槽", PU)
+    def slot(y, title, blk, busy):
+        name, bi, pg, ntok = blk
+        col = KVL_COL[name]
+        f.box(MX + 20, y, MW - 40, 104, "none", col if busy else GY2, 8, 1.6, dash=None if busy else "5,4")
+        f.t(MX + 36, y + 26, title, col if busy else GY, True, 15)
+        for q in range(KVL_BLK):
+            xx = MX + 36 + q * 140
+            ntk = min(KVL_PAGE, ntok - q * KVL_PAGE) if q < len(pg) else 0
+            if ntk > 0:
+                f.box(xx, y + 44, 132, 40, "#fff", col, 4, 1.4)
+                f.box(xx + 1, y + 45, 130 * ntk / KVL_PAGE, 38, KVL_TINT[name], KVL_TINT[name], 3)
+                f.t(xx + 66, y + 70, "%s 第 %d 页" % (name, (bi - 1) * KVL_BLK + q + 1), col, True, 15, "middle")
+    slot(py2 + 22, "槽 1　正在算：A 块 1（8 个 token）", KVL_B[0], True)
+    slot(py2 + 150, "槽 2　正在搬来：A 块 2（7 个 token）", KVL_B[1], False)
+    f.t(MX + MW / 2, py2 + 290, "两页挨着放：散页拼成连续的一块", INK, size=14, anchor="middle")
+    f.line(LW - 4, py2 + 202, MX + 16, py2 + 202, PU, 1.8)
+    # ── 右：一块喂一组头 ────────────────────────────────────────
+    RX = MX + MW + 18
+    RW = W - RX
+    py3 = f.panel(RX, y0, RW, PH, "一块 KV 喂一组查询头", GR)
+    for h in range(KVL_G):
+        f.box(RX + 22, py3 + 30 + h * 42, 150, 34, "#fff", INK, 4, 1.2)
+        f.t(RX + 97, py3 + 53 + h * 42, "查询头 %d" % (h + 1), INK, True, 14, "middle")
+        f.line(RX + 176, py3 + 47 + h * 42, RX + 228, py3 + 47 + h * 42, GY2, 1.2)
+    f.box(RX + 234, py3 + 30, 210, 160, "#e8f0fe", BL, 6, 1.6)
+    f.t(RX + 339, py3 + 104, "A 块 1 的 K、V", BL, True, 16, "middle")
+    f.t(RX + 339, py3 + 128, "片上只放一份", GY, size=14, anchor="middle")
+    f.t(RX + 22, py3 + 230, "4 个头摞成 4 行，一起乘这一块", INK, True, 15)
+    f.t(RX + 22, py3 + 258, "搬一次，用 4 次：每读 1 字节做 G 次运算", GY, size=14)
+    # ── 下：时间轴 ──────────────────────────────────────────────
+    ty0 = y0 + PH + 18
+    TH = 184
+    pt = f.panel(0, ty0, W, TH, "时间轴：搬总比算早一格", INK)
+    CX, CWd = 150, 196
+    for r, lab in enumerate(("搬（显存 → 片上）", "算（注意力）")):
+        f.t(CX - 14, pt + 46 + r * 52, lab, INK, True, 14, "end")
+    n = len(KVL_B)
+    for c in range(n + 1):
+        for r in range(2):
+            k = c if r == 0 else c - 1
+            x, y = CX + c * CWd, pt + 22 + r * 52
+            if 0 <= k < n:
+                name, bi, pg, ntok = KVL_B[k]
+                col = KVL_COL[name]
+                f.box(x + 3, y, CWd - 6, 38, KVL_TINT[name] if r == 0 else col, col, 4, 1.4)
+                f.t(x + CWd / 2, y + 25, "%s 块 %d · %d 个" % (name, bi, ntok) if r == 0 else "%s 块 %d" % (name, bi),
+                    col if r == 0 else "#ffffff", True, 14, "middle")
+            else:
+                f.box(x + 3, y, CWd - 6, 38, "#fff", LINE, 4, dash="4,3")
+    f.t(CX + 2 * CWd + CWd / 2, pt + 136, "↑ A 还没算完，B 块 1 已经在路上", OR, True, 14, "middle")
+    f._pan = None
+    yb = f.band(ty0 + TH + 18, "ok", "每个字节只搬一次，算的时候下一块已在路上", [
+        "看页池和槽：散页按页表拼成一块搬上片；C 只有 3 个 token，就只搬 3 个。",
+        "看时间轴：搬总比算早一格，序列交界也不停；右边 4 个头共用同一块 K、V。",
+    ])
+    yb = f.src(yb + 10,
+               "搬运规则：Ragged Paged Attention，arXiv 2604.15464。按页表从显存取页、和本步新算的 KV 拼成片上连续的一块（§3.3「Fetch B_kv」）；"
+               "Q、KV、输出三类块都双缓冲，算第 j 块时已发起第 j＋1 块的 DMA，一条序列算完就接着取下一条的第一块（算法 1 第 7–13 行）；"
+               "DMA 只搬有效长度（§3.4 开头）；同组查询头摞成 c_q·h_g 行，对同一块 K、V 算（§3.1.2）。",
+               "本步新算的 KV 也在流水线里异步写回页池（§3.3「Update U_kv」），图里没画。",
+               "⚠️ 示意：页大小、块大小、序列长度、页号、G＝4 都是编排的；时间轴每格等宽，真实耗时随 token 数变。")
+    f.save("fig6-s5-kvload.svg", yb + 14)
+
+
 fig_amortize()
 fig_tile()
 fig_mla()
 fig_dense()
 fig_allreduce()
 fig_rpa()
+fig_kvload()
