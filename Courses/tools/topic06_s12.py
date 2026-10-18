@@ -71,7 +71,7 @@ __FIG_S12_KVLAYOUT__
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数来自 megakernel 加 DSpark 投机，博客没提量化。
-    留下的问题：TPU 上每种 batch 形状都要先编译，人数一变就可能现编（第十四节）。</div>
+    留下的问题：这些招都默认 KV 能按 token 截、按块搬；线性层只有一份状态时，前缀复用、切序列、拆机器都要重想（第十三节）。</div>
 '''
 
 FIGS = {

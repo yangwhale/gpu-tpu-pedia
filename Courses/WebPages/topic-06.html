@@ -9917,7 +9917,7 @@ body.figonly section h3{margin-top:34px}
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数来自 megakernel 加 DSpark 投机，博客没提量化。
-    留下的问题：TPU 上每种 batch 形状都要先编译，人数一变就可能现编（第十四节）。</div>
+    留下的问题：这些招都默认 KV 能按 token 截、按块搬；线性层只有一份状态时，前缀复用、切序列、拆机器都要重想（第十三节）。</div>
 
 </div></section>
 <section id="s十三"><div class="wrap"><div class="stn"><span class="badge">第 十三 节</span><h2>新架构出难题：状态没法按 token 切</h2></div>
@@ -10949,7 +10949,7 @@ body.figonly section h3{margin-top:34px}
 </svg><figcaption><b>输入占大头；紫色那段就是磁盘 KV 缓存替 prefill 省下的。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 github.com/deepseek-ai/open-infra-index 202502OpenSourceWeek/day_6（2025-03-01 公布，统计 2025-02-27～28）：226.75 节点、输入 6,080 亿（其中 3,420 亿命中磁盘 KV，56.3%）、输出 1,680 亿。</p>
 <p>⚠️ 本课推导：未命中 ＝ 6,080 − 3,420 ＝ 2,660 亿；各段占比 ＝ 段 ÷ 7,760 亿；1,814 ＝ 226.75 × 8；每卡每秒 ＝ 7,760 亿 ÷ 86,400 s ÷ 1,814 卡。分母是全部卡、全天平均，不是 decode 卡的峰值。</p></details></figure>
   <p>这套服务用的正是表里的 MLA、大 EP 加 PD 分离、磁盘 KV 缓存和 FP8。</p>
-  <p class="landing">⭐ 回到 2022 年那一批人：等最长的那个 → 每步换人，座位却不够 → 分页、压薄、复用 → 长 prompt 插队 → 切块，再拆成两批机器 → MoE 拆散 batch → 大 EP → prefill 喂不上，重配台数 → 输出变长 → 投机 → 再少搬字节。<b>同一套硬件光改软件，每卡已是首发日的 5.1 倍。</b>下一个洞已经露出来：线性注意力的状态截不回任意位置，前缀难复用；K3 每个 rank 存整池 KDA 状态，DEP8 加载即 OOM（4.5、6.3）。</p>
+  <p class="landing">⭐ 回到 2022 年那一批人：等最长的那个 → 每步换人，座位却不够 → 分页、压薄、复用 → 长 prompt 插队 → 切块，再拆成两批机器 → MoE 拆散 batch → 大 EP → prefill 喂不上，重配台数 → 输出变长 → 投机 → 再少搬字节。<b>同一套硬件光改软件，每卡已是首发日的 5.1 倍。</b>下一个洞已经露出来，就是第十三节那件事：线性层的状态截不开，前缀难复用；TPU 上跑 Qwen3.5，前缀缓存至今还得关（14.3）。</p>
 
 </div></section>
 <section id="s十六"><div class="wrap"><div class="stn"><span class="badge">第 十六 节</span><h2>出处台账</h2></div>
