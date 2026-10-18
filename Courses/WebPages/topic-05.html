@@ -773,11 +773,11 @@ h4 { margin:18px 0 6px; font-size:15px }
 @media (max-width:720px){.figbar{right:70px;bottom:18px}
   .figbar .hint{display:none}
   .figbar button{padding:8px 13px;font-size:13px}}
-body.figonly section p:not(.lead):not(.landing),
-body.figonly section ul,
-body.figonly section ol,
-body.figonly section pre,
-body.figonly section .note{display:none}
+body.figonly section p:not(.lead):not(.landing):not(.peek, .peek *, details[open] *),
+body.figonly section ul:not(.peek, .peek *, details[open] *),
+body.figonly section ol:not(.peek, .peek *, details[open] *),
+body.figonly section pre:not(.peek, .peek *, details[open] *),
+body.figonly section .note:not(.peek, .peek *, details[open] *){display:none}
 /* ⛔ 防守：这两类里的 p 都不该被上面那条误伤 */
 body.figonly section figure p{display:revert}
 /* ⛔⛔ 2026-09-16：题目的题干是 <p class="q">，会被上面那条连题一起藏掉 ——&#160;
@@ -792,7 +792,7 @@ body.figonly .guess p{display:revert}
      引文是「故事」，不是「主线」，而折叠模式的定义就是只留主线。
    ⭐ 判据（上一次是 .guess p，这次反过来）：**一条写得太宽的全局规则，
      既会误伤该留的，也会留下该走的空壳 ——&#160;而空壳是静默的，更难发现。** */
-body.figonly section blockquote{display:none}
+body.figonly section blockquote:not(.peek, .peek *, details[open] *){display:none}
 /* ⭐⭐ 2026-09-16：图注是折叠模式下最大的一块字（48 条共 4960 字，占露出来
    的六成四）。⛔ 但图注不能整条藏 ——&#160;它是「看图该看什么」的指路。
    ⭐ 折中：**只留第一个 <br> 之前那一段**，后面的收起来。
@@ -803,8 +803,23 @@ body.figonly section blockquote{display:none}
    ⚠️ 上一轮留图注的理由是「它是看图该看什么的指路」——&#160;那条理由没错，
      但它跟「投屏时小字看不见」这条冲突，而讲课场景优先。
      展开模式下图注一个字没少。 */
-body.figonly figcaption{display:none}
+body.figonly figcaption:not(.peek, .peek *, details[open] *){display:none}
 body.figonly section h3{margin-top:34px}
+/* ⛔⛔ 2026-10-18 现场原话：「被你折起来的章节就那丢着，内容凭空消失了」
+   「有些地方点开以后里边还是空的」。两个病一个根：上面那几条写的是
+   「section 里所有 p／ul」，**连 <details> 里面的也一起藏** ——&#160;
+   读者亲手点开的折叠框，壳开了、内容还是被这层规则压着。
+   ⭐ 判据：**读者亲手点开的东西，优先级高于全局折叠。** 两种点开都要赢：
+     ① <details open>（考考自己、出处台账这类）；
+     ② 每个小节标题旁的「展开这一小节」（.peek，JS 按需挂上）。
+   ⭐ 做法是在每条隐藏规则后面加 :not(.peek, .peek *, details[open] *) ——&#160;
+     **让藏的规则不命中**，而不是再写一条 display:revert 去顶：revert 会退回浏览器默认，
+     把作者写的 flex／grid 一起冲掉。 */
+.peekbtn{display:none}
+body.figonly .peekbtn{display:inline-block;margin:0 0 6px;padding:2px 10px;font-size:13px;
+  color:var(--muted,#5f6368);background:none;border:1px dashed var(--line,#dadce0);
+  border-radius:12px;cursor:pointer}
+body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </style>
 <style>
 /* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
@@ -7425,6 +7440,29 @@ document.querySelectorAll('video[data-pauses]').forEach(function(v){
                           : ("全展开　·　按 T 切换");
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
   }
+  // ⭐ 2026-10-18：折叠不能折得「凭空消失」。每个小节标题后面挂一个小按钮，
+  //   只在折叠模式显示；点了只展开这一小节，别的照旧收着。
+  //   小节 ＝ 一个标题到下一个标题之间的兄弟元素；里面没有会被藏的东西就不挂。
+  var HID = "p:not(.lead):not(.landing), ul, ol, pre, .note, blockquote, figcaption";
+  //   节标题在 .stn 里（h2 包在 div 中），小节标题是 .wrap 下的 h3。
+  document.querySelectorAll("section").forEach(function(sec){
+    sec.querySelectorAll(".stn, h3").forEach(function(h){
+      var grp = [], el = h.nextElementSibling;
+      while (el && el.tagName !== "H3" && !el.classList.contains("stn")){
+        if (el.matches(HID) || el.querySelector(HID)) grp.push(el);
+        el = el.nextElementSibling;
+      }
+      if (!grp.length) return;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ 展开这一小节";
+      b.addEventListener("click", function(){
+        var on = !grp[0].classList.contains("peek");
+        grp.forEach(function(x){ x.classList.toggle("peek", on); });
+        b.textContent = on ? "▾ 收起这一小节" : "▸ 展开这一小节";
+      });
+      h.insertAdjacentElement("afterend", b);
+    });
+  });
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
   // ⛔ 默认**展开**。2026-09-17 麻瓜审：默认折叠会让第一次点进来的人
   //   看到一份被挖空的教材（整节正文不见、九张图的图注全不见）。
