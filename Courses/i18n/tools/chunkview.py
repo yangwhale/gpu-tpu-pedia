@@ -1,6 +1,6 @@
 """单块中英并排渲染（改完自查用）：python3 chunkview.py NN WIDTH OUTDIR
 产出 OUTDIR/cvNN-WIDTH-kkk.png（按锚点对齐的并排切片）。只用当前块文件，不碰整页。"""
-import os
+import re, os
 WORK = os.environ.get('I18N_WORK', '/tmp/t02en')
 TOPIC = os.environ.get('I18N_TOPIC', 'topic-02')
 import sys, re, pathlib, importlib.util
@@ -21,6 +21,9 @@ def page(lang):
     if lang == 'en':
         h = h.replace('lang="zh-CN"', 'lang="en"').replace('</title>', '</title><style>'+ff+'</style>')
         h = h.replace('"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif', m.LATIN)
+        # 讲义页还有第二套字体栈（与 assemble.py 同步）—— 漏换会让英文弯引号按汉字宽度量，测出来偏长
+        h = re.sub(r'"Noto Sans CJK SC","PingFang SC"(,"Microsoft YaHei")?(,-apple-system)?,sans-serif', m.LATIN, h)
+        h = h.replace('"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",Georgia,serif', 'Georgia,"Source Serif 4","Times New Roman","Noto Serif CJK SC",serif')
         body = body.replace("'Noto Sans CJK SC'", "'Source Sans 3','Noto Sans CJK SC'")
     return h + body + '</body></html>'
 shots = {}; anchors = {}

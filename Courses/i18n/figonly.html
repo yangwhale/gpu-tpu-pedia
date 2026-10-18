@@ -24,6 +24,13 @@ body.figonly section .note{display:none}
 body.figonly section figure p{display:revert}
 
 body.figonly .guess p{display:revert}
+body.figonly section .guess p:not(.lead):not(.landing){display:revert}
+body.figonly .guess .rev .grid{clear:both}
+
+body.figonly section .card p:not(.lead):not(.landing){display:revert}
+body.figonly .toc ol{display:grid}
+body.figonly .toc ul{display:revert}
+body.figonly .fo-empty{display:none}
 
 body.figonly section blockquote{display:none}
 
@@ -52,6 +59,27 @@ body.figonly section h3{margin-top:34px}
                    : ("All narration shown; press T to hide");
     hint.textContent = on ? (n + " hidden · press T") : ("All shown · press T");
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
+    // 折叠后只剩光杆的小标题（下面到下一个标题之间全被藏了）也一并藏起来
+    document.querySelectorAll("section h4").forEach(function(h){
+      h.classList.remove("fo-empty"); if (!on || h.closest(".guess")) return;
+      var el = h.nextElementSibling, vis = false;
+      while (el && !/^H[2-4]$/.test(el.tagName)) {
+        if (el.getClientRects().length && el.getBoundingClientRect().height > 0) { vis = true; break; }
+        el = el.nextElementSibling;
+      }
+      if (!vis) h.classList.add("fo-empty");
+    });
+    // 折叠后展开块里什么都不剩（正文全被藏了）：整颗藏掉，免得点开是空的
+    document.querySelectorAll("section details").forEach(function(d){
+      d.classList.remove("fo-empty"); if (!on) return;
+      var was = d.open; d.open = true; var vis = false;
+      for (var c = d.firstElementChild; c; c = c.nextElementSibling) {
+        if (c.tagName === "SUMMARY") continue;
+        if (!c.getClientRects().length) continue;
+        if ((c.innerText || "").trim().length || c.querySelector("svg,img,video,canvas") || /^(SVG|IMG|VIDEO|CANVAS|FIGURE)$/i.test(c.tagName)) { vis = true; break; }
+      }
+      d.open = was; if (!vis) d.classList.add("fo-empty");
+    });
   }
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
   set(saved === null ? true : saved === "1");

@@ -190,7 +190,10 @@ def main(topic, d):
             # 对内联 style 定过字号的标签同样生效（按等宽字体留的宽度足够装下）
             if h.get('fsa'): rules += '.svgsm,.svgtxt,.svglbl{font-size-adjust:%s}' % h['fsa']
         rules += '.figsrc>summary{font-family:'+LATIN.replace("'",'"')+'}'   # 出处折叠标题：中文落回无衬线，英文别显示成等宽
-        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){th{white-space:normal}.jstep span{font-size:9px}}'
+        # 卡片小标题：中文 12px 粗体灰字读起来是「标题」；英文同样式会变成大写加字距的小标签，显得又轻又小（PAR10 专题一 R6）
+        if re.search(r'\.card h4\s*\{[^}]*text-transform:\s*uppercase', css):
+            rules += '.card h4{text-transform:none;letter-spacing:0;font-size:13px}'
+        rules += '.jstep span{white-space:nowrap}@media(max-width:600px){th{white-space:normal;letter-spacing:0}.jstep span{font-size:9px}}'
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
     def put(m):
@@ -227,6 +230,9 @@ def main(topic, d):
             txt = re.sub(r'<[^>]+>', '', body)
             letters = len(re.findall(r'[A-Za-z]', txt)); digits = len(re.findall(r'[0-9]', txt))
             if not re.search(r'[A-Za-z]{3,}', txt) or digits > letters * 0.3:
+                return m.group(0)
+            # 代码标识符（o_proj、q_b_proj …）在中文里也是等宽粗体 —— 留等宽，别改成无衬线（PAR10 专题一 R3）
+            if re.search(r'[A-Za-z0-9]_[A-Za-z0-9]', txt):
                 return m.group(0)
             fam = 'font-family:' + LATIN.replace('"', "'") + ';'
             if 'style="' in tag: tag = tag.replace('style="', 'style="' + fam, 1)
