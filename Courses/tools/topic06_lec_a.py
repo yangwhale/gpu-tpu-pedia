@@ -239,6 +239,7 @@ Orca 是一篇论文里的系统，今天没人直接跑它，跑的是它的招
 <p class="board"><b>🖥 屏幕</b>：滚到「3.3　一步里装了什么：新人怎么接上」，放 <code>anim-stepmix</code>，第 2 步停下指 E 的「首字」。</p>
 
 <p class="say">「有人以为 prefill 做完的人要在门口等着并进 decode 的队。不用：最后一块算完那一步，首字当步就出，下一步它就是一格普通 decode。<br>
+vLLM 就像动画里这样，一步里混着跑。SGLang 默认不混，一步要么跑一块 prefill，要么全员 decode，加 enable mixed chunk 这个开关才混。不混也不用等，prefill 那一步照样出首字，下一个 decode 步就带上它。<br>
 真要等只有两种：KV 池满了，或者 PD 分离要把 KV 搬到另一批机器。」</p>
 
 <p class="say">「槽位就是 KV 池装得下几个人。Little 定律：批里的人数约等于吞吐乘字间隔。<br>
