@@ -46,7 +46,7 @@ __FIG_S11_TEMP__
   <p>各家报的倍数口径不同，不能横比。</p>
   <ul>
     <li><b>2022-11</b>：Google 提出（DeepMind 2023-02 独立提出），独立小模型当草稿，报单请求速度是不投机的 2–3 倍。</li>
-    <li><b>2024-01</b>：Medusa 在大模型上加几个解码头，报速度是不投机的 2.2–3.6 倍；EAGLE 用大模型的隐状态（出字前那层的向量）猜，是不投机的 2.7–3.5 倍。</li>
+    <li><b>2024-01</b>：Medusa 在大模型上加几个解码头，报速度是不投机的 2.2–3.6 倍；EAGLE 用大模型的隐状态（出字前那层的向量）猜，LLaMA2-Chat 70B 上是不投机的 2.7–3.5 倍。</li>
     <li><b>2024-12</b>：DeepSeek-V3 的 MTP 第 2 个字接受率 85–90%，速度约是不开 MTP 的 1.8 倍；草稿训进主模型，这招从此成了主流。</li>
     <li><b>2025-03</b>：EAGLE-3 融合大模型浅、中、深三层的状态，单请求速度最多是不投机的 6.5 倍，batch 64 时吞吐仍是不投机的 1.38 倍（SGLang）。</li>
     <li><b>2026-02</b>：DFlash 的小草稿一次前向并行出一整块（块扩散），论文报加速比最多是 EAGLE-3 的 2.5 倍。</li>
@@ -69,7 +69,7 @@ __FIG_S11_THREE__
   <ul>
     <li><b>草稿要占显存。</b>K3 开 DSpark 后 KV 池从 787,504 token 缩到 637,504，少了 19%。</li>
     <li><b>引擎默认值会跟着变。</b>K3 的 SGLang 配方开投机又没写 max-running-requests，它就被重设成 48，batch 上限悄悄压低。</li>
-    <li><b>PD 碰上投机解码。</b>刚从 prefill 交接来的请求只算 1 个 token，别人是 1＋N（N 个草稿），形状不齐就用不上 CUDA Graph（一串 kernel 录好一次发出，见 <a href="#s12-3">12.3</a>）；decode 端补齐到 1＋N 后，TPOT 约 40 ms 降到 22 ms（vLLM GLM-5.2 PD 博客）。</li>
+    <li><b>PD 碰上投机解码。</b>刚从 prefill 交接来的请求只算 1 个 token，别人是 1＋N（N 个草稿），形状不齐就掉出整图 CUDA Graph（一串 kernel 录好一次发出，见 <a href="#s12-3">12.3</a>），退回分段录或逐个发；decode 端补齐到 1＋N 后，TPOT 约 40 ms 降到 22 ms（vLLM GLM-5.2 PD 博客）。</li>
   </ul>
 
   <div class="note ok"><span class="t">回到主线</span>

@@ -487,7 +487,7 @@ def fig_conc():
 #   TP4 跑通见台账第 62 行；NVL72 一域 72 卡见第零节词表；SGLang 同域要求见本文件头。
 GATES = [
     ("①", "装得下", ["纸面 4 颗（v7x-8）够", "实测 FP8 放不下：用 8 颗，或专家换 FP4"],
-                   ["806 GB 权重", "一个 4 卡节点放得下（TP4 跑通过）"], True),
+                   ["约 800 GB 权重", "一个 4 卡节点放得下（TP4 跑通过）"], True),
     ("②", "快线多大", ["一个 ICI 切片", "TP 不跨 DCN"],
                     ["一个 NVL72 域，72 卡", "SGLang 部署要求全部节点同域"], True),
     ("③", "序列", ["KV 总量大，但单条装得下", "DCP 帮不上"],
@@ -501,7 +501,7 @@ GATES = [
 def fig_gates():
     f = Fig(W, "专题五的五关从上往下走：装得下、快线多大、序列、流水线并行、数据并行。"
                "左列是 DeepSeek-V3 跑在 TPU v7 上，右列是 DeepSeek-V4-Pro 跑在 GB300 上。"
-               "装得下：左边纸面 4 颗够、实测 FP8 放不下，用 8 颗或专家换 FP4；右边 806 GB 权重一个 4 卡节点放得下。"
+               "装得下：左边纸面 4 颗够、实测 FP8 放不下，用 8 颗或专家换 FP4；右边约 800 GB 权重一个 4 卡节点放得下。"
                "快线：左边一个 ICI 切片，TP 不跨 DCN；右边一个 NVL72 域 72 卡，SGLang 要求同域。"
                "序列：左边单条装得下，DCP 帮不上；右边只有一个 KV 头，改用 DEP。"
                "流水线并行两边都不用。数据并行：左边每个副本留在自己的切片里；右边先定 P:D 再加 decode 副本。"
@@ -536,7 +536,7 @@ def fig_gates():
     yb = yy - RG
     yb = f.src(yb + 10,
                "📌 TPU 列：见本节正文；4 颗／8 颗／FP4 见台账「V3 FP8 切片表」与 R1 FP4 README:59、72-73（R1 与 V3 同结构）。",
-               "📌 GPU 列：806 GB 见 gpu/inference/a4x-max/deepseek-v4/README.md:55；TP4 跑通见 VLLM-V4PRO-RUNBOOK.md:449；"
+               "📌 GPU 列：806 GB 见 gpu/inference/a4x-max/deepseek-v4/README.md:55；TP4 跑通见 VLLM-V4PRO-RUNBOOK.md:449（vLLM 用的是 832 GB FP8 版，:127）；"
                "同一 NVL72 域见 SGLANG-V4PRO-RUNBOOK.md:34、63；只有一个 KV 头见第六节。",
                "⚠️ 本课归纳：五关顺序取自专题五 §7.4，每格是本课按上述记录填的结论，不是某份 runbook 的原表。")
     f.save("fig6-s10-gates.svg", yb + 14)

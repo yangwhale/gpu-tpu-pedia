@@ -58,7 +58,7 @@ __FIG_S9_DECIDE__
   <h3 id="s9-4">9.4　再拆一层：AFD 与 EPD</h3>
   <p><a href="topic-05.html#s6-5">专题五 §6.5</a> 讲过：decode 里的注意力和专家也能拆到两批机器上，多台注意力机喂同一批专家，专家那边就凑得出大 batch。</p>
 __FIG_S9_AFD_T5__
-  <p>字节 2025 年的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT 的约束下做到每卡 4,039 tok/s，同条件的 DeepSeek-V3 是 2,324（Step-3 论文算的）。模型不同，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
+  <p>字节 2025 年的 MegaScale-Infer 报告每卡吞吐最多是对照系统的 1.90 倍；阶跃星辰的 Step-3 在 Hopper 上、50 ms TPOT、4K 上下文的约束下，峰值每卡 4,039 tok/s；论文拿来对照的 DeepSeek-V3 是 2,324，那是 DeepSeek 自己公开的 H800 profile 峰值，不是 Step-3 重测的。模型不同，Step-3 这档还用了 FP8 注意力，差距不能全记给 AFD。TPU 上本课没找到公开的 AFD 实现。</p>
   <p>开源实现没这么顺：vLLM 的 AFD 是外部插件，主仓库的提案（RFC）已因不活跃被关闭；插件博客在 Ascend 910C 上的数，配比一错就比不拆还慢。</p>
 __FIG_S9_AFD_ASCEND__
   <ul>
@@ -66,12 +66,12 @@ __FIG_S9_AFD_ASCEND__
     <li><b>只能看趋势</b>：实验把专家路由换成强制均衡，还用小部署模拟大规模。</li>
   </ul>
   <details class="foldfig"><summary><b>出处</b>：AFD 的几个数</summary>
-  <p>MegaScale-Infer：arXiv 2504.02263。Step-3：arXiv 2507.19427（4K 上下文、FP8、不开 MTP）。vLLM AFD 插件：vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin；RFC #22799 于 2026-05-31 被机器人关闭。</p></details>
+  <p>MegaScale-Infer：arXiv 2504.02263（对照的是当时最好的方案）。Step-3：arXiv 2507.19427 表 8（4K 上下文、FP8、不开 MTP；4,039 是峰值那一分钟，长期平均 3,910）。vLLM AFD 插件：vllm.ai/blog/2026-07-23-vllm-afd-plugin、github.com/vllm-project/afd-plugin；RFC #22799 于 2026-05-31 被机器人关闭。</p></details>
 
   <p><b>EPD：多模态把编码也拆出去。</b>多模态模型在 prefill 前要把图片、视频编码成 token，图一多就和 prefill 抢资源。</p>
   <ul>
     <li><b>做法</b>：编码器单独一批机器，视觉 token 交给 prefill，KV 再交给 decode。</li>
-    <li><b>论文的数</b>：arXiv 2501.05460 报告峰值显存最多降到 1/15，batch 最多是原来的 22 倍，TTFT 最多降 71%。</li>
+    <li><b>论文的数</b>：arXiv 2501.05460 对比不拆的系统，报告峰值显存最多降到 1/15，batch 最多是原来的 22 倍，TTFT 最多降 71%。</li>
     <li><b>什么时候值得</b>：请求带很多图或大图时；纯文本用不上（专题五 §6.6）。</li>
   </ul>
 

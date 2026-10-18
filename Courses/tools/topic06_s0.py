@@ -21,7 +21,7 @@ __FIG_S0_CHAIN__
     <tr><td>③</td><td>2022 → 2025</td><td>Google、DeepMind 论文；DeepSeek MTP、EAGLE-3</td><td>思考题动辄几千 token → 投机解码／MTP，一趟验几个字</td><td>MTP 约 1.8×；EAGLE-3 单请求最多 6.5×（都对不投机）</td><td>并发大、上下文长、开 DEP 时收益缩水，甚至倒亏</td><td>十一</td></tr>
     <tr><td>④</td><td>2023 → 2025</td><td>GQA 论文、DeepSeek</td><td>每条 KV 太厚 → GQA、MLA，再到 DSA 只挑一部分读</td><td>GQA 约 ÷8、MLA 约 ÷57（本课推导）；DSA 每字只读 2,048 条</td><td>MLA 全层一份 KV，TP 切不开，开几路就复制几份</td><td>四</td></tr>
     <tr><td>⑤</td><td>2023</td><td>vLLM</td><td>KV 预留白占显存 → PagedAttention 分页存</td><td>KV 利用率 96%；吞吐 2–4×（对 FasterTransformer、Orca）</td><td>能坐几人 ＝ KV 池 ÷ 每条 KV，而上下文在变长</td><td>四</td></tr>
-    <tr><td>⑥</td><td>2023 → 2025</td><td>Splitwise、DistServe → Mooncake → Dynamo</td><td>prefill 与 decode 抢卡 → PD 分离</td><td>DistServe 可接请求 7.4×（对不拆）</td><td>每请求多搬一趟 KV，还得调 P、D 配比</td><td>八</td></tr>
+    <tr><td>⑥</td><td>2023 → 2025</td><td>Splitwise、DistServe → Mooncake → Dynamo</td><td>prefill 与 decode 抢卡 → PD 分离</td><td>DistServe 可接请求 7.4×（对当时最好的系统，两段同卡）</td><td>每请求多搬一趟 KV，还得调 P、D 配比</td><td>八</td></tr>
     <tr><td>⑦</td><td>2023</td><td>SGLang 论文</td><td>同样的开头一遍遍重算 → RadixAttention 复用前缀</td><td>最多 6.4×（对当时其他系统）</td><td>想复用的前缀多到显存放不下</td><td>四</td></tr>
     <tr><td>⑧</td><td>2024</td><td>Sarathi-Serve 论文；引擎里 vLLM 先合入</td><td>长 prompt 一进门全员卡住 → 分块 prefill</td><td>达标请求 2.6–3.7×（对 vLLM）</td><td>只把打扰摊薄，两段还挤在同一批卡上</td><td>三</td></tr>
     <tr><td>⑨</td><td>2024 → 2025</td><td>Mooncake（Kimi）、DeepSeek</td><td>前缀放不下 → 分层下放到内存、SSD</td><td>Kimi 线上多接 107%–115%</td><td>副本一多，前缀只在自己那份里有；靠 KV 感知路由把命中率从 20% 拉到 75%</td><td>四、八、十四</td></tr>
@@ -51,7 +51,7 @@ __FIG_S0_ENGINES__
     <tr><td>2024-05</td><td>外部</td><td>DeepSeek-V2 提出 MLA</td><td>—</td><td>arXiv 2405.04434</td></tr>
     <tr><td>2024-06</td><td>外部</td><td>Mooncake 论文</td><td>—</td><td>arXiv 2407.00079</td></tr>
     <tr><td>2024-07</td><td>SGLang</td><td>v0.2 纯 Python 轻量调度，点名 vLLM 的 CPU 调度开销；最多 3.1×（对 vLLM 0.5.2）</td><td>—</td><td>lmsys 博客 2024-07-25</td></tr>
-    <tr><td>2024-09</td><td>vLLM</td><td>v0.6.0 承认 CPU 开销让 GPU 吃不饱，2.7×（对 v0.5.3）</td><td>原文没说是回应 v0.2，不标</td><td>vLLM 博客 2024-09-05</td></tr>
+    <tr><td>2024-09</td><td>vLLM</td><td>v0.6.0 承认 CPU 开销让 GPU 吃不饱，Llama 8B 上 2.7×（对 v0.5.3）</td><td>原文没说是回应 v0.2，不标</td><td>vLLM 博客 2024-09-05</td></tr>
     <tr><td>2024-09</td><td>SGLang</td><td>v0.3 先做 MLA 优化，3–7×（对基线系统）</td><td>—</td><td>lmsys 博客 2024-09-04</td></tr>
     <tr><td>2024-11</td><td>外部</td><td>Mooncake 传输引擎开源</td><td>—</td><td>Mooncake README 时间线</td></tr>
     <tr><td>2024-12</td><td>SGLang</td><td>v0.4：零开销调度、DP attention；V3 首发日支持</td><td>V3 首发日比 vLLM 早一两天</td><td>lmsys 博客 2024-12-04；两家 release</td></tr>
@@ -63,7 +63,7 @@ __FIG_S0_ENGINES__
     <tr><td>2025-03</td><td>外部</td><td>NVIDIA Dynamo 开源</td><td>一上来就同时支持两家</td><td>NVIDIA 新闻稿 2025-03-18</td></tr>
     <tr><td>2025-04</td><td>vLLM</td><td>KV Connector 接口（接 LMCache、NIXL）</td><td>—</td><td>vLLM 合入记录；LMCache 博客</td></tr>
     <tr><td>2025-04</td><td>SGLang</td><td>接 Mooncake（04-10）</td><td>晚 vLLM 3 个多月</td><td>SGLang 合入记录</td></tr>
-    <tr><td>2025-05</td><td>SGLang</td><td>大 EP ＋ PD 复现（96 张 H100），最多是同卡数纯 TP 的 5×</td><td>vLLM 2025-06-10 接 DeepEP，晚 1 个多月</td><td>lmsys 博客 2025-05-05</td></tr>
+    <tr><td>2025-05</td><td>SGLang</td><td>大 EP ＋ PD 复现（96 张 H100），最多是同卡数纯 TP 的 5×</td><td>vLLM 2025-06-03 接 DeepEP，晚近 1 个月</td><td>lmsys 博客 2025-05-05</td></tr>
     <tr><td>2025-09</td><td>外部</td><td>DeepSeek-V3.2（DSA）</td><td>两家同一天首发日支持</td><td>两家博客 2025-09-29</td></tr>
     <tr><td>2025-09</td><td>SGLang</td><td>HiCache 分层 KV 缓存</td><td>—</td><td>lmsys 博客 2025-09-10</td></tr>
     <tr><td>2025-09</td><td>vLLM</td><td>合入 DCP（MLA）</td><td>—</td><td>vLLM v0.10.2 release</td></tr>
