@@ -15,11 +15,11 @@
 @media (max-width:720px){.figbar{right:70px;bottom:18px}
   .figbar .hint{display:none}
   .figbar button{padding:6px 11px;font-size:12px;opacity:.88}}
-body.figonly section p:not(.lead):not(.landing),
-body.figonly section ul,
-body.figonly section ol,
-body.figonly section pre,
-body.figonly section .note{display:none}
+body.figonly section p:not(.lead):not(.landing):not(.peek, .peek *, details[open] *),
+body.figonly section ul:not(.peek, .peek *, details[open] *),
+body.figonly section ol:not(.peek, .peek *, details[open] *),
+body.figonly section pre:not(.peek, .peek *, details[open] *),
+body.figonly section .note:not(.peek, .peek *, details[open] *){display:none}
 
 body.figonly section figure p{display:revert}
 
@@ -33,11 +33,16 @@ body.figonly .toc ul{display:revert}
 body.figonly .fo-empty{display:none}
 body.figonly section p.tbl-note:not(.lead):not(.landing){display:revert}
 
-body.figonly section blockquote{display:none}
+body.figonly section blockquote:not(.peek, .peek *, details[open] *){display:none}
 
 
-body.figonly figcaption{display:none}
+body.figonly figcaption:not(.peek, .peek *, details[open] *){display:none}
 body.figonly section h3:not(.guess h3){margin-top:34px}
+.peekbtn{display:none}
+body.figonly .peekbtn{display:inline-block;margin:0 0 6px;padding:2px 10px;font-size:13px;
+  color:var(--muted,#5f6368);background:none;border:1px dashed var(--line,#dadce0);
+  border-radius:12px;cursor:pointer}
+body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </style>
 @@SPLIT@@
 <div class="figbar">
@@ -60,7 +65,10 @@ body.figonly section h3:not(.guess h3){margin-top:34px}
                    : ("All narration shown; press T to hide");
     hint.textContent = on ? (n + " hidden · press T") : ("All shown · press T");
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
-    // 折叠后只剩光杆的小标题（下面到下一个标题之间全被藏了）也一并藏起来
+    markEmpty(on);
+  }
+  // 折叠后只剩光杆的小标题（下面到下一个标题之间全被藏了）也一并藏起来；点开小节后重算
+  function markEmpty(on){
     document.querySelectorAll("section h4").forEach(function(h){
       h.classList.remove("fo-empty"); if (!on || h.closest(".guess")) return;
       var el = h.nextElementSibling, vis = false;
@@ -70,21 +78,30 @@ body.figonly section h3:not(.guess h3){margin-top:34px}
       }
       if (!vis) h.classList.add("fo-empty");
     });
-    // 折叠后展开块里什么都不剩（正文全被藏了）：整颗藏掉，免得点开是空的
-    // 由内向外查：内层空块先藏掉，外层才能看出自己也空了
-    var dl = Array.prototype.slice.call(document.querySelectorAll("section details"));
-    dl.forEach(function(d){ d.classList.remove("fo-empty"); });
-    dl.reverse().forEach(function(d){
-      if (!on) return;
-      var was = d.open; d.open = true; var vis = false;
-      for (var c = d.firstElementChild; c; c = c.nextElementSibling) {
-        if (c.tagName === "SUMMARY") continue;
-        if (!c.getClientRects().length) continue;
-        if ((c.innerText || "").trim().length || c.querySelector("svg,img,video,canvas") || /^(SVG|IMG|VIDEO|CANVAS|FIGURE)$/i.test(c.tagName)) { vis = true; break; }
-      }
-      d.open = was; if (!vis) d.classList.add("fo-empty");
-    });
   }
+  // 作者 2026-10-18（同中文专题五 e47f6f3）：折叠不能折得「凭空消失」——每个小节标题后挂一个只在
+  // 折叠模式显示的小按钮，只展开这一小节；读者亲手点开的 <details> 也不再被折叠规则压着（见 CSS）
+  var HID = "p:not(.lead):not(.landing), ul, ol, pre, .note, blockquote, figcaption";
+  document.querySelectorAll("section").forEach(function(sec){
+    sec.querySelectorAll(".stn, h3").forEach(function(h){
+      if (h.closest(".guess")) return;
+      var grp = [], el = h.nextElementSibling;
+      while (el && el.tagName !== "H3" && el.tagName !== "H2" && !el.classList.contains("stn")){
+        if (el.matches(HID) || el.querySelector(HID)) grp.push(el);
+        el = el.nextElementSibling;
+      }
+      if (!grp.length) return;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ Show this part";
+      b.addEventListener("click", function(){
+        var on = !grp[0].classList.contains("peek");
+        grp.forEach(function(x){ x.classList.toggle("peek", on); });
+        b.textContent = on ? "▾ Hide this part" : "▸ Show this part";
+        markEmpty(document.body.classList.contains("figonly"));
+      });
+      h.insertAdjacentElement("afterend", b);
+    });
+  });
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
   set(saved === null ? true : saved === "1");
   btn.addEventListener("click", function(){ set(!document.body.classList.contains("figonly")); });

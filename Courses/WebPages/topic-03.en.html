@@ -602,21 +602,27 @@ h4 { margin:18px 0 6px; font-size:15px }
 @media (max-width:720px){.figbar{right:70px;bottom:18px}
   .figbar .hint{display:none}
   .figbar button{padding:8px 13px;font-size:13px}}
-body.figonly section p:not(.lead):not(.landing),
-body.figonly section ul,
-body.figonly section ol,
-body.figonly section pre,
-body.figonly section .note{display:none}
+body.figonly section p:not(.lead):not(.landing):not(.peek, .peek *, details[open] *),
+body.figonly section ul:not(.peek, .peek *, details[open] *),
+body.figonly section ol:not(.peek, .peek *, details[open] *),
+body.figonly section pre:not(.peek, .peek *, details[open] *),
+body.figonly section .note:not(.peek, .peek *, details[open] *){display:none}
 
 body.figonly section figure p{display:revert}
 
 body.figonly .guess p{display:revert}
 
-body.figonly section blockquote{display:none}
+body.figonly section blockquote:not(.peek, .peek *, details[open] *){display:none}
 
 
-body.figonly figcaption{display:none}
+body.figonly figcaption:not(.peek, .peek *, details[open] *){display:none}
 body.figonly section h3{margin-top:34px}
+
+.peekbtn{display:none}
+body.figonly .peekbtn{display:inline-block;margin:0 0 6px;padding:2px 10px;font-size:13px;
+  color:var(--muted,#5f6368);background:none;border:1px dashed var(--line,#dadce0);
+  border-radius:12px;cursor:pointer}
+body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </style>
 <style>
 
@@ -10805,6 +10811,27 @@ so chunking returns <b>to win parallelism back.</b></p>
                           : ("All shown · press T");
     try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
   }
+  // Each sub-section heading gets a small button, shown only in folded mode, that unfolds just that sub-section
+  // (author, 2026-10-18: folded content must not simply vanish).
+  var HID = "p:not(.lead):not(.landing), ul, ol, pre, .note, blockquote, figcaption";
+  document.querySelectorAll("section").forEach(function(sec){
+    sec.querySelectorAll(".stn, h3").forEach(function(h){
+      var grp = [], el = h.nextElementSibling;
+      while (el && el.tagName !== "H3" && !el.classList.contains("stn")){
+        if (el.matches(HID) || el.querySelector(HID)) grp.push(el);
+        el = el.nextElementSibling;
+      }
+      if (!grp.length) return;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "peekbtn"; b.textContent = "▸ Show this part";
+      b.addEventListener("click", function(){
+        var on = !grp[0].classList.contains("peek");
+        grp.forEach(function(x){ x.classList.toggle("peek", on); });
+        b.textContent = on ? "▾ Hide this part" : "▸ Show this part";
+      });
+      h.insertAdjacentElement("afterend", b);
+    });
+  });
   var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
   // English edition: default folded (author, 2026-10-17).
   set(saved === null ? true : saved === "1");
@@ -10842,4 +10869,4 @@ so chunking returns <b>to win parallelism back.</b></p>
   document.querySelectorAll(SR).forEach(function(d){
    d.open=d.dataset.wasopen==="1";});});
 })();</script>
-<style id="en-size">table{font-size:15.5px}th{font-size:13px}.tbl-note{font-size:14px}.chip{font-size:14px}figcaption{font-size:16px}table code{font-size:0.8232em}.svgsm,.svgtxt,.tocbar a,.tocbar-lb,.console .tag,.hero .en,.jstep span,.stn .badge{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}.svgsm,.svgtxt,.svglbl{font-size-adjust:0.53}.figsrc>summary{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}h1 b,h2 b,h3 b,h4 b,th b,summary b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}.msfrom{white-space:nowrap}.card h4{text-transform:none;letter-spacing:0;font-size:13px}.jstep span{white-space:nowrap}@media(max-width:600px){.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}.sub{font-size:.95em}</style></body></html>
+<style id="en-size">table{font-size:15.5px}th{font-size:13px}.tbl-note{font-size:14px}.chip{font-size:14px}figcaption{font-size:16px}table code{font-size:0.8232em}.svgsm,.svgtxt,.tocbar a,.tocbar-lb,.console .tag,.hero .en,.jstep span,.stn .badge{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}.svgsm,.svgtxt,.svglbl{font-size-adjust:0.53}.figsrc>summary{font-family:"Source Sans 3","Noto Sans CJK SC",-apple-system,"Segoe UI",Roboto,sans-serif}h1 b,h2 b,h3 b,h4 b,th b,b b,strong b,.qq b,.t b,tr.sum b{font-weight:800}.msfrom{white-space:nowrap}@media(max-width:1000px){th{white-space:normal}main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}.card h4{text-transform:none;letter-spacing:0;font-size:13px}.jstep span{white-space:nowrap}@media(max-width:600px){main table,section table,details table,.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}.sub{font-size:.95em}</style></body></html>
