@@ -2667,13 +2667,432 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <em>想看三层软件谁搬谁派谁存、两个搬运库在两个引擎上结论相反、混合模型的尾巴、配比公式的完整推算、AFD 和 EPD，翻完整版第八、九节。</em></div>
 
 </div></section>
-<section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>投机解码：怎么一趟出好几个字？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
-<ul>
-  <li><b>一条主线</b>：先猜后验：猜对白赚，猜错只亏一点；batch 越大越不灵、温度会骗人</li>
-  <li><b>计划</b>：10 分钟</li>
-  <li><b>打算用的图</b>：anim-spec、fig-s11-conc、fig-s11-temp</li>
-  <li><b>想深挖</b>：<a href="topic-06-L300.html#s十一">完整版对应那一节</a></li>
-</ul>
+<section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>投机解码：怎么一趟出好几个字？</h2></div>
+  <p class="lead">上一节结尾留了个洞：拆不拆 PD，decode 还是一步只出一个字，每出一个字都把权重和 KV 搬一趟。
+    人多时这一趟分给很多人；可要跟手的档 batch 开不大，推理模型又一答几千字。<b>能不能搬一趟，出好几个字？</b></p>
+
+  <h3 id="l7-1">先猜后验：猜对白赚，猜错只亏一点</h3>
+<figure class="fbox fwide" id="anim-spec">
+<video src="media/topic06-spec.mp4?v=20d9f0f5" data-pauses="7.60,17.05" autoplay loop muted playsinline
+       aria-label="投机解码一步的动画。标题：投机解码：小模型先猜 4 个，大模型一趟验完。三行，分别标着已写下、小模型猜、大模型验；底下一条用时条，图例写：紫＝小模型猜一个（便宜），灰＝大模型搬一趟权重（贵）。开始时已写下「床前明月」。字幕依次是：第 1 步：小模型一个接一个猜 4 个字，每个都很快（猜出「光疑似地」，用时条多 4 小格紫色）。大模型搬一趟权重，同时算出这 5 个位置它自己会写的字（一个蓝框标着「一趟」，里面是「光、疑、是」和两个问号，用时条多一大格灰色）。从左往右逐个比：一样就收下（光、疑变绿）。第 3 个不一样：换成大模型自己的字，后面的全丢掉（「似」变红，「是」被黄框圈出，后面变暗；小字注：？＝前面那个字已经错了，这个位置算了也作废）。「光疑是」飞上去，第 1 步完成：猜对 2 个 ＋ 大模型补 1 个 ＝ 出 3 个字，停住。第 2 步：小模型猜「地上霜举」，大模型一趟算出「地上霜举头」；4 个全对；第 5 个位置大模型本来就算了，白送 1 个。「地上霜举头」飞上去，第 2 步完成：猜对 4 个 ＋ 白送 1 个 ＝ 出 5 个字，停住。最后：猜对几个就出几个，再加大模型自己的 1 个：每步至少出 1 个。画面复位。"></video>
+<figcaption><b>看第 1 步的红字「似」：错的位置换成大模型自己的字，后面的全扔；再看第 2 步白送的那一个。</b>
+  <span class="sub">（23 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。示意，按温度 0 贪心比对。）</span></figcaption></figure>
+  <div class="note info"><span class="t">徒弟打草稿，师傅一次批</span>
+    小模型是徒弟，一口气往下写几个字，写得快。大模型是师傅，把这几个字当一段输入，搬一趟权重，一次算出每个位置它自己会写什么，从左往右对。<br>
+    <b>对上的直接收；碰到第一个不对的，换成师傅自己的字，后面全扔。</b>所以最差也出一个字，跟不开一样多。</div>
+  <ul>
+    <li><b>为什么多验几个几乎不加时间。</b>第一节讲过：小 batch 时一步的时间主要花在搬权重上。验五个位置跟验一个一样只搬一趟，跟 prefill 一次读一整段 prompt 是一回事。</li>
+    <li><b>不改答案。</b>随机采样时按标准的拒绝采样决定收不收，出来的分布跟大模型自己一个字一个字写完全一样。改的只是速度。</li>
+    <li><b>收益账就一个除法：</b>每步平均出几个字（接受长度）÷ 一步变慢了几倍。分子靠徒弟猜得准，分母靠验证别太贵。</li>
+  </ul>
+  <p>Kimi K3 在 GB300 上、8 张卡一个人用：不开投机，一趟 11.1 ms 带回 1 个字；开了，一趟慢到约 16 ms（本课反推），平均带回 6.96 个字。摊到每个字 2.31 ms，<b>快到 4.81 倍</b>。</p>
+
+  <h3 id="l7-2">人一多就不灵</h3>
+<figure class="fbox fwide" id="fig-s11-conc"><svg viewBox="0 0 1400 522" width="100%" role="img" aria-label="Kimi K3 在 GB300 上开 DSpark 投机解码，输出吞吐的加速比随并发下降：并发 1 是 4.22 倍，8 是 2.86 倍，32 是 1.89 倍，64 是 1.74 倍；同样并发 1，上下文从 4K 拉到 32K，只剩 1.32 倍"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">投机解码的收益会缩　——　<tspan font-weight="700">人一多、上下文一长，白送的那部分就变少</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Kimi K3 · GB300 · SGLang TP8。柱高 ＝ 开投机后的输出吞吐 ÷ 不开；虚线 ＝ 1，不赚不赔</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">4K 上下文，并发 1 → 64</text>
+<rect x="235.16000000000003" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="256" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">32K 上下文，并发 1</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">开投机后的吞吐是不开的几倍</tspan></text>
+<path d="M130,390 L1360,390" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4,4"/>
+<text class="svgsm" x="120" y="396" fill="#5f6368" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums">1×</text>
+<rect x="150" y="204.17777777777778" width="130" height="243.82222222222222" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="215" y="194" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.22×</tspan></text>
+<text class="svgsm" x="215" y="476" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">并发 1</tspan></text>
+<rect x="340" y="282.7555555555556" width="130" height="165.2444444444444" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="405" y="272" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.86×</tspan></text>
+<text class="svgsm" x="405" y="476" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">并发 8</tspan></text>
+<rect x="530" y="338.8" width="130" height="109.19999999999999" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="595" y="328" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.89×</tspan></text>
+<text class="svgsm" x="595" y="476" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">并发 32</tspan></text>
+<rect x="720" y="347.4666666666667" width="130" height="100.5333333333333" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="785" y="337" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.74×</tspan></text>
+<text class="svgsm" x="785" y="476" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">并发 64</tspan></text>
+<path d="M940,178 L940,488" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="970" y="371.84153661464586" width="130" height="76.15846338535414" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1035" y="361" fill="#202124" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.32×</tspan></text>
+<text class="svgsm" x="1035" y="476" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K · 并发 1</tspan></text>
+<text class="svgsm" x="1124" y="251" fill="#681da8" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同样并发 1，</tspan></text>
+<text class="svgsm" x="1124" y="275" fill="#681da8" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上下文 4K → 32K：</tspan></text>
+<text class="svgsm" x="1124" y="299" fill="#681da8" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.22× → 1.32×</tspan></text>
+</svg><figcaption><b>从左往右看柱子一路变矮：人越多，投机多送的越少。</b><span class="capmore"><br><em>K3 在 GB300 上的输出吞吐，对同条件不开投机；最右那根是同样一个人、上下文拉到 32K。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089-1092（GB300，TP8 跨两节点，ISL 4096／OSL 1024，random，temperature 0，开环，只报热轮；输出 tok/s 总量）、:1057-1058（32K，只测了并发 1；8／32 没测，集群已删）。</p>
+<p>注：K3 并发 64 时开投机的 TPOT 仍只有不开的 40%，这一档吞吐和延迟同时变好。</p>
+<p>正文里另两组数的出处 —— B200：gpu/inference/a4/deepseek-v4/README.vllm.md:265-277（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%；十档并发 −3% 到 −37%）。</p>
+<p>V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%；decode 峰值 −13%、端到端 +28%）。B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。</p></details></figure>
+  <ul>
+    <li><b>白送的前提是工位闲着。</b>人少时算力大半空着，多验的几个位置是用闲着的算力算的。人一多，算力先忙满，草稿里每个字都得真算一遍。</li>
+    <li><b>柱子一路往右缩。</b>同一套 K3，一个人用时吞吐是不开投机的 4.22 倍，64 个人一起用只剩 1.74 倍。还是赚，赚得少了。</li>
+    <li><b>为大 batch 配的 DEP 可能倒亏。</b>8 张 B200 跑 DeepSeek-V4-Flash，vLLM、DEP8 开 MTP，十档并发全部变慢，慢 3% 到 37%。</li>
+  </ul>
+  <p><b>所以呢：</b>低并发、要跟手的档先开；为大 batch 配的部署先实测再开。</p>
+
+  <h3 id="l7-3">温度会骗人</h3>
+<figure class="fbox fwide" id="fig-s11-temp"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="用对答案打比方。题目是下一个字填什么，最可能的答案是「好」，草稿是贪心的，每次都写最可能的「好」。上一行温度 1.0：大模型掷骰子决定标准答案，大多掷出别的字，和草稿对不上，被扔掉。GB300 上的 DeepSeek-V4-Pro 实测接受率只有 1.16%，吞吐 944 tok/s。下一行温度 0：骰子永远停在最可能的那个字，草稿只要猜的就是它就能对上。实测接受率 34%，吞吐 2,911 tok/s，是温度 1.0 的 3.1 倍"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">温度：大模型出答案时掷不掷骰子　——　<tspan font-weight="700">草稿总写最可能的字，骰子一掷就对不上</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">题目：「今天天气真＿」，最可能填「好」。草稿是贪心的，永远交「好」；大模型按温度决定标准答案（示意）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">草稿交的答案</text>
+<rect x="141.08" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="162" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">对不上，扔掉</text>
+<rect x="282.16" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="303" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">对上，收下</text>
+<rect x="0" y="102" width="1400" height="190" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">温度 1.0　·　服务端默认</tspan></text>
+<rect x="30" y="178.0" width="130" height="68" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="95" y="206" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿交</tspan></text>
+<text class="svgsm" x="95" y="234" fill="#681da8" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="195" y="218" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对</tspan></text>
+<rect x="230" y="180.0" width="64" height="64" rx="10" fill="#fff" stroke="#5f6368" stroke-width="1.8"/>
+<circle cx="246.0" cy="196.0" r="5" fill="#5f6368"/>
+<circle cx="278.0" cy="196.0" r="5" fill="#5f6368"/>
+<circle cx="262.0" cy="212.0" r="5" fill="#5f6368"/>
+<circle cx="246.0" cy="228.0" r="5" fill="#5f6368"/>
+<circle cx="278.0" cy="228.0" r="5" fill="#5f6368"/>
+<text class="svgsm" x="262" y="268" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">掷骰子</tspan></text>
+<line x1="310" y1="212.0" x2="360" y2="212.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="380" y="168" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">五道各自独立的题（举例；不是同一步的五个位置，格子数也不是比例）</text>
+<rect x="380" y="182.0" width="96" height="60" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="428" y="210" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「不错」</tspan></text>
+<text class="svgsm" x="428" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕ 扔掉</tspan></text>
+<rect x="492" y="182.0" width="96" height="60" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="540" y="210" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「热」</tspan></text>
+<text class="svgsm" x="540" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕ 扔掉</tspan></text>
+<rect x="604" y="182.0" width="96" height="60" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="652" y="210" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="652" y="234" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓ 收下</tspan></text>
+<rect x="716" y="182.0" width="96" height="60" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="764" y="210" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「晴」</tspan></text>
+<text class="svgsm" x="764" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕ 扔掉</tspan></text>
+<rect x="828" y="182.0" width="96" height="60" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="876" y="210" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「冷」</tspan></text>
+<text class="svgsm" x="876" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✕ 扔掉</tspan></text>
+<path d="M980,146 L980,278" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1010" y="194" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">V4-Pro 实测接受率</tspan></text>
+<text class="svgsm" x="1010" y="232" fill="#a50e0e" style="font-size:30.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.16%</tspan></text>
+<text class="svgsm" x="1109" y="232" fill="#a50e0e" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">944 tok/s</tspan></text>
+<rect x="0" y="304" width="1400" height="190" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="304" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="306" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="334" x2="1400" y2="334" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="324" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">温度 0　·　请求里写明</tspan></text>
+<rect x="30" y="380.0" width="130" height="68" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="95" y="408" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿交</tspan></text>
+<text class="svgsm" x="95" y="436" fill="#681da8" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="195" y="420" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对</tspan></text>
+<rect x="230" y="382.0" width="64" height="64" rx="10" fill="#fff" stroke="#5f6368" stroke-width="1.8"/>
+<circle cx="262.0" cy="414.0" r="5" fill="#5f6368"/>
+<text class="svgsm" x="262" y="470" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只认最可能那个</tspan></text>
+<line x1="310" y1="414.0" x2="360" y2="414.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="380" y="370" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同样是五道独立的题（举例）</text>
+<rect x="380" y="384.0" width="96" height="60" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="428" y="412" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="428" y="436" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓ 收下</tspan></text>
+<rect x="492" y="384.0" width="96" height="60" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="540" y="412" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="540" y="436" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓ 收下</tspan></text>
+<rect x="604" y="384.0" width="96" height="60" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="652" y="412" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="652" y="436" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓ 收下</tspan></text>
+<rect x="716" y="384.0" width="96" height="60" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="764" y="412" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="764" y="436" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓ 收下</tspan></text>
+<rect x="828" y="384.0" width="96" height="60" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="876" y="412" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「好」</tspan></text>
+<text class="svgsm" x="876" y="436" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✓ 收下</tspan></text>
+<path d="M980,348 L980,480" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1010" y="396" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">V4-Pro 实测接受率</tspan></text>
+<text class="svgsm" x="1010" y="434" fill="#0d652d" style="font-size:30.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">34%</tspan></text>
+<text class="svgsm" x="1084" y="434" fill="#0d652d" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2,911 tok/s</tspan></text>
+<rect x="0" y="510" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="510" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="510" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="537" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">温度 0 的实测吞吐是温度 1.0 的 3.1 倍</tspan></text>
+<text class="svgsm" x="20" y="568" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">温度 0 那行也没全收：实测接受率 34%，其余是草稿自己没猜中大模型最可能的那个字。</text>
+</svg><figcaption><b>先看温度 1.0 那一行：草稿交的是最可能的字，照样常被判错。</b><span class="capmore"><br><em>V4-Pro 为 4K 进 1K 出、并发 256 的实测；五个候选字是举例。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 示意：「今天天气真＿」和温度 1.0 那行掷出的五个字是举例，不是实测分布。</p>
+<p>V4-Pro：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:398-410（GB300，vLLM，4K/1K，并发 256）。generation_config 默认 temperature 1.0；DSpark 草稿 draft_sample_method 为 greedy，num_speculative_tokens=7。vllm bench serve 不发 temperature；sa-bench 硬编码 0.0。</p>
+<p>正文里 K3 的数（接受长度：代码类约 4.73、创作类约 2.61）：gpu/inference/a4x-max/kimi-k3/VLLM-K3-RUNBOOK.md:226-237（官方压测 temperature 1.0、top-p 0.95；DSpark 用 probabilistic 草稿，草稿自己也掷骰子，所以温度 1.0 也对得上；接受长度为官方参考值，本仓库未复测）。</p>
+<p>告警：gpu/inference/a4x-max/kimi-k3/PD-BACKLOG.md:175。</p></details></figure>
+  <ul>
+    <li><b>草稿怎么抽，要跟请求的温度对上。</b>贪心的草稿永远交最可能的那个字；请求按温度 1.0 采样，大模型这边的「标准答案」在掷骰子，常常对不上。</li>
+    <li><b>压测工具少发一个参数，吞吐差三倍。</b>GB300 上压 V4-Pro，草稿是贪心的；工具不发温度，服务端按默认 1.0 采样，接受率只剩 1.16%；发温度 0，接受率 34%，吞吐是前者的 3.1 倍。</li>
+    <li><b>不是非得温度 0。</b>K3 的草稿按概率抽，官方压测用温度 1.0 照样对得上。要对上的是草稿的抽法和请求的温度。</li>
+  </ul>
+  <div class="note warn"><span class="t">接受率掉了不会报错</span>
+    它只让每字间隔慢慢变长，看着像机器变慢了。线上把接受率和接受长度当一级指标告警；跨框架比数，先对齐两边发没发温度。</div>
+
+  <h3 id="l7-4">草稿从哪来：离大模型越来越近</h3>
+<figure class="fbox fwide" id="fig-s11-tree"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="投机解码的草稿从哪来，按时间排在 2022 到 2026 年的轴上。2022 年 11 月投机解码：另放一个独立小模型打草稿。2024 年 1 月 Medusa：大模型头上加几个解码头；同期 EAGLE：小模型读大模型的隐状态来猜。2024 年 12 月 DeepSeek-V3 的 MTP：预训练时就多带一层，共享输出头。2025 年 3 月 EAGLE-3：把大模型几层的隐状态拼在一起来猜。2026 年 7 月 DSpark：半自回归一次出一小段，按置信度决定验几个。侧枝 2023 年 11 月 Prompt Lookup：不用草稿模型，直接从 prompt 里抄"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">草稿从哪来　——　<tspan font-weight="700">一步步长进大模型身上，或者干脆不要模型</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴是首次公开的时间：论文按 arXiv 首版，Prompt Lookup 没有论文，按 GitHub 仓库。每张卡只写草稿从哪来</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">主线：要训练的草稿（小模型／头／层）</text>
+<rect x="329.24" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="350" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">侧枝：不用草稿模型</text>
+<line x1="45.0" y1="114" x2="1355.0" y2="114" stroke="#9334e6" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="1345" y="106" fill="#681da8" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿越来越贴着大模型自己长</tspan></text>
+<rect x="25.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="37.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="73" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2022-11</tspan></text>
+<text class="svgsm" x="39" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">投机解码</tspan></text>
+<text class="svgsm" x="39" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">另放一个独立小模型</text>
+<text class="svgsm" x="39" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">打草稿</text>
+<line x1="130.0" y1="264" x2="282.71999999997206" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<circle cx="282.7" cy="334.0" r="6" fill="#9334e6"/>
+<rect x="253.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="265.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="301" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01</tspan></text>
+<text class="svgsm" x="267" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Medusa</tspan></text>
+<text class="svgsm" x="267" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">大模型头上</text>
+<text class="svgsm" x="267" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">加几个解码头</text>
+<line x1="358.0" y1="264" x2="582.2399999999907" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<circle cx="582.2" cy="334.0" r="6" fill="#9334e6"/>
+<rect x="481.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="493.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="529" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-01</tspan></text>
+<text class="svgsm" x="495" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE</tspan></text>
+<text class="svgsm" x="495" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">小模型读大模型的</text>
+<text class="svgsm" x="495" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">隐状态来猜</text>
+<line x1="586.0" y1="264" x2="592.4799999999814" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<circle cx="592.5" cy="334.0" r="6" fill="#9334e6"/>
+<rect x="709.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="721.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="757" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024-12</tspan></text>
+<text class="svgsm" x="723" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MTP · DeepSeek-V3</tspan></text>
+<text class="svgsm" x="723" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">预训练时就多带一层，</text>
+<text class="svgsm" x="723" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">共享输出头</text>
+<line x1="814.0" y1="264" x2="817.7600000000093" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<circle cx="817.8" cy="334.0" r="6" fill="#9334e6"/>
+<rect x="937.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="949.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="985" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025-03</tspan></text>
+<text class="svgsm" x="951" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE-3</tspan></text>
+<text class="svgsm" x="951" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">把大模型几层的隐状态</text>
+<text class="svgsm" x="951" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">拼在一起来猜</text>
+<line x1="1042.0" y1="264" x2="871.5200000000186" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<circle cx="871.5" cy="334.0" r="6" fill="#9334e6"/>
+<rect x="1165.0" y="132" width="210" height="132" rx="10" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1177.0" y="144" width="73" height="26" rx="13" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1213" y="162" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026-07</tspan></text>
+<text class="svgsm" x="1179" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DSpark</tspan></text>
+<text class="svgsm" x="1179" y="226" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">半自回归一次出一小段，</text>
+<text class="svgsm" x="1179" y="248" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">按置信度定验几个</text>
+<line x1="1270.0" y1="264" x2="1219.679999999993" y2="328" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round"/>
+<circle cx="1219.7" cy="334.0" r="6" fill="#9334e6"/>
+<line x1="40" y1="334" x2="1350" y2="334" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="60.0" y1="328" x2="60.0" y2="340" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="66" y="360" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2022</tspan></text>
+<line x1="316.0" y1="328" x2="316.0" y2="340" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="322" y="360" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023</tspan></text>
+<line x1="572.0" y1="328" x2="572.0" y2="340" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="578" y="360" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024</tspan></text>
+<line x1="828.0" y1="328" x2="828.0" y2="340" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="834" y="360" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025</tspan></text>
+<line x1="1084.0" y1="328" x2="1084.0" y2="340" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1090" y="360" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026</tspan></text>
+<circle cx="538.7" cy="334.0" r="6" fill="#e8710a"/>
+<line x1="538.7199999999721" y1="340" x2="598.7199999999721" y2="394" stroke="#e8710a" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 4"/>
+<rect x="493.71999999997206" y="394" width="210" height="132" rx="10" fill="none" stroke="#e8710a" stroke-width="1.0" stroke-dasharray="6,4"/>
+<rect x="505.71999999997206" y="406" width="73" height="26" rx="13" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="542" y="424" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023-11</tspan></text>
+<text class="svgsm" x="507" y="460" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Prompt Lookup</tspan></text>
+<text class="svgsm" x="507" y="488" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">不用草稿模型：</text>
+<text class="svgsm" x="507" y="510" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">直接从 prompt 里抄</text>
+</svg><figcaption><b>沿时间轴从左往右：草稿从独立小模型，一步步长到大模型身上。</b><span class="capmore"><br><em>图上故意不画倍数：各家在自己的模型上测，不能横比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>时间取 arXiv 首版（2026-10-15 逐个核过摘要页）：投机解码 Leviathan 等 <a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a>；Chen 等 <a href="https://arxiv.org/abs/2302.01318" target="_blank" rel="noopener">2302.01318</a>；Medusa <a href="https://arxiv.org/abs/2401.10774" target="_blank" rel="noopener">2401.10774</a>；EAGLE EAGLE <a href="https://arxiv.org/abs/2401.15077" target="_blank" rel="noopener">2401.15077</a>、EAGLE-2 <a href="https://arxiv.org/abs/2406.16858" target="_blank" rel="noopener">2406.16858</a>；MTP · DeepSeek-V3 <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a>；EAGLE-3 <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a>；DSpark <a href="https://arxiv.org/abs/2607.05147" target="_blank" rel="noopener">2607.05147</a>。Prompt Lookup 没有论文，年份按 GitHub 仓库 apoorvumang/prompt-lookup-decoding 的创建时间（2023-11，GitHub API 核过；已集成进 vLLM 与 transformers）。Medusa 与 EAGLE 都是 2024-01，轴上两点挨着。</p>
+<p>没画进图的（正文里提到）：SpecInfer <a href="https://arxiv.org/abs/2305.09781" target="_blank" rel="noopener">2305.09781</a> 把草稿排成树；SuffixDecoding <a href="https://arxiv.org/abs/2411.04975" target="_blank" rel="noopener">2411.04975</a> 从历史输出里抄；扩散草稿 DiffuSpec <a href="https://arxiv.org/abs/2510.02358" target="_blank" rel="noopener">2510.02358</a>、DFlash <a href="https://arxiv.org/abs/2602.06036" target="_blank" rel="noopener">2602.06036</a>；Lookahead <a href="https://arxiv.org/abs/2402.02057" target="_blank" rel="noopener">2402.02057</a>。P-EAGLE、PARD、LayerSkip 等也没画。</p>
+<p>注：各家倍数见正文列表；都是原作者在自己的模型和负载上测的，口径不同，不横比。</p></details></figure>
+  <p>这条线就一件事：<b>草稿离大模型越来越近</b>。各家报的倍数在自己的模型上测，不能横比。</p>
+  <ul>
+    <li><b>独立小模型</b>（2022-11）：另找一个小模型当徒弟，单请求快到 2–3 倍。</li>
+    <li><b>Medusa 加头、EAGLE 读隐状态</b>（2024-01）：草稿长到大模型身上。EAGLE 吃大模型出字前那一层的向量来猜，LLaMA2-Chat 70B 上快到 2.7–3.5 倍。</li>
+    <li><b>MTP 训进主模型</b>（2024-12）：DeepSeek-V3 的草稿是主模型自带的一层，跟着一起训出来，往后多猜一个字，第 2 个字接受率 85–90%。</li>
+    <li><b>EAGLE-3 融浅中深三层</b>（2025-03）：单请求最多快到 6.5 倍，batch 64 时吞吐仍是 1.38 倍。SGLang、vLLM 都已合入。</li>
+    <li><b>DFlash、DSpark</b>（2026）：一趟出整块，再按把握和负载决定验几个，替下了 DeepSeek 线上的 MTP-1。</li>
+  </ul>
+
+  <h3 id="l7-5">EAGLE 和 MTP：长得一样，差在谁训</h3>
+<figure class="fbox fwide" id="fig-s11-eagle"><svg viewBox="0 0 1400 1148" width="100%" role="img" aria-label="EAGLE、EAGLE-3、MTP 三种草稿的结构。第一块 EAGLE：大模型冻住，嵌入层和 LM head 借大模型的，只训一个 FC 压缩层加一层 decoder；输入是大模型出字前那层的向量，加上下一个已抽中的字的嵌入，拼成两倍宽，压回一倍，猜出下一位的向量，再借 LM head 出字，猜出的向量和字喂回去接着猜。第二块 EAGLE-3：浅、中、深三层向量拼成三倍宽再压回；猜第二个字起拿不到大模型的向量，用草稿自己上一步的输出顶替。第三块 MTP：骨架和 EAGLE 几乎一样，差在厂家预训练时一起训；单层 MTP 原样连猜，MiMo-7B 上第 1、2、3 个草稿字接受率约 70%、10%、2%，按连猜微调后是 81%、56%、36%"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">EAGLE 和 MTP 长什么样　——　<tspan font-weight="700">头尾借大模型，只训中间一小块</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">方框里橙色是要训的，蓝色是直接借大模型、不训的</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">要训</text>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">借大模型，冻住不训</text>
+<rect x="266.48" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="287" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">数据怎么拼</text>
+<rect x="0" y="102" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE（2024-01）：大模型冻住，草稿是外挂的一小块</tspan></text>
+<rect x="24" y="158" width="250" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="149" y="183" fill="#174ea6" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型出字前那层的向量</tspan></text>
+<text class="svgsm" x="149" y="203" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">大模型本来就算出来了</text>
+<rect x="24" y="236" width="120" height="56" rx="7" fill="#fff" stroke="#202124" stroke-width="1.6"/>
+<text class="svgsm" x="84" y="261" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">抽中的字</tspan></text>
+<text class="svgsm" x="84" y="281" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">已经定了的下一个</text>
+<line x1="144" y1="264.0" x2="152" y2="264.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="154" y="236" width="120" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="214" y="261" fill="#174ea6" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">嵌入层</tspan></text>
+<text class="svgsm" x="214" y="281" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">借</text>
+<rect x="318" y="196" width="130" height="84" rx="7" fill="#fff" stroke="#5f6368" stroke-width="1.6"/>
+<text class="svgsm" x="383" y="235" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼起来</tspan></text>
+<text class="svgsm" x="383" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">2 倍宽</text>
+<path d="M 274.0 186.0 H 308.0 Q 318.0 186.0 318.0 196.0 V 220.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<path d="M 274.0 264.0 H 314.0 Q 318.0 264.0 318.0 260.0 V 256.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="492" y="196" width="150" height="84" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="567" y="235" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FC</tspan></text>
+<text class="svgsm" x="567" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">压回 1 倍</text>
+<line x1="448" y1="238" x2="490" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="642" y1="238" x2="684" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="686" y="196" width="160" height="84" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="766" y="235" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一层 decoder</tspan></text>
+<text class="svgsm" x="766" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">猜下一位的向量</text>
+<line x1="846" y1="238" x2="888" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="890" y="196" width="150" height="84" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="965" y="235" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">LM head</tspan></text>
+<text class="svgsm" x="965" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">借：向量变成字</text>
+<line x1="1040" y1="238" x2="1082" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1084" y="214" width="96" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="1132" y="245" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿字</tspan></text>
+<path d="M 1132 262 L 1132 328 L 210 328 L 210 294" fill="none" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 4" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="680" y="350" fill="#b06000" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">猜出的向量 ＋ 刚抽中的字，再喂回去猜下一个：猜几个跑几趟</tspan></text>
+<text class="svgsm" x="1200" y="212" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么要喂抽中的字：</tspan></text>
+<text class="svgsm" x="1200" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">光看向量，不知道</text>
+<text class="svgsm" x="1200" y="256" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">上一步按概率抽中了谁</text>
+<text class="svgsm" x="1200" y="292" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">70B 配的这块：</text>
+<text class="svgsm" x="1200" y="314" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">可训 0.99B 参数，</tspan></text>
+<text class="svgsm" x="1200" y="336" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">A100 服务器 1–2 天</text>
+<rect x="0" y="414" width="1400" height="246" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="414" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="416" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="444" x2="1400" y2="444" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="434" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE-3（2025-03）：改两处</tspan></text>
+<text class="svgsm" x="24" y="474" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改动一：三层拼起来，直接猜字</tspan></text>
+<rect x="24" y="488" width="130" height="40" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="89" y="514" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">浅层向量</tspan></text>
+<path d="M 154.0 508.0 H 186.0 Q 196.0 508.0 196.0 518.0 V 558.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="24" y="538" width="130" height="40" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="89" y="564" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">中层向量</tspan></text>
+<path d="M 154.0 558.0 H 196.0 Q 196.0 558.0 196.0 558.0 V 558.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="24" y="588" width="130" height="40" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="89" y="614" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">深层向量</tspan></text>
+<path d="M 154.0 608.0 H 186.0 Q 196.0 608.0 196.0 598.0 V 558.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="198" y="528" width="110" height="60" rx="7" fill="#fff" stroke="#5f6368" stroke-width="1.6"/>
+<text class="svgsm" x="253" y="555" fill="#5f6368" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼起来</tspan></text>
+<text class="svgsm" x="253" y="575" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">3 倍宽</text>
+<line x1="308" y1="558" x2="334" y2="558" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="336" y="528" width="120" height="60" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="396" y="555" fill="#b06000" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FC</tspan></text>
+<text class="svgsm" x="396" y="575" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">压回 1 倍</text>
+<text class="svgsm" x="24" y="654" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">不再猜向量，decoder 出来直接借 LM head 出字</text>
+<line x1="530" y1="458" x2="530" y2="644" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="560" y="474" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改动二：第 2 个字起，拿草稿自己的输出顶替</tspan></text>
+<text class="svgsm" x="560" y="521" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步</tspan></text>
+<rect x="652" y="494" width="131" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="717" y="520" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 how</tspan></text>
+<rect x="791" y="494" width="127" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="854" y="520" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 can</tspan></text>
+<rect x="926" y="494" width="73" height="40" rx="6" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="962" y="520" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋ 字 I</tspan></text>
+<line x1="1011" y1="514" x2="1047" y2="514" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1051" y="494" width="70" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1086" y="520" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">do</tspan></text>
+<text class="svgsm" x="560" y="583" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 步</tspan></text>
+<rect x="652" y="556" width="131" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="717" y="582" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 how</tspan></text>
+<rect x="791" y="556" width="127" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="854" y="582" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 can</tspan></text>
+<rect x="926" y="556" width="107" height="40" rx="6" fill="#fef3e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="979" y="582" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿自己的 I</tspan></text>
+<rect x="1041" y="556" width="86" height="40" rx="6" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1084" y="582" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋ 字 do</tspan></text>
+<line x1="1139" y1="576" x2="1175" y2="576" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1179" y="556" width="70" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1214" y="582" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">it</tspan></text>
+<text class="svgsm" x="560" y="626" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">I 大模型还没验，拿不到它的向量，只能用草稿上一步的输出顶上。</text>
+<text class="svgsm" x="560" y="650" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以训练时就让草稿把自己的输出喂回来练：training-time test。</tspan></text>
+<rect x="0" y="704" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="704" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="0" y="706" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="734" x2="1400" y2="734" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="724" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MTP（DeepSeek-V3 起）：骨架几乎一样，差在谁训</tspan></text>
+<text class="svgsm" x="24" y="764" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DeepSeek-V3 的 MTP 模块</tspan></text>
+<rect x="24" y="780" width="150" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="99" y="805" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主干向量</tspan></text>
+<text class="svgsm" x="99" y="825" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">＋ 下一个字的嵌入</text>
+<line x1="174" y1="808" x2="192" y2="808" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="194" y="780" width="130" height="56" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="259" y="814" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">归一化、投影</tspan></text>
+<line x1="324" y1="808" x2="342" y2="808" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="344" y="780" width="170" height="56" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="429" y="814" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">transformer block</tspan></text>
+<line x1="514" y1="808" x2="532" y2="808" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="534" y="780" width="120" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="594" y="805" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出头</tspan></text>
+<text class="svgsm" x="594" y="825" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">与主模型共用</text>
+<text class="svgsm" x="24" y="874" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
+<text class="svgsm" x="100" y="874" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">什么时候训</tspan></text>
+<text class="svgsm" x="420" y="874" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型动不动</tspan></text>
+<line x1="24" y1="884" x2="640" y2="884" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="24" y="908" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE</tspan></text>
+<text class="svgsm" x="100" y="908" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">模型发布以后，谁都能外挂上去训</text>
+<text class="svgsm" x="420" y="908" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">冻住</text>
+<text class="svgsm" x="24" y="942" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MTP</tspan></text>
+<text class="svgsm" x="100" y="942" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">厂家预训练时一起训，随模型发布</text>
+<text class="svgsm" x="420" y="942" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">一起训</text>
+<text class="svgsm" x="24" y="996" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">带 MTP 的还有 Qwen3-Next、GLM-4.5、小米 MiMo；Step 3.5 Flash 挂 3 个模块（MTP-3）</text>
+<line x1="690" y1="748" x2="690" y2="988" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="720" y="764" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一层 MTP 连猜：输出喂回自己再跑一趟</tspan></text>
+<text class="svgsm" x="720" y="786" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">MiMo-7B，第 1／2／3 个草稿字的接受率</text>
+<rect x="760" y="865.0" width="64" height="105.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="792" y="857" fill="#80868b" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70%</tspan></text>
+<rect x="834" y="848.5" width="64" height="121.5" rx="3" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="866" y="840" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">81%</tspan></text>
+<text class="svgsm" x="829" y="994" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 个</tspan></text>
+<rect x="970" y="955.0" width="64" height="15.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1002" y="947" fill="#80868b" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10%</tspan></text>
+<rect x="1044" y="886.0" width="64" height="84.0" rx="3" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1076" y="878" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">56%</tspan></text>
+<text class="svgsm" x="1039" y="994" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 个</tspan></text>
+<rect x="1180" y="967.0" width="64" height="3.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1212" y="959" fill="#80868b" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2%</tspan></text>
+<rect x="1254" y="916.0" width="64" height="54.0" rx="3" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1286" y="908" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">36%</tspan></text>
+<text class="svgsm" x="1249" y="994" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 3 个</tspan></text>
+<line x1="740" y1="970" x2="1360" y2="970" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="1160" y="800" width="16" height="14" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1182" y="812" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">原样连猜（只练过往前一步）</text>
+<rect x="1160" y="824" width="16" height="14" rx="2" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1182" y="836" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按连猜微调后（FastMTP）</tspan></text>
+<rect x="0" y="1050" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1050" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1050" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1077" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">长相差不多，差在谁训、练没练过连猜</tspan></text>
+<text class="svgsm" x="20" y="1108" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">EAGLE 不是免训练，只是训得少；MTP 能多猜几步，但草稿得按连猜练过，改个参数不够。</text>
+</svg><figcaption><b>先看颜色：橙色要训，蓝色借大模型。</b>三块的橙色都只有中间一小段；右下灰柱和绿柱比的是连猜练没练过。<span class="capmore"><br><em>结构按论文正文；how／can／I／do／it 是 EAGLE-3 论文的例子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>EAGLE：arXiv <a href="https://arxiv.org/abs/2401.15077" target="_blank" rel="noopener">2401.15077</a> v3 §3（Figure 6 说明：嵌入层、LM head 用目标模型参数不训；FC＋一层 decoder；特征与提前一位的 token 嵌入拼 2 倍宽）、§4 Training（70B 可训 0.99B，A100 40G 服务器 1–2 天）。EAGLE-3：arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a> v3 §3.1–3.2（低／中／高特征拼 3k 经 FC 压回 k；第 2 步起用草稿输出 a 顶替；training-time test）；how／can／I／do／it 是论文 Figure 5 的例子。</p>
+<p>MTP：DeepSeek-V3 技术报告 MTP 一节；各家采用见 sebastianraschka.com 架构图鉴 MTP 页、FastMTP 引言。接受率：FastMTP arXiv <a href="https://arxiv.org/abs/2509.18362" target="_blank" rel="noopener">2509.18362</a>（MiMo-7B 单层 MTP，冻结主模型、自蒸馏数据微调 MTP 头；原样第 2 位约 10%，第 3 位约 2%）。</p></details></figure>
+  <ul>
+    <li><b>EAGLE 要训，量很小。</b>大模型冻住；入口的嵌入层、出口的 LM head 直接借。要训的只有中间一个压缩层加一层 decoder：给 70B 配的这块 0.99B 参数，一台 A100 服务器训 1–2 天。</li>
+    <li><b>MTP 的骨架跟 EAGLE 几乎一样，</b>猜法也一样，一个字一个字猜。差在谁训：MTP 由出模型的厂家在预训练里顺手练好，跟权重一起放出来；EAGLE 是拿到公开的模型之后，任何人自己另练一块挂上。</li>
+    <li><b>多猜几步，草稿得按连猜练过。</b>一层 MTP 把输出喂回去就能接着猜，可原版只练过往前一步：MiMo-7B 原样连猜，三个位置接受率约 70%、10%、近零；FastMTP 按连猜微调后是 81%、56%、36%。</li>
+  </ul>
+  <p>所以把「猜几个」的参数从 1 调到 3，接受率塌了，不是引擎坏了，是草稿没练过这么猜。</p>
+
+  <div class="note ok"><span class="t">这一节带走</span>
+    <b>投机解码让搬一趟权重换回好几个字：猜对几个出几个，最差也出一个。人少时赚得最多，人一多就缩。</b><br>
+    这一步进步多少：K3 在 GB300 上一个人用，每字间隔快到 4.81 倍；算上不受加速的首字，端到端吞吐是不开的 4.22 倍；64 个人一起用剩 1.74 倍。<br>
+    可人一多投机就帮不上，每一趟还是那么重。下一节换一根杠杆：把货变轻。<br>
+    <em>想看 MoE 多验为什么不白送、DSpark 的两刀、n-gram 草稿、接进系统的代价，翻完整版第十一节。</em></div>
+
 </div></section>
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>量化：少搬字节，掉不掉点？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
 <ul>
