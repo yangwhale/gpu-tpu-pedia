@@ -60,12 +60,7 @@ __L4_NET__
   <p><b>还有两笔账要付：</b>批必须够大，批小了凑不满车，传的开销照付；一张卡出事全组陪着，一个实例上百张卡。</p>
 
   <h3 id="l4-6">所以 NVL72 这类大域，对推理特别合适</h3>
-  <p>SGLang 在 GB200 NVL72 上把整柜当一个 EP 域跑 DeepSeek V3／R1（2K 输入、PD 分离，decode 48 张卡）。每卡对比 H100 上的大 EP 部署：</p>
-  <ul>
-    <li><b>第一篇：</b>decode 每卡 7,583 tok/s，<b>2.7 倍</b>。</li>
-    <li><b>第二篇：</b>注意力用 FP8、专家用 NVFP4，prefill <b>3.8 倍</b>、decode <b>4.8 倍</b>。</li>
-    <li><b>别全记在大 EP 头上。</b>这些倍数混着显存、精度、kernel 和 PD 分离，不全是大 EP 的功劳；decode 是先压慢、攒满请求再放开测的，H100 基线有一组开了模拟 MTP、GB200 没开。</li>
-  </ul>
+__L4_NVL72__
 
   <div class="note ok"><span class="t">这一节带走</span>
     <b>DEP 不复印笔记，每一步变短；大 EP 把专家那趟车坐满，还腾出显存装笔记。</b><br>
@@ -84,6 +79,9 @@ ANIM = '''<figure class="fbox fwide" id="anim-bigep">
 BODY = BODY.replace("__L4_ANIM__", ANIM)
 
 FIGS = {
+    "__L4_NVL72__": ("fig-nvl72", "fig6-nvl72.svg", "topic06-fig-nvl72.py",
+        '<b>先看虚线：H100 那根只到这里，最下面一根将近五个它长。</b><br>'
+        '<em>两篇都是每卡对每卡，对照的是 H100 上的大 EP 部署。</em>'),
     "__L4_TEPDEP__": C.l300_fig("fig-s6-tep-dep-t5",
         '<b>只看注意力那一半：左边四张卡合算一批人，右边四张卡各带各的人。</b><br>'
         '<em>专家那一半两边都按 EP 分，图里不画。</em>'),
