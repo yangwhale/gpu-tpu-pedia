@@ -28,7 +28,7 @@ CH = [_ch(i, r) for i, r in enumerate(SPINE)]
 
 PLAN = [("%s　%s" % (r[0], r[1]), r[3], "—", r[2]) for r in SPINE]
 
-JUDGED = ()   # 台词数字偏密但「数就是内容」的块（填开头几个字）
+JUDGED = ("「铺开换来三样",)   # 台词数字偏密但「数就是内容」的块（填开头几个字）
 
 TIME_NOTE = """<p>⛔ <b>第零、一节不能砍。</b>
   <em>第零节立住「decode 每一步都搬一趟」，第一节算清这一趟为什么贵；后面每节开头都拿它接。</em><br>
