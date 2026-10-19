@@ -20,7 +20,7 @@ __L1_AI__
 __L1_B1__
   <p>DeepSeek-V3 每出一个字要读约 37 GB 权重，一颗 v7 每秒读 7.37 TB：搬一趟约 5 毫秒。
     算只要 0.016 毫秒，<b>算力只用上 0.32%</b>。换更快的计算单元没用，下限是带宽定的。</p>
-  <div class="note info"><span class="t">公交车</span>
+  <div class="note info"><span class="t">还是那辆公交车</span>
     开一趟的油钱固定：坐一个人和坐满，搬的货一样多。prefill 是满载的车；decode 一趟只拉一个人。</div>
 
   <h3 id="l1-3">多拉几个人：权重能摊，KV 摊不了</h3>
