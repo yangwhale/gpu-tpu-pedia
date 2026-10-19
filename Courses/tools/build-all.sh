@@ -137,6 +137,8 @@ python3 topic04-build-lecture.py
   for s in topic06-fig-*.py; do python3 "$s"; done
   python3 topic06-build.py
   python3 topic06-build-lecture.py
+  python3 topic06-build-L200.py
+  python3 topic06-build-L200-lecture.py
 
   step "专题八 教材"
   python3 topic08-build.py
