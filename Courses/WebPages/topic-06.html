@@ -1357,13 +1357,122 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <em>想看三列对比表、强度怎么推、每组条的来历，翻完整版第一节。</em></div>
 
 </div></section>
-<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>那多拉几个人不就行了？batch 能开多大？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
-<ul>
-  <li><b>一条主线</b>：拼车：随上随下（连续批）；座位就是 KV，代价是每个人等得更久</li>
-  <li><b>计划</b>：10 分钟</li>
-  <li><b>打算用的图</b>：anim-contbatch、fig-s2-pareto</li>
-  <li><b>想深挖</b>：<a href="topic-06-L300.html#s三">完整版对应那一节</a></li>
-</ul>
+<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>那多拉几个人不就行了？batch 能开多大？</h2></div>
+  <p class="lead">上一节的结论是多拉人。可人不是一起上车、一起下车的：有人问一句就走，有人要写三千字。
+    <b>车怎么排，决定一趟能坐满几个人；座位有多少，决定最多坐几个。</b></p>
+
+  <h3 id="l2-1">老办法：凑满一车，等最慢的那个</h3>
+  <ul>
+    <li><b>静态批。</b>一批人一起进、一起出。先答完的人座位空着，车照样开，这一趟白搬。</li>
+    <li><b>卡在接口。</b>老引擎对外只有「整批跑完」一个按钮，调度器看不见中间那一步，没法中途换人。</li>
+  </ul>
+
+  <h3 id="l2-2">拼车：每一步都重新排一次</h3>
+<figure class="fbox fwide" id="anim-contbatch">
+<video src="media/topic06-contbatch.mp4?v=f9bb1ad0" autoplay loop muted playsinline
+       aria-label="静态批与连续批动画。上下两组各 4 个槽位；上组凑满一批、等最长的做完，下组每一步都重新排、谁做完谁让位。每一列是一步，灰格是槽位空转。最后：同样 15 步，静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。"></video>
+<figcaption><b>比两组的灰格：上面越走越多，下面一格没有。</b>
+  <span class="sub">（18 秒无声循环。请求长度是示意，每步按等长算。）</span></figcaption></figure>
+  <p>Orca（OSDI 2022）只改了一件事：<b>每走一步就停下来看一眼</b>，写完的马上下车，排队的马上补上。
+    业界后来叫它连续批（continuous batching），vLLM、SGLang 都这样排。</p>
+  <div class="note info"><span class="t">拼车</span>
+    网约车拼单：车不停在起点等凑满，路上随下随上，座位尽量不空着。</div>
+  <ul>
+    <li><b>为什么拼得起来。</b>乘权重那一步不管 token 是谁的，所有人接成一长条一起乘；只有注意力按人分开，各读各的 KV。</li>
+    <li><b>新人上车不堵门。</b>长 prompt 切成小块，每步带一块跟着车走，车上出字的人不会被卡一下（chunked prefill）。</li>
+  </ul>
+
+  <h3 id="l2-3">座位就是 KV：多给座位，不一定多出字</h3>
+  <p>每个人在车上都要占一块 KV，<b>KV 池装得下几个人，就是有几个座位</b>。可座位不是越多越好：</p>
+  <ul>
+    <li><b>GB300 上跑 V4-Pro 的实测：</b>给 KV 池多 13% 显存，每卡多坐 13% 的人（886 → 999），总吞吐只多 0.8%。</li>
+    <li><b>代价落在每个人身上：</b>两字间隔从 77.7 拖到 85.3 毫秒。人多了，每一步就长了。</li>
+  </ul>
+
+  <h3 id="l2-4">所以 batch 开多大，要先问「每人要多快」</h3>
+<figure class="fbox fwide" id="fig-s2-pareto"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="横轴是每个用户每秒拿到多少字，纵轴是每张 GPU 每秒出多少字，都是 GB300 上跑 DeepSeek-V4-Pro、8K 进 1K 出。InferenceX 的 vLLM 曲线三个点：每用户 68 时每卡 9,759，121 时 3,816，173 时只剩 895。PyTorch 博客的 SGLang 在每用户 50 处报每卡约 11,200，同一位置首发时只有约 2,200。本仓库实测的 9,168 落在每用户约 17 处。同一套系统沿着曲线往左走，每卡吞吐就往上涨；所以先定交互档，再在这一档上比吞吐"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">吞吐和交互性是一条曲线　——　<tspan font-weight="700">先定档，再比吞吐</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">GB300 · DeepSeek-V4-Pro · 8K 进 1K 出 · 纵轴只数输出 token、只除以 decode 卡（11,200 官方没写怎么数）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">InferenceX：Dynamo ＋ vLLM（同一条曲线）</text>
+<rect x="381.88000000000005" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="402" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">PyTorch 博客：SGLang</text>
+<rect x="600.24" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="621" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">本仓库实测：SGLang dep8</text>
+<rect x="0" y="102" width="1400" height="520" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张 GPU 的吞吐 vs 每个用户的速度</tspan></text>
+<line x1="150" y1="552" x2="1170" y2="552" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="150" y1="552" x2="150" y2="172" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="150.0" y1="552" x2="150.0" y2="558" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="150" y="576" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="400.0" y1="552" x2="400.0" y2="558" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="400" y="576" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">50</text>
+<line x1="650.0" y1="552" x2="650.0" y2="558" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="650" y="576" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">100</text>
+<line x1="900.0" y1="552" x2="900.0" y2="558" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="900" y="576" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">150</text>
+<line x1="1150.0" y1="552" x2="1150.0" y2="558" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1150" y="576" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">200</text>
+<line x1="144" y1="552.0" x2="150" y2="552.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="138" y="557" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="144" y1="462.0" x2="150" y2="462.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="150" y1="462.0" x2="1150" y2="462.0" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="138" y="467" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">3,000</text>
+<line x1="144" y1="372.0" x2="150" y2="372.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="150" y1="372.0" x2="1150" y2="372.0" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="138" y="377" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">6,000</text>
+<line x1="144" y1="282.0" x2="150" y2="282.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="150" y1="282.0" x2="1150" y2="282.0" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="138" y="287" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">9,000</text>
+<line x1="144" y1="192.0" x2="150" y2="192.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="150" y1="192.0" x2="1150" y2="192.0" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="138" y="197" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">12,000</text>
+<text class="svgsm" x="650" y="602" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每个用户每秒拿到的字（tok/s/user）→ 越右越跟手</tspan></text>
+<text class="svgsm" x="138" y="162" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张 GPU 每秒出的字 ↑</tspan></text>
+<line x1="400.0" y1="552" x2="400.0" y2="186" stroke="#9334e6" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text class="svgsm" x="408" y="202" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先定档：每用户 50 tok/s</tspan></text>
+<path d="M 490.00 259.23 L 755.00 437.52 L 1015.00 525.15" fill="none" stroke="#1e8e3e" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="490.0" cy="259.2" r="7" fill="#1e8e3e"/>
+<text class="svgsm" x="502" y="249" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9,759 @ 68</tspan></text>
+<circle cx="755.0" cy="437.5" r="7" fill="#1e8e3e"/>
+<text class="svgsm" x="767" y="427" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3,816 @ 121</tspan></text>
+<circle cx="1015.0" cy="525.1" r="7" fill="#1e8e3e"/>
+<text class="svgsm" x="1027" y="515" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">895 @ 173</tspan></text>
+<circle cx="400.0" cy="216.0" r="7" fill="#1a73e8"/>
+<text class="svgsm" x="412" y="221" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">11,200（2026-06，开 MTP）</tspan></text>
+<circle cx="400.0" cy="486.0" r="7" fill="#1a73e8"/>
+<text class="svgsm" x="412" y="491" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2,200（首发，无 MTP）</tspan></text>
+<circle cx="233.3" cy="277.0" r="7" fill="#e8710a"/>
+<text class="svgsm" x="245" y="302" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9,168 @ ≈ 17</tspan></text>
+<text class="svgsm" x="245" y="322" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums">（TPOT 约 60 ms）</text>
+<text class="svgsm" x="1140" y="242" fill="#174ea6" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一档上：11,200 对 2,200，几倍？</tspan></text>
+<text class="svgsm" x="1140" y="266" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">每卡约 224 个用户同时在线（11,200 ÷ 50）</text>
+<rect x="0" y="672" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="672" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="672" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="699" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">单报一个每卡吞吐，等于没报</tspan></text>
+<text class="svgsm" x="20" y="730" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一条 vLLM 曲线上，每用户从 68 提到 173，每卡吞吐从 9,759 掉到 895。报吞吐必须连同交互档一起报。</text>
+<text class="svgsm" x="20" y="754" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">本仓库的 9,168 落在每用户约 17 的低档，跟 50 档上的 11,200 不能直接比高低。</text>
+</svg><figcaption><b>沿着绿线往左走，每卡吞吐往上涨，每个人拿到的字变慢。</b><span class="capmore"><br><em>只有绿色三点是同一条曲线；其余点分属不同框架和配置。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>InferenceX 三点：gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:683-695（GB300 Dynamo ＋ vLLM，V4-Pro FP4，8K/1K，output ÷ decode GPU）。</p>
+<p>PyTorch 博客 2026-06-23「Serving DeepSeek-V4 on GB300 with SGLang: 5x Higher Throughput at the Same Interactivity Since Day-0」：~11,200 tok/s/GPU at roughly 50 tok/s/user，Day-0 无 MTP 曲线约 2,200。</p>
+<p>⚠️ 11,200 用的是 output ÷ decode GPU 还是 (in＋out) ÷ 全部 GPU，公开材料没钉死（SGLANG-V4PRO-RUNBOOK.md:745）。本图按前者画，若是后者，这个点要往下挪。</p>
+<p>本仓库实测 9,168：SGLANG-V4PRO-RUNBOOK.md:596（conc600，TPOT 59–61 ms）、723-725。横坐标 1000 ÷ 60 ≈ 17 是本课推导。</p>
+<p>goodput：DistServe（arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）。</p></details></figure>
+  <ul>
+    <li><b>同一套系统，一条曲线。</b>每人每秒 68 个字时，每卡 9,759；要 173 个字，每卡只剩 895。</li>
+    <li><b>先定档，再比吞吐。</b>别人报的大数，可能只是站在曲线更左的那头。</li>
+    <li><b>线上真有人选左边。</b>DeepSeek 公布的线上数：每个用户只有 20–22 字每秒，换来每节点约 14,800。</li>
+  </ul>
+
+  <div class="note ok"><span class="t">这一节带走</span>
+    <b>连续批让座位不空着；座位数由 KV 定；人越多，每人越慢。</b>
+    这一步进步多少：Orca 论文里，同样每字 190 毫秒的延迟，GPT-3 175B 每秒能服务的请求是 FasterTransformer 静态批的 36.9 倍。<br>
+    座位既然是 KV，下一节就问：每人那块 KV 到底多大，能不能小一点？<br>
+    <em>想看 chunked prefill 一步里装了什么、Little 定律怎么反推批大小、显存不够时踢谁，翻完整版第三节。</em></div>
+
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>KV cache 到底占多少，怎么省？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
 <ul>
