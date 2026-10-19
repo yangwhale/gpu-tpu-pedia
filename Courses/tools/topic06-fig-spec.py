@@ -603,6 +603,150 @@ def fig_three():
     f.save("fig6-spec-three.svg", yb + 14)
 
 
+# ════════════════════════════════════════════════════════════════════════
+# fig6-spec-eagle：EAGLE／EAGLE-3／MTP 草稿的结构。数字都来自论文正文（见出处行）。
+EAGLE_70B_TRAIN_B = 0.99                     # EAGLE 论文 §4：70B 对应可训参数 0.99B
+MIMO_RAW = [70, 10, 2]                       # FastMTP Fig.4(a)／贡献段：原样递归连猜第 1/2/3 位接受率 %
+MIMO_FT = [81, 56, 36]                       # FastMTP 贡献段：按连猜微调后
+assert all(a < b for a, b in zip(MIMO_RAW, MIMO_FT))
+
+
+def fig_eagle():
+    """EAGLE 借头借尾只训中间；EAGLE-3 的两处改动；MTP 同骨架、单层连猜要练过。"""
+    f = Fig(W, "EAGLE、EAGLE-3、MTP 三种草稿的结构。第一块 EAGLE：大模型冻住，嵌入层和 LM head 借大模型的，"
+               "只训一个 FC 压缩层加一层 decoder；输入是大模型出字前那层的向量，加上下一个已抽中的字的嵌入，"
+               "拼成两倍宽，压回一倍，猜出下一位的向量，再借 LM head 出字，猜出的向量和字喂回去接着猜。"
+               "第二块 EAGLE-3：浅、中、深三层向量拼成三倍宽再压回；猜第二个字起拿不到大模型的向量，用草稿自己上一步的输出顶替。"
+               "第三块 MTP：骨架和 EAGLE 几乎一样，差在厂家预训练时一起训；单层 MTP 原样连猜，"
+               "MiMo-7B 上第 1、2、3 个草稿字接受率约 70%、10%、2%，按连猜微调后是 81%、56%、36%")
+    y0 = f.header("EAGLE 和 MTP 长什么样　——　<tspan font-weight=\"700\">头尾借大模型，只训中间一小块</tspan>",
+                  "方框里橙色是要训的，蓝色是直接借大模型、不训的",
+                  [(OR, "要训"), (BL, "借大模型，冻住不训"), (GY, "数据怎么拼")])
+    TRAIN, BORROW = ("#fef3e0", OR), ("#e8f0fe", BL)
+
+    def blk(x, y, w, h, main, sub, kind, size=15):
+        fill, col = kind
+        f.box(x, y, w, h, fill, col, 7, 1.6)
+        f.t(x + w / 2, y + (h / 2 + 6 if not sub else h / 2 - 3), main, col, True, size, "middle", w=w - 10)
+        if sub:
+            f.t(x + w / 2, y + h / 2 + 17, sub, GY, False, 12.5, "middle", w=w - 10)
+        return x + w
+
+    # ① EAGLE
+    PH = 268
+    py = f.panel(0, y0, W, PH, "EAGLE（2024-01）：大模型冻住，草稿是外挂的一小块", OR)
+    ya, yb_, BH = py + 26, py + 104, 56
+    blk(24, ya, 250, BH, "大模型出字前那层的向量", "大模型本来就算出来了", BORROW, 14.5)
+    blk(24, yb_, 120, BH, "抽中的字", "已经定了的下一个", ("#fff", INK), 14.5)
+    f.line(144, yb_ + BH / 2, 152, yb_ + BH / 2, GY2, 1.4)
+    blk(154, yb_, 120, BH, "嵌入层", "借", BORROW, 14.5)
+    cx = 318
+    blk(cx, ya + 38, 130, 84, "拼起来", "2 倍宽", ("#f1f3f4", GY))
+    f.elbow(274, ya + BH / 2, cx, ya + 62, GY2)
+    f.elbow(274, yb_ + BH / 2, cx, ya + 98, GY2)
+    x = blk(492, ya + 38, 150, 84, "FC", "压回 1 倍", TRAIN)
+    f.line(cx + 130, ya + 80, 490, ya + 80, GY2, 1.4)
+    f.line(x, ya + 80, 684, ya + 80, GY2, 1.4)
+    x = blk(686, ya + 38, 160, 84, "一层 decoder", "猜下一位的向量", TRAIN)
+    f.line(x, ya + 80, 888, ya + 80, GY2, 1.4)
+    x = blk(890, ya + 38, 150, 84, "LM head", "借：向量变成字", BORROW)
+    f.line(x, ya + 80, 1082, ya + 80, GY2, 1.4)
+    f.box(1084, ya + 56, 96, 48, "#e6f4ea", GR, 6, 1.6)
+    f.t(1132, ya + 87, "草稿字", GR, True, 15, "middle")
+    f.path("M 1132 %d L 1132 %d L 210 %d L 210 %d" % (ya + 104, py + 196, py + 196, yb_ + BH + 2), OR, 1.6, dash="6 4")
+    f.t(680, py + 218, "猜出的向量 ＋ 刚抽中的字，再喂回去猜下一个：猜几个跑几趟", OR, True, 14.5, "middle")
+    f.t(1200, ya + 54, "为什么要喂抽中的字：", INK, True, 13.5)
+    f.t(1200, ya + 76, "光看向量，不知道", INK, size=13.5)
+    f.t(1200, ya + 98, "上一步按概率抽中了谁", INK, size=13.5)
+    f.t(1200, ya + 134, "70B 配的这块：", GY, size=13.5)
+    f.t(1200, ya + 156, "可训 %.2fB 参数，" % EAGLE_70B_TRAIN_B, OR, True, 13.5)
+    f.t(1200, ya + 178, "A100 服务器 1–2 天", GY, size=13.5)
+
+    # ② EAGLE-3
+    PH2 = 246
+    py = f.panel(0, py + PH + 14, W, PH2, "EAGLE-3（2025-03）：改两处", OR)
+    f.t(24, py + 30, "改动一：三层拼起来，直接猜字", INK, True, 15)
+    for i, lab in enumerate(("浅层向量", "中层向量", "深层向量")):
+        blk(24, py + 44 + i * 50, 130, 40, lab, None, BORROW, 14)
+        f.elbow(154, py + 64 + i * 50, 196, py + 114, GY2)
+    blk(198, py + 84, 110, 60, "拼起来", "3 倍宽", ("#f1f3f4", GY), 14.5)
+    f.line(308, py + 114, 334, py + 114, GY2, 1.4)
+    blk(336, py + 84, 120, 60, "FC", "压回 1 倍", TRAIN, 14.5)
+    f.t(24, py + 210, "不再猜向量，decoder 出来直接借 LM head 出字", GY, size=13.5)
+    X2 = 560
+    f.line(X2 - 30, py + 14, X2 - 30, py + PH2 - 46, LINE, 1, arrow=False)
+    f.t(X2, py + 30, "改动二：第 2 个字起，拿草稿自己的输出顶替", INK, True, 15)
+    def tokrow(y, label, items, out):
+        f.t(X2, y + 27, label, INK, True, 14)
+        x = X2 + 92
+        for txt, kind in items:
+            fill, col = kind
+            w = wpx(txt, 14) + 26
+            f.box(x, y, w, 40, fill, col, 6, 1.4)
+            f.t(x + w / 2, y + 26, txt, col, True, 14, "middle")
+            x += w + 8
+        f.line(x + 4, y + 20, x + 40, y + 20, GY2, 1.4)
+        f.box(x + 44, y, 70, 40, "#e6f4ea", GR, 6, 1.4)
+        f.t(x + 79, y + 26, out, GR, True, 14, "middle")
+        return x
+    G, A, E = BORROW, TRAIN, ("#fff", INK)
+    tokrow(py + 50, "第 1 步", [("大模型给的 how", G), ("大模型给的 can", G), ("＋ 字 I", E)], "do")
+    xr = tokrow(py + 112, "第 2 步", [("大模型给的 how", G), ("大模型给的 can", G), ("草稿自己的 I", A), ("＋ 字 do", E)], "it")
+    f.t(X2, py + 182, "I 大模型还没验，拿不到它的向量，只能用草稿上一步的输出顶上。", INK, size=13.5)
+    f.t(X2, py + 206, "所以训练时就让草稿把自己的输出喂回来练：training-time test。", OR, True, 13.5)
+
+    # ③ MTP
+    PH3 = 300
+    py = f.panel(0, py + PH2 + 14, W, PH3, "MTP（DeepSeek-V3 起）：骨架几乎一样，差在谁训", PU)
+    f.t(24, py + 30, "DeepSeek-V3 的 MTP 模块", INK, True, 15)
+    xs = 24
+    for main, sub, kind, w in (("主干向量", "＋ 下一个字的嵌入", BORROW, 150), ("归一化、投影", None, TRAIN, 130),
+                               ("transformer block", None, TRAIN, 170), ("输出头", "与主模型共用", BORROW, 120)):
+        x = blk(xs, py + 46, w, 56, main, sub, kind, 14)
+        if xs + w < 600:
+            f.line(x, py + 74, x + 18, py + 74, GY2, 1.4)
+        xs = x + 20
+    rows = [("", "什么时候训", "大模型动不动"),
+            ("EAGLE", "模型发布以后，谁都能外挂上去训", "冻住"),
+            ("MTP", "厂家预训练时一起训，随模型发布", "一起训")]
+    for i, (a, b, c) in enumerate(rows):
+        yy = py + 140 + i * 34
+        col = INK if i else GY
+        f.t(24, yy, a, OR if a == "EAGLE" else (PU if a == "MTP" else GY), True, 14)
+        f.t(100, yy, b, col, i == 0, 14)
+        f.t(420, yy, c, col, i == 0, 14)
+        if i == 0:
+            f.line(24, yy + 10, 640, yy + 10, LINE, 1, arrow=False)
+    f.t(24, py + 262, "带 MTP 的还有 Qwen3-Next、GLM-4.5、小米 MiMo；Step 3.5 Flash 挂 3 个模块（MTP-3）", GY, size=13.5)
+
+    X3 = 720
+    f.line(X3 - 30, py + 14, X3 - 30, py + PH3 - 46, LINE, 1, arrow=False)
+    f.t(X3, py + 30, "一层 MTP 连猜：输出喂回自己再跑一趟", INK, True, 15)
+    f.t(X3, py + 52, "MiMo-7B，第 1／2／3 个草稿字的接受率", GY, size=13)
+    BASE, HMAX, BW_ = py + 236, 150, 64
+    for k in range(3):
+        gx = X3 + 40 + k * 210
+        for j, (v, fill, col) in enumerate(((MIMO_RAW[k], "#f1f3f4", GY2), (MIMO_FT[k], "#a8dab5", GR))):
+            h = HMAX * v / 100
+            bx = gx + j * (BW_ + 10)
+            f.box(bx, BASE - h, BW_, max(h, 1.5), fill, col, 3, 1.2)
+            f.t(bx + BW_ / 2, BASE - h - 8, "%d%%" % v, col, True, 14, "middle")
+        f.t(gx + BW_ + 5, BASE + 24, "第 %d 个" % (k + 1), INK, True, 14, "middle")
+    f.line(X3 + 20, BASE, X3 + 640, BASE, GY2, 1, arrow=False)
+    f.box(X3 + 440, py + 66, 16, 14, "#f1f3f4", GY2, 2)
+    f.t(X3 + 462, py + 78, "原样连猜（只练过往前一步）", GY, size=13)
+    f.box(X3 + 440, py + 90, 16, 14, "#a8dab5", GR, 2)
+    f.t(X3 + 462, py + 102, "按连猜微调后（FastMTP）", GR, True, 13)
+    f._pan = None
+    yb = f.band(py + PH3 + 16, "ok", "长相差不多，差在谁训、练没练过连猜", [
+        "EAGLE 不是免训练，只是训得少；MTP 能多猜几步，但草稿得按连猜练过，改个参数不够。"])
+    yb = f.src(yb + 10,
+               "EAGLE：arXiv 2401.15077 v3 §3（Figure 6 说明：嵌入层、LM head 用目标模型参数不训；FC＋一层 decoder；特征与提前一位的 token 嵌入拼 2 倍宽）、§4 Training（70B 可训 0.99B，A100 40G 服务器 1–2 天）。"
+               "EAGLE-3：arXiv 2503.01840 v3 §3.1–3.2（低／中／高特征拼 3k 经 FC 压回 k；第 2 步起用草稿输出 a 顶替；training-time test）；how／can／I／do／it 是论文 Figure 5 的例子。",
+               "MTP：DeepSeek-V3 技术报告 MTP 一节；各家采用见 sebastianraschka.com 架构图鉴 MTP 页、FastMTP 引言。接受率：FastMTP arXiv 2509.18362（MiMo-7B 单层 MTP，冻结主模型、自蒸馏数据微调 MTP 头；原样第 2 位约 10%，第 3 位约 2%）。")
+    f.save("fig6-spec-eagle.svg", yb + 14)
+
+
 fig_step()
 fig_bytes()
 fig_conc()
@@ -610,3 +754,4 @@ fig_temp()
 fig_tree()
 fig_ngram()
 fig_three()
+fig_eagle()

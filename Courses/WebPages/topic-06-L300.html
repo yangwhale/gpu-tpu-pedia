@@ -10657,12 +10657,171 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>顺着 ① 到 ④：橙色对上，绿色照抄，红色被拒处换成蓝色。</b><span class="capmore"><br><em>示例自拟，只说明机制。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>做法：prompt-lookup-decoding 仓库 README（用提示词里的字符串匹配代替草稿模型，输入依赖型任务 2–4 倍）；vLLM vllm/config/speculative.py 的 method="ngram"、prompt_lookup_min／max（都不填时默认取 5）；SGLang --speculative-algorithm NGRAM。</p>
 <p>示例代码、匹配两个字、抄 4 个、验出 ✓✓✗ 都是自拟，只为说明机制；真实实现按 prompt_lookup_min～max 个 token 匹配。</p></details></figure>
   <p>vLLM 在 4 张 H100 上跑 Llama 3 70B、每秒 1 个请求，摘要数据集上最多快 2.8 倍；同条件换小草稿模型跑 ShareGPT 对话是 1.5 倍。开法：vLLM 的 <code>speculative_config</code> 里 <code>method</code> 写 <code>ngram</code>，SGLang 是 <code>--speculative-algorithm NGRAM</code>。</p>
-  <p><b>EAGLE 也要训，只是训得很少。</b>大模型冻住不动，入口把字变向量的嵌入层、出口把向量变字的 LM head 都直接借大模型的；要训的只有中间一小块：一个 FC 压缩层加一层 decoder。给 70B 配的这块 0.99B 参数，用 6.8 万条 ShareGPT 对话，一台 A100 40G 服务器训 1–2 天（EAGLE 论文）。</p>
-  <p><b>它怎么猜：</b>输入两样，一是大模型出字前那层的向量，二是下一个已经抽中的字的嵌入，拼成两倍宽；FC 压回一倍，decoder 猜下一位的向量，再借 LM head 出字。猜出的向量和字拼起来喂回去，接着猜。要喂抽中的字，是因为光看向量不知道上一步按概率抽中了哪个字。</p>
-  <p><b>EAGLE-3 改了两处。</b>一是从大模型浅、中、深三层各取一个向量，拼成三倍宽再压回一倍；也不再猜向量，直接猜字。二是猜第 2 个字起，那个字大模型还没验，拿不到它的向量，只能用草稿自己上一步的输出顶替；所以训练时就让草稿把自己的输出喂回来练，叫 training-time test。</p>
-  <p><b>MTP 的结构跟 EAGLE 几乎一样。</b>DeepSeek-V3 的 MTP 模块也是主干的向量加下一个字的嵌入，归一化、投影，过一个 transformer block；嵌入层和输出头与主模型共用。差别在谁训：MTP 是厂家预训练时一起训、随模型发布，EAGLE 是模型发布后谁都能外挂上去训。</p>
-  <p><b>带 MTP 的不止 DeepSeek。</b>Qwen3-Next、GLM-4.5、小米 MiMo 都带 MTP 层，Qwen3-Next 专门按多步推理来训。Step 3.5 Flash 训练和推理都用 3 个模块，叫 MTP-3；Nemotron 3 Super 训两层共用权重的 MTP，可反复套用猜两个以上（Raschka 架构图鉴）。</p>
-  <p><b>一层 MTP 也能连猜，但原版只练过往前一步。</b>把它的输出喂回去再跑一趟，就多猜一个字。MiMo-7B 只有一层 MTP，原样连猜，第 1、2、3 个草稿字接受率约 70%、10%、近 0。FastMTP 冻住主模型，用主模型自己生成的数据把这一层（2.1 亿参数）按连猜微调，三位升到 81%、56%、36%，平均速度是不投机的 2.03 倍。</p>
+  <p><b>EAGLE 也要训，只是训得很少。</b>大模型冻住，嵌入层和 LM head 直接借，只训中间一个 FC 加一层 decoder；给 70B 配的这块，用 6.8 万条 ShareGPT 对话就训得出来（EAGLE 论文）。</p>
+  <p><b>EAGLE-3 改了两处</b>（图第二块）。第二处 training-time test 让训练和推理时草稿吃到的输入对上了；论文说正因为这样，加训练数据才能接着涨，原版 EAGLE 加数据提升有限。</p>
+  <p><b>MTP 的骨架跟 EAGLE 几乎一样</b>（图第三块），区别在谁训。带 MTP 的不止 DeepSeek：Qwen3-Next 专门按多步推理来训；Nemotron 3 Super 训两层共用权重的 MTP，可反复套用猜两个以上（Raschka 架构图鉴）。</p>
+  <p><b>一层 MTP 也能连猜，但原版只练过往前一步</b>（图右下）。FastMTP 冻住主模型，用主模型自己生成的数据，把 MiMo-7B 那一层 MTP（2.1 亿参数）按连猜微调，平均速度是不投机的 2.03 倍。</p>
+<figure class="fbox fwide" id="fig-s11-eagle"><svg viewBox="0 0 1400 1148" width="100%" role="img" aria-label="EAGLE、EAGLE-3、MTP 三种草稿的结构。第一块 EAGLE：大模型冻住，嵌入层和 LM head 借大模型的，只训一个 FC 压缩层加一层 decoder；输入是大模型出字前那层的向量，加上下一个已抽中的字的嵌入，拼成两倍宽，压回一倍，猜出下一位的向量，再借 LM head 出字，猜出的向量和字喂回去接着猜。第二块 EAGLE-3：浅、中、深三层向量拼成三倍宽再压回；猜第二个字起拿不到大模型的向量，用草稿自己上一步的输出顶替。第三块 MTP：骨架和 EAGLE 几乎一样，差在厂家预训练时一起训；单层 MTP 原样连猜，MiMo-7B 上第 1、2、3 个草稿字接受率约 70%、10%、2%，按连猜微调后是 81%、56%、36%"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">EAGLE 和 MTP 长什么样　——　<tspan font-weight="700">头尾借大模型，只训中间一小块</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">方框里橙色是要训的，蓝色是直接借大模型、不训的</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">要训</text>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">借大模型，冻住不训</text>
+<rect x="266.48" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="287" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">数据怎么拼</text>
+<rect x="0" y="102" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE（2024-01）：大模型冻住，草稿是外挂的一小块</tspan></text>
+<rect x="24" y="158" width="250" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="149" y="183" fill="#174ea6" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型出字前那层的向量</tspan></text>
+<text class="svgsm" x="149" y="203" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">大模型本来就算出来了</text>
+<rect x="24" y="236" width="120" height="56" rx="7" fill="#fff" stroke="#202124" stroke-width="1.6"/>
+<text class="svgsm" x="84" y="261" fill="#202124" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">抽中的字</tspan></text>
+<text class="svgsm" x="84" y="281" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">已经定了的下一个</text>
+<line x1="144" y1="264.0" x2="152" y2="264.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="154" y="236" width="120" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="214" y="261" fill="#174ea6" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">嵌入层</tspan></text>
+<text class="svgsm" x="214" y="281" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">借</text>
+<rect x="318" y="196" width="130" height="84" rx="7" fill="#fff" stroke="#5f6368" stroke-width="1.6"/>
+<text class="svgsm" x="383" y="235" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼起来</tspan></text>
+<text class="svgsm" x="383" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">2 倍宽</text>
+<path d="M 274.0 186.0 H 308.0 Q 318.0 186.0 318.0 196.0 V 220.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<path d="M 274.0 264.0 H 314.0 Q 318.0 264.0 318.0 260.0 V 256.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="492" y="196" width="150" height="84" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="567" y="235" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FC</tspan></text>
+<text class="svgsm" x="567" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">压回 1 倍</text>
+<line x1="448" y1="238" x2="490" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="642" y1="238" x2="684" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="686" y="196" width="160" height="84" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="766" y="235" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一层 decoder</tspan></text>
+<text class="svgsm" x="766" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">猜下一位的向量</text>
+<line x1="846" y1="238" x2="888" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="890" y="196" width="150" height="84" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="965" y="235" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">LM head</tspan></text>
+<text class="svgsm" x="965" y="255" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">借：向量变成字</text>
+<line x1="1040" y1="238" x2="1082" y2="238" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1084" y="214" width="96" height="48" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="1132" y="245" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿字</tspan></text>
+<path d="M 1132 262 L 1132 328 L 210 328 L 210 294" fill="none" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 4" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="680" y="350" fill="#b06000" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">猜出的向量 ＋ 刚抽中的字，再喂回去猜下一个：猜几个跑几趟</tspan></text>
+<text class="svgsm" x="1200" y="212" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么要喂抽中的字：</tspan></text>
+<text class="svgsm" x="1200" y="234" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">光看向量，不知道</text>
+<text class="svgsm" x="1200" y="256" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">上一步按概率抽中了谁</text>
+<text class="svgsm" x="1200" y="292" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">70B 配的这块：</text>
+<text class="svgsm" x="1200" y="314" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">可训 0.99B 参数，</tspan></text>
+<text class="svgsm" x="1200" y="336" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">A100 服务器 1–2 天</text>
+<rect x="0" y="414" width="1400" height="246" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="414" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="416" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="444" x2="1400" y2="444" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="434" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE-3（2025-03）：改两处</tspan></text>
+<text class="svgsm" x="24" y="474" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改动一：三层拼起来，直接猜字</tspan></text>
+<rect x="24" y="488" width="130" height="40" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="89" y="514" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">浅层向量</tspan></text>
+<path d="M 154.0 508.0 H 186.0 Q 196.0 508.0 196.0 518.0 V 558.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="24" y="538" width="130" height="40" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="89" y="564" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">中层向量</tspan></text>
+<path d="M 154.0 558.0 H 196.0 Q 196.0 558.0 196.0 558.0 V 558.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="24" y="588" width="130" height="40" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="89" y="614" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">深层向量</tspan></text>
+<path d="M 154.0 608.0 H 186.0 Q 196.0 608.0 196.0 598.0 V 558.0" fill="none" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="198" y="528" width="110" height="60" rx="7" fill="#fff" stroke="#5f6368" stroke-width="1.6"/>
+<text class="svgsm" x="253" y="555" fill="#5f6368" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼起来</tspan></text>
+<text class="svgsm" x="253" y="575" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">3 倍宽</text>
+<line x1="308" y1="558" x2="334" y2="558" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="336" y="528" width="120" height="60" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="396" y="555" fill="#b06000" text-anchor="middle" style="font-size:14.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FC</tspan></text>
+<text class="svgsm" x="396" y="575" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">压回 1 倍</text>
+<text class="svgsm" x="24" y="654" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">不再猜向量，decoder 出来直接借 LM head 出字</text>
+<line x1="530" y1="458" x2="530" y2="644" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="560" y="474" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改动二：第 2 个字起，拿草稿自己的输出顶替</tspan></text>
+<text class="svgsm" x="560" y="521" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步</tspan></text>
+<rect x="652" y="494" width="131" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="717" y="520" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 how</tspan></text>
+<rect x="791" y="494" width="127" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="854" y="520" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 can</tspan></text>
+<rect x="926" y="494" width="73" height="40" rx="6" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="962" y="520" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋ 字 I</tspan></text>
+<line x1="1011" y1="514" x2="1047" y2="514" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1051" y="494" width="70" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1086" y="520" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">do</tspan></text>
+<text class="svgsm" x="560" y="583" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 步</tspan></text>
+<rect x="652" y="556" width="131" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="717" y="582" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 how</tspan></text>
+<rect x="791" y="556" width="127" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="854" y="582" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型给的 can</tspan></text>
+<rect x="926" y="556" width="107" height="40" rx="6" fill="#fef3e0" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="979" y="582" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">草稿自己的 I</tspan></text>
+<rect x="1041" y="556" width="86" height="40" rx="6" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1084" y="582" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋ 字 do</tspan></text>
+<line x1="1139" y1="576" x2="1175" y2="576" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1179" y="556" width="70" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1214" y="582" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">it</tspan></text>
+<text class="svgsm" x="560" y="626" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">I 大模型还没验，拿不到它的向量，只能用草稿上一步的输出顶上。</text>
+<text class="svgsm" x="560" y="650" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以训练时就让草稿把自己的输出喂回来练：training-time test。</tspan></text>
+<rect x="0" y="704" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="704" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="0" y="706" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="734" x2="1400" y2="734" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="724" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MTP（DeepSeek-V3 起）：骨架几乎一样，差在谁训</tspan></text>
+<text class="svgsm" x="24" y="764" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DeepSeek-V3 的 MTP 模块</tspan></text>
+<rect x="24" y="780" width="150" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="99" y="805" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主干向量</tspan></text>
+<text class="svgsm" x="99" y="825" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">＋ 下一个字的嵌入</text>
+<line x1="174" y1="808" x2="192" y2="808" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="194" y="780" width="130" height="56" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="259" y="814" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">归一化、投影</tspan></text>
+<line x1="324" y1="808" x2="342" y2="808" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="344" y="780" width="170" height="56" rx="7" fill="#fef3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="429" y="814" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">transformer block</tspan></text>
+<line x1="514" y1="808" x2="532" y2="808" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="534" y="780" width="120" height="56" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="594" y="805" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出头</tspan></text>
+<text class="svgsm" x="594" y="825" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">与主模型共用</text>
+<text class="svgsm" x="24" y="874" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
+<text class="svgsm" x="100" y="874" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">什么时候训</tspan></text>
+<text class="svgsm" x="420" y="874" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">大模型动不动</tspan></text>
+<line x1="24" y1="884" x2="640" y2="884" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="24" y="908" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">EAGLE</tspan></text>
+<text class="svgsm" x="100" y="908" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">模型发布以后，谁都能外挂上去训</text>
+<text class="svgsm" x="420" y="908" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">冻住</text>
+<text class="svgsm" x="24" y="942" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MTP</tspan></text>
+<text class="svgsm" x="100" y="942" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">厂家预训练时一起训，随模型发布</text>
+<text class="svgsm" x="420" y="942" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">一起训</text>
+<text class="svgsm" x="24" y="996" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">带 MTP 的还有 Qwen3-Next、GLM-4.5、小米 MiMo；Step 3.5 Flash 挂 3 个模块（MTP-3）</text>
+<line x1="690" y1="748" x2="690" y2="988" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="720" y="764" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一层 MTP 连猜：输出喂回自己再跑一趟</tspan></text>
+<text class="svgsm" x="720" y="786" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">MiMo-7B，第 1／2／3 个草稿字的接受率</text>
+<rect x="760" y="865.0" width="64" height="105.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="792" y="857" fill="#80868b" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70%</tspan></text>
+<rect x="834" y="848.5" width="64" height="121.5" rx="3" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="866" y="840" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">81%</tspan></text>
+<text class="svgsm" x="829" y="994" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 个</tspan></text>
+<rect x="970" y="955.0" width="64" height="15.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1002" y="947" fill="#80868b" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10%</tspan></text>
+<rect x="1044" y="886.0" width="64" height="84.0" rx="3" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1076" y="878" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">56%</tspan></text>
+<text class="svgsm" x="1039" y="994" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 个</tspan></text>
+<rect x="1180" y="967.0" width="64" height="3.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1212" y="959" fill="#80868b" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2%</tspan></text>
+<rect x="1254" y="916.0" width="64" height="54.0" rx="3" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1286" y="908" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">36%</tspan></text>
+<text class="svgsm" x="1249" y="994" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 3 个</tspan></text>
+<line x1="740" y1="970" x2="1360" y2="970" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<rect x="1160" y="800" width="16" height="14" rx="2" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1182" y="812" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">原样连猜（只练过往前一步）</text>
+<rect x="1160" y="824" width="16" height="14" rx="2" fill="#a8dab5" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1182" y="836" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按连猜微调后（FastMTP）</tspan></text>
+<rect x="0" y="1050" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1050" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1050" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1077" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">长相差不多，差在谁训、练没练过连猜</tspan></text>
+<text class="svgsm" x="20" y="1108" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">EAGLE 不是免训练，只是训得少；MTP 能多猜几步，但草稿得按连猜练过，改个参数不够。</text>
+</svg><figcaption><b>先看颜色：橙色要训，蓝色借大模型。</b>三块的橙色都只有中间一小段。<span class="capmore"><br><em>结构按论文正文；how／can／I／do／it 是 EAGLE-3 论文的例子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>EAGLE：arXiv <a href="https://arxiv.org/abs/2401.15077" target="_blank" rel="noopener">2401.15077</a> v3 §3（Figure 6 说明：嵌入层、LM head 用目标模型参数不训；FC＋一层 decoder；特征与提前一位的 token 嵌入拼 2 倍宽）、§4 Training（70B 可训 0.99B，A100 40G 服务器 1–2 天）。EAGLE-3：arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a> v3 §3.1–3.2（低／中／高特征拼 3k 经 FC 压回 k；第 2 步起用草稿输出 a 顶替；training-time test）；how／can／I／do／it 是论文 Figure 5 的例子。</p>
+<p>MTP：DeepSeek-V3 技术报告 MTP 一节；各家采用见 sebastianraschka.com 架构图鉴 MTP 页、FastMTP 引言。接受率：FastMTP arXiv <a href="https://arxiv.org/abs/2509.18362" target="_blank" rel="noopener">2509.18362</a>（MiMo-7B 单层 MTP，冻结主模型、自蒸馏数据微调 MTP 头；原样第 2 位约 10%，第 3 位约 2%）。</p></details></figure>
   <p><b>MTP、DFlash、DSpark 是一条线上的三步。</b>三者都是贴着大模型隐状态猜字的小草稿，差在怎么出字。MTP 和 EAGLE 一个字一个字猜，猜 5 个跑 5 趟；DFlash 一趟出整块，猜 5 个和猜 1 个差不多贵。</p>
 <figure class="fbox fwide" id="fig-s11-three"><svg viewBox="0 0 1400 1006" width="100%" role="img" aria-label="三种草稿并排。第一行 MTP 和 EAGLE：草稿一个字一个字猜，猜五个要跑五趟，每趟都看得见前面猜了什么。第二行 DFlash：草稿跑一趟就并行出五个字，但每个位置各猜各的，第一位选了 of，第二位却押了 no problem 里的 problem，拼出 of problem，验到第二位就断了。第三行 DSpark：同样跑一趟出整块，再加一个很轻的顺序小头，前一位选了 of，就把下一位的 course 抬起来；另一个小头给每一位估一个存活概率，负载轻时验到第四位，负载重时只验前两位。字和概率都是示意"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">三种草稿：<tspan font-weight="700">怎么出字，验几个</tspan></text>
@@ -12750,6 +12909,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>R85 补充 · 第零节 fig6-engines：EAGLE-3 SGLang 2025-03-18 合入（自称首个支持），vLLM 2025-04-25 合入，晚 5 周</td><td>github.com/sgl-project/sglang/pull/4247；github.com/vllm-project/vllm/pull/16937；间隔为本课推导（38 天）</td></tr>
     <tr><td>10-19 补充 · 11.3：EAGLE 草稿结构（嵌入层、LM head 借目标模型不训；只训 FC＋一层 decoder；输入＝出字前特征＋提前一位的字嵌入，拼 2 倍宽压回）；70B 可训参数 0.99B、ShareGPT 6.8 万条、A100 40G 服务器 1–2 天</td><td>EAGLE arXiv <a href="https://arxiv.org/abs/2401.15077" target="_blank" rel="noopener">2401.15077</a> v3 正文 §3 Figure 6 说明、§4 Training 段</td></tr>
     <tr><td>10-19 补充 · 11.3：EAGLE-3 低／中／高三层特征拼 3k 压回 k、改为直接预测 token、第 2 步起用草稿输出 a 顶替目标特征、training-time test</td><td>EAGLE-3 arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a> v3 正文 §3.1–3.2</td></tr>
+    <tr><td>10-19 补充 · 11.3：原版 EAGLE 加训练数据提升有限，EAGLE-3 改直接预测 token＋training-time test 后能吃到数据规模的收益</td><td>EAGLE-3 arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a> 摘要（「scaling up data provides limited improvements for EAGLE」「enable the draft model to fully benefit from scaling up training data」）</td></tr>
     <tr><td>10-19 补充 · 11.3：DeepSeek-V3 MTP 模块＝主干隐状态＋下一 token 嵌入→归一化、投影→transformer block，共享嵌入与输出头；Qwen3-Next 按多步推理训 MTP；Step 3.5 Flash 用 MTP-3；Nemotron 3 Super 两层共享权重可递归；GLM-4.5、MiMo 带 MTP</td><td>sebastianraschka.com/llm-architecture-gallery/mtp；FastMTP arXiv <a href="https://arxiv.org/abs/2509.18362" target="_blank" rel="noopener">2509.18362</a> 引言（列 GLM-4.5、Xiaomi MiMo 采用 MTP）</td></tr>
     <tr><td>10-19 补充 · 11.3：MiMo-7B 单层 MTP 原样递归连猜，第 1／2／3 个草稿字接受率约 70%／约 10%（贡献段写 11%）／近 0（2%）；FastMTP 冻结主模型、自蒸馏数据微调 210.8M 参数 MTP 头后升到 81%／56%／36%，平均 2.03×（对不投机）</td><td>FastMTP arXiv <a href="https://arxiv.org/abs/2509.18362" target="_blank" rel="noopener">2509.18362</a> v1 贡献段、§4 Implementation、Acceptance Rate Analysis 段</td></tr>
     <tr><td>R85 补充 · 第零节 fig6-engines：vLLM KV Connector 接口 2025-04</td><td>github.com/vllm-project/vllm/pull/15960（04-17）；blog.lmcache.ai/en/2025/04/11/shaping-nixl-based-pd-disaggregation-in-vllm-v1</td></tr>
