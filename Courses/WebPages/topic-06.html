@@ -3242,13 +3242,200 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <em>想看 MXFP4 和 NVFP4 的缩放差在哪、R1 在 TPU 上为什么非 FP4 不可、CUDA Graph 和 kernel 融合怎么去掉交接空等，翻完整版第十二节。</em></div>
 
 </div></section>
-<section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>第一天上手，先问哪几个问题？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
-<ul>
-  <li><b>一条主线</b>：回到那一趟：先算账，再挑招</li>
-  <li><b>计划</b>：4 分钟</li>
-  <li><b>打算用的图</b>：fig-s14-eight</li>
-  <li><b>想深挖</b>：<a href="topic-06-L300.html#s十五">完整版对应那一节</a></li>
-</ul>
+<section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>第一天上手，先问哪几个问题？</h2></div>
+  <p class="lead">上一节讲完，招就齐了。回到第零节那一趟：拿到一个模型、一批卡，<b>第一天先问哪几件事？</b>
+    一共八问：<b>前四问在纸上算账，后四问才去拨开关。</b></p>
+<figure class="fbox fwide" id="fig-s14-eight"><svg viewBox="0 0 1400 656" width="100%" role="img" aria-label="第一天的八问，钉在「搬一趟」那张搬货图上。仓库是显存，车把权重和 KV 拉到工位。一，负载长什么样，钉在工位；二，用哪把尺子，钉在尺子起点；三，一步至少搬多少字节，钉在车上的货；四，放得下几条序列，钉在座位；五，attention 怎么切，钉在仓库里的 KV；六，拆不拆 PD，钉在第二个仓库；七 a，量化开不开，钉在货上；七 b，投机开不开，钉在座位上；八，上线前跑通了吗，钉在车头"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第一天的八问　——　<tspan font-weight="700">先定尺子和账，再挑招数</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">还是第零节那一趟：每一问钉在它问的那个部件上</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">校准尺子 ／ 上线</text>
+<rect x="173.56" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="194" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">分给更多 token</text>
+<rect x="333.68" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="354" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">少搬</text>
+<rect x="412.04" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="433" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">拆开放对地方</text>
+<rect x="0" y="102" width="1400" height="452" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">八个图钉</tspan></text>
+<rect x="34" y="332" width="150" height="100" rx="3" fill="none" stroke="#e8710a" stroke-width="2.0" stroke-dasharray="7,5"/>
+<path d="M 24.0 332.0 L 109.0 296.0 L 194.0 332.0" fill="none" stroke="#e8710a" stroke-width="2.0" stroke-linejoin="round" stroke-dasharray="7,5"/>
+<text class="svgsm" x="109" y="372" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">吞 prompt</tspan></text>
+<rect x="70" y="392" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="96" y="392" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="122" y="392" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<line x1="192" y1="380" x2="238" y2="380" stroke="#9334e6" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="215" y="370" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV</tspan></text>
+<rect x="250" y="272" width="230" height="160" rx="3" fill="none" stroke="#202124" stroke-width="2.0"/>
+<path d="M 240.0 272.0 L 365.0 222.0 L 490.0 272.0" fill="none" stroke="#202124" stroke-width="2.0" stroke-linejoin="round"/>
+<text class="svgsm" x="365" y="257" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">仓库 ＝ 显存</tspan></text>
+<rect x="268" y="332" width="112" height="76" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="324" y="376" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重</tspan></text>
+<rect x="396" y="390" width="66" height="17" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="396" y="370" width="66" height="17" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="396" y="350" width="66" height="17" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="429" y="363" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV</tspan></text>
+<rect x="494" y="426" width="606" height="12" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<line x1="504" y1="432" x2="1090" y2="432" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-dasharray="14,10"/>
+<rect x="560" y="328" width="210" height="78" rx="4" fill="none" stroke="#5f6368" stroke-width="2"/>
+<rect x="570" y="338" width="108" height="60" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="624" y="374" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重</tspan></text>
+<rect x="688" y="380" width="72" height="18" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="688" y="358" width="72" height="18" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="688" y="336" width="72" height="18" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<path d="M 778.0 406.0 V 310.0 H 934.0 Q 960.0 310.0 960.0 348.0 V 406.0 Z" fill="none" stroke="#5f6368" stroke-width="2"/>
+<rect x="790" y="322" width="32" height="38" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<circle cx="806.0" cy="336.0" r="7" fill="#1a73e8"/>
+<path d="M 795.0 358.0 a 11 9 0 0 1 22 0 z" fill="#1a73e8"/>
+<rect x="830" y="322" width="32" height="38" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<circle cx="846.0" cy="336.0" r="7" fill="#1a73e8"/>
+<path d="M 835.0 358.0 a 11 9 0 0 1 22 0 z" fill="#1a73e8"/>
+<rect x="870" y="322" width="32" height="38" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<circle cx="886.0" cy="336.0" r="7" fill="#1a73e8"/>
+<path d="M 875.0 358.0 a 11 9 0 0 1 22 0 z" fill="#1a73e8"/>
+<rect x="910" y="322" width="32" height="38" rx="4" fill="none" stroke="#80868b" stroke-width="1.0"/>
+<circle cx="926.0" cy="336.0" r="7" fill="#1a73e8"/>
+<path d="M 915.0 358.0 a 11 9 0 0 1 22 0 z" fill="#1a73e8"/>
+<circle cx="610.0" cy="414.0" r="14" fill="#ffffff" stroke="#202124" stroke-width="2.4"/>
+<circle cx="730.0" cy="414.0" r="14" fill="#ffffff" stroke="#202124" stroke-width="2.4"/>
+<circle cx="910.0" cy="414.0" r="14" fill="#ffffff" stroke="#202124" stroke-width="2.4"/>
+<line x1="490" y1="346" x2="544" y2="346" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="500" y1="368" x2="544" y2="368" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="510" y1="390" x2="544" y2="390" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="972" y1="372" x2="1094" y2="372" stroke="#80868b" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1120" y="336" width="250" height="14" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<line x1="1140" y1="350" x2="1140" y2="432" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="1350" y1="350" x2="1350" y2="432" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<rect x="1164" y="256" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1192" y="256" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1220" y="256" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1248" y="256" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1276" y="256" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1304" y="256" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1164" y="282" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1192" y="282" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1220" y="282" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1248" y="282" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1276" y="282" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1304" y="282" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1164" y="308" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1192" y="308" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1220" y="308" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1248" y="308" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1276" y="308" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<rect x="1304" y="308" width="22" height="22" rx="3" fill="none" stroke="#202124" stroke-width="1.6"/>
+<text class="svgsm" x="1245" y="242" fill="#202124" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">工位 ＝ 算力</tspan></text>
+<line x1="494" y1="478" x2="1100" y2="478" stroke="#d93025" stroke-width="2" stroke-linecap="round"/>
+<line x1="494" y1="470" x2="494" y2="486" stroke="#d93025" stroke-width="2" stroke-linecap="round"/>
+<line x1="1100" y1="470" x2="1100" y2="486" stroke="#d93025" stroke-width="2" stroke-linecap="round"/>
+<line x1="544.5" y1="474" x2="544.5" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="595.0" y1="474" x2="595.0" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="645.5" y1="474" x2="645.5" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="696.0" y1="474" x2="696.0" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="746.5" y1="474" x2="746.5" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="797.0" y1="474" x2="797.0" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="847.5" y1="474" x2="847.5" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="898.0" y1="474" x2="898.0" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="948.5" y1="474" x2="948.5" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="999.0" y1="474" x2="999.0" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1049.5" y1="474" x2="1049.5" y2="478" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1245.0" y1="220" x2="1245.0" y2="194" stroke="#5f6368" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="1245.0" cy="177.0" r="17" fill="#5f6368" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="1245" y="183" fill="#ffffff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<line x1="494" y1="478" x2="494" y2="504" stroke="#5f6368" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="494.0" cy="521.0" r="17" fill="#5f6368" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="494" y="527" fill="#ffffff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<line x1="665" y1="328" x2="665" y2="302" stroke="#1e8e3e" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="665.0" cy="285.0" r="17" fill="#1e8e3e" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="665" y="291" fill="#ffffff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<line x1="869.0" y1="310" x2="869.0" y2="284" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="869.0" cy="267.0" r="17" fill="#1a73e8" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="869" y="273" fill="#ffffff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<line x1="429" y1="348" x2="429" y2="322" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="429.0" cy="305.0" r="17" fill="#1a73e8" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="429" y="311" fill="#ffffff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<line x1="109" y1="292" x2="109" y2="266" stroke="#e8710a" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="109.0" cy="249.0" r="17" fill="#e8710a" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="109" y="255" fill="#ffffff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<line x1="729" y1="328" x2="729" y2="302" stroke="#1e8e3e" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="729.0" cy="285.0" r="17" fill="#1e8e3e" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="729" y="290" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7a</tspan></text>
+<line x1="938" y1="314" x2="938" y2="288" stroke="#5f6368" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="938.0" cy="271.0" r="17" fill="#5f6368" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="938" y="277" fill="#ffffff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<line x1="805.0" y1="310" x2="805.0" y2="284" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="805.0" cy="267.0" r="17" fill="#1a73e8" stroke="#ffffff" stroke-width="2.5"/>
+<text class="svgsm" x="805" y="272" fill="#ffffff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7b</tspan></text>
+<text class="svgsm" x="10" y="587" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算账</tspan></text>
+<circle cx="104.0" cy="582.0" r="14.0" fill="#5f6368"/>
+<text class="svgsm" x="104" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="128" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">负载长什么样？</tspan></text>
+<circle cx="431.5" cy="582.0" r="14.0" fill="#5f6368"/>
+<text class="svgsm" x="431" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="455" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">用哪把尺子？</tspan></text>
+<circle cx="759.0" cy="582.0" r="14.0" fill="#1e8e3e"/>
+<text class="svgsm" x="759" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="783" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步至少搬多少字节？</tspan></text>
+<circle cx="1086.5" cy="582.0" r="14.0" fill="#1a73e8"/>
+<text class="svgsm" x="1086" y="587" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="1110" y="587" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">放得下几条序列？</tspan></text>
+<text class="svgsm" x="10" y="631" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">挑招数</tspan></text>
+<circle cx="104.0" cy="626.0" r="14.0" fill="#1a73e8"/>
+<text class="svgsm" x="104" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="128" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">attention 怎么切？</tspan></text>
+<circle cx="431.5" cy="626.0" r="14.0" fill="#e8710a"/>
+<text class="svgsm" x="431" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="455" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拆不拆 PD，配几台？</tspan></text>
+<circle cx="759.0" cy="626.0" r="14.0" fill="#1e8e3e"/>
+<text class="svgsm" x="759" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7a</tspan></text>
+<text class="svgsm" x="783" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">量化、</tspan></text>
+<circle cx="853.0" cy="626.0" r="14.0" fill="#1a73e8"/>
+<text class="svgsm" x="853" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7b</tspan></text>
+<text class="svgsm" x="877" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">投机开不开？</tspan></text>
+<circle cx="1086.5" cy="626.0" r="14.0" fill="#5f6368"/>
+<text class="svgsm" x="1086" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<text class="svgsm" x="1110" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上线前跑通了吗？</tspan></text>
+</svg><figcaption><b>先看车上：3、4、7 号钉在货和座位上，问的都是那一趟。</b><span class="capmore"><br><em>颜色对着两条路：蓝＝分给更多人，绿＝少搬；橙＝拆开放；灰＝尺子和上线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课归纳：顺序按「先校准、再算账、后调招数」排，各问拿什么回答、判据见正文和对应的节。</p></details></figure>
+
+  <h3 id="l9-1">前四问：算清这一趟多重、能分给几个人</h3>
+  <ul>
+    <li><b>① 负载长什么样。</b>输入输出多长，要哪个交互档。换一个档位，结论能整个反过来（第二节）。</li>
+    <li><b>② 用哪把尺子。</b>数总量还是数每卡，分母含不含 prefill 卡。同一次测量换个分母，能差几十倍。</li>
+    <li><b>③ 一步至少搬多少字节。</b>先算下限再看实测；实测是下限的好几倍，先查布局和调度，别急着加卡（第一节）。</li>
+    <li><b>④ 放得下几个人。</b>batch 的上限由 KV 定，也就定了这一趟最多分给几个人（第二、三节）。</li>
+  </ul>
+
+  <h3 id="l9-2">后四问：挑招</h3>
+  <ul>
+    <li><b>⑤ 注意力怎么切。</b>先定切法，再调参数。第四节换成 DEP，每卡 2.09 倍；同一组实测里只调并发，只涨 28%。上下文很长再看第五节。</li>
+    <li><b>⑥ 拆不拆 PD，配几台。</b>有尖峰先试分块 prefill，压不住再拆；拆了按两边各自的吞吐配台数（第六节）。</li>
+    <li><b>⑦ 量化、投机开不开。</b>投机在人少时最赚，K3 一个人用吞吐是不开的 4.22 倍，人一多就缩；量化总在减字节（第七、八节）。</li>
+    <li><b>⑧ 上线前跑通了吗。</b>没提前编译好，第一个用户要等一分钟。</li>
+  </ul>
+  <p class="landing">⭐ 八问归到一句话：<b>decode 每一步都要搬一趟。</b>前四问算清这一趟多重、能分给几个人；后四问要么让更多人分，要么让它变轻。</p>
+
+  <h3 id="l9-3">开场那道题：光改软件，几倍？</h3>
+  <p>第零节问过：同一套 GB300、同一个 DeepSeek-V4-Pro、每个用户出字一样快，光改软件，每卡吞吐是首发日的几倍？</p>
+  <ul>
+    <li><b>首发日到六月，每卡从约 2,200 涨到约 11,200。</b>SGLang 交的卷，硬件、模型、交互档都没换；六月那条开了 MTP，首发日没开。</li>
+    <li><b>11,200 ÷ 2,200 ≈ 5.1 倍</b>（本课推导，博客标题写 5 倍）。卡价不变，每个字的成本约降到五分之一（本课推导）。</li>
+    <li><b>MTP 占多少，博客没拆。</b>这 5.1 倍是软件栈所有改进的合计。</li>
+  </ul>
+  <div class="note warn"><span class="t">别把各节的倍数乘起来</span>
+    前面每节结尾报的进步，对照对象各不相同：Orca 比的是 FasterTransformer，分页比的已经有 Orca。<b>后一个的基线就是前一个，乘不得。</b>
+    同口径的总账只有这一笔。</div>
+  <p>按问题再串一遍：等最长的那个，就每步换人（第二节）；座位不够，就分页、压薄、复用（第三节）；MoE 拆散一批人，就 DEP 加大 EP（第四节）；上下文太长，就按序列切（第五节）；长 prompt 插队，就拆成两批机器（第六节）；一趟只出一个字，就投机（第七节）；最后少搬字节（第八节）。</p>
+
+  <div class="note ok"><span class="t">这一节带走</span>
+    <b>先算账，再挑招：这一趟多重、能分给几个人，算清了才轮到切法、PD、量化和投机。</b><br>
+    这一步进步多少：同一套 GB300、同一个 V4-Pro、同一个交互档，光改软件，每卡是首发日的 5.1 倍（本课推导）。<br>
+    下一个洞已经露出来：线性注意力层的状态截不开，前缀难复用；tpu-inference 上跑 Qwen3.5，前缀缓存至今还得关。<br>
+    谁再报一个倍数，先问三句：比的是谁，哪一档，分母几张卡。<br>
+    <em>想看 2022 到 2026 每一招各省多少、对谁比，同一批招数的分类账，DeepSeek 公开的一天 token 花在哪，翻完整版第十五节。</em></div>
+
 </div></section>
 
 <div class="wrap" style="padding:32px 0 64px">

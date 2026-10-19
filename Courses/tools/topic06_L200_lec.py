@@ -38,6 +38,6 @@ TIME_NOTE = """<p>⛔ <b>第零、一节不能砍。</b>
 THIN = """<h3 class="sec">🚧 这份讲义还薄的地方</h3>
 <div class="say">
   <ul>
-    <li>[ ] <b>2026-10-19 起新写，十节口播稿逐轮补。</b>进度见 <code>Courses/reviews/T6-L200-STATE.md</code>。</li>
+    <li>[ ] <b>十节口播稿已写齐，还没从头到尾串讲过一遍。</b>衔接、比方打架、时长待查；进度见 <code>Courses/reviews/T6-L200-STATE.md</code>。</li>
   </ul>
 </div>"""
