@@ -20,7 +20,7 @@ SPINE = [
      "fig-s6-tep-dep-t5、fig-s6-dep-kv、anim-bigep、fig-s6-bigep-net", "s六"),
     ("五", "长上下文：DCP 和 PCP 有啥区别？",
      "谁搬家：PCP 搬 KV、答案不用拼；DCP 搬 Q、答案要拼；谁小搬谁", 10,
-     "fig-s7-pcp-dcp-t5、fig-s7-kv-dup-t5、fig-s7-softmax-merge-t5", "s七"),
+     "fig-s7-pcp-dcp-t5、fig-s7-softmax-merge-t5、fig-s7-kv-dup-t5、fig-s7-dcp-gain", "s七"),
     ("六", "PD 分离：多搬一趟 KV，凭什么接的人更多？",
      "两种活互相拖：一口锅炒大菜，一口锅出单碗；分开后各开各的批", 10,
      "anim-pdsplit、fig-s8-kv-trip-t5、fig-s9-pd-ratio-t5", "s八"),
