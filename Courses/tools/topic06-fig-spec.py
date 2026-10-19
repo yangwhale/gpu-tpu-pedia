@@ -629,7 +629,7 @@ def fig_eagle():
         f.box(x, y, w, h, fill, col, 7, 1.6)
         f.t(x + w / 2, y + (h / 2 + 6 if not sub else h / 2 - 3), main, col, True, size, "middle", w=w - 10)
         if sub:
-            f.t(x + w / 2, y + h / 2 + 17, sub, GY, False, 12.5, "middle", w=w - 10)
+            f.t(x + w / 2, y + h / 2 + 17, sub, GY, False, 14, "middle", w=w - 10)
         return x + w
 
     # ① EAGLE
@@ -637,7 +637,7 @@ def fig_eagle():
     py = f.panel(0, y0, W, PH, "EAGLE（2024-01）：大模型冻住，草稿是外挂的一小块", OR)
     ya, yb_, BH = py + 26, py + 104, 56
     blk(24, ya, 250, BH, "大模型出字前那层的向量", "大模型本来就算出来了", BORROW, 14.5)
-    blk(24, yb_, 120, BH, "抽中的字", "已经定了的下一个", ("#fff", INK), 14.5)
+    blk(24, yb_, 120, BH, "抽中的字", "已定下的下一个", ("#fff", INK), 14.5)
     f.line(144, yb_ + BH / 2, 152, yb_ + BH / 2, GY2, 1.4)
     blk(154, yb_, 120, BH, "嵌入层", "借", BORROW, 14.5)
     cx = 318

@@ -112,7 +112,7 @@ def fig_chain():
         for ty, tm, lab in ticks:
             xt = xdate(ty, tm)
             f.line(xt, yy - 6, xt, yy + 6, col, 2, arrow=False)
-            f.t(xt + 5, yy - 7, lab, col, False, 12)
+            f.t(xt + 5, yy - 7, lab, col, False, 14)
     # ── 轴 ──
     ya = yf[-1] + 92
     ytop, ybot = yh + 12, ya + 92
@@ -133,18 +133,18 @@ def fig_chain():
             yy1, yy2 = ya + 36, ya + 56
             f.line(x, ya + 12, x, ya + 22, LINE, 1, arrow=False)
         wname = wpx(name, 14) * MONO_K * 1.08
-        wyr = wpx(yr_s, 12) * MONO_K
+        wyr = wpx(yr_s, 14) * MONO_K
         wl = max(wname, wyr)
         boxes.append((x - wl / 2, x + wl / 2, up, name))
-        f.t(x, yy1, yr_s, GY, False, 12, "middle")
+        f.t(x, yy1, yr_s, GY, False, 14, "middle")
         f.t(x, yy2, name, INK if not model else GY, True, 14, "middle")
         if model:
             f.p.append('<circle cx="%.1f" cy="%.1f" r="10" fill="#fff" stroke="%s" stroke-width="1.5" '
                        'stroke-dasharray="3 2"/>' % (x, ya, GY))
-            f.t(x, ya + 4, CIRC[n - 1], GY, True, 12, "middle")
+            f.t(x, ya + 4, CIRC[n - 1], GY, True, 13, "middle")
         else:
             f.p.append('<circle cx="%.1f" cy="%.1f" r="10" fill="%s"/>' % (x, ya, INK))
-            f.t(x, ya + 4, CIRC[n - 1], "#fff", True, 12, "middle")
+            f.t(x, ya + 4, CIRC[n - 1], "#fff", True, 13, "middle")
     # 同侧标签不许撞，也不许出边界
     for side in (True, False):
         row = sorted(b for b in boxes if b[2] == side)
@@ -157,7 +157,7 @@ def fig_chain():
     d = 13
     f.poly([(xe, ya - d), (xe + d, ya), (xe, ya + d), (xe - d, ya)], INK, INK)
     f.line(xe, ya + 16, xe, ya + 22, LINE, 1, arrow=False)
-    f.t(xe, ya + 36, "2026-06　截至目前", GY, False, 12, "middle")
+    f.t(xe, ya + 36, "2026-06　截至目前", GY, False, 14, "middle")
     f.t(xe, ya + 56, "GB300 × V4-Pro", INK, True, 14, "middle")
     f.t(xe, ya + 76, "涨了几倍？", INK, True, 15, "middle")
     for b in boxes:
