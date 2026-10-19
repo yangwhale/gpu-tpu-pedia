@@ -972,9 +972,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l0-2">贵在哪：每出一个字，整车货搬一趟</h3>
   <ul>
-    <li><b>货有多重。</b>DeepSeek-V3 出一个字要用到约 37 GB 权重（FP8）；再加这个人自己的 KV（前文每个字算出来、留给后面每一步读的中间结果），128K 上下文时是 8.58 GiB。</li>
+    <li><b>货有多重。</b>DeepSeek-V3 总参数 6,710 亿，每个字只走约 370 亿，FP8 每个 1 字节，约 37 GB。再加这个人自己的 KV：前文每个字算出来的中间结果，存着给后面每一步回头读，省得重算；128K 上下文时 8.58 GiB。</li>
     <li><b>为什么每步都要重搬。</b>芯片旁边能直接算的片上存储，TPU v7 一颗只有 128 MiB，约是显存的 1/1,500。几十 GB 放不进去，只能每一步从显存再流一遍。</li>
-    <li><b>像一辆公交车。</b>开一趟的油钱是固定的：车上坐一个人还是坐满，搬的货差不多一样多。</li>
+    <li><b>像一辆公交车。</b>权重是车自带的货：开一趟的油钱固定，坐一个人还是坐满，这份差不多一样多。KV 是乘客随身带的笔记，跟着人数涨。</li>
   </ul>
   <div class="note ok"><span class="t">全课一句话</span>
     <b>decode 每一步都要把权重和 KV 搬一趟。推理的每一招，要么让这一趟分给更多人，要么干脆少搬。</b><br>
@@ -1098,8 +1098,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="l1-1">一趟喂几行，决定卡在算还是卡在搬</h3>
   <ul>
     <li><b>prefill 一趟喂几千行。</b>prompt 是现成的，4K 个 token 一起进矩阵乘，读一次权重够算几千遍。</li>
-    <li><b>decode 一趟只喂一行。</b>下一个字要等上一个字出来，没法提前算；读一次权重，只够这一个人用。</li>
-    <li><b>线在 313。</b>v7 按 bf16，每读 1 字节要算满 313 次，算力才不闲着。一趟喂 M 行，大约就算 M 次。</li>
+    <li><b>decode 每人每步只喂一行。</b>下一个字要等上一个字出来，没法提前算；一步里几个人就几行，一个人时读一次权重只够他用。</li>
+    <li><b>线在 313。</b>v7 按 bf16，2,307 TFLOP/s ÷ 7.37 TB/s：每读 1 字节要算满 313 次，算力才不闲着。一趟喂 M 行，每个权重做 M 次乘加（2M 次运算）、占 2 字节，大约就算 M 次。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s1-ai"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="运算强度随一次喂进的行数 M 变化的曲线，横纵都是对数轴。矩阵是 7168×7168 的 bf16 权重。M＝1 时强度约 1，远低于 v7 的屋脊点 313；decode 一次 64 个人是 63，256 个人是 239，仍在屋脊点下面；prefill 一段 4K 的 prompt，M＝4096，远在屋脊点上面。曲线在 M≈343 处穿过屋脊点"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一次喂几行，决定卡在哪　——　<tspan font-weight="700">decode 在屋脊点下面，prefill 在上面</tspan></text>
@@ -1223,7 +1223,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 理想下限：只算权重，不算 KV、激活、通信和 kernel 开销，实测只会更慢。</p>
 <p>⚠️ 671 GB（≈ 625 GiB）一颗 192 GiB 的芯片放不下，至少 4 颗（还没算 KV）。摊到 N 颗上，两根条都 ÷N，0.32% 不变。</p></details></figure>
   <p>DeepSeek-V3 每出一个字要读约 37 GB 权重，一颗 v7 每秒读 7.37 TB：搬一趟约 5 毫秒。
-    算只要 0.016 毫秒，<b>算力只用上 0.32%</b>。换更快的计算单元没用，下限是带宽定的。</p>
+    算只要 0.016 毫秒，<b>算力只用上 0.32%</b>（一个人、只算权重、按 FP8 规格的理想下限；FP8 时屋脊点约 626、强度也翻倍，比例不变）。换更快的计算单元没用，下限是带宽定的。</p>
   <div class="note info"><span class="t">还是那辆公交车</span>
     开一趟的油钱固定：坐一个人和坐满，搬的货一样多。prefill 是满载的车；decode 一趟只拉一个人。</div>
 
@@ -1349,7 +1349,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边填满一边，右边只剩一条细线。</b><span class="capmore"><br><em>8 是均匀路由下的平均数；共享专家不受影响。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 256 个路由专家、每 token 挑 8 个：DeepSeek-V3 config.json（n_routed_experts、num_experts_per_tok）。MXU 一边 256：JAX 公开源码 jax/_src/pallas/mosaic/tpu_info.py，TPU 7 的 mxu_column_size＝256。</p>
 <p>📌 本课推导：专家矩阵 7168×2048，M＝8 时强度 ＝ 2·8·7168·2048 ÷ 2·(7168·2048 ＋ 8·(7168 ＋ 2048)) ≈ 8。稠密层 239 来自本节第一张图。</p>
 <p>⚠️ 8 是平均数，路由不均时有的专家几十行、有的零行。共享专家每个 token 都过，不受影响。</p></details></figure>
-  <p>V3 每层 256 个专家，每人只挑 8 个：凑齐 256 人，摊到每个专家平均只剩 8 行，又回到「一趟拉几个人」的老问题。</p>
+  <p>V3 每层 256 个专家，每人只挑 8 个：凑齐 256 人，摊到每个专家平均只剩 8 行，又回到「一趟拉几个人」的老问题。343 人过线只对整块矩阵乘成立；要每个专家都喂饱，一步得凑 9 千多个 token（完整版第三节按 H100 推导）。</p>
 
   <div class="note ok"><span class="t">这一节带走</span>
     <b>prefill 卡算力，decode 卡搬运。</b>要让这一趟值回油钱，就得多拉人：
@@ -1373,12 +1373,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
        aria-label="静态批与连续批动画。上下两组各 4 个槽位；上组凑满一批、等最长的做完，下组每一步都重新排、谁做完谁让位。每一列是一步，灰格是槽位空转。最后：同样 15 步，静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。"></video>
 <figcaption><b>比两组的灰格：上面越走越多，下面一格没有。</b>
   <span class="sub">（18 秒无声循环。请求长度是示意，每步按等长算。）</span></figcaption></figure>
-  <p>Orca（OSDI 2022）只改了一件事：<b>每走一步就停下来看一眼</b>，写完的马上下车，排队的马上补上。
+  <p>Orca（OSDI 2022）第一招：<b>每走一步就停下来看一眼</b>，写完的马上下车，排队的马上补上。
     业界后来叫它连续批（continuous batching），vLLM、SGLang 都这样排。</p>
   <div class="note info"><span class="t">还是那辆公交车</span>
     静态批像包车：凑满一车、一起到站。连续批才是公交本来的样子：每站都停，到站的下，等车的上，座位尽量不空着。</div>
   <ul>
-    <li><b>为什么拼得起来。</b>乘权重那一步不管 token 是谁的，所有人接成一长条一起乘；只有注意力按人分开，各读各的 KV。</li>
+    <li><b>为什么拼得起来（Orca 第二招）。</b>乘权重那一步不管 token 是谁的，所有人接成一长条一起乘；只有注意力（回头翻笔记）按人分开，各读各的 KV。</li>
     <li><b>新人上车不堵门。</b>长 prompt 切成小块，每步带一块跟着车走，车上出字的人不会被卡一下（chunked prefill）。</li>
   </ul>
 
@@ -1386,7 +1386,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>每个人在车上都要占一块 KV，<b>KV 池装得下几个人，就是有几个座位</b>。可座位不是越多越好：</p>
   <ul>
     <li><b>GB300 上跑 V4-Pro 的实测：</b>给 KV 池多 13% 显存，每卡多坐 13% 的人（886 → 999），总吞吐只多 0.8%。</li>
-    <li><b>代价落在每个人身上：</b>两字间隔从 77.7 拖到 85.3 毫秒。人多了，每一步就长了。</li>
+    <li><b>代价落在每个人身上：</b>两字间隔从 77.7 拖到 85.3 毫秒。权重早已摊薄，新人带来的全是 KV，每一步就长了。</li>
+    <li><b>拿 Little 定律口算：</b>每卡每秒的字数 ≈ 车上人数 × 1000 ÷ 两字间隔（毫秒）。就算新座位全坐满，也只多约 3%（本课推导：999/886 × 77.7/85.3）。</li>
   </ul>
 
   <h3 id="l2-4">所以 batch 开多大，要先问「每人要多快」</h3>
@@ -1462,9 +1463,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>本仓库实测 9,168：SGLANG-V4PRO-RUNBOOK.md:596（conc600，TPOT 59–61 ms）、723-725。横坐标 1000 ÷ 60 ≈ 17 是本课推导。</p>
 <p>goodput：DistServe（arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）。</p></details></figure>
   <ul>
-    <li><b>同一套系统，一条曲线。</b>每人每秒 68 个字时，每卡 9,759；要 173 个字，每卡只剩 895。</li>
+    <li><b>同一套系统，一条曲线。</b>每人每秒 68 个字时，每卡每秒 9,759 个；要 173 个字，每卡只剩 895。</li>
     <li><b>先定档，再比吞吐。</b>「每人每秒要几个字」这一档，后面叫交互档。别人报的大数，可能只是站在曲线更左的那头。</li>
-    <li><b>线上真有人选左边。</b>DeepSeek 公布的线上数：每个用户只有 20–22 字每秒，换来每节点约 14,800。</li>
+    <li><b>线上真有人选左边。</b>DeepSeek 公布的线上数：每个用户只有 20–22 字每秒，换来每节点（一台 8 卡机）约 14,800；和上面的每卡数不是同一套硬件和模型，别直接比。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
@@ -1475,16 +1476,16 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>KV cache 到底占多少，怎么省？</h2></div>
-  <p class="lead">上一节说座位就是 KV。车上每个人都带着一本笔记：他说过的每个字，都在笔记里记一页。
-    <b>座位数 ＝ KV 池 ÷ 每人那本笔记有多厚。</b>想多坐人，只有三条路：一页写薄点、纸别浪费、抄过的别再抄。</p>
+  <p class="lead">上一节说座位就是 KV。车上每个人都带着一本笔记：他说过的每个字，都在笔记里记一行。
+    <b>座位数 ＝ KV 池 ÷ 每人那本笔记有多厚。</b>想多坐人，只有三条路：每行写薄点、纸别浪费、抄过的别再抄。</p>
 
-  <h3 id="l3-1">一页多厚：同样的模型形状，能差五十多倍</h3>
+  <h3 id="l3-1">一行多厚：同样的模型形状，能差五十多倍</h3>
   <ul>
-    <li><b>MHA：每个头各记一份。</b>按 V3 的形状算，一个字要记约 4 MB（3,997,696 字节）。</li>
+    <li><b>MHA：每个头各记一份。</b>（头＝翻笔记的一个角度，V3 有 128 个。）按 V3 的形状算，一个字要记约 4 MB（3,997,696 字节）；128K 上下文一人约 488 GiB，一颗 192 GiB 的芯片装不下（本课推导）。</li>
     <li><b>GQA：几个头合用一份。</b>Llama-3.1-70B 分 8 组，一个字 327,680 字节。</li>
-    <li><b>MLA：只记一条压缩过的摘要，</b>用时每个头再从里面解出自己那份。DeepSeek-V3 一个字 70,272 字节，是同形状 MHA 的约 1/57（本课推导：3,997,696 ÷ 70,272）。</li>
+    <li><b>MLA：只记一条压缩过的摘要，</b>每层 512 ＋ 64 个数、1,152 字节；出字时所有头直接对这条摘要算，不展开，所以只算 1 个 KV 头。DeepSeek-V3 61 层合计一个字 70,272 字节，是同形状 MHA 的约 1/57（本课推导：3,997,696 ÷ 70,272）。</li>
   </ul>
-  <p><b>写薄了，分数掉不掉？</b>GQA 原论文把 T5-XXL 改成 8 组：解码快约 5.4 倍（本课推导：1.51 ÷ 0.28），平均分 47.1，原版 47.2。几乎白赚。</p>
+  <p><b>写薄了，分数掉不掉？</b>GQA 原论文把 T5-XXL 改成 8 组：解码快约 5.4 倍（本课推导：1.51 ÷ 0.28），平均分 47.1，原版 47.2。几乎白赚，但这是 T5-XXL 在 TPU v4 上的数，不是通用倍数。</p>
 
   <h3 id="l3-2">笔记越长，车上坐的人越少</h3>
 <figure class="fbox fwide" id="fig-s4-batch"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="一颗 TPU v7 芯片可用 189.5 GiB：V3 的八分之一 FP8 权重 78.1 GiB（83.9 GB），留 10%，剩 92.4 GiB 放 KV。上下文从 1K 到 128K，四种注意力能同时装的序列数：MLA 在 4K、32K、128K 分别是 344、43、10 条；GQA 73、9、2 条；线性加全注意力混合 315、83、23 条；MHA 到 32K 一条都装不下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -1597,7 +1598,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>口径：MHA 一行是 V3 形状的假想（128 头 × 128 维，专题三第一题）：3,997,696 B/token。</p>
 <p>本课推导：V3 权重全按 FP8 1 B/参数算 671 GB ÷ 8 芯片 ＝ 83.9 GB ＝ 78.1 GiB；每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，tpu-inference R1 FP4 README），再留 10% 给激活（本课假设）；KV 池 ＝ 189.5 GiB × 0.9 − 78.1 GiB ＝ 92.4 GiB，与第十节 10.5 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.5）。假设 attention 走数据并行（每颗芯片只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每颗芯片复制一份（专题五）。</p>
 <p>口径：没算激活与通信缓冲（归入那 10%）、线性层卷积状态、引擎实际的状态 dtype（可能不是 fp32）。</p></details></figure>
-  <p>一颗 v7 芯片，V3 权重分到 8 颗芯片上，剩约 92.4 GiB 给 KV。MLA 在 4K 上下文坐 344 人，32K 只剩 43 人：<b>上下文长 8 倍，人数少到 1/8</b>。人少了，每一趟搬运又只分给几个人，这就是长上下文贵的第一个原因。</p>
+  <p>一颗 v7 芯片，V3 权重分到 8 颗芯片上，剩约 92.4 GiB 给 KV。MLA 在 4K 上下文坐 344 人，32K 只剩 43 人：<b>上下文长 8 倍，人数少到 1/8</b>。人少了，每一趟搬运又只分给几个人，这是长上下文贵的第一个原因；第二个是每人每步要读的 KV 也更多（第一节紫段）。</p>
 
   <h3 id="l3-3">纸别浪费：领一页用一页</h3>
 <figure class="fbox fwide" id="anim-paged">
@@ -1607,7 +1608,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <span class="sub">（18 秒无声循环。块大小、块数、请求长度都是示意。）</span></figcaption></figure>
   <ul>
     <li><b>老办法按最长预留。</b>不知道谁会写多长，就给每人留一整段最大长度的连续显存。没写到的地方一直占着，实测只用上 20.4%–38.2%。</li>
-    <li><b>PagedAttention 像活页本。</b>KV 切成固定大小的块，写满一块才领下一块，页表记着每块放在哪；人一走，块立刻还回去。利用率到 96.3%，浪费只剩最后一块没写满的空尾巴。</li>
+    <li><b>PagedAttention 像活页本。</b>KV 切成固定大小的块（一页装几行），写满一块才领下一块，页表记着每块放在哪；人一走，块立刻还回去。利用率到 96.3%，浪费只剩最后一块没写满的空尾巴。</li>
   </ul>
 
   <h3 id="l3-4">算过的不再算：开头一样，就接着抄</h3>
@@ -1664,12 +1665,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>本课推导：13 ÷ 0.5 ＝ 26；100% − 56.3% ＝ 43.7%。两个数来自两份文档、两个时间点，不是同一次测量。价格不画。</p></details></figure>
   <ul>
     <li><b>很多请求开头一样：</b>同一段 system prompt、多轮对话的前几轮。这段 KV 留着，下一个人直接接着往后算。SGLang 的 RadixAttention 把这些开头存成一棵树，新请求沿树找最长的相同开头；vLLM 2025 年起也默认打开。</li>
-    <li><b>线上真能命中一半多。</b>DeepSeek 把 KV 存到磁盘上：一天里过半输入命中；128K 的 prompt 首字从 13 秒降到 0.5 秒。</li>
-    <li><b>只认一字不差的开头。</b>开头改一个 token，后面整段都对不上。删掉早先几轮来截断上下文，前缀命中率能掉一半（LMCache 论文）。</li>
+    <li><b>线上真能命中一半多。</b>DeepSeek 把 KV 存到磁盘上：一天里过半输入命中；128K 的 prompt 首字从 13 秒降到 0.5 秒。从磁盘读回现成的 KV，比整段重算快。</li>
+    <li><b>只认一字不差的开头。</b>每个字的 KV 都是看着前面所有字算出来的：开头改一个 token，后面整段都对不上。删掉早先几轮来截断上下文，前缀命中率能掉一半（LMCache 论文）。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>一页写薄（MLA／GQA）、纸不浪费（分页）、抄过的不再抄（前缀复用）：同样的显存里多坐人、少重算。</b><br>
+    <b>每行写薄（MLA／GQA）、纸不浪费（分页）、抄过的不再抄（前缀复用）：同样的显存里多坐人、少重算。</b><br>
     这一步进步多少：vLLM 论文（SOSP 2023）里，分页后同样延迟下的吞吐是 FasterTransformer 和 Orca（作者复现版）的 2–4 倍。<br>
     到这里都是一张卡上的账。模型大到要多张卡一起跑时，下一节问：每人那本笔记是只存一份，还是每张卡各复印一份？<br>
     <em>想看线性注意力的固定状态、混合模型两个池怎么分预算、前缀命中怎么按块算哈希，翻完整版第四节。</em></div>
@@ -1852,7 +1853,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>只看注意力那一半：左边四张卡合算一批人，右边四张卡各带各的人。</b><span class="capmore"><br><em>专家那一半两边都按 EP 分，图里不画。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TensorRT-LLM 定义：TEP&lt;N&gt; shards both attention (TP) and experts (EP) across N ranks；DEP&lt;N&gt; keeps attention data-parallel (ADP) while distributing experts across N ranks。</p>
 <p>⚠️ 专家那一步的通信按常见实现画：attention 用 TP 时各卡 token 相同，专家输出用 AllReduce 合并；attention 用数据并行时各卡 token 不同，走 AllToAll。示意 4 张卡、8 个专家。</p></details></figure>
   <ul>
-    <li><b>TP 按头切。</b>每张卡算一部分注意力头，各拿自己那几个头的笔记。头不够分时，每张卡都得拿一整本。</li>
+    <li><b>TP 按头切。</b>每张卡算一部分注意力头，各拿自己那几个头的笔记。KV 头比卡少时，几张卡共用同一个头，那个头的笔记就复印几份；只有 1 个 KV 头，每张卡各拿一整本。</li>
     <li><b>判据：TP 路数 ÷ KV 头数。</b>每人的笔记复印几份，就是这个数（头比路数多时，算 1 份）。每张卡不光多存一份，每一步还多读一遍。</li>
     <li><b>DEP 各带各的人。</b>每张卡只放自己那批人的笔记，存一份、读一遍。</li>
   </ul>
@@ -1944,10 +1945,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>先看上半张红条：TP4 每张卡都把同一批笔记读一遍；再看下表：车上的人变少，一步只剩约四分之一。</b><span class="capmore"><br><em>GB300、vLLM、并发 512；车上人数按 Little 定律推导，条长是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。</p>
 <p>实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；GPU 数 16 和 20 见 :476；投机接受率 34% 与 35.7% 见 :480。</p>
 <p>本课推导：在飞请求 ＝ 输出 tok/s × 出字间隔（Little 定律）；条长按卡上在飞请求数画，假设两边每个请求的 KV 一样长（同为 4K 进 1K 出）；TP4 里哪张卡算「原件」是示意。容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。</p></details></figure>
-  <p>V4-Pro 在 GB300 上的实测：同样并发 512，只把 decode 从 TP4 换成 dep8，按全部卡算每卡吞吐 1,319 → 2,758，<b>2.09 倍</b>（本课推导）。</p>
+  <p>V4-Pro 在 GB300 上的实测：同样并发 512，只把 decode 从 TP4 换成 dep8，按全部卡算每卡吞吐 1,319 → 2,758，<b>2.09 倍</b>（本课推导）。两组都带 12 张 prefill 卡（TP4 共 16 张，dep8 共 20 张）；只算 decode 卡，每卡出字 1,055 → 1,379，<b>1.31 倍</b>。</p>
   <ul>
     <li><b>原记录归功于容量。</b>副本省下的显存，理论上能多放 4 倍的人（TP 4 路 ÷ 1 个 KV 头）。</li>
-    <li><b>拿 Little 定律一核，车上的人反而少了。</b>（车上人数 ≈ 每秒出的字 × 两字间隔。）变的是每一步：三份重复读没了，TP 每层把各卡结果加总的那次 AllReduce 没了，EP 从 4 路宽到 8 路、每卡读的专家也减半。三项各占多少，原记录没拆。</li>
+    <li><b>拿 Little 定律一核，车上的人反而少了。</b>（车上人数 ≈ 每秒出的字 × 两字间隔。）变的是每一步：三份重复读没了，TP 每层把各卡结果加总的那次 AllReduce 没了（专家那一去一回两边都有），EP 从 4 路宽到 8 路、每卡读的专家也减半。三项各占多少，原记录没拆。</li>
     <li><b>所以呢：瓶颈换了边。</b>decode 吃得快了，就要更多 prefill 来喂；TP4 那边加第 4 台 prefill，总吞吐 21,100 → 20,479，纹丝不动。拓扑一换，P:D 配比要重扫。</li>
   </ul>
 
@@ -1959,14 +1960,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l4-4">大 EP：把第一节拆散的人收回来</h3>
   <p>第一节留了个洞：V3 每层 256 个专家，每人只挑 8 个，凑齐 256 人，摊到每个专家平均只剩 8 行。<b>专家铺得越开，每张卡管的专家越少，分到每份专家的人就越多。</b></p>
-  <p>一台 8 卡机器里分完就是 EP8；<b>出了一台机器还在分，就是大 EP</b>（TensorRT-LLM 划的线是 EP 超过 8）。注意力不跟着切专家，各卡管自己那批人，所以大 EP 就是放大版的 DEP。DeepSeek 线上 decode 用 EP144：18 台机器，每卡 2 个路由专家加 1 个共享专家。</p>
+  <p>一台 8 卡机器里分完就是 EP8；<b>出了一台机器还在分，就是大 EP</b>（TensorRT-LLM 划的线是 EP 超过 8）。注意力不跟着切专家，各卡管自己那批人，所以大 EP 就是放大版的 DEP。DeepSeek 线上 decode 用 EP144：18 台机器；256 个专家加 32 份冗余共 288 份，每卡 2 个路由专家加 1 个共享专家。</p>
 <figure class="fbox fwide" id="anim-bigep">
 <video src="media/topic06-bigep.mp4?v=be13a8bf" data-pauses="0.90,3.95,7.40,10.85,14.70,18.95" autoplay loop muted playsinline
        aria-label="动画：上下两条泳道，上面 EP8、8 张卡，一张卡里摆着 32 个路由专家的小格子；下面 EP144、144 张卡，一张卡里只有 2 个大格子。四列依次长出条形：每个专家分到几行，EP8 是 8 行、EP144 约 128 行；每层读多少权重，1.41 GB 对 88 MB；接着标出每字节用 8 次对 128 次；路由专家占显存，EP8 的 81.7 GB 越过 80 GB 的红线，EP144 只有 5.1 GB，旁边写着剩下装 KV。最后一拍，下面那张卡的 token 跑去其余 143 张卡再跑回来，字幕说代价是每层都要跨机器去一趟、回一趟。结尾打出：专家铺开，每卡读得少，读一次用得多。"></video>
 <figcaption><b>上下两条泳道比同一列：每份专家分到的人越多，每张卡读得越少。</b>
   <span class="sub">（24 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。专家大小、层数照 V3 配置；每卡 32 个请求、负载均匀是示意。）</span></figcaption></figure>
   <ul>
-    <li><b>车坐得满。</b>每卡 32 个请求时，每份专家分到的行数从 8 涨到约 128（本课推导，负载均匀时）。</li>
+    <li><b>车坐得满。</b>每卡 32 个请求时，每份专家分到的行数从 8 涨到约 128（144 卡 × 32 × 8 ÷ 288 份，本课推导，负载均匀时）。</li>
     <li><b>读得少。</b>每层每卡要读的专家权重从 1.41 GB 降到 88 MB，读进来的每个字节从用 8 次变成用 128 次。</li>
     <li><b>腾出显存给笔记。</b>光放路由专家，EP8 每卡要 81.7 GB，80 GB 的卡放不下；EP144 只要 5.1 GB，剩下的装 KV，批还能再大。</li>
   </ul>
@@ -2063,7 +2064,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>本课推导：(194 ＋ 360) µs × 58 层 ≈ 32 ms，是不重叠时的上限；V3 61 层中前 3 层稠密，MoE 58 层（config.json first_k_dense_replace 3）。NVL72、ICI 的带宽没写数字。</p></details></figure>
   <ul>
     <li><b>量不大。</b>每层先把 token 发到专家所在的卡，算完再收回来。一个 token 一步最多收发约 10 MB（本课推导），比它 4K 上下文一步要读的 288 MB 笔记小一个多量级。</li>
-    <li><b>难在等。</b>每层都要等一去一回，出一个字要等 116 次。</li>
+    <li><b>难在等。</b>每层都要等一去一回，58 个专家层 × 2，出一个字要等 116 次。</li>
     <li><b>普通 8 卡机也能做。</b>DeepSeek 就是：机内 NVLink，全集群 InfiniBand 全互连，GPU 直接发起 RDMA，不经 CPU。</li>
     <li><b>NVL72 换来的是余量。</b>一柜 72 张卡一个 NVLink 域，EP 铺到几十张卡也不出柜、不走网卡。</li>
   </ul>
@@ -2074,12 +2075,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <ul>
     <li><b>第一篇：</b>decode 每卡 7,583 tok/s，<b>2.7 倍</b>。</li>
     <li><b>第二篇：</b>注意力用 FP8、专家用 NVFP4，prefill <b>3.8 倍</b>、decode <b>4.8 倍</b>。</li>
-    <li><b>别全记在大 EP 头上。</b>这些倍数混着显存、精度、kernel 和 PD 分离，不全是大 EP 的功劳。</li>
+    <li><b>别全记在大 EP 头上。</b>这些倍数混着显存、精度、kernel 和 PD 分离，不全是大 EP 的功劳；decode 是先压慢、攒满请求再放开测的，H100 基线有一组开了模拟 MTP、GB200 没开。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
     <b>DEP 不复印笔记，每一步变短；大 EP 把专家那趟车坐满，还腾出显存装笔记。</b><br>
-    这一步进步多少：V4-Pro 从 TP4 换 dep8，GB300、vLLM、并发 512、按全部卡算，每卡吞吐 2.09 倍。<br>
+    这一步进步多少：V4-Pro 从 TP4 换 dep8，GB300、vLLM、并发 512、按全部卡算每卡吞吐 2.09 倍，只算 decode 卡 1.31 倍。<br>
     可 DEP 要每张卡自备一份状态，有的模型起不来，只能退回 TP，笔记又被复印；上下文一长，复印件把显存吃光。下一节问：长上下文时，DCP 和 PCP 有啥区别？<br>
     <em>想看 TPU 上的 DP 注意力、双微批怎么藏通信、EPLB 怎么给热门专家多备几份，翻完整版第六节。</em></div>
 
