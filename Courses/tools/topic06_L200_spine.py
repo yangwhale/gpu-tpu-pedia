@@ -23,7 +23,7 @@ SPINE = [
      "fig-s7-pcp-dcp-t5、fig-s7-softmax-merge-t5、fig-s7-kv-dup-t5、fig-s7-dcp-gain", "s七"),
     ("六", "PD 分离：多搬一趟 KV，凭什么接的人更多？",
      "两种活互相拖：一口锅炒大菜，一口锅出单碗；分开后各开各的批", 10,
-     "anim-pdsplit、fig-s8-kv-trip-t5、fig-s9-pd-ratio-t5", "s八"),
+     "anim-pdsplit、fig-s9-pd-ratio-t5、fig-s8-kv-trip-t5、fig-s9-2p1d", "s八"),
     ("七", "投机解码：怎么一趟出好几个字？",
      "先猜后验：猜对白赚，猜错只亏一点；batch 越大越不灵、温度会骗人", 10,
      "anim-spec、fig-s11-conc、fig-s11-temp", "s十一"),
