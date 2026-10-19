@@ -1078,14 +1078,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="tbl-wrap"><table>
     <tr><th>首次公开</th><th>卡在哪</th><th>怎么解</th><th>又留下什么</th><th>节</th></tr>
     <tr><td>2022</td><td>整批人陪最慢的那个写完</td><td>连续批：每一步都能上下车</td><td>座位归 KV 管，KV 还按最长预留</td><td>二</td></tr>
-    <tr><td>2023</td><td>KV 白占显存，每条又太厚</td><td>分页存；GQA、MLA 压薄；相同开头不重算</td><td>上下文越来越长，座位还是紧</td><td>三</td></tr>
+    <tr><td>2023–2024</td><td>KV 白占显存，每条又太厚</td><td>分页存；GQA、MLA 压薄；相同开头不重算</td><td>上下文越来越长，座位还是紧</td><td>三</td></tr>
     <tr><td>2024–2025</td><td>MoE 把一批人拆散到几百个专家</td><td>DEP ＋ 大 EP：专家铺满上百张卡</td><td>每张卡自备一份状态，长上下文时 KV 被复制</td><td>四</td></tr>
     <tr><td>2024–2025</td><td>长上下文 KV 放不下，首字又慢</td><td>DCP／PCP：按序列切</td><td>只在长上下文划算</td><td>五</td></tr>
     <tr><td>2023–2025</td><td>长 prompt 一进门，卡住所有正在出字的人</td><td>PD 分离：两种活分到两批机器</td><td>每个请求多搬一趟 KV</td><td>六</td></tr>
     <tr><td>2022–2025</td><td>思考模型一题几千字，一趟只出一个字</td><td>投机解码：一趟验好几个字</td><td>人多时收益缩水</td><td>七</td></tr>
     <tr><td>2022–2026</td><td>能省的只剩字节</td><td>FP8、FP4 量化，合并 kernel</td><td>掉不掉点要实测</td><td>八</td></tr>
   </table></div>
-  <p>两股外力一直在推：上下文变长（2023 年 128K，2024 年 1M），输出也变长（2024 年 o1、2025 年 R1 一题写几千个思考 token）。</p>
+  <p>两股外力一直在推：上下文变长（2023 年 128K，2024 年 1M），输出也变长（2024 年 o1、2025 年 R1 一题写几百到几千个思考 token）。</p>
   <div class="note info"><span class="t">先猜一个数</span>
     同一套 GB300、同一个 DeepSeek-V4-Pro、每个用户出字一样快，光改软件，每卡吞吐是首发日的几倍？答案在第九节。<br>
     <em>市面上推理降价更多，主要归给越来越强的小模型（斯坦福 AI Index 2025）；这道题只算软件那一份。</em></div>
@@ -2459,7 +2459,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>PD 分离：多搬一趟 KV，凭什么接的人更多？</h2></div>
-  <p class="lead">上一节结尾留了个洞：prefill 和 decode 还挤在同一批卡上。第四、五节把每张卡带的人撑多了，一个长 prompt 进门，被它耽误的人也跟着变多。
+  <p class="lead">上一节结尾留了个洞：prefill 和 decode 还挤在同一批卡上。第四、五节让每张卡装得下的人更多了，一个长 prompt 进门，被它耽误的人也跟着变多。
     PD 分离把两种活拆到两批机器上，就是第零节说的那一类不碰「这一趟」的招，代价是每个请求多搬一趟 KV。<b>多搬一趟，凭什么接的人反而更多？</b></p>
 
   <h3 id="l6-1">两种活互相拖</h3>
@@ -3057,7 +3057,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>独立小模型</b>（2022-11）：另找一个小模型当徒弟，单请求快到 2–3 倍。</li>
     <li><b>Medusa 加头、EAGLE 读隐状态</b>（2024-01）：草稿长到大模型身上。EAGLE 吃大模型出字前那一层的向量来猜，LLaMA2-Chat 70B 上快到 2.7–3.5 倍。</li>
     <li><b>MTP 训进主模型</b>（2024-12）：DeepSeek-V3 的草稿是主模型自带的一层，跟着一起训出来，往后多猜一个字，第 2 个字接受率 85–90%。</li>
-    <li><b>EAGLE-3 融浅中深三层</b>（2025-03）：训练时就让草稿把自己猜的字喂回去练，和推理对上。单请求最多快到 6.5 倍，batch 64 时吞吐仍是 1.38 倍。SGLang、vLLM 都已合入。</li>
+    <li><b>EAGLE-3 融浅中深三层</b>（2025-03）：训练时就让草稿把自己猜的字喂回去练，和推理对上。单请求最多快到 6.5 倍，batch 64 时吞吐仍是 1.38 倍（SGLang）。SGLang、vLLM 都已合入。</li>
     <li><b>DFlash</b>（2026-02）：一趟出整块，越往块尾越不准，会拼出「of problem」。</li>
     <li><b>DSpark</b>（2026-07）：以 DFlash 为骨干补两刀，前一位影响后一位，再按把握和负载决定验几个；替下了 DeepSeek 线上只验 2 个字的 MTP-1。</li>
   </ul>
@@ -3313,7 +3313,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="l8-2">专家压到 4 bit，注意力最多 8 bit</h3>
   <p>先按组件数一下参数。gpt-oss-120b 的模型卡分开列：专家 114.71B，注意力 0.96B，嵌入和输出层 1.16B。<b>专家约占 98%，注意力不到 1%</b>（本课推导）。OpenAI 只把专家压成 MXFP4，整个模型就装进了一张 80 GB 的卡。</p>
   <ul>
-    <li><b>注意力不压到 4 bit，头一条原因是按占地省不了多少。</b>不到 1% 的参数，压掉一半也只省半个百分点。但按每步读的字节它不小（下图），所以生产上多放在 FP8：Kimi K2 Thinking 把注意力、输出层放在不量化名单上，INT4 只给路由专家；DeepSeek-V4 模型卡写明专家 FP4、其余大多 FP8；TPU 上跑 R1，也是专家 FP4、注意力 FP8。</li>
+    <li><b>注意力不压到 4 bit，头一条原因是按占地省不了多少。</b>不到 1% 的参数，压掉一半也只省半个百分点。但按每步读的字节它不小（下图），所以生产上不压到 4 bit，要么不压、要么放 FP8：Kimi K2 Thinking 把注意力、输出层放在不量化名单上，INT4 只给路由专家；DeepSeek-V4 模型卡写明专家 FP4、其余大多 FP8；TPU 上跑 R1，也是专家 FP4、注意力 FP8。</li>
     <li><b>没有 FP4 算力也照样快。</b>TPU v7 公开规格里没有 FP4 峰值，4 bit 专家照样能提速：贵的是从显存搬，搬进片上再解开很便宜。省的是字节和容量，不是算得更快。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s12-ledger"><svg viewBox="0 0 1400 518" width="100%" role="img" aria-label="gpt-oss-120b 每生成一个字要读的权重字节，按组件堆成横条。三根条只有专家那段的格式不同。专家 BF16 约 7.2 GB、FP8 约 3.6 GB、MXFP4 约 1.9 GB；注意力 BF16 约 1.9 GB、输出层约 1.2 GB 三根都一样。合计约 10.2、6.7、5.0 GB。专家在整步里的占比从约七成降到不到四成（本课推导，batch 1，不含 KV）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3361,7 +3361,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">不动的那两段（蓝、灰）三根条一样长；上下文一长，还要再加一段 KV。</text>
 </svg><figcaption><b>从上往下看：橙色的专家一根比一根短，蓝、灰两段一动不动。</b><span class="capmore"><br><em>gpt-oss-120b 每出一个字读多少权重，按 config 推算，一个人用，不含 KV。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>gpt-oss-120b config.json（hidden 2880、intermediate 2880、128 专家选 4、36 层、64 头、8 个 KV 头、head_dim 64、词表 201,088）；模型卡 Table 1（注意力 0.96B、激活 5.13B）作核对锚点；MXFP4 每参数 4.25 bit（模型卡）。</p>
 <p>按 config 算的注意力 0.955B、激活 5.12B（另加路由约 0.01B）对上模型卡；字节、占比、倍数为本课推导，未计 KV、激活和缩放外的开销。</p></details></figure>
-  <p><b>所以呢：</b>专家压到四分之一，整步只省一半左右。压完以后，注意力在每步字节里占到约 38%（本课推导）；上下文一长，后面还要再接一段 KV。</p>
+  <p><b>所以呢：</b>专家压到四分之一，整步只省一半左右。以上图 gpt-oss-120b 为例（注意力留在 16 位、一个人用、不含 KV），压完以后注意力在每步字节里占到约 38%（本课推导）；上下文一长，后面还要再接一段 KV。</p>
 
   <h3 id="l8-3">掉不掉点：有出处的只有这几条</h3>
   <ul>
