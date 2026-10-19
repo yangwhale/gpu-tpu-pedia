@@ -2236,17 +2236,17 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>上半张三角表按横带分给四张卡；下半张只剩一行，竖着切成四段。</b><span class="capmore"><br><em>行数、卡数是示意。</em></span></figcaption></figure>
   <p>注意力可以看成一张表：每一行是一个新 token 的提问（Q），每一列是前面一个 token 的笔记（K、V）。切这张表，总有一方得搬到另一方那儿去。</p>
   <ul>
-    <li><b>PCP：提问不动，笔记搬过来。</b>prefill 一次来几千个提问，按行分给几张卡。每一行在一张卡上算完，答案不用拼；可靠后的行要看前面全部笔记，得先把前面几段的 KV 收齐。</li>
-    <li><b>DCP：笔记不动，提问发过去。</b>decode 每步只剩一个提问，没行可切。笔记按 token 轮流存在各张卡上，这个提问发到每张卡，各算自己那段，答案得拼起来。</li>
+    <li><b>PCP：提问不动，笔记搬过来。</b>prefill 一次来几千个提问，按行分给几张卡。靠后的行要看前面全部笔记：笔记沿环一站站传来，边传边算，每张卡边收边合，不用跨卡拼。</li>
+    <li><b>DCP：笔记不动，提问发过去。</b>decode 每步只剩一个提问，没行可切。笔记按 token 轮流存在各张卡上，这个提问发到每张卡，各算自己那段，最后在终点拼一次。</li>
   </ul>
 
   <h3 id="l5-2">为什么反过来：谁小搬谁</h3>
   <ul>
     <li><b>prefill 提问多。</b>一段 prompt 几千个 Q，GQA 下 KV 又小，搬笔记划算。</li>
     <li><b>decode 提问少。</b>一个 Q 对着十几万条笔记，当然搬那一个 Q。</li>
-    <li><b>同一篇论文里两种都用。</b>Meta 做 prefill，整段 prompt 时传 K、V，新 token 很少时改传 Q。结果都和不切一样。</li>
+    <li><b>同一篇论文里两种都用。</b>Meta 做 prefill：整段 prompt 传 K、V；带着很长的缓存前缀、新 token 很少时改传 Q。结果都和不切一样。</li>
   </ul>
-  <p><b>答案怎么拼：先别除。</b>注意力是按分数加权平均。每张卡交出自己那段的分子和分母，加总以后只除一次，才和放在一张卡上算的一样。</p>
+  <p><b>答案怎么拼：先别除。</b>注意力是按分数加权平均。每张卡交出自己那段的分子和分母，加总以后只除一次，才和放在一张卡上算的一样。Ring 在路上一段段这样合，DCP 在终点合，是同一招。</p>
 <figure class="fbox fwide" id="fig-s7-softmax-merge-t5"><svg viewBox="0 0 1400 544" width="100%" role="img" aria-label="笔记分在两张卡上时，注意力的结果怎么合。三个 token 的分数取指数是 2、1、1，值是 10、4、20；卡 0 拿前两个，卡 1 拿第三个。各除各的：卡 0 得 24 除以 3 等于 8，卡 1 得 20 除以 1 等于 20，再平均是 14，错了。先别除：分子加分子 44，分母加分母 4，最后除一次得 11，跟不分卡算的一样。所以每张卡除了结果还要交出自己的分母"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">分块算注意力，合并时先别除　——　<tspan font-weight="700">分子加分子，分母加分母，最后只除一次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">注意力 ＝ 按分数加权平均。三个 token：分数取指数后是 2、1、1，值是 10、4、20。卡 0 拿前两个，卡 1 拿第三个</text>
@@ -2440,7 +2440,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>各点比值：4K c1 −26%、c8 −9%、c32 −11%、c64 −7%；8K c8 −11%、c32 +24%；32K c8 −17%、c32 +7%；128K c1 +12%、c8 +237%。</p>
 <p>吞吐是输出 tok/s，热轮；32K c32 按 §11.0.3 取 TP8 408.2（宽表 ratio 0.4 那行是 420，比值变 1.04，不改结论）。K3 的 MLA 层只有一个 KV 头，它的 69 层 KDA 状态池 DCP 不切（同文件 :725-726）。横轴没换成「KV 总量」：原表只给输入长度和并发，没有实测的 KV 占用。</p></details></figure>
   <ul>
-    <li><b>长了赚。</b>K3 在 GB300 上，128K 输入、并发 8：TP8 默认配置只装得下约 79 万 token，8 个人要 100 多万，只能少收人；DCP8 每秒出 365 个字，TP8 调得最好的一档 108 个。</li>
+    <li><b>长了赚。</b>K3 在 GB300 上，128K 输入、并发 8：TP8 默认配置只装得下约 79 万 token，8 个人要 100 多万，只能少收人；DCP8 每秒出 365 个字，TP8 调得最好的一档 108 个。<b>赚在排队</b>：首字中位数 TP8 32.1 s，DCP8 2.3 s（含排队）。</li>
     <li><b>短了亏。</b>4K 时笔记本来放得下，DCP 只剩代价：每层多几次通信，还丢了一种加速卡间通信的显存用法。四档并发全亏，最多亏 26%。</li>
     <li><b>盈亏看笔记总量，不是单看长度。</b>同是 8K，并发 8 还亏 11%，并发 32 已赚 24%。</li>
   </ul>
@@ -2448,11 +2448,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="l5-5">开之前要知道的两件事</h3>
   <ul>
     <li><b>DCP 叠不到 DEP 上。</b>DCP 最多切成「TP 路数 ÷ KV 头数」份，DEP 的 TP 是 1。它专门救的就是退回 TP 的那批模型。</li>
-    <li><b>PCP 出错往往不报错。</b>漏收别段的 KV，算得少，速度反而好看，快得反常先核输出。线性注意力那类层带着一份随 token 滚动的状态，切开以后得一卡接一卡传，每段从零起步就全错。</li>
+    <li><b>PCP 出错往往不报错。</b>漏收别段的 KV，算得少，速度反而好看，快得反常先核输出。线性注意力那类层带着一份随 token 滚动的状态，每段从零起步就全错：要么接力传上一段的末状态，要么各段先并行算好、再从头合并。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>PCP 搬笔记、答案不用拼、要加卡，买首字；DCP 搬提问、答案要拼、不加卡，买容量。谁小搬谁。</b><br>
+    <b>PCP 搬笔记、不用跨卡拼、要加卡，买首字；DCP 搬提问、终点要拼、不加卡，买容量。谁小搬谁。</b><br>
     这一步进步多少：K3、GB300、SGLang、TP8 跨两台机器、128K 输入 1K 输出、并发 8，DCP8 对调过参的 TP8，输出吞吐 108 → 365 tok/s，多出 237%。短输入时它是亏的。<br>
     可到这里，prefill 和 decode 还挤在同一批卡上：一张卡上同时出字的人越多，一个长 prompt 进门那一下，耽误的人也越多。下一节问：PD 分离多搬一趟 KV，凭什么接的人更多？<br>
     <em>想看 HiCache 和 DCP 的冲突、Ring 和 Ulysses 怎么选、线性注意力的状态怎么接力、各种切法并排的显存账，翻完整版第七节。</em></div>
@@ -2539,6 +2539,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>混着做</b>，两种活互相拖，谁都跑不到自己的上限，7 张卡约 11.2 个/秒。</li>
     <li><b>拆开</b>，2 张 prefill 配 1 张 decode，两边差不多同时忙满，3 张卡就接住 10 个/秒，按卡算翻了一倍还多。</li>
     <li><b>配比就是这么来的</b>：哪边更累，就给哪边多配几台。</li>
+    <li><b>混着做为什么只有 1.6</b>：延迟要求其实是两条，首字别等太久、字距别卡；混在一起，大锅菜一下锅出单就超时，只能两头都少收。</li>
+    <li><b>拆开还能各挑切法</b>：prefill 用适合大算量的切法，decode 开大 EP、开 DCP（第四、五节）。</li>
   </ul>
   <p>DistServe 报告，九成以上请求守住延迟要求时，每卡能接的请求率最多是 vLLM、DeepSpeed-MII（都不拆）的 7.4 倍。Kimi 的线上系统 Mooncake 把它做进了生产，NVIDIA 的 Dynamo 2026 年 3 月出 1.0 正式版，PD 分离成了标准件。</p>
 
@@ -2598,15 +2600,71 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gb/s ＝ 12.5 GB/s → 约 83 ms。</p></details></figure>
   <ul>
     <li><b>很便宜。</b>Qwen3-Coder-480B 一个 8K prompt，prefill 要 1–2 秒；KV 约 1.04 GB，走 100 Gbps 网络加两头拷贝约 100 ms，只占 5–10%（按带宽估算）。</li>
-    <li><b>为什么藏得住。</b>一个请求只传这一次。TP 那种每层都要通信的，离不开机内最快的链路；这一趟走慢一点的网也不怕。</li>
-    <li><b>前提是网络真跑在设计带宽上。</b>vLLM 在 GB300 上跑 V4-Pro，开关配错，KV 每秒只走约 200 MB，按上面那份 KV 换算一趟要 5 秒多，比 prefill 还长；配对后快了两个数量级。配错不报错，只是首字慢。</li>
+    <li><b>为什么占得少。</b>一个请求只传这一次。TP 那种每层都要通信的，离不开机内最快的链路；这一趟走慢一点的网也占不了多少。</li>
+    <li><b>单趟便宜，不等于总量便宜。</b>一台 prefill 每秒外送一串请求的 KV。同一条专线，全注意力模型只够并 1–2 台，KV 薄的混合模型能并 12–21 台。KV 厚的，别让它出 NVLink 域。</li>
+    <li><b>前提是网络真跑在设计带宽上。</b>vLLM 在 GB300 上跑 V4-Pro，开关配错，KV 每秒只走约 200 MB，按上面那份 KV 换算一趟要 5 秒多，比 prefill 还长；配对后快了两个数量级。根因是没走直读对端显存的那条路，退回经主机内存中转。配错不报错，只是首字慢。</li>
   </ul>
-  <p><b>上线前两件事：先量 KV 传输带宽，再比字。</b>temperature 设 0，同一批 prompt 拆与不拆各跑一遍逐 token 对；前几个 token 就分叉，多半是 bug。PD 出错最常见的样子不是崩，是能跑、通顺，但和不拆时不同。</p>
+<figure class="fbox fwide" id="fig-s8-prfaas"><svg viewBox="0 0 1400 552" width="100%" role="img" aria-label="四个模型在 32K 输入时，一台 8 卡 H200 做 prefill，每秒要往外送多少 KV。全注意力的 Qwen3-235B 要 33.35 Gbps，混合的 Qwen3.5-397B 只要 8.25，前者是后者的 4 倍。全注意力的 MiniMax-M2.5 要 59.93，混合的 MiMo-V2-Flash 只要 4.66，前者是后者的 13 倍。红虚线是案例里整条跨集群专线约 100 Gbps，整个 prefill 集群共用：Qwen3-235B 只够并 2 台，MiniMax 只够 1 台，Qwen3.5 能并 12 台，MiMo 21 台。案例里整个 prefill 集群平均出口只有 13 Gbps"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KV 变薄，PD 才敢跨数据中心　——　<tspan font-weight="700">混合模型要送的字节降到全注意力的 1/4 到 1/13</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">PrFaaS 论文 Table 3：32K 输入，一台 8×H200（SGLang v0.5.9）做 prefill 时每秒要外送的 KV，单位 Gbps</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">全注意力</text>
+<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">混合（线性或滑窗 ＋ 少量全注意力）</text>
+<rect x="0" y="102" width="1400" height="390" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每台 prefill 每秒要外送的 KV（Gbps，32K 输入）</tspan></text>
+<line x1="330.0" y1="172" x2="330.0" y2="450" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="330" y="474" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="493.6363636363636" y1="172" x2="493.6363636363636" y2="450" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="493" y="474" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">20</text>
+<line x1="657.2727272727273" y1="172" x2="657.2727272727273" y2="450" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="657" y="474" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">40</text>
+<line x1="820.909090909091" y1="172" x2="820.909090909091" y2="450" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="820" y="474" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">60</text>
+<line x1="984.5454545454545" y1="172" x2="984.5454545454545" y2="450" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="984" y="474" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">80</text>
+<line x1="1148.181818181818" y1="172" x2="1148.181818181818" y2="450" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1148" y="474" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">100</text>
+<path d="M436.4,172 L436.4,450" fill="none" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="444" y="438" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">案例：整个 prefill 集群平均出口 13 Gbps ＝ 专线的 13%</tspan></text>
+<text class="svgsm" x="314" y="206" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Qwen3-235B</tspan></text>
+<text class="svgsm" x="314" y="227" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">全注意力</text>
+<rect x="330" y="190" width="272.8636363636364" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="606.8636363636364" y="194" width="49" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="612" y="211" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">33.35</tspan></text>
+<text class="svgsm" x="1164" y="211" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 2 台</text>
+<text class="svgsm" x="314" y="262" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Qwen3.5-397B</tspan></text>
+<text class="svgsm" x="314" y="283" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">每 4 层里 3 层线性</text>
+<rect x="330" y="246" width="67.5" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="401.5" y="250" width="40" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="407" y="267" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8.25</tspan></text>
+<text class="svgsm" x="1164" y="267" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 12 台</text>
+<text class="svgsm" x="314" y="326" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MiniMax-M2.5</tspan></text>
+<text class="svgsm" x="314" y="347" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">全注意力</text>
+<rect x="330" y="310" width="490.33636363636356" height="30" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="824.3363636363636" y="314" width="49" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="830" y="331" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">59.93</tspan></text>
+<text class="svgsm" x="1164" y="331" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 1 台</text>
+<text class="svgsm" x="314" y="382" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MiMo-V2-Flash</tspan></text>
+<text class="svgsm" x="314" y="403" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">每 6 层里 5 层只看近处</text>
+<rect x="330" y="366" width="38.127272727272725" height="30" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="372.1272727272727" y="370" width="40" height="24" rx="0" fill="#ffffff" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="378" y="387" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.66</tspan></text>
+<text class="svgsm" x="1164" y="387" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">够并 21 台</text>
+<path d="M1148.2,172 L1148.2,450" fill="none" stroke="#d93025" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="1140" y="190" fill="#a50e0e" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整条跨集群专线约 100 Gbps（集群共用）</tspan></text>
+</svg><figcaption><b>先看两根橙柱只够并 1–2 台，再看两根绿柱能并 12–21 台。</b><span class="capmore"><br><em>32K 输入，一台 8×H200 每秒外送的 KV；「够并几台」是 100 Gbps 除以每台外送，L300 的推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 PrFaaS，arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a>（Moonshot AI ＋ 清华）：Table 3 的 Φ_kv；案例吞吐 +54%、P90 TTFT −64%、同成本约 +15%、比不调度的朴素异构 +32%；长度阈值 19.4K，约一半请求外送；平均出口 13 Gbps，占整条以太网的 13%（§4.3.1，故专线约 100 Gbps）。「够并几台」＝ ⌊100 ÷ 每台外送⌋，本课推导。</p>
+<p>📌 案例：内部 1T 混合模型，32 张 H200 做 prefill ＋ 64 张 H20 做本地 PD，对比 96 张 H20 同构 PD。「每 4 层里 3 层线性」即论文的混合 3:1；「每 6 层里 5 层只看近处」即 5:1 滑窗注意力（SWA）。</p>
+<p>⚠️ 那 4 倍、13 倍是两两同代对比（论文原文），不是同一参数量下的严格对照。</p></details></figure>
+  <p><b>上线前两件事：先量 KV 传输带宽，再比字。</b>temperature 设 0，同一批 prompt 拆与不拆各跑一遍逐 token 对；前几个 token 就分叉，多半是 bug；几百个 token 后才分叉，可能只是浮点差异，分不清就把并发降到 1 再比。PD 出错最常见的样子不是崩，是能跑、通顺，但和不拆时不同。</p>
 
   <h3 id="l6-4">所以呢：配几台，什么时候别拆</h3>
   <ul>
-    <li><b>配比先算一个起点，再上下扫。</b>取每张 decode 卡的输出不再涨的那一档。SGLang 跑 V4-Pro（GB300、8 张 decode 卡），prefill 从 14 个加到 16 个，每张 decode 卡输出只涨 2%，已经喂饱。</li>
-    <li><b>加一台 prefill，换来的是首字快。</b>看下图：同一组数，按每卡吞吐看是亏，按首字看是赚。</li>
+    <li><b>配比先算一个起点，再上下扫。</b>起点 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒吞的 token；V4-Pro 算出约 9.8 个，官方配方 8 个，runbook 扫出 14 个。取每张 decode 卡的输出不再涨的那一档。SGLang 跑 V4-Pro（GB300、8 张 decode 卡），prefill 从 14 个加到 16 个，每张 decode 卡输出只涨 2%，已经喂饱。</li>
+    <li><b>加一台 prefill，换来的是首字快。</b>看下图：同一组数，按每卡吞吐看是亏，按首字看是赚。总输出不涨，是因为每个请求端到端约 65 s，首字省下的 0.67 s 摊进去看不出。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s9-2p1d"><svg viewBox="0 0 1400 550" width="100%" role="img" aria-label="同一组实测，两种看法。DeepSeek-V3 在 B200 上，从 1 台 prefill 加 1 台 decode，变成 2 台 prefill 加 1 台 decode，并发 128。左边按机器看：总输出只从 1,118.8 涨到 1,159.0，多 3.6%；每张卡从 69.9 掉到 48.3，少 31%。右边按用户看：平均首字延迟从 2.40 秒降到 1.73 秒，少 28%；P99 首字延迟从 12.07 秒降到 6.23 秒，少 48%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">多一台 prefill，买的是首字快，不是吞吐　——　<tspan font-weight="700">每张卡反而少了三成</tspan></text>
@@ -2662,7 +2720,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按自己的上限开批，谁也不等谁。多搬的那一趟 KV 一个请求只传一次，藏得住。</b><br>
+    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按自己的上限开批，谁也不等谁。多搬的那一趟 KV 一个请求只传一次，占得少；前提是网络跑在设计带宽上、KV 不厚得离谱。</b><br>
     这一步进步多少：Mooncake 的 FAST'25 正式版报告，比此前系统多接 115%（A800）、107%（H800）请求。DistServe 论文最多 7.4 倍，那是最好的一组，口径是守住延迟时每卡能接的请求率。<br>
     可不管拆不拆，decode 还是一步只出一个字，每出一个字都得把权重和 KV 搬一趟。下一节问：能不能一趟出好几个字？<br>
     <em>想看三层软件谁搬谁派谁存、两个搬运库在两个引擎上结论相反、混合模型的尾巴、配比公式的完整推算、AFD 和 EPD，翻完整版第八、九节。</em></div>
@@ -2682,11 +2740,94 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     小模型是徒弟，一口气往下写几个字，写得快。大模型是师傅，把这几个字当一段输入，搬一趟权重，一次算出每个位置它自己会写什么，从左往右对。<br>
     <b>对上的直接收；碰到第一个不对的，换成师傅自己的字，后面全扔。</b>所以最差也出一个字，跟不开一样多。</div>
   <ul>
-    <li><b>为什么多验几个几乎不加时间。</b>第一节讲过：小 batch 时一步的时间主要花在搬权重上。验五个位置跟验一个一样只搬一趟，跟 prefill 一次读一整段 prompt 是一回事。</li>
+    <li><b>为什么多验几个几乎不加时间。</b>第一节讲过：小 batch 时一步的时间主要花在搬权重上。稠密模型验五个位置跟验一个一样只搬一趟。猜出来的字是现成的输入，跟 prefill 一次读一整段 prompt 是一回事。<b>MoE 不白送：</b>每个位置挑自己的专家，多验就多读专家（下图左）。</li>
     <li><b>不改答案。</b>随机采样时按标准的拒绝采样决定收不收，出来的分布跟大模型自己一个字一个字写完全一样。改的只是速度。</li>
     <li><b>收益账就一个除法：</b>每步平均出几个字（接受长度）÷ 一步变慢了几倍。分子靠徒弟猜得准，分母靠验证别太贵。</li>
   </ul>
-  <p>Kimi K3 在 GB300 上、8 张卡一个人用：不开投机，一趟 11.1 ms 带回 1 个字；开了，一趟慢到约 16 ms（本课反推），平均带回 6.96 个字。摊到每个字 2.31 ms，<b>快到 4.81 倍</b>。</p>
+<figure class="fbox fwide" id="fig-s11-bytes"><svg viewBox="0 0 1400 592" width="100%" role="img" aria-label="左图：DeepSeek-V3 一步验证 n 个 token 要读多少权重，FP8 每参数一字节。浅蓝是每个 token 都要经过的部分，约 171 亿参数，验证几个 token 都只读一遍；深蓝是路由专家，每个 token 挑自己的 8 个，验证的 token 越多，碰到的专家并起来越多。验证 1 个读约 37.5 GB，验证 8 个约 163.8 GB，是 4.4 倍。右图：Kimi K3 实测的时间账。不开投机，搬一趟权重 11.1 毫秒，带回 1 个字；开投机，搬一趟变成约 16.1 毫秒，用时是不开的 1.45 倍，但平均带回 6.96 个字。摊到每个字，从 11.1 毫秒降到 2.31 毫秒，降到 1/4.81"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">多验证几个 token 贵不贵　——　<tspan font-weight="700">稠密部分白送，MoE 专家不白送</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：V3 验证一步要读的权重（本课推导，FP8）。右：Kimi K3 实测，搬一趟变慢了，但一趟带回的字多得多</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#aecbfa" stroke="#aecbfa" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">每个 token 都经过的部分</text>
+<rect x="231.8" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="252" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">路由专家（各挑各的）</text>
+<rect x="435.6" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="456" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">开投机后的一趟</text>
+<rect x="0" y="102" width="640" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="640" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="640" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">V3 验证 n 个 token，一步读多少 GB</tspan></text>
+<rect x="90" y="182" width="500" height="320" rx="4" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="80" y="507" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="80" y="400" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums">60</text>
+<text class="svgsm" x="80" y="293" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums">120</text>
+<text class="svgsm" x="80" y="187" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums">180</text>
+<text class="svgsm" x="30" y="168" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GB</text>
+<rect x="100.0" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="100.0" y="435.28732751644446" width="42.5" height="36.328265045333325" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="121" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">1</text>
+<text class="svgsm" x="121" y="427" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">37.5</tspan></text>
+<rect x="162.5" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="162.5" y="400.09432075377777" width="42.5" height="71.521271808" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="183" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">2</text>
+<rect x="225.0" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="225.0" y="366.0010954524445" width="42.5" height="105.61449710933333" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="246" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">3</text>
+<rect x="287.5" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="287.5" y="332.97328344177777" width="42.5" height="138.64230912000002" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="308" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">4</text>
+<rect x="350.0" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="350.0" y="300.9775905564444" width="42.5" height="170.63800200533336" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="371" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">5</text>
+<rect x="412.5" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="412.5" y="269.98176307377776" width="42.5" height="201.633829488" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="433" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">6</text>
+<rect x="475.0" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="475.0" y="239.95455519994442" width="42.5" height="231.66103736183337" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="496" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">7</text>
+<rect x="537.5" y="471.61559256177776" width="42.5" height="30.384407438222222" rx="2" fill="#aecbfa" stroke="#669df6" stroke-width="1.0"/>
+<rect x="537.5" y="210.86569757216841" width="42.5" height="260.74989498960934" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="558" y="526" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">8</text>
+<text class="svgsm" x="558" y="202" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">163.8</tspan></text>
+<text class="svgsm" x="340" y="554" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步验证的 token 数 n</tspan></text>
+<text class="svgsm" x="106" y="212" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">验证 8 个 ＝ 验证 1 个的 4.4 倍</tspan></text>
+<text class="svgsm" x="106" y="238" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">浅蓝 17.1 GB 不随 n 变</text>
+<rect x="660" y="102" width="740" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="660" y="102" width="740" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="660" y="104" width="740" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="660" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="674" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Kimi K3 实测：搬一趟，带回几个字</tspan></text>
+<text class="svgsm" x="684" y="198" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不开投机</tspan></text>
+<rect x="810" y="172" width="333.0" height="40" rx="6" fill="#e8eaed" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="824" y="198" fill="#80868b" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">搬一趟 11.1 ms</tspan></text>
+<rect x="810" y="228" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="856" y="250" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">带回 1 个字</tspan></text>
+<text class="svgsm" x="684" y="338" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">开投机</tspan></text>
+<rect x="810" y="312" width="482.32800000000003" height="40" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="824" y="338" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">搬一趟 16.1 ms</tspan></text>
+<rect x="810" y="368" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="846" y="368" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="882" y="368" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="918" y="368" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="954" y="368" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="990" y="368" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1026" y="368" width="30" height="30" rx="5" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1072" y="390" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">平均带回 6.96 个字</tspan></text>
+<path d="M1143,216 L1143,356" fill="none" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4,4"/>
+<path d="M1143,304 L1143,298 L1292,298 L1292,304" fill="none" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<text class="svgsm" x="1217" y="290" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">用时 1.45×，对不开</tspan></text>
+<path d="M684,432 L1376,432" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="684" y="462" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">摊到每个字</tspan></text>
+<text class="svgsm" x="684" y="498" fill="#0d652d" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">11.1 ms → 2.31 ms，降到 1/4.81</tspan></text>
+<text class="svgsm" x="684" y="528" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一趟慢一点不要紧，带回的字多得多</text>
+</svg><figcaption><b>左边深蓝那段越验越高：专家越验读得越多；右边一趟慢了一截，带回的字多得多。</b><span class="capmore"><br><em>左为 V3、FP8、均匀路由的推导，偏高；右为 K3 在 GB300 上一个人用的实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V3 结构取自 HF deepseek-ai/DeepSeek-V3 config.json：hidden 7,168、moe_intermediate 2,048、61 层中前 3 层稠密、256 个路由专家挑 8 个。每个专家 3 × 7,168 × 2,048 ≈ 4,404 万参数。</p>
+<p>⚠️ 本课推导：其余部分 ＝ 671B − 256 × 58 × 专家大小 ≈ 17.1B；由此推出每 token 激活 ≈ 37.5B，与技术报告的 37B 差 2% 以内（外部锚点）。</p>
+<p>⚠️ 本课推导：n 个 token 独立、均匀地挑专家时，一层平均碰到 256 × (1 − (1 − 8/256)^n) 个；实际路由不均匀、相邻 token 常挑同一批专家，所以深蓝那段是偏高的估计。</p>
+<p>K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089（GB300 TP8 跨两节点，ISL 4096／OSL 1024，temperature 0，bs=1，TPOT 11.1 → 2.31 ms）、:979（accept len 6.96，block 7）。</p>
+<p>⚠️ 本课推导：开投机后一趟耗时 ＝ 2.31 ms × 6.96 ≈ 16.1 ms；每字间隔降到 1/4.81（11.1 ÷ 2.31 ≈ 4.81）。runbook 报的端到端 4.22× 含首字时间，所以比 4.81 小。右图第 7 个方块代表平均值里的 0.96 个，示意。</p>
+<p>注：K3 是 8 张卡跑 bs=1，一步里除了读权重还有通信和 kernel 之间的空转，所以「用时 1.45×」不能全归给多读的专家。</p></details></figure>
+  <p>Kimi K3 在 GB300 上、8 张卡一个人用：不开投机，一趟 11.1 ms 带回 1 个字；开了，一趟慢到约 16 ms（本课反推），平均带回 6.96 个字。摊到每个字 2.31 ms，<b>快到 4.81 倍</b>。这是温度 0、随机 prompt 测的；官方按温度 1.0 给的接受长度，代码类约 4.73、创作类约 2.61，真实业务会低一截。</p>
 
   <h3 id="l7-2">人一多就不灵</h3>
 <figure class="fbox fwide" id="fig-s11-conc"><svg viewBox="0 0 1400 522" width="100%" role="img" aria-label="Kimi K3 在 GB300 上开 DSpark 投机解码，输出吞吐的加速比随并发下降：并发 1 是 4.22 倍，8 是 2.86 倍，32 是 1.89 倍，64 是 1.74 倍；同样并发 1，上下文从 4K 拉到 32K，只剩 1.32 倍"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2728,8 +2869,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%；decode 峰值 −13%、端到端 +28%）。B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。</p></details></figure>
   <ul>
     <li><b>白送的前提是算力闲着。</b>人少时算力大半空着，多验的几个位置是用闲着的算力算的。人一多，算力先忙满，草稿里每个字都得真算一遍。</li>
+    <li><b>草稿也占显存。</b>K3 开 DSpark 后 KV 池从 787,504 token 缩到 637,504，少了 19%，能坐的人少了。</li>
     <li><b>柱子一路往右缩。</b>同一套 K3，一个人用时吞吐是不开投机的 4.22 倍，64 个人一起用只剩 1.74 倍。还是赚，赚得少了。</li>
-    <li><b>为大 batch 配的 DEP 可能倒亏。</b>8 张 B200 跑 DeepSeek-V4-Flash，vLLM、DEP8 开模型自带的 MTP 草稿（下文 MTP 那一条），十档并发全部变慢，慢 3% 到 37%。</li>
+    <li><b>为大 batch 配的 DEP 可能倒亏。</b>8 张 B200 跑 DeepSeek-V4-Flash，vLLM、DEP8 开模型自带的 MTP 草稿（下文 MTP 那一条），十档并发全部变慢，慢 3% 到 37%；并发 1 也慢 12%，原因原文没给。</li>
   </ul>
   <p><b>所以呢：</b>低并发、要跟手的档先开；为大 batch 配的部署先实测再开。</p>
 
@@ -2915,8 +3057,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>独立小模型</b>（2022-11）：另找一个小模型当徒弟，单请求快到 2–3 倍。</li>
     <li><b>Medusa 加头、EAGLE 读隐状态</b>（2024-01）：草稿长到大模型身上。EAGLE 吃大模型出字前那一层的向量来猜，LLaMA2-Chat 70B 上快到 2.7–3.5 倍。</li>
     <li><b>MTP 训进主模型</b>（2024-12）：DeepSeek-V3 的草稿是主模型自带的一层，跟着一起训出来，往后多猜一个字，第 2 个字接受率 85–90%。</li>
-    <li><b>EAGLE-3 融浅中深三层</b>（2025-03）：单请求最多快到 6.5 倍，batch 64 时吞吐仍是 1.38 倍。SGLang、vLLM 都已合入。</li>
-    <li><b>DFlash、DSpark</b>（2026）：一趟出整块，再按把握和负载决定验几个，替下了 DeepSeek 线上的 MTP-1。</li>
+    <li><b>EAGLE-3 融浅中深三层</b>（2025-03）：训练时就让草稿把自己猜的字喂回去练，和推理对上。单请求最多快到 6.5 倍，batch 64 时吞吐仍是 1.38 倍。SGLang、vLLM 都已合入。</li>
+    <li><b>DFlash</b>（2026-02）：一趟出整块，越往块尾越不准，会拼出「of problem」。</li>
+    <li><b>DSpark</b>（2026-07）：以 DFlash 为骨干补两刀，前一位影响后一位，再按把握和负载决定验几个；替下了 DeepSeek 线上只验 2 个字的 MTP-1。</li>
   </ul>
 
   <h3 id="l7-5">EAGLE 和 MTP：长得一样，差在谁训</h3>
@@ -3161,15 +3304,16 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <b>人少的时候，一步的时间几乎全花在读权重上（第一节），所以字节减半，一步的时间下限也减半。</b></div>
   <ul>
     <li><b>算一笔账（本课推导，只算权重）。</b>DeepSeek-V3 出一个字要读 370 亿参数，8 颗 TPU v7 分着读：BF16 至少 1.26 ms，FP8 0.63 ms，4 bit 约 0.33–0.35 ms。FP8 那个数正好是第一节单芯片 5 ms 的八分之一。</li>
-    <li><b>实测接近这个比例。</b>vLLM 2024 年接入 FP8 权重，2 张 H100 上跑稠密的 Llama 3 70B，每字间隔最多降到不量化时的一半。</li>
+    <li><b>实测接近这个比例。</b>vLLM 2024 年接入 FP8 权重，2 张 H100 上跑稠密的 Llama 3 70B，每字间隔最多降到不量化时的一半；MoE 的 Mixtral 8x7B 只到 1/1.6。</li>
+    <li><b>人多时照样管用。</b>MoE 每个专家只分到几行，还是读权重说了算；省下的显存还能多放 KV。</li>
     <li><b>4 bit 为什么不是正好再减半。</b>4 bit 只有 16 个编码，一个数装不下量级，只能几个数共用一个缩放倍数；缩放本身也占字节。</li>
   </ul>
   <p><b>省下的显存还有第二份用处：</b>多放 KV、多接人。第二节说过座位就是 KV，量化顺带也走了「多坐人」那条路。</p>
 
-  <h3 id="l8-2">专家压到 4 bit，注意力不动</h3>
+  <h3 id="l8-2">专家压到 4 bit，注意力最多 8 bit</h3>
   <p>先按组件数一下参数。gpt-oss-120b 的模型卡分开列：专家 114.71B，注意力 0.96B，嵌入和输出层 1.16B。<b>专家约占 98%，注意力不到 1%</b>（本课推导）。OpenAI 只把专家压成 MXFP4，整个模型就装进了一张 80 GB 的卡。</p>
   <ul>
-    <li><b>注意力不压，因为省不了多少。</b>不到 1% 的参数，压掉一半也只省半个百分点。Kimi K2 Thinking 把注意力、输出层放在不量化名单上，INT4 只给路由专家；DeepSeek-V4 模型卡写明专家 FP4、其余大多 FP8。</li>
+    <li><b>注意力不压到 4 bit，头一条原因是按占地省不了多少。</b>不到 1% 的参数，压掉一半也只省半个百分点。但按每步读的字节它不小（下图），所以生产上多放在 FP8：Kimi K2 Thinking 把注意力、输出层放在不量化名单上，INT4 只给路由专家；DeepSeek-V4 模型卡写明专家 FP4、其余大多 FP8；TPU 上跑 R1，也是专家 FP4、注意力 FP8。</li>
     <li><b>没有 FP4 算力也照样快。</b>TPU v7 公开规格里没有 FP4 峰值，4 bit 专家照样能提速：贵的是从显存搬，搬进片上再解开很便宜。省的是字节和容量，不是算得更快。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s12-ledger"><svg viewBox="0 0 1400 518" width="100%" role="img" aria-label="gpt-oss-120b 每生成一个字要读的权重字节，按组件堆成横条。三根条只有专家那段的格式不同。专家 BF16 约 7.2 GB、FP8 约 3.6 GB、MXFP4 约 1.9 GB；注意力 BF16 约 1.9 GB、输出层约 1.2 GB 三根都一样。合计约 10.2、6.7、5.0 GB。专家在整步里的占比从约七成降到不到四成（本课推导，batch 1，不含 KV）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3217,27 +3361,27 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">不动的那两段（蓝、灰）三根条一样长；上下文一长，还要再加一段 KV。</text>
 </svg><figcaption><b>从上往下看：橙色的专家一根比一根短，蓝、灰两段一动不动。</b><span class="capmore"><br><em>gpt-oss-120b 每出一个字读多少权重，按 config 推算，一个人用，不含 KV。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>gpt-oss-120b config.json（hidden 2880、intermediate 2880、128 专家选 4、36 层、64 头、8 个 KV 头、head_dim 64、词表 201,088）；模型卡 Table 1（注意力 0.96B、激活 5.13B）作核对锚点；MXFP4 每参数 4.25 bit（模型卡）。</p>
 <p>按 config 算的注意力 0.955B、激活 5.12B（另加路由约 0.01B）对上模型卡；字节、占比、倍数为本课推导，未计 KV、激活和缩放外的开销。</p></details></figure>
-  <p><b>所以呢：</b>专家压到四分之一，整步只省一半左右。压完以后，原样不动的注意力和输出层反倒成了读得最多的部分；上下文一长，后面还要再接一段 KV。</p>
+  <p><b>所以呢：</b>专家压到四分之一，整步只省一半左右。压完以后，注意力在每步字节里占到约 38%（本课推导）；上下文一长，后面还要再接一段 KV。</p>
 
-  <h3 id="l8-3">掉不掉点：有数的只有这一档</h3>
+  <h3 id="l8-3">掉不掉点：有出处的只有这几条</h3>
   <ul>
     <li><b>取整取得聪明，差出一截。</b>AWQ 那组测试看 WikiText-2 困惑度（越低越好）：16 位 5.47；AWQ 压到 4 bit 是 5.60，直接四舍五入取整是 5.73。同样 4 bit，挑缩放的方法决定掉多少。</li>
     <li><b>从 FP8 再压到 NVFP4：</b>NVIDIA 博客称 DeepSeek-R1-0528 主要语言任务掉点在 1% 以内。</li>
     <li><b>「无损」要看跟谁比。</b>Kimi K2 Thinking 训练时就模拟 INT4，官方称「无损」、低延迟模式约快 2 倍，可没写对照的是什么精度，基准也只报了 INT4 下的分。</li>
   </ul>
   <div class="note warn"><span class="t">读错一步不会报错</span>
-    INT4 存进文件时整体加了 8，读时要减回去。Kimi K2.6 的记录里加载漏了这一步，每个权重差 8，输出崩成重复的乱词，程序照常出字。<b>量化之后先看输出、跑一遍基准，再上线。</b></div>
+    INT4 是 −8 到 7 的整数，存进文件时整体加了 8，读时要减回去。Kimi K2.6 的记录里加载漏了这一步，每个权重差 8，输出崩成重复的乱词，程序照常出字。<b>量化之后先看输出、跑一遍基准，再上线。</b></div>
 
   <h3 id="l8-4">KV 也能压</h3>
   <ul>
-    <li><b>一个参数的事。</b>KV 存 FP8，每个数从 2 字节变 1 字节，vLLM、SGLang 都是一个 <code>--kv-cache-dtype</code>。Kimi K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</li>
+    <li><b>一个参数的事。</b>KV 存 FP8，每个数从 2 字节变 1 字节，vLLM、SGLang 都是一个 <code>--kv-cache-dtype</code>。Kimi K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每组卡 128 个请求。</li>
     <li><b>坑在缩放。</b>vLLM 只设 <code>fp8</code> 不校准时，缩放全取 1.0。开了 FP8 KV 掉精度，先查有没有校准过的缩放。</li>
-    <li><b>省得不是正好一半。</b>V3.2 有一截位置编码不压、还要存缩放，同显存能装的请求约是 BF16 的 1.63 倍（本课推导）。</li>
+    <li><b>省得不是正好一半。</b>V3.2 有一截位置编码不压、还要存缩放，每层一条索引键本来就是 FP8，同显存能装的请求约是 BF16 的 1.63 倍（本课推导）。</li>
     <li><b>已经到 4 bit。</b>NVIDIA 在 Blackwell 上放出 NVFP4 KV，比 FP8 再省约一半；DeepSeek-V4.1-Flash 的主 KV 原生存 FP4，比原先的 FP8 KV 小 45%。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>量化让每一趟少搬：位数减半，下限减半。专家占大头先压它，注意力不动，所以整步省一半左右，不是四分之一。掉不掉点要实测，读错一步不会报错。</b><br>
+    <b>量化让每一趟少搬：位数减半，下限减半。专家占大头压到 4 bit，注意力最多 8 bit，所以整步省一半左右，不是四分之一。掉不掉点要实测，读错一步不会报错。</b><br>
     这一步进步多少：vLLM 在 2 张 H100 上给 Llama 3 70B 换 FP8 权重，每字间隔最多降到一半；gpt-oss-120b 只压专家，装进一张 80 GB 的卡。<br>
     招都讲完了。最后一节回到那一趟：拿到一个模型、一批卡，先问哪几个问题。<br>
     <em>想看 MXFP4 和 NVFP4 的缩放差在哪、R1 在 TPU 上为什么非 FP4 不可、CUDA Graph 和 kernel 融合怎么去掉交接空等，翻完整版第十二节。</em></div>
@@ -3399,12 +3543,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <circle cx="1086.5" cy="626.0" r="14.0" fill="#5f6368"/>
 <text class="svgsm" x="1086" y="631" fill="#fff" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
 <text class="svgsm" x="1110" y="631" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上线前跑通了吗？</tspan></text>
-</svg><figcaption><b>先看车上：3、4、7 号钉在货和座位上，问的都是那一趟。</b><span class="capmore"><br><em>颜色对着两条路：蓝＝分给更多人，绿＝少搬；橙＝拆开放；灰＝尺子和上线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课归纳：顺序按「先校准、再算账、后调招数」排，各问拿什么回答、判据见正文和对应的节。</p></details></figure>
+</svg><figcaption><b>先看车上：3、4、7 号钉在货和座位上，8 号钉在车头，问的都是那一趟。</b><span class="capmore"><br><em>颜色对着两条路：蓝＝分给更多人，绿＝少搬；橙＝拆开放；灰＝尺子和上线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课归纳：顺序按「先校准、再算账、后调招数」排，各问拿什么回答、判据见正文和对应的节。</p></details></figure>
 
   <h3 id="l9-1">前四问：算清这一趟多重、能分给几个人</h3>
   <ul>
     <li><b>① 负载长什么样。</b>输入输出多长，要哪个交互档。换一个档位，每卡吞吐能差十倍以上（第二节那条曲线，本课推导 9,759 ÷ 895），结论也能整个反过来（第五节的 DCP 短亏长赚）。</li>
-    <li><b>② 用哪把尺子。</b>数总量还是数每卡，分母含不含 prefill 卡。同一次测量换个分母，能差几十倍。</li>
+    <li><b>② 用哪把尺子。</b>数总量还是数每卡，分母含不含 prefill 卡。同一次测量换个分母差别很大：第四节 DEP 按全部卡 2.09 倍、只算 decode 卡 1.31 倍；完整版第二节的例子能差到几十倍。</li>
     <li><b>③ 一步至少搬多少字节。</b>先算下限再看实测；实测是下限的好几倍，先查布局和调度，别急着加卡（第一节）。</li>
     <li><b>④ 放得下几个人。</b>batch 的上限由 KV 定，也就定了这一趟最多分给几个人（第二、三节）。</li>
   </ul>
@@ -3414,26 +3558,27 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>⑤ 注意力怎么切。</b>先定切法，再调参数。第四节换成 DEP，每卡 2.09 倍；同一组实测里只调并发，只涨 28%。上下文很长再看第五节。</li>
     <li><b>⑥ 拆不拆 PD，配几台。</b>有尖峰先试分块 prefill，压不住再拆；拆了按两边各自的吞吐配台数（第六节）。</li>
     <li><b>⑦ 量化、投机开不开。</b>投机在人少时最赚，K3 一个人用吞吐是不开的 4.22 倍，人一多就缩；量化总在减字节（第七、八节）。</li>
-    <li><b>⑧ 上线前跑通了吗。</b>没提前编译好，第一个用户要等一分钟。</li>
+    <li><b>⑧ 上线前跑通了吗。</b>TPU 按固定形状整图编译，一批请求补到预编译的几档；没编过的档，第一个撞上的请求要等 60–90 s，之后同形状不到 1 s。上线前把常用档先跑一遍。</li>
   </ul>
   <p class="landing">⭐ 八问归到一句话：<b>decode 每一步都要搬一趟。</b>前四问算清这一趟多重、能分给几个人；后四问要么让更多人分，要么让它变轻。</p>
 
   <h3 id="l9-3">开场那道题：光改软件，几倍？</h3>
   <p>第零节问过：同一套 GB300、同一个 DeepSeek-V4-Pro、每个用户出字一样快，光改软件，每卡吞吐是首发日的几倍？</p>
   <ul>
-    <li><b>首发日到六月，每卡从约 2,200 涨到约 11,200。</b>SGLang 交的卷，硬件、模型、交互档都没换；六月那条开了 MTP，首发日没开。</li>
-    <li><b>11,200 ÷ 2,200 ≈ 5.1 倍</b>（本课推导，博客标题写 5 倍）。卡价不变，每个字的成本约降到五分之一（本课推导）。</li>
-    <li><b>MTP 占多少，博客没拆。</b>这 5.1 倍是软件栈所有改进的合计。</li>
+    <li><b>首发日到六月，每卡从约 2,200 涨到约 11,200。</b>DeepSeek-V4-Pro 在 GB300 上跑 SGLang，硬件、模型、交互档都没换；六月那条开了 MTP，首发日没开。</li>
+    <li><b>11,200 ÷ 2,200 ≈ 5.1 倍</b>（本课推导，博客标题写 5 倍）。按全部卡算、卡价不变，每个字的成本约降到五分之一（本课推导）。</li>
+    <li><b>分母没写明。</b>每卡是除以 decode 卡还是全部卡，博客没说；两个数出自同一篇同一张图，比值不受影响，换算成本时才要这个前提。</li>
+    <li><b>MTP 占多少，博客没拆。</b>这 5.1 倍是软件栈所有改进的合计。量级参考：TensorRT-LLM 在 8 张 B200 上跑 DeepSeek-R1，单用户每秒 111 token，开 1 层 MTP 198、3 层 253、5 层反降到 239（模型和卡都不同）。</li>
   </ul>
   <div class="note warn"><span class="t">别把各节的倍数乘起来</span>
-    前面每节结尾报的进步，对照对象各不相同：Orca 比的是 FasterTransformer，分页比的已经有 Orca。<b>后一个的基线就是前一个，乘不得。</b>
+    前面每节结尾报的进步，对照对象各不相同：Orca 比的是 FasterTransformer，分页比的已经有 Orca。<b>后一个的基线就是前一个，乘一遍等于把 Orca 那份重复算进去。</b>
     同口径的总账只有这一笔。</div>
   <p>按问题再串一遍：等最长的那个，就每步换人（第二节）；座位不够，就分页、压薄、复用（第三节）；MoE 拆散一批人，就 DEP 加大 EP（第四节）；上下文太长，就按序列切（第五节）；长 prompt 插队，就拆成两批机器（第六节）；一趟只出一个字，就投机（第七节）；最后少搬字节（第八节）。</p>
 
   <div class="note ok"><span class="t">这一节带走</span>
     <b>先算账，再挑招：这一趟多重、能分给几个人，算清了才轮到切法、PD、量化和投机。</b><br>
     这一步进步多少：同一套 GB300、同一个 V4-Pro、同一个交互档，光改软件，每卡是首发日的 5.1 倍（本课推导）。<br>
-    下一个洞已经露出来：线性注意力层的状态截不开，前缀难复用；tpu-inference 上跑 Qwen3.5，前缀缓存至今还得关。<br>
+    下一个洞已经露出来：线性注意力层不存逐字的 KV，只留一份随写随改的定长状态，截不出前缀那一份，前缀难复用；tpu-inference 上跑 Qwen3.5，前缀缓存至今还得关。<br>
     谁再报一个倍数，先问三句：比的是谁，哪一档，分母几张卡。<br>
     <em>想看 2022 到 2026 每一招各省多少、对谁比，同一批招数的分类账，DeepSeek 公开的一天 token 花在哪，翻完整版第十五节。</em></div>
 
