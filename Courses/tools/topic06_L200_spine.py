@@ -8,7 +8,7 @@ SPINE = [
      "fig-s0-life、fig-s0-chain", "s零"),
     ("一", "为什么吐第一个字快，后面一个字一个字慢？",
      "公交车：开一趟油钱固定；prefill 满载，decode 一趟只拉一个人", 12,
-     "fig-s1-ai、fig-s1-b1、fig-s1-wkv", "s一"),
+     "fig-s1-ai、fig-s1-b1、fig-s1-wkv、fig-s1-moe", "s一"),
     ("二", "那多拉几个人不就行了？batch 能开多大？",
      "拼车：随上随下（连续批）；座位就是 KV，代价是每个人等得更久", 10,
      "anim-contbatch、fig-s2-pareto", "s三"),

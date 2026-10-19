@@ -1091,13 +1091,271 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <em>市面上推理降价更多，主要归给越来越强的小模型（斯坦福 AI Index 2025）；这道题只算软件那一份。</em></div>
 
 </div></section>
-<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>为什么吐第一个字快，后面一个字一个字慢？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
-<ul>
-  <li><b>一条主线</b>：公交车：开一趟油钱固定；prefill 满载，decode 一趟只拉一个人</li>
-  <li><b>计划</b>：12 分钟</li>
-  <li><b>打算用的图</b>：fig-s1-ai、fig-s1-b1、fig-s1-wkv</li>
-  <li><b>想深挖</b>：<a href="topic-06-L300.html#s一">完整版对应那一节</a></li>
-</ul>
+<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>为什么吐第一个字快，后面一个字一个字慢？</h2></div>
+  <p class="lead">同一颗芯片，读 prompt 时忙得不行，往外吐字时大半在发呆。
+    <b>差别只在一件事：一趟喂进去几行。</b></p>
+
+  <h3 id="l1-1">一趟喂几行，决定卡在算还是卡在搬</h3>
+  <ul>
+    <li><b>prefill 一趟喂几千行。</b>prompt 是现成的，4K 个 token 一起进矩阵乘，读一次权重够算几千遍。</li>
+    <li><b>decode 一趟只喂一行。</b>下一个字要等上一个字出来，没法提前算；读一次权重，只够这一个人用。</li>
+    <li><b>线在 313。</b>v7 按 bf16，每读 1 字节要算满 313 次，算力才不闲着。一趟喂 M 行，大约就算 M 次。</li>
+  </ul>
+<figure class="fbox fwide" id="fig-s1-ai"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="运算强度随一次喂进的行数 M 变化的曲线，横纵都是对数轴。矩阵是 7168×7168 的 bf16 权重。M＝1 时强度约 1，远低于 v7 的屋脊点 313；decode 一次 64 个人是 63，256 个人是 239，仍在屋脊点下面；prefill 一段 4K 的 prompt，M＝4096，远在屋脊点上面。曲线在 M≈343 处穿过屋脊点"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一次喂几行，决定卡在哪　——　<tspan font-weight="700">decode 在屋脊点下面，prefill 在上面</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一个 7168×7168 的 bf16 矩阵乘：横轴是一次喂进去的行数 M（token 数），纵轴是每搬 1 字节做几次运算。两轴都是对数</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">decode：M ＝ 同时解码的人数</text>
+<rect x="272.12" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="293" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">prefill：M ＝ prompt 长度</text>
+<rect x="518.48" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="539" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7 屋脊点</text>
+<rect x="0" y="102" width="1400" height="560" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运算强度 ＝ 运算次数 ÷ 搬的字节</tspan></text>
+<line x1="120" y1="582" x2="1330" y2="582" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="120" y1="172" x2="120" y2="582" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="120.0" y1="582" x2="120.0" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="120" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="292.8571428571429" y1="582" x2="292.8571428571429" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="292" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">4</text>
+<line x1="465.7142857142857" y1="582" x2="465.7142857142857" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="465" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">16</text>
+<line x1="638.5714285714286" y1="582" x2="638.5714285714286" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="638" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">64</text>
+<line x1="811.4285714285714" y1="582" x2="811.4285714285714" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="811" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">256</text>
+<line x1="984.2857142857143" y1="582" x2="984.2857142857143" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="984" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1,024</text>
+<line x1="1157.142857142857" y1="582" x2="1157.142857142857" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1157" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">4,096</text>
+<line x1="1330.0" y1="582" x2="1330.0" y2="588" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1330" y="606" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">16,384</text>
+<text class="svgsm" x="725" y="632" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">M：一次喂进去的行数（token 数）</tspan></text>
+<line x1="114" y1="532.1560589484234" x2="120" y2="532.1560589484234" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="120" y1="532.1560589484234" x2="1330" y2="532.1560589484234" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="108" y="537" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="114" y1="436.8300555461371" x2="120" y2="436.8300555461371" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="120" y1="436.8300555461371" x2="1330" y2="436.8300555461371" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="108" y="441" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
+<line x1="114" y1="341.5040521438508" x2="120" y2="341.5040521438508" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="120" y1="341.5040521438508" x2="1330" y2="341.5040521438508" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="108" y="346" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">100</text>
+<line x1="114" y1="246.17804874156457" x2="120" y2="246.17804874156457" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="120" y1="246.17804874156457" x2="1330" y2="246.17804874156457" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round" stroke-dasharray="3,4"/>
+<text class="svgsm" x="108" y="251" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1,000</text>
+<text class="svgsm" x="28" y="176" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运算／字节</tspan></text>
+<line x1="120" y1="294.2623812100796" x2="1330" y2="294.2623812100796" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="7,5"/>
+<text class="svgsm" x="1324" y="284" fill="#a50e0e" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7 屋脊点：每字节要算 313 次才不用等显存（bf16）</tspan></text>
+<text class="svgsm" x="136" y="280" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">↑ 这一侧卡在算力</text>
+<text class="svgsm" x="136" y="320" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">↓ 这一侧卡在显存带宽</text>
+<path d="M 120.00 532.20 L 127.20 529.80 L 134.40 527.40 L 141.50 525.00 L 148.70 522.60 L 155.90 520.30 L 163.10 517.90 L 170.20 515.50 L 177.40 513.10 L 184.60 510.70 L 191.80 508.30 L 199.00 506.00 L 206.10 503.60 L 213.30 501.20 L 220.50 498.80 L 227.70 496.40 L 234.80 494.10 L 242.00 491.70 L 249.20 489.30 L 256.40 486.90 L 263.60 484.50 L 270.70 482.10 L 277.90 479.80 L 285.10 477.40 L 292.30 475.00 L 299.40 472.60 L 306.60 470.20 L 313.80 467.90 L 321.00 465.50 L 328.20 463.10 L 335.30 460.70 L 342.50 458.30 L 349.70 456.00 L 356.90 453.60 L 364.00 451.20 L 371.20 448.80 L 378.40 446.50 L 385.60 444.10 L 392.80 441.70 L 399.90 439.30 L 407.10 436.90 L 414.30 434.60 L 421.50 432.20 L 428.60 429.80 L 435.80 427.40 L 443.00 425.10 L 450.20 422.70 L 457.40 420.30 L 464.50 417.90 L 471.70 415.60 L 478.90 413.20 L 486.10 410.80 L 493.20 408.50 L 500.40 406.10 L 507.60 403.70 L 514.80 401.40 L 522.00 399.00 L 529.10 396.60 L 536.30 394.30 L 543.50 391.90 L 550.70 389.50 L 557.80 387.20 L 565.00 384.80 L 572.20 382.40 L 579.40 380.10 L 586.60 377.70 L 593.70 375.40 L 600.90 373.00 L 608.10 370.70 L 615.30 368.30 L 622.40 366.00 L 629.60 363.60 L 636.80 361.30 L 644.00 359.00 L 651.20 356.60 L 658.30 354.30 L 665.50 351.90 L 672.70 349.60 L 679.90 347.30 L 687.00 345.00 L 694.20 342.60 L 701.40 340.30 L 708.60 338.00 L 715.80 335.70 L 722.90 333.40 L 730.10 331.10 L 737.30 328.80 L 744.50 326.50 L 751.60 324.20 L 758.80 322.00 L 766.00 319.70 L 773.20 317.40 L 780.40 315.10 L 787.50 312.90 L 794.70 310.60 L 801.90 308.40 L 809.10 306.20 L 816.20 304.00 L 823.40 301.70 L 830.60 299.50 L 837.80 297.30 L 845.00 295.20 L 852.10 293.00 L 859.30 290.80 L 866.50 288.70 L 873.70 286.50 L 880.80 284.40 L 888.00 282.30 L 895.20 280.20 L 902.40 278.10 L 909.60 276.00 L 916.70 274.00 L 923.90 272.00 L 931.10 269.90 L 938.30 267.90 L 945.40 266.00 L 952.60 264.00 L 959.80 262.10 L 967.00 260.10 L 974.20 258.20 L 981.30 256.40 L 988.50 254.50 L 995.70 252.70 L 1002.90 250.90 L 1010.00 249.10 L 1017.20 247.40 L 1024.40 245.60 L 1031.60 243.90 L 1038.80 242.30 L 1045.90 240.60 L 1053.10 239.00 L 1060.30 237.40 L 1067.50 235.90 L 1074.60 234.40 L 1081.80 232.90 L 1089.00 231.50 L 1096.20 230.00 L 1103.40 228.70 L 1110.50 227.30 L 1117.70 226.00 L 1124.90 224.70 L 1132.10 223.50 L 1139.20 222.20 L 1146.40 221.10 L 1153.60 219.90 L 1160.80 218.80 L 1167.90 217.70 L 1175.10 216.70 L 1182.30 215.70 L 1189.50 214.70 L 1196.70 213.70 L 1203.80 212.80 L 1211.00 212.00 L 1218.20 211.10 L 1225.40 210.30 L 1232.50 209.50 L 1239.70 208.70 L 1246.90 208.00 L 1254.10 207.30 L 1261.30 206.70 L 1268.40 206.00 L 1275.60 205.40 L 1282.80 204.80 L 1290.00 204.20 L 1297.10 203.70 L 1304.30 203.20 L 1311.50 202.70 L 1318.70 202.20 L 1325.90 201.80" fill="none" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="847.9003843324875" y1="294.2623812100796" x2="847.9003843324875" y2="582" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<circle cx="847.9" cy="294.3" r="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="857" y="570" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次喂到约 343 行才过屋脊点</tspan></text>
+<circle cx="120.0" cy="532.2" r="8" fill="#1e8e3e"/>
+<text class="svgsm" x="136" y="558" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 1 人：每字节算 1 次</tspan></text>
+<circle cx="638.6" cy="360.7" r="8" fill="#1e8e3e"/>
+<text class="svgsm" x="624" y="346" fill="#0d652d" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 64 人：每字节算 63 次</tspan></text>
+<circle cx="811.4" cy="305.4" r="8" fill="#1e8e3e"/>
+<text class="svgsm" x="867" y="367" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 256 人：每字节算 239 次</tspan></text>
+<line x1="817.4285714285714" y1="311.4444421552058" x2="863.4285714285714" y2="353.4444421552058" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
+<circle cx="1157.1" cy="219.4" r="8" fill="#e8710a"/>
+<text class="svgsm" x="1141" y="213" fill="#b06000" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill 一段 4K prompt：远在线上</tspan></text>
+<rect x="0" y="712" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="712" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="712" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="739" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 再多拼人也难过线，prefill 一段 prompt 就远远过线</tspan></text>
+<text class="svgsm" x="20" y="770" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">decode 一步每人只喂 1 行，256 个人拼一起也才每字节算 239 次；prefill 一段 4K prompt 一次就是 4,096 行。</text>
+<text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以同一块芯片，prefill 时算力是瓶颈，decode 时显存带宽是瓶颈。</text>
+</svg><figcaption><b>红线是 313：绿点（decode）全在线下，橙点（prefill）在线上。</b><span class="capmore"><br><em>横轴是一趟喂几行，两轴都是对数；本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 7168 ＝ DeepSeek-V3 config.json 的 hidden_size。屋脊点 313 ＝ v7 每芯片 bf16 2,307 TFLOP/s ÷ HBM 7.37 TB/s（Google Cloud 公开规格；bf16 是 FP8 4,614 的一半，本课推导；专题二同一个数）。</p>
+<p>📌 本课推导：运算 2·M·H²，字节 2·(H² ＋ 2·M·H)（权重读一遍、输入读一遍、输出写一遍，bf16 每数 2 字节），强度 ＝ M·H ÷ (H ＋ 2M)。令它等于 313 解出 M ≈ 343。</p>
+<p>⚠️ 只算权重时强度就是 M，过线点正好是 313（专题五 fig5-decode-ai 的口径）；这里把输入输出也算上，过线点往右挪到 343。</p>
+<p>⚠️ 刻意没画：注意力（它读的是 KV，强度不随人数涨，第五节讲）和 MoE 专家层（见本节专家行数那张图）。</p></details></figure>
+  <p>decode 要一步凑够约 343 人才过线；prefill 一段 4K 的 prompt 一次就过。</p>
+
+  <h3 id="l1-2">一个人出一个字：5 毫秒在搬，0.016 毫秒在算</h3>
+<figure class="fbox fwide" id="fig-s1-b1"><svg viewBox="0 0 1400 604" width="100%" role="img" aria-label="DeepSeek-V3 一个人解码一步，在一颗 TPU v7 上的时间账。要读的权重是 37 GB（370 亿激活参数，FP8 每个 1 字节），按 7.37 TB/s 读完要 5.02 毫秒；要做的运算是 740 亿次，按 FP8 峰值算只要 0.016 毫秒。算力只用了 0.32%，恰好是 313 分之一"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个人解码一步：<tspan font-weight="700">读权重 5.02 ms，算只要 0.016 ms</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，batch 1，一颗 TPU v7 的规格，只算权重。两根条用同一把时间尺</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">从显存读权重</text>
+<rect x="141.08" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="162" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">MXU 做运算</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一步解码的时间（同一把尺）</tspan></text>
+<text class="svgsm" x="30" y="206" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读权重</tspan></text>
+<text class="svgsm" x="30" y="228" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">37 GB ÷ 7.37 TB/s</text>
+<rect x="250" y="182" width="1080" height="56" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="790" y="217" fill="#ffffff" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.02 ms</tspan></text>
+<text class="svgsm" x="30" y="306" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">做运算</tspan></text>
+<text class="svgsm" x="30" y="328" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">74 GFLOP ÷ 4,614 TFLOP/s</text>
+<rect x="250" y="282" width="3.4501950585175547" height="56" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="253.45019505851755" y="282" width="1076.5498049414825" height="56" rx="4" fill="none" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="5,4"/>
+<text class="svgsm" x="268" y="317" fill="#b06000" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.016 ms</tspan></text>
+<text class="svgsm" x="850" y="317" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums">其余时间：MXU 在等数据</text>
+<line x1="250" y1="374" x2="1330" y2="374" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="250.0" y1="374" x2="250.0" y2="380" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="250" y="398" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0 ms</text>
+<line x1="465.12432432432433" y1="374" x2="465.12432432432433" y2="380" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="465" y="398" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1 ms</text>
+<line x1="680.2486486486487" y1="374" x2="680.2486486486487" y2="380" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="680" y="398" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">2 ms</text>
+<line x1="895.372972972973" y1="374" x2="895.372972972973" y2="380" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="895" y="398" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">3 ms</text>
+<line x1="1110.4972972972973" y1="374" x2="1110.4972972972973" y2="380" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1110" y="398" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">4 ms</text>
+<line x1="1325.6216216216217" y1="374" x2="1325.6216216216217" y2="380" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1325" y="398" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">5 ms</text>
+<rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算力利用率 0.32%：一个人解码，芯片几乎全在等显存</tspan></text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">0.016 ÷ 5.02 ＝ 0.32%，正好是 1/313：FP8 每读 1 字节要做约 626 次运算才不用等显存，这里只做 2 次，差 313 倍。</text>
+<text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">换更快的 MXU 毫无用处，这一步的下限是显存带宽定的。</text>
+</svg><figcaption><b>橙条细到几乎看不见：那就是算的时间。</b><span class="capmore"><br><em>理想下限：只算权重，不算 KV、通信和 kernel 开销。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 37B 激活参数、671B 总参数：DeepSeek-V3 技术报告摘要。FP8 权重每参数 1 字节（V3 原生发布 FP8）。v7 每芯片 FP8 4,614 TFLOP/s、HBM 7.37 TB/s：Google Cloud 公开规格。</p>
+<p>📌 本课推导：37e9 ÷ 7.37e12 ＝ 5.02 ms；2 × 37e9 ÷ 4,614e12 ＝ 0.016 ms；比值 0.32% ＝ 2 ÷ (4,614 ÷ 7.37) ＝ 1/313。</p>
+<p>⚠️ 理想下限：只算权重，不算 KV、激活、通信和 kernel 开销，实测只会更慢。</p>
+<p>⚠️ 671 GB（≈ 625 GiB）一颗 192 GiB 的芯片放不下，至少 4 颗（还没算 KV）。摊到 N 颗上，两根条都 ÷N，0.32% 不变。</p></details></figure>
+  <p>DeepSeek-V3 每出一个字要读约 37 GB 权重，一颗 v7 每秒读 7.37 TB：搬一趟约 5 毫秒。
+    算只要 0.016 毫秒，<b>算力只用上 0.32%</b>。换更快的计算单元没用，下限是带宽定的。</p>
+  <div class="note info"><span class="t">公交车</span>
+    开一趟的油钱固定：坐一个人和坐满，搬的货一样多。prefill 是满载的车；decode 一趟只拉一个人。</div>
+
+  <h3 id="l1-3">多拉几个人：权重能摊，KV 摊不了</h3>
+<figure class="fbox fwide" id="fig-s1-wkv"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="每出一个字要从显存读的字节，拆成权重和 KV 两段。三组分别是 1 人、64 人、256 人同时解码，每组里上下文 4K、32K、128K。权重那段随人数变少，因为一次读的权重分给更多人；KV 那段只随上下文变长，每人一份，没法分。256 人、128K 时 KV 占 78%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每出一个字搬多少：<tspan font-weight="700">权重能分摊，KV 每人一份</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3，FP8 权重，bf16 的 MLA KV。每根条 ＝ 一步读的权重 ÷ 人数 ＋ 这个人自己的 KV。同一把尺</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">分到每个字的权重</text>
+<rect x="172.44" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">这个人自己的 KV</text>
+<rect x="0" y="102" width="1400" height="560" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每个字的字节（GB）</tspan></text>
+<text class="svgsm" x="30" y="184" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 人同时解码</tspan></text>
+<text class="svgsm" x="30" y="206" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums">整份 37 GB 只给一个人</text>
+<text class="svgsm" x="318" y="185" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4K</tspan></text>
+<rect x="330" y="162" width="709.1666666666667" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1039.1666666666667" y="162" width="5.51682048" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1054" y="185" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 0.8%</tspan></text>
+<text class="svgsm" x="318" y="229" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
+<rect x="330" y="206" width="709.1666666666667" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1039.1666666666667" y="206" width="44.13456384" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1093" y="229" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 6%</tspan></text>
+<text class="svgsm" x="318" y="273" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K</tspan></text>
+<rect x="330" y="250" width="709.1666666666667" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1039.1666666666667" y="250" width="176.53825536" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1225" y="273" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 20%</tspan></text>
+<text class="svgsm" x="30" y="340" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64 人同时解码</tspan></text>
+<text class="svgsm" x="30" y="362" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums">每人摊到 9.14 GB（87% 专家被碰到）</text>
+<text class="svgsm" x="318" y="341" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4K</tspan></text>
+<rect x="330" y="318" width="175.12257595126437" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="505.12257595126437" y="318" width="5.51682048" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="520" y="341" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 3%</tspan></text>
+<text class="svgsm" x="318" y="385" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
+<rect x="330" y="362" width="175.12257595126437" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="505.12257595126437" y="362" width="44.13456384" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="559" y="385" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 20%</tspan></text>
+<text class="svgsm" x="318" y="429" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K</tspan></text>
+<rect x="330" y="406" width="175.12257595126437" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="505.12257595126437" y="406" width="176.53825536" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="691" y="429" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 50%</tspan></text>
+<text class="svgsm" x="30" y="496" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256 人同时解码</tspan></text>
+<text class="svgsm" x="30" y="518" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums">每人摊到 2.62 GB</text>
+<text class="svgsm" x="318" y="497" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4K</tspan></text>
+<rect x="330" y="474" width="50.183802649810254" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="380.1838026498103" y="474" width="5.51682048" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="395" y="497" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 10%</tspan></text>
+<text class="svgsm" x="318" y="541" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K</tspan></text>
+<rect x="330" y="518" width="50.183802649810254" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="380.1838026498103" y="518" width="44.13456384" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="434" y="541" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 47%</tspan></text>
+<text class="svgsm" x="318" y="585" fill="#5f6368" text-anchor="end" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K</tspan></text>
+<rect x="330" y="562" width="50.183802649810254" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="380.1838026498103" y="562" width="176.53825536" height="34" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="566" y="585" fill="#681da8" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 78%</tspan></text>
+<line x1="330" y1="630" x2="1250" y2="630" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="330.0" y1="630" x2="330.0" y2="636" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="330" y="654" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="483.33333333333337" y1="630" x2="483.33333333333337" y2="636" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="483" y="654" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">8</text>
+<line x1="636.6666666666667" y1="630" x2="636.6666666666667" y2="636" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="636" y="654" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">16</text>
+<line x1="790.0" y1="630" x2="790.0" y2="636" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="790" y="654" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">24</text>
+<line x1="943.3333333333334" y1="630" x2="943.3333333333334" y2="636" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="943" y="654" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">32</text>
+<line x1="1096.6666666666667" y1="630" x2="1096.6666666666667" y2="636" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1096" y="654" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">40</text>
+<line x1="1250.0" y1="630" x2="1250.0" y2="636" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1250" y="654" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">48</text>
+<text class="svgsm" x="1276" y="654" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">GB／字</text>
+<rect x="0" y="712" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="712" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="712" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="739" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">人越多、上下文越长，这一趟里 KV 越重</tspan></text>
+<text class="svgsm" x="20" y="770" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">权重一次读完分给所有人；KV 是每人自己的历史，128K 时每个字要读 9.21 GB，拼多少人都不变。</text>
+<text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">256 人、128K 时 KV 已占 78%：再往后，省的就得是 KV 本身（第四、七节）。</text>
+</svg><figcaption><b>蓝段随人数缩短，紫段只随上下文变长。</b><span class="capmore"><br><em>均匀路由、上下文等长；不含激活值与通信。本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本课推导：KV ＝ 70,272 字节／token（MLA 每层存 512 ＋ 64 个数，bf16，61 层，config.json）× 上下文。128K 时 9.21 GB ＝ 8.58 GiB，与专题五同一个数。</p>
+<p>📌 本课推导：b 人一步读的权重 ＝ 不经路由的部分 ＋ 653.9B 路由专家 × [1 − (1 − 8/256)^b]（FP8，每参数 1 字节）。b＝1 时恰好 37 GB，b 很大时趋近 670.5 GB，对上 671B。</p>
+<p>⚠️ 64 人时每人摊到 9.14 GB 而不是 37 ÷ 64：每人挑的专家不同，一步里 87% 的专家都被碰到、都要读。</p>
+<p>⚠️ 假设路由均匀、所有人上下文一样长；没算激活和通信字节。KV 改存 FP8 时紫段减半。</p></details></figure>
+  <ul>
+    <li><b>权重是公用的。</b>人越多，每人摊到的越少（蓝段）。</li>
+    <li><b>KV 是每人自己的历史。</b>只跟上下文走（紫段），谁的历史谁自己读。上下文一长它就成了主角：256 人、128K 时占到七成八。</li>
+  </ul>
+
+  <h3 id="l1-4">MoE 又把凑好的人拆散</h3>
+<figure class="fbox fwide" id="fig-s1-moe"><svg viewBox="0 0 1400 684" width="100%" role="img" aria-label="256 个人一起解码。稠密层里这 256 行一起走同一块权重，正好填满 v7 MXU 256 的一边；MoE 层里每人挑 8 个专家，256 个专家平均每个只分到 8 行，只填满 MXU 一边的 32 分之一，运算强度约 8，离屋脊点 313 很远"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">MoE 把一批人拆散：<tspan font-weight="700">256 人进来，每个专家只分到 8 行</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一批 256 人解码一步。方块是 v7 的 MXU（一边 256），填色的是这一步真正喂进去的行</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">这一步喂进 MXU 的行（decode 的 token）</text>
+<rect x="0" y="102" width="1400" height="410" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密层 vs 一个专家</tspan></text>
+<text class="svgsm" x="110" y="180" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密层：256 人共用一块权重</tspan></text>
+<rect x="110" y="202" width="256" height="256" rx="2" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="110" y="202" width="256" height="256" rx="0" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="238" y="484" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">MXU 256 × 256</text>
+<text class="svgsm" x="396" y="232" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256 行，填满一边</tspan></text>
+<text class="svgsm" x="396" y="272" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运算强度 ≈ 239</tspan></text>
+<text class="svgsm" x="396" y="300" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums">屋脊点 313</text>
+<text class="svgsm" x="770" y="180" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE 层：一个专家</tspan></text>
+<rect x="770" y="202" width="256" height="256" rx="2" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="4,3"/>
+<rect x="770" y="202" width="256" height="8.0" rx="0" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="898" y="484" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">MXU 256 × 256</text>
+<text class="svgsm" x="1056" y="232" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">平均 8 行，占一边的 1/32</tspan></text>
+<text class="svgsm" x="1056" y="272" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运算强度 ≈ 8</tspan></text>
+<text class="svgsm" x="1056" y="300" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums">屋脊点 313</text>
+<text class="svgsm" x="1056" y="342" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">256 × 8 ÷ 256 ＝ 8</text>
+<text class="svgsm" x="396" y="342" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">仍在线下，但差得不多</text>
+<rect x="0" y="562" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="562" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="562" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="589" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼来的 256 人，到了专家这里又被拆成 256 份</tspan></text>
+<text class="svgsm" x="20" y="620" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">每人只挑 8 个专家，一个专家平均只分到 8 行，强度约 8；稠密层约 239，差 30 倍。</text>
+<text class="svgsm" x="20" y="644" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">要让专家吃饱，得把很多卡上的人收到一起：这是第五、六节的事。</text>
+</svg><figcaption><b>左边填满一边，右边只剩一条细线。</b><span class="capmore"><br><em>8 是均匀路由下的平均数；共享专家不受影响。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 256 个路由专家、每 token 挑 8 个：DeepSeek-V3 config.json（n_routed_experts、num_experts_per_tok）。MXU 一边 256：JAX 公开源码 jax/_src/pallas/mosaic/tpu_info.py，TPU 7 的 mxu_column_size＝256。</p>
+<p>📌 本课推导：专家矩阵 7168×2048，M＝8 时强度 ＝ 2·8·7168·2048 ÷ 2·(7168·2048 ＋ 8·(7168 ＋ 2048)) ≈ 8。稠密层 239 来自本节第一张图。</p>
+<p>⚠️ 8 是平均数，路由不均时有的专家几十行、有的零行。共享专家每个 token 都过，不受影响。</p></details></figure>
+  <p>V3 每层 256 个专家，每人只挑 8 个：凑齐 256 人，摊到每个专家平均只剩 8 行，又回到「一趟拉几个人」的老问题。</p>
+
+  <div class="note ok"><span class="t">这一节带走</span>
+    <b>prefill 卡算力，decode 卡搬运。</b>要让这一趟值回油钱，就得多拉人：
+    先让车一直坐满（第二节），再给 KV 腾座位（第三节），最后把被 MoE 拆散的人收回来（第四节）。<br>
+    <em>想看三列对比表、强度怎么推、每组条的来历，翻完整版第一节。</em></div>
+
 </div></section>
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>那多拉几个人不就行了？batch 能开多大？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
 <ul>
