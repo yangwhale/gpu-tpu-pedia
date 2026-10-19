@@ -26,8 +26,8 @@ import topic03_page as P
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
 CSS_SRC = os.path.join(WEB, "topic-01-lecture.html")
-OUT = os.path.join(WEB, "topic-06-lecture.html")
-DECK = "topic-06.html"
+OUT = os.path.join(WEB, "topic-06-L300-lecture.html")
+DECK = "topic-06-L300.html"
 
 
 def _css():
@@ -115,7 +115,7 @@ h3.sec .tm6{font:600 12px/1.6 system-ui,sans-serif;letter-spacing:0;text-transfo
   <span class="who">专题六 · <b>推理</b></span>
   <nav class="tabs">
     <a href="''' + DECK + '''">课件</a>
-    <a href="topic-06-lecture.html" class="on">讲义</a>
+    <a href="topic-06-L300-lecture.html" class="on">讲义</a>
     <a href="topic-05.html">专题五（并行那几刀）</a>
     <a href="index.html">课程总纲</a>
   </nav>

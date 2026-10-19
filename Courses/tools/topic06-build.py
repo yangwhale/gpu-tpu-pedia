@@ -43,13 +43,13 @@ import course_ai_trainer as AIT
 import topic06_quiz as QZ
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "WebPages", "topic-06.html")
+OUT = os.path.join(HERE, "..", "WebPages", "topic-06-L300.html")
 
 head = P.make_head(
-    "专题六 · 推理",
+    "专题六 · 推理 · L300 完整版",
     "推理 · 搬一趟，分给更多 token，或者少搬",
     "prefill 吃算力、decode 吃带宽。推理的每一招，要么让 decode 那一趟搬运被更多 token 分摊，要么干脆少搬。",
-    "topic-06.html")
+    "topic-06-L300.html")
 head += """
 <style>
 .animgrid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; margin:14px 0;
@@ -114,7 +114,7 @@ HERO = '''
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题六
-    ／ <b>推理</b></div>
+    ／ <b>推理</b> ／ L300 完整版</div>
   <h1>推理</h1>
   <div class="hook">
     训练一步算一大批，推理一步只出一个字。<br>
@@ -124,6 +124,7 @@ HERO = '''
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
     <span class="chip">⏱ <b>讲约 365 分钟</b></span>
+    <span class="chip">📖 <b>L300 完整版</b>：自读、回查用｜讲课看 <a href="topic-06.html">90 分钟主线版</a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -328,4 +329,4 @@ _html = _hook_steps(_html)
 assert _html.count("</body>") == 1
 _html = _html.replace("</body>", STEP_JS + SCROLL_JS + "</body>")
 _html = P.add_figonly_toggle(_html)
-P.finish(_html, OUT, SECTIONS, "topic-06.html")
+P.finish(_html, OUT, SECTIONS, "topic-06-L300.html")
