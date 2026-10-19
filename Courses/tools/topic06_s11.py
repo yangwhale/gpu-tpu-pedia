@@ -56,6 +56,12 @@ __FIG_S11_TREE__
   <p>还有一支不要草稿模型：n-gram（也叫 Prompt Lookup）拿已经写出的最后几个字，到提示词里找一样的片段，把后面几个字照抄成草稿。</p>
 __FIG_S11_NGRAM__
   <p>vLLM 在 4 张 H100 上跑 Llama 3 70B、每秒 1 个请求，摘要数据集上最多快 2.8 倍；同条件换小草稿模型跑 ShareGPT 对话是 1.5 倍。开法：vLLM 的 <code>speculative_config</code> 里 <code>method</code> 写 <code>ngram</code>，SGLang 是 <code>--speculative-algorithm NGRAM</code>。</p>
+  <p><b>EAGLE 也要训，只是训得很少。</b>大模型冻住不动，入口把字变向量的嵌入层、出口把向量变字的 LM head 都直接借大模型的；要训的只有中间一小块：一个 FC 压缩层加一层 decoder。给 70B 配的这块 0.99B 参数，用 6.8 万条 ShareGPT 对话，一台 A100 40G 服务器训 1–2 天（EAGLE 论文）。</p>
+  <p><b>它怎么猜：</b>输入两样，一是大模型出字前那层的向量，二是下一个已经抽中的字的嵌入，拼成两倍宽；FC 压回一倍，decoder 猜下一位的向量，再借 LM head 出字。猜出的向量和字拼起来喂回去，接着猜。要喂抽中的字，是因为光看向量不知道上一步按概率抽中了哪个字。</p>
+  <p><b>EAGLE-3 改了两处。</b>一是从大模型浅、中、深三层各取一个向量，拼成三倍宽再压回一倍；也不再猜向量，直接猜字。二是猜第 2 个字起，那个字大模型还没验，拿不到它的向量，只能用草稿自己上一步的输出顶替；所以训练时就让草稿把自己的输出喂回来练，叫 training-time test。</p>
+  <p><b>MTP 的结构跟 EAGLE 几乎一样。</b>DeepSeek-V3 的 MTP 模块也是主干的向量加下一个字的嵌入，归一化、投影，过一个 transformer block；嵌入层和输出头与主模型共用。差别在谁训：MTP 是厂家预训练时一起训、随模型发布，EAGLE 是模型发布后谁都能外挂上去训。</p>
+  <p><b>带 MTP 的不止 DeepSeek。</b>Qwen3-Next、GLM-4.5、小米 MiMo 都带 MTP 层，Qwen3-Next 专门按多步推理来训。Step 3.5 Flash 训练和推理都用 3 个模块，叫 MTP-3；Nemotron 3 Super 训两层共用权重的 MTP，可反复套用猜两个以上（Raschka 架构图鉴）。</p>
+  <p><b>一层 MTP 也能连猜，但原版只练过往前一步。</b>把它的输出喂回去再跑一趟，就多猜一个字。MiMo-7B 只有一层 MTP，原样连猜，第 1、2、3 个草稿字接受率约 70%、10%、近 0。FastMTP 冻住主模型，用主模型自己生成的数据把这一层（2.1 亿参数）按连猜微调，三位升到 81%、56%、36%，平均速度是不投机的 2.03 倍。</p>
   <p><b>MTP、DFlash、DSpark 是一条线上的三步。</b>三者都是贴着大模型隐状态猜字的小草稿，差在怎么出字。MTP 和 EAGLE 一个字一个字猜，猜 5 个跑 5 趟；DFlash 一趟出整块，猜 5 个和猜 1 个差不多贵。</p>
 __FIG_S11_THREE__
   <p>DFlash 还挪了喂隐状态的位置：EAGLE-3 只在草稿入口喂，草稿一深信号就淡；DFlash 注入草稿每一层的 KV（LMSYS 博客）。2026 年已上 vLLM、SGLang，B300 上单并发速度是不投机的 3.0–5.8 倍（Gemma-4 31B，NVIDIA 博客）。</p>
