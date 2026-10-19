@@ -839,7 +839,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </head>
 <body>
 <div class="progress"><i></i></div>
-<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 推理为什么贵，又为什么这几年便宜了几十倍？">推理为什么贵，又为什么这几年便宜</a><a href="#s一" title="第 一 节 · 为什么吐第一个字快，后面一个字一个字慢？">为什么吐第一个字快，后面一个字一</a><a href="#s二" title="第 二 节 · 那多拉几个人不就行了？batch 能开多大？">那多拉几个人不就行了？batch</a><a href="#s三" title="第 三 节 · KV cache 到底占多少，怎么省？">KV cache 到底占多少，怎</a><a href="#s四" title="第 四 节 · 多卡跑">多卡跑</a><a href="#s五" title="第 五 节 · 长上下文">长上下文</a><a href="#s六" title="第 六 节 · PD 分离">PD 分离</a><a href="#s七" title="第 七 节 · 投机解码">投机解码</a><a href="#s八" title="第 八 节 · 量化">量化</a><a href="#s九" title="第 九 节 · 第一天上手，先问哪几个问题？">第一天上手，先问哪几个问题？</a></div></nav>
+<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 推理为什么贵？这几年又是怎么一步步变便宜的？">推理为什么贵？这几年又是怎么一步</a><a href="#s一" title="第 一 节 · 为什么吐第一个字快，后面一个字一个字慢？">为什么吐第一个字快，后面一个字一</a><a href="#s二" title="第 二 节 · 那多拉几个人不就行了？batch 能开多大？">那多拉几个人不就行了？batch</a><a href="#s三" title="第 三 节 · KV cache 到底占多少，怎么省？">KV cache 到底占多少，怎</a><a href="#s四" title="第 四 节 · 多卡跑">多卡跑</a><a href="#s五" title="第 五 节 · 长上下文">长上下文</a><a href="#s六" title="第 六 节 · PD 分离">PD 分离</a><a href="#s七" title="第 七 节 · 投机解码">投机解码</a><a href="#s八" title="第 八 节 · 量化">量化</a><a href="#s九" title="第 九 节 · 第一天上手，先问哪几个问题？">第一天上手，先问哪几个问题？</a></div></nav>
 
 
 <div class="hero"><div class="wrap">
@@ -859,13 +859,237 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
 </div></div>
-<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>推理为什么贵，又为什么这几年便宜了几十倍？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
-<ul>
-  <li><b>一条主线</b>：decode 每一步都把整车货（权重＋KV）搬一趟；省钱只有两条路：一趟多坐人、少搬货</li>
-  <li><b>计划</b>：6 分钟</li>
-  <li><b>打算用的图</b>：fig-s0-life、fig-s0-layer、fig-s0-chain</li>
-  <li><b>想深挖</b>：<a href="topic-06-L300.html#s零">完整版对应那一节</a></li>
-</ul>
+<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>推理为什么贵？这几年又是怎么一步步变便宜的？</h2></div>
+  <p class="lead">训练一步算一大批，推理得一个字一个字往外吐。
+    <b>贵就贵在：每吐一个字，都要把整车货从显存里搬一趟。</b></p>
+
+  <h3 id="l0-1">一个请求的一生</h3>
+<figure class="fbox fwide" id="fig-s0-life"><svg viewBox="0 0 1400 824" width="100%" role="img" aria-label="一个请求的一生，示意时间线。请求进门后可能先排队；然后 prefill 一次把整段 prompt 算完，同时把 prompt 每个 token 的 KV 写进显存，算完吐出第一个字。从进门到第一个字的时间叫 TTFT。之后进入 decode：每一步只出一个字，每一步都要把全部权重和到目前为止的全部 KV 从显存读一遍，KV 每一步长一格。相邻两个字之间的时间叫 TPOT。出到结束符为止。prefill 一次读权重分给整段 prompt，吃的是算力；decode 一次读权重只出一个字，吃的是带宽"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一个请求的一生　——　<tspan font-weight="700">一大块 prefill，接一长串一步一字的 decode</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">示意时间线，格子长短不按比例。上：在做什么、何时出字；中：显存里的 KV 有多长；下：decode 每一步要从显存读什么</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">prefill：整段 prompt 一次算完</text>
+<rect x="272.12" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="293" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">decode：一步出一个字</text>
+<rect x="482.64" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="503" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">权重</text>
+<rect x="561.0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="582" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">KV cache</text>
+<rect x="0" y="102" width="1400" height="550" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">从进门到结束</tspan></text>
+<text class="svgsm" x="24" y="228" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在做什么</tspan></text>
+<text class="svgsm" x="24" y="248" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">何时出字</text>
+<rect x="170" y="202" width="62" height="54" rx="4" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="5,4"/>
+<text class="svgsm" x="201" y="235" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">排队</tspan></text>
+<rect x="240" y="202" width="282" height="54" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="381" y="226" fill="#ffffff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill</tspan></text>
+<text class="svgsm" x="381" y="246" fill="#ffffff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">整段 prompt 一次算完</text>
+<rect x="540" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="582" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步</tspan></text>
+<rect x="640" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="682" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 步</tspan></text>
+<rect x="740" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="782" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 3 步</tspan></text>
+<rect x="840" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="882" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 4 步</tspan></text>
+<rect x="940" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="982" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 5 步</tspan></text>
+<rect x="1040" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1082" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 6 步</tspan></text>
+<rect x="1140" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1182" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 7 步</tspan></text>
+<rect x="1240" y="202" width="84" height="54" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1282" y="235" fill="#ffffff" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 8 步</tspan></text>
+<circle cx="522.0" cy="188.0" r="6" fill="#d93025"/>
+<text class="svgsm" x="522" y="176" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">字 1</tspan></text>
+<circle cx="624.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="624" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">字 2</text>
+<circle cx="724.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="724" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">字 3</text>
+<circle cx="824.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="824" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">字 4</text>
+<circle cx="924.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="924" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">字 5</text>
+<circle cx="1024.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="1024" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">字 6</text>
+<circle cx="1124.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="1124" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">字 7</text>
+<circle cx="1224.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="1224" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">字 8</text>
+<circle cx="1324.0" cy="188.0" r="6" fill="#202124"/>
+<text class="svgsm" x="1324" y="176" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">结束</text>
+<line x1="170" y1="162" x2="170" y2="198" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="170" y="156" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">请求进门</tspan></text>
+<line x1="170" y1="282" x2="522" y2="282" stroke="#d93025" stroke-width="2" stroke-linecap="round"/>
+<line x1="170" y1="275" x2="170" y2="289" stroke="#d93025" stroke-width="2" stroke-linecap="round"/>
+<line x1="522" y1="275" x2="522" y2="289" stroke="#d93025" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="346" y="306" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TTFT：进门到第一个字（含排队）</tspan></text>
+<line x1="824" y1="282" x2="924" y2="282" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+<line x1="824" y1="275" x2="824" y2="289" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+<line x1="924" y1="275" x2="924" y2="289" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="874" y="306" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPOT：平均每字间隔</tspan></text>
+<text class="svgsm" x="24" y="392" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">显存里的</tspan></text>
+<text class="svgsm" x="24" y="414" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 有多长</tspan></text>
+<line x1="170" y1="462" x2="1360" y2="462" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<path d="M 240.00 462.00 L 522.00 384.00 L 624.00 384.00 L 624.00 371.00 L 724.00 371.00 L 724.00 358.00 L 824.00 358.00 L 824.00 345.00 L 924.00 345.00 L 924.00 332.00 L 1024.00 332.00 L 1024.00 319.00 L 1124.00 319.00 L 1124.00 306.00 L 1224.00 306.00 L 1224.00 293.00 L 1324.00 293.00 L 1324.00 280.00 L 1354.00 280.00 L 1354.00 462.00 Z" fill="#f3e8fd" stroke="none" stroke-width="1.0"/>
+<path d="M 240.00 462.00 L 522.00 384.00 L 624.00 384.00 L 624.00 371.00 L 724.00 371.00 L 724.00 358.00 L 824.00 358.00 L 824.00 345.00 L 924.00 345.00 L 924.00 332.00 L 1024.00 332.00 L 1024.00 319.00 L 1124.00 319.00 L 1124.00 306.00 L 1224.00 306.00 L 1224.00 293.00 L 1324.00 293.00 L 1324.00 280.00 L 1354.00 280.00" fill="none" stroke="#9334e6" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="244" y="370" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill 一次写满整段 prompt 的 KV</tspan></text>
+<text class="svgsm" x="940" y="440" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 每出一个字，KV 长一格</tspan></text>
+<text class="svgsm" x="24" y="552" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一步</tspan></text>
+<text class="svgsm" x="24" y="574" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">从显存读什么</tspan></text>
+<rect x="562" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="562" y="552" width="40" height="42" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="662" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="662" y="545" width="40" height="49" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="762" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="762" y="538" width="40" height="56" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="862" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="862" y="531" width="40" height="63" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="962" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="962" y="524" width="40" height="70" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1062" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1062" y="517" width="40" height="77" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1162" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1162" y="510" width="40" height="84" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1262" y="596" width="40" height="56" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1262" y="503" width="40" height="91" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="526" y="632" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重：每步读一遍</tspan></text>
+<text class="svgsm" x="526" y="578" fill="#681da8" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV：每步全部</tspan></text>
+<rect x="0" y="702" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="702" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="702" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="729" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两段的账正好相反</tspan></text>
+<text class="svgsm" x="20" y="760" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">prefill 读一遍权重，分给整段 prompt 的几千个 token 一起算：<tspan font-weight="700">卡在算力上</tspan>。</text>
+<text class="svgsm" x="20" y="784" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">decode 读一遍权重和全部 KV，只出一个字：<tspan font-weight="700">卡在显存带宽上</tspan>，而且字越往后 KV 越长、这一趟越重。</text>
+</svg><figcaption><b>红点是第一个字，之后每个绿格出一个字；紫色阶梯每一步都在长。</b><span class="capmore"><br><em>示意时间线，长短不按比例。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 示意时间线：格子长短不按比例，prompt 画成 6 格 KV、decode 画 8 步，都是为了看得清。</p>
+<p>📌 TTFT、TPOT 的定义按 vLLM 的 benchmark_serving：TTFT 从请求发出算到第一个输出 token，TPOT 是除第一个 token 外平均每个输出 token 的时间。第二节会细讲它们的口径（含不含排队、平均还是 p99）。</p>
+<p>⚠️ 「第一个字由 prefill 产出」是标准实现：prefill 的最后一个位置直接给出第一个输出 token 的分布。</p></details></figure>
+  <p>用户只感觉得到两个数：第一个字等了多久，之后每个字隔多久。
+    前一个看排队和 prefill，后一个看 decode。</p>
+
+  <h3 id="l0-2">贵在哪：每出一个字，整车货搬一趟</h3>
+  <ul>
+    <li><b>货有多重。</b>DeepSeek-V3 出一个字要用到约 37 GB 权重（FP8）；再加这个人自己的 KV，128K 上下文时是 8.58 GiB。</li>
+    <li><b>为什么每步都要重搬。</b>芯片旁边能直接算的片上存储，TPU v7 一颗只有 128 MiB，约是显存的 1/1,500。几十 GB 放不进去，只能每一步从显存再流一遍。</li>
+    <li><b>像一辆公交车。</b>开一趟的油钱是固定的：车上坐一个人还是坐满，搬的货差不多一样多。</li>
+  </ul>
+  <div class="note ok"><span class="t">全课一句话</span>
+    <b>decode 每一步都要把权重和 KV 搬一趟。推理的每一招，要么让这一趟分给更多人，要么干脆少搬。</b><br>
+    还有一类不碰这一趟：把两种活拆开，各放合适的机器。</div>
+
+  <h3 id="l0-3">四年怎么变便宜：每一招补一个洞，又留下一个</h3>
+<figure class="fbox fwide" id="fig-s0-chain"><svg viewBox="0 0 1400 370" width="100%" role="img" aria-label="推理的十一招放在一条时间轴上，从左往右是 2022 到 2026 年。2022 年：① Orca 连续批，② GPTQ 量化（一直做到 2026），③ 投机解码（到 2025）。2023 年：④ GQA 压薄 KV（模型侧，到 2025），⑤ PagedAttention，⑥ 分块 prefill，⑦ PD 分离（到 2025），⑧ RadixAttention。2024 年：⑨ KV 分层下放，⑩ 切序列（到 2025），⑪ MoE 大 EP（到 2025）。2025 年没有新起头的环，都是前面几环在往下做。上方两条细带是外力：上下文变长从 2023 年 11 月的 128K 起，2024 年 2 月到 1M；输出变长从 2024 年 9 月的 o1 起，2025 年 1 月有 R1。轴的右端停在 2026 年 6 月，是眼下最新的一环：GB300 跑 V4-Pro，光改软件涨了几倍，标成问号，答案在最后一节。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">问题链　——　<tspan font-weight="700">十一招各是哪年冒出来的</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">点落在首次公开的那一年，年内只排先后、不按月比例；点下的「→」是一直做到哪年；圈里的数是环号，从左到右按先后编</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">系统侧</text>
+<rect x="94.04" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">空心：模型侧</text>
+<rect x="235.12" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="256" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">外力：上下文变长</text>
+<rect x="407.56" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="428" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">外力：输出变长</text>
+<text class="svgsm" x="175" y="118" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2022</tspan></text>
+<text class="svgsm" x="567" y="118" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2023</tspan></text>
+<text class="svgsm" x="959" y="118" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2024</tspan></text>
+<text class="svgsm" x="1171" y="118" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2025</tspan></text>
+<text class="svgsm" x="1293" y="118" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2026</tspan></text>
+<text class="svgsm" x="647" y="157" fill="#b06000" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上下文变长</tspan></text>
+<line x1="657.0" y1="152" x2="1354" y2="152" stroke="#e8710a" stroke-width="3" stroke-linecap="round"/>
+<line x1="657.0" y1="146" x2="657.0" y2="158" stroke="#e8710a" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="662" y="145" fill="#b06000" style="font-size:12.0px;font-variant-numeric:tabular-nums">128K</text>
+<line x1="828.3333333333334" y1="146" x2="828.3333333333334" y2="158" stroke="#e8710a" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="833" y="145" fill="#b06000" style="font-size:12.0px;font-variant-numeric:tabular-nums">1M</text>
+<text class="svgsm" x="913" y="187" fill="#681da8" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出变长</tspan></text>
+<line x1="923.0" y1="182" x2="1354" y2="182" stroke="#9334e6" stroke-width="3" stroke-linecap="round"/>
+<line x1="923.0" y1="176" x2="923.0" y2="188" stroke="#9334e6" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="928" y="175" fill="#681da8" style="font-size:12.0px;font-variant-numeric:tabular-nums">o1</text>
+<line x1="1120.1666666666667" y1="176" x2="1120.1666666666667" y2="188" stroke="#9334e6" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="1125" y="175" fill="#681da8" style="font-size:12.0px;font-variant-numeric:tabular-nums">R1</text>
+<line x1="326" y1="130" x2="326" y2="366" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="808" y1="130" x2="808" y2="366" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="1110" y1="130" x2="1110" y2="366" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="1232" y1="130" x2="1232" y2="366" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="24" y1="274" x2="1354" y2="274" stroke="#5f6368" stroke-width="2" stroke-linecap="round"/>
+<line x1="85.0" y1="252" x2="85.0" y2="262" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="85" y="224" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2022</text>
+<text class="svgsm" x="85" y="244" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Orca 连续批</tspan></text>
+<circle cx="85.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="85" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
+<line x1="175.0" y1="286" x2="175.0" y2="296" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="175" y="310" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2022　→2026</text>
+<text class="svgsm" x="175" y="330" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPTQ 量化</tspan></text>
+<circle cx="175.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="175" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">②</tspan></text>
+<line x1="265.0" y1="252" x2="265.0" y2="262" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="265" y="224" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2022　→2025</text>
+<text class="svgsm" x="265" y="244" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">投机解码</tspan></text>
+<circle cx="265.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="265" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③</tspan></text>
+<line x1="387.0" y1="286" x2="387.0" y2="296" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="387" y="310" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2023　→2025</text>
+<text class="svgsm" x="387" y="330" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GQA 压薄 KV</tspan></text>
+<circle cx="387.0" cy="274.0" r="10" fill="#fff" stroke="#5f6368" stroke-width="1.5" stroke-dasharray="3 2"/>
+<text class="svgsm" x="387" y="278" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④</tspan></text>
+<line x1="477.0" y1="252" x2="477.0" y2="262" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="477" y="224" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2023</text>
+<text class="svgsm" x="477" y="244" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PagedAttention</tspan></text>
+<circle cx="477.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="477" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑤</tspan></text>
+<line x1="567.0" y1="286" x2="567.0" y2="296" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="567" y="310" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2023</text>
+<text class="svgsm" x="567" y="330" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">分块 prefill</tspan></text>
+<circle cx="567.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="567" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑥</tspan></text>
+<line x1="657.0" y1="252" x2="657.0" y2="262" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="657" y="224" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2023　→2025</text>
+<text class="svgsm" x="657" y="244" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">PD 分离</tspan></text>
+<circle cx="657.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="657" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑦</tspan></text>
+<line x1="747.0" y1="286" x2="747.0" y2="296" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="747" y="310" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2023</text>
+<text class="svgsm" x="747" y="330" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">RadixAttention</tspan></text>
+<circle cx="747.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="747" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑧</tspan></text>
+<line x1="869.0" y1="252" x2="869.0" y2="262" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="869" y="224" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2024　→2025</text>
+<text class="svgsm" x="869" y="244" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 分层下放</tspan></text>
+<circle cx="869.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="869" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑨</tspan></text>
+<line x1="959.0" y1="286" x2="959.0" y2="296" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="959" y="310" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2024　→2025</text>
+<text class="svgsm" x="959" y="330" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切序列 CP</tspan></text>
+<circle cx="959.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="959" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑩</tspan></text>
+<line x1="1049.0" y1="252" x2="1049.0" y2="262" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1049" y="224" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2024　→2025</text>
+<text class="svgsm" x="1049" y="244" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE 大 EP</tspan></text>
+<circle cx="1049.0" cy="274.0" r="10" fill="#202124"/>
+<text class="svgsm" x="1049" y="278" fill="#fff" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑪</tspan></text>
+<path d="M 1293.00 261.00 L 1306.00 274.00 L 1293.00 287.00 L 1280.00 274.00 Z" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<line x1="1293.0" y1="290" x2="1293.0" y2="296" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1293" y="310" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">2026-06　截至目前</text>
+<text class="svgsm" x="1293" y="330" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GB300 × V4-Pro</tspan></text>
+<text class="svgsm" x="1293" y="350" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">涨了几倍？</tspan></text>
+</svg><figcaption><b>点落在这一招首次公开的年份，圈里的环号从左到右就是先后。</b><span class="capmore"><br><em>每一环在讲什么，看图下的表；想看每招省了多少、对谁比，翻完整版第零节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>首次公开：Orca OSDI'22；GPTQ arXiv <a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener">2210.17323</a>；投机解码 Leviathan 等 arXiv <a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a>；GQA arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>；PagedAttention 博客 2023-06-20；Splitwise arXiv <a href="https://arxiv.org/abs/2311.18677" target="_blank" rel="noopener">2311.18677</a>；RadixAttention arXiv <a href="https://arxiv.org/abs/2312.07104" target="_blank" rel="noopener">2312.07104</a>；SARATHI arXiv <a href="https://arxiv.org/abs/2308.16369" target="_blank" rel="noopener">2308.16369</a>；Mooncake arXiv <a href="https://arxiv.org/abs/2407.00079" target="_blank" rel="noopener">2407.00079</a>；Meta 上下文并行 arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a>；SGLang v0.4 博客 2024-12-04（DP attention）、DeepSeek-V3 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a>。末年：DeepSeek-V3.2-Exp 技术报告（DSA，2025-09）；SGLang HiCache 博客 2025-09-10；NVIDIA Dynamo 新闻稿 2025-03-18；SGLang 大 EP 博客 2025-05-05；vLLM v0.10.2 release（DCP，2025-09）；EAGLE-3 arXiv <a href="https://arxiv.org/abs/2503.01840" target="_blank" rel="noopener">2503.01840</a>；Inferact TPU megakernel 博客 2026-09、vLLM DeepSeek-V4.1-Flash 博客 2026-10-07（FP4 KV）。外力：OpenAI DevDay 2023-11-06、Google 2024-02-15；OpenAI 2024-09-12、DeepSeek-R1 arXiv <a href="https://arxiv.org/abs/2501.12948" target="_blank" rel="noopener">2501.12948</a>。右端菱形：PyTorch 博客 2026-06-23，倍数留到最后一节揭晓。年内等距排，只表先后。</p></details></figure>
+  <div class="tbl-wrap"><table>
+    <tr><th>首次公开</th><th>卡在哪</th><th>怎么解</th><th>又留下什么</th><th>节</th></tr>
+    <tr><td>2022</td><td>整批人陪最慢的那个写完</td><td>连续批：每一步都能上下车</td><td>座位归 KV 管，KV 还按最长预留</td><td>二</td></tr>
+    <tr><td>2023</td><td>KV 白占显存，每条又太厚</td><td>分页存；GQA、MLA 压薄；相同开头不重算</td><td>上下文越来越长，座位还是紧</td><td>三</td></tr>
+    <tr><td>2024–2025</td><td>MoE 把一批人拆散到几百个专家</td><td>DEP ＋ 大 EP：专家铺满上百张卡</td><td>每张卡自备一份状态，长上下文时 KV 被复制</td><td>四</td></tr>
+    <tr><td>2024–2025</td><td>长上下文 KV 放不下，首字又慢</td><td>DCP／PCP：按序列切</td><td>只在长上下文划算</td><td>五</td></tr>
+    <tr><td>2023–2025</td><td>长 prompt 一进门，卡住所有正在出字的人</td><td>PD 分离：两种活分到两批机器</td><td>每个请求多搬一趟 KV</td><td>六</td></tr>
+    <tr><td>2022–2025</td><td>思考模型一题几千字，一趟只出一个字</td><td>投机解码：一趟验好几个字</td><td>人多时收益缩水</td><td>七</td></tr>
+    <tr><td>2022–2026</td><td>能省的只剩字节</td><td>FP8、FP4 量化，合并 kernel</td><td>掉不掉点要实测</td><td>八</td></tr>
+  </table></div>
+  <p>两股外力一直在推：上下文变长（2023 年 128K，2024 年 1M），输出也变长（2024 年 o1、2025 年 R1 一题写几千个思考 token）。</p>
+  <div class="note info"><span class="t">先猜一个数</span>
+    同一套 GB300、同一个 DeepSeek-V4-Pro、每个用户出字一样快，光改软件，每卡吞吐是首发日的几倍？答案在第九节。<br>
+    <em>市面上推理降价更多，主要归给越来越强的小模型（斯坦福 AI Index 2025）；这道题只算软件那一份。</em></div>
+
 </div></section>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>为什么吐第一个字快，后面一个字一个字慢？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
 <ul>

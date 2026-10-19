@@ -5,6 +5,7 @@ r"""专题六 L200 讲义：十节口播稿。每节一项 (标题, 课件小节
    互动＝抛题、停一下、揭晓。一块 <p class="say"> 对应一个动作，不超过 200 汉字。
 🚧 还没写的节先放计划框（不进地板），写好一节替换一节。
 """
+import importlib
 from topic06_L200_spine import SPINE
 
 
@@ -14,12 +15,20 @@ def _todo(row):
             '<p>🚧 <b>口播稿还没写。</b>打算用的图：%s。</p>' % (line, figs))
 
 
-CH = [("第%s节　%s（%d′）" % (r[0], r[1], r[3]), "s" + r[0], None, _todo(r), "（待写）")
-      for r in SPINE]
+def _ch(i, r):
+    title = "第%s节　%s（%d′）" % (r[0], r[1], r[3])
+    try:
+        m = importlib.import_module("topic06_L200_lec_s%d" % i)
+    except ModuleNotFoundError:
+        return (title, "s" + r[0], None, _todo(r), "（待写）")
+    return (title, "s" + r[0], m.FIG, m.BODY, m.DONT)
+
+
+CH = [_ch(i, r) for i, r in enumerate(SPINE)]
 
 PLAN = [("%s　%s" % (r[0], r[1]), r[3], "—", r[2]) for r in SPINE]
 
-JUDGED = ()
+JUDGED = ()   # 台词数字偏密但「数就是内容」的块（填开头几个字）
 
 TIME_NOTE = """<p>⛔ <b>第零、一节不能砍。</b>
   <em>第零节立住「decode 每一步都搬一趟」，第一节算清这一趟为什么贵；后面每节开头都拿它接。</em><br>
