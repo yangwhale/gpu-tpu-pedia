@@ -3094,13 +3094,153 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <em>想看 MoE 多验为什么不白送、DSpark 的两刀、n-gram 草稿、接进系统的代价，翻完整版第十一节。</em></div>
 
 </div></section>
-<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>量化：少搬字节，掉不掉点？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
-<ul>
-  <li><b>一条主线</b>：位数减半、搬运下限减半；专家压 4 bit、注意力不动；KV 也能压</li>
-  <li><b>计划</b>：6 分钟</li>
-  <li><b>打算用的图</b>：fig-s12-bytes、fig-s12-ledger</li>
-  <li><b>想深挖</b>：<a href="topic-06-L300.html#s十二">完整版对应那一节</a></li>
-</ul>
+<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>量化：少搬字节，掉不掉点？</h2></div>
+  <p class="lead">上一节结尾留了个洞：人一多，投机就帮不上，每一趟还是那么重。
+    第零节说过省钱只有两条路，前面几节都在走「一趟多坐人」。这一节换另一条：<b>车不变，货变轻。</b>
+    权重和 KV 用更少的位数存，每一趟少搬几个字节。<b>省多少？掉不掉点？</b></p>
+
+  <h3 id="l8-1">位数减半，搬运下限减半</h3>
+<figure class="fbox fwide" id="fig-s12-bytes"><svg viewBox="0 0 1400 452" width="100%" role="img" aria-label="DeepSeek-V3 每个 token 激活 370 亿参数。按 BF16 存要读 74 GB，FP8 37 GB，MXFP4 约 19.66 GB，NVFP4 约 20.81 GB。放在 8 颗 TPU v7 上、合计带宽 58.96 TB/s，decode 一步只读权重的时间下限分别是 1.26、0.63、0.33、0.35 毫秒。右边是全部 671B 参数要占多少 HBM：BF16 1,342 GB，FP8 671 GB，8 颗芯片合计 1,649 GB（＝ 1,536 GiB）"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">位数减半，一步的搬运下限就减半　——　<tspan font-weight="700">FP4 只要 BF16 的四分之一多一点</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3 · 8 颗 TPU v7 · batch 1 · 只算权重（本课推导）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">BF16</text>
+<rect x="82.84" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="103" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FP8</text>
+<rect x="156.72" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="177" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">MXFP4</text>
+<rect x="251.88" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="272" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">NVFP4</text>
+<rect x="0" y="102" width="860" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="860" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="860" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="860" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每 token 要读的权重（37B 激活参数）</tspan></text>
+<text class="svgsm" x="24" y="188" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">BF16</tspan></text>
+<text class="svgsm" x="24" y="210" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">16 bit</text>
+<rect x="130" y="170" width="444.0" height="38" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="586" y="195" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">74.00 GB → 至少 1.26 ms</tspan></text>
+<text class="svgsm" x="24" y="256" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP8</tspan></text>
+<text class="svgsm" x="24" y="278" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">8 bit</text>
+<rect x="130" y="238" width="222.0" height="38" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="364" y="263" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">37.00 GB → 至少 0.63 ms</tspan></text>
+<text class="svgsm" x="24" y="324" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MXFP4</tspan></text>
+<text class="svgsm" x="24" y="346" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4.25 bit</text>
+<rect x="130" y="306" width="117.9375" height="38" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="259" y="331" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">19.66 GB → 至少 0.33 ms</tspan></text>
+<text class="svgsm" x="24" y="392" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">NVFP4</tspan></text>
+<text class="svgsm" x="24" y="414" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4.5 bit</text>
+<rect x="130" y="374" width="124.875" height="38" rx="4" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="266" y="399" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20.81 GB → 至少 0.35 ms</tspan></text>
+<rect x="874" y="102" width="526" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="874" y="102" width="526" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="874" y="104" width="526" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="874" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="888" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整个模型放得下吗（671B，按 HBM 裸容量）</tspan></text>
+<text class="svgsm" x="894" y="206" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">BF16</tspan></text>
+<rect x="964" y="186" width="301.95" height="30" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1257" y="207" fill="#ffffff" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,342 GB</tspan></text>
+<text class="svgsm" x="894" y="270" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP8</tspan></text>
+<rect x="964" y="250" width="150.975" height="30" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1122" y="271" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">671 GB</tspan></text>
+<text class="svgsm" x="894" y="334" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MXFP4</tspan></text>
+<rect x="964" y="314" width="80.20546875000001" height="30" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1052" y="335" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">356 GB</tspan></text>
+<text class="svgsm" x="894" y="398" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">NVFP4</tspan></text>
+<rect x="964" y="378" width="84.9234375" height="30" rx="4" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
+<text class="svgsm" x="1056" y="399" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">377 GB</tspan></text>
+<path d="M1335,168 L1335,428" fill="none" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4"/>
+<text class="svgsm" x="1335" y="158" fill="#a50e0e" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 颗合计 1,649 GB</tspan></text>
+</svg><figcaption><b>先看左边四根条一根比一根短：位数减半，一步至少要花的时间也减半。</b><span class="capmore"><br><em>本课推导的理想值：带宽跑满，不含 KV 与通信，实际一步更慢。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V3：技术报告 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> 摘要，总参数 671B、每 token 激活 37B。TPU v7：Google Cloud 公开规格，每芯片 HBM 192 GiB、带宽 7.37 TB/s。右图统一用十进制 GB：8 × 192 GiB ＝ 1,536 GiB ≈ 1,649 GB（本课推导）。</p>
+<p>MXFP4：OCP Microscaling Formats (MX) Specification v1.0。NVFP4：NVIDIA 技术博客「Introducing NVFP4 for Efficient and Accurate Low-Precision Inference」。</p>
+<p>⚠️ 本课推导：下限 ＝ 激活参数 × 每参数位数 ÷ 8 ÷ (8 × 7.37 TB/s)。假设权重均匀摊开、带宽跑满；不含 KV、激活值和通信，实际一步更慢。</p>
+<p>注：真实部署很少整模型都降到 FP4：DeepSeek-V4 只把专家放 FP4、其余多为 FP8（HF 模型卡）。</p></details></figure>
+  <div class="note info"><span class="t">同一车货，换个装法</span>
+    车还是那辆，趟数一趟不少，每件货从 16 位装成 8 位、4 位，一趟就轻一半、再轻一半。<br>
+    <b>人少的时候，一步的时间几乎全花在读权重上（第一节），所以字节减半，一步的时间下限也减半。</b></div>
+  <ul>
+    <li><b>算一笔账（本课推导，只算权重）。</b>DeepSeek-V3 出一个字要读 370 亿参数，8 颗 TPU v7 分着读：BF16 至少 1.26 ms，FP8 0.63 ms，4 bit 约 0.33–0.35 ms。FP8 那个数正好是第一节单芯片 5 ms 的八分之一。</li>
+    <li><b>实测接近这个比例。</b>vLLM 2024 年接入 FP8 权重，2 张 H100 上跑稠密的 Llama 3 70B，每字间隔最多降到不量化时的一半。</li>
+    <li><b>4 bit 为什么不是正好再减半。</b>4 bit 只有 16 个编码，一个数装不下量级，只能几个数共用一个缩放倍数；缩放本身也占字节。</li>
+  </ul>
+  <p><b>省下的显存还有第二份用处：</b>多放 KV、多接人。第二节说过座位就是 KV，量化顺带也走了「多坐人」那条路。</p>
+
+  <h3 id="l8-2">专家压到 4 bit，注意力不动</h3>
+  <p>先按组件数一下参数。gpt-oss-120b 的模型卡分开列：专家 114.71B，注意力 0.96B，嵌入和输出层 1.16B。<b>专家约占 98%，注意力不到 1%</b>（本课推导）。OpenAI 只把专家压成 MXFP4，整个模型就装进了一张 80 GB 的卡。</p>
+  <ul>
+    <li><b>注意力不压，因为省不了多少。</b>不到 1% 的参数，压掉一半也只省半个百分点。Kimi K2 Thinking 把注意力、输出层放在不量化名单上，INT4 只给路由专家；DeepSeek-V4 模型卡写明专家 FP4、其余大多 FP8。</li>
+    <li><b>没有 FP4 算力也照样快。</b>TPU v7 公开规格里没有 FP4 峰值，4 bit 专家照样能提速：贵的是从显存搬，搬进片上再解开很便宜。省的是字节和容量，不是算得更快。</li>
+  </ul>
+<figure class="fbox fwide" id="fig-s12-ledger"><svg viewBox="0 0 1400 518" width="100%" role="img" aria-label="gpt-oss-120b 每生成一个字要读的权重字节，按组件堆成横条。三根条只有专家那段的格式不同。专家 BF16 约 7.2 GB、FP8 约 3.6 GB、MXFP4 约 1.9 GB；注意力 BF16 约 1.9 GB、输出层约 1.2 GB 三根都一样。合计约 10.2、6.7、5.0 GB。专家在整步里的占比从约七成降到不到四成（本课推导，batch 1，不含 KV）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">只压专家　——　<tspan font-weight="700">整步字节约减半，不是减到四分之一</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">gpt-oss-120b · batch 1 · 每生成一个字读多少权重（GB，本课推导，不含 KV 和激活）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">专家（选中的 4 个 × 36 层）</text>
+<rect x="272.12" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="293" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">注意力 BF16</text>
+<rect x="410.96000000000004" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="431" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">输出层 BF16</text>
+<rect x="0" y="102" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三根条只换专家的格式</tspan></text>
+<text class="svgsm" x="24" y="199" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 BF16</tspan></text>
+<rect x="230" y="176" width="659.3052672" height="36" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="559" y="200" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.2</tspan></text>
+<rect x="889.3052672" y="176" width="175.81473792" height="36" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="977" y="200" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.9</tspan></text>
+<rect x="1065.12000512" y="176" width="106.56055296" height="36" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1118" y="200" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.2</tspan></text>
+<text class="svgsm" x="1183" y="200" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合计 10.2　专家占 70%</tspan></text>
+<text class="svgsm" x="24" y="273" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 FP8</tspan></text>
+<rect x="230" y="250" width="329.6526336" height="36" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="394" y="274" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.6</tspan></text>
+<rect x="559.6526336" y="250" width="175.81473792" height="36" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="647" y="274" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.9</tspan></text>
+<rect x="735.4673715199999" y="250" width="106.56055296" height="36" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="788" y="274" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.2</tspan></text>
+<text class="svgsm" x="854" y="274" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合计 6.7　专家占 54%</tspan></text>
+<text class="svgsm" x="24" y="347" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 MXFP4</tspan></text>
+<rect x="230" y="324" width="175.1279616" height="36" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="317" y="348" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.9</tspan></text>
+<rect x="405.1279616" y="324" width="175.81473792" height="36" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="493" y="348" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.9</tspan></text>
+<rect x="580.94269952" y="324" width="106.56055296" height="36" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="634" y="348" fill="#ffffff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.2</tspan></text>
+<text class="svgsm" x="699" y="348" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合计 5.0　专家占 38%</tspan></text>
+<rect x="0" y="420" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="420" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="420" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="447" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">BF16 → MXFP4：整步约 2.06 倍，FP8 → MXFP4 约 1.34 倍</tspan></text>
+<text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">不动的那两段（蓝、灰）三根条一样长；上下文一长，还要再加一段 KV。</text>
+</svg><figcaption><b>从上往下看：橙色的专家一根比一根短，蓝、灰两段一动不动。</b><span class="capmore"><br><em>gpt-oss-120b 每出一个字读多少权重，按 config 推算，一个人用，不含 KV。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>gpt-oss-120b config.json（hidden 2880、intermediate 2880、128 专家选 4、36 层、64 头、8 个 KV 头、head_dim 64、词表 201,088）；模型卡 Table 1（注意力 0.96B、激活 5.13B）作核对锚点；MXFP4 每参数 4.25 bit（模型卡）。</p>
+<p>按 config 算的注意力 0.955B、激活 5.12B（另加路由约 0.01B）对上模型卡；字节、占比、倍数为本课推导，未计 KV、激活和缩放外的开销。</p></details></figure>
+  <p><b>所以呢：</b>专家压到四分之一，整步只省一半左右。压完以后，原样不动的注意力和输出层反倒成了读得最多的部分；上下文一长，后面还要再接一段 KV。</p>
+
+  <h3 id="l8-3">掉不掉点：有数的只有这一档</h3>
+  <ul>
+    <li><b>取整取得聪明，差出一截。</b>AWQ 那组测试看 WikiText-2 困惑度（越低越好）：16 位 5.47；AWQ 压到 4 bit 是 5.60，直接四舍五入取整是 5.73。同样 4 bit，挑缩放的方法决定掉多少。</li>
+    <li><b>从 FP8 再压到 NVFP4：</b>NVIDIA 博客称 DeepSeek-R1-0528 主要语言任务掉点在 1% 以内。</li>
+    <li><b>「无损」要看跟谁比。</b>Kimi K2 Thinking 训练时就模拟 INT4，官方称「无损」、低延迟模式约快 2 倍，可没写对照的是什么精度，基准也只报了 INT4 下的分。</li>
+  </ul>
+  <div class="note warn"><span class="t">读错一步不会报错</span>
+    INT4 存进文件时整体加了 8，读时要减回去。Kimi K2.6 的记录里加载漏了这一步，每个权重差 8，输出崩成重复的乱词，程序照常出字。<b>量化之后先看输出、跑一遍基准，再上线。</b></div>
+
+  <h3 id="l8-4">KV 也能压</h3>
+  <ul>
+    <li><b>一个参数的事。</b>KV 存 FP8，每个数从 2 字节变 1 字节，vLLM、SGLang 都是一个 <code>--kv-cache-dtype</code>。Kimi K3 官方的高吞吐配方把它列为必开：BF16 的 KV 装不下每副本 128 个请求。</li>
+    <li><b>坑在缩放。</b>vLLM 只设 <code>fp8</code> 不校准时，缩放全取 1.0。开了 FP8 KV 掉精度，先查有没有校准过的缩放。</li>
+    <li><b>省得不是正好一半。</b>V3.2 有一截位置编码不压、还要存缩放，同显存能装的请求约是 BF16 的 1.63 倍（本课推导）。</li>
+    <li><b>已经到 4 bit。</b>NVIDIA 在 Blackwell 上放出 NVFP4 KV，比 FP8 再省约一半；DeepSeek-V4.1-Flash 的主 KV 原生存 FP4，比原先的 FP8 KV 小 45%。</li>
+  </ul>
+
+  <div class="note ok"><span class="t">这一节带走</span>
+    <b>量化让每一趟少搬：位数减半，下限减半。专家占大头先压它，注意力不动，所以整步省一半左右，不是四分之一。掉不掉点要实测，读错一步不会报错。</b><br>
+    这一步进步多少：vLLM 在 2 张 H100 上给 Llama 3 70B 换 FP8 权重，每字间隔最多降到一半；gpt-oss-120b 只压专家，装进一张 80 GB 的卡。<br>
+    招都讲完了。最后一节回到那一趟：拿到一个模型、一批卡，先问哪几个问题。<br>
+    <em>想看 MXFP4 和 NVFP4 的缩放差在哪、R1 在 TPU 上为什么非 FP4 不可、CUDA Graph 和 kernel 融合怎么去掉交接空等，翻完整版第十二节。</em></div>
+
 </div></section>
 <section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>第一天上手，先问哪几个问题？</h2></div><div class="note warn"><span class="t">🚧 这一节还没写</span>计划如下，正文在后续轮次补。</div>
 <ul>
