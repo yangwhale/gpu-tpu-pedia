@@ -40,6 +40,7 @@ import re
 
 import topic03_page as P
 import course_ai_trainer as AIT
+import topic06_quiz as QZ
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "WebPages", "topic-06.html")
@@ -122,7 +123,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 355 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 360 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -133,6 +134,10 @@ HERO = '''
 </div>
 '''
 
+# 2026-10-19：开场热身（回顾专题五）挂在第零节标题下、导语之前，折叠，课上点开。
+_QUIZ_HTML, _QUIZ_CSS = QZ.build()
+head += "<style>" + _QUIZ_CSS + "</style>\n"
+
 BODY, FIGS, NUM_LOCK = "", {}, []
 for _i, (_sid, _num, _title) in enumerate(SECTIONS):
     BODY += sec(_sid, _num, _title)
@@ -141,7 +146,7 @@ for _i, (_sid, _num, _title) in enumerate(SECTIONS):
     except ModuleNotFoundError:
         BODY += todo(["（这一节还没写）"]) + "\n</div></section>\n"
         continue
-    BODY += _m.BODY + "\n</div></section>\n"
+    BODY += (_QUIZ_HTML if _i == 0 else "") + _m.BODY + "\n</div></section>\n"
     for _k, _v in getattr(_m, "FIGS", {}).items():
         assert _k not in FIGS, "图占位符 %s 在两节里重名" % _k
         FIGS[_k] = _v
