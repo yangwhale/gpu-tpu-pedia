@@ -28,6 +28,7 @@ import os
 
 import topic03_page as P
 import topic06_common as C
+import topic06_quiz as QZ
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "WebPages", "topic-06.html")
@@ -85,6 +86,13 @@ HERO = '''
 </div></div>
 ''' % (PLAN_SUM, L300)
 
+# R24：开场回顾专题五的勾选题，和 L300 共用 topic06_quiz（同一道题、同一份答案）；
+# 挂在第零节标题下、导语之前，折叠，课上点开。答案表下那行小字换成不带 L300 节号的写法。
+_QUIZ_HTML, _QUIZ_CSS = QZ.build(
+    "推理只剩前向，这张表还能用，但轻重变了：TP 每层那几次 AllReduce 数据不多，卡的是延迟；"
+    "EP 也不一定走 AllToAll —— 公开的 TPU 推理专家那步用的是 AllGather 加 ReduceScatter（完整版 6.4）。")
+head += "<style>" + _QUIZ_CSS + "</style>\n"
+
 BODY, FIGS, NUM_LOCK = "", {}, []
 for _i, _row in enumerate(SPINE):
     _sid, _num, _title = SECTIONS[_i]
@@ -94,7 +102,7 @@ for _i, _row in enumerate(SPINE):
     except ModuleNotFoundError:
         BODY += todo(_row) + "\n</div></section>\n"
         continue
-    BODY += _m.BODY + "\n</div></section>\n"
+    BODY += (_QUIZ_HTML if _i == 0 else "") + _m.BODY + "\n</div></section>\n"
     for _k, _v in getattr(_m, "FIGS", {}).items():
         assert _k not in FIGS, "图占位符 %s 在两节里重名" % _k
         FIGS[_k] = _v

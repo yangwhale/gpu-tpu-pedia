@@ -62,7 +62,12 @@ JS = """
 """
 
 
-def build():
+NOTE_L300 = ('推理只剩前向，这张表还能用，但轻重变了：TP 每层那几次 AllReduce 数据不多，卡的是延迟（5.3、第七节）；'
+             'EP 也不一定走 AllToAll —— 公开的 TPU 推理专家那步用的是 AllGather 加 ReduceScatter（6.4）。')
+
+
+def build(note=NOTE_L300):
+    """note：答案表下那行小字。默认是 L300 的写法（带 L300 节号）；L200 传自己的，节号不能串档。"""
     th = "".join("<th>%s</th>" % lab for _, lab in COLS)
     trs = "".join(
         '<tr data-k="%s"><td><b>%s</b><span class="sub">%s</span></td>%s</tr>'
@@ -86,10 +91,10 @@ def build():
 <tr><td>PP</td><td>一对一收发</td><td>只在相邻 stage 之间传激活（反向传梯度），不需要全员一起</td></tr>
 <tr><td>EP</td><td>AllToAll</td><td>每层两次：把 token 派给它选中的专家，算完再原路收回</td></tr>
 </table>
-<p class="sub">推理只剩前向，这张表还能用，但轻重变了：TP 每层那几次 AllReduce 数据不多，卡的是延迟（5.3、第七节）；EP 也不一定走 AllToAll —— 公开的 TPU 推理专家那步用的是 AllGather 加 ReduceScatter（6.4）。</p>
+%s
 </div>
 </div>
 <script>%s</script>
 </details>
-""" % (th, trs, JS)
+""" % (th, trs, '<p class="sub">%s</p>' % note, JS)
     return html, CSS
