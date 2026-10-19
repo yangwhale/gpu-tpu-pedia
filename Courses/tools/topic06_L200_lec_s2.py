@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
 """专题六 L200 讲义 · 第二节口播稿。"""
+# R19 借讲法：开场「不改模型、不换 kernel，只改排队」借 Anyscale《How continuous batching enables
+# 23x throughput in LLM inference while reducing p50 latency》的开场（大家以为只能靠量化和 kernel）；
+# 倍数仍只报 L300 的 Orca 36.9×。结尾「笔记一薄两头赚」借 Scaling Book《All About Transformer
+# Inference》把 KV 缩小后重跑同一张表、吞吐和延迟同时变好的讲法，本课只用机制不用其数。
+# 公交比方与 Baseten《Continuous vs dynamic batching for AI inference》同构（包车／公交线路）。
 
 FIG = "anim-contbatch"
 
 BODY = """
 <p>🎯 <b>这一节只留一句：连续批让座位不空着；座位数由 KV 定；人越多，每个人越慢。</b></p>
 
-<p class="say">「上一节说，decode 一趟只拉一个人太亏，那就多拉几个。听着简单，可乘客不是一起上车、一起下车的。<br>
-有人问一句『今天星期几』就走了，有人要你写三千字的报告。」</p>
+<p class="say">「上一节说，decode 一趟只拉一个人太亏，那就多拉几个。这一节的招，模型一行不改、kernel 一个不换，只改怎么排队，就多接了几十倍的人。<br>
+难在哪？乘客不是一起上车、一起下车的。有人问一句『今天星期几』就走了，有人要你写三千字的报告。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「老办法」，停在两条要点。</p>
 
@@ -67,7 +72,8 @@ BODY = """
 <p class="say">「这一节带走一句：连续批让座位不空着，座位数由 KV 定，人越多每个人越慢。<br>
 这一招有多大用？Orca 论文里，同样的延迟下，能服务的请求是老办法的三十六点九倍。」</p>
 
-<p class="say">「座位既然是 KV 定的，下一个问题就很自然：每个人那本笔记到底有多厚，能不能薄一点？」</p>
+<p class="say">「座位既然是 KV 定的，下一个问题就很自然：每个人那本笔记到底有多厚，能不能薄一点？<br>
+笔记一薄是两头赚：显存坐得下更多人，每一步要翻的少了，每个人也更快。这一节一路在讲取舍，这是少有的不用取舍的一招。」</p>
 """
 
 DONT = """⚠️ 三十六点九倍的口径是 <b>GPT-3 175B、每字中位延迟同压在 190 毫秒、对 FasterTransformer 静态批</b>，不是今天引擎之间的比。<br>
