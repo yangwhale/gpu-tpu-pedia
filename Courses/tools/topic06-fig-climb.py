@@ -1,86 +1,78 @@
 # -*- coding: utf-8 -*-
-r"""专题六 · 第十四节开头的「六道关」爬坡图。
+r"""专题六 · 第十四节开头的「TPU 跟 GPU 哪里不一样」对照图。
 
 回答的问题
-  · fig6-climb  把 Qwen3.5-397B 在一台 v7x-8 上跑起来，要按什么顺序过哪几关？每关撞的墙和修法是什么？K3 在哪几关走了另一条路？
+  · fig6-s14-diff  同一个模型从 GPU 搬到 TPU，哪几处规矩变了？Qwen3.5-397B 因此每处要做什么？
 
 数从哪来
-  · 跑得对、跑得快、拆得开（PCP8）三关：vLLM 的 PyTorch TPU 后端的私有实测，写作时尚未公开，只写指数（见出处台账 L99）。
-  · 60–90 s、约 349 MB：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md（台账 L98）。
-  · K3 三面旗：DEP8 加载 OOM 与「KDA 不能按序列切」取自 SGLang 的 K3 部署手册；megakernel 取自 Inferact 公开博客。
+  · GPU 一列：CUDA Graph 可选、档外照跑（12.3）；DeepEP 点对点收发、8 卡机＋IB（6.4）；
+    FlashAttention、DeepEP、Marlin（5.1、6.4、12.2）；Blackwell 张量核直接算 FP4（12.1）。
+  · TPU 一列：XLA 按静态形状整图编译、档外现编 60–90 s（tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md）；
+    Ironwood 64 颗 ICI 3D 环面、每颗 6 邻居、公开推理走 all-gather ＋ reduce-scatter（6.4）；
+    每个 TensorCore 64 MiB VMEM、SMEM 1 MiB、显存按 tile 存窄维补整块（5.1、14.2）；v7 公开规格只列 BF16、FP8（12.1）。
+  · 右列：本节 14.2 的做法，出自 vLLM 的 PyTorch TPU 后端（写作时尚未公开）。
 
 刻意没画
-  · 不画任何吞吐数：梯子那张图专管 prefill 的指数，这张只管顺序和因果。
-  · 台阶高度只表示先后，不表示难度或收益。
+  · 不画吞吐数：收益在 14.3 的梯子图。
 """
 from topic03_draw import Fig, wpx, BL, OR, GR, RD, GY, INK, GY2, LINE
 
 W = 1400
-# (关名, 墙的几行, 修法的几行, 是否主角关)
-GATES = [
-    ("装得下", ["2 个 KV 头，", "8 路 TP 切不开"], ["注意力按请求切，", "MoE 按专家切"], False),
-    ("起得来", ["没编过的档，", "首个请求等 60–90 s"], ["开服前预编译；", "分清编译和搬字节"], False),
-    ("跑得对", ["MoE 漏算别人的专家，", "PCP 显示起点 2 倍；", "状态槽全是垃圾"], ["补回显式通信；", "按头切、整条序列扫"], True),
-    ("跑得快", ["MoE 占 prefill 八成，", "通信露在外面"], ["一层 MoE 融成", "一个 Pallas 程序"], False),
-    ("拆得开", ["切序列只到 DP8 的", "约 0.89；PD 每请求", "要搬约 349 MB"], ["切序列为延迟；", "单机装得下就别拆"], False),
-    ("扛得住", ["注册表在线 ≠ 活着；", "前缀被副本摊薄"], ["真发请求判活；", "KV 感知路由"], False),
+# (差别, GPU 上, TPU 上, Qwen3.5 因此要做的)
+ROWS = [
+    ("形状",
+     ["逐个发 kernel；录图（CUDA Graph）", "只是加速，档外的批照样跑"],
+     ["XLA 按静态形状整图编译；", "没编过的档，首个请求等 60–90 s"],
+     ["开服前把档位编好；", "长短不齐交给 RPA 一个 kernel"]),
+    ("通信",
+     ["DeepEP 点对点收发；", "8 卡机内 NVLink、机间 IB 全互连"],
+     ["ICI 3D 环面，每颗只连 6 个邻居；", "XLA 未必把通信藏到你想藏的地方"],
+     ["注意力按请求切、MoE 按专家切；", "整层 MoE 写成一个 Pallas 程序"]),
+    ("片上与布局",
+     ["现成 kernel 多：FlashAttention、", "DeepEP、Marlin"],
+     ["每核 64 MiB VMEM、1 MiB SMEM；", "显存按 tile 存，窄维补成整块"],
+     ["KV 序列维放最内层；GDN 状态", "换视图不搬；路由表分窗流入"]),
+    ("数据格式",
+     ["Blackwell 张量核直接算 FP4"],
+     ["v7 公开规格只列 BF16、FP8"],
+     ["权重和 KV 存 FP8；线性层状态", "存 BF16、算时提回 FP32"]),
 ]
-# 挂在第几关（0 起）上的 K3 旗
-K3 = {0: ["DEP8 每个 rank 存整池状态，", "加载即 OOM，退回 TP"],
-      2: ["手册写明 KDA 不能", "按序列切，切了数全错"],
-      3: ["batch 只有 1–8：", "整个模型一次 Pallas 调用"]}
-assert len(GATES) == 6 and sorted(K3) == [0, 2, 3]
 
 
-def fig_climb():
-    f = Fig(W, "六级台阶从左往右升高，依次是装得下、起得来、跑得对、跑得快、拆得开、扛得住，台阶高度只表示先后。"
-               "每级写着撞上的墙（红）和修法（绿）。第三级跑得对用红框突出：MoE 漏算别的 rank 的专家、PCP 吞吐显示为起点的 2 倍，线性层状态槽全是垃圾，两个毛病都不报错。"
-               "三面橙色旗挂在装得下、跑得对、跑得快上方，是 Kimi K3 走的另一条路：DEP8 加载即 OOM；KDA 不能按序列切；batch 1 到 8 时整个模型写成一次 Pallas 调用")
-    y0 = f.header("落地六道关　——　<tspan font-weight=\"700\">最难的一关不报错</tspan>",
-                  "Qwen3.5-397B（FP8）在一台 v7x-8 上从零到上线。每级台阶 ＝ 撞上的墙 → 修法；台阶高度只表示先后",
-                  [(RD, "墙"), (GR, "修法"), (OR, "Kimi K3 的另一条路")])
-    PH = 500
-    py = f.panel(0, y0, W, PH, "按顺序过关", BL)
-    base = py + PH - 60
-    gap, sw = 12, (W - 40 - 5 * 12) / 6
-    H0, DH = 196, 36
-    for i, (nm, wall, fix, star) in enumerate(GATES):
-        x = 20 + i * (sw + gap)
-        h = H0 + i * DH
-        top = base - h
-        col = RD if star else BL
-        f.box(x, top, sw, h, "#fff", col, 6, sw=2 if star else 1.4)
-        f.box(x, top, sw, 8, col, col, 3)
-        f.t(x + 16, top + 40, "%d" % (i + 1), col, True, 20)
-        f.t(x + 44, top + 40, nm, INK, True, 20)
-        yy = top + 72
-        f.t(x + 16, yy, "墙", RD, True, 14)
-        for k, ln in enumerate(wall):
-            assert wpx(ln, 14) < sw - 50, (ln, wpx(ln, 14), sw)
-            f.t(x + 40, yy + k * 21, ln, INK, size=14)
-        yy += 21 * len(wall) + 14
-        f.t(x + 16, yy, "修", GR, True, 14)
-        for k, ln in enumerate(fix):
-            assert wpx(ln, 14) < sw - 50, (ln, wpx(ln, 14), sw)
-            f.t(x + 40, yy + k * 21, ln, INK, size=14)
-        if i in K3:
-            fh = 80
-            fy = top - 22 - fh
-            assert fy > py + 6, (i, fy, py)
-            f.line(x + 24, fy + fh, x + 24, top, OR, 1.6, arrow=False)
-            f.box(x + 8, fy, sw - 8, fh, "#fff", OR, 6, sw=1.4)
-            f.t(x + 20, fy + 24, "K3", OR, True, 14)
-            for k, ln in enumerate(K3[i]):
-                assert wpx(ln, 13) < sw - 30, (ln, wpx(ln, 13), sw)
-                f.t(x + 20, fy + 46 + k * 19, ln, INK, size=13)
-    f.line(20, base + 18, W - 20, base + 18, GY2, 1.6)
+def fig_diff():
+    f = Fig(W, "四行对照：形状、通信、片上与布局、数据格式。每行三栏：GPU 上怎么做、TPU 上的规矩、Qwen3.5-397B 因此要做的事。"
+               "形状：GPU 逐个发 kernel、录图只是加速；TPU 的 XLA 按静态形状整图编译，没编过的档首个请求等 60 到 90 秒，所以开服前编好档位，长短不齐交给 RPA。"
+               "通信：GPU 用 DeepEP 点对点收发；TPU 是 ICI 3D 环面、XLA 未必藏住通信，所以注意力按请求切、MoE 按专家切，整层 MoE 写成一个 Pallas 程序。"
+               "片上与布局：TPU 每核 64 MiB VMEM、1 MiB SMEM，显存按 tile 存、窄维补成整块，所以 KV 序列维放最内层、GDN 状态换视图不搬、路由表分窗流入。"
+               "数据格式：Blackwell 能直接算 FP4，v7 只列 BF16 和 FP8，所以权重和 KV 存 FP8，线性层状态存 BF16")
+    y0 = f.header("搬到 TPU，四条规矩变了　——　<tspan font-weight=\"700\">每条都落到这个模型的一处做法上</tspan>",
+                  "Qwen3.5-397B（FP8），一台 v7x-8：4 颗芯片、8 个 TensorCore；右栏做法见 14.2",
+                  [(GY, "GPU 上"), (BL, "TPU 的规矩"), (GR, "这个模型要做的")])
+    C0, C1, C2, C3 = 20, 190, 590, 990
+    CW = 380
+    RH = 96
+    PH = 64 + RH * len(ROWS)
+    py = f.panel(0, y0, W, PH, "同一个模型，换了一套硬件", BL)
+    for c, h, col in ((C1, "GPU 上", GY), (C2, "TPU 的规矩", BL), (C3, "Qwen3.5 要做的", GR)):
+        f.t(c + 14, py + 26, h, col, True, 15)
+    yy = py + 40
+    for nm, g, t, m in ROWS:
+        f.t(C0 + 4, yy + RH / 2 + 6, nm, INK, True, 18)
+        for c, lines, col, fill in ((C1, g, GY, "#f6f7f9"), (C2, t, BL, "#eef4fe"), (C3, m, GR, "#eef8f0")):
+            f.box(c, yy + 6, CW, RH - 14, fill, col, 6, sw=1.2)
+            top = yy + 6 + (RH - 14 - 22 * len(lines)) / 2 + 16
+            for k, ln in enumerate(lines):
+                assert wpx(ln, 15) < CW - 28, (ln, wpx(ln, 15))
+                f.t(c + 14, top + k * 22, ln, INK, size=15)
+        f.line(C2 + CW + 2, yy + RH / 2 - 1, C3 - 4, yy + RH / 2 - 1, GR, 1.6)
+        yy += RH
     f._pan = None
     yb = f.src(py + PH + 10,
-               "📌 跑得对、跑得快与 PCP8 一行据 vLLM 的 PyTorch TPU 后端私有实测（写作时尚未公开），倍数相对起点那天；"
-               "60–90 s、约 349 MB 取自 tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md。台阶高度是示意，不代表难度或收益。",
-               "K3 三面旗：DEP8 加载 OOM、69 层 KDA 不能按序列切取自 SGLang 的 K3 部署手册；megakernel 取自 inferact.ai/blog/tpu-megakernels。")
-    f.save("fig6-climb.svg", yb + 14)
+               "GPU 栏：本专题 5.1、6.4、12.1、12.3；TPU 栏：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md（60–90 s）、"
+               "Google Cloud 博客「Inside the Ironwood TPU codesigned AI stack」、本专题 5.1、6.4、12.1。",
+               "右栏：vLLM 的 PyTorch TPU 后端（写作时尚未公开），做法详见 14.2。")
+    f.save("fig6-s14-diff.svg", yb + 14)
 
 
 if __name__ == "__main__":
-    fig_climb()
+    fig_diff()
