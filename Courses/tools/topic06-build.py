@@ -100,7 +100,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 363 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 343 分钟</b></span>
     <span class="chip">📖 <b>L300 完整版</b>：自读、回查用｜讲课看 <a href="topic-06.html">90 分钟主线版</a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud

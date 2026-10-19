@@ -255,7 +255,7 @@ def lecture_finish(html, CH, PLAN, PLAN_SUM, JUDGED, WEB, DECK, OUT):
              for m in re.finditer(r'<h3 class="sec" id="c\d+">(第[零一二三四五六七八九十]+节.*?)</h3>', html)]
     assert len(_secs) == len(CH) == len(PLAN), "节数对不上：%d / %d / %d" % (len(_secs), len(CH), len(PLAN))
     _secs.append((html.index("🚧 这份讲义还薄"), ""))
-    _rows, _floor, _over = [], 0.0, []
+    _rows, _floor, _over, _untimed = [], 0.0, [], 0.0
     _ia_tot, _sk_tot, _ia_rows = 0, 0, []    # 只读统计：互动时长，不进任何 assert
     for _i in range(len(CH)):
         _t = html[_secs[_i][0]:_secs[_i + 1][0]]
@@ -263,16 +263,22 @@ def lecture_finish(html, CH, PLAN, PLAN_SUM, JUDGED, WEB, DECK, OUT):
                                                  for x in re.findall(_SAY_RE, _t, re.S))))
         _cc = len(re.findall(r'<p class="board">', _t))
         _f = _cn / 200.0 + _cc * 0.25
-        _floor += _f
-        _plan = int(re.search(r"（(\d+)′", _secs[_i][1]).group(1))
+        # 标题里没有「（N′」＝ 深讲、不计时（L300 第十四节起）：地板照算、单列，不进合计、不比计划。
+        _pm = re.search(r"（(\d+)′", _secs[_i][1])
+        _plan = int(_pm.group(1)) if _pm else None
         _ias = re.findall(r"<p>💬 <b>互动</b>.*?</p>", _t, re.S)
         _ia, _sk = len(_ias), sum("⏭" in x for x in _ias)
-        _ia_tot, _sk_tot = _ia_tot + _ia, _sk_tot + _sk
+        if _plan is not None:
+            _floor += _f
+            _ia_tot, _sk_tot = _ia_tot + _ia, _sk_tot + _sk
+        else:
+            _untimed += _f
         _ia_rows.append((_secs[_i][1].split("　")[0], _f + _ia * 0.5, _f + (_ia - _sk) * 0.5, _plan))
-        if _f > _plan:
+        if _plan is not None and _f > _plan:
             _over.append((_secs[_i][1].split("　")[0], _f, _plan))
-        _rows.append("<tr><td>%s</td><td>%s</td><td>%d</td><td>%.1f′</td><td>%d′</td><td>%d / %d</td><td>%.1f′</td><td>%.1f′</td></tr>"
-                     % (_secs[_i][1].split("（")[0], format(_cn, ","), _cc, _f, _plan,
+        _rows.append("<tr><td>%s</td><td>%s</td><td>%d</td><td>%.1f′</td><td>%s</td><td>%d / %d</td><td>%.1f′</td><td>%.1f′</td></tr>"
+                     % (_secs[_i][1].split("（")[0], format(_cn, ","), _cc, _f,
+                        ("%d′" % _plan) if _plan is not None else "不计时",
                         _ia, _sk, _f + _ia * 0.5, _f + (_ia - _sk) * 0.5))
     html = html.replace("@@FLOOR@@",
         '<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th><th>互动 / 可跳</th><th>含互动</th><th>跳后</th></tr></thead><tbody>'
@@ -282,8 +288,9 @@ def lecture_finish(html, CH, PLAN, PLAN_SUM, JUDGED, WEB, DECK, OUT):
 
     # ⭐ 两套计划时长（节标题里的、时间表里的）必须一致 —— 专题四踩过「各自自洽、互相对不上」。
     _head_min = [int(m) for m in re.findall(r'<h3 class="sec" id="c\d+">第[零一二三四五六七八九十]+节[^（<]*（(\d+)′', html)]
-    assert _head_min == [p[1] for p in PLAN], ("节标题 %s 与时间表 %s 对不上"
+    assert _head_min == [p[1] for p in PLAN if p[1] is not None], ("节标题 %s 与时间表 %s 对不上"
                                                 % (_head_min, [p[1] for p in PLAN]))
+    assert len(_head_min) + sum(p[1] is None for p in PLAN) == len(PLAN), "不计时的节，标题和时间表要一起标"
     # ⭐ 2026-09-24 L19：「可压到 N」曾经五节都写得比地板还低 —— 压不到的承诺比不写更坑讲师。
     for _p, _r in zip(PLAN, _rows):
         _m = re.match(r"可压到 (\d+)", _p[2])
@@ -291,7 +298,7 @@ def lecture_finish(html, CH, PLAN, PLAN_SUM, JUDGED, WEB, DECK, OUT):
         # 2026-10-16：创作阶段不卡时长，压缩最后再定 —— 只报告不拦。
         if _m and int(_m.group(1)) < _fv:
             print("   ℹ️  %s 写「可压到 %s」但地板已经 %.1f′（创作阶段只报告）" % (_p[0], _m.group(1), _fv))
-    _ia_over = [x for x in _ia_rows if x[2] > x[3]]
+    _ia_over = [x for x in _ia_rows if x[3] is not None and x[2] > x[3]]
     if _ia_over:
         print("   ℹ️  跳过 ⏭ 互动后仍超计划的节（只报告）：")
         for _nm, _fa, _fs, _pl in _ia_over:
@@ -368,8 +375,10 @@ def lecture_finish(html, CH, PLAN, PLAN_SUM, JUDGED, WEB, DECK, OUT):
     io.open(OUT, "w", encoding="utf-8").write(html)
     print("    互动 %d 个（⏭ 可跳 %d）× 0.5′：含互动 %.0f′ · 跳后 %.0f′（计划 %d′）"
           % (_ia_tot, _sk_tot, _floor + _ia_tot * 0.5, _floor + (_ia_tot - _sk_tot) * 0.5, PLAN_SUM))
+    if _untimed:
+        print("    深讲不计时的节另有地板 %.1f′（不进合计）" % _untimed)
     print("ok  %s  %s 字符 · %d 节 · 台词 %s 字 ＋ %d 切图 ＝ 地板 %.0f′（计划 %d′）"
-          % (os.path.basename(OUT), format(os.path.getsize(OUT), ","), len(CH), format(_n, ","), _cuts, _tot, PLAN_SUM))
+          % (os.path.basename(OUT), format(os.path.getsize(OUT), ","), len(CH), format(_n, ","), _cuts, _tot - _untimed, PLAN_SUM))
 
 
 

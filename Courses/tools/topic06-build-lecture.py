@@ -55,11 +55,13 @@ def _chapter(i, title, sid, fig, body, dont):
               "　·　<b>本节无图</b>（故意的）"
     # L35（只改展示）：① 节标题旁挂「计划 · 含互动」小字，数在下面时间账算完后回填；
     # ② 「本节主屏」挪到节首，讲师一进这节就能点过去；③ ❓ 备答从 ⚠️ 框里拆成独立的框。
-    plan = re.search(r"（(\d+)′", title).group(1)
+    # 标题里没有「（N′」的节是深讲、不计时（2026-10-19 第十四节起）：小字写「不计时」。
+    _m = re.search(r"（(\d+)′", title)
+    plan = ("计划 %s′" % _m.group(1)) if _m else "深讲，不计时"
     warn, _, ask = dont.partition("<b>❓")
     askbox = ('<div class="ask6"><b>❓' + ask + '</div>') if ask else ""
     return """
-<h3 class="sec" id="c%d">%s<span class="tm6">计划 %s′ · @@IA%02d@@</span></h3>
+<h3 class="sec" id="c%d">%s<span class="tm6">%s · @@IA%02d@@</span></h3>
 %s
 <div class="say">
 <p class="board sub">🖥 本节主屏：课件 <a href="%s#%s">%s</a>%s</p>
@@ -73,7 +75,7 @@ def _chapter(i, title, sid, fig, body, dont):
 
 
 PLAN = sum((L.PLAN for L in _LS), [])
-PLAN_SUM = sum(p[1] for p in PLAN)
+PLAN_SUM = sum(p[1] for p in PLAN if p[1] is not None)   # 分钟写 None 的节是深讲，不计入总时长
 
 html = ('''<!doctype html>
 <html lang="zh-CN">
@@ -126,7 +128,7 @@ html = ('''<!doctype html>
 ''' + LM.TIME_NOTE + '''
   <table>
 <thead><tr><th>段落</th><th>分钟</th><th>能不能砍</th><th>说明</th></tr></thead><tbody>
-''' + "".join("<tr><td>%s</td><td>%d</td><td>%s</td><td>%s</td></tr>\n" % p for p in PLAN) + '''<tr><td><b>合计</b></td><td><b>''' + str(PLAN_SUM) + '''</b></td><td></td><td>第十六节（出处台账）不进课堂，被追问时翻</td></tr>
+''' + "".join("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n" % (p[0], "—" if p[1] is None else p[1], p[2], p[3]) for p in PLAN) + '''<tr><td><b>合计</b></td><td><b>''' + str(PLAN_SUM) + '''</b></td><td></td><td>第十六节（出处台账）不进课堂，被追问时翻</td></tr>
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，<b>也不含等动画转完一圈的时间</b>（全讲约 3 分钟）。每次 build 现数。</em></p>
