@@ -28,6 +28,7 @@ for _, _, acc in ROWS:
 CSS = """
 .qz6 table{margin:10px 0;border-collapse:collapse;width:auto}
 .qz6 td,.qz6 th{padding:6px 10px;border-bottom:1px solid #e8eaed;text-align:center}
+.qz6 th{text-transform:none;letter-spacing:0}   /* 全站 th 默认大写，集合通信名要保留驼峰 */
 .qz6 td:first-child,.qz6 th:first-child{text-align:left}
 .qz6 td .sub{display:block;font-size:12px;color:#80868b}
 .qz6 input[type=checkbox]{width:18px;height:18px;cursor:pointer}
