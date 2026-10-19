@@ -113,4 +113,6 @@ FOOT = '''
 _html = head + HERO + BODY + FOOT
 _html = P.place_figs(_html, FIGS)
 _html = C.postprocess(_html, BODY, NUM_LOCK, strict=False)
+assert _html.count("</body>") == 1
+_html = _html.replace("</body>", C.REDUCED_MOTION_JS + "</body>")
 P.finish(_html, OUT, SECTIONS, "topic-06.html")

@@ -89,6 +89,24 @@ document.querySelectorAll('video[data-pauses]').forEach(function(v){
 </script>
 """
 
+# L200 R18（2026-10-20）：系统设了「减少动态效果」（prefers-reduced-motion）时，动画不自己动。
+#   一步一停的片子切到手工模式、停在第 0 帧，点「开始」才走（同一套 stepbar）；没有步点的片子停住、给播放控件。
+#   没有 JS 时视频照常自动循环（autoplay 不靠 JS），读屏读 aria-label。只有 L200 挂这一段，L300 页面不变。
+REDUCED_MOTION_JS = """<script>
+(function(){
+  if(!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('video[autoplay]').forEach(function(v){
+    v.removeAttribute('autoplay'); v.pause();
+    var bar=v.nextElementSibling;
+    if(v.dataset.pauses && bar && bar.classList.contains('stepbar')){
+      var au=bar.querySelector('input'); au.checked=false; au.dispatchEvent(new Event('change'));
+      bar.querySelector('.rs').click();
+    } else { v.loop=false; v.controls=true; v.currentTime=0; }
+  });
+})();
+</script>
+"""
+
 SCROLL_JS = """<style>
 .scrollhint{display:none;font-size:12px;color:#5f6368;margin:2px 0 4px;text-align:right;transition:opacity .4s}
 .scrollhint.on{display:block}
@@ -180,7 +198,10 @@ def postprocess(_html, BODY, NUM_LOCK, strict=True):
         assert _n.replace(",", "") in _g, "正文写 %s，而 %s 里没有这个数 —— 图脚本改了，正文没跟上" % (_n, _svg)
     # 一步一停的播放器：照抄 topic05-build.py（那边有来由注释）。动画脚本在每一步落地后打点，
     #   写进 manim/steps/<Scene>.json；这里挂到 <video data-pauses>，图注秒数也从同一份 json 取。
-    STEP_VIDEOS = {"topic06-spec.mp4": "SpecStep", "topic06-stepmix.mp4": "StepMix", "topic06-kvload.mp4": "KVLoad", "topic06-bigep.mp4": "BigEP"}
+    STEP_VIDEOS = {"topic06-spec.mp4": "SpecStep", "topic06-stepmix.mp4": "StepMix", "topic06-kvload.mp4": "KVLoad", "topic06-bigep.mp4": "BigEP",
+                   "topic06-trip.mp4": "DecodeTrip", "topic06-whomoves.mp4": "WhoMoves"}
+    # L200 R18 新拍的两支只进了 L200；L300 用 strict 构建时缺它们不算错（L300 页面一个字不变）。
+    L200_ONLY = {"topic06-trip.mp4", "topic06-whomoves.mp4"}
 
 
     def _steps(mp4):
@@ -192,7 +213,7 @@ def postprocess(_html, BODY, NUM_LOCK, strict=True):
         for mp4 in STEP_VIDEOS:
             st = _steps(mp4)
             tag = '<video src="media/%s"' % mp4
-            if html.count(tag) == 0 and not strict:
+            if html.count(tag) == 0 and (not strict or mp4 in L200_ONLY):
                 continue
             assert html.count(tag) == 1, "%s 在页面上出现 %d 次" % (mp4, html.count(tag))
             html = html.replace(tag, tag + ' data-pauses="%s"' % ",".join("%.2f" % t for t in st["pauses"]))
