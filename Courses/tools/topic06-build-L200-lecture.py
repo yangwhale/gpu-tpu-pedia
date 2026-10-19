@@ -50,6 +50,8 @@ html = ('''<!doctype html>
 <meta property="og:title" content="推理 · 讲义">
 <meta name="theme-color" content="#5f6368">
 ''' + _css() + C.LEC_CSS + '''
+<!-- R26：手机 390 宽下两张计划表（脊梁表 448 px、时间账 662 px）撑破页面；只在本讲义加横滚，L300 讲义不动 -->
+<style>.plan{overflow-x:auto;-webkit-overflow-scrolling:touch}</style>
 </head>
 <body>
 
