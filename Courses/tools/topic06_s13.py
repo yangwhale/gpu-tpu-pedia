@@ -20,19 +20,24 @@ __FIG_S13_SNAP__
   <p>命中后先把快照拷到这个请求自己的槽里再往下改：状态是原地更新的，直接在共享的那份上算，别人的就坏了。</p>
   <p>全注意力层的 KV 还是按块存，快照只是线性层多出来的一份。两类东西的复用边界不同，SGLang 2026 年把它们挂进同一棵前缀树，各按自己的边界判命中。</p>
 
-  <h3 id="s13-2">13.2　快照的账：隔多久存一份，一份顶几千个 token</h3>
-  <p><b>隔多久存一份。</b></p>
-  <ul>
-    <li><b>SGLang：每 256 个 token 一份。</b>decode 时序列长度整除 <code>--mamba-track-interval</code>（默认 256）就存；prefill 的落点按 chunk 和 page 的整数倍对齐。<code>--mamba-max-states-per-path</code> 可再限一条路径上留几份，超了先删最浅的。</li>
-    <li><b>vLLM：只在块边界存。</b>开前缀缓存时 <code>mamba_cache_mode</code> 自动设为 <code>align</code>，命中也只能从块边界接着算。<code>prefix_cache_retention_interval</code> 默认 0，只留必要的几份（重放边界、共享前缀分叉处）；设正值才按间隔多留。</li>
-    <li><b>块被撑大了。</b>vLLM 所有层共用一种页大小，全注意力的块要放大到一页装得下一份状态。官方博客的 Nemotron-Nano-12B-v2 例子里，一块变成 672 个 token，前缀命中的粒度跟着变粗。</li>
-  </ul>
+  <h3 id="s13-2">13.2　生产里怎么存：两个池，只留要紧的几份</h3>
+  <p><b>一份快照顶几千个 token。</b>拿 Qwen3.5-397B 算（本课推导，按 config）：15 层全注意力，每 token 的 KV 是 30 KiB；45 层 GDN，每层状态 4 MiB（fp32）加卷积状态 72 KiB，一份约 183 MiB，约等于 6,250 个 token 的 KV。4.1 表里的 180 MiB 只算了前一项。</p>
+  <p>K3 更大（本课推导，按公开 config、状态按 fp32 计）：69 层 KDA，每层 96 头 × 128 × 128，一份快照约 430 MiB；24 层 MLA 每 token 只存 576 维，约 27 KiB。一份快照约顶 1.6 万个 token 的 KV。</p>
 
-  <p><b>代价：一份快照顶几千个 token。</b>拿 Qwen3.5-397B 算（本课推导，按 config）：15 层全注意力，每 token 的 KV 是 30 KiB；45 层 GDN，每层状态 4 MiB（fp32）加卷积状态 72 KiB，一份快照约 183 MiB。4.1 表里的 180 MiB 只算了前一项。</p>
-  <p>183 MiB 约等于 6,250 个 token 的 KV。按 SGLang 默认每 256 个 token 存一份，快照占的显存约是这段 KV 的 24 倍（256 × 30 KiB ＝ 7.5 MiB，183 ÷ 7.5）。</p>
+  <p><b>所以生产不每段都存，只留要紧的几份。</b>vLLM 的 K3 博客明说：每个位置都存「贵得没法用」。它留三种：</p>
   <ul>
-    <li><b>存得密</b>：命中更准，显存被快照吃掉，能留的前缀变少。</li>
-    <li><b>存得疏</b>：省显存，命中后平均要多重算约半个间隔（本课推导）。</li>
+    <li><b>prompt 末尾必留</b>，自动识别。多轮对话下一轮正好从这里接着算。</li>
+    <li><b>隔一大段留一份</b>，例如每 32K 一份，用 <code>VLLM_PREFIX_CACHE_RETENTION_INTERVAL</code> 设；设 0 就只留 prompt 末尾。</li>
+    <li><b>第二次撞见才存</b>（Marconi，MLSys '25）：系统提示、代码仓库这类共享前缀不在 prompt 边界上，第一次只记下来，第二次确认真被共享，才在分叉处存一份。</li>
+  </ul>
+  <p>SGLang 是另一种管法：decode 每 256 个 token 记一份（<code>--mamba-track-interval</code>），一条路径留几份默认不封顶；真正的上限是池子大小，满了按 LRU 删快照，KV 留着。新请求的 KV 命中比快照远，就在分叉处补记一份，下回直接命中。</p>
+  <p><b>摊到一个请求上就不吓人了</b>（本课推导）：128K 的前缀，Qwen3.5 的 KV 约 3.75 GiB，末尾一份快照 183 MiB，约 5%；每 32K 再留一份，四份约 0.72 GiB，约 19%。吓人的是每 256 个都留：512 份、约 92 GiB。</p>
+
+  <p><b>两种东西，两种管法。</b>KV 按 token 长、按块存；快照按请求、按份存。</p>
+  <ul>
+    <li><b>SGLang 分两个池</b>：KV 池按 token，Mamba 池按份，比例用 <code>--mamba-full-memory-ratio</code> 定；弹性池让一边闲时让给另一边。淘汰走两条 LRU：KV 只能从叶子往根删，快照哪个节点上的都能单独删。</li>
+    <li><b>vLLM 一个管理器、一种页</b>：全注意力的块放大到一页装得下一份状态。PyTorch 博客的 Nemotron-Nano-12B-v2 例子里一块 672 个 token，命中粒度跟着变粗。K3 起把物理块、调度对齐、前缀匹配单位拆开，快照能登记在大块里的细边界上。</li>
+    <li><b>往下分层</b>：显存放不下，KV 和快照一起落到 CPU 内存、再到外部存储（SGLang HiCache；vLLM 接 Mooncake 或 CPU 卸载），命中再搬回来。</li>
     <li><b>把快照压小</b>：SGLang 的 <code>--enable-int8-mamba-checkpoint</code>（默认关）存 int8，说明写能多缓存约一倍前缀。选 int8 不选 fp8：状态值分布近乎均匀，fp8 的指数位用不上；而且只在命中时还原一次，误差不会在递推里累积。</li>
   </ul>
 
@@ -48,8 +53,8 @@ __FIG_S13_SNAP__
 
 FIGS = {
     "__FIG_S13_SNAP__": ("fig-s13-snap", "fig6-snapshot.svg", "topic06-fig-snapshot.py",
-        '<b>线性层只能退到存档点；一份存档约 183 MiB，是 256 个 token 的 KV 的 24 倍。</b><br>'
-        '<em>Qwen3.5-397B，按 config 推算（本课推导）。右下假设一条路径上的快照全留着，实际会被驱逐或限数。</em>'),
+        '<b>线性层只能退到存档点；一份存档约 183 MiB，顶 6,250 个 token 的 KV；128K 前缀只留末尾一份，才占 KV 的 5%。</b><br>'
+        '<em>Qwen3.5-397B，按 config 推算（本课推导）。右下比的是 128K 前缀存几份快照；末尾必留、每 32K 一份取自 vLLM 的留存策略。</em>'),
 }
 
 NUM_LOCK = []
