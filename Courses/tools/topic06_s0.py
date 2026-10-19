@@ -6,6 +6,21 @@ BODY = '''
     吞 prompt 那一段（prefill）还像训练的前向，吃算力；往外吐字那一段（decode）每步只出一个字，吃带宽。
     <b>一次请求里，前后两段要的硬件正好相反。</b></p>
 
+
+  <div class="note info"><span class="t">开场新闻 · 2026 年 10 月：循环模型</span>
+    <p>做法：模型分三段。前段、后段各跑一遍，中间一段共享的层反复跑 k 圈，每圈都把前段的输出再喂一次。圈数推理时再选，权重只有一份。</p>
+    <p>NVIDIA 10 月 16 日放出 Dory 4B：前 8 层、中间 20 层循环、后 8 层。默认 2 圈；要省算力跑 1 圈，SWE-bench 一类 agent 任务开到 4 圈。</p>
+    <p>10 月 8 日的论文 Elastic Latent Recurrence 给出 Koi-4B：同一个 checkpoint，1 圈时 Artificial Analysis 智能指数估计 18，和 Qwen3.5-4B 持平；4 圈到 29。</p>
+    <p><b>留一个问题：圈数从 1 加到 4，每出一个字要从显存搬的字节变不变？</b>答案在 0.2「回到开场新闻」。</p>
+  </div>
+  <details class="foldfig"><summary><b>循环模型怎么训，已训好的模型能不能改</b></summary>
+  <ul style="line-height:1.9">
+    <li><b>一次训练覆盖几个圈数。</b>每个 microbatch 随机抽一个圈数 k，前向真跑 k 圈，梯度穿过全部 k 圈回传。只按一个固定圈数训，换别的圈数就变差，离得越远越差。</li>
+    <li><b>多花的训练算力。</b>0.5B 的消融里，全程混着圈数训，约是不循环基线的 1.79 倍；前 3/4 只跑 1 圈、最后 1/4 才混，降到 1.20 倍，保住 5 圈收益的 84%。论文估 4B 配置只多 16%。</li>
+    <li><b>已训好的模型。</b>直接把中间几层多跑几遍，通常变差。把每圈改成带阻尼的小步更新，不训练也能小幅提升：Qwen3-4B-Instruct 的 MMLU-Pro 高 2.64 个百分点（Training-Free Looped Transformers，2026-05）。</li>
+    <li><b>要大幅提升得续训改造。</b>例如 Retrofitted Recurrence（2025-11）、Relaxed Recursive Transformers、LoopUS（2026-05），都是在已有权重上划出循环段再接着训。</li>
+  </ul>
+  </details>
   <h3 id="s0-1">0.1　2022 年以来，推理怎么变便宜</h3>
   <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出。Orca 的连续批让每一步都能有人进出，同延迟下吞吐是老办法 FasterTransformer 静态批的 36.9 倍。可座位数由 KV（已读内容的缓存）定：KV 按最大长度预留，显存里真正存着 token（大致一个字，本课常叫“字”）的只有两到近四成（4.2）。同年的 FlashAttention 把注意力切块放进片上 SRAM 算，不再把整张分数表写回显存（5.1）。</p>
   <p>2023 年 PagedAttention 把 KV 分页，利用率到 96%。浪费省掉以后，坐几个人就看 KV 池装得下几条 KV，偏偏上下文一路变长：2023 年 11 月 GPT-4 Turbo 开到 128K，2024 年 2 月 Gemini 1.5 Pro 预览 1M。模型侧用 GQA、MLA 把每条压薄；系统侧让相同的开头不再重算（SGLang 的 RadixAttention），存不下的往内存、SSD 放（Mooncake，给 Kimi 线上用）。</p>
@@ -92,6 +107,12 @@ __FIG_S0_LAYER__
     <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
     还有一类不碰这一趟：把两段拆开，各放合适的机器。</div>
 __FIG_S0_MAP__
+  <div class="note info"><span class="t">回到开场新闻：多一圈，就多搬一趟</span>
+    <p>Dory 中间 20 层的权重是 GB 量级，比 128 MiB 的 VMEM 大一个数量级以上，放不下。所以每跑一圈都要从 HBM 再流一遍。4 圈的 Dory 每出一个字搬的权重，跟同样深度（8＋20×4＋8＝96 层）的普通模型一样多（本课推导）。</p>
+    <p>省的是容量：存 36 层，跑出 96 层的深度，权重约占等深模型的 36/96≈38%（本课推导）。腾出来的显存装 KV、多坐人，这一趟就分给更多 token。</p>
+    <p>KV 是新麻烦：每圈各存一份，显存跟着圈数涨。Koi-4B 4 圈都存时，128K 一条要 7.5 GiB，是 1 圈 3.0 GiB 的 2.5 倍；只留最后一圈的 KV，压回 1 圈的大小，大部分收益还在。</p>
+    <p>圈数多了答得更短：Koi-4B 2、3、4 圈的输出 token 比 1 圈少 21.8%、29.5%、32.7%。每个字慢了，整道题不一定慢。</p>
+  </div>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b></summary>
   <ul style="line-height:1.9">

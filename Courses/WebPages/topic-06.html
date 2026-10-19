@@ -867,7 +867,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题三</b>（KV cache）<b>专题五</b>（并行）</span>
     <span class="chip">口径 <b>截至 2026-10</b></span>
-    <span class="chip">⏱ <b>讲约 360 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 365 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -921,6 +921,21 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     吞 prompt 那一段（prefill）还像训练的前向，吃算力；往外吐字那一段（decode）每步只出一个字，吃带宽。
     <b>一次请求里，前后两段要的硬件正好相反。</b></p>
 
+
+  <div class="note info"><span class="t">开场新闻 · 2026 年 10 月：循环模型</span>
+    <p>做法：模型分三段。前段、后段各跑一遍，中间一段共享的层反复跑 k 圈，每圈都把前段的输出再喂一次。圈数推理时再选，权重只有一份。</p>
+    <p>NVIDIA 10 月 16 日放出 Dory 4B：前 8 层、中间 20 层循环、后 8 层。默认 2 圈；要省算力跑 1 圈，SWE-bench 一类 agent 任务开到 4 圈。</p>
+    <p>10 月 8 日的论文 Elastic Latent Recurrence 给出 Koi-4B：同一个 checkpoint，1 圈时 Artificial Analysis 智能指数估计 18，和 Qwen3.5-4B 持平；4 圈到 29。</p>
+    <p><b>留一个问题：圈数从 1 加到 4，每出一个字要从显存搬的字节变不变？</b>答案在 0.2「回到开场新闻」。</p>
+  </div>
+  <details class="foldfig"><summary><b>循环模型怎么训，已训好的模型能不能改</b></summary>
+  <ul style="line-height:1.9">
+    <li><b>一次训练覆盖几个圈数。</b>每个 microbatch 随机抽一个圈数 k，前向真跑 k 圈，梯度穿过全部 k 圈回传。只按一个固定圈数训，换别的圈数就变差，离得越远越差。</li>
+    <li><b>多花的训练算力。</b>0.5B 的消融里，全程混着圈数训，约是不循环基线的 1.79 倍；前 3/4 只跑 1 圈、最后 1/4 才混，降到 1.20 倍，保住 5 圈收益的 84%。论文估 4B 配置只多 16%。</li>
+    <li><b>已训好的模型。</b>直接把中间几层多跑几遍，通常变差。把每圈改成带阻尼的小步更新，不训练也能小幅提升：Qwen3-4B-Instruct 的 MMLU-Pro 高 2.64 个百分点（Training-Free Looped Transformers，2026-05）。</li>
+    <li><b>要大幅提升得续训改造。</b>例如 Retrofitted Recurrence（2025-11）、Relaxed Recursive Transformers、LoopUS（2026-05），都是在已有权重上划出循环段再接着训。</li>
+  </ul>
+  </details>
   <h3 id="s0-1">0.1　2022 年以来，推理怎么变便宜</h3>
   <p>2022 年的推理服务，一批请求要等最长的那个写完才一起退出。Orca 的连续批让每一步都能有人进出，同延迟下吞吐是老办法 FasterTransformer 静态批的 36.9 倍。可座位数由 KV（已读内容的缓存）定：KV 按最大长度预留，显存里真正存着 token（大致一个字，本课常叫“字”）的只有两到近四成（4.2）。同年的 FlashAttention 把注意力切块放进片上 SRAM 算，不再把整张分数表写回显存（5.1）。</p>
   <p>2023 年 PagedAttention 把 KV 分页，利用率到 96%。浪费省掉以后，坐几个人就看 KV 池装得下几条 KV，偏偏上下文一路变长：2023 年 11 月 GPT-4 Turbo 开到 128K，2024 年 2 月 Gemini 1.5 Pro 预览 1M。模型侧用 GQA、MLA 把每条压薄；系统侧让相同的开头不再重算（SGLang 的 RadixAttention），存不下的往内存、SSD 放（Mooncake，给 Kimi 线上用）。</p>
@@ -1646,6 +1661,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="946" y="562" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二节</tspan></text>
 </svg><figcaption><b>蓝色那组节最多：批处理、切专家、切序列、投机解码、新架构，都在让一趟多坐几个人。</b><span class="capmore"><br><em>归类是本课的分法，标签是讲这一招的节。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课的分法：每节按它主要的贡献归一根杠杆。DEP 也让 attention 各管各的请求，KV 复用也省了 prefill 的计算，这类兼顾的地方只放一处。</p>
 <p>⚠️ 投机解码放在「车上多坐人」：它让搬一趟换来好几个字，和批处理一样是把一趟分给更多 token。</p></details></figure>
+  <div class="note info"><span class="t">回到开场新闻：多一圈，就多搬一趟</span>
+    <p>Dory 中间 20 层的权重是 GB 量级，比 128 MiB 的 VMEM 大一个数量级以上，放不下。所以每跑一圈都要从 HBM 再流一遍。4 圈的 Dory 每出一个字搬的权重，跟同样深度（8＋20×4＋8＝96 层）的普通模型一样多（本课推导）。</p>
+    <p>省的是容量：存 36 层，跑出 96 层的深度，权重约占等深模型的 36/96≈38%（本课推导）。腾出来的显存装 KV、多坐人，这一趟就分给更多 token。</p>
+    <p>KV 是新麻烦：每圈各存一份，显存跟着圈数涨。Koi-4B 4 圈都存时，128K 一条要 7.5 GiB，是 1 圈 3.0 GiB 的 2.5 倍；只留最后一圈的 KV，压回 1 圈的大小，大部分收益还在。</p>
+    <p>圈数多了答得更短：Koi-4B 2、3、4 圈的输出 token 比 1 圈少 21.8%、29.5%、32.7%。每个字慢了，整道题不一定慢。</p>
+  </div>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b></summary>
   <ul style="line-height:1.9">
@@ -12705,6 +12726,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>R85 补充 · 第零节 fig6-engines：vLLM v0.6.0 2024-09 博客承认调度的 CPU 开销让 GPU 吃不饱；2.7×，基线 v0.5.3</td><td>blog.vllm.ai/2024/09/05/perf-update.html（「2.7x Throughput Improvement」）</td></tr>
     <tr><td>R85 补充 · 第零节 fig6-engines：SGLang v0.3 2024-09 MLA 优化，3–7×（对基线系统）</td><td>lmsys.org/blog/2024-09-04-sglang-v0-3/（「3x to 7x higher throughput than the baseline system」）</td></tr>
     <tr><td>R85 补充 · 第零节 fig6-engines：Mooncake 传输引擎 2024-11 开源；vLLM 2024-12-15 合入（同月 12-01 合入首批 PD 代码），SGLang 2025-04-10 支持，晚 3 个多月</td><td>github.com/kvcache-ai/Mooncake（README 时间线）；github.com/vllm-project/vllm/pull/10884、/pull/10502；间隔为本课推导</td></tr>
+    <tr><td>R86 补充 · 第零节 开场新闻：Dory 4B 2026-10-16 发布，前 8、循环 20、后 8 层，每圈重新喂输入；默认 2 圈，1 圈省算力，agent 任务 4 圈；圈数多可能少出 token；默认每圈各存 KV，可改成只存 1 圈大小</td><td>huggingface.co/nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16（「Input and Output blocks have 8 layers each, while the Recurrent block has 20 layers」「We recommend two loops as the default」）</td></tr>
+    <tr><td>R86 补充 · 第零节 开场新闻：Koi-4B 1 圈约 18、4 圈 29；每微批随机抽圈数、梯度穿过全部圈；1.79×／1.20× 训练算力、保留 84%；4B 估多 16%；128K 每圈存 KV 7.5 GiB 对 3.0 GiB；输出 token 少 21.8%／29.5%／32.7%</td><td>arXiv <a href="https://arxiv.org/abs/2610.12582" target="_blank" rel="noopener">2610.12582</a>（Elastic Latent Recurrence，2026-10-08）§1、§3.2、§5、§6.5</td></tr>
+    <tr><td>R86 补充 · 第零节 开场新闻：免训练循环，直接重复通常变差，阻尼小步后 Qwen3-4B-Instruct MMLU-Pro +2.64pp</td><td>arXiv <a href="https://arxiv.org/abs/2605.23872" target="_blank" rel="noopener">2605.23872</a>；续训改造见 arXiv <a href="https://arxiv.org/abs/2511.07384" target="_blank" rel="noopener">2511.07384</a>、<a href="https://arxiv.org/abs/2410.20672" target="_blank" rel="noopener">2410.20672</a>、<a href="https://arxiv.org/abs/2605.11011" target="_blank" rel="noopener">2605.11011</a></td></tr>
+    <tr><td>R86 补充 · 第零节 开场新闻：等深 96 层、权重约 38%、中间段比 VMEM 大一个数量级</td><td>本课推导：8＋20×4＋8＝96；36/96；4B 参数 BF16 约 8 GB，中间 20 层约占一半，对 128 MiB</td></tr>
     <tr><td>R85 补充 · 第零节 fig6-engines：SGLang v0.4 2024-12-04（零开销调度、DP attention）；V3 Day-0 SGLang v0.4.1 12-25/26，vLLM v0.6.6 12-27，早一两天</td><td>lmsys.org/blog/2024-12-04-sglang-v0-4/；github.com/sgl-project/sglang/releases/tag/v0.4.1；github.com/vllm-project/vllm/releases/tag/v0.6.6</td></tr>
     <tr><td>R85 补充 · 第零节 fig6-engines：vLLM V1 2025-01-27 博客致谢 SGLang 等引擎</td><td>blog.vllm.ai/2025/01/27/v1-alpha-release.html（「These engines have significantly influenced our work」）</td></tr>
     <tr><td>R85 补充 · 第零节 fig6-engines：MTP SGLang 2025-02-14 合入，vLLM 2025-02-19 合入，晚 5 天</td><td>github.com/sgl-project/sglang/pull/3582；github.com/vllm-project/vllm/pull/12755；间隔为本课推导</td></tr>
