@@ -302,6 +302,11 @@ BODY = '''
     <tr><td>R95 补充 · 6.4 ／ 6.6：decode 48 卡，每卡 768 请求，共 36,864；32 份冗余专家</td><td>github.com/sgl-project/sglang/issues/7227（--nnodes 12 --tp-size 48 --dp-size 48 --enable-dp-attention … --max-running-requests 36864 … --cuda-graph-bs 768 … --ep-num-redundant-experts 32）</td></tr>
     <tr><td>R95 补充 · 6.4：FP8 KV 让 decode 访存约减半；batch 2K 输入 1408、4K 输入 768，2K 输入从 1408 降到 768 约掉一成（原文只写 batch size，按每卡读是本课推断，与 Part I 的 768 × 48 ＝ 36,864 口径一致）；NVFP4 融进 DeepEP，分发流量减半；prefill 缩 EP 加卸载（900 GB/s 双向），每实例 4 卡或 2 卡</td><td>lmsys.org/blog/2025-09-25-gb200-part-2（「roughly halves the memory access pressure in decode」「768 for 4k ISL and 1408 for 2k ISL … reduces performances by roughly one tenth」「halving the required network traffic」「minimizes the explosion radius … reduce the time wasted waiting for the slowest rank」）</td></tr>
     <tr><td>R95 补充 · 6.5：细粒度重叠，汇回通信叠下投影 GEMM 和共享专家</td><td>同上（「we overlap the combine communication with both the down GEMM and the shared experts」）</td></tr>
+    <tr><td>R96 补充 · 5.1：DSA prefill 的 gather 为取不到 2048 个不同行物化约 419 万行，稀疏路径 96.3% 设备时间在 gather；位图在 SparseCore 上建，带掩码稠密注意力与稀疏等价；4K 首 token 1338.81 → 729.04 ms；KV ≤ 9216 走 masked-dense</td><td>公开工程博客「Hy4 在 TPU v7 上的推理性能优化」篇（2026-10-08，更新于 10-09）（「物化出约 419 万行，冗余 2048 倍，稀疏路径设备时间的 96.3% 都花在 gather 上」「把 top-k 结果写成一张位图（在 SparseCore 上完成）」「4K 输入的 TTFT 从 1338.81 ms 降到 729.04 ms」「masked-dense（KV ≤ 9216 时），否则 sparse」）</td></tr>
+    <tr><td>R96 补充 · 5.1：Hy4 78 层只 21 层算 top-k、其余共用；位图跨层复用 +5.6%</td><td>同上（「位图跨层复用：78 层中只有 21 层计算 top-k，其余共用」「+5.6%」，并发 32）</td></tr>
+    <tr><td>R96 补充 · 14.1：64 token 分块循环追踪时展开 → fori_loop；attention sink 闭包常量 → 运行时输入；同一形状键 12–14 份程序；跨 rank 回放；95.1 分钟 → 约 14 分钟；图指纹看不见闭包常量、回滚换缓存根目录</td><td>公开工程博客「Hy4 在 TPU v7 上的冷编译优化」系列：第一篇（2026-10-01，更新于 10-09）（「冷编译从 95.1 分钟降到约 14 分钟（mnbt 2048，两次测量 819 秒和 842 秒）」「同一形状键下有 12–14 份程序」「回滚时更换缓存根目录」）</td></tr>
+    <tr><td>R96 补充 · 14.1：跨 DP 回放，Qwen3.5 DP8 权重加载完成到服务就绪 741 s → 270 s</td><td>同系列第二篇（2026-10-09）（「Qwen3.5 DP8 从 741 秒降到 270 秒」；741 为单次、270 为三次均值）</td></tr>
+    <tr><td>R96 补充 · 14.1：序列并行切片 reshape(W, -1, d)[rank] 把 rank 写进图，冷编译 48.2 分钟；组内 all_to_all 取 rank 后 18.7 分钟；小图错开 ＋ 后台保存 17.7 分钟</td><td>同系列第三篇（2026-10-12）（「冷编译需要 48.2 分钟（三次均值）」「降到 18.7 分钟」「降到 17.7 分钟」）</td></tr>
 </table>
   </details>'''
 
