@@ -17,7 +17,10 @@ __FIG_S7_GAIN__
     <li><b>为什么长了才赚</b>：官方说 DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。实测 TP8 默认配置只装得下约 79 万 token（这组没开投机，开了还少两成），128K 乘 8 并发要 100 多万，放不下，只能少收请求，128K、8 并发下首字延迟中位数，TP8 调得最好的一档 32.1 s（默认档 39.3 s），DCP8 是 2.3 s（含排队）。</li>
     <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了。</li>
     <li><b>看的是总量</b>：同是 8K，并发 8 还亏，并发 32 已赚。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
+    <li><b>每个字的间隔：读 KV 分摊了，通信又加回来</b>：TP8 每张卡都读这条请求的整份 KV，DCP8 每张卡只读 1/8，代价是每层多几次通信。并发 1、输入 4K → 128K，TP8 每 token 11.1 → 12.0 ms，DCP8 15.2 → 15.3 ms 几乎不涨。DCP8 起点高约 4 ms：同样 4K、关掉 symm-mem 的 TP8 是 15.1 ms，所以这 4 ms 基本是 symm-mem 被强制关掉的损失（本课按两行数推）。K3 只有 24 层 MLA，所以它主要赚在装得下。</li>
+    <li><b>官方口径是容量不是速度</b>：官方大规模预设 Peak Capacity（加 <code>--dcp-size 8</code>）写的是并发上限 +72%、引擎吞吐不变、ITL ×1.8。别说成「DCP 让每个字更快」。</li>
   </ul>
+  <p><b>名字按阶段起。</b>DCP／PCP 是推理框架里的叫法。Meta 论文（arXiv 2411.01783）按传什么叫 pass-KV／pass-Q：完整 prefill 用 pass-KV，decode 和缓存命中高的 partial prefill 用 pass-Q。NVIDIA Helix 论文（arXiv 2507.07120）管 decode 时按序列切 KV 的那一派叫 KV 并行（KVP）。</p>
 
   <p><b>开 DCP 之前要知道的坑。</b></p>
   <ul>

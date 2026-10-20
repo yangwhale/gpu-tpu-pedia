@@ -724,6 +724,11 @@ h4 { margin:18px 0 6px; font-size:15px }
 .animgrid figure { margin:0; min-width:0 }
 .animcell figcaption { font-size:14px; color:var(--gray); margin-top:6px; line-height:1.6 }
 .animgrid video { width:100%; border-radius:8px; display:block }
+/* 2026-10-20：动画视频原生只有 960 宽，fwide 的 figure 却有 1760 宽；video 默认行内、
+   没人给它宽度，于是全贴在左边。这里让它居中、放到 1240（跟 fbox 投影宽一致），
+   图注也收到同一个 1240 框里，左边缘跟视频对齐。 */
+figure.fwide > video { display:block; width:100%; max-width:1240px; margin:0 auto; border-radius:8px }
+figure.fwide:has(> video) > figcaption { max-width:1240px; margin-left:auto; margin-right:auto }
 @media (max-width:900px) { .animgrid { grid-template-columns:1fr } }
 .lecbtn { display:inline-block; margin-left:14px; font-size:13px; padding:4px 12px; border-radius:14px;
           background:#fff; border:1px solid var(--line); color:var(--blue); text-decoration:none }
@@ -7832,7 +7837,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>为什么长了才赚</b>：官方说 DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。实测 TP8 默认配置只装得下约 79 万 token（这组没开投机，开了还少两成），128K 乘 8 并发要 100 多万，放不下，只能少收请求，128K、8 并发下首字延迟中位数，TP8 调得最好的一档 32.1 s（默认档 39.3 s），DCP8 是 2.3 s（含排队）。</li>
     <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了。</li>
     <li><b>看的是总量</b>：同是 8K，并发 8 还亏，并发 32 已赚。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
+    <li><b>每个字的间隔：读 KV 分摊了，通信又加回来</b>：TP8 每张卡都读这条请求的整份 KV，DCP8 每张卡只读 1/8，代价是每层多几次通信。并发 1、输入 4K → 128K，TP8 每 token 11.1 → 12.0 ms，DCP8 15.2 → 15.3 ms 几乎不涨。DCP8 起点高约 4 ms：同样 4K、关掉 symm-mem 的 TP8 是 15.1 ms，所以这 4 ms 基本是 symm-mem 被强制关掉的损失（本课按两行数推）。K3 只有 24 层 MLA，所以它主要赚在装得下。</li>
+    <li><b>官方口径是容量不是速度</b>：官方大规模预设 Peak Capacity（加 <code>--dcp-size 8</code>）写的是并发上限 +72%、引擎吞吐不变、ITL ×1.8。别说成「DCP 让每个字更快」。</li>
   </ul>
+  <p><b>名字按阶段起。</b>DCP／PCP 是推理框架里的叫法。Meta 论文（arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a>）按传什么叫 pass-KV／pass-Q：完整 prefill 用 pass-KV，decode 和缓存命中高的 partial prefill 用 pass-Q。NVIDIA Helix 论文（arXiv <a href="https://arxiv.org/abs/2507.07120" target="_blank" rel="noopener">2507.07120</a>）管 decode 时按序列切 KV 的那一派叫 KV 并行（KVP）。</p>
 
   <p><b>开 DCP 之前要知道的坑。</b></p>
   <ul>
@@ -10971,6 +10979,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>从上往下三行：串行猜、一趟出整块、一趟出整块再补两刀。</b><span class="capmore"><br><em>例句和概率是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 示意：例句、各行猜 5 个、存活概率 95／86／60／24／5% 和两条截断位置都是举例；of course／no problem 的例子出自 DSpark 论文 §3。</p>
 <p>DFlash：arXiv <a href="https://arxiv.org/abs/2602.06036" target="_blank" rel="noopener">2602.06036</a>；KV 注入与 EAGLE-3 对比见 LMSYS 博客 2026-06-15。DSpark：arXiv <a href="https://arxiv.org/abs/2607.05147" target="_blank" rel="noopener">2607.05147</a>（Markov 顺序头、置信度头、前缀存活概率、全批贪心调度；MTP-3/5 高并发拉低吞吐）；vLLM dspark.py 从 mtp.{0,1,2}.* 读权重。</p></details></figure>
   <p>DFlash 还挪了喂隐状态的位置：EAGLE-3 只在草稿入口喂，草稿一深信号就淡；DFlash 注入草稿每一层的 KV（LMSYS 博客）。2026 年已上 vLLM、SGLang，B300 上单并发速度是不投机的 3.0–5.8 倍（Gemma-4 31B，NVIDIA 博客）。</p>
+  <p><b>一整块里是什么：一张填空卷。</b>Qwen3 上一块 16 格（LLaMA 3.1 是 10 格）：第一格是上一轮刚确认的字，后面 15 格都放同一个 mask 占位符。草稿只有 5 层（Qwen3 Coder 是 8 层），embedding 和输出头借大模型的、冻住不训；大模型从浅到深挑 5 层隐状态，拼起来投影成一份，塞进草稿每一层当额外的 KV。块内双向注意力，跑一次前向，15 个空同时填满。训练照这个来：在真实回答里随机挑一个位置当第一格，盖住后面的格子让它填（DFlash 论文 §4、§5）。</p>
   <p><b>一趟出整块的病：越往块尾越不准。</b>每个位置各猜各的，看不到同块前一位到底选了哪个字。上文既能接「of course」又能接「no problem」时，它会拼出「of problem」。DSpark 论文里，EAGLE-3 的逐位接受率持平，DFlash 一路往下掉。</p>
   <p><b>DSpark 第一刀补草稿。</b>DFlash 照旧一趟出整块，上面加一个很轻的顺序小头，按前一位选的字调下一位的分数：选了「of」，就抬高「course」。Qwen3 4B–14B 上平均接受长度比 DFlash 高 16–18%，比 EAGLE-3 高 27–31%；batch 128 时，草稿长度从 4 个到 16 个，整轮都只比 DFlash 慢 0.2–1.3%。</p>
   <p><b>第二刀补验证，这才是它线上好用的主因。</b>另一个小头估每一位被收下的概率，连乘成前缀存活概率。调度器把整批请求的候选前缀按存活概率排队，再查引擎吞吐表，定这一步总共验多少。负载轻多验，负载重少验，没把握的字不占名额。</p>
@@ -13000,6 +13009,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>R97 补充 · 14.1–14.3 深讲：Qwen3.5 全注意力层是 GQA，32 个查询头、2 个 KV 头、head_dim 256；GDN 64 个 V 头、16 个 QK 头、head_dim 128；TP8 摊到每 device 0.25 个头，复制让并发只到约 200（计划 512）；DP 每核 --max-num-seqs=64；all-to-all「massive, unpredictable network routing overhead」；分层 reduce-scatter 片内共享内存比芯片间 ICI 快 6 倍、芯片间递归倍增、切 2–4 个微批防 VMEM 溢出；SparseCore「optimized for indirect addressing」、收拢到连续缓冲区；SSM 状态 FP32 → BF16 向量单元吞吐翻倍；两种状态对齐放一起存、少补齐不碎片</td><td>https://developers.googleblog.com/systems-engineering-playbook-optimizing-qwen-35-397b-moe-on-ironwood-tpu7x/（§1、§3、§A–§D，2026-10-19 核对）；本课推导：32 ÷ 2 ＝ 16、8 ÷ 2 ＝ 4、8 × 64 ＝ 512、64 ÷ 8 ＝ 8、[81920, 4096] 的 81920 ＝ 8 × 1,024 × 10、每 token KV 15 × 2 × 256 × 2 × 2 ＝ 30,720 字节</td></tr>
     <tr><td>R97 补充 · 14.1、14.3 深讲：kernel 搬之外的阶段与起步收尾带宽闲置、每个 kernel 重来一遍；megakernel 去掉边界后权重搬运「can be issued as early as on-chip storage allows」；XLA「schedules chains of operations as a unit and reserves the right to reorder them or reclaim their buffers」；make_async_copy().start()／.wait()；run_scoped 管 VMEM 分配的生存期；单程序不分 grid</td><td>https://inferact.ai/blog/tpu-megakernels（2026-10-19 核对）</td></tr>
     <tr><td>R97 补充 · 14.1–14.3 深讲（本课推导）：TP2 后 1 个 KV 头，按头维打包每 token 每层 BF16／FP8 都占 256 × 4 ＝ 1,024 字节，序列维最内时 FP8 占 512；统一池 1K 请求状态占比约 86%、64K 约 9%，分池按 64K 定比例时 1K 流量下 KV 池约九成八闲置；整层融合上限 1 ÷ 0.8 ＝ 1.25 对实测 ×1.26；SMEM 是 VMEM 的 1/64；64 MiB ≈ 67.11 MB，67.11 − 31.29 ≈ 35.8 MB</td><td>本课推导：32 位格子装 2 个 BF16 或 4 个 FP8（tile 规则同第 195 行）；183 MiB ÷ 30 KiB ≈ 6,250（13.2），6,250 ÷ (6,250 ＋ 1,024) ≈ 0.86、6,250 ÷ (6,250 ＋ 65,536) ≈ 0.087，0.09 ÷ 183 × 30 ≈ 0.015 对 0.91；两成取自第 248 行；64 ÷ 1 ＝ 64；64 × 1,048,576 ＝ 67,108,864</td></tr>
+    <tr><td>R98 补充 · 7.1（L200 试讲回填）：K3 并发 1 每 token TP8 4K 11.1 ms → 128K 12.0 ms，DCP8 15.2 → 15.3 ms；4K 关 symm-mem 的 TP8 15.1 ms，DCP8 起点高约 4 ms 基本是 symm-mem 损失；官方 Peak Capacity（+<code>--dcp-size 8</code>）并发上限 +72%、引擎吞吐不变、ITL ×1.8；TP8 每卡读整份 KV、DCP8 读 1/8；Meta 叫 pass-KV／pass-Q，Helix 叫 KVP</td><td>SGLANG-K3-RUNBOOK.md 宽表 :924（TP8 4K）、:940（TP8 128K）、:928（DCP8 4K）、:941（DCP8 128K）、:929（B-nosymm-noAR 15.1 ms）；:1309（Peak Capacity）；arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a> §3.4；arXiv <a href="https://arxiv.org/abs/2507.07120" target="_blank" rel="noopener">2507.07120</a>；4 ms 归因与「读 1/8」本课推导</td></tr>
+    <tr><td>R98 补充 · 11.3（L200 试讲回填）：DFlash 一块 16 格（LLaMA 3.1 为 10），首格是上一轮确认的字、其余为 mask；草稿 5 层（Qwen3 Coder 为 8），共享并冻结 embedding 与 LM head；目标模型 5 层隐状态拼接投影后注入每层草稿 KV；块内双向注意力、单次前向；训练随机采 anchor 位置、盖住后续格</td><td>arXiv <a href="https://arxiv.org/abs/2602.06036" target="_blank" rel="noopener">2602.06036</a> §4、§5</td></tr>
 </table></div>
   </details>
 </div></section>
