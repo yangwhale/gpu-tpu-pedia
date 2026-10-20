@@ -71,6 +71,8 @@ __FIG_S4_OFFLOAD__
     <li><b>Mooncake Store</b>：集群各机的内存拼成一个 KV 池，按块哈希存取，冷数据可再下放到 SSD；字节走 RDMA（网卡直接读写对方内存，不经 CPU）搬。SGLang HiCache（2025-09）、vLLM（2026-05）都已能接它当后端。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下分层存 KV；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.2。</li>
     <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 外接存储，如磁盘、远端内存）；官方博客报长上下文和多轮对话基准下吞吐最多 6 倍、首字最多降 80%，没写明对照组。vLLM 0.11 也自带 CPU 下放（OffloadingConnector），两大引擎都有了。</li>
+    <li><b>DeepSeek 反着来，不分层</b>（2026-10 公开的 V4.1-Flash 线上做法）：块 KV 不放本机内存，全落独立的 3FS 存储集群，约 100 PiB SSD；agent 流量留 3 天，chatbot 留 7 天，chatbot 缩到 3 天左右命中率掉 0.5–1%。好处是任何一台 prefill 都能命中任何前缀，不用前缀亲和路由，路由只管负载均衡；存储和计算各自扩缩，计算节点坏了缓存也不丢（原文：计算节点故障率比存储高一个数量级以上）。</li>
+    <li><b>搬回分三段，只有第一段露在外面</b>：查哈希链定命中长度，要在路由前算完；后台从 3FS 取到主机共享内存；再逐层拷进显存、和前向重叠。最后一段不用 CUDA copy engine（细粒度块拷不快），改用 GDR 让网卡搬，打满 PCIe、不占 SM。3FS 峰值读 10 TiB/s。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>

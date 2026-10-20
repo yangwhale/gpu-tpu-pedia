@@ -140,7 +140,7 @@ __FIG_S13_LADDER__
   另几刀：专家槽轮转；集合通信按 2×2×4 连线手写，换拓扑就得重写；兼做投机验证器。整个 megakernel 从零编译不到 90 s：顺序和重叠由写 kernel 的人一次排好，XLA 不用再去找。</div>
 __FIG_S13_MAP__
   <p><b>拆开不一定更快。</b>PCP8 收尾时吞吐是 DP8 的约 0.89 倍，省的是长 prompt 的首 token 延迟（本课推测，<a href="#s7-2">7.2</a>）；tpu-inference 上拆 PD，每请求要搬约 349 MB（KV 加线性层状态，<a href="#s8-3">8.3</a>），单并发 0.95 倍。一台装得下就先别拆（<a href="#s8-1">8.1</a>）。</p>
-  <p>多副本时，前缀缓存只在本副本有效，KV 感知路由把同前缀的请求送到存着它的副本；SGLang、NVIDIA Dynamo、llm-d、GKE Inference Gateway 都做了。选栈：JetStream 已停止维护；tpu-inference 是 vLLM 的 JAX 后端，SGLang-JAX 是 SGLang 的 JAX 实现。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
+  <p>多副本时，前缀缓存只在本副本有效，KV 感知路由把同前缀的请求送到存着它的副本；SGLang、NVIDIA Dynamo、llm-d、GKE Inference Gateway 都做了。另一条路是 DeepSeek 那样把 KV 放进全集群共享的存储，哪个副本都能命中，路由就不用管前缀（4.4）。选栈：JetStream 已停止维护；tpu-inference 是 vLLM 的 JAX 后端，SGLang-JAX 是 SGLang 的 JAX 实现。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
 
   <p class="landing">⭐ 同一种芯片，刀落在哪取决于 batch：Qwen3.5 并发几百，刀落在通信和形状；K3 只有 1 到 8 条，刀落在 HBM 读写。<b>先看 batch 落在 <a href="#s1-1">1.1</a> 的哪一侧，再决定刀往哪砍。</b>接手一个服务的第一天怎么问，收成第十五节的八问。</p>
 '''

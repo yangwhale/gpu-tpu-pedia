@@ -4007,6 +4007,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>Mooncake Store</b>：集群各机的内存拼成一个 KV 池，按块哈希存取，冷数据可再下放到 SSD；字节走 RDMA（网卡直接读写对方内存，不经 CPU）搬。SGLang HiCache（2025-09）、vLLM（2026-05）都已能接它当后端。</li>
     <li><b>LMCache</b>：接在 vLLM、SGLang 下分层存 KV；论文（2025-10）报多轮问答、文档分析下吞吐最多是单跑 vLLM 的 15 倍；TPU 上的同类工具见 8.2。</li>
     <li><b>SGLang HiCache</b>：2025 年 9 月把分层缓存做进引擎（L1 显存、L2 主机内存、L3 外接存储，如磁盘、远端内存）；官方博客报长上下文和多轮对话基准下吞吐最多 6 倍、首字最多降 80%，没写明对照组。vLLM 0.11 也自带 CPU 下放（OffloadingConnector），两大引擎都有了。</li>
+    <li><b>DeepSeek 反着来，不分层</b>（2026-10 公开的 V4.1-Flash 线上做法）：块 KV 不放本机内存，全落独立的 3FS 存储集群，约 100 PiB SSD；agent 流量留 3 天，chatbot 留 7 天，chatbot 缩到 3 天左右命中率掉 0.5–1%。好处是任何一台 prefill 都能命中任何前缀，不用前缀亲和路由，路由只管负载均衡；存储和计算各自扩缩，计算节点坏了缓存也不丢（原文：计算节点故障率比存储高一个数量级以上）。</li>
+    <li><b>搬回分三段，只有第一段露在外面</b>：查哈希链定命中长度，要在路由前算完；后台从 3FS 取到主机共享内存；再逐层拷进显存、和前向重叠。最后一段不用 CUDA copy engine（细粒度块拷不快），改用 GDR 让网卡搬，打满 PCIe、不占 SM。3FS 峰值读 10 TiB/s。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节只要带走两件事</span>
@@ -7448,6 +7450,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>批必须够大</b>：行数靠总批撑，批小了凑不满车，传的开销照付。SGLang 实测 decode 每卡 32 个 token 时，双微批反而慢 27%。</li>
     <li><b>等最慢的那张卡</b>：DeepSeek 原话，一张卡过载就拖慢整个系统、其余卡空等；热门专家多备几份是 EPLB（6.6）。</li>
     <li><b>爆炸半径大</b>：一个实例上百张卡。Anyscale 指出，一个 DP rank 出故障，整个 DP 组都得下线，最多 128 张卡；TensorRT-LLM 也提醒，没有容错就会抬高线上故障率。</li>
+    <li><b>DeepSeek 怎么扛</b>（V4.1-Flash 线上，decode EP64–128）：不追重启速度，重启照样要几分钟，靠多留配额加请求级重新路由顶住；重启时按剩下健康的卡重定 EP 大小，有几张用几张。缩容也不让整组陪长尾：decode 实例收到下线通知先给 1 分钟宽限，没跑完的请求连同 KV 一次转给别的实例接着算。</li>
     <li><b>两套 kernel 不能混</b>：DeepEP 的常规模式（吞吐优先）和低延迟模式不能在同一个通信组里同时用，SGLang 因此必须 PD 分离；decode 批小、kernel 启动开销显眼，要靠 CUDA Graph，而常规模式用不了它；TensorRT-LLM 也因 DeepEP 并非所有场景都兼容 CUDA Graph，在 GB200 上自写了通信 kernel。</li>
   </ul>
 
@@ -8593,6 +8596,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>14 个</b>：runbook 早期自己扫的，prefill 8 个时每张 decode 卡输出 6,788 tok/s，14 个时 8,809，16 个时 8,993；14 到 16 只涨 2%，已喂饱，于是定为默认（runbook:43、1117）。</li>
   </ul>
   <p>公式定起点，上下扫，取每卡输出不再涨的那一档。</p>
+  <p><b>线上流量一直在变，配比也不能定死。</b>DeepSeek V4.1-Flash 线上让两边各自扩缩：prefill 按没命中缓存的 token 数算要几个实例，相当于把公式里的输入长度换成没命中的那部分；decode 按正在算的请求数算。都设上下界和限速；配额占用高于 0.8 不许缩容，池里另留空闲机器当扩容库存。</p>
 
   <p><b>多一台 prefill，换来的是首字。</b>一份 B200 上的 DeepSeek-V3 报告，在 1P1D（1 台 prefill 配 1 台 decode）上加一台 prefill。</p>
 <figure class="fbox fwide" id="fig-s9-2p1d"><svg viewBox="0 0 1400 550" width="100%" role="img" aria-label="同一组实测，两种看法。DeepSeek-V3 在 B200 上，从 1 台 prefill 加 1 台 decode，变成 2 台 prefill 加 1 台 decode，并发 128。左边按机器看：总输出只从 1,118.8 涨到 1,159.0，多 3.6%；每张卡从 69.9 掉到 48.3，少 31%。右边按用户看：平均首字延迟从 2.40 秒降到 1.73 秒，少 28%；P99 首字延迟从 12.07 秒降到 6.23 秒，少 48%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -11852,6 +11856,15 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>把快照压小</b>：SGLang 的 <code>--enable-int8-mamba-checkpoint</code>（默认关）存 int8，说明写能多缓存约一倍前缀。选 int8 不选 fp8：状态值分布近乎均匀，fp8 的指数位用不上；而且只在命中时还原一次，误差不会在递推里累积。</li>
   </ul>
 
+  <p><b>滑窗还有一条路：不存，缺了只重算尾巴。</b>DeepSeek 2026-10 开源推理框架 DeepInfer，同时公开了 V4.1-Flash 的线上做法。</p>
+  <ul>
+    <li><b>V4 是存下来、精确重算</b>：滑窗 KV 写进持久缓存，没命中就重算「层数 × 窗口」个 token。它占去持久缓存近一半容量，却只在活跃会话里被分钟级复用；块 KV 一段前缀能连着几天被命中。</li>
+    <li><b>V4.1 改成有界重放</b>：滑窗 KV 只留在产出它的那台机器的内存里，线上约 180 秒就换一轮，命中率 98% 以上。被挤掉了，就把命中前缀的最后 128 个 token 和没命中的后缀一起重算，注意力截在重算段里，得到的是<b>近似</b>的滑窗 KV；代价跟上下文多长、有多少层都无关。</li>
+    <li><b>命中长度只看块 KV</b>：块 KV 命中到 L1（128 的倍数）；L1 前那一块里存着滑窗 KV，就命中 L1，没有就退一块，命中 L1 − 128。</li>
+    <li><b>省得最多的是后半段层</b>：原文把层分成 encoder、decoder 两段，decoder 层的块 KV 由 encoder 末层投影得到，只有滑窗 KV 要各层自己算。精确重建要 20 层跑最后 2,560 个 token，改成只算 prompt 末尾 128 个，原文说 prefill 总计算量近乎减半。</li>
+  </ul>
+  <p>跟快照对照：线性层的状态吃下了整段历史，只能存；滑窗只看最近一个窗口，重算有上限，所以可以不存。</p>
+
   <p><b>同一个前提，前面已经撞了四次。</b></p>
   <ul>
     <li><b>前缀复用</b>（<a href="#s4-3">4.3</a>）：tpu-inference 跑 Qwen3.5 得关掉前缀缓存（<code>--no-enable-prefix-caching</code>，<code>tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md:95</code>），否则断言出错；看样子是还没接上这套快照（本课推测）。</li>
@@ -12292,7 +12305,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>看实心点扎堆在哪一列：上表在通信和形状，下表在 HBM 读写。</b><span class="capmore"><br><em>定性归类，点的大小不代表收益；K3 一侧依据 Inferact 公开博客与代码。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Qwen3.5 各刀的机制归类依据私有记录，只取机制不取数。K3 依据 inferact.ai/blog/tpu-megakernels（2026-09-23）与其 Apache-2.0 公开代码 github.com/Inferact/tpu-megakernels。</p>
 <p>「MXFP4 换 FP8」的代价与收益为本课按公开代码推导：专家每元素位数 12.75 → 20.37（三块合计），即 ×1.60；缩放从每 32 个元素一次变成每 256 个一次，向量单元上这部分活约为原来的 1/8。</p></details></figure>
   <p><b>拆开不一定更快。</b>PCP8 收尾时吞吐是 DP8 的约 0.89 倍，省的是长 prompt 的首 token 延迟（本课推测，<a href="#s7-2">7.2</a>）；tpu-inference 上拆 PD，每请求要搬约 349 MB（KV 加线性层状态，<a href="#s8-3">8.3</a>），单并发 0.95 倍。一台装得下就先别拆（<a href="#s8-1">8.1</a>）。</p>
-  <p>多副本时，前缀缓存只在本副本有效，KV 感知路由把同前缀的请求送到存着它的副本；SGLang、NVIDIA Dynamo、llm-d、GKE Inference Gateway 都做了。选栈：JetStream 已停止维护；tpu-inference 是 vLLM 的 JAX 后端，SGLang-JAX 是 SGLang 的 JAX 实现。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
+  <p>多副本时，前缀缓存只在本副本有效，KV 感知路由把同前缀的请求送到存着它的副本；SGLang、NVIDIA Dynamo、llm-d、GKE Inference Gateway 都做了。另一条路是 DeepSeek 那样把 KV 放进全集群共享的存储，哪个副本都能命中，路由就不用管前缀（4.4）。选栈：JetStream 已停止维护；tpu-inference 是 vLLM 的 JAX 后端，SGLang-JAX 是 SGLang 的 JAX 实现。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
 
   <p class="landing">⭐ 同一种芯片，刀落在哪取决于 batch：Qwen3.5 并发几百，刀落在通信和形状；K3 只有 1 到 8 条，刀落在 HBM 读写。<b>先看 batch 落在 <a href="#s1-1">1.1</a> 的哪一侧，再决定刀往哪砍。</b>接手一个服务的第一天怎么问，收成第十五节的八问。</p>
 
@@ -13020,6 +13033,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>R98 补充 · 7.1（L200 试讲回填）：K3 并发 1 每 token TP8 4K 11.1 ms → 128K 12.0 ms，DCP8 15.2 → 15.3 ms；4K 关 symm-mem 的 TP8 15.1 ms，DCP8 起点高约 4 ms 基本是 symm-mem 损失；官方 Peak Capacity（+<code>--dcp-size 8</code>）并发上限 +72%、引擎吞吐不变、ITL ×1.8；TP8 每卡读整份 KV、DCP8 读 1/8；Meta 叫 pass-KV／pass-Q，Helix 叫 KVP</td><td>SGLANG-K3-RUNBOOK.md 宽表 :924（TP8 4K）、:940（TP8 128K）、:928（DCP8 4K）、:941（DCP8 128K）、:929（B-nosymm-noAR 15.1 ms）；:1309（Peak Capacity）；arXiv <a href="https://arxiv.org/abs/2411.01783" target="_blank" rel="noopener">2411.01783</a> §3.4；arXiv <a href="https://arxiv.org/abs/2507.07120" target="_blank" rel="noopener">2507.07120</a>；4 ms 归因与「读 1/8」本课推导</td></tr>
     <tr><td>R98 补充 · 11.3（L200 试讲回填）：DFlash 一块 16 格（LLaMA 3.1 为 10），首格是上一轮确认的字、其余为 mask；草稿 5 层（Qwen3 Coder 为 8），共享并冻结 embedding 与 LM head；目标模型 5 层隐状态拼接投影后注入每层草稿 KV；块内双向注意力、单次前向；训练随机采 anchor 位置、盖住后续格</td><td>arXiv <a href="https://arxiv.org/abs/2602.06036" target="_blank" rel="noopener">2602.06036</a> §4、§5</td></tr>
     <tr><td>R99 补充 · 0.1 时间轴：去掉右端「GB300 × V4-Pro」菱形（结果不是招数），5.1× 挪到图下折叠表说明；补模型侧 ⑫ 线性注意力混合（2025-09 起，到 2026）、⑬ 循环模型（2026-10）。两点按进入主流大模型的时间放，思路更早</td><td>Qwen3-Next 博客 2025-09-10、vLLM 博客 2025-09-11（「Gated DeltaNet (linear attention)」）；Koi-4B 见 R86 行；Dory 4B 见 R86 行；更早：H3 arXiv <a href="https://arxiv.org/abs/2212.14052" target="_blank" rel="noopener">2212.14052</a>、Jamba arXiv <a href="https://arxiv.org/abs/2403.19887" target="_blank" rel="noopener">2403.19887</a>、Universal Transformers arXiv <a href="https://arxiv.org/abs/1807.03819" target="_blank" rel="noopener">1807.03819</a></td></tr>
+    <tr><td>R100 补充 · 13.2 SWA Bounded Replay：V4 滑窗 KV 落盘、未命中重算「层数 × 窗口」、占持久缓存近一半；V4.1 滑窗 KV 只留产出机内存，TTL 约 180 s、命中率 98% 以上；回放命中前缀末 128 token、注意力截在回放段内、得近似滑窗 KV；命中长度 L1 或 L1 − 128；decoder 精确重建 20 层 × 2,560 token → prompt 末 128，prefill 总计算量近乎减半</td><td>知乎专栏 DeepSeek「DeepSeek V4.1 Flash 大规模推理部署实践」（zhuanlan.zhihu.com/p/2095560295930508953，2026-10-20）（「只重算最近 128 个 token，并把注意力窗口截断在重算段内」「重算得到近似的 SWA KVCache」「总 prefill 计算量近乎减半」）；github.com/deepseek-ai/DeepInfer README（Decoder SWA bounded replay，默认 DEEPINFER_YOCO_PREFILL_KEEP_TOKENS=140，须覆盖窗口＋最大回退；文中 ring 为 128＋6＝134）。2026-10-20 核对</td></tr>
+    <tr><td>R100 补充 · 4.4 不分层：块 KV 全落独立 3FS 集群、约 100 PiB SSD；TTL agent 3 天、chatbot 7 天，chatbot 3 天左右命中率掉 0.5%–1%；不做前缀亲和路由；计算节点故障率比存储高一个数量级以上；命中三段只有哈希链匹配在关键路径；换入用 GDR、不占 SM；峰值读 10 TiB/s、写约 850 GiB/s</td><td>知乎专栏 DeepSeek「DeepSeek V4.1 Flash 大规模推理部署实践」（zhuanlan.zhihu.com/p/2095560295930508953，2026-10-20）（「相比多级存储系统，独立的存储集群使得所有 prefill 机器能命中任何前缀」「计算节点故障率比存储高数量级以上」）。KV 系统未开源（github.com/deepseek-ai/DeepInfer README「not included in this release」）。2026-10-20 核对</td></tr>
+    <tr><td>R100 补充 · 6.4 容错：decode EP64–128；重启分钟级，靠配额冗余＋请求级重新路由；按健康卡数重定 EP；下线宽限 1 min 后剩余请求连 KV 转发。9.1 扩缩：prefill 按未命中 token 数、decode 按在算请求数，有上下界与限速，配额占用 ＞ 0.8 禁止缩容，留 ready 机器作库存。14.3 共享存储免前缀路由</td><td>知乎专栏 DeepSeek「DeepSeek V4.1 Flash 大规模推理部署实践」（zhuanlan.zhihu.com/p/2095560295930508953，2026-10-20）「自动扩缩容」节（「平台按当前健康的所有卡重新确定EP大小」「宽限期（1 min）」「配额占用率高于 0.8 时禁止缩容」）。2026-10-20 核对</td></tr>
 </table></div>
   </details>
 </div></section>

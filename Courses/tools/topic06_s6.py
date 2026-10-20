@@ -79,6 +79,7 @@ __FIG_S6_BIGEP_NET__
     <li><b>批必须够大</b>：行数靠总批撑，批小了凑不满车，传的开销照付。SGLang 实测 decode 每卡 32 个 token 时，双微批反而慢 27%。</li>
     <li><b>等最慢的那张卡</b>：DeepSeek 原话，一张卡过载就拖慢整个系统、其余卡空等；热门专家多备几份是 EPLB（6.6）。</li>
     <li><b>爆炸半径大</b>：一个实例上百张卡。Anyscale 指出，一个 DP rank 出故障，整个 DP 组都得下线，最多 128 张卡；TensorRT-LLM 也提醒，没有容错就会抬高线上故障率。</li>
+    <li><b>DeepSeek 怎么扛</b>（V4.1-Flash 线上，decode EP64–128）：不追重启速度，重启照样要几分钟，靠多留配额加请求级重新路由顶住；重启时按剩下健康的卡重定 EP 大小，有几张用几张。缩容也不让整组陪长尾：decode 实例收到下线通知先给 1 分钟宽限，没跑完的请求连同 KV 一次转给别的实例接着算。</li>
     <li><b>两套 kernel 不能混</b>：DeepEP 的常规模式（吞吐优先）和低延迟模式不能在同一个通信组里同时用，SGLang 因此必须 PD 分离；decode 批小、kernel 启动开销显眼，要靠 CUDA Graph，而常规模式用不了它；TensorRT-LLM 也因 DeepEP 并非所有场景都兼容 CUDA Graph，在 GB200 上自写了通信 kernel。</li>
   </ul>
 
