@@ -2235,10 +2235,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>三个 token 的小算例：左下打叉，右下打勾。</b><span class="capmore"><br><em>像合并两个班的平均分，要带上各班人数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 讲法：Ring Attention（Liu 等，arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>）附录实现按分子、分母分别累加；分块 softmax 的数值稳定写法见 FlashAttention（arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>）。</p>
 <p>⚠️ 本课示例：数字是随手取的，按定义现算并断言。</p></details></figure>
 
-  <h3 id="l5-3">所以呢：一个不加卡，一个要加卡</h3>
+  <h3 id="l5-3">所以呢：同样切八份，买到的不一样</h3>
   <ul>
-    <li><b>DCP 不加卡，两样都给</b>：装得下，V3 一个 128K 请求每卡从一整份 8.58 GiB 降到 1.07 GiB；每步也只读自己那段笔记，TP 下八张卡各读一遍同一份的重复读去掉了。<b>代价是每层多一轮通信</b>，读笔记占比够大才净赚。</li>
-    <li><b>PCP 买的是首字早出来</b>，要加卡。Meta 用 128 张 H100 给 Llama3 405B 做 prefill，100 万 token 77 秒；可 1 到 8 台翻倍约减半，8 到 16 台只降约 35%（本课按原文两个数算）。</li>
+    <li><b>DCP：写字卡在搬，切开两样都给</b>：装得下，V3 一个 128K 请求每卡从一整份 8.58 GiB 降到 1.07 GiB；每步也只读自己那段笔记，TP 下八张卡各读一遍同一份的重复读去掉了。<b>代价是每层多一轮通信</b>，读笔记占比够大才净赚。</li>
+    <li><b>PCP：读题卡在算，切开买的是首字早出来。</b>Meta 用 128 张 H100 给 Llama3 405B 做 prefill，100 万 token 77 秒；可 1 到 8 台翻倍约减半，8 到 16 台只降约 35%（本课按原文两个数算）。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s7-kv-dup-t5"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="一个 128K 上下文的请求，DeepSeek-V3 的 KV cache 有多大、TP 和 DCP 各让每张卡存多少。每个 token 的 KV 是 70272 字节，128K 也就是 131072 个 token，就是约 8.58 GiB。TP 8 路时，MLA 的 KV 只有一个头，切不开，8 张卡每张都存完整的 8.58 GiB，一共 8 份一模一样的。DCP 8 路时，KV 按 token 轮流存到 8 张卡上，每张卡只存约 1.07 GiB"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">推理时切序列：KV cache 被 TP 复制了几份　——　<tspan font-weight="700">DCP 把复制变回容量</tspan></text>
@@ -2387,7 +2387,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>谁小搬谁。PCP 搬笔记、不用跨卡拼、要加卡，买首字；DCP 搬提问、终点要拼、不加卡，省显存也分摊读笔记，扣掉每层通信，长上下文才净赚。</b><br>
+    <b>谁小搬谁。两招都是一切八份：PCP 搬笔记、不用跨卡拼，读题卡在算，切开买首字；DCP 搬提问、终点要拼，写字卡在搬，切开买容量、也少读笔记，扣掉每层通信，长上下文才净赚。</b><br>
     这一步进步多少：K3、GB300、SGLang、TP8 跨两台机器、128K 输入 1K 输出、并发 8，DCP8 对调过参的 TP8，输出吞吐 108 → 365 tok/s，多出 237%。短输入时它是亏的。<br>
     可 prefill 和 decode 还挤在同一批卡上，人越多，一个长 prompt 进门耽误的人越多。下一节：PD 分离多搬一趟 KV，凭什么接的人更多？<br>
     <em>想深挖：完整版第七节。</em></div>
