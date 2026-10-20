@@ -2404,9 +2404,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
        aria-label="动画：上下两组时间轴，一格是一步 decode 的时间。上组是混部，下组是 PD 分离。前 4 步两组一样，请求 A、B、C 每步各出一个字。接着来了一个长 prompt，橙色 prefill 占了 5 格：上组它占住整台机器，A、B、C 这 5 格一个字都没出，被红框圈出；下组它在 prefill 机上算，decode 机照常每步出字。算完后下组一支紫色箭头「传 KV」从 prefill 机指向 decode 机，新请求下一步加入 decode 批。结尾：拆开后字距始终均匀，代价是多一批机器、每个请求多传一趟 KV。"></video>
 <figcaption><b>先看上组的红框，再看下组那支紫箭头：一个是整批人在等，一个是多搬一趟。</b>
   <span class="sub">（22 秒无声循环，Manim 渲染。时间格只表相对长短，不是实测毫秒；传 KV 画得比 prefill 短，量级见下文。）</span></figcaption></figure>
-  <div class="note info"><span class="t">一个厨房，两口锅的活</span>
-    毛病不在一趟搬多少，在两种活抢同一个灶。prefill 像炒一锅大菜，整段 prompt 一次下锅；decode 像一碗一碗出单，一次多出几碗才划算。大锅菜一下锅，出单的全停。<br>
-    <b>拆开就是两个灶，中间把炒好的半成品（KV）端过去一趟。</b></div>
+  <div class="note info"><span class="t">一个厨房：备菜和出菜</span>
+    毛病不在一趟搬多少，在两种活抢同一个灶台。prefill 是备菜，整段 prompt 一次备完；decode 是出菜，一盘一盘往外端，一次多端几盘才划算。突然来一桌大单、一大堆菜要备，出菜全停。<br>
+    <b>拆开就是两个灶台，备好的料（KV）递过去一趟。</b></div>
   <ul>
     <li><b>分块 prefill 只是摊平。</b>长 prompt 切几段夹进去，每步少等一点，两种活还在抢同一批卡。</li>
     <li><b>拆开不改 decode 每一趟搬多少。</b>只保证这一趟不被打断，才敢把批攒满。</li>
