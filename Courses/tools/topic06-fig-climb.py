@@ -10,7 +10,7 @@ r"""专题六 · 第十四节开头的「TPU 跟 GPU 哪里不一样」对照图
   · TPU 一列：XLA 按静态形状整图编译、档外现编 60–90 s（tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md）；
     Ironwood 64 颗 ICI 3D 环面、每颗 6 邻居、公开推理走 all-gather ＋ reduce-scatter（6.4）；
     每个 TensorCore 64 MiB VMEM、SMEM 1 MiB、显存按 tile 存窄维补整块（5.1、14.2）；v7 公开规格只列 BF16、FP8（12.1）。
-  · 右列：本节 14.2 的做法，出自 vLLM 的 PyTorch TPU 后端（写作时尚未公开）。
+  · 右列：本节 14.2 的做法，出自 vLLM-TorchTPU（github.com/vllm-project/vllm-torchtpu，2026-10-20 公布），PR 号见 14.2、14.3 正文。
 
 刻意没画
   · 不画吞吐数：收益在 14.3 的梯子图。
@@ -70,7 +70,7 @@ def fig_diff():
     yb = f.src(py + PH + 10,
                "GPU 栏：本专题 5.1、6.4、12.1、12.3；TPU 栏：tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/README.md（60–90 s）、"
                "Google Cloud 博客「Inside the Ironwood TPU codesigned AI stack」、本专题 5.1、6.4、12.1。",
-               "右栏：vLLM 的 PyTorch TPU 后端（写作时尚未公开），做法详见 14.2。")
+               "右栏：vLLM-TorchTPU（vllm-project/vllm-torchtpu，2026-10-20 开源），做法与 PR 号详见 14.2。")
     f.save("fig6-s14-diff.svg", yb + 14)
 
 

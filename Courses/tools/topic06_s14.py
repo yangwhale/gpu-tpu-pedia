@@ -2,13 +2,13 @@
 """专题六 · 第十四节「落地：把 Qwen3.5-397B 在 TPU 上跑起来」（深讲，不计入总时长）。
 
 三块：TPU 跟 GPU 哪里不一样 → 这个模型落到 TPU 要特殊处理哪几处 → 怎么跑快。
-主线是一台 v7x-8 上、vLLM 的 PyTorch TPU 后端（写作时尚未公开），
+主线是一台 v7x-8 上的 vLLM-TorchTPU（2026-10-20 随 TorchTPU 一起开源），每一刀注公开 PR 号，
 数字一律以起点那天 ＝ 1.00 指数化；Kimi K3 做两处对照。
 每一条都按「打个比方 → 机制 → 不这么做要付多少 → 为什么快」讲透。只讲做法，不讲排障。
 """
 
 BODY = '''
-  <p class="lead">前面十三节的招数，这一节落到一个模型、一种芯片上。主线是 Qwen3.5-397B（FP8）在一台 v7x-8 上：4 颗芯片、8 个 TensorCore；60 层里 45 层线性注意力（GDN）、15 层全注意力，每层 512 个专家选 10 个。栈是 vLLM 的 PyTorch TPU 后端，写作时尚未公开，倍数以起点那天 ＝ 1。<b>三个问题：TPU 跟 GPU 哪里不一样，这个模型哪几处要特殊处理，怎么跑快。</b></p>
+  <p class="lead">前面十三节的招数，这一节落到一个模型、一种芯片上。主线是 Qwen3.5-397B（FP8）在一台 v7x-8 上：4 颗芯片、8 个 TensorCore；60 层里 45 层线性注意力（GDN）、15 层全注意力，每层 512 个专家选 10 个。栈是 vLLM-TorchTPU：<a href="https://github.com/google-pytorch/torch_tpu">TorchTPU</a> 让 PyTorch 原生跑在 TPU 上，<a href="https://github.com/vllm-project/vllm-torchtpu">vLLM-TorchTPU</a> 是 vLLM 在它上面的后端，连同 <a href="https://github.com/sgl-project/sglang-torchtpu">SGLang-TorchTPU</a> 在 2026-10-20 一起公布。下面每一刀都注上公开 PR 号；梯子上的倍数仍以起点那天 ＝ 1，PR 正文里的绝对数各有各的测法，单独标出。<b>三个问题：TPU 跟 GPU 哪里不一样，这个模型哪几处要特殊处理，怎么跑快。</b></p>
 __FIG_S14_DIFF__
 
   <h3 id="s14-1">14.1　TPU 跟 GPU 哪里不一样</h3>
@@ -28,6 +28,7 @@ __FIG_S13_BUCKET__
     <li><b>怎么分</b>：档位分给不同 rank 编，产物经图指纹校验，其余 rank 直接加载。</li>
     <li><b>前提</b>：同一形状只能编出同一张图，图里不能混进各 rank 不同的东西。一篇公开工程博客在 Hy4 上连同几项改动：把 64 token 的分块循环改成 <code>fori_loop</code>，不在追踪时展开；把 attention sink 的闭包常量改成运行时输入。</li>
     <li><b>效果</b>：Hy4（TP16）冷编译 95.1 分钟 → 约 14 分钟；放宽到跨 DP 组回放，Qwen3.5 DP8 从权重加载完到可服务 741 s → 270 s。</li>
+    <li><b>vLLM-TorchTPU 的写法</b>：同一台主机里按桶分给各 rank、最大的桶先编，别的 rank 核对图指纹后直接回放，不再各自追踪一遍（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/1810">#1810</a>，已合入）；跨 DP 组回放还在评审（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/1708">#1708</a>）。</li>
   </ul>
   <p>所以凡是随 rank 变的值，rank 号、每卡自己的常量，都不进图，改成运行时输入或在组内用一次通信取到；图只剩一张，回放才成立。</p>
 
@@ -48,6 +49,7 @@ __FIG_S13_BUCKET__
     <li><b>边算边进货。</b>工作台留两个槽，一个在算，另一个装下一块，正是 5.1 动画里 RPA 的做法。</li>
     <li><b>台面按段借。</b>Pallas 的 <code>run_scoped</code> 让一段小 kernel 声明自己要多大一块 VMEM，用完归还；14.3 的 K3 就靠它分时复用。</li>
   </ul>
+  <p><b>PyTorch 栈怎么用上 Pallas。</b>模型代码是 PyTorch；Pallas kernel 照旧用 JAX 写，经 <code>jax.export</code> 导出、包成一个 torch 算子，TorchTPU 再把导出的模块交给 XLA 编译（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/543">#543</a> 正文）。所以下面几刀手写 kernel，在 PyTorch 栈里一样能用。</p>
   <p><b>布局按 tile 存。</b>显存里一块默认 tile 是 8 × 128 个 32 位格子，4,096 字节（<a href="#s5-1">5.1</a>）。最内两维都要补齐，窄维落在那里就补出一片空位。一个 32 位格子能装 2 个 BF16 或 4 个 FP8，FP8 的次内层因此补到 32 行。</p>
   <p><b>算一个补齐的例子（本课推导）。</b>TP2 后每个 rank 1 个 KV 头，head_dim 256。RPA 把 K 和 V 沿头维并成一个打包维，每 token 每层这一维只有 2 个数，摆进 32 位格子：</p>
   <ul>
@@ -70,6 +72,7 @@ __FIG_S13_BUCKET__
     <li><b>MoE 按专家切</b>：512 个专家每 device 64 个。all-gather 让每个 device 拿到全部 token，各自只算落到本地专家的那部分，再 reduce-scatter 把结果加回各自的请求。</li>
     <li><b>代价</b>：每个 device 要放下全部 8 份 token，比 all-to-all 多占本地内存；博客认这笔账，换延迟可预测。</li>
   </ul>
+  <p><b>切法跟着并发换。</b>公开的参考配方（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/989">#989</a>）：并发 4–32 注意力用 TP8，64–1,024 用 DP8，MoE 全程 EP8。并发 32 换成 DP4×TP2，吞吐低 2.65%、TPOT 短 17.9%（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/384">#384</a>），省的是每个字的延迟。</p>
 
   <p><b>缓存：KV 和线性层状态共用一个池。</b>KV 随上下文变长，GDN 状态每条序列一份、大小固定，约 183 MiB，顶约 6,250 个 token 的 KV（<a href="#s13-2">13.2</a>）。两者的比例随请求长度大起大落（本课推导）：</p>
   <ul>
@@ -77,7 +80,7 @@ __FIG_S13_BUCKET__
     <li><b>64K 的请求</b>：状态只占约 9%，大头是 KV。</li>
   </ul>
   <p><b>分两个池，总有一个闲着。</b>像分开的小车位和大巴位：按 64K 流量把状态池定在一成，换成 1K 流量时，状态池先满，能接的请求数被它卡住，KV 池约九成八空着（本课推导：1K 请求的 KV 约 30 MiB，0.09 ÷ 183 × 30 ≈ 0.015，对 0.91）。反过来也一样。</p>
-  <p><b>统一池：车位可互换。</b>两种东西共用可互换的页、按需领取，前缀缓存也走这个池。公开博客的说法是把两种状态对齐后放在一起存，少补齐、不碎片。13.2 讲过两种栈各自的写法：SGLang 两个池加比例旋钮和弹性池，vLLM 一个管理器、一种页。</p>
+  <p><b>统一池：车位可互换。</b>两种东西共用可互换的页、按需领取，前缀缓存也走这个池。公开博客的说法是把两种状态对齐后放在一起存，少补齐、不碎片。vLLM-TorchTPU 里先在 PD 分离配置上启用（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/106">#106</a>），再改成默认（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/170">#170</a>）。13.2 讲过两种栈各自的写法：SGLang 两个池加比例旋钮和弹性池，vLLM 一个管理器、一种页。</p>
 
   <p><b>GDN 状态：换视图，不搬数据。</b>GDN kernel 按 tile 算，要的是按头排好的 128 × 128 状态方阵；池里的页按统一池的格式存，两者布局不一样。</p>
   <ul>
@@ -91,18 +94,21 @@ __FIG_S13_BUCKET__
     <li><b>头与头不相干</b>：GDN 每个头有自己的一块状态，各扫各的。Qwen3.5 的 GDN 有 64 个 V 头、16 个 QK 头，head_dim 128（公开博客）。</li>
     <li><b>按头切</b>：像接力赛改成每人在自己的跑道上跑全程。进线性层前交换一次，从「每人一段 token、全部头」换成「每人全部 token、64 ÷ 8 ＝ 8 个 V 头」（本课推导），扫完再换回去。</li>
     <li><b>代价</b>：每个线性层多两次交换；切的份数不能超过头数，64 个头够切 8 份。</li>
+    <li><b>对应提交</b>：<a href="https://github.com/vllm-project/vllm-torchtpu/pull/65">#65</a> 把 GDN 状态按 PCP 切成每个 rank 本地一份，不再每个 rank 存全量；<a href="https://github.com/vllm-project/vllm-torchtpu/pull/129">#129</a> 把进出线性层的交换改成 all-to-all。</li>
   </ul>
 
   <p><b>KV：序列维放最内层。</b>上面那个补齐例子就是这一条：头维打包时，FP8 页跟 BF16 页一样大。KV 存 FP8 的本意是让每 token 的字节减半，序列维放到最内层后才兑现（<a href="#s5-1">5.1</a>）。</p>
   <ul>
     <li><b>不这么做</b>：FP8 KV 的页跟 BF16 一样大，池子一个 token 也没多装。</li>
     <li><b>这么做之后</b>：KV 那部分页能多装约一倍的 token（本课推导：1,024 ÷ 512 字节）。</li>
+    <li><b>对应提交</b>：从 tpu-inference 移植这种布局（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/504">#504</a>），再接进统一池（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/608">#608</a>）。</li>
     <li>线性层状态则用 BF16 存、计算时升回 FP32，见 14.3。</li>
   </ul>
 
   <p><b>MoE：整层一个 Pallas 程序。</b>MoE 占 prefill 约八成时间，XLA 又不把 reduce-scatter 藏到矩阵乘后面。写成一个 Pallas 程序后，kernel 自己选专家、把每行推给持有它的 rank，通信藏到矩阵乘后面。</p>
   <ul>
     <li><b>像流水线</b>：一箱货装好就发车，不等整车装满。算完一批行，立刻发起送往目标 rank 的异步传输，接着算下一批；最后统一等传输落地。</li>
+    <li><b>做法出处</b>：<a href="https://github.com/vllm-project/vllm-torchtpu/pull/543">#543</a>。一个程序替掉每层原来的路由排序、两次 argsort、SparseCore 重排、两次分组矩阵乘、合并和两次集合通信。</li>
     <li><b>路由表放 SMEM</b>：kernel 每发一行都要查「这行归谁、加权多少」，查表用的是标量，所以表放便签本 SMEM。它只有 1 MiB，是 VMEM 的 1/64（本课推导），token 一多装不下，就按窗口分批流进去。</li>
   </ul>
   <div class="note"><span class="t">K3 对照①</span>K3 的部署手册写明：69 层 KDA 的状态池，DP、EP、DCP 都不切它（DCP 只按 token 位置切 MLA 的 KV）。DEP8 下每个 rank 要存一整池 KDA 状态，装不下，所以 K3 用 TP：TP 把头分到各 rank，状态跟着头一起切小（<a href="#s6-1">6.1</a>）。Qwen3.5 的统一池随 DP 切，DP=8 实测跑通。</div>
@@ -115,9 +121,11 @@ __FIG_S13_LADDER__
   <ul>
     <li>SparseCore 是专为间接寻址做的单元：按路由表直接从 HBM 把 token 收拢到一块连续缓冲区，再就地按目的地累加。</li>
     <li>补齐的中间张量不再落进 HBM，原文的读 20 → 10、写 15 → 5（原文未写单位）。</li>
+    <li><b>对应提交</b>：<a href="https://github.com/vllm-project/vllm-torchtpu/pull/317">#317</a>，按目的地分工：每个 SparseCore 管连续 64 个 token，部分和攒在 VMEM 里，一块攒满再整块写回。PR 的单层 profile 里合并 −39.7%、整个 MoE 流程 −13.8%，跟上面的 ×1.06 不是一个测法。</li>
   </ul>
-  <p><b>第二刀，通信切块（×1.09）。</b>reduce-scatter 原本要等整块 [81920, 4096] 都累加完才出发；81920 就是 8 个 rank × 1,024 个 token × 选 10 个专家（本课推导）。切成 4 块，第 1 块在 SparseCore 上累加完就先发。可 XLA 排出来，通信仍没跟计算叠上。</p>
+  <p><b>第二刀，通信切块（×1.09）。</b>reduce-scatter 原本要等整块 [81920, 4096] 都累加完才出发；81920 就是 8 个 rank × 1,024 个 token × 选 10 个专家（本课推导）。切成 4 块，第 1 块在 SparseCore 上累加完就先发。可 XLA 排出来，通信仍没跟计算叠上（分段流水见 <a href="https://github.com/vllm-project/vllm-torchtpu/pull/529">#529</a>）。</p>
   <p><b>第三刀，整层融合（×1.26）。</b>整层融合是最大一级：改前 reduce-scatter 约占两成时间，切了块也没东西和它重叠，融合后才藏到矩阵乘后面。</p>
+  <p><a href="https://github.com/vllm-project/vllm-torchtpu/pull/543">#543</a> 量到的是：DP8＋EP、并发 256 时，reduce-scatter 每个 MoE 层 1,190 µs、占全部设备时间 22%，完全露在外面；同样 134 MB 的 all-gather 因为叠上了，只要 36 µs。PR 里端到端 A/B（并发 128，8K 入 1K 出）吞吐 10,614 → 21,297 tok/s，跟梯子上的 ×1.26 测法不同，不能直接比。</p>
   <ul>
     <li><b>上限对得上</b>：两成时间若全藏掉，最多快 1 ÷ 0.8 ＝ 1.25 倍；这一刀 ×1.26，量级正是把那两成藏干净（本课推导；两成是取整，只能说量级吻合）。</li>
     <li><b>reduce-scatter 本身也手写</b>：先在同一颗芯片的两个 TensorCore 之间用片内共享内存加一轮，原文说它比芯片间 ICI 快 6 倍；再在芯片之间按递归倍增交换。数据切成 2–4 个微批，免得撑爆 VMEM。</li>
@@ -127,8 +135,8 @@ __FIG_S13_LADDER__
   <p><b>decode 三刀，砍布局和小 batch</b>：decode 每步要把权重、KV 和状态各过一遍，卡的是 HBM 带宽，三刀都在少搬字节。</p>
   <ul>
     <li><b>KV 序列维放最内层</b>（14.2）：每 token 每层的 KV 从 1,024 字节变成 512，每步读 KV 的量减半（本课推导）。</li>
-    <li><b>小 batch 的 MoE 不排序</b>：每个专家只分到几行，排序分组那几趟收拢、散开就不划算了；所有 token 过一遍、没选中的乘 0，每个被选中的专家只读一次，daily 涨约一成二（<a href="#s5-2">5.2</a>）。</li>
-    <li><b>线性层状态存 BF16</b>：状态每步每条都要读写一遍，字节减半；公开博客说向量单元的吞吐翻倍。省下的显存让 KV 池多装约一成二，同时在跑的请求 208 → 232，精度验收还没收尾。</li>
+    <li><b>小 batch 的 MoE 不排序</b>：每个专家只分到几行，排序分组那几趟收拢、散开就不划算了；所有 token 过一遍、没选中的乘 0，每个被选中的专家只读一次，daily 涨约一成二（<a href="#s5-2">5.2</a>）。公开仓库里的同类做法：小 batch 改走 one-hot 换排（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/371">#371</a>，<a href="https://github.com/vllm-project/vllm-torchtpu/pull/509">#509</a> 修正后重新合入），以及一次调用流式读完活跃专家的小 batch kernel（<a href="https://github.com/vllm-project/vllm-torchtpu/pull/1678">#1678</a>）。</li>
+    <li><b>线性层状态存 BF16</b>：状态每步每条都要读写一遍，字节减半；公开博客说向量单元的吞吐翻倍。省下的显存让 KV 池多装约一成二，同时在跑的请求 208 → 232，精度验收还没收尾。对应 <a href="https://github.com/vllm-project/vllm-torchtpu/pull/1458">#1458</a>：DP4×TP2 decode 上 KV 池 +12.2%，吞吐 5,343 → 5,828 tok/s（+9.1%）；参考配方 <a href="https://github.com/vllm-project/vllm-torchtpu/pull/989">#989</a> 也写明 BF16 状态可能影响长生成质量，要按负载验。</li>
   </ul>
   <div class="note"><span class="t">K3 对照②</span>K3 只追 1 到 8 条，一步几乎全在读权重，按 config 推一个 token 读约 158 GB（本课推导，<a href="#s1-1">1.1</a>）。Inferact 把 92 个 MoE 层装进一次 Pallas 调用，不分 grid，跑在 16 颗 v7 上。挑三刀：
   <ul>
@@ -140,7 +148,7 @@ __FIG_S13_LADDER__
   另几刀：专家槽轮转；集合通信按 2×2×4 连线手写，换拓扑就得重写；兼做投机验证器。整个 megakernel 从零编译不到 90 s：顺序和重叠由写 kernel 的人一次排好，XLA 不用再去找。</div>
 __FIG_S13_MAP__
   <p><b>拆开不一定更快。</b>PCP8 收尾时吞吐是 DP8 的约 0.89 倍，省的是长 prompt 的首 token 延迟（本课推测，<a href="#s7-2">7.2</a>）；tpu-inference 上拆 PD，每请求要搬约 349 MB（KV 加线性层状态，<a href="#s8-3">8.3</a>），单并发 0.95 倍。一台装得下就先别拆（<a href="#s8-1">8.1</a>）。</p>
-  <p>多副本时，前缀缓存只在本副本有效，KV 感知路由把同前缀的请求送到存着它的副本；SGLang、NVIDIA Dynamo、llm-d、GKE Inference Gateway 都做了。另一条路是 DeepSeek 那样把 KV 放进全集群共享的存储，哪个副本都能命中，路由就不用管前缀（4.4）。选栈：JetStream 已停止维护；tpu-inference 是 vLLM 的 JAX 后端，SGLang-JAX 是 SGLang 的 JAX 实现。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
+  <p>多副本时，前缀缓存只在本副本有效，KV 感知路由把同前缀的请求送到存着它的副本；SGLang、NVIDIA Dynamo、llm-d、GKE Inference Gateway 都做了。另一条路是 DeepSeek 那样把 KV 放进全集群共享的存储，哪个副本都能命中，路由就不用管前缀（4.4）。选栈：JetStream 已停止维护；tpu-inference 是 vLLM 的 JAX 后端，SGLang-JAX 是 SGLang 的 JAX 实现；PyTorch 一侧有 vLLM-TorchTPU 和 SGLang-TorchTPU，本节主线是前者。先看模型在不在支持列表里，再看第十节的拓扑搭不搭得出来。</p>
 
   <p class="landing">⭐ 同一种芯片，刀落在哪取决于 batch：Qwen3.5 并发几百，刀落在通信和形状；K3 只有 1 到 8 条，刀落在 HBM 读写。<b>先看 batch 落在 <a href="#s1-1">1.1</a> 的哪一侧，再决定刀往哪砍。</b>接手一个服务的第一天怎么问，收成第十五节的八问。</p>
 '''
@@ -151,7 +159,7 @@ FIGS = {
     "__FIG_S13_BUCKET__": ("fig-s13-bucket", "fig6-s13-bucket.svg", "topic06-fig-serve.py",
         '<b>比绿条和第一根橙条：桶更少，浪费也更少。</b><br><em>本课推导示意：每步整批 token 总数取对数正态，非真实流量；浪费 ＝ 补零 token ÷ 实算 token。</em>'),
     "__FIG_S13_LADDER__": ("fig-s13-ladder", "fig6-s13-ladder.svg", "topic06-fig-landing.py",
-        '<b>看绿柱比左右两根高出多少：通信藏到矩阵乘后面，是一次就顶前两刀加起来的一级。</b><br><em>本课据私有实测指数化，起点那天 ＝ 1.00；只画 prefill，decode 中途换过口径，连不成一条梯子。</em>'),
+        '<b>看绿柱比左右两根高出多少：通信藏到矩阵乘后面，是一次就顶前两刀加起来的一级。</b><br><em>本课据未公开的实测指数化，起点那天 ＝ 1.00，四刀的公开 PR 见正文；只画 prefill，decode 中途换过口径，连不成一条梯子。</em>'),
     "__FIG_S13_MAP__": ("fig-s13-map", "fig6-s13-map.svg", "topic06-fig-landing.py",
         '<b>看实心点扎堆在哪一列：上表在通信和形状，下表在 HBM 读写。</b><br><em>定性归类，点的大小不代表收益；K3 一侧依据 Inferact 公开博客与代码。</em>'),
 }
