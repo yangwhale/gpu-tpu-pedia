@@ -69,6 +69,10 @@ head += """
 .animgrid figure { margin:0; min-width:0 }
 .animcell figcaption { font-size:14px; color:var(--gray); margin-top:6px; line-height:1.6 }
 .animgrid video { width:100%; border-radius:8px; display:block }
+/* 2026-10-20：fwide 里的动画视频原生只有 960 宽，figure 却有 1760 宽，video 没设宽度就全贴左边。
+   跟专题六同一条：居中、最宽 1240（fbox 投影宽），图注收进同一框跟视频左边缘对齐。 */
+figure.fwide > video { display:block; width:100%; max-width:1240px; margin:0 auto; border-radius:8px }
+figure.fwide:has(> video) > figcaption { max-width:1240px; margin-left:auto; margin-right:auto }
 @media (max-width:900px) { .animgrid { grid-template-columns:1fr } }
 .lecbtn { display:inline-block; margin-left:14px; font-size:13px; padding:4px 12px; border-radius:14px;
           background:#fff; border:1px solid var(--line); color:var(--blue); text-decoration:none }
