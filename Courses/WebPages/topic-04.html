@@ -709,6 +709,27 @@ nav.famnav .here em{color:#174ea6}
 #qz .qzans{margin-top:14px;border-top:1px dashed #dadce0;padding-top:12px}
 #qz .qzans li{margin:7px 0}
 @media(max-width:760px){#qz .qzwrap{grid-template-columns:1fr 60px 1fr}}
+/* ⭐ 2026-10-20 手机版（中文原稿问题清单第三组）：390 下原来还是三列 ＋ 色条不换行，
+   把整页撑到约 686px，右列被切。⛔ 只给色条加换行不够（英文版试过：仍 458px、版式更乱）。
+   ⭐ 改成上下两块：上面四个模型、下面四条构成，都左对齐竖排，色条可以折行；
+     两块左边共用一条 40px 的沟给连线走（线怎么走见 JS 里的 stacked 分支）。 */
+@media(max-width:600px){
+  #qz .qzwrap{grid-template-columns:minmax(0,1fr);row-gap:22px}
+  #qz .qzL{grid-column:1;grid-row:1;justify-items:start;padding-left:40px;gap:10px!important}
+  #qz .qzR{grid-column:1;grid-row:2;justify-items:stretch;padding-left:40px;gap:10px!important}
+  #qz .chip{white-space:normal}
+  #qz .cy{white-space:normal}
+}
+
+/* ── 窄屏（course_narrow_css.py，2026-10-20）──────────────────────────
+   ① 正文表格在自己框里横向滚动，不再把整页撑宽（跟英文版同一条）。
+   ② 节标题那一行是 flex：录音条（.lecmedia，最小 280px）挤在徽章和标题后面会把页面撑出去，
+      窄屏下让它另起一行、占满整行。
+   ③ 手机上表格已经能在框里横滑了，就别再把格子压扁：公式（td 里的 code）一折就是逐字断行
+      （专题四 1.3 形状表每行约 400px 高），数值列「7.32 TiB」折成两行 —— 这两类不折行。 */
+@media(max-width:1000px){main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}
+@media(max-width:600px){.stn{flex-wrap:wrap}.stn .lecmedia{flex:1 1 100%;min-width:0}
+  td code,td.num{white-space:nowrap}}
 </style>
 <style>
 ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
@@ -953,17 +974,33 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
    clear();
    var W=wrap.getBoundingClientRect();
    if(!W.width) return;                      // details 还没展开，宽度是 0
+   // ⭐ 手机版两块上下摞（见 CSS 的 max-width:600px）：线从模型芯片左边出发，横着进左边那条沟，
+   //   沿沟往下，再横着接进下面那一行构成。每条线各占一条竖道（越靠上的模型走越外侧的道），
+   //   所以线不会从别的芯片或构成条上穿过去。
+   var LB=root.querySelector('.qzL').getBoundingClientRect(),
+       RB=root.querySelector('.qzR').getBoundingClientRect();
+   var stacked = RB.top >= LB.bottom - 1;
    Object.keys(tie).forEach(function(i){
      var a=L[i].getBoundingClientRect(), b=R[tie[i]].getBoundingClientRect();
      var ln=document.createElementNS('http://www.w3.org/2000/svg','path');
-     var x1=a.right-W.left, y1=a.top+a.height/2-W.top;
-     var x2=b.left-W.left,  y2=b.top+b.height/2-W.top;
-     var m=(x1+x2)/2;
-     ln.setAttribute('d','M'+x1+','+y1+'C'+m+','+y1+' '+m+','+y2+' '+x2+','+y2);
+     var d;
+     if(stacked){
+       var xg=LB.left-W.left+6+(+i)*8;
+       var x1=a.left-W.left, y1=a.top+a.height/2-W.top;
+       var x2=b.left-W.left, y2=b.top+b.height/2-W.top;
+       d='M'+x1+','+y1+'H'+xg+'V'+y2+'H'+x2;
+     } else {
+       var x1=a.right-W.left, y1=a.top+a.height/2-W.top;
+       var x2=b.left-W.left,  y2=b.top+b.height/2-W.top;
+       var m=(x1+x2)/2;
+       d='M'+x1+','+y1+'C'+m+','+y1+' '+m+','+y2+' '+x2+','+y2;
+     }
+     ln.setAttribute('d',d);
      ln.setAttribute('fill','none');
      ln.setAttribute('stroke', L[i].getAttribute('data-ink')||'#1a73e8');
      ln.setAttribute('stroke-width','2.5');
      ln.setAttribute('stroke-linecap','round');
+     ln.setAttribute('stroke-linejoin','round');
      svg.appendChild(ln);
    });
  }
@@ -2015,7 +2052,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 横着是<tspan font-weight="700">位置</tspan>，竖着是<tspan font-weight="700">这一批里的每一条序列</tspan>　——　<tspan font-weight="700">每一格一个 loss</tspan></tspan></text>
-<text class="svgsm" x="1153" y="122" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">画出来的是 8 × 10 示意；真实是 15,360 × 4,095</text>
+<text class="svgsm" x="1386" y="122" fill="#5f6368" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">画出来的是 8 × 10 示意；真实是 15,360 × 4,095</text>
 <text class="svgsm" x="542" y="186" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">位置 1 →　位置 4,095　（一条序列有 4,095 个「下一个字」）</text>
 <line x1="150" y1="202" x2="934.0" y2="202" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
 <rect x="150.0" y="228.0" width="71.0" height="27.0" rx="2" fill="#fff" stroke="#80868b" stroke-width="0.75"/>
@@ -2495,12 +2532,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="60" y="202" width="190" height="72" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="155" y="232" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">进来</tspan></text>
 <text class="svgsm" x="155" y="258" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 个数</tspan></text>
-<line x1="256" y1="238" x2="288" y2="238" stroke="#9334e6" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<rect x="294" y="194" width="200" height="88" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<line x1="256" y1="238" x2="280" y2="238" stroke="#9334e6" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="286" y="194" width="216" height="88" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
 <text class="svgsm" x="394" y="222" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">装置</tspan></text>
 <text class="svgsm" x="394" y="246" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">几块权重 ＋ 激活</tspan></text>
 <text class="svgsm" x="394" y="268" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">（7,168→2,048 这种，<tspan font-weight="700">都不是方阵</tspan>）</text>
-<line x1="500" y1="238" x2="532" y2="238" stroke="#9334e6" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<line x1="508" y1="238" x2="532" y2="238" stroke="#9334e6" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
 <rect x="538" y="202" width="190" height="72" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="633" y="232" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">出去</tspan></text>
 <text class="svgsm" x="633" y="258" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,168 个数</tspan></text>
@@ -6409,7 +6446,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p>
 </div>
 
-<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— 9 行名次表、该切在哪、省多少付多少</b><span class="why">判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
+<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— 9 行名次表、该切在哪、省多少付多少</b>　<span class="why">判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
 <p>把 V3 在<b>基准的 4K</b> 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
 
 <table>
@@ -11268,7 +11305,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <path d="M 54.0 229.3 L 76.8 229.3 L 99.5 229.3 L 122.2 229.3 L 145.0 229.3 L 167.8 229.3 L 190.5 229.3 L 213.2 229.3 L 236.0 229.3 L 258.8 229.3 L 281.5 229.3 L 304.2 229.3 L 327.0 229.3 L 349.8 229.3 L 372.5 229.3 L 395.2 229.3 L 418.0 229.3 L 440.8 229.3 L 463.5 229.3 L 486.2 229.3 L 509.0 229.3 L 531.8 229.3 L 554.5 229.3 L 577.2 229.3 L 600.0 229.3" fill="none" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round"/>
 <path d="M 54.0 229.3 L 76.8 236.4 L 99.5 243.5 L 122.2 250.7 L 145.0 257.8 L 167.8 264.9 L 190.5 272.0 L 213.2 279.1 L 236.0 286.3 L 258.8 293.4 L 281.5 300.5 L 304.2 307.6 L 327.0 314.7 L 349.8 321.9 L 372.5 329.0 L 395.2 336.1 L 418.0 343.2 L 440.8 350.3 L 463.5 357.5 L 486.2 364.6 L 509.0 371.7 L 531.8 378.8 L 554.5 386.0 L 577.2 393.1 L 600.0 400.2" fill="none" stroke="#d93025" stroke-width="2.6" stroke-linecap="round"/>
 <text class="svgsm" x="596" y="217" fill="#0d652d" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Pre-LN</tspan></text>
-<text class="svgsm" x="606" y="405" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Post-LN</tspan></text>
+<text class="svgsm" x="588" y="415" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Post-LN</tspan></text>
 <text class="svgsm" x="320" y="178" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 预训练的时候</tspan></text>
 <rect x="40" y="462" width="564" height="104" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="320" y="494" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">残差「名存实亡」</tspan></text>
@@ -11291,7 +11328,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <path d="M 734.0 229.3 L 756.8 229.3 L 779.5 229.3 L 802.2 229.3 L 825.0 229.3 L 847.8 229.3 L 870.5 229.3 L 893.2 229.3 L 916.0 229.3 L 938.8 229.3 L 961.5 229.3 L 984.2 229.3 L 1007.0 229.3 L 1029.8 229.3 L 1052.5 229.3 L 1075.2 229.3 L 1098.0 229.3 L 1120.8 229.3 L 1143.5 229.3 L 1166.2 229.3 L 1189.0 229.3 L 1211.8 229.3 L 1234.5 229.3 L 1257.2 229.3 L 1280.0 229.3" fill="none" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round"/>
 <path d="M 734.0 229.3 L 756.8 236.4 L 779.5 243.5 L 802.2 250.7 L 825.0 257.8 L 847.8 264.9 L 870.5 272.0 L 893.2 279.1 L 916.0 286.3 L 938.8 293.4 L 961.5 300.5 L 984.2 307.6 L 1007.0 314.7 L 1029.8 321.9 L 1052.5 329.0 L 1075.2 336.1 L 1098.0 343.2 L 1120.8 350.3 L 1143.5 357.5 L 1166.2 364.6 L 1189.0 371.7 L 1211.8 378.8 L 1234.5 386.0 L 1257.2 393.1 L 1280.0 400.2" fill="none" stroke="#d93025" stroke-width="2.6" stroke-linecap="round"/>
 <text class="svgsm" x="1276" y="217" fill="#0d652d" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Pre-LN</tspan></text>
-<text class="svgsm" x="1286" y="405" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Post-LN</tspan></text>
+<text class="svgsm" x="1268" y="415" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Post-LN</tspan></text>
 <text class="svgsm" x="1000" y="178" fill="#0d652d" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 而拿去微调的时候</tspan></text>
 <rect x="720" y="462" width="564" height="104" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1000" y="494" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这正好是你要的</tspan></text>

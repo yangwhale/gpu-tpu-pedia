@@ -117,7 +117,9 @@ def main():
             f.path(d, col, sw, arrow=False)
 
         f.t(px(L) - 4, pyv(PRE[L]) - 12, "Pre-LN", GR, True, 13.5, "end")
-        f.t(px(L) + 6, pyv(POST[L]) + 5, "Post-LN", RD, True, 13.5)
+        # ⛔ 原来放在终点右边（px(L)+6），Ⓐ 那份会一直伸到中间那条虚线上（x≈660）。
+        #   改成跟 Pre-LN 一样右对齐在终点左侧，落在曲线下方、10⁻⁴ 刻度线上方。
+        f.t(px(L) - 12, pyv(POST[L]) + 15, "Post-LN", RD, True, 13.5, "end")
         f.t(x0 + HALF / 2.0, GT - 30, tag, tagcol, True, 16, "middle")
 
         # 底下那个结论框 ——&#160;左右唯一不同的东西

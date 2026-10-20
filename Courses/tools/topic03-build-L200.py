@@ -78,6 +78,10 @@ head = P.make_head(
     "从 RNN 讲到今天的混合配比 —— 按时间线穿起来的一个完整故事：每一步都只回答"
     "「上一步欠下了什么，这一步拿什么还」。多图、少字、说大白话。",
     "topic-03.html")
+# ⭐ 2026-10-20：窄屏规则（表格框内横滚、录音条另起一行），正本在 course_narrow_css.py
+from course_narrow_css import CSS as _NARROW_CSS   # noqa: E402
+head += "\n<style>" + _NARROW_CSS + "</style>"
+
 
 # ⭐ 节号与标题写死在这儿，跟正文里的 <section id> 对齐。
 # ⛔ 加节 / 改标题时**两处一起改**。

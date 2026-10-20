@@ -612,9 +612,10 @@ def fig_flow():
         anchor="middle")
     f.lines(OUTX - 30, ry(len(TOK) - 1) + 34, 210, [
         '这<tspan font-weight="700">一个</tspan>向量里，现在装着',
-        '<tspan font-weight="700">全场按需加权</tspan>的内容。'], size=14, lh=16, fill=GY)
+        '<tspan font-weight="700">全场按需加权</tspan>的内容。'], size=14, lh=20, fill=GY)
+    # 10-20（fx23）：14px 字配 16px 行距，两行几乎贴在一起 → lh 20；下面落点带随之下移 4
 
-    yy = ry(len(TOK) - 1) + 76
+    yy = ry(len(TOK) - 1) + 80
 
     # ── 落点带 ───────────────────────────────────────────────
     yy = f.band(yy, "ok", "为什么标题敢叫「Attention Is All You Need」", [

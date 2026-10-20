@@ -80,6 +80,10 @@ head = P.make_head(
     "注意力演进 · 从 RNN 的一个补丁，到今天各家的混合配比",
     "名词多到像各搞各的，但只有三个旋钮可以拧 —— MLA、GQA、SWA、DSA、GDN、KDA 全部收进同一把尺子，每一条都回到一手 config 核过。",
     "topic-03-L300.html")
+# ⭐ 2026-10-20：窄屏规则（表格框内横滚、录音条另起一行），正本在 course_narrow_css.py
+from course_narrow_css import CSS as _NARROW_CSS   # noqa: E402
+head += "\n<style>" + _NARROW_CSS + "</style>"
+
 
 # ⭐ 路线目录：节号与标题写死在这儿，跟正文里的 <section id> 对齐。
 # ⛔ 加节 / 改标题时**两处一起改** —— 这是手写 HTML 的代价，认了。

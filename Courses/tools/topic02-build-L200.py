@@ -129,7 +129,10 @@ def _head():
     details.branch 这些类 L200 都要用，各留一份必然走散。
     """
     i = _src.index("</style>")
-    return _src[:i + len("</style>")]
+    # ⭐ 2026-10-20：窄屏规则（表格框内横滚、录音条另起一行）只给 L200 这一页加，
+    #   来源见 course_narrow_css.py。L300 是全课 CSS 的源头，不在这里动它。
+    from course_narrow_css import CSS as _NARROW
+    return _src[:i] + _NARROW + _src[i:i + len("</style>")]
 
 
 def _shared_defs():

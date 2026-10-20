@@ -16,7 +16,7 @@ r"""专题五 · 1.5 折叠段「TPU 的环面」：3D 环面上的 AllGather，
 """
 from fractions import Fraction as Fr
 
-from topic03_draw import Fig, BL, OR, GR, GY, GY2, INK, LINE
+from topic03_draw import Fig, wpx, BL, OR, GR, GY, GY2, INK, LINE
 
 W = 1400
 L = 4
@@ -84,7 +84,11 @@ def gantt(f, px, y0, title, col, segs, bounds, total, note):
             if w > 40:
                 f.t(px + X0 + float(g0) * SC + w / 2, y + RH / 2 + 5, "闲", GY, size=13, anchor="middle")
     xe = px + X0 + float(total) * SC
-    f.t(xe + 8, top - 10, "用时 %s" % total, col, True, 15)
+    lab = "用时 %s" % total
+    if xe + 8 + wpx(lab, 15) > px + PW - 14:      # 右边放不下（逐轴那半 63 顶到面板边）：改放到终点线左边
+        f.t(xe - 6, top - 10, lab, col, True, 15, "end")
+    else:
+        f.t(xe + 8, top - 10, lab, col, True, 15)
     f.t(px + 22, py + ph - 52 + 14, note, col, True, 14)
     f._pan = None
     return py + ph - 30

@@ -126,12 +126,16 @@ def main():
 
     # 中间那条「跑去问前台」的路 —— 打叉
     f.line(400, by + 104, 560, by + 104, RD, 2.0, dash="6,5")
-    f.t(480, by + 90, "每道菜都跑去问？", RD, size=16, anchor="middle")
+    # 10-20（fx23）：by+90 时叉号上端（by+90）正好顶到字底，「都跑」两字被叉压住 → 上提 10
+    f.t(480, by + 80, "每道菜都跑去问？", RD, size=16, anchor="middle")
     for dx, dy in ((-14, -14), (-14, 14)):
         f.line(480 - dx, by + 104 - dy, 480 + dx, by + 104 + dy, RD, 3.0,
                arrow=False)
-    f.t(480, by + 148, "一来一回是微秒级，", RD, size=16, anchor="middle")
-    f.t(480, by + 170, "而这一步只有几十微秒", RD, size=16, anchor="middle")
+    # 10-20（fx23）：末句一行 10 个字 ≈164px，两框之间只有 168px，两头顶到前台／后厨的框边
+    #   → 拆成「而这一步」「只有几十微秒」，三行整体上提 4px（仍在叉号 by+118 之下）
+    f.t(480, by + 144, "一来一回是微秒级，", RD, size=16, anchor="middle")
+    f.t(480, by + 166, "而这一步", RD, size=16, anchor="middle")
+    f.t(480, by + 188, "只有几十微秒", RD, size=16, anchor="middle")
 
     # 后厨
     f.box(564, by + 16, 420, 176, "#e8f0fe", BL, 10)

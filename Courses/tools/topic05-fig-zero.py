@@ -351,7 +351,7 @@ def fig_siku():
         f.box(x, py + 40, RW, 56, "#f1f3f4" if i < N_DENSE else "#fef7e0", col, 2, sw=1.2)
     xe = RX + N_LAYER * (RW + RG) - RG
     f.t(RX, py + 118, "前 3 间：Dense", GY, True, 13)
-    f.t(RX + N_DENSE * (RW + RG) + 60, py + 118, "后 58 间：MoE，大多数长得一模一样", OR, True, 13)
+    f.t(RX + N_DENSE * (RW + RG) + 120, py + 118, "后 58 间：MoE，大多数长得一模一样", OR, True, 13)
     f.t(RX, py + 142, "第 1 间在最左，数据从左往右一间一间过", GY, size=13)
     f.t(RX, py + 164, "整套约 6,710 亿个参数；这是全部的书，不是其中一本", GY, size=13)
     # 右边：放大一间 MoE 书房
@@ -393,6 +393,9 @@ def fig_siku():
     SX, SW, SY = 150, 1100, py + 46
     f.t(24, SY + 22, "第 k 间的书，", INK, True, 13)
     f.t(24, SY + 40, "一页页排成一条", GY, size=12.5)
+    SEG = 8
+    segw = SW / SEG
+    cuts = [SX + k * segw for k in range(SEG + 1)]
     rnd = random.Random(7)
     x, b = SX, 0
     while x < SX + SW - 1:
@@ -400,10 +403,11 @@ def fig_siku():
         w = min(rnd.choice([150, 172, 196, 214]), SX + SW - x)
         f.box(x, SY, w, 44, BOOK_TINT[b % len(BOOK_TINT)], GY2, 2, sw=1)
         if w > 50:
-            f.t(x + w / 2.0, SY + 27, "书 %d" % (b + 1), GY, size=12, anchor="middle")
+            # 书名放在被红线隔开的最长那一截正中，别让红线穿过「书 N」
+            edges = sorted({x, x + w} | {c for c in cuts if x < c < x + w})
+            a0, a1 = max(zip(edges, edges[1:]), key=lambda e: e[1] - e[0])
+            f.t((a0 + a1) / 2.0, SY + 27, "书 %d" % (b + 1), GY, size=12, anchor="middle")
         x, b = x + w, b + 1
-    SEG = 8
-    segw = SW / SEG
     for k in range(SEG + 1):
         cx = SX + k * segw
         f.line(cx, SY - 12, cx, SY + 58, RD, 2, dash="5,3", arrow=False)

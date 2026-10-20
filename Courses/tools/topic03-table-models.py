@@ -402,7 +402,7 @@ _NHL = sum(1 for r in M.ROWS if M.is_hl(r[1]))
 BAR = ('<div class="hlbar">'
        '<span class="hlbtns">'
        '<button type="button" data-m="hl" aria-pressed="true">⭐ Highlight</button>'
-       '<button type="button" data-m="all" aria-pressed="false">Boom ——&#160;全部</button>'
+       '<button type="button" data-m="all" aria-pressed="false">全部</button>'
        '</span><span class="hlnote"></span></div>')
 
 _SRC_NOTE = ('<div class="note warn"><p>📌 <b>这张表的取数规则（⭐ 2026-09-13 补 ——&nbsp;'

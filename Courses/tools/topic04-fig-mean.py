@@ -60,9 +60,12 @@ def main():
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 横着是<tspan font-weight=\"700\">位置</tspan>，"
                  "竖着是<tspan font-weight=\"700\">这一批里的每一条序列</tspan>"
-                 "　——　<tspan font-weight=\"700\">每一格一个 loss</tspan>", BL,
-                 sub="⭐ 画出来的是 %d × %d 示意；真实是 %s × %s"
-                     % (NR, NC, format(GB, ","), format(TGT, ",")))
+                 "　——　<tspan font-weight=\"700\">每一格一个 loss</tspan>", BL)
+    # ⛔ 这句原来走 panel(sub=…)：它的 x 按 wpx(title) 算，而 title 里的
+    #   <tspan> 标记也被当成字宽算进去，结果被推到 x≈1153，右半截出了画布。
+    #   改成在标题栏里右对齐，字号不变（11）。
+    f.t(W - 14, y0 + 20, "⭐ 画出来的是 %d × %d 示意；真实是 %s × %s"
+        % (NR, NC, format(GB, ","), format(TGT, ",")), GY, size=11, anchor="end")
 
     # ⛔⛔ 2026-09-23 现场看着 Ⓑ 左边那个框说：「这个小方块里讲的内容不明不白的，
     #   根本就看不懂。要是讲不明白就删了。」——&#160;那个框写的是

@@ -176,9 +176,11 @@ def main():
 
     # ⭐ 两条竖虚线把两根条的**两端锁在一起** ——&#160;没有它们，
     #   读者不会自动去比两根条是不是一样长，「同一把尺」就白搭了。
+    # 10-20（fx23）：原来一笔从 YA-14 拉到 YB+BH+44，左边那条正好穿过两根条之间那行红字
+    #   → 断成两截，在红字那一行（YA+BH+74）让开；两截仍在同一 x 上，锁两端的作用不变
     for xv in (BX0, BX0 + BARW):
-        f.line(xv, YA - 14, xv, YB + BH + 44, GY2, 1.2, dash="4 4",
-               arrow=False)
+        for ya, yb in ((YA - 14, YA + BH + 48), (YB - 14, YB + BH + 44)):
+            f.line(xv, ya, xv, yb, GY2, 1.2, dash="4 4", arrow=False)
     f.t(BX0 + BARW, YA - 24, "要还的 512×", GY2, True, 15, "end")
 
     f.t(24, YA + BH + 74,

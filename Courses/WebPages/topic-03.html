@@ -718,6 +718,17 @@ h4 { margin:18px 0 6px; font-size:15px }
 @media print{.foldfig{border:none;background:none}
              .foldfig>summary{display:none}}
 </style>
+<style>
+/* ── 窄屏（course_narrow_css.py，2026-10-20）──────────────────────────
+   ① 正文表格在自己框里横向滚动，不再把整页撑宽（跟英文版同一条）。
+   ② 节标题那一行是 flex：录音条（.lecmedia，最小 280px）挤在徽章和标题后面会把页面撑出去，
+      窄屏下让它另起一行、占满整行。
+   ③ 手机上表格已经能在框里横滑了，就别再把格子压扁：公式（td 里的 code）一折就是逐字断行
+      （专题四 1.3 形状表每行约 400px 高），数值列「7.32 TiB」折成两行 —— 这两类不折行。 */
+@media(max-width:1000px){main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}
+@media(max-width:600px){.stn{flex-wrap:wrap}.stn .lecmedia{flex:1 1 100%;min-width:0}
+  td code,td.num{white-space:nowrap}}
+</style>
 
 
 <style id="figonly-css">
@@ -1260,7 +1271,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="118" y="516" fill="#7a5000" style="font-size:15px">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
 <text class="svgsm" x="16" y="535" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">智谱 GLM</tspan></text>
 <text class="svgsm" x="118" y="535" fill="#7a5000" style="font-size:15px">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
-<text class="svglbl" x="16" y="571" fill="#174ea6" style="font-size:12px">再看一眼 ② 那条泳道：这次补完混元和 GLM，多出来一条原先看不见的线</text>
+<text class="svglbl" x="16" y="571" fill="#174ea6" style="font-size:13px">再看一眼 ② 那条泳道：这次补完混元和 GLM，多出来一条原先看不见的线</text>
 <text class="svgsm" x="16" y="591" fill="#174ea6" style="font-size:15px">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan></text>
 <text class="svgsm" x="16" y="613" fill="#174ea6" style="font-size:15px">稳态四层一循环（前几层各家不同）——&#160;每 4 层只有 1 层自己算索引。</text>
 <text class="svgsm" x="16" y="635" fill="#174ea6" style="font-size:15px">所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
@@ -1372,7 +1383,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 #mtbl.hl .n-all{display:none}
 #mtbl.hl .n-hl{display:inline;color:#174ea6}
 </style>
-<div class="note warn"><p>📌 <b>这张表的取数规则（⭐ 2026-09-13 补 ——&nbsp;由表长出来的结论全靠这条规则撑着）</b></p><ul><li><b>层配比 / 层数 / 头数 / 维度</b>：一律读<b>公开 config</b>（HF 上那份 <code>config.json</code>）。</li><li><b>上下文</b>：取 config 的 <code>max_position_embeddings</code>。⚠️ <b>它是容量不是能力</b> ——&nbsp;声明 10M 不等于 10M 上都好用。</li><li><b>KV cache</b>：一律按 <b>@128K · bf16 · batch 1</b> 由形状当场算出，<b>不取厂商自报值</b>。⚠️ 滑窗模型给的是<b>窗口封顶后</b>的量。</li><li>⛔ <b>三处例外，各自标了</b>：混元 Hy3 那一行读自我们自己的仓库；Ling 一族读自模型卡；两处声明与实测口径不一致的（MiniMax-01 的 4M / config 10M）在备注里写了。</li></ul><p>⚠️ <b>凡是上下文 &lt; 128K 的行，那一格的 KV 是反事实值</b>（把它的形状放到 128K 上算）——&nbsp;<b>包括「846 倍」的分子 GPT-3</b>，它的实际上下文只有 2K。<em>这个倍数是用来看量级的，不是用来引用的。</em></p></div><div class="tblwrap"><div class="hlbar"><span class="hlbtns"><button type="button" data-m="hl" aria-pressed="true">⭐ Highlight</button><button type="button" data-m="all" aria-pressed="false">Boom ——&#160;全部</button></span><span class="hlnote"></span></div><p class="tbltip">⭐ <b>点表头可以排序</b>——&#160;时间 / 厂商 / 便宜层占比 / 上下文 / KV 大小，再点一次反向。<b>默认按时间。</b>两种模式下排序都作用在全部 44 行上。</p><table id="mtbl"><thead><tr><th class="s" data-k="t">时间</th><th class="s" data-k="v">模型 <span class="hint">按厂商</span></th><th class="s" data-k="c">一个循环 <span class="hint">一格＝一层</span></th><th class="s" data-k="x">上下文 <span class="hint">声明值</span></th><th class="s" data-k="k">KV cache＠128K</th><th>备注</th></tr></thead><tbody>
+<div class="note warn"><p>📌 <b>这张表的取数规则（⭐ 2026-09-13 补 ——&nbsp;由表长出来的结论全靠这条规则撑着）</b></p><ul><li><b>层配比 / 层数 / 头数 / 维度</b>：一律读<b>公开 config</b>（HF 上那份 <code>config.json</code>）。</li><li><b>上下文</b>：取 config 的 <code>max_position_embeddings</code>。⚠️ <b>它是容量不是能力</b> ——&nbsp;声明 10M 不等于 10M 上都好用。</li><li><b>KV cache</b>：一律按 <b>@128K · bf16 · batch 1</b> 由形状当场算出，<b>不取厂商自报值</b>。⚠️ 滑窗模型给的是<b>窗口封顶后</b>的量。</li><li>⛔ <b>三处例外，各自标了</b>：混元 Hy3 那一行读自我们自己的仓库；Ling 一族读自模型卡；两处声明与实测口径不一致的（MiniMax-01 的 4M / config 10M）在备注里写了。</li></ul><p>⚠️ <b>凡是上下文 &lt; 128K 的行，那一格的 KV 是反事实值</b>（把它的形状放到 128K 上算）——&nbsp;<b>包括「846 倍」的分子 GPT-3</b>，它的实际上下文只有 2K。<em>这个倍数是用来看量级的，不是用来引用的。</em></p></div><div class="tblwrap"><div class="hlbar"><span class="hlbtns"><button type="button" data-m="hl" aria-pressed="true">⭐ Highlight</button><button type="button" data-m="all" aria-pressed="false">全部</button></span><span class="hlnote"></span></div><p class="tbltip">⭐ <b>点表头可以排序</b>——&#160;时间 / 厂商 / 便宜层占比 / 上下文 / KV 大小，再点一次反向。<b>默认按时间。</b>两种模式下排序都作用在全部 44 行上。</p><table id="mtbl"><thead><tr><th class="s" data-k="t">时间</th><th class="s" data-k="v">模型 <span class="hint">按厂商</span></th><th class="s" data-k="c">一个循环 <span class="hint">一格＝一层</span></th><th class="s" data-k="x">上下文 <span class="hint">声明值</span></th><th class="s" data-k="k">KV cache＠128K</th><th>备注</th></tr></thead><tbody>
 <tr data-t="2020-05" data-v="OpenAI|2020-05" data-c="0.000000" data-x="2048" data-k="576.000000" data-hl="1"><td class="tm">2020-05</td><td><span class="chip" style="color:#5f6368;background:#f1f3f4;border-color:#5f6368">GPT-3　175B 稠密 · 96 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MHA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:180px"></b><em style="color:#7f0000">576 GiB<span class="fold">（10 条才画得下）</span></em></span></td><td class="nt"><span class="n-all"><b>基线：KV 按头数线性长，没有任何省法</b></span><span class="n-hl">起点。576 GiB 这把尺，后面所有省下来的都拿它比</span></td></tr>
 <tr data-t="2022-04" data-v="Google|2022-04" data-c="0.000000" data-x="2048" data-k="14.750000" data-hl="1"><td class="tm">2022-04</td><td><span class="chip" style="color:#1e8e3e;background:#e6f4ea;border-color:#1e8e3e">PaLM　540B 稠密 · 118 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MQA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:74px"></b><em style="color:#d93025">15 GiB</em></span></td><td class="nt"><span class="n-all">48 头共用 1 组 KV —— <b>第一次大规模砍 KV</b></span><span class="n-hl">MQA —— 第一次把 KV 砍到只剩 1 组</span></td></tr>
 <tr data-t="2023-02" data-v="Meta|2023-02" data-c="0.000000" data-x="2048" data-k="320.000000"><td class="tm">2023-02</td><td><span class="chip" style="color:#546e7a;background:#eceff1;border-color:#546e7a">Llama 1　65B 稠密 · 80 层</span></td><td class="cy"><span class="uni" style="background:#f9ab00">MHA —— 每一层都是这个</span></td><td class="ctx">2K</td><td class="kv"><span class="kvw"><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:300px"></b><b class="bar" style="background:#7f0000;width:100px"></b><em style="color:#7f0000">320 GiB<span class="fold">（6 条才画得下）</span></em></span></td><td class="nt"><span class="n-all">一代还是纯 MHA，<b>下一代才上 GQA</b></span></td></tr>
@@ -2983,7 +2994,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <p>链剪断了，可话还是得连起来读。<b>不靠一格一格传，那靠什么？</b></p>
 
-<figure class="fbox fwide" id="fig-mha-flow"><svg viewBox="0 0 1400 702" width="100%" role="img" aria-label="跟着最后一个 token 走一遍注意力：每个位置长出 query、key、value 三样东西；最后那个 token 拿自己的 query 去跟每个 key 打分，softmax 成一组加起来等于一的权重；再按权重把所有位置的 value 加起来，得到它的新向量"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-mha-flow"><svg viewBox="0 0 1400 706" width="100%" role="img" aria-label="跟着最后一个 token 走一遍注意力：每个位置长出 query、key、value 三样东西；最后那个 token 拿自己的 query 去跟每个 key 打分，softmax 成一组加起来等于一的权重；再按权重把所有位置的 value 加起来，得到它的新向量"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一次注意力，干的就是一件事 ——&#160;<tspan font-weight="700">每个位置都去全场取一次货</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">跟着最后那个 token 走一遍：它怎么提问、别人怎么报价、货怎么汇到它身上</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -3108,19 +3119,19 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="950" y="376" width="118" height="34" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text class="svgsm" x="1009" y="398" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">t6 的新向量</tspan></text>
 <text class="svgsm" x="920" y="428" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">这<tspan font-weight="700">一个</tspan>向量里，现在装着</text>
-<text class="svgsm" x="920" y="444" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全场按需加权</tspan>的内容。</text>
-<rect x="0" y="470" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="470" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="470" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="497" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么标题敢叫「Attention Is All You Need」</tspan></text>
-<text class="svgsm" x="20" y="528" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">RNN 要让 t1 影响 t6，得<tspan font-weight="700">一跳一跳传五次</tspan>；上面这一步 ——&#160;<tspan font-weight="700">一跳</tspan>。而且<tspan font-weight="700">六个位置是同时做的</tspan>，不是排队。</text>
-<text class="svgsm" x="20" y="552" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">整个过程<tspan font-weight="700">只有矩阵乘和一次 softmax</tspan>，没有任何循环 ——&#160;所以它能一次性并行算完整个序列。</text>
-<rect x="0" y="582" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="582" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="2" y="582" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="609" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两个最常被跳过的「为什么」</tspan></text>
-<text class="svgsm" x="20" y="640" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么要投三次，不能只用一个向量？</tspan>——&#160;去图书馆找书：<tspan font-weight="700">你脑子里那个需求</tspan>（q）跟<tspan font-weight="700">书脊上印的标题</tspan>（k）不是同一个东西。</text>
-<text class="svgsm" x="20" y="664" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">那 v 为什么还要跟 k 再分一次？<tspan font-weight="700">k 是书脊，v 是书里的内容</tspan>——&#160;「凭什么被选中」和「被选中之后交出什么」，本来就是两回事。</text>
+<text class="svgsm" x="920" y="448" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全场按需加权</tspan>的内容。</text>
+<rect x="0" y="474" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="474" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="474" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="501" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么标题敢叫「Attention Is All You Need」</tspan></text>
+<text class="svgsm" x="20" y="532" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">RNN 要让 t1 影响 t6，得<tspan font-weight="700">一跳一跳传五次</tspan>；上面这一步 ——&#160;<tspan font-weight="700">一跳</tspan>。而且<tspan font-weight="700">六个位置是同时做的</tspan>，不是排队。</text>
+<text class="svgsm" x="20" y="556" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">整个过程<tspan font-weight="700">只有矩阵乘和一次 softmax</tspan>，没有任何循环 ——&#160;所以它能一次性并行算完整个序列。</text>
+<rect x="0" y="586" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="586" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="2" y="586" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="613" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两个最常被跳过的「为什么」</tspan></text>
+<text class="svgsm" x="20" y="644" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">为什么要投三次，不能只用一个向量？</tspan>——&#160;去图书馆找书：<tspan font-weight="700">你脑子里那个需求</tspan>（q）跟<tspan font-weight="700">书脊上印的标题</tspan>（k）不是同一个东西。</text>
+<text class="svgsm" x="20" y="668" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">那 v 为什么还要跟 k 再分一次？<tspan font-weight="700">k 是书脊，v 是书里的内容</tspan>——&#160;「凭什么被选中」和「被选中之后交出什么」，本来就是两回事。</text>
 </svg><figcaption>⭐ 跟着最后那个字走一遍，你就懂了 ——&nbsp;<b>它不用等谁传话，直接一嗓子问全场，然后按各家报的价把货收回来。</b><span class="capmore"><br><em>⭐⭐ 而且这不是轮流来：<b>六个位置同时在做同一件事</b>。——&nbsp;上一章卡死人的那个「只能一步一步来」，到这里彻底没有了。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 论文 §3.2 的原话，不是本课编的比喻；<b>图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</b></p>
 <p>⚠️ 本图<b>只画注意力</b> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，它们不在本专题这条轴上（本专题的账本只有 KV cache）</p></details></figure>
 
@@ -3564,7 +3575,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="538" y="456" width="324" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
 <text class="svgsm" x="552" y="478" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">softmax</tspan></text>
 <text class="svgsm" x="625" y="478" fill="#202124" style="font-size:15px"><tspan font-weight="700">BTSKG（注意力矩阵，记作 A）</tspan></text>
-<text class="svgsm" x="876" y="478" fill="#a50e0e" style="font-size:15px">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
+<text class="svgsm" x="980" y="478" fill="#a50e0e" style="font-size:15px">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
 <rect x="530" y="520" width="340" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="536" y="516" fill="#174ea6" style="font-size:15px">BTSKG</text>
 <text class="svgsm" x="864" y="516" fill="#681da8" text-anchor="end" style="font-size:15px">BSKH</text>
@@ -7134,7 +7145,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p class="landing">📌 <b>那 2048 个到底怎么挑出来的</b> ——&nbsp;
   <em>省了什么、没省什么、多花了什么，一张图答完。</em></p>
 
-<figure class="fbox fwide" id="fig-dsa-flow"><svg viewBox="0 0 1400 1242" width="100%" role="img" aria-label="DSA 一步的三段流水线：闪电索引器用一个很轻的打分函数扫过全部历史，取分数最高的 2048 个，再只对这 2048 个做完整的注意力；以及三栏账：省了每步要算要搬的量、一点显存都没省、多花了索引器的全程打分和挑中之后的不连续访存"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-dsa-flow"><svg viewBox="0 0 1400 1264" width="100%" role="img" aria-label="DSA 一步的三段流水线：闪电索引器用一个很轻的打分函数扫过全部历史，取分数最高的 2048 个，再只对这 2048 个做完整的注意力；以及三栏账：省了每步要算要搬的量、一点显存都没省、多花了索引器的全程打分和挑中之后的不连续访存"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">DSA 走一步 ——&#160;<tspan font-weight="700">那 2048 个是怎么挑出来的</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">三步，<tspan font-weight="700">每一步都便宜；真正贵的那一步，根本没在全长上做</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -7145,7 +7156,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="330" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">没被读到的</text>
 <rect x="434.44000000000005" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="455" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">代价</text>
-<rect x="0" y="102" width="1400" height="376" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="398" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
@@ -7161,11 +7172,12 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="198" y="254" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">I[t,s] ＝ Σ<tspan baseline-shift="sub" font-size="11">j</tspan> w[t,j] · ReLU(q[t,j] · k[s] )</tspan></text>
 <text class="svgsm" x="198" y="304" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">它便宜在三处：</tspan></text>
 <text class="svgsm" x="216" y="332" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">· 头很少（不是主注意力那 128 个头）</text>
-<text class="svgsm" x="216" y="356" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">· 用 ReLU 不用 softmax ——　只排序，不做加权平均</text>
-<text class="svgsm" x="216" y="380" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">· 低精度就够（它只要把顺序排对）</text>
-<rect x="182" y="408" width="412" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="198" y="436" fill="#a50e0e" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">但它<tspan font-weight="700">必须扫过全部历史</tspan></tspan></text>
-<text class="svgsm" x="198" y="458" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">一个都不能跳 ——　不扫完，就不知道该跳谁</text>
+<text class="svgsm" x="216" y="356" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">· 用 ReLU 不用 softmax ——</text>
+<text class="svgsm" x="232" y="380" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">只排序，不做加权平均</text>
+<text class="svgsm" x="216" y="404" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">· 低精度就够（它只要把顺序排对）</text>
+<rect x="182" y="430" width="412" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="198" y="458" fill="#a50e0e" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">但它<tspan font-weight="700">必须扫过全部历史</tspan></tspan></text>
+<text class="svgsm" x="198" y="480" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">一个都不能跳 ——　不扫完，就不知道该跳谁</text>
 <path d="M 594.0 226.0 H 638.0 Q 638.0 226.0 638.0 226.0 V 226.0" fill="none" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
 <text class="svgsm" x="622" y="168" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 一整排分数，挑出最高的 2048 个</tspan></text>
 <rect x="622.0" y="248" width="13" height="18" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
@@ -7257,62 +7269,62 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="1028" y="420" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以整段注意力的账</tspan></text>
 <text class="svgsm" x="1028" y="443" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">从 <tspan font-weight="700">L × L</tspan> 变成 <tspan font-weight="700">L × 2048</tspan></text>
 <text class="svgsm" x="1028" y="464" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">长文越长，赚得越多</tspan></text>
-<rect x="0" y="496" width="1400" height="172" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="496" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="0" y="498" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="526" x2="1400" y2="526" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="516" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 2048 在 128K 里是多大一块</tspan></text>
-<text class="svgsm" x="226" y="516" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">这一条按真比例画 ——　上面那 24 根柱子是示意，这一条不是</text>
-<rect x="40" y="556" width="1320" height="34" rx="4" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
-<rect x="40" y="556" width="20.625" height="34" rx="4" fill="#fbbc04" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="40" y="614" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2048 ÷ 131072 ＝ <tspan font-weight="700">1.56%</tspan>　——　橙色那一小条就是每一步真正读进来的量</tspan></text>
-<text class="svgsm" x="40" y="640" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">剩下那 98.4% <tspan font-weight="700">还好端端地躺在显存里</tspan>　——　它们只是这一步没被读，不是没被存。</tspan></text>
-<text class="svgsm" x="40" y="664" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">顺带一个定义直接推出来的事实：历史不足 2048 时，top-2048 就是全选 ——　短上下文下 DSA 就是普通 MLA，稀疏根本没启动。</text>
-<rect x="10" y="686" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="10" y="686" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="10" y="688" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="10" y1="716" x2="450" y2="716" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="24" y="706" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">省下来的</tspan></text>
-<text class="svgsm" x="116" y="706" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">每一步要算、要搬的那些格子</text>
-<text class="svgsm" x="30" y="750" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">注意力那一段从 <tspan font-weight="700">L×L</tspan> 变成 <tspan font-weight="700">L×2048</tspan>。</text>
-<text class="svgsm" x="30" y="780" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">128K 下就是 <tspan font-weight="700">只读 1.56%</tspan>。</text>
-<text class="svgsm" x="30" y="810" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">上下文越长，省得越多 ——</text>
-<text class="svgsm" x="30" y="840" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">因为省的是<tspan font-weight="700">跟长度成正比</tspan>的那一段。</text>
-<rect x="480" y="686" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="480" y="686" width="440" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="480" y="688" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="480" y1="716" x2="920" y2="716" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="494" y="706" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一点没省的</tspan></text>
-<text class="svgsm" x="599" y="706" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">显存 ——　而且还多了一成</text>
-<text class="svgsm" x="500" y="750" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV cache 一个字节都没少。</tspan></text>
-<text class="svgsm" x="500" y="780" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">道理很硬：<tspan font-weight="700">要能从历史里挑，</tspan></text>
-<text class="svgsm" x="500" y="810" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">就得把历史全留着。</tspan></text>
-<text class="svgsm" x="500" y="840" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">而且索引器自己还要一份</tspan>：</text>
-<text class="svgsm" x="500" y="870" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">128 维 × FP8 × 61 层 × 128K</text>
-<text class="svgsm" x="500" y="900" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">＝ <tspan font-weight="700">0.95 GiB</tspan>，<tspan font-weight="700">比 V3 还多存约一成</tspan>。</text>
-<rect x="950" y="686" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="950" y="686" width="440" height="4" rx="2" fill="#b06000" stroke="#b06000" stroke-width="1.0"/>
-<rect x="950" y="688" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="950" y1="716" x2="1390" y2="716" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="964" y="706" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反而多花的</tspan></text>
-<text class="svgsm" x="1069" y="706" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">三笔，而且一笔比一笔疼</text>
-<text class="svgsm" x="970" y="750" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">① <tspan font-weight="700">索引器要给所有历史打分</tspan>，一个都不能跳。</text>
-<text class="svgsm" x="970" y="780" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">② <tspan font-weight="700">它那 0.95 GiB，每一步都要整条读完</tspan> ——</text>
-<text class="svgsm" x="970" y="810" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是挑中那 2048 个（0.13 GiB）的 7 倍。</tspan></text>
-<text class="svgsm" x="970" y="840" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">③ <tspan font-weight="700">挑中的 2048 个散落在各处</tspan>，搬起来碎。</text>
-<text class="svgsm" x="970" y="870" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">所以这一支后来都在缩第 ② 笔：</text>
-<text class="svgsm" x="970" y="900" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">几层共用一个索引器</tspan>。</text>
-<rect x="0" y="1032" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1032" width="4" height="74" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="2" y="1032" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1059" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这两笔多花的，正好把这一支后来的样子定下来了</tspan></text>
-<text class="svgsm" x="20" y="1090" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">省 FLOPs 谁都会 ——　在纸上少算 98% 的格子而已。可只要那些格子<tspan font-weight="700">散落在显存各处</tspan>，<tspan font-weight="700">要搬的字节一点没少，时间就一点没省</tspan>。</text>
-<rect x="0" y="1122" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="1122" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="2" y="1122" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="1149" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回到现场那四问，答案一句一条</tspan></text>
-<text class="svgsm" x="20" y="1180" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">怎么挑的</tspan>：一个很轻的打分器扫过全部历史，取分数最高的 2048 个位置。</text>
-<text class="svgsm" x="20" y="1204" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">省了显存吗</tspan>：<tspan font-weight="700">没有，一个字节都没省。</tspan>省的是每一步真正读进来、算进去的那一部分。</text>
+<rect x="0" y="518" width="1400" height="172" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="518" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="520" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="548" x2="1400" y2="548" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="538" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 2048 在 128K 里是多大一块</tspan></text>
+<text class="svgsm" x="226" y="538" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">这一条按真比例画 ——　上面那 24 根柱子是示意，这一条不是</text>
+<rect x="40" y="578" width="1320" height="34" rx="4" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="40" y="578" width="20.625" height="34" rx="4" fill="#fbbc04" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="40" y="636" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2048 ÷ 131072 ＝ <tspan font-weight="700">1.56%</tspan>　——　橙色那一小条就是每一步真正读进来的量</tspan></text>
+<text class="svgsm" x="40" y="662" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">剩下那 98.4% <tspan font-weight="700">还好端端地躺在显存里</tspan>　——　它们只是这一步没被读，不是没被存。</tspan></text>
+<text class="svgsm" x="40" y="686" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums">顺带一个定义直接推出来的事实：历史不足 2048 时，top-2048 就是全选 ——　短上下文下 DSA 就是普通 MLA，稀疏根本没启动。</text>
+<rect x="10" y="708" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="10" y="708" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="10" y="710" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="10" y1="738" x2="450" y2="738" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="24" y="728" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">省下来的</tspan></text>
+<text class="svgsm" x="116" y="728" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">每一步要算、要搬的那些格子</text>
+<text class="svgsm" x="30" y="772" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">注意力那一段从 <tspan font-weight="700">L×L</tspan> 变成 <tspan font-weight="700">L×2048</tspan>。</text>
+<text class="svgsm" x="30" y="802" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">128K 下就是 <tspan font-weight="700">只读 1.56%</tspan>。</text>
+<text class="svgsm" x="30" y="832" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">上下文越长，省得越多 ——</text>
+<text class="svgsm" x="30" y="862" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">因为省的是<tspan font-weight="700">跟长度成正比</tspan>的那一段。</text>
+<rect x="480" y="708" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="480" y="708" width="440" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="480" y="710" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="480" y1="738" x2="920" y2="738" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="494" y="728" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一点没省的</tspan></text>
+<text class="svgsm" x="599" y="728" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">显存 ——　而且还多了一成</text>
+<text class="svgsm" x="500" y="772" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV cache 一个字节都没少。</tspan></text>
+<text class="svgsm" x="500" y="802" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">道理很硬：<tspan font-weight="700">要能从历史里挑，</tspan></text>
+<text class="svgsm" x="500" y="832" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">就得把历史全留着。</tspan></text>
+<text class="svgsm" x="500" y="862" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">而且索引器自己还要一份</tspan>：</text>
+<text class="svgsm" x="500" y="892" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">128 维 × FP8 × 61 层 × 128K</text>
+<text class="svgsm" x="500" y="922" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">＝ <tspan font-weight="700">0.95 GiB</tspan>，<tspan font-weight="700">比 V3 还多存约一成</tspan>。</text>
+<rect x="950" y="708" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="950" y="708" width="440" height="4" rx="2" fill="#b06000" stroke="#b06000" stroke-width="1.0"/>
+<rect x="950" y="710" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="950" y1="738" x2="1390" y2="738" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="964" y="728" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反而多花的</tspan></text>
+<text class="svgsm" x="1069" y="728" fill="#5f6368" style="font-size:11.0px;font-variant-numeric:tabular-nums">三笔，而且一笔比一笔疼</text>
+<text class="svgsm" x="970" y="772" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">① <tspan font-weight="700">索引器要给所有历史打分</tspan>，一个都不能跳。</text>
+<text class="svgsm" x="970" y="802" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">② <tspan font-weight="700">它那 0.95 GiB，每一步都要整条读完</tspan> ——</text>
+<text class="svgsm" x="970" y="832" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是挑中那 2048 个（0.13 GiB）的 7 倍。</tspan></text>
+<text class="svgsm" x="970" y="862" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">③ <tspan font-weight="700">挑中的 2048 个散落在各处</tspan>，搬起来碎。</text>
+<text class="svgsm" x="970" y="892" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums">所以这一支后来都在缩第 ② 笔：</text>
+<text class="svgsm" x="970" y="922" fill="#5f6368" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">几层共用一个索引器</tspan>。</text>
+<rect x="0" y="1054" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1054" width="4" height="74" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="2" y="1054" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1081" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这两笔多花的，正好把这一支后来的样子定下来了</tspan></text>
+<text class="svgsm" x="20" y="1112" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">省 FLOPs 谁都会 ——　在纸上少算 98% 的格子而已。可只要那些格子<tspan font-weight="700">散落在显存各处</tspan>，<tspan font-weight="700">要搬的字节一点没少，时间就一点没省</tspan>。</text>
+<rect x="0" y="1144" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1144" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="2" y="1144" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1171" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">回到现场那四问，答案一句一条</tspan></text>
+<text class="svgsm" x="20" y="1202" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">怎么挑的</tspan>：一个很轻的打分器扫过全部历史，取分数最高的 2048 个位置。</text>
+<text class="svgsm" x="20" y="1226" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">省了显存吗</tspan>：<tspan font-weight="700">没有，一个字节都没省。</tspan>省的是每一步真正读进来、算进去的那一部分。</text>
 </svg><figcaption>⭐⭐⭐ <b>这一张是为现场那四个问题专门画的，四问四块，一一对上。</b><span class="capmore"><br><em>要是只看一眼，就看第 ② 块那条按真比例画的带子 ——&nbsp;<b>橙色那一小条是这一步读进来的，灰色那一大片全都还在显存里躺着。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>索引器的式子 I[t,s] ＝ Σ w·ReLU(q·k) 与 top-k＝2048 出自 DeepSeek-V3.2 技术报告（arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>）及其公开实现</p>
 <p>「不连续访存用不上 FlashAttention」逐条出自 NSA 论文 （arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a>）§2.2：token 粒度的选择要从 KV cache 里加载大量单个 token，「this non-contiguous memory access prevents efficient adaptation of fast attention techniques like FlashAttention」</p>
 <p>⚠️ 1.56% ＝ 2048 ÷ 131072，是<b>算出来的</b>；上排 24 根柱子的高低与选中位置是<b>示意</b>，不对应任何一次真实打分</p></details></figure>
@@ -9755,8 +9767,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="720" y="400" fill="#80868b" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">隔得越远 →</text>
 <path d="M 120.00 184.00 L 129.67 185.78 L 139.33 187.56 L 149.00 189.34 L 158.67 191.11 L 168.33 192.89 L 178.00 194.67 L 187.67 196.45 L 197.33 198.23 L 207.00 200.00 L 216.67 201.78 L 226.33 203.56 L 236.00 205.34 L 245.67 207.12 L 255.33 208.90 L 265.00 210.68 L 274.67 212.45 L 284.33 214.23 L 294.00 216.01 L 303.67 217.79 L 313.33 219.57 L 323.00 221.34 L 332.67 223.12 L 342.33 224.90 L 352.00 226.68 L 361.67 228.46 L 371.33 230.24 L 381.00 232.02 L 390.67 233.79 L 400.33 235.57 L 410.00 237.35 L 419.67 239.13 L 429.33 240.91 L 439.00 242.68 L 448.67 244.46 L 458.33 246.24 L 468.00 248.02 L 477.67 249.80 L 487.33 251.58 L 497.00 253.36 L 506.67 255.13 L 516.33 256.91 L 526.00 258.69 L 535.67 260.47 L 545.33 262.25 L 555.00 264.02 L 564.67 265.80 L 574.33 267.58 L 584.00 269.36 L 593.67 271.14 L 603.33 272.92 L 613.00 274.69 L 622.67 276.47 L 632.33 278.25 L 642.00 280.03 L 651.67 281.81 L 661.33 283.59 L 671.00 285.37 L 680.67 287.14 L 690.33 288.92 L 700.00 290.70" fill="none" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
 <path d="M 120.00 184.00 L 129.67 184.09 L 139.33 184.18 L 149.00 184.29 L 158.67 184.41 L 168.33 184.55 L 178.00 184.70 L 187.67 184.87 L 197.33 185.06 L 207.00 185.28 L 216.67 185.52 L 226.33 185.79 L 236.00 186.09 L 245.67 186.43 L 255.33 186.82 L 265.00 187.25 L 274.67 187.73 L 284.33 188.27 L 294.00 188.87 L 303.67 189.56 L 313.33 190.32 L 323.00 191.18 L 332.67 192.14 L 342.33 193.22 L 352.00 194.43 L 361.67 195.78 L 371.33 197.31 L 381.00 199.02 L 390.67 200.93 L 400.33 203.09 L 410.00 205.50 L 419.67 208.21 L 429.33 211.25 L 439.00 214.66 L 448.67 218.49 L 458.33 222.78 L 468.00 227.60 L 477.67 233.00 L 487.33 239.07 L 497.00 245.87 L 506.67 253.51 L 516.33 262.08 L 526.00 271.69 L 535.67 282.47 L 545.33 294.57 L 555.00 308.15 L 564.67 323.39 L 574.33 340.48 L 584.00 359.66 L 593.67 378.00 L 603.33 378.00 L 613.00 378.00 L 622.67 378.00 L 632.33 378.00 L 642.00 378.00 L 651.67 378.00 L 661.33 378.00 L 671.00 378.00 L 680.67 378.00 L 690.33 378.00 L 700.00 378.00" fill="none" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="546" y="246" fill="#174ea6" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">真实的语言</tspan></text>
-<text class="svgsm" x="546" y="270" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">隔一百句还剩一点</text>
+<text class="svgsm" x="546" y="222" fill="#174ea6" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">真实的语言</tspan></text>
+<text class="svgsm" x="546" y="246" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">隔一百句还剩一点</text>
 <text class="svgsm" x="598" y="338" fill="#a50e0e" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只记上一句</tspan></text>
 <text class="svgsm" x="598" y="362" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums">隔几十句就归零</text>
 <rect x="760" y="180" width="600" height="200" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
@@ -10209,7 +10221,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="456" y="818" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">总层数</tspan></text>
 <text class="svgsm" x="34" y="376" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全注意力层数</tspan></text>
 <line x1="96.0" y1="772.0" x2="816.0" y2="406.6153846153846" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 5"/>
-<text class="svgsm" x="566" y="528" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">假说 A 预测的样子（3 : 1）</tspan></text>
+<text class="svgsm" x="566" y="574" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">假说 A 预测的样子（3 : 1）</tspan></text>
 <line x1="96.0" y1="684.3076923076923" x2="816.0" y2="684.3076923076923" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6 5"/>
 <text class="svgsm" x="620" y="674" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">假说 B 预测的样子（平的）</tspan></text>
 <rect x="284.4" y="663.6923076923077" width="12" height="12" rx="6" fill="#e8710a" stroke="#fff" stroke-width="1.6"/>
@@ -11054,11 +11066,12 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="196" y="740" fill="#80868b" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">每桌几个人</text>
 <text class="svgsm" x="226" y="776" fill="#5f6368" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一顿饭只报一次</tspan></text>
 <line x1="400" y1="702" x2="560" y2="702" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6,5" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="480" y="688" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">每道菜都跑去问？</text>
+<text class="svgsm" x="480" y="678" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">每道菜都跑去问？</text>
 <line x1="494" y1="716" x2="466" y2="688" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
 <line x1="494" y1="688" x2="466" y2="716" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
-<text class="svgsm" x="480" y="746" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">一来一回是微秒级，</text>
-<text class="svgsm" x="480" y="768" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">而这一步只有几十微秒</text>
+<text class="svgsm" x="480" y="742" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">一来一回是微秒级，</text>
+<text class="svgsm" x="480" y="764" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">而这一步</text>
+<text class="svgsm" x="480" y="786" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums">只有几十微秒</text>
 <rect x="564" y="614" width="420" height="176" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="774" y="648" fill="#174ea6" text-anchor="middle" style="font-size:24.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">后厨（就在卡上）</tspan></text>
 <rect x="590" y="668" width="66" height="54" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
@@ -11326,8 +11339,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="232" y="674" width="1120.0" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text class="svglbl" x="792" y="705" fill="#174ea6" text-anchor="middle" style="font-size:23.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">512×</tspan></text>
 <text class="svgsm" x="792" y="746" fill="#174ea6" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">旋钮②　稀疏注意力：每步固定只读 2,048 个，<tspan font-weight="700">一整条全被它抵掉</tspan></tspan></text>
-<line x1="232" y1="502" x2="232" y2="764" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
-<line x1="1352.0" y1="502" x2="1352.0" y2="764" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
+<line x1="232" y1="502" x2="232" y2="610" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
+<line x1="232" y1="660" x2="232" y2="764" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
+<line x1="1352.0" y1="502" x2="1352.0" y2="610" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
+<line x1="1352.0" y1="660" x2="1352.0" y2="764" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
 <text class="svgsm" x="1352" y="492" fill="#80868b" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">要还的 512×</tspan></text>
 <text class="svgsm" x="24" y="636" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">末尾露出来的那一小截红，就是六年里真正多买的硬件</tspan> ——&#160;只有 2.25 倍。前面 227.5 倍是「把每个 token 变便宜」换来的。</text>
 <text class="svgsm" x="24" y="794" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums">这一根<tspan font-weight="700">一点都没露</tspan> ——&#160;上下文涨了 512 倍，每步要读的<tspan font-weight="700">一个字节都没涨</tspan>。 而它<tspan font-weight="700">不省显存</tspan>：KV 全存着，所以它不进上面那根条。</text>

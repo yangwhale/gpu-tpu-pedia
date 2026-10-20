@@ -1991,7 +1991,7 @@ __FIG_PER_BYTE__
   要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p>
 </div>
 
-<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— __NROWS__ 行名次表、该切在哪、省多少付多少</b><span class="why">判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
+<details class="foldfig"><summary><b>把一层里每个张量按这条判据排一遍 —— __NROWS__ 行名次表、该切在哪、省多少付多少</b>　<span class="why">判据本身上面已讲完；这里是跑一遍的细账，属于「装不装得下」</span></summary>
 <p>把 V3 在<b>基准的 4K</b> 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
 
 __TBL_PER_BYTE__
@@ -6240,7 +6240,8 @@ _QUIZ_HTML, _QUIZ_CSS = _QZ.build()
 #   ⭐ 判据：**往「那个 </style>」前面插之前，先数一数有几个。**
 #     盲 replace 会插进打印样式里 ——&#160;屏幕上完全看不出来，只有打印时才发作。
 assert head.count("</style>") == 2, "head 里 </style> 的个数变了，先去看 make_head"
-head = head.replace("</style>", _QUIZ_CSS + "</style>", 1)      # 只插第一个（屏幕样式）
+from course_narrow_css import CSS as _NARROW_CSS                      # noqa: E402
+head = head.replace("</style>", _QUIZ_CSS + _NARROW_CSS + "</style>", 1)      # 只插第一个（屏幕样式）
 
 _html = head + HERO + BODY + FOOT
 _html = _html.replace("__QUIZ__", _QUIZ_HTML)

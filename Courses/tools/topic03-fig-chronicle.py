@@ -649,7 +649,7 @@ for i, (who, arc) in enumerate((
     t(118, y, arc, fill=BR)
 
 t(16, FY + 122, '⭐⭐ 再看一眼 ② 那条泳道：这次补完混元和 GLM，多出来一条原先看不见的线',
-  "svglbl", "#174ea6", size=12)
+  "svglbl", "#174ea6", size=13)   # 10-20（fx23）：12 → 13，跟落点带首行那条标题同号
 # ⛔ 字号从 10.5 抬到 15 之后这一行放不下了 —— 拆两行，别缩回去
 t(16, FY + 142, '混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 '
                 'GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：'

@@ -471,7 +471,9 @@ def render(v):
               fill=C(key, INK if mark == "★" else GY),
               bold=(mark == "★"), size=FS_SHAPE)
             if mark == "★":
-                t(x + wbox // 2 + 14, y + 22,
+                # 10-20（fx23）：原来从框右沿 +14 起笔，V 支路的路由竖线（CX+MMW+96）
+                #   正好从这句话中间穿过 → 起笔挪到那条竖线右边 14px
+                t(max(x + wbox // 2, CX + MMW + 96) + 14, y + 22,
                   "★ <tspan font-weight=\"700\">这一步不落地，贵在要算的次数</tspan>",
                   fill=C(key, RD), size=FS_SHAPE)
             pos[key] = (x, y, y + 32)

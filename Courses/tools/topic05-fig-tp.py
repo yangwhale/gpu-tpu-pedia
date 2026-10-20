@@ -304,7 +304,7 @@ def fig_wide_deep():
     f.t(X0 + LW + 44, py + 60, "每一层都要", RD_, True, 14)
     f.t(X0 + LW + 44, py + 82, "四张卡对账", RD_, True, 14)
     f.t(X0 + LW + 44, py + 104, "（attention、MLP 各一次 AllReduce）", RD_, size=13)
-    f.t(24, py + PH - 30, "每层都要通信 → 只能坐最快的那圈线", BL, True, 14)
+    f.t(24, py + PH - 48, "每层都要通信 → 只能坐最快的那圈线", BL, True, 14)
     f._pan = None
     # 右：PP
     px = HW + 40
@@ -320,7 +320,7 @@ def fig_wide_deep():
     f.t(X1 + LW + 44, py2 + 104, "只在段的交界", RD_, True, 14)
     f.t(X1 + LW + 44, py2 + 126, "递一次门板", RD_, True, 14)
     f.t(X1 + LW + 44, py2 + 148, "（一对一收发）", RD_, size=13)
-    f.t(px + 24, py2 + PH - 30, "只 3 处通信 → 能跨慢线；代价是有人闲着等", OR, True, 14)
+    f.t(px + 24, py2 + PH - 48, "只 3 处通信 → 能跨慢线；代价是有人闲着等", OR, True, 14)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "一个切宽、一个切深，各付各的代价", [
         "切宽：每张卡每层只算四分之一，可每一层都得跟另外三张卡对账，所以 TP 出不了一台机器。",

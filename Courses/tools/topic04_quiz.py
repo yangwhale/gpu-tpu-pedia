@@ -89,6 +89,17 @@ CSS = """
 #qz .qzans{margin-top:14px;border-top:1px dashed #dadce0;padding-top:12px}
 #qz .qzans li{margin:7px 0}
 @media(max-width:760px){#qz .qzwrap{grid-template-columns:1fr 60px 1fr}}
+/* ⭐ 2026-10-20 手机版（中文原稿问题清单第三组）：390 下原来还是三列 ＋ 色条不换行，
+   把整页撑到约 686px，右列被切。⛔ 只给色条加换行不够（英文版试过：仍 458px、版式更乱）。
+   ⭐ 改成上下两块：上面四个模型、下面四条构成，都左对齐竖排，色条可以折行；
+     两块左边共用一条 40px 的沟给连线走（线怎么走见 JS 里的 stacked 分支）。 */
+@media(max-width:600px){
+  #qz .qzwrap{grid-template-columns:minmax(0,1fr);row-gap:22px}
+  #qz .qzL{grid-column:1;grid-row:1;justify-items:start;padding-left:40px;gap:10px!important}
+  #qz .qzR{grid-column:1;grid-row:2;justify-items:stretch;padding-left:40px;gap:10px!important}
+  #qz .chip{white-space:normal}
+  #qz .cy{white-space:normal}
+}
 """
 
 JS = """
@@ -106,17 +117,33 @@ JS = """
    clear();
    var W=wrap.getBoundingClientRect();
    if(!W.width) return;                      // details 还没展开，宽度是 0
+   // ⭐ 手机版两块上下摞（见 CSS 的 max-width:600px）：线从模型芯片左边出发，横着进左边那条沟，
+   //   沿沟往下，再横着接进下面那一行构成。每条线各占一条竖道（越靠上的模型走越外侧的道），
+   //   所以线不会从别的芯片或构成条上穿过去。
+   var LB=root.querySelector('.qzL').getBoundingClientRect(),
+       RB=root.querySelector('.qzR').getBoundingClientRect();
+   var stacked = RB.top >= LB.bottom - 1;
    Object.keys(tie).forEach(function(i){
      var a=L[i].getBoundingClientRect(), b=R[tie[i]].getBoundingClientRect();
      var ln=document.createElementNS('http://www.w3.org/2000/svg','path');
-     var x1=a.right-W.left, y1=a.top+a.height/2-W.top;
-     var x2=b.left-W.left,  y2=b.top+b.height/2-W.top;
-     var m=(x1+x2)/2;
-     ln.setAttribute('d','M'+x1+','+y1+'C'+m+','+y1+' '+m+','+y2+' '+x2+','+y2);
+     var d;
+     if(stacked){
+       var xg=LB.left-W.left+6+(+i)*8;
+       var x1=a.left-W.left, y1=a.top+a.height/2-W.top;
+       var x2=b.left-W.left, y2=b.top+b.height/2-W.top;
+       d='M'+x1+','+y1+'H'+xg+'V'+y2+'H'+x2;
+     } else {
+       var x1=a.right-W.left, y1=a.top+a.height/2-W.top;
+       var x2=b.left-W.left,  y2=b.top+b.height/2-W.top;
+       var m=(x1+x2)/2;
+       d='M'+x1+','+y1+'C'+m+','+y1+' '+m+','+y2+' '+x2+','+y2;
+     }
+     ln.setAttribute('d',d);
      ln.setAttribute('fill','none');
      ln.setAttribute('stroke', L[i].getAttribute('data-ink')||'#1a73e8');
      ln.setAttribute('stroke-width','2.5');
      ln.setAttribute('stroke-linecap','round');
+     ln.setAttribute('stroke-linejoin','round');
      svg.appendChild(ln);
    });
  }

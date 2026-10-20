@@ -84,6 +84,9 @@ NEW = '<span class="kind k-new">新</span>'
 # 开场热身题的样式单独追加一段 <style>，不去猜往第几个 </style> 前面插（专题四踩过：head 里有好几个）
 _QUIZ_HTML, _QUIZ_CSS = QZ.build()
 head += "<style>" + _QUIZ_CSS + "</style>\n"
+# ⭐ 2026-10-20：窄屏规则（表格框内横滚、录音条另起一行），正本在 course_narrow_css.py
+from course_narrow_css import CSS as _NARROW_CSS   # noqa: E402
+head += "<style>" + _NARROW_CSS + "</style>\n"
 
 SECTIONS = [
     ("s零", "零", "一张卡装不下"),
@@ -318,7 +321,7 @@ __FIG_BF16_BETA__
   <p>回到藏书楼。FSDP 切的时候<b>根本不管书是什么</b>：把一间书房的书一页页排成一长条，按长度等分成 128 段，每阁拿一段。切口常常落在一本书中间，所以每阁手里那段，可能是一本书的后半截接着另一本的开头 —— <b>单拿这一段谁也读不了</b>。
     要用这一间，就得把其余 127 段都<b>抄</b>过来，凑回整间（AllGather），读完把抄本扔掉，只留自己那段；反向算完，每一段的修改意见交回管那段的阁合并（ReduceScatter）。</p>
 __FIG_SIKU__
-  <p>注意跟后面 EP 的区别：EP 按整架分，每架都是一个完整专家，单独就能算；FSDP 切的是碎片，为的是通信好切块，<b>拼回来之前没用</b>。</p>
+  <p>注意跟后面 EP 的区别：EP 按整架分，每架都是一个完整专家，单独就能算；FSDP 切的是碎片，为的是通信好切块，<span style="white-space:nowrap"><b>拼回来之前没用</b>。</span></p>
 __FIG_FSDP_STEP__
 <figure class="fbox fwide" id="anim-fsdp">
 <video src="media/topic05-fsdp.mp4" autoplay loop muted playsinline
