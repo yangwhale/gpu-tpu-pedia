@@ -27,8 +27,9 @@ BODY = '''
   <p>座位坐满后，长 prompt 进门那一步会卡住所有正在出字的人。2023 年 SARATHI 把 prefill 切块塞进 decode 的步里（2024 年 Sarathi-Serve 做成完整调度），可这只摊平了打扰；Splitwise、DistServe 干脆把两段分到两批机器（PD 分离）。代价是每个请求多传一趟 KV，还多了一份 prefill 与 decode 的机器配比要调。</p>
   <p>DeepSeek-V3 这类 MoE（每个字只走几个专家）又把拼好的 batch 拆散：256 个专家选 8 个，每个专家只分到几行。SGLang 的 DP attention、DeepSeek 的大 EP 把专家铺到上百张卡上，凑够行数。随之而来的是每个 rank 要自备一份状态，K3 上 DEP8 直接显存不足；decode 快了，prefill 又喂不上。</p>
   <p>2024 年 9 月的 o1、2025 年 1 月的 DeepSeek-R1 一题要写几百到几千个思考 token（R1 论文），交互档（同样的出字速度）又限住 batch，“读一趟权重出一个字”成了硬上限。投机解码、MTP 让一趟验好几个字；剩下能省的是字节，FP8、FP4 和合并 kernel（芯片上调起的一个计算函数）接着压。同一套 GB300（NVIDIA 整柜 GPU）跑 DeepSeek-V4-Pro，光改软件，同一交互档每卡吞吐比首发日（Day-0）涨了几倍？先猜一个数，答案在 <a href="#s15-cost">15.3</a>。</p>
+  <p>模型侧也在动。Qwen3-Next、Qwen3.5、K3 把大部分层换成线性注意力，每条序列只留一份固定大小的状态；循环模型让同一段层多跑几圈换深度（开场新闻）。两样都给引擎出了新题，分别在第十三节和 0.2。</p>
 __FIG_S0_CHAIN__
-  <details class="foldfig"><summary><b>十一环展开</b>：每一招卡在哪、省了多少、又留下什么（按环号，也就是首次公开的先后）</summary>
+  <details class="foldfig"><summary><b>十三环展开</b>：每一招卡在哪、省了多少、又留下什么（按环号，也就是首次公开的先后）</summary>
   <table>
     <tr><th>环</th><th>首次公开</th><th>谁先做</th><th>卡在哪 → 怎么解</th><th>省了多少（对谁）</th><th>解完又冒出什么</th><th>节</th></tr>
     <tr><td>①</td><td>2022</td><td>Orca 论文</td><td>整批人陪最慢的那个写完 → 连续批，每步都能进出</td><td>同延迟吞吐 36.9×（对 FasterTransformer）</td><td>座位数归 KV 管，按最长预留，真用上的两到近四成</td><td>三</td></tr>
@@ -42,8 +43,10 @@ __FIG_S0_CHAIN__
     <tr><td>⑨</td><td>2024 → 2025</td><td>Mooncake（Kimi）、DeepSeek</td><td>前缀放不下 → 分层下放到内存、SSD</td><td>Kimi 线上多接 107%–115%</td><td>副本一多，前缀只在自己那份里有；靠 KV 感知路由把命中率从 20% 拉到 75%</td><td>四、八、十四</td></tr>
     <tr><td>⑩</td><td>2024 → 2025</td><td>Meta（CP）；vLLM 2025 合入 DCP</td><td>DEP 起不来、KV 被复制 → DCP／PCP 按序列切</td><td>DCP 把 KV 副本让出来，PCP 切 prompt 压首字</td><td>DCP 只在长上下文划算；PCP 遇上线性注意力，状态得一卡接一卡传</td><td>七</td></tr>
     <tr><td>⑪</td><td>2024 → 2025</td><td>SGLang、DeepSeek</td><td>MoE 把 batch 拆碎，每专家约 8 行 → DP attention ＋ 大 EP</td><td>SGLang 复现：最多是同卡数纯 TP 的 5×</td><td>每个 rank 自带一份状态，K3 开 DEP8 显存不够；prefill 也追不上变快的 decode</td><td>六</td></tr>
+    <tr><td>⑫</td><td>2025 → 2026（思路更早）</td><td>Qwen3-Next → Qwen3.5、K3</td><td>长上下文 KV 太大 → 大部分层换成线性注意力（GDN、KDA），每条序列一份固定大小的状态</td><td>Qwen3.5-397B 60 层里只有 15 层存 KV</td><td>状态截不开，前缀缓存只能存快照；tpu-inference 上跑 Qwen3.5 前缀缓存至今得关</td><td>十三</td></tr>
+    <tr><td>⑬</td><td>2026（思路更早）</td><td>Koi-4B 论文、NVIDIA Dory 4B</td><td>想多花算力换质量又不加参数 → 中间一段层反复跑几圈，圈数推理时选</td><td>Koi-4B 同一个 checkpoint，智能指数估计 1 圈 18、4 圈 29</td><td>多一圈多搬一趟权重；KV 每圈一份，显存跟着圈数涨</td><td>零（0.2）</td></tr>
   </table>
-  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。右端那颗菱形是眼下最新的一环， GB300 × V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡涨到首发日的几倍，留到 15.3 揭晓。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十五节）。</p>
+  <p>两股外力：上下文变长（2023-11 GPT-4 Turbo 128K，2024-02 Gemini 1.5 Pro 1M），每人占的 KV 多了座位就少；输出变长（2024-09 o1，2025-01 R1），一题几百到几千个思考 token。⑫⑬ 是模型侧的点，思路都早于 2022（混合：H3、Jamba；循环：Universal Transformers），图上落在进入主流大模型的那一年。这些招叠起来有多大：同一套 GB300 跑 DeepSeek-V4-Pro（2026-06），硬件、模型、交互档不动，只换软件，每卡是首发日的 <b>5.1 倍</b>（约 11,200 ÷ 约 2,200，本课推导；<a href="#s15-cost">15.3</a>）。表里每个倍数各有各的基线，彼此包含，不能乘起来（第二、十五节）。</p>
   </details>
 __FIG_S0_TWOLONG__
   <p>全课的账建在 DeepSeek-V3（2024 年 12 月）上：MoE，总参数 6,710 亿，每个 token 激活的参数约 370 亿。

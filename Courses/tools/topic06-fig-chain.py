@@ -3,7 +3,11 @@ r"""专题六 · 第零节 0.1「问题链」（fig6-chain）。R85 首版，L80
 
 ⭐ 回答的问题：2022 年到今天，推理的这十一招各是哪一年冒出来的？
    一条从左往右的轴，每环一个点，只写「年份 ＋ 招数名」。上方两条细带是外力（上下文变长、输出变长），
-   轴右端一个菱形，是眼下最新的一环： GB300 × V4-Pro 的 5.1×。
+   L96（2026-10-20）：去掉右端「GB300 × V4-Pro 涨了几倍」的菱形 —— 前面每个点是一招，它是一个结果，
+   不是一个维度；5.1× 挪到图下折叠表的说明里。补两个模型侧的点：⑫ 线性注意力混合、⑬ 循环模型。
+   ⛔ 这两点不按「首次公开」放：混合的思路早见 H3（arXiv 2212.14052）、Jamba（2403.19887），
+   循环早见 Universal Transformers（1807.03819），照规矩放会出轴或让 ⑨–⑪ 全链改号。
+   所以按「进入主流大模型」放：⑫ Qwen3-Next（2025-09），⑬ Koi-4B 论文（2026-10-08）、NVIDIA Dory 4B（10-16）。图上副标题写明。
 ⭐ L80 为什么重画：R85 版是 11 张卡片之字形排开，每张卡塞着问题句、倍数、红字新问题，
    再加两个外力框、一张最新一环的卡，共 13 个框。现场评语是「几十个框框，乱七八糟」，
    而且之字形看不出先后。
@@ -44,24 +48,25 @@ RINGS = [
     (9, 2024, 6, "KV 分层下放", 2025, False),
     (10, 2024, 11, "切序列 CP", 2025, False),
     (11, 2024, 12, "MoE 大 EP", 2025, False),
+    (12, 2025, 9, "线性注意力混合", 2026, True),
+    (13, 2026, 10, "循环模型", None, True),
 ]
-assert [r[0] for r in RINGS] == list(range(1, 12)), "环号要从左到右连续"
+assert [r[0] for r in RINGS] == list(range(1, 14)), "环号要从左到右连续"
 assert [(r[1], r[2]) for r in RINGS] == sorted((r[1], r[2]) for r in RINGS), "没按首次公开的时间排"
 YEARS = [2022, 2023, 2024, 2025, 2026]
-END = (2026, 6)               # 眼下最新一环：GB300 × V4-Pro
 # 外力：(颜色, 名字, [(年, 月, 刻度字)])
 FORCES = [
     (OR, "上下文变长", [(2023, 11, "128K"), (2024, 2, "1M")]),
     (PU, "输出变长", [(2024, 9, "o1"), (2025, 1, "R1")]),
 ]
-CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪"
+CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬"
 
 
 def seg_layout():
     """每年一段：段宽 ＝ 点数 × SLOT ＋ 两头留白；没有新点的年份给一格。返回 {年: (x0, x1, [点 x])}。"""
     out, x = {}, X0
     for y in YEARS:
-        n = sum(1 for r in RINGS if r[1] == y) + (1 if y == END[0] else 0)
+        n = sum(1 for r in RINGS if r[1] == y)
         w = max(n, 1) * SLOT + 2 * PAD
         xs = [x + PAD + SLOT * (k + 0.5) for k in range(n)]
         out[y] = (x, x + w, xs)
@@ -77,7 +82,7 @@ assert X1 <= W - 4, "轴太长：%d" % X1
 def xdate(y, m):
     """年月 → x：年内按已知点分段线性插值（只为把外力刻度放进对的先后位置，不是按月比例）。"""
     x0, x1, xs = SEG[y]
-    ms = [r[2] for r in RINGS if r[1] == y] + ([END[1]] if y == END[0] else [])
+    ms = [r[2] for r in RINGS if r[1] == y]
     knots = [(0, x0)] + list(zip(ms, xs)) + [(12, x1)]
     for (ma, xa), (mb, xb) in zip(knots, knots[1:]):
         if ma <= m <= mb:
@@ -86,16 +91,16 @@ def xdate(y, m):
 
 
 def fig_chain():
-    f = Fig(W, "推理的十一招放在一条时间轴上，从左往右是 2022 到 2026 年。"
+    f = Fig(W, "推理的十三招放在一条时间轴上，从左往右是 2022 到 2026 年。"
                "2022 年：① Orca 连续批，② GPTQ 量化（一直做到 2026），③ 投机解码（到 2025）。"
                "2023 年：④ GQA 压薄 KV（模型侧，到 2025），⑤ PagedAttention，⑥ 分块 prefill，⑦ PD 分离（到 2025），⑧ RadixAttention。"
                "2024 年：⑨ KV 分层下放，⑩ 切序列（到 2025），⑪ MoE 大 EP（到 2025）。"
-               "2025 年没有新起头的环，都是前面几环在往下做。"
+               "2025 年：⑫ 线性注意力混合（模型侧，到 2026）。2026 年：⑬ 循环模型（模型侧）。"
+               "这两个模型侧的点按进入主流大模型的时间放，思路更早。"
                "上方两条细带是外力：上下文变长从 2023 年 11 月的 128K 起，2024 年 2 月到 1M；"
-               "输出变长从 2024 年 9 月的 o1 起，2025 年 1 月有 R1。"
-               "轴的右端停在 2026 年 6 月，是眼下最新的一环：GB300 跑 V4-Pro，光改软件涨了几倍，标成问号，答案在最后一节。")
-    y0 = f.header("问题链　——　<tspan font-weight=\"700\">十一招各是哪年冒出来的</tspan>",
-                  "点落在首次公开的那一年，年内只排先后、不按月比例；点下的「→」是一直做到哪年；圈里的数是环号，从左到右按先后编",
+               "输出变长从 2024 年 9 月的 o1 起，2025 年 1 月有 R1。")
+    y0 = f.header("问题链　——　<tspan font-weight=\"700\">十三招各是哪年冒出来的</tspan>",
+                  "点落在首次公开的那一年（⑫⑬ 思路更早，落在进入主流大模型那年），年内只排先后；「→」是一直做到哪年；圈里是环号",
                   [(INK, "系统侧"), (GY, "空心：模型侧"), (OR, "外力：上下文变长"), (PU, "外力：输出变长")])
     # ── 年份列头 ＋ 列间细线 ──
     yh = y0 + 16
@@ -152,26 +157,17 @@ def fig_chain():
             assert a[1] + 8 <= b[0], "标签撞车：%s / %s" % (a[3], b[3])
         for b in row:
             assert b[0] >= 0 and b[1] <= W, "标签出边界：%s" % b[3]
-    # ── 眼下最新一环：菱形 ──
-    xe = SEG[END[0]][2][-1]
-    d = 13
-    f.poly([(xe, ya - d), (xe + d, ya), (xe, ya + d), (xe - d, ya)], INK, INK)
-    f.line(xe, ya + 16, xe, ya + 22, LINE, 1, arrow=False)
-    f.t(xe, ya + 36, "2026-06　截至目前", GY, False, 14, "middle")
-    f.t(xe, ya + 56, "GB300 × V4-Pro", INK, True, 14, "middle")
-    f.t(xe, ya + 76, "涨了几倍？", INK, True, 15, "middle")
-    for b in boxes:
-        if not b[2]:
-            assert b[1] + 8 <= xe - 70 or b[0] >= xe + 70, "右端标签撞车：%s" % b[3]
     f.src(ybot, "首次公开：Orca OSDI'22；GPTQ arXiv 2210.17323；投机解码 Leviathan 等 arXiv 2211.17192；"
                 "GQA arXiv 2305.13245；PagedAttention 博客 2023-06-20；Splitwise arXiv 2311.18677；"
                 "RadixAttention arXiv 2312.07104；SARATHI arXiv 2308.16369；Mooncake arXiv 2407.00079；"
-                "Meta 上下文并行 arXiv 2411.01783；SGLang v0.4 博客 2024-12-04（DP attention）、DeepSeek-V3 arXiv 2412.19437。"
+                "Meta 上下文并行 arXiv 2411.01783；SGLang v0.4 博客 2024-12-04（DP attention）、DeepSeek-V3 arXiv 2412.19437；"
+                "⑫ Qwen3-Next 博客 2025-09-10（更早：H3 arXiv 2212.14052、Jamba 2403.19887）；"
+                "⑬ Koi-4B arXiv 2610.12582、NVIDIA Dory 4B 2026-10-16（更早：Universal Transformers arXiv 1807.03819）。"
                 "末年：DeepSeek-V3.2-Exp 技术报告（DSA，2025-09）；SGLang HiCache 博客 2025-09-10；NVIDIA Dynamo 新闻稿 2025-03-18；"
                 "SGLang 大 EP 博客 2025-05-05；vLLM v0.10.2 release（DCP，2025-09）；EAGLE-3 arXiv 2503.01840；"
                 "Inferact TPU megakernel 博客 2026-09、vLLM DeepSeek-V4.1-Flash 博客 2026-10-07（FP4 KV）。"
                 "外力：OpenAI DevDay 2023-11-06、Google 2024-02-15；OpenAI 2024-09-12、DeepSeek-R1 arXiv 2501.12948。"
-                "右端菱形：PyTorch 博客 2026-06-23，倍数留到最后一节揭晓。年内等距排，只表先后。")
+                "年内等距排，只表先后。")
     f.save("fig6-chain.svg", ybot + 4)
 
 
