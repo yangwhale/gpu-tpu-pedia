@@ -2532,7 +2532,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <ul>
     <li><b>很便宜。</b>Qwen3-Coder-480B 一个 8K prompt 约 100 ms，只占 prefill 的 5–10%（按带宽估算）。</li>
     <li><b>单趟便宜，不等于总量便宜。</b>一台 prefill 每秒外送一串请求的 KV，一条专线并不了几台（下图）。KV 厚的，别出 NVLink 域。</li>
-    <li><b>前提是网络跑在设计带宽上。</b>vLLM 在 GB300 上跑 V4-Pro，配置漏了，绕道主机内存，每秒只走约 200 MB，一趟 5 秒多；配对后快两个数量级。配错不报错，只是首字慢。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s8-prfaas"><svg viewBox="0 0 1400 552" width="100%" role="img" aria-label="四个模型在 32K 输入时，一台 8 卡 H200 做 prefill，每秒要往外送多少 KV。全注意力的 Qwen3-235B 要 33.35 Gbps，混合的 Qwen3.5-397B 只要 8.25，前者是后者的 4 倍。全注意力的 MiniMax-M2.5 要 59.93，混合的 MiMo-V2-Flash 只要 4.66，前者是后者的 13 倍。红虚线是案例里整条跨集群专线约 100 Gbps，整个 prefill 集群共用：Qwen3-235B 只够并 2 台，MiniMax 只够 1 台，Qwen3.5 能并 12 台，MiMo 21 台。案例里整个 prefill 集群平均出口只有 13 Gbps"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KV 变薄，PD 才敢跨数据中心　——　<tspan font-weight="700">混合模型要送的字节降到全注意力的 1/4 到 1/13</tspan></text>
@@ -2589,7 +2588,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>先看两根橙柱只够并 1–2 台，再看两根绿柱能并 12–21 台。</b><span class="capmore"><br><em>32K 输入，一台 8×H200 每秒外送的 KV；「够并几台」是 100 Gbps 除以每台外送，L300 的推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 PrFaaS，arXiv <a href="https://arxiv.org/abs/2604.15039" target="_blank" rel="noopener">2604.15039</a>（Moonshot AI ＋ 清华）：Table 3 的 Φ_kv；案例吞吐 +54%、P90 TTFT −64%、同成本约 +15%、比不调度的朴素异构 +32%；长度阈值 19.4K，约一半请求外送；平均出口 13 Gbps，占整条以太网的 13%（§4.3.1，故专线约 100 Gbps）。「够并几台」＝ ⌊100 ÷ 每台外送⌋，本课推导。</p>
 <p>📌 案例：内部 1T 混合模型，32 张 H200 做 prefill ＋ 64 张 H20 做本地 PD，对比 96 张 H20 同构 PD。「每 4 层里 3 层线性」即论文的混合 3:1；「每 6 层里 5 层只看近处」即 5:1 滑窗注意力（SWA）。</p>
 <p>⚠️ 那 4 倍、13 倍是两两同代对比（论文原文），不是同一参数量下的严格对照。</p></details></figure>
-  <p><b>上线前两件事：先量 KV 传输带宽，再比字。</b>temperature 设 0，拆与不拆逐 token 对：前几个就分叉多半是 bug，几百个后才分叉可能是浮点差，分不清降到并发 1 再比。PD 出错常是能跑、通顺，但和不拆时不同。</p>
 
   <h3 id="l6-4">所以呢：配几台，什么时候别拆</h3>
   <ul>
@@ -2650,7 +2648,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按上限开批。多搬的 KV 一个请求只传一次，前提是网络跑在设计带宽上。</b><br>
+    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按上限开批。多搬的 KV 一个请求只传一次，单趟很便宜。</b><br>
     这一步进步多少：Mooncake 的 FAST'25 正式版报告，比此前系统多接 115%（A800）、107%（H800）请求。<br>
     可拆不拆，decode 还是一步只出一个字。下一节：能不能一趟出好几个字？<br>
     <em>想深挖：完整版第八、九节。</em></div>
