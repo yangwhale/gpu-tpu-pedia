@@ -37,19 +37,16 @@ __L8_PPL__
     <li><b>从 FP8 再压到 NVFP4：</b>NVIDIA 博客称 DeepSeek-R1-0528 主要语言任务掉点在 1% 以内。</li>
     <li><b>「无损」要看跟谁比。</b>Kimi K2 Thinking 训练时就模拟 INT4，官方称「无损」、低延迟模式约快 2 倍，没写对照精度，基准也只报了 INT4 的分。</li>
   </ul>
-  <div class="note warn"><span class="t">读错一步不会报错</span>
-    INT4 是 −8 到 7，存文件时整体加 8，读时要减回去。Kimi K2.6 的记录里加载漏了这步，输出崩成重复的乱词，程序照常出字。<b>量化后先看输出、跑基准，再上线。</b></div>
 
   <h3 id="l8-4">KV 也能压</h3>
   <ul>
     <li><b>一个参数的事。</b>KV 存 FP8，vLLM、SGLang 都是一个 <code>--kv-cache-dtype</code>。Kimi K3 高吞吐配方列为必开：BF16 的 KV 装不下每组卡 128 个请求。</li>
-    <li><b>坑在缩放。</b>vLLM 只设 <code>fp8</code> 不校准，缩放全取 1.0；掉精度先查这个。</li>
     <li><b>已经到 4 bit。</b>NVIDIA 在 Blackwell 上放出 NVFP4 KV，比 FP8 再省约一半。</li>
   </ul>
 __L8_KVQ__
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>位数减半，下限减半。专家压到 4 bit、注意力最多 8 bit，整步省一半左右。掉不掉点要实测，读错一步不报错。</b><br>
+    <b>位数减半，下限减半。专家压到 4 bit、注意力最多 8 bit，整步省一半左右。掉不掉点要实测。</b><br>
     这一步进步多少：vLLM 在 2 张 H100 上给 Llama 3 70B 换 FP8 权重，每字间隔最多降到一半；gpt-oss-120b 只压专家，装进一张 80 GB 的卡。<br>
     招都讲完了。最后一节回到那一趟：拿到一个模型、一批卡，先问哪几个问题。<br>
     <em>想深挖：完整版第十二节。</em></div>
