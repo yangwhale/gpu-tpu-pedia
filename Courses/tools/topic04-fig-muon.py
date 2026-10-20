@@ -313,7 +313,7 @@ def main():
                "⭐ 该文还考了一笔源流：<tspan font-weight=\"700\">2015 年的 Stochastic Spectral "
                "Descent 已经提出过大致相同的算法</tspan>",
                "⛔ 本图<tspan font-weight=\"700\">不含任何收敛速度对照</tspan> ——&#160;"
-               "本课没有这些优化器的对照实测，跟 fig4-optimizers 同一条规矩",
+               "本课没有这些优化器的对照实测，跟 3.1 那张图同一条规矩",
                "⚠️ Ⓓ 那个「低于 1%」<tspan font-weight=\"700\">不出自上面那篇，出自 Muon 原作者的博客</tspan>"
                "（kellerjordan.github.io/posts/muon）：<tspan font-weight=\"700\">按 Llama 405B 的"
                "宽度和每批 token 数算出来的 FLOP 开销</tspan>，不是我们量的墙钟时间。"

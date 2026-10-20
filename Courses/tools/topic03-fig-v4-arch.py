@@ -107,7 +107,7 @@ def main():
     # ── 落点
     f.box(72, py + 296, 1256, 124, "#e8f0fe", BL, 8)
     f.t(96, py + 328, "⭐⭐ 所以「看上去跟 MLA 一样」——　"
-                      "<tspan font-weight=\"700\">这个直觉是对的</tspan>：两代都是"
+                      "<tspan font-weight=\"700\">这个直觉对了一半</tspan>：两代都是"
                       "「所有头共用一条」。", INK, True, 17)
     f.t(96, py + 360, "⛔ 真正的差别只有一句："
                       "<tspan font-weight=\"700\">MLA 那条是「压缩件」，逻辑上要还原成每头的 K 和 V；"
