@@ -31,7 +31,7 @@ __L3_PAGED__
 __L3_DISK__
   <ul>
     <li><b>很多请求开头一样：</b>同一段 system prompt、多轮对话的前几轮。这段 KV 留着，下一个人接着往后算。SGLang 的 RadixAttention 把开头存成一棵树；vLLM 2025 年起也默认打开。</li>
-    <li><b>只认一字不差的开头。</b>每个字的 KV 都看着前面所有字算出来：开头改一个 token，后面整段对不上。删掉早先几轮来截断上下文，命中率能掉一半（LMCache 论文）。</li>
+    <li><b>只认一字不差的开头。</b>每个字的 KV 都看着前面所有字算出来：开头改一个 token，后面整段对不上。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>

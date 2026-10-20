@@ -1707,7 +1707,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>本课推导：13 ÷ 0.5 ＝ 26；100% − 56.3% ＝ 43.7%。两个数来自两份文档、两个时间点，不是同一次测量。价格不画。</p></details></figure>
   <ul>
     <li><b>很多请求开头一样：</b>同一段 system prompt、多轮对话的前几轮。这段 KV 留着，下一个人接着往后算。SGLang 的 RadixAttention 把开头存成一棵树；vLLM 2025 年起也默认打开。</li>
-    <li><b>只认一字不差的开头。</b>每个字的 KV 都看着前面所有字算出来：开头改一个 token，后面整段对不上。删掉早先几轮来截断上下文，命中率能掉一半（LMCache 论文）。</li>
+    <li><b>只认一字不差的开头。</b>每个字的 KV 都看着前面所有字算出来：开头改一个 token，后面整段对不上。</li>
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
@@ -2105,7 +2105,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>难在等。</b>58 个专家层，每层一去一回，出一个字要等 116 次。</li>
     <li><b>普通 8 卡机也能做。</b>DeepSeek 用 InfiniBand、GPU 直接发 RDMA 就做成了；NVL72 一柜一个 NVLink 域，换来的是余量。</li>
   </ul>
-  <p><b>还有两笔账：</b>批小了凑不满车，传的开销照付；一张卡出事全组陪着，一个实例上百张卡。</p>
+  <p><b>还有一笔账：</b>批小了凑不满车，传的开销照付。</p>
 
   <h3 id="l4-6">所以 NVL72 这类大域，对推理特别合适</h3>
 <figure class="fbox fwide" id="fig-nvl72"><svg viewBox="0 0 1400 590" width="100%" role="img" aria-label="SGLang 在 GB200 NVL72 上把整柜当一个 EP 域跑 DeepSeek V3／R1，2K 输入、PD 分离、decode 48 张卡。每卡吞吐以 H100 上的大 EP 部署为 1：第一篇原精度 decode 每卡 7,583 tok/s，2.7 倍；第二篇注意力用 FP8、专家用 NVFP4，prefill 3.8 倍、decode 4.8 倍。底下提醒：倍数里混着显存、精度、kernel 和 PD 分离；decode 先压慢攒满请求再放开测，H100 基线有一组开了模拟 MTP"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3464,7 +3464,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>人少、要每字都快：</b>投机，K3 一个人用 4.22 倍，人一多就缩（第七节）。</li>
     <li><b>哪儿都有用：</b>量化，少搬字节（第八节）。</li>
   </ul>
-  <p><b>顺序别反：</b>同一组实测，先换 DEP 每卡 2.09 倍，只调并发涨 28%。车头 ⑧ 是上线前把常用形状编译好（完整版第十四节）。</p>
+  <p><b>顺序别反：</b>同一组实测，先换 DEP 每卡 2.09 倍，只调并发涨 28%。</p>
   <p class="landing">⭐ 八问是一个问题：<b>这一趟卡在哪</b>；招要么让更多人分，要么让它变轻。</p>
 
   <h3 id="l9-3">开场那道题：光改软件，几倍？</h3>
