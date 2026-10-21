@@ -53,6 +53,7 @@ r"""专题四 · 梯度下降的「降维阶梯」——&#160;一维 → 二维 
 import math
 
 import numpy as np
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, VGroup, Dot, Line, Rectangle, ParametricFunction,
                    ValueTracker, always_redraw, FadeIn, FadeOut, MathTex, Text,
                    WHITE, ORIGIN, UP, DOWN, LEFT, RIGHT, linear, config)

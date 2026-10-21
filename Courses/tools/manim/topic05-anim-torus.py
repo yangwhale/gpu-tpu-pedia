@@ -27,6 +27,7 @@ import json
 import os
 from fractions import Fraction as Fr
 
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, VGroup, Line, Dot, Rectangle, Text, ValueTracker, always_redraw, FadeIn, FadeOut,
                    Transform, WHITE, GREY, GREY_B, BLUE, ORANGE, GREEN, YELLOW, UP, DOWN, LEFT, RIGHT, linear, smooth)
 

@@ -66,6 +66,7 @@ import numpy as np
 # ⛔ 别名不要用下划线开头的短名：别处出过 `WHITE as _W` 撞上已有的 14 维参数向量，
 #   `stroke_color` 拿到 numpy 数组，报「颜色不接受长度 14」。
 #   这里直接用 manim 的原名导入，本文件没有同名符号（已 grep 过）。
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, VGroup, Dot, Line, Text, MathTex, ValueTracker,
                    always_redraw, BLUE, RED, WHITE, GREY, GREY_B, BLACK, linear)
 

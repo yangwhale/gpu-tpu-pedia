@@ -52,6 +52,14 @@ python3 -m venv ~/.venvs/manim && ~/.venvs/manim/bin/pip install manim   # Manim
 
 `render.sh` 默认用 `~/.venvs/manim/bin/manim`，别的路径用 `MANIM_BIN=... render.sh ...` 覆盖。
 
+**字体必须显式指定。** 每个脚本在 `from manim import` 之前加一行：
+
+```python
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")
+```
+
+不指定时 Pango 自己挑：拉丁字母回落到衬线体，中文标点按繁中/日文居中，同一行里两套字体。`set_default` 改的是类本身，英文版 `*-en.py` 换上去的 `Text` 子类也继承它，不用另加。纯数字算式也用 `Text`，`MathTex` 只留给真公式（它是 LaTeX 衬线体）。换字体后字宽会变，`·` 在 SC 里是全角，标签会宽一截 —— 重渲前要查溢出。
+
 ---
 
 ## 三、一支动画的完整流程

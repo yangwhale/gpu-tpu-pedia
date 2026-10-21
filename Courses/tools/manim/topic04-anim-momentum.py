@@ -35,6 +35,7 @@ r"""专题四 · 动量：把上一步的速度留下来 ——&#160;`fig-moment
 import math
 
 import numpy as np
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (MovingCameraScene, VGroup, Dot, Line, Arrow, MathTex, Text,
                    ParametricFunction, ValueTracker, always_redraw, Write,
                    FadeIn, FadeOut, Indicate, TransformMatchingTex,

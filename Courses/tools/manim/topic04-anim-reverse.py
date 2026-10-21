@@ -75,6 +75,7 @@ S1（2026-09-18 下午）：房规松绑后回来加解释性文字
         tools/manim/topic04-anim-reverse.py Reverse WebPages/media/topic04-reverse.mp4
 """
 import numpy as np
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, Circle, Square, Line, Dot, VGroup, ValueTracker,
                    always_redraw, MathTex, Text, LEFT, RIGHT, UP,
                    ORIGIN, config)

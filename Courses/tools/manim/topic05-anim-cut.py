@@ -15,6 +15,7 @@ r"""专题五 · 第三节起「五刀」的动画。
    RingAttention 演的是不带因果掩码的情形（因果掩码下负载不均，第五节另讲之字形）；
    PDDisagg 与 MeshMap 的格数、快慢 1:9 都是示意，不是实测时序。
 """
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, VGroup, Rectangle, Text, Arrow, FadeIn, FadeOut, Indicate,
                    WHITE, GREY, GREY_B, BLUE, GREEN, ORANGE, YELLOW, RED, UP, DOWN, LEFT, RIGHT)
 

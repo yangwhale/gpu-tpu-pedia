@@ -80,6 +80,7 @@ r"""专题四 · 鞍点的 3D 曲面 ——&#160;`fig-saddle` Ⓐ 配的那段 8
 import inspect
 
 import numpy as np
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (ThreeDScene, Surface, Dot3D, ParametricFunction, VGroup,
                    Line, Text, MathTex, DEGREES, UP, DOWN, LEFT, RIGHT,
                    ORIGIN, config)

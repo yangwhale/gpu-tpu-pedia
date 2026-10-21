@@ -17,6 +17,7 @@ r"""专题五 · 第五节「切序列」：Ulysses 与 USP 的分步动画。
 import json
 import os
 
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, VGroup, Rectangle, Text, FadeIn, FadeOut, Indicate, WHITE, GREY, GREY_B,
                    BLUE, GREEN, ORANGE, PURPLE_B, YELLOW, RED, UP, DOWN, smooth)
 

@@ -76,6 +76,7 @@ r"""专题四 · 显存随时间 ——&#160;`fig-step` / `fig-act-bill` 配的�
         WebPages/media/topic04-memtime.mp4
 """
 import numpy as np
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, ValueTracker, Polygon, Rectangle, Line, DashedLine,
                    Dot, VGroup, Text, MathTex, always_redraw, RIGHT,
                    DOWN, LEFT, rate_functions, config)
@@ -359,8 +360,8 @@ class MemTime(Scene):
                             color=RD_, stroke_width=4, dash_length=0.16)
         peak_txt = VGroup(
             Text("峰值就在这一刻　——　前向刚结束", font_size=26, color=RD_),
-            MathTex(r"%.2f + %.2f = %.2f\;\mathrm{TiB}"
-                    % (RESIDENT_TIB, ACT_TIB, PEAK_TIB), color=RD_).scale(0.72),
+            Text("%.2f + %.2f = %.2f TiB" % (RESIDENT_TIB, ACT_TIB, PEAK_TIB),
+                 font_size=24, color=RD_),   # 纯算式用 Text：MathTex 是衬线体，跟旁边的字不搭
         ).arrange(DOWN, buff=0.15, aligned_edge=LEFT)
         # ⛔ 第一版放在 peak_y+1.28 ＝ 2.19，**正好压在图例那一行上**（图例在 2.26）。
         #   ⭐ 判据跟 descend 那次一样：**标注要贴着它指的那个东西，不是往空白处放**。

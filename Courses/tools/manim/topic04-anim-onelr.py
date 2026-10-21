@@ -105,6 +105,7 @@ r"""专题四 · 一个学习率伺候不了所有参数 ——&#160;`fig-onelr`
 import math
 
 import numpy as np
+import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体：不指定时拉丁字母会回落到衬线体、标点按繁中居中
 from manim import (Scene, VGroup, Dot, Line, Text, MathTex, ValueTracker,
                    always_redraw, DOWN, RIGHT, LEFT, linear)
 # ⭐⭐⭐ 2026-09-19：配色换成 **manim 自带的原生那套**（skill 房规②b）。
