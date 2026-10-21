@@ -8605,7 +8605,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="506" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 的业务 prefill 更累，就多配 prefill；长回答的业务多配 decode。</text>
 </svg><figcaption><b>两边按上限配，谁也不等谁。</b><span class="capmore"><br><em>专题五原图，DistServe 论文的 OPT 例子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DistServe（Zhong 等，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）sec. 1 与图 1 的例子（13B 模型、单张 A100，90% 请求达标）：同一 SLO 下单卡 goodput 1.6／5.6／10 rps，2P1D 每卡 3.3 rps、2.1 倍；作者博客「Throughput is Not All You Need」用同一组数讲了一遍。</p>
 <p>⚠️ 本课推导：2P1D 每秒 min(2 × 5.6, 10) ＝ 10 个，每卡约 3.3 个；混着做接 10 个要 ⌈10 ÷ 1.6⌉ ＝ 7 张卡。</p></details></figure>
-  <p>混着做为什么一张卡只接 1.6 个：DistServe 的延迟要求是两条，首字（TTFT）和字距（TPOT）。两段混在一起互相干扰，要求卡得紧时只能顾一头，要么多堆卡才能两头都守住。</p>
+  <p>混着做为什么一张卡每秒只接 1.6 个请求：DistServe 的延迟要求是两条，首字（TTFT）和字距（TPOT）。两段混在一起互相干扰，要求卡得紧时只能顾一头，要么多堆卡才能两头都守住。</p>
   <p>真实部署要把「一张接几个」换成量出来的吞吐。</p>
 
   <p><b>配比公式：先算一个起点。</b><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b></p>
