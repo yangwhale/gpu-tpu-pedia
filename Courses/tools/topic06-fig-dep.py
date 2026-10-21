@@ -160,9 +160,9 @@ def fig_dep_kv():
     f.t(920, hy + 50 + 3 * 48 - 12, "+%d%%　　　→　+%.1f%%" % (SG_GAIN1, SG_GAIN2), BL, True, 15, "middle")
     f._pan = None
     yb = f.band(y1 + TH + 20, "ok",
-                "座位换吞吐要两个前提：有人来坐，算力没到顶", [
+                "座位换吞吐要两个前提：有人来坐，每一步别跟着拖长", [
                     "727 → 886：池子划平、座位多了，有 14 台 prefill 喂着，座位坐得满，端到端涨 %d%%。" % SG_GAIN1,
-                    "886 → 999：再多 13%% 座位，只涨 %.1f%%，这时卡在算力上，座位不再值钱。" % SG_GAIN2])
+                    "886 → 999：再多 13%% 座位，只涨 %.1f%%：一步从 77.7 拖到 85.3 ms，多坐的人被抵掉。" % SG_GAIN2])
     yb = f.src(yb + 10,
                "SGLang 部署：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:33-34（14 prefill 各 dep4 ＋ dep8 decode、16 节点同一 NVL72 域）、"
                "scripts/prefill-dep4.sh、decode-dep8.sh（--enable-dp-attention，EP 4／8）；三行实测 :851-858（ISL 4096，14 路 × 并发 1050，#1／#3／#7）。",
