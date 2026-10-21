@@ -13,7 +13,7 @@ __FIG_S6_TEPDEP_T5__
 
   <p><b>判据：KV 头数和 batch。</b>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
-    SGLang 在 GB300 上做得最完整的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），输入 4096 时端到端每张 decode 卡 10,704 tok/s，是官方目标 11,200 的 95.6%。</p>
+    我们自己在 GB300 上用 SGLang 搭的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），输入 4096 时端到端每张 decode 卡 10,704 tok/s，是官方目标 11,200 的 95.6%。</p>
   <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。这套部署记了每卡在跑几个请求，容量那条轴看得见：</p>
 __FIG_S6_KV__
   <p>两个 KV 池怎么划见 <a href="#s3-3">3.3</a>。速度那条轴只有一组 TP 对 DEP 的实测当旁证：vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔 46.8 → 11.8 ms，每卡吞吐按全部卡 2.09 倍、只算 decode 卡 1.31 倍，那次 decode 卡数也翻了一倍。</p>

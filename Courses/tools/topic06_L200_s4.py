@@ -23,7 +23,7 @@ __L4_TEPDEP__
   <p><b>代进去：</b>MLA、V4-Pro 1 个 KV 头，TEP8 复印 8 份；Qwen3.5-397B 2 个，复印 4 份；8 个 KV 头的 GQA 不复印，DEP 不占便宜。</p>
 
   <h3 id="l4-2">容量和速度分开看：座位有人坐才值钱</h3>
-  <p>V4-Pro 1 个 KV 头。SGLang 在 GB300 上做得最完整的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8，每张 decode 卡端到端 10,704 tok/s，是官方目标的 95.6%。</p>
+  <p>V4-Pro 1 个 KV 头。我们自己在 GB300 上用 SGLang 搭的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8，每张 decode 卡端到端 10,704 tok/s，是官方目标的 95.6%。</p>
 __L4_KV__
   <ul>
     <li><b>容量：不复印，每卡最多多装 4 倍人。</b>这是天花板，人多到把池子坐满才兑现。</li>
