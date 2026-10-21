@@ -13,10 +13,10 @@ __FIG_S6_TEPDEP_T5__
 
   <p><b>判据：KV 头数和 batch。</b>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
-    同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐<b>翻了一倍多</b>。</p>
-  <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。原记录把收益归给容量，但没记 KV 池占用，这条核不了；量到的是速度：</p>
+    SGLang 在 GB300 上做得最完整的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），输入 4096 时端到端每张 decode 卡 10,704 tok/s，是官方目标 11,200 的 95.6%。</p>
+  <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。这套部署记了每卡在跑几个请求，容量那条轴看得见：</p>
 __FIG_S6_KV__
-  <p><b>步时只剩约四分之一</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
+  <p>两个 KV 池怎么划见 <a href="#s3-3">3.3</a>。速度那条轴只有一组 TP 对 DEP 的实测当旁证：vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔 46.8 → 11.8 ms，每卡吞吐按全部卡 2.09 倍、只算 decode 卡 1.31 倍，那次 decode 卡数也翻了一倍。</p>
   <p><b>换模型</b>：MLA 开 TEP8，KV 存 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，存 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</p>
 
   <p><b>DEP 的代价：每个 rank 都得自己备一份。</b>DEP 下每个 rank 是台小推理机，注意力权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
@@ -26,7 +26,7 @@ __FIG_S6_STATE__
     <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-6">6.6</a>）。</li>
   </ul>
 
-  <p><b>DEP 吃得快了，就得有人喂。</b>decode 步短了，瓶颈挪到 prefill：dep8 下每加一台 prefill，decode 吞吐就涨（<a href="#s9-2">9.2</a>）；换成 TP4 decode，加第 4 台 prefill，总吞吐 21,100 → 20,479，纹丝不动。<b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
+  <p><b>DEP 吃得快了，就得有人喂。</b>同样 16 台机器，SGLang 把 decode 从 dep8 宽到 dep16：出字间隔 60 → 33 ms，总输出涨 17%；可 prefill 只剩 12 台，首字 45 → 54 s，每张 decode 卡输出 9,032 → 5,270。14 台 prefill 才刚好喂饱 dep8（<a href="#s9-1">9.1</a>）。<b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
 
   <h3 id="s6-2">6.2　TPU 上也一样，先读懂参数名</h3>
   <p>tpu-inference 一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
@@ -131,8 +131,8 @@ FIGS = {
     "__FIG_S6_TEPDEP_T5__": ("fig-s6-tep-dep-t5", "fig5-tep-dep.svg", "topic05-fig-ep.py",
         '<b>只看注意力那一半。</b><br><em>专题五原图。</em>'),
     "__FIG_S6_KV__": ("fig-s6-dep-kv", "fig6-dep-kv.svg", "topic06-fig-dep.py",
-        '<b>上半张是容量（示意）：TP4 四张卡只放一批；下半张是速度（实测）：步时只剩约四分之一。</b><br>'
-        '<em>实测为 GB300、vLLM、并发 512；上半张是示意，不是实测占用。</em>'),
+        '<b>上半张是容量上限（示意）；下半张是 SGLang 实测：座位从 727 坐到 886，吞吐跟着涨，再往上就不涨了。</b><br>'
+        '<em>实测为 GB300、两头 DEP、输入 4096；上半张是示意，不是实测占用。</em>'),
     "__FIG_S6_STATE__": ("fig-s6-dep-state", "fig6-dep-state.svg", "topic06-fig-dep.py",
         '<b>比同一位置的两张卡：左边格子全满，右边每卡只亮两列。</b><br>'
         '<em>格子是示意，头数、槽数不按实际；「切头只有 TP」为本课推导。</em>'),

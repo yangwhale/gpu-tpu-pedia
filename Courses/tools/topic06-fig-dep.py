@@ -2,7 +2,7 @@
 r"""专题六 · 第六节「切专家与注意力：TEP 和 DEP」的三张静态图。
 
 回答的问题
-  · fig6-dep-kv   TP4 换 DEP8 要分容量、速度两条轴看；V4-Pro 那次 2.09× 量到的是哪条？
+  · fig6-dep-kv   TEP 换 DEP 分容量、速度两条轴看；SGLang 两头 DEP 的部署里，座位多少换多少吞吐？（vLLM TP4→dep8 只作速度旁证）
   · fig6-dep-tpu  TPU 上换成 DP 注意力，赢多少？跟并发什么关系？
   · fig6-dep-state K3 的 KDA 状态池：DEP 为什么每个 rank 都得备一整份，TP 为什么切得开？（示意）
 
@@ -19,7 +19,9 @@ r"""专题六 · 第六节「切专家与注意力：TEP 和 DEP」的三张静�
 刻意没画
   · fig6-dep-kv 不画「EP 从 4 路变 8 路省下的专家权重」那一半：要权重分项才能算准，没现算就不画。
   · ⛔ 不拿 Little 定律算出的「decode 上平均在跑几个请求」（197 → 130）去反驳容量：那个数是出字快慢的结果
-    （跑得快、走得快），和显存能放几个是两条轴，不能互证（2026-10-21 改）。上半张容量示意、下半张实测步时，各说各的。
+    （跑得快、走得快），和显存能放几个是两条轴，不能互证（2026-10-21 改）。
+  · 2026-10-21 再改：主线换成 SGLang 两头 DEP 的完整部署（SGLANG-V4PRO-RUNBOOK.md:33-34、:851-858），
+    它记了每卡在跑请求数和两个 KV 池占用，容量轴看得见；vLLM TP4 对 dep8 只剩底部一行速度旁证（唯一一组 TP 对 DEP 实测）。
   · 步时 46.8 → 11.8 ms 里 KV 少读、AllReduce 去掉、EP 变宽各占多少，runbook 没拆，图上不分。
   · fig6-dep-tpu 不画 TP／DP 的绝对吞吐曲线，只画相对差；绝对数只标在折线两端。
 """
@@ -40,6 +42,14 @@ OUT_TP4, OUT_DEP = 4220, 11031                 # 同一行的输出 tok/s
 PD_TP4, PD_DEP = OUT_TP4 / 4, OUT_DEP / 8      # 每张 decode 卡的输出
 assert round(PD_TP4) == 1055 and round(PD_DEP) == 1379 and round(PD_DEP / PD_TP4, 2) == 1.31
 assert round(OUT_DEP / OUT_TP4, 2) == 2.61
+
+# ── SGLang 两头 DEP 实测（ISL 4096，14 prefill dep4 ＋ dep8 decode）──────────
+SG_ROWS = [("池子划错（ratio 0.20）", 727, "0.93 ／ 0.63", 6887, 58.0, INK),
+           ("划平（ratio 0.15）", 886, "0.92 ／ 0.89", 10614, 77.7, BL),
+           ("再多 13% 显存", 999, "0.92 ／ 0.67", 10704, 85.3, INK)]
+SG_GAIN1 = round((10614 / 6887 - 1) * 100)
+SG_GAIN2 = round((10704 / 10614 - 1) * 100, 1)
+assert SG_GAIN1 == 54 and SG_GAIN2 == 0.8 and round(999 / 886 - 1, 2) == 0.13
 
 # ── 示意：8 张卡，每卡 KV 池 4 个请求槽 ─────────────────────────────────
 NCARD, SLOT = 8, 4
@@ -89,14 +99,14 @@ assert round((PR_A[3][0] / PR_A[2][0] - 1) * 100) == 3 and round((PR_A[3][1] / P
 
 
 def fig_dep_kv():
-    f = Fig(W, "V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，"
+    f = Fig(W, "V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分容量、速度两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，"
                "TP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，"
-               "所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但只有负载顶到上限时才兑现。"
-               "下半张是速度轴，实测：同样 3 台 TP4 prefill、并发 512，只把 decode 换成 DEP8，"
-               "出字间隔从 46.8 毫秒降到 11.8 毫秒，只剩约四分之一；每张 decode 卡输出 1055 到 1379，1.31 倍；"
-               "按全部卡算总吞吐每卡 1319 到 2758，2.09 倍。这次实测量到的是速度轴；记录没给 KV 池占用，容量轴这次没测到")
-    y0 = f.header("TP4 换 DEP8：容量和速度分开看　——　<tspan font-weight=\"700\">V4-Pro 实测量到的是步时 46.8 → 11.8 ms</tspan>",
-                  "上半张容量轴（示意，每卡 KV 池装满）；下半张速度轴（实测，并发 512、只换 decode）",
+               "所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但要同时在跑的请求多到坐满池子才兑现。"
+               "下半张是 SGLang 的完整部署，两头都用 DEP：14 台 prefill 各跑 dep4，decode 跑 dep8，输入 4096。"
+               "两个 KV 池划分不当时，每卡同时在跑 727 个请求，端到端每张 decode 卡 6887；划平后坐到 886 个，10614，高 54%；"
+               "再多给 13% 显存坐到 999 个，只到 10704，算力已到顶")
+    y0 = f.header("TEP 换 DEP：容量和速度分开看　——　<tspan font-weight=\"700\">SGLang 两头都用 DEP，座位坐满就换来吞吐</tspan>",
+                  "上半张容量轴（示意，每卡 KV 池装满）；下半张 SGLang 实测（14 台 prefill 各 dep4 → decode dep8）",
                   [(PU, "一批不同请求的 KV"), (RD, "同一批 KV 的副本")])
     PH = 560
     py = f.panel(0, y0, W, PH, "① 容量轴：KV 池装满时，存的是几批不同的请求（示意）", PU)
@@ -125,37 +135,41 @@ def fig_dep_kv():
         GY, size=15)
     f._pan = None
     y1 = y0 + PH + 20
-    TH = 250
-    py2 = f.panel(0, y1, W, TH, "② 速度轴：同样并发 512，一步要多久（实测）", BL)
-    cols = [("", 24, None), ("decode 卡", 330, "middle"), ("输出 tok/s", 560, "middle"), ("出字间隔", 800, "middle"),
-            ("每张 decode 卡输出", 1100, "middle")]
-    rows = [("TP4", ["4", "4,220", "46.8 ms", format(round(PD_TP4), ",")], INK),
-            ("DEP8", ["8", "11,031", "11.8 ms", format(round(PD_DEP), ",")], INK),
-            ("变化", ["×2", "×%.2f" % (OUT_DEP / OUT_TP4), "÷%.0f" % (TPOT_TP4 / TPOT_DEP),
-                      "×%.2f" % (PD_DEP / PD_TP4)], BL)]
-    hy = py2 + 50
+    TH = 330
+    py2 = f.panel(0, y1, W, TH, "② SGLang 实测：14 台 prefill 各 dep4 → decode dep8，输入 4096，座位多少换多少吞吐", BL)
+    # 拓扑条
+    ty = py2 + 30
+    f.box(24, ty, 470, 40, "#e8f0fe", BL, 6)
+    f.t(24 + 235, ty + 26, "prefill × 14 台，每台 dep4（注意力 DP4 ＋ EP4）", BL, True, 15, "middle")
+    f.line(500, ty + 20, 560, ty + 20, BL, 2)
+    f.box(566, ty, 400, 40, "#e8f0fe", BL, 6)
+    f.t(566 + 200, ty + 26, "decode dep8（跨 2 台，DP8 ＋ EP8）", BL, True, 15, "middle")
+    f.t(990, ty + 26, "16 台 GB300，同一 NVL72 域", GY, size=15)
+    cols = [("", 24, None), ("每卡同时在跑", 420, "middle"), ("两个 KV 池占用", 650, "middle"),
+            ("端到端每张 decode 卡", 920, "middle"), ("出字间隔", 1200, "middle")]
+    hy = ty + 84
     for txt, x, a in cols:
         f.t(x, hy, txt, GY, True, 15, a)
     f.line(24, hy + 14, W - 24, hy + 14, LINE, 1, arrow=False)
-    for r, (lab, vals, col) in enumerate(rows):
-        y = hy + 52 + r * 50
-        f.t(24, y, lab, col, True, 18)
-        for (txt, x, a), v in zip(cols[1:], vals):
-            hot = col == BL and txt == "出字间隔"
-            f.t(x, y, v, RD if hot else col, col == BL, 22 if hot else 18, a)
+    for r, (lab, n, pool, e2e, tpot, col) in enumerate(SG_ROWS):
+        y = hy + 50 + r * 48
+        f.t(24, y, lab, col, True, 17)
+        hot = r == 1
+        for (txt, x, a), v in zip(cols[1:], [format(n, ","), pool, format(e2e, ","), "%.1f ms" % tpot]):
+            f.t(x, y, v, col, hot, 20 if hot and txt.startswith("端到端") else 18, a)
+    f.t(920, hy + 50 + 3 * 48 - 12, "+%d%%　　　→　+%.1f%%" % (SG_GAIN1, SG_GAIN2), BL, True, 15, "middle")
     f._pan = None
     yb = f.band(y1 + TH + 20, "ok",
-                "这次量到的是速度轴：一步只剩约四分之一；容量轴这次没测到", [
-                    "步时变短来自三处：副本不再每步重复读、注意力那次 AllReduce 没了、EP 从 4 路宽到 8 路（各占多少原记录没拆）。",
-                    "记录没给 KV 池占用，说不清 TP4 在并发 512 下是否已被座位卡住，所以收益不能记在容量头上。",
-                    "按全部卡（含 12 张 prefill 卡）算总吞吐，每卡 %s → %s，是 %.2f 倍；按 decode 卡算只有 %.2f 倍。两边投机接受率相近（35%% 上下）。"
-                    % (format(round(TP4_PER), ","), format(round(DEP_PER), ","), RATIO, PD_DEP / PD_TP4)])
+                "座位换吞吐要两个前提：有人来坐，算力没到顶", [
+                    "727 → 886：池子划平、座位多了，有 14 台 prefill 喂着，座位坐得满，端到端涨 %d%%。" % SG_GAIN1,
+                    "886 → 999：再多 13%% 座位，只涨 %.1f%%，这时卡在算力上，座位不再值钱。" % SG_GAIN2])
     yb = f.src(yb + 10,
-               "V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。",
-               "实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；"
-               "GPU 数 16 和 20 见 :476；投机接受率 34% 与 35.7% 见 :480。",
-               "本课推导：容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；上半张是示意，条长不按实测请求数画；"
-               "MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。")
+               "SGLang 部署：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:33-34（14 prefill 各 dep4 ＋ dep8 decode、16 节点同一 NVL72 域）、"
+               "scripts/prefill-dep4.sh、decode-dep8.sh（--enable-dp-attention，EP 4／8）；三行实测 :851-858（ISL 4096，14 路 × 并发 1050，#1／#3／#7）。",
+               "旁证：VLLM-V4PRO-RUNBOOK.md:298-302（num_key_value_heads 1）、:464-465、:476（并发 512：TP4 decode 输出 4,220、出字间隔 46.8 ms；"
+               "dep8 为 11,031、11.8 ms；GPU 16 与 20）。",
+               "本课推导：容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，上半张是示意，条长不按实测请求数画；+54%% ＝ 10,614 ÷ 6,887，"
+               "+0.8%% ＝ 10,704 ÷ 10,614；2.09 倍 ＝ (55,153 ÷ 20) ÷ (21,100 ÷ 16)，1.31 倍 ＝ (11,031 ÷ 8) ÷ (4,220 ÷ 4)。".replace("%%", "%"))
     f.save("fig6-dep-kv.svg", yb + 14)
 
 

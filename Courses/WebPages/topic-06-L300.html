@@ -5155,11 +5155,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <p><b>判据：KV 头数和 batch。</b>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
-    同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐<b>翻了一倍多</b>。</p>
-  <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。原记录把收益归给容量，但没记 KV 池占用，这条核不了；量到的是速度：</p>
-<figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1074" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，TP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但只有负载顶到上限时才兑现。下半张是速度轴，实测：同样 3 台 TP4 prefill、并发 512，只把 decode 换成 DEP8，出字间隔从 46.8 毫秒降到 11.8 毫秒，只剩约四分之一；每张 decode 卡输出 1055 到 1379，1.31 倍；按全部卡算总吞吐每卡 1319 到 2758，2.09 倍。这次实测量到的是速度轴；记录没给 KV 池占用，容量轴这次没测到"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TP4 换 DEP8：容量和速度分开看　——　<tspan font-weight="700">V4-Pro 实测量到的是步时 46.8 → 11.8 ms</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上半张容量轴（示意，每卡 KV 池装满）；下半张速度轴（实测，并发 512、只换 decode）</text>
+    SGLang 在 GB300 上做得最完整的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），输入 4096 时端到端每张 decode 卡 10,704 tok/s，是官方目标 11,200 的 95.6%。</p>
+  <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。这套部署记了每卡在跑几个请求，容量那条轴看得见：</p>
+<figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1154" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分容量、速度两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，TP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但要同时在跑的请求多到坐满池子才兑现。下半张是 SGLang 的完整部署，两头都用 DEP：14 台 prefill 各跑 dep4，decode 跑 dep8，输入 4096。两个 KV 池划分不当时，每卡同时在跑 727 个请求，端到端每张 decode 卡 6887；划平后坐到 886 个，10614，高 54%；再多给 13% 显存坐到 999 个，只到 10704，算力已到顶。底部一行是速度轴的旁证：vLLM 同并发 512 把 decode 从 TP4 换成 dep8，出字间隔从 46.8 毫秒降到 11.8 毫秒"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TEP 换 DEP：容量和速度分开看　——　<tspan font-weight="700">SGLang 两头都用 DEP，座位坐满就换来吞吐</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上半张容量轴（示意，每卡 KV 池装满）；下半张 SGLang 实测（14 台 prefill 各 dep4 → decode dep8）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">一批不同请求的 KV</text>
 <rect x="183.64000000000001" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -5215,46 +5215,53 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="934" y="478" fill="#681da8" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 张卡放 8 批：每卡上限 4 倍</tspan></text>
 <text class="svgsm" x="934" y="504" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 ＝ TP 路数 4 ÷ KV 头数 1</text>
 <text class="svgsm" x="210" y="640" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这是天花板：同时在跑的请求多到坐满 TP4 的池子，多出的座位才换得来吞吐；光是上下文长没用。</text>
-<rect x="0" y="682" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="682" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="682" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="684" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="712" x2="1400" y2="712" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="702" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 速度轴：同样并发 512，一步要多久（实测）</tspan></text>
-<text class="svgsm" x="24" y="762" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
-<text class="svgsm" x="330" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 卡</tspan></text>
-<text class="svgsm" x="560" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出 tok/s</tspan></text>
-<text class="svgsm" x="800" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">出字间隔</tspan></text>
-<text class="svgsm" x="1100" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张 decode 卡输出</tspan></text>
-<line x1="24" y1="776" x2="1376" y2="776" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="24" y="814" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP4</tspan></text>
-<text class="svgsm" x="330" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">4</text>
-<text class="svgsm" x="560" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">4,220</text>
-<text class="svgsm" x="800" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">46.8 ms</text>
-<text class="svgsm" x="1100" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">1,055</text>
-<text class="svgsm" x="24" y="864" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DEP8</tspan></text>
-<text class="svgsm" x="330" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">8</text>
-<text class="svgsm" x="560" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">11,031</text>
-<text class="svgsm" x="800" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">11.8 ms</text>
-<text class="svgsm" x="1100" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">1,379</text>
-<text class="svgsm" x="24" y="914" fill="#174ea6" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">变化</tspan></text>
-<text class="svgsm" x="330" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×2</tspan></text>
-<text class="svgsm" x="560" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×2.61</tspan></text>
-<text class="svgsm" x="800" y="914" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">÷4</tspan></text>
-<text class="svgsm" x="1100" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×1.31</tspan></text>
-<rect x="0" y="952" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="952" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="952" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="979" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这次量到的是速度轴：一步只剩约四分之一；容量轴这次没测到</tspan></text>
-<text class="svgsm" x="20" y="1010" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">步时变短来自三处：副本不再每步重复读、注意力那次 AllReduce 没了、EP 从 4 路宽到 8 路（各占多少原记录没拆）。</text>
-<text class="svgsm" x="20" y="1034" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">记录没给 KV 池占用，说不清 TP4 在并发 512 下是否已被座位卡住，所以收益不能记在容量头上。</text>
-</svg><figcaption><b>上半张是容量（示意）：TP4 四张卡只放一批；下半张是速度（实测）：步时只剩约四分之一。</b><span class="capmore"><br><em>实测为 GB300、vLLM、并发 512；上半张是示意，不是实测占用。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。</p>
-<p>实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；GPU 数 16 和 20 见 :476；投机接受率 34% 与 35.7% 见 :480。</p>
-<p>本课推导：容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；上半张是示意，条长不按实测请求数画；MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。</p></details></figure>
-  <p><b>步时只剩约四分之一</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
+<text class="svglbl" x="14" y="702" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② SGLang 实测：14 台 prefill 各 dep4 → decode dep8，输入 4096，座位多少换多少吞吐</tspan></text>
+<rect x="24" y="742" width="470" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="259" y="768" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">prefill × 14 台，每台 dep4（注意力 DP4 ＋ EP4）</tspan></text>
+<line x1="500" y1="762" x2="560" y2="762" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="566" y="742" width="400" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="766" y="768" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode dep8（跨 2 台，DP8 ＋ EP8）</tspan></text>
+<text class="svgsm" x="990" y="768" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">16 台 GB300，同一 NVL72 域</text>
+<text class="svgsm" x="24" y="826" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
+<text class="svgsm" x="420" y="826" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每卡同时在跑</tspan></text>
+<text class="svgsm" x="650" y="826" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两个 KV 池占用</tspan></text>
+<text class="svgsm" x="920" y="826" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">端到端每张 decode 卡</tspan></text>
+<text class="svgsm" x="1200" y="826" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">出字间隔</tspan></text>
+<line x1="24" y1="840" x2="1376" y2="840" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="24" y="876" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">池子划错（ratio 0.20）</tspan></text>
+<text class="svgsm" x="420" y="876" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">727</text>
+<text class="svgsm" x="650" y="876" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">0.93 ／ 0.63</text>
+<text class="svgsm" x="920" y="876" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">6,887</text>
+<text class="svgsm" x="1200" y="876" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">58.0 ms</text>
+<text class="svgsm" x="24" y="924" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">划平（ratio 0.15）</tspan></text>
+<text class="svgsm" x="420" y="924" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">886</tspan></text>
+<text class="svgsm" x="650" y="924" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.92 ／ 0.89</tspan></text>
+<text class="svgsm" x="920" y="924" fill="#174ea6" text-anchor="middle" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10,614</tspan></text>
+<text class="svgsm" x="1200" y="924" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">77.7 ms</tspan></text>
+<text class="svgsm" x="24" y="972" fill="#202124" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">再多 13% 显存</tspan></text>
+<text class="svgsm" x="420" y="972" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">999</text>
+<text class="svgsm" x="650" y="972" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">0.92 ／ 0.67</text>
+<text class="svgsm" x="920" y="972" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">10,704</text>
+<text class="svgsm" x="1200" y="972" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">85.3 ms</text>
+<text class="svgsm" x="920" y="1008" fill="#174ea6" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">+54% →　+0.8%</tspan></text>
+<rect x="0" y="1032" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="1032" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="1032" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="1059" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">座位换吞吐要两个前提：有人来坐，算力没到顶</tspan></text>
+<text class="svgsm" x="20" y="1090" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">727 → 886：池子划平、座位多了，有 14 台 prefill 喂着，座位坐得满，端到端涨 54%。</text>
+<text class="svgsm" x="20" y="1114" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">886 → 999：再多 13% 座位，只涨 0.8%，这时卡在算力上，座位不再值钱。</text>
+</svg><figcaption><b>上半张是容量上限（示意）；下半张是 SGLang 实测：座位从 727 坐到 886，吞吐跟着涨，再往上就不涨了。</b><span class="capmore"><br><em>实测为 GB300、两头 DEP、输入 4096；上半张是示意，不是实测占用。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>SGLang 部署：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:33-34（14 prefill 各 dep4 ＋ dep8 decode、16 节点同一 NVL72 域）、scripts/prefill-dep4.sh、decode-dep8.sh（--enable-dp-attention，EP 4／8）；三行实测 :851-858（ISL 4096，14 路 × 并发 1050，#1／#3／#7）。</p>
+<p>旁证：VLLM-V4PRO-RUNBOOK.md:298-302（num_key_value_heads 1）、:464-465、:476（并发 512：TP4 decode 输出 4,220、出字间隔 46.8 ms；dep8 为 11,031、11.8 ms；GPU 16 与 20）。</p>
+<p>本课推导：容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，上半张是示意，条长不按实测请求数画；+54% ＝ 10,614 ÷ 6,887，+0.8% ＝ 10,704 ÷ 10,614；2.09 倍 ＝ (55,153 ÷ 20) ÷ (21,100 ÷ 16)，1.31 倍 ＝ (11,031 ÷ 8) ÷ (4,220 ÷ 4)。</p></details></figure>
+  <p>两个 KV 池怎么划见 <a href="#s3-3">3.3</a>。速度那条轴只有一组 TP 对 DEP 的实测当旁证：vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔 46.8 → 11.8 ms，每卡吞吐按全部卡 2.09 倍、只算 decode 卡 1.31 倍，那次 decode 卡数也翻了一倍。</p>
   <p><b>换模型</b>：MLA 开 TEP8，KV 存 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，存 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</p>
 
   <p><b>DEP 的代价：每个 rank 都得自己备一份。</b>DEP 下每个 rank 是台小推理机，注意力权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
-<figure class="fbox fwide" id="fig-s6-dep-state"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="Kimi K3 的 69 层 KDA 线性注意力，每个请求一块固定状态，按头存。左边 DEP8：8 个 rank 各算各的请求，每个 rank 的状态池都是完整的一整池，所有头、所有请求槽都要存，两次加载都 OOM。右边 TP8：一池状态按头切给 8 张卡，每张卡只存自己那几个头，8 张卡拼起来才是一整池。TP 按头切这一维，DP、EP、DCP 都不切"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s6-dep-state"><svg viewBox="0 0 1400 564" width="100%" role="img" aria-label="Kimi K3 的 69 层 KDA 线性注意力，每个请求一块固定状态，按头存。左边 DEP8：8 个 rank 各算各的请求，每个 rank 的状态池都是完整的一整池，所有头、所有请求槽都要存，两次加载都 OOM。右边 TP8：一池状态按头切给 8 张卡，每张卡只存自己那几个头，8 张卡拼起来才是一整池。TP 按头切这一维，DP、EP、DCP 都不切"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KDA 状态按头存：DEP 每个 rank 复制一整池，TP 每卡只存自己的头</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">Kimi K3：69 层 KDA，每个请求一块固定状态。一格 ＝ 一个请求槽在一个头上的状态；头数、槽数是示意，不按实际</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -6341,12 +6348,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-6">6.6</a>）。</li>
   </ul>
 
-  <p><b>DEP 吃得快了，就得有人喂。</b>decode 步短了，瓶颈挪到 prefill：dep8 下每加一台 prefill，decode 吞吐就涨（<a href="#s9-2">9.2</a>）；换成 TP4 decode，加第 4 台 prefill，总吞吐 21,100 → 20,479，纹丝不动。<b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
+  <p><b>DEP 吃得快了，就得有人喂。</b>同样 16 台机器，SGLang 把 decode 从 dep8 宽到 dep16：出字间隔 60 → 33 ms，总输出涨 17%；可 prefill 只剩 12 台，首字 45 → 54 s，每张 decode 卡输出 9,032 → 5,270。14 台 prefill 才刚好喂饱 dep8（<a href="#s9-1">9.1</a>）。<b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
 
   <h3 id="s6-2">6.2　TPU 上也一样，先读懂参数名</h3>
   <p>tpu-inference 一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
     Qwen3.5-397B 在 v7x-8 上比了 DP=8 和 TP=8：</p>
-<figure class="fbox fwide" id="fig-s6-dep-tpu"><svg viewBox="0 0 1400 636" width="100%" role="img" aria-label="tpu-inference 的一个公开 PR，在 TPU v7x-8 上跑 Qwen3.5-397B-A17B-FP8，比较 TP 等于 8 和 DP 注意力等于 8，专家都走 EP。1K 进 8K 出时，并发 64 打平，128 多 14%，256 多 22%，512 多 62%。8K 进 1K 出时依次多 14%、23%、36%、40%。并发越高，DP 注意力赢得越多。1K 进 8K 出并发 512 时，输出吞吐 TP 是 4266、DP 是 6914"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s6-dep-tpu"><svg viewBox="0 0 1400 636" width="100%" role="img" aria-label="tpu-inference 的一个公开 PR，在 TPU v7x-8 上跑 Qwen3.5-397B-A17B-FP8，比较 TP 等于 8 和 DP 注意力等于 8，专家都走 EP。1K 进 8K 出时，并发 64 打平，128 多 14%，256 多 22%，512 多 62%。8K 进 1K 出时依次多 14%、23%、36%、40%。并发越高，DP 注意力赢得越多。1K 进 8K 出并发 512 时，输出吞吐 TP 是 4266、DP 是 6914"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 上同一个模型：并发越高，DP 注意力比 TP 赢得越多　——　<tspan font-weight="700">512 并发 +62%</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">tpu-inference PR #2577 · Qwen3.5-397B-A17B-FP8 · TPU v7x-8（4 颗芯片、8 个 device）· TP=8 对 DP=8，专家都走 EP。纵轴：DP 的输出吞吐比 TP 多多少</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -7474,7 +7481,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s6-5">6.5　双微批：一批拆两半，一个传、一个算</h3>
   <p>大 EP 每层要传两趟：先把 token 分发到专家所在的卡，算完再汇回。传的时候，计算单元空等。DeepSeek 把一批拆成两个微批：A 在传，B 就在算。SGLang 叫它 TBO，vLLM 叫 DBO，都是这一招。</p>
-  <figure class="fbox fwide" id="fig-s6-tbo"><svg viewBox="0 0 1400 554" width="100%" role="img" aria-label="双微批示意。上面一整批：每层先算注意力，再把 token 分发给专家所在的卡，算完专家再汇回来，分发和汇回的时候计算单元空等。下面拆成 A、B 两个微批：A 在传的时候 B 在算，计算那一行一直排满，整趟前向提前结束。时长是示意，通信取同一批计算时长的八成"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <figure class="fbox fwide" id="fig-s6-tbo"><svg viewBox="0 0 1400 554" width="100%" role="img" aria-label="双微批示意。上面一整批：每层先算注意力，再把 token 分发给专家所在的卡，算完专家再汇回来，分发和汇回的时候计算单元空等。下面拆成 A、B 两个微批：A 在传的时候 B 在算，计算那一行一直排满，整趟前向提前结束。时长是示意，通信取同一批计算时长的八成"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">双微批：传的时候，别让算力干等</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">两层 MoE 的一趟前向。每层四步：算注意力 → 分发给专家 → 算专家 → 汇回。时长是示意，不按实测</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -7571,7 +7578,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s6-6">6.6　EPLB：热门专家多备几份</h3>
   <p>哪个专家热门，要等路由算完才知道（<a href="topic-05.html#s4-3">专题五 §4.3</a>）。专家那一步等最慢的卡，热门专家所在的卡拖住所有人。EPLB（专家并行负载均衡器，DeepSeek 开源）按过去一段的负载统计，把热门专家多复制几份放到别的卡上，再重新排座位。</p>
-  <figure class="fbox fwide" id="fig-s6-eplb"><svg viewBox="0 0 1400 650" width="100%" role="img" aria-label="EPLB 示意。左边：8 个专家按编号两个一组放 4 张卡，专家 0 最热门，卡 0 的柱子最高，专家那一步所有卡都要等它。右边：每卡多一个空位，热门的专家 0 和专家 7 各复制一份，token 平分给两份，再重新排座位，最高的柱子从 70 降到 52.5。数字是示意"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <figure class="fbox fwide" id="fig-s6-eplb"><svg viewBox="0 0 1400 650" width="100%" role="img" aria-label="EPLB 示意。左边：8 个专家按编号两个一组放 4 张卡，专家 0 最热门，卡 0 的柱子最高，专家那一步所有卡都要等它。右边：每卡多一个空位，热门的专家 0 和专家 7 各复制一份，token 平分给两份，再重新排座位，最高的柱子从 70 降到 52.5。数字是示意"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">EPLB：热门专家多备一份，再重新排座位</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">8 个专家、4 张卡。柱高 ＝ 这张卡这一步要算的 token，一段一个专家；数字是示意</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -9778,7 +9785,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左右两栏只换了分母，看「调参」那一步。</b><span class="capmore"><br><em>卡数含 prefill 与 decode。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:446（1p1d 并发 256，14,563）、:448（3p1d 并发 256，16,459）、:449（3p1d 并发 512，21,100）、:465（3p ＋ dep8 并发 512，55,153）、:468（并发 1,536，65,132）。「+45% / +347%」原话见 :489；「每卡 2.47×」见 :476；「256→512 涨 28%」见 :487。</p>
 <p>⚠️ 本课推导：每卡数 ＝ 总吞吐 ÷ GPU 数（1p1d 8 卡、3p1d 16 卡、3p ＋ dep8 20 卡，后两个数见 :476）；-28% 与 1.79× 是现算，原文没有。吞吐口径是 prompt 加输出的总 token，sa-bench、temperature=0。</p></details></figure>
   <p>拆开看，+45% 里大半是加卡：prefill 从 1 台加到 3 台，卡数翻倍，每卡反而变少。卡数不变、只调并发的那一步才是纯调参。</p>
-  <p>换拓扑在两种口径下都赢：按每卡算，换 DEP 是 TP4 的 2.09 倍（第六节拆过为什么），只调并发是 +28%。dep8 再拉高并发时每卡最高，但首字 95 s，已出了交互档。</p>
+  <p>换拓扑在两种口径下都赢：按每卡算，换 DEP 是 TP4 的 2.09 倍（第六节），只调并发是 +28%。dep8 再拉高并发时每卡最高，但首字 95 s，已出了交互档。</p>
 
   <p><b>拓扑约束是硬的。</b>16 个 device 跑 TP16，机间走 DCN 还是 ICI，结果差出一截。即便走 ICI，两台的总输出 513.8 tok/s 也不如单机 602。</p>
 <figure class="fbox fwide" id="fig-s10-wire"><svg viewBox="0 0 1400 581" width="100%" role="img" aria-label="Qwen3-Coder-480B 在 TPU v7 上，单机 v7x-8 跑 TP8 作对照。换成两台机器拼成 v7x-16 跑 TP16：如果两台之间走数据中心网络 DCN，输出吞吐低 17% 到 63%，并发越高越惨；如果两台被编进同一个 ICI 切片，只低 15% 到 21%。右边画的是两种连法：每台机器里 4 颗芯片之间都是粗管 ICI；上面那种，两台之间只有一根细管 DCN；下面那种，两台的芯片之间也接上粗管"><defs><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -12914,7 +12921,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>tpu-inference#2674：batch 小时用「one-hot 矩阵 × 隐状态」代替按下标排序／还原；Qwen3.5 并发 64 总吞吐 2,211 → 2,531（＋14.5%，1K 进 8K 出）、11,269 → 12,090（＋7.3%，8K 进 1K 出）；合入后默认关（环境变量 ONEHOT_MOE_PERMUTE_THRESHOLD 默认 0）</td><td>github.com/vllm-project/tpu-inference/pull/2674（2026-05-22 合入）正文表与 diff。2026-10-15 核对</td></tr>
     <tr><td>14,336 字节消息的带宽项只要 24 ns，实测是它的 460×</td><td>本课推导：7168 × 2 B ＝ 14,336 B；× 2(n−1)/n ＝ 1.5（4 卡 ring AllReduce）；NVLink5 1.8 TB/s 双向 → 单向 900 GB/s；14,336 × 1.5 ÷ 900 GB/s ≈ 23.9 ns；11.0 µs ÷ 23.9 ns ≈ 460</td></tr>
     <tr><td>V4-Pro 只有 1 个 KV 头，TP 切注意力会复制 KV</td><td>VLLM-V4PRO-RUNBOOK.md:298-302</td></tr>
-    <tr><td>并发 512 时 TP4 21,100（16 卡）对 DEP 55,153（20 卡）：每卡 1,319 对 2,758，2.09×；DEP 并发 1,536 时 65,132、每卡 3,257、2.47×，TTFT 95 s；输出 4,220 对 11,031 tok/s、出字间隔 46.8 对 11.8 ms （步时约 ÷4；KV 池占用未记录，容量轴未测到）；每张 decode 卡输出 1,055 对 1,379，1.31×；投机接受率 34% 对 35.7%</td><td>VLLM-V4PRO-RUNBOOK.md:449、464-468、476；每卡与 2.09× 本课推导；接受率 :480；每 decode 卡 ＝ 输出 ÷ 4 或 8，本课推导（runbook 原文把收益归给容量，但没记 KV 池占用；本课只认实测到的步时）</td></tr>
+    <tr><td>第六节主线 · SGLang 两头 DEP：14 台 prefill 各 dep4 ＋ 1 组 decode dep8（跨 2 节点），16 节点 GB300 同一 NVL72 域；ISL 4096 端到端每 decode 卡 10,704（官方 11,200 的 95.6%）；图中三行：每卡在跑 727／886／999，full／swa 占用 0.93／0.63、0.92／0.89、0.92／0.67，端到端 6,887／10,614／10,704，TPOT 58.0／77.7／85.3 ms，峰值 11,851／12,063／12,070</td><td>SGLANG-V4PRO-RUNBOOK.md:33-34、:39；scripts/prefill-dep4.sh、decode-dep8.sh；三行 :851-858（#1／#3／#7，14 路 × 并发 1050）</td></tr>
+    <tr><td>decode 从 dep8 宽到 dep16（16 节点下 prefill 14 → 12）：总输出 72,256 → 84,321（＋17%），TPOT 60 → 33 ms，TTFT 45 → 54 s，每 decode 卡 9,032 → 5,270；原文判 prefill 为瓶颈</td><td>SGLANG-V4PRO-RUNBOOK.md:790-806</td></tr>
+    <tr><td>并发 512 时 TP4 21,100（16 卡）对 DEP 55,153（20 卡）：每卡 1,319 对 2,758，2.09×；DEP 并发 1,536 时 65,132、每卡 3,257、2.47×，TTFT 95 s；输出 4,220 对 11,031 tok/s、出字间隔 46.8 对 11.8 ms （步时约 ÷4；第六节只作速度轴旁证）；每张 decode 卡输出 1,055 对 1,379，1.31×；投机接受率 34% 对 35.7%</td><td>VLLM-V4PRO-RUNBOOK.md:449、464-468、476；每卡与 2.09× 本课推导；接受率 :480；每 decode 卡 ＝ 输出 ÷ 4 或 8，本课推导（runbook 原文把收益归给容量，但没记 KV 池占用；本课只认实测到的步时）</td></tr>
     <tr><td>DEP 每卡吞吐随 prefill 喂料 307 → 12 个 prefill 时 3,187（14 个时 3,321）；TP4 停在 20,479</td><td>VLLM-V4PRO-RUNBOOK.md:711-724（4k1k 重跑 :727-734）、:488，2026-07-24 记录</td></tr>
     <tr><td>tpu-inference DEP：并发 512 时领先 62%（1k/8k）、40%（8k/1k）；并发 64／128／256 时 1k/8k 为 0%（打平）／＋14%／＋22%，8k/1k 为 ＋14%／＋23%／＋36%（输出 tok/s，DP=8 对 TP=8）；mmlu_pro 0.8129 对 0.8271</td><td>github.com/vllm-project/tpu-inference/pull/2577（2026-05-15 合入）</td></tr>
     <tr><td>大 EP：DeepSeek decode 用 EP144（18 个节点），每卡 2 个路由专家 ＋ 1 个共享专家；EP 的两条理由（放大 batch 提高矩阵效率、每卡只读少数专家降低延迟）；一批拆两个微批交替藏通信；跨节点 all-to-all 用 DeepEP；Day 6 发布于 2025-03-01（仓库 commit 2025-03-01T04:03Z）</td><td>github.com/deepseek-ai/open-infra-index/blob/main/202502OpenSourceWeek/day_6_one_more_thing_deepseekV3R1_inference_system_overview.md；「空出的显存给 KV」本课推导</td></tr>
