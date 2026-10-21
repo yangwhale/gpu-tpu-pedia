@@ -41,6 +41,16 @@ __L7_TREE__
     <li><b>DFlash</b>（2026-02）：一趟出整块，越往块尾越不准，会拼出「of problem」。</li>
     <li><b>DSpark</b>（2026-07）：以 DFlash 为骨干，按把握和负载定验几个；替下 DeepSeek 线上的 MTP-1。</li>
   </ul>
+  <p><b>DSpark 怎么补的：两刀。</b>先看论文里的数：一趟出整块的草稿开头更准、后面掉得快；闲聊又天生比解题难猜。两刀各补一头。</p>
+__L7_DSPARK__
+  <ul>
+    <li><b>第一刀补草稿。</b>骨干照旧一趟出整块，上面加一个很轻的小头，从左往右按前一格选的字改下一格的分数：选了「of」，就抬高「course」。每轮平均多收下 16–18%，整轮只慢 0.2–1.3%。</li>
+  </ul>
+__L7_DS_DRAFT__
+  <ul>
+    <li><b>第二刀补验证。</b>另一个小头给每格估一个把握，连乘成「活到这一格」的概率；整批请求的候选按它排队，再看机器忙不忙定这一步总共验几个。闲时多验，忙时少验，没把握的字不占名额。</li>
+  </ul>
+__L7_DS_SCHED__
 
   <h3 id="l7-5">EAGLE 和 MTP：长得一样，差在谁训</h3>
 __L7_EAGLE__
@@ -65,6 +75,14 @@ ANIM = '''<figure class="fbox fwide" id="anim-spec">
 
 BODY = BODY.replace("__L7_ANIM__", ANIM)
 
+# DSpark 两支动画原样取 L300 11.3 的 figure（aria-label 和图注都不带节号，可以整块复用）。
+import re as _re
+import topic06_s11 as _S11
+for _ph, _id in (("__L7_DS_DRAFT__", "anim-dspark-draft"), ("__L7_DS_SCHED__", "anim-dspark-sched")):
+    _m = _re.search(r'<figure class="fbox fwide" id="%s">.*?</figure>' % _id, _S11.BODY, _re.S)
+    assert _m, _id
+    BODY = BODY.replace(_ph, _m.group(0))
+
 FIGS = {
     "__L7_BYTES__": C.l300_fig("fig-s11-bytes",
         '<b>左边深蓝那段越验越高：专家越验读得越多；右边一趟慢了一截，带回的字多得多。</b><br>'
@@ -75,6 +93,9 @@ FIGS = {
     "__L7_TREE__": C.l300_fig("fig-s11-tree",
         '<b>沿时间轴从左往右：草稿从独立小模型，一步步长到大模型身上。</b><br>'
         '<em>图上故意不画倍数：各家在自己的模型上测，不能横比。</em>'),
+    "__L7_DSPARK__": C.l300_fig("fig-s11-dspark",
+        '<b>左边看箭头往哪指，右边看闲聊那组有多矮。</b><br>'
+        '<em>全部是 DSpark 论文实测；右图每类取三个基准的平均。</em>'),
     "__L7_EAGLE__": C.l300_fig("fig-s11-eagle",
         '<b>先看颜色：橙色要训，蓝色借大模型。</b>三块的橙色都只有中间一小段；右下灰柱和绿柱比的是连猜练没练过。<br>'
         '<em>结构按论文正文；how／can／I／do／it 是 EAGLE-3 论文的例子。</em>'),

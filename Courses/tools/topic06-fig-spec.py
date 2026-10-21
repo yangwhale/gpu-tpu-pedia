@@ -747,6 +747,88 @@ def fig_eagle():
     f.save("fig6-spec-eagle.svg", yb + 14)
 
 
+# ════════════════════════════════════════════════════════════════════════
+# fig6-spec-dspark：DSpark 论文的两组实测 —— 逐位接受率两端值、Qwen3-8B 接受长度（表 1）。
+# 逐位条件接受率（Qwen3-4B，论文 §4.3.1 正文给出的两端值；前面几位全收下的前提下这一位被收下的比例）
+DS_POS = [("闲聊", "EAGLE-3", 0.53, 0.74), ("闲聊", "DFlash", 0.72, 0.63), ("代码", "DFlash", 0.87, 0.78)]
+DS_FIRST = [("EAGLE-3", 0.81), ("DFlash", 0.88), ("DSpark", 0.93)]     # 数学，第 1 位
+# 表 1，Qwen3-8B，每类三个基准（含大模型补的那 1 个字）
+DS_T1 = {"EAGLE-3": [(5.30, 4.77, 3.91), (3.96, 4.33, 4.17), (2.66, 2.54, 2.54)],
+         "DFlash": [(5.33, 4.91, 4.07), (4.36, 4.64, 4.39), (3.11, 2.98, 2.81)],
+         "DSpark": [(6.17, 5.78, 5.01), (5.16, 5.52, 5.17), (3.72, 3.58, 3.21)]}
+def _mean(xs):
+    return sum(xs) / len(xs)
+_macro = {k: _mean([x for g in v for x in g]) for k, v in DS_T1.items()}
+# 外部锚点：论文正文写 Qwen3-8B 上 DSpark 比 EAGLE-3 高 26.7%、比 DFlash 高 18.4%
+assert round((_macro["DSpark"] / _macro["EAGLE-3"] - 1) * 100, 1) == 26.7
+assert round((_macro["DSpark"] / _macro["DFlash"] - 1) * 100, 1) == 18.4
+DS_COL = {"EAGLE-3": PU, "DFlash": OR, "DSpark": GR}
+
+
+def fig_dspark():
+    """DSpark 论文实测：左边逐位接受率两端值，右边 Qwen3-8B 三类任务的接受长度。"""
+    avg = {k: [_mean(g) for g in v] for k, v in DS_T1.items()}
+    f = Fig(W, "DSpark 论文的两组实测。左边是逐位接受率，指前面几位都被收下时这一位也被收下的比例，Qwen3-4B。"
+               "闲聊上 EAGLE-3 第 1 位 0.53，往后升到 0.74；DFlash 第 1 位 0.72，往后掉到 0.63；代码上 DFlash 从 0.87 掉到 0.78。"
+               "数学第 1 位：EAGLE-3 0.81，DFlash 0.88，DSpark 0.93。右边是 Qwen3-8B 每轮平均收下几个字："
+               "数学 EAGLE-3 %.2f、DFlash %.2f、DSpark %.2f；代码 %.2f、%.2f、%.2f；闲聊 %.2f、%.2f、%.2f。"
+               % tuple(avg[k][d] for d in range(3) for k in ("EAGLE-3", "DFlash", "DSpark")))
+    y0 = f.header("DSpark 论文实测：<tspan font-weight=\"700\">开头靠深度，往后靠前后照应</tspan>",
+                  "左：每一位单看准不准；右：一轮平均收下几个字",
+                  [(PU, "EAGLE-3（一个个猜）"), (OR, "DFlash（一趟出整块）"), (GR, "DSpark")])
+    PW, PH = 680, 400
+    # ── 左：逐位接受率 ──
+    py = f.panel(0, y0, PW, PH, "① 逐位接受率：第 1 位 → 块里往后", BL, tag="Qwen3-4B")
+    AX0, AX1 = 210, 640
+    def ax(v):
+        return AX0 + (v - 0.5) / 0.5 * (AX1 - AX0)
+    for v in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0):
+        f.line(ax(v), py + 30, ax(v), py + 300, LINE, 1, arrow=False)
+        f.t(ax(v), py + 318, "%.1f" % v, GY, size=12, anchor="middle")
+    for i, (dom, who, a0, a1) in enumerate(DS_POS):
+        y = py + 62 + i * 62
+        col = DS_COL[who]
+        f.t(24, y + 5, dom, INK, True, 14)
+        f.t(70, y + 5, who, col, True, 14)
+        f.line(ax(a0), y, ax(a1), y, col, 3)
+        f.t(ax(a0), y - 12, "%.2f" % a0, col, True, 13, "middle")
+        f.t(ax(a1), y - 12, "%.2f" % a1, col, True, 13, "middle")
+    y = py + 62 + 3 * 62 + 10
+    f.t(24, y + 5, "数学", INK, True, 14)
+    f.t(70, y + 5, "只看第 1 位", GY, size=13)
+    for k, (who, v) in enumerate(DS_FIRST):
+        f.box(ax(v) - 7, y - 7, 14, 14, DS_COL[who], DS_COL[who], 7)
+        f.t(ax(v), y - 14 if k != 1 else y + 24, "%s %.2f" % (who, v), DS_COL[who], True, 12.5, "middle")
+    f.t(24, py + 348, "箭头从第 1 位指向块里往后。一个个猜的越往后越稳，", INK, size=13.5)
+    f.t(24, py + 370, "一趟出整块的越往后越掉；第 1 位反而是浅草稿最弱。", INK, size=13.5)
+    # ── 右：接受长度 ──
+    RX = PW + 20
+    py2 = f.panel(RX, y0, W - RX, PH, "② 每轮平均收下几个字", GR, tag="Qwen3-8B，含大模型补的 1 个")
+    BY0, BU = py2 + 300, 46            # 柱底、每个字的高度
+    for v in range(0, 7):
+        f.line(RX + 60, BY0 - v * BU, W - 30, BY0 - v * BU, LINE, 1, arrow=False)
+        f.t(RX + 48, BY0 - v * BU + 4, str(v), GY, size=12, anchor="end")
+    GW, BWD = 200, 46
+    for d, dom in enumerate(("数学", "代码", "闲聊")):
+        gx = RX + 90 + d * GW
+        for k, who in enumerate(("EAGLE-3", "DFlash", "DSpark")):
+            v = avg[who][d]
+            x = gx + k * (BWD + 8)
+            f.box(x, BY0 - v * BU, BWD, v * BU, DS_COL[who], DS_COL[who], 3)
+            f.t(x + BWD / 2, BY0 - v * BU - 8, "%.2f" % v, DS_COL[who], True, 12.5, "middle")
+        f.t(gx + 1.5 * BWD + 8, BY0 + 22, dom, INK, True, 14, "middle")
+    f.t(RX + 24, py2 + 348, "同一个草稿，闲聊比数学少收两个多字：", INK, size=13.5)
+    f.t(RX + 24, py2 + 370, "每次验几个，该看内容，也该看机器忙不忙。", GR, True, 13.5)
+    f._pan = None
+    yb = f.band(y0 + PH + 16, "ok", "开头靠草稿够深，往后靠前后照应；DSpark 两头都要", [
+        "一趟出整块的草稿能叠得更深，第 1 位更准；DSpark 再用顺序小头把往后的下滑补回来。闲聊收得少，就是第二刀按把握定验几个的理由。",
+    ])
+    yb = f.src(yb + 10,
+               "DSpark：arXiv 2607.05147。左：§4.3.1 正文给出的数（Figure 2 全曲线未逐点公开，图上只画正文写明的；右端是正文说的「块里更靠后」处，没写明是第几位）。右：表 1 Qwen3-8B，数学＝GSM8K／MATH500／AIME25、代码＝MBPP／HumanEval／LiveCodeBench、闲聊＝MT-Bench／Alpaca／Arena-Hard，每类取三个基准的平均（本课计算）。",
+               "核对：九个基准的平均算出来 DSpark 比 EAGLE-3 高 26.7%、比 DFlash 高 18.4%，与论文正文一致。温度 1.0、块长 7、草稿 5 层（EAGLE-3 为 1 层）。")
+    f.save("fig6-spec-dspark.svg", yb + 14)
+
+
 fig_step()
 fig_bytes()
 fig_conc()
@@ -755,3 +837,4 @@ fig_tree()
 fig_ngram()
 fig_three()
 fig_eagle()
+fig_dspark()

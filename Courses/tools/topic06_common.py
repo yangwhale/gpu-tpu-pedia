@@ -204,7 +204,8 @@ def postprocess(_html, BODY, NUM_LOCK, strict=True):
     # 一步一停的播放器：照抄 topic05-build.py（那边有来由注释）。动画脚本在每一步落地后打点，
     #   写进 manim/steps/<Scene>.json；这里挂到 <video data-pauses>，图注秒数也从同一份 json 取。
     STEP_VIDEOS = {"topic06-spec.mp4": "SpecStep", "topic06-stepmix.mp4": "StepMix", "topic06-kvload.mp4": "KVLoad", "topic06-bigep.mp4": "BigEP",
-                   "topic06-trip.mp4": "DecodeTrip", "topic06-whomoves.mp4": "WhoMoves"}
+                   "topic06-trip.mp4": "DecodeTrip", "topic06-whomoves.mp4": "WhoMoves",
+                   "topic06-dspark-draft.mp4": "DSparkDraft", "topic06-dspark-sched.mp4": "DSparkSched"}
     # L200 R18 新拍的两支只进了 L200；L300 用 strict 构建时缺它们不算错（L300 页面一个字不变）。
     L200_ONLY = {"topic06-trip.mp4", "topic06-whomoves.mp4"}
 

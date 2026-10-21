@@ -327,6 +327,8 @@ BODY = '''
     <tr><td>R102 补充 · 第十二节 三：MoE 专家层比稠密 FFN 更扛量化、2 bit 专家可用；准确率相近而答案翻转，建议看 KL 和 flips</td><td>MoQE arXiv 2310.02410 摘要（「expert layers in MoE models are much more robust to the quantization than conventional feedforward networks (FFN) layers」）；Dutta 等 arXiv 2407.09141 摘要。2026-10-21 核对</td></tr>
     <tr><td>R102 补充 · 第十二节 四：e<sup>δ</sup> 放大；DeepSeek-V3 FP8 训练留高精度的组件；INT8 注意力 Llama2 MMLU 25.5%、K 按通道离群；KIVI K 按通道 V 按 token</td><td>e<sup>δ</sup> 本课推导；arXiv 2412.19437 §3.3.1（「due to their sensitivity to low-precision computations」，训练场景）；SageAttention arXiv 2410.02367 引言（「Llama2 only achieves a random-guessing-level accuracy of 25.5% on the MMLU dataset with INT8 attention」「The matrix K exhibits a significant channel-wise outlier」）；KIVI arXiv 2402.02750。2026-10-21 核对</td></tr>
     <tr><td>R102 补充 · 第十二节 边界：推理模型 W8A8、W4A16 基本无损，更低位风险明显，与模型大小、来源、题目难度有关</td><td>arXiv 2504.04823 摘要（COLM 2025）；「小翻转在长思维链上累积」是本课推测。2026-10-21 核对</td></tr>
+    <tr><td>R103 补充 · 11.3 DSpark 数据图：Qwen3-4B 逐位条件接受率 EAGLE-3 闲聊 0.53→0.74、DFlash 代码 0.87→0.78、闲聊 0.72→0.63（「deeper into the block」，未写位次）；数学第 1 位 EAGLE-3 0.81、DFlash 0.88、DSpark 0.93；表 1 Qwen3-8B 九个基准接受长度（三类平均为本课计算，九基准平均复现 26.7%／18.4%，图脚本 assert）；温度 1.0、块长 7、草稿 5 层（EAGLE-3 1 层）</td><td>arXiv 2607.05147 HTML 版 §4.1、§4.3.1、Figure 2、Table 1。2026-10-21 核对</td></tr>
+    <tr><td>R103 补充 · 11.3 两支 DSpark 动画：Algorithm 1（a<sub>r,j</sub> 连乘、全批按存活概率排序、Θ ＝ τ·SPS(B)、吞吐不升即停以保无损）；线上 §5.2 去掉提前停止做全局搜索（SPS 锯齿），用两步之前的置信度定截断长度 K、配合 ZOS 异步；动画里的分数、把握、吞吐表（一步耗时 ＝ 固定 100／4 ＋ 每 token 1）为示意，14 个／7 个由脚本按 Algorithm 1 现算并 assert</td><td>arXiv 2607.05147 §3.2.2 Algorithm 1、§5.2（「we remove the early-stopping break」「using the confidence head outputs from two steps prior」）、附录 A。2026-10-21 核对</td></tr>
 </table>
   </details>'''
 
