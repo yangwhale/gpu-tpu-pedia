@@ -14,9 +14,9 @@ __FIG_S6_TEPDEP_T5__
   <p><b>判据：KV 头数和 batch。</b>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
     同样并发 512，decode 从 TP4 换成 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），每卡吞吐<b>翻了一倍多</b>。</p>
-  <p>原记录归功于容量：副本让出的显存多收了请求。用 Little 定律（3.3）核一下：</p>
+  <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。原记录把收益归给容量，但没记 KV 池占用，这条核不了；量到的是速度：</p>
 __FIG_S6_KV__
-  <p><b>变的是步时</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
+  <p><b>步时只剩约四分之一</b>：除了图里的重复读和 AllReduce，EP 从 4 路宽到 8 路，每卡读的专家也减半（三项各占多少 runbook 没拆，本课推导）。</p>
   <p><b>换模型</b>：MLA 开 TEP8，KV 存 8 份；Qwen3.5-397B 全注意力层 2 个 KV 头，存 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</p>
 
   <p><b>DEP 的代价：每个 rank 都得自己备一份。</b>DEP 下每个 rank 是台小推理机，注意力权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
@@ -122,7 +122,7 @@ __FIG_S6_BIGEP_NET__
     <b>DEP 省下重复的 KV，大 EP 把专家那趟车坐满。</b>留下的问题：每个 rank 自备一份状态，K3 这类模型 DEP 起不来，退回 TP 后 KV 又被复制（第七节）。</div>
 
   <details class="foldfig"><summary><b>考考自己</b>：一个模型有 4 个 KV 头，8 张卡开 TEP8，换 DEP8 后 KV 容量最多是原来的几倍？什么情况下涨了也没用？</summary>
-  <p>8 ÷ 4 ＝ 2，是 TEP8 的 2 倍。prefill 喂不上、或 batch 大到算力先到顶时，放得下也换不来吞吐，6.1 的 V4-Pro 就是。</p></details>
+  <p>8 ÷ 4 ＝ 2，是 TEP8 的 2 倍。prefill 喂不上、或 batch 大到算力先到顶时，放得下也换不来吞吐。</p></details>
 '''
 
 FIGS = {
@@ -131,8 +131,8 @@ FIGS = {
     "__FIG_S6_TEPDEP_T5__": ("fig-s6-tep-dep-t5", "fig5-tep-dep.svg", "topic05-fig-ep.py",
         '<b>只看注意力那一半。</b><br><em>专题五原图。</em>'),
     "__FIG_S6_KV__": ("fig-s6-dep-kv", "fig6-dep-kv.svg", "topic06-fig-dep.py",
-        '<b>对比两列：在飞请求没变多，步时只剩约四分之一。</b><br>'
-        '<em>实测为 GB300、vLLM、并发 512；在飞请求按 Little 定律推导，条长是示意。</em>'),
+        '<b>上半张是容量（示意）：TP4 四张卡只放一批；下半张是速度（实测）：步时只剩约四分之一。</b><br>'
+        '<em>实测为 GB300、vLLM、并发 512；上半张是示意，不是实测占用。</em>'),
     "__FIG_S6_STATE__": ("fig-s6-dep-state", "fig6-dep-state.svg", "topic06-fig-dep.py",
         '<b>比同一位置的两张卡：左边格子全满，右边每卡只亮两列。</b><br>'
         '<em>格子是示意，头数、槽数不按实际；「切头只有 TP」为本课推导。</em>'),

@@ -1902,95 +1902,104 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
   <p><b>代进去：</b>MLA、V4-Pro 1 个 KV 头，TEP8 复印 8 份；Qwen3.5-397B 2 个，复印 4 份；8 个 KV 头的 GQA 不复印，DEP 不占便宜。</p>
 
-  <h3 id="l4-2">人没多装，是一步变短了</h3>
-<figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1074" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。同样 3 台 TP4 prefill、并发 512，只把 decode 从 TP4 换成 DEP8。上半张图画这一步每张卡要读的 KV：TP4 的 4 张卡各读一遍全部约 197 个在飞请求的 KV，其中 3 遍是重复读；DEP8 的 8 张卡各读自己那约 16 个请求。下半张用 Little 定律对账：在飞请求等于每秒输出字数乘出字间隔，TP4 是 4220 乘 0.0468 秒约 197 个，DEP8 是 11031 乘 0.0118 秒约 130 个，DEP8 反而少；出字间隔从 46.8 毫秒降到 11.8 毫秒。decode 卡从 4 张变 8 张，每张 decode 卡输出 1055 到 1379，1.31 倍；按全部卡算总吞吐每卡 1319 到 2758，2.09 倍"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">V4-Pro 换 DEP，赢在每一步读得少　——　<tspan font-weight="700">步时 46.8 → 11.8 ms</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同样 3 台 TP4 prefill、并发 512，只换 decode。条长 ＝ 这一步这张卡要读的 KV，按卡上在飞的请求数画（本课推导）</text>
+  <h3 id="l4-2">容量和速度分开看：量到的是一步变短</h3>
+<figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1074" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，TP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但只有负载顶到上限时才兑现。下半张是速度轴，实测：同样 3 台 TP4 prefill、并发 512，只把 decode 换成 DEP8，出字间隔从 46.8 毫秒降到 11.8 毫秒，只剩约四分之一；每张 decode 卡输出 1055 到 1379，1.31 倍；按全部卡算总吞吐每卡 1319 到 2758，2.09 倍。这次实测量到的是速度轴；记录没给 KV 池占用，容量轴这次没测到"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TP4 换 DEP8：容量和速度分开看　——　<tspan font-weight="700">V4-Pro 实测量到的是步时 46.8 → 11.8 ms</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上半张容量轴（示意，每卡 KV 池装满）；下半张速度轴（实测，并发 512、只换 decode）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">自己那批请求的 KV</text>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">一批不同请求的 KV</text>
 <rect x="183.64000000000001" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="204" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同一份 KV 的重复读</text>
+<text class="svgsm" x="204" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同一批 KV 的副本</text>
 <rect x="0" y="102" width="1400" height="560" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一步，每张卡要读多少 KV</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 容量轴：KV 池装满时，存的是几批不同的请求（示意）</tspan></text>
 <text class="svgsm" x="24" y="200" fill="#202124" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP4</tspan></text>
 <text class="svgsm" x="24" y="224" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 张卡合算一批</text>
 <text class="svgsm" x="198" y="196" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 0</text>
-<rect x="210" y="178" width="860.0000000000001" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="178" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="196" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 A</tspan></text>
 <text class="svgsm" x="198" y="230" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 1</text>
-<rect x="210" y="212" width="860.0000000000001" height="24" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="210" y="212" width="700" height="24" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="230" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 A 的副本</tspan></text>
 <text class="svgsm" x="198" y="264" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 2</text>
-<rect x="210" y="246" width="860.0000000000001" height="24" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="210" y="246" width="700" height="24" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="264" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 A 的副本</tspan></text>
 <text class="svgsm" x="198" y="298" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 3</text>
-<rect x="210" y="280" width="860.0000000000001" height="24" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1090" y="208" fill="#a50e0e" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 197 个请求</tspan></text>
-<text class="svgsm" x="1090" y="234" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每张卡读一遍，</text>
-<text class="svgsm" x="1090" y="256" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 遍里 3 遍是重复</text>
-<text class="svgsm" x="1090" y="284" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">＋ 每层一次 AllReduce</text>
+<rect x="210" y="280" width="700" height="24" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="298" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 A 的副本</tspan></text>
+<text class="svgsm" x="934" y="208" fill="#a50e0e" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 张卡只放 1 批</tspan></text>
+<text class="svgsm" x="934" y="234" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">1 个 KV 头切不开，</text>
+<text class="svgsm" x="934" y="256" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">每张卡各存一整份</text>
 <text class="svgsm" x="24" y="366" fill="#202124" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DEP8</tspan></text>
 <text class="svgsm" x="24" y="390" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">各算各的</text>
 <text class="svgsm" x="198" y="362" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 0</text>
-<rect x="210" y="344" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="344" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="362" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 1</tspan></text>
 <text class="svgsm" x="198" y="396" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 1</text>
-<rect x="210" y="378" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="378" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="396" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 2</tspan></text>
 <text class="svgsm" x="198" y="430" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 2</text>
-<rect x="210" y="412" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="412" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="430" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 3</tspan></text>
 <text class="svgsm" x="198" y="464" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 3</text>
-<rect x="210" y="446" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="446" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="464" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 4</tspan></text>
 <text class="svgsm" x="198" y="498" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 4</text>
-<rect x="210" y="480" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="480" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="498" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 5</tspan></text>
 <text class="svgsm" x="198" y="532" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 5</text>
-<rect x="210" y="514" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="514" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="532" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 6</tspan></text>
 <text class="svgsm" x="198" y="566" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 6</text>
-<rect x="210" y="548" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="210" y="548" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="566" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 7</tspan></text>
 <text class="svgsm" x="198" y="600" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 7</text>
-<rect x="210" y="582" width="70.85117420099647" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="296" y="478" fill="#681da8" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张卡约 16 个请求，各读一遍</tspan></text>
-<text class="svgsm" x="210" y="640" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">副本让出的显存，理论上能放的请求是原来的 4 倍（TP 度数 4 ÷ KV 头数 1）；实测在飞的请求没变多，见下表。</text>
+<rect x="210" y="582" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="560" y="600" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 8</tspan></text>
+<text class="svgsm" x="934" y="478" fill="#681da8" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 张卡放 8 批：每卡上限 4 倍</tspan></text>
+<text class="svgsm" x="934" y="504" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 ＝ TP 路数 4 ÷ KV 头数 1</text>
+<text class="svgsm" x="210" y="640" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这是天花板：只有来的人多到把 TP4 的池子坐满（长上下文、高并发），多出的座位才换得来吞吐。</text>
 <rect x="0" y="682" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="682" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="684" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="712" x2="1400" y2="712" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="702" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Little 定律对账：在飞请求 ＝ 每秒输出字数 × 出字间隔</tspan></text>
+<text class="svglbl" x="14" y="702" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 速度轴：同样并发 512，一步要多久（实测）</tspan></text>
 <text class="svgsm" x="24" y="762" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700"></tspan></text>
-<text class="svgsm" x="300" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 卡</tspan></text>
-<text class="svgsm" x="480" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出 tok/s</tspan></text>
-<text class="svgsm" x="660" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">出字间隔</tspan></text>
-<text class="svgsm" x="860" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在飞请求</tspan></text>
-<text class="svgsm" x="1120" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张 decode 卡输出</tspan></text>
+<text class="svgsm" x="330" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">decode 卡</tspan></text>
+<text class="svgsm" x="560" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出 tok/s</tspan></text>
+<text class="svgsm" x="800" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">出字间隔</tspan></text>
+<text class="svgsm" x="1100" y="762" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每张 decode 卡输出</tspan></text>
 <line x1="24" y1="776" x2="1376" y2="776" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="24" y="814" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP4</tspan></text>
-<text class="svgsm" x="300" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">4</text>
-<text class="svgsm" x="480" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">4,220</text>
-<text class="svgsm" x="660" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">46.8 ms</text>
-<text class="svgsm" x="860" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">约 197</text>
-<text class="svgsm" x="1120" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">1,055</text>
+<text class="svgsm" x="330" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">4</text>
+<text class="svgsm" x="560" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">4,220</text>
+<text class="svgsm" x="800" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">46.8 ms</text>
+<text class="svgsm" x="1100" y="814" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">1,055</text>
 <text class="svgsm" x="24" y="864" fill="#202124" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">DEP8</tspan></text>
-<text class="svgsm" x="300" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">8</text>
-<text class="svgsm" x="480" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">11,031</text>
-<text class="svgsm" x="660" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">11.8 ms</text>
-<text class="svgsm" x="860" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">约 130</text>
-<text class="svgsm" x="1120" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">1,379</text>
+<text class="svgsm" x="330" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">8</text>
+<text class="svgsm" x="560" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">11,031</text>
+<text class="svgsm" x="800" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">11.8 ms</text>
+<text class="svgsm" x="1100" y="864" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums">1,379</text>
 <text class="svgsm" x="24" y="914" fill="#174ea6" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">变化</tspan></text>
-<text class="svgsm" x="300" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×2</tspan></text>
-<text class="svgsm" x="480" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×2.61</tspan></text>
-<text class="svgsm" x="660" y="914" fill="#174ea6" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">÷4</tspan></text>
-<text class="svgsm" x="860" y="914" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">少 34%</tspan></text>
-<text class="svgsm" x="1120" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×1.31</tspan></text>
+<text class="svgsm" x="330" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×2</tspan></text>
+<text class="svgsm" x="560" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×2.61</tspan></text>
+<text class="svgsm" x="800" y="914" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">÷4</tspan></text>
+<text class="svgsm" x="1100" y="914" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×1.31</tspan></text>
 <rect x="0" y="952" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="952" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="952" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="979" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在飞的请求反而少了 34%：收益不来自多装，来自每一步变短，再加上 decode 卡翻倍</tspan></text>
-<text class="svgsm" x="20" y="1010" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">按全部卡（含 12 张 prefill 卡）算总吞吐，每卡 1,319 → 2,758，是 2.09 倍；按 decode 卡算输出只有 1.31 倍。</text>
-<text class="svgsm" x="20" y="1034" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">两边投机解码接受率相近（35% 上下），步时变短不是投机带来的。</text>
-</svg><figcaption><b>先看上半张红条：TP4 每张卡都把同一批笔记读一遍；再看下表：车上的人变少，一步只剩约四分之一。</b><span class="capmore"><br><em>GB300、vLLM、并发 512；车上人数按 Little 定律推导，条长是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。</p>
+<text class="svglbl" x="20" y="979" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这次量到的是速度轴：一步只剩约四分之一；容量轴这次没测到</tspan></text>
+<text class="svgsm" x="20" y="1010" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">步时变短来自三处：副本不再每步重复读、注意力那次 AllReduce 没了、EP 从 4 路宽到 8 路（各占多少原记录没拆）。</text>
+<text class="svgsm" x="20" y="1034" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">记录没给 KV 池占用，说不清 TP4 在并发 512 下是否已被座位卡住，所以收益不能记在容量头上。</text>
+</svg><figcaption><b>上半张是容量（示意）：TP4 四张卡只放一批，三份是复印；下半张是速度（实测）：一步只剩约四分之一。</b><span class="capmore"><br><em>GB300、vLLM、并发 512；上半张是示意，不是实测占用。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>V4-Pro 单 KV 头（num_key_value_heads 1，CSA／HCA 交错，不是 MLA）：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:298-302。</p>
 <p>实测：同文件 :449、:464-465（并发 512：TP4 decode 总吞吐 21,100、输出 4,220、出字间隔 46.8 ms；dep8 为 55,153、11,031、11.8 ms）；GPU 数 16 和 20 见 :476；投机接受率 34% 与 35.7% 见 :480。</p>
-<p>本课推导：在飞请求 ＝ 输出 tok/s × 出字间隔（Little 定律）；条长按卡上在飞请求数画，假设两边每个请求的 KV 一样长（同为 4K 进 1K 出）；TP4 里哪张卡算「原件」是示意。容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。</p></details></figure>
+<p>本课推导：容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，与 vLLM 文档「KV 被复制 tp_size / H 次」一致；上半张是示意，条长不按实测请求数画；MLA 模型 TEP8 是 8 倍，Qwen3.5-397B 全注意力层 2 个 KV 头、TEP8 是 4 倍，8 个 KV 头的 GQA 模型 TEP8 是 1 倍。</p></details></figure>
   <p>V4-Pro 在 GB300 上、并发 512，decode 从 TP4 换成 dep8：按全部卡算每卡吞吐 <b>2.09 倍</b>（本课推导），只算 decode 卡 <b>1.31 倍</b>。</p>
   <ul>
-    <li><b>原记录归功于容量，拿 Little 定律一核，车上的人反而少了。</b>变的是每一步：三份重复读、注意力那次 AllReduce 没了，EP 宽到 8 路、每卡读的专家减半。三项各占多少，原记录没拆。</li>
+    <li><b>容量：不复印，每卡最多多装 4 倍人。</b>这是天花板，人多到把 TP4 的池子坐满才兑现。原记录归功于容量，但没记 KV 池占用，这条核不了。</li>
+    <li><b>速度：一步只剩约四分之一。</b>出字间隔 46.8 → 11.8 毫秒，原因图里列了三条，各占多少原记录没拆。</li>
     <li><b>瓶颈换了边。</b>decode 吃得快了，要更多 prefill 喂；TP4 那边加第 4 台 prefill，总吞吐 21,100 → 20,479，纹丝不动。拓扑一换，P:D 配比要重扫。</li>
   </ul>
 
