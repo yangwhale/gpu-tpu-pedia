@@ -30,6 +30,9 @@ r"""专题三 · 注意力演进 —— **主线讲义（授课稿）**。
 import io
 import os
 import re
+# ⭐ 2026-10-20：窄屏规则（表格框内横滚、录音条另起一行），正本在 course_narrow_css.py。
+#   讲义的 CSS 抽自专题一讲义，那边没有这条，「这份讲义怎么用」的时间表在 390 下把整页撑宽。
+from course_narrow_css import CSS as _NARROW_CSS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
@@ -2044,6 +2047,7 @@ html = ('''<!doctype html>
 /* ⛔ 时间表第一列会把「一　一条链」竖着排成三行 —— 版心够宽，
    只是那一列没给下限。⭐ 给个 nowrap 就够，不要去动全局表格样式。 */
 .plan table td:first-child, .plan table th:first-child{white-space:nowrap}
+''' + _NARROW_CSS + '''
 p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
       margin:12px 0;line-height:1.95}
 p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}

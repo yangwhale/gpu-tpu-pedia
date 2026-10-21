@@ -23,6 +23,9 @@ import io
 import os
 import re
 import topic03_page as P
+# ⭐ 2026-10-20：窄屏规则（表格框内横滚、录音条另起一行），正本在 course_narrow_css.py。
+#   讲义的 CSS 抽自专题一讲义，那边没有这条，「这份讲义怎么用」的时间表在 390 下把整页撑宽。
+from course_narrow_css import CSS as _NARROW_CSS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
@@ -900,6 +903,7 @@ html = ('''<!doctype html>
 <style>
 .shell > main{grid-column:1 / -1}
 .plan table td:first-child, .plan table th:first-child{white-space:nowrap}
+''' + _NARROW_CSS + '''
 p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
       margin:12px 0;line-height:1.95}
 details.deep{margin:18px 0;border:1.5px dashed #9aa0a6;border-radius:10px;padding:6px 14px;background:#fafafa}

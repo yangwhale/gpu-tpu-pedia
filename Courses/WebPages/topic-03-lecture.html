@@ -197,6 +197,17 @@ details.oral .body p{margin:10px 0;line-height:1.9}
 /* ⛔ 时间表第一列会把「一　一条链」竖着排成三行 —— 版心够宽，
    只是那一列没给下限。⭐ 给个 nowrap 就够，不要去动全局表格样式。 */
 .plan table td:first-child, .plan table th:first-child{white-space:nowrap}
+
+/* ── 窄屏（course_narrow_css.py，2026-10-20）──────────────────────────
+   ① 正文表格在自己框里横向滚动，不再把整页撑宽（跟英文版同一条）。
+   ② 节标题那一行是 flex：录音条（.lecmedia，最小 280px）挤在徽章和标题后面会把页面撑出去，
+      窄屏下让它另起一行、占满整行。
+   ③ 手机上表格已经能在框里横滑了，就别再把格子压扁：公式（td 里的 code）一折就是逐字断行
+      （专题四 1.3 形状表每行约 400px 高），数值列「7.32 TiB」折成两行 —— 这两类不折行。 */
+@media(max-width:1000px){main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}
+@media(max-width:600px){.stn{flex-wrap:wrap}.stn .lecmedia{flex:1 1 100%;min-width:0}
+  td code,td.num{white-space:nowrap}}
+
 p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
       margin:12px 0;line-height:1.95}
 p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}

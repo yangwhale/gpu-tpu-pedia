@@ -24,6 +24,9 @@ r"""专题四 · 反向与优化器 —— **讲义（授课稿）**。
 import io
 import os
 import re
+# ⭐ 2026-10-20：窄屏规则（表格框内横滚、录音条另起一行），正本在 course_narrow_css.py。
+#   讲义的 CSS 抽自专题一讲义，那边没有这条，「这份讲义怎么用」的时间表在 390 下把整页撑宽。
+from course_narrow_css import CSS as _NARROW_CSS
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -3019,6 +3022,7 @@ html = ('''<!doctype html>
    这份没有 <aside>，不声明的话 main 会掉进那根 238px 的窄柱子里。 */
 .shell > main{grid-column:1 / -1}
 .plan table td:first-child, .plan table th:first-child{white-space:nowrap}
+''' + _NARROW_CSS + '''
 p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
       margin:12px 0;line-height:1.95}
 p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
