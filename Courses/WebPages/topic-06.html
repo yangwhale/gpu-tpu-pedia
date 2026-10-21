@@ -1238,7 +1238,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l1-2">一个人出一个字：5 毫秒在搬，0.016 毫秒在算</h3>
 <figure class="fbox fwide" id="anim-trip">
-<video src="media/topic06-trip.mp4?v=02fad11f" data-pauses="6.63,12.55,20.68" autoplay loop muted playsinline
+<video src="media/topic06-trip.mp4?v=dcb81024" data-pauses="6.63,12.55,20.68" autoplay loop muted playsinline
        aria-label="decode 一步搬一趟权重的动画。标题：每出一个字，权重都要从显存搬一趟。左边一个框写着显存（仓库），里面 8 格蓝色权重，下面写 37 GB 权重；右边一个框写着算的地方（工作台）。底下两根计时条，搬（蓝）和算（橙），条长按真实比例。字幕依次是：一个人：每层权重从显存搬上来，只跟这 1 行乘一下（工作台里出现一根黄线，标着 1 个人 ＝ 1 行；权重一格格飞上工作台、跟这一行乘一下、用完就消失，蓝条跟着一格格爬满）。蓝条末端标约 5 毫秒，橙条细到几乎看不见，标 0.016 毫秒：算力只用上 0.32%，工作台里出现出 1 个字。第 1 步完成：搬约 5 毫秒，算 0.016 毫秒，出 1 个字，停住。下一个字：工作台放不下 37 GB，权重得从头再搬一趟（蓝条清零，8 格权重重新从显存飞一遍）。第 2 步完成：又是一整趟、又是约 5 毫秒，还是只出 1 个字，停住。一趟喂 313 行：搬的还是这一车，算一点点追上来（黄线变成一大块，标 313 行；权重再搬一趟，这回橙条跟着蓝条一起长）。橙条末端标 313 × 0.016 ≈ 5 毫秒。第 3 步完成：算和搬一样长 —— 再多就卡在算，prefill 一趟几千行就在这一边，停住。最后：decode 卡在搬，prefill 卡在算。画面复位。底部小字：只算权重的理想下限：DeepSeek-V3、一颗 TPU v7、FP8；条长按真实比例，权重画成 8 格是示意。"></video>
 <figcaption><b>看蓝条一格格爬满、橙条几乎不动；再看第 3 步喂到 313 行，橙条才追上来。</b>
   <span class="sub">（27 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。只算权重的理想下限；「313 行时算和搬一样长」是本课按同一组规格推的。）</span></figcaption></figure>
@@ -1384,7 +1384,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l2-2">每站都停：每一步都重新排一次</h3>
 <figure class="fbox fwide" id="anim-contbatch">
-<video src="media/topic06-contbatch.mp4?v=f9bb1ad0" autoplay loop muted playsinline
+<video src="media/topic06-contbatch.mp4?v=0f4e495d" autoplay loop muted playsinline
        aria-label="静态批与连续批动画。上下两组各 4 个槽位；上组凑满一批、等最长的做完，下组每一步都重新排、谁做完谁让位。每一列是一步，灰格是槽位空转。最后：同样 15 步，静态批做完 8 个（空转 23 格），连续批做完 14 个（空转 0 格）。"></video>
 <figcaption><b>比两组的灰格：上面越走越多，下面一格没有。</b>
   <span class="sub">（18 秒无声循环。请求长度是示意，每步按等长算。）</span></figcaption></figure>
@@ -1649,7 +1649,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l3-3">纸别浪费：领一页用一页</h3>
 <figure class="fbox fwide" id="anim-paged">
-<video src="media/topic06-paged.mp4?v=42cf9186" autoplay loop muted playsinline
+<video src="media/topic06-paged.mp4?v=dc735367" autoplay loop muted playsinline
        aria-label="分页 KV 动画。左边是 16 块显存，每块 4 个 token 格；右边是页表，列出每个请求的第几块住在哪个物理块。三个请求边生成边长，写满一块才去空闲池领一块新的，领到哪块算哪块，所以一个请求的块东一块西一块，页表记住先后。请求 2 结束，它的 2 块立刻还回空闲池；新请求 4 进来，马上用上刚还回来的块 2 和块 5。最后字幕：浪费只剩每个请求最后一块的空尾巴；对照按最大长度连续预留，没写到的位置也一直占着。"></video>
 <figcaption><b>看请求 2 一走，它的两块马上被请求 4 住进去。</b>
   <span class="sub">（18 秒无声循环。块大小、块数、请求长度都是示意。）</span></figcaption></figure>
@@ -2004,7 +2004,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="l4-4">大 EP：把第一节拆散的人收回来</h3>
   <p>第一节的洞：每个专家平均只剩 8 行。解法是<b>把专家铺开</b>：出了一台 8 卡机还在分，就是大 EP（TensorRT-LLM 的线是 EP 超过 8）；注意力各管各的人，所以它是放大版的 DEP。</p>
 <figure class="fbox fwide" id="anim-bigep">
-<video src="media/topic06-bigep.mp4?v=be13a8bf" data-pauses="0.90,3.95,7.40,10.85,14.70,18.95" autoplay loop muted playsinline
+<video src="media/topic06-bigep.mp4?v=d5587dad" data-pauses="0.90,3.95,7.40,10.85,14.70,18.95" autoplay loop muted playsinline
        aria-label="动画：上下两条泳道，上面 EP8、8 张卡，一张卡里摆着 32 个路由专家的小格子；下面 EP144、144 张卡，一张卡里只有 2 个大格子。四列依次长出条形：每个专家分到几行，EP8 是 8 行、EP144 约 128 行；每层读多少权重，1.41 GB 对 88 MB；接着标出每字节用 8 次对 128 次；路由专家占显存，EP8 的 81.7 GB 越过 80 GB 的红线，EP144 只有 5.1 GB，旁边写着剩下装 KV。最后一拍，下面那张卡的 token 跑去其余 143 张卡再跑回来，字幕说代价是每层都要跨机器去一趟、回一趟。结尾打出：专家铺开，每卡读得少，读一次用得多。"></video>
 <figcaption><b>上下两条泳道比同一列：每份专家分到的人越多，每张卡读得越少。</b>
   <span class="sub">（24 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。专家大小、层数照 V3 配置；每卡 32 个请求、负载均匀是示意。）</span></figcaption></figure>
@@ -2172,7 +2172,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="l5-1">谁搬家</h3>
   <p>注意力是一张表：行是新 token 的提问（Q），列是前面 token 的笔记（K、V），只看前面，所以是三角。切开它，总有一方得搬家。</p>
 <figure class="fbox fwide" id="anim-whomoves">
-<video src="media/topic06-whomoves.mp4?v=02a872cf" data-pauses="2.15,7.05,12.05,17.05,20.90,25.00,28.50" autoplay loop muted playsinline
+<video src="media/topic06-whomoves.mp4?v=3618db7b" data-pauses="2.15,7.05,12.05,17.05,20.90,25.00,28.50" autoplay loop muted playsinline
        aria-label="谁搬家的动画。标题：谁搬家：PCP 搬笔记，DCP 搬提问。四个框，卡 0 到卡 3。字幕依次是：PCP（prefill）：几千个提问按行分给 4 张卡，每张卡先拿自己那段笔记（每张卡上一条黄色的提问第 i 段、一条蓝色的笔记第 i 段，中间一排四个小格 0 到 3，标着要合的笔记段；卡 i 只有 0 到 i 这几格是绿框，其余是灰框）。各卡先把自己那段合进去。底下小字：灰框＝三角外：靠前的提问看不到后面的字，路过不用算。第 1 站：笔记段全体往右传一站，最右边那段绕回卡 0（前三段各往右挪一张卡；卡 3 那段往右出卡，沿下方车道绕到最左，再往右进卡 0）。用得上的格子变绿，三角外的那段变暗。第 1 站完成：用得上的边收边合，三角外的路过，停住。第 2 站同样，停住。第 3 站之后：PCP 完成：提问不动，笔记绕环搬过来；每张卡边收边合，不用跨卡拼，停住；这时卡 i 正好合了第 0 到 i 段。接着画面清空。DCP（decode）：每步只剩 1 个提问；笔记按字轮流存在 4 张卡上，不动（每张卡一排蓝色竖条，卡 0 标第 0、4、8… 个字，卡 1 标第 1、5、9… 个字，以此类推；上方一个黄色的 1 个提问），停住。第 1 步：这一个提问发到每张卡，各算自己那一段（提问复制四份飞进四张卡）。每张卡下面出现分子、分母。第 1 步完成：每张卡交出自己那段的分子和分母，先别除，停住。第 2 步：在终点拼一次 —— 分子加总、分母加总，只除一次（四份分子分母飞到下方一个绿框：分子加总 ÷ 分母加总 ＝ 这个提问的答案）。第 2 步完成：笔记没动，提问搬了家，答案在终点拼，停住。最后：谁小搬谁：提问多就搬笔记（PCP），只剩 1 个提问就搬提问（DCP）。画面复位。底部小字：4 张卡、4 段都是示意。"></video>
 <figcaption><b>先看 PCP 里蓝色笔记段绕着环走、提问一动不动；再看 DCP 里反过来，黄色提问飞进每张卡、答案在终点拼。</b>
   <span class="sub">（34 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。4 张卡、4 段是示意；没画 Ring 的负载均衡排布。）</span></figcaption></figure>
@@ -2402,7 +2402,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l6-1">两种活互相拖</h3>
 <figure class="fbox fwide" id="anim-pdsplit">
-<video src="media/topic06-pdsplit.mp4?v=6bf4052d" autoplay loop muted playsinline
+<video src="media/topic06-pdsplit.mp4?v=78d66b87" autoplay loop muted playsinline
        aria-label="动画：上下两组时间轴，一格是一步 decode 的时间。上组是混部，下组是 PD 分离。前 4 步两组一样，请求 A、B、C 每步各出一个字。接着来了一个长 prompt，橙色 prefill 占了 5 格：上组它占住整台机器，A、B、C 这 5 格一个字都没出，被红框圈出；下组它在 prefill 机上算，decode 机照常每步出字。算完后下组一支紫色箭头「传 KV」从 prefill 机指向 decode 机，新请求下一步加入 decode 批。结尾：拆开后字距始终均匀，代价是多一批机器、每个请求多传一趟 KV。"></video>
 <figcaption><b>先看上组的红框，再看下组那支紫箭头：一个是整批人在等，一个是多搬一趟。</b>
   <span class="sub">（22 秒无声循环，Manim 渲染。时间格只表相对长短，不是实测毫秒；传 KV 画得比 prefill 短，量级见下文。）</span></figcaption></figure>
@@ -2661,7 +2661,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l7-1">先猜后验：猜对白赚，猜错只亏一点</h3>
 <figure class="fbox fwide" id="anim-spec">
-<video src="media/topic06-spec.mp4?v=20d9f0f5" data-pauses="7.60,17.05" autoplay loop muted playsinline
+<video src="media/topic06-spec.mp4?v=72baabbb" data-pauses="7.60,17.05" autoplay loop muted playsinline
        aria-label="投机解码一步的动画。标题：投机解码：小模型先猜 4 个，大模型一趟验完。三行，分别标着已写下、小模型猜、大模型验；底下一条用时条，图例写：紫＝小模型猜一个（便宜），灰＝大模型搬一趟权重（贵）。开始时已写下「床前明月」。字幕依次是：第 1 步：小模型一个接一个猜 4 个字，每个都很快（猜出「光疑似地」，用时条多 4 小格紫色）。大模型搬一趟权重，同时算出这 5 个位置它自己会写的字（一个蓝框标着「一趟」，里面是「光、疑、是」和两个问号，用时条多一大格灰色）。从左往右逐个比：一样就收下（光、疑变绿）。第 3 个不一样：换成大模型自己的字，后面的全丢掉（「似」变红，「是」被黄框圈出，后面变暗；小字注：？＝前面那个字已经错了，这个位置算了也作废）。「光疑是」飞上去，第 1 步完成：猜对 2 个 ＋ 大模型补 1 个 ＝ 出 3 个字，停住。第 2 步：小模型猜「地上霜举」，大模型一趟算出「地上霜举头」；4 个全对；第 5 个位置大模型本来就算了，白送 1 个。「地上霜举头」飞上去，第 2 步完成：猜对 4 个 ＋ 白送 1 个 ＝ 出 5 个字，停住。最后：猜对几个就出几个，再加大模型自己的 1 个：每步至少出 1 个。画面复位。"></video>
 <figcaption><b>看第 1 步的红字「似」：错的位置换成大模型自己的字，后面的全扔；再看第 2 步白送的那一个。</b>
   <span class="sub">（23 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。示意，按温度 0 贪心比对。）</span></figcaption></figure>
@@ -2998,7 +2998,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>第一刀补草稿。</b>骨干照旧一趟出整块，上面加一个很轻的小头，从左往右按前一格选的字改下一格的分数：选了「of」，就抬高「course」。每轮平均多收下 16–18%，整轮只慢 0.2–1.3%。</li>
   </ul>
 <figure class="fbox fwide" id="anim-dspark-draft">
-<video src="media/topic06-dspark-draft.mp4?v=8f53e7c3" data-pauses="5.60,12.80,18.00" autoplay loop muted playsinline
+<video src="media/topic06-dspark-draft.mp4?v=86d62225" data-pauses="5.60,12.80,18.00" autoplay loop muted playsinline
        aria-label="DSpark 第一刀的动画。标题：DSpark 第一刀：并行打底，再按前一格改下一格。左边一个绿框「Yes,」，标着上一轮确认的字；右边两个空框，标着草稿第 1 格、草稿第 2 格；底注：例子出自 DSpark 论文；分数、条长都是示意。字幕依次是：并行（DFlash）：一趟前向，两格同时出分数（第 1 格 of 55%、no 45%；第 2 格 course 55%、problem 45%）。第 2 格看不见第 1 格选了啥，只能两种说法各押一半。两格各自抽签：第 1 格抽到 of，第 2 格抽到 problem。红字：✗ 拼成「of problem」：两种说法串了（按这组数，约一半概率）。第 1 步完成：一趟出整块很快，但越往块尾越容易拼串，停住。DSpark：骨干还是这一趟；再加一个顺序小头，从左往右走。第 1 格定了 of：小头按 of 给第 2 格加一笔分（一支绿箭头从第 1 格指向第 2 格，标着前一格的字 → 下一格的偏置）。course 抬到 95%，problem 压到 5%；再抽。绿字：✓ 「of course」。第 2 步完成：块里的字前后接得上了，停住。代价：贵的骨干只跑一趟；小头每格只是查一次表、乘一个小矩阵（两条横条：紫色长条骨干 5 层，绿色短条顺序小头）。灰字：batch 128：草稿 4 到 16 个，整轮只比 DFlash 慢 0.2–1.3%。第 3 步完成：接受长度比 DFlash 高 16–18%（Qwen3 4B–14B），停住。最后：一趟出整块的速度留着，块里的前后照应补回来。画面复位。"></video>
 <figcaption>看第 2 格的分数条：同一个骨干，加了小头之后跟着第 1 格变。
   <span class="sub">（24 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。分数是示意；0.2–1.3% 与 16–18% 是论文实测。）</span></figcaption></figure>
@@ -3006,7 +3006,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>第二刀补验证。</b>另一个小头给每格估一个把握，连乘成「活到这一格」的概率；整批请求的候选按它排队，再看机器忙不忙定这一步总共验几个。闲时多验，忙时少验，没把握的字不占名额。</li>
   </ul>
 <figure class="fbox fwide" id="anim-dspark-sched">
-<video src="media/topic06-dspark-sched.mp4?v=82c3bc52" data-pauses="4.65,12.40,20.10" autoplay loop muted playsinline
+<video src="media/topic06-dspark-sched.mp4?v=f7c3531f" data-pauses="4.65,12.40,20.10" autoplay loop muted playsinline
        aria-label="DSpark 第二刀的动画。标题：DSpark 第二刀：按把握排队，按负载定验几个。左边 3 行 5 列的格子，行标请求 1 · 写代码、请求 2 · 闲聊、请求 3 · 解题，列标第 1 格到第 5 格；右边一张坐标图，纵轴预期吞吐，横轴已放进验证的草稿数；底注：算法照 DSpark 论文 Algorithm 1 现算；把握和吞吐表是示意。字幕依次是：每个请求猜 5 个，小头给每格估一个「把握」（写代码 .95 .95 .90 .90 .85；闲聊 .70 .60 .50 .50 .40；解题 .90 .85 .70 .60 .50；格子下注：把握＝前面几格都收下时，这一格也被收下的概率）。把握从左往右连乘＝活到这一格的概率，越往后越低（格子变成蓝色填充条：写代码 95% 90% 81% 73% 62%；闲聊 70% 42% 21% 10% 4%；解题 90% 76% 54% 32% 16%）。第 1 步完成：闲聊那行掉得最快，写代码那行最稳，停住。闲时：全批候选按存活概率从高到低，一个个放进验证（图上注：一步耗时 ＝ 固定 100 ＋ 每个 token 1；格子按顺序变绿框，右图每放一个多一个点）。闲聊第 5 格红框，红字：✗ 红框那格放进来吞吐反降，停。第 2 步完成：多验几乎不拖慢这一步，放进 14 个，只剩 4% 那格没要，停住。忙时：同一批草稿，但每多验 1 个，整步都更慢（图上注：一步耗时 ＝ 固定 4 ＋ 每个 token 1；格子变黄框）。第 3 步完成：只放进 7 个 —— 代码 4 个、闲聊 1 个、解题 2 个，停住。最后：名额按把握排，总数看机器忙不忙；没把握的字不占名额。画面复位。"></video>
 <figcaption>看同一批草稿，闲时放进 14 个、忙时只放 7 个。
   <span class="sub">（26 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。把握和吞吐表是示意，排队和停止规则照论文 Algorithm 1。）</span></figcaption></figure>

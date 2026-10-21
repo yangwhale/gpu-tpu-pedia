@@ -61,7 +61,7 @@ python3 -m venv ~/.venvs/manim && ~/.venvs/manim/bin/pip install manim   # Manim
 ② 写场景：tools/manim/topic0N-anim-<名>.py，文件头写「为什么非动不可 ／ 数据从哪来 ／ 刻意没画什么」
 ③ 草稿：render.sh ... --draft        → 480p，几秒钟；构图、时序、接缝在草稿上都看得出来
 ④ 反复改到满意（草稿一版几秒，正式渲染一版几分钟，所以在草稿上试二十轮）
-⑤ 正式渲染：render.sh ... WebPages/media/topic0N-<名>.mp4   → 1080p60 渲染、压到 960 宽、查首尾接缝
+⑤ 正式渲染：render.sh ... WebPages/media/topic0N-<名>.mp4   → 1080p60 渲染、保持 1920 宽（CRF 24）、查首尾接缝
 ⑥ 看拼接图 /tmp/loopdiff-<名>.png（上＝首帧，下＝末帧）—— 必须看
 ⑦ 登记基线：check-loop.py --update，然后手改 loop-baseline.json 里这一条的 note，写上人眼判定结论
 ⑧ 嵌进课件（第七节），图注写「N 秒无声循环，Manim 渲染」，aria-label 复述画面里的每一句话

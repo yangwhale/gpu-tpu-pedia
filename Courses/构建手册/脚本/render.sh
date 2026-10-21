@@ -27,7 +27,7 @@ MEDIA="${MANIM_MEDIA:-/tmp/manim-out}"
 if [ "$DRAFT" = "--draft" ]; then
   Q=-ql; SUB=480p15; WIDE=640; CRF=32
 else
-  Q=-qh; SUB=1080p60; WIDE=960; CRF=30
+  Q=-qh; SUB=1080p60; WIDE=1920; CRF=24   # 2026-10-21 由 960/30 上调：页面视频最宽 1240 CSS px，视网膜屏要 2480 物理像素，960 拉大 2.6 倍发虚
 fi
 
 echo "▸ 渲染 $SCENE（$Q）"
