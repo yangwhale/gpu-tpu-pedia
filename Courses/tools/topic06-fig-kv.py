@@ -2,7 +2,7 @@
 r"""专题六 · 第三节「KV cache：账、池、复用」的四张图。
 
 ⭐ 回答的问题（一张图一个）：
-   fig6-kv-batch  —— 一颗 v7 芯片放下 V3 的 1/8 权重后，4K／32K／128K 上下文各能同时装几条序列？
+   fig6-kv-batch  —— 一个 v7 device（半颗芯片）放下 V3 的 1/16 权重后，4K／32K／128K 上下文各能同时装几条序列？
                      MHA／GQA／MLA／线性＋全注意力混合，四种 KV 记账方式差多少？
    fig6-paged     —— PagedAttention 的页表怎么把「逻辑上连续」的 KV 映射到零散的物理块，
                      两条共用 prompt 的序列怎么共享块、写时复制？
@@ -14,7 +14,9 @@ r"""专题六 · 第三节「KV cache：账、池、复用」的四张图。
    · Llama-3.1-70B：HF config.json（80 层、8 个 KV 头、head_dim 128）；激活参数 70.6B 取自 HF 模型页。
    · Qwen3.5-397B-A17B：HF config.json（60 层 = 45 层线性注意力 ＋ 15 层全注意力；全注意力 2 个 KV 头 × 256；
      线性层 64 个 value 头 × key 128 × value 128，mamba_ssm_dtype float32）。
-   · 可用 189.5 GiB ＝ 每 device 实测可用 94.75 GiB × 2（tpu/tpu-inference R1 FP4 README:59，与第十节 10.2 同一口径）；
+   · 每 device 实测可用 94.75 GiB（tpu/tpu-inference R1 FP4 README:59，与第十节 10.2 同一口径）。
+     ⛔ 按 device 算，不按芯片：一颗 v7 对软件是两个 device，各管自己那 94.75 GiB，不能当一整块 189.5 GiB 用；
+       8 颗芯片 ＝ 16 个 device，权重每份是 1/16（2026-10-21 由「每芯片 1/8」改正）；
      「留 10% 给激活」是本课假设。
    · V4-Pro 两池实验：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5（约 L849–896，
      每张 decode GPU 的 e2e 输出吞吐，ISL 4096／8192，OSL 1024，关 radix cache）。
@@ -48,17 +50,17 @@ assert KV_HYB == 30720
 STATE_HYB = 45 * 64 * 128 * 128 * 4               # 45 层线性注意力，每条序列一个固定状态，fp32
 assert STATE_HYB == 188743680 and STATE_HYB / 2**20 == 180
 
-# ══ ② 一颗 v7 芯片的显存怎么分 ════════════════════════════════════════
-N_CHIP = 8                                        # 671 GB FP8 权重铺 8 颗芯片（2×2×2）
-W_CHIP = V3_TOTAL * 1 / N_CHIP                    # FP8 每参数 1 字节
-assert W_CHIP == 83.875e9
-USABLE = 189.5 * GIB                              # 每 device 实测可用 94.75 GiB × 2，同 10.2
+# ══ ② 一个 v7 device 的显存怎么分 ═════════════════════════════════════
+N_DEV = 8 * 2                                     # 671 GB FP8 权重铺 8 颗芯片（2×2×2）＝ 16 个 device
+W_DEV = V3_TOTAL * 1 / N_DEV                      # FP8 每参数 1 字节
+assert W_DEV == 41.9375e9
+USABLE = 94.75 * GIB                              # 每 device 实测可用，同 10.2
 RESERVE = USABLE * 0.1
-POOL = USABLE * 0.9 - W_CHIP
-assert "%.2f" % (USABLE * 0.9 / GIB) == "170.55"
-assert "%.1f" % (POOL / GIB) == "92.4" and "%.1f" % (POOL / GB) == "99.3"
-assert "%.1f" % (W_CHIP / GIB) == "78.1" and "%.1f" % (W_CHIP / GB) == "83.9"
-assert "%.2f" % (RESERVE / GIB) == "18.95"
+POOL = USABLE * 0.9 - W_DEV
+assert "%.3f" % (USABLE * 0.9 / GIB) == "85.275"
+assert "%.1f" % (POOL / GIB) == "46.2" and "%.1f" % (POOL / GB) == "49.6"
+assert "%.1f" % (W_DEV / GIB) == "39.1" and "%.1f" % (W_DEV / GB) == "41.9"
+assert "%.2f" % (RESERVE / GIB) == "9.47"
 
 
 def nseq(per_tok, L, fixed=0):
@@ -72,10 +74,10 @@ MODELS = [  # (名字, 每 token 字节, 固定字节, 颜色)
     ("MHA · V3 形状（假想）", KV_MHA, 0, RD),
 ]
 TAB = {m[0]: {L: nseq(m[1], L * K, m[2]) for L in (1, 2, 4, 8, 16, 32, 64, 128)} for m in MODELS}
-assert [TAB["MLA · DeepSeek-V3"][L] for L in (4, 32, 128)] == [344, 43, 10]
-assert [TAB["GQA · Llama-3.1-70B"][L] for L in (4, 32, 128)] == [73, 9, 2]
-assert [TAB["线性＋全注意力 · Qwen3.5 形状"][L] for L in (4, 32, 128)] == [315, 83, 23]
-assert [TAB["MHA · V3 形状（假想）"][L] for L in (1, 4, 16, 32)] == [24, 6, 1, 0]
+assert [TAB["MLA · DeepSeek-V3"][L] for L in (4, 32, 128)] == [172, 21, 5]
+assert [TAB["GQA · Llama-3.1-70B"][L] for L in (4, 32, 128)] == [36, 4, 1]
+assert [TAB["线性＋全注意力 · Qwen3.5 形状"][L] for L in (4, 32, 128)] == [157, 41, 11]
+assert [TAB["MHA · V3 形状（假想）"][L] for L in (1, 4, 8, 16)] == [12, 3, 1, 0]
 
 # ══ ③ V4-Pro 两池实验（runbook §11.5，每张 decode GPU） ══════════════════
 RUNS = [  # (ISL, 配置, e2e tok/s, full 占用, swa 占用, 每 rank 请求数, 结论)
@@ -120,21 +122,21 @@ assert abs(t_re(LSTAR) - t_ld(LSTAR, SLOW)) < 1e-9
 
 # ══════════════════════════════════════════════════════════════════════
 def fig_batch():
-    f = Fig(W, "一颗 TPU v7 芯片可用 189.5 GiB：V3 的八分之一 FP8 权重 78.1 GiB（83.9 GB），留 10%，剩 92.4 GiB 放 KV。"
-               "上下文从 1K 到 128K，四种注意力能同时装的序列数：MLA 在 4K、32K、128K 分别是 344、43、10 条；"
-               "GQA 73、9、2 条；线性加全注意力混合 315、83、23 条；MHA 到 32K 一条都装不下")
+    f = Fig(W, "一个 TPU v7 device（一颗芯片对软件是两个 device）可用 94.75 GiB：V3 的十六分之一 FP8 权重 39.1 GiB（41.9 GB），留 10%，剩 46.2 GiB 放 KV。"
+               "上下文从 1K 到 128K，四种注意力能同时装的序列数：MLA 在 4K、32K、128K 分别是 172、21、5 条；"
+               "GQA 36、4、1 条；线性加全注意力混合 157、41、11 条；MHA 到 16K 一条都装不下")
     y0 = f.header("上下文长到 8 倍，纯注意力只装得下 1/8，线性混合还剩 1/4 以上　——　"
                   "<tspan font-weight=\"700\">KV 的记账方式决定 batch 上限</tspan>",
-                  "一颗 v7 芯片，V3 权重铺 8 颗芯片后剩下的空间全给 KV。横轴上下文长度，纵轴能同时装下几条序列（对数，向下取整）",
+                  "一个 v7 device，V3 权重铺 8 颗芯片 ＝ 16 个 device 后剩下的空间全给 KV。横轴上下文长度，纵轴能同时装下几条序列（对数，向下取整）",
                   [(m[3], m[0]) for m in MODELS])
 
-    # 顶部：192 GiB 怎么分
-    py = f.panel(0, y0, W, 104, "一颗芯片可用的 189.5 GiB", GY)
+    # 顶部：一个 device 的 94.75 GiB 怎么分（v7 一颗芯片两个 device，各管各的，不能当一整块用）
+    py = f.panel(0, y0, W, 104, "一个 device 可用的 94.75 GiB（一颗芯片 ＝ 两个 device）", GY)
     X0, SPAN = 40, W - 80
     sc = SPAN / USABLE
-    segs = [(W_CHIP, BL, "V3 权重的 1/8（FP8）：78.1 GiB"),
-            (RESERVE, GY2, "留 10%：19.0 GiB"),
-            (POOL, PU, "KV 池：92.4 GiB")]
+    segs = [(W_DEV, BL, "V3 权重的 1/16（FP8）：39.1 GiB"),
+            (RESERVE, GY2, "留 10%：9.5 GiB"),
+            (POOL, PU, "KV 池：46.2 GiB")]
     x = X0
     for v, col, lab in segs:
         w = v * sc
@@ -188,25 +190,25 @@ def fig_batch():
                 f.t(xf(L) + 10, yf(TAB[name][L]) + dy, "%d" % TAB[name][L], col, True, 15)
             f.t(AX1 + 20, yf(TAB[name][128]) + 5, "%d 条　%s" % (TAB[name][128], name.split(" · ")[0]), col, True, 15)
             f.t(AX1 + 20, yf(TAB[name][128]) + 24, SUB[name], GY, size=13)
-        else:   # MHA：16K 之后一条都装不下
-            Lx = 32
+        else:   # MHA：16K 起一条都装不下
+            Lx = 16
             xx, yy = xf(Lx), YB - 2
             f.line(xx - 8, yy - 8, xx + 8, yy + 8, col, 3, arrow=False)
             f.line(xx - 8, yy + 8, xx + 8, yy - 8, col, 3, arrow=False)
-            f.t(xx + 14, yy - 10, "MHA：32K 起一条都装不下", col, True, 14)
-            f.t(xf(1) + 10, yf(24) - 12, "24", col, True, 15)
-            f.t(xf(4) + 10, yf(6) - 10, "6", col, True, 15)
+            f.t(xx + 14, yy - 10, "MHA：16K 起一条都装不下", col, True, 14)
+            f.t(xf(1) + 10, yf(12) - 12, "12", col, True, 15)
+            f.t(xf(4) + 10, yf(3) - 10, "3", col, True, 15)
     yb = y0 + 104 + 16 + PH + 20
     yb = f.band(yb, "ok", "装得下几条序列，每趟搬运就分给几个人", [
-        "MLA 在 4K 装 344 条，32K 只剩 43 条。线性层每条序列先交 180 MiB 固定状态：",
-        "4K 时反而比 MLA 少装（315 &lt; 344），128K 时是 MLA 的两倍多（23 &gt; 10）。",
+        "MLA 在 4K 装 172 条，32K 只剩 21 条。线性层每条序列先交 180 MiB 固定状态：",
+        "4K 时反而比 MLA 少装（157 &lt; 172），128K 时是 MLA 的两倍多（11 &gt; 5）。",
     ])
     yb = f.src(yb + 10,
                "出处：每 token KV：V3 (512+64)×61×2 B ＝ 70,272（config.json）；Llama-3.1-70B 2×8×128×80×2 ＝ 327,680（HF config.json）；"
                "Qwen3.5 全注意力 15 层 × 2 头 × 256 维 × K、V × 2 B ＝ 30,720，线性层状态 45×64×128×128×4 B ＝ 180 MiB（HF config.json，mamba_ssm_dtype float32）。",
                "口径：MHA 一行是 V3 形状的假想（128 头 × 128 维，专题三第一题）：3,997,696 B/token。",
-               "本课推导：V3 权重全按 FP8 1 B/参数算 671 GB ÷ 8 芯片 ＝ 83.9 GB ＝ 78.1 GiB；每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，tpu-inference R1 FP4 README），再留 10% 给激活（本课假设）；"
-               "KV 池 ＝ 189.5 GiB × 0.9 − 78.1 GiB ＝ 92.4 GiB，与第十节 10.2 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.2）。假设 attention 走数据并行（每颗芯片只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每颗芯片复制一份（专题五）。",
+               "本课推导：v7 一颗芯片对软件是两个 device，各管自己的显存，按 device 记账；V3 权重全按 FP8 1 B/参数算 671 GB ÷ 16 个 device ＝ 41.9 GB ＝ 39.1 GiB；每 device 实测可用 94.75 GiB（tpu-inference R1 FP4 README），再留 10% 给激活（本课假设）；"
+               "KV 池 ＝ 94.75 GiB × 0.9 − 39.1 GiB ＝ 46.2 GiB，可用量与第十节 10.2 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.2）。假设 attention 走数据并行（每个 device 只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每个 device 复制一份（专题五）。",
                "口径：没算激活与通信缓冲（归入那 10%）、线性层卷积状态、引擎实际的状态 dtype（可能不是 fp32）。")
     f.save("fig6-kv-batch.svg", yb + 14)
 

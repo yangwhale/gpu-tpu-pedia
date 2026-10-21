@@ -3490,10 +3490,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>出处：V4.1-Flash 各层共用主 KV 和索引 K、主 KV 存 FP4、全局 KV 每 token 890 B、约 V4-Flash 的 1/4，见 Hugging Face deepseek-ai/DeepSeek-V4.1-Flash 模型卡。</p>
 <p>口径：方块个数和压缩块宽度是示意，不按比例；V4、V4-Flash 每 token 的字节数原文没给，图里不画；V4.1-Flash 读法的变化模型卡没写，那一格只记索引 K 共用。</p></details></figure>
 
-  <p><b>batch 上限 ＝ KV 池 ÷ 每条序列的 KV。</b>一颗 v7 芯片扣掉激活值和分到的那份 V3 权重，剩下的给 KV（拆法见图，口径同 10.2）。每条序列的 KV 整条住一个 device（注意力走数据并行，见第六节），所以池子除以每条的 KV 就是装几条。权重这里按全切粗算；实际非专家权重每个 device 各存一份，池子更小。</p>
-<figure class="fbox fwide" id="fig-s4-batch"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="一颗 TPU v7 芯片可用 189.5 GiB：V3 的八分之一 FP8 权重 78.1 GiB（83.9 GB），留 10%，剩 92.4 GiB 放 KV。上下文从 1K 到 128K，四种注意力能同时装的序列数：MLA 在 4K、32K、128K 分别是 344、43、10 条；GQA 73、9、2 条；线性加全注意力混合 315、83、23 条；MHA 到 32K 一条都装不下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p><b>batch 上限 ＝ KV 池 ÷ 每条序列的 KV。</b>账要按 device 算：一颗 v7 芯片在软件里是两个 device，各有 94.75 GiB，不能当一整块用。8 颗芯片＝16 个 device，每个 device 扣掉激活值和分到的那 1/16 V3 权重，剩下的给 KV（拆法见图）。每条序列的 KV 整条住一个 device（注意力走数据并行，见第六节），所以池子除以每条的 KV 就是装几条。权重这里按全切粗算；实际非专家权重每个 device 各存一份，池子更小。</p>
+<figure class="fbox fwide" id="fig-s4-batch"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="一个 TPU v7 device（一颗芯片对软件是两个 device）可用 94.75 GiB：V3 的十六分之一 FP8 权重 39.1 GiB（41.9 GB），留 10%，剩 46.2 GiB 放 KV。上下文从 1K 到 128K，四种注意力能同时装的序列数：MLA 在 4K、32K、128K 分别是 172、21、5 条；GQA 36、4、1 条；线性加全注意力混合 157、41、11 条；MHA 到 16K 一条都装不下"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">上下文长到 8 倍，纯注意力只装得下 1/8，线性混合还剩 1/4 以上　——　<tspan font-weight="700">KV 的记账方式决定 batch 上限</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一颗 v7 芯片，V3 权重铺 8 颗芯片后剩下的空间全给 KV。横轴上下文长度，纵轴能同时装下几条序列（对数，向下取整）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一个 v7 device，V3 权重铺 8 颗芯片 ＝ 16 个 device 后剩下的空间全给 KV。横轴上下文长度，纵轴能同时装下几条序列（对数，向下取整）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">MLA · DeepSeek-V3</text>
 <rect x="206.04000000000002" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -3506,13 +3506,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一颗芯片可用的 189.5 GiB</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一个 device 可用的 94.75 GiB（一颗芯片 ＝ 两个 device）</tspan></text>
 <rect x="40" y="152" width="544.1233712324681" height="40" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="312" y="178" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">V3 权重的 1/8（FP8）：78.1 GiB</tspan></text>
+<text class="svgsm" x="312" y="178" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">V3 权重的 1/16（FP8）：39.1 GiB</tspan></text>
 <rect x="584.1233712324681" y="152" width="132.0" height="40" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="650" y="178" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">留 10%：19.0 GiB</tspan></text>
+<text class="svgsm" x="650" y="178" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">留 10%：9.5 GiB</tspan></text>
 <rect x="716.1233712324681" y="152" width="643.876628767532" height="40" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1038" y="178" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 池：92.4 GiB</tspan></text>
+<text class="svgsm" x="1038" y="178" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">KV 池：46.2 GiB</tspan></text>
 <rect x="0" y="222" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="222" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="0" y="224" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -3541,65 +3541,64 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="1010.0" y1="282" x2="1010.0" y2="642" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
 <text class="svgsm" x="575" y="686" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">上下文长度（对数，每格翻倍；1K ＝ 1024 token）</text>
 <text class="svgsm" x="118" y="270" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">条</text>
-<path d="M 130.0 299.6 L 255.7 332.5 L 381.4 365.4 L 507.1 398.2 L 632.9 431.0 L 758.6 463.9 L 884.3 497.8 L 1010.0 532.9" fill="none" stroke="#1e8e3e" stroke-width="3" stroke-linecap="round"/>
-<circle cx="130.0" cy="299.6" r="4.5" fill="#1e8e3e"/>
-<circle cx="255.7" cy="332.5" r="4.5" fill="#1e8e3e"/>
-<circle cx="381.4" cy="365.4" r="4.5" fill="#1e8e3e"/>
-<circle cx="507.1" cy="398.2" r="4.5" fill="#1e8e3e"/>
-<circle cx="632.9" cy="431.0" r="4.5" fill="#1e8e3e"/>
-<circle cx="758.6" cy="463.9" r="4.5" fill="#1e8e3e"/>
-<circle cx="884.3" cy="497.8" r="4.5" fill="#1e8e3e"/>
-<circle cx="1010.0" cy="532.9" r="4.5" fill="#1e8e3e"/>
-<text class="svgsm" x="391" y="353" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">344</tspan></text>
-<text class="svgsm" x="768" y="489" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">43</tspan></text>
-<text class="svgsm" x="1030" y="537" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">10 条　MLA</tspan></text>
-<text class="svgsm" x="1030" y="556" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">70,272 B/token</text>
-<path d="M 130.0 352.6 L 255.7 358.9 L 381.4 369.5 L 507.1 385.5 L 632.9 406.9 L 758.6 432.7 L 884.3 461.7 L 1010.0 493.5" fill="none" stroke="#9334e6" stroke-width="3" stroke-linecap="round"/>
-<circle cx="130.0" cy="352.6" r="4.5" fill="#9334e6"/>
-<circle cx="255.7" cy="358.9" r="4.5" fill="#9334e6"/>
-<circle cx="381.4" cy="369.5" r="4.5" fill="#9334e6"/>
-<circle cx="507.1" cy="385.5" r="4.5" fill="#9334e6"/>
-<circle cx="632.9" cy="406.9" r="4.5" fill="#9334e6"/>
-<circle cx="758.6" cy="432.7" r="4.5" fill="#9334e6"/>
-<circle cx="884.3" cy="461.7" r="4.5" fill="#9334e6"/>
-<circle cx="1010.0" cy="493.5" r="4.5" fill="#9334e6"/>
-<text class="svgsm" x="391" y="395" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">315</tspan></text>
-<text class="svgsm" x="768" y="420" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">83</tspan></text>
-<text class="svgsm" x="1030" y="498" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">23 条　线性＋全注意力</tspan></text>
-<text class="svgsm" x="1030" y="517" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">30,720 B/token ＋ 180 MiB/条</text>
-<path d="M 130.0 372.6 L 255.7 405.6 L 381.4 438.8 L 507.1 472.3 L 632.9 505.1 L 758.6 537.9 L 884.3 576.3 L 1010.0 609.2" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
-<circle cx="130.0" cy="372.6" r="4.5" fill="#1a73e8"/>
-<circle cx="255.7" cy="405.6" r="4.5" fill="#1a73e8"/>
-<circle cx="381.4" cy="438.8" r="4.5" fill="#1a73e8"/>
-<circle cx="507.1" cy="472.3" r="4.5" fill="#1a73e8"/>
-<circle cx="632.9" cy="505.1" r="4.5" fill="#1a73e8"/>
-<circle cx="758.6" cy="537.9" r="4.5" fill="#1a73e8"/>
-<circle cx="884.3" cy="576.3" r="4.5" fill="#1a73e8"/>
-<circle cx="1010.0" cy="609.2" r="4.5" fill="#1a73e8"/>
-<text class="svgsm" x="391" y="464" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">73</tspan></text>
-<text class="svgsm" x="768" y="563" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9</tspan></text>
-<text class="svgsm" x="1030" y="614" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2 条　GQA</tspan></text>
-<text class="svgsm" x="1030" y="633" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">327,680 B/token</text>
-<path d="M 130.0 491.5 L 255.7 524.3 L 381.4 557.1 L 507.1 590.0 L 632.9 642.0" fill="none" stroke="#d93025" stroke-width="3" stroke-linecap="round"/>
-<circle cx="130.0" cy="491.5" r="4.5" fill="#d93025"/>
-<circle cx="255.7" cy="524.3" r="4.5" fill="#d93025"/>
-<circle cx="381.4" cy="557.1" r="4.5" fill="#d93025"/>
-<circle cx="507.1" cy="590.0" r="4.5" fill="#d93025"/>
-<circle cx="632.9" cy="642.0" r="4.5" fill="#d93025"/>
-<line x1="750.5714285714286" y1="632" x2="766.5714285714286" y2="648" stroke="#d93025" stroke-width="3" stroke-linecap="round"/>
-<line x1="750.5714285714286" y1="648" x2="766.5714285714286" y2="632" stroke="#d93025" stroke-width="3" stroke-linecap="round"/>
-<text class="svgsm" x="772" y="630" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MHA：32K 起一条都装不下</tspan></text>
-<text class="svgsm" x="140" y="479" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">24</tspan></text>
-<text class="svgsm" x="391" y="547" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<path d="M 130.0 332.5 L 255.7 365.4 L 381.4 398.2 L 507.1 431.0 L 632.9 463.9 L 758.6 497.8 L 884.3 532.9 L 1010.0 565.8" fill="none" stroke="#1e8e3e" stroke-width="3" stroke-linecap="round"/>
+<circle cx="130.0" cy="332.5" r="4.5" fill="#1e8e3e"/>
+<circle cx="255.7" cy="365.4" r="4.5" fill="#1e8e3e"/>
+<circle cx="381.4" cy="398.2" r="4.5" fill="#1e8e3e"/>
+<circle cx="507.1" cy="431.0" r="4.5" fill="#1e8e3e"/>
+<circle cx="632.9" cy="463.9" r="4.5" fill="#1e8e3e"/>
+<circle cx="758.6" cy="497.8" r="4.5" fill="#1e8e3e"/>
+<circle cx="884.3" cy="532.9" r="4.5" fill="#1e8e3e"/>
+<circle cx="1010.0" cy="565.8" r="4.5" fill="#1e8e3e"/>
+<text class="svgsm" x="391" y="386" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">172</tspan></text>
+<text class="svgsm" x="768" y="523" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">21</tspan></text>
+<text class="svgsm" x="1030" y="570" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5 条　MLA</tspan></text>
+<text class="svgsm" x="1030" y="589" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">70,272 B/token</text>
+<path d="M 130.0 385.5 L 255.7 391.8 L 381.4 402.5 L 507.1 418.5 L 632.9 440.1 L 758.6 466.1 L 884.3 495.6 L 1010.0 528.4" fill="none" stroke="#9334e6" stroke-width="3" stroke-linecap="round"/>
+<circle cx="130.0" cy="385.5" r="4.5" fill="#9334e6"/>
+<circle cx="255.7" cy="391.8" r="4.5" fill="#9334e6"/>
+<circle cx="381.4" cy="402.5" r="4.5" fill="#9334e6"/>
+<circle cx="507.1" cy="418.5" r="4.5" fill="#9334e6"/>
+<circle cx="632.9" cy="440.1" r="4.5" fill="#9334e6"/>
+<circle cx="758.6" cy="466.1" r="4.5" fill="#9334e6"/>
+<circle cx="884.3" cy="495.6" r="4.5" fill="#9334e6"/>
+<circle cx="1010.0" cy="528.4" r="4.5" fill="#9334e6"/>
+<text class="svgsm" x="391" y="428" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">157</tspan></text>
+<text class="svgsm" x="768" y="454" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">41</tspan></text>
+<text class="svgsm" x="1030" y="533" fill="#681da8" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">11 条　线性＋全注意力</tspan></text>
+<text class="svgsm" x="1030" y="552" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">30,720 B/token ＋ 180 MiB/条</text>
+<path d="M 130.0 405.6 L 255.7 438.8 L 381.4 472.3 L 507.1 505.1 L 632.9 537.9 L 758.6 576.3 L 884.3 609.2 L 1010.0 642.0" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
+<circle cx="130.0" cy="405.6" r="4.5" fill="#1a73e8"/>
+<circle cx="255.7" cy="438.8" r="4.5" fill="#1a73e8"/>
+<circle cx="381.4" cy="472.3" r="4.5" fill="#1a73e8"/>
+<circle cx="507.1" cy="505.1" r="4.5" fill="#1a73e8"/>
+<circle cx="632.9" cy="537.9" r="4.5" fill="#1a73e8"/>
+<circle cx="758.6" cy="576.3" r="4.5" fill="#1a73e8"/>
+<circle cx="884.3" cy="609.2" r="4.5" fill="#1a73e8"/>
+<circle cx="1010.0" cy="642.0" r="4.5" fill="#1a73e8"/>
+<text class="svgsm" x="391" y="498" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">36</tspan></text>
+<text class="svgsm" x="768" y="602" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="1030" y="647" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1 条　GQA</tspan></text>
+<text class="svgsm" x="1030" y="666" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">327,680 B/token</text>
+<path d="M 130.0 524.3 L 255.7 557.1 L 381.4 590.0 L 507.1 642.0" fill="none" stroke="#d93025" stroke-width="3" stroke-linecap="round"/>
+<circle cx="130.0" cy="524.3" r="4.5" fill="#d93025"/>
+<circle cx="255.7" cy="557.1" r="4.5" fill="#d93025"/>
+<circle cx="381.4" cy="590.0" r="4.5" fill="#d93025"/>
+<circle cx="507.1" cy="642.0" r="4.5" fill="#d93025"/>
+<line x1="624.8571428571429" y1="632" x2="640.8571428571429" y2="648" stroke="#d93025" stroke-width="3" stroke-linecap="round"/>
+<line x1="624.8571428571429" y1="648" x2="640.8571428571429" y2="632" stroke="#d93025" stroke-width="3" stroke-linecap="round"/>
+<text class="svgsm" x="646" y="630" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MHA：16K 起一条都装不下</tspan></text>
+<text class="svgsm" x="140" y="512" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">12</tspan></text>
+<text class="svgsm" x="391" y="579" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
 <rect x="0" y="712" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="712" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="712" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="739" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">装得下几条序列，每趟搬运就分给几个人</tspan></text>
-<text class="svgsm" x="20" y="770" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">MLA 在 4K 装 344 条，32K 只剩 43 条。线性层每条序列先交 180 MiB 固定状态：</text>
-<text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">4K 时反而比 MLA 少装（315 &lt; 344），128K 时是 MLA 的两倍多（23 &gt; 10）。</text>
+<text class="svgsm" x="20" y="770" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">MLA 在 4K 装 172 条，32K 只剩 21 条。线性层每条序列先交 180 MiB 固定状态：</text>
+<text class="svgsm" x="20" y="794" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">4K 时反而比 MLA 少装（157 &lt; 172），128K 时是 MLA 的两倍多（11 &gt; 5）。</text>
 </svg><figcaption><b>纯注意力三条线往右一格人数减半；紫线先交固定状态，少得慢；红线 32K 起装不下。</b><span class="capmore"><br><em>口径同正文；KV 按 bf16、attention 数据并行。本课推导。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>出处：每 token KV：V3 (512+64)×61×2 B ＝ 70,272（config.json）；Llama-3.1-70B 2×8×128×80×2 ＝ 327,680（HF config.json）；Qwen3.5 全注意力 15 层 × 2 头 × 256 维 × K、V × 2 B ＝ 30,720，线性层状态 45×64×128×128×4 B ＝ 180 MiB（HF config.json，mamba_ssm_dtype float32）。</p>
 <p>口径：MHA 一行是 V3 形状的假想（128 头 × 128 维，专题三第一题）：3,997,696 B/token。</p>
-<p>本课推导：V3 权重全按 FP8 1 B/参数算 671 GB ÷ 8 芯片 ＝ 83.9 GB ＝ 78.1 GiB；每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，tpu-inference R1 FP4 README），再留 10% 给激活（本课假设）；KV 池 ＝ 189.5 GiB × 0.9 − 78.1 GiB ＝ 92.4 GiB，与第十节 10.5 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.5）。假设 attention 走数据并行（每颗芯片只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每颗芯片复制一份（专题五）。</p>
+<p>本课推导：v7 一颗芯片对软件是两个 device，各管自己的显存，按 device 记账；V3 权重全按 FP8 1 B/参数算 671 GB ÷ 16 个 device ＝ 41.9 GB ＝ 39.1 GiB；每 device 实测可用 94.75 GiB（tpu-inference R1 FP4 README），再留 10% 给激活（本课假设）；KV 池 ＝ 94.75 GiB × 0.9 − 39.1 GiB ＝ 46.2 GiB，可用量与第十节 10.2 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.2）。假设 attention 走数据并行（每个 device 只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每个 device 复制一份（专题五）。</p>
 <p>口径：没算激活与通信缓冲（归入那 10%）、线性层卷积状态、引擎实际的状态 dtype（可能不是 fp32）。</p></details></figure>
   <p>上下文越长人越少，一趟搬运分到的 token 越少：这是长上下文贵的第一个原因。</p>
 
@@ -4016,8 +4015,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <b>② 复用和卸载是少算、少搬。</b>下放之前算清搬回来是不是比重算快。<br>
     留下的问题：座位坐满以后，一步本身的时间还压不下来，注意力和 MoE 是两块硬骨头（第五节）。</div>
 
-  <details class="foldfig"><summary><b>考考自己</b>：一颗 v7 芯片的 KV 池是 92.4 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
-  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 21 条。存 FP8 按 12.4 的布局每 token 40,016 字节，约装 37 条（严格减半才是 43 条）。</p></details>
+  <details class="foldfig"><summary><b>考考自己</b>：一个 v7 device 的 KV 池是 46.2 GiB，V3 跑 64K 上下文能装几条？要是把 KV 存成 fp8 呢？</summary>
+  <p>每条 70,272 × 65,536 字节 ≈ 4.29 GiB，装 10 条。存 FP8 按 12.4 的布局每 token 40,016 字节，约装 18 条（严格减半才是 21 条）。</p></details>
 
 </div></section>
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>单卡里的两块硬骨头：decode 注意力与 MoE</h2></div>
@@ -12875,7 +12874,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>vLLM 压测工具的 goodput ＝ 每秒达标请求数（与 DistServe 口径不同）</td><td>vLLM 仓库 vllm/benchmarks/serve.py 的 --goodput 参数</td></tr>
     <tr><td>DeepSeek 线上实测（2025-03-01 公布，统计 2025-02-27～28）：226.75 节点、理论成本利润率 545%（全按 R1 定价收费的假设；价格口径，课件正文不引用）、decode 时每节点输出约 14,800 tok/s（原文「~14.8k tokens/s output during decoding」；故事图卡片写 14.8k，同一数）、20–22 tok/s/user；一天输入 6,080 亿、输出 1,680 亿 token，合每卡每秒约 4,950（本课推导：7,760 亿 ÷ 86,400 ÷ 1,814 卡）</td><td>GitHub deepseek-ai/open-infra-index：202502OpenSourceWeek/day_6</td></tr>
     <tr><td>每 token KV：MHA 3,997,696 B、GQA（Llama-3.1-70B）327,680 B、Qwen3.5 全注意力 30,720 B ＋ 线性状态 180 MiB／序列；Qwen3.5 KV 头数 2</td><td>本课推导，形状取各自 Hugging Face config.json</td></tr>
-    <tr><td>8 颗 v7 放 V3：KV 池 92.4 GiB／芯片，4K 装 344 条、32K 装 43 条、64K 装 21 条（FP8 KV 按 656 B/层约 37 条）；Llama 4K 73 条</td><td>本课推导：每芯片可用 189.5 GiB（每 device 实测 94.75 GiB × 2，R1 FP4 README:59，同台账里「V3 FP8 切片表」那一行）× 0.9 ＝ 170.55 GiB，− 78.1 GiB（671 GB ÷ 8）；0.9 为本课假设；先按权重全切分粗算，DP attention 下非专家权重每 device 复制，实际更小（10.2）</td></tr>
+    <tr><td>8 颗 v7（16 个 device）放 V3：KV 池 46.2 GiB／device，4K 装 172 条、32K 装 21 条、64K 装 10 条（FP8 KV 按 656 B/层约 18 条）；Llama 4K 36 条</td><td>本课推导：按 device 算（一颗芯片＝两个 device，不当整块用），每 device 实测可用 94.75 GiB（R1 FP4 README:59）× 0.9 ＝ 85.275 GiB，− 39.1 GiB（671 GB ÷ 16）；0.9 为本课假设；先按权重全切分粗算，DP attention 下非专家权重每 device 复制，实际更小（10.2）</td></tr>
     <tr><td>PagedAttention：KV 有效利用率 20.4–38.2% → 96.3%（4.2 正文照录；故事图卡片取整写 20–38%→96%，第零节、第十五节落点与故事图 alt 口语写「两到近四成 → 96%」，同一组数，正文与图只是取整不同）</td><td>vLLM 论文，arXiv <a href="https://arxiv.org/abs/2309.06180" target="_blank" rel="noopener">2309.06180</a></td></tr>
     <tr><td>Qwen3.5 RPA KV 页 16→256 token：并发 512 时这个 kernel 的 decode 一步 428 → 283 µs（原文称 kernel 级提速 33.8%，不是整步；原因：页小时索引开销让 VPU 停顿）</td><td>原文「reduced the decode step latency under Concurrency-512 from 428µs to 283µs, achieving a 33.8% kernel-level speedup」；gpu-tpu-pedia tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/BLOG-systems-engineering-playbook.md L395-405，即 Google Developers Blog「Systems Engineering Playbook: Optimizing Qwen 3.5-397B MoE on Ironwood (TPU7x)」</td></tr>
     <tr><td>V4 两个池（full／swa）预算比改 0.20 → 0.15：每 rank 请求 727 → 886，端到端每 decode 卡 6,887 → 10,614（＋54%）；8K 输入时 ratio 0.10 为 9,354（滑窗池 96%、全长池 78%，每 rank 588），0.15 为 9,053</td><td>SGLANG-V4PRO-RUNBOOK.md:855-857（§11.5 L849-896）；8K 两行 :864-865；swa_tokens 比例 L946（引 pool_configurator.py:387）；sliding_window 128 见 HF config</td></tr>
