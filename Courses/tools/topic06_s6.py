@@ -13,10 +13,10 @@ __FIG_S6_TEPDEP_T5__
 
   <p><b>判据：KV 头数和 batch。</b>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
-    我们自己在 GB300 上用 SGLang 搭的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），输入 4096 时端到端每张 decode 卡 10,704 tok/s，是官方目标 11,200 的 95.6%。</p>
+    我们自己在 GB300 上用 SGLang 搭的一套部署，<b>prefill 和 decode 两头都用 DEP</b>，最后跑到官方目标的 95.6%：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8）；输入 4096，端到端每张 decode 卡 10,704 对 11,200 tok/s。</p>
   <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。这套部署记了每卡在跑几个请求，容量那条轴看得见：</p>
 __FIG_S6_KV__
-  <p>两个 KV 池怎么划见 <a href="#s3-3">3.3</a>。速度那条轴只有一组 TP 对 DEP 的实测当旁证：vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔缩到约四分之一（46.8 → 11.8 ms）；每卡吞吐按全部卡 2.09 倍、只算 decode 卡 1.31 倍，因为那次 decode 卡数也翻了一倍。</p>
+  <p>两个 KV 池怎么划见 <a href="#s3-3">3.3</a>。速度那条轴只有一组 TP 对 DEP 的实测当旁证：vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔缩到约四分之一（46.8 → 11.8 ms）。每卡吞吐先看分母：那次 decode 卡数也翻了一倍，按全部卡是 2.09 倍，只算 decode 卡就只有 1.31 倍。</p>
   <p><b>换模型</b>：MLA 开 TEP8，KV 存 8 份；Qwen3.5-397B 全注意力层 32 个查询头共用 2 个 KV 头，存 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</p>
 
   <p><b>DEP 的代价：每个 rank 都得自己备一份。</b>DEP 下每个 rank 是台小推理机，注意力权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
@@ -26,7 +26,14 @@ __FIG_S6_STATE__
     <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-6">6.6</a>）。</li>
   </ul>
 
-  <p><b>DEP 吃得快了，就得有人喂。</b>同样 16 台机器，我们把 decode 从 dep8 宽到 dep16：一步快了将近一倍，可 prefill 只剩 12 台喂不饱，每张 decode 卡的输出反掉四成多（出字间隔 60 → 33 ms、总输出 +17%；首字 45 → 54 s；每卡 9,032 → 5,270）。14 台 prefill 才刚好喂饱 dep8（<a href="#s9-1">9.1</a>）。<b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
+  <p><b>DEP 吃得快了，就得有人喂。</b>同样 16 台机器，我们把 decode 从 dep8 宽到 dep16：一步快了将近一倍，可 prefill 只剩 12 台喂不饱，每张 decode 卡的输出反掉四成多。14 台 prefill 才刚好喂饱 dep8（<a href="#s9-1">9.1</a>）。</p>
+  <table>
+    <tr><th>同样 16 台机器</th><th>decode dep8</th><th>decode dep16（prefill 剩 12 台）</th></tr>
+    <tr><td>出字间隔</td><td>60 ms</td><td>33 ms</td></tr>
+    <tr><td>首字</td><td>45 s</td><td>54 s</td></tr>
+    <tr><td>每张 decode 卡输出</td><td>9,032 tok/s</td><td>5,270 tok/s（总输出只多 17%）</td></tr>
+  </table>
+  <p><b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
 
   <h3 id="s6-2">6.2　TPU 上也一样，先读懂参数名</h3>
   <p>tpu-inference 一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。

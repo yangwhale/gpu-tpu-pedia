@@ -5155,7 +5155,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <p><b>判据：KV 头数和 batch。</b>TP 按头切注意力。KV 头只有 1 个时切不开，<b>TP 开几路，每个请求的 KV 就存几份，每步也读几遍</b>。DEP 各存各的、各读各的。</p>
   <p>DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV（<code>num_key_value_heads: 1</code>）。
-    我们自己在 GB300 上用 SGLang 搭的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8），输入 4096 时端到端每张 decode 卡 10,704 tok/s，是官方目标 11,200 的 95.6%。</p>
+    我们自己在 GB300 上用 SGLang 搭的一套部署，<b>prefill 和 decode 两头都用 DEP</b>，最后跑到官方目标的 95.6%：14 台 prefill 各跑 dep4，decode 跑 dep8（TP1 ＋ 注意力 DP8 ＋ EP8）；输入 4096，端到端每张 decode 卡 10,704 对 11,200 tok/s。</p>
   <p><b>容量和速度分开看。</b>容量看 KV 池装满时能放几批人，速度看同样负载下一步要多久。这套部署记了每卡在跑几个请求，容量那条轴看得见：</p>
 <figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1154" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分容量、速度两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，TP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但要同时在跑的请求多到坐满池子才兑现。下半张是 SGLang 的完整部署，两头都用 DEP：14 台 prefill 各跑 dep4，decode 跑 dep8，输入 4096。两个 KV 池划分不当时，每卡同时在跑 727 个请求，端到端每张 decode 卡 6887；划平后坐到 886 个，10614，高 54%；再多给 13% 显存坐到 999 个，只到 10704，算力已到顶"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TEP 换 DEP：容量和速度分开看　——　<tspan font-weight="700">SGLang 两头都用 DEP，座位坐满就换来吞吐</tspan></text>
@@ -5257,7 +5257,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>上半张是容量上限（示意）；下半张是 SGLang 实测：座位从 727 坐到 886，吞吐跟着涨，再往上就不涨了。</b><span class="capmore"><br><em>实测为 GB300、两头 DEP、输入 4096；上半张是示意，不是实测占用。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>SGLang 部署：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:33-34（14 prefill 各 dep4 ＋ dep8 decode、16 节点同一 NVL72 域）、scripts/prefill-dep4.sh、decode-dep8.sh（--enable-dp-attention，EP 4／8）；三行实测 :851-858（ISL 4096，14 路 × 并发 1050，#1／#3／#7）。</p>
 <p>旁证：VLLM-V4PRO-RUNBOOK.md:298-302（num_key_value_heads 1）、:464-465、:476（并发 512：TP4 decode 输出 4,220、出字间隔 46.8 ms；dep8 为 11,031、11.8 ms；GPU 16 与 20）。</p>
 <p>本课推导：容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，上半张是示意，条长不按实测请求数画；+54% ＝ 10,614 ÷ 6,887，+0.8% ＝ 10,704 ÷ 10,614；2.09 倍 ＝ (55,153 ÷ 20) ÷ (21,100 ÷ 16)，1.31 倍 ＝ (11,031 ÷ 8) ÷ (4,220 ÷ 4)。</p></details></figure>
-  <p>两个 KV 池怎么划见 <a href="#s3-3">3.3</a>。速度那条轴只有一组 TP 对 DEP 的实测当旁证：vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔缩到约四分之一（46.8 → 11.8 ms）；每卡吞吐按全部卡 2.09 倍、只算 decode 卡 1.31 倍，因为那次 decode 卡数也翻了一倍。</p>
+  <p>两个 KV 池怎么划见 <a href="#s3-3">3.3</a>。速度那条轴只有一组 TP 对 DEP 的实测当旁证：vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔缩到约四分之一（46.8 → 11.8 ms）。每卡吞吐先看分母：那次 decode 卡数也翻了一倍，按全部卡是 2.09 倍，只算 decode 卡就只有 1.31 倍。</p>
   <p><b>换模型</b>：MLA 开 TEP8，KV 存 8 份；Qwen3.5-397B 全注意力层 32 个查询头共用 2 个 KV 头，存 4 份；8 个 KV 头的 GQA 每卡正好一个头，DEP 在 KV 上不占便宜。</p>
 
   <p><b>DEP 的代价：每个 rank 都得自己备一份。</b>DEP 下每个 rank 是台小推理机，注意力权重、调度器、状态各一份。<b>按请求开、又不随 DP 切的状态，DEP 一宽就成倍涨。</b></p>
@@ -6348,7 +6348,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>忙闲不均</b>：专家那步等最慢 rank，闲的陪跑空前向；热门专家多备几份是 EPLB（<a href="#s6-6">6.6</a>）。</li>
   </ul>
 
-  <p><b>DEP 吃得快了，就得有人喂。</b>同样 16 台机器，我们把 decode 从 dep8 宽到 dep16：一步快了将近一倍，可 prefill 只剩 12 台喂不饱，每张 decode 卡的输出反掉四成多（出字间隔 60 → 33 ms、总输出 +17%；首字 45 → 54 s；每卡 9,032 → 5,270）。14 台 prefill 才刚好喂饱 dep8（<a href="#s9-1">9.1</a>）。<b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
+  <p><b>DEP 吃得快了，就得有人喂。</b>同样 16 台机器，我们把 decode 从 dep8 宽到 dep16：一步快了将近一倍，可 prefill 只剩 12 台喂不饱，每张 decode 卡的输出反掉四成多。14 台 prefill 才刚好喂饱 dep8（<a href="#s9-1">9.1</a>）。</p>
+  <div class="tbl-wrap"><table>
+    <tr><th>同样 16 台机器</th><th>decode dep8</th><th>decode dep16（prefill 剩 12 台）</th></tr>
+    <tr><td>出字间隔</td><td>60 ms</td><td>33 ms</td></tr>
+    <tr><td>首字</td><td>45 s</td><td>54 s</td></tr>
+    <tr><td>每张 decode 卡输出</td><td>9,032 tok/s</td><td>5,270 tok/s（总输出只多 17%）</td></tr>
+  </table></div>
+  <p><b>拓扑一换，瓶颈换边，P:D 配比要重扫。</b></p>
 
   <h3 id="s6-2">6.2　TPU 上也一样，先读懂参数名</h3>
   <p>tpu-inference 一个公开 PR 给带线性注意力的混合模型接上了 DP 注意力。
@@ -7859,10 +7866,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>各点比值：4K c1 −26%、c8 −9%、c32 −11%、c64 −7%；8K c8 −11%、c32 +24%；32K c8 −17%、c32 +7%；128K c1 +12%、c8 +237%。</p>
 <p>吞吐是输出 tok/s，热轮；32K c32 按 §11.0.3 取 TP8 408.2（宽表 ratio 0.4 那行是 420，比值变 1.04，不改结论）。K3 的 MLA 层只有一个 KV 头，它的 69 层 KDA 状态池 DCP 不切（同文件 :725-726）。横轴没换成「KV 总量」：原表只给输入长度和并发，没有实测的 KV 占用。</p></details></figure>
   <ul>
-    <li><b>为什么长了才赚</b>：官方说 DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。实测 TP8 默认配置只装得下约 79 万 token（这组没开投机，开了还少两成），128K 乘 8 并发要 100 多万，放不下，只能少收请求，128K、8 并发下首字延迟中位数，TP8 调得最好的一档 32.1 s（默认档 39.3 s），DCP8 是 2.3 s（含排队）。</li>
+    <li><b>为什么长了才赚：TP8 放不下，只能少收请求</b>。128K 乘 8 并发要 100 多万 token，TP8 默认配置实测只装得下约 79 万（这组没开投机，开了还少两成）；官方说 DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。差别落在首字上：首字中位数 TP8 调得最好的一档要半分钟（32.1 s，默认档 39.3 s），DCP8 是 2.3 s（都含排队）。</li>
     <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了。</li>
     <li><b>看的是总量</b>：同是 8K，并发 8 还亏，并发 32 已赚。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
-    <li><b>每个字的间隔：读 KV 分摊了，通信又加回来</b>：TP8 每张卡都读这条请求的整份 KV，DCP8 每张卡只读 1/8，代价是每层多几次通信。并发 1、输入 4K → 128K，TP8 每 token 11.1 → 12.0 ms，DCP8 15.2 → 15.3 ms 几乎不涨。DCP8 起点高约 4 ms：同样 4K、关掉 symm-mem 的 TP8 是 15.1 ms，所以这 4 ms 基本是 symm-mem 被强制关掉的损失（本课按两行数推）。K3 只有 24 层 MLA，所以它主要赚在装得下。</li>
+    <li><b>每个字的间隔：DCP 越长越不吃亏，可起点高一截</b>。TP8 每张卡都读这条请求的整份 KV，DCP8 每张卡只读 1/8，代价是每层多几次通信。并发 1、输入从 4K 拉到 128K，TP8 每 token 跟着涨（11.1 → 12.0 ms），DCP8 几乎不动（15.2 → 15.3 ms）。高出的那约 4 ms 基本是 symm-mem 被强制关掉的损失：同样 4K、关掉 symm-mem 的 TP8 是 15.1 ms（本课按两行数推）。K3 只有 24 层 MLA，所以它主要赚在装得下。</li>
     <li><b>官方口径是容量不是速度</b>：官方大规模预设 Peak Capacity（加 <code>--dcp-size 8</code>）写的是并发上限 +72%、引擎吞吐不变、ITL ×1.8。别说成「DCP 让每个字更快」。</li>
   </ul>
   <p><b>多长时注意力算得比专家多？</b>拿 Qwen3.5-397B 算一笔（本课推导）：</p>
@@ -8542,7 +8549,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s9-1">9.1　配比：先算一个起点</h3>
   <p><a href="topic-05.html#s6-3">专题五 §6.3</a> 用 DistServe 的例子讲过：两边按各自上限配。</p>
-  <p>混着做为什么只到 1.6：DistServe 的延迟要求是两条，首字（TTFT）和字距（TPOT）。两段混在一起互相干扰，要求卡得紧时只能顾一头，要么多堆卡才能两头都守住。</p>
 <figure class="fbox fwide" id="fig-s9-pd-ratio-t5"><svg viewBox="0 0 1400 546" width="100%" role="img" aria-label="同样守住首字延迟和出字间隔两个要求。一张卡两样都做，每秒只接得住 1.6 个请求；只做 prefill 能接 5.6 个，只做 decode 能接 10 个。两张做 prefill、一张做 decode，三张卡每秒接 10 个请求，每张卡 3.3 个，是混着做的两倍多；混着做要接住 10 个，得 7 张卡"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">拆开以后，3 张卡顶混着做的 7 张　——　<tspan font-weight="700">各干各的，谁也不拖谁</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一套延迟要求下，一张卡每秒接得住几个请求（DistServe 论文的例子，13B 模型、单张 A100）</text>
@@ -8599,6 +8605,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="506" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">长 prompt 的业务 prefill 更累，就多配 prefill；长回答的业务多配 decode。</text>
 </svg><figcaption><b>两边按上限配，谁也不等谁。</b><span class="capmore"><br><em>专题五原图，DistServe 论文的 OPT 例子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DistServe（Zhong 等，arXiv <a href="https://arxiv.org/abs/2401.09670" target="_blank" rel="noopener">2401.09670</a>）sec. 1 与图 1 的例子（13B 模型、单张 A100，90% 请求达标）：同一 SLO 下单卡 goodput 1.6／5.6／10 rps，2P1D 每卡 3.3 rps、2.1 倍；作者博客「Throughput is Not All You Need」用同一组数讲了一遍。</p>
 <p>⚠️ 本课推导：2P1D 每秒 min(2 × 5.6, 10) ＝ 10 个，每卡约 3.3 个；混着做接 10 个要 ⌈10 ÷ 1.6⌉ ＝ 7 张卡。</p></details></figure>
+  <p>混着做为什么一张卡只接 1.6 个：DistServe 的延迟要求是两条，首字（TTFT）和字距（TPOT）。两段混在一起互相干扰，要求卡得紧时只能顾一头，要么多堆卡才能两头都守住。</p>
   <p>真实部署要把「一张接几个」换成量出来的吞吐。</p>
 
   <p><b>配比公式：先算一个起点。</b><b>prefill 个数 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒能吞的 token。</b></p>
@@ -8614,7 +8621,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <ul>
     <li><b>9.8 个</b>：公式的起点。runbook 实测 prefill 单卡峰值只有 15,196（官方的 83%），照实测还要更多。</li>
     <li><b>8 个</b>：官方高并发配方（high-conc-8p1d）的取值。</li>
-    <li><b>14 个</b>：runbook 早期自己扫的，14 到 16 只涨 2%，已喂饱，于是定为默认（每张 decode 卡输出：8 个 prefill 时 6,788 tok/s，14 个时 8,809，16 个时 8,993；runbook:43、1117）。</li>
+    <li><b>14 个</b>：runbook 早期自己扫的。prefill 往上加，每张 decode 卡的输出跟着涨；14 加到 16 只涨 2%，已喂饱，于是定为默认（8 个 6,788、14 个 8,809、16 个 8,993 tok/s；runbook:43、1117）。</li>
   </ul>
   <p>公式定起点，上下扫，取每卡输出不再涨的那一档。</p>
   <p><b>线上流量一直在变，配比也不能定死。</b>DeepSeek V4.1-Flash 线上让两边各自扩缩：prefill 按没命中缓存的 token 数算要几个实例，相当于把公式里的输入长度换成没命中的那部分；decode 按正在算的请求数算。都设上下界和限速；配额占用高于 0.8 不许缩容，池里另留空闲机器当扩容库存。</p>
@@ -11150,8 +11157,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <b>量化</b>让权重和 KV 占更少字节，<b>kernel 融合</b>去掉交接时的空等。</p>
 
   <h3 id="s12-1">12.1　位数减半，下限减半</h3>
-  <p>2022 年底的 GPTQ 只压权重、算时还原：3 bit 的 OPT-175B 在 1 张 A100 上逐字速度是 5 张卡跑 FP16 的 3.25 倍。同年 Hopper 的张量核（GPU 里做矩阵乘的单元）直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，4 bit 浮点（NVFP4）也进了张量核。</p>
-  <p>batch 小时一步几乎全在读权重：8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.1 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>
+  <p>小 batch 时一步几乎全在读权重，字节少一半，下限就少一半。这条路走了三步。2022 年底的 GPTQ 只压权重、算时还原：3 bit 的 OPT-175B 在 1 张 A100 上逐字速度是 5 张卡跑 FP16 的 3.25 倍。同年 Hopper 的张量核（GPU 里做矩阵乘的单元）直接算 FP8，DeepSeek-V3 连训练都用 FP8；到 Blackwell，4 bit 浮点（NVFP4）也进了张量核。</p>
+  <p>落到本课的例子上：8 颗 TPU v7 分着读 V3 的激活参数，FP8 的下限正是 1.1 节单芯片 5 毫秒的八分之一（本课推导，只算权重）。</p>
 <figure class="fbox fwide" id="fig-s12-bytes"><svg viewBox="0 0 1400 452" width="100%" role="img" aria-label="DeepSeek-V3 每个 token 激活 370 亿参数。按 BF16 存要读 74 GB，FP8 37 GB，MXFP4 约 19.66 GB，NVFP4 约 20.81 GB。放在 8 颗 TPU v7 上、合计带宽 58.96 TB/s，decode 一步只读权重的时间下限分别是 1.26、0.63、0.33、0.35 毫秒。右边是全部 671B 参数要占多少 HBM：BF16 1,342 GB，FP8 671 GB，8 颗芯片合计 1,649 GB（＝ 1,536 GiB）"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">位数减半，一步的搬运下限就减半　——　<tspan font-weight="700">FP4 只要 BF16 的四分之一多一点</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">DeepSeek-V3 · 8 颗 TPU v7 · batch 1 · 只算权重（本课推导）</text>
@@ -11290,7 +11297,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>NVIDIA「Introducing NVFP4」：每 16 个 FP4 (E2M1) 共享一个 FP8 E4M3 缩放，另有每张量 FP32 二级缩放。</p>
 <p>⚠️ 本课推导：平均位数 ＝ 4 ＋ 缩放位数 ÷ 块大小，FP32 二级缩放摊到百万级元素上不计。</p></details></figure>
   <p>块越小越贴合局部数值，精度越好，字节越多。格式细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
-  <p>差多少有一组同条件的数：NVIDIA 2025-09 用 8B 的 Mamba 与 Transformer 混合模型训 1T token，训练 loss 比 BF16 高的幅度，MXFP4 约 2.5%，NVFP4 约 1.5%；MXFP4 要多训 36% 的 token，loss 才追平 NVFP4。</p>
+  <p>差多少有一组同条件的数：NVIDIA 2025-09 用 8B 的 Mamba 与 Transformer 混合模型训 1T token，MXFP4 要多训 36% 的 token，loss 才追平 NVFP4（训练 loss 比 BF16 高的幅度：MXFP4 约 2.5%，NVFP4 约 1.5%）。</p>
   <p>推理侧，NVIDIA 博客称 DeepSeek-R1-0528 从 FP8 训后量化到 NVFP4，主要语言任务掉点在 1% 以内。同一张卡上 FP4 比 FP8 快多少，没找到官方同条件的数。</p>
 
   <p><b>低精度直接训出来。</b>2025 年的 Kimi K2 Thinking 在后训练做量化感知训练（QAT，训练时就模拟低精度），MoE 部分原生 INT4 权重，官方称低延迟模式生成约快 2 倍、「无损」；但没写对照的是什么精度，基准也只报 INT4 下的分。</p>
