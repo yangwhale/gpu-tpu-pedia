@@ -64,7 +64,7 @@ DeepSeek 线上原来只敢开一步的 MTP，就被这一路的 DSpark 替下�
 
 <p class="board"><b>🖥 屏幕</b>：往下滚过 <code>fig-s11-dspark</code> 不停，停在 <code>anim-dspark-draft</code>，让它连续播放；讲第二刀时滚到 <code>anim-dspark-sched</code>。</p>
 
-<p class="say">「第一刀补草稿。「Yes,」后面第二格看不见第一格选了 of 还是 no，两种说法各押一半，就拼出了「of problem」。加一个很轻的小头，从左往右看一眼前一格，拼串就没了，几乎不加时间。<br>
+<p class="say">「第一刀补草稿。「Yes,」后面可以接 of course，也可以接 no problem。第二格看不见第一格选了 of 还是 no，两种说法各押一半，就可能拼出「of problem」。加一个很轻的小头，从左往右看一眼前一格，拼串就没了，几乎不加时间。<br>
 第二刀补验证。给每一格估个把握：机器闲就多验，忙就少验，没把握的字不占名额。人不多时，每人能验到四到六个。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「EAGLE 和 MTP：长得一样，差在谁训」，停在 <code>fig-s11-eagle</code>，先指图例的橙、蓝两色；讲连猜时指右下的灰柱、绿柱。</p>
