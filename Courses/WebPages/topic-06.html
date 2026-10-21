@@ -2912,13 +2912,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>没画进图的（正文里提到）：SpecInfer <a href="https://arxiv.org/abs/2305.09781" target="_blank" rel="noopener">2305.09781</a> 把草稿排成树；SuffixDecoding <a href="https://arxiv.org/abs/2411.04975" target="_blank" rel="noopener">2411.04975</a> 从历史输出里抄；扩散草稿 DiffuSpec <a href="https://arxiv.org/abs/2510.02358" target="_blank" rel="noopener">2510.02358</a>、DFlash <a href="https://arxiv.org/abs/2602.06036" target="_blank" rel="noopener">2602.06036</a>；Lookahead <a href="https://arxiv.org/abs/2402.02057" target="_blank" rel="noopener">2402.02057</a>。P-EAGLE、PARD、LayerSkip 等也没画。</p>
 <p>注：各家倍数见正文列表；都是原作者在自己的模型和负载上测的，口径不同，不横比。</p></details></figure>
   <ul>
-    <li><b>独立小模型</b>（2022-11）：另找小模型当徒弟，单请求快到 2–3 倍。</li>
-    <li><b>Medusa 加头、EAGLE 读隐状态</b>（2024-01）：草稿长到大模型身上，EAGLE 在 LLaMA2-Chat 70B 上快到 2.7–3.5 倍。</li>
-    <li><b>MTP 训进主模型</b>（2024-12）：DeepSeek-V3 自带一层草稿，多猜一个字，接受率 85–90%。</li>
-    <li><b>EAGLE-3 融浅中深三层</b>（2025-03）：单请求最多 6.5 倍，batch 64 吞吐仍 1.38 倍（SGLang）；SGLang、vLLM 都已合入。</li>
+    <li><b>独立小模型</b>（2022-11）：另找小模型当徒弟。</li>
+    <li><b>Medusa 加头、EAGLE 读隐状态</b>（2024-01）：草稿长到大模型身上。</li>
+    <li><b>MTP 训进主模型</b>（2024-12）：DeepSeek-V3 自带一层草稿，多猜一个字。</li>
+    <li><b>EAGLE-3 融浅中深三层</b>（2025-03）：SGLang、vLLM 都已合入。</li>
     <li><b>DFlash</b>（2026-02）：一趟出整块，越往块尾越不准，会拼出「of problem」。</li>
     <li><b>DSpark</b>（2026-07）：以 DFlash 为骨干，按把握和负载定验几个；替下 DeepSeek 线上的 MTP-1。</li>
   </ul>
+  <p><em>各家倍数都是在自己的模型上对不投机测的，不能横比，完整版第十一节逐条列了。</em></p>
   <p><b>DSpark 怎么补的：两刀。</b>先看论文里的数：一趟出整块的草稿开头更准、后面掉得快；闲聊又天生比解题难猜。两刀各补一头。</p>
 <figure class="fbox fwide" id="fig-s11-dspark"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="DSpark 论文的两组实测。左边是逐位接受率，指前面几位都被收下时这一位也被收下的比例，Qwen3-4B。闲聊上 EAGLE-3 第 1 位 0.53，往后升到 0.74；DFlash 第 1 位 0.72，往后掉到 0.63；代码上 DFlash 从 0.87 掉到 0.78。数学第 1 位：EAGLE-3 0.81，DFlash 0.88，DSpark 0.93。右边是 Qwen3-8B 每轮平均收下几个字：数学 EAGLE-3 4.66、DFlash 4.77、DSpark 5.65；代码 4.15、4.46、5.28；闲聊 2.58、2.97、3.50。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">DSpark 论文实测：<tspan font-weight="700">开头靠深度，往后靠前后照应</tspan></text>
