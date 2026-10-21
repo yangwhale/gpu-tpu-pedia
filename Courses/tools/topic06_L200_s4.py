@@ -20,7 +20,7 @@ __L4_TEPDEP__
     <li><b>判据：TP 路数 ÷ KV 头数。</b>就是复印份数（最少 1 份），每份都要存、每步都要读。</li>
     <li><b>DEP 各带各的人。</b>每张卡只放自己那批人的笔记，存一份、读一遍。</li>
   </ul>
-  <p><b>代进去：</b>MLA、V4-Pro 1 个 KV 头，TEP8 复印 8 份；Qwen3.5-397B 2 个，复印 4 份；8 个 KV 头的 GQA 不复印，DEP 不占便宜。</p>
+  <p><b>代进去：</b>MLA、V4-Pro 1 个 KV 头，TEP8 复印 8 份；Qwen3.5-397B 32 个查询头共用 2 个，复印 4 份；8 个 KV 头的 GQA 不复印，DEP 不占便宜。</p>
 
   <h3 id="l4-2">容量和速度分开看：座位有人坐才值钱</h3>
   <p>V4-Pro 1 个 KV 头。我们自己在 GB300 上用 SGLang 搭的一套部署，<b>prefill 和 decode 两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8，每张 decode 卡端到端 10,704 tok/s，是官方目标的 95.6%。</p>

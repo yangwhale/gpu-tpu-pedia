@@ -20,6 +20,13 @@ __FIG_S7_GAIN__
     <li><b>每个字的间隔：读 KV 分摊了，通信又加回来</b>：TP8 每张卡都读这条请求的整份 KV，DCP8 每张卡只读 1/8，代价是每层多几次通信。并发 1、输入 4K → 128K，TP8 每 token 11.1 → 12.0 ms，DCP8 15.2 → 15.3 ms 几乎不涨。DCP8 起点高约 4 ms：同样 4K、关掉 symm-mem 的 TP8 是 15.1 ms，所以这 4 ms 基本是 symm-mem 被强制关掉的损失（本课按两行数推）。K3 只有 24 层 MLA，所以它主要赚在装得下。</li>
     <li><b>官方口径是容量不是速度</b>：官方大规模预设 Peak Capacity（加 <code>--dcp-size 8</code>）写的是并发上限 +72%、引擎吞吐不变、ITL ×1.8。别说成「DCP 让每个字更快」。</li>
   </ul>
+  <p><b>多长时注意力算得比专家多？</b>拿 Qwen3.5-397B 算一笔（本课推导）：</p>
+  <ul>
+    <li><b>专家不随长度变</b>：每 token 每层 10 个路由专家 ＋ 1 个共享专家，每个 3 个 4096 × 1024 矩阵，约 2.77 亿次浮点运算。</li>
+    <li><b>注意力随长度涨</b>：32 个查询头 × 256 维，打分、加权两步，每 token 每层约 32,768 × 上下文长度。</li>
+    <li><b>交叉点</b>：单看一层全注意力，decode 约 8.4K，prefill 因果平均只看一半，约 16.9K。60 层里只有 15 层全注意力，全模型再乘 4：decode 约 34K、prefill 约 68K。线性注意力层每 token 算量固定，不进这笔账。</li>
+    <li><b>它不是开 CP 的门槛</b>：decode 拼的是读字节，专家权重整批共用、KV 各读各的，注意力早就是大头。DCP 看 KV 放不放得下，PCP 看首字等不等得起（7.2）。</li>
+  </ul>
   <p><b>名字按阶段起。</b>DCP／PCP 是推理框架里的叫法。Meta 论文（arXiv 2411.01783）按传什么叫 pass-KV／pass-Q：完整 prefill 用 pass-KV，decode 和缓存命中高的 partial prefill 用 pass-Q。NVIDIA Helix 论文（arXiv 2507.07120）管 decode 时按序列切 KV 的那一派叫 KV 并行（KVP）。</p>
 
   <p><b>开 DCP 之前要知道的坑。</b></p>

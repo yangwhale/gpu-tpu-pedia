@@ -255,7 +255,7 @@ DeepSeek-V4-Pro 不是 MLA，但每层同样只存一条所有头共享的 KV，
 
 <p class="board"><b>🖥 屏幕</b>：滚到「换模型」那一行。</p>
 
-<p class="say">「换个模型呢？MLA 开 TEP 八路，KV 存八份；Qwen3.5-397B 的全注意力层有两个 KV 头，存四份；八个 KV 头的 GQA 模型开 TEP 八路，每卡正好一个头，DEP 在 KV 上就占不到便宜。<br>
+<p class="say">「换个模型呢？MLA 开 TEP 八路，KV 存八份；Qwen3.5-397B 的全注意力层三十二个查询头共用两个 KV 头，存四份；八个 KV 头的 GQA 模型开 TEP 八路，每卡正好一个头，DEP 在 KV 上就占不到便宜。<br>
 ⭐ 判据一句话：TP 路数除以 KV 头数，大于一，就在复制、也在重读。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：滚到「DEP 的代价：每个 rank 都得自己备一份」，<code>fig-s6-dep-state</code>，先指左边两排共八个红框（格子全满），再指右边每卡亮着的那两列。</p>
@@ -569,6 +569,7 @@ DEP 每个 device 每层都要整份读一遍注意力权重，一百八十七 M
 ⚠️ <b>7.3 两张表全是本课推导的纸面账</b>：读的下限不含通信和计算；实测 FP8 专家比均摊更占地方（10.2）。<br>
 ⚠️ 休息十分钟不计入计划时长。<br>
 <b>❓ 台下可能问（备答，不计地板；数都在课件上）</b><br>
+🛠 GPU 老兵「上下文多长，注意力的计算量才超过专家？」→ 课件 7.1 拿 Qwen3.5-397B 算了一笔（本课推导）：单层 decode 约 8.4K、prefill 约 16.9K；60 层只有 15 层全注意力，全模型 decode 约 34K、prefill 约 68K。但这不是开 CP 的门槛：decode 拼读字节，DCP 看 KV 放不放得下，PCP 看首字。<br>
 🧑‍🎓 新人「DCP 和 PCP 一字之差，差在哪？」→ D 是 decode，切的是 KV 的存放，用原来的 TP 卡；P 是 prefill，切的是一个长 prompt 的计算，要另外加卡。<br>
 🛠 GPU 老兵「Ring、Ulysses 选哪个？」→ 两个都是二〇二三年提出的，Ulysses 九月、Ring 十月；Ring 传 K、V 还是 Q，看谁的通信藏得进计算，结果都和不切一样；Ulysses 用 AllToAll 换成按头切，切的份数不能超过头数。Meta 那篇用的是 Ring。<br>
 🛠 GPU 老兵「DCP 能和 HiCache 一起开吗？」→ 课件 7.1 记的坑：HiCache 开 L3，或 L1＋L2 叠投机解码，就得退回纯 TP。<br>
