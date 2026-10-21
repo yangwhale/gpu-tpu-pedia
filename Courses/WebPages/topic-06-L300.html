@@ -1434,7 +1434,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 TTFT、TPOT 的定义按 vLLM 的 benchmark_serving：TTFT 从请求发出算到第一个输出 token，TPOT 是除第一个 token 外平均每个输出 token 的时间。第二节会细讲它们的口径（含不含排队、平均还是 p99）。</p>
 <p>⚠️ 「第一个字由 prefill 产出」是标准实现：prefill 的最后一个位置直接给出第一个输出 token 的分布。</p></details></figure>
   <p>用户只感觉得到两个数：等第一个字多久（TTFT，含排队），之后平均每个字隔多久（TPOT）。前者看排队和 prefill，后者看 decode（第二节）。</p>
-  <p><b>住在哪。</b>权重和 KV 都常驻 HBM（芯片自带的显存）。真正做乘加的地方旁边只有一小块片上存储：v7 每个 TensorCore 64 MiB VMEM，一颗芯片两个，合 128 MiB，约是 192 GiB HBM 的 1/1,500（14.2）。几十 GB 放不进去，所以每一步都得从 HBM 再流一遍。</p>
+  <p><b>住在哪。</b>权重和 KV 都常驻 HBM（芯片自带的显存）。真正做乘加的地方旁边那块片上存储，只有 HBM 的约 1/1,500：v7 每个 TensorCore 64 MiB VMEM，一颗芯片两个合 128 MiB，HBM 是 192 GiB（14.2）。几十 GB 放不进去，所以每一步都得从 HBM 再流一遍。</p>
   <p><b>多大。</b>V3 出一个字要用到 370 亿参数，FP8 每个 1 字节，约 37 GB（1.1）。KV 每层每个 token 存 1,152 B（怎么来的见下面逐层图），61 层合计 70,272 B（4.1）。</p>
   <p><b>跟长度成正比。</b>上下文 1 万 token，一条 KV 约 0.70 GB；128K 是 8.58 GiB。它是这个人自己的历史，一人一份，不跟别人共享。</p>
   <p><b>出一个字，61 层逐层走一遍：</b></p>
@@ -1537,7 +1537,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 本课推导：注意力 ＝ 7168×1536 ＋ 1536×128×192 ＋ 7168×576 ＋ 512×128×256 ＋ 128×128×7168 ＝ 187,105,280；稠密前馈 ＝ 3×7168×18432 ＝ 396,361,728；单个专家 ＝ 3×7168×2048 ＝ 44,040,192，9 个正好 396,361,728；路由 256×7168。</p>
 <p>📌 锚点：同一套公式总参数 671.0B（技术报告 671B，不含 MTP 层）；激活 ＝ 3×583.5M ＋ 58×585.3M ＋ 输出层 0.93B ＝ 36.6B，取整即报告的 37B（输入词表查表只读一行，不计）。</p>
 <p>⚠️ 口径：权重全按 FP8 每参数 1 字节，忽略 block scale；路由打分和 norm 实际精度更高，量级可忽略。KV、传下去的向量按 bf16。丢掉的中间结果包括本层的 Q、注意力分数、前馈中间那 18,432 维（专家是 2,048 维）的结果。</p></details></figure>
-  <p>每层读的权重约 0.58 GB，61 层合计 35.7 GB，加上输出层 0.93 GB，就是 1.1 那 37 GB（本课按 config 推导）。KV 每层 1 万 token 约 11.5 MB，128K 约 151 MB，已和本层注意力权重 187 MB 一个量级。</p>
+  <p><b>61 层加输出层的权重，合起来就是 1.1 那 37 GB</b>（每层约 0.58 GB × 61 ＝ 35.7 GB，输出层 0.93 GB；本课按 config 推导）。紫条单看一层不大，可到 128K 已和本层注意力权重（187 MB）一个量级。</p>
   <p>几个人同时 decode 时，注意力和稠密层的权重大家共用：读一遍，每人各出一个字。专家不一样：各人挑的 8 个不同，按均匀路由算，64 人就碰到 256 个里的约 222 个，一百多人几乎挑遍，每层专家要读满 11.3 GB（本课推导，1.2）。KV 更不行，它是每个人自己的历史，各读各的（第一节）。</p>
   <div class="note ok"><span class="t">一句话</span>
     <b>decode 每一步都要把权重和 KV 从显存里搬一趟。推理的每一招，要么让这一趟分给更多 token，要么干脆少搬。</b><br>
@@ -1679,7 +1679,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <p>Dory 中间 20 层的权重是 GB 量级，比 128 MiB 的 VMEM 大一个数量级以上，放不下。所以每跑一圈都要从 HBM 再流一遍。4 圈的 Dory 每出一个字搬的权重，跟同样深度（8＋20×4＋8＝96 层）的普通模型一样多（本课推导）。</p>
     <p>省的是容量：存 36 层，跑出 96 层的深度，权重约占等深模型的 36/96≈38%（本课推导）。腾出来的显存装 KV、多坐人，这一趟就分给更多 token。</p>
     <p>KV 是新麻烦：每圈各存一份，显存跟着圈数涨。Koi-4B 4 圈都存时，128K 一条要 7.5 GiB，是 1 圈 3.0 GiB 的 2.5 倍；只留最后一圈的 KV，压回 1 圈的大小，大部分收益还在。</p>
-    <p>圈数多了答得更短：Koi-4B 2、3、4 圈的输出 token 比 1 圈少 21.8%、29.5%、32.7%。每个字慢了，整道题不一定慢。</p>
+    <p>圈数多了答得更短：Koi-4B 4 圈比 1 圈少出三成多的 token（2、3、4 圈依次少 21.8%、29.5%、32.7%）。每个字慢了，整道题不一定慢。</p>
   </div>
 
   <details class="foldfig"><summary><b>遇到不认识的词，回这儿查</b></summary>
@@ -2059,7 +2059,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>比三根横杠的起点：只有 TTFT 从进门算起。</b><span class="capmore"><br><em>时间线是示意，绿块宽度按字数画。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>vLLM 定义：vllm/benchmarks/serve.py（TPOT ＝ (latency − ttft) ÷ (output_len − 1)；ITL 逐 chunk，源码注释写明 multiple output tokens may be bundled together）。</p>
 <p>NIM 定义：NVIDIA NIM for LLMs 的 benchmarking 指标页（TTFT 含排队、prefill、网络；ITL also known as TPOT）。AIPerf 沿用同一套。两家对同一个词的口径不同，正文第 2.1 节对照。</p>
 <p>⚠️ 时间线是示意：chunk 带几个字、各段长短都是为了看得清，不对应任何实测；绿块宽度按字数画，表示这几个字是攒在一起才到手的。</p></details></figure>
-  <p>TTFT 压测时往往大半是排队：同一个 Gemma4-31B，并发 1 时 86 ms，并发 256 时 7,756 ms。</p>
+  <p>TTFT 压测时往往大半是排队：同一个 Gemma4-31B，并发 1 时不到 0.1 秒，并发 256 时将近 8 秒（86 ms → 7,756 ms）。</p>
   <p>同一个词两家定义可能不同：NVIDIA NIM 的 ITL 是平均值，注明「也叫 TPOT」；vLLM 的 ITL 是逐次间隔的列表。</p>
 
   <p><b>吞吐和交互性是一条曲线。</b></p>
