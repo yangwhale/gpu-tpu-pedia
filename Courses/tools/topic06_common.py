@@ -227,7 +227,7 @@ def postprocess(_html, BODY, NUM_LOCK, strict=True):
             j = html.index("</figure>", i)
             fig = html[i:j]
             # ⚠️ 「N 秒」后 24 字内必须出现 Manim —— check-loop.py 靠这个正则认图注秒数，写长了它会静默跳过
-            fig2, n = re.subn(r"（\d+ 秒无声循环，(.*?)Manim 渲染", lambda m: "（%d 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看%s" % (round(st["duration"]), m.group(1).rstrip("，；")), fig, flags=re.S)
+            fig2, n = re.subn(r"（\d+ 秒无声循环，(.*?)Manim 渲染", lambda m: "（%d 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看%s" % (round(st["duration"]), m.group(1).rstrip("，；")), fig, flags=re.S)
             assert n == 1, "%s 的图注里没找到「N 秒无声循环」" % mp4
             html = html[:i] + fig2 + html[j:]
         return html

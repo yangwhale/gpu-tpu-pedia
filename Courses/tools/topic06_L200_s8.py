@@ -63,7 +63,7 @@ __L8_KVQ__
 
 FIGS = {
     "__L8_PPL__": ("fig-ppl", "fig6-ppl.svg", "topic06-fig-ppl.py",
-        '<b>绿点贴着灰点，红点离得远：同是 4 bit，差在缩放怎么挑。</b><br>'
+        '<b>红点离灰点远，绿点往回挪了一半：同是 4 bit，差在缩放怎么挑。</b><br>'
         '<em>困惑度越低越好；只这一组模型和数据集。</em>'),
     "__L8_KVQ__": ("fig-kvq", "fig6-kvq.svg", "topic06-fig-kvq.py",
         '<b>两根绿条都停在红虚线右边。</b><br>'

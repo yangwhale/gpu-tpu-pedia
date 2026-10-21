@@ -1241,7 +1241,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <video src="media/topic06-trip.mp4?v=2eacd881" data-pauses="6.63,12.55,20.68" autoplay loop muted playsinline
        aria-label="decode 一步搬一趟权重的动画。标题：每出一个字，权重都要从显存搬一趟。左边一个框写着显存（仓库），里面 8 格蓝色权重，下面写 37 GB 权重；右边一个框写着算的地方（工作台）。底下两根计时条，搬（蓝）和算（橙），条长按真实比例。字幕依次是：一个人：每层权重从显存搬上来，只跟这 1 行乘一下（工作台里出现一根黄线，标着 1 个人 ＝ 1 行；权重一格格飞上工作台、跟这一行乘一下、用完就消失，蓝条跟着一格格爬满）。蓝条末端标约 5 毫秒，橙条细到几乎看不见，标 0.016 毫秒：算力只用上 0.32%，工作台里出现出 1 个字。第 1 步完成：搬约 5 毫秒，算 0.016 毫秒，出 1 个字，停住。下一个字：工作台放不下 37 GB，权重得从头再搬一趟（蓝条清零，8 格权重重新从显存飞一遍）。第 2 步完成：又是一整趟、又是约 5 毫秒，还是只出 1 个字，停住。一趟喂 313 行：搬的还是这一车，算一点点追上来（黄线变成一大块，标 313 行；权重再搬一趟，这回橙条跟着蓝条一起长）。橙条末端标 313 × 0.016 ≈ 5 毫秒。第 3 步完成：算和搬一样长 —— 再多就卡在算，prefill 一趟几千行就在这一边，停住。最后：decode 卡在搬，prefill 卡在算。画面复位。底部小字：只算权重的理想下限：DeepSeek-V3、一颗 TPU v7、FP8；条长按真实比例，权重画成 8 格是示意。"></video>
 <figcaption><b>看蓝条一格格爬满、橙条几乎不动；再看第 3 步喂到 313 行，橙条才追上来。</b>
-  <span class="sub">（27 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。只算权重的理想下限；「313 行时算和搬一样长」是本课按同一组规格推的。）</span></figcaption></figure>
+  <span class="sub">（27 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。只算权重的理想下限；「313 行时算和搬一样长」是本课按同一组规格推的。）</span></figcaption></figure>
   <p>37 GB ÷ 7.37 TB/s ≈ 5 毫秒，算力只用上 0.32%（理想下限）。<b>换更快的计算单元没用，下限是带宽定的。</b></p>
   <div class="note info"><span class="t">还是那辆公交车</span>
     开一趟油钱固定：prefill 是满载的车，decode 一趟只拉一个人；313 人以内，多上来的人白搭车。</div>
@@ -1895,7 +1895,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差别全在注意力那一半：一起算同一批，还是各算各的一批</tspan></text>
 <text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TEP：同一批请求四张卡一起算，单个请求快；可 MLA 这类只有一个 KV 头的模型，KV 在每张卡上都得存一整份。</text>
 <text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DEP：每张卡只管自己那批请求，KV 不重复、batch 能开大；代价是专家那一步换成 AllToAll，还要防各卡忙闲不均。</text>
-</svg><figcaption><b>只看注意力那一半：左边四张卡合算一批人，右边四张卡各带各的人。</b><span class="capmore"><br><em>专家那一半两边都按 EP 分，图里不画。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TensorRT-LLM 定义：TEP&lt;N&gt; shards both attention (TP) and experts (EP) across N ranks；DEP&lt;N&gt; keeps attention data-parallel (ADP) while distributing experts across N ranks。</p>
+</svg><figcaption><b>只看注意力那一半：左边四张卡合算一批人，右边四张卡各带各的人。</b><span class="capmore"><br><em>专家那一行两边一样，都按 EP 分。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TensorRT-LLM 定义：TEP&lt;N&gt; shards both attention (TP) and experts (EP) across N ranks；DEP&lt;N&gt; keeps attention data-parallel (ADP) while distributing experts across N ranks。</p>
 <p>⚠️ 专家那一步的通信按常见实现画：attention 用 TP 时各卡 token 相同，专家输出用 AllReduce 合并；attention 用数据并行时各卡 token 不同，走 AllToAll。示意 4 张卡、8 个专家。</p></details></figure>
   <ul>
     <li><b>TP 按头切。</b>每张卡拿几个头的笔记；KV 头比卡少，几张卡共用一个头，笔记就复印几份。</li>
@@ -2025,7 +2025,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <video src="media/topic06-bigep.mp4?v=935b85bc" data-pauses="0.90,3.95,7.40,10.85,14.70,18.95" autoplay loop muted playsinline
        aria-label="动画：上下两条泳道，上面 EP8、8 张卡，一张卡里摆着 32 个路由专家的小格子；下面 EP144、144 张卡，一张卡里只有 2 个大格子。四列依次长出条形：每个专家分到几行，EP8 是 8 行、EP144 约 128 行；每层读多少权重，1.41 GB 对 88 MB；接着标出每字节用 8 次对 128 次；路由专家占显存，EP8 的 81.7 GB 越过 80 GB 的红线，EP144 只有 5.1 GB，旁边写着剩下装 KV。最后一拍，下面那张卡的 token 跑去其余 143 张卡再跑回来，字幕说代价是每层都要跨机器去一趟、回一趟。结尾打出：专家铺开，每卡读得少，读一次用得多。"></video>
 <figcaption><b>上下两条泳道比同一列：每份专家分到的人越多，每张卡读得越少。</b>
-  <span class="sub">（24 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。专家大小、层数照 V3 配置；每卡 32 个请求、负载均匀是示意。）</span></figcaption></figure>
+  <span class="sub">（24 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。专家大小、层数照 V3 配置；每卡 32 个请求、负载均匀是示意。）</span></figcaption></figure>
   <p>DeepSeek 线上 decode 用 EP144：18 台机器，256 个专家加 32 份冗余共 288 份，每卡 2 个路由专家加 1 个共享专家。</p>
   <ul>
     <li><b>车坐得满。</b>每卡 32 个请求时，每份专家分到的行数从 8 涨到约 128（144 × 32 × 8 ÷ 288，本课推导，负载均匀）。</li>
@@ -2193,7 +2193,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <video src="media/topic06-whomoves.mp4?v=c66da33f" data-pauses="2.15,7.05,12.05,17.05,20.90,25.00,28.50" autoplay loop muted playsinline
        aria-label="谁搬家的动画。标题：谁搬家：PCP 搬笔记，DCP 搬提问。四个框，卡 0 到卡 3。字幕依次是：PCP（prefill）：几千个提问按行分给 4 张卡，每张卡先拿自己那段笔记（每张卡上一条黄色的提问第 i 段、一条蓝色的笔记第 i 段，中间一排四个小格 0 到 3，标着要合的笔记段；卡 i 只有 0 到 i 这几格是绿框，其余是灰框）。各卡先把自己那段合进去。底下小字：灰框＝三角外：靠前的提问看不到后面的字，路过不用算。第 1 站：笔记段全体往右传一站，最右边那段绕回卡 0（前三段各往右挪一张卡；卡 3 那段往右出卡，沿下方车道绕到最左，再往右进卡 0）。用得上的格子变绿，三角外的那段变暗。第 1 站完成：用得上的边收边合，三角外的路过，停住。第 2 站同样，停住。第 3 站之后：PCP 完成：提问不动，笔记绕环搬过来；每张卡边收边合，不用跨卡拼，停住；这时卡 i 正好合了第 0 到 i 段。接着画面清空。DCP（decode）：每步只剩 1 个提问；笔记按字轮流存在 4 张卡上，不动（每张卡一排蓝色竖条，卡 0 标第 0、4、8… 个字，卡 1 标第 1、5、9… 个字，以此类推；上方一个黄色的 1 个提问），停住。第 1 步：这一个提问发到每张卡，各算自己那一段（提问复制四份飞进四张卡）。每张卡下面出现分子、分母。第 1 步完成：每张卡交出自己那段的分子和分母，先别除，停住。第 2 步：在终点拼一次 —— 分子加总、分母加总，只除一次（四份分子分母飞到下方一个绿框：分子加总 ÷ 分母加总 ＝ 这个提问的答案）。第 2 步完成：笔记没动，提问搬了家，答案在终点拼，停住。最后：谁小搬谁：提问多就搬笔记（PCP），只剩 1 个提问就搬提问（DCP）。画面复位。底部小字：4 张卡、4 段都是示意。"></video>
 <figcaption><b>先看 PCP 里蓝色笔记段绕着环走、提问一动不动；再看 DCP 里反过来，黄色提问飞进每张卡、答案在终点拼。</b>
-  <span class="sub">（34 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。4 张卡、4 段是示意；没画 Ring 的负载均衡排布。）</span></figcaption></figure>
+  <span class="sub">（34 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。4 张卡、4 段是示意；没画 Ring 的负载均衡排布。）</span></figcaption></figure>
   <p><b>切法一样：都按 token 把序列切成几段，每张卡管一段、存自己那段的 KV。不同只在传什么。</b></p>
   <ul>
     <li><b>PCP：提问不动，笔记搬过来。</b>prefill 几千个提问按行切；笔记边传边算，传的时间藏在算后面。</li>
@@ -2256,7 +2256,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="449" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">所以每张卡除了结果，还得交出自己的分母</tspan></text>
 <text class="svgsm" x="20" y="480" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">跟合并两个班的平均分一样：得带上各班人数，不能把两个平均数再平均。</text>
 <text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ring 在路上一段一段这样合并，DCP 在终点这样合并，是同一招。</text>
-</svg><figcaption><b>三个 token 的小算例：左下打叉，右下打勾。</b><span class="capmore"><br><em>像合并两个班的平均分，要带上各班人数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 讲法：Ring Attention（Liu 等，arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>）附录实现按分子、分母分别累加；分块 softmax 的数值稳定写法见 FlashAttention（arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>）。</p>
+</svg><figcaption><b>三个 token 的小算例：中间打叉，右边打勾。</b><span class="capmore"><br><em>像合并两个班的平均分，要带上各班人数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 讲法：Ring Attention（Liu 等，arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>）附录实现按分子、分母分别累加；分块 softmax 的数值稳定写法见 FlashAttention（arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>）。</p>
 <p>⚠️ 本课示例：数字是随手取的，按定义现算并断言。</p></details></figure>
 
   <h3 id="l5-3">所以呢：同样切八份，买到的不一样</h3>
@@ -2320,7 +2320,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="469" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP 超过 KV 头数，多出来的全是复制</tspan></text>
 <text class="svgsm" x="20" y="500" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">MLA 的 KV 只有一个头。TP 8 路时每张卡都存完整的一份，<tspan font-weight="700">7 份是白存的</tspan>。</text>
 <text class="svgsm" x="20" y="524" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">DCP 让 KV 按 token 轮流落到 8 张卡上，每卡只剩 1/8；它<tspan font-weight="700">不增加卡</tspan>，直接复用 TP 那几张。</text>
-</svg><figcaption><b>上排八块一样高的红条，下排八块矮条拼成一份。</b><span class="capmore"><br><em>MLA 每层只有一个 KV 头，TP 切不开它。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 vLLM context parallel 部署文档：KV cache 会被复制 tp_size / H 次；DeepSeek-R1 在 MLA 下只有 1 个 KV 头，-tp 8 就是 8 倍复制，可加 -dcp 8。KV 尺寸取自 V3 config.json，本脚本现算。</p></details></figure>
+</svg><figcaption><b>上排八块一样高（一绿七红），下排八块矮条拼成一份。</b><span class="capmore"><br><em>MLA 每层只有一个 KV 头，TP 切不开它。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 vLLM context parallel 部署文档：KV cache 会被复制 tp_size / H 次；DeepSeek-R1 在 MLA 下只有 1 个 KV 头，-tp 8 就是 8 倍复制，可加 -dcp 8。KV 尺寸取自 V3 config.json，本脚本现算。</p></details></figure>
 
   <h3 id="l5-4">DCP 什么时候赚，什么时候亏</h3>
 <figure class="fbox fwide" id="fig-s7-dcp-gain"><svg viewBox="0 0 1400 636" width="100%" role="img" aria-label="Kimi K3 在 GB300 上用 SGLang，比较 TP8 和 TP8 加 DCP8 的输出吞吐比值，纵轴是对数刻度，1 倍是盈亏线。输入 4K 时四档并发 DCP 都亏，亏 7% 到 26%。突出画的是并发 8 那条线：4K、8K、32K 都在盈亏线下面，到 128K 一下跳到 365 对 108，多 237%。其余并发画成淡色：8K 并发 32 赚 24%，32K 并发 32 赚 7%；并发 1 只测了 4K 和 128K，两点之间用虚线相连，128K 赚 12%。并发 64 只测了 4K 一个点，亏 7%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -2548,7 +2548,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="447" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">敢走慢线，是因为一个请求只传这一次</tspan></text>
 <text class="svgsm" x="20" y="478" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这个模型 KV 头少（8 个）又用 FP8 存，8K prompt 的 KV 约 1.04 GB；换一个 KV 大得多的模型、换网络，要重算。</text>
 <text class="svgsm" x="20" y="502" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">对比 TP：它每一层都要通信，只能待在最快那一圈；这里一个请求就一趟，跨机器也藏得住。</text>
-</svg><figcaption><b>先看上面那根一到两秒的长条，再看下面那根三色细条。</b><span class="capmore"><br><em>KV 用时按带宽估算，不是计时；图底那句的「第三节」指专题五。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。</p>
+</svg><figcaption><b>先看上面那根一到两秒的长条，再看下面那根三色细条。</b><span class="capmore"><br><em>KV 用时按带宽估算，不是计时。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。</p>
 <p>⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gb/s ＝ 12.5 GB/s → 约 83 ms。</p></details></figure>
   <ul>
     <li><b>很便宜，是个零头。</b>Qwen3-Coder-480B 一个 8K prompt 递 KV 约 100 ms，只占 prefill 的 5–10%（按带宽估算）。</li>
@@ -2692,7 +2692,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <video src="media/topic06-spec.mp4?v=2ad2f6de" data-pauses="7.60,17.05" autoplay loop muted playsinline
        aria-label="投机解码一步的动画。标题：投机解码：小模型先猜 4 个，大模型一趟验完。三行，分别标着已写下、小模型猜、大模型验；底下一条用时条，图例写：紫＝小模型猜一个（便宜），灰＝大模型搬一趟权重（贵）。开始时已写下「床前明月」。字幕依次是：第 1 步：小模型一个接一个猜 4 个字，每个都很快（猜出「光疑似地」，用时条多 4 小格紫色）。大模型搬一趟权重，同时算出这 5 个位置它自己会写的字（一个蓝框标着「一趟」，里面是「光、疑、是」和两个问号，用时条多一大格灰色）。从左往右逐个比：一样就收下（光、疑变绿）。第 3 个不一样：换成大模型自己的字，后面的全丢掉（「似」变红，「是」被黄框圈出，后面变暗；小字注：？＝前面那个字已经错了，这个位置算了也作废）。「光疑是」飞上去，第 1 步完成：猜对 2 个 ＋ 大模型补 1 个 ＝ 出 3 个字，停住。第 2 步：小模型猜「地上霜举」，大模型一趟算出「地上霜举头」；4 个全对；第 5 个位置大模型本来就算了，白送 1 个。「地上霜举头」飞上去，第 2 步完成：猜对 4 个 ＋ 白送 1 个 ＝ 出 5 个字，停住。最后：猜对几个就出几个，再加大模型自己的 1 个：每步至少出 1 个。画面复位。"></video>
 <figcaption><b>看第 1 步的红字「似」：错的位置换成大模型自己的字，后面的全扔；再看第 2 步白送的那一个。</b>
-  <span class="sub">（23 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。示意，按温度 0 贪心比对。）</span></figcaption></figure>
+  <span class="sub">（23 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。示意，按温度 0 贪心比对。）</span></figcaption></figure>
   <div class="note info"><span class="t">徒弟打草稿，师傅一次批</span>
     小模型（徒弟）一口气写几个字；大模型（师傅）把它们当一段输入，搬一趟权重一次批完。<br>
     <b>对上的收；第一个不对的换成师傅的字，后面全扔。</b>最差出一个字，跟不开一样。</div>
@@ -3030,7 +3030,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <video src="media/topic06-dspark-draft.mp4?v=66dfa72a" data-pauses="5.60,12.80,18.00" autoplay loop muted playsinline
        aria-label="DSpark 第一刀的动画。标题：DSpark 第一刀：并行打底，再按前一格改下一格。左边一个绿框「Yes,」，标着上一轮确认的字；右边两个空框，标着草稿第 1 格、草稿第 2 格；底注：例子出自 DSpark 论文；分数、条长都是示意。字幕依次是：并行（DFlash）：一趟前向，两格同时出分数（第 1 格 of 55%、no 45%；第 2 格 course 55%、problem 45%）。第 2 格看不见第 1 格选了啥，只能两种说法各押一半。两格各自抽签：第 1 格抽到 of，第 2 格抽到 problem。红字：✗ 拼成「of problem」：两种说法串了（按这组数，约一半概率）。第 1 步完成：一趟出整块很快，但越往块尾越容易拼串，停住。DSpark：骨干还是这一趟；再加一个顺序小头，从左往右走。第 1 格定了 of：小头按 of 给第 2 格加一笔分（一支绿箭头从第 1 格指向第 2 格，标着前一格的字 → 下一格的偏置）。course 抬到 95%，problem 压到 5%；再抽。绿字：✓ 「of course」。第 2 步完成：块里的字前后接得上了，停住。代价：贵的骨干只跑一趟；小头每格只是查一次表、乘一个小矩阵（两条横条：紫色长条骨干 5 层，绿色短条顺序小头）。灰字：batch 128：草稿 4 到 16 个，整轮只比 DFlash 慢 0.2–1.3%。第 3 步完成：接受长度比 DFlash 高 16–18%（Qwen3 4B–14B），停住。最后：一趟出整块的速度留着，块里的前后照应补回来。画面复位。"></video>
 <figcaption>看第 2 格的分数条：同一个骨干，加了小头之后跟着第 1 格变。
-  <span class="sub">（24 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。分数是示意；0.2–1.3% 与 16–18% 是论文实测。）</span></figcaption></figure>
+  <span class="sub">（24 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。分数是示意；0.2–1.3% 与 16–18% 是论文实测。）</span></figcaption></figure>
   <ul>
     <li><b>第二刀补验证。</b>另一个小头给每格估一个把握，连乘成「活到这一格」的概率；整批请求的候选按它排队，再看机器忙不忙定这一步总共验几个。闲时多验，忙时少验，没把握的字不占名额。</li>
   </ul>
@@ -3038,7 +3038,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <video src="media/topic06-dspark-sched.mp4?v=2a93b105" data-pauses="4.65,12.40,20.10" autoplay loop muted playsinline
        aria-label="DSpark 第二刀的动画。标题：DSpark 第二刀：按把握排队，按负载定验几个。左边 3 行 5 列的格子，行标请求 1 · 写代码、请求 2 · 闲聊、请求 3 · 解题，列标第 1 格到第 5 格；右边一张坐标图，纵轴预期吞吐，横轴已放进验证的草稿数；底注：算法照 DSpark 论文 Algorithm 1 现算；把握和吞吐表是示意。字幕依次是：每个请求猜 5 个，小头给每格估一个「把握」（写代码 .95 .95 .90 .90 .85；闲聊 .70 .60 .50 .50 .40；解题 .90 .85 .70 .60 .50；格子下注：把握＝前面几格都收下时，这一格也被收下的概率）。把握从左往右连乘＝活到这一格的概率，越往后越低（格子变成蓝色填充条：写代码 95% 90% 81% 73% 62%；闲聊 70% 42% 21% 10% 4%；解题 90% 76% 54% 32% 16%）。第 1 步完成：闲聊那行掉得最快，写代码那行最稳，停住。闲时：全批候选按存活概率从高到低，一个个放进验证（图上注：一步耗时 ＝ 固定 100 ＋ 每个 token 1；格子按顺序变绿框，右图每放一个多一个点）。闲聊第 5 格红框，红字：✗ 红框那格放进来吞吐反降，停。第 2 步完成：多验几乎不拖慢这一步，放进 14 个，只剩 4% 那格没要，停住。忙时：同一批草稿，但每多验 1 个，整步都更慢（图上注：一步耗时 ＝ 固定 4 ＋ 每个 token 1；格子变黄框）。第 3 步完成：只放进 7 个 —— 代码 4 个、闲聊 1 个、解题 2 个，停住。最后：名额按把握排，总数看机器忙不忙；没把握的字不占名额。画面复位。"></video>
 <figcaption>看同一批草稿，闲时放进 14 个、忙时只放 7 个。
-  <span class="sub">（26 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。把握和吞吐表是示意，排队和停止规则照论文 Algorithm 1。）</span></figcaption></figure>
+  <span class="sub">（26 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。把握和吞吐表是示意，排队和停止规则照论文 Algorithm 1。）</span></figcaption></figure>
 
   <h3 id="l7-5">EAGLE 和 MTP：长得一样，差在谁训</h3>
 <figure class="fbox fwide" id="fig-s11-eagle"><svg viewBox="0 0 1400 1148" width="100%" role="img" aria-label="EAGLE、EAGLE-3、MTP 三种草稿的结构。第一块 EAGLE：大模型冻住，嵌入层和 LM head 借大模型的，只训一个 FC 压缩层加一层 decoder；输入是大模型出字前那层的向量，加上下一个已抽中的字的嵌入，拼成两倍宽，压回一倍，猜出下一位的向量，再借 LM head 出字，猜出的向量和字喂回去接着猜。第二块 EAGLE-3：浅、中、深三层向量拼成三倍宽再压回；猜第二个字起拿不到大模型的向量，用草稿自己上一步的输出顶替。第三块 MTP：骨架和 EAGLE 几乎一样，差在厂家预训练时一起训；单层 MTP 原样连猜，MiMo-7B 上第 1、2、3 个草稿字接受率约 70%、10%、2%，按连猜微调后是 81%、56%、36%"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3400,7 +3400,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="335.9999999999985" y1="353" x2="335.9999999999985" y2="363" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
 <line x1="1064.0000000000014" y1="353" x2="1064.0000000000014" y2="363" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
 <text class="svgsm" x="1080" y="362" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">比 16 位多掉的</text>
-</svg><figcaption><b>绿点贴着灰点，红点离得远：同是 4 bit，差在缩放怎么挑。</b><span class="capmore"><br><em>困惑度越低越好；只这一组模型和数据集。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>AWQ：arXiv <a href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener">2306.00978</a>v5，Llama-2-7B、WikiText-2 困惑度 FP16 5.47、RTN 5.73、AWQ 5.60（INT4，每 128 个数一组缩放）。只这一组模型和数据集。</p></details></figure>
+</svg><figcaption><b>红点离灰点远，绿点往回挪了一半：同是 4 bit，差在缩放怎么挑。</b><span class="capmore"><br><em>困惑度越低越好；只这一组模型和数据集。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>AWQ：arXiv <a href="https://arxiv.org/abs/2306.00978" target="_blank" rel="noopener">2306.00978</a>v5，Llama-2-7B、WikiText-2 困惑度 FP16 5.47、RTN 5.73、AWQ 5.60（INT4，每 128 个数一组缩放）。只这一组模型和数据集。</p></details></figure>
   <ul>
     <li><b>换专为 4 bit 设计的格式：</b>从 FP8 再压到 NVFP4，NVIDIA 博客称 DeepSeek-R1-0528 主要语言任务掉点在 1% 以内。</li>
     <li><b>训练时就照 4 bit 练，「无损」要看跟谁比。</b>Kimi K2 Thinking 训练时就模拟 INT4，官方称「无损」、低延迟模式约快 2 倍，没写对照精度，基准也只报了 INT4 的分。</li>
