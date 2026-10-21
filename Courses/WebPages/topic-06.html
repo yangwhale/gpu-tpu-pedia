@@ -3288,7 +3288,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="l8-2">专家压到 4 bit，注意力最多 8 bit</h3>
   <p>gpt-oss-120b 的模型卡分开列：专家 114.71B，注意力 0.96B，嵌入和输出层 1.16B。<b>专家约占 98%，注意力不到 1%</b>（本课推导）。OpenAI 只把专家压成 MXFP4，整个模型装进一张 80 GB 的卡。</p>
   <ul>
-    <li><b>注意力不压到 4 bit：</b>占地不到 1%，省不了多少；它的打分要过 softmax，误差被指数放大，更怕压（见下方「为什么压了不掉点」）。按每步字节却不小（下图）。所以要么不压、要么 FP8：Kimi K2 Thinking 的 INT4 只给路由专家；DeepSeek-V4 专家 FP4、其余大多 FP8；TPU 上跑 R1 专家 FP4、注意力 FP8。</li>
+    <li><b>注意力不压到 4 bit：</b>占地不到 1%，省不了多少；它的打分要过 softmax，误差被指数放大，更怕压（见下方第④关）。按每步字节却不小（下图）。所以要么不压、要么 FP8：Kimi K2 Thinking 的 INT4 只给路由专家；DeepSeek-V4 专家 FP4、其余大多 FP8；TPU 上跑 R1 专家 FP4、注意力 FP8。</li>
     <li><b>没有 FP4 算力也照样快。</b>TPU v7 公开规格没有 FP4 峰值，4 bit 专家照样提速：贵的是从显存搬，片上解开很便宜。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s12-ledger"><svg viewBox="0 0 1400 518" width="100%" role="img" aria-label="gpt-oss-120b 每生成一个字要读的权重字节，按组件堆成横条。三根条只有专家那段的格式不同。专家 BF16 约 7.2 GB、FP8 约 3.6 GB、MXFP4 约 1.9 GB；注意力 BF16 约 1.9 GB、输出层约 1.2 GB 三根都一样。合计约 10.2、6.7、5.0 GB。专家在整步里的占比从约七成降到不到四成（本课推导，batch 1，不含 KV）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3338,7 +3338,15 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>按 config 算的注意力 0.955B、激活 5.12B（另加路由约 0.01B）对上模型卡；字节、占比、倍数为本课推导，未计 KV、激活和缩放外的开销。</p></details></figure>
   <p><b>所以呢：</b>专家压到四分之一，整步只省一半左右：压完后注意力占每步字节约 38%（本课推导），上下文一长还要再加 KV。</p>
 
-  <h3 id="l8-3">掉多少，看怎么压</h3>
+  <h3 id="l8-3">掉不掉点：误差过四道关，掉多少看怎么压</h3>
+  <p><b>误差过四道关。</b>不是 softmax 把误差补回来了；跟着一个四舍五入误差从权重走到出字（出处见完整版第十二节）：</p>
+  <ul>
+    <li><b>① 挪到平的地方。</b>训完梯度近零，权重挪一点，损失只按二阶涨；曲率大多接近零，只有少数陡方向。GPTQ 把误差往平的方向推。</li>
+    <li><b>② 互相抵掉，怕的是离群值。</b>有进有舍，累加后大半抵消（本课解释）；一个特别大的数会撑坏整组缩放，所以要分小组。</li>
+    <li><b>③ 只看谁排第一。</b>前两名挨得近才会换人。但准确率不变时答案也可能翻，要看翻转率。</li>
+    <li><b>④ 唯一的放大器：softmax。</b>打分差 δ，概率差 e<sup>δ</sup> 倍（本课推导）。注意力打分、路由选专家都过 softmax，所以要护着；专家输出直接加回残差，误差线性。</li>
+  </ul>
+  <p><b>掉多少，看怎么压。</b>同是 4 bit，直接四舍五入和挑过缩放差一截：</p>
 <figure class="fbox fwide" id="fig-ppl"><svg viewBox="0 0 1400 394" width="100%" role="img" aria-label="一把困惑度刻度尺，从 5.40 到 5.80，越往右越差。AWQ 那组测试里 Llama-2-7B 在 WikiText-2 上：16 位 5.47；AWQ 挑过缩放再压到 4 bit 是 5.60；直接四舍五入压到 4 bit 是 5.73，比 AWQ 离 16 位远得多"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同样压到 4 bit　——　<tspan font-weight="700">挑缩放的方法决定掉多少</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">AWQ 那组测试 · Llama-2-7B · WikiText-2 困惑度（越往右越差）</text>
@@ -3397,14 +3405,6 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>训练时就照 4 bit 练，「无损」要看跟谁比。</b>Kimi K2 Thinking 训练时就模拟 INT4，官方称「无损」、低延迟模式约快 2 倍，没写对照精度，基准也只报了 INT4 的分。</li>
   </ul>
 
-  <p><b>为什么压了不掉点？</b>不是 softmax 把误差补回来了，四条道理（出处见完整版第十二节）：</p>
-  <ul>
-    <li><b>谷底是平的。</b>训完梯度近零，权重挪一点，损失只按二阶涨；曲率大多接近零，只有少数陡方向。GPTQ 把误差往平的方向推。</li>
-    <li><b>误差是噪声，怕的是离群值。</b>有进有舍，累加后大半抵消（本课解释）；一个特别大的数会撑坏整组缩放，所以要分小组。</li>
-    <li><b>出字只看排名。</b>前两名挨得近才会换人。但准确率不变时答案也可能翻，要看翻转率。</li>
-    <li><b>softmax 是放大器。</b>打分差 δ，概率差 e<sup>δ</sup> 倍（本课推导）。注意力打分、路由选专家都过 softmax，所以要护着；专家输出直接加回残差，误差线性。</li>
-  </ul>
-
   <h3 id="l8-4">KV 也能压</h3>
   <ul>
     <li><b>一个参数的事。</b>KV 存 FP8，vLLM、SGLang 都是一个 <code>--kv-cache-dtype</code>。Kimi K3 高吞吐配方列为必开：BF16 的 KV 装不下每组卡 128 个请求。</li>
@@ -3447,9 +3447,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>V4.1-Flash：2026-09 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小 45%。</p></details></figure>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>位数减半，下限减半。专家压到 4 bit、注意力最多 8 bit，整步省一半左右。掉不掉点要实测。</b><br>
+    <b>省：位数减半，下限减半；专家压到 4 bit、注意力最多 8 bit，整步省一半左右。掉：误差大多半路被消化，softmax 是唯一的放大器，所以护着注意力；掉多少要实测。</b><br>
     这一步进步多少：vLLM 在 2 张 H100 上给 Llama 3 70B 换 FP8 权重，每字间隔最多降到一半；gpt-oss-120b 只压专家，装进一张 80 GB 的卡。<br>
-    招都讲完了。最后一节回到那一趟：拿到一个模型、一批卡，先问哪几个问题。<br>
+    招都讲完了。最后一节回到那一趟：拿到一个模型、一批卡，从哪下手。<br>
     <em>想深挖：完整版第十二节。</em></div>
 
 </div></section>
