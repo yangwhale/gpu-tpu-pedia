@@ -1398,7 +1398,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
 
   <h3 id="l2-3">座位就是 KV：多给座位，不一定多出字</h3>
-  <p><b>KV 池装得下几个人，就有几个座位。</b>Little 定律：每卡吞吐 ≈ 座位数 ÷ 两字间隔，座位一满，吞吐就到顶。</p>
+  <p><b>KV 池装得下几个人，就有几个座位。</b>Little 定律：每卡吞吐 ≈ 车上人数 ÷ 两字间隔，座位一满，吞吐就到顶。</p>
   <p>那多给座位呢？两字间隔不会原地不动：</p>
 <figure class="fbox fwide" id="fig-seats"><svg viewBox="0 0 1400 472" width="100%" role="img" aria-label="同一组 GB300 跑 DeepSeek-V4-Pro 的实测，只把 KV 池多分 13% 显存。四根横条画的是各项比原来变了百分之几：车上人数 886 到 999，多 13%；两字间隔 77.7 到 85.3 毫秒，每个人都慢了；按 Little 定律，吞吐约等于人数除以两字间隔，新座位全坐满最多多约 3%（本课推导）；实测端到端吞吐只多 0.8%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">座位多给一成多　——　<tspan font-weight="700">吞吐几乎没动，多出来的人换成了每一步更慢</tspan></text>
@@ -2007,8 +2007,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>旁证：VLLM-V4PRO-RUNBOOK.md:298-302（num_key_value_heads 1）、:464-465、:476（并发 512：TP4 decode 输出 4,220、出字间隔 46.8 ms；dep8 为 11,031、11.8 ms；GPU 16 与 20）。</p>
 <p>本课推导：容量上限倍数 ＝ TP ÷ min(TP, KV 头数)，上半张是示意，条长不按实测请求数画；+54% ＝ 10,614 ÷ 6,887，+0.8% ＝ 10,704 ÷ 10,614；2.09 倍 ＝ (55,153 ÷ 20) ÷ (21,100 ÷ 16)，1.31 倍 ＝ (11,031 ÷ 8) ÷ (4,220 ÷ 4)。</p></details></figure>
   <ul>
-    <li><b>容量：不复印，每卡最多多装 4 倍人。</b>这是天花板，人多到把池子坐满才兑现。</li>
-    <li><b>我们破案的三步。</b>① 首跑 6,887，每卡才坐 727 人：两本笔记（全文／最近一段）比例切歪，座位空着；② 调平坐到 886，吞吐涨 54%；③ 再加到 999，只涨 0.8%（第二节那道题），卡在算力。</li>
+    <li><b>容量：不复印，每卡最多装下 4 倍的人。</b>这是天花板，人多到把池子坐满才兑现。</li>
+    <li><b>我们破案的三步。</b>① 首跑 6,887，每卡才坐 727 人：两本笔记（全文／最近一段）比例切歪，座位空着；② 调平坐到 886，吞吐涨 54%；③ 再加到 999，只涨 0.8%（第二节那道题），每步变慢抵掉了。</li>
     <li><b>速度的旁证。</b>vLLM 同样并发 512，decode 从 TP4 换 dep8，出字间隔 46.8 → 11.8 毫秒，每卡吞吐按全部卡 <b>2.09 倍</b>（本课推导）、只算 decode 卡 <b>1.31 倍</b>，那次 decode 卡数也翻了一倍。</li>
     <li><b>瓶颈换了边。</b>decode 从 dep8 宽到 dep16，一步快了近一半，可 16 台机器只剩 12 台 prefill，喂不饱，每张 decode 卡输出反掉四成。拓扑一换，P:D 配比要重扫。</li>
   </ul>
@@ -2919,7 +2919,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>DFlash</b>（2026-02）：一趟出整块，越往块尾越不准，会拼出「of problem」。</li>
     <li><b>DSpark</b>（2026-07）：以 DFlash 为骨干，按把握和负载定验几个；替下 DeepSeek 线上的 MTP-1。</li>
   </ul>
-  <p><em>各家倍数都是在自己的模型上对不投机测的，不能横比，完整版第十一节逐条列了。</em></p>
+  <p><em>各家倍数口径不同，比的对象、用的模型都不一样，不能横比，完整版第十一节逐条列了。</em></p>
   <p><b>DSpark 怎么补的：两刀。</b>先看论文里的数：一趟出整块的草稿开头更准、后面掉得快；闲聊又天生比解题难猜。两刀各补一头。</p>
 <figure class="fbox fwide" id="fig-s11-dspark"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="DSpark 论文的两组实测。左边是逐位接受率，指前面几位都被收下时这一位也被收下的比例，Qwen3-4B。闲聊上 EAGLE-3 第 1 位 0.53，往后升到 0.74；DFlash 第 1 位 0.72，往后掉到 0.63；代码上 DFlash 从 0.87 掉到 0.78。数学第 1 位：EAGLE-3 0.81，DFlash 0.88，DSpark 0.93。右边是 Qwen3-8B 每轮平均收下几个字：数学 EAGLE-3 4.66、DFlash 4.77、DSpark 5.65；代码 4.15、4.46、5.28；闲聊 2.58、2.97、3.50。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">DSpark 论文实测：<tspan font-weight="700">开头靠深度，往后靠前后照应</tspan></text>
@@ -3344,7 +3344,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>① 挪到平的地方。</b>训完梯度近零，权重挪一点，损失只按二阶涨；曲率大多接近零，只有少数陡方向。GPTQ 把误差往平的方向推。</li>
     <li><b>② 互相抵掉，怕的是离群值。</b>有进有舍，累加后大半抵消（本课解释）；一个特别大的数会撑坏整组缩放，所以要分小组。</li>
     <li><b>③ 只看谁排第一。</b>前两名挨得近才会换人。但准确率不变时答案也可能翻，要看翻转率。</li>
-    <li><b>④ 唯一的放大器：softmax。</b>打分差 δ，概率差 e<sup>δ</sup> 倍（本课推导）。注意力打分、路由选专家都过 softmax，所以要护着；专家输出直接加回残差，误差线性。</li>
+    <li><b>④ 放大器：softmax。</b>打分差 δ，概率差 e<sup>δ</sup> 倍（本课推导）。注意力打分、路由选专家都过 softmax，所以要护着；专家输出直接加回残差，误差线性。</li>
   </ul>
   <p><b>掉多少，看怎么压。</b>同是 4 bit，直接四舍五入和挑过缩放差一截：</p>
 <figure class="fbox fwide" id="fig-ppl"><svg viewBox="0 0 1400 394" width="100%" role="img" aria-label="一把困惑度刻度尺，从 5.40 到 5.80，越往右越差。AWQ 那组测试里 Llama-2-7B 在 WikiText-2 上：16 位 5.47；AWQ 挑过缩放再压到 4 bit 是 5.60；直接四舍五入压到 4 bit 是 5.73，比 AWQ 离 16 位远得多"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -3447,7 +3447,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>V4.1-Flash：2026-09 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小 45%。</p></details></figure>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>省：位数减半，下限减半；专家压到 4 bit、注意力最多 8 bit，整步省一半左右。掉：误差大多半路被消化，softmax 是唯一的放大器，所以护着注意力；掉多少要实测。</b><br>
+    <b>省：位数减半，下限减半；专家压到 4 bit、注意力最多 8 bit，整步省一半左右。掉：误差大多半路被消化，softmax 会把误差放大，所以护着注意力；掉多少要实测。</b><br>
     这一步进步多少：vLLM 在 2 张 H100 上给 Llama 3 70B 换 FP8 权重，每字间隔最多降到一半；gpt-oss-120b 只压专家，装进一张 80 GB 的卡。<br>
     招都讲完了。最后一节回到那一趟：拿到一个模型、一批卡，从哪下手。<br>
     <em>想深挖：完整版第十二节。</em></div>
