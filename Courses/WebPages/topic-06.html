@@ -2492,17 +2492,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 本课推导：2P1D 每秒 min(2 × 5.6, 10) ＝ 10 个，每卡约 3.3 个；混着做接 10 个要 ⌈10 ÷ 1.6⌉ ＝ 7 张卡。</p></details></figure>
   <ul>
     <li><b>为什么只有 1.6</b>：延迟要求其实是两条，首字别等太久、字距别卡；混在一起两头都得防，只能少收。</li>
-    <li><b>拆开还能各挑切法</b>：两边脾气不同，切法也不同（下框）。</li>
+    <li><b>两边都跑到自己的上限</b>：两张 prefill 配一张 decode，3 张卡接 10 个；混着做 7 张才接约 11 个，每卡翻一倍多。</li>
   </ul>
-  <div class="note info"><span class="t">两边各怎么切：prefill 窄而多份，decode 宽而一份</span>
-    我们自己在 GB300 上用 SGLang 搭的 V4-Pro，16 台机器，<b>两头都是 DEP</b>（注意力各卡带自己那批人，专家按 EP 分），差在宽度和份数：
-    <ul>
-      <li><b>prefill：14 份 dep4。</b>一台机器 4 张卡一组，组和组互不说话。prefill 卡在算，一个长 prompt 自己就喂饱算力，不用凑人；组小，跨机通信少；要接更多，多开几份。</li>
-      <li><b>decode：1 份 dep8。</b>横跨两台机器 8 张卡。decode 卡在搬，得凑大批，专家权重读一遍才划算；EP 开宽，每个专家攒到的人更多；注意力走 DP，V4-Pro 只有 1 个 KV 头，每人的 KV 只存一份不复印。</li>
-      <li><b>宽了要有人喂。</b>decode 宽到 dep16，一步快了近一半；可 prefill 只剩 12 台，喂不饱，每张 decode 卡输出反掉四成（第四节）。拓扑一换，配比重扫。</li>
-      <li><b>不只我们这么配。</b>SGLang 在 GB200 NVL72 上的公开实测也是这个形状：decode 48 卡一个实例（DP 注意力＋EP48），prefill 每实例 2–4 卡（完整版 8.5）。</li>
-      <li><b>换模型，组合会变。</b>DEP 起不来的，decode 退回 TEP 再叠 DCP（K3，第五节）；首字太慢的，prefill 可以加 PCP。这两条是按前两节推的配法，我们这套部署没用到。</li>
-    </ul></div>
   <p>DistServe 报告每卡请求率最多是不拆的 7.4 倍（九成以上请求守住延迟）。Mooncake 做进 Kimi 线上，NVIDIA Dynamo 2026 年 3 月出 1.0 版，PD 分离成了标准件。</p>
 
   <h3 id="l6-3">多搬的那一趟有多贵</h3>
@@ -2560,8 +2551,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>先看上面那根一到两秒的长条，再看下面那根三色细条。</b><span class="capmore"><br><em>KV 用时按带宽估算，不是计时；图底那句的「第三节」指专题五。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 我们的 TPU v7x 1P1D 记录（wiki qwen3-coder-480b-pd-disagg-tpuv7x-20260425）：三段按带宽估算约 10 ／ 80 ／ 10 ms、合计约 100 ms、占 prefill 5–10%（prefill 1–2 s 由此反推）。</p>
 <p>⚠️ 本课推导：KV ＝ 2 × 62 层 × 8 个 KV 头 × 128 × 8,192 × 1 字节 ≈ 1.04 GB；100 Gb/s ＝ 12.5 GB/s → 约 83 ms。</p></details></figure>
   <ul>
-    <li><b>很便宜。</b>Qwen3-Coder-480B 一个 8K prompt 约 100 ms，只占 prefill 的 5–10%（按带宽估算）。</li>
-    <li><b>单趟便宜，不等于总量便宜。</b>一台 prefill 每秒外送一串请求的 KV，一条专线并不了几台（下图）。KV 厚的，别出 NVLink 域。</li>
+    <li><b>很便宜，是个零头。</b>Qwen3-Coder-480B 一个 8K prompt 递 KV 约 100 ms，只占 prefill 的 5–10%（按带宽估算）。</li>
+    <li><b>单趟便宜，不等于总量便宜。</b>一台 prefill 每秒外送一串请求的 KV，一条专线并不了几台（下图）。KV 薄的才敢把 prefill 放到别的机房；KV 厚的，别出 NVLink 域。</li>
   </ul>
 <figure class="fbox fwide" id="fig-s8-prfaas"><svg viewBox="0 0 1400 552" width="100%" role="img" aria-label="四个模型在 32K 输入时，一台 8 卡 H200 做 prefill，每秒要往外送多少 KV。全注意力的 Qwen3-235B 要 33.35 Gbps，混合的 Qwen3.5-397B 只要 8.25，前者是后者的 4 倍。全注意力的 MiniMax-M2.5 要 59.93，混合的 MiMo-V2-Flash 只要 4.66，前者是后者的 13 倍。红虚线是案例里整条跨集群专线约 100 Gbps，整个 prefill 集群共用：Qwen3-235B 只够并 2 台，MiniMax 只够 1 台，Qwen3.5 能并 12 台，MiMo 21 台。案例里整个 prefill 集群平均出口只有 13 Gbps"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">KV 变薄，PD 才敢跨数据中心　——　<tspan font-weight="700">混合模型要送的字节降到全注意力的 1/4 到 1/13</tspan></text>
@@ -2619,7 +2610,16 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 案例：内部 1T 混合模型，32 张 H200 做 prefill ＋ 64 张 H20 做本地 PD，对比 96 张 H20 同构 PD。「每 4 层里 3 层线性」即论文的混合 3:1；「每 6 层里 5 层只看近处」即 5:1 滑窗注意力（SWA）。</p>
 <p>⚠️ 那 4 倍、13 倍是两两同代对比（论文原文），不是同一参数量下的严格对照。</p></details></figure>
 
-  <h3 id="l6-4">所以呢：配几台，什么时候别拆</h3>
+  <h3 id="l6-4">拆开之后：各怎么切、配几台、什么时候别拆</h3>
+  <div class="note info"><span class="t">两边各怎么切：prefill 窄而多份，decode 宽而一份</span>
+    我们自己在 GB300 上用 SGLang 搭的 V4-Pro，16 台机器，<b>两头都是 DEP</b>（注意力各卡带自己那批人，专家按 EP 分），差在宽度和份数：
+    <ul>
+      <li><b>prefill：14 份 dep4。</b>一台机器 4 张卡一组，组和组互不说话。prefill 卡在算，一个长 prompt 自己就喂饱算力，不用凑人；组小，跨机通信少；要接更多，多开几份。</li>
+      <li><b>decode：1 份 dep8。</b>横跨两台机器 8 张卡。decode 卡在搬，得凑大批，专家权重读一遍才划算；EP 开宽，每个专家攒到的人更多；注意力走 DP，V4-Pro 只有 1 个 KV 头，每人的 KV 只存一份不复印。</li>
+      <li><b>宽了要有人喂。</b>decode 宽到 dep16，一步快了近一半；可 prefill 只剩 12 台，喂不饱，每张 decode 卡输出反掉四成（第四节）。拓扑一换，配比重扫（下面）。</li>
+      <li><b>不只我们这么配。</b>SGLang 在 GB200 NVL72 上的公开实测也是这个形状：decode 48 卡一个实例（DP 注意力＋EP48），prefill 每实例 2–4 卡（完整版 8.5）。</li>
+      <li><b>换模型，组合会变。</b>DEP 起不来的，decode 退回 TEP 再叠 DCP（K3，第五节）；首字太慢的，prefill 可以加 PCP。这两条是按前两节推的配法，我们这套部署没用到。</li>
+    </ul></div>
   <ul>
     <li><b>配比先算起点，再扫。</b>起点 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒吞的 token。V4-Pro（GB300、8 张 decode 卡）算出约 9.8 个，官方配方 8 个，runbook 扫出 14 个；14 加到 16，每张 decode 卡输出只涨 2%，已喂饱。</li>
     <li><b>再加一台 prefill，买的是首字。</b>每个请求端到端约 65 s，首字省下的 0.67 s 摊进去看不出，总输出不涨。</li>
@@ -2678,7 +2678,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按上限开批。多搬的 KV 一个请求只传一次，单趟很便宜。</b><br>
+    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按上限开批。多递的那趟 KV 一个请求只传一次，单趟很便宜；拆开后两边还能各挑切法。</b><br>
     这一步进步多少：Mooncake 的 FAST'25 正式版报告，比此前系统多接 115%（A800）、107%（H800）请求。<br>
     可拆不拆，decode 还是一步只出一个字。下一节：能不能一趟出好几个字？<br>
     <em>想深挖：完整版第八、九节。</em></div>

@@ -23,28 +23,28 @@ __L6_ANIM__
 __L6_RATIO__
   <ul>
     <li><b>为什么只有 1.6</b>：延迟要求其实是两条，首字别等太久、字距别卡；混在一起两头都得防，只能少收。</li>
-    <li><b>拆开还能各挑切法</b>：两边脾气不同，切法也不同（下框）。</li>
+    <li><b>两边都跑到自己的上限</b>：两张 prefill 配一张 decode，3 张卡接 10 个；混着做 7 张才接约 11 个，每卡翻一倍多。</li>
   </ul>
-  <div class="note info"><span class="t">两边各怎么切：prefill 窄而多份，decode 宽而一份</span>
-    我们自己在 GB300 上用 SGLang 搭的 V4-Pro，16 台机器，<b>两头都是 DEP</b>（注意力各卡带自己那批人，专家按 EP 分），差在宽度和份数：
-    <ul>
-      <li><b>prefill：14 份 dep4。</b>一台机器 4 张卡一组，组和组互不说话。prefill 卡在算，一个长 prompt 自己就喂饱算力，不用凑人；组小，跨机通信少；要接更多，多开几份。</li>
-      <li><b>decode：1 份 dep8。</b>横跨两台机器 8 张卡。decode 卡在搬，得凑大批，专家权重读一遍才划算；EP 开宽，每个专家攒到的人更多；注意力走 DP，V4-Pro 只有 1 个 KV 头，每人的 KV 只存一份不复印。</li>
-      <li><b>宽了要有人喂。</b>decode 宽到 dep16，一步快了近一半；可 prefill 只剩 12 台，喂不饱，每张 decode 卡输出反掉四成（第四节）。拓扑一换，配比重扫。</li>
-      <li><b>不只我们这么配。</b>SGLang 在 GB200 NVL72 上的公开实测也是这个形状：decode 48 卡一个实例（DP 注意力＋EP48），prefill 每实例 2–4 卡（完整版 8.5）。</li>
-      <li><b>换模型，组合会变。</b>DEP 起不来的，decode 退回 TEP 再叠 DCP（K3，第五节）；首字太慢的，prefill 可以加 PCP。这两条是按前两节推的配法，我们这套部署没用到。</li>
-    </ul></div>
   <p>DistServe 报告每卡请求率最多是不拆的 7.4 倍（九成以上请求守住延迟）。Mooncake 做进 Kimi 线上，NVIDIA Dynamo 2026 年 3 月出 1.0 版，PD 分离成了标准件。</p>
 
   <h3 id="l6-3">多搬的那一趟有多贵</h3>
 __L6_TRIP__
   <ul>
-    <li><b>很便宜。</b>Qwen3-Coder-480B 一个 8K prompt 约 100 ms，只占 prefill 的 5–10%（按带宽估算）。</li>
-    <li><b>单趟便宜，不等于总量便宜。</b>一台 prefill 每秒外送一串请求的 KV，一条专线并不了几台（下图）。KV 厚的，别出 NVLink 域。</li>
+    <li><b>很便宜，是个零头。</b>Qwen3-Coder-480B 一个 8K prompt 递 KV 约 100 ms，只占 prefill 的 5–10%（按带宽估算）。</li>
+    <li><b>单趟便宜，不等于总量便宜。</b>一台 prefill 每秒外送一串请求的 KV，一条专线并不了几台（下图）。KV 薄的才敢把 prefill 放到别的机房；KV 厚的，别出 NVLink 域。</li>
   </ul>
 __L6_PRFAAS__
 
-  <h3 id="l6-4">所以呢：配几台，什么时候别拆</h3>
+  <h3 id="l6-4">拆开之后：各怎么切、配几台、什么时候别拆</h3>
+  <div class="note info"><span class="t">两边各怎么切：prefill 窄而多份，decode 宽而一份</span>
+    我们自己在 GB300 上用 SGLang 搭的 V4-Pro，16 台机器，<b>两头都是 DEP</b>（注意力各卡带自己那批人，专家按 EP 分），差在宽度和份数：
+    <ul>
+      <li><b>prefill：14 份 dep4。</b>一台机器 4 张卡一组，组和组互不说话。prefill 卡在算，一个长 prompt 自己就喂饱算力，不用凑人；组小，跨机通信少；要接更多，多开几份。</li>
+      <li><b>decode：1 份 dep8。</b>横跨两台机器 8 张卡。decode 卡在搬，得凑大批，专家权重读一遍才划算；EP 开宽，每个专家攒到的人更多；注意力走 DP，V4-Pro 只有 1 个 KV 头，每人的 KV 只存一份不复印。</li>
+      <li><b>宽了要有人喂。</b>decode 宽到 dep16，一步快了近一半；可 prefill 只剩 12 台，喂不饱，每张 decode 卡输出反掉四成（第四节）。拓扑一换，配比重扫（下面）。</li>
+      <li><b>不只我们这么配。</b>SGLang 在 GB200 NVL72 上的公开实测也是这个形状：decode 48 卡一个实例（DP 注意力＋EP48），prefill 每实例 2–4 卡（完整版 8.5）。</li>
+      <li><b>换模型，组合会变。</b>DEP 起不来的，decode 退回 TEP 再叠 DCP（K3，第五节）；首字太慢的，prefill 可以加 PCP。这两条是按前两节推的配法，我们这套部署没用到。</li>
+    </ul></div>
   <ul>
     <li><b>配比先算起点，再扫。</b>起点 ≈ decode 每秒完成的请求数 × 输入长度 ÷ 一个 prefill 每秒吞的 token。V4-Pro（GB300、8 张 decode 卡）算出约 9.8 个，官方配方 8 个，runbook 扫出 14 个；14 加到 16，每张 decode 卡输出只涨 2%，已喂饱。</li>
     <li><b>再加一台 prefill，买的是首字。</b>每个请求端到端约 65 s，首字省下的 0.67 s 摊进去看不出，总输出不涨。</li>
@@ -56,7 +56,7 @@ __L6_2P1D__
   </ul>
 
   <div class="note ok"><span class="t">这一节带走</span>
-    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按上限开批。多搬的 KV 一个请求只传一次，单趟很便宜。</b><br>
+    <b>PD 分离不让 decode 少搬，只让它不被打断；两边各按上限开批。多递的那趟 KV 一个请求只传一次，单趟很便宜；拆开后两边还能各挑切法。</b><br>
     这一步进步多少：Mooncake 的 FAST'25 正式版报告，比此前系统多接 115%（A800）、107%（H800）请求。<br>
     可拆不拆，decode 还是一步只出一个字。下一节：能不能一趟出好几个字？<br>
     <em>想深挖：完整版第八、九节。</em></div>
