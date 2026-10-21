@@ -99,7 +99,7 @@ BODY = '''
     <tr><td>v7 每 device 实测可用 94.75 GiB（每 device 物理 96 GiB）；R1 FP8 MoE 每 device 101.8 放不下（README 写 GB，按 GB、GiB 读都超，最少也超 0.06 GB）</td><td>tpu/tpu-inference R1 FP4 README:59、72-73；0.06 ＝ 101.8 − 101.74（94.75 GiB 换成 GB）本课推导</td></tr>
     <tr><td>路由专家 FP8 均摊到 8 个 device 只有约 81.7 GB，比 README 的 101.8 多出约 20 GB</td><td>本课推导：653.9B × 1 B ÷ 8 ＝ 81.7 GB（＝ 76.1 GiB，拓扑图脚注同此）；101.8 − 81.7 ≈ 20</td></tr>
     <tr><td>v7 切片按 4、8、16、32 颗成档（2x2x1、2x2x2、2x2x4、2x4x4），4.07 颗取 8</td><td>Google Cloud TPU7x 文档 Supported configurations 表（cloud.google.com/tpu/docs/tpu7x）</td></tr>
-    <tr><td>V3 FP8 切片表：4K×64 要 642 GiB／纸面 4 颗，4K×256 要 694 GiB／8 颗，128K×256 要 2,821 GiB／32 颗，KV 是权重 3.5×；4 颗放完权重剩 57 GiB，4K 纸面装 213 条，但实测 FP8 放不下</td><td>本课推导：权重 671 GB ＝ 625 GiB；每芯片 189.5 GiB × 0.9 ＝ 170.55 GiB 可用；0.9 为本课假设；实测见上一行</td></tr>
+    <tr><td>V3 FP8 切片表（按 device 记账）：4K×64 要 642 GiB／纸面 7.53 → 8 device（4 颗），4K×256 要 694 GiB／8.13 → 16 device（8 颗），128K×256 要 2,821 GiB／33.08 → 64 device（32 颗），KV 是权重 3.5×；8 个 device 放完权重共剩 57 GiB（每 device 约 7.2 GiB），4K 纸面装 213 条，但实测 FP8 放不下</td><td>本课推导：权重 671 GB ＝ 625 GiB；每 device 94.75 GiB × 0.9 ＝ 85.275 GiB 可用（一颗芯片＝两个 device，不当整块用）；0.9 为本课假设；实测见上一行</td></tr>
     <tr><td>128K × 256 并发：DeepSeek-V3 KV 约 2,196 GiB（权重 625 GiB 的 3.5 倍）；单条 128K 8.58 GiB</td><td>本课推导：70,272 B × 131,072 × 256 ÷ 2<sup>30</sup></td></tr>
     <tr><td>GB300 R1：并发 8 只用上 ~3% 容量；854 → 10,715 tok/s，12.5×；并发 256 → 512 总吞吐只再涨 3%（10,390 → 10,715，本课推导），首字 12 s → 30 s</td><td>gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md :401、:405-413、:415</td></tr>
     <tr><td>投机解码原理（按标准拒绝采样实现时分布无损）</td><td>Leviathan 等 arXiv 2211.17192；Chen 等 arXiv 2302.01318</td></tr>

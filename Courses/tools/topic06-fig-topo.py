@@ -80,7 +80,11 @@ assert CHIP_USABLE * GIB < N.V7_HBM and round(CHIP_USABLE * GIB / 1e9, 1) == 203
 RESERVE = 0.10                                       # 本课假设：激活 ＋ 编译临时区
 CHIP_FOR_DATA = CHIP_USABLE * (1 - RESERVE)
 assert round(CHIP_USABLE, 1) == 189.5 and round(CHIP_FOR_DATA, 2) == 170.55
-SLICES = [4, 8, 16, 32]                              # v7x-8 / -16 / -32 / -64（名字按 device 数）
+# ⛔ 记账按 device：一颗芯片＝两个 device，各管各的显存，不能当一整块用（2026-10-21 改）
+DEV_FOR_DATA = DEV_USABLE * (1 - RESERVE)
+assert round(DEV_FOR_DATA, 3) == 85.275
+SLICES = [8, 16, 32, 64]                             # device 数：v7x-8 / -16 / -32 / -64 ＝ 4／8／16／32 颗芯片
+DPC = N.V7_DEVICES_PER_CHIP
 CTX = [("4K", 4096), ("32K", 32768), ("128K", 131072)]
 CONCS = [64, 256]
 
@@ -88,22 +92,24 @@ CONCS = [64, 256]
 def need(ctx, conc):
     kv = ctx * conc * KVT / GIB
     tot = W_FP8 + kv
-    raw = tot / CHIP_FOR_DATA
-    chips = next(s for s in SLICES if s >= raw)
-    return kv, tot, raw, chips
+    raw = tot / DEV_FOR_DATA                         # 纸面要几个 device
+    devs = next(s for s in SLICES if s >= raw)
+    return kv, tot, raw, devs
 
 
 GRID = {(c, n): need(t, n) for c, t in CTX for n in CONCS}
 TOTS = {k: round(v[1]) for k, v in GRID.items()}
-CHIPS = {k: v[3] for k, v in GRID.items()}
+CHIPS = {k: v[3] // DPC for k, v in GRID.items()}
 assert TOTS == {("4K", 64): 642, ("4K", 256): 694, ("32K", 64): 762, ("32K", 256): 1174,
                 ("128K", 64): 1174, ("128K", 256): 2821}, TOTS
 RAWS = {k: round(v[2], 2) for k, v in GRID.items()}
-assert (RAWS[("4K", 64)], RAWS[("4K", 256)], RAWS[("32K", 256)], RAWS[("128K", 256)]) == (3.76, 4.07, 6.88, 16.54), RAWS
+assert (RAWS[("4K", 64)], RAWS[("4K", 256)], RAWS[("32K", 256)], RAWS[("128K", 256)]) == (7.53, 8.13, 13.77, 33.08), RAWS
 assert round(GRID[("128K", 256)][0] / W_FP8, 1) == 3.5          # KV 是权重的 3.5 倍
 assert CHIPS == {("4K", 64): 4, ("4K", 256): 8, ("32K", 64): 8, ("32K", 256): 8,
                  ("128K", 64): 8, ("128K", 256): 32}, CHIPS
-LEFT4 = 4 * CHIP_FOR_DATA - W_FP8                     # 4 颗芯片放完权重还剩多少给 KV
+LEFT4 = 8 * DEV_FOR_DATA - W_FP8                      # 8 个 device（4 颗芯片）放完权重还剩多少给 KV
+LEFT4_DEV = LEFT4 / 8
+assert round(LEFT4_DEV, 1) == 7.2
 LEFT4_TOK = LEFT4 * GIB / KVT
 assert round(LEFT4) == 57 and round(LEFT4 * GIB / 1e9, 1) == 61.5 and round(LEFT4_TOK / 1000) == 875
 MAX4_AT_4K = int(LEFT4_TOK // 4096)
@@ -385,32 +391,32 @@ def fig_rank():
 
 # ─────────────────────────────────────────────────────────────────────────
 def fig_slice():
-    f = Fig(W, "DeepSeek-V3 用 FP8 权重 671 GB，即 625 GiB，每个 token 的 KV 70272 字节。TPU v7 每颗芯片可用约 189.5 GiB，"
-               "预留一成给激活值后按 170.55 GiB 算。竖虚线是 4、8、16、32 颗芯片各能放多少。"
-               "4K 上下文 64 并发要 642 GiB，纸面 3.76 颗，取 4 颗；"
-               "4K 256 并发 694 GiB，纸面 4.07 颗，可切片只有 4、8、16、32 颗几档，所以取 8 颗；"
-               "32K 64 并发 762 GiB，32K 256 并发和 128K 64 并发都是 1174 GiB，都是 8 颗；"
-               "128K 256 并发要 2821 GiB，纸面 16.54 颗，要 32 颗")
-    y0 = f.header("DeepSeek-V3 在 TPU v7 上最少几颗芯片　——　<tspan font-weight=\"700\">权重是地板，KV 决定往上加多少</tspan>",
-                  "本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GiB（可用 189.5 GiB，预留一成给激活值），向上取到切片档位",
-                  [(BL, "FP8 权重 625 GiB"), (PU, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档芯片能放多少")])
+    f = Fig(W, "DeepSeek-V3 用 FP8 权重 671 GB，即 625 GiB，每个 token 的 KV 70272 字节。TPU v7 一颗芯片是两个 device，按 device 记账："
+               "每个 device 可用 94.75 GiB，预留一成给激活值后按 85.275 GiB 算。竖虚线是 8、16、32、64 个 device（4、8、16、32 颗芯片）各能放多少。"
+               "4K 上下文 64 并发要 642 GiB，纸面 7.53 个 device，取 8 个（4 颗）；"
+               "4K 256 并发 694 GiB，纸面 8.13 个，切片只有 8、16、32、64 个 device 几档，所以取 16 个（8 颗）；"
+               "32K 64 并发 762 GiB，32K 256 并发和 128K 64 并发都是 1174 GiB，都是 16 个（8 颗）；"
+               "128K 256 并发要 2821 GiB，纸面 33.08 个，要 64 个（32 颗）")
+    y0 = f.header("DeepSeek-V3 在 TPU v7 上最少几个 device　——　<tspan font-weight=\"700\">权重是地板，KV 决定往上加多少</tspan>",
+                  "本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每 device 85.275 GiB（可用 94.75 GiB，预留一成给激活值；一颗芯片＝两个 device），向上取到切片档位",
+                  [(BL, "FP8 权重 625 GiB"), (PU, "KV ＝ 上下文 × 并发 × 70,272 B"), (GY2, "竖虚线：这一档 device 能放多少")])
     PH = 470
-    py = f.panel(0, y0, W, PH, "要多少 HBM（GiB），取几颗芯片", INK)
+    py = f.panel(0, y0, W, PH, "要多少 HBM（GiB），取几个 device", INK)
     RCOL = W - 210
     X0, AY = 150, py + 34
     AW = RCOL - 40 - X0
-    YMAX = 32 * CHIP_FOR_DATA * 1.04
+    YMAX = 64 * DEV_FOR_DATA * 1.04
     rows = [(c, n) for c, _ in CTX for n in CONCS]
     RH = 54
     AH = RH * len(rows)
     bh = 34
     sx = AW / YMAX
     for s in SLICES:
-        gx = X0 + s * CHIP_FOR_DATA * sx
+        gx = X0 + s * DEV_FOR_DATA * sx
         f.line(gx, AY - 6, gx, AY + AH, GY2, 1.2, "4 3", arrow=False)
-        f.t(gx, AY + AH + 22, "%d 颗" % s, GY, True, 15, "middle")
+        f.t(gx, AY + AH + 22, "%d dev（%d 颗）" % (s, s // DPC), GY, True, 15, "middle")
     for i, key in enumerate(rows):
-        kv, tot, raw, chips = GRID[key]
+        kv, tot, raw, devs = GRID[key]
         yy = AY + i * RH + (RH - bh) / 2
         f.t(X0 - 14, yy + bh / 2 + 6, "%s × %d" % key, INK, True, 15, "end")
         f.box(X0, yy, W_FP8 * sx, bh, BL, BL, 3)
@@ -420,9 +426,9 @@ def fig_slice():
         lx = X0 + tot * sx + 6
         f.box(lx - 2, yy + 4, wpx(lab, 15) + 8, bh - 8, "#ffffff", "none", 2)
         f.t(lx + 2, yy + bh / 2 + 6, lab, INK, True, 15)
-        f.t(RCOL, yy + bh / 2 + 6, "%.2f 颗 → %d 颗" % (raw, chips), RD if chips > 8 else INK, True, 15)
-    f.t(RCOL, AY - 10, "纸面 → 取档", GY, True, 15)
-    f.t(20, AY + AH + 64, "切片只有 4 / 8 / 16 / 32 颗这几档：纸面 %.2f 颗也只能取 8 颗，%.2f 颗就得取 32 颗"
+        f.t(RCOL, yy + bh / 2 + 6, "%.2f → %d dev" % (raw, devs), RD if devs > 16 else INK, True, 15)
+    f.t(RCOL, AY - 10, "纸面 device → 取档", GY, True, 15)
+    f.t(20, AY + AH + 64, "切片只有 8 / 16 / 32 / 64 个 device 这几档：纸面 %.2f 个也只能取 16 个（8 颗），%.2f 个就得取 64 个（32 颗）"
         % (GRID[("4K", 256)][2], GRID[("128K", 256)][2]), INK, True, 16)
     f._pan = None
     yb = y0 + PH
@@ -431,7 +437,7 @@ def fig_slice():
                "每 token KV 70,272 B ＝ (512 ＋ 64) × 2 B × 61 层。",
                "📌 每 device 可用 94.75 GiB（README 写 GB，运行日志为 GiB；v7 每芯片物理 192 GiB）、FP8 MoE 实测约 101.8/device 超 HBM 所以用 FP4：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、:72-73（R1 与 V3 同架构）。",
                "⚠️ 本课推导与假设：FP8 每参数 1 字节、不计 block scale；激活值预留 10% 是假设；KV 不重复（DP 注意力或 EP），"
-               "没算 DP 注意力在每个 device 上各放一份约 17B 非专家权重的开销；切片档位取 4／8／16／32 颗（v7x-8／16／32／64）。"
+               "没算 DP 注意力在每个 device 上各放一份约 17B 非专家权重的开销；切片档位取 8／16／32／64 个 device（v7x-8／16／32／64，＝ 4／8／16／32 颗芯片）。"
                "纸面 MoE 76.1 GiB/device ＝ 256 × 58 层 × 3 × 7168 × 2048 字节 ÷ 8 device。")
     f.save("fig6-s10-slice.svg", yb + 14)
 

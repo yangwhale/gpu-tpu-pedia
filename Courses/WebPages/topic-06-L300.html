@@ -9989,72 +9989,72 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>所以 mesh 交给 <code>mesh_utils.create_device_mesh</code> 按物理位置生成，跨切片用 <code>create_hybrid_device_mesh</code> 把 ICI 和 DCN 分成两层。</p>
 
   <h3 id="s10-2">10.2　最小切片、容量与对照实验</h3>
-  <p><b>最小切片怎么定。</b>一个引擎最少几颗芯片，先算纸面账：权重 ＋ KV ＋ 激活值（中间结果）的显存。拿 DeepSeek-V3 在 TPU v7 上算（口径同 4.1）。</p>
-<figure class="fbox fwide" id="fig-s10-slice"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="DeepSeek-V3 用 FP8 权重 671 GB，即 625 GiB，每个 token 的 KV 70272 字节。TPU v7 每颗芯片可用约 189.5 GiB，预留一成给激活值后按 170.55 GiB 算。竖虚线是 4、8、16、32 颗芯片各能放多少。4K 上下文 64 并发要 642 GiB，纸面 3.76 颗，取 4 颗；4K 256 并发 694 GiB，纸面 4.07 颗，可切片只有 4、8、16、32 颗几档，所以取 8 颗；32K 64 并发 762 GiB，32K 256 并发和 128K 64 并发都是 1174 GiB，都是 8 颗；128K 256 并发要 2821 GiB，纸面 16.54 颗，要 32 颗"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">DeepSeek-V3 在 TPU v7 上最少几颗芯片　——　<tspan font-weight="700">权重是地板，KV 决定往上加多少</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每芯片 170.55 GiB（可用 189.5 GiB，预留一成给激活值），向上取到切片档位</text>
+  <p><b>最小切片怎么定。</b>一个引擎最少几个 device，先算纸面账：权重 ＋ KV ＋ 激活值（中间结果）的显存。拿 DeepSeek-V3 在 TPU v7 上算（口径同 4.1）：一颗芯片是两个 device，各管各的 94.75 GiB，账按 device 记，最后再换回芯片数。</p>
+<figure class="fbox fwide" id="fig-s10-slice"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="DeepSeek-V3 用 FP8 权重 671 GB，即 625 GiB，每个 token 的 KV 70272 字节。TPU v7 一颗芯片是两个 device，按 device 记账：每个 device 可用 94.75 GiB，预留一成给激活值后按 85.275 GiB 算。竖虚线是 8、16、32、64 个 device（4、8、16、32 颗芯片）各能放多少。4K 上下文 64 并发要 642 GiB，纸面 7.53 个 device，取 8 个（4 颗）；4K 256 并发 694 GiB，纸面 8.13 个，切片只有 8、16、32、64 个 device 几档，所以取 16 个（8 颗）；32K 64 并发 762 GiB，32K 256 并发和 128K 64 并发都是 1174 GiB，都是 16 个（8 颗）；128K 256 并发要 2821 GiB，纸面 33.08 个，要 64 个（32 颗）"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">DeepSeek-V3 在 TPU v7 上最少几个 device　——　<tspan font-weight="700">权重是地板，KV 决定往上加多少</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">本课推导：FP8 权重 625 GiB ＋ KV（每 token 70,272 B）÷ 每 device 85.275 GiB（可用 94.75 GiB，预留一成给激活值；一颗芯片＝两个 device），向上取到切片档位</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FP8 权重 625 GiB</text>
 <rect x="182.52" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <text class="svgsm" x="203" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">KV ＝ 上下文 × 并发 × 70,272 B</text>
 <rect x="491.6" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="512" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">竖虚线：这一档芯片能放多少</text>
+<text class="svgsm" x="512" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">竖虚线：这一档 device 能放多少</text>
 <rect x="0" y="102" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">要多少 HBM（GiB），取几颗芯片</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">要多少 HBM（GiB），取几个 device</tspan></text>
 <line x1="270.1923076923077" y1="160" x2="270.1923076923077" y2="490" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
-<text class="svgsm" x="270" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 颗</tspan></text>
+<text class="svgsm" x="270" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 dev（4 颗）</tspan></text>
 <line x1="390.38461538461536" y1="160" x2="390.38461538461536" y2="490" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
-<text class="svgsm" x="390" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 颗</tspan></text>
+<text class="svgsm" x="390" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16 dev（8 颗）</tspan></text>
 <line x1="630.7692307692307" y1="160" x2="630.7692307692307" y2="490" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
-<text class="svgsm" x="630" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16 颗</tspan></text>
+<text class="svgsm" x="630" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 dev（16 颗）</tspan></text>
 <line x1="1111.5384615384614" y1="160" x2="1111.5384615384614" y2="490" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
-<text class="svgsm" x="1111" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32 颗</tspan></text>
+<text class="svgsm" x="1111" y="512" fill="#5f6368" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64 dev（32 颗）</tspan></text>
 <text class="svgsm" x="136" y="199" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4K × 64</tspan></text>
 <rect x="150" y="176.0" width="110.1000734978932" height="34" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="260.1000734978932" y="176.0" width="3.022646260401867" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="267.1227197582951" y="180.0" width="32" height="26" rx="2" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="271" y="199" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">642</tspan></text>
-<text class="svgsm" x="1190" y="199" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.76 颗 → 4 颗</tspan></text>
+<text class="svgsm" x="1190" y="199" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.53 → 8 dev</tspan></text>
 <text class="svgsm" x="136" y="253" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4K × 256</tspan></text>
 <rect x="150" y="230.0" width="110.1000734978932" height="34" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="260.1000734978932" y="230.0" width="12.090585041607468" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="276.19065853950065" y="234.0" width="32" height="26" rx="2" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="280" y="253" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">694</tspan></text>
-<text class="svgsm" x="1190" y="253" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.07 颗 → 8 颗</tspan></text>
+<text class="svgsm" x="1190" y="253" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8.13 → 16 dev</tspan></text>
 <text class="svgsm" x="136" y="307" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K × 64</tspan></text>
 <rect x="150" y="284.0" width="110.1000734978932" height="34" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="260.1000734978932" y="284.0" width="24.181170083214937" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="288.28124358110813" y="288.0" width="32" height="26" rx="2" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="292" y="307" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">762</tspan></text>
-<text class="svgsm" x="1190" y="307" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.47 颗 → 8 颗</tspan></text>
+<text class="svgsm" x="1190" y="307" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8.94 → 16 dev</tspan></text>
 <text class="svgsm" x="136" y="361" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">32K × 256</tspan></text>
 <rect x="150" y="338.0" width="110.1000734978932" height="34" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="260.1000734978932" y="338.0" width="96.72468033285975" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="360.82475383075297" y="342.0" width="45" height="26" rx="2" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="364" y="361" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,174</tspan></text>
-<text class="svgsm" x="1190" y="361" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.88 颗 → 8 颗</tspan></text>
+<text class="svgsm" x="1190" y="361" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13.77 → 16 dev</tspan></text>
 <text class="svgsm" x="136" y="415" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K × 64</tspan></text>
 <rect x="150" y="392.0" width="110.1000734978932" height="34" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="260.1000734978932" y="392.0" width="96.72468033285975" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="360.82475383075297" y="396.0" width="45" height="26" rx="2" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="364" y="415" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,174</tspan></text>
-<text class="svgsm" x="1190" y="415" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.88 颗 → 8 颗</tspan></text>
+<text class="svgsm" x="1190" y="415" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13.77 → 16 dev</tspan></text>
 <text class="svgsm" x="136" y="469" fill="#202124" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">128K × 256</tspan></text>
 <rect x="150" y="446.0" width="110.1000734978932" height="34" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="260.1000734978932" y="446.0" width="386.898721331439" height="34" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="650.9987948293322" y="450.0" width="45" height="26" rx="2" fill="#ffffff" stroke="none" stroke-width="1.0"/>
 <text class="svgsm" x="654" y="469" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2,821</tspan></text>
-<text class="svgsm" x="1190" y="469" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16.54 颗 → 32 颗</tspan></text>
-<text class="svgsm" x="1190" y="156" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纸面 → 取档</tspan></text>
-<text class="svgsm" x="20" y="554" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切片只有 4 / 8 / 16 / 32 颗这几档：纸面 4.07 颗也只能取 8 颗，16.54 颗就得取 32 颗</tspan></text>
-</svg><figcaption><b>六种配置里四种落在 8 颗；最长最满那行跳过 16，要取 32。</b><span class="capmore"><br><em>KV 按 bf16 计；纸面下限。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DeepSeek-V3 结构（671B、61 层、MLA kv_lora_rank 512 ＋ rope 64、256 专家）：topic06_numbers.py，来自 HF config.json。每 token KV 70,272 B ＝ (512 ＋ 64) × 2 B × 61 层。</p>
+<text class="svgsm" x="1190" y="469" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">33.08 → 64 dev</tspan></text>
+<text class="svgsm" x="1190" y="156" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纸面 device → 取档</tspan></text>
+<text class="svgsm" x="20" y="554" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">切片只有 8 / 16 / 32 / 64 个 device 这几档：纸面 8.13 个也只能取 16 个（8 颗），33.08 个就得取 64 个（32 颗）</tspan></text>
+</svg><figcaption><b>六种配置里四种落在 16 个 device（8 颗）；最长最满那行跳过 32 个，要取 64 个（32 颗）。</b><span class="capmore"><br><em>KV 按 bf16 计；纸面下限。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 DeepSeek-V3 结构（671B、61 层、MLA kv_lora_rank 512 ＋ rope 64、256 专家）：topic06_numbers.py，来自 HF config.json。每 token KV 70,272 B ＝ (512 ＋ 64) × 2 B × 61 层。</p>
 <p>📌 每 device 可用 94.75 GiB（README 写 GB，运行日志为 GiB；v7 每芯片物理 192 GiB）、FP8 MoE 实测约 101.8/device 超 HBM 所以用 FP4：tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md:59、:72-73（R1 与 V3 同架构）。</p>
-<p>⚠️ 本课推导与假设：FP8 每参数 1 字节、不计 block scale；激活值预留 10% 是假设；KV 不重复（DP 注意力或 EP），没算 DP 注意力在每个 device 上各放一份约 17B 非专家权重的开销；切片档位取 4／8／16／32 颗（v7x-8／16／32／64）。纸面 MoE 76.1 GiB/device ＝ 256 × 58 层 × 3 × 7168 × 2048 字节 ÷ 8 device。</p></details></figure>
+<p>⚠️ 本课推导与假设：FP8 每参数 1 字节、不计 block scale；激活值预留 10% 是假设；KV 不重复（DP 注意力或 EP），没算 DP 注意力在每个 device 上各放一份约 17B 非专家权重的开销；切片档位取 8／16／32／64 个 device（v7x-8／16／32／64，＝ 4／8／16／32 颗芯片）。纸面 MoE 76.1 GiB/device ＝ 256 × 58 层 × 3 × 7168 × 2048 字节 ÷ 8 device。</p></details></figure>
   <p>到 128K、256 并发，KV 约 2,196 GiB，是权重的 3.5 倍。要装下只有三条路：加芯片；KV 存 FP8（第十二节末尾）；冷 KV 下放主机内存（4.4）。DCP 帮不上：这里 KV 本就只存一份（DP 注意力），DCP 只把一条序列摊开，而一条 128K 才 8.58 GiB。</p>
-  <p>纸面最少 4 颗，实测却放不下：R1（和 V3 同结构）的 FP8 专家每个 device 要约 101.8 GB，已顶到 94.75 GiB（约 101.7 GB）上限，再加注意力约 9 GB（本课推导：FP4 连同注意力 70 − 专家 60.9）就更放不下，比按 8 份均摊多约 20 GB（原记录没拆原因），v7x-8 上实际用 FP4（12.2）。</p>
+  <p>纸面最少 8 个 device（4 颗），实测却放不下：R1（和 V3 同结构）的 FP8 专家每个 device 要约 101.8 GB，已顶到 94.75 GiB（约 101.7 GB）上限，再加注意力约 9 GB（本课推导：FP4 连同注意力 70 − 专家 60.9）就更放不下，比按 8 份均摊多约 20 GB（原记录没拆原因），v7x-8 上实际用 FP4（12.2）。</p>
   <div class="note warn"><span class="t">本课推导的边界</span>纸面账只给下限，激活值预留 10% 也是假设；用一次真实启动看实测的 HBM 峰值。</div>
 
   <p><b>容量别拿小并发估。</b>R1 在 GB300 上的部署记录先估了这套 DEP8 decode 的容量，起初却只拿并发 8 去量。</p>
@@ -10121,7 +10121,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s10-3">10.3　五步选法落到两个例子</h3>
   <p>专题五 <a href="topic-05.html#s7-4">§7.4</a> 的五关，推理时照样走一遍。PP 是流水线并行：按层切给几组卡。</p>
-<figure class="fbox fwide" id="fig-s10-gates"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="专题五的五关从上往下走：装得下、快线多大、序列、流水线并行、数据并行。左列是 DeepSeek-V3 跑在 TPU v7 上，右列是 DeepSeek-V4-Pro 跑在 GB300 上。装得下：左边纸面 4 颗够、实测 FP8 放不下，用 8 颗或专家换 FP4；右边 806 GB 权重一个 4 卡节点放得下。快线：左边一个 ICI 切片，TP 不跨 DCN；右边一个 NVL72 域 72 卡，SGLang 要求同域。序列：左边单条装得下，DCP 帮不上；右边只有一个 KV 头，改用 DEP。流水线并行两边都不用。数据并行：左边每个副本留在自己的切片里；右边先定 P:D 再加 decode 副本。五关里只有流水线那一关两边答案相同"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s10-gates"><svg viewBox="0 0 1400 596" width="100%" role="img" aria-label="专题五的五关从上往下走：装得下、快线多大、序列、流水线并行、数据并行。左列是 DeepSeek-V3 跑在 TPU v7 上，右列是 DeepSeek-V4-Pro 跑在 GB300 上。装得下：左边纸面 4 颗够、实测 FP8 放不下，用 8 颗或专家换 FP4；右边约 800 GB 权重一个 4 卡节点放得下。快线：左边一个 ICI 切片，TP 不跨 DCN；右边一个 NVL72 域 72 卡，SGLang 要求同域。序列：左边单条装得下，DCP 帮不上；右边只有一个 KV 头，改用 DEP。流水线并行两边都不用。数据并行：左边每个副本留在自己的切片里；右边先定 P:D 再加 decode 副本。五关里只有流水线那一关两边答案相同"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同样五关，两台机器走出两套配置　——　<tspan font-weight="700">五关里只有一关答案相同</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">从上往下逐关回答；左列 DeepSeek-V3 跑在 TPU v7 上，右列 DeepSeek-V4-Pro 跑在 GB300 上</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1.0"/>
@@ -10138,7 +10138,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="206" y="167" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纸面 4 颗（v7x-8）够</tspan></text>
 <text class="svgsm" x="206" y="193" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">实测 FP8 放不下：用 8 颗，或专家换 FP4</text>
 <rect x="816" y="136" width="580" height="76" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
-<text class="svgsm" x="832" y="167" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">806 GB 权重</tspan></text>
+<text class="svgsm" x="832" y="167" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 800 GB 权重</tspan></text>
 <text class="svgsm" x="832" y="193" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">一个 4 卡节点放得下（TP4 跑通过）</text>
 <text class="svgsm" x="793" y="182" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≠</tspan></text>
 <rect x="0" y="226" width="170" height="76" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.0"/>
@@ -10176,7 +10176,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="832" y="553" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums">再按目标用户数加 decode 副本</text>
 <text class="svgsm" x="793" y="542" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≠</tspan></text>
 </svg><figcaption><b>没有哪列更对：同一道关，硬件和模型变了，答案跟着变。</b><span class="capmore"><br><em>每格是本课按部署记录归纳的结论。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 TPU 列：见本节正文；4 颗／8 颗／FP4 见台账「V3 FP8 切片表」与 R1 FP4 README:59、72-73（R1 与 V3 同结构）。</p>
-<p>📌 GPU 列：806 GB 见 gpu/inference/a4x-max/deepseek-v4/README.md:55；TP4 跑通见 VLLM-V4PRO-RUNBOOK.md:449；同一 NVL72 域见 SGLANG-V4PRO-RUNBOOK.md:34、63；只有一个 KV 头见第六节。</p>
+<p>📌 GPU 列：806 GB 见 gpu/inference/a4x-max/deepseek-v4/README.md:55；TP4 跑通见 VLLM-V4PRO-RUNBOOK.md:449（vLLM 用的是 832 GB FP8 版，:127）；同一 NVL72 域见 SGLANG-V4PRO-RUNBOOK.md:34、63；只有一个 KV 头见第六节。</p>
 <p>⚠️ 本课归纳：五关顺序取自专题五 §7.4，每格是本课按上述记录填的结论，不是某份 runbook 的原表。</p></details></figure>
 
   <p class="landing">⭐ 拓扑定了那一趟搬运走哪条线、能分给多少人，参数只在这个上限底下挪动。<b>先选拓扑，再调参数；比较时先看分母。</b>留下的问题：这些都靠把 batch 做大，交互档压住 batch 时，一趟还是只出一个字（第十一节）。</p>
@@ -12941,7 +12941,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>v7 每 device 实测可用 94.75 GiB（每 device 物理 96 GiB）；R1 FP8 MoE 每 device 101.8 放不下（README 写 GB，按 GB、GiB 读都超，最少也超 0.06 GB）</td><td>tpu/tpu-inference R1 FP4 README:59、72-73；0.06 ＝ 101.8 − 101.74（94.75 GiB 换成 GB）本课推导</td></tr>
     <tr><td>路由专家 FP8 均摊到 8 个 device 只有约 81.7 GB，比 README 的 101.8 多出约 20 GB</td><td>本课推导：653.9B × 1 B ÷ 8 ＝ 81.7 GB（＝ 76.1 GiB，拓扑图脚注同此）；101.8 − 81.7 ≈ 20</td></tr>
     <tr><td>v7 切片按 4、8、16、32 颗成档（2x2x1、2x2x2、2x2x4、2x4x4），4.07 颗取 8</td><td>Google Cloud TPU7x 文档 Supported configurations 表（cloud.google.com/tpu/docs/tpu7x）</td></tr>
-    <tr><td>V3 FP8 切片表：4K×64 要 642 GiB／纸面 4 颗，4K×256 要 694 GiB／8 颗，128K×256 要 2,821 GiB／32 颗，KV 是权重 3.5×；4 颗放完权重剩 57 GiB，4K 纸面装 213 条，但实测 FP8 放不下</td><td>本课推导：权重 671 GB ＝ 625 GiB；每芯片 189.5 GiB × 0.9 ＝ 170.55 GiB 可用；0.9 为本课假设；实测见上一行</td></tr>
+    <tr><td>V3 FP8 切片表（按 device 记账）：4K×64 要 642 GiB／纸面 7.53 → 8 device（4 颗），4K×256 要 694 GiB／8.13 → 16 device（8 颗），128K×256 要 2,821 GiB／33.08 → 64 device（32 颗），KV 是权重 3.5×；8 个 device 放完权重共剩 57 GiB（每 device 约 7.2 GiB），4K 纸面装 213 条，但实测 FP8 放不下</td><td>本课推导：权重 671 GB ＝ 625 GiB；每 device 94.75 GiB × 0.9 ＝ 85.275 GiB 可用（一颗芯片＝两个 device，不当整块用）；0.9 为本课假设；实测见上一行</td></tr>
     <tr><td>128K × 256 并发：DeepSeek-V3 KV 约 2,196 GiB（权重 625 GiB 的 3.5 倍）；单条 128K 8.58 GiB</td><td>本课推导：70,272 B × 131,072 × 256 ÷ 2<sup>30</sup></td></tr>
     <tr><td>GB300 R1：并发 8 只用上 ~3% 容量；854 → 10,715 tok/s，12.5×；并发 256 → 512 总吞吐只再涨 3%（10,390 → 10,715，本课推导），首字 12 s → 30 s</td><td>gpu-tpu-pedia gpu/inference/a4x-max/deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md :401、:405-413、:415</td></tr>
     <tr><td>投机解码原理（按标准拒绝采样实现时分布无损）</td><td>Leviathan 等 arXiv <a href="https://arxiv.org/abs/2211.17192" target="_blank" rel="noopener">2211.17192</a>；Chen 等 arXiv <a href="https://arxiv.org/abs/2302.01318" target="_blank" rel="noopener">2302.01318</a></td></tr>
