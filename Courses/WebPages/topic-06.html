@@ -1244,7 +1244,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <span class="sub">（27 秒，Manim 渲染；默认连续播放，取消勾选「连续播放」就能点「开始」一步一步看。只算权重的理想下限；「313 行时算和搬一样长」是本课按同一组规格推的。）</span></figcaption></figure>
   <p>37 GB ÷ 7.37 TB/s ≈ 5 毫秒，算力只用上 0.32%（理想下限）。<b>换更快的计算单元没用，下限是带宽定的。</b></p>
   <div class="note info"><span class="t">还是那辆公交车</span>
-    开一趟油钱固定：prefill 是满载的车，decode 一趟只拉一个人。</div>
+    开一趟油钱固定：prefill 是满载的车，decode 一趟只拉一个人；313 人以内，多上来的人白搭车。</div>
 
   <h3 id="l1-3">多拉几个人：权重能摊，KV 摊不了</h3>
 <figure class="fbox fwide" id="fig-s1-wkv"><svg viewBox="0 0 1400 834" width="100%" role="img" aria-label="每出一个字要从显存读的字节，拆成权重和 KV 两段。三组分别是 1 人、64 人、256 人同时解码，每组里上下文 4K、32K、128K。权重那段随人数变少，因为一次读的权重分给更多人；KV 那段只随上下文变长，每人一份，没法分。256 人、128K 时 KV 占 78%"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -1361,7 +1361,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="589" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">拼来的 256 人，到了专家这里又被拆成 256 份</tspan></text>
 <text class="svgsm" x="20" y="620" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">每人只挑 8 个专家，一个专家平均只分到 8 行，强度约 8；稠密层约 239，差 30 倍。</text>
 <text class="svgsm" x="20" y="644" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">要让专家吃饱，得把很多卡上的人收到一起：这就是大 EP 要做的事。</text>
-</svg><figcaption><b>左边填满一边，右边只剩一条细线。</b><span class="capmore"><br><em>8 是均匀路由下的平均数；共享专家不受影响。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 256 个路由专家、每 token 挑 8 个：DeepSeek-V3 config.json（n_routed_experts、num_experts_per_tok）。MXU 一边 256：JAX 公开源码 jax/_src/pallas/mosaic/tpu_info.py，TPU 7 的 mxu_column_size＝256。</p>
+</svg><figcaption><b>左边填满一边，右边只剩一条细线：像每站换乘 256 条支线，每人只坐 8 条，每条平均只上 8 人。</b><span class="capmore"><br><em>8 是均匀路由下的平均数；共享专家不受影响。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 256 个路由专家、每 token 挑 8 个：DeepSeek-V3 config.json（n_routed_experts、num_experts_per_tok）。MXU 一边 256：JAX 公开源码 jax/_src/pallas/mosaic/tpu_info.py，TPU 7 的 mxu_column_size＝256。</p>
 <p>📌 本课推导：专家矩阵 7168×2048，M＝8 时强度 ＝ 2·8·7168·2048 ÷ 2·(7168·2048 ＋ 8·(7168 ＋ 2048)) ≈ 8。稠密层 239 来自本节第一张图。</p>
 <p>⚠️ 8 是平均数，路由不均时有的专家几十行、有的零行。共享专家每个 token 都过，不受影响。</p></details></figure>
   <p>343 人过线只对整块矩阵乘成立；要每个专家都喂饱，一步得凑 9 千多个 token（完整版第三节按 H100 推导）。</p>
