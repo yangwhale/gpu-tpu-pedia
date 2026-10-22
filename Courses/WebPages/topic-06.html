@@ -1906,7 +1906,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="l4-2">容量和速度分开看：座位有人坐才值钱</h3>
   <p>V4-Pro 1 个 KV 头。我们自己在 GB300 上用 SGLang 搭的一套部署，读题和写字拆在两批机器上（为什么这么拆，第六节讲），<b>两头都用 DEP</b>：14 台 prefill 各跑 dep4，decode 跑 dep8，每张 decode 卡端到端 10,704 tok/s，是官方目标的 95.6%。</p>
-<figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1154" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分容量、速度两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，TP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但要同时在跑的请求多到坐满池子才兑现。下半张是 SGLang 的完整部署，两头都用 DEP：14 台 prefill 各跑 dep4，decode 跑 dep8，输入 4096。两个 KV 池划分不当时，每卡同时在跑 727 个请求，端到端每张 decode 卡 6887；划平后坐到 886 个，10614，高 54%；再多给 13% 显存坐到 999 个，只到 10704，算力已到顶"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-s6-dep-kv"><svg viewBox="0 0 1400 1154" width="100%" role="img" aria-label="V4-Pro 只有一个 KV 头。比较 TEP4 和 DEP8 要分容量、速度两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，TEP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，所以同样的显存，DEP 能放的请求上限是 TEP4 的 4 倍，但要同时在跑的请求多到坐满池子才兑现。下半张是 SGLang 的完整部署，两头都用 DEP：14 台 prefill 各跑 dep4，decode 跑 dep8，输入 4096。两个 KV 池划分不当时，每卡同时在跑 727 个请求，端到端每张 decode 卡 6887；划平后坐到 886 个，10614，高 54%；再多给 13% 显存坐到 999 个，只到 10704，算力已到顶"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TEP 换 DEP：容量和速度分开看　——　<tspan font-weight="700">SGLang 两头都用 DEP，座位坐满就换来吞吐</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上半张容量轴（示意，每卡 KV 池装满）；下半张 SGLang 实测（14 台 prefill 各 dep4 → decode dep8）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -1918,7 +1918,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 容量轴：KV 池装满时，存的是几批不同的请求（示意）</tspan></text>
-<text class="svgsm" x="24" y="200" fill="#202124" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TP4</tspan></text>
+<text class="svgsm" x="24" y="200" fill="#202124" style="font-size:19.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TEP4</tspan></text>
 <text class="svgsm" x="24" y="224" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 张卡合算一批</text>
 <text class="svgsm" x="198" y="196" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡 0</text>
 <rect x="210" y="178" width="700" height="24" rx="4" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
@@ -1963,7 +1963,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="560" y="600" fill="#681da8" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">批 8</tspan></text>
 <text class="svgsm" x="934" y="478" fill="#681da8" style="font-size:20.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 张卡放 8 批：每卡上限 4 倍</tspan></text>
 <text class="svgsm" x="934" y="504" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">4 ＝ TP 路数 4 ÷ KV 头数 1</text>
-<text class="svgsm" x="210" y="640" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这是天花板：同时在跑的请求多到坐满 TP4 的池子，多出的座位才换得来吞吐；光是上下文长没用。</text>
+<text class="svgsm" x="210" y="640" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">这是天花板：同时在跑的请求多到坐满 TEP4 的池子，多出的座位才换得来吞吐；光是上下文长没用。</text>
 <rect x="0" y="682" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="682" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="684" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>

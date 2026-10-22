@@ -99,9 +99,9 @@ assert round((PR_A[3][0] / PR_A[2][0] - 1) * 100) == 3 and round((PR_A[3][1] / P
 
 
 def fig_dep_kv():
-    f = Fig(W, "V4-Pro 只有一个 KV 头。比较 TP4 和 DEP8 要分容量、速度两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，"
-               "TP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，"
-               "所以同样的显存，DEP 能放的请求上限是 TP4 的 4 倍，但要同时在跑的请求多到坐满池子才兑现。"
+    f = Fig(W, "V4-Pro 只有一个 KV 头。比较 TEP4 和 DEP8 要分容量、速度两条轴看。上半张是容量轴，示意：每张卡的 KV 池都装满时，"
+               "TEP4 的 4 张卡存的是同一批请求的 4 份，其中 3 份是副本；DEP8 的 8 张卡各存一批不同的请求，"
+               "所以同样的显存，DEP 能放的请求上限是 TEP4 的 4 倍，但要同时在跑的请求多到坐满池子才兑现。"
                "下半张是 SGLang 的完整部署，两头都用 DEP：14 台 prefill 各跑 dep4，decode 跑 dep8，输入 4096。"
                "两个 KV 池划分不当时，每卡同时在跑 727 个请求，端到端每张 decode 卡 6887；划平后坐到 886 个，10614，高 54%；"
                "再多给 13% 显存坐到 999 个，只到 10704，算力已到顶")
@@ -112,18 +112,18 @@ def fig_dep_kv():
     py = f.panel(0, y0, W, PH, "① 容量轴：KV 池装满时，存的是几批不同的请求（示意）", PU)
     X0, BW, RH, BH = 210, 700, 34, 24
     yy = py + 46
-    for name, sub_, n in (("TP4", "4 张卡合算一批", 4), ("DEP8", "各算各的", 8)):
+    for name, sub_, n in (("TEP4", "4 张卡合算一批", 4), ("DEP8", "各算各的", 8)):
         f.t(24, yy + 22, name, INK, True, 19)
         f.t(24, yy + 46, sub_, GY, size=15)
         for c in range(n):
             y = yy + c * RH
-            dup = name == "TP4" and c > 0
+            dup = name == "TEP4" and c > 0
             col = RD if dup else PU
-            lab = ("批 A 的副本" if dup else "批 A") if name == "TP4" else "批 %d" % (c + 1)
+            lab = ("批 A 的副本" if dup else "批 A") if name == "TEP4" else "批 %d" % (c + 1)
             f.t(X0 - 12, y + 18, "卡 %d" % c, GY, size=15, anchor="end")
             f.box(X0, y, BW, BH, "#fce8e6" if dup else "#f3e8fd", col, 4)
             f.t(X0 + BW / 2, y + 18, lab, col, True, 14, "middle")
-        if name == "TP4":
+        if name == "TEP4":
             f.t(X0 + BW + 24, yy + 30, "4 张卡只放 1 批", RD, True, 20)
             f.t(X0 + BW + 24, yy + 56, "1 个 KV 头切不开，", GY, size=15)
             f.t(X0 + BW + 24, yy + 78, "每张卡各存一整份", GY, size=15)
@@ -131,7 +131,7 @@ def fig_dep_kv():
             f.t(X0 + BW + 24, yy + 4 * RH - 2, "8 张卡放 8 批：每卡上限 4 倍", PU, True, 20)
             f.t(X0 + BW + 24, yy + 4 * RH + 24, "4 ＝ TP 路数 4 ÷ KV 头数 1", GY, size=15)
         yy += n * RH + 30
-    f.t(X0, y0 + PH - 22, "这是天花板：同时在跑的请求多到坐满 TP4 的池子，多出的座位才换得来吞吐；光是上下文长没用。",
+    f.t(X0, y0 + PH - 22, "这是天花板：同时在跑的请求多到坐满 TEP4 的池子，多出的座位才换得来吞吐；光是上下文长没用。",
         GY, size=15)
     f._pan = None
     y1 = y0 + PH + 20
