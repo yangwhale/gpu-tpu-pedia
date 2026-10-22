@@ -3297,6 +3297,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 示意：格子长短是编排的，CPU 与 TPU 段的比例不对应任何实测。</p></details></figure>
   <p>每步之前 CPU 要挑人、拼 batch、准备输入；串着走，加速器每步都要等它。</p>
   <p>GPU 上，2024 年底 SGLang 的零开销调度把下一批的 CPU 准备和这一批的 GPU 计算重叠，吞吐是原来的 1.1 倍。2025 年 vLLM V1 吞吐最多是 V0 的 1.7 倍，原因之一是分词、回传等 CPU 活挪到了别的进程。</p>
+  <p><b>CPU 提前一步，怎么知道谁写完了？它不等。</b>连续批每一步都重新组车，所以这道题每一步都有，不只在批次交界。SGLang 的重叠循环是：先把这一步发出去，再回头处理上一步的结果。</p>
+  <ul>
+    <li><b>先假设人人都还要写。</b>第 N 步刚吐的字不拷回 CPU 看，留在显卡上，第 N＋1 步凭占位从显卡里取。</li>
+    <li><b>结束晚一步才认出来。</b>谁写出了结束符，要等第 N 步的结果回到 CPU 才知道，下一轮排车才请他下去。用这一步的迟到，换加速器一刻不停。</li>
+  </ul>
 
   <h3 id="s3-4">3.4　显存不够时踢谁</h3>
   <p>批开大了，KV 可能中途装不下，只能先请出去几个。回来两种办法：KV 换到主机内存再搬回（swap），或丢掉、重算 prefill（recompute）。</p>
@@ -3872,6 +3877,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>口径：8K 那一格输入长度不同，吞吐不和左边两格直接比；隔板位置是示意，不代表真实字节比。</p></details></figure>
   <p><b>第三格为什么反过来是滑窗池先满？</b>因为隔板已经不在原处。输入翻到 8K，每条在全长池里的用量跟着涨，滑窗池每条仍只留 128 个，所以隔板往滑窗池那边挪，从 0.20 挪到 0.10，把预算让给全长池。这一下挪得稍多，滑窗池先满，但两边已接近平衡。同样 8K 放在 0.15，两池都没满（全长池 80%、滑窗池 37%），每卡只装 410 条、9,053 tok/s；实测 8K 的甜点在 0.10–0.12。</p>
   <p>两边一起满之后再多装人，吞吐几乎不涨（3.3）：瓶颈从装不下换成了算不动。</p>
+  <p><b>两个池各装什么。</b>不是「一部分层记全文、一部分层只看近处」，而是<b>每一层都两样都有</b>。V4-Pro 61 层：30 层 CSA（4 个 token 并一条，再挑 1,024 条读）、31 层 HCA（128 个并一条），每层另留最近 128 个 token 的原样 KV。</p>
+  <ul>
+    <li><b>全长池</b>放压缩后的整段：每多一个 token，CSA 层各多四分之一条，HCA 层各多一百二十八分之一条。按条数算，全长池九成七在 CSA 层（本课推导：30÷4 对 31÷128）。</li>
+    <li><b>滑窗池</b>放每层最近那一截原样 KV，每个请求一份，跟输入多长无关。</li>
+  </ul>
+  <p><b>比例能算吗？大致能。</b>比例 ＝ 滑窗池 ÷ 全长池（按 token 槽算）。每个请求在滑窗池里要的不止 128 槽：SGLang 还要给滑窗淘汰留余量（默认每 128 步淘汰一次，开投机再乘草稿数）、按页对齐、给下一步预留，合起来是几百槽，跟输入长度无关；在全长池里要的约等于它的总长度。所以<b>最优比例 ≈ 每请求固定的滑窗槽数 ÷ 平均序列长度</b>，输入翻倍，比例大致减半。拿 4K 甜点反推：车上每人平均约 4,600 个 token（输入 4,096，输出 1,024 平均写到一半），× 0.15 ≈ 700 槽（本课推导，只看量级）。</p>
+  <p><b>新版 SGLang 已经能自动配。</b>按 2026 年 10 月的源码，不显式传 <code>--swa-full-tokens-ratio</code>、又给了每卡最多几个请求时，滑窗池直接按「每请求最坏要几槽 × 请求数」加一点前缀缓存余量来留，剩下的全给全长池；条件不满足才退回默认比例 0.1。我们七月那次是手动给的比例，所以要自己扫。</p>
 
   <p>池子算错不一定报错：tpu-inference 跑 Qwen3.5 时块编号池大了约 3.5 倍，越界写入被静默钳回末尾，输出乱码。</p>
 
@@ -13212,6 +13224,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>R102 补充 · 第十二节 边界：推理模型 W8A8、W4A16 基本无损，更低位风险明显，与模型大小、来源、题目难度有关</td><td>arXiv <a href="https://arxiv.org/abs/2504.04823" target="_blank" rel="noopener">2504.04823</a> 摘要（COLM 2025）；「小翻转在长思维链上累积」是本课推测。2026-10-21 核对</td></tr>
     <tr><td>R103 补充 · 11.3 DSpark 数据图：Qwen3-4B 逐位条件接受率 EAGLE-3 闲聊 0.53→0.74、DFlash 代码 0.87→0.78、闲聊 0.72→0.63（「deeper into the block」，未写位次）；数学第 1 位 EAGLE-3 0.81、DFlash 0.88、DSpark 0.93；表 1 Qwen3-8B 九个基准接受长度（三类平均为本课计算，九基准平均复现 26.7%／18.4%，图脚本 assert）；温度 1.0、块长 7、草稿 5 层（EAGLE-3 1 层）</td><td>arXiv <a href="https://arxiv.org/abs/2607.05147" target="_blank" rel="noopener">2607.05147</a> HTML 版 §4.1、§4.3.1、Figure 2、Table 1。2026-10-21 核对</td></tr>
     <tr><td>R103 补充 · 11.3 两支 DSpark 动画：Algorithm 1（a<sub>r,j</sub> 连乘、全批按存活概率排序、Θ ＝ τ·SPS(B)、吞吐不升即停以保无损）；线上 §5.2 去掉提前停止做全局搜索（SPS 锯齿），用两步之前的置信度定截断长度 K、配合 ZOS 异步；动画里的分数、把握、吞吐表（一步耗时 ＝ 固定 100／4 ＋ 每 token 1）为示意，14 个／7 个由脚本按 Algorithm 1 现算并 assert</td><td>arXiv <a href="https://arxiv.org/abs/2607.05147" target="_blank" rel="noopener">2607.05147</a> §3.2.2 Algorithm 1、§5.2（「we remove the early-stopping break」「using the confidence head outputs from two steps prior」）、附录 A。2026-10-21 核对</td></tr>
+    <tr><td>2026-10-22 补充 · 3.3 SGLang 重叠调度：先发这一步、再处理上一步结果；下一步的输入 token 经显卡上的占位接力（FutureMap），结束判断晚一步</td><td>SGLang 源码 commit 4eb606b（2026-10-17）：python/sglang/srt/managers/scheduler.py <code>event_loop_overlap</code>（「Launch the current batch」在「Process the last batch」之前）；python/sglang/srt/managers/overlap_utils.py <code>FutureMap</code>（「relay for cross-iter values」）</td></tr>
+    <tr><td>2026-10-22 补充 · 4.2 V4-Pro 层表：61 层 ＝ 30 层 ratio 4（CSA）＋ 31 层 ratio 128（HCA），sliding_window 128，index_topk 1024，num_key_value_heads 1、head_dim 512；全长池九成七在 CSA 层（30÷4 ＝ 7.5 对 31÷128 ≈ 0.24，本课推导，只按 KV 条数、不含索引器）</td><td>huggingface.co/deepseek-ai/DeepSeek-V4-Pro config.json（compress_ratios 共 62 项：31 个 128、30 个 4、末尾 1 个 0，2026-10-22 读取；末尾那个 0 本课未核实对应哪一层）</td></tr>
+    <tr><td>2026-10-22 补充 · 4.2 两池的计价与自动配比：全长池每 token 计 CSA 层 1/4 条＋索引器、HCA 层 1/128 条；滑窗池每槽计全部层原样 KV；每请求滑窗最坏槽数 ＝ 窗口 ＋ 淘汰间隔 × 草稿数 ＋ 页 ＋ 解码预留，淘汰间隔默认 128；不显式传比例且给了每卡请求上限时走 cap 模式，否则默认比例 0.1。「最优比例 ≈ 每请求固定滑窗槽 ÷ 平均长度」「4,600 × 0.15 ≈ 700」是本课推导</td><td>SGLang 源码 commit 4eb606b（2026-10-17）：python/sglang/srt/model_executor/pool_configurator.py（<code>DSV4PoolConfigurator</code>、<code>_compressed_bytes_per_full_token</code>、<code>_resolve_swa_cap_tokens</code>、<code>compute_swa_request_cap</code>、<code>DSV4_DEFAULT_SWA_FULL_TOKENS_RATIO = 0.1</code>）；python/sglang/srt/environ.py <code>SGLANG_SWA_EVICTION_INTERVAL = EnvInt(128)</code>。我们七月的实测用的是显式比例（gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5）</td></tr>
 </table></div>
   </details>
 </div></section>
