@@ -11352,6 +11352,15 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>第三份最反直觉：v7 公开规格只列 BF16 和 FP8 峰值，没有 FP4 算力，照样能快。tpu-inference 的 MoE kernel 把 4 bit 权重块原样搬进片上，在 kernel 里和激活做点积，每块乘完再乘缩放；本课推测编译器在片上先解成更宽的格式再送进矩阵单元。贵的是从 HBM 搬，片上解一下便宜。</p>
   <p>GPU 上早算过同一笔账：Marlin（2024）让 4 bit 权重在寄存器里解回 FP16 再进张量核，batch 16 以内的矩阵乘接近 FP16 的 4 倍，接进 vLLM 端到端最多 2.8 倍。Blackwell 的张量核能直接算 FP4，那是另一条路。</p>
   <p>精度：本仓库在 v7x-8 上用 FP4 专家跑出 R1 的 GSM8K 94.9%（1319 题）、GLM-5.1 的 89.46%（5-shot，未调优）。两者口径不同，不横比；也都没有同条件的 FP8 分可对照，只能说跑出来了，不能说没掉点。同机 FP8 对 FP4 的吞吐也没有：R1 用 FP8 根本放不下。</p>
+  <div class="note info"><span class="t">我们在 TPU v7 上怎么压的：最朴素的一种，图的是装进一台机器</span>
+    R1、V3.2、GLM-5.1 三个模型同一套做法，都是从官方 FP8 权重出发：
+    <ul>
+      <li><b>只压路由专家。</b>注意力留 FP8，其余非专家部分不动。</li>
+      <li><b>压法三步，不用校准数据。</b>按原来 128×128 的块缩放把 FP8 解回 FP32；每个输出通道取绝对值最大，定一把尺子；四舍五入到 FP4（E2M1）。就是下面「挑尺子」里最朴素的那种，没用 GPTQ 这类挪误差的办法。</li>
+      <li><b>离线转一次，存盘复用。</b>纯 CPU 十二进程并行，R1 五十八层约 28 分钟。存盘借 FP8 当中转：FP4 的 16 个值全在 FP8 里，来回不丢；numpy 和 JAX 的 FP4 内存排法对不上，这样两边都能读。</li>
+      <li><b>换来的头一件是放得下。</b>R1 专家 FP8 每个 device 要 101.8 GB，超过 94.75 GB；FP4 只要 60.9 GB，四颗芯片一台机器就跑起来，两千并发约 7,300 tok/s（每芯片约 1,830）。GLM-5.1 专家每 device 27.5 GB，总占 61.6%，还剩 36 GB 给 KV。</li>
+    </ul>
+    Kimi K2.6 不在此列：它出厂就是 INT4（每 32 个一组、对称），我们没量化，只做了两件事：显存里一直存打包好的 INT4、用时在片上按位重解释；加载时补上那一步「减 8」。它一万亿参数，单台 v7x-8 前向要 105 GB 放不下，上了两台（v7x-16）。</div>
 
   <p><b>为什么压了不掉点：四条道理。</b>扔掉四分之三的位数，模型为什么还认得路？下面四条各有出处，合起来也说明了哪里能压、哪里要护着。</p>
   <p><b>一、训练停在谷底，谷底大多是平的。</b>训到收敛，损失对权重的一阶导数接近零，权重挪一点 Δw，损失主要按二阶项 ½ΔwᵀHΔw 涨（AdaRound，2020，原文「close to 0」）。H 是损失的曲率。Sagun 等（2017）量过它的特征值：绝大多数挤在零附近，只有少数几个大。所以大多数方向挪了不疼，疼的只是少数陡方向。GPTQ（2022）用的就是这份近似二阶信息：量化一列，就调整还没量化的列，把舍入误差往平的方向上推。</p>
@@ -13229,6 +13238,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <tr><td>2026-10-22 补充 · 4.2 两池的计价与自动配比：全长池每 token 计 CSA 层 1/4 条＋索引器、HCA 层 1/128 条；滑窗池每槽计全部层原样 KV；每请求滑窗最坏槽数 ＝ 窗口 ＋ 淘汰间隔 × 草稿数 ＋ 页 ＋ 解码预留，淘汰间隔默认 128；不显式传比例且给了每卡请求上限时走 cap 模式，否则默认比例 0.1。「最优比例 ≈ 每请求固定滑窗槽 ÷ 平均长度」「4,600 × 0.15 ≈ 700」是本课推导</td><td>SGLang 源码 commit 4eb606b（2026-10-17）：python/sglang/srt/model_executor/pool_configurator.py（<code>DSV4PoolConfigurator</code>、<code>_compressed_bytes_per_full_token</code>、<code>_resolve_swa_cap_tokens</code>、<code>compute_swa_request_cap</code>、<code>DSV4_DEFAULT_SWA_FULL_TOKENS_RATIO = 0.1</code>）；python/sglang/srt/environ.py <code>SGLANG_SWA_EVICTION_INTERVAL = EnvInt(128)</code>。我们七月的实测用的是显式比例（gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md §11.5）</td></tr>
     <tr><td>2026-10-22 补充 · 7.1／L200 第五节：K3 开 DCP 时 SGLang 强制关 <code>--enable-symm-mem</code>，理由是 decode CUDA graph 正确性；symm-mem bs=1 +35%；TP8 每 token 约 186 次 all-reduce（93 层 × 2，runbook 推算）；V3 提问 128 × 192 ＝ 24,576 对 MLA 一行 576，约 43 倍（本课推导）</td><td>SGLang 源码 commit 4eb606b：python/sglang/srt/arg_groups/model_overrides/kimi_k3.py（「Kimi-K3 DCP disables --enable-symm-mem due to decode CUDA graph correctness issues」）；SGLANG-K3-RUNBOOK.md §11.0.4、§11.2；DeepSeek-V3 config（num_attention_heads 128、qk_nope 128＋rope 64、kv_lora_rank 512）</td></tr>
     <tr><td>2026-10-22 补充 · 7.1／L200 第五节备答：DCP 不传 1536 维压缩提问。SGLang 各卡算本卡头的 q（q_nope、q_rope），在 DCP 组 all-gather 到全部头；若改传压缩 q 由各卡自解压，每层每卡多读 7/8 ×（1536×128×192 ＋ 128×128×512）≈ 4,000 万参数，对比收提问 7/8 × 128 × 576 × 2 B ≈ 129 KB/token，交叉点约 300 token（本课推导，FP8 权重按 1 字节）</td><td>SGLang 源码 commit 4eb606b：python/sglang/srt/models/deepseek_v2.py（「q_nope, q_rope is all gathered from dcp ranks」）、layers/attention/trtllm_mla_backend.py（「query all-gathered across the DCP」）；DeepSeek-V3 config（q_lora_rank 1536、128 头、qk_nope 128、rope 64、kv_lora_rank 512）</td></tr>
+    <tr><td>2026-10-22 补充 · 12.2 我们在 TPU v7 上的 FP4：R1／V3.2／GLM-5.1 只压路由专家、注意力 FP8；FP8 按 128×128 块缩放解回 FP32 → 每输出通道 abs_max ÷ fp4_max → float4_e2m1fn 四舍五入，无校准；FP8 作存盘中转（FP4 16 值是 FP8 子集）；CPU 12 进程 R1 58 层约 28 min；R1 专家 FP8 101.8 GB/device 超 94.75 GB、FP4 60.9 GB；R1 p2048 7,309 tok/s（1,827/chip）；GLM-5.1 专家 27.5 GB/device、总 58.43 GB（61.6%）、剩 36 GB；K2.6 原生 INT4 W4A16（compressed-tensors，group 32 对称），packed uint32 常驻 HBM、片上 bitcast，单台 v7x-8 前向 105 GB OOM、改 v7x-16</td><td>本仓库 tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md（关键性能表、硬件表、Step 4 流水线）与 gen_fp4_cache_cpu_parallel.py 文件头；tpu/tpu-inference/GLM-5.1-754B-FP4/README.md（HBM 表）；tpu/tpu-inference/Kimi-K2.6-1T-A32B-INT4/README.md（已验证性能表、架构对比表、已知问题 1）</td></tr>
 </table></div>
   </details>
 </div></section>
