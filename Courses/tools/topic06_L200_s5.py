@@ -28,7 +28,9 @@ __L5_ANIM__
     <li><b>同一篇论文两种都用。</b>Meta 做 prefill 整段传 K、V；缓存前缀很长、新 token 很少时改传 Q。结果都和不切一样。</li>
   </ul>
   <p><b>答案怎么拼：先别除。</b>注意力是加权平均：每张卡交出分子和分母，加总后只除一次。</p>
+<details class="foldfig"><summary><b>想看算术</b>：两张卡各交一个平均分，怎么合才对？</summary>
 __L5_MERGE__
+</details>
 
   <h3 id="l5-3">所以呢：同样切八份，买到的不一样</h3>
   <ul>

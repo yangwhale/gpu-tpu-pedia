@@ -2206,6 +2206,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>同一篇论文两种都用。</b>Meta 做 prefill 整段传 K、V；缓存前缀很长、新 token 很少时改传 Q。结果都和不切一样。</li>
   </ul>
   <p><b>答案怎么拼：先别除。</b>注意力是加权平均：每张卡交出分子和分母，加总后只除一次。</p>
+<details class="foldfig"><summary><b>想看算术</b>：两张卡各交一个平均分，怎么合才对？</summary>
 <figure class="fbox fwide" id="fig-s7-softmax-merge-t5"><svg viewBox="0 0 1400 544" width="100%" role="img" aria-label="笔记分在两张卡上时，注意力的结果怎么合。三个 token 的分数取指数是 2、1、1，值是 10、4、20；卡 0 拿前两个，卡 1 拿第三个。各除各的：卡 0 得 24 除以 3 等于 8，卡 1 得 20 除以 1 等于 20，再平均是 14，错了。先别除：分子加分子 44，分母加分母 4，最后除一次得 11，跟不分卡算的一样。所以每张卡除了结果还要交出自己的分母"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">分块算注意力，合并时先别除　——　<tspan font-weight="700">分子加分子，分母加分母，最后只除一次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">注意力 ＝ 按分数加权平均。三个 token：分数取指数后是 2、1、1，值是 10、4、20。卡 0 拿前两个，卡 1 拿第三个</text>
@@ -2258,6 +2259,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">Ring 在路上一段一段这样合并，DCP 在终点这样合并，是同一招。</text>
 </svg><figcaption><b>三个 token 的小算例：中间打叉，右边打勾。</b><span class="capmore"><br><em>像合并两个班的平均分，要带上各班人数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 讲法：Ring Attention（Liu 等，arXiv <a href="https://arxiv.org/abs/2310.01889" target="_blank" rel="noopener">2310.01889</a>）附录实现按分子、分母分别累加；分块 softmax 的数值稳定写法见 FlashAttention（arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>）。</p>
 <p>⚠️ 本课示例：数字是随手取的，按定义现算并断言。</p></details></figure>
+</details>
 
   <h3 id="l5-3">所以呢：同样切八份，买到的不一样</h3>
   <ul>
