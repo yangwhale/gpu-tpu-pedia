@@ -6,16 +6,23 @@ BODY = '''
     <b>DCP 管前一件，PCP 管后一件，两者都是沿序列切。</b></p>
 
   <h3 id="s7-1">7.1　DCP：只在长上下文赚，开之前先知道坑</h3>
-  <p><a href="topic-05.html#s5-4">专题五 §5.4</a> 讲过：KV 头比 TP 路数少时，DCP 把 KV 按 token 轮流存到这几张卡上，合并时再统一除 softmax 的分母。</p>
+  <p><a href="topic-05.html#s5-4">专题五 §5.4</a> 讲过：KV 头比 TP 路数少时，DCP 把 KV 按 token 轮流存到这几张卡上，合并时再统一除 softmax 的分母。轮流放而不是前一半后一半，是因为新字不停写进来，轮流放各卡才能一直一样多（本课的解释）。</p>
 __FIG_S7_KVDUP_T5__
 __FIG_S7_MERGE_T5__
   <p>代价是每层多几次通信（vLLM 默认后端每层 3 次），度数（切成几份，DCP8 就是 8 份）最多开到 TP ÷ KV 头数。</p>
+  <details class="foldfig"><summary><b>每层那 3 次是什么</b>（vLLM 默认 <code>ag_rs</code> 后端）</summary>
+  <ul>
+    <li><b>① all-gather 提问</b>：权重按头切，每卡只投影出自己那几个头，可本地那段 KV 所有头都要查，先收齐全部头。</li>
+    <li><b>② all-gather LSE</b>：kernel 在本地已经除过分母，只留下 log-sum-exp（每人每头一个数），收齐后各卡算出自己该占的比例。所以「先别除」是课堂说法，实现是「除了，但把分母记着」。</li>
+    <li><b>③ reduce-scatter 输出</b>：相加得完整结果，按头分回各卡，接上按头切的输出投影。</li>
+  </ul>
+  <p>代价主要是等不是量：V3 61 层 MLA × 3 ＝ 每 token 多 183 次集合通信，K3 24 层 × 3 ＝ 72 次（本课按层数乘）。<code>a2a</code> 后端把 ②③ 并成一次 all-to-all（源码注释：MLA 每层 3 次降到 2 次）；<code>dcp_q_replicate</code> 每卡放一整份提问投影省掉 ①，代价是重复算。两者没有公开实测。</p></details>
 
   <p><b>DCP 只在长上下文赚。</b>Kimi K3 在 GB300 上，<b>128K 输入时 DCP8 大赚</b>；输入 4K 时各档并发都亏。</p>
 __FIG_S7_GAIN__
   <ul>
     <li><b>为什么长了才赚：TP8 放不下，只能少收请求</b>。128K 乘 8 并发要 100 多万 token，TP8 默认配置实测只装得下约 79 万（这组没开投机，开了还少两成）；官方说 DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。差别落在首字上：首字中位数 TP8 调得最好的一档要半分钟（32.1 s，默认档 39.3 s），DCP8 是 2.3 s（都含排队）。</li>
-    <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了：SGLang 对 K3 一开 DCP 就强制关它，理由是 decode 的 CUDA Graph 会算错（模型设置，不是 DCP 本身的限制）。</li>
+    <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory：各卡在显存里留一块同形的区域，互相直接写对方那块，给小消息的 all-reduce 省掉来回握手；K3 一个人用时开它 87.8、关它 64.9 tok/s）的损失，而开 DCP 时 symm-mem 用不了：SGLang 对 K3 一开 DCP 就强制关它，理由是 decode 的 CUDA Graph 会算错（模型设置，不是 DCP 本身的限制）。</li>
     <li><b>看的是总量</b>：同是 8K，并发 8 还亏，并发 32 已赚。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
     <li><b>每个字的间隔：DCP 越长越不吃亏，可起点高一截</b>。TP8 每张卡都读这条请求的整份 KV，DCP8 每张卡只读 1/8，代价是每层多几次通信。并发 1、输入从 4K 拉到 128K，TP8 每 token 跟着涨（11.1 → 12.0 ms），DCP8 几乎不动（15.2 → 15.3 ms）。高出的那约 4 ms 基本是 symm-mem 被强制关掉的损失：同样 4K、关掉 symm-mem 的 TP8 是 15.1 ms（本课按两行数推）。K3 只有 24 层 MLA，所以它主要赚在装得下。</li>
     <li><b>官方口径是容量不是速度</b>：官方大规模预设 Peak Capacity（加 <code>--dcp-size 8</code>）写的是并发上限 +72%、引擎吞吐不变、ITL ×1.8。别说成「DCP 让每个字更快」。</li>
@@ -39,7 +46,7 @@ __FIG_S7_GAIN__
   <h3 id="s7-2">7.2　PCP：超长 prompt 的首字延迟</h3>
   <p>PCP 在 prefill 阶段沿序列切，<b>让几台机器合算同一个 prompt</b>（<a href="topic-05.html#s5-5">专题五 §5.5</a>）。</p>
 __FIG_S7_PCPDCP_T5__
-  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill：一百多张卡合算一个 prompt，一百万 token 一分多钟算完（128 张 H100、Llama3 405B，1M token 77 s，128K 3.8 s，并行效率 93%）。用的是 <b>Ring</b>（2023-10）：各卡拿一段，别人那段沿环一站站传来，边传边算。整段 prefill 传 K、V（GQA 下它小），新 token 很少时改传 Q，结果都和不切一样。</p>
+  <p>Meta 2024 年 11 月的论文把训练侧的切法搬到推理 prefill：一百多张卡合算一个 prompt，一百万 token 一分多钟算完（128 张 H100、Llama3 405B，1M token 77 s，128K 3.8 s，并行效率 93%）。用的是 <b>Ring</b>（2023-10）：各卡拿一段，别人那段沿环一站站传来，边传边算。整段 prefill 传 K、V（GQA 下它小），新 token 很少时改传 Q，结果都和不切一样。 为了让因果三角各卡活一样多，Meta 把序列切成 2N 块、首尾配对分给 N 张卡；DCP 则按 token 轮流放。</p>
   <p>同一篇里，1 到 8 台之间机器数翻倍，prefill 延迟约减半；再翻到 16 台就打了折扣，只降约 35%（8 台做 128K 5.85 s，16 台 3.8 s，降幅本课推导）。跨机切 TP 就不行：2 台时 TP16 比 CP2 慢约 15%，8 台慢约 100%。原文的解释：TP 每层都要走跨机带宽，而它比机内低得多。</p>
   <p>另有 Ulysses（DeepSpeed，2023-09）用 AllToAll（每张卡给其余每张卡各发一份）把按序列切换成按头切，切的份数不能超过头数。</p>
 

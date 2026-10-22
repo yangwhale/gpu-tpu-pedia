@@ -22,7 +22,7 @@ __FIG_S13_SNAP__
 
   <h3 id="s13-2">13.2　生产里怎么存：两个池，只留要紧的几份</h3>
   <p><b>一份快照顶几千个 token。</b>Qwen3.5-397B 一份约 183 MiB，约等于 6,250 个 token 的 KV（本课推导，按 config：15 层全注意力，每 token 的 KV 是 30 KiB；45 层 GDN，每层状态 4 MiB、fp32，加卷积状态 72 KiB；4.1 表里的 180 MiB 只算了前一项）。</p>
-  <p>K3 更大：一份快照约 430 MiB，约顶 1.6 万个 token 的 KV（本课推导，按公开 config、状态按 fp32 计：69 层 KDA，每层 96 头 × 128 × 128；24 层 MLA 每 token 只存 576 维，约 27 KiB）。</p>
+  <p>K3 更大：一份快照约 430 MiB，约顶 1.6 万个 token 的 KV（本课推导，按公开 config、状态按 fp32 计：69 层 KDA，每层 96 头 × 128 × 128（config 里 KDA 的 <code>linear_attn_config.num_heads</code> 和 MLA 的 <code>num_attention_heads</code> 是两个独立字段，都填 96）；24 层 MLA 每 token 只存 576 维，约 27 KiB）。</p>
 
   <p><b>所以生产不每段都存，只留要紧的几份。</b>vLLM 的 K3 博客明说：每个位置都存「贵得没法用」。它留三种：</p>
   <ul>

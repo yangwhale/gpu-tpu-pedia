@@ -10,7 +10,7 @@ BODY = '''
   <table>
     <caption class="sub" style="caption-side:bottom;text-align:left">按 bf16、所有层合计；存 fp8 约减半（MLA 见 12.4）。字节数取自各模型 config.json，本课推导；Qwen3.5 线性层状态按 fp32 算（config 的 mamba_ssm_dtype）；MHA 一行按 DeepSeek-V2 论文的口径（K、V 各 128 维 × 128 头）。</caption>
     <tr><th>记法</th><th>每层存什么</th><th>每 token 字节</th><th>例子</th></tr>
-    <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA</td></tr>
+    <tr><td>MHA（2017）</td><td>每个头各存一份 K、V</td><td>3,997,696</td><td>V3 的形状假如用 MHA；128K 一人约 524 GB（488 GiB），一颗 192 GiB 的芯片装不下（本课推导）</td></tr>
     <tr><td>GQA（2023）</td><td>几个头共用一组 K、V</td><td>327,680</td><td>Llama-3.1-70B：8 组 × 128 维 × 80 层</td></tr>
     <tr><td>MLA（2024）</td><td>一条压缩向量，所有头从它解出 K、V</td><td>70,272</td><td>DeepSeek-V3：(512 维压缩 KV＋64 维位置编码那截) × 61 层（不含 MTP 层）</td></tr>
     <tr><td>线性注意力（2020）</td><td>不按 token 存，每条序列一个大小固定的状态</td><td>0（另交固定状态）</td><td>Qwen3.5：45 层线性层每条序列 180 MiB，另 15 层全注意力 30,720 B/token</td></tr>
