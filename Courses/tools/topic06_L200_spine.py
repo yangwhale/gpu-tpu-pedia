@@ -15,7 +15,7 @@ SPINE = [
     ("三", "KV cache 到底占多少，怎么省？",
      "每人一本笔记：一行多厚（MLA／GQA）、纸别浪费（分页）、算过的不再算（前缀复用）", 8,
      "fig-s4-lineage、fig-s4-batch、anim-paged、fig-s4-disk", "s四"),
-    ("四", "多卡跑：注意力用 TP 还是 DEP？",
+    ("四", "多卡跑：TEP 还是 DEP？",
      "谁把笔记复印了几份；判据 TP 路数 ÷ KV 头数；容量和速度分开看，SGLang 两头 DEP 座位坐满才换吞吐；大 EP 把专家那趟车坐满", 11,
      "fig-s6-tep-dep-t5、fig-s6-dep-kv、anim-bigep、fig-s6-bigep-net", "s六"),
     ("五", "长上下文：DCP 和 PCP 有啥区别？",
