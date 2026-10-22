@@ -15,7 +15,7 @@ __FIG_S7_MERGE_T5__
 __FIG_S7_GAIN__
   <ul>
     <li><b>为什么长了才赚：TP8 放不下，只能少收请求</b>。128K 乘 8 并发要 100 多万 token，TP8 默认配置实测只装得下约 79 万（这组没开投机，开了还少两成）；官方说 DCP8 把整组卡能存的 KV 从 1.5M token 撑到 12.2M。差别落在首字上：首字中位数 TP8 调得最好的一档要半分钟（32.1 s，默认档 39.3 s），DCP8 是 2.3 s（都含排队）。</li>
-    <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了。</li>
+    <li><b>为什么短了亏</b>：KV 本来放得下，DCP 只剩代价。runbook 发现 4K 亏得最多的 −26%，正好等于关掉 symm-mem（symmetric memory，一种加速卡间通信的显存用法）的损失，而开 DCP 时 symm-mem 用不了：SGLang 对 K3 一开 DCP 就强制关它，理由是 decode 的 CUDA Graph 会算错（模型设置，不是 DCP 本身的限制）。</li>
     <li><b>看的是总量</b>：同是 8K，并发 8 还亏，并发 32 已赚。盈亏点看「输入长度 × 并发」压出的 KV 总量。</li>
     <li><b>每个字的间隔：DCP 越长越不吃亏，可起点高一截</b>。TP8 每张卡都读这条请求的整份 KV，DCP8 每张卡只读 1/8，代价是每层多几次通信。并发 1、输入从 4K 拉到 128K，TP8 每 token 跟着涨（11.1 → 12.0 ms），DCP8 几乎不动（15.2 → 15.3 ms）。高出的那约 4 ms 基本是 symm-mem 被强制关掉的损失：同样 4K、关掉 symm-mem 的 TP8 是 15.1 ms（本课按两行数推）。K3 只有 24 层 MLA，所以它主要赚在装得下。</li>
     <li><b>官方口径是容量不是速度</b>：官方大规模预设 Peak Capacity（加 <code>--dcp-size 8</code>）写的是并发上限 +72%、引擎吞吐不变、ITL ×1.8。别说成「DCP 让每个字更快」。</li>
