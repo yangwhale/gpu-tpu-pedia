@@ -64,6 +64,7 @@ html = ('''<!doctype html>
     <a href="topic-06-lecture.html" class="on">讲义</a>
     <a href="topic-06-L300.html">完整版（L300）</a>
     <a href="index.html">课程总纲</a>
+    <a href="topic-06-lecture.en.html" lang="en" hreflang="en">🌐 English</a>
   </nav>
 </div></div>
 

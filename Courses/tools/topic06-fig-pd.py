@@ -16,7 +16,7 @@ fig6-kv-bw.svg —— 回答：同一个库配错一个开关，那一趟 KV 会
   · 数从哪来：vLLM DeepSeek-V4-Pro runbook（gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:194）实测：
     KV 传输 200 MB/s → 7–167 GB/s，单次传输 200–800 ms → 2–10 ms。
   · 本课推导：拿专题五那份 1.04 GB（Qwen3-Coder-480B，8K prompt，FP8）分别按这几档带宽算一趟要多久，
-    跟专题五的 100 Gbps 数据中心网络（83 ms）和 1–2 s 的 prefill 放在同一根对数轴上。
+    跟专题五的 100 Gb/s 数据中心网络（83 ms）和 1–2 s 的 prefill 放在同一根对数轴上。
     ⚠️ 1.04 GB 不是 V4-Pro 的 KV，只是一把统一的尺子；图上写明。
   · 刻意没画：带宽为什么在 7 到 167 GB/s 之间浮动（runbook 没给分解，画了就是编）。
 
@@ -28,8 +28,8 @@ fig6-hybrid-kv.svg —— 回答：混合模型（GDN ／ Mamba 层 ＋ 少量�
   · 刻意没画：block 的真实大小和层内布局（示意格子）。
 
 fig6-prfaas.svg —— 回答：PD 能不能跨数据中心？卡在哪个数上？
-  · 数从哪来：PrFaaS（arXiv 2604.15039）Table 3：8×H200、SGLang v0.5.9、32K 输入时一台 prefill 每秒要外送的 KV（Φ_kv，Gbps）。
-    案例：内部 1T 混合模型，吞吐 +54%、P90 TTFT −64%，跨集群平均出口 13 Gbps。
+  · 数从哪来：PrFaaS（arXiv 2604.15039）Table 3：8×H200、SGLang v0.5.9、32K 输入时一台 prefill 每秒要外送的 KV（Φ_kv，Gb/s）。
+    案例：内部 1T 混合模型，吞吐 +54%、P90 TTFT −64%，跨集群平均出口 13 Gb/s。
   · 刻意没画：PrFaaS 的调度细节（按长度阈值外送、带宽感知），正文用一句话交代。
 """
 import math
@@ -45,7 +45,7 @@ assert abs(KV_8K / 1e9 - 1.04) < 0.01
 # ── vLLM V4-Pro runbook 实测带宽（MB/s）
 BW_BAD = 200e6                      # 走了 cuda_copy
 BW_LO, BW_HI = 7e9, 167e9           # 三件套之后
-BW_DCN = 100e9 / 8                  # 专题五：100 Gbps 数据中心网络 ＝ 12.5 GB/s
+BW_DCN = 100e9 / 8                  # 专题五：100 Gb/s 数据中心网络 ＝ 12.5 GB/s
 T = {k: KV_8K / v * 1e3 for k, v in (("bad", BW_BAD), ("lo", BW_LO), ("hi", BW_HI), ("dcn", BW_DCN))}
 assert round(T["bad"]) == 5201 and round(T["lo"]) == 149 and round(T["hi"], 1) == 6.2 and round(T["dcn"]) == 83
 PREFILL_MS = (1000, 2000)           # 专题五：8K prompt 的 prefill 1–2 s
@@ -60,11 +60,11 @@ assert XFER_BEFORE[0] / XFER_AFTER[0] == 100 and XFER_BEFORE[1] / XFER_AFTER[1] 
 GDN, ATT = 45, 15
 assert GDN + ATT == 60 and GDN / ATT == 3
 
-# ── PrFaaS Table 3（32K，Gbps，8×H200，SGLang v0.5.9）
+# ── PrFaaS Table 3（32K，Gb/s，8×H200，SGLang v0.5.9）
 PHI = [("Qwen3-235B", "全注意力", 33.35, OR), ("Qwen3.5-397B", "每 4 层里 3 层线性", 8.25, GR),
        ("MiniMax-M2.5", "全注意力", 59.93, OR), ("MiMo-V2-Flash", "每 6 层里 5 层只看近处", 4.66, GR)]
 assert round(PHI[0][2] / PHI[1][2]) == 4 and round(PHI[2][2] / PHI[3][2]) == 13
-LINK = 100                          # PrFaaS 案例整条跨集群以太网（13 Gbps ＝ 13%，论文 §4.3.1）；整个 prefill 集群共用，不是单机网口
+LINK = 100                          # PrFaaS 案例整条跨集群以太网（13 Gb/s ＝ 13%，论文 §4.3.1）；整个 prefill 集群共用，不是单机网口
 EGRESS = 13                         # 案例里 PrFaaS 集群平均出口
 assert EGRESS / LINK == 0.13
 
@@ -130,11 +130,11 @@ def fig_kv_stack():
 def fig_kv_bw():
     f = Fig(W, "同一份 1.04 GB 的 KV，按四档带宽各搬一趟要多久，画在对数时间轴上。"
                "200 MB/s 是 vLLM 在 GB300 上配错时的实测带宽，搬一趟约 5.2 秒，比 1 到 2 秒的 prefill 还长。"
-               "专题五那条 100 Gbps 数据中心网络约 83 毫秒。按对三个开关之后实测 7 到 167 GB/s，一趟只要 149 到 6 毫秒。"
+               "专题五那条 100 Gb/s 数据中心网络约 83 毫秒。按对三个开关之后实测 7 到 167 GB/s，一趟只要 149 到 6 毫秒。"
                "runbook 里单次传输从 200 到 800 毫秒降到 2 到 10 毫秒")
     y0 = f.header("配错一个开关，搬一趟要 prefill 本身的 2.6–5.2 倍时间　——　<tspan font-weight=\"700\">是配对时的 35–835 倍</tspan>",
                   "横轴是对数时间。每根条是同一份 1.04 GB 的 KV（专题五那个 8K prompt）按这一档带宽搬一趟；灰带是这个 prompt 的 prefill 本身",
-                  [(RD, "配错：实测 200 MB/s"), (GY2, "专题五：100 Gbps ＝ 12.5 GB/s"), (GR, "配对：实测 7–167 GB/s")])
+                  [(RD, "配错：实测 200 MB/s"), (GY2, "专题五：100 Gb/s ＝ 12.5 GB/s"), (GR, "配对：实测 7–167 GB/s")])
     PH = 400
     py = f.panel(0, y0, W, PH, "搬一趟 1.04 GB 要多久（本课推导，带宽是实测）", OR)
     BX, BW = 330, 960
@@ -149,7 +149,7 @@ def fig_kv_bw():
     f.box(X(PREFILL_MS[0]), py + 40, X(PREFILL_MS[1]) - X(PREFILL_MS[0]), AX - py - 40, "#e8eaed", "none", 0)
     f.t(X(1414), py + 62, "prefill 1–2 s", GY, True, 15, "middle")
     bars = [("配错（cuda_copy）", "200 MB/s", T["bad"], RD, "%s ms" % "{:,}".format(round(T["bad"]))),
-            ("专题五：数据中心网络", "100 Gbps ＝ 12.5 GB/s", T["dcn"], GY2, "%.0f ms" % T["dcn"]),
+            ("专题五：数据中心网络", "100 Gb/s ＝ 12.5 GB/s", T["dcn"], GY2, "%.0f ms" % T["dcn"]),
             ("配对，低端", "7 GB/s", T["lo"], GR, "%.0f ms" % T["lo"]),
             ("配对，高端", "167 GB/s", T["hi"], GR, "%.2f ms" % T["hi"])]
     by = py + 84
@@ -164,7 +164,7 @@ def fig_kv_bw():
     yb = f.src(yb + 10,
                "📌 带宽和单次传输时间：gpu/inference/a4x-max/deepseek-v4/VLLM-V4PRO-RUNBOOK.md:194（GB300，vLLM，NixlConnector）：单次传输 200–800 ms 降到 2–10 ms。",
                "⚠️ 本课推导：1.04 GB ＝ 2 × 62 × 8 × 128 × 8,192 × 1 字节（Qwen3-Coder-480B，FP8），只当一把统一的尺子，不是 V4-Pro 的 KV。"
-               "时间 ＝ 1.04 GB ÷ 带宽；没算握手和排队。prefill 1–2 s 与 100 Gbps 取自专题五 §6.2。")
+               "时间 ＝ 1.04 GB ÷ 带宽；没算握手和排队。prefill 1–2 s 与 100 Gb/s 取自专题五 §6.2。")
     f.save("fig6-kv-bw.svg", yb + 14)
 
 
@@ -223,14 +223,14 @@ def fig_hybrid_kv():
 
 def fig_prfaas():
     f = Fig(W, "四个模型在 32K 输入时，一台 8 卡 H200 做 prefill，每秒要往外送多少 KV。"
-               "全注意力的 Qwen3-235B 要 33.35 Gbps，混合的 Qwen3.5-397B 只要 8.25，前者是后者的 4 倍。"
+               "全注意力的 Qwen3-235B 要 33.35 Gb/s，混合的 Qwen3.5-397B 只要 8.25，前者是后者的 4 倍。"
                "全注意力的 MiniMax-M2.5 要 59.93，混合的 MiMo-V2-Flash 只要 4.66，前者是后者的 13 倍。"
-               "红虚线是案例里整条跨集群专线约 100 Gbps，整个 prefill 集群共用：Qwen3-235B 只够并 2 台，MiniMax 只够 1 台，Qwen3.5 能并 12 台，MiMo 21 台。案例里整个 prefill 集群平均出口只有 13 Gbps")
+               "红虚线是案例里整条跨集群专线约 100 Gb/s，整个 prefill 集群共用：Qwen3-235B 只够并 2 台，MiniMax 只够 1 台，Qwen3.5 能并 12 台，MiMo 21 台。案例里整个 prefill 集群平均出口只有 13 Gb/s")
     y0 = f.header("KV 变薄，PD 才敢跨数据中心　——　<tspan font-weight=\"700\">混合模型要送的字节降到全注意力的 1/4 到 1/13</tspan>",
-                  "PrFaaS 论文 Table 3：32K 输入，一台 8×H200（SGLang v0.5.9）做 prefill 时每秒要外送的 KV，单位 Gbps",
+                  "PrFaaS 论文 Table 3：32K 输入，一台 8×H200（SGLang v0.5.9）做 prefill 时每秒要外送的 KV，单位 Gb/s",
                   [(OR, "全注意力"), (GR, "混合（线性或滑窗 ＋ 少量全注意力）")])
     PH = 390
-    py = f.panel(0, y0, W, PH, "每台 prefill 每秒要外送的 KV（Gbps，32K 输入）", GR)
+    py = f.panel(0, y0, W, PH, "每台 prefill 每秒要外送的 KV（Gb/s，32K 输入）", GR)
     BX, BW = 330, 900
     VMAX = 110.0
 
@@ -241,7 +241,7 @@ def fig_prfaas():
         f.line(X(v), py + 40, X(v), AX, LINE, 1, arrow=False)
         f.t(X(v), AX + 24, str(v), GY, size=15, anchor="middle")
     f.path("M%.1f,%d L%.1f,%d" % (X(EGRESS), py + 40, X(EGRESS), AX), GR, 2, dash="5,4", arrow=False)
-    f.t(X(EGRESS) + 8, AX - 12, "案例：整个 prefill 集群平均出口 %d Gbps ＝ 专线的 13%%" % EGRESS, GR, True, 15)
+    f.t(X(EGRESS) + 8, AX - 12, "案例：整个 prefill 集群平均出口 %d Gb/s ＝ 专线的 13%%" % EGRESS, GR, True, 15)
     by = py + 70
     for i, (name, kind, v, col) in enumerate(PHI):
         f.t(BX - 16, by + 4, name, INK, True, 15, "end")
@@ -252,14 +252,14 @@ def fig_prfaas():
         f.t(X(LINK) + 16, by + 9, "够并 %d 台" % int(LINK // v), GY, size=14)        # 红线右边单列：台数 ＝ 100 ÷ 柱长
         by += 64 if i % 2 else 56
     f.path("M%.1f,%d L%.1f,%d" % (X(LINK), py + 40, X(LINK), AX), RD, 2, dash="5,4", arrow=False)
-    f.t(X(LINK) - 8, py + 58, "整条跨集群专线约 %d Gbps（集群共用）" % LINK, RD, True, 15, "end")
+    f.t(X(LINK) - 8, py + 58, "整条跨集群专线约 %d Gb/s（集群共用）" % LINK, RD, True, 15, "end")
     f._pan = None
     yb = py + PH + 6
     yb = f.src(yb + 10,
                "📌 PrFaaS，arXiv 2604.15039（Moonshot AI ＋ 清华）：Table 3 的 Φ_kv；案例吞吐 +54%、P90 TTFT −64%、同成本约 +15%、比不调度的朴素异构 +32%；"
-               "长度阈值 19.4K，约一半请求外送；平均出口 13 Gbps，占整条以太网的 13%（§4.3.1，故专线约 100 Gbps）。「够并几台」＝ ⌊100 ÷ 每台外送⌋，本课推导。",
+               "长度阈值 19.4K，约一半请求外送；平均出口 13 Gb/s，占整条以太网的 13%（§4.3.1，故专线约 100 Gb/s）。「够并几台」＝ ⌊100 ÷ 每台外送⌋，本课推导。",
                "📌 案例：内部 1T 混合模型，32 张 H200 做 prefill ＋ 64 张 H20 做本地 PD，对比 96 张 H20 同构 PD。「每 4 层里 3 层线性」即论文的混合 3:1；「每 6 层里 5 层只看近处」即 5:1 滑窗注意力（SWA）。",
-               "⚠️ 那 4 倍、13 倍是两两同代对比（论文原文），不是同一参数量下的严格对照。")
+               "⚠️ 那 4 倍、13 倍是论文拿规模相近的模型两两对比（原话 dense models of similar size），不是同一参数量下的严格对照。")
     f.save("fig6-prfaas.svg", yb + 14)
 
 

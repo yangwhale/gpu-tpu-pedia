@@ -114,7 +114,7 @@ def fig_2p1d():
             for i, (v, c) in enumerate(((a, GY2), (b, BL))):
                 f.box(BX, y + 8 + i * 38, BW * v / vmax, 28, c, c, 3)
                 f.t(BX + BW * v / vmax + 10, y + 28 + i * 38, fmt.format(v), c, True, 14.5)
-            f.t(x0 + HW - 20, y + 48, d, dc, True, 22, "end")
+            f.t(x0 + HW - 20, y + 48, d.replace("-", "−"), dc, True, 22, "end")   # 负号用 −（ISSUES-topic-06 #25）
             y += 130
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "加 prefill 前先问：缺的是首字速度，还是每秒出的字", [

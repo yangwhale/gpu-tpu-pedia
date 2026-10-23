@@ -69,7 +69,8 @@ HERO = '''
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ 主线 ／ 专题六
-    ／ <b>推理</b></div>
+    ／ <b>推理</b>
+    <a class="lecbtn" href="topic-06.en.html" lang="en" hreflang="en">🌐 English</a></div>
   <h1>推理</h1>
   <div class="hook">
     训练一步算一大批，推理一步只出一个字。<br>

@@ -298,8 +298,8 @@ def fig_conc():
     yb = f.src(y0 + PH + 6,
                "K3：gpu/inference/a4x-max/kimi-k3/SGLANG-K3-RUNBOOK.md:1089-1092（GB300，TP8 跨两节点，ISL 4096／OSL 1024，random，temperature 0，开环，只报热轮；输出 tok/s 总量）、:1057-1058（32K，只测了并发 1；8／32 没测，集群已删）。",
                "注：K3 并发 64 时开投机的 TPOT 仍只有不开的 40%，这一档吞吐和延迟同时变好。",
-               "正文里另两组数的出处 —— B200：gpu/inference/a4/deepseek-v4/README.vllm.md:265-277（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%；十档并发 −3% 到 −37%）。",
-               "V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36，单步 +41%；decode 峰值 −13%、端到端 +28%）。"
+               "另两组相关实测的出处 —— B200：gpu/inference/a4/deepseek-v4/README.vllm.md:265-277（DeepSeek-V4-Flash，8× B200，vLLM v0.20.0，EP+DP=8，MTP num_speculative_tokens=2；接受率约 54%；十档并发 −3% 到 −37%）。",
+               "V4-Pro：gpu/inference/a4x-max/deepseek-v4/SGLANG-V4PRO-RUNBOOK.md:900-911（steps 1／draft 2 → steps 2／draft 3；接受长度 1.88 → 2.36（+26%），反推单步耗时 115.3 → 162.5 ms（+41%）；decode 峰值 −13%、端到端 +28%）。"
                "B200 那套是 EP+DP 高吞吐配置，结论不能搬到 TP-only 低延迟配置。")
     f.save("fig6-spec-conc.svg", yb + 14)
 
@@ -375,7 +375,7 @@ TREE = [
     # (时间轴位置, 角标, 名字, 一句话（可两行）, 出处)
     (2022.87, "2022-11", "投机解码", ["另放一个独立小模型", "打草稿"], "Leviathan 等 2211.17192；Chen 等 2302.01318"),
     (2024.04, "2024-01", "Medusa", ["大模型头上", "加几个解码头"], "2401.10774"),
-    (2024.08, "2024-01", "EAGLE", ["小模型读大模型的", "隐状态来猜"], "EAGLE 2401.15077、EAGLE-2 2406.16858"),
+    (2024.08, "2024-01", "EAGLE", ["小模型读大模型的", "隐状态来猜"], "2401.15077、EAGLE-2 2406.16858"),
     (2024.96, "2024-12", "MTP · DeepSeek-V3", ["预训练时就多带一层，", "共享输出头"], "2412.19437"),
     (2025.17, "2025-03", "EAGLE-3", ["把大模型几层的隐状态", "拼在一起来猜"], "2503.01840"),
     (2026.53, "2026-07", "DSpark", ["半自回归一次出一小段，", "按置信度定验几个"], "2607.05147"),
@@ -438,9 +438,9 @@ def fig_tree():
                + "；".join("%s %s" % (nm, ref) for _, _, nm, _, ref in TREE) + "。"
                "Prompt Lookup 没有论文，年份按 GitHub 仓库 apoorvumang/prompt-lookup-decoding 的创建时间（2023-11，GitHub API 核过；已集成进 vLLM 与 transformers）。"
                "Medusa 与 EAGLE 都是 2024-01，轴上两点挨着。",
-               "没画进图的（正文里提到）：SpecInfer 2305.09781 把草稿排成树；SuffixDecoding 2411.04975 从历史输出里抄；"
+               "没画进图的：SpecInfer 2305.09781 把草稿排成树；SuffixDecoding 2411.04975 从历史输出里抄；"
                "扩散草稿 DiffuSpec 2510.02358、DFlash 2602.06036；Lookahead 2402.02057。P-EAGLE、PARD、LayerSkip 等也没画。",
-               "注：各家倍数见正文列表；都是原作者在自己的模型和负载上测的，口径不同，不横比。")
+               "注：各家倍数都是原作者在自己的模型和负载上测的，口径不同，不横比，所以图上不画。")
     f.save("fig6-spec-tree.svg", yb + 14)
 
 
@@ -817,7 +817,7 @@ def fig_dspark():
             f.box(x, BY0 - v * BU, BWD, v * BU, DS_COL[who], DS_COL[who], 3)
             f.t(x + BWD / 2, BY0 - v * BU - 8, "%.2f" % v, DS_COL[who], True, 12.5, "middle")
         f.t(gx + 1.5 * BWD + 8, BY0 + 22, dom, INK, True, 14, "middle")
-    f.t(RX + 24, py2 + 348, "同一个草稿，闲聊比数学少收两个多字：", INK, size=13.5)
+    f.t(RX + 24, py2 + 348, "同一个草稿，闲聊比数学少收约两个字：", INK, size=13.5)
     f.t(RX + 24, py2 + 370, "每次验几个，该看内容，也该看机器忙不忙。", GR, True, 13.5)
     f._pan = None
     yb = f.band(y0 + PH + 16, "ok", "开头靠草稿够深，往后靠前后照应；DSpark 两头都要", [

@@ -85,7 +85,7 @@ __FIG_S12_FUSE__
   <p>实际布局不是严格一半。V3.2 每层还多存一条索引键（indexer key，4.1 那个小打分器挑 token 时读的），它本来就存 FP8，换了也不变小，所以同显存多接的请求比只算 MLA 时少。</p>
 __FIG_S12_KVLAYOUT__
   <p>4 bit 已经落地：NVIDIA 2025-12 在 Blackwell 上放出 NVFP4 KV，比 FP8 KV 再省约一半，基准上精度损失不到 1%（NVIDIA 博客）。算注意力前仍解回 FP8，省的是容量和读的字节。同样显存多存了前缀，Qwen3-Coder-480B 上命中率比 FP8 KV 高 20%，首字延迟最多降到其约三分之一。</p>
-  <p>2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小 45%。</p>
+  <p>2026-09 的 DeepSeek-V4.1-Flash 主 KV 原生存 FP4（每 16 个数一个缩放），FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小 45%。不过 FlashMLA README 写这个 FP4 格式只能用于 extra_k_cache，k_cache 那份仍是 FP8，不是整份 KV 都换成了 FP4。</p>
 
   <div class="note ok"><span class="t">回到主线</span>
     <b>量化是少搬，融合是去掉空等</b>，两者都能和投机解码叠用：Inferact 那个数来自 megakernel 加 DSpark 投机，博客没提量化。

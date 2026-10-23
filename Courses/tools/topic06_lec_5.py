@@ -413,7 +413,7 @@ prefill 的形状千变万化，所以 vLLM 默认 decode 录整图，prefill �
 <p class="say">「KV 也已经到四 bit。二〇二五年十二月 NVIDIA 在 Blackwell 上放出 NVFP4 KV，比 FP8 再省约一半，博客报基准上精度损失不到百分之一。算注意力之前照样解回 FP8，省的是容量和读的字节。<br>
 同样显存多存了前缀：Qwen3-Coder-480B 上命中率比 FP8 KV 高两成，首字延迟最多降到约三分之一。」</p>
 
-<p class="say">「二〇二六年九月 DeepSeek 的 V4.1-Flash，主 KV 原生就存四 bit，每十六个数一个缩放，FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小四成五。」</p>
+<p class="say">「二〇二六年九月 DeepSeek 的 V4.1-Flash，主 KV 原生就存四 bit，每十六个数一个缩放，FlashMLA 同时放出读它的 kernel，比原先的 FP8 KV 小四成五。不过只有其中一份能存四 bit，另一份还是 FP8。」</p>
 
 
 <p class="board"><b>🖥 屏幕</b>：停在绿框「回到主线」。</p>

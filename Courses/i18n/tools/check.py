@@ -34,6 +34,9 @@ def tagseq(sp):
                 a['style'] = re.sub(r'font-size:[^;]*;?', '', a['style']).strip().rstrip(';')
                 if not a['style']: a.pop('style')
             a.pop('textLength', None); a.pop('lengthAdjust', None)
+        for k in ('src', 'poster'):
+            # 英文视频 media/X.en.mp4?v=… 与中文 media/X.mp4?v=… 视为同构（⭐ 只认 media/ 下同名换 .en）
+            if k in a: a[k] = re.sub(r'^(media/[^?"]+?)(?:\.en)?(\.(?:mp4|webm|png|jpg))(\?v=[0-9a-f]+)?$', r'\1\2', a[k])
         out.append((t.name, tuple(sorted(a.items()))))
     return out
 

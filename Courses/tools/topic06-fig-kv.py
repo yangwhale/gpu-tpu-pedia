@@ -14,7 +14,7 @@ r"""专题六 · 第三节「KV cache：账、池、复用」的四张图。
    · Llama-3.1-70B：HF config.json（80 层、8 个 KV 头、head_dim 128）；激活参数 70.6B 取自 HF 模型页。
    · Qwen3.5-397B-A17B：HF config.json（60 层 = 45 层线性注意力 ＋ 15 层全注意力；全注意力 2 个 KV 头 × 256；
      线性层 64 个 value 头 × key 128 × value 128，mamba_ssm_dtype float32）。
-   · 每 device 实测可用 94.75 GiB（tpu/tpu-inference R1 FP4 README:59，与第十节 10.2 同一口径）。
+   · 每 device 实测可用 94.75 GiB（tpu/tpu-inference R1 FP4 README:59）。
      ⛔ 按 device 算，不按芯片：一颗 v7 对软件是两个 device，各管自己那 94.75 GiB，不能当一整块 189.5 GiB 用；
        8 颗芯片 ＝ 16 个 device，权重每份是 1/16（2026-10-21 由「每芯片 1/8」改正）；
      「留 10% 给激活」是本课假设。
@@ -54,7 +54,7 @@ assert STATE_HYB == 188743680 and STATE_HYB / 2**20 == 180
 N_DEV = 8 * 2                                     # 671 GB FP8 权重铺 8 颗芯片（2×2×2）＝ 16 个 device
 W_DEV = V3_TOTAL * 1 / N_DEV                      # FP8 每参数 1 字节
 assert W_DEV == 41.9375e9
-USABLE = 94.75 * GIB                              # 每 device 实测可用，同 10.2
+USABLE = 94.75 * GIB                              # 每 device 实测可用（R1 FP4 README:59）
 RESERVE = USABLE * 0.1
 POOL = USABLE * 0.9 - W_DEV
 assert "%.3f" % (USABLE * 0.9 / GIB) == "85.275"
@@ -135,13 +135,18 @@ def fig_batch():
     X0, SPAN = 40, W - 80
     sc = SPAN / USABLE
     segs = [(W_DEV, BL, "V3 权重的 1/16（FP8）：39.1 GiB"),
-            (RESERVE, GY2, "留 10%：9.5 GiB"),
+            (RESERVE, GY2, "留 10%\n9.5 GiB"),
             (POOL, PU, "KV 池：46.2 GiB")]
     x = X0
     for v, col, lab in segs:
         w = v * sc
         f.box(x, py + 20, w, 40, col, col, 3)
-        f.t(x + w / 2, py + 46, lab, "#fff", True, 15, "middle")
+        if "\n" in lab:   # 灰段只有约 130 px 宽，一行写不下（ISSUES-topic-06 #28），拆两行
+            a, b = lab.split("\n")
+            f.t(x + w / 2, py + 37, a, "#fff", True, 14, "middle")
+            f.t(x + w / 2, py + 55, b, "#fff", True, 13, "middle")
+        else:
+            f.t(x + w / 2, py + 46, lab, "#fff", True, 15, "middle")
         x += w
 
     # 主图
@@ -208,7 +213,7 @@ def fig_batch():
                "Qwen3.5 全注意力 15 层 × 2 头 × 256 维 × K、V × 2 B ＝ 30,720，线性层状态 45×64×128×128×4 B ＝ 180 MiB（HF config.json，mamba_ssm_dtype float32）。",
                "口径：MHA 一行是 V3 形状的假想（128 头 × 128 维，专题三第一题）：3,997,696 B/token。",
                "本课推导：v7 一颗芯片对软件是两个 device，各管自己的显存，按 device 记账；V3 权重全按 FP8 1 B/参数算 671 GB ÷ 16 个 device ＝ 41.9 GB ＝ 39.1 GiB；每 device 实测可用 94.75 GiB（tpu-inference R1 FP4 README），再留 10% 给激活（本课假设）；"
-               "KV 池 ＝ 94.75 GiB × 0.9 − 39.1 GiB ＝ 46.2 GiB，可用量与第十节 10.2 同一口径。先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少（10.2）。假设 attention 走数据并行（每个 device 只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每个 device 复制一份（专题五）。",
+               "KV 池 ＝ 94.75 GiB × 0.9 − 39.1 GiB ＝ 46.2 GiB，先按权重全切粗算，DP attention 下非专家权重每个 device 各一份，实际更少。假设 attention 走数据并行（每个 device 只存自己那几条序列）；若 attention 走 TP，MLA 的 KV 每个 device 复制一份（专题五）。",
                "口径：没算激活与通信缓冲（归入那 10%）、线性层卷积状态、引擎实际的状态 dtype（可能不是 fp32）。")
     f.save("fig6-kv-batch.svg", yb + 14)
 

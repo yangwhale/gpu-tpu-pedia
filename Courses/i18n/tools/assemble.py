@@ -83,13 +83,28 @@ HEAD['topic-05-lecture'] = {
     'zh': 'topic-05-lecture.html',
     'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
 }
+HEAD['topic-06'] = {
+    'title': 'Topic 6 · Inference',
+    'og:title': 'Inference · one trip per step: share it with more users, or move less',
+    'og:description': 'Every decode step hauls the weights and the KV cache through once. Every inference technique either '
+                      'shares that trip across more users or moves fewer bytes.',
+    'zh': 'topic-06.html', 'fsa': 0.53,
+}
+HEAD['topic-06-lecture'] = {
+    'title': 'Topic 6 · Instructor notes (lecture script)',
+    'og:title': 'Inference · instructor notes',
+    'og:description': "The teacher's draft: the spoken script, which figure to point at, likely questions, and what not to say.",
+    'zh': 'topic-06-lecture.html',
+    'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
+}
 # 有英文版的页面：中文 href → 英文 href（锚点保留）。其余中文页一律去链接。
 EN_MAP = {'index.html': 'index.en.html', 'topic-02.html': 'topic-02.en.html',
           'topic-02-L200-lecture.html': 'topic-02-L200-lecture.en.html',
           'topic-01.html': 'topic-01.en.html', 'topic-01-lecture.html': 'topic-01-lecture.en.html',
           'topic-03.html': 'topic-03.en.html', 'topic-03-lecture.html': 'topic-03-lecture.en.html',
           'topic-04.html': 'topic-04.en.html', 'topic-04-lecture.html': 'topic-04-lecture.en.html',
-          'topic-05.html': 'topic-05.en.html', 'topic-05-lecture.html': 'topic-05-lecture.en.html'}
+          'topic-05.html': 'topic-05.en.html', 'topic-05-lecture.html': 'topic-05-lecture.en.html',
+          'topic-06.html': 'topic-06.en.html', 'topic-06-lecture.html': 'topic-06-lecture.en.html'}
 # ⭐ 英文版字体用 Source Sans 3（Google Fonts）：Noto Sans CJK 的拉丁字形就是从它来的，
 #    所以图上标签的宽度跟检查时（本机 Noto CJK）一致；又避开了 CJK 字体把弯引号画成全角的问题，
 #    而且 iPhone / Mac 上不再回落到更宽的系统字体（作者 10-17 是在 iPhone 上看的）。

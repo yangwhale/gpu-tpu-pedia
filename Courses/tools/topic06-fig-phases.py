@@ -337,7 +337,7 @@ def fig_moe():
     yb = f.src(yb + 10,
                "📌 256 个路由专家、每 token 挑 8 个：DeepSeek-V3 config.json（n_routed_experts、num_experts_per_tok）。"
                "MXU 一边 256：JAX 公开源码 jax/_src/pallas/mosaic/tpu_info.py，TPU 7 的 mxu_column_size＝256。",
-               "📌 本课推导：专家矩阵 7168×2048，M＝8 时强度 ＝ 2·8·7168·2048 ÷ 2·(7168·2048 ＋ 8·(7168 ＋ 2048)) ≈ 8。"
+               "📌 本课推导：专家矩阵 7168×2048，M＝8 时强度 ＝ 2·8·7168·2048 ÷ [2·(7168·2048 ＋ 8·(7168 ＋ 2048))] ≈ 8。"
                "稠密层 239 来自本节第一张图。",
                "⚠️ 8 是平均数，路由不均时有的专家几十行、有的零行。共享专家每个 token 都过，不受影响。")
     f.save("fig6-moe-rows.svg", yb + 14)
