@@ -113,7 +113,7 @@ ssh <corp-host> "GOOGLE_CLOUD_PROJECT=<project> \
 ### 2.3 基线的图：最重要的信息是"没看到什么"
 
 <!-- ===== TEMP:XPROF-LINKS  组内讨论期临时保留，优化收尾后整块删除 ===== -->
-XProf trace `chrisya-8390131192604817453`（仅内网）
+XProf trace（内部会话，不公开）
 <!-- ===== /TEMP:XPROF-LINKS ===== -->
 
 **全局视图**

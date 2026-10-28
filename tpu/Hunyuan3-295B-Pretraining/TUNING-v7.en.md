@@ -211,8 +211,8 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json
 >
 > | Profile | Session |
 > |---|---|
-> | 4 chips `2x2x1` / 80 layers | （内部 XProf trace `chrisya-11640939633798411639`，仅 Google 内网可访问） |
-> | 16 chips `2x2x4` / 20 layers (with HLO dump) | （内部 XProf trace `chrisya-18130551067782033931`，仅 Google 内网可访问） |
+> | 4 chips `2x2x1` / 80 layers | (internal XProf session, not public) |
+> | 16 chips `2x2x4` / 20 layers (with HLO dump) | (internal XProf session, not public) |
 >
 > Sessions expire; once they do, just re-upload the `.xplane.pb` from GCS.
 <!-- ===== /TEMP:XPROF-LINKS ===== -->
@@ -931,7 +931,7 @@ Four blockers:
 
 #### 5.4.2 QAG (quantize first, then communicate): a path blocked by the expert count
 
-> **It started with a question**: Chris asked, "when you are in FP8, isn't what gets communicated FP8 too?"
+> **It started with a question**: someone asked, "when you are in FP8, isn't what gets communicated FP8 too?"
 > My assumption at the time was "communication is unaffected by FP8" — that assumption was half wrong,
 > and following it down uncovered QAG, plus a conclusion that **points straight at next-generation model design**.
 
@@ -1095,7 +1095,7 @@ which is exactly what round S3 below sets out to measure.
 
 ##### A known precedent: Ant's ALModel (verified 2026-08-05, with one important correction)
 
-Chris mentioned that "Ant's ALModel turned FP8 from a negative into a positive by enabling QAG".
+A colleague mentioned that "another team's training framework turned FP8 from a negative into a positive by enabling QAG".
 **Verified true, and with exact numbers**:
 
 | | step time | Relative to BF16 |
@@ -1306,7 +1306,7 @@ What really drags the absolute value down is **pdbs dropping from 12 to 8**. Low
 4. **Narrowing FSDP from 128 to 64 did not OOM** (57.09 G, only 1.79 G more than 55.30).
    But this is 16 layers, and the full 80 layers will amplify it 5×, so **do not extrapolate directly**.
 
-> 🔁 **A methodology lesson (pointed out by Chris on the spot): when you are measuring a limit, do not downscale on your own.**
+> 🔁 **A methodology lesson (pointed out on the spot): when you are measuring a limit, do not downscale on your own.**
 > I dropped pdbs from 12 to 8 with the justification of "keeping FP8 compile time down" —
 > and in [Appendix C](#appendix-c-compilation-and-environment-engineering) I had measured myself that **compile time barely varies with scale**
 > (43.5 s vs 44.3 s). **Shrinking a run based on a reason you have already disproved yourself
