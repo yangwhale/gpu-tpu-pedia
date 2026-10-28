@@ -899,7 +899,7 @@ and **QAG** (confirmed by checking the official recipe on 2026-08-05, see [§5.4
 | # | What to do | Basis | Cost |
 |---|---|---|---|
 | **1** | **Sweep `w{i,o}_tile_*` on the FP8 path** | Change the six `*_mlp_dim` from 1024 to 1536 / 512 (both divide 1536). On 16 chips this change is worth **+8.25%** | 30 minutes per round |
-| **2** | **Turn on QAG** | The gates are fully mapped and there is an executable recipe (§5.4.2). It moves the 57.3% that is communication, **so its gain does not overlap with tile's**; Ant measured 0.88× → 1.05× BF16 | 30 minutes per round, plus convergence validation |
+| **2** | **Turn on QAG** | The gates are fully mapped and there is an executable recipe (§5.4.2). It moves the 57.3% that is communication, **so its gain does not overlap with tile's**; another team measured 0.88× → 1.05× BF16 | 30 minutes per round, plus convergence validation |
 | 3 | Set the tile by mapping from the BF16 optimum | The BF16 optimum is `(512, 2048, 1536)`; for wi, `k` is emb (4096) and `n` is mlp (1536), and wo is the other way around. The mapping has to be worked out | same as above |
 | 4 | Run the official autotune to generate cache entries | Replaces hand tuning | **Already investigated, see §5.4.1 — lower priority than 1** |
 | 5 | Write a batch split implementation for GQA | Possibly the largest gain, but **a development task, not tuning**, several hundred lines | high |
@@ -1093,7 +1093,7 @@ So this path is "**trade HBM for QAG**", and whether it works depends on
 whether the HBM QAG saves (the weight all-gather buffer halving) is enough to offset the cost of thicker shards —
 which is exactly what round S3 below sets out to measure.
 
-##### A known precedent: Ant's ALModel (verified 2026-08-05, with one important correction)
+##### A known precedent: another team's framework (verified 2026-08-05, with one important correction)
 
 A colleague mentioned that "another team's training framework turned FP8 from a negative into a positive by enabling QAG".
 **Verified true, and with exact numbers**:
@@ -1110,22 +1110,22 @@ The two gain mechanisms recorded officially match the code exactly:
 2. **Expert weight quantization cost cut to 1/128** (at FSDP=128) —
    it used to all-gather first and then quantize each shard separately; now it quantizes once and then gathers
 
-> ⚠️ **One important correction: Ant is not on this upstream `fixed` path.**
+> ⚠️ **One important correction: That team is not on this upstream `fixed` path.**
 > Their recipe explicitly says "Using absmax for quantization calibration,
 > **instead of** `fixed,-224,224`", for accuracy reasons.
 > To be able to enable QAG under absmax as well, they **applied a local patch**,
 > cutting `startswith("fixed") and isinstance(rhs, qpl.QArray)` in `ops.py`
 > down to just `isinstance(rhs, qpl.QArray)`.
 >
-> So "ALModel with QAG on" and "us with QAG on" **are not the same code path**:
+> So "their QAG" and "us with QAG on" **are not the same code path**:
 > we take the upstream static scale, they take a patched dynamic scale.
 > The preliminary official analysis of dynamic scale + QAG still concludes it **may be inefficient**,
 > and that patch has not gone upstream either.
 
-Ant's target is **1.2–1.3× BF16, and 1.05× has not met it**,
+That team's target is **1.2–1.3× BF16, and 1.05× has not met it**,
 which shows that **even with QAG on, FP8 on Ironwood is far from the end** — consistent with our assessment in §5.1.
 
-A few other choices in Ant's recipe worth noting: per-expert scale (`[E,1,N]` rather than `[1,1,N]`),
+A few other choices in that team's recipe worth noting: per-expert scale (`[E,1,N]` rather than `[1,1,N]`),
 **E4M3 for both forward and backward** (not the default bwd e5m2), and **keeping the last layer in BF16**;
 at 4000 steps the loss deviates from the BF16 baseline by 0.14%.
 
@@ -1759,14 +1759,14 @@ I mistakenly took it to mean fractional settings were supported. **Seeing a floa
 |---|---|---|
 | 1 | **Take FSDP as 64 / 96 to divide 192** | ✅ Mechanistically confirmed feasible (the constraint is divisibility, not powers of two). **The cost is HBM**, S3 is measuring it |
 | 2 | **Change the model to 256 experts** | ✅ Cleanest, and isomorphic to the DSv3 official recipe. A next-generation model design decision; S5 is measuring it |
-| 3 | Copy Ant's local patch (absmax + QAG) | ⚠️ Official analysis holds that QAG may be inefficient under dynamic scale, and it has not gone upstream |
+| 3 | Copy that team's local patch (absmax + QAG) | ⚠️ Official analysis holds that QAG may be inefficient under dynamic scale, and it has not gone upstream |
 | 4 | Set `ici_expert_parallelism` to make divisibility work | ❌ Ruled out. The config explicitly requires `EP=1 and TP=1`, and EP measures **−71%** on TPU |
 | 5 | Wait for upstream to support non-divisible cases | ❌ Not in our hands |
 
 ⚠️ **The general risk is unchanged**: `fixed` is a preset scale, and `±224` is the official choice for DSv3,
 **which is not necessarily appropriate for Hy3's weight distribution**.
 **An 8-step benchmark can only show whether there are NaNs and cannot prove convergence — touching this requires convergence validation.**
-Ant abandoned fixed for absmax + a patch precisely because of accuracy; keep that precedent in mind.
+That team abandoned fixed for absmax + a patch precisely because of accuracy; keep that precedent in mind.
 
 ---
 
@@ -1968,7 +1968,7 @@ doubles its per-device shard**. What is saved does not cover what is spent. The 
 | "The official DSV3 743.5 ≈ the 746 I computed ⇒ even DSV3 does not have QAG on" | **All four QAG conditions are present in the official recipe; DSV3 has it on.** When numbers from two independent systems collide, with only one observation point that says nothing about causality |
 | "The four QAG trigger conditions are parallel" | 3 and 4 are the same lock — `explicitly_weight_ag` checks `fixed` again internally. Turning on `shard_exp_on_fsdp` alone **fails silently** (measured 1.2228 → 1.2230, no change and no error) |
 | "The expert count must be a power of two to enable QAG" | The constraint is `num_experts % ici_fsdp_parallelism == 0`. It is a **divisibility relation**, not a power of two — it only looks that way because we have always used powers of two as the FSDP width |
-| "Ant's ALModel enabled QAG via this upstream `fixed` path" | Backwards. **They explicitly abandoned `fixed,-224,224` for absmax** (accuracy considerations) and enabled it via a local patch that deletes the `startswith("fixed")` criterion |
+| "Another team's framework enabled QAG via this upstream `fixed` path" | Backwards. **They explicitly abandoned `fixed,-224,224` for absmax** (accuracy considerations) and enabled it via a local patch that deletes the `startswith("fixed")` criterion |
 
 ### B.6 Operational screw-ups (not conclusions, but they waste time)
 

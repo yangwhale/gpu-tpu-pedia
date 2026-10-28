@@ -1617,7 +1617,7 @@ params["self_attention"]["wq_a"]["kernel"]
 | # | 做什么 | 依据 | 成本 |
 |---|---|---|---|
 | **1** | **扫 FP8 路径的 `w{i,o}_tile_*`** | 6 个 `*_mlp_dim` 从 1024 改成 1536 / 512（都整除 1536）。16 芯片上这一改值 **+8.25%** | 每轮 30 分钟 |
-| **2** | **开 QAG** | 门槛已全部查清并有可执行配方（§5.4.2）。它动的是通信那 57.3%，**跟 tile 收益不重叠**；蚂蚁实测值 0.88× → 1.05× BF16 | 每轮 30 分钟，且需配收敛验证 |
+| **2** | **开 QAG** | 门槛已全部查清并有可执行配方（§5.4.2）。它动的是通信那 57.3%，**跟 tile 收益不重叠**；另一个团队实测 0.88× → 1.05× BF16 | 每轮 30 分钟，且需配收敛验证 |
 | 3 | 按 BF16 最优映射设 tile | BF16 最优是 `(512, 2048, 1536)`；wi 的 `k` 是 emb(4096)、`n` 是 mlp(1536)，wo 反过来。映射关系要推一遍 | 同上 |
 | 4 | 跑官方 autotune 生成 cache | 替代手调 | **已调研，见 §5.4.1 —— 优先级低于 1** |
 | 5 | 给 GQA 写一份 batch split 实现 | 收益可能最大，但**是开发任务不是调优**，几百行 | 高 |
@@ -1683,7 +1683,7 @@ act_quantization_calibration_method=fixed,-224,224    # ⚠️ 同上
 
 
 <details>
-<summary><b>展开：这条路是怎么一步步摸出来的</b> —— 五道锁的发现过程、192 撞墙的确切位置、蚂蚁 ALModel 的先例，以及我自己写下又证伪的一条旁证</summary>
+<summary><b>展开：这条路是怎么一步步摸出来的</b> —— 五道锁的发现过程、192 撞墙的确切位置、另一个团队的先例，以及我自己写下又证伪的一条旁证</summary>
 
 ##### 先回答那个问题：默认情况下，通信传的确实是 bf16
 
@@ -1843,7 +1843,7 @@ if raw_keys["shard_exp_on_fsdp"] and (using_tensor_parallelism(raw_keys) or usin
 QAG 省下的 HBM（权重 all-gather 缓冲减半）够不够抵消分片变厚的开销 ——
 这正好是下面 S3 那一轮要测的。
 
-##### 已知先例：蚂蚁 ALModel（2026-08-05 查证，含一处重要纠正）
+##### 已知先例：另一个团队的框架（2026-08-05 查证，含一处重要纠正）
 
 有同事提到「另一个团队的训练框架靠开 QAG 把 FP8 从负收益转成正收益」。
 **查证属实，而且有确切数字**：
@@ -1860,22 +1860,22 @@ QAG 省下的 HBM（权重 all-gather 缓冲减半）够不够抵消分片变厚
 2. **专家权重量化开销降到 1/128**（FSDP=128 时）——
    原来是 all-gather 完每个分片各自量化，改成量化一次再 gather
 
-> ⚠️ **一处重要纠正：蚂蚁走的不是上游这条 `fixed` 路径。**
+> ⚠️ **一处重要纠正：那个团队走的不是上游这条 `fixed` 路径。**
 > 他们的 recipe 明确写着「Using absmax for quantization calibration,
 > **instead of** `fixed,-224,224`」，理由是精度。
 > 为了在 absmax 下也能开 QAG，他们**打了 local patch**，
 > 把 `ops.py` 里的 `startswith("fixed") and isinstance(rhs, qpl.QArray)`
 > 直接删成 `isinstance(rhs, qpl.QArray)`。
 >
-> 所以「ALModel 开 QAG」和「我们开 QAG」**不是同一条代码路径**：
+> 所以「他们开 QAG」和「我们开 QAG」**不是同一条代码路径**：
 > 我们走上游 static scale，他们走 patch 过的 dynamic scale。
 > 官方对 dynamic scale + QAG 的初步分析结论还是**可能不高效**，
 > 这条 patch 目前也没进上游。
 
-蚂蚁的目标是 **1.2–1.3× BF16，1.05× 尚未达标**，
+那个团队的目标是 **1.2–1.3× BF16，1.05× 尚未达标**，
 说明**即使开了 QAG，FP8 在 Ironwood 上也远没到头** —— 这跟我们 §5.1 的判断一致。
 
-蚂蚁 recipe 里另外几条值得记的选择：per-expert scale（`[E,1,N]` 而非 `[1,1,N]`）、
+那个团队的 recipe 里另外几条值得记的选择：per-expert scale（`[E,1,N]` 而非 `[1,1,N]`）、
 **前向后向都用 E4M3**（不是默认的 bwd e5m2）、**最后 1 层保持 BF16**；
 4000 步 loss 与 BF16 基线偏差 0.14%。
 
@@ -2512,14 +2512,14 @@ A2 的 OOM 本身也是信息：DSv3 那套里有抬高 HBM 占用的项
 |---|---|---|
 | 1 | **FSDP 取 64 / 96 整除 192** | ✅ 机制上确定可行（约束是整除，不是 2 的幂）。**代价是显存**，S3 在测 |
 | 2 | **模型改 256 experts** | ✅ 最干净，跟 DSv3 官方 recipe 同构。属于下一代模型设计决策，S5 在测 |
-| 3 | 抄蚂蚁的 local patch（absmax + QAG） | ⚠️ 官方分析认为 dynamic scale 下 QAG 可能不高效，且未进上游 |
+| 3 | 抄那个团队的 local patch（absmax + QAG） | ⚠️ 官方分析认为 dynamic scale 下 QAG 可能不高效，且未进上游 |
 | 4 | 配 `ici_expert_parallelism` 凑整除 | ❌ 排除。config 明确要求 `EP=1 且 TP=1`，且 TPU 上 EP 实测 **−71%** |
 | 5 | 等上游支持非整除 | ❌ 不在我们手上 |
 
 ⚠️ **通用风险没变**：`fixed` 是预设 scale，`±224` 是官方在 DSv3 上的选择，
 **换到 Hy3 的权重分布上未必合适**。
 **8 步 benchmark 只能看出有没有 NaN，证明不了收敛 —— 这条要动必须配收敛验证。**
-蚂蚁正是因为精度才放弃 fixed 改用 absmax + patch，这个先例要记住。
+那个团队正是因为精度才放弃 fixed 改用 absmax + patch，这个先例要记住。
 
 ---
 
@@ -2736,7 +2736,7 @@ SparseCore 卸载组、FP8 的 18 个 MaxText tile、FP8 tile 邻域精扫、
 | 「DSV3 官方 743.5 ≈ 我算的 746 ⇒ 连 DSV3 也没开 QAG」 | **官方 recipe 里 QAG 四个条件一个不缺，DSV3 是开着的**。两个独立体系的数字撞在一起，在只有一个观测点时说明不了因果 |
 | 「QAG 的四个触发条件是并列的」 | 3 和 4 是同一把锁 —— `explicitly_weight_ag` 内部又查一遍 `fixed`。只开 `shard_exp_on_fsdp` 会**静默失效**（实测 1.2228 → 1.2230，无变化也无报错） |
 | 「专家数必须是 2 的幂才能开 QAG」 | 约束是 `num_experts % ici_fsdp_parallelism == 0`。是**整除关系**，不是 2 的幂 —— 只因我们一直用 2 的幂当 FSDP 宽度才看着像 |
-| 「蚂蚁 ALModel 靠上游这条 `fixed` 路径开的 QAG」 | 反了。**他们明确弃用 `fixed,-224,224` 改用 absmax**（精度考虑），靠 local patch 删掉 `startswith("fixed")` 判据才开的 |
+| 「另一个团队的框架靠上游这条 `fixed` 路径开的 QAG」 | 反了。**他们明确弃用 `fixed,-224,224` 改用 absmax**（精度考虑），靠 local patch 删掉 `startswith("fixed")` 判据才开的 |
 
 ### B.6 操作类翻车（不是结论，但会浪费时间）
 
