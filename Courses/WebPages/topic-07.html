@@ -735,6 +735,7 @@ table.numtab td{vertical-align:top}
 th{text-transform:none}
 /* R8 版面体检：窄屏（≤720px）宽表在表内横向滚，不撑破整页 */
 @media (max-width:720px){table.numtab{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}}
+@media (max-width:720px){table.numtab td:first-child{white-space:normal}}
 .todo-assets img{max-width:100%}
 /* R9（讲法审 1、2）：坐标细账、录屏停点表在折叠态不显示（展开讲解或在打开的折叠块里才显示） */
 body.figonly section .fo-hide:not(details[open] *){display:none}
@@ -854,7 +855,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <span class="chip">案例 <b>腾讯混元3 · 64 颗 TPU v7x · FP8</b></span>
     <span class="chip">工具 <b>开源 XProf</b></span>
     <span class="chip">前置 <b>专题二</b>（TPU）<b>专题五</b>（并行）</span>
-    <span class="chip">⏱ <b>讲约 73 分钟</b></span>
+    <span class="chip">⏱ <b>讲约 82 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -876,8 +877,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <div><span class="k">改了参数之后</span><span class="v hot">7.84 s ／ 步</span></div>
     <div class="r">11.76 ÷ 7.84 ＝ 1.50：同样的时间多跑一半的 token</div>
   </div>
-  <p>模型是腾讯混元3（Hy3，295B 参数的 MoE：192 个专家、每个 token 选 8 个，80 层），64 颗 TPU v7x，FP8 训练。
-    这是我们自己的调优记录，配置、步时、profile 都是真的。</p>
+  <table>
+    <tr><th>在什么上跑的</th><th></th></tr>
+    <tr><td>模型</td><td>腾讯混元3（Hy3），295B 参数的 MoE：80 层，除第一层外每层 192 个专家，每个 token 挑 8 个</td></tr>
+    <tr><td>机器</td><td>64 颗 TPU v7x；每颗 2 个 TensorCore，profile 里算 2 个 device，共 128 个 device</td></tr>
+    <tr><td>切法</td><td>FSDP 64 路：权重切 64 份，每个 device 存一份，用到时再从别的卡拼回来</td></tr>
+    <tr><td>精度、框架</td><td>FP8 训练（每个数 1 字节）；MaxText（开源的 JAX 训练框架）</td></tr>
+  </table>
+  <p>这是我们自己的调优记录，配置、步时、profile 都是真的。</p>
 
   <details class="foldfig"><summary>两行步时怎么量的 <span class="why">（profile 中位步 ／ MaxText 日志，两种口径对得上）</span></summary>
   <table>
@@ -891,10 +898,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s0-2">0.2　改了什么</h3>
   <table>
-    <tr><th>配置项</th><th>原配方</th><th>改后</th></tr>
+    <tr><th>配置项</th><th>原配方（改前）</th><th>改后</th></tr>
     <tr><td>专家矩阵乘的 tile：<code>w{i,o}_tile_{fwd,dlhs,drhs}_embed_dim</code>（6 个）</td><td>1024</td><td>2048</td></tr>
     <tr><td>专家矩阵乘的 tile：<code>w{i,o}_tile_{fwd,dlhs,drhs}_mlp_dim</code>（6 个）</td><td>1024</td><td>1536</td></tr>
-    <tr><td><code>use_tokamax_gmm</code>（专家矩阵乘走哪条 kernel 实现）</td><td>True</td><td>False</td></tr>
+    <tr><td><code>use_tokamax_gmm</code>（专家矩阵乘用哪套 kernel：True ＝ tokamax 库的，False ＝ MaxText 自带的）</td><td>True</td><td>False</td></tr>
   </table>
   <p>两份配置逐行比，只差这 13 行。换了 kernel 实现、调大了分块，矩阵乘变快——听起来完全说得通。
     我们当时也没觉得哪里不对。</p>
@@ -915,7 +922,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <table>
     <tr><th>词</th><th>一句话</th></tr>
     <tr><td>一步（step）</td><td>训练里一次「前向 ＋ 反向 ＋ 更新权重」。步时越短，吞吐越高。</td></tr>
-    <tr><td>MoE、专家</td><td>每层有很多套并列的前馈网络（专家），每个 token 只挑几套算。混元3 每层 192 个专家，每个 token 挑 8 个。</td></tr>
+    <tr><td>MoE、专家</td><td>每层有很多套并列的前馈网络（专家），每个 token 只挑几套算。混元3 除第一层外每层 192 个专家，每个 token 挑 8 个。</td></tr>
     <tr><td>专家矩阵乘（gmm／tgmm）</td><td>把分到同一个专家的 token 凑在一起做的分组矩阵乘；<code>gmm</code> 算前向和对输入的梯度，<code>tgmm</code> 算对专家权重的梯度。trace 上就叫这两个名字。</td></tr>
     <tr><td>tile</td><td>kernel 一次搬进片上存储、算完再搬下一块的分块大小。</td></tr>
     <tr><td>BF16、FP8</td><td>两种数的格式：BF16 每个数 2 字节，FP8 每个数 1 字节。v7x 上 FP8 的峰值算力是 BF16 的两倍。</td></tr>
@@ -933,7 +940,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s1-1">1.1　第一把尺子：MFU</h3>
   <p><b>MFU ＝ 每芯片实际 TFLOP/s ÷ 峰值。</b>v7x 每芯片 BF16 峰值 2,307 TFLOP/s。
-    算 FP8 时，运算量照 BF16 那样数、分母也照样用 2,307，这样两种精度放在同一把尺子上。</p>
+    算 FP8 时，运算量照样按模型形状数（一次乘加记 2 次运算，和一个数占几个字节无关），分母也照样用 2,307，这样两种精度放在同一把尺子上。</p>
   <table>
     <tr><th></th><th>每芯片 TFLOP/s</th><th>MFU</th></tr>
     <tr><td>公开的 MoE（BF16，Qwen3-235B／DeepSeek-V3）</td><td>629.8／612.7</td><td>27.3%／26.6%</td></tr>
@@ -976,7 +983,7 @@ print(f"步时 {t:.3f} s  每芯片 {chip:,.1f} TFLOP/s  MFU {chip / 2307:.1%}")
     <tr><td>步时</td><td>profile 里 TPU:0 <code>XLA Modules</code> 行上的 <code>jit_train_step</code>，抓到的 3 个完整步取中位（11,758.2／7,842.1 ms）；或 MaxText 写的 <code>perf/step_time_seconds</code> 跳过前两步取中位</td><td>Overview 的「Average Step Time」按主机记的步边界切、取平均，长 0.2–0.3%（2.1）；开了 profile 的那几步会被写文件拖长，取中位不取平均</td></tr>
     <tr><td>每 device 的 TFLOP/s</td><td>MaxText 记的每 device 每步运算量 3,981.54 TFLOP ÷ 步时；两份 FP8 记的运算量一模一样</td><td>这个运算量是按模型形状算的，不是实测：只能说明记了多少活，不能说明干了多少</td></tr>
     <tr><td>MFU</td><td>每芯片 TFLOP/s ÷ 2,307（每芯片 BF16 峰值；一芯片 2 个 device）</td><td>XProf 页面用每 TensorCore 1,028.75，乘 2 也只有 2,057.5；换算前先统一分母（上面折叠块）</td></tr>
-    <tr><td>FP8 的 TFLOP/s</td><td>运算量照 BF16 那样数，分母照样 2,307</td><td>除 FP8 峰值 4,614，MFU 凭空减半（1,014.8 ÷ 4,614 ＝ 22.0%）</td></tr>
+    <tr><td>FP8 的 TFLOP/s</td><td>运算量照样按模型形状数，和精度无关；分母照样 2,307</td><td>除 FP8 峰值 4,614，MFU 凭空减半（1,014.8 ÷ 4,614 ＝ 22.0%）</td></tr>
     <tr><td>显存</td><td>会不会放不下，看运行时的峰值；峰值是谁占的，看编译器给程序排的账（3.6）</td><td>这两个峰值差好几 GiB，别混用（3.6）</td></tr>
   </table>
 
@@ -1032,8 +1039,8 @@ print(f"步时 {t:.3f} s  每芯片 {chip:,.1f} TFLOP/s  MFU {chip / 2307:.1%}")
 <line x1="517.6017129445097" y1="265.3705962378424" x2="578.3027150197129" y2="223.11658760701965" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
 <rect x="504.6017129445097" y="264.3705962378424" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="579.3027150197129" y="208.11658760701965" width="14" height="14" rx="7" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="511" y="301" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">示意：AI 1,000</text>
-<text class="svgsm" x="547" y="325" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">FP8 字节减半 → AI 2,000</text>
+<text class="svgsm" x="511" y="301" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">示意：强度 1,000</text>
+<text class="svgsm" x="547" y="325" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">FP8 字节减半 → 强度 2,000</text>
 <rect x="680" y="102" width="720" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="680" y="102" width="720" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="680" y="104" width="720" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -1080,13 +1087,13 @@ print(f"步时 {t:.3f} s  每芯片 {chip:,.1f} TFLOP/s  MFU {chip / 2307:.1%}")
 <rect x="2" y="590" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="617" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE 的时间大量不在矩阵乘上，FP8 一般只多出两成</tspan></text>
 <text class="svgsm" x="20" y="648" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">混元3 改后的涨幅和稠密 405B 一样大：要成立，一步里七成时间得是矩阵乘 —— 先打个问号。</text>
-</svg><figcaption><b>左边看示意点从蓝顶升到橙顶，正好两倍；右边看红点：它要求一步里七成时间是矩阵乘。</b><span class="capmore"><br><em>屋顶线常数取自开源 XProf 的 Roofline 页；右边曲线是本课推导的上限。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 屋顶线常数：开源 XProf Roofline 页 Device Information（TPU v7x，每 TensorCore 峰值 1,028.75 TFLOP/s、HBM 3,433 GiB/s）；拐点 279.1 FLOP/B 与 TUNING-v7 §⁠2.7 读出的 279.085 一致。</p>
+</svg><figcaption><b>左边看示意点从蓝顶升到橙顶，正好两倍；右边看红点（混元3 改后比它自己的 BF16 多 53%）：它要求一步里七成时间是矩阵乘。</b><span class="capmore"><br><em>屋顶线常数取自开源 XProf 的 Roofline 页；右边曲线是本课推导的上限。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 屋顶线常数：开源 XProf Roofline 页 Device Information（TPU v7x，每 TensorCore 峰值 1,028.75 TFLOP/s、HBM 3,433 GiB/s）；拐点 279.1 FLOP/B 与 TUNING-v7 §⁠2.7 读出的 279.085 一致。</p>
 <p>📌 FP8 峰值 ×2：每芯片 FP8 4,614 ÷ BF16 2,307（TUNING-v7 §⁠1.1 的 MFU 分母）。</p>
 <p>📌 涨幅：llama3.1-405B BF16→FP8 +52.8%、DeepSeek-V3 612.7→743.5（+21.4%），Ironwood 官方实测表，转引自 TUNING-v7 §⁠1.2；混元3 改后 1,014.8 ÷ BF16 662.3 ＝ 1.532（64 芯片，TUNING-v7 §⁠3.4.6 表）。</p>
 <p>⚠️ 本课推导：FP8 拐点 558 ＝ 279 × 2（平顶翻倍、带宽不变）；一步最多快 1 ÷ (1 − p/2)，假设 FP8 只把矩阵乘的时间最多砍半、其余不变；反推 p ≥ 2 × (1 − 1/涨幅)。通信若没藏住，量化后通信字节也减半，这时要把暴露的通信也算进 p —— 本例原配方暴露通信约 0.2 s／步，不改结论。</p>
-<p>⚠️ 示意：AI 1,000 的点是示意，不是混元3 的某个实测 kernel；混元3 的 BF16 和 FP8 两份 batch 不同（12 vs 7），比的是每芯片 TFLOP/s。</p></details></figure>
-  <p>FP8 让一个数从 2 字节变 1 字节：平顶抬一倍，同一个矩阵乘的算术强度也翻一倍。<b>所以一个矩阵乘最多快一倍，而且只有矩阵乘吃这一倍</b>：
-    路由、按专家重排 token、逐元素运算、通信，都不在这张图上。</p>
+<p>⚠️ 示意：强度 1,000 的点是示意，不是混元3 的某个实测 kernel；混元3 的 BF16 和 FP8 两份 batch 不同（12 vs 7），比的是每芯片 TFLOP/s。</p></details></figure>
+  <p>FP8 让一个数从 2 字节变 1 字节，两头各翻一倍：落在平顶上的矩阵乘，平顶抬高一倍；落在斜坡上的，要搬的字节减半，点往右挪一倍，沿斜坡也正好快一倍。
+    <b>所以一个矩阵乘最多快一倍，而且只有矩阵乘吃这一倍</b>：路由、按专家重排 token、逐元素运算、通信，都不在这张图上。</p>
 
   <details class="foldfig"><summary>右边那条曲线怎么来的 <span class="why">（1 ÷ (1 − p/2)，以及反推 p）</span></summary>
   <ul>
@@ -1097,6 +1104,8 @@ print(f"步时 {t:.3f} s  每芯片 {chip:,.1f} TFLOP/s  MFU {chip / 2307:.1%}")
   </details>
 
   <h3 id="s1-3">1.3　拿同类比一比</h3>
+  <p>公开实测报的都是「同一个模型从 BF16 换 FP8，每芯片 TFLOP/s 涨多少」，所以混元3 也拿自己的 BF16（662.3）当起点。
+    这和第零节的 1.50 倍不是一回事：那个是拿 FP8 原配方当起点。</p>
 <figure class="fbox fwide" id="fig-t7-ruler"><svg viewBox="0 0 1400 648" width="100%" role="img" aria-label="一把横向的尺子：每芯片 TFLOP/s，按 BF16 等价运算量算，从 0 到 BF16 峰值 2,307（MFU 100%），上方同时标 MFU 百分比。四行，每行一个灰色圆点是 BF16、一个彩色圆点是 FP8，中间箭头标涨幅。稠密 llama3.1-405B：1,261.4 到约 1,927，涨 52.8%。DeepSeek-V3（MoE）：612.7 到 743.5，涨 21.4%。混元3 原配方（MoE）：662.3 到 677.0，涨 2.2%。混元3 改后：662.3 到 1,014.8，涨 53.2%，红色，和稠密模型一样多。背景一条灰带标出公开 MoE 的 BF16 水位 600 到 630。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同样换 FP8：稠密涨 53%，MoE 涨 21%，混元3 改后涨了 53%</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一把尺子：每芯片 TFLOP/s（按 BF16 等价运算量算），右端 2,307 ＝ BF16 峰值 ＝ MFU 100%</text>
@@ -1180,7 +1189,7 @@ print(f"步时 {t:.3f} s  每芯片 {chip:,.1f} TFLOP/s  MFU {chip / 2307:.1%}")
     <tr><td>同样那些算子都还在，只是每个变短了，主要是专家矩阵乘</td><td>有一类算子整块变没了，或者短得离谱</td></tr>
     <tr><td>通信该多少还是多少</td><td>通信也跟着少了</td></tr>
   </table>
-  <p class="landing">⭐ <b>好得不像真的，先估再看。</b>DeepSeek-V3（MoE）换 FP8 只多出两成；拿到稠密模型的涨幅，就该打开 profile 找那 3.9 秒。</p>
+  <p class="landing">⭐ <b>好得不像真的，先估再看。</b>带着这张表打开 profile：少掉的 3.9 秒落在哪些算子上，通信还在不在。</p>
 
 </div></section>
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>打开 profile：少掉的时间在哪？</h2><a class="lecbtn" href="topic-07-lecture.html#c2">📝 本节讲义</a></div>
@@ -2124,11 +2133,11 @@ Bound by  = 利用率最高的那一项（Compute、HBM；TPU 上有 CMEM、VMEM
 <table class="numtab"><tr><th>#</th><th>是什么</th><th>页面上读到什么（框按页面文字的位置画）</th></tr><tr><td>①</td><td>Rank</td><td>第一个专家矩阵乘排第几：原配方 4（tgmm_megablox.12）、改后 124（tgmm.8）</td></tr><tr><td>②</td><td>#Occurrences</td><td>两份都是 1,872 次 ＝ 78 圈 × 3 步 × 8 个 TensorCore（这台主机 4 颗芯片）：一次没少调</td></tr><tr><td>③</td><td>Avg. self time</td><td>每次 5,692.2 µs → 94.5 µs（第一行）</td></tr><tr><td>④</td><td>Model GFLOP/s</td><td>507,049 → 30,526,213 GFLOP/s，即 507 TFLOP/s → 30.5 PFLOP/s：分子（自报的 FLOP）不变、分母（时间）缩了六十倍</td></tr><tr><td>⑤</td><td>每步只跑一次的几个</td><td>改后出现 24 次（每步每核 1 次，在 78 圈循环之外）的 gmm.6、tgmm.2…每次 4.2–5.0 ms、573–686 TFLOP/s：这几个没缩水（输出是 <code>bf16[192,1536,4096]</code> 这类带全部 192 个专家的形状）。是 MTP 那一层（4.6）</td></tr></table>
   <p><b>次数一样</b>，1,872 ＝ 78 圈 × 3 步 × 8 个 TensorCore（一台主机 4 颗芯片），每一圈都照常调了；
     <b>每次的时间</b>从 5,692 µs 掉到 94.5 µs。Model GFLOP/s 列就是「自报 FLOP ÷ 每次时间」，所以跟着涨了六十倍，到 3,050 万 GFLOP/s（30.5 PFLOP/s）。
-    <b>不是每个都缩水</b>：改后每步只跑一次的那几个（⑤，在 78 圈循环外面）还是 4.2–5.0 ms、573–686 TFLOP/s，和原配方的同类 kernel 一个量级——它们是 MTP 那一层的专家矩阵乘，权重另走一条路收齐了（4.6）。</p>
+    <b>不是每个都缩水</b>：改后每步只跑一次的那几个（⑤，在 78 圈循环外面）还是 4.2–5.0 ms、573–686 TFLOP/s，和原配方的同类 kernel 一个量级——它们是 MTP 那一层的专家矩阵乘（MTP：多 token 预测，主干后面多接的一层，用来多预测一个词），权重另走一条路收齐了（4.6）。</p>
   <p>页底还有一张小核的表，过滤 reduce-scatter：</p>
-<figure class="fbox fwide shot" id="fig-t7-35"><img src="img/topic07-35-opstats-rs.png" width="2388" height="1422" loading="lazy" alt="图 3.5 · Hlo Op Stats，名字里含 reduce-scatter：原配方 ／ 改后。① 主核上的 done；② 小核上的执行；③ 改后：两张表都空"><figcaption><b>原配方：① 主核上的 done 只有 0.02 ms，② 小核上的执行每条 9–10 ms；改后：③ 两张表都空。</b></figcaption></figure>
+<figure class="fbox fwide shot" id="fig-t7-35"><img src="img/topic07-35-opstats-rs.png" width="2388" height="1422" loading="lazy" alt="图 3.5 · Hlo Op Stats，名字里含 reduce-scatter：原配方 ／ 改后。① 主核上的 done；② 小核上的执行；③ 改后：两张表都空"><figcaption><b>原配方：① 主核上的 done 只有 0.02 ms，② 小核上的执行每次 9–11 ms（上三行在循环里、下三行在循环外）；改后：③ 两张表都空。</b></figcaption></figure>
 <table class="numtab"><tr><th>#</th><th>是什么</th><th>页面上读到什么（框按页面文字的位置画）</th></tr><tr><td>①</td><td>主核上的 done</td><td>原配方主核表里 <code>reduce-scatter.13／17….call-done</code> 每次平均 0.021／0.020 ms：主核走到 done 时小核早就散完了——这几条通信本来就藏在计算底下</td></tr><tr><td>②</td><td>小核上的执行</td><td>原配方小核表 6 条 reduce-scatter：.16／.12／.14 每条 234 次（＝ 78 圈 × 3 步，这张表只记一颗小核）、每次 9.1–10.4 ms，合计每步 2354.7 ms（trace 上按类型加总 2,354.0 ms）；.10／.6／.8 每条 3 次（每步 1 次，循环外）</td></tr><tr><td>③</td><td>改后：两张表都空</td><td>改后同样过滤，主核表、小核表一条 reduce-scatter 都没有：专家梯度根本没有散回去</td></tr></table>
-  <p>这张 <b>Sparse Core Ops</b> 表记的是小核上每条指令的执行，也就是第二节在 trace 里看到的那些通信本身。原配方三条专家梯度的 reduce-scatter 每条每次 9.1–10.4 ms，加起来每步 2354.7 ms（trace 上按类型加总 2,354.0 ms）；改后两张表一条都没有。
+  <p>这张 <b>Sparse Core Ops</b> 表记的是小核上每条指令的执行，也就是第二节在 trace 里看到的那些通信本身。原配方六条专家梯度的 reduce-scatter：循环里三条（每步各 78 次）、循环外三条（每步 1 次），每次 9.1–10.6 ms，加起来每步 2,354.7 ms（trace 上按类型加总 2,354.0 ms）；改后两张表一条都没有。
     原配方主核上对应的 done 每次只有 0.02 ms：这些通信本来就藏在计算底下（2.5 的结论），没了它们，主核的时间几乎省不下来——省下的大头还是在专家矩阵乘上。</p>
   <details class="foldfig"><summary>Op Stats 的几个口径 <span class="why">（次数怎么除、self time、两张表别混加）</span></summary>
   <ul>
@@ -2141,7 +2150,7 @@ Bound by  = 利用率最高的那一项（Compute、HBM；TPU 上有 CMEM、VMEM
 <details class="foldfig"><summary>现场打开 <span class="why">（本机开源 XProf 开到同一屏；第一次先看 2.1 的「本机怎么开」）</span></summary><ul><li>工具 <code>hlo_stats</code>（首页 Tools 里叫 HLO Op Stats）。表上方 Visible Columns 只勾 Rank、HLO op category、HLO op name、#Occurrences、Avg. self time、Total self time (%)、Model GFLOP/s、Normalized GFLOP/s：Program id 列是程序指纹，HLO op text 一行好几百字。</li><li>图 3.4：HLO op name 框按 <code>=</code> 切到包含，输 <code>gmm</code> 回车。图 3.5：同样输 <code>reduce-scatter</code>，往下滚到 Sparse Core Ops。</li></ul></details>
 
   <h3 id="s3-4">3.4　两头对账：少掉的时间 ≈ 没干的活</h3>
-  <p class="landing">⭐ 一步少了 3,916.1 ms：专家矩阵乘少了 3,570.5 ms，停在 done 上等的少了 485 ms，别处反而多花了一点。按「只算了 3/192」估，没干的专家矩阵乘该省 3,611 ms，两头对上了。</p>
+  <p class="landing">⭐ 一步少了 3,916.1 ms：专家矩阵乘少了 3,570.5 ms，停在 done 上等的少了 485 ms，别处反而多花了一点。假设每卡只算了自己那 3/192，没干的专家矩阵乘该省 3,611 ms，两头对上了。</p>
   <table class="numtab">
     <tr><th>TPU:0 中位步（ms）</th><th>原配方</th><th>改后</th><th>少了</th></tr>
     <tr><td>一步</td><td>11,758.2</td><td>7,842.1</td><td><b>3,916.1</b></td></tr>
@@ -2152,8 +2161,7 @@ Bound by  = 利用率最高的那一项（Compute、HBM；TPU 上有 CMEM、VMEM
     <tr><td>loop fusion</td><td>2,166.5</td><td>2,442.4</td><td>-275.9</td></tr>
     <tr><td>其余各类合计</td><td colspan="2"></td><td>-0.2</td></tr>
   </table>
-  <p><b>一头是时间</b>：少掉的 3,916.1 ms 里，91% 是专家矩阵乘少的（个数一样 957 个，时间少了 97%）。<b>另一头是活</b>：192 个专家分在 64 张卡上，每卡 3 个；改后每张卡只算了自己那 3 个（第四节从 HLO 里核实），
-    没干的是 189/192。原配方算全部 192 个花 3,668.8 ms，按「时间和专家数成正比」估，没干的那部分值 3,668.8 × 189/192 ＝ 3611.5 ms <span class="tag">[推断]</span>，实际少了 3,570.5 ms，差 1%。</p>
+  <p><b>一头是时间</b>：少掉的 3,916.1 ms 里，91% 是专家矩阵乘少的（个数一样 957 个，时间少了 97%）。<b>另一头是活</b>：192 个专家分在 64 张卡上，每卡 3 个；假设改后每张卡只算了自己那 3 个，没干的就是 189/192——这个假设对不对，要到 HLO 里去看。原配方算全部 192 个花 3,668.8 ms，按「时间和专家数成正比」估，没干的那部分值 3,668.8 × 189/192 ＝ 3,611.5 ms <span class="tag">[推断]</span>，实际少了 3,570.5 ms，差 1%。</p>
   <p>小核上没散的梯度、没收的权重（2,354 ms reduce-scatter、1,200 ms 左右 all-gather）不进这张账：它们本来就和主核的计算重叠，只体现在主核少等的那 485 ms 里（集合通信的 done 少了 119 ms，2.5 节；其余是 gather_offload 等别的异步 done，没再细拆）。
     loop fusion 改后反而多了 276 ms：活少了，怎么还有一类变多？先记下这个疑点，第四节在 HLO 里找到了它（4.6）。</p>
   <p class="landing">⭐ <b>少掉的 3.9 秒，九成是没算的专家矩阵乘。</b></p>
@@ -2193,7 +2201,7 @@ Bound by  = 利用率最高的那一项（Compute、HBM；TPU 上有 CMEM、VMEM
   <p>时间的账在 3.4 对上了，显存是另一本账。原配方要把 192 个专家的权重收齐才能算，反向算出的梯度也是 192 个专家一整份，散回各卡之前得有地方放：
     这样一块 <code>bf16[192,4096,1536]</code> 就是 2,304 MiB（192 × 4,096 × 1,536 × 2 字节）。改后真的没收没散，这些块都该不见，峰值该降下来好几 GiB。
     XProf 里看显存有两页：<b>Memory Profile</b> 是运行时分配器的账，横轴是时间；<b>Memory Viewer</b> 是编译器给一个程序排的账，横轴是程序里第几条指令。先一停一停走一遍：</p>
-<figure class="fbox fwide vid anim" id="xrec-mem"><video src="media/topic07-xrec-mem.mp4?v=1cdaeca7" data-first="1" data-pauses="21.40,32.40,41.40,54.40,66.40,78.40,89.40,101.40,114.40,127.40,140.40" poster="img/topic07-xrec-mem.png" autoplay loop muted playsinline preload="metadata" aria-label="步进录屏：fp8old 的 Memory Profile：运行时的显存账。① 容量 94.74 GiB　② 窗口峰值 93.28 GiB，只剩 1.46　③ 峰值时刻 1.4 ms ④ Stack 49.39 ＋ Heap 43.89 ＋ Free 1.46 ＝ 94.74　⑤ 三条线是平的：显存开跑就整块划好，在这找不到峰值；TPU:0（Memory ID 0）多记了 128 次小分配，峰值落在开头，训练步 380 ms 才开始 ① 换成 1　② 峰值时刻 23,606.7 ms，在第二步里　③ 93.23 GiB：8 个 device 都一样，TPU:0 多 0.05；① HLO&#x27;s at time 填 23606.7　② 这一刻在跑的只有 jit_train_step（表里 8 行＝8 个 TensorCore，画面露出 7 行） Memory Breakdown Table 只有两块：③ stack 49.387 GiB　④ 「unused preallocated」43.846 GiB；换到 Memory Viewer：编译期给一个程序排的账。① 默认打开 jit_add，一个零碎小程序 ② 峰值 0.00 MiB：第一步永远是换模块；① jit_train_step　② 峰值 91,766.56 MiB　③ 入口参数 44,533.22 MiB　④ 峰值时的临时变量 47,230.39 MiB 横轴是第几条指令（Program Order），不是时间；绿带是峰值那一段，第 3,204–3,319 条；往下到 HLO Ops at Peak：峰值那一刻活着的 buffer，一块一根条；by Buffer Size 从宽到窄 ① 悬停最宽那根　② param.471，5,688 MiB，f32[3,79,1536,4096]，Framework Op 是 opt_state 里的 nu；① 第二根一样宽　② param.393，state[&#x27;model&#x27;]…[&#x27;wo&#x27;]：专家权重的 f32 主副本 5,688 MiB ＝ 3 个专家 × 79 层 × 4,096 × 1,536 × 4 字节；③ 最宽 6 根 ＝ 3 份权重 ＋ 各自的 nu；① 宽度减半的　② param.468，bf16[3,79,4096,1536]，opt_state 里的 mu：一阶矩存成 bf16，2,844 MiB 参数 17,813 ＋ nu 17,813 ＋ mu 8,906.5 ＝ 页头那 44,533 MiB 入口参数；① 同样 2,844 MiB 的下一根　② bitcast_convert_fusion.11，bf16[79,3,4096,1536]，Temporary 左栏没有 Framework Op：编译器插的，HLO 里它的输入就是 f32 的 wi_0，转成 bf16、换了排布；① tgmm_megablox.10，bf16[192,4096,1536]，2,304 MiB　② 反向循环体里：一层 192 个专家的完整梯度，还没散回 3 个 ③ 同形状一共 5 块、11.25 GiB：这一层 3 块，另 2 块是 MTP 层专家梯度的 all-reduce；改后（fp8new）：峰值 91,597.20 MiB，只少 169 MiB，最宽的三根却换了人　① bf16[7,4096,120832]，6,608 MiB ② fusion.1176{1}，jvp()/dot_general，linears.py:105：输出头的 logits。峰值列表里没有 [192,…] 的梯度了；BF16（bf16old）：① 悬停一根参数　② param.329，f32[192,79,1536,32]：192 个专家都在，每个只有 32 行 入口参数 22,271 MiB，正好是 FP8 的一半　③ 最宽三根也是 logits，每块 11,328 MiB（每卡 12 条序列）"></video><figcaption>本机开源 XProf 2.23.1 的 Memory Profile／Memory Viewer 页面（DPR2 截图），框按页面文字和条形图里条的位置画。停 1–12 对应下表。</figcaption></figure><table class="numtab fo-hide"><tr><th>停</th><th>在哪一页、做什么</th><th>读出什么</th></tr><tr><td>1</td><td>fp8old Memory Profile，进来就是</td><td>容量 94.74 GiB、窗口峰值 93.28 GiB、峰值时刻 1.4 ms；Stack 49.39 ＋ Heap 43.89 ＋ Free 1.46；三条线是平的</td></tr><tr><td>2</td><td>Memory ID 下拉改成 1</td><td>峰值时刻 23,606.7 ms、93.23 GiB；默认的 0（TPU:0）多记了 128 次小分配，峰值落在窗口开头</td></tr><tr><td>3</td><td>HLO Modules 上方「HLO's at time」填 23606.7</td><td>这一刻在跑的只有 jit_train_step（表里 8 行＝8 个 TensorCore，画面露出 7 行）；Memory Breakdown Table：stack 49.387、unused preallocated 43.846 GiB</td></tr><tr><td>4</td><td>换到 Memory Viewer</td><td>默认模块 jit_add，峰值 0.00 MiB：先换模块</td></tr><tr><td>5</td><td>Hlo Modules 下拉选 jit_train_step</td><td>峰值 91,766.56 MiB；入口参数 44,533.22；临时变量 47,230.39；横轴是 Program Order。页头 Module Name 还写着 jit_add（这一版不刷新），以左栏下拉框为准</td></tr><tr><td>6</td><td>往下到 HLO Ops at Peak，by Buffer Size 悬停最宽一根</td><td>5,688 MiB 的 f32[3,79,…]：参数或它的 nu（6 根一样宽，谁先谁后每次开页面会变）</td></tr><tr><td>7</td><td>悬停第二根</td><td>另一种：nu 或 state['model'] 下的专家权重</td></tr><tr><td>8</td><td>悬停宽度减半的那几根</td><td>bf16 的 mu，2,844 MiB；参数 ＋ nu ＋ mu ＝ 44,533 MiB</td></tr><tr><td>9</td><td>同宽的下一根</td><td>bitcast_convert_fusion.11：Temporary，没有 Framework Op，编译器插的 bf16 权重副本</td></tr><tr><td>10</td><td>再往右，2,304 MiB 那几根</td><td>tgmm_megablox.10，bf16[192,4096,1536]：这一层 192 个专家的完整梯度。同形状一共 5 块、11.25 GiB：这一层 3 块，另 2 块是 MTP 层专家梯度的 all-reduce</td></tr><tr><td>11</td><td>fp8new 同一页</td><td>峰值 91,597.20 MiB；最宽三根换成输出头的 logits bf16[7,4096,120832]；峰值列表里没有 [192,…] 的梯度了</td></tr><tr><td>12</td><td>bf16old 同一页</td><td>参数 f32[192,79,…,32]：192 个专家、每个 32 行；入口参数 22,271 MiB，FP8 的一半</td></tr></table><p>原片 <a href="media/topic07-xrec-mem.mp4">topic07-xrec-mem.mp4</a>（海报是停 10 那一帧 <a href="img/topic07-xrec-mem.png">png</a>）。</p>
+<figure class="fbox fwide vid anim" id="xrec-mem"><video src="media/topic07-xrec-mem.mp4?v=1cdaeca7" data-first="1" data-pauses="21.40,32.40,41.40,54.40,66.40,78.40,89.40,101.40,114.40,127.40,140.40" poster="img/topic07-xrec-mem.png" autoplay loop muted playsinline preload="metadata" aria-label="步进录屏：fp8old 的 Memory Profile：运行时的显存账。① 容量 94.74 GiB　② 窗口峰值 93.28 GiB，只剩 1.46　③ 峰值时刻 1.4 ms ④ Stack 49.39 ＋ Heap 43.89 ＋ Free 1.46 ＝ 94.74　⑤ 三条线是平的：显存开跑就整块划好，在这找不到峰值；TPU:0（Memory ID 0）多记了 128 次小分配，峰值落在开头，训练步 380 ms 才开始 ① 换成 1　② 峰值时刻 23,606.7 ms，在第二步里　③ 93.23 GiB：8 个 device 都一样，TPU:0 多 0.05；① HLO&#x27;s at time 填 23606.7　② 这一刻在跑的只有 jit_train_step（表里 8 行＝8 个 TensorCore，画面露出 7 行） Memory Breakdown Table 只有两块：③ stack 49.387 GiB　④ 「unused preallocated」43.846 GiB；换到 Memory Viewer：编译期给一个程序排的账。① 默认打开 jit_add，一个零碎小程序 ② 峰值 0.00 MiB：第一步永远是换模块；① jit_train_step　② 峰值 91,766.56 MiB　③ 入口参数 44,533.22 MiB　④ 峰值时的临时变量 47,230.39 MiB 横轴是第几条指令（Program Order），不是时间；绿带是峰值那一段，第 3,204–3,319 条；往下到 HLO Ops at Peak：峰值那一刻活着的 buffer，一块一根条；by Buffer Size 从宽到窄 ① 悬停最宽那根　② param.471，5,688 MiB，f32[3,79,1536,4096]，Framework Op 是 opt_state 里的 nu；① 第二根一样宽　② param.393，state[&#x27;model&#x27;]…[&#x27;wo&#x27;]：专家权重的 f32 主副本 5,688 MiB ＝ 3 个专家 × 79 层 × 4,096 × 1,536 × 4 字节；③ 最宽 6 根 ＝ 3 份权重 ＋ 各自的 nu；① 宽度减半的　② param.468，bf16[3,79,4096,1536]，opt_state 里的 mu：一阶矩存成 bf16，2,844 MiB 参数 17,813 ＋ nu 17,813 ＋ mu 8,906.5 ＝ 页头那 44,533 MiB 入口参数；① 同样 2,844 MiB 的下一根　② bitcast_convert_fusion.11，bf16[79,3,4096,1536]，Temporary 左栏没有 Framework Op：编译器插的，HLO 里它的输入就是 f32 的 wi_0，转成 bf16、换了排布；① tgmm_megablox.10，bf16[192,4096,1536]，2,304 MiB　② 反向循环体里：一层 192 个专家的完整梯度，还没散回 3 个 ③ 同形状一共 5 块、11.25 GiB：这一层 3 块，另 2 块是 MTP 层专家梯度的 all-reduce；改后（fp8new）：峰值 91,597.20 MiB，只少 169 MiB，最宽的三根却换了人　① bf16[7,4096,120832]，6,608 MiB ② fusion.1176{1}，jvp()/dot_general，linears.py:105：输出头的 logits。峰值列表里没有 [192,…] 的梯度了；BF16（bf16old）：① 悬停一根参数　② param.329，f32[192,79,1536,32]：192 个专家都在，每个只有 32 行 入口参数 22,271 MiB，正好是 FP8 的一半　③ 最宽三根也是 logits，每块 11,328 MiB（每卡 12 条序列）"></video><figcaption>本机开源 XProf 2.23.1 的 Memory Profile／Memory Viewer 页面（DPR2 截图），框按页面文字和条形图里条的位置画。停 1–12 对应下表。</figcaption></figure><table class="numtab fo-hide"><tr><th>停</th><th>在哪一页、做什么</th><th>读出什么</th></tr><tr><td>1</td><td>fp8old Memory Profile，进来就是</td><td>容量 94.74 GiB、窗口峰值 93.28 GiB、峰值时刻 1.4 ms；Stack 49.39 ＋ Heap 43.89 ＋ Free 1.46；三条线是平的</td></tr><tr><td>2</td><td>Memory ID 下拉改成 1</td><td>峰值时刻 23,606.7 ms、93.23 GiB；默认的 0（TPU:0）多记了 128 次小分配，峰值落在窗口开头</td></tr><tr><td>3</td><td>HLO Modules 上方「HLO's at time」填 23606.7</td><td>这一刻在跑的只有 jit_train_step（表里 8 行＝8 个 TensorCore，画面露出 7 行）；Memory Breakdown Table：stack 49.387、unused preallocated 43.846 GiB</td></tr><tr><td>4</td><td>换到 Memory Viewer</td><td>默认模块 jit_add，峰值 0.00 MiB：先换模块</td></tr><tr><td>5</td><td>Hlo Modules 下拉选 jit_train_step</td><td>峰值 91,766.56 MiB；入口参数 44,533.22；临时变量 47,230.39；横轴是 Program Order。页头 Module Name 还写着 jit_add（这一版不刷新），以左栏下拉框为准</td></tr><tr><td>6</td><td>往下到 HLO Ops at Peak，by Buffer Size 悬停最宽一根</td><td>5,688 MiB 的 f32[3,79,…]：参数或它的 nu（6 根一样宽，谁先谁后每次开页面会变）</td></tr><tr><td>7</td><td>悬停第二根</td><td>另一种：nu 或 state['model'] 下的专家权重</td></tr><tr><td>8</td><td>悬停宽度减半的那几根</td><td>bf16 的 mu，2,844 MiB；参数 ＋ nu ＋ mu ＝ 44,533 MiB</td></tr><tr><td>9</td><td>同宽的下一根</td><td>bitcast_convert_fusion.11：Temporary，没有 Framework Op，编译器插的 bf16 权重副本</td></tr><tr><td>10</td><td>再往右，2,304 MiB 那几根</td><td>tgmm_megablox.10，bf16[192,4096,1536]：这一层 192 个专家的完整梯度。同形状一共 5 块、11.25 GiB：这一层 3 块，另 2 块是 MTP 层专家梯度的 all-reduce</td></tr><tr><td>11</td><td>fp8new 同一页</td><td>峰值 91,597.20 MiB；最宽三根换成输出头的 logits bf16[7,4096,120832]；峰值列表里没有 [192,…] 的梯度了</td></tr><tr><td>12</td><td>bf16old 同一页</td><td>参数 param.329（wo）f32[192,79,1536,32]：192 个专家都在，4,096 那一维只剩 32；入口参数 22,271 MiB，FP8 的一半</td></tr></table><p>原片 <a href="media/topic07-xrec-mem.mp4">topic07-xrec-mem.mp4</a>（海报是停 10 那一帧 <a href="img/topic07-xrec-mem.png">png</a>）。</p>
 <figure class="fbox fwide shot" id="fig-t7-37"><img src="img/topic07-37-memprof.png" width="3408" height="2542" loading="lazy" alt="图 3.7 · Memory Profile：峰值、时刻、Stack／Heap（fp8old）。① Memory ID；② 窗口峰值；③ 峰值时刻；④ Stack／Heap／Free；⑤ 时间线；⑥ HLO&#x27;s at time；⑦ 这一刻在跑的；⑧ stack；⑨ unused preallocated"><figcaption><b>运行时的账：峰值、时刻、两大块。</b>先看 ② ③（别停在 Memory ID 0），再看下半张 ⑦ 这一刻是哪个程序。</figcaption></figure>
 <table class="numtab"><tr><th>#</th><th>是什么</th><th>页面上读到什么（框按页面文字的位置、条形图里条的位置画）</th></tr><tr><td>①</td><td>Memory ID</td><td>默认是 0（TPU:0）：它多记了 128 次小分配（#Allocation 196 对 68），峰值时刻落在窗口开头的 1.4 ms，训练步 380 ms 才开始。换成 1；Memory ID 1–7 的数一样</td></tr><tr><td>②</td><td>窗口峰值</td><td>93.23 GiB（Memory ID 0 是 93.28），容量 94.74 GiB，只剩 1.50 GiB</td></tr><tr><td>③</td><td>峰值时刻</td><td>23,606.7 ms，落在 profile 的第二步里</td></tr><tr><td>④</td><td>Stack／Heap／Free</td><td>49.39 ＋ 43.85 ＋ 1.50 ＝ 94.74 GiB。Stack 是程序开跑时整块划出的工作区；Heap 是跨步常驻的数组（下面 ⑨）</td></tr><tr><td>⑤</td><td>时间线</td><td>三条线从头到尾几乎是平的：显存一开跑就整块分好，程序里的涨落分配器看不见。这张图只能读峰值和余量</td></tr><tr><td>⑥</td><td>HLO&#x27;s at time</td><td>填峰值时刻 23606.7，下面的模块表只留这一刻在跑的程序</td></tr><tr><td>⑦</td><td>这一刻在跑的</td><td>只有 <code>jit_train_step</code>。表里 8 行（8 个 TensorCore），画面里露出 7 行，TPU:6 那行要在表内往下滚；起止约 12,213–23,970 ms：峰值属于训练步这个程序</td></tr><tr><td>⑧</td><td>stack</td><td>Memory Breakdown Table 的第一块：49.387 GiB，就是 ④ 的 Stack</td></tr><tr><td>⑨</td><td>unused preallocated</td><td>第二块叫「unused preallocated device memory」，43.846 GiB：抓 profile 之前就分好的那块。名字叫 unused，大小却和 Memory Viewer 里的入口参数（参数＋优化器状态，44,533 MiB ＝ 43.49 GiB）只差 0.36 GiB <span class="tag">[推断：参数和优化器状态在窗口开始前就分好了，分配器只记成一整块]</span></td></tr></table>
   <p>三条线从头平到尾：训练程序一开跑就把要用的工作区整块划好（Stack），参数和优化器状态在抓 profile 之前就分好了（Heap），程序里的涨落分配器看不见。
@@ -2210,7 +2218,7 @@ Bound by  = 利用率最高的那一项（Compute、HBM；TPU 上有 CMEM、VMEM
   <ul>
     <li><b>参数和优化器状态</b>（Allocation Type 是 Parameter）：最宽的 6 根各 5,688 MiB，是 3 份专家权重（wi_0／wi_1／wo）的 f32 主副本和 Adam 的 nu。Adam 给每个参数记两个滑动平均：一阶矩 mu 记梯度的平均，二阶矩 nu 记梯度平方的平均。
       5,688 MiB ＝ 3 个专家 × 79 层 × 4,096 × 1,536 × 4 字节——<code>[3,79,…]</code> 的 3，就是每张卡手里那 3 个专家。宽度减半的是 mu，存成 bf16。参数 17,813 ＋ nu 17,813 ＋ mu 8,906.5 ＝ 44,533 MiB，就是页头的入口参数。</li>
-    <li><b>没有 Framework Op 的临时块</b>：<code>bitcast_convert_fusion.11</code> 这类，左栏根本没有 Framework Op 一栏。HLO 里它的输入是 f32 的参数，输出是换了排布的 bf16：编译器为计算插的权重副本，代码里找不到这一行，改代码也改不掉它。</li>
+    <li><b>没有 Framework Op 的临时块</b>：<code>bitcast_convert_fusion.11</code> 这类，左栏根本没有 Framework Op 一栏。HLO 里它的输入是 f32 的参数，输出是换了排布的 bf16：编译器为计算插的权重副本，代码里找不到这一行，改代码也改不掉它。同宽那组里另有三块 <code>bf16[79,3,…]</code> 的 broadcast（图 3.9 记作「梯度攒」）：形状是 79 层 × 每卡 3 个专家，op_name 落在反向 <code>transpose(jvp())</code> 里。HLO 里这三块是反向循环（while）进门前用 0 填好的缓冲：循环每转一圈，把这一层 3 个专家的权重梯度按层号写进其中一格（dynamic-update-slice）——反向一边算一边攒，所以它们整个反向循环里一直占着。</li>
     <li><b>192 个专家的梯度</b>：原配方里 2,304 MiB 一块的 <code>tgmm_megablox.10／11／12</code>，形状 <code>bf16[192,4096,1536]</code>，Framework Op 带 <code>transpose(jvp())/while/body</code>：反向循环体里，这一层 192 个专家完整的权重梯度，还没 reduce-scatter 散回 3 个——就是 4.5 代码 ④ 里 <code>psum_scatter</code> 之前的那个 <code>drhs</code>。
       同形状的还有 2 块 <code>all-reduce.354／358</code>：MTP 层专家梯度在全部 128 个 device 上求和，在循环外，结果一直留到优化器更新。一共 5 块、11.25 GiB，峰值就落在它们活着的时候。</li>
   </ul>
@@ -2244,7 +2252,7 @@ Bound by  = 利用率最高的那一项（Compute、HBM；TPU 上有 CMEM、VMEM
   <details class="foldfig"><summary>BF16 的入口参数为什么只有 FP8 的一半 <span class="why">（切法不同；顺手拿参数量对一下外部锚点）</span></summary>
   <ul>
     <li>FP8 配方是 <code>ici_fsdp_parallelism=64</code> × <code>ici_data_parallelism=2</code>：参数切 64 份，每份在 2 个 device 上各放一个，所以每个 device 拿 1/64，专家权重的形状是 <code>[3,79,4096,1536]</code>（按专家那一维切）。</li>
-    <li>BF16 配方是 <code>ici_fsdp_parallelism=-1</code>，128 个 device 切 128 份，每个 device 拿 1/128，专家权重是 <code>[192,79,32,1536]</code>（按 4,096 那一维切，每份 32 行；这正是第五节说的「专家维没切开」）。入口参数 22,271 MiB，正好是 FP8 的一半。</li>
+    <li>BF16 配方是 <code>ici_fsdp_parallelism=-1</code>，128 个 device 切 128 份，每个 device 拿 1/128，专家权重参数是 f32：<code>wi_0</code>／<code>wi_1</code> 是 <code>[192,79,32,1536]</code>，<code>wo</code> 是 <code>[192,79,1536,32]</code>（录屏停 12 悬停的 param.329 就是 wo；三个都按 4,096 那一维切，每份 32；这正是第五节说的「专家维没切开」）。入口参数 22,271 MiB，正好是 FP8 的一半。</li>
     <li>外部锚点：FP8 每个 device 的 f32 参数 17,813 MiB × 64 份 ÷ 每个数 4 字节 ＝ 2988.5 亿个参数。<a href="https://huggingface.co/tencent/Hy3">混元3 的模型卡</a>写的是主体 2,950 亿 ＋ MTP 层 38 亿 ＝ 2,988 亿，差 0.02%。参数这一项对得上外部的数，入口参数的拆法就对。</li>
     <li>BF16 每卡 12 条序列（FP8 是 7 条），所以它的 logits 一块 11,328 MiB，峰值同样落在输出头；BF16 两份峰值 88,401.89 对 88,399.85 MiB，几乎一样（第五节）。</li>
   </ul>
@@ -2505,7 +2513,8 @@ tgmm.8 = bf16[3,4096,1536] custom-call(…)               （后面没有 reduce
 
   <h3 id="s4-3">4.3　Graph Viewer：以同一颗 kernel 为中心看它的权重从哪来</h3>
   <p class="landing">⭐ 原配方 gmm_megablox.16 的权重往上追：本卡 <code>[1,3,…]</code> → 64 张卡 all-gather → <code>[192,4096,1536]</code>；改后 gmm.27 的权重就是本卡的 <code>[3,4096,1536]</code>。两颗 kernel 拿到的 token 分组表都是 192 组。</p>
-  <p>先看一遍怎么从 Trace Viewer 的一个色块走进 Graph Viewer、在图上沿边往上追：</p>
+  <p><b>Graph Viewer</b> 是 XProf 里的一页：选一条指令当中心，把它的操作数（上游）和使用者（下游）画成一张图，框是指令，箭头是数据流，带标题的大框是被调用的子计算，虚线框是还有输入没画出来的节点。
+    先看一遍怎么从 Trace Viewer 的一个色块走进 Graph Viewer、在图上沿边往上追：</p>
 <figure class="fbox fwide vid anim" id="xrec-graph"><video src="media/topic07-xrec-graph.mp4?v=d5e25a82" data-pauses="11.20,20.00,28.80,36.60,44.40,53.20,62.00,70.80,79.60,89.40,99.20,109.00" poster="img/topic07-xrec-graph.png" autoplay loop muted playsinline preload="metadata" aria-label="步进录屏：Graph Viewer 回答「谁喂给谁」。从第二节那一层出发：原配方（fp8old）前向 40 号层 红框是这层第一颗专家矩阵乘 gmm_megablox.16：它的权重是从哪来的？；① 单击 gmm_megablox.16：② Wall Duration 3,425,196 ns ＝ 3.43 ms ③ Details 右栏第一行是 Graph Viewer 链接：以这条指令为中心画图；Details 的 Start Stack Trace 下面那段就是这条指令的 HLO 原文（4.1 折叠块逐个符号讲） ④ 名字 ＝ 类型[形状] custom-call(…)　⑤ 一个操作数是 f8e4m3fn[192,4096,1536]：192 个专家的权重　⑥ s32[193]：192 组的分组偏移；点链接打开 Graph Viewer：① XLA Op Name 已经填好 gmm_megablox.16，右边却报 ② 找不到这条指令 开源版 2.23.1 不认链接里的模块名，③ 模块下拉框停在第一个 jit_add 上；① XLA Modules 手动选 jit_train_step：XLA Op Name 被清空，右边列出这个模块里最费时的指令当快捷按钮 ② 点 gmm_megablox.16 那个（也可以把名字填回 XLA Op Name、点 Search Graph，效果一样）；① Op 名回来了　② Graph Width ＝ 从中心往外画几层（这里 1 层） ③ 图出来了，可中心节点的标签太长、整张图缩得看不清：图下方有 Save SVG，存下来放大读；取下来的整张图：框 ＝ 一条 HLO 指令，箭头 ＝ 数据流。① 中间红菱形是中心 gmm_megablox.16（Pallas kernel） ② 上面一排是它的操作数　③ 下面灰底大框是吃它输出的 fusion　④ 虚线框：它还有输入没画出来（画到 Graph Width 的边了）；① 中心：custom-call，target tpu_custom_call ＝ Pallas kernel，平均 3.43 ms　② 操作数里权重是 f8e4m3fn[192,4096,1536] ③ s32[193]：192 组 token 的分组偏移　④ kernel 的 tile 512／2048／1536　⑤ 输出 bf16[229376,1536]；边上的小数字 ＝ 它是中心那条指令的第几号操作数，和 HLO 原文括号里的顺序一致（灰框 0、5 号是另外两条边） ① 1 号：从左边远处的 copy-done.141 来，s32[193] 分组偏移　② 7 号：蓝框 bitcast.3183，f8e4m3fn[192,4096,1536] 权重——往上追它；权重往上追：① bitcast 只是把 [1,192,…] 去掉一维成 [192,4096,1536]　② 它来自 all-gather.574 的 call-done ③ 对应的 call-start 写着 async_execution_thread=&quot;sparsecore&quot;：这次收集交给小核去跑（第二节 SC 行上那块）；带标题的大框是 call-start 调用的子计算，里面才是真正干活的 all-gather.573（3.01 ms） ① 输入：本卡 f8e4m3fn[1,3,4096,1536]　② 64 张卡（&#x27;fsdp&#x27;=64）沿第 1 维拼　③ 输出 [1,192,…]：3 × 64 ＝ 192；改后（fp8new）以 gmm.27 为中心画同一处：① 平均 49.31 µs　② 权重是 f8e4m3fn[3,4096,1536]，只有本卡 3 个 ③ 分组偏移照样 s32[193]（192 组）　④ 7 号操作数直接来自量化 fusion.1642：整张图里没有一条 all-gather；不开 Graph Viewer 也能读到同一件事：回 Trace Viewer 单击改后的 ① gmm.27，Details 里它的 HLO 原文 ② 权重 f8e4m3fn[3,4096,1536]　③ 分组偏移 s32[193]：拿着 192 组的 token，只有 3 个专家的权重"></video><figcaption>本机开源 XProf 2.23.1。停 1–5、12 是真实页面截图（DPR2）；停 6–11 是 Graph Viewer 页上那张 graphviz SVG 原样存下来、本地放大，框按 SVG 里节点和文字的位置画，同一张图里往里放大时走二维放大过渡。默认连续播放，取消「连续播放」就一停一停走，停 1–12 对应下表。</figcaption></figure>
   <table class="numtab fo-hide">
     <tr><th>停</th><th>做什么</th><th>读出什么</th></tr>
@@ -2528,13 +2537,13 @@ tgmm.8 = bf16[3,4096,1536] custom-call(…)               （后面没有 reduce
   <p>原片 <a href="media/topic07-xrec-graph.mp4">topic07-xrec-graph.mp4</a>（末帧 <a href="img/topic07-xrec-graph.png">png</a>）。录屏里那几张放大图拼成一张静态对照，就是图 4.2：</p>
 <figure class="fbox fwide shot" id="fig-t7-41"><img src="img/topic07-41-graph-ab.png" width="2532" height="2324" loading="lazy" alt="图 4.2 · Graph Viewer：同一个位置的专家矩阵乘，权重从哪来。① 本卡那份权重；② 和谁一起收、沿哪一维拼；③ 收齐之后；④ 去掉多余的那一维；⑤ kernel 收到的权重；⑥ 每组 token 从第几行起；⑦ 改后 kernel 收到的权重；⑧ 它从哪来"><figcaption><b>同一个位置的专家矩阵乘：⑤ 原配方拿到 192 个专家，⑦ 改后只有 3 个；⑥ 两边的分组表都是 192 组。</b></figcaption></figure>
 <table class="numtab"><tr><th>#</th><th>是什么</th><th>图上读到什么（框按 Graph Viewer 那张 SVG 里节点和文字的位置画）</th></tr><tr><td>①</td><td>本卡那份权重</td><td><code>Parameter 0</code> ＝ <code>f8e4m3fn[1,3,4096,1536]</code>：这张卡手里只有 3 个专家（192 ÷ 64），已经量化成 FP8</td></tr><tr><td>②</td><td>和谁一起收、沿哪一维拼</td><td><code>all-gather.573</code> 的 <code>replica_groups</code> 里只点了 <code>'fsdp'=64</code> 这一个轴：64 张卡一组；<code>dimensions={1}</code>：沿第 1 维（专家那一维）拼起来</td></tr><tr><td>③</td><td>收齐之后</td><td>输出 <code>f8e4m3fn[1,192,4096,1536]</code>：3 × 64 ＝ 192 个专家；它包在一个异步调用里（带标题的大框 ＝ 子计算），外面是 call-start → call-done，SC0 行上看到的那块 all-gather 就是它</td></tr><tr><td>④</td><td>去掉多余的那一维</td><td><code>bitcast</code> 成 <code>f8e4m3fn[192,4096,1536]</code>，箭头进 gmm_megablox.16</td></tr><tr><td>⑤</td><td>kernel 收到的权重</td><td>gmm_megablox.16 的操作数形状表里，权重那一项是 <code>f8e4m3fn[192,4096,1536]</code>：192 个专家都在</td></tr><tr><td>⑥</td><td>每组 token 从第几行起</td><td><code>s32[193]</code>：192 个专家的分组偏移（193 ＝ 192 ＋ 1 个结尾）。<b>两份一模一样</b>：token 照样按 192 组排好、送进来</td></tr><tr><td>⑦</td><td>改后 kernel 收到的权重</td><td>gmm.27 的权重那一项是 <code>f8e4m3fn[3,4096,1536]</code>：只有本卡那 3 个</td></tr><tr><td>⑧</td><td>它从哪来</td><td>operand 7 ＝ <code>fusion.1642</code> 的输出：把本卡那 3 个专家量化成 FP8 的那个 fusion。中间<b>没有 all-gather</b>，整张图里一条集合通信都没有</td></tr></table>
-  <p><b>Graph Viewer</b> 选一条指令当中心，把它的操作数（上游）和使用者（下游）画成一张图：框是指令，箭头是数据流，带标题的大框是被调用的子计算（虚线框是还有输入没画出来的节点）。
-    原配方那颗 kernel 的权重操作数一路往上，能看到整个「收」的过程；改后那颗 kernel 的同一个操作数，直接是本卡 3 个专家量化后的结果。
+  <p>原配方那颗 kernel 的权重操作数一路往上，能看到整个「收」的过程；改后那颗 kernel 的同一个操作数，直接是本卡 3 个专家量化后的结果。
     最该看的是 ⑥：<code>s32[193]</code> 是 192 组 token 的分组偏移，<b>两边一样</b>——token 照样按 192 个专家分好组送进来，只是改后手里只有 3 个专家的权重。</p>
 <details class="foldfig"><summary>现场打开 <span class="why">（本机开源 XProf 开到同一屏；第一次先看 2.1 的「本机怎么开」）</span></summary><ul><li>工具 <code>graph_viewer</code>（首页 Tools 里叫 Graph Viewer），run <code>fp8old</code>。页面下方的 quick-start 列表里点 <code>jit_train_step(…) - gmm_megablox.16</code>，就以它为中心画图；改后那份点 <code>gmm.27</code>。也可以在 XLA Op Name 里填名字、Graph Width 填 1，点 Search Graph。</li><li>整张图会缩得很小：原配方那张中心节点是一个很宽的红色菱形（标签太长），滚轮放大右上角那个虚线框就是 all-gather 的子计算。图下方 Save SVG 能把这张图存下来本地放大（图 4.2 就是这么取的，框按 SVG 里节点和文字的位置画）。</li><li>页上还有个 Check HLO Full Text（SHORT／LONG），本机 2.23.1 点了之后没显示出全文，本课没再追；要整份文本走上表第二、三条路。</li></ul></details>
 
   <h3 id="s4-4">4.4　动起来看：收 192 个专家，还是只算本卡 3 个</h3>
   <p class="landing">⭐ 同一张卡、同一批 token：原配方先收齐 192 个专家再算，算完梯度再散回去；改后手里只有 3 个，就只算了 3 组。</p>
+  <p>4.3 留下一个问题：改后的 kernel 拿 3 个专家的权重，去乘按 192 组分好的 token，会报错，还是算出点什么？把卡 0 上两份程序的先后放慢了看：</p>
 <figure class="fbox fwide vid anim" id="anim-experts"><video src="media/topic07-experts.mp4?v=d2f28e86" data-pauses="3.90,8.10,12.80,16.40,20.00,23.00,25.80" poster="img/topic07-experts.png" autoplay loop muted playsinline preload="metadata" aria-label="步进动画：收齐 192 个专家，还是只算本卡 3 个。192 个专家切在 64 张卡上，每卡 3 个；本卡的 token 却要分给全部 192 个专家　左：本卡手里的专家权重，一格一个；右：本卡 229,376 行（7 × 4,096 个 token × 选 8 个专家）分成的 192 组；原配方 ① all-gather：64 张卡各出自己那 3 个，收齐 192 个　HLO：f8e4m3fn[1,3,4096,1536] → [1,192,4096,1536]，replica_groups 只有 fsdp＝64 一个轴（图 4.2 ①–③）；② gmm：192 组都有对应的权重，229,376 行全部算完　前向一层 3 颗 gmm 合 10.1 ms；③ 反向 tgmm 算出 192 个专家的梯度，reduce-scatter 加总后每卡只留自己那 3 个　bf16[192,4096,1536] → [3,4096,1536]；反向一层 3 条 reduce-scatter 在小核上合 29.8 ms；改后 ① 没有 all-gather：手里还是本卡那 3 个　gmm.27 收到的权重是 f8e4m3fn[3,4096,1536]（图 4.2 ⑦⑧）；② gmm 只给 3 组建表：这 3 组的行算了，其余 189 组的行写 0　kernel 看到权重只有 3 组，就当自己只管 3 组（MaxText backend.py）；前向一层 3 颗 gmm 合 0.11 ms；③ 反向 tgmm 直接出 3 个专家的梯度，也就没有什么要散　tgmm.8 输出 bf16[3,4096,1536]；小核上的 reduce-scatter 一条都没有；形状处处合法，没有一处报错：活少了 189/192，时间少了 97%　专家矩阵乘每步 3,668.8 → 98.3 ms；补上收和散之后一步 12.501 s（调优记录，没有 profile）"></video><figcaption>Manim 动画，黑底。左边一格是一个专家的权重，右边一格是本卡 token 里分给那个专家的一组行。默认连续播放；取消「连续播放」就一停一停走，停 1–7 对应下表。</figcaption></figure>
   <table class="numtab fo-hide">
     <tr><th>停</th><th>看什么</th><th>读出什么</th></tr>
@@ -3301,17 +3310,17 @@ tgmm.8 = bf16[3,4096,1536] custom-call(…)               （后面没有 reduce
   <p class="landing">⭐ BF16 两份配置的差别和 FP8 一字不差；一步 21,747.2 → 20,693.8 ms，快了 1,053.4 ms（4.8%）。</p>
   <table class="numtab">
     <tr><th>同一个改动</th><th>FP8（第零到四节）</th><th>BF16（本节）</th></tr>
-    <tr><td>配置差别</td><td colspan="2"><code>use_tokamax_gmm</code> True → False ＋ 12 个 <code>w{i,o}_tile_*</code> 值 1024 → 2048／1536，两份 diff 完全一样（两边各自 diff 整份 MaxText 配置）</td></tr>
-    <tr><td>一步（TPU:0 中位步）</td><td>11,758.2 → 7,842.1 ms（−3,916.1）</td><td>21,747.2 → 20,693.8 ms（−1,053.4）</td></tr>
-    <tr class="hot"><td>小核上 all-gather／reduce-scatter（ms／步）</td><td>1,409.3／2,354.0 → 205.8／<b>0</b></td><td>2,522.8／2,543.1 → 2,593.7／2,606.5</td></tr>
-    <tr class="hot"><td>HLO 里收 192 个专家的 all-gather／散专家梯度的 reduce-scatter（条）</td><td>12／6 → <b>0／0</b></td><td>12／6 → 12／6</td></tr>
-    <tr class="hot"><td>专家矩阵乘（gmm 家族，ms／步）</td><td>3,668.8 → 98.3（−97%）</td><td>8,183.8 → 7,116.2（−13%）</td></tr>
-    <tr><td>Op Profile：custom-call 的 FLOPS 利用率</td><td>53.39% → <b>117.45%</b></td><td>45.57% → 49.62%</td></tr>
-    <tr><td>Op Stats：第一个专家矩阵乘排第几</td><td>第 4 → 第 124（掉出前十）</td><td>第 4 → 第 4（前十里还是 7 个）</td></tr>
-    <tr><td>kernel 拿到的专家权重</td><td><code>[192,4096,1536]</code> → <code>[3,4096,1536]</code></td><td><code>[192,4096,1536]</code> → <code>[192,4096,1536]</code></td></tr>
-    <tr><td>显存：峰值那一刻最大的几块（Memory Viewer）</td><td>循环里这一层 3 块 <code>[192,…]</code> 专家梯度 → <b>一块不剩</b>，峰值挪到输出头</td><td>两份一样：logits ＋ 收齐的 192 个专家权重</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">配置差别</td><td colspan="2"><code>use_tokamax_gmm</code> True → False ＋ 12 个 <code>w{i,o}_tile_*</code> 值 1024 → 2048／1536，两份 diff 完全一样（两边各自 diff 整份 MaxText 配置）</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">一步（TPU:0 中位步）</td><td>11,758.2 → 7,842.1 ms（−3,916.1）</td><td>21,747.2 → 20,693.8 ms（−1,053.4）</td></tr>
+    <tr class="hot"><td style="white-space:normal;min-width:7em">小核上 all-gather／reduce-scatter（ms／步）</td><td>1,409.3／2,354.0 → 205.8／<b>0</b></td><td>2,522.8／2,543.1 → 2,593.7／2,606.5</td></tr>
+    <tr class="hot"><td style="white-space:normal;min-width:7em">HLO 里收 192 个专家的 all-gather／散专家梯度的 reduce-scatter（条）</td><td>12／6 → <b>0／0</b></td><td>12／6 → 12／6</td></tr>
+    <tr class="hot"><td style="white-space:normal;min-width:7em">专家矩阵乘（gmm 家族，ms／步）</td><td>3,668.8 → 98.3（−97%）</td><td>8,183.8 → 7,116.2（−13%）</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">Op Profile：custom-call 的 FLOPS 利用率</td><td>53.39% → <b>117.45%</b></td><td>45.57% → 49.62%</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">Op Stats：第一个专家矩阵乘排第几</td><td>第 4 → 第 124（掉出前十）</td><td>第 4 → 第 4（前十里还是 7 个）</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">kernel 拿到的专家权重</td><td><code>[192,4096,1536]</code> → <code>[3,4096,1536]</code></td><td><code>[192,4096,1536]</code> → <code>[192,4096,1536]</code></td></tr>
+    <tr><td style="white-space:normal;min-width:7em">显存：峰值那一刻最大的几块（Memory Viewer）</td><td>循环里这一层 3 块 <code>[192,…]</code> 专家梯度 → <b>一块不剩</b>，峰值挪到输出头</td><td>两份一样：logits ＋ 收齐的 192 个专家权重</td></tr>
   </table>
-  <p>右边一列每一行都「没变」或「变了一点」，只有步时和专家矩阵乘在动；左边一列从第二行起每一行都在报警。下面两小节在 profile 里把右边一列一行行看过去。</p>
+  <p>右边一列每一行都「没变」或「变了一点」，只有步时和专家矩阵乘在动；左边一列从「小核上 all-gather」那一行起，每一行都在报警。下面两小节在 profile 里把右边一列一行行看过去。</p>
 
   <h3 id="s5-2">5.2　同一层：通信一条不少</h3>
   <p class="landing">⭐ 反向 40 号层并排：小核上收 192 个专家的 3 条 all-gather、散专家梯度的 reduce-scatter 两边都在，宽度几乎一样；主核上 9 颗专家矩阵乘一颗不少，合计 79.11 → 66.89 ms。</p>
@@ -3333,21 +3342,22 @@ tgmm.8 = bf16[3,4096,1536] custom-call(…)               （后面没有 reduce
   <p class="landing">⭐ 一步少 1,053.4 ms，custom-call 这一类少 1,054.1 ms，其中专家矩阵乘少 1,067.6 ms：账是对得上的，而且每颗 kernel 都在、每颗都短了一截。</p>
   <table class="numtab">
     <tr><th>BF16 · 每步（TPU:0 中位步）</th><th>原配方</th><th>改后</th><th>差</th></tr>
-    <tr><td>一步</td><td>21,747.2</td><td>20,693.8</td><td>−1,053.4</td></tr>
-    <tr><td>custom-call（Pallas kernel 这一类）</td><td>13,121.3</td><td>12,067.2</td><td>−1,054.1</td></tr>
-    <tr class="hot"><td>其中专家矩阵乘（gmm／tgmm）</td><td>8,183.8（957 颗）</td><td>7,116.2（956 颗）</td><td>−1,067.6</td></tr>
-    <tr><td>反向 40 号层 9 颗专家矩阵乘合计</td><td>79.11</td><td>66.89</td><td>−12.22</td></tr>
-    <tr><td>Op Stats 第一个专家矩阵乘：每次平均（µs）</td><td>10,411.3（<code>gmm_megablox_transpose_rhs.10</code>）</td><td>9,640.6（<code>gmm.19</code>）</td><td></td></tr>
-    <tr><td>同一颗的 Model GFLOP/s（每核峰值约 1,137,000）</td><td>475,232</td><td>513,223</td><td></td></tr>
+    <tr><td style="white-space:normal;min-width:7em">一步</td><td>21,747.2</td><td>20,693.8</td><td>−1,053.4</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">custom-call（Pallas kernel 这一类）</td><td>13,121.3</td><td>12,067.2</td><td>−1,054.1</td></tr>
+    <tr class="hot"><td style="white-space:normal;min-width:7em">其中专家矩阵乘（gmm／tgmm）</td><td>8,183.8（957 颗）</td><td>7,116.2（956 颗）</td><td>−1,067.6</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">反向 40 号层 9 颗专家矩阵乘合计</td><td>79.11</td><td>66.89</td><td>−12.22</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">Op Stats 第一个专家矩阵乘：每次平均（µs）</td><td>10,411.3（<code>gmm_megablox_transpose_rhs.10</code>）</td><td>9,640.6（<code>gmm.19</code>）</td><td></td></tr>
+    <tr><td style="white-space:normal;min-width:7em">同一颗的 Model GFLOP/s（每核峰值约 1,137,000）</td><td>475,232</td><td>513,223</td><td></td></tr>
   </table>
   <p>三处对账：步时差 ≈ custom-call 差 ≈ 专家矩阵乘差；颗数一样（每步差 1 颗，本课没追是哪一颗）；每颗还在合理的速度上——Model GFLOP/s 是峰值的四成多，
-    不像 FP8 改后那颗 gmm.27 报出 5,800 万 GFLOP/s。为什么新 kernel 每颗快 10% 上下，是 kernel 和 tile 自己的事，本课不拆；profile 能告诉你的是：<b>活一样多，干得快了。</b></p>
+    不像 FP8 改后那颗 gmm.27 报出 5,800 万 GFLOP/s（FP8 峰值的 25 倍）。为什么新 kernel 每颗快 10% 上下，是 kernel 和 tile 自己的事，本课不拆；profile 能告诉你的是：<b>活一样多，干得快了。</b></p>
+  <p>少的时间也能一层一层摊回去：反向 40 号层 9 颗少 12.22 ms，前向同一层 3 颗少 1.07 ms（图 5.2A／B），一层合计 13.29 ms，× 78 层 ≈ 1,037 ms，和一步少的 1,053.4 ms 只差十几毫秒。</p>
   <p>两张总账页上也是同样的样子：</p>
   <ul>
     <li>Op Profile（Group by Category）：整体 FLOPS 利用率 21.44% → 22.55%，custom-call 这一类 45.57% → 49.62%。都在 100% 以下，涨幅和时间少掉的比例对得上；FP8 那边同一格从 53.39% 跳到 117.45%。</li>
     <li>Op Stats 按名字过滤 gmm：前十名里专家矩阵乘两份都是 7 个，次数都是 1,872（78 圈 × 3 步 × 8 个 TensorCore）。FP8 改后前十里一个都不剩。</li>
     <li>前三名都是注意力（splash），每次 27.2／16.9／16.9 ms，两份差不到 0.1%：没动的东西就该一动不动，这也是「改动只碰到了专家矩阵乘」的旁证。</li>
-    <li>显存（3.6 的读法）：Memory Viewer 峰值 88,401.89 → 88,399.85 MiB，只差 2.0 MiB；峰值那一刻最大的几块两份一样，都是输出头的 logits <code>bf16[12,4096,120832]</code>（每块 11,328 MiB）和 3 块收齐的 192 个专家权重；运行时峰值两份都是 93.52 GiB。同样的活，就要同样的地方放。</li>
+    <li>显存（3.6 的读法）：Memory Viewer 峰值 88,401.89 → 88,399.85 MiB，只差 2.0 MiB；峰值那一刻最大的几块两份一样，都是输出头的 logits <code>bf16[12,4096,120832]</code>（每块 11,328 MiB）和 3 块收齐的 192 个专家权重；运行时峰值两份都是 93.52 GiB。同样的活，就要同样的地方放。3.6 显存录屏的停 12 就是 bf16old 这一页：悬停的参数是 <code>f32[192,79,1536,32]</code>，192 个专家都在，4,096 那一维只剩 32（这根是 wo）。</li>
   </ul>
 
   <h3 id="s5-4">5.4　BF16 为什么没踩坑</h3>
@@ -3355,9 +3365,9 @@ tgmm.8 = bf16[3,4096,1536] custom-call(…)               （后面没有 reduce
   <p>调优记录（TUNING-v7 3.4.10 节）把 FP8 那次漏算的触发条件写成三条，要同时成立。拿 BF16 的配置逐条对：</p>
   <table class="numtab">
     <tr><th>触发条件</th><th>FP8</th><th>BF16</th></tr>
-    <tr><td>① <code>shard_exp_on_fsdp=True</code> 且权重校准以 <code>fixed</code> 开头 → 代码会把「沿 fsdp 收专家」这个参数传下去</td><td>成立</td><td class="hot"><b>不成立</b>：<code>shard_exp_on_fsdp=False</code>；BF16 也不量化（<code>quantization=NONE</code>），没有校准这一说</td></tr>
-    <tr><td>② <code>use_tokamax_gmm=False</code>，走 native 那一支</td><td>成立</td><td>成立（同一个改动）</td></tr>
-    <tr><td>③ 专家数能被 FSDP 份数整除，专家维真被切开</td><td>192 ÷ 64 ＝ 3</td><td><b>不成立</b>：<code>ici_fsdp_parallelism=-1</code> ＝ 128 份，192 ÷ 128 除不尽；何况第 ① 条已经没让专家维参与切分 <span class="tag">本课推导</span></td></tr>
+    <tr><td style="white-space:normal;min-width:7em">① <code>shard_exp_on_fsdp=True</code> 且权重校准以 <code>fixed</code> 开头 → 代码会把「沿 fsdp 收专家」这个参数传下去</td><td>成立</td><td class="hot"><b>不成立</b>：<code>shard_exp_on_fsdp=False</code>；BF16 也不量化（<code>quantization=NONE</code>），没有校准这一说</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">② <code>use_tokamax_gmm=False</code>，走 native 那一支</td><td>成立</td><td>成立（同一个改动）</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">③ 专家数能被 FSDP 份数整除，专家维真被切开</td><td>成立<br><span style="white-space:nowrap">192÷64＝3</span></td><td><b>不成立</b>：<code>ici_fsdp_parallelism=-1</code> ＝ 128 份，192 ÷ 128 除不尽；何况第 ① 条已经没让专家维参与切分 <span class="tag">本课推导</span></td></tr>
   </table>
   <p>HLO 里看得到后果：BF16 每卡手里是 192 个专家、每个只有 4096 里的 32 行。收齐它的 all-gather 是编译器自己插的——</p>
 <pre class="peek"><code>── BF16 改后 · 前向循环体（降噪）
@@ -3366,18 +3376,18 @@ all-gather.580 = bf16[1,192,4096,1536] all-gather(param_0.11980),     # 输入 p
     frontend_attributes={is_spmd_generated="true"}
 gmm.24 = bf16[393216,1536] custom-call(…),
     operand_layout_constraints={…, bf16[393216,4096]{1,0}, bf16[192,4096,1536]{2,1,0}}</code></pre>
-  <p>沿第 2 维（4096）拼 128 份：32 × 128 ＝ 4096；属性 <code>is_spmd_generated="true"</code>，代码里搜不到这句（4.1 折叠块的三个属性）。
+  <p>沿第 2 维（从 0 数，就是 4096 那一维）拼 128 份：32 × 128 ＝ 4096；属性 <code>is_spmd_generated="true"</code>，代码里搜不到这句（4.1 折叠块的三个属性）。
     gmm.24 拿到的权重是 <code>[192,4096,1536]</code>，393,216 ＝ 每卡 12 条 × 4,096 token × 8 个专家。<b>专家维没被切小，就不存在「3 个专家也是合法输入」这个陷阱</b>——4.7 那条 note 的反面。</p>
 
   <h3 id="s5-5">5.5　并排：真快和漏算，在每一页上差在哪</h3>
   <p class="landing">⭐ 真快：活的条数和形状不变，同样的 kernel 每颗短一截，利用率还在 100% 以下。漏算：某一类活的条数或形状变了，利用率超出物理上限。</p>
   <table class="numtab">
     <tr><th>去哪看</th><th>真变快（BF16）</th><th>漏算（FP8）</th></tr>
-    <tr><td>先估（第一节）</td><td>+5%：专家矩阵乘占一步约 38%（8,183.8 ÷ 21,747.2），它快 13%，折到一步正好约 5%</td><td>+50%：同类 MoE 换 FP8 才 +21%，它和稠密 405B 的 +53% 一样多</td></tr>
-    <tr><td>Trace Viewer 同一层（第二节）</td><td>每一行都还在，色块变窄</td><td>小核上一类通信整块消失，kernel 窄到 1/93</td></tr>
-    <tr><td>Op Profile／Op Stats（第三节）</td><td>利用率 49.62%；排名、次数都不变</td><td>利用率 117.45%；排名 4 → 124，单颗报 25 倍峰值</td></tr>
-    <tr><td>HLO（第四节）</td><td>集合通信条数、kernel 的权重形状一样</td><td>收专家的 all-gather 12 → 0，权重 <code>[192,…]</code> → <code>[3,…]</code></td></tr>
-    <tr><td>显存（3.6）</td><td>峰值差 2 MiB，峰值那一刻最大的几块两份一样</td><td>峰值差 169 MiB，可循环里装 192 个专家梯度的 3 块不见了，峰值从反向挪到输出头</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">先估（第一节）</td><td>+5%：专家矩阵乘占一步约 38%（8,183.8 ÷ 21,747.2），它快 13%，折到一步正好约 5%</td><td>+50%：同类 MoE 换 FP8 才 +21%，它和稠密 405B 的 +53% 一样多</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">Trace Viewer 同一层（第二节）</td><td>每一行都还在，色块变窄</td><td>小核上一类通信整块消失，kernel 窄到 1/93</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">Op Profile／Op Stats（第三节）</td><td>利用率 49.62%；排名、次数都不变</td><td>利用率 117.45%；排名 4 → 124，单颗报到 FP8 峰值的 25 倍</td></tr>
+    <tr><td style="white-space:normal;min-width:7em">HLO（第四节）</td><td>集合通信条数、kernel 的权重形状一样</td><td>收专家的 all-gather 12 → 0，权重 <code>[192,…]</code> → <code>[3,…]</code></td></tr>
+    <tr><td style="white-space:normal;min-width:7em">显存（3.6）</td><td>峰值差 2 MiB，峰值那一刻最大的几块两份一样</td><td>峰值差 169 MiB，可循环里装 192 个专家梯度的 3 块不见了，峰值从反向挪到输出头</td></tr>
   </table>
 
 </div></section>
@@ -3806,7 +3816,7 @@ gmm.24 = bf16[393216,1536] custom-call(…),
     <tr><td><code>skip_first_n_steps_for_profiler</code></td><td>5（375 秒那份是 4）</td><td>跳过开头几步：编译和预热不进 profile</td></tr>
     <tr><td><code>profiler_steps</code></td><td>3</td><td>抓几步。抓 3 步，取时长居中的那一步读数（本课全程这么做）</td></tr>
     <tr><td><code>profile_cleanly</code></td><td>True（默认）</td><td>每步结束等训练状态算完，profile 里的步边界才对得齐</td></tr>
-    <tr><td><code>base_output_directory</code>、<code>run_name</code></td><td>自己的桶和名字</td><td>profile 写到 <code>&lt;base_output_directory&gt;/&lt;run_name&gt;/tensorboard/plugins/profile/&lt;时间戳&gt;/&lt;主机名&gt;.xplane.pb</code></td></tr>
+    <tr><td><code>base_output_directory</code>、<code>run_name</code></td><td>自己的桶和名字</td><td>profile 写到 <code>&lt;base_output_directory&gt;/&lt;run_name&gt;/tensorboard/</code><br><code>plugins/profile/&lt;时间戳&gt;/&lt;主机名&gt;.xplane.pb</code></td></tr>
   </table>
 <pre><code># 训练命令里加上（其余参数照旧）
 python3 -m maxtext.trainers.pre_train.train run_name=myrun base_output_directory=gs://&lt;桶&gt;/out &lt;你原来的其余参数&gt; \
@@ -3822,7 +3832,7 @@ xprof --logdir ~/prof --port 6311        # 浏览器开 http://127.0.0.1:6311/ �
     <li>开源 XProf 2.23.1 有四处已知的坑，本课都碰到过：Graph Viewer 从链接打开时不认模块名，要手动选一次（4.3 录屏停 3–4）；Overview 的 FLOPS／HBM Utilization 显示 0.0%（数在 Roofline 页）；从首页点进的 Trace Viewer 不认窗口参数，要直接开它的页面（2.1「本机怎么开」）；Utilization Viewer 对任何 profile 都是 No Data（这一版的路由问题，2.23.2 已修，3.2 末尾）。</li>
   </ul>
   <div class="note"><span class="t">下一步：自己动手</span>
-    本课的 7 份混元3 profile 上出了二十四道题，每题只用开源 XProf 就能找到答案；文件照上面的命令从 Release 下载，想换成自己的模型，就按上面的开关抓一份，照同样的步骤走：<a href="topic-07-drills.html">练习页 · 在开源 XProf 上自己找答案</a>。</div>
+    本课的 7 份混元3 profile 上出了二十四道题，每题只用开源 XProf 就能找到答案；文件从 Release 下载（命令在 2.1「本机怎么开」），想换成自己的模型，就按上面的开关抓一份，照同样的步骤走：<a href="topic-07-drills.html">练习页 · 在开源 XProf 上自己找答案</a>。</div>
 
 </div></section>
 
