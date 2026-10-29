@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题七 · 练习：在开源 XProf 上自己找答案</title>
+<!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
+     用自己的 emoji 字体现画：Mac 上是 Apple 那只红螃蟹，别处是各自的版本。
+     烤成 PNG 反而会把某一家的字形固定下来，在别的系统上看着别扭。
+     不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+<meta property="og:title" content="专题七练习 · 二十四道题">
+<meta property="og:description" content="混元3 的 7 份 profile，二十四道只用开源 XProf 就能找到答案的题：十二道跟着正文走，十二道迁移题换个对象再走一遍。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-07-drills.html">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1a73e8">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6;
+  --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea;
+  --purple:#9334e6; --cyan:#12b5cb; --orange:#e8710a;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --tokmul:"";              /* batch≠1 时由 render() 写入，如 "128K × 64 条" */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{background:var(--bg);color:var(--ink);
+  font:400 16px/1.75 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:31px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+h3{font-size:20px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:22px 0 8px}
+p{margin-bottom:14px}
+.lead{color:var(--gray);font-size:17px;margin-bottom:28px}
+b,strong{font-weight:600;color:var(--ink)}
+a{color:var(--blue)}
+code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
+        border-radius:4px;color:var(--blue-d);white-space:nowrap}
+.num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── batch ≠ 1 的防误读标记 ───────────────
+   「token 总数」= 序列长度 × batch。batch=1 时两者相等，看不出区别；
+   一旦 batch>1，这个数就不再是序列长度了，最容易被当成「输入变长了」。
+   下面两条规则在 batch=1 时完全不匹配 —— 默认口径下页面一个字都不会多。 */
+body.batched [data-v="tokens"]::after{
+  content:" (" var(--tokmul) ")";
+  font:600 .78em/1.4 var(--mono);color:var(--orange);letter-spacing:0}
+.ctrl.hot output{color:var(--orange);background:var(--yellow-l);
+  box-shadow:0 0 0 1px var(--yellow) inset}
+.ctrl.hot label{color:var(--orange);font-weight:600}
+
+/* ── 旅程进度条 ─────────────────────── */
+.journey{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 18px;margin:0 0 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.jsteps{display:flex;align-items:center;gap:0;flex:1;min-width:280px}
+.jstep{flex:1;height:6px;background:var(--line);position:relative;border-radius:3px;margin-right:3px}
+.jstep.done{background:var(--blue)}
+.jstep.now{background:var(--red)}
+.jstep span{position:absolute;top:-19px;left:0;font:600 10px var(--mono);color:var(--gray2)}
+.jstep.now span{color:var(--red)}
+.jstep.done span{color:var(--blue)}
+.jmeter{display:flex;gap:18px;font-size:13px;white-space:nowrap}
+.jmeter b{font-family:var(--mono);color:var(--blue-d)}
+.jmeter i{font-style:normal;color:var(--gray);margin-right:5px}
+
+/* ── 猜一猜 ───────────────────────────── */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:var(--blue-l)}
+.guess button.right{border-color:var(--green);background:var(--green-l)}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.75}
+.guess .rev.on{display:block}
+.guess .rev>p>b{color:var(--red)}          /* 只有直属段落的粗体标红，表格和说明框不受影响 */
+.guess .qs{font-size:15px;line-height:1.7;color:var(--gray)}
+.guess .qs b{color:var(--ink)}
+.guess .qs em{font-style:normal;color:var(--gray2);font-size:14px}
+.guess .rvt{font-size:14px;margin:4px 0 14px}
+.guess .rvt b{color:var(--ink)}
+
+/* ── 章节插画带 ───────────────────────── */
+/* 插画是浅底扁平矢量（Google 四色），所以 :after 的洗白层是「白→透明」，
+   跟深色版正好相反。换图但不换这层，标题会变成白底白字。 */
+.band{position:relative;height:210px;border-radius:16px;overflow:hidden;margin:0 0 26px;
+      display:flex;align-items:flex-end;background:var(--bg2);border:1px solid var(--line2)}
+.band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.band:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,.93) 40%,
+                 rgba(255,255,255,.55) 72%,rgba(255,255,255,.10) 100%)}
+.band .cap{position:relative;z-index:2;padding:0 32px 24px;color:var(--ink);max-width:660px}
+.band .cap .bn{font:700 11px/1 var(--mono);letter-spacing:.14em;color:var(--blue);
+      text-transform:uppercase;display:block;margin-bottom:8px}
+.band .cap .bt{font-size:27px;font-weight:700;letter-spacing:-.02em;display:block;margin-bottom:6px}
+.band .cap .bs{font-size:14.5px;color:var(--gray);line-height:1.6}
+
+/* ── 步号标记 ─────────────────────────── */
+.stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
+            border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.stn.big .badge{background:var(--red)}
+.stn h2{margin:0}
+
+/* ── hero ─────────────────────────────── */
+/* 浅色 hero，与 index.html 同一套：blue-l → 白 的竖向底 + 低透明度插画 + 横向洗白层 */
+.hero{position:relative;padding:96px 0 64px;overflow:hidden;
+      background:linear-gradient(180deg,var(--blue-l) 0%,#fff 100%)}
+.hero:before{content:"";position:absolute;inset:0;opacity:.5;
+      background:url(img/hero-token-journey.webp) center/cover no-repeat}
+.hero:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(95deg,rgba(255,255,255,.94) 0%,rgba(255,255,255,.86) 38%,
+                 rgba(255,255,255,.46) 68%,rgba(255,255,255,.12) 100%)}
+.hero .wrap{position:relative;z-index:2}
+.hero h1,.hero .en,.hook{color:var(--ink)}
+.hero .crumb{color:var(--gray)}
+.hero .crumb a{color:var(--blue)}
+.lecbtn{display:inline-block;margin-left:14px;font-size:13px;padding:4px 12px;border-radius:14px;
+        background:#fff;border:1px solid var(--line);color:var(--blue);
+        text-decoration:none}
+.lecbtn:hover{background:var(--blue-l);border-color:var(--blue)}
+.hero .en{color:var(--gray)}
+.hook{border-left-color:var(--blue)}
+.hook em{color:var(--blue-d)}
+.hero p{color:var(--gray)}
+.hero p b{color:var(--ink)}
+.hero .chip{background:#fff;border-color:var(--line);color:var(--gray)}
+.hero .chip b{color:var(--blue-d)}
+.crumb{font-size:14px;color:var(--gray);margin-bottom:20px}
+.crumb a{text-decoration:none}
+.hero h1{font-size:50px;font-weight:700;letter-spacing:-.035em;line-height:1.12;margin-bottom:6px}
+.hero .en{font:italic 400 19px/1 var(--mono);color:var(--gray);letter-spacing:.02em;margin-bottom:26px}
+.hook{font-size:21px;line-height:1.6;font-weight:500;border-left:4px solid var(--blue);
+      padding-left:20px;max-width:800px;margin-bottom:22px}
+.hook em{font-style:normal;color:var(--blue-d);font-weight:600}
+/* 署名行。hero 里单独给色 —— .hero .author（0,2,0）压得过 .hero p（0,1,1） */
+.author{font-size:14.5px;margin-top:20px;line-height:1.7}
+.author b{font-weight:600}
+.author .sep{color:var(--line);margin:0 10px}
+.hero .author{color:var(--gray2)}
+.hero .author b{color:var(--ink)}
+.hero .author .sep{color:var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{font-size:13px;background:#fff;border:1px solid var(--line);border-radius:20px;
+      padding:5px 14px;color:var(--gray)}
+.chip b{color:var(--blue-d)}
+
+/* ── sticky 控制台 ─────────────────────── */
+.console{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);
+         backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+         box-shadow:0 1px 8px rgba(0,0,0,.05)}
+/* 单行布局：它是 sticky 的，每多一行就永久吃掉一条屏幕。
+   所有控件都保留，靠「滑块可压缩、其余固定」把宽度挤出来。 */
+.console .inner{max-width:1080px;margin:0 auto;padding:7px 24px;
+                display:flex;align-items:center;gap:13px;flex-wrap:nowrap}
+.console .tag{font:700 10px/1 var(--mono);letter-spacing:.08em;color:var(--blue);
+              text-transform:uppercase;flex:0 0 auto}
+.ctrl{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--gray);
+      flex:0 1 auto;min-width:0}
+.ctrl label{white-space:nowrap;font-weight:500}
+/* 唯一允许被压缩的东西 —— 窗口变窄时先短滑轨，不动文字和按钮 */
+.ctrl input[type=range]{flex:1 1 96px;min-width:50px;max-width:112px;accent-color:var(--blue)}
+.ctrl output{font:600 12.5px/1 var(--mono);color:var(--blue-d);min-width:44px;
+             background:var(--blue-l);padding:4px 6px;border-radius:5px;text-align:center;
+             flex:0 0 auto}
+.ctrl select{font:500 12.5px/1 inherit;padding:4px 6px;border:1px solid var(--line);
+             border-radius:5px;background:#fff;color:var(--ink);flex:0 0 auto}
+.presets{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;
+         color:var(--gray);flex:0 0 auto}
+.presets span{margin-right:1px}
+.presets button{font:500 11.5px/1 inherit;color:var(--gray);background:#fff;
+                border:1px solid var(--line);border-radius:13px;padding:5px 10px;
+                cursor:pointer;white-space:nowrap}
+.presets button:hover{border-color:var(--blue);color:var(--blue)}
+.presets button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.live{background:var(--yellow-l);box-shadow:0 0 0 3px var(--yellow-l);
+      border-radius:3px;transition:background .45s,box-shadow .45s}
+
+/* ── 卡片 / 表格 ───────────────────────── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;background:#fff}
+.card.tint{background:var(--bg2)}
+.card h4{font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.08em;
+         text-transform:uppercase;margin:0 0 8px}
+.stat{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:4px}
+.stat.blue{color:var(--blue-d)}.stat.red{color:var(--red)}
+.stat.green{color:var(--green)}.stat.orange{color:var(--orange)}
+.sub{font-size:.92em;color:var(--gray)}
+.card .sub{font-size:13.5px;color:var(--gray);line-height:1.55}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.06em;
+   text-transform:uppercase;padding:10px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.6}
+td.n{font-family:var(--mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tr.sum td{border-top:2px solid var(--line);font-weight:700;background:var(--blue-l)}
+tr.sum td.n{color:var(--blue-d)}
+.tbl-wrap{overflow-x:auto}
+.tbl-note{font-size:13px;color:var(--gray);margin:8px 2px 0;line-height:1.7}
+
+/* ── 提示块 ───────────────────────────── */
+.note{border-radius:var(--radius);padding:16px 20px;font-size:15px;line-height:1.7;margin:20px 0}
+/* ⛔⛔ 2026-09-08 全书去彩底：提示块**不填背景**，白底 ＋ 细灰框 ＋ 左侧 4px 彩条。
+   原话：「不要背景填充，好丑」「现代化的文档风格是不是不用这个背景填充？
+   就是外圈有颜色，加上字有颜色，我觉得就挺好」。
+   ⭐ 这是全书唯一一份 note 样式源，专题二/三/八都从这里继承 ——&nbsp;
+     ⛔ 不要在某一课里再写一份局部覆盖，那样两边迟早漂开且不报错。
+   ⚠️ 还有第五种 `.note.q`（提问框），它的定义在 topic02-port-microscope.py
+     注入的那段 CSS 里，不在这个文件 —— 已一并去底。 */
+.note{background:#fff;border:1px solid var(--line);border-left-width:4px}
+.note.info{border-left-color:var(--blue)}
+.note.warn{border-left-color:var(--yellow)}
+.note.danger{border-left-color:var(--red)}
+.note.ok{border-left-color:var(--green)}
+.note .t{display:block;font-weight:700;margin-bottom:5px}
+/* 两级强调块：.punch 实心蓝（最强），.punch.soft 浅蓝底（次一级）。
+   原来次一级是近黑底 —— 跟 index.html 的浅色基调不搭，已换成同色系的浅底。 */
+.punch{font-size:20px;font-weight:600;line-height:1.6;text-align:center;padding:26px 30px;
+       background:var(--blue);color:#fff;border-radius:14px;margin:28px 0}
+.punch.soft{background:var(--blue-l);color:var(--ink);border:1px solid #d2e3fc}
+.punch small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
+.punch.soft small{opacity:1;color:var(--gray)}
+
+/* ── 默认收起的详情块 ─────────────────── */
+details.more{border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2);
+             margin:18px 0;overflow:hidden}
+details.more>summary{list-style:none;cursor:pointer;padding:11px 18px;font-size:14.5px;
+                     font-weight:600;color:var(--blue-d);user-select:none;
+                     display:flex;align-items:baseline;gap:9px;transition:background .15s}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";display:inline-block;font-size:11px;color:var(--gray2);
+                             transition:transform .18s;flex:none}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary:hover{background:var(--line2)}
+details.more[open]>summary{border-bottom:1px solid var(--line2)}
+details.more>summary .why{font-weight:400;color:var(--gray);font-size:13px}
+details.more .body{padding:2px 20px 14px}
+details.more .body>:first-child{margin-top:14px}
+details.more .body>:last-child{margin-bottom:0}
+details.more .body .note{margin:14px 0}
+
+/* ── 图 ───────────────────────────────── */
+figure{margin:26px 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:15px;color:#3c4043;margin-top:11px;line-height:1.65;text-align:left;max-width:none;margin-left:0;margin-right:0}
+.fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
+/* ⚠️ fill 用 :not([fill]) 兜底：SVG 的 fill= 呈现属性优先级低于 class 选择器，
+   直接写 .svgsm{fill:...} 会把元素上显式写的颜色全部盖掉（本文件曾有 398 处被静默盖成灰色）。
+   拆成「没写 fill 才给默认色」，写了 fill= 的就让它生效 —— 也自动覆盖 JS 后生成的节点。 */
+.svgtxt{font:500 13px var(--mono)}   .svgtxt:not([fill]){fill:var(--ink)}
+.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif}   .svglbl:not([fill]){fill:var(--gray)}
+.svgnum{font:700 14px var(--mono)}   .svgnum:not([fill]){fill:var(--ink)}
+.svgsm{font:500 10.5px var(--mono)}   .svgsm:not([fill]){fill:var(--gray2)}
+
+/* ── 公式 ─────────────────────────────── */
+.eq{font-family:var(--mono);font-size:14.5px;background:var(--bg2);border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0;overflow-x:auto;line-height:1.9;
+    white-space:pre-wrap;tab-size:2}
+.eq .c{color:var(--gray)}
+.eq .r{color:var(--blue-d);font-weight:700}
+
+/* ── 阅读进度 + 回顶 ─────────────────── */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:transparent;
+          pointer-events:none}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#1a73e8,#9334e6);
+            transition:width .1s linear}
+.totop{position:fixed;right:22px;bottom:22px;width:44px;height:44px;border-radius:50%;
+       background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:19px;z-index:55;
+       opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 16px rgba(0,0,0,.24)}
+.totop.on{opacity:.88;pointer-events:auto}
+.totop:hover{opacity:1}
+
+/* ── 术语 tooltip ─────────────────────── */
+.gl{border-bottom:1px dashed var(--blue);cursor:help;position:relative;
+    text-decoration:none;color:inherit}
+/* ⚠️ 气泡默认必须 display:none，不能只靠 opacity:0。
+   它是 290px 宽的绝对定位盒子，opacity:0 时照样占布局 —— 靠右的词会把整页
+   scrollWidth 顶出两三百像素，在 940 / 360 这类窗口下出现横向滚动条。
+   实测：关掉这两个伪元素，940px 下 scrollWidth 从 1211 直接回到 940。
+   代价是没有淡入动画，换来的是彻底不参与布局。 */
+/* ⚠️ 气泡必须 position:fixed，不能用 absolute。
+   absolute 时它会被任何一个「overflow 不是 visible」的祖先裁掉 ——
+   本页 10 个术语里有 6 个躺在 .tbl-wrap（overflow-x:auto）或 .more（hidden）里面。
+   注意 overflow-x:auto 会把 overflow-y 从 visible 提升成 auto，
+   所以横向滚动的表格同样会**纵向**裁切，气泡顶上那一截就这么没的。
+   fixed 之后坐标由 JS 在 mouseenter / focus 时写进 --tx/--ty，见下方 glossary()。 */
+.gl:after{content:attr(data-t);display:none;position:fixed;
+   left:var(--tx,-9999px);top:var(--ty,-9999px);
+   background:var(--ink);color:#fff;
+   font:400 13.5px/1.6 "Noto Sans CJK SC",sans-serif;padding:11px 15px;border-radius:9px;
+   width:290px;pointer-events:none;
+   box-shadow:0 6px 22px rgba(0,0,0,.22);z-index:80;text-align:left;white-space:normal}
+.gl:before{content:"";display:none;position:fixed;
+   left:var(--ax,-9999px);top:var(--ay,-9999px);
+   transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink);
+   z-index:81;pointer-events:none}
+/* 上方放不下时整个翻到词的下方，箭头也要跟着掉个头 */
+.gl.below:before{border-top-color:transparent;border-bottom-color:var(--ink)}
+.gl:hover:after,.gl:focus:after{display:block}
+.gl:hover:before,.gl:focus:before{display:block}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ── 打印 ─────────────────────────────── */
+@media print{
+  .console,.progress,.totop,.presets{display:none !important}
+  .hero:before{opacity:.28}
+  section{padding:22px 0;break-inside:avoid}
+  .band{height:150px;break-inside:avoid}
+  figure,.card,.note,.topic,.punch{break-inside:avoid}
+  details.more{border-color:#ccc;background:#fff}
+  details.more>summary{color:#000}
+  a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
+  body{font-size:12px}
+  .punch{background:#eee !important;color:#000 !important}
+  .punch.soft{background:#f1f3f4 !important;color:#000 !important}
+}
+
+@media(max-width:860px){.gl:after{width:220px;font-size:12.5px}}
+
+/* ── 目录 ─────────────────────────────── */
+.toc{background:var(--bg2);border-radius:var(--radius);padding:22px 26px;margin:24px 0}
+.toc ol{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);
+        gap:2px 28px}
+.toc li{padding:6px 0;font-size:15px;display:flex;gap:10px}
+.toc li i{font:700 11px/1.6 var(--mono);color:#fff;background:var(--blue);border-radius:10px;
+          padding:2px 7px;flex:0 0 auto;font-style:normal;letter-spacing:.04em}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--blue)}
+
+footer{padding:44px 0 60px;color:var(--gray);font-size:14px;line-height:1.8;
+       border-top:1px solid var(--line)}
+footer a{text-decoration:none}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ⭐⭐ 2026-09-04 投影版式（现场反馈：「要投到屏幕上去，以画图为主。
+        文字不要搞那么小的字，也不要搞那么密集的信息。」）
+   ⛔ 这里**只动字号与留白，不动版心宽度** —— 版心是按图的宽度定的，
+      改宽了 38 张图全要重画。
+   把正文 16 → 17.5、note 15 → 16.5、行距一起放开；
+   段间距和框间距加大，让每一屏的信息块数量降下来。
+   ⚠️ 窄屏那条 12px 的规则保持不动（手机上不是投影场景）。
+   ══════════════════════════════════════════════════════════════════ */
+body{font-size:17.5px;line-height:1.85}
+p{margin-bottom:18px}
+.note{font-size:16.5px;line-height:1.8;padding:20px 24px;margin:26px 0}
+.note .t{margin-bottom:8px;font-size:1.02em}
+.sub{font-size:.9em;line-height:1.7}
+li{padding:8px 0}
+h3{font-size:23px;margin:44px 0 16px}
+figcaption{line-height:1.8}
+details.aside > summary,details > summary{font-size:16px;padding:10px 0}
+/* 图和正文之间多留一口气 —— 投影时这一条比字号还管用。
+   ⛔⛔ 只准写 margin-top／margin-bottom，**不许写简写 `margin:30px 0`**。
+   2026-09-04 这里写过一次简写，后果是：简写把 margin-left 也设成了 0，
+   而 `figure.fbox`（元素＋类，特异度 0,1,1）压过下面 .fwide（0,1,0）——
+   于是所有宽图的 `margin-left:50%` 失效，只剩 translateX(-50%) 生效，
+   **整张图往左平移 720px，在 1900px 宽的窗口里左边缘跑到 x = −286**。
+   ⭐ 阴险在于：溢出探针查的是 scrollWidth > clientWidth，
+   而「跑到视口左边外面」根本不产生溢出，也不产生滚动条 —— 查不出来，
+   只有人眼看到「图被裁掉一块」。判据已加进 topic02-lint-readability.py。 */
+/* ⭐ 2026-09-04 节尾那一句。第二轮全局审的判据：**一节的最后一句话，
+   必须是这一节要留下的那句** —— 而当时有三节的结尾分别是一句版面交代、
+   一条图注、一段版本说明。补了落点之后给它一点视觉重量，
+   让读者合上一节时知道「这句是要带走的」。⛔ 不要做成大色块，
+   全篇提示框已经够多了；一条左边线 + 稍大的字就够。 */
+/* ⭐ 2026-09-04 引原文用。**逐字引用必须看得出是引用** ——&nbsp;
+   这门课到处在要求「每个数都能回查」，自己引论文时更不能把原文和转述混在一起。
+   等宽 ＋ 灰底 ＋ 左边线，一眼就知道这一段不是作者写的。 */
+b.fno{display:inline-block;font:600 11px/1.5 var(--sans);color:#5f6368;
+  background:var(--bg2);border:1px solid #dadce0;border-radius:4px;
+  padding:1px 7px;vertical-align:1px;letter-spacing:.02em}
+blockquote{margin:14px 0;padding:12px 18px;background:var(--bg2);
+  border-left:3px solid var(--gray);border-radius:0 8px 8px 0;
+  font:400 15px/1.75 var(--sans);color:var(--ink)}
+blockquote b{font-weight:700}
+
+p.landing{border-left:3px solid var(--blue);padding:2px 0 2px 16px;
+  margin:26px 0 10px;font-size:1.03em;color:var(--ink)}
+
+figure.fbox{margin-top:30px;margin-bottom:30px}
+/* ⭐ 2026-09-04 窄图也放大一档：§0–§2 那批是按 1000 px 画的，
+   塞进 1032 px 的版心等于原生比例 1.0 —— 图里 10.5 px 的字投影上还是 10.5 px。
+   突破到 1240 就等比放大 1.24 倍，跟宽图那条（1400 → 1760，1.26 倍）配成一对。
+   ⚠️ 版心本身**不许动**（38 张图的排版都吊在 1080 上），动的只有 figure。
+   ⚠️ 同时挂 fbox＋fwide 的元素由后面 figure.fwide 覆盖（同特异度、后写赢）。 */
+figure.fbox{width:min(1240px,calc(100vw - 32px));max-width:none;
+  margin-left:50%;transform:translateX(-50%)}
+figure.fbox > figcaption{max-width:1080px;margin-left:0}
+
+/* ⛔ 2026-09-04：上面那条 code 的 white-space:nowrap 是给**行内**代码的，
+   但它会一路继承进 <pre> —— nowrap 把换行折成空格，于是多行代码块
+   全挤成一行，而且不报错、只是难看。专题二 3.4 那个矩阵例子就这么废过一次。
+   ⭐ 所以块级代码必须单独把它扳回来，顺便去掉行内那层底色和内边距。
+   （这条写在 L300 的 CSS 里，因为 L200／专题三／专题八都从这儿抄 head。） */
+pre{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;overflow-x:auto;margin:14px 0;
+    font:500 13px/1.65 var(--mono);color:var(--ink)}
+pre code,pre .k{white-space:pre;background:none;padding:0;border-radius:0;
+                color:inherit;font-size:inherit;font-weight:inherit}
+
+/* 超窄屏：code 默认 nowrap，长的行内代码会把页面撑出横向滚动条 */
+@media(max-width:420px){
+  code,.k{white-space:normal;word-break:break-word}
+}
+
+/* 中等窗口：还想保住一行，就先把「场景」两个字和按钮内边距让出来 */
+@media(max-width:1020px){
+  .console .inner{gap:10px}
+  .presets span{display:none}
+  .presets button{padding:5px 8px;font-size:11px}
+  .ctrl label{font-size:12px}
+}
+
+@media(max-width:860px){
+  .hero h1{font-size:34px}.hook{font-size:18px}
+  .console .inner{flex-wrap:wrap}       /* 小屏放弃单行，否则会横向溢出 */
+  .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
+  .toc ol{grid-auto-flow:row;grid-template-rows:none}
+  .console .inner{gap:10px;padding:9px 16px}
+  .ctrl input[type=range]{width:84px}
+  .presets{margin-left:0;flex-wrap:wrap;gap:5px}
+  .presets span{display:none}
+  .presets button{padding:5px 10px;font-size:11.5px}
+  .console .adv{display:none}            /* 小屏只留序列长度滑块 + 场景预设 */
+  .console .tag{font-size:10px}
+  .ctrl label{font-size:12px}
+  .jmeter{flex-wrap:wrap;gap:6px 14px;font-size:12px;width:100%}
+  .journey{padding:12px 14px;gap:12px}
+  h2{font-size:25px}.punch{font-size:17px;padding:20px 22px}
+  .guess button{padding:11px 16px;font-size:14px}
+  .band{height:160px}.band .cap{padding:0 20px 18px}.band .cap .bt{font-size:21px}
+  .hero:before{opacity:.4}
+  .figpair{grid-template-columns:1fr !important}
+  .eq{font-size:12.5px;padding:12px 14px}
+}
+/* ── 支线小节（整个 h3 折起来）─────────────────────────────
+   跟 details.aside 的区别：aside 装一段旁白，branch 装**一整个小节**
+   （标题 ＋ 正文 ＋ 图）。判据是故事线：说不出「这段在旅程的哪一站」就折。
+
+   ⚠️ 展开后的内容区**不能有水平 padding、不能有边框背景**。里面的图是
+   .fwide（margin-left:50% ＋ translateX(-50%)，突破 1080 版心到 1440），
+   它按父容器算中心 —— 一旦 .body 有 padding，图就整体偏移；有边框的话
+   图还会从框里溢出去，很怪。所以只有 summary 那条灰条带样式。
+
+   ⚠️ 这几条也必须留在下面 CSS_MARK 之前，理由同上面故事线那段。 */
+details.branch{margin:26px 0}
+details.branch > summary{cursor:pointer;list-style:none;user-select:none;
+  padding:13px 18px;background:var(--bg2);border:1px solid var(--line);
+  border-left:3px solid var(--gray2);border-radius:0 10px 10px 0;
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-size:16px;font-weight:600;color:var(--ink)}
+details.branch > summary::-webkit-details-marker{display:none}
+details.branch > summary::before{content:"▸";color:var(--gray2);font-weight:400}
+details.branch[open] > summary::before{content:"▾"}
+details.branch > summary:hover{border-left-color:var(--blue)}
+details.branch .tag{font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;
+  background:var(--gray2);border-radius:10px;padding:2px 9px;white-space:nowrap}
+details.branch summary em{font-style:normal;font-weight:400;font-size:13.5px;
+  color:var(--gray)}
+details.branch > .body{padding:20px 0 4px}
+/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
+/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。
+
+   ⭐ 2026-09-04 上限 1440 → 1760。1440 只是「不缩小」，图里 10.5 px 的字
+   投到屏幕上还是 10.5 px，后排看不清。放到 1760，整张图等比放大 1.26 倍，
+   字跟着到 13 px 上下。**一个坐标都不用改、不可能撞车** ——
+   比逐张调字号安全得多（SVG 的 <text> 不换行，调字号会压到隔壁）。
+   窄屏由 calc(100vw - 32px) 兜底，行为不变。
+
+   ⛔⛔ 特异度写成 `figure.fwide`（0,1,1），不要写 `.fwide`（0,1,0）。
+   2026-09-04 页面主 CSS 里有一条 `figure.fbox{margin:30px 0}`（0,1,1），
+   简写把 margin-left 一起设成 0，**压过这里的 margin-left:50%** ——
+   于是只剩 translateX(-50%) 生效，整张宽图往左平移 720 px，
+   在 1900 px 宽的窗口里左边缘落到 x = −286，左边一截被裁掉。
+   ⭐ 而「往左跑」既不产生滚动条、也不让 scrollWidth 变大，
+   原来那个查横向溢出的探针对它恒为 0 —— 判据已加进 topic02-lint-layout.py。 */
+figure.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1760px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+.fwide svg{display:block}
+/* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
+   figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
+   看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
+   fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
+   **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
+.fwide figcaption{max-width:1080px;margin-left:0}
+/* ⛔⛔ 2026-09-08：note.q 是第五种提示框，跟 info/warn/danger/ok 一样**去彩底**。
+   上一轮按名字挨个改那四种，**漏了它** —— 它不在那四个名字里，
+   而且它的定义还不在 topic-02-L300.html 里，是**这里注入进去的**。
+   ⭐ 两条判据：
+     ① 改一族样式要按「渲染后还有谁带底色」验收，不能按「我记得有几种」；
+     ② 先确认那个文件是不是生成物 —— 直接改 L300 会被下一次 build 原样盖掉，
+        而且**盖掉不报错**，只是下次渲染又变回来。 */
+.note.q{background:#fff;border:1px solid var(--line);
+        border-left:4px solid var(--purple)}
+/* ---- 开场热身选择题（.guess）----
+   样式从专题一原样搬（topic-01.html），两课同一个观感 ——&nbsp;
+   学员一眼认得出「又是那个先猜一猜」。改这里要顺手看一眼那边有没有跟着变。
+   ⚠️ 只有 L200 用到；L300 里这几条是死规则，留着无害，别为了「干净」删掉 ——
+      两版共用同一份 CSS，删了下次 L300 若要加就得再抄一遍。 */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px;line-height:1.7}
+.guess .q .qs{font-size:15px}
+.guess .oplab{font-size:15px;color:var(--ink);font-weight:600;margin:14px 0 8px}
+.guess .oplab:first-of-type{margin-top:0}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:#e8f0fe}
+.guess button.right{border-color:var(--green);background:#e6f4ea}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.8}
+.guess .rev .qs{font-size:15px;color:var(--gray)}
+.guess .rev.on{display:block}
+/* 「↺ 重来」按钮：由 JS 生成后塞进答案区顶部。放在答案区里面是有意的 ——
+   答案区没展开时它跟着一起隐藏，天然实现「答过了才出现」，不需要额外的状态类。 */
+.guess .rst{float:right;margin:-2px 0 8px 14px}
+.guess .rst button{font:600 13px/1 inherit;padding:8px 15px;border:1.5px solid var(--line);
+  background:#fff;border-radius:8px;cursor:pointer;color:var(--gray);
+  transition:border-color .15s,color .15s}
+.guess .rst button:hover{border-color:var(--gray);color:var(--ink)}
+/* ---- 收尾节的 take-away 大字块 ----
+   ⛔ 2026-09-05 读到 §9：「那么多字，抓不住重点，字还那么小。
+      是不是给他少整几句 take-away highlight 就行了？」
+   ⭐ 病根是**收尾节用了正文的字号和密度**。正文 14 px 靠信息量取胜，
+      收尾节靠的是「就这三句，记住」——&nbsp;两者需要相反的排版。
+      所以这里不是把字调大一点，是**换一种块**：标题 19 px、留白翻倍、
+      每条一个序号圆点，一屏之内最多三条。
+   ⚠️ 别在这个块里塞第四条。它一旦超过三条就退化成又一段正文。
+   ⛔ 更硬的一条（2026-09-05 二次收时立的）：**只写图上没有的那一样。**
+      收尾节最容易「想强调，于是重复」——&nbsp;§9 为此返工过三次。 */
+/* ---- 引导思考块 ----
+   ⭐ 2026-09-05 现场反馈：「详情写到讲义里，引导部分就放到教材的引导思考部分。」
+   ⭐ 它跟 .note 的区别不是颜色，是**语法**：note 是陈述句，think 是**疑问句**，
+      而且**问完要留白**，让读者先自己答一遍再往下读。
+   ⛔ 里面只许放问题和「先想一下」，**不许把答案也塞进来** ——&nbsp;
+      塞了它就退化成又一个 note，而且是更花哨的那种。 */
+.think{margin:22px 0;padding:20px 24px 20px 26px;border-radius:12px;
+  background:#f3f6fb;border-left:5px solid var(--purple)}
+.think .qk{display:block;font-size:12.5px;font-weight:700;letter-spacing:.06em;
+  color:var(--purple);margin-bottom:8px}
+.think .qq{display:block;font-size:18px;line-height:1.6;color:var(--ink);font-weight:700}
+.think .qh{display:block;margin-top:9px;font-size:14px;color:var(--gray);font-style:italic}
+.tkaway{margin:26px 0;display:grid;gap:14px}
+.tkaway .tk{display:grid;grid-template-columns:30px 1fr;gap:16px;align-items:start;
+  padding:20px 24px;border-radius:12px;background:var(--bg2);
+  border:1px solid var(--line);border-left:5px solid var(--blue)}
+.tkaway .tk.solo{grid-template-columns:1fr}
+.tkaway .tk .n{width:28px;height:28px;border-radius:50%;background:var(--blue);
+  color:#fff;font-weight:700;font-size:15px;line-height:28px;text-align:center}
+.tkaway .tk b{display:block;font-size:19px;line-height:1.5;color:var(--ink);
+  font-weight:700;margin-bottom:7px}
+.tkaway .tk .d{display:block;font-size:15px;line-height:1.75;color:var(--gray)}
+.tkaway .tk .d b{display:inline;font-size:inherit;color:var(--ink);margin:0}
+@media(max-width:700px){.tkaway .tk{grid-template-columns:1fr}}
+/* ---- 旁白折叠块 ----
+   有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
+   但作为方法论又值得留着。折起来：想看的人点开，讲课时直接跳过。
+   注意 open 属性一个都不要加，默认全收。 */
+details.aside{margin:18px 0;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--bg2);font-size:14px;color:var(--gray)}
+details.aside > summary{cursor:pointer;padding:11px 16px;list-style:none;
+  font-size:13.5px;color:var(--gray);user-select:none}
+details.aside > summary::-webkit-details-marker{display:none}
+details.aside > summary::before{content:"▸ ";color:var(--gray)}
+details.aside[open] > summary::before{content:"▾ "}
+details.aside > summary:hover{color:var(--ink)}
+details.aside[open] > summary{border-bottom:1px solid var(--line)}
+details.aside .body{padding:14px 16px 16px;line-height:1.75}
+details.aside b{color:var(--ink);font-weight:600}
+.msfrom{color:var(--gray);font-size:12.5px}
+.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
+.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
+  color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
+.mscard > b{display:block;font-size:16px;margin-bottom:6px}
+.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+
+/* ══ 「课前勿点」那个折叠块（专题二 L200 开篇的两道热身题）══
+   ⭐ 跟普通的 details.more 分开配色：普通折叠是「想深挖再点」，
+   这个是**明确劝阻**。用红而不是蓝，让「别点」这层意思在扫视时就成立 ——&nbsp;
+   ⛔ 只靠 summary 里的文字挡不住手快的人。 */
+/* ⭐ 2026-09-12：揭晓规则改成「全对才开」，全选但没全对时用它报分。
+   判据：新造的类名落地前先确认它真有样式（09-09 栽过一次）。 */
+.guess .hint{display:none;margin-top:14px;padding:11px 16px;border-radius:10px;
+  background:#fce8e6;border:1px solid #f3c0bb;color:#a50e0e;font-weight:700;font-size:15px}
+.guess .hint.on{display:block}
+details.more.preclass{border-color:#f3c0bb;background:#fef7f6}
+details.more.preclass[open]{background:#fff}
+details.more.preclass>summary{color:#a50e0e}
+details.more.preclass>summary:hover{background:#fce8e6}
+details.more.preclass>summary::before{color:#d93025}
+details.more.preclass[open]>summary{border-bottom-color:#f3c0bb}
+details.more.preclass>summary .why{color:#b06000}
+
+/* ══ 外传两页的节号 chip ══
+   ⛔ `.secno` 这个类是我在建外传时随手写的，**从来没有对应的 CSS** ——&nbsp;
+   于是节号跟标题挤成一团：「开场这一讲要回答的两件事」「一同一把尺子」。
+   页面照常构建、版面探针也不报（它查的是溢出和撞车，不查「读起来断不断句」）。
+   ⭐ 判据：**自己新造的类名，落地前要去确认它真有样式** ——&nbsp;
+   没有样式的 class 在 HTML 里是完全合法的，它只是安静地什么都不做。
+   ⚠️ 主线 L200/L300 的 h2 不带节号（纯文本标题），所以这条只影响外传两页。 */
+h2 .secno{display:inline-block;min-width:2.1em;margin-right:.52em;
+  padding:.1em .52em;border-radius:7px;background:#e8f0fe;color:#174ea6;
+  font-size:.6em;font-weight:700;letter-spacing:0;vertical-align:.24em;
+  text-align:center}
+
+/* ══ 专题二一家四页的互跳导航（定义在 tools/topic02_family.py）══
+   ⭐ 样式只写这一处：另外三页的 <head> 是从本文件整块切下去的。
+   ⛔ 别在各页自己的 <style> 里再写一份。 */
+nav.famnav{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;
+  margin:0 0 24px;font-size:13px}
+nav.famnav .famlab{align-self:center;color:var(--gray2,#80868b);
+  margin-right:2px;white-space:nowrap}
+nav.famnav a,nav.famnav .here{display:block;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--line,#dadce0);background:#fff;text-decoration:none;
+  line-height:1.45;transition:border-color .12s,background .12s}
+nav.famnav a{color:var(--blue,#1a73e8)}
+nav.famnav a:hover{border-color:var(--blue,#1a73e8);background:#f8fbff}
+/* ⭐ 当前页渲染成不可点的高亮块 ——&nbsp;它同时充当「你在这里」的指示，
+   所以不需要再单独放一个面包屑说明当前在哪一版。 */
+nav.famnav .here{color:var(--ink,#202124);font-weight:700;
+  border-color:var(--blue,#1a73e8);background:#e8f0fe;cursor:default}
+nav.famnav em{display:block;font-style:normal;font-weight:400;font-size:11.5px;
+  color:var(--gray2,#80868b);margin-top:2px}
+nav.famnav .here em{color:#174ea6}
+@media(max-width:760px){nav.famnav em{display:none}
+  nav.famnav a,nav.famnav .here{padding:6px 10px}}
+</style>
+<style>
+ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
+/* ⭐ pre / pre code 的样式**已经修在 L300 的 CSS 源里**了（2026-09-04），
+   这里不再重复一份 —— 重复的 CSS 跟重复的正文是同一类问题。 */
+h4 { margin:18px 0 6px; font-size:15px }
+
+/* ⭐ 2026-09-08：提示框去彩底那段**已经改到共用 CSS 源里了**
+   （topic-01.html 与 topic-02-L300.html），本讲不再单独覆盖 ——
+   ⛔ 同一条规则留两份，迟早只改一份。 */
+
+/* ── 图下面折起来的「出处与口径」（2026-09-14）────────────────
+   ⭐ 收起来的时候只是一行灰字，跟图注拉开一档；展开才是那一堆脚注。
+   ⛔ 宽度跟着 figure 走（figure 是 .fwide，最宽 1760px），但**正文限宽在
+     1080px** —— 出处是拿来读的散文，不是图，所以这里自己收回版心，
+     否则一行会拉到一米八长，眼睛跟不回来。 */
+.figsrc{max-width:1080px;margin:6px auto 0;border-top:1px dashed var(--line);
+        font-size:13.5px;color:var(--gray)}
+/* ⭐ 跟 details.aside 用同一套三角记号，不另发明一种 —— 同一页里两种折叠
+   长两个样子，读者要分别学一次。 */
+.figsrc>summary{cursor:pointer;list-style:none;padding:8px 2px;
+                font:600 12.5px/1.4 var(--mono);color:#9aa0a6;
+                letter-spacing:.02em}
+.figsrc>summary::-webkit-details-marker{display:none}
+.figsrc>summary::before{content:"▸ "}
+.figsrc[open]>summary::before{content:"▾ "}
+.figsrc>summary:hover{color:var(--ink)}
+.figsrc p{margin:0 0 7px;line-height:1.7}
+.figsrc p:first-of-type{margin-top:4px}
+.figsrc b{color:var(--ink);font-weight:600}
+@media print{.figsrc{font-size:11px}}
+/* ⭐⭐⭐ 2026-09-16 现场：「这一部分给我折叠起来，我光看后边那个有模型名称
+   和年份的编年史就够了。」——&nbsp;说的是 §0 那张横轴时间线。
+   ⛔ 折叠 ≠ 删掉：它是首尾呼应用的，第九章还要请读者滚回来看。
+   ⭐ 跟 .figsrc 共用三角记号，同一页里不发明第二种折叠长相。 */
+.foldfig{margin:18px auto;border:1px solid var(--line);border-radius:10px;
+         background:#fafbfc;padding:2px 14px}
+.foldfig>summary{cursor:pointer;list-style:none;padding:10px 2px;
+                 font:600 14px/1.5 var(--sans);color:var(--gray)}
+.foldfig>summary::-webkit-details-marker{display:none}
+.foldfig>summary::before{content:"▸ "}
+.foldfig[open]>summary::before{content:"▾ "}
+.foldfig>summary:hover{color:var(--ink)}
+.foldfig>summary b{color:var(--ink)}
+.foldfig>summary .why{font-weight:400;color:#9aa0a6;font-size:13px}
+@media print{.foldfig{border:none;background:none}
+             .foldfig>summary{display:none}}
+</style>
+<style>a.tvlink{font-size:.88em;white-space:nowrap;margin-left:2px}</style>
+<style>
+/* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
+   那条规则之前是空转的（顶上什么都没有，点内链只是白空一截）。 */
+.tocbar{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
+     backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid #e8eaed;
+     overflow-x:auto;scrollbar-width:none}
+.tocbar::-webkit-scrollbar{display:none}
+.tocbar-in{display:flex;gap:6px;align-items:center;white-space:nowrap;
+        max-width:1760px;margin:0 auto;padding:8px 16px}
+.tocbar-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:6px;flex:none}
+/* ⭐ 2026-09-14 每个条目给一个真的框。原来只有 padding ＋ 悬停底色 ——
+   不悬停的时候它就是一排裸字，看不出「这是可以点的东西」，
+   条目之间也只靠 2px 间距分隔，读起来是一长串。
+   ⛔ 框要用 1px 实线 ＋ 胶囊圆角，不要用阴影：吸顶条只有 40 多像素高，
+     阴影在这个尺度上只会糊成一片灰。 */
+.tocbar a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
+       padding:5px 11px;border:1px solid #dadce0;border-radius:999px;
+       background:#fff;flex:none;transition:background .12s,border-color .12s}
+.tocbar a:hover{background:#f1f3f4;border-color:#bdc1c6;color:#202124}
+.tocbar a.on{background:#e8f0fe;border-color:#aecbfa;color:#174ea6;font-weight:600}
+@media print{.tocbar{display:none}}
+</style>
+</head>
+<body>
+<div class="progress"><i></i></div>
+<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s0" title="第 开始前 节 · 先把 7 份 profile 挂上">先把 7 份 profile 挂</a><a href="#s1" title="第 1 级 节 · 定位">定位</a><a href="#s2" title="第 2 级 节 · 归因">归因</a><a href="#s3" title="第 3 级 节 · 对到 HLO 和别的页">对到 HLO 和别的页</a><a href="#s4" title="第 迁移题 · 一 节 · 换一条通信、一颗 kernel、一份程序、一段代码">换一条通信、一颗 kernel、</a><a href="#s5" title="第 迁移题 · 二 节 · 换一张总账页、换一份显存">换一张总账页、换一份显存</a></div></nav>
+
+<div class="hero"><div class="wrap">
+  <div class="crumb"><a href="index.html">现代 AI 加速器 GPU / TPU 系统课程</a> ／ <a href="topic-07.html">专题七 · 性能调优与工具链</a> ／ <b>练习</b></div>
+  <h1>练习：在开源 XProf 上自己找答案</h1>
+  <div class="hook">二十四道题，全部在本课那 7 份混元3 profile 上做：前十二道跟着正文走，后十二道<a href="#s4">迁移题</a>换一条通信、一份 profile、一颗 kernel 再走一遍，答案只在本页。<em>先自己找，再点「答案？」核对。</em></div>
+  <div class="chips"><span class="chip">工具 <b>开源 XProf 2.23.1</b></span><span class="chip">前置 <b>专题七正文</b></span></div>
+</div></div>
+<section id="s0"><div class="wrap"><div class="stn"><span class="badge">开始前</span><h2>先把 7 份 profile 挂上</h2></div>
+  <p class="lead">7 份 profile 从 GitHub Release 下载，解压后一个 logdir 下每份一个 run，用开源 XProf 打开（和正文 2.1「本机怎么开」同一套命令）。</p>
+<p>本课用到的 7 份 profile 公开在 <a href="https://github.com/yangwhale/gpu-tpu-pedia/releases/tag/topic07-hy3-profiles-v1">GitHub Release <code>topic07-hy3-profiles-v1</code></a>（混元3 在 64 颗 TPU v7x 上的训练，每份是一台主机抓的 3 步，一份解压后 1.2–1.45 GB；除了主机名换成 <code>gke-node-N</code>，其余原样）。下面四步从下载到打开，命令可以直接复制：</p><pre><code># 1. 下载（7 个附件共 0.86 GB；只看一两份就只下那几个）
+mkdir -p ~/hy3-prof &amp;&amp; cd ~/hy3-prof
+B=https://github.com/yangwhale/gpu-tpu-pedia/releases/download/topic07-hy3-profiles-v1
+for r in fp8old fp8new fp8nat r3anat fp8tk bf16old bf16new; do curl -fLO $B/hy3-$r.tar.zst; done
+curl -fLO $B/SHA256SUMS &amp;&amp; sha256sum -c SHA256SUMS
+#   只下了几份就加 --ignore-missing；macOS 用 shasum -a 256 -c SHA256SUMS
+
+# 2. 解压（共 9.2 GB）：每个 tar 里已经是 &lt;run&gt;/plugins/profile/&lt;时间戳&gt;/&lt;主机&gt;.xplane.pb
+#   没有 zstd 命令先装：apt install zstd ／ brew install zstd
+for f in hy3-*.tar.zst; do zstd -dc "$f" | tar -xf -; done
+
+# 3. 装开源 XProf，指向这个目录
+#   ==2.23.1 是本课截图用的版本，去掉就装最新版
+pip install xprof==2.23.1
+xprof --logdir ~/hy3-prof --port 6311
+#   也可以用 TensorBoard：pip install tensorboard tensorboard-plugin-profile
+#   再 tensorboard --logdir ~/hy3-prof --port 6311，进 PROFILE 页
+
+# 4. 浏览器开 http://127.0.0.1:6311/
+#   左栏 Sessions 下拉选 run（如 fp8old/2026_08_15_03_57_28），Tools 选工具</code></pre><ul><li>目录结构就是 XProf 认 run 的方式：<code>&lt;logdir&gt;/&lt;run&gt;/plugins/profile/&lt;时间戳&gt;/&lt;主机&gt;.xplane.pb</code>，logdir 下每个子目录是一个 run。解压完 <code>~/hy3-prof</code> 下就是 7 个 run 目录；自己抓的 profile 照这个结构摆进来也能一起看。</li><li>每份第一次打开要等一会儿（本机实测 Overview 约 50 秒、Trace Viewer 约 55 秒：XProf 在转换 1 GB 多的 xplane，转完在同目录留缓存，再开就快了）。端口被占就换一个，下文链接里的 6311 跟着换。</li><li>文件和本课截图是同一份：run 名、主机名、时间戳和下表一致，文中「现场打开」里的链接直接能用。</li></ul><table class="numtab"><tr><th>run</th><th>是什么</th><th>中位步（ms）</th><th>解压后的文件</th></tr><tr><td><code>fp8old</code></td><td>FP8 原配方（tokamax，注入 tile 512／2048／1536）</td><td>11,758.2</td><td><code>fp8old/plugins/profile/2026_08_15_03_57_28/gke-node-1.xplane.pb</code></td></tr><tr><td><code>fp8new</code></td><td>FP8 改后（native ＋ 12 个新 tile 值）：快了 50% 的那一份</td><td>7,842.1</td><td><code>fp8new/plugins/profile/2026_08_15_04_11_46/gke-node-1.xplane.pb</code></td></tr><tr><td><code>fp8nat</code></td><td>fp8new 的复跑</td><td>7,846.1</td><td><code>fp8nat/plugins/profile/2026_08_15_16_59_57/gke-node-4.xplane.pb</code></td></tr><tr><td><code>r3anat</code></td><td>fp8new 的再一次复跑</td><td>7,840.1</td><td><code>r3anat/plugins/profile/2026_08_16_01_29_28/gke-node-5.xplane.pb</code></td></tr><tr><td><code>fp8tk</code></td><td>原配方但没注入 tile（默认 128×128×128）：375 s 那一份</td><td>375,160.0</td><td><code>fp8tk/plugins/profile/2026_08_15_17_48_55/gke-node-4.xplane.pb</code></td></tr><tr><td><code>bf16old</code></td><td>BF16，改之前（tokamax，注入 tile）</td><td>21,747.2</td><td><code>bf16old/plugins/profile/2026_08_15_09_13_02/gke-node-2.xplane.pb</code></td></tr><tr><td><code>bf16new</code></td><td>BF16，做同一个改动之后（native ＋ 同 12 个 tile 值）</td><td>20,693.8</td><td><code>bf16new/plugins/profile/2026_08_15_09_28_25/gke-node-3.xplane.pb</code></td></tr></table>
+  <ul>
+    <li>题里的窗口写成 <code>view_start</code>／<code>view_end</code>（毫秒，距 profile 起点），后面的「↗ 打开」直接开到那一屏；工具页的「↗ 打开」开到那份 run 的那一页。链接按本机 XProf 端口 6311 写，端口不同就把链接里的 6311 改掉。</li>
+    <li>打开后先照 2.2 收拾：Collapse All → 只留 <code>/device:TPU:0</code> 和它的 SparseCore 0／1 → Expand All。Details 里 Start、Wall Duration 的单位是 ns。</li>
+    <li>想拿自己的模型练，就照正文 6.3 的开关抓一份，把题里的名字换成你那份里的同类算子，照同样的步骤走。</li>
+    <li>答案按 xplane 现算，和页面上读到的一致到最后一位小数；不同版本的 XProf 版式会略有不同。</li>
+  </ul>
+  <details class="foldfig"><summary>本机开源 XProf 2.23.1 的坑 <span class="why">（正文里散在各处，做题前扫一眼）</span></summary>
+  <ul>
+    <li>从首页 Tools 点进去的 Trace Viewer 不认 <code>view_start</code>／<code>view_end</code>，打开就是整份会话；要开到一层，用题里窗口后面的「↗ 打开」（它直接开 <code>trace_viewer_index.html</code>）。</li>
+    <li>Find Events 回车以后，之前关掉的进程可能全冒回来（本课录屏里碰到过），计数「0 of 1872」也算上了它们；数次数先想清楚口径。</li>
+    <li>快捷键（W／S／A／D、f、m）要鼠标停在时间线上才生效；页面在转圈时单击不算。</li>
+    <li>Details 里 Start、Wall Duration 的单位是 ns，去掉后 6 位读 ms。</li>
+    <li>Graph Viewer 从 Details 的链接点进去时不认模块名，下拉框停在别的模块上，要手动选一次 <code>jit_train_step</code>（正文 4.3 录屏停 3–4）。</li>
+    <li>Memory Viewer 默认开的是 <code>jit_add</code> 这类小模块，要在 Hlo Modules 下拉里换成 <code>jit_train_step</code>；换完以后 Module Name 那一行可能还写着原来的名字，以下面的数为准。</li>
+    <li>Op Stats 的 HLO op name 过滤框默认完全匹配，按框右边的 <code>=</code> 切到「包含」才能用 <code>gmm</code> 这样的片段筛。</li>
+    <li>Overview 的 FLOPS／HBM Utilization 显示 0.0%：这一版没算，利用率去 Roofline、Op Profile 读。</li>
+    <li>Tools 下拉里的 Utilization Viewer（工具 <code>utilization_viewer</code>）在 2.23.1 上打开任何 profile 都弹 404，error 写着 No Data。这是这一版的 bug：它把这个工具路由到一个没注册的处理器，XProf 日志里是 <code>No ProfileProcessor registered for tool: utilization_viewer</code>；2.23.2 已修。原料是在的：以 fp8old 为例，<code>/device:TPU:0</code>–<code>3</code> 平面上各有一行 <code>counters_0</code>，每行 94,039 个硬件计数器事件。要看这一页就装 2.23.2 或更新的版本（本课截图都是 2.23.1）。</li>
+    <li>截图分享时遮掉 Program ID 列和进程名里的主机名。</li>
+  </ul>
+  </details>
+</div></section>
+<section id="s1"><div class="wrap"><div class="stn"><span class="badge">第 1 级</span><h2>定位：找得到一步、一层</h2></div><p class="lead">做完这一级，你能读出任何一份 profile 的步时，框出一步、认出一层里的通信。对应正文第二节。</p><h3>练习 1 · Overview 一句话</h3>
+<p>打开 <code>fp8tk</code> 的 Overview（工具 <code>overview_page</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=fp8tk/2026_08_15_17_48_55&amp;tag=overview_page&amp;host=gke-node-4" target="_blank" rel="noopener">↗ 打开</a>，读平均步时。它是原配方 <code>fp8old</code><a class="tvlink" href="http://127.0.0.1:6311/?run=fp8old/2026_08_15_03_57_28&amp;tag=overview_page&amp;host=gke-node-1" target="_blank" rel="noopener">↗ 打开</a> 同一格的几倍？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>fp8tk 375,326.7 ms，fp8old 11,793.8 ms，约 31.8 倍。</b></p><p>怎么看出来：两份 Overview 左栏的 Average Step Time。这一格按主机上的 Steps 切步、3 步平均，比 Trace Viewer 里单击 <code>jit_train_step</code> 读的中位步（375,160.0／11,758.2，31.9 倍）大 0.1–0.3%，口径不同，结论一样。为什么慢这么多，练习 6。</p></details>
+<h3>练习 2 · 复跑对得上吗</h3>
+<p>打开 <code>fp8nat</code> 的 Trace Viewer（不带窗口，整份会话）<a class="tvlink" href="http://127.0.0.1:6311/?run=fp8nat/2026_08_15_16_59_57&amp;tag=trace_viewer@&amp;host=gke-node-4" target="_blank" rel="noopener">↗ 打开</a>，在 <code>XLA Modules</code> 行上单击 3 块 <code>jit_train_step</code>，各读 Wall Duration。取居中的那一步，和 <code>fp8new</code> 的 7,842.1 ms 差多少？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>三步 7,846.7／7,846.1／7,845.4 ms；居中的是第二块（8,239.931 ms 起），7,846.1 ms，比 fp8new 多 4.0 ms（0.05%）。漏算那份结果能复现，不是一次偶然。</b></p><p>怎么看出来：抓了 3 步就有 3 块；读 <code>XLA Modules</code> 而不读 <code>Steps</code>（正文 2.3 认行表）。按 f 可以让选中的一步铺满一屏。</p></details>
+<h3>练习 3 · BF16 那一层的通信</h3>
+<p>打开 <code>bf16new</code> 反向 40 号层：<code>view_start=34056.155&amp;view_end=34251.406</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dbf16new%2F2026_08_15_09_28_25%26tag%3Dtrace_viewer%40%26host%3Dgke-node-3%26hosts%3Dgke-node-3&amp;view_start=34056.155&amp;view_end=34251.406" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 34056.155–34251.406 ms">↗ 打开</a>。小核 SparseCore 0 的 Sparse Core Ops 上，收 192 个专家的 all-gather 有几条、多宽？专家梯度的 reduce-scatter 呢？单击读形状。</p>
+<details class="foldfig"><summary>答案？</summary><p><b>all-gather.550／552／554：4.86／4.95／4.87 ms，输出 <code>bf16[1,192,4096,1536]</code> ×2 和 <code>[1,192,1536,4096]</code>；reduce-scatter.198／200／202：9.08／8.74／8.33 ms，输出 <code>bf16[192,32,1536]</code> ×2 和 <code>bf16[32,294912]</code>。和原配方 bf16old 同一层几乎一样宽：通信一条不少（正文图 5.1B）。</b></p><p>怎么看出来：<code>reduce-scatter.202</code> 的形状不带 192，可 294,912 ＝ 192 × 1,536：它是第三份专家矩阵的梯度换了排布（HLO 里顺着它的输入往上追，是一颗 tgmm 的输出）。另外 all-gather.550 在这一窗里出现两次（层头、层尾各一条），两次各算一条还是层尾那条属于下一层，本课没追。</p></details>
+</div></section>
+<section id="s2"><div class="wrap"><div class="stn"><span class="badge">第 2 级</span><h2>归因：主核在等谁、少的时间是哪类活</h2></div><p class="lead">做完这一级，你能说出一块 done 在等哪条小核上的通信、藏了多少，在两张总账页上判断「真快」还是「漏算」，并把少掉的时间和没干的活对上账。对应正文第二、三、五节。</p><h3>练习 4 · 一块 done 藏了多少</h3>
+<p>打开 <code>fp8old</code>：<code>view_start=31223.000&amp;view_end=31227.000</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dfp8old%2F2026_08_15_03_57_28%26tag%3Dtrace_viewer%40%26host%3Dgke-node-1%26hosts%3Dgke-node-1&amp;view_start=31223.000&amp;view_end=31227.000" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 31223.000–31227.000 ms">↗ 打开</a>（反向 40 号层里）。主核 XLA Ops 上找名字带 <code>all-gather.548</code>、<code>call-done</code> 的那块，读宽度；往下找小核上右沿和它对齐的那条。这次通信一共多长、藏住了多少？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>done 31,225.002–31,226.183 ms，宽 1.181 ms；对着 SparseCore 0 的 <code>all-gather.547</code>（31,223.777–31,226.183，2.406 ms，<code>f8e4m3fn[1,192,4096,1536]</code>），右沿差 0.1 µs。藏住 2.406 − 1.181 ＝ 1.225 ms，露出 1.181 ms。</b></p><p>怎么看出来：done 的宽度就是主核白等的那段；小核上的号比主核上的小 1（547 对 548）。先单击小核那条再单击 done，反过来点 Details 变高会把小核行挤出屏幕。正文 2.5、图 2.6。</p></details>
+<h3>练习 5 · BF16 的利用率正常吗</h3>
+<p>打开 <code>bf16new</code> 的 Hlo Op Profile（工具 <code>op_profile</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=bf16new/2026_08_15_09_28_25&amp;tag=op_profile&amp;host=gke-node-3" target="_blank" rel="noopener">↗ 打开</a>，Group by 选 Category，读整体 FLOPS 利用率和 custom-call 那一行的 FLOPS。再和 <code>fp8new</code><a class="tvlink" href="http://127.0.0.1:6311/?run=fp8new/2026_08_15_04_11_46&amp;tag=op_profile&amp;host=gke-node-1" target="_blank" rel="noopener">↗ 打开</a> 同一格比：哪一份可能是漏算？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>bf16new：整体 22.55%，custom-call 49.62%（bf16old 是 21.44%、45.57%）。fp8new 的 custom-call 是 117.45%，超过这页自己用的峰值：漏算的是 fp8new。</b></p><p>怎么看出来：BF16 这一格涨了 4 个点，和时间少掉的比例对得上；FP8 那一格时间少了一半多、利用率反而翻倍。只凭「超过 100%」还不够下结论（正文 3.2 折叠块），要展开到单颗 kernel 看它的 FLOP rate 有没有超过硬件峰值。</p></details>
+<h3>练习 6 · 375 s 那一份慢在哪</h3>
+<p>打开 <code>fp8tk</code> 的 Hlo Op Stats（工具 <code>hlo_stats</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=fp8tk/2026_08_15_17_48_55&amp;tag=hlo_stats&amp;host=gke-node-4" target="_blank" rel="noopener">↗ 打开</a>。第一名是谁、每次多久？按名字过滤 <code>gmm_megablox.16</code>，每次多久，是 <code>fp8old</code> 同名 kernel 的几倍？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>第一名 <code>tgmm_megablox.10</code>，每次 418,120.7 µs；gmm_megablox.16 每次 373,915.2 µs，fp8old 同名 3,432.0 µs，慢 108.9 倍（Model 7,719 GFLOP/s）。前十名全是专家矩阵乘。</b></p><p>怎么看出来：次数两份都是 1,872（78 圈 × 3 步 × 8 个 TensorCore）：活一样多，每颗慢了一百多倍。原因是这份没注入 tile，退回默认 128×128×128（正文 3.5）。</p></details>
+<h3>练习 7 · 两头对账：自己把 3.4 那张账对一遍</h3>
+<p>打开 <code>fp8old</code> 的 Hlo Op Stats<a class="tvlink" href="http://127.0.0.1:6311/?run=fp8old/2026_08_15_03_57_28&amp;tag=hlo_stats&amp;host=gke-node-1" target="_blank" rel="noopener">↗ 打开</a>，HLO op name 框切到「包含」、输 <code>gmm</code>。把筛出来那些行的 Total self time (us) 加起来，除以 24（8 个 TensorCore × 3 步）：每步每核专家矩阵乘花多少 ms？<code>fp8new</code><a class="tvlink" href="http://127.0.0.1:6311/?run=fp8new/2026_08_15_04_11_46&amp;tag=hlo_stats&amp;host=gke-node-1" target="_blank" rel="noopener">↗ 打开</a> 同样做一遍。再按「只算了 3/192」估：改后该省多少、实际省了多少、差几成？和正文 3.4 表里的 3,668.8／98.3 ms 为什么差一点？三十多行手加太累，可以用下面这段从同一张表的数据接口求和（页面上的表就是从这个接口取的数）：</p><pre class="peek"><code>import gzip, json, sys, urllib.parse, urllib.request
+run, key = sys.argv[1], sys.argv[2]            # run 写成 fp8old/2026_08_15_03_57_28 这样；key 是名字片段
+host = sys.argv[3] if len(sys.argv) &gt; 3 else "gke-node-1"
+q = urllib.parse.urlencode(dict(run=run, tag="hlo_stats", host=host))
+b = urllib.request.urlopen("http://127.0.0.1:6311/data/plugin/profile/data?" + q).read()
+try: b = gzip.decompress(b)
+except OSError: pass
+d = json.loads(b); ids = [c["id"] for c in d["cols"]]
+rows = [dict(zip(ids, [c.get("v") if c else None for c in r["c"]])) for r in d["rows"]]
+m = [r for r in rows if key in r["hlo_op_name"]]
+occ = sum(r["occurrences"] for r in m); us = sum(r["total_self_time"] for r in m)
+print(len(m), "行", int(occ), "次", round(us / 1000, 1), "ms；÷24 ＝", round(us / 24000, 1), "ms")
+</code></pre><pre class="peek"><code>python3 opstats_sum.py fp8old/2026_08_15_03_57_28 gmm
+python3 opstats_sum.py fp8new/2026_08_15_04_11_46 gmm</code></pre><p></p>
+<details class="foldfig"><summary>答案？</summary><p><b>fp8old：33 行，#Occurrences 合计 22,968（＝ 957 × 24，除以 24 没错），Total self time 合计 87,860.6 ms，每步每核 <b>3,660.9 ms</b>。fp8new：37 行，其中 33 行是专家矩阵乘 kernel（同样 22,968 次，每步每核 <b>99.1 ms</b>），另 4 行是名字里碰巧带 gmm 的 broadcast（<code>jit_gmm_.688</code> 这类），合计每步约 0.09 ms，带上是 99.2 ms。该省 3,660.9 × 189/192 ＝ 3,603.7 ms，实际少 3,561.7 ms，是估计的 98.8%，差约 1%：两头对上了。</b></p><p>怎么看出来：两份的次数一样（每步每核 957 个），时间少了 97%：kernel 照样一次次发出去，每次只干了 3/192 的活（正文 3.4、第四节）。和 3.4 那张表差 0.2%（原配方）和 0.9%（改后），是口径不同：Op Stats 是 8 个 TensorCore、3 步的平均，3.4 用的是 TPU:0 的中位步；两种口径各自算出来的「实际 ÷ 估计」都是 99% 上下。「包含」只按名字片段匹配，名字里碰巧带 gmm 的别的算子也会进来：改后那 4 行的 category 是 broadcast，Framework op 是 <code>jit(gmm)</code>，形状 <code>s32[192]</code>、<code>s32[639]</code>，每次不到 1 µs。对账前先扫一眼 category 列，不是 custom-call 的剔掉；fp8old 那 33 行全是 custom-call。</p></details>
+</div></section>
+<section id="s3"><div class="wrap"><div class="stn"><span class="badge">第 3 级</span><h2>对到 HLO 和别的页</h2></div><p class="lead">做完这一级，你能在 Details 的 HLO 原文、Graph Viewer 和导出的 HLO 文本里读出一条指令吃什么、程序里一共有几条、循环写死转几圈，并在 Memory Profile 上找到对应的数。对应正文第四节和 2.3、3.6。</p><h3>练习 8 · BF16 的 kernel 拿到几个专家</h3>
+<p>打开 <code>bf16new</code> 前向 40 号层：<code>view_start=23992.641&amp;view_end=24062.505</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dbf16new%2F2026_08_15_09_28_25%26tag%3Dtrace_viewer%40%26host%3Dgke-node-3%26hosts%3Dgke-node-3&amp;view_start=23992.641&amp;view_end=24062.505" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 23992.641–24062.505 ms">↗ 打开</a>。单击第一颗 <code>gmm.24</code>，读 Details 里 Start Stack Trace 下的 HLO 原文：专家权重那个操作数是什么形状？输入 token 那个操作数呢？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>权重 <code>bf16[192,4096,1536]</code>：192 个专家都在；输入 <code>bf16[393216,4096]</code>，393,216 ＝ 每卡 12 条 × 4,096 token × 每个 token 8 个专家。</b></p><p>怎么看出来：看 <code>operand_layout_constraints</code> 那一段最省事，每个操作数的形状按顺序列一遍（正文图 4.1 ⑨）。和第四节录屏停 12 的 fp8new <code>gmm.27</code>（<code>f8e4m3fn[3,4096,1536]</code>）对比，就是第五节的结论。</p></details>
+<h3>练习 9 · 显存还剩多少</h3>
+<p>打开 <code>fp8old</code> 的 Memory Profile（工具 <code>memory_profile</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=fp8old/2026_08_15_03_57_28&amp;tag=memory_profile&amp;host=gke-node-1" target="_blank" rel="noopener">↗ 打开</a>，读这份 profile 窗口里的显存峰值和总容量。</p>
+<details class="foldfig"><summary>答案？</summary><p><b>峰值 93.28 GiB，容量 94.74 GiB，只剩 1.5 GiB 左右。换成 Memory ID 1 是 93.23 GiB，时刻 23,606.7 ms。</b></p><p>怎么看出来：页面顶上的汇总里直接写着：几乎用满。默认显示的是 Memory ID 0，它的峰值落在窗口开头 1.4 ms，那时训练步还没开始；正文 3.6 教的是换到 1 再读，峰值时刻落在训练步里，两个数只差 0.05 GiB。是哪些 buffer 占了大头，去 Memory Viewer 按 buffer 看（正文 3.6；BF16 那份见练习 23、24）。</p></details>
+<h3>练习 10 · Graph Viewer：权重从哪来</h3>
+<p>打开 <code>fp8old</code> 的 Graph Viewer（工具 <code>graph_viewer</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=fp8old/2026_08_15_03_57_28&amp;tag=graph_viewer&amp;host=gke-node-1" target="_blank" rel="noopener">↗ 打开</a>，在页面下方的 quick-start 列表里点 <code>gmm_megablox.16</code>，以它为中心画图。指向它的边带序号：哪条边送来 <code>s32[193]</code>？7 号边从哪个节点来、什么形状、再往上是谁？换 <code>fp8new</code>，点 <code>gmm.27</code>，同样两条边呢？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>fp8old：1 号边 <code>copy-done.141</code>，<code>s32[193]</code>；7 号边 <code>bitcast.3183</code>，<code>f8e4m3fn[192,4096,1536]</code>，上游是 <code>all-gather.574</code> 的 call-done。fp8new：1 号边 <code>copy-done.122</code>，<code>s32[193]</code>；7 号边来自 <code>fusion.1642</code>，<code>f8e4m3fn[3,4096,1536]</code>。</b></p><p>怎么看出来：fp8old 往上那个带标题的大框是子计算 all-gather.573；fp8new 的 fusion.1642 是本卡 3 个专家量化后的结果。边上的序号就是操作数的位置，和 Details 里 HLO 原文的操作数顺序一致（练习 8 的读法）。fp8old 那张图上没有 4 号边：4 号操作数是 get-tuple-element，写在节点里。<code>s32[193]</code> 是 192 组 token 的分组偏移，两边一样：token 照样按 192 组送进来，改后手里只有 3 个专家的权重（正文 4.3、图 4.2）。图太小就滚轮放大，或点 Save SVG 存下来放大；从 Details 的链接点进来时下拉框停在别的模块上，先手动选 <code>jit_train_step</code>。</p></details>
+<h3>练习 11 · 在 HLO 里按形状数条数</h3>
+<p>Graph Viewer 一次只画一条指令周围那一小片。数整份程序要 HLO 文本：在 Graph Viewer 或 Memory Viewer 里打开过这份 run 之后，profile 目录里会多出每个模块一份 <code>*.hlo_proto.pb</code>，下面这段把训练步那份转成文本。分别导出 <code>fp8old</code>、<code>fp8new</code>，按形状数：输出是 <code>f8e4m3fn[1,192,…]</code> 或 <code>[192,1,…]</code> 的 all-gather 各几条？输出是 <code>bf16[3,…]</code> 的 reduce-scatter 呢？</p><pre class="peek"><code># hlo2txt.py：把 profile 目录里训练步的 HloProto 转成 HLO 文本（只用 jax，CPU 版就行）
+import glob, sys
+from jax._src.lib import xla_client as xc   # 内部模块路径，本机 jax 0.11.0 实测
+d, out = sys.argv[1], sys.argv[2]
+b = open(glob.glob(d + "/jit_train_step*.hlo_proto.pb")[0], "rb").read()
+n, i, s = 0, 1, 0          # 第 1 个字段是 hlo_module：先读出它的长度
+while True:
+    c = b[i]; i += 1; n |= (c &amp; 0x7F) &lt;&lt; s; s += 7
+    if c &lt; 0x80: break
+open(out, "w").write(xc.XlaComputation(b[i:i + n]).as_hlo_text())</code></pre>
+<pre class="peek"><code>pip install jax
+python3 hlo2txt.py ~/hy3-prof/fp8old/plugins/profile/2026_08_15_03_57_28 fp8old.hlo.txt
+grep -cE '= f8e4m3fn\[(1,192|192,1),\S* all-gather\(' fp8old.hlo.txt
+grep -cE '= bf16\[3,\S* reduce-scatter\(' fp8old.hlo.txt</code></pre><p></p>
+<details class="foldfig"><summary>答案？</summary><p><b>fp8old：all-gather 12 条、reduce-scatter 6 条；fp8new：0 条、0 条。导出的文本 fp8old 9,599,857 字节、fp8new 8,403,650 字节，就是正文 4.1 降噪前那两个数。</b></p><p>怎么看出来：两条 grep 就是正文 4.2 那张表的口径：收 192 个专家 FP8 权重的 all-gather 有四种形状（<code>[1,192,4096,1536]</code>×6、<code>[1,192,1536,4096]</code>×3、<code>[192,1,4096,1536]</code>×2、<code>[192,1,1536,4096]</code>×1），散回本卡 3 个专家梯度的 reduce-scatter 两种。页面只列跑过的指令；「改后一条都没有」这种答案，要数整份程序才拿得到。脚本用的是 jax 的内部模块，换了 jax 版本可能要改导入那一行。</p></details>
+<h3>练习 12 · 数圈数：78 写在程序的哪儿</h3>
+<p>正文 2.3 说前向、反向两个大循环各转 78 圈，是在 trace 上数出来的（while.457 底下同一块出现 78 次；Op Stats 里 <code>gmm_megablox.16</code> 的 #Occurrences 1,872 ＝ 78 × 3 步 × 8 核）。在练习 11 导出的 <code>fp8old.hlo.txt</code> 里把它核一遍：while 指令的 <code>condition=</code> 指向一个小计算，里面是「计数器 &lt; 某个常数」；<code>while(…)</code> 括号里是初始值元组，元组的第一个元素就是计数器的初值。从这一条开始：</p><pre class="peek"><code>grep -E '^\s*while\.457 = ' fp8old.hlo.txt | grep -oE 'while\([^)]+\)|condition=[^,]+'</code></pre><p>顺着打印出来的两个名字往下找。前向 while.457 的常数和初值各是多少？反向 while.453 呢？为什么一个从 1 数、一个从 0 数？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>while.457：condition（<code>wide.region_53.67_spmd.clone.clone.clone.clone</code>）里是 <code>constant(79)</code>、<code>direction=LT</code>；初值元组 <code>tuple.1968</code> 的第一个元素 <code>copy.2308</code> ＝ <code>copy(constant(1))</code>；body 的 ROOT 元组第一个元素是 <code>add.7090</code> ＝ 计数器 ＋ constant(1)。i 从 1 数到 78，78 圈。while.453：<code>constant(78)</code>、初值 <code>constant(0)</code>，也是 78 圈。</b></p><p>怎么看出来：四条 grep 一条接一条，后面每条里的名字都是前面打印出来的（第四条里的 <code>constant.4132.clone</code> 要先 grep 一次 <code>copy.2308</code> 才看得到，这里合成了一条）：</p><pre class="peek"><code>grep -E '^\s*while\.457 = ' fp8old.hlo.txt | grep -oE 'while\([^)]+\)|condition=[^,]+'
+grep -A4 '^wide.region_53.67_spmd.clone.clone.clone.clone {' fp8old.hlo.txt | grep -oE 'constant\([0-9]+\)|direction=\w+'
+grep -E '^\s*tuple\.1968 = ' fp8old.hlo.txt | grep -oE '\) tuple\([^,]+'
+grep -E '^\s*(copy\.2308|constant\.4132\.clone) = ' fp8old.hlo.txt | grep -oE '\S+ = \S+ (copy|constant)\([^)]*\)'</code></pre><p>层权重叠成首维 79（HLO 里 <code>u32[79]</code>、<code>bf16[79,…]</code> 这类形状到处都是）：前向把 0 号层剥到循环前，循环取 1–78 号层，所以计数器从 1 数到 79 之前；反向倒着取 78–1 号层、0 号层在循环后，计数器从 0 数到 78 之前（正文 2.3 折叠块）。前向那个条件计算的参数名里带 <code>loop_peel</code>（剥出一圈），说的就是这件事。读法：trace 上数出来的次数，到 HLO 里要能找到写死的常数；两边对不上，就是数的口径错了。</p></details>
+</div></section>
+<section id="s4"><div class="wrap"><div class="stn"><span class="badge">迁移题 · 一</span><h2>换一条通信、一颗 kernel、一份程序、一段代码</h2></div><p class="lead">正文只讲了一条 done、一层的合计、两份程序的条数和代码里的两行。下面七题换一条通信、换到一层里的每一颗 kernel、换一份 profile 的 HLO、回到代码，由易到难排；答案只在本页。做完这一组，你能用 Ctrl 多选对一层的账，按字节先估一条通信该多久再和实测比，判断一块 done 在等谁，并从 trace 上的一块追到公开代码里的那一行。</p><h3>练习 13 · BF16 一层里是哪几颗快了：Ctrl 多选（迁移正文 5.2、2.2 的 Ctrl 多选）</h3>
+<p>打开 <code>bf16old</code> 反向 40 号层：<code>view_start=35630.027&amp;view_end=35825.278</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dbf16old%2F2026_08_15_09_13_02%26tag%3Dtrace_viewer%40%26host%3Dgke-node-2%26hosts%3Dgke-node-2&amp;view_start=35630.027&amp;view_end=35825.278" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 35630.027–35825.278 ms">↗ 打开</a>。主核 XLA Ops 上单击第一颗专家矩阵乘（名字带 gmm），按住 Ctrl（Mac 是 Command）依次单击另外 8 颗，读面板顶上的「… items selected.」和 Totals 行的 Wall Duration；<code>bf16new</code> 同一层 <code>view_start=34056.155&amp;view_end=34251.406</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dbf16new%2F2026_08_15_09_28_25%26tag%3Dtrace_viewer%40%26host%3Dgke-node-3%26hosts%3Dgke-node-3&amp;view_start=34056.155&amp;view_end=34251.406" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 34056.155–34251.406 ms">↗ 打开</a> 再来一遍。这一层的专家矩阵乘一共少了多少？Totals 下面那行 Selection extent 又是什么？最后一颗对一颗比（单击读 Wall Duration），少掉的时间集中在哪几颗？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>「9 items selected.」，Totals 79,113,086 → 66,893,085 ns（79.113 → 66.893 ms），这一层少 12.220 ms。Selection extent 98,189,886／86,068,731 ns 是第一颗起点到最后一颗终点的跨度，不是合计。快得最多的三颗：<code>gmm_megablox_transpose_rhs.9</code> → <code>gmm.22</code> 9.961 → 6.305（−3.656）；<code>gmm_megablox_transpose_rhs.10</code> → <code>gmm.23</code> 10.414 → 7.000（−3.414）；<code>tgmm_megablox.10</code> → <code>tgmm.8</code> 10.053 → 6.834（−3.219），三颗合计少 10.289 ms，占 84%；<code>gmm_megablox.12</code>→<code>gmm.19</code>、<code>tgmm_megablox.8</code>→<code>tgmm.6</code>、<code>tgmm_megablox.9</code>→<code>tgmm.7</code> 几乎不动（±0.05 ms 以内）。</b></p><p>怎么看出来：两份的 9 颗按出现顺序一一对应，输出形状逐颗相同（单击核一下即可），所以能一颗对一颗比。少一行就是有一下没点中（页面转圈时单击不生效）。前向同一层也一样：3 颗里只有第三颗 <code>gmm_megablox.16</code> → <code>gmm.26</code> 快了 0.988 ms。一层少约 13.3 ms，× 78 圈 ≈ 1,037 ms，和一步少的 1,053.4 ms 对得上大头（剥到循环外那一层和 MTP 层没算）。为什么偏偏是这几颗快，本课没追。</p></details>
+<h3>练习 14 · 梯度散回去，藏住没有（迁移练习 4、8）</h3>
+<p>回到 <code>fp8old</code> 反向 40 号层，练习 4 那个窗口往右：<code>view_start=31254.000&amp;view_end=31292.000</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dfp8old%2F2026_08_15_03_57_28%26tag%3Dtrace_viewer%40%26host%3Dgke-node-1%26hosts%3Dgke-node-1&amp;view_start=31254.000&amp;view_end=31292.000" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 31254.000–31292.000 ms">↗ 打开</a>。主核上单击 <code>tgmm_megablox.10</code>，读输出形状；它算完的下一刻，小核上开始的那条 reduce-scatter 叫什么、多长、输出什么形状？主核上它的 done（号大 1）在哪、多宽？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>tgmm_megablox.10 输出 <code>bf16[192,4096,1536]</code>（4.522 ms）；31,260.076 小核上 <code>reduce-scatter.12</code> 开始，10.447 ms，输出 <code>bf16[3,4096,1536]</code>；主核 <code>reduce-scatter.13…call-done</code> 在 31,290.841，宽 0，全藏住。</b></p><p>怎么看出来：192 个专家的梯度进去、本卡 3 个出来：这就是正文 2.4 说的「散回去」。小核上三条 reduce-scatter（12、14、16）一条接一条，合计约 29.8 ms，主核一直在算别的，三个 done 都是 0 宽：这类通信在原配方里本来就不花主核时间，没了它们，主核也省不下多少（正文 3.3 图 3.5）。</p></details>
+<h3>练习 15 · 先估再看：散梯度该要多久（迁移正文 2.5）</h3>
+<p>还是练习 14 那条 <code>reduce-scatter.12</code>。在练习 11 导出的 HLO 里看它的输入和参与的卡：</p><pre class="peek"><code>grep -B1 'ROOT reduce-scatter.12 = ' fp8old.hlo.txt | cut -c1-330</code></pre><p>上一行是它所在子计算的 <code>parameter(0)</code>。先估：输入有多少字节？按正文 2.5 量出的 all-gather 速度（547 收齐 1.21 GB 用了 2.406 ms，约 0.50 TB/s）要搬多久？再和练习 14 读到的时长比：reduce-scatter 的有效速度是多少，是 all-gather 的几成？同一窗里另外两条（14、16）呢？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>输入 <code>bf16[192,4096,1536]</code>：192 × 4,096 × 1,536 × 2 字节 ＝ 2,415,919,104 字节 ≈ 2.42 GB，是 547 收齐后（FP8，1.21 GB）的两倍。按 0.50 TB/s 估要 4.8 ms；实测 10.447 ms，是估计的 2.2 倍。有效速度 2.42 GB ÷ 10.447 ms ≈ 0.23 TB/s，约 all-gather 的 46%。14、16 两条 10.246／9.134 ms，0.24／0.26 TB/s，同一个量级。replica_groups 是 <code>{'fsdp'}</code>，mesh 里 <code>'fsdp'=64</code>：在 64 张卡之间散，每卡留 192 ÷ 64 ＝ 3 个专家，和输出 <code>bf16[3,4096,1536]</code> 对得上。</b></p><p>怎么看出来：两边用同一把尺子：整块（192 个专家那一侧）的字节 ÷ 时长。环形的 all-gather 和 reduce-scatter，每张卡要收发的都约是整块的 63/64，按字节算两者该一样快 [推断：没核这一版用的是不是环形算法]；reduce-scatter 实测慢一倍多，原因本课没追 [推断：每收一块要和本卡那块相加再发出去，多了读写和加法]。先估再看的用处是定量：一层三条散梯度约 29.8 ms、一步 2,354.7 ms（正文 3.3），全靠和主核的计算重叠才不花时间（练习 14）；估出来的数和实测差一倍以上时，先回去核字节和形状，再怀疑带宽。</p></details>
+<h3>练习 16 · 同一层里的另一条 all-gather（迁移练习 4）</h3>
+<p>还在 <code>fp8old</code> 反向 40 号层：<code>view_start=31218.000&amp;view_end=31234.000</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dfp8old%2F2026_08_15_03_57_28%26tag%3Dtrace_viewer%40%26host%3Dgke-node-1%26hosts%3Dgke-node-1&amp;view_start=31218.000&amp;view_end=31234.000" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 31218.000–31234.000 ms">↗ 打开</a>。主核上找 <code>all-gather.546</code> 的 call-start 和 call-done，小核 SparseCore 0 上找号小 1 的 <code>all-gather.545</code>。它几时发令、开搬前在小核上等了多久、搬了多久？done 有多宽？和练习 4 那条 548 比，哪一条在主核上露得多？为什么？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>start 31,219.550 ms（比 548 晚 0.04 ms 发令）；545 在 547 搬完之后，31,226.187 才开搬，开搬前等了 6.64 ms，搬 2.207 ms，31,228.394 搬完；done 在 31,232.781，宽 0：搬完 4.39 ms 之后主核才走到这里，全藏住。548 露了 1.181 ms，546 一点没露。</b></p><p>怎么看出来：等多久不要紧，要紧的是主核什么时候要用。548 的用户是紧跟在后面的 <code>gmm_megablox.14</code>；546 搬的是另一份专家矩阵 <code>[1,192,1536,4096]</code>，它的用户 <code>gmm_megablox_transpose_rhs.10</code> 排在 gmm_megablox.14、.13 两颗之后，晚了 6 ms 多才要。HLO 里 <code>gmm_megablox_transpose_rhs.10</code> 的最后一个操作数 ＝ <code>bitcast(all-gather.546…call-done)</code>（找 HLO 见正文 4.1）。</p></details>
+<h3>练习 17 · BF16 一层里最宽的 done 在等谁（迁移练习 4）</h3>
+<p>回到 <code>bf16new</code> 反向 40 号层：<code>view_start=34056.155&amp;view_end=34251.406</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dbf16new%2F2026_08_15_09_28_25%26tag%3Dtrace_viewer%40%26host%3Dgke-node-3%26hosts%3Dgke-node-3&amp;view_start=34056.155&amp;view_end=34251.406" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 34056.155–34251.406 ms">↗ 打开</a>。先找练习 3 那 3 条收 192 个专家的 all-gather 在主核上的 done（号大 1：<code>all-gather.551／553／555</code>），各多宽？再找这一窗主核 XLA Ops 上最宽的那块 done，单击读名字和宽度，往下找右沿和它对齐的小核那条：它在干什么、输出什么形状？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>3 个 done 都是 0 宽。最宽的是 <code>gather_offload_async_done.3</code>，34,129.891–34,132.862 ms，2.971 ms；对着小核上的 <code>gather_offload_custom_fusion.70</code>，输出 <code>bf16[393216,4096]</code>：按专家搬 token，不是集合通信。</b></p><p>怎么看出来：这条 gather 两颗小核上都有，都从 34,129.579 ms 开始，SparseCore 0 跑 3.277 ms、SparseCore 1 跑 3.283 ms，done 的右沿对齐的是 SparseCore 1 那条。393,216 ＝ 每卡 12 条 × 4,096 token × 每个 token 8 个专家，和练习 8 里 gmm 输入的行数一样；Details 里这块 done 的 tf_op 末段是 <code>sort_activations/gather</code>。这一层宽过 50 µs 的 done 一共 10 块、合计 5.86 ms。读法：最宽的 done 不一定是通信，先读名字再下结论；两颗小核跑同一条时，done 等的是后结束的那颗。</p></details>
+<h3>练习 18 · 375 s 那份，通信多了吗（迁移练习 11）</h3>
+<p>用练习 11 的脚本导出 <code>fp8tk</code> 的 HLO（目录换成 <code>~/hy3-prof/fp8tk/plugins/profile/2026_08_15_17_48_55</code>），跑同样两条 grep。再用 <code>grep -oE ' (all-gather|reduce-scatter|all-reduce)\(' fp8tk.hlo.txt | sort | uniq -c</code> 数三类集合通信的总条数，和 <code>fp8old</code> 比。375 s 是通信多出来的吗？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>fp8tk：12 条、6 条，和 fp8old 一样；三类合计 all-gather 92、reduce-scatter 6、all-reduce 36，和 fp8old 一条不差（fp8new 是 82／0／36）。通信一条没多，375 s 慢在 kernel 本身（练习 6）。</b></p><p>怎么看出来：fp8tk 和 fp8old 是同一份配方，只差 tile 有没有注入（正文 3.5），程序结构一样，集合通信逐条相同。读法：两份一快一慢，先比程序结构（指令条数）变没变，再比单颗 kernel。</p></details>
+<h3>练习 19 · 回到代码：改后多出来的 276 ms 是哪几行（迁移正文 4.5、4.6）</h3>
+<p>打开 <code>fp8new</code> 前向 40 号层：<code>view_start=9384.136&amp;view_end=9419.813</code> <a class="tvlink" href="http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_streaming=true&amp;is_oss=true&amp;trace_data_url=%2Fdata%2Fplugin%2Fprofile%2Fdata%3Frun%3Dfp8new%2F2026_08_15_04_11_46%26tag%3Dtrace_viewer%40%26host%3Dgke-node-1%26hosts%3Dgke-node-1&amp;view_start=9384.136&amp;view_end=9419.813" target="_blank" rel="noopener" title="本机 XProf :6311，Trace Viewer 开到 9384.136–9419.813 ms">↗ 打开</a>。主核 XLA Ops 上第三颗专家矩阵乘 <code>gmm.28</code> 后面紧跟着一块 <code>broadcast_select_fusion…</code>：两块各读 Wall Duration 和输出形状，后一块 Details 里 tf_op 的末段是什么？再打开公开 MaxText 的 <a href="https://github.com/yangwhale/maxtext/blob/1afaa0fb/src/maxtext/kernels/megablox/backend.py"><code>backend.py</code></a>（<code>yangwhale/maxtext</code> 的 hunyuan3 分支 @1afaa0fb，正文 4.5 用的同一版），在 <code>gmm()</code> 里找 <code>num_current_groups</code> 那两行和函数末尾那个 <code>if</code>，再跳到它调用的函数。这一块在做什么？为什么只有改后才有？它比 kernel 本身慢 30 多倍，按字节估一下它该要多久。最后对上正文 3.4、4.6 里 loop fusion 多出来的 276 ms。</p>
+<details class="foldfig"><summary>答案？</summary><p><b><code>gmm.28</code>：0.035 ms，输出 <code>bf16[229376,4096]</code>；<code>broadcast_select_fusion.99</code> 紧接着开始，1.202 ms（34 倍），输出同样是 <code>bf16[229376,4096]</code>，tf_op 末段 <code>shard_map/jit(gmm)/jit(_where)/select_n</code>。代码：L346 <code>num_current_groups = rhs.shape[0]</code>（改后权重只有 3 组）、L347 <code>num_total_groups = group_sizes.shape[0]</code>（192 组）；L555 <code>if existing_out is None and num_current_groups &lt; num_total_groups:</code> 成立，L556 调 <code>_zero_uninitialized_memory</code>。这个函数（L268–281）按 <code>out.shape[0]</code> 建一个 229,376 长的掩码，只有前 3 组的行为真（L280），最后 L281 <code>return jnp.where(valid_mask[:, None], out, 0)</code> 把其余行写成 0。估：输出 229,376 × 4,096 × 2 字节 ＝ 1.88 GB，读一遍写一遍 3.76 GB，按每核 HBM 3,433 GiB/s 要 1.02 ms；实测平均 1.204 ms，约用到 85% 的带宽。每步前向 79 次、95.1 ms，反向 <code>select_add_fusion</code> 79 次、225.6 ms，就是 4.6 表里那两类。</b></p><p>怎么看出来：原配方的权重收齐了 192 组，3 &lt; 192 不成立，这一步根本不跑；改后权重只剩 3 组，kernel 只算这 3 组的行（所以只要 0.035 ms），剩下 189/192 的行靠这一步整块刷成 0 [推断：刷 0 一读一写、卡在 HBM 带宽上]。<code>jnp.where</code> 是逐元素操作，编译成 loop fusion，所以多出来的时间记在 loop fusion 这一类里（正文 3.4 表里 −275.9 ms）；反向那份和原来就有的梯度相加融在了一起（原配方那次相加每步 135.5 ms，记在 non-fusion elementwise），所以净多出来的约 140 ms 才是补 0 本身（正文 4.6）。读法：trace 上碰到一块不认识的融合，先读 tf_op 末段，它通常就是代码里那一行调的函数；文件和行号要按 profile 对应的那一版代码找（正文 4.5 折叠块）。</p></details>
+</div></section>
+<section id="s5"><div class="wrap"><div class="stn"><span class="badge">迁移题 · 二</span><h2>换一张总账页、换一份显存</h2></div><p class="lead">正文的 Roofline、显存各只读了一两份 profile。下面五题换到 BF16 和改后那份，由易到难排；答案只在本页。做完这一组，你能在 Roofline 上判断一个点画不画得出来、整步速率该不该信，并在 Memory Profile、Memory Viewer 上说清一个改动省没省显存、峰值那一刻是谁占着。</p><h3>练习 20 · BF16 在 Roofline 上（迁移正文 3.2）</h3>
+<p>打开 <code>bf16new</code> 的 Roofline（工具 <code>roofline_model</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=bf16new/2026_08_15_09_28_25&amp;tag=roofline_model&amp;host=gke-node-3" target="_blank" rel="noopener">↗ 打开</a>，Section2 的 Operation 框输 <code>gmm.19</code>；再在 <code>bf16old</code><a class="tvlink" href="http://127.0.0.1:6311/?run=bf16old/2026_08_15_09_13_02&amp;tag=roofline_model&amp;host=gke-node-2" target="_blank" rel="noopener">↗ 打开</a> 里输 <code>gmm_megablox_transpose_rhs.10</code>。各读 Model FLOP Rate、FLOP Rate / Peak 和 Source Info。点画得出来吗？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>bf16new gmm.19：513,223 GFLOP/s、49.9%，Source Info 是 MaxText <code>kernels/megablox/backend.py:548</code>；bf16old：475,232 GFLOP/s、46.2%（<code>layers/moe.py:1523</code>）。两颗点都在屋顶下面，画得出来。</b></p><p>怎么看出来：gmm.19 和 fp8new 的 gmm.27 是同一行代码（backend.py:548，改后那条分支），gmm.27 在 FP8 上报 5,674.9%、点冲出纵轴画不出来（正文 3.2 折叠块），gmm.19 在 BF16 上报 49.9%：同一条代码路径，BF16 那份 kernel 拿到的是 192 个专家（练习 8），所以真在干活。截图分享时记得遮掉 Program ID 那一列。</p></details>
+<h3>练习 21 · Roofline 第 1 节：一步记了多少运算量（迁移练习 20）</h3>
+<p>打开 <code>bf16old</code><a class="tvlink" href="http://127.0.0.1:6311/?run=bf16old/2026_08_15_09_13_02&amp;tag=roofline_model&amp;host=gke-node-2" target="_blank" rel="noopener">↗ 打开</a>、<code>bf16new</code><a class="tvlink" href="http://127.0.0.1:6311/?run=bf16new/2026_08_15_09_28_25&amp;tag=roofline_model&amp;host=gke-node-3" target="_blank" rel="noopener">↗ 打开</a> 的 Roofline，第 1 节（Section1）表里 Step 为 Average 的那一行，读 Total Time per core (us)、Normalized FLOP Rate (GFLOP/s) 和 FLOP Rate / Peak。时间、速率各变了百分之几？两数一乘，每步每核记了多少 GFLOP？再拿 <code>fp8old</code>、<code>fp8new</code> 同一行乘一遍。</p>
+<details class="foldfig"><summary>答案？</summary><p><b>bf16old 21,767,912 µs、474,422.33 GFLOP/s、46.1%；bf16new 20,713,041 µs、498,583.66 GFLOP/s、48.5%：时间少 4.85%、速率高 5.09%，乘出来两份都是每步每核约 10,327,184 GFLOP，一样多。FP8：fp8old 5,261,170、fp8new 5,267,374 GFLOP，也几乎一样，可时间少了 33.4%、速率高了 50.3%。</b></p><p>怎么看出来：Total Time per core 就是 Overview 的平均步时（21,767.9／20,713.0 ms）。记账的运算量两份一样，因为 XProf 按程序声明的运算量记账：BF16 那份活没少（练习 8 里 kernel 拿到 192 个专家）、时间真少了，速率涨 5% 合情合理；FP8 那份同样多的账面运算量配上短得多的时间，速率涨了五成，活其实少干了（正文 3.2、练习 5）。所以 Average 行的速率只在同一份程序之间比，先确认乘出来的分子没变。</p></details>
+<h3>练习 22 · 这个改动省显存了吗（迁移正文 3.6）</h3>
+<p>在 Memory Viewer（工具 <code>memory_viewer</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=bf16old/2026_08_15_09_13_02&amp;tag=memory_viewer&amp;host=gke-node-2" target="_blank" rel="noopener">↗ 打开</a> 里把 <code>bf16old</code>、<code>bf16new</code>、<code>fp8new</code> 都换到 <code>jit_train_step</code>，读顶上几行：Peak memory allocation、total argument size、stack simulated HLO temporary variables。原配方 <code>fp8old</code> 是 91,766.56 MiB、入口参数 44,533.22 MiB、临时变量 47,230.39 MiB。同一个改动，两种精度下显存各变了多少？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>BF16：88,401.89 → 88,399.85 MiB（−2.04），入口参数都是 22,271.03，临时变量 66,127.62 → 66,125.64。FP8：fp8new 91,597.20 MiB，比 fp8old 少 169.36，入口参数一样，临时变量 47,061.12。两种精度下这个改动都几乎不动显存（FP8 少 0.2%）。</b></p><p>怎么看出来：FP8 改后少了 12 条收 192 个专家权重的 all-gather、6 条散梯度的 reduce-scatter，峰值却只少 169 MiB：峰值只看最高那一刻。原配方峰值那一刻活着 5 块 bf16 的 <code>[192,…]</code> 梯度，其中 3 块是反向循环里这一层 tgmm 刚算完、还没散回去的（另 2 块是 MTP 层专家梯度的 all-reduce，在循环外）；改后循环里那 3 块没了，可峰值让给了输出头的 logits（正文 3.6），所以只少这么一点。收来的 FP8 专家权重本来就不在两份峰值那一刻最大的几块里（悬停前二十根就能看到：参数、优化器状态、输出头和这几块梯度）。读法：省没省显存，比 Peak memory allocation 和临时变量两行。换完模块后 Module Name 那一行可能还写着默认模块的名字，以下面的数为准。</p></details>
+<h3>练习 23 · BF16 的显存时间线（迁移练习 9、正文 3.6）</h3>
+<p>打开 <code>bf16new</code> 的 Memory Profile（工具 <code>memory_profile</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=bf16new/2026_08_15_09_28_25&amp;tag=memory_profile&amp;host=gke-node-3" target="_blank" rel="noopener">↗ 打开</a>。默认 Memory ID 是 0：读 Profile-window Peak Memory Usage 和它下面的 Timestamp、Stack Reservation、Heap Allocation、Free Memory。把 Memory ID 换成 1 再读一遍。然后在 HLO Modules 表上方的「HLO's at time (ms)」框里填 1 号的峰值时刻，表里剩下哪个模块？最后和 <code>fp8new</code> 的 0 号比 Stack、Heap。</p>
+<details class="foldfig"><summary>答案？</summary><p><b>0 号：93.60 GiB，时刻 2.0 ms，Stack 71.42、Heap 22.18、Free 1.13 GiB；1 号：93.52 GiB，时刻 41,419.7 ms，Stack 71.42、Heap 22.10、Free 1.21 GiB。填 41419.7 后表里剩 8 行，都是第二个 <code>jit_train_step</code>（TPU:0–7，21,109.4–41,803.3 ms）。fp8new 0 号：Stack 47.72、Heap 43.89、Free 3.12 GiB。</b></p><p>怎么看出来：Memory ID 是这台主机上的第几个设备（下拉里 0–7）。0 号的峰值落在窗口开头 2.0 ms，HLO Modules 表里第一个模块 395 ms 才开始跑；那一刻它比 1 号多出约 82 MiB heap。两个设备 Stack 一样、只差这点 heap，结论不受影响，但填 HLO's at time 要用落在步里的那个时刻。整条时间线几乎是平的，Stack 从头到尾都是 71.42 GiB。BF16 的 Heap 只有 fp8new 的一半、Stack 多 23.7 GiB：前者和 Memory Viewer 里入口参数只有一半对得上（正文 3.6）[推断：Heap 主要是常驻的参数和优化器状态，两者只差 0.4 GiB 左右]，后者和临时变量多（练习 22）同方向。</p></details>
+<h3>练习 24 · BF16 峰值那一刻谁占着（迁移正文 3.6）</h3>
+<p>打开 <code>bf16new</code> 的 Memory Viewer（工具 <code>memory_viewer</code>）<a class="tvlink" href="http://127.0.0.1:6311/?run=bf16new/2026_08_15_09_28_25&amp;tag=memory_viewer&amp;host=gke-node-3" target="_blank" rel="noopener">↗ 打开</a>，Hlo Modules 下拉换成 <code>jit_train_step</code>，读顶上的 Peak memory allocation。滚到 by Buffer Size，从左往右悬停第 0–4 根和第 11 根（从 0 数），读左栏的名字、Size、Shape、Framework Op。最大的三块是什么、加起来占峰值几成？第 3、4 根和第 11 根又是什么？</p>
+<details class="foldfig"><summary>答案？</summary><p><b>峰值 88,399.85 MiB（含碎片 93,519.35）。第 0–2 根各 11,328 MiB，形状都是 <code>bf16[12,4096,120832]</code>（<code>multiply_convert_fusion.1</code>、<code>fusion.1218{1}</code>、<code>select_reduce_fusion.3{1}</code>，Framework Op 末段分别是 convert_element_type、dot_general、reduce_sum），三块 33,984 MiB，占峰值 38.4%。第 3、4 根是 <code>gather_offload_custom_fusion.79／.81</code>，各 3,072 MiB，<code>bf16[393216,4096]</code>，Framework Op 末段 <code>sort_activations/gather</code>；第 11–13 根各 2,304 MiB，是 <code>all-gather.604／605</code>（<code>bf16[192,4096,1536]</code>）和 <code>copy.1717…</code>（<code>bf16[192,1536,4096]</code>）；同样宽的条每次开页面先后会变，第 11 根悬停出来是其中哪一块都对。</b></p><p>怎么看出来：120,832 是词表大小（配置 vocab_size），12 是每卡 12 条：12 × 4,096 × 120,832 × 2 字节 ＝ 11,328 MiB，是输出头的 logits 一类 [推断：按形状和 Framework Op 认]。393,216 行就是练习 17 那条按专家搬 token 的输出。<code>all-gather.604</code> 这一组是收齐 192 个专家的 BF16 权重：192 × 4,096 × 1,536 × 2 字节 ＝ 2,304 MiB，峰值那一刻它还活着，BF16 这份程序确实收了 192 个专家（练习 3、8）。第 5–10 根是参数和 Adam 的 nu，形状 <code>f32[192,79,32,1536]</code> 一类：192 个专家都在、切的是 4,096 那一维。</p></details>
+</div></section>
+<div class="wrap" style="padding:32px 0 64px"><p style="color:var(--gray)">← 回 <a href="topic-07.html">专题七正文</a>　·　<a href="topic-07-lecture.html">讲义（授课稿）</a>　·　<a href="index.html">课程总纲</a></p></div>
+<button class="totop" id="totop" title="回到顶部" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+<script>(function(){
+ var bar=document.querySelector(".progress i"), btn=document.getElementById("totop"), toc=document.getElementById("tocbar"), ls=[].slice.call(toc.querySelectorAll("a"));
+ function tick(){
+  var h=document.documentElement,  p=h.scrollTop/(h.scrollHeight-h.clientHeight||1);
+  bar.style.width=(p*100).toFixed(1)+"%";
+  btn.className="totop"+(h.scrollTop>600?" on":"");
+  var cur=null;
+  ls.forEach(function(a){var e=document.querySelector(a.getAttribute("href"));
+    if(e&&e.getBoundingClientRect().top<140)cur=a;});
+  ls.forEach(function(a){a.className=(a===cur?"on":"");});
+  if(cur&&cur.offsetLeft-toc.scrollLeft>toc.clientWidth-220)
+    toc.scrollLeft=cur.offsetLeft-120;
+ }
+ addEventListener("scroll",tick,{passive:true});tick();
+ var SR=".figsrc";
+ addEventListener("beforeprint",function(){
+  document.querySelectorAll(SR).forEach(function(d){
+   d.dataset.wasopen=d.open?"1":"";d.open=true;});});
+ addEventListener("afterprint",function(){
+  document.querySelectorAll(SR).forEach(function(d){
+   d.open=d.dataset.wasopen==="1";});});
+})();</script>
+</body></html>
