@@ -13,7 +13,7 @@ JS="""() => { const out=[]; document.querySelectorAll('svg').forEach((s,si)=>{
   return out; }"""
 def run(f):
     with sync_playwright() as p:
-        b=p.chromium.launch(); pg=b.new_page(viewport={'width':1280,'height':900}); pg.add_init_script("try{localStorage.setItem('figonly:'+location.pathname.split('/').pop(),'0')}catch(e){}")
+        b=p.chromium.launch(); pg=b.new_page(viewport={'width':1280,'height':900}); pg.add_init_script("try{['figonly:','t7fo:'].forEach(function(k){localStorage.setItem(k+location.pathname.split('/').pop(),'0')})}catch(e){}")
         pg.goto('file://'+f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(1500); pg.evaluate("document.querySelectorAll('details').forEach(d=>d.open=true)"); pg.wait_for_timeout(500)
         r=pg.evaluate(JS); b.close(); return r
 zh=run(sys.argv[1]); en=run(sys.argv[2])

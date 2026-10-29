@@ -11,7 +11,7 @@ JS = """() => { const els=[...document.body.querySelectorAll('*')].filter(e=>!e.
 def grab(f, zh):
     with sync_playwright() as p:
         b = p.chromium.launch(); pg = b.new_page(viewport={'width': W, 'height': 900})
-        pg.add_init_script("try{localStorage.setItem('figonly:'+location.pathname.split('/').pop(),'%s')}catch(e){}" % ('1' if FOLD else '0'))
+        pg.add_init_script("try{['figonly:','t7fo:'].forEach(function(k){localStorage.setItem(k+location.pathname.split('/').pop(),'%s')})}catch(e){}" % ('1' if FOLD else '0'))
         pg.goto('file://' + f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(1500)
         if not FOLD: pg.evaluate("document.querySelectorAll('details').forEach(d=>d.open=true)")
         else:

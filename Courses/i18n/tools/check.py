@@ -21,6 +21,12 @@ GEOM_EXTRA = {x for x in os.environ.get('I18N_GEOM_FREE', '').split(',') if x}
 def soup(p):
     return BeautifulSoup(pathlib.Path(p).read_text(), 'html.parser')
 
+# 英文媒体 media/X.en.mp4?v=… / img/X.en.png?v=… 与中文 media/X.mp4?v=… / img/X.png 视为同构
+# （⭐ 只认 media/ 与 img/ 下同名换 .en，?v= 只认十六进制；负例见 test_check.py）
+SRC_EN = re.compile(r'^((?:media|img)/[^?"]+?)(?:\.en)?(\.(?:mp4|webm|png|jpg))(\?v=[0-9a-f]+)?$')
+def norm_src(v):
+    return SRC_EN.sub(r'\1\2', v)
+
 def tagseq(sp):
     out = []
     for t in sp.find_all(True):
@@ -34,9 +40,8 @@ def tagseq(sp):
                 a['style'] = re.sub(r'font-size:[^;]*;?', '', a['style']).strip().rstrip(';')
                 if not a['style']: a.pop('style')
             a.pop('textLength', None); a.pop('lengthAdjust', None)
-        for k in ('src', 'poster'):
-            # 英文视频 media/X.en.mp4?v=… 与中文 media/X.mp4?v=… 视为同构（⭐ 只认 media/ 下同名换 .en）
-            if k in a: a[k] = re.sub(r'^(media/[^?"]+?)(?:\.en)?(\.(?:mp4|webm|png|jpg))(\?v=[0-9a-f]+)?$', r'\1\2', a[k])
+        for k in ('src', 'poster', 'href'):   # href：英文页「Full video」链接指向 .en 录像／末帧（专题七发布）
+            if k in a: a[k] = norm_src(a[k])
         out.append((t.name, tuple(sorted(a.items()))))
     return out
 

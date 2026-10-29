@@ -10,14 +10,14 @@ zh = re.sub(r'<div class="lecmedia".*?</video></div></div>', '', zh, flags=re.S)
 zh = re.sub(r'<!--lec:s[0-9a-z]+-->.*?<!--/lec:s[0-9a-z]+-->', '', zh, flags=re.S)
 zh = re.sub(r'\s*<a class="lecbtn" href="[^"]*\.en\.html"[^>]*>🌐 English</a>', '', zh)
 # 相对路径的媒体/图片指回 WebPages，截图才看得到
-for k in ('src="media/', 'src="img/', 'href="media/'):
+for k in ('src="media/', 'src="img/', 'href="media/', 'poster="img/', 'poster="media/'):
     zh = zh.replace(k, k.replace('"', '"file://%s/' % W, 1))
 out = pathlib.Path(work) / 'par' / rnd; out.mkdir(parents=True, exist_ok=True)
 (pathlib.Path(work) / 'zh-ref.html').write_text(zh)
 env = dict(os.environ, I18N_WORK=work, I18N_TOPIC=topic, I18N_OUT=f'{work}/tmp.en.html')
 subprocess.run(['python3', str(T / 'assemble.py'), topic, f'{work}/chunks'], env=env, capture_output=True)
 en = pathlib.Path(f'{work}/tmp.en.html').read_text()
-for k in ('src="media/', 'src="img/', 'href="media/'):
+for k in ('src="media/', 'src="img/', 'href="media/', 'poster="img/', 'poster="media/'):
     en = en.replace(k, k.replace('"', '"file://%s/' % W, 1))
 pathlib.Path(f'{work}/tmp.en.html').write_text(en)
 for w in widths:

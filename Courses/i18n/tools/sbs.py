@@ -20,7 +20,7 @@ A={}
 with sync_playwright() as p:
     b=p.chromium.launch()
     for k,f in pages.items():
-        pg=b.new_page(viewport={'width':W,'height':900}); pg.add_init_script("try{localStorage.setItem('figonly:'+location.pathname.split('/').pop(),'0')}catch(e){}"); pg.goto('file://'+f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(2000)
+        pg=b.new_page(viewport={'width':W,'height':900}); pg.add_init_script("try{['figonly:','t7fo:'].forEach(function(k){localStorage.setItem(k+location.pathname.split('/').pop(),'0')})}catch(e){}"); pg.goto('file://'+f); pg.evaluate('document.fonts.ready'); pg.wait_for_timeout(2000)
         fullshot(pg, f'full-{k}-{W}.png', W)
         A[k]=pg.evaluate("[...document.querySelectorAll('section, h3, figure')].filter(h=>h.offsetParent!==null||h.tagName=='SECTION').map(h=>[Math.round(h.getBoundingClientRect().top+scrollY), h.tagName=='FIGURE'?('fig '+h.id):(h.tagName=='SECTION'?'section '+h.id:(h.innerText||'').slice(0,70))])")
         pg.close()

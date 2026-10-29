@@ -97,6 +97,48 @@ HEAD['topic-06-lecture'] = {
     'zh': 'topic-06-lecture.html',
     'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
 }
+# 专题七 R0（10-29）：标题／og 是占位定译，R0 写作后按 TERMS-07 再核一次
+HEAD['topic-07'] = {
+    'title': 'Topic 7 · Performance Tuning and Tooling',
+    'og:title': 'Performance tuning · one step got 50% faster: estimate first, then look',
+    'og:description': 'Hunyuan3 FP8: one training step got 50% faster. Is that even possible? Estimate it with two rulers, '
+                      'then open XProf and work down layer by layer.',
+    'zh': 'topic-07.html', 'fsa': 0.53,
+    # 本页专用的英文 CSS（PAR10 专题七 CSS 轮，10-29）：2.1 折叠框里的运行表与练习页同一张，390 宽时同样被挤成一字一折
+    # （高 1792 vs 中文 1503）→ 手机上除「What」外不折行、框内横向滚动，打开后高 676；1280 宽不受影响
+    'encss': '@media(max-width:600px){#t7-setup table.numtab td:not(:nth-child(2)),#t7-setup table.numtab td:not(:nth-child(2)) code{white-space:nowrap}'
+             '#t7-setup table.numtab td:nth-child(2){min-width:11em}}'
+    # CSS 第二轮（10-29）：390 宽时英文表头会折行、表格不再像中文那样横向滚动，于是挤成 342px —— 代码 chip 被
+    #   break-word 从名字中间劈开（all-ga|ther.575、profile|r），散文列一词一行。改成：表格单元里的代码不折行
+    #   （断在连字符处同样是劈名字，所以不用 word-break:normal），带代码的表 + 6.2/6.3 两张散文表的非首列至少 7em，
+    #   装不下就在表格框内横向滚动（中文 390 宽本来就有 40 多张表在滚）。首列另算：紧跟在图后面的表首列是「#／Stop」序号，
+    #   不设下限；其余 ≥3 列的表首列是散文标签（Roofline「Per step, per TensorCore」那张一词一行），至少 8em。
+    #   全页 75 张表：代码被劈 186 → 0，一词一行的格子 305 → 151，表格总高 −13K px；1280 宽不受影响
+             '@media(max-width:600px){td code:not(pre code){white-space:nowrap}'
+             'table:has(td code):not(#t7-setup table) td:not(:first-child),#s6-2~table td:not(:first-child){min-width:7em}'
+             ':not(figure,script)+table:not(#t7-setup table) td:first-child:nth-last-child(n+3){min-width:8em}}',
+}
+HEAD['topic-07-lecture'] = {
+    'title': 'Topic 7 · Instructor notes (lecture script)',
+    'og:title': 'Performance Tuning and Tooling · instructor notes',
+    'og:description': "The teacher's draft: the spoken script, which figure to point at, likely questions, and what not to say.",
+    'zh': 'topic-07-lecture.html',
+    'css': {'content:"屏幕 · "': 'content:"Screen · "', 'content:"停 · "': 'content:"Pause · "'},
+}
+# 练习页是专题七新增的页型：没有图可留，「折叠讲解」开关会把题干一起藏掉 —— nofold 不注入
+HEAD['topic-07-drills'] = {
+    'title': 'Topic 7 · Exercises: find the answers yourself in open-source XProf',
+    'og:title': 'Topic 7 exercises · 24 problems',
+    'og:description': "Hunyuan3's 7 profiles and 24 problems you can answer with open-source XProf alone: "
+                      'twelve follow the main text, twelve transfer the same moves to a new target.',
+    'zh': 'topic-07-drills.html', 'fsa': 0.53, 'nofold': True,
+    # 本页专用的英文 CSS（PAR10 专题七 CSS 轮，10-29）：
+    # ① 390 宽时运行表被英文表头折行规则挤成一列一字、路径折 7–8 行 → 手机上除「What it is」外都不折行，表格框内横向滚动（中文本来也略溢出滚动）
+    # ② 英文徽章（Transfer problems · I）比中文长，h2 只剩 176px、折成 5 行 → ≤600px 时 .stn 允许折行（同专题三～五中文页的 .stn 规则）；
+    #    h2 基准宽 200px：徽章旁剩不到 200px 才换到下一行，短徽章（Level 1）的标题照旧并排，不白多一行
+    'encss': '@media(max-width:600px){#s0 table.numtab td:not(:nth-child(2)),#s0 table.numtab td:not(:nth-child(2)) code{white-space:nowrap}'
+             '#s0 table.numtab td:nth-child(2){min-width:11em}.stn{flex-wrap:wrap;row-gap:6px}.stn h2{flex:1 1 200px;min-width:0}}',
+}
 # 有英文版的页面：中文 href → 英文 href（锚点保留）。其余中文页一律去链接。
 EN_MAP = {'index.html': 'index.en.html', 'topic-02.html': 'topic-02.en.html',
           'topic-02-L200-lecture.html': 'topic-02-L200-lecture.en.html',
@@ -104,7 +146,9 @@ EN_MAP = {'index.html': 'index.en.html', 'topic-02.html': 'topic-02.en.html',
           'topic-03.html': 'topic-03.en.html', 'topic-03-lecture.html': 'topic-03-lecture.en.html',
           'topic-04.html': 'topic-04.en.html', 'topic-04-lecture.html': 'topic-04-lecture.en.html',
           'topic-05.html': 'topic-05.en.html', 'topic-05-lecture.html': 'topic-05-lecture.en.html',
-          'topic-06.html': 'topic-06.en.html', 'topic-06-lecture.html': 'topic-06-lecture.en.html'}
+          'topic-06.html': 'topic-06.en.html', 'topic-06-lecture.html': 'topic-06-lecture.en.html',
+          'topic-07.html': 'topic-07.en.html', 'topic-07-lecture.html': 'topic-07-lecture.en.html',
+          'topic-07-drills.html': 'topic-07-drills.en.html'}
 # ⭐ 英文版字体用 Source Sans 3（Google Fonts）：Noto Sans CJK 的拉丁字形就是从它来的，
 #    所以图上标签的宽度跟检查时（本机 Noto CJK）一致；又避开了 CJK 字体把弯引号画成全角的问题，
 #    而且 iPhone / Mac 上不再回落到更宽的系统字体（作者 10-17 是在 iPhone 上看的）。
@@ -146,7 +190,9 @@ def english_only_links(s):
         href, inner = m.group(1), m.group(2)
         # GitHub 上指向中文 md / 中文目录的外链也算中文页（文件名含中文或 URL 编码的中文）
         zh_ext = href.startswith('http') and ('github.com' in href) and (re.search(r'[\u4e00-\u9fff]|%E[4-9]', href) is not None)
-        if (href.startswith(('http', '#', 'mailto', 'data:')) and not zh_ext) or href.split('#')[0] in KEEP:
+        # 本站的图片／录像文件（img/、media/）不分语言，照留链接 —— 专题七「Full video: xxx.mp4」原先被当成中文页去链接，
+        # 英文显示成正文黑字、中文是蓝色链接（PAR10 专题七 R8 layout #41；专题一～六没有这种链接，不受影响）
+        if (href.startswith(('http', '#', 'mailto', 'data:', 'img/', 'media/')) and not zh_ext) or href.split('#')[0] in KEEP:
             return m.group(0)
         # 按钮样式的链接（inline-block）指向没有英文版的页：整颗删，留下裸文字反而像坏掉的按钮
         if 'display:inline-block' in m.group(0)[:m.group(0).find('>')]:
@@ -179,7 +225,7 @@ def main(topic, d):
     # ⭐ 「折叠讲解」开关（移植自专题三/四/五/六的 figbar）。英文版**默认折叠**：只留图，
     #    想细读的人点「Show narration」或按 T 展开（作者 2026-10-17）。中文专题二原本没有这个开关。
     # 中文页自带折叠开关（专题三起）就不再注入，开关文案与默认值在块里翻译/设定
-    if not topic.endswith('lecture') and 'figonly-css' not in s:
+    if not topic.endswith('lecture') and 'figonly-css' not in s and not h.get('nofold'):
       fo_css, fo_html = (pathlib.Path(__file__).resolve().parents[1] / 'figonly.html').read_text().split('@@SPLIT@@')
       s = s.replace('</title>', '</title>' + fo_css.strip(), 1)
       s = s.replace('</body>', fo_html + '</body>', 1)
@@ -226,6 +272,7 @@ def main(topic, d):
         if re.search(r'\.card h4\s*\{[^}]*text-transform:\s*uppercase', css):
             rules += '.card h4{text-transform:none;letter-spacing:0;font-size:13px}'
         rules += '.jstep span{white-space:nowrap}@media(max-width:600px){main table,section table,details table,.note table,.callout table{display:block;max-width:100%;overflow-x:auto}th{white-space:normal;letter-spacing:0;text-transform:none}.jstep span{font-size:9px}}'
+        rules += h.get('encss', '')   # 单页专用的英文 CSS（HEAD 里定义，只影响该页）
         s = s.replace('</body>', '<style id="en-size">' + rules + '.sub{font-size:.95em}</style></body>', 1)
     missing = []
     def put(m):
