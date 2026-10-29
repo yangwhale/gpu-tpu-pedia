@@ -1690,6 +1690,242 @@ print("http://127.0.0.1:6311/data/plugin/profile/trace_viewer_index.html?is_stre
 <table class="numtab"><tr><th>#</th><th>是什么</th><th>怎么看出来（事件名、时刻都从 xplane 读）</th></tr><tr><td>①</td><td>专家矩阵乘 ×9</td><td>TC：本层 9 个专家矩阵乘（gmm／tgmm）合 35.69 ms<span class="fo-hide"><br>主图里是 5 个框：<code>gmm_megablox.14</code>＋<code>gmm_megablox.13</code>＋<code>gmm_megablox_transpose_rhs.10</code>（31,226.184 ms 起，3.530／2.982／3.631 ms）；<code>gmm_megablox.15</code>（31,237.982 ms 起，3.357 ms）；<code>gmm_megablox_transpose_rhs.12</code>＋<code>gmm_megablox_transpose_rhs.11</code>（31,245.398 ms 起，4.050／4.043 ms）；<code>tgmm_megablox.10</code>＋<code>tgmm_megablox.11</code>（31,255.554 ms 起，4.522／3.911 ms）；<code>tgmm_megablox.12</code>（31,265.379 ms 起，5.660 ms）</span></td></tr><tr><td>②</td><td>收 192 专家的 all-gather</td><td>SC0：收 192 个专家权重的 all-gather 543／547／545：2.37／2.41／2.21 ms，形状 f8e4m3fn[1,192,4096,1536] 等<span class="fo-hide"><br>主图里是 2 个框：<code>all-gather.543</code>（31,200.121 ms 起，2.370 ms）；<code>all-gather.547</code>＋<code>all-gather.545</code>（31,223.777 ms 起，2.406／2.207 ms）</span></td></tr><tr><td>③</td><td>专家梯度 reduce-scatter</td><td>SC0：专家梯度 reduce-scatter 12／14／16：10.45／10.25／9.13 ms，形状 bf16[3,4096,1536] 等<span class="fo-hide"><br>主图里是 2 个框：<code>reduce-scatter.12</code>（31,260.076 ms 起，10.447 ms）；<code>reduce-scatter.14</code>＋<code>reduce-scatter.16</code>（31,270.953 ms 起，10.246／9.134 ms）</span></td></tr><tr><td>括号</td><td>本层 106.12 ms</td><td>窗口＝本层，左右各留 0.5 ms；改后那张同窗宽，左端对齐它自己的这一层</td></tr></table><figure class="fbox fwide shot" id="fig-t7-23b"><img src="img/topic07-23b-bwdL-fp8new.png" width="3000" height="1348" loading="lazy" alt="图 2.5B · FP8 改后（快了 50%） · 反向同一层（40 号 MoE 层）。① 专家矩阵乘 ×9；② 这里没有收专家的 all-gather；③ 这里没有梯度 reduce-scatter"><figcaption><b>改后反向：② ③ 都是空的。</b></figcaption></figure>
 <table class="numtab"><tr><th>#</th><th>是什么</th><th>怎么看出来（事件名、时刻都从 xplane 读）</th></tr><tr><td>①</td><td>专家矩阵乘 ×9</td><td>TC：本层 9 个专家矩阵乘（gmm／tgmm）合 0.47 ms；每个 0.03–0.08 ms，框只有几个像素宽（原配方同一层 35.69 ms）<span class="fo-hide"><br>主图里是 5 个框：<code>gmm.20</code>（13,233.506 ms 起，0.060 ms）；<code>gmm.22</code>＋<code>gmm.21</code>（13,234.596 ms 起，0.037／0.037 ms）；<code>gmm.25</code>（13,236.223 ms 起，0.035 ms）；<code>gmm.24</code>＋<code>gmm.23</code>（13,237.125 ms 起，0.036／0.036 ms）；<code>tgmm.10</code>＋<code>tgmm.9</code>＋<code>tgmm.8</code>（13,246.101 ms 起，0.076／0.079／0.079 ms）</span></td></tr><tr><td>②</td><td>这里没有收专家的 all-gather</td><td>虚线：本层开头到第一个 gmm 之前，原配方的 ② 落在这一段；这里 SC0 上没有收专家权重的 all-gather，只剩 5 条别的小 all-gather（都不是 [1,192,…] 整套专家，每条 ≤0.16 ms）和 gather_offload（按路由收 token）</td></tr><tr><td>③</td><td>这里没有梯度 reduce-scatter</td><td>虚线：tgmm 算完专家梯度以后到本层结束，原配方的 ③ 落在这一段；这里 SC0 上一条 reduce-scatter 都没有，只有 3 条 all-reduce（最长 0.56 ms）和 4 条小 all-gather</td></tr><tr class="fo-hide"><td>放大 1</td><td>13,246.04–13,246.39 ms 窗</td><td><code>tgmm.10</code>（0.076 ms）、<code>tgmm.9</code>（0.079 ms）、<code>tgmm.8</code>（0.079 ms）</td></tr><tr class="fo-hide"><td></td><td>放大图只取了一部分</td><td>① 一共 9 个，放大图里框出 3 个；其余几个同样每个只有几十微秒，见 ① 那一行</td></tr><tr><td>括号</td><td>本层 66.20 ms</td><td>灰虚线：本层结束，右边已是下一层（A/B 两张同窗宽 ＝ 原配方那一层的宽度）</td></tr></table>
   <p><b>reduce-scatter</b> 是 all-gather 的反方向：算完的梯度先在 64 张卡之间求和，每张卡只留自己那份。原配方反向三条形状是 <code>bf16[3,4096,1536]</code>——每张卡留 3 个专家的梯度（192 ÷ 64 ＝ 3）。改后反向一条都没有。</p>
+  <p>两组截图只框出了最长的那几条。把 40 号层小核上的集合通信一条不漏、按先后排出来，看少掉的是不是只有这两类：</p>
+<figure class="fbox fwide" id="fig-t7-comms"><svg viewBox="0 0 1400 678" width="100%" role="img" aria-label="40 号层一圈里的集合通信，按小核上的先后排。上半是前向，下半是反向，每半两行：原配方、改后。前向原配方 11 条：注意力权重 4 条、收专家权重 1 条、路由器权重 1 条、再收专家权重 2 条、共享专家权重 3 条；改后少了收专家权重那 3 条，其余一样。反向原配方：重算前向时注意力、专家、路由器的权重再收一遍，再收注意力和共享专家，三条专家梯度 reduce-scatter 每条约 10 毫秒，最后是注意力、路由器、共享专家的梯度在全部 128 个 device 上求和，以及专家梯度在 data 轴 2 份之间求和。改后反向少了收专家权重 3 条和散专家梯度 3 条，专家梯度在 data 轴的求和两份都有。两份程序里都没有 all-to-all，token 不出卡。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">40 号层的集合通信按先后排：改后少掉的只有 ④ 收专家权重、⑤ 散专家梯度</text>
+<text class="svglbl" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400">一格 ＝ 小核上连着的同一类通信：条数和时长（④⑤ 写每条，其余写合计）；格子上方 ＝ 距这一层开头的 ms；虚线格 ＝ 原配方有、改后没有</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svglbl" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">①②③ 注意力／路由器／共享专家的权重</text>
+<rect x="337.08000000000004" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svglbl" x="358" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">④ 专家权重 all-gather</text>
+<rect x="549.84" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svglbl" x="570" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">⑤ 专家梯度 reduce-scatter</text>
+<rect x="798.44" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svglbl" x="819" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">⑥⑦ 梯度 all-reduce</text>
+<text class="svglbl" x="0" y="126" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前向（一层 34.68 → 25.59 ms）</tspan></text>
+<text class="svglbl" x="0" y="180" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 原配方</tspan></text>
+<text class="svglbl" x="0" y="201" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">11 条</text>
+<rect x="118" y="156" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="135.0" cy="173.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="135" y="177" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="169" y="179" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×4</tspan></text>
+<text class="svglbl" x="159" y="202" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.50 ms</text>
+<text class="svglbl" x="120" y="149" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.0</text>
+<rect x="208" y="156" width="122" height="58" rx="5" fill="#feefe3" stroke="#e8710a" stroke-width="1.0"/>
+<circle cx="225.0" cy="173.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="225" y="177" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="279" y="179" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="269" y="202" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">2.38 ms</text>
+<text class="svglbl" x="210" y="149" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.5</text>
+<rect x="338" y="156" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="355.0" cy="173.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="355" y="177" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<text class="svglbl" x="389" y="179" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="379" y="202" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.09 ms</text>
+<text class="svglbl" x="340" y="149" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">3.0</text>
+<rect x="428" y="156" width="122" height="58" rx="5" fill="#feefe3" stroke="#e8710a" stroke-width="1.0"/>
+<circle cx="445.0" cy="173.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="445" y="177" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="499" y="179" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×2</tspan></text>
+<text class="svglbl" x="489" y="202" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">3.98／2.21 ms</text>
+<text class="svglbl" x="430" y="149" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">19.3</text>
+<rect x="558" y="156" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="575.0" cy="173.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="575" y="177" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">3</tspan></text>
+<text class="svglbl" x="609" y="179" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="599" y="202" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.30 ms</text>
+<text class="svglbl" x="560" y="149" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">32.9</text>
+<text class="svglbl" x="0" y="272" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 改后</tspan></text>
+<text class="svglbl" x="0" y="293" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">8 条</text>
+<rect x="118" y="248" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="135.0" cy="265.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="135" y="269" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="169" y="271" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×4</tspan></text>
+<text class="svglbl" x="159" y="294" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.42 ms</text>
+<text class="svglbl" x="120" y="241" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.0</text>
+<rect x="208" y="248" width="122" height="58" rx="5" fill="none" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="225.0" cy="265.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="225" y="269" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="279" y="271" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="269" y="294" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">改后没有</tspan></text>
+<rect x="338" y="248" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="355.0" cy="265.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="355" y="269" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<text class="svglbl" x="389" y="271" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="379" y="294" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.05 ms</text>
+<text class="svglbl" x="340" y="241" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.5</text>
+<rect x="428" y="248" width="122" height="58" rx="5" fill="none" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="445.0" cy="265.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="445" y="269" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="499" y="271" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×2</tspan></text>
+<text class="svglbl" x="489" y="294" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">改后没有</tspan></text>
+<rect x="558" y="248" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="575.0" cy="265.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="575" y="269" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">3</tspan></text>
+<text class="svglbl" x="609" y="271" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="599" y="294" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.28 ms</text>
+<text class="svglbl" x="560" y="241" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">23.9</text>
+<text class="svglbl" x="0" y="362" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反向（一层 106.12 → 66.20 ms；开头先把前向重算一遍，所以权重要再收一次）</tspan></text>
+<text class="svglbl" x="0" y="416" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 原配方</tspan></text>
+<text class="svglbl" x="0" y="437" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">22 条</text>
+<rect x="118" y="392" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="135.0" cy="409.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="135" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="169" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×4</tspan></text>
+<text class="svglbl" x="159" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.33 ms</text>
+<text class="svglbl" x="120" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.0</text>
+<rect x="208" y="392" width="122" height="58" rx="5" fill="#feefe3" stroke="#e8710a" stroke-width="1.0"/>
+<circle cx="225.0" cy="409.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="225" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="279" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="269" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">2.37 ms</text>
+<text class="svglbl" x="210" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.4</text>
+<rect x="338" y="392" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="355.0" cy="409.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="355" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<text class="svglbl" x="389" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="379" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.08 ms</text>
+<text class="svglbl" x="340" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">2.8</text>
+<rect x="428" y="392" width="122" height="58" rx="5" fill="#feefe3" stroke="#e8710a" stroke-width="1.0"/>
+<circle cx="445.0" cy="409.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="445" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="499" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×2</tspan></text>
+<text class="svglbl" x="489" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">2.41／2.21 ms</text>
+<text class="svglbl" x="430" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">24.0</text>
+<rect x="558" y="392" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="575.0" cy="409.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="575" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="609" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="599" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.18 ms</text>
+<text class="svglbl" x="560" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">44.6</text>
+<rect x="648" y="392" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="665.0" cy="409.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="665" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">3</tspan></text>
+<text class="svglbl" x="699" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="689" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.23 ms</text>
+<text class="svglbl" x="650" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">44.8</text>
+<rect x="738" y="392" width="122" height="58" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<circle cx="755.0" cy="409.0" r="11.0" fill="#d93025"/>
+<text class="svglbl" x="755" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<text class="svglbl" x="809" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="799" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">10.45 ms</text>
+<text class="svglbl" x="740" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">60.3</text>
+<rect x="868" y="392" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="885.0" cy="409.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="885" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="919" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="909" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.28 ms</text>
+<text class="svglbl" x="870" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">70.8</text>
+<rect x="958" y="392" width="122" height="58" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<circle cx="975.0" cy="409.0" r="11.0" fill="#d93025"/>
+<text class="svglbl" x="975" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<text class="svglbl" x="1029" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×2</tspan></text>
+<text class="svglbl" x="1019" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">10.25／9.13 ms</text>
+<text class="svglbl" x="960" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">71.2</text>
+<rect x="1088" y="392" width="82" height="58" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<circle cx="1105.0" cy="409.0" r="11.0" fill="#9334e6"/>
+<text class="svglbl" x="1105" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">6</tspan></text>
+<text class="svglbl" x="1139" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="1129" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">1.01 ms</text>
+<text class="svglbl" x="1090" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">97.7</text>
+<rect x="1178" y="392" width="82" height="58" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<circle cx="1195.0" cy="409.0" r="11.0" fill="#9334e6"/>
+<text class="svglbl" x="1195" y="413" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">7</tspan></text>
+<text class="svglbl" x="1229" y="415" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="1219" y="438" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.29 ms</text>
+<text class="svglbl" x="1180" y="385" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">101.2</text>
+<text class="svglbl" x="0" y="508" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 改后</tspan></text>
+<text class="svglbl" x="0" y="529" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">17 条</text>
+<rect x="118" y="484" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="135.0" cy="501.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="135" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="169" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×4</tspan></text>
+<text class="svglbl" x="159" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.42 ms</text>
+<text class="svglbl" x="120" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.0</text>
+<rect x="208" y="484" width="122" height="58" rx="5" fill="none" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="225.0" cy="501.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="225" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="279" y="507" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="269" y="530" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">改后没有</tspan></text>
+<rect x="338" y="484" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="355.0" cy="501.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="355" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<text class="svglbl" x="389" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="379" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.05 ms</text>
+<text class="svglbl" x="340" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0.5</text>
+<rect x="428" y="484" width="122" height="58" rx="5" fill="none" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="445.0" cy="501.0" r="11.0" fill="#e8710a"/>
+<text class="svglbl" x="445" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="499" y="507" fill="#b06000" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×2</tspan></text>
+<text class="svglbl" x="489" y="530" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">改后没有</tspan></text>
+<rect x="558" y="484" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="575.0" cy="501.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="575" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="609" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="599" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.28 ms</text>
+<text class="svglbl" x="560" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">33.2</text>
+<rect x="648" y="484" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="665.0" cy="501.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="665" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">3</tspan></text>
+<text class="svglbl" x="699" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="689" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.19 ms</text>
+<text class="svglbl" x="650" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">33.5</text>
+<rect x="738" y="484" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="755.0" cy="501.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="755" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<text class="svglbl" x="789" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="779" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.09 ms</text>
+<text class="svglbl" x="740" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">36.6</text>
+<rect x="828" y="484" width="122" height="58" rx="5" fill="none" stroke="#d93025" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="845.0" cy="501.0" r="11.0" fill="#d93025"/>
+<text class="svglbl" x="845" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<text class="svglbl" x="899" y="507" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="889" y="530" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">改后没有</tspan></text>
+<rect x="958" y="484" width="82" height="58" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="975.0" cy="501.0" r="11.0" fill="#5f6368"/>
+<text class="svglbl" x="975" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="1009" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="999" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.32 ms</text>
+<text class="svglbl" x="960" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">37.7</text>
+<rect x="1048" y="484" width="122" height="58" rx="5" fill="none" stroke="#d93025" stroke-width="1.6" stroke-dasharray="5 4"/>
+<circle cx="1065.0" cy="501.0" r="11.0" fill="#d93025"/>
+<text class="svglbl" x="1065" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<text class="svglbl" x="1119" y="507" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×2</tspan></text>
+<text class="svglbl" x="1109" y="530" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">改后没有</tspan></text>
+<rect x="1178" y="484" width="82" height="58" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<circle cx="1195.0" cy="501.0" r="11.0" fill="#9334e6"/>
+<text class="svglbl" x="1195" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">7</tspan></text>
+<text class="svglbl" x="1229" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×1</tspan></text>
+<text class="svglbl" x="1219" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">0.40 ms</text>
+<text class="svglbl" x="1180" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">37.7</text>
+<rect x="1268" y="484" width="82" height="58" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<circle cx="1285.0" cy="501.0" r="11.0" fill="#9334e6"/>
+<text class="svglbl" x="1285" y="505" fill="#fff" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">6</tspan></text>
+<text class="svglbl" x="1319" y="507" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">×3</tspan></text>
+<text class="svglbl" x="1309" y="530" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">1.11 ms</text>
+<text class="svglbl" x="1270" y="477" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">60.1</text>
+<text class="svglbl" x="0" y="568" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">另有主核上 4 条很小的同步 all-reduce（每条不到 0.25 ms），两份都有，没画。两份程序里 all-to-all、collective-permute 都是 0 条：token 不出卡。</text>
+<rect x="0" y="590" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="590" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="590" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="617" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余几类两份一样（改后反向多收一次路由器权重）；多出来的只有 ④ 和 ⑤，正是一层里最长的几条</tspan></text>
+<text class="svglbl" x="20" y="648" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400">原配方小核上通信一层合计：前向 9.46 ms、反向 39.22 ms；改后 0.75 ms、2.85 ms。⑦ 两份都有：改后专家梯度照样在 data 轴的 2 份之间求和，只是前面没有 ⑤。</text>
+</svg><figcaption><b>先看虚线格：原配方有、改后没有的只有橙色 ④ 和红色 ⑤。</b>其余各格逐类对一下，条数一样，时间都在零点几毫秒。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 窗口：40 号层，前向 fp8old 25,477.463–25,512.140、fp8new 9,384.636–9,410.223 ms；反向 fp8old 31,199.767–31,305.887、fp8new 13,209.876–13,276.078 ms（距 profile 起点，和图 2.4、2.5 同窗）。取 TPU:0 两颗小核 Sparse Core Ops 行上名字带 all-gather／reduce-scatter／all-reduce 的执行条；两颗小核上同名的 all-reduce 只算一条。</p>
+<p>📌 哪一条是哪个权重，按形状对配置认：<code>[1,4096,64,128]</code>、两条 <code>[1,4096,8,128]</code>、<code>[1,64,128,4096]</code> ＝ 注意力（64 个查询头、8 个 KV 头、每头 128）；<code>[1,4096,192]</code> ＝ 路由器（192 个专家）；<code>[1,4096,1536]</code> ×2、<code>[1,1536,4096]</code> ＝ 共享专家（1 个，中间维 1,536）；<code>[1,192,4096,1536]</code> ×2、<code>[1,192,1536,4096]</code> ＝ 专家权重收齐。全部是 f8e4m3fn。</p>
+<p>📌 求和的范围从最终 HLO 的 replica_groups 读：⑤ reduce-scatter 按 <code>{'fsdp'}</code>（64 份）；⑦ 专家梯度 all-reduce（原配方 all-reduce.384、改后 .394，形状 <code>bf16[3,4096,1536]</code> ×2 ＋ <code>[3,1536,4096]</code>）按 <code>{'data'}</code>（2 份）；⑥ 三条（路由器 f32[4096,192]、注意力、共享专家）是全部 128 个 device。</p>
+<p>📌 改后反向多一条路由器权重的 all-gather（.499，0.085 ms）：同一份权重在重算和求梯度时各收一次，编译器排程和原配方不同 [推断]。主核上的 4 条同步 all-reduce：原配方 all-reduce.306／307／308／312，改后 .316／317／318／322（f32[192] 和几条 bf16 小向量）。</p></details></figure>
+  <table class="numtab">
+    <tr><th>#</th><th>收或求和的是什么</th><th>形状（f8e4m3fn 收齐后／bf16 梯度）</th><th>一层里的条数：原配方 → 改后</th></tr>
+    <tr><td>①</td><td>注意力的四份权重（q、k、v、输出）</td><td><code>[1,4096,64,128]</code>、<code>[1,4096,8,128]</code> ×2、<code>[1,64,128,4096]</code></td><td>前向 4 → 4，反向 8 → 8</td></tr>
+    <tr><td>②</td><td>路由器权重</td><td><code>[1,4096,192]</code></td><td>前向 1 → 1，反向 1 → 2</td></tr>
+    <tr><td>③</td><td>共享专家的三份权重</td><td><code>[1,4096,1536]</code> ×2、<code>[1,1536,4096]</code></td><td>前向 3 → 3，反向 3 → 3</td></tr>
+    <tr class="hot"><td>④</td><td>192 个专家的权重</td><td><code>[1,192,4096,1536]</code> ×2、<code>[1,192,1536,4096]</code></td><td>前向 3 → 0，反向 3 → 0</td></tr>
+    <tr class="hot"><td>⑤</td><td>专家梯度 reduce-scatter</td><td><code>bf16[192,…] → [3,…]</code></td><td>反向 3 → 0</td></tr>
+    <tr><td>⑥</td><td>注意力、路由器、共享专家的梯度求和（全部 128 个 device）</td><td>all-reduce 三条</td><td>反向 3 → 3</td></tr>
+    <tr><td>⑦</td><td>专家梯度求和（data 轴 2 份）</td><td><code>bf16[3,4096,1536]</code> ×2、<code>[3,1536,4096]</code></td><td>反向 1 → 1</td></tr>
+  </table>
+  <p>除了 ④ ⑤，其余几类两份对得上；两份程序里也没有一条 all-to-all：token 不出卡，按专家搬 token 的 <code>gather_offload</code> 是小核在本卡里搬。
+    新冒出一个疑点：⑦ 两份都有，原配方是先 ⑤ 在 64 份之间求和、再 ⑦ 在 2 份之间求和；改后没有 ⑤，专家梯度只在 2 份之间求了和。先记下，第四节回到程序里看。</p>
 
   <h4>放大到一层：叶子分四类，只盯两样</h4>
   <p class="landing">⭐ 放大到一层，<code>XLA Ops</code> 第二层是一长串叶子，大的几块认得出名字，其余挤成一片细条。要不要一块块点开？</p>
@@ -2086,6 +2322,179 @@ tgmm.8 = bf16[3,4096,1536] custom-call(…)               （后面没有 reduce
     里面真正干活的 <code>all-gather.573</code> 只按 <code>'fsdp'=64</code> 这一个轴分组（64 张卡一组），沿第 1 维拼：3 × 64 ＝ 192。
     这就是第二节小核（SparseCore）那一行上看到的 all-gather——HLO 里的 <code>async_execution_thread="sparsecore"</code> 说明它交给小核去跑。
     改后，gmm.27 的权重直接来自一个只做量化的 fusion，形状是 <code>[3,4096,1536]</code>，中间什么也没收。</p>
+  <p>第一节说过，原配方「先把专家权重量化成 FP8 再收」。那改后是不是把量化挪到了别处？顺着 <code>fusion.1669</code>（原配方）和 <code>fusion.1642</code>（改后）往上追到参数：</p>
+<figure class="fbox fwide" id="fig-t7-quant"><svg viewBox="0 0 1400 668" width="100%" role="img" aria-label="上面一行是一张卡上一份专家矩阵从主权重变成 FP8 的四步，两份程序一样：一，f32 主权重，本卡 3 个专家乘 79 层，5,688 MiB；二，每步进循环前转一次 bf16，2,844 MiB；三，每层取出这一层，36 MiB；四，乘 2、截到正负 448、转成 f8e4m3fn，18 MiB。下面分两条：原配方量化完再做 all-gather，从 64 份收齐成 192 个专家，收进来的是 FP8，1,152 MiB，小核上 2.38 毫秒；如果先收 bf16 再量化，要 2,304 MiB，两倍。改后量化完不收，gmm 直接拿本卡 3 个专家的 18 MiB。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">FP8 量化在同一步：两份都先把本卡 3 个专家量化成 f8e4m3fn，差别只在量化之后收不收</text>
+<text class="svglbl" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400">一张卡、一份专家矩阵、一层；格子颜色 ＝ 数的格式，格里是 HLO 里的形状和大小；右边的条按同一比例画「这一步收进来多大」</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svglbl" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">f32</text>
+<rect x="69.4" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svglbl" x="90" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">bf16</text>
+<rect x="147.76" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svglbl" x="168" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">f8e4m3fn（FP8）</text>
+<text class="svglbl" x="0" y="130" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两份程序一样</tspan></text>
+<rect x="0" y="142" width="312" height="94" rx="7" fill="none" stroke="#5f6368" stroke-width="1.0"/>
+<circle cx="23.0" cy="165.0" r="13.0" fill="#5f6368"/>
+<text class="svglbl" x="23" y="169" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<text class="svglbl" x="42" y="171" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">主权重（优化器更新它）</tspan></text>
+<text class="svgsm" x="14" y="198" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">f32[3,79,4096,1536]</text>
+<text class="svglbl" x="300" y="171" fill="#5f6368" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5,688 MiB</tspan></text>
+<text class="svglbl" x="14" y="222" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">本卡 3 个专家 × 79 层</text>
+<rect x="352" y="142" width="312" height="94" rx="7" fill="none" stroke="#1a73e8" stroke-width="1.0"/>
+<circle cx="375.0" cy="165.0" r="13.0" fill="#1a73e8"/>
+<text class="svglbl" x="375" y="169" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<text class="svglbl" x="394" y="171" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">每步转一次 bf16</tspan></text>
+<text class="svgsm" x="366" y="198" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">bf16[79,3,4096,1536]</text>
+<text class="svglbl" x="652" y="171" fill="#174ea6" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2,844 MiB</tspan></text>
+<text class="svglbl" x="366" y="222" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">在循环外，一步一次</text>
+<rect x="704" y="142" width="312" height="94" rx="7" fill="none" stroke="#1a73e8" stroke-width="1.0"/>
+<circle cx="727.0" cy="165.0" r="13.0" fill="#1a73e8"/>
+<text class="svglbl" x="727" y="169" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">3</tspan></text>
+<text class="svglbl" x="746" y="171" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">每层取出这一层</tspan></text>
+<text class="svgsm" x="718" y="198" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">bf16[1,3,4096,1536]</text>
+<text class="svglbl" x="1004" y="171" fill="#174ea6" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">36 MiB</tspan></text>
+<text class="svglbl" x="718" y="222" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">循环里，dynamic-slice</text>
+<rect x="1056" y="142" width="312" height="94" rx="7" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<circle cx="1079.0" cy="165.0" r="13.0" fill="#e8710a"/>
+<text class="svglbl" x="1079" y="169" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<text class="svglbl" x="1098" y="171" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">量化成 FP8</tspan></text>
+<text class="svgsm" x="1070" y="198" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">f8e4m3fn[1,3,4096,1536]</text>
+<text class="svglbl" x="1356" y="171" fill="#b06000" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">18 MiB</tspan></text>
+<text class="svglbl" x="1070" y="222" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">×2 → 截到 ±448 → 转换；两份一模一样</text>
+<line x1="316" y1="189.0" x2="348" y2="189.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="668" y1="189.0" x2="700" y2="189.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="1020" y1="189.0" x2="1052" y2="189.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="1212.0" y1="240" x2="1212.0" y2="266" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="1212.0" y1="266" x2="300" y2="266" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="300" y1="266" x2="300" y2="302" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svglbl" x="0" y="336" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 原配方</tspan></text>
+<text class="svglbl" x="0" y="358" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">量化后再收</text>
+<text class="svglbl" x="0" y="470" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 改后</tspan></text>
+<text class="svglbl" x="0" y="492" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">量化后不收</text>
+<rect x="150" y="306" width="300" height="94" rx="7" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<circle cx="173.0" cy="329.0" r="13.0" fill="#e8710a"/>
+<text class="svglbl" x="173" y="333" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<text class="svglbl" x="192" y="335" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">all-gather：64 份收齐</tspan></text>
+<text class="svgsm" x="164" y="362" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">[1,3,…] → [1,192,…]</text>
+<text class="svglbl" x="164" y="386" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">收的是 FP8；小核上 2.38 ms</text>
+<line x1="454" y1="353.0" x2="490" y2="353.0" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="494" y="306" width="360" height="94" rx="7" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<circle cx="517.0" cy="329.0" r="13.0" fill="#e8710a"/>
+<text class="svglbl" x="517" y="333" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">6</tspan></text>
+<text class="svglbl" x="536" y="335" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">gmm_megablox.16 的权重</tspan></text>
+<text class="svgsm" x="508" y="362" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">f8e4m3fn[192,4096,1536]</text>
+<text class="svglbl" x="842" y="335" fill="#b06000" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1,152 MiB</tspan></text>
+<text class="svglbl" x="508" y="386" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">192 个专家</text>
+<rect x="637.2" y="376" width="2.4" height="14" rx="1" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="640.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="643.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="646.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="650.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="653.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="656.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="659.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="662.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="666.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="669.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="672.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="675.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="678.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="682.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="685.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="688.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="691.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="694.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="698.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="701.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="704.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="707.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="710.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="714.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="717.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="720.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="723.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="726.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="730.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="733.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="736.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="739.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="742.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="746.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="749.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="752.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="755.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="758.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="762.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="765.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="768.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="771.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="774.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="778.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="781.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="784.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="787.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="790.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="794.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="797.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="800.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="803.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="806.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="810.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="813.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="816.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="819.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="822.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="826.0" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="829.2" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="832.4000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="835.6" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="838.8000000000001" y="376" width="2.4" height="14" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="150" y="440" width="300" height="94" rx="7" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="5 4"/>
+<circle cx="173.0" cy="463.0" r="13.0" fill="#80868b"/>
+<text class="svglbl" x="173" y="467" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<text class="svglbl" x="192" y="469" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">不收</tspan></text>
+<text class="svglbl" x="164" y="496" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">量化结果直接交给 kernel</text>
+<line x1="454" y1="487.0" x2="490" y2="487.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="494" y="440" width="360" height="94" rx="7" fill="none" stroke="#e8710a" stroke-width="1.0"/>
+<circle cx="517.0" cy="463.0" r="13.0" fill="#e8710a"/>
+<text class="svglbl" x="517" y="467" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">6</tspan></text>
+<text class="svglbl" x="536" y="469" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">gmm.27 的权重</tspan></text>
+<text class="svgsm" x="508" y="496" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">f8e4m3fn[3,4096,1536]</text>
+<text class="svglbl" x="842" y="469" fill="#b06000" text-anchor="end" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">18 MiB</tspan></text>
+<text class="svglbl" x="508" y="520" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">本卡 3 个专家</text>
+<rect x="838.8" y="510" width="2.4" height="14" rx="1" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<line x1="132" y1="266" x2="300" y2="266" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="132" y1="266" x2="132" y2="487.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="132" y1="487.0" x2="146" y2="487.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svglbl" x="894" y="292" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">⑦ 这一步要收的字节（每卡、每份、每层）</tspan></text>
+<rect x="894" y="320" width="248.0" height="26" rx="3" fill="#feefe3" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svglbl" x="902" y="339" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">FP8 1,152 MiB</tspan></text>
+<rect x="894" y="358" width="496.0" height="26" rx="3" fill="none" stroke="#1a73e8" stroke-width="1.0" stroke-dasharray="5 4"/>
+<text class="svglbl" x="902" y="377" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">若先收 bf16：2,304 MiB</tspan></text>
+<text class="svglbl" x="894" y="473" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">0：没有要收的</tspan></text>
+<text class="svglbl" x="894" y="496" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">手里就是 18 MiB</text>
+<text class="svglbl" x="0" y="560" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">token 激活也在 gmm 前量化：两份都是同一个 clamp_convert 融合，输出 f8e4m3fn[229376,4096]，kernel 拿到的两个输入都是 FP8。</text>
+<rect x="0" y="580" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="580" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="580" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="607" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">量化放在收之前，原配方收的就是 FP8：比先收 bf16 省一半字节；改后连这一半也不用收</tspan></text>
+<text class="svglbl" x="20" y="638" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400">所以改后省下的不是「量化挪了位置」——量化那一步两份一字不差，少掉的是它后面那条 all-gather（以及反向那条 reduce-scatter）。</text>
+</svg><figcaption><b>上面一行两份一样；分叉在 ④ 之后：A 收，B 不收。</b>右边两根条同一比例：先收 bf16 要两倍字节。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 ① 专家参数（fp8old param.391、fp8new param.619／620）<code>f32[3,79,4096,1536]</code>，sharding <code>devices=[64,1,1,1,2] … last_tile_dim_replicate</code>；② 进循环前转 bf16：fp8old <code>bitcast_convert_fusion.11</code>（融合体里就是 convert f32→bf16，在 ENTRY 里，每步一次），fp8new <code>copy.2312</code>／<code>.2313</code>（f32 → bf16 的 copy）。</p>
+<p>📌 ③④ 循环体里：fp8old <code>fusion.1669</code>、fp8new <code>fusion.1642</code>（一次做两份），都是 dynamic-slice 取一层 → multiply(×2) → clamp(−448, 448) → convert f8e4m3fn。2 ＝ 448 ÷ 224：配置 <code>weight_quantization_calibration_method=fixed,-224,224</code>，f8e4m3fn 能表示的最大有限值是 448 [本课推导]。</p>
+<p>📌 ⑤⑥ fp8old：fusion.1669 → <code>all-gather.574</code>（里面 all-gather.573，<code>{'fsdp'}</code> 64 份、<code>dimensions={1}</code>）→ bitcast → gmm_megablox.16 第 7 号操作数；40 号层前向小核上 2.380 ms。fp8new：fusion.1642 的输出就是 gmm.27 第 7 号操作数 <code>[3,4096,1536]</code>。网络上真正收进来的是其余 63 份，1,152 × 63/64 ≈ 1,134 MiB。</p>
+<p>📌 ⑦ 「若先收 bf16」：<code>bf16[192,4096,1536]</code> ＝ 2,415,919,104 B。同一份程序里有现成的例子：MTP 层的专家权重是编译器插的 all-gather 以 bf16 收齐的（fp8new all-gather.537／538／539）。token 激活：两份都是 <code>clamp_convert_fusion.165</code> → <code>f8e4m3fn[229376,4096]</code>（gmm 第 5 号操作数），配置 <code>act_quantization_calibration_method=fixed,-224,224</code>。</p></details></figure>
+  <table class="numtab">
+    <tr><th>#</th><th>这一步</th><th>原配方</th><th>改后</th></tr>
+    <tr><td>①</td><td>f32 主权重（本卡 3 个专家 × 79 层）</td><td colspan="2"><code>f32[3,79,4096,1536]</code>，5,688 MiB，两份一样</td></tr>
+    <tr><td>②</td><td>进循环前转 bf16，一步一次</td><td colspan="2"><code>bf16[79,3,4096,1536]</code>，2,844 MiB</td></tr>
+    <tr><td>③</td><td>循环里取出这一层</td><td colspan="2"><code>bf16[1,3,4096,1536]</code>，36 MiB</td></tr>
+    <tr><td>④</td><td>量化：乘 2、截到 ±448、转 FP8</td><td colspan="2"><code>f8e4m3fn[1,3,4096,1536]</code>，18 MiB；四个运算、两个常数一模一样</td></tr>
+    <tr class="hot"><td>⑤</td><td>量化之后</td><td>all-gather 收齐 64 份，收的是 FP8；40 号层前向小核上 2.38 ms</td><td>不收</td></tr>
+    <tr class="hot"><td>⑥</td><td>kernel 拿到的权重</td><td><code>f8e4m3fn[192,4096,1536]</code>，1,152 MiB</td><td><code>f8e4m3fn[3,4096,1536]</code>，18 MiB</td></tr>
+    <tr><td>⑦</td><td>这一步要收的字节</td><td>1,152 MiB（先收 bf16 再量化就是 2,304 MiB）</td><td>0</td></tr>
+  </table>
+  <p>量化那一步两份一字不差，乘的 2 就是 448 ÷ 224（配置把权重的量化范围定成 ±224，FP8 最大能表示 448）。原配方确实先量化再收，收的是 FP8，比收 bf16 省一半字节；
+    改后并没有挪动量化，只是量化之后那条 all-gather 没了。</p>
   <details class="foldfig"><summary>改后剩下的那几条 all-gather 是什么 <span class="why">（为什么不是 92 → 80）</span></summary>
   <ul>
     <li>改后还剩 82 条 all-gather，形状里带 192 的只有两类：路由器那张 <code>[4096,192]</code> 的小权重（沿 4096 这一维收），以及 MTP 层（多 token 预测，主干 80 层之外的那一层）三份专家矩阵的 bf16 版 <code>bf16[3,4096,1536] → [192,4096,1536]</code>。</li>
@@ -2138,6 +2547,669 @@ tgmm.8 = bf16[3,4096,1536] custom-call(…)               （后面没有 reduce
     <tr><td>7</td><td>小结</td><td>形状处处合法，没有报错；活少了 189/192，专家矩阵乘每步 3,668.8 → 98.3 ms</td></tr>
   </table>
   <p>原片 <a href="media/topic07-experts.mp4">topic07-experts.mp4</a>（末帧 <a href="img/topic07-experts.png">png</a>，和第一帧相同）。动画里画的是卡 0：它手里正好是第 0–2 号专家，改后算的也正好是第 0–2 组 <span class="tag">[推断：读代码]</span>，画面上一一对齐；别的卡见 4.5 的折叠块。</p>
+  <p>动画是一张卡上的先后。把 192 个专家怎么切到 64 份上、两条分支各拿几个去算，摊开成一张静态图：</p>
+<figure class="fbox fwide" id="fig-t7-experts"><svg viewBox="0 0 1400 840" width="100%" role="img" aria-label="上面：192 个专家按顺序切成 64 份，每份 3 个，卡 0 拿第 0 到 2 号，卡 1 拿 3 到 5 号，一直到卡 63 拿 189 到 191 号；每一份在 data 轴的 2 个 device 上各存一份，一共 128 个 device。下面是同一张卡在两条分支上的五步。原配方：一，前向 all-gather 从其余 63 份收齐 192 个专家；二，gmm 里 192 组 token 都乘上了权重；三，反向 tgmm 出 192 个专家的梯度；四，reduce-scatter 在 64 份之间求和，每张卡只留自己的 3 个；五，在 data 轴 2 份之间再求和。改后：一，没有 all-gather，手里只有 3 个专家；二，gmm 里只有 3 组 token 有权重可乘，其余 189 组写 0，不报错；三，tgmm 直接出 3 个专家的梯度；四，没有 reduce-scatter；五，data 轴的求和照旧。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">192 个专家切成 64 份、每卡 3 个：原配方先收齐 192 个再算，改后就拿手里这 3 个算</text>
+<text class="svglbl" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400">上：怎么切。下：同一张卡（卡 0）在两条分支上走的五步，① 到 ⑤ 左右同号同一步；一小格 ＝ 3 个专家（或 3 组 token）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svglbl" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家权重</text>
+<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svglbl" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">token 分组：乘上了权重</text>
+<rect x="332.56" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svglbl" x="353" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">写 0／没有</text>
+<rect x="459.08000000000004" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svglbl" x="480" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家梯度</text>
+<text class="svglbl" x="0" y="149" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">192 个专家</tspan></text>
+<rect x="130" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="147" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="164" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="181" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="198" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="215" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="232" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="249" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="266" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="283" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="300" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="317" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="334" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="351" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="368" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="385" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="402" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="419" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="436" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="453" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="470" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="487" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="504" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="521" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="538" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="555" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="572" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="589" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="606" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="623" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="640" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="657" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="674" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="691" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="708" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="725" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="742" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="759" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="776" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="793" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="810" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="827" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="844" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="861" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="878" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="895" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="912" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="929" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="946" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="963" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="980" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="997" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1014" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1031" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1048" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1065" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1082" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1099" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1116" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1133" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1150" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1167" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1184" y="132" width="15" height="24" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1201" y="132" width="15" height="24" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<text class="svglbl" x="130" y="126" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">0</text>
+<text class="svglbl" x="1216" y="126" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">191</text>
+<text class="svglbl" x="1230" y="149" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">按顺序切 64 份</text>
+<rect x="150" y="214" width="150" height="48" rx="6" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svglbl" x="160" y="234" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">卡 0</tspan></text>
+<text class="svglbl" x="160" y="254" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家 0–2</text>
+<rect x="256" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="268" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="280" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<line x1="137.5" y1="158" x2="225.0" y2="210" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="330" y="214" width="150" height="48" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svglbl" x="340" y="234" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">卡 1</tspan></text>
+<text class="svglbl" x="340" y="254" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家 3–5</text>
+<rect x="436" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="448" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="460" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<line x1="154.5" y1="158" x2="405.0" y2="210" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="510" y="214" width="150" height="48" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svglbl" x="520" y="234" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">卡 2</tspan></text>
+<text class="svglbl" x="520" y="254" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家 6–8</text>
+<rect x="616" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="628" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="640" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<line x1="171.5" y1="158" x2="585.0" y2="210" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svglbl" x="720" y="244" fill="#5f6368" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">……</tspan></text>
+<rect x="780" y="214" width="150" height="48" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svglbl" x="790" y="234" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">卡 62</tspan></text>
+<text class="svglbl" x="790" y="254" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家 186–188</text>
+<rect x="886" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="898" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="910" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<line x1="1191.5" y1="158" x2="855.0" y2="210" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="960" y="214" width="150" height="48" rx="6" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svglbl" x="970" y="234" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">卡 63</tspan></text>
+<text class="svglbl" x="970" y="254" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家 189–191</text>
+<rect x="1066" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1078" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="1090" y="228" width="10" height="22" rx="2" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<line x1="1208.5" y1="158" x2="1035.0" y2="210" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svglbl" x="1140" y="226" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">每卡 3 个 ＝ 192 ÷ 64</tspan></text>
+<text class="svglbl" x="1140" y="248" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">data 轴 2 份各存一套，</text>
+<text class="svglbl" x="1140" y="268" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">共 128 个 device</text>
+<rect x="0" y="296" width="682" height="436" rx="8" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="296" width="682" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svglbl" x="16" y="326" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 原配方：先收齐 192 个，算完再散回 3 个</tspan></text>
+<circle cx="27.0" cy="367.0" r="13.0" fill="#e8710a"/>
+<text class="svglbl" x="27" y="371" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<rect x="50.0" y="358" width="3.5" height="20" rx="1" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="54.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="59.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="63.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="68.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="72.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="77.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="81.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="86.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="90.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="95.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="99.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="104.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="108.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="113.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="117.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="122.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="126.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="131.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="135.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="140.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="144.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="149.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="153.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="158.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="162.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="167.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="171.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="176.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="180.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="185.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="189.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="194.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="198.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="203.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="207.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="212.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="216.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="221.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="225.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="230.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="234.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="239.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="243.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="248.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="252.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="257.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="261.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="266.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="270.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="275.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="279.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="284.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="288.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="293.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="297.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="302.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="306.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="311.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="315.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="320.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="324.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="329.0" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="333.5" y="358" width="3.5" height="20" rx="1" fill="#feefe3" stroke="#e8710a" stroke-width="0.75"/>
+<text class="svglbl" x="50" y="396" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">本卡 3 个 ＋ 收进来的 189 个</text>
+<text class="svglbl" x="360" y="368" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">前向 all-gather：从其余 63 份收齐</tspan></text>
+<text class="svgsm" x="360" y="392" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">[1,3,4096,1536] → [1,192,4096,1536]</text>
+<line x1="14" y1="420" x2="668" y2="420" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="27.0" cy="443.0" r="13.0" fill="#1a73e8"/>
+<text class="svglbl" x="27" y="447" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<rect x="50.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="54.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="59.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="63.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="68.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="72.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="77.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="81.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="86.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="90.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="95.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="99.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="104.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="108.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="113.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="117.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="122.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="126.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="131.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="135.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="140.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="144.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="149.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="153.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="158.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="162.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="167.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="171.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="176.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="180.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="185.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="189.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="194.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="198.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="203.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="207.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="212.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="216.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="221.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="225.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="230.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="234.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="239.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="243.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="248.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="252.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="257.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="261.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="266.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="270.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="275.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="279.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="284.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="288.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="293.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="297.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="302.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="306.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="311.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="315.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="320.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="324.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="329.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="333.5" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<text class="svglbl" x="50" y="472" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">192 组 token × 192 个专家</text>
+<text class="svglbl" x="360" y="444" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">gmm：192 组 token 都乘上了权重</tspan></text>
+<text class="svglbl" x="360" y="468" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">一层前向 3 颗合 10.1 ms</text>
+<line x1="14" y1="496" x2="668" y2="496" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="27.0" cy="519.0" r="13.0" fill="#d93025"/>
+<text class="svglbl" x="27" y="523" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">3</tspan></text>
+<rect x="50.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="54.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="59.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="63.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="68.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="72.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="77.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="81.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="86.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="90.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="95.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="99.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="104.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="108.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="113.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="117.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="122.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="126.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="131.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="135.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="140.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="144.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="149.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="153.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="158.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="162.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="167.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="171.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="176.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="180.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="185.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="189.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="194.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="198.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="203.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="207.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="212.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="216.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="221.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="225.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="230.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="234.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="239.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="243.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="248.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="252.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="257.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="261.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="266.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="270.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="275.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="279.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="284.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="288.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="293.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="297.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="302.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="306.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="311.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="315.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="320.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="324.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="329.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="333.5" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="50" y="548" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">192 个专家的梯度</text>
+<text class="svglbl" x="360" y="520" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">反向 tgmm：出 192 个专家的梯度</tspan></text>
+<text class="svgsm" x="360" y="544" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">bf16[192,4096,1536]</text>
+<line x1="14" y1="572" x2="668" y2="572" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="27.0" cy="595.0" r="13.0" fill="#d93025"/>
+<text class="svglbl" x="27" y="599" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<rect x="50.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="54.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="59.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="63.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="68.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="72.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="77.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="81.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="86.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="90.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="95.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="99.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="104.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="108.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="113.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="117.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="122.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="126.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="131.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="135.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="140.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="144.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="149.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="153.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="158.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="162.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="167.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="171.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="176.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="180.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="185.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="189.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="194.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="198.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="203.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="207.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="212.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="216.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="221.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="225.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="230.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="234.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="239.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="243.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="248.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="252.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="257.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="261.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="266.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="270.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="275.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="279.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="284.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="288.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="293.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="297.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="302.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="306.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="311.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="315.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="320.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="324.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="329.0" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="333.5" y="586" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<line x1="194.0" y1="608" x2="194.0" y2="620" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="184.0" y="622" width="20" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="212" y="637" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">64 份求和，留 3 个</text>
+<text class="svglbl" x="360" y="596" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">reduce-scatter：每卡只留自己 3 个</tspan></text>
+<text class="svgsm" x="360" y="620" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">[192,4096,1536] → [3,4096,1536]</text>
+<line x1="14" y1="648" x2="668" y2="648" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="27.0" cy="671.0" r="13.0" fill="#9334e6"/>
+<text class="svglbl" x="27" y="675" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<rect x="50" y="662" width="20" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="80" y="677" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">＋</tspan></text>
+<rect x="102" y="662" width="20" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="132" y="677" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">→</tspan></text>
+<rect x="154" y="662" width="20" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="50" y="700" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">data 轴 2 份的同 3 个专家相加</text>
+<text class="svglbl" x="360" y="672" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">all-reduce：data 轴 2 份再求和</tspan></text>
+<text class="svgsm" x="360" y="696" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">bf16[3,4096,1536]</text>
+<rect x="718" y="296" width="682" height="436" rx="8" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="718" y="296" width="682" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svglbl" x="734" y="326" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 改后：手里 3 个，就只算 3 组，其余写 0</tspan></text>
+<circle cx="745.0" cy="367.0" r="13.0" fill="#80868b"/>
+<text class="svglbl" x="745" y="371" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">1</tspan></text>
+<rect x="768.0" y="358" width="3.5" height="20" rx="1" fill="#fbd5b5" stroke="#e8710a" stroke-width="0.75"/>
+<rect x="772.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="777.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="781.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="786.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="790.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="795.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="799.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="804.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="808.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="813.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="817.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="822.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="826.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="831.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="835.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="840.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="844.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="849.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="853.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="858.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="862.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="867.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="871.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="876.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="880.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="885.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="889.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="894.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="898.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="903.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="907.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="912.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="916.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="921.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="925.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="930.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="934.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="939.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="943.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="948.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="952.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="957.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="961.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="966.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="970.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="975.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="979.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="984.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="988.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="993.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="997.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1002.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1006.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1011.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1015.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1020.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1024.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1029.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1033.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1038.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1042.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1047.0" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1051.5" y="358" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<text class="svglbl" x="768" y="396" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">只有本卡 3 个</text>
+<text class="svglbl" x="1078" y="368" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">没有 all-gather：手里就这 3 个</tspan></text>
+<text class="svgsm" x="1078" y="392" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">f8e4m3fn[3,4096,1536]</text>
+<line x1="732" y1="420" x2="1386" y2="420" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="745.0" cy="443.0" r="13.0" fill="#1a73e8"/>
+<text class="svglbl" x="745" y="447" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">2</tspan></text>
+<rect x="768.0" y="434" width="3.5" height="20" rx="1" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.75"/>
+<rect x="772.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="777.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="781.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="786.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="790.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="795.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="799.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="804.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="808.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="813.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="817.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="822.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="826.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="831.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="835.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="840.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="844.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="849.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="853.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="858.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="862.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="867.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="871.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="876.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="880.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="885.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="889.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="894.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="898.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="903.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="907.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="912.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="916.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="921.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="925.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="930.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="934.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="939.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="943.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="948.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="952.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="957.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="961.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="966.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="970.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="975.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="979.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="984.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="988.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="993.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="997.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1002.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1006.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1011.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1015.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1020.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1024.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1029.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1033.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1038.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1042.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1047.0" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1051.5" y="434" width="3.5" height="20" rx="1" fill="#fff" stroke="#dadce0" stroke-width="0.75"/>
+<text class="svglbl" x="768" y="472" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">3 组有权重，189 组输出写 0</text>
+<text class="svglbl" x="1078" y="444" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">gmm：只算有权重的 3 组，不报错</tspan></text>
+<text class="svglbl" x="1078" y="468" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">一层前向 3 颗合 0.11 ms</text>
+<line x1="732" y1="496" x2="1386" y2="496" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="745.0" cy="519.0" r="13.0" fill="#d93025"/>
+<text class="svglbl" x="745" y="523" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">3</tspan></text>
+<rect x="768.0" y="510" width="3.5" height="20" rx="1" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<rect x="772.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="777.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="781.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="786.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="790.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="795.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="799.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="804.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="808.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="813.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="817.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="822.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="826.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="831.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="835.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="840.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="844.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="849.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="853.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="858.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="862.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="867.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="871.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="876.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="880.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="885.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="889.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="894.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="898.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="903.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="907.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="912.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="916.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="921.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="925.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="930.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="934.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="939.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="943.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="948.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="952.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="957.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="961.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="966.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="970.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="975.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="979.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="984.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="988.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="993.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="997.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1002.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1006.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1011.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1015.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1020.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1024.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1029.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1033.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1038.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1042.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1047.0" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<rect x="1051.5" y="510" width="3.5" height="20" rx="1" fill="none" stroke="#dadce0" stroke-width="0.75"/>
+<text class="svglbl" x="768" y="548" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">只有 3 个专家的梯度</text>
+<text class="svglbl" x="1078" y="520" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">tgmm：梯度只出本卡 3 个</tspan></text>
+<text class="svgsm" x="1078" y="544" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">bf16[3,4096,1536]</text>
+<line x1="732" y1="572" x2="1386" y2="572" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="745.0" cy="595.0" r="13.0" fill="#80868b"/>
+<text class="svglbl" x="745" y="599" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">4</tspan></text>
+<rect x="768" y="586" width="288.0" height="20" rx="3" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="5 4"/>
+<text class="svglbl" x="912" y="601" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">没有</tspan></text>
+<text class="svglbl" x="768" y="624" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">64 份之间不求和</text>
+<text class="svglbl" x="1078" y="596" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">没有 reduce-scatter</tspan></text>
+<text class="svglbl" x="1078" y="620" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-weight:400">专家梯度不在 64 份之间求和</text>
+<line x1="732" y1="648" x2="1386" y2="648" stroke="#eef0f2" stroke-width="0.75" stroke-linecap="round"/>
+<circle cx="745.0" cy="671.0" r="13.0" fill="#9334e6"/>
+<text class="svglbl" x="745" y="675" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">5</tspan></text>
+<rect x="768" y="662" width="20" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="798" y="677" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">＋</tspan></text>
+<rect x="820" y="662" width="20" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="850" y="677" fill="#5f6368" style="font-size:16.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">→</tspan></text>
+<rect x="872" y="662" width="20" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.75"/>
+<text class="svglbl" x="768" y="700" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums;font-weight:400">data 轴 2 份的同 3 个专家相加</text>
+<text class="svglbl" x="1078" y="672" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400"><tspan font-weight="700">all-reduce：data 轴 2 份照旧求和</tspan></text>
+<text class="svgsm" x="1078" y="696" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace">bf16[3,4096,1536]</text>
+<rect x="0" y="752" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="752" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="752" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="779" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两边的形状处处合法：分组表照样是 192 组（s32[193]），权重只有 3 个也能算</tspan></text>
+<text class="svglbl" x="20" y="810" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-weight:400">活少了 189/192，却没有一处报错；能看出来的只有「快得不像真的」，和小核那一行上 ① ④ 两步整块不见。</text>
+</svg><figcaption><b>左右两列同号对着看：② 蓝格只剩一格，④ 整步没有。</b>顶上那一排是 64 份的切法，下面是卡 0 一张卡。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 怎么切：配置 num_experts=192、ici_fsdp_parallelism=64、ici_data_parallelism=2（64 颗芯片 × 2 个 TensorCore ＝ 128 个 device）。最终 HLO 里专家参数是本卡的 <code>f32[3,79,4096,1536]</code>（3 个专家 × 79 层），sharding 写 <code>devices=[64,1,1,1,2] … last_tile_dim_replicate</code>：首维 192 按顺序切 64 块，每块在 2 个 device 上各存一份。图里的「卡」＝ fsdp 轴的一份。</p>
+<p>📌 ① 原配方 all-gather.573：输入本卡 <code>[1,3,4096,1536]</code>，<code>replica_groups=…{'fsdp'}</code>（64 份）、<code>dimensions={1}</code>，输出 <code>[1,192,4096,1536]</code>（f8e4m3fn）；② gmm_megablox.16 的权重操作数 <code>[192,4096,1536]</code>，改后 gmm.27 是 <code>[3,4096,1536]</code>，两边分组偏移都是 <code>s32[193]</code>；一层前向 3 颗合 10.107 → 0.109 ms（40 号层）。</p>
+<p>📌 ③④ 原配方 tgmm_megablox.10 输出 <code>bf16[192,4096,1536]</code>，reduce-scatter 按 <code>{'fsdp'}</code> 散回 <code>[3,4096,1536]</code>；改后 tgmm.8 直接输出 <code>[3,4096,1536]</code>。⑤ 专家梯度的 all-reduce（原配方 all-reduce.384、改后 .394）按 <code>{'data'}</code>，两份都有。</p>
+<p>📌 改后其余 189 组写 0：公开 MaxText backend.py 只给本卡 3 组建表、其余补 0（L346–347、L555–561）。卡 0 算的是哪 3 组 token 是读代码得出的 [推断]，图里不标第几组。</p></details></figure>
+  <table class="numtab">
+    <tr><th>#</th><th>原配方</th><th>改后</th></tr>
+    <tr><td>①</td><td>别的 63 张卡各送来 3 个，拼成 <code>[1,192,4096,1536]</code></td><td>没有 all-gather，手里就是 <code>[3,4096,1536]</code></td></tr>
+    <tr><td>②</td><td>gmm：192 组 token 都乘上了权重；40 号层前向 3 颗合 10.1 ms</td><td>gmm：只有 3 组有权重可乘，其余 189 组输出写 0；3 颗合 0.11 ms</td></tr>
+    <tr><td>③</td><td>算出的梯度是整套 192 个：<code>bf16[192,…]</code></td><td>梯度本来就只有 3 个：<code>bf16[3,…]</code></td></tr>
+    <tr class="hot"><td>④</td><td>reduce-scatter：64 份求和，每卡留自己 3 个</td><td>没有</td></tr>
+    <tr><td>⑤</td><td colspan="2">all-reduce：同一份专家在 data 轴的 2 个 device 上各有一套梯度，相加（两份都有，就是第二节通信图里的 ⑦）</td></tr>
+  </table>
+  <p>第二节记下的那个疑点在这里有了答案：改后专家梯度只在 data 轴 2 份之间求和，64 份之间那一次 ④ 没有了。一路下来形状处处合法，没有一处报错。</p>
 
   <h3 id="s4-5">4.5　回到代码：收和散只写在一条分支里</h3>
   <p class="landing">⭐ HLO 指令带着 op_name，能指回代码里是哪一条分支在跑；公开的 MaxText 里，收权重的 <code>all_gather</code> 和散梯度的 <code>psum_scatter</code> 只写在 tokamax 那一支，改后走的另一支直接调 kernel，两样都没有。</p>
