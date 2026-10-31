@@ -82,6 +82,7 @@ decoder block 里 —— 本项目把它们接成一个新的 `decoder_block: "h
 | **想在 v7 (Ironwood) 上跑** | **[QUICKSTART-v7.md](QUICKSTART-v7.md)** —— **直接给最优配方**，照抄就能跑到 BF16 599 / FP8+QAG 625。含 64 / 256 两个规模、端到端复现、单位换算 |
 | **想知道 v7 那 599 是怎么调出来的** | **[TUNING-v7.md](TUNING-v7.md)** —— 445 → 599 的完整故事线，每步的原因 / 机理 / 收益；瓶颈判定、扩展性、HBM 模型；全部负面案例折叠在附录 |
 | **抢卡之前想先知道会不会 OOM** | **[AOT-COMPILE.md](AOT-COMPILE.md)** —— 不占一张 TPU，在普通 CPU 上把训练步编出来，拿到每 device 显存分解、用 6 分钟 CPU 时间扫出最大可行 batch；含**端到端实战**（AOT 存产物 → 16 卡真训练加载，启动省 2.9×）、选机型扫描（**别买 highmem**）、DWS 换 pod 不丢卡的安全顺序、六个坑 |
+| **想和 GPU 版对齐精度** | [NUMERICS-ALIGNMENT.md](NUMERICS-ALIGNMENT.md) —— 按数据流逐段列出哪里该一位不差、哪里注定对不齐末位、各用什么手段查；路由「写 FP32」实际保的是哪一段 |
 | 想把**别的**模型移植进 MaxText | [MAXTEXT-PORTING-GUIDE.md](MAXTEXT-PORTING-GUIDE.md) —— 从本项目总结的通用范式，与 Hy3 无关 |
 | 想知道某个数字/结论怎么来的 | [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) —— 完整实验档案，2600 行 |
 | 只想跑脚本 | [maxtext-hunyuan3/](maxtext-hunyuan3/) —— `prep.sh` + `run.sh` + `aot.sh` |

@@ -93,6 +93,7 @@ Three ways to read this table:
 | **Want to run it on v5p** | **[QUICKSTART-v5p.md](QUICKSTART-v5p.md) 🇨🇳** — from creating the node pool to first numbers, two commands, with full parameters and baselines. **Verified from scratch.** |
 | **Want to run it on v7 (Ironwood)** | **[QUICKSTART-v7.en.md](QUICKSTART-v7.en.md)** — **gives you the best recipe directly**; copy it and you reach BF16 599 / FP8+QAG 625. Covers both the 64- and 256-chip scales, end-to-end reproduction, and unit conversions |
 | **Want to know how that 599 was reached** | **[TUNING-v7.en.md](TUNING-v7.en.md)** — the full 445 → 599 story line, with the reason / mechanism / gain behind each step; bottleneck diagnosis, scaling behavior, HBM model; every negative result folded into the appendix |
+| **Want to align numerics with the GPU version** | [NUMERICS-ALIGNMENT.md](NUMERICS-ALIGNMENT.md) (Chinese) — stage-by-stage list of what must match bit-for-bit, what cannot match in the last bit, and how to check each |
 | Want to port a **different** model into MaxText | [MAXTEXT-PORTING-GUIDE.md](MAXTEXT-PORTING-GUIDE.md) 🇨🇳 — the general pattern distilled from this project, independent of Hy3 |
 | Want to know where a specific number or claim came from | [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) 🇨🇳 — the complete experiment archive, 2,600 lines |
 | Just want to run the scripts | [maxtext-hunyuan3/](maxtext-hunyuan3/) — `prep.sh` + `run.sh` |
