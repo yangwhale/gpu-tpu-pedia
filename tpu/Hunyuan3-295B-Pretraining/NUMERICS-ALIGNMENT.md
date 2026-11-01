@@ -104,7 +104,11 @@ GPU：`moe_utils.topk_routing_with_score_function`；TPU：`moe.py` 的 `deepsee
 - TPU：`float32_gate_logits: True` 把输入和权重转成 FP32，但 `matmul_precision` 是默认档，矩阵单元把它们舍回 BF16 再乘，FP32 累加、FP32 输出。
 - GPU：`moe_router_dtype=fp32`，但混合精度下权重被统一转成 BF16，hidden state 本来就是 BF16；`te_general_gemm(..., out_dtype=fp32)` 同样是 BF16 乘、FP32 累加、FP32 输出。
 
-所以「路由写 FP32」保住的是**累加、输出分数、sigmoid 和挑前 8 名**，不是乘法本身：192 个分数挨得很近，存成 BF16 只剩两三位有效数字，名次会排错。真要乘法也是 FP32，TPU 要把精度开到 `highest`，GPU 要让权重保持 FP32 进入矩阵乘；只有在要和一个真 FP32 的参考对答案时才需要。
+所以「路由写 FP32」保住的是**累加、输出分数、sigmoid 和挑前 8 名**，不是乘法本身：192 个分数挨得很近，存成 BF16 只剩两三位有效数字，名次会排错。但「同一类精度」不等于「选对专家」：在缩小的同结构模型（同样 192 选 8、sigmoid + routed bias）上实测，同一份路由输入，默认档算出的 top-8 与 float64 参照相比每层有 1.3%–2.0% 的 token 不同；`precision=HIGHEST` 降到 0%，续训 500 步 loss 在噪声参照内、步时差测不出。**建议路由 matmul 开 `highest`**。注意这个 0% 是对 float64 说的：只调 TPU 不会和 Megatron 选出一样的专家；要两边一致，GPU 侧也要让路由权重保持 FP32、用真 FP32 GEMM（不走 TF32）。
+
+### 开 remat 时要存路由结果
+
+`jax.checkpoint` 不保证反向重算与前向逐位一致（两段独立编译、分块不同），近并列 token 会在反向换专家：小模型上整层重算每层 0.3%–0.8%，卸载层输入时约 3%。MaxText ≥ v0.2.5 设 `remat_policy=custom` + `moe_routing_maps=device`（默认 `full` 不读这个配置），换专家降为 0。
 
 ### 挑专家的检查方法
 
