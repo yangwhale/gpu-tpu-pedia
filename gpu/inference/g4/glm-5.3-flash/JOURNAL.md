@@ -67,3 +67,10 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 **04:34（12:34）规划 NVFP4 + 能力对比**：客户关心 NVFP4 会不会掉能力。决定继续用 vLLM（同一镜像），只换权重为 `RedHatAI/GLM-5.3-Flash-NVFP4`，这样性能和精度的差别都只来自量化。
 能力评测用 GSM8K（lm-evaluation-harness 0.4.13，5-shot，全量 1,319 题，temperature=0），FP8 和 NVFP4 都通过各自的 1P1D 部署跑，顺带验证 PD 链路的输出正确性。
 流水线：FP8 扫描结束 → FP8 GSM8K（同时两台机器下载 NVFP4 权重）→ 切 NVFP4 起 1P1D → 并发扫描 → NVFP4 GSM8K。
+
+**04:38（12:38）FP8 1P1D 扫描完成**：8 档 0 失败。甜点约 64 并发；128 并发时 TTFT 中位数跳到 31 s，判断为单台 P 的 prefill 能力到顶。同卡数下纯吞吐不如 DP2（换算），优势在 P99 ITL 平稳。
+
+**04:38–04:43（12:38–12:43）FP8 GSM8K 第一次失败**：`lm_eval` 的 API 模型需要 `transformers` 加载 tokenizer，`lm_eval[api]` 不会自动带上（`ModuleNotFoundError: No module named 'transformers'`）。`eval/gsm8k.sh` 已补装。由于流水线已切到 NVFP4，FP8 GSM8K 改到 NVFP4 测完后切回 FP8 1P1D 再跑。
+同时两台机器从 HuggingFace 下完 NVFP4 权重（185 GiB），并上传一份到同区域桶。
+
+**04:44（12:44）NVFP4 1P1D 启动**，开始并发扫描。
