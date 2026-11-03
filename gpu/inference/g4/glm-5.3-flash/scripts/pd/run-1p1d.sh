@@ -12,7 +12,7 @@ step proxy
 PREFILL="$P" DECODE="$D" bash $HERE/proxy.sh
 for i in $(seq 1 30); do curl -sf localhost:8000/healthcheck >/dev/null && break; sleep 2; done
 step smoke
-curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"glm","messages":[{"role":"user","content":"用一句话介绍香港。"}],"max_tokens":200,"chat_template_kwargs":{"enable_thinking":false}}' | tee $W/pd-smoke.json
+curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"glm","messages":[{"role":"user","content":"用一句话介绍香港。"}],"max_tokens":2000,"reasoning_effort":"low"}' | tee $W/pd-smoke.json
 echo
 grep -q '"content":"' $W/pd-smoke.json || { echo "SMOKE FAILED"; sudo docker logs --tail 40 glm-proxy > $W/pd-proxy-fail.log 2>&1; exit 3; }
 step bench

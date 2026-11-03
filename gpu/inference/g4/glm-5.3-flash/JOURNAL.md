@@ -57,3 +57,7 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 **04:03（12:03）1P1D 第一次失败**：P、D 都在引擎初始化末尾退出，根因 `AssertionError: 3-read Mamba conv transfer requires DS conv state layout. Set VLLM_SSM_CONV_STATE_LAYOUT=DS`。
 日志里同时有大量 `CUDACachingAllocator ... OOM` 警告，容易误判为显存不够（盯任务的探针就这么误判了），但单机健康启动的日志里也有同样的警告，是 profile 阶段的正常现象。
 修复：两边都加 `VLLM_SSM_CONV_STATE_LAYOUT=DS`，其余参数不变，重新启动。
+
+**04:13（12:13）1P1D 起来了，但冒烟判失败**：P、D、代理都正常，请求能走通 P→D。冒烟请求 200 token 全花在思考上（`finish_reason: length`），脚本因 `content` 为空判失败。
+细查 chat template：**这个模型没有 `enable_thinking` 开关**，传了被忽略；思考档位由 `reasoning_effort` 控制（`low` / `high`，默认 `max`）。早上单机冒烟加了 `enable_thinking=false` 能出答案，只是那次思考恰好短，不是开关生效。
+改为 `"reasoning_effort": "low"`：实测 reasoning_tokens 为 0，直接出答案。RUNBOOK 第 6 步、排障表和 `run-1p1d.sh` 已更正。压测用 `--ignore-eos` 固定生成长度，不受影响。

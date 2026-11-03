@@ -243,21 +243,21 @@ curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -
 }'
 ```
 
-**注意**：GLM-5.3-Flash 默认先思考再回答。上面这条请求 200 个 token 全用在思考上（`completion_tokens_details.reasoning_tokens: 200`），`content` 为空，**这是正常的**，不是服务坏了。两种处理：
+**注意**：GLM-5.3-Flash 默认以最高档（`max`）思考，再回答。上面这条请求 200 个 token 全用在思考上（`completion_tokens_details.reasoning_tokens: 200`，`finish_reason: length`），`content` 为空，**这是正常的**，不是服务坏了。两种处理：
 
-- 调大 `max_tokens`（思考类请求建议 2,000 以上）；
-- 或者关掉思考，直接出答案：
+- 调大 `max_tokens`（默认思考档位下建议 2,000 以上）；
+- 或者把思考档位调低，直接出答案。这个模型的 chat template **没有** `enable_thinking` 开关（传了会被忽略），控制项是 `reasoning_effort`，取值 `low` / `high`，不传为 `max`：
 
 ```bash
 curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
   "model": "glm",
   "messages": [{"role": "user", "content": "用一句话介绍香港。"}],
-  "max_tokens": 200,
-  "chat_template_kwargs": {"enable_thinking": false}
+  "max_tokens": 2000,
+  "reasoning_effort": "low"
 }'
 ```
 
-实测返回：「香港是一座融合东西方文化的国际大都市，以其繁华的金融中心地位、独特的摩天大楼天际线和"东方之珠"的魅力闻名于世。」
+`reasoning_effort` 写在顶层（OpenAI 标准字段）或写成 `"chat_template_kwargs": {"reasoning_effort": "low"}` 都生效。本次实测 `low` 和 `high` 这条请求的 `reasoning_tokens` 都是 0，直接返回：「香港是一座融合东西方文化的国际化大都市，以繁华的金融中心、璀璨的城市夜景和独特的美食文化闻名于世。」
 
 ## 7. 压测
 
@@ -404,7 +404,7 @@ P=<P_IP>:8100 D=<D_IP>:8200 bash ~/scripts/pd/run-1p1d.sh
 ```bash
 PREFILL="<P_IP>:8100" DECODE="<D_IP>:8200" bash ~/scripts/pd/proxy.sh
 curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
-  -d '{"model":"glm","messages":[{"role":"user","content":"用一句话介绍香港。"}],"max_tokens":200,"chat_template_kwargs":{"enable_thinking":false}}'
+  -d '{"model":"glm","messages":[{"role":"user","content":"用一句话介绍香港。"}],"max_tokens":2000,"reasoning_effort":"low"}'
 TAG=1p1d bash ~/scripts/pd/bench.sh
 ```
 
@@ -427,5 +427,6 @@ gcloud compute instances delete $NAME $NAME_D --zone $ZONE --project $PROJECT
 | `--max-num-seqs 1024` 时 OOM | KDA 状态池（Mamba cache）随并发线性涨，降到 512 以下 |
 | PD 启动约 6 分钟后退出，报 `3-read Mamba conv transfer requires DS conv state layout. Set VLLM_SSM_CONV_STATE_LAYOUT=DS` | P、D 两边都加 `-e VLLM_SSM_CONV_STATE_LAYOUT=DS`（`pd/serve.sh` 已带） |
 | 启动日志里大量 `CUDACachingAllocator ... memory allocation failed with OOM` | 显存 profile 阶段的正常警告，健康启动也有，**不是**失败原因；看 `RuntimeError` / `AssertionError` 那行 |
+| 回复 `content` 为空、`finish_reason: length` | 默认 `max` 思考档把 `max_tokens` 用完了。调大 `max_tokens`，或传 `"reasoning_effort": "low"`；`enable_thinking` 对这个模型无效 |
 | `No module named pip` | DLVM Ubuntu 24.04 镜像没带 pip，按第 4 步用 uv |
 | Spot 机被抢占 | `gcloud compute instances start $NAME`；权重在系统盘上不丢 |
