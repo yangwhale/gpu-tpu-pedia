@@ -3,7 +3,7 @@
 **照着做一次跑通 → [RUNBOOK.md](RUNBOOK.md)**　｜　测试过程与决策记录 → [JOURNAL.md](JOURNAL.md)　｜　原始数据 → [results/](results/)
 
 > **状态（2026-11-03）：** FP8 单机、FP8/NVFP4 1P1D、NVFP4 容量拆分、2P2D 与不分离对比、GSM8K 能力对比已完成；按到达速率的 TTFT 测试进行中。
-> **给客户讲的 HTML 报告**由 [`scripts/report/build_report.py`](scripts/report/build_report.py) 从 `results/` 直接生成。
+> **给客户讲的 HTML 报告**：[`report.html`](report.html)，由 [`scripts/report/build_report.py`](scripts/report/build_report.py) 从 `results/` 直接生成：`python3 scripts/report/build_report.py`。
 
 ## 结论先行
 
@@ -245,7 +245,7 @@ FP8 和 NVFP4 各自通过自己的 1P1D 部署评测，除权重外其余完全
 | 指标 | FP8 | NVFP4 | 差值 |
 |---|---|---|---|
 | strict-match | **93.33%** ± 0.69% | **92.95%** ± 0.71% | −0.38 个百分点 |
-| flexible-extract | **93.40%** ± 0.68% | **93.03%** ± 0.70% | −0.37 个百分点 |
+| flexible-extract | **93.40%** ± 0.68% | **93.03%** ± 0.70% | −0.38 个百分点 |
 
 （± 为 lm-eval 报告的标准误。）
 

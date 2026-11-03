@@ -339,13 +339,16 @@ def main():
         "%%DP4_TABLE%%": table(["总并发"] + SWH[1:3] + SWH[4:], [[c, f1(r["out"]), f0(r["total"]), s2(r["ttft_med"]), s2(r["ttft_p99"]), f"{r['tpot']:.1f} ms", f"{r['itl_p99']:.0f} ms", f0(r["fail"])] for c, r in dp4.items()]),
         "%%2P2D_TABLE%%": table(SWH, sw_rows(nv_2p2d, [1, 2, 4, 8, 16, 32, 64, 128, 256])),
         "%%FP_TABLE%%": table(["并发", "FP8 tok/s", "NVFP4 tok/s", "变化", "FP8 TPOT", "NVFP4 TPOT", "FP8 TTFT 中位数", "NVFP4 TTFT 中位数"],
-            [[c, f1(fp8_1p1d[c]["out"]), f1(nv_1p1d[c]["out"]), f"{(nv_1p1d[c]['out']/fp8_1p1d[c]['out']-1)*100:+.0f}%", f"{fp8_1p1d[c]['tpot']:.1f} ms", f"{nv_1p1d[c]['tpot']:.1f} ms", s2(fp8_1p1d[c]["ttft_med"]), s2(nv_1p1d[c]["ttft_med"])] for c in [1, 2, 4, 8, 16, 32, 64, 128]]),
+            [[c, f1(fp8_1p1d[c]["out"]), f1(nv_1p1d[c]["out"]), (lambda v: "0%" if abs(v) < 0.5 else f"{v:+.0f}%")((nv_1p1d[c]['out']/fp8_1p1d[c]['out']-1)*100), f"{fp8_1p1d[c]['tpot']:.1f} ms", f"{nv_1p1d[c]['tpot']:.1f} ms", s2(fp8_1p1d[c]["ttft_med"]), s2(nv_1p1d[c]["ttft_med"])] for c in [1, 2, 4, 8, 16, 32, 64, 128]]),
         "%%CMP_TABLE%%": table(["总并发", "1P1D 输出 tok/s", "2P2D 输出 tok/s", "不分离 4×TP4 输出 tok/s", "2P2D TTFT 中位数", "不分离 TTFT 中位数", "2P2D P99 ITL", "不分离 P99 ITL"],
             [[c, f1(nv_1p1d.get(c, {}).get("out", float("nan"))), f1(nv_2p2d[c]["out"]), f1(dp4[c]["out"]), s2(nv_2p2d[c]["ttft_med"]), s2(dp4[c]["ttft_med"]), f"{nv_2p2d[c]['itl_p99']:.0f} ms", f"{dp4[c]['itl_p99']:.0f} ms"] for c in (16, 32, 64, 128, 256)]),
         "%%CAP_TABLE%%": table(["实例", "prefill 吞吐（8K 输入）", "decode：并发 32", "decode：并发 64", "decode：并发 128", "decode：并发 256"],
             [[lab, f0(max(v["total"] for v in cap[t]["prefill"].values())) + " tok/s"] + [f"{cap[t]['decode'][c]['out']:,.0f} tok/s · {cap[t]['decode'][c]['tpot']:.0f} ms" if c in cap[t]["decode"] else "—" for c in (32, 64, 128, 256)]
              for t, lab in (("cap-nvfp4-tp8", "NVFP4 TP8（8 卡）"), ("cap-nvfp4-tp4-8001", "NVFP4 TP4 #1（4 卡）"), ("cap-nvfp4-tp4-8002", "NVFP4 TP4 #2（4 卡，同机并行）")) if t in cap]),
-        "%%RATE_2P2D%%": rate_table(r2p2d) if r2p2d else "", "%%RATE_DP4%%": rate_table(rdp4) if rdp4 else "",
+        "%%TTFT_BLOCK%%": (f'''<div class="fig">{ttftc}<div class="cap">图 5　TTFT 中位数对到达速率（8K 输入 / 1K 输出，16 卡）</div></div>
+<h3>2P2D</h3>{rate_table(r2p2d)}<h3>不分离 4×TP4</h3>{rate_table(rdp4)}
+<p class="note">不分离的速率测试由 4 个客户端各按总速率的四分之一独立发送；每个速率档使用不同的随机种子，避免重复 prompt 命中前缀缓存。</p>''' if (r2p2d and rdp4) else
+            '<div class="callout">按到达速率的 TTFT 测试正在重跑（第一次每档用了同一个随机种子，后面的档命中前缀缓存，数据作废），完成后本页在同一地址更新。在此之前请以并发扫描的 <b>TTFT 中位数</b>为参考：16–128 并发时 2P2D 为 1.4–1.7 s，不分离 4×TP4 为 2.4–2.6 s（第六节表格）。</div>'),
         "%%GSM_TABLE%%": table(["指标", "FP8", "NVFP4", "差值"], gsm_rows),
         "%%PAIRED%%": table(["", "题数"], [["两边都对", pm.group(1)], ["只有 FP8 对", pm.group(2)], ["只有 NVFP4 对", pm.group(3)], ["两边都错", pm.group(4)], ["抽取出的答案完全相同", f"{pm.group(5)} / {pm.group(6)}"]]) if pm else "",
         "%%PVAL%%": pm.group(7) if pm else "—",
