@@ -61,6 +61,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <a href="#summary">结论</a>
 <a href="#configs">推荐配置</a>
 <a href="#goodput">每张卡能出多少 token</a>
+<a href="#throughput">整体吞吐</a>
 <a href="#quality">NVFP4 会不会掉能力</a>
 <a href="#pd">要不要 PD 分离</a>
 <a href="#why">为什么是这样</a>
@@ -74,6 +75,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <div class="kpis">
 <div class="kpi"><div class="v">约 100 tok/s</div><div class="l">单个用户的生成速度</div></div>
 <div class="kpi"><div class="v">%%KPI_S2%% tok/s/卡</div><div class="l">标准对话体验下每卡输出（推荐配置）</div></div>
+<div class="kpi"><div class="v">约 8,100 tok/s</div><div class="l">一台 8 卡机器的总吞吐（标准对话体验，NVFP4）</div></div>
 <div class="kpi"><div class="v">2.5 倍</div><div class="l">NVFP4 + TP4 相对 FP8 TP8 的每卡吞吐</div></div>
 <div class="kpi"><div class="v">无差别</div><div class="l">NVFP4 与 FP8 的 GSM8K 准确率</div></div>
 </div>
@@ -111,9 +113,29 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <tr><td>S3 宽松</td><td>≤ 5 秒</td><td>≥ 17 tok/s</td><td>不限</td></tr>
 </table>
 <div class="fig">%%GPBARS%%<div class="cap">每卡每秒输出 token 数（越高越省钱）</div></div>
+<h3>每卡吞吐（所有部署）</h3>
+%%GOODPUT%%
+<p class="note">「输出」只算生成的 token；「总」= 输入 + 输出（8K 输入时输入占约 89%）。带 * 表示压到的最高负载仍满足要求，真实上限更高。</p>
+<h3>折算成一台 8 卡机器</h3>
+%%GP_MACHINE%%
+<p class="note">单位 tok/s，「输出 / 总」。</p>
 <ul>
-<li><b>NVFP4 + 4 卡实例是最大的杠杆</b>：S2 档下每卡从 FP8 的约 45 提到约 112–116 tok/s。</li>
+<li><b>NVFP4 + 4 卡实例是最大的杠杆</b>：S2 档下每卡从 FP8 的约 45 提到约 112–116 tok/s；一台 8 卡机器从约 360 提到约 900 输出 tok/s（总吞吐约 3,300 → 8,100 tok/s）。</li>
 <li><b>要求越严，PD 分离越划算</b>：S1 档 PD 分离最高；S3 档不分离最高。</li>
+</ul>
+</section>
+
+<section id="throughput">
+<h2>整体吞吐</h2>
+<p>不设延迟要求、只看能压到多少（并发扫描，8K 输入 / 1K 输出）。</p>
+<h3>压满时</h3>
+%%PEAK%%
+<h3>吞吐随并发的变化</h3>
+%%SCAN%%
+<div class="fig">%%FRONTIER%%<div class="cap">吞吐–延迟曲线：每卡输出吞吐对每个用户的生成间隔（TPOT）。越往左上越好，同一条线上是不同并发</div></div>
+<ul>
+<li><b>16 张卡压满可到约 2.9K 输出 tok/s、26K 总 tok/s</b>（NVFP4 不分离，256 并发），这时每个用户约 13 tok/s。</li>
+<li>实际部署建议停在吞吐曲线开始变平之前：不分离约每实例 32–64 并发，PD 分离约总并发 64–128。</li>
 </ul>
 </section>
 

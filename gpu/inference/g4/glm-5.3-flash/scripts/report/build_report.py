@@ -380,7 +380,29 @@ def main():
         [[c, " / ".join(f"{r[c]['out']/g:.0f}" for r, g in D3), " / ".join(f"{r[c]['tpot']:.0f}" for r, g in D3),
           " / ".join(f"{r[c]['itl_p99']:.0f}" for r, g in D3), " / ".join(f"{r[c]['ttft_med']/1000:.1f}" for r, g in D3)] for c in (16, 32, 64, 128, 256)])
 
+    # customer tables with absolute throughput
+    gpm_rows = []
+    for name, gpus, g in gp:
+        if not g:
+            continue
+        row = [name, gpus]
+        for s_ in goodput.SLAS:
+            x = g[s_["key"]]
+            row.append("不达标" if x is None else f"<b>{x[0]/gpus*8:,.0f}</b> / {x[1]/gpus*8:,.0f}" + ("*" if x[3].startswith("≥") else ""))
+        gpm_rows.append(row)
+    gp_machine = table(["部署", "卡数"] + [f"{s_['key']} {s_['name']}" for s_ in goodput.SLAS], gpm_rows)
+    scan_rows = []
+    for c in (16, 32, 64, 128, 256):
+        row = [c]
+        for rows, g in ((single, 8), (col4, 16), (p2, 16)):
+            r = rows.get(c)
+            row.append("—" if not r else f"<b>{r['out']:,.0f}</b> / {r['total']:,.0f}")
+        row += [f"{single[c]['tpot']:.0f} / {col4[c]['tpot']:.0f} / {p2[c]['tpot']:.0f}" if c in single else f"— / {col4[c]['tpot']:.0f} / {p2[c]['tpot']:.0f}"]
+        scan_rows.append(row)
+    scan = table(["总并发", "FP8 单机 TP8（8 卡）<br>输出 / 总 tok/s", "NVFP4 不分离（16 卡）<br>输出 / 总 tok/s", "NVFP4 2P2D（16 卡）<br>输出 / 总 tok/s", "平均 TPOT（ms）<br>FP8 / 不分离 / 2P2D"], scan_rows)
+
     rep = {
+        "%%GP_MACHINE%%": gp_machine, "%%SCAN%%": scan,
         "%%BASE_TABLE%%": table(["场景（输入 / 输出 / 并发）", "输出 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL"],
             [[k.replace("in", "").replace("-out", " / ").replace("-c", " / "), f1(v["out"]), s2(v["ttft_med"]), f"{v['tpot']:.2f} ms", f"{v['itl_p99']:.1f} ms"]
              for k, v in sorted(base.items(), key=lambda kv: [int(x) for x in re.findall(r"\d+", kv[0])])]),
