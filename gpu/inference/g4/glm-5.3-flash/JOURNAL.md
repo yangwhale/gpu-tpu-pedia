@@ -74,3 +74,6 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 同时两台机器从 HuggingFace 下完 NVFP4 权重（185 GiB），并上传一份到同区域桶。
 
 **04:44（12:44）NVFP4 1P1D 启动**，开始并发扫描。
+
+**04:44–05:09（12:44–13:09）NVFP4 1P1D 扫描完成**：8 档 0 失败，vLLM 自动选 `FLASHINFER_CUTLASS` NvFp4 MoE 后端，没有遇到社区报告的 autotune 卡死（已按模型卡加 `--no-enable-flashinfer-autotune`）。
+流水线随后误报 `NVFP4_FAILED`：判断语句经过 ssh 包装里的 `grep -v`，空输出时返回 1，把成功判成了失败，导致 NVFP4 GSM8K 被跳过。扫描数据本身完整。改为 FP8 GSM8K 跑完后再切回 NVFP4 补跑。

@@ -2,7 +2,7 @@
 
 **照着做一次跑通 → [RUNBOOK.md](RUNBOOK.md)**　｜　测试过程与决策记录 → [JOURNAL.md](JOURNAL.md)　｜　原始数据 → [results/](results/)
 
-> **状态（2026-11-03）：** FP8 单机（基础 7 场景 + 8K/1K 扫描）和 FP8 1P1D 已完成；NVFP4 1P1D 与 FP8/NVFP4 能力对比（GSM8K）进行中。
+> **状态（2026-11-03）：** FP8 单机、FP8 1P1D、NVFP4 1P1D 性能测试已完成；FP8 / NVFP4 能力对比（GSM8K）进行中。
 
 ## 结论先行
 
@@ -13,6 +13,7 @@
 | 吞吐 | 1K 输入 / 512 输出、64 并发：**992 输出 tok/s**，3,001 总 tok/s |
 | 8K 输入 / 1K 输出 | 单路 98.8 tok/s、TTFT 0.83 s；**并发 128 时输出 837 tok/s、总 7,541 tok/s**，每路约 7 tok/s（见 5.2） |
 | PD 分离 1P1D（16 卡） | 甜点约 64 并发：930 tok/s，P99 ITL 161 ms（单机同负载 650 ms+），TTFT 中位数 1.7 s；纯吞吐不如两台单机各跑各的，优势在延迟平稳（见 5.3） |
+| NVFP4（1P1D） | 8–64 并发吞吐比 FP8 高 23–30%、TPOT 低约 30%，KV 池翻倍；单路略慢 3%；甜点约 32 并发（见 5.4） |
 | 长输入 prefill | 32K 输入单路 TTFT 2.46 s（约 13K tok/s） |
 | KV 容量 | 4,441,368 token；128K 上下文可同时容纳约 34 个请求 |
 | 冷启动 | 权重加载 31 s，整个引擎初始化（含编译和 CUDA graph）318 s |
@@ -194,16 +195,48 @@ TP8 的 all-reduce 必然跨 NUMA，这是 G4 上做大 TP 的主要代价。
 - **甜点在 64 并发左右**：930 tok/s、每路 17 tok/s、TTFT 中位数 1.7 s、P99 ITL 161 ms。
   到 128 并发，TTFT 中位数从 1.7 s 跳到 31 s，**瓶颈换到了 P**：D 侧每秒完成约 1.17 条请求（1,197 ÷ 1,024），对应 8K 输入要约 9.6K tok/s 的 prefill，已接近单台 P 的能力（单机 32K 输入实测约 13K tok/s，推导值）。要把并发再往上推，应该加 P（2P1D），而不是加 D。
 
-### 5.4 NVFP4（计划中）
+### 5.4 NVFP4：1P1D 性能
 
-> 下一步：同样的 1P1D 部署、同样的压测，把权重换成 NVFP4，再用 GSM8K 对比 FP8 与 NVFP4 的模型能力。
+权重换成 `RedHatAI/GLM-5.3-Flash-NVFP4`，其余全部不变：同一个镜像 digest、同样的两台机器和 1P1D 部署、同样的压测。唯一多加的参数是 `--no-enable-flashinfer-autotune`。原始数据在 `results/pd-1p1d-nvfp4/`。全部 0 失败。
 
 | 项 | 选择 | 理由 |
 |---|---|---|
-| NVFP4 权重 | `RedHatAI/GLM-5.3-Flash-NVFP4`（184.3 GiB，compressed-tensors 格式） | 只量化 MoE 专家的权重和激活，其余层和 MTP 保持 FP8；模型卡标明面向 vLLM。备选：`nvidia/GLM-5.3-Flash-NVFP4`（ModelOpt 量化，190.4 GiB） |
-| 推理引擎 | vLLM，与 FP8 同一个镜像 digest | 引擎、PD 方式、压测参数都不变，**精度和性能的差别只来自权重**；SGLang 在 SM120 上目前只有社区构建 |
-| 额外参数 | `--no-enable-flashinfer-autotune` | RedHatAI 模型卡给的参数；社区报告不加时 FlashInfer autotune 可能卡死 |
-| 能力评测 | GSM8K 全量 1,319 题，5-shot，贪心解码，lm-evaluation-harness `0.4.13` | 两种精度用完全相同的设置，各自通过自己的 1P1D 部署评测 |
+| NVFP4 权重 | `RedHatAI/GLM-5.3-Flash-NVFP4`（184.3 GiB，compressed-tensors 格式） | 只量化 MoE 专家的权重和激活，其余层和 MTP 保持 FP8；模型卡标明面向 vLLM。备选：`nvidia/GLM-5.3-Flash-NVFP4`（ModelOpt 量化，190.4 GiB），本次未测 |
+| 推理引擎 | vLLM，与 FP8 同一个镜像 digest | 引擎、PD 方式、压测参数都不变，**性能和精度的差别只来自权重**；SGLang 在 SM120 上目前只有社区构建 |
+| MoE kernel | 日志显示自动选用 `FLASHINFER_CUTLASS` NvFp4 MoE 后端 | |
+
+显存与容量（每卡，日志原文）：
+
+| | FP8 | NVFP4 |
+|---|---|---|
+| 权重占用 | 39.38 GiB | **23.69 GiB** |
+| 可用 KV 显存 | 38.14 GiB | **54.51 GiB** |
+| KV 池（D 节点，整机） | 3,563,302 token | **7,126,605 token**（2 倍） |
+| 权重加载时间 | 31.5 s | 21.4 s |
+
+压测结果（8K 输入 / 1K 输出）：
+
+| 并发 | NVFP4 输出 tok/s | FP8 输出 tok/s | 提升 | NVFP4 TPOT | FP8 TPOT | NVFP4 TTFT 中位数 | FP8 TTFT 中位数 | NVFP4 P99 ITL |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 90.8 | 93.6 | −3% | 9.94 ms | 9.57 ms | 0.99 s | 1.04 s | 10.2 ms |
+| 2 | 164.1 | 164.4 | 0% | 10.89 ms | 10.82 ms | 1.16 s | 1.18 s | 21.6 ms |
+| 4 | 293.9 | 258.9 | +14% | 11.78 ms | 13.54 ms | 1.23 s | 1.27 s | 30.5 ms |
+| 8 | 472.4 | 382.9 | +23% | 14.54 ms | 18.52 ms | 1.29 s | 1.27 s | 40.5 ms |
+| 16 | 671.9 | 528.7 | +27% | 19.99 ms | 26.32 ms | 1.32 s | 1.38 s | 60.4 ms |
+| 32 | 896.0 | 691.0 | +30% | 29.38 ms | 39.77 ms | 1.41 s | 1.46 s | 103.7 ms |
+| 64 | 1,186.9 | 930.3 | +28% | 40.76 ms | 57.22 ms | 4.54 s | 1.68 s | 68.3 ms |
+| 128 | 1,274.1 | 1,196.8 | +6% | 42.84 ms | 63.80 ms | 50.3 s | 31.2 s | 68.7 ms |
+
+结论：
+
+- **中高并发吞吐高 23–30%，TPOT 低约 30%**（8–64 并发）。NVFP4 的 MoE 权重只有 FP8 的一半，decode 读权重更快，省下的显存又让 KV 池翻倍。
+- **单路不快反而略慢**（−3%）：1 并发时 TPOT 9.94 ms 对 9.57 ms。低并发场景没有收益，不要因为「4 bit 更小」就预期单路更快。
+- **P 成为瓶颈的点提前了**：D 变快以后，64 并发时 TTFT 中位数已经到 4.5 s（FP8 1P1D 是 1.7 s），128 并发时吞吐只比 64 并发多 7%。按 D 侧每秒完成约 1.16 条请求（1,187 ÷ 1,024）算，需要约 9.5K tok/s 的 prefill，已到单台 P 的上限（推导值）。
+- **NVFP4 1P1D 的甜点约在 32 并发**：896 tok/s、每路 34 tok/s、TTFT 中位数 1.4 s、P99 ITL 104 ms。想在 64 并发以上继续吃到 NVFP4 的吞吐，需要加 P（2P1D）。
+
+### 5.5 FP8 与 NVFP4 的模型能力对比（GSM8K）
+
+> 进行中。GSM8K 全量 1,319 题，5-shot，贪心解码（temperature=0），lm-evaluation-harness `0.4.13`；两种精度各自通过自己的 1P1D 部署评测，设置完全相同。脚本 [`scripts/eval/gsm8k.sh`](scripts/eval/gsm8k.sh)。
 
 ## 6. 已知限制与注意事项
 
