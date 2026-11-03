@@ -1,48 +1,114 @@
-# RUNBOOK — 在 G4 上跑 GLM-5.3-Flash（vLLM · FP8 · TP8）
+# RUNBOOK — 在 G4 上跑 GLM-5.3-Flash（vLLM · FP8 · TP8，以及 PD 分离 1P1D）
 
-从零开始，按顺序执行。每一步都写了「做完应该看到什么」。
-一键版：第 1 步建好机器后，把 [`scripts/run-all.sh`](scripts/run-all.sh) 拷上去用 `setsid nohup` 跑，它按顺序做完第 2–7 步。
-设了 `MODEL_URI=gs://...` 就从桶拷权重（4B），否则从 HuggingFace 下（4A）。
+从零开始，**按顺序一步不差地执行**就能复现本报告的全部数字。每一步都写了「做完应该看到什么」。
 
-总耗时参考：建机 1–2 分钟；装 Docker 约 1 分钟；下载 306 GiB 权重：HuggingFace 约 2.5 分钟，同区域 GCS 桶 49 秒；服务启动约 6.5 分钟（权重加载 31 s + 编译/预热/CUDA graph 共 318 s）；基础压测 7 个场景约 8 分钟。
+文中所有尖括号 `<...>` 都要换成你自己的值：
+
+| 占位符 | 含义 | 例子 |
+|---|---|---|
+| `<your-project>` | 你的 GCP 项目 ID | `my-gpu-project` |
+| `<your-bucket>` | 你自己的 GCS 桶（可选，用来缓存权重） | `my-models-uc1` |
+| `<P_IP>` / `<D_IP>` | PD 分离时两台机器的内网 IP | `10.0.0.2` |
+
+总耗时参考（本次实测）：
+
+| 步骤 | 耗时 |
+|---|---|
+| 建 Spot 机器 | 1–2 分钟 |
+| 装 Docker + 拉 vLLM 镜像（并行） | 约 1–2 分钟 |
+| 下载 306 GiB 权重 | HuggingFace 约 2.5 分钟；同区域 GCS 桶 49 秒 |
+| 服务启动 | 约 6.5 分钟（权重加载 31 s + 编译、预热、CUDA graph 共 318 s） |
+| 基础压测 7 个场景 | 约 8 分钟 |
+| 8K / 1K 并发扫描 8 档 | 约 30 分钟 |
+
+**省事的一键版**：做完第 1 步后，把 [`scripts/run-all.sh`](scripts/run-all.sh) 拷到机器上跑，它会自动做完第 2–7 步（见第 1.3 节）。
 
 ---
 
-## 0. 前提
+## 0. 准备（在你自己的电脑上）
 
-- 一个有 G4 配额的 GCP 项目（`g4-standard-384` 需要 8 张 `nvidia-rtx-pro-6000` 配额；Spot 用 Spot 配额）。
-- 本地装好 `gcloud` 并已登录。
-- 能访问 HuggingFace 和 Docker Hub（模型公开，不需要 HF token）。
+1. 一个有 G4 配额的 GCP 项目。`g4-standard-384` 一台需要 **8 张 `nvidia-rtx-pro-6000`** 的配额；用 Spot 时要的是 Spot（preemptible）配额。可在控制台「IAM 与管理 → 配额」里搜 `RTX PRO 6000` 查看。
+2. 装好 Google Cloud CLI 并登录：
+
+```bash
+gcloud auth login
+gcloud config set project <your-project>
+gcloud services enable compute.googleapis.com
+```
+
+3. 把本仓库拉下来，进入本目录：
+
+```bash
+git clone https://github.com/yangwhale/gpu-tpu-pedia.git
+cd gpu-tpu-pedia/gpu/inference/g4/glm-5.3-flash
+```
+
+4. 设几个后面反复用到的变量：
 
 ```bash
 export PROJECT=<your-project>
-export ZONE=us-central1-b      # G4 可用区：us-central1-b/c/f、us-west1-a/b/c、europe-west4-b 等，以控制台为准
+export ZONE=us-central1-b      # 需是有 G4 的 zone，以控制台「可用区」列表为准
 export NAME=g4-glm53
 ```
 
-## 1. 建机器
+不需要 HuggingFace token：`zai-org/GLM-5.3-Flash` 是公开模型。
+
+## 1. 建 Spot 机器
+
+### 1.1 创建命令
+
+下面这条和 [`scripts/create-vm.sh`](scripts/create-vm.sh) 完全一样，直接复制执行：
 
 ```bash
-PROJECT=$PROJECT ZONE=$ZONE NAME=$NAME ./scripts/create-vm.sh
+gcloud compute instances create $NAME \
+  --project $PROJECT --zone $ZONE \
+  --machine-type g4-standard-384 \
+  --provisioning-model SPOT --instance-termination-action STOP \
+  --maintenance-policy TERMINATE \
+  --image-family common-cu129-ubuntu-2404-nvidia-580 \
+  --image-project deeplearning-platform-release \
+  --boot-disk-size 2000GB --boot-disk-type hyperdisk-balanced \
+  --scopes cloud-platform \
+  --metadata install-nvidia-driver=True
 ```
-
-关键参数：
 
 | 参数 | 值 | 为什么 |
 |---|---|---|
-| `--machine-type` | `g4-standard-384` | 8 卡；模型 FP8 权重 306 GiB，至少要 4 张 96 GB 卡，TP8 才有足够 KV 空间 |
-| `--image-family` | `common-cu129-ubuntu-2404-nvidia-580` | 自带 NVIDIA 580 驱动，SM120 需要 570 以上 |
-| `--boot-disk-size` | `2000GB` | 权重 306 GiB + Docker 镜像约 30 GB，留余量 |
-| `--boot-disk-type` | `hyperdisk-balanced` | G4 只支持 Hyperdisk |
-| `--provisioning-model` | `SPOT` | 测试省钱；生产改按需 |
+| `--machine-type` | `g4-standard-384` | 8 卡 × 96 GB。FP8 权重 306 GiB，TP8 后每卡约 39 GiB，剩下的给 KV |
+| `--provisioning-model SPOT` + `--instance-termination-action STOP` | Spot，被抢占时**停机不删盘** | 测试省钱；被抢占后 `start` 回来，权重还在 |
+| `--image-family` | Deep Learning VM `common-cu129-ubuntu-2404-nvidia-580` | 预装 NVIDIA 驱动（本次实测 580.178.04）和 CUDA 12.9 |
+| `--boot-disk-size 2000GB` / `hyperdisk-balanced` | 2 TB 系统盘 | 权重 306 GiB + vLLM 镜像解压后 35.5 GB，留余量 |
+| `--scopes cloud-platform` | | 机器上能直接用 `gcloud storage` 读写你的桶 |
 
-**验证**：
+要按需（非 Spot）就去掉 `--provisioning-model` 和 `--instance-termination-action` 两个参数。
+报 `ZONE_RESOURCE_POOL_EXHAUSTED` 说明这个 zone 暂时没有 Spot 容量，换一个有 G4 的 zone 再试。
+
+### 1.2 验证
 
 ```bash
 gcloud compute ssh $NAME --zone $ZONE --project $PROJECT --command "nvidia-smi -L"
 ```
 
-应列出 8 行 `NVIDIA RTX PRO 6000 Blackwell Server Edition`。
+应列出 8 行 `NVIDIA RTX PRO 6000 Blackwell Server Edition`。第一次 ssh 会生成密钥，偶尔要等十几秒才生效，报 `Permission denied (publickey)` 就重试一次。
+
+### 1.3 把脚本拷上去（之后的步骤都在机器上执行）
+
+```bash
+gcloud compute scp --recurse scripts $NAME:~/ --zone $ZONE --project $PROJECT
+gcloud compute ssh $NAME --zone $ZONE --project $PROJECT
+# 现在已经在机器上了
+```
+
+一键版（自动做完第 2–7 步，日志在 `~/g4glm/run.log`，结果在 `~/g4glm/`）：
+
+```bash
+# 可选：权重已经放在你同区域的桶里，就设这一行，下载从 2.5 分钟变成 49 秒
+export MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash
+setsid nohup bash ~/scripts/run-all.sh > ~/g4glm-run.log 2>&1 < /dev/null &
+tail -f ~/g4glm-run.log          # 看到 "=== STEP ALL_DONE" 即全部完成
+```
+
+想一步步看清楚，就按下面第 2–7 步手动执行。
 
 ## 2. 装 Docker 和 NVIDIA Container Toolkit
 
@@ -69,14 +135,15 @@ sudo systemctl restart docker
 
 ## 3. 拉镜像（可与第 4 步并行）
 
+**固定用本次测试的镜像 digest**，不要用浮动的 `nightly` 标签（它每天都变，复现出来的数字会不一样）：
+
 ```bash
-sudo docker pull vllm/vllm-openai:nightly
-sudo docker run --rm --gpus all --entrypoint python3 vllm/vllm-openai:nightly \
-  -c "import vllm; print(vllm.__version__)"
+export IMAGE=vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57
+sudo docker pull $IMAGE
+sudo docker run --rm --gpus all --entrypoint python3 $IMAGE -c "import vllm; print(vllm.__version__)"
 ```
 
-> 生产环境请记下 `sudo docker inspect --format '{{index .RepoDigests 0}}' vllm/vllm-openai:nightly` 的 digest，
-> 之后用 `vllm/vllm-openai@sha256:...` 固定版本。本次测试用的 digest 见 [results/](results/)。
+应打印 `0.33.0rc1.dev484+g76c6f3f2a`。这个 digest 是 2026-11-03 拉取的 `vllm/vllm-openai:nightly`。
 
 ## 4. 下载模型
 
@@ -127,7 +194,7 @@ gcloud storage cp -r $MODEL_URI /data/
 ```bash
 sudo docker run -d --name glm --gpus all --shm-size=64g --ipc=host --network host \
   -v /data/GLM-5.3-Flash:/model \
-  vllm/vllm-openai:nightly \
+  $IMAGE \
   --model /model --served-model-name glm \
   --tensor-parallel-size 8 \
   --max-model-len 131072 --max-num-seqs 256 \
@@ -194,6 +261,25 @@ curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -
 
 ## 7. 压测
 
+### 压测工具：`vllm bench serve`
+
+**不用另外安装**：它就在 vLLM 镜像里，和服务端是同一个版本。上面第 5 步起的容器名叫 `glm`，直接 `docker exec` 进去调用即可。
+
+如果想在**另一台机器**上压测（比如模拟真实客户端），在那台机器上用同一个镜像跑即可（需要一份模型目录给 tokenizer 用）：
+
+```bash
+sudo docker run --rm --network host -v /data/GLM-5.3-Flash:/model:ro --entrypoint vllm \
+  vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57 \
+  bench serve --base-url http://<服务器IP>:8000 --model glm --tokenizer /model ...   # 其余参数同下
+```
+
+PD 分离的压测（第 9 节 `pd/bench.sh`）就是这么跑的。
+
+`--tokenizer` 要指向一份模型目录（只用其中的 tokenizer 文件），用来按 token 数精确生成随机输入。
+
+### 7.0 基础场景（7 个）
+
+
 ```bash
 for cfg in "1024 512 1" "1024 512 4" "1024 512 16" "1024 512 64" \
            "8192 512 1" "8192 512 16" "32768 256 1"; do
@@ -215,8 +301,8 @@ done
 
 ```bash
 # 服务起好后执行；结果写到 ~/g4glm/8k1k/，每档一个 .txt（摘要）和一个 .json（逐请求明细）
-bash scripts/bench-8k1k.sh
-# 只跑部分档位：CONCURRENCY="1 16 64" bash scripts/bench-8k1k.sh
+bash ~/scripts/bench-8k1k.sh
+# 只跑部分档位：CONCURRENCY="1 16 64" bash ~/scripts/bench-8k1k.sh
 ```
 
 | 参数 | 值 | 说明 |
@@ -255,11 +341,23 @@ G4 跨机没有 RDMA，NIXL 的 UCX 后端走 **TCP**。镜像里已带 NIXL 1.5
 
 ### 9.1 准备第二台机器
 
+前面那台（`$NAME`）当 P。在你自己的电脑上再建一台当 D，命令和第 1.1 节一样，只换名字：
+
 ```bash
-NAME=g4-glm53-d ./scripts/create-vm.sh
-# 在新机器上：
-MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash bash setup-node.sh
+export NAME_D=g4-glm53-d
+NAME=$NAME_D PROJECT=$PROJECT ZONE=$ZONE bash scripts/create-vm.sh
+gcloud compute scp --recurse scripts $NAME_D:~/ --zone $ZONE --project $PROJECT
+gcloud compute ssh $NAME_D --zone $ZONE --project $PROJECT
 ```
+
+在 D 上准备环境（装 Docker、拉同一个镜像、拷权重；不起服务）：
+
+```bash
+# 有桶就设 MODEL_URI，没有就先按第 4A 步从 HuggingFace 下到 /data/GLM-5.3-Flash
+MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash bash ~/scripts/setup-node.sh
+```
+
+P 上如果还开着第 5 步的单机服务，先停掉：`sudo docker rm -f glm`。两台机器各自的内网 IP 用 `hostname -I | awk '{print $1}'` 查，记作 `<P_IP>`、`<D_IP>`。
 
 两台机器要在**同一个 zone、同一个 VPC**，内网互通（默认 VPC 的 `default-allow-internal` 规则就够）。
 
@@ -275,9 +373,9 @@ iperf3 -c <D_IP> -P 1 -t 5       # 实测 49.7 Gbit/s（单条流）
 
 ```bash
 # P 机器
-ROLE=prefill bash pd/serve.sh
+ROLE=prefill bash ~/scripts/pd/serve.sh
 # D 机器
-ROLE=decode bash pd/serve.sh
+ROLE=decode bash ~/scripts/pd/serve.sh
 ```
 
 关键配置（`serve.sh` 里）：
@@ -296,19 +394,27 @@ ROLE=decode bash pd/serve.sh
 
 ```bash
 # P 机器
-P=<P_IP>:8100 D=<D_IP>:8200 bash pd/run-1p1d.sh
+P=<P_IP>:8100 D=<D_IP>:8200 bash ~/scripts/pd/run-1p1d.sh
+# 结果在 ~/g4glm/pd-1p1d/，每档一个 .txt 和 .json
 ```
 
 或分步：
 
 ```bash
-PREFILL="<P_IP>:8100" DECODE="<D_IP>:8200" bash pd/proxy.sh
+PREFILL="<P_IP>:8100" DECODE="<D_IP>:8200" bash ~/scripts/pd/proxy.sh
 curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
   -d '{"model":"glm","messages":[{"role":"user","content":"用一句话介绍香港。"}],"max_tokens":200,"chat_template_kwargs":{"enable_thinking":false}}'
-TAG=1p1d bash pd/bench.sh
+TAG=1p1d bash ~/scripts/pd/bench.sh
 ```
 
 客户端只认代理的 `:8000`，接口和单机完全一样。
+
+### 9.4 收尾
+
+```bash
+# 在你自己的电脑上
+gcloud compute instances delete $NAME $NAME_D --zone $ZONE --project $PROJECT
+```
 
 ## 排障
 

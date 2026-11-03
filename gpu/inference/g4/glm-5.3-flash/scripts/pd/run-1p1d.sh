@@ -1,6 +1,6 @@
 #!/bin/bash
 # Orchestrate 1P1D on the prefill node: wait for P and D, start proxy, smoke test, sweep.
-# Usage: P=10.128.0.73:8100 D=10.128.0.122:8200 bash run-1p1d.sh
+# Usage: P=<P_IP>:8100 D=<D_IP>:8200 bash run-1p1d.sh
 HERE=$(cd $(dirname $0) && pwd); W=$HOME/g4glm; mkdir -p $W
 step(){ echo "=== STEP $* $(date -u +%FT%TZ)"; }
 step wait-servers
