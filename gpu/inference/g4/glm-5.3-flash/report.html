@@ -90,7 +90,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <li><b>能跑，而且不用打补丁。</b> vLLM nightly（<code>0.33.0rc1.dev484</code>）原生支持 GLM-5.3-Flash 在 RTX PRO 6000（SM120）上运行，自动选用 SM120 的 sparse MLA 后端。单路生成约 100 tok/s，输入从 1K 到 32K 几乎不变。</li>
 <li><b>NVFP4 中高并发快 23–30%，模型能力看不出损失。</b> 同样的 1P1D 部署，8–64 并发时 NVFP4 吞吐比 FP8 高 23–30%、TPOT 低约 30%，KV 容量翻倍；GSM8K 全量 1,319 题差 0.38 个百分点，配对检验 p = 0.649，统计上无差别。单路没有收益（−3%）。</li>
 <li><b>PD 分离要配对比例，否则吃亏。</b> 1P1D 的 D 大部分时间在等 P：同样 16 张卡，NVFP4 1P1D 在 128 并发只有 1,274 tok/s。按实测容量把 P、D 配成 1:1 并都用 TP4（2P2D），吞吐提升到 2,107 tok/s（+65%）。<b>2P2D 没有多用一张卡</b>：还是同样两台机器、16 张卡，只是把每台机器切成两个 TP4。</li>
-<li><b>PD 分离换来的是「稳」，不是「多」。</b> 同样 16 张卡、128 并发，2P2D 吞吐比不分离的 4×TP4 低 -11%，但 P99 ITL 从 573 ms 降到 122 ms，TTFT 中位数从 2.44 s 降到 1.74 s。流式输出、语音、Agent 多轮这类对卡顿敏感的业务适合 PD；纯吞吐的离线批处理用不分离更划算。</li>
+<li><b>PD 分离在 G4 上换来的只有「不卡顿」。</b> 同样 16 张卡，2P2D 吞吐比不分离的 4×TP4 低 -11%；按真实的随机到达压测，<b>首字反而是不分离更快</b>（TTFT 中位数 0.8–1.1 s 对 1.2–1.7 s，PD 每个请求多一次代理转发和 KV 跨机传输）。2P2D 唯一的明确优势是生成平稳：P99 ITL 稳定在约 110 ms，不分离从每秒 1.5 个请求起就到 640 ms 以上。只有对生成卡顿敏感的业务（流式语音、数字人、实时字幕）值得上 PD。</li>
 <li><b>G4 上的两条硬约束：</b> 这个模型做 PD 时 P 和 D 必须用相同的 TP（KV 块大小随 TP 变化，不同则 NIXL 握手失败）；prefill 能力不随 TP 增长（TP4 与 TP8 都约 9K tok/s），所以 TP4 比 TP8 每卡效率高一倍。</li>
 </ul>
 </section>
@@ -279,6 +279,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <section id="2p2d">
 <h2>六、2P2D 与不分离对比（NVFP4，16 卡）</h2>
 <p>两种部署都是两台机器、16 张卡、4 个 TP4 实例。区别只在于：不分离时每个实例既做 prefill 又做 decode；2P2D 时 2 个只做 prefill、2 个只做 decode。</p>
+<p class="note">下表是并发扫描的结果，其中 TTFT 受「每档开头一次性涌入」影响，不分离一侧被放大，<b>首字延迟请以第七节的速率扫描为准</b>。</p>
 <div class="tw"><table class=""><thead><tr><th>总并发</th><th>1P1D 输出 tok/s</th><th>2P2D 输出 tok/s</th><th>不分离 4×TP4 输出 tok/s</th><th>2P2D TTFT 中位数</th><th>不分离 TTFT 中位数</th><th>2P2D P99 ITL</th><th>不分离 P99 ITL</th></tr></thead><tbody><tr><td>16</td><td>671.9</td><td>790.8</td><td>973.1</td><td>1.44 s</td><td>2.40 s</td><td>49 ms</td><td>14 ms</td></tr><tr><td>32</td><td>896.0</td><td>1,123.6</td><td>1,431.7</td><td>1.50 s</td><td>2.52 s</td><td>60 ms</td><td>31 ms</td></tr><tr><td>64</td><td>1,186.9</td><td>1,524.5</td><td>1,895.7</td><td>1.54 s</td><td>2.59 s</td><td>111 ms</td><td>558 ms</td></tr><tr><td>128</td><td>1,274.1</td><td>2,106.9</td><td>2,379.8</td><td>1.74 s</td><td>2.44 s</td><td>122 ms</td><td>573 ms</td></tr><tr><td>256</td><td>—</td><td>2,478.4</td><td>2,927.7</td><td>33.19 s</td><td>2.35 s</td><td>92 ms</td><td>659 ms</td></tr></tbody></table></div>
 <div class="fig"><div class="legend"><span><i style="background:#e87ba4"></i>FP8 单机 TP8（8 卡）</span><span><i style="background:#2a78d6"></i>FP8 1P1D（16 卡）</span><span><i style="background:#eb6834"></i>NVFP4 1P1D（16 卡）</span><span><i style="background:#1baf7a"></i>NVFP4 不分离 4×TP4（16 卡）</span><span><i style="background:#eda100"></i>NVFP4 2P2D 全 TP4（16 卡）</span></div><svg viewBox="0 0 760 380" class="chart" role="img">
 <line x1="64" x2="610" y1="332.0" y2="332.0" stroke="#e8eaed"/>
@@ -405,7 +406,43 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <section id="ttft">
 <h2>七、TTFT 到底多少</h2>
 <p>并发扫描里的 TTFT 会被「开头一波涌入」放大（第一批请求一起排队等 prefill），不能代表线上体验。下面用泊松到达的速率扫描重新测：</p>
-<div class="callout">按到达速率的 TTFT 测试正在重跑（第一次每档用了同一个随机种子，后面的档命中前缀缓存，数据作废），完成后本页在同一地址更新。在此之前请以并发扫描的 <b>TTFT 中位数</b>为参考：16–128 并发时 2P2D 为 1.4–1.7 s，不分离 4×TP4 为 2.4–2.6 s（第六节表格）。</div>
+<div class="fig"><div class="legend"><span><i style="background:#1baf7a"></i>NVFP4 不分离 4×TP4</span><span><i style="background:#eda100"></i>NVFP4 2P2D</span></div><svg viewBox="0 0 760 380" class="chart" role="img">
+<line x1="64" x2="610" y1="332.0" y2="332.0" stroke="#e8eaed"/>
+<text x="56" y="336.0" text-anchor="end" class="tick">0</text>
+<line x1="64" x2="610" y1="253.0" y2="253.0" stroke="#e8eaed"/>
+<text x="56" y="257.0" text-anchor="end" class="tick">1</text>
+<line x1="64" x2="610" y1="174.0" y2="174.0" stroke="#e8eaed"/>
+<text x="56" y="178.0" text-anchor="end" class="tick">2</text>
+<line x1="64" x2="610" y1="95.0" y2="95.0" stroke="#e8eaed"/>
+<text x="56" y="99.0" text-anchor="end" class="tick">3</text>
+<line x1="64" x2="610" y1="16.0" y2="16.0" stroke="#e8eaed"/>
+<text x="56" y="20.0" text-anchor="end" class="tick">4</text>
+<text x="64.0" y="350" text-anchor="middle" class="tick">0.5</text>
+<text x="200.5" y="350" text-anchor="middle" class="tick">1</text>
+<text x="337.0" y="350" text-anchor="middle" class="tick">1.5</text>
+<text x="473.5" y="350" text-anchor="middle" class="tick">2</text>
+<text x="610.0" y="350" text-anchor="middle" class="tick">2.5</text>
+<line x1="64" x2="610" y1="332" y2="332" stroke="#9aa0a6"/>
+<text x="337.0" y="372" text-anchor="middle" class="axis">到达速率（请求/秒，泊松分布）</text>
+<text x="14" y="174.0" text-anchor="middle" class="axis" transform="rotate(-90 14 174.0)">TTFT 中位数（s）</text>
+<path d="M64.0,267.3 L200.5,266.0 L337.0,264.3 L473.5,260.1 L610.0,243.0" fill="none" stroke="#1baf7a" stroke-width="2"/>
+<circle cx="64.0" cy="267.3" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 0.5 req/s：TTFT 中位数 0.82 s</title></circle>
+<circle cx="200.5" cy="266.0" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 1.0 req/s：TTFT 中位数 0.84 s</title></circle>
+<circle cx="337.0" cy="264.3" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 1.5 req/s：TTFT 中位数 0.86 s</title></circle>
+<circle cx="473.5" cy="260.1" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 2.0 req/s：TTFT 中位数 0.91 s</title></circle>
+<circle cx="610.0" cy="243.0" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 2.5 req/s：TTFT 中位数 1.13 s</title></circle>
+<path d="M64.0,235.6 L200.5,232.9 L337.0,226.2 L473.5,196.0 L610.0,94.2" fill="none" stroke="#eda100" stroke-width="2"/>
+<circle cx="64.0" cy="235.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 0.5 req/s：TTFT 中位数 1.22 s</title></circle>
+<circle cx="200.5" cy="232.9" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 1.0 req/s：TTFT 中位数 1.25 s</title></circle>
+<circle cx="337.0" cy="226.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 1.5 req/s：TTFT 中位数 1.34 s</title></circle>
+<circle cx="473.5" cy="196.0" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 2.0 req/s：TTFT 中位数 1.72 s</title></circle>
+<circle cx="610.0" cy="94.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 2.5 req/s：TTFT 中位数 3.01 s</title></circle>
+<text x="618.0" y="98.2" class="dlabel">NVFP4 2P2D</text>
+<text x="618.0" y="247.0" class="dlabel">NVFP4 不分离 4×TP4</text>
+</svg><div class="cap">图 5　TTFT 中位数对到达速率（8K 输入 / 1K 输出，16 卡）</div></div>
+<h3>2P2D</h3><div class="tw"><table class=""><thead><tr><th>到达速率</th><th>实际完成 req/s</th><th>输出 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>0.5 req/s</td><td>0.47</td><td>477</td><td>1.22 s</td><td>3.27 s</td><td>15.8 ms</td><td>42 ms</td><td>0</td></tr><tr><td>1.0 req/s</td><td>0.90</td><td>918</td><td>1.25 s</td><td>1.89 s</td><td>23.4 ms</td><td>78 ms</td><td>0</td></tr><tr><td>1.5 req/s</td><td>1.32</td><td>1,352</td><td>1.34 s</td><td>3.57 s</td><td>33.5 ms</td><td>105 ms</td><td>0</td></tr><tr><td>2.0 req/s</td><td>1.74</td><td>1,778</td><td>1.72 s</td><td>3.84 s</td><td>41.9 ms</td><td>108 ms</td><td>0</td></tr><tr><td>2.5 req/s</td><td>2.04</td><td>2,094</td><td>3.01 s</td><td>6.60 s</td><td>47.2 ms</td><td>83 ms</td><td>0</td></tr></tbody></table></div><h3>不分离 4×TP4</h3><div class="tw"><table class=""><thead><tr><th>到达速率</th><th>实际完成 req/s</th><th>输出 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>0.5 req/s</td><td>0.48</td><td>499</td><td>819 ms</td><td>1.52 s</td><td>14.2 ms</td><td>17 ms</td><td>0</td></tr><tr><td>1.0 req/s</td><td>0.94</td><td>963</td><td>835 ms</td><td>4.07 s</td><td>20.8 ms</td><td>146 ms</td><td>0</td></tr><tr><td>1.5 req/s</td><td>1.36</td><td>1,390</td><td>857 ms</td><td>3.27 s</td><td>29.3 ms</td><td>639 ms</td><td>0</td></tr><tr><td>2.0 req/s</td><td>1.76</td><td>1,806</td><td>910 ms</td><td>2.86 s</td><td>40.5 ms</td><td>654 ms</td><td>0</td></tr><tr><td>2.5 req/s</td><td>2.14</td><td>2,197</td><td>1.13 s</td><td>3.89 s</td><td>53.2 ms</td><td>659 ms</td><td>0</td></tr></tbody></table></div>
+<p class="note">不分离的速率测试由 4 个客户端各按总速率的四分之一独立发送；每个速率档使用不同的随机种子，避免重复 prompt 命中前缀缓存。</p>
+<div class="callout warn"><b>这一节修正了并发扫描给出的印象。</b> 并发扫描里 2P2D 的 TTFT 中位数更低（1.5–1.7 s 对 2.4–2.6 s），那是因为每档开头所有请求同时涌入，不分离的实例要先把这一大批 prefill 排完。真实流量陆续到达时，不分离的实例来一个请求就能用 chunked prefill 立即插进去，TTFT 中位数在 0.8–1.1 s；2P2D 每个请求多一次代理转发和 KV 跨机传输，为 1.2–1.7 s，到每秒 2.5 个请求时 P 接近饱和，升到 3.0 s。<br><b>不变的是生成平稳度</b>：从每秒 1.5 个请求起，不分离的 P99 ITL 在 640–660 ms，2P2D 在 83–108 ms。</div>
 </section>
 
 <section id="hw">
@@ -429,7 +466,8 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <table class="decision">
 <tr><th>业务目标</th><th>推荐</th><th>依据</th></tr>
 <tr><td>吞吐优先（离线批处理、对卡顿不敏感）</td><td>NVFP4，不分离，每台机器 2 × TP4</td><td>16 卡 128 并发 2,380 tok/s，四种部署里最高</td></tr>
-<tr><td>体验优先（流式对话、语音、Agent）</td><td>NVFP4，2P2D（全 TP4），P:D 按第五节方法配</td><td>吞吐只低 -11%，P99 ITL 122 ms 对 573 ms，TTFT 更低</td></tr>
+<tr><td>首字要快（对话、Agent 交互）</td><td>NVFP4，不分离，每台机器 2 × TP4</td><td>随机到达下 TTFT 中位数 0.8–1.1 s，比 2P2D 低 0.4–0.8 s</td></tr>
+<tr><td>生成不能卡（流式语音、数字人、实时字幕）</td><td>NVFP4，2P2D（全 TP4），P:D 按第五节方法配</td><td>P99 ITL 约 110 ms 对 640 ms+；代价是吞吐低 -11%、首字慢约 0.5 s</td></tr>
 <tr><td>单路速度优先（少量用户、要最快出字）</td><td>FP8 或 NVFP4，单机 TP8</td><td>单路约 100 tok/s；TP4 单路较慢</td></tr>
 <tr><td>超长上下文（≥ 256K）</td><td>NVFP4 优先</td><td>KV 池是 FP8 的两倍</td></tr>
 <tr><td>对精度极度敏感</td><td>先用 FP8 上线，同时用业务样本 A/B 验证 NVFP4</td><td>GSM8K 无差别，但长思考与业务场景尚未验证</td></tr>

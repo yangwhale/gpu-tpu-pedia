@@ -90,7 +90,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <li><b>能跑，而且不用打补丁。</b> vLLM nightly（<code>0.33.0rc1.dev484</code>）原生支持 GLM-5.3-Flash 在 RTX PRO 6000（SM120）上运行，自动选用 SM120 的 sparse MLA 后端。单路生成约 100 tok/s，输入从 1K 到 32K 几乎不变。</li>
 <li><b>NVFP4 中高并发快 23–30%，模型能力看不出损失。</b> 同样的 1P1D 部署，8–64 并发时 NVFP4 吞吐比 FP8 高 23–30%、TPOT 低约 30%，KV 容量翻倍；GSM8K 全量 1,319 题差 0.38 个百分点，配对检验 p = %%PVAL%%，统计上无差别。单路没有收益（−3%）。</li>
 <li><b>PD 分离要配对比例，否则吃亏。</b> 1P1D 的 D 大部分时间在等 P：同样 16 张卡，NVFP4 1P1D 在 128 并发只有 %%H1P1D_OUT%% tok/s。按实测容量把 P、D 配成 1:1 并都用 TP4（2P2D），吞吐提升到 %%H2P2D_OUT%% tok/s（%%IMP_2P2D%%）。<b>2P2D 没有多用一张卡</b>：还是同样两台机器、16 张卡，只是把每台机器切成两个 TP4。</li>
-<li><b>PD 分离换来的是「稳」，不是「多」。</b> 同样 16 张卡、128 并发，2P2D 吞吐比不分离的 4×TP4 低 %%GAP_DP4%%，但 P99 ITL 从 %%HDP4_ITL%% ms 降到 %%H2P2D_ITL%% ms，TTFT 中位数从 %%HDP4_TTFT%% 降到 %%H2P2D_TTFT%%。流式输出、语音、Agent 多轮这类对卡顿敏感的业务适合 PD；纯吞吐的离线批处理用不分离更划算。</li>
+<li><b>PD 分离在 G4 上换来的只有「不卡顿」。</b> 同样 16 张卡，2P2D 吞吐比不分离的 4×TP4 低 %%GAP_DP4%%；按真实的随机到达压测，<b>首字反而是不分离更快</b>（TTFT 中位数 0.8–1.1 s 对 1.2–1.7 s，PD 每个请求多一次代理转发和 KV 跨机传输）。2P2D 唯一的明确优势是生成平稳：P99 ITL 稳定在约 110 ms，不分离从每秒 1.5 个请求起就到 640 ms 以上。只有对生成卡顿敏感的业务（流式语音、数字人、实时字幕）值得上 PD。</li>
 <li><b>G4 上的两条硬约束：</b> 这个模型做 PD 时 P 和 D 必须用相同的 TP（KV 块大小随 TP 变化，不同则 NIXL 握手失败）；prefill 能力不随 TP 增长（TP4 与 TP8 都约 9K tok/s），所以 TP4 比 TP8 每卡效率高一倍。</li>
 </ul>
 </section>
@@ -208,6 +208,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <section id="2p2d">
 <h2>六、2P2D 与不分离对比（NVFP4，16 卡）</h2>
 <p>两种部署都是两台机器、16 张卡、4 个 TP4 实例。区别只在于：不分离时每个实例既做 prefill 又做 decode；2P2D 时 2 个只做 prefill、2 个只做 decode。</p>
+<p class="note">下表是并发扫描的结果，其中 TTFT 受「每档开头一次性涌入」影响，不分离一侧被放大，<b>首字延迟请以第七节的速率扫描为准</b>。</p>
 %%CMP_TABLE%%
 <div class="fig">%%FRONTIER%%<div class="cap">图 3　吞吐–延迟曲线：每卡输出吞吐对平均 TPOT。越往左上越好；同一条线上的点是不同并发</div></div>
 <div class="fig">%%ITL%%<div class="cap">图 4　P99 ITL：不分离从 64 并发起超过 550 ms，2P2D 始终在约 120 ms 以内</div></div>
@@ -223,6 +224,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <h2>七、TTFT 到底多少</h2>
 <p>并发扫描里的 TTFT 会被「开头一波涌入」放大（第一批请求一起排队等 prefill），不能代表线上体验。下面用泊松到达的速率扫描重新测：</p>
 %%TTFT_BLOCK%%
+<div class="callout warn"><b>这一节修正了并发扫描给出的印象。</b> 并发扫描里 2P2D 的 TTFT 中位数更低（1.5–1.7 s 对 2.4–2.6 s），那是因为每档开头所有请求同时涌入，不分离的实例要先把这一大批 prefill 排完。真实流量陆续到达时，不分离的实例来一个请求就能用 chunked prefill 立即插进去，TTFT 中位数在 0.8–1.1 s；2P2D 每个请求多一次代理转发和 KV 跨机传输，为 1.2–1.7 s，到每秒 2.5 个请求时 P 接近饱和，升到 3.0 s。<br><b>不变的是生成平稳度</b>：从每秒 1.5 个请求起，不分离的 P99 ITL 在 640–660 ms，2P2D 在 83–108 ms。</div>
 </section>
 
 <section id="hw">
@@ -246,7 +248,8 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <table class="decision">
 <tr><th>业务目标</th><th>推荐</th><th>依据</th></tr>
 <tr><td>吞吐优先（离线批处理、对卡顿不敏感）</td><td>NVFP4，不分离，每台机器 2 × TP4</td><td>16 卡 128 并发 %%HDP4_OUT%% tok/s，四种部署里最高</td></tr>
-<tr><td>体验优先（流式对话、语音、Agent）</td><td>NVFP4，2P2D（全 TP4），P:D 按第五节方法配</td><td>吞吐只低 %%GAP_DP4%%，P99 ITL %%H2P2D_ITL%% ms 对 %%HDP4_ITL%% ms，TTFT 更低</td></tr>
+<tr><td>首字要快（对话、Agent 交互）</td><td>NVFP4，不分离，每台机器 2 × TP4</td><td>随机到达下 TTFT 中位数 0.8–1.1 s，比 2P2D 低 0.4–0.8 s</td></tr>
+<tr><td>生成不能卡（流式语音、数字人、实时字幕）</td><td>NVFP4，2P2D（全 TP4），P:D 按第五节方法配</td><td>P99 ITL 约 110 ms 对 640 ms+；代价是吞吐低 %%GAP_DP4%%、首字慢约 0.5 s</td></tr>
 <tr><td>单路速度优先（少量用户、要最快出字）</td><td>FP8 或 NVFP4，单机 TP8</td><td>单路约 100 tok/s；TP4 单路较慢</td></tr>
 <tr><td>超长上下文（≥ 256K）</td><td>NVFP4 优先</td><td>KV 池是 FP8 的两倍</td></tr>
 <tr><td>对精度极度敏感</td><td>先用 FP8 上线，同时用业务样本 A/B 验证 NVFP4</td><td>GSM8K 无差别，但长思考与业务场景尚未验证</td></tr>

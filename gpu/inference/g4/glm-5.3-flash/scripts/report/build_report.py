@@ -73,9 +73,10 @@ def rate_rows(dirpath):
 
 def dp4_rate():
     rows = {}
-    for d in glob.glob(os.path.join(RES, "rate-dp4-nvfp4", "total-*")):
-        r = float(os.path.basename(d)[6:])
-        bs = [bench(f) for f in glob.glob(os.path.join(d, "inst-*", "rate-*.txt"))]
+    totals = sorted({os.path.basename(d) for d in glob.glob(os.path.join(RES, "rate-dp4-nvfp4", "*", "total-*"))})
+    for t in totals:
+        r = float(t[6:])
+        bs = [bench(f) for f in glob.glob(os.path.join(RES, "rate-dp4-nvfp4", "*", t, "inst-*", "rate-*.txt"))]
         if not bs:
             continue
         rows[r] = {
