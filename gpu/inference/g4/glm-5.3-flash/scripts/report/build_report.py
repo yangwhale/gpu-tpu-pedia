@@ -401,7 +401,18 @@ def main():
         scan_rows.append(row)
     scan = table(["总并发", "FP8 单机 TP8（8 卡）<br>输出 / 总 tok/s", "NVFP4 不分离（16 卡）<br>输出 / 总 tok/s", "NVFP4 2P2D（16 卡）<br>输出 / 总 tok/s", "平均 TPOT（ms）<br>FP8 / 不分离 / 2P2D"], scan_rows)
 
+    # cost per million tokens at G4 Spot price (us-central1, read from the Spot pricing page on 2026-11-04)
+    G4_SPOT_PER_GPU = 13.4464 / 8
+    cost_rows = []
+    for name, gpus, g in gp:
+        if not g or not g["S2"]:
+            continue
+        out_g, tot_g = g["S2"][0] / gpus, g["S2"][1] / gpus
+        cost_rows.append([name, f"{out_g*8:,.0f} / {tot_g*8:,.0f}", f"${G4_SPOT_PER_GPU*1e6/(out_g*3600):.2f}", f"${G4_SPOT_PER_GPU*1e6/(tot_g*3600):.3f}"])
+    cost = table(["部署（S2 标准对话档）", "每台 8 卡机器 tok/s<br>输出 / 总", "每百万输出 token", "每百万 token（输入 + 输出）"], cost_rows)
+
     rep = {
+        "%%COST%%": cost,
         "%%GP_MACHINE%%": gp_machine, "%%SCAN%%": scan,
         "%%BASE_TABLE%%": table(["场景（输入 / 输出 / 并发）", "输出 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL"],
             [[k.replace("in", "").replace("-out", " / ").replace("-c", " / "), f1(v["out"]), s2(v["ttft_med"]), f"{v['tpot']:.2f} ms", f"{v['itl_p99']:.1f} ms"]
