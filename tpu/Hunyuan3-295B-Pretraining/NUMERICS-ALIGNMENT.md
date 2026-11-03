@@ -41,7 +41,7 @@
 |---|---|---|---|
 | 路由 | `moe_router_force_load_balancing=True`（强制均匀，benchmark 专用） | 正常路由 | 两边都正常路由 |
 | 数据 | mock 数据 + NullTokenizer | `dataset_type=synthetic` | 同一份真实数据、同一个 tokenizer |
-| Adam 一阶动量 | Megatron 默认 `exp_avg_dtype=fp32`（qwen3 骨架 recipe 是否改过未核） | `mu_dtype=bfloat16` | 都用 FP32。一阶动量用 BF16，小更新会被抹回原值 |
+| Adam 一阶动量 | Megatron 默认 `exp_avg_dtype=fp32`（qwen3 骨架 recipe 是否改过未核） | `mu_dtype=bfloat16` | 都用 FP32。一阶动量每步只加 0.1 倍梯度，存 BF16 会让动量本身不准；主权重 TPU 已是 FP32（`weight_dtype=float32`），不会出现「更新被整个抹回原值」——那是主权重为 BF16 时才有的问题 |
 | MTP | 对齐脚本 `--mtp-layers 0` | 模型配置 `mtp_num_layers: 1` | 先都关，主干对齐后再开 |
 | FP8 | 对齐脚本有 FP8 / BF16 两档 | 生产配置有 FP8 | 先全 BF16 |
 | 梯度通信精度 | `grad_reduce_in_fp32=False`（BF16） | `grad_dtype=bfloat16` | 一致，可保留 |
