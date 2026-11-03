@@ -383,6 +383,7 @@ ROLE=decode bash ~/scripts/pd/serve.sh
 | 项 | 值 | 说明 |
 |---|---|---|
 | `--kv-transfer-config` | `{"kv_connector":"NixlConnector","kv_role":"kv_producer"/"kv_consumer","kv_load_failure_policy":"fail"}` | P 是生产者、D 是消费者 |
+| `VLLM_SSM_CONV_STATE_LAYOUT` | `DS` | **必须设**。GLM-5.3-Flash 有 KDA 线性注意力层（vLLM 按 Mamba 类状态管理），NIXL 传这类状态要求 DS 布局；不设会在引擎初始化末尾报 `3-read Mamba conv transfer requires DS conv state layout` 退出 |
 | `VLLM_NIXL_SIDE_CHANNEL_HOST` | 本机内网 IP | NIXL 握手地址，**跨机必须设**，否则默认 localhost 对方连不上 |
 | `VLLM_NIXL_SIDE_CHANNEL_PORT` | 5600 | 握手端口 |
 | `UCX_TLS` / `UCX_NET_DEVICES` | `all` / `all` | 让 UCX 自己选；G4 上会落到 TCP + cuda_copy |
@@ -424,5 +425,7 @@ gcloud compute instances delete $NAME $NAME_D --zone $ZONE --project $PROJECT
 | 启动时后端选错、偶发崩溃 | 原作者在社区镜像上要设 `FLASHINFER_MLA_SPARSE_SM90=1`；nightly 上此变量已不生效，后端自动选择 |
 | 预热阶段 GPU 100% 卡住不动 | FlashInfer autotune 卡死，加 `--no-enable-flashinfer-autotune`（社区 TP2 报告） |
 | `--max-num-seqs 1024` 时 OOM | KDA 状态池（Mamba cache）随并发线性涨，降到 512 以下 |
+| PD 启动约 6 分钟后退出，报 `3-read Mamba conv transfer requires DS conv state layout. Set VLLM_SSM_CONV_STATE_LAYOUT=DS` | P、D 两边都加 `-e VLLM_SSM_CONV_STATE_LAYOUT=DS`（`pd/serve.sh` 已带） |
+| 启动日志里大量 `CUDACachingAllocator ... memory allocation failed with OOM` | 显存 profile 阶段的正常警告，健康启动也有，**不是**失败原因；看 `RuntimeError` / `AssertionError` 那行 |
 | `No module named pip` | DLVM Ubuntu 24.04 镜像没带 pip，按第 4 步用 uv |
 | Spot 机被抢占 | `gcloud compute instances start $NAME`；权重在系统盘上不丢 |

@@ -3,6 +3,8 @@
 # Usage: ROLE=prefill|decode bash serve.sh
 #   prefill -> container glm-p, port 8100, kv_producer
 #   decode  -> container glm-d, port 8200, kv_consumer
+# VLLM_SSM_CONV_STATE_LAYOUT=DS is required: NIXL's hybrid (KDA/Mamba) state transfer refuses to start
+# with the default conv-state layout ("3-read Mamba conv transfer requires DS conv state layout").
 # G4 has no RDMA: NIXL's UCX backend moves KV over TCP (UCX picks tcp + cuda_copy).
 set -euo pipefail
 IMAGE=${IMAGE:-vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57}
@@ -16,6 +18,7 @@ sudo docker rm -f $NAME >/dev/null 2>&1 || true
 sudo docker run -d --name $NAME --gpus all --shm-size=64g --ipc=host --network host \
   -v /data/GLM-5.3-Flash:/model \
   -e VLLM_NIXL_SIDE_CHANNEL_HOST=$MY_IP -e VLLM_NIXL_SIDE_CHANNEL_PORT=5600 \
+  -e VLLM_SSM_CONV_STATE_LAYOUT=DS \
   -e UCX_NET_DEVICES=${UCX_NET_DEVICES:-all} -e UCX_TLS=${UCX_TLS:-all} \
   $IMAGE \
   --model /model --served-model-name glm --tensor-parallel-size 8 \

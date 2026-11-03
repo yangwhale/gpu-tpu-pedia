@@ -53,3 +53,7 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 **03:57（11:57）两机带宽**：iperf3 16 流 173 Gbit/s，单流 49.7 Gbit/s。
 
 **03:58（11:58）P、D 启动**，日志确认 `NIXL is available`。
+
+**04:03（12:03）1P1D 第一次失败**：P、D 都在引擎初始化末尾退出，根因 `AssertionError: 3-read Mamba conv transfer requires DS conv state layout. Set VLLM_SSM_CONV_STATE_LAYOUT=DS`。
+日志里同时有大量 `CUDACachingAllocator ... OOM` 警告，容易误判为显存不够（盯任务的探针就这么误判了），但单机健康启动的日志里也有同样的警告，是 profile 阶段的正常现象。
+修复：两边都加 `VLLM_SSM_CONV_STATE_LAYOUT=DS`，其余参数不变，重新启动。
