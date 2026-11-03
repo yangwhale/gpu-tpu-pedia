@@ -63,6 +63,10 @@ sudo systemctl restart docker
 
 **验证**：`sudo docker run --rm --gpus all ubuntu nvidia-smi -L` 能看到 8 张卡。
 
+> DLVM 镜像已经预装并 **hold** 住了 `nvidia-container-toolkit 1.19.1`。上面的 `apt-get install` 可能报
+> `Depends: nvidia-container-toolkit-base (= 1.20.1-1) but 1.19.1-1 is to be installed` / `held broken packages`，
+> **不影响使用**，只要 `nvidia-ctk runtime configure` 和上面的验证通过就行。另外别把其它包和它写在同一条 `apt-get install` 里，会被一起拖失败。
+
 ## 3. 拉镜像（可与第 4 步并行）
 
 ```bash
@@ -232,6 +236,79 @@ sudo docker rm -f glm
 # 不用了记得删机器，Spot 也按小时计费：
 gcloud compute instances delete $NAME --zone $ZONE --project $PROJECT
 ```
+
+## 9. PD 分离：1P1D（两台机器）
+
+一台机器跑 prefill（P），另一台跑 decode（D），各自 TP8。KV 由 vLLM 的 `NixlConnector` 从 P 传到 D；
+G4 跨机没有 RDMA，NIXL 的 UCX 后端走 **TCP**。镜像里已带 NIXL 1.5.2，并且已支持 KDA/Mamba 这类混合模型的状态传输，不用另装。
+
+脚本都在 [`scripts/pd/`](scripts/pd/)：
+
+| 脚本 | 在哪台跑 | 作用 |
+|---|---|---|
+| `setup-node.sh`（在 `scripts/`） | 每台 | 装 Docker、拉镜像、从桶拷权重，不起服务 |
+| `pd/serve.sh` | P、D 各一次 | `ROLE=prefill` 起 `glm-p`（:8100，kv_producer）；`ROLE=decode` 起 `glm-d`（:8200，kv_consumer） |
+| `pd/proxy.sh` | P | 起代理 `glm-proxy`（:8000）。代理先把请求发给 P 只算 prefill（`max_tokens=1`），拿到 KV 位置后转给 D 生成 |
+| `pd/toy_proxy_server.py` | — | vLLM 官方 NIXL 示例代理（`tests/v1/kv_connector/nixl_integration`，commit `76c6f3f2a`），原样拷贝 |
+| `pd/bench.sh` | P | 通过代理跑 8K / 1K 并发扫描 |
+| `pd/run-1p1d.sh` | P | 一键：等 P/D 就绪 → 起代理 → 冒烟 → 扫描 |
+
+### 9.1 准备第二台机器
+
+```bash
+NAME=g4-glm53-d ./scripts/create-vm.sh
+# 在新机器上：
+MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash bash setup-node.sh
+```
+
+两台机器要在**同一个 zone、同一个 VPC**，内网互通（默认 VPC 的 `default-allow-internal` 规则就够）。
+
+测一下两台之间的带宽（本次实测）：
+
+```bash
+# D 上：iperf3 -s -D      P 上：
+iperf3 -c <D_IP> -P 16 -t 10     # 实测 173 Gbit/s（16 条流）
+iperf3 -c <D_IP> -P 1 -t 5       # 实测 49.7 Gbit/s（单条流）
+```
+
+### 9.2 起服务
+
+```bash
+# P 机器
+ROLE=prefill bash pd/serve.sh
+# D 机器
+ROLE=decode bash pd/serve.sh
+```
+
+关键配置（`serve.sh` 里）：
+
+| 项 | 值 | 说明 |
+|---|---|---|
+| `--kv-transfer-config` | `{"kv_connector":"NixlConnector","kv_role":"kv_producer"/"kv_consumer","kv_load_failure_policy":"fail"}` | P 是生产者、D 是消费者 |
+| `VLLM_NIXL_SIDE_CHANNEL_HOST` | 本机内网 IP | NIXL 握手地址，**跨机必须设**，否则默认 localhost 对方连不上 |
+| `VLLM_NIXL_SIDE_CHANNEL_PORT` | 5600 | 握手端口 |
+| `UCX_TLS` / `UCX_NET_DEVICES` | `all` / `all` | 让 UCX 自己选；G4 上会落到 TCP + cuda_copy |
+| 其余参数 | 与单机 TP8 完全相同 | 方便和单机结果对比 |
+
+日志里出现 `NIXL is available` 说明连接器加载成功。
+
+### 9.3 代理、冒烟、压测
+
+```bash
+# P 机器
+P=<P_IP>:8100 D=<D_IP>:8200 bash pd/run-1p1d.sh
+```
+
+或分步：
+
+```bash
+PREFILL="<P_IP>:8100" DECODE="<D_IP>:8200" bash pd/proxy.sh
+curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"model":"glm","messages":[{"role":"user","content":"用一句话介绍香港。"}],"max_tokens":200,"chat_template_kwargs":{"enable_thinking":false}}'
+TAG=1p1d bash pd/bench.sh
+```
+
+客户端只认代理的 `:8000`，接口和单机完全一样。
 
 ## 排障
 

@@ -154,6 +154,11 @@ TP8 的 all-reduce 必然跨 NUMA，这是 G4 上做大 TP 的主要代价。
 - **从 16 并发起 P99 ITL 跳到 650 ms 以上**，原因同 5.1：新请求的 prefill 插进正在生成的批里。对流式平滑度敏感的场景可调小 `--max-num-batched-tokens`，或把 prefill 和 decode 拆到不同副本。
 - 单路 TPOT 9.3 ms 与 5.1 中 1K、32K 输入时一致，再次说明 decode 速度基本不随上下文长度变化。
 
+### 5.3 PD 分离：1P1D
+
+> 进行中。两台 `g4-standard-384`：P（prefill，TP8）+ D（decode，TP8），vLLM `NixlConnector`，KV 走 TCP。
+> 两机间实测带宽 173 Gbit/s（16 流）/ 49.7 Gbit/s（单流）。步骤见 RUNBOOK 第 9 节。
+
 ## 6. 已知限制与注意事项
 
 - **社区阶段**：SM120 支持还在 vLLM nightly 里，没进正式版。上生产前要锁定镜像 digest，不要用浮动的 `nightly` 标签。

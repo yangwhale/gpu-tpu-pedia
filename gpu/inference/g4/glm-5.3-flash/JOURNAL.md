@@ -44,3 +44,12 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 
 **03:10–03:40（11:10–11:40）8K / 1K 并发扫描完成**：8 档全部成功，0 失败。吞吐 128 并发时 837 输出 tok/s，仍未饱和。高并发下 TTFT P99 很大（c128 时 97 s），中位数稳定在约 2.7 s，判断为每档开头一次性涌入请求造成的 prefill 排队（按 13K tok/s prefill 估算约 80 s，量级吻合）。
 插曲：盯扫描的 watch 探针把 UTC 日志时间戳和 HKT 当前时间直接相减，误报「已跑约 3 小时」，实际 16 分钟。之后给探针写明时间戳为 UTC。
+
+**03:50（11:50）开始 PD 分离（1P1D）**：新开第二台 `g4-standard-384`（同 zone）做 D，原机器做 P，各 TP8。镜像固定到前面测过的 digest。
+确认镜像内 NIXL 1.5.2 已支持 hybrid（Mamba/KDA）模型的状态传输（`nixl/base_scheduler.py` 里有 `MambaSpec` 处理），不需要打补丁。代理用 vLLM 官方 NIXL 示例 `toy_proxy_server.py`（与镜像同 commit）。
+
+**03:54（11:54）第二台机器准备**：从桶拷权重约 80 秒。`apt-get install nvidia-container-toolkit` 报版本不匹配（DLVM 预装并 hold 了 1.19.1），不影响 GPU 容器；但同一条命令里的 `iperf3` 被一起拖失败，已拆开。
+
+**03:57（11:57）两机带宽**：iperf3 16 流 173 Gbit/s，单流 49.7 Gbit/s。
+
+**03:58（11:58）P、D 启动**，日志确认 `NIXL is available`。
