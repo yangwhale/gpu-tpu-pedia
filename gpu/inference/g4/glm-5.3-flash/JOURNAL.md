@@ -32,3 +32,12 @@
 **02:57（10:57）放进同区域 GCS 桶**：从 VM 上 `gcloud storage rsync` 到 us-central1 的桶，77 秒传完（328,366,173,639 字节，与 HuggingFace 上合计 305.8 GiB 一致）。
 随后实测从桶拷回 VM：**49 秒，平均 6.3 GiB/s**，比 HuggingFace 快约 3 倍。RUNBOOK 第 4 步加了 4B，`run-all.sh` 支持 `MODEL_URI`。
 这期间服务已在加载：权重加载后每卡占用约 42.9 GB，正在做 JIT kernel 预热。
+
+**03:02（11:02）服务就绪**：从 `docker run` 到可用约 6.5 分钟。日志确认自动选用 `FLASHINFER_MLA_SPARSE_SM120` + `fp8_ds_mla` KV，每卡权重 39.38 GiB、KV 38.14 GiB，KV 池共 4,441,368 token。预热时多次出现 shared memory broadcast 60 秒超时提示，没有影响。
+vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` 新，**不需要任何补丁或环境变量**。
+
+**03:02（11:02）冒烟**：思考模式下 200 token 全用在 reasoning，`content` 为空；加 `chat_template_kwargs.enable_thinking=false` 后直接返回正确中文答案。写进 RUNBOOK 第 6 步，避免客户误判为服务故障。
+
+**03:02–03:10（11:02–11:10）基础压测完成**：7 个场景全部 100% 成功。单路 decode 约 100 tok/s，与原作者在自建机器上的 ~100 tok/s 一致；1K/512 c64 输出 992 tok/s。
+
+**03:10（11:10）8K / 1K 并发扫描开始**，并发 1–128，脚本 `scripts/bench-8k1k.sh`。

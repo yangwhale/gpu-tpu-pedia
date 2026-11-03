@@ -4,7 +4,7 @@
 一键版：第 1 步建好机器后，把 [`scripts/run-all.sh`](scripts/run-all.sh) 拷上去用 `setsid nohup` 跑，它按顺序做完第 2–7 步。
 设了 `MODEL_URI=gs://...` 就从桶拷权重（4B），否则从 HuggingFace 下（4A）。
 
-总耗时参考：建机 1–2 分钟；装 Docker 约 1 分钟；下载 306 GiB 权重：HuggingFace 约 2.5 分钟，同区域 GCS 桶 49 秒；服务启动（待实测）；压测（待实测）。
+总耗时参考：建机 1–2 分钟；装 Docker 约 1 分钟；下载 306 GiB 权重：HuggingFace 约 2.5 分钟，同区域 GCS 桶 49 秒；服务启动约 6.5 分钟（权重加载 31 s + 编译/预热/CUDA graph 共 318 s）；基础压测 7 个场景约 8 分钟。
 
 ---
 
@@ -145,7 +145,18 @@ sudo docker logs -f glm      # 看加载进度
 | `--tool-call-parser glm47` / `--reasoning-parser glm45` | 官方 recipe 给的 GLM 系解析器 |
 | 不加 `--speculative-config` | **MTP 先别开**，nightly 原生 SM120 后端上接受率为 0% |
 
-**验证**：日志出现 `Using FLASHINFER_MLA_SPARSE_SM120 attention backend`，最后出现 `Application startup complete`。
+**验证**：日志里依次出现这几行（括号里是本次实测值）：
+
+```
+Using FLASHINFER_MLA_SPARSE_SM120 attention backend
+Using fp8_ds_mla KV cache format for FLASHINFER_MLA_SPARSE_SM120 backend.
+Model loading took 39.38 GiB memory and 31.5 seconds        （每卡）
+Available KV cache memory: 38.14 GiB                         （每卡）
+GPU KV cache size: 4,441,368 tokens, Maximum concurrency for 131,072 tokens per request: 33.88x
+init engine (profile, create kv cache, warmup model) took 318.07 s
+```
+
+预热期间会刷 `No available shared memory broadcast block found in 60 seconds`，是 JIT 编译慢导致的提示，**不是挂了**，等着就行。最后出现 `Application startup complete`。
 
 ```bash
 curl -s localhost:8000/v1/models
@@ -161,7 +172,21 @@ curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -
 }'
 ```
 
-应返回通顺的中文回答（`reasoning_content` 字段里是思考过程）。
+**注意**：GLM-5.3-Flash 默认先思考再回答。上面这条请求 200 个 token 全用在思考上（`completion_tokens_details.reasoning_tokens: 200`），`content` 为空，**这是正常的**，不是服务坏了。两种处理：
+
+- 调大 `max_tokens`（思考类请求建议 2,000 以上）；
+- 或者关掉思考，直接出答案：
+
+```bash
+curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "glm",
+  "messages": [{"role": "user", "content": "用一句话介绍香港。"}],
+  "max_tokens": 200,
+  "chat_template_kwargs": {"enable_thinking": false}
+}'
+```
+
+实测返回：「香港是一座融合东西方文化的国际大都市，以其繁华的金融中心地位、独特的摩天大楼天际线和"东方之珠"的魅力闻名于世。」
 
 ## 7. 压测
 
@@ -181,6 +206,24 @@ done
 ```
 
 看每个文件里的 `Output token throughput`、`Mean TTFT`、`Mean TPOT`。
+
+### 7.1 8K 输入 / 1K 输出并发扫描
+
+```bash
+# 服务起好后执行；结果写到 ~/g4glm/8k1k/，每档一个 .txt（摘要）和一个 .json（逐请求明细）
+bash scripts/bench-8k1k.sh
+# 只跑部分档位：CONCURRENCY="1 16 64" bash scripts/bench-8k1k.sh
+```
+
+| 参数 | 值 | 说明 |
+|---|---|---|
+| `--random-input-len` / `--random-output-len` | 8192 / 1024 | 随机 token，不命中前缀缓存 |
+| `--max-concurrency` | 1 2 4 8 16 32 64 128 | 同时在飞的请求数 |
+| `--num-prompts` | 并发 × 4，至少 8 | 每档跑 4 轮，摊掉首轮冷启动 |
+| `--ignore-eos` | 开 | 每条都生成满 1,024 个 token，数字可比 |
+| `--seed` | 等于并发数 | 每档数据固定，可复现 |
+
+整轮扫描约 30 分钟（实测见 README 第 5.2 节）。
 
 ## 8. 收尾
 
