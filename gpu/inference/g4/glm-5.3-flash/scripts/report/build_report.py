@@ -303,10 +303,9 @@ def main():
     def itl(rows):
         return [(c, r["itl_p99"], f"并发 {c}：P99 ITL {r['itl_p99']:.0f} ms") for c, r in rows.items() if c >= 4]
     itlc = line_chart([
-        ("NVFP4 不分离 4×TP4", C["aqua"], itl(col4), False),
-        ("NVFP4 2P2D", C["yellow"], itl(p2), False),
-        ("NVFP4 4P2D", C["orange"], itl(p4), False),
-    ], "总并发（对数刻度）", "P99 ITL（ms）", logx=True, xticks=[4, 8, 16, 32, 64, 128, 256])
+        ("不分离", C["aqua"], itl(col4), False),
+        ("PD 分离 2P2D", C["yellow"], itl(p2), False),
+    ], "总并发（对数刻度，16 卡）", "生成卡顿 P99 ITL（ms）", logx=True, xticks=[4, 8, 16, 32, 64, 128, 256])
     # chart: TTFT median vs load per 8 GPUs
     def norm(rows, machines):
         return [(r / machines, v["ttft_med"] / 1000, f"每台机器 {r/machines:.2f} req/s：TTFT 中位数 {v['ttft_med']/1000:.2f} s") for r, v in rows.items()]
@@ -365,9 +364,11 @@ def main():
         if g and g["S2"] and (not kbest or g["S2"][0] / gpus > kbest[0]):
             kbest = (g["S2"][0] / gpus, name)
     gp_html = table(["部署", "卡数"] + [f"{s['key']} {s['name']}<br><span class='note'>{s['desc']}</span>" for s in goodput.SLAS], gp_rows)
-    gpbars = bar_chart([s["key"] + " " + s["name"] for s in goodput.SLAS],
-        [(name, col, [(g[s["key"]][0] / gpus if g and g[s["key"]] else float("nan")) for s in goodput.SLAS])
-         for (name, gpus, g), col in zip(gp, [C["blue"], C["magenta"], C["aqua"], C["yellow"], C["orange"]])], "每卡输出 tok/s", h=320)
+    pick = {"FP8 单机 TP8（不分离）": ("FP8，8 卡实例，不分离", C["blue"]), "NVFP4 单机 2×TP4（不分离）": ("NVFP4，4 卡实例，不分离", C["aqua"]),
+            "NVFP4 2P2D（两机，全 TP4）": ("NVFP4，PD 分离 2P2D", C["yellow"])}
+    gpbars = bar_chart([s_["key"] + " " + s_["name"] for s_ in goodput.SLAS],
+        [(pick[name][0], pick[name][1], [(g[s_["key"]][0] / gpus if g and g[s_["key"]] else float("nan")) for s_ in goodput.SLAS])
+         for name, gpus, g in gp if name in pick], "每卡输出 tok/s", h=320)
     peak = []
     for lab, rows, gpus in (("FP8 单机 TP8", single, 8), ("NVFP4 不分离 4×TP4", col4, 16), ("NVFP4 2P2D", p2, 16), ("NVFP4 4P2D", p4, 24)):
         c, r = max(rows.items(), key=lambda kv: kv[1]["out"])
@@ -391,7 +392,7 @@ def main():
         "%%FRONTIER%%": frontier, "%%ITL%%": itlc, "%%TTFT%%": ttftc, "%%TPOTC%%": tpotc, "%%CAPBARS%%": capbars, "%%CAP_TABLE%%": cap_table,
         "%%CMP%%": cmp, "%%GSM_TABLE%%": table(["指标", "FP8", "NVFP4", "差值"], gsm_rows),
         "%%PAIRED%%": table(["", "题数"], [["两边都对", pm.group(1)], ["只有 FP8 对", pm.group(2)], ["只有 NVFP4 对", pm.group(3)], ["两边都错", pm.group(4)], ["抽取出的答案完全相同", f"{pm.group(5)} / {pm.group(6)}"]]),
-        "%%PVAL%%": pm.group(7), "%%NET_NIXL%%": table(["UCX 设置", "数据位置", "拆分 / 并发", "80 MB 一次耗时", "吞吐"], nrows), "%%NET_KV%%": kv_html,
+        "%%PVAL%%": f"{float(pm.group(7)):.2f}", "%%NET_NIXL%%": table(["UCX 设置", "数据位置", "拆分 / 并发", "80 MB 一次耗时", "吞吐"], nrows), "%%NET_KV%%": kv_html,
         "%%GOODPUT%%": gp_html, "%%GPBARS%%": gpbars, "%%PEAK%%": table(["部署", "卡数", "最高并发", "输出 tok/s", "每卡输出 tok/s", "每卡总 tok/s", "TPOT", "TTFT 中位数"], peak),
         "%%KPI_S2%%": f"{kbest[0]:.0f}", "%%KPI_S2_WHO%%": kbest[1],
         "%%PRE8%%": f0(pre8), "%%PRE4%%": f0(pre4), "%%PRE4X2%%": f0(pre4 + pre4b),

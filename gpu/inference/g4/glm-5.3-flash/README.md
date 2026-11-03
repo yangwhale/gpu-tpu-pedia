@@ -1,6 +1,6 @@
 # GLM-5.3-Flash on Google Cloud G4（8× RTX PRO 6000）— 推理测试报告
 
-**复现步骤 → [RUNBOOK.md](RUNBOOK.md)**　｜　给客户讲的 HTML 报告 → [report.html](report.html)　｜　原始数据 → [results/](results/)　｜　测试过程记录 → [JOURNAL.md](JOURNAL.md)
+**复现步骤 → [RUNBOOK.md](RUNBOOK.md)**　｜　给客户讲的一页式报告 → [report.html](report.html)（细节以本文和 results/ 为准）　｜　原始数据 → [results/](results/)　｜　测试过程记录 → [JOURNAL.md](JOURNAL.md)
 
 > 2026-11-03 实测。本文只保留最终配置的结果；配置不对或已被替代的中间数据在 `results/_archive/`，不用于结论。
 
@@ -86,7 +86,7 @@ prefill 不随 TP 增长 → 每台机器 2×TP4。8K/1K 每输出 1 token 要 p
 | GPU 显存，`UCX_TCP_TX_SEG_SIZE=1m UCX_TCP_RX_SEG_SIZE=1m` | 24.9 ms | 27 Gbps |
 | 同上，8 对 agent 并行，持续约 10 s | — | 网卡计数器中位数 176 Gbps、峰值 183 Gbps（单网卡打满） |
 
-放回 vLLM 后每次 KV 传输（每 rank 约 80–90 MB）从 379 ms 降到 121 ms。服务时一个 8K 请求约 0.3 GB（TP4），每秒 2 个请求只需约 5 Gbps，**暂不需要双网卡**。数据：`results/nixl-bench/`。
+放回 vLLM 后每次 KV 传输（每 rank 约 80–90 MB）从 379 ms 降到 121 ms。服务时一个 8K 请求约 0.35 GB（TP4），每秒 2 个请求只需约 6 Gbps，**暂不需要双网卡**。数据：`results/nixl-bench/`。
 
 ## 6. 按延迟门槛的性价比（每卡吞吐）
 
