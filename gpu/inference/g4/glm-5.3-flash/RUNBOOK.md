@@ -417,6 +417,48 @@ TAG=1p1d bash ~/scripts/pd/bench.sh
 gcloud compute instances delete $NAME $NAME_D --zone $ZONE --project $PROJECT
 ```
 
+## 10. NVFP4 与能力评测
+
+### 10.1 NVFP4 1P1D
+
+两台机器都下载 NVFP4 权重（或从桶拷），然后用同一套脚本、只换模型目录起服务：
+
+```bash
+# 两台机器都执行（184 GiB，HuggingFace 约 2–3 分钟）
+REPO=RedHatAI/GLM-5.3-Flash-NVFP4 DEST=/data/GLM-5.3-Flash-NVFP4 bash ~/scripts/download-hf.sh
+
+# P 机器
+MODEL_DIR=/data/GLM-5.3-Flash-NVFP4 EXTRA_ARGS=--no-enable-flashinfer-autotune ROLE=prefill bash ~/scripts/pd/serve.sh
+# D 机器
+MODEL_DIR=/data/GLM-5.3-Flash-NVFP4 EXTRA_ARGS=--no-enable-flashinfer-autotune ROLE=decode bash ~/scripts/pd/serve.sh
+
+# P 机器：代理 + 冒烟 + 扫描，结果在 ~/g4glm/pd-1p1d-nvfp4/
+TAG=1p1d-nvfp4 P=<P_IP>:8100 D=<D_IP>:8200 bash ~/scripts/pd/run-1p1d.sh
+```
+
+**验证**：日志里出现 `Using 'FLASHINFER_CUTLASS' NvFp4 MoE backend`、`Model loading took 23.69 GiB memory`（每卡）、`GPU KV cache size: 7,126,605 tokens`（D 节点）。
+
+### 10.2 GSM8K 能力评测
+
+评测工具 lm-evaluation-harness 装在独立虚拟环境里，脚本第一次运行时自动安装（`lm_eval[api]==0.4.13` + `transformers`；后者用来加载 tokenizer，`lm_eval[api]` 不会自动带上）：
+
+```bash
+# 服务起好（单机 :8000 或 PD 代理 :8000 都行）后，在同一台机器上：
+TAG=fp8   TOKENIZER=/data/GLM-5.3-Flash        bash ~/scripts/eval/gsm8k.sh
+TAG=nvfp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4  bash ~/scripts/eval/gsm8k.sh
+# 结果在 ~/g4glm/eval-<TAG>/：gsm8k.log 末尾是分数表，glm/samples_*.jsonl 是逐题记录
+```
+
+| 设置 | 值 |
+|---|---|
+| 任务 | `gsm8k`，测试集全量 1,319 题 |
+| few-shot | 5 |
+| 解码 | `temperature=0`（贪心） |
+| 接口 | `local-completions` → `/v1/completions`，并发 64 |
+| 随机种子 | 1234 |
+
+每次约 4 分钟（1P1D 部署上实测）。两个 TAG 的逐题记录可以做配对比较，分析方法和结果见 README 5.5 与 `results/eval/paired-analysis.txt`。
+
 ## 排障
 
 | 现象 | 处理 |

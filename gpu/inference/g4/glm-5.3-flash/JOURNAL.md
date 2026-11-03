@@ -77,3 +77,5 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 
 **04:44–05:09（12:44–13:09）NVFP4 1P1D 扫描完成**：8 档 0 失败，vLLM 自动选 `FLASHINFER_CUTLASS` NvFp4 MoE 后端，没有遇到社区报告的 autotune 卡死（已按模型卡加 `--no-enable-flashinfer-autotune`）。
 流水线随后误报 `NVFP4_FAILED`：判断语句经过 ssh 包装里的 `grep -v`，空输出时返回 1，把成功判成了失败，导致 NVFP4 GSM8K 被跳过。扫描数据本身完整。改为 FP8 GSM8K 跑完后再切回 NVFP4 补跑。
+
+**05:09–05:28（13:09–13:28）GSM8K 能力对比完成**：切回 FP8 1P1D 跑 GSM8K（约 4 分钟），再切回 NVFP4 补跑。FP8 strict-match 93.33%、NVFP4 92.95%，差 0.38 个百分点；逐题配对 McNemar 精确检验 p = 0.65，无显著差别。局限：GSM8K 偏简单、本次不开思考，建议后续补长思考难题和客户业务样本。
