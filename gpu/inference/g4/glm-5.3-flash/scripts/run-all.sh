@@ -14,12 +14,16 @@ fi
 sudo docker pull vllm/vllm-openai:nightly > $W/pull.log 2>&1 &
 PULL=$!
 step download-model
-python3 -m pip install -q --break-system-packages -U "huggingface_hub[hf_xet]" 2>&1 | tail -2
+# DLVM Ubuntu 24.04 image ships python3 without pip -> use uv for an isolated venv
+command -v uv >/dev/null || { curl -LsSf https://astral.sh/uv/install.sh | sh; }
+export PATH=$HOME/.local/bin:$PATH
+uv venv -q $W/hfenv && uv pip install -q --python $W/hfenv/bin/python "huggingface_hub[hf_xet]"
 sudo mkdir -p /data && sudo chown $USER /data
-HF_XET_HIGH_PERFORMANCE=1 python3 -c "from huggingface_hub import snapshot_download as s; s('zai-org/GLM-5.3-Flash', local_dir='/data/GLM-5.3-Flash', max_workers=32)" || { echo "DOWNLOAD FAILED"; exit 1; }
+HF_XET_HIGH_PERFORMANCE=1 $W/hfenv/bin/python -c "from huggingface_hub import snapshot_download as s; s('zai-org/GLM-5.3-Flash', local_dir='/data/GLM-5.3-Flash', max_workers=32)" || { echo "DOWNLOAD FAILED"; exit 1; }
 du -sh /data/GLM-5.3-Flash
 wait $PULL; tail -3 $W/pull.log
-sudo docker run --rm --gpus all --entrypoint python3 vllm/vllm-openai:nightly -c "import vllm;print('VLLM_VERSION',vllm.__version__)"
+{ sudo docker inspect --format "{{index .RepoDigests 0}}" vllm/vllm-openai:nightly; nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv; nvidia-smi topo -m; uname -r; } > $W/env.txt 2>&1
+sudo docker run --rm --gpus all --entrypoint python3 vllm/vllm-openai:nightly -c "import vllm;print('VLLM_VERSION',vllm.__version__)" | tee -a $W/env.txt
 step start-server
 sudo docker rm -f glm >/dev/null 2>&1
 sudo docker run -d --name glm --gpus all --shm-size=64g --ipc=host --network host \

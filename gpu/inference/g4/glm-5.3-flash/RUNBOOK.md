@@ -76,15 +76,18 @@ sudo docker run --rm --gpus all --entrypoint python3 vllm/vllm-openai:nightly \
 ## 4. 下载模型
 
 ```bash
-python3 -m pip install --break-system-packages -U "huggingface_hub[hf_xet]"
+# DLVM 的 Ubuntu 24.04 镜像里 python3 没带 pip，用 uv 建一个独立环境
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH=$HOME/.local/bin:$PATH
+uv venv ~/hfenv && uv pip install --python ~/hfenv/bin/python "huggingface_hub[hf_xet]"
 sudo mkdir -p /data && sudo chown $USER /data
-HF_XET_HIGH_PERFORMANCE=1 python3 -c "
+HF_XET_HIGH_PERFORMANCE=1 ~/hfenv/bin/python -c "
 from huggingface_hub import snapshot_download
 snapshot_download('zai-org/GLM-5.3-Flash', local_dir='/data/GLM-5.3-Flash', max_workers=32)"
 du -sh /data/GLM-5.3-Flash
 ```
 
-**验证**：`du` 约 306 GiB（HuggingFace 上全部文件合计 305.8 GiB）。
+**验证**：`du` 约 306 GiB（HuggingFace 上全部文件合计 305.8 GiB）。实测下载速度约 2 GB/s（开头 60 秒下了 115 GB），整份权重 3 分钟左右。
 
 ## 5. 启动服务
 
@@ -166,4 +169,5 @@ gcloud compute instances delete $NAME --zone $ZONE --project $PROJECT
 | 启动时后端选错、偶发崩溃 | 原作者在社区镜像上要设 `FLASHINFER_MLA_SPARSE_SM90=1`；nightly 上此变量已不生效，后端自动选择 |
 | 预热阶段 GPU 100% 卡住不动 | FlashInfer autotune 卡死，加 `--no-enable-flashinfer-autotune`（社区 TP2 报告） |
 | `--max-num-seqs 1024` 时 OOM | KDA 状态池（Mamba cache）随并发线性涨，降到 512 以下 |
+| `No module named pip` | DLVM Ubuntu 24.04 镜像没带 pip，按第 4 步用 uv |
 | Spot 机被抢占 | `gcloud compute instances start $NAME`；权重在系统盘上不丢 |

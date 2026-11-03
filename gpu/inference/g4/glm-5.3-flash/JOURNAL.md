@@ -21,3 +21,8 @@
 社区 overlay `cstechdev/vllm:glm53-flash-nope-sm120-cu130-20260826-r1`（2026-08-26）留作备选。
 
 **02:43（10:43）开跑**：`scripts/run-all.sh` 后台执行：装 Docker → 拉镜像与下载权重并行 → 起服务 → 冒烟 → 压测。
+
+**02:51（10:51）第一次失败**：下载步骤报 `No module named pip` → `No module named 'huggingface_hub'`。DLVM 的 Ubuntu 24.04 镜像里系统 python3 不带 pip。
+改用 uv 建独立虚拟环境装 `huggingface_hub`（RUNBOOK 第 4 步、`run-all.sh` 已同步修改）。镜像这时已拉完（`nightly`，解压后 35.5 GB）。
+
+**02:53（10:53）重跑**：下载速度约 2 GB/s，开头 60 秒下了 115 GB。`run-all.sh` 同时加了 `env.txt` 采集（镜像 digest、vLLM 版本、驱动、拓扑）。
