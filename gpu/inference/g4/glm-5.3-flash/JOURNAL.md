@@ -91,3 +91,7 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 **07:07–07:28（15:07–15:28）2P1D（P=TP4×2，D=TP8）失败**：服务都起来了，但所有请求 500。D 日志：`Not pairing remote 2304-token blocks with local 1280-token blocks: the remote KV layout cannot be split into 256-token units` → `NIXL transfer failure: handshake_failed`。
 原因：vLLM 为了让注意力页 ≥ KDA（Mamba 类）状态页，按每卡状态大小对齐块大小；TP 不同，每卡状态大小不同，块大小就不同（TP4 2304 token、TP8 1280 token），NIXL 无法配对。**这个模型做 PD 时 P、D 必须同 TP。**
 改为 2P2D 全 TP4：A 机器 2 个 P、B 机器 2 个 D。
+
+**07:29–07:55（15:29–15:55）2P2D（全 TP4）并发扫描**：0 失败；128 并发 2,107 tok/s，P99 ITL 122 ms。随后 c256 与速率扫描完成。
+
+**08:2x（16:2x）发现速率扫描有测量缺陷**：每个速率档用了同一个 `--seed 7`，后面的档重发了前面的 prompt，命中 P 上的前缀缓存，出现「负载越高 TTFT 中位数越低」的反常结果。作废该组数据，`bench-rate.sh` 改为每档不同种子，2P2D 与不分离的速率测试重跑。
