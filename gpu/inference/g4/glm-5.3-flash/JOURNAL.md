@@ -100,3 +100,12 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 插曲：收集不分离组数据时两台机器的目录同名，后拷的覆盖了先拷的，起初只统计到一半实例、吞吐看似减半；改为按机器分目录收集。
 
 **08:4x（16:4x）开第三台 G4**，测 P:D = 2:1：FP8 2P1D（全 TP8）、NVFP4 4P2D（全 TP4）。
+
+**09:24–10:55（17:24–18:55）三台机器 P:D = 2:1**（UCX 未调优）：FP8 2P1D（全 TP8）并发扫描 + 速率扫描完成，D 先饱和（256 并发 TPOT 106 ms）。NVFP4 4P2D（全 TP4）并发扫描完成：128 并发 2,299 tok/s，TPOT 49.5 ms；同 TPOT 下每卡吞吐低于 2P2D（96 对 132 tok/s/卡），印证 2:1 对 8K/1K 是 P 配多了。
+4P2D 的速率扫描**作废**：调试 NIXL 时我误以为 chain8 已结束，在 B、C 上清掉了所有容器，打断了正在跑的速率测试（rate=0.5 档 29 条失败，之后全失败）。改到 UCX 调优后重跑。
+
+**10:56–11:10（18:56–19:10）排查 KV 传输慢**：vLLM 日志里 KV 传输每个 rank 约 70–80 MB、耗时 320–380 ms（约 220 MB/s）。写了独立的 NIXL READ 基准（`scripts/pd/nixl_bench.py`）隔离测试，结果在 `results/nixl-bench/results.txt`：
+- CPU 内存：80 MB 一次 21–28 ms（24–31 Gbps）；GPU 显存（默认 UCX）：128 ms（5.3 Gbps）。拆成 1 块或 3,000 块差别不大——不是描述符数量的问题。
+- **`UCX_TCP_TX_SEG_SIZE=1m` + `UCX_TCP_RX_SEG_SIZE=1m`：GPU 显存一次 24.9 ms（27 Gbps），提速 5 倍**；4m 与 1m 相同；`UCX_RNDV_FRAG_SIZE` 无效；`UCX_PROTO_ENABLE=n` 报错。
+- 一对 agent 内多路并发封顶约 27 Gbps（一条 UCX 连接 = 一条 TCP 流）；**8 对 agent 并行（相当于 TP8 的 8 个 rank）NIC 计数器持续 176 Gbps、峰值 183 Gbps，单网卡打满**（iperf 上限 173 Gbps）；默认参数 8 对只有 42 Gbps。
+`pd/serve.sh` 默认加上这两个变量，2P2D 与 4P2D 用调优后的配置重跑。

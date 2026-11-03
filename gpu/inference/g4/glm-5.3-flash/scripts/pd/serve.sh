@@ -5,6 +5,10 @@
 #   decode  -> container glm-d, port 8200, kv_consumer
 # VLLM_SSM_CONV_STATE_LAYOUT=DS is required: NIXL's hybrid (KDA/Mamba) state transfer refuses to start
 # with the default conv-state layout ("3-read Mamba conv transfer requires DS conv state layout").
+# UCX_TCP_{TX,RX}_SEG_SIZE=1m: UCX's default TCP segment size makes GPU-memory transfers crawl
+# (measured 5 Gbps per agent pair, ~220 MB/s per KV transfer inside vLLM); 1m gives ~27 Gbps per pair
+# and 8 pairs saturate the NIC (176 Gbps). Pass UCX_TCP_TX_SEG_SIZE= UCX_TCP_RX_SEG_SIZE= (empty) is NOT the default;
+# to reproduce the untuned behaviour remove these two -e lines.
 # G4 has no RDMA: NIXL's UCX backend moves KV over TCP (UCX picks tcp + cuda_copy).
 set -euo pipefail
 IMAGE=${IMAGE:-vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57}
@@ -24,6 +28,7 @@ sudo docker run -d --name $NAME --gpus "\"device=$GPUS\"" --shm-size=64g --ipc=h
   -e VLLM_NIXL_SIDE_CHANNEL_HOST=$MY_IP -e VLLM_NIXL_SIDE_CHANNEL_PORT=$SIDE_PORT \
   -e VLLM_SSM_CONV_STATE_LAYOUT=DS \
   -e UCX_NET_DEVICES=${UCX_NET_DEVICES:-all} -e UCX_TLS=${UCX_TLS:-all} \
+  -e UCX_TCP_TX_SEG_SIZE=${UCX_TCP_TX_SEG_SIZE:-1m} -e UCX_TCP_RX_SEG_SIZE=${UCX_TCP_RX_SEG_SIZE:-1m} \
   $IMAGE \
   --model /model --served-model-name glm --tensor-parallel-size $TP \
   --max-model-len 131072 --max-num-seqs ${MAX_NUM_SEQS:-256} \

@@ -1,0 +1,28 @@
+###  | --mem cuda --total-mb 80 --descs 1 --iters 10
+{"mem": "cuda", "total_mb": 80.0, "descs": 1, "streams": 1, "median_ms": 122.1, "per_xfer_MBps": 655.0, "aggregate_Gbps": 5.49}
+###  | --mem cuda --total-mb 80 --descs 3000 --iters 10
+{"mem": "cuda", "total_mb": 80.0, "descs": 3000, "streams": 1, "median_ms": 148.3, "per_xfer_MBps": 539.0, "aggregate_Gbps": 4.53}
+### -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m | --mem cuda --total-mb 80 --descs 300 --iters 10
+{"mem": "cuda", "total_mb": 80.0, "descs": 300, "streams": 1, "median_ms": 24.9, "per_xfer_MBps": 3218.0, "aggregate_Gbps": 27.0}
+### -e UCX_RNDV_FRAG_SIZE=host:4m,cuda:4m | --mem cuda --total-mb 80 --descs 300 --iters 10
+{"mem": "cuda", "total_mb": 80.0, "descs": 300, "streams": 1, "median_ms": 125.7, "per_xfer_MBps": 636.0, "aggregate_Gbps": 5.34}
+### -e UCX_PROTO_ENABLE=n | --mem cuda --total-mb 80 --descs 300 --iters 10
+W1103 11:00:43.616622       1 ucx_enums.cpp:58] Unexpected UCX error: Unsupported operation
+nixl_cu13._bindings.nixlBackendError: NIXL_ERR_BACKEND
+### -e UCX_TCP_TX_SEG_SIZE=4m -e UCX_TCP_RX_SEG_SIZE=4m | --mem cuda --total-mb 80 --descs 300 --iters 10
+{"mem": "cuda", "total_mb": 80.0, "descs": 300, "streams": 1, "median_ms": 24.7, "per_xfer_MBps": 3234.0, "aggregate_Gbps": 27.13}
+### -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m | --mem cuda --total-mb 80 --descs 300 --iters 10 --streams 4
+{"mem": "cuda", "total_mb": 80.0, "descs": 300, "streams": 4, "median_ms": 99.9, "per_xfer_MBps": 801.0, "aggregate_Gbps": 26.87}
+### -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m | --mem cuda --total-mb 80 --descs 300 --iters 10 --streams 8
+{"mem": "cuda", "total_mb": 80.0, "descs": 300, "streams": 8, "median_ms": 205.2, "per_xfer_MBps": 390.0, "aggregate_Gbps": 26.16}
+### -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m | --mem cuda --total-mb 80 --descs 300 --iters 6 --streams 16
+{"mem": "cuda", "total_mb": 80.0, "descs": 300, "streams": 16, "median_ms": 395.2, "per_xfer_MBps": 202.0, "aggregate_Gbps": 27.17}
+### -e UCX_TCP_TX_SEG_SIZE=4m -e UCX_TCP_RX_SEG_SIZE=4m | --mem cuda --total-mb 80 --descs 300 --iters 6 --streams 16
+{"mem": "cuda", "total_mb": 80.0, "descs": 300, "streams": 16, "median_ms": 390.8, "per_xfer_MBps": 205.0, "aggregate_Gbps": 27.48}
+### pairs=4 seg1m streams=4
+4 pairs, sum aggregate Gbps = 102.2  per-pair: [33.18, 33.36, 18.34, 17.32]
+### pairs=8 seg1m streams=4
+8 pairs, sum aggregate Gbps = 197.7  per-pair: [26.06, 25.3, 27.87, 24.97, 24.68, 19.54, 23.69, 25.62]
+### pairs=8 default seg streams=4
+8 pairs, sum aggregate Gbps = 42.3  per-pair: [5.64, 6.16, 5.41, 5.64, 5.34, 5.12, 5.22, 3.8]
+8 pairs, sum aggregate Gbps = 192.6  per-pair: [33.19, 24.87, 24.6, 24.67, 24.55, 24.93, 18.63, 17.17]
