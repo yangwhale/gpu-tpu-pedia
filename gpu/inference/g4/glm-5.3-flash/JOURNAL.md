@@ -87,3 +87,7 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 **06:14–06:30（14:14–14:30）不开 PD 的公平基线 DP4**：两台机器共 4 个 NVFP4 TP4 实例各自服务，每实例一个压测客户端同步加压。总并发 64 时输出 1,896 tok/s、128 时 2,380 tok/s——**明显高于 NVFP4 1P1D**（同卡数 1,187 / 1,274）。
 
 **06:30–06:50（14:30–14:50）2P1D 第一次失败**：TP4 的 P 实例在 PD 模式下报 `No available memory for the cache blocks`（同样的 TP4 不开 PD 能正常起）。给 P 加 `--max-num-seqs 64 --gpu-memory-utilization 0.92` 后启动成功。盯任务的探针当时报的是 `SERVER TIMEOUT`，根因要看容器日志。
+
+**07:07–07:28（15:07–15:28）2P1D（P=TP4×2，D=TP8）失败**：服务都起来了，但所有请求 500。D 日志：`Not pairing remote 2304-token blocks with local 1280-token blocks: the remote KV layout cannot be split into 256-token units` → `NIXL transfer failure: handshake_failed`。
+原因：vLLM 为了让注意力页 ≥ KDA（Mamba 类）状态页，按每卡状态大小对齐块大小；TP 不同，每卡状态大小不同，块大小就不同（TP4 2304 token、TP8 1280 token），NIXL 无法配对。**这个模型做 PD 时 P、D 必须同 TP。**
+改为 2P2D 全 TP4：A 机器 2 个 P、B 机器 2 个 D。

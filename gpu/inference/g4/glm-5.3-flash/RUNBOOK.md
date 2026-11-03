@@ -471,5 +471,6 @@ TAG=nvfp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4  bash ~/scripts/eval/gsm8k.sh
 | 启动日志里大量 `CUDACachingAllocator ... memory allocation failed with OOM` | 显存 profile 阶段的正常警告，健康启动也有，**不是**失败原因；看 `RuntimeError` / `AssertionError` 那行 |
 | 回复 `content` 为空、`finish_reason: length` | 默认 `max` 思考档把 `max_tokens` 用完了。调大 `max_tokens`，或传 `"reasoning_effort": "low"`；`enable_thinking` 对这个模型无效 |
 | TP4 的 PD 实例（尤其 P）启动约 7 分钟后报 `No available memory for the cache blocks. The extensible KV cache already takes all device memory left` | 同样的 TP4 不开 PD 能起来；开 PD 后要给 P 加 `MAX_NUM_SEQS=64 GPU_UTIL=0.92`（P 只做 prefill，不需要 256 个并发槽位），TP4 的 D 用 `MAX_NUM_SEQS=128 GPU_UTIL=0.92` |
+| P、D 的 TP 不一样（如 P=TP4、D=TP8）时，请求全部 500，D 日志 `NIXL transfer failure: handshake_failed`，前面有 `Not pairing remote 2304-token blocks with local 1280-token blocks` | 这个混合模型的 KV 块大小跟 TP 有关（要对齐 KDA 状态页），TP 不同块就对不上。**P 和 D 用相同的 TP**（本次 2P2D 全部 TP4） |
 | `No module named pip` | DLVM Ubuntu 24.04 镜像没带 pip，按第 4 步用 uv |
 | Spot 机被抢占 | `gcloud compute instances start $NAME`；权重在系统盘上不丢 |
