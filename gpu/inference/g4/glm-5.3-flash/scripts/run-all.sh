@@ -14,12 +14,18 @@ fi
 sudo docker pull vllm/vllm-openai:nightly > $W/pull.log 2>&1 &
 PULL=$!
 step download-model
+sudo mkdir -p /data && sudo chown $USER /data
+if [ -n "$MODEL_URI" ]; then
+  # Same-region GCS bucket: ~49 s for 306 GiB (6.3 GiB/s) vs ~2.5 min from HuggingFace
+  gcloud storage cp -r "$MODEL_URI" /data/ || { echo "DOWNLOAD FAILED"; exit 1; }
+else
 # DLVM Ubuntu 24.04 image ships python3 without pip -> use uv for an isolated venv
 command -v uv >/dev/null || { curl -LsSf https://astral.sh/uv/install.sh | sh; }
 export PATH=$HOME/.local/bin:$PATH
 uv venv -q $W/hfenv && uv pip install -q --python $W/hfenv/bin/python "huggingface_hub[hf_xet]"
 sudo mkdir -p /data && sudo chown $USER /data
 HF_XET_HIGH_PERFORMANCE=1 $W/hfenv/bin/python -c "from huggingface_hub import snapshot_download as s; s('zai-org/GLM-5.3-Flash', local_dir='/data/GLM-5.3-Flash', max_workers=32)" || { echo "DOWNLOAD FAILED"; exit 1; }
+fi
 du -sh /data/GLM-5.3-Flash
 wait $PULL; tail -3 $W/pull.log
 { sudo docker inspect --format "{{index .RepoDigests 0}}" vllm/vllm-openai:nightly; nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv; nvidia-smi topo -m; uname -r; } > $W/env.txt 2>&1

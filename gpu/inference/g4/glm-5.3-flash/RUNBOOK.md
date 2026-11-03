@@ -2,8 +2,9 @@
 
 从零开始，按顺序执行。每一步都写了「做完应该看到什么」。
 一键版：第 1 步建好机器后，把 [`scripts/run-all.sh`](scripts/run-all.sh) 拷上去用 `setsid nohup` 跑，它按顺序做完第 2–7 步。
+设了 `MODEL_URI=gs://...` 就从桶拷权重（4B），否则从 HuggingFace 下（4A）。
 
-总耗时参考：建机 1–2 分钟；装 Docker 约 1 分钟；下载 306 GiB 权重（待实测）；服务启动（待实测）；压测（待实测）。
+总耗时参考：建机 1–2 分钟；装 Docker 约 1 分钟；下载 306 GiB 权重：HuggingFace 约 2.5 分钟，同区域 GCS 桶 49 秒；服务启动（待实测）；压测（待实测）。
 
 ---
 
@@ -75,6 +76,16 @@ sudo docker run --rm --gpus all --entrypoint python3 vllm/vllm-openai:nightly \
 
 ## 4. 下载模型
 
+两种来源，**推荐 4B**：第一次从 HuggingFace 下（4A），顺手放进**和 VM 同区域**的 GCS 桶，以后都从桶里拷（4B）。
+
+| 来源 | 实测耗时（306 GiB） | 实测速度 |
+|---|---|---|
+| 4A HuggingFace | 约 2.5 分钟（含装 uv） | 约 2 GB/s |
+| 4B 同区域 GCS 桶（us-central1 → us-central1-b） | **49 秒** | **6.3 GiB/s** |
+| 反向：本地上传到桶 | 77 秒 | 约 4 GiB/s |
+
+### 4A. 从 HuggingFace 下载
+
 ```bash
 # DLVM 的 Ubuntu 24.04 镜像里 python3 没带 pip，用 uv 建一个独立环境
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -87,7 +98,25 @@ snapshot_download('zai-org/GLM-5.3-Flash', local_dir='/data/GLM-5.3-Flash', max_
 du -sh /data/GLM-5.3-Flash
 ```
 
-**验证**：`du` 约 306 GiB（HuggingFace 上全部文件合计 305.8 GiB）。实测下载速度约 2 GB/s（开头 60 秒下了 115 GB），整份权重 3 分钟左右。
+### 4B. 从同区域 GCS 桶拷（推荐）
+
+桶要和 VM 在同一区域（本次桶在 `us-central1`，VM 在 `us-central1-b`），跨区域会慢且收出口流量费。
+VM 用默认服务账号 + `--scopes cloud-platform` 即可，服务账号需要桶的 `roles/storage.objectViewer`（上传需 `objectAdmin`）。
+
+```bash
+export MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash
+
+# 第一次：4A 下完后上传一份（.cache 是 huggingface_hub 的元数据，不用传）
+gcloud storage rsync -r /data/GLM-5.3-Flash $MODEL_URI --exclude="^\.cache/"
+
+# 以后：直接从桶拷
+sudo mkdir -p /data && sudo chown $USER /data
+gcloud storage cp -r $MODEL_URI /data/
+```
+
+`gcloud storage` 默认就会并行分片下载，不需要额外调参。
+
+**验证**：`du` 约 306 GiB（HuggingFace 上全部文件合计 305.8 GiB）。实测下载速度约 2 GB/s（开头 60 秒下了 115 GB），整份权重约 2.5 分钟。
 
 ## 5. 启动服务
 
