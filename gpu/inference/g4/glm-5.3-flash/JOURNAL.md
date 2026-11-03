@@ -61,3 +61,9 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 **04:13（12:13）1P1D 起来了，但冒烟判失败**：P、D、代理都正常，请求能走通 P→D。冒烟请求 200 token 全花在思考上（`finish_reason: length`），脚本因 `content` 为空判失败。
 细查 chat template：**这个模型没有 `enable_thinking` 开关**，传了被忽略；思考档位由 `reasoning_effort` 控制（`low` / `high`，默认 `max`）。早上单机冒烟加了 `enable_thinking=false` 能出答案，只是那次思考恰好短，不是开关生效。
 改为 `"reasoning_effort": "low"`：实测 reasoning_tokens 为 0，直接出答案。RUNBOOK 第 6 步、排障表和 `run-1p1d.sh` 已更正。压测用 `--ignore-eos` 固定生成长度，不受影响。
+
+**04:15–04:38（12:15–12:38）FP8 1P1D 并发扫描**进行中（结果待回填）。
+
+**04:34（12:34）规划 NVFP4 + 能力对比**：客户关心 NVFP4 会不会掉能力。决定继续用 vLLM（同一镜像），只换权重为 `RedHatAI/GLM-5.3-Flash-NVFP4`，这样性能和精度的差别都只来自量化。
+能力评测用 GSM8K（lm-evaluation-harness 0.4.13，5-shot，全量 1,319 题，temperature=0），FP8 和 NVFP4 都通过各自的 1P1D 部署跑，顺带验证 PD 链路的输出正确性。
+流水线：FP8 扫描结束 → FP8 GSM8K（同时两台机器下载 NVFP4 权重）→ 切 NVFP4 起 1P1D → 并发扫描 → NVFP4 GSM8K。

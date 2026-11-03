@@ -159,6 +159,17 @@ TP8 的 all-reduce 必然跨 NUMA，这是 G4 上做大 TP 的主要代价。
 > 进行中。两台 `g4-standard-384`：P（prefill，TP8）+ D（decode，TP8），vLLM `NixlConnector`，KV 走 TCP。
 > 两机间实测带宽 173 Gbit/s（16 流）/ 49.7 Gbit/s（单流）。步骤见 RUNBOOK 第 9 节。
 
+### 5.4 NVFP4（计划中）
+
+> 下一步：同样的 1P1D 部署、同样的压测，把权重换成 NVFP4，再用 GSM8K 对比 FP8 与 NVFP4 的模型能力。
+
+| 项 | 选择 | 理由 |
+|---|---|---|
+| NVFP4 权重 | `RedHatAI/GLM-5.3-Flash-NVFP4`（184.3 GiB，compressed-tensors 格式） | 只量化 MoE 专家的权重和激活，其余层和 MTP 保持 FP8；模型卡标明面向 vLLM。备选：`nvidia/GLM-5.3-Flash-NVFP4`（ModelOpt 量化，190.4 GiB） |
+| 推理引擎 | vLLM，与 FP8 同一个镜像 digest | 引擎、PD 方式、压测参数都不变，**精度和性能的差别只来自权重**；SGLang 在 SM120 上目前只有社区构建 |
+| 额外参数 | `--no-enable-flashinfer-autotune` | RedHatAI 模型卡给的参数；社区报告不加时 FlashInfer autotune 可能卡死 |
+| 能力评测 | GSM8K 全量 1,319 题，5-shot，贪心解码，lm-evaluation-harness `0.4.13` | 两种精度用完全相同的设置，各自通过自己的 1P1D 部署评测 |
+
 ## 6. 已知限制与注意事项
 
 - **社区阶段**：SM120 支持还在 vLLM nightly 里，没进正式版。上生产前要锁定镜像 digest，不要用浮动的 `nightly` 标签。

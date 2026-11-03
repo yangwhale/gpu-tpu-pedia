@@ -9,6 +9,7 @@
 set -euo pipefail
 IMAGE=${IMAGE:-vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57}
 ROLE=${ROLE:?prefill or decode}
+MODEL_DIR=${MODEL_DIR:-/data/GLM-5.3-Flash}   # NVFP4: /data/GLM-5.3-Flash-NVFP4 plus EXTRA_ARGS=--no-enable-flashinfer-autotune
 MY_IP=$(hostname -I | awk '{print $1}')
 case $ROLE in
   prefill) NAME=glm-p; PORT=8100; KV_ROLE=kv_producer ;;
@@ -16,7 +17,7 @@ case $ROLE in
 esac
 sudo docker rm -f $NAME >/dev/null 2>&1 || true
 sudo docker run -d --name $NAME --gpus all --shm-size=64g --ipc=host --network host \
-  -v /data/GLM-5.3-Flash:/model \
+  -v $MODEL_DIR:/model \
   -e VLLM_NIXL_SIDE_CHANNEL_HOST=$MY_IP -e VLLM_NIXL_SIDE_CHANNEL_PORT=5600 \
   -e VLLM_SSM_CONV_STATE_LAYOUT=DS \
   -e UCX_NET_DEVICES=${UCX_NET_DEVICES:-all} -e UCX_TLS=${UCX_TLS:-all} \
