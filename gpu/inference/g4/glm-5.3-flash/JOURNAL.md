@@ -79,3 +79,11 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 流水线随后误报 `NVFP4_FAILED`：判断语句经过 ssh 包装里的 `grep -v`，空输出时返回 1，把成功判成了失败，导致 NVFP4 GSM8K 被跳过。扫描数据本身完整。改为 FP8 GSM8K 跑完后再切回 NVFP4 补跑。
 
 **05:09–05:28（13:09–13:28）GSM8K 能力对比完成**：切回 FP8 1P1D 跑 GSM8K（约 4 分钟），再切回 NVFP4 补跑。FP8 strict-match 93.33%、NVFP4 92.95%，差 0.38 个百分点；逐题配对 McNemar 精确检验 p = 0.65，无显著差别。局限：GSM8K 偏简单、本次不开思考，建议后续补长思考难题和客户业务样本。
+
+**05:36–06:03（13:36–14:03）容量拆分测试**（为算 P:D 配比）：单独测一个实例的 prefill 能力（8K 输入、1 token 输出）和 decode 能力（8K 共享前缀命中缓存、1K 输出）。NVFP4 TP8：prefill 约 9.3K tok/s；TP4：约 9.0K tok/s——**prefill 能力不随 TP 增长**，一台机器拆两个 TP4 做 prefill 能力翻倍。decode（TPOT 约 45 ms）：TP8 c128 2,658 tok/s，2×TP4 c64 合计 2,620 tok/s。
+按 8K/1K 每个输出 token 需 8 个 prefill token 推算，P:D 按机器约 1:1，即「一台 2×TP4 做 P + 一台做 D」。
+插曲：chat 接口发 1 token 请求时，这个 token 可能落到 reasoning 字段，benchmark 判为失败（`Never received a valid chunk`），容量脚本改用 `/v1/completions`。
+
+**06:14–06:30（14:14–14:30）不开 PD 的公平基线 DP4**：两台机器共 4 个 NVFP4 TP4 实例各自服务，每实例一个压测客户端同步加压。总并发 64 时输出 1,896 tok/s、128 时 2,380 tok/s——**明显高于 NVFP4 1P1D**（同卡数 1,187 / 1,274）。
+
+**06:30–06:50（14:30–14:50）2P1D 第一次失败**：TP4 的 P 实例在 PD 模式下报 `No available memory for the cache blocks`（同样的 TP4 不开 PD 能正常起）。给 P 加 `--max-num-seqs 64 --gpu-memory-utilization 0.92` 后启动成功。盯任务的探针当时报的是 `SERVER TIMEOUT`，根因要看容器日志。

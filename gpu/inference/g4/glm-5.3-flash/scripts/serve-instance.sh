@@ -10,6 +10,6 @@ sudo docker run -d --name $NAME --gpus "\"device=$GPUS\"" --shm-size=64g --ipc=h
   -v $MODEL_DIR:/model $IMAGE \
   --model /model --served-model-name glm --tensor-parallel-size $TP \
   --max-model-len 131072 --max-num-seqs ${MAX_NUM_SEQS:-256} \
-  --gpu-memory-utilization 0.85 --kv-cache-dtype fp8 \
+  --gpu-memory-utilization ${GPU_UTIL:-0.85} --kv-cache-dtype fp8 \
   --tool-call-parser glm47 --reasoning-parser glm45 --port $PORT ${EXTRA_ARGS:-}
 echo "started $NAME (TP$TP, GPUs $GPUS) on :$PORT"
