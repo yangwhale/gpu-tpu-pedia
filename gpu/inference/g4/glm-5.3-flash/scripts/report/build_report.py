@@ -54,7 +54,7 @@ def sweep(dirpath, levels=(1, 2, 4, 8, 16, 32, 64, 128, 256)):
 def dp4_sweep():
     rows = {}
     for c in (4, 8, 16, 32, 64):
-        fs = glob.glob(os.path.join(RES, "dp4-nvfp4-colocated", "*", "inst-*", f"bench-in8192-out1024-c{c}.txt"))
+        fs = glob.glob(os.path.join(RES, "colocated-4xtp4-nvfp4", "*", "inst-*", f"bench-in8192-out1024-c{c}.txt"))
         bs = [bench(f) for f in fs]
         rows[4 * c] = {
             "out": sum(b["out"] for b in bs), "total": sum(b["total"] for b in bs),
@@ -73,21 +73,16 @@ def rate_rows(dirpath):
     return dict(sorted(rows.items()))
 
 
-def dp4_rate():
-    rows = {}
-    totals = sorted({os.path.basename(d) for d in glob.glob(os.path.join(RES, "rate-dp4-nvfp4", "*", "total-*"))})
-    for t in totals:
-        r = float(t[6:])
-        bs = [bench(f) for f in glob.glob(os.path.join(RES, "rate-dp4-nvfp4", "*", t, "inst-*", "rate-*.txt"))]
-        if not bs:
-            continue
-        rows[r] = {
-            "rps": sum(b["rps"] for b in bs), "out": sum(b["out"] for b in bs),
-            "ttft_med": statistics.mean(b["ttft_med"] for b in bs), "ttft_p99": max(b["ttft_p99"] for b in bs),
-            "tpot": statistics.mean(b["tpot"] for b in bs), "itl_p99": max(b["itl_p99"] for b in bs),
-            "fail": sum(b["fail"] for b in bs),
-        }
-    return dict(sorted(rows.items()))
+def multi_rate(dirpath, scale):
+    """Rate sweep split over several clients (inst-*): sum throughput, worst-case latency."""
+    per = {}
+    for f in glob.glob(os.path.join(dirpath, "inst-*", "rate-*.txt")):
+        r = round(float(os.path.basename(f)[5:-4]) * scale, 4)
+        per.setdefault(r, []).append(bench(f))
+    return {r: {"rps": sum(b["rps"] for b in bs), "out": sum(b["out"] for b in bs), "total": sum(b["total"] for b in bs),
+                "ttft_med": max(b["ttft_med"] for b in bs), "ttft_p99": max(b["ttft_p99"] for b in bs),
+                "tpot": max(b["tpot"] for b in bs), "itl_p99": max(b["itl_p99"] for b in bs),
+                "fail": sum(b["fail"] for b in bs)} for r, bs in sorted(per.items())}
 
 
 def capacity():
@@ -273,203 +268,142 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "report.html"))
     a = ap.parse_args()
 
-    single = sweep(os.path.join(RES, "8k1k"))
-    fp8_1p1d = sweep(os.path.join(RES, "pd-1p1d"))
-    nv_1p1d = sweep(os.path.join(RES, "pd-1p1d-nvfp4"))
-    nv_2p2d_old = sweep(os.path.join(RES, "pd-2p2d-nvfp4"))
-    nv_2p2d = sweep(os.path.join(RES, "pd-2p2d-nvfp4-ucx")) or nv_2p2d_old
-    fp8_2p1d = sweep(os.path.join(RES, "pd-2p1d-fp8"))
-    nv_4p2d = sweep(os.path.join(RES, "pd-4p2d-nvfp4-ucx")) or sweep(os.path.join(RES, "pd-4p2d-nvfp4"))
-    nv_4p2d_tuned = os.path.isdir(os.path.join(RES, "pd-4p2d-nvfp4-ucx"))
-    dp4 = dp4_sweep()
-    r2p2d_old = rate_rows(os.path.join(RES, "rate-2p2d-nvfp4"))
-    r2p2d = rate_rows(os.path.join(RES, "rate-2p2d-nvfp4-ucx")) or r2p2d_old
-    rdp4 = dp4_rate()
+    J = lambda *p: os.path.join(RES, *p)
+    single = sweep(J("fp8-tp8-single", "8k1k"))
+    base = {os.path.basename(f)[6:-4]: bench(f) for f in glob.glob(J("fp8-tp8-single", "bench-in*.txt"))}
+    col4 = dp4_sweep()
+    p2 = sweep(J("pd-2p2d-nvfp4"))
+    p4 = sweep(J("pd-4p2d-nvfp4"))
+    r_fp8 = rate_rows(J("rate-colocated-fp8-tp8"))
+    r_nv8 = rate_rows(J("rate-colocated-nvfp4-tp8"))
+    r_nv44 = multi_rate(J("rate-colocated-nvfp4-2xtp4"), 2)
+    r_p2 = rate_rows(J("rate-2p2d-nvfp4"))
+    r_p4 = rate_rows(J("rate-4p2d-nvfp4"))
     cap = capacity()
     ev = gsm8k()
-    base = {os.path.basename(f)[6:-4]: bench(f) for f in glob.glob(os.path.join(RES, "bench-in*.txt"))}
 
-    summary = {"single": single, "fp8_1p1d": fp8_1p1d, "nv_1p1d": nv_1p1d, "nv_2p2d": nv_2p2d, "dp4": dp4,
-               "rate_2p2d": r2p2d, "rate_dp4": rdp4, "capacity": cap, "gsm8k": {k: v for k, v in ev.items() if k != "paired"}}
-    json.dump(summary, open(os.path.join(RES, "summary.json"), "w"), indent=1, default=str)
+    SWH = ["并发", "输出 tok/s", "每卡 tok/s", "每路 tok/s", "TTFT 中位数", "TTFT P99", "平均 TPOT", "P99 ITL", "失败"]
+    def sw_rows(rows, gpus):
+        return [[c, f1(r["out"]), f1(r["out"] / gpus), f"{1000/r['tpot']:.0f}" if r["tpot"] else "—", s2(r["ttft_med"]), s2(r["ttft_p99"]),
+                 f"{r['tpot']:.1f} ms", f"{r['itl_p99']:.0f} ms", f0(r["fail"])] for c, r in rows.items()]
+    RTH = ["到达速率", "实际完成 req/s", "输出 tok/s", "每卡 tok/s", "TTFT 中位数", "TTFT P99", "平均 TPOT", "P99 ITL", "失败"]
+    def rate_table(rows, gpus):
+        return table(RTH, [[f"{r:g} req/s", f"{v['rps']:.2f}", f0(v["out"]), f1(v["out"] / gpus), s2(v["ttft_med"]), s2(v["ttft_p99"]),
+                            f"{v['tpot']:.1f} ms", f"{v['itl_p99']:.0f} ms", f0(v["fail"])] for r, v in rows.items()])
 
-    # Chart 1: throughput per GPU vs TPOT (the latency/throughput frontier)
+    # chart: per-GPU throughput vs TPOT (concurrency sweeps)
     def pts(rows, gpus, skip=()):
-        return [(r["tpot"], r["out"] / gpus, f"并发 {c}，{r['out']:.0f} tok/s 整体，TPOT {r['tpot']:.1f} ms")
-                for c, r in rows.items() if c not in skip and r["out"] == r["out"]]
+        return [(r["tpot"], r["out"] / gpus, f"并发 {c}：整体 {r['out']:.0f} tok/s，TPOT {r['tpot']:.1f} ms") for c, r in rows.items() if c not in skip]
     frontier = line_chart([
-        ("FP8 单机 TP8（8 卡）", C["magenta"], pts(single, 8), True),
-        ("FP8 1P1D（16 卡）", C["blue"], pts(fp8_1p1d, 16), False),
-        ("NVFP4 1P1D（16 卡）", C["orange"], pts(nv_1p1d, 16), False),
-        ("NVFP4 不分离 4×TP4（16 卡）", C["aqua"], pts(dp4, 16), False),
-        ("NVFP4 2P2D 全 TP4（16 卡）", C["yellow"], pts(nv_2p2d, 16, skip=(1,)), False),
+        ("FP8 单机 TP8", C["blue"], pts(single, 8), False),
+        ("NVFP4 不分离 4×TP4", C["aqua"], pts(col4, 16), False),
+        ("NVFP4 2P2D", C["yellow"], pts(p2, 16), False),
+        ("NVFP4 4P2D", C["orange"], pts(p4, 24), False),
     ], "平均 TPOT（ms，越左越快）", "每卡输出 tok/s", xmax=140)
-
-    # Chart 2: P99 ITL vs concurrency (stream smoothness)
-    def itl(rows, skip=()):
-        return [(c, r["itl_p99"], f"并发 {c}：P99 ITL {r['itl_p99']:.0f} ms") for c, r in rows.items() if c not in skip and c >= 4]
+    def itl(rows):
+        return [(c, r["itl_p99"], f"并发 {c}：P99 ITL {r['itl_p99']:.0f} ms") for c, r in rows.items() if c >= 4]
     itlc = line_chart([
-        ("NVFP4 不分离 4×TP4", C["aqua"], itl(dp4), False),
-        ("NVFP4 2P2D", C["yellow"], itl(nv_2p2d, skip=(1,)), False),
-        ("NVFP4 1P1D", C["orange"], itl(nv_1p1d), False),
+        ("NVFP4 不分离 4×TP4", C["aqua"], itl(col4), False),
+        ("NVFP4 2P2D", C["yellow"], itl(p2), False),
+        ("NVFP4 4P2D", C["orange"], itl(p4), False),
     ], "总并发（对数刻度）", "P99 ITL（ms）", logx=True, xticks=[4, 8, 16, 32, 64, 128, 256])
+    # chart: TTFT median vs load per 8 GPUs
+    def norm(rows, machines):
+        return [(r / machines, v["ttft_med"] / 1000, f"每台机器 {r/machines:.2f} req/s：TTFT 中位数 {v['ttft_med']/1000:.2f} s") for r, v in rows.items()]
+    ttftc = line_chart([
+        ("NVFP4 不分离 2×TP4", C["aqua"], norm(r_nv44, 1), False),
+        ("NVFP4 2P2D", C["yellow"], norm(r_p2, 2), False),
+        ("NVFP4 4P2D", C["orange"], norm(r_p4, 3), False),
+    ], "每台机器（8 卡）的到达速率，req/s", "TTFT 中位数（s）")
+    tpotc = line_chart([
+        ("FP8 TP8", C["blue"], [(r, v["tpot"], f"{r} req/s：TPOT {v['tpot']:.1f} ms") for r, v in r_fp8.items()], False),
+        ("NVFP4 TP8", C["orange"], [(r, v["tpot"], f"{r} req/s：TPOT {v['tpot']:.1f} ms") for r, v in r_nv8.items()], False),
+        ("NVFP4 2×TP4", C["aqua"], [(r, v["tpot"], f"{r} req/s：TPOT {v['tpot']:.1f} ms") for r, v in r_nv44.items()], False),
+    ], "单台机器的到达速率，req/s", "平均 TPOT（ms）", ymax=160)
 
-    # Chart 3: TTFT median vs request rate
-    if r2p2d and rdp4:
-        ttftc = line_chart([
-            ("NVFP4 不分离 4×TP4", C["aqua"], [(r, v["ttft_med"] / 1000, f"{r} req/s：TTFT 中位数 {v['ttft_med']/1000:.2f} s") for r, v in rdp4.items()], False),
-            ("NVFP4 2P2D", C["yellow"], [(r, v["ttft_med"] / 1000, f"{r} req/s：TTFT 中位数 {v['ttft_med']/1000:.2f} s") for r, v in r2p2d.items()], False),
-        ], "到达速率（请求/秒，泊松分布）", "TTFT 中位数（s）", xticks=[0.5, 1, 1.5, 2, 2.5])
-    else:
-        ttftc = '<p class="note">速率压测进行中。</p>'
-
-    # Chart 4: FP8 vs NVFP4 1P1D throughput by concurrency
-    lv = [1, 4, 8, 16, 32, 64, 128]
-    fpbars = bar_chart([str(c) for c in lv], [
-        ("FP8 1P1D", C["blue"], [fp8_1p1d[c]["out"] for c in lv]),
-        ("NVFP4 1P1D", C["orange"], [nv_1p1d[c]["out"] for c in lv]),
-    ], "输出 tok/s（16 卡）")
-
-    # Chart 5: capacity
-    tp8 = cap.get("cap-nvfp4-tp8", {}); tp4 = cap.get("cap-nvfp4-tp4-8001", {})
-    pre8 = max(v["total"] for v in tp8["prefill"].values()) if tp8 else float("nan")
-    pre4 = max(v["total"] for v in tp4["prefill"].values()) if tp4 else float("nan")
-    pre4b = max(v["total"] for v in cap["cap-nvfp4-tp4-8002"]["prefill"].values()) if "cap-nvfp4-tp4-8002" in cap else float("nan")
-    capbars = bar_chart(["每个实例", "每台机器（8 卡）"], [
-        ("1 × TP8", C["blue"], [pre8, pre8]),
-        ("TP4（每台 2 个）", C["orange"], [pre4, pre4 + pre4b]),
-    ], "prefill 吞吐（输入 tok/s）", h=280)
+    # capacity
+    pre = lambda t: max(v["total"] for v in cap[t]["prefill"].values())
+    pre8, pre4, pre4b = pre("cap-nvfp4-tp8"), pre("cap-nvfp4-tp4-8001"), pre("cap-nvfp4-tp4-8002")
+    capbars = bar_chart(["每个实例", "每台机器（8 卡）"], [("1 × TP8", C["blue"], [pre8, pre8]), ("TP4（每台 2 个）", C["orange"], [pre4, pre4 + pre4b])],
+                        "prefill 吞吐（输入 tok/s）", h=280)
+    cap_table = table(["实例", "prefill（8K 输入）", "decode 并发 32", "decode 并发 64", "decode 并发 128", "decode 并发 256"],
+        [[lab, f0(pre(t)) + " tok/s"] + [f"{cap[t]['decode'][c]['out']:,.0f} · {cap[t]['decode'][c]['tpot']:.0f} ms" for c in (32, 64, 128, 256)]
+         for t, lab in (("cap-nvfp4-tp8", "NVFP4 TP8（8 卡）"), ("cap-nvfp4-tp4-8001", "NVFP4 TP4 #1（4 卡）"), ("cap-nvfp4-tp4-8002", "NVFP4 TP4 #2（同机并行）"))])
 
     # GSM8K
     g8, g4 = ev.get("fp8", {}), ev.get("nvfp4", {})
     gsm_rows = []
     for k, lab in (("exact_match,strict-match", "strict-match"), ("exact_match,flexible-extract", "flexible-extract")):
-        if k in g8 and k in g4:
-            se8 = g8[k.replace("exact_match", "exact_match_stderr")]
-            se4 = g4[k.replace("exact_match", "exact_match_stderr")]
-            gsm_rows.append([lab, f"{g8[k]*100:.2f}% ± {se8*100:.2f}", f"{g4[k]*100:.2f}% ± {se4*100:.2f}", f"{(g4[k]-g8[k])*100:+.2f} 个百分点"])
-    paired = ev.get("paired", "")
-    pm = re.search(r"\[strict-match\].*?both right=(\d+)\s+only FP8 right=(\d+)\s+only NVFP4 right=(\d+)\s+both wrong=(\d+).*?identical extracted answer: (\d+)/(\d+).*?p = ([\d.]+)", paired, re.S)
+        se = lambda g: g[k.replace("exact_match", "exact_match_stderr")]
+        gsm_rows.append([lab, f"{g8[k]*100:.2f}% ± {se(g8)*100:.2f}", f"{g4[k]*100:.2f}% ± {se(g4)*100:.2f}", f"{(g4[k]-g8[k])*100:+.2f} 个百分点"])
+    pm = re.search(r"\[strict-match\].*?both right=(\d+)\s+only FP8 right=(\d+)\s+only NVFP4 right=(\d+)\s+both wrong=(\d+).*?identical extracted answer: (\d+)/(\d+).*?p = ([\d.]+)", ev.get("paired", ""), re.S)
 
-    def sw_rows(rows, levels):
-        return [[c, f1(r["out"]), f0(r["total"]), f"{1000/r['tpot']:.0f}" if r["tpot"] else "—", s2(r["ttft_med"]), s2(r["ttft_p99"]),
-                 f"{r['tpot']:.1f} ms", f"{r['itl_p99']:.0f} ms", f0(r["fail"])] for c, r in rows.items() if c in levels]
-    SWH = ["并发", "输出 tok/s", "总 tok/s", "每路 tok/s", "TTFT 中位数", "TTFT P99", "平均 TPOT", "P99 ITL", "失败"]
-
-    # headline numbers
-    h_dp4 = dp4[128]; h_2p2d = nv_2p2d[128]; h_1p1d = nv_1p1d[128]
-    imp_2p2d = (h_2p2d["out"] / h_1p1d["out"] - 1) * 100
-    gap_dp4 = (h_2p2d["out"] / h_dp4["out"] - 1) * 100
-
-    def rate_table(rows):
-        return table(["到达速率", "实际完成 req/s", "输出 tok/s", "TTFT 中位数", "TTFT P99", "平均 TPOT", "P99 ITL", "失败"],
-                     [[f"{r} req/s", f"{v['rps']:.2f}", f0(v["out"]), s2(v["ttft_med"]), s2(v["ttft_p99"]), f"{v['tpot']:.1f} ms",
-                       f"{v['itl_p99']:.0f} ms", f0(v["fail"])] for r, v in rows.items()])
-
-    # ---- network section
-    kv_old = kv_xfer(os.path.join(RES, "pd-2p2d-nvfp4", "pd-decode-d1.log"))
-    kv_new = kv_xfer(os.path.join(RES, "pd-2p2d-nvfp4-ucx", "pd-decode-d1.log"))
-    nx = nixl_rows()
+    # network
+    kv_old = kv_xfer(J("_archive", "pd-2p2d-nvfp4-ucxdefault", "pd-decode-d1.log"))
+    kv_new = kv_xfer(J("pd-2p2d-nvfp4", "pd-decode-d1.log"))
     nrows = []
-    for head, d in nx:
-        env, args = [x.strip() for x in head.split("|")] if "|" in head else (head, "")
+    for head, d in nixl_rows():
+        env = head.split("|")[0].strip() if "|" in head else head
         envs = "默认" if not env else env.replace("-e ", "").replace("UCX_TCP_TX_SEG_SIZE=", "TX=").replace("UCX_TCP_RX_SEG_SIZE=", "RX=")
         if "pairs_line" in d:
             m = re.search(r"(\d+) pairs, sum aggregate Gbps = ([\d.]+)", d["pairs_line"])
-            nrows.append([head.replace("pairs=", "并行 agent 对数 "), "GPU", "—", "—", f"{m.group(2)} Gbps（{m.group(1)} 对合计）"])
+            nrows.append([head.replace("pairs=", "并行 agent 对数 "), "GPU 显存", "—", "—", f"{m.group(2)} Gbps（{m.group(1)} 对合计）"])
         else:
             nrows.append([envs, "GPU 显存" if d["mem"] == "cuda" else "CPU 内存", f"{d['descs']} 块 × {d['streams']} 路", f"{d['median_ms']} ms", f"{d['aggregate_Gbps']} Gbps"])
-    net_html = table(["UCX 设置", "数据位置", "每次传输拆分 / 并发", "80 MB 一次耗时", "吞吐"], nrows) if nrows else ""
-    kv_html = table(["", "每个 rank 每次传输", "平均传输耗时", "传完后处理", "单次传输速度"],
-                    [[lab, f"{k['mb']:.0f} MB", f"{k['ms']:.0f} ms", f"{k['post']:.0f} ms", f"{k['mbps']:.0f} MB/s"] for lab, k in (("UCX 默认", kv_old), ("UCX 调优", kv_new)) if k])
-    ba = []
-    for c in (32, 64, 128):
-        if c in nv_2p2d_old and c in nv_2p2d:
-            o, n = nv_2p2d_old[c], nv_2p2d[c]
-            ba.append([f"并发 {c}", f"{o['out']:,.0f} → {n['out']:,.0f}", f"{o['tpot']:.1f} → {n['tpot']:.1f} ms", f"{o['itl_p99']:.0f} → {n['itl_p99']:.0f} ms", f"{s2(o['ttft_med'])} → {s2(n['ttft_med'])}"])
-    for r in (1.0, 2.0):
-        if r in r2p2d_old and r in r2p2d:
-            o, n = r2p2d_old[r], r2p2d[r]
-            ba.append([f"速率 {r:g} req/s", f"{o['out']:,.0f} → {n['out']:,.0f}", f"{o['tpot']:.1f} → {n['tpot']:.1f} ms", f"{o['itl_p99']:.0f} → {n['itl_p99']:.0f} ms", f"{s2(o['ttft_med'])} → {s2(n['ttft_med'])}"])
-    ba_html = table(["负载（NVFP4 2P2D）", "输出 tok/s", "平均 TPOT", "P99 ITL", "TTFT 中位数"], ba)
+    kv_html = table(["NVFP4 2P2D", "每个 rank 每次传输", "平均传输耗时", "传完后处理", "单次传输速度"],
+                    [[lab, f"{k['mb']:.0f} MB", f"{k['ms']:.0f} ms", f"{k['post']:.0f} ms", f"{k['mbps']:.0f} MB/s"] for lab, k in (("UCX 默认", kv_old), ("分段 1m", kv_new)) if k])
 
-    # ---- 2:1 section
-    def per_gpu_rows(rows, gpus, levels):
-        return [[c, f1(r["out"]), f1(r["out"] / gpus), s2(r["ttft_med"]), f"{r['tpot']:.1f} ms", f"{r['itl_p99']:.0f} ms", f0(r["fail"])] for c, r in rows.items() if c in levels]
-    PGH = ["并发", "输出 tok/s", "每卡 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL", "失败"]
-    lv9 = [1, 2, 4, 8, 16, 32, 64, 128, 256]
-    r21 = (table(PGH, per_gpu_rows(fp8_2p1d, 24, lv9)) if fp8_2p1d else "", table(PGH, per_gpu_rows(nv_4p2d, 24, lv9)) if nv_4p2d else "")
-    cmp21 = []
-    for c in (64, 128, 256):
-        if c in nv_4p2d and c in nv_2p2d:
-            a4, a2 = nv_4p2d[c], nv_2p2d[c]
-            cmp21.append([c, f"{a2['out']/16:.0f}（TPOT {a2['tpot']:.0f} ms，TTFT {s2(a2['ttft_med'])}）", f"{a4['out']/24:.0f}（TPOT {a4['tpot']:.0f} ms，TTFT {s2(a4['ttft_med'])}）"])
-    cmp21_html = table(["总并发", "2P2D 每卡 tok/s（16 卡）", "4P2D 每卡 tok/s（24 卡）"], cmp21)
-
-    # ---- goodput section
+    # goodput
     gp = goodput.table()
-    gp_rows = []
+    gp_rows, kbest = [], None
     for name, gpus, g in gp:
-        if g is None:
-            continue
         cells = [name, gpus]
         for sla in goodput.SLAS:
-            x = g[sla["key"]]
+            x = g[sla["key"]] if g else None
             cells.append("不达标" if x is None else f"<b>{x[0]/gpus:.0f}</b> / {x[1]/gpus:,.0f}" + ("*" if x[3].startswith("≥") else ""))
         gp_rows.append(cells)
+        if g and g["S2"] and (not kbest or g["S2"][0] / gpus > kbest[0]):
+            kbest = (g["S2"][0] / gpus, name)
     gp_html = table(["部署", "卡数"] + [f"{s['key']} {s['name']}<br><span class='note'>{s['desc']}</span>" for s in goodput.SLAS], gp_rows)
-    kbest = None
-    for name, gpus, g in gp:
-        if g and g.get("S2"):
-            v = g["S2"][0] / gpus
-            if not kbest or v > kbest[0]:
-                kbest = (v, name)
+    gpbars = bar_chart([s["key"] + " " + s["name"] for s in goodput.SLAS],
+        [(name, col, [(g[s["key"]][0] / gpus if g and g[s["key"]] else float("nan")) for s in goodput.SLAS])
+         for (name, gpus, g), col in zip(gp, [C["blue"], C["magenta"], C["aqua"], C["yellow"], C["orange"]])], "每卡输出 tok/s", h=320)
     peak = []
-    for lab, rows, gpus in (("FP8 单机 TP8", single, 8), ("NVFP4 不分离 4×TP4", dp4, 16), ("NVFP4 2P2D", nv_2p2d, 16), ("NVFP4 4P2D", nv_4p2d, 24), ("FP8 2P1D", fp8_2p1d, 24)):
-        if not rows:
-            continue
+    for lab, rows, gpus in (("FP8 单机 TP8", single, 8), ("NVFP4 不分离 4×TP4", col4, 16), ("NVFP4 2P2D", p2, 16), ("NVFP4 4P2D", p4, 24)):
         c, r = max(rows.items(), key=lambda kv: kv[1]["out"])
         peak.append([lab, gpus, c, f"{r['out']:,.0f}", f"{r['out']/gpus:.0f}", f"{r['total']/gpus:,.0f}", f"{r['tpot']:.0f} ms", s2(r["ttft_med"])])
-    peak_html = table(["部署", "卡数", "压到的最高并发", "输出 tok/s", "每卡输出 tok/s", "每卡总 tok/s", "TPOT", "TTFT 中位数"], peak)
 
-    html = TEMPLATE
+    c128 = lambda rows: rows[128]
+    D3 = ((col4, 16), (p2, 16), (p4, 24))
+    cmp = table(["总并发", "每卡输出 tok/s<br>不分离 / 2P2D / 4P2D", "平均 TPOT（ms）<br>不分离 / 2P2D / 4P2D", "P99 ITL（ms）<br>不分离 / 2P2D / 4P2D", "TTFT 中位数（s）<br>不分离 / 2P2D / 4P2D"],
+        [[c, " / ".join(f"{r[c]['out']/g:.0f}" for r, g in D3), " / ".join(f"{r[c]['tpot']:.0f}" for r, g in D3),
+          " / ".join(f"{r[c]['itl_p99']:.0f}" for r, g in D3), " / ".join(f"{r[c]['ttft_med']/1000:.1f}" for r, g in D3)] for c in (16, 32, 64, 128, 256)])
+
     rep = {
-        "%%NET_NIXL%%": net_html, "%%NET_KV%%": kv_html, "%%NET_BA%%": ba_html,
-        "%%R21_FP8%%": r21[0], "%%R21_NV%%": r21[1], "%%R21_CMP%%": cmp21_html,
-        "%%R21_NV_NOTE%%": "（UCX 调优后重测）" if nv_4p2d_tuned else "（UCX 调优前；调优后的重测进行中）",
-        "%%GOODPUT%%": gp_html, "%%PEAK%%": peak_html,
-        "%%KPI_S2%%": f"{kbest[0]:.0f}" if kbest else "—", "%%KPI_S2_WHO%%": kbest[1] if kbest else "",
-        "%%FRONTIER%%": frontier, "%%ITL%%": itlc, "%%TTFT%%": ttftc, "%%FPBARS%%": fpbars, "%%CAPBARS%%": capbars,
         "%%BASE_TABLE%%": table(["场景（输入 / 输出 / 并发）", "输出 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL"],
             [[k.replace("in", "").replace("-out", " / ").replace("-c", " / "), f1(v["out"]), s2(v["ttft_med"]), f"{v['tpot']:.2f} ms", f"{v['itl_p99']:.1f} ms"]
              for k, v in sorted(base.items(), key=lambda kv: [int(x) for x in re.findall(r"\d+", kv[0])])]),
-        "%%SINGLE_TABLE%%": table(SWH, sw_rows(single, [1, 2, 4, 8, 16, 32, 64, 128])),
-        "%%FP8_1P1D_TABLE%%": table(SWH, sw_rows(fp8_1p1d, [1, 2, 4, 8, 16, 32, 64, 128])),
-        "%%NV_1P1D_TABLE%%": table(SWH, sw_rows(nv_1p1d, [1, 2, 4, 8, 16, 32, 64, 128])),
-        "%%DP4_TABLE%%": table(["总并发"] + SWH[1:3] + SWH[4:], [[c, f1(r["out"]), f0(r["total"]), s2(r["ttft_med"]), s2(r["ttft_p99"]), f"{r['tpot']:.1f} ms", f"{r['itl_p99']:.0f} ms", f0(r["fail"])] for c, r in dp4.items()]),
-        "%%2P2D_TABLE%%": table(SWH, sw_rows(nv_2p2d, [1, 2, 4, 8, 16, 32, 64, 128, 256])),
-        "%%FP_TABLE%%": table(["并发", "FP8 tok/s", "NVFP4 tok/s", "变化", "FP8 TPOT", "NVFP4 TPOT", "FP8 TTFT 中位数", "NVFP4 TTFT 中位数"],
-            [[c, f1(fp8_1p1d[c]["out"]), f1(nv_1p1d[c]["out"]), (lambda v: "0%" if abs(v) < 0.5 else f"{v:+.0f}%")((nv_1p1d[c]['out']/fp8_1p1d[c]['out']-1)*100), f"{fp8_1p1d[c]['tpot']:.1f} ms", f"{nv_1p1d[c]['tpot']:.1f} ms", s2(fp8_1p1d[c]["ttft_med"]), s2(nv_1p1d[c]["ttft_med"])] for c in [1, 2, 4, 8, 16, 32, 64, 128]]),
-        "%%CMP_TABLE%%": table(["总并发", "1P1D 输出 tok/s", "2P2D 输出 tok/s", "不分离 4×TP4 输出 tok/s", "2P2D TTFT 中位数", "不分离 TTFT 中位数", "2P2D P99 ITL", "不分离 P99 ITL"],
-            [[c, f1(nv_1p1d.get(c, {}).get("out", float("nan"))), f1(nv_2p2d[c]["out"]), f1(dp4[c]["out"]), s2(nv_2p2d[c]["ttft_med"]), s2(dp4[c]["ttft_med"]), f"{nv_2p2d[c]['itl_p99']:.0f} ms", f"{dp4[c]['itl_p99']:.0f} ms"] for c in (16, 32, 64, 128, 256)]),
-        "%%CAP_TABLE%%": table(["实例", "prefill 吞吐（8K 输入）", "decode：并发 32", "decode：并发 64", "decode：并发 128", "decode：并发 256"],
-            [[lab, f0(max(v["total"] for v in cap[t]["prefill"].values())) + " tok/s"] + [f"{cap[t]['decode'][c]['out']:,.0f} tok/s · {cap[t]['decode'][c]['tpot']:.0f} ms" if c in cap[t]["decode"] else "—" for c in (32, 64, 128, 256)]
-             for t, lab in (("cap-nvfp4-tp8", "NVFP4 TP8（8 卡）"), ("cap-nvfp4-tp4-8001", "NVFP4 TP4 #1（4 卡）"), ("cap-nvfp4-tp4-8002", "NVFP4 TP4 #2（4 卡，同机并行）")) if t in cap]),
-        "%%TTFT_BLOCK%%": (f'''<div class="fig">{ttftc}<div class="cap">图 5　TTFT 中位数对到达速率（8K 输入 / 1K 输出，16 卡）</div></div>
-<h3>2P2D</h3>{rate_table(r2p2d)}<h3>不分离 4×TP4</h3>{rate_table(rdp4)}
-<p class="note">不分离的速率测试由 4 个客户端各按总速率的四分之一独立发送；每个速率档使用不同的随机种子，避免重复 prompt 命中前缀缓存。</p>''' if (r2p2d and rdp4) else
-            '<div class="callout">按到达速率的 TTFT 测试正在重跑（第一次每档用了同一个随机种子，后面的档命中前缀缓存，数据作废），完成后本页在同一地址更新。在此之前请以并发扫描的 <b>TTFT 中位数</b>为参考：16–128 并发时 2P2D 为 1.4–1.7 s，不分离 4×TP4 为 2.4–2.6 s（第六节表格）。</div>'),
-        "%%GSM_TABLE%%": table(["指标", "FP8", "NVFP4", "差值"], gsm_rows),
-        "%%PAIRED%%": table(["", "题数"], [["两边都对", pm.group(1)], ["只有 FP8 对", pm.group(2)], ["只有 NVFP4 对", pm.group(3)], ["两边都错", pm.group(4)], ["抽取出的答案完全相同", f"{pm.group(5)} / {pm.group(6)}"]]) if pm else "",
-        "%%PVAL%%": pm.group(7) if pm else "—",
-        "%%IMP_2P2D%%": f"{imp_2p2d:+.0f}%", "%%GAP_DP4%%": f"{gap_dp4:+.0f}%",
-        "%%H2P2D_OUT%%": f0(h_2p2d["out"]), "%%HDP4_OUT%%": f0(h_dp4["out"]), "%%H1P1D_OUT%%": f0(h_1p1d["out"]),
-        "%%H2P2D_ITL%%": f"{h_2p2d['itl_p99']:.0f}", "%%HDP4_ITL%%": f"{h_dp4['itl_p99']:.0f}",
-        "%%H2P2D_TTFT%%": s2(h_2p2d["ttft_med"]), "%%HDP4_TTFT%%": s2(h_dp4["ttft_med"]),
+        "%%SINGLE_TABLE%%": table(SWH, sw_rows(single, 8)),
+        "%%COL4_TABLE%%": table(["总并发"] + SWH[1:], sw_rows(col4, 16)),
+        "%%P2_TABLE%%": table(SWH, sw_rows(p2, 16)), "%%P4_TABLE%%": table(SWH, sw_rows(p4, 24)),
+        "%%R_FP8%%": rate_table(r_fp8, 8), "%%R_NV8%%": rate_table(r_nv8, 8), "%%R_NV44%%": rate_table(r_nv44, 8),
+        "%%R_P2%%": rate_table(r_p2, 16), "%%R_P4%%": rate_table(r_p4, 24),
+        "%%FRONTIER%%": frontier, "%%ITL%%": itlc, "%%TTFT%%": ttftc, "%%TPOTC%%": tpotc, "%%CAPBARS%%": capbars, "%%CAP_TABLE%%": cap_table,
+        "%%CMP%%": cmp, "%%GSM_TABLE%%": table(["指标", "FP8", "NVFP4", "差值"], gsm_rows),
+        "%%PAIRED%%": table(["", "题数"], [["两边都对", pm.group(1)], ["只有 FP8 对", pm.group(2)], ["只有 NVFP4 对", pm.group(3)], ["两边都错", pm.group(4)], ["抽取出的答案完全相同", f"{pm.group(5)} / {pm.group(6)}"]]),
+        "%%PVAL%%": pm.group(7), "%%NET_NIXL%%": table(["UCX 设置", "数据位置", "拆分 / 并发", "80 MB 一次耗时", "吞吐"], nrows), "%%NET_KV%%": kv_html,
+        "%%GOODPUT%%": gp_html, "%%GPBARS%%": gpbars, "%%PEAK%%": table(["部署", "卡数", "最高并发", "输出 tok/s", "每卡输出 tok/s", "每卡总 tok/s", "TPOT", "TTFT 中位数"], peak),
+        "%%KPI_S2%%": f"{kbest[0]:.0f}", "%%KPI_S2_WHO%%": kbest[1],
         "%%PRE8%%": f0(pre8), "%%PRE4%%": f0(pre4), "%%PRE4X2%%": f0(pre4 + pre4b),
+        "%%P2_128_ITL%%": f"{p2[128]['itl_p99']:.0f}", "%%C4_128_ITL%%": f"{col4[128]['itl_p99']:.0f}",
+        "%%P2_128_OUT%%": f0(p2[128]["out"]), "%%C4_128_OUT%%": f0(col4[128]["out"]),
     }
+    html = TEMPLATE
     for k, v in rep.items():
         html = html.replace(k, str(v))
+    left = sorted(set(re.findall(r"%%[A-Z0-9_]+%%", html)))
+    if left:
+        raise SystemExit(f"unfilled placeholders: {left}")
     open(a.out, "w").write(html)
     print("wrote", a.out)
 

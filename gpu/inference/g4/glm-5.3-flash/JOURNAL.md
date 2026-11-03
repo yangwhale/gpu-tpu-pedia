@@ -109,3 +109,7 @@ vLLM 版本 `0.33.0rc1.dev484+g76c6f3f2a`，比原作者测过的 `0.30.1rc1` �
 - **`UCX_TCP_TX_SEG_SIZE=1m` + `UCX_TCP_RX_SEG_SIZE=1m`：GPU 显存一次 24.9 ms（27 Gbps），提速 5 倍**；4m 与 1m 相同；`UCX_RNDV_FRAG_SIZE` 无效；`UCX_PROTO_ENABLE=n` 报错。
 - 一对 agent 内多路并发封顶约 27 Gbps（一条 UCX 连接 = 一条 TCP 流）；**8 对 agent 并行（相当于 TP8 的 8 个 rank）NIC 计数器持续 176 Gbps、峰值 183 Gbps，单网卡打满**（iperf 上限 173 Gbps）；默认参数 8 对只有 42 Gbps。
 `pd/serve.sh` 默认加上这两个变量，2P2D 与 4P2D 用调优后的配置重跑。
+
+**11:07–13:30（19:07–21:30）UCX 调优后重测**：2P2D（全 TP4）并发 + 速率扫描；同时第三台机器测单机不分离（NVFP4 2×TP4、NVFP4 TP8、FP8 TP8）的细步长速率扫描；最后三台机器重测 4P2D。4P2D 调优后 256 并发 3,802 tok/s、TTFT 中位数 1.37 s、P99 ITL 89 ms；速率扫描到 3.5 req/s 首字仍约 1.2 s。
+
+**整理**：结果目录只保留最终配置；UCX 未调优的 PD 数据、1P1D、FP8 2P1D、粗步长的 DP4 速率扫描移到 `results/_archive/`（原因见其中 README）。脚本按用途分到 `scripts/serve`、`scripts/bench`、`scripts/net`，RUNBOOK 改写为只描述推荐配置。本文件保留完整过程，其中提到的旧脚本路径以当时为准。

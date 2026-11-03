@@ -1,502 +1,301 @@
-# RUNBOOK — 在 G4 上跑 GLM-5.3-Flash（vLLM · FP8 · TP8，以及 PD 分离 1P1D）
+# RUNBOOK — 在 G4 上复现 GLM-5.3-Flash 的最优配置
 
-从零开始，**按顺序一步不差地执行**就能复现本报告的全部数字。每一步都写了「做完应该看到什么」。
+按顺序一步不差地执行即可复现 README 和 HTML 报告里的全部数字。每一步都写了「做完应该看到什么」。
 
-文中所有尖括号 `<...>` 都要换成你自己的值：
+尖括号 `<...>` 换成你自己的值：
 
-| 占位符 | 含义 | 例子 |
-|---|---|---|
-| `<your-project>` | 你的 GCP 项目 ID | `my-gpu-project` |
-| `<your-bucket>` | 你自己的 GCS 桶（可选，用来缓存权重） | `my-models-uc1` |
-| `<P_IP>` / `<D_IP>` | PD 分离时两台机器的内网 IP | `10.0.0.2` |
-
-总耗时参考（本次实测）：
-
-| 步骤 | 耗时 |
+| 占位符 | 含义 |
 |---|---|
-| 建 Spot 机器 | 1–2 分钟 |
-| 装 Docker + 拉 vLLM 镜像（并行） | 约 1–2 分钟 |
-| 下载 306 GiB 权重 | HuggingFace 约 2.5 分钟；同区域 GCS 桶 49 秒 |
-| 服务启动 | 约 6.5 分钟（权重加载 31 s + 编译、预热、CUDA graph 共 318 s） |
-| 基础压测 7 个场景 | 约 8 分钟 |
-| 8K / 1K 并发扫描 8 档 | 约 30 分钟 |
+| `<your-project>` | GCP 项目 ID |
+| `<your-bucket>` | 你自己的 GCS 桶（可选，缓存权重用，要和机器同区域） |
+| `<A_IP>` `<B_IP>` `<C_IP>` | 各台机器的内网 IP（`hostname -I \| awk '{print $1}'`） |
 
-**省事的一键版**：做完第 1 步后，把 [`scripts/run-all.sh`](scripts/run-all.sh) 拷到机器上跑，它会自动做完第 2–7 步（见第 1.3 节）。
+**要几台机器**：配置 A（不分离）1 台；配置 B（2P2D）2 台；配置 C（4P2D）3 台。
+
+| 步骤 | 耗时（实测） |
+|---|---|
+| 建一台 Spot 机器 | 1–2 分钟 |
+| 装 Docker + 拉镜像 | 1–2 分钟 |
+| 下权重：HuggingFace / 同区域 GCS 桶 | FP8 306 GiB 约 2.5 分钟 / 49 秒；NVFP4 185 GiB 约 1.5 分钟（HF） |
+| 起服务（单实例到可用） | 约 6.5 分钟 |
+| 一组并发扫描（1 → 256） | 约 35 分钟 |
+| 一组速率扫描（5–7 档） | 约 20–25 分钟 |
 
 ---
 
 ## 0. 准备（在你自己的电脑上）
 
-1. 一个有 G4 配额的 GCP 项目。`g4-standard-384` 一台需要 **8 张 `nvidia-rtx-pro-6000`** 的配额；用 Spot 时要的是 Spot（preemptible）配额。可在控制台「IAM 与管理 → 配额」里搜 `RTX PRO 6000` 查看。
-2. 装好 Google Cloud CLI 并登录：
-
 ```bash
 gcloud auth login
 gcloud config set project <your-project>
 gcloud services enable compute.googleapis.com
-```
 
-3. 把本仓库拉下来，进入本目录：
-
-```bash
 git clone https://github.com/yangwhale/gpu-tpu-pedia.git
 cd gpu-tpu-pedia/gpu/inference/g4/glm-5.3-flash
-```
 
-4. 设几个后面反复用到的变量：
-
-```bash
 export PROJECT=<your-project>
-export ZONE=us-central1-b      # 需是有 G4 的 zone，以控制台「可用区」列表为准
-export NAME=g4-glm53
+export ZONE=us-central1-b          # 需是有 G4 的 zone
 ```
 
-不需要 HuggingFace token：`zai-org/GLM-5.3-Flash` 是公开模型。
+配额：每台 `g4-standard-384` 需要 8 张 `nvidia-rtx-pro-6000`（Spot 用 preemptible 配额）。模型公开，不需要 HuggingFace token。
 
-## 1. 建 Spot 机器
+脚本目录：
 
-### 1.1 创建命令
+| 路径 | 用途 |
+|---|---|
+| `scripts/create-vm.sh` | 建一台 G4 Spot 机器 |
+| `scripts/setup-node.sh` | 在机器上装 Docker、拉镜像、拷权重 |
+| `scripts/download-hf.sh` | 从 HuggingFace 下载权重 |
+| `scripts/serve/instance.sh` | 起一个不分离的 vLLM 实例（可指定 GPU 子集） |
+| `scripts/serve/pd.sh` | 起一个 PD 实例（P 或 D），已带 UCX 调优 |
+| `scripts/serve/proxy.sh` + `toy_proxy_server.py` | PD 代理（vLLM 官方 NIXL 示例代理） |
+| `scripts/bench/concurrency.sh` | 并发扫描（8K/1K，1 → 256） |
+| `scripts/bench/rate.sh` | 泊松速率扫描 |
+| `scripts/bench/run-pd.sh` | PD 一键：等实例 → 起代理 → 冒烟 → 并发扫描 |
+| `scripts/bench/capacity.sh` | 单实例 prefill / decode 容量（算 P:D 配比） |
+| `scripts/eval/gsm8k.sh` | GSM8K 能力评测 |
+| `scripts/net/nixl_bench.py` | 独立 NIXL 传输基准 |
+| `scripts/report/goodput.py`、`build_report.py` | 按延迟门槛算每卡吞吐、生成 HTML 报告 |
+| `scripts/run-all.sh` | FP8 基线一键（装环境 → 下权重 → 起 TP8 → 冒烟 → 基础压测） |
 
-下面这条和 [`scripts/create-vm.sh`](scripts/create-vm.sh) 完全一样，直接复制执行：
+## 1. 建机器（每台都一样）
 
 ```bash
-gcloud compute instances create $NAME \
-  --project $PROJECT --zone $ZONE \
+NAME=g4-a PROJECT=$PROJECT ZONE=$ZONE bash scripts/create-vm.sh
+# 需要几台就建几台：g4-b、g4-c
+```
+
+`create-vm.sh` 里的命令（可以直接复制）：
+
+```bash
+gcloud compute instances create $NAME --project $PROJECT --zone $ZONE \
   --machine-type g4-standard-384 \
   --provisioning-model SPOT --instance-termination-action STOP \
   --maintenance-policy TERMINATE \
-  --image-family common-cu129-ubuntu-2404-nvidia-580 \
-  --image-project deeplearning-platform-release \
+  --image-family common-cu129-ubuntu-2404-nvidia-580 --image-project deeplearning-platform-release \
   --boot-disk-size 2000GB --boot-disk-type hyperdisk-balanced \
-  --scopes cloud-platform \
-  --metadata install-nvidia-driver=True
+  --scopes cloud-platform --metadata install-nvidia-driver=True
 ```
 
-| 参数 | 值 | 为什么 |
-|---|---|---|
-| `--machine-type` | `g4-standard-384` | 8 卡 × 96 GB。FP8 权重 306 GiB，TP8 后每卡约 39 GiB，剩下的给 KV |
-| `--provisioning-model SPOT` + `--instance-termination-action STOP` | Spot，被抢占时**停机不删盘** | 测试省钱；被抢占后 `start` 回来，权重还在 |
-| `--image-family` | Deep Learning VM `common-cu129-ubuntu-2404-nvidia-580` | 预装 NVIDIA 驱动（本次实测 580.178.04）和 CUDA 12.9 |
-| `--boot-disk-size 2000GB` / `hyperdisk-balanced` | 2 TB 系统盘 | 权重 306 GiB + vLLM 镜像解压后 35.5 GB，留余量 |
-| `--scopes cloud-platform` | | 机器上能直接用 `gcloud storage` 读写你的桶 |
+| 参数 | 为什么 |
+|---|---|
+| `g4-standard-384` | 8 × 96 GB；FP8 306 GiB / NVFP4 185 GiB 都放得下 |
+| `SPOT` + `--instance-termination-action STOP` | 测试省钱；被抢占时停机不删盘，`start` 回来权重还在。生产去掉这两项 |
+| DLVM `common-cu129-ubuntu-2404-nvidia-580` | 预装驱动（实测 580.178.04） |
+| 2 TB Hyperdisk Balanced | 两套权重 + 镜像（解压 35.5 GB）有余量 |
+| `--scopes cloud-platform` | 机器上能直接 `gcloud storage` 读写你的桶 |
 
-要按需（非 Spot）就去掉 `--provisioning-model` 和 `--instance-termination-action` 两个参数。
-报 `ZONE_RESOURCE_POOL_EXHAUSTED` 说明这个 zone 暂时没有 Spot 容量，换一个有 G4 的 zone 再试。
+多台机器要在**同一 zone、同一 VPC**（默认 VPC 的 `default-allow-internal` 即可互通）。
 
-### 1.2 验证
+**验证**：`gcloud compute ssh $NAME --zone $ZONE --project $PROJECT --command "nvidia-smi -L"` 列出 8 张 `RTX PRO 6000 Blackwell Server Edition`。首次 ssh 若报 `Permission denied (publickey)`，等十几秒重试。
 
-```bash
-gcloud compute ssh $NAME --zone $ZONE --project $PROJECT --command "nvidia-smi -L"
-```
-
-应列出 8 行 `NVIDIA RTX PRO 6000 Blackwell Server Edition`。第一次 ssh 会生成密钥，偶尔要等十几秒才生效，报 `Permission denied (publickey)` 就重试一次。
-
-### 1.3 把脚本拷上去（之后的步骤都在机器上执行）
+把脚本拷上去：
 
 ```bash
 gcloud compute scp --recurse scripts $NAME:~/ --zone $ZONE --project $PROJECT
-gcloud compute ssh $NAME --zone $ZONE --project $PROJECT
-# 现在已经在机器上了
 ```
 
-一键版（自动做完第 2–7 步，日志在 `~/g4glm/run.log`，结果在 `~/g4glm/`）：
+## 2. 每台机器准备环境
+
+在每台机器上：
 
 ```bash
-# 可选：权重已经放在你同区域的桶里，就设这一行，下载从 2.5 分钟变成 49 秒
-export MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash
-setsid nohup bash ~/scripts/run-all.sh > ~/g4glm-run.log 2>&1 < /dev/null &
-tail -f ~/g4glm-run.log          # 看到 "=== STEP ALL_DONE" 即全部完成
-```
-
-想一步步看清楚，就按下面第 2–7 步手动执行。
-
-## 2. 装 Docker 和 NVIDIA Container Toolkit
-
-DLVM 镜像不带 Docker，需要自己装。以下在 VM 上执行：
-
-```bash
-curl -fsSL https://get.docker.com | sudo sh
-
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
-  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
-  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-```
-
-**验证**：`sudo docker run --rm --gpus all ubuntu nvidia-smi -L` 能看到 8 张卡。
-
-> DLVM 镜像已经预装并 **hold** 住了 `nvidia-container-toolkit 1.19.1`。上面的 `apt-get install` 可能报
-> `Depends: nvidia-container-toolkit-base (= 1.20.1-1) but 1.19.1-1 is to be installed` / `held broken packages`，
-> **不影响使用**，只要 `nvidia-ctk runtime configure` 和上面的验证通过就行。另外别把其它包和它写在同一条 `apt-get install` 里，会被一起拖失败。
-
-## 3. 拉镜像（可与第 4 步并行）
-
-**固定用本次测试的镜像 digest**，不要用浮动的 `nightly` 标签（它每天都变，复现出来的数字会不一样）：
-
-```bash
-export IMAGE=vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57
-sudo docker pull $IMAGE
-sudo docker run --rm --gpus all --entrypoint python3 $IMAGE -c "import vllm; print(vllm.__version__)"
-```
-
-应打印 `0.33.0rc1.dev484+g76c6f3f2a`。这个 digest 是 2026-11-03 拉取的 `vllm/vllm-openai:nightly`。
-
-## 4. 下载模型
-
-两种来源，**推荐 4B**：第一次从 HuggingFace 下（4A），顺手放进**和 VM 同区域**的 GCS 桶，以后都从桶里拷（4B）。
-
-| 来源 | 实测耗时（306 GiB） | 实测速度 |
-|---|---|---|
-| 4A HuggingFace | 约 2.5 分钟（含装 uv） | 约 2 GB/s |
-| 4B 同区域 GCS 桶（us-central1 → us-central1-b） | **49 秒** | **6.3 GiB/s** |
-| 反向：本地上传到桶 | 77 秒 | 约 4 GiB/s |
-
-### 4A. 从 HuggingFace 下载
-
-```bash
-# DLVM 的 Ubuntu 24.04 镜像里 python3 没带 pip，用 uv 建一个独立环境
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH=$HOME/.local/bin:$PATH
-uv venv ~/hfenv && uv pip install --python ~/hfenv/bin/python "huggingface_hub[hf_xet]"
-sudo mkdir -p /data && sudo chown $USER /data
-HF_XET_HIGH_PERFORMANCE=1 ~/hfenv/bin/python -c "
-from huggingface_hub import snapshot_download
-snapshot_download('zai-org/GLM-5.3-Flash', local_dir='/data/GLM-5.3-Flash', max_workers=32)"
-du -sh /data/GLM-5.3-Flash
-```
-
-### 4B. 从同区域 GCS 桶拷（推荐）
-
-桶要和 VM 在同一区域（本次桶在 `us-central1`，VM 在 `us-central1-b`），跨区域会慢且收出口流量费。
-VM 用默认服务账号 + `--scopes cloud-platform` 即可，服务账号需要桶的 `roles/storage.objectViewer`（上传需 `objectAdmin`）。
-
-```bash
-export MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash
-
-# 第一次：4A 下完后上传一份（.cache 是 huggingface_hub 的元数据，不用传）
-gcloud storage rsync -r /data/GLM-5.3-Flash $MODEL_URI --exclude="^\.cache/"
-
-# 以后：直接从桶拷
-sudo mkdir -p /data && sudo chown $USER /data
-gcloud storage cp -r $MODEL_URI /data/
-```
-
-`gcloud storage` 默认就会并行分片下载，不需要额外调参。
-
-**验证**：`du` 约 306 GiB（HuggingFace 上全部文件合计 305.8 GiB）。实测下载速度约 2 GB/s（开头 60 秒下了 115 GB），整份权重约 2.5 分钟。
-
-## 5. 启动服务
-
-```bash
-sudo docker run -d --name glm --gpus all --shm-size=64g --ipc=host --network host \
-  -v /data/GLM-5.3-Flash:/model \
-  $IMAGE \
-  --model /model --served-model-name glm \
-  --tensor-parallel-size 8 \
-  --max-model-len 131072 --max-num-seqs 256 \
-  --gpu-memory-utilization 0.85 --kv-cache-dtype fp8 \
-  --tool-call-parser glm47 --reasoning-parser glm45 \
-  --port 8000
-
-sudo docker logs -f glm      # 看加载进度
-```
-
-参数说明：
-
-| 参数 | 说明 |
-|---|---|
-| `--tensor-parallel-size 8` | 8 卡切一个副本 |
-| `--max-model-len 131072` | 本次压测开 128K。要 1M 改成 `1048576`，KV 池需求更大 |
-| `--max-num-seqs 256` | 原作者报告 1024 时 Mamba（KDA 状态）缓存 OOM，512 是上限 |
-| `--kv-cache-dtype fp8` | SM120 的 sparse MLA 后端要求 `fp8_ds_mla` 格式 KV |
-| `--tool-call-parser glm47` / `--reasoning-parser glm45` | 官方 recipe 给的 GLM 系解析器 |
-| 不加 `--speculative-config` | **MTP 先别开**，nightly 原生 SM120 后端上接受率为 0% |
-
-**验证**：日志里依次出现这几行（括号里是本次实测值）：
-
-```
-Using FLASHINFER_MLA_SPARSE_SM120 attention backend
-Using fp8_ds_mla KV cache format for FLASHINFER_MLA_SPARSE_SM120 backend.
-Model loading took 39.38 GiB memory and 31.5 seconds        （每卡）
-Available KV cache memory: 38.14 GiB                         （每卡）
-GPU KV cache size: 4,441,368 tokens, Maximum concurrency for 131,072 tokens per request: 33.88x
-init engine (profile, create kv cache, warmup model) took 318.07 s
-```
-
-预热期间会刷 `No available shared memory broadcast block found in 60 seconds`，是 JIT 编译慢导致的提示，**不是挂了**，等着就行。最后出现 `Application startup complete`。
-
-```bash
-curl -s localhost:8000/v1/models
-```
-
-## 6. 冒烟测试
-
-```bash
-curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
-  "model": "glm",
-  "messages": [{"role": "user", "content": "用一句话介绍香港。"}],
-  "max_tokens": 200
-}'
-```
-
-**注意**：GLM-5.3-Flash 默认以最高档（`max`）思考，再回答。上面这条请求 200 个 token 全用在思考上（`completion_tokens_details.reasoning_tokens: 200`，`finish_reason: length`），`content` 为空，**这是正常的**，不是服务坏了。两种处理：
-
-- 调大 `max_tokens`（默认思考档位下建议 2,000 以上）；
-- 或者把思考档位调低，直接出答案。这个模型的 chat template **没有** `enable_thinking` 开关（传了会被忽略），控制项是 `reasoning_effort`，取值 `low` / `high`，不传为 `max`：
-
-```bash
-curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
-  "model": "glm",
-  "messages": [{"role": "user", "content": "用一句话介绍香港。"}],
-  "max_tokens": 2000,
-  "reasoning_effort": "low"
-}'
-```
-
-`reasoning_effort` 写在顶层（OpenAI 标准字段）或写成 `"chat_template_kwargs": {"reasoning_effort": "low"}` 都生效。本次实测 `low` 和 `high` 这条请求的 `reasoning_tokens` 都是 0，直接返回：「香港是一座融合东西方文化的国际化大都市，以繁华的金融中心、璀璨的城市夜景和独特的美食文化闻名于世。」
-
-## 7. 压测
-
-### 压测工具：`vllm bench serve`
-
-**不用另外安装**：它就在 vLLM 镜像里，和服务端是同一个版本。上面第 5 步起的容器名叫 `glm`，直接 `docker exec` 进去调用即可。
-
-如果想在**另一台机器**上压测（比如模拟真实客户端），在那台机器上用同一个镜像跑即可（需要一份模型目录给 tokenizer 用）：
-
-```bash
-sudo docker run --rm --network host -v /data/GLM-5.3-Flash:/model:ro --entrypoint vllm \
-  vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57 \
-  bench serve --base-url http://<服务器IP>:8000 --model glm --tokenizer /model ...   # 其余参数同下
-```
-
-PD 分离的压测（第 9 节 `pd/bench.sh`）就是这么跑的。
-
-`--tokenizer` 要指向一份模型目录（只用其中的 tokenizer 文件），用来按 token 数精确生成随机输入。
-
-### 7.0 基础场景（7 个）
-
-
-```bash
-for cfg in "1024 512 1" "1024 512 4" "1024 512 16" "1024 512 64" \
-           "8192 512 1" "8192 512 16" "32768 256 1"; do
-  set -- $cfg
-  n=$(( $3 * 4 )); [ $n -lt 8 ] && n=8
-  sudo docker exec glm vllm bench serve \
-    --backend openai-chat --endpoint /v1/chat/completions \
-    --model glm --tokenizer /model \
-    --dataset-name random --random-input-len $1 --random-output-len $2 \
-    --max-concurrency $3 --num-prompts $n --ignore-eos \
-    --percentile-metrics ttft,tpot,itl,e2el \
-    | tee bench-in$1-out$2-c$3.txt
-done
-```
-
-看每个文件里的 `Output token throughput`、`Mean TTFT`、`Mean TPOT`。
-
-### 7.1 8K 输入 / 1K 输出并发扫描
-
-```bash
-# 服务起好后执行；结果写到 ~/g4glm/8k1k/，每档一个 .txt（摘要）和一个 .json（逐请求明细）
-bash ~/scripts/bench-8k1k.sh
-# 只跑部分档位：CONCURRENCY="1 16 64" bash ~/scripts/bench-8k1k.sh
-```
-
-| 参数 | 值 | 说明 |
-|---|---|---|
-| `--random-input-len` / `--random-output-len` | 8192 / 1024 | 随机 token，不命中前缀缓存 |
-| `--max-concurrency` | 1 2 4 8 16 32 64 128 | 同时在飞的请求数 |
-| `--num-prompts` | 并发 × 4，至少 8 | 每档跑 4 轮，摊掉首轮冷启动 |
-| `--ignore-eos` | 开 | 每条都生成满 1,024 个 token，数字可比 |
-| `--seed` | 等于并发数 | 每档数据固定，可复现 |
-
-整轮扫描约 30 分钟（实测见 README 第 5.2 节）。
-
-## 8. 收尾
-
-```bash
-sudo docker rm -f glm
-# 不用了记得删机器，Spot 也按小时计费：
-gcloud compute instances delete $NAME --zone $ZONE --project $PROJECT
-```
-
-## 9. PD 分离：1P1D（两台机器）
-
-一台机器跑 prefill（P），另一台跑 decode（D），各自 TP8。KV 由 vLLM 的 `NixlConnector` 从 P 传到 D；
-G4 跨机没有 RDMA，NIXL 的 UCX 后端走 **TCP**。镜像里已带 NIXL 1.5.2，并且已支持 KDA/Mamba 这类混合模型的状态传输，不用另装。
-
-脚本都在 [`scripts/pd/`](scripts/pd/)：
-
-| 脚本 | 在哪台跑 | 作用 |
-|---|---|---|
-| `setup-node.sh`（在 `scripts/`） | 每台 | 装 Docker、拉镜像、从桶拷权重，不起服务 |
-| `pd/serve.sh` | P、D 各一次 | `ROLE=prefill` 起 `glm-p`（:8100，kv_producer）；`ROLE=decode` 起 `glm-d`（:8200，kv_consumer） |
-| `pd/proxy.sh` | P | 起代理 `glm-proxy`（:8000）。代理先把请求发给 P 只算 prefill（`max_tokens=1`），拿到 KV 位置后转给 D 生成 |
-| `pd/toy_proxy_server.py` | — | vLLM 官方 NIXL 示例代理（`tests/v1/kv_connector/nixl_integration`，commit `76c6f3f2a`），原样拷贝 |
-| `pd/bench.sh` | P | 通过代理跑 8K / 1K 并发扫描 |
-| `pd/run-1p1d.sh` | P | 一键：等 P/D 就绪 → 起代理 → 冒烟 → 扫描 |
-
-### 9.1 准备第二台机器
-
-前面那台（`$NAME`）当 P。在你自己的电脑上再建一台当 D，命令和第 1.1 节一样，只换名字：
-
-```bash
-export NAME_D=g4-glm53-d
-NAME=$NAME_D PROJECT=$PROJECT ZONE=$ZONE bash scripts/create-vm.sh
-gcloud compute scp --recurse scripts $NAME_D:~/ --zone $ZONE --project $PROJECT
-gcloud compute ssh $NAME_D --zone $ZONE --project $PROJECT
-```
-
-在 D 上准备环境（装 Docker、拉同一个镜像、拷权重；不起服务）：
-
-```bash
-# 有桶就设 MODEL_URI，没有就先按第 4A 步从 HuggingFace 下到 /data/GLM-5.3-Flash
+# FP8 权重已在同区域桶里就设 MODEL_URI（49 秒拷完）；没有桶就不设 MODEL_URI，改用下面的 download-hf.sh
 MODEL_URI=gs://<your-bucket>/models/zai-org/GLM-5.3-Flash bash ~/scripts/setup-node.sh
-```
 
-P 上如果还开着第 5 步的单机服务，先停掉：`sudo docker rm -f glm`。两台机器各自的内网 IP 用 `hostname -I | awk '{print $1}'` 查，记作 `<P_IP>`、`<D_IP>`。
-
-两台机器要在**同一个 zone、同一个 VPC**，内网互通（默认 VPC 的 `default-allow-internal` 规则就够）。
-
-测一下两台之间的带宽（本次实测）：
-
-```bash
-# D 上：iperf3 -s -D      P 上：
-iperf3 -c <D_IP> -P 16 -t 10     # 实测 173 Gbit/s（16 条流）
-iperf3 -c <D_IP> -P 1 -t 5       # 实测 49.7 Gbit/s（单条流）
-```
-
-### 9.2 起服务
-
-```bash
-# P 机器
-ROLE=prefill bash ~/scripts/pd/serve.sh
-# D 机器
-ROLE=decode bash ~/scripts/pd/serve.sh
-```
-
-关键配置（`serve.sh` 里）：
-
-| 项 | 值 | 说明 |
-|---|---|---|
-| `--kv-transfer-config` | `{"kv_connector":"NixlConnector","kv_role":"kv_producer"/"kv_consumer","kv_load_failure_policy":"fail"}` | P 是生产者、D 是消费者 |
-| `VLLM_SSM_CONV_STATE_LAYOUT` | `DS` | **必须设**。GLM-5.3-Flash 有 KDA 线性注意力层（vLLM 按 Mamba 类状态管理），NIXL 传这类状态要求 DS 布局；不设会在引擎初始化末尾报 `3-read Mamba conv transfer requires DS conv state layout` 退出 |
-| `UCX_TCP_TX_SEG_SIZE` / `UCX_TCP_RX_SEG_SIZE` | `1m` | **强烈建议**。UCX 默认分段下 GPU 显存经 TCP 每对连接只有约 5 Gbps，KV 传输每次 300+ ms；1m 后 27 Gbps/对，KV 传输约 120 ms（见 README 5.9） |
-| `VLLM_NIXL_SIDE_CHANNEL_HOST` | 本机内网 IP | NIXL 握手地址，**跨机必须设**，否则默认 localhost 对方连不上 |
-| `VLLM_NIXL_SIDE_CHANNEL_PORT` | 5600 | 握手端口 |
-| `UCX_TLS` / `UCX_NET_DEVICES` | `all` / `all` | 让 UCX 自己选；G4 上会落到 TCP + cuda_copy |
-| 其余参数 | 与单机 TP8 完全相同 | 方便和单机结果对比 |
-
-日志里出现 `NIXL is available` 说明连接器加载成功。
-
-### 9.3 代理、冒烟、压测
-
-```bash
-# P 机器
-P=<P_IP>:8100 D=<D_IP>:8200 bash ~/scripts/pd/run-1p1d.sh
-# 结果在 ~/g4glm/pd-1p1d/，每档一个 .txt 和 .json
-```
-
-或分步：
-
-```bash
-PREFILL="<P_IP>:8100" DECODE="<D_IP>:8200" bash ~/scripts/pd/proxy.sh
-curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
-  -d '{"model":"glm","messages":[{"role":"user","content":"用一句话介绍香港。"}],"max_tokens":2000,"reasoning_effort":"low"}'
-TAG=1p1d bash ~/scripts/pd/bench.sh
-```
-
-客户端只认代理的 `:8000`，接口和单机完全一样。
-
-### 9.4 收尾
-
-```bash
-# 在你自己的电脑上
-gcloud compute instances delete $NAME $NAME_D --zone $ZONE --project $PROJECT
-```
-
-## 10. NVFP4 与能力评测
-
-### 10.1 NVFP4 1P1D
-
-两台机器都下载 NVFP4 权重（或从桶拷），然后用同一套脚本、只换模型目录起服务：
-
-```bash
-# 两台机器都执行（184 GiB，HuggingFace 约 2–3 分钟）
+# NVFP4 权重（推荐配置都用它）
 REPO=RedHatAI/GLM-5.3-Flash-NVFP4 DEST=/data/GLM-5.3-Flash-NVFP4 bash ~/scripts/download-hf.sh
-
-# P 机器
-MODEL_DIR=/data/GLM-5.3-Flash-NVFP4 EXTRA_ARGS=--no-enable-flashinfer-autotune ROLE=prefill bash ~/scripts/pd/serve.sh
-# D 机器
-MODEL_DIR=/data/GLM-5.3-Flash-NVFP4 EXTRA_ARGS=--no-enable-flashinfer-autotune ROLE=decode bash ~/scripts/pd/serve.sh
-
-# P 机器：代理 + 冒烟 + 扫描，结果在 ~/g4glm/pd-1p1d-nvfp4/
-TAG=1p1d-nvfp4 P=<P_IP>:8100 D=<D_IP>:8200 bash ~/scripts/pd/run-1p1d.sh
+# 或从桶：gcloud storage cp -r gs://<your-bucket>/models/RedHatAI/GLM-5.3-Flash-NVFP4 /data/
+# FP8 没走桶时：REPO=zai-org/GLM-5.3-Flash DEST=/data/GLM-5.3-Flash bash ~/scripts/download-hf.sh
 ```
 
-**验证**：日志里出现 `Using 'FLASHINFER_CUTLASS' NvFp4 MoE backend`、`Model loading took 23.69 GiB memory`（每卡）、`GPU KV cache size: 7,126,605 tokens`（D 节点）。
+`setup-node.sh` 做三件事：装 Docker 与 NVIDIA Container Toolkit、拉固定 digest 的 vLLM 镜像、拷 FP8 权重。
 
-### 10.2 GSM8K 能力评测
+**验证**：
+- `sudo docker run --rm --gpus all ubuntu nvidia-smi -L` 看到 8 张卡；
+- `du -sh /data/GLM-5.3-Flash /data/GLM-5.3-Flash-NVFP4` 约 306 GiB / 185 GiB。
 
-评测工具 lm-evaluation-harness 装在独立虚拟环境里，脚本第一次运行时自动安装（`lm_eval[api]==0.4.13` + `transformers`；后者用来加载 tokenizer，`lm_eval[api]` 不会自动带上）：
+> DLVM 镜像预装并 hold 了 `nvidia-container-toolkit 1.19.1`，安装时报 `held broken packages` **不影响使用**，只要上面的验证通过。系统 python 没带 pip，下载脚本用 uv 建独立环境。
+
+**第一次下完权重，建议传一份到同区域桶**，以后拷贝只要 1 分钟以内：
 
 ```bash
-# 服务起好（单机 :8000 或 PD 代理 :8000 都行）后，在同一台机器上：
-TAG=fp8   TOKENIZER=/data/GLM-5.3-Flash        bash ~/scripts/eval/gsm8k.sh
-TAG=nvfp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4  bash ~/scripts/eval/gsm8k.sh
-# 结果在 ~/g4glm/eval-<TAG>/：gsm8k.log 末尾是分数表，glm/samples_*.jsonl 是逐题记录
+gcloud storage rsync -r /data/GLM-5.3-Flash-NVFP4 gs://<your-bucket>/models/RedHatAI/GLM-5.3-Flash-NVFP4 --exclude="^\.cache/"
 ```
 
-| 设置 | 值 |
+## 3. 配置 A：NVFP4 不分离（每台机器 2 × TP4）
+
+每台机器上：
+
+```bash
+NV="MODEL_DIR=/data/GLM-5.3-Flash-NVFP4 EXTRA_ARGS=--no-enable-flashinfer-autotune"
+env $NV NAME=glm-a GPUS=0,1,2,3 PORT=8001 bash ~/scripts/serve/instance.sh
+env $NV NAME=glm-b GPUS=4,5,6,7 PORT=8002 bash ~/scripts/serve/instance.sh
+```
+
+`instance.sh` 的关键参数：`--tensor-parallel-size 4`（由 `GPUS` 推出）、`--max-model-len 131072`、`--max-num-seqs 256`、`--gpu-memory-utilization 0.85`、`--kv-cache-dtype fp8`、`--tool-call-parser glm47`、`--reasoning-parser glm45`。
+
+**验证**（约 6.5 分钟后）：`curl -s localhost:8001/v1/models`、`curl -s localhost:8002/v1/models` 都返回 `glm`；日志有 `Using FLASHINFER_MLA_SPARSE_SM120 attention backend`、`Using 'FLASHINFER_CUTLASS' NvFp4 MoE backend`。
+
+客户端前面放任意 HTTP 负载均衡（按连接数或轮询），把请求分到所有实例的 `:8001` / `:8002`。
+
+## 4. 配置 B：NVFP4 2P2D（两台机器，全 TP4）
+
+| 机器 | 实例 |
 |---|---|
-| 任务 | `gsm8k`，测试集全量 1,319 题 |
-| few-shot | 5 |
-| 解码 | `temperature=0`（贪心） |
-| 接口 | `local-completions` → `/v1/completions`，并发 64 |
-| 随机种子 | 1234 |
+| A | 2 个 P（GPU 0–3 → :8100，GPU 4–7 → :8101），另跑代理 :8000 |
+| B | 2 个 D（GPU 0–3 → :8200，GPU 4–7 → :8201） |
 
-每次约 4 分钟（1P1D 部署上实测）。两个 TAG 的逐题记录可以做配对比较，分析方法和结果见 README 5.5 与 `results/eval/paired-analysis.txt`。
+```bash
+NV="MODEL_DIR=/data/GLM-5.3-Flash-NVFP4 EXTRA_ARGS=--no-enable-flashinfer-autotune"
+# 机器 A（P）
+env $NV ROLE=prefill NAME=glm-p1 GPUS=0,1,2,3 PORT=8100 SIDE_PORT=5600 MAX_NUM_SEQS=64 GPU_UTIL=0.92 bash ~/scripts/serve/pd.sh
+env $NV ROLE=prefill NAME=glm-p2 GPUS=4,5,6,7 PORT=8101 SIDE_PORT=5700 MAX_NUM_SEQS=64 GPU_UTIL=0.92 bash ~/scripts/serve/pd.sh
+# 机器 B（D）
+env $NV ROLE=decode NAME=glm-d1 GPUS=0,1,2,3 PORT=8200 SIDE_PORT=5600 MAX_NUM_SEQS=128 GPU_UTIL=0.92 bash ~/scripts/serve/pd.sh
+env $NV ROLE=decode NAME=glm-d2 GPUS=4,5,6,7 PORT=8201 SIDE_PORT=5700 MAX_NUM_SEQS=128 GPU_UTIL=0.92 bash ~/scripts/serve/pd.sh
+```
 
-## 11. 网络基准与性价比分析
+`pd.sh` 已设好的关键项（不要删）：
 
-### 11.1 NIXL 传输基准（不依赖 vLLM）
+| 项 | 值 | 为什么 |
+|---|---|---|
+| `--kv-transfer-config` | `NixlConnector`，P 为 `kv_producer`、D 为 `kv_consumer` | KV 由 D 从 P 读取 |
+| `VLLM_SSM_CONV_STATE_LAYOUT` | `DS` | 模型有 KDA 线性注意力层，NIXL 传状态要求 DS 布局；不设会在初始化末尾退出 |
+| `UCX_TCP_TX_SEG_SIZE` / `UCX_TCP_RX_SEG_SIZE` | `1m` | 默认分段下 GPU 显存经 TCP 每连接约 5 Gbps，KV 传输慢 3 倍；1m 后约 27 Gbps/连接 |
+| `VLLM_NIXL_SIDE_CHANNEL_HOST` / `_PORT` | 本机内网 IP / `SIDE_PORT` | 跨机握手；同机两个实例端口错开（5600 / 5700） |
+| `MAX_NUM_SEQS=64 GPU_UTIL=0.92`（P） | | P 只做 prefill；TP4 的 PD 实例用默认值会报 `No available memory for the cache blocks` |
+| `MAX_NUM_SEQS=128 GPU_UTIL=0.92`（D） | | 同上 |
+
+**P 和 D 必须用相同的 TP**：P=TP4、D=TP8 时 NIXL 握手失败，所有请求 500。
+
+代理 + 冒烟 + 并发扫描（在机器 A 上）：
+
+```bash
+TAG=2p2d-nvfp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4 CONCURRENCY='1 2 4 8 16 32 64 128 256' \
+  P='<A_IP>:8100 <A_IP>:8101' D='<B_IP>:8200 <B_IP>:8201' bash ~/scripts/bench/run-pd.sh
+# 结果：~/g4glm/pd-2p2d-nvfp4/，看到 "=== STEP ALL_DONE" 即完成
+```
+
+或分步：`PREFILL="<A_IP>:8100 <A_IP>:8101" DECODE="<B_IP>:8200 <B_IP>:8201" bash ~/scripts/serve/proxy.sh`，之后客户端只连代理的 `:8000`，接口与单机完全相同。
+
+**验证 KV 传输已调优**：`sudo docker logs glm-d1 | grep "KV Transfer metrics"`，`Avg xfer time (ms)` 应在 120 ms 左右（未调优时 350 ms 以上）。
+
+## 5. 配置 C：NVFP4 4P2D（三台机器，全 TP4）
+
+机器 A、B 各按第 4 节起 2 个 P（:8100 / :8101），机器 C 按第 4 节起 2 个 D（:8200 / :8201），然后在 A 上：
+
+```bash
+TAG=4p2d-nvfp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4 CONCURRENCY='1 2 4 8 16 32 64 128 256' \
+  P='<A_IP>:8100 <A_IP>:8101 <B_IP>:8100 <B_IP>:8101' D='<C_IP>:8200 <C_IP>:8201' bash ~/scripts/bench/run-pd.sh
+```
+
+## 6. 基线：FP8 单机 TP8
+
+```bash
+NAME=glm PORT=8000 bash ~/scripts/serve/instance.sh        # 默认 MODEL_DIR=/data/GLM-5.3-Flash，8 卡 TP8
+```
+
+或一键（装环境 → 下权重 → 起服务 → 冒烟 → 基础压测）：`setsid nohup bash ~/scripts/run-all.sh > ~/g4glm-run.log 2>&1 &`。
+
+**验证**：日志里 `Model loading took 39.38 GiB memory`（每卡）、`GPU KV cache size: 4,441,368 tokens`。
+
+## 7. 冒烟测试
+
+```bash
+curl -s localhost:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "glm", "messages": [{"role": "user", "content": "用一句话介绍香港。"}],
+  "max_tokens": 2000, "reasoning_effort": "low"}'
+```
+
+应直接返回中文答案。这个模型默认以最高档（`max`）思考：`max_tokens` 给少了会全部花在思考上，`content` 为空、`finish_reason: length`——**不是服务坏了**。chat template **没有** `enable_thinking` 开关，控制思考用 `reasoning_effort`（`low` / `high`，不传为 `max`）。
+
+## 8. 压测
+
+压测工具是镜像自带的 `vllm bench serve`，**不用另装**；脚本用同一个镜像起一次性容器当客户端，需要一份模型目录给 tokenizer。
+
+### 8.1 并发扫描（吞吐上限）
+
+```bash
+BASE=http://127.0.0.1:8000 TAG=<名字> TOKENIZER=/data/GLM-5.3-Flash-NVFP4 \
+  CONCURRENCY='1 2 4 8 16 32 64 128 256' bash ~/scripts/bench/concurrency.sh
+```
+
+每档请求数 = 并发 × 4（至少 8），`--ignore-eos`，`--seed` 等于并发数。**不分离多实例**时，每个实例配一个客户端同时跑（`BASE=http://127.0.0.1:8001`、`:8002`，不同 `OUT`），结果相加。
+
+### 8.2 速率扫描（真实延迟；性价比以它为准）
+
+```bash
+BASE=http://127.0.0.1:8000 TAG=<名字> TOKENIZER=/data/GLM-5.3-Flash-NVFP4 RATES='0.5 1 1.5 2 2.5' bash ~/scripts/bench/rate.sh
+```
+
+泊松到达，每档请求数 = max(60, 速率 × 180)，**每档不同随机种子**（同一种子会重发相同 prompt、命中前缀缓存，TTFT 偏低）。多实例时每个客户端发总速率的一份，并设不同的 `SEED_OFFSET`。
+
+本报告用的速率：
+
+| 部署 | RATES |
+|---|---|
+| 单机不分离（FP8 TP8 / NVFP4 TP8） | `0.25 0.5 0.75 1 1.25 (1.5)` |
+| 单机 NVFP4 2×TP4（每个实例的速率） | `0.25 0.5 0.625 0.75 0.875 1.0` |
+| 2P2D | `0.5 1 1.5 2 2.5` |
+| 4P2D | `0.5 1 1.5 2 2.5 3 3.5` |
+
+### 8.3 容量测试（算 P:D 配比）
+
+对一个不分离实例：
+
+```bash
+BASE=http://127.0.0.1:8000 TAG=nvfp4-tp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4 bash ~/scripts/bench/capacity.sh
+```
+
+prefill：8K 输入、1 token 输出；decode：8,184 token 共享前缀（命中缓存）+ 1,024 token 输出。配比 = (D 每秒能完成的请求数 × 输入长度) ÷ P 的 prefill 吞吐。
+
+## 9. 能力评测（GSM8K）
+
+```bash
+TAG=nvfp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4 bash ~/scripts/eval/gsm8k.sh   # 对 :8000（单实例或代理）
+TAG=fp8   TOKENIZER=/data/GLM-5.3-Flash        bash ~/scripts/eval/gsm8k.sh
+```
+
+lm-evaluation-harness `0.4.13` + `transformers` 自动装进独立环境；全量 1,319 题、5-shot、`temperature=0`、并发 64，约 4 分钟。结果在 `~/g4glm/eval-<TAG>/`。
+
+## 10. 网络基准（可选，排查 PD 传输用）
 
 ```bash
 IMG=vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57
-# 机器 1（被读的一方）
-sudo docker run --rm --gpus '"device=0"' --network host -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m \
-  -v ~/scripts/pd:/pd --entrypoint python3 $IMG /pd/nixl_bench.py target --mem cuda --total-mb 80
-# 机器 2（发起读取）
-sudo docker run --rm --gpus '"device=0"' --network host -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m \
-  -v ~/scripts/pd:/pd --entrypoint python3 $IMG /pd/nixl_bench.py init --host <机器1_IP> --mem cuda --total-mb 80 --descs 300 --iters 10
+UCX="-e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m"
+# 机器 1（被读）
+sudo docker run --rm --gpus '"device=0"' --network host $UCX -v ~/scripts/net:/n --entrypoint python3 $IMG /n/nixl_bench.py target --mem cuda --total-mb 80
+# 机器 2（读取）
+sudo docker run --rm --gpus '"device=0"' --network host $UCX -v ~/scripts/net:/n --entrypoint python3 $IMG /n/nixl_bench.py init --host <机器1_IP> --mem cuda --total-mb 80 --descs 300 --iters 10
 ```
 
-输出一行 JSON，`aggregate_Gbps` 即吞吐。去掉两个 `-e UCX_TCP_*` 可复现默认参数下的约 5 Gbps。想测多对并行，每张卡起一对（`--gpus device=i`、`--port 18515+i`），同时在接收端看 `/proc/net/dev` 的 ens3 字节数。
+期望约 25 ms / 27 Gbps；去掉 `$UCX` 约 128 ms / 5 Gbps。多对并行：每张卡一对（`--gpus device=i`、`--port 18515+i`），8 对可打满单网卡（约 176 Gbps），用 `/proc/net/dev` 的 ens3 字节数核对。机器间带宽基线：`iperf3 -c <IP> -P 16 -t 10`（实测 173 Gbit/s）。
 
-### 11.2 按延迟门槛算每卡吞吐
+## 11. 性价比与报告
 
 ```bash
-python3 scripts/report/goodput.py         # 读 results/ 下所有速率扫描，打印每档门槛下的每卡吞吐
-python3 scripts/report/build_report.py    # 重新生成 report.html
+python3 scripts/report/goodput.py        # 按延迟门槛算每卡吞吐（门槛在文件顶部 SLAS 里改）
+python3 scripts/report/build_report.py   # 从 results/ 重新生成 report.html
 ```
 
-门槛定义在 `goodput.py` 顶部的 `SLAS`，按业务要求修改即可。
+## 12. 收尾
+
+```bash
+gcloud compute instances delete g4-a g4-b g4-c --zone $ZONE --project $PROJECT
+```
 
 ## 排障
 
 | 现象 | 处理 |
 |---|---|
-| 启动报 `pe_dim must be 64 for fp8_ds_mla` | 镜像太旧，没有 NoPE 修复（vLLM PR #55738）。换更新的 nightly |
-| 启动时后端选错、偶发崩溃 | 原作者在社区镜像上要设 `FLASHINFER_MLA_SPARSE_SM90=1`；nightly 上此变量已不生效，后端自动选择 |
-| 预热阶段 GPU 100% 卡住不动 | FlashInfer autotune 卡死，加 `--no-enable-flashinfer-autotune`（社区 TP2 报告） |
-| `--max-num-seqs 1024` 时 OOM | KDA 状态池（Mamba cache）随并发线性涨，降到 512 以下 |
-| PD 启动约 6 分钟后退出，报 `3-read Mamba conv transfer requires DS conv state layout. Set VLLM_SSM_CONV_STATE_LAYOUT=DS` | P、D 两边都加 `-e VLLM_SSM_CONV_STATE_LAYOUT=DS`（`pd/serve.sh` 已带） |
-| 启动日志里大量 `CUDACachingAllocator ... memory allocation failed with OOM` | 显存 profile 阶段的正常警告，健康启动也有，**不是**失败原因；看 `RuntimeError` / `AssertionError` 那行 |
-| 回复 `content` 为空、`finish_reason: length` | 默认 `max` 思考档把 `max_tokens` 用完了。调大 `max_tokens`，或传 `"reasoning_effort": "low"`；`enable_thinking` 对这个模型无效 |
-| TP4 的 PD 实例（尤其 P）启动约 7 分钟后报 `No available memory for the cache blocks. The extensible KV cache already takes all device memory left` | 同样的 TP4 不开 PD 能起来；开 PD 后要给 P 加 `MAX_NUM_SEQS=64 GPU_UTIL=0.92`（P 只做 prefill，不需要 256 个并发槽位），TP4 的 D 用 `MAX_NUM_SEQS=128 GPU_UTIL=0.92` |
-| P、D 的 TP 不一样（如 P=TP4、D=TP8）时，请求全部 500，D 日志 `NIXL transfer failure: handshake_failed`，前面有 `Not pairing remote 2304-token blocks with local 1280-token blocks` | 这个混合模型的 KV 块大小跟 TP 有关（要对齐 KDA 状态页），TP 不同块就对不上。**P 和 D 用相同的 TP**（本次 2P2D 全部 TP4） |
-| `No module named pip` | DLVM Ubuntu 24.04 镜像没带 pip，按第 4 步用 uv |
-| Spot 机被抢占 | `gcloud compute instances start $NAME`；权重在系统盘上不丢 |
+| `content` 为空、`finish_reason: length` | 默认 `max` 思考档把 token 用完；调大 `max_tokens` 或传 `"reasoning_effort": "low"` |
+| PD 启动约 6 分钟后退出：`3-read Mamba conv transfer requires DS conv state layout` | 加 `VLLM_SSM_CONV_STATE_LAYOUT=DS`（`pd.sh` 已带） |
+| TP4 的 PD 实例报 `No available memory for the cache blocks` | P 用 `MAX_NUM_SEQS=64 GPU_UTIL=0.92`，D 用 `MAX_NUM_SEQS=128 GPU_UTIL=0.92` |
+| PD 请求全部 500，D 日志 `handshake_failed`，前有 `Not pairing remote 2304-token blocks with local 1280-token blocks` | P 和 D 的 TP 不同；改成相同 TP |
+| PD 的 KV 传输 300 ms 以上、首字慢 | 没设 `UCX_TCP_TX_SEG_SIZE=1m` / `UCX_TCP_RX_SEG_SIZE=1m` |
+| 启动日志大量 `CUDACachingAllocator ... OOM` | 显存探测阶段的正常警告，不是失败原因；看 `RuntimeError` / `AssertionError` 那行 |
+| 预热阶段 GPU 100% 卡住 | 加 `--no-enable-flashinfer-autotune`（NVFP4 已带） |
+| 预热时刷 `No available shared memory broadcast block found in 60 seconds` | JIT 编译慢，不是挂了，等着 |
+| 容量测试用 chat 接口发 1 token 请求报 `Never received a valid chunk` | 1 个 token 落进 reasoning 字段；`capacity.sh` 已改用 `/v1/completions` |
+| Spot 被抢占 | `gcloud compute instances start <NAME>`，权重在系统盘不丢 |
