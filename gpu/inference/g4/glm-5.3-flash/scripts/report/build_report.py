@@ -12,6 +12,8 @@ import os
 import re
 import statistics
 
+import goodput
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 RES = os.path.join(ROOT, "results")
@@ -111,6 +113,37 @@ def gsm8k():
     pa = os.path.join(RES, "eval", "paired-analysis.txt")
     res["paired"] = open(pa).read() if os.path.exists(pa) else ""
     return res
+
+
+def kv_xfer(path):
+    """Weighted average of vLLM 'KV Transfer metrics' lines in a decode log."""
+    if not os.path.exists(path):
+        return None
+    rows = [l for l in open(path, errors="ignore") if "KV Transfer metrics" in l]
+    g = lambda k, l: float(re.search(k + r"=([\d.]+)", l).group(1))
+    n = sum(g("Num successful transfers", l) for l in rows)
+    if not n:
+        return None
+    w = lambda k: sum(g(k, l) * g("Num successful transfers", l) for l in rows) / n
+    return {"n": n, "ms": w(r"Avg xfer time \(ms\)"), "post": w(r"Avg post time \(ms\)"),
+            "mb": w("Avg MB per transfer"), "mbps": w(r"Throughput \(MB/s\)")}
+
+
+def nixl_rows():
+    f = os.path.join(RES, "nixl-bench", "results.txt")
+    if not os.path.exists(f):
+        return []
+    out, head = [], None
+    for l in open(f):
+        l = l.strip()
+        if l.startswith("###"):
+            head = l[3:].strip()
+        elif l.startswith("{") and head:
+            d = json.loads(l)
+            out.append((head, d))
+        elif l.startswith("8 pairs") or l.startswith("4 pairs"):
+            out.append((head, {"pairs_line": l}))
+    return out
 
 
 # ---------------------------------------------------------------- SVG helpers
@@ -243,9 +276,14 @@ def main():
     single = sweep(os.path.join(RES, "8k1k"))
     fp8_1p1d = sweep(os.path.join(RES, "pd-1p1d"))
     nv_1p1d = sweep(os.path.join(RES, "pd-1p1d-nvfp4"))
-    nv_2p2d = sweep(os.path.join(RES, "pd-2p2d-nvfp4"))
+    nv_2p2d_old = sweep(os.path.join(RES, "pd-2p2d-nvfp4"))
+    nv_2p2d = sweep(os.path.join(RES, "pd-2p2d-nvfp4-ucx")) or nv_2p2d_old
+    fp8_2p1d = sweep(os.path.join(RES, "pd-2p1d-fp8"))
+    nv_4p2d = sweep(os.path.join(RES, "pd-4p2d-nvfp4-ucx")) or sweep(os.path.join(RES, "pd-4p2d-nvfp4"))
+    nv_4p2d_tuned = os.path.isdir(os.path.join(RES, "pd-4p2d-nvfp4-ucx"))
     dp4 = dp4_sweep()
-    r2p2d = rate_rows(os.path.join(RES, "rate-2p2d-nvfp4"))
+    r2p2d_old = rate_rows(os.path.join(RES, "rate-2p2d-nvfp4"))
+    r2p2d = rate_rows(os.path.join(RES, "rate-2p2d-nvfp4-ucx")) or r2p2d_old
     rdp4 = dp4_rate()
     cap = capacity()
     ev = gsm8k()
@@ -328,8 +366,79 @@ def main():
                      [[f"{r} req/s", f"{v['rps']:.2f}", f0(v["out"]), s2(v["ttft_med"]), s2(v["ttft_p99"]), f"{v['tpot']:.1f} ms",
                        f"{v['itl_p99']:.0f} ms", f0(v["fail"])] for r, v in rows.items()])
 
+    # ---- network section
+    kv_old = kv_xfer(os.path.join(RES, "pd-2p2d-nvfp4", "pd-decode-d1.log"))
+    kv_new = kv_xfer(os.path.join(RES, "pd-2p2d-nvfp4-ucx", "pd-decode-d1.log"))
+    nx = nixl_rows()
+    nrows = []
+    for head, d in nx:
+        env, args = [x.strip() for x in head.split("|")] if "|" in head else (head, "")
+        envs = "默认" if not env else env.replace("-e ", "").replace("UCX_TCP_TX_SEG_SIZE=", "TX=").replace("UCX_TCP_RX_SEG_SIZE=", "RX=")
+        if "pairs_line" in d:
+            m = re.search(r"(\d+) pairs, sum aggregate Gbps = ([\d.]+)", d["pairs_line"])
+            nrows.append([head.replace("pairs=", "并行 agent 对数 "), "GPU", "—", "—", f"{m.group(2)} Gbps（{m.group(1)} 对合计）"])
+        else:
+            nrows.append([envs, "GPU 显存" if d["mem"] == "cuda" else "CPU 内存", f"{d['descs']} 块 × {d['streams']} 路", f"{d['median_ms']} ms", f"{d['aggregate_Gbps']} Gbps"])
+    net_html = table(["UCX 设置", "数据位置", "每次传输拆分 / 并发", "80 MB 一次耗时", "吞吐"], nrows) if nrows else ""
+    kv_html = table(["", "每个 rank 每次传输", "平均传输耗时", "传完后处理", "单次传输速度"],
+                    [[lab, f"{k['mb']:.0f} MB", f"{k['ms']:.0f} ms", f"{k['post']:.0f} ms", f"{k['mbps']:.0f} MB/s"] for lab, k in (("UCX 默认", kv_old), ("UCX 调优", kv_new)) if k])
+    ba = []
+    for c in (32, 64, 128):
+        if c in nv_2p2d_old and c in nv_2p2d:
+            o, n = nv_2p2d_old[c], nv_2p2d[c]
+            ba.append([f"并发 {c}", f"{o['out']:,.0f} → {n['out']:,.0f}", f"{o['tpot']:.1f} → {n['tpot']:.1f} ms", f"{o['itl_p99']:.0f} → {n['itl_p99']:.0f} ms", f"{s2(o['ttft_med'])} → {s2(n['ttft_med'])}"])
+    for r in (1.0, 2.0):
+        if r in r2p2d_old and r in r2p2d:
+            o, n = r2p2d_old[r], r2p2d[r]
+            ba.append([f"速率 {r:g} req/s", f"{o['out']:,.0f} → {n['out']:,.0f}", f"{o['tpot']:.1f} → {n['tpot']:.1f} ms", f"{o['itl_p99']:.0f} → {n['itl_p99']:.0f} ms", f"{s2(o['ttft_med'])} → {s2(n['ttft_med'])}"])
+    ba_html = table(["负载（NVFP4 2P2D）", "输出 tok/s", "平均 TPOT", "P99 ITL", "TTFT 中位数"], ba)
+
+    # ---- 2:1 section
+    def per_gpu_rows(rows, gpus, levels):
+        return [[c, f1(r["out"]), f1(r["out"] / gpus), s2(r["ttft_med"]), f"{r['tpot']:.1f} ms", f"{r['itl_p99']:.0f} ms", f0(r["fail"])] for c, r in rows.items() if c in levels]
+    PGH = ["并发", "输出 tok/s", "每卡 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL", "失败"]
+    lv9 = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+    r21 = (table(PGH, per_gpu_rows(fp8_2p1d, 24, lv9)) if fp8_2p1d else "", table(PGH, per_gpu_rows(nv_4p2d, 24, lv9)) if nv_4p2d else "")
+    cmp21 = []
+    for c in (64, 128, 256):
+        if c in nv_4p2d and c in nv_2p2d:
+            a4, a2 = nv_4p2d[c], nv_2p2d[c]
+            cmp21.append([c, f"{a2['out']/16:.0f}（TPOT {a2['tpot']:.0f} ms，TTFT {s2(a2['ttft_med'])}）", f"{a4['out']/24:.0f}（TPOT {a4['tpot']:.0f} ms，TTFT {s2(a4['ttft_med'])}）"])
+    cmp21_html = table(["总并发", "2P2D 每卡 tok/s（16 卡）", "4P2D 每卡 tok/s（24 卡）"], cmp21)
+
+    # ---- goodput section
+    gp = goodput.table()
+    gp_rows = []
+    for name, gpus, g in gp:
+        if g is None:
+            continue
+        cells = [name, gpus]
+        for sla in goodput.SLAS:
+            x = g[sla["key"]]
+            cells.append("不达标" if x is None else f"<b>{x[0]/gpus:.0f}</b> / {x[1]/gpus:,.0f}" + ("*" if x[3].startswith("≥") else ""))
+        gp_rows.append(cells)
+    gp_html = table(["部署", "卡数"] + [f"{s['key']} {s['name']}<br><span class='note'>{s['desc']}</span>" for s in goodput.SLAS], gp_rows)
+    kbest = None
+    for name, gpus, g in gp:
+        if g and g.get("S2"):
+            v = g["S2"][0] / gpus
+            if not kbest or v > kbest[0]:
+                kbest = (v, name)
+    peak = []
+    for lab, rows, gpus in (("FP8 单机 TP8", single, 8), ("NVFP4 不分离 4×TP4", dp4, 16), ("NVFP4 2P2D", nv_2p2d, 16), ("NVFP4 4P2D", nv_4p2d, 24), ("FP8 2P1D", fp8_2p1d, 24)):
+        if not rows:
+            continue
+        c, r = max(rows.items(), key=lambda kv: kv[1]["out"])
+        peak.append([lab, gpus, c, f"{r['out']:,.0f}", f"{r['out']/gpus:.0f}", f"{r['total']/gpus:,.0f}", f"{r['tpot']:.0f} ms", s2(r["ttft_med"])])
+    peak_html = table(["部署", "卡数", "压到的最高并发", "输出 tok/s", "每卡输出 tok/s", "每卡总 tok/s", "TPOT", "TTFT 中位数"], peak)
+
     html = TEMPLATE
     rep = {
+        "%%NET_NIXL%%": net_html, "%%NET_KV%%": kv_html, "%%NET_BA%%": ba_html,
+        "%%R21_FP8%%": r21[0], "%%R21_NV%%": r21[1], "%%R21_CMP%%": cmp21_html,
+        "%%R21_NV_NOTE%%": "（UCX 调优后重测）" if nv_4p2d_tuned else "（UCX 调优前；调优后的重测进行中）",
+        "%%GOODPUT%%": gp_html, "%%PEAK%%": peak_html,
+        "%%KPI_S2%%": f"{kbest[0]:.0f}" if kbest else "—", "%%KPI_S2_WHO%%": kbest[1] if kbest else "",
         "%%FRONTIER%%": frontier, "%%ITL%%": itlc, "%%TTFT%%": ttftc, "%%FPBARS%%": fpbars, "%%CAPBARS%%": capbars,
         "%%BASE_TABLE%%": table(["场景（输入 / 输出 / 并发）", "输出 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL"],
             [[k.replace("in", "").replace("-out", " / ").replace("-c", " / "), f1(v["out"]), s2(v["ttft_med"]), f"{v['tpot']:.2f} ms", f"{v['itl_p99']:.1f} ms"]

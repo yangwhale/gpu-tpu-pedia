@@ -2,7 +2,7 @@
 
 **照着做一次跑通 → [RUNBOOK.md](RUNBOOK.md)**　｜　测试过程与决策记录 → [JOURNAL.md](JOURNAL.md)　｜　原始数据 → [results/](results/)
 
-> **状态（2026-11-03）：** FP8 单机、FP8/NVFP4 1P1D、NVFP4 容量拆分、2P2D 与不分离对比（含按到达速率的 TTFT）、GSM8K 能力对比已完成；三台机器 P:D=2:1（FP8 2P1D、NVFP4 4P2D）进行中。
+> **状态（2026-11-03）：** FP8 单机、FP8/NVFP4 1P1D、NVFP4 容量拆分、2P2D 与不分离对比（含按到达速率的 TTFT）、GSM8K 能力对比、UCX 网络调优、P:D=2:1、按延迟门槛的性价比已完成；NVFP4 4P2D 的 UCX 调优后重测进行中。
 > **给客户讲的 HTML 报告**：[`report.html`](report.html)，由 [`scripts/report/build_report.py`](scripts/report/build_report.py) 从 `results/` 直接生成：`python3 scripts/report/build_report.py`。
 
 ## 结论先行
@@ -319,6 +319,51 @@ FP8 和 NVFP4 各自通过自己的 1P1D 部署评测，除权重外其余完全
 
 **这组数据修正了 5.7 的结论**：并发扫描里 2P2D 的 TTFT 中位数更低，是因为每档开头所有请求同时涌入、不分离的实例要先排完这一批 prefill。真实流量陆续到达时，**不分离的首字更快**（0.8–1.1 s 对 1.2–1.7 s；PD 每个请求多一次代理转发和 KV 跨机传输），到 2.5 req/s 时 2P2D 的 P 接近饱和，TTFT 中位数升到 3.0 s。**不变的是生成平稳度**：1.5 req/s 起不分离 P99 ITL 640–660 ms，2P2D 83–108 ms。
 结论：G4 上 PD 分离唯一的明确优势是生成不卡顿；吞吐和首字都是不分离更好。
+
+### 5.9 网络：把一块网卡跑满（UCX 调优）
+
+vLLM decode 日志里的 KV 传输统计显示，默认配置下每个 rank 每次传约 80 MB、耗时约 380 ms（约 220 MB/s），远低于单网卡 iperf 的 173 Gbit/s。用独立的 NIXL 读取基准 [`scripts/pd/nixl_bench.py`](scripts/pd/nixl_bench.py) 隔离测试（80 MB、拆 300 块，原始结果 `results/nixl-bench/results.txt`）：
+
+| 配置 | 80 MB 一次 | 吞吐 |
+|---|---|---|
+| CPU 内存，UCX 默认 | 28 ms | 24 Gbps |
+| GPU 显存，UCX 默认 | 128 ms | 5.3 Gbps |
+| GPU 显存，`UCX_TCP_TX_SEG_SIZE=1m UCX_TCP_RX_SEG_SIZE=1m` | **24.9 ms** | **27 Gbps** |
+| 同上，8 对 agent 并行（≈ TP8 的 8 个 rank），持续约 10 s | — | **网卡计数器中位数 176 Gbps、峰值 183 Gbps（单网卡打满）** |
+| UCX 默认，8 对 agent 并行 | — | 合计 42 Gbps |
+
+- 拆 1 块 / 300 块 / 3,000 块差别不大，`UCX_RNDV_FRAG_SIZE` 无效，4m 分段与 1m 相同。
+- 放回 vLLM（2P2D NVFP4）：每次 KV 传输 379 → **121 ms**；128 并发吞吐 2,107 → 2,333 tok/s、TPOT 49.5 → 39.9 ms、P99 ITL 122 → 68 ms；2 req/s 时 TTFT 中位数 1.72 → 1.56 s、TPOT 41.9 → 33.7 ms。原始数据 `results/pd-2p2d-nvfp4-ucx/`、`results/rate-2p2d-nvfp4-ucx/`。
+- **双网卡暂不需要**：调优后单网卡可跑满 176 Gbps；服务时一个 8K 请求约 0.3 GB（TP4）–0.56 GB（TP8），每秒 2 个请求只需约 5–9 Gbps。
+- `pd/serve.sh` 已默认带上这两个变量。
+
+### 5.10 P:D = 2:1（三台机器，24 卡）
+
+FP8 2P1D（全 TP8）与 NVFP4 4P2D（全 TP4）。原始数据 `results/pd-2p1d-fp8/`、`results/rate-2p1d-fp8/`、`results/pd-4p2d-nvfp4/`（UCX 调优前；调优后的 4P2D 重测见 `results/pd-4p2d-nvfp4-ucx/`，如已生成）。
+
+- FP8 2P1D：一个 TP8 的 D 先饱和，256 并发 2,000 tok/s、TPOT 106 ms。
+- NVFP4 4P2D：128 并发 2,299 tok/s、TPOT 49.5 ms；同 TPOT 下每卡 96 tok/s，低于 2P2D（调优前 132、调优后 146）。8K/1K 下 1:1 才平衡，2:1 的 P 富余。
+- 4P2D 第一次的速率扫描因操作失误（调试时误清容器）作废，见 JOURNAL。
+
+### 5.11 按延迟门槛的性价比（每卡吞吐）
+
+三档门槛（8K 输入 / 1K 输出）：S1 严格流式 TTFT P90 ≤ 2 s、TPOT ≤ 25 ms、P99 ITL ≤ 200 ms；S2 标准对话 TTFT P90 ≤ 3 s、TPOT ≤ 40 ms；S3 宽松 TTFT P90 ≤ 5 s、TPOT ≤ 60 ms。用泊松到达的速率扫描逐档加压，取最后一个满足门槛的负载（与第一个不满足的负载间线性插值）。脚本 [`scripts/report/goodput.py`](scripts/report/goodput.py)。
+
+单元格：每卡输出 tok/s / 每卡总 tok/s（输入 + 输出）；* 为最高速率仍满足、真实上限更高。
+
+| 部署 | 卡数 | S1 严格流式 | S2 标准对话 | S3 宽松 |
+|---|---|---|---|---|
+| FP8 单机 TP8（不分离） | 8 | 30 / 274 | 45 / 407 | 61 / 547 |
+| NVFP4 单机 TP8（不分离） | 8 | 32 / 287 | 63 / 567 | 84 / 757 |
+| NVFP4 单机 2×TP4（不分离） | 8 | 63 / 568 | 112 / 1,013 | 141 / 1,267 |
+| NVFP4 两机 4×TP4（不分离） | 16 | 61 / 549 | 104 / 934 | 137 / 1,237* |
+| NVFP4 2P2D（两机，TP4，UCX 默认） | 16 | 62 / 557 | 105 / 948 | 128 / 1,155 |
+| NVFP4 2P2D（两机，TP4，UCX 调优） | 16 | 74 / 667 | 116 / 1,047 | 132 / 1,194 |
+| FP8 2P1D（三机，TP8，UCX 默认） | 24 | 不达标 | 27 / 241 | 43 / 389 |
+
+- **NVFP4 + TP4 是主杠杆**：S2 下 FP8 单机 TP8 约 45、NVFP4 单机 TP8 约 63、NVFP4 单机 2×TP4 约 112 tok/s/卡。
+- **门槛越严 PD 越占优**：S1 下 2P2D（UCX 调优）每卡 74，比不分离（63）高约 17%；S3 下不分离更高。
+- 「两机 4×TP4」速率步长粗（0.5 req/s），以「单机 2×TP4」的细步长结果为准。
 
 ## 6. 已知限制与注意事项
 

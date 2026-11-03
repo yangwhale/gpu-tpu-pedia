@@ -67,9 +67,12 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <a href="#ratio">五、P 和 D 该怎么配</a>
 <a href="#2p2d">六、2P2D 与不分离对比</a>
 <a href="#ttft">七、TTFT 到底多少</a>
-<a href="#hw">八、硬件视角：为什么是这样</a>
-<a href="#advice">九、部署建议</a>
-<a href="#limits">十、限制与复现</a>
+<a href="#net">八、网络：把一块网卡跑满</a>
+<a href="#r21">九、P:D = 2:1（三台机器）</a>
+<a href="#goodput">十、按延迟门槛的性价比</a>
+<a href="#hw">十一、硬件视角：为什么是这样</a>
+<a href="#advice">十二、部署建议</a>
+<a href="#limits">十三、限制与复现</a>
 </nav>
 <main>
 
@@ -78,8 +81,8 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <p class="sub">8 × NVIDIA RTX PRO 6000 Blackwell Server Edition · vLLM · FP8 / NVFP4 · 单机与 PD 分离 · 2026 年 11 月 3 日实测</p>
 <div class="kpis">
 <div class="kpi"><div class="v">约 100 tok/s</div><div class="l">单路生成速度（FP8，单机 TP8）</div></div>
-<div class="kpi"><div class="v">2,380 tok/s</div><div class="l">16 卡、128 并发最高吞吐（NVFP4，不分离 4×TP4）</div></div>
-<div class="kpi"><div class="v">122 ms</div><div class="l">2P2D 的 P99 ITL（同负载不分离为 573 ms）</div></div>
+<div class="kpi"><div class="v">116 tok/s/卡</div><div class="l">标准对话门槛下每卡输出吞吐（NVFP4 2P2D（两机，TP4，UCX 调优））</div></div>
+<div class="kpi"><div class="v">68 ms</div><div class="l">2P2D 的 P99 ITL（同负载不分离为 573 ms）</div></div>
 <div class="kpi"><div class="v">p = 0.649</div><div class="l">GSM8K：FP8 与 NVFP4 无显著差别</div></div>
 </div>
 </header>
@@ -89,8 +92,10 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <ul>
 <li><b>能跑，而且不用打补丁。</b> vLLM nightly（<code>0.33.0rc1.dev484</code>）原生支持 GLM-5.3-Flash 在 RTX PRO 6000（SM120）上运行，自动选用 SM120 的 sparse MLA 后端。单路生成约 100 tok/s，输入从 1K 到 32K 几乎不变。</li>
 <li><b>NVFP4 中高并发快 23–30%，模型能力看不出损失。</b> 同样的 1P1D 部署，8–64 并发时 NVFP4 吞吐比 FP8 高 23–30%、TPOT 低约 30%，KV 容量翻倍；GSM8K 全量 1,319 题差 0.38 个百分点，配对检验 p = 0.649，统计上无差别。单路没有收益（−3%）。</li>
-<li><b>PD 分离要配对比例，否则吃亏。</b> 1P1D 的 D 大部分时间在等 P：同样 16 张卡，NVFP4 1P1D 在 128 并发只有 1,274 tok/s。按实测容量把 P、D 配成 1:1 并都用 TP4（2P2D），吞吐提升到 2,107 tok/s（+65%）。<b>2P2D 没有多用一张卡</b>：还是同样两台机器、16 张卡，只是把每台机器切成两个 TP4。</li>
-<li><b>PD 分离在 G4 上换来的只有「不卡顿」。</b> 同样 16 张卡，2P2D 吞吐比不分离的 4×TP4 低 -11%；按真实的随机到达压测，<b>首字反而是不分离更快</b>（TTFT 中位数 0.8–1.1 s 对 1.2–1.7 s，PD 每个请求多一次代理转发和 KV 跨机传输）。2P2D 唯一的明确优势是生成平稳：P99 ITL 稳定在约 110 ms，不分离从每秒 1.5 个请求起就到 640 ms 以上。只有对生成卡顿敏感的业务（流式语音、数字人、实时字幕）值得上 PD。</li>
+<li><b>PD 分离要配对比例，否则吃亏。</b> 1P1D 的 D 大部分时间在等 P：同样 16 张卡，NVFP4 1P1D 在 128 并发只有 1,274 tok/s。按实测容量把 P、D 配成 1:1 并都用 TP4（2P2D），吞吐提升到 2,333 tok/s（+83%）。<b>2P2D 没有多用一张卡</b>：还是同样两台机器、16 张卡，只是把每台机器切成两个 TP4。</li>
+<li><b>PD 分离：调好网络后，吞吐追平，生成更稳，首字略慢。</b> 同样 16 张卡、128 并发，2P2D 吞吐与不分离的 4×TP4 相差 -2%，P99 ITL 68 ms 对 573 ms；按真实随机到达测，首字仍是不分离快约 0.2–0.6 s（PD 多一次 KV 跨机传输）。按延迟门槛折算每卡吞吐：严格门槛下 2P2D 领先，宽松门槛下不分离领先（第十节）。</li>
+<li><b>网络要调：UCX 默认参数让 KV 传输慢了 3 倍。</b> 默认 TCP 分段下，GPU 显存经 TCP 单对连接只有约 5 Gbps；把 <code>UCX_TCP_TX_SEG_SIZE</code>/<code>UCX_TCP_RX_SEG_SIZE</code> 调到 1m 后单对 27 Gbps，8 对并行把单网卡跑到 176 Gbps（打满）。vLLM 里每次 KV 传输从 379 ms 降到 121 ms（第八节）。</li>
+<li><b>最大的杠杆是「NVFP4 + TP4」。</b> 标准对话门槛下，每卡输出吞吐 FP8 单机 TP8 约 45 tok/s，NVFP4 单机 2×TP4 约 112 tok/s，约 2.5 倍。</li>
 <li><b>G4 上的两条硬约束：</b> 这个模型做 PD 时 P 和 D 必须用相同的 TP（KV 块大小随 TP 变化，不同则 NIXL 握手失败）；prefill 能力不随 TP 增长（TP4 与 TP8 都约 9K tok/s），所以 TP4 比 TP8 每卡效率高一倍。</li>
 </ul>
 </section>
@@ -278,9 +283,9 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 
 <section id="2p2d">
 <h2>六、2P2D 与不分离对比（NVFP4，16 卡）</h2>
-<p>两种部署都是两台机器、16 张卡、4 个 TP4 实例。区别只在于：不分离时每个实例既做 prefill 又做 decode；2P2D 时 2 个只做 prefill、2 个只做 decode。</p>
+<p>两种部署都是两台机器、16 张卡、4 个 TP4 实例（2P2D 为 UCX 调优后的数据，调优前后对比见第八节）。区别只在于：不分离时每个实例既做 prefill 又做 decode；2P2D 时 2 个只做 prefill、2 个只做 decode。</p>
 <p class="note">下表是并发扫描的结果，其中 TTFT 受「每档开头一次性涌入」影响，不分离一侧被放大，<b>首字延迟请以第七节的速率扫描为准</b>。</p>
-<div class="tw"><table class=""><thead><tr><th>总并发</th><th>1P1D 输出 tok/s</th><th>2P2D 输出 tok/s</th><th>不分离 4×TP4 输出 tok/s</th><th>2P2D TTFT 中位数</th><th>不分离 TTFT 中位数</th><th>2P2D P99 ITL</th><th>不分离 P99 ITL</th></tr></thead><tbody><tr><td>16</td><td>671.9</td><td>790.8</td><td>973.1</td><td>1.44 s</td><td>2.40 s</td><td>49 ms</td><td>14 ms</td></tr><tr><td>32</td><td>896.0</td><td>1,123.6</td><td>1,431.7</td><td>1.50 s</td><td>2.52 s</td><td>60 ms</td><td>31 ms</td></tr><tr><td>64</td><td>1,186.9</td><td>1,524.5</td><td>1,895.7</td><td>1.54 s</td><td>2.59 s</td><td>111 ms</td><td>558 ms</td></tr><tr><td>128</td><td>1,274.1</td><td>2,106.9</td><td>2,379.8</td><td>1.74 s</td><td>2.44 s</td><td>122 ms</td><td>573 ms</td></tr><tr><td>256</td><td>—</td><td>2,478.4</td><td>2,927.7</td><td>33.19 s</td><td>2.35 s</td><td>92 ms</td><td>659 ms</td></tr></tbody></table></div>
+<div class="tw"><table class=""><thead><tr><th>总并发</th><th>1P1D 输出 tok/s</th><th>2P2D 输出 tok/s</th><th>不分离 4×TP4 输出 tok/s</th><th>2P2D TTFT 中位数</th><th>不分离 TTFT 中位数</th><th>2P2D P99 ITL</th><th>不分离 P99 ITL</th></tr></thead><tbody><tr><td>16</td><td>671.9</td><td>833.0</td><td>973.1</td><td>1.21 s</td><td>2.40 s</td><td>31 ms</td><td>14 ms</td></tr><tr><td>32</td><td>896.0</td><td>1,221.5</td><td>1,431.7</td><td>1.27 s</td><td>2.52 s</td><td>48 ms</td><td>31 ms</td></tr><tr><td>64</td><td>1,186.9</td><td>1,701.6</td><td>1,895.7</td><td>1.40 s</td><td>2.59 s</td><td>59 ms</td><td>558 ms</td></tr><tr><td>128</td><td>1,274.1</td><td>2,333.4</td><td>2,379.8</td><td>6.71 s</td><td>2.44 s</td><td>68 ms</td><td>573 ms</td></tr><tr><td>256</td><td>—</td><td>2,512.6</td><td>2,927.7</td><td>51.12 s</td><td>2.35 s</td><td>70 ms</td><td>659 ms</td></tr></tbody></table></div>
 <div class="fig"><div class="legend"><span><i style="background:#e87ba4"></i>FP8 单机 TP8（8 卡）</span><span><i style="background:#2a78d6"></i>FP8 1P1D（16 卡）</span><span><i style="background:#eb6834"></i>NVFP4 1P1D（16 卡）</span><span><i style="background:#1baf7a"></i>NVFP4 不分离 4×TP4（16 卡）</span><span><i style="background:#eda100"></i>NVFP4 2P2D 全 TP4（16 卡）</span></div><svg viewBox="0 0 760 380" class="chart" role="img">
 <line x1="64" x2="610" y1="332.0" y2="332.0" stroke="#e8eaed"/>
 <text x="56" y="336.0" text-anchor="end" class="tick">0</text>
@@ -334,17 +339,17 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <circle cx="151.8" cy="182.2" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4（16 卡）: 并发 64，1896 tok/s 整体，TPOT 30.3 ms</title></circle>
 <circle cx="229.0" cy="144.0" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4（16 卡）: 并发 128，2380 tok/s 整体，TPOT 48.8 ms</title></circle>
 <circle cx="356.4" cy="100.7" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4（16 卡）: 并发 256，2928 tok/s 整体，TPOT 79.3 ms</title></circle>
-<path d="M67.8,317.9 L73.9,307.8 L83.1,292.1 L99.6,269.5 L128.1,243.2 L174.3,211.6 L231.9,165.6 L271.2,136.2" fill="none" stroke="#eda100" stroke-width="2"/>
-<circle cx="67.8" cy="317.9" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 2，178 tok/s 整体，TPOT 10.2 ms</title></circle>
-<circle cx="73.9" cy="307.8" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 4，307 tok/s 整体，TPOT 11.7 ms</title></circle>
-<circle cx="83.1" cy="292.1" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 8，505 tok/s 整体，TPOT 13.9 ms</title></circle>
-<circle cx="99.6" cy="269.5" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 16，791 tok/s 整体，TPOT 17.8 ms</title></circle>
-<circle cx="128.1" cy="243.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 32，1124 tok/s 整体，TPOT 24.7 ms</title></circle>
-<circle cx="174.3" cy="211.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 64，1524 tok/s 整体，TPOT 35.7 ms</title></circle>
-<circle cx="231.9" cy="165.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 128，2107 tok/s 整体，TPOT 49.5 ms</title></circle>
-<circle cx="271.2" cy="136.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 256，2478 tok/s 整体，TPOT 58.9 ms</title></circle>
+<path d="M68.3,317.9 L73.4,307.2 L81.1,290.8 L95.2,266.2 L118.7,235.5 L155.2,197.6 L191.9,147.7 L202.1,133.5" fill="none" stroke="#eda100" stroke-width="2"/>
+<circle cx="68.3" cy="317.9" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 2，178 tok/s 整体，TPOT 10.3 ms</title></circle>
+<circle cx="73.4" cy="307.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 4，314 tok/s 整体，TPOT 11.6 ms</title></circle>
+<circle cx="81.1" cy="290.8" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 8，521 tok/s 整体，TPOT 13.4 ms</title></circle>
+<circle cx="95.2" cy="266.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 16，833 tok/s 整体，TPOT 16.8 ms</title></circle>
+<circle cx="118.7" cy="235.5" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 32，1221 tok/s 整体，TPOT 22.4 ms</title></circle>
+<circle cx="155.2" cy="197.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 64，1702 tok/s 整体，TPOT 31.1 ms</title></circle>
+<circle cx="191.9" cy="147.7" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 128，2333 tok/s 整体，TPOT 39.9 ms</title></circle>
+<circle cx="202.1" cy="133.5" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D 全 TP4（16 卡）: 并发 256，2513 tok/s 整体，TPOT 42.4 ms</title></circle>
 <text x="364.4" y="104.7" class="dlabel">NVFP4 不分离 4×TP4（16 卡）</text>
-<text x="279.2" y="140.2" class="dlabel">NVFP4 2P2D 全 TP4（16 卡）</text>
+<text x="210.1" y="137.5" class="dlabel">NVFP4 2P2D 全 TP4（16 卡）</text>
 <text x="609.2" y="203.8" class="dlabel">FP8 单机 TP8（8 卡）</text>
 <text x="212.1" y="235.3" class="dlabel">NVFP4 1P1D（16 卡）</text>
 <text x="299.6" y="249.3" class="dlabel">FP8 1P1D（16 卡）</text>
@@ -376,14 +381,14 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <circle cx="428.0" cy="111.6" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 并发 64：P99 ITL 558 ms</title></circle>
 <circle cx="519.0" cy="105.6" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 并发 128：P99 ITL 573 ms</title></circle>
 <circle cx="610.0" cy="71.6" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 并发 256：P99 ITL 659 ms</title></circle>
-<path d="M64.0,327.2 L155.0,319.5 L246.0,312.6 L337.0,308.2 L428.0,288.1 L519.0,283.8 L610.0,295.8" fill="none" stroke="#eda100" stroke-width="2"/>
-<circle cx="64.0" cy="327.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 4：P99 ITL 12 ms</title></circle>
-<circle cx="155.0" cy="319.5" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 8：P99 ITL 32 ms</title></circle>
-<circle cx="246.0" cy="312.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 16：P99 ITL 49 ms</title></circle>
-<circle cx="337.0" cy="308.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 32：P99 ITL 60 ms</title></circle>
-<circle cx="428.0" cy="288.1" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 64：P99 ITL 111 ms</title></circle>
-<circle cx="519.0" cy="283.8" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 128：P99 ITL 122 ms</title></circle>
-<circle cx="610.0" cy="295.8" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 256：P99 ITL 92 ms</title></circle>
+<path d="M64.0,327.3 L155.0,325.3 L246.0,319.8 L337.0,313.1 L428.0,308.8 L519.0,305.0 L610.0,304.5" fill="none" stroke="#eda100" stroke-width="2"/>
+<circle cx="64.0" cy="327.3" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 4：P99 ITL 12 ms</title></circle>
+<circle cx="155.0" cy="325.3" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 8：P99 ITL 17 ms</title></circle>
+<circle cx="246.0" cy="319.8" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 16：P99 ITL 31 ms</title></circle>
+<circle cx="337.0" cy="313.1" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 32：P99 ITL 48 ms</title></circle>
+<circle cx="428.0" cy="308.8" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 64：P99 ITL 59 ms</title></circle>
+<circle cx="519.0" cy="305.0" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 128：P99 ITL 68 ms</title></circle>
+<circle cx="610.0" cy="304.5" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 并发 256：P99 ITL 70 ms</title></circle>
 <path d="M64.0,319.9 L155.0,316.0 L246.0,308.1 L337.0,291.0 L428.0,305.0 L519.0,304.8" fill="none" stroke="#eb6834" stroke-width="2"/>
 <circle cx="64.0" cy="319.9" r="4.5" fill="#eb6834" stroke="#fff" stroke-width="2"><title>NVFP4 1P1D: 并发 4：P99 ITL 31 ms</title></circle>
 <circle cx="155.0" cy="316.0" r="4.5" fill="#eb6834" stroke="#fff" stroke-width="2"><title>NVFP4 1P1D: 并发 8：P99 ITL 40 ms</title></circle>
@@ -392,11 +397,11 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <circle cx="428.0" cy="305.0" r="4.5" fill="#eb6834" stroke="#fff" stroke-width="2"><title>NVFP4 1P1D: 并发 64：P99 ITL 68 ms</title></circle>
 <circle cx="519.0" cy="304.8" r="4.5" fill="#eb6834" stroke="#fff" stroke-width="2"><title>NVFP4 1P1D: 并发 128：P99 ITL 69 ms</title></circle>
 <text x="618.0" y="75.6" class="dlabel">NVFP4 不分离 4×TP4</text>
-<text x="618.0" y="299.8" class="dlabel">NVFP4 2P2D</text>
-<text x="527.0" y="313.8" class="dlabel">NVFP4 1P1D</text>
+<text x="618.0" y="308.5" class="dlabel">NVFP4 2P2D</text>
+<text x="527.0" y="322.5" class="dlabel">NVFP4 1P1D</text>
 </svg><div class="cap">图 4　P99 ITL：不分离从 64 并发起超过 550 ms，2P2D 始终在约 120 ms 以内</div></div>
 <h3>2P2D 完整数据</h3>
-<div class="tw"><table class=""><thead><tr><th>并发</th><th>输出 tok/s</th><th>总 tok/s</th><th>每路 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>1</td><td>40.6</td><td>366</td><td>44</td><td>1.03 s</td><td>4.73 s</td><td>22.9 ms</td><td>75 ms</td><td>0</td></tr><tr><td>2</td><td>178.1</td><td>1,605</td><td>98</td><td>1.03 s</td><td>1.04 s</td><td>10.2 ms</td><td>10 ms</td><td>0</td></tr><tr><td>4</td><td>306.7</td><td>2,764</td><td>85</td><td>1.22 s</td><td>1.99 s</td><td>11.7 ms</td><td>12 ms</td><td>0</td></tr><tr><td>8</td><td>504.5</td><td>4,547</td><td>72</td><td>1.24 s</td><td>3.53 s</td><td>13.9 ms</td><td>32 ms</td><td>0</td></tr><tr><td>16</td><td>790.8</td><td>7,127</td><td>56</td><td>1.44 s</td><td>6.20 s</td><td>17.8 ms</td><td>49 ms</td><td>0</td></tr><tr><td>32</td><td>1,123.6</td><td>10,125</td><td>41</td><td>1.50 s</td><td>12.49 s</td><td>24.7 ms</td><td>60 ms</td><td>0</td></tr><tr><td>64</td><td>1,524.5</td><td>13,738</td><td>28</td><td>1.54 s</td><td>24.05 s</td><td>35.7 ms</td><td>111 ms</td><td>0</td></tr><tr><td>128</td><td>2,106.9</td><td>18,987</td><td>20</td><td>1.74 s</td><td>47.71 s</td><td>49.5 ms</td><td>122 ms</td><td>0</td></tr><tr><td>256</td><td>2,478.4</td><td>22,335</td><td>17</td><td>33.19 s</td><td>93.73 s</td><td>58.9 ms</td><td>92 ms</td><td>0</td></tr></tbody></table></div>
+<div class="tw"><table class=""><thead><tr><th>并发</th><th>输出 tok/s</th><th>总 tok/s</th><th>每路 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>1</td><td>86.5</td><td>779</td><td>95</td><td>901 ms</td><td>1.66 s</td><td>10.5 ms</td><td>11 ms</td><td>0</td></tr><tr><td>2</td><td>178.2</td><td>1,606</td><td>97</td><td>903 ms</td><td>917 ms</td><td>10.3 ms</td><td>11 ms</td><td>0</td></tr><tr><td>4</td><td>313.9</td><td>2,829</td><td>87</td><td>979 ms</td><td>1.86 s</td><td>11.6 ms</td><td>12 ms</td><td>0</td></tr><tr><td>8</td><td>521.1</td><td>4,696</td><td>75</td><td>1.12 s</td><td>4.26 s</td><td>13.4 ms</td><td>17 ms</td><td>0</td></tr><tr><td>16</td><td>833.0</td><td>7,507</td><td>60</td><td>1.21 s</td><td>6.41 s</td><td>16.8 ms</td><td>31 ms</td><td>0</td></tr><tr><td>32</td><td>1,221.5</td><td>11,007</td><td>45</td><td>1.27 s</td><td>12.28 s</td><td>22.4 ms</td><td>48 ms</td><td>0</td></tr><tr><td>64</td><td>1,701.6</td><td>15,334</td><td>32</td><td>1.40 s</td><td>23.86 s</td><td>31.1 ms</td><td>59 ms</td><td>0</td></tr><tr><td>128</td><td>2,333.4</td><td>21,028</td><td>25</td><td>6.71 s</td><td>47.69 s</td><td>39.9 ms</td><td>68 ms</td><td>0</td></tr><tr><td>256</td><td>2,512.6</td><td>22,642</td><td>24</td><td>51.12 s</td><td>93.60 s</td><td>42.4 ms</td><td>70 ms</td><td>0</td></tr></tbody></table></div>
 <p class="note">2P2D 并发 1 那一档是新起服务后的第一档，含首次请求的预热，TPOT 与 TTFT P99 偏高；从并发 2 起正常（单路约 98 tok/s）。</p>
 <h3>不分离 4×TP4 完整数据</h3>
 <div class="tw"><table class=""><thead><tr><th>总并发</th><th>输出 tok/s</th><th>总 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>16</td><td>973.1</td><td>8,769</td><td>2.40 s</td><td>4.57 s</td><td>14.3 ms</td><td>14 ms</td><td>0</td></tr><tr><td>32</td><td>1,431.7</td><td>12,902</td><td>2.52 s</td><td>6.09 s</td><td>19.8 ms</td><td>31 ms</td><td>0</td></tr><tr><td>64</td><td>1,895.7</td><td>17,083</td><td>2.59 s</td><td>11.89 s</td><td>30.3 ms</td><td>558 ms</td><td>0</td></tr><tr><td>128</td><td>2,379.8</td><td>21,446</td><td>2.44 s</td><td>24.08 s</td><td>48.8 ms</td><td>573 ms</td><td>0</td></tr><tr><td>256</td><td>2,927.7</td><td>26,383</td><td>2.35 s</td><td>47.59 s</td><td>79.3 ms</td><td>659 ms</td><td>0</td></tr></tbody></table></div>
@@ -431,22 +436,70 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <circle cx="337.0" cy="264.3" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 1.5 req/s：TTFT 中位数 0.86 s</title></circle>
 <circle cx="473.5" cy="260.1" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 2.0 req/s：TTFT 中位数 0.91 s</title></circle>
 <circle cx="610.0" cy="243.0" r="4.5" fill="#1baf7a" stroke="#fff" stroke-width="2"><title>NVFP4 不分离 4×TP4: 2.5 req/s：TTFT 中位数 1.13 s</title></circle>
-<path d="M64.0,235.6 L200.5,232.9 L337.0,226.2 L473.5,196.0 L610.0,94.2" fill="none" stroke="#eda100" stroke-width="2"/>
-<circle cx="64.0" cy="235.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 0.5 req/s：TTFT 中位数 1.22 s</title></circle>
-<circle cx="200.5" cy="232.9" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 1.0 req/s：TTFT 中位数 1.25 s</title></circle>
-<circle cx="337.0" cy="226.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 1.5 req/s：TTFT 中位数 1.34 s</title></circle>
-<circle cx="473.5" cy="196.0" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 2.0 req/s：TTFT 中位数 1.72 s</title></circle>
-<circle cx="610.0" cy="94.2" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 2.5 req/s：TTFT 中位数 3.01 s</title></circle>
-<text x="618.0" y="98.2" class="dlabel">NVFP4 2P2D</text>
+<path d="M64.0,248.0 L200.5,237.4 L337.0,228.6 L473.5,208.8 L610.0,112.6" fill="none" stroke="#eda100" stroke-width="2"/>
+<circle cx="64.0" cy="248.0" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 0.5 req/s：TTFT 中位数 1.06 s</title></circle>
+<circle cx="200.5" cy="237.4" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 1.0 req/s：TTFT 中位数 1.20 s</title></circle>
+<circle cx="337.0" cy="228.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 1.5 req/s：TTFT 中位数 1.31 s</title></circle>
+<circle cx="473.5" cy="208.8" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 2.0 req/s：TTFT 中位数 1.56 s</title></circle>
+<circle cx="610.0" cy="112.6" r="4.5" fill="#eda100" stroke="#fff" stroke-width="2"><title>NVFP4 2P2D: 2.5 req/s：TTFT 中位数 2.78 s</title></circle>
+<text x="618.0" y="116.6" class="dlabel">NVFP4 2P2D</text>
 <text x="618.0" y="247.0" class="dlabel">NVFP4 不分离 4×TP4</text>
 </svg><div class="cap">图 5　TTFT 中位数对到达速率（8K 输入 / 1K 输出，16 卡）</div></div>
-<h3>2P2D</h3><div class="tw"><table class=""><thead><tr><th>到达速率</th><th>实际完成 req/s</th><th>输出 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>0.5 req/s</td><td>0.47</td><td>477</td><td>1.22 s</td><td>3.27 s</td><td>15.8 ms</td><td>42 ms</td><td>0</td></tr><tr><td>1.0 req/s</td><td>0.90</td><td>918</td><td>1.25 s</td><td>1.89 s</td><td>23.4 ms</td><td>78 ms</td><td>0</td></tr><tr><td>1.5 req/s</td><td>1.32</td><td>1,352</td><td>1.34 s</td><td>3.57 s</td><td>33.5 ms</td><td>105 ms</td><td>0</td></tr><tr><td>2.0 req/s</td><td>1.74</td><td>1,778</td><td>1.72 s</td><td>3.84 s</td><td>41.9 ms</td><td>108 ms</td><td>0</td></tr><tr><td>2.5 req/s</td><td>2.04</td><td>2,094</td><td>3.01 s</td><td>6.60 s</td><td>47.2 ms</td><td>83 ms</td><td>0</td></tr></tbody></table></div><h3>不分离 4×TP4</h3><div class="tw"><table class=""><thead><tr><th>到达速率</th><th>实际完成 req/s</th><th>输出 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>0.5 req/s</td><td>0.48</td><td>499</td><td>819 ms</td><td>1.52 s</td><td>14.2 ms</td><td>17 ms</td><td>0</td></tr><tr><td>1.0 req/s</td><td>0.94</td><td>963</td><td>835 ms</td><td>4.07 s</td><td>20.8 ms</td><td>146 ms</td><td>0</td></tr><tr><td>1.5 req/s</td><td>1.36</td><td>1,390</td><td>857 ms</td><td>3.27 s</td><td>29.3 ms</td><td>639 ms</td><td>0</td></tr><tr><td>2.0 req/s</td><td>1.76</td><td>1,806</td><td>910 ms</td><td>2.86 s</td><td>40.5 ms</td><td>654 ms</td><td>0</td></tr><tr><td>2.5 req/s</td><td>2.14</td><td>2,197</td><td>1.13 s</td><td>3.89 s</td><td>53.2 ms</td><td>659 ms</td><td>0</td></tr></tbody></table></div>
+<h3>2P2D</h3><div class="tw"><table class=""><thead><tr><th>到达速率</th><th>实际完成 req/s</th><th>输出 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>0.5 req/s</td><td>0.47</td><td>478</td><td>1.06 s</td><td>1.78 s</td><td>14.8 ms</td><td>20 ms</td><td>0</td></tr><tr><td>1.0 req/s</td><td>0.90</td><td>921</td><td>1.20 s</td><td>1.77 s</td><td>21.3 ms</td><td>45 ms</td><td>0</td></tr><tr><td>1.5 req/s</td><td>1.33</td><td>1,367</td><td>1.31 s</td><td>3.07 s</td><td>27.5 ms</td><td>55 ms</td><td>0</td></tr><tr><td>2.0 req/s</td><td>1.76</td><td>1,802</td><td>1.56 s</td><td>3.56 s</td><td>33.7 ms</td><td>62 ms</td><td>0</td></tr><tr><td>2.5 req/s</td><td>2.09</td><td>2,136</td><td>2.78 s</td><td>6.46 s</td><td>37.0 ms</td><td>65 ms</td><td>0</td></tr></tbody></table></div><h3>不分离 4×TP4</h3><div class="tw"><table class=""><thead><tr><th>到达速率</th><th>实际完成 req/s</th><th>输出 tok/s</th><th>TTFT 中位数</th><th>TTFT P99</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>0.5 req/s</td><td>0.48</td><td>499</td><td>819 ms</td><td>1.52 s</td><td>14.2 ms</td><td>17 ms</td><td>0</td></tr><tr><td>1.0 req/s</td><td>0.94</td><td>963</td><td>835 ms</td><td>4.07 s</td><td>20.8 ms</td><td>146 ms</td><td>0</td></tr><tr><td>1.5 req/s</td><td>1.36</td><td>1,390</td><td>857 ms</td><td>3.27 s</td><td>29.3 ms</td><td>639 ms</td><td>0</td></tr><tr><td>2.0 req/s</td><td>1.76</td><td>1,806</td><td>910 ms</td><td>2.86 s</td><td>40.5 ms</td><td>654 ms</td><td>0</td></tr><tr><td>2.5 req/s</td><td>2.14</td><td>2,197</td><td>1.13 s</td><td>3.89 s</td><td>53.2 ms</td><td>659 ms</td><td>0</td></tr></tbody></table></div>
 <p class="note">不分离的速率测试由 4 个客户端各按总速率的四分之一独立发送；每个速率档使用不同的随机种子，避免重复 prompt 命中前缀缓存。</p>
-<div class="callout warn"><b>这一节修正了并发扫描给出的印象。</b> 并发扫描里 2P2D 的 TTFT 中位数更低（1.5–1.7 s 对 2.4–2.6 s），那是因为每档开头所有请求同时涌入，不分离的实例要先把这一大批 prefill 排完。真实流量陆续到达时，不分离的实例来一个请求就能用 chunked prefill 立即插进去，TTFT 中位数在 0.8–1.1 s；2P2D 每个请求多一次代理转发和 KV 跨机传输，为 1.2–1.7 s，到每秒 2.5 个请求时 P 接近饱和，升到 3.0 s。<br><b>不变的是生成平稳度</b>：从每秒 1.5 个请求起，不分离的 P99 ITL 在 640–660 ms，2P2D 在 83–108 ms。</div>
+<div class="callout warn"><b>这一节修正了并发扫描给出的印象。</b> 并发扫描里 2P2D 的 TTFT 中位数更低（1.5–1.7 s 对 2.4–2.6 s），那是因为每档开头所有请求同时涌入，不分离的实例要先把这一大批 prefill 排完。真实流量陆续到达时，不分离的实例来一个请求就能用 chunked prefill 立即插进去，TTFT 中位数在 0.8–1.1 s；2P2D（UCX 调优后）每个请求多一次代理转发和 KV 跨机传输，为 1.1–1.6 s，到每秒 2.5 个请求时 P 接近饱和，升到 2.8 s。<br><b>不变的是生成平稳度</b>：从每秒 1.5 个请求起，不分离的 P99 ITL 在 640–660 ms，2P2D 在 55–65 ms；2P2D 的 TPOT 也更低（2 req/s 时 33.7 ms 对 40.5 ms）。</div>
+</section>
+
+<section id="net">
+<h2>八、网络：把一块网卡跑满</h2>
+<p>vLLM 的 decode 日志自带 KV 传输统计。默认配置下，每个 rank 每次传输约 80 MB，要 300 多毫秒，单次只有约 220 MB/s——而这台机器单网卡 iperf 实测 173 Gbit/s。为了定位，我们写了一个独立的 NIXL 读取基准（<code>scripts/pd/nixl_bench.py</code>），绕开 vLLM 直接在两台机器之间搬 80 MB、拆成 300 块，和 vLLM 的做法一致：</p>
+<div class="tw"><table class=""><thead><tr><th>UCX 设置</th><th>数据位置</th><th>每次传输拆分 / 并发</th><th>80 MB 一次耗时</th><th>吞吐</th></tr></thead><tbody><tr><td>默认</td><td>CPU 内存</td><td>300 块 × 1 路</td><td>28.2 ms</td><td>23.81 Gbps</td></tr><tr><td>默认</td><td>GPU 显存</td><td>300 块 × 1 路</td><td>127.7 ms</td><td>5.26 Gbps</td></tr><tr><td>默认</td><td>GPU 显存</td><td>1 块 × 1 路</td><td>122.1 ms</td><td>5.49 Gbps</td></tr><tr><td>默认</td><td>GPU 显存</td><td>3000 块 × 1 路</td><td>148.3 ms</td><td>4.53 Gbps</td></tr><tr><td>TX=1m RX=1m</td><td>GPU 显存</td><td>300 块 × 1 路</td><td>24.9 ms</td><td>27.0 Gbps</td></tr><tr><td>UCX_RNDV_FRAG_SIZE=host:4m,cuda:4m</td><td>GPU 显存</td><td>300 块 × 1 路</td><td>125.7 ms</td><td>5.34 Gbps</td></tr><tr><td>TX=4m RX=4m</td><td>GPU 显存</td><td>300 块 × 1 路</td><td>24.7 ms</td><td>27.13 Gbps</td></tr><tr><td>TX=1m RX=1m</td><td>GPU 显存</td><td>300 块 × 4 路</td><td>99.9 ms</td><td>26.87 Gbps</td></tr><tr><td>TX=1m RX=1m</td><td>GPU 显存</td><td>300 块 × 8 路</td><td>205.2 ms</td><td>26.16 Gbps</td></tr><tr><td>TX=1m RX=1m</td><td>GPU 显存</td><td>300 块 × 16 路</td><td>395.2 ms</td><td>27.17 Gbps</td></tr><tr><td>TX=4m RX=4m</td><td>GPU 显存</td><td>300 块 × 16 路</td><td>390.8 ms</td><td>27.48 Gbps</td></tr><tr><td>并行 agent 对数 4 seg1m streams=4</td><td>GPU</td><td>—</td><td>—</td><td>102.2 Gbps（4 对合计）</td></tr><tr><td>并行 agent 对数 8 seg1m streams=4</td><td>GPU</td><td>—</td><td>—</td><td>197.7 Gbps（8 对合计）</td></tr><tr><td>并行 agent 对数 8 default seg streams=4</td><td>GPU</td><td>—</td><td>—</td><td>42.3 Gbps（8 对合计）</td></tr><tr><td>并行 agent 对数 8 seg1m streams=4 iters=150（持续 ~10 s；网卡计数器 1 s 采样中位数 175.7 Gbps、峰值 182.6 Gbps）</td><td>GPU</td><td>—</td><td>—</td><td>192.6 Gbps（8 对合计）</td></tr></tbody></table></div>
+<ul>
+<li><b>数据在 CPU 内存时本来就快</b>（24–31 Gbps），说明 TCP 和网卡没问题；<b>数据在 GPU 显存时只有约 5 Gbps</b>。拆成 1 块或 3,000 块差别不大，不是描述符数量的问题。</li>
+<li><b>根因是 UCX 的 TCP 分段大小</b>：<code>UCX_TCP_TX_SEG_SIZE=1m</code> + <code>UCX_TCP_RX_SEG_SIZE=1m</code> 后，GPU 显存单对连接到 27 Gbps（5 倍）；调成 4m 结果相同；<code>UCX_RNDV_FRAG_SIZE</code> 无效。</li>
+<li><b>单网卡已打满</b>：一对 NIXL agent 是一条 TCP 流，上限约 27 Gbps；8 对 agent 并行（相当于 TP8 的 8 个 rank）时，网卡计数器持续 176 Gbps、峰值 183 Gbps，达到单网卡上限。默认参数下 8 对只有 42 Gbps。</li>
+</ul>
+<h3>放回 vLLM 之后</h3>
+<div class="tw"><table class=""><thead><tr><th></th><th>每个 rank 每次传输</th><th>平均传输耗时</th><th>传完后处理</th><th>单次传输速度</th></tr></thead><tbody><tr><td>UCX 默认</td><td>80 MB</td><td>379 ms</td><td>65 ms</td><td>221 MB/s</td></tr><tr><td>UCX 调优</td><td>89 MB</td><td>121 ms</td><td>61 ms</td><td>784 MB/s</td></tr></tbody></table></div>
+<div class="tw"><table class=""><thead><tr><th>负载（NVFP4 2P2D）</th><th>输出 tok/s</th><th>平均 TPOT</th><th>P99 ITL</th><th>TTFT 中位数</th></tr></thead><tbody><tr><td>并发 32</td><td>1,124 → 1,221</td><td>24.7 → 22.4 ms</td><td>60 → 48 ms</td><td>1.50 s → 1.27 s</td></tr><tr><td>并发 64</td><td>1,524 → 1,702</td><td>35.7 → 31.1 ms</td><td>111 → 59 ms</td><td>1.54 s → 1.40 s</td></tr><tr><td>并发 128</td><td>2,107 → 2,333</td><td>49.5 → 39.9 ms</td><td>122 → 68 ms</td><td>1.74 s → 6.71 s</td></tr><tr><td>速率 1 req/s</td><td>918 → 921</td><td>23.4 → 21.3 ms</td><td>78 → 45 ms</td><td>1.25 s → 1.20 s</td></tr><tr><td>速率 2 req/s</td><td>1,778 → 1,802</td><td>41.9 → 33.7 ms</td><td>108 → 62 ms</td><td>1.72 s → 1.56 s</td></tr></tbody></table></div>
+<div class="callout"><b>要不要双网卡？</b> 调优后单网卡能跑满 176 Gbps，而服务时的实际需求很小：一个 8K 请求的 KV 加线性注意力状态约 0.3 GB（TP4）到 0.56 GB（TP8），每秒 2 个请求也只需约 5–9 Gbps。只有大量请求同时交接 KV 的瞬间才可能碰到单网卡上限，目前的负载下第二块网卡带不来明显收益。</div>
+<p class="note">复现：PD 实例启动时加 <code>-e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m</code>（仓库内 <code>scripts/pd/serve.sh</code> 已默认带上）。</p>
+</section>
+
+<section id="r21">
+<h2>九、P:D = 2:1（三台机器，24 卡）</h2>
+<p>两台机器做 P、一台做 D。FP8 只能 TP8（TP4 时每卡权重约 79 GB，KV 放不下），所以是 2P1D；NVFP4 用 TP4，是 4P2D。两者都满足「P、D 同 TP」。</p>
+<h3>FP8 2P1D（全 TP8，UCX 调优前）</h3>
+<div class="tw"><table class=""><thead><tr><th>并发</th><th>输出 tok/s</th><th>每卡 tok/s</th><th>TTFT 中位数</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>1</td><td>93.0</td><td>3.9</td><td>1.10 s</td><td>9.5 ms</td><td>10 ms</td><td>0</td></tr><tr><td>2</td><td>168.7</td><td>7.0</td><td>1.16 s</td><td>10.7 ms</td><td>11 ms</td><td>0</td></tr><tr><td>4</td><td>271.1</td><td>11.3</td><td>1.40 s</td><td>13.3 ms</td><td>17 ms</td><td>0</td></tr><tr><td>8</td><td>396.5</td><td>16.5</td><td>1.37 s</td><td>18.2 ms</td><td>34 ms</td><td>0</td></tr><tr><td>16</td><td>560.5</td><td>23.4</td><td>1.46 s</td><td>26.1 ms</td><td>57 ms</td><td>0</td></tr><tr><td>32</td><td>738.9</td><td>30.8</td><td>1.55 s</td><td>39.3 ms</td><td>141 ms</td><td>0</td></tr><tr><td>64</td><td>979.4</td><td>40.8</td><td>1.89 s</td><td>58.8 ms</td><td>157 ms</td><td>0</td></tr><tr><td>128</td><td>1,479.3</td><td>61.6</td><td>2.07 s</td><td>75.0 ms</td><td>227 ms</td><td>0</td></tr><tr><td>256</td><td>2,000.4</td><td>83.3</td><td>2.34 s</td><td>106.5 ms</td><td>275 ms</td><td>0</td></tr></tbody></table></div>
+<h3>NVFP4 4P2D（全 TP4）（UCX 调优前；调优后的重测进行中）</h3>
+<div class="tw"><table class=""><thead><tr><th>并发</th><th>输出 tok/s</th><th>每卡 tok/s</th><th>TTFT 中位数</th><th>平均 TPOT</th><th>P99 ITL</th><th>失败</th></tr></thead><tbody><tr><td>1</td><td>84.2</td><td>3.5</td><td>1.37 s</td><td>10.5 ms</td><td>11 ms</td><td>0</td></tr><tr><td>2</td><td>176.8</td><td>7.4</td><td>1.03 s</td><td>10.3 ms</td><td>11 ms</td><td>0</td></tr><tr><td>4</td><td>313.7</td><td>13.1</td><td>1.13 s</td><td>11.7 ms</td><td>12 ms</td><td>0</td></tr><tr><td>8</td><td>532.2</td><td>22.2</td><td>1.33 s</td><td>13.6 ms</td><td>26 ms</td><td>0</td></tr><tr><td>16</td><td>809.4</td><td>33.7</td><td>1.31 s</td><td>17.4 ms</td><td>44 ms</td><td>0</td></tr><tr><td>32</td><td>1,198.6</td><td>49.9</td><td>1.66 s</td><td>24.0 ms</td><td>66 ms</td><td>0</td></tr><tr><td>64</td><td>1,670.6</td><td>69.6</td><td>1.68 s</td><td>34.6 ms</td><td>134 ms</td><td>0</td></tr><tr><td>128</td><td>2,299.2</td><td>95.8</td><td>1.87 s</td><td>49.5 ms</td><td>177 ms</td><td>0</td></tr><tr><td>256</td><td>3,173.9</td><td>132.2</td><td>1.92 s</td><td>69.9 ms</td><td>266 ms</td><td>0</td></tr></tbody></table></div>
+<h3>按每卡比较：2:1 还是 1:1</h3>
+<div class="tw"><table class=""><thead><tr><th>总并发</th><th>2P2D 每卡 tok/s（16 卡）</th><th>4P2D 每卡 tok/s（24 卡）</th></tr></thead><tbody><tr><td>64</td><td>106（TPOT 31 ms，TTFT 1.40 s）</td><td>70（TPOT 35 ms，TTFT 1.68 s）</td></tr><tr><td>128</td><td>146（TPOT 40 ms，TTFT 6.71 s）</td><td>96（TPOT 50 ms，TTFT 1.87 s）</td></tr><tr><td>256</td><td>157（TPOT 42 ms，TTFT 51.12 s）</td><td>132（TPOT 70 ms，TTFT 1.92 s）</td></tr></tbody></table></div>
+<ul>
+<li><b>FP8 2P1D 是 D 先饱和</b>：只有一个 TP8 的 D，256 并发时 TPOT 超过 100 ms，每卡吞吐很低。</li>
+<li><b>NVFP4 4P2D 每卡吞吐低于 2P2D</b>：对 8K 输入 / 1K 输出，P 和 D 按 1:1 刚好平衡（第五节的测算），2:1 时多出来的 P 大部分时间空闲。4P2D 的好处是高并发时首字不排队（P 有富余）。</li>
+<li>结论与第五节一致：<b>配比应由「每个输出 token 需要多少 prefill」和两种实例的容量算出来</b>，不是越多 P 越好。</li>
+</ul>
+</section>
+
+<section id="goodput">
+<h2>十、按延迟门槛的性价比</h2>
+<p>客户真正关心的是：<b>在用户可接受的延迟下，每张卡每秒能出多少 token</b>。我们定义三档门槛，用泊松到达的速率扫描逐档加压，取最后一个仍满足门槛的负载（与第一个不满足的负载之间线性插值），换算成每卡吞吐。</p>
+<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>S1 严格流式<br><span class='note'>TTFT P90 ≤ 2 s，TPOT ≤ 25 ms（每路 ≥ 40 tok/s），P99 ITL ≤ 200 ms</span></th><th>S2 标准对话<br><span class='note'>TTFT P90 ≤ 3 s，TPOT ≤ 40 ms（每路 ≥ 25 tok/s）</span></th><th>S3 宽松<br><span class='note'>TTFT P90 ≤ 5 s，TPOT ≤ 60 ms（每路 ≥ 17 tok/s）</span></th></tr></thead><tbody><tr><td>FP8 单机 TP8（不分离）</td><td>8</td><td><b>30</b> / 274</td><td><b>45</b> / 407</td><td><b>61</b> / 547</td></tr><tr><td>NVFP4 单机 TP8（不分离）</td><td>8</td><td><b>32</b> / 287</td><td><b>63</b> / 567</td><td><b>84</b> / 757</td></tr><tr><td>NVFP4 单机 2×TP4（不分离）</td><td>8</td><td><b>63</b> / 568</td><td><b>112</b> / 1,013</td><td><b>141</b> / 1,267</td></tr><tr><td>NVFP4 两机 4×TP4（不分离）</td><td>16</td><td><b>61</b> / 549</td><td><b>104</b> / 934</td><td><b>137</b> / 1,237*</td></tr><tr><td>NVFP4 2P2D（两机，TP4，UCX 默认）</td><td>16</td><td><b>62</b> / 557</td><td><b>105</b> / 948</td><td><b>128</b> / 1,155</td></tr><tr><td>NVFP4 2P2D（两机，TP4，UCX 调优）</td><td>16</td><td><b>74</b> / 667</td><td><b>116</b> / 1,047</td><td><b>132</b> / 1,194</td></tr><tr><td>FP8 2P1D（三机，TP8，UCX 默认）</td><td>24</td><td>不达标</td><td><b>27</b> / 241</td><td><b>43</b> / 389</td></tr></tbody></table></div>
+<p class="note">单元格为「每卡输出 tok/s / 每卡总 tok/s（输入 + 输出）」。带 * 表示压到的最高速率仍满足门槛，真实上限更高。8K 输入 / 1K 输出，所有部署 0 失败。「两机 4×TP4（不分离）」的速率步长较粗（0.5 req/s），结果略保守；「单机 2×TP4（不分离）」是同一种部署的细步长测量，以它为准。</p>
+<h3>结论</h3>
+<ul>
+<li><b>NVFP4 + TP4 是性价比的主杠杆</b>：标准对话门槛下每卡约 110–116 tok/s，FP8 单机 TP8 约 45 tok/s，NVFP4 单机 TP8 约 63 tok/s。精度换成 NVFP4 约 1.4 倍，TP8 拆成两个 TP4 再约 1.8 倍。</li>
+<li><b>门槛越严，PD 越占优</b>：严格流式门槛（含 P99 ITL ≤ 200 ms）下，不分离的部署被生成卡顿先卡住，2P2D 每卡吞吐更高；宽松门槛下不分离更高。</li>
+<li><b>FP8 不适合追性价比</b>：同门槛下每卡吞吐不到 NVFP4 TP4 的一半；如对精度有顾虑，建议先按第四节的方法用业务样本验证 NVFP4。</li>
+</ul>
+<h3>只追吞吐：甜点在哪</h3>
+<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>压到的最高并发</th><th>输出 tok/s</th><th>每卡输出 tok/s</th><th>每卡总 tok/s</th><th>TPOT</th><th>TTFT 中位数</th></tr></thead><tbody><tr><td>FP8 单机 TP8</td><td>8</td><td>128</td><td>837</td><td>105</td><td>943</td><td>138 ms</td><td>2.77 s</td></tr><tr><td>NVFP4 不分离 4×TP4</td><td>16</td><td>256</td><td>2,928</td><td>183</td><td>1,649</td><td>79 ms</td><td>2.35 s</td></tr><tr><td>NVFP4 2P2D</td><td>16</td><td>256</td><td>2,513</td><td>157</td><td>1,415</td><td>42 ms</td><td>51.12 s</td></tr><tr><td>NVFP4 4P2D</td><td>24</td><td>256</td><td>3,174</td><td>132</td><td>1,192</td><td>70 ms</td><td>1.92 s</td></tr><tr><td>FP8 2P1D</td><td>24</td><td>256</td><td>2,000</td><td>83</td><td>751</td><td>106 ms</td><td>2.34 s</td></tr></tbody></table></div>
+<p>不考虑延迟时吞吐还能继续往上压，但代价是每路速度降到个位数到十几 tok/s、首字排队到数十秒。实用的甜点是吞吐曲线开始变平、TTFT 开始陡增之前的那一档：NVFP4 不分离约在每实例 32–64 并发（每卡约 150–180 tok/s，TPOT 50–80 ms）；2P2D 约在总并发 64–128（P 开始饱和之前）。</p>
 </section>
 
 <section id="hw">
-<h2>八、硬件视角：为什么是这样</h2>
+<h2>十一、硬件视角：为什么是这样</h2>
 <h3>1. FP4 的长处在 decode，不在 prefill</h3>
 <p>RTX PRO 6000 的第五代 Tensor Core 原生支持 FP4，标称算力是 FP8 的两倍（4 vs 2 PFLOPS）。但这次实测里，FP4 的收益主要来自<b>省显存、省带宽</b>，而不是算力：</p>
 <ul>
@@ -457,17 +510,17 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <div class="callout">软件还在快速演进：随着 SM120 的注意力 kernel 成熟，prefill 能力会上升，最优 P:D 比例会随之向「更少 P」移动。建议每次升级引擎后用第五节的方法重测两个容量。</div>
 <h3>2. PCIe 拓扑决定了 TP4 比 TP8 划算</h3>
 <p>G4 的 8 张卡两两挂在同一个 PCIe 交换芯片下，每 4 张一个 NUMA 节点，没有 NVLink。TP8 的每次 all-reduce 都要跨 NUMA；TP4 可以留在一个 NUMA 内。实测 prefill 每实例吞吐 TP4 ≈ TP8，等于 TP4 每卡效率高一倍；decode 在 TPOT 约 45 ms 时两者整机吞吐相当，更高负载时 TP4 略好。代价是 TP4 单路略慢（每卡分到的权重更多）。</p>
-<h3>3. 网络不是 PD 的瓶颈</h3>
-<p>G4 跨机没有 RDMA，KV 走 TCP。这个模型只有 11 层是 MLA，KV 很小；单路实测 PD 只比单机多约 0.2 s TTFT，整个测试里 PD 的瓶颈始终是 P 的算力，而不是网络。本次只用了一块网卡（实测 173 Gbit/s），机型上限是两块网卡 400 Gbps，还有余量。</p>
+<h3>3. 网络：带宽够，要调参数</h3>
+<p>G4 跨机没有 RDMA，KV 走 TCP。单网卡 iperf 实测 173 Gbps，一个 8K 请求要传约 0.3–0.56 GB，带宽绰绰有余；真正的问题是 UCX 默认的 TCP 分段让 GPU 显存的传输只有约 5 Gbps/连接。调大分段后单网卡可以打满（第八节）。机型上限是两块网卡 400 Gbps，本次只用了一块。</p>
 </section>
 
 <section id="advice">
-<h2>九、部署建议</h2>
+<h2>十二、部署建议</h2>
 <table class="decision">
 <tr><th>业务目标</th><th>推荐</th><th>依据</th></tr>
 <tr><td>吞吐优先（离线批处理、对卡顿不敏感）</td><td>NVFP4，不分离，每台机器 2 × TP4</td><td>16 卡 128 并发 2,380 tok/s，四种部署里最高</td></tr>
 <tr><td>首字要快（对话、Agent 交互）</td><td>NVFP4，不分离，每台机器 2 × TP4</td><td>随机到达下 TTFT 中位数 0.8–1.1 s，比 2P2D 低 0.4–0.8 s</td></tr>
-<tr><td>生成不能卡（流式语音、数字人、实时字幕）</td><td>NVFP4，2P2D（全 TP4），P:D 按第五节方法配</td><td>P99 ITL 约 110 ms 对 640 ms+；代价是吞吐低 -11%、首字慢约 0.5 s</td></tr>
+<tr><td>生成不能卡（流式语音、数字人、实时字幕）</td><td>NVFP4，2P2D（全 TP4），P:D 按第五节方法配，UCX 分段调到 1m</td><td>P99 ITL 约 60 ms 对 640 ms+，吞吐相当；代价是首字慢 0.2–0.6 s</td></tr>
 <tr><td>单路速度优先（少量用户、要最快出字）</td><td>FP8 或 NVFP4，单机 TP8</td><td>单路约 100 tok/s；TP4 单路较慢</td></tr>
 <tr><td>超长上下文（≥ 256K）</td><td>NVFP4 优先</td><td>KV 池是 FP8 的两倍</td></tr>
 <tr><td>对精度极度敏感</td><td>先用 FP8 上线，同时用业务样本 A/B 验证 NVFP4</td><td>GSM8K 无差别，但长思考与业务场景尚未验证</td></tr>
@@ -475,7 +528,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 </section>
 
 <section id="limits">
-<h2>十、限制与复现</h2>
+<h2>十三、限制与复现</h2>
 <ul>
 <li>SM120 支持目前在 vLLM nightly 中，尚未进入正式版。生产请固定镜像 digest。</li>
 <li>本次未开启 MTP 投机解码（社区报告 nightly 原生 SM120 后端上 MTP 接受率为 0）。</li>

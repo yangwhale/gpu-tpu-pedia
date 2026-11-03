@@ -384,6 +384,7 @@ ROLE=decode bash ~/scripts/pd/serve.sh
 |---|---|---|
 | `--kv-transfer-config` | `{"kv_connector":"NixlConnector","kv_role":"kv_producer"/"kv_consumer","kv_load_failure_policy":"fail"}` | P 是生产者、D 是消费者 |
 | `VLLM_SSM_CONV_STATE_LAYOUT` | `DS` | **必须设**。GLM-5.3-Flash 有 KDA 线性注意力层（vLLM 按 Mamba 类状态管理），NIXL 传这类状态要求 DS 布局；不设会在引擎初始化末尾报 `3-read Mamba conv transfer requires DS conv state layout` 退出 |
+| `UCX_TCP_TX_SEG_SIZE` / `UCX_TCP_RX_SEG_SIZE` | `1m` | **强烈建议**。UCX 默认分段下 GPU 显存经 TCP 每对连接只有约 5 Gbps，KV 传输每次 300+ ms；1m 后 27 Gbps/对，KV 传输约 120 ms（见 README 5.9） |
 | `VLLM_NIXL_SIDE_CHANNEL_HOST` | 本机内网 IP | NIXL 握手地址，**跨机必须设**，否则默认 localhost 对方连不上 |
 | `VLLM_NIXL_SIDE_CHANNEL_PORT` | 5600 | 握手端口 |
 | `UCX_TLS` / `UCX_NET_DEVICES` | `all` / `all` | 让 UCX 自己选；G4 上会落到 TCP + cuda_copy |
@@ -458,6 +459,31 @@ TAG=nvfp4 TOKENIZER=/data/GLM-5.3-Flash-NVFP4  bash ~/scripts/eval/gsm8k.sh
 | 随机种子 | 1234 |
 
 每次约 4 分钟（1P1D 部署上实测）。两个 TAG 的逐题记录可以做配对比较，分析方法和结果见 README 5.5 与 `results/eval/paired-analysis.txt`。
+
+## 11. 网络基准与性价比分析
+
+### 11.1 NIXL 传输基准（不依赖 vLLM）
+
+```bash
+IMG=vllm/vllm-openai@sha256:88cc2118dab845fec1ff759c2fc8afa517cf8a668162ed8683b2f1b781372f57
+# 机器 1（被读的一方）
+sudo docker run --rm --gpus '"device=0"' --network host -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m \
+  -v ~/scripts/pd:/pd --entrypoint python3 $IMG /pd/nixl_bench.py target --mem cuda --total-mb 80
+# 机器 2（发起读取）
+sudo docker run --rm --gpus '"device=0"' --network host -e UCX_TCP_TX_SEG_SIZE=1m -e UCX_TCP_RX_SEG_SIZE=1m \
+  -v ~/scripts/pd:/pd --entrypoint python3 $IMG /pd/nixl_bench.py init --host <机器1_IP> --mem cuda --total-mb 80 --descs 300 --iters 10
+```
+
+输出一行 JSON，`aggregate_Gbps` 即吞吐。去掉两个 `-e UCX_TCP_*` 可复现默认参数下的约 5 Gbps。想测多对并行，每张卡起一对（`--gpus device=i`、`--port 18515+i`），同时在接收端看 `/proc/net/dev` 的 ens3 字节数。
+
+### 11.2 按延迟门槛算每卡吞吐
+
+```bash
+python3 scripts/report/goodput.py         # 读 results/ 下所有速率扫描，打印每档门槛下的每卡吞吐
+python3 scripts/report/build_report.py    # 重新生成 report.html
+```
+
+门槛定义在 `goodput.py` 顶部的 `SLAS`，按业务要求修改即可。
 
 ## 排障
 

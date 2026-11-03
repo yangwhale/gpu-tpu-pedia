@@ -32,9 +32,10 @@ DEPLOYMENTS = [
     ("NVFP4 单机 TP8（不分离）", ["rate-col-nvfp4-tp8"], 8, 1),
     ("NVFP4 单机 2×TP4（不分离）", ["rate-col-nvfp4-2xtp4/inst-*"], 8, 2),
     ("NVFP4 两机 4×TP4（不分离）", ["rate-dp4-nvfp4/*/total-*/inst-*"], 16, None),
-    ("NVFP4 2P2D（两机，TP4）", ["rate-2p2d-nvfp4"], 16, 1),
-    ("FP8 2P1D（三机，TP8）", ["rate-2p1d-fp8"], 24, 1),
-    ("NVFP4 4P2D（三机，TP4）", ["rate-4p2d-nvfp4"], 24, 1),
+    ("NVFP4 2P2D（两机，TP4，UCX 默认）", ["rate-2p2d-nvfp4"], 16, 1),
+    ("NVFP4 2P2D（两机，TP4，UCX 调优）", ["rate-2p2d-nvfp4-ucx"], 16, 1),
+    ("FP8 2P1D（三机，TP8，UCX 默认）", ["rate-2p1d-fp8"], 24, 1),
+    ("NVFP4 4P2D（三机，TP4，UCX 调优）", ["rate-4p2d-nvfp4-ucx"], 24, 1),
 ]
 
 
