@@ -11,6 +11,8 @@
 | `colocated-4xtp4-nvfp4/` | NVFP4 两机 4×TP4，不分离，并发扫描（`A/`、`B/` 两台机器各两个实例） | 16 |
 | `pd-2p2d-nvfp4/`、`rate-2p2d-nvfp4/` | NVFP4 2P2D（全 TP4，UCX 分段 1m）：并发扫描、速率扫描、decode 日志（含 KV 传输统计） | 16 |
 | `pd-4p2d-nvfp4/`、`rate-4p2d-nvfp4/` | NVFP4 4P2D（全 TP4，UCX 分段 1m） | 24 |
+| `h200-fp8-tp8/`、`rate-h200-fp8-tp8/` | 对比：H200（A3 Ultra）FP8 单机 TP8，并发与速率扫描、服务日志 | 8 |
+| `h200-fp8-2xtp4/`、`rate-h200-fp8-2xtp4/` | 对比：H200 FP8 单机 2×TP4 | 8 |
 | `capacity/` | 单实例 prefill / decode 容量（算 P:D 配比用），NVFP4 TP8 与 TP4 | 8 / 4 |
 | `eval/` | GSM8K：FP8 与 NVFP4 的 lm-eval 结果、逐题记录、配对分析 | — |
 | `nixl-bench/` | 独立 NIXL 传输基准：UCX 参数、GPU/CPU 内存、多对并行 | — |

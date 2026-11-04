@@ -365,7 +365,7 @@ def main():
             kbest = (g["S2"][0] / gpus, name)
     gp_html = table(["部署", "卡数"] + [f"{s['key']} {s['name']}<br><span class='note'>{s['desc']}</span>" for s in goodput.SLAS], gp_rows)
     pick = {"FP8 单机 TP8（不分离）": ("FP8，8 卡实例，不分离", C["blue"]), "NVFP4 单机 2×TP4（不分离）": ("NVFP4，4 卡实例，不分离", C["aqua"]),
-            "NVFP4 2P2D（两机，全 TP4）": ("NVFP4，PD 分离 2P2D", C["yellow"])}
+            "NVFP4 2P2D（两机，全 TP4）": ("NVFP4，PD 分离 2P2D", C["yellow"]), "H200 FP8 单机 2×TP4（不分离）": ("H200 FP8，4 卡实例，不分离", C["magenta"])}
     gpbars = bar_chart([s_["key"] + " " + s_["name"] for s_ in goodput.SLAS],
         [(pick[name][0], pick[name][1], [(g[s_["key"]][0] / gpus if g and g[s_["key"]] else float("nan")) for s_ in goodput.SLAS])
          for name, gpus, g in gp if name in pick], "每卡输出 tok/s", h=320)
@@ -401,18 +401,33 @@ def main():
         scan_rows.append(row)
     scan = table(["总并发", "FP8 单机 TP8（8 卡）<br>输出 / 总 tok/s", "NVFP4 不分离（16 卡）<br>输出 / 总 tok/s", "NVFP4 2P2D（16 卡）<br>输出 / 总 tok/s", "平均 TPOT（ms）<br>FP8 / 不分离 / 2P2D"], scan_rows)
 
-    # cost per million tokens at G4 Spot price (us-central1, read from the Spot pricing page on 2026-11-04)
-    G4_SPOT_PER_GPU = 13.4464 / 8
+    # cost per million tokens at Spot list price (us-central1, read from the Spot pricing page on 2026-11-04)
+    PRICE = {"G4": 13.4464 / 8, "H200": 50.871161425 / 8}
     cost_rows = []
     for name, gpus, g in gp:
         if not g or not g["S2"]:
             continue
+        price = PRICE["H200"] if name.startswith("H200") else PRICE["G4"]
         out_g, tot_g = g["S2"][0] / gpus, g["S2"][1] / gpus
-        cost_rows.append([name, f"{out_g*8:,.0f} / {tot_g*8:,.0f}", f"${G4_SPOT_PER_GPU*1e6/(out_g*3600):.2f}", f"${G4_SPOT_PER_GPU*1e6/(tot_g*3600):.3f}"])
-    cost = table(["部署（S2 标准对话档）", "每台 8 卡机器 tok/s<br>输出 / 总", "每百万输出 token", "每百万 token（输入 + 输出）"], cost_rows)
+        cost_rows.append([name, f"${price:.2f}", f"{out_g:,.0f}", f"<b>${price*1e6/(out_g*3600):.2f}</b>", f"${price*1e6/(tot_g*3600):.3f}"])
+    cost = table(["部署（S2 标准对话档）", "每卡每小时 Spot 价", "每卡输出 tok/s", "每百万输出 token", "每百万 token（输入 + 输出）"], cost_rows)
+    h200_tp8 = sweep(J("h200-fp8-tp8"))
+    h200_44 = {}
+    for c in (4, 8, 16, 32, 64, 128):
+        bs = [bench(f) for f in glob.glob(J("h200-fp8-2xtp4", "inst-*", f"bench-in8192-out1024-c{c}.txt"))]
+        if bs:
+            h200_44[2 * c] = {"out": sum(x["out"] for x in bs), "total": sum(x["total"] for x in bs), "tpot": max(x["tpot"] for x in bs),
+                              "ttft_med": max(x["ttft_med"] for x in bs), "itl_p99": max(x["itl_p99"] for x in bs)}
+    hpk = []
+    for lab, rows, gpus in (("H200 FP8 单机 TP8", h200_tp8, 8), ("H200 FP8 单机 2×TP4", h200_44, 8)):
+        if rows:
+            c, r = max(rows.items(), key=lambda kv: kv[1]["out"])
+            hpk.append([lab, gpus, c, f"{r['out']:,.0f}", f"{r['out']/gpus:.0f}", f"{r['total']/gpus:,.0f}", f"{r['tpot']:.0f} ms", s2(r["ttft_med"])])
+    single_user = table(["", "H200 FP8（8 卡实例）", "G4 FP8（8 卡实例）", "G4 NVFP4（4 卡实例）"],
+        [["单个用户的生成速度", f"{1000/h200_tp8[1]['tpot']:.0f} tok/s", f"{1000/single[1]['tpot']:.0f} tok/s", f"{1000/p2[2]['tpot']:.0f} tok/s"]]) if h200_tp8 else ""
 
     rep = {
-        "%%COST%%": cost,
+        "%%COST%%": cost, "%%SINGLE_USER%%": single_user,
         "%%GP_MACHINE%%": gp_machine, "%%SCAN%%": scan,
         "%%BASE_TABLE%%": table(["场景（输入 / 输出 / 并发）", "输出 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL"],
             [[k.replace("in", "").replace("-out", " / ").replace("-c", " / "), f1(v["out"]), s2(v["ttft_med"]), f"{v['tpot']:.2f} ms", f"{v['itl_p99']:.1f} ms"]
@@ -426,7 +441,7 @@ def main():
         "%%CMP%%": cmp, "%%GSM_TABLE%%": table(["指标", "FP8", "NVFP4", "差值"], gsm_rows),
         "%%PAIRED%%": table(["", "题数"], [["两边都对", pm.group(1)], ["只有 FP8 对", pm.group(2)], ["只有 NVFP4 对", pm.group(3)], ["两边都错", pm.group(4)], ["抽取出的答案完全相同", f"{pm.group(5)} / {pm.group(6)}"]]),
         "%%PVAL%%": f"{float(pm.group(7)):.2f}", "%%NET_NIXL%%": table(["UCX 设置", "数据位置", "拆分 / 并发", "80 MB 一次耗时", "吞吐"], nrows), "%%NET_KV%%": kv_html,
-        "%%GOODPUT%%": gp_html, "%%GPBARS%%": gpbars, "%%PEAK%%": table(["部署", "卡数", "最高并发", "输出 tok/s", "每卡输出 tok/s", "每卡总 tok/s", "TPOT", "TTFT 中位数"], peak),
+        "%%GOODPUT%%": gp_html, "%%GPBARS%%": gpbars, "%%PEAK%%": table(["部署", "卡数", "最高并发", "输出 tok/s", "每卡输出 tok/s", "每卡总 tok/s", "TPOT", "TTFT 中位数"], peak + hpk),
         "%%KPI_S2%%": f"{kbest[0]:.0f}", "%%KPI_S2_WHO%%": kbest[1],
         "%%PRE8%%": f0(pre8), "%%PRE4%%": f0(pre4), "%%PRE4X2%%": f0(pre4 + pre4b),
         "%%P2_128_ITL%%": f"{p2[128]['itl_p99']:.0f}", "%%C4_128_ITL%%": f"{col4[128]['itl_p99']:.0f}",

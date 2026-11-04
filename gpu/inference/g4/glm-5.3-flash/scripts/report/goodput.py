@@ -33,6 +33,8 @@ DEPLOYMENTS = [
     ("NVFP4 单机 2×TP4（不分离）", ["rate-colocated-nvfp4-2xtp4/inst-*"], 8, 2),
     ("NVFP4 2P2D（两机，全 TP4）", ["rate-2p2d-nvfp4"], 16, 1),
     ("NVFP4 4P2D（三机，全 TP4）", ["rate-4p2d-nvfp4"], 24, 1),
+    ("H200 FP8 单机 TP8（不分离）", ["rate-h200-fp8-tp8"], 8, 1),
+    ("H200 FP8 单机 2×TP4（不分离）", ["rate-h200-fp8-2xtp4/inst-*"], 8, 2),
 ]
 
 

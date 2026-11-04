@@ -78,6 +78,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <div class="kpi"><div class="v">%%KPI_S2%% tok/s/卡</div><div class="l">标准对话体验下每卡输出（推荐配置）</div></div>
 <div class="kpi"><div class="v">约 8,100 tok/s</div><div class="l">一台 8 卡机器的总吞吐（标准对话体验，NVFP4）</div></div>
 <div class="kpi"><div class="v">2.5 倍</div><div class="l">NVFP4 + TP4 相对 FP8 TP8 的每卡吞吐</div></div>
+<div class="kpi"><div class="v">便宜约 30%</div><div class="l">G4 每百万 token 成本对 H200（实测，Spot 价）</div></div>
 <div class="kpi"><div class="v">无差别</div><div class="l">NVFP4 与 FP8 的 GSM8K 准确率</div></div>
 </div>
 </header>
@@ -89,6 +90,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <li><b>用 NVFP4，每台机器切成两个 4 卡实例。</b> 同样的用户体验下，每张卡的吞吐是 FP8、8 卡一个实例的约 2.5 倍。</li>
 <li><b>NVFP4 不掉能力。</b> GSM8K 全量 1,319 题：FP8 93.33%，NVFP4 92.95%，统计上无差别。</li>
 <li><b>PD 分离换来的是「生成不卡顿」。</b> 对语音、数字人这类对卡顿敏感的业务值得上；普通对话和批处理用不分离更快、更省事。</li>
+<li><b>对比 H200：G4 每个 token 便宜约 30%。</b> H200 每卡吞吐约是 G4 的 2.6 倍，但每卡价格是 3.8 倍；单用户速度 H200 更快（约 170 对 105 tok/s）。</li>
 <li><b>不需要双网卡。</b> 调好传输参数后单网卡可跑满 176 Gbps，实际服务只用到约 6 Gbps。</li>
 </ol>
 </section>
@@ -100,6 +102,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <tr><td>对话、Agent、批处理（要吞吐、要首字快）</td><td><b>NVFP4 不分离</b></td><td>2 个 4 卡实例，前面挂负载均衡</td></tr>
 <tr><td>流式语音、数字人、实时字幕（生成不能卡）</td><td><b>NVFP4 PD 分离 2P2D</b>（2 台一组）</td><td>一台跑 2 个 prefill，一台跑 2 个 decode</td></tr>
 <tr><td>对量化精度有顾虑</td><td>FP8，8 卡一个实例</td><td>先上线，同时用业务样本验证 NVFP4</td></tr>
+<tr><td>单用户速度要求极高 / 超长上下文</td><td>H200（A3 Ultra）FP8</td><td>2 个 4 卡实例；每 token 成本比 G4 高约 40%</td></tr>
 </table>
 <p class="note">完整部署步骤、脚本和全部原始数据：https://github.com/yangwhale/gpu-tpu-pedia/tree/main/gpu/inference/g4/glm-5.3-flash</p>
 </section>
@@ -165,25 +168,30 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 
 <section id="h200">
 <h2>G4 与 H200（A3 Ultra）</h2>
+<p>同一个模型、同一套脚本和负载，在一台 8 × H200（<code>a3-ultragpu-8g</code>）上实测 FP8（H200 不支持 FP4）。</p>
+<h3>实测：H200 每卡快，G4 每个 token 便宜</h3>
+%%COST%%
+<p class="note">「每卡输出 tok/s」为 S2 标准对话档（首字 P90 ≤ 3 秒、每用户 ≥ 25 tok/s）下的实测；价格为 Google Cloud Spot 价格页 us-central1 当前标价（2026-11-04 读取）：A3 Ultra $50.87/小时、G4 $13.45/小时（8 卡整机），按需与承诺价另计。H200 实测机器位于 us-west1 / europe-west4（Spot 容量所限），价格统一按 us-central1 标价比较。</p>
+<ul>
+<li><b>按卡比 H200 快约 2.6 倍</b>：S2 档下 H200（4 卡实例）每卡约 300 tok/s，G4 最优配置约 112–116 tok/s。</li>
+<li><b>按钱比 G4 便宜约 30%</b>：H200 每卡价格是 G4 的 3.8 倍，抵消了速度优势。每百万输出 token，G4 NVFP4 约 $4.0–4.2，H200 约 $5.8。</li>
+<li><b>两边都是「切成 4 卡实例」更划算</b>：H200 上 4 卡实例比 8 卡实例每卡吞吐高约 50%，和 G4 上看到的规律一致。</li>
+</ul>
+%%SINGLE_USER%%
 <h3>硬件与价格</h3>
 <table class="decision">
-<tr><th></th><th>H200（A3 Ultra，<code>a3-ultragpu-8g</code>）</th><th>RTX PRO 6000（G4，<code>g4-standard-384</code>）</th><th>对比</th></tr>
+<tr><th></th><th>H200（A3 Ultra）</th><th>RTX PRO 6000（G4）</th><th>对比</th></tr>
 <tr><td>每卡显存</td><td>141 GB HBM3e</td><td>96 GB GDDR7</td><td>H200 多 47%</td></tr>
-<tr><td>每卡显存带宽</td><td>4.8 TB/s</td><td>1.6 TB/s（1,597 GB/s）</td><td>H200 约 3 倍</td></tr>
-<tr><td>FP8 算力（官方标称）</td><td>3,958 TFLOPS（含稀疏）</td><td>2 PFLOPS</td><td>—</td></tr>
-<tr><td>FP4 算力（官方标称）</td><td>不支持</td><td>4 PFLOPS</td><td>仅 G4 支持</td></tr>
-<tr><td>卡间互联</td><td>NVLink 900 GB/s</td><td>PCIe Gen5，无 NVLink</td><td>H200 大幅领先</td></tr>
+<tr><td>每卡显存带宽</td><td>4.8 TB/s</td><td>1.6 TB/s</td><td>H200 约 3 倍</td></tr>
+<tr><td>FP8 / FP4 算力（官方标称）</td><td>FP8 3,958 TFLOPS（含稀疏）/ 不支持 FP4</td><td>FP8 2 PFLOPS / FP4 4 PFLOPS</td><td>仅 G4 支持 FP4</td></tr>
+<tr><td>卡间互联</td><td>NVLink 900 GB/s</td><td>PCIe Gen5</td><td>H200 大幅领先</td></tr>
 <tr><td>每台 8 卡机器 Spot 价格</td><td>$50.87 / 小时</td><td><b>$13.45 / 小时</b></td><td>G4 便宜约 3.8 倍</td></tr>
-<tr><td>每美元显存（Spot）</td><td>22 GB</td><td><b>57 GB</b></td><td>G4 约 2.6 倍</td></tr>
-<tr><td>每美元显存带宽（Spot）</td><td>0.75 TB/s</td><td><b>0.95 TB/s</b></td><td>G4 约 1.3 倍</td></tr>
 </table>
-<p class="note">硬件参数取自 NVIDIA 官方产品页（RTX PRO 6000 Server Edition 页未注明 FP8/FP4 是否含稀疏，故不做直接换算）；价格为 Google Cloud Spot 价格页 us-central1 当前标价（2026-11-04 读取），按需与承诺价另计。</p>
-<h3>G4 上跑 GLM-5.3-Flash 的单位成本（实测吞吐 × Spot 价格）</h3>
-%%COST%%
+<p class="note">硬件参数取自 NVIDIA 官方产品页（RTX PRO 6000 Server Edition 页未注明 FP8/FP4 是否含稀疏）。</p>
+<h3>怎么选</h3>
 <ul>
-<li><b>H200 一小时的钱，可以开将近 4 台 G4。</b> GLM-5.3-Flash 这类 MoE 模型在高并发时主要受显存容量和带宽限制，G4 在「每美元显存」和「每美元带宽」上都占优，NVFP4 还能再把权重压一半。</li>
-<li><b>H200 的优势在单路速度和大规模互联</b>：显存带宽约 3 倍、NVLink 让大 TP 几乎没有通信代价，适合对单用户速度要求极高、或必须跨机做大规模并行的场景。</li>
-<li><b>本次没有在 H200 上实测 GLM-5.3-Flash</b>，所以没有给出 H200 的每 token 成本；要做同口径对比，可用仓库里同一套脚本在 A3 Ultra 上跑一遍。</li>
+<li><b>要每个 token 最便宜、能接受每用户约 100 tok/s</b>：G4 + NVFP4。</li>
+<li><b>要单用户最快（约 170 tok/s）、或要更大的上下文容量</b>：H200。</li>
 </ul>
 </section>
 
@@ -200,7 +208,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <section id="env">
 <h2>测试环境与方法</h2>
 <table class="kv">
-<tr><td>机器</td><td>Google Cloud <code>g4-standard-384</code>：8 × RTX PRO 6000 Blackwell Server Edition（96 GB），最多 3 台</td></tr>
+<tr><td>机器</td><td>Google Cloud <code>g4-standard-384</code>：8 × RTX PRO 6000 Blackwell Server Edition（96 GB），最多 3 台；对比用 <code>a3-ultragpu-8g</code>：8 × H200（141 GB）</td></tr>
 <tr><td>模型</td><td><code>zai-org/GLM-5.3-Flash</code>（321B 总参 / 18B 激活）；FP8 官方权重，NVFP4 为 <code>RedHatAI/GLM-5.3-Flash-NVFP4</code></td></tr>
 <tr><td>软件</td><td>vLLM <code>0.33.0rc1.dev484</code>（nightly，镜像版本固定），PD 用 NIXL</td></tr>
 <tr><td>负载</td><td>8K 输入 / 1K 输出；请求按随机间隔到达（模拟真实流量），逐档加压</td></tr>

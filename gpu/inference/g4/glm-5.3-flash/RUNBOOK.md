@@ -279,7 +279,19 @@ python3 scripts/report/goodput.py        # 按延迟门槛算每卡吞吐（门�
 python3 scripts/report/build_report.py   # 从 results/ 重新生成 report.html
 ```
 
-## 12. 收尾
+## 12. 对比测试：H200（A3 Ultra）
+
+同一套脚本，机型换成 `a3-ultragpu-8g`（其余 `create-vm.sh` 参数不变；A3 Ultra 的 Spot 容量紧张，可在多个 zone 轮流重试），只测 FP8：
+
+```bash
+NAME=glm PORT=8000 bash ~/scripts/serve/instance.sh                                        # TP8
+NAME=glm-a GPUS=0,1,2,3 PORT=8001 bash ~/scripts/serve/instance.sh                          # 或 2×TP4
+NAME=glm-b GPUS=4,5,6,7 PORT=8002 bash ~/scripts/serve/instance.sh
+```
+
+压测同第 8 节（本报告 H200 TP8 速率用 `0.25 0.5 0.75 1 1.25 1.5 2 2.5 3`，2×TP4 每实例 `0.25 0.5 0.75 1 1.25 1.5`）。
+
+## 13. 收尾
 
 ```bash
 gcloud compute instances delete g4-a g4-b g4-c --zone $ZONE --project $PROJECT

@@ -75,9 +75,10 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <p class="sub">8 × NVIDIA RTX PRO 6000 Blackwell · vLLM · 2026 年 11 月实测</p>
 <div class="kpis">
 <div class="kpi"><div class="v">约 100 tok/s</div><div class="l">单个用户的生成速度</div></div>
-<div class="kpi"><div class="v">116 tok/s/卡</div><div class="l">标准对话体验下每卡输出（推荐配置）</div></div>
+<div class="kpi"><div class="v">304 tok/s/卡</div><div class="l">标准对话体验下每卡输出（推荐配置）</div></div>
 <div class="kpi"><div class="v">约 8,100 tok/s</div><div class="l">一台 8 卡机器的总吞吐（标准对话体验，NVFP4）</div></div>
 <div class="kpi"><div class="v">2.5 倍</div><div class="l">NVFP4 + TP4 相对 FP8 TP8 的每卡吞吐</div></div>
+<div class="kpi"><div class="v">便宜约 30%</div><div class="l">G4 每百万 token 成本对 H200（实测，Spot 价）</div></div>
 <div class="kpi"><div class="v">无差别</div><div class="l">NVFP4 与 FP8 的 GSM8K 准确率</div></div>
 </div>
 </header>
@@ -89,6 +90,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <li><b>用 NVFP4，每台机器切成两个 4 卡实例。</b> 同样的用户体验下，每张卡的吞吐是 FP8、8 卡一个实例的约 2.5 倍。</li>
 <li><b>NVFP4 不掉能力。</b> GSM8K 全量 1,319 题：FP8 93.33%，NVFP4 92.95%，统计上无差别。</li>
 <li><b>PD 分离换来的是「生成不卡顿」。</b> 对语音、数字人这类对卡顿敏感的业务值得上；普通对话和批处理用不分离更快、更省事。</li>
+<li><b>对比 H200：G4 每个 token 便宜约 30%。</b> H200 每卡吞吐约是 G4 的 2.6 倍，但每卡价格是 3.8 倍；单用户速度 H200 更快（约 170 对 105 tok/s）。</li>
 <li><b>不需要双网卡。</b> 调好传输参数后单网卡可跑满 176 Gbps，实际服务只用到约 6 Gbps。</li>
 </ol>
 </section>
@@ -100,6 +102,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <tr><td>对话、Agent、批处理（要吞吐、要首字快）</td><td><b>NVFP4 不分离</b></td><td>2 个 4 卡实例，前面挂负载均衡</td></tr>
 <tr><td>流式语音、数字人、实时字幕（生成不能卡）</td><td><b>NVFP4 PD 分离 2P2D</b>（2 台一组）</td><td>一台跑 2 个 prefill，一台跑 2 个 decode</td></tr>
 <tr><td>对量化精度有顾虑</td><td>FP8，8 卡一个实例</td><td>先上线，同时用业务样本验证 NVFP4</td></tr>
+<tr><td>单用户速度要求极高 / 超长上下文</td><td>H200（A3 Ultra）FP8</td><td>2 个 4 卡实例；每 token 成本比 G4 高约 40%</td></tr>
 </table>
 <p class="note">完整部署步骤、脚本和全部原始数据：https://github.com/yangwhale/gpu-tpu-pedia/tree/main/gpu/inference/g4/glm-5.3-flash</p>
 </section>
@@ -113,46 +116,52 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <tr><td>S2 标准对话</td><td>≤ 3 秒</td><td>≥ 25 tok/s</td><td>不限</td></tr>
 <tr><td>S3 宽松</td><td>≤ 5 秒</td><td>≥ 17 tok/s</td><td>不限</td></tr>
 </table>
-<div class="fig"><div class="legend"><span><i style="background:#2a78d6"></i>FP8，8 卡实例，不分离</span><span><i style="background:#1baf7a"></i>NVFP4，4 卡实例，不分离</span><span><i style="background:#eda100"></i>NVFP4，PD 分离 2P2D</span></div><svg viewBox="0 0 760 320" class="chart" role="img">
+<div class="fig"><div class="legend"><span><i style="background:#2a78d6"></i>FP8，8 卡实例，不分离</span><span><i style="background:#1baf7a"></i>NVFP4，4 卡实例，不分离</span><span><i style="background:#eda100"></i>NVFP4，PD 分离 2P2D</span><span><i style="background:#e87ba4"></i>H200 FP8，4 卡实例，不分离</span></div><svg viewBox="0 0 760 320" class="chart" role="img">
 <line x1="64" x2="744" y1="276.0" y2="276.0" stroke="#e8eaed"/>
 <text x="56" y="280.0" text-anchor="end" class="tick">0</text>
 <line x1="64" x2="744" y1="213.0" y2="213.0" stroke="#e8eaed"/>
-<text x="56" y="217.0" text-anchor="end" class="tick">50</text>
+<text x="56" y="217.0" text-anchor="end" class="tick">100</text>
 <line x1="64" x2="744" y1="150.0" y2="150.0" stroke="#e8eaed"/>
-<text x="56" y="154.0" text-anchor="end" class="tick">100</text>
+<text x="56" y="154.0" text-anchor="end" class="tick">200</text>
 <line x1="64" x2="744" y1="87.0" y2="87.0" stroke="#e8eaed"/>
-<text x="56" y="91.0" text-anchor="end" class="tick">150</text>
+<text x="56" y="91.0" text-anchor="end" class="tick">300</text>
 <line x1="64" x2="744" y1="24.0" y2="24.0" stroke="#e8eaed"/>
-<text x="56" y="28.0" text-anchor="end" class="tick">200</text>
+<text x="56" y="28.0" text-anchor="end" class="tick">400</text>
 <text x="177.3" y="294" text-anchor="middle" class="tick">S1 严格流式</text>
-<path d="M123.3,276 V241.7 Q123.3,237.7 127.3,237.7 H153.3 Q157.3,237.7 157.3,241.7 V276 Z" fill="#2a78d6"><title>FP8，8 卡实例，不分离 · S1 严格流式: 30</title></path>
-<text x="140.3" y="232.7" text-anchor="middle" class="vlabel">30</text>
-<path d="M159.3,276 V200.5 Q159.3,196.5 163.3,196.5 H189.3 Q193.3,196.5 193.3,200.5 V276 Z" fill="#1baf7a"><title>NVFP4，4 卡实例，不分离 · S1 严格流式: 63</title></path>
-<text x="176.3" y="191.5" text-anchor="middle" class="vlabel">63</text>
-<path d="M195.3,276 V186.7 Q195.3,182.7 199.3,182.7 H225.3 Q229.3,182.7 229.3,186.7 V276 Z" fill="#eda100"><title>NVFP4，PD 分离 2P2D · S1 严格流式: 74</title></path>
-<text x="212.3" y="177.7" text-anchor="middle" class="vlabel">74</text>
+<path d="M105.3,276 V260.8 Q105.3,256.8 109.3,256.8 H135.3 Q139.3,256.8 139.3,260.8 V276 Z" fill="#2a78d6"><title>FP8，8 卡实例，不分离 · S1 严格流式: 30</title></path>
+<text x="122.3" y="251.8" text-anchor="middle" class="vlabel">30</text>
+<path d="M141.3,276 V240.3 Q141.3,236.3 145.3,236.3 H171.3 Q175.3,236.3 175.3,240.3 V276 Z" fill="#1baf7a"><title>NVFP4，4 卡实例，不分离 · S1 严格流式: 63</title></path>
+<text x="158.3" y="231.3" text-anchor="middle" class="vlabel">63</text>
+<path d="M177.3,276 V233.4 Q177.3,229.4 181.3,229.4 H207.3 Q211.3,229.4 211.3,233.4 V276 Z" fill="#eda100"><title>NVFP4，PD 分离 2P2D · S1 严格流式: 74</title></path>
+<text x="194.3" y="224.4" text-anchor="middle" class="vlabel">74</text>
+<path d="M213.3,276 V186.0 Q213.3,182.0 217.3,182.0 H243.3 Q247.3,182.0 247.3,186.0 V276 Z" fill="#e87ba4"><title>H200 FP8，4 卡实例，不分离 · S1 严格流式: 149</title></path>
+<text x="230.3" y="177.0" text-anchor="middle" class="vlabel">149</text>
 <text x="404.0" y="294" text-anchor="middle" class="tick">S2 标准对话</text>
-<path d="M350.0,276 V223.1 Q350.0,219.1 354.0,219.1 H380.0 Q384.0,219.1 384.0,223.1 V276 Z" fill="#2a78d6"><title>FP8，8 卡实例，不分离 · S2 标准对话: 45</title></path>
-<text x="367.0" y="214.1" text-anchor="middle" class="vlabel">45</text>
-<path d="M386.0,276 V138.3 Q386.0,134.3 390.0,134.3 H416.0 Q420.0,134.3 420.0,138.3 V276 Z" fill="#1baf7a"><title>NVFP4，4 卡实例，不分离 · S2 标准对话: 112</title></path>
-<text x="403.0" y="129.3" text-anchor="middle" class="vlabel">112</text>
-<path d="M422.0,276 V133.6 Q422.0,129.6 426.0,129.6 H452.0 Q456.0,129.6 456.0,133.6 V276 Z" fill="#eda100"><title>NVFP4，PD 分离 2P2D · S2 标准对话: 116</title></path>
-<text x="439.0" y="124.6" text-anchor="middle" class="vlabel">116</text>
+<path d="M332.0,276 V251.5 Q332.0,247.5 336.0,247.5 H362.0 Q366.0,247.5 366.0,251.5 V276 Z" fill="#2a78d6"><title>FP8，8 卡实例，不分离 · S2 标准对话: 45</title></path>
+<text x="349.0" y="242.5" text-anchor="middle" class="vlabel">45</text>
+<path d="M368.0,276 V209.2 Q368.0,205.2 372.0,205.2 H398.0 Q402.0,205.2 402.0,209.2 V276 Z" fill="#1baf7a"><title>NVFP4，4 卡实例，不分离 · S2 标准对话: 112</title></path>
+<text x="385.0" y="200.2" text-anchor="middle" class="vlabel">112</text>
+<path d="M404.0,276 V206.8 Q404.0,202.8 408.0,202.8 H434.0 Q438.0,202.8 438.0,206.8 V276 Z" fill="#eda100"><title>NVFP4，PD 分离 2P2D · S2 标准对话: 116</title></path>
+<text x="421.0" y="197.8" text-anchor="middle" class="vlabel">116</text>
+<path d="M440.0,276 V88.8 Q440.0,84.8 444.0,84.8 H470.0 Q474.0,84.8 474.0,88.8 V276 Z" fill="#e87ba4"><title>H200 FP8，4 卡实例，不分离 · S2 标准对话: 304</title></path>
+<text x="457.0" y="79.8" text-anchor="middle" class="vlabel">304</text>
 <text x="630.7" y="294" text-anchor="middle" class="tick">S3 宽松</text>
-<path d="M576.7,276 V203.5 Q576.7,199.5 580.7,199.5 H606.7 Q610.7,199.5 610.7,203.5 V276 Z" fill="#2a78d6"><title>FP8，8 卡实例，不分离 · S3 宽松: 61</title></path>
-<text x="593.7" y="194.5" text-anchor="middle" class="vlabel">61</text>
-<path d="M612.7,276 V102.9 Q612.7,98.9 616.7,98.9 H642.7 Q646.7,98.9 646.7,102.9 V276 Z" fill="#1baf7a"><title>NVFP4，4 卡实例，不分离 · S3 宽松: 141</title></path>
-<text x="629.7" y="93.9" text-anchor="middle" class="vlabel">141</text>
-<path d="M648.7,276 V113.1 Q648.7,109.1 652.7,109.1 H678.7 Q682.7,109.1 682.7,113.1 V276 Z" fill="#eda100"><title>NVFP4，PD 分离 2P2D · S3 宽松: 132</title></path>
-<text x="665.7" y="104.1" text-anchor="middle" class="vlabel">132</text>
+<path d="M558.7,276 V241.7 Q558.7,237.7 562.7,237.7 H588.7 Q592.7,237.7 592.7,241.7 V276 Z" fill="#2a78d6"><title>FP8，8 卡实例，不分离 · S3 宽松: 61</title></path>
+<text x="575.7" y="232.7" text-anchor="middle" class="vlabel">61</text>
+<path d="M594.7,276 V191.4 Q594.7,187.4 598.7,187.4 H624.7 Q628.7,187.4 628.7,191.4 V276 Z" fill="#1baf7a"><title>NVFP4，4 卡实例，不分离 · S3 宽松: 141</title></path>
+<text x="611.7" y="182.4" text-anchor="middle" class="vlabel">141</text>
+<path d="M630.7,276 V196.5 Q630.7,192.5 634.7,192.5 H660.7 Q664.7,192.5 664.7,196.5 V276 Z" fill="#eda100"><title>NVFP4，PD 分离 2P2D · S3 宽松: 132</title></path>
+<text x="647.7" y="187.5" text-anchor="middle" class="vlabel">132</text>
+<path d="M666.7,276 V66.6 Q666.7,62.6 670.7,62.6 H696.7 Q700.7,62.6 700.7,66.6 V276 Z" fill="#e87ba4"><title>H200 FP8，4 卡实例，不分离 · S3 宽松: 339</title></path>
+<text x="683.7" y="57.6" text-anchor="middle" class="vlabel">339</text>
 <line x1="64" x2="744" y1="276" y2="276" stroke="#9aa0a6"/>
 <text x="14" y="150.0" text-anchor="middle" class="axis" transform="rotate(-90 14 150.0)">每卡输出 tok/s</text>
 </svg><div class="cap">每卡每秒输出 token 数（越高越省钱）</div></div>
 <h3>每卡吞吐（所有部署）</h3>
-<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>S1 严格流式<br><span class='note'>TTFT P90 ≤ 2 s，TPOT ≤ 25 ms（每路 ≥ 40 tok/s），P99 ITL ≤ 200 ms</span></th><th>S2 标准对话<br><span class='note'>TTFT P90 ≤ 3 s，TPOT ≤ 40 ms（每路 ≥ 25 tok/s）</span></th><th>S3 宽松<br><span class='note'>TTFT P90 ≤ 5 s，TPOT ≤ 60 ms（每路 ≥ 17 tok/s）</span></th></tr></thead><tbody><tr><td>FP8 单机 TP8（不分离）</td><td>8</td><td><b>30</b> / 274</td><td><b>45</b> / 407</td><td><b>61</b> / 547</td></tr><tr><td>NVFP4 单机 TP8（不分离）</td><td>8</td><td><b>32</b> / 287</td><td><b>63</b> / 567</td><td><b>84</b> / 757</td></tr><tr><td>NVFP4 单机 2×TP4（不分离）</td><td>8</td><td><b>63</b> / 568</td><td><b>112</b> / 1,013</td><td><b>141</b> / 1,267</td></tr><tr><td>NVFP4 2P2D（两机，全 TP4）</td><td>16</td><td><b>74</b> / 667</td><td><b>116</b> / 1,047</td><td><b>132</b> / 1,194</td></tr><tr><td>NVFP4 4P2D（三机，全 TP4）</td><td>24</td><td><b>48</b> / 435</td><td><b>93</b> / 841</td><td><b>123</b> / 1,109*</td></tr></tbody></table></div>
+<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>S1 严格流式<br><span class='note'>TTFT P90 ≤ 2 s，TPOT ≤ 25 ms（每路 ≥ 40 tok/s），P99 ITL ≤ 200 ms</span></th><th>S2 标准对话<br><span class='note'>TTFT P90 ≤ 3 s，TPOT ≤ 40 ms（每路 ≥ 25 tok/s）</span></th><th>S3 宽松<br><span class='note'>TTFT P90 ≤ 5 s，TPOT ≤ 60 ms（每路 ≥ 17 tok/s）</span></th></tr></thead><tbody><tr><td>FP8 单机 TP8（不分离）</td><td>8</td><td><b>30</b> / 274</td><td><b>45</b> / 407</td><td><b>61</b> / 547</td></tr><tr><td>NVFP4 单机 TP8（不分离）</td><td>8</td><td><b>32</b> / 287</td><td><b>63</b> / 567</td><td><b>84</b> / 757</td></tr><tr><td>NVFP4 单机 2×TP4（不分离）</td><td>8</td><td><b>63</b> / 568</td><td><b>112</b> / 1,013</td><td><b>141</b> / 1,267</td></tr><tr><td>NVFP4 2P2D（两机，全 TP4）</td><td>16</td><td><b>74</b> / 667</td><td><b>116</b> / 1,047</td><td><b>132</b> / 1,194</td></tr><tr><td>NVFP4 4P2D（三机，全 TP4）</td><td>24</td><td><b>48</b> / 435</td><td><b>93</b> / 841</td><td><b>123</b> / 1,109*</td></tr><tr><td>H200 FP8 单机 TP8（不分离）</td><td>8</td><td><b>106</b> / 952</td><td><b>203</b> / 1,829</td><td><b>234</b> / 2,112</td></tr><tr><td>H200 FP8 单机 2×TP4（不分离）</td><td>8</td><td><b>149</b> / 1,344</td><td><b>304</b> / 2,735</td><td><b>339</b> / 3,052*</td></tr></tbody></table></div>
 <p class="note">「输出」只算生成的 token；「总」= 输入 + 输出（8K 输入时输入占约 89%）。带 * 表示压到的最高负载仍满足要求，真实上限更高。</p>
 <h3>折算成一台 8 卡机器</h3>
-<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>S1 严格流式</th><th>S2 标准对话</th><th>S3 宽松</th></tr></thead><tbody><tr><td>FP8 单机 TP8（不分离）</td><td>8</td><td><b>243</b> / 2,194</td><td><b>361</b> / 3,257</td><td><b>486</b> / 4,380</td></tr><tr><td>NVFP4 单机 TP8（不分离）</td><td>8</td><td><b>255</b> / 2,298</td><td><b>504</b> / 4,540</td><td><b>672</b> / 6,057</td></tr><tr><td>NVFP4 单机 2×TP4（不分离）</td><td>8</td><td><b>505</b> / 4,547</td><td><b>900</b> / 8,107</td><td><b>1,125</b> / 10,134</td></tr><tr><td>NVFP4 2P2D（两机，全 TP4）</td><td>16</td><td><b>592</b> / 5,338</td><td><b>930</b> / 8,379</td><td><b>1,060</b> / 9,551</td></tr><tr><td>NVFP4 4P2D（三机，全 TP4）</td><td>24</td><td><b>386</b> / 3,477</td><td><b>747</b> / 6,732</td><td><b>984</b> / 8,869*</td></tr></tbody></table></div>
+<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>S1 严格流式</th><th>S2 标准对话</th><th>S3 宽松</th></tr></thead><tbody><tr><td>FP8 单机 TP8（不分离）</td><td>8</td><td><b>243</b> / 2,194</td><td><b>361</b> / 3,257</td><td><b>486</b> / 4,380</td></tr><tr><td>NVFP4 单机 TP8（不分离）</td><td>8</td><td><b>255</b> / 2,298</td><td><b>504</b> / 4,540</td><td><b>672</b> / 6,057</td></tr><tr><td>NVFP4 单机 2×TP4（不分离）</td><td>8</td><td><b>505</b> / 4,547</td><td><b>900</b> / 8,107</td><td><b>1,125</b> / 10,134</td></tr><tr><td>NVFP4 2P2D（两机，全 TP4）</td><td>16</td><td><b>592</b> / 5,338</td><td><b>930</b> / 8,379</td><td><b>1,060</b> / 9,551</td></tr><tr><td>NVFP4 4P2D（三机，全 TP4）</td><td>24</td><td><b>386</b> / 3,477</td><td><b>747</b> / 6,732</td><td><b>984</b> / 8,869*</td></tr><tr><td>H200 FP8 单机 TP8（不分离）</td><td>8</td><td><b>845</b> / 7,619</td><td><b>1,623</b> / 14,629</td><td><b>1,875</b> / 16,900</td></tr><tr><td>H200 FP8 单机 2×TP4（不分离）</td><td>8</td><td><b>1,193</b> / 10,754</td><td><b>2,428</b> / 21,881</td><td><b>2,710</b> / 24,418*</td></tr></tbody></table></div>
 <p class="note">单位 tok/s，「输出 / 总」。</p>
 <ul>
 <li><b>NVFP4 + 4 卡实例是最大的杠杆</b>：S2 档下每卡从 FP8 的约 45 提到约 112–116 tok/s；一台 8 卡机器从约 360 提到约 900 输出 tok/s（总吞吐约 3,300 → 8,100 tok/s）。</li>
@@ -164,7 +173,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <h2>整体吞吐</h2>
 <p>不设延迟要求、只看能压到多少（并发扫描，8K 输入 / 1K 输出）。</p>
 <h3>压满时</h3>
-<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>最高并发</th><th>输出 tok/s</th><th>每卡输出 tok/s</th><th>每卡总 tok/s</th><th>TPOT</th><th>TTFT 中位数</th></tr></thead><tbody><tr><td>FP8 单机 TP8</td><td>8</td><td>128</td><td>837</td><td>105</td><td>943</td><td>138 ms</td><td>2.77 s</td></tr><tr><td>NVFP4 不分离 4×TP4</td><td>16</td><td>256</td><td>2,928</td><td>183</td><td>1,649</td><td>79 ms</td><td>2.35 s</td></tr><tr><td>NVFP4 2P2D</td><td>16</td><td>256</td><td>2,513</td><td>157</td><td>1,415</td><td>42 ms</td><td>51.12 s</td></tr><tr><td>NVFP4 4P2D</td><td>24</td><td>256</td><td>3,802</td><td>158</td><td>1,428</td><td>56 ms</td><td>1.37 s</td></tr></tbody></table></div>
+<div class="tw"><table class=""><thead><tr><th>部署</th><th>卡数</th><th>最高并发</th><th>输出 tok/s</th><th>每卡输出 tok/s</th><th>每卡总 tok/s</th><th>TPOT</th><th>TTFT 中位数</th></tr></thead><tbody><tr><td>FP8 单机 TP8</td><td>8</td><td>128</td><td>837</td><td>105</td><td>943</td><td>138 ms</td><td>2.77 s</td></tr><tr><td>NVFP4 不分离 4×TP4</td><td>16</td><td>256</td><td>2,928</td><td>183</td><td>1,649</td><td>79 ms</td><td>2.35 s</td></tr><tr><td>NVFP4 2P2D</td><td>16</td><td>256</td><td>2,513</td><td>157</td><td>1,415</td><td>42 ms</td><td>51.12 s</td></tr><tr><td>NVFP4 4P2D</td><td>24</td><td>256</td><td>3,802</td><td>158</td><td>1,428</td><td>56 ms</td><td>1.37 s</td></tr><tr><td>H200 FP8 单机 TP8</td><td>8</td><td>256</td><td>2,314</td><td>289</td><td>2,607</td><td>98 ms</td><td>1.85 s</td></tr><tr><td>H200 FP8 单机 2×TP4</td><td>8</td><td>256</td><td>3,285</td><td>411</td><td>3,701</td><td>70 ms</td><td>1.55 s</td></tr></tbody></table></div>
 <h3>吞吐随并发的变化</h3>
 <div class="tw"><table class=""><thead><tr><th>总并发</th><th>FP8 单机 TP8（8 卡）<br>输出 / 总 tok/s</th><th>NVFP4 不分离（16 卡）<br>输出 / 总 tok/s</th><th>NVFP4 2P2D（16 卡）<br>输出 / 总 tok/s</th><th>平均 TPOT（ms）<br>FP8 / 不分离 / 2P2D</th></tr></thead><tbody><tr><td>16</td><td><b>441</b> / 3,971</td><td><b>973</b> / 8,769</td><td><b>833</b> / 7,507</td><td>33 / 14 / 17</td></tr><tr><td>32</td><td><b>538</b> / 4,846</td><td><b>1,432</b> / 12,902</td><td><b>1,221</b> / 11,007</td><td>54 / 20 / 22</td></tr><tr><td>64</td><td><b>652</b> / 5,880</td><td><b>1,896</b> / 17,083</td><td><b>1,702</b> / 15,334</td><td>90 / 30 / 31</td></tr><tr><td>128</td><td><b>837</b> / 7,541</td><td><b>2,380</b> / 21,446</td><td><b>2,333</b> / 21,028</td><td>138 / 49 / 40</td></tr><tr><td>256</td><td>—</td><td><b>2,928</b> / 26,383</td><td><b>2,513</b> / 22,642</td><td>— / 79 / 42</td></tr></tbody></table></div>
 <div class="fig"><div class="legend"><span><i style="background:#2a78d6"></i>FP8 单机 TP8</span><span><i style="background:#1baf7a"></i>NVFP4 不分离 4×TP4</span><span><i style="background:#eda100"></i>NVFP4 2P2D</span><span><i style="background:#eb6834"></i>NVFP4 4P2D</span></div><svg viewBox="0 0 760 380" class="chart" role="img">
@@ -295,25 +304,30 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 
 <section id="h200">
 <h2>G4 与 H200（A3 Ultra）</h2>
+<p>同一个模型、同一套脚本和负载，在一台 8 × H200（<code>a3-ultragpu-8g</code>）上实测 FP8（H200 不支持 FP4）。</p>
+<h3>实测：H200 每卡快，G4 每个 token 便宜</h3>
+<div class="tw"><table class=""><thead><tr><th>部署（S2 标准对话档）</th><th>每卡每小时 Spot 价</th><th>每卡输出 tok/s</th><th>每百万输出 token</th><th>每百万 token（输入 + 输出）</th></tr></thead><tbody><tr><td>FP8 单机 TP8（不分离）</td><td>$1.68</td><td>45</td><td><b>$10.33</b></td><td>$1.147</td></tr><tr><td>NVFP4 单机 TP8（不分离）</td><td>$1.68</td><td>63</td><td><b>$7.41</b></td><td>$0.823</td></tr><tr><td>NVFP4 单机 2×TP4（不分离）</td><td>$1.68</td><td>112</td><td><b>$4.15</b></td><td>$0.461</td></tr><tr><td>NVFP4 2P2D（两机，全 TP4）</td><td>$1.68</td><td>116</td><td><b>$4.02</b></td><td>$0.446</td></tr><tr><td>NVFP4 4P2D（三机，全 TP4）</td><td>$1.68</td><td>93</td><td><b>$5.00</b></td><td>$0.555</td></tr><tr><td>H200 FP8 单机 TP8（不分离）</td><td>$6.36</td><td>203</td><td><b>$8.71</b></td><td>$0.966</td></tr><tr><td>H200 FP8 单机 2×TP4（不分离）</td><td>$6.36</td><td>304</td><td><b>$5.82</b></td><td>$0.646</td></tr></tbody></table></div>
+<p class="note">「每卡输出 tok/s」为 S2 标准对话档（首字 P90 ≤ 3 秒、每用户 ≥ 25 tok/s）下的实测；价格为 Google Cloud Spot 价格页 us-central1 当前标价（2026-11-04 读取）：A3 Ultra $50.87/小时、G4 $13.45/小时（8 卡整机），按需与承诺价另计。H200 实测机器位于 us-west1 / europe-west4（Spot 容量所限），价格统一按 us-central1 标价比较。</p>
+<ul>
+<li><b>按卡比 H200 快约 2.6 倍</b>：S2 档下 H200（4 卡实例）每卡约 300 tok/s，G4 最优配置约 112–116 tok/s。</li>
+<li><b>按钱比 G4 便宜约 30%</b>：H200 每卡价格是 G4 的 3.8 倍，抵消了速度优势。每百万输出 token，G4 NVFP4 约 $4.0–4.2，H200 约 $5.8。</li>
+<li><b>两边都是「切成 4 卡实例」更划算</b>：H200 上 4 卡实例比 8 卡实例每卡吞吐高约 50%，和 G4 上看到的规律一致。</li>
+</ul>
+<div class="tw"><table class=""><thead><tr><th></th><th>H200 FP8（8 卡实例）</th><th>G4 FP8（8 卡实例）</th><th>G4 NVFP4（4 卡实例）</th></tr></thead><tbody><tr><td>单个用户的生成速度</td><td>173 tok/s</td><td>107 tok/s</td><td>97 tok/s</td></tr></tbody></table></div>
 <h3>硬件与价格</h3>
 <table class="decision">
-<tr><th></th><th>H200（A3 Ultra，<code>a3-ultragpu-8g</code>）</th><th>RTX PRO 6000（G4，<code>g4-standard-384</code>）</th><th>对比</th></tr>
+<tr><th></th><th>H200（A3 Ultra）</th><th>RTX PRO 6000（G4）</th><th>对比</th></tr>
 <tr><td>每卡显存</td><td>141 GB HBM3e</td><td>96 GB GDDR7</td><td>H200 多 47%</td></tr>
-<tr><td>每卡显存带宽</td><td>4.8 TB/s</td><td>1.6 TB/s（1,597 GB/s）</td><td>H200 约 3 倍</td></tr>
-<tr><td>FP8 算力（官方标称）</td><td>3,958 TFLOPS（含稀疏）</td><td>2 PFLOPS</td><td>—</td></tr>
-<tr><td>FP4 算力（官方标称）</td><td>不支持</td><td>4 PFLOPS</td><td>仅 G4 支持</td></tr>
-<tr><td>卡间互联</td><td>NVLink 900 GB/s</td><td>PCIe Gen5，无 NVLink</td><td>H200 大幅领先</td></tr>
+<tr><td>每卡显存带宽</td><td>4.8 TB/s</td><td>1.6 TB/s</td><td>H200 约 3 倍</td></tr>
+<tr><td>FP8 / FP4 算力（官方标称）</td><td>FP8 3,958 TFLOPS（含稀疏）/ 不支持 FP4</td><td>FP8 2 PFLOPS / FP4 4 PFLOPS</td><td>仅 G4 支持 FP4</td></tr>
+<tr><td>卡间互联</td><td>NVLink 900 GB/s</td><td>PCIe Gen5</td><td>H200 大幅领先</td></tr>
 <tr><td>每台 8 卡机器 Spot 价格</td><td>$50.87 / 小时</td><td><b>$13.45 / 小时</b></td><td>G4 便宜约 3.8 倍</td></tr>
-<tr><td>每美元显存（Spot）</td><td>22 GB</td><td><b>57 GB</b></td><td>G4 约 2.6 倍</td></tr>
-<tr><td>每美元显存带宽（Spot）</td><td>0.75 TB/s</td><td><b>0.95 TB/s</b></td><td>G4 约 1.3 倍</td></tr>
 </table>
-<p class="note">硬件参数取自 NVIDIA 官方产品页（RTX PRO 6000 Server Edition 页未注明 FP8/FP4 是否含稀疏，故不做直接换算）；价格为 Google Cloud Spot 价格页 us-central1 当前标价（2026-11-04 读取），按需与承诺价另计。</p>
-<h3>G4 上跑 GLM-5.3-Flash 的单位成本（实测吞吐 × Spot 价格）</h3>
-<div class="tw"><table class=""><thead><tr><th>部署（S2 标准对话档）</th><th>每台 8 卡机器 tok/s<br>输出 / 总</th><th>每百万输出 token</th><th>每百万 token（输入 + 输出）</th></tr></thead><tbody><tr><td>FP8 单机 TP8（不分离）</td><td>361 / 3,257</td><td>$10.33</td><td>$1.147</td></tr><tr><td>NVFP4 单机 TP8（不分离）</td><td>504 / 4,540</td><td>$7.41</td><td>$0.823</td></tr><tr><td>NVFP4 单机 2×TP4（不分离）</td><td>900 / 8,107</td><td>$4.15</td><td>$0.461</td></tr><tr><td>NVFP4 2P2D（两机，全 TP4）</td><td>930 / 8,379</td><td>$4.02</td><td>$0.446</td></tr><tr><td>NVFP4 4P2D（三机，全 TP4）</td><td>747 / 6,732</td><td>$5.00</td><td>$0.555</td></tr></tbody></table></div>
+<p class="note">硬件参数取自 NVIDIA 官方产品页（RTX PRO 6000 Server Edition 页未注明 FP8/FP4 是否含稀疏）。</p>
+<h3>怎么选</h3>
 <ul>
-<li><b>H200 一小时的钱，可以开将近 4 台 G4。</b> GLM-5.3-Flash 这类 MoE 模型在高并发时主要受显存容量和带宽限制，G4 在「每美元显存」和「每美元带宽」上都占优，NVFP4 还能再把权重压一半。</li>
-<li><b>H200 的优势在单路速度和大规模互联</b>：显存带宽约 3 倍、NVLink 让大 TP 几乎没有通信代价，适合对单用户速度要求极高、或必须跨机做大规模并行的场景。</li>
-<li><b>本次没有在 H200 上实测 GLM-5.3-Flash</b>，所以没有给出 H200 的每 token 成本；要做同口径对比，可用仓库里同一套脚本在 A3 Ultra 上跑一遍。</li>
+<li><b>要每个 token 最便宜、能接受每用户约 100 tok/s</b>：G4 + NVFP4。</li>
+<li><b>要单用户最快（约 170 tok/s）、或要更大的上下文容量</b>：H200。</li>
 </ul>
 </section>
 
@@ -330,7 +344,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <section id="env">
 <h2>测试环境与方法</h2>
 <table class="kv">
-<tr><td>机器</td><td>Google Cloud <code>g4-standard-384</code>：8 × RTX PRO 6000 Blackwell Server Edition（96 GB），最多 3 台</td></tr>
+<tr><td>机器</td><td>Google Cloud <code>g4-standard-384</code>：8 × RTX PRO 6000 Blackwell Server Edition（96 GB），最多 3 台；对比用 <code>a3-ultragpu-8g</code>：8 × H200（141 GB）</td></tr>
 <tr><td>模型</td><td><code>zai-org/GLM-5.3-Flash</code>（321B 总参 / 18B 激活）；FP8 官方权重，NVFP4 为 <code>RedHatAI/GLM-5.3-Flash-NVFP4</code></td></tr>
 <tr><td>软件</td><td>vLLM <code>0.33.0rc1.dev484</code>（nightly，镜像版本固定），PD 用 NIXL</td></tr>
 <tr><td>负载</td><td>8K 输入 / 1K 输出；请求按随机间隔到达（模拟真实流量），逐档加压</td></tr>
