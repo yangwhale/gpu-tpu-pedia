@@ -37,6 +37,9 @@ tbody tr:nth-child(even){background:#fafbfc}
 .callout.warn{border-color:#e37400;background:#fef7e0}
 .callout.ok{border-color:#188038;background:#e6f4ea}
 .note{color:var(--ink3);font-size:13px}
+.repro{margin:16px 0 4px;padding:12px 16px;border:1px solid #d2e3fc;background:#e8f0fe;border-radius:8px;color:var(--ink);word-break:break-all}
+.repro a{color:var(--blue)}
+a{color:var(--blue)}
 .chart{width:100%;height:auto;display:block;margin:4px 0 8px}
 .chart .tick{font-size:11px;fill:#5f6368}
 .chart .axis{font-size:12px;fill:#3c4043}
@@ -58,6 +61,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <div class="wrap">
 <nav>
 <b>目录</b>
+<a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/gpu/inference/g4/glm-5.3-flash" target="_blank">GitHub：复测步骤与数据 ↗</a>
 <a href="#summary">结论</a>
 <a href="#configs">推荐配置</a>
 <a href="#goodput">每张卡能出多少 token</a>
@@ -73,9 +77,12 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <header class="hero">
 <h1>GLM-5.3-Flash 在 Google Cloud G4 上的推理测试</h1>
 <p class="sub">8 × NVIDIA RTX PRO 6000 Blackwell · vLLM · 2026 年 11 月实测</p>
+<div class="repro"><b>自己复测：</b>完整的部署步骤、脚本和全部原始数据都在 GitHub —— <a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/gpu/inference/g4/glm-5.3-flash" target="_blank">https://github.com/yangwhale/gpu-tpu-pedia/tree/main/gpu/inference/g4/glm-5.3-flash</a><br>
+<span class="note">照着 <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/gpu/inference/g4/glm-5.3-flash/RUNBOOK.md" target="_blank">RUNBOOK.md</a> 一步步执行即可复现本报告的全部数字。</span></div>
+
 <div class="kpis">
 <div class="kpi"><div class="v">约 100 tok/s</div><div class="l">单个用户的生成速度</div></div>
-<div class="kpi"><div class="v">304 tok/s/卡</div><div class="l">标准对话体验下每卡输出（推荐配置）</div></div>
+<div class="kpi"><div class="v">116 tok/s/卡</div><div class="l">G4 标准对话体验下每卡输出（推荐配置）</div></div>
 <div class="kpi"><div class="v">约 8,100 tok/s</div><div class="l">一台 8 卡机器的总吞吐（标准对话体验，NVFP4）</div></div>
 <div class="kpi"><div class="v">2.5 倍</div><div class="l">NVFP4 + TP4 相对 FP8 TP8 的每卡吞吐</div></div>
 <div class="kpi"><div class="v">便宜约 30%</div><div class="l">G4 + NVFP4 对 H200 FP8 的每百万 token 成本（实测，Spot 价）</div></div>
@@ -104,7 +111,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <tr><td>对量化精度有顾虑</td><td>FP8，8 卡一个实例</td><td>先上线，同时用业务样本验证 NVFP4</td></tr>
 <tr><td>单用户速度要求极高 / 超长上下文 / 必须用 FP8</td><td>H200（A3 Ultra）FP8</td><td>2 个 4 卡实例；必须用 FP8 时也优先选它</td></tr>
 </table>
-<p class="note">完整部署步骤、脚本和全部原始数据：https://github.com/yangwhale/gpu-tpu-pedia/tree/main/gpu/inference/g4/glm-5.3-flash</p>
+<p class="note">部署步骤见 <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/gpu/inference/g4/glm-5.3-flash/RUNBOOK.md" target="_blank">RUNBOOK.md</a>。</p>
 </section>
 
 <section id="goodput">

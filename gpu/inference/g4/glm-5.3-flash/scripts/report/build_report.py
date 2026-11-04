@@ -361,7 +361,7 @@ def main():
             x = g[sla["key"]] if g else None
             cells.append("不达标" if x is None else f"<b>{x[0]/gpus:.0f}</b> / {x[1]/gpus:,.0f}" + ("*" if x[3].startswith("≥") else ""))
         gp_rows.append(cells)
-        if g and g["S2"] and (not kbest or g["S2"][0] / gpus > kbest[0]):
+        if g and g["S2"] and not name.startswith("H200") and (not kbest or g["S2"][0] / gpus > kbest[0]):
             kbest = (g["S2"][0] / gpus, name)
     gp_html = table(["部署", "卡数"] + [f"{s['key']} {s['name']}<br><span class='note'>{s['desc']}</span>" for s in goodput.SLAS], gp_rows)
     pick = {"FP8 单机 TP8（不分离）": ("FP8，8 卡实例，不分离", C["blue"]), "NVFP4 单机 2×TP4（不分离）": ("NVFP4，4 卡实例，不分离", C["aqua"]),
