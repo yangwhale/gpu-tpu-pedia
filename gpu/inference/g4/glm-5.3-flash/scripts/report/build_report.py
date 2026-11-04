@@ -410,6 +410,19 @@ def main():
         price = PRICE["H200"] if name.startswith("H200") else PRICE["G4"]
         out_g, tot_g = g["S2"][0] / gpus, g["S2"][1] / gpus
         cost_rows.append([name, f"${price:.2f}", f"{out_g:,.0f}", f"<b>${price*1e6/(out_g*3600):.2f}</b>", f"${price*1e6/(tot_g*3600):.3f}"])
+    gpd = {name: (gpus, g) for name, gpus, g in gp}
+    def costrow(lab, name, prec):
+        gpus, g = gpd[name]
+        price = PRICE["H200"] if name.startswith("H200") else PRICE["G4"]
+        o = g["S2"][0] / gpus
+        return [lab, prec, f"{o:,.0f}", f"<b>${price*1e6/(o*3600):.2f}</b>"]
+    H = ["部署", "精度", "S2 每卡输出 tok/s", "每百万输出 token"]
+    same_prec = table(H, [costrow("G4，8 卡实例", "FP8 单机 TP8（不分离）", "FP8"),
+                          costrow("H200，8 卡实例", "H200 FP8 单机 TP8（不分离）", "FP8"),
+                          costrow("H200，两个 4 卡实例", "H200 FP8 单机 2×TP4（不分离）", "FP8")])
+    best = table(H, [costrow("G4，两个 4 卡实例", "NVFP4 单机 2×TP4（不分离）", "NVFP4"),
+                     costrow("G4，PD 分离 2P2D", "NVFP4 2P2D（两机，全 TP4）", "NVFP4"),
+                     costrow("H200，两个 4 卡实例", "H200 FP8 单机 2×TP4（不分离）", "FP8")])
     cost = table(["部署（S2 标准对话档）", "每卡每小时 Spot 价", "每卡输出 tok/s", "每百万输出 token", "每百万 token（输入 + 输出）"], cost_rows)
     h200_tp8 = sweep(J("h200-fp8-tp8"))
     h200_44 = {}
@@ -427,7 +440,7 @@ def main():
         [["单个用户的生成速度", f"{1000/h200_tp8[1]['tpot']:.0f} tok/s", f"{1000/single[1]['tpot']:.0f} tok/s", f"{1000/p2[2]['tpot']:.0f} tok/s"]]) if h200_tp8 else ""
 
     rep = {
-        "%%COST%%": cost, "%%SINGLE_USER%%": single_user,
+        "%%COST%%": cost, "%%SAME_PREC%%": same_prec, "%%BEST%%": best, "%%SINGLE_USER%%": single_user,
         "%%GP_MACHINE%%": gp_machine, "%%SCAN%%": scan,
         "%%BASE_TABLE%%": table(["场景（输入 / 输出 / 并发）", "输出 tok/s", "TTFT 中位数", "平均 TPOT", "P99 ITL"],
             [[k.replace("in", "").replace("-out", " / ").replace("-c", " / "), f1(v["out"]), s2(v["ttft_med"]), f"{v['tpot']:.2f} ms", f"{v['itl_p99']:.1f} ms"]

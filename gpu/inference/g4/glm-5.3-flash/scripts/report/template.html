@@ -78,7 +78,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <div class="kpi"><div class="v">%%KPI_S2%% tok/s/卡</div><div class="l">标准对话体验下每卡输出（推荐配置）</div></div>
 <div class="kpi"><div class="v">约 8,100 tok/s</div><div class="l">一台 8 卡机器的总吞吐（标准对话体验，NVFP4）</div></div>
 <div class="kpi"><div class="v">2.5 倍</div><div class="l">NVFP4 + TP4 相对 FP8 TP8 的每卡吞吐</div></div>
-<div class="kpi"><div class="v">便宜约 30%</div><div class="l">G4 每百万 token 成本对 H200（实测，Spot 价）</div></div>
+<div class="kpi"><div class="v">便宜约 30%</div><div class="l">G4 + NVFP4 对 H200 FP8 的每百万 token 成本（实测，Spot 价）</div></div>
 <div class="kpi"><div class="v">无差别</div><div class="l">NVFP4 与 FP8 的 GSM8K 准确率</div></div>
 </div>
 </header>
@@ -90,7 +90,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <li><b>用 NVFP4，每台机器切成两个 4 卡实例。</b> 同样的用户体验下，每张卡的吞吐是 FP8、8 卡一个实例的约 2.5 倍。</li>
 <li><b>NVFP4 不掉能力。</b> GSM8K 全量 1,319 题：FP8 93.33%，NVFP4 92.95%，统计上无差别。</li>
 <li><b>PD 分离换来的是「生成不卡顿」。</b> 对语音、数字人这类对卡顿敏感的业务值得上；普通对话和批处理用不分离更快、更省事。</li>
-<li><b>对比 H200：G4 每个 token 便宜约 30%。</b> H200 每卡吞吐约是 G4 的 2.6 倍，但每卡价格是 3.8 倍；单用户速度 H200 更快（约 170 对 105 tok/s）。</li>
+<li><b>对比 H200：G4 便宜的前提是用 FP4。</b> 用 NVFP4 时，G4 每个 token 比 H200（FP8）便宜约 30%；两边都用 FP8 时，H200 更划算（约 $5.8 对 $10.3 每百万输出 token）。单用户速度 H200 更快（约 170 对 105 tok/s）。</li>
 <li><b>不需要双网卡。</b> 调好传输参数后单网卡可跑满 176 Gbps，实际服务只用到约 6 Gbps。</li>
 </ol>
 </section>
@@ -102,7 +102,7 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <tr><td>对话、Agent、批处理（要吞吐、要首字快）</td><td><b>NVFP4 不分离</b></td><td>2 个 4 卡实例，前面挂负载均衡</td></tr>
 <tr><td>流式语音、数字人、实时字幕（生成不能卡）</td><td><b>NVFP4 PD 分离 2P2D</b>（2 台一组）</td><td>一台跑 2 个 prefill，一台跑 2 个 decode</td></tr>
 <tr><td>对量化精度有顾虑</td><td>FP8，8 卡一个实例</td><td>先上线，同时用业务样本验证 NVFP4</td></tr>
-<tr><td>单用户速度要求极高 / 超长上下文</td><td>H200（A3 Ultra）FP8</td><td>2 个 4 卡实例；每 token 成本比 G4 高约 40%</td></tr>
+<tr><td>单用户速度要求极高 / 超长上下文 / 必须用 FP8</td><td>H200（A3 Ultra）FP8</td><td>2 个 4 卡实例；必须用 FP8 时也优先选它</td></tr>
 </table>
 <p class="note">完整部署步骤、脚本和全部原始数据：https://github.com/yangwhale/gpu-tpu-pedia/tree/main/gpu/inference/g4/glm-5.3-flash</p>
 </section>
@@ -169,15 +169,20 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <section id="h200">
 <h2>G4 与 H200（A3 Ultra）</h2>
 <p>同一个模型、同一套脚本和负载，在一台 8 × H200（<code>a3-ultragpu-8g</code>）上实测 FP8（H200 不支持 FP4）。</p>
-<h3>实测：H200 每卡快，G4 每个 token 便宜</h3>
-%%COST%%
-<p class="note">「每卡输出 tok/s」为 S2 标准对话档（首字 P90 ≤ 3 秒、每用户 ≥ 25 tok/s）下的实测；价格为 Google Cloud Spot 价格页 us-central1 当前标价（2026-11-04 读取）：A3 Ultra $50.87/小时、G4 $13.45/小时（8 卡整机），按需与承诺价另计。H200 实测机器位于 us-west1 / europe-west4（Spot 容量所限），价格统一按 us-central1 标价比较。</p>
+<h3>结论：G4 便宜的前提是用 FP4</h3>
+<p><b>同样用 FP8</b>（两边都能跑的精度）：</p>
+%%SAME_PREC%%
+<p><b>各用自己最好的配置</b>（G4 用 NVFP4；H200 不支持 FP4，用 FP8）：</p>
+%%BEST%%
 <ul>
-<li><b>按卡比 H200 快约 2.6 倍</b>：S2 档下 H200（4 卡实例）每卡约 300 tok/s，G4 最优配置约 112–116 tok/s。</li>
-<li><b>按钱比 G4 便宜约 30%</b>：H200 每卡价格是 G4 的 3.8 倍，抵消了速度优势。每百万输出 token，G4 NVFP4 约 $4.0–4.2，H200 约 $5.8。</li>
-<li><b>两边都是「切成 4 卡实例」更划算</b>：H200 上 4 卡实例比 8 卡实例每卡吞吐高约 50%，和 G4 上看到的规律一致。</li>
+<li><b>只能用 FP8 时，H200 更划算</b>：每百万输出 token H200（4 卡实例）约 $5.8，G4 约 $10.3。H200 显存带宽约 3 倍、有 NVLink，按卡的吞吐优势超过了 3.8 倍的价格差。</li>
+<li><b>用 FP4 时，G4 每个 token 便宜约 30%</b>：G4 NVFP4 约 $4.0–4.2，对 H200 FP8 约 $5.8。FP4 把权重压掉一半，省下的显存和带宽正好补上 G4 带宽的短板。</li>
+<li><b>两边都是切成 4 卡实例更划算</b>：H200 上 4 卡实例比 8 卡实例每卡吞吐高约 50%。G4 的 FP8 切 4 卡后每卡权重约 79 GB，留给上下文的显存太少，所以 G4 FP8 只测了 8 卡实例。</li>
 </ul>
+<p class="note">每卡输出为 S2 标准对话档（首字 P90 ≤ 3 秒、每用户 ≥ 25 tok/s）下的实测；价格为 Google Cloud Spot 价格页 us-central1 当前标价（2026-11-04 读取）：A3 Ultra $50.87/小时、G4 $13.45/小时（8 卡整机），按需与承诺价另计。H200 实测机器位于 us-west1 / europe-west4（Spot 容量所限），价格统一按 us-central1 标价比较。完整的单位成本表见下方。</p>
 %%SINGLE_USER%%
+<h3>全部部署的单位成本</h3>
+%%COST%%
 <h3>硬件与价格</h3>
 <table class="decision">
 <tr><th></th><th>H200（A3 Ultra）</th><th>RTX PRO 6000（G4）</th><th>对比</th></tr>
@@ -190,7 +195,8 @@ footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:12px}
 <p class="note">硬件参数取自 NVIDIA 官方产品页（RTX PRO 6000 Server Edition 页未注明 FP8/FP4 是否含稀疏）。</p>
 <h3>怎么选</h3>
 <ul>
-<li><b>要每个 token 最便宜、能接受每用户约 100 tok/s</b>：G4 + NVFP4。</li>
+<li><b>能用 FP4、要每个 token 最便宜</b>：G4 + NVFP4（每用户约 100 tok/s）。</li>
+<li><b>必须用 FP8</b>：H200 每个 token 更便宜，也更快。</li>
 <li><b>要单用户最快（约 170 tok/s）、或要更大的上下文容量</b>：H200。</li>
 </ul>
 </section>
