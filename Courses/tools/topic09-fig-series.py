@@ -7,6 +7,9 @@ fig9-judge  回答：一个数怎么判过不过？—— r ＝ 被测 ÷ 噪声
             数据：v5p 当前配置对精确轨迹的第一关验收（topic09_numbers.ACC，实测）。
 fig9-pairs  回答：参照对为什么要多？—— 纯噪声超过 n 个样本最大值的概率是 1/(n+1)。
             数字：1/(n+1) 现算；GPU 对 GPU 演练里待定条数（实测）。
+fig9-baseline 回答：只对一份基线比，基线自己偏了怎么办？—— 把同设置 10 份 GPU 运行都画出来，基线正好在上沿；换成 10 份均值重算，TPU 照样偏。
+            数据：10 份各自对第一份的第 301–1000 步 loss 带符号均值（topic09_numbers.GPU_RUNS10_TAIL，实测）；TPU 三种跑法（TPU_ARMS，实测）；扣均值是本课推导。
+            ⛔ 刻意没画纵轴：灰点竖着错开只为不重叠，纵向没有意义。
 """
 import statistics
 
@@ -162,6 +165,81 @@ def fig_pairs():
     f.save("fig9-pairs.svg", yb + 14)
 
 
+def _m(v, fmt="%.2e"):
+    """−1.66e-4 这种写法：真负号、指数去掉前导 0。"""
+    return (fmt % v).replace("e-0", "e-").replace("e+0", "e+").replace("-", "−")
+
+
+def fig_baseline():
+    G = N.GPU_RUNS10_TAIL
+    MU = N.GPU_RUNS10_TAIL_MEAN
+    SD = statistics.stdev(G)
+    ZS = [(t - MU) / SD for t in N.TPU_ARMS]
+    assert abs(min(ZS) - (-5.3)) < 0.05 and abs(max(ZS) - (-2.9)) < 0.05, ZS     # 案例里的「偏出 2.9–5.3 个标准差」
+    f = Fig(W, "一根横轴，是第 301 到 1000 步 loss 的带符号均值，以第一份 GPU 运行为基线。"
+               "上面一排 10 个灰点是同一设置的 10 份 GPU 运行，从负万分之 0.65 到正百万分之 2.4，被圈出来的是基线自己，等于 0，它在 10 份里排第三高，几乎在最右沿；10 份的均值是负十万分之 2.5。"
+               "下面三行蓝点是同一份代码在 TPU 上的三种跑法：负万分之 1.66、1.35、1.03。每个蓝点画两段：到基线的灰线，和到 10 份均值的蓝线。"
+               "扣掉均值后是负万分之 1.41、1.10、0.78，仍偏出 2.9 到 5.3 个标准差。")
+    y0 = f.header("基线只是 10 份里的一份，还贴在右沿　——　<tspan font-weight=\"700\">量到 10 份的中心，TPU 照样偏</tspan>",
+                  "横轴 ＝ 尾段 loss 的带符号均值（对基线那一份，越往左越低）；灰点 ＝ 同设置的 GPU 运行，圈出的是基线自己；细灰线 ＝ 到基线，粗蓝线 ＝ 到 10 份均值",
+                  [(GY2, "GPU 同设置 10 份"), (BL, "TPU 三种跑法"), (GY, "10 份的均值（虚线）")])
+    PH = 470
+    py = f.panel(0, y0, W, PH, "第 301–1000 步 loss 带符号均值（实测）", BL)
+    X0, XW, LO, HI = 230, 1110, -2.0e-4, 0.3e-4
+
+    def X(v):
+        return X0 + (v - LO) / (HI - LO) * XW
+    yg = py + 92                         # 灰点那一排的基准线
+    ytop, ybot = py + 40, py + PH - 56
+    # 刻度与竖格线
+    for k in range(-4, 1):
+        v = k * 0.5e-4
+        f.line(X(v), ytop, X(v), ybot, LINE, 1.0, arrow=False)
+        f.t(X(v), ybot + 22, "0" if k == 0 else _m(v, "%.1e"), GY, size=13, anchor="middle")
+    f.line(X(0), ytop, X(0), ybot, GY, 1.6, arrow=False)
+    # 灰点：按横坐标逐个放，挨得近就往上摞一层（竖直错开只为不重叠）
+    placed = []
+    for v in sorted(G):
+        lvl = 0
+        while any(abs(X(v) - x) < 17 and l == lvl for x, l in placed):
+            lvl += 1
+        placed.append((X(v), lvl))
+        cy = yg - lvl * 17
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="%s"/>' % (X(v), cy, GY2))
+        if v == 0.0:
+            ring = (X(v), cy)
+    f.p.append('<circle cx="%.1f" cy="%.1f" r="13" fill="none" stroke="%s" stroke-width="2"/>' % (ring[0], ring[1], INK))
+    f.t(ring[0] - 18, ring[1] - 22, "基线自己（＝ 0），10 份里排第 %d 高" % N.GPU_RUNS10_BASE_RANK, INK, True, 14, "end")
+    f.line(X(min(G)), yg + 22, X(max(G)), yg + 22, GY2, 3, arrow=False)
+    f.t(X(min(G)) - 10, yg + 27, "10 份的范围 %s 到 +%s" % (_m(min(G), "%.1e"), _m(max(G), "%.1e")), GY, size=13, anchor="end")
+    # 10 份均值
+    f.line(X(MU), yg + 34, X(MU), ybot, GY, 2, dash="6 5", arrow=False)
+    f.t(X(MU) - 8, yg + 52, "10 份均值 %s" % _m(MU), GY, True, 14, "end")
+    # TPU 三种跑法
+    labs = ["原样", "不重算", "改片上内存上限"]
+    for i, (lab, v) in enumerate(zip(labs, N.TPU_ARMS)):
+        y = py + 200 + i * 76
+        f.t(24, y + 5, lab, BL, True, 15)
+        f.line(X(v), y - 14, X(0), y - 14, GY2, 1.4, arrow=False)
+        f.t((X(v) + X(0)) / 2.0, y - 20, "到基线 %s" % _m(v), GY, size=13, anchor="middle")
+        f.line(X(v), y + 12, X(MU), y + 12, BL, 5, arrow=False)
+        f.t((X(v) + X(MU)) / 2.0, y + 34, "到均值 %s" % _m(v - MU), BL, True, 14, "middle")
+        f.p.append('<circle cx="%.1f" cy="%.1f" r="8" fill="%s"/>' % (X(v), y, BL))
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "N 取最大值，兜住了「基线贴边」；被测值被带偏多少，拿 10 份的均值重算一遍就看得出", [
+        "这一次：换成均值，三种跑法各缩回约 %s，仍偏出 %.1f–%.1f 个标准差 —— 偏差是真的。" % (_m(-MU, "%.1e"), -max(ZS), -min(ZS)),
+        "代价：换哪一份当基线，被测值就跟着挪，最多挪灰点的整个宽度（这一次约 %s）。" % _m(max(G) - min(G), "%.1e"),
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测：同一设置（默认设置、不开分布式优化器）的 GPU 运行 10 份，含基线那一份；每份对基线算第 301–1000 步 loss 逐步相对差的平均。10 份的均值 %s、样本标准差 %s。比基线高的两份只高 %s 和 %s。"
+               % (_m(MU), _m(SD), _m(sorted(G)[-2]), _m(max(G))),
+               "📌 实测：TPU 三种跑法是同一份代码（原样、不重算、改编译器的片上内存上限），对同一份基线 %s ／ %s ／ %s。"
+               % tuple(_m(v) for v in N.TPU_ARMS),
+               "⚠️ 本课推导：扣掉均值 ＝ 被测值 − 10 份均值；标准差倍数 ＝ 扣掉均值后 ÷ 样本标准差。灰点竖着错开只为不重叠，没有纵轴。")
+    f.save("fig9-baseline.svg", yb + 14)
+
+
 fig_dt()
 fig_judge()
 fig_pairs()
+fig_baseline()

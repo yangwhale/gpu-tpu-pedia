@@ -8,6 +8,9 @@ fig9-truncate  回答：GPU 张量核在长求和里为什么系统地偏小？�
                ⛔ 刻意没画：K ＝ 120,832 时合成输入的偏差反而降到 6.4e-5（推断是 cuBLAS 换了算法），写在出处里。
 fig9-tf32      回答：「我关了 TF32」为什么不算数？—— 开关读回来的值和实际跑的不一样。
 fig9-windowed  回答：TPU 上 FSDP 的矩阵乘为什么多舍了几次？—— 窗口化的 collective matmul 把每一轮的分片部分积在 BF16 里累加。
+fig9-excess    回答：excess precision 改的是什么？—— 舍在哪儿：融合块里中间那几次「舍到 BF16」被删掉，只在块出口舍；关掉它，舍入回到每个算子出口。
+               示意图：算子个数、融合怎么切都是示意，不带实测数；实测（关掉以后单层更远、1000 步 loss 偏移小一半）只进 📌。
+               ⛔ 刻意没画「哪一行更准」：这张图只讲舍入位置。关掉不是更准，画个准确度刻度就讲反了。
 """
 import math
 
@@ -243,7 +246,67 @@ def fig_windowed():
     f.save("fig9-windowed.svg", yb + 14)
 
 
+def fig_excess():
+    f = Fig(W, "四行，每行同样四个算子从左往右串起来，红色小块是一次「舍到 BF16」。"
+               "第一行 GPU：一个算子一个 kernel，每个算子出口舍一次，共 4 次。"
+               "第二行 TPU 默认：XLA 把相邻算子融成块（示意：前两个一块、后两个一块），块里一路用 FP32，只在块出口舍，共 2 次，舍在哪由融合怎么切决定。"
+               "第三行关掉 excess precision：块还在，但块里每个算子出口照样舍，共 4 次，位置跟第一行一样。"
+               "第四行开关不动，只在一处显式写「舍到 BF16」：那一处一定舍，编译器不会删。"
+               "关掉只是让舍入位置确定，不是更准。")
+    y0 = f.header("excess precision 改的是「舍在哪儿」　——　<tspan font-weight=\"700\">关掉它，位置定了，不等于更准</tspan>",
+                  "从左往右是一串算子；红色小块 ＝ 一次舍到 BF16，数一数每行有几块、落在哪；虚线框 ＝ 编译器融合成的一块（块里不落地）",
+                  [(GY, "GPU 上的算子"), (BL, "TPU 上的算子"), (RD, "舍到 BF16"), (PU, "显式写的那一次")])
+    RH, NOP = 104, 4
+    PH = 40 + 4 * RH
+    py = f.panel(0, y0, W, PH, "示意：同样四个算子，四种舍法", BL)
+    X0, OW, GAP = 330, 118, 74
+    rows = [  # (标题, 小字, 颜色, 融合块, 哪些出口舍, 显式舍的位置, 右侧两行)
+        ("GPU：逐个算子", "一个算子一个 kernel，输出写回 BF16", GY, [], [0, 1, 2, 3], None,
+         ("舍 4 次", "每个算子出口一次")),
+        ("TPU 默认", "excess precision 开：块里不舍", BL, [(0, 1), (2, 3)], [1, 3], None,
+         ("舍 2 次", "落在融合块边界上")),
+        ("关掉 excess precision", "块还在，块里照写的舍", BL, [(0, 1), (2, 3)], [0, 1, 2, 3], None,
+         ("舍 4 次", "位置跟 GPU 那一行一样")),
+        ("只在一处显式写", "开关不动，写「舍到 BF16」", BL, [(0, 1), (2, 3)], [1, 3], 0,
+         ("舍 3 次", "写了的那处一定舍")),
+    ]
+
+    def ox(k):
+        return X0 + k * (OW + GAP)
+    for r, (lab, sub, col, fus, cuts, extra, (cnt, where)) in enumerate(rows):
+        y = py + 26 + r * RH
+        f.t(24, y + 30, lab, col if col != GY else INK, True, 15)
+        f.t(24, y + 54, sub, GY, size=13)
+        for a, b in fus:
+            f.box(ox(a) - 12, y + 4, ox(b) + OW + 14 - (ox(a) - 12), 58, "none", BL, 10, sw=1.6, dash="7 5")
+        for k in range(NOP):
+            fill = "#e8f0fe" if col == BL else "#fff"
+            f.box(ox(k), y + 11, OW, 46, fill, col, 6)
+            f.t(ox(k) + OW / 2.0, y + 40, "算子 %d" % (k + 1), col, True, 14, "middle")
+            xa = ox(k) + OW
+            f.line(xa + 4, y + 34, xa + GAP - 6, y + 34, GY2, 1.6, arrow=(k < NOP - 1))
+            if k in cuts or k == extra:
+                c = PU if k == extra else RD
+                f.box(xa + 22, y + 15, 16, 38, "#f3e8fd" if k == extra else "#fce8e6", c, 3, sw=2 if k == extra else 1)
+                f.t(xa + 30, y + 80, "你写的" if k == extra else "舍", c, True, 12, "middle")
+        f.t(1130, y + 30, cnt, RD, True, 16)
+        f.t(1130, y + 54, where, GY, size=13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "开着时少舍几次，离精确值更近，可舍入落在哪由融合怎么切说了算；关掉换来的是位置确定", [
+        "要跟 GPU 在某一处舍得一样，就在那一处写「舍到 BF16」（JAX 的 lax.reduce_precision），别整个关掉。",
+        "代价：关掉不会更准，跟 GPU 也未必更近 —— GPU 自己也有在 FP32 里算完只舍一次的融合算子（比如归一化）。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（混元 3 · v5p，只加关掉 excess precision 这一个编译参数）：单层回放里每个张量对 GPU 的 rel_L2 都变大，约大 10%%–60%%，例如 qkv 输出 %s → %s；跑 1000 步，第 301–1000 步 loss 偏移 %s → %s，小了一半；参数范数的漂移一点没少。"
+               % (N.sci(N.QKV_VS_GPU_BEFORE), N.sci(N.QKV_VS_GPU_NOEXC), N.sci(N.NOEXC_LOSS_TAIL_ON), N.sci(N.NOEXC_LOSS_TAIL)),
+               "📌 实测：MoE 层 MLP 前的 RMSNorm，代码里写的是舍两次，开着时 XLA 把中间那次省掉，跟 GPU（FP32 算完舍一次的融合 kernel）逐位相同 %s；关掉以后只剩 %s。这一处恰好是「开着更像 GPU」。"
+               % (N.RMSNORM_BITWISE_EXC, N.RMSNORM_BITWISE_NOEXC),
+               "注：四个算子、融合切成两块、显式舍写在第一个算子出口，都是示意；真实的融合怎么切由编译器决定。GPU 那一行画的是「每个算子单独一个 kernel」的常见情形。")
+    f.save("fig9-excess.svg", yb + 14)
+
+
 fig_formats()
 fig_truncate()
 fig_tf32()
 fig_windowed()
+fig_excess()

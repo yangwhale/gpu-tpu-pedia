@@ -7,11 +7,14 @@ fig9-head      回答：那股力少在哪一段？—— GPU 输出层 dgrad �
 fig9-intervene 回答：怎么证明是这一股力？—— 两边都去掉它，差回到噪声；GPU 反着加上它，复现 TPU 的整套特征。
 fig9-swap      回答：是每一步都算得不一样，还是状态不同带出来的反馈？—— 把同一个状态搬到两边，各算一步。
 fig9-exact     回答：到底谁离精确值近？—— GPU 上跑一条「BF16 权重、全程 FP32 计算」的精确轨迹，它站在 TPU 一边。
+fig9-layer0    回答：冷门行的方向从哪来？—— 残差流固定探针：第 0 层输出最先沿 w ＝ γ⊙û 偏低、往后逐层放大；同一份输入只换第 0 层权重，确认是权重长歪，大头在注意力输出投影。
+               数字：L0_PROBE（每 25 步，逐点实测）、L0_SWAP_*（第 0 层权重互换，实测）。
+               ⛔ 刻意没画最后归一化输出那条线：它和第 3 层几乎重合，多一条只添乱。
 数字全部来自 topic09_numbers（实测）。
 """
 import math
 
-from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU, wpx, MONO_K
 import topic09_numbers as N
 
 W = 1400
@@ -311,9 +314,118 @@ def fig_chain():
     f.save("fig9-chain.svg", yb + 14)
 
 
+def _r2(v):
+    """两位有效数字、四舍五入（不走二进制的「银行家」舍入）：−0.00535 → −5.4e-3。"""
+    from decimal import Decimal, ROUND_HALF_UP
+    d = Decimal(repr(v))
+    e = d.adjusted()
+    q = (d.scaleb(-e)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return ("−%se%d" % (-q, e)) if v < 0 else "+%se%d" % (q, e)
+
+
+def _m3(v):
+    """三位有效数字（照 N.sci）：−1.94e-3、+7.5e-6。"""
+    t = N.sci(abs(v))
+    return ("−" if v < 0 else "+") + t
+
+
+def fig_layer0():
+    ST = N.L0_PROBE_STEPS
+    P = N.L0_PROBE
+    i100, i300 = ST.index(100), ST.index(300)
+    f = Fig(W, "左：横轴是训练步，纵轴是每一层输出在 token 上的均值，沿 w 等于 gamma 乘 u-hat 这个方向的投影，TPU 对 GPU 的相对差，往下是 TPU 更低。"
+               "embedding 的输出两边一样，贴着零；第 0 层（稠密层）从第 50 步起偏低，第 100 步负千分之 1.8，第 300 步负千分之 5.4；第 1、2、3 层一层比一层低，第 3 层到负百分之 1.4 左右。"
+               "灰线是第二份 GPU 对第一份，第 0 层的同一个量。"
+               "右：拿同一份第 0 层输入在 CPU 上重算，只换第 0 层权重。第 100 步换成 TPU 的权重，输出沿 w 低负千分之 1.94，跟探针对得上；换成另外两份 GPU 的权重只有正百万分之 7.5 和负万分之 2.4。"
+               "只换一组时，注意力输出投影一组就占负千分之 1.33，是大头。")
+    y0 = f.header("冷门行的方向从哪来：第 0 层最先分开，往后逐层放大　——　<tspan font-weight=\"700\">是第 0 层的权重长歪了</tspan>",
+                  "左：纵轴 ＝ 这一层输出（token 上取均值）沿 w ＝ γ⊙û 的投影，TPU 对 GPU 的相对差，往下 ＝ TPU 更低（w：最后隐状态均值的方向，按最后归一化的 scale 加权）；右：同一份输入只换第 0 层权重重算，柱长 ＝ 输出沿 w 低了多少",
+                  [(BL, "TPU 对 GPU：第 0 层"), ("#8ab4f8", "第 1–3 层"), ("#c6dafc", "embedding"), (GY2, "GPU 两次之间（第 0 层）"), (RD, "大头")])
+    PH = 440
+    PW = 840
+    py = f.panel(0, y0, PW, PH, "残差流固定探针：每 25 步一个点（实测）", BL)
+    GX0, GW, YT, GH = 100, 640, py + 40, PH - 100
+    VHI, VLO = 1.5e-3, -1.65e-2
+
+    def X(st):
+        return GX0 + st / 1000.0 * GW
+
+    def Y(v):
+        return YT + (VHI - v) / (VHI - VLO) * GH
+    for v in (0, -5e-3, -1e-2, -1.5e-2):
+        f.line(GX0, Y(v), GX0 + GW, Y(v), GY2 if v == 0 else LINE, 1.2 if v == 0 else 1.0, arrow=False)
+        f.t(GX0 - 10, Y(v) + 4, "0" if v == 0 else _r2(v).replace(".0e", "e"), GY, size=12, anchor="end")
+    for st in (100, 300, 500, 1000):
+        f.t(X(st), YT + GH + 22, "第 %d 步" % st, GY, size=12, anchor="middle")
+    f.path([(X(s), Y(v)) for s, v in zip(ST, N.L0_PROBE_GPU_PAIR)], GY2, 1.4, arrow=False)
+    f.path([(X(s), Y(v)) for s, v in zip(ST, P["embedding"])], "#c6dafc", 2.4, arrow=False)
+    for k in (3, 2, 1):
+        f.path([(X(s), Y(v)) for s, v in zip(ST, P["第 %d 层" % k])], "#8ab4f8", 1.8, arrow=False)
+    f.path([(X(s), Y(v)) for s, v in zip(ST, P["第 0 层"])], BL, 3.2, arrow=False)
+    # 右端标签（按末值排开，至少隔 17px）
+    ends = sorted([(Y(P[k][-1]), k) for k in ("第 0 层", "第 1 层", "第 2 层", "第 3 层")])
+    last = -1e9
+    for yv, k in ends:
+        ly = max(yv + 5, last + 17)
+        f.t(X(ST[-1]) + 10, ly, k, BL if k == "第 0 层" else "#4285f4", k == "第 0 层", 13)
+        last = ly
+    f.t(X(ST[-1]) + 10, Y(0) - 8, "embedding", "#4285f4", size=12)
+    # 两个读数：标签放在第 0 层上方的空白处（0 线和第 0 层之间），细线连回实测点
+    for i, (lx, lv) in ((i100, (380, -1.6e-3)), (i300, (380, -3.3e-3))):
+        v = P["第 0 层"][i]
+        lab = "第 %d 步 %s" % (ST[i], _r2(v))
+        lw = int(wpx(lab, 14) * MONO_K) + 16
+        f.line(X(ST[i]), Y(v), X(lx), Y(lv) - 5, BL, 1.0, arrow=False)
+        f.box(X(lx), Y(lv) - 18, lw, 26, "#fff", BL, 5)
+        f.t(X(lx) + 8, Y(lv), lab, BL, True, 14)
+        f.box(X(ST[i]) - 6, Y(v) - 6, 12, 12, BL, BL, 6)
+    f.t(X(60), Y(0) - 12, "第 50 步起转为偏低", BL, size=13)
+    f._pan = None
+    px = PW + 20
+    py2 = f.panel(px, y0, W - px, PH, "第 0 层权重互换：第 100 步（实测）", GR)
+    Z, SC = px + 24, 260 / 2.0e-3
+
+    def bar(y, lab, v, col):
+        f.t(Z + 8, y, lab, INK, False, 13)
+        L = max(abs(v) * SC, 1.5) if v < 0 else 1.5
+        f.box(Z, y + 8, L, 20, col, col, 3)
+        f.t(Z + L + 8, y + 24, _m3(v), col, True, 13)
+    f.t(Z, py2 + 24, "整层换掉　·　柱往右 ＝ 输出沿 w 更低", GY, size=13)
+    f.line(Z, py2 + 34, Z, py2 + 190, GY2, 1.2, arrow=False)
+    sw = N.L0_SWAP_100
+    for j, (lab, v, col) in enumerate([("换成 TPU 的第 0 层权重", sw[0], BL),
+                                         ("换成第二份 GPU 的", sw[1], GY2),
+                                         ("换成第三份 GPU 的", sw[2], GY2)]):
+        bar(py2 + 52 + j * 46, lab, v, col)
+    xp = Z + abs(P["第 0 层"][i100]) * SC
+    f.line(xp, py2 + 56, xp, py2 + 102, BL, 1.6, dash="5 4", arrow=False)
+    f.t(xp - 4, py2 + 116, "探针同一步 %s" % _r2(P["第 0 层"][i100]), BL, size=12, anchor="middle")
+    y2 = py2 + 210
+    f.t(Z, y2, "只换一组（换成 TPU 的）", GY, size=13)
+    f.line(Z, y2 + 10, Z, y2 + 152, GY2, 1.2, arrow=False)
+    for j, (lab, v) in enumerate(N.L0_SWAP_ONE_100):
+        bar(y2 + 28 + j * 42, lab, v, RD if j == 0 else "#8ab4f8")
+    f.t(Z, y2 + 170, "归一化的 scale、q／k 归一化：都在 %s 以下" % ("%.0e" % N.L0_SWAP_SMALL).replace("e-0", "e-"), GY, size=13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "偏低从第 0 层的权重来：同一份输入，换上 TPU 那一份第 0 层权重，就复现了探针量到的偏低", [
+        "换上 GPU 另两份的权重差得小很多；只换一组时，注意力输出投影一组就占了约七成。",
+        "没回答的：权重为什么往这个方向长 —— 第 1 步两边权重相同时，这个方向上的梯度并不偏小，要回头看输出头流回来的那股力。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（探针）：两边在同一条固定序列上每 25 步另跑一次前向（单独编译，不扰动训练），各层输出在 token 上取均值向量，投到 w ＝ γ⊙û（γ：基线那份 GPU 运行该步最后归一化的 scale；û：它该步最后归一化输出均值的单位方向）。最后归一化输出 ＝ γ⊙x/rms(x)，所以这个投影就是这一层对「最后隐状态均值沿 û 那一份」的贡献。画的是（TPU − 基线 GPU）÷ |基线 GPU|；灰线是第二份 GPU 对基线的同一个量。",
+               "📌 实测：第 300 步第 0–3 层 %s ／ %s ／ %s ／ %s；embedding 输出第 1–975 步 TPU 最大 2.3e-4，GPU 两次之间最大 1.5e-4。第 1 步第 0 层已差 %s（GPU 两次之间约 −6e-9），是前向数值差，第 50 步起转负并随步数增长。"
+               % (tuple(_r2(P["第 %d 层" % k][i300]) for k in range(3)) + (_m3(P["第 3 层"][i300]), _r2(P["第 0 层"][0]))),
+               "📌 实测（权重互换）：取基线 GPU 运行该步第 0 层的输入（一个 microbatch），在 CPU 上 FP32 重算第 0 层，只换权重；数值 ＝（换上的权重 − 基线自己的权重）算出的输出均值沿 w 的投影之差 ÷ |基线自己的投影|。第 100 步 %s（第二、三份 GPU %s ／ %s）；第 50 步 %s（%s ／ %s），同步的探针是 %s，对得上。"
+               % (_m3(N.L0_SWAP_100[0]), _r2(N.L0_SWAP_100[1]), _r2(N.L0_SWAP_100[2]), _r2(N.L0_SWAP_50[0]), _r2(N.L0_SWAP_50[1]), _r2(N.L0_SWAP_50[2]), _r2(P["第 0 层"][ST.index(50)])),
+               "⚠️ 推断（案例记录里的，没有单独验证）：第 50 → 100 步，步数翻倍、差涨约 9 倍，不像每步一点固定偏差在线性累积，像有反馈在放大 —— logit 水平一旦走低，梯度跟着变，再往同一方向推。",
+               "注：第 0 层是稠密层，第 1–3 层是 MoE 层；最后归一化输出那条线跟第 3 层几乎重合，没画。")
+    f.save("fig9-layer0.svg", yb + 14)
+
+
 fig_gauge()
 fig_chain()
 fig_head()
 fig_intervene()
 fig_swap()
 fig_exact()
+fig_layer0()
