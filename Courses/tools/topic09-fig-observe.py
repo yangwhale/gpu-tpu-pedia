@@ -20,11 +20,12 @@ assert abs((_m1 - N.BETA1 * _m0) / (1 - N.BETA1) / _c - _g) < 1e-12
 
 def fig_hooks():
     f = Fig(W, "左格 GPU：一个个算子按顺序跑，钩子只是在算好的张量上看一眼，数不变。"
-               "中格 TPU：整张计算图一起编译，编译器会把相邻的算子融成一块、省掉中间的舍入；加一个输出，融合方式就变了，舍入位置跟着变，量出来的已经不是生产那份数。"
+               "中格 TPU：整张计算图一起编译，编译器会把相邻的算子融成一块、省掉中间的舍入，红色小块是一次舍到 BF16。生产程序四个算子融成一块，只在出口舍 1 次；"
+               "加一个输出，融合在钩子处被切成两块，切口多舍一次，共 2 次，舍入位置跟着变，量出来的已经不是生产那份数。"
                "右格：TPU 上三条不扰动的路。一，步与步之间读状态：主权重、两个动量，再从一阶动量倒推出这一步的梯度；二，隔离回放：拿 GPU 的输入单独编译一层或一个算子来跑；三，固定探针：每隔几步在一条固定的序列上单独跑一次前向。")
     y0 = f.header("在 TPU 上「看一眼」会改掉你要看的东西　——　<tspan font-weight=\"700\">证据要从程序外面拿</tspan>",
-                  "方块 ＝ 算子；虚框 ＝ 编译器融成的一块；放大镜 ＝ 抓数的钩子",
-                  [(GY, "GPU 的算子"), (BL, "TPU 的算子"), (GR, "钩子不改数值"), (RD, "钩子改了数值")])
+                  "方块 ＝ 算子；虚框 ＝ 编译器融成的一块；红色小块 ＝ 一次舍到 BF16；放大镜 ＝ 抓数的钩子",
+                  [(GY, "GPU 的算子"), (BL, "TPU 的算子"), (RD, "一次舍到 BF16"), (GR, "钩子不改数值"), (OR, "！钩子改了数值")])
     PH = 400
 
     def lens(cx, cy, col):
@@ -45,27 +46,44 @@ def fig_hooks():
     f.t(24, py + 300, "开不开钩子：逐步逐位相同", GR, True, 15)
     f.t(24, py + 326, "（确定性设置下实测）", GY, size=13)
     f._pan = None
-    # TPU：算子是 TPU 的蓝；加了钩子以后数值变了的算子标红，钩子本身也是红放大镜
+    # TPU：算子一律 TPU 蓝；红色小块 ＝ 一次舍到 BF16（照 fig9-excess 的画法）；「钩子改了数值」另用橙色 ！ 标，不涂红
     px = 440
     py = f.panel(px, y0, 420, PH, "TPU：多一个输出，融合就变了", BL)
-    f.t(px + 24, py + 50, "生产程序", INK, True, 14)
-    f.box(px + 24, py + 64, 360, 60, "none", GY2, 10, dash="6 5")
+    OW = 66
+
+    def cut(x, y):
+        """一次舍到 BF16：红色小块 ＋「舍」字（跟 fig9-excess 一样）。"""
+        f.box(x, y + 3, 12, 38, "#fce8e6", RD, 3)
+        f.t(x + 6, y + 62, "舍", RD, True, 12, "middle")
+
+    def bang(cx, cy):
+        """钩子改了数值：橙色圆 ＋ 感叹号。"""
+        f.p.append('<circle cx="%d" cy="%d" r="11" fill="%s"/>' % (cx, cy, OR))
+        f.t(cx, cy + 5, "!", "#fff", True, 15, "middle")
+    f.t(px + 24, py + 50, "生产程序：舍 1 次", INK, True, 14)
+    f.box(px + 24, py + 64, 348, 60, "none", GY2, 10, dash="6 5")
     for i, lab in enumerate(["矩阵乘", "归一化", "激活", "矩阵乘"]):
-        f.box(px + 34 + i * 88, py + 72, 76, 44, "#e8f0fe", BL, 6)
-        f.t(px + 72 + i * 88, py + 99, lab, BL, True, 13, "middle")
-    f.t(px + 24, py + 168, "加了钩子的程序", INK, True, 14)
-    f.box(px + 24, py + 182, 170, 60, "none", GY2, 10, dash="6 5")
-    f.box(px + 214, py + 182, 170, 60, "none", GY2, 10, dash="6 5")
+        xx = px + 32 + i * 86
+        f.box(xx, py + 72, OW, 44, "#e8f0fe", BL, 6)
+        f.t(xx + OW / 2, py + 99, lab, BL, True, 13, "middle")
+    cut(px + 380, py + 72)
+    f.t(px + 24, py + 168, "加了钩子的程序：舍 2 次", INK, True, 14)
+    f.box(px + 24, py + 182, 162, 60, "none", GY2, 10, dash="6 5")
+    f.box(px + 210, py + 182, 162, 60, "none", GY2, 10, dash="6 5")
     for i, lab in enumerate(["矩阵乘", "归一化", "激活", "矩阵乘"]):
-        xx = px + 34 + i * 88 + (20 if i >= 2 else 0)
-        f.box(xx, py + 190, 70, 44, "#fce8e6", RD, 6)
-        f.t(xx + 35, py + 217, lab, RD, True, 13, "middle")
-    # ⭐ R3：切口处补上放大镜（图例说放大镜 ＝ 钩子，原来 TPU 这格没画）
-    f.line(px + 204, py + 244, px + 204, py + 258, RD, 1.4, arrow=False)
-    lens(px + 204, py + 276, RD)
-    f.t(px + 240, py + 282, "多一个输出：融合切开", RD, True, 13)
-    f.t(px + 240, py + 302, "中间多舍一次", RD, True, 13)
-    f.t(px + 24, py + 346, "和生产程序不再逐位（v5p 实测）", RD, True, 15)
+        xx = px + 32 + i * 80 + (26 if i >= 2 else 0)
+        f.box(xx, py + 190, OW, 44, "#e8f0fe", BL, 6)
+        f.t(xx + OW / 2, py + 217, lab, BL, True, 13, "middle")
+    cut(px + 192, py + 190)
+    cut(px + 380, py + 190)
+    bang(px + 372, py + 182)
+    # 切口处的放大镜 ＝ 钩子；改了数值 → 橙色
+    f.line(px + 198, py + 262, px + 198, py + 272, OR, 1.4, arrow=False)
+    lens(px + 198, py + 290, OR)
+    f.t(px + 236, py + 290, "多一个输出：融合切开", OR, True, 13)
+    f.t(px + 236, py + 310, "切口多舍一次", OR, True, 13)
+    bang(px + 36, py + 342)
+    f.t(px + 54, py + 347, "和生产程序不再逐位（v5p 实测）", OR, True, 15)
     f._pan = None
     # 三条路：每条只留一行（细节在正文三小节）
     px = 880
@@ -89,7 +107,8 @@ def fig_hooks():
     yb = f.src(yb + 10,
                "⚠️ 本课推导：Adam 一阶动量 mₖ ＝ β₁·mₖ₋₁ ＋ (1 − β₁)·gₖ（gₖ 是裁剪之后的梯度），倒过来 gₖ ＝ (mₖ − β₁·mₖ₋₁) ÷ (1 − β₁)；再除以裁剪系数得到裁剪之前的梯度。β₁ ＝ 0.9。",
                "📌 实测：GPU 上反推梯度对抓到的梯度 rel_L2 2e-7 – 4e-7；TPU 上固定探针单独编译，训练轨迹和不开探针时 1000 步逐位相同。",
-               "📌 实测：v5p 上加抓数输出的训练程序和生产程序不逐位；XLA 默认在融合内部跳过中间的 BF16 舍入（excess precision），融合一变，舍入位置就变。")
+               "📌 实测：v5p 上加抓数输出的训练程序和生产程序不逐位；XLA 默认在融合内部跳过中间的 BF16 舍入（excess precision），融合一变，舍入位置就变。",
+               "注：中格四个算子、融合切成几块、舍几次都是示意（跟 fig9-excess 同一种画法）；真实的融合怎么切由编译器决定。")
     f.save("fig9-hooks.svg", yb + 14)
 
 

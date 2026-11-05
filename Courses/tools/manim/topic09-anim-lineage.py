@@ -8,6 +8,7 @@ r"""专题九「GPU→TPU 训练精度对齐」：最终 golden 是一步步改�
   静态图 fig9-golden 只能并排放三根各自独立的柱子，读者得自己把三根对齐、自己做减法，
   而且看不出「缩掉的部分去哪了」；拆账图 fig9-decomp 有分段，但没有「是哪一步改动把这一段揭出来的」。
   把「改一样东西 → 同一根柱子缩一截 → 缩掉的那截有了名字」串成因果，只能放在时间里。
+  （「红色那段」现为蓝色：2026-11-05 按 R6 评审第 6 条改配色，见下方「配色」。）
   ⚠️ 这条理由是成立但偏弱的：一张「同一根柱子、分段着色」的静态堆叠条也能表达终态；
      动画多出来的只是「每一段是哪一步揭出来的」这个先后。
 
@@ -15,7 +16,8 @@ r"""专题九「GPU→TPU 训练精度对齐」：最终 golden 是一步步改�
   · 三个被测值（param_norm 带符号均值，被测 ＝ v5p 生产配置、FP32 累加开关打开前那一版，1000 步，实测）：
       对 ② 生产近似 2.93e-6、对 ③ 只修一处 1.25e-6、对 ④ 精确轨迹 4.36e-7。
     出处：tools/topic09-fig-golden.py 的 STEPS（课件静态图同一份数）；本脚本里重抄一份并断言比值对上。
-  · 尺子 N ＝ topic09_numbers.GPU_RERUN_PN ＝ 1.24e-7（GPU 生产程序重跑 10 对的最大值）。
+  · 尺子 N ＝ topic09_numbers.GPU_RERUN_PN ＝ 1.24e-7（③ 那组 GPU 重跑 5 份、两两 10 对的最大值；
+    R6 评审第 1 条：原先写「GPU 生产程序重跑」，会被读成 ② 那组）。
   · 比值 23.6 / 10.1 / 3.52 当场算（2.93e-6 ÷ 1.24e-7 等），断言跟静态图的断言一致。
   · 当前版（开关打开后）对 ④：topic09_numbers.ACC[0] 的 r ＝ 3.45。
   · 色块名字：「GPU 输出头 dgrad 截断」「GPU 其余 BF16 误差」＝ topic09_numbers.DECOMP 前两项的名字。
@@ -27,6 +29,15 @@ r"""专题九「GPU→TPU 训练精度对齐」：最终 golden 是一步步改�
   · loss、grad_norm 两项：只演参数范数一项。
   · 色块里没有误差棒：两次缩各是一次改动前后的差，画面只表达「这截是谁的」。
   · 不提「第一关／第二关」：关卡名留到 fig9-twolayer 再出（跟静态图 R3 的约定一致），画面只说「还不过」。
+    例外：③ 卡片下一行小字「第一关的尺子取自这组重跑」（R6 评审第 1 条，跟静态图 fig9-golden 的 ③ 卡片同一句）。
+
+🎨 配色（2026-11-05 按 R6 评审第 6 条改成跟静态图 fig9-decomp 同一套）：
+  · 柱子三段：dgrad 截断＝红、GPU 其余 BF16 误差＝橙、TPU 一侧剩下的（还没查清的）＝蓝。
+  · 「超过 2×N ＝ 不过」不再用整根红柱表达，改成柱尾数字旁一个红色「不过」标签（红在全课 ＝ 偏差源／不过，
+    这里两个用法同色但都指「有问题」，不翻转语义）。
+  · 卡片：① 暗灰、② 亮灰、③ 橙、④ 紫 —— 跟静态图 fig9-golden 的卡片同色；紫只用在 ④ 精确轨迹卡片（及「对 ④」）。
+    ⚠️ ③ 卡片的橙跟「GPU 其余」色块的橙同色（静态图 fig9-golden 与 fig9-decomp 本身就是这样），
+       ③ 一步揭出来的是红色那块；色块下都写了名字。
 
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic09-anim-lineage.py GoldenLineage WebPages/media/topic09-lineage.mp4
@@ -39,7 +50,7 @@ import sys
 import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体
 from manim import (Scene, VGroup, Rectangle, RoundedRectangle, Line, Text, ValueTracker, always_redraw,
                    WHITE, GREY, GREY_B, BLUE, RED, ORANGE, PURPLE_B,
-                   UP, linear, interpolate_color)
+                   UP, RIGHT, linear, interpolate_color)
 from manim.utils.rate_functions import smooth
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -64,6 +75,8 @@ assert (NAME3, NAME4) == ("输出头 dgrad 截断", "GPU 其余 BF16 误差")
 # ── ② 配色（全课约定；黑底上「更亮 ＝ 更强」，所以起点用暗灰、生产 golden 用亮灰）──
 C_START, C_PROD, C_FIX, C_EXACT = GREY, GREY_B, ORANGE, PURPLE_B
 C_FAIL, C_TPU = RED, BLUE
+C_DGRAD, C_OTHER = RED, ORANGE           # 跟 fig9-decomp 同色：dgrad 截断红、GPU 其余橙、TPU 剩下的蓝
+C_REST = C_TPU
 CHIP_COL = [C_START, C_PROD, C_FIX, C_EXACT]
 STEP_COL = {2: C_PROD, 3: C_FIX, 4: C_EXACT}
 
@@ -107,7 +120,7 @@ def fade_out_all(t):
 
 
 def red_len(t):
-    """红段长度（单位 N）：② 长出来，③④ 各缩一截。"""
+    """蓝段（还没查清、算在 TPU 一侧的）长度（单位 N）：② 长出来，③④ 各缩一截。"""
     v = R[2] * prog(t, T2A + 0.4, T2A + 2.0)
     v -= CHUNK3 * prog(t, T3A + 0.4, T3A + 2.1)
     v -= CHUNK4 * prog(t, T4A + 0.4, T4A + 2.1)
@@ -125,7 +138,7 @@ CAPS = [
     (T3A, "③ 只修一处：＋输出头 dgrad 换精确",
      "同一根柱子缩到 %.1f × N；缩掉的那截查清了，是 GPU 输出头 dgrad 截断" % R[3]),
     (T4A, "④ 精确轨迹：＋BF16 权重、全程 FP32、真关 TF32",
-     "再缩到 %.1f × N；缩掉的那截是 GPU 其余的 BF16 误差。仍超过 2×N，还不过" % R[4]),
+     "再缩到 %.1f × N；缩掉的那截是 GPU 其余的 BF16 误差。仍超过 2×N，不过" % R[4]),
     (T5A, "每往精确值靠一步，缩掉的都是 GPU golden 自己的偏差",
      "剩下那截才是 TPU 一侧的，还在查"),
 ]
@@ -175,7 +188,7 @@ class GoldenLineage(Scene):
         lbl2n = tx("2×N", 20, WHITE).move_to([X2N, BAR_Y - 0.7, 0])
         tpu = tx("TPU 被测", 22, C_TPU)
         tpu.move_to([X0 - 0.2 - tpu.width / 2, BAR_Y + 0.17, 0])
-        foot = tx("柱长 ＝ 同一个 TPU 被测的参数范数带符号均值 ÷ N；N ＝ GPU 生产程序重跑 10 对的最大值",
+        foot = tx("柱长 ＝ 同一个 TPU 被测的参数范数带符号均值 ÷ N；N ＝ ③ 那组 GPU 重跑 5 份两两 10 对的最大值",
                   18, GREY_B).move_to([0, -3.45, 0])
         self.add(base, tpu, foot)
 
@@ -197,28 +210,28 @@ class GoldenLineage(Scene):
                     g.add(Line([xa, CHIP_Y, 0], [xa + 0.19, CHIP_Y, 0], color=GREY, stroke_width=3))
             return g
 
-        # ── 柱子：红段 ＋ 两块「已查清」色块
+        # ── 柱子：蓝段（还没查清）＋ 两块「已查清」色块（红 ＝ dgrad 截断、橙 ＝ GPU 其余）
         def bar():
             t = clock()
             f = fade_out_all(t)
             g = VGroup()
             L = red_len(t)
             if L > 1e-4:
-                hl = prog(t, T5A, T5A + 0.6)            # ⑤：剩下的红段描一圈 TPU 蓝
-                g.add(Rectangle(width=L * K, height=BAR_H, stroke_color=C_TPU, stroke_width=5,
-                                stroke_opacity=hl * f, fill_color=C_FAIL,
+                hl = prog(t, T5A, T5A + 0.6)            # ⑤：剩下的蓝段描一圈白
+                g.add(Rectangle(width=L * K, height=BAR_H, stroke_color=WHITE, stroke_width=5,
+                                stroke_opacity=hl * f, fill_color=C_REST,
                                 fill_opacity=0.95 * f).move_to([X0 + L * K / 2, BAR_Y, 0]))
-            for k, lo, hi, col, a in ((3, R[3], R[2], C_FIX, T3A), (4, R[4], R[3], C_EXACT, T4A)):
+            for k, lo, hi, col, a in ((3, R[3], R[2], C_DGRAD, T3A), (4, R[4], R[3], C_OTHER, T4A)):
                 u = prog(t, a + 0.4, a + 2.1)
                 if u <= 0:
                     continue
-                left = max(L, lo)                       # 色块从红段末端一直铺到上一次的末端
+                left = max(L, lo)                       # 色块从蓝段末端一直铺到上一次的末端
                 w = (hi - left) * K
                 if w <= 1e-4:
                     continue
-                fc = interpolate_color(C_FAIL, col, u)  # 刚缩出来时还带红，慢慢变成名字的颜色
+                fc = interpolate_color(C_REST, col, u)  # 刚缩出来时还是蓝，慢慢变成名字的颜色
                 g.add(Rectangle(width=w, height=BAR_H, stroke_color=col, stroke_width=3,
-                                stroke_opacity=u * f, fill_color=fc, fill_opacity=(0.95 - 0.6 * u) * f)
+                                stroke_opacity=u * f, fill_color=fc, fill_opacity=(0.95 - 0.45 * u) * f)
                       .move_to([X0 + (left + hi) * K / 2, BAR_Y, 0]))
             return g
 
@@ -242,6 +255,10 @@ class GoldenLineage(Scene):
             put(tx(add, 18, GREY_B).move_to([CHIP_X[i - 1], CHIP_Y - 0.22, 0]),
                 lambda t, i=i: 0.35 + 0.65 * lit(i, t))
 
+        # ③ 卡片下一行小字：第一关的尺子取自这组重跑（R6 评审第 1 条）
+        put(tx("第一关的尺子取自这组重跑", 16, C_FIX).move_to([CHIP_X[2], CHIP_Y - CHIP_H / 2 - 0.22, 0]),
+            lambda t: 0.35 + 0.65 * lit(3, t))
+
         # 起点那一步：轨道上一句灰字，代替柱子
         put(tx("（① 不重算，跟生产配置不一样：没有柱子）", 20, GREY).move_to([X0 + 4.6, BAR_Y, 0]),
             lambda t: prog(t, T1A, T1A + 0.5) * (1 - prog(t, T2A, T2A + 0.4)))
@@ -254,9 +271,12 @@ class GoldenLineage(Scene):
             put(m, lambda t, k=k, hi=hi: prog(t, STEP_A[k], STEP_A[k] + 0.4)
                 * (1.0 if hi is None else 1 - prog(t, hi, hi + 0.4)) * fade_out_all(t))
 
-        # 柱子末端的数：落地后淡入、下一次缩之前淡出
+        # 柱尾（蓝段末端）的数 ＋ 红色「不过」标签：落地后淡入、下一次缩之前淡出
         for k in (2, 3, 4):
-            m = tx("%.1f × N" % R[k], 26, C_FAIL).move_to([X0 + R[k] * K, BAR_Y + 0.55, 0])
+            num = tx("%.1f × N" % R[k], 26, C_REST)
+            bad = Text("不过", font_size=24, color=C_FAIL, weight="BOLD")   # 只用字，不加框：set_opacity 会把空心框填实
+            m = VGroup(num, bad).arrange(RIGHT, buff=0.14).move_to([X0 + R[k] * K, BAR_Y + 0.55, 0])
+            assert R[k] > 2                             # 三次都超过 2×N：都挂「不过」
             if k == 2:
                 m.set_x(X0 + R[k] * K - m.width / 2)    # 最长那根：右对齐到末端，别出框
             if k == 4:
@@ -267,7 +287,7 @@ class GoldenLineage(Scene):
                 * (1.0 if hi is None else 1 - prog(t, hi + 0.1, hi + 0.4)) * fade_out_all(t))
 
         # 两块色块的名字（两行）
-        for lo, hi, col, a, name in ((R[3], R[2], C_FIX, T3A, "GPU " + NAME3), (R[4], R[3], C_EXACT, T4A, NAME4)):
+        for lo, hi, col, a, name in ((R[3], R[2], C_DGRAD, T3A, "GPU " + NAME3), (R[4], R[3], C_OTHER, T4A, NAME4)):
             cx = X0 + (lo + hi) * K / 2
             m1 = tx(name, 20, col).move_to([cx, BAR_Y - 0.62, 0])
             m2 = tx("（已查清）", 20, col).move_to([cx, BAR_Y - 0.97, 0])

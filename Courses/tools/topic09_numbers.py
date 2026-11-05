@@ -281,3 +281,12 @@ RMSNORM_BITWISE_EXC, RMSNORM_BITWISE_NOEXC = "99.9987%", "74.1%"   # 默认写�
 SIGMAS_10 = tuple((x - GPU_RUNS10_TAIL_MEAN) / _sd10 for x in TPU_ARMS)
 assert [round(abs(z), 1) for z in SIGMAS_10] == [5.3, 4.1, 2.9], SIGMAS_10
 SIGMA_RANGE = "2.9 到 5.3"
+
+# ── 2026-11-05 · 图修订：交叉核对二（TPU 执行噪声 28 对）其余三项、干预臂 loss 前后半（实测）──────────────
+# 出处：对齐实践的 golden 总表「第一层结果」表，交叉核对行（噪声 ＝ TPU 当前配置重标的 28 对，被测 v5p 当前配置）。
+XCHK_TPU_LOSS, XCHK_TPU_TAIL, XCHK_TPU_GN = 1.81, 1.42, 0.99   # loss 全程待定、尾段待定、grad_norm 过；只有 param_norm（XCHK_TPU_PN）超 2
+assert 1 < XCHK_TPU_LOSS <= 2 and 1 < XCHK_TPU_TAIL <= 2 and XCHK_TPU_GN <= 1 and XCHK_TPU_PN > 2
+# 出处：案例 01「dh 里的 logit 水平分量」行：两边都去掉 dh 沿 w̄ 的分量，1000 步，第 301–600 / 601–1000 步 loss 偏移。
+REMOVE_LOSS_H1, REMOVE_LOSS_H2 = 4.9e-5, -9.6e-5
+assert abs((300 * REMOVE_LOSS_H1 + 400 * REMOVE_LOSS_H2) / 700 - REMOVE_LOSS) < 0.1e-5     # 按步数加权 ＝ −3.39e-5 ≈ −3.4e-5
+assert 0.5 < REMOVE_LOSS_H2 / TPU_LOSS_TAIL < 0.65                                          # 后半仍剩约六成（−9.6e-5 ÷ −1.66e-4 ≈ 0.58）

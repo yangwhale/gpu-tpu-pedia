@@ -9,8 +9,12 @@ r"""专题九「GPU→TPU 训练精度对齐」§8.6 串起来：五环一条链
 
 ⛔ 数据从哪来（全部 import 自 tools/topic09_numbers.py，不另抄）
   · ① HEAD_BF16_S1 / HEAD_BF16_S100：GPU 输出层 dgrad 沿 w̄ 的相对误差，第 1 / 100 步 −6.51e-4 / −6.10e-4（实测）。
-  · ② SWAP 第三行：同一状态（GPU 第 99 步）、同一批数据，GPU 生产程序沿漂移方向每步少走 0.36%（实测，全体参数）。
-    「大头在第 0 层注意力输出投影」出自 fig9-chain 的出处栏（实测，换权重重算）。
+  · ② SWAP 第三行：同一状态（GPU 第 99 步）、同一批数据，GPU 生产配置这一整步（全体参数一起）沿漂移方向少走 0.36%（实测）。
+    ⚠️ R6 评审第 17 条：0.36% 是「整步、全体参数」的量，不是「主干权重」本身、也不是第 0 层输出投影那一份
+       （那一份另有测量，本脚本不引用）。它仍挂在 ② 下面而不是 ① 下面：① 是输出层 dgrad 自己的相对误差（0.065%），
+       0.36% 是这个误差（连同 GPU 其余 BF16 误差）传到「每一步怎么更新参数」以后的结果 —— 正是 ② 这一环说的事；
+       挪到 ① 下面反而会被读成 dgrad 的误差就是 0.36%。所以只改标签：「整步沿漂移方向少走 / 全体参数，同一状态实测」。
+    「主干里大头在第 0 层注意力输出投影」出自 fig9-chain 的出处栏（实测，换权重重算）。
   · ③ LSE_PROBE：固定探针 lse 差（TPU − GPU），第 25/50/100/300 步四个实测点；灰点 ＝ 第三列 GPU 两次之间。
     第 0 步两边是同一份权重，差记为 0（本课推导，不是测出来的点）。
   · ④ ROWS_300 第一行：没出现过的词，第 300 步输出层平方和 TPU − GPU ＋17.1（实测）。
@@ -19,6 +23,8 @@ r"""专题九「GPU→TPU 训练精度对齐」§8.6 串起来：五环一条链
     这几个数暂在本脚本里定义（RARE_*），待并入 topic09_numbers.py。
   · ⑤ topic09_series.json 的 pnorm_diff_tpu_minus_gpu_a / pnorm_diff_gpu_b_minus_gpu_a：参数范数差逐步实测值（第 1–300 步）；
     「按组拆：输出层占 87%」＝ GROUP_HEAD_300 / GROUP_TOTAL_300 ＝ 3.83e-3 / 4.39e-3（本课推导，按实测拆账算）。
+    ⚠️ R6 评审第 16 条：两个数参照不同 —— ＋4.6e-3 是逐步序列（TPU 对第一份 GPU），87% 来自分组拆账那一次
+       （对另一份同设置的 GPU 运行，合计 4.39e-3）。画面上两行都留，第二行注明「另测一对，合计 4.4e-3」。
     loss 偏低「一起出现、一起消失」是干预实测；它为什么跟着变，机制未验证。
 
 ⚠️ 中间帧是插值示意：
@@ -229,8 +235,8 @@ class DriftChain(Scene):
         panels.append(col(0, [("每一步少推", 17, GREY_B, False), ("%.3f%%" % HEAD1, 32, RED, True),
                               ("沿 w̄（第 1 步实测）", 15, GREY_B, False), ("第 100 步：%.3f%%" % HEAD100, 15, GREY_B, False),
                               ("→ 每一步都差这么多", 15, WHITE, False)], y0=[1.2, 0.7, 0.2, -0.15, -0.55]))
-        panels.append(col(1, [("每一步少走", 17, GREY_B, False), ("%.2f%%" % abs(SWAP_GPU), 32, ORANGE, True),
-                              ("沿漂移方向（同一状态实测）", 15, GREY_B, False), ("大头：第 0 层", 15, GREY_B, False),
+        panels.append(col(1, [("整步沿漂移方向少走", 17, GREY_B, False), ("%.2f%%" % abs(SWAP_GPU), 32, ORANGE, True),
+                              ("全体参数，同一状态实测", 15, GREY_B, False), ("主干里大头：第 0 层", 15, GREY_B, False),
                               ("注意力的输出投影", 15, GREY_B, False)], y0=[1.2, 0.7, 0.2, -0.15, -0.5]))
         # ③ 小图框架
         p3 = VGroup(tx("lse 差（TPU − GPU）", 15, GREY_B).move_to([XC[2], 1.2, 0]),
@@ -258,8 +264,9 @@ class DriftChain(Scene):
         lse_labs = [remember(tx("第 %d 步 %s" % (s, ("%.4f" % v).rstrip("0").replace("-", "−")), 15, COL_DIFF, True)
                              .move_to([XC[2], -1.5, 0])) for s, v, _ in N.LSE_PROBE]
         rare_lab = remember(tx("＋%.1f（第 300 步实测）" % RARE_300, 15, COL_DIFF, True).move_to([XC[3], -1.5, 0]))
-        pn_lab = remember(VGroup(tx("＋%.1e（第 300 步）" % PN_END, 15, COL_DIFF, True).move_to([XC[4], -1.5, 0]),
-                                 tx("按组拆：输出层占 %d%%" % round(HEAD_SHARE * 100), 13, GREY_B).move_to([XC[4], -1.85, 0])))
+        pn_lab = remember(VGroup(tx("＋%.1e（第 300 步）" % PN_END, 15, COL_DIFF, True).move_to([XC[4], -1.45, 0]),
+                                 tx("按组拆：输出层占 %d%%" % round(HEAD_SHARE * 100), 13, GREY_B).move_to([XC[4], -1.75, 0]),
+                                 tx("（另测一对，合计 %.1e）" % N.GROUP_TOTAL_300, 12, GREY_B).move_to([XC[4], -2.0, 0])))
         for p in panels:
             remember(p)
 

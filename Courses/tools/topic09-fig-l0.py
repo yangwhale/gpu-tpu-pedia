@@ -55,7 +55,7 @@ def fig_replay():
     f.box(X0, by + 6, BW * SAME_SHARE, 34, GR, GR, 4)
     f.box(X0 + BW * SAME_SHARE, by + 6, BW * (1 - SAME_SHARE), 34, "#fce8e6", RD, 4)
     f.t(X0 + 10, by + 70, "1000 步合计：2,000 / 16,000 落到同号设备", GR, True, 14)
-    f.t(X0 + BW, by + 70, "其余 14,000 个落到别的设备 → 加一步重排，才全部逐位", RD, True, 14, "end")
+    f.t(X0 + BW, by + 70, "其余 14,000 个落到别的设备（加一步重排可全部逐位；对齐仍用回放）", RD, True, 14, "end")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "数据这一级必须一位不差：1000 步 × 8 卡 × 2 小份 ＝ 16,000 个单元，逐个比", [
         "两边吃的东西完全一样，后面量出来的差才是「算」的差，不是「喂」的差。",
