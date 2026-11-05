@@ -949,7 +949,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以能要求的只有一条：TPU 和 GPU 的差，不超过 GPU 自己跟自己的差。</text>
 </svg><figcaption><b>同一个式子，两种顺序，差了一整格。</b><span class="capmore"><br><em>格距按 BF16 在 1 附近的真实格距画；正好在两格中间时，舍到末位是偶数的那一格（平局取偶）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课推导：BF16 有 7 位尾数，1 附近的格距 2⁻⁷；1 ＋ 2⁻⁸ 正好落在 1 和 1 ＋ 2⁻⁷ 中间，就近舍入平局取偶，舍回 1。</p>
 <p>📌 脚本里用 struct 把 float32 截到高 16 位并按平局取偶进位，真算两遍，结果写死在断言里。</p></details></figure>
-  <p>开场第二问的答案：<b>GPU 自己跑两遍也不一位不差</b>。反向里有些算子（大模型里主要是 FlashAttention 的反向）要很多线程往同一个格子里加数（原子加），谁先算完谁先加进去，每次的先后都不一样。
+  <p>开场第二问的答案：<b>GPU 自己跑两遍也不一位不差</b>。反向里有些算子（注意力的反向、MoE 把 token 合回原位的那一步、融合的交叉熵都可能是；这次没拆到底是哪一个）要很多线程往同一个格子里加数（原子加），谁先算完谁先加进去，每次的先后都不一样。
     前向通常是确定的，所以两次运行第 1 步的 loss 一样；从反向开始才分叉。</p>
   <details class="foldfig"><summary><b>外面的人怎么说</b>：换个顺序求和能差出多少种结果</summary>
   <p>有人把 8 个大小悬殊的数（±1e-10、±1e-5、±1e-2、±1）随机打乱求和 1 万次，得到 102 种不同的结果；同一篇文章也指出，大模型的前向在同一台机器上重跑是逐位一样的，大模型里常用、又要原子加的，基本只有 FlashAttention 的反向（Thinking Machines，<em>Defeating Nondeterminism in LLM Inference</em>，2025）。</p></details>
@@ -1083,7 +1083,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>BF16 / FP32 / TF32</b>：三种浮点格式，指数都是 8 位，尾数分别是 7、23、10 位（<a href="#s5-1">§5.1</a>）。</li>
     <li><b>张量核 / MXU</b>：GPU 和 TPU 上专门做矩阵乘的硬件单元。</li>
     <li><b>EP</b>：按专家切 —— 不同的专家放在不同的卡上，token 按路由结果发过去算。</li>
-    <li><b>分布式优化器</b>：把优化器状态切开分到各张卡上存；本讲的 GPU 默认组把它关掉，因为开着的那组运行有持续的小偏移。</li>
+    <li><b>分布式优化器</b>：把优化器状态切开分到各张卡上存；梯度规约也从 all-reduce 改成 reduce-scatter。本讲的 GPU 默认组把它关掉：有一批老运行（推断当时开着）持续偏低一点，原因没查清。</li>
     <li><b>Megatron-Bridge、Transformer Engine</b>：GPU 这一侧用的训练框架，以及 NVIDIA 给它提供低精度矩阵乘等算子的库。</li>
     <li><b>FSDP</b>：把权重切开分到各张卡、用的时候再拼起来的数据并行（专题五 §2.3）。</li>
     <li><b>collective matmul</b>：一边在设备之间收下一片数据、一边算矩阵乘，把通信藏在计算后面（<a href="#s5-4">§5.4</a>）。</li>
@@ -1275,8 +1275,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>权重衰减</td><td>0.033（GPU 配置里写 0.1，被调度器覆盖）</td></tr>
   <tr><td>学习率</td><td>常数 1e-5，逐步核对</td></tr>
   <tr><td>精度</td><td>BF16 计算，FP32 主权重，FP32 优化器状态</td></tr>
-  <tr><td>批大小</td><td>全局 16；每卡每步 2 个 microbatch，分两次前反向再累加（TPU 改成跟 GPU 一样的切法）</td></tr>
-  <tr><td>重算</td><td>GPU 生产近似（②）每层整层重算；TPU 开部分重算（存下各投影、MoE 输出和路由结果，其余在反向里重算）。重算时路由可能挑出跟第一次不一样的专家，所以把第一次的选择存下来，反向照着用。归因参照 ① 不重算</td></tr>
+  <tr><td>批大小</td><td>全局 16；每卡每步 2 个 microbatch，分两次前反向再累加。TPU 后来改成跟 GPU 一样的切法；第七、八节用到的 TPU 运行是改之前跑的（每设备一次算 2 条），只改这一项跑 30 步没有变好；第九节验收用的是改之后的配置</td></tr>
+  <tr><td>重算</td><td>GPU 生产近似（②）每层整层重算；TPU 开部分重算（存下各投影、MoE 输出和路由结果，其余在反向里重算）。重算时 top-k 的顺序会变（首次前向不排序、重算时排序），加权求和就差一位；分数贴得很近时还会挑出别的专家 —— 所以把第一次选中的专家存下来，反向照着用（概率在重算里重新算）。归因参照 ① 不重算</td></tr>
   </tbody></table>
   <details class="foldfig"><summary><b>为什么 microbatch 的切法也要对</b>：累加怎么分组，舍入就发生在哪</summary>
   <p>同样是一步 16 条数据，一次算 2 条和分两次各算 1 条再相加，加法的分组不同，舍入就不同。GPU 自己做过对照：只换梯度累积的切分，embedding 的梯度差就是 GPU 自己重跑那点差的 31 倍。
@@ -4266,7 +4266,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>蓝色一样宽，绿色不一样长。</b><span class="capmore"><br><em>下半的对齐位数是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 位宽：FP32 1/8/23（IEEE 754 binary32）；BF16 1/8/7；TF32 1/8/10（NVIDIA 张量核用的 19 位格式，按 32 位存放）。</p>
 <p>⚠️ 本课推导：有效数字含隐含的那一位，BF16 是 8 位、FP32 是 24 位，8 × 8 位的乘积至多 16 位 ≤ 24 位，所以只要不溢出就精确。</p></details></figure>
 
-  <h3 id="s5-2">5.2　GPU 张量核：每 16 个一组，抹零</h3>
+  <h3 id="s5-2">5.2　GPU（B200）张量核：每 16 个一组，抹零</h3>
 <figure class="fbox fwide" id="fig-truncate"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="左边：GPU 张量核累加的模型。每 16 个乘积连同累加器一起，按其中最大的指数对齐；对齐后最高位往后 25 位以外的低位直接截掉，向零，不是四舍五入。就像收银台每一单都抹零，只少不多。右边：用全是正数的合成输入，求和长度 K 从 256 到 65,536，朝零的相对偏差从 2.2e-5 涨到 3.1e-4；不走张量核的 FP32 不到 5e-8。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">GPU 张量核：每 16 个一组，低位抹掉　——　<tspan font-weight="700">只少不多，加得越长少得越多</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：一行 ＝ 一个乘积（对齐后）；虚线右边 ＝ 窗口外的低位，被截掉。右：横轴 ＝ 一次求和加多少个乘积（对数），纵轴 ＝ 结果朝零偏了多少（对数）</text>
@@ -4803,6 +4803,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 TPU 没有 TF32；FP32 操作数按编译时的矩阵乘精度档处理，默认档是先舍成 BF16 单遍乘、FP32 累加。</p></details></figure>
   <p>TF32 是 NVIDIA 张量核上的 19 位格式：FP32 的矩阵乘一进张量核，就悄悄按 10 位尾数算。训练容器默认开着它，所以名义上的「FP32」常常不是 FP32。
     要拿来当精确参照的程序，每次启动都实测一遍，把实测值记进运行的元数据。</p>
+  <p>BF16 训练里，TF32 只碰输入本来是 FP32 的矩阵乘（本例第 1 步只有路由反向那十来次），所以「BF16 设置下关不关 TF32 没影响」和「精确参照必须真关 TF32」两句并不打架。</p>
   <details class="foldfig"><summary><b>开关为什么这么乱</b>：PyTorch 各版本的默认值和一个压过一切的环境变量</summary>
   <p>PyTorch 里矩阵乘的 TF32 开关 1.7–1.11 版默认开、1.12 起默认关，cuDNN 那个开关一直默认开；另有一个环境变量 <code>NVIDIA_TF32_OVERRIDE=0</code>，压过所有框架和 NVIDIA 库的设置、全局关掉 TF32（NVIDIA cuBLAS 文档）—— 所以它连 Transformer Engine 那条路也能关掉（TE 对纯 FP32 矩阵乘在源码里写死用 TF32，不看 torch 开关）。PyTorch 2.9 起又改用 <code>fp32_precision</code> 这一套新开关，旧的 <code>allow_tf32</code> 将弃用。</p></details>
 
@@ -5616,7 +5617,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边最长的两根红柱，都是 GPU 的张量核。</b><span class="capmore"><br><em>参照是同一份输入在 FP64 里的结果。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：GPU 在线性层的前向、反向里记下输出层实际用到的 h、logits、权重和交给反向的 dlogits，与 dump 逐位相同；离线拆成「交叉熵反向」「矩阵乘」两段各对 FP64。第 100 步 GPU −6.10e-4，TPU −7.4e-5。</p>
 <p>📌 实测：右图把真实输出头张量的词表行打乱后取前 K 行，沿该方向的误差 −6.9e-5 / −2.0e-4 / −6.5e-4；朝零的整体尺度偏差 1.9e-5 / 7.3e-5 / 2.3e-4。</p></details></figure>
   <p>到这里只是一次矩阵乘、一步的离线证据；一千步下来到底谁偏，<a href="#s8-5">§8.5</a> 再下结论。GPU 在反向里沿 12 万的词表做一次很长的 BF16 矩阵乘求和，张量核把结果系统地朝零截了一点（<a href="#s5-2">§5.2</a> 的抹零）；
-    落在「所有 logits 一起升降」这个方向上，每一步都少推约 0.065%。TPU 这一步对 FP64 的误差小得多（第 1 步约 27 倍，第 100 步约 8 倍）。</p>
+    落在「所有 logits 一起升降」这个方向上，每一步都少推约 0.065%。TPU 这一步对 FP64 的误差小得多（第 1 步约 27 倍；第 100 步那个指标连真 FP32 都偏得不小，只作旁证）。</p>
   <details class="foldfig"><summary><b>口径</b>：哪部分是实测、哪部分是推断；一度判反的那一版</summary>
   <p>朝零、随求和长度增大，是实测；说它就是 <a href="#s5-2">§5.2</a> 那个抹零模型在起作用，是推断 —— 那个模型在这么长的求和上没有单独验证过。
     最早那一版「FP32 dgrad」没关 TF32，偏得比 BF16 还多，于是一度得出「换成精确 dgrad 训练也不动」的错误结论。</p></details>
@@ -5904,8 +5905,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <table class="t9"><thead><tr><th>改了什么</th><th>原来</th><th>最终 golden</th><th>方向</th><th>为什么</th></tr></thead><tbody>
   <tr><td>计算精度</td><td>BF16 混合精度</td><td>前向反向全部 FP32，权重仍按 BF16 用</td><td>两边向精确值</td><td>精确轨迹站在 TPU 一边（<a href="#s8-5">§8.5</a>）</td></tr>
   <tr><td>TF32</td><td>容器默认开</td><td>环境变量关，启动实测 ≤ 1e-5</td><td>两边向精确值</td><td>不关，「FP32」就不是 FP32（<a href="#s5-3">§5.3</a>）</td></tr>
-  <tr><td>重算</td><td>不重算</td><td>整层重算 ＋ 路由回放</td><td>GPU 向生产</td><td>生产两边都开重算；回放让重算和首次前向逐位相同</td></tr>
-  <tr><td>分布式优化器</td><td>开</td><td>关</td><td>—</td><td>开着时梯度规约的分组不同，实测这一组 GPU 运行比别的组持续低一点；全量抓数也要每张卡都有完整的梯度</td></tr>
+  <tr><td>重算</td><td>不重算</td><td>整层重算 ＋ 路由回放</td><td>GPU 向生产</td><td>按假设的生产配置开重算；回放让重算和首次前向逐位相同</td></tr>
+  <tr><td>分布式优化器</td><td>开</td><td>关</td><td>—</td><td>有一批老运行（推断当时开着）比别的组持续低一点，原因没查清；全量抓数也要每张卡都有完整的梯度</td></tr>
+  <tr><td>注意力实现</td><td>自动选（融合）</td><td>不融合</td><td>两边向精确值</td><td>全程 FP32 只能走不融合的那条</td></tr>
+  <tr><td>通信重叠</td><td>开</td><td>关</td><td>—</td><td>推断不改数值，没单独测过</td></tr>
   <tr><td>权重衰减</td><td>写 0.1，实际 0.033</td><td>同原始（0.033）</td><td>两边设成同一个实际值</td><td><a href="#s2-3">§2.3</a></td></tr>
   </tbody></table>
   <p>表里还要有一节「试过、没采用的」：交叉熵写法、注意力实现、梯度 BF16 规约、关 TF32（在 BF16 设置下）……各自的结论是「无影响」还是「有害」，免得后人再试一遍。</p>
@@ -6137,7 +6140,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>第 1 步张量</b>：逐个大张量算 rel_L2、cos、范数比；超线的那一处请 FP64 来算 R 比定责（≤ 1.2 算两边一样远）。MoE 先看路由槽位翻了没有，翻了就按「两边选中同一批 token」重比。</li>
     <li><b>跑满步数</b>：两个窗口（全程；尾段 ＝ 两条轨迹分开、偏移稳定以后，本例从第 301 步起；窗口事先写进协议；学习率有调度时，尾段要避开预热）各算带符号均值、MARE、最大单步，除以 N 得 r；≤ 1 过、1–2 待定、＞ 2 不过。待定先补参照重判。检查项多时，纯噪声也会预期出「条数 × 1/(n+1)」条待定。</li>
     <li><b>不过就往下排查</b>：从上往下一级级缩小（见下面的排查表）；TPU 上拿证据走程序外面（步间读状态、隔离回放、固定探针、状态互换）。</li>
-    <li><b>golden 自己可疑时</b>：在 GPU 上跑一条精确轨迹（BF16 权重、全程 FP32、真关 TF32），分两关：第一关对它判过不过；第二关对生产 golden 写成「已解释差异」。什么时候算可疑：排查表里「TPU 更低、更近 FP64」那一行。参照先对 FP64 核一遍再用。尺子怎么选没有通用规则（本例借 ③ 那组重跑），关键是事先写进协议、中途不换。代价：全程 FP32 的矩阵乘比 BF16 慢一个数量级上下（按 H100 规格 67 对 989 TFLOP/s 推，本课推导；以自己卡上实测为准）。</li>
+    <li><b>golden 自己可疑时</b>：在 GPU 上跑一条精确轨迹（BF16 权重、全程 FP32、真关 TF32），分两关：第一关对它判过不过；第二关对生产 golden 写成「已解释差异」。什么时候算可疑：排查表里「TPU 更低、更近 FP64」那一行。参照先对 FP64 核一遍再用。尺子怎么选没有通用规则（本例借 ③ 那组重跑），关键是事先写进协议、中途不换。代价：全程 FP32 的矩阵乘比 BF16 慢一到两个数量级（看硬件，以自己卡上实测为准），精确轨迹还得换成不融合的注意力。</li>
     <li><b>投产后</b>：日常回归先要求逐位；不逐位按 PR 的数值声明分流；TPU 执行噪声用只改执行方式的扰动臂标定，配置一换就重标。</li>
     <li><b>记下来</b>：一个问题一份案例文件，事实带出处、推断标出来、排除的也写；坑写进通用文档。</li>
   </ol>

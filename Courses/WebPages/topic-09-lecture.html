@@ -255,7 +255,7 @@ h2.part{margin:48px 0 8px;padding-top:18px;border-top:2px solid #dadce0;font-siz
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,062</td><td>4</td><td>6.3′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>752</td><td>3</td><td>4.5′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>965</td><td>4</td><td>6.0′</td><td>6′</td></tr><tr><td>第四节　指标（二）：张量</td><td>928</td><td>4</td><td>5.9′</td><td>6′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>823</td><td>7</td><td>6.0′</td><td>6′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>600</td><td>1</td><td>3.2′</td><td>4′</td></tr><tr><td>第七节　案例（上）：loss 偏低，漂的是冷门词</td><td>718</td><td>4</td><td>4.6′</td><td>5′</td></tr><tr><td>第八节　案例（下）：顺着那股力，查到是谁少推了一把</td><td>1,402</td><td>8</td><td>9.2′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>798</td><td>7</td><td>5.9′</td><td>6′</td></tr><tr><td>第十节　工程化与教训</td><td>715</td><td>2</td><td>4.1′</td><td>5′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>56′</b></td><td><b>60′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,066</td><td>4</td><td>6.3′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>752</td><td>3</td><td>4.5′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>965</td><td>4</td><td>6.0′</td><td>6′</td></tr><tr><td>第四节　指标（二）：张量</td><td>928</td><td>4</td><td>5.9′</td><td>6′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>823</td><td>7</td><td>6.0′</td><td>6′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>600</td><td>1</td><td>3.2′</td><td>4′</td></tr><tr><td>第七节　案例（上）：loss 偏低，漂的是冷门词</td><td>718</td><td>4</td><td>4.6′</td><td>5′</td></tr><tr><td>第八节　案例（下）：顺着那股力，查到是谁少推了一把</td><td>1,402</td><td>8</td><td>9.2′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>798</td><td>7</td><td>5.9′</td><td>6′</td></tr><tr><td>第十节　工程化与教训</td><td>715</td><td>2</td><td>4.1′</td><td>5′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>56′</b></td><td><b>60′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
@@ -308,7 +308,7 @@ h2.part{margin:48px 0 8px;padding-top:18px;border-top:2px solid #dadce0;font-siz
 <p class="say">「一次矩阵乘就是成千上万次这样的加法。GPU 和 TPU 切块不同、加的顺序不同，末位必然不同。混元 3 是 MoE 模型，每个词由路由器挑几位「专家」来算；末位一不同，某个词可能就挑了另一个专家，几百步之后两条轨迹必然分开。<br>
 预习第二问的答案也在这儿：GPU 自己跑两遍，也不一位不差。」</p>
 
-<p class="say">「为什么？前向通常是确定的，两次运行第一步的 loss 一样；分叉从反向开始。反向里有些算子，大模型里主要是注意力的反向，要很多线程往同一个格子里加数，谁先算完谁先加进去，每次的先后都不一样。加法换了顺序，就是刚才那张图。<br>
+<p class="say">「为什么？前向通常是确定的，两次运行第一步的 loss 一样；分叉从反向开始。反向里有些算子，比如注意力的反向、MoE 把 token 合回原位的那一步，要很多线程往同一个格子里加数，谁先算完谁先加进去，每次的先后都不一样。加法换了顺序，就是刚才那张图。<br>
 所以「完全相同」根本不是一个能达到的目标。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-ruler</code>，先只指灰色那一段，蓝点先不讲。</p>
