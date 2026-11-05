@@ -347,7 +347,7 @@ BATCH_TOKENS = 4096                                  # 隔离回放那一批的 
 BATCH_TOKENS_T = format(BATCH_TOKENS, ","); _lock("BATCH_TOKENS_T", BATCH_TOKENS_T, "4,096")
 FLIP_SLOTS_L1 = BATCH_TOKENS * TOPK; assert FLIP_SLOTS_L1 == 32768                    # 第 1 层槽位数
 FLIP_MARGIN_DASH_T = FLIP_MARGIN.replace(" 到 ", " – "); _lock("FLIP_MARGIN_DASH_T", FLIP_MARGIN_DASH_T, "2.7e-5 – 6.3e-5")
-# 出处：动画 RouteFlip 的断言常数（ROUTE_IN_RELL2、ALL_MARGIN_P50、SAME_IN_LOGITS、FP32_MARGIN），实测
+# 出处（实测）：逐层隔离回放的路由翻转统计（路由输入两边 rel_L2、翻转与全部 token 的分差中位数、喂相同输入 logits rel_L2 3.8e-6–4.0e-6）；同一状态两侧全程 FP32 前向逐点比（第 1 层 1/32768 个槽位不同，分差 1.6e-6）
 ROUTE_IN_RELL2_LO, ROUTE_IN_RELL2_HI = 3.4e-3, 3.9e-3                 # 路由输入两边 rel_L2，第 1–3 层
 ALL_MARGIN_LO, ALL_MARGIN_HI = 3.1e-4, 8.0e-4                         # 全部 token 第 8、9 名分差中位数
 ALL_MARGIN_HI_T = tx(ALL_MARGIN_HI, "%.1e"); _lock("ALL_MARGIN_HI_T", ALL_MARGIN_HI_T, "8.0e-4")
@@ -397,7 +397,9 @@ SWAP_TPU_T, SWAP_FIX_T, SWAP_GPU_T = (tx(v, "%.2f") + "%" for _, v, _r in SWAP)
 SWAP_GPU_ABS_T = "%.2f%%" % abs(SWAP[2][1])
 _lock("SWAP_TPU_T", SWAP_TPU_T, "0.00%"); _lock("SWAP_FIX_T", SWAP_FIX_T, "−0.10%"); _lock("SWAP_GPU_T", SWAP_GPU_T, "−0.36%"); _lock("SWAP_GPU_ABS_T", SWAP_GPU_ABS_T, "0.36%")
 SWAP_RES_T = "%.1f%%" % max(abs(x) for x in SWAP[0][2]); _lock("SWAP_RES_T", SWAP_RES_T, "0.1%")   # TPU 区间最宽处 → 「±0.1% 以内」
-SWAP_STATE_TENSORS = 1193                            # 状态互换导入 TPU、逐个核对 sha256 的张量数（fig9-swap 的 📌 实测）
+SWAP_STATE_TENSORS = 1193                            # 口径：Megatron 布局（qkv 合一、gate/up 合一）；1781 − 1193 ＝ 588 ＝ 192 专家 × 3 层 gate/up 576 ＋ qkv 4 层 × 2 ＋ 稠密层 1 ＋ 共享专家 3。
+# 状态互换导入 TPU、逐个核对 sha256 的张量数（fig9-swap 的 📌 实测）
+assert N_TENSORS - SWAP_STATE_TENSORS == 192 * 3 + 4 * 2 + 1 + 3, "张量数口径对不上"
 # 精确轨迹那段
 PERTURB = 1e-6                                       # 扰动版：给第 0 层一处权重乘 (1 ＋ 1e-6)
 FP32_TRAIN_LOSS_GAP_T = "1.75%"                      # 纯 FP32 训练前 100 步 loss 比 BF16 低。来源：课件既有数，待核

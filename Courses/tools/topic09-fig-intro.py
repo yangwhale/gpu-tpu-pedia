@@ -95,7 +95,7 @@ def fig_ruler():
         v = LO + i * 0.5e-4
         f.line(X(v), yl - 6, X(v), yl + 6, GY2, 1.2, arrow=False)
         f.t(X(v), yl + 48, "0" if abs(v) < 1e-12 else "%+.1f×10⁻⁴" % (v * 1e4), GY, size=13, anchor="middle")
-    # L12 评审 S3：0 在哪、为什么灰段不以 0 为中心 —— 先把 0 是谁标出来（贴右沿的原因在 fig9-baseline）
+    # 0 在哪、为什么灰段不以 0 为中心 —— 先把 0 是谁标出来（贴右沿的原因在 fig9-baseline）
     f.t(X(0), yl + 68, "基线 ＝ 第一份 GPU", INK, True, 13, "middle")
     f.box(X(N.GPU_RUNS10_LO), yl - 22, X(N.GPU_RUNS10_HI) - X(N.GPU_RUNS10_LO), 44, LINE2, GY2, 6)
     f.t((X(N.GPU_RUNS10_LO) + X(N.GPU_RUNS10_HI)) / 2, yl - 34, "10 次 GPU 重跑都在这儿", GY, True, 14, "middle")

@@ -95,7 +95,7 @@ def fig_formats():
     bits(f, 80 + SH * 22, y + 14, SIG_FP32 - SH, OR, "#fef7e0", bw=22, bh=24)
     bits(f, 80 + SIG_FP32 * 22, y + 14, SH, RD, "#fce8e6", bw=22, bh=24, dash="3 3")
     f.line(80 + SIG_FP32 * 22 - 2, y - 30, 80 + SIG_FP32 * 22 - 2, y + 48, RD, 2, dash="5 4", arrow=False)
-    # L12 评审：原「挤出的 10 位丢掉」会被读成普通 FP32 加法也是截断 → 写明普通加法是就近舍入，张量核的截断留给下一张图
+    # 原「挤出的 10 位丢掉」会被读成普通 FP32 加法也是截断 → 写明普通加法是就近舍入，张量核的截断留给下一张图
     xr = 80 + (SIG_FP32 + SH) * 22 + 14
     f.t(xr, y + 22, "小数往右对齐：挤出 24 位窗口的 %d 位要舍掉" % SH, RD, True, 13)
     f.t(xr, y + 42, "普通 FP32 加法：就近舍入（可能进一位）", GY, size=13)
@@ -164,7 +164,7 @@ def fig_truncate():
             f.t(x + 12, y + 20, "%.1e" % e, GY, True, 13)
         else:
             f.t(x - 10, y - 12, "%.1e" % e, GY, True, 13, "end")
-        # L13 评审：原先压在 K ＝ 65,536 点下面的三行「动画 3.5e-4 口径不同」挪进 📌（图里只留 highlight）
+        # 原先压在 K ＝ 65,536 点下面的三行「动画 3.5e-4 口径不同」挪进 📌（图里只留 highlight）
     f.line(GX0, GYf(N.FP32_BIAS_MAX), GX0 + GW, GYf(N.FP32_BIAS_MAX), GR, 2.5, dash="7 5", arrow=False)
     f.t(GX0 + GW, GYf(N.FP32_BIAS_MAX) - 10, "FP32 不走张量核：≤ 5e-8", GR, True, 13, "end")
     f._pan = None

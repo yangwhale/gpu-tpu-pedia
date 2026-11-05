@@ -223,7 +223,7 @@ __FIG_REPLAY__
 
   <h3>2.2　权重：转过去，再转回来，逐张量比字节</h3>
   <p>从开源权重转成两边各自的格式，要处理改名、拼接、拆专家、转置。证明转对的办法是<b>转过去再转回来</b>，跟原始文件按原始字节逐个张量比：
-    «N_TENSORS_T» 个张量全部相同，包括 «N_FP32_TENSORS» 个 FP32 的路由偏置和 «N_BF16_TENSORS_T» 个 BF16 张量；参数总数（不含路由偏置）«N_PARAMS»，两边一致。</p>
+    «N_TENSORS_T» 个张量全部相同，包括 «N_FP32_TENSORS» 个 FP32 的路由偏置和 «N_BF16_TENSORS_T» 个 BF16 张量；参数总数（不含路由偏置）«N_PARAMS»，两边一致。（这里按开源权重的命名数张量；§8.4 状态互换的文件按 GPU 框架的布局存，q/k/v 合成一个、gate/up 合成一个，同样的元素只数出 «SWAP_STATE_TENSORS» 个。）</p>
   <ul>
     <li><b>不抽样</b>：抽样比，没抽到的那个坏了查不出来。</li>
     <li><b>加载以后再读一遍</b>：训练开始前从设备上读出来，跟 GPU 第 0 步逐位比。主权重上小于 BF16 半格的错，舍成 BF16 后第 1 步前向看不见，第 2 步才分叉。</li>
@@ -377,7 +377,7 @@ __FIG_TF32__
   <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。权重切在收缩维（矩阵乘里被加起来、消掉的那一维）上时，每一轮只算出部分和，要一轮轮加起来。</p>
 __FIG_WINDOWED__
 __ANIM_WINDOWED__
-  <p>这里说的「开关」落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里写 <code>preferred_element_type=float32</code>，出口再转回 BF16），不是加一个编译参数；collective matmul 也只在超过一个大小阈值时才出现。本例改的是前向那几处；反向里的 collective matmul 要不要一起改，本课没有量过 —— 看编译后的程序里还剩哪几处，把它们列进逐模块换 FP32 的候选（§9.4）。</p>
+  <p>这里说的「开关」落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里给 <code>jax.lax.dot</code> 写 <code>preferred_element_type=jnp.float32</code>，出口再转回 BF16），不是加一个编译参数。别的框架没有统一的名字，要找的是「BF16 矩阵乘的部分和用什么精度相加」这一项；例如 PyTorch 在 GPU 上有 <code>torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction</code>，默认允许 BF16 GEMM 的拆分归约用低精度，设成 False 就关掉（见 PyTorch 的 CUDA 语义文档）。collective matmul 也只在超过一个大小阈值时才出现。本例改的是前向那几处；反向里的 collective matmul 要不要一起改，本课没有量过 —— 看编译后的程序里还剩哪几处，把它们列进逐模块换 FP32 的候选（§9.4）。</p>
   <p>这个开关修好了单层上的那一处多舍（qkv 投影 R «R_QKV_BEFORE» → «R_QKV_AFTER_T»），可对 1000 步的参数范数漂移几乎没用：参数范数那一项的 r（§3.3，被测对第九节验收用的精确轨迹 ④）开关前 «GOLDEN_R4_T»、开关后 «ACC_PN_R»。</p>
 
   <h3>5.5　excess precision：融合里省掉的舍入</h3>
@@ -717,12 +717,13 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>lse 差 «LSE25_T» ／ «LSE50_T» ／ «LSE100_T» ／ «LSE300_T»；第 1000 步约 «ORIG_LSE_T»</td><td>固定序列探针第 25 ／ 50 ／ 100 ／ 300 步（对第一份 GPU）；第 1000 步那个数取自训练批</td></tr>
   <tr><td>干预：去掉方向后 loss «REMOVE_LOSS_T»、参数范数 «REMOVE_PN_T»；GPU 加力 «FORCE_LOSS_T»、«FORCE_PN_T»</td><td>两边各 1000 步，同设置</td></tr>
   <tr><td>输出头反向误差：GPU dgrad «HEAD_BF16_S1_T»，TPU «HEAD_TPU_S1_T»，交叉熵 «CE_BWD_S1_T»，TF32 版 «HEAD_TF32_S1_T»，真 FP32 «HEAD_EXACT_S1_T»</td><td>第 1 步，用训练里实际用到的张量离线对 FP64；第 100 步 GPU «HEAD_BF16_S100_T»、TPU «HEAD_TPU_S100_T»。机制是张量核抹零为推断</td></tr>
-  <tr><td>同状态各算一步：TPU «SWAP_TPU_T»，GPU 精确 dgrad «SWAP_FIX_T»，GPU «SWAP_GPU_T»</td><td>GPU 第 99 步状态导入 TPU（«SWAP_STATE_TENSORS» 个张量核对指纹），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
+  <tr><td>同状态各算一步：TPU «SWAP_TPU_T»，GPU 精确 dgrad «SWAP_FIX_T»，GPU «SWAP_GPU_T»</td><td>GPU 第 99 步状态导入 TPU（«SWAP_STATE_TENSORS» 个张量核对指纹；按 GPU 框架布局数，q/k/v、gate/up 各合成一个，所以比 §2.2 按开源命名数的 «N_TENSORS_T» 少，元素一个不少），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
   <tr><td>精确轨迹：参数范数 «EXACT_TRAJ_PN975_T»（TPU «EXACT_TPU_PN975_T»，精确 dgrad «DGRADX_LO_T» – «DGRADX_HI_T»）</td><td>第 975 步，对 4 份默认 GPU 运行均值；GPU 自己 ±«EXACT_REF»</td></tr>
   <tr><td>拆账 «DECOMP_HEAD_T» ／ «DECOMP_REST_T» ／ «DECOMP_TPU_T»；loss «LOSS_FIXHEAD_SHARE_T»</td><td>TPU（开关打开前的配置）、生产 golden（5 份）、只修 dgrad 的 golden、精确轨迹，第 1000 步与第 301–1000 步</td></tr>
   <tr><td>TPU 自己剩下的：«TPU_OWN_NOREMAT_975_T» ／ «TPU_OWN_OLDCFG_1000_T» ／ «TPU_OWN_CURCFG_1000_T»</td><td>分别是：不重算配置第 975 步；生产近似配置、开关打开前第 1000 步；当前配置第 1000 步（都对精确轨迹）</td></tr>
   <tr><td>回归：«T0_STEPS» 步那档约 «T0_MIN» 分钟、«STEPS» 步那档约 «T1_MIN» 分钟；扰动臂旧配置 «ARMS_TRIED» 试 «ARMS_KEPT» 过、«CAL_PAIRS» 对；新配置 7 个重跑全过、重标 28 对</td><td>v5p（8 颗芯片），提交到取回</td></tr>
     <tr><td>第 1 步路由翻转：翻了的 token 第 8、9 名分差中位数 «FLIP_MARGIN_DASH_T»；某专家梯度 «STEP1_EXPERT»、«STEP1_TENSORS» 个张量合起来 «STEP1_ALL»</td><td>第 1 步隔离回放；被测梯度由 Adam 一阶动量反推</td></tr>
+    <tr><td>路由翻转对照（动画 anim-flip）：全部 token 第 8、9 名分差中位数 «ALL_MARGIN_LO» – «ALL_MARGIN_HI_T»；喂相同路由输入，两边 logits 的 rel_L2 仍约 «ROUTE_SAME_IN_DIFF»、翻转 0；两边全程 FP32 时第 1 层翻的那个 token 分差 «FP32_FLIP_MARGIN»</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 «BATCH_TOKENS» 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
   <tr><td>逐层 rel_L2：三层 «L_RELL2_1_T» ／ «L_RELL2_2_T» ／ «L_RELL2_3_T»（参考档不过、严格档过）</td><td>v5p，第 1 步逐层回放</td></tr>
   <tr><td>去掉 w̄ 方向后 loss：前半 «REMOVE_LOSS_H1_T»、后半 «REMOVE_LOSS_H2_T»（尾段平均 «REMOVE_LOSS_T»）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
   <tr><td>交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 «XCHK_SELF_PN» ／ «XCHK_SELF_LOSS» ／ «XCHK_SELF_TAIL» ／ «XCHK_SELF_GN»；TPU 执行噪声 28 对 «XCHK_TPU_PN» ／ «XCHK_TPU_LOSS» ／ «XCHK_TPU_TAIL» ／ «XCHK_TPU_GN»</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
@@ -881,7 +882,7 @@ def _anim_html(aid, mp4, scene, cap, sub, aria, first=False):
             '       aria-label="%s"></video>\n<figcaption><b>%s</b>\n'
             '  <span class="sub">（%d 秒，Manim 渲染%s%s）</span></figcaption></figure>'
             % (aid, mp4, pauses, aria.replace('"', "&quot;").replace("§", "&#167;"), cap, round(st["duration"]),
-               # 操作说明只在页面上第一支动画写全，其余只提一句（R5 文字评审：五支重复同一句）
+               # 操作说明只在页面上第一支动画写全，其余只提一句（避免五支动画重复同一句）
                "；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。" if first
                else "，可一步一步看。", sub))
 

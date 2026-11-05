@@ -1224,7 +1224,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s2-2">2.2　权重：转过去，再转回来，逐张量比字节</h3>
   <p>从开源权重转成两边各自的格式，要处理改名、拼接、拆专家、转置。证明转对的办法是<b>转过去再转回来</b>，跟原始文件按原始字节逐个张量比：
-    1,781 个张量全部相同，包括 3 个 FP32 的路由偏置和 1,778 个 BF16 张量；参数总数（不含路由偏置）12,386,079,744，两边一致。</p>
+    1,781 个张量全部相同，包括 3 个 FP32 的路由偏置和 1,778 个 BF16 张量；参数总数（不含路由偏置）12,386,079,744，两边一致。（这里按开源权重的命名数张量；<a href="#s8-4">§8.4</a> 状态互换的文件按 GPU 框架的布局存，q/k/v 合成一个、gate/up 合成一个，同样的元素只数出 1193 个。）</p>
   <ul>
     <li><b>不抽样</b>：抽样比，没抽到的那个坏了查不出来。</li>
     <li><b>加载以后再读一遍</b>：训练开始前从设备上读出来，跟 GPU 第 0 步逐位比。主权重上小于 BF16 半格的错，舍成 BF16 后第 1 步前向看不见，第 2 步才分叉。</li>
@@ -4896,7 +4896,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
        aria-label="FSDP 下的 collective matmul：部分和在轮与轮之间舍到 BF16。FSDP：权重按收缩维切成 4 片，每个设备存一片。第 1 步　默认：一轮收一片、算一片的部分积；部分和传给下一轮前先舍到 BF16，舍了 4 次，累计舍入误差（示意）涨满。第 2 步　打开 FP32 累加：部分和一路用 FP32 传，只在最后舍一次，误差条约为上一行的一半。第 3 步　qkv 投影对 GPU：rel_L2 2.36e-3 → 1.80e-4，R 1.235 → 1.000（实测）。单层这一处修好了；1000 步的参数范数漂移几乎没动：参数范数漂移的 r（对精确轨迹）开关前 3.52，开关后 3.45。一轮之内照样 FP32 累加，舍的是轮与轮之间的部分和（推断）；示意：4 片 4 轮，实际片数等于 FSDP 的路数。"></video>
 <figcaption><b>默认每收一片、算一轮，部分和就舍一次 BF16；打开 FP32 累加后只在最后舍一次。</b>
   <span class="sub">（24 秒，Manim 渲染，可一步一步看。4 片 4 轮、误差条长度都是示意；第 3 步的数是实测。）</span></figcaption></figure>
-  <p>这里说的「开关」落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里写 <code>preferred_element_type=float32</code>，出口再转回 BF16），不是加一个编译参数；collective matmul 也只在超过一个大小阈值时才出现。本例改的是前向那几处；反向里的 collective matmul 要不要一起改，本课没有量过 —— 看编译后的程序里还剩哪几处，把它们列进逐模块换 FP32 的候选（<a href="#s9-4">§9.4</a>）。</p>
+  <p>这里说的「开关」落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里给 <code>jax.lax.dot</code> 写 <code>preferred_element_type=jnp.float32</code>，出口再转回 BF16），不是加一个编译参数。别的框架没有统一的名字，要找的是「BF16 矩阵乘的部分和用什么精度相加」这一项；例如 PyTorch 在 GPU 上有 <code>torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction</code>，默认允许 BF16 GEMM 的拆分归约用低精度，设成 False 就关掉（见 PyTorch 的 CUDA 语义文档）。collective matmul 也只在超过一个大小阈值时才出现。本例改的是前向那几处；反向里的 collective matmul 要不要一起改，本课没有量过 —— 看编译后的程序里还剩哪几处，把它们列进逐模块换 FP32 的候选（<a href="#s9-4">§9.4</a>）。</p>
   <p>这个开关修好了单层上的那一处多舍（qkv 投影 R 1.235 → 1.000），可对 1000 步的参数范数漂移几乎没用：参数范数那一项的 r（<a href="#s3-3">§3.3</a>，被测对第九节验收用的精确轨迹 ④）开关前 3.52、开关后 3.45。</p>
 
   <h3 id="s5-5">5.5　excess precision：融合里省掉的舍入</h3>
@@ -5680,7 +5680,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="449" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一个状态、同一批数据，GPU 算出来的梯度每一步都偏一点 —— 偏差在单步计算里就有</tspan></text>
 <text class="svgsm" x="20" y="480" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">大头是那一次 dgrad：换成精确的，GPU 从少走 0.36% 降到 0.10%；TPU 生产程序每个 batch 都在精确值的 ±0.1% 里。</text>
 <text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：要把一侧的整套 FP32 主权重原样导进另一侧（逐个张量核对指纹），还要先确认那个「精确参照」自己真是精确的。</text>
-</svg><figcaption><b>蓝色几乎贴着精确值，红柱最长。</b><span class="capmore"><br><em>每根柱子是「这一步」的偏，不是累积。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：1193 个张量导入 TPU 后逐个核对 sha256。方向 d ＝ 第 100 步 TPU 与 GPU 主权重之差；梯度差经 Adam 逐元素缩放、乘学习率和裁剪系数后投到 d 上，按 |d|² 归一。</p>
+</svg><figcaption><b>蓝色几乎贴着精确值，红柱最长。</b><span class="capmore"><br><em>每根柱子是「这一步」的偏，不是累积。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：1193 个张量导入 TPU 后逐个核对 sha256（按 GPU 框架布局数，q/k/v、gate/up 已各合成一个，所以少于按开源命名数的 1781 个）。方向 d ＝ 第 100 步 TPU 与 GPU 主权重之差；梯度差经 Adam 逐元素缩放、乘学习率和裁剪系数后投到 d 上，按 |d|² 归一。</p>
 <p>📌 实测：θ₉₉ 上 TPU 0.00%、GPU 精确 dgrad −0.10%、GPU −0.36%；另外三个状态（GPU θ₂₉₉、TPU θ₉₉、TPU θ₂₉₉）、共 12 个 batch：TPU −0.04% 到 ＋0.10%，GPU 精确 dgrad −0.05% 到 −0.22%，GPU −0.31% 到 −0.47%。</p>
 <p>📌 参照用 GPU 上的全程 FP32（权重先舍成 BF16，跟生产用的同一份）：TPU 自己那份「全程 FP32」程序核对后发现路由专家实际按 BF16 算（对 FP64 3.2e-3），不能当参照。</p></details></figure>
   <p>同一状态下 TPU 每步几乎正好（±0.1% 以内），可第九节说 TPU 一侧还剩一成多：单步的分辨率只到 ±0.1%，那一成多要积上千步才显出来（推断，两者怎么对上还在查）。</p>
@@ -6267,12 +6267,13 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>lse 差 −0.0016 ／ −0.016 ／ −0.078 ／ −0.218；第 1000 步约 −0.33</td><td>固定序列探针第 25 ／ 50 ／ 100 ／ 300 步（对第一份 GPU）；第 1000 步那个数取自训练批</td></tr>
   <tr><td>干预：去掉方向后 loss −3.4e-5、参数范数 ＋6.1e-3；GPU 加力 −1.26e-4、＋2.05e-2</td><td>两边各 1000 步，同设置</td></tr>
   <tr><td>输出头反向误差：GPU dgrad −6.51e-4，TPU −2.4e-5，交叉熵 ＋2.7e-6，TF32 版 −8.08e-4，真 FP32 −1.7e-6</td><td>第 1 步，用训练里实际用到的张量离线对 FP64；第 100 步 GPU −6.10e-4、TPU −7.4e-5。机制是张量核抹零为推断</td></tr>
-  <tr><td>同状态各算一步：TPU 0.00%，GPU 精确 dgrad −0.10%，GPU −0.36%</td><td>GPU 第 99 步状态导入 TPU（1193 个张量核对指纹），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
+  <tr><td>同状态各算一步：TPU 0.00%，GPU 精确 dgrad −0.10%，GPU −0.36%</td><td>GPU 第 99 步状态导入 TPU（1193 个张量核对指纹；按 GPU 框架布局数，q/k/v、gate/up 各合成一个，所以比 <a href="#s2-2">§2.2</a> 按开源命名数的 1,781 少，元素一个不少），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
   <tr><td>精确轨迹：参数范数 ＋1.82e-2（TPU ＋1.99e-2，精确 dgrad ＋1.23e-2 – ＋1.28e-2）</td><td>第 975 步，对 4 份默认 GPU 运行均值；GPU 自己 ±4.5e-4</td></tr>
   <tr><td>拆账 59% ／ 29% ／ 12%；loss 73%</td><td>TPU（开关打开前的配置）、生产 golden（5 份）、只修 dgrad 的 golden、精确轨迹，第 1000 步与第 301–1000 步</td></tr>
   <tr><td>TPU 自己剩下的：＋1.7e-3 ／ ＋2.6e-3 ／ ＋2.3e-3</td><td>分别是：不重算配置第 975 步；生产近似配置、开关打开前第 1000 步；当前配置第 1000 步（都对精确轨迹）</td></tr>
   <tr><td>回归：20 步那档约 10 分钟、1000 步那档约 25 分钟；扰动臂旧配置 14 试 7 过、28 对；新配置 7 个重跑全过、重标 28 对</td><td>v5p（8 颗芯片），提交到取回</td></tr>
     <tr><td>第 1 步路由翻转：翻了的 token 第 8、9 名分差中位数 2.7e-5 – 6.3e-5；某专家梯度 0.102、50 个张量合起来 1.28e-3</td><td>第 1 步隔离回放；被测梯度由 Adam 一阶动量反推</td></tr>
+    <tr><td>路由翻转对照（动画 anim-flip）：全部 token 第 8、9 名分差中位数 3.1e-4 – 8.0e-4；喂相同路由输入，两边 logits 的 rel_L2 仍约 4e-6、翻转 0；两边全程 FP32 时第 1 层翻的那个 token 分差 1.6e-6</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 4096 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
   <tr><td>逐层 rel_L2：三层 0.016 ／ 0.020 ／ 0.028（参考档不过、严格档过）</td><td>v5p，第 1 步逐层回放</td></tr>
   <tr><td>去掉 w̄ 方向后 loss：前半 ＋4.9e-5、后半 −9.6e-5（尾段平均 −3.4e-5）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
   <tr><td>交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 4.00 ／ 2.03 ／ 1.21 ／ 2.24；TPU 执行噪声 28 对 5.03 ／ 1.81 ／ 1.42 ／ 0.99</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>

@@ -2,7 +2,7 @@
 r"""专题九 · MoE 路由的近平局翻转（RouteFlip）。
 
 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-flip.py RouteFlip /tmp/draft/topic09-flip.mp4 --draft
+   构建手册/脚本/render.sh tools/manim/topic09-anim-flip.py RouteFlip <草稿目录>/topic09-flip.mp4 --draft
    构建手册/脚本/render.sh tools/manim/topic09-anim-flip.py RouteFlip WebPages/media/topic09-flip.mp4
 每一步落地的停顿时刻写进 tools/manim/steps/RouteFlip.json（课件挂 data-pauses）。
 
@@ -49,7 +49,7 @@ import topic09_numbers as N   # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 
-# ── 新常数（实测；出处见报告，待并入 topic09_numbers）────────────────────
+# ── 常数（实测；出处与 topic09_numbers 同一组，课件出处台账有一行）────────────────────
 ROUTE_IN_RELL2 = (3.4e-3, 3.9e-3)          # 路由输入（MLP 前归一化输出）两边 rel_L2，第 1–3 层
 FLIP_MARGIN_P50 = (2.7e-5, 6.3e-5)         # 翻转 token 的第 k 与 k+1 名分差中位数
 ALL_MARGIN_P50 = (3.1e-4, 8.0e-4)          # 全部 token 的分差中位数
@@ -241,7 +241,7 @@ class RouteFlip(Scene):
         zgap0 = tx("B 只比 A 低 3e-5", 20, WHITE).move_to([ZX, ZY + ZH / 2 - 0.3, 0])
         zgap1 = tx("A 反比 B 低 1.5e-5：A 落选，B 入选", 20, YELLOW).move_to([ZX, ZY + ZH / 2 - 0.3, 0])
         assert zgap1.width < ZW - 0.3 and zgap0.width < ZW - 0.3, (zgap1.width, ZW)
-        # R6 评审第 18 条：框里这两个差是示意数（GAP0 ∈ 实测中位数范围，GAP1 由示意 δ 推出），屏上点明
+        # 框里这两个差是示意数（GAP0 ∈ 实测中位数范围，GAP1 由示意 δ 推出），屏上点明
         zschem = tx("示意，取在实测中位数范围内", 15, GREY_B).move_to([ZX, ZY + ZH / 2 - 0.62, 0])
         zfoot1 = tx("翻转 token 的第 8、9 名分差：中位数 2.7e-5 – 6.3e-5", 18, GREY_B
                     ).move_to([RX, ZY - ZH / 2 - 0.65, 0])

@@ -2,7 +2,7 @@
 r"""专题九 · FSDP 下 collective matmul 的部分和舍入（WindowedAcc）。
 
 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-windowed.py WindowedAcc /tmp/draft/topic09-windowed.mp4 --draft
+   构建手册/脚本/render.sh tools/manim/topic09-anim-windowed.py WindowedAcc <草稿目录>/topic09-windowed.mp4 --draft
    构建手册/脚本/render.sh tools/manim/topic09-anim-windowed.py WindowedAcc WebPages/media/topic09-windowed.mp4
 每一步落地的停顿时刻写进 tools/manim/steps/WindowedAcc.json（课件挂 data-pauses）。
 挂在课件 §5.4 静态图 fig9-windowed 下面。
