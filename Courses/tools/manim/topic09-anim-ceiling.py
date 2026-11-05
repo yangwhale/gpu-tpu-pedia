@@ -29,7 +29,8 @@ r"""专题九「GPU→TPU 训练精度对齐」：噪声上限 N 怎么来、被
   · 画面上 5 个点的编号按左右顺序排（运行编号 1,2,5,4,3 → 画面 1–5）；编号本身没有含义，配对柱的标签跟着换。
   · 参照对共用运行、不是独立样本，实际超线概率比 1/(n+1) 略高：课件正文写了，画面不展开。
   · 横轴没有刻度：5 个点只表达相对位置。
-  · 配色：GPU 重跑的点和配对柱灰、TPU 被测柱蓝、N 黄（全课 TPU＝蓝、GPU＝灰）。5 个点第 0 帧就在，第①步只是逐个闪一下。
+  · 配色：GPU 重跑的点和配对柱灰、TPU 被测柱蓝、N 黄（全课 TPU＝蓝、GPU＝灰）。5 个点第 0 帧就在，第 1 步只是逐个闪一下。
+  · 步骤号一律写「第 N 步」，不用圈号：③ 留给 golden 编号（「③ 那组」），两套编号同屏会撞车。
 
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic09-anim-ceiling.py NoiseCeiling WebPages/media/topic09-ceiling.mp4
@@ -109,7 +110,7 @@ BAR_X0, BAR_DX, BAR_W = -6.0, 0.66, 0.40
 TEST_X = 1.0
 BAND_L, BAND_R = -6.45, 1.65
 S1 = 2.2 / PN_N_RAW                             # 前三步：N ＝ 2.2 单位高
-S2 = 1.05 / PN_N_RAW                            # 第④步缩到 N ＝ 1.05，被测 3.45N 才装得下
+S2 = 1.05 / PN_N_RAW                            # 第 4 步缩到 N ＝ 1.05，被测 3.45N 才装得下
 TOP_Y = 0.72                                    # 红区上沿
 assert BASE_Y + PN_TEST_RAW * S2 < TOP_Y < AX_Y - 0.4
 COL_N, COL_TEST, COL_GPU = YELLOW, BLUE, GREY_B          # 全课：TPU 蓝、GPU 灰
@@ -179,15 +180,15 @@ def pair_window(k):
 
 
 CAPS = [
-    (0.0, "① 第一关的尺子：GPU 重跑 5 份（一个点 ＝ 一份）",
+    (0.0, "第 1 步　第一关的尺子：GPU 重跑 5 份（一个点 ＝ 一份）",
      "③ 那组设置：生产近似＋输出头 dgrad 换精确"),
-    (T2A, "② 两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱",
+    (T2A, "第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱",
      "带符号均值 ＝ 第 2–1000 步逐步相对差 dₜ 的平均；两个点隔多远，柱就多高"),
-    (T3A, "③ 取最大的那一根当噪声上限 N",
+    (T3A, "第 3 步　取最大的那一根当噪声上限 N",
      "为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里"),
-    (T4A, "④ 被测（TPU 对精确轨迹）出场：r ＝ 被测 ÷ N",
+    (T4A, "第 4 步　被测（TPU 对精确轨迹）出场：r ＝ 被测 ÷ N",
      "柱子比尺子高出一大截，纵轴得缩一半才装得下"),
-    (T5A, "⑤ 样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 1/(n+1)", ""),
+    (T5A, "第 5 步　样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 1/(n+1)", ""),
 ]
 
 
@@ -218,7 +219,7 @@ class NoiseCeiling(Scene):
         base = Line([BAND_L, BASE_Y, 0], [BAND_R, BASE_Y, 0], color=GREY, stroke_width=3)
         self.add(axis, base)
 
-        # ── 背景三个区（第④步）
+        # ── 背景三个区（第 4 步）
         def zones():
             t = clock()
             a = prog(t, T4A + 0.8, T4A + 1.4) * fade_out_all(t)
@@ -238,7 +239,7 @@ class NoiseCeiling(Scene):
             t = clock()
             g = VGroup()
             for i in range(1, 6):
-                a0 = T1A + (i - 1) * 0.35                     # 第①步：逐个闪一下（点本身第 0 帧就在）
+                a0 = T1A + (i - 1) * 0.35                     # 第 1 步：逐个闪一下（点本身第 0 帧就在）
                 pulse = prog(t, a0, a0 + 0.2) - prog(t, a0 + 0.2, a0 + 0.45)
                 g.add(Dot([dot_x(i), AX_Y, 0], radius=0.11 * (1 + 0.45 * pulse),
                           color=interpolate_color(COL_GPU, WHITE, pulse), stroke_width=0))
@@ -279,7 +280,7 @@ class NoiseCeiling(Scene):
                           .move_to([bar_x(k), BASE_Y + h / 2, 0]))
             return g
 
-        # ── N 线（第③步拉出）
+        # ── N 线（第 3 步拉出）
         def nline():
             t = clock()
             u = prog(t, T3A + 0.3, T3A + 1.1)
@@ -291,7 +292,7 @@ class NoiseCeiling(Scene):
             return Line([xl, y, 0], [max(xr, xl + 1e-3), y, 0], color=COL_N, stroke_width=4,
                         stroke_opacity=(1.0 if u > 0 else 0.0) * f)
 
-        # ── 被测柱（第④步）
+        # ── 被测柱（第 4 步）
         def testbar():
             t = clock()
             u = prog(t, T4A + 1.4, T4A + 2.4)
@@ -300,7 +301,7 @@ class NoiseCeiling(Scene):
                              fill_opacity=(0.92 if u > 0 else 0.0) * fade_out_all(t)
                              ).move_to([TEST_X, BASE_Y + h / 2, 0])
 
-        # ── 第⑤步：三行概率条
+        # ── 第 5 步：三行概率条
         P_ROW_Y = [1.95, 1.4, 0.85]
         P_LBL_X, P_BAR_X0, P_K = 3.1, 3.65, 9.6
 
