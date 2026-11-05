@@ -136,7 +136,7 @@ def fig_flip():
     f = Fig(W, "两格。左格：同一个 token 在 GPU 和 TPU 上给专家打分的名次表，前 %d 名入选；"
                "第 8 名和第 9 名分数几乎一样，两边正好对调，GPU 选了专家 A，TPU 选了专家 B。翻了的 token，两名之间的分差中位数是 %s。"
                "右格：第 3 层 0 号专家分到 %d 个 token，TPU 上少了 %d 个、多了 %d 个；它的梯度 rel_L2 是 %s，一根长红柱，"
-               "而比到的 %d 个张量合起来只有 %s，一根很短的蓝柱，约差 %d 倍；GPU 自己重跑路由不变，宽度为 0。"
+               "而比到的 %d 个张量合起来只有 %s，一根很短的灰柱，约差 %d 倍；GPU 自己重跑路由不变，宽度为 0。"
                % (N.TOPK, N.FLIP_MARGIN, N.E0_TOKENS, N.E0_OUT, N.E0_IN, N.STEP1_EXPERT,
                   N.STEP1_TENSORS, N.STEP1_ALL, round(ratio)))
     y0 = f.header("第 8、9 名一对调，一个专家就换了一批 token",
@@ -207,7 +207,7 @@ def fig_flip():
     BX, BMAX = px + 24, 440
     by = gy + 5 * dx + 50
     bars = [("这个专家的梯度（rel_L2）", N.STEP1_EXPERT, RD, "%g" % N.STEP1_EXPERT),
-            ("%d 个张量合起来" % N.STEP1_TENSORS, N.STEP1_ALL, BL, ("%.2e" % N.STEP1_ALL).replace("e-0", "e-")),
+            ("%d 个张量合起来" % N.STEP1_TENSORS, N.STEP1_ALL, GY, ("%.2e" % N.STEP1_ALL).replace("e-0", "e-")),
             ("GPU 重跑", 0.0, GY, "0")]
     for i, (lab, v, col, vs) in enumerate(bars):
         y = by + i * 60

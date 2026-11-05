@@ -169,11 +169,11 @@ __FIG_FUNNEL__
   <h3>1.4　这一讲跟着走的那一次</h3>
   <p>混元 3 截前 4 层，GPU B200×8 搬到 TPU v5p（8 颗芯片）。地基全部逐位，第 1 步 loss 只差百万分之 2.5；可是 1000 步下来，TPU 的 loss 一直比 GPU 低万分之一点五，参数范数也多涨一截。方法是通用的；具体的数只对这个设置（截 4 层、1000 步、学习率 1e-5 不变）成立。</p>
   <table class="t9"><thead><tr><th>这一讲用到的几组运行</th><th>多少</th><th>用在哪</th></tr></thead><tbody>
-  <tr><td>GPU 默认设置</td><td>10 份</td><td>第一节的尺子、§3.4 的基线贴边；§8.5 的零点是另跑的同设置 4 份（带探针）的均值</td></tr>
-  <tr><td>GPU 生产近似（② 整层重算＋路由回放）</td><td>5 份</td><td>§9.3 拆账的零点</td></tr>
-  <tr><td>GPU ③（生产近似＋输出头 dgrad 换精确）</td><td>5 份、两两 10 对</td><td>第一关的尺子（§3.3、第九节）</td></tr>
-  <tr><td>精确轨迹（GPU 上全程 FP32 算术），不重算配置</td><td>1 份，另有一份扰动版</td><td>§8.5 的诊断</td></tr>
-  <tr><td>精确轨迹，② 的配置（整层重算＋路由回放）</td><td>1 份基线，另有 4 份扰动版</td><td>第一关的基线（第九节）；基线连同 4 份扰动版共 5 份，两两 10 对是交叉核对一的尺子</td></tr>
+  <tr><td>① GPU 默认设置</td><td>10 份</td><td>第一节的尺子、§3.4 的基线贴边；§8.5 的零点是另跑的同设置 4 份（带探针）的均值</td></tr>
+  <tr><td>② GPU 生产近似（整层重算＋路由回放）</td><td>5 份</td><td>§9.3 拆账的零点</td></tr>
+  <tr><td>③ GPU 生产近似＋输出头 dgrad 换精确</td><td>5 份、两两 10 对</td><td>第一关的尺子（§3.3、第九节）</td></tr>
+  <tr><td>④′ 精确轨迹（GPU 上全程 FP32 算术），不重算配置</td><td>1 份，另有一份扰动版</td><td>§8.5 的诊断</td></tr>
+  <tr><td>④ 精确轨迹，② 的配置（整层重算＋路由回放）</td><td>1 份基线，另有 4 份扰动版</td><td>第一关的基线（第九节）；基线连同 4 份扰动版共 5 份，两两 10 对是交叉核对一的尺子</td></tr>
   <tr><td>TPU</td><td>3 种跑法；扰动臂 7 个＋基线，28 对</td><td>第一节的三个点；TPU 自己的执行噪声（§9.3、§10.1）</td></tr>
   </tbody></table>
   <p>现在只需记住两件：③ 那组是第一关的尺子；精确轨迹是 GPU 上全程 FP32 算术的那条训练。</p>
@@ -313,7 +313,7 @@ __FIG_COS__
   <h3>4.2　谁的错：对 FP64 的 R 比</h3>
   <p>第 1 步前向，GPU 默认设置下两次运行逐位相同，噪声是 0，当不了尺子；FP64 就在这里派上用场。</p>
 __FIG_RRATIO__
-  <p>但<b>对齐的目标仍然是 GPU</b>（GPU 的 golden 自己偏了，才换成精确轨迹，第九节）。注意这里的 R（对真值的距离比）跟 §3.3 的 r（被测 ÷ 噪声上限）不是一回事。</p>
+  <p>但<b>对齐的目标仍然是 GPU</b>（什么时候要换参照，第九节讲）。注意这里的 R（对真值的距离比）跟 §3.3 的 r（被测 ÷ 噪声上限）不是一回事。</p>
 
   <h3>4.3　第 1 步，一个专家的梯度大得离谱</h3>
   <p>第 1 步的梯度，比到的 «STEP1_TENSORS» 个张量（TPU 每层只存了 0、1 号两个专家的梯度，专家只比这两个；其余是全部非专家参数）合起来 rel_L2 只有 «STEP1_ALL»；可第 3 层 0 号专家的两个矩阵是 <b>«STEP1_EXPERT»</b>，大了约 80 倍，而 GPU 自己重跑这两个张量一位不差，拿噪声尺子去判就是「不过」。这个大数出在路由上。</p>
@@ -349,14 +349,14 @@ __FIG_FORMATS__
   <h3>5.2　GPU 张量核：每 16 个一组，抹零</h3>
 __FIG_TRUNCATE__
 __ANIM_TRUNC__
-  <p>收银台的比方：每一单抹零，单单都只少不多。张量核就是在每 16 个乘积这一单上抹零，而一次长求和有成千上万单。看上去是 FP32，末尾那几位其实从来没算过。</p>
+  <p>收银台的比方：每一单抹零，单单都只少不多。张量核就是在每 16 个乘积这一单上抹零，而一次长求和有成千上万单。（本课的合成输入在 12 万处偏差反而降了，见下面折叠；真实输出头上一路涨，见 §8.3。）看上去是 FP32，末尾那几位其实从来没算过。</p>
   <details class="foldfig"><summary><b>外面的人怎么量到同一件事</b>：V100 到 B200 的张量核测量、FP8 上的同类问题；附两种不抹零的加法作对照</summary>
   <ul>
     <li>V100、T4、A100 三代上就有人量出：张量核里乘积精确，加法向零舍入，只在最后规格化（Fasi、Higham、Mikaitis、Pranesh，<em>Numerical behavior of NVIDIA tensor cores</em>，PeerJ Computer Science，2021）。</li>
     <li>对 H100／B200 的比特级建模，BF16 进、FP32 出：16 项一组对齐、截断，累加器比 FP32 多 2 个对齐位（等价于本课说的「最高位后 25 位」），H100、H200 与 B200 相同 —— 跟本课在 B200 上独立量出的模型一致（Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>，arXiv:2512.07004）。</li>
     <li>同一类问题在 FP8 上更凶：DeepSeek-V3 报告实测 H800 上 FP8 矩阵乘的累加只保留约 14 位，于是每 128 个元素搬到 CUDA core 用 FP32 加一次（arXiv:2412.19437 sec. 3.3.2）。口径不同，只借问题的类型，不比大小。</li>
     <li>对照：Kahan 求和是每一单把抹掉的零头记账、下一单补回去，误差几乎不随长度长；成对求和像淘汰赛，误差随长度按对数长。张量核的抹零正好是反面。</li>
-      <li>GPU 侧本课试过的修法，是把输出层这一次 dgrad 换成真 FP32（§8.3）；分段 FP32 累加、split-K 这类更便宜的修法，本课没有测过。</li>
+      <li>分段 FP32 累加、split-K 这类在 GPU 侧更便宜的修法，本课没有测过；本课实际用的修法在第八节。</li>
   </ul></details>
 
   <h3>5.3　TF32：开关说的不算</h3>
@@ -529,7 +529,7 @@ __FIG_TWOLAYER__
   <div class="note warn"><span class="t">第一关还没过：参数范数 3.45 倍噪声</span>
   <ul>
     <li>v5p 当前配置对精确轨迹：参数范数 3.45 倍不过；loss 两个窗口（1.92、1.29 倍）和梯度范数（1.14 倍）待定，学习率逐步相等。v7x（FP32 累加开关打开之前的那一版）上参数范数 3.53 倍不过。尺子换成 §9.3 那两份交叉核对，总判定「不过」不变，各项倍数会变（核对一里 loss 全程、梯度范数也超 2；核对二里梯度范数 0.99 过）。</li>
-    <li>剩下的是 TPU 一侧那一成多，里面还含着两边专家切法不同：把 TPU 也改成跟 GPU 一样按专家切（EP＝8），参数范数从 3.45 倍变成 «EP8_R» 倍，这点变化在 TPU 自己的执行噪声以内 —— 切法不是主因，还在查是哪一处 BF16 误差。</li>
+    <li>剩下的是 TPU 一侧那一成多，里面还含着两边专家切法不同：把 TPU 也改成跟 GPU 一样按专家切（EP＝8），参数范数从 3.45 倍变成 «EP8_R» 倍，这点变化在 TPU 自己的执行噪声以内 —— 切法不是主因，还在查是哪一处 BF16 误差。候选按成本排、都还没验证：反向里的 collective matmul、输出头、反向融合里的舍入位置。</li>
     <li>对 GPU 生产 golden 的差，大头已经写成「已解释差异：GPU 张量核长求和截断」。</li>
   </ul></div>
   <p>这意味着什么：按协议，第一关还不能签字。正式判定只看上面这个 3.45 倍；正文里别的「剩多少」（第 975 步 ＋1.7e-3、拆账里的 12%）是不同时刻、不同参照下的诊断数。下游评测没有测过，这一讲只证明了差从哪来、各占多少。</p>
@@ -583,7 +583,7 @@ __FIG_REGRESS__
 
   <details class="foldfig"><summary><b>动手清单</b>：在自己的模型上做一次 GPU→TPU 对齐，一步一步来</summary>
   <ol>
-    <li><b>定目标和预算</b>：写下要对齐的配置（层数、步数、批大小、学习率、精度），和「对谁比」—— 默认对 GPU 那份 golden。开跑前埋好记录点：每步的实际学习率、实际权重衰减、裁剪前梯度范数、裁剪系数；主权重和两个动量的快照节奏；探针序列；数据单元的指纹字段。设备数要跟 GPU 卡数对上（本例 v5p 8 颗芯片、v7x 4 颗芯片，都是 8 个设备）；对不上时，切法差会算进 TPU 一侧，留一次切法消融（本例改成按专家切，变化在 TPU 执行噪声以内）。截短模型（本例 4 层）能让每次对比便宜很多。</li>
+    <li><b>定目标和预算</b>：写下要对齐的配置（层数、步数、批大小、学习率、精度），和「对谁比」—— 默认对 GPU 那份 golden。开跑前埋好记录点：每步的实际学习率、实际权重衰减、裁剪前梯度范数、裁剪系数；主权重和两个动量的快照节奏；探针序列；数据单元的指纹字段。设备数要跟 GPU 卡数对上（本例 v5p 8 颗芯片、v7x 4 颗芯片，都是 8 个设备）；对不上时，切法差会算进 TPU 一侧，留一次切法消融（本例改成按专家切，变化在 TPU 执行噪声以内）。截短模型（本例 4 层）能让每次对比便宜很多；签字前 GPU 侧要跑二十多次 1000 步（本例：默认 10 份、② 5 份、③ 5 份、两条精确轨迹连扰动版 7 份）。</li>
     <li><b>先量 GPU 自己的噪声</b>：同一设置的 GPU 至少跑 6–8 份（两两 15 对以上）；只用同一种设置的运行配对（确定性开关、分布式优化器开不开，都算设置）。算出每个检查项的 N。默认检查项：loss（两个窗口）、梯度范数、参数范数、学习率；训练时顺手记这几个便宜的量，出事时它们就是线索。</li>
     <li><b>铺地板 L0</b>：数据原样回放、逐单元比指纹；权重转过去再转回来、逐张量比字节；加载后从设备上再读一遍；配置对照表写<em>实际生效</em>的值（运行时元数据）；续训逐位。</li>
     <li><b>第 1 步自检</b>：看第 1 步 loss 的相对差。本例是 2.5e-6；超过参考档的 2e-4，先回清单第 3 步查地基，别查数值；介于两者之间，做隔离回放、用 FP64 的 R 比定责（本课经验）。</li>
@@ -595,28 +595,34 @@ __FIG_REGRESS__
     <li><b>记下来</b>：一个问题一份案例文件，事实带出处、推断标出来、排除的也写；坑写进通用文档。</li>
   </ol>
   <p>判定那一步的骨架（伪代码，本课推导）：</p>
-  <pre style="font-size:13px;line-height:1.5;background:#f8f9fa;padding:10px;border-radius:6px;overflow-x:auto">def d(test, base):            # 每一步的相对差
+  <pre style="font-size:13px;line-height:1.5;background:#f8f9fa;padding:10px;border-radius:6px;overflow-x:auto">STATS = ["signed_mean", "mare", "max_step"]
+CHECKS = {"loss": ["all", "tail"], "grad_norm": ["all"], "param_norm": ["all"]}   # 本例的检查项和各自的窗口
+WINDOWS = {"all": (2, T), "tail": (t0, T)}     # 训练步号，含两端；t0：事先写定的尾段起点
+def d(test, base):            # 每一步的相对差，d[0] 是第 1 步
     return [(t - b) / abs(b) for t, b in zip(test, base)]
-def stats(dt):                # 一个窗口里的三个统计
-    return {"signed_mean": abs(mean(dt)), "mare": mean(abs(x) for x in dt), "max_step": max(abs(x) for x in dt)}
-windows = {"all": (2, T), "tail": (t0, T)}      # 训练步号，含两端；t0：事先写定的尾段起点
-def sel(dt, w):                # dt[0] 是第 1 步
+def sel(dt, w):
     return [dt[t - 1] for t in range(w[0], w[1] + 1)]
-N = {w: {k: max(stats(sel(d(a, b), windows[w]))[k] for a, b in pairs(gpu_runs)) for k in KEYS} for w in windows}
-r = {w: {k: stats(sel(d(tpu, baseline), windows[w]))[k] / N[w][k] for k in KEYS} for w in windows}
-worst_by_check = {k: max(r[w][k] for w in windows) for k in KEYS}   # 每个检查项各自判
-verdict = {k: "过" if v &lt;= 1 else ("待定" if v &lt;= 2 else "不过") for k, v in worst_by_check.items()}
+def stats(x):                 # 一个窗口里的三个统计
+    return {"signed_mean": abs(mean(x)), "mare": mean(abs(v) for v in x), "max_step": max(abs(v) for v in x)}
+verdict = {}
+for c, wins in CHECKS.items():                  # 每个检查项、每个窗口各出一个判定
+    for wn in wins:
+        w = WINDOWS[wn]
+        N = {k: max(stats(sel(d(a[c], b[c]), w))[k] for a, b in pairs(gpu_runs)) for k in STATS}
+        r = {k: stats(sel(d(tpu[c], base[c]), w))[k] / N[k] for k in STATS}
+        worst = max(r.values())                 # 三个统计里最差的决定这一项
+        verdict[(c, wn)] = "过" if worst &lt;= 1 else ("待定" if worst &lt;= 2 else "不过")
 # 单算子定责：R = rel_l2(tpu, fp64) / rel_l2(gpu, fp64)；≤ 1.2 算两边一样远</pre>
   <p>本例自己的缺口：第一关的尺子只有 10 对，低于 15 对的建议线。</p></details>
 
   <details class="foldfig"><summary><b>速查卡</b>：指标、门槛、读法，一页</summary>
   <table class="t9"><thead><tr><th>量</th><th>怎么算</th><th>门槛 ／ 读法</th></tr></thead><tbody>
   <tr><td>dₜ</td><td>（被测 − 基线）÷ |基线|，同一步</td><td>只是原料；首步单独报</td></tr>
-  <tr><td>带符号均值 ／ MARE ／ 最大单步</td><td>窗口内 dₜ 的平均 ／ |dₜ| 的平均 ／ 最大 |dₜ|</td><td>窗口：全程第 2–1000 步、尾段第 301–1000 步；三个都判，最差的决定</td></tr>
+  <tr><td>带符号均值 ／ MARE ／ 最大单步</td><td>窗口内 dₜ 的平均 ／ |dₜ| 的平均 ／ 最大 |dₜ|</td><td>窗口：全程从第 2 步起；尾段从两条轨迹分开、偏移稳定以后起（本例第 301–1000 步）；三个都判，最差的决定</td></tr>
   <tr><td>N（噪声上限）</td><td>同设置 GPU 两两配对，同口径算，取绝对值的最大</td><td>纯噪声超过 n 对最大值的概率 1/(n+1)；正式签字 ≥ 15 对</td></tr>
   <tr><td>r</td><td>|被测| ÷ N</td><td>≤ 1 过；1–2 待定；＞ 2 不过</td></tr>
-  <tr><td>哪一级用哪把尺子</td><td>L0 地基；L1/L2 单算子、单层；L3/L4 整网第 1 步、多步</td><td>L0 逐位；L1/L2 第 1 步前向 GPU 重跑噪声为 0，用 R 比定责；整网多步用 GPU 噪声尺子</td></tr>
-  <tr><td>rel_L2</td><td>‖被测 − 参照‖ ÷ ‖参照‖（整个张量拉直）</td><td>张量主判；cos 0.999 ≈ rel_L2 4.5%</td></tr>
+  <tr><td>哪一级用哪把尺子</td><td>L0 地基；L1/L2 单算子、单层；L3/L4 整网第 1 步、多步</td><td>L0 逐位；L1/L2 前向（GPU 重跑噪声为 0）用 R 比定责；L2 反向、L3 整网第 1 步有噪声就对 GPU 重跑噪声，没有就用 R 比；L4 多步用 GPU 噪声尺子</td></tr>
+  <tr><td>rel_L2</td><td>‖被测 − 参照‖ ÷ ‖参照‖（整个张量拉直）</td><td>张量主判；长度相同时 cos 0.999 ≈ rel_L2 4.5%</td></tr>
   <tr><td>cos ／ 范数比</td><td>方向 ／ 长度之比</td><td>cos 看不见整体缩放；范数比 2.000 ＝ 漏除了一个 2</td></tr>
   <tr><td>R（对真值的距离比）</td><td>TPU 到 FP64 的 rel_L2 ÷ GPU 到 FP64 的 rel_L2</td><td>≈ 1 一样远；＞ 1.2 查 TPU；≈ 1.41 像多舍了一次；＜ 1 GPU 更远</td></tr>
   <tr><td>ULP</td><td>按原始格式数差了几格</td><td>只诊断，不当门槛</td></tr>
@@ -649,7 +655,7 @@ verdict = {k: "过" if v &lt;= 1 else ("待定" if v &lt;= 2 else "不过") for 
     <li>GPU 重跑 4 份，两两 6 对，参数范数带符号均值的绝对值最大是 2.0e-7；TPU 对基线是 3.0e-7。怎么判？还缺什么？
       <br><em>答：r ＝ 1.5，待定。只有 6 对，纯噪声超线的概率是 1/7；再补到 15 对以上重判，还在 1–2 倍就往下一级定责。</em></li>
     <li>第 1 步 loss 的相对差是 3e-4。该先查数值还是先查地基？
-      <br><em>答：本例第 1 步只差 2.5e-6，3e-4 大了一百多倍，也超过参考档的 2e-4（§4.4），先回 L0：数据指纹、权重逐字节、配置的实际生效值。第 1 步还没有任何更新，两边只差前向舍入，本例只有 2.5e-6。</em></li>
+      <br><em>答：本例第 1 步只差 2.5e-6，3e-4 大了一百多倍，也超过参考档的 2e-4（§4.4），先回 L0：数据指纹、权重逐字节、配置的实际生效值。第 1 步还没有任何更新，两边只差前向舍入。</em></li>
     <li>某个注意力投影的 R ＝ 1.40。说明什么？下一步查哪？
       <br><em>答：像 TPU 多舍了一次同量级的数（√2 ≈ 1.41）。查这处矩阵乘的累加器精度、是否是 collective matmul 在 BF16 里累加部分积、有没有 excess precision 改了舍入位置。</em></li>
     <li>你的「FP32 参照」对 FP64 的 rel_L2 是 3e-4，GPU 的 BF16 程序是 6.5e-4。能拿它当参照吗？
@@ -703,7 +709,7 @@ verdict = {k: "过" if v &lt;= 1 else ("待定" if v &lt;= 2 else "不过") for 
   <tr><td>逐层 rel_L2：三层 0.016 ／ 0.020 ／ 0.028（参考档不过、严格档过）</td><td>v5p，第 1 步逐层回放</td></tr>
   <tr><td>去掉 w̄ 方向后 loss：前半 ＋4.9e-5、后半 −9.6e-5（尾段平均 −3.4e-5）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
   <tr><td>交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 4.00 ／ 2.03 ／ 1.21 ／ 2.24；TPU 执行噪声 28 对 5.03 ／ 1.81 ／ 1.42 ／ 0.99</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
-  <tr><td>EP＝8：参数范数带符号均值 4.27e-7 → 3.52e-7，3.45 倍 → 2.85 倍；变化 7.5e-8 小于 TPU 执行噪声上限 8.5e-8</td><td>v5p 当前配置，TPU 改成按专家切，对精确轨迹</td></tr>
+  <tr><td>EP＝8：参数范数带符号均值 4.27e-7 → 3.52e-7，3.45 倍 → 2.85 倍；变化 7.5e-8 小于 TPU 执行噪声上限 8.5e-8（比较为本课推导）</td><td>v5p 当前配置，TPU 改成按专家切，对精确轨迹</td></tr>
 </tbody></table></details>
 </div></section>
 '''
