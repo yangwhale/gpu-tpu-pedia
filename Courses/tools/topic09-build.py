@@ -373,6 +373,7 @@ __FIG_TF32__
   <p>MXU 累加是不是就近舍入，没有直接证据，是推断。「BF16 乘、FP32 累加」有公开出处：Google Cloud TPU 的 bfloat16 文档（同页还写明 TPU 上转 BF16 是就近舍入、平局取偶，BF16 不支持非正规数），以及 ST-MoE 的脚注（arXiv:2202.08906）。JAX 里要 FP32 累加的写法是 <code>preferred_element_type=float32</code>；矩阵乘精度档 HIGH、HIGHEST 是用 3 遍、6 遍 BF16 去模拟 FP32，不是 IEEE FP32。</p></details>
   <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。权重切在收缩维（矩阵乘里被加起来、消掉的那一维）上时，每一轮只算出部分和，要一轮轮加起来。</p>
 __FIG_WINDOWED__
+__ANIM_WINDOWED__
   <p>这个开关修好了单层上的那一处多舍（qkv 投影 R «R_QKV_BEFORE» → «R_QKV_AFTER_T»），可对 1000 步的参数范数漂移几乎没用：参数范数那一项的 r（§3.3，被测对第九节验收用的精确轨迹 ④）开关前 «GOLDEN_R4_T»、开关后 «ACC_PN_R»。</p>
 
   <h3>5.5　excess precision：融合里省掉的舍入</h3>
@@ -840,6 +841,15 @@ ANIMS["__ANIM_LINEAGE__"] = ("anim-lineage", "topic09-lineage.mp4", "GoldenLinea
     "被测是 FP32 累加开关打开前那一版 TPU；当前版对 ④ 是 «ACC_PN_R» × N。"
     "每往精确值靠一步，缩掉的都是 GPU golden 自己的偏差；剩下那截才是 TPU 一侧的，还在查。"
     "柱长是同一个 TPU 被测的参数范数带符号均值除以 N；N 是 ③ 那组 GPU 重跑 10 对的最大值。")
+ANIMS["__ANIM_WINDOWED__"] = ("anim-windowed", "topic09-windowed.mp4", "WindowedAcc",
+    "默认每收一片、算一轮，部分和就舍一次 BF16；打开 FP32 累加后只在最后舍一次。",
+    "4 片 4 轮、误差条长度都是示意；第 3 步的数是实测。",
+    "FSDP 下的 collective matmul：部分和在轮与轮之间舍到 BF16。FSDP：权重按收缩维切成 4 片，每个设备存一片。"
+    "第 1 步　默认：一轮收一片、算一片的部分积；部分和传给下一轮前先舍到 BF16，舍了 4 次，累计舍入误差（示意）涨满。"
+    "第 2 步　打开 FP32 累加：部分和一路用 FP32 传，只在最后舍一次，误差条约为上一行的一半。"
+    "第 3 步　qkv 投影对 GPU：rel_L2 2.36e-3 → 1.80e-4，R 1.235 → 1.000（实测）。"
+    "单层这一处修好了；1000 步的参数范数漂移几乎没动：参数范数漂移的 r（对精确轨迹）开关前 3.52，开关后 3.45。"
+    "一轮之内照样 FP32 累加，舍的是轮与轮之间的部分和（推断）；示意：4 片 4 轮，实际片数等于 FSDP 的路数。")
 ANIMS["__ANIM_FLIP__"] = ("anim-flip", "topic09-flip.mp4", "RouteFlip",
     "输入只差一丝，近平局的 token 就换了专家；分到 token 少的专家，第 1 步梯度差被放大到 «STEP1_EXPERT»。",
     "条的高度、每个分数挪动的量和放大框里的分差是示意（取在实测中位数范围内）；其余数字是实测。",
