@@ -323,7 +323,7 @@ __FIG_RRATIO__
 __FIG_FLIP__
 __ANIM_FLIP__
   <p>MoE 的路由给每个 token 挑前 «TOPK» 名专家（共 «EXPERTS» 个），有的 token 第 8、9 名候选专家的「分数 ＋ 偏置」几乎平局（翻了的那些，分差中位数只有 «FLIP_MARGIN»）；上游注意力两边舍入差一点点，排名就对调，选中的专家换了。
-    给路由器喂两边完全相同的输入，翻转是 0；生产配置下两边的路由打分本来就输出 FP32，照样翻，两边全程 FP32（路由也是）也会翻（第 1 层 «FLIP_SLOTS_L1» 个槽位里 1 个）—— 根子在路由器的输入差，不在路由器自己的精度。排名用的是「分数 ＋ 负载均衡偏置」，选中以后加权用不带偏置的分数：偏置只管选谁。</p>
+    给路由器喂两边完全相同的输入，翻转是 0；生产配置下两边的路由打分本来就输出 FP32，照样翻，两边全程 FP32（路由也是）也会翻（训练中途第 99 步的状态上，第 1 层 «FLIP_SLOTS_L1» 个槽位里 1 个）—— 根子在路由器的输入差，不在路由器自己的精度。排名用的是「分数 ＋ 负载均衡偏置」，选中以后加权用不带偏置的分数：偏置只管选谁。</p>
   <p>在隔离回放的一批 «BATCH_TOKENS_T» 个 token 里，第 3 层 0 号专家只分到 «E0_TOKENS» 个，换出 «E0_OUT» 个、换进 «E0_IN» 个：分到的 token 少，一个 token 的进出就是它梯度的一大块（每个 token 的贡献像方向各异的小向量，换掉 k 个、共 n 个，相对差约 √(k ÷ n) ＝ √(«E0_SWAPPED» ÷ «E0_TOKENS») ≈ «E0_SQRT_T»，跟 «STEP1_EXPERT» 同量级 —— 这个估算是推断）。
     所以张量比较里先看零元素比例和路由槽位；路由翻了的专家，要按「两边选中同一批 token」重比，不能直接判算错。</p>
   <details class="foldfig"><summary><b>口径与旁证</b>：翻了多少槽位；推理和训练两套引擎也翻</summary>
@@ -723,7 +723,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>TPU 自己剩下的：«TPU_OWN_NOREMAT_975_T» ／ «TPU_OWN_OLDCFG_1000_T» ／ «TPU_OWN_CURCFG_1000_T»</td><td>分别是：不重算配置第 975 步；生产近似配置、开关打开前第 1000 步；当前配置第 1000 步（都对精确轨迹）</td></tr>
   <tr><td>回归：«T0_STEPS» 步那档约 «T0_MIN» 分钟、«STEPS» 步那档约 «T1_MIN» 分钟；扰动臂旧配置 «ARMS_TRIED» 试 «ARMS_KEPT» 过、«CAL_PAIRS» 对；新配置 7 个重跑全过、重标 28 对</td><td>v5p（8 颗芯片），提交到取回</td></tr>
     <tr><td>第 1 步路由翻转：翻了的 token 第 8、9 名分差中位数 «FLIP_MARGIN_DASH_T»；某专家梯度 «STEP1_EXPERT»、«STEP1_TENSORS» 个张量合起来 «STEP1_ALL»</td><td>第 1 步隔离回放；被测梯度由 Adam 一阶动量反推</td></tr>
-    <tr><td>路由翻转对照（动画 anim-flip）：全部 token 第 8、9 名分差中位数 «ALL_MARGIN_LO» – «ALL_MARGIN_HI_T»；喂相同路由输入，两边 logits 的 rel_L2 仍约 «ROUTE_SAME_IN_DIFF»、翻转 0；两边全程 FP32 时第 1 层翻的那个 token 分差 «FP32_FLIP_MARGIN»</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 «BATCH_TOKENS» 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
+    <tr><td>路由翻转对照（动画 anim-flip）：全部 token 第 8、9 名分差中位数 «ALL_MARGIN_LO» – «ALL_MARGIN_HI_T»；喂相同路由输入，两边路由打分（logits）的 rel_L2 仍约 «ROUTE_SAME_IN_DIFF»、翻转 0；两边全程 FP32 时第 1 层翻的那个 token 分差 «FP32_FLIP_MARGIN»</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 «BATCH_TOKENS» 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
   <tr><td>逐层 rel_L2：三层 «L_RELL2_1_T» ／ «L_RELL2_2_T» ／ «L_RELL2_3_T»（参考档不过、严格档过）</td><td>v5p，第 1 步逐层回放</td></tr>
   <tr><td>去掉 w̄ 方向后 loss：前半 «REMOVE_LOSS_H1_T»、后半 «REMOVE_LOSS_H2_T»（尾段平均 «REMOVE_LOSS_T»）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
   <tr><td>交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 «XCHK_SELF_PN» ／ «XCHK_SELF_LOSS» ／ «XCHK_SELF_TAIL» ／ «XCHK_SELF_GN»；TPU 执行噪声 28 对 «XCHK_TPU_PN» ／ «XCHK_TPU_LOSS» ／ «XCHK_TPU_TAIL» ／ «XCHK_TPU_GN»</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
@@ -870,7 +870,7 @@ ANIMS["__ANIM_FLIP__"] = ("anim-flip", "topic09-flip.mp4", "RouteFlip",
     "① 一个 token 给 «EXPERTS» 个专家打分，取前 «TOPK» 名：第 8、9 名几乎一样高。排名用分数加偏置；选中后加权用不带偏置的分数，偏置只管选谁。"
     "② 上游注意力两边差一点点，分数挪一丝，第 8、9 名对调。路由的输入（注意力之后）两边差 rel_L2 «ROUTE_IN_RELL2_LO» 到 «ROUTE_IN_RELL2_HI»，约是 BF16 舍入量级。放大看两根条的顶端（约 2000 倍）：B 只比 A 低 3e-5；挪动以后 A 反比 B 低 1.5e-5，A 落选，B 入选。翻转 token 的第 8、9 名分差中位数 «FLIP_MARGIN»；全部 token 的中位数 «ALL_MARGIN_LO» 到 «ALL_MARGIN_HI_T»。"
     "③ 这个 token 的那一份输出，整块换了一个专家来算：GPU 由专家 A 算，TPU 换成专家 B，不是差一丝，是换了一个人。分到 token 少的专家，进出一个 token 就是它梯度的一大块：第 3 层专家 0 在这一批 «BATCH_TOKENS» 个 token 里只分到 «E0_TOKENS» 个，TPU 上换出 «E0_OUT» 个、换进 «E0_IN» 个。第 1 步梯度对 GPU 的 rel_L2：这个专家的权重梯度 «STEP1_EXPERT»，比到的 «STEP1_TENSORS» 个张量合起来 «STEP1_ALL»，约差 «STEP1_X» 倍；估算 根号（换掉的除以分到的）＝ 根号（«E0_SWAPPED»/«E0_TOKENS»）约 «E0_SQRT_T»，同量级。GPU 自己重跑，这些张量的差几乎是 0。"
-    "④ 对照：两边喂完全相同的路由输入，3 层乘 «BATCH_TOKENS» 个 token，翻转 0（logits 两边仍差 «ROUTE_SAME_IN_DIFF»，但一个都没翻）；两边全程 FP32（路由也是），第 1 层 «BATCH_TOKENS» 个 token 里照样翻 1 个，它的第 8、9 名只差 «FP32_FLIP_MARGIN»。根子在输入差，不在路由器自己的精度。"
+    "④ 对照：两边喂完全相同的路由输入，3 层乘 «BATCH_TOKENS» 个 token，翻转 0（logits 两边仍差 «ROUTE_SAME_IN_DIFF»，但一个都没翻）；两边全程 FP32（路由也是；第 99 步的状态），第 1 层 «BATCH_TOKENS» 个 token 里照样翻 1 个，它的第 8、9 名只差 «FP32_FLIP_MARGIN»。根子在输入差，不在路由器自己的精度。"
     "⑤ GPU 自己重跑第 1 步：前向确定，路由一个不变；拿 GPU 重跑当噪声尺，路由翻转在这把尺上是 0 宽度。«STEP1_EXPERT» 要按专家拆开看，不是 TPU 算错了梯度。近平局加一丝输入差，等于选了另一个专家。")
 
 
