@@ -276,3 +276,8 @@ assert QKV_VS_GPU_NOEXC > QKV_VS_GPU_BEFORE  # 关掉反而离 GPU 更远（这�
 NOEXC_LOSS_TAIL, NOEXC_LOSS_TAIL_ON = -6.0e-5, -1.27e-4   # 1000 步，第 301–1000 步 loss 偏移：关掉 ／ 同配置开着（案例记录同一格里的对照）
 assert 0.4 < NOEXC_LOSS_TAIL / NOEXC_LOSS_TAIL_ON < 0.6     # 「小了一半」
 RMSNORM_BITWISE_EXC, RMSNORM_BITWISE_NOEXC = "99.9987%", "74.1%"   # 默认写法的 RMSNorm 与 GPU（FP32 算完舍一次）逐位相同的比例
+
+# L3（11-06）：「离 10 份 GPU 均值几个标准差」只用原始 10 个值算一次，fig-ruler、fig-baseline、正文、讲义共用
+SIGMAS_10 = tuple((x - GPU_RUNS10_TAIL_MEAN) / _sd10 for x in TPU_ARMS)
+assert [round(abs(z), 1) for z in SIGMAS_10] == [5.3, 4.1, 2.9], SIGMAS_10
+SIGMA_RANGE = "2.9 到 5.3"

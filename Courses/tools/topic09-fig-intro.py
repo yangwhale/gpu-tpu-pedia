@@ -75,7 +75,7 @@ def fig_assoc():
 def fig_ruler():
     f = Fig(W, "横轴是第 301 到 1000 步 loss 的平均相对偏差，以第一份 GPU 运行为准。"
                "灰色一段是 GPU 用同样设置再跑 10 次落下的范围，从负万分之 0.65 到正百万分之 2.4。"
-               "TPU 三种跑法落在负万分之 1.03 到负万分之 1.66，全在尺子外面，最远偏出 5.2 个标准差。")
+               "TPU 三种跑法落在负万分之 1.03 到负万分之 1.66，全在尺子外面，最远偏出 5.3 个标准差。")
     y0 = f.header("尺子：不问 TPU 跟 GPU 差多少，问它比 GPU 自己跟自己差得多不多",
                   "横轴 ＝ 第 301–1000 步 loss 平均偏了多少（相对，以第一份 GPU 运行为准）；灰色一段 ＝ 同样设置的 GPU 运行一共 10 次落下的范围（含基线那一份）",
                   [(GY2, "GPU 自己重跑（噪声）"), (BL, "TPU 三种跑法")])
@@ -96,12 +96,12 @@ def fig_ruler():
     f.t((X(N.GPU_RUNS10_LO) + X(N.GPU_RUNS10_HI)) / 2, yl - 34, "10 次 GPU 重跑都在这儿", GY, True, 14, "middle")
     for k, v in enumerate(N.TPU_ARMS):
         f.box(X(v) - 8, yl - 8, 16, 16, BL, BL, 8)
-        z = (v - N.GPU_RUNS10_MEAN) / N.GPU_RUNS10_STD
+        z = (v - N.GPU_RUNS10_TAIL_MEAN) / N._sd10
         f.t(X(v), yl - 26 - (k % 2) * 22, "偏 %.1f 个标准差" % abs(z), BL, size=13, anchor="middle")
     f.t(X(-1.35e-4), py + 44, "TPU：三种跑法都落在尺子外，方向一致", BL, True, 15, "middle")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "尺子一立，「万分之一点几」就有了大小", [
-        "TPU 的偏移离 GPU 重跑的均值 2.9 到 5.2 个标准差，而且三种跑法都朝同一边：不是噪声，值得查。",
+        "TPU 的偏移离 GPU 重跑的均值 2.9 到 5.3 个标准差，而且三种跑法都朝同一边：不是噪声，值得查。",
         "标准差在这里只用来描述有多远；正式的判法后面讲。",
     ])
     yb = f.src(yb + 10,
