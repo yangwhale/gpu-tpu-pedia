@@ -142,7 +142,7 @@ def fig_pairs():
         x = BX + i * (BW + 26)
         h = p / 0.25 * BH
         f.box(x, yb0 - h, BW, h, GY2, GY2, 4)
-        f.t(x + BW / 2, yb0 - h - 10, "%.1f%%" % (p * 100), INK, True, 15, "middle")
+        f.t(x + BW / 2, yb0 - h - 10, ("%.2f%%" if n == 15 else "%.1f%%") % (p * 100), INK, True, 15, "middle")   # R18：1/16 ＝ 6.25%，不写成 6.2%
         f.t(x + BW / 2, yb0 + 24, "%d 对" % n, GY, size=14, anchor="middle")
     f._pan = None
     px = 790

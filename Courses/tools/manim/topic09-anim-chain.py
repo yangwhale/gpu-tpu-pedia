@@ -156,6 +156,14 @@ CH_TOP, CH_BOT, CH_W = 0.75, -1.15, 2.2  # ③⑤ 小图的竖向范围、宽度
 CLK_Y, CLK_X0, CLK_X1 = -2.75, -5.2, 5.6
 
 
+def e1(v):               # R18：「4.6e-03」在 Text 里渲染成「4.6e- 03」→ 写成全课统一的「4.6e-3」
+    m, e = ("%.1e" % v).split("e")
+    return "%se%d" % (m, int(e))
+
+
+assert e1(4.6e-3) == "4.6e-3"
+
+
 def tx(s, size=18, color=WHITE, bold=False):
     return Text(s, font_size=size, color=color, weight="BOLD" if bold else "NORMAL")
 
@@ -192,7 +200,7 @@ CAPS = [
     "② 主干权重沿这个方向每一步少走一点",
     "③ 所有 logits 一起偏一截（lse 差）；softmax 看不见它",
     "④ 冷门词那几行在 Adam 的 ε 区（%d%% 的元素 √v < ε），压多压少跟着 logit 水平走" % round(RARE_SUBEPS_SHARE * 100),
-    "⑤ 参数范数多涨；loss 偏低一起出现、一起消失（机制未验证）",
+    "⑤ 参数范数多涨、loss 偏低（去掉那股力后各还剩一截；loss 的机制未验证）",   # R18：原「一起出现、一起消失」与 fig-intervene 不符
     "时钟走起来：①② 每一步都一样，③④⑤ 一步步积起来",
     "第 300 步：每步只差一点、同一个方向，积成看得见的漂移",
 ]
@@ -264,9 +272,9 @@ class DriftChain(Scene):
         lse_labs = [remember(tx("第 %d 步 %s" % (s, ("%.4f" % v).rstrip("0").replace("-", "−")), 15, COL_DIFF, True)
                              .move_to([XC[2], -1.5, 0])) for s, v, _ in N.LSE_PROBE]
         rare_lab = remember(tx("＋%.1f（第 300 步实测）" % RARE_300, 15, COL_DIFF, True).move_to([XC[3], -1.5, 0]))
-        pn_lab = remember(VGroup(tx("＋%.1e（第 300 步）" % PN_END, 15, COL_DIFF, True).move_to([XC[4], -1.45, 0]),
+        pn_lab = remember(VGroup(tx("＋%s（第 300 步）" % e1(PN_END), 15, COL_DIFF, True).move_to([XC[4], -1.45, 0]),
                                  tx("按组拆：输出层占 %d%%" % round(HEAD_SHARE * 100), 13, GREY_B).move_to([XC[4], -1.75, 0]),
-                                 tx("（另测一对，合计 %.1e）" % N.GROUP_TOTAL_300, 12, GREY_B).move_to([XC[4], -2.0, 0])))
+                                 tx("（另测一对，合计 %s）" % e1(N.GROUP_TOTAL_300), 12, GREY_B).move_to([XC[4], -2.0, 0])))
         for p in panels:
             remember(p)
 

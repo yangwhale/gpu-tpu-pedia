@@ -11,7 +11,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
 <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
 <meta property="og:title" content="GPU→TPU 训练精度对齐 · TPU 和 GPU 的差，不能比 GPU 自己跟自己的差大">
-<meta property="og:description" content="混元 3 从 GPU 搬到 TPU：地基逐位、两种指标、浮点与硬件、观测，再走一遍真实排查 —— 查到最后，偏移的大头在 GPU 的 golden。">
+<meta property="og:description" content="混元 3 从 GPU 搬到 TPU：地基逐位、两种指标、浮点与硬件、观测，再走一遍真实排查 —— 看这一截差到底是谁的。">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-09.html">
 
@@ -738,6 +738,7 @@ p.bridge { color:var(--gray); border-left:3px solid var(--line); padding-left:12
 @media(max-width:600px){.stn{flex-wrap:wrap}.stn .lecmedia{flex:1 1 100%;min-width:0}
   td code,td.num{white-space:nowrap}}
 </style>
+<style>.foldfig ol { padding-left: 2.4em }</style>
 <style>figure.fwide > video { display:block; width:100%; max-width:1240px; margin:0 auto; border-radius:8px }
 figure.fwide:has(> video) > figcaption { max-width:1240px; margin-left:auto; margin-right:auto }</style>
 
@@ -852,7 +853,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </div>
   <p style="max-width:820px;color:var(--gray)">
     先把地基铺平，再学两类指标和一把噪声尺子，弄清浮点和硬件在哪儿舍入，然后跟着一次真实的排查走到底：
-    TPU 的 loss 一直比 GPU 低万分之一点五，查到最后，偏移的大头不在 TPU。</p>
+    TPU 的 loss 一直比 GPU 低万分之一点五，查到最后，答案在一个谁都没怀疑的地方。</p>
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）、<b>专题八</b>（数值格式）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
@@ -3415,7 +3416,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 N 取参照各对里绝对值最大的那个；r ＝ |被测| ÷ N。参数范数的相对差只有 4e-7 也判不过，因为 r 不跟「看上去大不大」比，跟这个量自己的噪声比。</p></details></figure>
 <figure class="fbox fwide" id="anim-ceiling">
 <video src="media/topic09-ceiling.mp4?v=508f63e6" autoplay loop muted playsinline data-pauses="2.95,11.40,14.90,19.60,23.30"
-       aria-label="噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；③ 那组设置：生产近似＋输出头 dgrad 换精确。第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，1.24e-7。第 4 步　被测（TPU 对精确轨迹）出场，r 等于被测除以 N；尺子借自 ③ 那组 GPU 重跑（<a href="#s9-3">§9.3</a>）。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 4.27e-7，r 等于 4.27e-7 除以 1.24e-7，等于 3.45。背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。第 5 步　样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 n 加 1 分之一。3 对 1/4，10 对 1/11（这一次），28 对 1/29。"></video>
+       aria-label="噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；③ 那组设置：生产近似＋输出头 dgrad 换精确。第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，1.24e-7。第 4 步　被测（TPU 对精确轨迹）出场，r 等于被测除以 N；尺子借自 ③ 那组 GPU 重跑（&#167;9.3）。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 4.27e-7，r 等于 4.27e-7 除以 1.24e-7，等于 3.45。背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。第 5 步　样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 n 加 1 分之一。3 对 1/4，10 对 1/11（这一次），28 对 1/29。"></video>
 <figcaption><b>N 是从 10 对里挑出来的最大值；被测一出场，纵轴得缩一半才装得下。</b>
   <span class="sub">（26 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。只演参数范数的带符号均值；10 根柱子都是真值，横轴只表示相对位置。）</span></figcaption></figure>
   <p>参照对按跟被测一模一样的窗口、分母算三个统计，每个统计取所有对里的<b>最大值</b>当 N：被测如果只是噪声，就是又一个同分布的样本，应当落在已有样本的范围里。</p>
@@ -3442,7 +3443,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="261" y="312" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.1%</tspan></text>
 <text class="svgsm" x="261" y="426" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">10 对</text>
 <rect x="342" y="347.0" width="110" height="55.0" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="397" y="337" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.2%</tspan></text>
+<text class="svgsm" x="397" y="337" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.25%</tspan></text>
 <text class="svgsm" x="397" y="426" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums">15 对</text>
 <rect x="478" y="371.6551724137931" width="110" height="30.344827586206897" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="533" y="361" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.4%</tspan></text>
@@ -3784,10 +3785,238 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 实测：v5p 上单算子 FP64 对比，qkv 投影 R 1.235 → 1.000，第 0 层稠密 MLP 的输入投影 1.294 → 1.117（打开 FP32 累加的开关后，9 条单算子检查全过）。</p></details></figure>
   <p>但<b>对齐的目标仍然是 GPU</b>（GPU 的 golden 自己偏了，才换成精确轨迹，第九节）。注意这里的 R（对真值的距离比）跟 <a href="#s3-3">§3.3</a> 的 r（被测 ÷ 噪声上限）不是一回事。</p>
 
-  <h3 id="s4-3">4.3　一个大数不一定是算错：路由翻转</h3>
-  <p>第 1 步的梯度，比到的 50 个张量（专家只比了 0、1 号这两个）合起来 rel_L2 只有 1.28e-3；可第 3 层 0 号专家的两个矩阵是 <b>0.102</b>，大了约 80 倍，而 GPU 自己重跑这两个张量一位不差，拿噪声尺子去判就是「不过」。这个大数出在路由上。</p>
+  <h3 id="s4-3">4.3　第 1 步，一个专家的梯度大得离谱</h3>
+  <p>第 1 步的梯度，比到的 50 个张量（TPU 每层只存了 0、1 号两个专家的梯度，专家只比这两个；其余是全部非专家参数）合起来 rel_L2 只有 1.28e-3；可第 3 层 0 号专家的两个矩阵是 <b>0.102</b>，大了约 80 倍，而 GPU 自己重跑这两个张量一位不差，拿噪声尺子去判就是「不过」。这个大数出在路由上。</p>
+<figure class="fbox fwide" id="fig-flip"><svg viewBox="0 0 1400 664" width="100%" role="img" aria-label="两格。左格：同一个 token 在 GPU 和 TPU 上给专家打分的名次表，前 8 名入选；第 8 名和第 9 名分数几乎一样，两边正好对调，GPU 选了专家 A，TPU 选了专家 B。翻了的 token，两名之间的分差中位数是 2.7e-5 到 6.3e-5。右格：第 3 层 0 号专家分到 139 个 token，TPU 上少了 3 个、多了 1 个；它的梯度 rel_L2 是 0.102，一根长红柱，而比到的 50 个张量合起来只有 0.00128，一根很短的蓝柱，约差 80 倍；GPU 自己重跑路由不变，宽度为 0。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第 8、9 名一对调，一个专家就换了一批 token</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左格：同一个 token 的专家名次，上面 8 名入选（共 192 个专家）；右格：这个专家换了几个 token、梯度差多大（柱长按 rel_L2 线性画）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU</text>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU</text>
+<rect x="155.60000000000002" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="176" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">对调的两名 ／ 偏差来源</text>
+<rect x="0" y="102" width="640" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="640" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="640" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">名次表：同一个 token，两边的第 8、9 名对调</tspan></text>
+<text class="svgsm" x="70" y="168" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
+<text class="svgsm" x="355" y="168" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
+<text class="svgsm" x="56" y="199" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
+<text class="svgsm" x="56" y="224" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">2</text>
+<text class="svgsm" x="56" y="249" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">3</text>
+<text class="svgsm" x="56" y="274" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">4</text>
+<text class="svgsm" x="56" y="299" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">5</text>
+<text class="svgsm" x="56" y="324" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">6</text>
+<text class="svgsm" x="56" y="349" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">7</text>
+<text class="svgsm" x="56" y="374" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<text class="svgsm" x="56" y="399" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9</tspan></text>
+<text class="svgsm" x="56" y="424" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
+<rect x="70" y="187" width="200.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="70" y="212" width="186.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="70" y="237" width="174.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="70" y="262" width="164.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="70" y="287" width="156.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="70" y="312" width="148.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="70" y="337" width="142.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="70" y="362" width="137.0" height="17" rx="3" fill="#5f6368" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="215" y="375" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 A</tspan></text>
+<rect x="70" y="387" width="136.8" height="17" rx="3" fill="#5f6368" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="214" y="400" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 B</tspan></text>
+<rect x="70" y="412" width="124.0" height="17" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<rect x="355" y="187" width="200.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="355" y="212" width="186.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="355" y="237" width="174.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="355" y="262" width="164.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="355" y="287" width="156.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="355" y="312" width="148.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="355" y="337" width="142.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="355" y="362" width="137.0" height="17" rx="3" fill="#1a73e8" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="500" y="375" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 B</tspan></text>
+<rect x="355" y="387" width="136.8" height="17" rx="3" fill="#1a73e8" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="499" y="400" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家 A</tspan></text>
+<rect x="355" y="412" width="124.0" height="17" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<line x1="30" y1="382" x2="616" y2="382" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<text class="svgsm" x="616" y="376" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">以上入选</tspan></text>
+<text class="svgsm" x="616" y="398" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">以下落选</text>
+<line x1="277.0" y1="372" x2="343" y2="397" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ah-d93025)"/>
+<line x1="277.0" y1="397" x2="343" y2="372" stroke="#d93025" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="36" y="454" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">⋮ 后面还有 182 名</text>
+<text class="svgsm" x="24" y="476" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 8、9 名分差：中位数 2.7e-5–6.3e-5</tspan></text>
+<text class="svgsm" x="24" y="500" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">（条长是示意；真实差小到画不出来）</text>
+<rect x="660" y="102" width="740" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="660" y="102" width="740" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="660" y="104" width="740" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="660" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="674" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">后果：这个专家的梯度差</tspan></text>
+<text class="svgsm" x="680" y="158" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 3 层 0 号专家分到 139 个 token</tspan></text>
+<rect x="684" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="699" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="714" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="729" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="744" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="759" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="774" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="789" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="804" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="819" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="834" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="849" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="864" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="879" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="894" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="909" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="924" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="939" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="954" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="969" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="984" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="999" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1014" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1029" y="176" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<rect x="1044" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1059" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1074" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1089" y="176" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="684" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="699" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="714" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="729" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="744" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="759" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="774" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="789" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="804" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="819" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="834" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="849" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="864" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="879" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="894" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="909" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="924" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="939" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="954" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="969" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="984" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="999" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1014" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1029" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1044" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1059" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1074" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1089" y="191" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="684" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="699" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="714" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="729" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="744" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="759" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="774" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="789" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="804" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="819" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="834" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="849" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="864" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="879" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="894" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="909" y="206" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<rect x="924" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="939" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="954" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="969" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="984" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="999" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1014" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1029" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1044" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1059" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1074" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1089" y="206" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="684" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="699" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="714" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="729" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="744" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="759" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="774" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="789" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="804" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="819" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="834" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="849" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="864" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="879" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="894" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="909" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="924" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="939" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="954" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="969" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="984" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="999" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1014" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1029" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1044" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1059" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1074" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1089" y="221" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="684" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="699" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="714" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="729" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="744" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="759" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="774" y="236" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<rect x="789" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="804" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="819" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="834" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="849" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="864" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="879" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="894" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="909" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="924" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="939" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="954" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="969" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="984" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="999" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1014" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1029" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1044" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1059" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1074" y="236" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1089" y="236" width="10" height="10" rx="5" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="1124" y="180" width="10" height="10" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="1142" y="190" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 换出 3 个</tspan></text>
+<rect x="1124" y="206" width="10" height="10" rx="5" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1142" y="216" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换进 1 个</tspan></text>
+<text class="svgsm" x="1124" y="242" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">一个点 ＝ 一个 token</text>
+<text class="svgsm" x="684" y="301" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这个专家的梯度（rel_L2）</tspan></text>
+<rect x="684" y="309" width="440.0" height="20" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1134" y="325" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.102</tspan></text>
+<text class="svgsm" x="684" y="361" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">50 个张量合起来</text>
+<rect x="684" y="369" width="5.521568627450981" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="699" y="385" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.28e-3</tspan></text>
+<text class="svgsm" x="684" y="421" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 重跑</text>
+<line x1="684" y1="427" x2="684" y2="451" stroke="#5f6368" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="697" y="445" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<text class="svgsm" x="724" y="445" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">路由不变，尺子宽度 0</text>
+<text class="svgsm" x="1204" y="325" fill="#a50e0e" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 80 倍</tspan></text>
+<rect x="0" y="542" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="542" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="542" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="569" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差出在路由上，不在专家的算术上</tspan></text>
+<text class="svgsm" x="20" y="600" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">近平局 ＋ 上游一丝输入差 ＝ 选了另一个专家；同输入则 0 翻转。</text>
+<text class="svgsm" x="20" y="624" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以第 1 步张量比较先看路由槽位，翻了就按两边选中的同一批 token 重比。</text>
+</svg><figcaption><b>左边两条红框换了位置，右边就多出一根长红柱。</b><span class="capmore"><br><em>名次条的长短和被换掉的点位是示意，个数和柱长是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：第 1 步梯度对 GPU 的 rel_L2，第 3 层 0 号专家的权重梯度 0.102，比到的 50 个张量合起来 0.00128；隔离回放的那批 token 里这个专家分到 139 个，TPU 侧少 3 多 1；发生翻转的 token，第 8、9 名「分数＋偏置」之差的中位数按层在 2.7e-5 到 6.3e-5 之间。</p>
+<p>⚠️ 示意：左格名次条的长度和第 1–10 名的分数是示意，只有「第 8、9 名对调」和分差中位数是实测；右格点阵的个数是实测，哪几个点被换出是随手标的位置。</p></details></figure>
 <figure class="fbox fwide" id="anim-flip">
-<video src="media/topic09-flip.mp4?v=9edf7048" autoplay loop muted playsinline data-pauses="2.70,8.10,12.72,17.32,21.72,25.92"
+<video src="media/topic09-flip.mp4?v=45c4dd18" autoplay loop muted playsinline data-pauses="2.70,8.10,12.72,17.32,21.72,25.92"
        aria-label="MoE 路由的近平局翻转：差一丝，就换一个专家。① 一个 token 给 192 个专家打分，取前 8 名：第 8、9 名几乎一样高。排名用分数加偏置；选中后加权用不带偏置的分数，偏置只管选谁。② 上游注意力两边差一点点，分数挪一丝，第 8、9 名对调。路由的输入（注意力之后）两边差 rel_L2 3.4e-3 到 3.9e-3，约是 BF16 舍入量级。放大看两根条的顶端（约 2000 倍）：B 只比 A 低 3e-5；挪动以后 A 反比 B 低 1.5e-5，A 落选，B 入选。翻转 token 的第 8、9 名分差中位数 2.7e-5 到 6.3e-5；全部 token 的中位数 3.1e-4 到 8.0e-4。③ 这个 token 的那一份输出，整块换了一个专家来算：GPU 由专家 A 算，TPU 换成专家 B，不是差一丝，是换了一个人。分到 token 少的专家，进出一个 token 就是它梯度的一大块：第 3 层专家 0 在这一批 4096 个 token 里只分到 139 个，TPU 上换出 3 个、换进 1 个。第 1 步梯度对 GPU 的 rel_L2：这个专家的权重梯度 0.102，比到的 50 个张量合起来 1.28e-3，约差 80 倍；估算 根号（换掉的除以分到的）＝ 根号（4/139）约 0.17，同量级。GPU 自己重跑，这些张量的差几乎是 0。④ 对照：两边喂完全相同的路由输入，3 层乘 4096 个 token，翻转 0（logits 两边仍差 4e-6，但一个都没翻）；两边全程 FP32（路由也是），第 1 层 4096 个 token 里照样翻 1 个，它的第 8、9 名只差 1.6e-6。根子在输入差，不在路由器自己的精度。⑤ GPU 自己重跑第 1 步：前向确定，路由一个不变；拿 GPU 重跑当噪声尺，路由翻转在这把尺上是 0 宽度。0.102 要按专家拆开看，不是 TPU 算错了梯度。近平局加一丝输入差，等于选了另一个专家。"></video>
 <figcaption><b>输入只差一丝，近平局的 token 就换了专家；分到 token 少的专家，第 1 步梯度差被放大到 0.102。</b>
   <span class="sub">（29 秒，Manim 渲染，可一步一步看。条的高度、每个分数挪动的量和放大框里的分差是示意（取在实测中位数范围内）；其余数字是实测。）</span></figcaption></figure>
@@ -4515,7 +4744,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>注：左图每个乘积右移几位是示意，不是实测数据。</p>
 <p>注：动画终点的 3.5e-4 是同一张量核模型的模拟（单条点积，只有累加器截断，不含输出舍到 BF16、不含 cuBLAS 分块），跟右图实测 3.1e-4 口径不同；两者差多少、差在哪，没有单独拆过。另外动画纵轴带正负号（朝零偏画成负的），这张右图画的是偏了多少，取的绝对值。</p></details></figure>
 <figure class="fbox fwide" id="anim-trunc">
-<video src="media/topic09-trunc.mp4?v=6489f6fa" autoplay loop muted playsinline data-pauses="6.00,16.90,19.60"
+<video src="media/topic09-trunc.mp4?v=a2bcfa8e" autoplay loop muted playsinline data-pauses="6.00,16.90,19.60"
        aria-label="GPU 张量核：每 16 个一组，抹零。第 1 步：一组 16 个乘积连同累加器，按最大的指数对齐；保留最高位后 25 位，窗口外的位抹掉。抹零一列每一行都是少；就近舍入（对照）一列两行少、两行多。第 1 步完成：窗口外的位，抹零次次少；就近舍入有多有少。第 2 步：很多组接着加（模拟，合成正数输入）。纵轴相对误差，横轴加了多少个乘积，一直加到 65,536 个：抹零的相对误差一路往下到约 −3.5e-4，就近舍入（对照）停在 0 附近，放大 80 倍才看得见它围着 0 晃，终点约 −2.3e-6。模拟，口径与实测曲线不同。第 2 步完成：抹零一路往下；就近舍入在 0 附近晃。抹零只少不多：求和越长，偏得越多。"></video>
 <figcaption><b>抹零一路往下，就近舍入在 0 附近晃：同一次求和，越长偏得越多。</b>
   <span class="sub">（24 秒，Manim 渲染，可一步一步看。数据是按实测张量核模型在合成正数输入上的模拟，不是实测曲线；右边那条只叫「就近舍入（对照）」，不代表任何一家硬件。）</span></figcaption></figure>
@@ -4524,7 +4753,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <ul>
     <li>V100、T4、A100 三代上就有人量出：张量核里乘积精确，加法向零舍入，只在最后规格化（Fasi、Higham、Mikaitis、Pranesh，<em>Numerical behavior of NVIDIA tensor cores</em>，PeerJ Computer Science，2021）。</li>
     <li>对 H100／B200 的比特级建模，BF16 进、FP32 出：16 项一组对齐、截断，累加器比 FP32 多 2 个对齐位（等价于本课说的「最高位后 25 位」），H100、H200 与 B200 相同 —— 跟本课在 B200 上独立量出的模型一致（Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>，arXiv:<a href="https://arxiv.org/abs/2512.07004" target="_blank" rel="noopener">2512.07004</a>）。</li>
-    <li>同一类问题在 FP8 上更凶：DeepSeek-V3 报告实测 H800 上 FP8 矩阵乘的累加只保留约 14 位，于是每 128 个元素搬到 CUDA core 用 FP32 加一次（arXiv:<a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> §3.3.2）。口径不同，只借问题的类型，不比大小。</li>
+    <li>同一类问题在 FP8 上更凶：DeepSeek-V3 报告实测 H800 上 FP8 矩阵乘的累加只保留约 14 位，于是每 128 个元素搬到 CUDA core 用 FP32 加一次（arXiv:<a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a> sec. 3.3.2）。口径不同，只借问题的类型，不比大小。</li>
     <li>对照：Kahan 求和是每一单把抹掉的零头记账、下一单补回去，误差几乎不随长度长；成对求和像淘汰赛，误差随长度按对数长。张量核的抹零正好是反面。</li>
       <li>GPU 侧本课试过的修法，是把输出层这一次 dgrad 换成真 FP32（<a href="#s8-3">§8.3</a>）；分段 FP32 累加、split-K 这类更便宜的修法，本课没有测过。</li>
   </ul></details>
@@ -4581,7 +4810,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>TPU 的矩阵单元 MXU 同样吃 BF16、乘积精确、在 FP32 里累加。同一份输入算路由打分，TPU 对 FP64 的相对误差是 4.8e-8，GPU 是 3.8e-6；长求和上 TPU 也会偏，但小得多。</p>
   <details class="foldfig"><summary><b>口径</b>：MXU 的累加怎么舍是推断；「BF16 乘、FP32 累加」的公开出处</summary>
   <p>MXU 累加是不是就近舍入，没有直接证据，是推断。「BF16 乘、FP32 累加」有公开出处：Google Cloud TPU 的 bfloat16 文档（同页还写明 TPU 上转 BF16 是就近舍入、平局取偶，BF16 不支持非正规数），以及 ST-MoE 的脚注（arXiv:<a href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener">2202.08906</a>）。JAX 里要 FP32 累加的写法是 <code>preferred_element_type=float32</code>；矩阵乘精度档 HIGH、HIGHEST 是用 3 遍、6 遍 BF16 去模拟 FP32，不是 IEEE FP32。</p></details>
-  <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。</p>
+  <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。权重切在收缩维（矩阵乘里被加起来、消掉的那一维）上时，每一轮只算出部分和，要一轮轮加起来。</p>
 <figure class="fbox fwide" id="fig-windowed"><svg viewBox="0 0 1400 544" width="100%" role="img" aria-label="上一行：TPU 上 FSDP 把权重切开分到各个设备上（示意画 4 片），编译器把这个矩阵乘做成窗口化的 collective matmul：一边轮流收下一片权重，一边算当前这片的部分积。默认每一轮的部分积以 BF16 输出、在 BF16 累加器里相加，4 轮舍 4 次；打开 FP32 累加的开关后，累加器是 FP32，最后只舍一次，跟 GPU 一样。右边：qkv 投影输出对 GPU 的相对差从 2.36e-3 降到 1.8e-4。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 上 FSDP 的矩阵乘：分片部分积在 BF16 里累加　——　<tspan font-weight="700">比 GPU 多舍了几次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一格 ＝ 一轮：收下一片权重的同时，算当前这片的部分积（这种「边收边算」就叫 collective matmul）；红色小块 ＝ 一次舍到 BF16</text>
@@ -5012,7 +5241,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 换算（本课推导）：参数范数 ＝ √S（S ＝ 全部参数平方和），S 多出 ΔS 时参数范数多出约 ΔS ÷ (2 × 参数范数)。输出层平方和差合计 ＋23.2（四根柱各自四舍五入，加起来 22.7）÷（2 × 3042）≈ 3.81e-3，跟左边输出层的 3.83e-3 差约 0.4%；只用四根柱的 22.7 算是 3.7e-3，差约 3%。</p>
 <p>📌 实测：没出现过的词那些行，√v̂ 均值两边只差 0–4%，Adam 更新的大小只差 1%–3%；Σ w·u（更新在这一行权重方向上的分量，加起来）从第 25 步起就分开。</p></details></figure>
 
-  <h3 id="s7-4">7.4　为什么偏偏是冷门词：Adam 的 ε 区</h3>
+  <h3 id="s7-4">7.4　Adam 的 ε 区</h3>
 <figure class="fbox fwide" id="fig-eps"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="横轴是一个参数的梯度大小，对数刻度；纵轴是 Adam 给它的更新量，按学习率归一化。梯度远大于 ε 时，更新被拉平到 1 附近，梯度差 1%，更新只差 0.01%；梯度和 ε 差不多或更小时，曲线变成斜坡，更新几乎跟梯度成正比，梯度差 1%，更新差约 0.7%。冷门词那些行的梯度在 4e-9 到 1e-8，正好落在斜坡上。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">Adam 的 ε 区：梯度太小，Adam 就不再「拉平」　——　<tspan font-weight="700">一点偏差原样漏过去</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">横轴 ＝ 一个参数的梯度大小（对数）；纵轴 ＝ Adam 这一步的更新量（÷ 学习率）；稳态下更新 ≈ g ÷ (|g| ＋ ε)，ε ＝ 1e-8</text>
@@ -5080,7 +5309,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="bridge">这一节留下的问题：冷门行的更新方向第 25 步就分开了（参数范数要到第 100 步才高过噪声），是什么让它分开的？</p>
 </div></section>
 
-<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>案例（下）：偏的是 GPU 的 golden</h2></div>
+<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>案例（下）：顺着那股力，查到是谁少推了一把</h2></div>
   <p class="lead">冷门行的更新方向，取决于隐状态在各个 token 上长什么样；顺着往回查，推歪它的是输出头流回来的梯度。</p>
 
 <figure class="fbox fwide" id="fig-layer0"><svg viewBox="0 0 1400 684" width="100%" role="img" aria-label="左：横轴是训练步，纵轴是每一层输出在 token 上的均值，沿隐状态方向 h-hat（等于 gamma 乘 u-hat）的投影，TPU 对 GPU 的相对差，往下是 TPU 更低。embedding 的输出两边一样，贴着零；第 0 层（稠密层）从第 50 步起偏低，第 100 步负千分之 1.8，第 300 步负千分之 5.4；第 1、2、3 层一层比一层低，第 3 层到负百分之 1.4 左右。灰线是 GPU 重跑 A 对基线那份，第 0 层的同一个量。右：拿同一份第 0 层输入在 CPU 上重算，只换第 0 层权重。第 100 步换成 TPU 的权重，输出沿 h-hat 低负千分之 1.94，跟探针对得上；换成另外两份 GPU 的权重只有正百万分之 7.5 和负万分之 2.4。只换一组时，注意力输出投影一组就占负千分之 1.33，是大头。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -5149,8 +5378,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="892" y="276" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">换成 GPU 重跑 B 的</text>
 <rect x="884" y="284" width="31.2" height="20" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="923" y="300" fill="#80868b" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−2.4e-4</tspan></text>
-<line x1="1112.8" y1="188" x2="1112.8" y2="234" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5 4"/>
-<text class="svgsm" x="1108" y="248" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">探针同一步 −1.8e-3</text>
+<line x1="1112.8" y1="170" x2="1112.8" y2="218" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5 4"/>
+<text class="svgsm" x="1118" y="180" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">探针同一步 −1.8e-3</text>
 <text class="svgsm" x="884" y="342" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">只换一组（换成 TPU 的）</text>
 <line x1="884" y1="352" x2="884" y2="494" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="892" y="370" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">注意力输出投影</text>
@@ -5239,18 +5468,18 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1052" y="172" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 100 步</text>
 <text class="svgsm" x="1272" y="172" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 300 步</text>
 <path d="M 774.69 183.47 L 913.52 196.67 L 1052.35 253.50 L 1272.38 381.83" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<rect x="769.692288416578" y="177.09166666666667" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="908.5192163124334" y="178.19166666666666" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1047.346144208289" y="182.68333333333334" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="1267.3816190135399" y="196.25" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <rect x="768.692288416578" y="177.46666666666667" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="784" y="203" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.0016</tspan></text>
-<rect x="769.692288416578" y="177.09166666666667" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <rect x="907.5192163124334" y="190.66666666666666" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="903" y="216" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.016</tspan></text>
-<rect x="908.5192163124334" y="178.19166666666666" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <rect x="1046.346144208289" y="247.5" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="1042" y="273" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.078</tspan></text>
-<rect x="1047.346144208289" y="182.68333333333334" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <rect x="1266.3816190135399" y="375.83333333333337" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="1262" y="401" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.218</tspan></text>
-<rect x="1267.3816190135399" y="196.25" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="1262" y="221" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 两次之间</tspan></text>
 <rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -5313,7 +5542,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 实测：GPU 把自己沿这个方向的那一小份反号放大 9 倍（相当于往下多推一把）跑 1000 步，对默认 GPU：loss −1.26e-4，param_norm ＋2.05e-2；再跑一份 −1.27e-4、＋2.01e-2。TPU 原样对 GPU：−1.66e-4、＋2.1e-2。GPU 人为多推一把，连 logits 下移、冷门行范数偏大一起复现。</p></details></figure>
   <p>到这里只知道「是这股力」，还不知道它在哪一边算错了：是 TPU 多推了，还是 GPU 少推了？</p>
 
-  <h3 id="s8-3">8.3　少的那一点，在 GPU 那一次 12 万长的求和里</h3>
+  <h3 id="s8-3">8.3　把输出头的误差拆到每一段</h3>
 <figure class="fbox fwide" id="fig-head"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="左：输出头反向沿「所有 logits 一起动」方向的相对误差，对数刻度，第 1 步。GPU 的交叉熵反向只有 2.7e-6；GPU 输出层 dgrad 的 BF16 矩阵乘 6.51e-4，是大头；TPU 整个头反向 2.4e-5；GPU 名义 FP32、实际 TF32 的那一版 8.08e-4，比 BF16 还差；真关 TF32 的 FP32 只有 1.7e-6。右：拿真实的输出头张量，把词表行随机打乱后取 K 行，K 从 16,384 到 120,832（整张词表），误差从 6.9e-5 涨到 6.5e-4；横纵都是对数刻度。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">少掉的那一点，在 GPU 输出层 dgrad 那一次长求和里</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">柱长 ＝ 沿「所有 logits 一起动」方向的相对误差（对数刻度，一格 ＝ 十倍，越短越准），参照 FP64；右：横轴 K ＝ 词表行随机打乱后取的行数，横纵都是对数刻度</text>
@@ -5464,7 +5693,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="700" y="204" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">+0.0110</text>
 <line x1="1310.0" y1="175" x2="1310.0" y2="185" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="1310" y="204" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">+0.0220</text>
-<rect x="65.04545454545455" y="168" width="49.90909090909091" height="24" rx="0" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1.0"/>
+<rect x="65.04545454545455" y="168" width="49.90909090909091" height="24" rx="0" fill="#dadce0" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="90" y="212" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0（GPU 均值）</tspan></text>
 <rect x="774.1818181818182" y="171" width="18" height="18" rx="9" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="2"/>
 <text class="svgsm" x="783" y="164" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 dgrad +0.0125</tspan></text>
@@ -5482,7 +5711,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="700" y="328" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">-0.160</text>
 <line x1="1310.0" y1="299" x2="1310.0" y2="309" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="1310" y="328" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">-0.320</text>
-<rect x="40.43750000000001" y="292" width="99.12499999999999" height="24" rx="0" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1.0"/>
+<rect x="40.43750000000001" y="292" width="99.12499999999999" height="24" rx="0" fill="#dadce0" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="90" y="336" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0（GPU 均值）</tspan></text>
 <rect x="748.1875" y="295" width="18" height="18" rx="9" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="2"/>
 <text class="svgsm" x="757" y="288" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 dgrad -0.175</tspan></text>
@@ -5500,7 +5729,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="700" y="452" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">-8.50e-05</text>
 <line x1="1310.0" y1="423" x2="1310.0" y2="433" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="1310" y="452" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">-1.70e-04</text>
-<rect x="25.411764705882348" y="416" width="129.1764705882353" height="24" rx="0" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1.0"/>
+<rect x="25.411764705882348" y="416" width="129.1764705882353" height="24" rx="0" fill="#dadce0" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="90" y="460" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0（GPU 均值）</tspan></text>
 <rect x="922.470588235294" y="424" width="265.52941176470597" height="8" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="604.8823529411765" y="419" width="18" height="18" rx="9" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="2"/>
@@ -5578,8 +5807,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 实测：GPU dgrad 沿 w̄ 第 1 / 100 步 −6.5e-4 / −6.1e-4；第 0 层输出在各层里最先分开、往后逐层放大（第 50 步起转为偏低），换权重重算确认是权重长歪、大头在注意力输出投影；第 1000 步训练批上 TPU 的 logits 整体低 0.27。</p>
 <p>📌 实测（第四环，第 300 步同一步，没出现过的词那些行）：两边 |g| 的均方根之比 0.990；Σ w·g GPU 8.1e-5、TPU 1.2e-6；92% 的元素 √v̂ ＜ ε（中位数 2.6e-9），这些元素的更新 ≈ m̂ ÷ ε；Σ w·u 两边差 −4994，其中 m̂ 那一份 −5450。</p></details></figure>
 <figure class="fbox fwide" id="anim-chain">
-<video src="media/topic09-chain.mp4?v=5917c50f" autoplay loop muted playsinline data-pauses="1.70,4.30,6.90,9.50,12.10,24.10"
-       aria-label="五环一条链：每一步少推一点，几百步积出来。每一环是下一环的原因；底下的时钟是训练步数。① GPU 输出层 dgrad：12 万长的求和朝零截掉一点，每一步少推 0.065%（沿所有 logits 一起动的方向，第 1 步实测；第 100 步 0.061%），每一步都差这么多。② 主干权重沿这个方向每一步少走一点：整步沿漂移方向少走 0.36%（全体参数，同一状态实测），主干里大头在第 0 层注意力的输出投影。③ 所有 logits 一起偏一截（lse 差，TPU 减 GPU）；softmax 看不见它。第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218。④ 冷门词那几行在 Adam 的 ε 区（92% 的元素根号 v 小于 ε），压多压少跟着 logit 水平走；没出现过的词那几行平方和多涨 17.1（第 300 步实测）。⑤ 参数范数多涨，第 300 步 4.6e-3；按组拆输出层占 87%（另测一对，合计 4.4e-3）；loss 偏低一起出现、一起消失（机制未验证）。时钟走起来：①② 每一步都一样，③④⑤ 一步步积起来。第 300 步：每步只差一点、同一个方向，积成看得见的漂移。灰色是 GPU 两次之间；刻度上白色是探针实测的那几步。五环都标实测。"></video>
+<video src="media/topic09-chain.mp4?v=567f2aca" autoplay loop muted playsinline data-pauses="1.70,4.30,6.90,9.50,12.10,24.10"
+       aria-label="五环一条链：每一步少推一点，几百步积出来。每一环是下一环的原因；底下的时钟是训练步数。① GPU 输出层 dgrad：12 万长的求和朝零截掉一点，每一步少推 0.065%（沿所有 logits 一起动的方向，第 1 步实测；第 100 步 0.061%），每一步都差这么多。② 主干权重沿这个方向每一步少走一点：整步沿漂移方向少走 0.36%（全体参数，同一状态实测），主干里大头在第 0 层注意力的输出投影。③ 所有 logits 一起偏一截（lse 差，TPU 减 GPU）；softmax 看不见它。第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218。④ 冷门词那几行在 Adam 的 ε 区（92% 的元素根号 v 小于 ε），压多压少跟着 logit 水平走；没出现过的词那几行平方和多涨 17.1（第 300 步实测）。⑤ 参数范数多涨，第 300 步 4.6e-3；按组拆输出层占 87%（另测一对，合计 4.4e-3）；loss 偏低（去掉那股力后各还剩一截；loss 的机制未验证）。时钟走起来：①② 每一步都一样，③④⑤ 一步步积起来。第 300 步：每步只差一点、同一个方向，积成看得见的漂移。灰色是 GPU 两次之间；刻度上白色是探针实测的那几步。五环都标实测。"></video>
 <figcaption><b>同一个小差每一步都一样，积到第 300 步就成了看得见的漂移。</b>
   <span class="sub">（29 秒，Manim 渲染，可一步一步看。③ 只有 4 个实测点，中间连直线；④ 只有第 300 步一个实测值，柱子中间是插值示意；⑤ 是逐步实测。）</span></figcaption></figure>
 <details class="foldfig"><summary><b>考考自己</b>：为什么「GPU 把 dgrad 换成精确值」和「精确轨迹」都要跑满 1000 步，不能只看第 1 步？</summary><p>第 1 步那股力只差万分之几，单看一步、对 GPU 噪声比根本看不出；它是每一步同向地少一点，要累积几百步才显出 loss、lse 和参数范数的差。比的是轨迹，所以要跑满。</p></details>
@@ -5664,7 +5893,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>柱子从左到右一截截变短。</b><span class="capmore"><br><em>同一个被测、同一把尺子。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：被测是 v5p 上生产配置 1000 步（FP32 累加开关打开之前的那一版），param_norm 带符号均值对 ② 2.93e-6、对 ③ 1.25e-6、对 ④ 4.36e-7；N ＝ 1.24e-7。开关打开后的当前配置对 ④ 是 4.27e-7（3.45 倍）。</p>
 <p>📌 实测：③ − ② 在第 301–1000 步 loss 上是 −9.8e-5，占 TPU 对 ② 偏移（−1.34e-4）的 73%；第 1000 步参数范数 ＋1.24e-2，占 ＋2.12e-2 的 59%。</p></details></figure>
 <figure class="fbox fwide" id="anim-lineage">
-<video src="media/topic09-lineage.mp4?v=7db214b5" autoplay loop muted playsinline data-pauses="1.80,6.22,10.72,15.22,18.22"
+<video src="media/topic09-lineage.mp4?v=7bb8108f" autoplay loop muted playsinline data-pauses="1.80,6.22,10.72,15.22,18.22"
        aria-label="最终 golden 是一步步改出来的：每一步只加一样东西。① 起点：框架默认配置（BF16、不重算、TF32 开），不拿来验收，只当归因参照；它不重算，跟生产配置不一样，没有柱子。② 生产近似：加整层重算和路由回放。同一个 TPU 被测对它：参数范数差 23.6 × N，远超 2×N。③ 只修一处：加输出头 dgrad 换精确。同一根柱子缩到 10.1 × N；缩掉的那截查清了，是 GPU 输出头 dgrad 截断（已查清）。④ 精确轨迹：加 BF16 权重、全程 FP32、真关 TF32。再缩到 3.5 × N；缩掉的那截是 GPU 其余的 BF16 误差（已查清）。仍超过 2×N，不过。三根柱子的数后面都跟着红字「不过」；红块是 dgrad 截断，橙块是 GPU 其余 BF16，蓝段是 TPU 一侧还没查清的。③ 卡片下注：第一关的尺子取自这组重跑。被测是 FP32 累加开关打开前那一版 TPU；当前版对 ④ 是 3.45 × N。每往精确值靠一步，缩掉的都是 GPU golden 自己的偏差；剩下那截才是 TPU 一侧的，还在查。柱长是同一个 TPU 被测的参数范数带符号均值除以 N；N 是 ③ 那组 GPU 重跑 10 对的最大值。"></video>
 <figcaption><b>同一个 TPU 被测、同一把尺子：golden 每加一样东西，同一根柱子就缩一截，缩掉的那截换成标了名字的「已查清」色块。</b>
   <span class="sub">（22 秒，Manim 渲染，可一步一步看。色块长度是带符号均值之差，不是 <a href="#s9-3">§9.3</a> 拆账图的百分比。）</span></figcaption></figure>
@@ -5750,14 +5979,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="960" y="162" width="360" height="76" rx="10" fill="#fff" stroke="#e8710a" stroke-width="2"/>
 <text class="svgsm" x="1140" y="192" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">尺子：③ 那组 GPU 重跑</tspan></text>
 <text class="svgsm" x="1140" y="216" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">生产近似＋精确 dgrad · 5 份两两 10 对</text>
-<rect x="892" y="244" width="456" height="54" rx="10" fill="#fff" stroke="#80868b" stroke-width="1.6" stroke-dasharray="5 4"/>
-<text class="svgsm" x="1120" y="266" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交叉核对一：精确轨迹 5 份（基线＋4 份扰动版）· 10 对</tspan></text>
-<text class="svgsm" x="1120" y="287" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">param_norm 4.00× · loss 2.03× / 尾段 1.21× · grad_norm 2.24×</text>
-<line x1="892" y1="271" x2="842" y2="308" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#ah-80868b)"/>
-<rect x="892" y="306" width="456" height="54" rx="10" fill="#fff" stroke="#80868b" stroke-width="1.6" stroke-dasharray="5 4"/>
-<text class="svgsm" x="1120" y="328" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交叉核对二：TPU 执行噪声 28 对</tspan></text>
-<text class="svgsm" x="1120" y="349" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">param_norm 5.03× · loss 1.81× / 尾段 1.42× · grad_norm 0.99×</text>
-<line x1="892" y1="333" x2="842" y2="330" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#ah-80868b)"/>
+<rect x="922" y="244" width="456" height="54" rx="10" fill="#fff" stroke="#80868b" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text class="svgsm" x="1150" y="266" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交叉核对一：精确轨迹 5 份（基线＋4 份扰动版）· 10 对</tspan></text>
+<text class="svgsm" x="1150" y="287" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">param_norm 4.00× · loss 2.03× / 尾段 1.21× · grad_norm 2.24×</text>
+<line x1="922" y1="271" x2="842" y2="308" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#ah-80868b)"/>
+<rect x="922" y="306" width="456" height="54" rx="10" fill="#fff" stroke="#80868b" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text class="svgsm" x="1150" y="328" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交叉核对二：TPU 执行噪声 28 对</tspan></text>
+<text class="svgsm" x="1150" y="349" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">param_norm 5.03× · loss 1.81× / 尾段 1.42× · grad_norm 0.99×</text>
+<line x1="922" y1="333" x2="842" y2="330" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#ah-80868b)"/>
 <rect x="80" y="402" width="360" height="76" rx="10" fill="#fff" stroke="#5f6368" stroke-width="2"/>
 <text class="svgsm" x="260" y="432" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② GPU 生产 golden</tspan></text>
 <text class="svgsm" x="260" y="456" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">整层重算 ＋ 路由回放（不是尺子）</text>
@@ -5769,7 +5998,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="430" y="286" fill="#a50e0e" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">正式判定：param_norm 3.45×N，不过</tspan></text>
 <line x1="960" y1="200" x2="842" y2="297" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
 <text class="svgsm" x="850" y="224" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">量出 N</tspan></text>
-<text class="svgsm" x="1120" y="382" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">× ＝ 被测 ÷ 该尺子的 N；超过 2：核对一 3 项，核对二仅 param_norm</text>
+<text class="svgsm" x="1150" y="382" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">× ＝ 被测 ÷ 该尺子的 N；超过 2：核对一 3 项，核对二仅 param_norm</text>
 <path d="M 560.0 337.0 H 450.0 Q 440.0 337.0 440.0 347.0 V 440.0" fill="none" stroke="#5f6368" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
 <text class="svgsm" x="470" y="400" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二关：不判</tspan></text>
 <line x1="442" y1="440" x2="958" y2="440" stroke="#5f6368" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
@@ -5896,7 +6125,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <b>一次 12 万长的 BF16 求和，每一步都朝零少算了一点</b>（说它就是抹零模型，是推断）。所以这一讲只立一句话：<b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差。</b>查到 GPU 的 golden 自己偏了以后，正式验收换成对精确轨迹比（第九节）。</p>
 
   <h3 id="s10-5">10.5　拿回去用：清单、速查卡、排查表、练习</h3>
-  <p>这一节不进课堂，留给要在自己的模型上做一次对齐的人。四个折叠，按用的顺序排。</p>
+  <p>这一节不进课堂，留给要在自己的模型上做一次对齐的人。前四个折叠按用的顺序排；后面是延伸阅读和出处台账。</p>
 
   <details class="foldfig"><summary><b>动手清单</b>：在自己的模型上做一次 GPU→TPU 对齐，一步一步来</summary>
   <ol>
@@ -5981,7 +6210,7 @@ verdict = {k: "过" if v &lt;= 1 else ("待定" if v &lt;= 2 else "不过") for 
   <ul>
     <li>浮点加法为什么换顺序就变、前向为什么其实是确定的：Thinking Machines，<em>Defeating Nondeterminism in LLM Inference</em>（2025）。</li>
     <li>张量核里的累加到底怎么舍：Fasi 等，<em>Numerical behavior of NVIDIA tensor cores</em>（PeerJ Computer Science，2021）；Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>（arXiv:<a href="https://arxiv.org/abs/2512.07004" target="_blank" rel="noopener">2512.07004</a>）。</li>
-    <li>低精度累加在大模型训练里的代价与对策：DeepSeek-V3 技术报告 §3.3.2（arXiv:<a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a>）。</li>
+    <li>低精度累加在大模型训练里的代价与对策：DeepSeek-V3 技术报告 sec. 3.3.2（arXiv:<a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a>）。</li>
     <li>logits 漂移、ε 与训练不稳定：Wortsman 等，<em>Small-scale proxies for large-scale Transformer training instabilities</em>（arXiv:<a href="https://arxiv.org/abs/2309.14322" target="_blank" rel="noopener">2309.14322</a>）。</li>
     <li>MoE 路由两套引擎选得不一样：Ma 等，<em>Stabilizing MoE Reinforcement Learning by Aligning Training and Inference Routers</em>（arXiv:<a href="https://arxiv.org/abs/2510.11370" target="_blank" rel="noopener">2510.11370</a>）。</li>
     <li>拿噪声当尺子：Microsoft ExP 团队关于 A/A 测试的博客；Henderson 等，<em>Deep Reinforcement Learning that Matters</em>（arXiv:<a href="https://arxiv.org/abs/1709.06560" target="_blank" rel="noopener">1709.06560</a>）。</li>

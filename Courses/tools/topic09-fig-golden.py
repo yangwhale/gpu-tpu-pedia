@@ -146,10 +146,11 @@ def fig_twolayer():
             (py + 112, "交叉核对一：精确轨迹 5 份（基线＋4 份扰动版）· 10 对",
              "param_norm %.2f× · loss %.2f× / 尾段 %.2f× · grad_norm %.2f×" % (XS["param_norm"], XS["loss 全程"], XS["loss 尾段"], XS["grad_norm"])),
             (py + 174, "交叉核对二：TPU 执行噪声 28 对", "param_norm %.2f× · loss %.2f× / 尾段 %.2f× · grad_norm %.2f×" % (N.XCHK_TPU_PN, N.XCHK_TPU_LOSS, N.XCHK_TPU_TAIL, N.XCHK_TPU_GN))]):
-        f.box(892, yx, 456, 54, "#fff", GY2, 10, sw=1.6, dash="5 4")
-        f.t(1120, yx + 22, t1, GY, True, 14, "middle")
-        f.t(1120, yx + 43, t2, GY, size=12, anchor="middle")
-        f.line(892, yx + 27, 842, py + 176 + 22 * k, GY2, 1.4, dash="5 4")
+        # R18：橙色「量出 N」箭头原来切过核对一的左上角 → 两个虚线框整体右移 30 px
+        f.box(922, yx, 456, 54, "#fff", GY2, 10, sw=1.6, dash="5 4")
+        f.t(1150, yx + 22, t1, GY, True, 14, "middle")
+        f.t(1150, yx + 43, t2, GY, size=12, anchor="middle")
+        f.line(922, yx + 27, 842, py + 176 + 22 * k, GY2, 1.4, dash="5 4")
     node(80, py + 270, 360, 76, "② GPU 生产 golden", "整层重算 ＋ 路由回放（不是尺子）", GY)
     node(960, py + 270, 360, 76, "已解释差异", "量级 ＋ 由谁造成 ＋ 证据", GY)
     f.elbow(560, py + 175, 440, py + 68, PU, 2.2)
@@ -157,7 +158,7 @@ def fig_twolayer():
     f.t(430, py + 154, "正式判定：param_norm %.2f×N，不过" % GATE1_PN, RD, True, 13, "end")
     f.line(960, py + 68, 842, py + 165, OR, 1.6)
     f.t(850, py + 92, "量出 N", OR, True, 13)      # R3：原来被斜箭头穿过 → 挪到箭头左上方
-    f.t(1120, py + 250, "× ＝ 被测 ÷ 该尺子的 N；超过 2：核对一 3 项，核对二仅 param_norm", GY, size=13, anchor="middle")
+    f.t(1150, py + 250, "× ＝ 被测 ÷ 该尺子的 N；超过 2：核对一 3 项，核对二仅 param_norm", GY, size=13, anchor="middle")
     f.elbow(560, py + 205, 440, py + 308, GY, 2.2)
     f.t(470, py + 268, "第二关：不判", GY, True, 15)
     f.line(442, py + 308, 958, py + 308, GY, 1.6)

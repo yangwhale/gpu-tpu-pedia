@@ -67,6 +67,10 @@ def fig_gauge():
     for st in (25, 50, 100, 300):
         f.t(X(st), YT - 10, "第 %d 步" % st, GY, size=12, anchor="middle")
     f.path([(X(s), Y(v)) for s, v, _ in LSE], BL, 2.6, arrow=False)
+    # R18：灰点（GPU 两次之间）先画，TPU 蓝点最后画 —— 第 25 步两点几乎重合，蓝点不能被盖住
+    for s, v, g in LSE:
+        if g is not None:
+            f.box(X(s) - 5, Y(-abs(g)) - 5, 10, 10, GY2, GY2, 5)
     for i, (s, v, g) in enumerate(LSE):
         f.box(X(s) - 6, Y(v) - 6, 12, 12, BL, BL, 6)
         # R3：「−0.078」原来写在点的右下，被下一段线穿过 → 一律写在左下（第一个点贴着纵轴，写右下）
@@ -74,8 +78,6 @@ def fig_gauge():
             f.t(X(s) + 10, Y(v) + 20, "%g" % v, BL, True, 13)
         else:
             f.t(X(s) - 10, Y(v) + 20, "%g" % v, BL, True, 13, "end")
-        if g is not None:
-            f.box(X(s) - 5, Y(-abs(g)) - 5, 10, 10, GY2, GY2, 5)
     f.t(X(300) - 10, Y(-0.021) + 20, "GPU 两次之间", GY, True, 13, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "这股力每一步只差 0.065%，同一个方向、每一步都差 —— 几百步积成 logits 整体水平的差", [
@@ -252,7 +254,7 @@ def fig_exact():
         for q in (0.5, 1.0):
             f.line(X0 + q * XW, yl - 5, X0 + q * XW, yl + 5, GY2, 1.2, arrow=False)
             f.t(X0 + q * XW, yl + 24, fmt % (pts[-1][0] / abs(pts[-1][0]) * q * vmax), GY, size=11, anchor="middle")
-        f.box(X0 - ref / vmax * XW, yl - 12, 2 * ref / vmax * XW, 24, "#f1f3f4", "#f1f3f4", 0)
+        f.box(X0 - ref / vmax * XW, yl - 12, 2 * ref / vmax * XW, 24, "#dadce0", "#bdc1c6", 0)   # R18：原 #f1f3f4 在面板上看不见
         f.t(X0, yl + 32, "0（GPU 均值）", GY, True, 13, "middle")
         pu = [v for v, c, _, _ in pts if c == PU]
         if len(pu) == 2:
@@ -407,8 +409,9 @@ def fig_layer0():
                                          ("换成 GPU 重跑 B 的", sw[2], GY2)]):
         bar(py2 + 52 + j * 46, lab, v, col)
     xp = Z + abs(P["第 0 层"][i100]) * SC
-    f.line(xp, py2 + 56, xp, py2 + 102, BL, 1.6, dash="5 4", arrow=False)
-    f.t(xp - 4, py2 + 116, "探针同一步 %s" % _r2(P["第 0 层"][i100]), BL, size=12, anchor="middle")
+    # R18：标注原来写在虚线下端，挤进「换成 GPU 重跑 A 的」那一行 → 挪到蓝柱上方、虚线右侧
+    f.line(xp, py2 + 38, xp, py2 + 86, BL, 1.6, dash="5 4", arrow=False)
+    f.t(xp + 6, py2 + 48, "探针同一步 %s" % _r2(P["第 0 层"][i100]), BL, size=12)
     y2 = py2 + 210
     f.t(Z, y2, "只换一组（换成 TPU 的）", GY, size=13)
     f.line(Z, y2 + 10, Z, y2 + 152, GY2, 1.2, arrow=False)

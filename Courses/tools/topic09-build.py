@@ -51,7 +51,7 @@ OUT_DIR = os.path.join(HERE, "..", "WebPages")
 head = P.make_head(
     "专题九 · GPU→TPU 训练精度对齐",
     "GPU→TPU 训练精度对齐 · TPU 和 GPU 的差，不能比 GPU 自己跟自己的差大",
-    "混元 3 从 GPU 搬到 TPU：地基逐位、两种指标、浮点与硬件、观测，再走一遍真实排查 —— 查到最后，偏移的大头在 GPU 的 golden。",
+    "混元 3 从 GPU 搬到 TPU：地基逐位、两种指标、浮点与硬件、观测，再走一遍真实排查 —— 看这一截差到底是谁的。",
     "topic-09.html")
 head += """
 <style>
@@ -66,6 +66,7 @@ p.bridge { color:var(--gray); border-left:3px solid var(--line); padding-left:12
 </style>"""
 from course_narrow_css import CSS as _NARROW_CSS   # noqa: E402
 head += "<style>" + _NARROW_CSS + "</style>\n"
+head += "<style>.foldfig ol { padding-left: 2.4em }</style>\n"
 head += "<style>figure.fwide > video { display:block; width:100%; max-width:1240px; margin:0 auto; border-radius:8px }\nfigure.fwide:has(> video) > figcaption { max-width:1240px; margin-left:auto; margin-right:auto }</style>\n"
 
 SECTIONS = [
@@ -76,7 +77,7 @@ SECTIONS = [
     ("s五", "五", "浮点与硬件：差从哪来"),
     ("s六", "六", "观测：在 TPU 上怎么看"),
     ("s七", "七", "案例（上）：loss 偏低，漂的是冷门词"),
-    ("s八", "八", "案例（下）：偏的是 GPU 的 golden"),
+    ("s八", "八", "案例（下）：顺着那股力，查到是谁少推了一把"),
     ("s九", "九", "验收与 golden 设计"),
     ("s十", "十", "工程化与教训"),
 ]
@@ -106,7 +107,7 @@ HERO = '''
   </div>
   <p style="max-width:820px;color:var(--gray)">
     先把地基铺平，再学两类指标和一把噪声尺子，弄清浮点和硬件在哪儿舍入，然后跟着一次真实的排查走到底：
-    TPU 的 loss 一直比 GPU 低万分之一点五，查到最后，偏移的大头不在 TPU。</p>
+    TPU 的 loss 一直比 GPU 低万分之一点五，查到最后，答案在一个谁都没怀疑的地方。</p>
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）、<b>专题八</b>（数值格式）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
@@ -314,8 +315,9 @@ __FIG_COS__
 __FIG_RRATIO__
   <p>但<b>对齐的目标仍然是 GPU</b>（GPU 的 golden 自己偏了，才换成精确轨迹，第九节）。注意这里的 R（对真值的距离比）跟 §3.3 的 r（被测 ÷ 噪声上限）不是一回事。</p>
 
-  <h3>4.3　一个大数不一定是算错：路由翻转</h3>
-  <p>第 1 步的梯度，比到的 «STEP1_TENSORS» 个张量（专家只比了 0、1 号这两个）合起来 rel_L2 只有 «STEP1_ALL»；可第 3 层 0 号专家的两个矩阵是 <b>«STEP1_EXPERT»</b>，大了约 80 倍，而 GPU 自己重跑这两个张量一位不差，拿噪声尺子去判就是「不过」。这个大数出在路由上。</p>
+  <h3>4.3　第 1 步，一个专家的梯度大得离谱</h3>
+  <p>第 1 步的梯度，比到的 «STEP1_TENSORS» 个张量（TPU 每层只存了 0、1 号两个专家的梯度，专家只比这两个；其余是全部非专家参数）合起来 rel_L2 只有 «STEP1_ALL»；可第 3 层 0 号专家的两个矩阵是 <b>«STEP1_EXPERT»</b>，大了约 80 倍，而 GPU 自己重跑这两个张量一位不差，拿噪声尺子去判就是「不过」。这个大数出在路由上。</p>
+__FIG_FLIP__
 __ANIM_FLIP__
   <p>MoE 的路由给每个 token 挑前 «TOPK» 名专家（共 «EXPERTS» 个），有的 token 第 8、9 名候选专家的「分数 ＋ 偏置」几乎平局（翻了的那些，分差中位数只有 «FLIP_MARGIN»）；上游注意力两边舍入差一点点，排名就对调，选中的专家换了。
     给路由器喂两边完全相同的输入，翻转是 0；生产配置下两边的路由打分本来就输出 FP32，照样翻，两边全程 FP32（路由也是）也会翻（第 1 层 32,768 个槽位里 1 个）—— 根子在路由器的输入差，不在路由器自己的精度。排名用的是「分数 ＋ 负载均衡偏置」，选中以后加权用不带偏置的分数：偏置只管选谁。</p>
@@ -352,7 +354,7 @@ __ANIM_TRUNC__
   <ul>
     <li>V100、T4、A100 三代上就有人量出：张量核里乘积精确，加法向零舍入，只在最后规格化（Fasi、Higham、Mikaitis、Pranesh，<em>Numerical behavior of NVIDIA tensor cores</em>，PeerJ Computer Science，2021）。</li>
     <li>对 H100／B200 的比特级建模，BF16 进、FP32 出：16 项一组对齐、截断，累加器比 FP32 多 2 个对齐位（等价于本课说的「最高位后 25 位」），H100、H200 与 B200 相同 —— 跟本课在 B200 上独立量出的模型一致（Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>，arXiv:2512.07004）。</li>
-    <li>同一类问题在 FP8 上更凶：DeepSeek-V3 报告实测 H800 上 FP8 矩阵乘的累加只保留约 14 位，于是每 128 个元素搬到 CUDA core 用 FP32 加一次（arXiv:2412.19437 §3.3.2）。口径不同，只借问题的类型，不比大小。</li>
+    <li>同一类问题在 FP8 上更凶：DeepSeek-V3 报告实测 H800 上 FP8 矩阵乘的累加只保留约 14 位，于是每 128 个元素搬到 CUDA core 用 FP32 加一次（arXiv:2412.19437 sec. 3.3.2）。口径不同，只借问题的类型，不比大小。</li>
     <li>对照：Kahan 求和是每一单把抹掉的零头记账、下一单补回去，误差几乎不随长度长；成对求和像淘汰赛，误差随长度按对数长。张量核的抹零正好是反面。</li>
       <li>GPU 侧本课试过的修法，是把输出层这一次 dgrad 换成真 FP32（§8.3）；分段 FP32 累加、split-K 这类更便宜的修法，本课没有测过。</li>
   </ul></details>
@@ -368,7 +370,7 @@ __FIG_TF32__
   <p>TPU 的矩阵单元 MXU 同样吃 BF16、乘积精确、在 FP32 里累加。同一份输入算路由打分，TPU 对 FP64 的相对误差是 4.8e-8，GPU 是 3.8e-6；长求和上 TPU 也会偏，但小得多。</p>
   <details class="foldfig"><summary><b>口径</b>：MXU 的累加怎么舍是推断；「BF16 乘、FP32 累加」的公开出处</summary>
   <p>MXU 累加是不是就近舍入，没有直接证据，是推断。「BF16 乘、FP32 累加」有公开出处：Google Cloud TPU 的 bfloat16 文档（同页还写明 TPU 上转 BF16 是就近舍入、平局取偶，BF16 不支持非正规数），以及 ST-MoE 的脚注（arXiv:2202.08906）。JAX 里要 FP32 累加的写法是 <code>preferred_element_type=float32</code>；矩阵乘精度档 HIGH、HIGHEST 是用 3 遍、6 遍 BF16 去模拟 FP32，不是 IEEE FP32。</p></details>
-  <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。</p>
+  <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。权重切在收缩维（矩阵乘里被加起来、消掉的那一维）上时，每一轮只算出部分和，要一轮轮加起来。</p>
 __FIG_WINDOWED__
   <p>这个开关修好了单层上的那一处多舍（qkv 投影 R 1.235 → 1.000），可对 1000 步的参数范数漂移几乎没用：参数范数那一项的 r（§3.3，被测对第九节验收用的精确轨迹 ④）开关前 3.52、开关后 3.45。</p>
 
@@ -425,7 +427,7 @@ __FIG_DRIFT__
   <h3>7.3　漂在哪：输出层，冷门词的行</h3>
 __FIG_ROWS__
 
-  <h3>7.4　为什么偏偏是冷门词：Adam 的 ε 区</h3>
+  <h3>7.4　Adam 的 ε 区</h3>
 __FIG_EPS__
   <p>打个比方，Adam 像收音机的自动音量，把每个参数的步子拉成差不多大。可声音小到比 ε 还小时，它就不再自动调音量，进来多大、出去就按比例多大，输出跟输入成正比 ——
     梯度的方向一变，更新就原样跟着变。</p>
@@ -451,7 +453,7 @@ __FIG_EPS__
   <p class="bridge">这一节留下的问题：冷门行的更新方向第 25 步就分开了（参数范数要到第 100 步才高过噪声），是什么让它分开的？</p>
 </div></section>
 
-''' + sec("s八", "八", "案例（下）：偏的是 GPU 的 golden") + '''
+''' + sec("s八", "八", "案例（下）：顺着那股力，查到是谁少推了一把") + '''
   <p class="lead">冷门行的更新方向，取决于隐状态在各个 token 上长什么样；顺着往回查，推歪它的是输出头流回来的梯度。</p>
 
 __FIG_LAYER0__
@@ -467,7 +469,7 @@ __FIG_GAUGE__
 __FIG_INTERVENE__
   <p>到这里只知道「是这股力」，还不知道它在哪一边算错了：是 TPU 多推了，还是 GPU 少推了？</p>
 
-  <h3>8.3　少的那一点，在 GPU 那一次 12 万长的求和里</h3>
+  <h3>8.3　把输出头的误差拆到每一段</h3>
 __FIG_HEAD__
   <p>开场第三问的答案：<b>偏移的大头不是 TPU 算错</b>。GPU 在反向里沿 12 万的词表做一次很长的 BF16 矩阵乘求和，张量核把结果系统地朝零截了一点（§5.2 的抹零）；
     落在「所有 logits 一起升降」这个方向上，每一步都少推约 0.065%。TPU 这一步对 FP64 的误差小得多（第 1 步约 27 倍，第 100 步约 8 倍）。</p>
@@ -577,7 +579,7 @@ __FIG_REGRESS__
     <b>一次 12 万长的 BF16 求和，每一步都朝零少算了一点</b>（说它就是抹零模型，是推断）。所以这一讲只立一句话：<b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差。</b>查到 GPU 的 golden 自己偏了以后，正式验收换成对精确轨迹比（第九节）。</p>
 
   <h3>10.5　拿回去用：清单、速查卡、排查表、练习</h3>
-  <p>这一节不进课堂，留给要在自己的模型上做一次对齐的人。四个折叠，按用的顺序排。</p>
+  <p>这一节不进课堂，留给要在自己的模型上做一次对齐的人。前四个折叠按用的顺序排；后面是延伸阅读和出处台账。</p>
 
   <details class="foldfig"><summary><b>动手清单</b>：在自己的模型上做一次 GPU→TPU 对齐，一步一步来</summary>
   <ol>
@@ -662,7 +664,7 @@ verdict = {k: "过" if v &lt;= 1 else ("待定" if v &lt;= 2 else "不过") for 
   <ul>
     <li>浮点加法为什么换顺序就变、前向为什么其实是确定的：Thinking Machines，<em>Defeating Nondeterminism in LLM Inference</em>（2025）。</li>
     <li>张量核里的累加到底怎么舍：Fasi 等，<em>Numerical behavior of NVIDIA tensor cores</em>（PeerJ Computer Science，2021）；Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>（arXiv:2512.07004）。</li>
-    <li>低精度累加在大模型训练里的代价与对策：DeepSeek-V3 技术报告 §3.3.2（arXiv:2412.19437）。</li>
+    <li>低精度累加在大模型训练里的代价与对策：DeepSeek-V3 技术报告 sec. 3.3.2（arXiv:2412.19437）。</li>
     <li>logits 漂移、ε 与训练不稳定：Wortsman 等，<em>Small-scale proxies for large-scale Transformer training instabilities</em>（arXiv:2309.14322）。</li>
     <li>MoE 路由两套引擎选得不一样：Ma 等，<em>Stabilizing MoE Reinforcement Learning by Aligning Training and Inference Routers</em>（arXiv:2510.11370）。</li>
     <li>拿噪声当尺子：Microsoft ExP 团队关于 A/A 测试的博客；Henderson 等，<em>Deep Reinforcement Learning that Matters</em>（arXiv:1709.06560）。</li>
@@ -740,6 +742,8 @@ FIGS = {
         '<b>红色虚线的长度就是 rel_L2。</b><br><em>中格的角度放大了画。</em>'),
     "__FIG_RRATIO__": ("fig-rratio", "fig9-rratio.svg", "topic09-fig-tensor.py",
         '<b>先看点落在哪一圈底色里。</b><br><em>灰圈是 GPU 离真值的距离，定为 1；两次独立、同量级的舍入叠起来，误差平方相加：√(1²＋1²) ≈ 1.41。</em>'),
+    "__FIG_FLIP__": ("fig-flip", "fig9-flip.svg", "topic09-fig-tensor.py",
+        '<b>左边两条红框换了位置，右边就多出一根长红柱。</b><br><em>名次条的长短和被换掉的点位是示意，个数和柱长是实测。</em>'),
     "__FIG_FORMATS__": ("fig-formats", "fig9-formats.svg", "topic09-fig-fp.py",
         '<b>蓝色一样宽，绿色不一样长。</b><br><em>下半的对齐位数是示意。</em>'),
     "__FIG_TRUNCATE__": ("fig-truncate", "fig9-truncate.svg", "topic09-fig-fp.py",
@@ -805,7 +809,7 @@ ANIMS["__ANIM_CHAIN__"] = ("anim-chain", "topic09-chain.mp4", "DriftChain",
     "② 主干权重沿这个方向每一步少走一点：整步沿漂移方向少走 0.36%（全体参数，同一状态实测），主干里大头在第 0 层注意力的输出投影。"
     "③ 所有 logits 一起偏一截（lse 差，TPU 减 GPU）；softmax 看不见它。第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218。"
     "④ 冷门词那几行在 Adam 的 ε 区（92% 的元素根号 v 小于 ε），压多压少跟着 logit 水平走；没出现过的词那几行平方和多涨 17.1（第 300 步实测）。"
-    "⑤ 参数范数多涨，第 300 步 4.6e-3；按组拆输出层占 87%（另测一对，合计 4.4e-3）；loss 偏低一起出现、一起消失（机制未验证）。"
+    "⑤ 参数范数多涨，第 300 步 4.6e-3；按组拆输出层占 87%（另测一对，合计 4.4e-3）；loss 偏低（去掉那股力后各还剩一截；loss 的机制未验证）。"
     "时钟走起来：①② 每一步都一样，③④⑤ 一步步积起来。第 300 步：每步只差一点、同一个方向，积成看得见的漂移。"
     "灰色是 GPU 两次之间；刻度上白色是探针实测的那几步。五环都标实测。")
 ANIMS["__ANIM_TRUNC__"] = ("anim-trunc", "topic09-trunc.mp4", "TruncVsRound",
@@ -844,7 +848,7 @@ def _anim_html(aid, mp4, scene, cap, sub, aria, first=False):
     return ('<figure class="fbox fwide" id="%s">\n<video src="media/%s" autoplay loop muted playsinline data-pauses="%s"\n'
             '       aria-label="%s"></video>\n<figcaption><b>%s</b>\n'
             '  <span class="sub">（%d 秒，Manim 渲染%s%s）</span></figcaption></figure>'
-            % (aid, mp4, pauses, aria.replace('"', "&quot;"), cap, round(st["duration"]),
+            % (aid, mp4, pauses, aria.replace('"', "&quot;").replace("§", "&#167;"), cap, round(st["duration"]),
                # 操作说明只在页面上第一支动画写全，其余只提一句（R5 文字评审：五支重复同一句）
                "；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。" if first
                else "，可一步一步看。", sub))
@@ -867,7 +871,7 @@ for _tag in ("h2", "h3", "section", "div", "details", "table"):
     _c = _html.count("</%s>" % _tag)
     assert _o == _c, "<%s> 开 %d 个、闭 %d 个" % (_tag, _o, _c)
 # ⭐ 正文里手打的关键数，必须在对应的图里也出现（图是脚本现算的）—— 照专题五的 _NUM_LOCK。
-_NUM_LOCK = [("16,000", "fig9-replay.svg"), ("0.033", "fig9-wd.svg"), ("3.45", "fig9-judge.svg"),
+_NUM_LOCK = [("16,000", "fig9-replay.svg"), ("0.033", "fig9-wd.svg"), ("3.45", "fig9-judge.svg"), ("1.92", "fig9-judge.svg"), ("1.29", "fig9-judge.svg"), ("1.14", "fig9-judge.svg"),
              ("1.235", "fig9-rratio.svg"), ("2.36e-03", "fig9-windowed.svg"), ("0.127", "fig9-drift.svg"),
              ("17.1", "fig9-rows.svg"), ("0.065%", "fig9-gauge.svg"), ("6.5e-04", "fig9-head.svg"),
              ("0.36%", "fig9-swap.svg"), ("+0.0182", "fig9-exact.svg"), ("59%", "fig9-decomp.svg"),

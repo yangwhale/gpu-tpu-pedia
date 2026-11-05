@@ -147,8 +147,9 @@ CAPS = [
 def cap_alpha(i, t):
     lo = CAPS[i][0]
     hi = CAPS[i + 1][0] if i + 1 < len(CAPS) else T6A
-    a = 1.0 if i == 0 else prog(t, lo - 0.15, lo + 0.15, ease=False)
-    b = 1.0 - prog(t, hi - 0.15, hi + 0.15, ease=False)
+    # R18：原来新旧字幕在 lo±0.15 交叉淡变，同一位置叠字 → 改成旧的在 [hi−0.3, hi] 先淡出、新的在 [lo, lo+0.3] 再淡入
+    a = 1.0 if i == 0 else prog(t, lo, lo + 0.3, ease=False)
+    b = 1.0 - prog(t, hi - 0.3, hi, ease=False)
     v = min(a, b)
     if i == 0:
         v = max(v, prog(t, T6A, T6B, ease=False))

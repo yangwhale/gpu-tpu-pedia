@@ -110,7 +110,7 @@ BASE_Y, HSCALE = -2.15, 6.2          # 主图基线；分数 → 高度
 BAR_W, BAR_DX, BAR_X0 = 0.38, 0.54, -6.15
 CUT_X = BAR_X0 + BAR_DX * (TOPK - 0.5)
 RX = 3.55                            # 右半边面板的中线
-ZX, ZY, ZW, ZH = RX, -1.05, 3.6, 2.5 # 放大框
+ZX, ZY, ZW, ZH = RX, -1.05, 5.0, 2.5 # 放大框（R18：3.6 → 5.0，第 ② 段黄字原来比框宽、框线压字）
 Z_LO, Z_HI = S8 - 1.25e-4, S8 + 0.75e-4
 ZOOM = (ZH / (Z_HI - Z_LO)) / HSCALE
 assert ZOOM > 1000
@@ -240,6 +240,7 @@ class RouteFlip(Scene):
         zb = tx("B", 22, YELLOW).move_to([ZX + 0.75, ZY - ZH / 2 - 0.25, 0])
         zgap0 = tx("B 只比 A 低 3e-5", 20, WHITE).move_to([ZX, ZY + ZH / 2 - 0.3, 0])
         zgap1 = tx("A 反比 B 低 1.5e-5：A 落选，B 入选", 20, YELLOW).move_to([ZX, ZY + ZH / 2 - 0.3, 0])
+        assert zgap1.width < ZW - 0.3 and zgap0.width < ZW - 0.3, (zgap1.width, ZW)
         # R6 评审第 18 条：框里这两个差是示意数（GAP0 ∈ 实测中位数范围，GAP1 由示意 δ 推出），屏上点明
         zschem = tx("示意，取在实测中位数范围内", 15, GREY_B).move_to([ZX, ZY + ZH / 2 - 0.62, 0])
         zfoot1 = tx("翻转 token 的第 8、9 名分差：中位数 2.7e-5 – 6.3e-5", 18, GREY_B

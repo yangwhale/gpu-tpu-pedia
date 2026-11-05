@@ -5,6 +5,9 @@ fig9-cos     回答：rel_L2 和 cos 各看见什么、看不见什么？
              现算：被测 ＝ 参照 × 2 时 cos ＝ 1、rel_L2 ＝ 1；同长度转 2.56° 时 cos ＝ 0.999、rel_L2 ≈ 4.5%（1 − cos ≈ ½·rel_L2²）。
 fig9-rratio  回答：TPU 离 GPU 远了，是谁的错？—— 拿 FP64 真值当靶心，比两边各离靶心多远：R ＝ 被测距离 ÷ GPU 距离。
              数字：门槛 1.2（推断）；√2 ≈ 1.41 ＝ 多一次同量级独立舍入（本课推导）；qkv 投影 1.235 → 1.000（实测）。
+fig9-flip    回答：第 1 步一个专家的梯度差 0.102、全体只有 1.28e-3，差从哪来？—— 路由第 8、9 名对调，专家换了 token。
+             数字全取 topic09_numbers（实测）：STEP1_EXPERT / STEP1_ALL / STEP1_TENSORS、E0_*、FLIP_MARGIN、TOPK、EXPERTS。
+             刻意没画：名次条的长度和第 1–10 名的分数（示意，画上刻度就是编）；点阵里哪几个 token 被换（位置示意，个数实测）。
 """
 import math
 
@@ -127,5 +130,110 @@ def fig_rratio():
     f.save("fig9-rratio.svg", yb + 14)
 
 
+def fig_flip():
+    ratio = N.STEP1_EXPERT / N.STEP1_ALL
+    assert 70 < ratio < 90, ratio
+    f = Fig(W, "两格。左格：同一个 token 在 GPU 和 TPU 上给专家打分的名次表，前 %d 名入选；"
+               "第 8 名和第 9 名分数几乎一样，两边正好对调，GPU 选了专家 A，TPU 选了专家 B。翻了的 token，两名之间的分差中位数是 %s。"
+               "右格：第 3 层 0 号专家分到 %d 个 token，TPU 上少了 %d 个、多了 %d 个；它的梯度 rel_L2 是 %s，一根长红柱，"
+               "而比到的 %d 个张量合起来只有 %s，一根很短的蓝柱，约差 %d 倍；GPU 自己重跑路由不变，宽度为 0。"
+               % (N.TOPK, N.FLIP_MARGIN, N.E0_TOKENS, N.E0_OUT, N.E0_IN, N.STEP1_EXPERT,
+                  N.STEP1_TENSORS, N.STEP1_ALL, round(ratio)))
+    y0 = f.header("第 8、9 名一对调，一个专家就换了一批 token",
+                  "左格：同一个 token 的专家名次，上面 %d 名入选（共 %d 个专家）；右格：这个专家换了几个 token、梯度差多大（柱长按 rel_L2 线性画）"
+                  % (N.TOPK, N.EXPERTS),
+                  [(GY, "GPU"), (BL, "TPU"), (RD, "对调的两名 ／ 偏差来源")])
+    PH = 420
+    # ── 左格：名次表 ──
+    LW = 640
+    py = f.panel(0, y0, LW, PH, "名次表：同一个 token，两边的第 8、9 名对调", BL)
+    scores = [1.00, 0.93, 0.87, 0.82, 0.78, 0.74, 0.71, 0.685, 0.684, 0.62]   # 示意
+    RH, top = 25, py + 52
+    cols = [(70, "GPU", GY, ["", "", "", "", "", "", "", "A", "B", ""]),
+            (355, "TPU", BL, ["", "", "", "", "", "", "", "B", "A", ""])]
+    BLEN = 200
+    for cx, name, col, labs in cols:
+        f.t(cx, top - 16, name, col, True, 15)
+    for i in range(10):
+        y = top + i * RH
+        f.t(56, y + 15, "%d" % (i + 1), GY, i in (7, 8), 13, "end")
+    for cx, name, col, labs in cols:
+        for i, sc in enumerate(scores):
+            y = top + i * RH
+            hot = i in (7, 8)
+            L = BLEN * sc
+            if hot:
+                f.box(cx, y + 3, L, RH - 8, col, RD, 3, sw=2)
+                f.t(cx + L + 8, y + 16, "专家 " + labs[i], RD, True, 14)
+            else:
+                f.box(cx, y + 3, L, RH - 8, col, col, 3)
+    # 入选线：第 8 名下面
+    yc = top + 8 * RH - 2
+    f.line(30, yc, LW - 24, yc, INK, 1.4, dash="6 4", arrow=False)
+    f.t(LW - 24, yc - 6, "以上入选", INK, True, 13, "end")
+    f.t(LW - 24, yc + 16, "以下落选", GY, False, 13, "end")
+    # 对调的交叉线：GPU 的 A（第 8）→ TPU 的 A（第 9），B 反之
+    xg, xt = 70 + BLEN * scores[7] + 70, 355 - 12
+    f.line(xg, top + 7 * RH + 13, xt, top + 8 * RH + 13, RD, 1.4, dash="4 3", arrow=True)
+    f.line(xg, top + 8 * RH + 13, xt, top + 7 * RH + 13, RD, 1.4, dash="4 3", arrow=True)
+    f.t(36, top + 10 * RH + 20, "⋮ 后面还有 %d 名" % (N.EXPERTS - 10), GY, size=13)
+    f.t(24, py + PH - 76, "第 8、9 名分差：中位数 %s" % N.FLIP_MARGIN.replace(" 到 ", "–"), RD, True, 15)
+    f.t(24, py + PH - 52, "（条长是示意；真实差小到画不出来）", GY, size=13)
+    f._pan = None
+    # ── 右格：后果 ──
+    px = LW + 20
+    RW = W - px
+    py = f.panel(px, y0, RW, PH, "后果：这个专家的梯度差", RD)
+    f.t(px + 20, py + 26, "第 3 层 0 号专家分到 %d 个 token" % N.E0_TOKENS, INK, True, 14)
+    per, dx = 28, 15
+    gx, gy = px + 24, py + 44
+    out_idx = {23, 71, 118}                     # 位置示意
+    assert len(out_idx) == N.E0_OUT
+    for k in range(N.E0_TOKENS + N.E0_IN):
+        x, y = gx + (k % per) * dx, gy + (k // per) * dx
+        if k >= N.E0_TOKENS:
+            f.box(x, y, 10, 10, RD, RD, 5)                       # 换进
+        elif k in out_idx:
+            f.box(x, y, 10, 10, "#fff", RD, 5, sw=2)             # 换出
+        else:
+            f.box(x, y, 10, 10, GY2, GY2, 5)
+    lx = gx + per * dx + 20
+    f.box(lx, gy + 4, 10, 10, "#fff", RD, 5, sw=2)
+    f.t(lx + 18, gy + 14, "TPU 换出 %d 个" % N.E0_OUT, RD, True, 14)
+    f.box(lx, gy + 30, 10, 10, RD, RD, 5)
+    f.t(lx + 18, gy + 40, "换进 %d 个" % N.E0_IN, RD, True, 14)
+    f.t(lx, gy + 66, "一个点 ＝ 一个 token", GY, size=13)
+    # 柱子：rel_L2 线性
+    BX, BMAX = px + 24, 440
+    by = gy + 5 * dx + 50
+    bars = [("这个专家的梯度（rel_L2）", N.STEP1_EXPERT, RD, "%g" % N.STEP1_EXPERT),
+            ("%d 个张量合起来" % N.STEP1_TENSORS, N.STEP1_ALL, BL, ("%.2e" % N.STEP1_ALL).replace("e-0", "e-")),
+            ("GPU 重跑", 0.0, GY, "0")]
+    for i, (lab, v, col, vs) in enumerate(bars):
+        y = by + i * 60
+        f.t(BX, y, lab, INK, i == 0, 14)
+        L = BMAX * v / N.STEP1_EXPERT
+        if L > 0:
+            f.box(BX, y + 8, max(L, 3), 20, col, col, 3)
+        else:
+            f.line(BX, y + 6, BX, y + 30, GY, 2, arrow=False)
+        f.t(BX + max(L, 3) + 10, y + 24, vs, col, True, 15)
+        if i == 2:
+            f.t(BX + 40, y + 24, "路由不变，尺子宽度 0", GY, size=14)
+    f.t(BX + BMAX + 80, by + 24, "约 %d 倍" % round(ratio), RD, True, 17)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "warn", "差出在路由上，不在专家的算术上", [
+        "近平局 ＋ 上游一丝输入差 ＝ 选了另一个专家；同输入则 0 翻转。",
+        "所以第 1 步张量比较先看路由槽位，翻了就按两边选中的同一批 token 重比。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测：第 1 步梯度对 GPU 的 rel_L2，第 3 层 0 号专家的权重梯度 %g，比到的 %d 个张量合起来 %g；"
+               "隔离回放的那批 token 里这个专家分到 %d 个，TPU 侧少 %d 多 %d；发生翻转的 token，第 8、9 名「分数＋偏置」之差的中位数按层在 %s 之间。"
+               % (N.STEP1_EXPERT, N.STEP1_TENSORS, N.STEP1_ALL, N.E0_TOKENS, N.E0_OUT, N.E0_IN, N.FLIP_MARGIN),
+               "⚠️ 示意：左格名次条的长度和第 1–10 名的分数是示意，只有「第 8、9 名对调」和分差中位数是实测；右格点阵的个数是实测，哪几个点被换出是随手标的位置。")
+    f.save("fig9-flip.svg", yb + 14)
+
+
 fig_cos()
 fig_rratio()
+fig_flip()

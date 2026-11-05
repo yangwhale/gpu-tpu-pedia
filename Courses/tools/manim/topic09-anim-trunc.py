@@ -293,7 +293,7 @@ def path_pts(series, kcur, fx, fy, nmax=400):
 def fmt_e(v):
     s = "%.1e" % v
     m, e = s.split("e")
-    return "%s e%d" % (m.replace("-", "−"), int(e)) if v != 0 else "0"
+    return "%se%d" % (m.replace("-", "−"), int(e)) if v != 0 else "0"   # R18：e 前不留空格，同全课「3.1e-4」
 
 
 class TruncVsRound(Scene):
