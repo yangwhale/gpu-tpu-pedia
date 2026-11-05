@@ -189,6 +189,9 @@ __FIG_FUNNEL__
     <li><b>逐位相同</b>：两个数的每一个二进制位都一样，不只是「看着相等」。</li>
     <li><b>BF16 / FP32 / TF32</b>：三种浮点格式，指数都是 8 位，尾数分别是 7、23、10 位（§5.1）。</li>
     <li><b>张量核 / MXU</b>：GPU 和 TPU 上专门做矩阵乘的硬件单元。</li>
+    <li><b>EP</b>：按专家切 —— 不同的专家放在不同的卡上，token 按路由结果发过去算。</li>
+    <li><b>分布式优化器</b>：把优化器状态切开分到各张卡上存；本讲的 GPU 默认组把它关掉，因为开着的那组运行有持续的小偏移。</li>
+    <li><b>Megatron-Bridge、Transformer Engine</b>：GPU 这一侧用的训练框架，以及 NVIDIA 给它提供低精度矩阵乘等算子的库。</li>
     <li><b>FSDP</b>：把权重切开分到各张卡、用的时候再拼起来的数据并行（专题五 §2.3）。</li>
     <li><b>collective matmul</b>：一边在设备之间收下一片数据、一边算矩阵乘，把通信藏在计算后面（§5.4）。</li>
     <li><b>microbatch</b>：一步要算的一批数据再切成几小份，一份一份地过，梯度加起来。</li>
@@ -352,6 +355,7 @@ __ANIM_TRUNC__
     <li>对 H100／B200 的比特级建模，BF16 进、FP32 出：16 项一组对齐、截断，累加器比 FP32 多 2 个对齐位（等价于本课说的「最高位后 25 位」），H100、H200 与 B200 相同 —— 跟本课在 B200 上独立量出的模型一致（Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>，arXiv:2512.07004）。</li>
     <li>同一类问题在 FP8 上更凶：DeepSeek-V3 报告实测 H800 上 FP8 矩阵乘的累加只保留约 14 位，于是每 128 个元素搬到 CUDA core 用 FP32 加一次（arXiv:2412.19437 §3.3.2）。口径不同，只借问题的类型，不比大小。</li>
     <li>对照：Kahan 求和是每一单把抹掉的零头记账、下一单补回去，误差几乎不随长度长；成对求和像淘汰赛，误差随长度按对数长。张量核的抹零正好是反面。</li>
+      <li>GPU 侧本课试过的修法，是把输出层这一次 dgrad 换成真 FP32（§8.3）；分段 FP32 累加、split-K 这类更便宜的修法，本课没有测过。</li>
   </ul></details>
 
   <h3>5.3　TF32：开关说的不算</h3>
@@ -578,21 +582,34 @@ __FIG_REGRESS__
     <li><b>定目标和预算</b>：写下要对齐的配置（层数、步数、批大小、学习率、精度），和「对谁比」—— 默认对 GPU 那份 golden。</li>
     <li><b>先量 GPU 自己的噪声</b>：同一设置的 GPU 至少跑 6–8 份（两两 15 对以上）；只用同一种设置的运行配对（确定性开关、分布式优化器开不开，都算设置）。算出每个检查项的 N。</li>
     <li><b>铺地板 L0</b>：数据原样回放、逐单元比指纹；权重转过去再转回来、逐张量比字节；加载后从设备上再读一遍；配置对照表写<em>实际生效</em>的值（运行时元数据）；续训逐位。</li>
-    <li><b>第 1 步自检</b>：两边第 1 步 loss 的相对差应在 1e-5 量级以下；差得离谱回第 3 步，别查数值。</li>
+    <li><b>第 1 步自检</b>：看第 1 步 loss 的相对差。本例是 2.5e-6；超过参考档的 2e-4，先回第 3 步查地基，别查数值；介于两者之间，做隔离回放、用 FP64 的 R 比定责（本课经验）。</li>
     <li><b>第 1 步张量</b>：逐个大张量算 rel_L2、cos、范数比；超线的那一处请 FP64 来算 R 比定责（≤ 1.2 算两边一样远）。MoE 先看路由槽位翻了没有，翻了就按「两边选中同一批 token」重比。</li>
-    <li><b>跑满步数</b>：两个窗口（全程、尾段）各算带符号均值、MARE、最大单步，除以 N 得 r；≤ 1 过、1–2 待定、＞ 2 不过。待定先补参照重判。</li>
+    <li><b>跑满步数</b>：两个窗口（全程；尾段 ＝ 两条轨迹分开、偏移稳定以后，本例从第 301 步起；窗口事先写进协议）各算带符号均值、MARE、最大单步，除以 N 得 r；≤ 1 过、1–2 待定、＞ 2 不过。待定先补参照重判。检查项多时，纯噪声也会预期出「条数 × 1/(n+1)」条待定。</li>
     <li><b>不过就往下排查</b>：从上往下一级级缩小（见下面的排查表）；TPU 上拿证据走程序外面（步间读状态、隔离回放、固定探针、状态互换）。</li>
     <li><b>golden 自己可疑时</b>：在 GPU 上跑一条精确轨迹（BF16 权重、全程 FP32、真关 TF32），分两关：第一关对它判过不过；第二关对生产 golden 写成「已解释差异」。尺子、基线事先写进协议，中途不换。</li>
     <li><b>投产后</b>：日常回归先要求逐位；不逐位按 PR 的数值声明分流；TPU 执行噪声用只改执行方式的扰动臂标定，配置一换就重标。</li>
     <li><b>记下来</b>：一个问题一份案例文件，事实带出处、推断标出来、排除的也写；坑写进通用文档。</li>
-  </ol></details>
+  </ol>
+  <p>判定那一步的骨架（伪代码，本课推导）：</p>
+  <pre style="font-size:13px;line-height:1.5;background:#f8f9fa;padding:10px;border-radius:6px;overflow-x:auto">def d(test, base):            # 每一步的相对差
+    return [(t - b) / abs(b) for t, b in zip(test, base)]
+def stats(dt):                # 一个窗口里的三个统计
+    return {"signed_mean": abs(mean(dt)), "mare": mean(abs(x) for x in dt), "max_step": max(abs(x) for x in dt)}
+windows = {"all": range(2, T + 1), "tail": range(t0, T + 1)}   # t0：事先写定的尾段起点
+N = {w: {k: max(stats(d(a, b)[w])[k] for a, b in pairs(gpu_runs)) for k in KEYS} for w in windows}
+r = {w: {k: stats(d(tpu, baseline)[w])[k] / N[w][k] for k in KEYS} for w in windows}
+worst = max(max(v.values()) for v in r.values())
+verdict = "过" if worst &lt;= 1 else ("待定" if worst &lt;= 2 else "不过")
+# 单算子定责：R = rel_l2(tpu, fp64) / rel_l2(gpu, fp64)；≤ 1.2 算两边一样远</pre>
+  <p>本例自己的缺口：第一关的尺子只有 10 对，低于 15 对的建议线。</p></details>
 
   <details class="foldfig"><summary><b>速查卡</b>：指标、门槛、读法，一页</summary>
   <table class="t9"><thead><tr><th>量</th><th>怎么算</th><th>门槛 ／ 读法</th></tr></thead><tbody>
   <tr><td>dₜ</td><td>（被测 − 基线）÷ |基线|，同一步</td><td>只是原料；首步单独报</td></tr>
   <tr><td>带符号均值 ／ MARE ／ 最大单步</td><td>窗口内 dₜ 的平均 ／ |dₜ| 的平均 ／ 最大 |dₜ|</td><td>窗口：全程第 2–1000 步、尾段第 301–1000 步；三个都判，最差的决定</td></tr>
-  <tr><td>N（噪声上限）</td><td>同设置 GPU 两两配对，同口径算，取最大</td><td>纯噪声超过 n 对最大值的概率 1/(n+1)；正式签字 ≥ 15 对</td></tr>
-  <tr><td>r</td><td>被测 ÷ N</td><td>≤ 1 过；1–2 待定；＞ 2 不过</td></tr>
+  <tr><td>N（噪声上限）</td><td>同设置 GPU 两两配对，同口径算，取绝对值的最大</td><td>纯噪声超过 n 对最大值的概率 1/(n+1)；正式签字 ≥ 15 对</td></tr>
+  <tr><td>r</td><td>|被测| ÷ N</td><td>≤ 1 过；1–2 待定；＞ 2 不过</td></tr>
+  <tr><td>哪一级用哪把尺子</td><td>L0 地基；L1/L2 单算子、单层；L3/L4 整网第 1 步、多步</td><td>L0 逐位；L1/L2 第 1 步前向 GPU 重跑噪声为 0，用 R 比定责；整网多步用 GPU 噪声尺子</td></tr>
   <tr><td>rel_L2</td><td>‖被测 − 参照‖ ÷ ‖参照‖（整个张量拉直）</td><td>张量主判；cos 0.999 ≈ rel_L2 4.5%</td></tr>
   <tr><td>cos ／ 范数比</td><td>方向 ／ 长度之比</td><td>cos 看不见整体缩放；范数比 2.000 ＝ 漏除了一个 2</td></tr>
   <tr><td>R（对真值的距离比）</td><td>TPU 到 FP64 的 rel_L2 ÷ GPU 到 FP64 的 rel_L2</td><td>≈ 1 一样远；＞ 1.2 查 TPU；≈ 1.41 像多舍了一次；＜ 1 GPU 更远</td></tr>
@@ -603,8 +620,8 @@ __FIG_REGRESS__
 
   <details class="foldfig"><summary><b>排查表</b>：看到什么 → 多半是什么 → 先查什么</summary>
   <table class="t9"><thead><tr><th>症状</th><th>多半是</th><th>先查</th></tr></thead><tbody>
-  <tr><td>第 1 步 loss 就差 1e-3 以上</td><td>地基没铺平：数据、权重、配置</td><td>数据指纹、权重逐字节、配置的实际生效值</td></tr>
-  <tr><td>第 2 步才开始分叉</td><td>FP32 主权重有小于 BF16 半格的错</td><td>加载后从设备读回、比主权重</td></tr>
+  <tr><td>第 1 步 loss 相对差超过 2e-4</td><td>地基没铺平：数据、权重、配置</td><td>数据指纹、权重逐字节、配置的实际生效值</td></tr>
+  <tr><td>第 1 步对上，第 2 步起的差明显大于 GPU 重跑第 2 步的差</td><td>FP32 主权重有小于 BF16 半格的错</td><td>加载后从设备读回、跟 GPU 第 0 步逐位比主权重</td></tr>
   <tr><td>差从第 1 步起就稳定在一个常数</td><td>口径：loss 分母、步号错位</td><td>故意错开一步再比；核对 loss 归一化</td></tr>
   <tr><td>梯度 cos ≈ 1、范数比是整数倍</td><td>漏除了 microbatch 数或卡数</td><td>梯度累积和规约里的除法</td></tr>
   <tr><td>某个专家梯度大得离谱，GPU 重跑却一位不差</td><td>路由近平局翻转</td><td>路由槽位；给路由器喂相同输入再比</td></tr>
@@ -612,22 +629,25 @@ __FIG_REGRESS__
   <tr><td>名义 FP32 的参照比 BF16 还偏</td><td>TF32 没关干净</td><td>启动时实测 FP32 矩阵乘对 FP64；打印环境变量</td></tr>
   <tr><td>加了抓数的程序和生产程序不逐位</td><td>钩子切开了融合</td><td>改用步间读状态、隔离回放、探针</td></tr>
   <tr><td>loss 慢慢偏、参数范数一起漂</td><td>每一步更新里有一个固定方向的小差</td><td>按组、按行拆参数范数；看 Adam 的 ε 区；状态互换</td></tr>
+  <tr><td>TPU 的 loss 更低、参数范数更大，单步上 TPU 反而离 FP64 更近</td><td>golden 自己偏了，比如大词表 dgrad 的长求和朝零少算</td><td>精确 dgrad 的 A/B；状态互换；在 GPU 上跑精确轨迹</td></tr>
   <tr><td>严格档不过、参考档过</td><td>差已超出噪声，但不大</td><td>定责：是谁的差，再决定写成已解释差异还是修</td></tr>
   <tr><td>不同配置之间偏移不一致</td><td>并行切法、重算、批大小切法也是数值的一部分</td><td>参照和被测固定同一切法、同一设置</td></tr>
   </tbody></table></details>
 
-  <details class="foldfig"><summary><b>练习</b>：五道题，答案在每题下面</summary>
+  <details class="foldfig"><summary><b>练习</b>：六道题，答案在每题下面</summary>
   <ol>
-    <li>GPU 重跑 4 份，两两 6 对，参数范数带符号均值的最大值是 2.0e-7；TPU 对基线是 3.0e-7。怎么判？还缺什么？
+    <li>GPU 重跑 4 份，两两 6 对，参数范数带符号均值的绝对值最大是 2.0e-7；TPU 对基线是 3.0e-7。怎么判？还缺什么？
       <br><em>答：r ＝ 1.5，待定。只有 6 对，纯噪声超线的概率是 1/7；再补到 15 对以上重判，还在 1–2 倍就往下一级定责。</em></li>
-    <li>第 1 步 loss：TPU 11.4658，GPU 11.4659。该先查数值还是先查地基？
-      <br><em>答：相对差约 8.7e-6，跟本课的 2.5e-6 同一量级，地基大概率是平的；这一项过了再往下看。真要是 1e-3 量级，先回 L0。</em></li>
+    <li>第 1 步 loss 的相对差是 3e-4。该先查数值还是先查地基？
+      <br><em>答：超过参考档的 2e-4，先回 L0：数据指纹、权重逐字节、配置的实际生效值。第 1 步还没有任何更新，两边只差前向舍入，本例只有 2.5e-6。</em></li>
     <li>某个注意力投影的 R ＝ 1.40。说明什么？下一步查哪？
       <br><em>答：像 TPU 多舍了一次同量级的数（√2 ≈ 1.41）。查这处矩阵乘的累加器精度、是否是 collective matmul 在 BF16 里累加部分积、有没有 excess precision 改了舍入位置。</em></li>
     <li>你的「FP32 参照」对 FP64 的 rel_L2 是 3e-4，GPU 的 BF16 程序是 6.5e-4。能拿它当参照吗？
-      <br><em>答：不能。真 FP32 应在 1e-6 量级；3e-4 说明它多半走了 TF32。先真关 TF32（环境变量），启动时实测一遍再用。</em></li>
+      <br><em>答：不能。§5.3 的判据是真 FP32 对 FP64 ≤ 1e-5；3e-4 说明它多半走了 TF32。先真关 TF32（环境变量），启动时实测一遍再用。</em></li>
     <li>迁移验收第一关 3.45 倍不过，loss 待定。经理问能不能上线，你怎么答？
-      <br><em>答：数值上能说清的：差多大、几成是 GPU golden 自己的偏差（已解释）、几成在 TPU 一侧（还在查）、下游没测。能不能上线是业务判断，要拿这几条去定。</em></li>
+      <br><em>答：先说协议结论：第一关不过，不能签字。再给四行：已解释的部分（几成是 GPU golden 自己的偏差）；没解释的部分和下一步；下游没测；要带条件上线，还缺哪些证据、止损线设在哪。能不能上线是业务判断，拿这四行去定。</em></li>
+    <li>换一个词表 25 万的模型，输出层 dgrad 那次长求和的朝零偏差，会比 12 万时更大还是更小？
+      <br><em>答：多半更大：求和越长，抹零只少不多，本课实测的趋势是随 K 增长还加速（推断，没在 25 万上测过）。要么在 GPU 上把这一次 dgrad 换成真 FP32，要么至少在第一关前先测它对 FP64 的偏差。</em></li>
   </ol></details>
 
   <details class="foldfig"><summary><b>延伸阅读</b>：想把这一讲的几个底层问题读透，从这几篇开始</summary>
@@ -731,7 +751,7 @@ FIGS = {
     "__FIG_EPS__": ("fig-eps", "fig9-eps.svg", "topic09-fig-case1.py",
         '<b>红区在斜坡上，绿区在平台上。</b><br><em>曲线是稳态近似，只讲形状。</em>'),
     "__FIG_LAYER0__": ("fig-layer0", "fig9-layer0.svg", "topic09-fig-case2.py",
-        '<b>粗蓝线最先往下走，浅蓝线一层比一层低；右边只有换上 TPU 权重那根长。</b><br><em>左图每 25 步一个实测点。</em>'),
+        '<b>粗蓝线最先往下走，浅蓝线一层比一层低；右边只有换上 TPU 权重那根长。</b><br><em>ĥ：最后一层隐状态的均值方向（û），每一维再乘最后那次归一化的缩放 γ；左图每 25 步一个实测点。</em>'),
     "__FIG_GAUGE__": ("fig-gauge", "fig9-gauge.svg", "topic09-fig-case2.py",
         '<b>左边是那个方向，右边是它每步少一点积出来的结果。</b><br><em>左图的箭头是示意。</em>'),
     "__FIG_INTERVENE__": ("fig-intervene", "fig9-intervene.svg", "topic09-fig-case2.py",
