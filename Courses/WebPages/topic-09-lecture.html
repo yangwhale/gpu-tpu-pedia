@@ -255,7 +255,7 @@ h2.part{margin:48px 0 8px;padding-top:18px;border-top:2px solid #dadce0;font-siz
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,062</td><td>4</td><td>6.3′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>752</td><td>3</td><td>4.5′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>965</td><td>4</td><td>6.0′</td><td>6′</td></tr><tr><td>第四节　指标（二）：张量</td><td>928</td><td>4</td><td>5.9′</td><td>6′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>823</td><td>7</td><td>6.0′</td><td>6′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>600</td><td>1</td><td>3.2′</td><td>4′</td></tr><tr><td>第七节　案例（上）：loss 偏低，漂的是冷门词</td><td>718</td><td>4</td><td>4.6′</td><td>5′</td></tr><tr><td>第八节　案例（下）：顺着那股力，查到是谁少推了一把</td><td>1,402</td><td>8</td><td>9.2′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>799</td><td>7</td><td>5.9′</td><td>6′</td></tr><tr><td>第十节　工程化与教训</td><td>715</td><td>2</td><td>4.1′</td><td>5′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>56′</b></td><td><b>60′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,062</td><td>4</td><td>6.3′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>752</td><td>3</td><td>4.5′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>965</td><td>4</td><td>6.0′</td><td>6′</td></tr><tr><td>第四节　指标（二）：张量</td><td>928</td><td>4</td><td>5.9′</td><td>6′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>823</td><td>7</td><td>6.0′</td><td>6′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>600</td><td>1</td><td>3.2′</td><td>4′</td></tr><tr><td>第七节　案例（上）：loss 偏低，漂的是冷门词</td><td>718</td><td>4</td><td>4.6′</td><td>5′</td></tr><tr><td>第八节　案例（下）：顺着那股力，查到是谁少推了一把</td><td>1,402</td><td>8</td><td>9.2′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>798</td><td>7</td><td>5.9′</td><td>6′</td></tr><tr><td>第十节　工程化与教训</td><td>715</td><td>2</td><td>4.1′</td><td>5′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>56′</b></td><td><b>60′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
@@ -704,8 +704,8 @@ TPU 上的程序由 XLA 整图编译。还记得上次那张图吗：GPU 每个�
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-golden</code>，从左往右四张卡，再看下面的柱子。</p>
 
-<p class="say">「答案是：拿精确轨迹当基线。做法跟上一节紫点那条一样，只是换到整层重算加路由回放的配置上重跑了一条。可它不是一开始就有的：从框架默认出发，改了三次，每次只改一类。<br>
-第一份是框架默认，不重算，底下没有柱子，只拿来归因。第二份加上整层重算和路由回放，模仿生产；第三份只把输出头 dgrad 换成精确的；第四份改成精确轨迹。<br>
+<p class="say">「答案是：拿精确轨迹当基线。做法跟上一节紫点那条一样，只是换到整层重算加路由回放的配置上。可它不是一开始就有的：从框架默认出发，先对齐超参、数据和并行，再改了三次，每次只改一类。<br>
+第一份不重算，底下没有柱子，只拿来归因；第二份加上整层重算和路由回放；第三份只把输出头 dgrad 换成精确的；第四份改成精确轨迹。<br>
 同一个 TPU 被测、同一把尺子：二十四倍，十倍，三倍半；竖线是两倍噪声，三倍半还在线外，不过。这是打开第五节那个 FP32 累加开关之前的那版 TPU；打开以后三点四五倍，几乎没动。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>anim-lineage</code>，色块出现时只念色块上的名字：「GPU 输出头 dgrad 截断，已查清」「GPU 其余 BF16 误差，已查清」；最后指剩下那一小截：「这才是 TPU 一侧的」（约 22 秒）。</p>
@@ -734,7 +734,7 @@ loss 上，TPU 落在 GPU 生产 golden 和精确值之间：不是 TPU 偏离�
 
 <p class="say">「总览表每一格写实测值、离门槛几倍、判定，参考档的判定跟在后面。数字和判定都由脚本生成，不手写。」</p>
 
-<p class="say">「今天的结论要说实话：第一关还没过，参数范数三点四五倍；loss 和梯度范数待定。剩下的是 TPU 一侧的那一成多；把 TPU 改成跟 GPU 一样按专家切，变化在 TPU 自己的执行噪声以内，切法不是主因，还在查。<br>
+<p class="say">「今天的结论要说实话：第一关还没过，参数范数三点四五倍；loss 和梯度范数待定。剩下的是 TPU 一侧的那一成多；把 TPU 改成跟 GPU 一样按专家切，变化在 TPU 自己的执行噪声以内，分不出切法的影响，还在查。<br>
 回到第三节那张判定图，四个点就是它。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：回切 <code>fig-judge</code>。</p>
