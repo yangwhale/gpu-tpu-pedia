@@ -226,7 +226,7 @@ def fig_tile():
     yb = f.src(y0 + PH + 10,
                "📌 tile 规则：openxla.org/xla/tiled_layout —— TPU 最常见的 tile 是 8×128，对应 8×128 个 32 位的向量寄存器；"
                "16 位类型沿次内层把两个值拼进一个 32 位，8 位类型拼四个。于是默认 tile 的次内层 bf16 是 16 行、fp8 是 32 行，每块都是 8×128×4 ＝ 4,096 字节（本课推导）。图里「标准箱」就是这块默认 tile。",
-               "窄头数被补齐、加 packing 维逼 XLA 选最小 tile T(packing,128)、把 K 和 V 沿头维并起来：Ragged Paged Attention，arXiv 2604.15464，§2.1.2、§3.1.1、§3.1.3、§3.5。",
+               "窄头数被补齐、加 packing 维逼 XLA 选最小 tile T(packing,128)、把 K 和 V 沿头维并起来：Ragged Paged Attention，arXiv 2604.15464，sec. 2.1.2、3.1.1、3.1.3、3.5。",
                "本课推导：占用 ＝ ⌈次内层 ÷ 每块行数⌉ × 每块行数 × ⌈最内层 ÷ 128⌉ × 128 × 每元素字节。"
                "A：头数在最内层（128 格），⌈128÷16⌉＝8 块 ×2（K、V）；B：头数在次内层，K、V 各 1 块；C：4 行 ÷ 每块 2 行。"
                "FP8 时：A 32 KiB（仍 64 倍）、B 8 KiB（16 倍）、C 512 B。",

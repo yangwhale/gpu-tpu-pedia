@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题九 · 讲义（授课稿）</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<meta property="og:title" content="GPU→TPU 训练精度对齐 · 讲义">
+<meta name="theme-color" content="#5f6368">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6; --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea; --purple:#9334e6;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --paper:#fdfcfa; --bg2:#f6f5f2;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:78px}
+body{background:var(--paper);color:var(--ink);
+  font:400 16px/1.8 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+b,strong{font-weight:600}
+code{font:600 .88em/1.4 var(--mono);background:#eeece7;padding:2px 6px;border-radius:4px;
+     color:var(--blue-d);white-space:nowrap}
+
+/* ── 顶栏 + tab ─────────────────────── */
+.top{position:sticky;top:0;z-index:50;background:rgba(253,252,250,.95);
+     backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1240px;margin:0 auto;padding:10px 24px;display:flex;
+         align-items:center;gap:18px;flex-wrap:wrap}
+.top .who{font-size:14px;color:var(--gray);white-space:nowrap}
+.top .who b{color:var(--ink)}
+.tabs{display:flex;gap:4px;background:#eeece7;padding:3px;border-radius:9px}
+.tabs a{font-size:13.5px;font-weight:600;padding:7px 16px;border-radius:7px;
+        text-decoration:none;color:var(--gray)}
+.tabs a.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tabs a:hover:not(.on){color:var(--ink)}
+.top .meta{margin-left:auto;font:600 12px var(--mono);color:var(--gray2)}
+
+/* ── 布局 ───────────────────────────── */
+.shell{max-width:1240px;margin:0 auto;padding:0 24px;display:grid;
+       grid-template-columns:238px 1fr;gap:44px;align-items:start}
+.side{position:sticky;top:78px;padding:28px 0 40px;max-height:calc(100vh - 78px);overflow-y:auto}
+.side h4{font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--gray2);
+         text-transform:uppercase;margin:0 0 12px}
+.side ol{list-style:none}
+.side li{margin-bottom:1px}
+.side a{display:flex;gap:9px;padding:6px 10px;border-radius:7px;font-size:13.5px;
+        text-decoration:none;color:var(--gray);line-height:1.45}
+.side a:hover{background:#eeece7;color:var(--ink)}
+.side a.on{background:var(--blue-l);color:var(--blue-d);font-weight:600}
+.side a i{font:700 10.5px/1.5 var(--mono);font-style:normal;color:var(--gray2);flex:0 0 20px}
+.side a.on i{color:var(--blue)}
+.side a.todo{opacity:.5}
+.side .grp{font:700 10.5px/1 var(--mono);letter-spacing:.1em;color:var(--gray2);
+           margin:16px 0 7px;padding-left:10px;text-transform:uppercase}
+main{padding:28px 0 90px;min-width:0}
+
+/* ── 讲次 ───────────────────────────── */
+.lec{border-top:1px solid var(--line);padding:36px 0 12px}
+.lec:first-child{border-top:none;padding-top:8px}
+.lh{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.lh .no{font:700 12px/1 var(--mono);color:#fff;background:var(--ink);
+        border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.lh h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lh .t{margin-left:auto;font:600 12px var(--mono);color:var(--gray2);
+       background:var(--bg2);padding:5px 11px;border-radius:6px;white-space:nowrap}
+.goal{background:var(--green-l);border-left:4px solid var(--green);border-radius:0 10px 10px 0;
+      padding:14px 18px;margin:16px 0;font-size:16px;line-height:1.7}
+.goal b{color:#0b6b30}
+.goal .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#0b6b30;
+         text-transform:uppercase;margin-bottom:5px}
+
+h3.sec{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--gray2);
+       text-transform:uppercase;margin:26px 0 10px;display:flex;align-items:center;gap:9px}
+h3.sec:after{content:"";flex:1;height:1px;background:var(--line2)}
+
+/* 讲稿 —— 排成一本书，不是一份脚本
+   ⛔⛔ 2026-09-06 整段重写。现场反馈：「那个讲义能不能不要看上去跟一个脚本一样，
+        要看上去像一个故事书一样。」
+   ⭐ 原来那一版之所以像脚本，**不是因为内容，是因为版式**：
+      ① 每隔一两段就横插一个整宽蓝框（屏幕提示），叙述被切成碎片；
+      ② `<em>` 是荧光笔黄底，一页十几处，看着像别人划过的考卷；
+      ③ 无衬线 16.5px 顶着一个白卡片，读起来是「文档」不是「书」。
+   ⭐ 三条对策，逐条对应：
+      ① **舞台指示挪到页边**（宽屏时浮到右侧留白里），正文一条不断；
+      ② 荧光笔换成**细下划线**，强调还在，喧宾夺主没了；
+      ③ 正文换**衬线体、17.5px、行高 2.05、首行缩进两字**，去掉外框和阴影。
+   ⚠️ 这份 CSS 被两份讲义共用（专题二那份 `_css()` 原样抽这里的 <style>）——
+      改这里等于两边一起改，那是有意的。 */
+.say{background:transparent;border:0;border-radius:0;box-shadow:none;
+     padding:6px 0 20px;margin:4px 0;position:relative}
+.say p{margin:0 0 1.05em;font-size:17.5px;line-height:2.05;text-indent:2em;
+  font-family:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",Georgia,serif;
+  color:#1b1b1d;max-width:38em}
+.say p:first-child{margin-top:10px}
+/* 每一讲的头一段不缩进 —— 中文书的惯例，也让「这一讲开始了」一眼看得出来 */
+.say > p:first-of-type{text-indent:0}
+.say > p:first-of-type:first-letter{font-size:1.05em;font-weight:600}
+.say h4{margin:30px 0 6px;font-size:15px;color:var(--blue);
+  border-left:3px solid var(--blue);padding-left:10px}
+/* 强调：细下划线，不用荧光笔 */
+.say em{font-style:normal;background:none;font-weight:600;color:#111;
+        border-bottom:1.5px solid #e8c46a;padding-bottom:1px}
+/* ── 舞台指示：宽屏浮到右边页边，窄屏退回行内 ──────────────────────
+   它们是「怎么演」，不是「讲什么」。读故事的人应该能一路顺下来，
+   眼角瞥见就行。 */
+.say .pause,.say .board{display:block;font-size:13px;line-height:1.72;
+  color:var(--gray);margin:2px 0 14px;padding-left:12px;
+  border-left:2px solid var(--line);max-width:38em;
+  font-family:"Noto Sans CJK SC","PingFang SC",sans-serif;text-indent:0}
+.say .board{border-left-color:#9ab7e8}
+.say .pause{border-left-color:#d9d2c2;font-style:italic}
+.say .board:before{content:"屏幕 · ";font-weight:700;color:#5b7fc7}
+.say .pause:before{content:"停 · ";font-weight:700;color:#a89a76;font-style:normal}
+/* ⛔ 2026-09-06 这里试过「宽屏时把舞台指示浮到右侧页边」——&nbsp;**塌了，已撤**。
+   position:absolute 把它们移出文档流之后，相邻的两三条会**落在同一个 y 上互相叠字**
+   （原因很简单：absolute 元素的静态位置是它原来的位置，而后面的兄弟节点向上收缩，
+   于是好几条挤到一起）。
+   ⭐ 判据：**边注要真的排成一栏，得用双栏 grid，不能靠一个负的 right 值。**
+   现在两个宽度用同一套行内样式 ——&nbsp;安静、不断流，已经够书感了。 */
+
+/* 问答 */
+.qa{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0}
+.qa details{border-top:1px solid var(--line2)}
+.qa details:first-child{border-top:none}
+.qa summary{padding:13px 18px;cursor:pointer;font-size:15px;font-weight:600;
+            list-style:none;display:flex;gap:9px;background:#fff}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary:before{content:"Q";font:700 11px/1.5 var(--mono);color:#fff;background:var(--purple);
+                   border-radius:50%;width:19px;height:19px;text-align:center;flex:0 0 19px;
+                   margin-top:3px}
+.qa summary:hover{background:var(--bg2)}
+.sub{font-size:.92em;color:var(--gray)}
+.qa .a{padding:2px 18px 16px 46px;font-size:15px;line-height:1.85;color:#3c4043;background:#fff}
+.qa .a p{margin:10px 0}
+
+/* 边界 / 提示 */
+.warn{background:var(--red-l);border-left:4px solid var(--red);border-radius:0 10px 10px 0;
+      padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.warn .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#a50e0e;
+         text-transform:uppercase;margin-bottom:5px}
+.tip{background:var(--yellow-l);border-left:4px solid var(--yellow);border-radius:0 10px 10px 0;
+     padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.tip .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#8a5a00;
+        text-transform:uppercase;margin-bottom:5px}
+
+.num{font-family:var(--mono);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:14px 0}
+th{text-align:left;font-size:11.5px;font-weight:700;color:var(--gray2);letter-spacing:.06em;
+   text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.7}
+td.n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+
+.todo-box{border:1px dashed var(--line);border-radius:12px;padding:22px 24px;
+          color:var(--gray);font-size:15px;background:#fff}
+.todo-box b{color:var(--ink)}
+
+.plan{background:var(--bg2);border-radius:14px;padding:24px 26px;margin:0 0 8px}
+.plan h2{font-size:22px;margin-bottom:6px}
+.plan p{font-size:15px;color:var(--gray);margin-bottom:16px}
+.plan table{margin:0}
+.plan td:first-child{width:44px;font:700 11px var(--mono);color:var(--gray2)}
+/* 时间表要比上面那张图例表宽一点的首列（"12–27" 塞不进 44px），单独覆盖 */
+.plan .sched{margin:10px 0 0}
+.plan .sched td:first-child{width:64px;font:700 12.5px var(--mono);color:var(--blue)}
+.plan h3{font-size:16px;margin:22px 0 2px}
+
+footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);font-size:14px;
+       line-height:1.8;grid-column:1/-1}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr;gap:0}
+  .side{position:static;max-height:none;padding:18px 0 4px;
+        border-bottom:1px solid var(--line)}
+  .side ol{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .lh h2{font-size:21px}.lh .t{margin-left:0}
+  .say{padding:2px 16px 14px}.say p{font-size:15.5px}
+  .qa .a{padding-left:18px}
+}
+</style>
+<style>
+.shell > main{grid-column:1 / -1}
+.plan table td:first-child, .plan table th:first-child{white-space:nowrap}
+
+/* ── 窄屏（course_narrow_css.py，2026-10-20）──────────────────────────
+   ① 正文表格在自己框里横向滚动，不再把整页撑宽（跟英文版同一条）。
+   ② 节标题那一行是 flex：录音条（.lecmedia，最小 280px）挤在徽章和标题后面会把页面撑出去，
+      窄屏下让它另起一行、占满整行。
+   ③ 手机上表格已经能在框里横滑了，就别再把格子压扁：公式（td 里的 code）一折就是逐字断行
+      （专题四 1.3 形状表每行约 400px 高），数值列「7.32 TiB」折成两行 —— 这两类不折行。 */
+@media(max-width:1000px){main table,section table,details table{display:block;max-width:100%;overflow-x:auto}}
+@media(max-width:600px){.stn{flex-wrap:wrap}.stn .lecmedia{flex:1 1 100%;min-width:0}
+  td code,td.num{white-space:nowrap}}
+
+p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;margin:12px 0;line-height:1.95}
+h2.part{margin:48px 0 8px;padding-top:18px;border-top:2px solid #dadce0;font-size:24px}
+</style>
+</head>
+<body>
+
+<!-- ⛔ 这个文件由 Courses/tools/topic09-build-lecture.py 生成，不要手改。 -->
+
+<div class="top"><div class="in">
+  <span class="who">专题九 · <b>GPU→TPU 训练精度对齐</b></span>
+  <nav class="tabs">
+    <a href="topic-09.html">课件</a>
+    <a href="topic-09-lecture.html" class="on">讲义</a>
+    <a href="topic-08.html">专题八（数值格式）</a>
+    <a href="index.html">课程总纲</a>
+  </nav>
+</div></div>
+
+<div class="shell">
+<main>
+
+<div class="plan">
+  <h2>这份讲义怎么用</h2>
+  <p><b>两个用法。</b><br>
+    <b>① 上台讲</b>：照着念，台词、切图、每段几分钟都写着。<br>
+    <b>② 自学</b>：把这一整份丢给 AI，你会得到一个既有全部背景、
+    也知道该怎么讲的助教，让它带你走一遍。</p>
+  <p>内容本身在<a href="topic-09.html">课件</a>那边，这一份只管「怎么讲」。<br>
+    课程作者 <b>Chris Yang</b> · Google Cloud AI Infra 架构师。</p>
+  <table><tbody>
+    <tr><td>🎯</td><td><b>这一节要留下什么</b>　讲完之后台下脑子里该剩的那一句。</td></tr>
+    <tr><td>🗣</td><td><b>讲稿</b>　<em>黄底</em>的可以照着念。</td></tr>
+    <tr><td>🖥</td><td><b>屏幕</b>　该滚到课件的哪张图。
+      <em>⭐ 这些提示挂了 <code>class="board"</code>，构建时逐条对账。</em></td></tr>
+    <tr><td>⚠️</td><td><b>别讲什么</b>　这一节最容易跑偏的方向。</td></tr>
+  </tbody></table>
+</div>
+
+<div class="plan">
+  <h2>⏱ 时间：主线 60′，分两次课</h2>
+  <p>⛔ <b>这一讲是一条接力线，不能跳。</b>
+  <em>每节最后那句「这一节留下的问题」就是下一节的开场，时间再紧也要念。
+  要压时间，压每一节中间的例子，别压首尾。第一次课讲第一到五节（备工具），第二次课讲第六到十节（用工具）。</em></p>
+  <table>
+<thead><tr><th>段落</th><th>分钟</th><th>能不能砍</th><th>说明</th></tr></thead><tbody>
+<tr><td>一　什么叫对齐</td><td>6</td><td>不能</td><td>⭐ 开场题；尺子这个概念必须立住</td></tr>
+<tr><td>二　地基 L0</td><td>5</td><td>不能</td><td>回放、权重转回来比、配置按实际值；第 1 步 loss 自检</td></tr>
+<tr><td>三　逐步序列</td><td>7</td><td>不能</td><td>⭐ 带符号均值是判定量；N 取最大值；≤1 过、＞2 不过</td></tr>
+<tr><td>四　张量指标</td><td>5</td><td>不能</td><td>rel_L2 ／ cos ／ 范数比；R 比定责；两档门槛</td></tr>
+<tr><td>五　浮点与硬件</td><td>7</td><td>不能</td><td>⭐ 乘精确加才舍；抹零；TF32 开关不算数；不点破案例答案</td></tr>
+<tr><td>六　观测</td><td>4</td><td>不能</td><td>TPU 上钩子改编译；三条不扰动的路</td></tr>
+<tr><td>七　案例（上）</td><td>6</td><td>不能</td><td>参数范数漂 → 输出层冷门行 → ε 区</td></tr>
+<tr><td>八　案例（下）</td><td>8</td><td>不能</td><td>⭐ 揭晓开场第三问；精确轨迹站在 TPU 一边</td></tr>
+<tr><td>九　验收与 golden</td><td>6</td><td>不能</td><td>两关验收；如实说第一关还没过</td></tr>
+<tr><td>十　工程化与收尾</td><td>6</td><td>收尾不能砍</td><td>逐位优先的回归；三个坑；回到开头那一句</td></tr>
+<tr><td><b>合计</b></td><td><b>60</b></td><td></td><td>第十节末尾的出处台账不进课堂，被追问时翻</td></tr>
+</tbody></table>
+  <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
+  <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动。每次 build 现数。</em></p>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>795</td><td>4</td><td>5.0′</td><td>6′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>617</td><td>3</td><td>3.8′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>899</td><td>3</td><td>5.2′</td><td>7′</td></tr><tr><td>第四节　指标（二）：张量</td><td>577</td><td>3</td><td>3.6′</td><td>5′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>805</td><td>4</td><td>5.0′</td><td>7′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>405</td><td>1</td><td>2.3′</td><td>4′</td></tr><tr><td>第七节　案例（上）：loss 偏低，漂的是冷门词</td><td>649</td><td>3</td><td>4.0′</td><td>6′</td></tr><tr><td>第八节　案例（下）：偏的是 GPU 的 golden</td><td>1,017</td><td>6</td><td>6.6′</td><td>8′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>609</td><td>4</td><td>4.0′</td><td>6′</td></tr><tr><td>第十节　工程化与教训</td><td>532</td><td>2</td><td>3.2′</td><td>6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>43′</b></td><td><b>60′</b></td></tr></tbody></table>
+</div>
+
+<h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
+<div class="say">
+  <p><b>① 每个结论都要一把尺子。</b>
+    <em>万分之一点五大不大、R 比 1.2 高不高、参照要几对 —— 每一处都先问「拿什么比」。</em></p>
+  <p><b>② 先排除自己，再怀疑硬件。</b>
+    <em>地基、口径、步号、测量工具，先查这些；第七节排除假警报、第八节发现参照没关 TF32，都是这一条。</em></p>
+  <p><b>③ 读回值、工具输出都要实测核对。</b>
+    <em>TF32 开关、配置文件里的权重衰减、加了钩子的程序，都是「看上去是 A，实际是 B」。</em></p>
+  <span class="pause">⭐ <b>如果只能让台下带走一句话</b>：
+  <b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差。</b></span>
+</div>
+
+<h3 class="sec">🖥 投屏怎么放</h3>
+<div class="say">
+  <p>⭐ <b>课件右下角有个「折叠讲解」按钮（或按 T），投屏前按一下。</b>
+    <em>不开的话，台下会低头读字，不听你讲。</em></p>
+  <p>⭐ <b>这一讲没有动画，全是静态图。</b>
+    <em>很多图是左右两格的，投屏时一次讲一格；判定图（<code>fig-judge</code>）第一次出现时先遮住四个点。</em></p>
+</div>
+
+<h2 class="part" id="part1">第一次课：备工具（第一到五节，30′）</h2>
+
+<h3 class="sec" id="c0">第一节　什么叫对齐（6′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：课件 <code>s一</code> 最上面的「🎯 开场热身」，点开，先只露第一问。</p>
+
+<p class="say">「先做一道题，回顾专题八。BF16 和 FP32，指数位一样多，都是 8 位。那 BF16 比 FP32 少的是什么？少了几位？」</p>
+
+<p>💬 <b>互动</b>：等台下说出「尾数」「少 16 位」，再点开答案。</p>
+
+<p class="say">「对，少的是尾数：23 位只剩 7 位。所以两者能表示的范围一样大，差的是精度。在 1 附近，BF16 一格就有千分之八那么宽。这一格，后面整整一讲都绕不开。<br>
+再留两道预习题，不用现在答。第二问：同一个 GPU 程序跑两遍，会一位不差吗？第三问：搬到 TPU 后，loss 一直比 GPU 低万分之一点五，TPU 算错了吗？」</p>
+
+<p class="say">「今天的问题只有一句：一个模型在 GPU 上已经训稳了，搬到 TPU 上，怎么证明训的还是同一个模型？<br>
+你一定会想：那让两边一位不差不就行了？」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-assoc</code>，先指左格，再指右格。</p>
+
+<p class="say">「看这个最小的例子：三个数相加，1 加两个 0.0039。左边先加前两个，结果正好落在两格中间，按规矩舍回 1；再加一次，又舍回 1。右边先把两个小数加起来，正好一格，1 加上它落在格点上。<br>
+同一个式子，换个加法顺序，差了一整格。」</p>
+
+<p class="say">「一次矩阵乘就是成千上万次这样的加法。GPU 和 TPU 切块不同、加的顺序不同，末位必然不同。末位一不同，某个词可能就挑了另一个专家，几百步之后两条轨迹必然分开。<br>
+预习第二问的答案也在这儿：GPU 自己跑两遍，也不一位不差，反向里的原子加，每次顺序都不一样。」</p>
+
+<p class="say">「为什么 GPU 自己都不逐位？反向里有很多线程往同一个格子里加数，谁先算完谁先加进去，每次的先后都不一样。加法换了顺序，就是刚才那张图。<br>
+所以「完全相同」根本不是一个能达到的目标，我们得换一个问法。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-ruler</code>，先只指绿色那一段，红点先不讲。</p>
+
+<p class="say">「既然一位不差做不到，就得换一个问法：不问 TPU 跟 GPU 差多少，问它比 GPU 自己跟自己差得多不多。<br>
+GPU 上跑出来当标准答案的那条记录，我们叫 golden。同样设置的 GPU 再跑几次，两两之间的差，就是噪声。绿色这一段，是 GPU 重跑十次落下的范围。这就是尺子。」</p>
+
+<p class="say">「再看红点：同一个 TPU 程序，三种执行方式，全在尺子外面，而且都朝同一边，偏了三到五个标准差。<br>
+有了尺子，「万分之一点几」才有了大小。这三个红点，就是今天要查到底的那件事。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-funnel</code>，指左右两根箭头。</p>
+
+<p class="say">「从哪查起？分五级。最底下 L0 是地基：数据、权重、配置，喂进去的东西，必须一位不差。往上是单个算子、单层、整网第一步、一千步。<br>
+验收从下往上，低一级不过，上一级的结论不可信；出了问题从上往下，一级一级缩小范围。」</p>
+
+<p class="say">「这一讲跟着走的是一次真实的对齐：混元 3 截前 4 层，从 B200 搬到 TPU。地基全部逐位，第一步 loss 只差百万分之二点五，可一千步下来，TPU 的 loss 一直低万分之一点五。<br>
+前五节备工具，后五节回来查它。」</p>
+
+<p class="say">「第一步，先把地基铺平：数据、权重、配置，怎么做到一位不差？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要在这一节讲任何判定细节</b>（N 怎么取、2 倍、参照对数）。<em>那是第三节的事；这里只立「尺子」这个概念。</em><br>
+⛔ <b>不要提前说出案例的结论</b>（GPU 张量核截断）。<em>第三问的答案在第八节揭晓。</em><br>
+❓ 台下可能问：「为什么不拿 FP64 当标准答案？」—— 答：对齐的目标是 GPU，模型是在 GPU 上调稳的；FP64 只在单个算子上帮我们判断差是谁带来的，第四节讲。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s一">第一节　什么叫对齐</a>　·　主图 <code>fig-ruler</code></p>
+</div>
+
+<h3 class="sec" id="c1">第二节　地基 L0：输入必须一位不差（5′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：地基这一级只有一个标准，一位不差；第一步 loss 是最便宜的自检。</b></p>
+
+<p class="say">「L0 只有一条要求：两边的输入一位不差。这一级不过，后面所有比较都没有意义，你量到的差，说不清是算出来的还是喂出来的。<br>
+三样东西：数据、权重、配置。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-replay</code>，指上下两排颜色一一对上的那些格子。</p>
+
+<p class="say">「数据不重读，原样回放。GPU 训练的时候，把每一步、每张卡、每一小份吃进去的东西原样存下来，每一份记一个指纹。TPU 不读数据集，按同样的顺序回放：设备 d 的第 m 份，就是 GPU 第 d 张卡的第 m 份。<br>
+一千步乘八张卡乘两小份，一万六千个单元，逐个比指纹，全部相同。」</p>
+
+<p class="say">「最下面那根条值得看一眼：换成 TPU 自己的数据加载器，读的是同一份数据，内容也逐位相同，可只有八分之一落到同号的设备上。两边切小份的方式不一样。<br>
+所以对齐的时候，TPU 不走自己的数据管线。」</p>
+
+<p class="say">「权重的办法是：转过去，再转回来，跟原始文件按字节逐个张量比。一千七百八十一个张量，全部相同，不抽样。<br>
+加载到设备上以后，再读出来比一遍：FP32 主权重上小于 BF16 半格的错，第一步前向看不见，第二步才分叉。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-wd</code>，先指虚线，再指实线。</p>
+
+<p class="say">「配置是最容易翻车的。权重衰减，GPU 的配置文件里写的是 0.1。可框架的调度器每一步都把它覆盖成 0.033。真正生效的是 0.033。<br>
+TPU 要是照抄配置文件，每一步多衰减三倍，而且不报任何错。」</p>
+
+<p class="say">「所以对照表要写实际生效的值，证据是运行时读出来的元数据，不是配置文件。混元 3 这张表有几十行：学习率、精度、批大小怎么切、重算怎么开，每行一条证据。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>s二</code> 最后那个绿框「第 1 步 loss」。</p>
+
+<p class="say">「最后一个最便宜、也最有用的自检：第一步的 loss。第一步还没有任何更新，两边只差前向的舍入。混元 3 是百万分之二点五。<br>
+第一步就差得离谱，别去查数值，先回头查地基。」</p>
+
+<p class="say">「还有一条容易忘：续训。第十步存档、恢复后接着跑到第二十步，跟一口气跑下来逐位相同。<br>
+生产训练一定会断点重启，这一条不过，一次重启就把两边的对齐打乱了。」</p>
+
+<p class="say">「地基平了，两边就开始各算各的了，每一步都会有一点差。一千步的差，怎么压成几个能判的数？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不讲权重转换的细节</b>（改名、拼接、转置怎么做）。<em>台下只需要知道「转过去再转回来、逐字节比」这个办法。</em><br>
+⚠️ 口径：16,000 是「步 × 卡 × 小份」的单元数，每个单元四个字段各一个指纹；别说成 16,000 个样本。<br>
+❓ 台下可能问：「生产里 TPU 总要用自己的数据管线吧？」—— 答：对，生产管线要另外单独验；对齐阶段先用回放，把「喂」的差排除掉。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s二">第二节　地基 L0：输入必须一位不差</a>　·　主图 <code>fig-replay</code></p>
+</div>
+
+<h3 class="sec" id="c2">第三节　指标（一）：逐步序列（7′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节留两样：判定量是带符号均值；被测 ÷ 噪声上限 N，≤ 1 过、＞ 2 不过。</b></p>
+
+<p class="say">「loss、梯度范数、参数范数，每一步一个数。先定义每一步的差：被测减基线，除以基线的绝对值，带正负号。分子分母都取同一步。<br>
+一千步就是一千个差。怎么压成几个数？」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-dt</code>，先只看上排灰点，再看下排红点。</p>
+
+<p class="say">「上排是 GPU 第二次对第一次：点围着零上下抖。下排是 TPU 对 GPU：抖的宽度一模一样，可整团点往下沉，九成的步 TPU 都更低。<br>
+这张图告诉你三个数各管什么：偏多少，抖多大，最尖的一下。」</p>
+
+<p class="say">「偏多少，用带符号均值：把差直接平均，正负抵消，随机的抖动就没了，剩下的是一直往一边偏的那部分，它是判定量。<br>
+抖多大，用绝对值的平均，叫 MARE。最尖的一下，用最大单步，拦住某一步突然跳一下。后两个只报，不当主判。」</p>
+
+<p class="say">「窗口要事先写死。两个窗口：全程是第二到一千步，尾段是第三百零一到一千步。前几百步两条轨迹还没分开，差还没长出来，会冲淡偏移。第一步单独报，不进窗口。<br>
+同一次运行，换个窗口，结论可能就反了。」</p>
+
+<p class="say">「两个范数顺便说清楚：参数范数是所有主权重平方和开根号，一个数，大约三千零四十二；梯度范数取裁剪之前的值。它们跟 loss 一样算这三个数。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-judge</code>，先遮住四个点，只讲三种颜色。</p>
+
+<p class="say">「怎么判？同设置的 GPU 运行两两配成一对，每一对按一模一样的窗口算同样三个数，取所有对里最大的那个，叫 N。被测除以 N：不到 1 倍，看起来就像多跑了一次噪声，过；超过 2 倍，噪声解释不了，不过；中间算待定。」</p>
+
+<p>💬 <b>互动</b>：问「为什么取最大的那一对，不取平均？」等有人说出「被测如果只是噪声，就该落在已有样本的范围里」。</p>
+
+<p class="say">「对。被测要是纯噪声，它就是又一个同分布的样本，应该落在已有样本的范围里，所以拿范围的上沿当线。<br>
+现在放开那四个点：这是这一讲最后的验收结果，被测是 TPU，基线是一条「精确轨迹」，第八节讲它是什么。参数范数三点四五倍，不过；loss 和梯度范数在一到两倍之间，待定。」</p>
+
+<p class="say">「拿参数范数那个点算一遍：被测对基线的带符号均值是十的负七次方量级，十对 GPU 重跑里最大的那一对，大约是它的三分之一，所以是三点四五倍。<br>
+三个量各算一个倍数，最差的那个决定结论。」</p>
+
+<p class="say">「还有一条：参照对只能用同一种设置的运行。分布式优化器开着的那组 GPU 运行，比别的组持续低一点点；混进来，尺子就被撑宽了，该抓的偏差就漏过去。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-pairs</code>，左边柱子、右边格子各指一次。</p>
+
+<p class="say">「参照要几对？道理很简单：一个纯噪声，超过 n 个样本最大值的概率是 n 加 1 分之一。只有 3 对时，四分之一的纯噪声会超线。<br>
+右边是实测：一次本该全过的 GPU 对 GPU 演练，3 对参照时，46 条检查里 8 条判待定；凑到 28 对，只剩 1 条。正式签字前，每种设置至少跑六到八份。」</p>
+
+<p class="say">「最后一条规矩：比较只对一份事先指定的基线，不对几份取平均，也不挑最差的。尺子量的是两份运行之间差多少，被测也该跟一份运行比，口径才一致。<br>
+代价是基线自己也是个样本，可能挪动一个噪声单位，所以 N 才取最大值兜住。」</p>
+
+<p class="say">「逐步的数只能告诉你偏了。偏在哪一层、哪个张量？那要比第一步里的一个个大张量。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不讲标准误、留一法这些辅助统计</b>。<em>它们只做提示，不做判定；被问到再答。</em><br>
+⚠️ <b>别把 2 倍说成统计推导出来的</b>。<em>它是约定的余量，用来把「刚比样本最大值大一点」和「明显大一截」分开。</em><br>
+⚠️ 「精确轨迹的尺子是借来的」这个例外，这里只提一句，第九节细讲。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s三">第三节　指标（一）：逐步序列</a>　·　主图 <code>fig-dt</code></p>
+</div>
+
+<h3 class="sec" id="c3">第四节　指标（二）：张量（5′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：rel_L2 主判，cos 和范数比各补盲点；FP64 是定责的工具，不是标准答案。</b></p>
+
+<p class="say">「第一步的激活、梯度、权重，是一个个几百万元素的张量。一个张量也压成一个数：整个拉直成一个向量来比。几个指标各管一类错，各有盲点。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-cos</code>，左格、中格、右边小表依次指。</p>
+
+<p class="say">「主判是 rel_L2：差向量的长度除以参照的长度，就是红色虚线的长度占灰箭头的几成。<br>
+左格：被测是参照的两倍长、方向一样，cos 是 1，完全看不出问题；rel_L2 是百分之百。中格：一样长、转了两度半，cos 是 0.999，看着很近；rel_L2 已经百分之四点五了。」</p>
+
+<p class="say">「所以 cos 看方向，对整体放大缩小完全看不见。梯度漏除了一个 8，cos 还是 1，只有范数比抓得到。<br>
+记一个换算：差很小时，1 减 cos 约等于 rel_L2 平方的一半，cos 等于 0.999 就已经是百分之四点五了。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-rratio</code>，先讲三个圈，再指两个点。</p>
+
+<p class="say">「TPU 离 GPU 远了，是谁的错？第一步前向，GPU 自己重跑一位不差，噪声是零，当不了尺子。这时候请 FP64 出来：同一份输入，用 64 位浮点算一遍，当靶心。<br>
+R 等于 TPU 离靶心的距离除以 GPU 离靶心的距离。」</p>
+
+<p class="say">「R 约等于 1，两边离真值一样远，只是加法顺序不同。R 大于 1.2，TPU 这一步多舍了，去查 TPU。R 小于 1，TPU 近、GPU 远，这一处是 GPU 离真值更远。R 在 1.41 附近，像是多舍了一次同量级的数。<br>
+混元 3 上注意力的 qkv 投影原来是 1.235，超线；查出来是 TPU 自己多舍了，改完回到 1.000。」</p>
+
+<p class="say">「记住：对齐的目标还是 GPU，FP64 只在单个算子、单层上帮我们定责。<br>
+还有一个叫 ULP 的指标，数两个数差了几格。它只诊断、不当门槛：GPU 自己两次运行第一步的梯度，差一格的只占百分之一点三，十七格以上的占三分之二。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>s四</code> 末尾 4.4 那张两档门槛的表。</p>
+
+<p class="say">「最后，门槛分两档。严格档是这一讲的规矩：噪声尺子、地基逐位、R 比不超过 1.2，验收只看它。参考档是另一个已经上线的迁移项目用过的固定线，比如 loss 平均差不超过万分之二。<br>
+参考档普遍更宽，所以常见严格档不过、参考档过：差已经超出噪声、要定责，但还在别人能上线的范围里。」</p>
+
+<p class="say">「R 比能告诉你谁离真值远。可为什么会远？要看两边的硬件，到底在哪儿舍入。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不逐个讲其余六个指标</b>（标准差比、均值偏移、零元素比例……）。<em>它们在课件折叠里，是会后查的。</em><br>
+⚠️ <b>别把 FP64 讲成终极裁判</b>。<em>整网多步的裁判是 GPU 自己的重跑噪声；FP64 只给单个算子定责。</em><br>
+❓ 台下可能问：「参考档是谁的？」—— 答：另一个已经上线的 GPU→TPU 迁移项目的实践门槛，我们没有独立验证过，所以只并排报，不决定验收。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s四">第四节　指标（二）：张量</a>　·　主图 <code>fig-rratio</code></p>
+</div>
+
+<h3 class="sec" id="c4">第五节　浮点与硬件：差从哪来（7′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节留两样：乘是精确的，加才舍入；GPU 张量核在长求和里朝零「抹零」，而 TF32 开关说的不算。</b></p>
+
+<p class="say">「一次矩阵乘分两步：把数两两相乘，再把乘积加起来。舍入落在哪一步？」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-formats</code>，先上半，再下半的「乘」「加」两行。</p>
+
+<p class="say">「三种格式，指数都是 8 位，所以范围一样；尾数 23、10、7 位，所以精度不一样。<br>
+关键在下半：两个 BF16 相乘，有效数字 8 位乘 8 位，最多 16 位，放进 FP32 的 24 位里还空着 8 位。乘积是精确的。」</p>
+
+<p class="say">「舍入发生在加法：一个大数加一个小数，小数要先往右对齐，挤出 24 位窗口的那几位就丢了。<br>
+所以两边虽然都叫「BF16 乘、FP32 累加」，差别全在累加那一步怎么舍。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-truncate</code>，左边先指虚线右侧的红格，再看右边那条线。</p>
+
+<p class="say">「GPU 张量核是怎么加的？我们在 B200 上量出了它的模型：每 16 个乘积连同累加器一起，按其中最大的指数对齐，超出 25 位窗口的低位直接截掉，往零的方向，不是四舍五入。<br>
+这个模型能一位不差地复现真实的计算结果。」</p>
+
+<p class="say">「打个比方：收银台每一单都抹零。四舍五入有时多有时少，单数一多就抵消了；抹零只少不多，单数越多少得越多。<br>
+右边就是实测：求和越长，结果朝零偏得越多。加 256 个偏十万分之二，加六万多个偏到万分之三。不走张量核的 FP32，几乎为零。」</p>
+
+<p>💬 <b>互动</b>：问「输入全是负数，结果会偏大还是偏小？」等有人说「朝零，绝对值变小」。</p>
+
+<p class="say">「对，朝零。抹零是丢低位，正负都一样。还有一点：这种偏差只有拿精确值当参照才量得到，GPU 对 GPU 比，两边带着同一个偏差，永远看不出来。<br>
+记住这句：求和越长，偏得越多。后面还会用到。」</p>
+
+<p class="say">「为什么越长偏得越多？每一组十六个乘积对齐的时候，小的那些乘积的低位都被截掉，截掉的永远是朝零的那一截，只少不多。<br>
+一次长求和有成千上万组，丢掉的部分只会一直累积。四舍五入有进有舍，长了就互相抵掉，这就是两者的差别。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-tf32</code>，指左边小字和柱子颜色对不上的那两行。</p>
+
+<p class="say">「还有一个陷阱叫 TF32：FP32 的矩阵乘一进张量核，就悄悄按 10 位尾数算，训练容器默认开着它。<br>
+只关 torch 的两个开关，读回来是关了，可另一条库的路照样走 TF32；设了环境变量才真关掉，这时候 torch 的开关读回来反而还是开着。开关读回来的值不能当证据，每次启动实测一遍。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-windowed</code>，上下两行对比，再指右边的柱子。</p>
+
+<p class="say">「TPU 这边：矩阵单元同样吃 BF16、乘积精确、FP32 累加。同一份输入算路由打分，TPU 离真值近得多；它的累加是不是四舍五入，我们没有直接证据，按推断说。<br>
+TPU 自己多舍的地方在 FSDP：权重切在几个芯片上，编译器一边收下一片权重一边算，每一轮的部分积默认在 BF16 里累加，每加一次舍一次。」</p>
+
+<p class="say">「打开一个开关，让累加器用 FP32，最后只舍一次，跟 GPU 一样。qkv 投影对 GPU 的差小了一个数量级，第四节那个 1.235 就是这样回到 1.000 的。<br>
+最后一个词：excess precision，编译器在融合起来的一块里省掉中间的舍入。关掉它只是让舍入位置确定，不是更准。」</p>
+
+<p class="say">「知道差可能从哪来了，还得量得到。可在 TPU 上，量这个动作本身就会改结果。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不要说「这就是案例的答案」</b>。<em>抹零和「越长偏得越多」，第八节回扣；这里点破，后半节就没有悬念了。</em><br>
+⚠️ 口径：右图是合成的正数输入；求和长度到 12 万时合成输入的偏差反而降了（推断是换了算法），被问到再说。<br>
+❓ 台下可能问：「TPU 的累加是四舍五入吗？」—— 答：我们没有直接证据，只有旁证（路由打分对 FP64 很准），按推断说。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s五">第五节　浮点与硬件：差从哪来</a>　·　主图 <code>fig-truncate</code></p>
+</div>
+<h2 class="part" id="part2">第二次课：用工具（第六到十节，30′）</h2>
+<h3 class="sec" id="c5">第六节　观测：在 TPU 上怎么看（4′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：在 TPU 上，证据要从训练程序外面拿。</b></p>
+
+<p class="say">「要定位，就得把中间的张量拿出来看。GPU 上随手挂个钩子就行；TPU 上不行。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-hooks</code>，左格、中格依次指，中格指那个被切开的虚框。</p>
+
+<p class="say">「GPU 是一个个算子按顺序跑，钩子只是在算好的张量上看一眼，开不开钩子，逐位相同。<br>
+TPU 是整张图一起编译，编译器会把相邻的算子融成一块，省掉中间的舍入。你多要一个输出，那一块就被切开，省掉的舍入回来了，量到的已经不是生产程序的那份数。」</p>
+
+<p class="say">「所以在 TPU 上换三条路。第一条：训练步和训练步之间读状态，主权重、两个动量，不碰训练程序。梯度不用另抓：Adam 每一步都把梯度揉进一阶动量里，相邻两步的动量一减、除以 0.1、再除以裁剪系数，就倒推出来了。<br>
+在 GPU 上对过直接抓的梯度，相对差只有千万分之几。」</p>
+
+<p class="say">「第二条：隔离回放。第 k 层的输入直接用 GPU 那一层的输入，TPU 上只编译这一层。层与层的误差不串，第一个超线的就是出错的那层。<br>
+第三条：固定探针，每隔 25 步在一条固定的序列上单独跑一次前向，记每一层的输出。它单独编译，不扰动训练。」</p>
+
+<p class="say">「还有一个工具后面要用：状态互换，把一侧某一步的整套状态搬到另一侧，用同一批数据各算一步。它能把「这一步算得不一样」和「状态早就不一样了」分开。」</p>
+
+<p class="say">「工具都齐了。回到开头那件事：TPU 的 loss，为什么一直低万分之一点五？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不讲「观测版程序过标定」的细节</b>。<em>一句话：每步都加钩子的程序要先当扰动臂过标定，v5p 上没过，只当诊断值。</em><br>
+⚠️ 反推公式里除的是 1 − β₁ ＝ 0.1，不是 β₁。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s六">第六节　观测：在 TPU 上怎么看</a>　·　主图 <code>fig-hooks</code></p>
+</div>
+
+<h3 class="sec" id="c6">第七节　案例（上）：loss 偏低，漂的是冷门词（6′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：偏移是慢慢长出来的，长在输出层冷门词的行上，因为那些行处在 Adam 的 ε 区。</b></p>
+
+<p class="say">「地基全部逐位，第一步只差百万分之二点五，可一千步下来，TPU 的 loss 一直比 GPU 低万分之一点五。按参考档那条「万分之二」的线，这已经能交差了。<br>
+可第一节的尺子量过：它偏了三到五个标准差，而且方向一致。值得查。」</p>
+
+<p class="say">「先排除两个假警报。一是步号错位：故意错开一步再比，差大了一百倍，步号是对的。二是常数口径，比如 loss 的分母不同：那种差第一步就该在，这里第一步几乎没差。<br>
+第三节那张散点图就是它：前一百步看不出，三百步以后稳定在负万分之一点五。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-drift</code>，指红线从第 100 步起的斜坡。</p>
+
+<p class="say">「偏移是慢慢长出来的，那就去看别的每步都记的量，谁也在慢慢长。参数范数：前一百步看不出，之后近似一条斜线往上走，一千步多涨了约百分之十七，正好跟 loss 偏移拉开的时间一致。<br>
+嫌疑从「某个前向算子」收窄到「每一步的更新」。」</p>
+
+<p class="say">「这一步的思路值得记住：loss 只告诉你偏了，不告诉你偏在哪。要在别的每步都记的量里，找一个也在慢慢长的。<br>
+所以训练时多记几个便宜的量，参数范数、梯度范数、路由偏置的统计，出事的时候它们就是线索。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-rows</code>，左边那根独大的，再右边第一根。</p>
+
+<p class="say">「多涨的那一截在哪？按参数分组拆：几乎全在输出层。再把输出层按词在数据里出现的次数分桶：几乎全在从来没出现过的词那几行。<br>
+这些行在 GPU 上被 Adam 压缩的量，TPU 上只有一半。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-eps</code>，红区和绿区各指一次。</p>
+
+<p class="say">「为什么偏偏是冷门词？还记得专题四里 Adam 像一个自动音量均衡吗？它把每个参数的步子拉成差不多大，梯度里一点小偏差，被拉平了。<br>
+可冷门词的行，每一步只收到一点点「往下压」的梯度，比 ε 还小。到了这儿，均衡器不放大了，更新几乎跟梯度成正比。」</p>
+
+<p class="say">「梯度差百分之一，常见词的行更新只差万分之一，冷门词的行差千分之七。所以这些行的梯度大小两边一样、方向差一点，更新就跟着差一点，一步步积进范数。<br>
+中间我们还排除了一长串怀疑：优化器公式、注意力实现、重算、十几处写法，都在课件的折叠里。」</p>
+
+<p class="say">「冷门行的更新方向，两边从第二十五步起就分开了。是什么让它分开？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不逐条念排除清单</b>。<em>台上只说「按成本从低到高验，排除了一串」；清单是会后查的。</em><br>
+⚠️ 口径：冷门行的「梯度大小两边一样，差在方向」—— 别说成 TPU 的梯度更小。<br>
+❓ 台下可能问：「loss 更低是不是说明 TPU 训得更好？」—— 答：不能这么读。loss 系统性地低只说明两条轨迹有系统差别；有效学习率、权重衰减的差别都能造成它。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s七">第七节　案例（上）：loss 偏低，漂的是冷门词</a>　·　主图 <code>fig-rows</code></p>
+</div>
+
+<h3 class="sec" id="c7">第八节　案例（下）：偏的是 GPU 的 golden（8′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：TPU 没有算错，是 GPU 那一次十二万长的 BF16 求和，每一步都朝零截掉了一点。</b></p>
+
+<p class="say">「冷门行的更新方向取决于隐状态，所以回头看主干。固定探针显示，第 0 层的输出最先分开，往后逐层放大；把两边第 0 层的权重换着算，确认是权重慢慢长歪了：范数几乎没变，变的是方向。<br>
+推它的，是输出头流回来的梯度。」</p>
+
+<p class="say">「怎么确认是权重长歪、不是前向算得不一样？把两边第 0 层的权重拿出来，用同一份输入在 CPU 上各算一遍：换成 TPU 的权重，输出就偏；换成 GPU 的，就不偏。<br>
+大头在注意力的输出投影上。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-gauge</code>，左边先讲粗箭头，右边看那条线怎么长起来。</p>
+
+<p class="say">「输出层每个词有一行权重，它们有一个共同的平均方向。隐状态沿这个方向挪一点，所有词的 logits 就一起升高或降低一点。反向的时候，梯度沿这个方向的那一份，就是把所有 logits 一起往下压的那股力。<br>
+右边：TPU 的 logits 整体水平一步步比 GPU 低下去，第一百步就很明显了。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-intervene</code>，先绿柱，再橙柱。</p>
+
+<p class="say">「怎么证明就是这股力？双向干预。两边都把这个方向的梯度去掉，再比：loss 的差回到噪声附近，logits 水平的差从零点三几变成千分之七。<br>
+再让 GPU 自己反着加上这股力：loss 偏低、参数范数多涨，TPU 的整套特征都复现了。」</p>
+
+<p class="say">「可这只说明是这股力，还不知道是哪一边算错了：是 TPU 多推了，还是 GPU 少推了？」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-head</code>，先指左边最长的两根红柱，再看右边那条线。</p>
+
+<p class="say">「拿训练里实际用到的那几个张量，在 FP64 里重算一遍，把误差拆到每一段。交叉熵那一段只有百万分之几，TPU 整个输出头也只有十万分之几；最长的一根，是 GPU 输出层 dgrad 那一次 BF16 矩阵乘，万分之六点五。<br>
+右边：只取词表的前 K 个词，K 越长，偏得越多。」</p>
+
+<p class="say">「还记得第五节的收银台吗？每一单都抹零。输出头的反向要沿整张词表求和，十二万，正是「越长偏得越多」的那种长求和。张量核把结果系统地朝零截了一点（说它就是那个抹零模型，是推断），落在「所有 logits 一起动」这个方向上，每一步少推约万分之六点五。<br>
+预习第三问的答案：TPU 没有算错。」</p>
+
+<p class="say">「中间我们自己也踩了第五节那个坑：最早那一版「FP32 dgrad」没关 TF32，偏得比 BF16 还多，于是一度得出「换成精确 dgrad 也不动」的错误结论。真关掉 TF32 以后，GPU 就朝 TPU 走过去了大约六成。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-swap</code>，三根柱子对比。</p>
+
+<p class="say">「还有一个问题：是每一步都算得不一样，还是状态早就不一样、反馈放大出来的？用状态互换：把 GPU 第 99 步的整套状态搬到 TPU，两边用同一批数据各算一步。<br>
+跟同一个精确参照比：TPU 几乎正好；GPU 每一步沿漂移方向少走百分之零点三六，换成精确 dgrad 还少走百分之零点一。是每一步的数值问题。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-exact</code>，三行里都指紫点和红点。</p>
+
+<p class="say">「剩下那四成是谁的？在 GPU 上跑一条精确轨迹：权重的用法跟生产一样，FP32 主权重每步舍成 BF16 再用；但前向反向的算术全部 FP32，真关 TF32。这就是这份 BF16 训练本该算出来的样子。<br>
+结果：三行里，紫点都挨着红点。」</p>
+
+<p class="say">「参数范数，精确轨迹走了 TPU 九成的路；logits 水平九成以上；loss 甚至比 TPU 还低。所以「TPU 偏了」的大部分，其实是 GPU 的 BF16 golden 自己离精确值远。」</p>
+
+<p class="say">「换句话说：只修 dgrad，GPU 走了六成；把 GPU 所有的计算都换成精确的，走了九成。剩下那一成，才是 TPU 自己的。<br>
+我们一开始问「TPU 哪里算错了」，查到最后，大部分答案是「GPU 的 golden 本身就偏」。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-chain</code>，从左往右指五格，第四格的「推断」标签要点到。</p>
+
+<p class="say">「最后把它串成一条链：GPU 那一次求和每步少推一点，主干权重沿那个方向少走一点，logits 的整体水平就偏一截，冷门词那几行压多压少跟着变，最后变成参数范数和 loss 的差。<br>
+第四格是推断，其余四格都是量到的。」</p>
+
+<p class="say">「GPU 的生产 golden 自己就偏了。那验收拿什么当尺子？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不讲「规范分量」「行和残差」那条支线</b>。<em>它被验证过不是根因；讲了只会让台下迷路。</em><br>
+⚠️ 口径：「万分之六点五」是沿那个方向的相对误差，不是 dgrad 整体错了万分之六点五。<br>
+⚠️ 口径：精确轨迹不是「全程 FP32 训练」—— 权重仍按 BF16 用。纯 FP32 训练前 100 步 loss 就低 1.75%，是另一条轨迹。<br>
+❓ 台下可能问：「为什么张量核会截断而不是四舍五入？」—— 答：我们量出的模型能逐位复现结果，这是实测；硬件为什么这样设计，我们没有官方资料，不猜。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s八">第八节　案例（下）：偏的是 GPU 的 golden</a>　·　主图 <code>fig-head</code></p>
+</div>
+
+<h3 class="sec" id="c8">第九节　验收与 golden 设计（6′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：golden 自己有偏差时，分两关验收；第一关对精确轨迹必须过，第二关写成已解释差异。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-golden</code>，从左往右四张卡，再看下面的柱子。</p>
+
+<p class="say">「最终那份 golden 不是一开始就有的：从框架的默认配置出发，改了三次，每次只加一样东西。<br>
+第二份加上整层重算和路由回放，模仿生产；第三份只把输出头 dgrad 换成精确的；第四份改成精确轨迹。同一个 TPU 被测、同一把尺子：二十四倍，十倍，三倍半。」</p>
+
+<p class="say">「每一步改了什么、为什么改、证据在哪，都进一张出处总表，一处改动一行，连「试过、没采用的」也写上，省得后人再试一遍。」</p>
+
+<p class="say">「表里有一栏叫方向：这一处改动是 GPU 向 TPU 靠，TPU 向 GPU 靠，还是两边都向精确值靠。<br>
+比如把 TPU 的批大小改成跟 GPU 一样的切法，是 TPU 向 GPU；关掉 TF32、换精确轨迹，是两边向精确值。方向写清楚，后面的人才知道哪些改动是为了对齐、哪些是为了更准。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-decomp</code>，红橙两段对蓝色那一小段。</p>
+
+<p class="say">「把 TPU 对生产 golden 的参数范数差拆账：近六成是 dgrad 截断，近三成是 GPU 其余的 BF16 误差，TPU 自己的只有一成多。<br>
+loss 上，TPU 落在 GPU 生产 golden 和精确值之间：不是 TPU 偏离了 GPU，是 TPU 更接近精确值。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-twolayer</code>，先指紫色那条，再指蓝色那条。</p>
+
+<p class="say">「所以验收分两关。第一关必须过：TPU 对精确轨迹那一份比。第二关不判过不过：TPU 对 GPU 生产 golden 的差，写清量级、由哪个查清了的 GPU 偏差造成、证据在哪。<br>
+噪声尺子只量「重跑会差多少」，量不出 golden 自己的偏差，所以必须分两关。」</p>
+
+<p class="say">「第一关的尺子是个有意的例外。精确轨迹是确定性的，重跑一位不差，量不出噪声；靠一点点扰动造出来的散布，又比真实执行噪声小十八倍，太严。所以借 GPU 生产程序重跑的散布当尺子，在协议里写明。<br>
+另外用 TPU 自己的执行噪声做一份交叉核对，只报不判。」</p>
+
+<p class="say">「读总览表也一样：每一格写实测值、离门槛几倍、判定，参考档的判定跟在后面。数字和判定都由脚本生成，不手写。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>s九</code> 末尾 9.5 那个黄框。</p>
+
+<p class="say">「今天的结论要说实话：第一关还没过，参数范数三点四五倍；loss 和梯度范数待定。剩下的是 TPU 自己的那一成多，还在查。<br>
+回到第三节那张判定图，四个点就是它。」</p>
+
+<p class="say">「验收是一次性的。可模型投产以后，训练代码每天都在变，怎么知道它没有悄悄改了数值？」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不逐行讲出处总表</b>。<em>只讲「每处改动一行、连没采用的也写」这个做法。</em><br>
+⚠️ 说实话：第一关没过就说没过，别为了收尾好听说成「对齐完成」。<br>
+❓ 台下可能问：「那 TPU 能不能上线？」—— 答：这是业务判断，不是数值判断；数值上我们能说清楚差多大、几成是谁的。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s九">第九节　验收与 golden 设计</a>　·　主图 <code>fig-golden</code></p>
+</div>
+
+<h3 class="sec" id="c9">第十节　工程化与教训（6′）</h3>
+<div class="say">
+
+<p>🎯 <b>这一节只留一句：日常回归先要求逐位；把走过的弯路写下来，下一次就不用再走。</b></p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>fig-regress</code>，先走上面那条绿线，再走三条分流。</p>
+
+<p class="say">「验收证明 TPU 和 GPU 训的是同一个模型；日常回归证明今天的 TPU 和上次验过的 TPU 是同一个。参照不是 GPU，是上一次全部通过的那次 TPU 运行。<br>
+TPU 同一个程序重跑逐位相同，所以数学不变的改动，应当一位不变。大多数改动走上面那条绿线就结束了。」</p>
+
+<p class="say">「不逐位，就看改代码的人写的数值影响声明：写了数学不变，退回；执行方式的改动或者升级依赖，用 TPU 自己的执行噪声判；改了数学的，要对 GPU golden 不变差。<br>
+TPU 的噪声得自己造：只改执行方式的扰动臂，试了十四个，过关七个，加基线凑出二十八对。」</p>
+
+<p class="say">「「上一次全部通过」的那次运行叫 LKG。第一次建立它，要同一个提交跑两遍、逐位相同才算数。数值没变，指针自己往前走；数值变了，每一次换代都要负责人点头。」</p>
+
+<p class="say">「再说怎么记。一个问题一份案例文件，标题就是发现；事实带出处，推断标出来；排除了的也写下来；一次只改一件事，新结果不覆盖旧的；结论只写一处。工具和结果分开放。」</p>
+
+<p class="board"><b>🖥 屏幕</b>：<code>s十</code> 的 10.3 那张坑表，只指前三行。</p>
+
+<p class="say">「这一次踩过的坑，挑三个：TF32 没关干净，差点判反了结论；量错了张量，参照本身就不准；钩子改了编译，量到的不是生产那份数。<br>
+三个坑是同一句话：先核对你的尺子和你的测量工具，再去怀疑硬件。」</p>
+
+<p class="say">「回到开头：TPU 的 loss 低万分之一点五，按经验线早就能交差；按噪声尺子，它是三到五个标准差的真偏差。顺着五级往下查，查到最后，偏的是 GPU 的 golden：一次十二万长的求和，每一步都朝零截掉了一点。」</p>
+
+<p class="say">「所以这一讲只立一句话：TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差。<br>
+最后提醒一句，今天的数字都是这一次实践的，换模型、换版本就会过期，方法不会。」</p>
+
+<div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
+⛔ <b>不逐条念坑表和记录规矩</b>。<em>挑三个讲，其余是会后查的。</em><br>
+⚠️ 收尾那一句念完就停。<br>
+❓ 台下可能问：「每天跑回归要多少资源？」—— 答：v5p 上 20 步那档一次约 10 分钟，1000 步那档约 25 分钟（提交到取回）。
+</div>
+<p class="board sub">🖥 本节主屏：课件 <a href="topic-09.html#s十">第十节　工程化与教训</a>　·　主图 <code>fig-regress</code></p>
+</div>
+
+<h3 class="sec">🚧 这份讲义还薄的地方</h3>
+<div class="say">
+  <ul>
+    <li>[ ] <b>没真讲过，时间表是估的。</b>第一次讲完按实际用时回来改。</li>
+    <li>[ ] <b>第一关验收还没过</b>，第九节「今天的结论」会随着后续排查更新；数字变了，课件和讲义一起改。</li>
+  </ul>
+</div>
+
+</main>
+</div>
+</body></html>

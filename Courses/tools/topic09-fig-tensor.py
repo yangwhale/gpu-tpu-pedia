@@ -1,0 +1,119 @@
+# -*- coding: utf-8 -*-
+r"""专题九 · 第四节「张量级指标」的两张图。
+
+fig9-cos     回答：rel_L2 和 cos 各看见什么、看不见什么？
+             现算：被测 ＝ 参照 × 2 时 cos ＝ 1、rel_L2 ＝ 1；同长度转 2.56° 时 cos ＝ 0.999、rel_L2 ≈ 4.5%（1 − cos ≈ ½·rel_L2²）。
+fig9-rratio  回答：TPU 离 GPU 远了，是谁的错？—— 拿 FP64 真值当靶心，比两边各离靶心多远：R ＝ 被测距离 ÷ GPU 距离。
+             数字：门槛 1.2（推断）；√2 ≈ 1.41 ＝ 多一次同量级独立舍入（本课推导）；qkv 投影 1.235 → 1.000（实测）。
+"""
+import math
+
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
+import topic09_numbers as N
+
+W = 1400
+TH = math.degrees(math.acos(0.999))
+REL_ROT = 2 * math.sin(math.radians(TH) / 2)          # 同长度、夹角 θ：‖a − b‖ ÷ ‖b‖ ＝ 2 sin(θ/2)
+assert abs(TH - 2.56) < 0.01 and abs(REL_ROT - N.COS_0999_RELL2) < 1e-4
+
+
+def fig_cos():
+    f = Fig(W, "三格。左格：被测是参照的两倍长、方向一样，cos 是 1，看不出问题；rel_L2 是 100%，范数比是 2。"
+               "中格：被测和参照一样长、转了 2.56 度，cos 是 0.999，看着很接近；rel_L2 已经是 4.5%。"
+               "右格一张小表：rel_L2 主判，cos 补方向，范数比补 cos 看不见的缩放。")
+    y0 = f.header("一个张量出一个数：rel_L2 主判，cos 和范数比各补一个盲点",
+                  "灰箭头 ＝ 参照（GPU）；彩色箭头 ＝ 被测（TPU）；红色虚线 ＝ 两者之差 a − b，rel_L2 就是它的长度 ÷ 灰箭头的长度",
+                  [(GY, "参照 b"), (BL, "被测 a"), (RD, "差 a − b")])
+    PH = 330
+    for k, (title, scale, ang, txt) in enumerate([
+            ("被测 ＝ 参照 × 2", 2.0, 0.0, ["cos ＝ 1（看不出）", "rel_L2 ＝ 100%", "范数比 ＝ 2"]),
+            ("一样长，转了 %.2f°" % TH, 1.0, TH * 6, ["cos ＝ 0.999（看着很近）", "rel_L2 ＝ %.1f%%" % (REL_ROT * 100), "范数比 ＝ 1"])]):
+        px = k * 470
+        py = f.panel(px, y0, 450, PH, title, BL)
+        ox, oy, L = px + 50, py + 230, 150
+        f.line(ox, oy, ox + L, oy, GY, 4)
+        a = math.radians(ang)
+        ax, ay = ox + L * scale * math.cos(a), oy - L * scale * math.sin(a)
+        if ang == 0:
+            f.line(ox, oy - 26, ox + L * scale, oy - 26, BL, 4)
+            f.line(ox + L, oy - 40, ox + L * scale, oy - 40, RD, 2, dash="6 5")
+        else:
+            f.line(ox, oy, ax, ay, BL, 4)
+            f.line(ox + L, oy, ax, ay, RD, 2, dash="6 5", arrow=False)
+        for i, t in enumerate(txt):
+            f.t(px + 24, py + 40 + i * 24, t, RD if i == 1 else INK, i == 1, 15)
+        f._pan = None
+    px = 940
+    py = f.panel(px, y0, W - px, PH, "谁看得见什么", GR)
+    rows = [("", "整体 × 2", "方向偏", "个别大错"),
+            ("rel_L2", "✓", "✓", "✓（分不清哪种）"),
+            ("cos", "✕", "✓", "✓"),
+            ("范数比", "✓", "✕", "✕")]
+    for i, r in enumerate(rows):
+        for j, c in enumerate(r):
+            x = px + 18 + [0, 110, 210, 300][j]
+            col = GR if c.startswith("✓") else (RD if c == "✕" else INK)
+            f.t(x, py + 44 + i * 44, c, col, i == 0 or j == 0, 14)
+    f.t(px + 18, py + 44 + 4 * 44 + 10, "差很小时 1 − cos ≈ ½·rel_L2²：", GY, size=13)
+    f.t(px + 18, py + 44 + 4 * 44 + 32, "cos 0.999 ≈ rel_L2 4.5%", GY, True, 13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "主判看 rel_L2：差占信号几成；梯度一定要配范数比", [
+        "梯度整体乘 1/8 时 cos 仍是 1，靠范数比才抓得到（漏除了 microbatch 数就是这种错）。",
+        "代价：一个张量压成一个数，分不清均匀小错还是几个大错 —— 超线以后再按行、按专家拆开定位。",
+    ])
+    yb = f.src(yb + 10,
+               "⚠️ 本课推导：同长度、夹角 θ 时 rel_L2 ＝ 2·sin(θ/2)；cos θ ＝ 0.999 → θ ≈ 2.56°，rel_L2 ≈ 4.47%。图里中格的角度放大了 6 倍画，方便看见。",
+               "📌 指标一律在 FP64 里算：两个相近的数相减本身是精确的，丢精度的是后面的平方和、点积和除法。")
+    f.save("fig9-cos.svg", yb + 14)
+
+
+def fig_rratio():
+    f = Fig(W, "一个靶子，靶心是同一份输入在 FP64 里算出的真值。GPU 离靶心的距离定为 1，画成灰色圆。"
+               "绿色圆是门槛 1.2 倍；橙色虚圆是 1.41 倍，相当于比 GPU 多舍入了一次同量级的数。"
+               "TPU 的 qkv 投影原来在 1.235 倍，红点，超线；改成 FP32 累加以后回到 1.000，绿点，和 GPU 一样远。")
+    y0 = f.header("TPU 离 GPU 远了，先问：两边各离真值多远",
+                  "靶心 ＝ 同一份输入在 FP64 里算的真值；R ＝ TPU 离靶心的距离 ÷ GPU 离靶心的距离",
+                  [(GY, "GPU 的距离（R ＝ 1）"), (GR, "门槛 R ＝ 1.2"), (OR, "多舍一次 R ≈ 1.41")])
+    PH = 420
+    py = f.panel(0, y0, 760, PH, "单个算子：注意力的 qkv 投影（实测）", BL)
+    cx, cy, U = 380, py + 205, 125
+
+    def circ(r, col, dash=None, sw=2):
+        f.p.append('<circle cx="%d" cy="%d" r="%.1f" fill="none" stroke="%s" stroke-width="%s"%s/>'
+                   % (cx, cy, r * U, col, sw, ' stroke-dasharray="%s"' % dash if dash else ""))
+    circ(N.R_ONE_EXTRA, OR, "7 6")
+    circ(N.R_GATE, GR, None, 2.5)
+    circ(1.0, GY, None, 2)
+    f.box(cx - 6, cy - 6, 12, 12, INK, INK, 6)
+    f.t(cx, cy + 26, "FP64 真值", INK, True, 13, "middle")
+    for r, ang, col, lab in [(N.R_QKV_BEFORE, 35, RD, "改之前 R ＝ %.3f" % N.R_QKV_BEFORE),
+                             (N.R_QKV_AFTER, 150, GR, "改之后 R ＝ %.3f" % N.R_QKV_AFTER)]:
+        x, y = cx + r * U * math.cos(math.radians(ang)), cy - r * U * math.sin(math.radians(ang))
+        f.box(x - 9, y - 9, 18, 18, col, INK, 9)
+        f.t(x + (16 if ang < 90 else -16), y - 12, lab, col, True, 15, "start" if ang < 90 else "end")
+    f._pan = None
+    px = 790
+    py2 = f.panel(px, y0, W - px, PH, "四种读法", GR)
+    rows = [(GR, "R ≈ 1", "两边离真值一样远：只是加法顺序不同，平台固有"),
+            (RD, "R > 1.2", "TPU 远：TPU 这一步多舍了，去查 TPU"),
+            (BL, "R &lt; 1", "TPU 近、GPU 远：这一处 GPU 离真值更远"),
+            (OR, "R ≈ 1.41", "像是多舍入了一次同量级的数")]
+    for i, (col, a, b) in enumerate(rows):
+        y = py2 + 46 + i * 84
+        f.box(px + 20, y - 18, 8, 50, col, col, 2)
+        f.t(px + 42, y, a, col, True, 17)
+        f.t(px + 42, y + 26, b, INK, size=14)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "FP64 不是标准答案，是定责的工具：它告诉你差是谁带来的", [
+        "qkv 投影超线的根因在 TPU：分片部分积在 BF16 里累加（下一节讲），改成 FP32 累加后 R 从 1.235 回到 1.000。",
+        "代价：要在 CPU 上用同一份真实输入重算一遍 FP64；只适合单个算子和单层，整网多步靠噪声尺子。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 距离都用 rel_L2 量；靶子上两个点画在不同角度只为分开，只有离圆心多远有意义。",
+               "⚠️ 推断（门槛）：只差舍入顺序时 R ≈ 1；多一次同量级的独立舍入，误差按平方相加，R ≈ √2 ≈ 1.41；取 1.2 当线。",
+               "📌 实测：v5p 上单算子 FP64 对比，qkv 投影 R 1.235 → 1.000，第 0 层稠密 MLP 的输入投影 1.294 → 1.117（打开 FP32 累加的开关后，9 条单算子检查全过）。")
+    f.save("fig9-rratio.svg", yb + 14)
+
+
+fig_cos()
+fig_rratio()

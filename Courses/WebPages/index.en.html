@@ -355,7 +355,7 @@ footer a{color:var(--blue);text-decoration:none}
         <h4>Deep dives · as needed, any order</h4>
         <ul>
           <li><span class="k">8</span><a href="#t8">Precision and quantization</a></li>
-          <li><span class="k">9</span><a href="#t9">Latest open models compared</a></li>
+          <li><span class="k">9</span><a href="#t9">GPU→TPU training numerics alignment</a></li>
           <li><span class="k">10</span><a href="#t10">Post-training and RL</a></li>
           <li><span class="k">11</span><a href="#t11">Diffusion and DiT</a></li>
           <li><span class="k">14</span><a href="#t14">Distillation and knowledge transfer</a></li>
@@ -419,7 +419,7 @@ footer a{color:var(--blue);text-decoration:none}
     <dl>
       <dt>Covers</dt><dd>First, separate the two motivations: <b>the hardware cost</b> (the KV cache can outgrow the weights, and without a fix you can't ship) and <b>the information argument</b> (the attention matrix is extremely sparse to begin with, so most of what you compute is wasted). Then one table sorts every name onto three knobs: <b>how much each token stores · how much each query looks at · different math altogether</b>.</dd>
       <dt>Why third</dt><dd>Lecture 1 computed a curve: at 4K context, attention is <b>12%</b> of compute; at 128K, <b>82%</b>; at 1M, <b>97%</b>. <b>Nothing about the model changes; the input just gets longer, and the bottleneck moves somewhere else entirely.</b> Lecture 1 only shows why a change is unavoidable; this lecture shows how people made it. It comes right after, while the numbers are fresh.</dd>
-      <dt>Sets up</dt><dd>Every later lecture uses it: how to split the sequence dimension in parallelism, why prefill and decode have opposite bottlenecks in inference, how to read the “attention scheme” column in the open-model comparison. All of it grows out of these three knobs.</dd>
+      <dt>Sets up</dt><dd>Every later lecture uses it: how to split the sequence dimension in parallelism, why prefill and decode have opposite bottlenecks in inference. All of it grows out of these three knobs.</dd>
       <dt>Two editions</dt><dd><b>Core track</b> (rewrite finished 2026-09-14): one story along a <b>timeline</b>. How RNNs remember → 2017 cuts the chain and replaces it with a table → long contexts make the table unaffordable → cut heads (MQA/GQA) → store a compressed form instead of K/V (MLA) → don't read everything (sliding window → DSA) → back to a fixed-size state → hybrid ratios. Many figures, few words; each chapter answers only “what did the last chapter leave unpaid, and how does this one pay it?”<br><b>L300 full edition</b>: the earlier version, kept whole as an archive. Every derivation, ablation table and primary source, plus our own measurements on v7, <b>58 figures</b> in all. Use it to look things up. The English edition covers the core track.</dd>
       <dt>In L300</dt><dd><b>Every core section is drafted</b> (2026-09-13). The focus isn't which schemes exist but <b>how each was conceived and why it works</b>: for example, <b>how MLA can get away with compressing 32,768 down to 576</b>, <b>how DSA escapes the chicken-and-egg problem that judging what matters requires computing attention first</b>, and <b>why dropping four tokens from a sliding window sends perplexity from 5.40 to 5158</b>.<br><b>Added 2026-09-16</b>: the core track gained a full block on <b>DeepSeek-V4</b>. NSA / DSA / CSA / HCA are four steps along <b>one road</b>, and V4-Pro's KV looks nothing like what you'd guess (<b>it isn't MLA but Shared K=V MQA</b>; the 64-dim RoPE sits inside the 512, not outside).<br>Two threads also run through the whole lecture: <b>compressing after the fact vs training compressed from scratch</b> (it comes up four times), and <b>hardware dictating the formula</b> (from “dot products won because they can be written as matmuls” to “select by block, not by token”).</dd>
     </dl>
@@ -500,9 +500,10 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic opt" id="t9">
-    <div class="head"><span class="num">09</span><span class="name">Latest open models compared</span><span class="pre">Prereq: 01 · 03</span></div>
-    <div class="quote">Today's major open models in one table: which design choices have settled, and which are still sharply diverging.</div>
-    <dl><dt>Reading it</dt><dd>Where designs have converged, just follow them; <b>only the divergences are worth digging into</b>.</dd></dl>
+    <div class="head"><span class="num">09</span><span class="name">GPU→TPU training numerics alignment</span><span class="pre">Prereq: 02 · 04 · 08</span><span class="wip">English edition coming</span></div>
+    <div class="quote">TPU and GPU can never match bit for bit. What you can demand: the TPU–GPU gap is no bigger than the GPU's gap with itself.</div>
+    <dl><dt>The case</dt><dd>Hunyuan3 moved from GPU to TPU, and the TPU loss sat 1.5e-4 lower for 1,000 steps. Tracked down level by level, <b>the TPU wasn't the one off</b>: a 120k-long BF16 sum on the GPU was truncated toward zero at every step.</dd>
+      <dt>For now</dt><dd>The <a href="topic-09.html">Chinese edition</a> (courseware and lecture notes) is live.</dd></dl>
   </div>
 
   <div class="topic opt" id="t10">
@@ -549,7 +550,8 @@ footer a{color:var(--blue);text-decoration:none}
     <thead><tr><th style="width:34%">You are…</th><th>Suggested path</th></tr></thead>
     <tbody>
       <tr><td><b>After the big picture</b></td><td>Core 01–06 is enough</td></tr>
-      <tr><td><b>Making technical calls / reviewing designs</b></td><td>Core + 07, 09</td></tr>
+      <tr><td><b>Making technical calls / reviewing designs</b></td><td>Core + 07</td></tr>
+      <tr><td><b>Moving GPU training to TPU</b></td><td>Core + 08, 09, 13</td></tr>
       <tr><td><b>Focused on cost and capacity planning</b></td><td>01, 03, 05 + 08</td></tr>
       <tr><td><b>Going to write code</b></td><td>Core + 12, 13</td></tr>
       <tr><td><b>Only deploying inference</b></td><td>01, 02, 05, then 07, 08 as needed</td></tr>

@@ -140,6 +140,16 @@ python3 topic04-build-lecture.py
   python3 topic06-build-L200.py
   python3 topic06-build-L200-lecture.py
 
+  # 专题九：2026-11-05 替换原「最新开源模型对比」（只有大纲，从没成页）。GPU→TPU 训练精度对齐，图全走 topic03_draw。
+  step "专题九 教材"
+  rm -f fig9-*.svg fig9-*.src.html
+  for s in topic09-fig-*.py; do python3 "$s"; done
+  python3 topic09-build.py
+
+  step "专题九 讲义"
+  # ⛔ 必须排在教材之后 —— 讲义要读成品 topic-09.html 对账（图 id、小节、封面时长）。
+  python3 topic09-build-lecture.py
+
   step "专题八 教材"
   python3 topic08-build.py
 
