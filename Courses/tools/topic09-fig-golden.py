@@ -3,29 +3,30 @@ r"""专题九 · 第九、十节的四张图。
 
 fig9-golden   回答：最终那份 golden 是怎么一步步来的？每一步加了什么、换来了什么？
               数字：同一个被测（v5p，FP32 累加开关打开前的配置）对三份 golden 的参数范数带符号均值 ÷ 同一把尺子 N（实测）。
-fig9-decomp   回答：TPU 对 GPU 生产 golden 的参数范数差，各有几成是谁的？—— 59% / 29% / 12%（实测拆账）。
+fig9-decomp   回答：TPU 对 GPU 生产 golden 的参数范数差是谁的？—— 两个生产程序只差 GPU 输出头 dgrad 的长累加；对 ④ 的那截是三笔相加（实测，11-06 版）。
 fig9-twolayer 回答：golden 自己有系统偏差时怎么验收？—— 分两关：第一关对精确轨迹必须过，第二关对生产 golden 写成已解释差异。
 fig9-regress  回答：验收过了以后，每天合进来的代码怎么守？—— 先要求逐位；不逐位按 PR 的数值声明分流。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
 import topic09_numbers as N
+from topic09_numbers import tx
 
 W = 1400
 NOISE = N.GPU_RERUN_PN
 # R3：颜色 ＝ 全课约定（GPU 生产 golden 深灰、精确轨迹紫）；卡片上不提前用「第一关／第二关」，关卡名留到 fig9-twolayer 再出
 STEPS = [("① 起点", "框架默认配置", ["BF16，不重算", "TF32 开着"], None, GY2, "归因参照"),
          ("② 生产近似", "＋ 整层重算 ＋ 路由回放", ["模仿生产开重算", "跟①比：各项都在 GPU 噪声内"], 2.93e-6, GY, "生产 golden：差要写清来由"),
-         ("③ 只修一处", "＋ 输出头 dgrad 换精确", ["解释了 loss 偏移的 73%", "参数范数差的 59%", "第一关的尺子取自这组重跑"], 1.25e-6, OR, "归因证据"),
-         ("④ 精确轨迹", "＋ BF16 权重、全程 FP32", ["真关 TF32；这就是", "BF16 训练的精确轨迹"], 4.36e-7, PU, "最终 golden")]
+         ("③ 只修一处", "＋ 输出头 dgrad 换成 FP32", ["解释了 loss 偏移的 73%", "参数范数 ＋0.0124（BF16 那一截）", "第一关的尺子取自这组重跑"], 1.25e-6, OR, "归因证据"),
+         ("④ 精确轨迹", "＋ BF16 权重、全程 FP32", ["真关 TF32；可输出头那次", "长求和仍一次累加，有偏"], 4.36e-7, PU, "第一关现行基线（换不换待定）")]
 R = [None if st[3] is None else st[3] / NOISE for st in STEPS]
 assert abs(R[1] - 23.6) < 0.1 and abs(R[2] - 10.1) < 0.1 and abs(R[3] - 3.52) < 0.01, R
 
 
 def fig_golden():
     f = Fig(W, "四张卡片从左到右：第一份是起点，框架默认配置；第二份加上整层重算和路由回放，跟生产一样；第三份再把输出头 dgrad 换成精确乘法；"
-               "第四份再改成 BF16 权重、全程 FP32 计算，就是精确轨迹，最终 golden。"
+               "第四份再改成 BF16 权重、全程 FP32 计算，叫精确轨迹，是第一关现行的基线；后来发现它输出头那次长求和仍有偏，基线换不换待定。"
                "卡片下面是同一个 TPU 被测对它的参数范数差，按同一把尺子 N 算倍数：对第二份 24 倍，对第三份 10 倍，对第四份 3.5 倍。")
-    y0 = f.header("最终 golden 是一步步改出来的　——　<tspan font-weight=\"700\">先对齐超参和数据，再每一步只加一样东西</tspan>",
+    y0 = f.header("golden 是一步步改出来的　——　<tspan font-weight=\"700\">先对齐超参和数据，再每一步只加一样东西</tspan>",
                   "卡片 ＝ 一份 golden（GPU 上跑的标准答案）；下面的柱子 ＝ 同一个 TPU 被测对它的参数范数差是噪声的几倍（同一把尺子）",
                   [(GY2, "起点"), (GY, "生产近似"), (OR, "只修一处"), (PU, "精确轨迹"), (RD, "不过：超过 2×N")])
     PH = 420
@@ -57,61 +58,80 @@ def fig_golden():
     f.t(30, py + 350, "柱子：同一个 TPU 被测的参数范数带符号均值 ÷ N（N ＝ ③ 那组 GPU 重跑 5 份两两 10 对的最大值）；竖线 ＝ 2×N，超过就判不过", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "每往精确值靠一步，TPU 的「偏差」就缩一截：24 倍 → 10 倍 → 3.5 倍", [
-        "缩掉的部分都查清了是 GPU golden 自己的偏差，所以可以写成「已解释差异」；剩下的那截（开关前 3.52 倍，当前 3.45 倍）在 TPU 一侧（还含两边切法不同），还在查。",
+        "缩掉的部分都查清了是 GPU golden 自己的偏差；剩下那截（开关前 3.52 倍，当前 3.45 倍）后来也拆清了：④ 自己还少漂一笔，TPU 的 dlogits 舍入又少漂一笔，两笔相减剩下这点。",
         "代价：每一份 golden 都要单独跑满 1000 步、存好数据；改了什么、为什么改、证据在哪，都要进一张出处总表。",
     ])
     yb = f.src(yb + 10,
                "📌 实测：被测是 v5p 上生产配置 1000 步（FP32 累加开关打开之前的那一版），param_norm 带符号均值对 ② 2.93e-6、对 ③ 1.25e-6、对 ④ 4.36e-7；N ＝ 1.24e-7。开关打开后的当前配置对 ④ 是 4.27e-7（3.45 倍）。",
-               "📌 实测：③ − ② 在第 301–1000 步 loss 上是 −9.8e-5，占 TPU 对 ② 偏移（−1.34e-4）的 73%；第 1000 步参数范数 ＋1.24e-2，占 ＋2.12e-2 的 59%。")
+               "📌 实测：③ − ② 在第 301–1000 步 loss 上是 −9.8e-5，占 TPU 对 ② 偏移（−1.34e-4）的 73%；第 1000 步参数范数 ＋1.24e-2（③ 的 dgrad 用的是 cuBLAS FP32 一次累加，本身也偏，所以这只是 BF16 那一截）。")
     f.save("fig9-golden.svg", yb + 14)
 
 
 def fig_decomp():
-    f = Fig(W, "一根长条代表 TPU 对 GPU 生产 golden 第 1000 步的参数范数差 +0.0212，拆成三段："
-               "输出头 dgrad 的截断 +0.0124，59%；GPU 其余的 BF16 误差 +0.0062，29%；TPU 一侧对精确轨迹 +0.0026，12%，里面含两边切分方式不同。"
-               "下面一根是第 301 到 1000 步的 loss：TPU 对生产 golden 低 1.34e-4，其中 73% 是 dgrad 截断，其余没有拆；精确轨迹比 TPU 还低 7.6e-5。")
-    y0 = f.header("拆账：参数范数的差里，近九成是 GPU golden 自己的",
-                  "长条全长 ＝ TPU 对 GPU 生产 golden 的差；每一段 ＝ 由哪一处造成（实测拆分）",
-                  [(RD, "输出头 dgrad 截断（GPU）"), (OR, "GPU 其余 BF16 误差"), (BL, "TPU 一侧"), (LINE2, "其余（没拆）")])
+    f = Fig(W, "上面一条数轴是第 1000 步参数范数对 GPU 生产 golden 的差：GPU 精确轨迹 ＋0.0186，GPU 生产只把输出头 dgrad 改成分段累加的那份 ＋0.0207，TPU 生产 ＋0.0209，真精确 ＋0.0274。"
+               "从 0 到 ＋0.0207 是 GPU 输出头 dgrad 长累加的偏差；从 ＋0.0207 到 ＋0.0274 是两边都有的 dlogits 舍入。"
+               "下面是 TPU 生产对精确轨迹那 ＋0.00235 的三笔：精确轨迹自己少漂 ＋0.0087，TPU 的 dlogits 舍入 −0.0068，其余 ＋0.0005。")
+    y0 = f.header("新的账：两个生产程序只差 GPU 那一次长累加",
+                  "上：各条运行第 1000 步落在哪（实测）；下：TPU 对精确轨迹那一小截的三笔（实测，按定义加起来正好闭合）",
+                  [(GY, "GPU 生产"), (PU, "精确轨迹 ／ 真精确"), (OR, "GPU 生产＋分段累加"), (BL, "TPU 生产"), (RD, "GPU 长累加偏差"), (LINE2, "两边共有")])
     PH = 300
-    py = f.panel(0, y0, W, PH, "第 1000 步参数范数差 ＋%.4f（实测；对 GPU 生产 golden 5 份的均值，生产近似配置）" % N.DECOMP_TOTAL, BL)
-    X0, BW = 40, 1300
-    x = X0
-    cols = [RD, OR, BL]
-    for k, ((lab, v), c, sh) in enumerate(zip(N.DECOMP, cols, N.DECOMP_SHARE)):
-        L = v / N.DECOMP_TOTAL * BW
-        f.box(x, py + 40, L, 56, c, c, 4)
-        f.t(x + L / 2, py + 76, "%.0f%%" % (sh * 100), "#fff", True, 18, "middle", big=True)
-        if k == 2:      # 最后一段窄，标签靠右对齐，别顶出面板
-            f.t(X0 + BW, py + 124, "TPU 一侧（含两边切分方式不同）", c, True, 14, "end")
-            f.t(X0 + BW, py + 146, "＋%.4f" % v, c, size=13, anchor="end")
-        else:
-            f.t(x + 6, py + 124, lab, c, True, 14)
-            f.t(x + 6, py + 146, "＋%.4f" % v, c, size=13)
-        x += L
-    # loss
-    y = py + 190
-    f.t(X0, y, "第 301–1000 步 loss：TPU 比生产 golden 低 %.2e，其中 %.0f%% 是 dgrad 截断；精确轨迹比 TPU 还低 7.6e-5" %
-        (abs(N.LOSS_TPU_VS_PROD_TAIL), N.LOSS_FIXHEAD_MINUS_PROD / N.LOSS_TPU_VS_PROD_TAIL * 100), INK, True, 14)
-    L1 = abs(N.LOSS_TPU_VS_PROD_TAIL) / abs(N.LOSS_EXACT_MINUS_PROD) * BW * 0.85
-    L2 = abs(N.LOSS_FIXHEAD_MINUS_PROD) / abs(N.LOSS_EXACT_MINUS_PROD) * BW * 0.85
-    L3 = BW * 0.85
-    f.box(X0, y + 16, L3, 14, "#f3e8fd", PU, 3)
-    # ⭐ R3：TPU 细条在红段之外剩的 27% 原来是浅蓝，会被读成「loss 上 TPU 自己占 27%」→ 改中性灰，标「其余（没拆）」
-    f.box(X0, y + 34, L1, 14, LINE2, GY2, 3)
-    f.box(X0, y + 34, L2, 14, RD, RD, 3)
-    f.t(X0 + L2 + (L1 - L2) / 2, y + 45, "其余（没拆）", GY, True, 11, "middle")
-    f.t(X0 + L3 + 8, y + 28, "精确轨迹 −2.09e-4", PU, True, 12)
-    f.t(X0 + L1 + 8, y + 46, "TPU −1.34e-4：红 ＝ dgrad 截断 −9.8e-5，灰 ＝ 其余", BL, True, 12)
-    f.t(X0, y + 70, "细条长度 ＝ 比 GPU 生产 golden 低多少；loss 上精确轨迹走得比 TPU 还远", GY, size=12)
+    py = f.panel(0, y0, W, PH, "第 1000 步参数范数，对 GPU 生产 golden 5 份均值的差（生产近似配置）", BL)
+    X0, BW, VMAX = 60, 1260, 0.029
+    X = lambda v: X0 + v / VMAX * BW
+    ya = py + 120
+    f.line(X0, ya, X0 + BW, ya, INK, 1.5, arrow=False)
+    for v in (0, 0.01, 0.02):
+        f.line(X(v), ya - 5, X(v), ya + 5, INK, 1.2, arrow=False)
+        f.t(X(v), ya + 22, "0" if v == 0 else "＋%.2f" % v, GY, size=12, anchor="middle")
+    pts = [(0.0, "GPU 生产", GY, -1), (N.PN_FIX1, "④ 精确轨迹 ＋%.4f" % N.PN_FIX1, PU, -1),
+           (N.PN_PRODCHUNK, "⑤ 生产＋分段累加 ＋%.4f" % N.PN_PRODCHUNK, OR, -2), (N.PN_TPU_PROD, "TPU 生产 ＋%.4f" % N.PN_TPU_PROD, BL, -3),
+           (N.PN_TRUE, "⑥ 真精确 ＋%.4f" % N.PN_TRUE, PU, -1)]
+    for v, lab, c, row in pts:
+        x = X(v)
+        f.box(x - 7, ya - 7, 14, 14, c, c, 7)
+        yl = ya + 18 * row - 14
+        f.line(x, ya - 9, x, yl + 4, c, 1, arrow=False)
+        anc = "end" if v > 0.024 else ("middle" if v < 0.001 else "end")
+        if v < 0.001:
+            anc = "start"
+        f.t(x + (4 if anc == "start" else -4), yl, lab, c, True, 13, anchor=anc)
+    yb1 = ya + 50
+    f.box(X(0), yb1, X(N.PN_PRODCHUNK) - X(0), 22, RD, RD, 3)
+    f.t(X(0) + 8, yb1 + 16, "GPU 输出头 dgrad 的长累加偏差 ＋%.4f（BF16 张量核 ＋ cuBLAS FP32 一次累加）" % N.LADDER_DGRAD, "#fff", True, 13)
+    f.box(X(N.PN_PRODCHUNK), yb1, X(N.PN_TRUE) - X(N.PN_PRODCHUNK), 22, LINE2, GY2, 3)
+    f.t(X(N.PN_TRUE), yb1 + 46, "两边共有：输出头反向的 dlogits 舍成 BF16 ＋%.4f" % N.LADDER_SHARED, GY, True, 13, anchor="end")
+    f.t(X0, py + PH - 40, "TPU 生产和 ⑤ 几乎落在同一点；真精确 ＝ ⑥，TPU 自己的精确轨迹也落在这里", GY, size=12)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "第二关写成「已解释差异」：量级、由哪一处造成、证据在哪，一样不少", [
-        "loss 上 TPU 落在 GPU 生产 golden 和精确值之间 —— 不是 TPU 偏离了 GPU，是 TPU 更接近精确值。",
-        "代价：剩下 12%（＋0.0026）在 TPU 一侧（含两边切分方式不同），第一关还没过，要接着查是哪一处 BF16 误差。",
+    PH2 = 232
+    py2 = f.panel(0, py + PH + 16, W, PH2, "TPU 生产对 ④ 的 ＋%.5f 是三笔相加（第 1000 步）" % N.TPU_VS_FIX1, BL)
+    K = 760 / 0.0095
+    xs = X0 + 120
+    ytop = py2 + 50
+    steps = [(N.B_GPUEXACT, RD, "① ④ 自己少漂：cuBLAS FP32 一次累加整个词表（GPU 一侧）", "%.2e"),
+             (N.B_DLOGITS, BL, "② TPU 输出头反向的 dlogits 舍成 BF16（TPU 一侧）", "%.2e"),
+             (N.B_REST, LINE2, "③ 其余 BF16 存储与逐元素", "%.1e")]
+    cur = 0.0
+    for k, (v, c, lab, sp) in enumerate(steps):
+        a, b = cur, cur + v
+        x1, x2 = xs + min(a, b) * K, xs + max(a, b) * K
+        yy = ytop + k * 40
+        f.box(x1, yy, max(x2 - x1, 3), 24, c, GY2 if c == LINE2 else c, 3)
+        if k < 2:
+            f.t(x1 + 10, yy + 17, "%s　%s" % (lab, tx(v, sp, plus=True)), "#fff", True, 13)
+        else:
+            f.t(x2 + 10, yy + 17, "%s　%s" % (lab, tx(v, sp, plus=True)), GY, True, 13)
+        cur = b
+    f.line(xs + cur * K, ytop + 84, xs + cur * K, ytop + 128, INK, 1.5, dash="4,3", arrow=False)
+    f.t(xs + cur * K + 8, ytop + 140, "合计 ％s，正好等于实测" .replace("％s", tx(N.TPU_VS_FIX1)), INK, True, 13)
+    f._pan = None
+    yb = f.band(py2 + PH2 + 20, "ok", "两个生产程序之间，唯一测得出的差是 GPU 输出头 dgrad 的长累加", [
+        "GPU 生产只修这一处，TPU 生产就跟它几乎重合（按 ③ 那把尺子 v5p 五项全过）；剩下离真精确的那截是两边都有的 dlogits 舍入，不算两边的差。",
+        "第一关对 ④ 的那点差，是 ① 和 ② 两笔方向相反的偏差相减剩下的：基线自己偏一笔，TPU 自己舍入一笔。",
+        "代价：要两边各补跑一批只改一处的 1000 步运行；第一关拿谁当基线还没定。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：TPU 对生产 golden（整层重算 ＋ 路由回放，5 份均值）第 1000 步 param_norm ＋2.12e-2；只修 dgrad 的那份对生产 golden ＋1.24e-2；精确轨迹对只修 dgrad 的 ＋0.62e-2；TPU 对精确轨迹 ＋0.26e-2。",
-               "📌 实测：第 301–1000 步 loss 相对生产 golden 均值：只修 dgrad 的 −9.8e-5，精确轨迹 −2.09e-4，TPU −1.34e-4；TPU 对精确轨迹 ＋7.6e-5（生产 golden 各份标准差 2.6e-5）。")
+               "📌 实测：第 1000 步参数范数对 GPU 生产 golden 5 份均值：④ ＋1.857e-2、⑤ ＋2.071e-2、TPU 生产 ＋2.092e-2（v5p、v7x 当前配置同值）、⑥ ＋2.744e-2；TPU 精确轨迹 ＋2.73e-2。TPU 生产对 TPU 精确少 6.3e-3，对 ⑥ 少 6.5e-3，差不到一个记录刻度。",
+               "📌 实测：① ＋8.697e-3（GPU 精确改分段累加 ＋8.55e-3）；② −6.836e-3（TPU 只把 dlogits 舍成 BF16、其余全精确）；GPU 真精确只多舍这一次 dlogits 少漂 6.74e-3；③ 由差额得出，约两个 FP32 记录刻度，单独分辨不清。")
     f.save("fig9-decomp.svg", yb + 14)
 
 
@@ -178,7 +198,7 @@ def fig_twolayer():
 def fig_regress():
     f = Fig(W, "每天的流程。训练代码的每个改动都要写一栏数值影响声明，然后跑一轮回归，对上一次全部通过的 TPU 运行比。"
                "逐位相同就通过，指针前移。不逐位就看声明：写了数学不变的，退回；执行级的改动或升级依赖，用 TPU 自己的执行噪声（TPU 28 对）判；"
-               "数学级的改动，要对起点那份 golden（①）不变差（这是历史门，待换成 ④ 精确轨迹），必要时回到验收的某一级重做。")
+               "数学级的改动，要对起点那份 golden（①）不变差（这是历史门，待换成第一关定下的基线），必要时回到验收的某一级重做。")
     y0 = f.header("日常回归：先要求逐位，不逐位再按声明分流",
                   "方块 ＝ 一个环节；菱形 ＝ 一个判断；参照不是 GPU，是上一次全部通过的 TPU 运行（LKG）",
                   [(GR, "通过"), (RD, "退回"), (OR, "用 TPU 噪声判"), (PU, "回到对齐验收")])
@@ -200,7 +220,7 @@ def fig_regress():
     node(1080, py + 40, 300, 66, "写了数学不变却不逐位 → 退回", "没写声明的也按这条处理", RD, "#fce8e6")
     node(1080, py + 130, 300, 66, "执行级 / 升级依赖", "容差门：TPU 执行噪声（TPU 28 对）", OR, "#fef7e0")
     node(1080, py + 220, 300, 76, "数学级", "对齐门：对起点那份 golden（①）不变差", PU, "#f3e8fd")
-    f.t(1230, py + 290, "（历史门，待换成 ④）", PU, size=12, anchor="middle")
+    f.t(1230, py + 290, "（历史门，待换成定下的基线）", PU, size=12, anchor="middle")
     f.line(230, py + 168, 268, py + 168, GY2, 1.8)
     f.line(490, py + 168, 558, py + 168, GY2, 1.8)
     f.elbow(640, py + 120, 778, py + 60, GR, 1.8)

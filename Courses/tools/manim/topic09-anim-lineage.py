@@ -32,7 +32,7 @@ r"""专题九「GPU→TPU 训练精度对齐」：最终 golden 是一步步改�
     例外：③ 卡片下一行小字「第一关的尺子取自这组重跑」（跟静态图 fig9-golden 的 ③ 卡片同一句）。
 
 🎨 配色（跟静态图 fig9-decomp 同一套）：
-  · 柱子三段：dgrad 截断＝红、GPU 其余 BF16 误差＝橙、TPU 一侧剩下的（还没查清的）＝蓝。
+  · 柱子三段：dgrad 截断＝红、GPU 其余 BF16 误差＝橙、剩下那截（11-06 起已拆清：④ 自己偏 ＋ TPU 舍入）＝蓝。
   · 「超过 2×N ＝ 不过」不再用整根红柱表达，改成柱尾数字旁一个红色「不过」标签（红在全课 ＝ 偏差源／不过，
     这里两个用法同色但都指「有问题」，不翻转语义）。
   · 卡片：① 暗灰、② 亮灰、③ 橙、④ 紫 —— 跟静态图 fig9-golden 的卡片同色；紫只用在 ④ 精确轨迹卡片（及「对 ④」）。
@@ -140,7 +140,7 @@ CAPS = [
     (T4A, "④ 精确轨迹：＋BF16 权重、全程 FP32、真关 TF32",
      "再缩到 %.1f × N；缩掉的那截是 GPU 其余的 BF16 误差。仍超过 2×N，不过" % R[4]),
     (T5A, "每往精确值靠一步，缩掉的都是 GPU golden 自己的偏差",
-     "剩下那截才是 TPU 一侧的，还在查"),
+     "剩下那截后来也拆清了：④ 自己偏一笔、TPU 舍入一笔，相减剩下"),
 ]
 
 
@@ -180,7 +180,7 @@ class GoldenLineage(Scene):
         def clock():
             return tr.get_value()            # ⭐ 全片唯一读时钟的地方
 
-        title = tx("最终 golden 是一步步改出来的：每一步只加一样东西", 32).to_edge(UP, buff=0.3)
+        title = tx("golden 是一步步改出来的：每一步只加一样东西", 32).to_edge(UP, buff=0.3)
         self.add(title)
 
         # ── 静态件（第 0 帧就在）：柱子起点线、2×N 竖线、底注
@@ -300,7 +300,7 @@ class GoldenLineage(Scene):
         note.move_to([0, -2.55, 0])
         put(note, lambda t: prog(t, T4A + 2.0, T4A + 2.5) * fade_out_all(t))
 
-        rest = tx("剩下这截：TPU 一侧，还在查", 22, C_TPU)
+        rest = tx("剩下这截：④ 自己偏 ＋ TPU 舍入，两笔相减", 22, C_TPU)
         rest.move_to([X0 + rest.width / 2 - 0.1, BAR_Y + 1.05, 0])
         put(rest, lambda t: prog(t, T5A, T5A + 0.6) * fade_out_all(t))
 

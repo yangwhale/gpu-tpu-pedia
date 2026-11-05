@@ -460,3 +460,44 @@ _lock("HEAD_TF32_S1_T", HEAD_TF32_S1_T, "−8.08e-4"); _lock("HEAD_EXACT_S1_T", 
 _lock("HEAD_BF16_S100_T", HEAD_BF16_S100_T, "−6.10e-4"); _lock("HEAD_TPU_S100_T", HEAD_TPU_S100_T, "−7.4e-5")
 # 动画 TruncVsRound 的模拟终点（合成正数输入、按实测张量核模型模拟，不是实测曲线）。来源：课件既有数，待核
 TRUNC_SIM_END_T, RNE_SIM_END_T = "−3.5e-4", "−2.3e-6"
+
+# ── 11-06 更新：「精确轨迹」自己也不精确（GPU cuBLAS FP32 在 12 万长求和上有偏），新的账 ──────────────
+# 出处（实测）：排查记录 11-06 上午的版本（含 ⑤ 的判定与 dlogits 那组补跑）。第 1000 步参数范数，对 ② 生产 golden 5 份均值；生产近似配置。
+PN_FIX1 = 1.857e-2          # ④ 精确轨迹（cuBLAS FP32 一次累加整个词表）
+PN_PRODCHUNK = 2.071e-2     # ⑤ GPU 生产 ＋ 输出头 dgrad 分段 FP32 累加
+PN_TRUE = 2.744e-2          # ⑥ 真精确：④ ＋ 分段累加
+PN_TPU_PROD = 2.092e-2      # TPU 生产（v5p、v7x 当前配置同值）
+B_GPUEXACT, B_DLOGITS, B_REST = 8.697e-3, -6.836e-3, 0.488e-3     # TPU 生产 − ④ 的三份：④ 自己少漂 / TPU dlogits 舍 BF16 / 其余 BF16 存储与逐元素
+TPU_VS_FIX1 = 2.349e-3
+assert abs(B_GPUEXACT + B_DLOGITS + B_REST - TPU_VS_FIX1) < 1e-9
+PN_TPU_EXACT = PN_FIX1 + B_GPUEXACT                               # TPU 精确轨迹（＝真精确，GPU 分段累加只低 1.5e-4，一个记录刻度内）
+TPU_VS_TRUE = PN_TPU_PROD - PN_TPU_EXACT                          # 校对更正：−6.35e-3
+assert abs(TPU_VS_TRUE + 6.35e-3) < 1e-5, TPU_VS_TRUE
+LADDER_DGRAD = PN_PRODCHUNK                                       # 生产 → ⑤：输出头 dgrad 长累加（BF16 张量核与 cuBLAS FP32 两段合计）
+LADDER_SHARED = PN_TRUE - PN_PRODCHUNK                            # ⑤ → ⑥：两侧共有的 dlogits 舍 BF16
+assert abs(LADDER_SHARED - 6.73e-3) < 1e-5
+SHARED_DLOGITS_GPU = -6.738e-3                                    # GPU 真精确只多舍一次 dlogits，少漂这么多
+CUBLAS_S1, CUBLAS_299 = -1.8e-6, -2.6e-4                          # cuBLAS FP32 输出头 dgrad 沿 w̄ 的相对偏差：第 1 步、第 299 步的状态
+CHUNK_VS_TPUEXACT = 7.9e-8                                        # GPU 精确＋分段累加 对 TPU 精确，参数范数带符号均值（不重算配置）
+DRIFT_RATIO_TRUE, DRIFT_RATIO_TPU = 1.45, 1.10                    # 不重算配置第 1000 步漂移对 ④′ 之比：真精确 / TPU 生产
+NOISE_PN = 1.24e-7                                                # ③ 那组 10 对的参数范数带符号均值上限
+PRODCHUNK_PN_V5P, PRODCHUNK_LOSS_TAIL_V5P, NOISE_LOSS_TAIL = 5.2e-8, 3.3e-5, 5.62e-5
+TRUEEXACT_PN_V5P, TRUEEXACT_PN_V7X = -7.70e-7, -8.77e-7
+HEADFP32_COST = 0.097
+# 落进正文的写法
+PN_FIX1_T, PN_PRODCHUNK_T, PN_TRUE_T, PN_TPU_PROD_T = (tx(v, "%.2e", plus=True) for v in (PN_FIX1, PN_PRODCHUNK, PN_TRUE, PN_TPU_PROD))
+_lock("PN_FIX1_T", PN_FIX1_T, "＋1.86e-2"); _lock("PN_PRODCHUNK_T", PN_PRODCHUNK_T, "＋2.07e-2"); _lock("PN_TRUE_T", PN_TRUE_T, "＋2.74e-2"); _lock("PN_TPU_PROD_T", PN_TPU_PROD_T, "＋2.09e-2")
+B_GPUEXACT_T, B_DLOGITS_T, B_REST_T, TPU_VS_FIX1_T = tx(B_GPUEXACT, plus=True), tx(B_DLOGITS), tx(B_REST, "%.1e", plus=True), tx(TPU_VS_FIX1, plus=True)
+_lock("B_GPUEXACT_T", B_GPUEXACT_T, "＋8.70e-3"); _lock("B_DLOGITS_T", B_DLOGITS_T, "−6.84e-3"); _lock("B_REST_T", B_REST_T, "＋4.9e-4"); _lock("TPU_VS_FIX1_T", TPU_VS_FIX1_T, "＋2.35e-3")
+TPU_VS_TRUE_T = tx(abs(TPU_VS_TRUE), "%.1e"); _lock("TPU_VS_TRUE_T", TPU_VS_TRUE_T, "6.3e-3")
+LADDER_DGRAD_T, LADDER_SHARED_T = tx(LADDER_DGRAD, plus=True), tx(LADDER_SHARED, "%.1e", plus=True)
+_lock("LADDER_DGRAD_T", LADDER_DGRAD_T, "＋2.07e-2"); _lock("LADDER_SHARED_T", LADDER_SHARED_T, "＋6.7e-3")
+SHARED_DLOGITS_GPU_T = tx(SHARED_DLOGITS_GPU, "%.1e"); _lock("SHARED_DLOGITS_GPU_T", SHARED_DLOGITS_GPU_T, "−6.7e-3")
+CUBLAS_S1_T, CUBLAS_299_T = tx(CUBLAS_S1, "%.1e"), tx(CUBLAS_299, "%.1e"); _lock("CUBLAS_S1_T", CUBLAS_S1_T, "−1.8e-6"); _lock("CUBLAS_299_T", CUBLAS_299_T, "−2.6e-4")
+PRODCHUNK_PN_R = PRODCHUNK_PN_V5P / NOISE_PN; PRODCHUNK_LOSS_R = PRODCHUNK_LOSS_TAIL_V5P / NOISE_LOSS_TAIL
+PRODCHUNK_PN_R_T, PRODCHUNK_LOSS_R_T = "%.2f" % PRODCHUNK_PN_R, "%.2f" % PRODCHUNK_LOSS_R; _lock("PRODCHUNK_PN_R_T", PRODCHUNK_PN_R_T, "0.42"); _lock("PRODCHUNK_LOSS_R_T", PRODCHUNK_LOSS_R_T, "0.59")
+TRUEEXACT_R_T = "%.1f 到 %.1f" % (abs(TRUEEXACT_PN_V5P) / NOISE_PN, abs(TRUEEXACT_PN_V7X) / NOISE_PN); _lock("TRUEEXACT_R_T", TRUEEXACT_R_T, "6.2 到 7.1")
+HEADFP32_COST_T = "%.1f%%" % (HEADFP32_COST * 100); _lock("HEADFP32_COST_T", HEADFP32_COST_T, "9.7%")
+DRIFT_RATIO_TRUE_T, DRIFT_RATIO_TPU_T = "%.2f" % DRIFT_RATIO_TRUE, "%.2f" % DRIFT_RATIO_TPU
+CHUNK_VS_TPUEXACT_T = tx(CHUNK_VS_TPUEXACT, "%.1e"); _lock("CHUNK_VS_TPUEXACT_T", CHUNK_VS_TPUEXACT_T, "7.9e-8")
+TPU_SHARE_OF_TRUE_T = "%.0f%%" % (PN_TPU_PROD / PN_TRUE * 100); _lock("TPU_SHARE_OF_TRUE_T", TPU_SHARE_OF_TRUE_T, "76%")
