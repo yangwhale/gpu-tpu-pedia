@@ -45,12 +45,19 @@ assert abs(CLIP1 - 0.057) < 0.001
 # ── 噪声尺子 ──────────────────────────────────────────────────────
 GPU_RUNS10_MEAN, GPU_RUNS10_STD = -2.5e-5, 2.7e-5     # 10 次 GPU 重跑，301–1000 步 loss 带符号均值（对第一份）
 GPU_RUNS10_LO, GPU_RUNS10_HI = -6.5e-5, 2.4e-6
-TPU_ARMS = (-1.66e-4, -1.35e-4, -1.03e-4)             # TPU 三种执行方式（原样／不重算／改片上内存上限）
+TPU_ARMS = (-1.66e-4, -1.35e-4, -1.03e-4)             # 同一份代码的三种跑法（原样／不重算／改片上内存上限）
 PAIRS_10RUNS = 10 * 9 // 2
 assert PAIRS_10RUNS == 45
 INCONCL = {3: (8, 46), 15: (3, 9), 28: (1, 46)}      # 参照对数 → 待定条数（GPU 对 GPU 演练）
-EXACT_SELF_PN, GPU_RERUN_PN = 6.9e-9, 1.24e-7          # 精确轨迹自己扰动出的散布 vs GPU 生产程序重跑散布（param_norm 带符号均值）
-assert abs(GPU_RERUN_PN / EXACT_SELF_PN - 18) < 0.5
+# 精确轨迹扰动出的五份两两 10 对的上限 vs GPU 生产程序重跑 10 对的上限（param_norm 带符号均值，实测）。
+# ⛔ 旧值 6.9e-9 只是单对（第二份给第 0 层一处权重乘 1 ＋ 1e-6），不能代表「精确轨迹自己的散布」；五份 10 对的上限跟 GPU 那把同一量级。
+EXACT_SELF_PN, GPU_RERUN_PN = 1.07e-7, 1.24e-7
+assert 0.5 < EXACT_SELF_PN / GPU_RERUN_PN < 2, "同一量级"
+# 交叉核对（只报不判）：被测 v5p 当前配置，噪声换成别的尺子时 r 是多少（实测）。
+XCHK_SELF = {"param_norm": 4.00, "loss 全程": 2.03, "loss 尾段": 1.21, "grad_norm": 2.24}   # 噪声 ＝ 精确轨迹自己那 10 对
+XCHK_TPU_PN = 5.03                                    # 噪声 ＝ TPU 执行噪声 28 对，param_norm（按新标定；旧值 4.74）
+assert XCHK_SELF["param_norm"] > 2 and XCHK_SELF["loss 全程"] > 2 and 1 < XCHK_SELF["loss 尾段"] <= 2 and XCHK_SELF["grad_norm"] > 2
+assert XCHK_TPU_PN > 2
 
 
 def p_exceed(n):
@@ -107,7 +114,14 @@ ROWS_300_TOTAL, ROWS_GPU_PAIR_MAX = 23.2, 0.21
 RARE_ROWS = 58638
 SHRINK_GPU, SHRINK_TPU, SHRINK_WD = 66.3, 49.2, 31.8
 assert abs(SHRINK_GPU - SHRINK_WD - 34.5) < 0.05 and abs(SHRINK_TPU - SHRINK_WD - 17.4) < 0.15
-RARE_G_LO, RARE_G_HI = 4e-9, 1e-8                     # 冷门行梯度的量级：第 200–300 步 √v̂ 均值（第 1 步中位数 5.2e-8，12% 小于 ε）
+RARE_G_LO, RARE_G_HI = 4e-9, 1e-8                     # 冷门行梯度的量级：第 200–300 步 √v̂ 的**均值**落在这个区间（不是梯度分位数）；第 1 步梯度中位数 5.2e-8，12% 小于 ε
+# 冷门行放大链，第 300 步同一步直接量（实测，没出现过的词那些行）：
+RARE_RMS_RATIO = 0.990        # 两边冷门行 |g| 的均方根之比（TPU ÷ GPU）：大小几乎一样
+RARE_EPS_FRAC = 0.92          # √v̂ < ε 的元素占比 → 这些元素 u ≈ m̂ ÷ ε
+RARE_VHAT_MED = 2.6e-9        # √v̂ 的中位数
+SUMWU_DIFF, SUMWU_MHAT = -4994, -5450                 # Σ w·u 两边之差，其中 m̂ 那一份
+assert abs(RARE_RMS_RATIO - 1) < 0.02 and RARE_VHAT_MED < EPS and RARE_EPS_FRAC > 0.5
+assert abs(SUMWU_MHAT) > abs(SUMWU_DIFF) and SUMWU_MHAT * SUMWU_DIFF > 0      # m̂ 那份是大头、同号
 OGSCALE_125 = 14.6                                     # 只把输出层梯度放大 1.25 倍，第 300 步输出层平方和多涨
 # 干预（对第一份 GPU 运行，1000 步）
 TPU_LOSS_TAIL, TPU_PN_1000 = -1.66e-4, 2.1e-2
@@ -124,6 +138,10 @@ EXACT_REF = 4.5e-4
 EXACT_POS = [("精确 dgrad 的 GPU", 1.25e-2), ("精确轨迹", 1.82e-2), ("TPU", 1.99e-2)]
 DGRADX_RANGE = (1.23e-2, 1.28e-2)
 assert DGRADX_RANGE[0] <= EXACT_POS[0][1] <= DGRADX_RANGE[1]
+# 第 301–1000 步 loss 平均偏移，对 4 份默认 GPU 运行的均值（实测）：精确轨迹两份、TPU（不重算的配置）
+EXACT_LOSS_TAIL = (-1.53e-4, -1.16e-4)
+EXACT_TPU_LOSS_TAIL = -1.27e-4
+assert min(EXACT_LOSS_TAIL) < EXACT_TPU_LOSS_TAIL < max(EXACT_LOSS_TAIL)    # TPU 夹在精确轨迹两份中间
 EXACT_SHARE = EXACT_POS[1][1] / EXACT_POS[2][1]
 assert abs(EXACT_SHARE - 0.91) < 0.01, EXACT_SHARE
 # 拆账：TPU 对 GPU 生产 golden 第 1000 步 param_norm 差
@@ -133,8 +151,9 @@ assert abs(sum(v for _, v in DECOMP) - DECOMP_TOTAL) < 1e-9
 DECOMP_SHARE = (0.59, 0.29, 0.12)                      # 实测拆账给的份额（按未舍入的原值算）
 for (_l, _v), _s in zip(DECOMP, DECOMP_SHARE):
     assert abs(_v / DECOMP_TOTAL - _s) < 0.01, (_l, _v / DECOMP_TOTAL)
-LOSS_RC_TAIL, LOSS_RCX_MINUS_RC, LOSS_RCE_MINUS_RC = -1.34e-4, -9.8e-5, -2.09e-4
-assert abs(LOSS_RCX_MINUS_RC / LOSS_RC_TAIL - 0.73) < 0.01
+# 第 301–1000 步 loss 相对 GPU 生产 golden 均值（实测）：TPU、只修 dgrad 的那份 − 生产、精确轨迹 − 生产
+LOSS_TPU_VS_PROD_TAIL, LOSS_FIXHEAD_MINUS_PROD, LOSS_EXACT_MINUS_PROD = -1.34e-4, -9.8e-5, -2.09e-4
+assert abs(LOSS_FIXHEAD_MINUS_PROD / LOSS_TPU_VS_PROD_TAIL - 0.73) < 0.01
 
 # ── 日常回归 ──────────────────────────────────────────────────────
 ARMS_TRIED, ARMS_KEPT = 14, 7
@@ -168,3 +187,37 @@ def series():
 
 def mean(xs):
     return sum(xs) / float(len(xs))
+
+
+# ── 2026-11-05 夜：新结论（一手材料 11-05 23:00 版）────────────────────────────────
+def sci(x):
+    """1.24e-07 → 1.24e-7（课件里的写法）"""
+    m, e = ("%.2e" % x).split("e")
+    m = m.rstrip("0").rstrip(".") if "." in m else m
+    return "%se%d" % (m, int(e))
+
+
+def show(v):
+    """«名字» 占位符落进正文的写法：字符串原样、整数原样、小数按有效数字。"""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, int):
+        return format(v, ",") if v >= 10000 else str(v)
+    return sci(v) if abs(v) < 1e-2 else ("%g" % v)
+
+
+EXACT_PAIR1_PN = 6.9e-9          # 精确轨迹只看一对扰动时的 param_norm 带符号均值（旧的「小 18 倍」就是它）
+assert abs(GPU_RERUN_PN / EXACT_PAIR1_PN - 18) < 0.5
+XCHK_SELF_PN, XCHK_SELF_LOSS, XCHK_SELF_GN = "4.00", "2.03", "2.24"   # 交叉核对（只报）：尺子换成精确轨迹自己 10 对
+EP8_PN = 3.52e-7                 # v5p 当前配置改成 EP＝8：param_norm 对精确轨迹的带符号均值（原 FSDP 4.27e-7）
+EP8_DROP_PCT = "%d%%" % round((1 - EP8_PN / ACC[0][1]) * 100)
+assert EP8_DROP_PCT == "18%"
+EP8_R = "2.85"                   # 判定文件里的比值（N 未舍入是 1.237e-7）
+assert abs(EP8_PN / 1.237e-7 - 2.85) < 0.01
+# 第 1 步梯度与路由翻转（隔离回放；被测梯度由 Adam 一阶动量反推）
+STEP1_TENSORS, STEP1_ALL, STEP1_EXPERT = 50, 1.28e-3, 0.102    # 比到的 50 个张量合起来 rel_L2；第 3 层专家 0 的 fc1/fc2
+assert 70 < STEP1_EXPERT / STEP1_ALL < 90                       # 「大了近百倍」（约 80 倍）
+FLIP_SLOTS, FLIP_TOKENS = "0.44–0.56%", "3.5–4.5%"            # 路由槽位翻转比例；至少换了一个专家的 token 比例
+E0_TOKENS, E0_OUT, E0_IN = 139, 3, 1                            # 第 3 层专家 0：4096 个 token 里分到 139 个，换出 3、换进 1
+FLIP_MARGIN = "2.7e-5 到 6.3e-5"                                 # 翻转 token 的第 8、9 名「分数＋偏置」分差中位数（各层范围）
+EXPERTS, TOPK = 192, 8

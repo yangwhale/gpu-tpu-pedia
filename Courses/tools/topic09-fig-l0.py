@@ -11,7 +11,10 @@ from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
 import topic09_numbers as N
 
 W = 1400
-COLS = [BL, OR, GR, RD, "#9334e6", "#00838f", "#b06000", GY]     # 8 张卡 8 个颜色
+# 8 张卡用同一个灰色系的深浅区分（R3：原来 8 种颜色，第 2 卡绿、第 3 卡红正好撞上图例的「指纹相同／落到别的设备」）。
+# ⭐ 中性灰不占任何语义色：绿／红只留给图例那两样。
+COLS = ["#202124", "#3c4043", "#5f6368", "#80868b", "#9aa0a6", "#bdc1c6", "#dadce0", "#e8eaed"]
+TXT = ["#fff"] * 5 + ["#202124"] * 3                                # 浅的三格用深字
 assert len(COLS) == N.RANKS
 SAME_SHARE = N.NATIVE_SAME_RANK / float(N.DATA_UNITS)
 assert abs(SAME_SHARE - 1 / 8.0) < 1e-12
@@ -22,7 +25,7 @@ def fig_replay():
                "中间一排是 TPU 的 8 个设备按同样顺序回放：设备 d 的第 m 份就是 GPU 第 d 张卡的第 m 份，16 个单元逐个比指纹，1000 步共 16,000 个全部相同。"
                "下面一条：如果改用 TPU 自己的数据加载器、不重排，内容虽然一样，只有八分之一的单元落到同号设备上。")
     y0 = f.header("数据不重读，原样回放　——　<tspan font-weight=\"700\">每一步、每张卡、每一小份都对指纹</tspan>",
-                  "一格 ＝ 一张卡这一步吃的一小份数据（microbatch）；颜色 ＝ 它在 GPU 上属于哪张卡",
+                  "一格 ＝ 一张卡这一步吃的一小份数据（microbatch）；灰度深浅 ＝ 它在 GPU 上属于哪张卡",
                   [(GR, "指纹相同"), (RD, "落到了别的设备")])
     PH = 380
     py = f.panel(0, y0, W, PH, "一步里的 16 个单元（8 张卡 × 2 小份）", BL)
@@ -35,8 +38,8 @@ def fig_replay():
         for d in range(N.RANKS):
             x = X0 + d * (2 * CW + GAP + 4)
             for m in range(N.MICRO):
-                f.box(x + m * (CW + 4), y + 10, CW, CH, COLS[d], COLS[d], 5)
-                f.t(x + m * (CW + 4) + CW / 2, y + 36, "%d·m%d" % (d, m), "#fff", True, 13, "middle")
+                f.box(x + m * (CW + 4), y + 10, CW, CH, COLS[d], GY2 if d >= 6 else COLS[d], 5)
+                f.t(x + m * (CW + 4) + CW / 2, y + 36, "%d·m%d" % (d, m), TXT[d], True, 13, "middle")
             if mark:
                 f.t(x + CW + 2, y + CH + 36, mark, GR, True, 16, "middle")
     row(py + 20, "GPU 训练时", "存下每一格 ＋ 指纹")

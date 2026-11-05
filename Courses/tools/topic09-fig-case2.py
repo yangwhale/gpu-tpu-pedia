@@ -24,30 +24,30 @@ def fig_gauge():
                "隐状态 h 沿这个平均方向挪一点，所有词的 logits 就一起升高或降低一点；反向时，梯度沿这个方向的那一份，就是把所有 logits 一起往下压的力。"
                "右：TPU 对 GPU 的 lse 差随步数往下走：第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218；GPU 两次之间小得多。")
     y0 = f.header("有一个方向，能让所有词的 logits 一起升降　——　<tspan font-weight=\"700\">那股力每步少一点，几百步就积出来了</tspan>",
-                  "左：细箭头 ＝ 输出层每个词的那一行权重；粗箭头 ＝ 它们的平均方向 w̄；红箭头 ＝ h 沿 w̄ 挪的那一小步。右：横轴 ＝ 训练步（对数），纵轴往下 ＝ TPU 的 lse 比 GPU 低多少",
-                  [(PU, "平均方向 w̄"), (RD, "TPU − GPU"), (GY, "GPU 两次之间")])
+                  "左：细箭头 ＝ 每个词那一行权重，粗箭头 ＝ 平均方向 w̄，红箭头 ＝ h 沿 w̄ 的一小步；右：横轴 ＝ 训练步（对数），往下 ＝ TPU 的 lse 更低",
+                  [(INK, "平均方向 w̄"), (GY, "隐状态 h"), (RD, "h 沿 w̄ 的一小步"), (BL, "TPU − GPU"), (GY2, "GPU 两次之间")])
     PH = 360
-    py = f.panel(0, y0, 600, PH, "输出头：logit ＝ h · 这个词的那一行", PU)
+    py = f.panel(0, y0, 600, PH, "输出头：logit ＝ h · 这个词的那一行", GY)
     ox, oy = 120, py + 215
     import random
     rnd = random.Random(7)
     for k in range(22):
         a = math.radians(38 + rnd.uniform(-26, 26))
         L = rnd.uniform(150, 230)
-        f.line(ox, oy, ox + L * math.cos(a), oy - L * math.sin(a), "#c5cae9", 1.2, arrow=False)
+        f.line(ox, oy, ox + L * math.cos(a), oy - L * math.sin(a), "#bdc1c6", 1.2, arrow=False)
     a0 = math.radians(38)
-    f.line(ox, oy, ox + 260 * math.cos(a0), oy - 260 * math.sin(a0), PU, 5)
-    f.t(ox + 268 * math.cos(a0), oy - 268 * math.sin(a0) - 6, "w̄", PU, True, 20, big=True)
+    f.line(ox, oy, ox + 260 * math.cos(a0), oy - 260 * math.sin(a0), INK, 5)
+    f.t(ox + 268 * math.cos(a0), oy - 268 * math.sin(a0) - 6, "w̄", INK, True, 20, big=True)
     hx, hy = ox + 150, oy + 24
-    f.line(ox, oy, hx, hy, BL, 4)
-    f.t(hx + 8, hy + 22, "隐状态 h", BL, True, 15)
+    f.line(ox, oy, hx, hy, GY, 4)
+    f.t(hx + 8, hy + 22, "隐状态 h", GY, True, 15)
     dx, dy = 70 * math.cos(a0), -70 * math.sin(a0)
     f.line(hx, hy, hx + dx, hy + dy, RD, 4)
     f.t(hx + dx + 8, hy + dy - 4, "h 沿 w̄ 挪一小步", RD, True, 14)
     f.t(24, py + 312, "每个词的 logit ＝ h·这一行；各行都带着 w̄ 那一份 → 所有 logits 一起升降", INK, True, 14)
     f._pan = None
     px = 620
-    py2 = f.panel(px, y0, W - px, PH, "lse 差随步数往下走（实测，固定一条序列的探针）", RD)
+    py2 = f.panel(px, y0, W - px, PH, "lse 差随步数往下走（实测，固定一条序列的探针）", BL)
     GX0, GW, GY0, GH = px + 110, 600, py2 + 270, 220
 
     def X(st):
@@ -63,12 +63,16 @@ def fig_gauge():
         f.t(GX0 - 10, Y(v) + 4, "%g" % v, GY, size=12, anchor="end")
     for st in (25, 50, 100, 300):
         f.t(X(st), YT - 10, "第 %d 步" % st, GY, size=12, anchor="middle")
-    f.path([(X(s), Y(v)) for s, v, _ in LSE], RD, 2.6, arrow=False)
-    for s, v, g in LSE:
-        f.box(X(s) - 6, Y(v) - 6, 12, 12, RD, RD, 6)
-        f.t(X(s) + 10, Y(v) + 18, "%g" % v, RD, True, 13)
+    f.path([(X(s), Y(v)) for s, v, _ in LSE], BL, 2.6, arrow=False)
+    for i, (s, v, g) in enumerate(LSE):
+        f.box(X(s) - 6, Y(v) - 6, 12, 12, BL, BL, 6)
+        # R3：「−0.078」原来写在点的右下，被下一段线穿过 → 一律写在左下（第一个点贴着纵轴，写右下）
+        if i == 0:
+            f.t(X(s) + 10, Y(v) + 20, "%g" % v, BL, True, 13)
+        else:
+            f.t(X(s) - 10, Y(v) + 20, "%g" % v, BL, True, 13, "end")
         if g is not None:
-            f.box(X(s) - 5, Y(-abs(g)) - 5, 10, 10, GY, GY, 5)
+            f.box(X(s) - 5, Y(-abs(g)) - 5, 10, 10, GY2, GY2, 5)
     f.t(X(300) - 10, Y(-0.021) + 20, "GPU 两次之间", GY, True, 13, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "这股力每一步只差 0.065%，同一个方向、每一步都差 —— 几百步积成 logits 整体水平的差", [
@@ -88,7 +92,7 @@ def fig_head():
                "TPU 整个头反向 2.4e-5；GPU 名义 FP32、实际 TF32 的那一版 8.08e-4，比 BF16 还差；真关 TF32 的 FP32 只有 1.7e-6。"
                "右：拿真实的输出头张量只取前 K 个词，K 从 16,384 到 120,832，误差从 6.9e-5 涨到 6.5e-4。")
     y0 = f.header("少掉的那一点，在 GPU 输出层 dgrad 那一次长求和里",
-                  "柱长 ＝ 沿「所有 logits 一起动」方向的相对误差（对数刻度，越短越准），参照是 FP64；右：横轴 ＝ 求和长度 K（词表取前 K 个词）",
+                  "柱长 ＝ 沿「所有 logits 一起动」方向的相对误差（对数刻度，一格 ＝ 十倍，越短越准），参照是 FP64；右：横轴 ＝ 求和长度 K（词表取前 K 个词）",
                   [(RD, "GPU 张量核 / TF32"), (BL, "TPU"), (GR, "真 FP32"), (GY2, "交叉熵反向")])
     PH = 400
     py = f.panel(0, y0, 820, PH, "第 1 步，拿训练里实际用到的张量重算（实测）", OR)
@@ -98,6 +102,11 @@ def fig_head():
             ("GPU dgrad 名义 FP32", "没关 TF32 —— 一度被当成「精确」", abs(N.HEAD_TF32_S1), RD),
             ("GPU dgrad FP32，真关 TF32", "这才是精确 dgrad", abs(N.HEAD_EXACT_S1), GR)]
     bx, bw, emin, emax = 330, 380, 1e-6, 1e-3
+    # ⭐ R3：对数柱的原点藏着（1e-6），柱长看着差 2 倍其实差 27 倍 → 每个十倍一根竖格线、顶上标数
+    for e in range(-6, -2):
+        xg = bx + (e + 6) / 3.0 * bw
+        f.line(xg, py + 24, xg, py + 26 + 5 * 72 - 30, LINE, 1.0, arrow=False)
+        f.t(xg, py + 18, "1e%d" % e, GY, size=12, anchor="middle")
     for i, (lab, sub, v, c) in enumerate(rows):
         y = py + 26 + i * 72
         f.t(24, y + 18, lab, INK, True, 14)
@@ -128,7 +137,7 @@ def fig_head():
     f.t(GX0 + GW, GY0 + 46, "K ＝ 词表取前多少个词", GY, size=12, anchor="end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "交叉熵没问题，TPU 也没问题；偏的是 GPU 那一次 12 万长的 BF16 矩阵乘 —— 朝零截掉了一点", [
-        "跟前面用合成数据量到的一样：正负对称地朝零偏，随求和长度增大；第 1、100 步都在 −6e-4 量级。",
+        "趋势跟前面合成数据的一样：正负对称地朝零偏，随求和长度增大；第 1、100 步都在 −6e-4 量级。",
         "代价：要先证明量的就是训练里实际用到的那几个张量（这里核对过，和抓下来的逐位相同）；精确参照还得真关 TF32。",
     ])
     yb = f.src(yb + 10,
@@ -144,10 +153,10 @@ def fig_intervene():
                "第三根：GPU 人为往这个方向多推一把，对不加的 GPU 比：loss −1.26e-4、参数范数 +0.0205，几乎复现了 TPU。")
     y0 = f.header("双向干预：去掉它，loss 的差几乎没了；加上它，差就回来了",
                   "柱长 ＝ 差有多大（同一组柱子同一把尺）；灰色带 ＝ GPU 自己重跑的差（噪声）",
-                  [(RD, "原样：TPU 对 GPU"), (GR, "两边都去掉那个方向"), (OR, "GPU 人为多推一把，对 GPU 默认")])
+                  [(BL, "原样：TPU 对 GPU"), (GR, "两边都去掉那个方向"), (OR, "GPU 人为多推一把，对 GPU 默认")])
     PH = 330
-    groups = [("第 301–1000 步 loss 平均偏移（相对）", [(N.TPU_LOSS_TAIL, RD), (N.REMOVE_LOSS, GR), (N.FORCE_LOSS, OR)], 1.8e-4, 2.5e-5, "%.2e"),
-              ("第 1000 步参数范数差", [(N.TPU_PN_1000, RD), (N.REMOVE_PN, GR), (N.FORCE_PN, OR)], 0.024, 4.9e-4, "%+.4f")]
+    groups = [("第 301–1000 步 loss 平均偏移（相对）", [(N.TPU_LOSS_TAIL, BL), (N.REMOVE_LOSS, GR), (N.FORCE_LOSS, OR)], 1.8e-4, 2.5e-5, "%.2e"),
+              ("第 1000 步参数范数差", [(N.TPU_PN_1000, BL), (N.REMOVE_PN, GR), (N.FORCE_PN, OR)], 0.024, 4.9e-4, "%+.4f")]
     for gi, (title, bars, vmax, noise, fmt) in enumerate(groups):
         px = gi * 710
         py = f.panel(px, y0, 690, PH, title, BL)
@@ -161,7 +170,7 @@ def fig_intervene():
         f.t(bx, py + 30 + 3 * 78 + 26, "灰色带 ＝ GPU 重跑的差", GY, size=13)
         f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "loss 偏移、参数范数漂移、logits 整体偏低，是同一股力的三个后果", [
-        "两边都去掉之后，第 1000 步 lse 的差从约 −0.33 变成 −0.007；GPU 反着加力，连 logits 下移、冷门行范数偏大一起复现。",
+        "两边都去掉之后，第 1000 步 lse 的差从约 −0.33 变成 −0.007；GPU 人为多推一把，连 logits 下移、冷门行范数偏大一起复现。",
         "代价：这两个开关改的是数学本身，只能拿来证明「是这股力」，不能放进 golden。参数范数还剩约三成没去掉（后面接着查）。",
     ])
     yb = f.src(yb + 10,
@@ -175,7 +184,7 @@ def fig_swap():
                "看沿漂移方向比精确值多走还是少走了多少。TPU 生产程序 0.00%，几乎正好；GPU 只把输出头 dgrad 换成精确的，少走 0.10%；GPU 生产程序少走 0.36%。"
                "细线是 4 个状态、12 个 batch 的范围，结论都一样。")
     y0 = f.header("同一个起点，各算一步：GPU 每一步都少走一点　——　<tspan font-weight=\"700\">TPU 几乎正好</tspan>",
-                  "柱长 ＝ 这一步沿「TPU − GPU 权重差」方向，比精确值少走了漂移本身的百分之几（往左 ＝ 少走）；参照 ＝ 同一份 BF16 权重、全程 FP32 算这一步；细线 ＝ 12 个 batch 的范围",
+                  "柱长 ＝ 这一步沿「TPU − GPU 权重差」方向，比精确值少走了漂移本身的百分之几（往左 ＝ 少走）；细线 ＝ 12 个 batch 的范围",
                   [(BL, "TPU"), (GR, "GPU，只换精确 dgrad"), (RD, "GPU")])
     PH = 300
     py = f.panel(0, y0, W, PH, "同一状态、同一批数据（实测，全体参数）", BL)
@@ -208,25 +217,28 @@ def fig_swap():
     f.save("fig9-swap.svg", yb + 14)
 
 
-EXACT_ROWS = [
-    ("第 975 步参数范数差", [(N.EXACT_POS[0][1], GR, "精确 dgrad"), (N.EXACT_POS[1][1], PU, "精确轨迹"), (N.EXACT_POS[2][1], RD, "TPU")], 0.022, N.EXACT_REF, "%+.4f"),
-    ("第 975 步 lse 差", [(-0.175, GR, "精确 dgrad"), (-0.262, PU, "精确轨迹"), (-0.286, RD, "TPU")], 0.32, 0.013, "%+.3f"),
-    ("第 301–1000 步 loss 平均偏移（相对）", [(-7.3e-5, GR, "精确 dgrad"), (-1.53e-4, PU, "精确轨迹"), (-1.27e-4, RD, "TPU")], 1.7e-4, 9e-6, "%.2e"),
+EX1, EX2 = N.EXACT_LOSS_TAIL
+EXACT_ROWS = [   # (标题, [(值, 颜色, 标签, 标签抬高)], 满刻度, GPU 散布半宽, 格式)
+    ("第 975 步参数范数差", [(N.EXACT_POS[0][1], GR, "精确 dgrad", 16), (N.EXACT_POS[1][1], PU, "精确轨迹", 36), (N.EXACT_POS[2][1], BL, "TPU", 16)], 0.022, N.EXACT_REF, "%+.4f"),
+    ("第 975 步 lse 差", [(-0.175, GR, "精确 dgrad", 16), (-0.262, PU, "精确轨迹", 36), (-0.286, BL, "TPU", 16)], 0.32, 0.013, "%+.3f"),
+    # ⭐ 精确轨迹的 loss 有两份（−1.53e-4、−1.16e-4），TPU 的 −1.27e-4 夹在中间 → 画成一段紫色区间
+    ("第 301–1000 步 loss 平均偏移（相对）", [(-7.3e-5, GR, "精确 dgrad", 16), (EX2, PU, "精确轨迹第二份", 36), (N.EXACT_TPU_LOSS_TAIL, BL, "TPU", 16), (EX1, PU, "精确轨迹", 36)], 1.7e-4, 9e-6, "%.2e"),
 ]
 
 
 def fig_exact():
     f = Fig(W, "三行，都是对四次默认 GPU 运行的平均值比，零点就是 GPU。"
                "参数范数：GPU 只把 dgrad 换成精确的，走到 +0.0125；精确轨迹走到 +0.0182；TPU 在 +0.0199。"
-               "lse：精确 dgrad 约 −0.175，精确轨迹 −0.262，TPU −0.286。loss：精确 dgrad 约 −7.3e-5，精确轨迹 −1.53e-4，比 TPU 的 −1.27e-4 还低。"
+               "lse：精确 dgrad 约 −0.175，精确轨迹 −0.262，TPU −0.286。loss：精确 dgrad 约 −7.3e-5；精确轨迹有两份，−1.16e-4 和 −1.53e-4，TPU 的 −1.27e-4 夹在两份中间。"
                "灰色是 GPU 四次运行自己的散布。")
     y0 = f.header("精确轨迹站在 TPU 一边　——　<tspan font-weight=\"700\">离精确值远的，是 GPU 的 BF16 golden</tspan>",
-                  "零点 ＝ 4 次默认 GPU 运行的平均；往右 ＝ 离 GPU 越远（参数范数更大、lse 更低、loss 更低）；精确轨迹 ＝ BF16 的权重、全程 FP32 的计算（真关 TF32）",
-                  [(GR, "GPU 只换精确 dgrad"), (PU, "精确轨迹"), (RD, "TPU"), (GY, "GPU 自己的散布")])
+                  "零点 ＝ 4 次默认 GPU 运行的平均（这个配置不重算）；往右 ＝ 离 GPU 越远（参数范数更大、lse 更低、loss 更低）；精确轨迹 ＝ BF16 权重、全程 FP32（真关 TF32）",
+                  [(GR, "GPU 只换精确 dgrad"), (PU, "精确轨迹"), (BL, "TPU"), (GY2, "GPU 自己的散布（灰底）")])
     PH = 110
     y = y0
     for title, pts, vmax, ref, fmt in EXACT_ROWS:
-        py = f.panel(0, y, W, PH, title + "（对 4 份默认 GPU 运行的均值；这个配置不重算）", BL)
+        # R3：限定语「对 4 份默认 GPU 运行的均值；这个配置不重算」原来三个面板各写一遍 → 挪进副标题，只写一次
+        py = f.panel(0, y, W, PH, title, BL)
         X0, XW = 90, 1220
 
         def X(v):
@@ -237,63 +249,65 @@ def fig_exact():
             f.line(X0 + q * XW, yl - 5, X0 + q * XW, yl + 5, GY2, 1.2, arrow=False)
             f.t(X0 + q * XW, yl + 24, fmt % (pts[-1][0] / abs(pts[-1][0]) * q * vmax), GY, size=11, anchor="middle")
         f.box(X0 - ref / vmax * XW, yl - 12, 2 * ref / vmax * XW, 24, "#f1f3f4", "#f1f3f4", 0)
-        f.t(X0, yl + 32, "GPU", GY, True, 13, "middle")
-        for k, (v, c, lab) in enumerate(pts):
-            f.box(X(v) - 9, yl - 9, 18, 18, c, c, 9)
-            f.t(X(v), yl - (36 if k == 1 else 16), "%s %s" % (lab, fmt % v), c, True, 13, "middle")
+        f.t(X0, yl + 32, "0（GPU 均值）", GY, True, 13, "middle")
+        pu = [v for v, c, _, _ in pts if c == PU]
+        if len(pu) == 2:
+            f.box(X(min(pu, key=abs)), yl - 4, X(max(pu, key=abs)) - X(min(pu, key=abs)), 8, PU, PU, 4)
+        for v, c, lab, up in pts:
+            f.box(X(v) - 9, yl - 9, 18, 18, c, c if c != PU or len(pu) < 2 else "#fff", 9, sw=2)
+            f.t(X(v), yl - up, "%s %s" % (lab, fmt % v), c, True, 13, "middle")
         f._pan = None
         y = py + PH - 30 + 14
-    yb = f.band(y + 6, "ok", "精确轨迹走了 TPU 九成的路：参数范数 91%，lse 九成以上，loss 比 TPU 还低", [
+    yb = f.band(y + 6, "ok", "精确轨迹走了 TPU 九成的路：参数范数 91%，lse 九成以上；loss 上 TPU 落在精确轨迹两份之间", [
         "所以「TPU 偏了」的大部分，其实是 GPU 的 BF16 golden 自己离精确值远；TPU 对精确轨迹只剩参数范数 ＋1.7e-3（这个配置不重算，第 975 步）。",
         "代价：精确轨迹慢（全程 FP32），而且是确定性的 —— 它自己量不出噪声，下一节要借别的尺子。",
     ])
     yb = f.src(yb + 10,
                "📌 实测：精确轨迹 ＝ 主权重 FP32，每步前向前舍到 BF16，前向反向全部 FP32、关 TF32、不用融合注意力；第 2 / 3 步 loss 11.23569 / 10.58785，TPU 11.23569 / 10.58784，GPU BF16 11.23543 / 10.58775。",
-               "📌 实测：第 975 步对 4 份默认 GPU 运行均值：param_norm 精确轨迹 ＋1.82e-2、TPU ＋1.99e-2、精确 dgrad ＋1.23e-2 – ＋1.28e-2（图中取中点），4 份 GPU 自己 ±4.5e-4；lse −0.262 / −0.286 / −0.16 – −0.19，GPU ±0.013；301–1000 步 loss −1.53e-4 / −1.27e-4 / −4.3e-5 – −1.02e-4，GPU ±9e-6。",
+               "📌 实测：第 975 步对 4 份默认 GPU 运行均值：param_norm 精确轨迹 ＋1.82e-2、TPU ＋1.99e-2、精确 dgrad ＋1.23e-2 – ＋1.28e-2（图中取中点），4 份 GPU 自己 ±4.5e-4；lse −0.262 / −0.286 / −0.16 – −0.19，GPU ±0.013；301–1000 步 loss 精确轨迹两份 −1.53e-4、−1.16e-4，TPU −1.27e-4，精确 dgrad −4.3e-5 – −1.02e-4，GPU ±9e-6。",
                "注：lse 与 loss 两行里「精确 dgrad」取两份运行的中点，画的是位置示意。")
     f.save("fig9-exact.svg", yb + 14)
 
 
-CHAIN = [
-    ("① GPU 输出层 dgrad", ["沿整张词表的长求和", "朝零截掉一点：沿 w̄", "每步少推约 0.065%"], "实测", RD),
-    ("② 主干权重", ["沿这个方向每步少走一点", "第 0 层注意力的", "输出投影最先长歪"], "实测", OR),
-    ("③ logits 的整体水平", ["隐状态在 w̄ 上的分量不同", "所有 logits 一起偏一截", "softmax 看不见它"], "实测", PU),
-    ("④ 冷门词那几行", ["在 ε 区，更新跟着梯度走", "logit 水平越高", "被 Adam 压得越多"], "推断", BL),
-    ("⑤ 看到的现象", ["GPU 的冷门行缩得多", "→ TPU 参数范数显得大", "loss 偏低一起出现、一起消失"], "实测", GR),
+CHAIN = [   # R3：卡片文字砍到一行；边框统一中性灰
+    ("① GPU 输出层 dgrad", "朝零截掉：每步少推 0.065%"),
+    ("② 主干权重", "第 0 层注意力输出投影最先歪"),
+    ("③ logits 的整体水平", "整体偏一截，softmax 看不见"),
+    ("④ 冷门词那几行", "在 ε 区：logit 越高压得越多"),
+    ("⑤ 看到的现象", "TPU 参数范数显大、loss 偏低"),
 ]
 
 
 def fig_chain():
-    f = Fig(W, "一条五环的链。第一环：GPU 输出层 dgrad 沿整张词表做长求和，朝零截掉一点，沿 w̄ 每步少推约 0.065%，实测。"
-               "第二环：主干权重沿这个方向每步少走一点，第 0 层注意力的输出投影最先长歪，实测。"
-               "第三环：隐状态在 w̄ 上的分量不同，所有 logits 一起偏一截，softmax 看不见，实测。"
-               "第四环：冷门词那几行在 ε 区，更新跟着梯度走，logit 水平越高被压得越多，这一环是推断。"
-               "第五环：GPU 的冷门行缩得多，TPU 的参数范数显得大，loss 偏低也一起出现，实测。")
+    f = Fig(W, "一条五环的链。第一环：GPU 输出层 dgrad 沿整张词表做长求和，朝零截掉一点，沿 w̄ 每步少推约 0.065%。"
+               "第二环：主干权重沿这个方向每步少走一点，第 0 层注意力的输出投影最先长歪。"
+               "第三环：隐状态在 w̄ 上的分量不同，所有 logits 一起偏一截，softmax 看不见。"
+               "第四环：冷门词那几行在 ε 区，更新跟着梯度走，logit 水平越高被压得越多。"
+               "第五环：GPU 的冷门行缩得多，TPU 的参数范数显得大，loss 偏低也一起出现。五环都有直接测量。")
     y0 = f.header("从一次求和到参数范数：五环一条链",
-                  "一格 ＝ 一环；右上角的小标签 ＝ 这一环是直接量到的（实测）还是推出来的（推断）",
-                  [(GR, "实测"), (BL, "推断")])
-    PH = 250
+                  "一格 ＝ 一环，从左往右一环推一环；右上角的小标签 ＝ 这一环有直接测量",
+                  [(GR, "实测")])
+    PH = 150
     py = f.panel(0, y0, W, PH, "TPU 算得准、GPU 每步少推一点 —— 两边一比，看上去像是 TPU 偏了", BL)
     BW, GAP = 252, 27
-    for i, (title, lines, tag, col) in enumerate(CHAIN):
+    for i, (title, line) in enumerate(CHAIN):
         x = 8 + i * (BW + GAP)
-        f.box(x, py + 24, BW, 170, "#fff", col, 10, sw=2)
-        f.box(x, py + 24, BW, 6, col, col, 3)
-        f.t(x + 14, py + 60, title, col, True, 15)
-        tc = GR if tag == "实测" else BL
-        f.box(x + BW - 54, py + 40, 44, 22, "none", tc, 11)
-        f.t(x + BW - 32, py + 56, tag, tc, True, 12, "middle")
-        f.lines(x + 14, py + 92, BW - 24, lines, size=13, lh=26, fill=INK)
+        f.box(x, py + 24, BW, 100, "#fff", GY2, 10, sw=1.5)
+        f.t(x + 14, py + 60, title, INK, True, 15)
+        f.box(x + BW - 54, py + 40, 44, 22, "none", GR, 11)
+        f.t(x + BW - 32, py + 56, "实测", GR, True, 12, "middle")
+        f.t(x + 14, py + 98, line, INK, size=13, w=BW - 24)
         if i < len(CHAIN) - 1:
-            f.line(x + BW + 3, py + 109, x + BW + GAP - 3, py + 109, GY2, 2)
+            f.line(x + BW + 3, py + 74, x + BW + GAP - 3, py + 74, GY2, 2)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "证据：两边都去掉 ① 那个方向的力，logit 水平和 loss 的差回到噪声附近；GPU 人为加上它，整套现象一起出现", [
-        "第四环是推断：同一个状态下，冷门行这一步的梯度两边几乎一样；差是状态（logit 水平）不同以后才长出来的。",
+        "第四环在第 300 步同一步上量过：两边冷门行梯度的大小几乎一样（0.990），差在方向；九成多的元素落在 ε 区，Σ w·u 之差的大头来自一阶动量。",
         "loss 为什么也跟着变（softmax 看不见整体平移），机制没有验证；实测只是它跟着这股力一起出现、一起消失。",
     ])
     yb = f.src(yb + 10,
                "📌 实测：GPU dgrad 沿 w̄ 第 1 / 100 步 −6.5e-4 / −6.1e-4；第 0 层输出在各层里最先分开、往后逐层放大（第 50 步起转为偏低），换权重重算确认是权重长歪、大头在注意力输出投影；第 1000 步训练批上 TPU 的 logits 整体低 0.27。",
-               "⚠️ 推断（第四环）：冷门词那一行的梯度 ≈ Σ 概率 × 隐状态，更新在这一行权重方向上的分量 ∝ 按概率加权的原始 logit；logit 水平一低，这一行就压得少。这一环没有在同一步上直接量过。")
+               "📌 实测（第四环，第 300 步同一步，没出现过的词那些行）：两边 |g| 的均方根之比 %.3f；Σ w·g GPU 8.1e-5、TPU 1.2e-6；%.0f%% 的元素 √v̂ ＜ ε（中位数 %s），这些元素的更新 ≈ m̂ ÷ ε；Σ w·u 两边差 −%d，其中 m̂ 那一份 −%d。"
+               % (N.RARE_RMS_RATIO, N.RARE_EPS_FRAC * 100, ("%.1e" % N.RARE_VHAT_MED).replace("e-0", "e-"), -N.SUMWU_DIFF, -N.SUMWU_MHAT))
     f.save("fig9-chain.svg", yb + 14)
 
 

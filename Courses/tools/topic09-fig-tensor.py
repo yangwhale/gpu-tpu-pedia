@@ -69,40 +69,52 @@ def fig_cos():
 
 def fig_rratio():
     f = Fig(W, "一个靶子，靶心是同一份输入在 FP64 里算出的真值。GPU 离靶心的距离定为 1，画成灰色圆。"
-               "绿色圆是门槛 1.2 倍；橙色虚圆是 1.41 倍，相当于比 GPU 多舍入了一次同量级的数。"
-               "TPU 的 qkv 投影原来在 1.235 倍，红点，超线；改成 FP32 累加以后回到 1.000，绿点，和 GPU 一样远。")
+               "四种读法直接画在靶子上：灰圆里面淡蓝，R 小于 1，TPU 比 GPU 更近；灰圆到 1.2 倍的绿环，平台固有；1.2 倍以外淡红，去查 TPU；"
+               "橙色虚圆是 1.41 倍，相当于比 GPU 多舍入了一次同量级的数。"
+               "TPU 的 qkv 投影原来在 1.235 倍，红点，落在淡红区；改成 FP32 累加以后回到 1.000，绿点，和 GPU 一样远。")
     y0 = f.header("TPU 离 GPU 远了，先问：两边各离真值多远",
-                  "靶心 ＝ 同一份输入在 FP64 里算的真值；R ＝ TPU 离靶心的距离 ÷ GPU 离靶心的距离",
+                  "靶心 ＝ 同一份输入在 FP64 里算的真值；R ＝ TPU 离靶心的距离 ÷ GPU 离靶心的距离；底色 ＝ 落在这一圈该怎么读",
                   [(GY, "GPU 的距离（R ＝ 1）"), (GR, "门槛 R ＝ 1.2"), (OR, "多舍一次 R ≈ 1.41")])
     PH = 420
-    py = f.panel(0, y0, 760, PH, "单个算子：注意力的 qkv 投影（实测）", BL)
-    cx, cy, U = 380, py + 205, 125
+    py = f.panel(0, y0, W, PH, "单个算子：注意力的 qkv 投影（实测）", BL)
+    cx, cy, U = 700, py + 200, 112
+
+    def disk(r, fill):
+        f.p.append('<circle cx="%d" cy="%d" r="%.1f" fill="%s" stroke="none"/>' % (cx, cy, r * U, fill))
 
     def circ(r, col, dash=None, sw=2):
         f.p.append('<circle cx="%d" cy="%d" r="%.1f" fill="none" stroke="%s" stroke-width="%s"%s/>'
                    % (cx, cy, r * U, col, sw, ' stroke-dasharray="%s"' % dash if dash else ""))
+    # ⭐ R3：右格「四种读法」原来是一张文字清单 → 直接画成靶子上的底色（淡蓝 ＜ 1、淡绿 1–1.2、淡红 ＞ 1.2）
+    RMAX = 1.68
+    disk(RMAX, "#fce8e6")
+    disk(N.R_GATE, "#e6f4ea")
+    disk(1.0, "#e8f0fe")
     circ(N.R_ONE_EXTRA, OR, "7 6")
     circ(N.R_GATE, GR, None, 2.5)
     circ(1.0, GY, None, 2)
     f.box(cx - 6, cy - 6, 12, 12, INK, INK, 6)
     f.t(cx, cy + 26, "FP64 真值", INK, True, 13, "middle")
-    for r, ang, col, lab in [(N.R_QKV_BEFORE, 35, RD, "改之前 R ＝ %.3f" % N.R_QKV_BEFORE),
-                             (N.R_QKV_AFTER, 150, GR, "改之后 R ＝ %.3f" % N.R_QKV_AFTER)]:
+    # 四种读法：标签放在靶子两侧，引线指到对应的那一圈
+    LX, RX = cx - RMAX * U - 40, cx + RMAX * U + 40
+    for (lx, ly, anchor, col, a, b, tx, ty) in [
+            (LX, cy - 110, "end", BL, "R ＜ 1", "TPU 更近、GPU 远", cx - 0.62 * U, cy - 0.55 * U),
+            (LX, cy + 40, "end", GR, "R ≈ 1–1.2", "平台固有：只是加法顺序不同", cx - 1.1 * U, cy + 0.1 * U),
+            (RX, cy - 110, "start", RD, "R ＞ 1.2", "TPU 多舍了：去查 TPU", cx + 1.15 * U, cy - 1.1 * U),
+            (RX, cy + 40, "start", OR, "R ≈ 1.41", "像是多舍入了一次同量级的数", cx + N.R_ONE_EXTRA * U * 0.97, cy + 0.36 * U)]:
+        f.t(lx, ly, a, col, True, 17, anchor)
+        f.t(lx, ly + 24, b, INK, size=14, anchor=anchor)
+        x0 = lx + (8 if anchor == "end" else -8)
+        f.line(x0, ly - 6, tx, ty, col, 1.0, arrow=False)
+        f.box(tx - 3, ty - 3, 6, 6, col, col, 3)
+    # 两个实测点：标签放在靶子外面，用短引线连回点
+    for r, ang, col, lab, ldx, ldy in [(N.R_QKV_BEFORE, 62, RD, "改之前 R ＝ %.3f" % N.R_QKV_BEFORE, 70, -48),
+                                       (N.R_QKV_AFTER, 235, GR, "改之后 R ＝ %.3f" % N.R_QKV_AFTER, -40, 70)]:
         x, y = cx + r * U * math.cos(math.radians(ang)), cy - r * U * math.sin(math.radians(ang))
+        f.line(x, y, x + ldx, y + ldy, col, 1.0, arrow=False)
         f.box(x - 9, y - 9, 18, 18, col, INK, 9)
-        f.t(x + (16 if ang < 90 else -16), y - 12, lab, col, True, 15, "start" if ang < 90 else "end")
-    f._pan = None
-    px = 790
-    py2 = f.panel(px, y0, W - px, PH, "四种读法", GR)
-    rows = [(GR, "R ≈ 1", "两边离真值一样远：只是加法顺序不同，平台固有"),
-            (RD, "R > 1.2", "TPU 远：TPU 这一步多舍了，去查 TPU"),
-            (BL, "R &lt; 1", "TPU 近、GPU 远：这一处 GPU 离真值更远"),
-            (OR, "R ≈ 1.41", "像是多舍入了一次同量级的数")]
-    for i, (col, a, b) in enumerate(rows):
-        y = py2 + 46 + i * 84
-        f.box(px + 20, y - 18, 8, 50, col, col, 2)
-        f.t(px + 42, y, a, col, True, 17)
-        f.t(px + 42, y + 26, b, INK, size=14)
+        f.t(x + ldx + (6 if ldx > 0 else -6), y + ldy + (0 if ldy < 0 else 14), lab, col, True, 15,
+            "start" if ldx > 0 else "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "FP64 不是标准答案，是定责的工具：它告诉你差是谁带来的", [
         "qkv 投影超线的根因在 TPU：分片部分积在 BF16 里累加（下一节讲），改成 FP32 累加后 R 从 1.235 回到 1.000。",

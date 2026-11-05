@@ -11,7 +11,7 @@ fig9-windowed  回答：TPU 上 FSDP 的矩阵乘为什么多舍了几次？—�
 """
 import math
 
-from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
 import topic09_numbers as N
 
 W = 1400
@@ -66,8 +66,8 @@ def fig_formats():
     # 加法
     y = py2 + 140
     f.t(24, y + 22, "加", INK, True, 18, big=True)
-    bits(f, 80, y - 20, SIG_FP32, BL, "#e8f0fe", bw=22, bh=24)
-    f.t(80 + SIG_FP32 * 22 + 14, y - 2, "大数（24 位）", BL, True, 13)
+    bits(f, 80, y - 20, SIG_FP32, GY2, LINE2, bw=22, bh=24)            # R3：中性灰，别借上半「指数」的蓝
+    f.t(80 + SIG_FP32 * 22 + 14, y - 2, "大数（24 位）", GY, True, 13)
     SH = 10
     bits(f, 80 + SH * 22, y + 14, SIG_FP32 - SH, OR, "#fef7e0", bw=22, bh=24)
     bits(f, 80 + SIG_FP32 * 22, y + 14, SH, RD, "#fce8e6", bw=22, bh=24, dash="3 3")
@@ -84,16 +84,16 @@ def fig_formats():
 
 
 def fig_truncate():
-    f = Fig(W, "左边：GPU 张量核累加的模型。每 16 个乘积连同累加器一起，按其中最大的指数对齐；对齐后超出 25 位窗口的低位直接截掉，向零，不是四舍五入。"
+    f = Fig(W, "左边：GPU 张量核累加的模型。每 16 个乘积连同累加器一起，按其中最大的指数对齐；对齐后最高位往后 25 位以外的低位直接截掉，向零，不是四舍五入。"
                "就像收银台每一单都抹零，只少不多。右边：用全是正数的合成输入，求和长度 K 从 256 到 65,536，"
                "朝零的相对偏差从 2.2e-5 涨到 3.1e-4；不走张量核的 FP32 不到 5e-8。")
     y0 = f.header("GPU 张量核：每 16 个一组，低位抹掉　——　<tspan font-weight=\"700\">只少不多，加得越长少得越多</tspan>",
                   "左：一行 ＝ 一个乘积（对齐后）；虚线右边 ＝ 窗口外的低位，被截掉。右：横轴 ＝ 一次求和加多少个乘积（对数），纵轴 ＝ 结果朝零偏了多少（对数）",
-                  [(BL, "留下的位"), (RD, "截掉的位（向零）"), (OR, "实测：BF16 张量核"), (GR, "实测：FP32 不走张量核")])
+                  [(GY2, "留下的位"), (RD, "截掉的位（向零）"), (GY, "实测：GPU BF16 张量核"), (GR, "实测：FP32 不走张量核")])
     PH = 400
     py = f.panel(0, y0, 640, PH, "一组 16 个乘积 ＋ 累加器，按最大指数对齐（实测的 B200 模型）", BL)
     X0, BW, BH = 40, 13, 14
-    WIN = 25
+    WIN = N.TC_KEEP + 1          # 保留「最高位 ＋ 其后 25 位」＝ 26 列（跟仿真代码的定义一致；原来把最高位算在 25 里，少画一列）
     shifts = [0, 3, 1, 6, 2, 9, 4, 12, 5, 2, 7, 15, 3, 8, 1, 11, 4]   # 示意：每个乘积相对最大指数右移几位
     assert len(shifts) == N.TC_GROUP + 1
     for i, s in enumerate(shifts):
@@ -104,15 +104,16 @@ def fig_truncate():
         for b in range(L):
             pos = s + b
             if pos < WIN:
-                f.box(X0 + 60 + pos * BW, y, BW - 2, BH, "#e8f0fe", BL, 2)
+                f.box(X0 + 60 + pos * BW, y, BW - 2, BH, LINE2, GY2, 2)
             else:
                 f.box(X0 + 60 + pos * BW, y, BW - 2, BH, "#fce8e6", RD, 2)
     xw = X0 + 60 + WIN * BW - 1
-    f.line(xw, py + 14, xw, py + 24 + 17 * 20, RD, 2, dash="6 4", arrow=False)
-    f.t(xw - 6, py + 24 + 17 * 20 + 4, "25 位窗口", RD, True, 13, "end")
+    f.line(xw, py + 4, xw, py + 24 + 17 * 20, RD, 2, dash="6 4", arrow=False)
+    # R3：原来写在窗口线底端，贴着面板下沿被切掉一半 → 挪到顶端、累加器那一行上方
+    f.t(xw - 6, py + 16, "最高位后 25 位", RD, True, 13, "end")
     f._pan = None
     px = 670
-    py2 = f.panel(px, y0, W - px, PH, "偏差随求和长度长大（实测，合成正数输入）", OR)
+    py2 = f.panel(px, y0, W - px, PH, "偏差随求和长度长大（实测，合成正数输入，输出写回 BF16）", GY)
     GX0, GY0, GW, GH = px + 90, py2 + 320, 580, 280
     KMIN, KMAX, EMIN, EMAX = 2 ** 7, 2 ** 18, 1e-8, 1e-3
 
@@ -128,20 +129,25 @@ def fig_truncate():
     for k in (256, 4096, 65536):
         f.t(GXf(k), GY0 + 20, "K ＝ %s" % format(k, ","), GY, size=12, anchor="middle")
     pts = [(GXf(k), GYf(e)) for k, e in N.TC_BIAS_K]
-    f.path(pts, OR, 2.5, arrow=False)
-    for (k, e), (x, y) in zip(N.TC_BIAS_K, pts):
-        f.box(x - 7, y - 7, 14, 14, OR, OR, 7)
-        f.t(x - 10, y - 12, "%.1e" % e, OR, True, 13, "end")
+    f.path(pts, GY, 2.5, arrow=False)
+    for i, ((k, e), (x, y)) in enumerate(zip(N.TC_BIAS_K, pts)):
+        f.box(x - 7, y - 7, 14, 14, GY, GY, 7)
+        # R3：第一个点贴着纵轴，标签往左写会横跨纵轴 → 第一个放到点的右下方
+        if i == 0:
+            f.t(x + 12, y + 20, "%.1e" % e, GY, True, 13)
+        else:
+            f.t(x - 10, y - 12, "%.1e" % e, GY, True, 13, "end")
     f.line(GX0, GYf(N.FP32_BIAS_MAX), GX0 + GW, GYf(N.FP32_BIAS_MAX), GR, 2.5, dash="7 5", arrow=False)
     f.t(GX0 + GW, GYf(N.FP32_BIAS_MAX) - 10, "FP32 不走张量核：≤ 5e-8", GR, True, 13, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "四舍五入有多有少，长了能抵消；抹零每次都少，长了就积成一个朝零的系统偏差", [
         "正数、负数输入都一样朝零偏，随 K 增大：加到六万多个，就偏到万分之三。",
-        "代价：短的求和看不出来，几百个乘积以内偏差只有十万分之几。",
+        "口径：这条实测含输出舍成 BF16；短求和那几点主要是输出舍入（推断），长求和才是截断主导。",
     ])
     yb = f.src(yb + 10,
                "📌 实测的 B200 张量核模型（一个经验模型，不是厂商规格）：每 16 个乘积连同累加器对齐到最大指数，低于 2^(emax−25) 的位向零截掉，写回 FP32 也向零舍入。「25 位」是拟合出来的窗口宽度，跟 FP32 的 24 位有效数字不是一回事。它在路由打分（K ＝ 4096）上逐位复现了三层全部 4096 × 192 个元素；把参数改成 8 个一组、24 位或就近舍入，命中率都掉到 1% 以下。",
                "📌 实测：合成负数输入 −9.5e-6 / −6.9e-5 / −3.4e-4，同样朝零；TF32 小约一个量级；FP32 不走张量核 ≤ 5e-8。K ＝ 120,832 时合成输入的偏差反而降到 6.4e-5（推断：cuBLAS 对这个形状换了算法），所以图上没有画这一点。",
+               "⚠️ 推断：量这条曲线时输出写回的是 BF16。只算截断模型，K ＝ 256 约 3e-7、K ＝ 4096 约 1.1e-5；加上输出舍成 BF16，才回到实测的量级 —— 所以短求和那几点主要是输出舍入，长求和才是截断主导。",
                "注：左图每个乘积右移几位是示意，不是实测数据。")
     f.save("fig9-truncate.svg", yb + 14)
 
@@ -151,7 +157,7 @@ def fig_tf32():
                "但 Transformer Engine 的 FP32 矩阵乘照样走 TF32，误差 2.94e-4 不变；设环境变量 NVIDIA_TF32_OVERRIDE=0 后两条路都是真 FP32，1.15e-6，"
                "而 torch 的开关读回来反而是 True。判据：每次启动实测一遍，1e-5 以下才算真关了。")
     y0 = f.header("「我关了 TF32」不算数　——　<tspan font-weight=\"700\">开关读回来的值，和实际跑的不一样</tspan>",
-                  "柱长 ＝ FP32 矩阵乘对 FP64 的误差（对数刻度，越短越准）；左边小字 ＝ 那一刻 torch 的开关读回来是什么",
+                  "柱长 ＝ FP32 矩阵乘对 FP64 的误差（对数刻度，一格 ＝ 十倍，越短越准）；左边小字 ＝ 那一刻 torch 的开关读回来是什么",
                   [(RD, "实际走 TF32"), (GR, "实际是真 FP32"), (GY2, "判据线（虚线）")])
     PH = 330
     py = f.panel(0, y0, W, PH, "GPU 训练容器里的 FP32 矩阵乘（实测）", BL)
@@ -162,6 +168,11 @@ def fig_tf32():
 
     def LX(v):
         return bx + (math.log10(v) - math.log10(emin)) / (math.log10(emax) - math.log10(emin)) * bw
+    # R3：图注说「一格十倍」，原来图上没有格 → 每个十倍画一根竖格线并标数
+    for e in range(-7, -2):
+        xg = LX(10.0 ** e)
+        f.line(xg, py + 26, xg, py + 250, LINE, 1.0, arrow=False)
+        f.t(xg, py + 20, "1e%d" % e, GY, size=12, anchor="middle")
     for i, (lab, sub, v, c) in enumerate(rows):
         y = py + 44 + i * 110
         f.t(24, y + 20, lab, INK, True, 15)

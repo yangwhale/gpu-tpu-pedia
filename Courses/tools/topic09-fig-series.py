@@ -10,7 +10,7 @@ fig9-pairs  回答：参照对为什么要多？—— 纯噪声超过 n 个样�
 """
 import statistics
 
-from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, wpx, MONO_K
 import topic09_numbers as N
 
 W = 1400
@@ -36,16 +36,16 @@ def fig_dt():
                "下排是 TPU 对第一次 GPU：抖动的宽度和上排一样，但整团点往下沉，平均偏负万分之 1.66，九成的步更低。"
                "最大单步在第 380 步。")
     y0 = f.header("1000 个点压成三个数：偏多少、抖多大、最尖的一下",
-                  "一个点 ＝ 一步的相对差 dₜ ＝（被测 − 基线）÷ 基线；阴影 ＝ 第 301–1000 步（尾段窗口）；红线 ＝ 窗口里的带符号均值",
-                  [(GY, "GPU 第二次 对 第一次"), (RD, "TPU 对 GPU 第一次")])
+                  "一个点 ＝ 一步的相对差 dₜ ＝（被测 − 基线）÷ 基线；阴影 ＝ 第 301–1000 步（尾段窗口）；黑线 ＝ 窗口里的带符号均值",
+                  [(GY2, "GPU 第二次 对 第一次（噪声）"), (BL, "TPU 对 GPU 第一次")])
     PW, PH = W, 250
     X0, XW = 110, 1250
     lo, hi = -7e-4, 7e-4
 
     for r, (title, data, col, sm) in enumerate([
-            ("GPU 自己跟自己：点围着零抖", D_GPU, GY, SM_GPU),
-            ("TPU 对 GPU：抖得一样宽，整团往下沉", D_TPU, RD, SM_TPU)]):
-        py = f.panel(0, y0 + r * (PH + 16), PW, PH, title, col if col != GY else BL)
+            ("GPU 自己跟自己：点围着零抖", D_GPU, GY2, SM_GPU),
+            ("TPU 对 GPU：抖得一样宽，整团往下沉", D_TPU, BL, SM_TPU)]):
+        py = f.panel(0, y0 + r * (PH + 16), PW, PH, title, GY if r == 0 else BL)
         YM = py + (PH - 70) / 2.0
 
         def Y(v):
@@ -59,8 +59,14 @@ def fig_dt():
             f.t(X0 - 10, Y(v) + 4, "%+.0f×10⁻⁴" % (v * 1e4), GY, size=12, anchor="end")
         for k, v in enumerate(data):
             f.p.append('<circle cx="%.1f" cy="%.1f" r="1.6" fill="%s" fill-opacity="0.55"/>' % (X(k + 1), Y(v), col))
-        f.line(X(301), Y(sm), X(1000), Y(sm), RD, 3, arrow=False)
-        f.t(X(1000) - 6, Y(sm) + (22 if sm < 0 else -10), "带符号均值 %s" % ("%.2e" % sm).replace("e-0", "e-"), RD, True, 14, "end")
+        f.line(X(301), Y(sm), X(1000), Y(sm), INK, 3, arrow=False)
+        # R3：标签原来压在散点上 → 挪到窗口里点最稀的下沿，垫一块白底再写
+        lab = "带符号均值 %s" % ("%.2e" % sm).replace("e-0", "e-")
+        lw = int(wpx(lab, 14) * MONO_K) + 16
+        ly = Y(lo) + 4
+        f.box(X(1000) - lw, ly - 18, lw, 26, "#fff", INK, 5)
+        f.line(X(1000) - lw / 2.0, ly - 18, X(1000) - lw / 2.0, Y(sm) + 3, INK, 1.0, arrow=False)
+        f.t(X(1000) - 8, ly, lab, INK, True, 14, "end")
         if r == 1:
             f.box(X(IMAX + 1) - 9, Y(D_TPU[IMAX]) - 9, 18, 18, "none", OR, 9, sw=2)
             f.t(X(IMAX + 1) + 14, Y(D_TPU[IMAX]) + 5, "最大单步：第 %d 步 %.1e" % (IMAX + 1, D_TPU[IMAX]), OR, True, 13)
@@ -123,21 +129,21 @@ def fig_pairs():
                "右边是一次 GPU 对 GPU 的演练，本来应该全部通过：3 对参照时 46 条检查里 8 条判待定，扩到 28 对只剩 1 条。")
     y0 = f.header("参照对太少，尺子就太短　——　<tspan font-weight=\"700\">3 对时，纯噪声也有四分之一会「超线」</tspan>",
                   "左：柱高 ＝ 一个纯噪声的被测超过 n 对参照最大值的概率，1/(n+1)；右：一次本该全过的 GPU 对 GPU 演练，一格一条检查，橙色 ＝ 判成待定",
-                  [(BL, "推导"), (OR, "实测：待定"), (GR, "实测：通过")])
+                  [(GY2, "推导（纯噪声）"), (OR, "实测：待定"), (GR, "实测：通过")])
     PH = 330
-    py = f.panel(0, y0, 760, PH, "纯噪声超线的概率（本课推导）", BL)
+    py = f.panel(0, y0, 760, PH, "纯噪声超线的概率（本课推导）", GY)
     BX, BW, BH = 70, 110, 220
     yb0 = py + 270
     for i, (n, p) in enumerate(zip(NS, PS)):
         x = BX + i * (BW + 26)
         h = p / 0.25 * BH
-        f.box(x, yb0 - h, BW, h, BL, BL, 4)
+        f.box(x, yb0 - h, BW, h, GY2, GY2, 4)
         f.t(x + BW / 2, yb0 - h - 10, "%.1f%%" % (p * 100), INK, True, 15, "middle")
         f.t(x + BW / 2, yb0 + 24, "%d 对" % n, GY, size=14, anchor="middle")
     f._pan = None
     px = 790
     py2 = f.panel(px, y0, W - px, PH, "GPU 对 GPU 演练：本该全部通过（实测）", OR)
-    rows = [(3, "46 条检查，8 条待定", 46, 8), (15, "只重判那 9 条：剩 3 条待定", 9, 3), (28, "重判全部 46 条：只剩 1 条", 46, 1)]
+    rows = [(3, "46 条检查，8 条待定", 46, 8), (15, "重判那 8 条＋梯度范数 1 条：剩 3 条待定", 9, 3), (28, "重判全部 46 条：只剩 1 条", 46, 1)]
     for i, (n, lab, tot, bad) in enumerate(rows):
         y = py2 + 30 + i * 92
         f.t(px + 24, y + 18, "%d 对参照" % n, INK, True, 15)

@@ -28,11 +28,11 @@ assert abs(EXTRA_SHARE - 0.17) < 0.01
 
 def fig_drift():
     f = Fig(W, "横轴第 1 到 1000 步，纵轴是参数范数的差。灰色是第二次 GPU 减第一次，一直贴着零，最多差万分之几。"
-               "红色是 TPU 减 GPU：前 100 步看不出，之后近似一条斜线往上走，到第 1000 步多出 0.021。"
+               "蓝色是 TPU 减 GPU：前 100 步看不出，之后近似一条斜线往上走，到第 1000 步多出 0.021。"
                "GPU 自己 1000 步一共涨了 0.127，TPU 多涨了约 17%。")
     y0 = f.header("先漂起来的是参数范数　——　<tspan font-weight=\"700\">从第 100 步起，TPU 一直比 GPU 涨得快一点</tspan>",
                   "一个点 ＝ 一步的参数范数之差（全部参数平方和开根号，约 3042）；灰 ＝ GPU 自己重跑的差，当噪声",
-                  [(GY, "GPU 第二次 − 第一次"), (RD, "TPU − GPU 第一次")])
+                  [(GY2, "GPU 第二次 − 第一次（噪声）"), (BL, "TPU − GPU 第一次")])
     PH = 330
     py = f.panel(0, y0, W, PH, "参数范数，1000 步（实测）", BL)
     X0, XW, YB, YH = 110, 1240, py + 270, 230
@@ -48,9 +48,9 @@ def fig_drift():
         f.t(X0 - 10, Y(v) + 4, "%+.2f" % v if v else "0", GY, size=12, anchor="end")
     for st in (1, 100, 500, 1000):
         f.t(X(st), YB + 24, "第 %d 步" % st, GY, size=12, anchor="middle")
-    f.path([(X(k + 1), Y(v)) for k, v in enumerate(PG)], GY, 1.4, arrow=False)
-    f.path([(X(k + 1), Y(v)) for k, v in enumerate(PT)], RD, 2.4, arrow=False)
-    f.t(X(1000) - 6, Y(PT[999]) - 12, "第 1000 步 ＋%.3f" % PT[999], RD, True, 15, "end")
+    f.path([(X(k + 1), Y(v)) for k, v in enumerate(PG)], GY2, 1.4, arrow=False)
+    f.path([(X(k + 1), Y(v)) for k, v in enumerate(PT)], BL, 2.4, arrow=False)
+    f.t(X(1000) - 6, Y(PT[999]) - 12, "第 1000 步 ＋%.3f" % PT[999], BL, True, 15, "end")
     f.t(X(560), Y(0) + 22, "GPU 自己：最多差 %.1e，贴着零" % max(abs(x) for x in PG), GY, True, 13, "middle")
     f.line(X(100), py + 20, X(100), YB, OR, 1.4, dash="5 5", arrow=False)
     f.t(X(100) + 8, py + 34, "约第 100 步：loss 偏移也是这时拉开的", OR, True, 13)
@@ -70,27 +70,28 @@ def fig_rows():
                "右：输出层的平方和差再按词在前 300 步数据里出现的次数分桶：没出现过的词 +17.1，出现 1 到 10 次的 +3.1，11 到 100 次的 +2.5，常见词约为 0；GPU 两次之间每桶不超过 0.21。")
     y0 = f.header("漂移几乎全在输出层，而且全在冷门词那几行",
                   "左：柱长 ＝ 这一组参数贡献了多少参数范数差；右：柱长 ＝ 按词频分桶后，输出层的平方和多出多少（左右单位不同，不比大小）",
-                  [(RD, "TPU − GPU"), (GY, "GPU 两次之间（噪声）")])
-    PH = 330
+                  [(BL, "TPU − GPU"), (GY2, "GPU 两次之间（噪声）")])
+    PH = 344      # R3：右格底注原来贴着面板下框
     py = f.panel(0, y0, 560, PH, "按参数分组，第 300 步（实测）", BL)
     rows = [("输出层", N.GROUP_HEAD_300), ("其余全部", N.GROUP_TOTAL_300 - N.GROUP_HEAD_300)]
     for i, (lab, v) in enumerate(rows):
         y = py + 60 + i * 110
         f.t(24, y + 24, lab, INK, True, 16)
         L = v / N.GROUP_TOTAL_300 * 330
-        f.box(150, y, L, 40, RD, RD, 4)
-        f.t(150 + L + 10, y + 26, "%.2e" % v, RD, True, 14)
+        f.box(150, y, L, 40, BL, BL, 4)
+        f.t(150 + L + 10, y + 26, "%.2e" % v, BL, True, 14)
     f.t(24, py + 290, "合计 %.2e，其余全部 ＝ 合计 − 输出层；GPU 两次之间输出层只差 6e-6" % N.GROUP_TOTAL_300, GY, size=13)
     f._pan = None
     px = 580
-    py2 = f.panel(px, y0, W - px, PH, "输出层按词频分桶，第 300 步平方和差（实测）", RD)
+    py2 = f.panel(px, y0, W - px, PH, "输出层按词频分桶，第 300 步平方和差（实测）", BL)
     for i, (lab, v) in enumerate(N.ROWS_300):
         y = py2 + 36 + i * 68
         f.t(px + 24, y + 24, lab, INK, True, 15)
         L = max(v / 17.1 * 500, 3)
-        f.box(px + 170, y + 4, L, 34, RD if v > 0 else GY2, RD if v > 0 else GY2, 4)
-        f.box(px + 170, y + 40, N.ROWS_GPU_PAIR_MAX / 17.1 * 500, 6, GY, GY, 2)
-        f.t(px + 170 + L + 10, y + 28, ("＋%.1f" % v) if v else "约 0", RD if v else GY, True, 14)
+        # R3：「约 0」那根原来用了噪声灰，会被读成噪声 → 跟其它桶一样用 TPU − GPU 的蓝
+        f.box(px + 170, y + 4, L, 34, BL, BL, 4)
+        f.box(px + 170, y + 40, N.ROWS_GPU_PAIR_MAX / 17.1 * 500, 6, GY2, GY2, 2)
+        f.t(px + 170 + L + 10, y + 28, ("＋%.1f" % v) if v else "约 0", BL, True, 14)
     f.t(px + 24, py2 + 300, "没出现过的词一共 %s 行；灰色细条 ＝ GPU 两次之间每桶的差，都不超过 %.2f" % (format(N.RARE_ROWS, ","), N.ROWS_GPU_PAIR_MAX), GY, size=13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "TPU 上冷门词的行被压得少：从初值算起 GPU 缩了 66.3，TPU 只缩了 49.2", [
@@ -116,9 +117,9 @@ def fig_eps():
                "冷门词那些行的梯度在 4e-9 到 1e-8，正好落在斜坡上。")
     y0 = f.header("Adam 的 ε 区：梯度太小，Adam 就不再「拉平」　——　<tspan font-weight=\"700\">一点偏差原样漏过去</tspan>",
                   "横轴 ＝ 一个参数的梯度大小（对数）；纵轴 ＝ Adam 这一步的更新量（÷ 学习率）；稳态下更新 ≈ g ÷ (|g| ＋ ε)，ε ＝ 1e-8",
-                  [(BL, "Adam 的更新"), (RD, "冷门词的行"), (GR, "常见词的行")])
+                  [(INK, "Adam 的更新"), (RD, "冷门词的行"), (GR, "常见词的行")])
     PH = 380
-    py = f.panel(0, y0, W, PH, "更新量 ≈ g ÷ (|g| ＋ ε)（本课推导，稳态近似）", BL)
+    py = f.panel(0, y0, W, PH, "更新量 ≈ g ÷ (|g| ＋ ε)（本课推导，稳态近似）", GY)
     X0, XW, YB, YH = 120, 1150, py + 300, 250
 
     def X(g):
@@ -134,7 +135,7 @@ def fig_eps():
         f.t(X0 - 10, Y(u) + 4, "%g" % u, GY, size=12, anchor="end")
     f.box(X(N.RARE_G_LO), Y(1.0) - 6, X(N.RARE_G_HI) - X(N.RARE_G_LO), YH + 6, "#fce8e6", "#fce8e6", 0)
     f.box(X(3e-7), Y(1.0) - 6, X(3e-6) - X(3e-7), YH + 6, "#e6f4ea", "#e6f4ea", 0)
-    f.path([(X(g), Y(u)) for g, u in zip(GS, U)], BL, 3, arrow=False)
+    f.path([(X(g), Y(u)) for g, u in zip(GS, U)], INK, 3, arrow=False)
     f.line(X(N.EPS), YB, X(N.EPS), Y(1.0) - 10, GY2, 1.4, dash="5 5", arrow=False)
     f.t(X(N.EPS) + 6, Y(1.0) - 14, "ε ＝ 1e-8", GY, True, 13)
     f.t(X(N.RARE_G_LO) - 10, Y(0.9), "冷门词的行", RD, True, 15, "end")
@@ -148,7 +149,7 @@ def fig_eps():
     ])
     yb = f.src(yb + 10,
                "⚠️ 本课推导：Adam 更新 u ＝ m̂ ÷ (√v̂ ＋ ε)。梯度稳定时 m̂ ≈ g、√v̂ ≈ |g|，u ≈ g ÷ (|g| ＋ ε)；弹性 (du/u) ÷ (dg/g) ＝ ε ÷ (|g| ＋ ε)：g ＝ 4e-9 时 0.71，g ＝ 1e-6 时 0.0099。",
-               "📌 实测：没出现过的词那些行，第 200–300 步 √v̂ 的均值在 4e-9 到 1e-8（第 1 步梯度中位数 5.2e-8，12% 小于 ε）；β₁ ＝ 0.9、β₂ ＝ 0.95、ε ＝ 1e-8；没有出现 FP32 下溢或非正规数。",
+               "📌 实测：没出现过的词那些行，第 200–300 步 √v̂ 的均值在 4e-9 到 1e-8（第 1 步梯度中位数 5.2e-8，12%% 小于 ε）；第 300 步有 %.0f%% 的元素 √v̂ ＜ ε，中位数 %s；" % (N.RARE_EPS_FRAC * 100, ("%.1e" % N.RARE_VHAT_MED).replace("e-0", "e-")) + "β₁ ＝ 0.9、β₂ ＝ 0.95、ε ＝ 1e-8；没有出现 FP32 下溢或非正规数。",
                "注：绿色那一段「常见词的行」只是示意它们的梯度远大于 ε，具体位置没有画实测值。")
     f.save("fig9-eps.svg", yb + 14)
 

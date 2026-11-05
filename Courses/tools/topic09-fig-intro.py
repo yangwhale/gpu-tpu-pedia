@@ -9,7 +9,7 @@ fig9-ruler   回答：差多少才算「不一样」？—— 拿 GPU 自己重�
 fig9-funnel  回答：从哪儿查起？—— L0 到 L4 五级，验收从下往上，排查从上往下。
              刻意没画：每级的具体检查项（在正文表里）。
 """
-from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
 import topic09_numbers as N
 
 W = 1400
@@ -32,11 +32,11 @@ def fig_assoc():
                "两种顺序差了一整格。")
     y0 = f.header("加法换个顺序，末位就不一样　——　<tspan font-weight=\"700\">所以「一位不差」做不到</tspan>",
                   "竖线 ＝ BF16 在 1 附近能表示的数（一格 ＝ 2⁻⁷ ≈ 0.0078）；圆点 ＝ 精确结果，落在两格之间就要舍到最近的那一格",
-                  [(BL, "精确值"), (GR, "舍入后实际存下的数")])
+                  [(PU, "精确值"), (INK, "舍入后实际存下的数")])
     PH = 300
     for k, (title, col, xs, res) in enumerate([
-            ("先算 (1 ＋ 0.0039)，再 ＋ 0.0039", RD, [(A + B, AB), (AB + C, LEFT)], LEFT),
-            ("先算 (0.0039 ＋ 0.0039)，再 ＋ 1", GR, [(A + BC, RIGHT)], RIGHT)]):
+            ("先算 (1 ＋ 0.0039)，再 ＋ 0.0039", GY, [(A + B, AB), (AB + C, LEFT)], LEFT),
+            ("先算 (0.0039 ＋ 0.0039)，再 ＋ 1", GY, [(A + BC, RIGHT)], RIGHT)]):
         px = k * 710
         py = f.panel(px, y0, 690, PH, title, col)
         # 数轴：1 − 1 格 到 1 + 2 格
@@ -52,14 +52,14 @@ def fig_assoc():
             f.t(X(v), yl + 40, "%.4f" % v, GY, size=13, anchor="middle")
         for j, (exact, stored) in enumerate(xs):
             yy = yl - 50 - j * 34
-            f.box(X(exact) - 7, yy - 7, 14, 14, BL, BL, 7)
+            f.box(X(exact) - 7, yy - 7, 14, 14, PU, PU, 7)
             if exact != stored:
-                f.path([(X(exact), yy + 8), (X(stored) + 4, yl - 10)], GR, 1.6)
+                f.path([(X(exact), yy + 8), (X(stored) + 4, yl - 10)], INK, 1.6)
                 f.t(X(exact) + 12, yy + 5, "第 %d 次加：正好在两格中间 → 舍回 %.4f" % (j + 1, stored), INK, size=13)
             else:
                 f.t(X(exact) + 12, yy + 5, "正好落在格上，不用舍", INK, size=13)
-        f.box(X(res) - 8, yl - 8, 16, 16, GR, GR, 8)
-        f.t(px + 24, py + PH - 40, "结果：%.7f" % res, col, True, 17)
+        f.box(X(res) - 8, yl - 8, 16, 16, INK, INK, 8)
+        f.t(px + 24, py + PH - 40, "结果：%.7f" % res, INK, True, 17)
         f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "差的不是谁算错了，是加法顺序不同", [
         "GPU 和 TPU 把一次矩阵乘切成不同的块、按不同的顺序累加，末位必然不同；几百步训练下来，两条轨迹必然分开。",
@@ -74,11 +74,11 @@ def fig_assoc():
 # ── fig9-ruler ────────────────────────────────────────────────────
 def fig_ruler():
     f = Fig(W, "横轴是第 301 到 1000 步 loss 的平均相对偏差，以第一份 GPU 运行为准。"
-               "绿色一段是 GPU 用同样设置再跑 10 次落下的范围，从负万分之 0.65 到正百万分之 2.4。"
+               "灰色一段是 GPU 用同样设置再跑 10 次落下的范围，从负万分之 0.65 到正百万分之 2.4。"
                "TPU 三种跑法落在负万分之 1.03 到负万分之 1.66，全在尺子外面，最远偏出 5.2 个标准差。")
     y0 = f.header("尺子：不问 TPU 跟 GPU 差多少，问它比 GPU 自己跟自己差得多不多",
-                  "横轴 ＝ 第 301–1000 步 loss 平均偏了多少（相对，以第一份 GPU 运行为准）；绿色一段 ＝ 同样设置的 GPU 运行一共 10 次落下的范围（含基线那一份）",
-                  [(GR, "GPU 自己重跑（噪声）"), (RD, "TPU 三种跑法")])
+                  "横轴 ＝ 第 301–1000 步 loss 平均偏了多少（相对，以第一份 GPU 运行为准）；灰色一段 ＝ 同样设置的 GPU 运行一共 10 次落下的范围（含基线那一份）",
+                  [(GY2, "GPU 自己重跑（噪声）"), (BL, "TPU 三种跑法")])
     PH = 250
     py = f.panel(0, y0, W, PH, "混元 3 截 4 层，1000 步（实测）", BL)
     LO, HI = -2.0e-4, 0.5e-4
@@ -91,17 +91,17 @@ def fig_ruler():
     for i in range(6):
         v = LO + i * 0.5e-4
         f.line(X(v), yl - 6, X(v), yl + 6, GY2, 1.2, arrow=False)
-        f.t(X(v), yl + 48, ("%+.1f" % (v * 1e4)).replace("+0.0", "0") + "×10⁻⁴", GY, size=13, anchor="middle")
-    f.box(X(N.GPU_RUNS10_LO), yl - 22, X(N.GPU_RUNS10_HI) - X(N.GPU_RUNS10_LO), 44, "#e6f4ea", GR, 6)
-    f.t((X(N.GPU_RUNS10_LO) + X(N.GPU_RUNS10_HI)) / 2, yl - 34, "10 次 GPU 重跑都在这儿", GR, True, 14, "middle")
+        f.t(X(v), yl + 48, "0" if abs(v) < 1e-12 else "%+.1f×10⁻⁴" % (v * 1e4), GY, size=13, anchor="middle")
+    f.box(X(N.GPU_RUNS10_LO), yl - 22, X(N.GPU_RUNS10_HI) - X(N.GPU_RUNS10_LO), 44, LINE2, GY2, 6)
+    f.t((X(N.GPU_RUNS10_LO) + X(N.GPU_RUNS10_HI)) / 2, yl - 34, "10 次 GPU 重跑都在这儿", GY, True, 14, "middle")
     for k, v in enumerate(N.TPU_ARMS):
-        f.box(X(v) - 8, yl - 8, 16, 16, RD, RD, 8)
+        f.box(X(v) - 8, yl - 8, 16, 16, BL, BL, 8)
         z = (v - N.GPU_RUNS10_MEAN) / N.GPU_RUNS10_STD
-        f.t(X(v), yl - 26 - (k % 2) * 22, "偏 %.1f 个标准差" % abs(z), RD, size=13, anchor="middle")
-    f.t(X(-1.35e-4), py + 44, "TPU：三种跑法都落在尺子外，方向一致", RD, True, 15, "middle")
+        f.t(X(v), yl - 26 - (k % 2) * 22, "偏 %.1f 个标准差" % abs(z), BL, size=13, anchor="middle")
+    f.t(X(-1.35e-4), py + 44, "TPU：三种跑法都落在尺子外，方向一致", BL, True, 15, "middle")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "尺子一立，「万分之一点几」就有了大小", [
-        "TPU 的偏移是 GPU 重跑噪声的 3 到 5 个标准差，而且三种跑法都朝同一边：不是噪声，值得查。",
+        "TPU 的偏移离 GPU 重跑的均值 2.9 到 5.2 个标准差，而且三种跑法都朝同一边：不是噪声，值得查。",
         "标准差在这里只用来描述有多远；正式的判法后面讲。",
     ])
     yb = f.src(yb + 10,
