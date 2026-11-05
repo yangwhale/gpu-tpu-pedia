@@ -26,6 +26,9 @@ r"""专题九 · MoE 路由的近平局翻转（RouteFlip）。
    ⚠️ 示意：10 根条的高度、每个分数被挪动的量（δ）是造的；只有「初始分差取在翻转 token 分差中位数的范围里、
      δ 足以翻转近平局却翻不动典型分差」这两条用断言钉住。
 
+🎨 配色（2026-11-05 按全课规矩改）：条的颜色表示「谁算的分数」—— GPU 那份灰、挪到 TPU 那份变蓝（跟着分数挪动同步渐变）；
+   入选前 8 名与否只用填充深浅（实 / 淡）和虚线区分。原先用「蓝 ＝ 入选」，会被读成 TPU。
+
 ⭐ 刻意没画：192 个专家（只画前 10 名）；top-8 里另外 7 个专家各自的输出；路由权重怎么归一；
    反向里梯度怎么回传；第 2、3 层的翻转比例；「GPU 自己重跑也会翻」—— 依据里只有「第 1 步 GPU 重跑路由不变」，
    没有 GPU 自己翻转的证据，所以不画。
@@ -37,7 +40,8 @@ import sys
 
 import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体
 from manim import (Scene, VGroup, Rectangle, Line, DashedLine, Circle, Text, ValueTracker, always_redraw,
-                   WHITE, GREY, GREY_B, BLUE, GREEN, RED, YELLOW, UP, DOWN, LEFT, RIGHT, linear)
+                   WHITE, GREY, GREY_B, BLUE, GREEN, RED, YELLOW, UP, DOWN, LEFT, RIGHT, linear,
+                   interpolate_color)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -148,6 +152,9 @@ class RouteFlip(Scene):
         def swap(t):                    # 名次对调后，主图上两根条换位置
             return ease((t - T["s2"] - 1.8) / 0.6)
 
+        def side_col(t):                # 全课配色：GPU 灰、TPU 蓝 —— 条的颜色跟着「这是谁算的分数」走
+            return interpolate_color(GREY_B, BLUE, clip01(shift(t)))
+
         def scores(t):
             p = shift(t)
             return [a + p * d for a, d in zip(S_GPU, DELTA)]
@@ -170,7 +177,7 @@ class RouteFlip(Scene):
                 x = BAR_X0 + BAR_DX * ((1 - p) * R_GPU.index(i) + p * R_TPU.index(i))
                 h = max(1e-3, s[i] * HSCALE * g)
                 on = i in sel
-                col = BLUE if on else GREY
+                col = side_col(t)                   # GPU 灰 → TPU 蓝；入选与否只看填充深浅
                 r = Rectangle(width=BAR_W, height=h, fill_color=col, fill_opacity=0.85 if on else 0.25,
                               stroke_color=YELLOW if i in (IA, IB) else col,
                               stroke_width=4 if i in (IA, IB) else 2)
@@ -221,7 +228,7 @@ class RouteFlip(Scene):
                 y_top = ZY - ZH / 2 + (s[i] - Z_LO) / (Z_HI - Z_LO) * ZH
                 h = max(1e-3, y_top - (ZY - ZH / 2))
                 on = i in sel
-                col = BLUE if on else GREY
+                col = side_col(t)
                 r = Rectangle(width=0.9, height=h, fill_color=col, fill_opacity=(0.85 if on else 0.25) * vis,
                               stroke_color=YELLOW, stroke_width=4, stroke_opacity=vis)
                 r.move_to([ZX - 0.75 + 1.5 * j, ZY - ZH / 2 + h / 2, 0])

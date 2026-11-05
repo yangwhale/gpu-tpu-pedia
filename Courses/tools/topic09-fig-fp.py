@@ -14,7 +14,7 @@ fig9-excess    回答：excess precision 改的是什么？—— 舍在哪儿�
 """
 import math
 
-from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU, wpx, MONO_K
 import topic09_numbers as N
 
 W = 1400
@@ -36,11 +36,25 @@ def bits(f, x, y, n, col, fill, bw=30, bh=34, label=None, dash=None):
 def fig_formats():
     f = Fig(W, "上半：三种格式的位。FP32 是 1 位符号、8 位指数、23 位尾数；TF32 也是 8 位指数，尾数只用 10 位；BF16 是 8 位指数、7 位尾数，一共 16 位。"
                "三者指数位一样多，所以能表示的范围一样大，差的是尾数，也就是精度。"
-               "下半：两个 BF16 相乘，有效数字 8 位乘 8 位，最多 16 位，放进 FP32 的 24 位里还空 8 位，乘积是精确的；"
-               "舍入发生在加法：一个大数加一个小数，要先把小数往右对齐，挤出 24 位窗口的那几位就丢了。")
+               "下半：两个 BF16 相乘，有效数字 8 位乘 8 位（存下的 7 位尾数，前面再加一位不存的 1），最多 16 位，放进 FP32 的 24 位里还空 8 位，乘积是精确的；"
+               "舍入发生在加法：一个大数加一个小数，要先把小数往右对齐，挤出 24 位窗口的那几位就丢了。虚线白格是不用的位，浅灰底深灰框是加法里的大数。")
     y0 = f.header("指数一样宽、尾数不一样长　——　<tspan font-weight=\"700\">乘是精确的，加才舍入</tspan>",
                   "一格 ＝ 一位；红 ＝ 符号，蓝 ＝ 指数（决定范围），绿 ＝ 尾数（决定精度）",
-                  [(RD, "符号"), (BL, "指数"), (GR, "尾数"), (GY2, "这一位不参与运算")])
+                  [(RD, "符号"), (BL, "指数"), (GR, "尾数")])
+    # R4 麻瓜第 2 条：原图例「灰 ＝ 这一位不参与运算」跟加法行的灰色大数（它参与运算）打架，
+    #   而 TF32 不用的位画的其实是虚线白格。→ 图例拆成两项，手画在同一行（共用 header 只会画实心色块）：
+    #   虚线白格 ＝ 不用的位；浅灰底 ＋ 深灰框 ＝ 加法里的大数（只示位数，不分字段）。
+    ly = y0 - 28
+    lx = sum(21 + wpx(lab, 14) * MONO_K + 26 for lab in ("符号", "指数", "尾数"))
+    for kind, lab in (("dash", "虚线白格 ＝ 不用的位（TF32 那 13 位、乘积空出的 8 位）"),
+                      ("big", "浅灰底深灰框 ＝ 加法里的大数（只示位数）")):
+        if kind == "dash":
+            f.box(lx, ly - 11, 14, 14, "#fff", GY2, 3, dash="3 3")
+        else:
+            f.box(lx, ly - 11, 14, 14, LINE2, GY, 3, sw=1.5)
+        f.t(lx + 21, ly, lab, GY, size=14)
+        lx += 21 + wpx(lab, 14) * MONO_K + 26
+    assert lx < W, lx
     PH = 250
     py = f.panel(0, y0, W, PH, "三种格式", BL)
     X0 = 130
@@ -62,6 +76,11 @@ def fig_formats():
     xa = bits(f, 80, y, SIG_BF16, GR, "#e6f4ea", bw=22, bh=26, label="8 位有效数字")
     f.t(xa + 14, y + 20, "×", INK, True, 18, big=True)
     xb = bits(f, xa + 40, y, SIG_BF16, GR, "#e6f4ea", bw=22, bh=26, label="8 位")
+    # R4 麻瓜第 1 条：上半 BF16 只画 7 个尾数格，这里是 8 格 —— 多的那格是不存的隐含位「1」
+    for x1 in (80, xa + 40):
+        f.box(x1, y, 19, 26, "#fff", GR, 3)
+        f.t(x1 + 9.5, y + 18, "1", GR, True, 13, "middle")
+    f.t(80, y + 72, "BF16 只存 7 位尾数，前面还有一位不存的 1（白格），所以有效数字是 8 位", GY, size=13)
     f.t(xb + 14, y + 20, "＝", INK, True, 18, big=True)
     xc = bits(f, xb + 40, y, 2 * SIG_BF16, GR, GR, bw=22, bh=26)
     bits(f, xc, y, SIG_FP32 - 2 * SIG_BF16, GY2, "#fff", bw=22, bh=26, dash="3 3")
@@ -69,7 +88,8 @@ def fig_formats():
     # 加法
     y = py2 + 140
     f.t(24, y + 22, "加", INK, True, 18, big=True)
-    bits(f, 80, y - 20, SIG_FP32, GY2, LINE2, bw=22, bh=24)            # R3：中性灰，别借上半「指数」的蓝
+    for i in range(SIG_FP32):                                         # R3：中性灰，别借上半「指数」的蓝；R4：深灰框，跟虚线「不用的位」分开
+        f.box(80 + i * 22, y - 20, 19, 24, LINE2, GY, 3, sw=1.5)
     f.t(80 + SIG_FP32 * 22 + 14, y - 2, "大数（24 位）", GY, True, 13)
     SH = 10
     bits(f, 80 + SH * 22, y + 14, SIG_FP32 - SH, OR, "#fef7e0", bw=22, bh=24)
@@ -140,6 +160,11 @@ def fig_truncate():
             f.t(x + 12, y + 20, "%.1e" % e, GY, True, 13)
         else:
             f.t(x - 10, y - 12, "%.1e" % e, GY, True, 13, "end")
+        if k == 65536:
+            # R4 麻瓜第 3 部分 trunc 行：动画收在 3.5e-4，这里是 3.1e-4 —— 口径不同，当场交代一句
+            f.t(W - 14, y + 30, "动画里的 3.5e-4 是模拟单条点积", GY, size=12, anchor="end")
+            f.t(W - 14, y + 47, "（只有截断、不含输出舍入）", GY, size=12, anchor="end")
+            f.t(W - 14, y + 64, "口径不同", GY, size=12, anchor="end")
     f.line(GX0, GYf(N.FP32_BIAS_MAX), GX0 + GW, GYf(N.FP32_BIAS_MAX), GR, 2.5, dash="7 5", arrow=False)
     f.t(GX0 + GW, GYf(N.FP32_BIAS_MAX) - 10, "FP32 不走张量核：≤ 5e-8", GR, True, 13, "end")
     f._pan = None
@@ -151,7 +176,8 @@ def fig_truncate():
                "📌 实测的 B200 张量核模型（一个经验模型，不是厂商规格）：每 16 个乘积连同累加器对齐到最大指数，低于 2^(emax−25) 的位向零截掉，写回 FP32 也向零舍入。「25 位」是拟合出来的窗口宽度，跟 FP32 的 24 位有效数字不是一回事。它在路由打分（K ＝ 4096）上逐位复现了三层全部 4096 × 192 个元素；把参数改成 8 个一组、24 位或就近舍入，命中率都掉到 1% 以下。",
                "📌 实测：合成负数输入 −9.5e-6 / −6.9e-5 / −3.4e-4，同样朝零；TF32 小约一个量级；FP32 不走张量核 ≤ 5e-8。K ＝ 120,832 时合成输入的偏差反而降到 6.4e-5（推断：cuBLAS 对这个形状换了算法），所以图上没有画这一点。",
                "⚠️ 推断：量这条曲线时输出写回的是 BF16。只算截断模型，K ＝ 256 约 3e-7、K ＝ 4096 约 1.1e-5；加上输出舍成 BF16，才回到实测的量级 —— 所以短求和那几点主要是输出舍入，长求和才是截断主导。",
-               "注：左图每个乘积右移几位是示意，不是实测数据。")
+               "注：左图每个乘积右移几位是示意，不是实测数据。",
+               "注：动画终点的 3.5e-4 是同一张量核模型的模拟（单条点积，只有累加器截断，不含输出舍到 BF16、不含 cuBLAS 分块），跟右图实测 3.1e-4 口径不同；两者差多少、差在哪，没有单独拆过。")
     f.save("fig9-truncate.svg", yb + 14)
 
 

@@ -26,7 +26,9 @@ r"""专题九「GPU→TPU 训练精度对齐」§5.2 的动画：GPU 张量核�
 ⛔ 刻意没画
   · 输出再舍到 BF16 那一步、cuBLAS 的分块与 split-K、负数输入（同样朝零）、TF32。
   · 画面不写任何案例里的具体张量和长度；纵轴只到 4e-4，不标「实测」。
-  · 不说 TPU 是就近舍入 —— 那是推断，画面里只叫「就近舍入（对照）」。
+  · 不说 TPU 是就近舍入 —— 那是推断，画面里只叫「就近舍入（对照）」，并且用中性白、不用蓝（全课蓝＝TPU）。
+    抹零红（偏差来源），GPU 的位格子灰。终点数字旁小字「模拟，口径与实测曲线不同」：这里是单条点积的运行中相对误差，
+    实测曲线是许多条点积平均的朝零偏差，短求和处还含输出舍到 BF16（见上「与实测核对」）。
 
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic09-anim-trunc.py TruncVsRound WebPages/media/topic09-trunc.mp4
@@ -225,6 +227,8 @@ CAPS = {
     "s2": "第 2 步完成：抹零一路往下；就近舍入在 0 附近晃",
 }
 MORAL = "抹零只少不多：求和越长，偏得越多"
+SIM_NOTE = "模拟，口径与实测曲线不同"
+COL_RN = WHITE                                         # 就近舍入（对照）：中性白，不用蓝（蓝＝TPU）
 CELL = 0.28
 X0 = -5.45                                             # 第 0 列（累加器最高位）的左边
 ROW_Y0, ROW_DY = 1.25, 0.72
@@ -234,7 +238,7 @@ def col_x(c):
     return X0 + c * CELL + CELL / 2
 
 
-def bit_cells(bits, c0, y, col=BLUE):
+def bit_cells(bits, c0, y, col=GREY_B):            # GPU 的位：灰（全课 TPU 蓝、GPU 灰）
     g = VGroup()
     for j, b in enumerate(bits):
         r = Rectangle(width=CELL * 0.82, height=0.42, stroke_color=col, stroke_width=2.5,
@@ -305,10 +309,10 @@ class TruncVsRound(Scene):
         labels, rows, targets, dots = build_rows()
         self.add(title, cap, labels, *rows)
 
-        def say(s, color=GREY_B):
+        def say(s, color=GREY_B, extra=()):
             nonlocal cap
             n = tx(s, 28, color).next_to(title, DOWN, buff=0.22)
-            self.play(FadeOut(cap), FadeIn(n), run_time=0.35)
+            self.play(FadeOut(cap), FadeIn(n), *extra, run_time=0.35)
             cap = n
 
         shown = VGroup()
@@ -337,8 +341,8 @@ class TruncVsRound(Scene):
         # 两列：抹零 / 就近舍入（对照）
         cx1, cx2 = col_x(COLS) + 0.75, col_x(COLS) + 2.05
         h1 = tx("抹零", 26, RED, True).move_to([cx1, ROW_Y0, 0])
-        h2 = tx("就近舍入", 26, BLUE, True).move_to([cx2, ROW_Y0 + 0.13, 0])
-        h2b = tx("（对照）", 20, BLUE).next_to(h2, DOWN, buff=0.04)
+        h2 = tx("就近舍入", 26, COL_RN, True).move_to([cx2, ROW_Y0 + 0.13, 0])
+        h2b = tx("（对照）", 20, COL_RN).next_to(h2, DOWN, buff=0.04)
         tags1, tags2 = VGroup(), VGroup()
         for k, (_i, _bits, _top, _cn, fr) in enumerate(SHOW):
             y = ROW_Y0 - (k + 1) * ROW_DY
@@ -365,10 +369,10 @@ class TruncVsRound(Scene):
         xl = VGroup(tx("加了多少个乘积 →", 24, GREY_B).next_to([(PX0 + PX1) / 2, PY0, 0], UP, buff=0.1),
                     tx("65,536", 24, GREY_B).next_to([px(KMAX), PY0, 0], UP, buff=0.1))
         ylab = tx("相对误差", 24, GREY_B).next_to(yl[2], DOWN, buff=0.12)
-        box = Rectangle(width=IX1 - IX0 + 0.3, height=2 * IH + 0.3, stroke_color=BLUE, stroke_width=2.5)
+        box = Rectangle(width=IX1 - IX0 + 0.3, height=2 * IH + 0.3, stroke_color=COL_RN, stroke_width=2.5)
         box.move_to([(IX0 + IX1) / 2, IYC, 0])
         zero_i = DashedLine([IX0, IYC, 0], [IX1, IYC, 0], color=GREY, stroke_width=2, dash_length=0.08)
-        zlab = tx("放大 80 倍", 22, BLUE).next_to(box, DOWN, buff=0.08)
+        zlab = tx("放大 80 倍", 22, COL_RN).next_to(box, DOWN, buff=0.08)
         zlab0 = tx("0", 20, GREY_B).next_to([IX0, IYC, 0], RIGHT, buff=0.0).shift(LEFT * 0.42)
         frame = VGroup(ax_x, ax_y, ticks, yl, xl, ylab, box, zero_i, zlab, zlab0)
         self.play(FadeIn(frame), run_time=0.6)
@@ -386,8 +390,8 @@ class TruncVsRound(Scene):
             return always_redraw(f)
 
         c_tc = mk_curve(E_TC[:, PATH], px, py, RED)
-        c_rn = mk_curve(E_RN[:, PATH], px, py, BLUE, 4)
-        c_rz = mk_curve(E_RN[:, PATH], lambda k: IX0 + (IX1 - IX0) * k / KMAX, ipy, BLUE, 3)
+        c_rn = mk_curve(E_RN[:, PATH], px, py, COL_RN, 4)
+        c_rz = mk_curve(E_RN[:, PATH], lambda k: IX0 + (IX1 - IX0) * k / KMAX, ipy, COL_RN, 3)
 
         def val_at(series):
             i = int(round(k_now() / KMAX * NG)) - 1
@@ -400,7 +404,7 @@ class TruncVsRound(Scene):
             return always_redraw(f)
 
         n_tc = counter(E_TC[:, PATH], "抹零", RED, 1.0)
-        n_rn = counter(E_RN[:, PATH], "就近舍入（对照）", BLUE, -0.2)
+        n_rn = counter(E_RN[:, PATH], "就近舍入（对照）", COL_RN, -0.2)
 
         def kcount():
             k = int(round(k_now() / 256.0)) * 256
@@ -409,7 +413,9 @@ class TruncVsRound(Scene):
         self.add(c_tc, c_rn, c_rz, n_tc, n_rn, n_k)
         self.play(kt.animate.set_value(KMAX), run_time=7.0, rate_func=linear)
         shown.add(c_tc, c_rn, c_rz, n_tc, n_rn, n_k)
-        say(CAPS["s2"])
+        simnote = tx(SIM_NOTE, 20, GREY_B).move_to([TAB_X, 1.78, 0], aligned_edge=LEFT)
+        shown.add(simnote)
+        say(CAPS["s2"], extra=(FadeIn(simnote),))           # 跟字幕同一拍淡入，不改停顿时刻
         hold(2.0)
 
         # ── 第 3 步：一句话

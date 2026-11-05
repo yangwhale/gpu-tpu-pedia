@@ -23,9 +23,12 @@ r"""专题九「GPU→TPU 训练精度对齐」：噪声上限 N 怎么来、被
 
 ⛔ 刻意没画
   · loss 和 grad_norm 两项、MARE 和最大单步两个统计：只演参数范数的带符号均值一项，其余同一个套路。
-  · 这一次的被测比的是「精确轨迹」那份基线，而 N 用的是 GPU 生产程序重跑 —— 这是一个有意的例外（课件紧接着讲），画面只写「TPU 对基线」。
+  · 这一次的被测比的是「精确轨迹」那份基线，而 N 用的是 GPU 生产程序重跑 —— 这是一个有意的例外（课件 §9.3 讲），
+    画面只写「TPU 对精确轨迹」加一行小字「尺子借自 GPU 生产程序重跑（§9.3）」，不展开。
+  · 画面上 5 个点的编号按左右顺序排（运行编号 1,2,5,4,3 → 画面 1–5）；编号本身没有含义，配对柱的标签跟着换。
   · 参照对共用运行、不是独立样本，实际超线概率比 1/(n+1) 略高：课件正文写了，画面不展开。
   · 横轴没有刻度：5 个点只表达相对位置。
+  · 配色：GPU 重跑的点和配对柱灰、TPU 被测柱蓝、N 黄（全课 TPU＝蓝、GPU＝灰）。5 个点第 0 帧就在，第①步只是逐个闪一下。
 
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic09-anim-ceiling.py NoiseCeiling WebPages/media/topic09-ceiling.mp4
@@ -81,6 +84,17 @@ POS_ERR, POS = _best
 assert POS_ERR < 1e-26, POS_ERR                                 # 10 个距离全部对上：两点隔多远，柱就多高
 assert min(POS) == 0.0                                          # 取的朝向里第 1 份在最左
 
+# 画面编号按左右顺序重排（运行顺序 1,2,5,4,3 从左到右会让人困惑；编号本身没有含义）
+_order = sorted(range(1, 6), key=lambda i: POS[i - 1])           # 从左到右的运行编号
+assert _order == [1, 2, 5, 4, 3], _order
+RUN2D = {run: d for d, run in enumerate(_order, start=1)}         # 运行编号 → 画面编号
+POS = [POS[_order[d - 1] - 1] for d in range(1, 6)]              # 改成按画面编号索引
+PAIR_VAL = {tuple(sorted((RUN2D[i], RUN2D[j]))): v for (i, j), v in PAIR_VAL.items()}
+PAIRS = sorted(PAIR_VAL)
+P_MAX = max(PAIR_VAL, key=PAIR_VAL.get)
+assert P_MAX == (1, 5) and POS == sorted(POS)
+assert all(abs(abs(POS[i - 1] - POS[j - 1]) - PAIR_VAL[(i, j)]) < 1e-13 for i, j in PAIRS)
+
 # 1/(n+1)
 PROBS = [(3, "1/4"), (10, "1/11"), (28, "1/29")]
 assert [round(1 / T.p_exceed(n)) for n, _ in PROBS] == [4, 11, 29]
@@ -97,7 +111,7 @@ S1 = 2.2 / PN_N_RAW                             # 前三步：N ＝ 2.2 单位�
 S2 = 1.05 / PN_N_RAW                            # 第④步缩到 N ＝ 1.05，被测 3.45N 才装得下
 TOP_Y = 0.72                                    # 红区上沿
 assert BASE_Y + PN_TEST_RAW * S2 < TOP_Y < AX_Y - 0.4
-COL_N, COL_TEST = YELLOW, WHITE
+COL_N, COL_TEST, COL_GPU = YELLOW, BLUE, GREY_B          # 全课：TPU 蓝、GPU 灰
 ZONES = [(0, 1, GREEN), (1, 2, ORANGE), (2, None, RED)]
 
 # ── ③ 时间轴（秒）：每一步落地后停 2 秒 ──────────────────────────────────────
@@ -164,12 +178,12 @@ def pair_window(k):
 
 
 CAPS = [
-    (0.0, "① 同一设置，GPU 重跑 5 份（一个点 ＝ 一份）", ""),
+    (0.0, "① 验收那组设置：GPU 生产程序重跑 5 份（一个点 ＝ 一份）", ""),
     (T2A, "② 两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱",
      "带符号均值 ＝ 第 2–1000 步逐步相对差 dₜ 的平均；两个点隔多远，柱就多高"),
     (T3A, "③ 取最大的那一根当噪声上限 N",
      "为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里"),
-    (T4A, "④ 被测（TPU 对基线）出场：r ＝ 被测 ÷ N",
+    (T4A, "④ 被测（TPU 对精确轨迹）出场：r ＝ 被测 ÷ N",
      "柱子比尺子高出一大截，纵轴得缩一半才装得下"),
     (T5A, "⑤ 样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 1/(n+1)", ""),
 ]
@@ -222,9 +236,10 @@ class NoiseCeiling(Scene):
             t = clock()
             g = VGroup()
             for i in range(1, 6):
-                a = prog(t, T1A + (i - 1) * 0.35, T1A + (i - 1) * 0.35 + 0.4) * fade_out_all(t)
-                g.add(Dot([dot_x(i), AX_Y, 0], radius=0.11 * (0.4 + 0.6 * a), color=BLUE,
-                          fill_opacity=a, stroke_width=0))
+                a0 = T1A + (i - 1) * 0.35                     # 第①步：逐个闪一下（点本身第 0 帧就在）
+                pulse = prog(t, a0, a0 + 0.2) - prog(t, a0 + 0.2, a0 + 0.45)
+                g.add(Dot([dot_x(i), AX_Y, 0], radius=0.11 * (1 + 0.45 * pulse),
+                          color=interpolate_color(COL_GPU, WHITE, pulse), stroke_width=0))
             return g
 
         # ── 10 根柱：先在横轴上亮出两点之间那一段，再变形落成柱
@@ -250,13 +265,13 @@ class NoiseCeiling(Scene):
                     hh = 0.07 + (h - 0.07) * u
                     cx = (xa + xb) / 2 + (bar_x(k) - (xa + xb) / 2) * u
                     cy = AX_Y + (BASE_Y + h / 2 - AX_Y) * u
-                    col = interpolate_color(YELLOW, BLUE, u)
+                    col = interpolate_color(YELLOW, COL_GPU, u)
                     g.add(Rectangle(width=max(w, 1e-3), height=max(hh, 1e-3), stroke_width=0,
                                     fill_color=col, fill_opacity=0.9 * seg_a).move_to([cx, cy, 0]))
                 else:
-                    col = BLUE
+                    col = COL_GPU
                     if is_max:
-                        col = interpolate_color(BLUE, COL_N, prog(t, T3A, T3A + 0.5))
+                        col = interpolate_color(COL_GPU, COL_N, prog(t, T3A, T3A + 0.5))
                     g.add(Rectangle(width=BAR_W, height=max(h, 1e-3), stroke_width=0,
                                     fill_color=col, fill_opacity=0.9 * f)
                           .move_to([bar_x(k), BASE_Y + h / 2, 0]))
@@ -315,8 +330,8 @@ class NoiseCeiling(Scene):
 
         for i in range(1, 6):
             a0 = T1A + (i - 1) * 0.35
-            put(tx(str(i), 22, BLUE).move_to([dot_x(i), AX_Y + 0.32, 0]),
-                lambda t, a0=a0: prog(t, a0, a0 + 0.4) * fade_out_all(t))
+            put(tx(str(i), 22, COL_GPU).move_to([dot_x(i), AX_Y + 0.32, 0]),
+                lambda t: 1.0)
 
         for k, (i, j) in enumerate(PAIRS):
             _, b = pair_window(k)
@@ -349,6 +364,9 @@ class NoiseCeiling(Scene):
         rf = tx("r ＝ %s ÷ %s ＝ %.2f" % (sci(X_TEST), sci(N_PUB), R_PUB), 22, WHITE)
         rf.move_to([BAND_R + 0.25 + rf.width / 2, 0.15, 0])
         put(rf, lambda t: prog(t, T4A + 2.2, T4A + 2.6) * fade_out_all(t))
+        rn = tx("尺子借自 GPU 生产程序重跑（§9.3）", 18, GREY_B)
+        rn.move_to([BAND_R + 0.25 + rn.width / 2, -0.3, 0])
+        put(rn, lambda t: prog(t, T4A + 0.2, T4A + 0.6) * fade_out_all(t))
 
         for r, (n, frac) in enumerate(PROBS):
             a0 = T5A + r * 0.4

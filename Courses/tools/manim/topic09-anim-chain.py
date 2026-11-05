@@ -32,6 +32,9 @@ r"""专题九「GPU→TPU 训练精度对齐」§8.6 串起来：五环一条链
   · 第五环里 loss 的逐步曲线（第 300 步以前 loss 差还淹在噪声里，画了只是一条抖线）。
   · w̄ 的几何（§8.1 的静态图已画）、双向干预的柱子（§8.2 已画）。
 
+🎨 配色（2026-11-05 按全课规矩改）：TPU − GPU 的差一律蓝（③ 折线、④ 柱、⑤ 曲线和它们的数字），GPU 两次之间灰；
+   ① 偏差来源红、② 中性橙、⑤ 盒子中性白；「实测」标签灰、探针刻度白 —— 紫留给精确轨迹、绿留给「通过」，这里都不出现。
+
 📌 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic09-anim-chain.py DriftChain WebPages/media/topic09-chain.mp4
    每一步落地的停顿时刻写进 steps/DriftChain.json（课件挂 data-pauses）。
@@ -45,7 +48,7 @@ import sys
 
 import manim as _mn; _mn.Text.set_default(font="Noto Sans CJK SC"); _mn.MarkupText.set_default(font="Noto Sans CJK SC")   # 统一字体
 from manim import (Scene, VGroup, VMobject, Rectangle, RoundedRectangle, Line, Dot, Triangle, Text, ValueTracker,
-                   always_redraw, WHITE, GREY, GREY_B, BLUE, RED, GREEN, YELLOW, ORANGE, PURPLE_B,
+                   always_redraw, WHITE, GREY, GREY_B, BLUE, RED, YELLOW, ORANGE,
                    UP, DOWN, LEFT, RIGHT, linear)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -133,7 +136,12 @@ def lse_at(s):
 
 
 # ── 画面常数 ───────────────────────────────────────────────────────
-COLS = [RED, ORANGE, PURPLE_B, BLUE, GREEN]
+# 全课配色：TPU＝蓝、GPU＝灰、精确轨迹＝紫、红＝偏差来源、绿＝通过。
+# ① 是偏差来源（红）；② 中性橙；③④ 画的是 TPU − GPU 的差（蓝）；⑤ 盒子中性白，里面的 TPU − GPU 曲线蓝。
+# 这支片子里没有精确轨迹、也没有「通过」，所以不用紫、不用绿。
+COLS = [RED, ORANGE, BLUE, BLUE, WHITE]
+COL_DIFF = BLUE                          # TPU − GPU 的差
+COL_PROBE = WHITE                        # 时钟上探针实测的那几步
 XC = [-5.6 + 2.8 * i for i in range(5)]
 BW, BH, BY = 2.55, 0.95, 2.05            # 环的盒子
 TITLES = ["① GPU 输出层 dgrad", "② 主干权重", "③ logits 整体水平", "④ 冷门词那几行", "⑤ 看到的现象"]
@@ -199,7 +207,7 @@ class DriftChain(Scene):
         for i in range(5):
             box = RoundedRectangle(width=BW, height=BH, corner_radius=0.12, stroke_color=GREY, stroke_width=3).move_to([XC[i], BY, 0])
             dim_grp.append(remember(VGroup(box, tx(TITLES[i], 17, GREY, True).move_to([XC[i], BY + 0.17, 0]))))
-            tc = GREEN if TAGS[i] == "实测" else BLUE
+            tc = GREY_B                          # 「实测」标签：中性灰（绿在全课是「通过」）
             g = VGroup(RoundedRectangle(width=BW, height=BH, corner_radius=0.12, stroke_color=COLS[i], stroke_width=4,
                                         fill_color=COLS[i], fill_opacity=0.12).move_to([XC[i], BY, 0]),
                        tx(TITLES[i], 17, COLS[i], True).move_to([XC[i], BY + 0.17, 0]))
@@ -236,7 +244,7 @@ class DriftChain(Scene):
         p4 = VGroup(tx("没出现过的词那几行", 15, GREY_B).move_to([XC[3], 1.2, 0]),
                     tx("平方和多涨（TPU − GPU）", 13, GREY_B).move_to([XC[3], 0.9, 0]),
                     Line([bar_x - 0.7, CH_BOT, 0], [bar_x + 0.7, CH_BOT, 0], color=GREY, stroke_width=2),
-                    tx("logit 越高，压得越多", 13, BLUE).move_to([XC[3], -1.85, 0]))
+                    tx("logit 越高，压得越多", 13, COL_DIFF).move_to([XC[3], -1.85, 0]))
         panels.append(p4)
         # ⑤ 小图框架
         p5 = VGroup(tx("参数范数差（TPU − GPU）", 15, GREY_B).move_to([XC[4], 1.2, 0]),
@@ -247,10 +255,10 @@ class DriftChain(Scene):
             remember(p)
 
         # 只在走过实测点时出现的数字
-        lse_labs = [remember(tx("第 %d 步 %s" % (s, ("%.4f" % v).rstrip("0").replace("-", "−")), 15, PURPLE_B, True)
+        lse_labs = [remember(tx("第 %d 步 %s" % (s, ("%.4f" % v).rstrip("0").replace("-", "−")), 15, COL_DIFF, True)
                              .move_to([XC[2], -1.5, 0])) for s, v, _ in N.LSE_PROBE]
-        rare_lab = remember(tx("＋%.1f（第 300 步实测）" % RARE_300, 15, BLUE, True).move_to([XC[3], -1.5, 0]))
-        pn_lab = remember(VGroup(tx("＋%.1e（第 300 步）" % PN_END, 15, GREEN, True).move_to([XC[4], -1.5, 0]),
+        rare_lab = remember(tx("＋%.1f（第 300 步实测）" % RARE_300, 15, COL_DIFF, True).move_to([XC[3], -1.5, 0]))
+        pn_lab = remember(VGroup(tx("＋%.1e（第 300 步）" % PN_END, 15, COL_DIFF, True).move_to([XC[4], -1.5, 0]),
                                  tx("按组拆：输出层占 %d%%" % round(HEAD_SHARE * 100), 13, GREY_B).move_to([XC[4], -1.85, 0])))
         for p in panels:
             remember(p)
@@ -279,20 +287,20 @@ class DriftChain(Scene):
             # ③
             pts = [(sx(2, p[0]), self_y3(p[1])) for p in LSE_PTS if p[0] <= s]
             pts.append((sx(2, s), self_y3(lse_at(s))))
-            g.add(poly(pts, PURPLE_B, 4).set_stroke(opacity=lit[2]))
+            g.add(poly(pts, COL_DIFF, 4).set_stroke(opacity=lit[2]))
             for ps, v, gg in N.LSE_PROBE:
                 if ps <= s + 1e-6:
-                    g.add(Dot([sx(2, ps), self_y3(v), 0], radius=0.05, color=PURPLE_B).set_opacity(lit[2]))
+                    g.add(Dot([sx(2, ps), self_y3(v), 0], radius=0.05, color=COL_DIFF).set_opacity(lit[2]))
                     g.add(Dot([sx(2, ps), self_y3(gg), 0], radius=0.04, color=GREY).set_opacity(lit[2]))
             g.add(Dot([sx(2, s), self_y3(lse_at(s)), 0], radius=0.06, color=WHITE).set_opacity(lit[2]))
             # ④ 柱子：线性插值示意
             h = max((CH_TOP - 0.1 - CH_BOT) * clamp(s / S_END), 0.001)
-            g.add(Rectangle(width=bar_w, height=h, stroke_width=0, fill_color=BLUE, fill_opacity=0.75 * lit[3])
+            g.add(Rectangle(width=bar_w, height=h, stroke_width=0, fill_color=COL_DIFF, fill_opacity=0.75 * lit[3])
                   .move_to([bar_x, CH_BOT + h / 2, 0]))
             # ⑤ 逐步实测
             n = int(s + 1e-6)
             g.add(poly([(sx(4, k), y5(PN_G[k])) for k in range(n + 1)], GREY, 2).set_stroke(opacity=lit[4]))
-            g.add(poly([(sx(4, k), y5(PN[k])) for k in range(n + 1)], GREEN, 3).set_stroke(opacity=lit[4]))
+            g.add(poly([(sx(4, k), y5(PN[k])) for k in range(n + 1)], COL_DIFF, 3).set_stroke(opacity=lit[4]))
             # 步数时钟
             x = CLK_X0 + (CLK_X1 - CLK_X0) * s / S_END
             g.add(Triangle(color=YELLOW, fill_color=YELLOW, fill_opacity=1, stroke_width=0).scale(0.11).rotate(3.14159)
@@ -308,13 +316,13 @@ class DriftChain(Scene):
         for s in (0, 25, 50, 100, 150, 200, 250, 300):
             x = CLK_X0 + (CLK_X1 - CLK_X0) * s / S_END
             probe = s in (25, 50, 100, 300)
-            clk.add(Line([x, CLK_Y - 0.09, 0], [x, CLK_Y + 0.09, 0], color=PURPLE_B if probe else GREY, stroke_width=3))
-            clk.add(tx(str(s), 14, PURPLE_B if probe else GREY).move_to([x, CLK_Y - 0.28, 0]))
+            clk.add(Line([x, CLK_Y - 0.09, 0], [x, CLK_Y + 0.09, 0], color=COL_PROBE if probe else GREY, stroke_width=3))
+            clk.add(tx(str(s), 14, COL_PROBE if probe else GREY).move_to([x, CLK_Y - 0.28, 0]))
         self.add(clk)
         step_lab = always_redraw(lambda: tx("第 %d 步" % int(st()[1] + 1e-6), 17, YELLOW, True)
                                  .move_to([CLK_X0 + (CLK_X1 - CLK_X0) * st()[1] / S_END, CLK_Y + 0.45, 0]))
         self.add(step_lab)
-        foot = tx("灰色 ＝ GPU 两次之间；刻度上紫色 ＝ 探针实测的那几步；③ 实测点之间连直线，④ 柱子中间是插值示意，⑤ 是逐步实测", 14, GREY).move_to([0, -3.62, 0])
+        foot = tx("灰色 ＝ GPU 两次之间；刻度上白色 ＝ 探针实测的那几步；③ 实测点之间连直线，④ 柱子中间是插值示意，⑤ 是逐步实测", 14, GREY).move_to([0, -3.62, 0])
         self.add(foot)
 
         # ── 字幕：建一次，按区间切透明度 ─────────────────────────────
