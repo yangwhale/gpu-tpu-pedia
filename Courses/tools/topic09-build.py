@@ -491,11 +491,11 @@ __FIG_HEAD__
     落在「所有 logits 一起升降」这个方向上，每一步都少推约 «HEAD_PCT_S1_T»。TPU 这一步对 FP64 的误差小得多（第 1 步约 «HEAD_RATIO_S1» 倍；第 100 步那个指标连真 FP32 都偏得不小，只作旁证）。</p>
   <details class="foldfig"><summary><b>口径</b>：哪部分是实测、哪部分是推断；一度判反的那一版</summary>
   <p>朝零、随求和长度增大，是实测；说它就是 §5.2 那个抹零模型在起作用，是推断 —— 那个模型在这么长的求和上没有单独验证过。
-    最早那一版「FP32 dgrad」没关 TF32，偏得比 BF16 还多，于是一度得出「换成精确 dgrad 训练也不动」的错误结论。</p></details>
+    最早那一版「FP32 dgrad」没关 TF32，偏得比 BF16 还多，于是一度得出「换成FP32 dgrad 训练也不动」的错误结论。</p></details>
 
   <h3>8.4　同一个起点，各算一步</h3>
 __FIG_SWAP__
-  <p>同一状态下 TPU 每步几乎正好（±«SWAP_RES_T» 以内）。这里的「精确值」和「精确 dgrad」都是 GPU 用 FP32 算的，那次长求和交给 cuBLAS 一次累加到底；§8.5 会看到它积上千步以后也偏，所以这张图只看谁少走得多、谁少走得少。</p>
+  <p>同一状态下 TPU 每步几乎正好（±«SWAP_RES_T» 以内）。这里的「精确值」和「FP32 dgrad」都是 GPU 算的，那次长求和交给 cuBLAS 一次累加到底；§8.5 会看到它积上千步以后也偏，所以这张图只看谁少走得多、谁少走得少。</p>
   <p>别把两个百分比混了：§8.3 的 «HEAD_PCT_S1_T» 量的是那一次矩阵乘沿 w̄ 少了多少；这里的 «SWAP_GPU_ABS_T» 量的是整个梯度经过 Adam 之后，权重沿漂移方向少走了多少。</p>
 
   <h3>8.5　精确轨迹：连 GPU 的 FP32 也不精确</h3>
@@ -514,7 +514,7 @@ __FIG_EXACT__
   <h3>8.6　串起来：五环一条链</h3>
 __FIG_CHAIN__
 __ANIM_CHAIN__
-''' + quiz("为什么「GPU 把 dgrad 换成精确值」和「精确轨迹」都要跑满 1000 步，不能只看第 1 步？",
+''' + quiz("为什么「GPU 把 dgrad 换成 FP32」和「精确轨迹」都要跑满 1000 步，不能只看第 1 步？",
            "第 1 步那股力只差万分之几，单看一步、对 GPU 噪声比根本看不出；它是每一步同向地少一点，要累积几百步才显出 loss、lse 和参数范数的差。比的是轨迹，所以要跑满。") + '''
   <p class="bridge">这一节留下的问题：GPU 的 BF16 golden 偏了，连「精确轨迹」也带着一份长累加的偏差，验收拿谁当基线？</p>
 </div></section>
@@ -674,7 +674,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>名义 FP32 的参照比 BF16 还偏</td><td>TF32 没关干净</td><td>启动时实测 FP32 矩阵乘对 FP64；打印环境变量</td></tr>
   <tr><td>加了抓数的程序和生产程序不逐位</td><td>钩子切开了融合</td><td>改用步间读状态、隔离回放、探针</td></tr>
   <tr><td>loss 慢慢偏、参数范数一起漂</td><td>每一步更新里有一个固定方向的小差</td><td>按组、按行拆参数范数；看 Adam 的 ε 区；状态互换</td></tr>
-  <tr><td>TPU 的 loss 更低、参数范数更大，单步上 TPU 反而离 FP64 更近</td><td>golden 自己偏了，比如大词表 dgrad 的长求和朝零少算</td><td>精确 dgrad 的 A/B；状态互换；在 GPU 上跑精确轨迹（长求和分段累加）</td></tr>
+  <tr><td>TPU 的 loss 更低、参数范数更大，单步上 TPU 反而离 FP64 更近</td><td>golden 自己偏了，比如大词表 dgrad 的长求和朝零少算</td><td>FP32 dgrad 的 A/B；状态互换；在 GPU 上跑精确轨迹（长求和分段累加）</td></tr>
   <tr><td>TPU 对精确轨迹还差一截，可同状态单步看不出</td><td>精确参照里的长求和自己有偏，或 TPU 某处多舍了一次，两笔可能相抵</td><td>把参照的长求和改成分段累加再比；TPU 一侧从精确一处一处降回生产精度</td></tr>
   <tr><td>GPU 重跑逐位相同，N ＝ 0</td><td>开着确定性设置；或这一级（第 1 步前向、单算子）本来就没有噪声</td><td>整网多步改用生产配置的重跑当尺子；单算子、单层用 FP64 的 R 比</td></tr>
   <tr><td>TPU 自己重跑也不逐位</td><td>环境变了（镜像、依赖、硬件），或程序里有非确定的算子</td><td>补跑上次通过的提交；对比依赖版本</td></tr>
@@ -734,8 +734,8 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>lse 差 «LSE25_T» ／ «LSE50_T» ／ «LSE100_T» ／ «LSE300_T»；第 1000 步约 «ORIG_LSE_T»</td><td>固定序列探针第 25 ／ 50 ／ 100 ／ 300 步（对第一份 GPU）；第 1000 步那个数取自训练批</td></tr>
   <tr><td>干预：去掉方向后 loss «REMOVE_LOSS_T»、参数范数 «REMOVE_PN_T»；GPU 加力 «FORCE_LOSS_T»、«FORCE_PN_T»</td><td>两边各 1000 步，同设置</td></tr>
   <tr><td>输出头反向误差：GPU dgrad «HEAD_BF16_S1_T»，TPU «HEAD_TPU_S1_T»，交叉熵 «CE_BWD_S1_T»，TF32 版 «HEAD_TF32_S1_T»，真 FP32 «HEAD_EXACT_S1_T»</td><td>第 1 步，用训练里实际用到的张量离线对 FP64；第 100 步 GPU «HEAD_BF16_S100_T»、TPU «HEAD_TPU_S100_T»。机制是张量核抹零为推断</td></tr>
-  <tr><td>同状态各算一步：TPU «SWAP_TPU_T»，GPU 精确 dgrad «SWAP_FIX_T»，GPU «SWAP_GPU_T»</td><td>GPU 第 99 步状态导入 TPU（«SWAP_STATE_TENSORS» 个张量核对指纹；按 GPU 框架布局数，q/k/v、gate/up 各合成一个，所以比 §2.2 按开源命名数的 «N_TENSORS_T» 少，元素一个不少），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
-  <tr><td>精确轨迹：参数范数 «EXACT_TRAJ_PN975_T»（TPU «EXACT_TPU_PN975_T»，精确 dgrad «DGRADX_LO_T» – «DGRADX_HI_T»）</td><td>第 975 步，对 4 份默认 GPU 运行均值；GPU 自己 ±«EXACT_REF»</td></tr>
+  <tr><td>同状态各算一步：TPU «SWAP_TPU_T»，GPU FP32 dgrad «SWAP_FIX_T»，GPU «SWAP_GPU_T»</td><td>GPU 第 99 步状态导入 TPU（«SWAP_STATE_TENSORS» 个张量核对指纹；按 GPU 框架布局数，q/k/v、gate/up 各合成一个，所以比 §2.2 按开源命名数的 «N_TENSORS_T» 少，元素一个不少），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
+  <tr><td>精确轨迹：参数范数 «EXACT_TRAJ_PN975_T»（TPU «EXACT_TPU_PN975_T»，FP32 dgrad «DGRADX_LO_T» – «DGRADX_HI_T»）</td><td>第 975 步，对 4 份默认 GPU 运行均值；GPU 自己 ±«EXACT_REF»</td></tr>
   <tr><td>旧版拆账 «DECOMP_HEAD_T» ／ «DECOMP_REST_T» ／ «DECOMP_TPU_T»（作废：把 ④ 当成了精确值）；loss «LOSS_FIXHEAD_SHARE_T»</td><td>TPU（开关打开前的配置）、生产 golden（5 份）、只修 dgrad 的 golden、精确轨迹，第 1000 步与第 301–1000 步</td></tr>
   <tr><td>新的账：④ «PN_FIX1_T»、⑤ «PN_PRODCHUNK_T»、TPU 生产 «PN_TPU_PROD_T»、⑥ «PN_TRUE_T»；生产 → ⑤ «LADDER_DGRAD_T»、⑤ → ⑥ «LADDER_SHARED_T»</td><td>第 1000 步参数范数，对生产 golden 5 份均值；生产近似配置；TPU v5p、v7x 当前配置同值</td></tr>
   <tr><td>TPU 对 ④ «TPU_VS_FIX1_T» ＝ «B_GPUEXACT_T» «B_DLOGITS_T» «B_REST_T»；TPU 对真精确少漂 «TPU_VS_TRUE_T»；GPU 真精确多舍一次 dlogits «SHARED_DLOGITS_GPU_T»</td><td>第 1000 步；第一笔由 GPU 精确改分段累加证实，第二笔由 TPU 精确只把 dlogits 舍 BF16 证实，第三笔是差额</td></tr>
@@ -840,7 +840,7 @@ ANIMS = {}   # 占位符 -> (anim id, mp4, Scene, 图注一句, 图注补充, ar
 ANIMS["__ANIM_CEILING__"] = ("anim-ceiling", "topic09-ceiling.mp4", "NoiseCeiling",
     "N 是从 10 对里挑出来的最大值；被测一出场，纵轴得缩一半才装得下。",
     "只演参数范数的带符号均值；10 根柱子都是真值，横轴只表示相对位置。",
-    "噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；③ 那组设置：生产近似＋输出头 dgrad 换精确。"
+    "噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；③ 那组设置：生产近似＋输出头 dgrad 换成 FP32（一次累加）。"
     "第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。"
     "第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，«GPU_RERUN_PN»。"
     "第 4 步　被测（TPU 对精确轨迹）出场，r 等于被测除以 N；尺子借自 ③ 那组 GPU 重跑（§9.3）。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 «ACC_PN_X»，r 等于 «ACC_PN_X» 除以 «GPU_RERUN_PN»，等于 «ACC_PN_R»。"

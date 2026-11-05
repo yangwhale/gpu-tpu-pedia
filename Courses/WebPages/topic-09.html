@@ -3416,12 +3416,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="449" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一项用三个统计各算一个 r，最差的决定这一项；图上画的就是最差的那个</tspan></text>
 <text class="svgsm" x="20" y="480" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一次：参数范数 3.45 倍，不通过；loss 两个窗口、梯度范数在 1–2 倍之间，待定。</text>
 <text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：2 倍这条线是约定的余量，不是统计推导出来的；待定不能直接签，要先加参照重判。</text>
-</svg><figcaption><b>落在哪个颜色里，就是什么判定。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：被测是 v5p 当前配置 1000 步，基线是精确轨迹的一份（它是什么，后面讲 golden 时细说），N 取 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换精确）5 份两两 10 对的最大值。</p>
+</svg><figcaption><b>落在哪个颜色里，就是什么判定。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：被测是 v5p 当前配置 1000 步，基线是精确轨迹的一份（它是什么，后面讲 golden 时细说），N 取 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换成 FP32）5 份两两 10 对的最大值。</p>
 <p>📌 param_norm 带符号均值 4.27e-7、N 1.24e-7；loss 全程 8.62e-5 / 4.49e-5，尾段 7.23e-5 / 5.62e-5；grad_norm 2.32e-3 / 2.03e-3。</p>
 <p>📌 N 取参照各对里绝对值最大的那个；r ＝ |被测| ÷ N。参数范数的相对差只有 4e-7 也判不过，因为 r 不跟「看上去大不大」比，跟这个量自己的噪声比。</p></details></figure>
 <figure class="fbox fwide" id="anim-ceiling">
-<video src="media/topic09-ceiling.mp4?v=508f63e6" autoplay loop muted playsinline data-pauses="2.95,11.40,14.90,19.60,23.30"
-       aria-label="噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；③ 那组设置：生产近似＋输出头 dgrad 换精确。第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，1.24e-7。第 4 步　被测（TPU 对精确轨迹）出场，r 等于被测除以 N；尺子借自 ③ 那组 GPU 重跑（&#167;9.3）。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 4.27e-7，r 等于 4.27e-7 除以 1.24e-7，等于 3.45。背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。第 5 步　样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 n 加 1 分之一。3 对 1/4，10 对 1/11（这一次），28 对 1/29。"></video>
+<video src="media/topic09-ceiling.mp4?v=cf82ec15" autoplay loop muted playsinline data-pauses="2.95,11.40,14.90,19.60,23.30"
+       aria-label="噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；③ 那组设置：生产近似＋输出头 dgrad 换成 FP32（一次累加）。第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，1.24e-7。第 4 步　被测（TPU 对精确轨迹）出场，r 等于被测除以 N；尺子借自 ③ 那组 GPU 重跑（&#167;9.3）。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 4.27e-7，r 等于 4.27e-7 除以 1.24e-7，等于 3.45。背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。第 5 步　样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 n 加 1 分之一。3 对 1/4，10 对 1/11（这一次），28 对 1/29。"></video>
 <figcaption><b>N 是从 10 对里挑出来的最大值；被测一出场，纵轴得缩一半才装得下。</b>
   <span class="sub">（26 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。只演参数范数的带符号均值；10 根柱子都是真值，横轴只表示相对位置。）</span></figcaption></figure>
   <p>参照对按跟被测一模一样的窗口、分母算三个统计，每个统计取所有对里的<b>最大值</b>当 N：被测如果只是噪声，就是又一个同分布的样本，应当落在已有样本的范围里。</p>
@@ -5640,18 +5640,18 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     落在「所有 logits 一起升降」这个方向上，每一步都少推约 0.065%。TPU 这一步对 FP64 的误差小得多（第 1 步约 27 倍；第 100 步那个指标连真 FP32 都偏得不小，只作旁证）。</p>
   <details class="foldfig"><summary><b>口径</b>：哪部分是实测、哪部分是推断；一度判反的那一版</summary>
   <p>朝零、随求和长度增大，是实测；说它就是 <a href="#s5-2">§5.2</a> 那个抹零模型在起作用，是推断 —— 那个模型在这么长的求和上没有单独验证过。
-    最早那一版「FP32 dgrad」没关 TF32，偏得比 BF16 还多，于是一度得出「换成精确 dgrad 训练也不动」的错误结论。</p></details>
+    最早那一版「FP32 dgrad」没关 TF32，偏得比 BF16 还多，于是一度得出「换成FP32 dgrad 训练也不动」的错误结论。</p></details>
 
   <h3 id="s8-4">8.4　同一个起点，各算一步</h3>
-<figure class="fbox fwide" id="fig-swap"><svg viewBox="0 0 1400 544" width="100%" role="img" aria-label="把 GPU 第 99 步的整套状态原样搬到 TPU 上，两边用同一批数据各算一步梯度，跟同一个精确参照（GPU 上全程 FP32 算的那一份）比，看沿漂移方向比精确值多走还是少走了多少。TPU 生产程序 0.00%，几乎正好；GPU 只把输出头 dgrad 换成精确的，少走 0.10%；GPU 生产程序少走 0.36%。细线是 4 个状态、12 个 batch 的范围，结论都一样。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-swap"><svg viewBox="0 0 1400 544" width="100%" role="img" aria-label="把 GPU 第 99 步的整套状态原样搬到 TPU 上，两边用同一批数据各算一步梯度，跟同一个精确参照（GPU 上全程 FP32 算的那一份）比，看沿漂移方向比精确值多走还是少走了多少。TPU 生产程序 0.00%，几乎正好；GPU 只把输出头 dgrad 换成 FP32 的，少走 0.10%；GPU 生产程序少走 0.36%。细线是 4 个状态、12 个 batch 的范围，结论都一样。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一个起点，各算一步：GPU 每一步都少走一点　——　<tspan font-weight="700">TPU 几乎正好</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">柱长 ＝ 这一步沿「TPU − GPU 权重差」方向，比精确值少走了漂移本身的百分之几（往左 ＝ 少走）；细线 ＝ 12 个 batch 的范围</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU</text>
 <rect x="77.24000000000001" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="98" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU，只换精确 dgrad</text>
-<rect x="285.52000000000004" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="306" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU</text>
+<text class="svgsm" x="98" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU，只换FP32 dgrad</text>
+<rect x="290.0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="311" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU</text>
 <rect x="0" y="102" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5665,7 +5665,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="836.0" y1="182" x2="836.0" y2="202" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
 <line x1="1060.0" y1="182" x2="1060.0" y2="202" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
 <text class="svgsm" x="1076" y="199" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.00%（几乎正好）</tspan></text>
-<text class="svgsm" x="24" y="272" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 只换精确 dgrad</tspan></text>
+<text class="svgsm" x="24" y="272" fill="#0d652d" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 只换FP32 dgrad</tspan></text>
 <rect x="740.0" y="246" width="160.0" height="40" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <line x1="548.0" y1="266" x2="820.0" y2="266" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
 <line x1="548.0" y1="256" x2="548.0" y2="276" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
@@ -5681,12 +5681,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="422" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="422" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="449" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一个状态、同一批数据，GPU 算出来的梯度每一步都偏一点 —— 偏差在单步计算里就有</tspan></text>
-<text class="svgsm" x="20" y="480" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">大头是那一次 dgrad：换成精确的，GPU 从少走 0.36% 降到 0.10%；TPU 生产程序每个 batch 都在精确值的 ±0.1% 里。</text>
+<text class="svgsm" x="20" y="480" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">大头是那一次 dgrad：换成 FP32 的，GPU 从少走 0.36% 降到 0.10%；TPU 生产程序每个 batch 都在精确值的 ±0.1% 里。</text>
 <text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：要把一侧的整套 FP32 主权重原样导进另一侧（逐个张量核对指纹），还要先确认那个「精确参照」自己真是精确的。</text>
 </svg><figcaption><b>蓝色几乎贴着精确值，红柱最长。</b><span class="capmore"><br><em>每根柱子是「这一步」的偏，不是累积。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：1193 个张量导入 TPU 后逐个核对 sha256（按 GPU 框架布局数，q/k/v、gate/up 已各合成一个，所以少于按开源命名数的 1781 个）。方向 d ＝ 第 100 步 TPU 与 GPU 主权重之差；梯度差经 Adam 逐元素缩放、乘学习率和裁剪系数后投到 d 上，按 |d|² 归一。</p>
-<p>📌 实测：θ₉₉ 上 TPU 0.00%、GPU 精确 dgrad −0.10%、GPU −0.36%；另外三个状态（GPU θ₂₉₉、TPU θ₉₉、TPU θ₂₉₉）、共 12 个 batch：TPU −0.04% 到 ＋0.10%，GPU 精确 dgrad −0.05% 到 −0.22%，GPU −0.31% 到 −0.47%。</p>
+<p>📌 实测：θ₉₉ 上 TPU 0.00%、GPU FP32 dgrad −0.10%、GPU −0.36%；另外三个状态（GPU θ₂₉₉、TPU θ₉₉、TPU θ₂₉₉）、共 12 个 batch：TPU −0.04% 到 ＋0.10%，GPU FP32 dgrad −0.05% 到 −0.22%，GPU −0.31% 到 −0.47%。</p>
 <p>📌 参照用 GPU 上的全程 FP32（权重先舍成 BF16，跟生产用的同一份）：TPU 自己那份「全程 FP32」程序核对后发现路由专家实际按 BF16 算（对 FP64 3.2e-3），不能当参照。</p></details></figure>
-  <p>同一状态下 TPU 每步几乎正好（±0.1% 以内）。这里的「精确值」和「精确 dgrad」都是 GPU 用 FP32 算的，那次长求和交给 cuBLAS 一次累加到底；<a href="#s8-5">§8.5</a> 会看到它积上千步以后也偏，所以这张图只看谁少走得多、谁少走得少。</p>
+  <p>同一状态下 TPU 每步几乎正好（±0.1% 以内）。这里的「精确值」和「FP32 dgrad」都是 GPU 算的，那次长求和交给 cuBLAS 一次累加到底；<a href="#s8-5">§8.5</a> 会看到它积上千步以后也偏，所以这张图只看谁少走得多、谁少走得少。</p>
   <p>别把两个百分比混了：<a href="#s8-3">§8.3</a> 的 0.065% 量的是那一次矩阵乘沿 w̄ 少了多少；这里的 0.36% 量的是整个梯度经过 Adam 之后，权重沿漂移方向少走了多少。</p>
 
   <h3 id="s8-5">8.5　精确轨迹：连 GPU 的 FP32 也不精确</h3>
@@ -5694,17 +5694,17 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>先把 GPU 输出头这一次矩阵乘换成 FP32（真关 TF32），1000 步下来 GPU 自己朝 TPU 走过去约六成。剩下的，要在 GPU 上跑一条<b>精确轨迹</b>来看：权重的用法跟生产一样（FP32 主权重，每步舍成 BF16 再用），
     但前向反向的算术全部 FP32、真关 TF32。它想做的是「这份 BF16 训练本该算出来的样子」。它自己重跑一位不差；图里 loss 那一行的第二个紫点，是给第 0 层一处权重乘 (1 ＋ 1e-6) 的扰动版。</p>
   <p>注意：这里的精确轨迹跟 ① 一样不重算；第九节第一关用的那条精确轨迹是在 ② 的配置上（整层重算＋路由回放）跑的，两节的数不能直接对。</p>
-<figure class="fbox fwide" id="fig-exact"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="三行，都是对四次默认 GPU 运行的平均值比，零点就是 GPU。参数范数：GPU 只把 dgrad 换成精确的，走到 +0.0125；精确轨迹走到 +0.0182；TPU 在 +0.0199。lse：精确 dgrad 约 −0.175，精确轨迹 −0.262，TPU −0.286。loss：精确 dgrad 约 −7.3e-5；精确轨迹有两份，−1.16e-4 和 −1.53e-4，TPU 的 −1.27e-4 夹在两份中间。灰色是 GPU 四次运行自己的散布。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-exact"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="三行，都是对四次默认 GPU 运行的平均值比，零点就是 GPU。参数范数：GPU 只把 dgrad 换成 FP32 的，走到 +0.0125；精确轨迹走到 +0.0182；TPU 在 +0.0199。lse：FP32 dgrad 约 −0.175，精确轨迹 −0.262，TPU −0.286。loss：FP32 dgrad 约 −7.3e-5；精确轨迹有两份，−1.16e-4 和 −1.53e-4，TPU 的 −1.27e-4 夹在两份中间。灰色是 GPU 四次运行自己的散布。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">精确轨迹站在 TPU 一边　——　<tspan font-weight="700">可它自己也还差一步才到真精确</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">零点 ＝ 4 次默认 GPU 运行的平均（这个配置不重算）；往右 ＝ 离 GPU 越远（参数范数更大、lse 更低、loss 更低）；精确轨迹 ＝ BF16 权重、全程 FP32（真关 TF32）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 只换精确 dgrad</text>
-<rect x="201.56" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="222" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">精确轨迹</text>
-<rect x="311.28" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="332" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU</text>
-<rect x="388.52" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="409" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 自己的散布（灰底）</text>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 只换FP32 dgrad</text>
+<rect x="206.04000000000002" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="227" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">精确轨迹</text>
+<rect x="315.76" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="336" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU</text>
+<rect x="393.0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="414" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 自己的散布（灰底）</text>
 <rect x="0" y="102" width="1400" height="110" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -5718,7 +5718,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="65.04545454545455" y="168" width="49.90909090909091" height="24" rx="0" fill="#dadce0" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="90" y="212" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0（GPU 均值）</tspan></text>
 <rect x="774.1818181818182" y="171" width="18" height="18" rx="9" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="783" y="164" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 dgrad +0.0125</tspan></text>
+<text class="svgsm" x="783" y="164" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 dgrad +0.0125</tspan></text>
 <rect x="1090.2727272727275" y="171" width="18" height="18" rx="9" fill="#9334e6" stroke="#9334e6" stroke-width="2"/>
 <text class="svgsm" x="1099" y="144" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确轨迹 +0.0182</tspan></text>
 <rect x="1184.5454545454547" y="171" width="18" height="18" rx="9" fill="#1a73e8" stroke="#1a73e8" stroke-width="2"/>
@@ -5736,7 +5736,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="40.43750000000001" y="292" width="99.12499999999999" height="24" rx="0" fill="#dadce0" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="90" y="336" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0（GPU 均值）</tspan></text>
 <rect x="748.1875" y="295" width="18" height="18" rx="9" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="757" y="288" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 dgrad -0.175</tspan></text>
+<text class="svgsm" x="757" y="288" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 dgrad -0.175</tspan></text>
 <rect x="1079.875" y="295" width="18" height="18" rx="9" fill="#9334e6" stroke="#9334e6" stroke-width="2"/>
 <text class="svgsm" x="1088" y="268" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确轨迹 -0.262</tspan></text>
 <rect x="1171.375" y="295" width="18" height="18" rx="9" fill="#1a73e8" stroke="#1a73e8" stroke-width="2"/>
@@ -5755,7 +5755,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="90" y="460" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0（GPU 均值）</tspan></text>
 <rect x="922.470588235294" y="424" width="265.52941176470597" height="8" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="604.8823529411765" y="419" width="18" height="18" rx="9" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="2"/>
-<text class="svgsm" x="613" y="412" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 dgrad -7.30e-05</tspan></text>
+<text class="svgsm" x="613" y="412" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 dgrad -7.30e-05</tspan></text>
 <rect x="913.470588235294" y="419" width="18" height="18" rx="9" fill="#9334e6" stroke="#fff" stroke-width="2"/>
 <text class="svgsm" x="922" y="392" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确轨迹（权重扰动 1e-6） -1.16e-04</tspan></text>
 <rect x="992.4117647058822" y="419" width="18" height="18" rx="9" fill="#1a73e8" stroke="#1a73e8" stroke-width="2"/>
@@ -5770,8 +5770,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="562" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">产是 1.10 倍（第 1000 步）。</text>
 <text class="svgsm" x="20" y="586" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：精确轨迹慢（全程 FP32），而且是确定性的 —— 它自己量不出噪声，下一节要借别的尺子。</text>
 </svg><figcaption><b>三行里，紫点都挨着蓝点。</b><span class="capmore"><br><em>零点是 GPU 默认运行的平均。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：精确轨迹 ＝ 主权重 FP32，每步前向前舍到 BF16，前向反向全部 FP32、关 TF32、不用融合注意力；第 2 / 3 步 loss 11.23569 / 10.58785，TPU 11.23569 / 10.58784，GPU BF16 11.23543 / 10.58775。</p>
-<p>📌 实测：第 975 步对 4 份默认 GPU 运行均值：param_norm 精确轨迹 ＋1.82e-2、TPU ＋1.99e-2、精确 dgrad ＋1.23e-2 – ＋1.28e-2（图中取中点），4 份 GPU 自己 ±4.5e-4；lse −0.262 / −0.286 / −0.16 – −0.19，GPU ±0.013；301–1000 步 loss 精确轨迹两份 −1.53e-4、−1.16e-4，TPU −1.27e-4，精确 dgrad −4.3e-5 – −1.02e-4，GPU ±9e-6。</p>
-<p>注：lse 与 loss 两行里「精确 dgrad」取两份运行的中点，画的是位置示意。</p></details></figure>
+<p>📌 实测：第 975 步对 4 份默认 GPU 运行均值：param_norm 精确轨迹 ＋1.82e-2、TPU ＋1.99e-2、FP32 dgrad ＋1.23e-2 – ＋1.28e-2（图中取中点），4 份 GPU 自己 ±4.5e-4；lse −0.262 / −0.286 / −0.16 – −0.19，GPU ±0.013；301–1000 步 loss 精确轨迹两份 −1.53e-4、−1.16e-4，TPU −1.27e-4，FP32 dgrad −4.3e-5 – −1.02e-4，GPU ±9e-6。</p>
+<p>注：lse 与 loss 两行里「FP32 dgrad」取两份运行的中点，画的是位置示意。</p></details></figure>
   <p><b>反转在这里。</b>精确轨迹里，输出头 dgrad 那次沿 12 万词表的求和，是交给 cuBLAS 用 FP32 一次累加到底的。B200 上它也偏：第 1 步只有 −1.8e-6（跟 <a href="#s8-3">§8.3</a> 那根绿柱同量级），训练到第 299 步的状态已经 −2.6e-4，跟 BF16 张量核同一个数量级。
     第 1 步几乎不偏，是因为那时 dlogits 还很均匀；训练以后冷门词的概率变得很小，小项在长累加里被系统地吃掉（推断，cuBLAS 怎么累加没有源码可看）。<a href="#s5-2">§5.2</a> 那句「求和越长，偏得越多」，FP32 也逃不掉。</p>
   <p>把这一处改成<b>分段累加</b>（12 万长的求和切成几段，各段 FP32 求和以后再相加），GPU 的精确轨迹就跟 TPU 上跑的精确轨迹重合：参数范数带符号均值只差 7.9e-8，在噪声上限以内。两边在真精确的算术下，是同一条轨迹。
@@ -5838,7 +5838,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
        aria-label="五环一条链：每一步少推一点，几百步积出来。每一环是下一环的原因；底下的时钟是训练步数。① GPU 输出层 dgrad：12 万长的求和朝零截掉一点，每一步少推 0.065%（沿所有 logits 一起动的方向，第 1 步实测；第 100 步 0.061%），每一步都差这么多。② 主干权重沿这个方向每一步少走一点：整步沿漂移方向少走 0.36%（全体参数，同一状态实测），主干里大头在第 0 层注意力的输出投影。③ 所有 logits 一起偏一截（lse 差，TPU 减 GPU）；softmax 看不见它。第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218。④ 冷门词那几行在 Adam 的 ε 区（92% 的元素根号 v 小于 ε），压多压少跟着 logit 水平走；没出现过的词那几行平方和多涨 17.1（第 300 步实测）。⑤ 参数范数多涨，第 300 步 4.6e-3；按组拆输出层占 87%（另测一对，合计 4.4e-3）；loss 偏低（去掉那股力后各还剩一截；loss 的机制未验证）。时钟走起来：①② 每一步都一样，③④⑤ 一步步积起来。第 300 步：每步只差一点、同一个方向，积成看得见的漂移。灰色是 GPU 两次之间；刻度上白色是探针实测的那几步。五环都标实测。"></video>
 <figcaption><b>同一个小差每一步都一样，积到第 300 步就成了看得见的漂移。</b>
   <span class="sub">（29 秒，Manim 渲染，可一步一步看。第 3 环只有 4 个实测点，中间连直线；第 4 环只有第 300 步一个实测值，柱子中间是插值示意；⑤ 是逐步实测。）</span></figcaption></figure>
-<details class="foldfig"><summary><b>考考自己</b>：为什么「GPU 把 dgrad 换成精确值」和「精确轨迹」都要跑满 1000 步，不能只看第 1 步？</summary><p>第 1 步那股力只差万分之几，单看一步、对 GPU 噪声比根本看不出；它是每一步同向地少一点，要累积几百步才显出 loss、lse 和参数范数的差。比的是轨迹，所以要跑满。</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：为什么「GPU 把 dgrad 换成 FP32」和「精确轨迹」都要跑满 1000 步，不能只看第 1 步？</summary><p>第 1 步那股力只差万分之几，单看一步、对 GPU 噪声比根本看不出；它是每一步同向地少一点，要累积几百步才显出 loss、lse 和参数范数的差。比的是轨迹，所以要跑满。</p></details>
   <p class="bridge">这一节留下的问题：GPU 的 BF16 golden 偏了，连「精确轨迹」也带着一份长累加的偏差，验收拿谁当基线？</p>
 </div></section>
 
@@ -5846,7 +5846,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">当基线的那份 golden 不是一开始就有的：从框架的默认配置出发改了三次，到最后还发现要再改一处。</p>
 
   <h3 id="s9-1">9.1　四份 golden，一步一步来</h3>
-<figure class="fbox fwide" id="fig-golden"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="四张卡片从左到右：第一份是起点，框架默认配置；第二份加上整层重算和路由回放，跟生产一样；第三份再把输出头 dgrad 换成精确乘法；第四份再改成 BF16 权重、全程 FP32 计算，叫精确轨迹，是第一关现行的基线；后来发现它输出头那次长求和仍有偏，基线换不换待定。卡片下面是同一个 TPU 被测对它的参数范数差，按同一把尺子 N 算倍数：对第二份 24 倍，对第三份 10 倍，对第四份 3.5 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-golden"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="四张卡片从左到右：第一份是起点，框架默认配置；第二份加上整层重算和路由回放，跟生产一样；第三份再把输出头 dgrad 换成 FP32 乘法（一次累加）；第四份再改成 BF16 权重、全程 FP32 计算，叫精确轨迹，是第一关现行的基线；后来发现它输出头那次长求和仍有偏，基线换不换待定。卡片下面是同一个 TPU 被测对它的参数范数差，按同一把尺子 N 算倍数：对第二份 24 倍，对第三份 10 倍，对第四份 3.5 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">golden 是一步步改出来的　——　<tspan font-weight="700">先对齐超参和数据，再每一步只加一样东西</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡片 ＝ 一份 golden（GPU 上跑的标准答案）；下面的柱子 ＝ 同一个 TPU 被测对它的参数范数差是噪声的几倍（同一把尺子）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -6011,7 +6011,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>先看上面的数轴：蓝点和橙点几乎叠在一起。</b><span class="capmore"><br><em>都是第 1000 步、生产近似配置、TPU 当前配置；下面三笔里红色是 GPU 一侧，蓝色是 TPU 一侧。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：第 1000 步参数范数对 GPU 生产 golden 5 份均值：④ ＋1.857e-2、⑤ ＋2.071e-2、TPU 生产 ＋2.092e-2（v5p、v7x 当前配置同值）、⑥ ＋2.744e-2；TPU 精确轨迹 ＋2.73e-2。TPU 生产对 TPU 精确少 6.3e-3，对 ⑥ 少 6.5e-3，差不到一个记录刻度。</p>
 <p>📌 实测：① ＋8.697e-3（GPU 精确改分段累加 ＋8.55e-3）；② −6.836e-3（TPU 只把 dlogits 舍成 BF16、其余全精确）；GPU 真精确只多舍这一次 dlogits 少漂 6.74e-3；③ 由差额得出，约两个 FP32 记录刻度，单独分辨不清。</p></details></figure>
   <p>换句话说，GPU 生产和 TPU 生产之间量得出来的差别，只剩 GPU 那一次长求和。旧版拆账（59% ／ 29% ／ 12%）把 ④ 当成了精确值，而 ④ 自己也偏，那一版作废。</p>
-<figure class="fbox fwide" id="fig-twolayer"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="上一层：第一关，必须过。TPU 对精确轨迹那一份比；尺子例外地借 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换精确）5 份两两 10 对的散布，因为精确轨迹自己是确定性的，量不出噪声。旁边另做两份交叉核对，都只报不判：一份尺子换成精确轨迹 5 份（基线＋4 份扰动版）两两 10 对，参数范数 4.00 倍、loss 全程 2.03 倍、梯度范数 2.24 倍超过 2，loss 尾段 1.21 倍待定；另一份换成 TPU 自己的执行噪声 28 对，只有参数范数 5.03 倍超过 2，loss 全程 1.81 倍、尾段 1.42 倍待定，梯度范数 0.99 倍过。下一层：第二关，已解释差异。TPU 对 GPU 生产 golden 的差不判过不过，写清量级、哪一部分由哪个已查清的 GPU 偏差解释、证据在哪。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-twolayer"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="上一层：第一关，必须过。TPU 对精确轨迹那一份比；尺子例外地借 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换成 FP32）5 份两两 10 对的散布，因为精确轨迹自己是确定性的，量不出噪声。旁边另做两份交叉核对，都只报不判：一份尺子换成精确轨迹 5 份（基线＋4 份扰动版）两两 10 对，参数范数 4.00 倍、loss 全程 2.03 倍、梯度范数 2.24 倍超过 2，loss 尾段 1.21 倍待定；另一份换成 TPU 自己的执行噪声 28 对，只有参数范数 5.03 倍超过 2，loss 全程 1.81 倍、尾段 1.42 倍待定，梯度范数 0.99 倍过。下一层：第二关，已解释差异。TPU 对 GPU 生产 golden 的差不判过不过，写清量级、哪一部分由哪个已查清的 GPU 偏差解释、证据在哪。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">golden 自己有偏差时：分两关验收</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上 ＝ 必须过的那一关；下 ＝ 只写清楚、不判过不过的那一关；箭头 ＝ 谁对谁比</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -6035,7 +6035,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="260" y="216" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">BF16 权重、全程 FP32</text>
 <rect x="960" y="162" width="360" height="76" rx="10" fill="#fff" stroke="#e8710a" stroke-width="2"/>
 <text class="svgsm" x="1140" y="192" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">尺子：③ 那组 GPU 重跑</tspan></text>
-<text class="svgsm" x="1140" y="216" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">生产近似＋精确 dgrad · 5 份两两 10 对</text>
+<text class="svgsm" x="1140" y="216" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">生产近似＋FP32 dgrad · 5 份两两 10 对</text>
 <rect x="922" y="244" width="456" height="54" rx="10" fill="#fff" stroke="#80868b" stroke-width="1.6" stroke-dasharray="5 4"/>
 <text class="svgsm" x="1150" y="266" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交叉核对一：精确轨迹 5 份（基线＋4 份扰动版）· 10 对</tspan></text>
 <text class="svgsm" x="1150" y="287" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">param_norm 4.00× · loss 2.03× / 尾段 1.21× · grad_norm 2.24×</text>
@@ -6251,7 +6251,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>名义 FP32 的参照比 BF16 还偏</td><td>TF32 没关干净</td><td>启动时实测 FP32 矩阵乘对 FP64；打印环境变量</td></tr>
   <tr><td>加了抓数的程序和生产程序不逐位</td><td>钩子切开了融合</td><td>改用步间读状态、隔离回放、探针</td></tr>
   <tr><td>loss 慢慢偏、参数范数一起漂</td><td>每一步更新里有一个固定方向的小差</td><td>按组、按行拆参数范数；看 Adam 的 ε 区；状态互换</td></tr>
-  <tr><td>TPU 的 loss 更低、参数范数更大，单步上 TPU 反而离 FP64 更近</td><td>golden 自己偏了，比如大词表 dgrad 的长求和朝零少算</td><td>精确 dgrad 的 A/B；状态互换；在 GPU 上跑精确轨迹（长求和分段累加）</td></tr>
+  <tr><td>TPU 的 loss 更低、参数范数更大，单步上 TPU 反而离 FP64 更近</td><td>golden 自己偏了，比如大词表 dgrad 的长求和朝零少算</td><td>FP32 dgrad 的 A/B；状态互换；在 GPU 上跑精确轨迹（长求和分段累加）</td></tr>
   <tr><td>TPU 对精确轨迹还差一截，可同状态单步看不出</td><td>精确参照里的长求和自己有偏，或 TPU 某处多舍了一次，两笔可能相抵</td><td>把参照的长求和改成分段累加再比；TPU 一侧从精确一处一处降回生产精度</td></tr>
   <tr><td>GPU 重跑逐位相同，N ＝ 0</td><td>开着确定性设置；或这一级（第 1 步前向、单算子）本来就没有噪声</td><td>整网多步改用生产配置的重跑当尺子；单算子、单层用 FP64 的 R 比</td></tr>
   <tr><td>TPU 自己重跑也不逐位</td><td>环境变了（镜像、依赖、硬件），或程序里有非确定的算子</td><td>补跑上次通过的提交；对比依赖版本</td></tr>
@@ -6311,8 +6311,8 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>lse 差 −0.0016 ／ −0.016 ／ −0.078 ／ −0.218；第 1000 步约 −0.33</td><td>固定序列探针第 25 ／ 50 ／ 100 ／ 300 步（对第一份 GPU）；第 1000 步那个数取自训练批</td></tr>
   <tr><td>干预：去掉方向后 loss −3.4e-5、参数范数 ＋6.1e-3；GPU 加力 −1.26e-4、＋2.05e-2</td><td>两边各 1000 步，同设置</td></tr>
   <tr><td>输出头反向误差：GPU dgrad −6.51e-4，TPU −2.4e-5，交叉熵 ＋2.7e-6，TF32 版 −8.08e-4，真 FP32 −1.7e-6</td><td>第 1 步，用训练里实际用到的张量离线对 FP64；第 100 步 GPU −6.10e-4、TPU −7.4e-5。机制是张量核抹零为推断</td></tr>
-  <tr><td>同状态各算一步：TPU 0.00%，GPU 精确 dgrad −0.10%，GPU −0.36%</td><td>GPU 第 99 步状态导入 TPU（1193 个张量核对指纹；按 GPU 框架布局数，q/k/v、gate/up 各合成一个，所以比 <a href="#s2-2">§2.2</a> 按开源命名数的 1,781 少，元素一个不少），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
-  <tr><td>精确轨迹：参数范数 ＋1.82e-2（TPU ＋1.99e-2，精确 dgrad ＋1.23e-2 – ＋1.28e-2）</td><td>第 975 步，对 4 份默认 GPU 运行均值；GPU 自己 ±4.5e-4</td></tr>
+  <tr><td>同状态各算一步：TPU 0.00%，GPU FP32 dgrad −0.10%，GPU −0.36%</td><td>GPU 第 99 步状态导入 TPU（1193 个张量核对指纹；按 GPU 框架布局数，q/k/v、gate/up 各合成一个，所以比 <a href="#s2-2">§2.2</a> 按开源命名数的 1,781 少，元素一个不少），第 100 步数据，共同参照为 GPU 全程 FP32；4 个状态 12 个 batch 范围见图</td></tr>
+  <tr><td>精确轨迹：参数范数 ＋1.82e-2（TPU ＋1.99e-2，FP32 dgrad ＋1.23e-2 – ＋1.28e-2）</td><td>第 975 步，对 4 份默认 GPU 运行均值；GPU 自己 ±4.5e-4</td></tr>
   <tr><td>旧版拆账 59% ／ 29% ／ 12%（作废：把 ④ 当成了精确值）；loss 73%</td><td>TPU（开关打开前的配置）、生产 golden（5 份）、只修 dgrad 的 golden、精确轨迹，第 1000 步与第 301–1000 步</td></tr>
   <tr><td>新的账：④ ＋1.86e-2、⑤ ＋2.07e-2、TPU 生产 ＋2.09e-2、⑥ ＋2.74e-2；生产 → ⑤ ＋2.07e-2、⑤ → ⑥ ＋6.7e-3</td><td>第 1000 步参数范数，对生产 golden 5 份均值；生产近似配置；TPU v5p、v7x 当前配置同值</td></tr>
   <tr><td>TPU 对 ④ ＋2.35e-3 ＝ ＋8.70e-3 −6.84e-3 ＋4.9e-4；TPU 对真精确少漂 6.3e-3；GPU 真精确多舍一次 dlogits −6.7e-3</td><td>第 1000 步；第一笔由 GPU 精确改分段累加证实，第二笔由 TPU 精确只把 dlogits 舍 BF16 证实，第三笔是差额</td></tr>
