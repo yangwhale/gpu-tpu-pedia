@@ -5246,6 +5246,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边一根独大，右边第一根独大。</b><span class="capmore"><br><em>灰色细条是噪声，短到几乎看不见。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：分组参数平方和、逐行平方和都按 FP32 主权重算，两边组名一致；第 100 / 200 / 300 步输出层贡献 ＋4.1e-4 / ＋1.85e-3 / ＋3.83e-3，逐步变大。</p>
 <p>📌 换算（本课推导）：参数范数 ＝ √S（S ＝ 全部参数平方和），S 多出 ΔS 时参数范数多出约 ΔS ÷ (2 × 参数范数)。输出层平方和差合计 ＋23.2 ÷（2 × 3042）≈ 3.81e-3，跟左边输出层的 3.83e-3 差约 0.4%。</p>
 <p>📌 实测：没出现过的词那些行，√v̂ 均值两边只差 0–4%，Adam 更新的大小只差 1%–3%；Σ w·u（更新在这一行权重方向上的分量，加起来）从第 25 步起就分开。</p></details></figure>
+  <p>这里只说两边不一样，不说谁对；哪一边偏，第八节才知道。</p>
 
   <h3 id="s7-4">7.4　Adam 的 ε 区</h3>
 <figure class="fbox fwide" id="fig-eps"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="横轴是一个参数的梯度大小，对数刻度；纵轴是 Adam 给它的更新量，按学习率归一化。梯度远大于 ε 时，更新被拉平到 1 附近，梯度差 1%，更新只差 0.01%；梯度和 ε 差不多或更小时，曲线变成斜坡，更新几乎跟梯度成正比，梯度差 1%，更新差约 0.7%。冷门词那些行的梯度在 4e-9 到 1e-8，正好落在斜坡上。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -5316,7 +5317,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div></section>
 
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>案例（下）：顺着那股力，查到是谁少推了一把</h2></div>
-  <p class="lead">冷门行的更新方向，取决于隐状态在各个 token 上长什么样；顺着往回查，推歪它的是输出头流回来的梯度。</p>
+  <p class="lead">输出层一行的梯度，等于各个 token 的隐状态按这个词的概率加权求和；所以冷门行往哪偏，取决于隐状态。顺着往回查，推歪它的是输出头流回来的梯度。</p>
 
 <figure class="fbox fwide" id="fig-layer0"><svg viewBox="0 0 1400 684" width="100%" role="img" aria-label="左：横轴是训练步，纵轴是每一层输出在 token 上的均值，沿隐状态方向 h-hat（等于 gamma 乘 u-hat）的投影，TPU 对 GPU 的相对差，往下是 TPU 更低。embedding 的输出两边一样，贴着零；第 0 层（稠密层）从第 50 步起偏低，第 100 步负千分之 1.8，第 300 步负千分之 5.4；第 1、2、3 层一层比一层低，第 3 层到负百分之 1.4 左右。灰线是 GPU 重跑 A 对基线那份，第 0 层的同一个量。右：拿同一份第 0 层输入在 CPU 上重算，只换第 0 层权重。第 100 步换成 TPU 的权重，输出沿 h-hat 低负千分之 1.94，跟探针对得上；换成另外两份 GPU 的权重只有正百万分之 7.5 和负万分之 2.4。只换一组时，注意力输出投影一组就占负千分之 1.33，是大头。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">冷门行的方向从哪来：第 0 层最先分开，往后逐层放大　——　<tspan font-weight="700">是第 0 层的权重长歪了</tspan></text>
@@ -5490,13 +5491,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="482" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="482" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="482" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这股力每一步只差 0.065%，同一个方向、每一步都差 —— 几百步积成 logits 整体水平的差</tspan></text>
-<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所有 logits 一起升降，softmax 的概率不变，所以平时没人管这个方向；可冷门词那几行压多压少，跟的正是原始 logit 的整体水平。</text>
+<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这股力每一步只差 0.065%（哪一边少推，后面揭晓），同一个方向、每一步都差 —— 几百步积成 logits 整体水平的差</tspan></text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所有 logits 一起升降，softmax 的概率不变；可冷门词那几行压多压少，跟的正是原始 logit 的整体水平 —— 整体水平低一点，那几行就少压一点。</text>
 <text class="svgsm" x="20" y="564" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：第 1 步只差万分之几，单看一步、对 GPU 噪声比，完全看不出来。</text>
 </svg><figcaption><b>左边是那个方向，右边是它每步少一点积出来的结果。</b><span class="capmore"><br><em>左图的箭头是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：两边在同一条固定序列上每 25 步跑一次前向（单独编译，不扰动训练）；TPU 对第一份 GPU 的 lse 均值差第 25 / 50 / 100 / 300 步 −0.0016 / −0.016 / −0.078 / −0.218，GPU 两次之间 −0.0001 / ＋0.0013 / −0.0062 / −0.021。</p>
 <p>📌 实测：第 1000 步的训练批上，TPU 的 logits 在整个词表上整体低 0.27、lse 低约 0.33，GPU 两次之间 0.0001。</p>
 <p>⚠️ 本课推导：dlogits 各项加起来是 0，可各行在 w̄ 上的投影长短不一，乘上各行以后沿 w̄ 并不抵消 —— 所以 dh 沿 w̄ 那一份不为零。</p>
 <p>注：左图的箭头是示意：真实的输出层有 120,832 行、4096 维。</p></details></figure>
+  <p>主干沿上一张图那个方向长歪，最后一层隐状态整体偏一点，打到输出层每一行上，所有词的 logits 就一起偏 —— lse 的实测正是这样。上一张图的方向和这里的 w̄ 不是同一个，这两环之间怎么定量接上，没有单独量过。</p>
   <p>softmax 看不见所有 logits 的整体平移，概率不变；可冷门行不一样：对没出现过的词，一行权重跟梯度的内积 w·g，恒等于这个词的<em>原始</em> logit 按概率加权求和（输出层没有偏置、不跟 embedding 共享时的精确恒等式；出现过的词还多一项）。所以整体水平一低，冷门行每步收到的那份「往下压」就少了 —— 这一环在第 300 步上直接量到了。这个方向上的漂移，在这里不会让训练出事，只是两边各漂各的，漂出了一截差。</p>
   <details class="foldfig"><summary><b>外面的人怎么说</b>：z-loss 管的就是这个方向</summary>
   <p>PaLM 训练时专门加了一项 z-loss，把 softmax 的归一化项 log Z 往 0 拉（arXiv:<a href="https://arxiv.org/abs/2204.02311" target="_blank" rel="noopener">2204.02311</a>）；也有人发现输出 logits 整体漂得越来越负，训练会发散，z-loss 能管住（Wortsman 等，arXiv:<a href="https://arxiv.org/abs/2309.14322" target="_blank" rel="noopener">2309.14322</a>）。</p></details>
@@ -5742,7 +5744,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="604.8823529411765" y="419" width="18" height="18" rx="9" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="2"/>
 <text class="svgsm" x="613" y="412" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确 dgrad -7.30e-05</tspan></text>
 <rect x="913.470588235294" y="419" width="18" height="18" rx="9" fill="#9334e6" stroke="#fff" stroke-width="2"/>
-<text class="svgsm" x="922" y="392" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确轨迹第二份 -1.16e-04</tspan></text>
+<text class="svgsm" x="922" y="392" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精确轨迹（权重扰动 1e-6） -1.16e-04</tspan></text>
 <rect x="992.4117647058822" y="419" width="18" height="18" rx="9" fill="#1a73e8" stroke="#1a73e8" stroke-width="2"/>
 <text class="svgsm" x="1001" y="412" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU -1.27e-04</tspan></text>
 <rect x="1179.0" y="419" width="18" height="18" rx="9" fill="#9334e6" stroke="#fff" stroke-width="2"/>
@@ -5906,7 +5908,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <span class="sub">（22 秒，Manim 渲染，可一步一步看。色块长度是带符号均值之差，不是 <a href="#s9-3">§9.3</a> 拆账图的百分比。）</span></figcaption></figure>
 
   <h3 id="s9-2">9.2　出处总表：最终 golden 对上游默认改了什么</h3>
-  <p>每一处改动一行：改了什么、原来、最终 golden、方向（GPU 向 TPU、TPU 向 GPU，还是两边向精确值）、为什么。几行例子：</p>
+  <p>每一处改动一行：改了什么、原来、最终 golden、方向（GPU 向 TPU、TPU 向 GPU，还是两边向精确值）、为什么。几行例子（表里不止三行：golden 谱系的三步之外，还有先对齐的超参、数据、并行和 kernel 选择）：</p>
   <table class="t9"><thead><tr><th>改了什么</th><th>原来</th><th>最终 golden</th><th>方向</th><th>为什么</th></tr></thead><tbody>
   <tr><td>计算精度</td><td>BF16 混合精度</td><td>前向反向全部 FP32，权重仍按 BF16 用</td><td>两边向精确值</td><td>精确轨迹站在 TPU 一边（<a href="#s8-5">§8.5</a>）</td></tr>
   <tr><td>TF32</td><td>容器默认开</td><td>环境变量关，启动实测 ≤ 1e-5</td><td>两边向精确值</td><td>不关，「FP32」就不是 FP32（<a href="#s5-3">§5.3</a>）</td></tr>
