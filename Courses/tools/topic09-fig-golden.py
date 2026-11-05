@@ -121,7 +121,7 @@ assert N.ACC[0][0].startswith("param_norm") and GATE1_PN == 3.45
 
 def fig_twolayer():
     f = Fig(W, "上一层：第一关，必须过。TPU 对精确轨迹那一份比；尺子例外地借 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换精确）5 份两两 10 对的散布，因为精确轨迹自己是确定性的，量不出噪声。"
-               + ("旁边另做两份交叉核对，都只报不判：一份尺子换成精确轨迹扰动版 5 份两两 10 对，参数范数 %.2f 倍、loss 全程 %.2f 倍、梯度范数 %.2f 倍超过 2，loss 尾段 %.2f 倍待定；"
+               + ("旁边另做两份交叉核对，都只报不判：一份尺子换成精确轨迹 5 份（基线＋4 份扰动版）两两 10 对，参数范数 %.2f 倍、loss 全程 %.2f 倍、梯度范数 %.2f 倍超过 2，loss 尾段 %.2f 倍待定；"
                "另一份换成 TPU 自己的执行噪声 28 对，只有参数范数 %.2f 倍超过 2，loss 全程 %.2f 倍、尾段 %.2f 倍待定，梯度范数 %.2f 倍过。"
                % (N.XCHK_SELF["param_norm"], N.XCHK_SELF["loss 全程"], N.XCHK_SELF["grad_norm"], N.XCHK_SELF["loss 尾段"],
                   N.XCHK_TPU_PN, N.XCHK_TPU_LOSS, N.XCHK_TPU_TAIL, N.XCHK_TPU_GN))
@@ -143,7 +143,7 @@ def fig_twolayer():
     # R4 一致性第 15 条：讲义和课件都说「两份交叉核对」，原图只画了 TPU 执行噪声那一份 → 两份都画，共一句「只报不判」
     XS = N.XCHK_SELF
     for k, (yx, t1, t2) in enumerate([
-            (py + 112, "交叉核对一：精确轨迹扰动版 5 份 · 两两 10 对",
+            (py + 112, "交叉核对一：精确轨迹 5 份（基线＋4 份扰动版）· 10 对",
              "param_norm %.2f× · loss %.2f× / 尾段 %.2f× · grad_norm %.2f×" % (XS["param_norm"], XS["loss 全程"], XS["loss 尾段"], XS["grad_norm"])),
             (py + 174, "交叉核对二：TPU 执行噪声 28 对", "param_norm %.2f× · loss %.2f× / 尾段 %.2f× · grad_norm %.2f×" % (N.XCHK_TPU_PN, N.XCHK_TPU_LOSS, N.XCHK_TPU_TAIL, N.XCHK_TPU_GN))]):
         f.box(892, yx, 456, 54, "#fff", GY2, 10, sw=1.6, dash="5 4")
@@ -169,7 +169,7 @@ def fig_twolayer():
     yb = f.src(yb + 10,
                "📌 实测：param_norm 带符号均值的噪声上限，精确轨迹扰动出来的五份两两 10 对 %s，③ 那组 GPU 重跑 10 对 %s，同一量级；正式判定按事先写定的协议借后者，验收中途不换尺子。"
                % (("%.2e" % N.EXACT_SELF_PN).replace("e-0", "e-"), ("%.2e" % N.GPU_RERUN_PN).replace("e-0", "e-")),
-               "📌 实测：v5p 当前配置第一关 param_norm %.2f 倍不过、loss 两项和梯度范数待定；交叉核对一（噪声换成精确轨迹扰动版 5 份两两 10 对）param_norm %.2f 倍不过、loss 全程 %.2f 倍不过、尾段 %.2f 倍待定、梯度范数 %.2f 倍不过；交叉核对二（TPU 执行噪声 28 对）param_norm %.2f 倍不过、loss 全程 %.2f 倍和尾段 %.2f 倍待定、梯度范数 %.2f 倍过；v7x param_norm 3.53 倍不过。"
+               "📌 实测：v5p 当前配置第一关 param_norm %.2f 倍不过、loss 两项和梯度范数待定；交叉核对一（噪声换成精确轨迹 5 份（基线＋4 份扰动版）两两 10 对）param_norm %.2f 倍不过、loss 全程 %.2f 倍不过、尾段 %.2f 倍待定、梯度范数 %.2f 倍不过；交叉核对二（TPU 执行噪声 28 对）param_norm %.2f 倍不过、loss 全程 %.2f 倍和尾段 %.2f 倍待定、梯度范数 %.2f 倍过；v7x param_norm 3.53 倍不过。"
                % (GATE1_PN, N.XCHK_SELF["param_norm"], N.XCHK_SELF["loss 全程"], N.XCHK_SELF["loss 尾段"], N.XCHK_SELF["grad_norm"], N.XCHK_TPU_PN, N.XCHK_TPU_LOSS, N.XCHK_TPU_TAIL, N.XCHK_TPU_GN))
     f.save("fig9-twolayer.svg", yb + 14)
 

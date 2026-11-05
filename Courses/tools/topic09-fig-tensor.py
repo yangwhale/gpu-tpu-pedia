@@ -54,7 +54,7 @@ def fig_cos():
             x = px + 18 + [0, 110, 210, 300][j]
             col = GR if c.startswith("✓") else (RD if c == "✕" else INK)
             f.t(x, py + 44 + i * 44, c, col, i == 0 or j == 0, 14)
-    f.t(px + 18, py + 44 + 4 * 44 + 10, "差很小时 1 − cos ≈ ½·rel_L2²：", GY, size=13)
+    f.t(px + 18, py + 44 + 4 * 44 + 10, "长度相同、差很小时 1 − cos ≈ ½·rel_L2²：", GY, size=13)
     f.t(px + 18, py + 44 + 4 * 44 + 32, "cos 0.999 ≈ rel_L2 4.5%", GY, True, 13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "主判看 rel_L2：差占信号几成；梯度一定要配范数比", [

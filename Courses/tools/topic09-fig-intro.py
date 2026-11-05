@@ -72,6 +72,9 @@ def fig_assoc():
 
 
 # ── fig9-ruler ────────────────────────────────────────────────────
+ARM_SPREAD = max(N.TPU_ARMS) - min(N.TPU_ARMS)          # 6.3e-5
+RULER_SPREAD = N.GPU_RUNS10_HI - N.GPU_RUNS10_LO        # 6.7e-5
+assert 0.5 < ARM_SPREAD / RULER_SPREAD < 1.5, (ARM_SPREAD, RULER_SPREAD)
 def fig_ruler():
     f = Fig(W, "横轴是第 301 到 1000 步 loss 的平均相对偏差，以第一份 GPU 运行为准。"
                "灰色一段是 GPU 用同样设置再跑 10 次落下的范围，从负万分之 0.65 到正百万分之 2.4。"
@@ -92,6 +95,8 @@ def fig_ruler():
         v = LO + i * 0.5e-4
         f.line(X(v), yl - 6, X(v), yl + 6, GY2, 1.2, arrow=False)
         f.t(X(v), yl + 48, "0" if abs(v) < 1e-12 else "%+.1f×10⁻⁴" % (v * 1e4), GY, size=13, anchor="middle")
+    # L12 评审 S3：0 在哪、为什么灰段不以 0 为中心 —— 先把 0 是谁标出来（贴右沿的原因在 fig9-baseline）
+    f.t(X(0), yl + 68, "基线 ＝ 第一份 GPU", INK, True, 13, "middle")
     f.box(X(N.GPU_RUNS10_LO), yl - 22, X(N.GPU_RUNS10_HI) - X(N.GPU_RUNS10_LO), 44, LINE2, GY2, 6)
     f.t((X(N.GPU_RUNS10_LO) + X(N.GPU_RUNS10_HI)) / 2, yl - 34, "10 次 GPU 重跑都在这儿", GY, True, 14, "middle")
     for k, v in enumerate(N.TPU_ARMS):
@@ -107,7 +112,10 @@ def fig_ruler():
     yb = f.src(yb + 10,
                "📌 实测：10 次同设置 GPU 运行（含 3 份原始 golden）的带符号均值 −2.5e-5 ± 2.7e-5（均值 ± 标准差），范围 −6.5e-5 至 +2.4e-6。",
                "📌 实测：TPU 原样 −1.66e-4、不开重算 −1.35e-4、改编译器片上内存上限 −1.03e-4；标准差个数 ＝ (TPU − GPU 均值) ÷ GPU 标准差（本课推导）。",
-               "📌 实测：第一份 GPU 运行几乎贴着 10 次的最上沿（排第三高）；扣掉 10 次的均值以后，TPU 三种跑法仍偏 −0.8e-4 到 −1.4e-4。")
+               "📌 实测：第一份 GPU 运行几乎贴着 10 次的最上沿（排第三高）；扣掉 10 次的均值以后，TPU 三种跑法仍偏 −0.8e-4 到 −1.4e-4。",
+               "📌 实测：三个蓝点彼此也散开约 %.0fe-5，跟灰段（约 %.0fe-5）差不多宽：是整团挪了，不是哪一种跑法单独跑偏。" % (ARM_SPREAD * 1e5, RULER_SPREAD * 1e5),
+               "📌 实测：最左是原样跑：逐步稳定在 −1.5e-4 上下，第 301–1000 步平均 −1.66e-4 —— 开头说的「万分之一点五」就是它。",
+               "注：落在尺子外 ≠ 判不过；正式判法见判定那张图（r ＝ 被测 ÷ 噪声上限 N）。")
     f.save("fig9-ruler.svg", yb + 14)
 
 
