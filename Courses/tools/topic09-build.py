@@ -148,6 +148,7 @@ __FIG_ASSOC__
   <p>一次矩阵乘就是成千上万次这样的加法，GPU 和 TPU 切块不同、加的顺序不同，末位必然不同；末位一不同，某个 token 就可能挑了另一个专家，几百步之后两条轨迹必然分开。
     开场第二问的答案也在这儿：<b>GPU 自己跑两遍也不一位不差</b>。反向里有很多线程往同一个格子里加数（原子加），谁先算完谁先加进去，每次的先后都不一样。
     前向通常是确定的，所以两次运行第 1 步的 loss 一样；从反向开始才分叉。</p>
+  <p>换顺序能差多少？有人把 8 个大小悬殊的数（±1e-10、±1e-5、±1e-2、±1）随机打乱求和 1 万次，得到 102 种不同的结果；同一篇文章也指出，大模型的前向在同一台机器上重跑是逐位一样的，常见要原子加的只有 scatter_add 和 FlashAttention 的反向这类算子（Thinking Machines，<em>Defeating Nondeterminism in LLM Inference</em>，2025）。</p>
 
   <h3>1.2　那拿什么当尺子：GPU 自己跟自己的差</h3>
   <p>GPU 上跑出来的标准答案叫 <b>golden</b>。同样设置的 GPU 再多跑几次，两两之间的差有多大，就是<b>噪声</b>。拿它当尺子：</p>
@@ -269,6 +270,7 @@ __FIG_PAIRS__
   <ul>
     <li><b>只对一份事先指定的基线比</b>，不对几份 golden 取平均，也不取最差：N 量的是「两份运行之间差多少」，被测也该是跟一份运行比，两边口径才一样。对平均比太松，对最差比太严。</li>
     <li><b>代价</b>：基线自己也是一个样本，换一份当基线，结果可能挪动约一个噪声单位（这一次第一份 GPU 运行正好在 10 次的最上沿）。N 取最大值，能兜住「基线贴边」造成的误判；被测值本身被带偏多少，可以拿 10 次的均值再算一遍核对 —— 扣掉均值，TPU 仍偏 −0.8e-4 到 −1.4e-4。</li>
+    <li><b>这其实是 A/A 测试</b>：做线上实验的人有个老问法 ——「要是两边其实一模一样，这个差有多稀奇？」两组都吃安慰剂（Microsoft ExP 团队的 A/A 测试博客）。样本少时它会骗人：同一套超参只换随机种子跑 10 次，分成两组各 5 次，两组曲线就能「统计上显著不同」（Henderson 等，<em>Deep Reinforcement Learning that Matters</em>，arXiv:1709.06560）。本课的噪声只含执行噪声，种子和数据顺序两边都固定。</li>
     <li><b>这一次的缺口</b>：正式验收用的 GPU 重跑只有 5 份、10 对，低于上面那条建议线；判成「待定」的那几项，下一步就是补参照重判。</li>
   </ul>
 
@@ -308,6 +310,7 @@ __ANIM_FLIP__
   <ul>
     <li><b>判据</b>：给路由器喂两边完全相同的输入，翻转是 0；两边的路由打分本来就按 FP32 算，照样翻 —— 根子在路由器的输入差，不在路由器自己的精度。</li>
     <li><b>尺子也要换</b>：GPU 前向是确定的，自己重跑路由一个不变 —— 拿 GPU 重跑当噪声尺子，路由翻转在这把尺上是 0 宽度，照字面判就是「不过」。
+    <li><b>不止这一处</b>：同一份模型用推理引擎和训练框架各跑一遍前向，约 10% 的路由选得不一样，94% 的 token 至少在一层换了专家（Ma 等，arXiv:2510.11370）。常见的建议是路由打分用 FP32（Megatron Core 的 MoE 文档）—— 这里两边本来就是 FP32 打分，挡不住，因为差在路由器的输入里。</li>
     <li><b>怎么用</b>：张量比较里先看零元素比例和路由槽位；路由翻了的专家，要按「两边选中同一批 token」重比，不能直接判算错。</li>
   </ul>
 
@@ -336,16 +339,24 @@ __FIG_FORMATS__
 __FIG_TRUNCATE__
 __ANIM_TRUNC__
   <p>收银台的比方：每一单抹零，单单都只少不多。四舍五入有时多有时少，单数一多就抵消了；抹零不会，单数越多少得越多。
-    张量核就是在每 16 个乘积这一单上抹零，而一次长求和有成千上万单。</p>
+    张量核就是在每 16 个乘积这一单上抹零，而一次长求和有成千上万单。看上去是 FP32，末尾那几位其实从来没算过。</p>
+  <details class="foldfig"><summary><b>外面的人也量到了</b>：这个模型不是我们一家之言</summary>
+  <ul>
+    <li>V100 时代就有人量出：张量核里乘积精确，加法向零舍入，只在最后规格化（Fasi、Higham、Mikaitis、Pranesh，<em>Numerical behavior of NVIDIA tensor cores</em>，PeerJ Computer Science，2021）。</li>
+    <li>对 H100／B200 的比特级建模，BF16 进、FP32 出：16 项一组对齐、截断 —— 跟本课在 B200 上独立量出的模型一致（Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>，arXiv:2512.07004）。</li>
+    <li>同一类问题在 FP8 上更凶：DeepSeek-V3 报告实测 H800 上 FP8 矩阵乘的累加只保留约 14 位，于是每 128 个元素搬到 CUDA core 用 FP32 加一次（arXiv:2412.19437 §3.3.2）。口径不同，只借问题的类型，不比大小。</li>
+    <li>对照：Kahan 求和是每一单把抹掉的零头记账、下一单补回去，误差几乎不随长度长；成对求和像淘汰赛，误差随长度按对数长。张量核的抹零正好是反面。</li>
+  </ul></details>
 
   <h3>5.3　TF32：开关说的不算</h3>
 __FIG_TF32__
   <p>TF32 是 NVIDIA 张量核上的 19 位格式：FP32 的矩阵乘一进张量核，就悄悄按 10 位尾数算。训练容器默认开着它，所以名义上的「FP32」常常不是 FP32。
     要拿来当精确参照的程序，每次启动都实测一遍，把实测值记进运行的元数据。</p>
+  <p>开关为什么这么乱：PyTorch 里矩阵乘的 TF32 开关 1.7–1.11 版默认开、1.12 起默认关，cuDNN 那个开关一直默认开；另有一个环境变量 <code>NVIDIA_TF32_OVERRIDE=0</code> 压过所有 PyTorch 设置、全局关掉 TF32（PyTorch CUDA semantics 文档）。几层开关谁压过谁，读回来的值说明不了实际走了哪条路。</p>
 
   <h3>5.4　TPU：MXU，和 FSDP 下多舍的那几次</h3>
   <p>TPU 的矩阵单元 MXU 同样吃 BF16、乘积精确、在 FP32 里累加。同一份输入算路由打分，TPU 对 FP64 的相对误差是 4.8e-8，GPU 是 3.8e-6；长求和上 TPU 也会偏，但小得多。
-    MXU 累加是不是就近舍入，没有直接证据，是推断。</p>
+    MXU 累加是不是就近舍入，没有直接证据，是推断。「TPU 上矩阵乘用 BF16 乘、FP32 累加」有公开出处（ST-MoE，arXiv:2202.08906 的脚注）。</p>
   <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。</p>
 __FIG_WINDOWED__
 
@@ -405,6 +416,7 @@ __FIG_ROWS__
 __FIG_EPS__
   <p>还记得专题四里 Adam 的那个比方吗？它像一个自动音量均衡，把每个参数的步子拉成差不多大。可声音小到比 ε 还小时，均衡器就不放大了，输出跟输入成正比 ——
     梯度的方向一变，更新就原样跟着变。在平台区，每个元素的更新约等于 ±1，细节被抹平；在 ε 区，更新正比于梯度，所以冷门行「大小一样、方向差一点」，就足够让它们压多压少不同。</p>
+  <p>别人也见过这件事：梯度的均方根小到跟 ε 同一量级时，Adam 的步子就会跟着变小（Wortsman 等，<em>Small-scale proxies for large-scale Transformer training instabilities</em>，arXiv:2309.14322）；PaLM 的报告也提过，冷门词的嵌入二阶矩估得不准（arXiv:2204.02311）。</p>
 
   <h3>7.5　按成本从低到高验，排除了一串</h3>
   <p>先查配置和名单（几分钟），再跑几十步的短运行，最后才跑 1000 步。下面这些都查过，不是原因：</p>
@@ -431,6 +443,7 @@ __FIG_EPS__
 
   <h3>8.1　一个让所有 logits 一起升降的方向</h3>
 __FIG_GAUGE__
+  <p>这个方向别人也盯过：PaLM 训练时专门加了一项 z-loss，把 softmax 的归一化项 log Z 往 0 拉（arXiv:2204.02311）；也有人发现输出 logits 整体漂得越来越负，训练会发散，z-loss 能管住（Wortsman 等，arXiv:2309.14322）。在这里它不会发散，只是两边各漂各的，漂出了一截差。</p>
 
   <h3>8.2　双向干预：去掉它、加上它</h3>
 __FIG_INTERVENE__
@@ -511,6 +524,7 @@ __FIG_REGRESS__
   <tr><td>会改数值</td><td>改精度、算法、默认配置、并行或重算设置；会改变融合、分块的性能改动</td><td>写明是<b>执行级</b>（只改舍入位置，比如融合、分块变了）还是<b>数学级</b>（公式、精度、算法变了），以及会影响哪些检查；执行级用 TPU 执行噪声判，数学级对起点那份 GPU golden（§9.1 的①）不能变差 —— 这道门是两关验收定下来之前设的，还没换</td></tr>
   <tr><td>升级依赖</td><td>框架、编译器、kernel 库、镜像、编译开关</td><td>先要求逐位；不逐位按执行级判，并做归因</td></tr>
   </tbody></table>
+  <p>为什么不能指望「换个版本也一样」：PyTorch 自己的文档就写明，不保证跨版本、跨提交、跨平台的结果完全可复现。所以噪声标定和上一次全过的运行都要绑死版本。</p>
   <p>回归失败了，先补跑一次上次通过的那个提交：它也不逐位，变的是环境（镜像、硬件）；它逐位，再在两次提交之间二分。
     TPU 执行噪声的标定绑死平台、档位、训练配置和依赖版本；配置换了就重标：FP32 累加开关打开以后，上一次全过的运行（LKG）同一个提交双跑逐位、负责人批准后重建，那 7 个扰动臂在新配置下重跑全过，28 对重新标定。</p>
 
@@ -534,8 +548,18 @@ __FIG_REGRESS__
   </tbody></table>
 
   <h3>10.4　回到开头</h3>
-  <p>TPU 的 loss 低万分之一点五，按参考档早就能交差；按噪声尺子，它是 3 到 5 个标准差的真偏差。顺着五级往下查，查到最后偏的是 GPU 的 golden ——
+  <p>TPU 的 loss 低万分之一点五，按参考档早就能交差；按噪声尺子，它远在 GPU 重跑的范围之外，是真偏差。顺着五级往下查，查到最后偏的是 GPU 的 golden ——
     <b>一次 12 万长的 BF16 求和，每一单都抹了零</b>。所以这一讲只立一句话：<b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差。</b></p>
+
+  <details class="foldfig"><summary><b>延伸阅读</b>：想把这一讲的几个底层问题读透，从这几篇开始</summary>
+  <ul>
+    <li>浮点加法为什么换顺序就变、前向为什么其实是确定的：Thinking Machines，<em>Defeating Nondeterminism in LLM Inference</em>（2025）。</li>
+    <li>张量核里的累加到底怎么舍：Fasi 等，<em>Numerical behavior of NVIDIA tensor cores</em>（PeerJ Computer Science，2021）；Khattak、Mikaitis，<em>Accurate Models of NVIDIA Tensor Cores</em>（arXiv:2512.07004）。</li>
+    <li>低精度累加在大模型训练里的代价与对策：DeepSeek-V3 技术报告 §3.3.2（arXiv:2412.19437）。</li>
+    <li>logits 漂移、ε 与训练不稳定：Wortsman 等，<em>Small-scale proxies for large-scale Transformer training instabilities</em>（arXiv:2309.14322）。</li>
+    <li>MoE 路由两套引擎选得不一样：Ma 等，<em>Stabilizing MoE Reinforcement Learning by Aligning Training and Inference Routers</em>（arXiv:2510.11370）。</li>
+    <li>拿噪声当尺子：Microsoft ExP 团队关于 A/A 测试的博客；Henderson 等，<em>Deep Reinforcement Learning that Matters</em>（arXiv:1709.06560）。</li>
+  </ul></details>
 
   <details class="foldfig"><summary><b>出处台账</b>：每个结论来自哪一次测量（混元 3 截 4 层；除标「本课推导」外都是实测，步数、配置、单算子还是整网，见右栏）</summary>
   <table class="t9"><thead><tr><th>结论</th><th>材料与测量条件</th></tr></thead><tbody>
@@ -726,7 +750,7 @@ import hashlib  # noqa: E402
 _BANNED = [("850ca8e0ec3f", 5), ("5c58c51f38f6", 8), ("7853225b8ee4", 2), ("53874092e000", 2),
            ("1637f2d1f2f6", 10), ("e134c033e88f", 7), ("f09761d7a79c", 12), ("c68c12825750", 5)]
 import glob  # noqa: E402
-_SRC = "\n".join(io.open(_f, encoding="utf-8").read() for _f in sorted(glob.glob(os.path.join(HERE, "topic09*"))))
+_SRC = "\n".join(io.open(_f, encoding="utf-8").read() for _f in sorted(glob.glob(os.path.join(HERE, "topic09*")) + glob.glob(os.path.join(HERE, "manim", "topic09-anim-*.py"))))
 _hits = set()
 for _n in sorted({n for _h, n in _BANNED}):
     _want = {h for h, n in _BANNED if n == _n}
