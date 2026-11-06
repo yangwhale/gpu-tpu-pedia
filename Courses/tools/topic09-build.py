@@ -330,7 +330,7 @@ __ANIM_FLIP__
     给路由器喂两边完全相同的输入，翻转是 0；输入换成 TPU 自己算出来的（跟 GPU 差 rel_L2 «ROUTE_IN_RELL2_LO» 到 «ROUTE_IN_RELL2_HI»），每层就翻 «FLIP_L2_T» 的 token。根子在路由器的输入差，不在路由器自己的精度。（早先还拿全程 FP32 下的翻转当「两边精确实现不同」的证据，后来查出 TPU 那份 FP32 参照的路由专家实际是 BF16，那条结论撤回了。）排名用的是「分数 ＋ 负载均衡偏置」，选中以后加权用不带偏置的分数：偏置只管选谁。</p>
   <p>在隔离回放的一批 «BATCH_TOKENS_T» 个 token 里，第 3 层 0 号专家只分到 «E0_TOKENS» 个，换出 «E0_OUT» 个、换进 «E0_IN» 个：分到的 token 少，一个 token 的进出就是它梯度的一大块（每个 token 的贡献像方向各异的小向量，换掉 k 个、共 n 个，相对差约 √(k ÷ n) ＝ √(«E0_SWAPPED» ÷ «E0_TOKENS») ≈ «E0_SQRT_T»，跟 «STEP1_EXPERT» 同量级 —— 这个估算是推断）。
     所以张量比较里先看零元素比例和路由槽位；路由翻了的专家，要按「两边选中同一批 token」重比，不能直接判算错。</p>
-  <p>还有一层：会翻的不只是两种硬件。同一个 TPU 程序只改编译器的片上内存上限，第 3 层 0 号专家的梯度就差 «STEP1_EXEC_T»（TPU 对 GPU 是 «STEP1_TVG_T»）。早先说「只改执行方式路由不翻」，只在逐层隔离回放里成立。所以第 1 步整步的张量，尺子要用两侧执行噪声的并集（§9.4）。</p>
+  <p>还有一层：会翻的不只是两种硬件。同一个 TPU 程序只改编译器的片上内存上限，第 3 层 0 号专家的梯度就差 «STEP1_EXEC_T»（TPU 对 GPU 是 «STEP1_TVG_T»）。我们一度以为只改执行方式路由不翻，其实这只在逐层隔离回放（每层输入取同一份，§6.2）里成立。所以第 1 步整步的张量，尺子换成两侧执行噪声放在一起量（并集）；换了尺子仍有几层超出，另有来源，见 §9.4。（这里的 «STEP1_TVG_T» 是换尺子那组当前配置的读数，前面的 «STEP1_EXPERT» 是更早那次。）</p>
   <details class="foldfig"><summary><b>口径与旁证</b>：翻了多少槽位；推理和训练两套引擎也翻</summary>
   <ul>
     <li>隔离回放（每一层喂 GPU 那一层的输入，§6.2）里有 «FLIP_SLOTS» 的路由槽位翻了（«FLIP_TOKENS» 的 token 至少换了一个专家）。</li>
@@ -557,29 +557,29 @@ __FIG_TWOLAYER__
   <tr><td>v5p EP＝8</td><td>0.76 ✅</td><td>0.78 ✅</td><td>0.74 ✅</td><td>0.48 ✅</td><td>逐位 ✅</td></tr>
   <tr><td>v7x EP＝8</td><td>0.77 ✅</td><td>0.81 ✅</td><td>0.68 ✅</td><td>0.35 ✅</td><td>逐位 ✅</td></tr>
   </tbody></table>
-  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 «FINAL_WORST_T» 倍</b>；按专家切（EP＝8）四项也过（这一档没测路由偏置曲线和健康信号）；当前配置的路由偏置曲线和健康信号也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden 的差，照样在第二关报。TPU 一侧也不是挑出来的好样本：只改执行参数的 «ENSEMBLE_RUNS» 份扰动运行（v5p «ENSEMBLE_V5P»、v7x «ENSEMBLE_V7X»），«ENSEMBLE_OK» 份四项都不超过 «FINAL_WORST_T» 倍；剩 1 份（v7x，注意力分块 1024）梯度范数待定（«ENSEMBLE_PEND_T»），落在 v7x 自己的执行噪声里：v7x 扰动组两两的梯度范数逐步涨落比 GPU 重跑宽约两成。对 GPU 生产 golden ② 的差（参数范数 ＋«VS_RC_PN»，loss «VS_RC_LOSS_V5P_T»）写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
+  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 «FINAL_WORST_T» 倍</b>；按专家切（EP＝8）四项也过（这一档没测路由偏置曲线和健康信号）；当前配置的路由偏置曲线和健康信号也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden 的差，照样在第二关报。TPU 一侧也不是挑出来的好样本：只改执行参数的 «ENSEMBLE_RUNS» 份扰动运行（v5p «ENSEMBLE_V5P»、v7x «ENSEMBLE_V7X»），«ENSEMBLE_OK» 份四项都不超过 «FINAL_WORST_T» 倍；剩 1 份（v7x，注意力分块 1024）梯度范数待定（«ENSEMBLE_PEND_T»），落在 v7x 自己的执行噪声里：v7x 扰动组两两的梯度范数逐步涨落比 GPU 重跑宽约两成。对 GPU 生产 golden ② 的差（参数范数 ＋«VS_RC_PN»，loss «VS_RC_LOSS_V5P_T»（v5p））写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
   <details class="foldfig"><summary><b>怎么走到 10 份、两两 45 对的</b>：10 对时有两项待定；两处测量口径；补 5 份重跑</summary>
   <ol>
     <li>先只有 ⑤ 的 5 份（10 对），v5p 的梯度范数、v7x 的梯度范数和参数范数落在 «PEND10_T» 倍的待定区。</li>
     <li>查出两处测量口径（不是数值差）：TPU 记的参数范数是整网一次 FP32 归约，自己的单步误差 «PN_MEAS_TPU_T»，跟 GPU 重跑两两的单步差 «PN_RERUN_STEP_T» 一样宽（GPU 同样比法只有 «PN_MEAS_GPU_T»），改读按组求和再合成的值；梯度范数逐步涨落约 3%，以 golden 当分母时带符号均值有约 1e-3 的正偏，两两配对按哪边在前，N 从 «GN_N_AB_T» 变成 «GN_N_BA_T»，改用两边均值当分母。改完 10 对下仍有两项待定。</li>
     <li>所有 r 都在 0.7–1.3 之间，没有一项明显偏大，像是参照太少（N 取最大值，样本越少越窄）。按协议「待定先补参照」，再跑 5 份，10 份两两 45 对把它们全部收进来，最差 «FINAL_WORST_T»。不做那两处口径改正，45 对（10 份两两）下也全部过，最差 «FINAL_WORST_OLDCAL_T»。</li>
   </ol></details>
-  <details class="foldfig"><summary><b>1000 步这一级全过；L0–L3 还有几格不是「严格档过」</b>：每一格都对上了一条机制</summary>
+  <details class="foldfig"><summary><b>1000 步这一级全过；其余几级还有几格不是「严格档过」</b>：每一格都对上了一条机制</summary>
   <table class="t9"><thead><tr><th>检查</th><th>为什么</th></tr></thead><tbody>
   <tr><td>TPU 原生数据加载器与 GPU 逐样本一致（L0）</td><td>切小份的顺序不同（§2.1）；对齐时原样回放 GPU 的数据，每一步每张卡的输入指纹全部相同</td></tr>
   <tr><td>v7x 单算子、单层前向（L1、L2）</td><td>按当前配置重跑后，v7x 四层前向 R 比 «V7X_L2_R_T»（开关前 1.53–1.57），v5p 也全过；只剩第 2 层 MoE 块 R «V7X_MOE_R» 一格：4096 个 token 里有 1 个在近平局处选了跟 FP64 不同的专家，去掉它 R 是 «V7X_MOE_R_DROP»（v5p 同层去掉 2 个这样的 token 是 «V5P_MOE_R_DROP»）。一两个 token 就能让这个比值跨线，反映的是路由翻转；路由本身另有检查，两平台都过</td></tr>
-  <tr><td>第 1 步整步的参数梯度、优化器状态（L2、L3；尺子换成两侧执行噪声的并集后，v5p 待定 1.05–1.75，第 0–2 层参数梯度不过 2.1 ／ 4.5 ／ 2.3；v7x 待定 1.05–1.86，第 1 层不过 3.1）</td><td>两处来源：路由近平局翻转（§4.3），每层 «FLIP_SLOT_T» 的槽位两边各落一边；另一处是 TPU 有几类参数的梯度先以 BF16 落地（下一个折叠）。v5p 第 0 层是稠密层、没有路由，那一层的不过全来自后者。整网按梯度能量只差 «STEP1_ALL»，1000 步的统计在噪声内</td></tr>
+  <tr><td>第 1 步整步的参数梯度、优化器状态（L3；尺子换成两侧执行噪声的并集后，v5p 待定 1.05–1.75 倍，第 0–2 层参数梯度不过 2.1 ／ 4.5 ／ 2.3 倍；v7x 待定 1.05–1.86 倍，第 1 层不过 3.1 倍）</td><td>两处来源：路由近平局翻转（§4.3），每层 «FLIP_SLOT_T» 的槽位两边各落一边；另一处是 TPU 有几类参数的梯度先以 BF16 落地（下一个折叠）。v5p 第 0 层是稠密层、没有路由，那一层的不过全来自后者。比到的张量合起来 rel_L2 只差 «STEP1_ALL»，1000 步的统计在噪声内</td></tr>
   <tr><td>第 1 步更新后主权重（L3，v5p 待定 «MASTER_W_V5P» 倍，v7x 过 «MASTER_W_V7X»）</td><td>同上的下游，量级很小；对 FP64 按能量 R «MASTER_W_FP64_R»，TPU 的更新量反而更接近精确</td></tr>
-  <tr><td>v7x 更新后路由偏置（L3）</td><td>192 个专家里 1 个翻号。平均负载 «BIAS_MEAN_T» 个 token；按 FP64 整步算，这个专家选中 «BIAS_TOKENS_FP64» 个，比均值少，偏置该加 —— v7x 跟精确算术一致，是 GPU 差一个 token 落到了均值另一边</td></tr>
+  <tr><td>v7x 更新后路由偏置（L3）</td><td>192 个专家里 1 个翻号。平均负载 «BIAS_MEAN_T» 个 token；按 FP64 整步算，这个专家选中 «BIAS_TOKENS_FP64» 个，比均值少，偏置该加 —— v7x 跟精确算术一致，GPU 三份和 v5p 都差一个 token 落到了均值另一边。判不过是因为 24 对噪声里没有一对翻号，尺子宽度是 0</td></tr>
   <tr><td>开不开抓数，结果逐位相同（L4）</td><td>加抓数输出会改变编译器的融合（§6.1），所以正式验收用不加钩子的构建</td></tr>
   </tbody></table></details>
-  <details class="foldfig"><summary><b>第 1 步的张量换了尺子</b>：两侧执行噪声的并集；FP64 定责；TPU 一处梯度先以 BF16 落地</summary>
+  <details class="foldfig"><summary><b>第 1 步的张量换了尺子</b>：两侧执行噪声放在一起量；对 FP64 分清谁更远；TPU 三类参数的梯度先舍成 BF16</summary>
   <ul>
-    <li><b>为什么换</b>：第 1 步 GPU 重跑路由一个不翻，尺子对路由翻转宽度是 0；可 TPU 只改执行参数也会翻。第 1 步整步的张量改用两侧执行噪声的并集当尺子：GPU 第 1 步重跑 «UNION_GPU_PAIRS» 对 ＋ TPU 只改执行参数的 «UNION_TPU_RUNS» 份两两 «UNION_TPU_PAIRS» 对，共 «UNION_PAIRS» 对。</li>
-    <li><b>逐层隔离回放的反向</b>：每层输入固定，只改执行方式时路由不翻，改按 FP64 的 R 比判：v5p «ISO_BWD_V5P_T»，v7x «ISO_BWD_V7X_T»，全部 ≤ «R_GATE»，这一项关掉了。</li>
-    <li><b>整步超出并集的部分对 FP64 定责</b>（只报不判）：整网按能量 R «STEP_R_T»。投影、共享专家、稠密 MLP 的梯度 R «STEP_R_PROJ_T»，TPU 更接近精确；路由专家与路由权重 «STEP_R_EXPERT_T»，两边差不多远，来自路由近平局；一维 norm 权重、输出层、embedding 的梯度 TPU 更远，最高 «STEP_R_NORMMAX_V5P»（v7x «STEP_R_NORMMAX_V7X»）。</li>
-    <li><b>后面那一处的机制</b>（逐一用诊断改动验证过）：TPU 框架把这几类 FP32 参数先转成 BF16 再用，梯度在每个设备、每份小批上先以 BF16 落地，再累加回 FP32；GPU 框架把权重梯度直接累加进 FP32。三个地方：RMSNorm 把 scale 舍到 BF16（JAX 在反向对梯度也舍一次）；输出层的权重在收集之前先转 BF16；embedding 整张表先转 BF16 再取行，反向的散加也在 BF16 里。逐处改掉后 R：«ARM_R_T»；三处一起，整网 1.20 → 0.67，第 1 步 loss 一位不变。</li>
-    <li><b>对应的开关</b>：三个，默认关，前向不变，v5p 步时 ＋«GRAD_FP32_COST_T»。打开以后 1000 步这一级的复核还在跑，结果没出来之前不写结论；加不加进对齐配置由项目负责人定。</li>
+    <li><b>为什么换</b>：第 1 步 GPU 重跑路由一个不翻，尺子对路由翻转宽度是 0；可 TPU 只改执行参数也会翻。第 1 步整步的张量改用两侧执行噪声放在一起（并集）当尺子：GPU 第 1 步重跑 3 份、两两 «UNION_GPU_PAIRS» 对，加上 TPU 只改执行参数的 «UNION_TPU_RUNS» 份、两两 «UNION_TPU_PAIRS» 对，共 «UNION_PAIRS» 对，取最大当 N。</li>
+    <li><b>逐层隔离回放的反向</b>：每层输入固定，只改执行方式时路由不翻，并集里没有路由翻转这一份，改按 FP64 的 R 比判（跟单算子、单层一样）：v5p «ISO_BWD_V5P_T»，v7x «ISO_BWD_V7X_T»，全部 ≤ «R_GATE»，这一项结案。</li>
+    <li><b>整步超出并集的部分对 FP64 定责</b>（只用来分清谁离精确更远，不当门槛）：把每个张量的误差按梯度大小加权合起来，整网 R «STEP_R_T»。投影、共享专家、稠密 MLP 的梯度 R «STEP_R_PROJ_T»，TPU 更接近精确；路由专家与路由权重 «STEP_R_EXPERT_T»，两边差不多远，来自路由近平局；一维 norm 权重、输出层、embedding 的梯度大多是 TPU 更远，最高 «STEP_R_NORMMAX_V5P»（v7x «STEP_R_NORMMAX_V7X»）。</li>
+    <li><b>后面那一处的机制</b>（逐一用诊断改动验证过）：TPU 框架把这几类 FP32 参数先转成 BF16 再用，梯度在每个设备、每份小批上先舍成 BF16 存下来（落地），再累加回 FP32；GPU 框架把权重梯度直接累加进 FP32。三个地方：RMSNorm 把 scale 舍到 BF16（JAX 在反向对梯度也舍一次）；输出层先把权重转成 BF16 再乘，权重梯度也以 BF16 输出；embedding 整张表先转 BF16 再取行，反向把梯度加回各行（散加）也在 BF16 里。逐处改掉后 R（v5p，按组）：«ARM_R_T»；三处一起，整网 1.20 → 0.67，第 1 步 loss 一位不变。</li>
+    <li><b>对应的开关</b>：三个，默认关，前向不变，v5p 步时 ＋«GRAD_FP32_COST_T»。它只管这一处，路由翻转那一份不受影响。打开以后 1000 步这一级的复核还在跑，结果没出来之前不写结论，也先不归进上面的开关表；加不加进对齐配置由项目负责人定。</li>
   </ul></details>
   <details class="foldfig"><summary><b>想两边对得更紧，要动哪些开关</b>：TPU 一侧必需两项、推荐两项，GPU 一侧一处，各有代价</summary>
   <ul>
@@ -613,7 +613,7 @@ __FIG_REGRESS__
     <li><b>假设表按成本排，排除了的也写</b>：省得后人再查一遍。</li>
     <li><b>一次只改一件事，新结果不覆盖旧的</b>；结论只写一处，错了追加更正，不悄悄改。</li>
     <li><b>工具和结果分开放</b>：工具的文档只讲方法，某个模型的结论和坑写在它自己的目录里。</li>
-    <li><b>结果带上检查目录的指纹，只算检查内容</b>：改了哪条检查，旧结果自动作废；改注释、改说明文字不改指纹，不用为了改文档重跑。</li>
+    <li><b>结果带上检查清单的指纹，只算检查内容</b>：清单里的检查一改，这份清单下的旧结果自动作废；改注释、改说明文字不改指纹，不用为了改文档重跑。</li>
     <li><b>交给别人看的文档按发布标准写</b>：份数和对数分开说（「10 份重跑，两两 45 对」，不写「45 组测试」）；每个代号就地加括号说全称；不留「待验证」挂着 —— 要么验掉，要么写清楚还缺什么。</li>
     <li><b>排查和讲课两条线互相喂</b>：讲课时说不清的地方，往往就是排查里没坐实的地方；排查的新结果当天回到课件，课件的追问再变成下一个实验。</li>
   </ul>
@@ -627,7 +627,7 @@ __FIG_JOURNEY__
   <tr><td>量错了张量</td><td>TPU 那份 FP32 参照，路由专家一段实际是 BF16（据此一度认为全程 FP32 下两边路由也会翻、两边实现不同，后来撤回）；「舍成 BF16 的参照」被编译器删掉了舍入；拿 FP32 主权重当参照，量出一个假的 «FP32_MASTER_FAKE_DIFF_T» 差</td><td>参照先对 FP64 核一遍，再拿来量别人</td></tr>
   <tr><td>钩子改了编译</td><td>TPU 上加了抓数输出的程序和生产程序不逐位</td><td>证据从程序外面拿（§6）</td></tr>
   <tr><td>尺子太短</td><td>只有 10 对时几项落在 «PEND10_T» 倍，补到 10 份两两 45 对全过；只用 3 份 GPU 运行，带符号均值的噪声上限只有一半大；精确轨迹只看一对扰动，散布像是小 «EXACT_PAIR1_X» 倍，凑齐五份再量就不小了</td><td>参照凑到 15 对以上；尺子要量真实的执行噪声</td></tr>
-  <tr><td>尺子看不见的差</td><td>第 1 步 GPU 重跑路由一个不翻，尺子对路由翻转宽度是 0；以为 TPU 只改执行参数也不翻，其实会（«STEP1_EXEC_T» 对 «STEP1_TVG_T»）</td><td>先问这把尺子能不能看见这种差；看不见就换尺子：两侧执行噪声的并集，或对 FP64</td></tr>
+  <tr><td>尺子看不见的差</td><td>第 1 步 GPU 重跑路由一个不翻，尺子对路由翻转宽度是 0；以为 TPU 只改执行参数也不翻，其实会（同一个专家的梯度，TPU 只改片上内存上限差 «STEP1_EXEC_T»，TPU 对 GPU «STEP1_TVG_T»）</td><td>先问这把尺子能不能看见这种差；看不见就换尺子：两侧执行噪声的并集，或对 FP64</td></tr>
   <tr><td>测量口径撑大了 r</td><td>TPU 的参数范数自己就测得粗（单步误差跟尺子一样宽）；梯度范数的带符号均值以 golden 当分母，交换两边不只差一个符号</td><td>被测和尺子用同样精度的量法；统计量要对两边对称</td></tr>
   <tr><td>切法也是数值的一部分</td><td>只换梯度累积的切分，embedding 梯度差到噪声的 «MICRO_SPLIT_EMB_X» 倍；只换专家并行度，反向就不逐位</td><td>golden 和噪声参照固定同一种切分</td></tr>
   <tr><td>只信配置文件</td><td>权重衰减写 «WD_CONFIG»，实际 «WD_EFFECTIVE»</td><td>对照表写运行时读出的实际值</td></tr>
@@ -681,7 +681,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>带符号均值 ／ MARE ／ 最大单步</td><td>窗口内 dₜ 的平均 ／ |dₜ| 的平均 ／ 最大 |dₜ|</td><td>窗口：全程从第 2 步起；尾段从两条轨迹分开、偏移稳定以后起（本例第 301–1000 步）；三个都判，最差的决定</td></tr>
   <tr><td>N（噪声上限）</td><td>同设置 GPU 两两配对，同口径算，取绝对值的最大</td><td>纯噪声超过 n 对最大值的概率 1/(n+1)；正式签字 ≥ 15 对</td></tr>
   <tr><td>r</td><td>|被测| ÷ N</td><td>≤ 1 过；1–2 待定；＞ 2 不过</td></tr>
-  <tr><td>哪一级用哪把尺子</td><td>L0 地基；L1/L2 单算子、单层；L3/L4 整网第 1 步、多步</td><td>L0 逐位；L1/L2 前向（GPU 重跑噪声为 0）用 R 比定责；L2 反向、L3 整网第 1 步对 GPU 重跑噪声（MoE 先查路由翻转）；L4 多步用 GPU 噪声尺子</td></tr>
+  <tr><td>哪一级用哪把尺子</td><td>L0 地基；L1/L2 单算子、单层；L3/L4 整网第 1 步、多步</td><td>L0 逐位；L1/L2 前向（GPU 重跑噪声为 0）用 R 比定责；L2 逐层反向也用 R 比（本例 GPU 重跑反向逐位、量不到路由翻转）；L3 整网第 1 步用 GPU 和 TPU 两侧执行噪声的并集（MoE 路由会翻，只看 GPU 重跑宽度为 0）；L4 多步用 GPU 噪声尺子</td></tr>
   <tr><td>rel_L2</td><td>‖被测 − 参照‖ ÷ ‖参照‖（整个张量拉直）</td><td>张量主判；长度相同时 cos 0.999 ≈ rel_L2 «COS_0999_RELL2_T»</td></tr>
   <tr><td>cos ／ 范数比</td><td>方向 ／ 长度之比</td><td>cos 看不见整体缩放；范数比 2.000 ＝ 漏除了一个 2</td></tr>
   <tr><td>R（对真值的距离比）</td><td>TPU 到 FP64 的 rel_L2 ÷ GPU 到 FP64 的 rel_L2</td><td>≈ 1 一样远；＞ «R_GATE» 查 TPU；≈ «R_ONE_EXTRA_T» 像多舍了一次；＜ 1 GPU 更远</td></tr>
@@ -777,7 +777,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
     <tr><td>路由翻转对照（动画 anim-flip）：全部 token 第 8、9 名分差中位数 «ALL_MARGIN_LO» – «ALL_MARGIN_HI_T»；喂相同路由输入，两边路由打分（logits）的 rel_L2 仍约 «ROUTE_SAME_IN_DIFF»、翻转 0；输入换成 TPU 自己算的，每层翻 «FLIP_L2_T»；全程 FP32 下第 1 层翻的那个 token 分差 «FP32_FLIP_MARGIN»（据此得出的「两边实现不同」已撤回）</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 «BATCH_TOKENS» 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
   <tr><td>逐层 rel_L2：三层 «L_RELL2_1_T» ／ «L_RELL2_2_T» ／ «L_RELL2_3_T»（参考档不过、严格档过）</td><td>v5p，第 1 步逐层回放</td></tr>
   <tr><td>去掉 w̄ 方向后 loss：前半 «REMOVE_LOSS_H1_T»、后半 «REMOVE_LOSS_H2_T»（尾段平均 «REMOVE_LOSS_T»）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
-  <tr><td>第 1 步换尺子：TPU 只改片上内存上限 «STEP1_EXEC_T»、TPU 对 GPU «STEP1_TVG_T»；并集 «UNION_PAIRS» 对；隔离回放反向 R v5p «ISO_BWD_V5P_T»、v7x «ISO_BWD_V7X_T»；整步按能量 R «STEP_R_T»；逐处改掉 «ARM_R_T»；三个开关 v5p 步时 ＋«GRAD_FP32_COST_T»；路由偏置 FP64 选中 «BIAS_TOKENS_FP64»（均值 «BIAS_MEAN_T»）</td><td>第 1 步；第 3 层 0 号专家梯度；FP64 真值是同一全局批在 FP64 里求的梯度；开关后 1000 步复核未出</td></tr>
+  <tr><td>第 1 步换尺子：最差张量 TPU 只改片上内存上限 «STEP1_EXEC_T»、TPU 对 GPU «STEP1_TVG_T»；并集 «UNION_PAIRS» 对；隔离回放反向 R v5p «ISO_BWD_V5P_T»、v7x «ISO_BWD_V7X_T»；整步按能量 R «STEP_R_T»；逐处改掉 «ARM_R_T»；三个开关 v5p 步时 ＋«GRAD_FP32_COST_T»；路由偏置 FP64 选中 «BIAS_TOKENS_FP64»（均值 «BIAS_MEAN_T»）</td><td>第 1 步；前两个数是最差张量的相对差；诊断改动的 R 只在 v5p 上测；FP64 真值是同一全局批在 FP64 里求的梯度；开关后 1000 步复核未出</td></tr>
   <tr><td>（定案前）交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 «XCHK_SELF_PN» ／ «XCHK_SELF_LOSS» ／ «XCHK_SELF_TAIL» ／ «XCHK_SELF_GN»；TPU 执行噪声 28 对 «XCHK_TPU_PN» ／ «XCHK_TPU_LOSS» ／ «XCHK_TPU_TAIL» ／ «XCHK_TPU_GN»</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
   <tr><td>（定案前）EP＝8：参数范数带符号均值 «ACC_PN_X» → «EP8_PN»，«ACC_PN_R» 倍 → «EP8_R» 倍；变化 «EP8_DELTA» 小于 TPU 执行噪声上限 «TPU_NOISE_PN_N»（比较为本课推导）</td><td>v5p 当前配置，TPU 改成按专家切，对精确轨迹</td></tr>
 </tbody></table></details>
