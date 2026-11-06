@@ -501,3 +501,47 @@ HEADFP32_COST_T = "%.1f%%" % (HEADFP32_COST * 100); _lock("HEADFP32_COST_T", HEA
 DRIFT_RATIO_TRUE_T, DRIFT_RATIO_TPU_T = "%.2f" % DRIFT_RATIO_TRUE, "%.2f" % DRIFT_RATIO_TPU
 CHUNK_VS_TPUEXACT_T = tx(CHUNK_VS_TPUEXACT, "%.1e"); _lock("CHUNK_VS_TPUEXACT_T", CHUNK_VS_TPUEXACT_T, "7.9e-8")
 TPU_SHARE_OF_TRUE_T = "%.0f%%" % (PN_TPU_PROD / PN_TRUE * 100); _lock("TPU_SHARE_OF_TRUE_T", TPU_SHARE_OF_TRUE_T, "76%")
+
+# ── 11-06 定案：第一关基线 ＝ ⑤（GPU 生产＋输出头 dgrad 分段累加），尺子 ＝ ⑤ 自己 10 份两两 45 对 ─────────────
+# 出处（实测）：对齐报告 §3–§8（11-06 定案版）。每格是三个统计里对 N 最差的 r。
+FINAL_RUNS, FINAL_PAIRS = 10, 45
+assert FINAL_PAIRS == FINAL_RUNS * (FINAL_RUNS - 1) // 2
+FINAL = [  # (平台·配置, loss 全程, loss 尾段, grad_norm, param_norm, 路由偏置曲线)
+    ("v5p 当前对齐配置", 0.80, 0.80, 0.85, 0.50, 0.78),
+    ("v7x 当前对齐配置", 0.82, 0.83, 0.85, 0.53, 0.75),
+    ("v5p EP＝8", 0.76, 0.78, 0.74, 0.48, None),
+    ("v7x EP＝8", 0.77, 0.81, 0.68, 0.35, None),
+]
+FINAL_WORST = max(max(v for v in row[1:] if v is not None) for row in FINAL)
+assert FINAL_WORST == 0.85
+FINAL_WORST_OLDCAL = 0.84                     # 不做两处口径改正，45 对下最差
+PEND10_LO, PEND10_HI = 1.02, 1.24             # 只有 5 份 10 对时的待定区
+ENSEMBLE_RUNS, ENSEMBLE_V5P, ENSEMBLE_V7X = 7, 5, 2
+ENSEMBLE_SPREAD_TPU, ENSEMBLE_SPREAD_GPU = 5.4e-5, 9.5e-5   # loss 带符号均值两两散布：TPU 扰动组 / GPU 重跑
+assert ENSEMBLE_V5P + ENSEMBLE_V7X == ENSEMBLE_RUNS
+PN_MEAS_TPU, PN_MEAS_GPU, PN_RERUN_STEP = 2.6e-7, 8e-8, 2.7e-7   # param_norm 自测误差（单步最大差）：TPU 整网一次归约 / GPU；GPU 重跑两两单步最大差
+GN_N_AB, GN_N_BA = 1.26e-3, 2.49e-3           # grad_norm 带符号均值的 N，随配对方向变
+GN_JITTER = 0.03
+VS_RC_PN, VS_RC_LOSS_V5P, VS_RC_LOSS_V7X = 2.09e-2, -1.37e-4, -1.07e-4
+CHUNK_SEG, CHUNK_STEP_OLD, CHUNK_STEP_NEW = 1024, 0.236, 0.382
+CHUNK_COST = CHUNK_STEP_NEW / CHUNK_STEP_OLD - 1
+assert abs(CHUNK_COST - 0.62) < 0.01
+DFA_COST_V7X, DFA_COST_V5P, EP8_SPEEDUP_V7X = 0.019, 0.0066, 0.28
+FLIP_SLOT_LO, FLIP_SLOT_HI = 0.44, 0.56       # 第 1 步每层翻转的槽位百分比
+MASTER_W_V5P, MASTER_W_V7X = 1.31, 1.19       # L3 更新后主权重（待定）
+# 落进正文
+FINAL_WORST_T, FINAL_WORST_OLDCAL_T = "%.2f" % FINAL_WORST, "%.2f" % FINAL_WORST_OLDCAL
+_lock("FINAL_WORST_T", FINAL_WORST_T, "0.85"); _lock("FINAL_WORST_OLDCAL_T", FINAL_WORST_OLDCAL_T, "0.84")
+FINAL_PN_V5P_T, FINAL_PN_V7X_T = "%.2f" % FINAL[0][4], "%.2f" % FINAL[1][4]
+_lock("FINAL_PN_V5P_T", FINAL_PN_V5P_T, "0.50"); _lock("FINAL_PN_V7X_T", FINAL_PN_V7X_T, "0.53")
+PEND10_T = "%.2f–%.2f" % (PEND10_LO, PEND10_HI); _lock("PEND10_T", PEND10_T, "1.02–1.24")
+PN_MEAS_TPU_T, PN_MEAS_GPU_T, PN_RERUN_STEP_T = tx(PN_MEAS_TPU, "%.1e"), tx(PN_MEAS_GPU, "%.0e"), tx(PN_RERUN_STEP, "%.1e")
+_lock("PN_MEAS_TPU_T", PN_MEAS_TPU_T, "2.6e-7"); _lock("PN_MEAS_GPU_T", PN_MEAS_GPU_T, "8e-8"); _lock("PN_RERUN_STEP_T", PN_RERUN_STEP_T, "2.7e-7")
+GN_N_AB_T, GN_N_BA_T = tx(GN_N_AB), tx(GN_N_BA); _lock("GN_N_AB_T", GN_N_AB_T, "1.26e-3"); _lock("GN_N_BA_T", GN_N_BA_T, "2.49e-3")
+ENSEMBLE_SPREAD_TPU_T, ENSEMBLE_SPREAD_GPU_T = tx(ENSEMBLE_SPREAD_TPU, "%.1e"), tx(ENSEMBLE_SPREAD_GPU, "%.1e")
+VS_RC_LOSS_V5P_T, VS_RC_LOSS_V7X_T = tx(VS_RC_LOSS_V5P), tx(VS_RC_LOSS_V7X)
+_lock("VS_RC_LOSS_V5P_T", VS_RC_LOSS_V5P_T, "−1.37e-4"); _lock("VS_RC_LOSS_V7X_T", VS_RC_LOSS_V7X_T, "−1.07e-4")
+CHUNK_COST_T = "%.0f%%" % (CHUNK_COST * 100); _lock("CHUNK_COST_T", CHUNK_COST_T, "62%")
+DFA_COST_V7X_T, DFA_COST_V5P_T, EP8_SPEEDUP_V7X_T = "%.1f%%" % (DFA_COST_V7X * 100), "%.2f%%" % (DFA_COST_V5P * 100), "%.0f%%" % (EP8_SPEEDUP_V7X * 100)
+_lock("DFA_COST_V7X_T", DFA_COST_V7X_T, "1.9%"); _lock("DFA_COST_V5P_T", DFA_COST_V5P_T, "0.66%"); _lock("EP8_SPEEDUP_V7X_T", EP8_SPEEDUP_V7X_T, "28%")
+FLIP_SLOT_T = "%.2f%%–%.2f%%" % (FLIP_SLOT_LO, FLIP_SLOT_HI)

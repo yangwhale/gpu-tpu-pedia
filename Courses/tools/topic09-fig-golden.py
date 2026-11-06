@@ -16,22 +16,24 @@ NOISE = N.GPU_RERUN_PN
 # R3：颜色 ＝ 全课约定（GPU 生产 golden 深灰、精确轨迹紫）；卡片上不提前用「第一关／第二关」，关卡名留到 fig9-twolayer 再出
 STEPS = [("① 起点", "框架默认配置", ["BF16，不重算", "TF32 开着"], None, GY2, "归因参照"),
          ("② 生产近似", "＋ 整层重算 ＋ 路由回放", ["模仿生产开重算", "跟①比：各项都在 GPU 噪声内"], 2.93e-6, GY, "生产 golden：差要写清来由"),
-         ("③ 只修一处", "＋ 输出头 dgrad 换成 FP32", ["解释了 loss 偏移的 73%", "参数范数 ＋0.0124（BF16 那一截）", "第一关的尺子取自这组重跑"], 1.25e-6, OR, "归因证据"),
-         ("④ 精确轨迹", "＋ BF16 权重、全程 FP32", ["真关 TF32；可输出头那次", "长求和仍一次累加，有偏"], 4.36e-7, PU, "第一关现行基线（换不换待定）")]
+         ("③ 只修一处", "＋ 输出头 dgrad 换成 FP32", ["解释 loss 偏移的 73%", "参数范数 ＋0.0124", "定案前的尺子取自这组"], 1.25e-6, OR, "归因证据"),
+         ("④ 精确轨迹", "＋ BF16 权重、全程 FP32", ["真关 TF32；可输出头", "长求和一次累加，有偏"], 4.36e-7, PU, "定案前的基线"),
+         ("⑤ 最终 golden", "② ＋ dgrad 分段累加", ["只改这一处", "GPU 步时多六成", "尺子：自己 10 份 45 对"], None, GR, "第一关的基线（定案）")]
 R = [None if st[3] is None else st[3] / NOISE for st in STEPS]
+R[4] = N.FINAL[0][4]                     # ⑤ 用它自己的 45 对尺子，v5p 当前配置
 assert abs(R[1] - 23.6) < 0.1 and abs(R[2] - 10.1) < 0.1 and abs(R[3] - 3.52) < 0.01, R
 
 
 def fig_golden():
     f = Fig(W, "四张卡片从左到右：第一份是起点，框架默认配置；第二份加上整层重算和路由回放，跟生产一样；第三份再把输出头 dgrad 换成 FP32 乘法（一次累加）；"
-               "第四份再改成 BF16 权重、全程 FP32 计算，叫精确轨迹，是第一关现行的基线；后来发现它输出头那次长求和仍有偏，基线换不换待定。"
-               "卡片下面是同一个 TPU 被测对它的参数范数差，按同一把尺子 N 算倍数：对第二份 24 倍，对第三份 10 倍，对第四份 3.5 倍。")
+               "第四份再改成 BF16 权重、全程 FP32 计算，叫精确轨迹，是定案前的基线；后来发现它输出头那次长求和仍有偏。第五份是最终 golden：回到第二份，只把输出头 dgrad 改成分段累加。"
+               "卡片下面是同一个 TPU 被测对它的参数范数差，按同一把尺子 N 算倍数：对第二份 24 倍，对第三份 10 倍，对第四份 3.5 倍；第五份换成它自己 45 对的尺子，当前 TPU 是 0.50 倍，过。")
     y0 = f.header("golden 是一步步改出来的　——　<tspan font-weight=\"700\">先对齐超参和数据，再每一步只加一样东西</tspan>",
                   "卡片 ＝ 一份 golden（GPU 上跑的标准答案）；下面的柱子 ＝ 同一个 TPU 被测对它的参数范数差是噪声的几倍（同一把尺子）",
-                  [(GY2, "起点"), (GY, "生产近似"), (OR, "只修一处"), (PU, "精确轨迹"), (RD, "不过：超过 2×N")])
+                  [(GY2, "起点"), (GY, "生产近似"), (OR, "只修一处"), (PU, "精确轨迹"), (GR, "最终 golden"), (RD, "不过：超过 2×N")])
     PH = 420
-    py = f.panel(0, y0, W, PH, "混元 3 的四份 golden（实测）", BL)
-    CW, GAP = 300, 46
+    py = f.panel(0, y0, W, PH, "混元 3 的五份 golden（实测）", BL)
+    CW, GAP = 252, 20
     for i, ((name, add, lines, v, col, role), r) in enumerate(zip(STEPS, R)):
         x = 30 + i * (CW + GAP)
         f.box(x, py + 24, CW, 192, "#fff", col, 10, sw=2)
@@ -41,24 +43,26 @@ def fig_golden():
         for k, ln in enumerate(lines):
             f.t(x + 18, py + 124 + k * 22, ln, OR if k == 2 else GY, k == 2, 13)
         f.t(x + 18, py + 204, role, col, True, 13)
-        if i < 3:
+        if i < 4:
             f.line(x + CW + 6, py + 108, x + CW + GAP - 6, py + 108, GY2, 2)
         if r is not None:
-            L = min(r / 24.0 * 250, 250)
+            L = min(r / 24.0 * 216, 216)
             f.box(x + 18, py + 250, L, 30, RD if r > 2 else GR, RD if r > 2 else GR, 4)
             # ⭐ R3：每根柱子补一条 2×N 的参考短线，「3.5 倍还不过」一眼能看出来
-            x2 = x + 18 + 2 / 24.0 * 250
+            x2 = x + 18 + 2 / 24.0 * 216
             f.line(x2, py + 242, x2, py + 288, INK, 2, arrow=False)
             f.t(x2, py + 236, "2×N", INK, True, 12, "middle")
-            f.t(x + 18, py + 306, "TPU 对它：%.1f × N" % r, RD, True, 15)
+            f.t(x + 18, py + 306, ("TPU 对它：%.2f × N" if r < 1 else "TPU 对它：%.1f × N") % r, RD if r > 2 else GR, True, 15)
             if i == 3:
-                f.t(x + 18, py + 328, "被测：FP32 累加开关打开前的那一版 TPU", GY, size=12)
+                f.t(x + 18, py + 328, "被测：开关打开前那一版 TPU", GY, size=12)
+            if i == 4:
+                f.t(x + 18, py + 328, "被测：当前 TPU；尺子换成它自己的", GY, size=12)
         else:
             f.t(x + 18, py + 270, "（不重算，跟生产配置不一样，不拿来验收）", GY, size=13)
-    f.t(30, py + 350, "柱子：同一个 TPU 被测的参数范数带符号均值 ÷ N（N ＝ ③ 那组 GPU 重跑 5 份两两 10 对的最大值）；竖线 ＝ 2×N，超过就判不过", GY, size=13)
+    f.t(30, py + 350, "柱子：TPU 被测的参数范数带符号均值 ÷ N（②–④ 的 N ＝ ③ 那组 5 份两两 10 对的最大值；⑤ 用它自己 10 份 45 对）；竖线 ＝ 2×N", GY, size=13)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "每往精确值靠一步，TPU 的「偏差」就缩一截：24 倍 → 10 倍 → 3.5 倍", [
-        "缩掉的部分都查清了是 GPU golden 自己的偏差；剩下那截（开关前 3.52 倍，当前 3.45 倍）后来也拆清了：④ 自己还少漂一笔，TPU 的 dlogits 舍入又少漂一笔，两笔相减剩下这点。",
+    yb = f.band(py + PH + 20, "ok", "每往精确值靠一步，TPU 的「偏差」就缩一截：24 倍 → 10 倍 → 3.5 倍；最终 golden 上 0.50 倍", [
+        "缩掉的部分都查清了是 GPU golden 自己的偏差；④ 上剩的那截也拆清了：④ 自己少漂一笔、TPU 的 dlogits 舍入少漂一笔，两笔相减。最后只修 GPU 那一次长求和，两边就落进同一团噪声。",
         "代价：每一份 golden 都要单独跑满 1000 步、存好数据；改了什么、为什么改、证据在哪，都要进一张出处总表。",
     ])
     yb = f.src(yb + 10,
@@ -127,7 +131,7 @@ def fig_decomp():
     yb = f.band(py2 + PH2 + 20, "ok", "两个生产程序之间，唯一测得出的差是 GPU 输出头 dgrad 的长累加", [
         "GPU 生产只修这一处，TPU 生产就跟它几乎重合（按 ③ 那把尺子 v5p 五项全过）；剩下离真精确的那截是两边都有的 dlogits 舍入，不算两边的差。",
         "第一关对 ④ 的那点差，是 ① 和 ② 两笔方向相反的偏差相减剩下的：基线自己偏一笔，TPU 自己舍入一笔。",
-        "代价：要两边各补跑一批只改一处的 1000 步运行；第一关拿谁当基线还没定。",
+        "代价：要两边各补跑一批只改一处的 1000 步运行；最后第一关的基线就定在 ⑤。",
     ])
     yb = f.src(yb + 10,
                "📌 实测：第 1000 步参数范数对 GPU 生产 golden 5 份均值：④ ＋1.857e-2、⑤ ＋2.071e-2、TPU 生产 ＋2.092e-2（v5p、v7x 当前配置同值）、⑥ ＋2.744e-2；TPU 精确轨迹 ＋2.73e-2。TPU 生产对 TPU 精确少 6.3e-3，对 ⑥ 少 6.5e-3，差不到一个记录刻度。",
@@ -140,58 +144,49 @@ assert N.ACC[0][0].startswith("param_norm") and GATE1_PN == 3.45
 
 
 def fig_twolayer():
-    f = Fig(W, "上一层：第一关，必须过。TPU 对精确轨迹那一份比；尺子例外地借 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换成 FP32）5 份两两 10 对的散布，因为精确轨迹自己是确定性的，量不出噪声。"
-               + ("旁边另做两份交叉核对，都只报不判：一份尺子换成精确轨迹 5 份（基线＋4 份扰动版）两两 10 对，参数范数 %.2f 倍、loss 全程 %.2f 倍、梯度范数 %.2f 倍超过 2，loss 尾段 %.2f 倍待定；"
-               "另一份换成 TPU 自己的执行噪声 28 对，只有参数范数 %.2f 倍超过 2，loss 全程 %.2f 倍、尾段 %.2f 倍待定，梯度范数 %.2f 倍过。"
-               % (N.XCHK_SELF["param_norm"], N.XCHK_SELF["loss 全程"], N.XCHK_SELF["grad_norm"], N.XCHK_SELF["loss 尾段"],
-                  N.XCHK_TPU_PN, N.XCHK_TPU_LOSS, N.XCHK_TPU_TAIL, N.XCHK_TPU_GN))
-               + "下一层：第二关，已解释差异。TPU 对 GPU 生产 golden 的差不判过不过，写清量级、哪一部分由哪个已查清的 GPU 偏差解释、证据在哪。")
-    y0 = f.header("golden 自己有偏差时：分两关验收",
+    FV5, FV7 = N.FINAL[0], N.FINAL[1]
+    f = Fig(W, "定案后的验收协议。上一层：第一关，必须过。TPU 被测对最终 golden ⑤ 的一份比，⑤ 是 GPU 生产程序只把输出头 dgrad 改成分段累加；尺子是 ⑤ 自己同设置重跑 10 份、两两 45 对。"
+               "v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 7 份扰动运行，每份也都不超过 0.85 倍。"
+               "下一层：第二关，已解释差异。TPU 对 GPU 生产 golden ② 仍差参数范数 +0.0209、loss −1.37e-4，全部是 GPU 输出头 dgrad 长求和的偏差。")
+    y0 = f.header("golden 自己有偏差时：分两关验收（定案版）",
                   "上 ＝ 必须过的那一关；下 ＝ 只写清楚、不判过不过的那一关；箭头 ＝ 谁对谁比",
-                  [(PU, "第一关：对精确轨迹"), (GY, "第二关：对 GPU 生产 golden"), (BL, "TPU 被测"), (OR, "尺子：③ 那组 GPU 重跑")])
+                  [(OR, "第一关：对最终 golden ⑤"), (GY, "第二关：对 GPU 生产 golden ②"), (BL, "TPU 被测"), (GR, "过")])
     PH = 400
-    py = f.panel(0, y0, W, PH, "混元 3 的验收协议", PU)
+    py = f.panel(0, y0, W, PH, "混元 3 的验收协议（第一关基线已定）", OR)
 
     def node(x, y, w, h, title, sub, col, fill="#fff"):
         f.box(x, y, w, h, fill, col, 10, sw=2)
         f.t(x + w / 2, y + 30, title, col, True, 16, "middle")
         if sub:
             f.t(x + w / 2, y + 54, sub, GY, size=13, anchor="middle")
-    node(560, py + 150, 280, 76, "TPU 被测", "生产配置，1000 步", BL)
-    node(80, py + 30, 360, 76, "精确轨迹（一份）", "BF16 权重、全程 FP32", PU)
-    node(960, py + 30, 360, 76, "尺子：③ 那组 GPU 重跑", "生产近似＋FP32 dgrad · 5 份两两 10 对", OR)
-    # R4 一致性第 15 条：讲义和课件都说「两份交叉核对」，原图只画了 TPU 执行噪声那一份 → 两份都画，共一句「只报不判」
-    XS = N.XCHK_SELF
-    for k, (yx, t1, t2) in enumerate([
-            (py + 112, "交叉核对一：精确轨迹 5 份（基线＋4 份扰动版）· 10 对",
-             "param_norm %.2f× · loss %.2f× / 尾段 %.2f× · grad_norm %.2f×" % (XS["param_norm"], XS["loss 全程"], XS["loss 尾段"], XS["grad_norm"])),
-            (py + 174, "交叉核对二：TPU 执行噪声 28 对", "param_norm %.2f× · loss %.2f× / 尾段 %.2f× · grad_norm %.2f×" % (N.XCHK_TPU_PN, N.XCHK_TPU_LOSS, N.XCHK_TPU_TAIL, N.XCHK_TPU_GN))]):
-        # R18：橙色「量出 N」箭头原来切过核对一的左上角 → 两个虚线框整体右移 30 px
-        f.box(922, yx, 456, 54, "#fff", GY2, 10, sw=1.6, dash="5 4")
-        f.t(1150, yx + 22, t1, GY, True, 14, "middle")
-        f.t(1150, yx + 43, t2, GY, size=12, anchor="middle")
-        f.line(922, yx + 27, 842, py + 176 + 22 * k, GY2, 1.4, dash="5 4")
-    node(80, py + 270, 360, 76, "② GPU 生产 golden", "整层重算 ＋ 路由回放（不是尺子）", GY)
-    node(960, py + 270, 360, 76, "已解释差异", "量级 ＋ 由谁造成 ＋ 证据", GY)
-    f.elbow(560, py + 175, 440, py + 68, PU, 2.2)
-    f.t(470, py + 132, "第一关：必须过", PU, True, 15)
-    f.t(430, py + 154, "正式判定：param_norm %.2f×N，不过" % GATE1_PN, RD, True, 13, "end")
+    node(560, py + 150, 280, 76, "TPU 被测", "当前对齐配置，1000 步", BL)
+    node(60, py + 30, 400, 76, "⑤ 最终 golden（一份当基线）", "GPU 生产 ＋ 输出头 dgrad 分段累加", OR)
+    node(960, py + 30, 380, 76, "尺子：⑤ 自己重跑", "%d 份两两 %d 对" % (N.FINAL_RUNS, N.FINAL_PAIRS), OR)
+    f.box(922, py + 140, 456, 54, "#fff", GY2, 10, sw=1.6, dash="5 4")
+    f.t(1150, py + 162, "只报：TPU 扰动组 %d 份（只改执行参数）" % N.ENSEMBLE_RUNS, GY, True, 14, "middle")
+    f.t(1150, py + 183, "每份对 ⑤ 的四项 r 都 ≤ %.2f" % N.FINAL_WORST, GY, size=12, anchor="middle")
+    f.line(922, py + 167, 842, py + 185, GY2, 1.4, dash="5 4")
+    node(60, py + 270, 400, 76, "② GPU 生产 golden", "整层重算 ＋ 路由回放", GY)
+    node(960, py + 270, 380, 76, "已解释差异", "全部是 GPU 输出头 dgrad 的长求和", GY)
+    f.elbow(560, py + 175, 460, py + 68, OR, 2.2)
+    f.t(470, py + 124, "第一关：必须过", OR, True, 15)
+    f.t(452, py + 148, "v5p 最差 %.2f×N · v7x 最差 %.2f×N，全过" % (max(FV5[1:5]), max(FV7[1:5])), GR, True, 13, "end")
     f.line(960, py + 68, 842, py + 165, OR, 1.6)
-    f.t(850, py + 92, "量出 N", OR, True, 13)      # R3：原来被斜箭头穿过 → 挪到箭头左上方
-    f.t(1150, py + 250, "× ＝ 被测 ÷ 该尺子的 N；超过 2：核对一 3 项，核对二仅 param_norm", GY, size=13, anchor="middle")
-    f.elbow(560, py + 205, 440, py + 308, GY, 2.2)
-    f.t(470, py + 268, "第二关：不判", GY, True, 15)
-    f.line(442, py + 308, 958, py + 308, GY, 1.6)
+    f.t(850, py + 92, "量出 N", OR, True, 13)
+    f.t(1150, py + 238, "param_norm：v5p %.2f×N、v7x %.2f×N" % (FV5[4], FV7[4]), GY, size=13, anchor="middle")
+    f.elbow(560, py + 205, 460, py + 308, GY, 2.2)
+    f.t(470, py + 262, "第二关：不判", GY, True, 15)
+    f.line(462, py + 308, 958, py + 308, GY, 1.6)
+    f.t(710, py + 330, "参数范数 ＋%.4f、loss %s（v5p）" % (N.VS_RC_PN, N.VS_RC_LOSS_V5P_T), GY, size=13, anchor="middle")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "噪声尺子量的是「重跑会差多少」，量不出 golden 自己的系统偏差 —— 所以要分两关", [
-        "精确轨迹重跑逐位相同，自己量不出噪声；正式判定事先定好借 ③ 那组 GPU 重跑的散布。精确轨迹扰动出来的五份散布（%s）跟它同一量级。" % ("%.2e" % N.EXACT_SELF_PN).replace("e-0", "e-"),
-        "代价：例外要写在检查目录的文件头；两份交叉核对换别的尺子并排报，正式判定以 GPU 那把为准。",
+        "定案前，第一关拿精确轨迹当基线、借 ③ 那组的尺子，判出 3.45 倍不过；那份基线自己的长求和也偏，这个判定是两笔相反偏差相减的结果。",
+        "代价：最终 golden 每一步都要多做一次分段累加，GPU 步时多六成；第二关要把差的每一部分都对上一条查清的机制。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：param_norm 带符号均值的噪声上限，精确轨迹扰动出来的五份两两 10 对 %s，③ 那组 GPU 重跑 10 对 %s，同一量级；正式判定按事先写定的协议借后者，验收中途不换尺子。"
-               % (("%.2e" % N.EXACT_SELF_PN).replace("e-0", "e-"), ("%.2e" % N.GPU_RERUN_PN).replace("e-0", "e-")),
-               "📌 实测：v5p 当前配置第一关 param_norm %.2f 倍不过、loss 两项和梯度范数待定；交叉核对一（噪声换成精确轨迹 5 份（基线＋4 份扰动版）两两 10 对）param_norm %.2f 倍不过、loss 全程 %.2f 倍不过、尾段 %.2f 倍待定、梯度范数 %.2f 倍不过；交叉核对二（TPU 执行噪声 28 对）param_norm %.2f 倍不过、loss 全程 %.2f 倍和尾段 %.2f 倍待定、梯度范数 %.2f 倍过；v7x param_norm 3.53 倍不过。"
-               % (GATE1_PN, N.XCHK_SELF["param_norm"], N.XCHK_SELF["loss 全程"], N.XCHK_SELF["loss 尾段"], N.XCHK_SELF["grad_norm"], N.XCHK_TPU_PN, N.XCHK_TPU_LOSS, N.XCHK_TPU_TAIL, N.XCHK_TPU_GN))
+               "📌 实测：第一关对 ⑤ 的一份、尺子 ⑤ 自己 45 对。v5p loss 全程 %.2f、尾段 %.2f、梯度范数 %.2f、参数范数 %.2f；v7x %.2f / %.2f / %.2f / %.2f；EP＝8 两平台也全过；学习率逐位。"
+               % (FV5[1], FV5[2], FV5[3], FV5[4], FV7[1], FV7[2], FV7[3], FV7[4]),
+               "📌 实测：第二关对 ②：参数范数 ＋2.09e-2，loss −1.37e-4（v5p）／ −1.07e-4（v7x）。定案前的旧协议：对精确轨迹、尺子 ③ 10 对，v5p 参数范数 3.45 倍。")
     f.save("fig9-twolayer.svg", yb + 14)
 
 
