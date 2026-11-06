@@ -556,7 +556,7 @@ __FIG_TWOLAYER__
   <tr><td>v5p EP＝8</td><td>0.76 ✅</td><td>0.78 ✅</td><td>0.74 ✅</td><td>0.48 ✅</td><td>逐位 ✅</td></tr>
   <tr><td>v7x EP＝8</td><td>0.77 ✅</td><td>0.81 ✅</td><td>0.68 ✅</td><td>0.35 ✅</td><td>逐位 ✅</td></tr>
   </tbody></table>
-  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 «FINAL_WORST_T» 倍</b>；按专家切（EP＝8）四项也过（这一档没测路由偏置曲线和健康信号）；当前配置的路由偏置曲线和健康信号也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden 的差，照样在第二关报。TPU 一侧也不是挑出来的好样本：只改执行参数的 «ENSEMBLE_RUNS» 份扰动运行（v5p «ENSEMBLE_V5P»、v7x «ENSEMBLE_V7X»），每份四项都不超过 «FINAL_WORST_T» 倍。对 GPU 生产 golden ② 的差（参数范数 ＋«VS_RC_PN»，loss «VS_RC_LOSS_V5P_T»）写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
+  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 «FINAL_WORST_T» 倍</b>；按专家切（EP＝8）四项也过（这一档没测路由偏置曲线和健康信号）；当前配置的路由偏置曲线和健康信号也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden 的差，照样在第二关报。TPU 一侧也不是挑出来的好样本：只改执行参数的 «ENSEMBLE_RUNS» 份扰动运行（v5p «ENSEMBLE_V5P»、v7x «ENSEMBLE_V7X»），«ENSEMBLE_OK» 份四项都不超过 «FINAL_WORST_T» 倍；剩 1 份（v7x，注意力分块 1024）梯度范数待定（«ENSEMBLE_PEND_T»），落在 v7x 自己的执行噪声里：v7x 扰动组两两的梯度范数逐步涨落比 GPU 重跑宽约两成。对 GPU 生产 golden ② 的差（参数范数 ＋«VS_RC_PN»，loss «VS_RC_LOSS_V5P_T»）写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
   <details class="foldfig"><summary><b>怎么走到 45 对的</b>：10 对时有两项待定；两处测量口径；补 5 份重跑</summary>
   <ol>
     <li>先只有 ⑤ 的 5 份（10 对），v5p 的梯度范数、v7x 的梯度范数和参数范数落在 «PEND10_T» 倍的待定区。</li>
@@ -566,7 +566,7 @@ __FIG_TWOLAYER__
   <details class="foldfig"><summary><b>1000 步这一级全过；L0–L3 还有几格不是「严格档过」</b>：每一格都对上了一条机制</summary>
   <table class="t9"><thead><tr><th>检查</th><th>为什么</th></tr></thead><tbody>
   <tr><td>TPU 原生数据加载器与 GPU 逐样本一致（L0）</td><td>切小份的顺序不同（§2.1）；对齐时原样回放 GPU 的数据，每一步每张卡的输入指纹全部相同</td></tr>
-  <tr><td>v7x 单算子、单层前向（L1、L2）</td><td>读的还是打开 FP32 累加开关之前的回放；v5p 按当前配置重跑后全过，v7x 当前配置的回放在排队</td></tr>
+  <tr><td>v7x 单算子、单层前向（L1、L2）</td><td>按当前配置重跑后，v7x 四层前向 R 比 «V7X_L2_R_T»（开关前 1.53–1.57），v5p 也全过；只剩第 2 层 MoE 块 R «V7X_MOE_R» 一格：4096 个 token 里有 1 个在近平局处选了跟 FP64 不同的专家，去掉它 R 是 «V7X_MOE_R_DROP»（v5p 同层去掉 2 个这样的 token 是 «V5P_MOE_R_DROP»）。一两个 token 就能让这个比值跨线，反映的是路由翻转；路由本身另有检查，两平台都过</td></tr>
   <tr><td>第 1 步各层反向、参数梯度、优化器状态（L2、L3）</td><td>路由近平局翻转（§4.3）：每层 «FLIP_SLOT_T» 的槽位两边各落一边；GPU 重跑从不翻转，这把尺子宽度是 0。整网按梯度能量只差 «STEP1_ALL»，1000 步的统计在噪声内</td></tr>
   <tr><td>第 1 步更新后主权重（L3，待定 «MASTER_W_V5P» ／ «MASTER_W_V7X» 倍）</td><td>同上的下游，量级很小</td></tr>
   <tr><td>v7x 更新后路由偏置（L3）</td><td>192 个专家里 1 个翻号：平均负载约 2731 个 token，差一个就能落在均值两边（推断），同上的下游</td></tr>
@@ -574,13 +574,13 @@ __FIG_TWOLAYER__
   </tbody></table></details>
   <details class="foldfig"><summary><b>想两边对得更紧，要动哪些开关</b>：TPU 一侧必需两项、推荐两项，GPU 一侧一处，各有代价</summary>
   <ul>
-    <li>TPU 必需：窗口化 collective matmul 的部分和留在 FP32（§5.4），步时 v7x ＋«DFA_COST_V7X_T»、v5p ＋«DFA_COST_V5P_T»；梯度累积的分组跟 GPU 一样。</li>
+    <li>TPU 必需：窗口化 collective matmul 的部分和留在 FP32（§5.4），步时 v7x ＋«DFA_COST_V7X_T»、v5p ＋«DFA_COST_V5P_T»。它是单算子、单层这两级要的；1000 步这一级不靠它，开关打开前的配置对 ⑤ 也全过（最差 v5p «PRESWITCH_VS_FINAL_V5P»、v7x «PRESWITCH_VS_FINAL_V7X»）。梯度累积的分组跟 GPU 一样。</li>
     <li>TPU 推荐：RMSNorm 在 FP32 里算完只舍一次；门控激活逐个算子舍入（不开时这个算子只有约四分之三元素跟 GPU 逐位）。可选：按专家切，步时反而少 «EP8_SPEEDUP_V7X_T»（v7x）。</li>
     <li>GPU（只影响 golden 的制作）：输出头 dgrad 改成分段 FP32 累加，这是最终 golden 唯一的数值改动，步时多 «CHUNK_COST_T»（一个没优化过的实现）。</li>
     <li>想朝真精确再近一步：两边都让 dlogits 留在 FP32（TPU 步时多 «HEADFP32_COST_T»），对齐本身不需要。</li>
   </ul></details>
 ''' + quiz("只有 10 对时几项落在 1.02–1.24 倍，补到 45 对就全过了。这算不算「把尺子放宽了好过关」？",
-           "不算，理由有三：协议事先写的就是「待定先补参照」，不是事后改门槛；N 取最大值，样本少时系统性偏窄，10 对时所有 r 都挤在 0.7–1.3、没有离群项，像尺子短而不像真差；另外两条旁证 —— 不做口径改正 45 对下最差 «FINAL_WORST_OLDCAL_T»，TPU 七份扰动运行也都不超过 «FINAL_WORST_T»。") + '''
+           "不算，理由有三：协议事先写的就是「待定先补参照」，不是事后改门槛；N 取最大值，样本少时系统性偏窄，10 对时所有 r 都挤在 0.7–1.3、没有离群项，像尺子短而不像真差；另外两条旁证 —— 不做口径改正 45 对下最差 «FINAL_WORST_OLDCAL_T»，TPU «ENSEMBLE_RUNS» 份扰动运行里 «ENSEMBLE_OK» 份不超过 «FINAL_WORST_T»，剩下一份的待定也落在 TPU 自己的执行噪声里。") + '''
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>
 </div></section>
 
@@ -755,7 +755,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>TPU 对 ④ «TPU_VS_FIX1_T» ＝ «B_GPUEXACT_T» «B_DLOGITS_T» «B_REST_T»（v7x；v5p ＋7.97e-3、−6.10e-3、＋4.9e-4）；TPU 对真精确少漂 «TPU_VS_TRUE_T»；GPU 真精确多舍一次 dlogits «SHARED_DLOGITS_GPU_T»</td><td>第 1000 步；第一笔由 GPU 精确改分段累加证实，第二笔由 TPU 精确只把 dlogits 舍 BF16 证实，第三笔是差额</td></tr>
   <tr><td>cuBLAS FP32 一次累加的偏差：第 1 步 «CUBLAS_S1_T»，第 299 步状态 «CUBLAS_299_T»；改分段累加后 GPU 精确对 TPU 精确 «CHUNK_VS_TPUEXACT_T»；漂移比 «DRIFT_RATIO_TRUE_T» ／ «DRIFT_RATIO_TPU_T»</td><td>B200，输出头 dgrad 沿 w̄ 的相对偏差；后两项为不重算配置第 1000 步（参数范数带符号均值；漂移对 4 份默认 GPU 运行均值，取前后 25 步平均）</td></tr>
   <tr><td>定案前比过的基线：⑤ 参数范数 «PRODCHUNK_PN_R_T» 倍、loss 尾段 «PRODCHUNK_LOSS_R_T» 倍；⑥ 参数范数 «TRUEEXACT_R_T» 倍；dlogits 留 FP32 的诊断版步时 ＋«HEADFP32_COST_T»</td><td>v5p 当前配置（⑥ 一项含 v7x），尺子为 ③ 那组 10 对</td></tr>
-  <tr><td>定案后第一关：最差 «FINAL_WORST_T» 倍（v5p 参数范数 «FINAL_PN_V5P_T»、v7x «FINAL_PN_V7X_T»），EP＝8 也过；TPU 扰动组 «ENSEMBLE_RUNS» 份都 ≤ «FINAL_WORST_T»；10 对时待定 «PEND10_T»；原口径 45 对最差 «FINAL_WORST_OLDCAL_T»</td><td>对 ⑤ 的一份，尺子 ⑤ 自己 10 份两两 45 对；v5p、v7x 当前配置 1000 步</td></tr>
+  <tr><td>定案后第一关：最差 «FINAL_WORST_T» 倍（v5p 参数范数 «FINAL_PN_V5P_T»、v7x «FINAL_PN_V7X_T»），EP＝8 也过；TPU 扰动组 «ENSEMBLE_RUNS» 份里 «ENSEMBLE_OK» 份 ≤ «FINAL_WORST_T»、1 份梯度范数待定（«ENSEMBLE_PEND_T»，v7x 扰动组梯度范数 MARE 两两 «V7X_GN_MARE_TPU» 对 GPU «V7X_GN_MARE_GPU»）；v7x 当前配置四层前向 R «V7X_L2_R_T»、第 2 层 MoE 块 «V7X_MOE_R» → 去掉 1 个翻转 token «V7X_MOE_R_DROP»；10 对时待定 «PEND10_T»；原口径 45 对最差 «FINAL_WORST_OLDCAL_T»</td><td>对 ⑤ 的一份，尺子 ⑤ 自己 10 份两两 45 对；v5p、v7x 当前配置 1000 步</td></tr>
   <tr><td>两处测量口径：TPU 参数范数单步自测误差 «PN_MEAS_TPU_T»（GPU «PN_MEAS_GPU_T»，GPU 重跑单步差 «PN_RERUN_STEP_T»）；梯度范数 N 随配对方向 «GN_N_AB_T» ／ «GN_N_BA_T»</td><td>同一次运行里按组记录的平方和与整网一次归约对比；梯度范数改用两边均值当分母</td></tr>
   <tr><td>开关代价：FP32 累加步时 v7x ＋«DFA_COST_V7X_T»、v5p ＋«DFA_COST_V5P_T»；按专家切 v7x −«EP8_SPEEDUP_V7X_T»；GPU 分段累加 ＋«CHUNK_COST_T»</td><td>FP32 累加为 100 步对比；按专家切为 1000 步运行第 50–1000 步步时中位数；分段累加为 GPU 侧步时</td></tr>
   <tr><td>TPU 自己剩下的（旧口径，对精确轨迹；第一个数对 ④′，后两个对 ④）：«TPU_OWN_NOREMAT_975_T» ／ «TPU_OWN_OLDCFG_1000_T» ／ «TPU_OWN_CURCFG_1000_T»</td><td>分别是：不重算配置第 975 步；生产近似配置、开关打开前第 1000 步；当前配置第 1000 步</td></tr>

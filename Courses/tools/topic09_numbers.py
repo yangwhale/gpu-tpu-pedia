@@ -516,7 +516,14 @@ FINAL_WORST = max(max(v for v in row[1:] if v is not None) for row in FINAL)
 assert FINAL_WORST == 0.85
 FINAL_WORST_OLDCAL = 0.84                     # 不做两处口径改正，45 对下最差
 PEND10_LO, PEND10_HI = 1.02, 1.24             # 只有 5 份 10 对时的待定区
-ENSEMBLE_RUNS, ENSEMBLE_V5P, ENSEMBLE_V7X = 7, 5, 2
+ENSEMBLE_RUNS, ENSEMBLE_V5P, ENSEMBLE_V7X = 9, 5, 4
+ENSEMBLE_OK = 8                                   # ≤ 0.85 的份数；剩 1 份（v7x，splash 块 1024）梯度范数待定
+ENSEMBLE_PEND_MARE, ENSEMBLE_PEND_MAX = 1.02, 1.15
+V7X_GN_MARE_TPU, V7X_GN_MARE_GPU = 3.9e-2, 3.3e-2  # v7x 扰动组两两 / GPU 重跑两两的梯度范数 MARE
+assert 1.15 < V7X_GN_MARE_TPU / V7X_GN_MARE_GPU < 1.25   # 宽约两成
+V7X_L2_R = (1.06, 1.01, 1.01, 1.02)                # v7x 当前配置四层前向 R 比（开关前 1.53–1.57）
+V7X_MOE_R, V7X_MOE_R_DROP, V5P_MOE_R_DROP = 1.27, 0.95, 0.94   # 第 2 层 MoE 块：1/4096 个 token 近平局选了另一个专家；去掉后；v5p 同层去掉 2 个后
+PRESWITCH_VS_FINAL_V5P, PRESWITCH_VS_FINAL_V7X = 0.79, 0.78    # 开关打开前的配置对 ⑤ 的最差 r（L4 不需要这个开关）
 ENSEMBLE_SPREAD_TPU, ENSEMBLE_SPREAD_GPU = 5.4e-5, 9.5e-5   # loss 带符号均值两两散布：TPU 扰动组 / GPU 重跑
 assert ENSEMBLE_V5P + ENSEMBLE_V7X == ENSEMBLE_RUNS
 PN_MEAS_TPU, PN_MEAS_GPU, PN_RERUN_STEP = 2.6e-7, 8e-8, 2.7e-7   # param_norm 自测误差（单步最大差）：TPU 整网一次归约 / GPU；GPU 重跑两两单步最大差
@@ -553,3 +560,5 @@ FINAL_PN_SM, FINAL_PN_SM_N = 1.593e-8, 2.269e-7      # v5p 当前配置对 ⑤�
 FINAL_PN_SM_R = FINAL_PN_SM / FINAL_PN_SM_N
 FINAL_PN_SM_R_T = "%.2f" % FINAL_PN_SM_R; _lock("FINAL_PN_SM_R_T", FINAL_PN_SM_R_T, "0.07")
 B_V5P = (7.965e-3, -6.104e-3, 0.488e-3)              # v5p 那组补跑的三笔（v7x 是 B_GPUEXACT / B_DLOGITS / B_REST）
+ENSEMBLE_PEND_T = "MARE %.2f、最大单步 %.2f" % (ENSEMBLE_PEND_MARE, ENSEMBLE_PEND_MAX); _lock("ENSEMBLE_PEND_T", ENSEMBLE_PEND_T, "MARE 1.02、最大单步 1.15")
+V7X_L2_R_T = " ／ ".join("%.2f" % v for v in V7X_L2_R); _lock("V7X_L2_R_T", V7X_L2_R_T, "1.06 ／ 1.01 ／ 1.01 ／ 1.02")

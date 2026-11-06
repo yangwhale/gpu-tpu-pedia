@@ -1070,7 +1070,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>⑤ GPU 生产近似＋输出头 dgrad 分段 FP32 累加（最终 golden）</td><td>10 份、两两 45 对</td><td>第一关的基线（取其中一份）和尺子（<a href="#s9-4">§9.4</a>）</td></tr>
   <tr><td>⑥ 真精确：④ 再把输出头 dgrad 改成分段累加</td><td>1 份</td><td><a href="#s9-3">§9.3</a> 的真精确参照</td></tr>
   <tr><td>TPU</td><td>3 种跑法；扰动臂 7 个＋基线，28 对</td><td>第一节的三个点；TPU 自己的执行噪声（<a href="#s10-1">§10.1</a> 的回归）</td></tr>
-  <tr><td>TPU 扰动组（定案后）</td><td>7 份（v5p 5、v7x 2），只改执行参数</td><td><a href="#s9-4">§9.4</a> 只报：TPU 不是挑出来的好样本</td></tr>
+  <tr><td>TPU 扰动组（定案后）</td><td>9 份（v5p 5、v7x 4），只改执行参数</td><td><a href="#s9-4">§9.4</a> 只报：TPU 不是挑出来的好样本</td></tr>
   </tbody></table>
   <p>现在只需记住两件：定案前，第一关拿 ④ 当基线、借 ③ 那组当尺子（<a href="#s3-3">§3.3</a> 的例子就是那时的判定）；最后定下来的是 ⑤：基线取它的一份，尺子是它自己 10 份两两 45 对（<a href="#s9-4">§9.4</a>）。</p>
 
@@ -5853,9 +5853,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">当基线的那份 golden 不是一开始就有的：从框架的默认配置出发改了三次，最后回到第二份、只改一处，就是最终 golden ⑤（⑥ 真精确只当参照）。</p>
 
   <h3 id="s9-1">9.1　五份 golden，一步一步来</h3>
-<figure class="fbox fwide" id="fig-golden"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="四张卡片从左到右：第一份是起点，框架默认配置；第二份加上整层重算和路由回放，跟生产一样；第三份再把输出头 dgrad 换成 FP32 乘法（一次累加）；第四份再改成 BF16 权重、全程 FP32 计算，叫精确轨迹，是定案前的基线；后来发现它输出头那次长求和仍有偏。第五份是最终 golden：回到第二份，只把输出头 dgrad 改成分段累加。卡片下面是同一个 TPU 被测对它的参数范数差，按同一把尺子 N 算倍数：对第二份 24 倍，对第三份 10 倍，对第四份 3.5 倍；第五份换成它自己 45 对的尺子，当前 TPU 是 0.50 倍，过。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-golden"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="四张卡片从左到右：第一份是起点，框架默认配置；第二份加上整层重算和路由回放，跟生产一样；第三份再把输出头 dgrad 换成 FP32 乘法（一次累加）；第四份再改成 BF16 权重、全程 FP32 计算，叫精确轨迹，是定案前的基线；后来发现它输出头那次长求和仍有偏。第五份是最终 golden：回到第二份，只把输出头 dgrad 改成分段累加。卡片下面是同一个 TPU 被测对它的参数范数差，按同一把尺子 N 算倍数：对第二份 24 倍，对第三份 10 倍，对第四份 3.5 倍；第五份换成当前 TPU 和它自己 45 对的尺子，带符号均值只有 0.07 倍，过。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">golden 是一步步改出来的　——　<tspan font-weight="700">先对齐超参和数据，再每一步只加一样东西</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡片 ＝ 一份 golden（GPU 上跑的标准答案）；下面的柱子 ＝ 同一个 TPU 被测对它的参数范数差是噪声的几倍（同一把尺子）</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">卡片 ＝ 一份 golden（GPU 上跑的标准答案）；柱子 ＝ TPU 被测对它的参数范数差是噪声的几倍（②–④ 同被测同尺子；⑤ 换成当前 TPU 和它自己的尺子）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">起点</text>
 <rect x="78.36" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
@@ -5928,16 +5928,16 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1136" y="278" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">GPU 步时多六成</text>
 <text class="svgsm" x="1136" y="300" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">尺子：自己 10 份 45 对</tspan></text>
 <text class="svgsm" x="1136" y="336" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第一关的基线（定案）</tspan></text>
-<rect x="1136" y="382" width="4.5" height="30" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1136" y="382" width="0.6318642573821067" height="30" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <line x1="1154.0" y1="374" x2="1154.0" y2="420" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
 <text class="svgsm" x="1154" y="368" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2×N</tspan></text>
-<text class="svgsm" x="1136" y="438" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 对它：0.50 × N</tspan></text>
+<text class="svgsm" x="1136" y="438" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 对它：0.07 × N</tspan></text>
 <text class="svgsm" x="1136" y="460" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">被测：当前 TPU；尺子换成它自己的</text>
 <text class="svgsm" x="30" y="482" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">柱子：TPU 被测的参数范数带符号均值 ÷ N（②–④ 的 N ＝ ③ 那组 5 份两两 10 对的最大值；⑤ 用它自己 10 份 45 对）；竖线 ＝ 2×N</text>
 <rect x="0" y="572" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="572" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="572" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="599" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每往精确值靠一步，TPU 的「偏差」就缩一截：24 倍 → 10 倍 → 3.5 倍；最终 golden 上 0.50 倍</tspan></text>
+<text class="svglbl" x="20" y="599" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每往精确值靠一步，TPU 的「偏差」就缩一截：24 倍 → 10 倍 → 3.5 倍；最终 golden 上 0.07 倍</tspan></text>
 <text class="svgsm" x="20" y="630" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">缩掉的部分都查清了是 GPU golden 自己的偏差；④ 上剩的那截也拆清了：④ 自己少漂一笔、TPU 的 dlogits 舍入少漂一笔，两笔相减。最后只修 GPU 那一次长求和，两边就落进</text>
 <text class="svgsm" x="20" y="654" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一团噪声。</text>
 <text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：每一份 golden 都要单独跑满 1000 步、存好数据；改了什么、为什么改、证据在哪，都要进一张出处总表。</text>
@@ -6014,25 +6014,25 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="448" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="450" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="478" x2="1400" y2="478" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="468" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 生产对 ④ 的 ＋0.00235 是三笔相加（第 1000 步）</tspan></text>
+<text class="svglbl" x="14" y="468" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 生产对 ④ 的 ＋0.00235 是三笔相加（第 1000 步，v7x 那组补跑；v5p 那组见出处）</tspan></text>
 <rect x="180.0" y="528" width="695.76" height="24" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="190" y="545" fill="#fff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① ④ 自己少漂：cuBLAS FP32 一次累加整个词表（GPU 一侧）　＋8.70e-3</tspan></text>
+<text class="svgsm" x="190" y="545" fill="#fff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第一笔　④ 自己少漂：cuBLAS FP32 一次累加整个词表（GPU 一侧）　＋8.70e-3</tspan></text>
 <rect x="328.88" y="568" width="546.88" height="24" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="338" y="585" fill="#fff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② TPU 输出头反向的 dlogits 舍成 BF16（TPU 一侧）　−6.84e-3</tspan></text>
+<text class="svgsm" x="338" y="585" fill="#fff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二笔　TPU 输出头反向的 dlogits 舍成 BF16（TPU 一侧）　−6.84e-3</tspan></text>
 <rect x="328.88" y="608" width="39.039999999999964" height="24" rx="3" fill="#e8eaed" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="377" y="625" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 其余 BF16 存储与逐元素　＋4.9e-4</tspan></text>
+<text class="svgsm" x="377" y="625" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第三笔　其余 BF16 存储与逐元素　＋4.9e-4</tspan></text>
 <line x1="367.91999999999996" y1="612" x2="367.91999999999996" y2="656" stroke="#202124" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4,3"/>
 <text class="svgsm" x="375" y="668" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合计 2.35e-3，正好等于实测</tspan></text>
 <rect x="0" y="730" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="730" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="730" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="757" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两个生产程序之间，唯一测得出的差是 GPU 输出头 dgrad 的长累加</tspan></text>
-<text class="svgsm" x="20" y="788" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">GPU 生产只修这一处，TPU 生产就跟它几乎重合（按 ③ 那把尺子 v5p 五项全过）；剩下离真精确的那截是两边都有的 dlogits 舍入，不算两边的差。</text>
-<text class="svgsm" x="20" y="812" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第一关对 ④ 的那点差，是 ① 和 ② 两笔方向相反的偏差相减剩下的：基线自己偏一笔，TPU 自己舍入一笔。</text>
+<text class="svgsm" x="20" y="788" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">GPU 生产只修这一处，TPU 生产就跟它几乎重合（按 ⑤ 自己 45 对的尺子，v5p、v7x 全过）；剩下离真精确的那截是两边都有的 dlogits 舍入，不算两边的差。</text>
+<text class="svgsm" x="20" y="812" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">定案前对 ④ 的那点差，是头两笔方向相反的偏差相减剩下的：基线自己偏一笔，TPU 自己舍入一笔。</text>
 </svg><figcaption><b>先看上面的数轴：蓝点和橙点几乎叠在一起。</b><span class="capmore"><br><em>都是第 1000 步、生产近似配置、TPU 当前配置；下面三笔里红色是 GPU 一侧，蓝色是 TPU 一侧。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：第 1000 步参数范数对 GPU 生产 golden 5 份均值：④ ＋1.857e-2、⑤ ＋2.071e-2、TPU 生产 ＋2.092e-2（v5p、v7x 当前配置同值）、⑥ ＋2.744e-2；TPU 精确轨迹 ＋2.73e-2。TPU 生产对 TPU 精确少 6.3e-3，对 ⑥ 少 6.5e-3，差不到一个记录刻度。</p>
-<p>📌 实测：① ＋8.697e-3（GPU 精确改分段累加 ＋8.55e-3）；② −6.836e-3（TPU 只把 dlogits 舍成 BF16、其余全精确）；GPU 真精确只多舍这一次 dlogits 少漂 6.74e-3；③ 由差额得出，约两个 FP32 记录刻度，单独分辨不清。</p></details></figure>
+<p>📌 实测（v7x）：第一笔 ＋8.697e-3（GPU 精确改分段累加 ＋8.55e-3）；第二笔 −6.836e-3（TPU 只把 dlogits 舍成 BF16、其余全精确）；第三笔由差额得出，约两个 FP32 记录刻度。v5p 那组：＋7.97e-3、−6.10e-3、＋4.9e-4，同样合到 ＋2.35e-3。GPU 真精确只多舍这一次 dlogits 少漂 6.74e-3。</p></details></figure>
   <p>换句话说，GPU 生产和 TPU 生产之间量得出来的差别，只剩 GPU 那一次长求和。旧版拆账（59% ／ 29% ／ 12%）把 ④ 当成了精确值，而 ④ 自己也偏，那一版作废。</p>
-<figure class="fbox fwide" id="fig-twolayer"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="定案后的验收协议。上一层：第一关，必须过。TPU 被测对最终 golden ⑤ 的一份比，⑤ 是 GPU 生产程序只把输出头 dgrad 改成分段累加；尺子是 ⑤ 自己同设置重跑 10 份、两两 45 对。v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 7 份扰动运行，每份也都不超过 0.85 倍。下一层：第二关，已解释差异。TPU 对 GPU 生产 golden ② 仍差参数范数 +0.0209、loss −1.37e-4，全部是 GPU 输出头 dgrad 长求和的偏差。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-twolayer"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="定案后的验收协议。上一层：第一关，必须过。TPU 被测对最终 golden ⑤ 的一份比，⑤ 是 GPU 生产程序只把输出头 dgrad 改成分段累加；尺子是 ⑤ 自己同设置重跑 10 份、两两 45 对。v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 9 份扰动运行，8 份不超过 0.85 倍，1 份梯度范数待定，落在 TPU 自己的执行噪声里。下一层：第二关，已解释差异。TPU 对 GPU 生产 golden ② 仍差参数范数 +0.0209、loss −1.37e-4，全部是 GPU 输出头 dgrad 长求和的偏差。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">golden 自己有偏差时：分两关验收（定案版）</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上 ＝ 必须过的那一关；下 ＝ 只写清楚、不判过不过的那一关；箭头 ＝ 谁对谁比</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -6058,8 +6058,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1150" y="192" fill="#b06000" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">尺子：⑤ 自己重跑</tspan></text>
 <text class="svgsm" x="1150" y="216" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">10 份两两 45 对</text>
 <rect x="922" y="272" width="456" height="54" rx="10" fill="#fff" stroke="#80868b" stroke-width="1.6" stroke-dasharray="5 4"/>
-<text class="svgsm" x="1150" y="294" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只报：TPU 扰动组 7 份（只改执行参数）</tspan></text>
-<text class="svgsm" x="1150" y="315" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">每份对 ⑤ 的四项 r 都 ≤ 0.85</text>
+<text class="svgsm" x="1150" y="294" fill="#5f6368" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只报：TPU 扰动组 9 份（只改执行参数）</tspan></text>
+<text class="svgsm" x="1150" y="315" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">8 份四项 r ≤ 0.85；1 份梯度范数待定（TPU 自己的噪声内）</text>
 <line x1="922" y1="299" x2="842" y2="317" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="5 4" marker-end="url(#ah-80868b)"/>
 <rect x="60" y="402" width="400" height="76" rx="10" fill="#fff" stroke="#5f6368" stroke-width="2"/>
 <text class="svgsm" x="260" y="432" fill="#5f6368" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② GPU 生产 golden</tspan></text>
@@ -6096,7 +6096,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>v5p EP＝8</td><td>0.76 ✅</td><td>0.78 ✅</td><td>0.74 ✅</td><td>0.48 ✅</td><td>逐位 ✅</td></tr>
   <tr><td>v7x EP＝8</td><td>0.77 ✅</td><td>0.81 ✅</td><td>0.68 ✅</td><td>0.35 ✅</td><td>逐位 ✅</td></tr>
   </tbody></table>
-  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 0.85 倍</b>；按专家切（EP＝8）四项也过（这一档没测路由偏置曲线和健康信号）；当前配置的路由偏置曲线和健康信号也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden 的差，照样在第二关报。TPU 一侧也不是挑出来的好样本：只改执行参数的 7 份扰动运行（v5p 5、v7x 2），每份四项都不超过 0.85 倍。对 GPU 生产 golden ② 的差（参数范数 ＋0.0209，loss −1.37e-4）写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
+  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 0.85 倍</b>；按专家切（EP＝8）四项也过（这一档没测路由偏置曲线和健康信号）；当前配置的路由偏置曲线和健康信号也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden 的差，照样在第二关报。TPU 一侧也不是挑出来的好样本：只改执行参数的 9 份扰动运行（v5p 5、v7x 4），8 份四项都不超过 0.85 倍；剩 1 份（v7x，注意力分块 1024）梯度范数待定（MARE 1.02、最大单步 1.15），落在 v7x 自己的执行噪声里：v7x 扰动组两两的梯度范数逐步涨落比 GPU 重跑宽约两成。对 GPU 生产 golden ② 的差（参数范数 ＋0.0209，loss −1.37e-4）写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
   <details class="foldfig"><summary><b>怎么走到 45 对的</b>：10 对时有两项待定；两处测量口径；补 5 份重跑</summary>
   <ol>
     <li>先只有 ⑤ 的 5 份（10 对），v5p 的梯度范数、v7x 的梯度范数和参数范数落在 1.02–1.24 倍的待定区。</li>
@@ -6106,7 +6106,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>1000 步这一级全过；L0–L3 还有几格不是「严格档过」</b>：每一格都对上了一条机制</summary>
   <table class="t9"><thead><tr><th>检查</th><th>为什么</th></tr></thead><tbody>
   <tr><td>TPU 原生数据加载器与 GPU 逐样本一致（L0）</td><td>切小份的顺序不同（<a href="#s2-1">§2.1</a>）；对齐时原样回放 GPU 的数据，每一步每张卡的输入指纹全部相同</td></tr>
-  <tr><td>v7x 单算子、单层前向（L1、L2）</td><td>读的还是打开 FP32 累加开关之前的回放；v5p 按当前配置重跑后全过，v7x 当前配置的回放在排队</td></tr>
+  <tr><td>v7x 单算子、单层前向（L1、L2）</td><td>按当前配置重跑后，v7x 四层前向 R 比 1.06 ／ 1.01 ／ 1.01 ／ 1.02（开关前 1.53–1.57），v5p 也全过；只剩第 2 层 MoE 块 R 1.27 一格：4096 个 token 里有 1 个在近平局处选了跟 FP64 不同的专家，去掉它 R 是 0.95（v5p 同层去掉 2 个这样的 token 是 0.94）。一两个 token 就能让这个比值跨线，反映的是路由翻转；路由本身另有检查，两平台都过</td></tr>
   <tr><td>第 1 步各层反向、参数梯度、优化器状态（L2、L3）</td><td>路由近平局翻转（<a href="#s4-3">§4.3</a>）：每层 0.44%–0.56% 的槽位两边各落一边；GPU 重跑从不翻转，这把尺子宽度是 0。整网按梯度能量只差 1.28e-3，1000 步的统计在噪声内</td></tr>
   <tr><td>第 1 步更新后主权重（L3，待定 1.31 ／ 1.19 倍）</td><td>同上的下游，量级很小</td></tr>
   <tr><td>v7x 更新后路由偏置（L3）</td><td>192 个专家里 1 个翻号：平均负载约 2731 个 token，差一个就能落在均值两边（推断），同上的下游</td></tr>
@@ -6114,12 +6114,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </tbody></table></details>
   <details class="foldfig"><summary><b>想两边对得更紧，要动哪些开关</b>：TPU 一侧必需两项、推荐两项，GPU 一侧一处，各有代价</summary>
   <ul>
-    <li>TPU 必需：窗口化 collective matmul 的部分和留在 FP32（<a href="#s5-4">§5.4</a>），步时 v7x ＋1.9%、v5p ＋0.66%；梯度累积的分组跟 GPU 一样。</li>
+    <li>TPU 必需：窗口化 collective matmul 的部分和留在 FP32（<a href="#s5-4">§5.4</a>），步时 v7x ＋1.9%、v5p ＋0.66%。它是单算子、单层这两级要的；1000 步这一级不靠它，开关打开前的配置对 ⑤ 也全过（最差 v5p 0.79、v7x 0.78）。梯度累积的分组跟 GPU 一样。</li>
     <li>TPU 推荐：RMSNorm 在 FP32 里算完只舍一次；门控激活逐个算子舍入（不开时这个算子只有约四分之三元素跟 GPU 逐位）。可选：按专家切，步时反而少 28%（v7x）。</li>
     <li>GPU（只影响 golden 的制作）：输出头 dgrad 改成分段 FP32 累加，这是最终 golden 唯一的数值改动，步时多 62%（一个没优化过的实现）。</li>
     <li>想朝真精确再近一步：两边都让 dlogits 留在 FP32（TPU 步时多 9.7%），对齐本身不需要。</li>
   </ul></details>
-<details class="foldfig"><summary><b>考考自己</b>：只有 10 对时几项落在 1.02–1.24 倍，补到 45 对就全过了。这算不算「把尺子放宽了好过关」？</summary><p>不算，理由有三：协议事先写的就是「待定先补参照」，不是事后改门槛；N 取最大值，样本少时系统性偏窄，10 对时所有 r 都挤在 0.7–1.3、没有离群项，像尺子短而不像真差；另外两条旁证 —— 不做口径改正 45 对下最差 0.84，TPU 七份扰动运行也都不超过 0.85。</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：只有 10 对时几项落在 1.02–1.24 倍，补到 45 对就全过了。这算不算「把尺子放宽了好过关」？</summary><p>不算，理由有三：协议事先写的就是「待定先补参照」，不是事后改门槛；N 取最大值，样本少时系统性偏窄，10 对时所有 r 都挤在 0.7–1.3、没有离群项，像尺子短而不像真差；另外两条旁证 —— 不做口径改正 45 对下最差 0.84，TPU 9 份扰动运行里 8 份不超过 0.85，剩下一份的待定也落在 TPU 自己的执行噪声里。</p></details>
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>
 </div></section>
 
@@ -6127,7 +6127,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">守住数值靠回归；少走弯路，靠把走过的弯路记下来。</p>
 
   <h3 id="s10-1">10.1　日常回归：逐位优先</h3>
-<figure class="fbox fwide" id="fig-regress"><svg viewBox="0 0 1400 658" width="100%" role="img" aria-label="每天的流程。训练代码的每个改动都要写一栏数值影响声明，然后跑一轮回归，对上一次全部通过的 TPU 运行比。逐位相同就通过，指针前移。不逐位就看声明：写了数学不变的，退回；执行级的改动或升级依赖，用 TPU 自己的执行噪声（TPU 28 对）判；数学级的改动，要对起点那份 golden（①）不变差（这是历史门，待换成第一关定下的基线），必要时回到验收的某一级重做。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-regress"><svg viewBox="0 0 1400 658" width="100%" role="img" aria-label="每天的流程。训练代码的每个改动都要写一栏数值影响声明，然后跑一轮回归，对上一次全部通过的 TPU 运行比。逐位相同就通过，指针前移。不逐位就看声明：写了数学不变的，退回；执行级的改动或升级依赖，用 TPU 自己的执行噪声（TPU 28 对）判；数学级的改动，要对起点那份 golden（①）不变差（这是历史门，本课建议换成最终 golden ⑤），必要时回到验收的某一级重做。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">日常回归：先要求逐位，不逐位再按声明分流</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">方块 ＝ 一个环节；菱形 ＝ 一个判断；参照不是 GPU，是上一次全部通过的 TPU 运行（LKG）</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -6165,7 +6165,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1080" y="352" width="300" height="76" rx="10" fill="#fff" stroke="#9334e6" stroke-width="2"/>
 <text class="svgsm" x="1230" y="380" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数学级</tspan></text>
 <text class="svgsm" x="1230" y="404" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">对齐门：对起点那份 golden（①）不变差</text>
-<text class="svgsm" x="1230" y="422" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">（历史门，待换成定下的基线）</text>
+<text class="svgsm" x="1230" y="422" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">（历史门，本课建议换成 ⑤）</text>
 <line x1="230" y1="300" x2="268" y2="300" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <line x1="490" y1="300" x2="558" y2="300" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <path d="M 640.0 252.0 H 768.0 Q 778.0 252.0 778.0 242.0 V 192.0" fill="none" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
@@ -6272,7 +6272,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="30" y="788" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
 <text class="svgsm" x="52" y="819" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
 <text class="svgsm" x="78" y="810" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">定案 ⑤：只修那一次长求和</tspan></text>
-<text class="svgsm" x="78" y="830" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">10 对时两项 1.02–1.24 倍待定 → 两处测量口径 → 补到 45 对</text>
+<text class="svgsm" x="78" y="830" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">10 对时几项 1.02–1.24 倍待定 → 两处测量口径 → 补到 45 对</text>
 <text class="svgsm" x="1350" y="819" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v5p、v7x 全部在噪声内，最差 0.85 倍</tspan></text>
 <rect x="0" y="892" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="892" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -6428,7 +6428,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>TPU 对 ④ ＋2.35e-3 ＝ ＋8.70e-3 −6.84e-3 ＋4.9e-4（v7x；v5p ＋7.97e-3、−6.10e-3、＋4.9e-4）；TPU 对真精确少漂 6.3e-3；GPU 真精确多舍一次 dlogits −6.7e-3</td><td>第 1000 步；第一笔由 GPU 精确改分段累加证实，第二笔由 TPU 精确只把 dlogits 舍 BF16 证实，第三笔是差额</td></tr>
   <tr><td>cuBLAS FP32 一次累加的偏差：第 1 步 −1.8e-6，第 299 步状态 −2.6e-4；改分段累加后 GPU 精确对 TPU 精确 7.9e-8；漂移比 1.45 ／ 1.10</td><td>B200，输出头 dgrad 沿 w̄ 的相对偏差；后两项为不重算配置第 1000 步（参数范数带符号均值；漂移对 4 份默认 GPU 运行均值，取前后 25 步平均）</td></tr>
   <tr><td>定案前比过的基线：⑤ 参数范数 0.42 倍、loss 尾段 0.59 倍；⑥ 参数范数 6.2 到 7.1 倍；dlogits 留 FP32 的诊断版步时 ＋9.7%</td><td>v5p 当前配置（⑥ 一项含 v7x），尺子为 ③ 那组 10 对</td></tr>
-  <tr><td>定案后第一关：最差 0.85 倍（v5p 参数范数 0.50、v7x 0.53），EP＝8 也过；TPU 扰动组 7 份都 ≤ 0.85；10 对时待定 1.02–1.24；原口径 45 对最差 0.84</td><td>对 ⑤ 的一份，尺子 ⑤ 自己 10 份两两 45 对；v5p、v7x 当前配置 1000 步</td></tr>
+  <tr><td>定案后第一关：最差 0.85 倍（v5p 参数范数 0.50、v7x 0.53），EP＝8 也过；TPU 扰动组 9 份里 8 份 ≤ 0.85、1 份梯度范数待定（MARE 1.02、最大单步 1.15，v7x 扰动组梯度范数 MARE 两两 0.039 对 GPU 0.033）；v7x 当前配置四层前向 R 1.06 ／ 1.01 ／ 1.01 ／ 1.02、第 2 层 MoE 块 1.27 → 去掉 1 个翻转 token 0.95；10 对时待定 1.02–1.24；原口径 45 对最差 0.84</td><td>对 ⑤ 的一份，尺子 ⑤ 自己 10 份两两 45 对；v5p、v7x 当前配置 1000 步</td></tr>
   <tr><td>两处测量口径：TPU 参数范数单步自测误差 2.6e-7（GPU 8e-8，GPU 重跑单步差 2.7e-7）；梯度范数 N 随配对方向 1.26e-3 ／ 2.49e-3</td><td>同一次运行里按组记录的平方和与整网一次归约对比；梯度范数改用两边均值当分母</td></tr>
   <tr><td>开关代价：FP32 累加步时 v7x ＋1.9%、v5p ＋0.66%；按专家切 v7x −28%；GPU 分段累加 ＋62%</td><td>FP32 累加为 100 步对比；按专家切为 1000 步运行第 50–1000 步步时中位数；分段累加为 GPU 侧步时</td></tr>
   <tr><td>TPU 自己剩下的（旧口径，对精确轨迹；第一个数对 ④′，后两个对 ④）：＋1.7e-3 ／ ＋2.6e-3 ／ ＋2.3e-3</td><td>分别是：不重算配置第 975 步；生产近似配置、开关打开前第 1000 步；当前配置第 1000 步</td></tr>

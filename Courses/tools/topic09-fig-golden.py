@@ -146,7 +146,7 @@ assert N.ACC[0][0].startswith("param_norm") and GATE1_PN == 3.45
 def fig_twolayer():
     FV5, FV7 = N.FINAL[0], N.FINAL[1]
     f = Fig(W, "定案后的验收协议。上一层：第一关，必须过。TPU 被测对最终 golden ⑤ 的一份比，⑤ 是 GPU 生产程序只把输出头 dgrad 改成分段累加；尺子是 ⑤ 自己同设置重跑 10 份、两两 45 对。"
-               "v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 7 份扰动运行，每份也都不超过 0.85 倍。"
+               "v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 9 份扰动运行，8 份不超过 0.85 倍，1 份梯度范数待定，落在 TPU 自己的执行噪声里。"
                "下一层：第二关，已解释差异。TPU 对 GPU 生产 golden ② 仍差参数范数 +0.0209、loss −1.37e-4，全部是 GPU 输出头 dgrad 长求和的偏差。")
     y0 = f.header("golden 自己有偏差时：分两关验收（定案版）",
                   "上 ＝ 必须过的那一关；下 ＝ 只写清楚、不判过不过的那一关；箭头 ＝ 谁对谁比",
@@ -164,7 +164,7 @@ def fig_twolayer():
     node(960, py + 30, 380, 76, "尺子：⑤ 自己重跑", "%d 份两两 %d 对" % (N.FINAL_RUNS, N.FINAL_PAIRS), OR)
     f.box(922, py + 140, 456, 54, "#fff", GY2, 10, sw=1.6, dash="5 4")
     f.t(1150, py + 162, "只报：TPU 扰动组 %d 份（只改执行参数）" % N.ENSEMBLE_RUNS, GY, True, 14, "middle")
-    f.t(1150, py + 183, "每份对 ⑤ 的四项 r 都 ≤ %.2f" % N.FINAL_WORST, GY, size=12, anchor="middle")
+    f.t(1150, py + 183, "%d 份四项 r ≤ %.2f；1 份梯度范数待定（TPU 自己的噪声内）" % (N.ENSEMBLE_OK, N.FINAL_WORST), GY, size=12, anchor="middle")
     f.line(922, py + 167, 842, py + 185, GY2, 1.4, dash="5 4")
     node(60, py + 270, 400, 76, "② GPU 生产 golden", "整层重算 ＋ 路由回放", GY)
     node(960, py + 270, 380, 76, "已解释差异", "全部是 GPU 输出头 dgrad 的长求和", GY)
