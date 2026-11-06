@@ -356,7 +356,7 @@ ROUTE_SAME_IN_DIFF = 4e-6                                             # 喂相�
 FP32_FLIP_MARGIN = 1.6e-6                                             # 两边全程 FP32 时第 1 层翻的那个 token 的分差
 # 参考档
 REF_LOSS_GATE, REF_RELL2_GATE = 2e-4, 0.01           # 另一个已上线迁移项目的固定线（首步与窗口 loss；逐层 rel_L2）
-LAYER_RELL2_FAIL = (0.016, 0.020, 0.028)             # v5p 第 1 步逐层回放：参考档不过、严格档过的三层（实测）
+LAYER_RELL2_FAIL = (0.016, 0.020, 0.028)             # v5p 第 1 步逐层回放，MoE 第 1–3 层的 rel_L2（实测）；这几层参考档「不适用」（受路由翻转影响），严格档 R 比过
 assert all(x > REF_RELL2_GATE for x in LAYER_RELL2_FAIL)
 L_RELL2_1_T, L_RELL2_2_T, L_RELL2_3_T = ("%.3f" % x for x in LAYER_RELL2_FAIL)
 _lock("L_RELL2_2_T", L_RELL2_2_T, "0.020")

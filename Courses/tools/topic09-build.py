@@ -386,7 +386,7 @@ __ANIM_TRUNC__
     <li><b>越长越偏</b>：单数越多，丢得越多，而且同一个方向；累加值越长越大，窗口跟着它往高位挪，后来的小乘积被扔掉的比例越来越大。</li>
   </ol>
   <p>十进制的例子（示意，只留 4 位）：累加值 1234 加 5.6 和 7.8，对齐到千位、只留 4 位，小数部分全扔：1234 ＋ 5 ＋ 7 ＝ 1246，真值 1247.4。累加值涨到 12340 以后，同样加 5.6 和 7.8，个位也落到窗口外：12340 ＋ 0 ＋ 0，一下少了 13.4。</p>
-  <p>«TC_GROUP» 和 «TC_KEEP» 是从实测里拟合出来的（按这个模型重算，三层路由打分逐位对上），跟一篇公开论文的比特级模型一致，不是 NVIDIA 公开的规格。</p></details>
+  <p>«TC_GROUP» 和 «TC_KEEP» 是从实测里拟合出来的（按这个模型重算，三层路由打分逐位对上），不是 NVIDIA 公开的规格。</p></details>
   <details class="foldfig"><summary><b>外面的人怎么量到同一件事</b>：V100 到 B200 的张量核测量、FP8 上的同类问题；附两种不抹零的加法作对照</summary>
   <ul>
     <li>V100、T4、A100 三代上就有人量出：张量核里乘积精确，加法向零舍入，只在最后规格化（Fasi、Higham、Mikaitis、Pranesh，<em>Numerical behavior of NVIDIA tensor cores</em>，PeerJ Computer Science，2021）。</li>
@@ -566,7 +566,7 @@ __FIG_EXACT__
   <ul>
     <li>不分段，FP32 也偏：第 300 步还是 «ABL_FP32_ONESHOT_300_T»。分段以后，BF16 张量核也降到 1e-7 到 1e-6 的量级，跟升 FP32 分段一样准，单次耗时只有它的十分之一（«ABL_MS_T»；两种分段都是逐段调库、没做融合）。</li>
     <li>两个条件：段结果必须留 FP32 —— 每段先舍 BF16 再相加就不行；段长不超过 «CHUNK_SEG» —— 到 4096 已剩 «ABL_CHUNK4096_T»，再长剩得更多，跟 §5.2「越长越偏」一致。</li>
-    <li>训练上也确认了：⑤ 的设置原样、只把这一处换成 BF16 张量核分段，跑满 1000 步 «CB_RUNS» 份，拿 ⑤ 的 45 对尺子对 ⑤ 的基线判，全过，最差 «CB_WORST» 倍，跟同一台机器原样重跑 ⑤ 的对照一样（«CB_CHK_WORST»）；步时 «CB_STEP_T»，比生产只多 «CB_COST_T»（⑤ 多 «CHUNK_COST_T»）。它是同样准、便宜得多的等价修法；正式基线仍是 ⑤。</li>
+    <li>训练上也确认了：⑤ 的设置原样、只把这一处换成 BF16 张量核分段，跑满 1000 步 «CB_RUNS» 份，拿 ⑤ 的 45 对尺子对 ⑤ 的基线判，全过，最差 «CB_WORST» 倍，跟同一台机器原样重跑 ⑤ 的对照一样（«CB_CHK_WORST»）；步时 «CB_STEP_T»，比生产只多 «CB_COST_T»（⑤ 多 «CHUNK_COST_T»）。TPU 当前配置拿它当基线交叉核对：v5p 全过；v7x 梯度范数 «CB_TPU_V7X_GN» 倍待定，可同一个 TPU 运行改对 ⑤ 的各份逐一当基线，也在 «CB_TPU_V7X_GN_SINGLE_T» 之间起伏，是单份基线自己的涨落。它是同样准、便宜得多的等价修法；正式基线仍是 ⑤。</li>
   </ul></details>
   <details class="foldfig"><summary><b>为什么不直接用全程 FP32 训练当参照</b>：那是另一条轨迹</summary>
   <p>生产里矩阵乘用的是主权重舍到 BF16 的那一份，权重本身每个元素就差半个 BF16 格。纯 FP32 训练（权重不舍）前 100 步 loss 就比 BF16 低 «FP32_TRAIN_LOSS_GAP_T»，走的是另一条路，跟哪边都差得远。
@@ -643,7 +643,7 @@ __FIG_TWOLAYER__
   <ul>
     <li>TPU 必需：窗口化 collective matmul 的部分和留在 FP32（§5.4），步时 v7x ＋«DFA_COST_V7X_T»、v5p ＋«DFA_COST_V5P_T»。它是单算子、单层这两级要的；1000 步这一级不靠它，开关打开前的配置对 ⑤ 也全过（最差 v5p «PRESWITCH_VS_FINAL_V5P»、v7x «PRESWITCH_VS_FINAL_V7X»）。梯度累积的分组跟 GPU 一样。</li>
     <li>TPU 推荐：RMSNorm 在 FP32 里算完只舍一次；门控激活逐个算子舍入（不开时这个算子只有约四分之三元素跟 GPU 逐位）。可选：按专家切，步时反而少 «EP8_SPEEDUP_V7X_T»（v7x）。</li>
-    <li>GPU（只影响 golden 的制作）：输出头 dgrad 改成分段 FP32 累加，这是最终 golden 唯一的数值改动，步时多 «CHUNK_COST_T»，按单次乘法的耗时推断，大头花在升 FP32 上（升 FP32 不分段就要 «ABL_MS_FP32_ONESHOT» ms）。乘法留在 BF16 张量核、只分段，一样准，步时只多 «CB_COST_T»：1000 步跟 ⑤ 分不开（§8.5）。TPU 当前配置拿它当基线交叉核对，v5p 全过；v7x 梯度范数 «CB_TPU_V7X_GN» 倍待定，可同一个 TPU 运行改对 ⑤ 的单份逐一当基线，也在 «CB_TPU_V7X_GN_SINGLE_T» 之间起伏，是单份基线自己的涨落。</li>
+    <li>GPU（只影响 golden 的制作）：输出头 dgrad 分段累加，最终 golden 唯一的数值改动。⑤ 升 FP32 再分段，步时多 «CHUNK_COST_T»（大头在升 FP32，按单次乘法耗时推断）；乘法留在 BF16 张量核、只分段，1000 步跟 ⑤ 分不开，步时只多 «CB_COST_T»（§8.5）。</li>
     <li>想朝真精确再近一步：两边都让 dlogits 留在 FP32（TPU 步时多 «HEADFP32_COST_T»，v7x），对齐本身不需要。</li>
   </ul></details>
 ''' + quiz("只有 5 份、两两 10 对时几项落在 1.02–1.24 倍，补到 10 份、两两 45 对就全过了。这算不算「把尺子放宽了好过关」？",
@@ -833,7 +833,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>回归：«T0_STEPS» 步那档约 «T0_MIN» 分钟、«STEPS» 步那档约 «T1_MIN» 分钟；扰动臂旧配置 «ARMS_TRIED» 试 «ARMS_KEPT» 过、«CAL_PAIRS» 对；新配置 7 个重跑全过、重标 28 对</td><td>v5p（8 颗芯片），提交到取回</td></tr>
     <tr><td>第 1 步路由翻转：翻了的 token 第 8、9 名分差中位数 «FLIP_MARGIN_DASH_T»；某专家梯度 «STEP1_EXPERT»、«STEP1_TENSORS» 个张量合起来 «STEP1_ALL»</td><td>第 1 步隔离回放；被测梯度由 Adam 一阶动量反推</td></tr>
     <tr><td>路由翻转对照（动画 anim-flip）：全部 token 第 8、9 名分差中位数 «ALL_MARGIN_LO» – «ALL_MARGIN_HI_T»；喂相同路由输入，两边路由打分（logits）的 rel_L2 仍约 «ROUTE_SAME_IN_DIFF»、翻转 0；输入换成 TPU 自己算的，每层翻 «FLIP_L2_T»；全程 FP32 下第 1 层翻的那个 token 分差 «FP32_FLIP_MARGIN»（据此得出的「两边实现不同」已撤回）</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 «BATCH_TOKENS» 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
-  <tr><td>逐层 rel_L2：三层 «L_RELL2_1_T» ／ «L_RELL2_2_T» ／ «L_RELL2_3_T»（参考档不过、严格档过）</td><td>v5p，第 1 步逐层回放</td></tr>
+  <tr><td>逐层 rel_L2：MoE 三层 «L_RELL2_1_T» ／ «L_RELL2_2_T» ／ «L_RELL2_3_T»（参考档在这几层不适用，严格档 R 比过）；第 0 层前向 «REF_LAYER0_FWD_T»、反向 «REF_LAYER0_BWD_T»（参考档过）；参考线来历：同类项目注意力层逐层前向实测 «REF_LAYER_MEAS_T»</td><td>v5p，第 1 步逐层回放；第 0 层两平台相同</td></tr>
   <tr><td>去掉 w̄ 方向后 loss：前半 «REMOVE_LOSS_H1_T»、后半 «REMOVE_LOSS_H2_T»（尾段平均 «REMOVE_LOSS_T»）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
   <tr><td>第 1 步换尺子：最差张量 TPU 只改片上内存上限 «STEP1_EXEC_T»、TPU 对 GPU «STEP1_TVG_T»；并集 «UNION_PAIRS» 对；隔离回放反向 R v5p «ISO_BWD_V5P_T»、v7x «ISO_BWD_V7X_T»；整步按能量 R «STEP_R_T»；逐处改掉 «ARM_R_T»；三个开关步时 v5p ＋«GRAD_FP32_COST_T»、v7x ＋«GF32_COST_V7X_T»，打开后 1000 步对 ⑤：v5p «GF32_V5P_T»，v7x 梯度范数«GF32_V7X_GN_T»、其余过；路由偏置 FP64 选中 «BIAS_TOKENS_FP64»（均值 «BIAS_MEAN_T»）</td><td>第 1 步；前两个数是最差张量的相对差；诊断改动的 R 只在 v5p 上测；FP64 真值是同一全局批在 FP64 里求的梯度；开关步时为 100 步对比</td></tr>
   <tr><td>（定案前）交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 «XCHK_SELF_PN» ／ «XCHK_SELF_LOSS» ／ «XCHK_SELF_TAIL» ／ «XCHK_SELF_GN»；TPU 执行噪声 28 对 «XCHK_TPU_PN» ／ «XCHK_TPU_LOSS» ／ «XCHK_TPU_TAIL» ／ «XCHK_TPU_GN»</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
