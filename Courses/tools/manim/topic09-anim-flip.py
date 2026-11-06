@@ -55,7 +55,7 @@ FLIP_MARGIN_P50 = (2.7e-5, 6.3e-5)         # 翻转 token 的第 k 与 k+1 名�
 ALL_MARGIN_P50 = (3.1e-4, 8.0e-4)          # 全部 token 的分差中位数
 SAME_IN_LOGITS = (3.8e-6, 4.0e-6)          # 喂相同输入时两边路由 logits 的 rel_L2
 SAME_IN_LAYERS, TOKENS = 3, 4096           # 喂相同输入：3 层 × 4096 个 token，翻转 0
-FP32_FLIPS_L1, FP32_MARGIN = 1, 1.6e-6     # 两边全程 FP32：第 1 层翻 1 个 token，分差 1.6e-6
+FP32_FLIPS_L1, FP32_MARGIN = 1, 1.6e-6     # 两边全程 FP32：第 1 层翻 1 个 token，分差 1.6e-6（画面已不用：据此的结论撤回，改用隔离回放的 3.5%–5.4%）
 EXPERTS, TOPK = 192, 8
 G_EXPERT, G_NET, G_NET_TENSORS = 0.102, 1.28e-3, 50   # 第 1 步梯度 rel_L2：最差专家 / 比到的 50 个张量合起来
 E_TOKENS, E_OUT, E_IN = 139, 3, 1          # 第 3 层专家 0：一批 4096 个 token 里分到 139 个，换出 3、换进 1
@@ -296,9 +296,9 @@ class RouteFlip(Scene):
         c1 = tx("两边喂完全相同的路由输入", 22, WHITE).move_to([RX, 1.85, 0])
         c2 = tx("3 层 × 4096 个 token：翻转 0", 24, GREEN).move_to([RX, 1.35, 0])
         c3 = tx("（logits 两边仍差 4e-6，但一个都没翻）", 18, GREY_B).move_to([RX, 0.95, 0])
-        c4 = tx("两边全程 FP32（路由也是）", 22, WHITE).move_to([RX, 0.05, 0])
-        c5 = tx("第 1 层 4096 个 token 里照样翻 1 个", 24, RED).move_to([RX, -0.45, 0])
-        c6 = tx("它的第 8、9 名只差 1.6e-6", 18, GREY_B).move_to([RX, -0.85, 0])
+        c4 = tx("输入换成 TPU 自己算出来的（差 3.4e-3）", 22, WHITE).move_to([RX, 0.05, 0])
+        c5 = tx("每层翻 3.5%–5.4% 的 token", 24, RED).move_to([RX, -0.45, 0])
+        c6 = tx("翻的多是分差很小的近平局", 18, GREY_B).move_to([RX, -0.85, 0])
         c7 = tx("根子在输入差，不在路由器自己的精度", 22, YELLOW).move_to([RX, -1.75, 0])
 
         # ── ⑤ 收 ──

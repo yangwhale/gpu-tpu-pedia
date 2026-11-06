@@ -545,3 +545,11 @@ CHUNK_COST_T = "%.0f%%" % (CHUNK_COST * 100); _lock("CHUNK_COST_T", CHUNK_COST_T
 DFA_COST_V7X_T, DFA_COST_V5P_T, EP8_SPEEDUP_V7X_T = "%.1f%%" % (DFA_COST_V7X * 100), "%.2f%%" % (DFA_COST_V5P * 100), "%.0f%%" % (EP8_SPEEDUP_V7X * 100)
 _lock("DFA_COST_V7X_T", DFA_COST_V7X_T, "1.9%"); _lock("DFA_COST_V5P_T", DFA_COST_V5P_T, "0.66%"); _lock("EP8_SPEEDUP_V7X_T", EP8_SPEEDUP_V7X_T, "28%")
 FLIP_SLOT_T = "%.2f%%–%.2f%%" % (FLIP_SLOT_LO, FLIP_SLOT_HI)
+# 路由翻转的有效证据（L1/L2 隔离回放）：路由输入换成 TPU 自己算的，每层翻的 token 比例
+FLIP_L2_LO, FLIP_L2_HI = 3.5, 5.4
+FLIP_L2_T = "%.1f%%–%.1f%%" % (FLIP_L2_LO, FLIP_L2_HI); _lock("FLIP_L2_T", FLIP_L2_T, "3.5%–5.4%")
+# 「两边全程 FP32 也翻」那条证据已撤回：TPU 的 FP32 参照里路由专家其实按 BF16 算（FP32_MARGIN 只留作台账旧数）
+FINAL_PN_SM, FINAL_PN_SM_N = 1.593e-8, 2.269e-7      # v5p 当前配置对 ⑤：参数范数带符号均值、45 对上限（fig9-golden 柱子用带符号均值，跟 ②–④ 同口径）
+FINAL_PN_SM_R = FINAL_PN_SM / FINAL_PN_SM_N
+FINAL_PN_SM_R_T = "%.2f" % FINAL_PN_SM_R; _lock("FINAL_PN_SM_R_T", FINAL_PN_SM_R_T, "0.07")
+B_V5P = (7.965e-3, -6.104e-3, 0.488e-3)              # v5p 那组补跑的三笔（v7x 是 B_GPUEXACT / B_DLOGITS / B_REST）
