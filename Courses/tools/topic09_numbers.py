@@ -562,3 +562,36 @@ FINAL_PN_SM_R_T = "%.2f" % FINAL_PN_SM_R; _lock("FINAL_PN_SM_R_T", FINAL_PN_SM_R
 B_V5P = (7.965e-3, -6.104e-3, 0.488e-3)              # v5p 那组补跑的三笔（v7x 是 B_GPUEXACT / B_DLOGITS / B_REST）
 ENSEMBLE_PEND_T = "MARE %.2f、最大单步 %.2f" % (ENSEMBLE_PEND_MARE, ENSEMBLE_PEND_MAX); _lock("ENSEMBLE_PEND_T", ENSEMBLE_PEND_T, "MARE 1.02、最大单步 1.15")
 V7X_L2_R_T = " ／ ".join("%.2f" % v for v in V7X_L2_R); _lock("V7X_L2_R_T", V7X_L2_R_T, "1.06 ／ 1.01 ／ 1.01 ／ 1.02")
+
+# ── 11-06 下午：第 1 步张量换尺子（两侧执行噪声并集）＋ 台账 #20 定责 ─────────────────────────────
+# 出处（实测）：对齐报告 §4 与注 17、注 20（11-06 下午版）；新开关步时取补跑记录。
+STEP1_TPU_ONLY_EXEC, STEP1_TPU_VS_GPU = 0.080, 0.105    # 第 3 层 0 号专家梯度相对差：TPU 只改片上内存上限 / TPU 对 GPU
+UNION_GPU_PAIRS, UNION_TPU_RUNS = 3, 7
+UNION_TPU_PAIRS = UNION_TPU_RUNS * (UNION_TPU_RUNS - 1) // 2
+UNION_PAIRS = UNION_GPU_PAIRS + UNION_TPU_PAIRS
+assert (UNION_TPU_PAIRS, UNION_PAIRS) == (21, 24)
+ISO_BWD_R_V5P, ISO_BWD_R_V7X = (0.98, 0.74, 0.83, 1.01), (0.98, 0.96, 0.88, 0.95)   # 逐层隔离回放反向对 FP64 的 R
+assert max(ISO_BWD_R_V5P + ISO_BWD_R_V7X) <= 1.2
+STEP_R_V5P, STEP_R_V7X = 1.20, 1.21           # 整步梯度对 FP64，整网按能量 R
+STEP_R_PROJ = (0.45, 0.96)                     # 投影、共享专家、稠密 MLP：TPU 更近精确
+STEP_R_EXPERT = (0.76, 1.32)                   # 专家与路由权重：两边差不多远
+STEP_R_NORMMAX_V5P, STEP_R_NORMMAX_V7X = 2.20, 2.70   # 一维 norm、输出层、embedding：TPU 更远（最高）
+ARM_R = [("RMSNorm 的 scale", 1.35, 0.58), ("输出层", 1.60, 0.91), ("embedding", 1.21, 0.87)]
+ARM_ALL_R = (1.20, 0.67)
+GRAD_FP32_COST_V5P = 0.0079                    # 三个开关一起开，v5p 步时（1.6111 → 1.6239 s）
+assert abs(1.6239 / 1.6111 - 1 - GRAD_FP32_COST_V5P) < 0.0005
+STEP1_L23_V5P, STEP1_L23_V7X = (1.05, 1.75), (1.05, 1.86)          # 第 1 步整步检查的待定区间
+STEP1_FAIL_V5P, STEP1_FAIL_V7X = (2.1, 4.5, 2.3), (3.1,)            # 不过的层参数梯度：v5p 第 0–2 层、v7x 第 1 层
+MASTER_W_V5P, MASTER_W_V7X = 1.12, 0.99                              # 换尺子后，更新后主权重（v5p 待定、v7x 过）
+MASTER_W_FP64_R = 0.92
+BIAS_TOKENS_FP64, BIAS_MEAN = 2730, 65536 * 8 / 192
+assert abs(BIAS_MEAN - 2730.67) < 0.01
+# 落进正文
+STEP1_EXEC_T = "%.3f" % STEP1_TPU_ONLY_EXEC; _lock("STEP1_EXEC_T", STEP1_EXEC_T, "0.080")
+STEP1_TVG_T = "%.3f" % STEP1_TPU_VS_GPU; _lock("STEP1_TVG_T", STEP1_TVG_T, "0.105")
+ISO_BWD_V5P_T = " ／ ".join("%.2f" % v for v in ISO_BWD_R_V5P); ISO_BWD_V7X_T = " ／ ".join("%.2f" % v for v in ISO_BWD_R_V7X)
+STEP_R_T = "%.2f（v5p）／ %.2f（v7x）" % (STEP_R_V5P, STEP_R_V7X); _lock("STEP_R_T", STEP_R_T, "1.20（v5p）／ 1.21（v7x）")
+STEP_R_PROJ_T = "%.2f–%.2f" % STEP_R_PROJ; STEP_R_EXPERT_T = "%.2f–%.2f" % STEP_R_EXPERT
+ARM_R_T = "；".join("%s %.2f → %.2f" % a for a in ARM_R); _lock("ARM_R_T", ARM_R_T, "RMSNorm 的 scale 1.35 → 0.58；输出层 1.60 → 0.91；embedding 1.21 → 0.87")
+GRAD_FP32_COST_T = "%.2f%%" % (GRAD_FP32_COST_V5P * 100); _lock("GRAD_FP32_COST_T", GRAD_FP32_COST_T, "0.79%")
+BIAS_MEAN_T = "%.2f" % BIAS_MEAN
