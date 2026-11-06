@@ -609,3 +609,6 @@ GF32_V7X_T = "loss 全程 %.2f、尾段 %.2f、参数范数 %.2f、路由偏置�
 GF32_V7X_GN_T = "最大单步 %.2f 倍（带符号均值 %.2f 倍、MARE %.2f 倍）" % (GF32_V7X_GN_MAX, GF32_V7X_GN_SM, GF32_V7X_GN_MARE)
 _lock("GF32_V7X_GN_T", GF32_V7X_GN_T, "最大单步 1.05 倍（带符号均值 0.10 倍、MARE 0.97 倍）")
 GF32_COST_V7X_T = "%.1f%%" % (GF32_COST_V7X * 100); _lock("GF32_COST_V7X_T", GF32_COST_V7X_T, "1.6%")
+# 扰动臂第三关的第 1 步梯度一半改成比 FP64（出处：回归说明 11-06 补做，实测）：当前配置 6 个臂，按能量 R
+ARMS_FP64_N, ARMS_FP64_R = 6, (1.001, 1.039)
+ARMS_FP64_R_T = "%.3f–%.3f" % ARMS_FP64_R; _lock("ARMS_FP64_R_T", ARMS_FP64_R_T, "1.001–1.039")
