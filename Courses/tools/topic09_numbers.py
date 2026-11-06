@@ -49,8 +49,9 @@ TPU_ARMS = (-1.66e-4, -1.35e-4, -1.03e-4)             # 同一份代码的三种
 PAIRS_10RUNS = 10 * 9 // 2
 assert PAIRS_10RUNS == 45
 INCONCL = {3: (8, 46), 15: (3, 9), 28: (1, 46)}      # 参照对数 → 待定条数（GPU 对 GPU 演练）
-# 精确轨迹扰动出的五份两两 10 对的上限 vs GPU 生产程序重跑 10 对的上限（param_norm 带符号均值，实测）。
+# 精确轨迹扰动出的五份两两 10 对的上限 vs ③ 那组 GPU 重跑 10 对的上限（param_norm 带符号均值，实测）。
 # ⛔ 旧值 6.9e-9 只是单对（第二份给第 0 层一处权重乘 1 ＋ 1e-6），不能代表「精确轨迹自己的散布」；五份 10 对的上限跟 GPU 那把同一量级。
+# GPU_RERUN_PN 的「GPU 重跑」是 ③ 那组（生产近似＋输出头 dgrad 换 FP32 一次累加）5 份两两 10 对，不是 ② 生产程序本身。
 EXACT_SELF_PN, GPU_RERUN_PN = 1.07e-7, 1.24e-7
 assert 0.5 < EXACT_SELF_PN / GPU_RERUN_PN < 2, "同一量级"
 # 交叉核对（只报不判）：被测 v5p 当前配置，噪声换成别的尺子时 r 是多少（实测）。
@@ -65,7 +66,7 @@ def p_exceed(n):
     return 1.0 / (n + 1)
 
 
-# ── 第一层验收（v5p 当前配置对精确轨迹那一份，噪声取 GPU 生产程序重跑 10 对）────────
+# ── 第一层验收（v5p 当前配置对精确轨迹那一份，噪声取 ③ 那组 GPU 重跑 10 对）────────
 ACC = [  # (量, 被测值, N, r)
     ("param_norm 带符号均值", 4.27e-7, 1.24e-7, 3.45),
     ("loss 带符号均值（第 2–1000 步）", 8.62e-5, 4.49e-5, 1.92),
@@ -96,7 +97,7 @@ HEAD_BIAS_K = [(16384, 6.9e-5), (65536, 2.0e-4), (120832, 6.5e-4)]  # 真实输�
 HEAD_BF16_S1, HEAD_BF16_S100 = -6.51e-4, -6.10e-4     # GPU 输出头 dgrad 沿该方向的相对误差（第 1 / 100 步）
 HEAD_TF32_S1 = -8.08e-4                               # 名义 FP32、实际 TF32 的那一版
 HEAD_EXACT_S1 = -1.7e-6                               # 真关 TF32 的 FP32
-HEAD_TPU_S1, HEAD_TPU_S100 = -2.4e-5, -7.4e-5         # TPU 输出头反向对 FP64
+HEAD_TPU_S1, HEAD_TPU_S100 = -2.4e-5, -7.4e-5         # TPU 输出头反向对 FP64（输出头回放，第 1 / 100 步，跟 HEAD_BF16_S1/S100 同步号配对；另一次单 microbatch 回放读 −2.6e-5、同次 GPU −4.4e-4，别跟这里混配）
 CE_BWD_S1 = 2.7e-6                                    # 交叉熵反向自己的那份（第 1 步）
 TF32_TE_ON, TF32_ALL_OFF = 2.94e-4, 1.15e-6           # FP32 GEMM 对 FP64 的 rel_L2：只关 torch 开关 / 设 NVIDIA_TF32_OVERRIDE=0
 TF32_PROBE_OK = 1e-5
@@ -162,7 +163,7 @@ CAL_PAIRS = CAL_RUNS * (CAL_RUNS - 1) // 2
 assert CAL_PAIRS == 28
 T0_STEPS, T0_MIN, T1_MIN = 20, 10, 25
 # 「TPU 自己剩下的」三种口径（别混）：
-TPU_OWN_NOREMAT_975 = 1.7e-3     # 不重算的配置，第 975 步，对精确轨迹
+TPU_OWN_NOREMAT_975 = 1.7e-3     # TPU 对不重算的精确轨迹 ④′，第 975 步
 TPU_OWN_OLDCFG_1000 = 2.6e-3     # 生产近似配置、FP32 累加开关打开前，第 1000 步
 TPU_OWN_CURCFG_1000 = 2.3e-3     # 当前配置（开关打开后），第 1000 步
 
@@ -324,9 +325,9 @@ N_TENSORS_T, N_BF16_TENSORS_T = format(N_TENSORS, ","), format(N_BF16_TENSORS, "
 _lock("N_TENSORS_T", N_TENSORS_T, "1,781"); _lock("N_BF16_TENSORS_T", N_BF16_TENSORS_T, "1,778")
 QUIZ_SAMPLED = 100                                   # §2 考考自己：假设只抽 100 个张量比（题设）
 QUIZ_UNSAMPLED_T = format(N_TENSORS - QUIZ_SAMPLED, ","); _lock("QUIZ_UNSAMPLED_T", QUIZ_UNSAMPLED_T, "1,681")
-MASTER_CMP_TENSORS = 50                              # 加载后比 FP32 主权重：GPU 那边抓下来的张量数。来源：课件既有数，待核
+MASTER_CMP_TENSORS = 50                              # 加载后比 FP32 主权重：GPU 那边抓下来的张量数。出处：对齐实践 v5p 验收的 L0「载入后的 FP32 主权重」检查，50 个张量全部一致
 NATIVE_SAME_RANK_T = format(NATIVE_SAME_RANK, ","); _lock("NATIVE_SAME_RANK_T", NATIVE_SAME_RANK_T, "2,000")
-MICRO_SPLIT_EMB_X = 31                               # 只换梯度累积切分，embedding 梯度差 ÷ GPU 重跑差。来源：课件既有数，待核
+MICRO_SPLIT_EMB_X = 31                               # 只换梯度累积切分，embedding 梯度差 ÷ GPU 重跑差。出处：对齐报告偏差台账「梯度累积的分组」行
 # 参数范数、梯度范数的量级
 PN_LEVEL0 = 3042.377                                 # GPU 第一份运行第 1 步参数范数（fig9-drift 的 📌 实测：3042.377 → 3042.503）
 PN_LEVEL_T = "%d" % PN_LEVEL0; _lock("PN_LEVEL_T", PN_LEVEL_T, "3042")
@@ -371,9 +372,9 @@ ACC_LOSS_ALL_R, ACC_LOSS_TAIL_R, ACC_GN_R = ACC[1][3], ACC[2][3], ACC[3][3]
 ACC_PN_X_07_T = "%.2e" % ACC_PN_X; _lock("ACC_PN_X_07_T", ACC_PN_X_07_T, "4.27e-07")   # 总览表一格的原样写法
 XCHK_SELF_TAIL = XCHK_SELF["loss 尾段"]
 EP8_DELTA = ACC_PN_X - EP8_PN
-TPU_NOISE_PN_N = 8.5e-8                              # TPU 执行噪声 28 对的参数范数噪声上限。来源：课件既有数，待核
+TPU_NOISE_PN_N = 8.5e-8                              # TPU 执行噪声 28 对的参数范数噪声上限。出处：日常回归的噪声标定记录（v5p，28 对）param_norm 带符号均值上限 8.49e-8
 assert EP8_DELTA < TPU_NOISE_PN_N and sci(EP8_DELTA) == "7.5e-8"
-WINDOWED_OFF_PN_DROP_T = "3%"                        # 关掉 collective matmul 窗口化，参数范数差只少 3%。来源：课件既有数，待核
+WINDOWED_OFF_PN_DROP_T = "3%"                        # 关掉 collective matmul 窗口化，参数范数差只少 3%。出处：案例记录「TPU 窗口化 collective matmul」行（8.74e-3 → 8.50e-3）
 # excess precision 那段：TPU 三种跑法彼此的散布（也就是只改片上内存上限那一臂挪的量）
 ARMS_SPREAD = max(TPU_ARMS) - min(TPU_ARMS)
 assert ARMS_SPREAD == TPU_ARMS[2] - TPU_ARMS[0]
@@ -382,12 +383,12 @@ ARMS_SPREAD_T = tx(ARMS_SPREAD, "%.0e"); _lock("ARMS_SPREAD_T", ARMS_SPREAD_T, "
 MISALIGN_OK_T, MISALIGN_OFF_T = tx(MISALIGN[0]), tx(MISALIGN[1])
 _lock("MISALIGN_OK_T", MISALIGN_OK_T, "1.53e-4"); _lock("MISALIGN_OFF_T", MISALIGN_OFF_T, "1.41e-2")
 MISALIGN_X_FLOOR = 90; assert MISALIGN_X_FLOOR < MISALIGN[1] / MISALIGN[0] < MISALIGN_X_FLOOR + 10   # 「大 90 多倍」
-LOSS_TAIL_ROUGH_T = "−1.5e-4"                        # 「300 步以后稳定在 −1.5e-4 左右」。来源：课件既有数，待核（只断言落在三种跑法范围内）
+LOSS_TAIL_ROUGH_T = "−1.5e-4"                        # 「300 步以后稳定在 −1.5e-4 左右」。出处：案例记录 §3.1 原话（只断言落在三种跑法范围内）
 assert min(TPU_ARMS) <= -1.5e-4 <= max(TPU_ARMS)
 # 排除清单
-WD_MASK_X = 13                                       # 权重衰减掩码反过来，残差大 13 倍以上。来源：课件既有数，待核
-UPD1_RATIO_LO_T, UPD1_RATIO_HI_T = "0.997", "1.003"  # 第 1 步逐张量更新量之比。来源：课件既有数，待核
-RARE_VHAT_DIFF_T = "0–4%"                            # 冷门行 √v̂ 两边只差 0–4%。来源：课件既有数，待核
+WD_MASK_X = 13                                       # 权重衰减掩码反过来，残差大 13 倍以上。出处：案例记录排除表第 1 行
+UPD1_RATIO_LO_T, UPD1_RATIO_HI_T = "0.997", "1.003"  # 第 1 步逐张量更新量之比。出处：案例记录排除表第 3 行（50 个张量）
+RARE_VHAT_DIFF_T = "0–4%"                            # 冷门行 √v̂ 两边只差 0–4%。出处：案例记录冷门行 w·u 那一节
 # 输出头 dgrad、同状态各算一步
 HEAD_PCT_S1_T, HEAD_PCT_S100_T = tx(abs(HEAD_BF16_S1), "%.3f", pct=True), tx(abs(HEAD_BF16_S100), "%.3f", pct=True)
 _lock("HEAD_PCT_S1_T", HEAD_PCT_S1_T, "0.065%"); _lock("HEAD_PCT_S100_T", HEAD_PCT_S100_T, "0.061%")
@@ -402,7 +403,7 @@ SWAP_STATE_TENSORS = 1193                            # 口径：Megatron 布局�
 assert N_TENSORS - SWAP_STATE_TENSORS == 192 * 3 + 4 * 2 + 1 + 3, "张量数口径对不上"
 # 精确轨迹那段
 PERTURB = 1e-6                                       # 扰动版：给第 0 层一处权重乘 (1 ＋ 1e-6)
-FP32_TRAIN_LOSS_GAP_T = "1.75%"                      # 纯 FP32 训练前 100 步 loss 比 BF16 低。来源：课件既有数，待核
+FP32_TRAIN_LOSS_GAP_T = "1.75%"                      # 纯 FP32 训练前 100 步 loss 比 BF16 低。出处：golden 设计文档「纯 FP32 训练」那一条
 EXACT_TRAJ_PN975_T, EXACT_TPU_PN975_T = tx(EXACT_POS[1][1], plus=True), tx(EXACT_POS[2][1], plus=True)
 DGRADX_LO_T, DGRADX_HI_T = tx(DGRADX_RANGE[0], plus=True), tx(DGRADX_RANGE[1], plus=True)
 _lock("EXACT_TRAJ_PN975_T", EXACT_TRAJ_PN975_T, "＋1.82e-2"); _lock("EXACT_TPU_PN975_T", EXACT_TPU_PN975_T, "＋1.99e-2")
@@ -415,7 +416,7 @@ LOSS_FIXHEAD_SHARE_T = "%.0f%%" % (LOSS_FIXHEAD_MINUS_PROD / LOSS_TPU_VS_PROD_TA
 TPU_OWN_NOREMAT_975_T, TPU_OWN_OLDCFG_1000_T, TPU_OWN_CURCFG_1000_T = (tx(v, "%.1e", plus=True) for v in (TPU_OWN_NOREMAT_975, TPU_OWN_OLDCFG_1000, TPU_OWN_CURCFG_1000))
 _lock("TPU_OWN_NOREMAT_975_T", TPU_OWN_NOREMAT_975_T, "＋1.7e-3"); _lock("TPU_OWN_OLDCFG_1000_T", TPU_OWN_OLDCFG_1000_T, "＋2.6e-3"); _lock("TPU_OWN_CURCFG_1000_T", TPU_OWN_CURCFG_1000_T, "＋2.3e-3")
 # 踩坑表、速查卡
-FP32_MASTER_FAKE_DIFF_T = "1.5%"                     # 拿 FP32 主权重当参照量出的假差。来源：课件既有数，待核
+FP32_MASTER_FAKE_DIFF_T = "1.5%"                     # 拿 FP32 主权重当参照量出的假差。出处：案例记录的更正条（拿 FP32 主权重当参照，结论作废）
 EXACT_PAIR1_X = int(round(GPU_RERUN_PN / EXACT_PAIR1_PN)); assert EXACT_PAIR1_X == 18
 COS_0999_RELL2_T = "%.1f%%" % (COS_0999_RELL2 * 100); _lock("COS_0999_RELL2_T", COS_0999_RELL2_T, "4.5%")
 R_ONE_EXTRA_T = "%.2f" % R_ONE_EXTRA; _lock("R_ONE_EXTRA_T", R_ONE_EXTRA_T, "1.41")
@@ -434,9 +435,9 @@ TC_K1, TC_BIAS1 = TC_BIAS_K[0]
 TC_K2, TC_BIAS2 = TC_BIAS_K[1]
 TC_K3, TC_BIAS3 = TC_BIAS_K[2]
 TC_BIAS2_T, TC_K3_T = tx(TC_BIAS2, "%.1e"), str(TC_K3); _lock("TC_BIAS2_T", TC_BIAS2_T, "7.0e-5"); _lock("TC_K3_T", TC_K3_T, "65536")
-ROUTER_TPU_FP64_HI, ROUTER_GPU_FP64_HI = 5.7e-8, 4.0e-6   # 路由打分对 FP64 三层的上沿（下沿是 ROUTER_*_FP64）。来源：课件既有数，待核
+ROUTER_TPU_FP64_HI, ROUTER_GPU_FP64_HI = 5.7e-8, 4.0e-6   # 路由打分对 FP64 三层的上沿（下沿是 ROUTER_*_FP64）。出处：逐层回放报告 L1 注 2（TPU 4.8e-8–5.7e-8、GPU 3.8e-6–4.0e-6）
 ROUTER_GPU_FP64_HI_T = tx(ROUTER_GPU_FP64_HI, "%.1e"); _lock("ROUTER_GPU_FP64_HI_T", ROUTER_GPU_FP64_HI_T, "4.0e-6")
-MOMENTUM_INV_LO, MOMENTUM_INV_HI = 2e-7, 4e-7        # 反推梯度对直接抓的梯度 rel_L2（GPU 上）。来源：课件既有数，待核
+MOMENTUM_INV_LO, MOMENTUM_INV_HI = 2e-7, 4e-7        # 反推梯度对直接抓的梯度 rel_L2（GPU 上）。出处：案例记录「动量反推梯度」核对（GPU 上对直接抓的梯度）
 PN_GPU_PAIR_MAX = 6.6e-4                             # GPU 两次之间参数范数差的最大值（逐步序列现算，见下）
 assert abs(max(abs(x) for x in series()["pnorm_diff_gpu_b_minus_gpu_a"]) - PN_GPU_PAIR_MAX) < 0.05e-4
 PN_DIFF_300_T = tx(series()["pnorm_diff_tpu_minus_gpu_a"][299], "%.1e"); _lock("PN_DIFF_300_T", PN_DIFF_300_T, "4.6e-3")   # 第 300 步 TPU − GPU
@@ -458,7 +459,7 @@ HEAD_BF16_S100_T, HEAD_TPU_S100_T = tx(HEAD_BF16_S100), tx(HEAD_TPU_S100, "%.1e"
 _lock("HEAD_BF16_S1_T", HEAD_BF16_S1_T, "−6.51e-4"); _lock("HEAD_TPU_S1_T", HEAD_TPU_S1_T, "−2.4e-5"); _lock("CE_BWD_S1_T", CE_BWD_S1_T, "＋2.7e-6")
 _lock("HEAD_TF32_S1_T", HEAD_TF32_S1_T, "−8.08e-4"); _lock("HEAD_EXACT_S1_T", HEAD_EXACT_S1_T, "−1.7e-6")
 _lock("HEAD_BF16_S100_T", HEAD_BF16_S100_T, "−6.10e-4"); _lock("HEAD_TPU_S100_T", HEAD_TPU_S100_T, "−7.4e-5")
-# 动画 TruncVsRound 的模拟终点（合成正数输入、按实测张量核模型模拟，不是实测曲线）。来源：课件既有数，待核
+# 动画 TruncVsRound 的模拟终点（合成正数输入、按实测张量核模型模拟，不是实测曲线）。本课模拟（合成输入，不是实测）
 TRUNC_SIM_END_T, RNE_SIM_END_T = "−3.5e-4", "−2.3e-6"
 
 # ── 11-06 更新：「精确轨迹」自己也不精确（GPU cuBLAS FP32 在 12 万长求和上有偏），新的账 ──────────────
@@ -526,13 +527,14 @@ V7X_MOE_R, V7X_MOE_R_DROP, V5P_MOE_R_DROP = 1.27, 0.95, 0.94   # 第 2 层 MoE �
 PRESWITCH_VS_FINAL_V5P, PRESWITCH_VS_FINAL_V7X = 0.79, 0.78    # 开关打开前的配置对 ⑤ 的最差 r（L4 不需要这个开关）
 ENSEMBLE_SPREAD_TPU, ENSEMBLE_SPREAD_GPU = 5.4e-5, 9.5e-5   # loss 带符号均值两两散布：TPU 扰动组 / GPU 重跑
 assert ENSEMBLE_V5P + ENSEMBLE_V7X == ENSEMBLE_RUNS
-PN_MEAS_TPU, PN_MEAS_GPU, PN_RERUN_STEP = 2.6e-7, 8e-8, 2.7e-7   # param_norm 自测误差（单步最大差）：TPU 整网一次归约 / GPU；GPU 重跑两两单步最大差
+PN_MEAS_TPU, PN_MEAS_GPU, PN_RERUN_STEP = 2.6e-7, 8e-8, 4.86e-7   # param_norm 自测误差（单步最大差）：TPU 整网一次归约 / GPU；GPU ⑤ 重跑两两单步最大差的上限（45 对；旧 10 对时 2.7e-7）
 GN_N_AB, GN_N_BA = 1.26e-3, 2.49e-3           # grad_norm 带符号均值的 N，随配对方向变
 GN_JITTER = 0.03
 VS_RC_PN, VS_RC_LOSS_V5P, VS_RC_LOSS_V7X = 2.09e-2, -1.37e-4, -1.08e-4   # v7x 一项是推断（对 ⑤ 的差加 ⑤ 对 ② 的差）
-CHUNK_SEG, CHUNK_STEP_OLD, CHUNK_STEP_NEW = 1024, 0.236, 0.382
+# 步时（第 50–1000 步中位数）：② 5 份约 0.236 s；⑤ 10 份 0.380–0.382 s、同机对照 0.381 s（11-07 按 1000 步复核记录统一成 0.381，原写 ⑤ 第一份的 0.382 → 62%）
+CHUNK_SEG, CHUNK_STEP_OLD, CHUNK_STEP_NEW = 1024, 0.236, 0.381
 CHUNK_COST = CHUNK_STEP_NEW / CHUNK_STEP_OLD - 1
-assert abs(CHUNK_COST - 0.62) < 0.01
+assert abs(CHUNK_COST - 0.61) < 0.01
 DFA_COST_V7X, DFA_COST_V5P, EP8_SPEEDUP_V7X = 0.019, 0.0066, 0.28
 FLIP_SLOT_LO, FLIP_SLOT_HI = 0.44, 0.56       # 第 1 步每层翻转的槽位百分比
 # 落进正文
@@ -541,13 +543,13 @@ _lock("FINAL_WORST_T", FINAL_WORST_T, "0.85"); _lock("FINAL_WORST_OLDCAL_T", FIN
 FINAL_PN_V5P_T, FINAL_PN_V7X_T = "%.2f" % FINAL[0][4], "%.2f" % FINAL[1][4]
 _lock("FINAL_PN_V5P_T", FINAL_PN_V5P_T, "0.50"); _lock("FINAL_PN_V7X_T", FINAL_PN_V7X_T, "0.53")
 PEND10_T = "%.2f–%.2f" % (PEND10_LO, PEND10_HI); _lock("PEND10_T", PEND10_T, "1.02–1.24")
-PN_MEAS_TPU_T, PN_MEAS_GPU_T, PN_RERUN_STEP_T = tx(PN_MEAS_TPU, "%.1e"), tx(PN_MEAS_GPU, "%.0e"), tx(PN_RERUN_STEP, "%.1e")
-_lock("PN_MEAS_TPU_T", PN_MEAS_TPU_T, "2.6e-7"); _lock("PN_MEAS_GPU_T", PN_MEAS_GPU_T, "8e-8"); _lock("PN_RERUN_STEP_T", PN_RERUN_STEP_T, "2.7e-7")
+PN_MEAS_TPU_T, PN_MEAS_GPU_T, PN_RERUN_STEP_T = tx(PN_MEAS_TPU, "%.1e"), tx(PN_MEAS_GPU, "%.0e"), tx(PN_RERUN_STEP, "%.2e")
+_lock("PN_MEAS_TPU_T", PN_MEAS_TPU_T, "2.6e-7"); _lock("PN_MEAS_GPU_T", PN_MEAS_GPU_T, "8e-8"); _lock("PN_RERUN_STEP_T", PN_RERUN_STEP_T, "4.86e-7")
 GN_N_AB_T, GN_N_BA_T = tx(GN_N_AB), tx(GN_N_BA); _lock("GN_N_AB_T", GN_N_AB_T, "1.26e-3"); _lock("GN_N_BA_T", GN_N_BA_T, "2.49e-3")
 ENSEMBLE_SPREAD_TPU_T, ENSEMBLE_SPREAD_GPU_T = tx(ENSEMBLE_SPREAD_TPU, "%.1e"), tx(ENSEMBLE_SPREAD_GPU, "%.1e")
 VS_RC_LOSS_V5P_T, VS_RC_LOSS_V7X_T = tx(VS_RC_LOSS_V5P), tx(VS_RC_LOSS_V7X)
 _lock("VS_RC_LOSS_V5P_T", VS_RC_LOSS_V5P_T, "−1.37e-4"); _lock("VS_RC_LOSS_V7X_T", VS_RC_LOSS_V7X_T, "−1.08e-4")
-CHUNK_COST_T = "%.0f%%" % (CHUNK_COST * 100); _lock("CHUNK_COST_T", CHUNK_COST_T, "62%")
+CHUNK_COST_T = "%.0f%%" % (CHUNK_COST * 100); _lock("CHUNK_COST_T", CHUNK_COST_T, "61%")
 DFA_COST_V7X_T, DFA_COST_V5P_T, EP8_SPEEDUP_V7X_T = "%.1f%%" % (DFA_COST_V7X * 100), "%.2f%%" % (DFA_COST_V5P * 100), "%.0f%%" % (EP8_SPEEDUP_V7X * 100)
 _lock("DFA_COST_V7X_T", DFA_COST_V7X_T, "1.9%"); _lock("DFA_COST_V5P_T", DFA_COST_V5P_T, "0.66%"); _lock("EP8_SPEEDUP_V7X_T", EP8_SPEEDUP_V7X_T, "28%")
 FLIP_SLOT_T = "%.2f%%–%.2f%%" % (FLIP_SLOT_LO, FLIP_SLOT_HI)
@@ -581,7 +583,7 @@ GRAD_FP32_COST_V5P = 0.0079                    # 三个开关一起开，v5p 步
 assert abs(1.6239 / 1.6111 - 1 - GRAD_FP32_COST_V5P) < 0.0005
 STEP1_L23_V5P, STEP1_L23_V7X = (1.05, 1.75), (1.05, 1.86)          # 第 1 步整步检查的待定区间
 STEP1_FAIL_V5P, STEP1_FAIL_V7X = (2.1, 4.5, 2.3), (3.1,)            # 不过的层参数梯度：v5p 第 0–2 层、v7x 第 1 层
-MASTER_W_V5P, MASTER_W_V7X = 1.12, 0.99                              # 换尺子后，更新后主权重（v5p 待定、v7x 过）
+MASTER_W_V5P, MASTER_W_V7X = 1.11, 0.99                              # 换尺子后，更新后主权重（v5p 待定、v7x 过）
 MASTER_W_FP64_R = 0.92
 BIAS_TOKENS_FP64, BIAS_MEAN = 2730, 65536 * 8 / 192
 assert abs(BIAS_MEAN - 2730.67) < 0.01
@@ -610,5 +612,64 @@ GF32_V7X_GN_T = "最大单步 %.2f 倍（带符号均值 %.2f 倍、MARE %.2f �
 _lock("GF32_V7X_GN_T", GF32_V7X_GN_T, "最大单步 1.05 倍（带符号均值 0.10 倍、MARE 0.97 倍）")
 GF32_COST_V7X_T = "%.1f%%" % (GF32_COST_V7X * 100); _lock("GF32_COST_V7X_T", GF32_COST_V7X_T, "1.6%")
 # 扰动臂第三关的第 1 步梯度一半改成比 FP64（出处：回归说明 11-06 补做，实测）：当前配置 6 个臂，按能量 R
-ARMS_FP64_N, ARMS_FP64_R = 6, (1.001, 1.039)
-ARMS_FP64_R_T = "%.3f–%.3f" % ARMS_FP64_R; _lock("ARMS_FP64_R_T", ARMS_FP64_R_T, "1.001–1.039")
+ARMS_FP64_N, ARMS_FP64_R_V5P, ARMS_FP64_R_V7X = 6, (1.001, 1.008), (1.003, 1.039)   # 11-07 更正：两平台分开写（原合写 1.001–1.039）
+ARMS_FP64_R_T = "v5p %.3f–%.3f、v7x %.3f–%.3f" % (ARMS_FP64_R_V5P + ARMS_FP64_R_V7X); _lock("ARMS_FP64_R_T", ARMS_FP64_R_T, "v5p 1.001–1.008、v7x 1.003–1.039")
+STEP_R_EXPERT_V7X_MAX = 1.44                   # v7x 专家与路由权重梯度 R 最高（第 2 层 1 号专家 fc2）
+
+# ── 11-07 · 课上追问补答（Round 2）────────────────────────────────────────────────
+# rel_L2 与 cos、范数比：rel² ＝ (r−1)² ＋ 2r(1−cos)，r ＝ |a| ÷ |b|（本课推导：|a−b|² 展开再除以 |b|²）；等长纯旋转 θ → rel ＝ 2 sin(θ/2)
+assert abs(math.sqrt(2 * (1 - math.cos(math.radians(2.56)))) - 2 * math.sin(math.radians(1.28))) < 1e-12
+assert abs(2 * math.sin(math.acos(0.999) / 2) - COS_0999_RELL2) < 1e-4          # 跟 §4.1 那个 4.5% 是同一个数
+# R 比的分母：路由打分 TPU、GPU 各离 FP64 多远 → R ＝ TPU ÷ GPU（本课推导）
+R_ROUTER = ROUTER_TPU_FP64 / ROUTER_GPU_FP64
+R_ROUTER_T = "%.3f" % R_ROUTER; _lock("R_ROUTER_T", R_ROUTER_T, "0.013")
+# 张量个数（出处：对齐实践的术语表「张量个数」条）：开源命名 3 个 MoE 层 × 192 专家 × 3 个矩阵 ＋ 53；GPU 框架布局每专家 2 个矩阵 ＋ 41
+MOE_LAYERS = 3
+HF_EXPERT_TENSORS, HF_OTHER_TENSORS = MOE_LAYERS * EXPERTS * 3, 53
+MG_EXPERT_TENSORS, MG_OTHER_TENSORS = MOE_LAYERS * EXPERTS * 2, 41
+assert HF_EXPERT_TENSORS + HF_OTHER_TENSORS == N_TENSORS and MG_EXPERT_TENSORS + MG_OTHER_TENSORS == SWAP_STATE_TENSORS
+HF_EXPERT_TENSORS_T, MG_EXPERT_TENSORS_T = format(HF_EXPERT_TENSORS, ","), format(MG_EXPERT_TENSORS, ",")
+_lock("HF_EXPERT_TENSORS_T", HF_EXPERT_TENSORS_T, "1,728"); _lock("MG_EXPERT_TENSORS_T", MG_EXPERT_TENSORS_T, "1,152")
+# 输出头 dgrad 的四种写法消融（出处：对齐实践的结果文件「输出头 dgrad 消融」，B200 一张卡，训练实际张量，对 FP64，沿 w̄）
+# 三个值依次是第 1 ／ 100 ／ 300 步的状态
+ABL_BF16_ONESHOT = (-6.51e-4, -6.10e-4, -4.60e-4)     # 生产：BF16 张量核一次乘完
+ABL_FP32_ONESHOT = (-1.70e-6, -2.56e-4, -2.58e-4)     # 升 FP32 一次乘完（真关 TF32）
+ABL_BF16_CHUNK = (-6.88e-7, 8.27e-7, 3.11e-7)         # BF16 张量核每 1024 一段，段结果留 FP32、段间 FP32 相加
+ABL_FP32_CHUNK = (9.85e-9, 3.49e-7, 1.08e-7)          # 升 FP32 每 1024 一段（最终 golden ⑤ 的写法）
+ABL_CHUNK4096_MAX, ABL_CHUNK16384 = -5.648e-6, (-2.33e-5, -4.32e-5)   # 段长 4096 最多剩 / 16384 剩
+ABL_MS_PROD, ABL_MS_BF16_CHUNK, ABL_MS_FP32_CHUNK = 2.45, 7.2, 71.7  # 单次乘法耗时（ms，中位数；分段是 Python 逐段调库，没融合）
+assert ABL_BF16_ONESHOT[0] == HEAD_BF16_S1 and ABL_BF16_ONESHOT[1] == HEAD_BF16_S100 and ABL_FP32_ONESHOT[0] == HEAD_EXACT_S1
+assert abs(ABL_FP32_ONESHOT[2] - CUBLAS_299) < 0.03e-4
+assert all(1e-7 <= abs(x) <= 1e-6 for x in ABL_BF16_CHUNK)                       # 「约 1e-7 到 1e-6」
+ABL_BF16_CHUNK_HI_T = tx(max(abs(x) for x in ABL_BF16_CHUNK), "%.1e"); _lock("ABL_BF16_CHUNK_HI_T", ABL_BF16_CHUNK_HI_T, "8.3e-7")
+ABL_FP32_ONESHOT_300_T = tx(ABL_FP32_ONESHOT[2], "%.1e"); _lock("ABL_FP32_ONESHOT_300_T", ABL_FP32_ONESHOT_300_T, "−2.6e-4")
+ABL_CHUNK4096_T = tx(ABL_CHUNK4096_MAX, "%.1e"); _lock("ABL_CHUNK4096_T", ABL_CHUNK4096_T, "−5.6e-6")
+ABL_MS_T = "%.1f ms 对 %.1f ms" % (ABL_MS_BF16_CHUNK, ABL_MS_FP32_CHUNK); _lock("ABL_MS_T", ABL_MS_T, "7.2 ms 对 71.7 ms")
+ABL_MS_PROD_T = "%.2f ms" % ABL_MS_PROD
+# 参考档逐层线的来历（出处：对齐实践的方法文档「两档门槛 · 参考值」）：同类项目注意力层输出逐层前向实测 rel_L2，线取 1%
+REF_LAYER_MEAS_T = "3e-3 到 5.4e-3"
+REF_LAYER0_FWD, REF_LAYER0_BWD = 0.0040, 0.0021     # 本例只在第 0 层稠密层用这条线：前向 ／ 反向（两平台相同）
+assert REF_LAYER0_FWD < REF_RELL2_GATE and REF_LAYER0_BWD < REF_RELL2_GATE
+# 张量核在真实矩阵乘里也偏一点：合成正数、K ＝ 4096 → 7.0e-5（TC_BIAS_K 第二项）
+_j3 = lambda xs, specs: " ／ ".join(tx(x, sp, plus=True) for x, sp in zip(xs, specs))
+ABL_BF16_ONESHOT_T = _j3(ABL_BF16_ONESHOT, ("%.2e",) * 3); _lock("ABL_BF16_ONESHOT_T", ABL_BF16_ONESHOT_T, "−6.51e-4 ／ −6.10e-4 ／ −4.60e-4")
+ABL_FP32_ONESHOT_T = _j3(ABL_FP32_ONESHOT, ("%.1e", "%.2e", "%.2e")); _lock("ABL_FP32_ONESHOT_T", ABL_FP32_ONESHOT_T, "−1.7e-6 ／ −2.56e-4 ／ −2.58e-4")
+ABL_BF16_CHUNK_T = _j3(ABL_BF16_CHUNK, ("%.1e",) * 3); _lock("ABL_BF16_CHUNK_T", ABL_BF16_CHUNK_T, "−6.9e-7 ／ ＋8.3e-7 ／ ＋3.1e-7")
+ABL_FP32_CHUNK_T = _j3(ABL_FP32_CHUNK, ("%.0e", "%.1e", "%.1e")); _lock("ABL_FP32_CHUNK_T", ABL_FP32_CHUNK_T, "＋1e-8 ／ ＋3.5e-7 ／ ＋1.1e-7")
+REF_LAYER0_FWD_T, REF_LAYER0_BWD_T = "%.4f" % REF_LAYER0_FWD, "%.4f" % REF_LAYER0_BWD
+_lock("REF_LAYER0_FWD_T", REF_LAYER0_FWD_T, "0.0040"); _lock("REF_LAYER0_BWD_T", REF_LAYER0_BWD_T, "0.0021")
+ABL_MS_FP32_ONESHOT = 65.6        # 升 FP32 一次乘完的单次耗时（同一消融）：分段 FP32 的耗时大头在升 FP32（本课推断）
+assert ABL_MS_FP32_ONESHOT - ABL_MS_PROD > 0.8 * (ABL_MS_FP32_CHUNK - ABL_MS_PROD)
+
+# ── 11-07 · BF16 张量核分段跑满 1000 步（出处：对齐实践的 1000 步复核结果文件，实测）──────────────
+# 设置 ＝ ⑤ 原样，只把输出头 dgrad 换成「BF16 张量核每 1024 一段、段结果 FP32、段间 FP32 相加」；2 份；尺子 ＝ ⑤ 10 份两两 45 对
+CB_RUNS = 2
+CB_WORST, CB_CHK_WORST = 0.91, 0.91          # 对 ⑤ 基线：BF16 分段那份最差 r（路由偏置曲线）／ 同机原样重跑 ⑤ 的对照
+CB_VS_RCC_A = (0.77, 0.77, 0.84, 0.67, 0.91)  # loss 全程、尾段、梯度范数、参数范数、路由偏置曲线（第一份）
+assert max(CB_VS_RCC_A) == CB_WORST
+CB_STEP = 0.250                               # 步时 s
+CB_COST = CB_STEP / CHUNK_STEP_OLD - 1
+CB_COST_T = "%.0f%%" % (CB_COST * 100); _lock("CB_COST_T", CB_COST_T, "6%")
+CB_STEP_T = "%.3f s" % CB_STEP
+CB_TPU_V7X_GN, CB_TPU_V7X_GN_SINGLE = 1.09, (0.70, 1.11)   # TPU v7x 对 BF16 分段第一份：梯度范数 MARE r 待定；同一 TPU 运行改对 ⑤ 的单份逐一当基线时的范围
+CB_TPU_V7X_GN_SINGLE_T = "%.2f–%.2f" % CB_TPU_V7X_GN_SINGLE; _lock("CB_TPU_V7X_GN_SINGLE_T", CB_TPU_V7X_GN_SINGLE_T, "0.70–1.11")
