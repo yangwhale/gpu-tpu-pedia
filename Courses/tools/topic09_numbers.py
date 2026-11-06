@@ -594,3 +594,18 @@ STEP_R_PROJ_T = "%.2f–%.2f" % STEP_R_PROJ; STEP_R_EXPERT_T = "%.2f–%.2f" % S
 ARM_R_T = "；".join("%s %.2f → %.2f" % a for a in ARM_R); _lock("ARM_R_T", ARM_R_T, "RMSNorm 的 scale 1.35 → 0.58；输出层 1.60 → 0.91；embedding 1.21 → 0.87")
 GRAD_FP32_COST_T = "%.2f%%" % (GRAD_FP32_COST_V5P * 100); _lock("GRAD_FP32_COST_T", GRAD_FP32_COST_T, "0.79%")
 BIAS_MEAN_T = "%.2f" % BIAS_MEAN
+
+# ── 11-06 晚：三个梯度 FP32 开关的 1000 步复核（出处：对齐报告「TPU 开关的补充说明」，实测）──────────
+GF32_V5P = (0.88, 0.91, 0.79, 0.60, 0.85)      # 开关打开后对 ⑤：loss 全程、尾段、梯度范数、参数范数、路由偏置曲线（v5p，全过）
+GF32_V7X = (0.78, 0.73, None, 0.53, 0.68)      # v7x：梯度范数待定，见下
+GF32_V7X_GN_MAX, GF32_V7X_GN_SM, GF32_V7X_GN_MARE = 1.05, 0.10, 0.97
+assert abs(0.482 / 0.459 - GF32_V7X_GN_MAX) < 0.005
+GF32_COST_V7X = 0.016
+assert abs(0.9952 / 0.9796 - 1 - GF32_COST_V7X) < 0.001
+ARM_ALL_R_V7X = (1.21, 0.72)
+GF32_V5P_T = "loss 全程 %.2f、尾段 %.2f、梯度范数 %.2f、参数范数 %.2f、路由偏置曲线 %.2f" % GF32_V5P
+_lock("GF32_V5P_T", GF32_V5P_T, "loss 全程 0.88、尾段 0.91、梯度范数 0.79、参数范数 0.60、路由偏置曲线 0.85")
+GF32_V7X_T = "loss 全程 %.2f、尾段 %.2f、参数范数 %.2f、路由偏置曲线 %.2f" % (GF32_V7X[0], GF32_V7X[1], GF32_V7X[3], GF32_V7X[4])
+GF32_V7X_GN_T = "最大单步 %.2f 倍（带符号均值 %.2f 倍、MARE %.2f 倍）" % (GF32_V7X_GN_MAX, GF32_V7X_GN_SM, GF32_V7X_GN_MARE)
+_lock("GF32_V7X_GN_T", GF32_V7X_GN_T, "最大单步 1.05 倍（带符号均值 0.10 倍、MARE 0.97 倍）")
+GF32_COST_V7X_T = "%.1f%%" % (GF32_COST_V7X * 100); _lock("GF32_COST_V7X_T", GF32_COST_V7X_T, "1.6%")
