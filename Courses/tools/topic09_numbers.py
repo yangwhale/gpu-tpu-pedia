@@ -673,3 +673,94 @@ CB_COST_T = "%.0f%%" % (CB_COST * 100); _lock("CB_COST_T", CB_COST_T, "6%")
 CB_STEP_T = "%.3f s" % CB_STEP
 CB_TPU_V7X_GN, CB_TPU_V7X_GN_SINGLE = 1.09, (0.70, 1.11)   # TPU v7x 对 BF16 分段第一份：梯度范数 MARE r 待定；同一 TPU 运行改对 ⑤ 的单份逐一当基线时的范围
 CB_TPU_V7X_GN_SINGLE_T = "%.2f–%.2f" % CB_TPU_V7X_GN_SINGLE; _lock("CB_TPU_V7X_GN_SINGLE_T", CB_TPU_V7X_GN_SINGLE_T, "0.70–1.11")
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# ── 11-07 · 第二次迁移（一个更新的、带稀疏注意力的 MoE 模型，小尺寸随机初始化，300 ／ 1000 步）────────
+# 出处：同一位作者的第二次对齐实践的案例记录、改动台账与结果文件（实测）；公开课只写机制和数，不写模型与项目名。
+# 课件 §2.2、§2.3、§4.2、§4.3、§5.6、§5.7、§6.2、§10.3 用。
+# ══════════════════════════════════════════════════════════════════════════════════════
+# 第 1 步逐张量梯度：TPU 对 GPU 的 rel_L2 ÷ GPU 三份两两的最大 rel_L2（195 个张量）
+B2_TENSORS = 195
+B2_RATIO_MED = (2.67, 1.65, 1.72)       # 开关全关 ／ 打开对上 GPU 舍入位置的三个开关 ／ 再加第四个（门控激活逐算子舍）
+B2_OVER2 = (139, 52, 62)                # 比值超过 2 的张量个数，同上三种
+assert B2_RATIO_MED[1] < B2_RATIO_MED[2] and B2_OVER2[1] < B2_OVER2[2]   # 第四个开关让统计略差，照样开（按 GPU 的写法，不按好不好看）
+assert all(n < B2_TENSORS for n in B2_OVER2)
+B2_RATIO_MED_T = "%.2f → %.2f" % B2_RATIO_MED[:2]; _lock("B2_RATIO_MED_T", B2_RATIO_MED_T, "2.67 → 1.65")
+B2_OVER2_T = "%d → %d" % B2_OVER2[:2]
+# 「存成 16 位的中间值」：参照一侧自己写的 eager 注意力把 q·k 先舍 BF16 再进 FP32 softmax；只改这一处的第 1 步变化 vs GPU 自己的噪声
+ATTN_FIX_LOSS, ATTN_FIX_GN = 8.1e-7, -3.0e-5          # 第 1 步 loss ／ 梯度范数的相对变化
+ATTN_NOISE_LOSS, ATTN_NOISE_GN = 4.5e-5, 2.2e-3       # GPU 8 份两两 28 对最大相对差（改后那一代）
+assert ATTN_FIX_LOSS < ATTN_NOISE_LOSS / 10 and abs(ATTN_FIX_GN) < ATTN_NOISE_GN / 10   # 远小于噪声：靠数值大小抓不到它
+ATTN_FIX_LOSS_T, ATTN_FIX_GN_T = tx(ATTN_FIX_LOSS, "%.1e", plus=True), tx(ATTN_FIX_GN, "%.1e")
+ATTN_NOISE_LOSS_T, ATTN_NOISE_GN_T = tx(ATTN_NOISE_LOSS, "%.1e"), tx(ATTN_NOISE_GN, "%.1e")
+_lock("ATTN_FIX_LOSS_T", ATTN_FIX_LOSS_T, "＋8.1e-7"); _lock("ATTN_NOISE_GN_T", ATTN_NOISE_GN_T, "2.2e-3")
+# 「HIGHEST 也不是 FP32」：四路残差流的加权和，TPU 默认 HIGHEST einsum（多遍 BF16 拼近似 FP32），GPU 逐元素 FP32 乘加
+HC_TENSORS = 45
+HC_OVER = (12, 5, 18)                    # 对 FP32 参照 R ＞ 1.2 的张量：现行 ／ 改逐路 FP32 乘加 ／ 现行再关 excess precision
+HC_MED = (0.88, 0.79, 1.09)              # R 中位数，同上
+assert HC_OVER[1] < HC_OVER[0] < HC_OVER[2]   # 关 excess precision 反而更多：跟 §5.5 混元 3 的方向一致
+HC_OVER_T = "%d → %d" % HC_OVER[:2]; _lock("HC_OVER_T", HC_OVER_T, "12 → 5")
+# 病态：稀疏注意力索引器的蒸馏损失（KL）每行约 1.1e-4 nat，log-sum-exp 约 7.1
+KD_KL, KD_LSE = 1.1e-4, 7.1
+KD_ULP = 4.73e-7                         # f32 在 lse 处一格（实测各行平均；lse ∈ [4, 8) 时 2⁻²¹ ≈ 4.77e-7）
+assert abs(KD_ULP - 2.0 ** -21) / 2.0 ** -21 < 0.02
+KD_ULP_OF_KL = 4.31e-3                   # 一格 ÷ KL（实测；按上两数 4.73e-7 ÷ 1.1e-4 ≈ 4.3e-3，本课推导核对）
+assert abs(KD_ULP / KD_KL - KD_ULP_OF_KL) / KD_ULP_OF_KL < 0.01
+KD_LSE_TPU_ULP, KD_LSE_CPU_ULP = -0.953, -0.004    # TPU 图内 ／ CPU torch f32 的 lse 对 FP64，按格计的平均
+KD_POS_ROWS = "8.6%"                     # TPU 偏正的行只占这么多：方向一致
+KD_DIFF = -1.155e-3                      # 同一行 KD：TPU 图内对同一输入的 FP64 重算（相对）
+KD_IN_R, KD_GRAD_R = "0.94–0.99", "0.78–1.03"     # KD 的输入（教师 q ／ k、打分）对 FP32 参照的 R ／ 由它出发的梯度（20 个张量）的 R
+KD_RATIO = KD_LSE / KD_KL
+assert 6e4 < KD_RATIO < 7e4              # 大数是小数的约 6.5 万倍
+KD_ULP_OF_KL_T = tx(KD_ULP_OF_KL, "%.1e"); _lock("KD_ULP_OF_KL_T", KD_ULP_OF_KL_T, "4.3e-3")
+KD_DIFF_T = tx(KD_DIFF, "%.1e"); _lock("KD_DIFF_T", KD_DIFF_T, "−1.2e-3")
+KD_ULP_T = tx(KD_ULP, "%.2e")
+KD_LSE_TPU_ULP_T = tx(KD_LSE_TPU_ULP, "%.2f")
+# 船上称船长（本课推导，比方的数按 1 单位 lse ↔ 1000 吨换算，比例与上面一致）
+SHIP_T = KD_LSE * 1000                   # 7100 吨
+CAPTAIN_KG = KD_KL * 1e9 / 1000          # KL 1.1e-4 → 110 公斤
+TICK_KG = KD_ULP * 1e6                   # 一格 → 0.47 公斤
+assert abs(SHIP_T - 7100) < 1e-6 and abs(CAPTAIN_KG - 110) < 1e-6
+assert abs(TICK_KG / CAPTAIN_KG - KD_ULP_OF_KL) / KD_ULP_OF_KL < 0.01
+TICK_KG_T = "%.2f" % TICK_KG; _lock("TICK_KG_T", TICK_KG_T, "0.47")
+TICK_PCT_T = "%.2f%%" % (TICK_KG / CAPTAIN_KG * 100); _lock("TICK_PCT_T", TICK_PCT_T, "0.43%")
+KD_DIFF_PCT_T = "%.2f%%" % (abs(KD_DIFF) * 100); _lock("KD_DIFF_PCT_T", KD_DIFF_PCT_T, "0.12%")
+# 尺子只来自参照：一度把 TPU 只改执行参数的扰动并进尺子（GPU 28 对 ＋ TPU 10 对 ＝ 38 对），撤回后同一批运行重判
+UNION2_PAIRS, GPU2_PAIRS = 38, 28
+assert UNION2_PAIRS == GPU2_PAIRS + 5 * 4 // 2
+UNION2_GN = ((1.77, 2.08), (1.75, 2.69), (1.68, 2.75))   # 梯度范数 r：三次比较，并集 → 只用 GPU（待定全部转不过）
+assert all(a <= 2 < b for a, b in UNION2_GN)
+UNION2_GN_T = "、".join("%.2f → %.2f" % p for p in UNION2_GN)
+# 路由偏置零均值：协议写了两边都做，参照框架根本没有这个更新；TPU 关掉后重跑
+BIAS_ZM_R = (19.1, 0.31)
+BIAS_ZM_R_T = "%.1f → %.2f" % BIAS_ZM_R; _lock("BIAS_ZM_R_T", BIAS_ZM_R_T, "19.1 → 0.31")
+# 回放工具的 bug：注入只换位置参数，关键字传的输入漏了
+INJ_R = (1.563, 0.950)                   # 稠密 MLP 单算子 R：修前 ／ 修后
+INJ_ALONE_R = 0.999                      # 同一个 GPU 输入直接喂那个算子（CPU），对 FP64
+assert INJ_R[0] > 1.2 >= INJ_R[1]
+INJ_R_T = "%.2f → %.2f" % INJ_R; _lock("INJ_R_T", INJ_R_T, "1.56 → 0.95")
+# 优化器写法（单测对参照框架的固定参照，每步更新的相对差）
+OPT_ALL_OFF, OPT_ALL_ON = 0.13, 1.3e-6   # Muon 三处写法都不对上 ／ 都对上
+OPT_NADAM = 0.56                         # 标量参数走成 NAdam（对普通 Adam）
+OPT_NS = 1e-6                            # 只差 Newton–Schulz 前归一化的 eps 写法：舍入量级
+assert OPT_ALL_ON < OPT_NS * 2 and OPT_NADAM > OPT_ALL_OFF
+OPT_ALL_ON_T = tx(OPT_ALL_ON, "%.1e")
+# 测量口径：参数范数在 FP32 里整棵树一路相加
+PN2_FP32_BIAS = "1e-7 至 3e-7"            # 对精确值偏低（第 1 步 −1.39e-7）
+PN2_STEP1_EXACT = 1.6e-9                  # 两边都改比精确值（每 128 个元素一段 FP32 平方和、FP64 合成）后第 1 步的差
+PN2_STEP1_EXACT_T = tx(PN2_STEP1_EXACT, "%.1e"); _lock("PN2_STEP1_EXACT_T", PN2_STEP1_EXACT_T, "1.6e-9")
+# 稀疏注意力索引器的 top-k 翻转：多，但几乎不影响输出
+DSA_Q_FLIP, DSA_Q = 1936, 2048           # 第 1 步 GPU 对 FP64：至少翻了一个槽位的 query ／ 全部稀疏 query
+DSA_SLOT_FLIP = "0.147%"
+assert DSA_Q_FLIP / DSA_Q > 0.9
+DSA_Q_FLIP_T = "%s ／ %s" % (format(DSA_Q_FLIP, ","), format(DSA_Q, ","))
+# R 在误差不到一个 BF16 格时会摆：随上游一处写法在 0.6–1.6 之间
+R_SWING = "0.6–1.6"
+# 门控激活 silu·up：GPU 舍两次、TPU 默认舍一次时逐位相同的元素比例（混元 3）
+GLU_BITWISE = "73.7%"
+# 正文直接引用的单值（«名字» 只认名字，不认下标）
+B2_MED_OFF, B2_MED_4SW = B2_RATIO_MED[0], B2_RATIO_MED[2]
+B2_OVER_OFF, B2_OVER_4SW = B2_OVER2[0], B2_OVER2[2]
+INJ_R_BEFORE, INJ_R_AFTER = INJ_R
+INJ_R_AFTER_T = "%.2f" % INJ_R_AFTER; _lock("INJ_R_AFTER_T", INJ_R_AFTER_T, "0.95")
+HC_OVER_NOEXC = HC_OVER[2]

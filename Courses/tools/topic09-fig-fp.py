@@ -11,6 +11,11 @@ fig9-windowed  回答：TPU 上 FSDP 的矩阵乘为什么多舍了几次？—�
 fig9-excess    回答：excess precision 改的是什么？—— 舍在哪儿：融合块里中间那几次「舍到 BF16」被删掉，只在块出口舍；关掉它，舍入回到每个算子出口。
                示意图：算子个数、融合怎么切都是示意，不带实测数；实测（关掉以后单层更远、1000 步 loss 偏移小一半）只进 📌。
                ⛔ 刻意没画「哪一行更准」：这张图只讲舍入位置。关掉不是更准，画个准确度刻度就讲反了。
+fig9-boundary  回答：对不齐通常出在哪？—— 一个值在 16 位和 32 位之间进出的地方。每个算子两边各写一行五格 dtype 路径，
+               五列各放一个真实例子，不一样的那一格画红框（2026-11-07 第二次迁移的教训，例子取自两次迁移）。
+               ⛔ 刻意没画误差大小：这张图是一张检查表，量级在出处里；第 4 行的效果在第 1 步比 GPU 噪声小几十倍，画柱子会让人以为它不重要。
+fig9-captain   回答：一个小标量对不上，怎么分清是病态还是 bug？—— 船上称船长：船 7100 吨、船长 110 公斤，秤的一格 0.47 公斤 ＝ 船长的 0.43%。
+               比方的数按 lse 1 单位 ↔ 1000 吨换算（本课推导），比例与实测一致：f32 一格 ＝ KL 的 4.3e-3。
 """
 import math
 
@@ -333,8 +338,143 @@ def fig_excess():
     f.save("fig9-excess.svg", yb + 14)
 
 
+def fig_boundary():
+    f = Fig(W, "一张检查表。五列是一个算子在一侧的五格：输入是什么精度、乘法按什么精度算、部分和在什么精度里加、结果以什么精度存下来、舍入发生在哪一步。"
+               "五行是五个真实的算子，每个算子 TPU 一行（蓝）、GPU 一行（灰），两边不一样的那一格画红框，五个例子正好每列一个。"
+               "第一行，一处投影乘的权重：TPU 原来乘 FP32 主权重，GPU 乘舍成 BF16 的模型权重。"
+               "第二行，名义 FP32 的输出头：TPU 默认精度下 FP32 操作数只算一遍 BF16，GPU 是真 FP32。"
+               "第三行，FSDP 下的投影：TPU 部分和在轮与轮之间舍成 BF16，GPU 在 FP32 里加完。"
+               "第四行，注意力打分 q 乘 k：GPU 参照自己写的实现先把结果存成 BF16 再进 softmax，TPU 和生产的融合内核都留在 FP32。"
+               "第五行，RMSNorm：TPU 默认归一化结果和缩放各舍一次，GPU 算完只舍一次。"
+               "五格都一样的算子只剩加法顺序的差，那是噪声；有一格不一样，就是一个要对上的边界。")
+    y0 = f.header("每个算子两边各写一行五格，红框就是要对上的边界",
+                  "白格 ＝ 16 位（BF16），灰格 ＝ 32 位（FP32）；红框 ＝ 根子上不一样的那一格；五列各举一个真实例子",
+                  [(BL, "TPU"), (GY, "GPU"), (RD, "两边不一样")])
+    COLS = ["输入", "乘法 ／ 矩阵乘精度", "累加", "输出 ／ 存储", "舍在哪"]
+    X0, CW, CG, RH = 300, 186, 8, 34
+    rows = [  # (算子, 小字, 哪一列不一样, TPU 五格, GPU 五格)；格子写 (文字, 是不是 32 位)
+        ("一处投影：乘哪份权重", "第二次迁移", 0,
+         [("FP32 主权重", 1), ("默认精度", 0), ("FP32", 1), ("FP32", 1), ("出口一次", 0)],
+         [("BF16 模型权重", 0), ("默认精度", 0), ("FP32", 1), ("FP32", 1), ("出口一次", 0)]),
+        ("名义 FP32 的输出头", "第二次迁移", 1,
+         [("FP32", 1), ("默认：单遍 BF16", 0), ("FP32", 1), ("FP32", 1), ("—", 1)],
+         [("FP32", 1), ("真 FP32（TF32 关）", 1), ("FP32", 1), ("FP32", 1), ("—", 1)]),
+        ("FSDP 下的投影", "混元 3", 2,
+         [("BF16", 0), ("BF16 × BF16", 0), ("轮间舍 BF16", 0), ("BF16", 0), ("随累加那格", 0)],
+         [("BF16", 0), ("BF16 × BF16", 0), ("FP32 加完", 1), ("BF16", 0), ("随累加那格", 0)]),
+        ("注意力打分 q·k", "第二次迁移", 3,
+         [("BF16", 0), ("BF16 × BF16", 0), ("FP32", 1), ("留 FP32 进 softmax", 1), ("随存储那格", 0)],
+         [("BF16", 0), ("BF16 × BF16", 0), ("FP32", 1), ("存 BF16 再 softmax", 0), ("随存储那格", 0)]),
+        ("RMSNorm", "混元 3", 4,
+         [("BF16", 0), ("FP32 里算", 1), ("FP32", 1), ("BF16", 0), ("结果、缩放各一次", 0)],
+         [("BF16", 0), ("FP32 里算", 1), ("FP32", 1), ("BF16", 0), ("算完只舍一次", 0)]),
+    ]
+    PH = 52 + len(rows) * (2 * RH + 22)
+    py = f.panel(0, y0, W, PH, "五格 × 两边：五个例子，五列各一个", BL)
+    for j, c in enumerate(COLS):
+        f.t(X0 + j * (CW + CG) + CW / 2.0, py + 26, c, INK, True, 14, "middle")
+    y = py + 40
+    for (op, where, bad, tpu, gpu) in rows:
+        f.t(20, y + RH - 4, op, INK, True, 15)
+        f.t(20, y + RH + 16, where, GY, size=12)
+        for side, (cells, col) in enumerate([(tpu, BL), (gpu, GY)]):
+            yy = y + side * RH
+            f.t(X0 - 12, yy + RH / 2.0 + 5, "TPU" if side == 0 else "GPU", col, True, 12, "end")
+            for j, (txt, w32) in enumerate(cells):
+                x = X0 + j * (CW + CG)
+                fill = "#e8eaed" if w32 else "#fff"
+                f.box(x, yy + 2, CW, RH - 4, fill, RD if j == bad else LINE, 4, sw=2.4 if j == bad else 1)
+                f.t(x + CW / 2.0, yy + RH / 2.0 + 5, txt, RD if j == bad else (col if col == BL else INK), j == bad, 12.5, "middle")
+        y += 2 * RH + 22
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "五格都一样，只剩加法顺序的差（噪声）；有一格不一样，就是一个要对上的边界", [
+        "看代码找对不齐，就是把每个算子两边各写一行，逐格比；有差的格子再去找开关，没有开关的记一行再定谁改。",
+        "代价：GPU 重跑量不出这种差 —— 重跑之间舍入位置一模一样，尺子在这里宽度是 0；要靠逐格读代码，再拿 FP64 定责。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 出处：第 1、2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。",
+               "📌 第 4 行只改这一处，第 1 步 loss %s、梯度范数 %s，比 GPU 自己的噪声（%s ／ %s）小几十倍 —— 它是按写法定的 bug，不是按大小抓到的。"
+               % (N.ATTN_FIX_LOSS_T, N.ATTN_FIX_GN_T, N.ATTN_NOISE_LOSS_T, N.ATTN_NOISE_GN_T),
+               "📌 同在「乘法」这一列的还有一处：TPU 的 HIGHEST 精度是多遍 BF16 拼出来的近似 FP32，GPU 是逐元素 FP32 乘加；四路残差流的加权和改成逐路 FP32 乘加以后，第 1 步对 FP32 参照 R ＞ 1.2 的张量 %s（共 %d 个）。"
+               % (N.HC_OVER_T, N.HC_TENSORS),
+               "注：「舍在哪」一列只在它本身是根子时画红（第 5 行）；第 3、4 行多舍、少舍的位置跟着左边那格走，写「随……那格」；第 2 行两边都没有额外的舍入，写「—」。第 1 行两边矩阵乘都按各自的默认精度算，差在乘的是哪份权重。")
+    f.save("fig9-boundary.svg", yb + 14)
+
+
+def fig_captain():
+    f = Fig(W, "左格：船上称船长。先称船加船长，再称空船，两次相减得船长的体重。船 %d 吨，船长 %d 公斤，秤能读到 %s 公斤一格，八位有效数字，已经很准；"
+               "可这一格落到船长身上，就是他体重的 %s。下面一行对回模型：船是 log-sum-exp，约 %.1f；船长是蒸馏损失 KL，每行约 %s；秤的一格是 f32 在 %.1f 处的一格，约 %s，等于 KL 的 %s。"
+               "右格：病态还是 bug，问三件事。它的输入两边离参照一样近吗？R %s，一样近。由它出发的梯度一样近吗？R %s，一样近。"
+               "它是不是两个大数相减剩下的小数、差折成大数的格在一两格以内？TPU 的 lse 平均差 %s 格。三条都是，就是病态：定责，不改。"
+               % (N.SHIP_T, N.CAPTAIN_KG, N.TICK_KG_T, N.TICK_PCT_T, N.KD_LSE, N.sci(N.KD_KL), N.KD_LSE, N.KD_ULP_T, N.KD_ULP_OF_KL_T,
+                  N.KD_IN_R, N.KD_GRAD_R, N.KD_LSE_TPU_ULP_T))
+    y0 = f.header("小数是两个大数相减时，f32 差一格就是千分之几　——　<tspan font-weight=\"700\">病态不是 bug</tspan>",
+                  "左边：在一杆称船的秤上称船长；右边：三个问题分清「病态」和「算错」",
+                  [(GY, "大数（船、lse）"), (OR, "小数（船长、KL）"), (RD, "秤的一格")])
+    PH = 440
+    LW = 800
+    py = f.panel(0, y0, LW, PH, "船上称船长（比方；比例跟实测一样）", OR)
+    # 两次称重：两根几乎一样长的灰条，船长那一截细到看不见
+    BX, BL_ = 30, 480
+    for i, (lab, val, cap) in enumerate([("船 ＋ 船长", "%s 公斤" % format(int(N.SHIP_T * 1000 + N.CAPTAIN_KG), ","), True),
+                                         ("空船", "%s 公斤" % format(int(N.SHIP_T * 1000), ","), False)]):
+        y = py + 30 + i * 56
+        f.t(BX, y + 22, lab, INK, True, 14)
+        f.box(BX + 110, y + 6, BL_, 26, "#e8eaed", GY, 4)
+        if cap:
+            f.box(BX + 110 + BL_, y + 6, 2, 26, OR, OR, 0)
+        f.t(BX + 110 + BL_ + 14, y + 25, val, INK, True, 13)
+    f.t(BX, py + 162, "两次一减 ＝ %d 公斤：船长只有船的约 1/%s，两根条看不出差别" % (N.CAPTAIN_KG, format(int(round(N.KD_RATIO, -3)), ",")), GY, size=13)
+    # 放大镜：船长那一截，按秤的一格画刻度
+    ZY, ZX, ZL = py + 196, 30, 740
+    f.t(ZX, ZY, "放大到船长那一截：一格 %s 公斤" % N.TICK_KG_T, INK, True, 14)
+    f.box(ZX, ZY + 14, ZL, 34, "#fef7e0", OR, 4)
+    f.t(ZX + ZL / 2.0, ZY + 37, "船长 %d 公斤" % N.CAPTAIN_KG, OR, True, 14, "middle")
+    tick = ZL * N.TICK_KG / N.CAPTAIN_KG
+    f.box(ZX + ZL - tick, ZY + 10, tick, 42, RD, RD, 0)
+    f.line(ZX + ZL - tick / 2.0, ZY + 56, ZX + ZL - 150, ZY + 86, RD, 1.2, arrow=False)
+    f.t(ZX + ZL - 156, ZY + 92, "差一格 ＝ 船长体重的 %s" % N.TICK_PCT_T, RD, True, 14, "end")
+    # 对回模型
+    my = py + 330
+    f.line(ZX, my - 16, ZX + ZL, my - 16, LINE, 1, arrow=False)
+    for k, (a, b) in enumerate([("船", "log-sum-exp ≈ %.1f" % N.KD_LSE), ("船长", "蒸馏损失 KL ≈ %s" % N.sci(N.KD_KL)),
+                                ("秤的一格", "f32 在 7.1 处一格 ≈ %s" % N.KD_ULP_T)]):
+        x = ZX + k * 250
+        f.t(x, my + 8, a, OR if k == 1 else (RD if k == 2 else GY), True, 14)
+        f.t(x, my + 32, b, INK, size=13)
+    f.t(ZX, my + 64, "一格 ＝ KL 的 %s；实测 TPU 记下的 KL 偏低 %s" % (N.KD_ULP_OF_KL_T, N.KD_DIFF_PCT_T), RD, True, 13)
+    f._pan = None
+    px = LW + 20
+    py2 = f.panel(px, y0, W - px, PH, "病态还是 bug：问三件事（实测）", GR)
+    qs = [("① 它的输入，两边离参照一样近？", "教师 q ／ k、打分：R %s" % N.KD_IN_R),
+          ("② 由它出发的梯度，两边一样近？", "20 个张量：R %s" % N.KD_GRAD_R),
+          ("③ 它是大数相减剩下的小数？", "差折成大数的格：平均 %s 格" % N.KD_LSE_TPU_ULP_T)]
+    for i, (q, a) in enumerate(qs):
+        y = py2 + 30 + i * 84
+        f.t(px + 18, y + 20, q, INK, True, 14)
+        f.t(px + 40, y + 46, a, GR, True, 13)
+        f.t(px + 18, y + 46, "✓", GR, True, 15)
+    f.box(px + 16, py2 + 290, W - px - 32, 50, "#e6f4ea", GR, 6)
+    f.t(px + 30, py2 + 321, "三条都是 → 病态：定责，不改", GR, True, 15)
+    f.t(px + 18, py2 + 372, "有一条不是 → 回到五格表找边界", GY, size=13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "先看这个数是不是两个大数相减：是的话，用大数的格去量它的差，一两格以内就是病态", [
+        "病态是算法本身的条件数，两边写法一模一样也躲不开；只有写法不同造成的差，才要回头去改。",
+        "代价：病态不会自己消失 —— 这一项在验收表里一直是「不过，已定责」，要把这三问的证据附在旁边。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移，第 1 步，稀疏注意力索引器的蒸馏损失）：同一行 TPU 图内对同一输入的 FP64 重算 %s；TPU 图内 lse 对 FP64 平均 %s 格（只有 %s 的行偏正），CPU 上 f32 只差 %s 格；KD 的输入与梯度见右格。"
+               % (N.KD_DIFF_T, N.KD_LSE_TPU_ULP_T, N.KD_POS_ROWS, ("%.3f" % N.KD_LSE_CPU_ULP).replace("-", "−")),
+               "⚠️ 本课推导：比方按 lse 1 单位 ↔ 1000 吨换算，船 %d 吨、船长 %d 公斤、一格 %s 公斤，比例跟实测的「一格 ＝ KL 的 %s」一致。lse 偏一格到 KL 偏多少，中间还隔着教师那一项，两者不是简单相乘，只取量级。"
+               % (N.SHIP_T, N.CAPTAIN_KG, N.TICK_KG_T, N.KD_ULP_OF_KL_T),
+               "注：秤读到 0.47 公斤，对 7100 吨是八位有效数字，大致是 f32 的水平（约 7 位十进制）。")
+    f.save("fig9-captain.svg", yb + 14)
+
+
 fig_formats()
 fig_truncate()
 fig_tf32()
 fig_windowed()
 fig_excess()
+fig_boundary()
+fig_captain()
