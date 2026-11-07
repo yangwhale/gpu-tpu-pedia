@@ -694,7 +694,7 @@ assert ATTN_FIX_LOSS < ATTN_NOISE_LOSS / 10 and abs(ATTN_FIX_GN) < ATTN_NOISE_GN
 ATTN_FIX_LOSS_T, ATTN_FIX_GN_T = tx(ATTN_FIX_LOSS, "%.1e", plus=True), tx(ATTN_FIX_GN, "%.1e")
 ATTN_NOISE_LOSS_T, ATTN_NOISE_GN_T = tx(ATTN_NOISE_LOSS, "%.1e"), tx(ATTN_NOISE_GN, "%.1e")
 _lock("ATTN_FIX_LOSS_T", ATTN_FIX_LOSS_T, "＋8.1e-7"); _lock("ATTN_NOISE_GN_T", ATTN_NOISE_GN_T, "2.2e-3")
-# 「HIGHEST 也不是 FP32」：四路残差流的加权和，TPU 默认 HIGHEST einsum（多遍 BF16 拼近似 FP32），GPU 逐元素 FP32 乘加
+# 「HIGHEST 也不是 FP32」：多路残差流的加权和，TPU 默认 HIGHEST einsum（多遍 BF16 拼近似 FP32），GPU 逐元素 FP32 乘加
 HC_TENSORS = 45
 HC_OVER = (12, 5, 18)                    # 对 FP32 参照 R ＞ 1.2 的张量：现行 ／ 改逐路 FP32 乘加 ／ 现行再关 excess precision
 HC_MED = (0.88, 0.79, 1.09)              # R 中位数，同上
@@ -740,9 +740,9 @@ INJ_ALONE_R = 0.999                      # 同一个 GPU 输入直接喂那个�
 assert INJ_R[0] > 1.2 >= INJ_R[1]
 INJ_R_T = "%.2f → %.2f" % INJ_R; _lock("INJ_R_T", INJ_R_T, "1.56 → 0.95")
 # 优化器写法（单测对参照框架的固定参照，每步更新的相对差）
-OPT_ALL_OFF, OPT_ALL_ON = 0.13, 1.3e-6   # Muon 三处写法都不对上 ／ 都对上
-OPT_NADAM = 0.56                         # 标量参数走成 NAdam（对普通 Adam）
-OPT_NS = 1e-6                            # 只差 Newton–Schulz 前归一化的 eps 写法：舍入量级
+OPT_ALL_OFF, OPT_ALL_ON = 0.13, 1.3e-6   # 优化器三处写法都不对上 ／ 都对上
+OPT_NADAM = 0.56                         # 一维参数走成 NAdam（对普通 Adam）
+OPT_NS = 1e-6                            # 只差正交化迭代前归一化的 eps 写法：舍入量级
 assert OPT_ALL_ON < OPT_NS * 2 and OPT_NADAM > OPT_ALL_OFF
 OPT_ALL_ON_T = tx(OPT_ALL_ON, "%.1e")
 # 测量口径：参数范数在 FP32 里整棵树一路相加

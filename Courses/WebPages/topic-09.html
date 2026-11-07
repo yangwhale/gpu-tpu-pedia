@@ -1293,7 +1293,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     所以 TPU 也改成「每个设备分两次前反向再累加」，让设备 d 的第 m 份正好是 GPU 第 d 张卡的第 m 份。</p></details>
   <details class="foldfig"><summary><b>名字一样，写法不一样</b>：第二次迁移在配置和优化器里查出的四处，都不报错</summary>
   <ul>
-    <li><b>优化器</b>：两边都叫 Muon，可 Nesterov 那一步做不做偏差修正、标量参数走普通 Adam 还是 NAdam、Newton–Schulz 迭代前归一化的 eps 怎么加，三处写法都不同。单测里拿参照框架的实现逐步比：三处都不对上，每步更新差 0.13；只把标量参数走成 NAdam 就差 0.56；三处都对上，差 1.3e-6。</li>
+    <li><b>优化器</b>：两边用的是同一个名字的优化器（一种较新的、对矩阵做迭代正交化的优化器），可 Nesterov 动量那一步做不做偏差修正、一维参数走普通 Adam 还是 NAdam、正交化迭代前归一化的 eps 怎么加，三处写法都不同。单测里拿参照框架的实现逐步比：三处都不对上，每步更新差 0.13；只把一维参数走成 NAdam 就差 0.56；三处都对上，差 1.3e-6。</li>
     <li><b>重算</b>：「存下路由结果、反向不重选」这个设置，TPU 框架只在一种自定义重算策略下才读；配置写的是整层重算，它就被悄悄忽略，反向重新选路由。配置项名字对了，不等于生效了。</li>
     <li><b>协议写了、参照做不到</b>：协议写「两边的路由偏置都做零均值更新」，可参照框架根本没有这个更新。TPU 开着它，偏置均值逐步漂开，判定 r 到了 19；TPU 关掉以后，r 19.1 → 0.31。</li>
     <li><b>统计量怎么跨 microbatch 合</b>：梯度累积把各份 microbatch 的辅助量一律求和，连「取最大」的统计（注意力的最大 logit）也被加成约累积份数倍，用它做裁剪就裁多了。</li>
@@ -5083,155 +5083,110 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     混元 3 上这样做出的「舍过的参照」实际用的还是 FP32 主权重，量出来的结论整个作废，改用 JAX 的 <code>lax.reduce_precision</code>（BF16 对应 <code>exponent_bits=8, mantissa_bits=7</code>）才对 —— 它不会被优化掉；输出类型仍是 FP32，只是数值已经舍到 BF16 的格点上。自查办法：把编译后的程序转储出来，看那处还有没有成对的 convert；或者把选项关掉重跑一次对比。</p></details>
 
   <h3 id="s5-6">5.6　差几乎都出在 16 位和 32 位的交界</h3>
-<figure class="fbox fwide" id="fig-boundary"><svg viewBox="0 0 1400 746" width="100%" role="img" aria-label="一张检查表。五列是一个算子在一侧的五格：输入是什么精度、乘法按什么精度算、部分和在什么精度里加、结果以什么精度存下来、舍入发生在哪一步。五行是五个真实的算子，每个算子 TPU 一行（蓝）、GPU 一行（灰），两边不一样的那一格画红框，五个例子正好每列一个。第一行，一处投影乘的权重：TPU 原来乘 FP32 主权重，GPU 乘舍成 BF16 的模型权重。第二行，名义 FP32 的输出头：TPU 默认精度下 FP32 操作数只算一遍 BF16，GPU 是真 FP32。第三行，FSDP 下的投影：TPU 部分和在轮与轮之间舍成 BF16，GPU 在 FP32 里加完。第四行，注意力打分 q 乘 k：GPU 参照自己写的实现先把结果存成 BF16 再进 softmax，TPU 和生产的融合内核都留在 FP32。第五行，RMSNorm：TPU 默认归一化结果和缩放各舍一次，GPU 算完只舍一次。五格都一样的算子只剩加法顺序的差，那是噪声；有一格不一样，就是一个要对上的边界。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每个算子两边各写一行五格，红框就是要对上的边界</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">白格 ＝ 16 位（BF16），灰格 ＝ 32 位（FP32）；红框 ＝ 根子上不一样的那一格；五列各举一个真实例子</text>
+<figure class="fbox fwide" id="fig-boundary"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="一张检查表，画成五条路径。横向五格是一个算子的五个环节：输入、乘法（矩阵乘精度）、累加、输出存储、舍在哪；每一格里线的高低表示这个值在几位里：高 ＝ 32 位（FP32），低 ＝ 16 位（BF16）。蓝线是 TPU，灰色虚线是 GPU；两条线分开的那一格涂红，就是要对上的边界。五个例子正好每列一个。第一行，路由打分乘哪份权重：TPU 原来乘 FP32 主权重，GPU 乘舍成 BF16 的权重。第二行，名义 FP32 的输出头：TPU 默认精度下 FP32 操作数只算一遍 BF16，GPU 是真 FP32。第三行，FSDP 下的投影：TPU 部分和在轮与轮之间舍成 BF16，GPU 在 FP32 里加完。第四行，注意力打分 q 乘 k：GPU 参照自己写的实现先把结果存成 BF16 再进 softmax，TPU 和生产的融合内核都留在 FP32。第五行，RMSNorm：TPU 默认归一化结果和缩放各舍一次，GPU 算完只舍一次。两条线全程重合的算子只剩加法顺序的差，那是噪声；分开一格，就是一个要对上的边界。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每个算子两边各画一条精度路径，分开的那一格就是要对上的边界</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">线高 ＝ 这一格的值在 32 位（FP32），线低 ＝ 16 位（BF16）；蓝 ＝ TPU，灰虚线 ＝ GPU；红底 ＝ 两条线分开的那一格</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU</text>
 <rect x="77.24000000000001" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="98" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU</text>
 <rect x="155.60000000000002" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="176" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">两边不一样</text>
-<rect x="0" y="102" width="1400" height="502" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="550" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">五格 × 两边：五个例子，五列各一个</tspan></text>
-<text class="svgsm" x="393" y="158" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入</tspan></text>
-<text class="svgsm" x="587" y="158" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">乘法 ／ 矩阵乘精度</tspan></text>
-<text class="svgsm" x="781" y="158" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加</tspan></text>
-<text class="svgsm" x="975" y="158" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出 ／ 存储</tspan></text>
-<text class="svgsm" x="1169" y="158" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍在哪</tspan></text>
-<text class="svgsm" x="20" y="202" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一处投影：乘哪份权重</tspan></text>
-<text class="svgsm" x="20" y="222" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">第二次迁移</text>
-<text class="svgsm" x="288" y="194" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="300" y="174" width="186" height="30" rx="4" fill="#e8eaed" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="393" y="194" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 主权重</tspan></text>
-<rect x="494" y="174" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="194" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">默认精度</text>
-<rect x="688" y="174" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="194" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="174" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="194" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="1076" y="174" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="194" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">出口一次</text>
-<text class="svgsm" x="288" y="228" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="300" y="208" width="186" height="30" rx="4" fill="#fff" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="393" y="228" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">BF16 模型权重</tspan></text>
-<rect x="494" y="208" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="228" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">默认精度</text>
-<rect x="688" y="208" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="228" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="208" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="228" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="1076" y="208" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="228" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">出口一次</text>
-<text class="svgsm" x="20" y="292" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">名义 FP32 的输出头</tspan></text>
-<text class="svgsm" x="20" y="312" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">第二次迁移</text>
-<text class="svgsm" x="288" y="284" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="300" y="264" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="284" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="494" y="264" width="186" height="30" rx="4" fill="#fff" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="587" y="284" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认：单遍 BF16</tspan></text>
-<rect x="688" y="264" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="284" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="264" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="284" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="1076" y="264" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="284" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">—</text>
-<text class="svgsm" x="288" y="318" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="300" y="298" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="318" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="494" y="298" width="186" height="30" rx="4" fill="#e8eaed" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="587" y="318" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">真 FP32（TF32 关）</tspan></text>
-<rect x="688" y="298" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="318" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="298" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="318" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="1076" y="298" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="318" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">—</text>
-<text class="svgsm" x="20" y="382" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP 下的投影</tspan></text>
-<text class="svgsm" x="20" y="402" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">混元 3</text>
-<text class="svgsm" x="288" y="374" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="300" y="354" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="374" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="494" y="354" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="374" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16 × BF16</text>
-<rect x="688" y="354" width="186" height="30" rx="4" fill="#fff" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="781" y="374" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">轮间舍 BF16</tspan></text>
-<rect x="882" y="354" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="374" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="1076" y="354" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="374" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">随累加那格</text>
-<text class="svgsm" x="288" y="408" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="300" y="388" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="408" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="494" y="388" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="408" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16 × BF16</text>
-<rect x="688" y="388" width="186" height="30" rx="4" fill="#e8eaed" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="781" y="408" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 加完</tspan></text>
-<rect x="882" y="388" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="408" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="1076" y="388" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="408" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">随累加那格</text>
-<text class="svgsm" x="20" y="472" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力打分 q·k</tspan></text>
-<text class="svgsm" x="20" y="492" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">第二次迁移</text>
-<text class="svgsm" x="288" y="464" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="300" y="444" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="464" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="494" y="444" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="464" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16 × BF16</text>
-<rect x="688" y="444" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="464" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="444" width="186" height="30" rx="4" fill="#e8eaed" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="975" y="464" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">留 FP32 进 softmax</tspan></text>
-<rect x="1076" y="444" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="464" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">随存储那格</text>
-<text class="svgsm" x="288" y="498" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="300" y="478" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="498" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="494" y="478" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="498" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16 × BF16</text>
-<rect x="688" y="478" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="498" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="478" width="186" height="30" rx="4" fill="#fff" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="975" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">存 BF16 再 softmax</tspan></text>
-<rect x="1076" y="478" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="498" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">随存储那格</text>
-<text class="svgsm" x="20" y="562" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">RMSNorm</tspan></text>
-<text class="svgsm" x="20" y="582" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">混元 3</text>
-<text class="svgsm" x="288" y="554" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="300" y="534" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="554" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="494" y="534" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="554" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32 里算</text>
-<rect x="688" y="534" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="554" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="534" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="554" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="1076" y="534" width="186" height="30" rx="4" fill="#fff" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="1169" y="554" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结果、缩放各一次</tspan></text>
-<text class="svgsm" x="288" y="588" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="300" y="568" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="393" y="588" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="494" y="568" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="587" y="588" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32 里算</text>
-<rect x="688" y="568" width="186" height="30" rx="4" fill="#e8eaed" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="781" y="588" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32</text>
-<rect x="882" y="568" width="186" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="975" y="588" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">BF16</text>
-<rect x="1076" y="568" width="186" height="30" rx="4" fill="#fff" stroke="#d93025" stroke-width="2.4"/>
-<text class="svgsm" x="1169" y="588" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算完只舍一次</tspan></text>
-<rect x="0" y="624" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="624" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="624" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="651" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">五格都一样，只剩加法顺序的差（噪声）；有一格不一样，就是一个要对上的边界</tspan></text>
-<text class="svgsm" x="20" y="682" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">看代码找对不齐，就是把每个算子两边各写一行，逐格比；有差的格子再去找开关，没有开关的记一行再定谁改。</text>
-<text class="svgsm" x="20" y="706" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：GPU 重跑量不出这种差 —— 重跑之间舍入位置一模一样，尺子在这里宽度是 0；要靠逐格读代码，再拿 FP64 定责。</text>
-</svg><figcaption><b>每一行先找红框：五个例子，五列各一个。</b><span class="capmore"><br><em>白格 16 位、灰格 32 位；例子取自两次迁移，只讲在哪不一样，不讲差多大。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：第 1、2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。</p>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">五个例子，五列各一个</tspan></text>
+<text class="svgsm" x="393" y="156" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输入</tspan></text>
+<text class="svgsm" x="587" y="156" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">乘法 ／ 矩阵乘精度</tspan></text>
+<text class="svgsm" x="781" y="156" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加</tspan></text>
+<text class="svgsm" x="975" y="156" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出 ／ 存储</tspan></text>
+<text class="svgsm" x="1169" y="156" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍在哪</tspan></text>
+<text class="svgsm" x="20" y="204" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">路由打分：乘哪份权重</tspan></text>
+<text class="svgsm" x="20" y="226" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">两次迁移都遇到</text>
+<rect x="300" y="172" width="186" height="82" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="393" y="189" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 主权重</tspan></text>
+<text class="svgsm" x="393" y="248" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">BF16 权重</tspan></text>
+<rect x="494" y="172" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="587" y="248" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32 里乘</text>
+<rect x="688" y="172" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="781" y="248" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32</text>
+<rect x="882" y="172" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="975" y="248" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32 打分</text>
+<rect x="1076" y="172" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="1169" y="248" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">—</text>
+<path d="M310 198 L476 198 L504 198 L670 198 L698 198 L864 198 L892 198 L1058 198 L1086 198 L1252 198" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M310 231 L476 231 L504 203 L670 203 L698 203 L864 203 L892 203 L1058 203 L1086 203 L1252 203" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<text class="svgsm" x="20" y="300" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">名义 FP32 的输出头</tspan></text>
+<text class="svgsm" x="20" y="322" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">第二次迁移</text>
+<rect x="300" y="268" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="393" y="344" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32</text>
+<rect x="494" y="268" width="186" height="82" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="587" y="344" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认：单遍 BF16</tspan></text>
+<text class="svgsm" x="587" y="285" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">真 FP32（TF32 关）</tspan></text>
+<rect x="688" y="268" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="781" y="344" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32</text>
+<rect x="882" y="268" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="975" y="344" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32</text>
+<rect x="1076" y="268" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="1169" y="344" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">—</text>
+<path d="M310 294 L476 294 L504 322 L670 322 L698 294 L864 294 L892 294 L1058 294 L1086 294 L1252 294" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M310 299 L476 299 L504 299 L670 299 L698 299 L864 299 L892 299 L1058 299 L1086 299 L1252 299" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<text class="svgsm" x="20" y="396" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP 下的投影</tspan></text>
+<text class="svgsm" x="20" y="418" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">混元 3</text>
+<rect x="300" y="364" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="393" y="440" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16</text>
+<rect x="494" y="364" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="587" y="440" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16 × BF16</text>
+<rect x="688" y="364" width="186" height="82" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="781" y="440" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">轮与轮之间舍 BF16</tspan></text>
+<text class="svgsm" x="781" y="381" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 里加完</tspan></text>
+<rect x="882" y="364" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="975" y="440" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16</text>
+<rect x="1076" y="364" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="1169" y="440" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">随累加那格</text>
+<path d="M310 418 L476 418 L504 418 L670 418 L698 418 L864 418 L892 418 L1058 418 L1086 418 L1252 418" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M310 423 L476 423 L504 423 L670 423 L698 395 L864 395 L892 423 L1058 423 L1086 423 L1252 423" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<text class="svgsm" x="20" y="492" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力打分 q·k</tspan></text>
+<text class="svgsm" x="20" y="514" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">第二次迁移</text>
+<rect x="300" y="460" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="393" y="536" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16</text>
+<rect x="494" y="460" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="587" y="536" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16 × BF16</text>
+<rect x="688" y="460" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="781" y="536" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32</text>
+<rect x="882" y="460" width="186" height="82" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="975" y="477" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">留 FP32</tspan></text>
+<text class="svgsm" x="975" y="536" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先存 BF16</tspan></text>
+<rect x="1076" y="460" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="1169" y="536" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">softmax 在 FP32</text>
+<path d="M310 514 L476 514 L504 514 L670 514 L698 486 L864 486 L892 486 L1058 486 L1086 486 L1252 486" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M310 519 L476 519 L504 519 L670 519 L698 491 L864 491 L892 519 L1058 519 L1086 491 L1252 491" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<text class="svgsm" x="20" y="588" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">RMSNorm</tspan></text>
+<text class="svgsm" x="20" y="610" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">混元 3</text>
+<rect x="300" y="556" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="393" y="632" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16</text>
+<rect x="494" y="556" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="587" y="632" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32 里算</text>
+<rect x="688" y="556" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="781" y="632" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32</text>
+<rect x="882" y="556" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="975" y="632" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16</text>
+<rect x="1076" y="556" width="186" height="82" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="1169" y="632" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结果、缩放各舍一次</tspan></text>
+<text class="svgsm" x="1169" y="573" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算完只舍一次</tspan></text>
+<path d="M310 610 L476 610 L504 582 L670 582 L698 582 L864 582 L892 610 L1058 610 L1086 610 L1252 610" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M310 615 L476 615 L504 587 L670 587 L698 587 L864 587 L892 615 L1058 615 L1086 587 L1252 587" fill="none" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
+<rect x="0" y="672" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="672" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="672" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="699" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两条线全程重合，只剩加法顺序的差（噪声）；分开一格，就是一个要对上的边界</tspan></text>
+<text class="svgsm" x="20" y="730" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">看代码找对不齐，就是把每个算子两边各写一行五格，逐格比；有差的格子再去找开关，没有开关的记一行再定谁改。</text>
+<text class="svgsm" x="20" y="754" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：GPU 重跑量不出这种差 —— 重跑之间舍入位置一模一样，尺子在这里宽度是 0；要靠逐格读代码，再拿 FP64 定责。</text>
+</svg><figcaption><b>每一行先找两条线分开的那一格：五个例子，五列各一个。</b><span class="capmore"><br><em>例子取自两次迁移；只讲在哪不一样，不讲差多大。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：第 2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3；第 1 行两次都遇到（路由打分的权重操作数，GPU 用舍成 BF16 的权重在 FP32 里乘）。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。</p>
 <p>📌 第 4 行只改这一处，第 1 步 loss ＋8.1e-7、梯度范数 −3.0e-5，比 GPU 自己的噪声（4.5e-5 ／ 2.2e-3）小几十倍 —— 它是按写法定的 bug，不是按大小抓到的。</p>
-<p>📌 同在「乘法」这一列的还有一处：TPU 的 HIGHEST 精度是多遍 BF16 拼出来的近似 FP32，GPU 是逐元素 FP32 乘加；四路残差流的加权和改成逐路 FP32 乘加以后，第 1 步对 FP32 参照 R ＞ 1.2 的张量 12 → 5（共 45 个）。</p>
-<p>注：「舍在哪」一列只在它本身是根子时画红（第 5 行）；第 3、4 行多舍、少舍的位置跟着左边那格走，写「随……那格」；第 2 行两边都没有额外的舍入，写「—」。第 1 行两边矩阵乘都按各自的默认精度算，差在乘的是哪份权重。</p></details></figure>
+<p>📌 同在「乘法」这一列的还有一处：TPU 的 HIGHEST 精度是多遍 BF16 拼出来的近似 FP32，GPU 是逐元素 FP32 乘加；多路残差流的加权和改成逐路 FP32 乘加以后，第 1 步对 FP32 参照 R ＞ 1.2 的张量 12 → 5（共 45 个）。</p>
+<p>注：线高只分 16 位、32 位两档，HIGHEST 这类「多遍 BF16 拼近似 FP32」画在 32 位；「舍在哪」一列线低 ＝ 这里多舍了一次到 16 位。第 3 行累加那一格：一轮之内照常 FP32 累加，舍的是轮与轮之间的部分和（<a href="#s5-4">§5.4</a> 的推断）。</p></details></figure>
   <p>前面五小节各讲了一处舍入。第二次迁移把对不齐一处处查下来，几乎每一处都是一个值从 16 位进 32 位、或从 32 位落回 16 位的地方，再加上悄悄打开的 TF32。所以读代码找对不齐，就是给每个算子两边各写一行五格，找不一样的那一格。</p>
   <p>两格最容易看走眼。一是 <b>TPU 上的「FP32」</b>：操作数转成了 FP32，矩阵乘精度却跟全局设置走，默认只算一遍 BF16；要真 FP32 得给那一处单独设 HIGHEST，而 HIGHEST 也是多遍 BF16 拼出来的近似，碰上 GPU 那边逐元素 FP32 乘加的地方，照样差末位。二是<b>该留 32 位的中间值存成了 16 位</b>：这是写错了，不是噪声，哪怕它小到 GPU 重跑都盖得住。图里第 4 行就出在参照一侧自己写的实现上，改的是 GPU。</p>
   <details class="foldfig"><summary><b>边界清单</b>：两次迁移碰到的十二类，各举一例</summary>
@@ -5243,10 +5198,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>逐元素函数在 FP32 里算再舍，还是直接在 BF16 上算</td><td>门控激活 silu·up：GPU 舍两次、TPU 默认舍一次，只有 73.7% 的元素逐位；输出门的 sigmoid 两边也一个 FP32、一个 BF16</td><td>按 GPU 的写法逐个算子舍</td></tr>
   <tr><td>路由打分要 FP32</td><td>top-k 的集合跟 FP64 不同</td><td>两边路由打分都设 FP32</td></tr>
   <tr><td>FP32 操作数在 TPU 默认精度下只算一遍 BF16</td><td>名义 FP32 的输出头（图第 2 行）；HIGHEST 是多遍 BF16 近似，不等于逐元素 FP32 乘加</td><td>给那一处单独设精度，或改成逐元素 FP32 乘加</td></tr>
-  <tr><td>乘的是 FP32 主权重还是 BF16 权重</td><td>一处投影、路由打分的权重（图第 1 行）</td><td>按参照用哪份就用哪份</td></tr>
+  <tr><td>乘的是 FP32 主权重还是 BF16 权重</td><td>路由打分的权重（图第 1 行），另一处投影也是</td><td>按参照用哪份就用哪份</td></tr>
   <tr><td>GPU 上 TF32 悄悄打开</td><td>名义 FP32 的参照比 BF16 还偏（<a href="#s5-3">§5.3</a>）</td><td>启动时对 FP64 实测</td></tr>
   <tr><td>梯度以 BF16 落地</td><td>norm 权重、输出层、embedding（<a href="#s9-4">§9.4</a>）</td><td>梯度直接累加进 FP32</td></tr>
-  <tr><td>优化器内部的精度</td><td>Newton–Schulz 迭代两边都在 BF16 量级里算</td><td>只是舍入差，不必对；写法差（<a href="#s2-3">§2.3</a> 折叠）要对</td></tr>
+  <tr><td>优化器内部的精度</td><td>优化器里的正交化迭代两边都在 BF16 量级里算</td><td>只是舍入差，不必对；写法差（<a href="#s2-3">§2.3</a> 折叠）要对</td></tr>
   <tr><td>FP32 里的病态标量</td><td>KL 远小于 log-sum-exp（<a href="#s5-7">§5.7</a>）</td><td><b>不是 bug</b>：定责，不改</td></tr>
   </tbody></table>
   <p>不是 dtype 的那一类叫语义差：同一个量两边定义不同（<a href="#s2-3">§2.3</a> 折叠的四处）、测量工具自己错了（<a href="#s6-2">§6.2</a>）。它们不在这张表里，排查时另列。</p></details>
@@ -6787,10 +6742,10 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>（定案前）交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 4.00 ／ 2.03 ／ 1.21 ／ 2.24；TPU 执行噪声 28 对 5.03 ／ 1.81 ／ 1.42 ／ 0.99</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
   <tr><td>（定案前）EP＝8：参数范数带符号均值 4.27e-7 → 3.52e-7，3.45 倍 → 2.85 倍；变化 7.5e-8 小于 TPU 执行噪声上限 8.5e-8（比较为本课推导）</td><td>v5p 当前配置，TPU 改成按专家切，对精确轨迹</td></tr>
   <tr><td>（第二次迁移）第 1 步逐张量比值中位数 2.67 → 1.65、超 2 倍 139 → 52（共 195）；四个开关 1.72 ／ 62</td><td>更新的、带稀疏注意力的 MoE 模型，小尺寸、随机初始化；TPU 对 GPU 第 1 步三份，按开关逐一打开</td></tr>
-  <tr><td>（第二次迁移）注意力打分改留 FP32：第 1 步 loss ＋8.1e-7、梯度范数 −3.0e-5；GPU 噪声 4.5e-5 ／ 2.2e-3；四路流加权和 R ＞ 1.2 12 → 5（关 excess precision 18）</td><td>GPU 只改这一处的第 1 步对比、8 份两两 28 对；加权和为 TPU 第 1 步诊断对 FP32 参照（FP32 ＋ HIGHEST，误差约 1e-7）</td></tr>
+  <tr><td>（第二次迁移）注意力打分改留 FP32：第 1 步 loss ＋8.1e-7、梯度范数 −3.0e-5；GPU 噪声 4.5e-5 ／ 2.2e-3；多路流加权和 R ＞ 1.2 12 → 5（关 excess precision 18）</td><td>GPU 只改这一处的第 1 步对比、8 份两两 28 对；加权和为 TPU 第 1 步诊断对 FP32 参照（FP32 ＋ HIGHEST，误差约 1e-7）</td></tr>
   <tr><td>（第二次迁移）病态：KL ≈ 1.1e-4、lse ≈ 7.1、一格 4.73e-7 ＝ KL 的 4.3e-3；TPU lse −0.95 格；同一行 KD −1.2e-3；输入 R 0.94–0.99、梯度 R 0.78–1.03</td><td>第 1 步，存下一行 KD 的原始输入在 FP64 里逐项重算；船和船长的数为本课推导（按比例换算）</td></tr>
   <tr><td>（第二次迁移）尺子撤回并集：梯度范数 r 1.77 → 2.08、1.75 → 2.69、1.68 → 2.75；路由偏置均值 r 19.1 → 0.31；回放注入 R 1.56 → 0.95（单独喂 0.999）；参数范数测量偏低 1e-7 至 3e-7，改精确值后第 1 步差 1.6e-9</td><td>300 步比较，并集 38 对 → GPU 28 对；偏置为 TPU 关零均值更新后重跑；回放为截层真实权重第 1 步前向</td></tr>
-  <tr><td>（第二次迁移）优化器单测：三处写法都不对上 0.13，标量参数走 NAdam 0.56，都对上 1.3e-6；索引器 top-k 翻转 1,936 ／ 2,048 个 query、槽位 0.147%</td><td>对参照框架实现生成的固定参照逐步比每步更新的相对差；翻转为第 1 步 GPU 对 FP64</td></tr>
+  <tr><td>（第二次迁移）优化器单测：三处写法都不对上 0.13，一维参数走 NAdam 0.56，都对上 1.3e-6；索引器 top-k 翻转 1,936 ／ 2,048 个 query、槽位 0.147%</td><td>对参照框架实现生成的固定参照逐步比每步更新的相对差；翻转为第 1 步 GPU 对 FP64</td></tr>
 </tbody></table></details>
 </div></section>
 

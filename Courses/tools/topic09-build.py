@@ -252,7 +252,7 @@ __FIG_WD__
     所以 TPU 也改成「每个设备分两次前反向再累加」，让设备 d 的第 m 份正好是 GPU 第 d 张卡的第 m 份。</p></details>
   <details class="foldfig"><summary><b>名字一样，写法不一样</b>：第二次迁移在配置和优化器里查出的四处，都不报错</summary>
   <ul>
-    <li><b>优化器</b>：两边都叫 Muon，可 Nesterov 那一步做不做偏差修正、标量参数走普通 Adam 还是 NAdam、Newton–Schulz 迭代前归一化的 eps 怎么加，三处写法都不同。单测里拿参照框架的实现逐步比：三处都不对上，每步更新差 «OPT_ALL_OFF»；只把标量参数走成 NAdam 就差 «OPT_NADAM»；三处都对上，差 «OPT_ALL_ON_T»。</li>
+    <li><b>优化器</b>：两边用的是同一个名字的优化器（一种较新的、对矩阵做迭代正交化的优化器），可 Nesterov 动量那一步做不做偏差修正、一维参数走普通 Adam 还是 NAdam、正交化迭代前归一化的 eps 怎么加，三处写法都不同。单测里拿参照框架的实现逐步比：三处都不对上，每步更新差 «OPT_ALL_OFF»；只把一维参数走成 NAdam 就差 «OPT_NADAM»；三处都对上，差 «OPT_ALL_ON_T»。</li>
     <li><b>重算</b>：「存下路由结果、反向不重选」这个设置，TPU 框架只在一种自定义重算策略下才读；配置写的是整层重算，它就被悄悄忽略，反向重新选路由。配置项名字对了，不等于生效了。</li>
     <li><b>协议写了、参照做不到</b>：协议写「两边的路由偏置都做零均值更新」，可参照框架根本没有这个更新。TPU 开着它，偏置均值逐步漂开，判定 r 到了 19；TPU 关掉以后，r «BIAS_ZM_R_T»。</li>
     <li><b>统计量怎么跨 microbatch 合</b>：梯度累积把各份 microbatch 的辅助量一律求和，连「取最大」的统计（注意力的最大 logit）也被加成约累积份数倍，用它做裁剪就裁多了。</li>
@@ -451,10 +451,10 @@ __FIG_BOUNDARY__
   <tr><td>逐元素函数在 FP32 里算再舍，还是直接在 BF16 上算</td><td>门控激活 silu·up：GPU 舍两次、TPU 默认舍一次，只有 «GLU_BITWISE» 的元素逐位；输出门的 sigmoid 两边也一个 FP32、一个 BF16</td><td>按 GPU 的写法逐个算子舍</td></tr>
   <tr><td>路由打分要 FP32</td><td>top-k 的集合跟 FP64 不同</td><td>两边路由打分都设 FP32</td></tr>
   <tr><td>FP32 操作数在 TPU 默认精度下只算一遍 BF16</td><td>名义 FP32 的输出头（图第 2 行）；HIGHEST 是多遍 BF16 近似，不等于逐元素 FP32 乘加</td><td>给那一处单独设精度，或改成逐元素 FP32 乘加</td></tr>
-  <tr><td>乘的是 FP32 主权重还是 BF16 权重</td><td>一处投影、路由打分的权重（图第 1 行）</td><td>按参照用哪份就用哪份</td></tr>
+  <tr><td>乘的是 FP32 主权重还是 BF16 权重</td><td>路由打分的权重（图第 1 行），另一处投影也是</td><td>按参照用哪份就用哪份</td></tr>
   <tr><td>GPU 上 TF32 悄悄打开</td><td>名义 FP32 的参照比 BF16 还偏（§5.3）</td><td>启动时对 FP64 实测</td></tr>
   <tr><td>梯度以 BF16 落地</td><td>norm 权重、输出层、embedding（§9.4）</td><td>梯度直接累加进 FP32</td></tr>
-  <tr><td>优化器内部的精度</td><td>Newton–Schulz 迭代两边都在 BF16 量级里算</td><td>只是舍入差，不必对；写法差（§2.3 折叠）要对</td></tr>
+  <tr><td>优化器内部的精度</td><td>优化器里的正交化迭代两边都在 BF16 量级里算</td><td>只是舍入差，不必对；写法差（§2.3 折叠）要对</td></tr>
   <tr><td>FP32 里的病态标量</td><td>KL 远小于 log-sum-exp（§5.7）</td><td><b>不是 bug</b>：定责，不改</td></tr>
   </tbody></table>
   <p>不是 dtype 的那一类叫语义差：同一个量两边定义不同（§2.3 折叠的四处）、测量工具自己错了（§6.2）。它们不在这张表里，排查时另列。</p></details>
@@ -906,10 +906,10 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>（定案前）交叉核对：精确轨迹 5 份（基线＋4 份扰动版）两两 10 对 «XCHK_SELF_PN» ／ «XCHK_SELF_LOSS» ／ «XCHK_SELF_TAIL» ／ «XCHK_SELF_GN»；TPU 执行噪声 28 对 «XCHK_TPU_PN» ／ «XCHK_TPU_LOSS» ／ «XCHK_TPU_TAIL» ／ «XCHK_TPU_GN»</td><td>参数范数 ／ loss 全程 ／ loss 尾段 ／ 梯度范数，v5p 当前配置，只报不判</td></tr>
   <tr><td>（定案前）EP＝8：参数范数带符号均值 «ACC_PN_X» → «EP8_PN»，«ACC_PN_R» 倍 → «EP8_R» 倍；变化 «EP8_DELTA» 小于 TPU 执行噪声上限 «TPU_NOISE_PN_N»（比较为本课推导）</td><td>v5p 当前配置，TPU 改成按专家切，对精确轨迹</td></tr>
   <tr><td>（第二次迁移）第 1 步逐张量比值中位数 «B2_RATIO_MED_T»、超 2 倍 «B2_OVER2_T»（共 «B2_TENSORS»）；四个开关 «B2_MED_4SW» ／ «B2_OVER_4SW»</td><td>更新的、带稀疏注意力的 MoE 模型，小尺寸、随机初始化；TPU 对 GPU 第 1 步三份，按开关逐一打开</td></tr>
-  <tr><td>（第二次迁移）注意力打分改留 FP32：第 1 步 loss «ATTN_FIX_LOSS_T»、梯度范数 «ATTN_FIX_GN_T»；GPU 噪声 «ATTN_NOISE_LOSS_T» ／ «ATTN_NOISE_GN_T»；四路流加权和 R ＞ 1.2 «HC_OVER_T»（关 excess precision «HC_OVER_NOEXC»）</td><td>GPU 只改这一处的第 1 步对比、8 份两两 28 对；加权和为 TPU 第 1 步诊断对 FP32 参照（FP32 ＋ HIGHEST，误差约 1e-7）</td></tr>
+  <tr><td>（第二次迁移）注意力打分改留 FP32：第 1 步 loss «ATTN_FIX_LOSS_T»、梯度范数 «ATTN_FIX_GN_T»；GPU 噪声 «ATTN_NOISE_LOSS_T» ／ «ATTN_NOISE_GN_T»；多路流加权和 R ＞ 1.2 «HC_OVER_T»（关 excess precision «HC_OVER_NOEXC»）</td><td>GPU 只改这一处的第 1 步对比、8 份两两 28 对；加权和为 TPU 第 1 步诊断对 FP32 参照（FP32 ＋ HIGHEST，误差约 1e-7）</td></tr>
   <tr><td>（第二次迁移）病态：KL ≈ «KD_KL»、lse ≈ «KD_LSE»、一格 «KD_ULP_T» ＝ KL 的 «KD_ULP_OF_KL_T»；TPU lse «KD_LSE_TPU_ULP_T» 格；同一行 KD «KD_DIFF_T»；输入 R «KD_IN_R»、梯度 R «KD_GRAD_R»</td><td>第 1 步，存下一行 KD 的原始输入在 FP64 里逐项重算；船和船长的数为本课推导（按比例换算）</td></tr>
   <tr><td>（第二次迁移）尺子撤回并集：梯度范数 r «UNION2_GN_T»；路由偏置均值 r «BIAS_ZM_R_T»；回放注入 R «INJ_R_T»（单独喂 «INJ_ALONE_R»）；参数范数测量偏低 «PN2_FP32_BIAS»，改精确值后第 1 步差 «PN2_STEP1_EXACT_T»</td><td>300 步比较，并集 «UNION2_PAIRS» 对 → GPU «GPU2_PAIRS» 对；偏置为 TPU 关零均值更新后重跑；回放为截层真实权重第 1 步前向</td></tr>
-  <tr><td>（第二次迁移）优化器单测：三处写法都不对上 «OPT_ALL_OFF»，标量参数走 NAdam «OPT_NADAM»，都对上 «OPT_ALL_ON_T»；索引器 top-k 翻转 «DSA_Q_FLIP_T» 个 query、槽位 «DSA_SLOT_FLIP»</td><td>对参照框架实现生成的固定参照逐步比每步更新的相对差；翻转为第 1 步 GPU 对 FP64</td></tr>
+  <tr><td>（第二次迁移）优化器单测：三处写法都不对上 «OPT_ALL_OFF»，一维参数走 NAdam «OPT_NADAM»，都对上 «OPT_ALL_ON_T»；索引器 top-k 翻转 «DSA_Q_FLIP_T» 个 query、槽位 «DSA_SLOT_FLIP»</td><td>对参照框架实现生成的固定参照逐步比每步更新的相对差；翻转为第 1 步 GPU 对 FP64</td></tr>
 </tbody></table></details>
 </div></section>
 '''
@@ -961,7 +961,7 @@ FIGS = {
     "__FIG_EXCESS__": ("fig-excess", "fig9-excess.svg", "topic09-fig-fp.py",
         '<b>数每一行的红块：第二行少了，第三行又回到第一行的位置。</b><br><em>四个算子、融合怎么切都是示意。</em>'),
     "__FIG_BOUNDARY__": ("fig-boundary", "fig9-boundary.svg", "topic09-fig-fp.py",
-        '<b>每一行先找红框：五个例子，五列各一个。</b><br><em>白格 16 位、灰格 32 位；例子取自两次迁移，只讲在哪不一样，不讲差多大。</em>'),
+        '<b>每一行先找两条线分开的那一格：五个例子，五列各一个。</b><br><em>例子取自两次迁移；只讲在哪不一样，不讲差多大。</em>'),
     "__FIG_CAPTAIN__": ("fig-captain", "fig9-captain.svg", "topic09-fig-fp.py",
         '<b>红色那一小截就是秤的一格。</b><br><em>船和船长是比方，比例跟实测一样；右边三问是实测。</em>'),
     "__FIG_HOOKS__": ("fig-hooks", "fig9-hooks.svg", "topic09-fig-observe.py",
