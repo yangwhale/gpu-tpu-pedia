@@ -400,8 +400,8 @@ def fig_boundary():
                 x = X0 + j * (CW + CG)
                 yy = (hi if v == 32 else lo) + off
                 pts.append((x + 10, yy)); pts.append((x + CW - 10, yy))
-            d = "M%d %d " % pts[0] + " ".join("L%d %d" % q for q in pts[1:])
-            f.path(d, col, 2.6 if col == BL else 2.0, dash=dash, arrow=False)
+            for (xa, ya), (xb, yb_) in zip(pts, pts[1:]):      # 逐段画：体检按线段数「形状」，一条 path 只算一笔
+                f.line(xa, ya, xb, yb_, col, 2.6 if col == BL else 2.0, dash=dash, arrow=False)
         f.t(X0 + 5 * (CW + CG) + 6, y + 46, FIXSIDE[rows.index((op, where, bad, tpu, gpu, labs))], RD if FIXSIDE[rows.index((op, where, bad, tpu, gpu, labs))] == "改 GPU" else GY, True, 13)
         y += RH
     f._pan = None
