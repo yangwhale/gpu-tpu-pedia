@@ -349,27 +349,29 @@ def fig_boundary():
                "第五行，RMSNorm：TPU 默认归一化结果和缩放各舍一次，GPU 算完只舍一次。"
                "两条线全程重合的算子只剩加法顺序的差，那是噪声；分开一格，就是一个要对上的边界。")
     y0 = f.header("每个算子两边各画一条精度路径，分开的那一格就是要对上的边界",
-                  "线高 ＝ 这一格的值在 32 位（FP32），线低 ＝ 16 位（BF16）；蓝 ＝ TPU，灰虚线 ＝ GPU；红底 ＝ 两条线分开的那一格",
+                  "前四格：线高 ＝ 值在 32 位、线低 ＝ 16 位；最后一格数舍了几次；蓝线蓝字 ＝ TPU，灰虚线黑字 ＝ GPU；红底 ＝ 两边分开的那一格",
                   [(BL, "TPU"), (GY, "GPU"), (RD, "两边不一样")])
     COLS = ["输入", "乘法 ／ 矩阵乘精度", "累加", "输出 ／ 存储", "舍在哪"]
     X0, CW, CG, RH = 300, 186, 8, 96
     # (算子, 出处, 哪一列不一样, TPU 五格位宽, GPU 五格位宽, 共同的小字（不一样那格写两边各自的）)
+    FIXSIDE = ["改 TPU", "改 TPU", "改 TPU", "改 GPU", "改 TPU"]
     rows = [
-        ("路由打分：乘哪份权重", "两次迁移都遇到", 0, [32, 32, 32, 32, 32], [16, 32, 32, 32, 32],
+        ("路由打分：乘哪份权重", "第二次迁移", 0, [32, 32, 32, 32, 32], [16, 32, 32, 32, 32],
          [("FP32 主权重", "BF16 权重"), "FP32 里乘", "FP32", "FP32 打分", "—"]),
         ("名义 FP32 的输出头", "第二次迁移", 1, [32, 16, 32, 32, 32], [32, 32, 32, 32, 32],
          ["FP32", ("默认：单遍 BF16", "真 FP32（TF32 关）"), "FP32", "FP32", "—"]),
-        ("FSDP 下的投影", "混元 3", 2, [16, 16, 16, 16, 16], [16, 16, 32, 16, 16],
+        ("FSDP 切开收缩维的投影", "混元 3", 2, [16, 16, 16, 16, 16], [16, 16, 32, 16, 16],
          ["BF16", "BF16 × BF16", ("轮与轮之间舍 BF16", "FP32 里加完"), "BF16", "随累加那格"]),
         ("注意力打分 q·k", "第二次迁移", 3, [16, 16, 32, 32, 32], [16, 16, 32, 16, 32],
          ["BF16", "BF16 × BF16", "FP32", ("留 FP32", "先存 BF16"), "softmax 在 FP32"]),
         ("RMSNorm", "混元 3", 4, [16, 32, 32, 16, 16], [16, 32, 32, 16, 32],
-         ["BF16", "FP32 里算", "FP32", "BF16", ("结果、缩放各舍一次", "算完只舍一次")]),
+         ["BF16", "FP32 里算", "FP32", "BF16", ("TPU 舍 2 次", "GPU 舍 1 次")]),
     ]
     PH = 70 + len(rows) * RH
     py = f.panel(0, y0, W, PH, "五个例子，五列各一个", BL)
     for j, c in enumerate(COLS):
         f.t(X0 + j * (CW + CG) + CW / 2.0, py + 24, c, INK, True, 14, "middle")
+    f.t(X0 + 5 * (CW + CG) + 6, py + 24, "改哪边", INK, True, 14)
     y = py + 36
     for (op, where, bad, tpu, gpu, labs) in rows:
         f.t(20, y + 36, op, INK, True, 15)
@@ -378,7 +380,14 @@ def fig_boundary():
         for j in range(5):
             x = X0 + j * (CW + CG)
             f.box(x, y + 4, CW, RH - 14, "#fce8e6" if j == bad else "#f8f9fa", RD if j == bad else LINE2, 4, sw=1.6 if j == bad else 1)
-            if j == bad:
+            if j == bad and j == 4:      # 「舍在哪」：数刻痕，不用线高（线高在这一列没有意义）
+                ta, ga = labs[j]
+                for k, (lab, n, col) in enumerate([(ta, 2, BL), (ga, 1, INK)]):
+                    yy = y + 22 + k * 34
+                    for m in range(n):
+                        f.box(x + 14 + m * 12, yy - 12, 6, 16, RD, RD, 1)
+                    f.t(x + 48, yy + 1, lab, col, True, 12)
+            elif j == bad:
                 ta, ga = labs[j]
                 f.t(x + CW / 2.0, hi - 9 if tpu[j] == 32 else lo + 22, ta, BL, True, 12.5, "middle")
                 f.t(x + CW / 2.0, hi - 9 if gpu[j] == 32 else lo + 22, ga, INK, True, 12.5, "middle")
@@ -387,12 +396,13 @@ def fig_boundary():
         # 两条阶梯线：TPU 实线，GPU 虚线、往下错 4 px，重合时也看得见两条
         for vals, col, dash, off in [(tpu, BL, None, 0), (gpu, GY, "6 4", 5)]:
             pts = []
-            for j, v in enumerate(vals):
+            for j, v in enumerate(vals[:4]):
                 x = X0 + j * (CW + CG)
                 yy = (hi if v == 32 else lo) + off
                 pts.append((x + 10, yy)); pts.append((x + CW - 10, yy))
             d = "M%d %d " % pts[0] + " ".join("L%d %d" % q for q in pts[1:])
             f.path(d, col, 2.6 if col == BL else 2.0, dash=dash, arrow=False)
+        f.t(X0 + 5 * (CW + CG) + 6, y + 46, FIXSIDE[rows.index((op, where, bad, tpu, gpu, labs))], RD if FIXSIDE[rows.index((op, where, bad, tpu, gpu, labs))] == "改 GPU" else GY, True, 13)
         y += RH
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "两条线全程重合，只剩加法顺序的差（噪声）；分开一格，就是一个要对上的边界", [
@@ -400,12 +410,12 @@ def fig_boundary():
         "代价：GPU 重跑量不出这种差 —— 重跑之间舍入位置一模一样，尺子在这里宽度是 0；要靠逐格读代码，再拿 FP64 定责。",
     ])
     yb = f.src(yb + 10,
-               "📌 出处：第 2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3；第 1 行两次都遇到（路由打分的权重操作数，GPU 用舍成 BF16 的权重在 FP32 里乘）。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。",
+               "📌 出处：第 1、2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3。第 1 行：TPU 把路由打分设成最高精度以后才出现这个差；混元 3 有同一个开关，但那时默认精度本来就先舍 BF16，开不开逐位相同。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。",
                "📌 第 4 行只改这一处，第 1 步 loss %s、梯度范数 %s，比 GPU 自己的噪声（%s ／ %s）小几十倍 —— 它是按写法定的 bug，不是按大小抓到的。"
                % (N.ATTN_FIX_LOSS_T, N.ATTN_FIX_GN_T, N.ATTN_NOISE_LOSS_T, N.ATTN_NOISE_GN_T),
-               "📌 同在「乘法」这一列的还有一处：TPU 的 HIGHEST 精度是多遍 BF16 拼出来的近似 FP32，GPU 是逐元素 FP32 乘加；多路残差流的加权和改成逐路 FP32 乘加以后，第 1 步对 FP32 参照 R ＞ 1.2 的张量 %s（共 %d 个）。"
+               "📌 同在「乘法」这一列的还有一处：TPU 的 HIGHEST 精度是多遍 BF16 拼出来的近似 FP32，GPU 是逐元素 FP32 乘加；一处多项加权和改成逐项 FP32 乘加以后，第 1 步对 FP32 参照 R ＞ 1.2 的张量 %s（共 %d 个）。"
                % (N.HC_OVER_T, N.HC_TENSORS),
-               "注：线高只分 16 位、32 位两档，HIGHEST 这类「多遍 BF16 拼近似 FP32」画在 32 位；「舍在哪」一列线低 ＝ 这里多舍了一次到 16 位。第 3 行累加那一格：一轮之内照常 FP32 累加，舍的是轮与轮之间的部分和（§5.4 的推断）。")
+               "注：线高只分 16 位、32 位两档，HIGHEST 这类「多遍 BF16 拼近似 FP32」画在 32 位；「舍在哪」一列不画线，红色刻痕一道 ＝ 舍一次到 16 位，只在它本身是根子时画（第 5 行：TPU 默认归一化结果、缩放各舍一次，GPU 算完只舍一次）。第 3 行累加那一格：一轮之内照常 FP32 累加，舍的是轮与轮之间的部分和（§5.4 的推断）。")
     f.save("fig9-boundary.svg", yb + 14)
 
 
@@ -432,7 +442,7 @@ def fig_captain():
         if cap:
             f.box(BX + 110 + BL_, y + 6, 2, 26, OR, OR, 0)
         f.t(BX + 110 + BL_ + 14, y + 25, val, INK, True, 13)
-    f.t(BX, py + 162, "两次一减 ＝ %d 公斤：船长只有船的约 1/%s，两根条看不出差别" % (N.CAPTAIN_KG, format(int(round(N.KD_RATIO, -3)), ",")), GY, size=13)
+    f.t(BX, py + 162, "两次相减 ＝ %d 公斤：船长只有船的约 1/%s，两根条看不出差别" % (N.CAPTAIN_KG, format(int(round(N.KD_RATIO, -3)), ",")), GY, size=13)
     # 放大镜：船长那一截，按秤的一格画刻度
     ZY, ZX, ZL = py + 196, 30, 740
     f.t(ZX, ZY, "放大到船长那一截：一格 %s 公斤" % N.TICK_KG_T, INK, True, 14)
@@ -445,37 +455,56 @@ def fig_captain():
     # 对回模型
     my = py + 330
     f.line(ZX, my - 16, ZX + ZL, my - 16, LINE, 1, arrow=False)
-    for k, (a, b) in enumerate([("船", "log-sum-exp ≈ %.1f" % N.KD_LSE), ("船长", "蒸馏损失 KL ≈ %s" % N.sci(N.KD_KL)),
-                                ("秤的一格", "f32 在 7.1 处一格 ≈ %s" % N.KD_ULP_T)]):
+    for k, (a, b) in enumerate([("船", "log-sum-exp ≈ %.1f" % N.KD_LSE), ("船长", "辅助损失 KL ≈ %s" % N.sci(N.KD_KL)),
+                                ("秤的一格", "f32 在 lse 处一格 ≈ %s" % N.KD_ULP_T)]):
         x = ZX + k * 250
         f.t(x, my + 8, a, OR if k == 1 else (RD if k == 2 else GY), True, 14)
         f.t(x, my + 32, b, INK, size=13)
-    f.t(ZX, my + 64, "一格 ＝ KL 的 %s；实测 TPU 记下的 KL 偏低 %s" % (N.KD_ULP_OF_KL_T, N.KD_DIFF_PCT_T), RD, True, 13)
+    f.t(ZX, my + 64, "一格 ＝ KL 的 %s；实测 TPU 记下的 KL 偏低 %s（一行，对 FP64）" % (N.KD_ULP_OF_KL_T, N.KD_DIFF_PCT_T), RD, True, 13)
     f._pan = None
     px = LW + 20
     py2 = f.panel(px, y0, W - px, PH, "病态还是 bug：问三件事（实测）", GR)
-    qs = [("① 它的输入，两边离参照一样近？", "教师 q ／ k、打分：R %s" % N.KD_IN_R),
+    qs = [("① 它的输入，两边离参照一样近？", "三组输入：R %s" % N.KD_IN_R),
           ("② 由它出发的梯度，两边一样近？", "20 个张量：R %s" % N.KD_GRAD_R),
-          ("③ 它是大数相减剩下的小数？", "差折成大数的格：平均 %s 格" % N.KD_LSE_TPU_ULP_T)]
+          ("③ 大数相减剩小数、差在一两格内？", "lse 对 FP64：平均 %s 格" % N.KD_LSE_TPU_ULP_T)]
     for i, (q, a) in enumerate(qs):
         y = py2 + 30 + i * 84
         f.t(px + 18, y + 20, q, INK, True, 14)
         f.t(px + 40, y + 46, a, GR, True, 13)
         f.t(px + 18, y + 46, "✓", GR, True, 15)
+        bx, U = px + 330, 160          # 右侧小图：① ② 画 GPU 距离（灰，＝ 1）与 TPU 距离（蓝，区间）、1.2 门槛虚线；③ 画 ±2 格的刻度
+        if i < 2:
+            lo, hi = [float(v) for v in (N.KD_IN_R if i == 0 else N.KD_GRAD_R).split("–")]
+            f.box(bx, y + 6, U, 9, "#dadce0", GY, 2)
+            f.box(bx, y + 22, U * lo, 9, BL, BL, 2)
+            f.box(bx + U * lo, y + 22, U * (hi - lo), 9, "#aecbfa", BL, 2)
+            f.line(bx + U * N.R_GATE, y, bx + U * N.R_GATE, y + 38, GR, 1.4, dash="4 3", arrow=False)
+            f.t(bx + U * N.R_GATE + 4, y + 50, "1.2", GR, size=11)
+            f.t(bx - 6, y + 14, "GPU", GY, size=11, anchor="end")
+            f.t(bx - 6, y + 31, "TPU", BL, size=11, anchor="end")
+        else:
+            f.line(bx, y + 20, bx + U * 1.3, y + 20, GY2, 1.2, arrow=False)
+            for k in range(5):
+                xx = bx + k * U * 1.3 / 4
+                f.line(xx, y + 14, xx, y + 26, GY2, 1.2, arrow=False)
+                f.t(xx, y + 42, str(k - 2), GY, size=11, anchor="middle")
+            xm = bx + (2 + N.KD_LSE_TPU_ULP) * U * 1.3 / 4
+            f.box(xm - 5, y + 13, 10, 14, RD, RD, 5)
+            f.t(bx + U * 1.3 / 2, y + 58, "单位：f32 的格", GY, size=11, anchor="middle")
     f.box(px + 16, py2 + 290, W - px - 32, 50, "#e6f4ea", GR, 6)
     f.t(px + 30, py2 + 321, "三条都是 → 病态：定责，不改", GR, True, 15)
     f.t(px + 18, py2 + 372, "有一条不是 → 回到五格表找边界", GY, size=13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "先看这个数是不是两个大数相减：是的话，用大数的格去量它的差，一两格以内就是病态", [
-        "病态是算法本身的条件数，两边写法一模一样也躲不开；只有写法不同造成的差，才要回头去改。",
+        "病态把一格以内的差放大成千分之一；判它看输入和梯度两边是不是一样近，不看这个数本身。",
         "代价：病态不会自己消失 —— 这一项在验收表里一直是「不过，已定责」，要把这三问的证据附在旁边。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移，第 1 步，稀疏注意力索引器的蒸馏损失）：同一行 TPU 图内对同一输入的 FP64 重算 %s；TPU 图内 lse 对 FP64 平均 %s 格（只有 %s 的行偏正），CPU 上 f32 只差 %s 格；KD 的输入与梯度见右格。"
-               % (N.KD_DIFF_T, N.KD_LSE_TPU_ULP_T, N.KD_POS_ROWS, ("%.3f" % N.KD_LSE_CPU_ULP).replace("-", "−")),
-               "⚠️ 本课推导：比方按 lse 1 单位 ↔ 1000 吨换算，船 %d 吨、船长 %d 公斤、一格 %s 公斤，比例跟实测的「一格 ＝ KL 的 %s」一致。lse 偏一格到 KL 偏多少，中间还隔着教师那一项，两者不是简单相乘，只取量级。"
+               "📌 实测（第二次迁移，第 1 步，稀疏注意力里的一项辅助蒸馏损失）：同一行 TPU 图内对同一输入的 FP64 重算 %s（对 GPU、全部运行合起来 %s）；TPU 图内 lse 对 FP64 平均 %s 格（只有 %s 的行偏正），CPU 上 torch 的 f32 只差 %s 格；输入与梯度见右格。"
+               % (N.KD_DIFF_T, N.KD_VS_GPU_T, N.KD_LSE_TPU_ULP_T, N.KD_POS_ROWS, ("%.3f" % N.KD_LSE_CPU_ULP).replace("-", "−")),
+               "⚠️ 本课推导：比方按 lse 1 单位 ↔ 1000 吨换算，船 %d 吨、船长 %d 公斤、一格 %s 公斤，比例跟实测的「一格 ＝ KL 的 %s」一致。⚠️ 照学生那一侧算，lse 低 0.95 格该让 KL 低约 4.1e-3，实测是 1.2e-3：两者只对得上量级，一手材料没有逐项对上（推断：教师那一侧的 lse 也偏、抵掉一部分，未核实）。"
                % (N.SHIP_T, N.CAPTAIN_KG, N.TICK_KG_T, N.KD_ULP_OF_KL_T),
-               "注：秤读到 0.47 公斤，对 7100 吨是八位有效数字，大致是 f32 的水平（约 7 位十进制）。")
+               "注：秤读到 0.47 公斤，对 7100 吨约是七位有效数字，正是 f32 的水平（约 7 位十进制）。这杆秤就是 f32 格式本身，不是前面那把噪声尺子。")
     f.save("fig9-captain.svg", yb + 14)
 
 

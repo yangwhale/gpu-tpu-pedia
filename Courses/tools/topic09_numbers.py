@@ -694,13 +694,13 @@ assert ATTN_FIX_LOSS < ATTN_NOISE_LOSS / 10 and abs(ATTN_FIX_GN) < ATTN_NOISE_GN
 ATTN_FIX_LOSS_T, ATTN_FIX_GN_T = tx(ATTN_FIX_LOSS, "%.1e", plus=True), tx(ATTN_FIX_GN, "%.1e")
 ATTN_NOISE_LOSS_T, ATTN_NOISE_GN_T = tx(ATTN_NOISE_LOSS, "%.1e"), tx(ATTN_NOISE_GN, "%.1e")
 _lock("ATTN_FIX_LOSS_T", ATTN_FIX_LOSS_T, "＋8.1e-7"); _lock("ATTN_NOISE_GN_T", ATTN_NOISE_GN_T, "2.2e-3")
-# 「HIGHEST 也不是 FP32」：多路残差流的加权和，TPU 默认 HIGHEST einsum（多遍 BF16 拼近似 FP32），GPU 逐元素 FP32 乘加
+# 「HIGHEST 也不是 FP32」：一处多项加权和，TPU 默认 HIGHEST einsum（多遍 BF16 拼近似 FP32），GPU 逐元素 FP32 乘加
 HC_TENSORS = 45
 HC_OVER = (12, 5, 18)                    # 对 FP32 参照 R ＞ 1.2 的张量：现行 ／ 改逐路 FP32 乘加 ／ 现行再关 excess precision
 HC_MED = (0.88, 0.79, 1.09)              # R 中位数，同上
 assert HC_OVER[1] < HC_OVER[0] < HC_OVER[2]   # 关 excess precision 反而更多：跟 §5.5 混元 3 的方向一致
 HC_OVER_T = "%d → %d" % HC_OVER[:2]; _lock("HC_OVER_T", HC_OVER_T, "12 → 5")
-# 病态：稀疏注意力索引器的蒸馏损失（KL）每行约 1.1e-4 nat，log-sum-exp 约 7.1
+# 病态：稀疏注意力里一项辅助蒸馏损失（KL）每行约 1.1e-4 nat，log-sum-exp 约 7.1
 KD_KL, KD_LSE = 1.1e-4, 7.1
 KD_ULP = 4.73e-7                         # f32 在 lse 处一格（实测各行平均；lse ∈ [4, 8) 时 2⁻²¹ ≈ 4.77e-7）
 assert abs(KD_ULP - 2.0 ** -21) / 2.0 ** -21 < 0.02
@@ -709,7 +709,7 @@ assert abs(KD_ULP / KD_KL - KD_ULP_OF_KL) / KD_ULP_OF_KL < 0.01
 KD_LSE_TPU_ULP, KD_LSE_CPU_ULP = -0.953, -0.004    # TPU 图内 ／ CPU torch f32 的 lse 对 FP64，按格计的平均
 KD_POS_ROWS = "8.6%"                     # TPU 偏正的行只占这么多：方向一致
 KD_DIFF = -1.155e-3                      # 同一行 KD：TPU 图内对同一输入的 FP64 重算（相对）
-KD_IN_R, KD_GRAD_R = "0.94–0.99", "0.78–1.03"     # KD 的输入（教师 q ／ k、打分）对 FP32 参照的 R ／ 由它出发的梯度（20 个张量）的 R
+KD_IN_R, KD_GRAD_R = "0.94–0.99", "0.78–1.03"     # 它的三组输入对 FP32 参照的 R ／ 由它出发的梯度（20 个张量）的 R
 KD_RATIO = KD_LSE / KD_KL
 assert 6e4 < KD_RATIO < 7e4              # 大数是小数的约 6.5 万倍
 KD_ULP_OF_KL_T = tx(KD_ULP_OF_KL, "%.1e"); _lock("KD_ULP_OF_KL_T", KD_ULP_OF_KL_T, "4.3e-3")
@@ -741,15 +741,15 @@ assert INJ_R[0] > 1.2 >= INJ_R[1]
 INJ_R_T = "%.2f → %.2f" % INJ_R; _lock("INJ_R_T", INJ_R_T, "1.56 → 0.95")
 # 优化器写法（单测对参照框架的固定参照，每步更新的相对差）
 OPT_ALL_OFF, OPT_ALL_ON = 0.13, 1.3e-6   # 优化器三处写法都不对上 ／ 都对上
-OPT_NADAM = 0.56                         # 一维参数走成 NAdam（对普通 Adam）
-OPT_NS = 1e-6                            # 只差正交化迭代前归一化的 eps 写法：舍入量级
-assert OPT_ALL_ON < OPT_NS * 2 and OPT_NADAM > OPT_ALL_OFF
+OPT_NADAM = 0.56                         # 另一个用例：那部分参数的分支走成 NAdam，对普通 Adam
+OPT_NS = 1e-6                            # 只差一处归一化的 eps 写法：舍入量级
+assert OPT_ALL_ON < OPT_NS * 2   # 0.13 与 0.56 是两个不同的单测用例（矩阵参数更新对固定参照 ／ 那部分参数的分支对 Adam），不能互相比
 OPT_ALL_ON_T = tx(OPT_ALL_ON, "%.1e")
 # 测量口径：参数范数在 FP32 里整棵树一路相加
 PN2_FP32_BIAS = "1e-7 至 3e-7"            # 对精确值偏低（第 1 步 −1.39e-7）
 PN2_STEP1_EXACT = 1.6e-9                  # 两边都改比精确值（每 128 个元素一段 FP32 平方和、FP64 合成）后第 1 步的差
 PN2_STEP1_EXACT_T = tx(PN2_STEP1_EXACT, "%.1e"); _lock("PN2_STEP1_EXACT_T", PN2_STEP1_EXACT_T, "1.6e-9")
-# 稀疏注意力索引器的 top-k 翻转：多，但几乎不影响输出
+# 稀疏注意力选 token 的 top-k 翻转：多，但几乎不影响输出
 DSA_Q_FLIP, DSA_Q = 1936, 2048           # 第 1 步 GPU 对 FP64：至少翻了一个槽位的 query ／ 全部稀疏 query
 DSA_SLOT_FLIP = "0.147%"
 assert DSA_Q_FLIP / DSA_Q > 0.9
@@ -764,3 +764,9 @@ B2_OVER_OFF, B2_OVER_4SW = B2_OVER2[0], B2_OVER2[2]
 INJ_R_BEFORE, INJ_R_AFTER = INJ_R
 INJ_R_AFTER_T = "%.2f" % INJ_R_AFTER; _lock("INJ_R_AFTER_T", INJ_R_AFTER_T, "0.95")
 HC_OVER_NOEXC = HC_OVER[2]
+KD_VS_GPU = -9.2e-4                      # 第 1 步 KD：TPU 全部运行对 GPU 全部运行（相对），区别于单行对 FP64 的 KD_DIFF
+KD_VS_GPU_T = tx(KD_VS_GPU, "%.1e"); _lock("KD_VS_GPU_T", KD_VS_GPU_T, "−9.2e-4")
+# §5.6 折叠的收尾：现行五个开关下第 1 步逐张量（205 个张量的那份逐张量表）
+B2_ALL_TENSORS, B2_FINAL_OVER, B2_FINAL_RMED, B2_FINAL_OVER_ATTR = 205, 58, 0.95, 56
+assert B2_FINAL_OVER_ATTR <= B2_FINAL_OVER < B2_ALL_TENSORS
+B2_GN_NOW = 1.34                         # 现行比较（参照改后、TPU 补齐几处边界）梯度范数 r，MARE，待定
