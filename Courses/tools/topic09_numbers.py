@@ -784,8 +784,10 @@ assert all(x > 0 for x in ELIDE_RUNS) and min(ELIDE_RUNS) < ELIDE_GPU_MAX < max(
 assert ELIDE_AFTER < max(ELIDE_RUNS) and ELIDE_R[0] > 2 >= 1 >= ELIDE_R[1]
 ELIDE_RANGE_T = "＋%.1e 到 ＋%.1e" % (min(ELIDE_RUNS), max(ELIDE_RUNS)); ELIDE_RANGE_T = ELIDE_RANGE_T.replace("e-06", "e-6")
 _lock("ELIDE_RANGE_T", ELIDE_RANGE_T, "＋3.7e-6 到 ＋8.6e-6")
-ELIDE_FIX_T = "＋%.1e → ＋%.1e" % (max(ELIDE_RUNS), ELIDE_AFTER); ELIDE_FIX_T = ELIDE_FIX_T.replace("e-06", "e-6")
-_lock("ELIDE_FIX_T", ELIDE_FIX_T, "＋8.6e-6 → ＋3.5e-6")
+ELIDE_FIX_T = "＋%.1e（推算）" % ELIDE_AFTER; ELIDE_FIX_T = ELIDE_FIX_T.replace("e-06", "e-6")
+_lock("ELIDE_FIX_T", ELIDE_FIX_T, "＋3.5e-6（推算）")
+ELIDE_OVER = sum(1 for x in ELIDE_RUNS if x > ELIDE_GPU_MAX)
+assert ELIDE_OVER == 4
 ELIDE_R_T = "%.2f → %.2f" % ELIDE_R
 ELIDE_GPU_MAX_T = tx(ELIDE_GPU_MAX, "%.1e")
 # 超越函数（§5.8）：TPU v5p 默认 FP32 实现对正确舍入的最大误差（格＝ulp），对照 GPU 文档上限与 TPU 高精度写法
@@ -851,8 +853,11 @@ assert abs(DIV_STEP1_R - 0.31) < 0.01
 HY3_REJUDGE = (11, 10, 1)                 # 变严项数：合计 ／ 待定→不过 ／ 过→待定；没有一项变松
 HY3_REJUDGE_R = "1.23–2.70"               # 不过的里，一部分张量对 FP64 的 R 在这个范围（字面上不算已定责）
 assert HY3_REJUDGE[0] == HY3_REJUDGE[1] + HY3_REJUDGE[2]
-NSB_GPU = "2.7%–13%"                      # 参照（GPU）那段迭代的更新离 FP64（第 1 步）
+NSB_GPU = "1.2%–13%"                      # 参照（GPU）那段迭代的更新离 FP64（同一 8 步回放）
 HY3_REJ_N, HY3_REJ_A, HY3_REJ_B = HY3_REJUDGE
 NSB_DIFF_0, NSB_DIFF_1 = "%.1f" % NSB_DIFF[0], "%.1f" % NSB_DIFF[1]
 LADDER_MID_T = "%d ／ %d ／ %d" % LADDER_MID_PASS
 DIV_STEP1_R_T = "%.2f" % DIV_STEP1_R
+DIV_STEP11_100 = 4.8e-5                   # 第 11–100 步 TPU 对 GPU 8 份均值的带符号相对差 |.|（同号，负）
+DIV_FP32_STEPS = 30                       # FP32 轨迹只跑了 30 步
+SW_ADAM_COST = "0.02%"                    # 精确的除法、开方、偏差修正：跨代对比 ＋0.02%

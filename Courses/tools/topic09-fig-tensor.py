@@ -238,9 +238,9 @@ def fig_flip():
 
 def fig_rR():
     f = Fig(W, "左格，小写 r：两个点是 GPU 和 TPU 的结果，中间的距离是两边的差，灰段是 GPU 自己重跑的噪声；r 等于差除以噪声。把两个点换个位置，r 不变，它说不出谁错。"
-               "例子：优化器里一段迭代，TPU 对 GPU 的更新差最多 12.8%%，远超噪声。"
-               "右格，大写 R：一个靶心是 FP64 真值，两边各离靶心多远。同一个例子，GPU 那段迭代在 BF16 里算，离真值 %s；TPU 原来在 FP32 里算，中位数 %s，九成七的张量步 TPU 更近。"
-               "所以 r 说差得多，R 说 TPU 更准；照 GPU 改是为了对齐，不是修错。下面一行：报一个比值，带三样东西。"
+               "例子：优化器里一段迭代，TPU 对 GPU 的更新差最多 12.8%%；可这是单次回放，没有重跑的噪声，r 量不出来。"
+               "右格，大写 R：一个靶心是 FP64 真值，两边各离靶心多远。同一个例子，GPU 那段迭代在 BF16 里算，离真值 %s；TPU 原来在 FP32 里算，中位数 %s，九成七的张量步 R 小于 1。"
+               "所以两边差得多，R 却说 TPU 更准；照 GPU 改是为了对齐，不是修错。下面一行：报一个比值，带三样东西。"
                % (N.NSB_GPU, N.sci(N.NSB_ABS[0])))
     y0 = f.header("小写 r 只说差多少，大写 R 才说谁错",
                   "左：r ＝ 两边的差 ÷ GPU 自己的噪声（对称）；右：R ＝ TPU 离真值 ÷ GPU 离真值（能定责）；同一个例子，两种读法",
@@ -257,8 +257,8 @@ def fig_rR():
     f.t(ax, cy + 34, "GPU", GY, True, 13, "middle"); f.t(bx, cy + 34, "TPU", BL, True, 13, "middle")
     f.path("M%d %d Q%d %d %d %d" % (ax, cy + 52, (ax + bx) / 2, cy + 102, bx, cy + 52), GY2, 1.4, arrow=True)
     f.t((ax + bx) / 2, cy + 104, "两个点换个位置，r 一样：说不出谁错", GY, size=13, anchor="middle")
-    f.t(24, py + PH - 66, "例：优化器一段迭代，更新差最多 %s%%" % ("%.1f" % N.NSB_DIFF[0]), INK, True, 14)
-    f.t(24, py + PH - 42, "→ r 远超 2：两边确实不一样", RD, True, 13)
+    f.t(24, py + PH - 66, "例：优化器一段迭代，两边更新差最多 %s%%" % ("%.1f" % N.NSB_DIFF[0]), INK, True, 14)
+    f.t(24, py + PH - 42, "单次回放没有重跑噪声：r 量不出，只能看 R", RD, True, 13)
     f._pan = None
     px = 700
     py2 = f.panel(px, y0, W - px, PH, "大写 R：各离真值多远", BL)
@@ -271,18 +271,17 @@ def fig_rR():
     f.t(cx + 128, cyy - 60, "离真值 %s" % N.NSB_GPU, GY, size=13)
     f.t(cx + 128, cyy - 10, "TPU（FP32 里迭代）", BL, True, 13)
     f.t(cx + 128, cyy + 10, "离真值中位数 %s" % N.sci(N.NSB_ABS[0]), BL, size=13)
-    f.t(cx + 128, cyy + 46, "%s 的张量步 TPU 更近" % N.NSB_TPU_CLOSER, BL, True, 13)
+    f.t(cx + 128, cyy + 46, "%s 的张量步 R ＜ 1" % N.NSB_TPU_CLOSER, BL, True, 13)
     f.t(px + 24, py2 + PH - 66, "→ R ＜ 1：TPU 不错；照 GPU 改只为对齐", GR, True, 14)
-    f.t(px + 24, py2 + PH - 42, "反例：一个小张量的更新 GPU 1.49e-6、TPU 5.70e-6，R %s" % N.ADAM_R_T, INK, size=13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "报一个比值，带三样：比什么、基线的绝对值、被测的绝对值", [
         "例：「Adam 小张量第 5 步更新 · 对 FP64 的 rel_L2：GPU 1.49e-6，TPU 5.70e-6，R 3.82」—— 光写「R 3.82」，别人判断不了它大不大。",
-        "代价：两边都小于一个 BF16 格时，R 只是两种舍入之比，会来回摆；这时看绝对值，不看比值。",
+        "代价：r 要有 GPU 重跑的噪声才量得出；R 要有一个比两边都准的参照（FP64），整网多步跑不动它。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，优化器 8 步回放）：照 GPU 把那段迭代改到 BF16 之前，TPU 对 GPU 的更新差最多 %s%%、之后 %s%%；改之前 %s 的张量步 TPU 比 GPU 更接近 FP64，更新对 FP64 的相对误差中位数 %s。GPU 那段迭代离 FP64 %s（第 1 步）。"
                % ("%.1f" % N.NSB_DIFF[0], "%.1f" % N.NSB_DIFF[1], N.NSB_TPU_CLOSER, N.NSB_ABS_T, N.NSB_GPU),
-               "📌 反例那一行：Adam 管的一个小张量，TPU 的除法、开方、偏差修正不够精确；换成精确写法后 R %s（同一回放）。注：左图两点的距离、右图圆的半径只表示大小关系。" % N.ADAM_R_T)
+               "📌 落点带里那个例子是另一处：Adam 管的一个小张量，TPU 的除法、开方、偏差修正不够精确，R %s（§5.8 折叠）。⚠️ 两边都小于一个 BF16 格时，R 只是两种舍入之比，会来回摆；这时看绝对值。注：左图两点的距离、右图圆的半径只表示大小关系。" % N.ADAM_R_T)
     f.save("fig9-rR.svg", yb + 14)
 
 

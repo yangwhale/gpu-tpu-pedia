@@ -118,11 +118,11 @@ def fig_hooks():
 
 def fig_diverge():
     import math as _m
-    f = Fig(W, "纵轴是相对差，对数刻度；横轴是三个时段：第 1 步、第 2 到 10 步、第 11 到 100 步。"
-               "红点是 TPU 对 GPU 的差：第 1 步 8.5e-5，之后 6.8e-5、4.8e-5。紫色一带是 FP32 轨迹离两条 BF16 轨迹的距离：从第 2 步起就是 2e-3 到 1e-2，是两边之差的 30 到 100 倍。"
-               "第 1 步两边用同一份权重，FP32 还能当裁判：TPU 离它 2.0e-5，GPU 6.5e-5，R 0.31。")
-    y0 = f.header("第 2 步起，连 FP32 轨迹也走开了：分叉以后只比标量曲线",
-                  "纵轴 ＝ 主 loss 的相对差（对数）；红 ＝ TPU 对 GPU；紫带 ＝ FP32 轨迹离两条 BF16 轨迹；第 1 步的两个小点 ＝ 各离 FP32 多远",
+    f = Fig(W, "纵轴是相对差的大小，对数刻度；横轴是三个时段：第 1 步、第 2 到 10 步、第 11 到 100 步。"
+               "红点是 TPU 对 GPU 的差，都偏同一边：第 1 步 −8.5e-5，之后 −6.8e-5、−4.8e-5。紫色一带是一条 FP32 轨迹离两条 BF16 轨迹的距离：从第 2 步起就是 2e-3 到 1e-2，是两边之差的 30 到 100 倍；这条轨迹只跑了 30 步。"
+               "第 1 步两边用同一份权重，两个小圈是各离 FP32 多远，还能比；第 2 步起就比不了了。")
+    y0 = f.header("连权重都不舍的 FP32 轨迹，第 2 步起就走开了：分叉以后只比标量曲线",
+                  "纵轴 ＝ 主 loss 相对差的大小（对数）；红 ＝ TPU 对 GPU；紫带 ＝ FP32 轨迹离两条 BF16 轨迹；第 1 步两个小圈 ＝ 各离 FP32 多远",
                   [(RD, "TPU 对 GPU"), (PU, "FP32 轨迹离 BF16 轨迹"), (BL, "TPU 离 FP32"), (GY, "GPU 离 FP32")])
     PH = 340
     py = f.panel(0, y0, W, PH, "真实权重截层，主 loss（实测）", PU)
@@ -135,24 +135,24 @@ def fig_diverge():
         f.t(150, Y(e) + 4, "%.0e" % e, GY, size=12, anchor="end")
     for x, lab in zip(X, ["第 1 步（同一份权重）", "第 2–10 步", "第 11–100 步"]):
         f.t(x, Y0 + 30, lab, INK, True, 14, "middle")
-    f.box(X[1] - 150, Y(1e-2), X[2] + 150 - (X[1] - 150), Y(2e-3) - Y(1e-2), "#f3e8fd", PU, 4)
+    f.box(X[1] - 150, Y(1e-2), (X[1] + X[2]) / 2 - (X[1] - 150), Y(2e-3) - Y(1e-2), "#f3e8fd", PU, 4)
     f.t(X[1] - 140, Y(1e-2) + 18, "FP32 轨迹离两条 BF16 轨迹 %s" % N.DIV_FP32_AWAY, PU, True, 13)
-    for x, v in zip(X, [abs(N.LADDER_REAL_STEP1), N.DIV_STEP2_10, 4.8e-5]):
-        f.p.append('<circle cx="%d" cy="%.1f" r="8" fill="%s"/>' % (x, Y(v), RD))
-        f.t(x + 14, Y(v) + 5, N.sci(v), RD, True, 13)
+    f.t(X[1] - 140, Y(1e-2) + 38, "（只跑到第 %d 步）" % N.DIV_FP32_STEPS, PU, size=12)
+    for x, v in zip(X, [N.LADDER_REAL_STEP1, -N.DIV_STEP2_10, -N.DIV_STEP11_100]):
+        f.p.append('<circle cx="%d" cy="%.1f" r="8" fill="%s"/>' % (x, Y(abs(v)), RD))
+        f.t(x + 14, Y(abs(v)) + 5, N.tx(v, "%.1e"), RD, True, 13)
     for dx, v, col, lab in [(-60, abs(N.DIV_STEP1[0]), BL, "TPU"), (-100, N.DIV_STEP1[1], GY, "GPU")]:
         f.p.append('<circle cx="%d" cy="%.1f" r="6" fill="none" stroke="%s" stroke-width="2"/>' % (X[0] + dx, Y(v), col))
         f.t(X[0] + dx - 10, Y(v) + 5, lab, col, True, 12, "end")
-    f.t(X[0] - 150, Y(2e-4) - 4, "第 1 步：R ＝ %.2f" % N.DIV_STEP1_R, BL, True, 13)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "逐元素、逐张量只在第 0、1 步比；第 2 步起两边、连同参照都各走各的，只比 loss、范数这类标量曲线", [
-        "第 1 步两边吃同一份权重，FP32 能告诉你谁更近（这里 TPU 更近）；第 2 步起它跟两边都差几十倍，说不出谁更精确。",
-        "代价：第 2 步以后的差只能用 GPU 重跑的噪声判，要定责得回到第 1 步。",
+    yb = f.band(y0 + PH + 20, "ok", "逐元素、逐张量只在第 0、1 步比；第 2 步起两边各走各的，只比 loss、范数这类标量曲线", [
+        "第 1 步两边吃同一份权重，还能拿 FP32 比谁更近；第 2 步起这条 FP32 轨迹离两边几十倍，比不出谁更精确。",
+        "代价：它连权重都不舍成 BF16，练的是另一个模型；要拿精确参照跑多步，得每步把权重照样舍成 BF16（案例里的精确轨迹就是这么做的）。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移，真实权重截层，同一批数据上的 TPU FP32 轨迹 30 步）：TPU 对 GPU 8 份均值的带符号相对差，第 1 步 %s、第 2–10 步约 −6.8e-5、第 11–100 步约 −4.8e-5，同号、逐步衰减；第 1 步对 FP32：TPU −2.0e-5、GPU ＋6.5e-5。"
-               % N.LADDER_REAL_STEP1_T,
-               "⚠️ FP32 参照自己离 FP64 多远没有测，所以第 1 步的 R 只当诊断，不写成定责。")
+               "📌 实测（第二次迁移，真实权重截层，同一批数据上的 TPU FP32 轨迹 %d 步）：TPU 对 GPU 8 份均值的带符号相对差，第 1 步 %s、第 2–10 步约 −6.8e-5、第 11–100 步约 −4.8e-5，同号、逐步衰减；第 1 步各离 FP32：TPU −2.0e-5、GPU ＋6.5e-5。"
+               % (N.DIV_FP32_STEPS, N.LADDER_REAL_STEP1_T),
+               "⚠️ FP32 参照自己离 FP64 多远没有测，第 1 步的比较只当诊断。纵轴画的是大小，红点三个差都是负的。")
     f.save("fig9-diverge.svg", yb + 14)
 
 
