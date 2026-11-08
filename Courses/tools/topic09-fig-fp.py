@@ -14,6 +14,10 @@ fig9-excess    回答：excess precision 改的是什么？—— 舍在哪儿�
 fig9-boundary  回答：对不齐通常出在哪？—— 一个值在 16 位和 32 位之间进出的地方。每个算子两边各写一行五格 dtype 路径，
                五列各放一个真实例子，不一样的那一格画红框（2026-11-07 第二次迁移的教训，例子取自两次迁移）。
                ⛔ 刻意没画误差大小：这张图是一张检查表，量级在出处里；第 4 行的效果在第 1 步比 GPU 噪声小几十倍，画柱子会让人以为它不重要。
+fig9-elide     回答：编译器「更精确」为什么也会对不齐？—— GPU 一定会做的 FP32→BF16→FP32 往返，TPU 上被省掉，1000 步 loss 次次偏高。
+               数字全是实测（五次运行、GPU 噪声上限、强制舍入后）；「被编译器省掉」是推断（开关效果支持，没看编译产物）。
+fig9-trans     回答：TPU 默认的 exp、log 有多粗？高精度的软件实现怎么算？—— 默认几十到上百格，GPU 个位数；区间缩减 ＋ 多项式 ＋ 牛顿修正。
+               右格的算法是教科书做法（示意），不是哪一家库的源码。
 fig9-captain   回答：一个小标量对不上，怎么分清是病态还是 bug？—— 船上称船长：船 7100 吨、船长 110 公斤，秤的一格 0.47 公斤 ＝ 船长的 0.43%。
                比方的数按 lse 1 单位 ↔ 1000 吨换算（本课推导），比例与实测一致：f32 一格 ＝ KL 的 4.3e-3。
 """
@@ -423,13 +427,15 @@ def fig_captain():
     f = Fig(W, "左格：船上称船长。先称船加船长，再称空船，两次相减得船长的体重。船 %d 吨，船长 %d 公斤，秤能读到 %s 公斤一格，约七位有效数字，已经很准；"
                "可这一格落到船长身上，就是他体重的 %s。下面一行对回模型：船是 log-sum-exp，约 %.1f；船长是蒸馏损失 KL，每行约 %s；秤的一格是 f32 在 %.1f 处的一格，约 %s，等于 KL 的 %s。"
                "右格：病态还是 bug，问三件事。它的输入两边离参照一样近吗？R %s，一样近。由它出发的梯度一样近吗？R %s，一样近。"
-               "它是不是两个大数相减剩下的小数、差折成大数的格在一两格以内？TPU 的 lse 平均差 %s 格。三条都是，就是病态：定责，不改。"
+               "它是不是两个大数相减剩下的小数、差折成大数的格在一两格以内？TPU 的 lse 平均差 %s 格。三条都是，就是病态在放大。"
+               "第四问：被放大的那一格是谁的？同一个程序在 CPU 上只差 −0.004 格，TPU 差 %s 格，所以那一格来自 TPU 默认的 exp 和 log。"
+               "换成高精度的 exp、log 以后，lse 的偏差 %s，300 步那一项的 r %s。"
                % (N.SHIP_T, N.CAPTAIN_KG, N.TICK_KG_T, N.TICK_PCT_T, N.KD_LSE, N.sci(N.KD_KL), N.KD_LSE, N.KD_ULP_T, N.KD_ULP_OF_KL_T,
-                  N.KD_IN_R, N.KD_GRAD_R, N.KD_LSE_TPU_ULP_T))
-    y0 = f.header("小数是两个大数相减时，f32 差一格就是千分之几　——　<tspan font-weight=\"700\">病态不是 bug</tspan>",
-                  "左边：在一杆称船的秤上称船长；右边：三个问题分清「病态」和「算错」",
+                  N.KD_IN_R, N.KD_GRAD_R, N.KD_LSE_TPU_ULP_T, N.KD_LSE_TPU_ULP_T, N.KD_FIX_LSE_T, N.KD_FIX_R300_T))
+    y0 = f.header("小数是两个大数相减时，f32 差一格就是千分之几　——　<tspan font-weight=\"700\">病态是放大器，不是根因</tspan>",
+                  "左边：在一杆称船的秤上称船长；右边：前三问认出放大器，第四问找被放大的那一格是谁的",
                   [(GY, "大数（船、lse）"), (OR, "小数（船长、KL）"), (RD, "秤的一格")])
-    PH = 440
+    PH = 470
     LW = 800
     py = f.panel(0, y0, LW, PH, "船上称船长（比方；比例跟实测一样）", OR)
     # 两次称重：两根几乎一样长的灰条，船长那一截细到看不见
@@ -463,15 +469,16 @@ def fig_captain():
     f.t(ZX, my + 64, "一格 ＝ KL 的 %s；实测偏低 %s（一行对 FP64），同一量级" % (N.KD_ULP_OF_KL_T, N.KD_DIFF_PCT_T), RD, True, 13)
     f._pan = None
     px = LW + 20
-    py2 = f.panel(px, y0, W - px, PH, "病态还是 bug：问三件事（实测）", GR)
+    py2 = f.panel(px, y0, W - px, PH, "病态还是 bug：问四件事（实测）", GR)
     qs = [("① 它的输入，两边离参照一样近？", "三组输入：R %s" % N.KD_IN_R),
           ("② 由它出发的梯度，两边一样近？", "20 个张量：R %s" % N.KD_GRAD_R),
-          ("③ 大数相减剩小数、差在一两格内？", "lse 对 FP64：平均 %s 格" % N.KD_LSE_TPU_ULP_T)]
+          ("③ 大数相减剩小数、差在一两格内？", "lse 对 FP64：平均 %s 格" % N.KD_LSE_TPU_ULP_T),
+          ("④ 那一格是谁的？同一程序换 CPU 算", "CPU −0.004 格，TPU %s 格" % N.KD_LSE_TPU_ULP_T)]
     for i, (q, a) in enumerate(qs):
-        y = py2 + 30 + i * 84
+        y = py2 + 22 + i * 76
         f.t(px + 18, y + 20, q, INK, True, 14)
-        f.t(px + 40, y + 46, a, GR, True, 13)
-        f.t(px + 18, y + 46, "✓", GR, True, 15)
+        f.t(px + 40, y + 46, a, RD if i == 3 else GR, True, 13)
+        f.t(px + 18, y + 46, "✗" if i == 3 else "✓", RD if i == 3 else GR, True, 15)
         bx, U = px + 330, 160          # 右侧小图：① ② 画 GPU 距离（灰，＝ 1）与 TPU 距离（蓝，区间）、1.2 门槛虚线；③ 画 ±2 格的刻度
         if i < 2:
             lo, hi = [float(v) for v in (N.KD_IN_R if i == 0 else N.KD_GRAD_R).split("–")]
@@ -482,7 +489,7 @@ def fig_captain():
             f.t(bx + U * N.R_GATE + 4, y + 50, "1.2", GR, size=11)
             f.t(bx - 6, y + 14, "GPU", GY, size=11, anchor="end")
             f.t(bx - 6, y + 31, "TPU", BL, size=11, anchor="end")
-        else:
+        elif i == 2:
             f.line(bx, y + 20, bx + U * 1.3, y + 20, GY2, 1.2, arrow=False)
             for k in range(5):
                 xx = bx + k * U * 1.3 / 4
@@ -491,13 +498,18 @@ def fig_captain():
             xm = bx + (2 + N.KD_LSE_TPU_ULP) * U * 1.3 / 4
             f.box(xm - 5, y + 13, 10, 14, RD, RD, 5)
             f.t(bx + U * 1.3 / 2, y + 58, "单位：f32 的格", GY, size=11, anchor="middle")
-    f.box(px + 16, py2 + 290, W - px - 32, 50, "#e6f4ea", GR, 6)
-    f.t(px + 30, py2 + 321, "三条都是 → 病态：定责，不改", GR, True, 15)
-    f.t(px + 18, py2 + 372, "有一条不是 → 回到五格表找边界", GY, size=13)
+        else:                           # ④：两根条，CPU 几乎为零、TPU 一格
+            for k, (lab, v, col) in enumerate([("CPU", N.KD_LSE_CPU_ULP, GY), ("TPU", N.KD_LSE_TPU_ULP, BL)]):
+                f.t(bx - 6, y + 14 + k * 17, lab, col, size=11, anchor="end")
+                f.box(bx, y + 6 + k * 17, max(2, U * abs(v)), 9, col, col, 2)
+    f.box(px + 16, py2 + 330, W - px - 32, 80, "#e6f4ea", GR, 6)
+    f.t(px + 30, py2 + 356, "①–③ 是：病态在放大；④ 指向 TPU 的 exp、log", GR, True, 14)
+    f.t(px + 30, py2 + 384, "换高精度写法：lse %s；r %s" % (N.KD_FIX_LSE_T, N.KD_FIX_R300_T), GR, True, 13)
+    f.t(px + 18, py2 + 434, "①② 有一条不是 → 回到五格表找边界", GY, size=13)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "先看这个数是不是两个大数相减：是的话，用大数的格去量它的差，一两格以内就是病态", [
-        "病态把一格以内的差放大成千分之一；判它看输入和梯度两边是不是一样近，不看这个数本身。",
-        "代价：病态不会自己消失 —— 这一项在 300 步的验收表里一直是「不过，已定责」，要把这三问的证据附在旁边。",
+    yb = f.band(y0 + PH + 20, "ok", "病态把一格以内的差放大成千分之一；放大器认出来以后，还要问被放大的那一格是谁的", [
+        "这一次那一格是 TPU 默认的 exp、log（偏低、只有几十格的精度）；换成高精度写法，偏差就没了。",
+        "代价：要是那一格是两边都躲不开的末位（CPU 上也偏），才写「不过，已定责」，并附上这几问的证据。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，第 1 步，稀疏注意力里的一项辅助蒸馏损失）：同一行 TPU 图内对同一输入的 FP64 重算 %s（对 GPU、全部运行合起来 %s）；TPU 图内 lse 对 FP64 平均 %s 格（只有 %s 的行偏正），CPU 上 torch 的 f32 只差 %s 格；输入与梯度见右格。"
@@ -508,6 +520,97 @@ def fig_captain():
     f.save("fig9-captain.svg", yb + 14)
 
 
+def fig_elide():
+    f = Fig(W, "一条横轴：1000 步主 loss 的带符号均值，TPU 对 GPU 8 份的平均，单位 1e-6。灰色一段是 GPU 自己两两最大的那一对，正负 %s。"
+               "第一行：改成逐项 FP32 乘加之前，TPU 在 ＋1.1，落在灰段里。第二行：改了以后五次 TPU 运行，其中三次只改执行参数，全在右边，%s，同一个方向。"
+               "第三行：在两处强制写一次「舍到 BF16」以后，回到 ＋3.5，进了灰段。"
+               % (N.ELIDE_GPU_MAX_T, N.ELIDE_RANGE_T))
+    y0 = f.header("编译器省掉一次舍入，1000 步 loss 次次偏高",
+                  "横轴 ＝ 1000 步主 loss 的带符号均值（TPU 对 GPU 8 份平均，×1e-6）；灰段 ＝ GPU 自己两两最大的差；一个点 ＝ 一次 TPU 运行",
+                  [(GY, "GPU 自己的噪声"), (BL, "TPU 运行"), (GR, "强制舍入以后")])
+    PH = 300
+    py = f.panel(0, y0, W, PH, "三代 TPU，同一把尺子（实测）", BL)
+    X0, X1, LO, HI = 360, 1320, -5.0, 10.0
+    def X(v):
+        return X0 + (v * 1e6 - LO) / (HI - LO) * (X1 - X0)
+    yt, yb_ = py + 20, py + PH - 70
+    f.box(X(-N.ELIDE_GPU_MAX), yt, X(N.ELIDE_GPU_MAX) - X(-N.ELIDE_GPU_MAX), yb_ - yt, "#e8eaed", "none", 0)
+    f.line(X(0), yt, X(0), yb_, GY2, 1, dash="3 3", arrow=False)
+    for v in range(-4, 11, 2):
+        f.line(X(v * 1e-6), yb_, X(v * 1e-6), yb_ + 6, GY2, 1, arrow=False)
+        f.t(X(v * 1e-6), yb_ + 22, ("＋%d" % v) if v > 0 else str(v).replace("-", "−"), GY, size=12, anchor="middle")
+    rows = [("改逐项乘加之前", [N.ELIDE_BEFORE], BL, False),
+            ("改了以后（5 次）", list(N.ELIDE_RUNS), BL, True),
+            ("两处强制舍入以后", [N.ELIDE_AFTER], GR, True)]
+    for i, (lab, vals, col, filled) in enumerate(rows):
+        y = py + 70 + i * 66
+        f.t(24, y + 5, lab, INK, True, 15)
+        for v in vals:
+            f.p.append('<circle cx="%.1f" cy="%d" r="8" fill="%s" stroke="%s" stroke-width="2"/>' % (X(v), y, col if filled else "#fff", col))
+    f.t(X(N.ELIDE_GPU_MAX) + 8, yt + 18, "GPU 自己最大 ±%s" % N.ELIDE_GPU_MAX_T, GY, size=12)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "GPU 每次都把中间值存成 BF16，TPU 上这次往返被编译器拿掉：值更精确，跟 GPU 反而对不上", [
+        "要和 GPU 舍在同一处，就在那一处显式写「舍到 BF16」（JAX 的 lax.reduce_precision），编译器不会删。",
+        "代价：显式舍入是为了对齐，生产里关掉同样准；剩下的 ＋3.5e-6 还没查清。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移）：五次 TPU 运行对 GPU 8 份均值 %s，GPU 两两 28 对的带符号均值最大 %s；强制舍入后判定 r %s（对 GPU 基线，带符号均值），对 GPU 均值约 ＋3.5e-6（推算）。"
+               % (N.ELIDE_RANGE_T, N.ELIDE_GPU_MAX_T, N.ELIDE_R_T),
+               "⚠️ 推断：「往返被编译器省掉」由开关的效果推出，没有去看编译后的程序。五次里有三次只改执行参数（注意力分块、专家并行、MoE 实现），同号偏高，说明不是轨迹偶然分开。")
+    f.save("fig9-elide.svg", yb + 14)
+
+
+def fig_trans():
+    f = Fig(W, "左格：四个超越函数，横条长度是对正确舍入的最大误差，按格（ulp）计，对数刻度。"
+               "TPU 默认：%s。TPU 高精度写法：%s。GPU：exp 2、log 1、sigmoid 和 silu 约 4。"
+               "右格：高精度的 exp 怎么用软件算：先把 x 拆成 k 个 ln2 加一个小余数 r，余数上用多项式算 e 的 r 次方，再乘 2 的 k 次方，只改指数位、精确；"
+               "求倒数用牛顿修正，每修一次误差平方一次。" % (N.TRANS_T, N.TRANS_HI_T))
+    y0 = f.header("TPU 默认的 exp、log 差几十格，GPU 只差个位数",
+                  "左：条长 ＝ 对正确舍入的最大误差（格，对数刻度）；右：高精度的软件 exp 和倒数，分几步算",
+                  [(BL, "TPU 默认"), (GR, "TPU 高精度写法"), (GY, "GPU")])
+    PH = 420
+    LW = 760
+    py = f.panel(0, y0, LW, PH, "最大误差，按格计（实测；GPU 按文档）", BL)
+    X0, X1 = 150, LW - 60
+    import math as _m
+    def X(u):
+        return X0 + _m.log10(max(u, 1)) / _m.log10(200) * (X1 - X0)
+    for u in (1, 2, 5, 10, 20, 50, 100, 200):
+        f.line(X(u), py + 30, X(u), py + PH - 72, LINE2, 1, arrow=False)
+        f.t(X(u), py + PH - 54, str(u), GY, size=12, anchor="middle")
+    for i, (fn, (d, h, g)) in enumerate(N.TRANS.items()):
+        y = py + 30 + i * 76
+        f.t(24, y + 26, fn, INK, True, 16)
+        for k, (v, col) in enumerate([(d, BL), (h, GR), (g, GY)]):
+            yy = y + k * 20
+            f.box(X0, yy, max(4, X(v) - X0), 14, col, col, 2)
+            f.t(X(v) + 6 if X(v) > X0 + 4 else X0 + 10, yy + 12, str(v), col, True, 12)
+    f._pan = None
+    px = LW + 20
+    py2 = f.panel(px, y0, W - px, PH, "高精度的软件实现：分三步（示意）", GR)
+    steps = [("① 区间缩减", "x ＝ k·ln2 ＋ r，|r| ≤ ln2 ÷ 2", "把大范围的 x 压到一小段"),
+             ("② 多项式", "eʳ ≈ 1 ＋ r ＋ r²/2 ＋ … ＋ r⁶/720", "r 小，几项就到 FP32 末位"),
+             ("③ 乘 2ᵏ", "只改指数位，精确", "eˣ ＝ 2ᵏ · eʳ"),
+             ("倒数：牛顿修正", "y ← y·(2 − a·y)", "每修一次，误差平方一次")]
+    for i, (a, b, c) in enumerate(steps):
+        y = py2 + 30 + i * 86
+        f.t(px + 20, y + 18, a, GR if i < 3 else PU, True, 15)
+        f.t(px + 40, y + 44, b, INK, True, 14)
+        f.t(px + 40, y + 66, c, GY, size=12)
+        if i < 2:
+            f.line(px + 26, y + 52, px + 26, y + 92, GY2, 1.2)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "默认的 exp 不只是粗，还系统偏低：真实输入上只有 %s 正好舍对，平均偏 %s 格" % (N.EXP_CR_FRAC, N.EXP_SIGNED_ULP_T), [
+        "偏低的 exp 进了 log-sum-exp，再被病态放大，就是上一节那千分之一。",
+        "代价：更精确不等于更一致 —— 要对上的是 GPU 实际算的那条路（在哪舍、反向怎么写），不是最精确的那条。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（TPU v5p，FP32，对 FP64 正确舍入数格）：默认 %s；高精度写法 %s。GPU：%s。TPU 默认的上限跟 JAX 文档给这一代芯片写的一致。"
+               % (N.TRANS_T, N.TRANS_HI_T, N.TRANS_GPU_NOTE),
+               "⚠️ 右格是教科书做法（区间缩减、多项式、牛顿迭代），只讲思路；各家库的系数、项数和缩减方式不同。sigmoid、silu 的高精度写法用高精度的 exp 搭：e ＝ exp(−|x|)，再算 1 ÷ (1 ＋ e)，倒数做一次牛顿修正。")
+    f.save("fig9-trans.svg", yb + 14)
+
+
 fig_formats()
 fig_truncate()
 fig_tf32()
@@ -515,3 +618,5 @@ fig_windowed()
 fig_excess()
 fig_boundary()
 fig_captain()
+fig_elide()
+fig_trans()

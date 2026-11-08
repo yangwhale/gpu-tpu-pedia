@@ -770,3 +770,89 @@ KD_VS_GPU_T = tx(KD_VS_GPU, "%.1e"); _lock("KD_VS_GPU_T", KD_VS_GPU_T, "−9.2e-
 B2_ALL_TENSORS, B2_FINAL_OVER, B2_FINAL_RMED, B2_FINAL_OVER_ATTR = 205, 58, 0.95, 56
 assert B2_FINAL_OVER_ATTR <= B2_FINAL_OVER < B2_ALL_TENSORS
 B2_GN_NOW = 1.34                         # 现行比较（参照改后、TPU 补齐几处边界）梯度范数 r，MARE，待定
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# ── 11-08 · 第二次迁移的后续（出处：同一实践的根源一览、改动台账、结果文件；实测，除标推断／本课推导）──────
+# ══════════════════════════════════════════════════════════════════════════════════════
+# 编译器省掉的舍入（§5.5）：改成逐项 FP32 乘加之后，GPU 一定会做的 FP32→BF16→FP32 往返在 TPU 上被省掉（推断，没看编译产物）
+ELIDE_GPU_MAX = 3.77e-6                   # GPU 8 份两两 28 对，1000 步主 loss 带符号均值的最大 |.|
+ELIDE_BEFORE = 1.07e-6                    # 改逐项乘加之前那一代 TPU：对 GPU 8 份均值的带符号均值
+ELIDE_RUNS = (7.68e-6, 6.59e-6, 6.35e-6, 3.71e-6, 8.58e-6)   # 改之后 5 次 TPU 运行（含只改执行参数的 3 次），同号偏高
+ELIDE_AFTER = 3.5e-6                      # 两处改用 reduce_precision 强制舍入以后（推算，对 GPU 均值）
+ELIDE_R = (2.12, 0.76)                    # 同一量的判定 r（带符号均值，对 GPU 基线）：强制舍入前 ／ 后
+assert all(x > 0 for x in ELIDE_RUNS) and min(ELIDE_RUNS) < ELIDE_GPU_MAX < max(ELIDE_RUNS)
+assert ELIDE_AFTER < max(ELIDE_RUNS) and ELIDE_R[0] > 2 >= 1 >= ELIDE_R[1]
+ELIDE_RANGE_T = "＋%.1e 到 ＋%.1e" % (min(ELIDE_RUNS), max(ELIDE_RUNS)); ELIDE_RANGE_T = ELIDE_RANGE_T.replace("e-06", "e-6")
+_lock("ELIDE_RANGE_T", ELIDE_RANGE_T, "＋3.7e-6 到 ＋8.6e-6")
+ELIDE_FIX_T = "＋%.1e → ＋%.1e" % (max(ELIDE_RUNS), ELIDE_AFTER); ELIDE_FIX_T = ELIDE_FIX_T.replace("e-06", "e-6")
+_lock("ELIDE_FIX_T", ELIDE_FIX_T, "＋8.6e-6 → ＋3.5e-6")
+ELIDE_R_T = "%.2f → %.2f" % ELIDE_R
+ELIDE_GPU_MAX_T = tx(ELIDE_GPU_MAX, "%.1e")
+# 超越函数（§5.8）：TPU v5p 默认 FP32 实现对正确舍入的最大误差（格＝ulp），对照 GPU 文档上限与 TPU 高精度写法
+TRANS = {   # 函数: (TPU 默认 ulp_max, TPU 高精度写法 ulp_max, GPU 上限)
+    "exp": (105, 1, 2), "log": (62, 3, 1), "sigmoid": (83, 3, 4), "silu": (86, 4, 4)}
+TRANS_GPU_NOTE = "exp ≤ 2、log ≤ 1 是 CUDA 文档；sigmoid、silu 的 4 是推断，GPU 实测最大 3.4"
+assert all(d > 20 * g for d, h, g in TRANS.values())               # 默认比 GPU 差一个数量级以上
+assert all(h <= 4 for d, h, g in TRANS.values())
+EXP_CR_FRAC, EXP_SIGNED_ULP = "6%", -2.49   # 实际蒸馏损失 softmax 的输入上：exp 只有 6% 正好舍对，平均偏 −2.5 格（系统偏低）
+TRANS_T = "、".join("%s %d" % (k, v[0]) for k, v in TRANS.items()); _lock("TRANS_T", TRANS_T, "exp 105、log 62、sigmoid 83、silu 86")
+TRANS_HI_T = "、".join("%s %d" % (k, v[1]) for k, v in TRANS.items()); _lock("TRANS_HI_T", TRANS_HI_T, "exp 1、log 3、sigmoid 3、silu 4")
+EXP_SIGNED_ULP_T = tx(EXP_SIGNED_ULP, "%.1f")
+# 打开高精度 exp／log 以后，病态那一项（§5.7）
+KD_FIX_LSE = (-0.953, 0.025)              # lse 对 FP64，按格计的平均
+KD_FIX_ROW = (-1.155e-3, 9.7e-5)          # 同一行 KD 对 FP64（相对）
+KD_FIX_R300 = (3.67, 0.01)                # 300 步 KD loss 带符号均值的 r
+assert KD_FIX_LSE[0] == KD_LSE_TPU_ULP and KD_FIX_ROW[0] == KD_DIFF
+KD_FIX_LSE_T = "%.3f → ＋%.3f 格" % KD_FIX_LSE; KD_FIX_LSE_T = KD_FIX_LSE_T.replace("-", "−"); _lock("KD_FIX_LSE_T", KD_FIX_LSE_T, "−0.953 → ＋0.025 格")
+KD_FIX_ROW_T = "%s → %s" % (tx(KD_FIX_ROW[0], "%.1e"), tx(KD_FIX_ROW[1], "%.1e", plus=True)); _lock("KD_FIX_ROW_T", KD_FIX_ROW_T, "−1.2e-3 → ＋9.7e-5")
+KD_FIX_R300_T = "%.2f → %.2f" % KD_FIX_R300
+# sigmoid 的「高精度」开关：读回是开，实际逐位没变；真换成精确写法以后整网反而偏得多（根因待查）
+SIG_FLAG_SAME_OPS = 99                    # 开关前后逐算子回放，99 个算子逐位相同
+SIG_LOSS_R = (0.65, 1.79)                 # 主 loss 前 300 步带符号均值 r：精确 sigmoid／silu 之前 ／ 之后
+assert SIG_LOSS_R[1] > 1 > SIG_LOSS_R[0]
+SIG_LOSS_R_T = "%.2f → %.2f" % SIG_LOSS_R
+# 优化器里的除法、开方、偏差修正（§5.8 折叠）
+OPT_ULP = {"除法": (2, 1), "开方": (3, 1), "偏差修正 1 − βᵗ": (108, 2)}
+ADAM_R = (1.49e-6, 5.70e-6, 1.49e-6)      # 一个小张量第 5 步的更新对 FP64：GPU ／ TPU 默认 ／ TPU 精确写法
+ADAM_R_BEFORE = ADAM_R[1] / ADAM_R[0]
+assert abs(ADAM_R_BEFORE - 3.82) < 0.02
+ADAM_R_T = "3.82 → 1.00"   # 结果文件里的 R（由未舍入的距离算；用上面舍入后的两个数相除是 3.83）
+# r 和 R（§4.2）：同一处，r 说两边差得多，R 说 TPU 更准 —— 优化器里一次迭代在什么精度里算
+NSB_DIFF = (12.8, 1.6)                    # 8 步回放：TPU 对 GPU 的更新差最多（%）：照 GPU 改成 BF16 迭代之前 ／ 之后
+NSB_TPU_CLOSER = "97%"                    # 改之前，这类张量步里 TPU 比 GPU 更接近 FP64 的比例
+NSB_ABS = (3.0e-3, 3.95e-2)               # 更新对 FP64 的相对误差中位数：TPU 原来（FP32 迭代）／ 照 GPU（BF16 迭代）
+assert NSB_ABS[0] < NSB_ABS[1] / 10
+NSB_ABS_T = "%s 对 %s" % (tx(NSB_ABS[0], "%.1e"), tx(NSB_ABS[1], "%.2e"))
+# 算法前提被打破（§10.3）：裁剪缩放 η ＝ min(1, τ ÷ 最大 logit)，最大 logit 为负时 η 为负，开根号得 NaN
+QKC_SMAX, QKC_TAU = -0.4956, 100.0
+QKC_ETA = min(1.0, QKC_TAU / QKC_SMAX)
+assert QKC_ETA < 0
+QKC_ETA_T = tx(QKC_ETA, "%.1f"); _lock("QKC_ETA_T", QKC_ETA_T, "−201.8")
+QKC_SMAX_T = tx(QKC_SMAX, "%.4f")
+# 开关三类（§9.5）：用途分类以 1% 步时为界（本课取同一口径）
+SW_COST_GATE = "1%"
+SW_MIX_COST = "0.4%"                      # 逐项 FP32 乘加：步时 ＋0.4%（只差这一个开关的两次运行）
+SW_ELIDE_COST = "0.06%"                   # 强制舍入：跨代对比 ＋0.06%
+# 规模一级级往上（§9.6）
+LADDER_MID_PASS = (5, 0, 4)               # 中等尺寸（随机初始化，宽度和注意力形状同真实模型）300 步：过 ／ 不过 ／ 待定
+LADDER_MID_WORST = 1.04                   # 四个待定都只略超 N：最差 1.04 N
+LADDER_REAL_STEP1 = -8.5e-5               # 真实权重截层：第 1 步前向主 loss 就差（GPU 8 份第 1 步逐位相同）
+LADDER_MINI_STEP1 = (2.9e-6, 1.1e-6)      # 小模型第 1 步的差（两代），在 GPU 份间散布以内
+assert abs(LADDER_REAL_STEP1) / max(LADDER_MINI_STEP1) > 25
+LADDER_REAL_STEP1_T = tx(LADDER_REAL_STEP1, "%.1e")
+# 分叉以后（§6.3）：TPU 的 FP32 轨迹从第 2 步起离两条 BF16 轨迹 2e-3 到 1e-2，是两边之差的 30–100 倍
+DIV_FP32_AWAY = "2e-3 到 1e-2"
+DIV_STEP1 = (-2.0e-5, 6.5e-5)             # 第 1 步（同一份权重）对 FP32 参照：TPU ／ GPU 主 loss 的相对差
+DIV_STEP2_10 = 6.8e-5                     # 第 2–10 步 TPU 对 GPU 8 份均值的带符号相对差 |.|
+assert 2e-3 / DIV_STEP2_10 > 25
+DIV_STEP1_R = abs(DIV_STEP1[0]) / abs(DIV_STEP1[1])
+assert abs(DIV_STEP1_R - 0.31) < 0.01
+# 混元 3 第 1 步按「尺子只来自参照」重判（§9.4）
+HY3_REJUDGE = (11, 10, 1)                 # 变严项数：合计 ／ 待定→不过 ／ 过→待定；没有一项变松
+HY3_REJUDGE_R = "1.23–2.70"               # 不过的里，一部分张量对 FP64 的 R 在这个范围（字面上不算已定责）
+assert HY3_REJUDGE[0] == HY3_REJUDGE[1] + HY3_REJUDGE[2]
+NSB_GPU = "2.7%–13%"                      # 参照（GPU）那段迭代的更新离 FP64（第 1 步）
+HY3_REJ_N, HY3_REJ_A, HY3_REJ_B = HY3_REJUDGE
+NSB_DIFF_0, NSB_DIFF_1 = "%.1f" % NSB_DIFF[0], "%.1f" % NSB_DIFF[1]
+LADDER_MID_T = "%d ／ %d ／ %d" % LADDER_MID_PASS
+DIV_STEP1_R_T = "%.2f" % DIV_STEP1_R
