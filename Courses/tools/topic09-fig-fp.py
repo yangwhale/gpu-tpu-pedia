@@ -522,7 +522,7 @@ def fig_captain():
 
 def fig_elide():
     f = Fig(W, "一条横轴：1000 步主 loss 的带符号均值，TPU 对 GPU 8 份的平均，单位 1e-6。灰色一段是 GPU 自己两两最大的那一对，正负 %s。"
-               "第一行：改成逐项 FP32 乘加之前，TPU 在 ＋1.1，落在灰段里。第二行：改了以后五次 TPU 运行，其中三次只改执行参数，全在右边，%s，同一个方向。"
+               "第一行：一处加权和照 GPU 改写法之前，TPU 在 ＋1.1，落在灰段里。第二行：改了以后五次 TPU 运行，其中三次只改执行参数，全在右边，%s，同一个方向。"
                "五次里四次出了灰段。第三行：在两处强制写一次「舍到 BF16」以后，约 ＋3.5（推算），回到灰段里。"
                % (N.ELIDE_GPU_MAX_T, N.ELIDE_RANGE_T))
     y0 = f.header("编译器省掉一次舍入，1000 步 loss 五次同号偏高、四次出了噪声",
@@ -539,8 +539,8 @@ def fig_elide():
     for v in range(-4, 11, 2):
         f.line(X(v * 1e-6), yb_, X(v * 1e-6), yb_ + 6, GY2, 1, arrow=False)
         f.t(X(v * 1e-6), yb_ + 22, ("＋%d" % v) if v > 0 else str(v).replace("-", "−"), GY, size=12, anchor="middle")
-    rows = [("改逐项乘加之前", [N.ELIDE_BEFORE], BL, True),
-            ("改了以后（5 次）", list(N.ELIDE_RUNS), BL, True),
+    rows = [("改写法之前", [N.ELIDE_BEFORE], BL, True),
+            ("改写法以后（5 次）", list(N.ELIDE_RUNS), BL, True),
             ("两处强制舍入以后（推算）", [N.ELIDE_AFTER], GR, False)]
     for i, (lab, vals, col, filled) in enumerate(rows):
         y = py + 70 + i * 66
@@ -551,7 +551,7 @@ def fig_elide():
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "GPU 每次都把中间值存成 BF16，TPU 上这次往返被编译器拿掉：值更精确，跟 GPU 反而对不上", [
         "要和 GPU 舍在同一处，就在那一处显式写「舍到 BF16」（JAX 的 lax.reduce_precision），编译器不会删。",
-        "代价：显式舍入是为了对齐，生产里关掉同样准；剩下约 ＋3.5e-6 还没查清。",
+        "代价：显式舍入是为了对齐，生产里关掉同样准（推断）；剩下约 ＋3.5e-6 还没查清。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移）：五次 TPU 运行对 GPU 8 份均值 %s，GPU 两两 28 对的带符号均值最大 %s；强制舍入后判定 r %s（对 GPU 基线，带符号均值），对 GPU 均值约 ＋3.5e-6（推算）。"
@@ -570,7 +570,7 @@ def fig_trans():
                   [(BL, "TPU 默认"), (GR, "TPU 高精度写法"), (GY, "GPU")])
     PH = 420
     LW = 760
-    py = f.panel(0, y0, LW, PH, "最大误差，按格计（实测；GPU 按文档）", BL)
+    py = f.panel(0, y0, LW, PH, "最大误差，按格计（TPU 实测；GPU 按文档，sigmoid、silu 为推断）", BL)
     X0, X1 = 150, LW - 60
     import math as _m
     def X(u):

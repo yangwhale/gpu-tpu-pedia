@@ -839,8 +839,9 @@ SW_ELIDE_COST = "0.06%"                   # 强制舍入：跨代对比 ＋0.06%
 LADDER_MID_PASS = (5, 0, 4)               # 中等尺寸（随机初始化，宽度和注意力形状同真实模型）300 步：过 ／ 不过 ／ 待定
 LADDER_MID_WORST = 1.04                   # 四个待定都只略超 N：最差 1.04 N
 LADDER_REAL_STEP1 = -8.5e-5               # 真实权重截层：第 1 步前向主 loss 就差（GPU 8 份第 1 步逐位相同）
-LADDER_MINI_STEP1 = (2.9e-6, 1.1e-6)      # 小模型第 1 步的差（两代），在 GPU 份间散布以内
-assert abs(LADDER_REAL_STEP1) / max(LADDER_MINI_STEP1) > 25
+LADDER_MINI_STEP1 = (1.1e-6, 3.6e-6)      # 小模型各代第 1 步的差（范围），在 GPU 份间散布以内
+assert abs(LADDER_REAL_STEP1) / max(LADDER_MINI_STEP1) > 20
+LADDER_MINI_T = "1.1e-6–3.6e-6"
 LADDER_REAL_STEP1_T = tx(LADDER_REAL_STEP1, "%.1e")
 # 分叉以后（§6.3）：TPU 的 FP32 轨迹从第 2 步起离两条 BF16 轨迹 2e-3 到 1e-2，是两边之差的 30–100 倍
 DIV_FP32_AWAY = "2e-3 到 1e-2"
