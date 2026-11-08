@@ -8,6 +8,11 @@ fig9-hooks  回答：为什么 GPU 上随手加个钩子抓数没事，TPU 上�
             反推公式 g ＝ (m_k − β₁·m_{k−1}) ÷ (1 − β₁) ÷ 裁剪系数 是本课推导（由 Adam 一阶动量的定义倒过来写）。
 fig9-diverge  回答：两边分叉以后为什么只比标量曲线？—— 连 FP32 轨迹从第 2 步起也离两条 BF16 轨迹 30–100 倍远，只有第 1 步（同一份权重）能当裁判。
               数字是第二次迁移真实权重截层的实测（主 loss 的相对差）。
+fig9-ongrid   回答：从 BF16 检查点续训时，为什么只管权重一侧精度的开关，第 1 步前后逐位相同？—— 主权重的初值全在 BF16 格点上、激活也是 BF16，
+              单遍 BF16 乘 ＋ FP32 累加已经精确；第一次更新以后主权重离开格点，开关才开始起作用。随机 FP32 初始化起训时不成立。
+              数字全部是本脚本现跑的玩具实验（线性模型 ＋ Adam），不是任何真实模型的数。
+              刻意没画：两条 loss 曲线本身 —— 玩具里开关带来的差只有千分之一量级，两条线叠成一条，看不出东西；
+              改画「同一份权重，开关开、关算出的输出差」，它就是开关能起作用的那部分，第 1 步恰好是 0。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
 import topic09_numbers as N
@@ -156,5 +161,187 @@ def fig_diverge():
     f.save("fig9-diverge.svg", yb + 14)
 
 
+# ── fig9-ongrid 的玩具实验：数全是这里现跑的 ───────────────────────────
+import numpy as _np
+
+
+def _bf16(x):
+    """FP32 → BF16（就近舍入、平局取偶）→ 再放回 FP32。只动位，不依赖别的库。"""
+    u = _np.asarray(x, _np.float32).view(_np.uint32).astype(_np.uint64)
+    u = (u + 0x7FFF + ((u >> 16) & 1)) & 0xFFFF0000
+    return u.astype(_np.uint32).view(_np.float32)
+
+
+# 舍入自检：1 附近 BF16 的格距是 2⁻⁷；正好在两格中间时取末位为偶的那一格
+assert _bf16(_np.float32(1 + 2 ** -8)) == 1.0
+assert _bf16(_np.float32(1 + 3 * 2 ** -8)) == _np.float32(1 + 2 ** -6)
+# 两个 BF16 相乘：有效位各 8 位，乘积至多 16 位，FP32（24 位）装得下 → FP32 里的乘积就是精确值
+_r = _bf16(_np.random.default_rng(0).standard_normal(200000).astype(_np.float32))
+assert _np.array_equal((_r[:100000] * _r[100000:]).astype(_np.float64),
+                       _r[:100000].astype(_np.float64) * _r[100000:].astype(_np.float64))
+
+OG_K, OG_M, OG_B, OG_STEPS, OG_LR, OG_STD = 256, 32, 64, 60, 1e-5, 0.02
+
+
+def _og_run(W0, on):
+    """玩具线性模型 y ＝ x·W，MSE，Adam（FP32 主权重）。激活 x 是 BF16。
+    on＝False：权重先舍成 BF16 再乘（单遍 BF16）；on＝True：权重按 FP32 乘（高精度）。只有这一处不同。"""
+    rng = _np.random.default_rng(1)
+    Wt = (rng.standard_normal((OG_K, OG_M)) * OG_STD).astype(_np.float32)
+    W, m, v = W0.copy(), _np.zeros_like(W0), _np.zeros_like(W0)
+    b1, b2, eps = _np.float32(0.9), _np.float32(0.999), _np.float32(1e-8)
+    L, Ws = [], [W.copy()]
+    for t in range(1, OG_STEPS + 1):
+        X = _bf16(rng.standard_normal((OG_B, OG_K)).astype(_np.float32))
+        T = (X @ Wt + _np.float32(0.01) * rng.standard_normal((OG_B, OG_M)).astype(_np.float32)).astype(_np.float32)
+        E = X @ (W if on else _bf16(W)) - T
+        L.append(_np.mean(E * E, dtype=_np.float32))
+        G = (X.T @ E) * _np.float32(2.0 / (OG_B * OG_M))
+        m = b1 * m + (1 - b1) * G
+        v = b2 * v + (1 - b2) * G * G
+        W = (W - _np.float32(OG_LR) * (m / (1 - b1 ** t)) / (_np.sqrt(v / (1 - b2 ** t)) + eps)).astype(_np.float32)
+        Ws.append(W.copy())
+    return _np.array(L), Ws
+
+
+_W_rand = (_np.random.default_rng(7).standard_normal((OG_K, OG_M)) * OG_STD).astype(_np.float32)
+_W_ckpt = _bf16(_W_rand)                      # 「BF16 检查点」：同一份随机数先舍到 BF16
+_L_off, _Ws_off = _og_run(_W_ckpt, False)
+_L_on, _Ws_on = _og_run(_W_ckpt, True)
+# 从 BF16 检查点起训：第 1 步 loss、第 1 次更新后的整份权重，开关前后逐位相同；第 2 步起不同
+assert _L_off[0] == _L_on[0] and _np.array_equal(_Ws_off[1], _Ws_on[1])
+assert _L_off[1] != _L_on[1]
+# 随机 FP32 初始化起训：第 1 步就不同
+_Lr_off, _ = _og_run(_W_rand, False)
+_Lr_on, _Ws_ron = _og_run(_W_rand, True)
+assert _Lr_off[0] != _Lr_on[0]
+
+_Xp = _bf16(_np.random.default_rng(99).standard_normal((2048, OG_K)).astype(_np.float32))
+
+
+def _og_gap(W):
+    """同一份权重、同一批 BF16 输入：开关开、关算出的输出的相对差（L2）。"""
+    a = (_Xp @ W).astype(_np.float64)
+    b = (_Xp @ _bf16(W)).astype(_np.float64)
+    return float(_np.linalg.norm(a - b) / _np.linalg.norm(a))
+
+
+def _og_off(W):
+    return float(_np.mean(W != _bf16(W)))
+
+
+def _og_dist(W):
+    """离最近 BF16 格点的平均距离，以格距为单位（均匀乱撒时是 0.25）。"""
+    W = W.astype(_np.float64)
+    ulp = 2.0 ** (_np.floor(_np.log2(_np.abs(W))) - 7)
+    return float(_np.mean(_np.abs(W - _bf16(W.astype(_np.float32))) / ulp))
+
+
+OG_GAP = [_og_gap(W) for W in _Ws_on[:OG_STEPS]]       # OG_GAP[k-1] ＝ 第 k 步前向用的那份权重
+OG_GAP_RAND = [_og_gap(W) for W in _Ws_ron[:OG_STEPS]]
+OG_OFF = [_og_off(W) for W in _Ws_on]
+OG_DIST = [_og_dist(W) for W in _Ws_on]
+assert OG_GAP[0] == 0.0 and OG_OFF[0] == 0.0 and OG_DIST[0] == 0.0
+assert OG_OFF[1] > 0.99                               # 第一次更新以后几乎全部离开格点
+assert 0 < OG_GAP[1] < OG_GAP[20]                     # 离开了，但一开始离得近，差还小
+assert 0.22 < OG_DIST[30] < 0.28                      # 约 30 步后像均匀乱撒一样（0.25）
+assert OG_GAP_RAND[0] > 0 and abs(OG_GAP_RAND[0] / OG_GAP[-1] - 1) < 0.2   # 随机初始化第 1 步就在平台上
+OG_PLATEAU = sum(OG_GAP[30:]) / len(OG_GAP[30:])
+
+
+def fig_ongrid():
+    import math as _m
+    f = Fig(W, "左格是一段数轴，竖线是 BF16 能精确表示的格点。从 BF16 检查点起训，第 0 步的 FP32 主权重全落在格点上；"
+               "第 1 次更新以后全部离开格点，但离得很近，平均 %.2f 格；第 30 次更新以后散到格点之间，平均 %.2f 格。"
+               "右格横轴是训练步，纵轴是同一份权重开关开、关算出的输出相对差，对数刻度。从检查点起训，第 1 步恰好是 0，逐位相同；"
+               "第 2 步起是 %.1e，几十步后长到约 %.1e。随机 FP32 初始化起训，第 1 步就已经是 %.1e。数都是玩具实验现跑的。"
+               % (OG_DIST[1], OG_DIST[30], OG_GAP[1], OG_PLATEAU, OG_GAP_RAND[0]))
+    y0 = f.header("第 1 步开关前后逐位相同，不等于开关没用　——　<tspan font-weight=\"700\">权重还在 BF16 格点上</tspan>",
+                  "只管权重一侧精度的开关（例：权重按 FP32 乘，还是先舍成 BF16 再乘）；左：主权重在不在格点上；右：同一份权重开关开、关差多少",
+                  [(GY, "BF16 格点"), (BL, "FP32 主权重（从 BF16 检查点起训）"), (OR, "随机 FP32 初始化起训")])
+    PH = 410
+    # ── 左格：数轴 ────────────────────────────────────────────────
+    LW = 640
+    py = f.panel(0, y0, LW, PH, "Ⓐ 主权重：第 0 步全在格点上，更新以后散开", BL)
+    sp = 2.0 ** -13                                   # [2⁻⁶, 2⁻⁵) 这一段 BF16 的格距
+    g0 = 2.0 ** -6 + 24 * sp
+    NG = 4
+    W0f = _Ws_on[0].ravel().astype(_np.float64)
+    pick = []
+    for j in range(NG + 1):                           # 每个格点挑三个落在它上面的元素
+        idx = _np.nonzero(W0f == g0 + j * sp)[0][:3]
+        pick += list(idx)
+    assert len(pick) == 3 * (NG + 1), len(pick)
+    XL, XR = 230, LW - 50
+    def X(v):
+        return XL + (v - g0) / (NG * sp) * (XR - XL)
+    rows = [(0, "第 0 步", "检查点"), (1, "第 1 次更新后", None), (30, "第 30 次更新后", None)]
+    for r, (k, lab, sub_) in enumerate(rows):
+        yy = py + 70 + r * 96
+        f.line(XL - 10, yy, XR + 10, yy, LINE2, 1, arrow=False)
+        for j in range(NG + 1):
+            f.line(X(g0 + j * sp), yy - 22, X(g0 + j * sp), yy + 22, GY2, 1.4, arrow=False)
+        f.t(16, yy - 4, lab, INK, True, 13)
+        f.t(16, yy + 14, "全部平均离格点 %.2f 格" % OG_DIST[k] if k else "全部在格点上", BL if k else GY, size=12)
+        Wk = _Ws_on[k].ravel().astype(_np.float64)
+        seen = {}
+        for i in pick:
+            x = X(Wk[i])
+            if not (XL - 12 <= x <= XR + 12):
+                continue
+            n = seen.get(round(x), 0)
+            seen[round(x)] = n + 1
+            f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="%s" fill-opacity="0.85"/>'
+                       % (x, yy - 14 + (n % 3) * 14, BL))
+    f.t(XL - 20, py + PH - 52, "一格 ＝ 2⁻¹³（[2⁻⁶, 2⁻⁵) 这一段 BF16 的格距）", GY, size=12)
+    f._pan = None
+    # ── 右格：开关开、关的差 ──────────────────────────────────────
+    RX = LW + 20
+    py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 同一份权重，开关开、关算出的输出差", BL)
+    PX0, PX1 = RX + 90, W - 40
+    YT, YB = py2 + 30, py2 + PH - 124
+    lo, hi = 1e-5, 1e-2
+    def Y(v):
+        return YB - (_m.log10(v) - _m.log10(lo)) / (_m.log10(hi) - _m.log10(lo)) * (YB - YT)
+    def XS(k):
+        return PX0 + (k - 1) / (OG_STEPS - 1) * (PX1 - PX0)
+    for e in (1e-5, 1e-4, 1e-3, 1e-2):
+        f.line(PX0, Y(e), PX1, Y(e), LINE2, 1, arrow=False)
+        f.t(PX0 - 10, Y(e) + 4, "%.0e" % e, GY, size=12, anchor="end")
+    Z = YB + 34                                         # 「＝ 0」那一行画在对数轴下面
+    f.line(PX0, Z, PX1, Z, LINE2, 1, dash="4 4", arrow=False)
+    f.t(PX0 - 10, Z + 4, "0", GY, size=12, anchor="end")
+    for k in (1, 10, 20, 30, 40, 50, 60):
+        f.t(XS(k), Z + 26, "%d" % k, GY, size=12, anchor="middle")
+    f.t(PX1, Z + 44, "训练步", GY, size=12, anchor="end")
+    f.path([(XS(k), Y(OG_GAP_RAND[k - 1])) for k in range(1, OG_STEPS + 1)], OR, 2, dash="6 4", arrow=False)
+    f.path([(XS(k), Y(OG_GAP[k - 1])) for k in range(2, OG_STEPS + 1)], BL, 2.4, arrow=False)
+    f.line(XS(1), Z, XS(2), Y(OG_GAP[1]), BL, 1.2, dash="2 3", arrow=False)
+    f.p.append('<circle cx="%.1f" cy="%.1f" r="7" fill="#fff" stroke="%s" stroke-width="2.4"/>' % (XS(1), Z, BL))
+    f.t(XS(1) + 14, Z - 8, "第 1 步 ＝ 0：逐位相同", BL, True, 13)
+    f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="%s"/>' % (XS(1), Y(OG_GAP_RAND[0]), OR))
+    f.t(XS(1) + 12, Y(OG_GAP_RAND[0]) - 12, "随机初始化：第 1 步就是 %s" % N.tx(OG_GAP_RAND[0], "%.1e"), OR, True, 13)
+    f.t(XS(2) + 10, Y(OG_GAP[1]) + 20, "第 2 步 %s" % N.tx(OG_GAP[1], "%.1e"), BL, True, 13)
+    f.t(XS(40), Y(OG_PLATEAU) + 24, "几十步后约 %s" % N.tx(OG_PLATEAU, "%.1e"), BL, True, 13, "middle")
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "权重一侧的开关，拿训练若干步以后的权重去测，或者看多步曲线；别拿第 1 步「逐位相同」当没用的证据", [
+        "第 1 步：权重在格点上、激活是 BF16，两个 BF16 相乘精确，单遍 BF16 一位都没截掉，高精度多算的那几遍乘的全是 0。",
+        "随机 FP32 初始化起训时不成立：第 0 步的权重就不在格点上，第 1 步就看得出差（橙虚线）。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 本图脚本现跑的玩具实验：线性模型 %d×%d，批 %d，MSE，Adam（lr %.0e，FP32 主权重），输入舍成 BF16；「BF16 检查点」＝ 一份标准差 %.2f 的随机权重先舍到 BF16。"
+               "开关关 ＝ 权重先舍到 BF16 再乘；开关开 ＝ 权重按 FP32 乘；其余逐行相同。两次训练第 1 步的 loss 和第 1 次更新后的整份权重逐位相同（脚本里 assert），第 2 步起 loss 不同。"
+               % (OG_K, OG_M, OG_B, OG_LR, OG_STD),
+               "📌 第 1 次更新后离开格点的元素占 %.1f%%；右格纵轴 ＝ 同一份权重、同一批 2048 条 BF16 输入，开关开、关两种输出之差的 L2 范数除以输出的 L2 范数。"
+               % (100 * OG_OFF[1]),
+               "⚠️ 本课推导：BF16 有效位 8 位，两个相乘至多 16 位，FP32 有 24 位，乘积不舍入（脚本里对 10 万对随机数 assert 过）。"
+               "高精度档把 FP32 拆成几份 BF16 分别乘再加，格点上的数拆出来只有第一份非零，其余几份乘出来全是 0；"
+               "多遍和单遍逐位相同还要求那一份的累加顺序不变（推断）。",
+               "注：前提是权重以 FP32 进矩阵乘、开关只改权重这一侧；要是框架在进矩阵乘之前就把权重转成了 BF16，这类开关从头到尾都不起作用。"
+               "左格挑了 %d 个第 0 步正好落在这 5 个格点上的元素，每个格点三个；数轴位置是真实值，第 30 次更新后走出这一段的不画。玩具的差是多大没有意义，只看第 1 步是不是 0。" % (len(pick)))
+    f.save("fig9-ongrid.svg", yb + 14)
+
+
 fig_hooks()
 fig_diverge()
+fig_ongrid()

@@ -5759,6 +5759,134 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="544" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：它连权重都不舍成 BF16，第 1 步以后练的就是另一个模型；第 1 步两边用的是同一份检查点，所以只有第 1 步能拿它比。</text>
 </svg><figcaption><b>紫带比红点高出一截。</b><span class="capmore"><br><em>这条 FP32 轨迹连权重都不舍成 BF16；只有第 1 步能拿它比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，真实权重截层，同一批数据上的 TPU FP32 轨迹 30 步）：TPU 对 GPU 8 份均值的带符号相对差，第 1 步 −8.5e-5、第 2–10 步约 −6.8e-5、第 11–100 步约 −4.8e-5，同号、逐步衰减；第 1 步各离 FP32：TPU −2.0e-5、GPU ＋6.5e-5。</p>
 <p>⚠️ FP32 参照自己离 FP64 多远没有测，第 1 步的比较只当诊断。纵轴画的是大小，红点三个差都是负的。</p></details></figure>
+
+  <h3 id="s6-4">6.4　第 1 步逐位相同，不等于开关没用</h3>
+  <p class="lead">从 BF16 检查点续训或微调时，有一类开关第 1 步开和不开逐位相同，要过几步才看得出差。</p>
+<figure class="fbox fwide" id="fig-ongrid"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="左格是一段数轴，竖线是 BF16 能精确表示的格点。从 BF16 检查点起训，第 0 步的 FP32 主权重全落在格点上；第 1 次更新以后全部离开格点，但离得很近，平均 0.17 格；第 30 次更新以后散到格点之间，平均 0.25 格。右格横轴是训练步，纵轴是同一份权重开关开、关算出的输出相对差，对数刻度。从检查点起训，第 1 步恰好是 0，逐位相同；第 2 步起是 4.7e-04，几十步后长到约 1.6e-03。随机 FP32 初始化起训，第 1 步就已经是 1.7e-03。数都是玩具实验现跑的。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第 1 步开关前后逐位相同，不等于开关没用　——　<tspan font-weight="700">权重还在 BF16 格点上</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">只管权重一侧精度的开关（例：权重按 FP32 乘，还是先舍成 BF16 再乘）；左：主权重在不在格点上；右：同一份权重开关开、关差多少</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">BF16 格点</text>
+<rect x="123.16000000000001" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="144" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FP32 主权重（从 BF16 检查点起训）</text>
+<rect x="440.08000000000004" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="461" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">随机 FP32 初始化起训</text>
+<rect x="0" y="102" width="640" height="410" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="640" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="640" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 主权重：第 0 步全在格点上，更新以后散开</tspan></text>
+<line x1="220" y1="202" x2="600" y2="202" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="230.0" y1="180" x2="230.0" y2="224" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="320.0" y1="180" x2="320.0" y2="224" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="410.0" y1="180" x2="410.0" y2="224" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="500.0" y1="180" x2="500.0" y2="224" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="590.0" y1="180" x2="590.0" y2="224" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="198" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 0 步</tspan></text>
+<text class="svgsm" x="16" y="216" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">全部在格点上</text>
+<circle cx="230.0" cy="188.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="230.0" cy="202.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="230.0" cy="216.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="320.0" cy="188.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="320.0" cy="202.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="320.0" cy="216.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="410.0" cy="188.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="410.0" cy="202.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="410.0" cy="216.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="500.0" cy="188.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="500.0" cy="202.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="500.0" cy="216.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="590.0" cy="188.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="590.0" cy="202.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="590.0" cy="216.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<line x1="220" y1="298" x2="600" y2="298" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="230.0" y1="276" x2="230.0" y2="320" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="320.0" y1="276" x2="320.0" y2="320" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="410.0" y1="276" x2="410.0" y2="320" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="500.0" y1="276" x2="500.0" y2="320" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="590.0" y1="276" x2="590.0" y2="320" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="294" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 次更新后</tspan></text>
+<text class="svgsm" x="16" y="312" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">全部平均离格点 0.17 格</text>
+<circle cx="222.6" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="237.4" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="237.4" cy="298.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="312.6" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="312.6" cy="298.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="327.4" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="402.6" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="417.4" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="402.6" cy="298.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="492.6" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="492.6" cy="298.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="492.6" cy="312.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="597.4" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="582.6" cy="284.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="597.4" cy="298.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<line x1="220" y1="394" x2="600" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="230.0" y1="372" x2="230.0" y2="416" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="320.0" y1="372" x2="320.0" y2="416" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="410.0" y1="372" x2="410.0" y2="416" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="500.0" y1="372" x2="500.0" y2="416" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="590.0" y1="372" x2="590.0" y2="416" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="390" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 30 次更新后</tspan></text>
+<text class="svgsm" x="16" y="408" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">全部平均离格点 0.25 格</text>
+<circle cx="232.7" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="340.9" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="241.1" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="270.3" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="456.0" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="458.2" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="277.6" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="478.5" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="362.5" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="388.7" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="511.2" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<circle cx="538.9" cy="380.0" r="5" fill="#1a73e8" fill-opacity="0.85"/>
+<text class="svgsm" x="210" y="490" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">一格 ＝ 2⁻¹³（[2⁻⁶, 2⁻⁵) 这一段 BF16 的格距）</text>
+<rect x="660" y="102" width="740" height="410" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="660" y="102" width="740" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="660" y="104" width="740" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="660" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="674" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 同一份权重，开关开、关算出的输出差</tspan></text>
+<line x1="750" y1="418.0" x2="1360" y2="418.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="740" y="422" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1e-05</text>
+<line x1="750" y1="332.6666666666667" x2="1360" y2="332.6666666666667" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="740" y="336" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1e-04</text>
+<line x1="750" y1="247.33333333333334" x2="1360" y2="247.33333333333334" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="740" y="251" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1e-03</text>
+<line x1="750" y1="162.0" x2="1360" y2="162.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="740" y="166" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1e-02</text>
+<line x1="750" y1="452" x2="1360" y2="452" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="740" y="456" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="750" y="478" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
+<text class="svgsm" x="843" y="478" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">10</text>
+<text class="svgsm" x="946" y="478" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">20</text>
+<text class="svgsm" x="1049" y="478" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">30</text>
+<text class="svgsm" x="1153" y="478" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">40</text>
+<text class="svgsm" x="1256" y="478" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">50</text>
+<text class="svgsm" x="1360" y="478" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">60</text>
+<text class="svgsm" x="1360" y="496" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">训练步</text>
+<path d="M 750.00 228.35 L 760.34 228.39 L 770.68 228.50 L 781.02 228.54 L 791.36 228.81 L 801.69 228.86 L 812.03 228.74 L 822.37 228.75 L 832.71 228.83 L 843.05 228.95 L 853.39 228.99 L 863.73 229.05 L 874.07 228.97 L 884.41 229.06 L 894.75 229.17 L 905.08 229.16 L 915.42 229.23 L 925.76 229.22 L 936.10 229.04 L 946.44 229.02 L 956.78 228.91 L 967.12 228.81 L 977.46 228.81 L 987.80 228.84 L 998.14 228.66 L 1008.47 228.65 L 1018.81 228.50 L 1029.15 228.51 L 1039.49 228.43 L 1049.83 228.45 L 1060.17 228.44 L 1070.51 228.47 L 1080.85 228.38 L 1091.19 228.39 L 1101.53 228.39 L 1111.86 228.41 L 1122.20 228.54 L 1132.54 228.52 L 1142.88 228.60 L 1153.22 228.62 L 1163.56 228.60 L 1173.90 228.88 L 1184.24 228.97 L 1194.58 229.03 L 1204.92 229.20 L 1215.25 229.23 L 1225.59 229.38 L 1235.93 229.37 L 1246.27 229.41 L 1256.61 229.52 L 1266.95 229.53 L 1277.29 229.41 L 1287.63 229.36 L 1297.97 229.27 L 1308.31 229.21 L 1318.64 228.99 L 1328.98 228.90 L 1339.32 228.72 L 1349.66 228.77 L 1360.00 228.73" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" stroke-dasharray="6 4"/>
+<path d="M 760.34 275.46 L 770.68 260.29 L 781.02 251.08 L 791.36 245.67 L 801.69 241.33 L 812.03 237.31 L 822.37 233.91 L 832.71 231.86 L 843.05 230.66 L 853.39 229.38 L 863.73 228.19 L 874.07 227.16 L 884.41 226.08 L 894.75 225.13 L 905.08 224.54 L 915.42 224.26 L 925.76 224.41 L 936.10 224.45 L 946.44 224.40 L 956.78 224.64 L 967.12 224.86 L 977.46 225.09 L 987.80 225.35 L 998.14 225.81 L 1008.47 226.29 L 1018.81 226.81 L 1029.15 227.42 L 1039.49 227.87 L 1049.83 228.38 L 1060.17 229.02 L 1070.51 229.60 L 1080.85 230.25 L 1091.19 230.77 L 1101.53 231.02 L 1111.86 231.22 L 1122.20 231.39 L 1132.54 231.28 L 1142.88 231.11 L 1153.22 230.93 L 1163.56 230.49 L 1173.90 230.18 L 1184.24 229.72 L 1194.58 229.29 L 1204.92 228.94 L 1215.25 228.63 L 1225.59 228.43 L 1235.93 228.11 L 1246.27 227.85 L 1256.61 227.59 L 1266.95 227.52 L 1277.29 227.49 L 1287.63 227.39 L 1297.97 227.39 L 1308.31 227.56 L 1318.64 227.82 L 1328.98 227.99 L 1339.32 228.21 L 1349.66 228.46 L 1360.00 228.73" fill="none" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<line x1="750.0" y1="452" x2="760.3389830508474" y2="275.4562527018529" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="2 3"/>
+<circle cx="750.0" cy="452.0" r="7" fill="#fff" stroke="#1a73e8" stroke-width="2.4"/>
+<text class="svgsm" x="764" y="444" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步 ＝ 0：逐位相同</tspan></text>
+<circle cx="750.0" cy="228.4" r="5" fill="#e8710a"/>
+<text class="svgsm" x="762" y="216" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">随机初始化：第 1 步就是 1.7e-3</tspan></text>
+<text class="svgsm" x="770" y="295" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 步 4.7e-4</tspan></text>
+<text class="svgsm" x="1153" y="253" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">几十步后约 1.6e-3</tspan></text>
+<rect x="0" y="532" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="532" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="532" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="559" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重一侧的开关，拿训练若干步以后的权重去测，或者看多步曲线；别拿第 1 步「逐位相同」当没用的证据</tspan></text>
+<text class="svgsm" x="20" y="590" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第 1 步：权重在格点上、激活是 BF16，两个 BF16 相乘精确，单遍 BF16 一位都没截掉，高精度多算的那几遍乘的全是 0。</text>
+<text class="svgsm" x="20" y="614" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">随机 FP32 初始化起训时不成立：第 0 步的权重就不在格点上，第 1 步就看得出差（橙虚线）。</text>
+</svg><figcaption><b>左边第一行的点都压在竖线上，右边蓝线第 1 步落在 0 上。</b><span class="capmore"><br><em>两格的数都是玩具实验现跑的，只看第 1 步是不是 0，差多大没有意义。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 本图脚本现跑的玩具实验：线性模型 256×32，批 64，MSE，Adam（lr 1e-05，FP32 主权重），输入舍成 BF16；「BF16 检查点」＝ 一份标准差 0.02 的随机权重先舍到 BF16。开关关 ＝ 权重先舍到 BF16 再乘；开关开 ＝ 权重按 FP32 乘；其余逐行相同。两次训练第 1 步的 loss 和第 1 次更新后的整份权重逐位相同（脚本里 assert），第 2 步起 loss 不同。</p>
+<p>📌 第 1 次更新后离开格点的元素占 100.0%；右格纵轴 ＝ 同一份权重、同一批 2048 条 BF16 输入，开关开、关两种输出之差的 L2 范数除以输出的 L2 范数。</p>
+<p>⚠️ 本课推导：BF16 有效位 8 位，两个相乘至多 16 位，FP32 有 24 位，乘积不舍入（脚本里对 10 万对随机数 assert 过）。高精度档把 FP32 拆成几份 BF16 分别乘再加，格点上的数拆出来只有第一份非零，其余几份乘出来全是 0；多遍和单遍逐位相同还要求那一份的累加顺序不变（推断）。</p>
+<p>注：前提是权重以 FP32 进矩阵乘、开关只改权重这一侧；要是框架在进矩阵乘之前就把权重转成了 BF16，这类开关从头到尾都不起作用。左格挑了 15 个第 0 步正好落在这 5 个格点上的元素，每个格点三个；数轴位置是真实值，第 30 次更新后走出这一段的不画。玩具的差是多大没有意义，只看第 1 步是不是 0。</p></details></figure>
+  <p>原因在起点。FP32 主权重是从 BF16 检查点读进来的，每个值都正好落在 BF16 的格点上；进矩阵乘的激活也是 BF16。两个 BF16 相乘精确（<a href="#s5-1">§5.1</a>），单遍 BF16 一位都没截掉，最高精度档多算的那几遍乘的全是 0，两种算法逐位一样。只管权重一侧精度、舍入的开关（比如输出头的矩阵乘用不用最高精度档，即 <a href="#s5-4">§5.4</a> 那种多遍 BF16），在第 0、1 步没有东西可改。第一次更新以后主权重离开格点，单遍 BF16 开始截掉尾数，差才出现，而且要几十步才长满。</p>
+  <p>所以第 1 步「开关前后逐位相同」不能当「这个开关没用」的证据。<a href="#s6-3">§6.3</a> 说逐元素只在第 1 步比，这一类开关恰好在第 1 步看不见：要拿训练若干步以后的权重去测（用状态互换，从那一步的状态各算一步），或者看多步曲线。随机 FP32 初始化起训时没有这回事，第 0 步的权重就不在格点上。</p>
 <details class="foldfig"><summary><b>考考自己</b>：为什么在 TPU 上「加一个输出」会改变别的张量的值，哪怕那个输出什么都不改？</summary><p>TPU 上的程序都由 XLA 整图编译（GPU 上用 JAX 或 torch.compile 也一样）。多一个输出，编译器就得把那个中间值落到内存里，原来融在一起的算子被切开，融合内部舍入的位置（excess precision）就跟着变了，下游的数也就变了。</p></details>
   <p class="bridge">这一节留下的问题：TPU 的 loss 为什么一直比 GPU 低万分之一点五？</p>
 </div></section>
