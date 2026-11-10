@@ -885,9 +885,9 @@ LOO16_1K_MAX_T, LOO8_300_MAX_T = "%.2f" % LOO16_1K_MAX, "%.2f" % LOO8_300_MAX
 _GZ = _TS["grayzone_1000"]
 GZ8_LO_T, GZ8_HI_T = "%.2f" % min(g["r1000_n8"] for g in _GZ), "%.2f" % max(g["r1000_n8"] for g in _GZ)
 GZ16_LO_T, GZ16_HI_T = "%.2f" % min(g["r1000_n16"] for g in _GZ), "%.2f" % max(g["r1000_n16"] for g in _GZ)
-assert (GZ8_LO_T, GZ8_HI_T, GZ16_LO_T, GZ16_HI_T) == ("2.00", "2.75", "1.18", "1.62")
+assert (GZ8_LO_T, GZ8_HI_T, GZ16_LO_T, GZ16_HI_T) == ("2.00", "2.75", "1.19", "1.64")   # 16 份一列按分母统一后的结果
 N16_WIDEN_T = "1.0–2.1"                # 16 份 120 对的上限 ÷ 8 份 28 对（「GPU 8 份对 16 份上限」结果文件；MATRIX「L 长跑」第一条）
-N16_GN_WIDEN = 1.70                    # 其中梯度范数带符号均值放宽 1.70 倍（同上；路由偏置均值 2.07 倍最大）
+N16_GN_WIDEN = 1.84                    # 其中梯度范数带符号均值放宽 1.84 倍（分母统一为参照后；统一前 1.70；路由偏置均值 2.07 倍）
 # 词嵌入梯度（第二次迁移 TPU 自比，第 1 步对 CPU FP64 的 rel_L2；倍数按 max(golden 4.00e-3, GPU 三份中位数 4.17e-3)）
 EMB_DP_X = "3.6"                       # 纯数据并行 8：1.51e-2（MATRIX B1、纯数据并行那一臂的结果文件）
 EMB_NOEXC_X = "26"                     # 关 excess precision：1.09e-1（MATRIX C、根因一览第 22 行 R 26.1）
