@@ -3398,7 +3398,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>MARE（平均绝对相对差）</td><td>|dₜ| 的平均</td><td>整体抖多大，不管方向</td></tr>
   <tr><td>最大单步</td><td>最大的 |dₜ| 和它在第几步</td><td>拦住某一步突然跳一下</td></tr>
   </tbody></table>
-  <p>两个窗口：<b>全程</b>（第 2–1000 步）和<b>尾段</b>（第 301–1000 步）。前几百步两条轨迹还没分开，差还没长出来，会冲淡偏移；尾段看分开以后是不是稳定在一边。原始数据只有一份：两个窗口读的是同一条 dₜ 序列，只是求平均的范围不同；每个统计量是整个窗口算出的<b>一个数</b>，不是逐步的滑动平均。第 1 步单独报（d₀），不进窗口：GPU 重跑第 1 步的 loss 常常逐位相同，差为 0，当不了尺子。</p>
+  <p>两个窗口：<b>全程</b>（第 2–1000 步）和<b>尾段</b>（第 301–1000 步）。前几百步两条轨迹还没分开，差还没长出来，会冲淡偏移；尾段看分开以后是不是稳定在一边。第二次迁移的窗口不同：后段从第 101 步起，三百步时第 101–300 步、一千步时第 101–1000 步。窗口写哪段，事先写进协议。原始数据只有一份：两个窗口读的是同一条 dₜ 序列，只是求平均的范围不同；每个统计量是整个窗口算出的<b>一个数</b>，不是逐步的滑动平均。第 1 步单独报（记作 d₀），不进窗口：GPU 重跑第 1 步的 loss 常常逐位相同，差为 0，当不了尺子。</p>
   <p>loss 是结果，范数是总量。只换求和顺序的差，在几亿个元素上正负随机，平方一加几乎抵消；丢了精度的差有固定方向，范数直接变。混元 3 那次，三个被比的量里<b>参数范数最先冲出去</b>。它是个累加器，每一步的更新都加在权重上、往里攒一点：随机的差这步正、下步负，像醉汉走路，攒起来只按步数的平方根散开；固定方向的差每步都加在同一边，按步数长。好比赌场抽水：每把只抽一点，你的手气输赢按根号散开；押几百把手气还盖得住抽水，押几千把，抽水就压过了手气。跑得够久，再小的系统偏差也会冲出噪声带：</p>
 <figure class="fbox fwide" id="fig-integrator"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="两块。左块：横轴是训练步数 0 到 1000，纵轴是累加起来的差。十二条灰色细线是只有随机噪声的累加，像醉汉走路，散开的宽度按步数的平方根长，灰色阴影是正负两倍平方根的噪声带。虚线 400 步是平均意义上偏差追上带边的地方，单条蓝线早一点晚一点出带都正常。蓝线每步多一个只有噪声十分之一大的固定偏差，前几百步埋在带里，四五百步以后冲出去，越走越远。右块：两支一样长的箭头指向不同方向，长度就是参数范数，所以范数分不出它们；下面两根条，一组多涨一点、一组少涨一点，平方和加起来不变。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">参数范数是个累加器：噪声按根号长，偏差按步数长</text>
@@ -3469,7 +3469,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：范数只是一个长度。方向变了、两组反着偏，它都看不见，所以还要配第 1 步逐张量对 FP64。</text>
 </svg><figcaption><b>灰线越散越宽，蓝线一直斜着往上走。</b><span class="capmore"><br><em>左块是示意模拟；右块两支箭头一样长。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课推导 ＋ 示意模拟：增量取标准正态（固定种子），蓝线每步多 0.1；设各步的差相互独立，噪声累加的标准差是 √t，偏差累加是 0.1·t（真实训练会把扰动放大，独立只是近似），两者在 0.1·t ＝ 2√t 处相交，t* ＝ 400。真实训练里 b 多大、噪声多宽各不相同，t* 只示意形状。参数范数是累加器：‖θ‖² 每步变 2θ·Δθ ＋ ‖Δθ‖²，学习率小时 ‖θ‖ 的变化约等于 Δθ 沿 θ 方向的分量。</p>
 <p>📌 实测锚点：混元 3 定案前第一关参数范数 r 3.45、loss 全程 1.92、尾段 1.29、梯度范数 1.14（判定图）。</p></details></figure>
-  <p>盲区也在这里：范数只是一个长度。方向变了，或者一组参数多涨、另一组少涨，它都看不出来；全模型的范数又被大张量主导，小张量（归一化权重、偏置）上的错几乎看不见。所以逐步曲线要配第 1 步的逐张量比较（第四节）：一个抓攒出来的偏，一个抓偏在哪个张量。</p>
+  <p>盲区也在这里：范数只是一个长度。方向变了，或者一组参数多涨、另一组少涨，它都看不出来；全模型的范数又被大张量主导，小张量（归一化权重、偏置）上的错几乎看不见。另两条也各有盲区：loss 只对很大的局部错才显（MTP 那一项权重偏到 1e-2 才在主 loss 上看得出）；路由偏置的均值在 0 附近来回穿，过零时 dₜ 被放大，N 也跟着放大（最大单步的 N 43.6），只抓得到大的语义差。所以逐步曲线要配第 1 步的逐张量比较（第四节）：一个抓攒出来的偏，一个抓偏在哪个张量。</p>
   <details class="foldfig"><summary><b>第二次迁移的证据</b>：故意埋的错，领头的常是范数，不是 loss</summary>
   <p>第二次迁移里故意让 loss 多乘 1.01（相当于漏除一个常数），梯度范数的 r 是 94.5，主 loss 只有 5.2；把 FSDP 改成纯数据并行（词嵌入梯度改在 BF16 里跨卡求和，<a href="#s5-5">§5.5</a>），梯度范数 2.62，主 loss 1.85。loss 告诉你训练效果变没变，可对不少数值问题反应慢；两个范数把几亿个数各压成一个，对固定方向的偏差最先有反应。</p></details>
 
@@ -4615,7 +4615,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="560" y="686" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.23e-4 ÷ 3.85e-4 ＝ 1.36</tspan></text>
 <text class="svgsm" x="790" y="686" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1.84e-3 ÷ 2.24e-3 ＝ 0.82</text>
 <text class="svgsm" x="990" y="686" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.62</tspan></text>
-<text class="svgsm" x="20" y="726" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">其余 5 项都 ≤ 1</text>
+<text class="svgsm" x="20" y="726" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">其余 5 项都 ≤ 1　·　后段 ＝ 第 101–300 步（200 个 dₜ）</text>
 <rect x="1100" y="582" width="270" height="120" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
 <text class="svgsm" x="1235" y="616" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次比较取最大</tspan></text>
 <text class="svgsm" x="1235" y="656" fill="#a50e0e" text-anchor="middle" style="font-size:26.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.62</tspan></text>
@@ -5536,16 +5536,17 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="742" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="769" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">曲线说有没有差、差多大、怎么随时间攒；第 1 步说差在谁身上、是换了顺序还是丢了精度</tspan></text>
 <text class="svgsm" x="20" y="800" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">两样都过，才说改动只是换了求和顺序；有一样不过就要查，四格各指一个方向。</text>
-<text class="svgsm" x="20" y="824" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：要一份 CPU 上 FP64 算的第 1 步梯度，而且裁判必须来自参照一侧的代码，不能拿被测自己的输出当真值。</text>
+<text class="svgsm" x="20" y="824" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：要一份 CPU 上 FP64 算的第 1 步梯度，而且裁判一律用 GPU golden 那一侧的代码，不能拿被测自己的输出当真值。</text>
 </svg><figcaption><b>上面一行四步；同一个张量两次读数，第三步都超出，第四步才分出谁丢了精度。</b><span class="capmore"><br><em>下面四格是两类尺子的组合。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，TPU v5p 自比，对 TPU golden）：词嵌入梯度离 FP64 的 rel_L2，golden 4.00e-3、GPU 三份中位数 4.17e-3；纯数据并行 1.51e-2，对 golden 的 d 1.46e-2，刻度 2.48e-3，d ÷ 刻度 5.89，R 3.62；修复后 3.79e-3、d 3.37e-3、1.36、R 0.91。205 个张量的刻度中位数 2.68e-3。</p>
 <p>📌 梯度：TPU 两侧都从第一动量倒推（Adam 参数 m ÷ (1 − β₁)，Muon 参数 buf ÷ (1 − β)），再除以第 1 步的裁剪系数得到裁剪前的梯度；倒推本身带进几个 2⁻²⁴ 量级的相对舍入，所以刻度不低于 2⁻²⁰（GPU 三份逐位相同的张量刻度是 0，205 个里 10 个）。</p>
 <p>⚠️ 门槛 1.2 的来历（推断）：只差加法顺序时 R ≈ 1；多一次同量级的独立舍入，误差方差约翻倍，R ≈ √2 ≈ 1.41；1.2 取在两者之间。FP64 参照是用参照一侧（GPU）的同一套模型代码，在 CPU 上把第 1 步整网改成 FP64 重算的。GPU↔TPU 对齐时 R 的分母只用 GPU 三份中位数，另有「两边离 FP64 都小于一次 BF16 舍入（2⁻⁸）就按下限判过」一条。</p></details></figure>
   <details class="foldfig"><summary><b>照着算第 1 步</b>：梯度从哪来、刻度为什么有下限、1.2 是怎么定的、FP64 由谁来算</summary>
   <ul>
-    <li><b>梯度从哪来</b>：TPU 上不挂钩子（§6），从第 1 步更新后的一阶动量倒推：m₁ ＝ (1 − β₁)·g，所以 g ＝ m₁ ÷ (1 − β₁)；裁剪触发过的，再除以裁剪系数（混元 3 第 1 步裁剪前范数 17.5，系数约 0.057）。用二阶动量独立核一遍，混元 3 第 1 步相对差约 6e-8。</li>
+    <li><b>梯度从哪来</b>：TPU 上不挂钩子（§6），从第 1 步更新后的一阶动量倒推：m₁ ＝ (1 − β₁)·g，所以 g ＝ m₁ ÷ (1 − β₁)（用 Muon 的参数同理，动量缓冲 ÷ (1 − β)）；裁剪触发过的，再除以裁剪系数 ＝ 阈值 ÷ 裁剪前范数（混元 3 第 1 步裁剪前范数 17.5，系数约 0.057）。用二阶动量独立核一遍，混元 3 第 1 步相对差约 6e-8。</li>
     <li><b>刻度</b>：每个张量各自一个，等于 GPU 第 1 步三份两两的最大 rel_L2；倒推本身会带进几个 2⁻²⁴ 量级的相对舍入，所以刻度不低于 2⁻²⁰，GPU 三份逐位相同的张量也按这个下限算。</li>
     <li><b>1.2 的来历</b>（推断）：只差加法顺序时，两边离真值差不多远，R ≈ 1；多一次同量级的独立舍入，误差方差约翻倍，R ≈ √2 ≈ 1.41；1.2 取在两者之间。</li>
-    <li><b>FP64 由谁来算</b>：用参照一侧（GPU）的同一套模型代码，在 CPU 上把第 1 步整网改成 FP64 重算；被测一侧的代码一行不用。裁判不能来自被测。</li>
+    <li><b>R 的两种写法</b>：本节（GPU 搬 TPU）R ＝ TPU 离 FP64 ÷ GPU 三份离 FP64 的中位数；两边离 FP64 都小于一次 BF16 舍入（2⁻⁸ ≈ 3.9e-3）的张量，比远近没有意义，直接按过。TPU 自比时分母换成「基线、GPU 中位数里离得远的那个」，门槛同为 1.2。</li>
+    <li><b>FP64 由谁来算</b>：一律用 GPU golden 那一侧的同一套模型代码（TPU 自比时也一样），在 CPU 上把第 1 步整网改成 FP64 重算；被测一侧的代码一行不用。裁判不能来自被测。</li>
   </ul></details>
 <figure class="fbox fwide" id="fig-twoaxis"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="三块散点，每块是 TPU 上的一个改动。一个点是一个参数张量第 1 步的梯度，共 160 个。横轴是它跟 TPU 基线差多少，除以 GPU 重跑的差，大于 1 就超出噪声；纵轴是它离 64 位真值的距离，除以原来离真值的距离，大于 1.2 就是丢了精度。左块换到 v7x：148 个点超出噪声，可全部贴着纵轴 1，一个都没变远，是换了顺序。中块改成纯数据并行：只有词嵌入梯度一个红点冲到 3.6 倍。右块关掉编译器的省舍入：词嵌入梯度冲到 26 倍，另有一个路由门控权重 1.20 倍刚过线。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第 1 步逐张量：一把尺子量差多少，另一把量离真值多远</text>

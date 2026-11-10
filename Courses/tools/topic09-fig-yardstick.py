@@ -367,7 +367,7 @@ def fig_rpipe():
             rs.append(r)
             f.t(330 + j * 230, y, "%s ÷ %s ＝ %.2f" % (_e(num), _e(den), r), RD if r > 1 else INK, r > 1, 13, "middle")
         f.t(990, y, "%.2f" % max(rs), RD if max(rs) > 1 else INK, True, 14, "middle")
-    f.t(20, yt + 34 + 3 * 40, "其余 5 项都 ≤ 1", GY, size=13)
+    f.t(20, yt + 34 + 3 * 40, "其余 5 项都 ≤ 1　·　后段 ＝ 第 101–300 步（200 个 dₜ）", GY, size=13)
     f.box(1100, yt + 10, 270, 120, "#fff", OR, 8, sw=1.6)
     f.t(1235, yt + 44, "一次比较取最大", OR, True, 14, "middle")
     f.t(1235, yt + 84, "2.62", RD, True, 26, "middle", big=True)
@@ -455,7 +455,7 @@ def fig_step1():
     f._pan = None
     yb = f.band(y1 + PH2 + 20, "ok", "曲线说有没有差、差多大、怎么随时间攒；第 1 步说差在谁身上、是换了顺序还是丢了精度", [
         "两样都过，才说改动只是换了求和顺序；有一样不过就要查，四格各指一个方向。",
-        "代价：要一份 CPU 上 FP64 算的第 1 步梯度，而且裁判必须来自参照一侧的代码，不能拿被测自己的输出当真值。",
+        "代价：要一份 CPU 上 FP64 算的第 1 步梯度，而且裁判一律用 GPU golden 那一侧的代码，不能拿被测自己的输出当真值。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，TPU v5p 自比，对 TPU golden）：词嵌入梯度离 FP64 的 rel_L2，golden 4.00e-3、GPU 三份中位数 4.17e-3；纯数据并行 1.51e-2，对 golden 的 d 1.46e-2，刻度 2.48e-3，d ÷ 刻度 5.89，R 3.62；"
