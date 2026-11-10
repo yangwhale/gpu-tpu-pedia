@@ -275,6 +275,118 @@ def fig_twoaxis():
     f.save("fig9-twoaxis.svg", yb + 14)
 
 
+# ── fig9-rpipe：照着算一遍 —— 一条序列、两个窗口、三种 reduce；从 K 份运行到一个 r ─────────────
+#   Ⓐ 混元 3 TPU 对 GPU 第一份的逐步 loss 相对差（topic09_series.json，实测）：窗口只决定求平均的范围。
+#   Ⓑ 第二次迁移 TPU 自比「FSDP 改纯数据并行」那一臂前 300 步（对齐记录的结果文件与《尺子》入门 1.7 节的算例表，实测；分母一律参照）。
+_SER = N.series()["loss_rel_tpu_vs_gpu_a"]
+_FULL, _TAIL = _SER[1:1000], _SER[300:1000]
+def _st(x):
+    k = max(range(len(x)), key=lambda i: abs(x[i]))
+    return sum(x) / len(x), sum(abs(v) for v in x) / len(x), abs(x[k]), k
+SM_F, MA_F, MX_F, KF = _st(_FULL)
+SM_T, MA_T, MX_T, KT = _st(_TAIL)
+assert abs(SM_T - (-1.66e-4)) < 0.01e-4 and abs(SM_F - (-1.30e-4)) < 0.01e-4 and KF + 2 == 380 and KT + 301 == 380
+#   每格 (被测, N, r)：r 取结果文件里用未舍入原值算的比值（用表里舍入后的数现除，末位可能差 1）
+DP8 = [("主 loss 全程", (5.58e-6, 3.01e-6, 1.85), (8.84e-6, 6.72e-6, 1.31), (3.70e-5, 4.53e-5, 0.82)),
+       ("主 loss 后段", (9.22e-6, 4.54e-6, 2.03), (1.11e-5, 8.46e-6, 1.32), (3.70e-5, 4.53e-5, 0.82)),
+       ("梯度范数", (2.60e-4, 9.92e-5, 2.62), (5.23e-4, 3.85e-4, 1.36), (1.84e-3, 2.24e-3, 0.82))]
+assert all(abs(a / b - r) < 0.015 for row in DP8 for a, b, r in row[1:])
+assert [max(r for _a, _b, r in row[1:]) for row in DP8] == [1.85, 2.03, 2.62]
+
+
+def _e(v):
+    m, e = ("%.2e" % v).split("e")
+    return "%se%d" % (m, int(e))
+
+
+def fig_rpipe():
+    f = Fig(W, "两块。上块：一条逐步相对差的序列，第 1 步单独拿出来叫 d0，第 2 到 1000 步是全程窗口、第 301 到 1000 步是后段窗口；"
+               "两个窗口读的是同一条序列，各自算出带符号均值、MARE、最大单步三个数：全程 −1.30e-4、1.53e-4、6.65e-4（第 380 步），后段 −1.66e-4、1.79e-4、同一步。"
+               "下块：从 GPU 重跑 8 份两两配成 28 对，每对按同样的窗口和规则算三个统计、各取最大得到 N；被测的三个统计各除以 N 得三个 r，一项检查取最大，一次比较再取最大。"
+               "算例是纯数据并行那一臂：主 loss 全程 1.85、后段 2.03、梯度范数 2.62，整次比较 2.62。")
+    y0 = f.header("照着算一遍：一条序列 → 三个数 → 除以 N → 取最差",
+                  "上：窗口只决定拿哪一段求平均，原始数据只有一份；下：r 怎么算出来、在两级上怎么取最差（算例数字都是实测）",
+                  [(BL, "被测对参照的 dₜ"), (GY2, "GPU 重跑"), (OR, "取最大")])
+    # Ⓐ
+    PH1 = 300
+    py = f.panel(0, y0, W, PH1, "Ⓐ 一条序列，两个窗口，三种 reduce（混元 3，TPU 对 GPU 第一份，逐步 loss 相对差）", BL)
+    X0, XW, YM, YH = 110, 820, py + 120, 70
+    lim = 7e-4
+
+    def X(t):
+        return X0 + (t - 1) / 999.0 * XW
+
+    def Y(v):
+        return YM - v / lim * YH
+    f.line(X0, YM, X0 + XW, YM, LINE, 1.0, arrow=False)
+    for t in range(2, 1001):
+        f.line(X(t), YM, X(t), Y(_SER[t - 1]), "#a8c7fa", 0.6, arrow=False)
+    f.box(X(1) - 4, Y(_SER[0]) - 4, 8, 8, INK, INK, 4)
+    f.t(X(1) - 8, YM - 14, "d₀", INK, True, 13, "end")
+    for (a, b, lab, yy, col) in [(2, 1000, "全程窗口：第 2–1000 步，999 个数", YM + YH + 20, BL), (301, 1000, "后段窗口：第 301–1000 步，700 个数", YM + YH + 46, OR)]:
+        f.line(X(a), yy, X(b), yy, col, 2.2, arrow=False)
+        f.line(X(a), yy - 6, X(a), yy + 6, col, 2.2, arrow=False)
+        f.line(X(b), yy - 6, X(b), yy + 6, col, 2.2, arrow=False)
+        f.t(X(a) + 6, yy - 6, lab, col, True, 13)
+    f.t(X(380) + 10, Y(_SER[379]) + 4, "← 第 380 步", INK, size=12.5)
+    TX = X0 + XW + 40
+    f.t(TX, py + 40, "每个窗口算出三个数（不是滑动平均）", INK, True, 14)
+    rows = [("", "全程", "后段"), ("带符号均值", _e(SM_F), _e(SM_T)), ("MARE", _e(MA_F), _e(MA_T)), ("最大单步", _e(MX_F), _e(MX_T))]
+    for i, (a, b, c) in enumerate(rows):
+        y = py + 76 + i * 30
+        f.t(TX, y, a, GY if i == 0 else INK, i > 0, 13.5)
+        f.t(TX + 150, y, b, BL if i else GY, i > 0, 13.5)
+        f.t(TX + 270, y, c, OR if i else GY, i > 0, 13.5)
+    f.t(TX, py + 214, "第 1 步单独报：d₀ ＝ ＋2.5e-6，不进窗口", GY, size=13)
+    f.t(TX, py + 238, "两个窗口读的是同一条序列", GY, size=13)
+    f._pan = None
+    # Ⓑ
+    y1 = y0 + PH1 + 20
+    PH2 = 330
+    py2 = f.panel(0, y1, W, PH2, "Ⓑ 从 K 份运行到一个 r（第二次迁移，TPU 自比，FSDP 改纯数据并行，前 300 步）", OR)
+    bx = [20, 300, 600, 900, 1160]
+    top = py2 + 24
+    lab = [("GPU 重跑 8 份", "同一设置"), ("两两配对", "C(8,2) ＝ 28 对"), ("每对算三个统计", "同窗口、同分母、去第 1 步"), ("各取 28 对里最大", "→ 三个 N"), ("剔除逐位相同的对", "不足 3 对最多待定")]
+    for i, (a, b) in enumerate(lab):
+        f.box(bx[i], top, 230, 56, "#fff", GY2, 8, sw=1.3, dash="4 3" if i == 4 else None)
+        f.t(bx[i] + 115, top + 24, a, INK, True, 13.5, "middle")
+        f.t(bx[i] + 115, top + 44, b, GY, size=12.5, anchor="middle")
+        if i < 3:
+            f.line(bx[i] + 232, top + 28, bx[i + 1] - 4, top + 28, GY, 1.4)
+    yt = top + 96
+    f.t(20, yt, "被测的三个统计 ÷ N", INK, True, 14)
+    f.t(330, yt, "带符号均值", GY, size=13, anchor="middle")
+    f.t(560, yt, "MARE", GY, size=13, anchor="middle")
+    f.t(790, yt, "最大单步", GY, size=13, anchor="middle")
+    f.t(990, yt, "一项检查取最大", OR, True, 13, "middle")
+    for i, (name, a, b, c) in enumerate(DP8):
+        y = yt + 34 + i * 40
+        f.t(20, y, name, INK, True, 13.5)
+        rs = []
+        for j, (num, den, r) in enumerate((a, b, c)):
+            rs.append(r)
+            f.t(330 + j * 230, y, "%s ÷ %s ＝ %.2f" % (_e(num), _e(den), r), RD if r > 1 else INK, r > 1, 13, "middle")
+        f.t(990, y, "%.2f" % max(rs), RD if max(rs) > 1 else INK, True, 14, "middle")
+    f.t(20, yt + 34 + 3 * 40, "其余 5 项都 ≤ 1", GY, size=13)
+    f.box(1100, yt + 10, 270, 120, "#fff", OR, 8, sw=1.6)
+    f.t(1235, yt + 44, "一次比较取最大", OR, True, 14, "middle")
+    f.t(1235, yt + 84, "2.62", RD, True, 26, "middle", big=True)
+    f.t(1235, yt + 112, "> 2：超出刻度", RD, size=13, anchor="middle")
+    f._pan = None
+    yb = f.band(y1 + PH2 + 20, "ok", "照着这四步就能自己算：dₜ → 窗口里三个统计 → 各除以 N → 检查、比较两级各取最差", [
+        "三处领头的都是带符号均值，MARE 和最大单步只略高于噪声：这是系统偏差的样子（loss 持续偏高、梯度范数持续偏低）。",
+        "代价：N 是有限几对里的最大值，份数少会偏窄；一次比较看的数多，纯噪声也常落进 1–2。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 Ⓐ 实测：混元 3 截 4 层，TPU v5p 第一次 1000 步运行对 GPU 第一份，逐步 loss 相对差 dₜ ＝（TPU − GPU）÷ GPU；全程（第 2–1000 步）带符号均值 −1.30e-4、MARE 1.53e-4、最大单步 6.65e-4（第 380 步）；"
+               "后段（第 301–1000 步）−1.66e-4、1.79e-4、同一步；第 1 步 ＋2.5e-6 单独报。",
+               "📌 Ⓑ 实测：第二次迁移小尺寸模型，TPU 自比「FSDP 8 改纯数据并行 8」对 TPU golden，前 300 步；N 是 GPU 同设置 8 份两两 28 对的上限；分母一律用参照（梯度范数也是，对齐记录 2026-11-10 起统一）。"
+               "主 loss 全程 ＋5.58e-6 ／ 3.01e-6、8.84e-6 ／ 6.72e-6、3.70e-5（第 273 步）／ 4.53e-5；后段 ＋9.22e-6 ／ 4.54e-6；梯度范数 −2.60e-4 ／ 9.92e-5、5.23e-4 ／ 3.85e-4、1.84e-3（第 28 步）／ 2.24e-3。带符号均值判定时取绝对值，正负号另看方向。",
+               "⚠️ 两块数据来自两个模型：上块是混元 3（为了用一条完整的 1000 步序列），下块是第二次迁移（为了有一份完整公开的算例表）。")
+    f.save("fig9-rpipe.svg", yb + 14)
+
+
 fig_loo()
 fig_integrator()
 fig_twoaxis()
+fig_rpipe()
