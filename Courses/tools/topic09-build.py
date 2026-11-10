@@ -785,6 +785,9 @@ __FIG_REGRESS__
   <tr><td>升级依赖</td><td>框架、编译器、kernel 库、镜像、编译开关</td><td>先要求逐位；不逐位按执行级判，并做归因</td></tr>
   </tbody></table>
   <p>回归失败了，先补跑一次上次通过的那个提交：它也不逐位，变的是环境（镜像、硬件）；它逐位，再在两次提交之间二分。</p>
+  <p><b>改完先比程序指纹。</b>TPU 上同一个程序逐位可复现（§10.1），所以最便宜的一步是只编译、不训练，比训练步编译后程序的指纹：一样，结果就一定逐位相同，回归直接过；不一样，再跑 300 步看档。指纹加上噪声尺子和 FP64，还抓到过一个编译器的真 bug：</p>
+__FIG_BUG__
+  <p>修法只在那三样同时成立时生效；golden 用修后的代码重跑逐位不变、程序指纹也不变 —— 修 bug 的改动自己先过了「数学不变」那一行。</p>
   <details class="foldfig"><summary><b>为什么标定要绑死版本</b>：PyTorch 官方不保证跨版本可复现</summary>
   <p>PyTorch 自己的文档就写明，不保证跨版本、跨提交、跨平台的结果完全可复现。所以噪声标定和上一次全过的运行都要绑死版本。</p></details>
 
@@ -1033,6 +1036,8 @@ FIGS = {
         '<b>右边三根红条，都是在 BF16 里多加了几次。</b><br><em>左块卡数、列数画成 4 是示意。</em>'),
     "__FIG_TEMPER__": ("fig-temper", "fig9-temper.svg", "topic09-fig-temper.py",
         '<b>蓝点挤在 1 附近，红点只有十个。</b><br><em>点竖着错开只为不重叠；横轴对数。</em>'),
+    "__FIG_BUG__": ("fig-bug", "fig9-bug.svg", "topic09-fig-bug.py",
+        '<b>左边：一样就不用跑。右边：七个红叉，是编译器丢掉的梯度。</b><br><em>8 张卡、每卡 2 个微批是这次的实际设置。</em>'),
     "__FIG_LOO__": ("fig-loo", "fig9-loo.svg", "topic09-fig-yardstick.py",
         '<b>灰点是纯噪声，一大片落进黄区。</b><br><em>一个点是一种轮换：一份当被测、一份当基线，其余几份当尺子。</em>'),
     "__FIG_BASELINE__": ("fig-baseline", "fig9-baseline.svg", "topic09-fig-series.py",

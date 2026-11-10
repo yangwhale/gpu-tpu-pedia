@@ -8451,6 +8451,115 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>升级依赖</td><td>框架、编译器、kernel 库、镜像、编译开关</td><td>先要求逐位；不逐位按执行级判，并做归因</td></tr>
   </tbody></table>
   <p>回归失败了，先补跑一次上次通过的那个提交：它也不逐位，变的是环境（镜像、硬件）；它逐位，再在两次提交之间二分。</p>
+  <p><b>改完先比程序指纹。</b>TPU 上同一个程序逐位可复现（<a href="#s10-1">§10.1</a>），所以最便宜的一步是只编译、不训练，比训练步编译后程序的指纹：一样，结果就一定逐位相同，回归直接过；不一样，再跑 300 步看档。指纹加上噪声尺子和 FP64，还抓到过一个编译器的真 bug：</p>
+<figure class="fbox fwide" id="fig-bug"><svg viewBox="0 0 1400 664" width="100%" role="img" aria-label="两块。左块：改完代码先只编译，比训练步编译后程序的指纹。起名字、拆函数、乘法换顺序、求平均写成求和再除、除以 n 换成乘 1/n、换梯度裁剪写法，编出来的程序一模一样，结果一定逐位相同，不用跑；x 乘 x 代替平方、einsum 换广播乘、除以平方根代替乘倒数平方根，程序变了，跑 300 步，r 都在 1 附近。右块：八张卡、每张卡两个微批的梯度格子。正常时十六格都加进来；编译器把跨卡求和挪出循环、又在循环里把 0 号以外的卡清零以后，1 到 7 号卡的第一个微批全丢了：词嵌入梯度只剩 0.51 倍，四分之一的行整行为零，r 611。修好以后 r 0.98。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">改完先比指纹；工具抓到的一个真 bug</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：程序一样就一定逐位，省掉一次训练；右：一个只在「数据并行 ＋ 梯度累积 ＋ 词嵌入梯度 FP32 累加」同时成立时出现的编译器 bug（第二次迁移，实测）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">逐位相同</text>
+<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">程序变了：跑 300 步看档</text>
+<rect x="340.4" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="361" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">被清零的梯度</text>
+<rect x="0" y="102" width="640" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="640" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="640" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 改完先只编译，比程序指纹</tspan></text>
+<rect x="24" y="152" width="160" height="46" rx="8" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="104" y="181" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改了一处代码</tspan></text>
+<line x1="184" y1="175" x2="230" y2="175" stroke="#5f6368" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="234" y="152" width="180" height="46" rx="8" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="324" y="181" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只编译，不训练</tspan></text>
+<line x1="414" y1="175" x2="456" y2="175" stroke="#5f6368" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="460" y="152" width="156" height="46" rx="8" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="538" y="181" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">比程序指纹</tspan></text>
+<line x1="538" y1="198" x2="160" y2="236" stroke="#1e8e3e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="538" y1="198" x2="470" y2="236" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="24" y="240" width="290" height="250" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="40" y="266" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一样 → 一定逐位相同，不用跑</tspan></text>
+<text class="svgsm" x="44" y="300" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· 给中间值起名字</text>
+<text class="svgsm" x="44" y="330" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· 拆出一个函数</text>
+<text class="svgsm" x="44" y="360" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· 乘法换个顺序</text>
+<text class="svgsm" x="44" y="390" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· 求平均写成求和再除</text>
+<text class="svgsm" x="44" y="420" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· 除以 n 换成乘 1/n</text>
+<text class="svgsm" x="44" y="450" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· 梯度裁剪换写法</text>
+<rect x="330" y="240" width="286" height="250" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="346" y="266" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不一样 → 跑 300 步看档</tspan></text>
+<text class="svgsm" x="350" y="300" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· x·x 代替 square(x)</text>
+<text class="svgsm" x="600" y="300" fill="#174ea6" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">r 1.09</tspan></text>
+<text class="svgsm" x="350" y="330" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· einsum 换广播乘</text>
+<text class="svgsm" x="600" y="330" fill="#174ea6" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">r 1.10</tspan></text>
+<text class="svgsm" x="350" y="360" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">· ÷√ 代替 ×1/√</text>
+<text class="svgsm" x="600" y="360" fill="#174ea6" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">r 0.98</tspan></text>
+<text class="svgsm" x="346" y="410" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">程序不一样，也可能逐位</text>
+<text class="svgsm" x="346" y="432" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">（reduce-scatter 交给 SparseCore）</text>
+<rect x="664" y="102" width="736" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="664" y="102" width="736" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="664" y="104" width="736" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="664" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="678" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 编译器把跨卡求和挪出了累积循环</tspan></text>
+<text class="svgsm" x="688" y="204" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">微批 1</tspan></text>
+<text class="svgsm" x="688" y="250" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">微批 2</tspan></text>
+<text class="svgsm" x="842" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡0</text>
+<rect x="814" y="186" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="814" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="904" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡1</text>
+<rect x="876" y="186" width="56" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0" stroke-dasharray="4 3"/>
+<line x1="884" y1="194" x2="924" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="924" y1="194" x2="884" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="876" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="966" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡2</text>
+<rect x="938" y="186" width="56" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0" stroke-dasharray="4 3"/>
+<line x1="946" y1="194" x2="986" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="986" y1="194" x2="946" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="938" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1028" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡3</text>
+<rect x="1000" y="186" width="56" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0" stroke-dasharray="4 3"/>
+<line x1="1008" y1="194" x2="1048" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1048" y1="194" x2="1008" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="1000" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1090" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡4</text>
+<rect x="1062" y="186" width="56" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0" stroke-dasharray="4 3"/>
+<line x1="1070" y1="194" x2="1110" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1110" y1="194" x2="1070" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="1062" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1152" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡5</text>
+<rect x="1124" y="186" width="56" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0" stroke-dasharray="4 3"/>
+<line x1="1132" y1="194" x2="1172" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1172" y1="194" x2="1132" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="1124" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1214" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡6</text>
+<rect x="1186" y="186" width="56" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0" stroke-dasharray="4 3"/>
+<line x1="1194" y1="194" x2="1234" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1234" y1="194" x2="1194" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="1186" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1276" y="176" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">卡7</text>
+<rect x="1248" y="186" width="56" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0" stroke-dasharray="4 3"/>
+<line x1="1256" y1="194" x2="1296" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1296" y1="194" x2="1256" y2="214" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="1248" y="232" width="56" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="688" y="302" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">循环里每一圈都对「卡号 ≠ 0」的卡把累加器清零，求和挪到了循环外面：</text>
+<text class="svgsm" x="688" y="326" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">1–7 号卡只剩最后一个微批，0 号卡完整。</text>
+<text class="svgsm" x="704" y="364" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">词嵌入梯度范数</text>
+<text class="svgsm" x="1064" y="364" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.51 倍</tspan></text>
+<text class="svgsm" x="704" y="392" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">有梯度的行里整行为零</text>
+<text class="svgsm" x="1064" y="392" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2829／10911（26%）</tspan></text>
+<text class="svgsm" x="704" y="420" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">离 FP64</text>
+<text class="svgsm" x="1064" y="420" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">远 130 倍</tspan></text>
+<text class="svgsm" x="704" y="448" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">300 步曲线 r</text>
+<text class="svgsm" x="1064" y="448" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">611</tspan></text>
+<text class="svgsm" x="688" y="486" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修法：每个微批的梯度累加前加一道屏障，挡住这次挪动 → r 0.98；golden 重跑逐位不变</tspan></text>
+<rect x="0" y="542" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="542" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="542" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="569" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">便宜的先做：先比程序指纹，再跑 300 步；尺子和 FP64 一起看，连编译器的 bug 都能抓出来</tspan></text>
+<text class="svgsm" x="20" y="600" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">那个 bug 的读数一点不含糊：梯度少一半、四分之一的行整行为零、r 611。少了任何一样条件（不累积、不开开关、改成 FSDP）都正常。</text>
+<text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：指纹只能证明「没变」；变了以后是好是坏，仍要跑曲线、对 FP64。</text>
+</svg><figcaption><b>左边：一样就不用跑。右边：七个红叉，是编译器丢掉的梯度。</b><span class="capmore"><br><em>8 张卡、每卡 2 个微批是这次的实际设置。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，TPU v5p 自比）：指纹 ＝ 训练步优化后程序去掉元数据和源码位置表后的哈希。起名字、拆函数、乘法换序、mean 换 sum/n、除以 n 换乘 1/n、换梯度裁剪写法，程序相同、结果逐位；x·x 代替 lax.square、einsum 换广播乘、x/sqrt 代替 x·rsqrt，程序不同，300 步 r 1.09 ／ 1.10 ／ 0.98。reduce-scatter 交给 SparseCore 程序不同、结果逐位。</p>
+<p>📌 bug：纯数据并行 8、每设备微批 1 × 累积 2、词嵌入梯度 FP32 累加三样同时成立。编译后的循环体里有一条 select(卡号, 0, 累加器)，这份 FP32 梯度只有 1 次跨卡求和（BF16 版每个微批一次，共 2 次）。第 1 步词嵌入梯度范数是正确值的 0.51 倍，正确值里有梯度的 10911 行中 2829 行整行为零，离 FP64 远 130 倍；raw 梯度范数 6.19（正确 6.36）。修法：三者同时成立时每个微批的梯度累加前加 optimization_barrier；修后纯数据并行 ＋ FP32 累加词嵌入梯度离 FP64 3.79e-3、梯度范数 6.3596（FP64 6.3594）、300 步 r 0.98；golden 用修后代码重跑逐位相同、程序相同。</p>
+<p>⚠️ 卡数画 8、微批画 2 是这次的实际设置；「求和挪到循环外、循环里清零」是从编译后程序读出来的。</p></details></figure>
+  <p>修法只在那三样同时成立时生效；golden 用修后的代码重跑逐位不变、程序指纹也不变 —— 修 bug 的改动自己先过了「数学不变」那一行。</p>
   <details class="foldfig"><summary><b>为什么标定要绑死版本</b>：PyTorch 官方不保证跨版本可复现</summary>
   <p>PyTorch 自己的文档就写明，不保证跨版本、跨提交、跨平台的结果完全可复现。所以噪声标定和上一次全过的运行都要绑死版本。</p></details>
 
