@@ -1,0 +1,120 @@
+# -*- coding: utf-8 -*-
+r"""专题九 · 第九节补的「第二次迁移成绩单」（第二次迁移的新材料）。
+
+fig9-hy4  回答：同一套方法换一个模型再走一遍，结果怎样？
+          Ⓐ 小尺寸模型 L0–L4 全套、1000 步 9 项：尺子 GPU 8 份时过 7、待定 2（梯度范数 1.25、路由偏置标准差 1.14）；
+             尺子扩到 16 份以后 9 项全过（对齐记录只作旁注，判档仍按 8 份）。
+          Ⓑ GPU 自己换机器数、换切法（1 台 → 2 台、4 台，DP／EP／PP）：对单机刻度最大 1.76 倍，没有超出；学习率大 10% 的正对照 r 4149。
+          Ⓒ 真实宽度三层（中间结果）：第 1 步主 loss 对 CPU FP64 GPU 偏高、TPU 偏低；前 164 步 TPU 几条曲线同号偏低。1000 步没跑完，只作早期信号。
+          数据：对齐记录 alignments/01-mini（results/t1zga-l4.results.json、gpu-noise/results/t1zga-l4-n16.results.json）、
+                alignments/05-gpu-scale/results/*-vs-single-node.results.json、alignments/06-rw3（README、results/step1-loss-vs-fp64.json、rw3-l4-first164），全部实测。
+"""
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+
+W = 1400
+MINI = [("主 loss（全程）", 0.977, 0.899), ("主 loss（后段）", 0.954, 0.868), ("MTP loss（全程）", 0.848, 0.848),
+        ("MTP loss（后段）", 0.846, 0.846), ("索引器蒸馏 loss", 0.848, 0.767), ("梯度范数", 1.246, 0.999),
+        ("参数范数", 0.444, 0.435), ("路由偏置均值", 0.808, 0.391), ("路由偏置标准差", 1.141, 0.912)]
+assert sum(1 for _n, a, _b in MINI if a <= 1) == 7 and all(b <= 1 for _n, _a, b in MINI)
+GPUSCALE = [("1 台，原设置重跑", 0.93), ("1 台，EP 8", 0.95), ("2 台 DP16＋EP4（8 份）", [1.76, 0.90, 1.59, 0.95, 0.97, 1.17, 1.00, 0.81]),
+            ("2 台 DP16＋EP16", 0.89), ("2 台 PP2", 1.25), ("4 台 PP2", 1.50)]
+GPU_POS = 4149.37                     # 正对照：同 2 台设置、学习率大 10%
+RW3_GPU = (5.1e-5, 5.8e-5)            # 第 1 步主 loss 对 CPU FP64：GPU 4 份重跑的范围（相对差）
+RW3_GPU_A, RW3_TPU = 5.76e-5, -9.87e-5
+assert abs(abs(RW3_TPU) / RW3_GPU_A - 1.71) < 0.01
+RW3_RATIO = 17.8                       # 前 164 步主 loss 带符号均值 ÷ 同窗口 GPU 刻度
+
+
+def fig_hy4():
+    f = Fig(W, "三块。左块九对横条：第二次迁移的小尺寸模型 1000 步九项检查，浅色是尺子 GPU 8 份时的 r，深色是 16 份时的 r。"
+               "8 份时梯度范数 1.25、路由偏置标准差 1.14 越过 1，其余七项过；16 份时九项都在 1 以内。"
+               "中块：GPU 自己换机器数和切法，每个点一次运行对单机刻度的最大倍数，最大 1.76，没有超过 2；学习率大 10% 的正对照是 4149 倍。"
+               "右块：真实宽度三层，第 1 步主 loss 对 64 位真值，GPU 四份都偏高约 5.5e-5，TPU 偏低 9.9e-5；前 164 步 TPU 同号偏低，主 loss 是刻度的 17.8 倍。标着中间结果。")
+    y0 = f.header("第二次迁移：同一套方法再走一遍",
+                  "左：小尺寸模型全套对齐的 1000 步成绩；中：GPU 自己扩机器、换切法；右：真实宽度截层的早期信号（中间结果）",
+                  [("#c6dafc", "尺子 8 份"), (BL, "尺子 16 份"), (GY2, "GPU 运行"), (RD, "TPU")])
+    PH = 470
+    AW, BW = 520, 430
+    # Ⓐ
+    py = f.panel(0, y0, AW, PH, "Ⓐ 小尺寸全套，1000 步九项（实测）", BL)
+    lx, x0, x1 = 18, 190, AW - 40
+
+    def X(r):
+        return x0 + r / 1.5 * (x1 - x0)
+    f.box(X(1), py + 14, X(1.5) - X(1), 9 * 40 + 6, "#fef7e0", "#fef7e0", 0)
+    f.line(X(1), py + 10, X(1), py + 14 + 9 * 40 + 10, GY, 1.2, dash="4 3", arrow=False)
+    for i, (name, a, b) in enumerate(MINI):
+        y = py + 20 + i * 40
+        f.t(x0 - 10, y + 18, name, INK, a > 1, 13, "end")
+        f.box(x0, y + 4, X(a) - x0, 13, "#c6dafc", "#c6dafc", 2)
+        f.box(x0, y + 17, X(b) - x0, 13, BL, BL, 2)
+        h = lambda v: "%.2f" % (v + 1e-9)          # 四舍五入（0.435 → 0.44）
+        f.t(X(max(a, b)) + 6, y + 18, (h(a) + " → " + h(b)) if a > 1 else h(b), RD if a > 1 else GY, a > 1, 12.5)
+    f.t(X(1), py + 14 + 9 * 40 + 30, "1", GY, size=13, anchor="middle")
+    f.t(lx, py + PH - 70, "8 份：过 7、待定 2；16 份：9 项全过", INK, True, 13.5)
+    f.t(lx, py + PH - 48, "（对齐记录只把 16 份当旁注，判档仍按 8 份）", GY, size=12.5)
+    f._pan = None
+    # Ⓑ
+    BX0 = AW + 22
+    py2 = f.panel(BX0, y0, BW, PH, "Ⓑ GPU 换机器数、换切法（实测）", GY)
+    gx0, gx1 = BX0 + 190, BX0 + BW - 24
+
+    def GX(r):
+        return gx0 + r / 2.2 * (gx1 - gx0)
+    f.box(GX(0), py2 + 14, GX(1) - GX(0), 6 * 46, "#e6f4ea", "#e6f4ea", 0)
+    f.box(GX(1), py2 + 14, GX(2) - GX(1), 6 * 46, "#fef7e0", "#fef7e0", 0)
+    for v in (0, 1, 2):
+        f.t(GX(v), py2 + 14 + 6 * 46 + 20, "%d" % v, GY, size=13, anchor="middle")
+    for i, (name, v) in enumerate(GPUSCALE):
+        y = py2 + 14 + i * 46 + 23
+        f.t(gx0 - 8, y + 5, name, INK, False, 12.5, "end")
+        for k, u in enumerate(v if isinstance(v, list) else [v]):
+            f.box(GX(u) - 5, y - 5 + (k % 2) * 4 - 2, 10, 10, GY2, INK, 5)
+    f.t(BX0 + 18, py2 + 14 + 6 * 46 + 52, "学习率大 10%% 的正对照：%d 倍（出了图）" % round(GPU_POS), RD, True, 13)
+    f.t(BX0 + 18, py2 + 14 + 6 * 46 + 76, "存档续跑：跟不断开逐位相同", GR, True, 13)
+    f.t(BX0 + 18, py2 + 14 + 6 * 46 + 98, "（两台机器，上万个状态张量逐个比）", GY, size=12.5)
+    f._pan = None
+    # Ⓒ
+    CX0 = AW + BW + 44
+    py3 = f.panel(CX0, y0, W - CX0, PH, "Ⓒ 真实宽度三层：早期信号", OR, tag="中间结果")
+    cx0, cx1 = CX0 + 30, W - 40
+    lo, hi = -1.2e-4, 0.9e-4
+
+    def CX(v):
+        return cx0 + (v - lo) / (hi - lo) * (cx1 - cx0)
+    f.t(CX0 + 16, py3 + 24, "第 1 步主 loss 对 CPU FP64 的相对差", INK, True, 13)
+    yl = py3 + 80
+    f.line(cx0, yl, cx1, yl, LINE, 1.2, arrow=False)
+    f.line(CX(0), yl - 18, CX(0), yl + 18, INK, 1.4, arrow=False)
+    f.t(CX(0), yl + 36, "0 ＝ 真值", GY, size=12.5, anchor="middle")
+    f.box(CX(RW3_GPU[0]), yl - 7, CX(RW3_GPU[1]) - CX(RW3_GPU[0]), 14, GY2, GY2, 3)
+    f.t(CX(5.5e-5), yl - 16, "GPU 4 份：偏高", GY, True, 12.5, "middle")
+    f.box(CX(RW3_TPU) - 6, yl - 6, 12, 12, RD, INK, 6)
+    f.t(CX(RW3_TPU), yl - 16, "TPU：偏低", RD, True, 12.5, "middle")
+    f.t(CX0 + 16, yl + 66, "离真值：TPU ÷ GPU ＝ 1.71", INK, True, 13)
+    f.t(CX0 + 16, yl + 110, "前 164 步：TPU 几条曲线同号偏低", INK, True, 13)
+    f.t(CX0 + 16, yl + 134, "主 loss 带符号均值 ＝ 刻度的 %.1f 倍" % RW3_RATIO, RD, True, 13)
+    f.t(CX0 + 16, yl + 166, "方向跟第 1 步一致；落在刻度", GY, size=12.5)
+    f.t(CX0 + 16, yl + 186, "最窄的训练早期", GY, size=12.5)
+    f.box(CX0 + 16, yl + 214, W - CX0 - 48, 92, "#fff", OR, 8, sw=1.4, dash="5 3")
+    f.t(CX0 + 30, yl + 240, "1000 步还没跑完：", OR, True, 13)
+    f.t(CX0 + 30, yl + 262, "整片抢占式 TPU 被收走三次，", GY, size=12.5)
+    f.t(CX0 + 30, yl + 284, "改成分段存档续跑", GY, size=12.5)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "换一个模型，方法照样走得通：小尺寸全套对上，GPU 自己扩机器也守得住刻度", [
+        "真实宽度上又冒出新的差，方向从第 1 步就有，正在查 —— 判档要等 1000 步跑完，这里只是早期信号。",
+        "代价：小尺寸那 2 项待定是在 8 份尺子下判的；换 16 份全过，可份数是看到结果后才扩的，对齐记录只当旁注。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 Ⓐ 小尺寸（约 4.3 亿参数，保留新模型全部结构、缩宽度和层数，随机初始化）TPU v5p 8 设备 ↔ B200×8，1000 步，被测对 GPU 基线一份；每格是三个统计里最差的 r。"
+               "8 份 28 对：主 loss 0.98、后段 0.95、MTP 0.85、后段 0.85、索引器蒸馏 0.85、梯度范数 1.25（带符号均值 TPU −4.39e-4，上限 3.52e-4）、参数范数 0.44、路由偏置均值 0.81、标准差 1.14（−1.82e-3，上限 1.60e-3）；"
+               "16 份 120 对：0.90 ／ 0.87 ／ 0.85 ／ 0.85 ／ 0.77 ／ 1.00 ／ 0.44 ／ 0.39 ／ 0.91。两项待定都已定责、接受。",
+               "📌 Ⓑ 对单机 GPU golden 的前 300 步，刻度是单机 8 份两两 28 对；8 项检查取最差倍数。2 台 DP16＋EP4 跑了 8 份（最大 1.76，参数范数）；多机自己的刻度是单机的 1.0–1.3 倍，两组对单机基线没有系统偏移（Welch |t| ≤ 1.3）。"
+               "正对照：同 2 台设置、学习率大 10%，8 项里 7 项超出，最大 4149 倍。存档续跑：确定性模式下「跑 20 步」对「跑 10 步、存、续跑 10 步」，2 台 PP2＋DP8＋EP8 的 8760 个状态张量、真实宽度 2 台的 14512 个状态张量都逐位相同。",
+               "📌 Ⓒ 真实宽度第 0–2 层 ＋ MTP（3.21e10 参数），GPU 2 台跑 1000 步当 golden，TPU v5p 16 片原样回放：第 1 步主 loss 对 CPU FP64 GPU ＋5.76e-5（4 份 ＋5.1e-5 到 ＋5.8e-5）、TPU −9.87e-5；"
+               "前 164 步 9 项里不过 6、待定 2、过 1，主 loss、MTP、索引器蒸馏、参数范数都是 TPU 同号偏低。",
+               "⚠️ Ⓒ 是中间结果：1000 步还没跑完，判档以跑完后的比较为准。")
+    f.save("fig9-hy4.svg", yb + 14)
+
+
+fig_hy4()
