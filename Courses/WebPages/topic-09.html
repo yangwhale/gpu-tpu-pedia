@@ -8390,6 +8390,100 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>重算策略</b>：数学上应当逐位相同，三种实测都不逐位 —— 编译器按不同的保存方案重排了融合和通信，求和顺序跟着变，跟换切分是同一个量级。</li>
     <li><b>第 1 步一样、后面分开，不一定是 bug</b>：把 all-reduce 交给专用的通信单元（SparseCore），第 1 步 loss 逐位不变，可 14 个专家权重的梯度变了，更新以后第 2 步起分开；300 步 r 1.03。一次集合通信换一条硬件路径，就能造出这个现象。</li>
   </ul></details>
+  <p><b>这把尺子能抓多小？</b>反过来故意埋 bug、扫大小：学习率偏大 1e-4 就抓得到，偏 3e-5 以下跟重跑分不开。也有尺子量不出来的：</p>
+<figure class="fbox fwide" id="fig-sens"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="两块。左块是对数对数图：横轴是故意埋的 bug 有多大，纵轴是 300 步曲线的 r。蓝线是学习率偏大，1e-4 时 r 4.1，之后每大十倍 r 也大十倍；3e-5 和 1e-5 时 r 只有 1.06 和 1.21，跟纯噪声分不开。橙色实线是 MTP loss 的权重偏大：对主 loss 的影响要到 1e-2 才显出来（r 6.2），可记下的 MTP loss 本身 1e-3 时 r 就是 50。右块五根横条：五个动了精度的改动跑满 1000 步，r 1.62、1.38、1.06、1.05、0.97，都没超过纯噪声最大值 1.82。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">尺子能抓多小：学习率偏 1e-4 抓得到，偏 3e-5 就分不开</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：故意埋 bug、扫大小（300 步，对数对数）；右：尺子量不出来的几个精度改动（1000 步，GPU 16 份当刻度）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">学习率 × (1 ＋ ε)</text>
+<rect x="187.0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="208" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">MTP loss 权重 × (1 ＋ ε)：主 loss</text>
+<rect x="503.92" y="63" width="14" height="14" rx="3" fill="#f6c08d" stroke="#f6c08d" stroke-width="1.0"/>
+<text class="svgsm" x="524" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">同上：记下的 MTP loss</text>
+<rect x="722.28" y="63" width="14" height="14" rx="3" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="743" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">纯噪声能到的范围</text>
+<rect x="0" y="102" width="780" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="780" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="780" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="780" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 故意埋 bug：r 跟 bug 的大小成正比，太小就淹进噪声</tspan></text>
+<rect x="90" y="428.72875056130647" width="650" height="53.27124943869353" rx="0" fill="#e8eaed" stroke="#e8eaed" stroke-width="1.0"/>
+<text class="svgsm" x="732" y="446" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯噪声能到 2.47（300 步）</tspan></text>
+<line x1="132.51780671053916" y1="152" x2="132.51780671053916" y2="482" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="132" y="502" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1e-5</text>
+<line x1="273.7589033552696" y1="152" x2="273.7589033552696" y2="482" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="273" y="502" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1e-4</text>
+<line x1="415.0" y1="152" x2="415.0" y2="482" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="415" y="502" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1e-3</text>
+<line x1="556.2410966447304" y1="152" x2="556.2410966447304" y2="482" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="556" y="502" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1e-2</text>
+<line x1="697.4821932894608" y1="152" x2="697.4821932894608" y2="482" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="697" y="502" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1e-1</text>
+<line x1="90" y1="458.90323046589725" x2="740" y2="458.90323046589725" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="463" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="90" y1="382.17742284942295" x2="740" y2="382.17742284942295" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="387" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
+<line x1="90" y1="305.45161523294865" x2="740" y2="305.45161523294865" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="310" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">100</text>
+<line x1="90" y1="228.72580761647433" x2="740" y2="228.72580761647433" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="233" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">1000</text>
+<line x1="90" y1="152.0" x2="740" y2="152.0" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="82" y="157" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">10000</text>
+<text class="svgsm" x="415" y="526" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">埋进去的 bug 有多大：ε</text>
+<text class="svgsm" x="14" y="156" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">r</tspan></text>
+<line x1="231.24109664473042" y1="434.9836636988404" x2="740.0" y2="158.61270178121197" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<path d="M 415.00 328.47 L 556.24 251.70 L 697.48 175.03" fill="none" stroke="#f6c08d" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="5 4"/>
+<path d="M 415.00 463.16 L 556.24 398.21 L 697.48 329.91" fill="none" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M 132.52 452.55 L 199.91 456.96 L 273.76 411.81 L 415.00 331.15 L 556.24 254.50 L 697.48 178.57" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<rect x="411.0" y="324.4685087522928" width="8" height="8" rx="4" fill="#fff" stroke="#f6c08d" stroke-width="1.8"/>
+<rect x="552.2410966447304" y="247.69951477482823" width="8" height="8" rx="4" fill="#fff" stroke="#f6c08d" stroke-width="1.8"/>
+<rect x="693.4821932894608" y="171.0264020348215" width="8" height="8" rx="4" fill="#fff" stroke="#f6c08d" stroke-width="1.8"/>
+<rect x="410.0" y="458.1628422818842" width="10" height="10" rx="5" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="551.2410966447304" y="393.21400089938436" width="10" height="10" rx="5" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="692.4821932894608" y="324.9086387301347" width="10" height="10" rx="5" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="127.01780671053916" y="447.05145606953874" width="11" height="11" rx="5" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<rect x="194.40693595965405" y="451.4616175160241" width="11" height="11" rx="5" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<rect x="268.2589033552696" y="406.3057209336879" width="11" height="11" rx="5" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<rect x="409.5" y="325.6461876671435" width="11" height="11" rx="5" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<rect x="550.7410966447304" y="248.99828146821156" width="11" height="11" rx="5" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<rect x="691.9821932894608" y="173.0689193032744" width="11" height="11" rx="5" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="283" y="429" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1e-4：r 4.1，抓得到</tspan></text>
+<text class="svgsm" x="122" y="430" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3e-5 以下：分不开</tspan></text>
+<text class="svgsm" x="403" y="314" fill="#c26401" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">记下的 MTP loss：跟蓝线几乎重合</tspan></text>
+<text class="svgsm" x="425" y="483" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">训练效果要到 1e-2 才显</tspan></text>
+<text class="svgsm" x="604" y="275" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums">r ≈ 4.1e4 × ε</text>
+<rect x="804" y="102" width="596" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="804" y="102" width="596" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="804" y="104" width="596" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="804" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="818" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 动了精度，尺子却量不出来（1000 步）</tspan></text>
+<text class="svgsm" x="828" y="176" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">少开「投影照 GPU 的 FP32 累加」</tspan></text>
+<rect x="828" y="186" width="377.0181818181818" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1213" y="202" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.62</tspan></text>
+<text class="svgsm" x="828" y="238" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SwiGLU 少舍一次</tspan></text>
+<rect x="828" y="248" width="321.1636363636362" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1157" y="264" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.38</tspan></text>
+<text class="svgsm" x="828" y="300" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">索引器打分不用真 FP32</tspan></text>
+<rect x="828" y="310" width="246.69090909090914" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1082" y="326" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.06</tspan></text>
+<text class="svgsm" x="828" y="362" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">指数等函数回到 TPU 默认近似</tspan></text>
+<rect x="828" y="372" width="244.36363636363626" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1080" y="388" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.05</tspan></text>
+<text class="svgsm" x="828" y="424" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Muon 正交化改 FP32</tspan></text>
+<rect x="828" y="434" width="225.74545454545455" height="20" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1061" y="450" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.97</tspan></text>
+<line x1="1251.3541818181818" y1="154" x2="1251.3541818181818" y2="502" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<text class="svgsm" x="1245" y="518" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯噪声最大 1.82</tspan></text>
+<rect x="0" y="552" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="552" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="552" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">全局的系统偏差，相对大小 1e-4 就抓得到；再小，或者只动一小块，曲线就看不出来</tspan></text>
+<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以记下的每一项 loss 都要逐项比，别只看总 loss：只动一部分梯度的 bug，训练效果藏得住，记下的那一项藏不住。</text>
+<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：几个动了精度的改动跑到 1000 步也分不开 —— 分不开不等于没影响，这类改动要靠第 1 步对 FP64、或者几个一起关来看累积效果。</text>
+</svg><figcaption><b>蓝线从 1e-4 起斜着往上，左下那两个点埋在灰带里。</b><span class="capmore"><br><em>左块对数对数；右块五根条都没过虚线。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，TPU v5p 自比，300 步对 golden，r 用 GPU 8 份两两 28 对的上限）：学习率 × (1 ＋ ε)，ε ＝ 1e-5 ／ 3e-5 ／ 1e-4 ／ 1e-3 ／ 1e-2 ／ 1e-1，曲线最差 r 1.21 ／ 1.06 ／ 4.11 ／ 46.3 ／ 461 ／ 4505，领头的都是主 loss 带符号均值；ε ≥ 1e-4 时 r ≈ 4.1e4 × ε。MTP loss 权重 × (1 ＋ ε)，ε ＝ 1e-3 ／ 1e-2 ／ 1e-1：主 loss r 0.88 ／ 6.18 ／ 48.0，记下的 MTP loss 本身 50 ／ 502 ／ 5011。另：loss 多乘 1.01（漏除常数），梯度范数 r 93.9、主 loss 5.23。</p>
+<p>📌 右块：对 golden 的 1000 步比较，刻度 GPU 1000 步 16 份两两 120 对，纯噪声（GPU 留一法）最大 1.82；五个都是「动了精度」的改动，300 步时 r 0.91–1.06。</p>
+<p>⚠️ 「抓得到的下限在 3e-5 到 1e-4 之间」只对学习率这类全局偏差、这个模型、300 步成立。</p></details></figure>
+  <p>所以两条用法：<b>记下的每一项 loss 都逐项比</b>，不只看总 loss；<b>动到精度的改动，曲线分不开也要对 FP64 看一眼</b> —— 分不开只说明这把尺子量不出，不说明没影响。</p>
 
   <h3 id="s10-2">10.2　日常回归：逐位优先</h3>
 <figure class="fbox fwide" id="fig-regress"><svg viewBox="0 0 1400 658" width="100%" role="img" aria-label="每天的流程。训练代码的每个改动都要写一栏数值影响声明，然后跑一轮回归，对上一次全部通过的 TPU 运行比。逐位相同就通过，指针前移。不逐位就看声明：写了数学不变的，退回；执行级的改动或升级依赖，用 TPU 自己的执行噪声（TPU 28 对）判；数学级的改动，要对起点那份 golden（①）不变差（这是历史门，本课建议换成最终 golden ⑤），必要时回到验收的某一级重做。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
