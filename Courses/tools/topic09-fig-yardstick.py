@@ -107,4 +107,105 @@ def fig_loo():
     f.save("fig9-loo.svg", yb + 14)
 
 
+import math  # noqa: E402
+import random  # noqa: E402
+
+# ── fig9-integrator：参数范数为什么灵（本课推导 ＋ 示意模拟）──────────────────────────
+#   每一步给一个随机增量（噪声，标准差 1）；被测另外每步多一个固定的小偏 b。累加起来：
+#   噪声的累加按 √t 长（正负抵消），偏差按 t 长（同一个方向）。两条线在 b·t ＝ 2√t，即 t* ＝ (2/b)² 处相交。
+#   参数范数正是这样一个累加器：‖θ‖ 每步的变化 ≈ 这一步更新沿 θ 方向的分量（本课推导，学习率小时成立）。
+INT_B, INT_T, INT_WALKS, INT_SEED = 0.1, 1000, 12, 13
+INT_TSTAR = (2 / INT_B) ** 2
+assert INT_TSTAR == 400
+
+
+def _walk(rng, b):
+    s, out = 0.0, [0.0]
+    for _ in range(INT_T):
+        s += rng.gauss(0, 1) + b
+        out.append(s)
+    return out
+
+
+def fig_integrator():
+    rng = random.Random(INT_SEED)
+    noise = [_walk(rng, 0.0) for _ in range(INT_WALKS)]
+    drift = _walk(rng, INT_B)
+    # 示意要讲得通：被测那条在 t* 之后确实冲出噪声带、之前大多在带里（固定种子下核过）
+    band = lambda t: 2 * math.sqrt(t)
+    assert drift[INT_T] > band(INT_T) * 1.5
+    assert sum(1 for t in range(1, 200) if abs(drift[t]) <= band(t)) > 190
+    first_out = next(t for t in range(1, INT_T + 1) if all(drift[u] > band(u) for u in range(t, INT_T + 1)))
+    assert 350 < first_out < 600, first_out
+    f = Fig(W, "两块。左块：横轴是训练步数 0 到 1000，纵轴是累加起来的差。十二条灰色细线是只有随机噪声的累加，"
+               "像醉汉走路，散开的宽度按步数的平方根长，灰色阴影是正负两倍平方根的噪声带。"
+               "蓝线每步多一个只有噪声十分之一大的固定偏差，前几百步埋在带里，四五百步以后冲出去，越走越远。"
+               "右块：两支一样长的箭头指向不同方向，长度就是参数范数，所以范数分不出它们；"
+               "下面两根条，一组多涨一点、一组少涨一点，平方和加起来不变。")
+    y0 = f.header("参数范数是个累加器：噪声按根号长，偏差按步数长",
+                  "左：示意模拟（固定种子），每步一个随机增量；蓝线每步另多一个固定的小偏，只有噪声的十分之一。右：范数只看长度，看不见方向",
+                  [(GY2, "只有噪声"), (BL, "噪声 ＋ 每步一点固定偏差"), ("#e8eaed", "噪声带 ±2√t")])
+    PH = 400
+    LW = 860
+    py = f.panel(0, y0, LW, PH, "Ⓐ 为什么灵：每步一点点，几百步冲出噪声带", BL)
+    X0, XW, YM, YH = 70, LW - 120, py + 170, 140
+    lim = max(max(abs(v) for v in w) for w in noise + [drift])
+
+    def X(t):
+        return X0 + t / float(INT_T) * XW
+
+    def Y(v):
+        return YM - v / lim * YH
+    up = [(X(t), Y(band(t))) for t in range(0, INT_T + 1, 10)]
+    dn = [(X(t), Y(-band(t))) for t in range(INT_T, -1, -10)]
+    f.poly(up + dn, "#f1f3f4", "none")
+    f.line(X0, YM, X0 + XW, YM, LINE, 1.0, arrow=False)
+    for w in noise:
+        f.path([(X(t), Y(w[t])) for t in range(0, INT_T + 1, 5)], GY2, 0.9, arrow=False)
+    f.path([(X(t), Y(drift[t])) for t in range(0, INT_T + 1, 5)], BL, 2.4, arrow=False)
+    f.line(X(INT_TSTAR), py + 18, X(INT_TSTAR), YM + YH + 6, INK, 1.2, dash="4 3", arrow=False)
+    f.t(X(INT_TSTAR) + 8, py + 34, "t* ＝ (2 ÷ 0.1)² ＝ 400 步", INK, True, 13)
+    f.t(X(INT_T) - 4, Y(drift[INT_T]) - 12, "偏差：∝ t", BL, True, 14, "end")
+    f.t(X(INT_T) - 4, Y(band(INT_T)) + 26, "噪声：∝ √t", GY, True, 14, "end")
+    for t in (0, 250, 500, 750, 1000):
+        f.t(X(t), YM + YH + 28, "%d" % t, GY, size=13, anchor="middle")
+    f.t(X0 + XW, YM + YH + 50, "训练步", GY, size=13, anchor="end")
+    f._pan = None
+    RX = LW + 24
+    py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 盲区：只看长度，不看方向", RD)
+    cx, cy, R = RX + 80, py2 + 175, 120
+    f.path("M %d %d A %d %d 0 0 0 %d %d" % (cx + R, cy, R, R, cx, cy - R), LINE, 1.2, dash="3 3", arrow=False)
+    for ang, col, lab in [(18, GY, "GPU"), (62, BL, "TPU")]:
+        a = math.radians(ang)
+        f.line(cx, cy, cx + R * math.cos(a), cy - R * math.sin(a), col, 2.4)
+        f.t(cx + (R + 14) * math.cos(a), cy - (R + 14) * math.sin(a) + 5, lab, col, True, 14)
+    f.box(cx - 4, cy - 4, 8, 8, INK, INK, 4)
+    f.t(cx + R + 40, cy - 118, "一样长：范数相同", INK, True, 14)
+    f.t(cx + R + 40, cy - 96, "指向不同：模型已经不一样", GY, size=13)
+    by = py2 + 250
+    for i, (lab, d) in enumerate([("A 组", +1), ("B 组", -1)]):
+        y = by + i * 34
+        f.t(RX + 24, y + 15, lab, INK, True, 13)
+        if d > 0:
+            f.box(RX + 80, y, 160, 22, "#e8eaed", "none", 3)
+            f.box(RX + 240, y, 30, 22, OR, "none", 3)
+        else:
+            f.box(RX + 80, y, 130, 22, "#e8eaed", "none", 3)
+            f.box(RX + 210, y, 30, 22, "none", BL, 3, sw=1.4, dash="3 2")
+        f.t(RX + 290, y + 16, "多涨一点" if d > 0 else "少涨一点", GY, size=13)
+    f.t(RX + 24, by + 92, "平方和加起来不变：总范数什么都看不出", RD, True, 13)
+    f._pan = None
+    yb = f.band(py + PH + 20, "ok", "随机的差每一步正负抵消，固定方向的差一步步攒起来：参数范数常常最先冲出噪声", [
+        "混元 3 那次，定案前四项判定里参数范数 3.45 倍、其余三项都在 2 倍以内；案例里的漂移也是它最先露出来。",
+        "代价：范数只是一个长度。方向变了、两组反着偏，它都看不见，所以还要配第 1 步逐张量对 FP64。",
+    ])
+    yb = f.src(yb + 10,
+               "⚠️ 本课推导 ＋ 示意模拟：增量取标准正态（固定种子），蓝线每步多 0.1；噪声累加的标准差是 √t，偏差累加是 0.1·t，"
+               "两者在 0.1·t ＝ 2√t 处相交，t* ＝ 400。真实训练里 b 多大、噪声多宽各不相同，t* 只示意形状。"
+               "参数范数是累加器：‖θ‖² 每步变 2θ·Δθ ＋ ‖Δθ‖²，学习率小时 ‖θ‖ 的变化约等于 Δθ 沿 θ 方向的分量。",
+               "📌 实测锚点：混元 3 定案前第一关参数范数 r 3.45、loss 全程 1.92、尾段 1.29、梯度范数 1.14（判定图）。")
+    f.save("fig9-integrator.svg", yb + 14)
+
+
 fig_loo()
+fig_integrator()
