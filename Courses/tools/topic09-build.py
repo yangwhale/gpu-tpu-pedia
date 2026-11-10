@@ -406,7 +406,8 @@ __ANIM_FLIP__
 </div></section>
 
 ''' + sec("s五", "五", "浮点与硬件：差从哪来") + '''
-  <p class="lead">一次矩阵乘分两步：把数两两相乘，再把乘积加起来。这一节看清楚舍入落在哪一步，两边各自怎么舍。</p>
+  <p class="lead">两边对不上，差只有三种。语义（公式写得不一样）第二节对过了；只换了加法顺序的是噪声，尺子兜住。这一节看剩下的大头：精度 —— 一次矩阵乘把数两两相乘、再把乘积加起来，舍入落在哪一步，两边各自怎么舍。</p>
+__FIG_KINDS__
 
   <h3>5.1　乘是精确的，加才舍入</h3>
 __FIG_FORMATS__
@@ -458,6 +459,9 @@ __ANIM_WINDOWED__
 __FIG_EXCESS__
   <p>excess precision 是 XLA 的一个默认开着的选项：允许结果比程序写的更精确。最常见的表现是融合块里跳过中间那几次「舍到 BF16」，只在出口舍一次。</p>
   <p>混元 3 上关掉它，单层回放里每个张量对 GPU 反而都更远；跑 1000 步，loss 偏移小了一半、参数范数的漂移一点没少 —— 可 loss 这一项对执行方式本来就敏感：只改片上内存上限也挪了 «ARMS_SPREAD_T»，TPU 三种跑法彼此也散开 «ARMS_SPREAD_T»，分不出是不是效果；判据看参数范数，它一点没少。</p>
+  <p>反过来，关掉它也能闯祸。第二次迁移的 TPU 自比里，词嵌入梯度两次「飞出去」（§4.2 末尾）都在这里：</p>
+__FIG_EMBED__
+  <p>词表里的一行，要把用到这个词的每个 token 的梯度都加进来，常常是成百上千次加法。在哪一步用 BF16 加，误差就在哪里攒：纯数据并行时八张卡各加一份整表、再在 BF16 里跨卡相加，离 FP64 远 «EMB_DP_X» 倍；关掉 excess precision，连卡里的散加也每加一次舍一次，远 «EMB_NOEXC_X» 倍。修法是让这份梯度在 FP32 里累加，两种情形都回到 GPU 的水平。</p>
   <p>为什么 TPU 上会有这种「更精确」：一份公开的事故复盘（Anthropic，2025 年 9 月）提到 TPU 的向量单元按 FP32 原生计算，编译器可以把融合块里的一些运算按 FP32 算；v7x 上是否仍然如此，我们没有单独核实。</p>
   <details class="foldfig"><summary><b>一个坑</b>：「先转 BF16 再转回来」会被编译器整个删掉</summary>
   <p>想在 TPU 上把 FP32 权重舍成 BF16 再用，写成「转 BF16、再转回 FP32」两步，excess precision 开着时，编译器会把这一对转换直接消掉，权重根本没舍。
@@ -485,7 +489,7 @@ __FIG_BOUNDARY__
   <tr><td>FP32 超越函数的实现精度（32 位对 32 位）</td><td>TPU 默认的 exp、log、sigmoid、silu 差几十格（§5.8）</td><td>换高精度写法；先量 GPU 实际怎么算</td></tr>
   <tr><td>FP32 里的病态标量</td><td>小数是两个大数相减（§5.7）</td><td>病态只放大；被放大的那一格是谁的，再查</td></tr>
   </tbody></table>
-  <p>另有两类不在这张表里：长求和本身的偏差（张量核的抹零，§5.2）；语义差 —— 同一个量两边定义不同（§2.3 折叠的四处）、测量工具自己错了（§6.2）。排查时另列。</p></details>
+  <p>另有两类不在这张表里：长求和怎么分段（张量核的抹零 §5.2、FP32 一次累加 §8.5），也属精度；语义差 —— 同一个量两边定义不同（§2.3 折叠的四处）、测量工具自己错了（§6.2），排查时另列。</p></details>
   <details class="foldfig"><summary><b>十分钟看代码</b>：grep 哪些词，两行对照怎么写</summary>
   <p>两边代码里搜这些词，每一处都是一个可能的边界：<code>astype</code>、<code>.to(</code>、<code>.float()</code>、<code>.bfloat16()</code>、<code>preferred_element_type</code>、<code>precision=</code>、<code>allow_tf32</code>、<code>NVIDIA_TF32_OVERRIDE</code>、<code>autocast</code>、<code>reduce_precision</code>、<code>dtype=</code>。然后沿前向、反向，每个算子两边各写一行（输入 ／ 乘法精度 ／ 累加 ／ 输出存储 ／ 舍在哪）。</p>
   <p>验的时候：单个算子对 FP64 算 R（§4.2）；第 1 步逐张量梯度对 GPU 重跑的噪声，超出的对 FP64 定责。</p></details>
@@ -1011,6 +1015,10 @@ FIGS = {
         '<b>灰线越散越宽，蓝线一直斜着往上走。</b><br><em>左块是示意模拟；右块两支箭头一样长。</em>'),
     "__FIG_TWOAXIS__": ("fig-twoaxis", "fig9-twoaxis.svg", "topic09-fig-yardstick.py",
         '<b>先看红虚线上面有没有点。</b><br><em>横轴对数，大于 1 就超出 GPU 噪声；纵轴对数，红虚线是 1.2。</em>'),
+    "__FIG_KINDS__": ("fig-kinds", "fig9-kinds.svg", "topic09-fig-kinds.py",
+        '<b>先认是哪一种，再决定修不修。</b><br><em>中间那排小线是示意；底下的条数是本课按对齐记录逐条归的类。</em>'),
+    "__FIG_EMBED__": ("fig-embed", "fig9-embed.svg", "topic09-fig-kinds.py",
+        '<b>右边三根红条，都是在 BF16 里多加了几次。</b><br><em>左块卡数、列数画成 4 是示意。</em>'),
     "__FIG_LOO__": ("fig-loo", "fig9-loo.svg", "topic09-fig-yardstick.py",
         '<b>灰点是纯噪声，一大片落进黄区。</b><br><em>一个点是一种轮换：一份当被测、一份当基线，其余几份当尺子。</em>'),
     "__FIG_BASELINE__": ("fig-baseline", "fig9-baseline.svg", "topic09-fig-series.py",

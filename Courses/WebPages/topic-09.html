@@ -5172,7 +5172,75 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </div></section>
 
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>浮点与硬件：差从哪来</h2></div>
-  <p class="lead">一次矩阵乘分两步：把数两两相乘，再把乘积加起来。这一节看清楚舍入落在哪一步，两边各自怎么舍。</p>
+  <p class="lead">两边对不上，差只有三种。语义（公式写得不一样）第二节对过了；只换了加法顺序的是噪声，尺子兜住。这一节看剩下的大头：精度 —— 一次矩阵乘把数两两相乘、再把乘积加起来，舍入落在哪一步，两边各自怎么舍。</p>
+<figure class="fbox fwide" id="fig-kinds"><svg viewBox="0 0 1400 688" width="100%" role="img" aria-label="三张卡片。第一张：只换了加法顺序，两边精度一样，差是噪声，不修，用噪声尺子兜住；认法是离 64 位真值没有变远。第二张：丢了精度，一个值在 16 位和 32 位之间换挡时一侧多舍了一次，或者长求和没有分段；认法是离真值变远，或者五格表里有一格不同；要修。第三张：语义不同，两边的公式或定义不一样；认法是读代码对公式；必须对齐。底下一条横条：第二次迁移查清的 26 条根因，本课归类后精度 17 条、语义 7 条、两样都有 1 条、顺序 1 条。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两边对不上，差只有三种</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">先分清是哪一种，再决定修不修：顺序是噪声，精度要定责，语义必须对齐</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">顺序</text>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">精度</text>
+<rect x="156.72" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="177" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">语义</text>
+<rect x="235.07999999999998" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="256" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">两样都有</text>
+<rect x="0" y="102" width="448" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="448" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="0" y="104" width="448" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="448" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#80868b" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 只换了加法顺序</tspan></text>
+<rect x="24" y="158" width="400" height="86" rx="8" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="224" y="196" fill="#80868b" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">a ＋ b ＋ c　vs　a ＋ (b ＋ c)</tspan></text>
+<text class="svgsm" x="224" y="226" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">精度一样，舍入落在不同的地方</text>
+<path d="M 40.00 292.00 L 210.00 292.00 L 240.00 322.00 L 408.00 322.00" fill="none" stroke="#5f6368" stroke-width="3" stroke-linecap="round"/>
+<path d="M 40.00 322.00 L 210.00 322.00 L 240.00 292.00 L 408.00 292.00" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
+<text class="svgsm" x="24" y="382" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">怎么认：超出噪声，可离 FP64 没变远</text>
+<text class="svgsm" x="24" y="408" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">怎么办：不修，噪声尺子兜住</tspan></text>
+<rect x="476" y="102" width="448" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="476" y="102" width="448" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="476" y="104" width="448" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="476" y1="132" x2="924" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="490" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 丢了精度</tspan></text>
+<rect x="500" y="158" width="400" height="86" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="700" y="196" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">16 → 32 → 16，一侧多舍一次</tspan></text>
+<text class="svgsm" x="700" y="226" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">或者一次很长的求和没有分段</text>
+<line x1="516" y1="307" x2="884" y2="307" stroke="#5f6368" stroke-width="6" stroke-linecap="round"/>
+<line x1="516" y1="337" x2="646" y2="337" stroke="#1a73e8" stroke-width="6" stroke-linecap="round"/>
+<line x1="646" y1="337" x2="746" y2="337" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="746" y1="337" x2="884" y2="337" stroke="#1a73e8" stroke-width="6" stroke-linecap="round"/>
+<text class="svgsm" x="696" y="324" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">16 位</tspan></text>
+<text class="svgsm" x="500" y="382" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">怎么认：离 FP64 变远；五格表有一格不同</text>
+<text class="svgsm" x="500" y="408" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">怎么办：定责，离真值远的那边修</tspan></text>
+<rect x="952" y="102" width="448" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="952" y="102" width="448" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="952" y="104" width="448" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="952" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="966" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 语义不同</tspan></text>
+<rect x="976" y="158" width="400" height="86" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1176" y="196" fill="#681da8" text-anchor="middle" style="font-size:17.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">x ÷ (1 − βᵗ)　vs　x</tspan></text>
+<text class="svgsm" x="1176" y="226" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">两边写的根本不是同一个公式</text>
+<path d="M 992.00 314.00 L 1360.00 314.00" fill="none" stroke="#5f6368" stroke-width="3" stroke-linecap="round"/>
+<path d="M 992.00 314.00 L 1102.00 314.00 L 1192.00 350.00 L 1360.00 350.00" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
+<text class="svgsm" x="976" y="382" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">怎么认：读代码对公式，差常常很大</text>
+<text class="svgsm" x="976" y="408" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">怎么办：必须对齐，参照找不到就不算</tspan></text>
+<text class="svgsm" x="0" y="480" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二次迁移查清的 26 条根因（本课归类）</tspan></text>
+<rect x="0" y="494" width="912.3846153846154" height="34" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="457" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精度 17</tspan></text>
+<rect x="915.3846153846154" y="494" width="50.84615384615385" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="942" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="969.2307692307692" y="494" width="373.9230769230769" height="34" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1157" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">语义 7</tspan></text>
+<rect x="1346.1538461538462" y="494" width="50.84615384615385" height="34" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1373" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="1396" y="550" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">「两样都有」「顺序」各 1 条</text>
+<rect x="0" y="566" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="566" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="566" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="593" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差的大头是精度：一个值在 16 位和 32 位之间换挡、一次长求和没分段；顺序只是噪声</tspan></text>
+<text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以排查先分类：离真值没变远就别修；变远了，去五格表里找那一格；公式不一样，先把公式对上。</text>
+<text class="svgsm" x="20" y="648" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：归类是本课按根因一栏的标注做的，界线上的条目（例如为了照 GPU 才对上的加法顺序）各人可能分得不同。</text>
+</svg><figcaption><b>先认是哪一种，再决定修不修。</b><span class="capmore"><br><em>中间那排小线是示意；底下的条数是本课按对齐记录逐条归的类。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 第二次迁移的根因一览一共 26 行，每行「根因」一栏都标了它属于哪一类边界或语义；本课据此归成四堆：精度 17（16/32 位交界、矩阵乘精度档、长求和、超越函数与优化器里的实现精度、编译器省掉的舍入）、语义 7（设置、优化器公式、两处 bug、统计量取法、算法边界、记录写法）、两样都有 1（输出头单遍 BF16 是精度，整层重算重选路由是语义）、顺序 1（四路相加配对还是依次，对上它只为照 GPU）。</p>
+<p>⚠️ 归类是本课做的，对齐记录里没有这四个数。</p></details></figure>
 
   <h3 id="s5-1">5.1　乘是精确的，加才舍入</h3>
 <figure class="fbox fwide" id="fig-formats"><svg viewBox="0 0 1400 776" width="100%" role="img" aria-label="上半：三种格式的位。FP32 是 1 位符号、8 位指数、23 位尾数；TF32 也是 8 位指数，尾数只用 10 位；BF16 是 8 位指数、7 位尾数，一共 16 位。三者指数位一样多，所以能表示的范围一样大，差的是尾数，也就是精度。下半：两个 BF16 相乘，有效数字 8 位乘 8 位（存下的 7 位尾数，前面再加一位不存的 1），最多 16 位，放进 FP32 的 24 位里还空 8 位，乘积是精确的；舍入发生在加法：一个大数加一个小数，要先把小数往右对齐，挤出 24 位窗口的那几位要舍掉 —— 普通 FP32 加法是就近舍入，可能进一位；张量核怎么舍见下一张图。虚线白格是不用的位，浅灰底深灰框是加法里的大数。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -6162,6 +6230,86 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>注：四个算子、融合切成两块、显式舍写在第一个算子出口，都是示意；真实的融合怎么切由编译器决定。GPU 那一行画的是「每个算子单独一个 kernel」的常见情形。</p></details></figure>
   <p>excess precision 是 XLA 的一个默认开着的选项：允许结果比程序写的更精确。最常见的表现是融合块里跳过中间那几次「舍到 BF16」，只在出口舍一次。</p>
   <p>混元 3 上关掉它，单层回放里每个张量对 GPU 反而都更远；跑 1000 步，loss 偏移小了一半、参数范数的漂移一点没少 —— 可 loss 这一项对执行方式本来就敏感：只改片上内存上限也挪了 6e-5，TPU 三种跑法彼此也散开 6e-5，分不出是不是效果；判据看参数范数，它一点没少。</p>
+  <p>反过来，关掉它也能闯祸。第二次迁移的 TPU 自比里，词嵌入梯度两次「飞出去」（<a href="#s4-2">§4.2</a> 末尾）都在这里：</p>
+<figure class="fbox fwide" id="fig-embed"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="两块。左块示意词嵌入的反向：每个 token 的梯度要散加回词表里它那一行。FSDP 下每张卡只管表的一部分列，自己加完就是最终结果；纯数据并行时每张卡各加一份整表，再把八份在 BF16 里跨卡相加，每加一次舍一次。右块是第 1 步词嵌入梯度离 64 位真值的距离，对数刻度：GPU 4.17e-3，TPU 默认 4.00e-3；纯数据并行 1.51e-2，远 3.6 倍；不做梯度累积 2.92e-2，7 倍；关掉编译器的省舍入 1.09e-1，26 倍；打开词嵌入梯度 FP32 累加以后回到 3.8e-3。"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 上最容易真出问题的一处：词嵌入梯度</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：反向怎么算（推断自编译后的程序）；右：第 1 步词嵌入梯度离 CPU FP64 的距离（实测，对数刻度，一格十倍）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU 默认</text>
+<rect x="117.56" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="138" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">改了以后变远</text>
+<rect x="258.64" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="279" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FP32 累加以后</text>
+<rect x="0" y="102" width="600" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="600" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="600" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="600" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一行要加很多次：在哪加、用什么精度加</tspan></text>
+<text class="svgsm" x="24" y="164" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP：每张卡管几列，自己加完就是结果</tspan></text>
+<rect x="30" y="178" width="60" height="100" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="60" y="234" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡0</tspan></text>
+<rect x="96" y="178" width="60" height="100" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="126" y="234" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡1</tspan></text>
+<rect x="162" y="178" width="60" height="100" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="192" y="234" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡2</tspan></text>
+<rect x="228" y="178" width="60" height="100" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="258" y="234" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卡3</tspan></text>
+<text class="svgsm" x="310" y="224" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不用跨卡求和</tspan></text>
+<text class="svgsm" x="310" y="248" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">融合块里在 FP32 里加</text>
+<text class="svgsm" x="24" y="318" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯数据并行：每张卡加一份整表，再跨卡相加</tspan></text>
+<rect x="30" y="332" width="120" height="70" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="70" y="338" width="120" height="70" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="110" y="344" width="120" height="70" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="150" y="350" width="120" height="70" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="96" y="382" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×8 份</tspan></text>
+<line x1="276" y1="378" x2="302" y2="378" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="306" y="348" width="260" height="60" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="436" y="374" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">BF16 跨卡求和</tspan></text>
+<text class="svgsm" x="436" y="396" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">每加一次舍一次</text>
+<text class="svgsm" x="24" y="486" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关掉省舍入：连卡内的散加也每加一次舍一次</tspan></text>
+<rect x="624" y="102" width="776" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="624" y="102" width="776" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="624" y="104" width="776" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="624" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="638" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 第 1 步词嵌入梯度离 FP64 多远（实测）</tspan></text>
+<line x1="957.9856129977466" y1="146" x2="957.9856129977466" y2="462" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="957" y="482" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0.003</text>
+<line x1="1058.9012108368515" y1="146" x2="1058.9012108368515" y2="462" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="1058" y="482" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0.01</text>
+<line x1="1150.9856129977466" y1="146" x2="1150.9856129977466" y2="462" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="1150" y="482" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0.03</text>
+<line x1="1251.9012108368515" y1="146" x2="1251.9012108368515" y2="462" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="1251" y="482" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0.1</text>
+<text class="svgsm" x="912" y="178" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">GPU（三份中位数）</text>
+<rect x="924" y="164" width="61.58746944678683" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="993" y="180" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">4.17e-3</text>
+<text class="svgsm" x="912" y="222" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">TPU 默认：FSDP 8</text>
+<rect x="924" y="208" width="58.09878916314835" height="22" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="990" y="224" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums">4.00e-3</text>
+<text class="svgsm" x="912" y="266" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯数据并行 8（BF16 跨卡求和）</tspan></text>
+<rect x="924" y="252" width="169.4437616644334" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1101" y="268" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.51e-2　3.6 倍</tspan></text>
+<text class="svgsm" x="912" y="310" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯数据并行、不做梯度累积</tspan></text>
+<rect x="924" y="296" width="224.7201011663965" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1156" y="312" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.92e-2　7.0 倍</tspan></text>
+<text class="svgsm" x="912" y="354" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关掉编译器的省舍入</tspan></text>
+<rect x="924" y="340" width="335.1245249393919" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1267" y="356" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.09e-1　26.1 倍</tspan></text>
+<text class="svgsm" x="912" y="398" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">纯数据并行 ＋ 词嵌入梯度 FP32 累加</text>
+<rect x="924" y="384" width="53.57857836068956" height="22" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="985" y="400" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums">3.79e-3</text>
+<text class="svgsm" x="912" y="442" fill="#202124" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">FSDP ＋ 词嵌入梯度 FP32 累加</text>
+<rect x="924" y="428" width="54.0197311422462" height="22" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="986" y="444" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums">3.81e-3</text>
+<rect x="0" y="522" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="522" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="522" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">词表那一行要被很多 token 加很多次；哪里在 BF16 里加，误差就在哪里攒起来</tspan></text>
+<text class="svgsm" x="20" y="580" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">修法只有一条：让词嵌入梯度在 FP32 里累加。纯数据并行、关省舍入都回到 GPU 的水平，步时几乎不变。</text>
+<text class="svgsm" x="20" y="604" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：这个开关原本跟「数据并行 ＋ 梯度累积」撞上一个编译器的真 bug，修掉以后才可用（第十节讲）。</text>
+</svg><figcaption><b>右边三根红条，都是在 BF16 里多加了几次。</b><span class="capmore"><br><em>左块卡数、列数画成 4 是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸模型，TPU v5p 自比，第 1 步训练梯度对 CPU FP64 的 rel_L2）：GPU 三份中位数 4.17e-3；TPU golden（FSDP 8，微批 1 × 累积 2）4.00e-3；纯数据并行 8 1.51e-2（3.6 倍，倍数按 max(golden, GPU) 算）；纯数据并行、每设备微批 2 × 累积 1 2.92e-2（7.0 倍）；关 excess precision 1.09e-1（26 倍）；纯数据并行 ＋ 词嵌入梯度 FP32 累加（修复后的代码）3.79e-3；FSDP ＋ 同一开关 3.81e-3。其余 204 个张量在纯数据并行时离 FP64 跟 golden 一样近（比值中位数 0.99）。</p>
+<p>⚠️ 左块的机制是从编译后程序里张量的形状和算子推断的：FSDP 时每张卡上的词嵌入表是 [词表, 隐藏维 ÷ 8]，没有这份梯度的跨卡求和；纯数据并行时是整表，梯度在累积循环里每个微批做一次 BF16 加法的 all-reduce。卡数、列数画成 4 是示意。</p></details></figure>
+  <p>词表里的一行，要把用到这个词的每个 token 的梯度都加进来，常常是成百上千次加法。在哪一步用 BF16 加，误差就在哪里攒：纯数据并行时八张卡各加一份整表、再在 BF16 里跨卡相加，离 FP64 远 3.6 倍；关掉 excess precision，连卡里的散加也每加一次舍一次，远 26 倍。修法是让这份梯度在 FP32 里累加，两种情形都回到 GPU 的水平。</p>
   <p>为什么 TPU 上会有这种「更精确」：一份公开的事故复盘（Anthropic，2025 年 9 月）提到 TPU 的向量单元按 FP32 原生计算，编译器可以把融合块里的一些运算按 FP32 算；v7x 上是否仍然如此，我们没有单独核实。</p>
   <details class="foldfig"><summary><b>一个坑</b>：「先转 BF16 再转回来」会被编译器整个删掉</summary>
   <p>想在 TPU 上把 FP32 权重舍成 BF16 再用，写成「转 BF16、再转回 FP32」两步，excess precision 开着时，编译器会把这一对转换直接消掉，权重根本没舍。
@@ -6411,7 +6559,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>FP32 超越函数的实现精度（32 位对 32 位）</td><td>TPU 默认的 exp、log、sigmoid、silu 差几十格（<a href="#s5-8">§5.8</a>）</td><td>换高精度写法；先量 GPU 实际怎么算</td></tr>
   <tr><td>FP32 里的病态标量</td><td>小数是两个大数相减（<a href="#s5-7">§5.7</a>）</td><td>病态只放大；被放大的那一格是谁的，再查</td></tr>
   </tbody></table>
-  <p>另有两类不在这张表里：长求和本身的偏差（张量核的抹零，<a href="#s5-2">§5.2</a>）；语义差 —— 同一个量两边定义不同（<a href="#s2-3">§2.3</a> 折叠的四处）、测量工具自己错了（<a href="#s6-2">§6.2</a>）。排查时另列。</p></details>
+  <p>另有两类不在这张表里：长求和怎么分段（张量核的抹零 <a href="#s5-2">§5.2</a>、FP32 一次累加 <a href="#s8-5">§8.5</a>），也属精度；语义差 —— 同一个量两边定义不同（<a href="#s2-3">§2.3</a> 折叠的四处）、测量工具自己错了（<a href="#s6-2">§6.2</a>），排查时另列。</p></details>
   <details class="foldfig"><summary><b>十分钟看代码</b>：grep 哪些词，两行对照怎么写</summary>
   <p>两边代码里搜这些词，每一处都是一个可能的边界：<code>astype</code>、<code>.to(</code>、<code>.float()</code>、<code>.bfloat16()</code>、<code>preferred_element_type</code>、<code>precision=</code>、<code>allow_tf32</code>、<code>NVIDIA_TF32_OVERRIDE</code>、<code>autocast</code>、<code>reduce_precision</code>、<code>dtype=</code>。然后沿前向、反向，每个算子两边各写一行（输入 ／ 乘法精度 ／ 累加 ／ 输出存储 ／ 舍在哪）。</p>
   <p>验的时候：单个算子对 FP64 算 R（<a href="#s4-2">§4.2</a>）；第 1 步逐张量梯度对 GPU 重跑的噪声，超出的对 FP64 定责。</p></details>

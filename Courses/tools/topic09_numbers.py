@@ -888,3 +888,7 @@ GZ16_LO_T, GZ16_HI_T = "%.2f" % min(g["r1000_n16"] for g in _GZ), "%.2f" % max(g
 assert (GZ8_LO_T, GZ8_HI_T, GZ16_LO_T, GZ16_HI_T) == ("2.00", "2.75", "1.18", "1.62")
 N16_WIDEN_T = "1.0–2.1"                # 16 份 120 对的上限 ÷ 8 份 28 对（g3x16-noise-vs-8.json；MATRIX「L 长跑」第一条）
 N16_GN_WIDEN = 1.70                    # 其中梯度范数带符号均值放宽 1.70 倍（同上；路由偏置均值 2.07 倍最大）
+# 词嵌入梯度（第二次迁移 TPU 自比，第 1 步对 CPU FP64 的 rel_L2；倍数按 max(golden 4.00e-3, GPU 三份中位数 4.17e-3)）
+EMB_DP_X = "3.6"                       # 纯数据并行 8：1.51e-2（MATRIX B1、ts-dp8 结果文件）
+EMB_NOEXC_X = "26"                     # 关 excess precision：1.09e-1（MATRIX C、根因一览第 22 行 R 26.1）
+assert abs(1.51e-2 / 4.172e-3 - 3.62) < 0.01 and abs(1.090e-1 / 4.172e-3 - 26.1) < 0.1
