@@ -1021,6 +1021,14 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>（第二次迁移）超越函数：默认 «TRANS_T» 格，高精度 «TRANS_HI_T» 格；exp 真实输入正好舍对 «EXP_CR_FRAC»、平均 «EXP_SIGNED_ULP_T» 格；lse «KD_FIX_LSE_T»、300 步 r «KD_FIX_R300_T»（同一代还开了一个优化器开关，没拆开）；sigmoid 开关前后 «SIG_FLAG_SAME_OPS» 个算子逐位相同，精确写法后 r «SIG_LOSS_R_T»；除法、开方、偏差修正 2／3／108 → 1／1／2 格，小张量 R «ADAM_R_T»</td><td>TPU v5p FP32 对 FP64 正确舍入数格；GPU 上限按 CUDA 文档（sigmoid、silu 为推断）；整网为 300 步比较</td></tr>
   <tr><td>（第二次迁移）r 与 R：更新差 «NSB_DIFF_0»% → «NSB_DIFF_1»%，«NSB_TPU_CLOSER» 张量步 TPU 更近，误差中位数 «NSB_ABS_T»，GPU «NSB_GPU»；QK-Clip 最大 logit «QKC_SMAX_T» → η «QKC_ETA_T»</td><td>优化器 8 步回放；NaN 为真实权重截层第 1 步</td></tr>
   <tr><td>（第二次迁移）规模：中等尺寸 300 步 过 ／ 不过 ／ 待定 «LADDER_MID_T»；真实权重截层第 1 步 «LADDER_REAL_STEP1_T»；FP32 轨迹第 2 步起离开 «DIV_FP32_AWAY»；第 1 步 R «DIV_STEP1_R_T»</td><td>GPU 8 份两两 28 对；FP32 参照自己的误差没有测</td></tr>
+  <tr><td>（第二次迁移）纯噪声轮换：300 步 8 份 56 种，«MC_300_OBS_T» 过 1、最高 «LOO8_300_MAX_T»；1000 步 16 份 240 种，«MC_1K_OBS_T» 过 1、最高 «LOO16_1K_MAX_T»；单条检查最高 «LOO1_TAIL»–«LOO1_BM»；粗算 «MC_300_T» ／ «MC_1K_T»（本课推导）</td><td>GPU 同设置重跑轮流当被测，尺子用其余各份，检查同 TPU 自比；单条最高与粗算是本课从逐种轮换数据算的</td></tr>
+  <tr><td>（第二次迁移）8 → 16 份尺子上限放宽 «N16_WIDEN_T» 倍；六个 TPU 改动 «GZ8_LO_T»–«GZ8_HI_T» → «GZ16_LO_T»–«GZ16_HI_T»</td><td>1000 步对 TPU golden；尺子 GPU 8 份 28 对 vs 16 份 120 对</td></tr>
+  <tr><td>（第二次迁移）第 1 步两把参照：三个改动各 160 个张量；词嵌入梯度离 FP64 远 «EMB_DP_X» 倍（纯数据并行）、«EMB_NOEXC_X» 倍（关 excess precision）</td><td>TPU v5p 自比第 1 步训练梯度（由动量反推），对 CPU FP64；45 个多路残差小参数单列</td></tr>
+  <tr><td>（第二次迁移）26 条根因：精度 18 ／ 语义 6 ／ 两样都有 1 ／ 顺序 1</td><td>对齐记录根因一览逐行的「根因」标注；归类是本课做的</td></tr>
+  <tr><td>（第二次迁移）TPU 的脾气：89 个改动，逐位 29、分不开 45、分得开 10、第 1 步抓到 5；其中 «LONG_ARMS» 个跑满 1000 步只 1 个分得开；换 v7x 第 1 步中位数 «V7X_STEP1_MED»、300 步 r «V7X_R300»、芯片·秒省 «V7X_SAVE»</td><td>同一小尺寸模型，每次只改一样，300 步对 TPU golden；r 用 GPU 重跑当刻度；第 1 步对 FP64 定责</td></tr>
+  <tr><td>（第二次迁移）灵敏度：学习率偏 1e-4 → r 4.11，3e-5 → 1.06；五个精度改动 1000 步 0.97–1.62</td><td>故意埋 bug、300 步；右块 1000 步、GPU 16 份</td></tr>
+  <tr><td>（第二次迁移）程序指纹相同 3 种改写；编译器 bug：词嵌入梯度 0.51 倍、2829／10911 行为零、r 611 → 修后 0.98</td><td>各改写臂结果文件的 program_equal；bug 读自编译后程序的循环体与第 1 步抓数</td></tr>
+  <tr><td>（第二次迁移）小尺寸 1000 步九项：8 份尺子过 7、待定 2（1.25、1.14），16 份全过（旁注）；GPU 换机器数和切法最大 1.76、正对照 4149；真实宽度第 1 步 GPU ＋5.76e-5 ／ TPU −9.87e-5（中间结果）</td><td>TPU v5p 8 设备 ↔ B200×8；GPU 扩展对单机 8 份刻度前 300 步；真实宽度 1000 步没跑完</td></tr>
   <tr><td>混元 3 第 1 步按只用 GPU 的尺子重判：变严 «HY3_REJ_N» 项，没有变松；部分张量 R «HY3_REJUDGE_R»</td><td>GPU 第 1 步重跑 3 对；1000 步结论不变</td></tr>
 </tbody></table></details>
 </div></section>
