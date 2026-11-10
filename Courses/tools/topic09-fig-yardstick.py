@@ -207,5 +207,73 @@ def fig_integrator():
     f.save("fig9-integrator.svg", yb + 14)
 
 
+# ── fig9-twoaxis：第 1 步逐张量，两把参照（实测）──────────────────────────────────
+#   横：对 TPU golden 的相对差 ÷ GPU 第 1 步三份的刻度（＞ 1 ＝ 超出噪声）；
+#   纵：被测离 CPU FP64 ÷ max(golden 离 FP64, GPU 三份中位数离 FP64)（＞ 1.2 ＝ 丢了精度；对齐记录 setup.md「定责」）。
+S1 = T["step1_scatter"]
+assert [a["label"] for a in S1] == ["v5p 换 v7x", "FSDP 改成纯数据并行", "关掉编译器的省舍入"]
+assert all(a["n_tensors"] == 205 and a["n_small_skipped"] == 45 and len(a["points"]) == 160 for a in S1)
+assert max(y for _x, y, _e in S1[0]["points"]) <= 1.2                      # 换 v7x：一个都没变远
+_emb = [[(x, y) for x, y, e in a["points"] if e][0] for a in S1]
+assert abs(_emb[1][1] - 3.62) < 0.005 and abs(_emb[2][1] - 26.13) < 0.005  # 词嵌入梯度：3.6 倍、26 倍（MATRIX B1、C 表）
+
+
+def fig_twoaxis():
+    f = Fig(W, "三块散点，每块是 TPU 上的一个改动。一个点是一个参数张量第 1 步的梯度，共 160 个。"
+               "横轴是它跟 TPU 基线差多少，除以 GPU 重跑的差，大于 1 就超出噪声；纵轴是它离 64 位真值的距离，除以原来离真值的距离，大于 1.2 就是丢了精度。"
+               "左块换到 v7x：148 个点超出噪声，可全部贴着纵轴 1，一个都没变远，是换了顺序。"
+               "中块改成纯数据并行：只有词嵌入梯度一个红点冲到 3.6 倍。右块关掉编译器的省舍入：词嵌入梯度冲到 26 倍。")
+    y0 = f.header("第 1 步逐张量：一把尺子量差多少，另一把量离真值多远",
+                  "一个点 ＝ 一个参数张量的梯度　横：对 TPU 基线的差 ÷ GPU 重跑的差（＞ 1 超出噪声）　纵：离 CPU FP64 的距离 ÷ 原来的距离（＞ 1.2 丢了精度）",
+                  [("#e6f4ea", "在噪声里"), ("#eceff3", "换了顺序：差变大，离真值没变远"), ("#fce8e6", "丢了精度"), (RD, "词嵌入梯度")])
+    PW, GAP, PH = 448, 28, 400
+    XL, XH, YL, YH = 0.1, 1e4, 0.15, 40.0
+
+    for k, a in enumerate(S1):
+        px = k * (PW + GAP)
+        py = f.panel(px, y0, PW, PH, a["label"], BL if k == 0 else RD)
+        ax0, ax1, ay0, ay1 = px + 58, px + PW - 18, py + 20, py + PH - 92
+
+        def X(v):
+            return ax0 + (math.log10(max(min(v, XH), XL)) - math.log10(XL)) / (math.log10(XH) - math.log10(XL)) * (ax1 - ax0)
+
+        def Y(v):
+            return ay1 - (math.log10(max(min(v, YH), YL)) - math.log10(YL)) / (math.log10(YH) - math.log10(YL)) * (ay1 - ay0)
+        f.box(ax0, ay0, X(1) - ax0, ay1 - ay0, "#e6f4ea", "#e6f4ea", 0)
+        f.box(X(1), Y(1.2), ax1 - X(1), ay1 - Y(1.2), "#eceff3", "#eceff3", 0)
+        f.box(ax0, ay0, ax1 - ax0, Y(1.2) - ay0, "#fce8e6", "#fce8e6", 0)
+        f.line(X(1), ay0, X(1), ay1, GY2, 1.0, arrow=False)
+        f.line(ax0, Y(1.2), ax1, Y(1.2), RD, 1.0, dash="4 3", arrow=False)
+        f.line(ax0, Y(1), ax1, Y(1), LINE, 0.8, arrow=False)
+        for v in (0.1, 1, 10, 100, 1000, 10000):
+            f.t(X(v), ay1 + 20, ("%g" % v) if v < 1000 else ("1e%d" % round(math.log10(v))), GY, size=13, anchor="middle")
+        for v, lab in ((0.2, "0.2"), (1, "1"), (1.2, "1.2"), (5, "5"), (30, "30")):
+            f.t(ax0 - 8, Y(v) + 5, lab, RD if v == 1.2 else GY, size=13, anchor="end")
+        f.t((ax0 + ax1) / 2, ay1 + 42, "对基线的差 ÷ GPU 噪声", GY, size=13, anchor="middle")
+        nover = sum(1 for x, _y, _e in a["points"] if x > 1)
+        nfar = sum(1 for x, y, _e in a["points"] if y > 1.2)
+        for x, y, e in a["points"]:
+            if not e:
+                f.box(X(x) - 2.6, Y(y) - 2.6, 5.2, 5.2, BL, BL, 2.6)
+        for x, y, e in a["points"]:
+            if e:
+                f.box(X(x) - 6, Y(y) - 6, 12, 12, RD, INK, 6)
+                f.t(X(x) - 12 if y > 1.2 else X(x) + 10, Y(y) + 5 if y > 1.2 else Y(y) - 8,
+                    ("词嵌入梯度 %.1f 倍" % y) if y > 1.2 else "词嵌入", RD, True, 13, "end" if y > 1.2 else None)
+        f.t(ax1 - 8, ay1 - 30, "超出噪声 %d／160" % nover, INK, True, 13, "end")
+        f.t(ax1 - 8, ay1 - 10, ("离真值变远：%d" % nfar) if nfar else "离真值变远：0 → 换了顺序", RD if nfar else GR, True, 13, "end")
+        f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "超出噪声不等于出错：离真值没变远，就是换了顺序；变远了，才是丢了精度", [
+        "换 v7x，九成张量超出 GPU 的噪声，可一个都没离真值更远；纯数据并行、关省舍入，飞得远的都只有词嵌入梯度一个点 —— 查哪里，一眼就知道。",
+        "代价：要一份 CPU 上 FP64 算的第 1 步梯度。多路残差混合的 45 个小参数本身病态，单列处理，没画。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移，小尺寸模型，TPU v5p 自比，对同一个 TPU golden）：第 1 步 205 个参数张量的训练梯度，其中多路残差混合的 45 个小参数（缩放、偏置、混合权重）已知病态、对齐记录单列已接受，不画；画 160 个。",
+               "📌 横：被测对 golden 的 rel_L2 ÷ GPU 第 1 步三份两两的最大 rel_L2（这个张量自己的刻度）。纵：被测离 CPU FP64 的 rel_L2 ÷ max(golden 离 FP64, GPU 三份离 FP64 的中位数)；对齐记录的定责规则是 ≤ 1.2 记「换了顺序」，超过记「丢了精度」。",
+               "📌 词嵌入梯度离 FP64：golden 4.00e-3、GPU 三份中位数 4.17e-3；纯数据并行 1.51e-2（3.6 倍）；关 excess precision 1.09e-1（26 倍）。关省舍入那一块另有一个张量 1.20 倍压线。横轴大到上千的点，是 GPU 三份几乎逐位相同、刻度极窄的张量。")
+    f.save("fig9-twoaxis.svg", yb + 14)
+
+
 fig_loo()
 fig_integrator()
+fig_twoaxis()
