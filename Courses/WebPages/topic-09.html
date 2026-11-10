@@ -5456,7 +5456,97 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>噪声是 0 的张量</b>：GPU 重跑逐位相同（第二次迁移里有两层的一组梯度三份逐位），尺子量不出来，只能看对外部参照的 R。</li>
     <li><b>精度路径不同</b>：路由打分那次矩阵乘，GPU 离 FP64 3.8e-6、TPU 4.8e-8，R ≈ 0.013（<a href="#s5-4">§5.4</a>）。R 远小于 1 只说明 TPU 这一处离真值近得多，不是「TPU 算错了」；门槛 1.2 只拦一个方向。</li>
   </ul></details>
-  <p><b>两把参照一起用。</b>第 1 步每个张量都跟两样东西比：跟基线比，看差多少，超没超出 GPU 重跑的噪声；跟 FP64 比，看离真值远了没有。超出噪声、离真值没变远，是<b>换了顺序</b>：加法先后不同，末位本来就会变，记「在刻度内」，不算 bug；离真值远了 1.2 倍以上，才是<b>丢了精度</b>。TPU 自己改代码时也靠这一招分辨（第二次迁移，对 TPU 自己的基线）。这里比的是梯度：反向里有原子加，GPU 三份大多不逐位，噪声不是 0；三份完全逐位的张量，刻度按一个很小的下限算。</p>
+  <p><b>两把参照一起用。</b>第 1 步每个张量都跟两样东西比：跟基线比，看差多少，超没超出 GPU 重跑的噪声；跟 FP64 比，看离真值远了没有。超出噪声、离真值没变远，是<b>换了顺序</b>：加法先后不同，末位本来就会变，记「在刻度内」，不算 bug；离真值远了 1.2 倍以上，才是<b>丢了精度</b>。TPU 自己改代码时也靠这一招分辨（第二次迁移，对 TPU 自己的基线）。这里比的是梯度：反向里有原子加，GPU 三份大多不逐位，噪声不是 0；三份完全逐位的张量，刻度按一个很小的下限算。一个张量走一遍：</p>
+<figure class="fbox fwide" id="fig-step1"><svg viewBox="0 0 1400 864" width="100%" role="img" aria-label="两块。上块是一条流程：第 1 步的梯度从一阶动量倒推出来；跟基线算相对 L2，除以这个张量自己的刻度（GPU 三份两两的最大差，不低于 2 的负 20 次方），不超过 1 就在刻度内；超过的，再看它离 64 位真值的距离，除以基线和 GPU 中位数里离得远的那个，不超过 1.2 记换了顺序，超过记丢了精度。两行算例都是词嵌入梯度：纯数据并行时超出刻度 5.89 倍、离真值远 3.62 倍，丢了精度；修好以后仍超出刻度 1.36 倍，可离真值只有 0.91 倍，换了顺序。下块是两类尺子怎么配合的四格：曲线和第 1 步都过，只是换了顺序；曲线不过、第 1 步全定责，多半是第 1 步之后的事；曲线过、第 1 步有丢精度的，是曲线没灵敏到；两样都不过，按 bug 查。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第 1 步逐张量：先量差多少，再请 FP64 判是谁的</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上：一个张量走一遍定责流程（两行算例是同一个张量在两次改动下的读数）；下：两类尺子各管什么，四种组合怎么读</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">第 1 步逐张量</text>
+<rect x="151.16000000000003" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="172" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">换了顺序</text>
+<rect x="260.88" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="281" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">丢了精度</text>
+<rect x="0" y="102" width="1400" height="350" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 定责流程（第二次迁移，TPU 自比，词嵌入梯度）</tspan></text>
+<rect x="16" y="152" width="330" height="74" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="30" y="176" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 拿到梯度</tspan></text>
+<text class="svgsm" x="30" y="198" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">一阶动量倒推：</text>
+<text class="svgsm" x="30" y="218" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">m₁ ÷ (1 − β₁) ÷ 裁剪系数</text>
+<line x1="348" y1="189" x2="356" y2="189" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="360" y="152" width="330" height="74" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="374" y="176" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 跟基线比</tspan></text>
+<text class="svgsm" x="374" y="198" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">d ＝ ‖被测 − 基线‖ ÷ ‖基线‖</text>
+<text class="svgsm" x="374" y="218" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">全部元素，FP64 里累加</text>
+<line x1="692" y1="189" x2="696" y2="189" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="700" y="152" width="330" height="74" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="714" y="176" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 除以刻度</tspan></text>
+<text class="svgsm" x="714" y="198" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">刻度 ＝ GPU 三份两两最大差</text>
+<text class="svgsm" x="714" y="218" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">不低于 2⁻²⁰；≤ 1 在刻度内</text>
+<line x1="1032" y1="189" x2="1036" y2="189" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="1040" y="152" width="344" height="74" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1054" y="176" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④ 对 FP64 定责</tspan></text>
+<text class="svgsm" x="1054" y="198" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">R ＝ 离 FP64 ÷ max(基线, GPU 中位数)</text>
+<text class="svgsm" x="1054" y="218" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">≤ 1.2 换了顺序；＞ 1.2 丢了精度</text>
+<text class="svgsm" x="16" y="262" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">算例：词嵌入梯度（基线离 FP64 4.00e-3，GPU 三份中位数 4.17e-3，刻度 2.48e-3）</tspan></text>
+<text class="svgsm" x="16" y="298" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"></text>
+<text class="svgsm" x="330" y="298" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">离 FP64</text>
+<text class="svgsm" x="520" y="298" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">对基线 d</text>
+<text class="svgsm" x="710" y="298" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">d ÷ 刻度</text>
+<text class="svgsm" x="900" y="298" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">R</text>
+<text class="svgsm" x="1060" y="298" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">记作</text>
+<text class="svgsm" x="16" y="332" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯数据并行</tspan></text>
+<text class="svgsm" x="330" y="332" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">1.51e-2</text>
+<text class="svgsm" x="520" y="332" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">1.46e-2</text>
+<text class="svgsm" x="710" y="332" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.89（超出刻度）</tspan></text>
+<text class="svgsm" x="900" y="332" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.62</tspan></text>
+<text class="svgsm" x="1060" y="332" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">丢了精度</tspan></text>
+<text class="svgsm" x="16" y="372" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">修复后（FP32 累加）</tspan></text>
+<text class="svgsm" x="330" y="372" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">3.79e-3</text>
+<text class="svgsm" x="520" y="372" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">3.37e-3</text>
+<text class="svgsm" x="710" y="372" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.36（超出刻度）</tspan></text>
+<text class="svgsm" x="900" y="372" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.91</tspan></text>
+<text class="svgsm" x="1060" y="372" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换了顺序</tspan></text>
+<text class="svgsm" x="16" y="432" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">修好以后仍超出刻度，可离真值比基线和 GPU 都近：超出刻度不等于有问题，所以第 ③ 步之后一定要走第 ④ 步。</text>
+<rect x="0" y="472" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="472" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="474" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="502" x2="1400" y2="502" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="492" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 两类尺子怎么配合</tspan></text>
+<text class="svgsm" x="250" y="536" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步：没有丢精度的张量</tspan></text>
+<text class="svgsm" x="600" y="536" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步：有丢精度的张量</tspan></text>
+<text class="svgsm" x="16" y="598" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">曲线：分不开</tspan></text>
+<rect x="160" y="558" width="260" height="66" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="290" y="596" fill="#0d652d" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只是换了顺序，不是 bug</tspan></text>
+<rect x="470" y="558" width="260" height="66" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="600" y="596" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">多是曲线没灵敏到那一处</tspan></text>
+<text class="svgsm" x="16" y="680" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">曲线：超出</tspan></text>
+<rect x="160" y="640" width="260" height="66" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="290" y="678" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">多半是第 1 步之后的事</tspan></text>
+<rect x="470" y="640" width="260" height="66" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="600" y="678" fill="#a50e0e" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按 bug 查</tspan></text>
+<text class="svgsm" x="770" y="576" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">左上：换切分、换 v7x、升运行库，大多落在这一格。</text>
+<text class="svgsm" x="770" y="616" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">左下：比如只作用在权重一侧的开关，第 1 步权重还在 BF16 格点上，测不到。</text>
+<text class="svgsm" x="770" y="656" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">右上：比如多路残差混合不强制舍 BF16：300 步曲线 r 1.09，第 1 步对 FP64 抓到 1.61 倍。</text>
+<text class="svgsm" x="770" y="696" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">右下：纯数据并行、关省舍入：曲线 2.62、13.3，第 1 步词嵌入梯度 3.6 倍、26 倍。</text>
+<rect x="0" y="742" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="742" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="742" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="769" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">曲线说有没有差、差多大、怎么随时间攒；第 1 步说差在谁身上、是换了顺序还是丢了精度</tspan></text>
+<text class="svgsm" x="20" y="800" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">两样都过，才说改动只是换了求和顺序；有一样不过就要查，四格各指一个方向。</text>
+<text class="svgsm" x="20" y="824" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：要一份 CPU 上 FP64 算的第 1 步梯度，而且裁判必须来自参照一侧的代码，不能拿被测自己的输出当真值。</text>
+</svg><figcaption><b>上面一行四步；同一个张量两次读数，第三步都超出，第四步才分出谁丢了精度。</b><span class="capmore"><br><em>下面四格是两类尺子的组合。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，TPU v5p 自比，对 TPU golden）：词嵌入梯度离 FP64 的 rel_L2，golden 4.00e-3、GPU 三份中位数 4.17e-3；纯数据并行 1.51e-2，对 golden 的 d 1.46e-2，刻度 2.48e-3，d ÷ 刻度 5.89，R 3.62；修复后 3.79e-3、d 3.37e-3、1.36、R 0.91。205 个张量的刻度中位数 2.68e-3。</p>
+<p>📌 梯度：TPU 两侧都从第一动量倒推（Adam 参数 m ÷ (1 − β₁)，Muon 参数 buf ÷ (1 − β)），再除以第 1 步的裁剪系数得到裁剪前的梯度；倒推本身带进几个 2⁻²⁴ 量级的相对舍入，所以刻度不低于 2⁻²⁰（GPU 三份逐位相同的张量刻度是 0，205 个里 10 个）。</p>
+<p>⚠️ 门槛 1.2 的来历（推断）：只差加法顺序时 R ≈ 1；多一次同量级的独立舍入，误差方差约翻倍，R ≈ √2 ≈ 1.41；1.2 取在两者之间。FP64 参照是用参照一侧（GPU）的同一套模型代码，在 CPU 上把第 1 步整网改成 FP64 重算的。GPU↔TPU 对齐时 R 的分母只用 GPU 三份中位数，另有「两边离 FP64 都小于一次 BF16 舍入（2⁻⁸）就按下限判过」一条。</p></details></figure>
+  <details class="foldfig"><summary><b>照着算第 1 步</b>：梯度从哪来、刻度为什么有下限、1.2 是怎么定的、FP64 由谁来算</summary>
+  <ul>
+    <li><b>梯度从哪来</b>：TPU 上不挂钩子（§6），从第 1 步更新后的一阶动量倒推：m₁ ＝ (1 − β₁)·g，所以 g ＝ m₁ ÷ (1 − β₁)；裁剪触发过的，再除以裁剪系数（混元 3 第 1 步裁剪前范数 17.5，系数约 0.057）。用二阶动量独立核一遍，混元 3 第 1 步相对差约 6e-8。</li>
+    <li><b>刻度</b>：每个张量各自一个，等于 GPU 第 1 步三份两两的最大 rel_L2；倒推本身会带进几个 2⁻²⁴ 量级的相对舍入，所以刻度不低于 2⁻²⁰，GPU 三份逐位相同的张量也按这个下限算。</li>
+    <li><b>1.2 的来历</b>（推断）：只差加法顺序时，两边离真值差不多远，R ≈ 1；多一次同量级的独立舍入，误差方差约翻倍，R ≈ √2 ≈ 1.41；1.2 取在两者之间。</li>
+    <li><b>FP64 由谁来算</b>：用参照一侧（GPU）的同一套模型代码，在 CPU 上把第 1 步整网改成 FP64 重算；被测一侧的代码一行不用。裁判不能来自被测。</li>
+  </ul></details>
 <figure class="fbox fwide" id="fig-twoaxis"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="三块散点，每块是 TPU 上的一个改动。一个点是一个参数张量第 1 步的梯度，共 160 个。横轴是它跟 TPU 基线差多少，除以 GPU 重跑的差，大于 1 就超出噪声；纵轴是它离 64 位真值的距离，除以原来离真值的距离，大于 1.2 就是丢了精度。左块换到 v7x：148 个点超出噪声，可全部贴着纵轴 1，一个都没变远，是换了顺序。中块改成纯数据并行：只有词嵌入梯度一个红点冲到 3.6 倍。右块关掉编译器的省舍入：词嵌入梯度冲到 26 倍，另有一个路由门控权重 1.20 倍刚过线。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第 1 步逐张量：一把尺子量差多少，另一把量离真值多远</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一个点 ＝ 一个参数张量的梯度　横：对 TPU 基线的差 ÷ GPU 重跑的差（＞ 1 超出噪声）　纵：离 CPU FP64 的距离 ÷ 原 TPU 基线和 GPU 里离得远的那个（＞ 1.2 丢了精度）</text>
