@@ -111,7 +111,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）、<b>专题八</b>（数值格式）</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>讲约 60 分钟</b>（两次课，各 30 分钟）</span>
+    <span class="chip">⏱ <b>讲约 90 分钟</b>（三次课，各 30 分钟）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
