@@ -6,7 +6,7 @@ fig9-temper  回答：在 TPU 上改了一样东西，结果会不会变？变�
              一行一类改动；左边一格数逐位相同的，右边按 300 步曲线最差 r 画点（对数轴）；
              蓝点 ＝ 跟 GPU 重跑分不开；红点 ＝ 分得开；红圈 ＝ 曲线分不开、第 1 步有张量离 FP64 更远。
              灵敏度那一类（故意埋 bug）不在这张图，单独一张（fig9-sens）。
-             数据：topic09_tpuself.json 的 arms（导出自对齐记录 alignments/04-tpu-self/README.md 的脾气表，实测）。
+             数据：topic09_tpuself.json 的 arms（导出自对齐记录 TPU 自比一节的 README.md 的脾气表，实测）。
 """
 import math
 

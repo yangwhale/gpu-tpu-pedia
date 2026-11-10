@@ -191,7 +191,7 @@ def mean(xs):
 
 
 def tpuself():
-    """第二次迁移的 TPU 自比与 GPU 留一法（topic09_tpuself.json，导出自对齐记录 alignments/04-tpu-self，实测）。"""
+    """第二次迁移的 TPU 自比与 GPU 留一法（topic09_tpuself.json，导出自对齐记录 TPU 自比一节，实测）。"""
     with open(os.path.join(HERE, "topic09_tpuself.json"), encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -871,9 +871,9 @@ SW_ADAM_COST = "0.02%"                    # 精确的除法、开方、偏差修
 
 # ── 2026-11-10 · 第二次迁移的新材料（TPU 自比、GPU 尺子扩到 16 份）──────────────────────────
 # 出处：第二次迁移的对齐记录（小尺寸模型，随机初始化，约 4.3 亿参数；TPU v5p 8 设备 ↔ B200×8）。
-#   alignments/04-tpu-self/README.md、MATRIX.md（TPU 自比：脾气表、机制、留一法、长跑）；
-#   alignments/04-tpu-self/results/gpu-rerun-loo-r-{300,1000}.json（GPU 留一法，逐种轮换的 r）；
-#   alignments/01-mini/gpu-noise/results/g3x16-noise-vs-8.json（8 份 → 16 份的上限对比）。
+#   TPU 自比一节的 README.md、MATRIX.md（TPU 自比：脾气表、机制、留一法、长跑）；
+#   TPU 自比一节的 results/gpu-rerun-loo-r-{300,1000}.json（GPU 留一法，逐种轮换的 r）；
+#   小尺寸一节的「GPU 8 份对 16 份上限」结果文件（8 份 → 16 份的上限对比）。
 #   逐点数据导出在 topic09_tpuself.json（私有导出脚本，只含数字和改写过的中文标签）。
 _TS = tpuself()
 LOO8_1K_MAX = 2.00                     # 1000 步只有 8 份时 GPU 留一法最差 r 的最大值（MATRIX「GPU 重跑的留一法 r」表第 2 行，已被 16 份取代）
@@ -886,13 +886,13 @@ _GZ = _TS["grayzone_1000"]
 GZ8_LO_T, GZ8_HI_T = "%.2f" % min(g["r1000_n8"] for g in _GZ), "%.2f" % max(g["r1000_n8"] for g in _GZ)
 GZ16_LO_T, GZ16_HI_T = "%.2f" % min(g["r1000_n16"] for g in _GZ), "%.2f" % max(g["r1000_n16"] for g in _GZ)
 assert (GZ8_LO_T, GZ8_HI_T, GZ16_LO_T, GZ16_HI_T) == ("2.00", "2.75", "1.18", "1.62")
-N16_WIDEN_T = "1.0–2.1"                # 16 份 120 对的上限 ÷ 8 份 28 对（g3x16-noise-vs-8.json；MATRIX「L 长跑」第一条）
+N16_WIDEN_T = "1.0–2.1"                # 16 份 120 对的上限 ÷ 8 份 28 对（「GPU 8 份对 16 份上限」结果文件；MATRIX「L 长跑」第一条）
 N16_GN_WIDEN = 1.70                    # 其中梯度范数带符号均值放宽 1.70 倍（同上；路由偏置均值 2.07 倍最大）
 # 词嵌入梯度（第二次迁移 TPU 自比，第 1 步对 CPU FP64 的 rel_L2；倍数按 max(golden 4.00e-3, GPU 三份中位数 4.17e-3)）
-EMB_DP_X = "3.6"                       # 纯数据并行 8：1.51e-2（MATRIX B1、ts-dp8 结果文件）
+EMB_DP_X = "3.6"                       # 纯数据并行 8：1.51e-2（MATRIX B1、纯数据并行那一臂的结果文件）
 EMB_NOEXC_X = "26"                     # 关 excess precision：1.09e-1（MATRIX C、根因一览第 22 行 R 26.1）
 assert abs(1.51e-2 / 4.172e-3 - 3.62) < 0.01 and abs(1.090e-1 / 4.172e-3 - 26.1) < 0.1
-# TPU 自比的脾气（对齐记录 alignments/04-tpu-self/README.md 脾气表与 MATRIX「H v5p ↔ v7x」「C6」，实测）
+# TPU 自比的脾气（对齐记录 TPU 自比一节的 README.md 脾气表与 MATRIX「H v5p ↔ v7x」「C6」，实测）
 LONG_ARMS = 32                         # 跑满 1000 步的改动数；只有 1 个分得开（多路残差混合不强制舍 BF16，第 1 步抓到）
 # （以 README 汇总表「长跑（1000 步）32 臂、分得开 1」为准；脾气表的 1000 步一列只挂在有 300 步对应行的改动上）
 V7X_STEP1_MED, V7X_FP64_RATIO, V7X_R300 = "3.9e-3", "1.01", "1.02"
@@ -908,3 +908,5 @@ MC_300_T, MC_1K_T = "%d%%" % round(MC_300 * 100), "%d%%" % round(MC_1K * 100)
 MC_300_OBS_T = "%d%%" % round(_TS["loo_300_n8"]["frac_gt_1"] * 100)
 MC_1K_OBS_T = "%d%%" % round(_TS["loo_1000_n16"]["frac_gt_1"] * 100)
 assert (MC_300_OBS_T, MC_1K_OBS_T) == ("59%", "22%")
+# 同一种轮换（GPU 1000 步 16 份，240 种）单看一条检查的最高分（本课从逐种轮换数据算：每条检查取三个统计里最大的，再取 240 种里最大的）
+LOO1_LOSS, LOO1_TAIL, LOO1_PN, LOO1_BM = "1.29", "1.23", "1.58", "1.82"   # 主 loss 全程、后段、参数范数、路由偏置均值

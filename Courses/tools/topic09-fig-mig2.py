@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 r"""专题九 · 第九节补的「第二次迁移成绩单」（第二次迁移的新材料）。
 
-fig9-hy4  回答：同一套方法换一个模型再走一遍，结果怎样？
+fig9-mig2  回答：同一套方法换一个模型再走一遍，结果怎样？
           Ⓐ 小尺寸模型 L0–L4 全套、1000 步 9 项：尺子 GPU 8 份时过 7、待定 2（梯度范数 1.25、路由偏置标准差 1.14）；
              尺子扩到 16 份以后 9 项全过（对齐记录只作旁注，判档仍按 8 份）。
           Ⓑ GPU 自己换机器数、换切法（1 台 → 2 台、4 台，DP／EP／PP）：对单机刻度最大 1.76 倍，没有超出；学习率大 10% 的正对照 r 4149。
           Ⓒ 真实宽度三层（中间结果）：第 1 步主 loss 对 CPU FP64 GPU 偏高、TPU 偏低；前 164 步 TPU 几条曲线同号偏低。1000 步没跑完，只作早期信号。
-          数据（Ⓒ 是中间结果，其余实测）：对齐记录 alignments/01-mini（results/t1zga-l4.results.json、gpu-noise/results/t1zga-l4-n16.results.json）、
-                alignments/05-gpu-scale/results/*-vs-single-node.results.json、alignments/06-rw3（README、results/step1-loss-vs-fp64.json、rw3-l4-first164），全部实测。
+          数据（Ⓒ 是中间结果，其余实测）：对齐记录 小尺寸一节（1000 步现行比较的 8 份、16 份两份结果文件）、
+                GPU 扩展一节（各运行对单机的结果文件）、真实宽度一节（README、第 1 步对 FP64、前 164 步中间判档），全部实测。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
 
@@ -25,7 +25,7 @@ assert abs(abs(RW3_TPU) / RW3_GPU_A - 1.71) < 0.01
 RW3_RATIO = 17.8                       # 前 164 步主 loss 带符号均值 ÷ 同窗口 GPU 刻度
 
 
-def fig_hy4():
+def fig_mig2():
     f = Fig(W, "三块。左块九对横条：第二次迁移的小尺寸模型 1000 步九项检查，浅色是尺子 GPU 8 份时的 r，深色是 16 份时的 r。"
                "8 份时梯度范数 1.25、路由偏置标准差 1.14 越过 1，其余七项过；16 份时九项都在 1 以内。"
                "中块：GPU 自己换机器数和切法，每个点一次运行对单机刻度的最大倍数，最大 1.76，没有超过 2；学习率大 10% 的正对照是 4149 倍。"
@@ -114,7 +114,7 @@ def fig_hy4():
                "📌 Ⓒ 真实宽度第 0–2 层 ＋ MTP（3.21e10 参数），GPU 2 台跑 1000 步当 golden，TPU v5p 16 片原样回放：第 1 步主 loss 对 CPU FP64 GPU ＋5.76e-5（4 份 ＋5.1e-5 到 ＋5.8e-5）、TPU −9.87e-5；"
                "前 164 步 9 项里不过 6、待定 2、过 1，主 loss、MTP、索引器蒸馏、参数范数都是 TPU 同号偏低。",
                "⚠️ Ⓒ 是中间结果：1000 步还没跑完，判档以跑完后的比较为准。")
-    f.save("fig9-hy4.svg", yb + 14)
+    f.save("fig9-mig2.svg", yb + 14)
 
 
-fig_hy4()
+fig_mig2()
