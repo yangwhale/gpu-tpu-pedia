@@ -190,6 +190,12 @@ def mean(xs):
     return sum(xs) / float(len(xs))
 
 
+def tpuself():
+    """第二次迁移的 TPU 自比与 GPU 留一法（topic09_tpuself.json，导出自对齐记录 alignments/04-tpu-self，实测）。"""
+    with open(os.path.join(HERE, "topic09_tpuself.json"), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 # ── 2026-11-05 夜：新结论（一手材料 11-05 23:00 版）────────────────────────────────
 def sci(x):
     """1.24e-07 → 1.24e-7（课件里的写法）"""
@@ -862,3 +868,23 @@ DIV_STEP1_R_T = "%.2f" % DIV_STEP1_R
 DIV_STEP11_100 = 4.8e-5                   # 第 11–100 步 TPU 对 GPU 8 份均值的带符号相对差 |.|（同号，负）
 DIV_FP32_STEPS = 30                       # FP32 轨迹只跑了 30 步
 SW_ADAM_COST = "0.02%"                    # 精确的除法、开方、偏差修正：跨代对比 ＋0.02%
+
+# ── 2026-11-10 · 第二次迁移的新材料（TPU 自比、GPU 尺子扩到 16 份）──────────────────────────
+# 出处：第二次迁移的对齐记录（小尺寸模型，随机初始化，约 4.3 亿参数；TPU v5p 8 设备 ↔ B200×8）。
+#   alignments/04-tpu-self/README.md、MATRIX.md（TPU 自比：脾气表、机制、留一法、长跑）；
+#   alignments/04-tpu-self/results/gpu-rerun-loo-r-{300,1000}.json（GPU 留一法，逐种轮换的 r）；
+#   alignments/01-mini/gpu-noise/results/g3x16-noise-vs-8.json（8 份 → 16 份的上限对比）。
+#   逐点数据导出在 topic09_tpuself.json（私有导出脚本，只含数字和改写过的中文标签）。
+_TS = tpuself()
+LOO8_1K_MAX = 2.00                     # 1000 步只有 8 份时 GPU 留一法最差 r 的最大值（MATRIX「GPU 重跑的留一法 r」表第 2 行，已被 16 份取代）
+LOO8_1K_MAX_T = "%.2f" % LOO8_1K_MAX
+LOO16_1K_MAX = _TS["loo_1000_n16"]["max"]          # 1.82（16 份，240 种轮换）
+LOO8_300_MAX = _TS["loo_300_n8"]["max"]            # 2.47（300 步 8 份，56 种轮换）
+assert abs(LOO16_1K_MAX - 1.82) < 0.005 and abs(LOO8_300_MAX - 2.47) < 0.005
+LOO16_1K_MAX_T, LOO8_300_MAX_T = "%.2f" % LOO16_1K_MAX, "%.2f" % LOO8_300_MAX
+_GZ = _TS["grayzone_1000"]
+GZ8_LO_T, GZ8_HI_T = "%.2f" % min(g["r1000_n8"] for g in _GZ), "%.2f" % max(g["r1000_n8"] for g in _GZ)
+GZ16_LO_T, GZ16_HI_T = "%.2f" % min(g["r1000_n16"] for g in _GZ), "%.2f" % max(g["r1000_n16"] for g in _GZ)
+assert (GZ8_LO_T, GZ8_HI_T, GZ16_LO_T, GZ16_HI_T) == ("2.00", "2.75", "1.18", "1.62")
+N16_WIDEN_T = "1.0–2.1"                # 16 份 120 对的上限 ÷ 8 份 28 对（g3x16-noise-vs-8.json；MATRIX「L 长跑」第一条）
+N16_GN_WIDEN = 1.70                    # 其中梯度范数带符号均值放宽 1.70 倍（同上；路由偏置均值 2.07 倍最大）
