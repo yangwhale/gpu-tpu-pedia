@@ -306,7 +306,7 @@ def fig_fixcmp():
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "主因：流的梯度怎么舍；对齐配置剩的那一截，机制还在查", [
         "补上 GPU 的流梯度舍法，均值从 %s 降到 %s（两样本检验 p %s）；GPU 一边反过来改也长出尾巴，见下一张图。" % (N.FC_MEAN_T["修之前"], N.FC_MEAN_T["补流梯度舍法"], N.TW_P_T["tpu"]),
-        "对齐配置把收拢处也照 GPU 舍，均值 %s，比只补流梯度大（p %s），原因在查；判档时主 loss 过（%.2f 倍），6 份里 1 份待定（%.2f）。" % (N.FC_MEAN_T["对齐配置"], N.TW_P_T["c_m58"], N.C_NOW["loss_r"], N.C_NOW["rep_pend_r"]),
+        "对齐配置把收拢处也照 GPU 舍，均值 %s，比只补流梯度大（p %s），跟修之前反倒分不开（p %s），原因在查；判档时主 loss 过（%.2f 倍）。" % (N.FC_MEAN_T["对齐配置"], N.TW_P_T["c_m58"], N.TW_P_CCTL_T, N.C_NOW["loss_r"]),
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，1000 步）：主 loss 对 GPU 16 份逐步均值的相对差，25 步滑动平均（两端各留半窗不画）；灰带是 GPU 16 份每份对其余 15 份均值的相对差（同样平滑）的逐步最大绝对值，只作背景。"
@@ -363,7 +363,7 @@ def fig_twoway():
         if side == "tpu":
             a, b = X0 + cw * 0.5, X0 + cw * 1.5
             f.t((a + b) / 2, YT + 8, "差 %s，p %s" % (("%+.1e" % (TW["tpu"]["补流梯度舍法"]["mean"] - TW["tpu"]["对照"]["mean"])).replace("e-0", "e-"), N.TW_P_T["tpu"]), GR, True, 13.5, "middle")
-            f.t(X0 + cw * 2.5, YT + 8, "比左边一格大，p %s；在查" % N.TW_P_T["c_m58"], PU, True, 12.5, "middle")
+            f.t(X0 + cw * 2.5, YT + 8, "比左边大 p %s；跟修之前 p %s" % (N.TW_P_T["c_m58"], N.TW_P_CCTL_T), PU, True, 12.5, "middle")
         else:
             f.t(X0 + cw * 1.5, YT + 8, "4 份全为正，p %s" % N.TW_P_T["gpu"], OR, True, 13.5, "middle")
             f.t(X0 + cw * 2.5, YT + 8, "p %s，没变" % N.TW_P_T["head"], GY, True, 13, "middle")

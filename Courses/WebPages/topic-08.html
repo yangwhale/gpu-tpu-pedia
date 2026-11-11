@@ -10746,7 +10746,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="552" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主因：流的梯度怎么舍；对齐配置剩的那一截，机制还在查</tspan></text>
 <text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">补上 GPU 的流梯度舍法，均值从 +9.4e-6 降到 +1.9e-6（两样本检验 p 0.016）；GPU 一边反过来改也长出尾巴，见下一张图。</text>
-<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">对齐配置把收拢处也照 GPU 舍，均值 +6.9e-6，比只补流梯度大（p 0.024），原因在查；判档时主 loss 过（0.98 倍），6 份里 1 份待定（1.14）。</text>
+<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">对齐配置把收拢处也照 GPU 舍，均值 +6.9e-6，比只补流梯度大（p 0.024），跟修之前反倒分不开（p 0.32），原因在查；判档时主 loss 过（0.98 倍）。</text>
 </svg><figcaption><b>左边红线四条都爬出灰带；中间绿线多数贴着 0；右边紫线还剩一截。</b><span class="capmore"><br><em>三列同一纵轴；每条线一份运行；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，1000 步）：主 loss 对 GPU 16 份逐步均值的相对差，25 步滑动平均（两端各留半窗不画）；灰带是 GPU 16 份每份对其余 15 份均值的相对差（同样平滑）的逐步最大绝对值，只作背景。「尾巴还在」按对齐记录的判据：第 751–1000 步均值超过 3e-6。p 是对修之前那一格的置换检验。</p>
 <p>📌 三列都开着「多路残差分支输入和更新后的流强制舍 BF16」那个开关（修之前就开着），所以对齐配置一共三处照 GPU 写法、比修之前多两处。修之前四份里三份只改执行方式（片上内存上限、调度），同一配置。「补流梯度舍法」再让流的几份梯度先各舍 BF16、照 GPU 的顺序逐个相加（分支输出也舍 BF16）；「对齐配置」再加上收拢处（四路收成一路之后）的舍入，2026-11-11 起是对齐用的配置。取舍：只补流梯度，后段平了，第 51–100 步的小鼓包还在（＋5.6e-6，修之前 ＋3.9e-6）；对齐配置把收拢处也补上，鼓包没了（−2.8e-7），后段却多出一截。</p>
 <p>📌 对齐配置那截残余已排除的：关掉 MTP 再跑 4 份，对同配置 GPU 仍 ＋7.5e-6；GPU 在只换流梯度之上再让分支输出不舍，＋2.3e-6，不放大尾巴。</p>
@@ -10808,7 +10808,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="569" y="506" fill="#681da8" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对齐配置</tspan></text>
 <text class="svgsm" x="569" y="528" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">6 份，均值 +6.9e-6</text>
 <text class="svgsm" x="269" y="170" fill="#0d652d" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差 -7.5e-6，p 0.016</tspan></text>
-<text class="svgsm" x="569" y="170" fill="#681da8" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">比左边一格大，p 0.024；在查</tspan></text>
+<text class="svgsm" x="569" y="170" fill="#681da8" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">比左边大 p 0.024；跟修之前 p 0.32</tspan></text>
 <text class="svgsm" x="16" y="572" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">灰带：GPU 留一法标准差 ± 2.1e-6</text>
 <rect x="711" y="102" width="689" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="711" y="102" width="689" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -10873,7 +10873,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左块红点降到绿点；右块灰点升到橙点：两头各改一处，方向对上。</b><span class="capmore"><br><em>每点一份运行；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步）：每格 4–6 份（GPU 自己那格 16 份），第 551–1000 步主 loss 带符号均值；p 是对同一块里第一格做的置换检验（左块对修之前，右块对 GPU 自己）；对齐配置那格的 p 是对补流梯度舍法那一格。</p>
 <p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过；GPU 的三个诊断开关都不开时，CPU 上 191 个梯度逐位不变。GPU 只换收拢处那次舍法，后段不变，可第 51–100 步冒出 ＋3.7e-6（p 0.001）—— 正是 TPU 不补收拢处舍入时的前段鼓包，又一处两头对上。</p>
 <p>⚠️ 都是 mini 尺寸、每格份数不多；结论是「主因」，对齐配置还剩的一截机制未定。</p></details></figure>
-  <p>两个方向对上，才说得上主因是它。还剩两件照实写：TPU 那边「FP32 里加完才舍」是推断，没看后端指令；对齐配置把收拢处也照 GPU 舍以后，后段还剩 ＋6.9e-6，比只补流梯度大，为什么还没查清。（p 是检验值：把这些运行随机重新分组，分出这么大差别的概率。）<b>先改一边看效果，再反过来改另一边看能不能造出同样的偏</b>，这招在别的地方也用得上。</p>
+  <p>两个方向对上，才说得上主因是它。还剩两件照实写：TPU 那边「FP32 里加完才舍」是推断，没看后端指令；对齐配置把收拢处也照 GPU 舍以后，后段还剩 ＋6.9e-6，比只补流梯度大，跟修之前反倒分不开（p 0.32），为什么还没查清。（p 是检验值：把这些运行随机重新分组，分出这么大差别的概率。）<b>先改一边看效果，再反过来改另一边看能不能造出同样的偏</b>，这招在别的地方也用得上。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/configs/base.yml#L1405">MaxText（混元 4 公开分支）：开关 sa_use_base2_exp（默认开）</a></p>
 <details class="foldfig"><summary><b>考考自己</b>：中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？</summary><p>不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开。而且「过了」只是 300 步那一级：第二级第 1 步两边各自对 FP64，GPU 已经偏高 1.42e-5（比 GPU 8 份之间的极差还大）、TPU 只有 2.4e-7 —— 宽度一换成真的，GPU 那边就有一截偏差（还在查），只是 300 步的判定没把它显出来。要定，就再补一级只换其中一样，比如真实结构配随机权重。（TPU 那一半后来定到了「权重」那一行：真实权重的 logits 大，把 base2 常数舍入的误差放大了，<a href="#s9-7">§9.7</a>。）</p></details>
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>
