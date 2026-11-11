@@ -78,7 +78,7 @@ def fig_2x2():
             _ticks(f, x + 30, y + 40, k, sort, BL, 1.0)
             many = "几" if c == 0 else "几十到几百"
             if sort:
-                txt = "收几次更新，舍 1 次" if c == 0 else "8 张卡收齐，次数约是下一格的 8 倍，舍 1 次"
+                txt = "收几次更新，舍 1 次" if c == 0 else "8 张卡收齐，次数约是纯数据并行那格的 8 倍，舍 1 次"
             else:
                 txt = "收%s次更新，舍%s次" % (many, many)
             f.t(x + 30, y + 92, txt, GY, size=13.5)
@@ -91,9 +91,9 @@ def fig_2x2():
                 f.t(x + CW - 24, y + 150, "是上一格的 %s 倍" % N.C2_HOT_X_T, RD, True, 15, "end")
             if c == 0 and not sort:
                 f.t(x + CW - 24, y + 150, "不明显", GY, True, 15, "end")
-    yb = f.band(top + 2 * RH + 40, "warn", "低频行怎么加误差都小；高频行在 BF16 里一次次地加，才把误差攒起来", [
-        "纯数据并行比 FSDP 多出来的误差，%s 落在这 %d 个高频词的行上；低频两组最多只远 %s 倍。" % (N.C2_HOT_SHARE_T, HOT[1], N.C2_LOW_X_T),
-        "代价：左边两格的误差本来就有，在加进词表之前就在了，两种写法一样，不是这里的问题。",
+    yb = f.band(top + 2 * RH + 40, "warn", "低频行两种写法差别小（最多 %s 倍）；高频行在 BF16 里一次次地加，才把误差攒起来" % N.C2_LOW_X_T, [
+        "纯数据并行比 FSDP 多出来的误差，%s 落在这 %d 个高频词的行上。" % (N.C2_HOT_SHARE_T, HOT[1]),
+        "代价：左边两格的绝对误差不小，可它在加进词表之前就在了，两种写法一样，不是这里的问题。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，TPU v5p 自比，第 1 步）：词嵌入梯度按行分组，每组算 ‖被测 − FP64‖ ÷ ‖FP64‖。分组按这一行的 token 在这一步全局批里一共出现几次（16 条序列，主输入与多 token 预测输入合计）："
@@ -187,7 +187,7 @@ def fig_flow():
         f.t(434, y + 20, "dE%s：整张表 BF16" % "₀₁₂₃"[k], INK, True, 13.5, "middle")
         f.t(434, y + 37, "[120832, 1024]", GY, size=12, anchor="middle", mono=True)
         f.line(566, y + 22, 640, py + 140, OR, 1.4, arrow=(k == 3))
-    f.t(320, py + 272, "4096 个下标 ＜ 门槛 15104 → 不排序，每碰一次就舍一次", RD, True, 14)
+    f.t(320, py + 272, "4096 个下标 ＜ 门槛 15104（行数 ÷ 8）→ 不排序，每碰一次就舍一次", RD, True, 14)
     f.box(644, py + 104, 300, 72, "#fef7e0", OR, 8, sw=1.4)
     f.t(794, py + 134, "BF16 all-reduce，整张表", OR, True, 15, "middle")
     f.t(794, py + 158, "每卡每次 ≈ %s 字节" % ("%.2e" % N.C2_AR_BYTES).replace("e+0", "e"), GY, size=13, anchor="middle")
@@ -226,11 +226,11 @@ def fig_flow():
     f.t(1184, py2 + 104, "scatter-add → dE[:, 128k : 128k＋128]", GR, True, 14.5, "middle")
     f.t(1184, py2 + 126, "片上 FP32 里加完，只舍一次", GR, True, 13.5, "middle")
     f.t(1184, py2 + 148, "加完就是最终梯度，不再跨卡求和", GY, size=13, anchor="middle")
-    f.t(584, py2 + 290, "32768 个下标 ＞ 门槛 15104 → 后端自己插排序，同一个词的更新挨在一起", GR, True, 14)
+    f.t(584, py2 + 290, "32768 个下标 ＞ 门槛 15104 → 后端自己插排序、标「已排序」，同一个词的更新挨在一起", GR, True, 14)
     f._pan = None
     yb = f.band(py2 + PH + 30 + 20, "ok", "「先传后加」让每次 scatter 的下标数翻了 8 倍，正好跨过门槛", [
         "FSDP 一次加的更多，反而走上了只舍一次的写法；这是编译器自动切分的结果，跟 PyTorch FSDP「各卡先算整表梯度、再 reduce-scatter」不是一回事。",
-        "顺带：按形状算，FSDP 每卡每次跨卡的数据量约是纯数据并行的 1/%d（本课推导，线上实际字节数没测）。" % round(N.C2_BYTES_X),
+        "顺带：按形状算，反向这一次跨卡的数据量 FSDP 约是纯数据并行的 1/%d（本课推导）；每步连前向那次一起算约 1/15。" % round(N.C2_BYTES_X),
     ])
     yb = f.src(yb + 10,
                "📌 实测（两边训练步优化后的 HLO，每个微批主输入、多 token 预测输入各一组）：纯数据并行 —— scatter 输出 bf16[120832,1024]、没有排序，之后 all-reduce bf16[120832,1024]、BF16 加法；"
@@ -485,9 +485,9 @@ def fig_shard():
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，TPU v5p 8 设备，纯数据并行 8 ＋ 梯度累积 2，只多一个开关：词嵌入表的隐藏维换一个逻辑轴，沿数据并行轴切）：通信路径读自训练步优化后的 HLO —— 前向 token 号 all-gather s32[8,4096,1]、取到的行 all-to-all bf16[8,1,4096,128]；反向 token 号 all-gather、梯度 all-to-all bf16[1,4096,8,128]，先 sort 32768 个下标，scatter 输出 bf16[120832,128]、标「下标已排序」。跟 FSDP 8 的词嵌入通信一条不差。",
-               "📌 第 1 步：205 个梯度张量里 187 个换了顺序、11 个在 GPU 尺子以内、7 个是多路残差混合小参数（照例单列），没有丢精度的；梯度范数（裁剪前）6.35963，FP64 6.35944。开关关着时编出的程序与原来逐字相同，重跑逐位相同。",
+               "📌 第 1 步：205 个梯度张量里 187 个换了顺序、11 个在 GPU 尺子以内、7 个是多路残差混合小参数（照例单列），没有丢精度的；梯度范数（裁剪前）6.35963，FP64 6.35944。开关关着时编出的程序去掉元数据后与原来逐字相同，重跑逐位相同。",
                "📌 步时（第 11 步起每步中位数）：只切表 %.3f s，不修 %.3f s，golden（FSDP 8）%.3f s；显存峰值每设备 %s → %s 字节，参数与优化器状态 %s → %s（表的主权重和两份动量只存 1/8）。" % (N.C3_STEP_S, N.C2_DP_STEP_S, N.C2_G_STEP_S, _b(N.C3_HBM[0]), _b(N.C3_HBM[1]), _b(N.C3_STATE[0]), _b(N.C3_STATE[1])),
-               "⚠️ 通信少了、步时却没快，推断是原来那份整表 all-reduce 本来就和计算重叠、不在关键路径上；没有看 profile 核实。只在 v5p、缩小版、纯数据并行 8 上验证过；v7x、生产尺寸、数据并行 × FSDP 混合没跑。")
+               "⚠️ 通信少了、步时却没快，推断是原来那份整表 all-reduce 本来就和计算重叠、不在关键路径上；没有看 profile 核实。只在 v5p、缩小版、纯数据并行 8 ＋ 累积 2 上验证过；v7x、生产尺寸、数据并行 × FSDP 混合没跑。")
     f.save("fig9-shard.svg", yb + 14)
 
 
@@ -551,9 +551,9 @@ def fig_comm():
         "代价：字节按形状算，不是线上实测，只适合互相比；看不到精度（同一条 HLO 后端可以生成不同的指令），也看不到快慢（重不重叠要看步时或 profile）。",
     ])
     yb = f.src(yb + 10,
-               "📌 做法（本课实测所用）：用训练同一套配置和同一个训练步，把设备换成目标拓扑的描述，在 CPU 上为它做完整的切分和后端编译（JAX 的提前编译）；让 XLA 把训练步模块存成文本（--xla_dump_to、--xla_dump_hlo_as_text），只看切分、融合、调度都做完以后那一份（after_optimizations）。上卡后存下的程序与离线编的逐条一致（只差设备分组的写法）。",
-               "📌 读法：五种集合通信 all-reduce、all-gather、all-to-all、collective-permute、reduce-scatter；异步版 xxx-start／xxx-done 成对，算一次。认参数按形状（词嵌入 [120832,1024]，切开后 [120832,128]；输出头是 [1024,120832]）和 metadata 里的 op_name（前向取行是 gather，反向是 scatter-add），对不上就顺着数据流看使用者。每步次数 ＝ 从入口到它所在计算一路上各层循环次数之积，循环次数读条件计算里 compare(计数器, 常数), direction=LT 的那个常数。字节：all-reduce 算被求和的那块、all-gather 算拼好后的结果、all-to-all 算交换的那块、异步 collective-permute 只算一块缓冲。",
-               "📌 右块（实测，各运行上卡时存下的训练步程序，每步次数已乘上循环次数）：词嵌入／全部每步每设备字节 —— 不修 %s／%s；修法① %s／%s（主输入和多 token 预测输入合成一次 FP32 all-reduce，每个微批 1 次，仍在循环里；另多 %s 字节的 collective-permute）；修法② %s／%s；FSDP 8 %s／%s；只切词嵌入表 %s／%s（%d 条集合通信）。"
+               "📌 做法（本课实测所用）：用训练同一套配置和同一个训练步，把设备换成目标拓扑的描述，在 CPU 上为它做完整的切分和后端编译（JAX 的提前编译）；让 XLA 把训练步模块存成文本（--xla_dump_to、--xla_dump_hlo_as_text），只看切分、融合、调度都做完以后那一份（after_optimizations）。上卡后存下的程序里，集合通信与离线编的逐条一致（只差设备分组的写法；核对的是只切词嵌入表那份）。",
+               "📌 读法：五种集合通信 all-reduce、all-gather、all-to-all、collective-permute、reduce-scatter；异步版 xxx-start／xxx-done 成对，算一次，也可能包成 async-start、calls=子计算，集合通信在子计算里。认参数按形状（词嵌入 [120832,1024]，切开后 [120832,128]；输出头是 [1024,120832]）和 metadata 里的 op_name（前向取行是 gather，反向是 scatter-add），对不上就顺着数据流看使用者。每步次数 ＝ 从入口到它所在计算一路上各层循环次数之积，循环次数读条件计算里 compare(计数器, 常数), direction=LT 的那个常数。字节：all-reduce 算被求和的那块、all-gather 算拼好后的结果、all-to-all 算交换的那块、异步 collective-permute 只算一块缓冲。",
+               "📌 右块（取自各运行上卡时存下的训练步程序，每步次数已乘上循环次数；字节仍按形状算）：词嵌入／全部每步每设备字节 —— 不修 %s／%s；修法① %s／%s（主输入和多 token 预测输入合成一次 FP32 all-reduce，每个微批 1 次，仍在循环里；另多 %s 字节的 collective-permute）；修法② %s／%s；FSDP 8 %s／%s；只切词嵌入表 %s／%s（%d 条集合通信）。"
                % tuple(_b(x) if isinstance(x, (int, float)) and x > 1000 else x for x in (N.C3_COMM["纯数据并行8"] + (N.C3_COMM["修法1"][0], N.C3_COMM["修法1"][1], N.C3_FIX1_PERM_T) + N.C3_COMM["修法2"] + N.C3_COMM["FSDP8"] + N.C3_COMM["只切词嵌入表"] + (N.C3_N_COMM,))),
                "⚠️ 线上实际传多少还取决于通信算法：例如 ring all-reduce 每设备约收发 2(n−1)/n 倍，all-to-all 约 (n−1)/n 倍（通用估算）。")
     f.save("fig9-comm.svg", yb + 14)

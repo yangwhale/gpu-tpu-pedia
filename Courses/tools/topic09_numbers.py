@@ -1093,3 +1093,6 @@ assert abs((C3_STATE[0] - C3_STATE[1]) - C2_V * C2_D * 4 * 3 * 7 / 8.0) < 0.02e9
 C3_HBM = (6.16e9, 4.46e9)                # 实测显存峰值，每设备：不修 ／ 只切表
 C3_N_COMM = _CM["只切词嵌入表"]["条数"]    # 39 条集合通信
 assert C3_N_COMM == 39
+assert round(C3_COMM["纯数据并行8"][0] / C3_COMM["只切词嵌入表"][0]) == 15   # 每步连前向一起算：词嵌入通信约 1/15（本课复算，14.5）
+C2_K100_UNS_T, C2_K100_SRT_T, C2_HOT_DP_T, C2_HOT_FSDP_T = "1.46e-2", "1.70e-3", "1.57e-2", "3.26e-3"
+assert ("%.2e %.2e %.2e %.2e" % (C2_BYCOUNT["bf16_unsorted_excess_on"][3], C2_BYCOUNT["bf16_presorted_excess_on"][3], C2_GROUPS[2][4], C2_GROUPS[2][3])) == "1.46e-02 1.70e-03 1.57e-02 3.26e-03"
