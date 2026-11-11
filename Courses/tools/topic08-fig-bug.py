@@ -102,3 +102,63 @@ def fig_bug():
 
 
 fig_bug()
+
+
+def fig_screen():
+    """fig8-screen 回答：改完代码，上卡之前能不能先判一判？研究线的跑前离线筛回测 109 个改动，判得准不准、哪些判不了。"""
+    S = N.SCREEN
+    f = Fig(W, "左右两块。左：改了代码，先在 CPU 上为目标拓扑编一次训练步（约三分钟，不占芯片），跟对照比优化后的程序，"
+               "三个出口：程序相同 23 个，不用跑，上卡实际全部逐位；程序不同 72 个，上卡跑 300 步看档，其中 5 个结果仍逐位；判不了 14 个，直接上卡，"
+               "是 SparseCore 卸载开关 6、换运行库 5、换芯片代际 3。右：能判的 95 个对上 TPU 实际全部相符，不符 0；运行库升到 0.0.52 后，104 个能比的判定一条没变，抽 3 条判相同的上卡，全部逐位。")
+    y0 = f.header("跑前离线筛：上卡之前，先在 CPU 上编一次、比程序",
+                  "研究线拿已经上过卡的 %d 个改动回测（第二次迁移，TPU v5p 为主）" % S["arms"],
+                  [(GR, "程序相同：不用跑"), (BL, "程序不同：上卡看档"), (OR, "判不了：直接上卡")])
+    PH = 340
+    LW = 900
+    py = f.panel(0, y0, LW, PH, "Ⓐ 一次编译，三个出口", GR)
+    f.box(24, py + 30, 150, 50, "#fff", INK, 8, sw=1.4)
+    f.t(99, py + 61, "改了一处", INK, True, 14, "middle")
+    f.line(174, py + 55, 214, py + 55, GY, 1.6)
+    f.box(218, py + 22, 230, 66, "#fff", INK, 8, sw=1.4)
+    f.t(333, py + 50, "CPU 上为目标拓扑编译", INK, True, 14, "middle")
+    f.t(333, py + 72, "约 %s 分钟，不占芯片" % N.SCREEN_MIN_T, GY, size=12.5, anchor="middle")
+    f.line(448, py + 55, 488, py + 55, GY, 1.6)
+    f.box(492, py + 22, 200, 66, "#fff", INK, 8, sw=1.4)
+    f.t(592, py + 50, "比优化后的程序", INK, True, 14, "middle")
+    f.t(592, py + 72, "去元数据、名字重编号", GY, size=12.5, anchor="middle")
+    outs = [(GR, "程序相同 %d" % S["same"], "不用跑；上卡实际全部逐位"),
+            (BL, "程序不同 %d" % S["diff"], "上卡 300 步看档；%d 个仍逐位" % N.SCREEN_DIFF_BITWISE),
+            (OR, "判不了 %d" % S["cant"], "卸载开关 %d、换运行库 %d、换芯片 %d" % tuple(N.SCREEN_CANT_KINDS.values()))]
+    TX = 470
+    ys = [py + 112 + i * 66 for i in range(3)]
+    f.line(TX, py + 88, TX, ys[-1] + 25, GY, 1.4, arrow=False)
+    for (col, a, b), y in zip(outs, ys):
+        f.line(TX, y + 25, TX + 26, y + 25, GY, 1.4)
+        f.box(TX + 30, y, 150, 50, col, col, 8)
+        f.t(TX + 105, y + 31, a, "#fff", True, 14, "middle")
+        f.t(TX + 196, y + 31, b, col, True, 12.5, w=LW - TX - 206)
+    f._pan = None
+    RX = LW + 20
+    py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 判得准不准", BL)
+    tot = S["match"] + S["mismatch"]
+    bw = W - RX - 60
+    f.t(RX + 20, py2 + 34, "能判的 %d 个，对上 TPU 实际：" % tot, INK, True, 14)
+    f.box(RX + 20, py2 + 48, bw, 34, GR, GR, 6)
+    f.t(RX + 20 + bw / 2, py2 + 71, "相符 %d　不符 %d" % (S["match"], S["mismatch"]), "#fff", True, 15, "middle")
+    f.t(RX + 20, py2 + 120, "运行库升到 0.0.52 以后：", INK, True, 14)
+    f.t(RX + 20, py2 + 146, "%d 个能比的改动，判定一条没变" % N.LIB_SCREEN_N, BL, True, 13.5)
+    f.t(RX + 20, py2 + 170, "抽 %d 条判相同的上卡，全部逐位" % N.LIB_SPOT, BL, True, 13.5)
+    f.t(RX + 20, py2 + 214, "判不了 ≠ 判错：只是规则上直接上卡", GY, True, 13)
+    f.t(RX + 20, py2 + 238, "程序不同也可能逐位：只会多跑，不会漏", GY, True, 13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "改完先编译比程序：一样就不用跑，不一样再上卡；后端会一起变的几类，规则上直接上卡", [
+        "换运行库、换芯片、SparseCore 卸载这几类，优化后的程序说明不了后端怎么生成 kernel，所以不靠它判。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（研究线「跑前离线筛：回测」）：%d 个改动，判程序相同 %d、不同 %d、判不了 %d；能判的 %d 个跟 TPU 实际全部相符。共编 %d 份规格，每份整次 %s s（中位数 %d s），单进程峰值内存 %s GiB。"
+               % (S["arms"], S["same"], S["diff"], S["cant"], S["match"], N.SCREEN_SPECS, N.SCREEN_SEC_T, N.SCREEN_MED_S, N.SCREEN_GIB_T),
+               "📌 「程序相同」的规则：取编译器优化后的训练步程序，去掉元数据与源码位置、名字按出现顺序重编号、设备分组展开、子计算参数按编号排前，再逐字比；CPU 上编的跟 TPU 上实际存下的规范化后一字不差。")
+    f.save("fig8-screen.svg", yb + 14)
+
+
+fig_screen()

@@ -1257,3 +1257,6 @@ assert LAD_MID[0] > LAD_MID_SPREAD > max(abs(x) for x in LAD_MINI_GPU_RANGE)
 MD_ISO = {"对照": 1.48e-5, "关MTP": 1.16e-5, "关KD": 9.0e-6, "都关": 8.7e-6}
 assert all(v > 0 for v in MD_ISO.values()) and abs(MD_ISO["都关"] / MD_ISO["对照"] - 0.6) < 0.05   # 约六成
 MD_ISO_T = "对照 ＋1.5e-5，关 MTP ＋1.2e-5，关 KD ＋9.0e-6，两个都关 ＋8.7e-6"
+SCREEN_DIFF_BITWISE = 5                    # 判程序不同、上卡后结果仍逐位的（多跑一次，不漏）
+SCREEN_CANT_KINDS = {"SparseCore 卸载开关": 6, "换运行库": 5, "换芯片代际": 3}
+assert sum(SCREEN_CANT_KINDS.values()) == SCREEN["cant"]

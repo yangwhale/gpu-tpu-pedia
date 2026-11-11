@@ -11096,13 +11096,69 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 
   <h3 id="s10-3">10.3　日常回归：逐位优先</h3>
-  <p><b>第一步：改完先比程序指纹</b>（编译后的整份程序去掉元数据、名字重新编号以后的哈希）。一样，结果就一定逐位相同，回归直接过；不一样，再跑 300 步看档。研究线把它做成了跑前离线筛：在 CPU 上为目标拓扑编一次训练步（不占芯片，一次约 3 分钟），跟对照比优化后的程序。拿已有 TPU 结论的 109 个改动回测：判程序相同 23 个、不同 72 个、判不了 14 个；能判的 95 个跟 TPU 实际全部相符，不符 0 个。</p>
-  <details class="foldfig"><summary><b>离线筛怎么比、哪几类判不了</b></summary>
+  <p><b>第一步：改完先比程序指纹</b>（编译后的整份程序去掉元数据、名字重新编号以后的哈希）。一样，结果就一定逐位相同，回归直接过；不一样，再跑 300 步看档。研究线把它做成了跑前离线筛，拿已经上过卡的改动回测过：</p>
+<figure class="fbox fwide" id="fig-screen"><svg viewBox="0 0 1400 560" width="100%" role="img" aria-label="左右两块。左：改了代码，先在 CPU 上为目标拓扑编一次训练步（约三分钟，不占芯片），跟对照比优化后的程序，三个出口：程序相同 23 个，不用跑，上卡实际全部逐位；程序不同 72 个，上卡跑 300 步看档，其中 5 个结果仍逐位；判不了 14 个，直接上卡，是 SparseCore 卸载开关 6、换运行库 5、换芯片代际 3。右：能判的 95 个对上 TPU 实际全部相符，不符 0；运行库升到 0.0.52 后，104 个能比的判定一条没变，抽 3 条判相同的上卡，全部逐位。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">跑前离线筛：上卡之前，先在 CPU 上编一次、比程序</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">研究线拿已经上过卡的 109 个改动回测（第二次迁移，TPU v5p 为主）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">程序相同：不用跑</text>
+<rect x="172.44" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="193" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">程序不同：上卡看档</text>
+<rect x="360.56" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="381" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">判不了：直接上卡</text>
+<rect x="0" y="102" width="900" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="900" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="900" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="900" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一次编译，三个出口</tspan></text>
+<rect x="24" y="162" width="150" height="50" rx="8" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="193" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改了一处</tspan></text>
+<line x1="174" y1="187" x2="214" y2="187" stroke="#5f6368" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="218" y="154" width="230" height="66" rx="8" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="333" y="182" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">CPU 上为目标拓扑编译</tspan></text>
+<text class="svgsm" x="333" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">约 3 分钟，不占芯片</text>
+<line x1="448" y1="187" x2="488" y2="187" stroke="#5f6368" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="492" y="154" width="200" height="66" rx="8" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="592" y="182" fill="#202124" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">比优化后的程序</tspan></text>
+<text class="svgsm" x="592" y="204" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">去元数据、名字重编号</text>
+<line x1="470" y1="220" x2="470" y2="401" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="470" y1="269" x2="496" y2="269" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="500" y="244" width="150" height="50" rx="8" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="575" y="275" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">程序相同 23</tspan></text>
+<text class="svgsm" x="666" y="275" fill="#0d652d" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不用跑；上卡实际全部逐位</tspan></text>
+<line x1="470" y1="335" x2="496" y2="335" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="500" y="310" width="150" height="50" rx="8" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="575" y="341" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">程序不同 72</tspan></text>
+<text class="svgsm" x="666" y="341" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上卡 300 步看档；5 个仍逐位</tspan></text>
+<line x1="470" y1="401" x2="496" y2="401" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="500" y="376" width="150" height="50" rx="8" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="575" y="407" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">判不了 14</tspan></text>
+<text class="svgsm" x="666" y="407" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卸载开关 6、换运行库 5、换芯片 3</tspan></text>
+<rect x="920" y="102" width="480" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="920" y="102" width="480" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="920" y="104" width="480" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="920" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="934" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 判得准不准</tspan></text>
+<text class="svgsm" x="940" y="166" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">能判的 95 个，对上 TPU 实际：</tspan></text>
+<rect x="940" y="180" width="420" height="34" rx="6" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1150" y="203" fill="#fff" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">相符 95　不符 0</tspan></text>
+<text class="svgsm" x="940" y="252" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库升到 0.0.52 以后：</tspan></text>
+<text class="svgsm" x="940" y="278" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">104 个能比的改动，判定一条没变</tspan></text>
+<text class="svgsm" x="940" y="302" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">抽 3 条判相同的上卡，全部逐位</tspan></text>
+<text class="svgsm" x="940" y="346" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">判不了 ≠ 判错：只是规则上直接上卡</tspan></text>
+<text class="svgsm" x="940" y="370" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">程序不同也可能逐位：只会多跑，不会漏</tspan></text>
+<rect x="0" y="462" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="462" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="462" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="489" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改完先编译比程序：一样就不用跑，不一样再上卡；后端会一起变的几类，规则上直接上卡</tspan></text>
+<text class="svgsm" x="20" y="520" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">换运行库、换芯片、SparseCore 卸载这几类，优化后的程序说明不了后端怎么生成 kernel，所以不靠它判。</text>
+</svg><figcaption><b>左边一次编译三个出口；右边能判的全部对上。</b><span class="capmore"><br><em>数都是研究线的回测实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（研究线「跑前离线筛：回测」）：109 个改动，判程序相同 23、不同 72、判不了 14；能判的 95 个跟 TPU 实际全部相符。共编 95 份规格，每份整次 114–265 s（中位数 184 s），单进程峰值内存 13.2–16.9 GiB。</p>
+<p>📌 「程序相同」的规则：取编译器优化后的训练步程序，去掉元数据与源码位置、名字按出现顺序重编号、设备分组展开、子计算参数按编号排前，再逐字比；CPU 上编的跟 TPU 上实际存下的规范化后一字不差。</p></details></figure>
+  <details class="foldfig"><summary><b>离线筛怎么比、那几类为什么判不了</b></summary>
   <ul>
     <li><b>怎么比</b>：取编译器优化后的训练步程序，去掉元数据和源码位置，指令名按出现顺序重新编号（CPU 上编和 TPU 上编，名字里的序号会差几十），设备分组展开成设备号，每个子计算的参数按编号排到最前，然后逐字比。CPU 上编出的程序跟 TPU 上实际存下的，规范化以后一字不差。</li>
     <li><b>判不了的几类</b>：换运行库、换镜像（后端代码生成一起换了，程序相同也不能推出逐位相同）；换芯片代际（本来就是两个程序）；SparseCore 卸载的开关（卸载可能不体现在优化后的程序里，规则上谨慎起见直接上卡；目前程序相同的两个这类开关，实测结果也都逐位）。这几类直接上卡。</li>
     <li><b>程序不同，结果也可能逐位相同</b>：比如全局矩阵乘最高精度，程序变了、结果一位没变。离线筛只会让你多跑，不会让你漏跑。</li>
-    <li><b>换版本以后还能用</b>：运行库升到 0.0.52，104 个能比的改动，「程序相同／不同」的判定一条没变；抽 3 条判相同的上卡，都跟新基准逐位相同。</li>
   </ul></details>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/153ae2c439c5197f46e487480f33bb4dd09a423e/models/hunyuan4/alignments/04-tpu-self/hlo_screen.py">代码：跑前离线筛</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/153ae2c439c5197f46e487480f33bb4dd09a423e/models/hunyuan4/alignments/04-tpu-self/setup.md">代码：用法与规范化规则（「跑前离线筛」一节）</a></p>
   <p>指纹加上噪声尺子和 FP64，还抓到过一个编译器的真 bug：</p>
