@@ -1005,6 +1005,9 @@ def _anim_extra(seg):
 _secs = [(m.start(), re.sub(r"<[^>]+>", "", m.group(1)))
          for m in re.finditer(r'<h3 class="sec" id="c\d+">(第[零一二三四五六七八九十]+节.*?)</h3>', html)]
 assert len(_secs) == len(CH) == len(PLAN), "节数对不上：%d / %d / %d" % (len(_secs), len(CH), len(PLAN))
+# 11-11 晚（讲师整讲意见）：讲义每节分 5–6 个小段（▍），手册「每章小节别太碎」的讲义口径；做成断言，别只写在注释里
+_seg = [(c[0], c[3].count("<p><b>▍")) for c in CH]
+assert all(5 <= n <= 6 for _t, n in _seg), "讲义每节应有 5–6 个 ▍ 小段：%s" % [x for x in _seg if not 5 <= x[1] <= 6]
 _secs.append((html.index("🚧 这份讲义还薄"), ""))
 _rows, _floor, _over = [], 0.0, []
 for _i in range(len(CH)):
