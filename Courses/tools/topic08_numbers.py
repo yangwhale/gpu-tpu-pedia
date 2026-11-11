@@ -1291,7 +1291,7 @@ _PS = _C2["prod_shape"]
 PROD_TH = {k: _PS["%s|6144|%s" % (v, g)]["门槛"] for k, (v, g) in {"v5p_046": ("0.0.46", "v5p"), "v5p_052": ("0.0.52", "v5p"), "v7x_046": ("0.0.46", "v7x"), "v7x_052": ("0.0.52", "v7x")}.items()}
 assert PROD_TH == {"v5p_046": 15105, "v5p_052": None, "v7x_046": 15105, "v7x_052": 43648} and _PS["0.0.52|6144|v5p"]["查到"] == 65536
 assert not any(_PS["0.0.52|6144|%s" % g]["每卡"][n] for g in ("v5p", "v7x") for n in ("4096", "8192", "16384"))   # 0.0.52 上每卡 4096–16384 两代都不排序
-PROD_TH_V7X_052_T = format(PROD_TH["v7x_052"], ",")
+PROD_TH_V7X_052_T = str(PROD_TH["v7x_052"])
 
 # 混元 3 换基线重判（11-11 晚，混元 3 对齐报告「基线」一段，实测）：⑤ 的十份每份当一次基线，四个配置各判一遍
 REBASE_SHIFT_MAX, REBASE_V7X_PEND = 0.47, 3      # r 在十份基线之间最多相差 0.47；v7x 当前配置有 3 份基线落进待定（最差 1.11），没有不过
@@ -1332,3 +1332,6 @@ PR_LOSS_X = PR["L4.loss"]["ratio"]["signed_mean"]
 assert "%.1f" % PR_LOSS_X == "4.8"                                                # 主 loss 带符号均值：同配方尺子比现行宽几倍
 assert ["%.2f" % PR[k]["r_borrowed"] for k in ("L4.loss", "L4.grad_norm")] == ["2.97", "2.45"]   # 借现行尺子时这两项判超
 PR_N_T, PR_WORST_T, PR_LOSS_X_T = "8", "%.2f" % PR_WORST, "%.1f" % PR_LOSS_X
+# F14：生产形状 0.0.46 的门槛（两代都是 V/8 往上取整）——每卡 16384 个下标在 0.0.46 上会排序，0.0.52 上不排序
+assert PROD_TH["v5p_046"] == PROD_TH["v7x_046"] == 120832 // 8 + 1 and 16384 > PROD_TH["v5p_046"]
+PROD_TH_046_T = str(PROD_TH["v5p_046"])
