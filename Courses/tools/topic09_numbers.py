@@ -570,7 +570,7 @@ B_V5P = (7.965e-3, -6.104e-3, 0.488e-3)              # v5p 那组补跑的三笔
 ENSEMBLE_PEND_T = "MARE %.2f、最大单步 %.2f" % (ENSEMBLE_PEND_MARE, ENSEMBLE_PEND_MAX); _lock("ENSEMBLE_PEND_T", ENSEMBLE_PEND_T, "MARE 1.02、最大单步 1.15")
 V7X_L2_R_T = " ／ ".join("%.2f" % v for v in V7X_L2_R); _lock("V7X_L2_R_T", V7X_L2_R_T, "1.06 ／ 1.01 ／ 1.01 ／ 1.02")
 
-# ── 11-06 下午：第 1 步张量换尺子（两侧执行噪声并集）＋ 台账 #20 定责 ─────────────────────────────
+# ── 11-06 下午：第 1 步张量换尺子（两侧执行噪声并集）＋ 一处定责 ─────────────────────────────
 # 出处（实测）：对齐报告 §4 与注 17、注 20（11-06 下午版）；新开关步时取补跑记录。
 STEP1_TPU_ONLY_EXEC, STEP1_TPU_VS_GPU = 0.080, 0.105    # 第 3 层 0 号专家梯度相对差：TPU 只改片上内存上限 / TPU 对 GPU
 UNION_GPU_PAIRS, UNION_TPU_RUNS = 3, 7

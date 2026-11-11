@@ -571,7 +571,7 @@ __FIG_ELIDE__
 __FIG_BOUNDARY__
   <p>第二次迁移把数值上的对不齐一处处查下来，几乎每一处都是一个精度换挡的地方：一个值从 16 位进 32 位、从 32 位落回 16 位，或者 GPU 上悄悄打开的 TF32；剩下一类是 32 位对 32 位，同样是 FP32 的 exp、log，两边的实现精度差几十倍（§5.8）。连「操作数转成 FP32」都不等于 FP32 矩阵乘：TPU 默认对 FP32 操作数也只算一遍 BF16（图第 2 行）。</p>
   <p>要更接近 FP32，得给那一处单独设 HIGHEST（多遍 BF16 拼出来的近似）。可一处写着 HIGHEST，不等于它真上了矩阵单元：编译器可能把小的加权和改写成 FP32 逐元素乘加，那时它跟 GPU 只差加法顺序。是不是多遍 BF16，看编译后它还是不是矩阵乘。另一格是<b>该留 32 位的中间值存成了 16 位</b>：这是写错了，不是噪声，哪怕它小到 GPU 重跑都盖得住。参照的写法跟生产对不上时，以生产为准，改参照 —— 第 4 行改的就是 GPU。</p>
-  <p class="codeline">''' + mt(4, "src/maxtext/layers/mhc.py", "L547-L562", "四路相加的两种写法（ihc_stream_sum_unrolled）") + "　" + mt(4, "src/maxtext/configs/base.yml", "L229-L233", "输出头单独设精度（logits_matmul_precision）") + '''</p>
+  <p class="codeline">''' + mt(4, "src/maxtext/layers/mhc.py", "L547-L562", "四路相加的两种写法（ihc_stream_sum_unrolled；注释说 HIGHEST 是多遍 BF16，那是旧说法，以编译产物为准）") + "　" + mt(4, "src/maxtext/configs/base.yml", "L229-L233", "输出头单独设精度（logits_matmul_precision）") + '''</p>
   <details class="foldfig"><summary><b>边界清单</b>：两次迁移碰到的十三类（本课整理，单列了「Python 常数」一类），各举一例</summary>
   <table class="t9"><thead><tr><th>边界</th><th>例子</th><th>怎么对上</th></tr></thead><tbody>
   <tr><td>矩阵乘 FP32 累加，结果先存 BF16 再给下一个算子</td><td>注意力打分 q·k，参照自己写的不融合实现（图第 4 行）</td><td>让它留 FP32，照生产的融合内核</td></tr>
@@ -860,7 +860,7 @@ __FIG_SWEEP__
   <p>前两种修法都没动纯数据并行处理这份梯度的结构：每张卡一个微批只有 4096 个 token，跨卡求和传的却是整张表，占纯数据并行全部通信的 «C3_EMB_SHARE_T»；8 张卡各存一整份表和它的优化器状态。换个思路：FSDP 那条「先传后加」不是谁手写的，是编译器在「表按隐藏维切开」这个前提下自动切出来的。那就其余参数照旧纯数据并行，只给词嵌入表加一个开关，让它沿数据并行轴、按隐藏维切开：</p>
 __FIG_SHARD__
   <p>结果跟预期一样：编译器对这一个参数生成了跟 FSDP 一条不差的通信，每张卡那次加法收 «C2_FSDP_N» 个下标、排序、带标记，按单算子实验就是只舍一次，病根「高频词 × 不排序」不再成立。205 个张量没有丢精度的；曲线跟 GPU 重跑分不开；词嵌入那份通信每步每设备从 9.90e8 降到 6.82e7 字节，步时 «C3_ST_T»（对基线）。</p>
-  <p class="codeline">''' + mt(4, "src/maxtext/configs/base.yml", "L150-L152", "三种修法的开关") + "　" + mt(4, "src/maxtext/layers/embeddings.py", "L136-L165", "词嵌入层：表怎么切、在什么精度里加") + "　" + mt(4, "HUNYUAN.md", "", "全部开关一览") + '''</p>
+  <p class="codeline">''' + mt(4, "src/maxtext/configs/base.yml", "L150-L152", "三种修法的开关") + "　" + mt(4, "src/maxtext/layers/embeddings.py", "L136-L187", "词嵌入层：表怎么切、在什么精度里加") + "　" + mt(4, "HUNYUAN.md", "", "全部开关一览") + '''</p>
   <details class="foldfig"><summary><b>三种修法放在一起</b>：精度、通信、步时、它靠什么</summary>
   <table class="t9"><thead><tr><th>修法</th><th>第 1 步离 FP64</th><th>曲线最差 <span style="text-transform:none">r</span>（300 ／ 1000 步）</th><th>词嵌入通信（每步每设备，按形状算）</th><th>步时（对基线）</th><th>靠什么</th></tr></thead><tbody>
   <tr><td>不修</td><td>«C2_EMB_DP_T»</td><td>«C2_R_DP8_T»</td><td>9.90e8</td><td>«C2_ST_DP_T»</td><td>—</td></tr>

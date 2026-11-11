@@ -19,10 +19,10 @@ assert sum(1 for _n, a in MINI if a <= 1) == 7 and max(a for _n, a in MINI) == 1
 GPUSCALE = [("1 台，原设置重跑", 0.93), ("1 台，EP 8", 0.95), ("2 台 DP16＋EP4（8 份）", [1.76, 0.90, 1.59, 0.95, 0.97, 1.17, 1.00, 0.81]),
             ("2 台 DP16＋EP16", 0.89), ("2 台 PP2", 1.25), ("4 台 PP2", 1.50)]
 GPU_POS = 4149.37                     # 正对照：同 2 台设置、学习率大 10%
-RW3_GPU_A, RW3_TPU, RW3_TPU_OFF = 5.76e-5, -9.87e-5, -1.24e-6   # 第 1 步主 loss 对 CPU FP64：GPU、TPU 开 base2、TPU 只关 base2（真实宽度一节、根源一览第 24 行）
-assert abs(abs(RW3_TPU) / RW3_GPU_A - 1.71) < 0.01
-RW3_1K = {"开 base2": (2, 4, 3), "关 base2": (3, 6, 0)}       # 1000 步回放 9 项：过／待定／不过
-assert all(sum(v) == 9 for v in RW3_1K.values())
+RWIDE_GPU_A, RWIDE_TPU, RWIDE_TPU_OFF = 5.76e-5, -9.87e-5, -1.24e-6   # 第 1 步主 loss 对 CPU FP64：GPU、TPU 开 base2、TPU 只关 base2（真实宽度一节、根源一览第 24 行）
+assert abs(abs(RWIDE_TPU) / RWIDE_GPU_A - 1.71) < 0.01
+RWIDE_1K = {"开 base2": (2, 4, 3), "关 base2": (3, 6, 0)}       # 1000 步回放 9 项：过／待定／不过
+assert all(sum(v) == 9 for v in RWIDE_1K.values())
 KAPPA_T = "1.0018"
 
 
@@ -86,17 +86,17 @@ def fig_mig2():
     f.line(cx0, yl, cx1, yl, LINE, 1.2, arrow=False)
     f.line(CX(0), yl - 18, CX(0), yl + 18, INK, 1.4, arrow=False)
     f.t(CX(0), yl + 36, "0 ＝ 真值", GY, size=12.5, anchor="middle")
-    f.box(CX(RW3_GPU_A) - 6, yl - 6, 12, 12, GY2, INK, 6)
-    f.t(CX(RW3_GPU_A), yl - 16, "GPU", GY, True, 12.5, "middle")
-    f.box(CX(RW3_TPU) - 6, yl - 6, 12, 12, RD, INK, 6)
-    f.t(CX(RW3_TPU), yl - 16, "TPU", RD, True, 12.5, "middle")
-    f.line(CX(RW3_TPU) + 8, yl + 14, CX(RW3_TPU_OFF) - 8, yl + 14, GR, 1.6)
-    f.box(CX(RW3_TPU_OFF) - 6, yl + 8, 12, 12, GR, INK, 6)
+    f.box(CX(RWIDE_GPU_A) - 6, yl - 6, 12, 12, GY2, INK, 6)
+    f.t(CX(RWIDE_GPU_A), yl - 16, "GPU", GY, True, 12.5, "middle")
+    f.box(CX(RWIDE_TPU) - 6, yl - 6, 12, 12, RD, INK, 6)
+    f.t(CX(RWIDE_TPU), yl - 16, "TPU", RD, True, 12.5, "middle")
+    f.line(CX(RWIDE_TPU) + 8, yl + 14, CX(RWIDE_TPU_OFF) - 8, yl + 14, GR, 1.6)
+    f.box(CX(RWIDE_TPU_OFF) - 6, yl + 8, 12, 12, GR, INK, 6)
     f.t(CX0 + 16, yl + 66, "TPU 偏低，定到注意力的 base2：", INK, True, 13)
     f.t(CX0 + 16, yl + 88, "常数 log₂e 舍成 BF16，logits 整体 ×%s" % KAPPA_T, INK, size=12.5)
-    f.t(CX0 + 16, yl + 110, "只关这个开关：%.2e → %.2e" % (RW3_TPU, RW3_TPU_OFF), GR, True, 12.5)
+    f.t(CX0 + 16, yl + 110, "只关这个开关：%.2e → %.2e" % (RWIDE_TPU, RWIDE_TPU_OFF), GR, True, 12.5)
     f.t(CX0 + 16, yl + 150, "1000 步回放九项（过／待定／不过）", INK, True, 13)
-    for i, (k, (p_, q_, r_)) in enumerate(RW3_1K.items()):
+    for i, (k, (p_, q_, r_)) in enumerate(RWIDE_1K.items()):
         y = yl + 180 + i * 30
         f.t(CX0 + 16, y, k, INK, True, 12.5)
         for j, (n_, col) in enumerate(((p_, BL), (q_, OR), (r_, RD))):
