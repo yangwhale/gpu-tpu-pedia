@@ -910,3 +910,186 @@ MC_1K_OBS_T = "%d%%" % round(_TS["loo_1000_n16"]["frac_gt_1"] * 100)
 assert (MC_300_OBS_T, MC_1K_OBS_T) == ("59%", "22%")
 # 同一种轮换（GPU 1000 步 16 份，240 种）单看一条检查的最高分（本课从逐种轮换数据算：每条检查取三个统计里最大的，再取 240 种里最大的）
 LOO1_LOSS, LOO1_TAIL, LOO1_PN, LOO1_BM = "1.29", "1.23", "1.58", "1.82"   # 主 loss 全程、后段、参数范数、路由偏置均值
+
+
+# ── 2026-11-11 · 第八节「案例二：DDP 和 FSDP 对不上」（第二次迁移 ＝ 混元 4 缩小版，TPU v5p 自比）──────────────
+# 出处（公开源码里只写相对说法）：对齐记录里 DDP 与 FSDP 那个案例、梯度的跨卡归约、影响逐件「纯数据并行」
+#   「关掉编译器的省舍入」；数字导出在 topic09_case2.json（私有导出脚本，读各臂结果文件和两份单算子结果）。
+#   导不出来的（按行分组的表、编译产物里的指令条数）照文档原文抄成常数，并用能对上的别处数字互相钉住。
+def case2():
+    with open(os.path.join(HERE, "topic09_case2.json"), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+_C2 = case2()
+_C2R = _C2["runs"]
+C2_PARAMS_T = "4.3 亿"                # 缩小版：保留全部结构、只缩宽度和层数（同上「第二次迁移」小尺寸）
+C2_HY4_TOTAL_T, C2_HY4_ACTIVE_T = "770B", "49B"   # 混元 4（Hy4）公开口径：总参数、激活参数（混元官网 Hy4 发布页）
+C2_V, C2_D = _C2["probe"]["V"], _C2["probe"]["D"]   # 词表行数 120832、隐藏维 1024
+C2_DEV, C2_TOK = 8, 4096                 # 8 张卡；每张卡每个微批 1 条 4096 token 的序列，每步 2 个微批
+assert (C2_V, C2_D) == (120832, 1024)
+C2_D_SHARD = C2_D // C2_DEV              # FSDP 下每张卡管 128 维
+C2_FSDP_N = C2_DEV * C2_TOK              # FSDP 那次 scatter 收 8 张卡的全部 token：32768
+C2_GATE = C2_V // 8                      # 门槛：下标数超过表行数的 1/8 → 15104
+assert (C2_D_SHARD, C2_FSDP_N, C2_GATE) == (128, 32768, 15104)
+# ① 现象：四种条件的曲线最差 r（300 步）
+C2_R = {k: _C2R[k]["r_max"] for k in ("纯数据并行8", "纯数据并行8不累积", "纯数据并行16", "v7x纯数据并行8")}
+assert ["%.2f" % v for v in C2_R.values()] == ["2.62", "3.69", "2.65", "2.21"]
+C2_R_DP8_T, C2_R_GA1_T, C2_R_DP16_T, C2_R_V7X_T = ["%.2f" % v for v in C2_R.values()]
+C2_LOSS_SM, C2_GN_SM = _C2R["纯数据并行8"]["loss_worst"][1], _C2R["纯数据并行8"]["grad_norm_worst"][1]
+assert _C2R["纯数据并行8"]["loss_worst"][0] == _C2R["纯数据并行8"]["grad_norm_worst"][0] == "signed_mean"
+assert abs(C2_LOSS_SM - 5.58e-6) < 0.005e-6 and abs(C2_GN_SM + 2.60e-4) < 0.005e-4
+C2_LOSS_SM_T, C2_GN_SM_T = "＋5.58e-6", "−2.60e-4"
+C2_LOSS_R_T = "%.2f" % _C2R["纯数据并行8"]["loss_r"]
+assert C2_LOSS_R_T == "1.85"
+# ② 第 1 步对 FP64：205 个张量，只有词嵌入梯度丢了精度
+C2_NT = _C2R["纯数据并行8"]["n_step1_tensors"]
+assert C2_NT == 205
+_e = _C2R["纯数据并行8"]
+C2_EMB_DP, C2_EMB_G, C2_EMB_GPU, C2_EMB_R = _e["emb_test"], _e["emb_golden"], _e["emb_gpu"], _e["emb_R"]
+assert ("%.2e %.2e %.2e" % (C2_EMB_DP, C2_EMB_G, C2_EMB_GPU)) == "1.51e-02 4.00e-03 4.17e-03" and abs(C2_EMB_R - 3.62) < 0.005
+C2_EMB_DP_T, C2_EMB_G_T, C2_EMB_GPU_T, C2_EMB_R_T = "1.51e-2", "4.00e-3", "4.17e-3", "3.6"
+C2_OTHER_MED_T = "0.99"                  # 其余 204 个离 FP64 的比值（纯数据并行 ÷ golden）中位数（对齐记录）
+C2_IHC_SKIP = 6                          # 6 个多路残差混合小参数，数值上病态，向来不定责（另算）
+# ③ 第一个假设 → FP32 开关一开 r 611（修复前）；读数与 fig-bug 同一份
+_b = _C2R["修复前开关"]
+assert abs(_b["r_max"] - 611.3) < 0.1 and abs(_b["emb_R"] - 129.7) < 0.1
+C2_BUG_R_T, C2_BUG_FAR_T = "611", "130"
+# 第二种修法（本卡 FP32、跨卡 BF16）与修法①的读数
+_f1, _f1k, _f2, _f2k = _C2R["修法1"], _C2R["修法1_1000"], _C2R["修法2"], _C2R["修法2_1000"]
+C2_FIX1_EMB_T, C2_FIX2_EMB_T = "%.2e" % _f1["emb_test"], "%.2e" % _f2["emb_test"]
+assert (C2_FIX1_EMB_T, C2_FIX2_EMB_T) == ("3.79e-03", "4.24e-03")
+C2_FIX1_EMB_T, C2_FIX2_EMB_T = "3.79e-3", "4.24e-3"
+C2_FIX1_R300_T, C2_FIX1_R1K_T = "%.2f" % _f1["r_max"], "%.2f" % _f1k["r_max"]
+C2_FIX2_R300_T, C2_FIX2_R1K_T = "%.2f" % _f2["r_max"], "%.2f" % _f2k["r_max"]
+assert (C2_FIX1_R300_T, C2_FIX1_R1K_T, C2_FIX2_R300_T, C2_FIX2_R1K_T) == ("0.98", "1.09", "0.93", "1.07")
+C2_FIX1_16_T = "%.2f ／ %.2f" % (_C2R["修法1_16卡"]["r_max"], _C2R["修法1_16卡_1000"]["r_max"])
+assert C2_FIX1_16_T == "0.99 ／ 1.30"
+C2_FIX1_GA1_T = "%.2f" % _C2R["修法1_不累积"]["r_max"]
+assert C2_FIX1_GA1_T == "1.01"
+# 步时（对 golden，按每步中位数；负数＝比 golden 快）
+C2_ST = {k: _C2R[k]["step_time_vs_golden"] for k in ("纯数据并行8", "修法1", "修法2")}
+C2_ST_T = ["%.1f%%" % (100 * v) for v in C2_ST.values()]
+assert C2_ST_T == ["-3.4%", "-2.8%", "-2.6%"], C2_ST_T
+C2_ST_DP_T, C2_ST_F1_T, C2_ST_F2_T = [s.replace("-", "−") for s in C2_ST_T]
+C2_ST_COST_T = "0.6–0.8 个百分点"          # 修法本身的代价：3.4 − 2.8 ＝ 0.6，3.4 − 2.6 ＝ 0.8（本课核算）
+C2_COMM_BYTES = 9.90e8                   # 每步每设备跨卡字节数，默认／修法①／修法②三者相同（对齐记录）
+# ④ 审计编译产物：按行分组（对齐记录里梯度跨卡归约那一页的表；三组互不重叠，合起来 10911 行）
+C2_GROUPS = [  # (说明, 行数, 占梯度范数平方, golden, 纯数据并行8, 不累积(8192), 纯数据并行16, 修法①, 关省舍入)
+    ("每个微批只在 1 张卡上出现", 7638, 1.3e-2, 9.31e-3, 9.41e-3, 9.16e-3, 9.25e-3, 9.31e-3, 1.02e-2),
+    ("出现在 ≥ 2 张卡上、合计 ≤ 300 次", 3234, 8.9e-2, 7.77e-3, 8.31e-3, 8.26e-3, 8.33e-3, 7.28e-3, 9.58e-3),
+    ("合计 ≥ 301 次（高频词）", 39, 0.90, 3.26e-3, 1.57e-2, 3.07e-2, 1.59e-2, 3.08e-3, 1.15e-1),
+]
+C2_ROWS = sum(g[1] for g in C2_GROUPS)
+assert C2_ROWS == 10911
+# 互相钉住：各组 rel² 按范数平方加权求和，应回到整张表的 rel（golden 4.00e-3、纯数据并行 1.51e-2、不累积 2.92e-2、关省舍入 1.09e-1）
+for _col, _tot in ((3, C2_EMB_G), (4, C2_EMB_DP), (5, _C2R["纯数据并行8不累积"]["emb_test"]), (8, _C2R["关省舍入"]["emb_test"])):
+    _rel = math.sqrt(sum(g[2] * g[_col] ** 2 for g in C2_GROUPS))
+    assert abs(_rel / _tot - 1) < 0.03, (_col, _rel, _tot)
+# 纯数据并行比 golden 多出来的误差（误差平方之差）里，高频 39 行占多少（本课按上表复算，对齐记录写 99.6%）
+_ex = [g[2] * (g[4] ** 2 - g[3] ** 2) for g in C2_GROUPS]
+C2_HOT_SHARE = _ex[2] / sum(_ex)
+assert abs(C2_HOT_SHARE - 0.996) < 0.001, C2_HOT_SHARE
+C2_HOT_SHARE_T = "99.6%"
+C2_HOT_X = C2_GROUPS[2][4] / C2_GROUPS[2][3]                  # 高频行：纯数据并行 ÷ FSDP
+C2_LOW_X = max(g[4] / g[3] for g in C2_GROUPS[:2])            # 低频两组最多远几倍
+assert abs(C2_HOT_X - 4.8) < 0.05 and abs(C2_LOW_X - 1.07) < 0.005
+C2_HOT_X_T, C2_LOW_X_T = "4.8", "1.07"
+C2_NOEXC_HOT_X = C2_GROUPS[2][8] / C2_GROUPS[2][3]            # FSDP 只关省舍入，高频行远 35 倍
+assert abs(C2_NOEXC_HOT_X - 35.3) < 0.1
+C2_HOT_CNT_MED, C2_HOT_CNT_MAX = 74, 458   # 高频 39 个词在一张卡、一个微批里加几次（取出现最多的那张卡那个微批；主输入＋MTP 输入合计）
+C2_HOT_CNT_MAIN = (37, 229)                # 单算主输入
+# ⑤ 先加后传 vs 先传后加：每张卡每次跨卡的数据量（按 HLO 里的形状算，本课推导；线上实际字节数取决于通信算法，没测）
+C2_AR_BYTES = C2_V * C2_D * 2              # 纯数据并行：整张表 BF16 all-reduce
+C2_A2A_BYTES = C2_FSDP_N * C2_D_SHARD * 2  # FSDP：all-to-all 收齐 [32768, 128] BF16
+assert abs(C2_AR_BYTES - 2.47e8) < 0.01e8 and abs(C2_A2A_BYTES - 8.4e6) < 0.05e6
+C2_BYTES_X = C2_AR_BYTES / C2_A2A_BYTES
+assert abs(C2_BYTES_X - 29.5) < 0.1
+# ⑥ 单算子（v5p 真跑，下标取 golden 第 1 步真实 token，更新量随机 BF16；离 FP64 的 rel_L2）
+_P = _C2["probe"]["cells"]
+C2_SWEEP_N = [2048, 4096, 8192, 16384, 32768]
+C2_SWEEP = {k: [_P[str(n)]["rel"][k] for n in C2_SWEEP_N]
+            for k in ("bf16_unsorted_excess_on", "bf16_presorted_excess_on", "bf16_unsorted_excess_off", "f32_unsorted")}
+assert ["%.3g" % v for v in C2_SWEEP["bf16_unsorted_excess_on"]] == ["0.00459", "0.00675", "0.00914", "0.00155", "0.00158"]
+assert ["%.3g" % v for v in C2_SWEEP["bf16_presorted_excess_on"]] == ["0.00137", "0.00148", "0.00151", "0.00155", "0.00158"]
+assert ["%.3g" % v for v in C2_SWEEP["bf16_unsorted_excess_off"]] == ["0.00459", "0.00675", "0.00914", "0.0129", "0.0176"]
+_c4 = _P["4096"]["rel"]
+C2_CELL4 = {"不排序·开": _c4["bf16_unsorted_excess_on"], "不排序·关": _c4["bf16_unsorted_excess_off"],
+            "排序·开": _c4["bf16_presorted_excess_on"], "排序·关": _c4["bf16_presorted_excess_off"],
+            "只排不标·开": _c4["bf16_presorted_nf_excess_on"], "FP32": _c4["f32_unsorted"]}
+assert ["%.3g" % C2_CELL4[k] for k in ("不排序·开", "不排序·关", "排序·开", "排序·关", "只排不标·开")] == ["0.00675"] * 2 + ["0.00148"] + ["0.00675"] * 2
+assert abs(C2_CELL4["FP32"] - 2.6e-9) < 0.05e-9
+C2_BYCOUNT_ROWS = _P["4096"]["按次数分桶行数"]
+assert C2_BYCOUNT_ROWS == {"1": 961, "2-9": 402, "10-99": 60, "100+": 3}
+C2_BYCOUNT = {k: [_P["4096"]["按次数"][k][b] for b in ("1", "2-9", "10-99", "100+")]
+              for k in ("bf16_unsorted_excess_on", "bf16_presorted_excess_on")}
+assert ["%.3g" % v for v in C2_BYCOUNT["bf16_unsorted_excess_on"]] == ["0", "0.0027", "0.00781", "0.0146"]
+assert ["%.3g" % v for v in C2_BYCOUNT["bf16_presorted_excess_on"]] == ["0", "0.00172", "0.00166", "0.0017"]
+C2_K100_X = C2_BYCOUNT["bf16_unsorted_excess_on"][3] / C2_BYCOUNT["bf16_presorted_excess_on"][3]   # 约 8.5 倍
+assert abs(C2_K100_X - 8.5) < 0.1
+_S = _C2["probe"]["sharded"]   # 8 个设备照两种切法各跑一份（每卡 4096，全局 32768）
+C2_SH = {k: _S[k] for k in ("fsdp_excess_on", "fsdp_excess_off", "dp_excess_on", "dp_jaxsort_excess_on")}
+assert ["%.3g" % v for v in C2_SH.values()] == ["0.00158", "0.0176", "0.00717", "0.00286"]
+C2_SORT_SHARE = (C2_SH["dp_excess_on"] - C2_SH["dp_jaxsort_excess_on"]) / (C2_SH["dp_excess_on"] - C2_SH["fsdp_excess_on"])
+assert abs(C2_SORT_SHARE - 0.77) < 0.01     # 「排序一项走了约八成」（本课按单算子三个数复算：77%）
+C2_SORT_SHARE_T = "约八成（%.0f%%）" % (C2_SORT_SHARE * 100)
+# 门槛：对不同表形状二分出的最小插排序下标数（CPU 上为 v5p 交叉编译，看优化后 HLO 里有没有 sort）
+C2_THRESH = [(t["V"], t["D"], t["最小插排序N"]) for t in _C2["threshold"]]
+for _v, _d, _n in C2_THRESH:
+    if _n is not None:
+        assert _n == _v // 8 + 1, (_v, _d, _n)   # 最小的插排序 N ＝ V/8 ＋ 1，即「N > V/8」，和列数 D 无关
+C2_PASS = "tpu_scatter_gather_optimizer"     # 插排序的那道后端工序（libtpu 里，公开 XLA 代码里按名字搜不到）
+C2_VPACK = 12288                            # 排序那颗 kernel 关掉省舍入后多出的舍到 BF16 的指令（静态条数，对齐记录）
+C2_V7X_EMB_T = "1.50e-2 对 4.25e-3"           # v7x 纯数据并行：第 1 步词嵌入梯度对 v7x golden（机理没在 v7x 上单独测）
+assert "%.2e" % _C2R["v7x纯数据并行8"]["emb_test"] == "1.50e-02" and "%.2e" % _C2R["v7x纯数据并行8"]["emb_golden"] == "4.25e-03"
+# ⑨ 关省舍入：FSDP 也每次舍，比纯数据并行还差
+_n = _C2R["关省舍入"]
+C2_NOEXC_EMB_T = "%.2e" % _n["emb_test"]
+assert C2_NOEXC_EMB_T == "1.09e-01" and abs(_n["r_max"] - 13.28) < 0.01
+C2_NOEXC_EMB_T, C2_NOEXC_R_T = "1.09e-1", "13.3"
+C2_NOEXC_X_G = _n["emb_test"] / C2_EMB_G         # 对 golden 27 倍（对齐记录的口径）
+C2_NOEXC_X_R = _n["emb_R"]                        # 对 max(golden, GPU) 26.1 倍（定责口径，§4.2 用的是这个）
+assert abs(C2_NOEXC_X_G - 27.2) < 0.1 and abs(C2_NOEXC_X_R - 26.1) < 0.05
+# GPU：PyTorch CUDA 的词嵌入反向（aten/src/ATen/native/cuda/Embedding.cu，embedding_dense_backward_cuda）按下标数分两路，门槛 3072
+C2_TORCH_GATE = 3072
+C2_FSDP_SH_T, C2_DP_SH_T, C2_DPSORT_SH_T = ["%.2e" % C2_SH[k] for k in ("fsdp_excess_on", "dp_excess_on", "dp_jaxsort_excess_on")]
+assert (C2_FSDP_SH_T, C2_DP_SH_T, C2_DPSORT_SH_T) == ("1.58e-03", "7.17e-03", "2.86e-03")
+C2_FSDP_SH_T, C2_DP_SH_T, C2_DPSORT_SH_T = "1.58e-3", "7.17e-3", "2.86e-3"
+C2_FP32_CELL_T = "2.6e-9"
+assert abs(C2_CELL4["FP32"] - 2.6e-9) < 0.05e-9
+# FP32 线性累加的上界（本课推导）：458 次 × 2⁻²⁴ ≈ 2.7e-5
+assert abs(C2_HOT_CNT_MAX * 2 ** -24 - 2.7e-5) < 0.05e-5
+C2_BYTES_ROUND = "30"                    # 2.47e8 ÷ 8.4e6 ≈ 29.5（本课推导，按 HLO 形状）
+assert abs(C2_BYTES_X - 30) < 0.6
+
+# ── 2026-11-11 · 案例二第二阶段：只把词嵌入表沿数据并行轴切开（第三种修法）──────────────────────────────
+# 出处：对齐记录里那个案例的第二阶段一页；各运行训练步优化后 HLO 的集合通信汇总（导出在 topic09_case2.json 的 comm）；
+#   结果文件（300 步对 golden、1000 步对 1000 步 golden）。只在 v5p、缩小版、纯数据并行 8 ＋ 累积 2 上验证过。
+_CM = _C2["comm"]
+_s3, _s3k = _C2R["只切词嵌入表"], _C2R["只切词嵌入表_1000"]
+C3_EMB_T = "%.2e" % _s3["emb_test"]
+assert C3_EMB_T == "3.97e-03" and abs(_s3["emb_R"] - 0.95) < 0.005
+C3_EMB_T, C3_EMB_R_T = "3.97e-3", "0.95"
+C3_R300_T, C3_R1K_T = "%.2f" % _s3["r_max"], "%.2f" % _s3k["r_max"]
+assert (C3_R300_T, C3_R1K_T) == ("1.02", "1.15")
+C3_ST_T = "%.1f%%" % (100 * _s3["step_time_vs_golden"])
+assert C3_ST_T == "-3.3%"
+C3_ST_T = C3_ST_T.replace("-", "−")
+C3_STEP_S, C2_DP_STEP_S, C2_G_STEP_S = 0.478, 0.477, 0.494   # 每步中位数（第 11 步起），只切表 ／ 不修 ／ golden（对齐记录）
+# 通信（每步每设备字节，按 HLO 形状 × 字节宽 × 每步次数；不是线上实测）
+C3_COMM = {k: (_CM[k]["词嵌入每步字节"], _CM[k]["全部每步字节"]) for k in ("纯数据并行8", "修法1", "修法2", "FSDP8", "只切词嵌入表")}
+assert ["%.2e/%.2e" % v for v in C3_COMM.values()] == ["9.90e+08/2.70e+09", "1.06e+09/2.77e+09", "9.90e+08/2.70e+09", "6.82e+07/1.32e+10", "6.82e+07/1.78e+09"]
+C3_EMB_CUT = 1 - C3_COMM["只切词嵌入表"][0] / C3_COMM["纯数据并行8"][0]
+C3_ALL_CUT = 1 - C3_COMM["只切词嵌入表"][1] / C3_COMM["纯数据并行8"][1]
+assert abs(C3_EMB_CUT - 0.93) < 0.005 and abs(C3_ALL_CUT - 0.34) < 0.005
+C3_EMB_CUT_T, C3_ALL_CUT_T = "93%", "34%"
+C3_EMB_SHARE_T = "%d%%" % round(100 * C3_COMM["纯数据并行8"][0] / C3_COMM["纯数据并行8"][1])   # 词嵌入占纯数据并行全部通信
+assert C3_EMB_SHARE_T == "37%"
+C3_FIX1_PERMUTE = 67108864 + 131072      # 修法①在 scatter 前多出的 collective-permute（梯度 ＋ id），每步每设备
+assert abs(C3_COMM["修法1"][0] - C3_COMM["纯数据并行8"][0] - C3_FIX1_PERMUTE) < 1
+C3_FIX1_EMB_T, C3_FIX1_PERM_T = "1.06e9", "6.7e7"
+C3_STATE = (4.41e9, 3.12e9)              # 参数与优化器状态，每设备（离线编译的 argument size；对齐记录）
+assert abs((C3_STATE[0] - C3_STATE[1]) - C2_V * C2_D * 4 * 3 * 7 / 8.0) < 0.02e9   # 少掉的 1.30e9 ＝ 表的主权重＋两份动量从整份变 1/8（本课复算）
+C3_HBM = (6.16e9, 4.46e9)                # 实测显存峰值，每设备：不修 ／ 只切表
+C3_N_COMM = _CM["只切词嵌入表"]["条数"]    # 39 条集合通信
+assert C3_N_COMM == 39
