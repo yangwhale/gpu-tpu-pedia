@@ -1393,3 +1393,6 @@ B2_C_UNATTR_T = "超出波动 %.2f 倍，R %.2f" % _hcfn
 TW_P_CCTL = TW["c_vs_ctl_p"]
 assert "%.2f" % TW_P_CCTL == "0.32"
 TW_P_CCTL_T = "%.2f" % TW_P_CCTL
+# F27：对齐配置 6 份各自的待定项（6 份重复结果文件，各项最差 r）：没有不过；现行那份路由偏置均值 1.31，另一份主 loss 1.14、MTP 1.07，一份梯度范数 1.04
+REP6_PEND = {"router_bias_mean": 1.31, "loss": 1.14, "mtp": 1.07, "grad_norm": 1.04}
+assert REP6_PEND["loss"] == C_NOW["rep_pend_r"] and max(REP6_PEND.values()) <= 2
