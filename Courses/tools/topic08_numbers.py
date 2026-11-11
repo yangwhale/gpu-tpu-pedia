@@ -1339,3 +1339,6 @@ PROD_TH_046_T = str(PROD_TH["v5p_046"])
 B2_NOW6 = {"total": 205, "over": 169, "attr": 167, "far": 2, "far_mix": 1, "same": 10, "within": 26}
 assert B2_NOW6["attr"] + B2_NOW6["far"] == B2_NOW6["over"] and B2_NOW6["over"] + B2_NOW6["same"] + B2_NOW6["within"] == B2_NOW6["total"]
 assert B2_NOW6["over"] < B2_NOW["over"] and B2_NOW6["far_mix"] < B2_NOW["far_mix"]      # 份数补够，超线和没定责的都变少
+# F18：换基线挪动分两层（结果文件逐配置复算）：单条检查最多挪 0.47（v7x 按专家切的 param_norm）；四条取最差后最多挪 0.33（v7x FSDP 8：0.78–1.11）
+REBASE_COMB_SHIFT = 0.33
+assert REBASE_COMB_SHIFT < REBASE_SHIFT_MAX

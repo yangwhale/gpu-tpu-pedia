@@ -965,7 +965,7 @@ __FIG_TWOLAYER__
   </tbody></table>
   <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 «FINAL_WORST_T» 倍</b>；按专家切（EP＝8）也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden ② 的差（参数范数 ＋«VS_RC_PN»，loss «VS_RC_LOSS_V5P_T»（v5p）），在第二关写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
   <details class="foldfig"><summary><b>换一份当基线会怎样</b>：「全过」是对事先定下的那一份说的</summary>
-  <p>基线事先定为 ⑤ 的第一份。事后把十份逐份都当一次基线、尺子不变重判：r 在十份基线之间最多差 «REBASE_SHIFT_MAX»；v5p 两个配置、v7x 按专家切十份基线全过，v7x 当前配置有 «REBASE_V7X_PEND» 份基线落进待定（最差 «REBASE_WORST_T»），没有不过。这正是 §3.4 说的代价：基线自己也是一个样本，能挪一个 N 以内。所以报结论时写清「对哪一份基线」。</p></details>
+  <p>基线事先定为 ⑤ 的第一份。事后把十份逐份都当一次基线、尺子不变重判：单条检查的 r 在十份基线之间最多差 «REBASE_SHIFT_MAX»，四条取最差以后最多差 «REBASE_COMB_SHIFT»；v5p 两个配置、v7x 按专家切十份基线全过，v7x 当前配置有 «REBASE_V7X_PEND» 份基线落进待定（最差 «REBASE_WORST_T»），没有不过。这正是 §3.4 说的代价：基线自己也是一个样本，能挪一个 N 以内。所以报结论时写清「对哪一份基线」。</p></details>
   <details class="foldfig"><summary><b>TPU 不是挑出来的好样本</b>：«ENSEMBLE_RUNS» 份只改执行参数的扰动运行</summary>
   <p>只改执行参数的 «ENSEMBLE_RUNS» 份扰动运行（v5p «ENSEMBLE_V5P»、v7x «ENSEMBLE_V7X»），«ENSEMBLE_OK» 份四项都不超过 «FINAL_WORST_T» 倍；剩 1 份（v7x，注意力分块 1024）梯度范数待定（«ENSEMBLE_PEND_T»），落在 v7x 自己的执行噪声里：v7x 扰动组两两的梯度范数逐步涨落比 GPU 重跑宽约两成。按专家切那一档没测路由偏置曲线和健康信号；当前配置的路由偏置曲线和健康信号也过。</p></details>
   <details class="foldfig"><summary><b>怎么走到 10 份、两两 45 对的</b>：10 对时有两项待定；两处测量口径；补 5 份重跑</summary>
