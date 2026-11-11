@@ -870,7 +870,7 @@ SW_ADAM_COST = "0.02%"                    # 精确的除法、开方、偏差修
 # ── 2026-11-10 · 第二次迁移的新材料（TPU 自比、GPU 尺子扩到 16 份）──────────────────────────
 # 出处：第二次迁移的对齐记录（小尺寸模型，随机初始化，约 4.3 亿参数；TPU v5p 8 设备 ↔ B200×8）。
 #   TPU 自比一节的 汇总页和实验矩阵（TPU 自比：脾气表、机制、留一法、长跑）；
-#   TPU 自比一节的 results/gpu-rerun-loo-r-{300,1000}.json（GPU 留一法，逐种轮换的 r）；
+#   TPU 自比一节的 GPU 留一法的两份结果文件（300 步、1000 步，逐种轮换的 r）；
 #   小尺寸一节的「GPU 8 份对 16 份上限」结果文件（8 份 → 16 份的上限对比）。
 #   逐点数据导出在 topic08_tpuself.json（私有导出脚本，只含数字和改写过的中文标签）。
 _TS = tpuself()
@@ -1188,12 +1188,12 @@ LIB_V7X_GA1_T = "r %.2f → %.2f，词嵌入梯度离 FP64 %.2e → %.2e，R %.2
 LIB_THRESH = {k: {(t["V"], t["D"]): t["最小插排序N"] for t in v} for k, v in _C2["threshold_versions"].items()}
 assert LIB_THRESH["v5p_046"][(120832, 1024)] == 15105 and LIB_THRESH["v5p_052"][(120832, 1024)] == 14420
 assert LIB_THRESH["v5p_052"][(120832, 128)] == 1783 and LIB_THRESH["v7x_052"][(120832, 1024)] == 7181
-assert LIB_THRESH["v7x_046"][(120832, 128)] == 2 == LIB_THRESH["v7x_052"][(120832, 128)]     # 这张表在 v7x 上交给 SparseCore（HLO 可见），下标到 2 就排序
+assert all(d != 128 for (_v, d) in LIB_THRESH["v7x_046"]) and all(d != 128 for (_v, d) in LIB_THRESH["v7x_052"])   # v7x 只列 1024 以上的列宽（窄列另算，不公开）
 assert all(LIB_THRESH[k][(1000, 1024)] is None for k in LIB_THRESH) and LIB_THRESH["v5p_052"][(30000, 128)] is None
 for (_v, _d), _n in LIB_THRESH["v5p_046"].items():
     assert _n is None or _n == _v // 8 + 1                                                    # 0.0.46 上 v5p 全部是 N ＞ V／8
 for (_v, _d), _n in LIB_THRESH["v7x_046"].items():
-    assert _n is None or _n == _v // 8 + 1 or (_d == 128 and _n == 2)                         # 0.0.46 上 v7x：列数 1024 也是 V／8
+    assert _n is None or _n == _v // 8 + 1                                                    # 0.0.46 上 v7x：列出的形状也是 V／8
 assert LIB_THRESH["v7x_052"][(120832, 1024)] < 8192 < LIB_THRESH["v5p_052"][(120832, 1024)]   # v7x 0.0.52 上每卡 8192 过线、v5p 不过
 assert 4096 < LIB_THRESH["v7x_052"][(120832, 1024)]                                          # 累积 2（每卡 4096）在 v7x 0.0.52 上仍不过
 LIB_SCREEN_CHANGED = 0          # 104 个能比的臂，两个版本下「程序相同／不同」的判定一条没变（25 相同、79 不同）
@@ -1297,7 +1297,7 @@ PROD_TH_V7X_052_T = str(PROD_TH["v7x_052"])
 REBASE_SHIFT_MAX, REBASE_V7X_PEND = 0.47, 3      # r 在十份基线之间最多相差 0.47；v7x 当前配置有 3 份基线落进待定（最差 1.11），没有不过
 REBASE_WORST_T = "1.11"
 
-# ── 2026-11-11 晚 · F10：小尺寸主 loss 后段「补流梯度舍入」的读数（实测）。⛔ 对齐记录随后撤回了「根因」：三个开关都补后尾巴又出现，在查（F11）──
+# ── 2026-11-11 晚 · F10：小尺寸主 loss 后段「补流梯度舍入」的读数（实测）。⛔ 对齐记录随后撤回了「根因」：两处都补后尾巴又出现，在查（F11）──
 MD_FIX = {"对照": 1.48e-5, "补上舍入": 1.9e-6, "GPU尺子": 2.1e-6, "只补流梯度": 0.6e-6, "只补分支输出": 3.0e-6}   # 第 551–1000 步主 loss 对 GPU 16 份均值
 assert MD_FIX["补上舍入"] < MD_FIX["GPU尺子"] < MD_FIX["对照"]
 MD_NOIHC = (1.9e-6, 0.7e-6)              # 两边都去掉多路残差（换普通残差），TPU 2 份对 GPU 3 份均值，后段不飘
@@ -1309,16 +1309,16 @@ assert ["%.1e" % x for x in MI["两边都去掉多路残差"]["tpu_each"]] == ["
 MI_SD = MI["对照"]["gpu_loo_sd"]          # GPU 16 份留一法 sd 2.1e-6
 assert "%.1e" % MI_SD == "2.1e-06"
 
-# ── 2026-11-11 晚 · F11：修之前 ／ 只补残差流舍入 ／ 三个都补（topic08_fixcmp.json，私有导出脚本读各运行的逐步记录；实测）──
+# ── 2026-11-11 晚 · F11：修之前 ／ 只补残差流舍入 ／ 两处都补（topic08_fixcmp.json，私有导出脚本读各运行的逐步记录；实测）──
 with open(os.path.join(HERE, "topic08_fixcmp.json"), encoding="utf-8") as _fh:
     FC = json.load(_fh)
 FC_W = {k: [r["w551"] for r in v] for k, v in FC["cols"].items()}
-assert "%.2e" % FC_W["修之前"][0] == "1.48e-05" and len(FC_W["只补残差流舍入"]) == 5 and len(FC_W["三个都补"]) == 3
-assert ["%.1e" % x for x in FC_W["三个都补"]] == ["8.2e-06", "1.1e-05", "2.1e-06"]
+assert "%.2e" % FC_W["修之前"][0] == "1.48e-05" and len(FC_W["只补残差流舍入"]) == 5 and len(FC_W["两处都补"]) == 3
+assert ["%.1e" % x for x in FC_W["两处都补"]] == ["8.2e-06", "1.1e-05", "2.1e-06"]
 FC_SD = FC["loo_sd_551_1000"]
 assert abs(FC_SD - MI_SD) < 1e-9                                   # 跟研究线消融结果文件的 GPU 留一法 sd 一致
 FC_IN = {k: sum(1 for x in v if abs(x) <= 2 * FC_SD) for k, v in FC_W.items()}   # 落在 GPU 散布 2 sd 以内的份数
-assert FC_IN == {"修之前": 0, "只补残差流舍入": 4, "三个都补": 1}, FC_IN
+assert FC_IN == {"修之前": 0, "只补残差流舍入": 4, "两处都补": 1}, FC_IN
 FC_BEFORE_751 = FC["cols"]["修之前"][0]["w751"]
 assert "%.1e" % FC_BEFORE_751 == "2.1e-05"
 

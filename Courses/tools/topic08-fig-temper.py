@@ -203,20 +203,20 @@ def fig_libtpu():
         yy = py2 + 42 + i * rh
         f.t(RX + 14, yy + 24, "%s × %d" % (format(v, ","), d) , INK, True, 12.5)
         for j, (k, _lab) in enumerate(cols):
-            n = N.PROD_TH[k] if d == 6144 else N.LIB_THRESH[k][(v, d)]
-            if n is None and d == 6144:
+            n = N.PROD_TH[k] if d == 6144 else N.LIB_THRESH[k].get((v, d))
+            if d == 128 and k.startswith("v7x"):
+                txt, fill, c = "—", "#f1f3f4", GY
+            elif n is None and d == 6144:
                 txt, fill, c = "＞65,536", "#fef7e0", OR
             elif n is None:
                 txt, fill, c = "不插", "#f1f3f4", GY
-            elif d == 128 and k.startswith("v7x"):
-                txt, fill, c = "SparseCore", "#e8f0fe", BL
             elif n == v // 8 + 1:
                 txt, fill, c = format(n, ","), "#fff", INK
             else:
                 txt, fill, c = format(n, ","), "#fef7e0", OR
             f.box(cx0 + j * cw + 3, yy + 4, cw - 6, rh - 8, fill, LINE, 4)
             f.t(cx0 + j * cw + cw / 2, yy + 24, txt, c, c != INK, 12, "middle", w=cw - 10)
-    f.t(RX + 14, py2 + 42 + 4 * rh + 22, "最后一行是生产宽度。白：行数 ÷ 8 ＋ 1　黄：不再是 1/8　蓝：交给 SparseCore", GY, size=11.5)
+    f.t(RX + 14, py2 + 42 + 4 * rh + 22, "最后一行是生产宽度。白：行数 ÷ 8 ＋ 1　黄：不再是 1/8　—：v7x 只列 1024 以上的列宽", GY, size=11.5)
     f._pan = None
     y3 = y0 + PH1 + 16
     PH2 = PH - PH1 - 16
@@ -241,7 +241,7 @@ def fig_libtpu():
                "前 300 步主 loss 对基准的带符号均值 %s → %s，换一组机器重跑逐位相同。三种修法 0.0.52 上（300 ／ 1000 步）：%s，都跟 GPU 重跑分不开。"
                % (N.LIB_SIX_R["纯数据并行"] + N.LIB_SIX_R["关省舍入"] + N.LIB_RMS_R_STEP1 + N.LIB_RMS_SM_T + (N.LIB_FIX_T,)),
                "📌 Ⓑ 单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。"
-               "整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。部分形状在 v7x 上交给 SparseCore 执行（HLO 可见），另算。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。",
+               "整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上部分形状走另一条执行路径（HLO 可见），另算；表里 v7x 只列 1024 以上的列宽。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。",
                "📌 Ⓒ v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：%s。" % N.LIB_V7X_GA1_T,
                "⚠️ RMSNorm 那件为什么变强，见下一张图（对齐记录已查清）。上下文并行那件降到 0.95，只能说这次没超。")
     f.save("fig8-libtpu.svg", yb + 14)
