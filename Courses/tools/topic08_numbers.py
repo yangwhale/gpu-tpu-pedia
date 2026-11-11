@@ -1297,7 +1297,7 @@ PROD_TH_V7X_052_T = format(PROD_TH["v7x_052"], ",")
 REBASE_SHIFT_MAX, REBASE_V7X_PEND = 0.47, 3      # r 在十份基线之间最多相差 0.47；v7x 当前配置有 3 份基线落进待定（最差 1.11），没有不过
 REBASE_WORST_T = "1.11"
 
-# ── 2026-11-11 晚 · F10：小尺寸主 loss 后段的根因（研究线根源一览第 30 行、知识库，实测；「旧 GPU 口径」＝ 标准答案按现在这份 GPU 参照的写法）──
+# ── 2026-11-11 晚 · F10：小尺寸主 loss 后段「补流梯度舍入」的读数（实测）。⛔ 对齐记录随后撤回了「根因」：三个开关都补后尾巴又出现，在查（F11）──
 MD_FIX = {"对照": 1.48e-5, "补上舍入": 1.9e-6, "GPU尺子": 2.1e-6, "只补流梯度": 0.6e-6, "只补分支输出": 3.0e-6}   # 第 551–1000 步主 loss 对 GPU 16 份均值
 assert MD_FIX["补上舍入"] < MD_FIX["GPU尺子"] < MD_FIX["对照"]
 MD_NOIHC = (1.9e-6, 0.7e-6)              # 两边都去掉多路残差（换普通残差），TPU 2 份对 GPU 3 份均值，后段不飘
@@ -1308,3 +1308,16 @@ assert "%.1e %.1e" % (MI["只补流的梯度"]["tpu_mean"], MI["只补分支输�
 assert ["%.1e" % x for x in MI["两边都去掉多路残差"]["tpu_each"]] == ["1.9e-06", "6.9e-07"]
 MI_SD = MI["对照"]["gpu_loo_sd"]          # GPU 16 份留一法 sd 2.1e-6
 assert "%.1e" % MI_SD == "2.1e-06"
+
+# ── 2026-11-11 晚 · F11：修之前 ／ 只补流梯度舍入 ／ 三个都补（topic08_fixcmp.json，私有导出脚本读各运行的逐步记录；实测）──
+with open(os.path.join(HERE, "topic08_fixcmp.json"), encoding="utf-8") as _fh:
+    FC = json.load(_fh)
+FC_W = {k: [r["w551"] for r in v] for k, v in FC["cols"].items()}
+assert "%.2e" % FC_W["修之前"][0] == "1.48e-05" and len(FC_W["只补流梯度舍入"]) == 5 and len(FC_W["三个都补"]) == 3
+assert ["%.1e" % x for x in FC_W["三个都补"]] == ["8.2e-06", "1.1e-05", "2.1e-06"]
+FC_SD = FC["loo_sd_551_1000"]
+assert abs(FC_SD - MI_SD) < 1e-9                                   # 跟研究线消融结果文件的 GPU 留一法 sd 一致
+FC_IN = {k: sum(1 for x in v if abs(x) <= 2 * FC_SD) for k, v in FC_W.items()}   # 落在 GPU 散布 2 sd 以内的份数
+assert FC_IN == {"修之前": 0, "只补流梯度舍入": 4, "三个都补": 1}, FC_IN
+FC_BEFORE_751 = FC["cols"]["修之前"][0]["w751"]
+assert "%.1e" % FC_BEFORE_751 == "2.1e-05"
