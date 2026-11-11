@@ -3,7 +3,7 @@ r"""专题八 · 第十节的「TPU 脾气」图（第二次迁移 ＝ 混元 4 
 
 fig8-temper  回答：在 TPU 上改了一样东西，结果会不会变？变了算不算 bug？哪些要处理？
              同一个小尺寸模型、同一份权重和数据，每次只改一样东西，跟一次确认过的 TPU 运行（golden）比，尺子是 GPU 同设置重跑的噪声上限。
-             Ⓐ 119 种改动（运行库 0.0.46）分六堆（一格一种）：逐位相同／变了但跟 GPU 重跑一样大／真有影响（归成 6 件）／量不出来／故意改坏／没出结果。
+             Ⓐ 120 种改动（绝大多数在运行库 0.0.46 上）分六堆（一格一种）：逐位相同／变了但跟 GPU 重跑一样大／真有影响（归成 6 件）／量不出来／故意改坏／没出结果。
              Ⓑ 后两堆以外、有曲线的那些：横轴 300 步曲线最差 r（对数）；蓝点 ＝ 跟重跑一样大；红点 ＝ 真有影响的那 6 件里的实验，
                 标出能不能忍；曲线分不开、靠第 1 步对 FP64 抓到的画空心。
              数据：topic08_tpuself.json 的 piles（导出自对齐记录 TPU 自比一节汇总页的六张自动生成的表，实测）。
@@ -17,13 +17,14 @@ import topic08_numbers as N
 
 W = 1400
 P = N.tpuself()["piles"]
-OV = P["overview"]                      # [119, 33, 34, 46, 13, 5, 15, 6]（运行库 0.0.46 上的改动；0.0.52 上的重测另算，见 fig8-libtpu）
+OV = P["overview"]                      # [120, 33, 34, 46, 14, 5, 15, 6]（运行库 0.0.46 上的改动；0.0.52 上的重测另算，见 fig8-libtpu）
 TOTAL, LONG, N_SAME, N_NOISE, N_ISSUE, N_BLIND, N_BROKEN, N_PEND = OV
-assert TOTAL == N_SAME + N_NOISE + N_ISSUE + N_BLIND + N_BROKEN + N_PEND == 119
+assert TOTAL == N_SAME + N_NOISE + N_ISSUE + N_BLIND + N_BROKEN + N_PEND == 120
 V52 = "TPU 运行库 0.0.52 上重测"
 NOISE46 = [a for a in P["noise"] if a["cat"] != V52]
-assert (len(NOISE46), len(P["blind"]), len(P["broken"])) == (N_NOISE, N_BLIND, N_BROKEN)
-ISSUES = [dict(i, exps=[e for e in i["exps"] if "0.0.52" not in e[0]]) for i in P["issues"]]   # 这张图只画 0.0.46
+BLIND46 = [b for b in P["blind"] if "0.0.52" not in b["change"]]
+assert (len(NOISE46), len(BLIND46), len(P["broken"])) == (N_NOISE, N_BLIND, N_BROKEN)
+ISSUES = [dict(i, exps=[e for e in i["exps"] if "0.0.52" not in e[0] and "只让最后一层" not in e[0]]) for i in P["issues"]]   # 这张图只画 0.0.46；「只让最后一层真舍两次」是查机理用的诊断臂，画在 fig8-rms2r
 assert len(ISSUES) == 6 and sum(len(i["exps"]) for i in ISSUES) >= N_ISSUE - 1
 NOT_OK = [i for i in ISSUES if i["tolerable"] == "不能忍"]   # 0.0.46 上
 assert len(NOT_OK) == 2
@@ -42,7 +43,7 @@ def _tol(i):
 
 
 def fig_temper():
-    f = Fig(W, "两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：119 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 13（归成 6 件）、"
+    f = Fig(W, "两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：120 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 14（归成 6 件，其中一个是查机理的诊断臂）、"
                "动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；"
                "蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；"
                "另外四件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行，都能忍。"
@@ -132,7 +133,7 @@ def fig_temper():
                % N.LOO8_300_MAX_T,
                "📌 分堆由对齐记录的生成器按每次实验的结果文件自动归类（共 %d 种，其中 %d 种另外跑到 1000 步，尺子 GPU 16 份两两 120 对、留一法最大 %s）。真有影响的 6 件：%s。"
                % (TOTAL, LONG, N.LOO16_1K_MAX_T, "；".join("%s（%s）" % (_short(i["name"]), i["tolerable"].replace("TPU 运行库 ", "运行库 ")) for i in ISSUES)),
-               "📌 量不出来的 %d 种：%s。" % (N_BLIND, "、".join("%s（300 步 %.2f，1000 步 %.2f）" % (b["change"], b["r300"], b["r1000"]) for b in P["blind"])),
+               "📌 量不出来的 %d 种：%s。" % (N_BLIND, "、".join("%s（300 步 %.2f，1000 步 %.2f）" % (b["change"], b["r300"], b["r1000"]) for b in BLIND46)),
                "⚠️ 蓝点竖着错开只为不重叠；红点一行一件，同一件的几次实验画在一行。")
     f.save("fig8-temper.svg", yb + 14)
 
@@ -144,7 +145,7 @@ def fig_libtpu():
     f = Fig(W, "三块。左：换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，"
                "纯数据并行 2.62 到 2.82、关省舍入 13.3 到 12.6 仍超，关小矩阵乘改写、多路残差两件仍在 1 附近；"
                "RMSNorm 多舍一次从 1.06 跳到 5.50（1000 步 3.68），由能忍变成不能忍；上下文并行从 1.27 降到 0.95。"
-               "右上：词嵌入 scatter 插排序的门槛，0.0.46 上是表行数的八分之一，0.0.52 上随列宽和芯片变，v7x 列数 1024 的表降到 7181。"
+               "右上：词嵌入 scatter 插排序的门槛，0.0.46 上是表行数的八分之一，0.0.52 上随列宽和芯片变，v7x 列数 1024 的表降到 7181，生产宽度 6144 列反而涨到 43648。"
                "右下：据此预测 v7x 纯数据并行不累积（每卡 8192 个下标）在 0.0.52 上会排序、不再丢精度；上卡核对成立，r 4.06 降到 0.89。")
     y0 = f.header("换运行库，不一定只换了求和顺序",
                   "第二次迁移，TPU 运行库 0.0.46 → 0.0.52：基准运行重建，六件逐件重测，各对同版本的基准比",
@@ -168,7 +169,7 @@ def fig_libtpu():
     f.line(X(N.LOO8_300_MAX), ytop, X(N.LOO8_300_MAX), ybot, INK, 1.4, dash="4 3", arrow=False)
     f.t(X(N.LOO8_300_MAX) + 6, ytop + 14, "纯噪声最高 %s" % N.LOO8_300_MAX_T, INK, True, 12.5)
     rows = [("基准运行自己", N.LIB_GOLDEN_R[0], N.LIB_GOLDEN_R[0], "", "")] + list(N.LIB_SIX)
-    note = {"RMSNorm 多舍一次": "主 loss 系统偏高；1000 步 %s；机理在查" % N.LIB_RMS_R1K_T,
+    note = {"RMSNorm 多舍一次": "主 loss 系统偏高；1000 步 %s；最后一层真舍了两次（下一张图）" % N.LIB_RMS_R1K_T,
             "上下文并行（不开 FP32 logits）": "两次都在线内；那个张量随顺序跳一倍，降了不说明变好",
             "基准运行自己": "0.0.52 对 0.0.46，在噪声内"}
     for i, (name, a, b, va, vb) in enumerate(rows):
@@ -194,16 +195,18 @@ def fig_libtpu():
     PH1 = 270
     py2 = f.panel(RX, y0, RW, PH1, "Ⓑ 词嵌入那次 scatter：几个下标起插排序", OR)
     cols = [("v5p_046", "v5p 0.0.46"), ("v5p_052", "v5p 0.0.52"), ("v7x_046", "v7x 0.0.46"), ("v7x_052", "v7x 0.0.52")]
-    shapes = [(120832, 1024), (120832, 128), (30000, 1024), (480000, 128)]
+    shapes = [(120832, 1024), (120832, 128), (480000, 128), (120832, 6144)]
     cx0, cw, rh = RX + 150, 102, 38
     for j, (_k, lab) in enumerate(cols):
         f.t(cx0 + j * cw + cw / 2, py2 + 26, lab, INK, True, 12.5, "middle")
     for i, (v, d) in enumerate(shapes):
         yy = py2 + 42 + i * rh
-        f.t(RX + 14, yy + 24, "%s × %d" % (format(v, ","), d), INK, True, 12.5)
+        f.t(RX + 14, yy + 24, "%s × %d" % (format(v, ","), d) , INK, True, 12.5)
         for j, (k, _lab) in enumerate(cols):
-            n = N.LIB_THRESH[k][(v, d)]
-            if n is None:
+            n = N.PROD_TH[k] if d == 6144 else N.LIB_THRESH[k][(v, d)]
+            if n is None and d == 6144:
+                txt, fill, c = "＞65,536", "#fef7e0", OR
+            elif n is None:
                 txt, fill, c = "不插", "#f1f3f4", GY
             elif d == 128 and k.startswith("v7x"):
                 txt, fill, c = "SparseCore", "#e8f0fe", BL
@@ -213,7 +216,7 @@ def fig_libtpu():
                 txt, fill, c = format(n, ","), "#fef7e0", OR
             f.box(cx0 + j * cw + 3, yy + 4, cw - 6, rh - 8, fill, LINE, 4)
             f.t(cx0 + j * cw + cw / 2, yy + 24, txt, c, c != INK, 12, "middle", w=cw - 10)
-    f.t(RX + 14, py2 + 42 + 4 * rh + 22, "白：行数 ÷ 8 ＋ 1　黄：不再是 1/8　蓝：v7x 上交给 SparseCore，下标到 2 就排", GY, size=11.5)
+    f.t(RX + 14, py2 + 42 + 4 * rh + 22, "最后一行是生产宽度。白：行数 ÷ 8 ＋ 1　黄：不再是 1/8　蓝：交给 SparseCore", GY, size=11.5)
     f._pan = None
     y3 = y0 + PH1 + 16
     PH2 = PH - PH1 - 16
@@ -238,11 +241,110 @@ def fig_libtpu():
                "前 300 步主 loss 对基准的带符号均值 %s → %s，换一组机器重跑逐位相同。三种修法 0.0.52 上（300 ／ 1000 步）：%s，都跟 GPU 重跑分不开。"
                % (N.LIB_SIX_R["纯数据并行"] + N.LIB_SIX_R["关省舍入"] + N.LIB_RMS_R_STEP1 + N.LIB_RMS_SM_T + (N.LIB_FIX_T,)),
                "📌 Ⓑ 单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。"
-               "整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上列数 128 的表交给 SparseCore 执行（HLO 可见）。",
+               "整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。部分形状在 v7x 上交给 SparseCore 执行（HLO 可见），另算。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。",
                "📌 Ⓒ v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：%s。" % N.LIB_V7X_GA1_T,
-               "⚠️ RMSNorm 那件为什么在 0.0.52 上变强，研究线还在查；这里只写实测现象。上下文并行那件变弱，只能说这次没超。")
+               "⚠️ RMSNorm 那件为什么变强，见下一张图（研究线已查清）。上下文并行那件降到 0.95，只能说这次没超。")
     f.save("fig8-libtpu.svg", yb + 14)
+
+
+def fig_rms2r():
+    """fig8-rms2r 回答：RMSNorm 多舍一次，为什么换到运行库 0.0.52 就从能忍变成不能忍？
+    Ⓐ 最后一层 RMSNorm：0.0.46 融在一颗 kernel 里只舍一次；0.0.52 插了一次布局转换，归一化值写回内存，两次舍入都真发生。
+    Ⓑ 为什么两次舍入有偏：γ 离 1 越近（又不等于 1），|h| 被系统地缩小得越多（FP64 里扫 γ）。
+    Ⓒ 只动最后一层就能开、关这件事（300 步曲线最差 r）。数据：topic08_numbers 的 RMS_*（实测）。"""
+    f = Fig(W, "三块。左上：最后一层 RMSNorm 在两个运行库版本里的样子。0.0.46：归一化、乘 γ、舍到 BF16 在一颗 kernel 里，只舍一次；"
+               "0.0.52：编译器给归一化值插了一次布局转换，挡住融合，归一化值先舍成 BF16 写回内存，下一颗 kernel 读回来乘 γ 再舍一次。"
+               "右上：FP64 里扫 γ，两次舍入让输出的绝对值平均缩小多少；γ 等于 1 时为 0，γ 是 0.996 时缩小 1.7e-3，离 1 远了就小；混元 4 最后一层 γ 均值 1.001。"
+               "下：只动最后一层的五个运行，300 步曲线最差 r：0.0.46 默认 1.06；0.0.46 最后一层强制两次 6.83；0.0.52 默认 5.50；0.0.52 只把最后一层改回一次 0.84；0.0.52 最后一层强制两次 6.97。")
+    y0 = f.header("RMSNorm 多舍一次：0.0.52 让最后一层真的舍了两次",
+                  "第二次迁移，小尺寸，v5p；默认写法 ＝ 归一化值先舍成 BF16、乘 γ 再舍一次",
+                  [(GR, "只舍一次"), (RD, "真舍两次")])
+    PH1 = 300
+    LW = 760
+    py = f.panel(0, y0, LW, PH1, "Ⓐ 最后一层 RMSNorm，两个版本编出来不一样", GR)
+    rows = [("运行库 0.0.46", GR, [("归一化", GR), ("× γ", GR), ("舍 BF16", GR)], "一颗 kernel，中间那次被省掉", False),
+            ("运行库 0.0.52", RD, [("归一化", RD), ("舍 BF16，写回内存", RD), ("读回 × γ", RD), ("再舍 BF16", RD)], "布局转换挡住了融合，两次都真舍", True)]
+    for i, (lab, col, steps, note, split) in enumerate(rows):
+        y = py + 34 + i * 128
+        f.t(20, y + 30, lab, col, True, 14)
+        x = 150
+        boxes = []
+        for j, (t, c) in enumerate(steps):
+            w = 150 if len(t) > 6 else 104
+            boxes.append((x, w))
+            f.box(x, y + 6, w, 40, "#fff", c, 8, sw=1.6)
+            f.t(x + w / 2, y + 31, t, c, True, 13, "middle")
+            if j < len(steps) - 1:
+                gap = 30 if (split and j == 1) else 14
+                f.line(x + w, y + 26, x + w + gap, y + 26, GY, 1.4)
+                x += w + gap + 4
+        if split:
+            x1, w1 = boxes[1]
+            x2, _ = boxes[2]
+            f.box(x1 - 6, y - 4, w1 + 12, 60, "none", RD, 10, dash="5 4")
+            f.box(x2 - 6, y - 4, boxes[3][0] + boxes[3][1] - x2 + 12, 60, "none", RD, 10, dash="5 4")
+        else:
+            f.box(144, y - 4, x + boxes[-1][1] - 144 + 6 - (x - boxes[-1][0]), 60, "none", GR, 10, dash="5 4")
+        f.t(150, y + 76, note, col, True, 12.5)
+    f._pan = None
+    RX = LW + 20
+    py2 = f.panel(RX, y0, W - RX, PH1, "Ⓑ 为什么两次舍入有偏：γ 贴近 1", OR)
+    X0, X1 = RX + 60, W - 30
+    YT, YB = py2 + 40, py2 + PH1 - 74
+    gmin, gmax, vmin = 0.85, 1.20, -1.8e-3
+
+    def GX(g):
+        return X0 + (g - gmin) / (gmax - gmin) * (X1 - X0)
+
+    def VY(v):
+        return YT + (v / vmin) * (YB - YT) if v < 0 else YT
+    f.line(X0, YT, X1, YT, GY2, 1, arrow=False)
+    f.t(X0 - 6, YT + 4, "0", GY, size=11.5, anchor="end")
+    f.t(X0 - 6, VY(-1.5e-3) + 4, "−1.5e-3", GY, size=11.5, anchor="end")
+    f.line(X0, VY(-1.5e-3), X1, VY(-1.5e-3), LINE, 0.8, arrow=False)
+    pts = [(GX(g), VY(c)) for g, c in N.RMS_SWEEP]
+    f.path(pts, OR, 2.2, arrow=False)
+    for (g, c), (x, y) in zip(N.RMS_SWEEP, pts):
+        f.box(x - 4, y - 4, 8, 8, OR, OR, 4)
+    f.line(GX(1.0), YT - 6, GX(1.0), YB, INK, 1, dash="4 3", arrow=False)
+    f.t(GX(1.0) + 6, YT - 10, "γ ＝ 1：第二次舍入精确，没偏差", INK, True, 12)
+    f.t(GX(0.996) - 10, VY(-1.71e-3) + 4, "γ ＝ 0.996：缩小 1.7e-3", OR, True, 12.5, "end")
+    f.t(GX(0.86), VY(-0.9e-3), "离 1 远处只剩几e-5，有正有负", GY, size=12)
+    for g in (0.9, 1.0, 1.1, 1.2):
+        f.t(GX(g), YB + 18, "%g" % g, GY, size=12, anchor="middle")
+    f.t(X0, YB + 40, "最后一层的 γ：均值 %.3f，范围 %.2f–%.2f → 输出头的输入整体缩小 %s" % (N.RMS_GAMMA + (N.RMS_SHRINK_T,)), INK, True, 12.5)
+    f._pan = None
+    y2 = y0 + PH1 + 16
+    PH2 = 270
+    py3 = f.panel(0, y2, W, PH2, "Ⓒ 只动最后一层，就能打开、关掉这件事（300 步曲线最差 r）", RD)
+    BX0, BX1 = 520, W - 180
+    rmax = 8.0
+
+    def BXr(v):
+        return BX0 + v / rmax * (BX1 - BX0)
+    for i, (tag, ver, rest, last, r) in enumerate(N.RMS_AB):
+        y = py3 + 22 + i * 40
+        bad = r > N.LOO8_300_MAX
+        f.t(20, y + 21, "%s　其余各层 %s，最后一层 %s" % (ver, rest, last), RD if bad else GR, bad, 13)
+        f.box(BX0, y + 6, max(BXr(r) - BX0, 3), 22, RD if bad else GR, RD if bad else GR, 4)
+        f.t(BXr(r) + 8, y + 23, "%.2f" % r, RD if bad else GR, True, 13)
+    f.line(BXr(N.LOO8_300_MAX), py3 + 14, BXr(N.LOO8_300_MAX), py3 + 22 + 5 * 40, INK, 1.3, dash="4 3", arrow=False)
+    f.t(BXr(N.LOO8_300_MAX) + 6, py3 + 22 + 5 * 40 + 14, "纯噪声最高 %s" % N.LOO8_300_MAX_T, INK, True, 12.5)
+    f._pan = None
+    yb = f.band(y2 + PH2 + 20, "warn", "机理跟版本无关，版本只决定编译器有没有把中间那次舍入省掉", [
+        "同一份权重上前向就高 %s（16 批平均；FP64 模拟第 301 步那批 %s）；第 1 步几乎没有，学会预测后才显（推断）。" % (N.RMS_FROZEN_T, N.RMS_FP64_T),
+        "做法：开 RMSNorm 单次舍入（对齐、生产都开）；换版本后先用同一份权重比一次前向。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8）：整步优化后的程序里，「融合出口就是归一化值转 BF16」的融合只在 0.0.52 默认写法里有 1 处（最后一层）；0.0.46、0.0.52 只把最后一层改回一次、v7x 0.0.52 都是 0 处。"
+               "v7x 0.0.52 默认写法没有单独写回，300 步 %.2f（跟 GPU 重跑分不开）。" % N.RMS_V7X_R,
+               "📌 同一份权重（0.0.52 基准第 300 步更新后）各算 16 批前向：默认写法 − 单次舍入 %s；0.0.46 上同样的比较 16 批平均 −8e-11、单批都在 ±1.1e-7 内。CPU FP64 模拟第 301 步这一批 %s（TPU 同一批 ＋3.13e-5），第 1 步 ＋2.5e-7（在误差内）。"
+               "把两次舍入的变化拆成「沿输出方向的整体缩放」和其余部分，整体缩放解释了全部增量的 %.1f%%。" % (N.RMS_FROZEN_T, N.RMS_FP64_T, N.RMS_SCALE_SHARE * 100),
+               "📌 Ⓑ 是推导配实测：FP64 里 400 万个标准正态数，单个 γ，先舍 BF16 再乘 γ 再舍，对比一次舍入，|h| 平均的相对变化。",
+               "⚠️ 为什么只有最后一层要紧是推断：它的输出直接进输出头；层内的输出还要过投影、加回残差、再归一化，整体缩放被冲淡，没有单独量。")
+    f.save("fig8-rms2r.svg", yb + 14)
 
 
 fig_temper()
 fig_libtpu()
+fig_rms2r()

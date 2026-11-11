@@ -1108,7 +1108,7 @@ C2_EMB_VS_G_T = "3.77"
 RESELECT_PCT_T = "0.117%"                 # 「存下路由结果」被忽略时，反向重选的路由槽位（根源一览第 5 行）
 BIAS_ZM_SM_AFTER = 0.17                   # 路由偏置零均值更新：TPU 关掉后带符号均值的 r（之前 19.1；最差项换成 MARE 时 0.31）
 assert BIAS_ZM_R[0] == 19.1 and BIAS_ZM_R[1] == 0.31 and BIAS_ZM_SM_AFTER < BIAS_ZM_R[1]
-B2_NOW = {"total": 205, "over": 177, "attr": 171, "far": 6, "far_ihc": 5, "far_new": 3, "same3": 10, "within": 18}   # 现行配置（关 base2）第 1 步对 FP64（小尺寸报告「第一步整网」）
+B2_NOW = {"total": 205, "over": 177, "attr": 171, "far": 6, "far_mix": 5, "far_new": 3, "same3": 10, "within": 18}   # 现行配置（关 base2）第 1 步对 FP64（小尺寸报告「第一步整网」）
 assert B2_NOW["attr"] + B2_NOW["far"] == B2_NOW["over"] and B2_NOW["over"] + B2_NOW["same3"] + B2_NOW["within"] == B2_NOW["total"]
 OUTGATE_R_T = "0.96–0.98"                 # 注意力输出门 sigmoid：TPU 对 GPU 离 FP64 之比（定责，不处理）
 import struct as _st
@@ -1188,7 +1188,7 @@ LIB_V7X_GA1_T = "r %.2f → %.2f，词嵌入梯度离 FP64 %.2e → %.2e，R %.2
 LIB_THRESH = {k: {(t["V"], t["D"]): t["最小插排序N"] for t in v} for k, v in _C2["threshold_versions"].items()}
 assert LIB_THRESH["v5p_046"][(120832, 1024)] == 15105 and LIB_THRESH["v5p_052"][(120832, 1024)] == 14420
 assert LIB_THRESH["v5p_052"][(120832, 128)] == 1783 and LIB_THRESH["v7x_052"][(120832, 1024)] == 7181
-assert LIB_THRESH["v7x_046"][(120832, 128)] == 2 == LIB_THRESH["v7x_052"][(120832, 128)]     # 列数 128 的表在 v7x 上交给 SparseCore，下标到 2 就排序
+assert LIB_THRESH["v7x_046"][(120832, 128)] == 2 == LIB_THRESH["v7x_052"][(120832, 128)]     # 这张表在 v7x 上交给 SparseCore（HLO 可见），下标到 2 就排序
 assert all(LIB_THRESH[k][(1000, 1024)] is None for k in LIB_THRESH) and LIB_THRESH["v5p_052"][(30000, 128)] is None
 for (_v, _d), _n in LIB_THRESH["v5p_046"].items():
     assert _n is None or _n == _v // 8 + 1                                                    # 0.0.46 上 v5p 全部是 N ＞ V／8
@@ -1258,5 +1258,37 @@ MD_ISO = {"对照": 1.48e-5, "关MTP": 1.16e-5, "关KD": 9.0e-6, "都关": 8.7e-
 assert all(v > 0 for v in MD_ISO.values()) and abs(MD_ISO["都关"] / MD_ISO["对照"] - 0.6) < 0.05   # 约六成
 MD_ISO_T = "对照 ＋1.5e-5，关 MTP ＋1.2e-5，关 KD ＋9.0e-6，两个都关 ＋8.7e-6"
 SCREEN_DIFF_BITWISE = 5                    # 判程序不同、上卡后结果仍逐位的（多跑一次，不漏）
-SCREEN_CANT_KINDS = {"SparseCore 卸载开关": 6, "换运行库": 5, "换芯片代际": 3}
+SCREEN_CANT_KINDS = {"SparseCore 开关": 6, "换运行库": 5, "换芯片代际": 3}
 assert sum(SCREEN_CANT_KINDS.values()) == SCREEN["cant"]
+
+# ── 2026-11-11 晚 · F6：RMSNorm 多舍一次在运行库 0.0.52 上为什么变强（出处：研究线影响逐件「RMSNorm 多舍一次」、案例 15、各结果文件；实测，除标推导）──
+_RM = _C2["rms052"]
+RMS_AB = [   # (标签, 版本, 其余各层, 最后一层, 300 步曲线最差 r)
+    ("E6", "0.0.46", "默认写法", "默认写法（编译器只舍一次）", _r("RMSNorm多舍一次")),
+    ("E6d", "0.0.46", "单次舍入", "强制舍两次", _r("RMSNorm最后一层强制两次")),
+    ("V7", "0.0.52", "默认写法", "默认写法（编译器真舍两次）", _r("052_RMSNorm多舍一次")),
+    ("V20", "0.0.52", "默认写法", "单次舍入", _r("052_RMSNorm只最后一层改回一次")),
+    ("V19", "0.0.52", "单次舍入", "强制舍两次", _r("052_RMSNorm最后一层强制两次")),
+]
+assert ["%.2f" % x[4] for x in RMS_AB] == ["1.06", "6.83", "5.50", "0.84", "6.97"], [x[4] for x in RMS_AB]
+assert _RM["写回内存的归一化值"] == {"046默认": 0, "052只最后一层改回一次": 0, "052默认": 1, "v7x052默认": 0}
+RMS_V7X_R = _r("052_v7x_RMSNorm多舍一次")                     # v7x 0.0.52 默认写法：没单独写回，1.22 略超、跟 GPU 重跑分不开
+assert "%.2f" % RMS_V7X_R == "1.22"
+RMS_FROZEN = _RM["同状态前向"]["r52"]["rel_mean"]               # 同一份权重上前向：默认写法 − 单次舍入，16 批平均 ＋3.23e-5
+assert "%.2e" % RMS_FROZEN == "3.23e-05" and abs(_RM["同状态前向"]["r46"]["rel_mean"]) < 1e-9
+RMS_FP64 = _RM["fp64_summary"]["double_minus_single_rel"]       # CPU FP64 模拟第 301 步：＋3.17e-5
+RMS_FP64_S1 = _RM["fp64_step1_summary"]["double_minus_single_rel"]   # 第 1 步：＋2.5e-7
+RMS_SHRINK = -_RM["fp64_summary"]["shrink_mean"]                # 输出头的输入整体缩小 1.49e-4
+RMS_SCALE_SHARE = _RM["fp64_summary"]["scale_only_share"]       # 只按整体缩放就解释 100.3%
+assert ("%.2e %.1e %.2e %.3f" % (RMS_FP64, RMS_FP64_S1, RMS_SHRINK, RMS_SCALE_SHARE)) == "3.17e-05 2.5e-07 1.49e-04 1.003"
+RMS_GAMMA = (_RM["norm_scale"]["mean"], _RM["norm_scale"]["min"], _RM["norm_scale"]["max"])   # 最后一层 γ：均值 1.001，范围 0.86–1.18
+assert "%.3f %.2f %.2f" % RMS_GAMMA == "1.001 0.86 1.18"
+RMS_SWEEP = sorted({round(w, 8): c for w, c in _RM["scale_sweep"]}.items())     # 单个 γ 下两次舍入让 |h| 平均变多少（FP64 里 400 万个标准正态数）
+assert dict(RMS_SWEEP)[1.0] == 0.0 and abs(dict(RMS_SWEEP)[0.99609375] + 1.71e-3) < 1e-5
+RMS_FROZEN_T, RMS_FP64_T, RMS_SHRINK_T = "＋3.23e-5", "＋3.17e-5", "1.49e-4"
+# 生产形状（词表 120832、隐藏维 6144）上单算子离线编译的门槛（研究线案例二「在自己的模型上怎么做」，实测）
+_PS = _C2["prod_shape"]
+PROD_TH = {k: _PS["%s|6144|%s" % (v, g)]["门槛"] for k, (v, g) in {"v5p_046": ("0.0.46", "v5p"), "v5p_052": ("0.0.52", "v5p"), "v7x_046": ("0.0.46", "v7x"), "v7x_052": ("0.0.52", "v7x")}.items()}
+assert PROD_TH == {"v5p_046": 15105, "v5p_052": None, "v7x_046": 15105, "v7x_052": 43648} and _PS["0.0.52|6144|v5p"]["查到"] == 65536
+assert not any(_PS["0.0.52|6144|%s" % g]["每卡"][n] for g in ("v5p", "v7x") for n in ("4096", "8192", "16384"))   # 0.0.52 上每卡 4096–16384 两代都不排序
+PROD_TH_V7X_052_T = format(PROD_TH["v7x_052"], ",")

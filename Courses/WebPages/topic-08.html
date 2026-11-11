@@ -1120,7 +1120,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>程序指纹</b>：编译后的整份程序去掉元数据、名字按出现顺序重新编号以后的哈希；编译开关和运行库也相同时，指纹一样，结果就逐位相同（<a href="#s10-3">§10.3</a>）。</li>
     <li><b>运行库（libtpu）</b>：TPU 的编译器后端和运行时打包成的一个库。换它，优化后的程序、生成的 kernel 都可能变，所以换版本不能当成「只换了加法顺序」（<a href="#s10-2">§10.2</a>）。</li>
     <li><b>SparseCore</b>：TPU 芯片上的专用小核，官方定位是加速嵌入查表这类稀疏计算（Google Cloud TPU 文档）；本课用到两处：集合通信可以卸载给它；v7x 上 FSDP 那次词嵌入 scatter 也交给了它（<a href="#s8-6">§8.6</a>）。</li>
-    <li><b>RMSNorm</b>：按均方根归一化、再乘一组可学的缩放；第二次迁移里它的舍入次数是一处边界（<a href="#s5-5">§5.5</a>、<a href="#s10-1">§10.1</a>）；换到运行库 0.0.52，多舍的那一次影响变大（<a href="#s10-2">§10.2</a>）。</li>
+    <li><b>RMSNorm</b>：按均方根归一化、再乘一组可学的缩放；第二次迁移里它的舍入次数是一处边界（<a href="#s5-5">§5.5</a>、<a href="#s10-1">§10.1</a>）；换到运行库 0.0.52，最后一层的两次舍入都真发生，主 loss 偏高（<a href="#s10-2">§10.2</a>）。</li>
     <li><b>重算、路由回放</b>：重算是反向时把前向的中间结果再算一遍、省显存；路由回放是重算时沿用前向选中的专家，不重新选（<a href="#s1-4">§1.4</a>、<a href="#s2-3">§2.3</a>）。</li>
     <li><b>MTP</b>：多 token 预测，模型末尾多一层去预测再往后一个 token，记一项自己的 loss。</li>
     <li><b>Muon</b>：第二次迁移用的优化器，对矩阵参数先把动量正交化再更新；非矩阵参数仍用 Adam。</li>
@@ -9518,7 +9518,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">纯数据并行每卡 4096、不累积 8192 都在线左边，不排序；反过来，纯数据并行每卡一次的 token 要是超过 15104，按这条规则也会被排序（推断，训练里没跑过）。</text>
 <text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：这是运行库 0.0.46 上的门槛；0.0.52 上它跟列宽、芯片走，不再是 1/8（见「换运行库」那张图）；表很小时也不插。</text>
 </svg><figcaption><b>红线过了竖线就掉下来。</b><span class="capmore"><br><em>右块的点都落在虚线上；空心点是表太小、不插排序。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 左块实测（单算子，v5p，表 bf16[120832,1024]，下标取 golden 第 1 步真实 token 的前 N 个，更新量随机 BF16）：不带标记 4.59e-3 ／ 6.75e-3 ／ 9.14e-3 ／ 1.55e-3 ／ 1.58e-3；排好序带标记 1.37e-3 ／ 1.48e-3 ／ 1.51e-3 ／ 1.55e-3 ／ 1.58e-3；关 excess precision 4.59e-3 ／ 6.75e-3 ／ 9.14e-3 ／ 1.29e-2 ／ 1.76e-2；FP32 累加 1.6e-9 到 1.1e-8。每格都逐位等于对应的 CPU 仿真。</p>
-<p>📌 右块实测（CPU 上用同一个 TPU 运行库为 v5p 交叉编译，看优化后 HLO 里有没有 sort）：1,000 × 1024 到 65536 都不插；30,000 × 128 到 65536 都不插；30,000 × 1024 最小 3,751；60,000 × 128 最小 7,501；120,832 × 128 最小 15,105；120,832 × 1024 最小 15,105；480,000 × 128 最小 60,001。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；整张表按 FP32 放得进片上内存时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 × 1024 的门槛也是 15104／15105（列数 128 的表在 v7x 上交给 SparseCore，另算）。</p>
+<p>📌 右块实测（CPU 上用同一个 TPU 运行库为 v5p 交叉编译，看优化后 HLO 里有没有 sort）：1,000 × 1024 到 65536 都不插；30,000 × 128 到 65536 都不插；30,000 × 1024 最小 3,751；60,000 × 128 最小 7,501；120,832 × 128 最小 15,105；120,832 × 1024 最小 15,105；480,000 × 128 最小 60,001。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；整张表按 FP32 放得进片上内存时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 × 1024 的门槛也是 15104／15105（有的表形状在 v7x 上交给 SparseCore，另算）。</p>
 <p>📌 插排序的是 TPU 后端（libtpu）里的一道工序 tpu_scatter_gather_optimizer：对（下标, 序号）稳定排序 → 按排序后的次序取更新量 → scatter 标上「下标已排序」。公开的 XLA 代码里按名字搜不到，触发条件只能从实验反推。</p>
 <p>⚠️ 门槛为什么定在这里（推断）：看上去是为速度定的启发式，精度更好是附带效果；单算子耗时只部分支持（快慢交叉在 4096 到 8192 之间，和 15104 对不上）。</p></details></figure>
   <p>落回训练：每张卡那次 scatter 一次加几个下标，决定了排不排序。<a href="#s8-1">§8.1</a> 那张表就是这么来的：</p>
@@ -9532,6 +9532,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>不累积时同一个词在一张卡上加的次数翻倍，所以最差；16 卡每卡仍 4096 个，跟 8 卡差不多。v7x 在 0.0.46 上跟 v5p 一样走不排序（第 1 步词嵌入梯度 1.50e-2 对 4.25e-3；v7x 上交给 SparseCore 的是 FSDP 那一侧的 scatter）。</p>
   <p><b>门槛跟着运行库走。</b>1/8 是在运行库 0.0.46 上二分出来的。升到 0.0.52 再二分（单算子离线编译），门槛跟列宽、芯片代际都有关（<a href="#s10-2">§10.2</a> 图右上）：同样 120832 行，v5p 上列数 1024 的门槛 14,420，列数 128 的降到 1,783；v7x 上列数 1024 的降到 7,181。</p>
   <p>表的最后一行就是拿它做的预测：离线编译先看到 0.0.52 排序，再上卡核对，词嵌入梯度 R 6.90 → 1.10，曲线回到噪声内。但第 1 步另有三个多路残差输出头的小参数离 FP64 远（R 最大 25.7），是靠研究线对多路残差小参数的豁免才判在噪声内；这条豁免要不要收窄、这处偏差跟别的运行里那种是不是同一回事，研究线还在查。机理还是那一条，只是门槛挪了。</p>
+  <p><b>别急着把它当好消息。</b>同样的规则搬到生产宽度（词表 120832、隐藏维 6144），0.0.52 上门槛跟着列数涨：v7x 涨到 43,648，v5p 到 65536 都不插（图右上最后一行）。0.0.52 上，纯数据并行每卡 4096、8192、16384 个下标（测的三档）两代芯片都不排序，照样要修。小模型上的结论能不能搬，按自己的形状再判一次。</p>
 
   <h3 id="s8-7">8.7　结论：高频词 × 不排序；修法和代价</h3>
   <p><b>两个条件缺一个都不丢精度</b>（本节开头那张 2×2）：一行加的次数多，而且后端没排序、每加一次舍一次。第一版的两种修法，是让这次累加落在 FP32：</p>
@@ -9547,7 +9548,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>N 不过门槛（运行库 0.0.46 上是 V／8）</td><td>不排序，高频词丢精度</td><td>首选只切词嵌入表（切开后 N 变成切分组里所有卡的 token 数；它跟 FSDP 一样要 excess precision 开着，且不能跟按数据并行切优化器状态的 ZeRO-1 同开）；合起来仍不过线，用修法①</td></tr>
   <tr><td>N 过门槛</td><td>后端自动排序，只舍一次（excess precision 开时；v5p 实测）</td><td>不修也行</td></tr>
   </tbody></table>
-  <p>N 在纯数据并行下是本卡一个微批的 token 数；词表按隐藏维切的 FSDP 下，是切分组里所有卡一个微批的 token 数；主输入、多 token 预测输入分开算。按这条规则，FSDP 一个微批的 token 太少，也会落到不排序那一边（推断，没跑过）。门槛随运行库版本、列宽和芯片变（<a href="#s8-6">§8.6</a>），表很小时也不插 —— 所以别用 V／8 硬算，换版本、换形状以后直接看编译产物里那次 scatter 有没有 <code>sort</code> 和 <code>indices_are_sorted=true</code>（<a href="#s8-10">§8.10</a>）；开了第三种修法也要按切开后的 N 再核一遍；不过线、或者拿不准运行库版本时，开修法①最稳（用修好 bug 以后的代码）。另外：两种并行编出的是两个程序，求和顺序不同，逐位相同做不到。</p></details>
+  <p>N 在纯数据并行下是本卡一个微批的 token 数；词表按隐藏维切的 FSDP 下，是切分组里所有卡一个微批的 token 数；主输入、多 token 预测输入分开算。按这条规则，FSDP 一个微批的 token 太少，也会落到不排序那一边（推断，没跑过）。门槛随运行库版本、列宽和芯片变（<a href="#s8-6">§8.6</a>），表很小时也不插 —— 所以别用 V／8 硬算：研究线的单算子脚本带了一个 <code>check</code> 子命令，在训练镜像里给出词表行数、每卡列数、每卡下标数，CPU 上只编不跑就告诉你插不插排序、门槛是多少；最后以整步编译产物里那次 scatter 有没有 <code>sort</code> 和 <code>indices_are_sorted=true</code> 为准（<a href="#s8-10">§8.10</a>）；开了第三种修法也要按切开后的 N 再核一遍；不过线、或者拿不准运行库版本时，开修法①最稳（用修好 bug 以后的代码）。另外：两种并行编出的是两个程序，求和顺序不同，逐位相同做不到。</p></details>
   <details class="foldfig"><summary><b>FP32 为什么能修</b>：舍入一次小 2¹⁶ 倍</summary>
   <p>加的顺序照样跟 FSDP 不同，但每次加法的舍入从 2⁻⁸ 量级降到 2⁻²⁴ 量级，小了 2¹⁶ ＝ 65536 倍。最高频的词在一张卡上加 458 次，按 FP32 每次 2⁻²⁴ 线性累加也只有约 2.7e-5，仍远小于一次 BF16 舍入的 3.9e-3（本课推导）。单算子里 FP32 scatter 离 FP64 只有 2.6e-9。</p></details>
 
@@ -9557,7 +9558,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><a href="https://github.com/pytorch/pytorch/blob/8b7ee4d69c74e7a1a140f6ea218928b9b8de1779/aten/src/ATen/native/cuda/Embedding.cu#L268-L282">Embedding.cu</a> 的 <code>embedding_dense_backward_cuda</code> 按下标数分两条路：不超过 3072 个时，每批 32 个下标在共享内存里用 float 合并，批与批之间舍一次；超过时走排序、分段累加。读的是 2026-11-11 的 PyTorch 主分支（链接钉在那个提交）；GPU 镜像里那个版本没有逐行核过，实际走了哪条也没有单独确认。</p></details>
   <p><b>关掉 excess precision</b>：<a href="#s5-5">§5.5</a> 末尾那个「远 26.1 倍」就出在这里。有人建议关掉它让 FSDP 和 DDP 更像（另一个 6 层测试模型上差确实回到 0 附近，但那次主要是把一条梯度累积路径改成了 FP32）。</p>
   <p>放到这里看，这条路走不通：纯数据并行那次 scatter 本来就每次舍，开关管不着；FSDP 那次排好序的 scatter 却从只舍一次退回每次舍，而且一次要顺序加 32,768 个更新。结果 FSDP 比纯数据并行还差得多：第 1 步词嵌入梯度离 FP64 1.09e-1，300 步 r 13.3。<b>让两边一样，不等于让两边都对</b>：修法要看离精确值近不近，不能只看两边的差。</p>
-<details class="foldfig"><summary><b>考考自己</b>：你的模型词表 25 万行，8 张卡纯数据并行、每卡每个微批 8192 个 token，没开 FP32 修法。按这一节，会不会中招？换成每卡 40000 个呢？</summary><p>按运行库 0.0.46 的规则，门槛是 V／8 ＝ 31250。8192 不过线，不排序，高频词每加一次舍一次，会中招。首选只切词嵌入表：8 张卡合起来 65536 个，过线，会走排序、只舍一次。40000 本来就过线，后端会自己排序（前提是 excess precision 开着）。换到 0.0.52，门槛跟列宽、芯片走，不能再用 V／8 估。所以这些都只是初判：编译一次，看那次 scatter 有没有 sort 和「下标已排序」的标记（<a href="#s8-10">§8.10</a>）；拿不准就开修法①。</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：你的模型词表 25 万行，8 张卡纯数据并行、每卡每个微批 8192 个 token，没开 FP32 修法。按这一节，会不会中招？换成每卡 40000 个呢？</summary><p>按运行库 0.0.46 的规则，门槛是 V／8 ＝ 31250。8192 不过线，不排序，高频词每加一次舍一次，会中招。首选只切词嵌入表：8 张卡合起来 65536 个，过线，会走排序、只舍一次。40000 本来就过线，后端会自己排序（前提是 excess precision 开着）。换到 0.0.52，门槛跟列宽、芯片走，不能再用 V／8 估。所以这些都只是初判：用研究线脚本的 check 子命令在自己的形状、自己的运行库上判一次，再看整步编译产物里那次 scatter 有没有 sort 和「下标已排序」的标记（<a href="#s8-10">§8.10</a>）；拿不准就开修法①。</p></details>
 
   <h3 id="s8-9">8.9　第三种修法：换切分，不换精度</h3>
   <p>前两种修法都没动纯数据并行处理这份梯度的结构：每张卡一个微批只有 4096 个 token，跨卡求和传的却是整张表，占纯数据并行全部通信的 37%；8 张卡各存一整份表和它的优化器状态。换个思路：FSDP 那条「先传后加」不是谁手写的，是编译器在「表按隐藏维切开」这个前提下自动切出来的。那就其余参数照旧纯数据并行，只给词嵌入表加一个开关，让它沿数据并行轴、按隐藏维切开：</p>
@@ -10579,7 +10580,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s10-1">10.1　TPU 的脾气：改了什么，结果变不变</h3>
   <p>改完结果不逐位了，是改出了 bug，还是只换了加法顺序？第二次迁移把日常会碰到的改动一样一样量了一遍：每次只改一样东西，跟一次确认过的 TPU 运行比，尺子借 GPU 重跑（TPU 自己重跑逐位相同，量不出宽度），第 1 步再对 FP64 定责。</p>
-<figure class="fbox fwide" id="fig-temper"><svg viewBox="0 0 1400 930" width="100%" role="img" aria-label="两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：119 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 13（归成 6 件）、动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；另外四件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行，都能忍。RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-temper"><svg viewBox="0 0 1400 930" width="100%" role="img" aria-label="两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：120 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 14（归成 6 件，其中一个是查机理的诊断臂）、动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；另外四件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行，都能忍。RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 的脾气：改一样东西，结果变不变、要不要管</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移（混元 4 缩小版），绝大多数在运行库 0.0.46 上；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -10587,7 +10588,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="135.48000000000002" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="156" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">变了，跟 GPU 重跑一样大 46</text>
 <rect x="398.64000000000004" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="419" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">真有影响（归成 6 件） 13</text>
+<text class="svgsm" x="419" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">真有影响（归成 6 件） 14</text>
 <rect x="638.2800000000001" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="659" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">动了精度、量不出来 5</text>
 <rect x="843.2" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -10598,7 +10599,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 119 种改动，一格一种</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 120 种改动，一格一种</tspan></text>
 <rect x="24" y="154" width="22" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <rect x="49" y="154" width="22" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <rect x="74" y="154" width="22" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -10692,12 +10693,12 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1024" y="179" width="22" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="1049" y="179" width="22" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="1074" y="179" width="22" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1099" y="179" width="22" height="22" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1099" y="179" width="22" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="1124" y="179" width="22" height="22" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="1149" y="179" width="22" height="22" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="1174" y="179" width="22" height="22" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="1199" y="179" width="22" height="22" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1224" y="179" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1224" y="179" width="22" height="22" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="1249" y="179" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="24" y="204" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="49" y="204" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
@@ -10712,13 +10713,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="274" y="204" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="299" y="204" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="324" y="204" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<rect x="349" y="204" width="22" height="22" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<rect x="349" y="204" width="22" height="22" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
 <rect x="374" y="204" width="22" height="22" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
 <rect x="399" y="204" width="22" height="22" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
 <rect x="424" y="204" width="22" height="22" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
 <rect x="449" y="204" width="22" height="22" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
 <rect x="474" y="204" width="22" height="22" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="24" y="247" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">灰 逐位 34 ｜ 蓝 跟重跑一样大 46 ｜ 红 真有影响 13 ｜ 橙 量不出来 5 ｜ 紫 故意改坏 15 ｜ 空 没出结果 6</tspan></text>
+<rect x="499" y="204" width="22" height="22" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="24" y="247" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">灰 逐位 34 ｜ 蓝 跟重跑一样大 46 ｜ 红 真有影响 14 ｜ 橙 量不出来 5 ｜ 紫 故意改坏 15 ｜ 空 没出结果 6</tspan></text>
 <rect x="0" y="298" width="1400" height="460" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="298" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="300" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -10825,7 +10827,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="866" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">不能忍：纯数据并行（词嵌入梯度在 BF16 里累加，第八节）和关掉省舍入；能忍的四件曲线都在 1 附近，靠第 1 步对 FP64 才抓到，各有开关。</text>
 <text class="svgsm" x="20" y="890" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：还有 5 种动了精度、跑到 1000 步也分不开，第 1 步对 FP64 也没抓到 —— 分不开不等于没影响，只是这两把尺子都量不出来。</text>
 </svg><figcaption><b>蓝点挤在 1 附近；红点实心的出了线，空心的曲线分不开、靠第 1 步对 FP64 抓到。</b><span class="capmore"><br><em>点竖着错开只为不重叠；横轴对数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸模型，TPU v5p 8 设备，FSDP 8、每设备微批 1 × 累积 2）：每个改动从 golden 的命令出发只改一样，跑 300 步，对 golden 比 8 项检查（7 条曲线，主 loss 两个窗口）的三个统计；尺子是 GPU 同设置重跑的噪声上限（300 步 8 份两两 28 对，留一法最大 2.47）；第 1 步 205 个梯度张量另对 CPU FP64 定责（离 FP64 比 golden 与 GPU 里远的那个还远 1.2 倍以上，记丢了精度）。</p>
-<p>📌 分堆由对齐记录的生成器按每次实验的结果文件自动归类（共 119 种，其中 33 种另外跑到 1000 步，尺子 GPU 16 份两两 120 对、留一法最大 1.82）。真有影响的 6 件：纯数据并行（不能忍）；关省舍入（不能忍）；关小矩阵乘改写（能忍）；RMSNorm 多舍一次（运行库 0.0.46 上能忍；0.0.52 上不能忍）；多路残差不强制舍 BF16（能忍）；上下文并行（能忍）。</p>
+<p>📌 分堆由对齐记录的生成器按每次实验的结果文件自动归类（共 120 种，其中 33 种另外跑到 1000 步，尺子 GPU 16 份两两 120 对、留一法最大 1.82）。真有影响的 6 件：纯数据并行（不能忍）；关省舍入（不能忍）；关小矩阵乘改写（能忍）；RMSNorm 多舍一次（运行库 0.0.46 上能忍；0.0.52 上不能忍）；多路残差不强制舍 BF16（能忍）；上下文并行（能忍）。</p>
 <p>📌 量不出来的 5 种：关掉「投影照 GPU 的 FP32 累加」对齐开关（300 步 0.97，1000 步 1.64）、指数等函数回到 TPU 默认近似（300 步 0.91，1000 步 1.07）、SwiGLU 少舍一次（300 步 0.98，1000 步 1.37）、Muon 正交化改 FP32（300 步 0.98，1000 步 0.97）、索引器打分不用真 FP32（300 步 1.06，1000 步 1.06）。</p>
 <p>⚠️ 蓝点竖着错开只为不重叠；红点一行一件，同一件的几次实验画在一行。</p></details></figure>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/153ae2c439c5197f46e487480f33bb4dd09a423e/models/hunyuan4/alignments/04-tpu-self/build_tables.py">代码：按结果文件自动分堆的生成器</a></p>
@@ -10947,7 +10949,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s10-2">10.2　换运行库：不一定只换了加法顺序</h3>
   <p>上面那张图都在 TPU 运行库 0.0.46 上量的。升到 0.0.52，研究线把同一条路又走了一遍：先离线编译看哪些程序变了，再上卡重建基准运行、把六件逐件重测，每件对同版本的基准比：</p>
-<figure class="fbox fwide" id="fig-libtpu"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="三块。左：换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，纯数据并行 2.62 到 2.82、关省舍入 13.3 到 12.6 仍超，关小矩阵乘改写、多路残差两件仍在 1 附近；RMSNorm 多舍一次从 1.06 跳到 5.50（1000 步 3.68），由能忍变成不能忍；上下文并行从 1.27 降到 0.95。右上：词嵌入 scatter 插排序的门槛，0.0.46 上是表行数的八分之一，0.0.52 上随列宽和芯片变，v7x 列数 1024 的表降到 7181。右下：据此预测 v7x 纯数据并行不累积（每卡 8192 个下标）在 0.0.52 上会排序、不再丢精度；上卡核对成立，r 4.06 降到 0.89。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-libtpu"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="三块。左：换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，纯数据并行 2.62 到 2.82、关省舍入 13.3 到 12.6 仍超，关小矩阵乘改写、多路残差两件仍在 1 附近；RMSNorm 多舍一次从 1.06 跳到 5.50（1000 步 3.68），由能忍变成不能忍；上下文并行从 1.27 降到 0.95。右上：词嵌入 scatter 插排序的门槛，0.0.46 上是表行数的八分之一，0.0.52 上随列宽和芯片变，v7x 列数 1024 的表降到 7181，生产宽度 6144 列反而涨到 43648。右下：据此预测 v7x 纯数据并行不累积（每卡 8192 个下标）在 0.0.52 上会排序、不再丢精度；上卡核对成立，r 4.06 降到 0.89。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">换运行库，不一定只换了求和顺序</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，TPU 运行库 0.0.46 → 0.0.52：基准运行重建，六件逐件重测，各对同版本的基准比</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -11003,7 +11005,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="539.1611923605133" y="386" width="12" height="12" rx="6" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
 <text class="svgsm" x="299" y="397" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.06</text>
 <text class="svgsm" x="555" y="397" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.50</tspan></text>
-<text class="svgsm" x="254" y="416" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主 loss 系统偏高；1000 步 3.68；机理在查</tspan></text>
+<text class="svgsm" x="254" y="416" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主 loss 系统偏高；1000 步 3.68；最后一层真舍了两次（下一张图）</tspan></text>
 <text class="svgsm" x="20" y="449" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">多路残差不强制舍 BF16</text>
 <line x1="313.40794942127525" y1="444" x2="324.76743942440544" y2="444" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
 <rect x="307.40794942127525" y="438" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
@@ -11044,25 +11046,25 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1225" y="236" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SparseCore</tspan></text>
 <rect x="1279" y="216" width="96" height="30" rx="4" fill="#e8f0fe" stroke="#dadce0" stroke-width="1.0"/>
 <text class="svgsm" x="1327" y="236" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SparseCore</tspan></text>
-<text class="svgsm" x="834" y="274" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30,000 × 1024</tspan></text>
+<text class="svgsm" x="834" y="274" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">480,000 × 128</tspan></text>
 <rect x="973" y="254" width="96" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1021" y="274" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">3,751</text>
+<text class="svgsm" x="1021" y="274" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">60,001</text>
 <rect x="1075" y="254" width="96" height="30" rx="4" fill="#fef7e0" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1123" y="274" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3,553</tspan></text>
-<rect x="1177" y="254" width="96" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1225" y="274" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">3,751</text>
-<rect x="1279" y="254" width="96" height="30" rx="4" fill="#fef7e0" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1327" y="274" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1,771</tspan></text>
-<text class="svgsm" x="834" y="312" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">480,000 × 128</tspan></text>
+<text class="svgsm" x="1123" y="274" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,132</tspan></text>
+<rect x="1177" y="254" width="96" height="30" rx="4" fill="#e8f0fe" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1225" y="274" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SparseCore</tspan></text>
+<rect x="1279" y="254" width="96" height="30" rx="4" fill="#e8f0fe" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1327" y="274" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SparseCore</tspan></text>
+<text class="svgsm" x="834" y="312" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">120,832 × 6144</tspan></text>
 <rect x="973" y="292" width="96" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1021" y="312" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">60,001</text>
+<text class="svgsm" x="1021" y="312" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">15,105</text>
 <rect x="1075" y="292" width="96" height="30" rx="4" fill="#fef7e0" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1123" y="312" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7,132</tspan></text>
-<rect x="1177" y="292" width="96" height="30" rx="4" fill="#e8f0fe" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1225" y="312" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SparseCore</tspan></text>
-<rect x="1279" y="292" width="96" height="30" rx="4" fill="#e8f0fe" stroke="#dadce0" stroke-width="1.0"/>
-<text class="svgsm" x="1327" y="312" fill="#174ea6" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SparseCore</tspan></text>
-<text class="svgsm" x="834" y="348" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">白：行数 ÷ 8 ＋ 1　黄：不再是 1/8　蓝：v7x 上交给 SparseCore，下标到 2 就排</text>
+<text class="svgsm" x="1123" y="312" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＞65,536</tspan></text>
+<rect x="1177" y="292" width="96" height="30" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1225" y="312" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">15,105</text>
+<rect x="1279" y="292" width="96" height="30" rx="4" fill="#fef7e0" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="1327" y="312" fill="#b06000" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">43,648</tspan></text>
+<text class="svgsm" x="834" y="348" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">最后一行是生产宽度。白：行数 ÷ 8 ＋ 1　黄：不再是 1/8　蓝：交给 SparseCore</text>
 <rect x="820" y="388" width="580" height="184" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="820" y="388" width="580" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="820" y="390" width="580" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -11082,16 +11084,120 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="674" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">做法：开着 RMSNorm 单次舍入（对齐、生产都开）；换版本后看一眼那次 scatter 有没有 sort 和 indices_are_sorted=true。</text>
 </svg><figcaption><b>左边只有 RMSNorm 那一行往右蹿出了线；右上黄格是门槛变了的地方；右下那条预测上卡成立。</b><span class="capmore"><br><em>横轴对数；红点只说明超线，结论变没变看箭头；三块都是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8；JAX 0.11.1 不变、只换运行库，这不是官方配套的组合，换官方组合要重测）：新基准换一组机器重跑逐位相同；新基准对旧基准 300 ／ 1000 步 0.99 ／ 0.96，步时 -5.5%。六件各按基准的命令只改那一样，对同版本的基准比 8 项检查的三个统计（上下文并行对同版本的普通注意力底），尺子 GPU 同设置重跑 8 份（留一法最大 2.47）。</p>
 <p>📌 第 1 步：纯数据并行词嵌入梯度 R 3.62 → 3.60，关省舍入 26.13 → 26.11，两个版本几乎一样；RMSNorm 多舍一次第 0 层归一化权重的 R 1.20 → 1.17（第 1 步看不出，偏差是跑起来以后攒的），前 300 步主 loss 对基准的带符号均值 1.3e-6 → 1.65e-5，换一组机器重跑逐位相同。三种修法 0.0.52 上（300 ／ 1000 步）：① 1.55 ／ 0.92；② 1.20 ／ 1.28；③ 1.23 ／ 0.97，都跟 GPU 重跑分不开。</p>
-<p>📌 Ⓑ 单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上列数 128 的表交给 SparseCore 执行（HLO 可见）。</p>
+<p>📌 Ⓑ 单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。部分形状在 v7x 上交给 SparseCore 执行（HLO 可见），另算。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。</p>
 <p>📌 Ⓒ v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：r 4.06 → 0.89，词嵌入梯度离 FP64 2.93e-02 → 4.63e-03，R 6.90 → 1.10。</p>
-<p>⚠️ RMSNorm 那件为什么在 0.0.52 上变强，研究线还在查；这里只写实测现象。上下文并行那件变弱，只能说这次没超。</p></details></figure>
+<p>⚠️ RMSNorm 那件为什么变强，见下一张图（研究线已查清）。上下文并行那件降到 0.95，只能说这次没超。</p></details></figure>
   <ul>
     <li><b>基准运行自己</b>：同版本重跑逐位相同；新对旧 300 ／ 1000 步 0.99 ／ 0.96，在噪声内，步时少 5.5%。单看这一条，换版本跟重跑分不开。</li>
-    <li><b>一件变强</b>：RMSNorm 多舍一次，r 1.06 → 5.50（1000 步 3.68），主 loss 一直偏高，换一组机器重跑逐位相同；第 1 步看不出，是跑起来攒的。为什么变强，研究线还在查。</li>
+    <li><b>一件变强</b>：RMSNorm 多舍一次，r 1.06 → 5.50（1000 步 3.68），主 loss 一直偏高，换一组机器重跑逐位相同；第 1 步看不出，是跑起来攒的。为什么变强，研究线已经查清，见下一张图。</li>
     <li><b>一件变弱、一个门槛变了</b>：上下文并行降到 0.95（那个张量本来就随加法顺序跳一倍，只算这次没过线）；词嵌入排序门槛变了，v7x 上不累积的纯数据并行不再丢精度（<a href="#s8-6">§8.6</a>）。纯数据并行、关省舍入、关小矩阵乘改写、多路残差这四件，在 v5p 上结论不变。</li>
   </ul>
   <p><b>所以换版本不能当成「只换了加法顺序」</b>：JAX 交出的是同一份程序，编译器优化后的程序（这次 110 份规格全部变了）和后端的代码生成都一起换了。怎么做，见图下那条带。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/153ae2c439c5197f46e487480f33bb4dd09a423e/models/hunyuan4/alignments/04-tpu-self/libtpu-052.md">代码：升运行库 0.0.52 的三步与全部结果</a></p>
+  <p><b>RMSNorm 那件为什么变强</b>（v5p、FSDP 8 上查清）：默认写法是先把归一化值舍成 BF16、乘 γ 再舍一次。运行库 0.0.46 上，最后一层的这一段融在一颗 kernel 里，中间那次被省掉，实际只舍一次；0.0.52 在定内存布局时给归一化值插了一次布局转换，挡住了融合，两次舍入都真发生了：</p>
+<figure class="fbox fwide" id="fig-rms2r"><svg viewBox="0 0 1400 830" width="100%" role="img" aria-label="三块。左上：最后一层 RMSNorm 在两个运行库版本里的样子。0.0.46：归一化、乘 γ、舍到 BF16 在一颗 kernel 里，只舍一次；0.0.52：编译器给归一化值插了一次布局转换，挡住融合，归一化值先舍成 BF16 写回内存，下一颗 kernel 读回来乘 γ 再舍一次。右上：FP64 里扫 γ，两次舍入让输出的绝对值平均缩小多少；γ 等于 1 时为 0，γ 是 0.996 时缩小 1.7e-3，离 1 远了就小；混元 4 最后一层 γ 均值 1.001。下：只动最后一层的五个运行，300 步曲线最差 r：0.0.46 默认 1.06；0.0.46 最后一层强制两次 6.83；0.0.52 默认 5.50；0.0.52 只把最后一层改回一次 0.84；0.0.52 最后一层强制两次 6.97。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">RMSNorm 多舍一次：0.0.52 让最后一层真的舍了两次</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p；默认写法 ＝ 归一化值先舍成 BF16、乘 γ 再舍一次</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">只舍一次</text>
+<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">真舍两次</text>
+<rect x="0" y="102" width="760" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="760" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="0" y="104" width="760" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="760" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 最后一层 RMSNorm，两个版本编出来不一样</tspan></text>
+<text class="svgsm" x="20" y="196" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库 0.0.46</tspan></text>
+<rect x="150" y="172" width="104" height="40" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="202" y="197" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">归一化</tspan></text>
+<line x1="254" y1="192" x2="268" y2="192" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="272" y="172" width="104" height="40" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="324" y="197" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">× γ</tspan></text>
+<line x1="376" y1="192" x2="390" y2="192" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="394" y="172" width="104" height="40" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="446" y="197" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍 BF16</tspan></text>
+<rect x="144" y="162" width="360" height="60" rx="10" fill="none" stroke="#1e8e3e" stroke-width="1.0" stroke-dasharray="5 4"/>
+<text class="svgsm" x="150" y="242" fill="#0d652d" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一颗 kernel，中间那次被省掉</tspan></text>
+<text class="svgsm" x="20" y="324" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库 0.0.52</tspan></text>
+<rect x="150" y="300" width="104" height="40" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="202" y="325" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">归一化</tspan></text>
+<line x1="254" y1="320" x2="268" y2="320" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="272" y="300" width="150" height="40" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="347" y="325" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍 BF16，写回内存</tspan></text>
+<line x1="422" y1="320" x2="452" y2="320" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="456" y="300" width="104" height="40" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="508" y="325" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">读回 × γ</tspan></text>
+<line x1="560" y1="320" x2="574" y2="320" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="578" y="300" width="150" height="40" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="653" y="325" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">再舍 BF16</tspan></text>
+<rect x="266" y="290" width="162" height="60" rx="10" fill="none" stroke="#d93025" stroke-width="1.0" stroke-dasharray="5 4"/>
+<rect x="450" y="290" width="284" height="60" rx="10" fill="none" stroke="#d93025" stroke-width="1.0" stroke-dasharray="5 4"/>
+<text class="svgsm" x="150" y="370" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">布局转换挡住了融合，两次都真舍</tspan></text>
+<rect x="780" y="102" width="620" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="780" y="102" width="620" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="780" y="104" width="620" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="780" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="794" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 为什么两次舍入有偏：γ 贴近 1</tspan></text>
+<line x1="840" y1="172" x2="1370" y2="172" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="834" y="176" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="834" y="331" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">−1.5e-3</text>
+<line x1="840" y1="327.0" x2="1370" y2="327.0" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<path d="M 854.20 172.00 L 913.35 179.33 L 990.25 172.00 L 1037.57 202.90 L 1049.40 236.21 L 1061.23 349.05 L 1067.14 172.00 L 1078.97 202.61 L 1102.63 192.84 L 1138.12 187.11 L 1220.94 173.86 L 1339.24 173.42" fill="none" stroke="#e8710a" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="850.1964285714286" y="168" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="909.3482142857143" y="175.3257639764387" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="986.2455357142858" y="168" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1033.5669642857142" y="198.8963658799091" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045.3973214285716" y="232.21438337773378" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1057.2276785714287" y="345.0545367056042" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1063.142857142857" y="168" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1074.9732142857144" y="198.60934013787886" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1098.6339285714287" y="188.84372116019" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1134.125" y="183.1141688102022" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1216.9375" y="169.85868113166887" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1335.2410714285716" y="169.4166643933421" width="8" height="8" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<line x1="1067.142857142857" y1="166" x2="1067.142857142857" y2="358" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<text class="svgsm" x="1073" y="162" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">γ ＝ 1：第二次舍入精确，没偏差</tspan></text>
+<text class="svgsm" x="1051" y="352" fill="#b06000" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">γ ＝ 0.996：缩小 1.7e-3</tspan></text>
+<text class="svgsm" x="855" y="265" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">离 1 远处只剩几e-5，有正有负</text>
+<text class="svgsm" x="915" y="376" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0.9</text>
+<text class="svgsm" x="1067" y="376" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
+<text class="svgsm" x="1218" y="376" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.1</text>
+<text class="svgsm" x="1370" y="376" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.2</text>
+<text class="svgsm" x="840" y="398" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">最后一层的 γ：均值 1.001，范围 0.86–1.18 → 输出头的输入整体缩小 1.49e-4</tspan></text>
+<rect x="0" y="418" width="1400" height="270" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="418" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="420" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="448" x2="1400" y2="448" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="438" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓒ 只动最后一层，就能打开、关掉这件事（300 步曲线最差 r）</tspan></text>
+<text class="svgsm" x="20" y="491" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums">0.0.46　其余各层 默认写法，最后一层 默认写法（编译器只舍一次）</text>
+<rect x="520" y="476" width="92.67124999999999" height="22" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="620" y="493" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.06</tspan></text>
+<text class="svgsm" x="20" y="531" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.46　其余各层 单次舍入，最后一层 强制舍两次</tspan></text>
+<rect x="520" y="516" width="597.72125" height="22" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1125" y="533" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.83</tspan></text>
+<text class="svgsm" x="20" y="571" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.52　其余各层 默认写法，最后一层 默认写法（编译器真舍两次）</tspan></text>
+<rect x="520" y="556" width="481.26750000000004" height="22" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1009" y="573" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.50</tspan></text>
+<text class="svgsm" x="20" y="611" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums">0.0.52　其余各层 默认写法，最后一层 单次舍入</text>
+<rect x="520" y="596" width="73.255" height="22" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="601" y="613" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.84</tspan></text>
+<text class="svgsm" x="20" y="651" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.52　其余各层 单次舍入，最后一层 强制舍两次</tspan></text>
+<rect x="520" y="636" width="610.04125" height="22" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1138" y="653" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6.97</tspan></text>
+<line x1="736.4137499999999" y1="462" x2="736.4137499999999" y2="670" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<text class="svgsm" x="742" y="684" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯噪声最高 2.47</tspan></text>
+<rect x="0" y="708" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="708" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="708" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="735" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">机理跟版本无关，版本只决定编译器有没有把中间那次舍入省掉</tspan></text>
+<text class="svgsm" x="20" y="766" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一份权重上前向就高 ＋3.23e-5（16 批平均；FP64 模拟第 301 步那批 ＋3.17e-5）；第 1 步几乎没有，学会预测后才显（推断）。</text>
+<text class="svgsm" x="20" y="790" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">做法：开 RMSNorm 单次舍入（对齐、生产都开）；换版本后先用同一份权重比一次前向。</text>
+</svg><figcaption><b>左上两排只差一个虚线框：0.0.52 把归一化值单独写回了内存。右上 γ 贴近 1 时偏得最多；下面只动最后一层就开关这件事。</b><span class="capmore"><br><em>Ⓐ Ⓒ 实测；Ⓑ 是推导配 FP64 实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8）：整步优化后的程序里，「融合出口就是归一化值转 BF16」的融合只在 0.0.52 默认写法里有 1 处（最后一层）；0.0.46、0.0.52 只把最后一层改回一次、v7x 0.0.52 都是 0 处。v7x 0.0.52 默认写法没有单独写回，300 步 1.22（跟 GPU 重跑分不开）。</p>
+<p>📌 同一份权重（0.0.52 基准第 300 步更新后）各算 16 批前向：默认写法 − 单次舍入 ＋3.23e-5；0.0.46 上同样的比较 16 批平均 −8e-11、单批都在 ±1.1e-7 内。CPU FP64 模拟第 301 步这一批 ＋3.17e-5（TPU 同一批 ＋3.13e-5），第 1 步 ＋2.5e-7（在误差内）。把两次舍入的变化拆成「沿输出方向的整体缩放」和其余部分，整体缩放解释了全部增量的 100.3%。</p>
+<p>📌 Ⓑ 是推导配实测：FP64 里 400 万个标准正态数，单个 γ，先舍 BF16 再乘 γ 再舍，对比一次舍入，|h| 平均的相对变化。</p>
+<p>⚠️ 为什么只有最后一层要紧是推断：它的输出直接进输出头；层内的输出还要过投影、加回残差、再归一化，整体缩放被冲淡，没有单独量。</p></details></figure>
+  <p>两次舍入本该是随机误差，可第二次舍入的输入已经在 BF16 格点上，乘一个贴近 1 的 γ 再舍，往哪边落由 γ 决定，于是输出头的输入被整体缩小。模型学会预测以后，这一点缩小就把预测压平、抬高 loss。<b>所以换版本时，「开关开着没事」比「这件以前能忍」可靠得多</b>。</p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/153ae2c439c5197f46e487480f33bb4dd09a423e/models/hunyuan4/alignments/04-tpu-self/impacts/04-rmsnorm-double-rounding.md">代码：RMSNorm 多舍一次：0.0.52 上为什么变强（证据六条）</a></p>
 <details class="foldfig"><summary><b>考考自己</b>：升级运行库以后，新基准跟旧基准在噪声内。能不能直接沿用旧版本上「这几件能忍」的结论？</summary><p>不能。基准运行只说明「这一个配置」换版本跟重跑分不开；别的改动走的 kernel 可能变了。0.0.46 → 0.0.52 就是例子：基准 0.99，可 RMSNorm 多舍一次从 1.06 变成 5.50。要把已知的几件在新版本上重测，或者干脆把相应的开关都开着（RMSNorm 单次舍入）。</p></details>
 
 
@@ -11133,7 +11239,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="470" y1="401" x2="496" y2="401" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
 <rect x="500" y="376" width="150" height="50" rx="8" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="575" y="407" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">判不了 14</tspan></text>
-<text class="svgsm" x="666" y="407" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">卸载开关 6、换运行库 5、换芯片 3</tspan></text>
+<text class="svgsm" x="666" y="407" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">SC 开关 6、换运行库 5、换芯片 3</tspan></text>
 <rect x="920" y="102" width="480" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="920" y="102" width="480" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="920" y="104" width="480" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -11151,9 +11257,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="462" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="462" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="489" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改完先编译比程序：一样就不用跑，不一样再上卡；后端会一起变的几类，规则上直接上卡</tspan></text>
-<text class="svgsm" x="20" y="520" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">换运行库、换芯片、SparseCore 卸载这几类，优化后的程序说明不了后端怎么生成 kernel，所以不靠它判。</text>
+<text class="svgsm" x="20" y="520" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">换运行库、换镜像：后端一起换了，程序相同也推不出逐位；换芯片：本来就是两个程序；SparseCore 开关：效果不一定体现在优化后的程序里。</text>
 </svg><figcaption><b>左边一次编译三个出口；右边能判的全部对上。</b><span class="capmore"><br><em>数都是研究线的回测实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（研究线「跑前离线筛：回测」）：109 个改动，判程序相同 23、不同 72、判不了 14；能判的 95 个跟 TPU 实际全部相符。共编 95 份规格，每份整次 114–265 s（中位数 184 s），单进程峰值内存 13.2–16.9 GiB。</p>
-<p>📌 「程序相同」的规则：取编译器优化后的训练步程序，去掉元数据与源码位置、名字按出现顺序重编号、设备分组展开、子计算参数按编号排前，再逐字比；CPU 上编的跟 TPU 上实际存下的规范化后一字不差。</p></details></figure>
+<p>📌 判不了的 14 个：SparseCore 相关开关（图里写 SC 开关）6、换运行库 5、换芯片代际 3。「程序相同」的规则：取编译器优化后的训练步程序，去掉元数据与源码位置、名字按出现顺序重编号、设备分组展开、子计算参数按编号排前，再逐字比；CPU 上编的跟 TPU 上实际存下的规范化后一字不差。</p></details></figure>
   <details class="foldfig"><summary><b>离线筛怎么比、那几类为什么判不了</b></summary>
   <ul>
     <li><b>怎么比</b>：取编译器优化后的训练步程序，去掉元数据和源码位置，指令名按出现顺序重新编号（CPU 上编和 TPU 上编，名字里的序号会差几十），设备分组展开成设备号，每个子计算的参数按编号排到最前，然后逐字比。CPU 上编出的程序跟 TPU 上实际存下的，规范化以后一字不差。</li>
@@ -11625,7 +11731,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>（第二次迁移）8 → 16 份尺子上限放宽 1.0–2.1 倍；六个 TPU 改动 2.00–2.75 → 1.19–1.64</td><td>1000 步对 TPU golden；尺子 GPU 8 份 28 对 vs 16 份 120 对</td></tr>
   <tr><td>（第二次迁移）第 1 步两把参照：三个改动各 160 个张量；词嵌入梯度 R 3.62（纯数据并行）、R 26.1（关 excess precision；分母是基线与 GPU 中位数里远的那个）</td><td>TPU v5p 自比第 1 步训练梯度（由动量反推），对 CPU FP64；45 个多路残差小参数单列</td></tr>
   <tr><td>（第二次迁移）29 条根因：精度 21 ／ 语义 6 ／ 两样都有 1 ／ 顺序 1（第 27 条 GPU 一侧把索引器旋转位置编码放在 BF16 里算、第 28 条多路残差收拢后少舍的那次 BF16、第 29 条纯数据并行时词嵌入不排序，都归精度）</td><td>对齐记录根因一览逐行的「根因」标注；归类是本课做的</td></tr>
-  <tr><td>（第二次迁移）TPU 的脾气（运行库 0.0.46）：119 种改动分六堆，逐位 34、跟重跑一样大 46、真有影响 13（归成 6 件，不能忍 2 件）、量不出来 5、故意改坏 15、没出结果 6；另有 0.0.52 上的 18 次重测（逐位 4、一样大 9、真有影响 5，<a href="#s10-2">§10.2</a>）；其中 33 种跑满 1000 步只 1 个分得开；换 v7x 第 1 步中位数 3.9e-3、300 步 r 1.02、芯片·秒省 65%</td><td>同一小尺寸模型，每次只改一样，300 步对 TPU golden；r 的分母取 GPU 重跑；第 1 步对 FP64 定责；分堆由对齐记录的生成器按结果文件自动归类</td></tr>
+  <tr><td>（第二次迁移）TPU 的脾气（绝大多数在运行库 0.0.46 上）：120 种改动分六堆，逐位 34、跟重跑一样大 46、真有影响 14（归成 6 件，不能忍 2 件；其中 1 种是查 RMSNorm 机理的诊断臂）、量不出来 5、故意改坏 15、没出结果 6；另有 0.0.52 上的 22 次重测（逐位 5、一样大 9、真有影响 6、其余 2 次归在量不出来，<a href="#s10-2">§10.2</a>）；其中 33 种跑满 1000 步只 1 个分得开；换 v7x 第 1 步中位数 3.9e-3、300 步 r 1.02、芯片·秒省 65%</td><td>同一小尺寸模型，每次只改一样，300 步对 TPU golden；r 的分母取 GPU 重跑；第 1 步对 FP64 定责；分堆由对齐记录的生成器按结果文件自动归类</td></tr>
   <tr><td>（第二次迁移）灵敏度：学习率偏 1e-4 → r 4.11，3e-5 → 1.06；五个精度改动 1000 步 0.97–1.64</td><td>故意埋 bug、300 步；右块 1000 步、GPU 16 份</td></tr>
   <tr><td>（第二次迁移 · 案例二）纯数据并行四种条件 r 2.62／3.69／2.65／2.21；第 1 步 205 个张量只有词嵌入梯度远 3.62 倍</td><td>TPU v5p（v7x 那行在 v7x）自比，对 FSDP 8 的 TPU golden，300 步；各臂结果文件的曲线判定与第 1 步逐张量表</td></tr>
   <tr><td>（案例二）按行分组：39 个高频词占梯度范数平方 0.90，纯数据并行多出来的误差 99.6% 在它们身上；本卡次数翻倍误差近翻倍、卡数翻倍不变</td><td>第 1 步词嵌入梯度对 CPU FP64，按 token 在全局批里的出现次数分组（对齐记录：梯度的跨卡归约）；占比本课按误差平方相减复算</td></tr>
