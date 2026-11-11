@@ -1408,3 +1408,15 @@ R6 = FC["rep6_loss"]
 R6_ABOVE = sum(1 for x in R6["c"] if x > max(R6["gpu_loo"]))
 assert R6_ABOVE == 3 and len(R6["c"]) == 6 and len(R6["gpu_loo"]) == 15
 R6_GPU_MAX_T = "%.2f" % max(R6["gpu_loo"])
+# F30：对齐配置两种候选并排（对齐记录「两种候选并排」结果文件，每份用现行检查项目录判；待拍板）
+CF = FC["configs2"]; CFP = FC["configs2_first_pend"]
+def _cnt(k):
+    v = list(CF[k].values()); return len(v), sum(1 for x in v if x["fail"] == 0), sum(1 for x in v if x["pass"] == 9)
+CF_C, CF_M = _cnt("c_1000"), _cnt("m58_1000")
+assert CF_C == (6, 6, 3) and CF_M == (5, 5, 2)
+assert CF["c_1000"]["tc-a"]["pass"] == 8 and CF["m58_1000"]["lgd-ihc-a"]["pass"] == 9
+assert CFP["c_300"] == {"L4.grad_norm": 1.01} and CFP["m58_300"] == {"L4.loss": 1.18, "L4.grad_norm": 1.3}
+CF_C_BUMP_T, CF_M_BUMP_T = FC_BUMP_T["对齐配置"], FC_BUMP_T["补流梯度舍法"]
+CF_C_N, CF_C_ALL = CF_C[0], CF_C[2]
+CF_M_N, CF_M_ALL = CF_M[0], CF_M[2]
+FC_M_MEAN_T = FC_MEAN_T["补流梯度舍法"].replace("+", "＋")
