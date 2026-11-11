@@ -1327,11 +1327,11 @@ assert FC_TAIL["修之前"] == TW["tpu"]["对照"]["n_tail"] and FC_TAIL["补流
 FC_MEAN = {k: sum(v) / len(v) for k, v in FC_W.items()}
 assert ["%.1e" % FC_MEAN[k] for k in ("修之前", "补流梯度舍法", "对齐配置")] == ["9.4e-06", "1.9e-06", "6.6e-06"]
 TW_P = {"tpu": TW["tpu"]["补流梯度舍法"]["p"], "gpu": TW["gpu"]["GPU 换流梯度舍法"]["p"], "head": TW["gpu"]["GPU 换收拢处舍法"]["p"], "c_m58": TW["c_vs_m58_p"]}
-assert ["%.3f" % TW_P[k] for k in ("tpu", "gpu", "head", "c_m58")] == ["0.016", "0.002", "0.886", "0.048"]
+assert ["%.2g" % TW_P[k] for k in ("tpu", "gpu", "head", "c_m58")] == ["0.016", "0.0025", "0.89", "0.048"]
 TW_GPU_MEAN = TW["gpu"]["GPU 换流梯度舍法"]["mean"]
 assert "%.1e" % TW_GPU_MEAN == "3.9e-06" and all(x > 0 for x in TW["gpu"]["GPU 换流梯度舍法"]["w551"])   # 4 份都正
 FC_MEAN_T = {k: ("%+.1e" % v).replace("e-0", "e-") for k, v in FC_MEAN.items()}
-TW_P_T = {k: ("%.3f" % v).rstrip("0") for k, v in TW_P.items()}
+TW_P_T = {k: "%.2g" % v for k, v in TW_P.items()}                # 两位有效数字（GPU 那格 0.00248 → 0.0025）
 C_NOW = {"pass": 8, "pend": 1, "loss_r": 0.98, "rep_pend": 1, "rep_pend_r": 1.14}   # 现行比较（C 口径第一份）1000 步：过 8、待定 1，主 loss MARE r 0.98；5 份里 1 份主 loss 待定 1.14（小尺寸对齐报告）
 assert C_NOW["pass"] + C_NOW["pend"] == 9 and C_NOW["loss_r"] <= 1 < C_NOW["rep_pend_r"] <= 2
 
@@ -1362,3 +1362,7 @@ assert "%.1e" % TW_HEAD51 == "3.7e-06" and TW_HEAD51_P < 0.002     # 结果文�
 TW_HEAD51_T, TW_HEAD51_P_T = ("%+.1e" % TW_HEAD51).replace("e-0", "e-").replace("+", "＋"), "%.3f" % TW_HEAD51_P
 C_LOSS_R_T = "%.2f" % C_NOW["loss_r"]
 FC_C_MEAN_T = FC_MEAN_T["对齐配置"].replace("+", "＋")
+# 只补流梯度舍法（不补收拢处）的取舍：后段平了，前段第 51–100 步的小鼓包还在；对齐配置补上收拢处后鼓包消失
+FC_BUMP = {k: TW["tpu"][k]["mean51"] for k in ("对照", "补流梯度舍法", "对齐配置")}
+assert FC_BUMP["补流梯度舍法"] > FC_BUMP["对照"] > 0 > FC_BUMP["对齐配置"] and TW["tpu"]["对齐配置"]["p51"] < 0.01 if "p51" in TW["tpu"]["对齐配置"] else True
+FC_BUMP_T = {k: ("%+.1e" % v).replace("e-0", "e-").replace("+", "＋").replace("-", "−", 1) if v < 0 else ("%+.1e" % v).replace("e-0", "e-").replace("+", "＋") for k, v in FC_BUMP.items()}

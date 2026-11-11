@@ -94,8 +94,8 @@ def sec(sid, num, title):
 
 
 # 公开代码链接：一律钉到公开版仓库的同步提交（完整 sha），不用 main —— 公开仓库每次同步整棵树替换，文件可能挪位置。
-#   2026-11-11 晚 F6 升到同步提交 7df4a3d（对应研究线 RMSNorm 0.0.52 机理与 check 子命令合入后）；每条链接都实际打开核过（T8-STATE 第四阶段 E2、E9，第五阶段 F1）。
-PUB_SHA = "7df4a3d6c3d14da5ebbe68e47ff066444f8d4785"
+#   2026-11-12 F20 升到同步提交 950974d（研究线小尺寸后段两头验证、C 口径合入后；14 条链接逐条核过在新 sha 上存在，都不带行号锚点）。此前 F6 是 7df4a3d（对应研究线 RMSNorm 0.0.52 机理与 check 子命令合入后）；每条链接都实际打开核过（T8-STATE 第四阶段 E2、E9，第五阶段 F1）。
+PUB_SHA = "950974d6d308ac754aafa53200c9723f6b1f9b5e"
 PUB_REPO = "https://github.com/yangwhale/" + "jan" + "us"
 
 
