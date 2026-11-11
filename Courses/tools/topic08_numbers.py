@@ -1396,3 +1396,15 @@ TW_P_CCTL_T = "%.2f" % TW_P_CCTL
 # F27：对齐配置 6 份各自的待定项（6 份重复结果文件，各项最差 r）：没有不过；现行那份路由偏置均值 1.31，另一份主 loss 1.14、MTP 1.07，一份梯度范数 1.04
 REP6_PEND = {"router_bias_mean": 1.31, "loss": 1.14, "mtp": 1.07, "grad_norm": 1.04}
 assert REP6_PEND["loss"] == C_NOW["rep_pend_r"] and max(REP6_PEND.values()) <= 2
+# F29：收拢处舍入（M52）一开，补流梯度舍法（M58，全套或任一半）测不出作用（单因素交叉「C 口径 × M58 一半」两份结果文件；实测）
+MG = FC["m52gate"]
+assert [len(MG[k]["w551"]) for k in ("M52", "C", "C_stream", "C_branch")] == [4, 4, 4, 4]
+assert ["%.1e" % MG[k]["mean"] for k in ("M52", "C", "C_stream", "C_branch")] == ["1.3e-05", "6.7e-06", "7.9e-06", "1.1e-05"]
+assert ["%.2f" % MG[k]["p_vs_m52"] for k in ("C", "C_stream", "C_branch")] == ["0.14", "0.14", "0.54"]
+MG_P_T = {k: "%.2f" % MG[k]["p_vs_m52"] for k in ("C", "C_stream", "C_branch")}
+MG_MEAN_T = {k: ("%+.1e" % MG[k]["mean"]).replace("e-0", "e-").replace("+", "＋") for k in MG}
+# 对齐配置 6 份主 loss 的 r：3 份高于 GPU 留一法全部 15 份（判档刚好过线）
+R6 = FC["rep6_loss"]
+R6_ABOVE = sum(1 for x in R6["c"] if x > max(R6["gpu_loo"]))
+assert R6_ABOVE == 3 and len(R6["c"]) == 6 and len(R6["gpu_loo"]) == 15
+R6_GPU_MAX_T = "%.2f" % max(R6["gpu_loo"])
