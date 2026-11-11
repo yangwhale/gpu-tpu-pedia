@@ -784,22 +784,22 @@ B2_GN_NOW = 1.34                         # 现行比较（参照改后、TPU 补
 ELIDE_GPU_MAX = 3.77e-6                   # GPU 8 份两两 28 对，1000 步主 loss 带符号均值的最大 |.|
 ELIDE_BEFORE = 1.07e-6                    # 改逐项乘加之前那一代 TPU：对 GPU 8 份均值的带符号均值
 ELIDE_RUNS = (7.68e-6, 6.59e-6, 6.35e-6, 3.71e-6, 8.58e-6)   # 改之后 5 次 TPU 运行（含只改执行参数的 3 次），同号偏高
-ELIDE_AFTER = 3.5e-6                      # 两处改用 reduce_precision 强制舍入以后（推算，对 GPU 均值）
+ELIDE_AFTER = 3.5e-6                      # 两处改用 reduce_precision 强制舍入以后（对 GPU 均值，实测：协议变更记录 +8.6e-6 → +3.5e-6）
 ELIDE_R = (2.12, 0.76)                    # 同一量的判定 r（带符号均值，对 GPU 基线）：强制舍入前 ／ 后
 assert all(x > 0 for x in ELIDE_RUNS) and min(ELIDE_RUNS) < ELIDE_GPU_MAX < max(ELIDE_RUNS)
 assert ELIDE_AFTER < max(ELIDE_RUNS) and ELIDE_R[0] > 2 >= 1 >= ELIDE_R[1]
 ELIDE_RANGE_T = "＋%.1e 到 ＋%.1e" % (min(ELIDE_RUNS), max(ELIDE_RUNS)); ELIDE_RANGE_T = ELIDE_RANGE_T.replace("e-06", "e-6")
 _lock("ELIDE_RANGE_T", ELIDE_RANGE_T, "＋3.7e-6 到 ＋8.6e-6")
-ELIDE_FIX_T = "＋%.1e（推算）" % ELIDE_AFTER; ELIDE_FIX_T = ELIDE_FIX_T.replace("e-06", "e-6")
-_lock("ELIDE_FIX_T", ELIDE_FIX_T, "＋3.5e-6（推算）")
+ELIDE_FIX_T = "＋%.1e" % ELIDE_AFTER; ELIDE_FIX_T = ELIDE_FIX_T.replace("e-06", "e-6")
+_lock("ELIDE_FIX_T", ELIDE_FIX_T, "＋3.5e-6")   # 2026-11-11：研究线记的是实测值，去掉「推算」
 ELIDE_OVER = sum(1 for x in ELIDE_RUNS if x > ELIDE_GPU_MAX)
 assert ELIDE_OVER == 4
 ELIDE_R_T = "%.2f → %.2f" % ELIDE_R
 ELIDE_GPU_MAX_T = tx(ELIDE_GPU_MAX, "%.1e")
 # 超越函数（§5.8）：TPU v5p 默认 FP32 实现对正确舍入的最大误差（格＝ulp），对照 GPU 文档上限与 TPU 高精度写法
 TRANS = {   # 函数: (TPU 默认 ulp_max, TPU 高精度写法 ulp_max, GPU 上限)
-    "exp": (105, 1, 2), "log": (62, 3, 1), "sigmoid": (83, 3, 4), "silu": (86, 4, 4)}
-TRANS_GPU_NOTE = "exp ≤ 2、log ≤ 1 是 CUDA 文档；sigmoid、silu 的 4 是推断，GPU 实测最大 3.4"
+    "exp": (105, 1, 2), "log": (62, 3, 1), "sigmoid": (83, 3, 3.4), "silu": (86, 4, 3.4)}
+TRANS_GPU_NOTE = "B200 实测 exp 2、log 1、sigmoid 和 silu 最大 3.4（根源一览第 11 行）"
 assert all(d > 20 * g for d, h, g in TRANS.values())               # 默认比 GPU 差一个数量级以上
 assert all(h <= 4 for d, h, g in TRANS.values())
 EXP_CR_FRAC, EXP_SIGNED_ULP = "6%", -2.49   # 实际蒸馏损失 softmax 的输入上：exp 只有 6% 正好舍对，平均偏 −2.5 格（系统偏低）
@@ -889,11 +889,11 @@ assert (GZ8_LO_T, GZ8_HI_T, GZ16_LO_T, GZ16_HI_T) == ("2.00", "2.75", "1.19", "1
 N16_WIDEN_T = "1.0–2.1"                # 16 份 120 对的上限 ÷ 8 份 28 对（「GPU 8 份对 16 份上限」结果文件；MATRIX「L 长跑」第一条）
 N16_GN_WIDEN = 1.84                    # 其中梯度范数带符号均值放宽 1.84 倍（分母统一为参照后；统一前 1.70；路由偏置均值 2.07 倍）
 # 词嵌入梯度（第二次迁移 TPU 自比，第 1 步对 CPU FP64 的 rel_L2；倍数按 max(golden 4.00e-3, GPU 三份中位数 4.17e-3)）
-EMB_DP_X = "3.6"                       # 纯数据并行 8：1.51e-2（MATRIX B1、纯数据并行那一臂的结果文件）
-EMB_NOEXC_X = "26"                     # 关 excess precision：1.09e-1（MATRIX C、根因一览第 22 行 R 26.1）
+EMB_DP_X = "3.62"                      # 纯数据并行 8：1.51e-2（MATRIX B1、纯数据并行那一臂的结果文件）
+EMB_NOEXC_X = "26.1"                   # 关 excess precision：1.09e-1（MATRIX C、根因一览第 22 行 R 26.1）
 assert abs(1.51e-2 / 4.172e-3 - 3.62) < 0.01 and abs(1.090e-1 / 4.172e-3 - 26.1) < 0.1
 # TPU 自比的脾气（对齐记录 TPU 自比一节的 README.md 脾气表与 MATRIX「H v5p ↔ v7x」「C6」，实测）
-LONG_ARMS = 32                         # 跑满 1000 步的改动数；只有 1 个分得开（多路残差混合不强制舍 BF16，第 1 步抓到）
+LONG_ARMS = 33                         # 跑满 1000 步的改动数；只有 1 个分得开（多路残差混合不强制舍 BF16，第 1 步抓到）（README 2026-11-11：115 种里 33 种另外跑到 1000 步）
 # （以 README 汇总表「长跑（1000 步）32 臂、分得开 1」为准；脾气表的 1000 步一列只挂在有 300 步对应行的改动上）
 V7X_STEP1_MED, V7X_FP64_RATIO, V7X_R300 = "3.9e-3", "1.01", "1.02"
 V7X_STEP_T, V5P_STEP_T, V7X_SAVE = "0.343 s（4 片）", "0.494 s（8 片）", "65%"
@@ -948,7 +948,7 @@ assert C2_NT == 205
 _e = _C2R["纯数据并行8"]
 C2_EMB_DP, C2_EMB_G, C2_EMB_GPU, C2_EMB_R = _e["emb_test"], _e["emb_golden"], _e["emb_gpu"], _e["emb_R"]
 assert ("%.2e %.2e %.2e" % (C2_EMB_DP, C2_EMB_G, C2_EMB_GPU)) == "1.51e-02 4.00e-03 4.17e-03" and abs(C2_EMB_R - 3.62) < 0.005
-C2_EMB_DP_T, C2_EMB_G_T, C2_EMB_GPU_T, C2_EMB_R_T = "1.51e-2", "4.00e-3", "4.17e-3", "3.6"
+C2_EMB_DP_T, C2_EMB_G_T, C2_EMB_GPU_T, C2_EMB_R_T = "1.51e-2", "4.00e-3", "4.17e-3", "3.62"
 C2_OTHER_MED_T = "0.99"                  # 其余 204 个离 FP64 的比值（纯数据并行 ÷ golden）中位数（对齐记录）
 C2_IHC_SKIP = 6                          # 6 个多路残差混合小参数，数值上病态，向来不定责（另算）
 # ③ 第一个假设 → FP32 开关一开 r 611（修复前）；读数与 fig-bug 同一份
@@ -1096,3 +1096,44 @@ assert C3_N_COMM == 39
 assert round(C3_COMM["纯数据并行8"][0] / C3_COMM["只切词嵌入表"][0]) == 15   # 每步连前向一起算：词嵌入通信约 1/15（本课复算，14.5）
 C2_K100_UNS_T, C2_K100_SRT_T, C2_HOT_DP_T, C2_HOT_FSDP_T = "1.46e-2", "1.70e-3", "1.57e-2", "3.26e-3"
 assert ("%.2e %.2e %.2e %.2e" % (C2_BYCOUNT["bf16_unsorted_excess_on"][3], C2_BYCOUNT["bf16_presorted_excess_on"][3], C2_GROUPS[2][4], C2_GROUPS[2][3])) == "1.46e-02 1.70e-03 1.57e-02 3.26e-03"
+# 1.07 倍拆开（对齐记录 2026-11-11 补的按行分组结果：修法② ＝ 本卡 FP32、跨卡 BF16，修法① ＝ 全程 FP32）
+#   跨卡那份 ≈ 修法② ÷ 修法①；本卡那份 ≈ 纯数据并行 ÷ 修法②（本课按同一文件复算）
+_RG = _C2["rowgroups"]["runs"]
+C2_SPLIT_B = (_RG["修法2"]["B"] / _RG["修法1"]["B"], _RG["纯数据并行8"]["B"] / _RG["修法2"]["B"])
+C2_SPLIT_C = (_RG["修法2"]["C"] / _RG["修法1"]["C"], _RG["纯数据并行8"]["C"] / _RG["修法2"]["C"])
+assert ("%.2f %.2f %.2f %.1f" % (C2_SPLIT_B + C2_SPLIT_C)) == "1.05 1.09 1.17 4.4", C2_SPLIT_B + C2_SPLIT_C
+C2_SPLIT_T = "低频多卡那组：跨卡约 %.2f 倍、本卡约 %.2f 倍；高频行：跨卡 %.2f 倍、本卡 %.1f 倍" % (C2_SPLIT_B + C2_SPLIT_C)
+assert abs(_RG["纯数据并行8"]["all"] / C2_EMB_G - 3.77) < 0.01      # 对 golden 是 3.77 倍；R 3.62 的分母是 GPU 中位数
+C2_EMB_VS_G_T = "3.77"
+
+# ── 2026-11-11 · 整体优化 E1：第一到五节跟上研究线的新结论（出处：对齐记录的根源一览、小尺寸对齐报告、TPU 自比影响逐件；实测，除标本课推导）──
+RESELECT_PCT_T = "0.117%"                 # 「存下路由结果」被忽略时，反向重选的路由槽位（根源一览第 5 行）
+BIAS_ZM_SM_AFTER = 0.17                   # 路由偏置零均值更新：TPU 关掉后带符号均值的 r（之前 19.1；最差项换成 MARE 时 0.31）
+assert BIAS_ZM_R[0] == 19.1 and BIAS_ZM_R[1] == 0.31 and BIAS_ZM_SM_AFTER < BIAS_ZM_R[1]
+B2_NOW = {"total": 205, "over": 177, "attr": 171, "far": 6, "far_ihc": 5, "far_new": 3, "same3": 10, "within": 18}   # 现行配置（关 base2）第 1 步对 FP64（小尺寸报告「第一步整网」）
+assert B2_NOW["attr"] + B2_NOW["far"] == B2_NOW["over"] and B2_NOW["over"] + B2_NOW["same3"] + B2_NOW["within"] == B2_NOW["total"]
+OUTGATE_R_T = "0.96–0.98"                 # 注意力输出门 sigmoid：TPU 对 GPU 离 FP64 之比（定责，不处理）
+import struct as _st
+def _bf16(x):                             # 就近舍入到 BF16（本课推导用）
+    b = _st.unpack(">I", _st.pack(">f", x))[0]
+    b = (b + 0x7FFF + ((b >> 16) & 1)) & 0xFFFF0000
+    return _st.unpack(">f", _st.pack(">I", b))[0]
+LOG2E_BF16 = _bf16(1 / math.log(2))
+assert LOG2E_BF16 == 1.4453125 and abs(LOG2E_BF16 * math.log(2) - 1.0018) < 0.0001      # logits 整体乘 κ ≈ 1.0018（本课复算，对上根源一览第 24 行）
+HY3_SCALE_BF16 = _bf16(1 / math.sqrt(128))
+assert HY3_SCALE_BF16 == 0.08837890625                                                  # 混元 3 的注意力缩放常数舍成 BF16（对齐报告偏差台账）
+KD_SM300_T, KD_STEP1_T = "−5.1e-4", "−9.2e-4"   # 300 步那一代 KD 记录值带符号均值 ／ 第 1 步（根源一览第 13 行）
+KD_GKL_R_T = "1.06 → 0.69"                # 改记广义 KL 后 1000 步 KD 的 r（根源一览第 25 行）
+KD_GRAD_R64_T = "0.97–0.99"               # 索引器梯度对 FP64 的 R 中位数（同上）
+GPU_KD_ROPE_SHARE_T = "六成"               # 真实宽度：GPU 的 KD 偏高约六成来自索引器 RoPE 在 BF16 里算（根源一览第 27 行：+5.0e-4 ÷ +8.1e-4–8.4e-4）
+assert 0.59 < 5.0e-4 / 8.4e-4 and 5.0e-4 / 8.1e-4 < 0.63
+SIG_VJP_R_T = "2.54 → 0.89"               # 精确 sigmoid／silu 的反向改成 GPU 的解析式：1000 步路由偏置均值的 r（根源一览第 18 行）
+MINI_TPU_HIGH = 4.3e-6                    # 小尺寸：八份 TPU 主 loss 对 GPU 16 份逐步均值全部为正，平均 ＋4.3e-6（根源一览「待查」）
+MINI_GPU_SPREAD = 2.63e-6                 # GPU 每份对其余 15 份的带符号均值最大 |.|（−2.63e-6 到 ＋2.34e-6）
+assert MINI_TPU_HIGH > MINI_GPU_SPREAD
+MINI_TPU_HIGH_T, MINI_GPU_SPREAD_T = "4.3e-6", "2.6e-6"
+ELIDE_AFTER_MEASURED_T = "＋3.5e-6"        # 强制舍入后对 GPU 均值（协议变更记录，实测；原来误标「推算」）
+assert abs(ELIDE_AFTER - 3.5e-6) < 1e-12
+KAPPA_T = "1.0018"                        # base2 常数舍成 BF16 后 logits 的整体系数（本课复算见 LOG2E_BF16）
+
+assert LONG_ARMS == tpuself()['piles']['overview'][1]

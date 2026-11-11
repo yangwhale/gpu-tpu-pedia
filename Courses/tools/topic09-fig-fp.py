@@ -523,11 +523,11 @@ def fig_captain():
 def fig_elide():
     f = Fig(W, "一条横轴：1000 步主 loss 的带符号均值，TPU 对 GPU 8 份的平均，单位 1e-6。灰色一段是 GPU 自己两两最大的那一对，正负 %s。"
                "第一行：一处加权和照 GPU 改写法之前，TPU 在 ＋1.1，落在灰段里。第二行：改了以后五次 TPU 运行，其中三次只改执行参数，全在右边，%s，同一个方向。"
-               "五次里四次出了灰段。第三行：在两处强制写一次「舍到 BF16」以后，约 ＋3.5（推算），回到灰段里。"
+               "五次里四次出了灰段。第三行：在两处强制写一次「舍到 BF16」以后，约 ＋3.5，回到灰段里。"
                % (N.ELIDE_GPU_MAX_T, N.ELIDE_RANGE_T))
     y0 = f.header("编译器省掉一次舍入，1000 步 loss 五次同号偏高、四次出了噪声",
                   "横轴 ＝ 1000 步主 loss 的带符号均值（TPU 对 GPU 8 份平均，×1e-6）；灰段 ＝ GPU 自己两两最大的差；一个点 ＝ 一次 TPU 运行",
-                  [(GY, "GPU 自己的噪声"), (BL, "TPU 运行"), (GR, "强制舍入以后（推算）")])
+                  [(GY, "GPU 自己的噪声"), (BL, "TPU 运行"), (GR, "强制舍入以后")])
     PH = 300
     py = f.panel(0, y0, W, PH, "同一 TPU，三版代码，同一把尺子", BL)
     X0, X1, LO, HI = 360, 1320, -5.0, 10.0
@@ -541,7 +541,7 @@ def fig_elide():
         f.t(X(v * 1e-6), yb_ + 22, ("＋%d" % v) if v > 0 else str(v).replace("-", "−"), GY, size=12, anchor="middle")
     rows = [("改写法之前", [N.ELIDE_BEFORE], BL, True),
             ("改写法以后（5 次）", list(N.ELIDE_RUNS), BL, True),
-            ("两处强制舍入以后（推算）", [N.ELIDE_AFTER], GR, False)]
+            ("两处强制舍入以后", [N.ELIDE_AFTER], GR, False)]
     for i, (lab, vals, col, filled) in enumerate(rows):
         y = py + 70 + i * 66
         f.t(24, y + 5, lab, INK, True, 15)
@@ -554,15 +554,15 @@ def fig_elide():
         "代价：显式舍入是为了对齐，生产里关掉同样准（推断）；剩下约 ＋3.5e-6 还没查清。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移）：五次 TPU 运行对 GPU 8 份均值 %s，GPU 两两 28 对的带符号均值最大 %s；强制舍入后判定 r %s（对 GPU 基线，带符号均值），对 GPU 均值约 ＋3.5e-6（推算）。"
+               "📌 实测（第二次迁移）：五次 TPU 运行对 GPU 8 份均值 %s，GPU 两两 28 对的带符号均值最大 %s；强制舍入后判定 r %s（对 GPU 基线，带符号均值），对 GPU 均值约 ＋3.5e-6（实测）。八份 TPU 运行的主 loss 仍比 GPU 普遍偏高约 4.3e-6；同口径（每份 GPU 对其余各份）GPU 只在 ±2.6e-6 以内，灰段是两两最大差，口径更宽。"
                % (N.ELIDE_RANGE_T, N.ELIDE_GPU_MAX_T, N.ELIDE_R_T),
-               "⚠️ 推断：「往返被编译器省掉」由开关的效果推出，没有去看编译后的程序。五次里有三次只改执行参数（注意力分块、专家并行、MoE 实现），同号偏高，说明不是轨迹偶然分开。")
+               "📌 编译产物：优化后的 HLO 里「转 BF16 再转回」都还在，差别在后端 —— 算均方那颗 kernel 用的是没舍的 FP32，归一化输出那颗舍了（对齐记录在 TPU 自比里数过后端指令）。五次里有三次只改执行参数（注意力分块、专家并行、MoE 实现），同号偏高，说明不是轨迹偶然分开。")
     f.save("fig9-elide.svg", yb + 14)
 
 
 def fig_trans():
     f = Fig(W, "左格：四个超越函数，横条长度是对正确舍入的最大误差，按格（ulp）计，对数刻度。"
-               "TPU 默认：%s。TPU 高精度写法：%s。GPU：exp 2、log 1、sigmoid 和 silu 约 4。"
+               "TPU 默认：%s。TPU 高精度写法：%s。GPU：exp 2、log 1、sigmoid 和 silu 最大 3.4（实测）。"
                "右格：高精度的 exp 怎么用软件算：先把 x 拆成 k 个 ln2 加一个小余数 s，余数上用多项式算 e 的 s 次方，再乘 2 的 k 次方，只改指数位、精确；"
                "求倒数用牛顿修正，每修一次误差平方一次。" % (N.TRANS_T, N.TRANS_HI_T))
     y0 = f.header("TPU 默认的 exp、log 差几十格，GPU 只差个位数",
@@ -570,7 +570,7 @@ def fig_trans():
                   [(BL, "TPU 默认"), (GR, "TPU 高精度写法"), (GY, "GPU")])
     PH = 420
     LW = 760
-    py = f.panel(0, y0, LW, PH, "最大误差，按格计（TPU 实测；GPU 按文档，sigmoid、silu 为推断）", BL)
+    py = f.panel(0, y0, LW, PH, "最大误差，按格计（实测）", BL)
     X0, X1 = 150, LW - 60
     import math as _m
     def X(u):
@@ -602,7 +602,7 @@ def fig_trans():
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "默认的 exp 不只是粗，还系统偏低：真实输入上只有 %s 正好舍对，平均偏 %s 格" % (N.EXP_CR_FRAC, N.EXP_SIGNED_ULP_T), [
         "偏低的 exp 进了 log-sum-exp，再被病态放大，就是上一节那千分之一。",
-        "代价：单算子对上了 GPU 的精度，整网未必跟着对上 —— sigmoid、silu 换成精确写法后整网反而偏得多，根因还在查；改完要整网再验。",
+        "代价：单算子对上了 GPU 的精度，整网未必跟着对上 —— sigmoid、silu 换成精确写法后整网先是偏得更多，查到一处是反向公式跟 GPU 不同；改完要整网再验。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（TPU v5p，FP32，对 FP64 正确舍入数格）：默认 %s；高精度写法 %s。GPU：%s。TPU 默认的上限跟 JAX 文档给这一代芯片写的一致。"
