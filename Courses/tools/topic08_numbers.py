@@ -1315,24 +1315,24 @@ with open(os.path.join(HERE, "topic08_fixcmp.json"), encoding="utf-8") as _fh:
     FC = json.load(_fh)
 FC_W = {k: [r["w551"] for r in v] for k, v in FC["cols"].items()}
 TW = FC["twoway"]
-assert [len(FC_W[k]) for k in ("修之前", "补流梯度舍法", "对齐配置")] == [4, 5, 5]
+assert [len(FC_W[k]) for k in ("修之前", "补流梯度舍法", "对齐配置")] == [4, 5, 6]
 for _k in FC_W:                                                    # 运行目录算的数跟结果文件逐份一致
     assert all(abs(a - b) < 1e-12 for a, b in zip(FC_W[_k], TW["tpu"]["对照" if _k == "修之前" else _k]["w551"])), _k
 FC_SD = FC["loo_sd_551_1000"]
 assert abs(FC_SD - MI_SD) < 1e-9                                   # 跟研究线消融结果文件的 GPU 留一法 sd 一致
 TAIL_TH = TW["tail_threshold"]                                     # 「尾部在」＝ 第 751–1000 步均值 ＞ 3e-6（对齐记录的判据）
 FC_TAIL = {k: sum(1 for r in v if r["w751"] > TAIL_TH) for k, v in FC["cols"].items()}
-assert TAIL_TH == 3e-6 and FC_TAIL == {"修之前": 4, "补流梯度舍法": 2, "对齐配置": 4}, FC_TAIL
+assert TAIL_TH == 3e-6 and FC_TAIL == {"修之前": 4, "补流梯度舍法": 2, "对齐配置": 5}, FC_TAIL
 assert FC_TAIL["修之前"] == TW["tpu"]["对照"]["n_tail"] and FC_TAIL["补流梯度舍法"] == TW["tpu"]["补流梯度舍法"]["n_tail"] and FC_TAIL["对齐配置"] == TW["tpu"]["对齐配置"]["n_tail"]
 FC_MEAN = {k: sum(v) / len(v) for k, v in FC_W.items()}
-assert ["%.1e" % FC_MEAN[k] for k in ("修之前", "补流梯度舍法", "对齐配置")] == ["9.4e-06", "1.9e-06", "6.6e-06"]
+assert ["%.1e" % FC_MEAN[k] for k in ("修之前", "补流梯度舍法", "对齐配置")] == ["9.4e-06", "1.9e-06", "6.9e-06"]   # 对齐配置 6 份 6.948e-6（对齐记录写 ＋7.0e-6，舍入口径不同）
 TW_P = {"tpu": TW["tpu"]["补流梯度舍法"]["p"], "gpu": TW["gpu"]["GPU 换流梯度舍法"]["p"], "head": TW["gpu"]["GPU 换收拢处舍法"]["p"], "c_m58": TW["c_vs_m58_p"]}
-assert ["%.2g" % TW_P[k] for k in ("tpu", "gpu", "head", "c_m58")] == ["0.016", "0.0025", "0.89", "0.048"]
+assert ["%.2g" % TW_P[k] for k in ("tpu", "gpu", "head", "c_m58")] == ["0.016", "0.0025", "0.89", "0.024"]
 TW_GPU_MEAN = TW["gpu"]["GPU 换流梯度舍法"]["mean"]
 assert "%.1e" % TW_GPU_MEAN == "3.9e-06" and all(x > 0 for x in TW["gpu"]["GPU 换流梯度舍法"]["w551"])   # 4 份都正
 FC_MEAN_T = {k: ("%+.1e" % v).replace("e-0", "e-") for k, v in FC_MEAN.items()}
 TW_P_T = {k: "%.2g" % v for k, v in TW_P.items()}                # 两位有效数字（GPU 那格 0.00248 → 0.0025）
-C_NOW = {"pass": 8, "pend": 1, "loss_r": 0.98, "rep_pend": 1, "rep_pend_r": 1.14}   # 现行比较（C 口径第一份）1000 步：过 8、待定 1，主 loss MARE r 0.98；5 份里 1 份主 loss 待定 1.14（小尺寸对齐报告）
+C_NOW = {"pass": 8, "pend": 1, "loss_r": 0.98, "rep_pend": 1, "rep_pend_r": 1.14, "n_rep": 6}   # 现行比较（C 口径第一份）1000 步：过 8、待定 1，主 loss MARE r 0.98；6 份里 1 份主 loss 待定 1.14（小尺寸对齐报告、6 份重复结果文件）
 assert C_NOW["pass"] + C_NOW["pend"] == 9 and C_NOW["loss_r"] <= 1 < C_NOW["rep_pend_r"] <= 2
 
 # ── 2026-11-12 · F13：生产配方臂补到同配方 GPU 8 份当尺子重判（对齐记录同配方尺子重判的结果文件）──
@@ -1378,3 +1378,14 @@ assert RMS_EDGE_R[0] > 1.2 > RMS_EDGE_R[1]
 RMS_EDGE_T = "%.4f" % RMS_EDGE_R[0], "%.4f" % RMS_EDGE_R[1]
 RMS_EDGE3_T, RMS_EDGE6_T = RMS_EDGE_T
 C_REP_PEND_T = "%.2f" % C_NOW["rep_pend_r"]
+# F24：对齐配置残余的两组排查（结果文件）：关 MTP 仍偏（4 份）；GPU 在只改流梯度之上再让分支输出不舍，不放大尾部
+RES = TW["residual"]
+assert "%.1e" % RES["c_nomtp_551"] == "7.5e-06" and RES["c_nomtp_n"] == 4
+assert "%.1e" % RES["gpu_stream_branch"] == "2.3e-06" and RES["gpu_stream_branch"] < RES["gpu_stream_only"]
+RES_NOMTP_T = ("%+.1e" % RES["c_nomtp_551"]).replace("e-0", "e-").replace("+", "＋")
+RES_BRANCH_T = ("%+.1e" % RES["gpu_stream_branch"]).replace("e-0", "e-").replace("+", "＋")
+# F24：第 1 步在新对齐配置上重判（GPU 参照 6 份 15 对；结果文件 judge_fp64 与逐张量行）
+B2_C_OVER = 163
+_hcfn = (0.01591170578999582 / 0.013978521350485136, 1.4260719562589834)   # 第 3 层 FFN 前 hc_fn：超 N 倍数、R
+assert "%.2f %.2f" % _hcfn == "1.14 1.43"
+B2_C_UNATTR_T = "超出波动 %.2f 倍，R %.2f" % _hcfn
