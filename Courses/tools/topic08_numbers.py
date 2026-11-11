@@ -1366,3 +1366,9 @@ FC_C_MEAN_T = FC_MEAN_T["对齐配置"].replace("+", "＋")
 FC_BUMP = {k: TW["tpu"][k]["mean51"] for k in ("对照", "补流梯度舍法", "对齐配置")}
 assert FC_BUMP["补流梯度舍法"] > FC_BUMP["对照"] > 0 > FC_BUMP["对齐配置"] and TW["tpu"]["对齐配置"]["p51"] < 0.01 if "p51" in TW["tpu"]["对齐配置"] else True
 FC_BUMP_T = {k: ("%+.1e" % v).replace("e-0", "e-").replace("+", "＋").replace("-", "−", 1) if v < 0 else ("%+.1e" % v).replace("e-0", "e-").replace("+", "＋") for k, v in FC_BUMP.items()}
+# F21：换 v7x（以及 einsum 换写法）第 1 步多路残差收拢处三个小参数离 FP64 远、被豁免盖住 —— 对齐记录 TPU 自比矩阵「规则还有一类漏判」（实测）
+V7X_HCHEAD_FP64 = (1.25, 1.30)            # 三个张量第 1 步离 FP64（相对）；golden 0.03–0.07
+V7X_HCHEAD_GOLDEN = (0.03, 0.07)
+V7X_HCHEAD_RMAX = 46.2
+assert V7X_HCHEAD_FP64[0] / V7X_HCHEAD_GOLDEN[1] > 15 and V7X_HCHEAD_RMAX > 1.2
+V7X_HCHEAD_T = "离 FP64 %.2f–%.2f（golden %.2f–%.2f），最大 R %.1f" % (V7X_HCHEAD_FP64 + V7X_HCHEAD_GOLDEN + (V7X_HCHEAD_RMAX,))
