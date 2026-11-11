@@ -1321,3 +1321,14 @@ FC_IN = {k: sum(1 for x in v if abs(x) <= 2 * FC_SD) for k, v in FC_W.items()}  
 assert FC_IN == {"修之前": 0, "只补残差流舍入": 4, "三个都补": 1}, FC_IN
 FC_BEFORE_751 = FC["cols"]["修之前"][0]["w751"]
 assert "%.1e" % FC_BEFORE_751 == "2.1e-05"
+
+# ── 2026-11-12 · F13：生产配方臂补到同配方 GPU 8 份当尺子重判（对齐记录同配方尺子重判的结果文件）──
+with open(os.path.join(HERE, "topic08_prodrecipe.json"), encoding="utf-8") as _fh:
+    PR = json.load(_fh)["checks"]
+assert all(c["status_own"] == "pass" for c in PR.values()) and len(PR) == 9      # 同配方尺子：9 项全过
+PR_WORST = max(c["r_own"] for c in PR.values())
+assert "%.2f" % PR_WORST == "1.00"                                                # 最差一项（索引器蒸馏 loss）
+PR_LOSS_X = PR["L4.loss"]["ratio"]["signed_mean"]
+assert "%.1f" % PR_LOSS_X == "4.8"                                                # 主 loss 带符号均值：同配方尺子比现行宽几倍
+assert ["%.2f" % PR[k]["r_borrowed"] for k in ("L4.loss", "L4.grad_norm")] == ["2.97", "2.45"]   # 借现行尺子时这两项判超
+PR_N_T, PR_WORST_T, PR_LOSS_X_T = "8", "%.2f" % PR_WORST, "%.1f" % PR_LOSS_X
