@@ -496,7 +496,7 @@ PN_FIX1_T, PN_PRODCHUNK_T, PN_TRUE_T, PN_TPU_PROD_T = (tx(v, "%.2e", plus=True) 
 _lock("PN_FIX1_T", PN_FIX1_T, "＋1.86e-2"); _lock("PN_PRODCHUNK_T", PN_PRODCHUNK_T, "＋2.07e-2"); _lock("PN_TRUE_T", PN_TRUE_T, "＋2.74e-2"); _lock("PN_TPU_PROD_T", PN_TPU_PROD_T, "＋2.09e-2")
 B_GPUEXACT_T, B_DLOGITS_T, B_REST_T, TPU_VS_FIX1_T = tx(B_GPUEXACT, plus=True), tx(B_DLOGITS), tx(B_REST, "%.1e", plus=True), tx(TPU_VS_FIX1, plus=True)
 _lock("B_GPUEXACT_T", B_GPUEXACT_T, "＋8.70e-3"); _lock("B_DLOGITS_T", B_DLOGITS_T, "−6.84e-3"); _lock("B_REST_T", B_REST_T, "＋4.9e-4"); _lock("TPU_VS_FIX1_T", TPU_VS_FIX1_T, "＋2.35e-3")
-TPU_VS_TRUE_T = tx(abs(TPU_VS_TRUE), "%.1e"); _lock("TPU_VS_TRUE_T", TPU_VS_TRUE_T, "6.3e-3")
+TPU_VS_TRUE_T = tx(abs(TPU_VS_TRUE), "%.2e"); _lock("TPU_VS_TRUE_T", TPU_VS_TRUE_T, "6.35e-3")
 LADDER_DGRAD_T, LADDER_SHARED_T = tx(LADDER_DGRAD, plus=True), tx(LADDER_SHARED, "%.1e", plus=True)
 _lock("LADDER_DGRAD_T", LADDER_DGRAD_T, "＋2.07e-2"); _lock("LADDER_SHARED_T", LADDER_SHARED_T, "＋6.7e-3")
 SHARED_DLOGITS_GPU_T = tx(SHARED_DLOGITS_GPU, "%.1e"); _lock("SHARED_DLOGITS_GPU_T", SHARED_DLOGITS_GPU_T, "−6.7e-3")
@@ -589,7 +589,7 @@ GRAD_FP32_COST_V5P = 0.0079                    # 三个开关一起开，v5p 步
 assert abs(1.6239 / 1.6111 - 1 - GRAD_FP32_COST_V5P) < 0.0005
 STEP1_L23_V5P, STEP1_L23_V7X = (1.05, 1.75), (1.05, 1.86)          # 第 1 步整步检查的待定区间
 STEP1_FAIL_V5P, STEP1_FAIL_V7X = (2.1, 4.5, 2.3), (3.1,)            # 不过的层参数梯度：v5p 第 0–2 层、v7x 第 1 层
-MASTER_W_V5P, MASTER_W_V7X = 1.11, 0.99                              # 换尺子后，更新后主权重（v5p 待定、v7x 过）
+MASTER_W_V5P, MASTER_W_V7X = 1.63, 1.61                              # 尺子只用 GPU（11-11 起）后，更新后主权重：两平台都待定（混元 3 对齐报告 L3）
 MASTER_W_FP64_R = 0.92
 BIAS_TOKENS_FP64, BIAS_MEAN = 2730, 65536 * 8 / 192
 assert abs(BIAS_MEAN - 2730.67) < 0.01
@@ -778,7 +778,7 @@ B2_GN_NOW = 1.34                         # 现行比较（参照改后、TPU 补
 # ══════════════════════════════════════════════════════════════════════════════════════
 # ── 11-08 · 第二次迁移的后续（出处：同一实践的根源一览、改动台账、结果文件；实测，除标推断／本课推导）──────
 # ══════════════════════════════════════════════════════════════════════════════════════
-# 编译器省掉的舍入（§5.5）：改成逐项 FP32 乘加之后，GPU 一定会做的 FP32→BF16→FP32 往返在 TPU 上被省掉（推断，没看编译产物）
+# 编译器省掉的舍入（§5.5）：改成逐项 FP32 乘加之后，GPU 一定会做的 FP32→BF16→FP32 往返在 TPU 上被省掉（HLO 里 convert 都还在；最小复现的后端指令里一半被省掉，见根源一览第 16 行）
 ELIDE_GPU_MAX = 3.77e-6                   # GPU 8 份两两 28 对，1000 步主 loss 带符号均值的最大 |.|
 ELIDE_BEFORE = 1.07e-6                    # 改逐项乘加之前那一代 TPU：对 GPU 8 份均值的带符号均值
 ELIDE_RUNS = (7.68e-6, 6.59e-6, 6.35e-6, 3.71e-6, 8.58e-6)   # 改之后 5 次 TPU 运行（含只改执行参数的 3 次），同号偏高
@@ -891,7 +891,7 @@ EMB_DP_X = "3.62"                      # 纯数据并行 8：1.51e-2（实验矩
 EMB_NOEXC_X = "26.1"                   # 关 excess precision：1.09e-1（实验矩阵关省舍入一组、根因一览第 22 行 R 26.1）
 assert abs(1.51e-2 / 4.172e-3 - 3.62) < 0.01 and abs(1.090e-1 / 4.172e-3 - 26.1) < 0.1
 # TPU 自比的脾气（对齐记录 TPU 自比一节的 汇总页脾气表与实验矩阵 v5p ↔ v7x 一组，实测）
-LONG_ARMS = 33                         # 跑满 1000 步的改动数；只有 1 个分得开（多路残差混合不强制舍 BF16，第 1 步抓到）（汇总页 2026-11-11：115 种里 33 种另外跑到 1000 步）
+LONG_ARMS = 33                         # 跑满 1000 步的改动数；只有 1 个分得开（多路残差混合不强制舍 BF16，第 1 步抓到）（汇总页 2026-11-11：119 种里 33 种另外跑到 1000 步）
 # （汇总页现行：33 种另外跑到 1000 步，分得开 1；脾气表的 1000 步一列只挂在有 300 步对应行的改动上）
 V7X_STEP1_MED, V7X_FP64_RATIO, V7X_R300 = "3.9e-3", "1.01", "1.02"
 V7X_STEP_T, V5P_STEP_T, V7X_SAVE = "0.343 s（4 片）", "0.494 s（8 片）", "65%"
@@ -1177,7 +1177,7 @@ LIB_RMS_R_T, LIB_RMS_R1K_T = "%.2f" % _r("052_RMSNorm多舍一次"), "%.2f" % LI
 # 三种修法在 0.0.52 上（300 ／ 1000 步），都跟 GPU 重跑分不开
 LIB_FIX = {k: (_r("052_" + k), _r("052_" + k + "_1000")) for k in ("修法1", "修法2", "只切词嵌入表")}
 assert ["%.2f/%.2f" % v for v in LIB_FIX.values()] == ["1.55/0.92", "1.20/1.28", "1.23/0.97"]
-assert max(max(v) for v in LIB_FIX.values()) < LOO8_300_MAX
+assert max(v[0] for v in LIB_FIX.values()) < LOO8_300_MAX and max(v[1] for v in LIB_FIX.values()) < LOO16_1K_MAX   # 300 步对 8 份留一法最高、1000 步对 16 份
 LIB_FIX_T = "；".join("%s %.2f ／ %.2f" % (n, a, b) for n, (a, b) in zip(("①", "②", "③"), LIB_FIX.values()))
 # v7x 纯数据并行、不累积（每卡 8192 个下标）：0.0.52 开始排序 → 不再丢精度（先离线预测，再上卡核）
 _v46, _v52 = _C2R["v7x纯数据并行8不累积"], _C2R["052_v7x纯数据并行8不累积"]
@@ -1206,7 +1206,7 @@ SCREEN = {"arms": 109, "same": 23, "diff": 72, "cant": 14, "match": 95, "mismatc
 assert SCREEN["same"] + SCREEN["diff"] + SCREEN["cant"] == SCREEN["arms"] and SCREEN["same"] + SCREEN["diff"] == SCREEN["match"] + SCREEN["mismatch"]
 SCREEN_SPECS, SCREEN_SEC_T, SCREEN_MED_S, SCREEN_GIB_T = 95, "114–265", 184, "13.2–16.9"   # 编了 95 份规格；整次 114–265 s、中位数 184 s；单进程峰值内存
 
-# ── 2026-11-11 晚 · F1：小尺寸主 loss 共同偏高，偏差随步数怎么走（出处：小尺寸 results/mini-main-loss-drift.json、知识库「mini 主 loss 共同偏高」；实测）──
+# ── 2026-11-11 晚 · F1：小尺寸主 loss 共同偏高，偏差随步数怎么走（出处：对齐记录里小尺寸主 loss 偏高的分析；实测）──
 MD = tpuself()["mini_drift"]
 assert MD["n_tpu"] == 8 and MD["n_gpu"] == 16 and len(MD["主loss"]["blocks"]) == 40
 _lmw = {w[0]: w for w in MD["主loss"]["windows"]}
@@ -1237,3 +1237,17 @@ LIB_SCREEN_N = LIB_SCREEN[0]
 SCREEN_ARMS, SCREEN_SAME, SCREEN_DIFF, SCREEN_CANT, SCREEN_MATCH = (SCREEN[k] for k in ("arms", "same", "diff", "cant", "match"))
 SCREEN_MIN_T = "%d" % round(SCREEN_MED_S / 60)       # 整次中位数 184 s ≈ 3 分钟
 assert SCREEN_MIN_T == "3"
+LIB_DP8_52_T = "%.2f" % _r("052_纯数据并行8")
+LIB_V7X_R52_T = "%.2f" % LIB_V7X_GA1["r"][1]
+LIB_V7X_R_PAIR_T = "%.2f → %.2f" % LIB_V7X_GA1["R"]
+assert (LIB_DP8_52_T, LIB_V7X_R52_T, LIB_V7X_R_PAIR_T) == ("2.82", "0.89", "6.90 → 1.10")
+
+# ── 2026-11-11 晚 · F2：从小到大三级，第 1 步主 loss 两边各自对 CPU FP64（出处：对齐记录 小尺寸知识库、中等尺寸对齐报告「第 1 步主 loss 对 CPU FP64」、真实宽度 README；实测）──
+LAD_MINI_GPU_RANGE = (-2.46e-6, 4.7e-7)   # 小模型 GPU 8 份
+LAD_MINI_TPU = -3.68e-6                    # 小模型 TPU（现行关 base2；开 base2 −2.14e-6）
+LAD_MID = (1.68e-4, 2.8e-6)                # 中等尺寸（真实宽度与注意力、随机权重）：GPU、TPU
+LAD_REAL_GPU = 5.3e-5                      # 真实宽度截层 GPU 4 份（＋5.1e-5 到 ＋5.8e-5）
+LAD_REAL_TPU = (-9.87e-5, -1.24e-6)        # 真实宽度截层 TPU：开 base2 → 只关 base2
+LAD_REAL_GPU_SHARE = 0.55                  # GPU 那份偏高在 FP64 里逐类加 BF16 舍入，简单相加能复现约 55%
+assert LAD_MID[0] / LAD_MID[1] > 50 and abs(LAD_REAL_TPU[1]) < abs(LAD_MINI_TPU)
+LAD_MID_T, LAD_REAL_GPU_T = ("＋1.68e-4", "＋2.8e-6"), "＋5.3e-5"
