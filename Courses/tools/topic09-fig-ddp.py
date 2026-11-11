@@ -565,7 +565,7 @@ def fig_comm():
         "代价：字节按形状算，不是线上实测，只适合互相比；看不到精度（同一条 HLO 后端可以生成不同的指令），也看不到快慢（重不重叠要看步时或 profile）。",
     ])
     yb = f.src(yb + 10,
-               "📌 做法（本课实测所用）：用训练同一套配置和同一个训练步，把设备换成目标拓扑的描述，在 CPU 上为它做完整的切分和后端编译（JAX 的提前编译）；让 XLA 把训练步模块存成文本（--xla_dump_to、--xla_dump_hlo_as_text），只看切分、融合、调度都做完以后那一份（after_optimizations）。上卡后存下的程序里，集合通信与离线编的逐条一致（只差设备分组的写法；核对的是只切词嵌入表那份）。",
+               "📌 做法（对齐记录所用）：用训练同一套配置和同一个训练步，把设备换成目标拓扑的描述，在 CPU 上为它做完整的切分和后端编译（JAX 的提前编译）；让 XLA 把训练步模块存成文本（--xla_dump_to、--xla_dump_hlo_as_text），只看切分、融合、调度都做完以后那一份（after_optimizations）。上卡后存下的程序里，集合通信与离线编的逐条一致（只差设备分组的写法；核对的是只切词嵌入表那份）。",
                "📌 读法：五种集合通信 all-reduce、all-gather、all-to-all、collective-permute、reduce-scatter；异步版 xxx-start／xxx-done 成对，算一次，也可能包成 async-start、calls=子计算，集合通信在子计算里。认参数按形状（词嵌入 [120832,1024]，切开后 [120832,128]；输出头是 [1024,120832]）和 metadata 里的 op_name（前向取行是 gather，反向是 scatter-add），对不上就顺着数据流看使用者。每步次数 ＝ 从入口到它所在计算一路上各层循环次数之积，循环次数读条件计算里 compare(计数器, 常数), direction=LT 的那个常数。字节：all-reduce 算被求和的那块、all-gather 算拼好后的结果、all-to-all 算交换的那块、异步 collective-permute 只算一块缓冲。",
                "📌 右块（取自各运行上卡时存下的训练步程序，每步次数已乘上循环次数；字节仍按形状算）：词嵌入／全部每步每设备字节 —— 不修 %s／%s；修法① %s／%s（主输入和多 token 预测输入合成一次 FP32 all-reduce，每个微批 1 次，仍在循环里；另多 %s 字节的 collective-permute）；修法② %s／%s；FSDP 8 %s／%s；只切词嵌入表 %s／%s（%d 条集合通信）。"
                % tuple(_b(x) if isinstance(x, (int, float)) and x > 1000 else x for x in (N.C3_COMM["纯数据并行8"] + (N.C3_COMM["修法1"][0], N.C3_COMM["修法1"][1], N.C3_FIX1_PERM_T) + N.C3_COMM["修法2"] + N.C3_COMM["FSDP8"] + N.C3_COMM["只切词嵌入表"] + (N.C3_N_COMM,))),

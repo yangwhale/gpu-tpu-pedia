@@ -3,7 +3,7 @@ r"""专题九 · 第三节补的两张「尺子」图（第二次迁移的新材
 
 fig9-loo   回答：r 落在 1–2 之间，算不算出事？—— 先看纯噪声自己能到多少。
            GPU 同设置的几份重跑，轮流挑一份当被测、一份当基线，尺子用其余几份重算，判法跟 TPU 被测一模一样；
-           一次比较要看 8 条曲线 × 3 个统计 ＝ 24 个数，取最差的 —— 纯噪声也常常「略超」。
+           一次比较要看 8 项检查（7 条曲线，主 loss 两个窗口）× 3 个统计 ＝ 24 个数，取最差的 —— 纯噪声也常常「略超」。
            第三行：8 份尺子时被推过 2 倍的六个 TPU 改动，补到 16 份后全部回到 1–2 之间。
            数据：topic09_tpuself.json（导出自第二次迁移的对齐记录：TPU 自比的 GPU 留一法、长跑灰区表），全部实测。
 """
@@ -216,7 +216,7 @@ assert [a["label"] for a in S1] == ["v5p 换 v7x", "FSDP 改成纯数据并行",
 assert all(a["n_tensors"] == 205 and a["n_small_skipped"] == 45 and len(a["points"]) == 160 for a in S1)
 assert max(y for _x, y, _e in S1[0]["points"]) <= 1.2                      # 换 v7x：一个都没变远
 _emb = [[(x, y) for x, y, e in a["points"] if e][0] for a in S1]
-assert abs(_emb[1][1] - 3.62) < 0.005 and abs(_emb[2][1] - 26.13) < 0.005  # 词嵌入梯度：3.6 倍、26 倍（MATRIX B1、C 表）
+assert abs(_emb[1][1] - 3.62) < 0.005 and abs(_emb[2][1] - 26.13) < 0.005  # 词嵌入梯度：3.6 倍、26 倍（实验矩阵：纯数据并行、关省舍入两组）
 
 
 def fig_twoaxis():
