@@ -1309,18 +1309,31 @@ assert ["%.1e" % x for x in MI["两边都去掉多路残差"]["tpu_each"]] == ["
 MI_SD = MI["对照"]["gpu_loo_sd"]          # GPU 16 份留一法 sd 2.1e-6
 assert "%.1e" % MI_SD == "2.1e-06"
 
-# ── 2026-11-11 晚 · F11：修之前 ／ 只补残差流舍入 ／ 两处都补（topic08_fixcmp.json，私有导出脚本读各运行的逐步记录；实测）──
+# ── 2026-11-12 · F19：后段主因定到流梯度舍法（两头验证）；对齐配置改 C 口径（topic08_fixcmp.json：曲线由私有导出脚本读各运行逐步记录；
+#    两头验证的每份数由同一脚本从对齐记录三份单因素交叉结果文件抄来；实测）──
 with open(os.path.join(HERE, "topic08_fixcmp.json"), encoding="utf-8") as _fh:
     FC = json.load(_fh)
 FC_W = {k: [r["w551"] for r in v] for k, v in FC["cols"].items()}
-assert "%.2e" % FC_W["修之前"][0] == "1.48e-05" and len(FC_W["只补残差流舍入"]) == 5 and len(FC_W["两处都补"]) == 3
-assert ["%.1e" % x for x in FC_W["两处都补"]] == ["8.2e-06", "1.1e-05", "2.1e-06"]
+TW = FC["twoway"]
+assert [len(FC_W[k]) for k in ("修之前", "补流梯度舍法", "对齐配置")] == [4, 5, 5]
+for _k in FC_W:                                                    # 运行目录算的数跟结果文件逐份一致
+    assert all(abs(a - b) < 1e-12 for a, b in zip(FC_W[_k], TW["tpu"]["对照" if _k == "修之前" else _k]["w551"])), _k
 FC_SD = FC["loo_sd_551_1000"]
 assert abs(FC_SD - MI_SD) < 1e-9                                   # 跟研究线消融结果文件的 GPU 留一法 sd 一致
-FC_IN = {k: sum(1 for x in v if abs(x) <= 2 * FC_SD) for k, v in FC_W.items()}   # 落在 GPU 散布 2 sd 以内的份数
-assert FC_IN == {"修之前": 0, "只补残差流舍入": 4, "两处都补": 1}, FC_IN
-FC_BEFORE_751 = FC["cols"]["修之前"][0]["w751"]
-assert "%.1e" % FC_BEFORE_751 == "2.1e-05"
+TAIL_TH = TW["tail_threshold"]                                     # 「尾部在」＝ 第 751–1000 步均值 ＞ 3e-6（对齐记录的判据）
+FC_TAIL = {k: sum(1 for r in v if r["w751"] > TAIL_TH) for k, v in FC["cols"].items()}
+assert TAIL_TH == 3e-6 and FC_TAIL == {"修之前": 4, "补流梯度舍法": 2, "对齐配置": 4}, FC_TAIL
+assert FC_TAIL["修之前"] == TW["tpu"]["对照"]["n_tail"] and FC_TAIL["补流梯度舍法"] == TW["tpu"]["补流梯度舍法"]["n_tail"] and FC_TAIL["对齐配置"] == TW["tpu"]["对齐配置"]["n_tail"]
+FC_MEAN = {k: sum(v) / len(v) for k, v in FC_W.items()}
+assert ["%.1e" % FC_MEAN[k] for k in ("修之前", "补流梯度舍法", "对齐配置")] == ["9.4e-06", "1.9e-06", "6.6e-06"]
+TW_P = {"tpu": TW["tpu"]["补流梯度舍法"]["p"], "gpu": TW["gpu"]["GPU 换流梯度舍法"]["p"], "head": TW["gpu"]["GPU 换收拢处舍法"]["p"], "c_m58": TW["c_vs_m58_p"]}
+assert ["%.3f" % TW_P[k] for k in ("tpu", "gpu", "head", "c_m58")] == ["0.016", "0.002", "0.886", "0.048"]
+TW_GPU_MEAN = TW["gpu"]["GPU 换流梯度舍法"]["mean"]
+assert "%.1e" % TW_GPU_MEAN == "3.9e-06" and all(x > 0 for x in TW["gpu"]["GPU 换流梯度舍法"]["w551"])   # 4 份都正
+FC_MEAN_T = {k: ("%+.1e" % v).replace("e-0", "e-") for k, v in FC_MEAN.items()}
+TW_P_T = {k: ("%.3f" % v).rstrip("0") for k, v in TW_P.items()}
+C_NOW = {"pass": 8, "pend": 1, "loss_r": 0.98, "rep_pend": 1, "rep_pend_r": 1.14}   # 现行比较（C 口径第一份）1000 步：过 8、待定 1，主 loss MARE r 0.98；5 份里 1 份主 loss 待定 1.14（小尺寸对齐报告）
+assert C_NOW["pass"] + C_NOW["pend"] == 9 and C_NOW["loss_r"] <= 1 < C_NOW["rep_pend_r"] <= 2
 
 # ── 2026-11-12 · F13：生产配方臂补到同配方 GPU 8 份当尺子重判（对齐记录同配方尺子重判的结果文件）──
 with open(os.path.join(HERE, "topic08_prodrecipe.json"), encoding="utf-8") as _fh:
@@ -1342,3 +1355,10 @@ assert B2_NOW6["over"] < B2_NOW["over"] and B2_NOW6["far_mix"] < B2_NOW["far_mix
 # F18：换基线挪动分两层（结果文件逐配置复算）：单条检查最多挪 0.47（v7x 按专家切的 param_norm）；四条取最差后最多挪 0.33（v7x FSDP 8：0.78–1.11）
 REBASE_COMB_SHIFT = 0.33
 assert REBASE_COMB_SHIFT < REBASE_SHIFT_MAX
+# GPU 只换收拢处舍法：后段不变，第 51–100 步冒出前段鼓包（对 GPU 自己 p 0.001）——跟 TPU 不补收拢处舍入时的前段鼓包两头对上
+TW_HEAD51 = TW["gpu"]["GPU 换收拢处舍法"]["mean51"]
+TW_HEAD51_P = TW["gpu"]["GPU 换收拢处舍法"]["p51"]
+assert "%.1e" % TW_HEAD51 == "3.7e-06" and TW_HEAD51_P < 0.002     # 结果文件 3.745e-6（对齐记录知识库写 ＋3.8e-6，舍入口径不同）
+TW_HEAD51_T, TW_HEAD51_P_T = ("%+.1e" % TW_HEAD51).replace("e-0", "e-").replace("+", "＋"), "%.3f" % TW_HEAD51_P
+C_LOSS_R_T = "%.2f" % C_NOW["loss_r"]
+FC_C_MEAN_T = FC_MEAN_T["对齐配置"].replace("+", "＋")
