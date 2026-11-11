@@ -417,9 +417,9 @@ def fig_boundary():
                "📌 出处：第 2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3。第 1 行是混元 3 时期就有的开关，第二次迁移才需要打开：TPU 把路由打分设成最高精度以后才出现这个差；混元 3 有同一个开关，但那时默认精度本来就先舍 BF16，开不开逐位相同。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。",
                "📌 第 4 行只改这一处，第 1 步 loss %s、梯度范数 %s，比 GPU 自己的噪声（%s ／ %s）小几十倍 —— 它是按写法定的 bug，不是按大小抓到的。"
                % (N.ATTN_FIX_LOSS_T, N.ATTN_FIX_GN_T, N.ATTN_NOISE_LOSS_T, N.ATTN_NOISE_GN_T),
-               "📌 同在「乘法」这一列的还有一处：TPU 的 HIGHEST 精度是多遍 BF16 拼出来的近似 FP32，GPU 是逐元素 FP32 乘加；一处多项加权和改成逐项 FP32 乘加以后，第 1 步对 FP32 参照 R ＞ 1.2 的张量 %s（共 %d 个）。"
-               % (N.MIX_OVER_T, N.MIX_TENSORS),
-               "注：线高只分 16 位、32 位两档，HIGHEST 这类「多遍 BF16 拼近似 FP32」也画在 32 位，所以乘法那一格要比字、不只比高度（HIGHEST 对逐元素 FP32 乘加照样差末位）；「舍在哪」一列不画线，红色刻痕一道 ＝ 舍一次到 16 位，只在它本身是根子时画（第 5 行：TPU 默认归一化结果、缩放各舍一次，GPU 算完只舍一次）。第 3 行累加那一格：一轮之内照常 FP32 累加，舍的是轮与轮之间的部分和（§5.4 的推断）。")
+               "📌 乘法那一格要看编译后的样子：一处 HIGHEST 写的多路残差四路加权和，编译器已改写成 FP32 逐元素乘加、不上矩阵单元，跟 GPU 只差加法顺序（TPU 配对相加、GPU 依次相加），归顺序那一格；改成依次相加后第 1 步该处梯度对 CPU FP64 R ＞ 1.2 的张量 %s，后一代配置没复现。"
+               % N.MIX_OVER_T,
+               "注：线高只分 16 位、32 位两档，HIGHEST 这类「多遍 BF16 拼近似 FP32」也画在 32 位，所以乘法那一格要比字、不只比高度；HIGHEST 是不是多遍 BF16，看编译后它还是不是矩阵乘；「舍在哪」一列不画线，红色刻痕一道 ＝ 舍一次到 16 位，只在它本身是根子时画（第 5 行：TPU 默认归一化结果、缩放各舍一次，GPU 算完只舍一次）。第 3 行累加那一格：一轮之内照常 FP32 累加，舍的是轮与轮之间的部分和（§5.4 的推断）。")
     f.save("fig9-boundary.svg", yb + 14)
 
 
@@ -522,7 +522,7 @@ def fig_captain():
 
 def fig_elide():
     f = Fig(W, "一条横轴：1000 步主 loss 的带符号均值，TPU 对 GPU 8 份的平均，单位 1e-6。灰色一段是 GPU 自己两两最大的那一对，正负 %s。"
-               "第一行：一处加权和照 GPU 改写法之前，TPU 在 ＋1.1，落在灰段里。第二行：改了以后五次 TPU 运行，其中三次只改执行参数，全在右边，%s，同一个方向。"
+               "第一行：一处四路加权和照 GPU 改加法顺序之前，TPU 在 ＋1.1，落在灰段里。第二行：改了以后五次 TPU 运行，其中三次只改执行参数，全在右边，%s，同一个方向。"
                "五次里四次出了灰段。第三行：在两处强制写一次「舍到 BF16」以后，约 ＋3.5，回到灰段里。"
                % (N.ELIDE_GPU_MAX_T, N.ELIDE_RANGE_T))
     y0 = f.header("编译器省掉一次舍入，1000 步 loss 五次同号偏高、四次出了噪声",
@@ -539,8 +539,8 @@ def fig_elide():
     for v in range(-4, 11, 2):
         f.line(X(v * 1e-6), yb_, X(v * 1e-6), yb_ + 6, GY2, 1, arrow=False)
         f.t(X(v * 1e-6), yb_ + 22, ("＋%d" % v) if v > 0 else str(v).replace("-", "−"), GY, size=12, anchor="middle")
-    rows = [("改写法之前", [N.ELIDE_BEFORE], BL, True),
-            ("改写法以后（5 次）", list(N.ELIDE_RUNS), BL, True),
+    rows = [("改顺序之前", [N.ELIDE_BEFORE], BL, True),
+            ("改顺序以后（5 次）", list(N.ELIDE_RUNS), BL, True),
             ("两处强制舍入以后", [N.ELIDE_AFTER], GR, False)]
     for i, (lab, vals, col, filled) in enumerate(rows):
         y = py + 70 + i * 66
@@ -549,14 +549,14 @@ def fig_elide():
             f.p.append('<circle cx="%.1f" cy="%d" r="8" fill="%s" stroke="%s" stroke-width="2"/>' % (X(v), y, col if filled else "#fff", col))
     f.t(X(N.ELIDE_GPU_MAX) + 8, yt + 18, "GPU 自己最大 ±%s" % N.ELIDE_GPU_MAX_T, GY, size=12)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "GPU 每次都把中间值存成 BF16，TPU 上这次往返被编译器拿掉：值更精确，跟 GPU 反而对不上", [
+    yb = f.band(y0 + PH + 20, "ok", "GPU 每次都把中间值存成 BF16，TPU 上这次往返只做了一半：值更精确，跟 GPU 反而对不上", [
         "要和 GPU 舍在同一处，就在那一处显式写「舍到 BF16」（JAX 的 lax.reduce_precision），编译器不会删。",
         "代价：显式舍入是为了对齐，生产里关掉同样准（推断）；剩下约 ＋3.5e-6 还没查清。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移）：五次 TPU 运行对 GPU 8 份均值 %s，GPU 两两 28 对的带符号均值最大 %s；强制舍入后判定 r %s（对 GPU 基线，带符号均值），对 GPU 均值约 ＋3.5e-6（实测）。八份 TPU 运行的主 loss 仍比 GPU 普遍偏高约 4.3e-6；同口径（每份 GPU 对其余各份）GPU 只在 ±2.6e-6 以内，灰段是两两最大差，口径更宽。"
                % (N.ELIDE_RANGE_T, N.ELIDE_GPU_MAX_T, N.ELIDE_R_T),
-               "📌 编译产物：优化后的 HLO 里「转 BF16 再转回」都还在，差别在后端 —— 算均方那颗 kernel 用的是没舍的 FP32，归一化输出那颗舍了（对齐记录在 TPU 自比里数过后端指令）。五次里有三次只改执行参数（注意力分块、专家并行、MoE 实现），同号偏高，说明不是轨迹偶然分开。")
+               "📌 编译产物：优化后的 HLO 里「转 BF16 再转回」都还在，差别在后端 —— 算均方那颗 kernel 用的是没舍的 FP32，归一化输出那颗舍了（在一个最小复现里数过后端指令；长跑偏高归到这一处是推断）。五次里有三次只改执行参数（注意力分块、专家并行、MoE 实现），同号偏高，说明不是轨迹偶然分开。")
     f.save("fig9-elide.svg", yb + 14)
 
 

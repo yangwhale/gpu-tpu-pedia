@@ -700,12 +700,11 @@ assert ATTN_FIX_LOSS < ATTN_NOISE_LOSS / 10 and abs(ATTN_FIX_GN) < ATTN_NOISE_GN
 ATTN_FIX_LOSS_T, ATTN_FIX_GN_T = tx(ATTN_FIX_LOSS, "%.1e", plus=True), tx(ATTN_FIX_GN, "%.1e")
 ATTN_NOISE_LOSS_T, ATTN_NOISE_GN_T = tx(ATTN_NOISE_LOSS, "%.1e"), tx(ATTN_NOISE_GN, "%.1e")
 _lock("ATTN_FIX_LOSS_T", ATTN_FIX_LOSS_T, "＋8.1e-7"); _lock("ATTN_NOISE_GN_T", ATTN_NOISE_GN_T, "2.2e-3")
-# 「HIGHEST 也不是 FP32」：一处多项加权和，TPU 默认 HIGHEST einsum（多遍 BF16 拼近似 FP32），GPU 逐元素 FP32 乘加
-MIX_TENSORS = 45
-MIX_OVER = (12, 5, 18)                    # 对 FP32 参照 R ＞ 1.2 的张量：现行 ／ 改逐项 FP32 乘加 ／ 现行再关 excess precision
-MIX_MED = (0.88, 0.79, 1.09)              # R 中位数，同上
-assert MIX_OVER[1] < MIX_OVER[0] < MIX_OVER[2]   # 关 excess precision 反而更多：跟 §5.5 混元 3 的方向一致
-MIX_OVER_T = "%d → %d" % MIX_OVER[:2]; _lock("MIX_OVER_T", MIX_OVER_T, "12 → 5")
+# 「HIGHEST 是不是多遍 BF16，看编译后还是不是矩阵乘」：多路残差四路加权和，TPU 默认写成 HIGHEST einsum，
+# 编译器把它改写成 FP32 逐元素乘 ＋ FP32 求和（不上矩阵单元），跟 GPU 只差加法顺序（TPU 配对、GPU 依次）。
+# 改成依次相加以后，第 1 步该处梯度对 CPU FP64 R ＞ 1.2 的张量 11 → 8；后一代配置没复现，机制待查。
+MIX_OVER = (11, 8)
+MIX_OVER_T = "%d → %d" % MIX_OVER; _lock("MIX_OVER_T", MIX_OVER_T, "11 → 8")
 # 病态：稀疏注意力里一项辅助蒸馏损失（KL）每行约 1.1e-4 nat，log-sum-exp 约 7.1
 KD_KL, KD_LSE = 1.1e-4, 7.1
 KD_ULP = 4.73e-7                         # f32 在 lse 处一格（实测各行平均；lse ∈ [4, 8) 时 2⁻²¹ ≈ 4.77e-7）
@@ -769,7 +768,6 @@ B2_MED_OFF, B2_MED_4SW = B2_RATIO_MED[0], B2_RATIO_MED[2]
 B2_OVER_OFF, B2_OVER_4SW = B2_OVER2[0], B2_OVER2[2]
 INJ_R_BEFORE, INJ_R_AFTER = INJ_R
 INJ_R_AFTER_T = "%.2f" % INJ_R_AFTER; _lock("INJ_R_AFTER_T", INJ_R_AFTER_T, "0.95")
-MIX_OVER_NOEXC = MIX_OVER[2]
 KD_VS_GPU = -9.2e-4                      # 第 1 步 KD：TPU 全部运行对 GPU 全部运行（相对），区别于单行对 FP64 的 KD_DIFF
 KD_VS_GPU_T = tx(KD_VS_GPU, "%.1e"); _lock("KD_VS_GPU_T", KD_VS_GPU_T, "−9.2e-4")
 # §5.6 折叠的收尾：现行五个开关下第 1 步逐张量（205 个张量的那份逐张量表）
@@ -839,7 +837,7 @@ QKC_ETA_T = tx(QKC_ETA, "%.1f"); _lock("QKC_ETA_T", QKC_ETA_T, "−201.8")
 QKC_SMAX_T = tx(QKC_SMAX, "%.4f")
 # 开关三类（§9.5）：用途分类以 1% 步时为界（本课取同一口径）
 SW_COST_GATE = "1%"
-SW_MIX_COST = "0.4%"                      # 逐项 FP32 乘加：步时 ＋0.4%（只差这一个开关的两次运行）
+SW_MIX_COST = "0.2%"                      # 四路相加改依次（照 GPU 的顺序）：步时 ＋0.2%；对 FP64 更准未证实，归「看情况」
 SW_ELIDE_COST = "0.06%"                   # 强制舍入：跨代对比 ＋0.06%
 # 规模一级级往上（§9.6）
 LADDER_MID_PASS = (5, 0, 4)               # 中等尺寸（随机初始化，宽度和注意力形状同真实模型）300 步：过 ／ 不过 ／ 待定
