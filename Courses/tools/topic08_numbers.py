@@ -1372,3 +1372,8 @@ V7X_HCHEAD_GOLDEN = (0.03, 0.07)
 V7X_HCHEAD_RMAX = 46.2
 assert V7X_HCHEAD_FP64[0] / V7X_HCHEAD_GOLDEN[1] > 15 and V7X_HCHEAD_RMAX > 1.2
 V7X_HCHEAD_T = "离 FP64 %.2f–%.2f（golden %.2f–%.2f），最大 R %.1f" % (V7X_HCHEAD_FP64 + V7X_HCHEAD_GOLDEN + (V7X_HCHEAD_RMAX,))
+# F22：0.0.46 上 RMSNorm 多舍一次「分得开」只靠第 1 步第 0 层 input_layernorm 权重一个压线张量（TPU 自比第 1 步按 6 份 GPU 参照重判的结果文件）
+RMS_EDGE_R = (1.2024758939024367, 1.1955309333947115)   # GPU 第 1 步参照 3 份 ／ 6 份时的 R
+assert RMS_EDGE_R[0] > 1.2 > RMS_EDGE_R[1]
+RMS_EDGE_T = "%.4f" % RMS_EDGE_R[0], "%.4f" % RMS_EDGE_R[1]
+RMS_EDGE3_T, RMS_EDGE6_T = RMS_EDGE_T
