@@ -9526,7 +9526,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>v7x 纯数据并行 8，不累积</td><td>8192</td><td>不排序</td><td><b>排序</b></td><td>4.06 ／ <b>0.89</b></td></tr>
   </tbody></table>
   <p>不累积时同一个词在一张卡上加的次数翻倍，所以最差；16 卡每卡仍 4096 个，跟 8 卡差不多。v7x 在 0.0.46 上跟 v5p 一样走不排序（第 1 步词嵌入梯度 1.50e-2 对 4.25e-3；v7x 上交给 SparseCore 的是 FSDP 那一侧的 scatter）。</p>
-  <p><b>门槛跟着运行库走。</b>1/8 是在运行库 0.0.46 上二分出来的。升到 0.0.52 再二分（单算子离线编译），门槛跟列宽、芯片代际都有关（<a href="#s10-2">§10.2</a> 图右上）：同样 120832 行，v5p 上列数 1024 的门槛 14,420，列数 128 的降到 1,783；v7x 上列数 1024 的降到 7,181。表的最后一行就是拿它做的预测：离线编译先看到 0.0.52 排序，再上卡核对，词嵌入梯度 R 6.90 → 1.10。机理还是那一条，只是门槛挪了。</p>
+  <p><b>门槛跟着运行库走。</b>1/8 是在运行库 0.0.46 上二分出来的。升到 0.0.52 再二分（单算子离线编译），门槛跟列宽、芯片代际都有关（<a href="#s10-2">§10.2</a> 图右上）：同样 120832 行，v5p 上列数 1024 的门槛 14,420，列数 128 的降到 1,783；v7x 上列数 1024 的降到 7,181。表的最后一行就是拿它做的预测：离线编译先看到 0.0.52 排序，再上卡核对，词嵌入梯度 R 6.90 → 1.10，曲线回到噪声内（第 1 步另有三个多路残差输出头的小参数离 FP64 远，按研究线的规矩单列、不挡判档，那是另一件事）。机理还是那一条，只是门槛挪了。</p>
 
   <h3 id="s8-7">8.7　结论：高频词 × 不排序；修法和代价</h3>
   <p><b>两个条件缺一个都不丢精度</b>（本节开头那张 2×2）：一行加的次数多，而且后端没排序、每加一次舍一次。第一版的两种修法，是让这次累加落在 FP32：</p>
@@ -9536,6 +9536,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>② 本卡 FP32 加完、舍一次，再 BF16 跨卡求和</td><td>4.24e-3</td><td>0.93 ／ 1.07</td><td>−2.6%</td></tr>
   </tbody></table>
   <p>负数是比基线快：不修时纯数据并行本来就快，修法本身多花 0.6–0.8 个百分点。1000 步的 1.09、1.07 判「略超」，可没超过纯噪声自己能拿到的分（<a href="#s3-5">§3.5</a> 的留一法），跟 GPU 重跑分不开。后来又有第三种修法：不改精度、只改切分（<a href="#s8-9">§8.9</a>）。三种的精度同档（都跟 GPU 重跑分不开），第三种通信、显存、步时最省，所以<b>纯数据并行时首选只切词嵌入表；过不了排序门槛，再退回修法①</b>。</p>
+  <p>回头看混元 3：它的 FSDP 8 和按专家切 8 两种跑法，词嵌入表都沿隐藏维切开，每卡一次收齐 32768 个下标、过门槛、排了序（运行库 0.0.46 上离线编译核过；v7x 上那次 scatter 交给 SparseCore），所以不受这件事影响。</p>
   <details class="foldfig"><summary><b>换到自己的模型怎么自查</b>：比较每卡一次 scatter 的下标数 N 和词表行数 V</summary>
   <table class="t9"><thead><tr><th>情况</th><th>会怎样</th><th>做法</th></tr></thead><tbody>
   <tr><td>N 不过门槛（运行库 0.0.46 上是 V／8）</td><td>不排序，高频词丢精度</td><td>首选只切词嵌入表（切开后 N 变成切分组里所有卡的 token 数；它跟 FSDP 一样要 excess precision 开着，且不能跟按数据并行切优化器状态的 ZeRO-1 同开）；合起来仍不过线，用修法①</td></tr>
@@ -10555,8 +10556,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="596" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="623" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是训练轨迹慢慢偏开，不是前向的差；前段的鼓包定了，后段在查</tspan></text>
 <text class="svgsm" x="20" y="654" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一份权重上两边各算几批（6 个状态、19 批），TPU 只比 GPU 写法高 ＋0.83e-6 ± 1.15e-6，不到后段的一成；偏差跟步数、参数范数同步（相关 0.96），跟梯度范数无关。</text>
-<text class="svgsm" x="20" y="678" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">后段在 TPU 一侧试过六种改法（含收拢处强制舍入）都没压住；还剩的候选（几类小参数的梯度离精确值更远）是推断，下一步要在 GPU 一侧做消融。</text>
-</svg><figcaption><b>上面的柱第 550 步以后一路变红变高；下面 MTP 反着往下。</b><span class="capmore"><br><em>灰带是 GPU 自己的散布；柱的颜色只看 8 份是否同号，不是判档。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步，现行对齐配置）：TPU 8 份 ＝ 开、关 base2 各 4 份（其中 6 份只改执行方式）；每一步取 8 份对 GPU 16 份逐步均值的相对差再平均，25 步一块；灰带是 GPU 16 份轮流当被测、对其余 15 份均值的标准差。窗口值：第 2–1000 步 ＋4.3e-6，第 751–1000 步 ＋1.3e-5，MTP 同窗口 −3.2e-5。</p>
+<text class="svgsm" x="20" y="678" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">跟 MTP、索引器 KD 无关：两边把这两项的系数都设 0，后段照样往上（约为对照的六成，是它们放大了还是样本少，在查）；TPU 一侧试过的改法都没压住，根因在查。</text>
+</svg><figcaption><b>上面的柱第 550 步以后一路变红变高；下面 MTP 反着往下。</b><span class="capmore"><br><em>灰带是 GPU 自己的散布；柱的颜色只看 8 份是否同号，不是判档。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步，现行对齐配置）：TPU 8 份 ＝ 开、关 base2 各 4 份（其中 6 份只改执行方式）；每一步取 8 份对 GPU 16 份逐步均值的相对差再平均，25 步一块；灰带是 GPU 16 份轮流当被测、对其余 15 份均值的标准差。窗口值：第 2–1000 步 ＋4.3e-6，第 751–1000 步 ＋1.3e-5，MTP 同窗口 −3.2e-5。隔离实验（第 551–1000 步，TPU 对同配置 GPU 4 份均值，每种 TPU 2 份）：对照 ＋1.5e-5，关 MTP ＋1.2e-5，关 KD ＋9.0e-6，两个都关 ＋8.7e-6。</p>
 <p>📌 前段鼓包：GPU 在多路残差收拢成一路之后舍一次 BF16 再进末层归一化，TPU 这次舍入没做（推断是编译器在省舍入下省掉的，没看后端指令）；加一个强制舍入的开关，第 51–100 步回到 GPU 附近，第 751–1000 步不变。</p>
 <p>⚠️ 柱的颜色只看 8 份的符号是否一致，不是判档；判档仍按第三节的三个统计和 GPU 16 份的尺子（主 loss 1.55、1.52 待定）。</p></details></figure>
   <p>能说的写在图下那条带里；说不出的就写「在查」，不替它下结论。这也是方法的一部分（<a href="#s10-4">§10.4</a>）。</p>
@@ -11063,7 +11064,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="834" y="468" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">0.0.46：门槛 15,105，不过线 → 不排序</text>
 <text class="svgsm" x="834" y="490" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.52：门槛 7,181，过线 → 排序（离线编译看到）</tspan></text>
 <text class="svgsm" x="834" y="518" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上卡：r 4.06 → 0.89　词嵌入梯度 R 6.90 → 1.10</tspan></text>
-<text class="svgsm" x="834" y="542" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">预测成立：问题随版本消失，机理不变</tspan></text>
+<text class="svgsm" x="834" y="542" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">预测成立：词嵌入这一处随版本消失，机理不变</tspan></text>
+<text class="svgsm" x="834" y="566" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">（另有三个多路残差小参数离 FP64 远，按规矩单列）</text>
 <rect x="0" y="592" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="592" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="592" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>

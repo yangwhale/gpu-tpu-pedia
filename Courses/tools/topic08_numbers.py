@@ -1251,3 +1251,7 @@ LAD_REAL_TPU = (-9.87e-5, -1.24e-6)        # 真实宽度截层 TPU：开 base2 
 LAD_REAL_GPU_SHARE = 0.55                  # GPU 那份偏高在 FP64 里逐类加 BF16 舍入，简单相加能复现约 55%
 assert LAD_MID[0] / LAD_MID[1] > 50 and abs(LAD_REAL_TPU[1]) < abs(LAD_MINI_TPU)
 LAD_MID_T, LAD_REAL_GPU_T = ("＋1.68e-4", "＋2.8e-6"), "＋5.3e-5"
+# 隔离实验（研究线 11-11 晚，小尺寸知识库「隔离实验」行，实测）：两侧把 MTP、索引器 KD 的系数设 0，第 551–1000 步 TPU 对同配置 GPU 4 份均值
+MD_ISO = {"对照": 1.48e-5, "关MTP": 1.16e-5, "关KD": 9.0e-6, "都关": 8.7e-6}
+assert all(v > 0 for v in MD_ISO.values()) and abs(MD_ISO["都关"] / MD_ISO["对照"] - 0.6) < 0.05   # 约六成
+MD_ISO_T = "对照 ＋1.5e-5，关 MTP ＋1.2e-5，关 KD ＋9.0e-6，两个都关 ＋8.7e-6"
