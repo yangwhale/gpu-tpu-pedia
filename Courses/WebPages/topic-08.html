@@ -1118,7 +1118,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>留一法</b>：轮流拿一份 GPU 重跑当被测，用其余几份当尺子，看纯噪声按同一套判法能拿几分（<a href="#s3-5">§3.5</a>）。</li>
     <li><b>定责</b>：查清一处差来自哪一边、为什么；第 1 步靠对 FP64 的 R 比，分「换了顺序」和「丢了精度」（<a href="#s4-2">§4.2</a>）。</li>
     <li><b>程序指纹</b>：编译后的整份程序去掉元数据、名字按出现顺序重新编号以后的哈希；编译开关和运行库也相同时，指纹一样，结果就逐位相同（<a href="#s10-3">§10.3</a>）。</li>
-    <li><b>运行库（libtpu）</b>：TPU 的编译器后端和运行时打包成的一个库。换它，同一份 HLO 生成的 kernel 也可能变，所以换版本不能当成「只换了加法顺序」（<a href="#s10-2">§10.2</a>）。</li>
+    <li><b>运行库（libtpu）</b>：TPU 的编译器后端和运行时打包成的一个库。换它，优化后的程序、生成的 kernel 都可能变，所以换版本不能当成「只换了加法顺序」（<a href="#s10-2">§10.2</a>）。</li>
     <li><b>SparseCore</b>：TPU 芯片上的专用小核，官方定位是加速嵌入查表这类稀疏计算（Google Cloud TPU 文档）；本课用到两处：集合通信可以卸载给它；v7x 上 FSDP 那次词嵌入 scatter 也交给了它（<a href="#s8-6">§8.6</a>）。</li>
     <li><b>RMSNorm</b>：按均方根归一化、再乘一组可学的缩放；第二次迁移里它的舍入次数是一处边界（<a href="#s5-5">§5.5</a>、<a href="#s10-1">§10.1</a>）；换到运行库 0.0.52，多舍的那一次影响变大（<a href="#s10-2">§10.2</a>）。</li>
     <li><b>重算、路由回放</b>：重算是反向时把前向的中间结果再算一遍、省显存；路由回放是重算时沿用前向选中的专家，不重新选（<a href="#s1-4">§1.4</a>、<a href="#s2-3">§2.3</a>）。</li>
@@ -6442,7 +6442,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="224" y="226" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">精度一样，舍入落在不同的地方</text>
 <path d="M 40.00 292.00 L 210.00 292.00 L 240.00 322.00 L 408.00 322.00" fill="none" stroke="#5f6368" stroke-width="3" stroke-linecap="round"/>
 <path d="M 40.00 322.00 L 210.00 322.00 L 240.00 292.00 L 408.00 292.00" fill="none" stroke="#1a73e8" stroke-width="3" stroke-linecap="round"/>
-<text class="svgsm" x="24" y="382" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">怎么认：第 1 步张量超出噪声，可离 FP64 没变远</text>
+<text class="svgsm" x="24" y="382" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">怎么认：结果不逐位，但离 FP64 没变远</text>
 <text class="svgsm" x="24" y="408" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">怎么办：不修，噪声尺子兜住</tspan></text>
 <rect x="476" y="102" width="448" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="476" y="102" width="448" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -6472,22 +6472,22 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="976" y="382" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">怎么认：读代码对公式，差常常很大</text>
 <text class="svgsm" x="976" y="408" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">怎么办：必须对齐，参照找不到就不算</tspan></text>
 <text class="svgsm" x="0" y="480" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第二次迁移查清的 29 条根因（本课归类）</tspan></text>
-<rect x="0" y="494" width="1010.7931034482758" height="34" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="506" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精度 21</tspan></text>
-<rect x="1013.7931034482758" y="494" width="45.275862068965516" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1037" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
-<rect x="1062.0689655172414" y="494" width="286.6551724137931" height="34" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
-<text class="svgsm" x="1206" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">语义 6</tspan></text>
-<rect x="1351.7241379310344" y="494" width="45.275862068965516" height="34" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="1375" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="0" y="494" width="45.275862068965516" height="34" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="24" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="48.275862068965516" y="494" width="1010.7931034482758" height="34" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="555" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">精度 21</tspan></text>
+<rect x="1062.0689655172414" y="494" width="45.275862068965516" height="34" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1086" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="1110.344827586207" y="494" width="286.6551724137931" height="34" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1255" y="517" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">语义 6</tspan></text>
 <text class="svgsm" x="1396" y="550" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">「两样都有」「顺序」各 1 条</text>
 <rect x="0" y="566" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="566" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="566" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="593" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">差的大头是精度：一个值在 16 位和 32 位之间换挡、一次长求和没分段；顺序只是噪声</tspan></text>
-<text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以排查先分类：离真值没变远就别修；变远了，去五格表里找那一格；公式不一样，先把公式对上。</text>
+<text class="svgsm" x="20" y="624" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">所以排查先分类：离真值没变远就别修；变远了，去「16 位和 32 位的交界」那张边界清单里找那一处；公式不一样，先把公式对上。</text>
 <text class="svgsm" x="20" y="648" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：归类是本课按根因一栏的标注做的，界线上的条目（例如为了照 GPU 才对上的加法顺序）各人可能分得不同。</text>
-</svg><figcaption><b>先认是哪一种，再决定修不修。</b><span class="capmore"><br><em>中间那排小线是示意；底下的条数是本课按对齐记录逐条归的类。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 第二次迁移的根因一览一共 29 行，每行「根因」一栏都标了它属于哪一类边界或语义；本课据此归成四堆：精度 19（16/32 位交界、矩阵乘精度档、长求和、超越函数与优化器里的实现精度、编译器省掉的舍入、FP32 里病态的记录写法、GPU 一侧在 BF16 里算的旋转位置编码、纯数据并行时词嵌入 scatter 不排序）、语义 6（设置、优化器公式、框架里一处 bug（扫描层共用缩放、累积时最大 logit 被求和）、辅助 loss 的加权与重标写法、统计量取法、算法边界）、两样都有 1（输出头单遍 BF16 是精度，整层重算重选路由是语义）、顺序 1（四路相加配对还是依次，对上它只为照 GPU）。</p>
+</svg><figcaption><b>先认是哪一种，再决定修不修。</b><span class="capmore"><br><em>中间那排小线是示意；底下的条数是本课按对齐记录逐条归的类。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 第二次迁移的根因一览一共 29 行，每行「根因」一栏都标了它属于哪一类边界或语义；本课据此归成四堆：精度 21（16/32 位交界、矩阵乘精度档、长求和、超越函数与优化器里的实现精度、编译器省掉的舍入、FP32 里病态的记录写法、GPU 一侧在 BF16 里算的旋转位置编码、纯数据并行时词嵌入 scatter 不排序）、语义 6（设置、优化器公式、框架里一处 bug（扫描层共用缩放、累积时最大 logit 被求和）、辅助 loss 的加权与重标写法、统计量取法、算法边界）、两样都有 1（输出头单遍 BF16 是精度，整层重算重选路由是语义）、顺序 1（四路相加配对还是依次，对上它只为照 GPU）。</p>
 <p>⚠️ 归类是本课做的，对齐记录里没有这四个数。</p></details></figure>
 
   <h3 id="s5-1">5.1　乘是精确的，加才舍入</h3>
@@ -7484,8 +7484,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>1000 步 loss 偏移</td><td>小了一半</td><td>loss 对执行方式本来就敏感（只改片上内存上限也挪 6e-5），分不出是不是效果</td></tr>
   <tr><td>1000 步参数范数漂移</td><td>一点没少</td><td>判据看它：没用</td></tr>
   </tbody></table>
-  <p>反过来，它也在悄悄替你省一处舍入。第二次迁移的 TPU 自比里，v5p 上词嵌入梯度「飞出去」两次（<a href="#s4-2">§4.2</a> 末尾）：一次是把 FSDP 改成纯数据并行，一次就是关掉 excess precision（离 FP64 是基线的 27 倍，R 26.1）。两次都出在同一处：反向里一次 scatter-add 在 BF16 里一次次地加，排不排序、excess precision 开不开，一起决定它舍几次。第八节把这一处整个查一遍。（v7x 上 FSDP 那次 scatter 交给了 SparseCore，关省舍入它不受影响，变远的是别处，<a href="#s10-1">§10.1</a>。）</p>
-  <p>为什么 TPU 上会有这种「更精确」：一份公开的事故复盘（Anthropic，2025 年 9 月）提到 TPU 的向量单元按 FP32 原生计算，编译器可以把融合块里的一些运算按 FP32 算。研究线数过编译后的后端指令（静态条数）：v5p 整步 1750 颗 kernel 里没有一条 BF16 算术指令；v7x 的向量单元有 BF16 算术，整步里带它的 40 来颗多是拼接时加 0、取最大这类结果精确的运算，外加少量 BF16 乘加。静态条数看不出它们会不会多舍一次。</p>
+  <p>反过来，它也在悄悄替你省一处舍入。第二次迁移的 TPU 自比里，v5p 上词嵌入梯度「飞出去」两次（<a href="#s4-2">§4.2</a> 末尾）：一次是把 FSDP 改成纯数据并行，一次就是关掉 excess precision（离 FP64 是基线的 27 倍，R 26.1）。两次都出在同一处：反向里一次 scatter-add 在 BF16 里一次次地加，排不排序、excess precision 开不开，一起决定它舍几次。第八节把这一处整个查一遍。</p>
+  <p>（v7x 上 FSDP 那次 scatter 交给了 SparseCore，关省舍入它不受影响，变远的是别处，<a href="#s10-1">§10.1</a>。）</p>
+  <p>为什么 TPU 上会有这种「更精确」：一份公开的事故复盘（Anthropic，2025 年 9 月）提到 TPU 的向量单元按 FP32 原生计算，编译器可以把融合块里的一些运算按 FP32 算。</p>
+  <p>研究线数过编译后的后端指令（静态条数，运行库 0.0.52）：v5p 整步 1750 颗 kernel 里没有一条 BF16 算术指令；v7x 的向量单元有 BF16 算术，整步有 40 来颗带它，条数最多的几颗是加 0 拼接、取最大（结果精确），以及 BF16 的乘和加。静态条数看不出它们会不会多舍一次。</p>
   <details class="foldfig"><summary><b>一个坑</b>：「先转 BF16 再转回来」会被编译器整个删掉</summary>
   <p>想在 TPU 上把 FP32 权重舍成 BF16 再用，写成「转 BF16、再转回 FP32」两步，excess precision 开着时，编译器会把这一对转换直接消掉，权重根本没舍。
     混元 3 上这样做出的「舍过的参照」实际用的还是 FP32 主权重，量出来的结论整个作废，改用 JAX 的 <code>lax.reduce_precision</code>（BF16 对应 <code>exponent_bits=8, mantissa_bits=7</code>）才对 —— 它不会被优化掉；输出类型仍是 FP32，只是数值已经舍到 BF16 的格点上。自查办法：把编译后的程序转储出来，看那处还有没有成对的 convert —— 可第二次迁移的例子说明，convert 都还在，后端照样可以只省一半，所以更稳的是把选项关掉重跑一次对比，或者直接在那一处写 <code>reduce_precision</code>。</p></details>
@@ -9448,9 +9450,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下标数扫过门槛（词表 120832 行）</tspan></text>
 <line x1="84" y1="462" x2="830" y2="462" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="80" y="466" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
-<text class="svgsm" x="80" y="391" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">5.00e-3</text>
-<text class="svgsm" x="80" y="316" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.00e-2</text>
-<text class="svgsm" x="80" y="241" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.50e-2</text>
+<text class="svgsm" x="80" y="391" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">5e-3</text>
+<text class="svgsm" x="80" y="316" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1e-2</text>
+<text class="svgsm" x="80" y="241" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.5e-2</text>
+<text class="svgsm" x="30" y="182" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">离 FP64 的相对差（rel_L2）</tspan></text>
 <text class="svgsm" x="90" y="484" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">2,048</text>
 <text class="svgsm" x="270" y="484" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">4,096</text>
 <text class="svgsm" x="450" y="484" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">8,192</text>
@@ -9478,6 +9481,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="806.0" y="434.33417258177155" width="8" height="8" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="444" y="312" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9.14e-3</tspan></text>
 <text class="svgsm" x="638" y="408" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">编译器插了排序 → 1.55e-3</tspan></text>
+<text class="svgsm" x="100" y="381" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">门槛以下，灰线和红线重合</text>
 <text class="svgsm" x="814" y="185" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.76e-2</tspan></text>
 <text class="svgsm" x="270" y="508" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯数据并行每卡</tspan></text>
 <text class="svgsm" x="450" y="508" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不累积</tspan></text>
@@ -9514,7 +9518,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">纯数据并行每卡 4096、不累积 8192 都在线左边，不排序；反过来，纯数据并行每卡一次的 token 要是超过 15104，按这条规则也会被排序（推断，训练里没跑过）。</text>
 <text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：这是运行库 0.0.46 上的门槛；0.0.52 上它跟列宽、芯片走，不再是 1/8（见「换运行库」那张图）；表很小时也不插。</text>
 </svg><figcaption><b>红线过了竖线就掉下来。</b><span class="capmore"><br><em>右块的点都落在虚线上；空心点是表太小、不插排序。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 左块实测（单算子，v5p，表 bf16[120832,1024]，下标取 golden 第 1 步真实 token 的前 N 个，更新量随机 BF16）：不带标记 4.59e-3 ／ 6.75e-3 ／ 9.14e-3 ／ 1.55e-3 ／ 1.58e-3；排好序带标记 1.37e-3 ／ 1.48e-3 ／ 1.51e-3 ／ 1.55e-3 ／ 1.58e-3；关 excess precision 4.59e-3 ／ 6.75e-3 ／ 9.14e-3 ／ 1.29e-2 ／ 1.76e-2；FP32 累加 1.6e-9 到 1.1e-8。每格都逐位等于对应的 CPU 仿真。</p>
-<p>📌 右块实测（CPU 上用同一个 TPU 运行库为 v5p 交叉编译，看优化后 HLO 里有没有 sort）：1,000 × 1024 到 65536 都不插；30,000 × 128 到 65536 都不插；30,000 × 1024 最小 3,751；60,000 × 128 最小 7,501；120,832 × 128 最小 15,105；120,832 × 1024 最小 15,105；480,000 × 128 最小 60,001。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；表的总元素太少时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 × 1024 的门槛也是 15104／15105（列数 128 的表在 v7x 上交给 SparseCore，另算）。</p>
+<p>📌 右块实测（CPU 上用同一个 TPU 运行库为 v5p 交叉编译，看优化后 HLO 里有没有 sort）：1,000 × 1024 到 65536 都不插；30,000 × 128 到 65536 都不插；30,000 × 1024 最小 3,751；60,000 × 128 最小 7,501；120,832 × 128 最小 15,105；120,832 × 1024 最小 15,105；480,000 × 128 最小 60,001。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；整张表按 FP32 放得进片上内存时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 × 1024 的门槛也是 15104／15105（列数 128 的表在 v7x 上交给 SparseCore，另算）。</p>
 <p>📌 插排序的是 TPU 后端（libtpu）里的一道工序 tpu_scatter_gather_optimizer：对（下标, 序号）稳定排序 → 按排序后的次序取更新量 → scatter 标上「下标已排序」。公开的 XLA 代码里按名字搜不到，触发条件只能从实验反推。</p>
 <p>⚠️ 门槛为什么定在这里（推断）：看上去是为速度定的启发式，精度更好是附带效果；单算子耗时只部分支持（快慢交叉在 4096 到 8192 之间，和 15104 对不上）。</p></details></figure>
   <p>落回训练：每张卡那次 scatter 一次加几个下标，决定了排不排序。<a href="#s8-1">§8.1</a> 那张表就是这么来的：</p>
@@ -9526,7 +9530,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>v7x 纯数据并行 8，不累积</td><td>8192</td><td>不排序</td><td><b>排序</b></td><td>4.06 ／ <b>0.89</b></td></tr>
   </tbody></table>
   <p>不累积时同一个词在一张卡上加的次数翻倍，所以最差；16 卡每卡仍 4096 个，跟 8 卡差不多。v7x 在 0.0.46 上跟 v5p 一样走不排序（第 1 步词嵌入梯度 1.50e-2 对 4.25e-3；v7x 上交给 SparseCore 的是 FSDP 那一侧的 scatter）。</p>
-  <p><b>门槛跟着运行库走。</b>1/8 是在运行库 0.0.46 上二分出来的。升到 0.0.52 再二分（单算子离线编译），门槛跟列宽、芯片代际都有关（<a href="#s10-2">§10.2</a> 图右上）：同样 120832 行，v5p 上列数 1024 的门槛 14,420，列数 128 的降到 1,783；v7x 上列数 1024 的降到 7,181。表的最后一行就是拿它做的预测：离线编译先看到 0.0.52 排序，再上卡核对，词嵌入梯度 R 6.90 → 1.10，曲线回到噪声内（第 1 步另有三个多路残差输出头的小参数离 FP64 远，按研究线的规矩单列、不挡判档，那是另一件事）。机理还是那一条，只是门槛挪了。</p>
+  <p><b>门槛跟着运行库走。</b>1/8 是在运行库 0.0.46 上二分出来的。升到 0.0.52 再二分（单算子离线编译），门槛跟列宽、芯片代际都有关（<a href="#s10-2">§10.2</a> 图右上）：同样 120832 行，v5p 上列数 1024 的门槛 14,420，列数 128 的降到 1,783；v7x 上列数 1024 的降到 7,181。</p>
+  <p>表的最后一行就是拿它做的预测：离线编译先看到 0.0.52 排序，再上卡核对，词嵌入梯度 R 6.90 → 1.10，曲线回到噪声内。但第 1 步另有三个多路残差输出头的小参数离 FP64 远（R 最大 25.7），是靠研究线对多路残差小参数的豁免才判在噪声内；这条豁免要不要收窄、这处偏差跟别的运行里那种是不是同一回事，研究线还在查。机理还是那一条，只是门槛挪了。</p>
 
   <h3 id="s8-7">8.7　结论：高频词 × 不排序；修法和代价</h3>
   <p><b>两个条件缺一个都不丢精度</b>（本节开头那张 2×2）：一行加的次数多，而且后端没排序、每加一次舍一次。第一版的两种修法，是让这次累加落在 FP32：</p>
@@ -9536,7 +9541,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>② 本卡 FP32 加完、舍一次，再 BF16 跨卡求和</td><td>4.24e-3</td><td>0.93 ／ 1.07</td><td>−2.6%</td></tr>
   </tbody></table>
   <p>负数是比基线快：不修时纯数据并行本来就快，修法本身多花 0.6–0.8 个百分点。1000 步的 1.09、1.07 判「略超」，可没超过纯噪声自己能拿到的分（<a href="#s3-5">§3.5</a> 的留一法），跟 GPU 重跑分不开。后来又有第三种修法：不改精度、只改切分（<a href="#s8-9">§8.9</a>）。三种的精度同档（都跟 GPU 重跑分不开），第三种通信、显存、步时最省，所以<b>纯数据并行时首选只切词嵌入表；过不了排序门槛，再退回修法①</b>。</p>
-  <p>回头看混元 3：它的 FSDP 8 和按专家切 8 两种跑法，词嵌入表都沿隐藏维切开，每卡一次收齐 32768 个下标、过门槛、排了序（运行库 0.0.46 上离线编译核过；v7x 上那次 scatter 交给 SparseCore），所以不受这件事影响。</p>
+  <p>回头看混元 3：按专家切 8 那份离线编译核过，词嵌入表沿隐藏维切开，每卡一次收齐 32768 个下标、排了序；FSDP 8 看的是一次观测运行存下的程序，每卡 65536 个、也排了序（运行库 0.0.46）。所以在 v5p 上不受这件事影响；v7x 上那次 scatter 交给 SparseCore，累加精度没测。</p>
   <details class="foldfig"><summary><b>换到自己的模型怎么自查</b>：比较每卡一次 scatter 的下标数 N 和词表行数 V</summary>
   <table class="t9"><thead><tr><th>情况</th><th>会怎样</th><th>做法</th></tr></thead><tbody>
   <tr><td>N 不过门槛（运行库 0.0.46 上是 V／8）</td><td>不排序，高频词丢精度</td><td>首选只切词嵌入表（切开后 N 变成切分组里所有卡的 token 数；它跟 FSDP 一样要 excess precision 开着，且不能跟按数据并行切优化器状态的 ZeRO-1 同开）；合起来仍不过线，用修法①</td></tr>
@@ -10116,7 +10121,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s9-6">9.6　从小模型到真实权重：中间补一级</h3>
   <p class="lead">小模型上量的步时、查出的根源，都不能直接外推到真实规模；可一下子跳到真实权重，冒出新的差又说不清是谁带来的。</p>
-<figure class="fbox fwide" id="fig-ladder"><svg viewBox="0 0 1400 584" width="100%" role="img" aria-label="左右两块。左：一张格子，行是模型的几样属性（宽度和注意力形状、专家个数、专家宽度、层数、权重），列是三级：小模型、中等尺寸、真实权重截层；浅灰是跟小模型一样，蓝是跟真实模型一样，橙是改了、但两边都不像。中等尺寸换了宽度和注意力形状、专家宽度；真实权重截层又换了专家个数、专家宽度、权重，层数只截一到两层。右：每一级第 1 步主 loss 两边各自对 CPU FP64 的差，对数轴。小模型两边都在 3.7e-6 以内；中等尺寸 GPU 偏高 1.68e-4、TPU 只有 2.8e-6，差在 GPU 一侧；真实权重截层 GPU 仍偏高 5.3e-5，TPU 偏低 9.9e-5，只关 base2 以后 TPU 到 1.2e-6。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-ladder"><svg viewBox="0 0 1400 584" width="100%" role="img" aria-label="左右两块。左：一张格子，行是模型的几样属性（宽度和注意力形状、专家个数、专家宽度、层数、权重），列是三级：小模型、中等尺寸、真实权重截层；浅灰是跟小模型一样，蓝是跟真实模型一样，橙是改了、但两边都不像。中等尺寸换了宽度和注意力形状、专家宽度；真实权重截层又换了专家个数、专家宽度、权重，层数只截前几层。右：每一级第 1 步主 loss 两边各自对 CPU FP64 的差，对数轴。小模型两边都在 3.7e-6 以内；中等尺寸 GPU 偏高 1.42e-5、TPU 只有 2.4e-7，差在 GPU 一侧；真实权重截层 GPU 仍偏高 5.3e-5，TPU 偏低 9.9e-5，只关 base2 以后 TPU 到 1.2e-6。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">每一级两边各自对 FP64：差冒出来的那一级翻了哪几行，嫌疑就在那几行</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">行 ＝ 模型的一样属性；列 ＝ 一级；颜色 ＝ 这一级的这一样跟谁一样；右 ＝ 第 1 步主 loss 两边各自对 FP64</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
@@ -10136,7 +10141,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="203" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">宽度、注意力形状</tspan></text>
 <rect x="200" y="180" width="150" height="36" rx="4" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="275" y="203" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
-<rect x="360" y="180" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="2.4"/>
+<rect x="360" y="180" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#202124" stroke-width="2.6"/>
 <text class="svgsm" x="435" y="203" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同真实模型</text>
 <rect x="520" y="180" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="595" y="203" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同真实模型</text>
@@ -10145,67 +10150,69 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="275" y="247" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
 <rect x="360" y="224" width="150" height="36" rx="4" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="435" y="247" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
-<rect x="520" y="224" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#d93025" stroke-width="2.4"/>
+<rect x="520" y="224" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#202124" stroke-width="2.6"/>
 <text class="svgsm" x="595" y="247" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同真实模型</text>
 <text class="svgsm" x="20" y="291" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">专家宽度</tspan></text>
 <rect x="200" y="268" width="150" height="36" rx="4" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="275" y="291" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
-<rect x="360" y="268" width="150" height="36" rx="4" fill="#fef7e0" stroke="#1a73e8" stroke-width="2.4"/>
+<rect x="360" y="268" width="150" height="36" rx="4" fill="#fef7e0" stroke="#202124" stroke-width="2.6"/>
 <text class="svgsm" x="435" y="291" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">改了</text>
-<rect x="520" y="268" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#d93025" stroke-width="2.4"/>
+<rect x="520" y="268" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#202124" stroke-width="2.6"/>
 <text class="svgsm" x="595" y="291" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同真实模型</text>
 <text class="svgsm" x="20" y="335" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">层数</tspan></text>
 <rect x="200" y="312" width="150" height="36" rx="4" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="275" y="335" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
 <rect x="360" y="312" width="150" height="36" rx="4" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="435" y="335" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
-<rect x="520" y="312" width="150" height="36" rx="4" fill="#fef7e0" stroke="#d93025" stroke-width="2.4"/>
+<rect x="520" y="312" width="150" height="36" rx="4" fill="#fef7e0" stroke="#202124" stroke-width="2.6"/>
 <text class="svgsm" x="595" y="335" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">改了</text>
 <text class="svgsm" x="20" y="379" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重</tspan></text>
 <rect x="200" y="356" width="150" height="36" rx="4" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="275" y="379" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
 <rect x="360" y="356" width="150" height="36" rx="4" fill="#fff" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="435" y="379" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同小模型</text>
-<rect x="520" y="356" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#d93025" stroke-width="2.4"/>
+<rect x="520" y="356" width="150" height="36" rx="4" fill="#e8f0fe" stroke="#202124" stroke-width="2.6"/>
 <text class="svgsm" x="595" y="379" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">同真实模型</text>
-<text class="svgsm" x="200" y="418" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">粗框 ＝ 这一级新换的：② 蓝框，③ 红框</tspan></text>
+<text class="svgsm" x="200" y="418" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">黑粗框 ＝ 这一级新换的</tspan></text>
 <text class="svgsm" x="710" y="160" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步主 loss 对 CPU FP64（对数轴，标正负）</tspan></text>
 <text class="svgsm" x="710" y="210" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
-<text class="svgsm" x="740" y="195" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="800" y="182" width="145.51940082688532" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="951" y="196" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">±2.5e-6 以内</tspan></text>
-<text class="svgsm" x="740" y="223" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="800" y="210" width="174.0884770500079" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="980" y="224" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−3.7e-6</tspan></text>
+<text class="svgsm" x="740" y="195" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
+<rect x="800" y="182" width="227.18606749355195" height="18" rx="3" fill="#e8eaed" stroke="#80868b" stroke-width="1.0" stroke-dasharray="4 3"/>
+<text class="svgsm" x="1033" y="196" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 份都在 ±2.5e-6 内</tspan></text>
+<text class="svgsm" x="740" y="223" fill="#681da8" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
+<rect x="800" y="210" width="255.75514371667464" height="18" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1061" y="224" fill="#681da8" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−3.7e-6（同一量级）</tspan></text>
 <text class="svgsm" x="710" y="284" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">②</tspan></text>
-<text class="svgsm" x="740" y="269" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="800" y="256" width="445.13384934855753" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1251" y="270" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.68e-4</tspan></text>
-<text class="svgsm" x="740" y="297" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="800" y="284" width="154.70247845256245" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="960" y="298" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋2.8e-6</tspan></text>
+<text class="svgsm" x="740" y="269" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
+<rect x="800" y="256" width="351.54042958256605" height="18" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1157" y="270" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.42e-5</tspan></text>
+<text class="svgsm" x="740" y="297" fill="#681da8" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
+<rect x="800" y="284" width="62.10116947956237" height="18" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="868" y="298" fill="#681da8" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋2.4e-7</tspan></text>
 <text class="svgsm" x="710" y="358" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③</tspan></text>
-<text class="svgsm" x="740" y="343" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
-<rect x="800" y="330" width="363.2983920347956" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1169" y="344" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋5.3e-5</tspan></text>
-<text class="svgsm" x="740" y="371" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
-<rect x="800" y="358" width="407.40513493604067" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1213" y="372" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−9.9e-5</tspan></text>
-<rect x="895.9255419098317" y="358" width="2" height="18" rx="0" fill="#202124" stroke="#202124" stroke-width="1.0"/>
-<line x1="881.6666666666666" y1="176" x2="881.6666666666666" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="881" y="410" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1e-06</text>
-<line x1="1045.0" y1="176" x2="1045.0" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1045" y="410" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1e-05</text>
-<line x1="1208.3333333333335" y1="176" x2="1208.3333333333335" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1208" y="410" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1e-04</text>
-<text class="svgsm" x="710" y="432" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 橙条里的黑线 ＝ 只关 base2 以后的 TPU：−1.2e-6</tspan></text>
+<text class="svgsm" x="740" y="343" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
+<rect x="800" y="330" width="444.9650587014621" height="18" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1250" y="344" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋5.3e-5</tspan></text>
+<text class="svgsm" x="740" y="371" fill="#681da8" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
+<rect x="800" y="358" width="489.0718016027072" height="18" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="1295" y="372" fill="#681da8" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−9.9e-5</tspan></text>
+<rect x="977.0922085764984" y="358" width="3" height="18" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="800.0" y1="176" x2="800.0" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="800" y="410" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1e-07</text>
+<line x1="963.3333333333333" y1="176" x2="963.3333333333333" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="963" y="410" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1e-06</text>
+<line x1="1126.6666666666665" y1="176" x2="1126.6666666666665" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1126" y="410" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1e-05</text>
+<line x1="1290.0" y1="176" x2="1290.0" y2="394" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="1290" y="410" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1e-04</text>
+<text class="svgsm" x="710" y="432" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">深灰 GPU、紫 TPU；③ 紫条里的白线 ＝ 只关 base2 以后：−1.2e-6</tspan></text>
 <rect x="0" y="462" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="462" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="462" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="489" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每一级尽量只换一类，而且两边各自对 FP64 看：差是谁的、从哪一级冒出来，一眼分开</tspan></text>
-<text class="svgsm" x="20" y="520" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">GPU 一侧的偏高第二级就有：宽度和注意力一换成真的就出现（推断是 GPU 一侧的 BF16 系统偏差；在真实宽度上逐类加舍入只复现约一半，在查）。</text>
-<text class="svgsm" x="20" y="544" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TPU 一侧的偏低到第三级才有，定到权重那一行：真实权重的 logits 大，把 base2 常数舍成 BF16 的误差放大了（只关 base2 就对上 FP64，见第二次迁移那一节）。</text>
-</svg><figcaption><b>右边每一级两根条：② 那一级蓝条先变长，③ 那一级橙条才变长。</b><span class="capmore"><br><em>格子只写跟谁一样，不写尺寸；右边对数轴。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测，第 1 步主 loss 对 CPU 上 GPU 同一套代码的 FP64 整网前向：小模型 GPU 8 份 −2.46e-6 到 ＋4.7e-7，TPU 关 base2 −3.68e-6（开 −2.14e-6）；中等尺寸（真实宽度与注意力、随机权重）GPU ＋1.68e-4、TPU ＋2.8e-6，比 GPU 8 份第 1 步的极差（1.1e-4）还大；真实宽度截层 GPU 4 份 ＋5.1e-5 到 ＋5.8e-5，TPU 开 base2 −9.87e-5、只关 base2 −1.24e-6。</p>
+<text class="svgsm" x="20" y="520" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">GPU 的差第二级冒出来：宽度和注意力一换成真的就有（来源在查）。</text>
+<text class="svgsm" x="20" y="544" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">TPU 的差第三级才冒出来：定到权重那一行，真实权重的 logits 大，放大了 base2 常数舍成 BF16 的误差。</text>
+</svg><figcaption><b>右边每一级两根条：② 那一级灰条（GPU）先变长，③ 那一级紫条（TPU）才变长。</b><span class="capmore"><br><em>格子只写跟谁一样，不写尺寸；右边对数轴。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测，第 1 步主 loss 对 CPU 上 GPU 同一套代码的 FP64 整网前向：小模型 GPU 8 份 −2.46e-6 到 ＋4.7e-7，TPU 关 base2 −3.68e-6（开 −2.14e-6）；中等尺寸（真实宽度与注意力、随机权重）GPU ＋1.42e-5、TPU ＋2.4e-7，比 GPU 8 份第 1 步的极差（9.4e-6）还大；真实权重截前三层（真实宽度）GPU 4 份 ＋5.1e-5 到 ＋5.8e-5（条上标的是中位数 ＋5.3e-5；第二次迁移成绩单那张图用的是其中一份 ＋5.76e-5），TPU 开 base2 −9.87e-5、只关 base2 −1.24e-6。</p>
 <p>📌 中等尺寸 300 步对 GPU 8 份两两 28 对：5 过、0 不过、4 待定（最差 1.04 N）；它的 1000 步和单层、单算子两级都没做。格子只写同谁一样，不写具体尺寸。</p>
 <p>⚠️ 「GPU 一侧的偏高跟宽度有关」是从「第二级才出现」推的；GPU 那份偏高从哪一层起还没查。</p></details></figure>
   <p>第二次迁移就是这样：从小模型直接跳到真实权重截层，第 1 步前向就冒出一个小模型上没有的差，那一步同时换了尺寸、专家和权重。补上中间一级、而且<b>两边各自对 FP64</b> 以后，这个差拆成了两半，见图下那条带（细节在 <a href="#s9-7">§9.7</a>）。只看两边的差，这两半是分不开的。</p>
@@ -10348,20 +10355,20 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <table class="t9"><thead><tr><th>图里三块</th><th>结论</th><th>还差什么</th></tr></thead><tbody>
   <tr><td>小尺寸 1000 步（2026-11-11 起关 base2、尺子 GPU 16 份）</td><td>九项过 7、待定 2（主 loss 全程和后段）</td><td>TPU 开、关 base2 各 4 份，主 loss 全部偏高、平均约 4.3e-6，跟 base2 无关；是训练轨迹慢慢偏开，后段在查（下图）；离签字还差几件</td></tr>
   <tr><td>GPU 扩机器、换切法</td><td>守得住尺子，多机 GPU 可以当 golden</td><td>多机重跑本身略宽（单机尺子的 1.0–1.3 倍），判多机被测要用多机自己的尺子</td></tr>
-  <tr><td>真实宽度三层</td><td>第 1 步 TPU 偏低定到 base2：常数 log₂e 跟着 BF16 的 q 舍成 1.4453125，logits 整体乘 1.0018；只关它就对上 FP64，所有尺寸的对齐配置因此都关了 base2</td><td>GPU 第 1 步自己也偏高 ＋5.3e-5（对 FP64），只拆清约一半；后段主 loss 偏低：同一份权重上两边前向没差，是轨迹差，来源在查（base2、索引器、省舍入已排除）</td></tr>
+  <tr><td>真实宽度三层</td><td>第 1 步 TPU 偏低定到 base2：常数 log₂e 跟着 BF16 的 q 舍成 1.4453125，logits 整体乘 1.0018；只关它就对上 FP64，所有尺寸的对齐配置因此都关了 base2</td><td>GPU 第 1 步自己也偏高 ＋5.3e-5（对 FP64），只拆清约一半；后段主 loss 偏低：同一份权重上 TPU 前向反而高 1.5e-5，所以偏低是轨迹差，来源在查（base2、索引器、省舍入已排除）</td></tr>
   </tbody></table>
   <p>base2 在小模型上显不出来，是因为效果跟 logits 的大小成正比：随机初始化时最大 logit 只有约 0.13，真实权重截层上到 14.5。</p>
   <p>小尺寸剩下的那截偏高，研究线拆了它随步数怎么走：</p>
 <figure class="fbox fwide" id="fig-minidrift"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="上下两条。上：小尺寸 1000 步，TPU 8 份主 loss 对 GPU 16 份逐步均值的相对差，每 25 步一根柱，灰带是 GPU 自己的散布。第 1 步 −2.0e-6；第 51 到 100 步一个小鼓包；第 100 到 550 步在 0 附近；第 550 步起一路往上，到最后一块 ＋1.8e-5。下：同一批运行的 MTP loss，第 100 步起反着往下，最后 −3.2e-5。前段鼓包定到多路残差收拢那次少舍的 BF16；后段在查。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">小尺寸主 loss 那截偏高：几乎全在第 550 步以后，越往后越大</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块；灰带 ＝ ± GPU 留一法标准差（实测）</text>
-<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">8 份全部偏高的块</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">8 份同号偏高的块</text>
 <rect x="173.56" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="194" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">8 份全部偏低的块</text>
-<rect x="347.12" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="194" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">8 份同号偏低的块</text>
+<rect x="347.12" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="368" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">其余块</text>
-<rect x="441.16" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<rect x="441.16" y="63" width="14" height="14" rx="3" fill="#dadce0" stroke="#dadce0" stroke-width="1.0"/>
 <text class="svgsm" x="462" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">± GPU 散布</text>
 <rect x="0" y="102" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -10412,60 +10419,60 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="112" y="199" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+1e-5</text>
 <text class="svgsm" x="112" y="293" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-1e-5</text>
 <text class="svgsm" x="112" y="246" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">0</text>
-<rect x="122.0" y="242.0" width="25.54954954954954" height="2.0245756073706502" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="152.7807807807808" y="235.33506383496263" width="25.54954954954954" height="6.664936165037375" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="183.56156156156158" y="217.91459210670536" width="25.54954954954951" height="24.085407893294644" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="214.34234234234236" y="223.54634258099668" width="25.54954954954951" height="18.45365741900332" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="245.12312312312315" y="242.0" width="25.54954954954951" height="3.056444269702837" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="275.90390390390394" y="242.0" width="25.54954954954951" height="2.4773968764896495" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="306.6846846846847" y="242.0" width="25.54954954954951" height="0.8471833132473989" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="337.46546546546546" y="233.26955692302113" width="25.549549549549567" height="8.730443076978872" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="368.2462462462463" y="242.0" width="25.54954954954951" height="3.262609624173706" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="399.02702702702703" y="233.46551596642186" width="25.54954954954951" height="8.534484033578138" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="429.8078078078078" y="242.0" width="25.54954954954951" height="3.657333921272908" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="460.5885885885886" y="242.0" width="25.549549549549567" height="4.492440221915189" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="491.3693693693694" y="242.0" width="25.549549549549567" height="4.909282102970678" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="522.1501501501501" y="242.0" width="25.549549549549624" height="3.198796174968521" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="552.9309309309309" y="242.0" width="25.549549549549624" height="5.7302212026945085" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="583.7117117117117" y="242.0" width="25.549549549549624" height="9.364599921663569" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="614.4924924924926" y="242.0" width="25.549549549549397" height="12.385988735216557" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="645.2732732732733" y="242.0" width="25.54954954954951" height="0.342991547823118" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="676.0540540540541" y="242.0" width="25.54954954954951" height="1.9186627501113094" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="706.8348348348349" y="242.0" width="25.54954954954951" height="9.204312713725528" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="737.6156156156156" y="242.0" width="25.54954954954951" height="8.207214408064232" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="768.3963963963964" y="233.64208657098652" width="25.549549549549624" height="8.357913429013479" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="799.1771771771772" y="236.52557989053977" width="25.54954954954951" height="5.474420109460226" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="829.957957957958" y="234.10151683312188" width="25.54954954954951" height="7.898483166878123" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="860.7387387387388" y="222.78984687939442" width="25.54954954954951" height="19.210153120605582" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="891.5195195195195" y="222.58980968187723" width="25.549549549549624" height="19.410190318122773" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="922.3003003003003" y="222.02717106976118" width="25.549549549549624" height="19.97282893023882" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="953.081081081081" y="207.5109959293429" width="25.549549549549624" height="34.4890040706571" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="983.8618618618618" y="201.1692835512403" width="25.549549549549624" height="40.83071644875969" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1014.6426426426426" y="199.338777154478" width="25.54954954954951" height="42.66122284552199" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1045.4234234234234" y="188.81155014712428" width="25.54954954954951" height="53.18844985287572" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1076.2042042042042" y="197.6754403764328" width="25.54954954954951" height="44.32455962356721" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1106.9849849849852" y="194.5418383050506" width="25.549549549549283" height="47.45816169494941" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1137.7657657657658" y="178.37139858669718" width="25.54954954954951" height="63.62860141330282" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1168.5465465465466" y="173.08712493690237" width="25.54954954954951" height="68.91287506309763" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1199.3273273273273" y="178.75186909746617" width="25.54954954954951" height="63.24813090253383" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1230.1081081081081" y="188.5707450597775" width="25.54954954954951" height="53.429254940222506" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1260.888888888889" y="183.41807454097295" width="25.54954954954951" height="58.58192545902705" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1291.6696696696697" y="157.8477179146568" width="25.54954954954951" height="84.15228208534319" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="1322.4504504504505" y="158.67520121001937" width="25.54954954954951" height="83.32479878998063" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="122.0" y="242.0" width="25.54954954954954" height="2.0245756073706502" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="152.7807807807808" y="235.33506383496263" width="25.54954954954954" height="6.664936165037375" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="183.56156156156158" y="217.91459210670536" width="25.54954954954951" height="24.085407893294644" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="214.34234234234236" y="223.54634258099668" width="25.54954954954951" height="18.45365741900332" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="245.12312312312315" y="242.0" width="25.54954954954951" height="3.056444269702837" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="275.90390390390394" y="242.0" width="25.54954954954951" height="2.4773968764896495" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="306.6846846846847" y="242.0" width="25.54954954954951" height="0.8471833132473989" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="337.46546546546546" y="233.26955692302113" width="25.549549549549567" height="8.730443076978872" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="368.2462462462463" y="242.0" width="25.54954954954951" height="3.262609624173706" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="399.02702702702703" y="233.46551596642186" width="25.54954954954951" height="8.534484033578138" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="429.8078078078078" y="242.0" width="25.54954954954951" height="3.657333921272908" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="460.5885885885886" y="242.0" width="25.549549549549567" height="4.492440221915189" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="491.3693693693694" y="242.0" width="25.549549549549567" height="4.909282102970678" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="522.1501501501501" y="242.0" width="25.549549549549624" height="3.198796174968521" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="552.9309309309309" y="242.0" width="25.549549549549624" height="5.7302212026945085" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="583.7117117117117" y="242.0" width="25.549549549549624" height="9.364599921663569" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="614.4924924924926" y="242.0" width="25.549549549549397" height="12.385988735216557" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="645.2732732732733" y="242.0" width="25.54954954954951" height="0.342991547823118" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="676.0540540540541" y="242.0" width="25.54954954954951" height="1.9186627501113094" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="706.8348348348349" y="242.0" width="25.54954954954951" height="9.204312713725528" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="737.6156156156156" y="242.0" width="25.54954954954951" height="8.207214408064232" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="768.3963963963964" y="233.64208657098652" width="25.549549549549624" height="8.357913429013479" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="799.1771771771772" y="236.52557989053977" width="25.54954954954951" height="5.474420109460226" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="829.957957957958" y="234.10151683312188" width="25.54954954954951" height="7.898483166878123" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="860.7387387387388" y="222.78984687939442" width="25.54954954954951" height="19.210153120605582" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="891.5195195195195" y="222.58980968187723" width="25.549549549549624" height="19.410190318122773" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="922.3003003003003" y="222.02717106976118" width="25.549549549549624" height="19.97282893023882" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="953.081081081081" y="207.5109959293429" width="25.549549549549624" height="34.4890040706571" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="983.8618618618618" y="201.1692835512403" width="25.549549549549624" height="40.83071644875969" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1014.6426426426426" y="199.338777154478" width="25.54954954954951" height="42.66122284552199" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1045.4234234234234" y="188.81155014712428" width="25.54954954954951" height="53.18844985287572" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1076.2042042042042" y="197.6754403764328" width="25.54954954954951" height="44.32455962356721" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1106.9849849849852" y="194.5418383050506" width="25.549549549549283" height="47.45816169494941" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1137.7657657657658" y="178.37139858669718" width="25.54954954954951" height="63.62860141330282" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1168.5465465465466" y="173.08712493690237" width="25.54954954954951" height="68.91287506309763" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1199.3273273273273" y="178.75186909746617" width="25.54954954954951" height="63.24813090253383" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1230.1081081081081" y="188.5707450597775" width="25.54954954954951" height="53.429254940222506" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="1260.888888888889" y="183.41807454097295" width="25.54954954954951" height="58.58192545902705" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="1291.6696696696697" y="157.8477179146568" width="25.54954954954951" height="84.15228208534319" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1322.4504504504505" y="158.67520121001937" width="25.54954954954951" height="83.32479878998063" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="120" y="346" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 1 步</text>
 <text class="svgsm" x="426" y="346" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 250 步</text>
 <text class="svgsm" x="734" y="346" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 500 步</text>
 <text class="svgsm" x="1042" y="346" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 750 步</text>
 <text class="svgsm" x="1350" y="346" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 1000 步</text>
 <text class="svgsm" x="126" y="273" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步 −2.0e-6</tspan></text>
-<text class="svgsm" x="192" y="207" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">小鼓包：定到多路残差收拢后少舍的那次 BF16</tspan></text>
+<text class="svgsm" x="192" y="207" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">小鼓包：已定位（见正文）</tspan></text>
 <text class="svgsm" x="438" y="270" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 100–550 步在 0 附近，正负相抵</tspan></text>
-<text class="svgsm" x="808" y="155" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 550 步起一路往上，最后一块 ＋1.8e-5；8 份全部偏高</tspan></text>
+<text class="svgsm" x="808" y="155" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 550 步起一路往上，最后一块 ＋1.8e-5；8 份全部偏高</tspan></text>
 <rect x="0" y="366" width="1400" height="210" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="366" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="368" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="396" x2="1400" y2="396" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="386" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一批运行的 MTP loss：反着走</tspan></text>
+<text class="svglbl" x="14" y="386" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一批运行的 MTP loss：反着走（纵轴刻度是上图的 2.5 倍）</tspan></text>
 <rect x="120.0" y="485.4206466114975" width="29.54954954954954" height="1.1587067770050226" rx="0" fill="#eceff1" stroke="#eceff1" stroke-width="1.0"/>
 <rect x="150.7807807807808" y="485.2379376570976" width="29.54954954954954" height="1.5241246858048498" rx="0" fill="#eceff1" stroke="#eceff1" stroke-width="1.0"/>
 <rect x="181.56156156156158" y="481.587110245065" width="29.54954954954951" height="8.825779509870017" rx="0" fill="#eceff1" stroke="#eceff1" stroke-width="1.0"/>
@@ -10510,32 +10517,32 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="112" y="460" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+2e-5</text>
 <text class="svgsm" x="112" y="519" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-2e-5</text>
 <text class="svgsm" x="112" y="490" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">0</text>
-<rect x="122.0" y="486.0" width="25.54954954954954" height="0.08485685815230681" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="152.7807807807808" y="485.82615133976856" width="25.54954954954954" height="0.1738486602314424" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="183.56156156156158" y="485.4011241015487" width="25.54954954954951" height="0.598875898451297" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="214.34234234234236" y="486.0" width="25.54954954954951" height="1.509988991616808" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="245.12312312312315" y="486.0" width="25.54954954954951" height="3.135840429954783" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="275.90390390390394" y="486.0" width="25.54954954954951" height="9.243150867997088" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="306.6846846846847" y="486.0" width="25.54954954954951" height="5.926952981645002" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="337.46546546546546" y="486.0" width="25.549549549549567" height="12.849948364565535" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="368.2462462462463" y="486.0" width="25.54954954954951" height="4.235937486582088" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="399.02702702702703" y="486.0" width="25.54954954954951" height="16.852837768038626" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="429.8078078078078" y="479.52888558610607" width="25.54954954954951" height="6.471114413893929" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="460.5885885885886" y="486.0" width="25.549549549549567" height="8.396170323950912" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="491.3693693693694" y="486.0" width="25.549549549549567" height="6.413386655769898" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="522.1501501501501" y="486.0" width="25.549549549549624" height="12.341386044548756" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="552.9309309309309" y="486.0" width="25.549549549549624" height="26.180959366437946" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="583.7117117117117" y="486.0" width="25.549549549549624" height="12.542489346578066" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="614.4924924924926" y="486.0" width="25.549549549549397" height="6.250593949668371" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="645.2732732732733" y="486.0" width="25.54954954954951" height="28.234537587413456" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="676.0540540540541" y="486.0" width="25.54954954954951" height="20.834692007906256" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="706.8348348348349" y="486.0" width="25.54954954954951" height="38.4737922380466" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="737.6156156156156" y="486.0" width="25.54954954954951" height="23.568967033699266" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="768.3963963963964" y="486.0" width="25.549549549549624" height="29.35192659254801" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="799.1771771771772" y="486.0" width="25.54954954954951" height="36.68640988494883" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="829.957957957958" y="486.0" width="25.54954954954951" height="19.902771202508518" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="860.7387387387388" y="486.0" width="25.54954954954951" height="64.62761361580124" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="891.5195195195195" y="486.0" width="25.549549549549624" height="47.99346724152588" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="122.0" y="486.0" width="25.54954954954954" height="0.08485685815230681" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="152.7807807807808" y="485.82615133976856" width="25.54954954954954" height="0.1738486602314424" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="183.56156156156158" y="485.4011241015487" width="25.54954954954951" height="0.598875898451297" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="214.34234234234236" y="486.0" width="25.54954954954951" height="1.509988991616808" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="245.12312312312315" y="486.0" width="25.54954954954951" height="3.135840429954783" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="275.90390390390394" y="486.0" width="25.54954954954951" height="9.243150867997088" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="306.6846846846847" y="486.0" width="25.54954954954951" height="5.926952981645002" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="337.46546546546546" y="486.0" width="25.549549549549567" height="12.849948364565535" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="368.2462462462463" y="486.0" width="25.54954954954951" height="4.235937486582088" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="399.02702702702703" y="486.0" width="25.54954954954951" height="16.852837768038626" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="429.8078078078078" y="479.52888558610607" width="25.54954954954951" height="6.471114413893929" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="460.5885885885886" y="486.0" width="25.549549549549567" height="8.396170323950912" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="491.3693693693694" y="486.0" width="25.549549549549567" height="6.413386655769898" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="522.1501501501501" y="486.0" width="25.549549549549624" height="12.341386044548756" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="552.9309309309309" y="486.0" width="25.549549549549624" height="26.180959366437946" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="583.7117117117117" y="486.0" width="25.549549549549624" height="12.542489346578066" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="614.4924924924926" y="486.0" width="25.549549549549397" height="6.250593949668371" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="645.2732732732733" y="486.0" width="25.54954954954951" height="28.234537587413456" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="676.0540540540541" y="486.0" width="25.54954954954951" height="20.834692007906256" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="706.8348348348349" y="486.0" width="25.54954954954951" height="38.4737922380466" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="737.6156156156156" y="486.0" width="25.54954954954951" height="23.568967033699266" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="768.3963963963964" y="486.0" width="25.549549549549624" height="29.35192659254801" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="799.1771771771772" y="486.0" width="25.54954954954951" height="36.68640988494883" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="829.957957957958" y="486.0" width="25.54954954954951" height="19.902771202508518" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="860.7387387387388" y="486.0" width="25.54954954954951" height="64.62761361580124" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<rect x="891.5195195195195" y="486.0" width="25.549549549549624" height="47.99346724152588" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <rect x="922.3003003003003" y="486.0" width="25.549549549549624" height="37.45607908452598" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="953.081081081081" y="486.0" width="25.549549549549624" height="53.09966297571316" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="983.8618618618618" y="486.0" width="25.549549549549624" height="55.66211102763259" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -10549,20 +10556,21 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1230.1081081081081" y="486.0" width="25.54954954954951" height="56.953076578149876" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="1260.888888888889" y="486.0" width="25.54954954954951" height="62.415573090891485" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="1291.6696696696697" y="486.0" width="25.54954954954951" height="57.88536814254826" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="1322.4504504504505" y="486.0" width="25.54954954954951" height="28.444380325316047" rx="1" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1322.4504504504505" y="486.0" width="25.54954954954951" height="28.444380325316047" rx="1" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="697" y="435" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 751–1000 步 −3.2e-5，8 份全部偏低（MTP 的尺子宽 4 倍，判档能过）</tspan></text>
 <rect x="0" y="596" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="596" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="596" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="623" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">是训练轨迹慢慢偏开，不是前向的差；前段的鼓包定了，后段在查</tspan></text>
-<text class="svgsm" x="20" y="654" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一份权重上两边各算几批（6 个状态、19 批），TPU 只比 GPU 写法高 ＋0.83e-6 ± 1.15e-6，不到后段的一成；偏差跟步数、参数范数同步（相关 0.96），跟梯度范数无关。</text>
-<text class="svgsm" x="20" y="678" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">跟 MTP、索引器 KD 无关：两边把这两项的系数都设 0，后段照样往上（约为对照的六成，是它们放大了还是样本少，在查）；TPU 一侧试过的改法都没压住，根因在查。</text>
-</svg><figcaption><b>上面的柱第 550 步以后一路变红变高；下面 MTP 反着往下。</b><span class="capmore"><br><em>灰带是 GPU 自己的散布；柱的颜色只看 8 份是否同号，不是判档。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步，现行对齐配置）：TPU 8 份 ＝ 开、关 base2 各 4 份（其中 6 份只改执行方式）；每一步取 8 份对 GPU 16 份逐步均值的相对差再平均，25 步一块；灰带是 GPU 16 份轮流当被测、对其余 15 份均值的标准差。窗口值：第 2–1000 步 ＋4.3e-6，第 751–1000 步 ＋1.3e-5，MTP 同窗口 −3.2e-5。隔离实验（第 551–1000 步，TPU 对同配置 GPU 4 份均值，每种 TPU 2 份）：对照 ＋1.5e-5，关 MTP ＋1.2e-5，关 KD ＋9.0e-6，两个都关 ＋8.7e-6。</p>
+<text class="svgsm" x="20" y="654" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一份权重上两边前向几乎没差（不到后段的一成），是轨迹慢慢偏开。</text>
+<text class="svgsm" x="20" y="678" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">两边把 MTP、索引器 KD 都关掉，后段照样往上（约剩六成）；已试的几种改法没压住，多路残差那一种两份差得大、还在补样本。</text>
+</svg><figcaption><b>上面的柱第 550 步以后一路变橙变高；下面 MTP 反着往下。</b><span class="capmore"><br><em>灰带是 GPU 自己的散布；柱的颜色只看 8 份是否同号，不是判档。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步，现行对齐配置）：TPU 8 份 ＝ 开、关 base2 各 4 份（其中 6 份只改执行方式）；每一步取 8 份对 GPU 16 份逐步均值的相对差再平均，25 步一块；灰带是 GPU 16 份轮流当被测、对其余 15 份均值的标准差。窗口值：第 2–1000 步 ＋4.3e-6，第 751–1000 步 ＋1.3e-5，MTP 同窗口 −3.2e-5。隔离实验（第 551–1000 步，TPU 对同配置 GPU 4 份均值，每种 TPU 2 份）：对照 ＋1.5e-5，关 MTP ＋1.2e-5，关 KD ＋9.0e-6，两个都关 ＋8.7e-6。</p>
 <p>📌 前段鼓包：GPU 在多路残差收拢成一路之后舍一次 BF16 再进末层归一化，TPU 这次舍入没做（推断是编译器在省舍入下省掉的，没看后端指令）；加一个强制舍入的开关，第 51–100 步回到 GPU 附近，第 751–1000 步不变。</p>
+<p>📌 同一份权重上的前向：6 个状态、19 批，TPU 减 GPU 写法 ＋0.83e-6 ± 1.15e-6；偏差跟步数、参数范数同步（第 501 步起相关 0.96），跟梯度范数无关。关掉 MTP、KD 后幅度约为对照的六成，是它们放大了还是样本少，在查。</p>
 <p>⚠️ 柱的颜色只看 8 份的符号是否一致，不是判档；判档仍按第三节的三个统计和 GPU 16 份的尺子（主 loss 1.55、1.52 待定）。</p></details></figure>
   <p>能说的写在图下那条带里；说不出的就写「在查」，不替它下结论。这也是方法的一部分（<a href="#s10-4">§10.4</a>）。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/configs/base.yml#L1405">MaxText（混元 4 公开分支）：开关 sa_use_base2_exp（默认开）</a></p>
-<details class="foldfig"><summary><b>考考自己</b>：中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？</summary><p>不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开。而且「过了」只是 300 步那一级：第二级第 1 步两边各自对 FP64，GPU 已经偏高 1.68e-4、TPU 只有 2.8e-6 —— 宽度一换成真的，GPU 那边就有一截偏差（还在查），只是 300 步的判定没把它显出来。要定，就再补一级只换其中一样，比如真实结构配随机权重。（TPU 那一半后来定到了「权重」那一行：真实权重的 logits 大，把 base2 常数舍入的误差放大了，<a href="#s9-7">§9.7</a>。）</p></details>
+<details class="foldfig"><summary><b>考考自己</b>：中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？</summary><p>不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开。而且「过了」只是 300 步那一级：第二级第 1 步两边各自对 FP64，GPU 已经偏高 1.42e-5（比 GPU 8 份之间的极差还大）、TPU 只有 2.4e-7 —— 宽度一换成真的，GPU 那边就有一截偏差（还在查），只是 300 步的判定没把它显出来。要定，就再补一级只换其中一样，比如真实结构配随机权重。（TPU 那一半后来定到了「权重」那一行：真实权重的 logits 大，把 base2 常数舍入的误差放大了，<a href="#s9-7">§9.7</a>。）</p></details>
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>
 </div></section>
 
@@ -10571,9 +10579,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s10-1">10.1　TPU 的脾气：改了什么，结果变不变</h3>
   <p>改完结果不逐位了，是改出了 bug，还是只换了加法顺序？第二次迁移把日常会碰到的改动一样一样量了一遍：每次只改一样东西，跟一次确认过的 TPU 运行比，尺子借 GPU 重跑（TPU 自己重跑逐位相同，量不出宽度），第 1 步再对 FP64 定责。</p>
-<figure class="fbox fwide" id="fig-temper"><svg viewBox="0 0 1400 930" width="100%" role="img" aria-label="两块，都是运行库 0.0.46 上的结果。上：119 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 13（归成 6 件）、动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；另外四件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行，都能忍。RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-temper"><svg viewBox="0 0 1400 930" width="100%" role="img" aria-label="两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：119 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 13（归成 6 件）、动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；另外四件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行，都能忍。RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 的脾气：改一样东西，结果变不变、要不要管</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移（混元 4 缩小版），TPU 运行库 0.0.46；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移（混元 4 缩小版），绝大多数在运行库 0.0.46 上；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">逐位相同 34</text>
 <rect x="135.48000000000002" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -10582,6 +10590,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="419" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">真有影响（归成 6 件） 13</text>
 <rect x="638.2800000000001" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="659" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">动了精度、量不出来 5</text>
+<rect x="843.2" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="864" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">故意改坏 15</text>
+<rect x="978.6800000000001" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="999" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">没出结果 6</text>
 <rect x="0" y="102" width="1400" height="150" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -10712,104 +10724,100 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="300" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="328" x2="1400" y2="328" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="318" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 300 步曲线最差 r（对数）：蓝 ＝ 跟重跑一样大，红 ＝ 真有影响</tspan></text>
-<rect x="230.0" y="348" width="55.48166535884394" height="370" rx="0" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1.0"/>
-<rect x="285.48166535884394" y="348" width="140.8610431656209" height="370" rx="0" fill="#fef7e0" stroke="#fef7e0" stroke-width="1.0"/>
-<rect x="426.34270852446485" y="348" width="933.6572914755352" height="370" rx="0" fill="#fce8e6" stroke="#fce8e6" stroke-width="1.0"/>
-<line x1="285.48166535884394" y1="348" x2="285.48166535884394" y2="718" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="285" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
-<line x1="393.3024152314758" y1="348" x2="393.3024152314758" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="393" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">2</text>
-<line x1="643.6544435725626" y1="348" x2="643.6544435725626" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="643" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
-<line x1="1001.8272217862813" y1="348" x2="1001.8272217862813" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="1001" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">100</text>
-<line x1="1360.0" y1="348" x2="1360.0" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="1360" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1000</text>
-<line x1="426.34270852446485" y1="348" x2="426.34270852446485" y2="718" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
-<text class="svgsm" x="432" y="364" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯噪声最高 2.47</tspan></text>
+<rect x="230.0" y="348" width="89.37069200459848" height="370" rx="0" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1.0"/>
+<rect x="319.3706920045985" y="348" width="226.90106403221841" height="370" rx="0" fill="#fef7e0" stroke="#fef7e0" stroke-width="1.0"/>
+<rect x="546.2717560368169" y="348" width="523.7282439631831" height="370" rx="0" fill="#fce8e6" stroke="#fce8e6" stroke-width="1.0"/>
+<line x1="319.3706920045985" y1="348" x2="319.3706920045985" y2="718" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="319" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="493.049960033921" y1="348" x2="493.049960033921" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="493" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">2</text>
+<line x1="722.6414639413549" y1="348" x2="722.6414639413549" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="722" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">5</text>
+<line x1="896.3207319706775" y1="348" x2="896.3207319706775" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="896" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
+<line x1="1070.0" y1="348" x2="1070.0" y2="718" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="1070" y="738" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">20</text>
+<line x1="546.2717560368169" y1="348" x2="546.2717560368169" y2="718" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<text class="svgsm" x="552" y="364" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯噪声最高 2.47</tspan></text>
 <text class="svgsm" x="20" y="427" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">跟重跑一样大 46</tspan></text>
-<rect x="254.3605668793018" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="259.8191080408124" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="263.3545434334745" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="265.0925778406389" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="266.81140705472427" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="266.81140705472427" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="270.1931154813022" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="270.1931154813022" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="273.50286717656513" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="276.7436606700355" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="276.7436606700355" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="278.33908451378795" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="278.33908451378795" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="279.91831088148615" y="402" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="279.91831088148615" y="442" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="279.91831088148615" y="394" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="281.48166535884394" y="450" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="281.48166535884394" y="386" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="281.48166535884394" y="458" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="283.0294638122729" y="378" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="283.0294638122729" y="466" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="283.0294638122729" y="370" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="284.56201277192514" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="284.56201277192514" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="284.56201277192514" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="284.56201277192514" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="286.0796097960492" y="402" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="286.0796097960492" y="442" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="286.0796097960492" y="394" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="286.0796097960492" y="450" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="287.582543817745" y="386" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="290.54553742582874" y="458" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="293.4531447199407" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="293.4531447199407" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="294.88681810504715" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="294.88681810504715" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="296.3073983996912" y="402" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="299.1102212768087" y="442" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="301.86343405586695" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="307.22784361925767" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="309.84223223814575" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="309.84223223814575" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="314.94276987880903" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="322.2930724135682" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="334.92788950120723" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="334.92788950120723" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="271.68362307174107" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="280.47632238573215" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="286.1712543156979" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="288.97090599686953" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="291.73962166729854" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="291.73962166729854" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="297.1869279131784" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="297.1869279131784" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="302.51832518569904" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="307.7386435608265" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="307.7386435608265" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="310.30857602472406" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="310.30857602472406" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="312.85241735321074" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="312.85241735321074" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="312.85241735321074" y="402" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="315.3706920045985" y="442" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="315.3706920045985" y="394" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="315.3706920045985" y="450" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="317.8639087812025" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="317.8639087812025" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="317.8639087812025" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="320.332561446352" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="320.332561446352" y="402" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="320.332561446352" y="442" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="320.332561446352" y="394" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="322.77712931130117" y="450" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="322.77712931130117" y="386" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="322.77712931130117" y="458" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="322.77712931130117" y="378" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="325.1980777937856" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="329.97091198048395" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="334.6545290686106" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="334.6545290686106" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="336.9639114872317" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="336.9639114872317" y="434" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="339.2522033609398" y="402" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="343.7670321512112" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="348.2019482574401" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="356.8430189927095" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="361.05431507633955" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="361.05431507633955" y="410" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="369.2703369926485" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="381.11031367189696" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="401.4626650148228" y="418" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="401.4626650148228" y="426" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="20" y="513" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯数据并行</tspan></text>
 <text class="svgsm" x="218" y="513" fill="#a50e0e" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不能忍</tspan></text>
-<rect x="403.3336028199794" y="502.5" width="11" height="11" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
-<rect x="429.80580100122324" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="444" y="513" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.6</tspan></text>
-<rect x="431.57681589428375" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<rect x="483.07507424646394" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="497" y="513" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.7</tspan></text>
-<rect x="497.93912542056216" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<rect x="1277.9395984708508" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="1292" y="513" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">611</tspan></text>
+<rect x="512.5678280712319" y="502.5" width="11" height="11" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<rect x="555.2096387493881" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<rect x="558.0624158879177" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<rect x="641.016576621889" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<rect x="664.9598113973601" y="502.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="679" y="513" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4.1</tspan></text>
+<text class="svgsm" x="1066" y="499" fill="#a50e0e" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">→ 611（FP32 开关撞上编译器 bug）</tspan></text>
 <text class="svgsm" x="20" y="547" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关省舍入</tspan></text>
 <text class="svgsm" x="218" y="547" fill="#a50e0e" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不能忍</tspan></text>
-<rect x="471.70944749603086" y="536.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="486" y="547" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.4</tspan></text>
-<rect x="682.2806403773558" y="536.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="696" y="547" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13.3</tspan></text>
-<text class="svgsm" x="20" y="581" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关小矩阵乘改写</tspan></text>
-<text class="svgsm" x="218" y="581" fill="#b06000" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
-<rect x="270.3567940260822" y="570.5" width="11" height="11" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="466" y="581" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums">曲线分不开，第 1 步对 FP64 抓到</text>
-<text class="svgsm" x="20" y="615" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">RMSNorm 多舍一次</tspan></text>
-<text class="svgsm" x="218" y="615" fill="#b06000" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
-<text class="svgsm" x="814" y="615" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换到运行库 0.0.52：不能忍（下一张图）</tspan></text>
-<rect x="289.04553742582874" y="604.5" width="11" height="11" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="466" y="615" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums">曲线分不开，第 1 步对 FP64 抓到</text>
-<text class="svgsm" x="20" y="649" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">多路残差不强制舍 BF16</tspan></text>
-<text class="svgsm" x="218" y="649" fill="#b06000" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
-<rect x="293.38681810504715" y="638.5" width="11" height="11" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="466" y="649" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums">曲线分不开，第 1 步对 FP64 抓到</text>
-<text class="svgsm" x="20" y="683" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上下文并行</tspan></text>
-<text class="svgsm" x="218" y="683" fill="#b06000" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
-<rect x="317.1613324825606" y="672.5" width="11" height="11" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
-<rect x="317.1613324825606" y="672.5" width="11" height="11" rx="5" fill="#fff" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="466" y="683" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums">曲线分不开，第 1 步对 FP64 抓到</text>
-<text class="svgsm" x="1360" y="758" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">300 步曲线最差 r（对数）</text>
+<rect x="622.708655956882" y="536.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<rect x="961.8998662841332" y="536.5" width="11" height="11" rx="5" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="976" y="547" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">13</tspan></text>
+<text class="svgsm" x="20" y="581" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums">关小矩阵乘改写</text>
+<text class="svgsm" x="218" y="581" fill="#a50e0e" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
+<text class="svgsm" x="1086" y="581" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">曲线分不开，第 1 步对 FP64 抓到</text>
+<rect x="298.3668060649703" y="570.5" width="11" height="11" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="20" y="615" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums">RMSNorm 多舍一次</text>
+<text class="svgsm" x="218" y="615" fill="#a50e0e" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
+<text class="svgsm" x="1086" y="615" fill="#a50e0e" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库 0.0.52 上不能忍（下一张图）</tspan></text>
+<rect x="328.47091198048395" y="604.5" width="11" height="11" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="20" y="649" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums">多路残差不强制舍 BF16</text>
+<text class="svgsm" x="218" y="649" fill="#a50e0e" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
+<text class="svgsm" x="1086" y="649" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">曲线分不开，第 1 步对 FP64 抓到</text>
+<rect x="335.4639114872317" y="638.5" width="11" height="11" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="20" y="683" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums">上下文并行</text>
+<text class="svgsm" x="218" y="683" fill="#a50e0e" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">能忍</text>
+<text class="svgsm" x="1086" y="683" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">曲线分不开，第 1 步对 FP64 抓到</text>
+<rect x="373.76025295876553" y="672.5" width="11" height="11" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<rect x="373.76025295876553" y="672.5" width="11" height="11" rx="5" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="1070" y="752" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums">300 步曲线最差 r（对数）</text>
 <rect x="0" y="808" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="808" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="808" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -10952,7 +10960,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="102" width="800" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <rect x="0" y="104" width="800" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="800" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 300 步曲线最差 r（对数）：一件变强、一件变弱</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 300 步曲线最差 r（对数）：结论变了的只有 RMSNorm 一件</tspan></text>
 <rect x="250.0" y="150" width="51.06896685977057" height="390" rx="0" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1.0"/>
 <rect x="301.06896685977057" y="150" width="129.6577508755534" height="390" rx="0" fill="#fef7e0" stroke="#fef7e0" stroke-width="1.0"/>
 <rect x="430.726717735324" y="150" width="299.273282264676" height="390" rx="0" fill="#fce8e6" stroke="#fce8e6" stroke-width="1.0"/>
@@ -11008,7 +11016,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="287.7247572489709" y="490" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
 <text class="svgsm" x="283" y="501" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.95</tspan></text>
 <text class="svgsm" x="345" y="501" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.27</text>
-<text class="svgsm" x="305" y="520" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">这次没超；那个张量本来就随顺序跳</text>
+<text class="svgsm" x="305" y="520" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">两次都在线内；那个张量随顺序跳一倍，降了不说明变好</text>
 <rect x="820" y="102" width="580" height="270" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="820" y="102" width="580" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="820" y="104" width="580" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -11065,14 +11073,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="834" y="490" fill="#174ea6" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.0.52：门槛 7,181，过线 → 排序（离线编译看到）</tspan></text>
 <text class="svgsm" x="834" y="518" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上卡：r 4.06 → 0.89　词嵌入梯度 R 6.90 → 1.10</tspan></text>
 <text class="svgsm" x="834" y="542" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">预测成立：词嵌入这一处随版本消失，机理不变</tspan></text>
-<text class="svgsm" x="834" y="566" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">（另有三个多路残差小参数离 FP64 远，按规矩单列）</text>
+<text class="svgsm" x="834" y="566" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">（另有三个多路残差小参数离 FP64 远，靠豁免单列，在查）</text>
 <rect x="0" y="592" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="592" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="592" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="619" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换运行库：先建新基准，再把六件重测；结论只对测过的版本对和配置成立</tspan></text>
-<text class="svgsm" x="20" y="650" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一份 HLO，后端怎么生成 kernel 也会变：RMSNorm 那件在优化后程序里的差别两个版本是同一类，结果却从能忍变成不能忍。离线筛判不了换版本。</text>
+<text class="svgsm" x="20" y="650" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">优化后的程序和后端生成的 kernel 都跟着变：RMSNorm 那件改动带来的程序差别两个版本是同一类，结果却从能忍变成不能忍。离线筛判不了换版本。</text>
 <text class="svgsm" x="20" y="674" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">做法：开着 RMSNorm 单次舍入（对齐、生产都开）；换版本后看一眼那次 scatter 有没有 sort 和 indices_are_sorted=true。</text>
-</svg><figcaption><b>左边只有 RMSNorm 那一行往右蹿出了线；右上黄格是门槛变了的地方；右下那条预测上卡成立。</b><span class="capmore"><br><em>横轴对数；三块都是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8，JAX 不变、只换运行库）：新基准换一组机器重跑逐位相同；新基准对旧基准 300 ／ 1000 步 0.99 ／ 0.96，步时 -5.5%。六件各按基准的命令只改那一样，对同版本的基准比 8 项检查的三个统计，尺子 GPU 同设置重跑 8 份（留一法最大 2.47）。</p>
+</svg><figcaption><b>左边只有 RMSNorm 那一行往右蹿出了线；右上黄格是门槛变了的地方；右下那条预测上卡成立。</b><span class="capmore"><br><em>横轴对数；红点只说明超线，结论变没变看箭头；三块都是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8；JAX 0.11.1 不变、只换运行库，这不是官方配套的组合，换官方组合要重测）：新基准换一组机器重跑逐位相同；新基准对旧基准 300 ／ 1000 步 0.99 ／ 0.96，步时 -5.5%。六件各按基准的命令只改那一样，对同版本的基准比 8 项检查的三个统计（上下文并行对同版本的普通注意力底），尺子 GPU 同设置重跑 8 份（留一法最大 2.47）。</p>
 <p>📌 第 1 步：纯数据并行词嵌入梯度 R 3.62 → 3.60，关省舍入 26.13 → 26.11，两个版本几乎一样；RMSNorm 多舍一次第 0 层归一化权重的 R 1.20 → 1.17（第 1 步看不出，偏差是跑起来以后攒的），前 300 步主 loss 对基准的带符号均值 1.3e-6 → 1.65e-5，换一组机器重跑逐位相同。三种修法 0.0.52 上（300 ／ 1000 步）：① 1.55 ／ 0.92；② 1.20 ／ 1.28；③ 1.23 ／ 0.97，都跟 GPU 重跑分不开。</p>
 <p>📌 Ⓑ 单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上列数 128 的表交给 SparseCore 执行（HLO 可见）。</p>
 <p>📌 Ⓒ v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：r 4.06 → 0.89，词嵌入梯度离 FP64 2.93e-02 → 4.63e-03，R 6.90 → 1.10。</p>
@@ -11082,13 +11090,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>一件变强</b>：RMSNorm 多舍一次，r 1.06 → 5.50（1000 步 3.68），主 loss 一直偏高，换一组机器重跑逐位相同；第 1 步看不出，是跑起来攒的。为什么变强，研究线还在查。</li>
     <li><b>一件变弱、一个门槛变了</b>：上下文并行降到 0.95（那个张量本来就随加法顺序跳一倍，只算这次没过线）；词嵌入排序门槛变了，v7x 上不累积的纯数据并行不再丢精度（<a href="#s8-6">§8.6</a>）。纯数据并行、关省舍入、关小矩阵乘改写、多路残差这四件，在 v5p 上结论不变。</li>
   </ul>
-  <p><b>所以换版本不能当成「只换了加法顺序」</b>：同一份 HLO，后端的代码生成也一起换了。怎么做，见图下那条带。</p>
+  <p><b>所以换版本不能当成「只换了加法顺序」</b>：JAX 交出的是同一份程序，编译器优化后的程序（这次 110 份规格全部变了）和后端的代码生成都一起换了。怎么做，见图下那条带。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/153ae2c439c5197f46e487480f33bb4dd09a423e/models/hunyuan4/alignments/04-tpu-self/libtpu-052.md">代码：升运行库 0.0.52 的三步与全部结果</a></p>
 <details class="foldfig"><summary><b>考考自己</b>：升级运行库以后，新基准跟旧基准在噪声内。能不能直接沿用旧版本上「这几件能忍」的结论？</summary><p>不能。基准运行只说明「这一个配置」换版本跟重跑分不开；别的改动走的 kernel 可能变了。0.0.46 → 0.0.52 就是例子：基准 0.99，可 RMSNorm 多舍一次从 1.06 变成 5.50。要把已知的几件在新版本上重测，或者干脆把相应的开关都开着（RMSNorm 单次舍入）。</p></details>
 
 
   <h3 id="s10-3">10.3　日常回归：逐位优先</h3>
-  <p><b>第一步：改完先比程序指纹</b>（去掉元数据后整份程序的哈希）。一样，结果就一定逐位相同，回归直接过；不一样，再跑 300 步看档。研究线把它做成了跑前离线筛：在 CPU 上为目标拓扑编一次训练步（不占芯片，一次约 3 分钟），跟对照比优化后的程序。拿已有 TPU 结论的 109 个改动回测：判程序相同 23 个、不同 72 个、判不了 14 个；能判的 95 个跟 TPU 实际全部相符，不符 0 个。</p>
+  <p><b>第一步：改完先比程序指纹</b>（编译后的整份程序去掉元数据、名字重新编号以后的哈希）。一样，结果就一定逐位相同，回归直接过；不一样，再跑 300 步看档。研究线把它做成了跑前离线筛：在 CPU 上为目标拓扑编一次训练步（不占芯片，一次约 3 分钟），跟对照比优化后的程序。拿已有 TPU 结论的 109 个改动回测：判程序相同 23 个、不同 72 个、判不了 14 个；能判的 95 个跟 TPU 实际全部相符，不符 0 个。</p>
   <details class="foldfig"><summary><b>离线筛怎么比、哪几类判不了</b></summary>
   <ul>
     <li><b>怎么比</b>：取编译器优化后的训练步程序，去掉元数据和源码位置，指令名按出现顺序重新编号（CPU 上编和 TPU 上编，名字里的序号会差几十），设备分组展开成设备号，每个子计算的参数按编号排到最前，然后逐字比。CPU 上编出的程序跟 TPU 上实际存下的，规范化以后一字不差。</li>

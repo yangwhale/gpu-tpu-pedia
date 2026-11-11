@@ -42,14 +42,14 @@ def _tol(i):
 
 
 def fig_temper():
-    f = Fig(W, "两块，都是运行库 0.0.46 上的结果。上：119 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 13（归成 6 件）、"
+    f = Fig(W, "两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：119 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 13（归成 6 件）、"
                "动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；"
-               "蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；"
+               "蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；"
                "另外四件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行，都能忍。"
                "RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。")
     y0 = f.header("TPU 的脾气：改一样东西，结果变不变、要不要管",
-                  "第二次迁移（混元 4 缩小版），TPU 运行库 0.0.46；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑",
-                  [(c, "%s %d" % (n, k)) for n, k, c in PILES[:4]])
+                  "第二次迁移（混元 4 缩小版），绝大多数在运行库 0.0.46 上；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑",
+                  [(c, "%s %d" % (n, k)) for n, k, c in PILES[:4]] + [(PU, "故意改坏 %d" % N_BROKEN), (GY2, "没出结果 %d" % N_PEND)])
     # Ⓐ 六堆
     PH1 = 150
     py = f.panel(0, y0, W, PH1, "Ⓐ %d 种改动，一格一种" % TOTAL, GY)
@@ -68,8 +68,8 @@ def fig_temper():
     y1 = py + PH1 + 16
     PH2 = 460
     py2 = f.panel(0, y1, W, PH2, "Ⓑ 300 步曲线最差 r（对数）：蓝 ＝ 跟重跑一样大，红 ＝ 真有影响", RD)
-    X0, X1 = 230, W - 40
-    RL, RHI = 0.7, 1000.0
+    X0, X1 = 230, W - 330
+    RL, RHI = 0.7, 20.0
 
     def X(r):
         r = max(min(r, RHI), RL)
@@ -78,7 +78,7 @@ def fig_temper():
     f.box(X(RL), ytop, X(1) - X(RL), ybot - ytop, "#e6f4ea", "#e6f4ea", 0)
     f.box(X(1), ytop, X(N.LOO8_300_MAX) - X(1), ybot - ytop, "#fef7e0", "#fef7e0", 0)
     f.box(X(N.LOO8_300_MAX), ytop, X(RHI) - X(N.LOO8_300_MAX), ybot - ytop, "#fce8e6", "#fce8e6", 0)
-    for v in (1, 2, 10, 100, 1000):
+    for v in (1, 2, 5, 10, 20):
         f.line(X(v), ytop, X(v), ybot, LINE if v != 1 else GY2, 0.8, arrow=False)
         f.t(X(v), ybot + 20, "%g" % v, GY, size=13, anchor="middle")
     f.line(X(N.LOO8_300_MAX), ytop, X(N.LOO8_300_MAX), ybot, INK, 1.4, dash="4 3", arrow=False)
@@ -98,23 +98,29 @@ def fig_temper():
     for i, iss in enumerate(ISSUES):
         yy = ytop + 160 + i * 34
         bad = _tol(iss) == "不能忍"
-        f.t(20, yy + 5, _short(iss["name"]), RD if bad else OR, True, 14)
-        f.t(X0 - 12, yy + 5, "不能忍" if bad else "能忍", RD if bad else OR, bad, 12.5, "end")
+        f.t(20, yy + 5, _short(iss["name"]), RD, bad, 14)
+        f.t(X0 - 12, yy + 5, "不能忍" if bad else "能忍", RD, bad, 12.5, "end")
+        NX = X1 + 16                       # 右侧说明列
         if _tol(iss) != iss["tolerable"]:
-            f.t(X(30), yy + 5, "换到运行库 0.0.52：不能忍（下一张图）", RD, True, 12.5)
-        last = None
+            f.t(NX, yy + 5, "运行库 0.0.52 上不能忍（下一张图）", RD, True, 12.5)
+        elif all(r <= N.LOO8_300_MAX for _l, r in iss["exps"]):
+            f.t(NX, yy + 5, "曲线分不开，第 1 步对 FP64 抓到", GY, size=12.5)
+        solid = [r for _l, r in iss["exps"] if r > N.LOO8_300_MAX]
         for (lab, r) in sorted(iss["exps"], key=lambda e: e[1]):
             xx = X(r)
+            if r > RHI:
+                continue
             if r > N.LOO8_300_MAX:
                 f.box(xx - 5.5, yy - 5.5, 11, 11, RD, INK, 5.5)
-                if last is None or xx - last > 40:
-                    f.t(xx + 9, yy + 5, "%g" % (round(r, 1) if r < 100 else round(r)), RD, True, 12.5)
-                    last = xx
             else:
-                f.box(xx - 5.5, yy - 5.5, 11, 11, "#fff", RD if bad else OR, 5.5, sw=2)
-        if all(r <= N.LOO8_300_MAX for _l, r in iss["exps"]):
-            f.t(X(3.2), yy + 5, "曲线分不开，第 1 步对 FP64 抓到", OR, size=12.5)
-    f.t(X(RHI), ybot + 40, "300 步曲线最差 r（对数）", GY, size=13, anchor="end")
+                f.box(xx - 5.5, yy - 5.5, 11, 11, "#fff", RD, 5.5, sw=2)
+        inside = [r for r in solid if r <= RHI]
+        if inside:
+            f.t(X(max(inside)) + 9, yy + 5, "%.1f" % max(inside) if max(inside) < 10 else "%.0f" % max(inside), RD, True, 12.5)
+        big = [r for r in solid if r > RHI]
+        if big:
+            f.t(X1 - 4, yy - 9, "→ %.0f（FP32 开关撞上编译器 bug）" % max(big), RD, True, 11.5, "end")
+    f.t(X(RHI), ybot + 34, "300 步曲线最差 r（对数）", GY, size=13, anchor="end")
     f._pan = None
     yb = f.band(py2 + PH2 + 20, "ok", "不逐位不等于有 bug：%d 种逐位、%d 种跟重跑一样大；真有影响的 6 件里，不能忍的只有两件（运行库 0.0.46）" % (N_SAME, N_NOISE), [
         "不能忍：纯数据并行（词嵌入梯度在 BF16 里累加，第八节）和关掉省舍入；能忍的四件曲线都在 1 附近，靠第 1 步对 FP64 才抓到，各有开关。",
@@ -145,7 +151,7 @@ def fig_libtpu():
                   [(GY2, "空心 ＝ 0.0.46"), (RD, "0.0.52，超出纯噪声最高分"), (BL, "0.0.52，在线内")])
     PH = 470
     LW = 800
-    py = f.panel(0, y0, LW, PH, "Ⓐ 300 步曲线最差 r（对数）：一件变强、一件变弱", RD)
+    py = f.panel(0, y0, LW, PH, "Ⓐ 300 步曲线最差 r（对数）：结论变了的只有 RMSNorm 一件", RD)
     X0, X1 = 250, LW - 70
     RL, RHI = 0.7, 20.0
 
@@ -163,7 +169,7 @@ def fig_libtpu():
     f.t(X(N.LOO8_300_MAX) + 6, ytop + 14, "纯噪声最高 %s" % N.LOO8_300_MAX_T, INK, True, 12.5)
     rows = [("基准运行自己", N.LIB_GOLDEN_R[0], N.LIB_GOLDEN_R[0], "", "")] + list(N.LIB_SIX)
     note = {"RMSNorm 多舍一次": "主 loss 系统偏高；1000 步 %s；机理在查" % N.LIB_RMS_R1K_T,
-            "上下文并行（不开 FP32 logits）": "这次没超；那个张量本来就随顺序跳",
+            "上下文并行（不开 FP32 logits）": "两次都在线内；那个张量随顺序跳一倍，降了不说明变好",
             "基准运行自己": "0.0.52 对 0.0.46，在噪声内"}
     for i, (name, a, b, va, vb) in enumerate(rows):
         yy = ytop + 34 + i * 52
@@ -218,15 +224,15 @@ def fig_libtpu():
     f.t(RX + 14, py3 + 72, "0.0.52：门槛 %s，过线 → 排序（离线编译看到）" % format(N.LIB_THRESH["v7x_052"][(120832, 1024)], ","), BL, True, 12.5)
     f.t(RX + 14, py3 + 100, "上卡：r %.2f → %.2f　词嵌入梯度 R %.2f → %.2f" % (t["r"] + t["R"]), BL, True, 13)
     f.t(RX + 14, py3 + 124, "预测成立：词嵌入这一处随版本消失，机理不变", INK, True, 12.5)
-    f.t(RX + 14, py3 + 148, "（另有三个多路残差小参数离 FP64 远，按规矩单列）", GY, size=11.5)
+    f.t(RX + 14, py3 + 148, "（另有三个多路残差小参数离 FP64 远，靠豁免单列，在查）", GY, size=11.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "换运行库：先建新基准，再把六件重测；结论只对测过的版本对和配置成立", [
-        "同一份 HLO，后端怎么生成 kernel 也会变：RMSNorm 那件在优化后程序里的差别两个版本是同一类，结果却从能忍变成不能忍。离线筛判不了换版本。",
+        "优化后的程序和后端生成的 kernel 都跟着变：RMSNorm 那件改动带来的程序差别两个版本是同一类，结果却从能忍变成不能忍。离线筛判不了换版本。",
         "做法：开着 RMSNorm 单次舍入（对齐、生产都开）；换版本后看一眼那次 scatter 有没有 sort 和 indices_are_sorted=true。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8，JAX 不变、只换运行库）：新基准换一组机器重跑逐位相同；新基准对旧基准 300 ／ 1000 步 %s，步时 %.1f%%。"
-               "六件各按基准的命令只改那一样，对同版本的基准比 8 项检查的三个统计，尺子 GPU 同设置重跑 8 份（留一法最大 %s）。"
+               "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8；JAX 0.11.1 不变、只换运行库，这不是官方配套的组合，换官方组合要重测）：新基准换一组机器重跑逐位相同；新基准对旧基准 300 ／ 1000 步 %s，步时 %.1f%%。"
+               "六件各按基准的命令只改那一样，对同版本的基准比 8 项检查的三个统计（上下文并行对同版本的普通注意力底），尺子 GPU 同设置重跑 8 份（留一法最大 %s）。"
                % (N.LIB_GOLDEN_R_T, N.LIB_GOLDEN_STEP * 100, N.LOO8_300_MAX_T),
                "📌 第 1 步：纯数据并行词嵌入梯度 R %s → %s，关省舍入 %s → %s，两个版本几乎一样；RMSNorm 多舍一次第 0 层归一化权重的 R %s → %s（第 1 步看不出，偏差是跑起来以后攒的），"
                "前 300 步主 loss 对基准的带符号均值 %s → %s，换一组机器重跑逐位相同。三种修法 0.0.52 上（300 ／ 1000 步）：%s，都跟 GPU 重跑分不开。"

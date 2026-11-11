@@ -1245,12 +1245,14 @@ assert (LIB_DP8_52_T, LIB_V7X_R52_T, LIB_V7X_R_PAIR_T) == ("2.82", "0.89", "6.90
 # ── 2026-11-11 晚 · F2：从小到大三级，第 1 步主 loss 两边各自对 CPU FP64（出处：对齐记录 小尺寸知识库、中等尺寸对齐报告「第 1 步主 loss 对 CPU FP64」、真实宽度 README；实测）──
 LAD_MINI_GPU_RANGE = (-2.46e-6, 4.7e-7)   # 小模型 GPU 8 份
 LAD_MINI_TPU = -3.68e-6                    # 小模型 TPU（现行关 base2；开 base2 −2.14e-6）
-LAD_MID = (1.68e-4, 2.8e-6)                # 中等尺寸（真实宽度与注意力、随机权重）：GPU、TPU
+LAD_MID = (1.42e-5, 2.4e-7)                # 中等尺寸（真实宽度与注意力、随机权重）：GPU、TPU，相对差（研究线 11-11 起统一写相对差；旧的绝对差是 1.68e-4／2.8e-6）
 LAD_REAL_GPU = 5.3e-5                      # 真实宽度截层 GPU 4 份（＋5.1e-5 到 ＋5.8e-5）
 LAD_REAL_TPU = (-9.87e-5, -1.24e-6)        # 真实宽度截层 TPU：开 base2 → 只关 base2
 LAD_REAL_GPU_SHARE = 0.55                  # GPU 那份偏高在 FP64 里逐类加 BF16 舍入，简单相加能复现约 55%
-assert LAD_MID[0] / LAD_MID[1] > 50 and abs(LAD_REAL_TPU[1]) < abs(LAD_MINI_TPU)
-LAD_MID_T, LAD_REAL_GPU_T = ("＋1.68e-4", "＋2.8e-6"), "＋5.3e-5"
+assert LAD_MID[0] / LAD_MID[1] > 50 and LAD_MID[0] < LAD_REAL_GPU and abs(LAD_REAL_TPU[1]) < abs(LAD_MINI_TPU)
+LAD_MID_T, LAD_REAL_GPU_T = ("＋1.42e-5", "＋2.4e-7"), "＋5.3e-5"
+LAD_MID_SPREAD = 9.4e-6                    # 中等尺寸 GPU 8 份第 1 步的极差（相对）
+assert LAD_MID[0] > LAD_MID_SPREAD > max(abs(x) for x in LAD_MINI_GPU_RANGE)
 # 隔离实验（研究线 11-11 晚，小尺寸知识库「隔离实验」行，实测）：两侧把 MTP、索引器 KD 的系数设 0，第 551–1000 步 TPU 对同配置 GPU 4 份均值
 MD_ISO = {"对照": 1.48e-5, "关MTP": 1.16e-5, "关KD": 9.0e-6, "都关": 8.7e-6}
 assert all(v > 0 for v in MD_ISO.values()) and abs(MD_ISO["都关"] / MD_ISO["对照"] - 0.6) < 0.05   # 约六成

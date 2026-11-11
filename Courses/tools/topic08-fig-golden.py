@@ -332,8 +332,8 @@ def fig_switch():
 
 def fig_ladder():
     f = Fig(W, "左右两块。左：一张格子，行是模型的几样属性（宽度和注意力形状、专家个数、专家宽度、层数、权重），列是三级：小模型、中等尺寸、真实权重截层；"
-               "浅灰是跟小模型一样，蓝是跟真实模型一样，橙是改了、但两边都不像。中等尺寸换了宽度和注意力形状、专家宽度；真实权重截层又换了专家个数、专家宽度、权重，层数只截一到两层。"
-               "右：每一级第 1 步主 loss 两边各自对 CPU FP64 的差，对数轴。小模型两边都在 3.7e-6 以内；中等尺寸 GPU 偏高 1.68e-4、TPU 只有 2.8e-6，差在 GPU 一侧；"
+               "浅灰是跟小模型一样，蓝是跟真实模型一样，橙是改了、但两边都不像。中等尺寸换了宽度和注意力形状、专家宽度；真实权重截层又换了专家个数、专家宽度、权重，层数只截前几层。"
+               "右：每一级第 1 步主 loss 两边各自对 CPU FP64 的差，对数轴。小模型两边都在 3.7e-6 以内；中等尺寸 GPU 偏高 1.42e-5、TPU 只有 2.4e-7，差在 GPU 一侧；"
                "真实权重截层 GPU 仍偏高 5.3e-5，TPU 偏低 9.9e-5，只关 base2 以后 TPU 到 1.2e-6。")
     y0 = f.header("每一级两边各自对 FP64：差冒出来的那一级翻了哪几行，嫌疑就在那几行",
                   "行 ＝ 模型的一样属性；列 ＝ 一级；颜色 ＝ 这一级的这一样跟谁一样；右 ＝ 第 1 步主 loss 两边各自对 FP64",
@@ -354,43 +354,47 @@ def fig_ladder():
         for j, (_, cells, _) in enumerate(COLS):
             fill, col, lab = FILL[cells[i]]
             changed = j > 0 and cells[i] != COLS[j - 1][1][i]
-            edge = (BL if j == 1 else RD) if changed else col
-            f.box(X0 + j * (CW + 10), y + 4, CW, RH - 8, fill, edge, 4, sw=2.4 if changed else 1)
+            edge = INK if changed else col
+            f.box(X0 + j * (CW + 10), y + 4, CW, RH - 8, fill, edge, 4, sw=2.6 if changed else 1)
             f.t(X0 + j * (CW + 10) + CW / 2.0, y + 27, lab, col, size=12.5, anchor="middle")
-    f.t(X0, py + 44 + len(ROWS) * RH + 22, "粗框 ＝ 这一级新换的：② 蓝框，③ 红框", GY, True, 12.5)
+    f.t(X0, py + 44 + len(ROWS) * RH + 22, "黑粗框 ＝ 这一级新换的", GY, True, 12.5)
     import math as _m
     RX = X0 + 3 * (CW + 10) + 30
     f.t(RX, py + 28, "第 1 步主 loss 对 CPU FP64（对数轴，标正负）", INK, True, 14)
     AX0, AX1 = RX + 90, W - 110
 
     def LX(v):
-        return AX0 + (_m.log10(abs(v)) - (-6.5)) / (-3.5 - (-6.5)) * (AX1 - AX0)
-    rows = [("①", [("GPU", max(abs(x) for x in N.LAD_MINI_GPU_RANGE), "±2.5e-6 以内", BL),
-                   ("TPU", N.LAD_MINI_TPU, "−3.7e-6", OR)]),
-            ("②", [("GPU", N.LAD_MID[0], N.LAD_MID_T[0], BL), ("TPU", N.LAD_MID[1], N.LAD_MID_T[1], OR)]),
-            ("③", [("GPU", N.LAD_REAL_GPU, N.LAD_REAL_GPU_T, BL), ("TPU", N.LAD_REAL_TPU[0], "−9.9e-5", OR)])]
+        return AX0 + (_m.log10(abs(v)) - (-7.0)) / (-4.0 - (-7.0)) * (AX1 - AX0)
+    CG, CT = INK, PU
+    rows = [("①", [("GPU", max(abs(x) for x in N.LAD_MINI_GPU_RANGE), "8 份都在 ±2.5e-6 内", CG),
+                   ("TPU", N.LAD_MINI_TPU, "−3.7e-6（同一量级）", CT)]),
+            ("②", [("GPU", N.LAD_MID[0], N.LAD_MID_T[0], CG), ("TPU", N.LAD_MID[1], N.LAD_MID_T[1], CT)]),
+            ("③", [("GPU", N.LAD_REAL_GPU, N.LAD_REAL_GPU_T, CG), ("TPU", N.LAD_REAL_TPU[0], "−9.9e-5", CT)])]
     for k, (lev, bars) in enumerate(rows):
         yb0 = py + 48 + k * 74
         f.t(RX, yb0 + 30, lev, COLS[k][2], True, 15)
         for m, (side, v, lab, col) in enumerate(bars):
             y = yb0 + m * 28
             f.t(RX + 30, y + 15, side, col, True, 12.5)
-            f.box(AX0, y + 2, max(LX(v) - AX0, 3), 18, col, col, 3)
+            if k == 0 and side == "GPU":
+                f.box(AX0, y + 2, max(LX(v) - AX0, 3), 18, "#e8eaed", GY2, 3, dash="4 3")
+            else:
+                f.box(AX0, y + 2, max(LX(v) - AX0, 3), 18, col, col, 3)
             f.t(LX(v) + 6, y + 16, lab, col, True, 12.5)
         if k == 2:
-            f.box(LX(N.LAD_REAL_TPU[1]) - 1, yb0 + 28 + 2, 2, 18, INK, INK, 0)
-    for e in (1e-6, 1e-5, 1e-4):
+            f.box(LX(N.LAD_REAL_TPU[1]) - 1.5, yb0 + 28 + 2, 3, 18, "#fff", "#fff", 0)
+    for e in (1e-7, 1e-6, 1e-5, 1e-4):
         f.line(LX(e), py + 44, LX(e), py + 48 + 3 * 74 - 8, LINE2, 1, arrow=False)
         f.t(LX(e), py + 48 + 3 * 74 + 8, "%.0e" % e, GY, size=11, anchor="middle")
-    f.t(RX, py + 48 + 3 * 74 + 30, "③ 橙条里的黑线 ＝ 只关 base2 以后的 TPU：−1.2e-6", INK, True, 12.5)
+    f.t(RX, py + 48 + 3 * 74 + 30, "深灰 GPU、紫 TPU；③ 紫条里的白线 ＝ 只关 base2 以后：−1.2e-6", INK, True, 12.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "每一级尽量只换一类，而且两边各自对 FP64 看：差是谁的、从哪一级冒出来，一眼分开", [
-        "GPU 一侧的偏高第二级就有：宽度和注意力一换成真的就出现（推断是 GPU 一侧的 BF16 系统偏差；在真实宽度上逐类加舍入只复现约一半，在查）。",
-        "TPU 一侧的偏低到第三级才有，定到权重那一行：真实权重的 logits 大，把 base2 常数舍成 BF16 的误差放大了（只关 base2 就对上 FP64，见第二次迁移那一节）。",
+        "GPU 的差第二级冒出来：宽度和注意力一换成真的就有（来源在查）。",
+        "TPU 的差第三级才冒出来：定到权重那一行，真实权重的 logits 大，放大了 base2 常数舍成 BF16 的误差。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测，第 1 步主 loss 对 CPU 上 GPU 同一套代码的 FP64 整网前向：小模型 GPU 8 份 −2.46e-6 到 ＋4.7e-7，TPU 关 base2 −3.68e-6（开 −2.14e-6）；中等尺寸（真实宽度与注意力、随机权重）GPU ＋1.68e-4、TPU ＋2.8e-6，"
-               "比 GPU 8 份第 1 步的极差（1.1e-4）还大；真实宽度截层 GPU 4 份 ＋5.1e-5 到 ＋5.8e-5，TPU 开 base2 −9.87e-5、只关 base2 −1.24e-6。",
+               "📌 实测，第 1 步主 loss 对 CPU 上 GPU 同一套代码的 FP64 整网前向：小模型 GPU 8 份 −2.46e-6 到 ＋4.7e-7，TPU 关 base2 −3.68e-6（开 −2.14e-6）；中等尺寸（真实宽度与注意力、随机权重）GPU ＋1.42e-5、TPU ＋2.4e-7，"
+               "比 GPU 8 份第 1 步的极差（9.4e-6）还大；真实权重截前三层（真实宽度）GPU 4 份 ＋5.1e-5 到 ＋5.8e-5（条上标的是中位数 ＋5.3e-5；第二次迁移成绩单那张图用的是其中一份 ＋5.76e-5），TPU 开 base2 −9.87e-5、只关 base2 −1.24e-6。",
                "📌 中等尺寸 300 步对 GPU 8 份两两 28 对：%d 过、%d 不过、%d 待定（最差 %.2f N）；它的 1000 步和单层、单算子两级都没做。格子只写同谁一样，不写具体尺寸。" % (N.LADDER_MID_PASS + (N.LADDER_MID_WORST,)),
                "⚠️ 「GPU 一侧的偏高跟宽度有关」是从「第二级才出现」推的；GPU 那份偏高从哪一层起还没查。")
     f.save("fig8-ladder.svg", yb + 14)

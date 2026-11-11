@@ -365,8 +365,9 @@ def fig_sweep():
     def Y(v):
         return YB - v / vmax * YH
     f.line(X0 - 6, YB, X0 + XW + 20, YB, GY2, 1.2, arrow=False)
-    for v in (0, 5e-3, 1e-2, 1.5e-2):
-        f.t(X0 - 10, Y(v) + 4, "0" if v == 0 else _e(v), GY, size=12, anchor="end")
+    for v, lab in ((0, "0"), (5e-3, "5e-3"), (1e-2, "1e-2"), (1.5e-2, "1.5e-2")):
+        f.t(X0 - 10, Y(v) + 4, lab, GY, size=12, anchor="end")
+    f.t(X0 - 60, py + 50, "离 FP64 的相对差（rel_L2）", GY, True, 12.5)
     for n in N.C2_SWEEP_N:
         f.t(X(n), YB + 22, format(n, ","), GY, size=12.5, anchor="middle")
     xg = X(N.C2_GATE)
@@ -380,6 +381,7 @@ def fig_sweep():
     u = N.C2_SWEEP["bf16_unsorted_excess_on"]
     f.t(X(8192) - 6, Y(u[2]) - 12, _e(u[2]), RD, True, 13.5, "end")
     f.t(X(16384) + 8, Y(u[3]) - 30, "编译器插了排序 → %s" % _e(u[3]), RD, True, 13.5)
+    f.t(X(2048) + 10, Y(u[0]) - 12, "门槛以下，灰线和红线重合", GY, size=12)
     f.t(X(32768) + 4, Y(N.C2_SWEEP["bf16_unsorted_excess_off"][4]) - 12, _e(N.C2_SWEEP["bf16_unsorted_excess_off"][4]), GY, True, 13, "end")
     # 训练里的三种跑法落在哪
     for n, lab in ((4096, "纯数据并行每卡"), (8192, "不累积"), (32768, "FSDP 每卡")):
@@ -422,7 +424,7 @@ def fig_sweep():
                % tuple(" ／ ".join(_e(x) for x in N.C2_SWEEP[k]) for k in ("bf16_unsorted_excess_on", "bf16_presorted_excess_on", "bf16_unsorted_excess_off")),
                "📌 右块实测（CPU 上用同一个 TPU 运行库为 v5p 交叉编译，看优化后 HLO 里有没有 sort）：" + "；".join(
                    "%s × %d %s" % (format(v, ","), d, ("最小 %s" % format(n, ",")) if n else "到 65536 都不插") for v, d, n in N.C2_THRESH)
-               + "。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；表的总元素太少时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 × 1024 的门槛也是 15104／15105（列数 128 的表在 v7x 上交给 SparseCore，另算）。",
+               + "。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；整张表按 FP32 放得进片上内存时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 × 1024 的门槛也是 15104／15105（列数 128 的表在 v7x 上交给 SparseCore，另算）。",
                "📌 插排序的是 TPU 后端（libtpu）里的一道工序 %s：对（下标, 序号）稳定排序 → 按排序后的次序取更新量 → scatter 标上「下标已排序」。公开的 XLA 代码里按名字搜不到，触发条件只能从实验反推。" % N.C2_PASS,
                "⚠️ 门槛为什么定在这里（推断）：看上去是为速度定的启发式，精度更好是附带效果；单算子耗时只部分支持（快慢交叉在 4096 到 8192 之间，和 15104 对不上）。")
     f.save("fig8-sweep.svg", yb + 14)
