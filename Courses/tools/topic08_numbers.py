@@ -536,7 +536,7 @@ assert ENSEMBLE_V5P + ENSEMBLE_V7X == ENSEMBLE_RUNS
 PN_MEAS_TPU, PN_MEAS_GPU, PN_RERUN_STEP = 2.6e-7, 8e-8, 4.86e-7   # param_norm 自测误差（单步最大差）：TPU 整网一次归约 / GPU；GPU ⑤ 重跑两两单步最大差的上限（45 对；旧 10 对时 2.7e-7）
 GN_N_AB, GN_N_BA = 1.26e-3, 2.49e-3           # grad_norm 带符号均值的 N，随配对方向变
 GN_JITTER = 0.03
-VS_RC_PN, VS_RC_LOSS_V5P, VS_RC_LOSS_V7X = 2.09e-2, -1.37e-4, -1.08e-4   # v7x 一项是推断（对 ⑤ 的差加 ⑤ 对 ② 的差）
+VS_RC_PN, VS_RC_LOSS_V5P, VS_RC_LOSS_V7X = 2.09e-2, -1.37e-4, -1.07e-4   # v7x 一项 11-11 晚起直接算（混元 3 对齐报告；之前是推断的 −1.08e-4）
 # 步时（第 50–1000 步中位数）：② 5 份约 0.236 s；⑤ 10 份 0.380–0.382 s、同机对照 0.381 s（11-07 按 1000 步复核记录统一成 0.381，原写 ⑤ 第一份的 0.382 → 62%）
 CHUNK_SEG, CHUNK_STEP_OLD, CHUNK_STEP_NEW = 1024, 0.236, 0.381
 CHUNK_COST = CHUNK_STEP_NEW / CHUNK_STEP_OLD - 1
@@ -554,7 +554,7 @@ _lock("PN_MEAS_TPU_T", PN_MEAS_TPU_T, "2.6e-7"); _lock("PN_MEAS_GPU_T", PN_MEAS_
 GN_N_AB_T, GN_N_BA_T = tx(GN_N_AB), tx(GN_N_BA); _lock("GN_N_AB_T", GN_N_AB_T, "1.26e-3"); _lock("GN_N_BA_T", GN_N_BA_T, "2.49e-3")
 ENSEMBLE_SPREAD_TPU_T, ENSEMBLE_SPREAD_GPU_T = tx(ENSEMBLE_SPREAD_TPU, "%.1e"), tx(ENSEMBLE_SPREAD_GPU, "%.1e")
 VS_RC_LOSS_V5P_T, VS_RC_LOSS_V7X_T = tx(VS_RC_LOSS_V5P), tx(VS_RC_LOSS_V7X)
-_lock("VS_RC_LOSS_V5P_T", VS_RC_LOSS_V5P_T, "−1.37e-4"); _lock("VS_RC_LOSS_V7X_T", VS_RC_LOSS_V7X_T, "−1.08e-4")
+_lock("VS_RC_LOSS_V5P_T", VS_RC_LOSS_V5P_T, "−1.37e-4"); _lock("VS_RC_LOSS_V7X_T", VS_RC_LOSS_V7X_T, "−1.07e-4")
 CHUNK_COST_T = "%.0f%%" % (CHUNK_COST * 100); _lock("CHUNK_COST_T", CHUNK_COST_T, "61%")
 DFA_COST_V7X_T, DFA_COST_V5P_T, EP8_SPEEDUP_V7X_T = "%.1f%%" % (DFA_COST_V7X * 100), "%.2f%%" % (DFA_COST_V5P * 100), "%.0f%%" % (EP8_SPEEDUP_V7X * 100)
 _lock("DFA_COST_V7X_T", DFA_COST_V7X_T, "1.9%"); _lock("DFA_COST_V5P_T", DFA_COST_V5P_T, "0.66%"); _lock("EP8_SPEEDUP_V7X_T", EP8_SPEEDUP_V7X_T, "28%")
@@ -1292,3 +1292,7 @@ PROD_TH = {k: _PS["%s|6144|%s" % (v, g)]["门槛"] for k, (v, g) in {"v5p_046": 
 assert PROD_TH == {"v5p_046": 15105, "v5p_052": None, "v7x_046": 15105, "v7x_052": 43648} and _PS["0.0.52|6144|v5p"]["查到"] == 65536
 assert not any(_PS["0.0.52|6144|%s" % g]["每卡"][n] for g in ("v5p", "v7x") for n in ("4096", "8192", "16384"))   # 0.0.52 上每卡 4096–16384 两代都不排序
 PROD_TH_V7X_052_T = format(PROD_TH["v7x_052"], ",")
+
+# 混元 3 换基线重判（11-11 晚，混元 3 对齐报告「基线」一段，实测）：⑤ 的十份每份当一次基线，四个配置各判一遍
+REBASE_SHIFT_MAX, REBASE_V7X_PEND = 0.47, 3      # r 在十份基线之间最多相差 0.47；v7x 当前配置有 3 份基线落进待定（最差 1.11），没有不过
+REBASE_WORST_T = "1.11"

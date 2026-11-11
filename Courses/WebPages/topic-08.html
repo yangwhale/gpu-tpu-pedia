@@ -10014,7 +10014,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">定案前，第一关拿精确轨迹当基线、借 ③ 那组的尺子，判出 3.45 倍不过；那份基线自己的长求和也偏，这个判定是两笔相反偏差相减的结果。</text>
 <text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：最终 golden 每一步都要多做一次分段累加，GPU 步时多六成；第二关要把差的每一部分都对上一条查清的机制。</text>
 </svg><figcaption><b>橙色那一关要判过不过，灰色那一关只写清楚。</b><span class="capmore"><br><em>虚线框是只报不判的两份交叉核对。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：第一关对 ⑤ 的一份、尺子 ⑤ 自己 45 对。v5p loss 全程 0.80、尾段 0.80、梯度范数 0.85、参数范数 0.50；v7x 0.82 / 0.83 / 0.85 / 0.53；EP＝8 两平台也全过；学习率逐位。</p>
-<p>📌 实测：第二关对 ②：参数范数 ＋2.09e-2，loss −1.37e-4（v5p）；v7x 约 −1.08e-4（推断，v7x 逐步序列没入库）。定案前的旧协议：对精确轨迹、尺子 ③ 10 对，v5p 参数范数 3.45 倍。</p></details></figure>
+<p>📌 实测：第二关对 ②：参数范数 ＋2.09e-2，loss −1.37e-4（v5p）；v7x −1.07e-4（直接算）。定案前的旧协议：对精确轨迹、尺子 ③ 10 对，v5p 参数范数 3.45 倍。</p></details></figure>
   <p>两档门槛（<a href="#s4-4">§4.4</a>）照旧并排报：第一关每一格既写严格档的判定，也写离参考档那条线还差多少。定案后，参考档在 1000 步那一级两个平台也全过。</p>
 
   <h3 id="s9-4">9.4　今天的结论</h3>
@@ -10027,6 +10027,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>v7x EP＝8</td><td>0.77 ✅</td><td>0.81 ✅</td><td>0.68 ✅</td><td>0.35 ✅</td><td>逐位 ✅</td></tr>
   </tbody></table>
   <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 0.85 倍</b>；按专家切（EP＝8）也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden ② 的差（参数范数 ＋0.0209，loss −1.37e-4（v5p）），在第二关写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
+  <details class="foldfig"><summary><b>换一份当基线会怎样</b>：「全过」是对事先定下的那一份说的</summary>
+  <p>基线事先定为 ⑤ 的第一份。事后把十份逐份都当一次基线、尺子不变重判：r 在十份基线之间最多差 0.47；v5p 两个配置、v7x 按专家切十份基线全过，v7x 当前配置有 3 份基线落进待定（最差 1.11），没有不过。这正是 <a href="#s3-4">§3.4</a> 说的代价：基线自己也是一个样本，能挪一个 N 以内。所以报结论时写清「对哪一份基线」。</p></details>
   <details class="foldfig"><summary><b>TPU 不是挑出来的好样本</b>：9 份只改执行参数的扰动运行</summary>
   <p>只改执行参数的 9 份扰动运行（v5p 5、v7x 4），8 份四项都不超过 0.85 倍；剩 1 份（v7x，注意力分块 1024）梯度范数待定（MARE 1.02、最大单步 1.15），落在 v7x 自己的执行噪声里：v7x 扰动组两两的梯度范数逐步涨落比 GPU 重跑宽约两成。按专家切那一档没测路由偏置曲线和健康信号；当前配置的路由偏置曲线和健康信号也过。</p></details>
   <details class="foldfig"><summary><b>怎么走到 10 份、两两 45 对的</b>：10 对时有两项待定；两处测量口径；补 5 份重跑</summary>
