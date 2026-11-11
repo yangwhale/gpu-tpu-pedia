@@ -3227,11 +3227,11 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
     <span class="sub">（一条是 warp 级指令，要求 <code>sm_120a</code>，只有消费级 die 才有；另一条是 <code>tcgen05.mma</code> 的 block_scale，要求 <code>sm_100a</code> ——&nbsp;B200 就这一条。图在 L300 图 G-5。）</span></p>
 
 
-  <!-- ⭐ 2026-09-04 这里原来 lift 了 L300 那个 FP4 折叠。**整块迁去专题八了**，
+  <!-- ⭐ 2026-09-04 这里原来 lift 了 L300 那个 FP4 折叠。**整块迁去专题九了**，
        两边同步换成指针。理由见 L300 那侧的注释。 -->
   <p class="sub">⭐ <b>块量化在硬件上到底怎么跑的</b>（NVFP4 与 MXFP4、
     Blackwell 加了哪三样、训练侧那个 16×16）——&nbsp;<b>整套机制在
-    <a href="topic-08.html">专题八 · 精度与量化</a></b>。</p>
+    <a href="topic-09.html">专题九 · 精度与量化</a></b>。</p>
 
   <p>第二个例子在 TPU 这边，叫 <b>SparseCore</b> ——&nbsp;一颗专门查嵌入表的核。
     宣传口径是「TPU 有个专门查 embedding 表的核」。</p>

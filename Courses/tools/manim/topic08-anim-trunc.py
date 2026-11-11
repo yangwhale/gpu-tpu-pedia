@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-r"""专题九「GPU→TPU 训练精度对齐」§5.2 的动画：GPU 张量核每 16 个一组抹零，对照就近舍入（TruncVsRound）。
-挂在静态图 fig9-truncate 下面。画面和本文件里都不写案例答案。
+r"""专题八「GPU→TPU 训练精度对齐」§5.2 的动画：GPU 张量核每 16 个一组抹零，对照就近舍入（TruncVsRound）。
+挂在静态图 fig8-truncate 下面。画面和本文件里都不写案例答案。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间或第三维）
   · 论点是「越加越偏」：抹零每一组只丢一点点，偏差是一组一组攒出来的；就近舍入每组有进有舍，攒不起来。
@@ -9,7 +9,7 @@ r"""专题九「GPU→TPU 训练精度对齐」§5.2 的动画：GPU 张量核�
   · 第一步的「对齐」也是动作：几行尾数从左对齐滑到按指数对齐的位置，窗口外的位才露出来、才被剪掉。
 
 ⛔ 数据从哪来（全部在本文件里现算，numpy）
-  · 张量核模型：照实测的 B200 经验模型（topic09_numbers.TC_GROUP ＝ 16、TC_KEEP ＝ 25，不是厂商规格）：
+  · 张量核模型：照实测的 B200 经验模型（topic08_numbers.TC_GROUP ＝ 16、TC_KEEP ＝ 25，不是厂商规格）：
     每 16 个 BF16 乘积连同累加器一起对齐到最大指数 emax（emax ＝ ⌊log2|x|⌋；乘积的指数取两个输入指数之和，不按乘积规格化），
     低于 2^(emax−25) 的位向零截掉，精确相加，写回 FP32 也向零截断。
   · 对照：FP32 逐项顺序累加，每加一项就近舍入一次（RNE）。画面里只叫「就近舍入（对照）」，不说它是哪家硬件。
@@ -31,7 +31,7 @@ r"""专题九「GPU→TPU 训练精度对齐」§5.2 的动画：GPU 张量核�
     实测曲线是许多条点积平均的朝零偏差，短求和处还含输出舍到 BF16（见上「与实测核对」）。
 
 📌 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-trunc.py TruncVsRound WebPages/media/topic09-trunc.mp4
+   构建手册/脚本/render.sh tools/manim/topic08-anim-trunc.py TruncVsRound WebPages/media/topic08-trunc.mp4
    每一步落地的停顿时刻写进 steps/TruncVsRound.json（课件挂 data-pauses）。
 """
 import json
@@ -48,7 +48,7 @@ from manim import (Scene, VGroup, VMobject, Rectangle, Line, DashedLine, Text, V
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-import topic09_numbers as NUM  # noqa: E402
+import topic08_numbers as NUM  # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 G, KEEP = NUM.TC_GROUP, NUM.TC_KEEP

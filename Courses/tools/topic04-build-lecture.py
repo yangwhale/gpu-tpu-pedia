@@ -3108,7 +3108,7 @@ html = ('''<!doctype html>
 p.say{background:#fffdf3;border-left:3px solid #f9ab00;padding:10px 14px;
       margin:12px 0;line-height:1.95}
 p.say.q{background:#f1f3f4;border-left-color:#5f6368;font-style:italic}
-/* 2026-11-08：「时间富余再讲」块，沿用专题九的样式；不计入地板（地板只数 p.say） */
+/* 2026-11-08：「时间富余再讲」块，沿用专题八的样式；不计入地板（地板只数 p.say） */
 p.spare{background:#f8f9fa;border-left:3px dashed #9aa0a6;padding:8px 14px;margin:10px 0;line-height:1.85;color:#5f6368}
 ''' + FAM.CSS + '''
 </style>

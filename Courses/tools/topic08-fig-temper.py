@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · 第十节的「TPU 脾气」图（第二次迁移 ＝ 混元 4 缩小版，TPU v5p 自比）。
+r"""专题八 · 第十节的「TPU 脾气」图（第二次迁移 ＝ 混元 4 缩小版，TPU v5p 自比）。
 
-fig9-temper  回答：在 TPU 上改了一样东西，结果会不会变？变了算不算 bug？哪些要处理？
+fig8-temper  回答：在 TPU 上改了一样东西，结果会不会变？变了算不算 bug？哪些要处理？
              同一个小尺寸模型、同一份权重和数据，每次只改一样东西，跟一次确认过的 TPU 运行（golden）比，尺子是 GPU 同设置重跑的噪声上限。
              Ⓐ 115 种改动分六堆（一格一种）：逐位相同／变了但跟 GPU 重跑一样大／真有影响（归成 6 件）／量不出来／故意改坏／没出结果。
              Ⓑ 后两堆以外、有曲线的那些：横轴 300 步曲线最差 r（对数）；蓝点 ＝ 跟重跑一样大；红点 ＝ 真有影响的那 6 件里的实验，
                 标出能不能忍；曲线分不开、靠第 1 步对 FP64 抓到的画空心。
-             数据：topic09_tpuself.json 的 piles（导出自对齐记录 TPU 自比一节汇总页的六张自动生成的表，实测）。
+             数据：topic08_tpuself.json 的 piles（导出自对齐记录 TPU 自比一节汇总页的六张自动生成的表，实测）。
              2026-11-11 重画：原图按 8 类画 89 个改动（旧快照），研究线改成六堆、115 种以后整张换掉。
-⛔ 刻意没画：故意改坏的 15 种（另一张图 fig9-sens）；1000 步那一列（正文和出处里写）；多花的算力。
+⛔ 刻意没画：故意改坏的 15 种（另一张图 fig8-sens）；1000 步那一列（正文和出处里写）；多花的算力。
 """
 import math
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
-import topic09_numbers as N
+import topic08_numbers as N
 
 W = 1400
 P = N.tpuself()["piles"]
@@ -119,7 +119,7 @@ def fig_temper():
                % (TOTAL, LONG, N.LOO16_1K_MAX_T, "；".join("%s（%s）" % (_short(i["name"]), i["tolerable"]) for i in ISSUES)),
                "📌 量不出来的 %d 种：%s。" % (N_BLIND, "、".join("%s（300 步 %.2f，1000 步 %.2f）" % (b["change"], b["r300"], b["r1000"]) for b in P["blind"])),
                "⚠️ 蓝点竖着错开只为不重叠；红点一行一件，同一件的几次实验画在一行。")
-    f.save("fig9-temper.svg", yb + 14)
+    f.save("fig8-temper.svg", yb + 14)
 
 
 fig_temper()

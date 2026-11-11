@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-r"""专题九「GPU→TPU 训练精度对齐」：最终 golden 是一步步改出来的（GoldenLineage）。
-挂在第九节 §9.1 静态图 fig9-golden 下面。
+r"""专题八「GPU→TPU 训练精度对齐」：最终 golden 是一步步改出来的（GoldenLineage）。
+挂在第九节 §9.1 静态图 fig8-golden 下面。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间）
   「一截截缩」：每给 golden 加一样东西，同一根柱子（同一个 TPU 被测、同一把尺子 N）当场缩一截，
   缩掉的那截不消失，原地换成一块标了名字的「已查清」色块 —— 柱子总长不变，红色那段越来越短。
-  静态图 fig9-golden 只能并排放三根各自独立的柱子，读者得自己把三根对齐、自己做减法，
-  而且看不出「缩掉的部分去哪了」；拆账图 fig9-decomp 有分段，但没有「是哪一步改动把这一段揭出来的」。
+  静态图 fig8-golden 只能并排放三根各自独立的柱子，读者得自己把三根对齐、自己做减法，
+  而且看不出「缩掉的部分去哪了」；拆账图 fig8-decomp 有分段，但没有「是哪一步改动把这一段揭出来的」。
   把「改一样东西 → 同一根柱子缩一截 → 缩掉的那截有了名字」串成因果，只能放在时间里。
   （「红色那段」现为蓝色：改过配色，见下方「配色」。）
   ⚠️ 这条理由是成立但偏弱的：一张「同一根柱子、分段着色」的静态堆叠条也能表达终态；
@@ -15,12 +15,12 @@ r"""专题九「GPU→TPU 训练精度对齐」：最终 golden 是一步步改�
 ⛔ 数据从哪来
   · 三个被测值（param_norm 带符号均值，被测 ＝ v5p 生产配置、FP32 累加开关打开前那一版，1000 步，实测）：
       对 ② 生产近似 2.93e-6、对 ③ 只修一处 1.25e-6、对 ④ 精确轨迹 4.36e-7。
-    出处：tools/topic09-fig-golden.py 的 STEPS（课件静态图同一份数）；本脚本里重抄一份并断言比值对上。
-  · 尺子 N ＝ topic09_numbers.GPU_RERUN_PN ＝ 1.24e-7（③ 那组 GPU 重跑 5 份、两两 10 对的最大值；
+    出处：tools/topic08-fig-golden.py 的 STEPS（课件静态图同一份数）；本脚本里重抄一份并断言比值对上。
+  · 尺子 N ＝ topic08_numbers.GPU_RERUN_PN ＝ 1.24e-7（③ 那组 GPU 重跑 5 份、两两 10 对的最大值；
     原先写「GPU 生产程序重跑」，会被读成 ② 那组）。
   · 比值 23.6 / 10.1 / 3.52 当场算（2.93e-6 ÷ 1.24e-7 等），断言跟静态图的断言一致。
-  · 当前版（开关打开后）对 ④：topic09_numbers.ACC[0] 的 r ＝ 3.45。
-  · 色块名字：「GPU 输出头 dgrad 截断」「GPU 其余 BF16 误差」＝ topic09_numbers.DECOMP 前两项的名字。
+  · 当前版（开关打开后）对 ④：topic08_numbers.ACC[0] 的 r ＝ 3.45。
+  · 色块名字：「GPU 输出头 dgrad 截断」「GPU 其余 BF16 误差」＝ topic08_numbers.DECOMP 前两项的名字。
     ⛔ 色块长度是这里的「带符号均值 ÷ N」之差（13.5N、6.6N，本课推导），不是 DECOMP 的 59%／29%
        （那是第 1000 步参数范数差的拆账，另一个量）—— 所以画面上不标百分比。
 
@@ -28,19 +28,19 @@ r"""专题九「GPU→TPU 训练精度对齐」：最终 golden 是一步步改�
   · 起点 ① 没有柱子：它不重算，跟生产配置不一样，1000 步验收不用它（第 1 步那几级对它比；静态图同口径）。
   · loss、grad_norm 两项：只演参数范数一项。
   · 色块里没有误差棒：两次缩各是一次改动前后的差，画面只表达「这截是谁的」。
-  · 不提「第一关／第二关」：关卡名留到 fig9-twolayer 再出（跟静态图 R3 的约定一致），画面只说「还不过」。
-    例外：③ 卡片下一行小字「第一关的尺子取自这组重跑」（跟静态图 fig9-golden 的 ③ 卡片同一句）。
+  · 不提「第一关／第二关」：关卡名留到 fig8-twolayer 再出（跟静态图 R3 的约定一致），画面只说「还不过」。
+    例外：③ 卡片下一行小字「第一关的尺子取自这组重跑」（跟静态图 fig8-golden 的 ③ 卡片同一句）。
 
-🎨 配色（跟静态图 fig9-decomp 同一套）：
+🎨 配色（跟静态图 fig8-decomp 同一套）：
   · 柱子三段：dgrad 截断＝红、GPU 其余 BF16 误差＝橙、剩下那截（11-06 起已拆清：④ 自己偏 ＋ TPU 舍入）＝蓝。
   · 「超过 2×N ＝ 不过」不再用整根红柱表达，改成柱尾数字旁一个红色「不过」标签（红在全课 ＝ 偏差源／不过，
     这里两个用法同色但都指「有问题」，不翻转语义）。
-  · 卡片：① 暗灰、② 亮灰、③ 橙、④ 紫 —— 跟静态图 fig9-golden 的卡片同色；紫只用在 ④ 精确轨迹卡片（及「对 ④」）。
-    ⚠️ ③ 卡片的橙跟「GPU 其余」色块的橙同色（静态图 fig9-golden 与 fig9-decomp 本身就是这样），
+  · 卡片：① 暗灰、② 亮灰、③ 橙、④ 紫 —— 跟静态图 fig8-golden 的卡片同色；紫只用在 ④ 精确轨迹卡片（及「对 ④」）。
+    ⚠️ ③ 卡片的橙跟「GPU 其余」色块的橙同色（静态图 fig8-golden 与 fig8-decomp 本身就是这样），
        ③ 一步揭出来的是红色那块；色块下都写了名字。
 
 📌 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-lineage.py GoldenLineage WebPages/media/topic09-lineage.mp4
+   构建手册/脚本/render.sh tools/manim/topic08-anim-lineage.py GoldenLineage WebPages/media/topic08-lineage.mp4
    每一步落地的停顿时刻写进 steps/GoldenLineage.json（课件挂 data-pauses）。
 """
 import json
@@ -55,13 +55,13 @@ from manim.utils.rate_functions import smooth
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-import topic09_numbers as T  # noqa: E402
+import topic08_numbers as T  # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 
 # ── ① 数据 ────────────────────────────────────────────────────────────
 NOISE = T.GPU_RERUN_PN                                   # N ＝ 1.24e-7
-PN_VS = {2: 2.93e-6, 3: 1.25e-6, 4: 4.36e-7}             # 被测对第 k 份 golden（实测，同 topic09-fig-golden.py STEPS）
+PN_VS = {2: 2.93e-6, 3: 1.25e-6, 4: 4.36e-7}             # 被测对第 k 份 golden（实测，同 topic08-fig-golden.py STEPS）
 R = {k: v / NOISE for k, v in PN_VS.items()}
 assert abs(R[2] - 23.6) < 0.1 and abs(R[3] - 10.1) < 0.1 and abs(R[4] - 3.52) < 0.01, R
 assert R[2] > R[3] > R[4] > 2                            # 一路缩，但最后仍超 2×N
@@ -75,7 +75,7 @@ assert (NAME3, NAME4) == ("输出头 dgrad 截断", "GPU 其余 BF16 误差")
 # ── ② 配色（全课约定；黑底上「更亮 ＝ 更强」，所以起点用暗灰、生产 golden 用亮灰）──
 C_START, C_PROD, C_FIX, C_EXACT = GREY, GREY_B, ORANGE, PURPLE_B
 C_FAIL, C_TPU = RED, BLUE
-C_DGRAD, C_OTHER = RED, ORANGE           # 跟 fig9-decomp 同色：dgrad 截断红、GPU 其余橙、TPU 剩下的蓝
+C_DGRAD, C_OTHER = RED, ORANGE           # 跟 fig8-decomp 同色：dgrad 截断红、GPU 其余橙、TPU 剩下的蓝
 C_REST = C_TPU
 CHIP_COL = [C_START, C_PROD, C_FIX, C_EXACT]
 STEP_COL = {2: C_PROD, 3: C_FIX, 4: C_EXACT}

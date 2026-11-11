@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · 第一节「什么叫对齐」的三张图。
+r"""专题八 · 第一节「什么叫对齐」的三张图。
 
-fig9-assoc   回答：为什么不能要求 TPU 和 GPU 一位不差？
-             数字现算：1 ＋ 2⁻⁸ ＋ 2⁻⁸ 在 BF16 里按两种顺序加，用 topic09_numbers.bf16（就近舍入、平局取偶）真算。
+fig8-assoc   回答：为什么不能要求 TPU 和 GPU 一位不差？
+             数字现算：1 ＋ 2⁻⁸ ＋ 2⁻⁸ 在 BF16 里按两种顺序加，用 topic08_numbers.bf16（就近舍入、平局取偶）真算。
              刻意没画：FP32 的同类例子（道理一样，格子更密，画不出来）。
-fig9-ruler   回答：差多少才算「不一样」？—— 拿 GPU 自己重跑的差当尺子。
-             数字：10 次 GPU 重跑的范围与 TPU 三种跑法，见 topic09_numbers（实测）。
-fig9-funnel  回答：从哪儿查起？—— L0 到 L4 五级，验收从下往上，排查从上往下。
+fig8-ruler   回答：差多少才算「不一样」？—— 拿 GPU 自己重跑的差当尺子。
+             数字：10 次 GPU 重跑的范围与 TPU 三种跑法，见 topic08_numbers（实测）。
+fig8-funnel  回答：从哪儿查起？—— L0 到 L4 五级，验收从下往上，排查从上往下。
              刻意没画：每级的具体检查项（在正文表里）。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
-import topic09_numbers as N
+import topic08_numbers as N
 
 W = 1400
 
-# ── fig9-assoc 的数：真算一遍 ──────────────────────────────────────
+# ── fig8-assoc 的数：真算一遍 ──────────────────────────────────────
 A, B, C = 1.0, 2.0 ** -8, 2.0 ** -8
 AB = N.bf16(A + B)
 LEFT = N.bf16(AB + C)
@@ -68,10 +68,10 @@ def fig_assoc():
     yb = f.src(yb + 10,
                "⚠️ 本课推导：BF16 有 7 位尾数，1 附近的格距 2⁻⁷；1 ＋ 2⁻⁸ 正好落在 1 和 1 ＋ 2⁻⁷ 中间，就近舍入平局取偶，舍回 1。",
                "📌 脚本里用 struct 把 float32 截到高 16 位并按平局取偶进位，真算两遍，结果写死在断言里。")
-    f.save("fig9-assoc.svg", yb + 14)
+    f.save("fig8-assoc.svg", yb + 14)
 
 
-# ── fig9-ruler ────────────────────────────────────────────────────
+# ── fig8-ruler ────────────────────────────────────────────────────
 ARM_SPREAD = max(N.TPU_ARMS) - min(N.TPU_ARMS)          # 6.3e-5
 RULER_SPREAD = N.GPU_RUNS10_HI - N.GPU_RUNS10_LO        # 6.7e-5
 assert 0.5 < ARM_SPREAD / RULER_SPREAD < 1.5, (ARM_SPREAD, RULER_SPREAD)
@@ -95,7 +95,7 @@ def fig_ruler():
         v = LO + i * 0.5e-4
         f.line(X(v), yl - 6, X(v), yl + 6, GY2, 1.2, arrow=False)
         f.t(X(v), yl + 48, "0" if abs(v) < 1e-12 else "%+.1f×10⁻⁴" % (v * 1e4), GY, size=13, anchor="middle")
-    # 0 在哪、为什么灰段不以 0 为中心 —— 先把 0 是谁标出来（贴右沿的原因在 fig9-baseline）
+    # 0 在哪、为什么灰段不以 0 为中心 —— 先把 0 是谁标出来（贴右沿的原因在 fig8-baseline）
     f.t(X(0), yl + 68, "基线 ＝ 第一份 GPU", INK, True, 13, "middle")
     f.box(X(N.GPU_RUNS10_LO), yl - 22, X(N.GPU_RUNS10_HI) - X(N.GPU_RUNS10_LO), 44, LINE2, GY2, 6)
     f.t((X(N.GPU_RUNS10_LO) + X(N.GPU_RUNS10_HI)) / 2, yl - 34, "10 次 GPU 重跑都在这儿", GY, True, 14, "middle")
@@ -116,10 +116,10 @@ def fig_ruler():
                "📌 实测：三个蓝点彼此也散开约 %.0fe-5，跟灰段（约 %.0fe-5）差不多宽：是整团挪了，不是哪一种跑法单独跑偏。" % (ARM_SPREAD * 1e5, RULER_SPREAD * 1e5),
                "📌 实测：最左是原样跑：逐步稳定在 −1.5e-4 上下，第 301–1000 步平均 −1.66e-4 —— 开头说的「万分之一点五」就是它。",
                "注：落在尺子外 ≠ 判不过；正式判法见判定那张图（r ＝ 被测 ÷ 噪声上限 N）。")
-    f.save("fig9-ruler.svg", yb + 14)
+    f.save("fig8-ruler.svg", yb + 14)
 
 
-# ── fig9-funnel ───────────────────────────────────────────────────
+# ── fig8-funnel ───────────────────────────────────────────────────
 LEVELS = [
     ("L4", "多步", "整条训练轨迹", BL),
     ("L3", "整网第 1 步", "整张网络，只看第 1 步", BL),
@@ -159,7 +159,7 @@ def fig_funnel():
         "L0 的要求是一位不差；L1–L4 才谈「差多少算正常」。",
         "代价：每一级都要能单独拿到证据 —— 在 TPU 上怎么拿，后面专门讲。",
     ])
-    f.save("fig9-funnel.svg", yb + 14)
+    f.save("fig8-funnel.svg", yb + 14)
 
 
 fig_assoc()

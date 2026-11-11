@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · GPU→TPU 训练精度对齐 —— 全讲共用的数（唯一一份）。
+r"""专题八 · GPU→TPU 训练精度对齐 —— 全讲共用的数（唯一一份）。
 
 ⭐ 一个事实一个落点：图脚本、课件正文、开场题都从这里取，不各抄一份（手册 03 · 二 · 5）。
 ⭐ 出处约定：
    · 「实测」= 本课程作者做的一次对齐实践：混元 3（Hy3，截前 4 层、去掉 MTP），
      GPU 侧 B200×8 + Megatron-Bridge，TPU 侧 v5p（8 颗芯片）／ v7x（4 颗芯片） + MaxText，同一份权重、同一批数据、同样的顺序，1000 步。
    · 「本课推导」= 自己算的，推导链写在旁边。
-   · 逐步序列（loss、param_norm）从 topic09_series.json 现算，下面的常数只是给断言用的锚点。
+   · 逐步序列（loss、param_norm）从 topic08_series.json 现算，下面的常数只是给断言用的锚点。
 ⛔ 改一个数之前，先 grep 全专题（图脚本、build、讲义）—— 同一个数可能还挂在别处的断言上。
 """
 import json
@@ -182,7 +182,7 @@ assert bf16(1.0 + 2 ** -7) == 1.0 + 2 ** -7
 
 def series():
     """逐步序列（第 1–1000 步）：loss 相对差与 param_norm 差。"""
-    with open(os.path.join(HERE, "topic09_series.json"), encoding="utf-8") as fh:
+    with open(os.path.join(HERE, "topic08_series.json"), encoding="utf-8") as fh:
         return json.load(fh)
 
 
@@ -191,8 +191,8 @@ def mean(xs):
 
 
 def tpuself():
-    """第二次迁移的 TPU 自比与 GPU 留一法（topic09_tpuself.json，导出自对齐记录 TPU 自比一节，实测）。"""
-    with open(os.path.join(HERE, "topic09_tpuself.json"), encoding="utf-8") as fh:
+    """第二次迁移的 TPU 自比与 GPU 留一法（topic08_tpuself.json，导出自对齐记录 TPU 自比一节，实测）。"""
+    with open(os.path.join(HERE, "topic08_tpuself.json"), encoding="utf-8") as fh:
         return json.load(fh)
 
 
@@ -229,7 +229,7 @@ E0_TOKENS, E0_OUT, E0_IN = 139, 3, 1                            # 第 3 层专�
 FLIP_MARGIN = "2.7e-5 到 6.3e-5"                                 # 翻转 token 的第 8、9 名「分数＋偏置」分差中位数（各层范围）
 EXPERTS, TOPK = 192, 8
 
-# ── 2026-11-05 · fig9-baseline：10 份 GPU 运行各自的尾段 loss 偏移（实测）──────────────────
+# ── 2026-11-05 · fig8-baseline：10 份 GPU 运行各自的尾段 loss 偏移（实测）──────────────────
 # 默认设置（不开分布式优化器）的 10 份 GPU 运行，各自对第一份算第 301–1000 步 loss 的带符号均值；
 # 下标 0 是第一份自己（＝ 0）。出处：对齐实践的案例记录「噪声带」那一行与它的结果文件（逐份值）。
 GPU_RUNS10_TAIL = (0.0, -3.78e-5, 2.5e-7, 2.44e-6, -6.51e-5, -2.15e-5, -9.2e-6, -3.47e-6, -4.94e-5, -6.19e-5)
@@ -245,7 +245,7 @@ TPU_ARMS_VS_MEAN10 = tuple(x - GPU_RUNS10_TAIL_MEAN for x in TPU_ARMS)          
 assert abs(TPU_ARMS_VS_MEAN10[0] - (-1.41e-4)) < 0.01e-4 and abs(TPU_ARMS_VS_MEAN10[2] - (-0.78e-4)) < 0.01e-4
 assert round(max(TPU_ARMS_VS_MEAN10) * 1e4, 1) == -0.8 and round(min(TPU_ARMS_VS_MEAN10) * 1e4, 1) == -1.4   # 正文「−0.8e-4 到 −1.4e-4」
 
-# ── 2026-11-05 · fig9-layer0：残差流固定探针，与第 0 层权重互换（实测）──────────────────────
+# ── 2026-11-05 · fig8-layer0：残差流固定探针，与第 0 层权重互换（实测）──────────────────────
 # 探针：两边在同一条固定序列上每 25 步另跑一次前向，各层输出在 token 上取均值向量，投到 w ＝ γ⊙û 上
 #   （γ：第一份 GPU 运行该步最后归一化的 scale；û：它该步最后归一化输出均值的单位方向。最后归一化输出 ＝ γ⊙x/rms(x)，
 #    所以这个投影就是这一层对「最后隐状态均值沿 û 那一份」的贡献）。数值 ＝（TPU − 第一份 GPU）÷ |第一份 GPU|，3 位有效数字。
@@ -276,7 +276,7 @@ assert abs(L0_SWAP_50[0] / L0_PROBE["第 0 层"][_i50] - 1) < 0.5
 assert max(abs(x) for x in L0_SWAP_100[1:]) < abs(L0_SWAP_100[0]) / 5
 assert abs(L0_SWAP_ONE_100[0][1]) > 0.6 * abs(L0_SWAP_100[0])                            # 大头在注意力输出投影（约七成）
 
-# ── 2026-11-05 · fig9-excess 的 📌（实测，混元 3 · v5p）──────────────────────────────
+# ── 2026-11-05 · fig8-excess 的 📌（实测，混元 3 · v5p）──────────────────────────────
 # 只加「关掉 excess precision」这一个编译参数：
 QKV_VS_GPU_NOEXC = 3.49e-3                  # 单层回放 qkv 输出对 GPU 的 rel_L2（开着时是 QKV_VS_GPU_BEFORE）
 assert QKV_VS_GPU_NOEXC > QKV_VS_GPU_BEFORE  # 关掉反而离 GPU 更远（这一层每个张量都是，约远 10%–60%）
@@ -298,7 +298,7 @@ REMOVE_LOSS_H1, REMOVE_LOSS_H2 = 4.9e-5, -9.6e-5
 assert abs((300 * REMOVE_LOSS_H1 + 400 * REMOVE_LOSS_H2) / 700 - REMOVE_LOSS) < 0.1e-5     # 按步数加权 ＝ −3.39e-5 ≈ −3.4e-5
 assert 0.5 < REMOVE_LOSS_H2 / TPU_LOSS_TAIL < 0.65                                          # 后半仍剩约六成（−9.6e-5 ÷ −1.66e-4 ≈ 0.58）
 
-# ── 2026-11-05 · 数字锁：课件正文（topic09-build.py）原先手打的数，一律从这里取 ───────────────────
+# ── 2026-11-05 · 数字锁：课件正文（topic08-build.py）原先手打的数，一律从这里取 ───────────────────
 # 正文用 «名字» 占位符，构建时按 show() 落地。show() 写不出原文写法的（千分位、尾零、负号 −、全角 ＋、百分号、
 # 固定小数位），另立一个 *_T 字符串常数：由数值常数现算，再用断言钉死跟原正文逐字一致 —— 数一改，断言先响。
 # 出处没写的，沿用上面同名数值常数的出处；新数逐条写出处，拿不准的写「来源：课件既有数，待核」。
@@ -335,7 +335,7 @@ MASTER_CMP_TENSORS = 50                              # 加载后比 FP32 主权�
 NATIVE_SAME_RANK_T = format(NATIVE_SAME_RANK, ","); _lock("NATIVE_SAME_RANK_T", NATIVE_SAME_RANK_T, "2,000")
 MICRO_SPLIT_EMB_X = 31                               # 只换梯度累积切分，embedding 梯度差 ÷ GPU 重跑差。出处：对齐报告偏差台账「梯度累积的分组」行
 # 参数范数、梯度范数的量级
-PN_LEVEL0 = 3042.377                                 # GPU 第一份运行第 1 步参数范数（fig9-drift 的 📌 实测：3042.377 → 3042.503）
+PN_LEVEL0 = 3042.377                                 # GPU 第一份运行第 1 步参数范数（fig8-drift 的 📌 实测：3042.377 → 3042.503）
 PN_LEVEL_T = "%d" % PN_LEVEL0; _lock("PN_LEVEL_T", PN_LEVEL_T, "3042")
 CLIP_GRAD = 1.0                                      # 裁剪阈值 clip_grad
 assert CLIP1 == CLIP_GRAD / GRADNORM1
@@ -366,7 +366,7 @@ LAYER_RELL2_FAIL = (0.016, 0.020, 0.028)             # v5p 第 1 步逐层回放
 assert all(x > REF_RELL2_GATE for x in LAYER_RELL2_FAIL)
 L_RELL2_1_T, L_RELL2_2_T, L_RELL2_3_T = ("%.3f" % x for x in LAYER_RELL2_FAIL)
 _lock("L_RELL2_2_T", L_RELL2_2_T, "0.020")
-# 窗口化开关、golden 一步步（出处：fig9-golden 的同一组实测：v5p 开关前配置对 ②③④ 的参数范数带符号均值）
+# 窗口化开关、golden 一步步（出处：fig8-golden 的同一组实测：v5p 开关前配置对 ②③④ 的参数范数带符号均值）
 R_QKV_AFTER_T = "%.3f" % R_QKV_AFTER; _lock("R_QKV_AFTER_T", R_QKV_AFTER_T, "1.000")
 GOLDEN_PN_X = (2.93e-6, 1.25e-6, 4.36e-7)
 GOLDEN_R = tuple(x / GPU_RERUN_PN for x in GOLDEN_PN_X)
@@ -405,7 +405,7 @@ SWAP_GPU_ABS_T = "%.2f%%" % abs(SWAP[2][1])
 _lock("SWAP_TPU_T", SWAP_TPU_T, "0.00%"); _lock("SWAP_FIX_T", SWAP_FIX_T, "−0.10%"); _lock("SWAP_GPU_T", SWAP_GPU_T, "−0.36%"); _lock("SWAP_GPU_ABS_T", SWAP_GPU_ABS_T, "0.36%")
 SWAP_RES_T = "%.1f%%" % max(abs(x) for x in SWAP[0][2]); _lock("SWAP_RES_T", SWAP_RES_T, "0.1%")   # TPU 区间最宽处 → 「±0.1% 以内」
 SWAP_STATE_TENSORS = 1193                            # 口径：Megatron 布局（qkv 合一、gate/up 合一）；1781 − 1193 ＝ 588 ＝ 192 专家 × 3 层 gate/up 576 ＋ qkv 4 层 × 2 ＋ 稠密层 1 ＋ 共享专家 3。
-# 状态互换导入 TPU、逐个核对 sha256 的张量数（fig9-swap 的 📌 实测）
+# 状态互换导入 TPU、逐个核对 sha256 的张量数（fig8-swap 的 📌 实测）
 assert N_TENSORS - SWAP_STATE_TENSORS == 192 * 3 + 4 * 2 + 1 + 3, "张量数口径对不上"
 # 精确轨迹那段
 PERTURB = 1e-6                                       # 扰动版：给第 0 层一处权重乘 (1 ＋ 1e-6)
@@ -434,7 +434,7 @@ GPU_RUNS10_MEAN_T = tx(GPU_RUNS10_MEAN, "%.1e"); _lock("GPU_RUNS10_MEAN_T", GPU_
 TPU_ARM_LO_T, TPU_ARM_HI_T = tx(max(TPU_ARMS)), tx(min(TPU_ARMS))
 _lock("TPU_ARM_LO_T", TPU_ARM_LO_T, "−1.03e-4"); _lock("TPU_ARM_HI_T", TPU_ARM_HI_T, "−1.66e-4")
 TPU_LOSS_TAIL_T = tx(TPU_LOSS_TAIL); _lock("TPU_LOSS_TAIL_T", TPU_LOSS_TAIL_T, "−1.66e-4")
-TPU_TAIL_STEP_STD = 1.33e-4                          # TPU 对 GPU 第一份逐步差的标准差，第 301–1000 步（fig9-dt 的 📌 实测）
+TPU_TAIL_STEP_STD = 1.33e-4                          # TPU 对 GPU 第一份逐步差的标准差，第 301–1000 步（fig8-dt 的 📌 实测）
 INCONCL_PAIRS_T = " ／ ".join(str(k) for k in sorted(INCONCL)); _lock("INCONCL_PAIRS_T", INCONCL_PAIRS_T, "3 ／ 15 ／ 28")
 INCONCL_T = "、".join("%d／%d" % INCONCL[k] for k in sorted(INCONCL)); _lock("INCONCL_T", INCONCL_T, "8／46、3／9、1／46")
 TC_K1, TC_BIAS1 = TC_BIAS_K[0]
@@ -563,7 +563,7 @@ FLIP_SLOT_T = "%.2f%%–%.2f%%" % (FLIP_SLOT_LO, FLIP_SLOT_HI)
 FLIP_L2_LO, FLIP_L2_HI = 3.5, 5.4
 FLIP_L2_T = "%.1f%%–%.1f%%" % (FLIP_L2_LO, FLIP_L2_HI); _lock("FLIP_L2_T", FLIP_L2_T, "3.5%–5.4%")
 # 「两边全程 FP32 也翻」那条证据已撤回：TPU 的 FP32 参照里路由专家其实按 BF16 算（FP32_MARGIN 只留作台账旧数）
-FINAL_PN_SM, FINAL_PN_SM_N = 1.593e-8, 2.269e-7      # v5p 当前配置对 ⑤：参数范数带符号均值、45 对上限（fig9-golden 柱子用带符号均值，跟 ②–④ 同口径）
+FINAL_PN_SM, FINAL_PN_SM_N = 1.593e-8, 2.269e-7      # v5p 当前配置对 ⑤：参数范数带符号均值、45 对上限（fig8-golden 柱子用带符号均值，跟 ②–④ 同口径）
 FINAL_PN_SM_R = FINAL_PN_SM / FINAL_PN_SM_N
 FINAL_PN_SM_R_T = "%.2f" % FINAL_PN_SM_R; _lock("FINAL_PN_SM_R_T", FINAL_PN_SM_R_T, "0.07")
 B_V5P = (7.965e-3, -6.104e-3, 0.488e-3)              # v5p 那组补跑的三笔（v7x 是 B_GPUEXACT / B_DLOGITS / B_REST）
@@ -872,7 +872,7 @@ SW_ADAM_COST = "0.02%"                    # 精确的除法、开方、偏差修
 #   TPU 自比一节的 汇总页和实验矩阵（TPU 自比：脾气表、机制、留一法、长跑）；
 #   TPU 自比一节的 results/gpu-rerun-loo-r-{300,1000}.json（GPU 留一法，逐种轮换的 r）；
 #   小尺寸一节的「GPU 8 份对 16 份上限」结果文件（8 份 → 16 份的上限对比）。
-#   逐点数据导出在 topic09_tpuself.json（私有导出脚本，只含数字和改写过的中文标签）。
+#   逐点数据导出在 topic08_tpuself.json（私有导出脚本，只含数字和改写过的中文标签）。
 _TS = tpuself()
 LOO8_1K_MAX = 2.00                     # 1000 步只有 8 份时 GPU 留一法最差 r 的最大值（实验矩阵「GPU 重跑的留一法 r」表第 2 行，已被 16 份取代）
 LOO8_1K_MAX_T = "%.2f" % LOO8_1K_MAX
@@ -912,10 +912,10 @@ LOO1_LOSS, LOO1_TAIL, LOO1_PN, LOO1_BM = "1.29", "1.23", "1.58", "1.82"   # 主 
 
 # ── 2026-11-11 · 第八节「案例二：DDP 和 FSDP 对不上」（第二次迁移 ＝ 混元 4 缩小版，TPU v5p 自比）──────────────
 # 出处（公开源码里只写相对说法）：对齐记录里 DDP 与 FSDP 那个案例、梯度的跨卡归约、影响逐件「纯数据并行」
-#   「关掉编译器的省舍入」；数字导出在 topic09_case2.json（私有导出脚本，读各臂结果文件和两份单算子结果）。
+#   「关掉编译器的省舍入」；数字导出在 topic08_case2.json（私有导出脚本，读各臂结果文件和两份单算子结果）。
 #   导不出来的（按行分组的表、编译产物里的指令条数）照文档原文抄成常数，并用能对上的别处数字互相钉住。
 def case2():
-    with open(os.path.join(HERE, "topic09_case2.json"), encoding="utf-8") as fh:
+    with open(os.path.join(HERE, "topic08_case2.json"), encoding="utf-8") as fh:
         return json.load(fh)
 
 
@@ -1061,7 +1061,7 @@ C2_BYTES_ROUND = "30"                    # 2.47e8 ÷ 8.4e6 ≈ 29.5（本课推�
 assert abs(C2_BYTES_X - 30) < 0.6
 
 # ── 2026-11-11 · 案例二第二阶段：只把词嵌入表沿数据并行轴切开（第三种修法）──────────────────────────────
-# 出处：对齐记录里那个案例的第二阶段一页；各运行训练步优化后 HLO 的集合通信汇总（导出在 topic09_case2.json 的 comm）；
+# 出处：对齐记录里那个案例的第二阶段一页；各运行训练步优化后 HLO 的集合通信汇总（导出在 topic08_case2.json 的 comm）；
 #   结果文件（300 步对 golden、1000 步对 1000 步 golden）。只在 v5p、缩小版、纯数据并行 8 ＋ 累积 2 上验证过。
 _CM = _C2["comm"]
 _s3, _s3k = _C2R["只切词嵌入表"], _C2R["只切词嵌入表_1000"]

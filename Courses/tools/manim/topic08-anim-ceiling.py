@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-r"""专题九「GPU→TPU 训练精度对齐」：噪声上限 N 怎么来、被测怎么判（NoiseCeiling）。
-挂在静态图 fig9-judge 下面。画面和本文件里都不写课件节号以外的内部信息。
+r"""专题八「GPU→TPU 训练精度对齐」：噪声上限 N 怎么来、被测怎么判（NoiseCeiling）。
+挂在静态图 fig8-judge 下面。画面和本文件里都不写课件节号以外的内部信息。
 
 ⭐ 为什么非动不可（构建手册 10 · 第一节：增量只能来自时间）
   N 不是一个现成的数，是一个过程的产物：先有 5 份重跑 → 两两配对、一对一对算出 10 根柱 → 从里面挑最高的那根 → 拿它去量被测。
-  静态图（fig9-judge）只给终点（四个点落在哪个颜色里），画不出「N 是从一堆配对里挑出来的最大值」，
+  静态图（fig8-judge）只给终点（四个点落在哪个颜色里），画不出「N 是从一堆配对里挑出来的最大值」，
   也画不出「被测一出场，纵轴得缩一半才装得下」—— 3.45 倍的分量是在这次缩放里看出来的。
 
 ⛔ 数据从哪来
@@ -17,9 +17,9 @@ r"""专题九「GPU→TPU 训练精度对齐」：噪声上限 N 怎么来、被
   · 5 个点在横轴上的位置：同样由这 10 个真值反推（本课推导）。带符号均值近似可加（sᵢⱼ ≈ xᵢ − xⱼ），
     取第 1 份为原点、按 1–2…1–5 四对定位置，其余 6 对的距离与真值的残差平方和 < 1e-26（断言钉住）——
     所以「两点隔多远，柱就多高」在这组数上是成立的。整条轴左右翻转同样成立，朝向是任取的。
-  · 被测 4.27e-7、N 1.24e-7、r 3.45：topic09_numbers.ACC 第一行（课件已有的公开数）；脚本另用结果文件的未舍入值
+  · 被测 4.27e-7、N 1.24e-7、r 3.45：topic08_numbers.ACC 第一行（课件已有的公开数）；脚本另用结果文件的未舍入值
     4.268544e-7 ÷ 1.237070e-7 ＝ 3.4505 交叉核对。
-  · 1/(n+1)：topic09_numbers.p_exceed（本课推导：对称性）。3 对 1/4、10 对 1/11、28 对 1/29。
+  · 1/(n+1)：topic08_numbers.p_exceed（本课推导：对称性）。3 对 1/4、10 对 1/11、28 对 1/29。
 
 ⛔ 刻意没画
   · loss 和 grad_norm 两项、MARE 和最大单步两个统计：只演参数范数的带符号均值一项，其余同一个套路。
@@ -33,7 +33,7 @@ r"""专题九「GPU→TPU 训练精度对齐」：噪声上限 N 怎么来、被
   · 步骤号一律写「第 N 步」，不用圈号：③ 留给 golden 编号（「③ 那组」），两套编号同屏会撞车。
 
 📌 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-ceiling.py NoiseCeiling WebPages/media/topic09-ceiling.mp4
+   构建手册/脚本/render.sh tools/manim/topic08-anim-ceiling.py NoiseCeiling WebPages/media/topic08-ceiling.mp4
    每一步落地的停顿时刻写进 steps/NoiseCeiling.json（课件挂 data-pauses）。
 """
 import itertools
@@ -49,7 +49,7 @@ from manim.utils.rate_functions import smooth
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-import topic09_numbers as T  # noqa: E402
+import topic08_numbers as T  # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 

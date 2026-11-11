@@ -1068,7 +1068,7 @@ __FIG_WHEN_AXIS__
   ——&nbsp;<b>不算</b> —— 它跟这三步正交。
   <em>三个旋钮管的是<b>存几个数、读几个数</b>；量化管的是<b>每个数用几个 bit</b>。
   两者可以任意组合（DeepSeek-V4 就是稀疏 ＋ KV 混合精度一起上）。
-  <b>精度那一维整个归<a href="专题08-低精度.md">专题八</a>。</b></em></p>
+  <b>精度那一维整个归<a href="topic-09.html">专题九</a>。</b></em></p>
 <p>📌 所以「没有第四个位置」这句话的准确版本是：
   在「<b>要不要留、留多少、读多少</b>」这件事上没有第四个位置；
   <b>「每个数多大」是另一根轴。</b></p></div>
@@ -1434,7 +1434,7 @@ __FIG_SWA_WHY__
      ＋「量化里那批 outlier」）**逐字复述**了一遍。图上有，正文就不写。 -->
 <p>⭐ 一条<b>课程内的接线</b>：
   图上那句「量化里那批 outlier 跟这是同一件事」不是顺口一提 ——&nbsp;
-  <b>那批 outlier 在 <a href="topic-08.html">专题八</a> 有专门一节</b>。
+  <b>那批 outlier 在 <a href="topic-09.html">专题九</a> 有专门一节</b>。
   <em>到那儿你会再遇到同一个形状：一个「毫无道理却极其稳定」的现象，
   背后是一条你没注意到的守恒约束。<b>同一个形状分在两讲里各讲一遍，
   比在一讲里说两遍有用。</b></em></p>
@@ -2393,7 +2393,7 @@ out = [head, '''
   <p style="color:var(--gray)">
     ← 回 <a href="index.html">课程总纲</a>　·
     硬件背景在 <a href="topic-02.html">专题二 · TPU 与 GPU</a>　·
-    量化那一支在 <a href="topic-08.html">专题八 · 精度与量化</a>　·
+    量化那一支在 <a href="topic-09.html">专题九 · 精度与量化</a>　·
     <a href="topic-03-L300-lecture.html">📝 讲义</a></p>
   <p style="color:var(--gray);font-size:13px">
     本页由 <code>Courses/tools/topic03-build-L300.py</code> 生成 ——&nbsp;

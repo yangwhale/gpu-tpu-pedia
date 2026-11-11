@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · 第二节「地基 L0」的两张图。
+r"""专题八 · 第二节「地基 L0」的两张图。
 
-fig9-replay  回答：怎么保证两边吃的是同一批数据？—— GPU 训练时把每一步每张卡吃的东西原样存下、记指纹，TPU 按同样顺序回放。
+fig8-replay  回答：怎么保证两边吃的是同一批数据？—— GPU 训练时把每一步每张卡吃的东西原样存下、记指纹，TPU 按同样顺序回放。
              数字：1000 步 × 8 卡 × 2 个 microbatch ＝ 16,000 个单元（实测全部逐位相同）；
              换成 TPU 自己的数据加载器、不重排：内容一样，只有 2,000 个单元落到同号设备（实测）。
              ⛔ 刻意没画：原生加载器到底怎么交错取行 —— 只画结果比例，不画我们没核过的映射。
-fig9-wd      回答：配置文件能直接照抄吗？—— 权重衰减写 0.1，每一步真正用的是 0.033。
+fig8-wd      回答：配置文件能直接照抄吗？—— 权重衰减写 0.1，每一步真正用的是 0.033。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
-import topic09_numbers as N
+import topic08_numbers as N
 
 W = 1400
 # 8 张卡用同一个灰色系的深浅区分（R3：原来 8 种颜色，第 2 卡绿、第 3 卡红正好撞上图例的「指纹相同／落到别的设备」）。
@@ -64,7 +64,7 @@ def fig_replay():
     yb = f.src(yb + 10,
                "📌 实测：每个单元记 tokens、labels、loss_mask、position_ids 各一个 sha256，另比每步非 padding 的 token 总数。",
                "📌 实测：TPU 原生加载器读同一份数据，索引表逐字节相同、样本流逐位相同；按原样布局只有 2,000 / 16,000 个单元落到同号设备（两边梯度累积切分的方式不同），重排后全部逐位。")
-    f.save("fig9-replay.svg", yb + 14)
+    f.save("fig8-replay.svg", yb + 14)
 
 
 def fig_wd():
@@ -99,7 +99,7 @@ def fig_wd():
     yb = f.src(yb + 10,
                "📌 实测：GPU 侧配置 weight_decay: 0.1；调度器 start_weight_decay = end_weight_decay = 0.033、constant、override_opt_param_scheduler=True，运行元数据记录的就是 0.033。TPU 侧配 adam_weight_decay: 0.033。",
                "⚠️ 本课推导：0.1 ÷ 0.033 ≈ 3。")
-    f.save("fig9-wd.svg", yb + 14)
+    f.save("fig8-wd.svg", yb + 14)
 
 
 fig_replay()

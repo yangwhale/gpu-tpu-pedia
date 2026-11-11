@@ -41,7 +41,7 @@ board 提示里的引号有两种用途，机器分不清：
 原来的 main() 把两个文件名**写死**成 `topic-02.html` ↔
 `topic-02-L200-lecture.html`。于是：
   · 它每次打印「100 条 board 提示，0 条对不上」——&nbsp;那 100 条**全是专题二的**；
-  · 专题一 141 条、专题三 90 条、专题二x 12 条、专题八 8 条，
+  · 专题一 141 条、专题三 90 条、专题二x 12 条、专题九 8 条，
     **共 251 条从来没有被对过账**。
 
 代价是真金白银的：专题三讲义里连着三条 cue 写着「滚到 1.3 / 1.5 / 1.6」，
@@ -118,8 +118,8 @@ PAIRS = [
     ("topic-06-L300-lecture.html", "topic-06-L300.html"),
     ("topic-06-lecture.html",      "topic-06.html"),
     ("topic-07-lecture.html",      "topic-07.html"),
-    ("topic-08-lecture.html",      "topic-08.html"),
     ("topic-09-lecture.html",      "topic-09.html"),
+    ("topic-08-lecture.html",      "topic-08.html"),
 ]
 
 

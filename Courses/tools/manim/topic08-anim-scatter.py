@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · 案例二：不排序「读—加—舍—写」对排序「片上 FP32 累加、舍一次」（ScatterRound）。
+r"""专题八 · 案例二：不排序「读—加—舍—写」对排序「片上 FP32 累加、舍一次」（ScatterRound）。
 
 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-scatter.py ScatterRound <草稿目录>/topic09-scatter.mp4 --draft
-   构建手册/脚本/render.sh tools/manim/topic09-anim-scatter.py ScatterRound WebPages/media/topic09-scatter.mp4
+   构建手册/脚本/render.sh tools/manim/topic08-anim-scatter.py ScatterRound <草稿目录>/topic08-scatter.mp4 --draft
+   构建手册/脚本/render.sh tools/manim/topic08-anim-scatter.py ScatterRound WebPages/media/topic08-scatter.mp4
 每一步落地的停顿时刻写进 tools/manim/steps/ScatterRound.json（课件挂 data-pauses）。
-挂在课件 §8.5 静态图 fig9-rmw 下面。
+挂在课件 §8.5 静态图 fig8-rmw 下面。
 
 ⭐ 为什么非动不可：论点是「同一个词每出现一次就多舍一次，舍入跟着下标流一次次攒起来」。静态图摆得出结果
    （红框几个），摆不出「舍入是随着下标流一个个经过才出现的」：不排序时同一个词的更新隔着别的词，每来一次都要
    把那一行读出、加上、舍回；排序后同一个词挨在一起，在片上缓冲里一口气加完、最后才舍一次 —— 增量来自时间。
 
-⭐ 数据从哪来（第二次迁移 ＝ 混元 4 缩小版，TPU v5p 单算子；全部取自 topic09_numbers）：
+⭐ 数据从哪来（第二次迁移 ＝ 混元 4 缩小版，TPU v5p 单算子；全部取自 topic08_numbers）：
    · 第 3 步：这一行在一次 4096 个下标的 scatter 里出现 ≥ 100 次的那组，离 FP64：不排序 C2_BYCOUNT 1.46e-2、
      排序 1.70e-3（实测；更新量是随机 BF16）；
    · 第 4 步：训练第 1 步，39 个高频词的行：纯数据并行 1.57e-2、FSDP 3.26e-3（实测，C2_GROUPS）。
@@ -32,11 +32,11 @@ from manim import (Scene, VGroup, Rectangle, RoundedRectangle, Line, Text, Value
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-import topic09_numbers as N   # noqa: E402
+import topic08_numbers as N   # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 
-# ── 数（全部来自 topic09_numbers）────────────────────────────────────
+# ── 数（全部来自 topic08_numbers）────────────────────────────────────
 K100_UNS, K100_SRT = N.C2_BYCOUNT["bf16_unsorted_excess_on"][3], N.C2_BYCOUNT["bf16_presorted_excess_on"][3]
 HOT_DP, HOT_FSDP = N.C2_GROUPS[2][4], N.C2_GROUPS[2][3]
 E = lambda v: ("%.2e" % v).replace("e-0", "e-")   # noqa: E731

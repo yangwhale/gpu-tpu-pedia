@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · 第四节「张量级指标」的两张图。
+r"""专题八 · 第四节「张量级指标」的两张图。
 
-fig9-cos     回答：rel_L2 和 cos 各看见什么、看不见什么？
+fig8-cos     回答：rel_L2 和 cos 各看见什么、看不见什么？
              现算：被测 ＝ 参照 × 2 时 cos ＝ 1、rel_L2 ＝ 1；同长度转 2.56° 时 cos ＝ 0.999、rel_L2 ≈ 4.5%（1 − cos ≈ ½·rel_L2²）。
-fig9-rratio  回答：TPU 离 GPU 远了，是谁的错？—— 拿 FP64 真值当靶心，比两边各离靶心多远：R ＝ 被测距离 ÷ GPU 距离。
+fig8-rratio  回答：TPU 离 GPU 远了，是谁的错？—— 拿 FP64 真值当靶心，比两边各离靶心多远：R ＝ 被测距离 ÷ GPU 距离。
              数字：门槛 1.2（推断）；√2 ≈ 1.41 ＝ 多一次同量级独立舍入（本课推导）；qkv 投影 1.235 → 1.000（实测）。
-fig9-flip    回答：第 1 步一个专家的梯度差 0.102、全体只有 1.28e-3，差从哪来？—— 路由第 8、9 名对调，专家换了 token。
-             数字全取 topic09_numbers（实测）：STEP1_EXPERT / STEP1_ALL / STEP1_TENSORS、E0_*、FLIP_MARGIN、TOPK、EXPERTS。
+fig8-flip    回答：第 1 步一个专家的梯度差 0.102、全体只有 1.28e-3，差从哪来？—— 路由第 8、9 名对调，专家换了 token。
+             数字全取 topic08_numbers（实测）：STEP1_EXPERT / STEP1_ALL / STEP1_TENSORS、E0_*、FLIP_MARGIN、TOPK、EXPERTS。
              刻意没画：名次条的长度和第 1–10 名的分数（示意，画上刻度就是编）；点阵里哪几个 token 被换（位置示意，个数实测）。
-fig9-rR      回答：小写 r 和大写 R 各说明什么？—— r 只说两边差多少（对称，不分对错）；R 对真值，能定责。报比值要带三样：比什么、基线绝对值、被测绝对值。
+fig8-rR      回答：小写 r 和大写 R 各说明什么？—— r 只说两边差多少（对称，不分对错）；R 对真值，能定责。报比值要带三样：比什么、基线绝对值、被测绝对值。
              例子都是第二次迁移的实测：优化器一段迭代（r 大、R 说 TPU 更准）；Adam 的一个小张量（R 3.82 → 1.00）。
 """
 import math
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
-import topic09_numbers as N
+import topic08_numbers as N
 
 W = 1400
 TH = math.degrees(math.acos(0.999))
@@ -69,7 +69,7 @@ def fig_cos():
     yb = f.src(yb + 10,
                "⚠️ 本课推导：同长度、夹角 θ 时 rel_L2 ＝ 2·sin(θ/2)；cos θ ＝ 0.999 → θ ≈ 2.56°，rel_L2 ≈ 4.47%。图里中格的角度放大了 6 倍画，方便看见。",
                "📌 指标一律在 FP64 里算：两个相近的数相减本身是精确的，丢精度的是后面的平方和、点积和除法。")
-    f.save("fig9-cos.svg", yb + 14)
+    f.save("fig8-cos.svg", yb + 14)
 
 
 def fig_rratio():
@@ -129,7 +129,7 @@ def fig_rratio():
                "📌 距离都用 rel_L2 量；靶子上两个点画在不同角度只为分开，只有离圆心多远有意义。",
                "⚠️ 推断（门槛）：只差舍入顺序时 R ≈ 1；多一次同量级的独立舍入，误差按平方相加，R ≈ √2 ≈ 1.41；取 1.2 当线。",
                "📌 实测：v5p 上单算子 FP64 对比，qkv 投影 R 1.235 → 1.000，第 0 层稠密 MLP 的输入投影 1.294 → 1.117（打开 FP32 累加的开关后，9 条单算子检查全过）。")
-    f.save("fig9-rratio.svg", yb + 14)
+    f.save("fig8-rratio.svg", yb + 14)
 
 
 def fig_flip():
@@ -233,7 +233,7 @@ def fig_flip():
                "隔离回放的那批 token 里这个专家分到 %d 个，TPU 侧少 %d 多 %d；发生翻转的 token，第 8、9 名「分数＋偏置」之差的中位数按层在 %s 之间。"
                % (N.STEP1_EXPERT, N.STEP1_TENSORS, N.STEP1_ALL, N.E0_TOKENS, N.E0_OUT, N.E0_IN, N.FLIP_MARGIN),
                "⚠️ 示意：左格名次条的长度和第 1–10 名的分数是示意，只有「第 8、9 名对调」和分差中位数是实测；右格点阵的个数是实测，哪几个点被换出是随手标的位置。")
-    f.save("fig9-flip.svg", yb + 14)
+    f.save("fig8-flip.svg", yb + 14)
 
 
 def fig_rR():
@@ -282,7 +282,7 @@ def fig_rR():
                "📌 实测（第二次迁移，优化器 8 步回放）：照 GPU 把那段迭代改到 BF16 之前，TPU 对 GPU 的更新差最多 %s%%、之后 %s%%；改之前 %s 的张量步 TPU 比 GPU 更接近 FP64，更新对 FP64 的相对误差中位数 %s。GPU 那段迭代离 FP64 %s（同一 8 步回放）。"
                % ("%.1f" % N.NSB_DIFF[0], "%.1f" % N.NSB_DIFF[1], N.NSB_TPU_CLOSER, N.NSB_ABS_T, N.NSB_GPU),
                "📌 落点带里那个例子是另一处：Adam 管的一个小张量，TPU 的除法、开方、偏差修正不够精确，R %s（§5.8 折叠）。⚠️ 两边都小于一个 BF16 格时，R 只是两种舍入之比，会来回摆；这时看绝对值。注：左图两点的距离、右图圆的半径只表示大小关系。" % N.ADAM_R_T)
-    f.save("fig9-rR.svg", yb + 14)
+    f.save("fig8-rR.svg", yb + 14)
 
 
 fig_cos()

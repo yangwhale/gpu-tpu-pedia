@@ -111,6 +111,7 @@ tbody tr:hover{background:var(--bg2)}
 .topic .num{font-size:13px;font-weight:700;color:#fff;background:var(--blue);
             border-radius:20px;padding:3px 11px;letter-spacing:.03em}
 .topic.opt .num{background:var(--gray)}
+.topic.opt.now .num{background:var(--blue)}
 .topic .name{font-size:21px;font-weight:700;letter-spacing:-.01em}
 .topic .name a{color:inherit;text-decoration:none}
 .topic .name a:hover{color:var(--blue)}
@@ -354,8 +355,8 @@ footer a{color:var(--blue);text-decoration:none}
       <div>
         <h4>Deep dives · as needed, any order</h4>
         <ul>
-          <li><span class="k">8</span><a href="#t8">Precision and quantization</a></li>
-          <li><span class="k">9</span><a href="#t9">GPU→TPU training numerics alignment</a></li>
+          <li><span class="k">8</span><a href="#t8">GPU→TPU training numerics alignment</a></li>
+          <li><span class="k">9</span><a href="#t9">Precision and quantization</a></li>
           <li><span class="k">10</span><a href="#t10">Post-training and RL</a></li>
           <li><span class="k">11</span><a href="#t11">Diffusion and DiT</a></li>
           <li><span class="k">14</span><a href="#t14">Distillation and knowledge transfer</a></li>
@@ -492,18 +493,18 @@ footer a{color:var(--blue);text-decoration:none}
   <div class="sechead"><b>Deep dives</b><span>As needed · any order</span></div>
 
 
-  <div class="topic opt" id="t8">
-    <div class="head"><span class="num">08</span><span class="name">Precision and quantization</span><span class="pre">Prereq: 04 · 06</span><span class="wip">English edition coming</span></div>
-    <div class="quote">Each step down in precision halves memory and bandwidth. The price is numerical safety margin; this lecture shows exactly where that boundary lies.</div>
-    <dl><dt>Done so far</dt><dd><b>Scaling itself</b> (from per-tensor to groups of 16), <b>the 16×16 and the chain rule in FP4 training</b>, and <b>what Blackwell actually added</b>, all three with full source logs.</dd>
-      <dt>Also answers</dt><dd>A counterintuitive question: why the copy of the weights held by the optimizer <b>must</b> be high precision.</dd></dl>
+  <div class="topic opt now" id="t8">
+    <div class="head"><span class="num">08</span><span class="name">GPU→TPU training numerics alignment</span><span class="pre">Prereq: 02 · 04</span><span class="wip">English edition coming</span></div>
+    <div class="quote">TPU and GPU can never match bit for bit. What you can demand: the TPU–GPU gap is no bigger than the GPU's gap with itself.</div>
+    <dl><dt>The case</dt><dd>Hunyuan3 moved from GPU to TPU, and the TPU loss sat 1.5e-4 lower for 1,000 steps. Tracked down level by level, <b>the TPU wasn't the one off</b>: a 120k-long BF16 sum on the GPU was truncated toward zero at every step.</dd>
+      <dt>For now</dt><dd>The <a href="topic-08.html">Chinese edition</a> (courseware and lecture notes) is live.</dd></dl>
   </div>
 
   <div class="topic opt" id="t9">
-    <div class="head"><span class="num">09</span><span class="name">GPU→TPU training numerics alignment</span><span class="pre">Prereq: 02 · 04 · 08</span><span class="wip">English edition coming</span></div>
-    <div class="quote">TPU and GPU can never match bit for bit. What you can demand: the TPU–GPU gap is no bigger than the GPU's gap with itself.</div>
-    <dl><dt>The case</dt><dd>Hunyuan3 moved from GPU to TPU, and the TPU loss sat 1.5e-4 lower for 1,000 steps. Tracked down level by level, <b>the TPU wasn't the one off</b>: a 120k-long BF16 sum on the GPU was truncated toward zero at every step.</dd>
-      <dt>For now</dt><dd>The <a href="topic-09.html">Chinese edition</a> (courseware and lecture notes) is live.</dd></dl>
+    <div class="head"><span class="num">09</span><span class="name">Precision and quantization</span><span class="pre">Prereq: 04 · 06</span><span class="wip">English edition coming</span></div>
+    <div class="quote">Each step down in precision halves memory and bandwidth. The price is numerical safety margin; this lecture shows exactly where that boundary lies.</div>
+    <dl><dt>Done so far</dt><dd><b>Scaling itself</b> (from per-tensor to groups of 16), <b>the 16×16 and the chain rule in FP4 training</b>, and <b>what Blackwell actually added</b>, all three with full source logs.</dd>
+      <dt>Also answers</dt><dd>A counterintuitive question: why the copy of the weights held by the optimizer <b>must</b> be high precision.</dd></dl>
   </div>
 
   <div class="topic opt" id="t10">
@@ -536,7 +537,7 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic opt" id="t13">
-    <div class="head"><span class="num">13</span><span class="name">Migration: PyTorch → TPU</span><span class="pre">Prereq: 12 · 08</span></div>
+    <div class="head"><span class="num">13</span><span class="name">Migration: PyTorch → TPU</span><span class="pre">Prereq: 12 · 09</span></div>
     <div class="quote">The hard part isn't getting it to run. It's proving that what runs is still the same model.</div>
     <dl><dt>Focus</dt><dd>Half is how to port it; the other half is <b>a methodology for numerical validation</b>, and that's where the real skill lies.</dd></dl>
   </div>
@@ -552,11 +553,11 @@ footer a{color:var(--blue);text-decoration:none}
       <tr><td><b>After the big picture</b></td><td>Core 01–06 is enough</td></tr>
       <tr><td><b>Making technical calls / reviewing designs</b></td><td>Core + 07</td></tr>
       <tr><td><b>Moving GPU training to TPU</b></td><td>Core + 08, 09, 13</td></tr>
-      <tr><td><b>Focused on cost and capacity planning</b></td><td>01, 03, 05 + 08</td></tr>
+      <tr><td><b>Focused on cost and capacity planning</b></td><td>01, 03, 05 + 09</td></tr>
       <tr><td><b>Going to write code</b></td><td>Core + 12, 13</td></tr>
-      <tr><td><b>Only deploying inference</b></td><td>01, 02, 05, then 07, 08 as needed</td></tr>
+      <tr><td><b>Only deploying inference</b></td><td>01, 02, 05, then 07, 09 as needed</td></tr>
       <tr><td><b>Working on multimodal / generative models</b></td><td>Core + 11</td></tr>
-      <tr><td><b>Making large models smaller / shipping them</b></td><td>01, 06 + 08, 14</td></tr>
+      <tr><td><b>Making large models smaller / shipping them</b></td><td>01, 06 + 09, 14</td></tr>
     </tbody>
   </table>
   <div class="note" style="margin-top:24px">

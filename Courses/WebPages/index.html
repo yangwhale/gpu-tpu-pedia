@@ -111,6 +111,7 @@ tbody tr:hover{background:var(--bg2)}
 .topic .num{font-size:13px;font-weight:700;color:#fff;background:var(--blue);
             border-radius:20px;padding:3px 11px;letter-spacing:.03em}
 .topic.opt .num{background:var(--gray)}
+.topic.opt.now .num{background:var(--blue)}
 .topic .name{font-size:21px;font-weight:700;letter-spacing:-.01em}
 .topic .name a{color:inherit;text-decoration:none}
 .topic .name a:hover{color:var(--blue)}
@@ -385,8 +386,8 @@ footer a{color:var(--blue);text-decoration:none}
       <div>
         <h4>深入 · 按需，任意顺序</h4>
         <ul>
-          <li><span class="k">8</span><a href="#t8">精度与量化</a></li>
-          <li><span class="k">9</span><a href="#t9">GPU→TPU 训练精度对齐</a></li>
+          <li><span class="k">8</span><a href="#t8">GPU→TPU 训练精度对齐</a></li>
+          <li><span class="k">9</span><a href="#t9">精度与量化</a></li>
           <li><span class="k">10</span><a href="#t10">后训练与 RL</a></li>
           <li><span class="k">11</span><a href="#t11">Diffusion 与 DiT</a></li>
           <li><span class="k">14</span><a href="#t14">蒸馏与知识迁移</a></li>
@@ -560,27 +561,28 @@ footer a{color:var(--blue);text-decoration:none}
   <div class="sechead"><b>深入</b><span>按需 · 任意顺序</span></div>
 
 
-  <!-- ⭐ 2026-09-04 专题八提前开工了：材料是讲专题二时问出来的，
-       按「材料属于哪一讲就写进哪一讲」的规矩当场写进了它。
-       所以这一条从纯占位变成了带入口 —— 但状态必须诚实标成「写了一半」。 -->
-  <div class="topic opt" id="t8">
-    <div class="head"><span class="num">08</span><span class="name"><a href="topic-08.html">精度与量化</a></span><span class="pre">前置 04 · 06</span><span class="rdy">🚧 写了一半 · 中间三节已完成</span></div>
-    <div class="quote">每往下压一档精度，就省一半的显存和带宽。代价是数值上的安全边际 —— 这一课讲这条边界具体在哪。</div>
-    <dl><dt>已经写完的</dt><dd><b>缩放这件事</b>（从 per-tensor 到 16 个数一组）、<b>FP4 训练里那个 16×16 与链式法则</b>、<b>Blackwell 到底加了什么</b> —— 三节都带完整出处台账。</dd>
-      <dt>顺带回答</dt><dd>一个反直觉的问题：优化器里那份权重，为什么<b>必须</b>是高精度的。</dd></dl>
+  <!-- 2026-11-05：原「最新开源模型对比」只有大纲、从没成页，按现场原话替换（旧大纲在 git 历史里）。
+       2026-11-11：跟「精度与量化」对调编号，由 09 改为 08（正好轮到第八讲）；编号标蓝（class now），卡片其余仍按「深入」样式。 -->
+  <div class="topic opt now" id="t8">
+    <div class="head"><span class="num">08</span><span class="name"><a href="topic-08.html">GPU→TPU 训练精度对齐</a></span><span class="pre">前置 02 · 04</span><span class="rdy">✅ 课件 ＋ 讲义 · 讲约 90′（三次课）· 59 张图 ＋ 7 支动画</span></div>
+    <div class="quote">TPU 和 GPU 不可能一位不差。能要求的是：TPU 跟 GPU 的差，不比 GPU 自己跟自己的差大。</div>
+    <dl><dt>讲什么</dt><dd>一把噪声尺子、L0–L4 五级检查、两类指标（逐步曲线和第 1 步逐张量），再看清浮点和硬件在哪儿舍入、在 TPU 上怎么拿证据；第二次迁移补上纯噪声也会超线、换了顺序还是丢了精度、16 位与 32 位的交界，以及 TPU 自己改一样东西会不会变。</dd>
+      <dt>转折</dt><dd>两个案例。混元 3 搬到 TPU 后 loss 一直低万分之一点五，一路查下去，<b>偏的不是 TPU</b>：GPU 在一次 12 万长的 BF16 求和里，每一步都朝零截掉了一点。混元 4 缩小版上 DDP 和 FSDP 数学等价却对不上，查到最后是<b>高频词 × 不排序</b>：编译器只在一次 scatter-add 的下标数过线时才插排序。</dd>
+      <dt>带走</dt><dd>golden 自己有偏差时怎么分两关验收；TPU 的脾气：重跑与等价重构逐位、换切分换版本只换顺序、真出事集中在词嵌入梯度，精度会随批大小变；改完代码先比程序指纹。</dd></dl>
     <div class="docs">
       <a class="pri" href="topic-08.html">课件 →</a>
       <a href="topic-08-lecture.html">📝 讲义（授课稿）</a>
     </div>
   </div>
 
-  <!-- 2026-11-05：原「最新开源模型对比」只有大纲、从没成页，按现场原话替换（旧大纲在 git 历史里）。 -->
+  <!-- ⭐ 2026-09-04 专题九（当时编号专题八）提前开工了：材料是讲专题二时问出来的，
+       按「材料属于哪一讲就写进哪一讲」的规矩当场写进了它。
+       所以这一条从纯占位变成了带入口 —— 但状态必须诚实标成「写了一半」。 -->
   <div class="topic opt" id="t9">
-    <div class="head"><span class="num">09</span><span class="name"><a href="topic-09.html">GPU→TPU 训练精度对齐</a></span><span class="pre">前置 02 · 04 · 08</span><span class="rdy">✅ 课件 ＋ 讲义 · 讲约 90′（三次课）· 59 张图 ＋ 7 支动画</span></div>
-    <div class="quote">TPU 和 GPU 不可能一位不差。能要求的是：TPU 跟 GPU 的差，不比 GPU 自己跟自己的差大。</div>
-    <dl><dt>讲什么</dt><dd>一把噪声尺子、L0–L4 五级检查、两类指标（逐步曲线和第 1 步逐张量），再看清浮点和硬件在哪儿舍入、在 TPU 上怎么拿证据；第二次迁移补上纯噪声也会超线、换了顺序还是丢了精度、16 位与 32 位的交界，以及 TPU 自己改一样东西会不会变。</dd>
-      <dt>转折</dt><dd>两个案例。混元 3 搬到 TPU 后 loss 一直低万分之一点五，一路查下去，<b>偏的不是 TPU</b>：GPU 在一次 12 万长的 BF16 求和里，每一步都朝零截掉了一点。混元 4 缩小版上 DDP 和 FSDP 数学等价却对不上，查到最后是<b>高频词 × 不排序</b>：编译器只在一次 scatter-add 的下标数过线时才插排序。</dd>
-      <dt>带走</dt><dd>golden 自己有偏差时怎么分两关验收；TPU 的脾气：重跑与等价重构逐位、换切分换版本只换顺序、真出事集中在词嵌入梯度，精度会随批大小变；改完代码先比程序指纹。</dd></dl>
+    <div class="head"><span class="num">09</span><span class="name"><a href="topic-09.html">精度与量化</a></span><span class="pre">前置 04 · 06</span><span class="rdy">🚧 写了一半 · 中间三节已完成</span></div>
+    <div class="quote">每往下压一档精度，就省一半的显存和带宽。代价是数值上的安全边际 —— 这一课讲这条边界具体在哪。</div>
+    <dl><dt>已经写完的</dt><dd><b>缩放这件事</b>（从 per-tensor 到 16 个数一组）、<b>FP4 训练里那个 16×16 与链式法则</b>、<b>Blackwell 到底加了什么</b> —— 三节都带完整出处台账。</dd>
+      <dt>顺带回答</dt><dd>一个反直觉的问题：优化器里那份权重，为什么<b>必须</b>是高精度的。</dd></dl>
     <div class="docs">
       <a class="pri" href="topic-09.html">课件 →</a>
       <a href="topic-09-lecture.html">📝 讲义（授课稿）</a>
@@ -617,7 +619,7 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic opt" id="t13">
-    <div class="head"><span class="num">13</span><span class="name">迁移：PyTorch → TPU</span><span class="pre">前置 12 · 08</span></div>
+    <div class="head"><span class="num">13</span><span class="name">迁移：PyTorch → TPU</span><span class="pre">前置 12 · 09</span></div>
     <div class="quote">难的不是把它跑起来，是证明跑起来的还是同一个模型。</div>
     <dl><dt>重点</dt><dd>一半讲怎么搬，另一半讲<b>数值验证方法论</b> —— 后者才是真功夫。</dd></dl>
   </div>
@@ -633,11 +635,11 @@ footer a{color:var(--blue);text-decoration:none}
       <tr><td><b>想建立整体认知</b></td><td>主线 01–06，够了</td></tr>
       <tr><td><b>要做技术判断 / 方案评审</b></td><td>主线 ＋ 07</td></tr>
       <tr><td><b>要把 GPU 上的训练搬到 TPU</b></td><td>主线 ＋ 08 09 13</td></tr>
-      <tr><td><b>关心成本与容量规划</b></td><td>01 03 05 ＋ 08</td></tr>
+      <tr><td><b>关心成本与容量规划</b></td><td>01 03 05 ＋ 09</td></tr>
       <tr><td><b>要动手写代码</b></td><td>主线 ＋ 12 13</td></tr>
-      <tr><td><b>只关心推理部署</b></td><td>01 02 05，再按需看 07 08</td></tr>
+      <tr><td><b>只关心推理部署</b></td><td>01 02 05，再按需看 07 09</td></tr>
       <tr><td><b>做多模态 / 生成式</b></td><td>主线 ＋ 11</td></tr>
-      <tr><td><b>要把大模型变小 / 上线</b></td><td>01 06 ＋ 08 14</td></tr>
+      <tr><td><b>要把大模型变小 / 上线</b></td><td>01 06 ＋ 09 14</td></tr>
     </tbody>
   </table>
   <div class="note" style="margin-top:24px">
@@ -646,7 +648,7 @@ footer a{color:var(--blue);text-decoration:none}
 </div></section>
 
 <footer><div class="wrap">
-  <p><b>现代 AI 加速器 GPU / TPU 系统课程</b> · <b>专题 01–07、09 正文已完成</b>（带课件与全部插图），专题 08 写了一半，其余五个专题（10–14）目前只有大纲，陆续补充</p>
+  <p><b>现代 AI 加速器 GPU / TPU 系统课程</b> · <b>专题 01–08 正文已完成</b>（带课件与全部插图），专题 09 写了一半，其余五个专题（10–14）目前只有大纲，陆续补充</p>
   <p style="margin-top:10px"><b>Chris Yang</b> · Google Cloud AI Infra 架构师　——
      文中观点与数据均为个人整理，不代表所属机构。</p>
   <p style="margin-top:10px">本课程采用 <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>

@@ -15,7 +15,7 @@ __FIG_S12_BYTES__
 
   <p><b>同叫 4 bit，差在缩放。</b>4 bit 只有 16 个编码，必须几个数共用一个缩放倍数；MXFP4 和 NVFP4 差在块大小和缩放格式。</p>
 __FIG_S12_MX__
-  <p>块越小越贴合局部数值，精度越好，字节越多。格式细节见专题八 <a href="topic-08.html#s2">§2</a>。</p>
+  <p>块越小越贴合局部数值，精度越好，字节越多。格式细节见专题九 <a href="topic-09.html#s2">§2</a>。</p>
   <p>差多少有一组同条件的数：NVIDIA 2025-09 用 8B 的 Mamba 与 Transformer 混合模型训 1T token，MXFP4 要多训 36% 的 token，loss 才追平 NVFP4（训练 loss 比 BF16 高的幅度：MXFP4 约 2.5%，NVFP4 约 1.5%）。</p>
   <p>推理侧，NVIDIA 博客称 DeepSeek-R1-0528 从 FP8 训后量化到 NVFP4，主要语言任务掉点在 1% 以内。同一张卡上 FP4 比 FP8 快多少，没找到官方同条件的数。</p>
 

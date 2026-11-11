@@ -41,8 +41,8 @@ DECKS = (
     ("topic-03-L300.html", "topic-03-L300-lecture.html"),
     ("topic-04.html",      "topic-04-lecture.html"),
     ("topic-05.html",      "topic-05-lecture.html"),
-    ("topic-08.html",      "topic-08-lecture.html"),
     ("topic-09.html",      "topic-09-lecture.html"),
+    ("topic-08.html",      "topic-08-lecture.html"),
 )
 
 # ⛔ 这段里**不要出现 `%`** —— 有一个页面（topic02-build-L200）的模板走

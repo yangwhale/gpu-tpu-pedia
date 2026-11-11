@@ -1,21 +1,21 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · 第八节「案例（下）」的五张图。
+r"""专题八 · 第八节「案例（下）」的五张图。
 
-fig9-gauge     回答：输出头流回隐状态的梯度里，哪个方向能让「所有 logits 一起升降」？它每步少一点，会积出什么？
+fig8-gauge     回答：输出头流回隐状态的梯度里，哪个方向能让「所有 logits 一起升降」？它每步少一点，会积出什么？
                数字：探针测到的 lse（logits 的 log-sum-exp）差随步数（实测）；每步少推 0.065% 来自输出头回放（实测）。
-fig9-head      回答：那股力少在哪一段？—— GPU 输出层 dgrad 的 BF16 张量核矩阵乘；求和越长偏得越多。
-fig9-intervene 回答：怎么证明是这一股力？—— 两边都去掉它，差回到噪声；GPU 反着加上它，复现 TPU 的整套特征。
-fig9-swap      回答：是每一步都算得不一样，还是状态不同带出来的反馈？—— 把同一个状态搬到两边，各算一步。
-fig9-exact     回答：到底谁离精确值近？—— GPU 上跑一条「BF16 权重、全程 FP32 计算」的精确轨迹，它站在 TPU 一边；可它的长求和也偏（11-06）。
-fig9-layer0    回答：冷门行的方向从哪来？—— 残差流固定探针：第 0 层输出最先沿隐状态方向 ĥ ＝ γ⊙û 偏低、往后逐层放大；同一份输入只换第 0 层权重，确认是权重长歪，大头在注意力输出投影。
+fig8-head      回答：那股力少在哪一段？—— GPU 输出层 dgrad 的 BF16 张量核矩阵乘；求和越长偏得越多。
+fig8-intervene 回答：怎么证明是这一股力？—— 两边都去掉它，差回到噪声；GPU 反着加上它，复现 TPU 的整套特征。
+fig8-swap      回答：是每一步都算得不一样，还是状态不同带出来的反馈？—— 把同一个状态搬到两边，各算一步。
+fig8-exact     回答：到底谁离精确值近？—— GPU 上跑一条「BF16 权重、全程 FP32 计算」的精确轨迹，它站在 TPU 一边；可它的长求和也偏（11-06）。
+fig8-layer0    回答：冷门行的方向从哪来？—— 残差流固定探针：第 0 层输出最先沿隐状态方向 ĥ ＝ γ⊙û 偏低、往后逐层放大；同一份输入只换第 0 层权重，确认是权重长歪，大头在注意力输出投影。
                数字：L0_PROBE（每 25 步，逐点实测）、L0_SWAP_*（第 0 层权重互换，实测）。
                ⛔ 刻意没画最后归一化输出那条线：它和第 3 层几乎重合，多一条只添乱。
-数字全部来自 topic09_numbers（实测）。
+数字全部来自 topic08_numbers（实测）。
 """
 import math
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU, wpx, MONO_K
-import topic09_numbers as N
+import topic08_numbers as N
 
 W = 1400
 
@@ -89,7 +89,7 @@ def fig_gauge():
                "📌 实测：第 1000 步的训练批上，TPU 的 logits 在整个词表上整体低 0.27、lse 低约 0.33，GPU 两次之间 0.0001。",
                "⚠️ 本课推导：dlogits 各项加起来是 0，可各行在 w̄ 上的投影长短不一，乘上各行以后沿 w̄ 并不抵消 —— 所以 dh 沿 w̄ 那一份不为零。",
                "注：左图的箭头是示意：真实的输出层有 120,832 行、4096 维。")
-    f.save("fig9-gauge.svg", yb + 14)
+    f.save("fig8-gauge.svg", yb + 14)
 
 
 def fig_head():
@@ -148,7 +148,7 @@ def fig_head():
     yb = f.src(yb + 10,
                "📌 实测：GPU 在线性层的前向、反向里记下输出层实际用到的 h、logits、权重和交给反向的 dlogits，与 dump 逐位相同；离线拆成「交叉熵反向」「矩阵乘」两段各对 FP64。第 100 步 GPU −6.10e-4，TPU −7.4e-5。",
                "📌 实测：右图把真实输出头张量的词表行打乱后取前 K 行，沿该方向的误差 −6.9e-5 / −2.0e-4 / −6.5e-4；朝零的整体尺度偏差 1.9e-5 / 7.3e-5 / 2.3e-4。")
-    f.save("fig9-head.svg", yb + 14)
+    f.save("fig8-head.svg", yb + 14)
 
 
 def fig_intervene():
@@ -182,7 +182,7 @@ def fig_intervene():
     yb = f.src(yb + 10,
                "📌 实测（1000 步）：两边都去掉 dh 沿 w̄ 的全部分量后，TPU 对 GPU：loss −3.4e-5，param_norm ＋6.1e-3；同设置 GPU 两次之间 loss −2.5e-5、param_norm ＋4.9e-4。",
                "📌 实测：GPU 把自己沿这个方向的那一小份反号放大 9 倍（相当于往下多推一把）跑 1000 步，对默认 GPU：loss −1.26e-4，param_norm ＋2.05e-2；再跑一份 −1.27e-4、＋2.01e-2。TPU 原样对 GPU：−1.66e-4、＋2.1e-2。GPU 人为多推一把，连 logits 下移、冷门行范数偏大一起复现。")
-    f.save("fig9-intervene.svg", yb + 14)
+    f.save("fig8-intervene.svg", yb + 14)
 
 
 def fig_swap():
@@ -220,7 +220,7 @@ def fig_swap():
                "📌 实测：1193 个张量导入 TPU 后逐个核对 sha256（按 GPU 框架布局数，q/k/v、gate/up 已各合成一个，所以少于按开源命名数的 1781 个）。方向 d ＝ 第 100 步 TPU 与 GPU 主权重之差；梯度差经 Adam 逐元素缩放、乘学习率和裁剪系数后投到 d 上，按 |d|² 归一。",
                "📌 实测：θ₉₉ 上 TPU 0.00%、GPU FP32 dgrad −0.10%、GPU −0.36%；另外三个状态（GPU θ₂₉₉、TPU θ₉₉、TPU θ₂₉₉）、共 12 个 batch：TPU −0.04% 到 ＋0.10%，GPU FP32 dgrad −0.05% 到 −0.22%，GPU −0.31% 到 −0.47%。",
                "📌 参照用 GPU 上的全程 FP32（权重先舍成 BF16，跟生产用的同一份）：TPU 自己那份「全程 FP32」程序核对后发现路由专家实际按 BF16 算（对 FP64 3.2e-3），不能当参照。")
-    f.save("fig9-swap.svg", yb + 14)
+    f.save("fig8-swap.svg", yb + 14)
 
 
 EX1, EX2 = N.EXACT_LOSS_TAIL
@@ -272,7 +272,7 @@ def fig_exact():
                "📌 实测：精确轨迹 ＝ 主权重 FP32，每步前向前舍到 BF16，前向反向全部 FP32、关 TF32、不用融合注意力；第 2 / 3 步 loss 11.23569 / 10.58785，TPU 11.23569 / 10.58784，GPU BF16 11.23543 / 10.58775。",
                "📌 实测：第 975 步对 4 份默认 GPU 运行均值：param_norm 精确轨迹 ＋1.82e-2、TPU ＋1.99e-2、FP32 dgrad ＋1.23e-2 – ＋1.28e-2（图中取中点），4 份 GPU 自己 ±4.5e-4；lse −0.262 / −0.286 / −0.16 – −0.19，GPU ±0.013；301–1000 步 loss 精确轨迹两份 −1.53e-4、−1.16e-4，TPU −1.27e-4，FP32 dgrad −4.3e-5 – −1.02e-4，GPU ±9e-6。",
                "注：lse 与 loss 两行里「FP32 dgrad」取两份运行的中点，画的是位置示意。")
-    f.save("fig9-exact.svg", yb + 14)
+    f.save("fig8-exact.svg", yb + 14)
 
 
 CHAIN = [   # R3：卡片文字砍到一行；边框统一中性灰
@@ -322,7 +322,7 @@ def fig_chain():
                "📌 实测：GPU dgrad 沿 w̄ 第 1 / 100 步 −6.5e-4 / −6.1e-4；第 0 层输出在各层里最先分开、往后逐层放大（第 50 步起转为偏低），换权重重算确认是权重长歪、大头在注意力输出投影；第 1000 步训练批上 TPU 的 logits 整体低 0.27。",
                "📌 实测（第四环，第 300 步同一步，没出现过的词那些行）：两边 |g| 的均方根之比 %.3f；Σ w·g GPU 8.1e-5、TPU 1.2e-6；%.0f%% 的元素 √v̂ ＜ ε（中位数 %s），这些元素的更新 ≈ m̂ ÷ ε；Σ w·u 两边差 −%d，其中 m̂ 那一份 −%d。"
                % (N.RARE_RMS_RATIO, N.RARE_EPS_FRAC * 100, ("%.1e" % N.RARE_VHAT_MED).replace("e-0", "e-"), -N.SUMWU_DIFF, -N.SUMWU_MHAT))
-    f.save("fig9-chain.svg", yb + 14)
+    f.save("fig8-chain.svg", yb + 14)
 
 
 def _r2(v):
@@ -431,7 +431,7 @@ def fig_layer0():
                % (_m3(N.L0_SWAP_100[0]), _r2(N.L0_SWAP_100[1]), _r2(N.L0_SWAP_100[2]), _r2(N.L0_SWAP_50[0]), _r2(N.L0_SWAP_50[1]), _r2(N.L0_SWAP_50[2]), _r2(P["第 0 层"][ST.index(50)])),
                "⚠️ 推断（案例记录里的，没有单独验证）：第 50 → 100 步，步数翻倍、差涨约 9 倍，不像每步一点固定偏差在线性累积，像有反馈在放大 —— logit 水平一旦走低，梯度跟着变，再往同一方向推。",
                "注：第 0 层是稠密层，第 1–3 层是 MoE 层；最后归一化输出那条线跟第 3 层几乎重合，没画。")
-    f.save("fig9-layer0.svg", yb + 14)
+    f.save("fig8-layer0.svg", yb + 14)
 
 
 fig_gauge()

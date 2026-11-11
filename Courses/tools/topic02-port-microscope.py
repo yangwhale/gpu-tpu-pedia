@@ -1276,17 +1276,17 @@ def sections(F):
        图由 topic02-fig-s3-sparsecore.py 生成，按 id 锚点 s012-fig3-5 注入。
        ⛔ 图里那句「(8,128) 不是 DMA 粒度」是在纠正我自己讲错过的说法，别删。 -->
   <!-- ⭐⭐⭐ 2026-09-04 这里原来挂着一个一万两千字的 NVFP4／MXFP4 折叠
-       （连问六轮攒出来的机制 ＋ 出处台账）。**整块迁去专题八了。**
+       （连问六轮攒出来的机制 ＋ 出处台账）。**整块迁去专题九了。**
        ⛔ 不要再往这儿加 FP4 的机制内容 —— 这一讲是「TPU vs GPU」，
           块量化在这里只是「宣传口径 vs 门槛」那条主线的一个例子。
        ⭐ 迁移依据是 2026-09-04 立的规矩：材料属于哪一讲就写进哪一讲，
           不等轮到它再去收集（memory: feedback_write-material-into-future-topics）。
-       📌 源现在在 tools/topic08-build.py ＋ topic08-seg-*.html。 -->
+       📌 源现在在 tools/topic09-build.py ＋ topic09-seg-*.html。 -->
   <p class="sub">⭐ <b>想知道块量化在硬件上到底怎么跑的</b>
     ——&nbsp;NVFP4 与 MXFP4 差在哪、HBM 里放的是什么、量化是谁做的、
     Blackwell 究竟加了哪三样、以及训练侧那个 16×16 为什么存在
     ——&nbsp;<b>整套机制连同出处台账都在
-    <a href="topic-08.html">专题八 · 精度与量化</a></b>。
+    <a href="topic-09.html">专题九 · 精度与量化</a></b>。
     <em>这一讲只用它做「宣传口径 vs 细则门槛」的例子。</em></p>
 
   <p>那「处理不规则访存」到底是怎么处理的？——&nbsp;<b>把这颗核拆开看一眼</b>。</p>

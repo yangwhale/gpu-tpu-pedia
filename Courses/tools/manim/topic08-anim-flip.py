@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · MoE 路由的近平局翻转（RouteFlip）。
+r"""专题八 · MoE 路由的近平局翻转（RouteFlip）。
 
 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-flip.py RouteFlip <草稿目录>/topic09-flip.mp4 --draft
-   构建手册/脚本/render.sh tools/manim/topic09-anim-flip.py RouteFlip WebPages/media/topic09-flip.mp4
+   构建手册/脚本/render.sh tools/manim/topic08-anim-flip.py RouteFlip <草稿目录>/topic08-flip.mp4 --draft
+   构建手册/脚本/render.sh tools/manim/topic08-anim-flip.py RouteFlip WebPages/media/topic08-flip.mp4
 每一步落地的停顿时刻写进 tools/manim/steps/RouteFlip.json（课件挂 data-pauses）。
 
 ⭐ 为什么非动不可：论点是一个因果链「输入差一丝 → 分数挪一丝 → 第 8、9 名在某一刻交叉 → 选中的专家换人
@@ -45,11 +45,11 @@ from manim import (Scene, VGroup, Rectangle, Line, DashedLine, Circle, Text, Val
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-import topic09_numbers as N   # noqa: E402
+import topic08_numbers as N   # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 
-# ── 常数（实测；出处与 topic09_numbers 同一组，课件出处台账有一行）────────────────────
+# ── 常数（实测；出处与 topic08_numbers 同一组，课件出处台账有一行）────────────────────
 ROUTE_IN_RELL2 = (3.4e-3, 3.9e-3)          # 路由输入（MLP 前归一化输出）两边 rel_L2，第 1–3 层
 FLIP_MARGIN_P50 = (2.7e-5, 6.3e-5)         # 翻转 token 的第 k 与 k+1 名分差中位数
 ALL_MARGIN_P50 = (3.1e-4, 8.0e-4)          # 全部 token 的分差中位数

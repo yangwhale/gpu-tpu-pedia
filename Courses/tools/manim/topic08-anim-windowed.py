@@ -1,23 +1,23 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · FSDP 下 collective matmul 的部分和舍入（WindowedAcc）。
+r"""专题八 · FSDP 下 collective matmul 的部分和舍入（WindowedAcc）。
 
 渲染（在 Courses/ 下）：
-   构建手册/脚本/render.sh tools/manim/topic09-anim-windowed.py WindowedAcc <草稿目录>/topic09-windowed.mp4 --draft
-   构建手册/脚本/render.sh tools/manim/topic09-anim-windowed.py WindowedAcc WebPages/media/topic09-windowed.mp4
+   构建手册/脚本/render.sh tools/manim/topic08-anim-windowed.py WindowedAcc <草稿目录>/topic08-windowed.mp4 --draft
+   构建手册/脚本/render.sh tools/manim/topic08-anim-windowed.py WindowedAcc WebPages/media/topic08-windowed.mp4
 每一步落地的停顿时刻写进 tools/manim/steps/WindowedAcc.json（课件挂 data-pauses）。
-挂在课件 §5.4 静态图 fig9-windowed 下面。
+挂在课件 §5.4 静态图 fig8-windowed 下面。
 
 ⭐ 为什么非动不可：论点是「每多收一片、多算一轮，就多舍一次」—— 舍入次数跟着轮数长，误差一轮一轮攒起来；
    打开 FP32 累加以后，同样走四轮，前三轮一个红块都不出，只在最后舍一次。静态图把两行并排摆出了结果
    （4 个红块对 1 个红块），画不出「红块是随着部分和往下一轮传的那一刻才出现的、误差条是一格一格涨的」——
    「轮」本身就是时间，增量来自时间。
 
-⭐ 数据从哪来（一个对齐实践：混元 3 截前 4 层，GPU B200×8 对 TPU v5p，同一份权重和数据；全部取自 topic09_numbers）：
+⭐ 数据从哪来（一个对齐实践：混元 3 截前 4 层，GPU B200×8 对 TPU v5p，同一份权重和数据；全部取自 topic08_numbers）：
    · qkv 投影输出对 GPU 的 rel_L2：QKV_VS_GPU_BEFORE 2.36e-3 → QKV_VS_GPU_AFTER 1.8e-4（实测）；
    · 对 FP64 的 R：R_QKV_BEFORE 1.235 → R_QKV_AFTER 1.000（实测）；
    · 1000 步参数范数那一项的 r（被测对精确轨迹，噪声取 GPU 生产程序重跑 10 对）：
      开关前 GOLDEN_R[2] ＝ 4.36e-7 ÷ 1.24e-7 ≈ 3.52，开关后 ACC_PN_R ＝ 3.45（实测，断言钉住两位小数）。
-   · 舍入次数：默认 4 次（每轮出口一次，最后一轮的出口就是结果）、FP32 累加 1 次 —— 跟 fig9-windowed 同一口径，由 ROUNDS 现算并断言。
+   · 舍入次数：默认 4 次（每轮出口一次，最后一轮的出口就是结果）、FP32 累加 1 次 —— 跟 fig8-windowed 同一口径，由 ROUNDS 现算并断言。
    ⚠️ 示意：4 片 4 轮（实际片数等于 FSDP 的路数）；右边「累计舍入误差」条的长度 ∝ √（已舍次数），
      只是「独立舍入一次次叠加」的示意，不是实测，跟第 3 步的实测 rel_L2 不成比例（屏上标「示意」）。
    ⚠️ 推断：「一轮之内照样 FP32 累加，舍的是轮与轮之间的部分和」——一手材料只写到循环累加器是 BF16，
@@ -38,11 +38,11 @@ from manim import (Scene, VGroup, Rectangle, RoundedRectangle, Line, Text, Value
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
-import topic09_numbers as N   # noqa: E402
+import topic08_numbers as N   # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 
-# ── 数（全部来自 topic09_numbers）────────────────────────────────────
+# ── 数（全部来自 topic08_numbers）────────────────────────────────────
 REL_BEFORE, REL_AFTER = N.QKV_VS_GPU_BEFORE, N.QKV_VS_GPU_AFTER
 R_BEFORE, R_AFTER = N.R_QKV_BEFORE, N.R_QKV_AFTER
 PN_R_BEFORE, PN_R_AFTER = N.GOLDEN_R[2], N.ACC_PN_R
@@ -59,7 +59,7 @@ REL_SHORT = lambda v: "%.2e" % v                       # noqa: E731
 K = 4
 ROUNDS = {"bf16": [True] * K,                      # 默认：每轮的部分和以 BF16 传下去（最后一轮的出口就是结果）
           "fp32": [False] * (K - 1) + [True]}      # FP32 累加：只在最后舍一次
-assert sum(ROUNDS["bf16"]) == 4 and sum(ROUNDS["fp32"]) == 1   # 跟 fig9-windowed「舍了 4 次 / 只舍 1 次」同一口径
+assert sum(ROUNDS["bf16"]) == 4 and sum(ROUNDS["fp32"]) == 1   # 跟 fig8-windowed「舍了 4 次 / 只舍 1 次」同一口径
 
 # ── 时间轴（时钟 ＝ 场景时间）──────────────────────────────────────────
 T_START = 0.8

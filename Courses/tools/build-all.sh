@@ -44,7 +44,7 @@ if [ "${1:-}" != "--lint" ]; then
   step "专题二 L200 讲义"
   python3 topic02-build-L200-lecture.py
 
-  # ⭐ 专题八在轮到它之前就开工了 —— 材料是讲专题二时问出来的，
+  # ⭐ 专题九在轮到它之前就开工了 —— 材料是讲专题二时问出来的，
   #    当场写进了它该属于的那一讲。它的 CSS 从专题二 L300 / 专题一讲义抽，
   #    **所以必须排在那两步之后**。
   # ⛔⛔ 2026-09-10 更正：这两行原来写着「源是 md，页面由 md2course.py 转出来，
@@ -140,21 +140,21 @@ python3 topic04-build-lecture.py
   python3 topic06-build-L200.py
   python3 topic06-build-L200-lecture.py
 
-  # 专题九：2026-11-05 替换原「最新开源模型对比」（只有大纲，从没成页）。GPU→TPU 训练精度对齐，图全走 topic03_draw。
-  step "专题九 教材"
-  rm -f fig9-*.svg fig9-*.src.html
-  for s in topic09-fig-*.py; do python3 "$s"; done
-  python3 topic09-build.py
-
-  step "专题九 讲义"
-  # ⛔ 必须排在教材之后 —— 讲义要读成品 topic-09.html 对账（图 id、小节、封面时长）。
-  python3 topic09-build-lecture.py
-
+  # 专题八（2026-11-11 前是专题九，跟精度与量化对调）：2026-11-05 替换原「最新开源模型对比」（只有大纲，从没成页）。GPU→TPU 训练精度对齐，图全走 topic03_draw。
   step "专题八 教材"
+  rm -f fig8-*.svg fig8-*.src.html
+  for s in topic08-fig-*.py; do python3 "$s"; done
   python3 topic08-build.py
 
   step "专题八 讲义"
+  # ⛔ 必须排在教材之后 —— 讲义要读成品 topic-08.html 对账（图 id、小节、封面时长）。
   python3 topic08-build-lecture.py
+
+  step "专题九 教材"
+  python3 topic09-build.py
+
+  step "专题九 讲义"
+  python3 topic09-build-lecture.py
 
   # ⭐ 专题二外传（L100，主线 17 分钟 ＋ §三 可跳 2 分钟）。CSS 从 L300 抽，**必须排在它之后**。
   #   ⛔ 五张图先生成 —— topic02x-build.py 找不到 svg 会直接 assert 挂掉，
@@ -233,7 +233,7 @@ python3 topic02-lint-coverage.py
 
 # ⭐ 第六条体检：**<head> 里的元信息**。前五条查的都是页面上看得见的东西，
 # 而标题只出现在浏览器标签、og 只出现在分享卡片上 —— ⛔ 这类错能错很久没人发现。
-# 2026-09-07 首次跑出：专题三、专题八的标题和四条 og 全是从专题二整段搬过来的，
+# 2026-09-07 首次跑出：专题三、专题九的标题和四条 og 全是从专题二整段搬过来的，
 # 因为那句改标题的 str.replace 模式匹配不上，而**匹配不上是静默的**。
 # ⭐ 第七条体检：**节号 ↔ 小节号**。2026-09-08 立的，起因是专题三两次重编号之后
 # §五～§八 四节的小节号集体比节号少 1 —— 页面上写着「第 六 节」，小节却编成 5.x。

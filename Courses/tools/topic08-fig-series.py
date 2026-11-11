@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-r"""专题九 · 第三节「逐步序列」的三张图。
+r"""专题八 · 第三节「逐步序列」的三张图。
 
-fig9-dt     回答：1000 个逐步相对差 dₜ，怎么压成三个数？—— 带符号均值（偏）、MARE（抖）、最大单步（尖）。
-            数据：topic09_series.json 的真实逐步值（TPU 对第一份 GPU、第二份 GPU 对第一份 GPU），点都是真点。
-fig9-judge  回答：一个数怎么判过不过？—— r ＝ 被测 ÷ 噪声上限 N；≤ 1 过，> 2 不过，中间待定。
-            数据：v5p 当前配置对精确轨迹的第一关验收（topic09_numbers.ACC，实测）。
-fig9-pairs  回答：参照对为什么要多？—— 纯噪声超过 n 个样本最大值的概率是 1/(n+1)。
+fig8-dt     回答：1000 个逐步相对差 dₜ，怎么压成三个数？—— 带符号均值（偏）、MARE（抖）、最大单步（尖）。
+            数据：topic08_series.json 的真实逐步值（TPU 对第一份 GPU、第二份 GPU 对第一份 GPU），点都是真点。
+fig8-judge  回答：一个数怎么判过不过？—— r ＝ 被测 ÷ 噪声上限 N；≤ 1 过，> 2 不过，中间待定。
+            数据：v5p 当前配置对精确轨迹的第一关验收（topic08_numbers.ACC，实测）。
+fig8-pairs  回答：参照对为什么要多？—— 纯噪声超过 n 个样本最大值的概率是 1/(n+1)。
             数字：1/(n+1) 现算；GPU 对 GPU 演练里待定条数（实测）。
-fig9-baseline 回答：只对一份基线比，基线自己偏了怎么办？—— 把同设置 10 份 GPU 运行都画出来，基线正好在上沿；换成 10 份均值重算，TPU 照样偏。
-            数据：10 份各自对第一份的第 301–1000 步 loss 带符号均值（topic09_numbers.GPU_RUNS10_TAIL，实测）；TPU 三种跑法（TPU_ARMS，实测）；扣均值是本课推导。
+fig8-baseline 回答：只对一份基线比，基线自己偏了怎么办？—— 把同设置 10 份 GPU 运行都画出来，基线正好在上沿；换成 10 份均值重算，TPU 照样偏。
+            数据：10 份各自对第一份的第 301–1000 步 loss 带符号均值（topic08_numbers.GPU_RUNS10_TAIL，实测）；TPU 三种跑法（TPU_ARMS，实测）；扣均值是本课推导。
             ⛔ 刻意没画纵轴：灰点竖着错开只为不重叠，纵向没有意义。
 """
 import statistics
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, wpx, MONO_K
-import topic09_numbers as N
+import topic08_numbers as N
 
 W = 1400
 S = N.series()
@@ -84,7 +84,7 @@ def fig_dt():
     yb = f.src(yb + 10,
                "📌 实测：两条 1000 步运行（同权重、同数据、同顺序），第 301–1000 步 TPU 对 GPU 第一份的带符号均值 −1.66e-4，GPU 第二份对第一份 −3.8e-5；两条的逐步标准差是 1.33e-4 和 1.34e-4，一阶自相关接近 0。",
                "📌 首步差 d₀ 单独报，不进窗口：GPU 重跑第 1 步通常逐位相同，当不了尺子。")
-    f.save("fig9-dt.svg", yb + 14)
+    f.save("fig8-dt.svg", yb + 14)
 
 
 def fig_judge():
@@ -124,7 +124,7 @@ def fig_judge():
                "📌 实测（定案前那次）：被测是 v5p 当前配置 1000 步，基线是精确轨迹的一份（它是什么，后面讲 golden 时细说），N 取 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换成 FP32）5 份两两 10 对的最大值。",
                "📌 param_norm 带符号均值 4.27e-7、N 1.24e-7；loss 全程 8.62e-5 / 4.49e-5，尾段 7.23e-5 / 5.62e-5；grad_norm 2.32e-3 / 2.03e-3。",
                "📌 定案后：基线换成最终 golden 的一份、N 取它自己 10 份两两 45 对，loss 全程 0.80、尾段 0.80、梯度范数 0.85、参数范数 0.50。N 取参照各对里绝对值最大的那个；r ＝ |被测| ÷ N。参数范数的相对差只有 4e-7 也判不过，因为 r 不跟「看上去大不大」比，跟这个量自己的噪声比。")
-    f.save("fig9-judge.svg", yb + 14)
+    f.save("fig8-judge.svg", yb + 14)
 
 
 NS = [3, 10, 15, 28, 45]
@@ -168,7 +168,7 @@ def fig_pairs():
     yb = f.src(yb + 10,
                "⚠️ 本课推导：被测若只是噪声，它和 n 个参照是同分布的 n＋1 个样本，每一个当最大值的机会相等，所以超过其余 n 个的概率是 1/(n＋1)。",
                "📌 实测：第一阶段 GPU 对 GPU 演练（每份 100 步，46 条检查，各级各种量加起来），3 份运行两两 3 对时有 8 条待定；扩到 6 份 15 对，重判那 8 条外加梯度范数一条，共 9 条，剩 3 条；8 份 GPU 对 GPU 28 对重判全部 46 条只剩 1 条（loss 最大单步，1.03 倍）。")
-    f.save("fig9-pairs.svg", yb + 14)
+    f.save("fig8-pairs.svg", yb + 14)
 
 
 def _m(v, fmt="%.2e"):
@@ -242,7 +242,7 @@ def fig_baseline():
                "📌 实测：TPU 三种跑法是同一份代码（原样、不重算、改编译器的片上内存上限），对同一份基线 %s ／ %s ／ %s。"
                % tuple(_m(v) for v in N.TPU_ARMS),
                "⚠️ 本课推导：扣掉均值 ＝ 被测值 − 10 份均值；标准差倍数 ＝ 扣掉均值后 ÷ 样本标准差。灰点竖着错开只为不重叠，没有纵轴。")
-    f.save("fig9-baseline.svg", yb + 14)
+    f.save("fig8-baseline.svg", yb + 14)
 
 
 fig_dt()
