@@ -1309,15 +1309,15 @@ assert ["%.1e" % x for x in MI["两边都去掉多路残差"]["tpu_each"]] == ["
 MI_SD = MI["对照"]["gpu_loo_sd"]          # GPU 16 份留一法 sd 2.1e-6
 assert "%.1e" % MI_SD == "2.1e-06"
 
-# ── 2026-11-11 晚 · F11：修之前 ／ 只补流梯度舍入 ／ 三个都补（topic08_fixcmp.json，私有导出脚本读各运行的逐步记录；实测）──
+# ── 2026-11-11 晚 · F11：修之前 ／ 只补残差流舍入 ／ 三个都补（topic08_fixcmp.json，私有导出脚本读各运行的逐步记录；实测）──
 with open(os.path.join(HERE, "topic08_fixcmp.json"), encoding="utf-8") as _fh:
     FC = json.load(_fh)
 FC_W = {k: [r["w551"] for r in v] for k, v in FC["cols"].items()}
-assert "%.2e" % FC_W["修之前"][0] == "1.48e-05" and len(FC_W["只补流梯度舍入"]) == 5 and len(FC_W["三个都补"]) == 3
+assert "%.2e" % FC_W["修之前"][0] == "1.48e-05" and len(FC_W["只补残差流舍入"]) == 5 and len(FC_W["三个都补"]) == 3
 assert ["%.1e" % x for x in FC_W["三个都补"]] == ["8.2e-06", "1.1e-05", "2.1e-06"]
 FC_SD = FC["loo_sd_551_1000"]
 assert abs(FC_SD - MI_SD) < 1e-9                                   # 跟研究线消融结果文件的 GPU 留一法 sd 一致
 FC_IN = {k: sum(1 for x in v if abs(x) <= 2 * FC_SD) for k, v in FC_W.items()}   # 落在 GPU 散布 2 sd 以内的份数
-assert FC_IN == {"修之前": 0, "只补流梯度舍入": 4, "三个都补": 1}, FC_IN
+assert FC_IN == {"修之前": 0, "只补残差流舍入": 4, "三个都补": 1}, FC_IN
 FC_BEFORE_751 = FC["cols"]["修之前"][0]["w751"]
 assert "%.1e" % FC_BEFORE_751 == "2.1e-05"
