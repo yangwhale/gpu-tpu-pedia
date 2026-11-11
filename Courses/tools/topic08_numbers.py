@@ -1136,3 +1136,104 @@ assert abs(ELIDE_AFTER - 3.5e-6) < 1e-12
 KAPPA_T = "1.0018"                        # base2 常数舍成 BF16 后 logits 的整体系数（本课复算见 LOG2E_BF16）
 
 assert LONG_ARMS == tpuself()['piles']['overview'][1]
+
+# ── 2026-11-11 晚 · F1：TPU 运行库 0.0.46 → 0.0.52（出处：对齐记录 TPU 自比「升 libtpu 0.0.52」一页、影响逐件、各 V 类结果文件；实测，除标本课推导）──
+# 自比的基准运行和 115 种改动原来都在运行库 0.0.46 上；升 0.0.52 后：新建基准运行（同版本重跑逐位相同），六件重测。
+LIB_OLD, LIB_NEW = "0.0.46", "0.0.52"
+_g52, _g52k = _C2R["052_基准对046"], _C2R["052_基准对046_1000"]
+LIB_GOLDEN_R = (_g52["r_max"], _g52k["r_max"])                       # 新基准对旧基准：300 步 0.99、1000 步 0.96，都在噪声内
+assert ("%.2f %.2f" % LIB_GOLDEN_R) == "0.99 0.96"
+LIB_GOLDEN_STEP = _g52["step_time_vs_golden"]                         # 步时 −5.5%（0.466 s 对 0.494 s）
+assert abs(LIB_GOLDEN_STEP + 0.0553) < 0.0002 and abs(0.466 / 0.494 - 1 + 0.057) < 0.002
+LIB_GOLDEN_R_T = "%.2f ／ %.2f" % LIB_GOLDEN_R
+# 六件：每件只改那一样，各对同版本的基准运行比；300 步曲线最差 r（1000 步写在括号里），第 1 步领头张量的 R
+def _r(k):
+    return _C2R[k]["r_max"]
+LIB_SIX = [   # (件, 0.0.46 的 r, 0.0.52 的 r, 0.0.46 判, 0.0.52 判)
+    ("纯数据并行（不修）", _r("纯数据并行8"), _r("052_纯数据并行8"), "超", "超"),
+    ("关省舍入", _r("关省舍入"), _r("052_关省舍入"), "超", "超"),
+    ("关小矩阵乘改写", 0.94, 1.00, "能忍", "能忍"),            # 这两件 r 来自脾气表（topic08_tpuself.json 的 issues，下面断言）
+    ("RMSNorm 多舍一次", _r("RMSNorm多舍一次"), _r("052_RMSNorm多舍一次"), "能忍", "超"),
+    ("多路残差不强制舍 BF16", 1.09, 1.18, "能忍", "能忍"),
+    ("上下文并行（不开 FP32 logits）", 1.27, 0.95, "能忍", "在噪声内"),
+]
+_iss = {i["name"]: dict(i["exps"]) for i in tpuself()["piles"]["issues"]}
+assert _iss["关小矩阵乘改写"]["关小矩阵乘改写"] == 0.94 and _iss["关小矩阵乘改写"]["TPU 运行库 0.0.52：关小矩阵乘改写"] == 1.0
+assert _iss["多路残差混合 不强制舍成 BF16"]["TPU 运行库 0.0.52：多路残差混合 不强制舍成 BF16"] == 1.18
+assert _iss["RMSNorm 多舍一次"]["TPU 运行库 0.0.52：RMSNorm 多舍一次"] == 5.5
+assert [("%.2f" % a, "%.2f" % b) for _n, a, b, _x, _y in LIB_SIX] == [("2.62", "2.82"), ("13.28", "12.56"), ("0.94", "1.00"), ("1.06", "5.50"), ("1.09", "1.18"), ("1.27", "0.95")]
+_cp52 = [a for a in tpuself()["arms"] if a["change"] == "TPU 运行库 0.0.52：加上下文并行（不做负载均衡）"]
+assert _cp52 and _cp52[0]["r300"] == 0.95
+LIB_SIX_R = {"纯数据并行": ("3.62", "3.60"), "关省舍入": ("26.13", "26.11")}   # 第 1 步词嵌入梯度 R
+assert "%.2f" % _C2R["052_纯数据并行8"]["emb_R"] == "3.60" and "%.2f" % _C2R["052_关省舍入"]["emb_R"] == "26.11"
+# RMSNorm 多舍一次：0.0.52 上主 loss 系统性偏高
+LIB_RMS_R1K = _r("052_RMSNorm多舍一次_1000")
+assert "%.2f" % LIB_RMS_R1K == "3.68"
+LIB_RMS_SM = (1.3e-6, _C2R["052_RMSNorm多舍一次"]["loss_worst"][1])   # 前 300 步主 loss 对基准的带符号均值：0.0.46 1.3e-6（影响逐件），0.0.52 1.65e-5
+assert _C2R["052_RMSNorm多舍一次"]["loss_worst"][0] == "signed_mean" and "%.3g" % LIB_RMS_SM[1] == "1.66e-05"
+LIB_RMS_SM_T = ("1.3e-6", "1.65e-5")        # 研究线写 1.65e-5（结果文件 1.6551e-5，按三位有效是 1.66e-5；照研究线）
+LIB_RMS_R_STEP1 = ("1.20", "1.17")          # 第 0 层 input_layernorm 权重梯度的 R（第 1 步看不出）
+LIB_RMS_R_T, LIB_RMS_R1K_T = "%.2f" % _r("052_RMSNorm多舍一次"), "%.2f" % LIB_RMS_R1K
+# 三种修法在 0.0.52 上（300 ／ 1000 步），都跟 GPU 重跑分不开
+LIB_FIX = {k: (_r("052_" + k), _r("052_" + k + "_1000")) for k in ("修法1", "修法2", "只切词嵌入表")}
+assert ["%.2f/%.2f" % v for v in LIB_FIX.values()] == ["1.55/0.92", "1.20/1.28", "1.23/0.97"]
+assert max(max(v) for v in LIB_FIX.values()) < LOO8_300_MAX
+LIB_FIX_T = "；".join("%s %.2f ／ %.2f" % (n, a, b) for n, (a, b) in zip(("①", "②", "③"), LIB_FIX.values()))
+# v7x 纯数据并行、不累积（每卡 8192 个下标）：0.0.52 开始排序 → 不再丢精度（先离线预测，再上卡核）
+_v46, _v52 = _C2R["v7x纯数据并行8不累积"], _C2R["052_v7x纯数据并行8不累积"]
+LIB_V7X_GA1 = {"r": (_v46["r_max"], _v52["r_max"]), "emb": (_v46["emb_test"], _v52["emb_test"]), "R": (_v46["emb_R"], _v52["emb_R"])}
+assert "%.2f %.2f %.2e %.2e %.2f %.2f" % (LIB_V7X_GA1["r"] + LIB_V7X_GA1["emb"] + LIB_V7X_GA1["R"]) == "4.06 0.89 2.93e-02 4.63e-03 6.90 1.10"
+LIB_V7X_GA1_T = "r %.2f → %.2f，词嵌入梯度离 FP64 %.2e → %.2e，R %.2f → %.2f" % (LIB_V7X_GA1["r"] + LIB_V7X_GA1["emb"] + LIB_V7X_GA1["R"])
+# 门槛：四种组合（芯片 × 运行库）二分出的最小插排序下标数（单算子离线编译；None ＝ 到 65536 都不插）
+LIB_THRESH = {k: {(t["V"], t["D"]): t["最小插排序N"] for t in v} for k, v in _C2["threshold_versions"].items()}
+assert LIB_THRESH["v5p_046"][(120832, 1024)] == 15105 and LIB_THRESH["v5p_052"][(120832, 1024)] == 14420
+assert LIB_THRESH["v5p_052"][(120832, 128)] == 1783 and LIB_THRESH["v7x_052"][(120832, 1024)] == 7181
+assert LIB_THRESH["v7x_046"][(120832, 128)] == 2 == LIB_THRESH["v7x_052"][(120832, 128)]     # 列数 128 的表在 v7x 上交给 SparseCore，下标到 2 就排序
+assert all(LIB_THRESH[k][(1000, 1024)] is None for k in LIB_THRESH) and LIB_THRESH["v5p_052"][(30000, 128)] is None
+for (_v, _d), _n in LIB_THRESH["v5p_046"].items():
+    assert _n is None or _n == _v // 8 + 1                                                    # 0.0.46 上 v5p 全部是 N ＞ V／8
+for (_v, _d), _n in LIB_THRESH["v7x_046"].items():
+    assert _n is None or _n == _v // 8 + 1 or (_d == 128 and _n == 2)                         # 0.0.46 上 v7x：列数 1024 也是 V／8
+assert LIB_THRESH["v7x_052"][(120832, 1024)] < 8192 < LIB_THRESH["v5p_052"][(120832, 1024)]   # v7x 0.0.52 上每卡 8192 过线、v5p 不过
+assert 4096 < LIB_THRESH["v7x_052"][(120832, 1024)]                                          # 累积 2（每卡 4096）在 v7x 0.0.52 上仍不过
+LIB_SCREEN_CHANGED = 0          # 104 个能比的臂，两个版本下「程序相同／不同」的判定一条没变（25 相同、79 不同）
+LIB_SCREEN = (104, 25, 79)
+assert LIB_SCREEN[1] + LIB_SCREEN[2] == LIB_SCREEN[0]
+LIB_SPOT = 3                    # 0.0.52 上抽 3 条「程序相同」的改动上卡，都跟新基准逐位相同
+
+# ── 2026-11-11 晚 · F1：跑前离线筛（出处：TPU 自比「跑前离线筛：回测」表、setup「跑前离线筛」；实测）──
+SCREEN = {"arms": 109, "same": 23, "diff": 72, "cant": 14, "match": 95, "mismatch": 0}
+assert SCREEN["same"] + SCREEN["diff"] + SCREEN["cant"] == SCREEN["arms"] and SCREEN["same"] + SCREEN["diff"] == SCREEN["match"] + SCREEN["mismatch"]
+SCREEN_SPECS, SCREEN_SEC_T, SCREEN_MED_S, SCREEN_GIB_T = 95, "114–265", 184, "13.2–16.9"   # 编了 95 份规格；整次 114–265 s、中位数 184 s；单进程峰值内存
+
+# ── 2026-11-11 晚 · F1：小尺寸主 loss 共同偏高，偏差随步数怎么走（出处：小尺寸 results/mini-main-loss-drift.json、知识库「mini 主 loss 共同偏高」；实测）──
+MD = tpuself()["mini_drift"]
+assert MD["n_tpu"] == 8 and MD["n_gpu"] == 16 and len(MD["主loss"]["blocks"]) == 40
+_lmw = {w[0]: w for w in MD["主loss"]["windows"]}
+_mtw = {w[0]: w for w in MD["MTP"]["windows"]}
+MD_STEP1 = _lmw["1-1"][1]                 # 第 1 步 −2.0e-6（8 份都偏低）
+MD_BUMP = _lmw["51-100"][1]               # 第 51–100 步的小鼓包 ＋4.5e-6
+MD_LATE = _lmw["751-1000"][1]             # 第 751–1000 步 ＋1.3e-5
+MD_ALL = _lmw["2-1000"][1]                # 第 2–1000 步 ＋4.3e-6
+MD_MTP_LATE = _mtw["751-1000"][1]         # 同期 MTP −3.2e-5（反着走）
+assert "%.1e %.1e %.1e %.1e %.1e" % (MD_STEP1, MD_BUMP, MD_LATE, MD_ALL, MD_MTP_LATE) == "-2.0e-06 4.5e-06 1.3e-05 4.3e-06 -3.2e-05"
+assert _lmw["751-1000"][3] == 8 and _mtw["751-1000"][3] == 0       # 后段 8 份全部偏高，MTP 8 份全部偏低
+_blk = {b[0]: b for b in MD["主loss"]["blocks"]}
+MD_LAST = _blk["976-1000"][1]
+assert "%.1e" % MD_LAST == "1.8e-05" and "%.1e" % _blk["601-625"][1] == "4.1e-06"
+MD_CORR = (MD["corr"]["param_norm_501起"], MD["corr"]["梯度范数倒数_501起"])
+assert "%.2f %.2f" % (MD["corr"]["步数_501起"], MD_CORR[1]) == "0.96 -0.11"
+MD_SAME_STATE_T = "＋0.83e-6 ± 1.15e-6"   # 同一份权重上的前向：TPU 减 GPU 写法（6 个状态 19 批，均值 ± 标准误），不到后段的一成
+MD_STEP1_T, MD_LATE_T, MD_LAST_T, MD_MTP_LATE_T = "−2.0e-6", "＋1.3e-5", "＋1.8e-5", "−3.2e-5"
+# 课件正文用的字符串（F1）
+LIB_V7X_R46_T = "%.2f" % LIB_V7X_GA1["r"][0]
+LIB_TH_V5P_1024, LIB_TH_V5P_128, LIB_TH_V7X_1024 = (format(LIB_THRESH["v5p_052"][(120832, 1024)], ","), format(LIB_THRESH["v5p_052"][(120832, 128)], ","),
+                                                    format(LIB_THRESH["v7x_052"][(120832, 1024)], ","))
+LIB_GOLDEN_STEP_T = "%.1f%%" % (-LIB_GOLDEN_STEP * 100)
+assert LIB_GOLDEN_STEP_T == "5.5%"
+LIB_RMS_PAIR_T = "%.2f → %s" % (_r("RMSNorm多舍一次"), LIB_RMS_R_T)
+assert LIB_RMS_PAIR_T == "1.06 → 5.50"
+LIB_SCREEN_N = LIB_SCREEN[0]
+SCREEN_ARMS, SCREEN_SAME, SCREEN_DIFF, SCREEN_CANT, SCREEN_MATCH = (SCREEN[k] for k in ("arms", "same", "diff", "cant", "match"))
+SCREEN_MIN_T = "%d" % round(SCREEN_MED_S / 60)       # 整次中位数 184 s ≈ 3 分钟
+assert SCREEN_MIN_T == "3"

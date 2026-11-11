@@ -10,6 +10,7 @@ fig8-mig2  回答：同一套方法换一个模型再走一遍，结果怎样？
                 GPU 扩展一节（各运行对单机的结果文件）、真实宽度一节（汇总页、第 1 步对 FP64、前 164 步中间判档），全部实测。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+import topic08_numbers as N
 
 W = 1400
 MINI = [("主 loss（全程）", 1.55), ("主 loss（后段）", 1.52), ("MTP loss（全程）", 1.00), ("MTP loss（后段）", 1.00),
@@ -123,4 +124,70 @@ def fig_mig2():
     f.save("fig8-mig2.svg", yb + 14)
 
 
+def fig_minidrift():
+    """fig8-minidrift 回答：小尺寸 TPU 主 loss 那截共同偏高，是从哪一步开始的、是不是前向的差？
+    上：主 loss，TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块（柱）；灰带 ＝ ± GPU 留一法标准差。
+    下：同一批运行的 MTP loss，同样画法（反着走）。数据：topic08_numbers 的 MD（小尺寸 results/mini-main-loss-drift.json，实测）。"""
+    MD = N.MD
+    f = Fig(W, "上下两条。上：小尺寸 1000 步，TPU 8 份主 loss 对 GPU 16 份逐步均值的相对差，每 25 步一根柱，灰带是 GPU 自己的散布。"
+               "第 1 步 −2.0e-6；第 51 到 100 步一个小鼓包；第 100 到 550 步在 0 附近；第 550 步起一路往上，到最后一块 ＋1.8e-5。"
+               "下：同一批运行的 MTP loss，第 100 步起反着往下，最后 −3.2e-5。前段鼓包定到多路残差收拢那次少舍的 BF16；后段在查。")
+    y0 = f.header("小尺寸主 loss 那截偏高：几乎全在第 550 步以后，越往后越大",
+                  "TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块；灰带 ＝ ± GPU 留一法标准差（实测）",
+                  [(RD, "8 份全部偏高的块"), (BL, "8 份全部偏低的块"), (OR, "其余块"), (GY2, "± GPU 散布")])
+    X0, XW = 120, W - 170
+
+    def X(step):
+        return X0 + (step - 1) / 999.0 * XW
+
+    def strip(y, h, key, vmax, title, col):
+        py = f.panel(0, y, W, h, title, col)
+        mid = py + (h - 30) / 2.0
+        k = (h - 30) / 2.0 - 16
+
+        def Y(v):
+            return mid - v / vmax * k
+        for b in MD[key]["blocks"]:
+            a, c = (int(x) for x in b[0].split("-"))
+            sd = b[2]
+            f.box(X(a), Y(sd), X(c) - X(a), Y(-sd) - Y(sd), "#eceff1", "#eceff1", 0)
+        f.line(X0, mid, X0 + XW, mid, GY2, 1, arrow=False)
+        tk = 1e-5 if vmax < 3e-5 else 2e-5
+        for v in (tk, -tk):
+            f.t(X0 - 8, Y(v) + 4, ("%+.0e" % v).replace("e-0", "e-"), GY, size=11.5, anchor="end")
+        f.t(X0 - 8, mid + 4, "0", GY, size=11.5, anchor="end")
+        for b in MD[key]["blocks"]:
+            a, c = (int(x) for x in b[0].split("-"))
+            v, n = b[1], b[3]
+            fill = RD if n == 8 and v > 0 else (BL if n == 0 and v < 0 else OR)
+            yv = Y(v)
+            f.box(X(a) + 2, min(yv, mid), X(c) - X(a) - 4, abs(yv - mid), fill, fill, 1)
+        return py, Y, mid
+    PH = 250
+    py, Y, mid = strip(y0, PH, "主loss", 2.0e-5, "主 loss：TPU 减 GPU（相对差）", RD)
+    for st in (1, 250, 500, 750, 1000):
+        f.t(X(st), py + PH - 36, "第 %d 步" % st, GY, size=12, anchor="middle")
+    f.t(X(1) + 6, Y(N.MD_STEP1) + 22, "第 1 步 %s" % N.MD_STEP1_T, INK, True, 12.5)
+    f.t(X(60), Y(5.2e-6) - 10, "小鼓包：定到多路残差收拢后少舍的那次 BF16", OR, True, 12.5)
+    f.t(X(260), Y(-6e-6), "第 100–550 步在 0 附近，正负相抵", GY, True, 12.5)
+    f.t(X(560), Y(1.75e-5) - 4, "第 550 步起一路往上，最后一块 %s；8 份全部偏高" % N.MD_LAST_T, RD, True, 13)
+    f._pan = None
+    y1 = py + PH - 30 + 14
+    PH2 = 210
+    py2, Y2, mid2 = strip(y1, PH2, "MTP", 5.0e-5, "同一批运行的 MTP loss：反着走", BL)
+    f.t(X(470), Y2(3.4e-5), "第 751–1000 步 %s，8 份全部偏低（MTP 的尺子宽 4 倍，判档能过）" % N.MD_MTP_LATE_T, BL, True, 12.5)
+    f._pan = None
+    yb = f.band(py2 + PH2 - 30 + 20, "warn", "是训练轨迹慢慢偏开，不是前向的差；前段的鼓包定了，后段在查", [
+        "同一份权重上两边各算几批（6 个状态、19 批），TPU 只比 GPU 写法高 %s，不到后段的一成；偏差跟步数、参数范数同步（相关 %.2f），跟梯度范数无关。" % (N.MD_SAME_STATE_T, N.MD_CORR[0]),
+        "后段排除过五个候选；还剩的候选（几类小参数的梯度离精确值更远）是推断，没有开关能单独把它拉回来，下一步要在 GPU 一侧做消融。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步，现行对齐配置）：TPU 8 份 ＝ 开、关 base2 各 4 份（其中 6 份只改执行方式）；每一步取 8 份对 GPU 16 份逐步均值的相对差再平均，25 步一块；灰带是 GPU 16 份轮流当被测、对其余 15 份均值的标准差。"
+               "窗口值：第 2–1000 步 ＋4.3e-6，第 751–1000 步 %s，MTP 同窗口 %s。" % (N.MD_LATE_T, N.MD_MTP_LATE_T),
+               "📌 前段鼓包：GPU 在多路残差收拢成一路之后舍一次 BF16 再进末层归一化，TPU 这次舍入被编译器省掉；加一个强制舍入的开关，第 51–100 步回到 GPU 附近，第 751–1000 步不变。",
+               "⚠️ 柱的颜色只看 8 份的符号是否一致，不是判档；判档仍按第三节的三个统计和 GPU 16 份的尺子（主 loss 1.55、1.52 待定）。")
+    f.save("fig8-minidrift.svg", yb + 14)
+
+
 fig_mig2()
+fig_minidrift()
