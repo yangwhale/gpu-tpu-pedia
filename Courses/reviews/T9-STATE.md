@@ -302,3 +302,7 @@
   - §3.3 判档 `janus/checks/base.py`（judge_calibrated）、`janus/checks/series.py`；§3.5 留一法 `models/hunyuan4/analysis/gpu_loo_r.py`、尺子入门 `docs/guide/ruler.md`；§4.2 FP64 参照 `models/hunyuan4/frameworks/megatron/step1_ref.py`、反推梯度与定责与程序指纹 `models/hunyuan4/analysis/tpu_self_compare.py`；§8.3 `emb_grad_row_groups.py`；§8.5 `emb_scatter_sort_probe.py`；§8.10 `hlo_comm_bytes.py`；§10.1 `04-tpu-self/build_tables.py`。10 条全部 200。
   - 链接一律钉 sha（PUB_SHA 常数），不用 main；MaxText 分支不链接。讲义第四、八节备答各加一条「照着跑」。
   - 课件源码的禁词闸门：只给公开仓库前缀开例外（仓库名在源码里拼接，包目录写 PKG/ 再替换），别的照旧拦。
+
+### E3（2026-11-11）第五、六节大段文字
+- §5.4「开关在代码里怎么开」（164 字）收折叠；§5.5 混元 3 关 excess precision 那段（94 字）→ 三行表（单层回放／loss 偏移／参数范数，各一句读法）；§5.6 开头钩子（150 字）压成一段两句（「你一定以为」留给讲义）；§5.7 第四问那段（229 字）→ 一句正文 ＋「后来还有两步」折叠；§5.8 sigmoid 那段（166 字）→ 一句 ＋「细账」折叠（图下落点带已讲经过，避免三面重复）；§6.3「读数算不算数」（299 字）→ 一句 ＋「工具｜改不改生产程序｜读数能当什么｜能比到第几步」五行表；§6.4 删掉与 fig-ongrid 底行逐字重复的 154 字，第二段压成一句。
+- 讲义第四、八节加「照着跑」；闸门例外补上仓库全名（只认 owner/仓库 这一个）。
