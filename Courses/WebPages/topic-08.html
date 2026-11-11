@@ -1118,7 +1118,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>五种集合通信</b>：all-reduce 各卡相加、每卡一份；reduce-scatter 相加后每卡只留一段；all-gather 把各卡的段拼成整份；all-to-all 每卡把自己的数据切成 n 份、第 i 份送给第 i 张卡；collective-permute 是点对点地传一块（<a href="#s8-10">§8.10</a>）。</li>
     <li><b>HLO</b>：XLA 编译出来的程序文本；切分、融合做完以后那一份里，每个算子、每次跨卡通信的类型和形状都看得到（<a href="#s8-10">§8.10</a>）。</li>
     <li><b>R</b>：被测离 FP64 的距离 ÷ 参照离 FP64 的距离；≤ 1.2 记「换了顺序」，更大记「丢了精度」（<a href="#s4-2">§4.2</a>）。</li>
-    <li><b>尺子、刻度</b>：拿来比的那把叫尺子：多步曲线上是噪声上限 N，第 1 步逐张量上是 GPU 三份两两的最大差；「刻度」只指 FP32 记录值的分辨率（例如混元 3 的参数范数在 3042 附近一格约 2.44e-4）。</li>
+    <li><b>尺子、刻度</b>：拿来比的那把叫尺子：多步曲线上是噪声上限 N，第 1 步逐张量上是 GPU 几份重跑两两的最大差（混元 3 三份，第二次迁移现在六份）；「刻度」只指 FP32 记录值的分辨率（例如混元 3 的参数范数在 3042 附近一格约 2.44e-4）。</li>
     <li><b>留一法</b>：轮流拿一份 GPU 重跑当被测，用其余几份当尺子，看纯噪声按同一套判法能拿几分（<a href="#s3-5">§3.5</a>）。</li>
     <li><b>定责</b>：查清一处差来自哪一边、为什么；第 1 步靠对 FP64 的 R 比，分「换了顺序」和「丢了精度」（<a href="#s4-2">§4.2</a>）。</li>
     <li><b>程序指纹</b>：编译后的整份程序去掉元数据、名字按出现顺序重新编号以后的哈希；编译开关和运行库也相同时，指纹一样，结果就逐位相同（<a href="#s10-3">§10.3</a>）。</li>
@@ -7753,7 +7753,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>验的时候：单个算子对 FP64 算 R（<a href="#s4-2">§4.2</a>）；第 1 步逐张量梯度对 GPU 重跑的噪声，超出的对 FP64 定责。</p></details>
   <details class="foldfig"><summary><b>一处一处看不出来的时候</b>：第 1 步逐张量梯度普遍是 GPU 噪声的 2–3 倍，没有哪一处突出</summary>
   <p>第二次迁移第 1 步，195 个张量里 TPU 对 GPU 的差 ÷ GPU 三份两两的最大差，中位数 2.67，超过 2 倍的 139 个，从输出层到第 0 层普遍偏大。这不像一个模块写错，像好几处舍入位置一起跟 GPU 不同：打开三个照 GPU 写法舍入的开关（FP32 累加部分和、RMSNorm 只舍一次、路由权重先舍 BF16），中位数 2.67 → 1.65，超 2 倍的 139 → 52。第四个开关（门控激活逐算子舍）让统计略变差（1.72、62 个），照样打开 —— 开不开看 GPU 实际怎么写，不看统计好不好看。</p>
-  <p>现行配置（关 base2）第 1 步：205 个梯度里 177 个超出 GPU 三份的波动，拿去对 CPU 上的 FP64 整网重算定责：171 个离 FP64 不超过 GPU 的 1.2 倍，6 个比 GPU 远（5 个是多路残差混合的小参数，其中 3 个是关 base2 后新冒出来的、还没定责；1 个是 MTP 的归一化权重，已接受）；另 10 个 GPU 三份逐位相同、18 个在波动内。定责一律对 FP64，不对 TPU 自己跑的 FP32 参照（裁判不能是选手，<a href="#s4-2">§4.2</a>）。</p></details>
+  <p>现行配置（关 base2）第 1 步，GPU 参照补到六份（15 对）后：205 个梯度里 169 个超出 GPU 的波动，拿去对 CPU 上的 FP64 整网重算定责：167 个离 FP64 不超过 GPU 的 1.2 倍，2 个比 GPU 远（1 个是多路残差混合的小参数，超出波动 1.05 倍、判待定；1 个是 MTP 的归一化权重，已接受）；另 10 个 GPU 各份逐位相同、26 个在波动内。只有三份时是 177 个超出、5 个小参数没定责：份数补够，尺子量准了，大半「没定责」自己就消失了。定责一律对 FP64，不对 TPU 自己跑的 FP32 参照（裁判不能是选手，<a href="#s4-2">§4.2</a>）。</p></details>
 <details class="foldfig"><summary><b>考考自己</b>：TPU 上把一处矩阵乘的两个操作数都转成 FP32，别的没改。为什么离 GPU 的真 FP32 还差末位？</summary><p>默认精度下它只算一遍 BF16；设成 HIGHEST 是多遍 BF16 拼出来的近似。但写着 HIGHEST 不算数，要看编译后的样子：编译器若把它改写成逐元素 FP32 乘加，差的就只剩加法顺序，归到「顺序」那一格。</p></details>
 
   <h3 id="s5-7">5.7　小数是两个大数相减：病态会放大一格</h3>
@@ -10228,7 +10228,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s9-7">9.7　第二次迁移：换一个模型，方法还灵不灵</h3>
   <p>第二次迁移照同一条路走：先在保留全部结构、只缩宽度和层数的小模型上做 L0–L4 全套；再让 GPU 自己扩到多台机器、换切法，看参照守不守得住尺子；最后上真实宽度。</p>
-<figure class="fbox fwide" id="fig-mig2"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="三块。左块九根横条：第二次迁移的小尺寸模型 1000 步九项检查，尺子是 GPU 16 份；七项在 1 以内，主 loss 全程 1.55、后段 1.52 待定，TPU 开、关 base2 各 4 份共八份，主 loss 全部偏高、平均约 4.3e-6，还在查。中块：GPU 自己换机器数和切法，每个点一次运行对单机尺子的最大倍数，最大 1.76，没有超过 2；学习率大 10% 的正对照是 4149 倍。右块：真实宽度三层，第 1 步主 loss 对 64 位真值 GPU 偏高 5.8e-5、TPU 偏低 9.9e-5；定到注意力的 base2 常数舍成 BF16、logits 整体乘 1.0018，只关这个开关 TPU 到 −1.2e-6。1000 步回放九项：开着过 2、待定 4、不过 3；关掉过 3、待定 6、不过 0。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-mig2"><svg viewBox="0 0 1400 738" width="100%" role="img" aria-label="三块。左块九根横条：第二次迁移的小尺寸模型 1000 步九项检查，尺子是 GPU 16 份；七项在 1 以内，主 loss 全程 1.55、后段 1.52 待定，TPU 开、关 base2 各 4 份共八份，主 loss 全部偏高、平均约 4.3e-6，还在查。中块：GPU 自己换机器数和切法，每个点一次运行对单机尺子的最大倍数，最大 1.76，没有超过 2；学习率大 10% 的正对照是 4149 倍。右块：真实宽度三层，第 1 步主 loss 对 64 位真值 GPU 偏高 5.8e-5、TPU 偏低 9.9e-5；定到注意力的 base2 常数舍成 BF16、logits 整体乘 1.0018，只关这个开关 TPU 到 −1.2e-6。1000 步回放九项：开着过 2、待定 4、不过 3；关掉过 3、待定 6、不过 0。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第二次迁移：同一套方法再走一遍</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：小尺寸 1000 步成绩（尺子 GPU 16 份）；中：GPU 自己扩机器、换切法；右：真实宽度三层，第 1 步的差定了责，1000 步跑完</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -10352,12 +10352,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1010" y="468" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">关了以后不过清零；剩下的后段偏低，</text>
 <text class="svgsm" x="1010" y="490" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">在同一份权重上核过：是轨迹差，</text>
 <text class="svgsm" x="1010" y="512" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">不是前向差，来源还在查</text>
-<rect x="0" y="592" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="592" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="592" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<rect x="0" y="592" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="592" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="592" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换一个模型，方法照样走得通：小尺寸曲线大半对上，真实宽度第 1 步的差查到了根</tspan></text>
-<text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">还不能签字：小尺寸主 loss 两个窗口待定（八份 TPU 共同偏高，在查）、第 1 步有 3 个新冒出来的小参数要定责；真实宽度后段偏低是轨迹差，来源还在查。</text>
-<text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：小尺寸这一代的判法和尺子都是 2026-11-11 才换上的（关 base2、尺子 16 份）；上一代那两项已接受的结论不能套到这一代。</text>
+<text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">还不能签字：小尺寸主 loss 两个窗口待定（八份 TPU 共同偏高，在查）、第 1 步还有 1 个小参数待定（GPU 参照补到六份后，五个没定责的只剩一个）；真实宽度后段偏低是轨</text>
+<text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">迹差，来源还在查。</text>
+<text class="svgsm" x="20" y="698" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">代价：小尺寸这一代的判法和尺子都是 2026-11-11 才换上的（关 base2、尺子 16 份）；上一代那两项已接受的结论不能套到这一代。</text>
 </svg><figcaption><b>左边只有两根橙条略过 1；中间没有点过 2；右边红点关掉 base2 以后挪到真值旁边。</b><span class="capmore"><br><em>三块都是实测；左块两项待定还在查。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Ⓐ 小尺寸（约 4.3 亿参数，保留新模型全部结构、缩宽度和层数，随机初始化）TPU v5p 8 设备 ↔ B200×8，1000 步，现行比较：对齐配置关 base2，被测对 GPU 基线一份，尺子 GPU 16 份两两 120 对；每格是三个统计里最差的 r。主 loss 1.55（带符号均值 TPU ＋7.21e-6，上限 4.65e-6）、后段 1.52、MTP 1.00、后段 1.00、索引器蒸馏 0.77、梯度范数 0.81、参数范数 0.55、路由偏置均值 0.20、标准差 0.77。开、关 base2 各 4 份重复，主 loss 都偏高、两组交叠：这份偏高跟 base2 无关，平均 ＋4.3e-6（GPU 每份对其余 15 份在 −2.63e-6 到 ＋2.34e-6），原因还在查。上一代（开 base2、尺子 8 份）是梯度范数 1.23、路由偏置标准差 1.14 待定，已接受。</p>
 <p>📌 Ⓑ 对单机 GPU golden 的前 300 步，尺子是单机 8 份两两 28 对；8 项检查取最差倍数。2 台 DP16＋EP4 跑了 8 份（最大 1.76，参数范数）；多机自己的尺子在主 loss、梯度范数、参数范数上是单机的 1.0–1.3 倍；两组对单机基线的窗口带符号均值没有系统偏移（Welch |t| ≤ 1.3）。正对照：同 2 台设置、学习率大 10%，8 项里 7 项超出，最大 4149 倍。存档续跑：确定性模式下「跑 20 步」对「跑 10 步、存、续跑 10 步」，2 台 PP2＋DP8＋EP8 的 8760 个状态张量、真实宽度 2 台的 14512 个状态张量都逐位相同。</p>
 <p>📌 Ⓒ 真实宽度第 0–2 层 ＋ MTP（3.21e10 参数），GPU 2 台跑 1000 步当 golden，TPU v5p 16 片原样回放：第 1 步主 loss 对 CPU FP64 GPU ＋5.76e-5、TPU −9.87e-5；注意力内核里 q 是 BF16，常数 log₂e 跟着舍成 1.4453125，logits（不含 sink）整体乘 1.0018；只关 base2 这一个开关，TPU −1.24e-6（CPU FP64 只加这个系数的移动跟实测相符）。1000 步回放九项：开 base2 过 2／待定 4／不过 3，关 base2 过 3／待定 6／不过 0。后段主 loss 偏低：同一份权重上 32 批对比，前向差不到一个标准误，后段的偏低全是轨迹差。索引器蒸馏那一项 GPU 自己偏高，约六成来自 GPU 把索引器的旋转位置编码放在 BF16 里算。所有尺寸的对齐配置因此都关了 base2。</p></details></figure>

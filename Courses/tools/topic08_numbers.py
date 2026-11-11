@@ -1335,3 +1335,7 @@ PR_N_T, PR_WORST_T, PR_LOSS_X_T = "8", "%.2f" % PR_WORST, "%.1f" % PR_LOSS_X
 # F14：生产形状 0.0.46 的门槛（两代都是 V/8 往上取整）——每卡 16384 个下标在 0.0.46 上会排序，0.0.52 上不排序
 assert PROD_TH["v5p_046"] == PROD_TH["v7x_046"] == 120832 // 8 + 1 and 16384 > PROD_TH["v5p_046"]
 PROD_TH_046_T = str(PROD_TH["v5p_046"])
+# F16：GPU 第 1 步参照补到 6 份 15 对后重判（小尺寸报告「第一步整网」、结果文件 judge_fp64：超 N 169、待定 2 个、判「待定」）
+B2_NOW6 = {"total": 205, "over": 169, "attr": 167, "far": 2, "far_mix": 1, "same": 10, "within": 26}
+assert B2_NOW6["attr"] + B2_NOW6["far"] == B2_NOW6["over"] and B2_NOW6["over"] + B2_NOW6["same"] + B2_NOW6["within"] == B2_NOW6["total"]
+assert B2_NOW6["over"] < B2_NOW["over"] and B2_NOW6["far_mix"] < B2_NOW["far_mix"]      # 份数补够，超线和没定责的都变少
