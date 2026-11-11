@@ -19,7 +19,7 @@ fig9-comm     回答：怎么从编译产物看通信？—— 一条集合通�
 """
 import math
 
-from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU, wpx, MONO_K
 import topic09_numbers as N
 
 W = 1400
@@ -75,7 +75,10 @@ def fig_2x2():
             x = LX + c * (CW + 20)
             bad = (c == 1 and not sort)
             f.box(x, y, CW, RH, "#fce8e6" if bad else "#fff", RD if bad else LINE, 10, sw=1.6 if bad else 1)
-            _ticks(f, x + 30, y + 40, k, sort, BL, 1.0)
+            if sort and c == 1:
+                _ticks(f, x + 30, y + 44, 24, True, BL, 0.6)   # 示意：FSDP 那次收齐 8 张卡，同一个词加得更多
+            else:
+                _ticks(f, x + 30, y + 40, k, sort, BL, 1.0)
             many = "几" if c == 0 else "几十到几百"
             if sort:
                 txt = "收几次更新，舍 1 次" if c == 0 else "8 张卡收齐，次数约是纯数据并行那格的 8 倍，舍 1 次"
@@ -93,7 +96,7 @@ def fig_2x2():
                 f.t(x + CW - 24, y + 150, "不明显", GY, True, 15, "end")
     yb = f.band(top + 2 * RH + 40, "warn", "低频行两种写法差别小（最多 %s 倍）；高频行在 BF16 里一次次地加，才把误差攒起来" % N.C2_LOW_X_T, [
         "纯数据并行比 FSDP 多出来的误差，%s 落在这 %d 个高频词的行上。" % (N.C2_HOT_SHARE_T, HOT[1]),
-        "代价：左边两格的绝对误差不小，可它在加进词表之前就在了，两种写法一样，不是这里的问题。",
+        "代价：要让高频行只舍一次，要么排序（靠一个门槛），要么在 FP32 里加；后面几小节讲。",
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，TPU v5p 自比，第 1 步）：词嵌入梯度按行分组，每组算 ‖被测 − FP64‖ ÷ ‖FP64‖。分组按这一行的 token 在这一步全局批里一共出现几次（16 条序列，主输入与多 token 预测输入合计）："
@@ -144,16 +147,18 @@ def fig_rows():
         f.t(x + 2 * (BW + 10) - 5, YB + 48, sub, GY, size=13, anchor="middle")
     # 两条读法
     hx = gx[2]
-    ax = hx + 4 * (BW + 10) + 14
-    f.t(ax, Y(HOT[5]) + 6, "← 本卡一次加的次数翻倍", PU, True, 14.5)
-    f.t(ax + 22, Y(HOT[5]) + 28, "误差接近翻倍", PU, True, 14.5)
-    f.t(ax, Y(HOT[4]) + 40, "← 卡数翻倍、跨卡多一倍路", OR, True, 14.5)
-    f.t(ax + 22, Y(HOT[4]) + 62, "误差不变", OR, True, 14.5)
-    f.t(gx[0], py + 50, "低频行：四种跑法几乎一样高", GY, True, 14.5)
+    ax = hx + 4 * (BW + 10) + 30
+    f.elbow(hx + 3 * (BW + 10) + BW, Y(HOT[5]) + 10, ax - 6, Y(HOT[5]) + 10, PU, 1.4, arrow=False)
+    f.t(ax, Y(HOT[5]) + 6, "本卡一次加的次数翻倍", PU, True, 14.5)
+    f.t(ax, Y(HOT[5]) + 28, "误差接近翻倍", PU, True, 14.5)
+    f.elbow(hx + 2 * (BW + 10) + BW, Y(HOT[6]) + 10, ax - 6, Y(HOT[6]) + 60, OR, 1.4, arrow=False)
+    f.t(ax, Y(HOT[6]) + 56, "卡数翻倍、跨卡多一倍路", OR, True, 14.5)
+    f.t(ax, Y(HOT[6]) + 78, "误差不变", OR, True, 14.5)
+    f.t(gx[0], Y(1.0e-2) - 14, "低频行：四种跑法几乎一样高", GY, True, 14.5)
     f._pan = None
     yb = f.band(py + PH + 20, "warn", "主因在每张卡自己那次 BF16 累加；8 路 BF16 跨卡求和只是次要的", [
         "低频那两组纯数据并行最多只比 FSDP 远 %s 倍：本卡那几次舍入加上跨卡求和，合起来也只有这个量级。" % N.C2_LOW_X_T,
-        "代价：同时留下一个反常 —— FSDP 一次要加 8 张卡的全部 token，同一个词加的次数是 8 倍，误差反而最小。",
+        "留下的问题：FSDP 一次要加 8 张卡的全部 token，同一个词加的次数是 8 倍，误差反而最小。",
     ])
     yb = f.src(yb + 10,
                "📌 实测：同一张按行分组的表（第 1 步，离 FP64 的 rel_L2）。四列每张卡一次 scatter 的下标数：FSDP 32768（收齐 8 张卡的 token，排序）；纯数据并行 8 卡 4096；16 卡 4096（跨卡求和从 8 路变 16 路）；8 卡不做梯度累积 8192（一步的数据不拆微批）。",
@@ -174,7 +179,7 @@ def fig_flow():
                   [(BL, "本卡的梯度"), (RD, "不排序：加一次舍一次"), (GR, "排序：只舍一次"), (OR, "跨卡")])
     CARD = [BL, "#4285f4", "#669df6", "#8ab4f8"]
     # ── 上：纯数据并行 ──
-    PH = 300
+    PH = 320
     py = f.panel(0, y0, W, PH, "纯数据并行：每张卡存整张表 —— 先加后传", RD)
     for k in range(4):
         y = py + 22 + k * 62
@@ -204,7 +209,7 @@ def fig_flow():
         f.t(24, y + 20, "卡 %d：dX" % k, BL, True, 13.5)
         for j in range(4):
             f.box(100 + j * 34, y + 4, 30, 36, CARD[j], CARD[j], 3)
-        f.t(240, y + 28, "按列切 8 段", GY, size=12.5)
+        f.t(240, y + 28, "按列切成卡数段", GY, size=12.5)
     f.box(330, py2 + 70, 190, 100, "#fef7e0", OR, 8, sw=1.4)
     f.t(425, py2 + 100, "all-to-all", OR, True, 15, "middle")
     f.t(425, py2 + 122, "每段 [4096, 128]", GY, size=12.5, anchor="middle", mono=True)
@@ -216,7 +221,7 @@ def fig_flow():
     f.t(584, py2 + 30, "卡 0 收齐：8 张卡在它那 128 维上的梯度", INK, True, 13.5)
     for j in range(4):
         f.box(590 + j * 40, py2 + 46, 34, 150, CARD[0], CARD[0], 3)
-    f.t(668, py2 + 218, "[32768, 128]", GY, size=12.5, anchor="middle", mono=True)
+    f.t(668, py2 + 218, "[32768, 128]：每张卡的第 0 段", GY, size=12.5, anchor="middle", mono=True)
     f.line(760, py2 + 120, 810, py2 + 120, GR, 1.8)
     f.box(814, py2 + 82, 120, 76, "#e6f4ea", GR, 8, sw=1.4)
     f.t(874, py2 + 114, "先排序", GR, True, 15, "middle")
@@ -260,7 +265,7 @@ def fig_rmw():
     for j in range(3):
         y = py + 86 + j * 40
         f.t(20, y + 18, "第 %d 次" % (j + 1), GY, size=13)
-        steps = [("读 BF16", GY), ("转 FP32 加", BL), ("舍回 BF16", RD if j > 0 else GY2), ("写回", GY)]
+        steps = [("读 BF16", GY), ("转 FP32 加", BL), ("舍回 BF16" if j > 0 else "加到 0，不舍", RD if j > 0 else GY2), ("写回", GY)]
         for k, (s, c) in enumerate(steps):
             f.box(90 + k * 122, y, 112, 28, "#fce8e6" if (c == RD) else "#fff", c, 5, sw=1.4 if c == RD else 1)
             f.t(146 + k * 122, y + 19, s, c, c == RD, 12.5, "middle")
@@ -301,9 +306,7 @@ def fig_rmw():
             f.t(x + 52, y + 74, "只舍一次" if good else "每次舍", GR if good else RD, size=13, anchor="middle")
     f.t(MX + 14, py2 + 330, "只排好序、不带标记：", GY, True, 13)
     f.t(MX + 14, py2 + 352, "仍是 %s，每次舍" % _e(N.C2_CELL4["只排不标·开"]), RD, size=13)
-    f.t(MX + 14, py2 + 384, "对照：FP32 累加 %s" % _e(N.C2_CELL4["FP32"]), GY, size=13)
-    f.t(MX + 14, py2 + 410, "标记告诉后端「同一行已挨在一起」，", GY, size=13)
-    f.t(MX + 14, py2 + 432, "后端见到它才换写法", GY, size=13)
+
     f._pan = None
     # 右：按次数分组
     RX = MX + MW + 20
@@ -318,14 +321,14 @@ def fig_rmw():
         x = X0 + 8 + i * 84
         for j, (key, c) in enumerate((("bf16_unsorted_excess_on", RD), ("bf16_presorted_excess_on", GR))):
             v = N.C2_BYCOUNT[key][i]
-            h = max(v / vmax * YH, 1.5)
-            f.box(x + j * 36, YB - h, 32, h, c, c, 3)
+            if v > 0:
+                h = max(v / vmax * YH, 1.5)
+                f.box(x + j * 36, YB - h, 32, h, c, c, 3)
         f.t(x + 34, YB + 22, b + " 次", INK, True, 13, "middle")
         f.t(x + 34, YB + 42, "%d 行" % rows_n[i], GY, size=12, anchor="middle")
     f.t(X0 + 8 + 3 * 84 + 16, YB - N.C2_BYCOUNT["bf16_unsorted_excess_on"][3] / vmax * YH - 8,
         _e(N.C2_BYCOUNT["bf16_unsorted_excess_on"][3]), RD, True, 13, "middle")
-    f.t(X0, py3 + 46, "红：不排序，越加越远", RD, True, 13.5)
-    f.t(X0, py3 + 68, "绿：排序，停在最后那一次舍入", GR, True, 13.5)
+    f.t(X0, py3 + 46, "红柱不排序，绿柱排序", INK, True, 13.5)
     f.t(RX + 16, py3 + 420, "出现 1 次 ＝ 加到 0 上，两边都是 0", GY, size=12.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "一行出现 k 次：不排序舍 k − 1 次，排序只舍 1 次 —— k 上百时差约 %.1f 倍" % N.C2_K100_X, [
@@ -347,9 +350,9 @@ def fig_sweep():
                "红线是训练里那种不带标记的写法：2048、4096、8192 时 4.6e-3、6.8e-3、9.1e-3，一路涨；到 16384 突然掉到 1.55e-3，因为编译器自己插了排序。"
                "绿线是排好序带标记的写法，一直在 1.4e-3 到 1.6e-3。灰线是关掉 excess precision，一路涨到 1.76e-2。竖线是门槛 15104，等于词表行数的八分之一。"
                "纯数据并行每卡 4096 和不累积时 8192 都在门槛左边，FSDP 每卡 32768 在右边。"
-               "右块换不同的表形状二分门槛，点都落在「下标数 ＝ 行数 ÷ 8」那条线上，和列数无关；表太小时不插。")
+               "右块换不同的表形状二分门槛，插排序的点都落在「下标数 ＝ 行数 ÷ 8」那条线上；表的总元素太少时不插。")
     y0 = f.header("谁来排序：一次 scatter 的下标数超过表行数的 1/8，后端自己插",
-                  "左：同一个 scatter，下标数从 2048 扫到 32768（单算子，实测）；右：换表形状二分出的门槛（交叉编译，实测）",
+                  "左：同一个 scatter，下标数从 2048 扫到 32768（单算子，实测，横轴每格翻倍）；右：换表形状二分出的门槛（交叉编译，实测）",
                   [(RD, "不带标记（训练里的写法）"), (GR, "排好序、带标记"), (GY2, "关掉 excess precision")])
     PH = 430
     LW = 860
@@ -367,8 +370,8 @@ def fig_sweep():
     for n in N.C2_SWEEP_N:
         f.t(X(n), YB + 22, format(n, ","), GY, size=12.5, anchor="middle")
     xg = X(N.C2_GATE)
-    f.line(xg, py + 40, xg, YB, OR, 1.6, dash="6 4", arrow=False)
-    f.t(xg - 8, py + 110, "门槛 %s ＝ 行数 ÷ 8" % format(N.C2_GATE, ","), OR, True, 14, "end")
+    f.line(xg, py + 40, xg, YB, INK, 1.4, dash="6 4", arrow=False)
+    f.t(xg - 8, py + 110, "门槛 %s ＝ 行数 ÷ 8" % format(N.C2_GATE, ","), INK, True, 14, "end")
     for key, c, sw in (("bf16_unsorted_excess_off", GY2, 2.0), ("bf16_presorted_excess_on", GR, 2.4), ("bf16_unsorted_excess_on", RD, 3.0)):
         pts = [(X(n), Y(v)) for n, v in zip(N.C2_SWEEP_N, N.C2_SWEEP[key])]
         f.path(pts, c, sw, arrow=False)
@@ -377,7 +380,7 @@ def fig_sweep():
     u = N.C2_SWEEP["bf16_unsorted_excess_on"]
     f.t(X(8192) - 6, Y(u[2]) - 12, _e(u[2]), RD, True, 13.5, "end")
     f.t(X(16384) + 8, Y(u[3]) - 30, "编译器插了排序 → %s" % _e(u[3]), RD, True, 13.5)
-    f.t(X(32768) - 8, Y(N.C2_SWEEP["bf16_unsorted_excess_off"][4]) + 24, _e(N.C2_SWEEP["bf16_unsorted_excess_off"][4]), GY, True, 13, "end")
+    f.t(X(32768) + 4, Y(N.C2_SWEEP["bf16_unsorted_excess_off"][4]) - 12, _e(N.C2_SWEEP["bf16_unsorted_excess_off"][4]), GY, True, 13, "end")
     # 训练里的三种跑法落在哪
     for n, lab in ((4096, "纯数据并行每卡"), (8192, "不累积"), (32768, "FSDP 每卡")):
         f.t(X(n), YB + 46, lab, INK, True, 13, "middle")
@@ -419,16 +422,16 @@ def fig_sweep():
                % tuple(" ／ ".join(_e(x) for x in N.C2_SWEEP[k]) for k in ("bf16_unsorted_excess_on", "bf16_presorted_excess_on", "bf16_unsorted_excess_off")),
                "📌 右块实测（CPU 上用同一个 TPU 运行库为 v5p 交叉编译，看优化后 HLO 里有没有 sort）：" + "；".join(
                    "%s × %d %s" % (format(v, ","), d, ("最小 %s" % format(n, ",")) if n else "到 65536 都不插") for v, d, n in N.C2_THRESH)
-               + "。最小插排序的下标数都等于 行数 ÷ 8 ＋ 1，和列数无关。同一个运行库为 v7x、v6e 编译，120832 行的门槛也是 15104／15105。",
+               + "。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；表的总元素太少时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 行的门槛也是 15104／15105。",
                "📌 插排序的是 TPU 后端（libtpu）里的一道工序 %s：对（下标, 序号）稳定排序 → 按排序后的次序取更新量 → scatter 标上「下标已排序」。公开的 XLA 代码里按名字搜不到，触发条件只能从实验反推。" % N.C2_PASS,
                "⚠️ 门槛为什么定在这里（推断）：看上去是为速度定的，精度更好是附带效果；单算子耗时只部分支持（快慢交叉在 4096 到 8192 之间，和 15104 对不上）。")
     f.save("fig9-sweep.svg", yb + 14)
 
 
 def fig_shard():
-    f = Fig(W, "上下两条。上：前向。其余参数每张卡一整份，只有词嵌入表按隐藏维切成 8 段，每张卡存 120832 行乘 128 列。"
+    f = Fig(W, "上下两块。上：前向。其余参数每张卡一整份，只有词嵌入表按隐藏维切成 8 段，每张卡存 120832 行乘 128 列。"
                "先把 8 张卡的 token 号收齐，每张卡从自己那 128 列里取出 32768 个 token 的行，再用 all-to-all 把整行换回每张卡自己那 4096 个 token，不取整张表。"
-               "下：反向，跟 FSDP 那条路一样：梯度按列切段交换，每张卡收齐 32768 个下标，排序以后只舍一次，不再对整张表跨卡求和。"
+               "下：每张卡存什么。不修时每卡一整张表加主权重和两份动量；只切表后每卡只存八分之一。实测显存峰值每设备 6.16e9 降到 4.46e9 字节，参数与优化器状态 4.41e9 降到 3.12e9。反向那条路跟 FSDP 一样，见上一张图。"
                "结果：第 1 步词嵌入梯度离 FP64 3.97e-3，R 0.95；300 步 r 1.02、1000 步 1.15；词嵌入通信少 93%；步时跟不修一样快。")
     y0 = f.header("第三种修法：只把词嵌入表沿数据并行轴切开　——　<tspan font-weight=\"700\">编译器自己生成 FSDP 那条路</tspan>",
                   "其余参数仍是纯数据并行（每卡一整份）；只有词嵌入表 [%s, %d] 按隐藏维切 8 段，每卡 [%s, %d]；卡画 4 张是示意，实际 8 张" %
@@ -459,25 +462,25 @@ def fig_shard():
     f.t(1264, py + 126, "跟原来一样往下算", GY, size=12.5, anchor="middle")
     f._pan = None
     y1 = py + PH + 16
-    py2 = f.panel(0, y1, W, PH, "反向：跟 FSDP 一模一样的「先传后加」", GR)
-    f.box(24, py2 + 74, 200, 72, "#e8f0fe", BL, 8, sw=1.4)
-    f.t(124, py2 + 104, "dX [4096, 1024]", BL, True, 14.5, "middle", mono=True)
-    f.t(124, py2 + 126, "按列切 8 段", GY, size=12.5, anchor="middle")
-    f.line(226, py2 + 110, 280, py2 + 110, OR, 1.8)
-    f.box(284, py2 + 74, 220, 72, "#fef7e0", OR, 8, sw=1.4)
-    f.t(394, py2 + 104, "all-to-all 交换原始梯度", OR, True, 14.5, "middle")
-    f.t(394, py2 + 126, "不是本卡先加好的整表", GY, size=12.5, anchor="middle")
-    f.line(506, py2 + 110, 560, py2 + 110, GR, 1.8)
-    f.box(564, py2 + 74, 200, 72, "#e6f4ea", GR, 8, sw=1.4)
-    f.t(664, py2 + 104, "收齐 32768 个下标", GR, True, 14.5, "middle")
-    f.t(664, py2 + 126, "＞ 门槛 15104 → 排序", GY, size=12.5, anchor="middle")
-    f.line(766, py2 + 110, 820, py2 + 110, GR, 1.8)
-    f.box(824, py2 + 74, 290, 72, "#fff", GR, 8, sw=1.6)
-    f.t(969, py2 + 104, "scatter-add 进本卡那 128 列", GR, True, 14.5, "middle")
-    f.t(969, py2 + 126, "片上 FP32 加完，只舍一次", GR, size=12.5, anchor="middle")
-    f.t(1140, py2 + 98, "不再对整张表", INK, True, 14)
-    f.t(1140, py2 + 120, "跨卡求和", INK, True, 14)
-    f.t(24, py2 + 200, "重算不会把这些通信再做一遍（词嵌入在层扫描之外）；token 号的收齐前向、反向各做一次，每次约 1.3e5 字节", GY, size=13)
+    py2 = f.panel(0, y1, W, PH, "每张卡存什么、省了什么（反向那条路跟 FSDP 一样，见上一张图下半）", GR)
+    f.t(24, py2 + 30, "不修：每卡一整张表 ＋ 主权重 ＋ 两份动量", INK, True, 13.5)
+    for k in range(4):
+        f.box(24 + k * 70, py2 + 46, 60, 150, CARD[k], CARD[k], 3)
+        f.t(54 + k * 70, py2 + 214, "卡%d" % k, GY, size=12, anchor="middle")
+    f.t(330, py2 + 30, "只切表：每卡只存 1/8", GR, True, 13.5)
+    for k in range(4):
+        f.box(330 + k * 70, py2 + 46, 60, 150, "#fff", LINE, 3, dash="4 3")
+        f.box(330 + k * 70, py2 + 46, 60, 150 / 8.0, CARD[k], CARD[k], 3)
+        f.t(360 + k * 70, py2 + 214, "卡%d" % k, GY, size=12, anchor="middle")
+    BX, BW = 720, 480
+    for i, (lab, before, after) in enumerate((("实测显存峰值，每设备", N.C3_HBM[0], N.C3_HBM[1]),
+                                              ("参数与优化器状态，每设备", N.C3_STATE[0], N.C3_STATE[1]))):
+        y = py2 + 52 + i * 92
+        f.t(BX, y, lab, INK, True, 13.5)
+        f.box(BX, y + 10, BW * before / N.C3_HBM[0], 18, GY2, GY2, 3)
+        f.t(BX + BW * before / N.C3_HBM[0] + 8, y + 24, "不修 %s" % _b(before), GY, size=12.5)
+        f.box(BX, y + 34, BW * after / N.C3_HBM[0], 18, GR, GR, 3)
+        f.t(BX + BW * after / N.C3_HBM[0] + 8, y + 48, "只切表 %s" % _b(after), GR, True, 12.5)
     f._pan = None
     yb = f.band(py2 + PH + 20, "ok", "精度跟前两种修法一样，通信反而少了：词嵌入那份每步少 %s，步时跟不修一样快" % N.C3_EMB_CUT_T, [
         "第 1 步词嵌入梯度离 FP64 %s（R %s，换了顺序）；300 步 r %s、1000 步 %s，都在 GPU 重跑的纯噪声分数以内。" % (N.C3_EMB_T, N.C3_EMB_R_T, N.C3_R300_T, N.C3_R1K_T),
@@ -494,22 +497,34 @@ def fig_shard():
 def fig_comm():
     f = Fig(W, "两块。左块：一条集合通信怎么读成字节。编译后的程序里一行 all-reduce，结果形状 bf16[120832,1024]，元素数乘 BF16 的 2 字节是 2.47e8；"
                "它在梯度累积循环里，循环次数从条件计算的「计数器小于 2」读出来；主输入和多 token 预测输入各一条，所以每步 4 次，合计 9.90e8 字节。"
-               "右块：五种跑法每步每设备的通信字节，对数刻度。词嵌入那份：不修 9.90e8，修法① 1.06e9，修法② 9.90e8，FSDP 和只切词嵌入表都是 6.82e7。"
+               "右块：五种跑法每步每设备的通信字节，对数刻度，橙色是词嵌入那份。词嵌入那份：不修 9.90e8，修法① 1.06e9，修法② 9.90e8，FSDP 和只切词嵌入表都是 6.82e7。"
                "全部集合通信：不修 2.70e9，修法① 2.77e9，修法② 2.70e9，FSDP 1.32e10，只切词嵌入表 1.78e9。")
     y0 = f.header("怎么从编译产物看通信：形状 × 字节宽 × 每步次数",
                   "左：一条集合通信读成字节（本课按编译后程序里的原文示意）；右：五种跑法每步每设备的通信字节（按形状算，对数刻度）",
-                  [(RD, "词嵌入的通信"), (GY2, "全部集合通信")])
+                  [(OR, "词嵌入的通信"), (GY2, "全部集合通信")])
     PH = 486
     LW = 660
     py = f.panel(0, y0, LW, PH, "一条通信，四步读成字节", BL)
     f.box(16, py + 22, LW - 32, 40, "#f8f9fa", LINE, 6)
-    f.t(26, py + 47, "%all-reduce = bf16[120832,1024] all-reduce(%x), to_apply=%add", INK, size=13, mono=True)
+    CODE = "%all-reduce = bf16[120832,1024] all-reduce(%x), to_apply=%add"
+    f.t(26, py + 47, CODE, INK, size=13, mono=True)
+
+    def _cx(sub, k=0):                    # 代码行里第 k 次出现的 sub 的起止 x（等宽字估宽）
+        i = -1
+        for _ in range(k + 1):
+            i = CODE.index(sub, i + 1)
+        x0 = 26 + wpx(CODE[:i], 13) * MONO_K
+        return x0, x0 + wpx(sub, 13) * MONO_K
+    for n_, (sub, k, col) in enumerate([("all-reduce", 1, BL), ("[120832,1024]", 0, BL), ("bf16", 0, BL)]):
+        a, b = _cx(sub, k)
+        f.line(a, py + 56, b, py + 56, col, 2.2, arrow=False)
+        f.badge((a + b) / 2, py + 76, (1, 2, 4)[n_], col, r=10)
     steps = [("① 是哪种通信", "all-reduce：各卡相加，每卡一份；to_apply 是加法，结果类型就是相加用的类型"),
              ("② 属于哪个参数", "形状 [120832, 1024] 是词嵌入表；op_name 里有 scatter-add，是反向往表里加"),
              ("③ 每步几次", "它在梯度累积那个 while 循环里；循环次数读条件里的「计数器 ＜ 2」；主输入、多 token 预测各一条 → 2 × 2 ＝ 4 次"),
              ("④ 字节", "120832 × 1024 × 2 字节（BF16）≈ 2.47e8；× 4 次 ＝ 9.90e8 字节／步／设备")]
     for i, (k, v) in enumerate(steps):
-        y = py + 96 + i * 82
+        y = py + 100 + i * 82
         f.box(16, y, 150, 56, "#e8f0fe", BL, 6)
         f.t(91, y + 33, k, BL, True, 14, "middle")
         rows = []
@@ -522,10 +537,9 @@ def fig_comm():
             rows.append(cur)
         for j, r in enumerate(rows[:3]):
             f.t(180, y + 18 + j * 20, r, INK, size=13)
-    f.t(16, py + 440, "排没排序：scatter 前有没有 sort、属性里有没有「下标已排序」", GR, True, 13.5)
     f._pan = None
     RX = LW + 20
-    py2 = f.panel(RX, y0, W - RX, PH, "五种跑法，每步每设备字节（v5p 8 设备）", RD)
+    py2 = f.panel(RX, y0, W - RX, PH, "五种跑法，每步每设备字节（v5p 8 设备）", OR)
     runs = [("不修（纯数据并行）", "纯数据并行8"), ("修法① 全程 FP32", "修法1"), ("修法② 本卡 FP32", "修法2"),
             ("FSDP 8（golden）", "FSDP8"), ("只切词嵌入表", "只切词嵌入表")]
     X0, XW = RX + 190, W - RX - 230
@@ -539,11 +553,11 @@ def fig_comm():
     for i, (lab, key) in enumerate(runs):
         emb, tot = N.C3_COMM[key]
         y = py2 + 52 + i * 70
-        f.t(RX + 14, y + 24, lab, GR if key == "只切词嵌入表" else INK, True, 13.5)
+        f.t(RX + 14, y + 24, lab, INK, True, 13.5)
         f.box(X0, y + 2, X(tot) - X0, 18, GY2, GY2, 3)
         f.t(X(tot) + 6, y + 16, ("%.2e" % tot).replace("e+0", "e").replace("e+", "e"), GY, size=12)
-        f.box(X0, y + 26, X(emb) - X0, 18, RD, RD, 3)
-        f.t(X(emb) + 6, y + 40, ("%.2e" % emb).replace("e+0", "e").replace("e+", "e"), RD, True, 12.5)
+        f.box(X0, y + 26, X(emb) - X0, 18, OR, OR, 3)
+        f.t(X(emb) + 6, y + 40, ("%.2e" % emb).replace("e+0", "e").replace("e+", "e"), OR, True, 12.5)
     f.t(RX + 14, py2 + 446, "FSDP 全部通信大，是其余参数也切开了，跟词嵌入无关", GY, size=12.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "上卡之前就能看清「传什么、传几次、在哪排序」：离线编一遍，不占芯片", [

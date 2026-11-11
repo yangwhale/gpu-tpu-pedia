@@ -16,7 +16,7 @@ r"""专题九 · 案例二：不排序「读—加—舍—写」对排序「片
      排序 1.70e-3（实测；更新量是随机 BF16）；
    · 第 4 步：训练第 1 步，39 个高频词的行：纯数据并行 1.57e-2、FSDP 3.26e-3（实测，C2_GROUPS）。
    · 舍入次数：同一个词出现 k 次，不排序舍 k − 1 次（第一次加到 0 上不舍），排序舍 1 次 —— 按定义成立，由 OCC 现算并断言。
-   ⚠️ 示意：下标流里 14 个位置、词 17 出现 6 次（真实高频词一次 scatter 里几十到几百次）；右边「累计舍入误差」条长 ∝ √（舍入次数），
+   ⚠️ 示意：下标流里 14 个位置、词 17 出现 6 次（真实高频词一次 scatter 里几十到几百次）；右边「累计舍入误差」条长按舍入次数画（5 对 1），
      只是示意，不是实测（屏上标「示意」）；token 号随手写。
 
 ⭐ 刻意没画：别的词那几行的更新（只跟着词 17 一行）；排序本身的耗时；excess precision 关掉的那一格（静态图中块有）。
@@ -72,7 +72,7 @@ assert all(h >= 2.0 for _n, _d, h in SEGS)
 LANE_Y = {"uns": 0.75, "srt": -1.45}
 X0, DX = -4.6, 0.52              # 下标流的格子
 CELL_X = 3.35                    # 词 17 那一行（不排序：BF16 表里那一格；排序：片上 FP32 缓冲）
-BAR_X0, BAR_MAX = 4.35, 2.4
+BAR_X0, BAR_MAX = 4.2, 2.4
 LAB_X = -6.05
 assert X0 + DX * (len(UNSORTED) - 1) < CELL_X - 0.8 and CELL_X + 0.6 < BAR_X0 and BAR_X0 + BAR_MAX < 7.05
 
@@ -182,7 +182,7 @@ class ScatterRound(Scene):
         def counter(lane):
             def draw():
                 t = clock()
-                n = int(round(n_rounded(lane, t) - 0.49)) if n_rounded(lane, t) > 0.5 else 0
+                n = sum(1 for a in round_times(lane) if t >= a - 0.05)   # 跟闪红同一刻更新
                 o = clip01((t - T[seg[lane]]) / 0.3) * gfade(t)
                 m = tx("舍了 %d 次" % n, 18, RED if lane == "uns" else GREEN).move_to([CELL_X, LANE_Y[lane] - 0.62, 0])
                 m.set_opacity(o)
@@ -199,10 +199,10 @@ class ScatterRound(Scene):
             vis = 1.0 - clip01((t - S3) / 0.4)
             g = VGroup()
             for lane in ("uns", "srt"):
-                L = BAR_MAX * math.sqrt(n_rounded(lane, t)) / math.sqrt(N_ROUND["uns"])
+                L = BAR_MAX * n_rounded(lane, t) / N_ROUND["uns"]      # 示意：按舍入次数画（5 次对 1 次）
                 if L > 1e-3 and vis > 0:
-                    g.add(Rectangle(width=L, height=0.32, fill_color=RED, fill_opacity=0.85 * vis, stroke_width=0
-                                    ).move_to([BAR_X0 + L / 2, LANE_Y[lane], 0]))
+                    g.add(Rectangle(width=L, height=0.32, fill_color=RED if lane == "uns" else GREEN,
+                                    fill_opacity=0.85 * vis, stroke_width=0).move_to([BAR_X0 + L / 2, LANE_Y[lane], 0]))
             return g
         self.add(always_redraw(err_bars))
 
@@ -220,8 +220,8 @@ class ScatterRound(Scene):
                                     ).move_to([BAR_X0 + L / 2, LANE_Y[lane], 0]))
                 return g
             return draw
-        self.add(always_redraw(meas_bars(None, (K100_UNS, K100_SRT), S3 + 0.4)))
-        self.add(always_redraw(meas_bars(None, (HOT_DP, HOT_FSDP), S4 + 0.4)))
+        self.add(always_redraw(meas_bars(None, (K100_UNS, K100_SRT), S3 + 0.2)))
+        self.add(always_redraw(meas_bars(None, (HOT_DP, HOT_FSDP), S4 + 0.2)))
         head3 = tx("单算子·≥100 次的行（实测）", 15, GREY_B).move_to([BAR_X0 + BAR_MAX / 2, LANE_Y["uns"] + 0.85, 0])
         head4 = tx("训练第 1 步·高频行（实测）", 15, GREY_B).move_to([BAR_X0 + BAR_MAX / 2, LANE_Y["uns"] + 0.85, 0])
         v3a = tx("离 FP64 %s" % E(K100_UNS), 17, RED).move_to([BAR_X0 + BAR_MAX / 2, LANE_Y["uns"] - 0.5, 0])
@@ -250,9 +250,9 @@ class ScatterRound(Scene):
             cap_items.append((m, a, b))
         assert cap0.width < 13.6
 
-        timed_all = cap_items + [(err_head, S1, S3), (head3, S3 + 0.3, S4), (v3a, S3 + 1.0, S4), (v3b, S3 + 1.0, S4),
-                                 (head4, S4 + 0.3, END), (v4a, S4 + 1.0, END), (v4b, S4 + 1.0, END),
-                                 (note, S1 + 0.5, END), (fin, S2 + LANE_DUR - 0.2, END)]
+        timed_all = cap_items + [(err_head, S1, S3), (head3, S3 + 0.2, S4), (v3a, S3 + 0.6, S4), (v3b, S3 + 0.6, S4),
+                                 (head4, S4 + 0.2, END), (v4a, S4 + 0.6, END), (v4b, S4 + 0.6, END),
+                                 (note, S1 + 0.5, END), (fin, S2 + LANE_DUR - 0.8, END)]
 
         def show(m, a, b):
             m.set_opacity(win(clock(), a, b, f=0.3 if b < END else FADE))
