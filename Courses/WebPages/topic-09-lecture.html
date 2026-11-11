@@ -256,7 +256,7 @@ h2.part{margin:48px 0 8px;padding-top:18px;border-top:2px solid #dadce0;font-siz
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,138</td><td>4</td><td>6.7′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>752</td><td>3</td><td>4.5′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,974</td><td>11</td><td>17.8′</td><td>18′</td></tr><tr><td>第四节　指标（二）：张量</td><td>2,186</td><td>7</td><td>12.9′</td><td>13′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>1,521</td><td>11</td><td>10.5′</td><td>11′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>615</td><td>3</td><td>3.8′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,230</td><td>10</td><td>8.9′</td><td>9′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,637</td><td>8</td><td>10.4′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,038</td><td>9</td><td>7.6′</td><td>7′</td></tr><tr><td>第十节　工程化与教训</td><td>998</td><td>6</td><td>6.5′</td><td>6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>90′</b></td><td><b>90′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,138</td><td>4</td><td>6.7′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>752</td><td>3</td><td>4.5′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,989</td><td>11</td><td>17.9′</td><td>18′</td></tr><tr><td>第四节　指标（二）：张量</td><td>2,186</td><td>7</td><td>12.9′</td><td>13′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>1,521</td><td>11</td><td>10.5′</td><td>11′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>615</td><td>3</td><td>3.8′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,230</td><td>10</td><td>8.9′</td><td>9′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,637</td><td>8</td><td>10.4′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,038</td><td>9</td><td>7.6′</td><td>7′</td></tr><tr><td>第十节　工程化与教训</td><td>998</td><td>6</td><td>6.5′</td><td>6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>90′</b></td><td><b>90′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
@@ -336,7 +336,7 @@ GPU 上跑出来当标准答案的那条记录，我们叫 golden。同样设置
 
 <div class="warn"><span class="k">⚠️ 这一节最容易跑偏的地方</span>
 ⛔ <b>不要在这一节讲任何判定细节</b>（N 怎么取、2 倍、参照对数）。<em>那是第三节的事；这里只立「尺子」这个概念。</em><br>
-⛔ <b>不要提前说出案例的结论</b>（GPU 张量核截断）。<em>第三问的答案在第七节揭晓。</em><br>
+⛔ <b>不要提前说出案例的结论</b>（GPU 输出头 dgrad 那次长求和有偏）。<em>第三问的答案在第七节揭晓。</em><br>
 ❓ 台下可能问：「为什么不拿 FP64 当标准答案？」—— 答：对齐的目标是 GPU，模型是在 GPU 上调稳的；FP64 只在第一步那几级（单算子、单层、整网第一步）帮我们判断差是谁带来的，第四节讲。<br>
 ❓ 台下可能问：「GPU 为什么不开确定性模式，把噪声关成零？」—— 答：生产训练不开它；尺子要量的是生产配置下会有的执行噪声。<br>
 ❓ 台下可能问：「到底是万分之一点五还是一点七？」—— 答：原样那条逐步稳定在一点五上下，第三百零一到一千步平均是一点六六。
@@ -462,7 +462,7 @@ TPU 要是照抄配置文件，每一步多衰减三倍，而且不报任何错�
 <p class="say">「参照要几对？道理一句话：被测要是纯噪声，它跟 n 对参照是同分布的 n 加 1 个样本，每个当最大的机会一样，所以超过其余 n 个的机会是 n 加 1 分之一。3 对是四分之一，10 对是十一分之一，28 对是二十九分之一。」</p>
 
 <p class="say">「右边是实测：第一阶段 100 步、一次本该全过的 GPU 对 GPU 演练，3 对参照时，46 条检查里 8 条判待定；凑到 28 对，只剩 1 条。所以签字前每种设置至少跑六到八份，凑出十五到二十八对。<br>
-混元 3 定案前的尺子只有五份、十对，几项卡在待定；补到十份、两两四十五对才全过，第九节讲。」</p>
+混元 3 最后那份 golden 自己的尺子，起先只有五份、十对，几项落在一点零二到一点二四倍待定；补到十份、两两四十五对才全过，第九节讲。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-loo</code>，先指上排灰点里落进黄区的那一片，再指第二排。</p>
 
@@ -888,6 +888,7 @@ TPU 上的程序由 XLA 整图编译，第五节那张省舍入的图：TPU 默�
 ❓ 台下可能问：「GPU 为什么没这个问题？」—— 答：推断。PyTorch 的词嵌入反向，下标超过 3072 个就先排序、按段在 FP32 里累加，最后才转回 BF16，跟 TPU FSDP 排序后是同一种舍入结构；GPU 那边每卡每个微批 4096 个，超过 3072。读的是 PyTorch 主分支，GPU 镜像里那个版本没有逐行核过。<br>
 ❓ 台下可能问：「我想自己数一遍通信。」—— 照着跑（公开仓库 yangwhale/janus 里的脚本，课件 §8.10 有链接）：先按目标拓扑离线编一遍、让 XLA 存下训练步的 <code>after_optimizations.txt</code>，再跑 <code>python models/hunyuan4/analysis/hlo_comm_bytes.py ddp8=&lt;文件&gt; shard=&lt;文件&gt; --out comm.json</code>；它列出每条集合通信的类型、形状、每步次数和字节，哪几行属于词嵌入要自己按形状和 op_name 认。<br>
 ⚠️ 口径：第三种修法只在 v5p、缩小版、纯数据并行 8 ＋ 累积 2 上验证过；「步时不变是因为原来就重叠」是推断，没看 profile。<br>
+❓ 台下可能问：「三种修法在代码里怎么开？」—— 答：都是 MaxText 的配置开关，混元 4 的公开分支里有：<code>embedding_grad_fp32</code>、<code>embedding_grad_fp32_local_bf16_comm</code>、<code>embedding_shard_over_data</code>，默认都关；全部开关的说明在那个分支根目录的 HUNYUAN.md（课件 §8.9 有链接）。<br>
 ❓ 台下可能问：「修法①是不是让通信翻倍了？」—— 答：没有。编译器把两路输入合成一次 FP32 跨卡相加，每个微批一次，字节跟原来两次 BF16 一样；另多了约 6.7e7 字节的点对点交换，词嵌入那份每步 1.06e9 对 9.90e8。只有一路输入的模型才会翻倍（推断）。<br>
 ⚠️ 口径：门槛「表行数的八分之一」是在一个运行库版本上二分出来的，换版本可能变；表很小时也不插。别说成 TPU 的固定规格。<br>
 ⚠️ 口径：GPU 那条是读 PyTorch 主分支源码的推断，GPU 镜像里那个版本没有逐行核过。<br>

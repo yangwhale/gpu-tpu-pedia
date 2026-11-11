@@ -93,9 +93,19 @@ def sec(sid, num, title):
 
 
 # 公开代码链接：一律钉到公开版仓库的同步提交（完整 sha），不用 main —— 公开仓库每次同步整棵树替换，文件可能挪位置。
-#   2026-11-11 取的最新同步提交，每条链接都实际打开核过（记在 reviews/T9-STATE.md 第四阶段 E2）。
-PUB_SHA = "210710076450bfefe774cad1336ecf43e47b25c7"
+#   2026-11-11 取的最新同步提交，每条链接都实际打开核过（记在 reviews/T9-STATE.md 第四阶段 E2、E9）。
+PUB_SHA = "4675f0dff26261b19bccfd103c4e2c68f3a55c59"
 PUB_REPO = "https://github.com/yangwhale/" + "jan" + "us"
+
+
+# MaxText 公开分支（各一个提交、没有历史）：混元 4 用 hunyuan4 分支，混元 3 用 hunyuan 分支；开关说明在根目录 HUNYUAN.md。
+MT_REPO = "https://github.com/yangwhale/maxtext"
+MT_SHA = {4: "319afd46a676654e33c09a553b3d4266b82716cc", 3: "fb4c449621c2f3f3a0941f176903911da4cfb69c"}
+
+
+def mt(ver, path, lines, label):
+    return ('<a class="codelink" href="%s/blob/%s/%s%s">MaxText（混元 %d 公开分支）：%s</a>'
+            % (MT_REPO, MT_SHA[ver], path, ("#" + lines) if lines else "", ver, label))
 
 
 def code(path, label=None):
@@ -222,7 +232,7 @@ __FIG_FUNNEL__
     <li><b>参数范数（param_norm）</b>：全部参数平方和开根号，一个数；<b>梯度范数（grad_norm）</b>同理，取裁剪之前的值。</li>
     <li><b>FP64 真值</b>：同一份输入用 64 位浮点算一遍，几乎没有舍入，当靶心用。</li>
     <li><b>XLA、融合</b>：XLA 是 JAX 用的编译器，TPU 上的程序都经它整图编译；融合是把相邻几个算子编进同一块一起算，中间结果不落回内存。</li>
-    <li><b>excess precision</b>：允许编译器让结果比程序写的更精确（XLA 的 <code>xla_allow_excess_precision</code>，默认开）；表现为融合块内部不舍、成对的「转 BF16 再转回」被删掉（§5.5）。</li>
+    <li><b>excess precision</b>：允许编译器让结果比程序写的更精确（XLA 的 <code>xla_allow_excess_precision</code>，默认开）；表现为中间值不按 BF16 落地：成对的「转 BF16 再转回」可能被删掉，也可能在 HLO 里还在、后端编 kernel 时省掉（§5.5）。</li>
     <li><b>收缩维</b>：矩阵乘里被加起来、消掉的那一维，它的长度就是一次求和要加多少个乘积。</li>
     <li><b>路由槽位</b>：每个 token 选几个专家就占几个槽位；「翻了一个槽位」＝这个 token 有一个专家换了人（§4.3）。</li>
     <li><b>MARE</b>：mean absolute relative error，逐步相对差取绝对值再平均（§3.2）。</li>
@@ -239,7 +249,14 @@ __FIG_FUNNEL__
     <li><b>留一法</b>：轮流拿一份 GPU 重跑当被测，用其余几份当尺子，看纯噪声按同一套判法能拿几分（§3.5）。</li>
     <li><b>定责</b>：查清一处差来自哪一边、为什么；第 1 步靠对 FP64 的 R 比，分「换了顺序」和「丢了精度」（§4.2）。</li>
     <li><b>程序指纹</b>：编译后整份程序去掉元数据以后的哈希；编译开关和运行库也相同时，指纹一样，结果就逐位相同（§10.2）。</li>
-    <li><b>SparseCore</b>：TPU 芯片上的专用小核，官方定位是加速嵌入查表这类稀疏计算（Google Cloud TPU 文档）；本课只用到一点：集合通信可以卸载给它。</li>
+    <li><b>SparseCore</b>：TPU 芯片上的专用小核，官方定位是加速嵌入查表这类稀疏计算（Google Cloud TPU 文档）；本课用到两处：集合通信可以卸载给它；v7x 上 FSDP 那次词嵌入 scatter 也交给了它（§8.6）。</li>
+    <li><b>RMSNorm</b>：按均方根归一化、再乘一组可学的缩放；第二次迁移里它的舍入次数是一处边界（§5.5、§10.1）。</li>
+    <li><b>重算、路由回放</b>：重算是反向时把前向的中间结果再算一遍、省显存；路由回放是重算时沿用前向选中的专家，不重新选（§1.4、§2.3）。</li>
+    <li><b>MTP</b>：多 token 预测，模型末尾多一层去预测再往后一个 token，记一项自己的 loss。</li>
+    <li><b>Muon</b>：第二次迁移用的优化器，对矩阵参数先把动量正交化再更新；非矩阵参数仍用 Adam。</li>
+    <li><b>多路残差混合</b>：混元 4 把残差流复制成 4 路，每层用一组小参数按权把几路混进、混出；「多路残差混合的小参数」指这组参数，数值上病态，定责时单列。</li>
+    <li><b>索引器、蒸馏损失（KD）</b>：稀疏注意力里给每个 query 挑一批 token 的小打分网络；它靠一项蒸馏损失向完整注意力学（§5.7）。</li>
+    <li><b>base2</b>：注意力内核把 eˣ 写成 2 的 (x·log₂e) 次方来算的写法；第二次迁移里那个常数跟着 BF16 舍了，所有尺寸的对齐配置现在都关掉它（§9.7）。</li>
     <li><b>HIGHEST</b>：TPU 上矩阵乘的最高精度档，用多遍 BF16 拼出近似 FP32；默认档对 FP32 操作数只算一遍 BF16（§5.4、§5.6）。</li>
   </ul></details>
 ''' + quiz("TPU 跟 GPU 的 loss 第 300 步差了万分之一，算不算对不齐？",
@@ -359,7 +376,7 @@ __FIG_RPIPE__
     <li>每个统计的 N ＝ 所有对里的最大值；三个统计各有各的 N。</li>
   </ol>
   <p>两条自动处理：窗口里逐位相同的参照对剔除，不让它把 N 拉低；剔除后不足 3 对，最多判待定。r ＝ 被测的统计 ÷ 对应的 N；一项检查取三个 r 里最大的，一次比较取所有检查里最大的。≤ 1 过，1–2 待定，＞ 2 不过；2 是约定的余量，不是统计推导出来的。</p></details>
-  <p>图上红黄那四个点是定案前的一次判定：那时的基线后来查出自己也偏（第八、九节），«ACC_PN_R» 倍留在这里当判法的例子。绿色那一簇是换成最终 golden 以后的同四项，全部过。</p>
+  <p>图上红黄那四个点是定案前的一次判定：那时的基线后来查出自己也偏（§7.5、§9.3），«ACC_PN_R» 倍留在这里当判法的例子。绿色那一簇是换成最终 golden 以后的同四项，全部过。</p>
 
   <h3>3.4　参照要几对，比较只对一份</h3>
 __FIG_PAIRS__
@@ -529,13 +546,14 @@ __FIG_WINDOWED__
 __ANIM_WINDOWED__
   <details class="foldfig"><summary><b>这个开关在代码里怎么开</b>：JAX、PyTorch 各叫什么；反向那几处要不要一起改</summary>
   <p>落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里给 <code>jax.lax.dot</code> 写 <code>preferred_element_type=jnp.float32</code>，出口再转回 BF16），不是加一个编译参数。别的框架要找的是「BF16 矩阵乘的部分和用什么精度相加」这一项；例如 PyTorch 在 GPU 上有 <code>torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction</code>，设成 False 就关掉（PyTorch 的 CUDA 语义文档）。collective matmul 也只在超过一个大小阈值时才出现。本例改的是前向那几处；反向里的要不要一起改，本课没有量过 —— 看编译后的程序里还剩哪几处，排查时列进候选。</p></details>
+  <p class="codeline">''' + mt(3, "src/maxtext/configs/base.yml", "L148", "开关 dense_fp32_accumulation") + "　" + mt(3, "src/maxtext/layers/linears.py", "L215-L227", "矩阵乘里 FP32 累加、只舍一次") + '''</p>
   <p>这个开关修好了单层上的那一处多舍（qkv 投影 R «R_QKV_BEFORE» → «R_QKV_AFTER_T»），可对 1000 步的参数范数漂移几乎没用：参数范数那一项的 r（§3.3 的例子，对定案前的基线 ④ 精确轨迹）开关前 «GOLDEN_R4_T»、开关后 «ACC_PN_R»。</p>
 
   <h3>5.5　excess precision：融合里省掉的舍入</h3>
 __FIG_EXCESS__
   <p>excess precision 是 XLA 的一个默认开着的选项：允许结果比程序写的更精确。最常见的表现是融合块里跳过中间那几次「舍到 BF16」，只在出口舍一次。</p>
   <table class="t9"><thead><tr><th>混元 3 关掉 excess precision</th><th>结果</th><th>读法</th></tr></thead><tbody>
-  <tr><td>单层回放</td><td>每个张量对 GPU 反而都更远</td><td>省掉的舍入本来更准</td></tr>
+  <tr><td>单层回放</td><td>每个张量对 GPU 反而都更远</td><td>省掉舍入的结果本来更接近 GPU</td></tr>
   <tr><td>1000 步 loss 偏移</td><td>小了一半</td><td>loss 对执行方式本来就敏感（只改片上内存上限也挪 «ARMS_SPREAD_T»），分不出是不是效果</td></tr>
   <tr><td>1000 步参数范数漂移</td><td>一点没少</td><td>判据看它：没用</td></tr>
   </tbody></table>
@@ -546,13 +564,15 @@ __FIG_EXCESS__
     混元 3 上这样做出的「舍过的参照」实际用的还是 FP32 主权重，量出来的结论整个作废，改用 JAX 的 <code>lax.reduce_precision</code>（BF16 对应 <code>exponent_bits=8, mantissa_bits=7</code>）才对 —— 它不会被优化掉；输出类型仍是 FP32，只是数值已经舍到 BF16 的格点上。自查办法：把编译后的程序转储出来，看那处还有没有成对的 convert —— 可第二次迁移的例子说明，convert 都还在，后端照样可以只省一半，所以更稳的是把选项关掉重跑一次对比，或者直接在那一处写 <code>reduce_precision</code>。</p></details>
   <p>第二次迁移里，同一件事成了一处真正的偏差。GPU 在一处中间值上每次都存成 BF16，TPU 的代码也写了「转 BF16」；可把紧挨着的一处四路加权和照 GPU 的顺序改了（从配对相加改成依次相加，§5.6）以后，这次舍入在 TPU 上丢了一半。这是在一个最小复现里看到的：编译后的程序里「转过去再转回来」都还在，可后端生成指令时，算均方那一步用的是没舍的 FP32，归一化输出那一步用的是舍过的值，两步不再用同一个数：</p>
 __FIG_ELIDE__
-  <p>1000 步下来五次 TPU 运行的 loss 都偏高（«ELIDE_RANGE_T»），其中 «ELIDE_OVER» 次超出 GPU 自己的 ±«ELIDE_GPU_MAX_T»。在那两处显式写一次「舍到 BF16」，回到 «ELIDE_FIX_T»，判定 r «ELIDE_R_T»，回到线以内 —— 长跑偏高归到这一处，是推断：修了就回来，但没在整网的编译产物里逐处核。可现行配置下八份 TPU 运行的主 loss 仍比 GPU 普遍偏高约 «MINI_TPU_HIGH_T»（GPU 每份对其余各份在 ±«MINI_GPU_SPREAD_T» 以内），这一截还在查。</p>
+  <p>1000 步下来五次 TPU 运行的 loss 都偏高（«ELIDE_RANGE_T»），其中 «ELIDE_OVER» 次超出 GPU 自己的 ±«ELIDE_GPU_MAX_T»。在那两处显式写一次「舍到 BF16」，回到 «ELIDE_FIX_T»，判定 r «ELIDE_R_T»，回到线以内 —— 长跑偏高归到这一处，是推断：修了就回来；整网 HLO 看不出这一层，后端指令只在最小复现里数过，而且第 1 步定责时发现，单这一处解释不了：要连同第 0 层分支输入、层内的流三处一起，才对上第 0、1 层的读数（第 5 层仍对不上）。可现行配置下 TPU 开、关 base2 各 4 份共八份，主 loss 全部比 GPU 偏高，平均约 «MINI_TPU_HIGH_T»（GPU 每份对其余各份在 ±«MINI_GPU_SPREAD_T» 以内）；第 1 步还没有，是训练中攒出来的，这一截还在查。</p>
+  <p class="codeline">''' + mt(4, "src/maxtext/configs/base.yml", "L1630", "开关 ihc_force_bf16_rounding") + "　" + mt(4, "src/maxtext/layers/mhc.py", "L567-L573", "用 reduce_precision 舍，编译器不会删") + '''</p>
 
   <h3>5.6　第二次迁移：差几乎都出在 16 位和 32 位的交界</h3>
 __FIG_BOUNDARY__
   <p>第二次迁移把数值上的对不齐一处处查下来，几乎每一处都是一个精度换挡的地方：一个值从 16 位进 32 位、从 32 位落回 16 位，或者 GPU 上悄悄打开的 TF32；剩下一类是 32 位对 32 位，同样是 FP32 的 exp、log，两边的实现精度差几十倍（§5.8）。连「操作数转成 FP32」都不等于 FP32 矩阵乘：TPU 默认对 FP32 操作数也只算一遍 BF16（图第 2 行）。</p>
   <p>要更接近 FP32，得给那一处单独设 HIGHEST（多遍 BF16 拼出来的近似）。可一处写着 HIGHEST，不等于它真上了矩阵单元：编译器可能把小的加权和改写成 FP32 逐元素乘加，那时它跟 GPU 只差加法顺序。是不是多遍 BF16，看编译后它还是不是矩阵乘。另一格是<b>该留 32 位的中间值存成了 16 位</b>：这是写错了，不是噪声，哪怕它小到 GPU 重跑都盖得住。参照的写法跟生产对不上时，以生产为准，改参照 —— 第 4 行改的就是 GPU。</p>
-  <details class="foldfig"><summary><b>边界清单</b>：两次迁移碰到的十三类，各举一例</summary>
+  <p class="codeline">''' + mt(4, "src/maxtext/layers/mhc.py", "L547-L562", "四路相加的两种写法（ihc_stream_sum_unrolled）") + "　" + mt(4, "src/maxtext/configs/base.yml", "L229-L233", "输出头单独设精度（logits_matmul_precision）") + '''</p>
+  <details class="foldfig"><summary><b>边界清单</b>：两次迁移碰到的十三类（本课整理，单列了「Python 常数」一类），各举一例</summary>
   <table class="t9"><thead><tr><th>边界</th><th>例子</th><th>怎么对上</th></tr></thead><tbody>
   <tr><td>矩阵乘 FP32 累加，结果先存 BF16 再给下一个算子</td><td>注意力打分 q·k，参照自己写的不融合实现（图第 4 行）</td><td>让它留 FP32，照生产的融合内核</td></tr>
   <tr><td>跨分片的部分和先舍 BF16 再相加</td><td>FSDP 切开收缩维的投影（§5.4）</td><td>部分和留 FP32</td></tr>
@@ -583,7 +603,7 @@ __FIG_CAPTAIN__
   <p>第二次迁移里有一项辅助蒸馏损失（KL），每行只有约 «KD_KL»，却是从约 «KD_LSE» 的 log-sum-exp 里减出来的。300 步那一代，TPU 记下的它一直偏低（带符号均值 «KD_SM300_T»，第 1 步差到 «KD_STEP1_T»），按噪声尺子判「不过」。图里那杆秤是 f32 格式本身，不是前面的噪声尺子：lse 差一格，就是 KL 的千分之四。</p>
   <p>前三问认出这是病态在放大；第四问问被放大的那一格是谁的：同样的 f32 计算换到 CPU（PyTorch）上几乎不偏，TPU 偏了将近一格，来自 TPU 默认的 exp 和 log，换成高精度写法，300 步那一项的系统偏差没了。</p>
   <details class="foldfig"><summary><b>后来还有两步</b>：记录写法本身病态；GPU 自己也偏</summary>
-  <p>这项 KL 的记录写法本身在 FP32 里病态（CPU 上调同一个函数也偏高），改记一种等价的广义 KL 以后，1000 步 r «KD_GKL_R_T»，梯度一位不变；真实宽度上 GPU 自己记下的这一项也偏高，约«GPU_KD_ROPE_SHARE_T»来自 GPU 把索引器的旋转位置编码放在 BF16 里算。所以「更准就是更像 GPU」只在 lse 那一格成立（同一代还开了另一个开关，没拆开）。</p></details>
+  <p>这项 KL 的记录写法本身在 FP32 里病态（CPU 上调同一个函数也偏高），改记一种等价的广义 KL 以后，1000 步带符号均值的 r «KD_GKL_R_T»，三个统计里最差的 «KD_GKL_WORST»，由待定变过；梯度一位不变。真实宽度上 GPU 自己记下的这一项也偏高，约«GPU_KD_ROPE_SHARE_T»来自 GPU 把索引器的旋转位置编码放在 BF16 里算。所以「更准就是更像 GPU」只在 lse 那一格成立（同一代还开了另一个开关，没拆开）。</p></details>
   <details class="foldfig"><summary><b>FP64 怎么把它拆出来</b>：逐项重算同一行，差只剩最后那一步</summary>
   <p>把一行的原始输入存下来，在 FP64 里逐项重算：目标分布、对数概率，误差都在 1e-7 量级，比 1e-3 小四个数量级，差只能落在最后的 log-sum-exp 上。偏低的大小有两个口径：单行对 FP64 重算 «KD_DIFF_T»；TPU 全部运行对 GPU 全部运行 «KD_VS_GPU_T»。换成高精度的 exp、log 以后，同一行对 FP64 «KD_FIX_ROW_T»，lse «KD_FIX_LSE_T»（前后两端的其余设置不同）。由它出发的梯度对 FP64 的 R 中位数 «KD_GRAD_R64_T»（实测）。要是同样的 f32 计算换到 CPU（PyTorch）上也偏同样多，那一格就是两边都躲不开的末位，才写「不过，已定责」。</p></details>
 
@@ -700,6 +720,7 @@ __FIG_GAUGE__
 
   <h3>7.4　是这股力；谁推歪了</h3>
   <p>先证明就是这股力：两边都把这个方向的梯度去掉、再让 GPU 往这个方向多推一把。</p>
+  <p class="codeline">''' + mt(3, "src/maxtext/configs/base.yml", "L144-L145", "诊断开关 lm_head_dh_wbar_remove") + "　" + mt(3, "src/maxtext/layers/nnx_decoders.py", "L1825-L1827", "去掉沿 w̄ 那一份梯度") + '''</p>
 __FIG_INTERVENE__
   <p>只知道「是这股力」，还不知道是谁算错了：TPU 多推了，还是 GPU 少推了？拿训练里实际用到的张量，在 FP64 里重算一遍，把输出头的误差拆到每一段：</p>
 __FIG_HEAD__
@@ -719,10 +740,13 @@ __FIG_HEAD__
   <p>是每一步都算得不一样，还是状态早就不一样、反馈放大出来的？用状态互换（§6.3）：把 GPU 第 99 步的整套状态搬到 TPU，同一批数据各算一步。</p>
 __FIG_SWAP__
   <p>同一状态下 TPU 每步几乎正好（±«SWAP_RES_T» 以内）。这里的「精确值」和「FP32 dgrad」都是 GPU 算的，那次长求和交给 cuBLAS 一次累加到底，下面会看到它积上千步以后也偏，所以这张图只看谁少走得多、谁少走得少。别把两个百分比混了：§7.4 的 «HEAD_PCT_S1_T» 量的是那一次矩阵乘沿 w̄ 少了多少；这里的 «SWAP_GPU_ABS_T» 量的是整个梯度经过 Adam 之后，权重沿漂移方向少走了多少。</p>
-  <p>开场第三问「TPU 算错了吗？」的答案在这里：<b>偏移的大头不是 TPU 算错</b>，是 GPU 当标准答案的那份 BF16 golden 自己离精确值远。先把 GPU 输出头这一次矩阵乘换成 FP32（真关 TF32），1000 步下来 GPU 自己朝 TPU 走过去约六成；剩下的，在 GPU 上跑一条<b>精确轨迹</b>来看：权重的用法跟生产一样（FP32 主权重，每步舍成 BF16 再用），前向反向的算术全部 FP32、真关 TF32。它自己重跑一位不差；图里 loss 那一行的第二个紫点，是给第 0 层一处权重乘 (1 ＋ «PERTURB») 的扰动版。</p>
+  <p>开场第三问「TPU 算错了吗？」的答案在这里：<b>偏移的大头不是 TPU 算错</b>，是 GPU 当标准答案的那份 BF16 golden 自己离精确值远。</p>
+  <p>先把 GPU 输出头这一次矩阵乘换成 FP32（真关 TF32），1000 步下来 GPU 自己朝 TPU 走过去约六成；剩下的，在 GPU 上跑一条<b>精确轨迹</b>来看：权重的用法跟生产一样（FP32 主权重，每步舍成 BF16 再用），前向反向的算术全部 FP32、真关 TF32。它自己重跑一位不差；图里 loss 那一行的第二个紫点，是给第 0 层一处权重乘 (1 ＋ «PERTURB») 的扰动版。</p>
 __FIG_EXACT__
   <p><b>反转在这里。</b>精确轨迹里，输出头 dgrad 那次沿 12 万词表的求和，是交给 cuBLAS 用 FP32 一次累加到底的。B200 上它也偏：第 1 步只有 «CUBLAS_S1_T»，训练到第 299 步的状态已经 «CUBLAS_299_T»，跟 BF16 张量核同一个数量级 —— 冷门词的概率变小以后，小项在长累加里被系统地吃掉（推断，cuBLAS 怎么累加没有源码可看）。把这一处改成<b>分段累加</b>（12 万长的求和切成几段，各段 FP32 求和以后再相加），GPU 的精确轨迹就跟 TPU 上跑的精确轨迹重合：参数范数带符号均值只差 «CHUNK_VS_TPUEXACT_T»，在噪声上限以内。两边在真精确的算术下，是同一条轨迹。</p>
-  <p>第 1000 步的漂移，真精确是上图精确轨迹的 «DRIFT_RATIO_TRUE_T» 倍，TPU 生产是 «DRIFT_RATIO_TPU_T» 倍：TPU 生产落在两者之间。按漂移从少到多排：GPU 生产 golden ＜ 精确轨迹 ＜ TPU 生产 ＜ 真精确；离真精确最远的，是当标准答案的那份 GPU BF16 golden。换到第九节验收用的配置（整层重算＋路由回放），第 1000 步 TPU 生产比真精确少漂 «TPU_VS_TRUE_T»；这一截是谁的，第九节拆账。</p>
+  <div class="note"><span class="t">漂移从少到多：GPU 生产 golden ＜ 精确轨迹 ＜ TPU 生产 ＜ 真精确</span>
+    第 1000 步，真精确是上图精确轨迹的 «DRIFT_RATIO_TRUE_T» 倍，TPU 生产是 «DRIFT_RATIO_TPU_T» 倍。离真精确最远的，是当标准答案的那份 GPU BF16 golden。</div>
+  <p>换到第九节验收用的配置（整层重算＋路由回放），第 1000 步 TPU 生产比真精确少漂 «TPU_VS_TRUE_T»；这一截是谁的，第九节拆账。</p>
   <details class="foldfig"><summary><b>起作用的是「分段」，不是「FP32」</b>：同一批张量换四种写法重算一遍</summary>
   <p>分段 FP32 同时做了两件事：升 FP32、把词表切段。拿训练里实际用到的那几个张量（第 1、100、300 步），在一张 B200 上换写法重算这次矩阵乘，对 FP64 比沿 w̄ 的偏差：</p>
   <table class="t9"><thead><tr><th>写法</th><th>第 1 ／ 100 ／ 300 步</th><th>单次耗时</th></tr></thead><tbody>
@@ -772,6 +796,7 @@ __FIG_DDP2X2__
   <h3>8.2　第一个假设：BF16 跨卡求和；打开 FP32 开关，r 611</h3>
   <p>先说词嵌入的反向在干什么：一次 scatter-add，按 token 号（下标）把每个 token 的梯度加回词表那一行；一张卡一次加 4096 个 token，就是 4096 个下标。最顺手的解释：FSDP 下词嵌入表按隐藏维切，每张卡只管自己那 «C2_D_SHARD» 维，不用跨卡求和（为什么不用，§8.4 看形状）；纯数据并行下每张卡有整张表，梯度要在 8 张卡之间加起来，而这次 all-reduce 用的是 BF16 加法。修法也现成：一个让词嵌入梯度在 FP32 里累加的开关，下文叫修法①（前向从 FP32 主权重表取行再转 BF16，前向逐位不变，反向的累加落在 FP32 上）。</p>
   <p>打开它，r 反而冲到 <b>«C2_BUG_R_T»</b>：一块梯度凭空没了。编译器把这份 FP32 梯度的跨卡求和挪出了梯度累积循环，又在循环里把 0 号以外各卡的累加器清零 —— 这就是 §10.2「改完先比指纹」那张图右块的编译器 bug，要「数据并行 ＋ 梯度累积 ＋ 这个开关」三样同时成立才出现。修好以后 300 步 r «C2_FIX1_R300_T»。</p>
+  <p class="codeline">''' + mt(4, "src/maxtext/utils/gradient_accumulation.py", "L148-L160", "绕开这个编译器 bug 的那道屏障") + '''</p>
   <p>接着有人追问：只把本卡的累加换成 FP32、跨卡仍传 BF16，行不行？为此加了修法②，结果词嵌入梯度离 FP64 «C2_FIX2_EMB_T»、300 步 r «C2_FIX2_R300_T»，也在噪声内。<b>跨卡仍用 BF16 也够了</b> —— 这已经在暗示：跨卡那一步不是主因。</p>
   <details class="foldfig"><summary><b>修法①为什么没证明主因</b>，以及修法②省没省通讯</summary>
   <ul>
@@ -835,6 +860,7 @@ __FIG_SWEEP__
   <p>前两种修法都没动纯数据并行处理这份梯度的结构：每张卡一个微批只有 4096 个 token，跨卡求和传的却是整张表，占纯数据并行全部通信的 «C3_EMB_SHARE_T»；8 张卡各存一整份表和它的优化器状态。换个思路：FSDP 那条「先传后加」不是谁手写的，是编译器在「表按隐藏维切开」这个前提下自动切出来的。那就其余参数照旧纯数据并行，只给词嵌入表加一个开关，让它沿数据并行轴、按隐藏维切开：</p>
 __FIG_SHARD__
   <p>结果跟预期一样：编译器对这一个参数生成了跟 FSDP 一条不差的通信，每张卡那次加法收 «C2_FSDP_N» 个下标、排序、带标记，按单算子实验就是只舍一次，病根「高频词 × 不排序」不再成立。205 个张量没有丢精度的；曲线跟 GPU 重跑分不开；词嵌入那份通信每步每设备从 9.90e8 降到 6.82e7 字节，步时 «C3_ST_T»（对基线）。</p>
+  <p class="codeline">''' + mt(4, "src/maxtext/configs/base.yml", "L150-L152", "三种修法的开关") + "　" + mt(4, "src/maxtext/layers/embeddings.py", "L136-L165", "词嵌入层：表怎么切、在什么精度里加") + "　" + mt(4, "HUNYUAN.md", "", "全部开关一览") + '''</p>
   <details class="foldfig"><summary><b>三种修法放在一起</b>：精度、通信、步时、它靠什么</summary>
   <table class="t9"><thead><tr><th>修法</th><th>第 1 步离 FP64</th><th>曲线最差 <span style="text-transform:none">r</span>（300 ／ 1000 步）</th><th>词嵌入通信（每步每设备，按形状算）</th><th>步时（对基线）</th><th>靠什么</th></tr></thead><tbody>
   <tr><td>不修</td><td>«C2_EMB_DP_T»</td><td>«C2_R_DP8_T»</td><td>9.90e8</td><td>«C2_ST_DP_T»</td><td>—</td></tr>
@@ -954,11 +980,12 @@ __FIG_LADDER__
   <p>第二次迁移照同一条路走：先在保留全部结构、只缩宽度和层数的小模型上做 L0–L4 全套；再让 GPU 自己扩到多台机器、换切法，看参照守不守得住尺子；最后上真实宽度。</p>
 __FIG_MIG2__
   <table class="t9"><thead><tr><th>图里三块</th><th>结论</th><th>还差什么</th></tr></thead><tbody>
-  <tr><td>小尺寸 1000 步（2026-11-11 起关 base2、尺子 GPU 16 份）</td><td>九项过 7、待定 2（主 loss 全程和后段）</td><td>八份 TPU 主 loss 都偏高约 «MINI_TPU_HIGH_T»，跟 base2 无关，在查；离签字还差几件（见图下）</td></tr>
+  <tr><td>小尺寸 1000 步（2026-11-11 起关 base2、尺子 GPU 16 份）</td><td>九项过 7、待定 2（主 loss 全程和后段）</td><td>TPU 开、关 base2 各 4 份，主 loss 全部偏高、平均约 «MINI_TPU_HIGH_T»（第 1 步还没有），跟 base2 无关，在查；离签字还差几件（见图下）</td></tr>
   <tr><td>GPU 扩机器、换切法</td><td>守得住尺子，多机 GPU 可以当 golden</td><td>多机重跑本身略宽（单机尺子的 1.0–1.3 倍），判多机被测要用多机自己的尺子</td></tr>
   <tr><td>真实宽度三层</td><td>第 1 步 TPU 偏低定到 base2：常数 log₂e 跟着 BF16 的 q 舍成 1.4453125，logits 整体乘 «KAPPA_T»；只关它就对上 FP64，所有尺寸的对齐配置因此都关了 base2</td><td>后段主 loss 偏低：同一份权重上两边前向没差，是轨迹差，来源在查（base2、索引器、省舍入已排除）</td></tr>
   </tbody></table>
   <p>base2 在小模型上显不出来，是因为效果跟 logits 的大小成正比：随机初始化时最大 logit 只有约 0.13，真实权重截层上到 14.5。</p>
+  <p class="codeline">''' + mt(4, "src/maxtext/configs/base.yml", "L1405", "开关 sa_use_base2_exp（默认开）") + '''</p>
 ''' + quiz("中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？",
            "不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开；只能说宽度和注意力形状大概不是原因（第二级已经换成真的、没出那一级的不过）。要定，就再补一级只换其中一样，比如真实结构配随机权重。（后来定位到了：是「权重」那一行 —— 真实权重的 logits 大，把 base2 常数舍入的误差放大了，§9.7。）") + '''
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>
