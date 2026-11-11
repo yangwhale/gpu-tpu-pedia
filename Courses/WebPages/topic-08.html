@@ -10578,6 +10578,83 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 同一份权重上的前向：6 个状态、19 批，TPU 减 GPU 写法 ＋0.83e-6 ± 1.15e-6；偏差跟步数、参数范数同步（第 501 步起相关 0.96），跟梯度范数无关。关掉 MTP、KD 后幅度约为对照的六成，是它们放大了还是样本少，在查。</p>
 <p>📌 后段（第 551–1000 步，对 GPU 16 份均值）：对照 ＋1.48e-5，补上舍入的开关 5 份均值 ＋1.9e-6；只补流的梯度 ＋0.6e-6、只补分支输出 ＋3.0e-6；两边都去掉多路残差，TPU 2 份 ＋1.9e-6、＋0.7e-6。延长到 2000 步：尾部在第 1000–1250 步到顶（＋2.9e-5）后回落到 GPU 两份的散布里。</p>
 <p>⚠️ 柱的颜色只看 8 份的符号是否一致，不是判档；判档仍按第三节的三个统计和 GPU 16 份的尺子（主 loss 1.55、1.52 待定）。</p></details></figure>
+  <p>后段的根子查到了，又是省舍入：</p>
+<figure class="fbox fwide" id="fig-ihcroot"><svg viewBox="0 0 1400 580" width="100%" role="img" aria-label="两块。左：多路残差的流在一层里的样子。GPU：FP32 算完存成 BF16，下一处读的是 BF16，反向三份 BF16 梯度逐份舍入相加；TPU：代码里同样写了存 BF16，编译器在省舍入下把它省了，流和它的梯度实际按 FP32 走。右：第 551 到 1000 步主 loss 的 TPU 减 GPU。关掉 MTP、关掉索引器蒸馏、两个都关，都还偏高 0.9e-5 到 1.2e-5；对照 1.48e-5；只在 TPU 补上流的舍入，5 份平均 1.9e-6，落进 GPU 的散布 2.1e-6；两边都去掉多路残差，1.9e-6 和 0.7e-6。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">小尺寸后段偏高的根子：同一个值，GPU 存成 BF16，TPU 被编译器留成了 FP32</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p；按现在这份 GPU 参照的写法定位（参照改成生产精度后要重判）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU 偏高</text>
+<rect x="117.56" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="138" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">补上舍入或去掉多路残差</text>
+<rect x="337.04" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="358" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">排除的候选</text>
+<rect x="0" y="102" width="620" height="360" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="620" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="620" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="620" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 多路残差的流，两边实际怎么存</tspan></text>
+<text class="svgsm" x="20" y="202" fill="#174ea6" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU</tspan></text>
+<rect x="80" y="180" width="120" height="40" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="140" y="205" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 算</tspan></text>
+<line x1="200" y1="200" x2="226" y2="200" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="230" y="180" width="160" height="40" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="310" y="205" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">存成 BF16</tspan></text>
+<line x1="390" y1="200" x2="416" y2="200" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="420" y="180" width="160" height="40" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="500" y="205" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下一处读 BF16</tspan></text>
+<text class="svgsm" x="80" y="250" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反向：三份 BF16 梯度，每加一次舍一次</tspan></text>
+<text class="svgsm" x="20" y="332" fill="#b06000" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU</tspan></text>
+<rect x="80" y="310" width="120" height="40" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="140" y="335" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 算</tspan></text>
+<line x1="200" y1="330" x2="226" y2="330" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="230" y="310" width="160" height="40" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text class="svgsm" x="310" y="335" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">存 BF16（被省掉）</tspan></text>
+<line x1="390" y1="330" x2="416" y2="330" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="420" y="310" width="160" height="40" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="500" y="335" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下一处读 FP32</tspan></text>
+<text class="svgsm" x="80" y="380" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反向：流的梯度实际按 FP32 走</tspan></text>
+<text class="svgsm" x="20" y="416" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一个值：GPU 存 BF16，TPU 留成 FP32。</tspan></text>
+<text class="svgsm" x="20" y="442" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">跟「省舍入」那一节是同一类：编译器省掉了 GPU 会做的舍入。</text>
+<rect x="640" y="102" width="760" height="360" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="640" y="102" width="760" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="640" y="104" width="760" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="640" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="654" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 第 551–1000 步主 loss，TPU 减 GPU</tspan></text>
+<rect x="910" y="146" width="49.71854177895659" height="250" rx="0" fill="#eceff1" stroke="#eceff1" stroke-width="1.0"/>
+<text class="svgsm" x="963" y="412" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">GPU 自己的散布 2.1e-6</text>
+<text class="svgsm" x="654" y="173" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关掉 MTP</tspan></text>
+<rect x="910" y="158" width="275.5" height="22" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1195" y="174" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.2e-5</tspan></text>
+<text class="svgsm" x="654" y="213" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">关掉索引器蒸馏</tspan></text>
+<rect x="910" y="198" width="213.75" height="22" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1133" y="214" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋9.0e-6</tspan></text>
+<text class="svgsm" x="654" y="253" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两个都关</tspan></text>
+<rect x="910" y="238" width="206.625" height="22" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="1126" y="254" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋8.7e-6</tspan></text>
+<text class="svgsm" x="654" y="293" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对照</tspan></text>
+<rect x="910" y="278" width="352.20410753367855" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1272" y="294" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.48e-5</tspan></text>
+<text class="svgsm" x="654" y="333" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只在 TPU 补上流的舍入（5 份）</tspan></text>
+<rect x="910" y="318" width="45.315262287053315" height="22" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1046.025375" y="326" width="6" height="6" rx="3" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<rect x="923.986" y="326" width="6" height="6" rx="3" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<rect x="907.0" y="326" width="6" height="6" rx="3" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<rect x="930.0375" y="326" width="6" height="6" rx="3" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<rect x="970.039625" y="326" width="6" height="6" rx="3" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1059" y="334" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.9e-6</tspan></text>
+<text class="svgsm" x="654" y="373" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两边都去掉多路残差（2 份）</tspan></text>
+<rect x="910" y="358" width="30.63933960219424" height="22" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="951.989625" y="366" width="6" height="6" rx="3" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<rect x="923.290125" y="366" width="6" height="6" rx="3" fill="#fff" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="964" y="374" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.3e-6</tspan></text>
+<rect x="0" y="482" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="482" width="4" height="74" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="482" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">排除一个个候选以后，消融两头夹住：补上那几处舍入就收拢，去掉多路残差就不飘</tspan></text>
+<text class="svgsm" x="20" y="540" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">关掉 MTP、索引器蒸馏都还偏；只在 TPU 补上流的舍入、或者两边都换普通残差，后段都回到 GPU 自己的散布里。</text>
+</svg><figcaption><b>左边两排只差一个虚线框；右边灰条（排除的）都还长，绿条（补上舍入、去掉多路残差）缩进灰带。</b><span class="capmore"><br><em>实测；参照改成生产精度后要重判。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p，1000 步）：第 551–1000 步主 loss 对 GPU 均值的带符号均值。对照与补舍入、去多路残差那几行对 GPU 16 份均值（去多路残差那组对它自己的 GPU 3 份）；关 MTP、关蒸馏那三行对同配置的 GPU 4 份均值。补舍入的开关 5 份：+5.9e-06、+7.2e-07、-6.5e-07、+9.7e-07、+2.7e-06；只补流的梯度 ＋5.8e-07、只补分支输出 ＋3.0e-06。运行库 0.0.52 上对照 ＋1.2e-05，补上后 ＋5.2e-06。</p>
+<p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过（三份 BF16 梯度按分组相加、每加一次舍一次）；TPU 这几处被省掉，是按编译器在省舍入下的行为推断，补上舍入后收拢是直接证据。</p>
+<p>⚠️ 「旧 GPU 口径」：标准答案按现在这份 GPU 参照的写法；参照改成生产精度后要重判。修法定没定、进不进对齐配置，对齐记录还在跑。</p></details></figure>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/configs/base.yml#L1405">MaxText（混元 4 公开分支）：开关 sa_use_base2_exp（默认开）</a></p>
 <details class="foldfig"><summary><b>考考自己</b>：中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？</summary><p>不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开。而且「过了」只是 300 步那一级：第二级第 1 步两边各自对 FP64，GPU 已经偏高 1.42e-5（比 GPU 8 份之间的极差还大）、TPU 只有 2.4e-7 —— 宽度一换成真的，GPU 那边就有一截偏差（还在查），只是 300 步的判定没把它显出来。要定，就再补一级只换其中一样，比如真实结构配随机权重。（TPU 那一半后来定到了「权重」那一行：真实权重的 logits 大，把 base2 常数舍入的误差放大了，<a href="#s9-7">§9.7</a>。）</p></details>
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>

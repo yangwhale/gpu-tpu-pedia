@@ -1302,3 +1302,9 @@ MD_FIX = {"对照": 1.48e-5, "补上舍入": 1.9e-6, "GPU尺子": 2.1e-6, "只�
 assert MD_FIX["补上舍入"] < MD_FIX["GPU尺子"] < MD_FIX["对照"]
 MD_NOIHC = (1.9e-6, 0.7e-6)              # 两边都去掉多路残差（换普通残差），TPU 2 份对 GPU 3 份均值，后段不飘
 MD_FIX_T = "＋1.48e-5 → ＋1.9e-6（GPU 尺子 2.1e-6）"
+MI = tpuself()["mini_ihc"]
+assert "%.2e" % MI["对照"]["tpu_mean"] == "1.48e-05" and "%.1e" % MI["补上流的舍入"]["tpu_mean"] == "1.9e-06" and len(MI["补上流的舍入"]["tpu_each"]) == 5
+assert "%.1e %.1e" % (MI["只补流的梯度"]["tpu_mean"], MI["只补分支输出"]["tpu_mean"]) == "5.8e-07 3.0e-06"
+assert ["%.1e" % x for x in MI["两边都去掉多路残差"]["tpu_each"]] == ["1.9e-06", "6.9e-07"]
+MI_SD = MI["对照"]["gpu_loo_sd"]          # GPU 16 份留一法 sd 2.1e-6
+assert "%.1e" % MI_SD == "2.1e-06"

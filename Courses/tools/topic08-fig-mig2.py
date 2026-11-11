@@ -11,6 +11,7 @@ fig8-mig2  回答：同一套方法换一个模型再走一遍，结果怎样？
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
 import topic08_numbers as N
+MI_SD = N.MI_SD
 
 W = 1400
 MINI = [("主 loss（全程）", 1.55), ("主 loss（后段）", 1.52), ("MTP loss（全程）", 1.00), ("MTP loss（后段）", 1.00),
@@ -191,5 +192,72 @@ def fig_minidrift():
     f.save("fig8-minidrift.svg", yb + 14)
 
 
+def fig_ihcroot():
+    """fig8-ihcroot 回答：小尺寸主 loss 后段为什么偏高？同一个值 GPU 存成 BF16、TPU 被编译器留成 FP32；消融逐个排除、补上就收拢。
+    数据：topic08_numbers 的 MI、MD_ISO（实测；「旧 GPU 口径」＝ 按现在这份 GPU 参照的写法）。"""
+    MI = N.MI
+    f = Fig(W, "两块。左：多路残差的流在一层里的样子。GPU：FP32 算完存成 BF16，下一处读的是 BF16，反向三份 BF16 梯度逐份舍入相加；"
+               "TPU：代码里同样写了存 BF16，编译器在省舍入下把它省了，流和它的梯度实际按 FP32 走。"
+               "右：第 551 到 1000 步主 loss 的 TPU 减 GPU。关掉 MTP、关掉索引器蒸馏、两个都关，都还偏高 0.9e-5 到 1.2e-5；"
+               "对照 1.48e-5；只在 TPU 补上流的舍入，5 份平均 1.9e-6，落进 GPU 的散布 2.1e-6；两边都去掉多路残差，1.9e-6 和 0.7e-6。")
+    y0 = f.header("小尺寸后段偏高的根子：同一个值，GPU 存成 BF16，TPU 被编译器留成了 FP32",
+                  "第二次迁移，小尺寸，v5p；按现在这份 GPU 参照的写法定位（参照改成生产精度后要重判）",
+                  [(OR, "TPU 偏高"), (GR, "补上舍入或去掉多路残差"), (GY2, "排除的候选")])
+    PH = 360
+    LW = 620
+    py = f.panel(0, y0, LW, PH, "Ⓐ 多路残差的流，两边实际怎么存", BL)
+    rows = [("GPU", BL, [("FP32 算", BL, False), ("存成 BF16", BL, False), ("下一处读 BF16", BL, False)], "反向：三份 BF16 梯度，每加一次舍一次"),
+            ("TPU", OR, [("FP32 算", OR, False), ("存 BF16（被省掉）", OR, True), ("下一处读 FP32", OR, False)], "反向：流的梯度实际按 FP32 走")]
+    for i, (lab, col, steps, note) in enumerate(rows):
+        y = py + 40 + i * 130
+        f.t(20, y + 30, lab, col, True, 16)
+        x = 80
+        for j, (t, c, dash) in enumerate(steps):
+            w = 160 if len(t) > 6 else 120
+            f.box(x, y + 8, w, 40, "#fff", c, 8, sw=1.6, dash="5 4" if dash else None)
+            f.t(x + w / 2, y + 33, t, c, True, 13.5, "middle")
+            if j < len(steps) - 1:
+                f.line(x + w, y + 28, x + w + 26, y + 28, GY, 1.4)
+            x += w + 30
+        f.t(80, y + 78, note, col, True, 13.5)
+    f.t(20, py + PH - 76, "同一个值：GPU 存 BF16，TPU 留成 FP32。", INK, True, 14)
+    f.t(20, py + PH - 50, "跟「省舍入」那一节是同一类：编译器省掉了 GPU 会做的舍入。", GY, size=12.5)
+    f._pan = None
+    RX = LW + 20
+    py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 第 551–1000 步主 loss，TPU 减 GPU", OR)
+    bars = [("关掉 MTP", N.MD_ISO["关MTP"], GY2, None), ("关掉索引器蒸馏", N.MD_ISO["关KD"], GY2, None), ("两个都关", N.MD_ISO["都关"], GY2, None),
+            ("对照", MI["对照"]["tpu_mean"], OR, None),
+            ("只在 TPU 补上流的舍入（5 份）", MI["补上流的舍入"]["tpu_mean"], GR, MI["补上流的舍入"]["tpu_each"]),
+            ("两边都去掉多路残差（2 份）", MI["两边都去掉多路残差"]["tpu_mean"], GR, MI["两边都去掉多路残差"]["tpu_each"])]
+    BX0, BX1, vmax = RX + 270, W - 110, 1.6e-5
+
+    def BX(v):
+        return BX0 + max(v, 0) / vmax * (BX1 - BX0)
+    f.box(BX0, py2 + 14, BX(MI_SD) - BX0, 6 * 40 + 10, "#eceff1", "#eceff1", 0)
+    f.t(BX(MI_SD) + 4, py2 + 6 * 40 + 40, "GPU 自己的散布 " + ("%.1e" % MI_SD).replace("e-0", "e-"), GY, size=12)
+    for i, (lab, v, col, each) in enumerate(bars):
+        y = py2 + 22 + i * 40
+        f.t(RX + 14, y + 19, lab, col if col != GY2 else GY, True, 13)
+        f.box(BX0, y + 4, max(BX(v) - BX0, 3), 22, col, col, 4)
+        if each:
+            for e in each:
+                f.box(BX(e) - 3, y + 12, 6, 6, "#fff", INK, 3)
+        xe = max([BX(v)] + [BX(e) for e in (each or [])])
+        txt = ("%.2e" % v if lab == "对照" else "%.1e" % v).replace("e-0", "e-")
+        f.t(xe + 10, y + 20, "＋" + txt, col if col != GY2 else GY, True, 13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "排除一个个候选以后，消融两头夹住：补上那几处舍入就收拢，去掉多路残差就不飘", [
+        "关掉 MTP、索引器蒸馏都还偏；只在 TPU 补上流的舍入、或者两边都换普通残差，后段都回到 GPU 自己的散布里。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移，小尺寸，TPU v5p，1000 步）：第 551–1000 步主 loss 对 GPU 均值的带符号均值。对照与补舍入、去多路残差那几行对 GPU 16 份均值（去多路残差那组对它自己的 GPU 3 份）；关 MTP、关蒸馏那三行对同配置的 GPU 4 份均值。"
+               "补舍入的开关 5 份：%s；只补流的梯度 ＋%.1e、只补分支输出 ＋%.1e。运行库 0.0.52 上对照 ＋%.1e，补上后 ＋%.1e。"
+               % ("、".join("%+.1e" % e for e in MI["补上流的舍入"]["tpu_each"]), MI["只补流的梯度"]["tpu_mean"], MI["只补分支输出"]["tpu_mean"], MI["0.0.52 对照"]["tpu_mean"], MI["0.0.52 补上流的舍入"]["tpu_mean"]),
+               "📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过（三份 BF16 梯度按分组相加、每加一次舍一次）；TPU 这几处被省掉，是按编译器在省舍入下的行为推断，补上舍入后收拢是直接证据。",
+               "⚠️ 「旧 GPU 口径」：标准答案按现在这份 GPU 参照的写法；参照改成生产精度后要重判。修法定没定、进不进对齐配置，对齐记录还在跑。")
+    f.save("fig8-ihcroot.svg", yb + 14)
+
+
 fig_mig2()
 fig_minidrift()
+fig_ihcroot()
