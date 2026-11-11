@@ -222,11 +222,11 @@ def fig_libtpu():
     PH2 = PH - PH1 - 16
     py3 = f.panel(RX, y3, RW, PH2, "Ⓒ 先离线预测，再上卡核对", BL)
     t = N.LIB_V7X_GA1
-    f.t(RX + 14, py3 + 26, "v7x 纯数据并行、不累积：每卡 8,192 个下标", INK, True, 13)
-    f.t(RX + 14, py3 + 50, "0.0.46：门槛 15,105，不过线 → 不排序", GY, size=12.5)
-    f.t(RX + 14, py3 + 72, "0.0.52：门槛 %s，过线 → 排序（离线编译看到）" % format(N.LIB_THRESH["v7x_052"][(120832, 1024)], ","), BL, True, 12.5)
-    f.t(RX + 14, py3 + 100, "上卡：r %.2f → %.2f　词嵌入梯度 R %.2f → %.2f" % (t["r"] + t["R"]), BL, True, 13)
-    f.t(RX + 14, py3 + 124, "预测成立：词嵌入这一处随版本消失，机理不变", INK, True, 12.5)
+    f.t(RX + 14, py3 + 26, "v7x 纯数据并行、不累积：每卡 8,192 个下标", INK, True, 14.5)
+    f.t(RX + 14, py3 + 50, "0.0.46：门槛 15,105，不过线 → 不排序", GY, size=14)
+    f.t(RX + 14, py3 + 72, "0.0.52：门槛 %s，过线 → 排序（离线编译看到）" % format(N.LIB_THRESH["v7x_052"][(120832, 1024)], ","), BL, True, 14)
+    f.t(RX + 14, py3 + 100, "上卡：r %.2f → %.2f　词嵌入梯度 R %.2f → %.2f" % (t["r"] + t["R"]), BL, True, 14.5)
+    f.t(RX + 14, py3 + 124, "预测成立：词嵌入这一处随版本消失，机理不变", INK, True, 14)
     f.t(RX + 14, py3 + 148, "（另有三个多路残差小参数离 FP64 远，靠豁免单列，在查）", GY, size=11.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "换运行库：先建新基准，再把六件重测；结论只对测过的版本对和配置成立", [
@@ -266,7 +266,7 @@ def fig_rms2r():
             ("运行库 0.0.52", RD, [("归一化", RD), ("舍 BF16，写回内存", RD), ("读回 × γ", RD), ("再舍 BF16", RD)], "布局转换挡住了融合，两次都真舍", True)]
     for i, (lab, col, steps, note, split) in enumerate(rows):
         y = py + 34 + i * 128
-        f.t(20, y + 30, lab, col, True, 14)
+        f.t(20, y + 30, lab, col, True, 15)
         x = 150
         boxes = []
         for j, (t, c) in enumerate(steps):
@@ -285,7 +285,7 @@ def fig_rms2r():
             f.box(x2 - 6, y - 4, boxes[3][0] + boxes[3][1] - x2 + 12, 60, "none", RD, 10, dash="5 4")
         else:
             f.box(144, y - 4, x + boxes[-1][1] - 144 + 6 - (x - boxes[-1][0]), 60, "none", GR, 10, dash="5 4")
-        f.t(150, y + 76, note, col, True, 12.5)
+        f.t(150, y + 76, note, col, True, 14)
     f._pan = None
     RX = LW + 20
     py2 = f.panel(RX, y0, W - RX, PH1, "Ⓑ 为什么两次舍入有偏：γ 贴近 1", OR)
@@ -325,9 +325,9 @@ def fig_rms2r():
     for i, (tag, ver, rest, last, r) in enumerate(N.RMS_AB):
         y = py3 + 22 + i * 40
         bad = r > N.LOO8_300_MAX
-        f.t(20, y + 21, "%s　其余各层 %s，最后一层 %s" % (ver, rest, last), RD if bad else GR, bad, 13)
+        f.t(20, y + 21, "%s　其余各层 %s，最后一层 %s" % (ver, rest, last), RD if bad else GR, bad, 14)
         f.box(BX0, y + 6, max(BXr(r) - BX0, 3), 22, RD if bad else GR, RD if bad else GR, 4)
-        f.t(BXr(r) + 8, y + 23, "%.2f" % r, RD if bad else GR, True, 13)
+        f.t(BXr(r) + 8, y + 23, "%.2f" % r, RD if bad else GR, True, 15)
     f.line(BXr(N.LOO8_300_MAX), py3 + 14, BXr(N.LOO8_300_MAX), py3 + 22 + 5 * 40, INK, 1.3, dash="4 3", arrow=False)
     f.t(BXr(N.LOO8_300_MAX) + 6, py3 + 22 + 5 * 40 + 14, "纯噪声最高 %s" % N.LOO8_300_MAX_T, INK, True, 12.5)
     f._pan = None
