@@ -1396,7 +1396,7 @@ TW_P_CCTL_T = "%.2f" % TW_P_CCTL
 # F27：对齐配置 6 份各自的待定项（6 份重复结果文件，各项最差 r）：没有不过；现行那份路由偏置均值 1.31，另一份主 loss 1.14、MTP 1.07，一份梯度范数 1.04
 REP6_PEND = {"router_bias_mean": 1.31, "loss": 1.14, "mtp": 1.07, "grad_norm": 1.04}
 assert REP6_PEND["loss"] == C_NOW["rep_pend_r"] and max(REP6_PEND.values()) <= 2
-# F29：收拢处舍入（M52）一开，补流梯度舍法（M58，全套或任一半）测不出作用（单因素交叉「C 口径 × M58 一半」两份结果文件；实测）
+# F29：收拢处舍入一开，补流梯度舍法（全套或任一半）测不出作用（单因素交叉两份结果文件；实测）。数据键沿用导出文件里的名字
 MG = FC["m52gate"]
 assert [len(MG[k]["w551"]) for k in ("M52", "C", "C_stream", "C_branch")] == [4, 4, 4, 4]
 assert ["%.1e" % MG[k]["mean"] for k in ("M52", "C", "C_stream", "C_branch")] == ["1.3e-05", "6.7e-06", "7.9e-06", "1.1e-05"]
@@ -1420,3 +1420,60 @@ CF_C_BUMP_T, CF_M_BUMP_T = FC_BUMP_T["对齐配置"], FC_BUMP_T["补流梯度舍
 CF_C_N, CF_C_ALL = CF_C[0], CF_C[2]
 CF_M_N, CF_M_ALL = CF_M[0], CF_M[2]
 FC_M_MEAN_T = FC_MEAN_T["补流梯度舍法"].replace("+", "＋")
+# ── 2026-11-12 · 先编译、再扫描 —— 整个训练步里「该舍 BF16 没舍」的位置（出处：对齐记录 小尺寸知识库「同一段在 v5p 上编出来」、
+#    hc_head 最小复现的 HLO/LLO 结果文件、TPU 自比影响逐件「iHC 不强制舍入」、整步扫描的结果文件与扫描脚本；实测，除标推断）──
+# 左块例子：多路残差分支输入那次（TPU 自比影响逐件「iHC 不强制舍入」的最小复现：4 路加权和 → 转 BF16 → RMSNorm，v5p 离线编译，省舍入默认开）。
+#   训练步优化后 HLO 里那对 convert 在每一处使用前都还在；均方那颗 kernel 里打包成 BF16 的指令 0 条（平方用的是没舍的 FP32）；
+#   同一处补上 reduce_precision：256 条，真舍；关掉省舍入：两种写法都真舍。
+EL_IHC_PACKS = (0, 256)
+assert EL_IHC_PACKS[0] == 0 < EL_IHC_PACKS[1]
+# 收拢处那颗 norm 反向 kernel（hc_head 最小复现）：两路梯度各转 BF16 的两条 convert 在 HLO 里还在、LLO 打包 0 条；对齐配置在两路相加之后补的那次舍入
+#   给这颗 kernel 多出 688 条打包（加法 2064、乘法 4128 条不变），可原来那两条 convert 补完照样被省 —— 补的是另一处。
+EL_PROBE = {"convert_bf16": 2, "packs_base": 0, "packs_fixed": 688, "vadd_f32": 2064, "vmul_f32": 4128}
+# 整步扫描：现行对齐配置训练步（v5p-16 离线编译，libtpu 0.0.46，省舍入默认开）。优化后 HLO 里 convert(f32→bf16) 在同一颗融合里又被转回 f32 使用的「往返」，按位置归类（使用次数，不是 kernel 数）。
+#   按类数字取自整步扫描结果文件；在两个 MaxText 版本上复算一致。
+EL_USES = {"wgrad": 75,            # 每个微批的权重梯度 dW 不舍
+           "attnin": 70,           # 分支输入（以注意力输入为主）的梯度合流
+           "fwd_linear": 51,       # 前向：线性层输出
+           "fwd_attn_gate": 34,    # 前向：注意力输出门
+           "fwd_expert": 13,       # 前向：路由专家 act×up
+           "fwd_norm": 6,          # 前向：norm 输出
+           "expert_bwd": 7,        # 反向：路由专家 act×up
+           "norm_dgrad": 7,        # 反向：norm 输入梯度
+           "idx_mask": 9}          # 索引器掩码：值本来就在 BF16 网格上，往返无害
+EL_TOTAL = sum(EL_USES.values())
+assert EL_TOTAL == 272
+EL_FWD = EL_USES["fwd_linear"] + EL_USES["fwd_attn_gate"] + EL_USES["fwd_expert"] + EL_USES["fwd_norm"]
+EL_MINOR = EL_USES["expert_bwd"] + EL_USES["norm_dgrad"]
+assert EL_FWD == 104 and EL_MINOR == 14 and EL_USES["wgrad"] + EL_USES["attnin"] + EL_FWD + EL_MINOR + EL_USES["idx_mask"] == EL_TOTAL
+# 整颗 kernel 只含往返（没有真舍、没有 reduce_precision）的：41 颗（扫描穿过 bitcast / reshape 这类只搬数据的运算；不穿过的早先一遍是 30 颗，合入版不用），
+#   LLO 打包指令全部 0 条；负对照：同配置关省舍入编译，同类 kernel 35 颗，没有一颗是 0 条。按类：dW 34、索引器掩码 4、norm 3。
+EL_K = {"wgrad": 34, "idx_mask": 4, "norm": 3}
+EL_K_TOTAL = sum(EL_K.values())
+assert EL_K_TOTAL == 41
+EL_K_ZERO = 41            # 只含往返的 kernel 里 0 条打包的颗数
+EL_K_NOEXC, EL_K_NOEXC_ZERO = 35, 0   # 负对照：关省舍入时同类 kernel 颗数、其中 0 条打包的颗数
+assert EL_K_ZERO == EL_K_TOTAL and EL_K_NOEXC_ZERO == 0
+# 已补上的（iHC 两处、hc_head 收拢处、流梯度）：转回 f32 后紧跟 reduce_precision，或输入本来就在 BF16 网格上，不计入 272
+EL_PACKS_FIXED = EL_PROBE["packs_fixed"]
+EL_IHC_FIXED = EL_IHC_PACKS[1]
+EL_WGRAD, EL_ATTNIN = EL_USES["wgrad"], EL_USES["attnin"]
+# 讲义备答用：小尺寸关掉省舍入（上一代配置）1000 步主 loss 比 GPU 高 4.1e-5（对齐记录 小尺寸知识库「精度本身对轨迹影响很大」；实测）；TPU 自比 35 个 1000 步长跑主 loss 全为正
+EL_NOEXC_LOSS, EL_SELF_RUNS = 4.1e-5, 35
+assert EL_NOEXC_LOSS > 4 * 9.4e-6
+# 已用 reduce_precision 补上的往返（不计入 272）：全图 55 处，其中多路残差与收拢处 30 处、其余 25 处（norm 15、线性层 10）
+EL_COVERED, EL_COVERED_MHC = 55, 30
+assert EL_COVERED == 30 + 15 + 10
+# 剩下三类的优先级（对齐记录案例：GPU 那边会舍、TPU 省掉、在反向梯度路径上，三条都满足的为高）：dW 高、分支输入梯度合流高、前向几处中
+EL_LEFT = EL_USES["wgrad"] + EL_USES["attnin"] + EL_FWD
+assert EL_LEFT == 249
+# 代码层已对到只差累加顺序：对齐配置再开「两边共用一次末层归一化」，CPU 上这一段与 GPU 只差 FP32 累加顺序；上卡 4 份第 551–1000 步 +5.0e-6，对对齐配置 p 0.40（实测）
+EL_SHARED = {"n": 4, "mean": 5.0e-6, "p_vs_c": 0.40}
+# GPU 上拿掉收拢处那次梯度舍入（4 份，对 GPU 16 份留一法）：第 51–100 步 +4.9e-6（p 0.0002）、第 551–1000 步 −2.9e-6（p 0.018）（实测）
+EL_HEADCOT = {"n": 4, "front": 4.9e-6, "front_p": 0.0002, "late": -2.9e-6, "late_p": 0.018}
+assert EL_HEADCOT["front"] > 0 > EL_HEADCOT["late"]
+EL_HEADCOT_N = EL_HEADCOT["n"]
+EL_HC_FRONT_T = ("%+.1e" % EL_HEADCOT["front"]).replace("e-0", "e-").replace("+", "＋")
+EL_HC_LATE_T = "−" + ("%.1e" % -EL_HEADCOT["late"]).replace("e-0", "e-")
+EL_SHARED_N, EL_SHARED_P_T = EL_SHARED["n"], "%.2f" % EL_SHARED["p_vs_c"]
+assert EL_HC_FRONT_T == "＋4.9e-6" and EL_HC_LATE_T == "−2.9e-6"
