@@ -1512,3 +1512,13 @@ assert len(GV_RUNS["loo"]) == 16 and abs(sum(GV_RUNS["loo"])) < 1e-9
 CX_UP_T = "%.1f" % ((CX["both"] - CX["stream"]) * 1e6)
 assert CX_UP_T == "5.0" and TW_P_T["c_m58"] == "0.024"
 CX_HEAD_P = 0.26
+# ── 上卡验证的 TPU 一头（研究线已合入：对齐配置之上补分支输入的梯度合流，各 4 份；第 551–1000 步主 loss 对 GPU 16 份均值；p 对对齐配置 6 份）──
+#   补注意力输入那处 +6.1e-6（p 0.67）；注意力加 MoE 输入 +5.3e-6（p 0.37）；对齐配置 6 份 +6.9e-6。两头都排除了清单前三类（研究线判读）。
+TV_RUNS = {"C": [8.153e-06, 1.12912e-05, 2.097e-06, 5.1174e-06, 6.3224e-06, 8.7067e-06],
+           "attn": [4.0455e-06, 4.565e-06, 5.9796e-06, 9.8895e-06], "all": [2.8151e-06, 7.8097e-06, 6.1737e-06, 4.2489e-06]}
+TV_P = {"attn": 0.67, "all": 0.37}
+TV_MEAN = {k: sum(v) / len(v) for k, v in TV_RUNS.items()}
+assert ["%.1e" % TV_MEAN[k] for k in ("C", "attn", "all")] == ["6.9e-06", "6.1e-06", "5.3e-06"] and abs(TV_MEAN["C"] - FC_MEAN["对齐配置"]) < 1e-10   # 逐份取 5 位有效数字
+TV_T = {k: ("%+.1e" % v).replace("e-0", "e-").replace("+", "＋") for k, v in TV_MEAN.items()}
+TV_ATTN_T, TV_ALL_T = TV_T["attn"], TV_T["all"]
+TV_ATTN_P, TV_ALL_P = "%.2f" % TV_P["attn"], "%.2f" % TV_P["all"]

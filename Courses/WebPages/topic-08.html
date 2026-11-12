@@ -11225,94 +11225,128 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>只找得到这一类。</b>写了往返、被编译器省掉的，扫得出来；代码里本来没写舍入、累加顺序不同、近似超越函数这类差，扫不出来。</li>
     <li><b>GPU 舍不舍，要对照 GPU 代码。</b>清单只说 TPU 省掉了。dW 这一类算数，是因为 GPU 参照关了 Megatron 的 <code>gradient_accumulation_fusion</code>，每个微批的 dW 先出 BF16 再加进 FP32 的累加器；开着的话，这一类就不算差别。另外只有 dW 那一类整颗 kernel 只含往返，能在 LLO 里一颗颗数；另两类跟真舍混在一起，是按同一规则推断的。</li>
   </ul>
-  <p><b>收尾：上卡验证。</b>还是两头验证那一招：GPU 上把 A、B 拆成三处照 TPU 改，长出尾巴就是它，不长就排除。结果：</p>
-<figure class="fbox fwide" id="fig-verify"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="上卡验证。办法跟定主因那次一样：在 GPU 上把候选照 TPU 的样子改，看 GPU 自己长不长出尾巴。每个点是一份 1000 步运行第 551 到 1000 步主 loss 的偏差，横线是均值，灰点是 GPU 自己 16 份。注意力输入那处单开，4 份都正，均值 ＋3.0e-6，p 0.021；MoE 输入那处单开 ＋9.6e-7；两处一起开反而回到 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73，排除。同类舍入合起来本该叠加，这里对不上，研究线判为没坐实、很可能是偶然。前向几处还没验，TPU 一头在跑。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">上卡验证：dW 排除；注意力输入那处单开像有一点，合开反而没了，没坐实</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，B200；GPU 上照 TPU 改一处，第 551–1000 步主 loss 偏差（橙、绿点对 GPU 16 份均值，灰点留一法），每点一份运行</text>
+  <p><b>收尾：上卡验证。</b>还是两头验证那一招：GPU 上把 A、B 拆成三处照 TPU 改，看 GPU 自己长不长出尾巴；TPU 上在对齐配置之上补上，看尾巴下不下去。</p>
+<figure class="fbox fwide" id="fig-verify"><svg viewBox="0 0 1400 640" width="100%" role="img" aria-label="上卡两头验证。左块 GPU 一头：在 GPU 上把候选照 TPU 改，看 GPU 自己长不长出尾巴。注意力输入那处单开 ＋3.0e-6，p 0.021；跟 MoE 输入那处一起开只剩 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73。右块 TPU 一头：在对齐配置之上补上，看尾巴下不下去。对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。两头都排除了清单前三类，残余还在查。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两头验证：清单前三类都排除了，残余还在查</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，第 551–1000 步主 loss 偏差，每点一份运行，横线是均值</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 自己</text>
-<rect x="118.68" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="139" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">照 TPU 改</text>
-<rect x="244.08" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="265" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">排除</text>
-<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单里前两类拆成三处，各 4 份</tspan></text>
-<line x1="110" y1="401.16666666666663" x2="1360" y2="401.16666666666663" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="104" y="405" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-4e-6</text>
-<line x1="110" y1="359.5" x2="1360" y2="359.5" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="104" y="363" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-2e-6</text>
-<line x1="110" y1="276.16666666666663" x2="1360" y2="276.16666666666663" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="104" y="280" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+2e-6</text>
-<line x1="110" y1="234.5" x2="1360" y2="234.5" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="104" y="238" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+4e-6</text>
-<line x1="110" y1="192.83333333333331" x2="1360" y2="192.83333333333331" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="104" y="196" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+6e-6</text>
-<line x1="110" y1="317.8333333333333" x2="1360" y2="317.8333333333333" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="104" y="321" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">0</text>
-<rect x="159.6875" y="340.99375" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="169.0625" y="338.60416666666663" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="178.4375" y="283.66041666666666" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="187.8125" y="294.04166666666663" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="197.1875" y="295.625" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="206.5625" y="307.42708333333337" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="215.9375" y="280.5333333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="225.3125" y="396.2458333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="234.6875" y="246.94583333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="244.0625" y="317.36875" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="253.4375" y="407.05208333333337" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="262.8125" y="282.7395833333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="272.1875" y="255.76041666666663" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="281.5625" y="319.0229166666667" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="290.9375" y="317.36458333333337" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<rect x="300.3125" y="321.9458333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
-<line x1="185.0" y1="317.83320312499995" x2="285.0" y2="317.83320312499995" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="235" y="446" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 自己（16 份）</tspan></text>
-<rect x="462.0" y="264.875" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="474.0" y="271.2104166666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="486.0" y="278.13958333333335" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="498.0" y="186.72708333333333" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<line x1="435.0" y1="255.23802083333334" x2="535.0" y2="255.23802083333334" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="485" y="446" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力输入那处</tspan></text>
-<text class="svgsm" x="485" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 ＋3.0e-6</text>
-<text class="svgsm" x="485" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.021</tspan></text>
-<rect x="712.0" y="369.3416666666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="724.0" y="289.05" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="736.0" y="211.27291666666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="748.0" y="302.0854166666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<line x1="685.0" y1="297.9375" x2="785.0" y2="297.9375" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="735" y="446" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE 输入那处</tspan></text>
-<text class="svgsm" x="735" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 ＋9.6e-7</text>
-<text class="svgsm" x="735" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.47</tspan></text>
-<rect x="962.0" y="311.5395833333333" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="974.0" y="326.20416666666665" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="986.0" y="301.83124999999995" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<rect x="998.0" y="295.89583333333337" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
-<line x1="935.0" y1="313.8677083333333" x2="1035.0" y2="313.8677083333333" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="985" y="446" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处一起</tspan></text>
-<text class="svgsm" x="985" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 ＋1.9e-7</text>
-<text class="svgsm" x="985" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.87</tspan></text>
-<rect x="1212.0" y="329.78125" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1224.0" y="318.3041666666667" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1236.0" y="324.1875" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1248.0" y="310.9666666666667" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<line x1="1185.0" y1="325.8098958333333" x2="1285.0" y2="325.8098958333333" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="1235" y="446" fill="#0d652d" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每个微批的 dW</tspan></text>
-<text class="svgsm" x="1235" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 −3.8e-7</text>
-<text class="svgsm" x="1235" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.73</tspan></text>
-<text class="svgsm" x="485" y="492" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">单开 4 份都正，可跟 MoE 那处一起开反而回到零附近：没坐实</tspan></text>
-<text class="svgsm" x="1235" y="492" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">排除</tspan></text>
-<rect x="0" y="522" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="522" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="2" y="522" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="549" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单是候选，不是结论：两类高优先级里，一类排除，一类没坐实</tspan></text>
-<text class="svgsm" x="20" y="580" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">同类舍入合起来本该叠加，这里对不上；四格一起看，0.021 按格数校正是 0.084，研究线判为很可能是偶然（推断）。还没验的：前向几处，和扫描找不到的差；TPU 一头（补注意</text>
-<text class="svgsm" x="20" y="604" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">力输入那处）截至 2026-11-12 还没出结果。</text>
-</svg><figcaption><b>最右一格贴着 0：dW 排除；注意力输入那处单开偏上，可「两处一起」又回到 0。</b><span class="capmore"><br><em>每点一份运行；实测；判读是研究线的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，B200×8，1000 步）：每格 4 份，第 551–1000 步主 loss 对 GPU 16 份均值的带符号均值；GPU 自己那格是 16 份各自对其余 15 份；p 是对 GPU 自己的置换检验。「注意力输入那处」：q、kv 下投影和输出门三份梯度在 FP32 里加完只舍一次；「MoE 输入那处」：路由、共享专家、路由专家三份梯度同上；「每个微批的 dW」：直接在 FP32 里累加，不先舍 BF16。</p>
-<p>⚠️ 判读是研究线的：dW 排除；两处梯度合流没坐实。</p></details></figure>
-  <p>两类都没在 GPU 上复现出残余：dW 排除；注意力输入那处单开像有一点，跟 MoE 输入那处一起开反而没了。丙还在查：TPU 一头截至 2026-11-12 还没出结果，C 类前向几处和扫描找不到的差还没验。<b>清单是候选，不是结论</b>，判它的只有上卡。</p>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">参照格</text>
+<rect x="94.04" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">改了一处，结论：排除</text>
+<rect x="0" y="102" width="820" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="820" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="820" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 一头：照 TPU 改，长不长出尾巴（对 GPU 16 份均值）</tspan></text>
+<line x1="80" y1="435.52941176470586" x2="804" y2="435.52941176470586" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="74" y="439" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-4e-6</text>
+<line x1="80" y1="303.764705882353" x2="804" y2="303.764705882353" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="74" y="307" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+4e-6</text>
+<line x1="80" y1="237.8823529411765" x2="804" y2="237.8823529411765" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="74" y="241" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+8e-6</text>
+<line x1="80" y1="172.0" x2="804" y2="172.0" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="74" y="176" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+1e-5</text>
+<line x1="80" y1="369.6470588235294" x2="804" y2="369.6470588235294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="74" y="373" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">0</text>
+<rect x="91.15" y="386.9103529411765" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="98.65" y="385.0211764705882" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="106.15" y="341.58329411764703" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="113.65" y="349.79058823529414" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="121.15" y="351.04235294117643" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="128.65" y="360.3729411764706" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="136.15" y="339.11105882352945" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="143.65" y="430.592" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="151.15" y="312.5571764705883" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="158.65" y="368.23270588235295" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="166.15" y="439.13529411764705" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="173.65" y="340.8552941176471" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="181.15" y="319.52588235294115" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="188.65" y="369.5404705882353" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="196.15" y="368.2294117647059" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="203.65" y="371.85129411764706" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<line x1="112.4" y1="369.6469558823529" x2="192.4" y2="369.6469558823529" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="152" y="476" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 自己</tspan></text>
+<text class="svgsm" x="152" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">16 份</text>
+<rect x="275.70000000000005" y="326.73176470588237" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="286.70000000000005" y="331.7404705882353" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="297.70000000000005" y="337.21858823529413" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="308.70000000000005" y="264.9489411764706" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<line x1="257.20000000000005" y1="320.1599411764706" x2="337.20000000000005" y2="320.1599411764706" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="297" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力输入</tspan></text>
+<text class="svgsm" x="297" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋3.0e-6</text>
+<text class="svgsm" x="297" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.021</tspan></text>
+<rect x="420.5" y="409.3218823529412" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="431.5" y="345.84423529411765" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="442.5" y="284.35458823529416" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="453.5" y="356.1498823529412" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<line x1="402.0" y1="353.91764705882355" x2="482.0" y2="353.91764705882355" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="442" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE 输入</tspan></text>
+<text class="svgsm" x="442" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋9.6e-7</text>
+<text class="svgsm" x="442" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.47</tspan></text>
+<rect x="565.3000000000001" y="363.6242352941176" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="576.3000000000001" y="375.21788235294116" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="587.3000000000001" y="355.9489411764706" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="598.3000000000001" y="351.2564705882353" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<line x1="546.8000000000001" y1="366.51188235294114" x2="626.8000000000001" y2="366.51188235294114" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="586" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处一起</tspan></text>
+<text class="svgsm" x="586" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋1.9e-7</text>
+<text class="svgsm" x="586" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.87</tspan></text>
+<rect x="710.1" y="378.04588235294113" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="721.1" y="368.97223529411764" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="732.1" y="373.6235294117647" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="743.1" y="363.1712941176471" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<line x1="691.6" y1="375.95323529411763" x2="771.6" y2="375.95323529411763" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="731" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每微批 dW</tspan></text>
+<text class="svgsm" x="731" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 −3.8e-7</text>
+<text class="svgsm" x="731" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.73</tspan></text>
+<rect x="842" y="102" width="558" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="842" y="102" width="558" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="842" y="104" width="558" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="842" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="856" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 一头：补上，尾巴下不下去</tspan></text>
+<line x1="922" y1="435.52941176470586" x2="1384" y2="435.52941176470586" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="916" y="439" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-4e-6</text>
+<line x1="922" y1="303.764705882353" x2="1384" y2="303.764705882353" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="916" y="307" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+4e-6</text>
+<line x1="922" y1="237.8823529411765" x2="1384" y2="237.8823529411765" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="916" y="241" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+8e-6</text>
+<line x1="922" y1="172.0" x2="1384" y2="172.0" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="916" y="176" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+1e-5</text>
+<line x1="922" y1="369.6470588235294" x2="1384" y2="369.6470588235294" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="916" y="373" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">0</text>
+<rect x="966.5" y="230.36235294117648" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="977.5" y="178.6743529411765" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="988.5" y="330.10823529411766" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="999.5" y="280.36047058823533" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="1010.5" y="260.5134117647059" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="1021.5" y="221.24258823529414" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<line x1="959.0" y1="255.21023529411767" x2="1039.0" y2="255.21023529411767" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="999" y="476" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对齐配置</tspan></text>
+<text class="svgsm" x="999" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">6 份 ＋6.9e-6</text>
+<rect x="1131.5" y="298.01529411764704" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1142.5" y="289.4588235294118" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1153.5" y="266.1595294117647" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1164.5" y="201.76117647058823" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<line x1="1113.0" y1="268.84870588235293" x2="1193.0" y2="268.84870588235293" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="1153" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋补注意力输入</tspan></text>
+<text class="svgsm" x="1153" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋6.1e-6</text>
+<text class="svgsm" x="1153" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.67</tspan></text>
+<rect x="1285.5" y="318.280705882353" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1296.5" y="236.01670588235294" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1307.5" y="262.9625882352941" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1318.5" y="294.6651764705882" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<line x1="1267.0" y1="282.98129411764705" x2="1347.0" y2="282.98129411764705" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="1307" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋注意力和 MoE 输入</tspan></text>
+<text class="svgsm" x="1307" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋5.3e-6</text>
+<text class="svgsm" x="1307" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.37</tspan></text>
+<rect x="0" y="542" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="542" width="4" height="74" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="542" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="569" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单是候选，不是结论：前三类两头都排除，残余还在查</tspan></text>
+<text class="svgsm" x="20" y="600" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">注意力输入那处 GPU 单开像有一点，可合开就没了，按格数校正 p 0.084，研究线推断是偶然；TPU 补上也跟对齐配置分不开。下一批：前向几处，和扫描看不到的差。</text>
+</svg><figcaption><b>左边改了一处的格子都没稳稳长出尾巴；右边补上的两格跟对齐配置一样高。</b><span class="capmore"><br><em>每点一份运行；实测；判读是研究线的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，1000 步，每格 4 份）：第 551–1000 步主 loss 的带符号均值。左块 B200×8，改了一处的格子对 GPU 16 份均值，GPU 自己那格是每份对其余 15 份，p 对 GPU 自己；右块 TPU v5p 8 设备，对 GPU 16 份均值，p 对对齐配置 6 份。「注意力输入」：q、kv 下投影和输出门三份梯度合流；「MoE 输入」：路由、共享专家、路由专家三份梯度合流；「每微批 dW」：每个微批的权重梯度。</p>
+<p>⚠️ 判读是研究线的。还没验：前向几处，以及扫描找不到的差（代码没写舍入、GPU 却舍了的地方；累加顺序）。</p></details></figure>
+  <p>两头都没对上，清单前三类排除，丙还在查；下一批是 C 类前向几处，和扫描看不到的差。这就是<b>清单是候选，不是结论</b>：扫描告诉你先查哪儿，判它的只有上卡。</p>
   <details class="foldfig"><summary><b>两种候选配置并排</b>（待拍板）：三处都照 GPU 写法，还是不开收拢处</summary>
   <table class="t9"><thead><tr><th></th><th>对齐配置（三处都照 GPU 写法，现行）</th><th>不开收拢处（只补到流梯度）</th></tr></thead><tbody>
   <tr><td>1000 步，第一份</td><td>过 8、待定 1（路由偏置均值 1.31）</td><td>九项全过</td></tr>
@@ -12328,7 +12362,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul></details>
 
   <h3 id="s10-5">10.5　回到开头</h3>
-  <p>TPU 的 loss 低万分之一点五，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分段累加、拿它当基线，v5p、v7x 每一项都在噪声内（最差 0.85 倍）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。<b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差，当参照的那一份也要查。</b>第二次迁移照同一条路又走了一遍（<a href="#s9-6">§9.6</a>）：真实宽度第 1 步 TPU 那一半的差查到了根；小尺寸那截主 loss 共同偏高，主因两头验证过；对齐配置下剩的那截，先编译、再扫描，划出候选清单（<a href="#s9-7">§9.7</a>）；上卡验了两类，都没复现出残余，还在查。数字会过期，方法不会。</p>
+  <p>TPU 的 loss 低万分之一点五，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分段累加、拿它当基线，v5p、v7x 每一项都在噪声内（最差 0.85 倍）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。<b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差，当参照的那一份也要查。</b>第二次迁移照同一条路又走了一遍（<a href="#s9-6">§9.6</a>）：真实宽度第 1 步 TPU 那一半的差查到了根；小尺寸那截主 loss 共同偏高，主因两头验证过；对齐配置下剩的那截，先编译、再扫描，划出候选清单（<a href="#s9-7">§9.7</a>）；前三类上卡两头都排除了，残余还在查。数字会过期，方法不会。</p>
 
   <h3 id="s10-6">10.6　拿回去用：清单、速查卡、排查表、练习</h3>
   <p>这一节不进课堂，留给要在自己的模型上做一次对齐的人。前四个折叠按用的顺序排；后面是延伸阅读和出处台账。</p>

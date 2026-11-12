@@ -256,7 +256,7 @@ h2.part{margin:48px 0 8px;padding-top:18px;border-top:2px solid #dadce0;font-siz
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,138</td><td>4</td><td>6.7′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>769</td><td>3</td><td>4.6′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,689</td><td>11</td><td>16.4′</td><td>18′</td></tr><tr><td>第四节　指标（二）：张量</td><td>2,181</td><td>8</td><td>13.1′</td><td>13′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>1,548</td><td>12</td><td>10.9′</td><td>11′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>555</td><td>3</td><td>3.5′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,174</td><td>10</td><td>8.6′</td><td>9′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,643</td><td>9</td><td>10.7′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,778</td><td>17</td><td>13.7′</td><td>6′</td></tr><tr><td>第十节　工程化与教训</td><td>1,343</td><td>6</td><td>8.2′</td><td>7′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>96′</b></td><td><b>90′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,138</td><td>4</td><td>6.7′</td><td>7′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>769</td><td>3</td><td>4.6′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,689</td><td>11</td><td>16.4′</td><td>18′</td></tr><tr><td>第四节　指标（二）：张量</td><td>2,181</td><td>8</td><td>13.1′</td><td>13′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>1,548</td><td>12</td><td>10.9′</td><td>11′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>555</td><td>3</td><td>3.5′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,174</td><td>10</td><td>8.6′</td><td>9′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,643</td><td>9</td><td>10.7′</td><td>10′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,825</td><td>17</td><td>14.0′</td><td>6′</td></tr><tr><td>第十节　工程化与教训</td><td>1,343</td><td>6</td><td>8.2′</td><td>7′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>97′</b></td><td><b>90′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
@@ -1067,9 +1067,11 @@ TPU 上的程序由 XLA 整图编译，第五节那张省舍入的图：TPU 默�
 
 <p class="say">「这一招，是这门课我最想让大家带走的。代码里的往返不改数学，就像收银单上印着『此处抹零』，收银员觉得马上还要接着算，就没抹。那就别一张张猜：整个训练步编一遍，把这种地方全列出来。两百七十二处，先查三类：A 分支输入的梯度合流、B 每个微批的权重梯度、C 前向几处。」</p>
 
-<p class="board"><b>🖥 屏幕</b>：<code>fig-verify</code>，先指最右一格贴着 0，再指「两处一起」那格。</p>
+<p class="board"><b>🖥 屏幕</b>：<code>fig-verify</code>，先左块（GPU 一头），再右块（TPU 一头）。</p>
 
-<p class="say">「最后还是两头验证那一招：GPU 上把 A、B 拆成三处照 TPU 改。dW 排除；注意力输入那处单开像有一点，可跟 MoE 输入一起开反而没了，没坐实。丙还在查。所以记住：清单是候选，不是结论，判它的只有上卡。」</p>
+<p class="say">「最后还是两头验证那一招。GPU 上把前两类拆成三处照 TPU 改：dW 不动；注意力输入那处单开像有一点，可跟 MoE 输入一起开就没了。TPU 上把它补上，尾巴也没下去。前三类两头都排除，丙还在查，下一批是前向几处和扫描看不到的差。」</p>
+
+<p class="say">「这正是清单该怎么用：它告诉你先查哪儿，判它的只有上卡。清单是候选，不是结论。」</p>
 
 <p class="say">「验收是一次性的。可模型投产以后，训练代码每天都在变，怎么知道它没有悄悄改了数值？」</p>
 

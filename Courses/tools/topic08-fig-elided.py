@@ -244,58 +244,66 @@ def fig_sites():
 
 
 def fig_verify():
-    """fig8-verify 回答：扫出来的候选，上卡验了以后怎样？—— GPU 上把前两类拆成三处照 TPU 改：dW 排除；注意力输入那处单开像有一点、
-    跟 MoE 输入一起开反而没了，没坐实。清单是候选，不是结论。数据：topic08_numbers 的 GV、GV_RUNS（研究线已合入的结果文件；实测）；
-    「没坐实、很可能是偶然」是研究线的推断。⛔ 刻意没画：TPU 一头（在跑）、前向几处（还没验）。"""
-    R = N.GV_RUNS
-    f = Fig(W, "上卡验证。办法跟定主因那次一样：在 GPU 上把候选照 TPU 的样子改，看 GPU 自己长不长出尾巴。每个点是一份 1000 步运行第 551 到 1000 步主 loss 的偏差，横线是均值，灰点是 GPU 自己 16 份。"
-               "注意力输入那处单开，4 份都正，均值 ＋3.0e-6，p 0.021；MoE 输入那处单开 ＋9.6e-7；两处一起开反而回到 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73，排除。"
-               "同类舍入合起来本该叠加，这里对不上，研究线判为没坐实、很可能是偶然。前向几处还没验，TPU 一头在跑。")
-    y0 = f.header("上卡验证：dW 排除；注意力输入那处单开像有一点，合开反而没了，没坐实",
-                  "第二次迁移，小尺寸，B200；GPU 上照 TPU 改一处，第 551–1000 步主 loss 偏差（橙、绿点对 GPU 16 份均值，灰点留一法），每点一份运行",
-                  [(GY2, "GPU 自己"), (OR, "照 TPU 改"), (GR, "排除")])
-    PH = 400
-    py = f.panel(0, y0, W, PH, "清单里前两类拆成三处，各 4 份", OR)
-    X0, X1 = 110, W - 40
-    YT, YB = py + 40, py + PH - 110
-    vmin, vmax = -5e-6, 7e-6
+    """fig8-verify 回答：扫出来的候选，上卡两头验了以后怎样？—— 左：GPU 上照 TPU 改（dW、注意力输入、MoE 输入、两处一起）；
+    右：TPU 上在对齐配置之上补注意力输入、注意力加 MoE 输入。两头都没把残余造出来或消下去：清单前三类排除，残余还在查。
+    数据：topic08_numbers 的 GV、GV_RUNS、TV、TV_RUNS（研究线已合入的两份结果文件；实测）；判读是研究线的（注意力输入单开那次是偶然：推断）。
+    ⛔ 刻意没画：前向几处（还没验）。"""
+    R, T = N.GV_RUNS, N.TV_RUNS
+    f = Fig(W, "上卡两头验证。左块 GPU 一头：在 GPU 上把候选照 TPU 改，看 GPU 自己长不长出尾巴。注意力输入那处单开 ＋3.0e-6，p 0.021；"
+               "跟 MoE 输入那处一起开只剩 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73。右块 TPU 一头：在对齐配置之上补上，看尾巴下不下去。"
+               "对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。两头都排除了清单前三类，残余还在查。")
+    y0 = f.header("两头验证：清单前三类都排除了，残余还在查",
+                  "第二次迁移，小尺寸，第 551–1000 步主 loss 偏差，每点一份运行，横线是均值",
+                  [(GY2, "参照格"), (GR, "改了一处，结论：排除")])
+    PH, GAP = 420, 22
+    LW = 820
+    vmin, vmax = -5e-6, 1.2e-5
 
-    def Y(v):
-        return YT + (vmax - v) / (vmax - vmin) * (YB - YT)
-    for v in (-4e-6, -2e-6, 2e-6, 4e-6, 6e-6):
-        f.line(X0, Y(v), X1, Y(v), LINE, 0.6, arrow=False)
-        f.t(X0 - 6, Y(v) + 4, ("%+.0e" % v).replace("e-0", "e-"), GY, size=11.5, anchor="end")
-    f.line(X0, Y(0), X1, Y(0), GY, 1.2, arrow=False)
-    f.t(X0 - 6, Y(0) + 4, "0", GY, size=11.5, anchor="end")
-    cells = [("loo", "GPU 自己（16 份）", GY2, ""), ("attn", "注意力输入那处", OR, "p %s" % N.GV_ATTN_P),
-             ("moe", "MoE 输入那处", OR, "p %s" % N.GV_T["moe"][1]), ("both", "两处一起", OR, "p %s" % N.GV_BOTH_P),
-             ("wgrad", "每个微批的 dW", GR, "p %s" % N.GV_WGRAD_P)]
-    cw = (X1 - X0) / float(len(cells))
-    for k, (key, lab, col, ptxt) in enumerate(cells):
-        cx = X0 + cw * (k + 0.5)
-        vals = R[key]
-        n = len(vals)
-        for m, v in enumerate(vals):
-            dx = (m - (n - 1) / 2.0) * min(12, 150.0 / n)
-            f.box(cx + dx - 5, Y(v) - 5, 10, 10, col, "#fff", 5, sw=1)
-        mean = sum(vals) / n
-        f.line(cx - 50, Y(mean), cx + 50, Y(mean), INK, 2.4, arrow=False)
-        f.t(cx, YB + 24, lab, col if col != GY2 else GY, True, 13.5, "middle")
-        if key != "loo":
-            f.t(cx, YB + 46, "均值 %s" % N.GV_T[key][0], INK, False, 12.5, "middle")
-            f.t(cx, YT - 10, ptxt, GY, True, 12.5, "middle")
-    f.t(X0 + cw * 1.5, YB + 70, "单开 4 份都正，可跟 MoE 那处一起开反而回到零附近：没坐实", OR, True, 13, "middle")
-    f.t(X0 + cw * 4.5, YB + 70, "排除", GR, True, 14, "middle")
-    f._pan = None
-    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：两类高优先级里，一类排除，一类没坐实", [
-        "同类舍入合起来本该叠加，这里对不上；四格一起看，0.021 按格数校正是 0.084，研究线判为很可能是偶然（推断）。还没验的：前向几处，和扫描找不到的差；TPU 一头（补注意力输入那处）截至 2026-11-12 还没出结果。",
+    def panel(x0, w, title, col, cells, data, side):
+        py = f.panel(x0, y0, w, PH, title, col)
+        X0, X1 = x0 + 80, x0 + w - 16
+        YT, YB = py + 40, py + PH - 100
+
+        def Y(v):
+            return YT + (vmax - v) / (vmax - vmin) * (YB - YT)
+        for v in (-4e-6, 4e-6, 8e-6, 1.2e-5):
+            f.line(X0, Y(v), X1, Y(v), LINE, 0.6, arrow=False)
+            f.t(X0 - 6, Y(v) + 4, ("%+.0e" % v).replace("e-0", "e-").replace("e-05", "e-5"), GY, size=11.5, anchor="end")
+        f.line(X0, Y(0), X1, Y(0), GY, 1.2, arrow=False)
+        f.t(X0 - 6, Y(0) + 4, "0", GY, size=11.5, anchor="end")
+        cw = (X1 - X0) / float(len(cells))
+        for k, (key, lab, c, mean_t, ptxt) in enumerate(cells):
+            cx = X0 + cw * (k + 0.5)
+            vals = data[key]
+            n = len(vals)
+            for m, v in enumerate(vals):
+                dx = (m - (n - 1) / 2.0) * min(11, 120.0 / n)
+                f.box(cx + dx - 5, Y(v) - 5, 10, 10, c, "#fff", 5, sw=1)
+            mean = sum(vals) / n
+            f.line(cx - 40, Y(mean), cx + 40, Y(mean), INK, 2.4, arrow=False)
+            f.t(cx, YB + 24, lab, c if c != GY2 else GY, True, 13, "middle")
+            if mean_t:
+                f.t(cx, YB + 44, mean_t, INK, False, 12, "middle")
+            if ptxt:
+                f.t(cx, YT - 10, ptxt, GY, True, 12, "middle")
+        f._pan = None
+        return py
+    gcells = [("loo", "GPU 自己", GY2, "16 份", ""), ("attn", "注意力输入", GR, "均值 %s" % N.GV_T["attn"][0], "p %s" % N.GV_ATTN_P),
+              ("moe", "MoE 输入", GR, "均值 %s" % N.GV_T["moe"][0], "p %s" % N.GV_T["moe"][1]),
+              ("both", "两处一起", GR, "均值 %s" % N.GV_BOTH_T, "p %s" % N.GV_BOTH_P),
+              ("wgrad", "每微批 dW", GR, "均值 %s" % N.GV_WGRAD_T, "p %s" % N.GV_WGRAD_P)]
+    panel(0, LW, "GPU 一头：照 TPU 改，长不长出尾巴（对 GPU 16 份均值）", OR, gcells, R, "gpu")
+    tcells = [("C", "对齐配置", GY2, "6 份 %s" % N.TV_T["C"], ""), ("attn", "＋补注意力输入", GR, "均值 %s" % N.TV_ATTN_T, "p %s" % N.TV_ATTN_P),
+              ("all", "＋注意力和 MoE 输入", GR, "均值 %s" % N.TV_ALL_T, "p %s" % N.TV_ALL_P)]
+    panel(LW + GAP, W - LW - GAP, "TPU 一头：补上，尾巴下不下去", BL, tcells, T, "tpu")
+    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：前三类两头都排除，残余还在查", [
+        "注意力输入那处 GPU 单开像有一点，可合开就没了，按格数校正 p 0.084，研究线推断是偶然；TPU 补上也跟对齐配置分不开。下一批：前向几处，和扫描看不到的差。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移，小尺寸，B200×8，1000 步）：每格 4 份，第 551–1000 步主 loss 对 GPU 16 份均值的带符号均值；GPU 自己那格是 16 份各自对其余 15 份；p 是对 GPU 自己的置换检验。"
-               "「注意力输入那处」：q、kv 下投影和输出门三份梯度在 FP32 里加完只舍一次；「MoE 输入那处」：路由、共享专家、路由专家三份梯度同上；「每个微批的 dW」：直接在 FP32 里累加，不先舍 BF16。",
-               "⚠️ 判读是研究线的：dW 排除；两处梯度合流没坐实。")
+               "📌 实测（第二次迁移，小尺寸，1000 步，每格 4 份）：第 551–1000 步主 loss 的带符号均值。左块 B200×8，改了一处的格子对 GPU 16 份均值，GPU 自己那格是每份对其余 15 份，p 对 GPU 自己；"
+               "右块 TPU v5p 8 设备，对 GPU 16 份均值，p 对对齐配置 6 份。「注意力输入」：q、kv 下投影和输出门三份梯度合流；「MoE 输入」：路由、共享专家、路由专家三份梯度合流；「每微批 dW」：每个微批的权重梯度。",
+               "⚠️ 判读是研究线的。还没验：前向几处，以及扫描找不到的差（代码没写舍入、GPU 却舍了的地方；累加顺序）。")
     f.save("fig8-verify.svg", yb + 14)
-
 
 fig_elided()
 fig_cancel()
