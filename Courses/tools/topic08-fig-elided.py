@@ -135,4 +135,60 @@ def fig_elided():
     f.save("fig8-elided.svg", yb + 14)
 
 
+def fig_cancel():
+    """fig8-cancel 回答：为什么修好收拢处，尾巴反而变大？—— 两处没舍的方向相反：流梯度那处往上推，收拢处梯度那处往下拉；
+    修之前两股相抵一部分。数据：topic08_numbers 的 CX、EL_GPU_HEADGRAD（实测）；「往下拉的那一份」是推断（本课把 +3.1 与 GPU 的 −2.9 对照）。
+    ⛔ 刻意没画：箭头长度不是测量值，只表示方向；各格份数不同（4–6 份），没画误差棒（检验值在前两张图里）。"""
+    C = N.CX
+    f = Fig(W, "像一杆秤上坏了两个零件：一个让读数偏多，一个让读数偏少。左边四行是四种配置，每行两个零件补没补，右边是第 551 到 1000 步主 loss 的偏差。"
+               "两处都没补，＋9.4，单位十的负六次方；只补收拢处，读数反而变大到 ＋12.5；只补流梯度，＋1.9，看着像修好了；两处都补，＋6.9。"
+               "最下面一行：GPU 上反过来拿掉收拢处那次梯度舍入，后段被压低 2.9，跟只补收拢处多出来的 3.1 量级相当、方向相反。"
+               "推断：收拢处梯度不舍一直在往下拉，只补流梯度的 ＋1.9 里有它帮的倒忙；两处都补后剩下的 ＋6.9 来自这一段以外。")
+    y0 = f.header("修好一个零件，读数反而变大：因为另一个零件一直在少称",
+                  "第二次迁移，小尺寸，v5p；读数 ＝ 第 551–1000 步主 loss 偏差（TPU − GPU，×1e-6），每格 4–6 份运行的平均",
+                  [(OR, "往上推：流梯度没照 GPU 舍"), (BL, "往下拉：收拢处梯度没舍"), (GR, "已补上")])
+    PH = 380
+    py = f.panel(0, y0, W, PH, "四种配置：两个零件各补没补，读数是多少", OR)
+    cols = {"stream": 300, "head": 470}
+    f.t(cols["stream"], py + 26, "流梯度", OR, True, 13.5, "middle")
+    f.t(cols["head"], py + 26, "收拢处梯度", BL, True, 13.5, "middle")
+    B0, B1, vmax = 600, W - 260, 13.5e-6
+
+    def BX(v):
+        return B0 + v / vmax * (B1 - B0)
+    rows = [("两处都没补（修之前）", False, False, C["none"], "两股相抵了一部分"),
+            ("只补收拢处", False, True, C["head"], "往下拉的那股没了，读数反而大 %s" % N.CX_HEAD_UP_T),
+            ("只补流梯度", True, False, C["stream"], "看着像修好，可往下拉的那股还在帮倒忙"),
+            ("两处都补（对齐配置）", True, True, C["both"], "剩下这截推断来自这一段以外")]
+    for i, (lab, s_ok, h_ok, v, note) in enumerate(rows):
+        y = py + 50 + i * 66
+        f.t(20, y + 24, lab, INK, True, 13.5)
+        for key, ok, col, sign in (("stream", s_ok, OR, 1), ("head", h_ok, BL, -1)):
+            x = cols[key]
+            if ok:
+                f.box(x - 34, y + 8, 68, 26, "#fff", GR, 13, sw=1.4)
+                f.t(x, y + 26, "已补", GR, True, 12.5, "middle")
+            else:
+                f.line(x, y + 21 + 14 * sign, x, y + 21 - 14 * sign, col, 3)
+                f.t(x + 14, y + 26, "没补", col, False, 12)
+        f.box(B0, y + 8, max(BX(v) - B0, 3), 24, OR if not (s_ok and h_ok) else GY2, OR if not (s_ok and h_ok) else GY2, 4)
+        f.t(BX(v) + 8, y + 26, "＋%s" % N.CX_T[["none", "head", "stream", "both"][i]], INK, True, 14)
+        f.t(B0, y + 50, note, GY, size=12)
+    f.line(B0, py + 40, B0, py + 50 + 4 * 66 - 20, GY, 1.2, arrow=False)
+    yg = py + 50 + 4 * 66 + 6
+    f.line(14, yg - 8, W - 14, yg - 8, LINE, 1, arrow=False)
+    f.t(20, yg + 18, "反过来在 GPU 上验：", BL, True, 13.5)
+    f.t(190, yg + 18, "拿掉收拢处那次梯度舍入（%d 份），后段压低 %s；跟上面多出来的 %s 量级相当、方向相反。"
+        % (N.EL_GPU_HEADGRAD_N, "%.1f" % (-N.EL_GPU_HEADGRAD["late"] * 1e6), N.CX_HEAD_UP_T), INK, size=13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "warn", "只补流梯度时的 ＋1.9 不全是修好：往下拉的那股还在，帮着把读数压低了", [
+        "两处都照 GPU 补上，往上推、往下拉都没了，还剩 ＋6.9：推断这截不在这一段，要换个地方找。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测：四格都是第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值，单位 1e-6；修之前 4 份、只补收拢处 4 份、只补流梯度 5 份、对齐配置 6 份。GPU 那一行对 GPU 16 份留一法，4 份。",
+               "⚠️ 推断：把「只补收拢处比修之前多出的 3.1」和「GPU 上拿掉那次梯度舍入压低的 2.9」对上，是本课的相减与对照；研究线的口径是「方向一致，只补流梯度的后段变平有一部分是这次不照 GPU 舍的下压」。箭头只表示方向，不是测量值。")
+    f.save("fig8-cancel.svg", yb + 14)
+
+
 fig_elided()
+fig_cancel()

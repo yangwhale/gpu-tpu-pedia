@@ -10371,7 +10371,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/configs/base.yml#L1405">MaxText（混元 4 公开分支）：开关 sa_use_base2_exp（默认开）</a></p>
 <details class="foldfig"><summary><b>考考自己</b>：中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？</summary><p>不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开。而且「过了」只是 300 步那一级：第二级第 1 步两边各自对 FP64，GPU 已经偏高 1.42e-5（比 GPU 8 份之间的极差还大）、TPU 只有 2.4e-7 —— 宽度一换成真的，GPU 那边就有一截偏差（还在查），只是 300 步的判定没把它显出来。要定，就再补一级只换其中一样，比如真实结构配随机权重。（TPU 那一半后来定到了「权重」那一行：真实权重的 logits 大，把 base2 常数舍入的误差放大了，<a href="#s9-7">§9.7</a>。）</p></details>
   <h3 id="s9-8">9.8　一条主 loss 的尾巴：一路排除，最后先编译、再扫描</h3>
-  <p>八份 TPU 主 loss 全部比 GPU 高，前五百步贴着零，第 550 步以后才往上爬。这是第二次迁移里查得最久的一件；最后划出范围的，不是又一次上卡，是一次离线编译。先看它随步数怎么走：</p>
+  <p>八份 TPU 主 loss 全部比 GPU 高，前五百步贴着零，第 550 步以后才往上爬。这是第二次迁移里查得最久的一件；最后划出范围的，不是又一次上卡，是一次离线编译。</p>
 <figure class="fbox fwide" id="fig-minidrift"><svg viewBox="0 0 1400 718" width="100%" role="img" aria-label="上下两条。上：小尺寸 1000 步，TPU 8 份主 loss 对 GPU 16 份逐步均值的相对差，每 25 步一根柱，灰带是 GPU 自己的散布。第 1 步 −2.0e-6；第 51 到 100 步一个小鼓包；第 100 到 550 步在 0 附近；第 550 步起一路往上，到最后一块 ＋1.8e-5。下：同一批运行的 MTP loss，第 100 步起反着往下，最后 −3.2e-5。前段鼓包定到多路残差收拢那次少舍的 BF16；后段主因后来定到流梯度的舍法。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">小尺寸主 loss 那截偏高：几乎全在第 550 步以后，越往后越大</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块；灰带 ＝ ± GPU 留一法标准差（实测）</text>
@@ -10582,7 +10582,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 同一份权重上的前向：6 个状态、19 批，TPU 减 GPU 写法 ＋0.83e-6 ± 1.15e-6；偏差跟步数、参数范数同步（第 501 步起相关 0.96），跟梯度范数无关。关掉 MTP、KD 后幅度约为对照的六成，是它们放大了还是样本少，在查。</p>
 <p>📌 后段（第 551–1000 步，对 GPU 16 份均值）：对照一份 ＋1.48e-5，补流梯度舍法（流的梯度逐个舍、分支输出也舍）5 份均值 ＋1.9e-6；把它拆成两半各跑 1 份：只补梯度累加 ＋0.6e-6、只补分支输出 ＋3.0e-6；两边都去掉多路残差，TPU 2 份 ＋1.9e-6、＋0.7e-6。延长到 2000 步：尾部在第 1000–1250 步到顶（＋2.9e-5）后回落到 GPU 两份的散布里。</p>
 <p>⚠️ 柱的颜色只看 8 份的符号是否一致，不是判档；那一代判档按第三节的三个统计和 GPU 16 份的尺子是主 loss 1.55、1.52 待定，现行对齐配置下主 loss 过。</p></details></figure>
-  <p>先认三个词。混元 4 把残差流复制成 4 路（多路残差）；每一层里，流被读三次（加权混进分支、门控、残差直通），反向就回来三份梯度要加起来，这里叫<b>流梯度</b>；模型最后把四路收成一路、再进末层归一化，那个地方叫<b>收拢处</b>。后段先用排除法缩小范围，</p>
+  <p>先认两个地方。混元 4 把残差流复制成 4 路（多路残差），每层里流被读三次，反向回来三份梯度要加起来，这里叫<b>流梯度</b>；模型最后把四路收成一路、再进末层归一化，那里叫<b>收拢处</b>。再记住 <a href="#s5-5">§5.5</a> 那件事：代码里「转 BF16、再转回 FP32」的一对，编译器开着省舍入时可以省掉；写成 <code>reduce_precision</code> 就省不掉。后面每补一处，用的都是它。</p>
+  <p><b>前段那个小鼓包先破了。</b>GPU 在收拢处把四路收成一路以后舍一次 BF16，反向传回的梯度也舍；TPU 省掉了梯度那次。在收拢处强制舍（前向、梯度都舍），第 51–100 步回到 GPU 附近；只在前向舍、梯度原样传回，鼓包又回来。可后段一点没动。</p>
+  <p><b>后段先排除嫌疑。</b>关掉 MTP、关掉蒸馏，都还偏；换运行库、换芯片、换并行方式，35 次长跑后段全是正的；两边都把多路残差换成普通残差，尾巴没了。嫌疑锁定在多路残差这一段：</p>
 <figure class="fbox fwide" id="fig-ihcroot"><svg viewBox="0 0 1400 580" width="100%" role="img" aria-label="两块。左：多路残差的流在反向里的样子。流在一层里有三处用到，回来三份梯度。GPU：三份各舍 BF16，再一个一个加，每加一次舍一次；TPU：三份在 FP32 里加完，最后舍一次（推断）。右：第 551 到 1000 步主 loss 的 TPU 减 GPU。关掉 MTP、关掉索引器蒸馏、两个都关，都还偏高 0.9e-5 到 1.2e-5；对照 1.48e-5；两边都去掉多路残差，1.9e-6 和 0.7e-6，落进 GPU 的散布 2.1e-6。所以范围缩到多路残差这一段。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">后段偏高：排除了一圈，范围缩到多路残差这一段</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p，现行对齐配置之前那一代；对比基准是 GPU 现行写法</text>
@@ -10651,15 +10653,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>右边灰条（排除的候选）都还长，只有绿条（两边都去掉多路残差）缩进灰带。</b><span class="capmore"><br><em>右边实测；左边 TPU 那排虚线是推断。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p，1000 步）：第 551–1000 步主 loss 对 GPU 均值的带符号均值。对照是一份运行（后两张图的修之前四份含它），对 GPU 16 份均值；去多路残差那组对它自己的 GPU 3 份；关 MTP、关蒸馏那三行对同配置的 GPU 4 份均值。GPU 侧索引器旋转位置编码改 FP32 也一样飘；TPU 自比里换运行库、换 v7x、换并行方式等 35 个 1000 步运行，第 751–1000 步主 loss 全部偏高。</p>
 <p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过（三份 BF16 梯度按分组相加、每加一次舍一次）；TPU 这几处是否被省掉是推断，没看后端指令；GPU 一边照这个推断改写就长出同样的偏（后两张图）。</p>
 <p>⚠️ 标准答案按现在这份 GPU 参照的写法；对齐记录一度凭单边几份运行写成定案、又撤回，后来每格补到 4–5 份、两头各改一处做两样本检验才定下。</p></details></figure>
-  <div class="note"><span class="t">「对齐配置」在这一段补了哪三处</span>
-  <p>背景是 <a href="#s5-5">§5.5</a> 那件事：excess precision 开着时，代码里「转 BF16、再转回 FP32」的一对，编译器可以省掉，值照旧按 FP32 往下走；<code>reduce_precision</code> 是把值舍到 BF16 格点上的一次运算，编译器不会省。对齐配置在多路残差这一段用它补了三处，都照 GPU 的写法：</p>
-  <ol>
-    <li><b>每层的分支输入和更新后的流</b>：4 路加权混成分支的输入、残差加完以后的流，各强制舍一次 BF16。</li>
-    <li><b>收拢处</b>：四路收成一路以后强制舍一次；前向舍，反向传回来的梯度也舍。</li>
-    <li><b>流梯度</b>：流在一层里复制三份给三处用，反向回来三份梯度，每份先舍 BF16，再按 GPU 的顺序一个个加，每加一次舍一次；分支的输出也强制舍。</li>
-  </ol>
-  <p>下面几张图里：「修之前」只开了第 1 处；「补流梯度舍法」开第 1、3 处；「对齐配置」三处全开。</p></div>
-  <p>再把 GPU 的舍法补到 TPU 上，看那截偏高回不回来：</p>
+  <p><b>两头验证，定下主因：流梯度。</b>GPU 把三份梯度各舍 BF16、一个个加，每加一次舍一次；TPU 推断是 FP32 里加完才舍。照 GPU 的写法补上（每份先舍，按 GPU 的顺序逐个加；分支输出也舍），尾巴降下来（多路残差的分支输入和更新后的流，修之前就已经照 GPU 舍了，<a href="#s5-5">§5.5</a>）：</p>
 <figure class="fbox fwide" id="fig-fixcmp"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="三列，纵轴刻度相同：主 loss 的 TPU 减 GPU（对 GPU 16 份逐步均值的相对差，25 步滑动平均），灰带是 GPU 每份对其余 15 份的同样偏差的范围。修之前四份：前 550 步在 0 上下，之后一路往上，四份尾巴都在。补上 GPU 的流梯度舍法五份：均值降到 ＋1.9e-6，两份仍超尾巴的阈值，三份贴着 0。对齐配置再把收拢处也照 GPU 舍，六份里五份又有一截尾巴，均值比只补流梯度大。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">把 GPU 的流梯度舍法补上，均值降到 ＋1.9e-6（5 份里 2 份仍有尾巴）；对齐配置的后段跟不修分不开</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p，1000 步；三列同一纵轴；每条线一份运行</text>
@@ -10763,7 +10757,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 三列都开着「多路残差分支输入和更新后的流强制舍 BF16」那个开关（修之前就开着），所以对齐配置一共三处照 GPU 写法、比修之前多两处。修之前四份里三份只改执行方式（片上内存上限、调度），同一配置。「补流梯度舍法」再让流的几份梯度先各舍 BF16、照 GPU 的顺序逐个相加（分支输出也舍 BF16）；「对齐配置」再加上收拢处（四路收成一路之后）的舍入，2026-11-11 起是对齐用的配置。取舍：只补流梯度，后段平了，第 51–100 步的小鼓包还在（＋5.6e-6，修之前 ＋3.9e-6）；对齐配置把收拢处也补上，鼓包没了（−2.8e-7），流梯度那处却测不出作用了（下下张图）。</p>
 <p>📌 对齐配置那截残余已排除的：关掉 MTP 再跑 4 份，对同配置 GPU 仍 ＋7.5e-6；GPU 在只换流梯度之上再让分支输出不舍，＋2.3e-6，不放大尾巴。</p>
 <p>⚠️ 都是 mini 尺寸；延长到 2000 步时，修之前的尾巴在第 1000–1250 步到顶后回落到 GPU 散布里。</p></details></figure>
-  <p>只在 TPU 一边补好，还不够定案：也可能是两处差别凑巧抵消。对齐记录前一轮就是只补了一边、几份运行就写成根因，再补一处尾巴又冒出来，只好撤回。这次每格补到 4–5 份，两头各改一处：</p>
+  <p>只补一边还不够：对齐记录前一轮就是只补 TPU、几份运行就写成根因，后来又撤回。这次两头各改一处，每格 4–5 份：TPU 改成 GPU 的写法，偏高降下来；GPU 改成 TPU 的写法，GPU 自己长出同样的尾巴。</p>
 <figure class="fbox fwide" id="fig-twoway"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="两块，纵轴相同：每个点是一份 1000 步运行第 551 到 1000 步主 loss 的带符号均值，横线是这一格的均值。左块 TPU 对 GPU 16 份均值：修之前四份都在 ＋6e-6 以上；补上 GPU 的流梯度舍法，五份降到均值 ＋1.9e-6；对齐配置六份均值 ＋6.9e-6。右块 GPU 对其余 15 份：GPU 自己 16 份散在 0 上下；GPU 把流梯度换成 TPU 的舍法，四份全部为正、均值 ＋3.9e-6；只换收拢处那次，四份散在 0 上下。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两头各改一处：TPU 换成 GPU 的舍法，偏高降下来；GPU 换成 TPU 的舍法，自己偏高</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，1000 步，第 551–1000 步主 loss 带符号均值；每点一份运行，横线是均值</text>
@@ -10885,8 +10879,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左块红点降到绿点；右块灰点升到橙点：两头各改一处，方向对上。</b><span class="capmore"><br><em>每点一份运行；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步）：每格 4–6 份（GPU 自己那格 16 份），第 551–1000 步主 loss 带符号均值；p 是对同一块里第一格做的置换检验（左块对修之前，右块对 GPU 自己）；对齐配置那格的 p 是对补流梯度舍法那一格。</p>
 <p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过；GPU 的三个诊断开关都不开时，CPU 上 191 个梯度逐位不变。GPU 只换收拢处那次舍法，后段不变，可第 51–100 步冒出 ＋3.7e-6（p 0.001）—— 正是 TPU 不补收拢处舍入时的前段鼓包，又一处两头对上。</p>
 <p>⚠️ 都是 mini 尺寸、每格份数不多；结论是「主因」，对齐配置还剩的一截机制未定。</p></details></figure>
-  <p>两个方向对上，才说得上主因是它。TPU 那边「FP32 里加完才舍」仍是推断，没看后端指令。（图里的 p 是检验值：把这些运行随机重新分组，分出这么大差别的概率。）<b>先改一边看效果，再反过来改另一边看能不能造出同样的偏</b>，这招在别的地方也用得上。</p>
-  <p>可对齐配置没跟着变好：把收拢处也照 GPU 舍以后，后段还剩 ＋6.9e-6，比只补流梯度大，跟修之前分不开（p 0.32）。补一组实验才看清：收拢处那次舍入一开，再补流梯度舍法就测不出作用了，</p>
+  <p>两个方向对上，才说得上主因是它。（图里的 p 是检验值：把这些运行随机重新分组，分出这么大差别的概率。）<b>先改一边看效果，再反过来改另一边看能不能造出同样的偏</b>，这招在别处也用得上。</p>
+  <p><b>反转。</b>两处都照 GPU 补上，就是现行的对齐配置；可后段还剩 ＋6.9e-6，比只补流梯度大，跟修之前分不开（p 0.32）。收拢处一开，再补流梯度就测不出作用了：</p>
 <figure class="fbox fwide" id="fig-gatecmp"><svg viewBox="0 0 1400 684" width="100%" role="img" aria-label="两块。左：每个点是一份 1000 步运行第 551 到 1000 步主 loss 的偏差，横线是均值。只开收拢处的舍入四份均值 ＋1.3e-5；在它上面再补流梯度舍法，全套四份 ＋6.7e-6、只补梯度一半 ＋7.9e-6、只补分支输出一半 ＋1.1e-5，对只开收拢处的 p 是 0.14、0.14、0.54，都测不出作用。右：主 loss 的判档倍数，灰点是 GPU 自己 15 份轮流当被测，最高 0.97；紫点是对齐配置 6 份，3 份高过 GPU 的全部 15 份，最高 1.14。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">收拢处一开，流梯度那处就测不出作用；对齐配置的主 loss 只是刚好过线</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p，1000 步；每点一份运行；机制还在查</text>
@@ -10994,7 +10988,67 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边：在橙点那格上再补，三格紫点都没明显往下；右边：紫点有三个落在所有灰点的右边。</b><span class="capmore"><br><em>每点一份运行；实测；机制在查。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，1000 步）：左块每格 4 份，第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值；三格对修之前（只开前向那个强制舍入）也都分不开。「只补梯度一半」「只补分支输出一半」是把流梯度舍法拆成两半各自单开。</p>
 <p>📌 右块：现行检查项目录、GPU 16 份两两 120 对的尺子；GPU 那 15 份是每份对基线那份的同样判档（留一法）。对齐配置 6 份没有不过，现行那份 0.98。</p>
 <p>⚠️ 都是 mini 尺寸、每格份数不多；「测不出作用」是这几份运行下的结论，不等于证明没有作用。</p></details></figure>
-  <p>拆开看，收拢处那次舍入前向舍一次、反向传回的梯度也舍一次；消掉前段鼓包靠的是梯度那次（实测：只在前向舍、梯度原样传回，鼓包就回来），跟流梯度相冲的推断也在这里。GPU 上反过来拿掉这次梯度舍入（4 份），前段冒出鼓包（＋4.9e-6），后段反被往下压（−2.9e-6），方向跟 TPU 一致。所以只补流梯度时后段变平，推断有一部分是两处误差互相抵消，不全是修好。三处都照 GPU 写法的对齐配置，后段跟不修分不开，判档的主 loss 只是刚好过线。</p>
+  <p><b>为什么？两处没舍的方向相反。</b>好比一杆秤坏了两个零件，一个让读数偏多，一个偏少，读到的是两者相抵后的数。修好偏少那个，读数反而变大：</p>
+<figure class="fbox fwide" id="fig-cancel"><svg viewBox="0 0 1400 600" width="100%" role="img" aria-label="像一杆秤上坏了两个零件：一个让读数偏多，一个让读数偏少。左边四行是四种配置，每行两个零件补没补，右边是第 551 到 1000 步主 loss 的偏差。两处都没补，＋9.4，单位十的负六次方；只补收拢处，读数反而变大到 ＋12.5；只补流梯度，＋1.9，看着像修好了；两处都补，＋6.9。最下面一行：GPU 上反过来拿掉收拢处那次梯度舍入，后段被压低 2.9，跟只补收拢处多出来的 3.1 量级相当、方向相反。推断：收拢处梯度不舍一直在往下拉，只补流梯度的 ＋1.9 里有它帮的倒忙；两处都补后剩下的 ＋6.9 来自这一段以外。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">修好一个零件，读数反而变大：因为另一个零件一直在少称</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p；读数 ＝ 第 551–1000 步主 loss 偏差（TPU − GPU，×1e-6），每格 4–6 份运行的平均</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">往上推：流梯度没照 GPU 舍</text>
+<rect x="251.96" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="272" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">往下拉：收拢处梯度没舍</text>
+<rect x="471.44000000000005" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="492" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">已补上</text>
+<rect x="0" y="102" width="1400" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四种配置：两个零件各补没补，读数是多少</tspan></text>
+<text class="svgsm" x="300" y="158" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">流梯度</tspan></text>
+<text class="svgsm" x="470" y="158" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收拢处梯度</tspan></text>
+<text class="svgsm" x="20" y="206" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处都没补（修之前）</tspan></text>
+<line x1="300" y1="217" x2="300" y2="189" stroke="#e8710a" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="314" y="208" fill="#b06000" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
+<line x1="470" y1="189" x2="470" y2="217" stroke="#1a73e8" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="484" y="208" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
+<rect x="600" y="190" width="375.82869891551627" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="983" y="208" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋9.4</tspan></text>
+<text class="svgsm" x="600" y="232" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">两股相抵了一部分</text>
+<text class="svgsm" x="20" y="272" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只补收拢处</tspan></text>
+<line x1="300" y1="283" x2="300" y2="255" stroke="#e8710a" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="314" y="274" fill="#b06000" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
+<rect x="436" y="256" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="470" y="274" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
+<rect x="600" y="256" width="500.85745894397223" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1108" y="274" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋12.5</tspan></text>
+<text class="svgsm" x="600" y="298" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">往下拉的那股没了，读数反而大 3.1</text>
+<text class="svgsm" x="20" y="338" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只补流梯度</tspan></text>
+<rect x="266" y="322" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="300" y="340" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
+<line x1="470" y1="321" x2="470" y2="349" stroke="#1a73e8" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="484" y="340" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
+<rect x="600" y="322" width="76.3204417466161" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="684" y="340" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.9</tspan></text>
+<text class="svgsm" x="600" y="364" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">看着像修好，可往下拉的那股还在帮倒忙</text>
+<text class="svgsm" x="20" y="404" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处都补（对齐配置）</tspan></text>
+<rect x="266" y="388" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="300" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
+<rect x="436" y="388" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="470" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
+<rect x="600" y="388" width="277.9181969477322" height="24" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="885" y="406" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋6.9</tspan></text>
+<text class="svgsm" x="600" y="430" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">剩下这截推断来自这一段以外</text>
+<line x1="600" y1="172" x2="600" y2="426" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="14" y1="444" x2="1386" y2="444" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="20" y="470" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反过来在 GPU 上验：</tspan></text>
+<text class="svgsm" x="190" y="470" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">拿掉收拢处那次梯度舍入（4 份），后段压低 2.9；跟上面多出来的 3.1 量级相当、方向相反。</text>
+<rect x="0" y="502" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="502" width="4" height="74" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="502" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="529" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只补流梯度时的 ＋1.9 不全是修好：往下拉的那股还在，帮着把读数压低了</tspan></text>
+<text class="svgsm" x="20" y="560" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">两处都照 GPU 补上，往上推、往下拉都没了，还剩 ＋6.9：推断这截不在这一段，要换个地方找。</text>
+</svg><figcaption><b>只补收拢处那一行读数最大；只补流梯度那一行最小，可往下拉的那股还在。</b><span class="capmore"><br><em>读数是实测；「往下拉的那份」是推断，箭头只表示方向。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：四格都是第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值，单位 1e-6；修之前 4 份、只补收拢处 4 份、只补流梯度 5 份、对齐配置 6 份。GPU 那一行对 GPU 16 份留一法，4 份。</p>
+<p>⚠️ 推断：把「只补收拢处比修之前多出的 3.1」和「GPU 上拿掉那次梯度舍入压低的 2.9」对上，是本课的相减与对照；研究线的口径是「方向一致，只补流梯度的后段变平有一部分是这次不照 GPU 舍的下压」。箭头只表示方向，不是测量值。</p></details></figure>
+  <p>所以只补流梯度时那个 ＋1.9e-6 偏乐观（推断；GPU 上拿掉收拢处那次梯度舍入，方向一致）。两处都补以后剩下的那截，得换个地方找。</p>
   <details class="foldfig"><summary><b>两种候选配置并排</b>（待拍板）：三处都照 GPU 写法，还是不开收拢处</summary>
   <table class="t9"><thead><tr><th></th><th>对齐配置（三处都照 GPU 写法，现行）</th><th>不开收拢处（只补到流梯度）</th></tr></thead><tbody>
   <tr><td>1000 步，第一份</td><td>过 8、待定 1（路由偏置均值 1.31）</td><td>九项全过</td></tr>
@@ -11006,10 +11060,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </tbody></table>
   <p>两边各缺一块：一个后段没修掉，一个前段鼓包还在。哪个当对齐配置，取决于更在意哪一段，课程不替它定。</p>
   </details>
-  <p>收拢处这一段的代码也对到头了：收拢处加末层归一化，在 CPU 上跟 GPU 逐位对照，再开一个让两边共用一次末层归一化的开关，两边就只差 FP32 累加顺序；可上卡 4 份，后段照旧（对对齐配置 p 0.40）。代码写的一样，跑出来不一样，剩下能查的，只有编译器实际做了什么。</p>
-  <p><a href="#s5-5">§5.5</a> 讲过的那一处就是线索。多路残差把 4 路流加权求和、转成 BF16 再进归一化；把这一小段为 v5p 离线编译，HLO 里那对 convert 都还在，可算均方那颗 kernel 的后端指令（LLO）里，把 FP32 打包成 BF16 的指令一条都没有（<a href="#s8-5">§8.5</a> 也是这样数的）。同一处补上 reduce_precision，就有 256 条，真舍了。收拢处那一段编出来也一样：主头和 MTP 各做一次末层归一化，两路反向各有一次「转 BF16」，都是 0 条（这两次在各种配置里都被省，解释不了配置之间的差，只拿来认规律）。规律是：往返留在一颗融合里就不舍，值写回内存交给下一颗才真舍。</p>
+  <p><b>只剩编译器。</b>收拢处这一段的代码已经对到头：在 CPU 上跟 GPU 逐位对照，再让两边共用一次末层归一化，就只差 FP32 累加顺序；可上卡 4 份，后段照旧（对对齐配置 p 0.40）。代码写的一样，跑出来不一样，剩下能查的，是编译器实际做了什么。</p>
+  <p>先在一处上看清楚。多路残差把 4 路加权和转成 BF16 再进归一化；把这一小段为 v5p 离线编译，HLO 里那对 convert 都在，可算均方那颗 kernel 的后端指令（LLO）里，把 FP32 打包成 BF16 的指令一条都没有（<a href="#s8-5">§8.5</a> 也是这样数的）。同一处补上 reduce_precision，就有 256 条。往返留在一颗融合里就不舍，值写回内存交给下一颗才真舍。</p>
   <div class="note ok" style="border-left:6px solid #e8710a"><span class="t">全课最想让你带走的一招：先编译，再扫描</span>
-  <p>代码里的 convert 往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思：<b>这里要舍一次</b>。所以每一处往返，都是一句「该舍」的声明；单看一处，HLO 里两条 convert 都在，像是舍了；LLO 证实，往返只要落在同一颗融合里，就不舍。规律定下来，就不用一颗颗数 LLO 了：把整个训练步离线编译一次（不用上卡），在 HLO 里找「同一颗融合里转成 BF16、又转回 FP32」，同类位置一次列全，问题的范围就划出来了；能单独数的 kernel，再拿 LLO 抽查。</p></div>
+  <p>代码里的 convert 往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思：<b>这里要舍一次</b>。每一处往返，都是一句「该舍」的声明。规律定下来，就不用一颗颗数 LLO：把整个训练步离线编译一次（不用上卡），在 HLO 里找「同一颗融合里转成 BF16、又转回 FP32」，同类位置一次列全，范围就划出来了；能单独数的 kernel，再拿 LLO 抽查。</p></div>
 <figure class="fbox fwide" id="fig-elided"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="两块。左：多路残差分支输入那一处的三层。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。右：把现行对齐配置的整个训练步离线编译一次，扫所有这样的往返，一共 272 处：每个微批的权重梯度 75，分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。已经补上的 55 处不算在里面。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">先编译、再扫描：代码里的往返 convert，就是「这里该舍」的声明</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：整个训练步扫一遍</text>
@@ -11148,13 +11202,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：整步扫一遍，三根橙条就是剩下的范围。</b><span class="capmore"><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Ⓐ 实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
 <p>📌 Ⓑ 实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。272 是 convert(f32→bf16) 在同一计算里又被转回 f32 的使用次数（同一行代码在 scan 外的层、MTP 块、前向、重算、反向里各记一次），按源码行与形状归类（经验规则）；用 reduce_precision 补上、或输入本来就在 BF16 网格上的往返不计。「只含往返」＝ 这颗 kernel 有往返、没有真舍、没有 reduce_precision。</p>
 <p>⚠️ 少舍一次，单看这一处离精确值更近（推断，没量过）；可省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。小尺寸、单一配置；别的模型要重编重扫。</p></details></figure>
-  <p>右块三根橙条是先查的范围，前两根在反向的梯度路径上，排在最前；灰条那 20 处优先级低，没排除。其中只有 dW 那一类整颗 kernel 只含往返，能在 LLO 里一颗颗数；另外两类跟真舍混在一起，是按同一规则推断的。第一根跟刚抓到的流梯度是同一个手法：几份梯度在 FP32 里合流，只是换了个地方，这次在各层分支的输入上（典型是注意力的输入）。在这些地方 TPU 少舍一次，单看这一处离精确值更近（推断，没量过）；可对齐比的是像不像 GPU，GPU 在这里舍了，两边就差这一次舍入。</p>
-  <p>这个办法有三条边界：</p>
+  <p>三根橙条是先查的范围，前两根在反向的梯度路径上，排在最前；灰条优先级低，没排除。第一根跟刚抓到的流梯度是同一种手法：几份梯度在 FP32 里合流，只是换到了各层分支的输入上（典型是注意力的输入）。这些地方 TPU 少舍一次，单看这一处离精确值更近（推断，没量过）；可对齐比的是像不像 GPU，GPU 在这里舍了，两边就差这一次。</p>
+  <p>三条边界：</p>
   <ul>
-    <li><b>只找得到这一类。</b>写了往返、被编译器省掉的，扫得出来；代码里本来没写舍入、累加顺序不同、近似超越函数这类差，都扫不出来。</li>
-    <li><b>GPU 舍不舍，要对照 GPU 代码。</b>清单只说 TPU 省掉了，不说 GPU 舍了。dW 这一类算数，是因为 GPU 参照关了 Megatron 的 <code>gradient_accumulation_fusion</code>，每个微批的 dW 先出 BF16 再加进 FP32 的累加器；要是开着，GPU 的 dW 直接在 FP32 里累加，这一类就不算差别。</li>
-    <li><b>找到的是候选，因果要上卡验证。</b>办法还是两头各改一处：在 GPU 上把这几类一一改成 TPU 的样子，看尾巴会不会长出来。这组实验还在跑；结论出来之前，这三类只能算范围，还算不上根因。</li>
+    <li><b>只找得到这一类。</b>写了往返、被编译器省掉的，扫得出来；代码里本来没写舍入、累加顺序不同、近似超越函数这类差，扫不出来。</li>
+    <li><b>GPU 舍不舍，要对照 GPU 代码。</b>清单只说 TPU 省掉了。dW 这一类算数，是因为 GPU 参照关了 Megatron 的 <code>gradient_accumulation_fusion</code>，每个微批的 dW 先出 BF16 再加进 FP32 的累加器；开着的话，这一类就不算差别。</li>
+    <li><b>只能算范围，不能算根因。</b>只有 dW 那一类整颗 kernel 只含往返，能在 LLO 里一颗颗数；另两类跟真舍混在一起，是按同一规则推断的。哪一类真造成尾巴，要上卡验证。</li>
   </ul>
+  <p><b>收尾：上卡验证。</b>办法还是两头：GPU 上把前两类各自改成 TPU 的样子，看尾巴长不长出来。这组实验在跑；不管哪类命中、哪类排除，<b>清单是候选，不是结论</b>，判它的只有上卡。</p>
   <details class="foldfig"><summary><b>照着做</b>：自己的模型怎么扫</summary>
   <ol>
     <li>离线编译整个训练步（CPU 上为目标芯片编译就行，不用上卡），存下优化后的 HLO 和后端指令（LLO）。</li>

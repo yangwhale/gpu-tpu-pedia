@@ -1478,3 +1478,14 @@ EL_HC_FRONT_T = ("%+.1e" % EL_GPU_HEADGRAD["front"]).replace("e-0", "e-").replac
 EL_HC_LATE_T = "−" + ("%.1e" % -EL_GPU_HEADGRAD["late"]).replace("e-0", "e-")
 EL_SHARED_N, EL_SHARED_P_T = EL_SHARED["n"], "%.2f" % EL_SHARED["p_vs_c"]
 assert EL_HC_FRONT_T == "＋4.9e-6" and EL_HC_LATE_T == "−2.9e-6"
+# ── 抵消（「秤」那一拍）：第 551–1000 步主 loss 对 GPU 16 份均值（单因素交叉结果文件；实测）──
+#   修之前（两处都没补）9.4e-6；只补收拢处 12.5e-6（4 份）；只补流梯度 1.9e-6；两处都补（对齐配置）6.9e-6。
+#   GPU 上拿掉收拢处那次梯度舍入，后段 −2.9e-6（实测）。只补收拢处比修之前高的那一截（本课相减，约 3.1e-6）与它同量级、方向相反：
+#   推断收拢处梯度不舍一直在把后段往下压，「只补流梯度 1.9e-6」里有它这一份。
+CX = {"none": FC_MEAN["修之前"], "head": MG["M52"]["mean"], "stream": FC_MEAN["补流梯度舍法"], "both": FC_MEAN["对齐配置"]}
+CX_HEAD_UP = CX["head"] - CX["none"]
+assert "%.1e" % CX["head"] == "1.3e-05" and abs(CX_HEAD_UP - 3.1e-6) < 0.1e-6 and abs(CX_HEAD_UP + EL_GPU_HEADGRAD["late"]) < 0.5e-6
+CX_T = {k: "%.1f" % (v * 1e6) for k, v in CX.items()}
+CX_HEAD_UP_T = "%.1f" % (CX_HEAD_UP * 1e6)
+assert CX_T == {"none": "9.4", "head": "12.5", "stream": "1.9", "both": "6.9"} and CX_HEAD_UP_T == "3.1"
+CX_STREAM_T = "＋" + CX_T["stream"] + "e-6"
