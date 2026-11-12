@@ -1489,3 +1489,5 @@ CX_T = {k: "%.1f" % (v * 1e6) for k, v in CX.items()}
 CX_HEAD_UP_T = "%.1f" % (CX_HEAD_UP * 1e6)
 assert CX_T == {"none": "9.4", "head": "12.5", "stream": "1.9", "both": "6.9"} and CX_HEAD_UP_T == "3.1"
 CX_STREAM_T = "＋" + CX_T["stream"] + "e-6"
+EL_IHC_P0 = EL_IHC_PACKS[0]
+assert "%.8f" % bf16(0.72314453125) == "0.72265625"   # 动画 DeclaredElided 里的示意值
