@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-r"""专题八 · §9.8：先编译，再扫描（ScanSweep）。
+r"""专题八 · §9.7：先编译，再扫描（ScanSweep）。
 
 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic08-anim-scan.py ScanSweep /tmp/draft/topic08-scan.mp4 --draft
    构建手册/脚本/render.sh tools/manim/topic08-anim-scan.py ScanSweep WebPages/media/topic08-scan.mp4
-步点写进 tools/manim/steps/ScanSweep.json。挂在 §9.8 静态图 fig8-elided 下面（anim-declared 之后）。
+步点写进 tools/manim/steps/ScanSweep.json。挂在 §9.7 静态图 fig8-elided 下面（anim-declared 之后）。
 
 ⭐ 为什么非动不可：方法的要点是「一次扫过整个程序，同一个模式在哪儿出现就在哪儿亮」，再把亮起来的按位置归堆、
    计数一路涨到真实总数；最后拿 LLO 一颗颗抽查只含往返的 kernel。「扫过」「一路涨」「一颗颗盖章」都在时间里，

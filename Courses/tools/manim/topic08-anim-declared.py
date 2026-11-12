@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-r"""专题八 · §9.8：代码说「这里舍一次」，编译器听了吗？（DeclaredElided）
+r"""专题八 · §9.7：代码说「这里舍一次」，编译器听了吗？（DeclaredElided）
 
 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic08-anim-declared.py DeclaredElided /tmp/draft/topic08-declared.mp4 --draft
    构建手册/脚本/render.sh tools/manim/topic08-anim-declared.py DeclaredElided WebPages/media/topic08-declared.mp4
-每一步落地的停顿时刻写进 tools/manim/steps/DeclaredElided.json（课件挂 data-pauses）。挂在 §9.8 静态图 fig8-elided 下面。
+每一步落地的停顿时刻写进 tools/manim/steps/DeclaredElided.json（课件挂 data-pauses）。挂在 §9.7 静态图 fig8-elided 下面。
 
 ⭐ 为什么非动不可：论点是「同一个值走过同一串盒子，三种走法舍不舍不一样」——代码的本意（经过「转 BF16」就舍）、
    实际在一颗融合里（经过了也不舍）、写回内存交给下一颗（真舍）。静态图能摆出三张截面，摆不出「同一个值一路走、
