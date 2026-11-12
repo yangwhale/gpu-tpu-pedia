@@ -1492,3 +1492,23 @@ CX_STREAM_T = "＋" + CX_T["stream"] + "e-6"
 EL_IHC_P0 = EL_IHC_PACKS[0]
 assert "%.8f" % bf16(0.72314453125) == "0.72265625"   # 动画 DeclaredElided 里的示意值
 CX_NONE_T, CX_HEAD_T, CX_STREAM_V, CX_BOTH_T = ("%+.1f" % (CX[k] * 1e6) for k in ("none", "head", "stream", "both"))
+# ── 上卡验证（研究线已合入：GPU 上把前两类拆成三处照 TPU 改，各 4 份，第 551–1000 步主 loss 对 GPU 16 份留一法；置换检验 p 对 GPU 自己）──
+#   分支输入里注意力输入那部分 +3.0e-6（p 0.021）；MoE 输入那部分 +9.6e-7（p 0.47）；两处一起开 +1.9e-7（p 0.87）；每微批 dW −3.8e-7（p 0.73）。
+#   研究线判读：dW 排除；两处梯度合流没坐实（单开像有一点，合开反而没了，同类舍入合起来应叠加——推断；按格数校正 0.021×4＝0.084，推断是偶然）。TPU 一头（补注意力输入那处）在跑。
+GV = {"attn": (3.0e-6, 0.021), "moe": (9.6e-7, 0.47), "both": (1.9e-7, 0.87), "wgrad": (-3.8e-7, 0.73)}
+assert GV["both"][0] < GV["attn"][0] and GV["wgrad"][1] > 0.5 and abs(GV["attn"][1] * 4 - 0.084) < 1e-9
+GV_T = {k: (("%+.1e" % v).replace("e-0", "e-").replace("+", "＋").replace("-", "−", 1) if v < 0 else ("%+.1e" % v).replace("e-0", "e-").replace("+", "＋"), "%.2f" % p if p >= 0.1 else "%.3f" % p) for k, (v, p) in GV.items()}
+GV_ATTN_T, GV_ATTN_P = GV_T["attn"]; GV_BOTH_T, GV_BOTH_P = GV_T["both"]; GV_WGRAD_T, GV_WGRAD_P = GV_T["wgrad"]
+assert (GV_ATTN_T, GV_ATTN_P, GV_BOTH_T, GV_BOTH_P, GV_WGRAD_T, GV_WGRAD_P) == ("＋3.0e-6", "0.021", "＋1.9e-7", "0.87", "−3.8e-7", "0.73")
+# 逐份（同一结果文件 cells.*.runs.*.lm_551_1000）：
+GV_RUNS = {"loo": [-1.3517e-06, -1.237e-06, 1.4003e-06, 9.02e-07, 8.26e-07, 2.595e-07, 1.5504e-06, -4.0038e-06, 3.1626e-06, -2.177e-07, -4.5225e-06, 1.4445e-06, 2.7395e-06, -2.971e-07, -2.175e-07, -4.374e-07],
+           "attn": [2.302e-06, 1.9979e-06, 1.6653e-06, 6.0531e-06], "moe": [-2.7124e-06, 1.1416e-06, 4.8749e-06, 5.159e-07],
+           "both": [6.21e-08, -6.418e-07, 5.281e-07, 8.13e-07], "wgrad": [-8.135e-07, -2.626e-07, -5.45e-07, 8.96e-08]}
+for _k in ("attn", "moe", "both", "wgrad"):
+    assert abs(sum(GV_RUNS[_k]) / 4 - GV[_k][0]) < 0.06e-6, _k
+assert len(GV_RUNS["loo"]) == 16 and abs(sum(GV_RUNS["loo"])) < 1e-9
+# 秤（研究线案例的口径：三个毛病）：只补流梯度 → 两处都补，后段 +5.0e-6（p 0.024，实测）；GPU 拿掉收拢处那次梯度舍入 −2.9e-6，方向一致、只解释其中一部分（推断）。
+#   只补收拢处比修之前高 3.1e-6，单看分不开（p 0.26），只作旁证。
+CX_UP_T = "%.1f" % ((CX["both"] - CX["stream"]) * 1e6)
+assert CX_UP_T == "5.0" and TW_P_T["c_m58"] == "0.024"
+CX_HEAD_P = 0.26

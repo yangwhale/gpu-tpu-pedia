@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-r"""专题八 · §9.7：修好一个零件，读数反而离零更远（CancelScale）。
+r"""专题八 · §9.7：一台秤三个毛病，修好一个，读数反而偏了（CancelScale）。
 
 渲染（在 Courses/ 下）：
    构建手册/脚本/render.sh tools/manim/topic08-anim-cancel.py CancelScale /tmp/draft/topic08-cancel.mp4 --draft
    构建手册/脚本/render.sh tools/manim/topic08-anim-cancel.py CancelScale WebPages/media/topic08-cancel.mp4
 步点写进 tools/manim/steps/CancelScale.json。挂在 §9.7 静态图 fig8-cancel 下面。
 
-⭐ 为什么非动不可：这一拍的戏剧性在「拨一个开关，指针往意料之外的方向跑」：修好收拢处，指针离零更远；
-   只修流梯度，指针几乎回零；两个都修，又停在中间。静态图（fig8-cancel）把四个读数并排，看不出「修了反而变坏」
-   这一下的方向感；增量来自时间。
+⭐ 为什么非动不可：这一拍的戏剧性在「拨一个开关，指针往意料之外的方向跑」：只修甲（流梯度），指针几乎回零；
+   再修乙（收拢处），指针反而往右跑回 6.9。静态图（fig8-cancel）把读数并排，看不出「修了反而偏」这一下的方向感；增量来自时间。
+   只修乙那一格（12.5，单看分不开）不进动画，静态图里有。
 ⭐ 数据从哪来：四个读数（9.4 / 12.5 / 1.9 / 6.9，×1e-6）与 GPU 上拿掉收拢处梯度舍入的 −2.9，全部取自
    topic08_numbers 的 CX、EL_GPU_HEADGRAD（研究线单因素交叉结果文件，实测）。
-   ⚠️ 推断：「两个零件方向相反、读数是两者相抵」是研究线的推断（GPU 那一侧方向一致）；屏幕上标「推断」。
-⭐ 刻意没画：每格的份数与散布（检验值在 fig-gatecmp、fig-twoway）；两个零件各自的大小（没有单独测过）。
+   ⚠️ 推断：「三个毛病、乙丙抵掉、丙露出来」是研究线的推断（GPU 那一侧方向一致，只占一部分）；屏幕上标「推断」。
+⭐ 刻意没画：每格的份数与散布（检验值在 fig-gatecmp、fig-twoway）；甲乙丙在 TPU 上各自的大小（没有单独测出）。
 """
 import json
 import os
@@ -57,14 +57,15 @@ def ruler(y, label, col):
 class CancelScale(Scene):
     def construct(self):
         marks = []
-        title = tx("修好一个零件，读数反而离零更远", 30).to_edge(UP)
+        title = tx("一台秤三个毛病：修好一个，读数反而偏了", 30).to_edge(UP)
         unit = tx("读数：第 551–1000 步主 loss 偏差，×1e-6", 17, GREY_B).move_to([0, 2.65, 0])
         r_tpu = ruler(Y_TPU, "TPU 对 GPU", ORANGE)
         r_gpu = ruler(Y_GPU, "GPU 自己（对 GPU 其余各份）", BLUE)
         sw_y = 1.75
-        lab_a = tx("① 流梯度", 20, ORANGE).move_to([-3.6, sw_y, 0])
-        lab_b = tx("② 收拢处梯度", 20, BLUE).move_to([2.2, sw_y, 0])
-        base = VGroup(title, unit, r_tpu, r_gpu, lab_a, lab_b)
+        lab_a = tx("甲 流梯度（偏重）", 19, ORANGE).move_to([-4.6, sw_y, 0])
+        lab_b = tx("乙 收拢处梯度（偏轻）", 19, BLUE).move_to([0.0, sw_y, 0])
+        lab_c = tx("丙 还没找到（偏重）", 19, ORANGE).move_to([4.4, sw_y, 0])
+        base = VGroup(title, unit, r_tpu, r_gpu, lab_a, lab_b, lab_c)
         self.add(base)
 
         st = {"a": False, "b": False}
@@ -73,9 +74,10 @@ class CancelScale(Scene):
 
         def state(key, x):
             ok = st[key]
-            return tx("已补" if ok else "没补", 20, GREEN if ok else RED).move_to([x, sw_y, 0])
-        sa = always_redraw(lambda: state("a", -1.9))
-        sb = always_redraw(lambda: state("b", 4.2))
+            return tx("已修" if ok else "没修", 19, GREEN if ok else RED).move_to([x, sw_y - 0.42, 0])
+        sa = always_redraw(lambda: state("a", -4.6))
+        sb = always_redraw(lambda: state("b", 0.0))
+        sc = tx("？", 22, ORANGE).move_to([4.4, sw_y - 0.42, 0])
 
         def pointer(tr, y, col):
             def draw():
@@ -84,7 +86,7 @@ class CancelScale(Scene):
                 return VGroup(t, tx("%+.1f" % v, 22, col).move_to([xv(v), y + 0.68, 0]))
             return draw
         pt = always_redraw(pointer(val, Y_TPU, ORANGE))
-        self.add(sa, sb, pt)
+        self.add(sa, sb, sc, pt)
         self.wait(0.6)
 
         def cap(s, col=GREY_B):
@@ -96,36 +98,33 @@ class CancelScale(Scene):
             marks.append(round(self.renderer.time + 0.2, 2))
 
         steps = [
-            ("第 1 步　两处都没补（修之前）：读数 %.1f" % R["none"], None, None, R["none"]),
-            ("第 2 步　只补 ② 收拢处：指针反而往右跑，离零更远", "b", True, R["head"]),
-            ("第 3 步　改成只补 ① 流梯度：几乎回到零，看着像修好了", "ab", (True, False), R["stream"]),
-            ("第 4 步　两处都补（对齐配置）：停在中间，剩下这截推断在这一段以外", "b", True, R["both"]),
+            ("第 1 步　都没修（修之前）：读数 %.1f，是三股相抵后的数" % R["none"], None, R["none"], GREY_B),
+            ("第 2 步　只修甲：几乎回到零，乙和丙大致抵掉，看着像修好了", (True, False), R["stream"], GREY_B),
+            ("第 3 步　再修乙：指针反而往右跑，高了 %s（p %s）—— 被乙遮住的丙露出来（推断）" % (N.CX_UP_T, N.TW_P_T["c_m58"]),
+             (True, True), R["both"], YELLOW),
         ]
         cur = None
-        for k, (s, key, newv, target) in enumerate(steps):
-            c = cap(s, YELLOW if k == 1 else GREY_B)
-            if key == "b":
-                st["b"] = newv
-            elif key == "ab":
-                st["a"], st["b"] = newv
+        for s_, newv, target, col in steps:
+            c = cap(s_, col)
             self.play(*([FadeOut(cur)] if cur else []), FadeIn(c), run_time=0.5)
+            if newv:
+                st["a"], st["b"] = newv
             self.play(val.animate.set_value(target), run_time=1.4)
             cur = c
             mark()
-            self.wait(2.2)
+            self.wait(2.4)
 
-        # 第 5 步：GPU 上反过来验
-        c5 = cap("第 5 步　GPU 上拿掉 ② 那次梯度舍入：GPU 自己被往下压 %.1f，跟第 2 步多出的 %s 对得上（推断）"
-                 % (-GPU_HC, N.CX_HEAD_UP_T), BLUE)
+        c4 = cap("第 4 步　GPU 上只拿掉乙那次舍入：GPU 自己被压低 %.1f，方向一致，是那 %s 的一部分（推断）"
+                 % (-GPU_HC, N.CX_UP_T), BLUE)
         pg = always_redraw(pointer(gv, Y_GPU, BLUE))
-        self.play(FadeOut(cur), FadeIn(c5), FadeIn(pg), run_time=0.5)
+        self.play(FadeOut(cur), FadeIn(c4), FadeIn(pg), run_time=0.5)
         self.play(gv.animate.set_value(GPU_HC), run_time=1.4)
         mark()
         self.wait(3.0)
 
         # 收尾：回到第 0 帧
         st["a"], st["b"] = False, False
-        self.play(FadeOut(c5), FadeOut(pg), val.animate.set_value(R["none"]), run_time=0.8)
+        self.play(FadeOut(c4), FadeOut(pg), val.animate.set_value(R["none"]), run_time=0.8)
         self.wait(0.5)
 
         os.makedirs(STEPS_DIR, exist_ok=True)

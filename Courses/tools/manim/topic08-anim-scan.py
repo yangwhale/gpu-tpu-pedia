@@ -30,8 +30,8 @@ import topic08_numbers as N   # noqa: E402
 
 STEPS_DIR = os.path.join(HERE, "steps")
 U = N.EL_USES
-BUCKETS = [("① 分支输入梯度合流", U["branchin"], ORANGE), ("② 每微批 dW", U["wgrad"], ORANGE),
-           ("③ 前向几处", N.EL_FWD, ORANGE), ("其余（优先级低）", N.EL_MINOR, GREY_B), ("索引器掩码（无害）", U["idx_mask"], GREY)]
+BUCKETS = [("A 分支输入梯度合流", U["branchin"], ORANGE), ("B 每微批 dW", U["wgrad"], ORANGE),
+           ("C 前向几处", N.EL_FWD, ORANGE), ("其余（优先级低）", N.EL_MINOR, GREY_B), ("索引器掩码（无害）", U["idx_mask"], GREY)]
 assert sum(b[1] for b in BUCKETS) == N.EL_TOTAL == 272
 K_ON, K_OFF = N.EL_K_TOTAL, N.EL_K_NOEXC
 assert (K_ON, N.EL_K_ZERO, K_OFF, N.EL_K_NOEXC_ZERO) == (41, 41, 35, 0)

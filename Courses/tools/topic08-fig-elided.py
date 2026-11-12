@@ -35,7 +35,7 @@ def fig_elided():
     PH = 470
     LW = 560
     # ── Ⓐ ───────────────────────────────────────────────
-    py = f.panel(0, y0, LW, PH, "Ⓐ 一处往返：声明了，但被省掉", OR)
+    py = f.panel(0, y0, LW, PH, "Ⓐ 一处往返（⓪ 补之前的写法）：声明了，但被省掉", OR)
     LX = 20
     BX = 128
     rows_y = [py + 26, py + 140, py + 262]
@@ -76,9 +76,9 @@ def fig_elided():
     RX = LW + 20
     RW = W - RX
     py2 = f.panel(RX, y0, RW, PH, "Ⓑ 整个训练步扫一遍：往返 %d 处，按位置分" % N.EL_TOTAL, OR)
-    bars = [("① 分支输入的梯度合流", U["branchin"], OR, "反向 · 几份梯度在 FP32 里相加，典型是注意力的输入"),
-            ("② 每个微批的权重梯度 dW", U["wgrad"], OR, "反向"),
-            ("③ 前向几处", N.EL_FWD, OR, "线性层输出 %d · 输出门 %d · 专家 %d" % (U["fwd_linear"], U["fwd_attn_gate"], U["fwd_expert"])),
+    bars = [("A 分支输入的梯度合流", U["branchin"], OR, "反向 · 几份梯度在 FP32 里相加，典型是注意力的输入"),
+            ("B 每个微批的权重梯度 dW", U["wgrad"], OR, "反向"),
+            ("C 前向几处", N.EL_FWD, OR, "线性层输出 %d · 输出门 %d · 专家 %d" % (U["fwd_linear"], U["fwd_attn_gate"], U["fwd_expert"])),
             ("其余（专家反向、norm）", N.EL_MINOR, GY2, "专家反向 %d · norm 输入梯度 %d · norm 输出 %d" % (U["expert_bwd"], U["norm_dgrad"], U["fwd_norm"])),
             ("索引器掩码（0 和 −∞，转了也精确）", U["idx_mask"], "#bdc1c6", "无害")]
     LB = RX + 16
@@ -122,7 +122,7 @@ def fig_elided():
     f.t(LB, y0 + PH - 14, "三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断", GY, size=11.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "不用一处处猜：编一次、扫一遍，同类位置全列出来，问题的范围就划出来了", [
-        "先查三根橙条：① 分支输入的梯度合流、② 每个微批的 dW、③ 前向几处，共 %d 处；灰条优先级低，没排除。" % N.EL_LEFT,
+        "先查三根橙条 A、B、C，共 %d 处；灰条优先级低，没排除。" % N.EL_LEFT,
         "只找得到「写了往返却被省掉」这一类；GPU 那边舍不舍要对照 GPU 代码。",
     ])
     yb = f.src(yb + 10,
@@ -136,59 +136,61 @@ def fig_elided():
 
 
 def fig_cancel():
-    """fig8-cancel 回答：为什么修好收拢处，尾巴反而变大？—— 两处没舍的方向相反：流梯度那处往上推，收拢处梯度那处往下拉；
-    修之前两股相抵一部分。数据：topic08_numbers 的 CX、EL_GPU_HEADGRAD（实测）；「往下拉的那一份」是推断（本课把 +3.1 与 GPU 的 −2.9 对照）。
-    ⛔ 刻意没画：箭头长度不是测量值，只表示方向；各格份数不同（4–6 份），没画误差棒（检验值在前两张图里）。"""
+    """fig8-cancel 回答：为什么两处都照 GPU 补上，后段反而比只补流梯度高？—— 研究线的比方：一台秤三个毛病，甲（流梯度少舍）偏重、
+    乙（收拢处那次梯度少舍）偏轻、丙偏重还没找到。只修甲，乙丙大致抵掉；甲乙都修，丙露出来。
+    数据：topic08_numbers 的 CX、TW_P_T、EL_GPU_HEADGRAD（实测）；「三个毛病、抵掉、丙」是推断。
+    ⛔ 刻意没画：甲乙丙各自的大小（没有单独测出）；箭头只表示方向。"""
     C = N.CX
-    f = Fig(W, "像一杆秤上坏了两个零件：一个让读数偏多，一个让读数偏少。左边四行是四种配置，每行两个零件补没补，右边是第 551 到 1000 步主 loss 的偏差。"
-               "两处都没补，＋9.4，单位十的负六次方；只补收拢处，读数反而变大到 ＋12.5；只补流梯度，＋1.9，看着像修好了；两处都补，＋6.9。"
-               "最下面一行：GPU 上反过来拿掉收拢处那次梯度舍入，后段被压低 2.9，跟只补收拢处多出来的 3.1 量级相当、方向相反。"
-               "推断：收拢处梯度不舍一直在往下拉，只补流梯度的 ＋1.9 里有它遮掉的一部分；两处都补后剩下的 ＋6.9 来自这一段以外。")
-    y0 = f.header("修好一个零件，读数反而变大：因为另一个零件一直在少称",
-                  "第二次迁移，小尺寸，v5p；读数 ＝ 第 551–1000 步主 loss 偏差（TPU − GPU，×1e-6），每格 4–6 份运行的平均",
-                  [(OR, "往上推：流梯度没照 GPU 舍"), (BL, "往下拉：收拢处梯度没舍"), (GR, "已补上")])
-    PH = 380
-    py = f.panel(0, y0, W, PH, "四种配置：两个零件各补没补，读数是多少", OR)
-    cols = {"stream": 300, "head": 470}
-    f.t(cols["stream"], py + 26, "流梯度", OR, True, 13.5, "middle")
-    f.t(cols["head"], py + 26, "收拢处梯度", BL, True, 13.5, "middle")
-    B0, B1, vmax = 600, W - 260, 13.5e-6
+    f = Fig(W, "像一台秤有三个毛病：甲让读数偏重，是流梯度少舍，主因，已找到；乙让读数偏轻，是收拢处那次梯度少舍；丙也偏重，还没找到。"
+               "四行是四种配置，右边是第 551 到 1000 步主 loss 的偏差，单位十的负六次方。都没修 ＋9.4；只修乙 ＋12.5，单看分不开；只修甲 ＋1.9，乙和丙大致抵掉，看着准了；"
+               "甲乙都修 ＋6.9，比只修甲高 5.0，p 0.024，丙露出来了。最下面：GPU 上拿掉乙那次舍入，后段压低 2.9，方向一致，是那 5.0 的一部分。这几步的解释是推断。")
+    y0 = f.header("修好一个毛病，读数反而偏了：因为另一个毛病一直在帮着抵",
+                  "第二次迁移，小尺寸，v5p；读数 ＝ 第 551–1000 步主 loss 偏差（TPU − GPU，×1e-6），每格 4–6 份运行的平均；甲乙丙的解释是推断",
+                  [(OR, "偏重：甲 流梯度少舍、丙 还没找到"), (BL, "偏轻：乙 收拢处梯度少舍"), (GR, "已修")])
+    PH = 400
+    py = f.panel(0, y0, W, PH, "一台秤，三个毛病：四种修法，读数是多少", OR)
+    cols = {"a": 290, "b": 410, "c": 530}
+    for k, lab, col in (("a", "甲", OR), ("b", "乙", BL), ("c", "丙", OR)):
+        f.t(cols[k], py + 26, lab, col, True, 14, "middle")
+    B0, B1, vmax = 640, W - 230, 13.5e-6
 
     def BX(v):
         return B0 + v / vmax * (B1 - B0)
-    rows = [("两处都没补（修之前）", False, False, C["none"], "两股相抵了一部分"),
-            ("只补收拢处", False, True, C["head"], "往下拉的那股没了，离零反而远了 %s（4 份，单看分不开，要跟最下面一行合着看）" % N.CX_HEAD_UP_T),
-            ("只补流梯度", True, False, C["stream"], "看着像修好，可往下拉的那股还在，替它遮了一部分"),
-            ("两处都补（对齐配置）", True, True, C["both"], "剩下这截推断来自这一段以外")]
-    for i, (lab, s_ok, h_ok, v, note) in enumerate(rows):
-        y = py + 50 + i * 66
+    rows = [("都没修（修之前）", False, False, C["none"], "三股相抵后的读数"),
+            ("只修乙（收拢处）", False, True, C["head"], "均值往上走 %s，4 份单看分不开（p %.2f）" % (N.CX_HEAD_UP_T, N.CX_HEAD_P)),
+            ("只修甲（流梯度）", True, False, C["stream"], "乙和丙大致抵掉，看着准了"),
+            ("甲乙都修（对齐配置）", True, True, C["both"], "比只修甲高 %s（p %s）：丙露出来了" % (N.CX_UP_T, N.TW_P_T["c_m58"]))]
+    for i, (lab, a_ok, b_ok, v, note) in enumerate(rows):
+        y = py + 50 + i * 68
         f.t(20, y + 24, lab, INK, True, 13.5)
-        for key, ok, col, sign in (("stream", s_ok, OR, 1), ("head", h_ok, BL, -1)):
+        for key, ok, col, sign in (("a", a_ok, OR, 1), ("b", b_ok, BL, -1), ("c", False, OR, 1)):
             x = cols[key]
             if ok:
-                f.box(x - 34, y + 8, 68, 26, "#fff", GR, 13, sw=1.4)
-                f.t(x, y + 26, "已补", GR, True, 12.5, "middle")
+                f.box(x - 30, y + 8, 60, 26, "#fff", GR, 13, sw=1.4)
+                f.t(x, y + 26, "已修", GR, True, 12.5, "middle")
+            elif key == "c":
+                f.line(x, y + 21 + 14 * sign, x, y + 21 - 14 * sign, col, 3, dash="4 3")
+                f.t(x + 14, y + 26, "？", col, True, 13)
             else:
                 f.line(x, y + 21 + 14 * sign, x, y + 21 - 14 * sign, col, 3)
-                f.t(x + 14, y + 26, "没补", col, False, 12)
-        f.box(B0, y + 8, max(BX(v) - B0, 3), 24, OR if not (s_ok and h_ok) else GY2, OR if not (s_ok and h_ok) else GY2, 4)
+        hl = (i == 3)
+        f.box(B0, y + 8, max(BX(v) - B0, 3), 24, OR, OR, 4)
         f.t(BX(v) + 8, y + 26, "＋%s" % N.CX_T[["none", "head", "stream", "both"][i]], INK, True, 14)
-        f.t(B0, y + 50, note, GY, size=12)
-    f.line(B0, py + 40, B0, py + 50 + 4 * 66 - 20, GY, 1.2, arrow=False)
-    yg = py + 50 + 4 * 66 + 6
+        f.t(B0, y + 50, note, OR if hl else GY, hl, 12.5 if hl else 12)
+    f.line(B0, py + 40, B0, py + 50 + 4 * 68 - 20, GY, 1.2, arrow=False)
+    yg = py + 50 + 4 * 68 + 6
     f.line(14, yg - 8, W - 14, yg - 8, LINE, 1, arrow=False)
-    f.t(20, yg + 18, "反过来在 GPU 上验：", BL, True, 13.5)
-    f.t(190, yg + 18, "拿掉收拢处那次梯度舍入（%d 份），后段压低 %s；跟上面多出来的 %s 量级相当、方向相反。"
-        % (N.EL_GPU_HEADGRAD_N, "%.1f" % (-N.EL_GPU_HEADGRAD["late"] * 1e6), N.CX_HEAD_UP_T), INK, size=13)
+    f.t(20, yg + 18, "反过来在 GPU 上验乙：", BL, True, 13.5)
+    f.t(210, yg + 18, "只拿掉收拢处那次梯度舍入（%d 份），后段压低 %s：方向一致，是那 %s 的一部分。"
+        % (N.EL_GPU_HEADGRAD_N, "%.1f" % (-N.EL_GPU_HEADGRAD["late"] * 1e6), N.CX_UP_T), INK, size=13)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "warn", "只补流梯度时的 ＋1.9 不全是修好：往下拉的那股还在，替它遮了一部分", [
-        "两处都照 GPU 补上，往上推、往下拉都没了，还剩 ＋6.9：推断这截不在这一段，要换个地方找。",
+    yb = f.band(y0 + PH + 20, "warn", "甲乙都修以后剩下的 ＋6.9，不是修坏了，是被乙遮住的丙露了出来（推断）", [
+        "丙在哪？下一步去找它。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：四格都是第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值，单位 1e-6；修之前 4 份、只补收拢处 4 份、只补流梯度 5 份、对齐配置 6 份。GPU 那一行对 GPU 16 份留一法，4 份。",
-               "⚠️ 推断：把「只补收拢处比修之前多出的 3.1」和「GPU 上拿掉那次梯度舍入压低的 2.9」对上，是本课的相减与对照；研究线的口径是「方向一致，只补流梯度的后段变平有一部分是这次不照 GPU 舍的下压」。箭头只表示方向，不是测量值。")
+               "📌 实测：四格都是第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值，单位 1e-6；都没修 4 份、只修乙 4 份、只修甲 5 份、甲乙都修 6 份；甲乙都修对只修甲是置换检验。GPU 那一行对 GPU 16 份留一法，4 份；它只拿掉收拢处反向那一次梯度舍入，跟 fig-twoway 里整段换收拢处写法的那格不是同一个改法。",
+               "⚠️ 推断：三个毛病、乙丙抵掉、丙在别处，是研究线的解释；GPU 一侧方向一致，但大小只占 5.0 的一部分。箭头只表示方向，甲乙丙各自多大没有单独测出。")
     f.save("fig8-cancel.svg", yb + 14)
-
 
 def fig_sites():
     """fig8-sites 回答：多路残差这一段，GPU 舍、TPU 可能被省的舍入点在哪？—— 三处：⓪ 分支输入（修之前就照 GPU 舍了）、
@@ -231,8 +233,8 @@ def fig_sites():
     f.line(cx, (lanes[1] + lanes[2]) / 2, cx + 90, (lanes[1] + lanes[2]) / 2, BL, 2.4)
     f.box(cx + 92, (lanes[1] + lanes[2]) / 2 - 20, 160, 40, "#fff", BL, 8, sw=1.6)
     f.t(cx + 172, (lanes[1] + lanes[2]) / 2 + 5, "末层归一化", BL, True, 13, "middle")
-    f.badge(cx + 30, lanes[3] + 30, "2", BL)
-    f.t(cx + 62, lanes[3] + 46, "② 收拢处：4 路收成一路", BL, True, 13.5)
+    f.badge(cx + 30, lanes[3] + 30, "2", INK)
+    f.t(cx + 62, lanes[3] + 46, "② 收拢处：4 路收成一路", INK, True, 13.5)
     f.t(cx + 62, lanes[3] + 66, "前向舍一次，梯度传回来也舍", GY, size=12.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "info", "三处在代码里都写了「转 BF16」；GPU 都真舍了，TPU 可能被编译器省掉", [
@@ -241,6 +243,61 @@ def fig_sites():
     f.save("fig8-sites.svg", yb + 14)
 
 
+def fig_verify():
+    """fig8-verify 回答：扫出来的候选，上卡验了以后怎样？—— GPU 上把前两类拆成三处照 TPU 改：dW 排除；注意力输入那处单开像有一点、
+    跟 MoE 输入一起开反而没了，没坐实。清单是候选，不是结论。数据：topic08_numbers 的 GV、GV_RUNS（研究线已合入的结果文件；实测）；
+    「没坐实、很可能是偶然」是研究线的推断。⛔ 刻意没画：TPU 一头（在跑）、前向几处（还没验）。"""
+    R = N.GV_RUNS
+    f = Fig(W, "上卡验证。办法跟定主因那次一样：在 GPU 上把候选照 TPU 的样子改，看 GPU 自己长不长出尾巴。每个点是一份 1000 步运行第 551 到 1000 步主 loss 的偏差，横线是均值，灰点是 GPU 自己 16 份。"
+               "注意力输入那处单开，4 份都正，均值 ＋3.0e-6，p 0.021；MoE 输入那处单开 ＋9.6e-7；两处一起开反而回到 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73，排除。"
+               "同类舍入合起来本该叠加，这里对不上，研究线判为没坐实、很可能是偶然。前向几处还没验，TPU 一头在跑。")
+    y0 = f.header("上卡验证：dW 排除；注意力输入那处单开像有一点，合开反而没了，没坐实",
+                  "第二次迁移，小尺寸，B200；GPU 上照 TPU 改一处，第 551–1000 步主 loss 偏差（对 GPU 16 份留一法），每点一份运行",
+                  [(GY2, "GPU 自己"), (OR, "照 TPU 改"), (GR, "排除")])
+    PH = 400
+    py = f.panel(0, y0, W, PH, "清单里前两类拆成三处，各 4 份", OR)
+    X0, X1 = 110, W - 40
+    YT, YB = py + 40, py + PH - 110
+    vmin, vmax = -5e-6, 7e-6
+
+    def Y(v):
+        return YT + (vmax - v) / (vmax - vmin) * (YB - YT)
+    for v in (-4e-6, -2e-6, 2e-6, 4e-6, 6e-6):
+        f.line(X0, Y(v), X1, Y(v), LINE, 0.6, arrow=False)
+        f.t(X0 - 6, Y(v) + 4, ("%+.0e" % v).replace("e-0", "e-"), GY, size=11.5, anchor="end")
+    f.line(X0, Y(0), X1, Y(0), GY, 1.2, arrow=False)
+    f.t(X0 - 6, Y(0) + 4, "0", GY, size=11.5, anchor="end")
+    cells = [("loo", "GPU 自己（16 份）", GY2, ""), ("attn", "注意力输入那处", OR, "p %s" % N.GV_ATTN_P),
+             ("moe", "MoE 输入那处", OR, "p %s" % N.GV_T["moe"][1]), ("both", "两处一起", OR, "p %s" % N.GV_BOTH_P),
+             ("wgrad", "每个微批的 dW", GR, "p %s" % N.GV_WGRAD_P)]
+    cw = (X1 - X0) / float(len(cells))
+    for k, (key, lab, col, ptxt) in enumerate(cells):
+        cx = X0 + cw * (k + 0.5)
+        vals = R[key]
+        n = len(vals)
+        for m, v in enumerate(vals):
+            dx = (m - (n - 1) / 2.0) * min(12, 150.0 / n)
+            f.box(cx + dx - 5, Y(v) - 5, 10, 10, col, "#fff", 5, sw=1)
+        mean = sum(vals) / n
+        f.line(cx - 50, Y(mean), cx + 50, Y(mean), INK, 2.4, arrow=False)
+        f.t(cx, YB + 24, lab, col if col != GY2 else GY, True, 13.5, "middle")
+        if key != "loo":
+            f.t(cx, YB + 46, "均值 %s" % N.GV_T[key][0], INK, False, 12.5, "middle")
+            f.t(cx, YT - 10, ptxt, GY, True, 12.5, "middle")
+    f.t(X0 + cw * 1.5, YB + 70, "单开 4 份都正，可跟 MoE 那处一起开反而回到零附近：没坐实", OR, True, 13, "middle")
+    f.t(X0 + cw * 4.5, YB + 70, "排除", GR, True, 14, "middle")
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：两类高优先级里，一类排除，一类没坐实", [
+        "同类舍入合起来本该叠加，这里对不上；四格一起看，0.021 按格数校正是 0.084，研究线判为很可能是偶然（推断）。还没验的：前向几处，和扫描找不到的差；TPU 一头（补注意力输入那处）在跑。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移，小尺寸，B200×8，1000 步）：每格 4 份，第 551–1000 步主 loss 对 GPU 16 份均值的带符号均值；GPU 自己那格是 16 份各自对其余 15 份；p 是对 GPU 自己的置换检验。"
+               "「注意力输入那处」：q、kv 下投影和输出门三份梯度在 FP32 里加完只舍一次；「MoE 输入那处」：路由、共享专家、路由专家三份梯度同上；「每个微批的 dW」：直接在 FP32 里累加，不先舍 BF16。",
+               "⚠️ 判读是研究线的：dW 排除；两处梯度合流没坐实。")
+    f.save("fig8-verify.svg", yb + 14)
+
+
 fig_elided()
 fig_cancel()
 fig_sites()
+fig_verify()

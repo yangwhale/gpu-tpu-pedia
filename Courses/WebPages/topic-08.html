@@ -3558,7 +3558,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>落在哪个颜色里，就是什么判定。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（定案前那次）：被测是 v5p 当前配置 1000 步，基线是精确轨迹的一份（它是什么，后面讲 golden 时细说），N 取 ③ 那组 GPU 重跑（生产近似＋输出头 dgrad 换成 FP32）5 份两两 10 对的最大值。</p>
 <p>📌 param_norm 带符号均值 4.27e-7、N 1.24e-7；loss 全程 8.62e-5 / 4.49e-5，尾段 7.23e-5 / 5.62e-5；grad_norm 2.32e-3 / 2.03e-3。</p>
 <p>📌 定案后：基线换成最终 golden 的一份、N 取它自己 10 份两两 45 对，loss 全程 0.80、尾段 0.80、梯度范数 0.85、参数范数 0.50。N 取参照各对里绝对值最大的那个；r ＝ |被测| ÷ N。参数范数的相对差只有 4e-7 也判不过，因为 r 不跟「看上去大不大」比，跟这个量自己的噪声比。</p></details></figure>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/janus/checks/base.py">代码：判档：r ＝ |被测| ÷ N，≤1 过、＞2 不过</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/janus/checks/series.py">代码：逐步序列的三种统计</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/janus/checks/base.py">代码：判档：r ＝ |被测| ÷ N，≤1 过、＞2 不过</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/janus/checks/series.py">代码：逐步序列的三种统计</a></p>
 <figure class="fbox fwide" id="anim-ceiling">
 <video src="media/topic08-ceiling.mp4?v=8e11fdeb" autoplay loop muted playsinline data-pauses="2.95,11.40,14.90,19.60,23.30"
        aria-label="噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　定案前第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；③ 那组设置：生产近似＋输出头 dgrad 换成 FP32（一次累加）。第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，1.24e-7。第 4 步　被测（TPU 对精确轨迹）出场，r 等于被测除以 N；尺子借自 ③ 那组 GPU 重跑（&#167;9.3）。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 4.27e-7，r 等于 4.27e-7 除以 1.24e-7，等于 3.45。背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。第 5 步　样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 n 加 1 分之一。3 对 1/4，10 对 1/11（这一次），28 对 1/29。"></video>
@@ -4902,7 +4902,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s3-5">3.5　一次看几十个数：r 在 1–2 之间，先别急着判错</h3>
   <p>尺子为什么只用 GPU 重跑？第二次迁移里，TPU 同一个程序重跑，换一组机器、换一个集群，结果都<b>逐位相同</b>：拿它当尺子，宽度是 0，什么都判不过。硬给 TPU 造点波动来撑宽，又成了被测给自己定门槛（<a href="#s4-3">§4.3</a>）。</p>
   <p>第二次迁移一次比较要看 8 项检查（7 条曲线，主 loss 开两个窗口），每项 3 个统计，一共 24 个 r，最差的那个说了算。每个数超过自己尺子的机会不大，24 个里总有一个超的机会就大了。纯噪声按同一套判法能拿几分？把 GPU 的重跑轮流拿一份当被测，试一遍：</p>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/analysis/gpu_loo_r.py">代码：留一法</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/docs/guide/ruler.md">代码：尺子的入门（文档）</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/analysis/gpu_loo_r.py">代码：留一法</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/docs/guide/ruler.md">代码：尺子的入门（文档）</a></p>
 <figure class="fbox fwide" id="fig-loo"><svg viewBox="0 0 1400 910" width="100%" role="img" aria-label="一根横轴是 r，0 到 1 绿色判过，1 到 2 黄色判待定，大于 2 红色判不过。第一行：GPU 同设置 8 份、300 步，轮流一份当被测、一份当基线、其余当尺子，一共 56 种，一个点一种；59% 超过 1，其中 11% 超过 2，最大 2.47。第二行：1000 步、16 份，240 种，22% 在黄区，没有进红区的，最大 1.82。第三行：六个 TPU 改动跑 1000 步，用 8 份的尺子时 r 在 2.00 到 2.75，压线或越过当时纯噪声的最大值 2.00；尺子补到 16 份后落到 1.19 到 1.64，都在纯噪声最大值 1.82 以内。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">纯噪声互相比，也常常超线</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一个点 ＝ GPU 重跑里挑一份当被测、一份当基线、其余当尺子；判法跟 TPU 一样：几十个 r 取最差的（300 步 24 个，1000 步 27 个）</text>
@@ -5492,7 +5492,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>精度路径不同</b>：路由打分那次矩阵乘，GPU 离 FP64 3.8e-6、TPU 4.8e-8，R ≈ 0.013（<a href="#s5-4">§5.4</a>）。R 远小于 1 只说明 TPU 这一处离真值近得多，不是「TPU 算错了」；门槛 1.2 只拦一个方向。</li>
   </ul></details>
   <p><b>两把参照一起用</b>：第 1 步每个张量既跟基线比（超没超出 GPU 重跑的噪声），又跟 FP64 比（离真值远了没有）。超出噪声、离真值没变远，是<b>换了顺序</b>；远了 1.2 倍以上，才是<b>丢了精度</b>。一个张量走一遍：</p>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/frameworks/megatron/step1_ref.py">代码：FP64 参照（GPU 一侧代码在 CPU 上整网 FP64）</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/analysis/tpu_self_compare.py">代码：从动量反推梯度、逐张量定责、程序指纹</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/frameworks/megatron/step1_ref.py">代码：FP64 参照（GPU 一侧代码在 CPU 上整网 FP64）</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/analysis/tpu_self_compare.py">代码：从动量反推梯度、逐张量定责、程序指纹</a></p>
 <figure class="fbox fwide" id="fig-step1"><svg viewBox="0 0 1400 864" width="100%" role="img" aria-label="两块。上块是一条流程：第 1 步的梯度从一阶动量倒推出来；跟基线算相对 L2，除以这个张量自己的尺子（GPU 三份两两的最大差，不低于 2 的负 20 次方），不超过 1 就在噪声内；超过的，再看它离 64 位真值的距离，除以基线和 GPU 中位数里离得远的那个，不超过 1.2 记换了顺序，超过记丢了精度。两行算例都是词嵌入梯度：纯数据并行时超出尺子 5.89 倍、离真值远 3.62 倍，丢了精度；修好以后仍超出尺子 1.36 倍，可离真值只有 0.91 倍，换了顺序。下块是两类尺子怎么配合的四格：曲线和第 1 步都过，只是换了顺序；曲线不过、第 1 步全定责，多半是第 1 步之后的事；曲线过、第 1 步有丢精度的，是曲线没灵敏到；两样都不过，按 bug 查。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第 1 步逐张量：先量差多少，再请 FP64 判是谁的</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上：一个张量走一遍定责流程（两行算例是同一个张量在两次改动下的读数）；下：两类尺子各管什么，四种组合怎么读</text>
@@ -9164,7 +9164,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>看右边一组：紫柱接近红柱的两倍，橙柱跟红柱一样高。</b><span class="capmore"><br><em>绿柱是 FSDP。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：同一张按行分组的表（第 1 步，离 FP64 的 rel_L2）。四列每张卡一次 scatter 的下标数：FSDP 32768（收齐 8 张卡的 token，排序）；纯数据并行 8 卡 4096；16 卡 4096（跨卡求和从 8 路变 16 路）；8 卡不做梯度累积 8192（一步的数据不拆微批）。</p>
 <p>📌 高频行：3.26e-3 ／ 1.57e-2 ／ 1.59e-2 ／ 3.07e-2；整张表：FSDP 4.00e-3、纯数据并行 8 卡 1.51e-2、不累积 2.92e-2。各组 rel² 按范数平方加权求和回到整张表的数（本课复算，差 3% 以内）。</p>
 <p>⚠️ 「接近翻倍」是这一步实测到的，不是一般规律：舍入误差有正有负、互不相关时，次数翻倍误差只涨约 1.4 倍；训练里接近线性，推断是舍入误差偏向一边（后加进去的小梯度被系统地吞掉一部分）。</p></details></figure>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/analysis/emb_grad_row_groups.py">代码：按行分组</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/analysis/emb_grad_row_groups.py">代码：按行分组</a></p>
   <p>两根对照柱把第一个假设推翻了：误差跟着「本卡一次加几次」走，跨卡多几路它不在乎。<b>主因在每张卡本地那次 BF16 scatter-add</b>。高频那 39 行占整张梯度范数平方的 0.90，纯数据并行多出来的误差 99.6% 在它们身上。</p>
   <details class="foldfig"><summary><b>矩阵乘类权重为什么两边一样</b>：也有 BF16 跨卡求和，可两边舍入次数基本相同</summary>
   <p>审计顺带改正了一个印象：纯数据并行下以 BF16 跨卡求和的不只词嵌入，32 个 all-reduce 里有 10 个用 BF16 加法（路由专家 6 个、稀疏注意力索引器的两个投影 2 个、词嵌入 2 个）。可路由专家和索引器在 FSDP 下同样是 BF16，舍入次数相同，离 FP64 的比值（纯数据并行 ÷ 基线）在 0.91–1.07。矩阵乘类权重的梯度来自矩阵乘，每张卡先算部分和再跨卡加：纯数据并行用 all-reduce，FSDP 多半用 reduce-scatter（路由专家两边都是 all-reduce）；all-reduce ＝ reduce-scatter ＋ all-gather，all-gather 只搬不加，所以只差先后。例外是第 0 层和多 token 预测层：纯数据并行下它们的舍入落在跨卡之前，位置跟 FSDP 不同，但离 FP64 没有变远。词嵌入不同：它的累加不是矩阵乘，是 scatter-add，FSDP 那一侧换了写法。</p></details>
@@ -9434,7 +9434,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
        aria-label="同一个词的更新怎么加进词表那一行。词嵌入的反向：每个 token 的梯度按 token 号加回词表那一行（scatter-add）。第 1 步　不排序：同一个词的更新隔着别的词，每来一次都要读出、加上、舍回 BF16、写回；词 17 出现 6 次，舍了 5 次，第一次是加到 0 上不舍。第 2 步　排好序、带标记：同一个词挨在一起，在片上 FP32 缓冲里一口气加完，写出时舍一次。第 3 步　单算子实测：这一行在一次 4096 个下标的 scatter 里出现 100 次以上的那组，离 FP64：不排序 1.46e-2，排序 1.70e-3。第 4 步　训练第 1 步：39 个高频词的行，纯数据并行 1.57e-2，FSDP 3.26e-3。出现 k 次：不排序舍 k 减 1 次，排序只舍 1 次。示意：真实高频词一次加几十到几百次；token 号随手写。"></video>
 <figcaption><b>不排序时同一个词每来一次就舍一次；排好序以后挨在一起，在片上 FP32 缓冲里加完才舍一次。</b>
   <span class="sub">（28 秒，Manim 渲染，可一步一步看。下标流、词 17 出现 6 次和左边的误差条是示意；第 3、4 步的数是实测。）</span></figcaption></figure>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/analysis/emb_scatter_sort_probe.py">代码：单算子实验（四格、扫下标数、交叉编译看门槛）</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/analysis/emb_scatter_sort_probe.py">代码：单算子实验（四格、扫下标数、交叉编译看门槛）</a></p>
   <p>四格里只有「排序 ＋ 标记 ＋ excess precision 开」那一格在 FP32 里累加。只排好序不带标记，结果仍逐位等于每次舍：标记告诉后端「同一行的更新已经挨在一起」，后端见到它才换成片上累加的写法：把表一块一块搬进片上的 FP32 缓冲，这一块的更新加完再写回，每行只舍一次（后端指令和逐位结果都核过）。</p>
   <details class="foldfig"><summary><b>8 个设备上照两种切法各跑一份</b>：排序一项走了多少</summary>
   <p>每卡 4096 个下标、全局 32768 个（更新量是随机数，跟训练里的数不直接比，只看相对大小）：FSDP 1.58e-3；纯数据并行 7.17e-3；纯数据并行只加上排序 2.86e-3。从纯数据并行到 FSDP 的差距，排序一项走了约八成（77%）（本课按这三个数复算）；剩下的在本卡部分和先舍一次 BF16、再做 BF16 跨卡求和 —— 跟修法②是同一种舍入结构。</p></details>
@@ -9769,7 +9769,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>认参数</b>：形状先认（词嵌入 [120832, 1024]，切开后 [120832, 128]；输出头是 [1024, 120832]，第一维不同）；再看 <code>metadata={op_name="…"}</code>，反向往表里加的那一串里带 <code>scatter-add</code>，前向取行带 <code>gather</code>；还拿不准，顺着数据流看谁用了它。</li>
     <li><b>核对</b>：本课这一份，上卡后存下的程序里集合通信跟离线编的逐条一致（只差设备分组的写法；核对的是只切词嵌入表那份）。</li>
   </ul></details>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/analysis/hlo_comm_bytes.py">代码：列出每条集合通信、每步次数和字节</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/analysis/hlo_comm_bytes.py">代码：列出每条集合通信、每步次数和字节</a></p>
   <p>这把尺子也有边界（字节按形状算这一条写在图下）：</p>
   <ul>
     <li><b>看不到精度</b>：<a href="#s8-5">§8.5</a> 那一格就是程序一字不差、只关一个开关，后端的写法就变了；换运行库也一样（<a href="#s10-2">§10.2</a>）。精度仍要上卡做第 1 步逐张量定责。</li>
@@ -9893,7 +9893,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s9-3">9.3　拆账，和两关验收</h3>
   <p>把每条运行第 1000 步的参数范数钉在一根数轴上（下图）：TPU 生产那颗点和 ⑤（GPU 生产只把那次长求和分段累加）几乎叠在一起。GPU 生产到 ⑤ 那一截，全是 12 万长的求和带来的；⑤ 到 ⑥（真精确，只当参照）那一截两边都有，不是两边的差。</p>
-  <p>定案前那 3.45 倍又是什么？像一杆秤上两个零件都少称：精确轨迹 ④ 自己少漂一截，TPU 的梯度舍入也少漂一截，读到的是两笔相减剩下的差额。这杆秤 <a href="#s9-7">§9.7</a> 还会再出场。</p>
+  <p>定案前那 3.45 倍又是什么？是两笔相反的偏差相抵后剩下的差额：当参照的精确轨迹 ④ 自己少漂一截，TPU 把流进输出头反向的梯度存成 BF16，也少漂一截。</p>
   <details class="foldfig"><summary><b>账的数</b>：每一截多少、共有误差从哪来</summary>
   <p>从 GPU 生产到 ⑤ 涨了 ＋2.07e-2（BF16 张量核那段和 cuBLAS 一次累加那段加起来）；从 ⑤ 到 ⑥ 再涨 ＋6.7e-3，原因是流进输出头反向的梯度在生产程序里存成了 BF16 —— GPU 生产和 TPU 生产都舍了这一次（GPU 真精确只多舍这一次，参数范数就小了 −6.7e-3）。TPU 生产落在 ＋2.09e-2，⑤ 在 ＋2.07e-2。③ 到 ④ 缩掉的那截（<a href="#s9-1">§9.1</a> 动画里的橙块）大小跟这份共有误差差不多，很可能是同一类，TPU 生产也带着它（推断）。</p></details>
 <figure class="fbox fwide" id="fig-decomp"><svg viewBox="0 0 1400 852" width="100%" role="img" aria-label="上面一条数轴是第 1000 步参数范数对 GPU 生产 golden 的差：GPU 精确轨迹 ＋0.0186，GPU 生产只把输出头 dgrad 改成分段累加的那份 ＋0.0207，TPU 生产 ＋0.0209，真精确 ＋0.0274。从 0 到 ＋0.0207 是 GPU 输出头 dgrad 长累加的偏差；从 ＋0.0207 到 ＋0.0274 是两边都有的 dlogits 舍入。下面是 TPU 生产对精确轨迹那 ＋0.00235 的三笔：精确轨迹自己少漂 ＋0.0087，TPU 的 dlogits 舍入 −0.0068，其余 ＋0.0005。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -10625,9 +10625,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="1040" y1="243.0" x2="1130" y2="243.0" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
 <rect x="1132" y="223.0" width="160" height="40" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
 <text class="svgsm" x="1212" y="248" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">末层归一化</tspan></text>
-<circle cx="1083.0" cy="337.0" r="13.0" fill="#1a73e8"/>
+<circle cx="1083.0" cy="337.0" r="13.0" fill="#202124"/>
 <text class="svgsm" x="1083" y="341" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<text class="svgsm" x="1102" y="340" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 收拢处：4 路收成一路</tspan></text>
+<text class="svgsm" x="1102" y="340" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 收拢处：4 路收成一路</tspan></text>
 <text class="svgsm" x="1102" y="360" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">前向舍一次，梯度传回来也舍</text>
 <rect x="0" y="452" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="452" width="4" height="74" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -10635,7 +10635,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="479" fill="#174ea6" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三处在代码里都写了「转 BF16」；GPU 都真舍了，TPU 可能被编译器省掉</tspan></text>
 <text class="svgsm" x="20" y="510" fill="#174ea6" style="font-size:15.0px;font-variant-numeric:tabular-nums">⓪ 修之前就补上了；① 和 ② 是这一段要查的两处。</text>
 </svg><figcaption><b>三个编号是后面一直要用的地名：⓪ 分支输入、① 流梯度、② 收拢处。</b><span class="capmore"><br><em>示意图，只画一层。</em></span></figcaption></figure>
-  <p><b>前段那个小鼓包先破了。</b>在 ② 收拢处，GPU 前向舍一次、梯度传回来也舍；TPU 省掉了梯度那次。在收拢处强制舍，第 51–100 步回到 GPU 附近；只在前向舍、梯度原样传回，鼓包又回来。可后段没降，均值反而略高。记住这个补丁，它后面还会回来。</p>
+  <p><b>前段那个小鼓包先破了。</b>在 ② 收拢处，GPU 前向舍一次、梯度传回来也舍；TPU 省掉了梯度那次。在收拢处强制舍，第 51–100 步回到 GPU 附近；只在前向舍、梯度原样传回，鼓包又回来。可后段没降，均值反而略高（4 份，单看分不开）。记住这个补丁，它后面还会回来。</p>
   <p><b>后段先排除嫌疑。</b>关掉 MTP、关掉蒸馏，都还偏；换运行库、换芯片、换并行方式，35 次长跑后段全是正的；两边都把多路残差换成普通残差，尾巴没了。嫌疑锁定在多路残差这一段：</p>
 <figure class="fbox fwide" id="fig-ihcroot"><svg viewBox="0 0 1400 580" width="100%" role="img" aria-label="两块。左：多路残差的流在反向里的样子。流在一层里有三处用到，回来三份梯度。GPU：三份各舍 BF16，再一个一个加，每加一次舍一次；TPU：三份在 FP32 里加完，最后舍一次（推断）。右：第 551 到 1000 步主 loss 的 TPU 减 GPU。关掉 MTP、关掉索引器蒸馏、两个都关，都还偏高 0.9e-5 到 1.2e-5；对照 1.48e-5；两边都去掉多路残差，1.9e-6 和 0.7e-6，落进 GPU 的散布 2.1e-6。所以范围缩到多路残差这一段。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">后段偏高：排除了一圈，范围缩到多路残差这一段</text>
@@ -10776,11 +10776,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="2" y="552" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">补上 GPU 的流梯度舍法，尾巴降下来</tspan></text>
 <text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">均值从 +9.4e-6 降到 +1.9e-6（两样本检验 p 0.016）；只补一边还不算数，GPU 一边反过来改，见下一张图。</text>
-</svg><figcaption><b>左边红线四条都爬出灰带；中间绿线多数贴着 0；右边紫线又爬出去。</b><span class="capmore"><br><em>三列同一纵轴；每条线一份运行；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，1000 步）：主 loss 对 GPU 16 份逐步均值的相对差，25 步滑动平均（两端各留半窗不画）；灰带是 GPU 16 份每份对其余 15 份均值的相对差（同样平滑）的逐步最大绝对值，只作背景。「尾巴还在」按对齐记录的判据：第 751–1000 步均值超过 3e-6。p 是对修之前那一格的置换检验。</p>
+</svg><figcaption><b>左边红线四条都爬出灰带；右边绿线多数贴着 0。</b><span class="capmore"><br><em>两列同一纵轴；每条线一份运行；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，1000 步）：主 loss 对 GPU 16 份逐步均值的相对差，25 步滑动平均（两端各留半窗不画）；灰带是 GPU 16 份每份对其余 15 份均值的相对差（同样平滑）的逐步最大绝对值，只作背景。「尾巴还在」按对齐记录的判据：第 751–1000 步均值超过 3e-6。p 是对修之前那一格的置换检验。</p>
 <p>📌 两列都开着「多路残差分支输入和更新后的流强制舍 BF16」那个开关（修之前就开着）。修之前四份里三份只改执行方式（片上内存上限、调度），同一配置。「补流梯度舍法」再让流的几份梯度先各舍 BF16、照 GPU 的顺序逐个相加（分支输出也舍 BF16）。只补流梯度时，第 51–100 步的小鼓包还在（＋5.6e-6，修之前 ＋3.9e-6）。</p>
 <p>⚠️ 都是 mini 尺寸；延长到 2000 步时，修之前的尾巴在第 1000–1250 步到顶后回落到 GPU 散布里。</p></details></figure>
-  <p>只补一边还不够：对齐记录前一轮就是只补 TPU、几份运行就写成根因，后来又撤回。像医生判一种药的副作用：停药症状消失，再用药症状又出现，两头都对上才算是它。这次两头各改一处，每格 4–5 份：</p>
-<figure class="fbox fwide" id="fig-twoway"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="两块，纵轴相同：每个点是一份 1000 步运行第 551 到 1000 步主 loss 的带符号均值，横线是这一格的均值。左块 TPU 对 GPU 16 份均值：修之前四份都在 ＋6e-6 以上；补上 GPU 的流梯度舍法，五份降到均值 ＋1.9e-6。右块 GPU 对其余 15 份：GPU 自己 16 份散在 0 上下；GPU 把流梯度换成 TPU 的舍法，四份全部为正、均值 ＋3.9e-6；只换收拢处那次，四份散在 0 上下。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p>只补一边还不够：对齐记录前一轮就是只补 TPU、几份运行就写成根因，后来又撤回。像医生判一种药的副作用：停药症状消失，换个人吃同样的药也长出同样的症状，两头都对上才算是它。这次两头各改一处，每格 4–5 份：</p>
+<figure class="fbox fwide" id="fig-twoway"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="两块，纵轴相同：每个点是一份 1000 步运行第 551 到 1000 步主 loss 的带符号均值，横线是这一格的均值。左块 TPU 对 GPU 16 份均值：修之前四份都在 ＋6e-6 以上；补上 GPU 的流梯度舍法，五份降到均值 ＋1.9e-6。右块 GPU 对其余 15 份：GPU 自己 16 份散在 0 上下；GPU 把流梯度换成 TPU 的舍法，四份全部为正、均值 ＋3.9e-6；只换收拢处整段写法，四份散在 0 上下。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两头各改一处：TPU 换成 GPU 的舍法，偏高降下来；GPU 换成 TPU 的舍法，自己偏高</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，1000 步，第 551–1000 步主 loss 带符号均值；每点一份运行，横线是均值</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -10875,7 +10875,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1280.1666666666665" y="383.6125361126036" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
 <rect x="1290.1666666666665" y="342.7251253785475" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
 <line x1="1234.1666666666665" y1="356.76264788940966" x2="1326.1666666666665" y2="356.76264788940966" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="1280" y="506" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换收拢处舍法</tspan></text>
+<text class="svgsm" x="1280" y="506" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换收拢处整段写法</tspan></text>
 <text class="svgsm" x="1280" y="528" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">4 份，均值 +1.8e-7</text>
 <text class="svgsm" x="1080" y="170" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 份全为正，p 0.0025</tspan></text>
 <text class="svgsm" x="1280" y="170" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.89，没变</tspan></text>
@@ -10886,13 +10886,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="619" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两头对上，才说得上主因是它：流的几份梯度怎么相加、在哪儿舍</tspan></text>
 <text class="svgsm" x="20" y="650" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">只在 TPU 一边补，补好了也可能是两处差别凑巧抵消（上一轮就是这样撤回的）；GPU 一边反着改、长出同样方向的偏，两个方向对上，才说得上是它。</text>
 <text class="svgsm" x="20" y="674" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">GPU 每份梯度先舍 BF16 再逐个相加，每加一次舍一次；TPU 推断是在 FP32 里加完才舍一次。</text>
-</svg><figcaption><b>左块红点降到绿点；右块灰点升到橙点：两头各改一处，方向对上。</b><span class="capmore"><br><em>每点一份运行；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步）：每格 4–6 份（GPU 自己那格 16 份），第 551–1000 步主 loss 带符号均值；p 是对同一块里第一格做的置换检验（左块对修之前，右块对 GPU 自己）；</p>
-<p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过；GPU 的三个诊断开关都不开时，CPU 上 191 个梯度逐位不变。GPU 只换收拢处那次舍法，后段不变，可第 51–100 步冒出 ＋3.7e-6（p 0.001）—— 正是 TPU 不补收拢处舍入时的前段鼓包，又一处两头对上。</p>
+</svg><figcaption><b>左块红点降到绿点；右块灰点升到橙点：两头各改一处，方向对上。</b><span class="capmore"><br><em>每点一份运行；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步）：每格 4–5 份（GPU 自己那格 16 份），第 551–1000 步主 loss 带符号均值；p 是对同一块里第一格做的置换检验（左块对修之前，右块对 GPU 自己）。</p>
+<p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过；GPU 的三个诊断开关都不开时，CPU 上 191 个梯度逐位不变。GPU 只换收拢处整段写法，后段不变，可第 51–100 步冒出 ＋3.7e-6（p 0.001）—— 正是 TPU 不补收拢处舍入时的前段鼓包，又一处两头对上。</p>
 <p>⚠️ 都是 mini 尺寸、每格份数不多；这里的结论是「主因」。</p></details></figure>
   <p>TPU 改成 GPU 的写法，偏高降下来；GPU 改成 TPU 的写法，GPU 自己长出同样的尾巴。两个方向对上，主因定了。（图里的 p 是检验值：把这些运行随机重新分组，分出这么大差别的概率。）</p>
   <p><b>反转。</b>把 ① 和 ② 都照 GPU 补上，就是现行的对齐配置；可后段还剩 ＋6.9e-6，比只补流梯度大，跟修之前分不开（p 0.32）。收拢处一开，再补流梯度就测不出作用了：</p>
 <figure class="fbox fwide" id="fig-gatecmp"><svg viewBox="0 0 1400 684" width="100%" role="img" aria-label="两块。左：每个点是一份 1000 步运行第 551 到 1000 步主 loss 的偏差，横线是均值。只开收拢处的舍入四份均值 ＋1.3e-5；在它上面再补流梯度舍法，全套四份 ＋6.7e-6、只补梯度一半 ＋7.9e-6、只补分支输出一半 ＋1.1e-5，对只开收拢处的 p 是 0.14、0.14、0.54，都测不出作用。右：主 loss 的判档倍数，灰点是 GPU 自己 15 份轮流当被测，最高 0.97；紫点是对齐配置 6 份，3 份高过 GPU 的全部 15 份，最高 1.14。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">收拢处一开，流梯度那处就测不出作用；对齐配置的主 loss 只是刚好过线</text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">收拢处一开，流梯度那处就测不出作用；对齐配置第一份主 loss 0.98 刚好过线</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p，1000 步；每点一份运行；机制还在查</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">只开收拢处舍入</text>
@@ -10998,81 +10998,86 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边：在橙点那格上再补，三格紫点都没明显往下；右边：紫点有三个落在所有灰点的右边。</b><span class="capmore"><br><em>每点一份运行；实测；机制在查。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，1000 步）：左块每格 4 份，第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值；三格对修之前（只开前向那个强制舍入）也都分不开。「只补梯度一半」「只补分支输出一半」是把流梯度舍法拆成两半各自单开。</p>
 <p>📌 右块：现行检查项目录、GPU 16 份两两 120 对的尺子；GPU 那 15 份是每份对基线那份的同样判档（留一法）。对齐配置 6 份没有不过，现行那份 0.98。</p>
 <p>⚠️ 都是 mini 尺寸、每格份数不多；「测不出作用」是这几份运行下的结论，不等于证明没有作用。</p></details></figure>
-  <p><b>为什么？两处没舍的方向相反。</b>好比一杆秤坏了两个零件，一个让读数偏多，一个偏少，读到的是两者相抵后的数。修好偏少那个，读数离零反而更远：</p>
-<figure class="fbox fwide" id="fig-cancel"><svg viewBox="0 0 1400 600" width="100%" role="img" aria-label="像一杆秤上坏了两个零件：一个让读数偏多，一个让读数偏少。左边四行是四种配置，每行两个零件补没补，右边是第 551 到 1000 步主 loss 的偏差。两处都没补，＋9.4，单位十的负六次方；只补收拢处，读数反而变大到 ＋12.5；只补流梯度，＋1.9，看着像修好了；两处都补，＋6.9。最下面一行：GPU 上反过来拿掉收拢处那次梯度舍入，后段被压低 2.9，跟只补收拢处多出来的 3.1 量级相当、方向相反。推断：收拢处梯度不舍一直在往下拉，只补流梯度的 ＋1.9 里有它遮掉的一部分；两处都补后剩下的 ＋6.9 来自这一段以外。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">修好一个零件，读数反而变大：因为另一个零件一直在少称</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p；读数 ＝ 第 551–1000 步主 loss 偏差（TPU − GPU，×1e-6），每格 4–6 份运行的平均</text>
+  <p><b>为什么？研究线的解释（推断）：一台秤有三个毛病。</b>甲让读数偏重，是流梯度少舍（主因，已找到）；乙让读数偏轻，是收拢处那次梯度少舍；丙也偏重，还没找到。只修甲，乙和丙大致抵掉，读数看着准了；甲乙都修，丙就露出来了。乙这个毛病有点怪：在前段它把 loss 往上鼓（就是那个鼓包），在后段却往下压。</p>
+<figure class="fbox fwide" id="fig-cancel"><svg viewBox="0 0 1400 620" width="100%" role="img" aria-label="像一台秤有三个毛病：甲让读数偏重，是流梯度少舍，主因，已找到；乙让读数偏轻，是收拢处那次梯度少舍；丙也偏重，还没找到。四行是四种配置，右边是第 551 到 1000 步主 loss 的偏差，单位十的负六次方。都没修 ＋9.4；只修乙 ＋12.5，单看分不开；只修甲 ＋1.9，乙和丙大致抵掉，看着准了；甲乙都修 ＋6.9，比只修甲高 5.0，p 0.024，丙露出来了。最下面：GPU 上拿掉乙那次舍入，后段压低 2.9，方向一致，是那 5.0 的一部分。这几步的解释是推断。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">修好一个毛病，读数反而偏了：因为另一个毛病一直在帮着抵</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p；读数 ＝ 第 551–1000 步主 loss 偏差（TPU − GPU，×1e-6），每格 4–6 份运行的平均；甲乙丙的解释是推断</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">往上推：流梯度没照 GPU 舍</text>
-<rect x="251.96" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="272" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">往下拉：收拢处梯度没舍</text>
-<rect x="471.44000000000005" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="492" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">已补上</text>
-<rect x="0" y="102" width="1400" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">偏重：甲 流梯度少舍、丙 还没找到</text>
+<rect x="299.0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="320" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">偏轻：乙 收拢处梯度少舍</text>
+<rect x="526.32" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="547" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">已修</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四种配置：两个零件各补没补，读数是多少</tspan></text>
-<text class="svgsm" x="300" y="158" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">流梯度</tspan></text>
-<text class="svgsm" x="470" y="158" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收拢处梯度</tspan></text>
-<text class="svgsm" x="20" y="206" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处都没补（修之前）</tspan></text>
-<line x1="300" y1="217" x2="300" y2="189" stroke="#e8710a" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="314" y="208" fill="#b06000" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
-<line x1="470" y1="189" x2="470" y2="217" stroke="#1a73e8" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="484" y="208" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
-<rect x="600" y="190" width="375.82869891551627" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="983" y="208" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋9.4</tspan></text>
-<text class="svgsm" x="600" y="232" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">两股相抵了一部分</text>
-<text class="svgsm" x="20" y="272" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只补收拢处</tspan></text>
-<line x1="300" y1="283" x2="300" y2="255" stroke="#e8710a" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<text class="svgsm" x="314" y="274" fill="#b06000" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
-<rect x="436" y="256" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="470" y="274" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
-<rect x="600" y="256" width="500.85745894397223" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1108" y="274" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋12.5</tspan></text>
-<text class="svgsm" x="600" y="298" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">往下拉的那股没了，离零反而远了 3.1（4 份，单看分不开，要跟最下面一行合着看）</text>
-<text class="svgsm" x="20" y="338" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只补流梯度</tspan></text>
-<rect x="266" y="322" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="300" y="340" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
-<line x1="470" y1="321" x2="470" y2="349" stroke="#1a73e8" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<text class="svgsm" x="484" y="340" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums">没补</text>
-<rect x="600" y="322" width="76.3204417466161" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="684" y="340" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.9</tspan></text>
-<text class="svgsm" x="600" y="364" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">看着像修好，可往下拉的那股还在，替它遮了一部分</text>
-<text class="svgsm" x="20" y="404" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处都补（对齐配置）</tspan></text>
-<rect x="266" y="388" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="300" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
-<rect x="436" y="388" width="68" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="470" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补</tspan></text>
-<rect x="600" y="388" width="277.9181969477322" height="24" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="885" y="406" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋6.9</tspan></text>
-<text class="svgsm" x="600" y="430" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">剩下这截推断来自这一段以外</text>
-<line x1="600" y1="172" x2="600" y2="426" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="14" y1="444" x2="1386" y2="444" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="20" y="470" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反过来在 GPU 上验：</tspan></text>
-<text class="svgsm" x="190" y="470" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">拿掉收拢处那次梯度舍入（4 份），后段压低 2.9；跟上面多出来的 3.1 量级相当、方向相反。</text>
-<rect x="0" y="502" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="502" width="4" height="74" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="2" y="502" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="529" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只补流梯度时的 ＋1.9 不全是修好：往下拉的那股还在，替它遮了一部分</tspan></text>
-<text class="svgsm" x="20" y="560" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">两处都照 GPU 补上，往上推、往下拉都没了，还剩 ＋6.9：推断这截不在这一段，要换个地方找。</text>
-</svg><figcaption><b>只补收拢处那一行读数最大；只补流梯度那一行最小，可往下拉的那股还在。</b><span class="capmore"><br><em>读数是实测；「往下拉的那份」是推断，箭头只表示方向。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：四格都是第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值，单位 1e-6；修之前 4 份、只补收拢处 4 份、只补流梯度 5 份、对齐配置 6 份。GPU 那一行对 GPU 16 份留一法，4 份。</p>
-<p>⚠️ 推断：把「只补收拢处比修之前多出的 3.1」和「GPU 上拿掉那次梯度舍入压低的 2.9」对上，是本课的相减与对照；研究线的口径是「方向一致，只补流梯度的后段变平有一部分是这次不照 GPU 舍的下压」。箭头只表示方向，不是测量值。</p></details></figure>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一台秤，三个毛病：四种修法，读数是多少</tspan></text>
+<text class="svgsm" x="290" y="158" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">甲</tspan></text>
+<text class="svgsm" x="410" y="158" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">乙</tspan></text>
+<text class="svgsm" x="530" y="158" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">丙</tspan></text>
+<text class="svgsm" x="20" y="206" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">都没修（修之前）</tspan></text>
+<line x1="290" y1="217" x2="290" y2="189" stroke="#e8710a" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="410" y1="189" x2="410" y2="217" stroke="#1a73e8" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="530" y1="217" x2="530" y2="189" stroke="#e8710a" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="544" y="208" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">？</tspan></text>
+<rect x="640" y="190" width="368.8689081948586" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1016" y="208" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋9.4</tspan></text>
+<text class="svgsm" x="640" y="232" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">三股相抵后的读数</text>
+<text class="svgsm" x="20" y="274" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只修乙（收拢处）</tspan></text>
+<line x1="290" y1="285" x2="290" y2="257" stroke="#e8710a" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="380" y="258" width="60" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="410" y="276" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已修</tspan></text>
+<line x1="530" y1="285" x2="530" y2="257" stroke="#e8710a" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="544" y="276" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">？</tspan></text>
+<rect x="640" y="258" width="491.58232081538017" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1139" y="276" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋12.5</tspan></text>
+<text class="svgsm" x="640" y="300" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值往上走 3.1，4 份单看分不开（p 0.26）</text>
+<text class="svgsm" x="20" y="342" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只修甲（流梯度）</tspan></text>
+<rect x="260" y="326" width="60" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="290" y="344" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已修</tspan></text>
+<line x1="410" y1="325" x2="410" y2="353" stroke="#1a73e8" stroke-width="3" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<line x1="530" y1="353" x2="530" y2="325" stroke="#e8710a" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="544" y="344" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">？</tspan></text>
+<rect x="640" y="326" width="74.90710023278984" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="722" y="344" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋1.9</tspan></text>
+<text class="svgsm" x="640" y="368" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">乙和丙大致抵掉，看着准了</text>
+<text class="svgsm" x="20" y="410" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">甲乙都修（对齐配置）</tspan></text>
+<rect x="260" y="394" width="60" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="290" y="412" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已修</tspan></text>
+<rect x="380" y="394" width="60" height="26" rx="13" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="410" y="412" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已修</tspan></text>
+<line x1="530" y1="421" x2="530" y2="393" stroke="#e8710a" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="544" y="412" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">？</tspan></text>
+<rect x="640" y="394" width="272.7715636709222" height="24" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="920" y="412" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋6.9</tspan></text>
+<text class="svgsm" x="640" y="436" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">比只修甲高 5.0（p 0.024）：丙露出来了</tspan></text>
+<line x1="640" y1="172" x2="640" y2="434" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="14" y1="452" x2="1386" y2="452" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="20" y="478" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">反过来在 GPU 上验乙：</tspan></text>
+<text class="svgsm" x="210" y="478" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">只拿掉收拢处那次梯度舍入（4 份），后段压低 2.9：方向一致，是那 5.0 的一部分。</text>
+<rect x="0" y="522" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="522" width="4" height="74" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="522" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="549" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">甲乙都修以后剩下的 ＋6.9，不是修坏了，是被乙遮住的丙露了出来（推断）</tspan></text>
+<text class="svgsm" x="20" y="580" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">丙在哪？下一步去找它。</text>
+</svg><figcaption><b>只补收拢处那一行读数最大；只补流梯度那一行最小，可往下拉的那股还在。</b><span class="capmore"><br><em>读数是实测；「往下拉的那份」是推断，箭头只表示方向。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：四格都是第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值，单位 1e-6；都没修 4 份、只修乙 4 份、只修甲 5 份、甲乙都修 6 份；甲乙都修对只修甲是置换检验。GPU 那一行对 GPU 16 份留一法，4 份；它只拿掉收拢处反向那一次梯度舍入，跟 fig-twoway 里整段换收拢处写法的那格不是同一个改法。</p>
+<p>⚠️ 推断：三个毛病、乙丙抵掉、丙在别处，是研究线的解释；GPU 一侧方向一致，但大小只占 5.0 的一部分。箭头只表示方向，甲乙丙各自多大没有单独测出。</p></details></figure>
 <figure class="fbox fwide" id="anim-cancel">
-<video src="media/topic08-cancel.mp4?v=d951f81c" autoplay loop muted playsinline data-pauses="2.70,6.80,10.90,15.00,19.10"
-       aria-label="修好一个零件，读数反而离零更远。读数：第 551–1000 步主 loss 偏差，乘 1e-6；上面一根尺子是 TPU 对 GPU，下面一根是 GPU 自己（对 GPU 其余各份）；两个开关：① 流梯度、② 收拢处梯度，没补或已补。第 1 步　两处都没补（修之前）：读数 +9.4。第 2 步　只补 ② 收拢处：指针反而往右跑，离零更远，到 +12.5。第 3 步　改成只补 ① 流梯度：几乎回到零，看着像修好了，+1.9。第 4 步　两处都补（对齐配置）：停在中间，+6.9，剩下这截推断在这一段以外。第 5 步　GPU 上拿掉 ② 那次梯度舍入：GPU 自己被往下压 2.9，跟第 2 步多出的 3.1 对得上（推断）。"></video>
-<figcaption><b>拨一个开关，指针往意料之外的方向跑：修好收拢处，读数离零更远；GPU 上反过来拿掉那次舍入，GPU 自己被往下压。</b>
-  <span class="sub">（23 秒，Manim 渲染，可一步一步看。四个读数和 GPU 那一格是实测；「两个零件方向相反、读数是两者相抵」是推断。）</span></figcaption></figure>
-  <p>所以只补流梯度时那个 ＋1.9e-6 偏乐观（推断；GPU 上拿掉收拢处那次梯度舍入，方向一致）。两处都补以后剩下的那截，得换个地方找。</p>
-  <p><b>只剩编译器。</b>这一段以外，还有几百处「转 BF16 再转回」，一处处对代码对不完；收拢处这一段的代码，两边已经对到只差累加顺序，上卡后段照旧（出处见本节末的折叠）。可鼓包和流梯度已经说明，差都出在编译器悄悄省掉的舍入上。那就反过来，让编译器自己交代：它在哪些地方省了。</p>
-  <p>先在一处上看清楚。把 ⓪ 那一小段为 v5p 离线编译：HLO 里那对 convert 都在，可算均方那颗 kernel 的后端指令（LLO）里，把 FP32 打包成 BF16 的指令一条都没有（<a href="#s8-5">§8.5</a> 也是这样数的）；同一处写成强制舍入，就有 256 条。往返留在一颗 kernel 里就不舍，值写回内存交给下一颗才真舍：</p>
+<video src="media/topic08-cancel.mp4?v=10123cbe" autoplay loop muted playsinline data-pauses="2.70,7.00,11.30,15.60"
+       aria-label="一台秤三个毛病：修好一个，读数反而偏了。读数：第 551–1000 步主 loss 偏差，乘 1e-6；上面一根尺子是 TPU 对 GPU，下面一根是 GPU 自己（对 GPU 其余各份）。三个毛病：甲 流梯度（偏重）、乙 收拢处梯度（偏轻）、丙 还没找到（偏重），各标没修或已修，丙是问号。第 1 步　都没修（修之前）：读数 9.4，是三股相抵后的数。第 2 步　只修甲：几乎回到零，乙和丙大致抵掉，看着像修好了，+1.9。第 3 步　再修乙：指针反而往右跑，高了 5.0（p 0.024），到 +6.9 —— 被乙遮住的丙露出来（推断）。第 4 步　GPU 上只拿掉乙那次舍入：GPU 自己被压低 2.9，方向一致，是那 5.0 的一部分（推断）。"></video>
+<figcaption><b>拨一个开关，指针往意料之外的方向跑：只修甲几乎回零，再修乙反而往右跑回去；GPU 上只拿掉乙，GPU 自己被往下压。</b>
+  <span class="sub">（20 秒，Manim 渲染，可一步一步看。读数是实测；「三个毛病、乙丙抵掉、丙露出来」是推断。只修乙那一格单看分不开，没放进动画（静态图里有）。）</span></figcaption></figure>
+  <p>对齐配置剩下的 ＋6.9e-6 就是丙。GPU 上只拿掉乙那次舍入，后段压低，方向一致，但只占一部分。下一步：找丙。</p>
+  <p><b>丙在哪？先查能一次列全的那种。</b>丙有两种可能：两边算的东西不一样，或者算的一样、舍的位置不一样。收拢处这一段的代码已经对到只差累加顺序，上卡照旧（出处见本节末的折叠）；到目前坐实的鼓包、流梯度，又都是后一种：代码写了舍，编译器省掉了。后一种有个好处，能让编译器自己交代，一次列全。先查便宜的。</p>
+  <p>先在一处上看清楚，就拿 ⓪ 当初没补时的写法（它后来正是这样补上的），为 v5p 离线编译：HLO 里那对 convert 都在，可算均方那颗 kernel 的后端指令（LLO）里，把 FP32 打包成 BF16 的指令一条都没有（<a href="#s8-5">§8.5</a> 也是这样数的）；同一处写成强制舍入，就有 256 条。往返留在一颗 kernel 里就不舍，值写回内存交给下一颗才真舍：</p>
 <figure class="fbox fwide" id="anim-declared">
 <video src="media/topic08-declared.mp4?v=696580e9" autoplay loop muted playsinline data-pauses="5.20,12.40,19.50,27.30"
        aria-label="代码说「这里舍一次」，编译器听了吗？四个盒子：4 路加权和 FP32、转 BF16、转回 FP32、算均方。第 1 步　代码的本意：经过「转 BF16」就舍一次，后面用的是舍过的数。0.72314453 经过转 BF16 变成 0.72265625。第 2 步　实际：这一串在同一颗融合里，编译器把往返省掉，均方用的是没舍的数。转 BF16 被打叉，值保持 0.72314453；后端指令里打包成 BF16 的：0 条。第 3 步　同一个值还要写回内存、交给下一颗算归一化输出：这一路真舍了。写进内存（BF16）时变成 0.72265625，交给下一颗：归一化输出。两颗 kernel 用的不是同一个数。第 4 步　写成强制舍入（reduce_precision）：编译器省不掉，融合里也真舍。转 BF16 换成强制舍，值变成 0.72265625；打包成 BF16 的：256 条。"></video>
 <figcaption><b>同一个值走同一串盒子：代码的本意是舍，在一颗融合里没舍，写回内存才舍；写成强制舍入才真舍。</b>
   <span class="sub">（31 秒，Manim 渲染，可一步一步看。值是随手取的 FP32 数，BF16 当场算；打包条数是最小复现的实测。）</span></figcaption></figure>
   <div class="note ok" style="border-left:6px solid #e8710a"><span class="t">全课最想让你带走的一招：先编译，再扫描</span>
-  <p>代码里的 convert 往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思：<b>这里要舍一次</b>。像一张写着「此处要盖章」的单子，编译器嫌麻烦没盖。不用一张张猜：把整个训练步离线编译一次（不用上卡），在 HLO 里筛「同一颗 kernel 里转成 BF16、又转回 FP32」，同类位置一次列全，范围就划出来了；能单独数的 kernel，再拿 LLO 抽查。</p></div>
+  <p>代码里的 convert 往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思：<b>这里要舍一次</b>。像收银单上印着「此处抹零」，收银员图省事没抹。不用一张张猜：把整个训练步离线编译一次（不用上卡），把同类位置全列出来（下图）。</p></div>
 <figure class="fbox fwide" id="fig-elided"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="两块。左：多路残差分支输入那一处的三层。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。右：把现行对齐配置的整个训练步离线编译一次，扫所有这样的往返，一共 272 处：每个微批的权重梯度 75，分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。已经补上的 55 处不算在里面。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">先编译、再扫描：代码里的往返 convert，就是「这里该舍」的声明</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：整个训练步扫一遍</text>
@@ -11088,7 +11093,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="102" width="560" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0" y="104" width="560" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="560" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一处往返：声明了，但被省掉</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 一处往返（⓪ 补之前的写法）：声明了，但被省掉</tspan></text>
 <text class="svgsm" x="20" y="184" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">代码</tspan></text>
 <text class="svgsm" x="20" y="206" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">写了往返</text>
 <text class="svgsm" x="20" y="298" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">优化后 HLO</tspan></text>
@@ -11127,15 +11132,15 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="580" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="580" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="594" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 整个训练步扫一遍：往返 272 处，按位置分</tspan></text>
-<text class="svgsm" x="596" y="173" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 分支输入的梯度合流</tspan></text>
+<text class="svgsm" x="596" y="173" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 分支输入的梯度合流</tspan></text>
 <rect x="880" y="158" width="286.3636363636365" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1174" y="174" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70</tspan></text>
 <text class="svgsm" x="880" y="194" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">反向 · 几份梯度在 FP32 里相加，典型是注意力的输入</text>
-<text class="svgsm" x="596" y="217" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 每个微批的权重梯度 dW</tspan></text>
+<text class="svgsm" x="596" y="217" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 每个微批的权重梯度 dW</tspan></text>
 <rect x="880" y="202" width="306.81818181818176" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1194" y="218" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">75</tspan></text>
 <text class="svgsm" x="880" y="238" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">反向</text>
-<text class="svgsm" x="596" y="261" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ 前向几处</tspan></text>
+<text class="svgsm" x="596" y="261" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 前向几处</tspan></text>
 <rect x="880" y="246" width="400.909090909091" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1288" y="262" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">98</tspan></text>
 <text class="svgsm" x="880" y="282" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">线性层输出 51 · 输出门 34 · 专家 13</text>
@@ -11206,23 +11211,110 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="592" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="592" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="619" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不用一处处猜：编一次、扫一遍，同类位置全列出来，问题的范围就划出来了</tspan></text>
-<text class="svgsm" x="20" y="650" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">先查三根橙条：① 分支输入的梯度合流、② 每个微批的 dW、③ 前向几处，共 243 处；灰条优先级低，没排除。</text>
+<text class="svgsm" x="20" y="650" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">先查三根橙条 A、B、C，共 243 处；灰条优先级低，没排除。</text>
 <text class="svgsm" x="20" y="674" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">只找得到「写了往返却被省掉」这一类；GPU 那边舍不舍要对照 GPU 代码。</text>
 </svg><figcaption><b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：整步扫一遍，三根橙条就是剩下的范围。</b><span class="capmore"><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Ⓐ 实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
 <p>📌 Ⓑ 实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。272 是 convert(f32→bf16) 在同一计算里又被转回 f32 的使用次数（同一行代码在 scan 外的层、MTP 块、前向、重算、反向里各记一次），按源码行与形状归类（经验规则）；用 reduce_precision 补上、或输入本来就在 BF16 网格上的往返不计。「只含往返」＝ 这颗 kernel 有往返、没有真舍、没有 reduce_precision。</p>
 <p>⚠️ 少舍一次，单看这一处离精确值更近（推断，没量过）；可省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。小尺寸、单一配置；别的模型要重编重扫。</p></details></figure>
 <figure class="fbox fwide" id="anim-scan">
-<video src="media/topic08-scan.mp4?v=7118d278" autoplay loop muted playsinline data-pauses="9.00,15.20,18.60"
-       aria-label="先编译，再扫描：同一个模式，在哪儿出现就在哪儿亮。整个训练步编出来的程序（示意：60 格）。第 1 步　找「同一颗融合里转成 BF16、又转回 FP32」：一格一格扫，亮了就按位置归堆。① 分支输入梯度合流 70 处，② 每微批 dW 75 处，③ 前向几处 98 处，其余（优先级低）20 处，索引器掩码（无害）9 处；已补上，跳过：55 处。一共 272 处往返（按使用次数）；三根橙色是先查的范围。第 2 步　整颗只含往返的 kernel 拿 LLO 一颗颗数：打包成 BF16 的指令都是 0 条。省舍入开：只含往返的 41 颗。第 3 步　负对照：关掉省舍入再编，同类 kernel 没有一颗是 0 条，「0 条」确实是省舍入造成的。省舍入关：同类 35 颗，0 条的 0 颗。"></video>
+<video src="media/topic08-scan.mp4?v=c54418a7" autoplay loop muted playsinline data-pauses="9.00,15.20,18.60"
+       aria-label="先编译，再扫描：同一个模式，在哪儿出现就在哪儿亮。整个训练步编出来的程序（示意：60 格）。第 1 步　找「同一颗融合里转成 BF16、又转回 FP32」：一格一格扫，亮了就按位置归堆。A 分支输入梯度合流 70 处，B 每微批 dW 75 处，C 前向几处 98 处，其余（优先级低）20 处，索引器掩码（无害）9 处；已补上，跳过：55 处。一共 272 处往返（按使用次数）；三根橙色是先查的范围。第 2 步　整颗只含往返的 kernel 拿 LLO 一颗颗数：打包成 BF16 的指令都是 0 条。省舍入开：只含往返的 41 颗。第 3 步　负对照：关掉省舍入再编，同类 kernel 没有一颗是 0 条，「0 条」确实是省舍入造成的。省舍入关：同类 35 颗，0 条的 0 颗。"></video>
 <figcaption><b>一格一格扫过整个程序，同一个模式亮起来就按位置归堆；只含往返的 kernel 拿 LLO 一颗颗数，全是 0 条；关掉省舍入，没有一颗是 0。</b>
   <span class="sub">（23 秒，Manim 渲染，可一步一步看。上面那条「程序」只画 60 格，哪几格亮是示意；各堆的终值、41 颗和 35 颗是实测。）</span></figcaption></figure>
-  <p>三根橙条是先查的范围，前两根在反向的梯度路径上，排在最前。第一根跟刚抓到的流梯度是同一种手法：几份梯度在 FP32 里合流，只是换到了各层分支的输入上（典型是注意力的输入）。这些地方 TPU 少舍一次，单看这一处离精确值更近（推断，没量过）；可对齐比的是像不像 GPU，GPU 在这里舍了，两边就差这一次。</p>
+  <p>三根橙条 A、B、C 是先查的范围，A、B 在反向的梯度路径上，排在最前。A 跟刚抓到的流梯度是同一种手法：几份梯度在 FP32 里合流，只是换到了各层分支的输入上（典型是注意力的输入）。这些地方 TPU 少舍一次，单看这一处离精确值更近（推断，没量过）；可对齐比的是像不像 GPU，GPU 在这里舍了，两边就差这一次。</p>
   <p>两条边界：</p>
   <ul>
     <li><b>只找得到这一类。</b>写了往返、被编译器省掉的，扫得出来；代码里本来没写舍入、累加顺序不同、近似超越函数这类差，扫不出来。</li>
     <li><b>GPU 舍不舍，要对照 GPU 代码。</b>清单只说 TPU 省掉了。dW 这一类算数，是因为 GPU 参照关了 Megatron 的 <code>gradient_accumulation_fusion</code>，每个微批的 dW 先出 BF16 再加进 FP32 的累加器；开着的话，这一类就不算差别。另外只有 dW 那一类整颗 kernel 只含往返，能在 LLO 里一颗颗数；另两类跟真舍混在一起，是按同一规则推断的。</li>
   </ul>
-  <p><b>收尾：上卡验证。</b>还是两头验证那一招：GPU 上把第一类改成 TPU 的样子，长出尾巴就是它，不长就排除，再换第二类。这组实验在跑。<b>清单是候选，不是结论</b>，判它的只有上卡。</p>
+  <p><b>收尾：上卡验证。</b>还是两头验证那一招：GPU 上把 A、B 拆成三处照 TPU 改，长出尾巴就是它，不长就排除。结果：</p>
+<figure class="fbox fwide" id="fig-verify"><svg viewBox="0 0 1400 644" width="100%" role="img" aria-label="上卡验证。办法跟定主因那次一样：在 GPU 上把候选照 TPU 的样子改，看 GPU 自己长不长出尾巴。每个点是一份 1000 步运行第 551 到 1000 步主 loss 的偏差，横线是均值，灰点是 GPU 自己 16 份。注意力输入那处单开，4 份都正，均值 ＋3.0e-6，p 0.021；MoE 输入那处单开 ＋9.6e-7；两处一起开反而回到 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73，排除。同类舍入合起来本该叠加，这里对不上，研究线判为没坐实、很可能是偶然。前向几处还没验，TPU 一头在跑。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">上卡验证：dW 排除；注意力输入那处单开像有一点，合开反而没了，没坐实</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，B200；GPU 上照 TPU 改一处，第 551–1000 步主 loss 偏差（对 GPU 16 份留一法），每点一份运行</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU 自己</text>
+<rect x="118.68" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="139" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">照 TPU 改</text>
+<rect x="244.08" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="265" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">排除</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单里前两类拆成三处，各 4 份</tspan></text>
+<line x1="110" y1="401.16666666666663" x2="1360" y2="401.16666666666663" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="104" y="405" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-4e-6</text>
+<line x1="110" y1="359.5" x2="1360" y2="359.5" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="104" y="363" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">-2e-6</text>
+<line x1="110" y1="276.16666666666663" x2="1360" y2="276.16666666666663" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="104" y="280" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+2e-6</text>
+<line x1="110" y1="234.5" x2="1360" y2="234.5" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="104" y="238" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+4e-6</text>
+<line x1="110" y1="192.83333333333331" x2="1360" y2="192.83333333333331" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="104" y="196" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">+6e-6</text>
+<line x1="110" y1="317.8333333333333" x2="1360" y2="317.8333333333333" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="104" y="321" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">0</text>
+<rect x="159.6875" y="340.99375" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="169.0625" y="338.60416666666663" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="178.4375" y="283.66041666666666" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="187.8125" y="294.04166666666663" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="197.1875" y="295.625" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="206.5625" y="307.42708333333337" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="215.9375" y="280.5333333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="225.3125" y="396.2458333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="234.6875" y="246.94583333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="244.0625" y="317.36875" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="253.4375" y="407.05208333333337" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="262.8125" y="282.7395833333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="272.1875" y="255.76041666666663" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="281.5625" y="319.0229166666667" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="290.9375" y="317.36458333333337" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<rect x="300.3125" y="321.9458333333333" width="10" height="10" rx="5" fill="#80868b" stroke="#fff" stroke-width="1.0"/>
+<line x1="185.0" y1="317.83320312499995" x2="285.0" y2="317.83320312499995" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="235" y="446" fill="#5f6368" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 自己（16 份）</tspan></text>
+<rect x="462.0" y="264.875" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="474.0" y="271.2104166666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="486.0" y="278.13958333333335" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="498.0" y="186.72708333333333" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<line x1="435.0" y1="255.23802083333334" x2="535.0" y2="255.23802083333334" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="485" y="446" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力输入那处</tspan></text>
+<text class="svgsm" x="485" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 ＋3.0e-6</text>
+<text class="svgsm" x="485" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.021</tspan></text>
+<rect x="712.0" y="369.3416666666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="724.0" y="289.05" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="736.0" y="211.27291666666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="748.0" y="302.0854166666667" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<line x1="685.0" y1="297.9375" x2="785.0" y2="297.9375" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="735" y="446" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE 输入那处</tspan></text>
+<text class="svgsm" x="735" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 ＋9.6e-7</text>
+<text class="svgsm" x="735" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.47</tspan></text>
+<rect x="962.0" y="311.5395833333333" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="974.0" y="326.20416666666665" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="986.0" y="301.83124999999995" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<rect x="998.0" y="295.89583333333337" width="10" height="10" rx="5" fill="#e8710a" stroke="#fff" stroke-width="1.0"/>
+<line x1="935.0" y1="313.8677083333333" x2="1035.0" y2="313.8677083333333" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="985" y="446" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处一起</tspan></text>
+<text class="svgsm" x="985" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 ＋1.9e-7</text>
+<text class="svgsm" x="985" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.87</tspan></text>
+<rect x="1212.0" y="329.78125" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1224.0" y="318.3041666666667" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1236.0" y="324.1875" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1248.0" y="310.9666666666667" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<line x1="1185.0" y1="325.8098958333333" x2="1285.0" y2="325.8098958333333" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="1235" y="446" fill="#0d652d" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每个微批的 dW</tspan></text>
+<text class="svgsm" x="1235" y="468" fill="#202124" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums">均值 −3.8e-7</text>
+<text class="svgsm" x="1235" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.73</tspan></text>
+<text class="svgsm" x="485" y="492" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">单开 4 份都正，可跟 MoE 那处一起开反而回到零附近：没坐实</tspan></text>
+<text class="svgsm" x="1235" y="492" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">排除</tspan></text>
+<rect x="0" y="522" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="522" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="522" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="549" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单是候选，不是结论：两类高优先级里，一类排除，一类没坐实</tspan></text>
+<text class="svgsm" x="20" y="580" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">同类舍入合起来本该叠加，这里对不上；四格一起看，0.021 按格数校正是 0.084，研究线判为很可能是偶然（推断）。还没验的：前向几处，和扫描找不到的差；TPU 一头（补注意</text>
+<text class="svgsm" x="20" y="604" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">力输入那处）在跑。</text>
+</svg><figcaption><b>最右一格贴着 0：dW 排除；注意力输入那处单开偏上，可「两处一起」又回到 0。</b><span class="capmore"><br><em>每点一份运行；实测；判读是研究线的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，B200×8，1000 步）：每格 4 份，第 551–1000 步主 loss 对 GPU 16 份均值的带符号均值；GPU 自己那格是 16 份各自对其余 15 份；p 是对 GPU 自己的置换检验。「注意力输入那处」：q、kv 下投影和输出门三份梯度在 FP32 里加完只舍一次；「MoE 输入那处」：路由、共享专家、路由专家三份梯度同上；「每个微批的 dW」：直接在 FP32 里累加，不先舍 BF16。</p>
+<p>⚠️ 判读是研究线的：dW 排除；两处梯度合流没坐实。</p></details></figure>
+  <p>两类都没在 GPU 上复现出残余：dW 排除；注意力输入那处单开像有一点，跟 MoE 输入那处一起开反而没了。丙还在查：TPU 一头在跑，C 类前向几处和扫描找不到的差还没验。<b>清单是候选，不是结论</b>，判它的只有上卡。</p>
   <details class="foldfig"><summary><b>两种候选配置并排</b>（待拍板）：三处都照 GPU 写法，还是不开收拢处</summary>
   <table class="t9"><thead><tr><th></th><th>对齐配置（三处都照 GPU 写法，现行）</th><th>不开收拢处（只补到流梯度）</th></tr></thead><tbody>
   <tr><td>1000 步，第一份</td><td>过 8、待定 1（路由偏置均值 1.31）</td><td>九项全过</td></tr>
@@ -11244,7 +11336,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li>只含往返的 kernel，数 LLO 里打包成 BF16 的指令，应该是 0；再关掉省舍入编一次当负对照，应该不再是 0。</li>
     <li>每一类去对照 GPU 代码，看那里舍不舍；GPU 舍的，才是候选。候选再上卡，两头各改一处验证。</li>
   </ol></details>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/cases/17-late-drift-elided-rounding.md">代码：对齐记录 · 案例 17「后段为什么慢慢偏开」（第九幕是扫描）</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/analysis/elided_rounding_scan.py">代码：扫描脚本</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/alignments/01-mini/results/mini-c-elided-rounding-scan.json">代码：整步扫描结果</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/docs/guide/06-debugging.md">代码：排查指南「扫全图找被省掉的舍入」</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/cases/17-late-drift-elided-rounding.md">代码：对齐记录 · 案例 17「后段为什么慢慢偏开」（重点在「先编译、再扫描」一节）</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/analysis/elided_rounding_scan.py">代码：扫描脚本</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/alignments/01-mini/results/mini-c-elided-rounding-scan.json">代码：整步扫描结果</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/docs/guide/06-debugging.md">代码：排查指南「扫全图找被省掉的舍入」</a></p>
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>
 </div></section>
 
@@ -11503,7 +11595,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 分堆由对齐记录的生成器按每次实验的结果文件自动归类（共 120 种，其中 33 种另外跑到 1000 步，尺子 GPU 16 份两两 120 对、留一法最大 1.82）。真有影响的 6 件：纯数据并行（不能忍）；关省舍入（不能忍）；关小矩阵乘改写（能忍）；RMSNorm 多舍一次（运行库 0.0.46 上能忍；0.0.52 上不能忍）；多路残差不强制舍 BF16（能忍）；上下文并行（能忍）。</p>
 <p>📌 量不出来的 5 种：关掉「投影照 GPU 的 FP32 累加」对齐开关（300 步 0.97，1000 步 1.64）、指数等函数回到 TPU 默认近似（300 步 0.91，1000 步 1.07）、SwiGLU 少舍一次（300 步 0.98，1000 步 1.37）、Muon 正交化改 FP32（300 步 0.98，1000 步 0.97）、索引器打分不用真 FP32（300 步 1.06，1000 步 1.06）。</p>
 <p>⚠️ 蓝点竖着错开只为不重叠；红点一行一件，同一件的几次实验画在一行。</p></details></figure>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/alignments/04-tpu-self/build_tables.py">代码：按结果文件自动分堆的生成器</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/alignments/04-tpu-self/build_tables.py">代码：按结果文件自动分堆的生成器</a></p>
   <p>三句话带走：</p>
   <ul>
     <li><b>逐位相同</b>：重跑、换机器、换集群，以及起名字、拆函数这类不改程序的重构。</li>
@@ -11760,7 +11852,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>一件变弱、一个门槛变了</b>：上下文并行降到 0.95（那个张量本来就随加法顺序跳一倍，只算这次没过线）；词嵌入排序门槛变了，v7x 上不累积的纯数据并行不再丢精度（<a href="#s8-6">§8.6</a>）。纯数据并行、关省舍入、关小矩阵乘改写、多路残差这四件，在 v5p 上结论不变。</li>
   </ul>
   <p><b>所以换版本不能当成「只换了加法顺序」</b>：JAX 交出的是同一份程序，编译器优化后的程序（这次 110 份规格全部变了）和后端的代码生成都一起换了。</p>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/alignments/04-tpu-self/libtpu-052.md">代码：升运行库 0.0.52 的三步与全部结果</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/alignments/04-tpu-self/libtpu-052.md">代码：升运行库 0.0.52 的三步与全部结果</a></p>
   <p><b>RMSNorm 那件为什么变强</b>（v5p、FSDP 8 上查清）：默认写法是先把归一化值舍成 BF16、乘 γ 再舍一次。运行库 0.0.46 上，最后一层的这一段融在一颗 kernel 里，中间那次被省掉，实际只舍一次；0.0.52 在定内存布局时给归一化值插了一次布局转换，挡住了融合，两次舍入都真发生了：</p>
 <figure class="fbox fwide" id="fig-rms2r"><svg viewBox="0 0 1400 830" width="100%" role="img" aria-label="三块。左上：最后一层 RMSNorm 在两个运行库版本里的样子。0.0.46：归一化、乘 γ、舍到 BF16 在一颗 kernel 里，只舍一次；0.0.52：编译器给归一化值插了一次布局转换，挡住融合，归一化值先舍成 BF16 写回内存，下一颗 kernel 读回来乘 γ 再舍一次。右上：FP64 里扫 γ，两次舍入让输出的绝对值平均缩小多少；γ 等于 1 时为 0，γ 是 0.996 时缩小 1.7e-3，离 1 远了就小；混元 4 最后一层 γ 均值 1.001。下：只动最后一层的五个运行，300 步曲线最差 r：0.0.46 默认 1.06；0.0.46 最后一层强制两次 6.83；0.0.52 默认 5.50；0.0.52 只把最后一层改回一次 0.84；0.0.52 最后一层强制两次 6.97。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">RMSNorm 多舍一次：0.0.52 让最后一层真的舍了两次</text>
@@ -11864,7 +11956,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 Ⓑ 是推导配实测：FP64 里 400 万个标准正态数，单个 γ，先舍 BF16 再乘 γ 再舍，对比一次舍入，|h| 平均的相对变化。</p>
 <p>⚠️ 为什么只有最后一层要紧是推断：它的输出直接进输出头；层内的输出还要过投影、加回残差、再归一化，整体缩放被冲淡，没有单独量。</p></details></figure>
   <p>两次舍入本该是随机误差，可第二次舍入的输入已经在 BF16 格点上，乘一个贴近 1 的 γ 再舍，往哪边落由 γ 决定，于是输出头的输入被整体缩小。模型学会预测以后，这一点缩小就把预测压平、抬高 loss。<b>所以换版本时，「开关开着没事」比「这件以前能忍」可靠得多</b>。</p>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/alignments/04-tpu-self/impacts/04-rmsnorm-double-rounding.md">代码：RMSNorm 多舍一次：0.0.52 上为什么变强（证据六条）</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/alignments/04-tpu-self/impacts/04-rmsnorm-double-rounding.md">代码：RMSNorm 多舍一次：0.0.52 上为什么变强（证据六条）</a></p>
 <details class="foldfig"><summary><b>考考自己</b>：升级运行库以后，新基准跟旧基准在噪声内。能不能直接沿用旧版本上「这几件能忍」的结论？</summary><p>不能。基准运行只说明「这一个配置」换版本跟重跑分不开；别的改动走的 kernel 可能变了。0.0.46 → 0.0.52 就是例子：基准 0.99，可 RMSNorm 多舍一次从 1.06 变成 5.50。要把已知的几件在新版本上重测，或者干脆把相应的开关都开着（RMSNorm 单次舍入）。</p></details>
 
 
@@ -11933,7 +12025,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>判不了的几类</b>：换运行库、换镜像（后端代码生成一起换了，程序相同也不能推出逐位相同）；换芯片代际（本来就是两个程序）；SparseCore 卸载的开关（卸载可能不体现在优化后的程序里，规则上谨慎起见直接上卡；目前程序相同的两个这类开关，实测结果也都逐位）。这几类直接上卡。</li>
     <li><b>程序不同，结果也可能逐位相同</b>：比如全局矩阵乘最高精度，程序变了、结果一位没变。离线筛只会让你多跑，不会让你漏跑。</li>
   </ul></details>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/alignments/04-tpu-self/hlo_screen.py">代码：跑前离线筛</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35/models/hunyuan4/alignments/04-tpu-self/setup.md">代码：用法与规范化规则（「跑前离线筛」一节）</a></p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/alignments/04-tpu-self/hlo_screen.py">代码：跑前离线筛</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/f559a46bcf40fe40db508305d67cc6bfbf5ff966/models/hunyuan4/alignments/04-tpu-self/setup.md">代码：用法与规范化规则（「跑前离线筛」一节）</a></p>
   <p>指纹加上噪声尺子和 FP64，还抓到过一个编译器的真 bug：</p>
 <figure class="fbox fwide" id="fig-bug"><svg viewBox="0 0 1400 664" width="100%" role="img" aria-label="两块。左块：改完代码先只编译，比训练步编译后程序的指纹。起名字、拆函数、求平均写成求和再除，编出来的程序一模一样，结果一定逐位相同，不用跑；程序变了再跑：乘法换顺序、除以 n 换成乘 1/n、换梯度裁剪写法、多记一个监控量，程序变了结果仍逐位；x 乘 x 代替平方、einsum 换广播乘，结果不逐位，r 在 1 附近。右块：八张卡、每张卡两个微批的梯度格子。正常时十六格都加进来；编译器把跨卡求和挪出循环、又在循环里把 0 号以外的卡清零以后，1 到 7 号卡的第一个微批全丢了：词嵌入梯度只剩 0.51 倍，四分之一的行整行为零，r 611。修好以后 r 0.98。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">改完先比指纹；工具抓到的一个真 bug</text>
@@ -12238,7 +12330,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul></details>
 
   <h3 id="s10-5">10.5　回到开头</h3>
-  <p>TPU 的 loss 低万分之一点五，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分段累加、拿它当基线，v5p、v7x 每一项都在噪声内（最差 0.85 倍）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。<b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差，当参照的那一份也要查。</b>第二次迁移照同一条路又走了一遍（<a href="#s9-6">§9.6</a>）：真实宽度第 1 步 TPU 那一半的差查到了根；小尺寸那截主 loss 共同偏高，主因两头验证过；对齐配置下剩的那截，先编译、再扫描，划出了三类候选（<a href="#s9-7">§9.7</a>），还在查。数字会过期，方法不会。</p>
+  <p>TPU 的 loss 低万分之一点五，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分段累加、拿它当基线，v5p、v7x 每一项都在噪声内（最差 0.85 倍）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。<b>TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差，当参照的那一份也要查。</b>第二次迁移照同一条路又走了一遍（<a href="#s9-6">§9.6</a>）：真实宽度第 1 步 TPU 那一半的差查到了根；小尺寸那截主 loss 共同偏高，主因两头验证过；对齐配置下剩的那截，先编译、再扫描，划出候选清单（<a href="#s9-7">§9.7</a>）；上卡验了两类，都没复现出残余，还在查。数字会过期，方法不会。</p>
 
   <h3 id="s10-6">10.6　拿回去用：清单、速查卡、排查表、练习</h3>
   <p>这一节不进课堂，留给要在自己的模型上做一次对齐的人。前四个折叠按用的顺序排；后面是延伸阅读和出处台账。</p>
