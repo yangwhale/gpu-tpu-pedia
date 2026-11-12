@@ -94,8 +94,8 @@ def sec(sid, num, title):
 
 
 # 公开代码链接：一律钉到公开版仓库的同步提交（完整 sha），不用 main —— 公开仓库每次同步整棵树替换，文件可能挪位置。
-#   2026-11-12 F30 升到同步提交 cb2a4f2（研究线 D30 事实更正合入后）；F20 是 950974d（研究线小尺寸后段两头验证、C 口径合入后；14 条链接逐条核过在新 sha 上存在，都不带行号锚点）。此前 F6 是 7df4a3d（对应研究线 RMSNorm 0.0.52 机理与 check 子命令合入后）；每条链接都实际打开核过（T8-STATE 第四阶段 E2、E9，第五阶段 F1）。
-PUB_SHA = "cb2a4f205287db7d6318d788703f346920ea3b74"
+#   2026-11-12 G4 升到同步提交 8cfcc5a（研究线案例 17 与整步扫描工具合入后）；F30 是 cb2a4f2（研究线 D30 事实更正合入后）；F20 是 950974d（研究线小尺寸后段两头验证、C 口径合入后；14 条链接逐条核过在新 sha 上存在，都不带行号锚点）。此前 F6 是 7df4a3d（对应研究线 RMSNorm 0.0.52 机理与 check 子命令合入后）；每条链接都实际打开核过（T8-STATE 第四阶段 E2、E9，第五阶段 F1）。
+PUB_SHA = "8cfcc5a27ec2ba2bd301f1991cf9f8e550206b35"
 PUB_REPO = "https://github.com/yangwhale/" + "jan" + "us"
 
 
@@ -1078,6 +1078,7 @@ __FIG_ELIDED__
     <li>只含往返的 kernel，数 LLO 里打包成 BF16 的指令，应该是 0；再关掉省舍入编一次当负对照，应该不再是 0。</li>
     <li>每一类去对照 GPU 代码，看那里舍不舍；GPU 舍的，才是候选。候选再上卡，两头各改一处验证。</li>
   </ol></details>
+  <p class="codeline">''' + code("models/hunyuan4/cases/17-late-drift-elided-rounding.md", "对齐记录 · 案例 17「后段为什么慢慢偏开」（第九幕是扫描）") + "　" + code("models/hunyuan4/analysis/elided_rounding_scan.py", "扫描脚本") + "　" + code("models/hunyuan4/alignments/01-mini/results/mini-c-elided-rounding-scan.json", "整步扫描结果") + "　" + code("docs/guide/06-debugging.md", "排查指南「扫全图找被省掉的舍入」") + '''</p>
   <p class="bridge">这一节留下的问题：验收过了。模型投产以后训练代码每天都在变，怎么知道它没有悄悄改了数值？</p>
 </div></section>
 
