@@ -11058,6 +11058,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="20" y="560" fill="#b06000" style="font-size:15.0px;font-variant-numeric:tabular-nums">两处都照 GPU 补上，往上推、往下拉都没了，还剩 ＋6.9：推断这截不在这一段，要换个地方找。</text>
 </svg><figcaption><b>只补收拢处那一行读数最大；只补流梯度那一行最小，可往下拉的那股还在。</b><span class="capmore"><br><em>读数是实测；「往下拉的那份」是推断，箭头只表示方向。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：四格都是第 551–1000 步主 loss 对 GPU 16 份逐步均值的带符号均值，单位 1e-6；修之前 4 份、只补收拢处 4 份、只补流梯度 5 份、对齐配置 6 份。GPU 那一行对 GPU 16 份留一法，4 份。</p>
 <p>⚠️ 推断：把「只补收拢处比修之前多出的 3.1」和「GPU 上拿掉那次梯度舍入压低的 2.9」对上，是本课的相减与对照；研究线的口径是「方向一致，只补流梯度的后段变平有一部分是这次不照 GPU 舍的下压」。箭头只表示方向，不是测量值。</p></details></figure>
+<figure class="fbox fwide" id="anim-cancel">
+<video src="media/topic08-cancel.mp4?v=d951f81c" autoplay loop muted playsinline data-pauses="2.70,6.80,10.90,15.00,19.10"
+       aria-label="修好一个零件，读数反而离零更远。读数：第 551–1000 步主 loss 偏差，乘 1e-6；上面一根尺子是 TPU 对 GPU，下面一根是 GPU 自己（对 GPU 其余各份）；两个开关：① 流梯度、② 收拢处梯度，没补或已补。第 1 步　两处都没补（修之前）：读数 +9.4。第 2 步　只补 ② 收拢处：指针反而往右跑，离零更远，到 +12.5。第 3 步　改成只补 ① 流梯度：几乎回到零，看着像修好了，+1.9。第 4 步　两处都补（对齐配置）：停在中间，+6.9，剩下这截推断在这一段以外。第 5 步　GPU 上拿掉 ② 那次梯度舍入：GPU 自己被往下压 2.9，跟第 2 步多出的 3.1 对得上（推断）。"></video>
+<figcaption><b>拨一个开关，指针往意料之外的方向跑：修好收拢处，读数离零更远；GPU 上反过来拿掉那次舍入，GPU 自己被往下压。</b>
+  <span class="sub">（23 秒，Manim 渲染，可一步一步看。四个读数和 GPU 那一格是实测；「两个零件方向相反、读数是两者相抵」是推断。）</span></figcaption></figure>
   <p>所以只补流梯度时那个 ＋1.9e-6 偏乐观（推断；GPU 上拿掉收拢处那次梯度舍入，方向一致）。两处都补以后剩下的那截，得换个地方找。</p>
   <p><b>只剩编译器。</b>这一段以外，还有几百处「转 BF16 再转回」，一处处对代码对不完；收拢处这一段的代码，两边已经对到只差累加顺序，上卡后段照旧（出处见本节末的折叠）。可鼓包和流梯度已经说明，差都出在编译器悄悄省掉的舍入上。那就反过来，让编译器自己交代：它在哪些地方省了。</p>
   <p>先在一处上看清楚。把 ⓪ 那一小段为 v5p 离线编译：HLO 里那对 convert 都在，可算均方那颗 kernel 的后端指令（LLO）里，把 FP32 打包成 BF16 的指令一条都没有（<a href="#s8-5">§8.5</a> 也是这样数的）；同一处写成强制舍入，就有 256 条。往返留在一颗 kernel 里就不舍，值写回内存交给下一颗才真舍：</p>
@@ -11864,7 +11869,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 
   <h3 id="s10-3">10.3　日常回归：逐位优先</h3>
-  <p><b>第一步：改完先比程序指纹</b>（编译后的整份程序去掉元数据、名字重新编号以后的哈希）。像门禁按工牌放行：今天的程序跟上次登记的一字不差，就直接过；一样，结果就一定逐位相同；不一样，再跑 300 步看档。对齐记录把它做成了跑前离线筛，拿已经上过卡的改动回测过：</p>
+  <p><b>第一步：改完先比程序指纹</b>（编译后的整份程序去掉元数据、名字重新编号以后的哈希）。像门禁按工牌放行：今天的程序跟上次登记的一字不差，结果就一定逐位相同，回归直接过；不一样，再跑 300 步看档。对齐记录把它做成了跑前离线筛，拿已经上过卡的改动回测过：</p>
 <figure class="fbox fwide" id="fig-screen"><svg viewBox="0 0 1400 560" width="100%" role="img" aria-label="左右两块。左：改了代码，先在 CPU 上为目标拓扑编一次训练步（约三分钟，不占芯片），跟对照比优化后的程序，三个出口：程序相同 23 个，不用跑，上卡实际全部逐位；程序不同 72 个，上卡跑 300 步看档，其中 5 个结果仍逐位；判不了 14 个，直接上卡，是 SparseCore 卸载开关 6、换运行库 5、换芯片代际 3。右：能判的 95 个对上 TPU 实际全部相符，不符 0；运行库升到 0.0.52 后，104 个能比的判定一条没变，抽 3 条判相同的上卡，全部逐位。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">跑前离线筛：上卡之前，先在 CPU 上编一次、比程序</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">对齐记录拿已经上过卡的 109 个改动回测（第二次迁移，TPU v5p 为主）</text>

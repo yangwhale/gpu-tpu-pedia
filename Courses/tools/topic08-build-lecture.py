@@ -777,7 +777,7 @@ TPU 上的程序由 XLA 整图编译，第五节那张省舍入的图：TPU 默�
 
 <p class="say">「反转来了：两处都照 GPU 补上，就是现行的对齐配置，尾巴却回来了，跟没修分不开。为什么？」</p>
 
-<p class="board"><b>🖥 屏幕</b>：<code>fig-cancel</code>，从上往下一行行指读数：九点四、十二点五、一点九、六点九。</p>
+<p class="board"><b>🖥 屏幕</b>：<code>anim-cancel</code>，第 2 步指针往右跑时停一下，问台下「修好了一个零件，怎么更远了？」；之后再给 <code>fig-cancel</code> 看四行并排。</p>
 
 <p class="say">「想象一杆秤坏了两个零件：一个让读数偏多，一个偏少。流梯度那处往上推，收拢处梯度那处往下拉。只修收拢处，往下拉的没了，读数反而从九点四涨到十二点五；GPU 上拿掉那次梯度舍入，后段正好压低二点九。所以只补流梯度的一点九偏乐观；两处都修，还剩六点九，推断在这一段以外。」</p>
 
@@ -1047,7 +1047,7 @@ _tot = _n / 200.0 + _cuts * 0.25
 #   片长从 manim/steps/<Scene>.json 取（课件构建用的同一份）。
 import json as _json  # noqa: E402
 _ANIM_SCENE = {"anim-scatter": "ScatterRound", "anim-trunc": "TruncVsRound", "anim-ceiling": "NoiseCeiling", "anim-flip": "RouteFlip",
-               "anim-chain": "DriftChain", "anim-lineage": "GoldenLineage", "anim-declared": "DeclaredElided", "anim-scan": "ScanSweep"}
+               "anim-chain": "DriftChain", "anim-lineage": "GoldenLineage", "anim-declared": "DeclaredElided", "anim-scan": "ScanSweep", "anim-cancel": "CancelScale"}
 
 
 def _anim_extra(seg):

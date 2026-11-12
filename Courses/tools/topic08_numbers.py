@@ -1491,3 +1491,4 @@ assert CX_T == {"none": "9.4", "head": "12.5", "stream": "1.9", "both": "6.9"} a
 CX_STREAM_T = "＋" + CX_T["stream"] + "e-6"
 EL_IHC_P0 = EL_IHC_PACKS[0]
 assert "%.8f" % bf16(0.72314453125) == "0.72265625"   # 动画 DeclaredElided 里的示意值
+CX_NONE_T, CX_HEAD_T, CX_STREAM_V, CX_BOTH_T = ("%+.1f" % (CX[k] * 1e6) for k in ("none", "head", "stream", "both"))
