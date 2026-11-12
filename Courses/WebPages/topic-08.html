@@ -10651,6 +10651,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>右边灰条（排除的候选）都还长，只有绿条（两边都去掉多路残差）缩进灰带。</b><span class="capmore"><br><em>右边实测；左边 TPU 那排虚线是推断。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p，1000 步）：第 551–1000 步主 loss 对 GPU 均值的带符号均值。对照是一份运行（后两张图的修之前四份含它），对 GPU 16 份均值；去多路残差那组对它自己的 GPU 3 份；关 MTP、关蒸馏那三行对同配置的 GPU 4 份均值。GPU 侧索引器旋转位置编码改 FP32 也一样飘；TPU 自比里换运行库、换 v7x、换并行方式等 35 个 1000 步运行，第 751–1000 步主 loss 全部偏高。</p>
 <p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过（三份 BF16 梯度按分组相加、每加一次舍一次）；TPU 这几处是否被省掉是推断，没看后端指令；GPU 一边照这个推断改写就长出同样的偏（后两张图）。</p>
 <p>⚠️ 标准答案按现在这份 GPU 参照的写法；对齐记录一度凭单边几份运行写成定案、又撤回，后来每格补到 4–5 份、两头各改一处做两样本检验才定下。</p></details></figure>
+  <div class="note"><span class="t">「对齐配置」在这一段补了哪三处</span>
+  <p>背景是 <a href="#s5-5">§5.5</a> 那件事：excess precision 开着时，代码里「转 BF16、再转回 FP32」的一对，编译器可以省掉，值照旧按 FP32 往下走；<code>reduce_precision</code> 是把值舍到 BF16 格点上的一次运算，编译器不会省。对齐配置在多路残差这一段用它补了三处，都照 GPU 的写法：</p>
+  <ol>
+    <li><b>每层的分支输入和更新后的流</b>：4 路加权混成分支的输入、残差加完以后的流，各强制舍一次 BF16。</li>
+    <li><b>收拢处</b>：四路收成一路以后强制舍一次；前向舍，反向传回来的梯度也舍。</li>
+    <li><b>流梯度</b>：流在一层里复制三份给三处用，反向回来三份梯度，每份先舍 BF16，再按 GPU 的顺序一个个加，每加一次舍一次；分支的输出也强制舍。</li>
+  </ol>
+  <p>下面几张图里：「修之前」只开了第 1 处；「补流梯度舍法」开第 1、3 处；「对齐配置」三处全开。</p></div>
   <p>再把 GPU 的舍法补到 TPU 上，看那截偏高回不回来：</p>
 <figure class="fbox fwide" id="fig-fixcmp"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="三列，纵轴刻度相同：主 loss 的 TPU 减 GPU（对 GPU 16 份逐步均值的相对差，25 步滑动平均），灰带是 GPU 每份对其余 15 份的同样偏差的范围。修之前四份：前 550 步在 0 上下，之后一路往上，四份尾巴都在。补上 GPU 的流梯度舍法五份：均值降到 ＋1.9e-6，两份仍超尾巴的阈值，三份贴着 0。对齐配置再把收拢处也照 GPU 舍，六份里五份又有一截尾巴，均值比只补流梯度大。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">把 GPU 的流梯度舍法补上，均值降到 ＋1.9e-6（5 份里 2 份仍有尾巴）；对齐配置的后段跟不修分不开</text>
