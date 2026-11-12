@@ -1041,7 +1041,7 @@ _tot = _n / 200.0 + _cuts * 0.25
 #   片长从 manim/steps/<Scene>.json 取（课件构建用的同一份）。
 import json as _json  # noqa: E402
 _ANIM_SCENE = {"anim-scatter": "ScatterRound", "anim-trunc": "TruncVsRound", "anim-ceiling": "NoiseCeiling", "anim-flip": "RouteFlip",
-               "anim-chain": "DriftChain", "anim-lineage": "GoldenLineage"}
+               "anim-chain": "DriftChain", "anim-lineage": "GoldenLineage", "anim-declared": "DeclaredElided"}
 
 
 def _anim_extra(seg):
