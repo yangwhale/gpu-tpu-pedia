@@ -791,6 +791,8 @@ TPU 上的程序由 XLA 整图编译，第五节那张省舍入的图：TPU 默�
 
 <p class="say">「这一招，是这门课我最想让大家带走的。代码里的往返不改数学，写它就是在说『这里该舍』。那就别猜了：整个训练步编一遍，扫所有『转成 BF16 又在同一颗融合里转回来』的地方。已补上的不算，还剩两百七十二处；只含往返的四十一颗 kernel，打包全是零。」</p>
 
+<p class="board"><b>🖥 屏幕</b>：<code>anim-scan</code>，先闭嘴看第 1 步扫完（约 10 秒），再讲后两步的 0 条和负对照。</p>
+
 <p class="say">「先查三类：分支输入的梯度合流、每个微批的权重梯度、前向几处。第一类跟流梯度同一种手法，换了个地方又出现一次。这些地方 TPU 少舍一次，单看更准；可对齐比的是像不像 GPU，GPU 在这儿舍了，就差这一次。」</p>
 
 <p class="say">「最后一步还是上卡：GPU 上把前两类各改成 TPU 的样子，看尾巴长不长出来，实验在跑。三条边界：只找得到这一类；GPU 舍不舍要读 GPU 代码；清单是候选，不是结论。」</p>
@@ -1041,7 +1043,7 @@ _tot = _n / 200.0 + _cuts * 0.25
 #   片长从 manim/steps/<Scene>.json 取（课件构建用的同一份）。
 import json as _json  # noqa: E402
 _ANIM_SCENE = {"anim-scatter": "ScatterRound", "anim-trunc": "TruncVsRound", "anim-ceiling": "NoiseCeiling", "anim-flip": "RouteFlip",
-               "anim-chain": "DriftChain", "anim-lineage": "GoldenLineage", "anim-declared": "DeclaredElided"}
+               "anim-chain": "DriftChain", "anim-lineage": "GoldenLineage", "anim-declared": "DeclaredElided", "anim-scan": "ScanSweep"}
 
 
 def _anim_extra(seg):
