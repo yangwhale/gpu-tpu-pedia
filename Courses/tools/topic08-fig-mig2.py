@@ -251,7 +251,7 @@ def fig_ihcroot():
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，小尺寸，TPU v5p，1000 步）：第 551–1000 步主 loss 对 GPU 均值的带符号均值。对照是一份运行（后两张图的修之前四份含它），对 GPU 16 份均值；去多路残差那组对它自己的 GPU 3 份；关 MTP、关蒸馏那三行对同配置的 GPU 4 份均值。"
-               "GPU 侧索引器旋转位置编码改 FP32 也一样飘；TPU 自比里换运行库、换 v7x、换并行方式等 35 个 1000 步运行，后段主 loss 全部偏高。",
+               "GPU 侧索引器旋转位置编码改 FP32 也一样飘；TPU 自比里换运行库、换 v7x、换并行方式等 35 个 1000 步运行，第 751–1000 步主 loss 全部偏高。",
                "📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过（三份 BF16 梯度按分组相加、每加一次舍一次）；TPU 这几处是否被省掉是推断，没看后端指令；GPU 一边照这个推断改写就长出同样的偏（后两张图）。",
                "⚠️ 标准答案按现在这份 GPU 参照的写法；对齐记录一度凭单边几份运行写成定案、又撤回，后来每格补到 4–5 份、两头各改一处做两样本检验才定下。")
     f.save("fig8-ihcroot.svg", yb + 14)
@@ -349,7 +349,7 @@ def fig_twoway():
         f.t(X0 - 6, Y(0) + 4, "0", GY, size=11.5, anchor="end")
         f.box(X0, Y(N.FC_SD), X1 - X0, Y(-N.FC_SD) - Y(N.FC_SD), "#eceff1", "none", 0)
         cw = (X1 - X0) / 3.0
-        for k, (key, lab, col) in enumerate(cells):
+        for k, (key, lab, col) in enumerate(cells):   # 数据键沿用导出文件里的名字
             c = TW[side][key]
             cx = X0 + cw * (k + 0.5)
             vals = c["w551"]
@@ -407,7 +407,7 @@ def fig_gatecmp():
     f.box(X0, Y(N.FC_SD), X1 - X0, Y(-N.FC_SD) - Y(N.FC_SD), "#eceff1", "none", 0)
     cells = [("M52", "只开收拢处", OR), ("C", "＋全套", PU), ("C_stream", "＋只补梯度一半", PU), ("C_branch", "＋只补分支输出一半", PU)]
     cw = (X1 - X0) / 4.0
-    for k, (key, lab, col) in enumerate(cells):
+    for k, (key, lab, col) in enumerate(cells):   # 数据键沿用导出文件里的名字
         c = MG[key]
         cx = X0 + cw * (k + 0.5)
         for m, v in enumerate(c["w551"]):

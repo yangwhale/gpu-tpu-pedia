@@ -26,12 +26,12 @@ def fig_elided():
                "编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。"
                "同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。"
                "右：把现行对齐配置的整个训练步离线编译一次，扫所有这样的往返，一共 272 处：每个微批的权重梯度 75，"
-               "注意力输入一带的梯度合流 70，前向几处 104，其余反向 14，索引器掩码 9 处无害。"
+               "分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。"
                "整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。"
                "已经补上的 55 处不算在里面。")
     y0 = f.header("先编译、再扫描：代码里的往返 convert，就是「这里该舍」的声明",
                   "第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：整个训练步扫一遍",
-                  [(OR, "写了舍、被省掉"), (GR, "已补上 / 真舍"), (GY2, "其余 / 无害")])
+                  [(OR, "写了舍、被省掉"), (GR, "已补上 / 真舍"), (GY2, "优先级低"), ("#bdc1c6", "无害")])
     PH = 470
     LW = 560
     # ── Ⓐ ───────────────────────────────────────────────
@@ -76,11 +76,11 @@ def fig_elided():
     RX = LW + 20
     RW = W - RX
     py2 = f.panel(RX, y0, RW, PH, "Ⓑ 整个训练步扫一遍：往返 %d 处，按位置分" % N.EL_TOTAL, OR)
-    bars = [("① 注意力输入一带的梯度合流", U["attnin"], OR, "反向 · 优先"),
-            ("② 每个微批的权重梯度 dW", U["wgrad"], OR, "反向 · 优先"),
-            ("③ 前向几处", N.EL_FWD, OR, "线性层输出 %d · 输出门 %d · 专家 %d · norm %d" % (U["fwd_linear"], U["fwd_attn_gate"], U["fwd_expert"], U["fwd_norm"])),
-            ("其余反向（专家、norm）", N.EL_MINOR, GY2, None),
-            ("索引器掩码（0 和 −∞，转了也精确）", U["idx_mask"], GY2, "无害")]
+    bars = [("① 分支输入的梯度合流", U["branchin"], OR, "反向 · 几份梯度在 FP32 里相加，典型是注意力的输入"),
+            ("② 每个微批的权重梯度 dW", U["wgrad"], OR, "反向"),
+            ("③ 前向几处", N.EL_FWD, OR, "线性层输出 %d · 输出门 %d · 专家 %d" % (U["fwd_linear"], U["fwd_attn_gate"], U["fwd_expert"])),
+            ("其余（专家反向、norm）", N.EL_MINOR, GY2, "专家反向 %d · norm 输入梯度 %d · norm 输出 %d" % (U["expert_bwd"], U["norm_dgrad"], U["fwd_norm"])),
+            ("索引器掩码（0 和 −∞，转了也精确）", U["idx_mask"], "#bdc1c6", "无害")]
     LB = RX + 16
     B0 = RX + 300
     B1 = W - 70
@@ -90,19 +90,19 @@ def fig_elided():
         return B0 + v / vmax * (B1 - B0)
     for i, (lab, v, col, note) in enumerate(bars):
         yy = py2 + 22 + i * 44
-        f.t(LB, yy + 19, lab, col if col != GY2 else GY, True, 13)
+        f.t(LB, yy + 19, lab, col if col in (OR, GR) else GY, True, 13)
         f.box(B0, yy + 4, BXv(v) - B0, 22, col, col, 4)
-        f.t(BXv(v) + 8, yy + 20, "%d" % v, col if col != GY2 else GY, True, 13)
+        f.t(BXv(v) + 8, yy + 20, "%d" % v, col if col in (OR, GR) else GY, True, 13)
         if note:
             f.t(B0, yy + 40, note, GY, size=11.5)
     # 剩下的范围：三根橙条括起来
     f.path("M %d %d h -6 v %d h 6" % (LB - 4, py2 + 24, 3 * 44 - 6), OR, 2, arrow=False)
-    f.t(W - 24, py2 + 22 + 44 + 20, "剩下的范围：%d 处" % N.EL_LEFT, OR, True, 13.5, "end")
+    f.t(W - 24, py2 + 22 + 44 + 20, "先查的范围：%d 处" % N.EL_LEFT, OR, True, 13.5, "end")
     # 已补上的 chips
     yc = py2 + 22 + 5 * 44 + 4
-    f.t(LB, yc + 18, "已补上 %d 处，不计入，其中：" % N.EL_COVERED, GR, True, 13)
-    cx = LB + 200
-    for lab in ("多路残差与流梯度", "收拢处"):
+    f.t(LB, yc + 18, "已补上 %d 处，不计入：" % N.EL_COVERED, GR, True, 13)
+    cx = LB + 170
+    for lab in ("多路残差、流梯度、收拢处 %d" % N.EL_COVERED_MHC, "norm、线性层 %d" % (N.EL_COVERED - N.EL_COVERED_MHC)):
         w = 26 + 13.0 * len(lab)
         f.box(cx, yc + 2, w, 24, "#fff", GR, 12, sw=1.4)
         f.t(cx + w / 2, yc + 19, lab, GR, True, 12.5, "middle")
@@ -112,17 +112,17 @@ def fig_elided():
     f.line(RX + 12, yk - 6, W - 12, yk - 6, LINE, 1, arrow=False)
     f.t(LB, yk + 16, "整颗只含往返的 kernel %d 颗，LLO 打包指令：全是 0" % N.EL_K_TOTAL, INK, True, 13.5)
     sx = LB
-    for key, col, lab in (("wgrad", OR, "dW"), ("norm", GY2, "norm"), ("idx_mask", GY2, "掩码")):
+    for key, col, lab in (("wgrad", OR, "dW"), ("norm", GY2, "norm"), ("idx_mask", "#bdc1c6", "掩码")):
         n = N.EL_K[key]
         for j in range(n):
             f.box(sx + j * 14, yk + 28, 10, 10, col, col, 2)
-        f.t(sx, yk + 58, "%s %d" % (lab, n), col if col != GY2 else GY, True, 12)
-        sx += n * 14 + 16
+        f.t(sx, yk + 58, "%s %d" % (lab, n), col if col in (OR, GR) else GY, True, 12)
+        sx += max(n * 14, 13 * len(lab) + 34) + 16
     f.t(LB, yk + 86, "负对照：关掉省舍入再编，同类 kernel %d 颗，打包 0 条的 %d 颗" % (N.EL_K_NOEXC, N.EL_K_NOEXC_ZERO), GY, size=12)
-    f.t(LB, y0 + PH - 14, "LLO 逐颗核过的是 dW 这类；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断", GY, size=11.5)
+    f.t(LB, y0 + PH - 14, "三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断", GY, size=11.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "不用一处处猜：编一次、扫一遍，同类位置全列出来，问题的范围就划出来了", [
-        "剩下的范围就是三根橙条：① 注意力输入一带的梯度合流、② 每个微批的 dW、③ 前向几处，共 %d 处。" % N.EL_LEFT,
+        "先查三根橙条：① 分支输入的梯度合流、② 每个微批的 dW、③ 前向几处，共 %d 处；灰条优先级低，没排除。" % N.EL_LEFT,
         "只找得到「写了往返却被省掉」这一类；GPU 那边舍不舍要对照 GPU 代码；列出来的是候选，哪类真造成尾巴，还在上卡验证。",
     ])
     yb = f.src(yb + 10,
