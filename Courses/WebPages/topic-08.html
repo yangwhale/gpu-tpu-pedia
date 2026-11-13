@@ -875,7 +875,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <div class="wrap">
   <p style="color:var(--gray)">全讲的例子是一次真实的对齐：混元 3（截前 4 层），GPU 侧 B200×8 ＋ Megatron-Bridge，TPU 侧 v5p（8 颗芯片）／ v7x（4 颗芯片） ＋ MaxText，同一份权重、同一批数据，1000 步。
     数字都是这次实测的；自己推出来的，标了「本课推导」。出处在第十节末尾的台账。
-    后来又做了一次迁移（混元 4 的缩小版，一个更新的、带稀疏注意力的 MoE 模型，下文叫「第二次迁移」），同一套方法又走了一遍，后面借它当旁证和第二个案例（第八节），用到时都先报名字。</p>
+    后来又做了一次迁移（混元 4 的缩小版，一个更新的、带稀疏注意力的 MoE 模型，下文叫「第二次迁移」），同一套方法又走了一遍，后面借它当旁证和第二个案例（第八节），用到时都先报名字。第三次迁移是混元 4 的另一个尺寸，这次从生产代码原样起步，查清了一件只在 8 个以上设备才有的事（<a href="#s5-4">§5.4</a>）。</p>
 </div>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>什么叫对齐</h2></div>
 <details class="foldfig" id="qz9box"><summary><b>🎯 开场热身：三道题</b>
@@ -1077,6 +1077,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </tbody></table></details>
   <p>编号先不用记。只记一句：最后定下来的标准答案叫 ⑤，基线取它的一份、尺子是它自己 10 份两两 45 对（第九节讲它怎么来的）；在那之前用过几份别的，用到时会说是哪一份。</p>
   <p>另有一个模型，下文叫「第二次迁移」：一个更新的、带稀疏注意力的 MoE 模型，同一套方法又走了一遍，课上拿它当旁证，用到时先报名字。先记住一点：两次迁移里，TPU 同一个程序重跑都逐位相同，所以 TPU 一侧没有「重跑噪声」可量；表里那 28 对 TPU 执行噪声，是故意改执行参数造出来的（<a href="#s10-3">§10.3</a>）。</p>
+  <p>还有一个「第三次迁移」：混元 4 的另一个尺寸。前两次都是先把代码对齐好再比；这一次从生产代码原样起步，一个开关一个开关地打开，每开一个跑一遍全套，看它修了什么、值不值得上生产。课上用到它的一个发现（<a href="#s5-4">§5.4</a>），<a href="#s9-6">§9.6</a> 再回来说这条路。</p>
   <div class="note"><span class="t">后面常出现的三个词，先认个脸</span>
   <b>TPU 自比</b>：在 TPU 上只改一样东西（换并行、关一个编译开关、升版本……），跟一次确认过的 TPU 运行比。尺子仍借 GPU 重跑，因为 TPU 自己重跑逐位相同、量不出宽度。第二次迁移的很多例子来自它（<a href="#s10-1">§10.1</a> 汇总）。<br>
   <b>运行库（libtpu）</b>：TPU 的编译器后端和运行时打包成的库；文中 0.0.46、0.0.52 是它的版本号（<a href="#s10-2">§10.2</a>）。<br>
@@ -1112,6 +1113,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>超越函数</b>：exp、log、sigmoid 这类不能用有限次加减乘除精确算出的函数；硬件和库用软件近似，精度各家不同（<a href="#s5-8">§5.8</a>）。</li>
     <li><b>病态</b>：结果对舍入极敏感；典型是两个几乎相等的大数相减剩下一个小数，大数上差一格，小数上就是一大截（<a href="#s5-7">§5.7</a>）。</li>
     <li><b>第二次迁移</b>：同一套方法在混元 4（公开口径总参数 770B、激活 49B）的缩小版上又走了一遍，它是一个更新的、带稀疏注意力的 MoE 模型；它的「小尺寸模型」保留全部结构、只缩宽度和层数，随机初始化，约 4.3 亿参数。</li>
+    <li><b>第三次迁移</b>：混元 4 的另一个尺寸，从生产代码原样起步、一个开关一个开关地打开（<a href="#s1-4">§1.4</a>、<a href="#s5-4">§5.4</a>、<a href="#s9-6">§9.6</a>）。</li>
+    <li><b>MLA</b>：多头潜在注意力，先把 q、k、v 投到一个低秩的中间维，再投回每个头（DeepSeek-V2，arXiv:<a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>）；混元 4 用它。</li>
     <li><b>纯数据并行</b>：每张卡存一整份权重、各算各的数据，梯度再跨卡求和（FSDP 则把权重也切开）。</li>
     <li><b>词嵌入</b>：词表里每个词一行向量；反向时，用到这个词的每个 token 的梯度都要加回它那一行，这一步叫 scatter-add（第八节）。</li>
     <li><b>下标、排序标记</b>：scatter-add 时每个 token 的号就是一个下标，一次加多少个 token 就是多少个下标；编译器给 scatter 标上「下标已排序」（<code>indices_are_sorted</code>），后端才换成同一行连续加完的写法（第八节）。</li>
@@ -1266,7 +1269,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>参照那一侧也要自检</b>：转换往返逐位，不等于训练时真载入了。同期另一次迁移里，GPU 训练入口没设载入路径，框架按初始化方法随机建了权重，第一轮 golden 整轮作废。训练入口在第 1 步之前逐参数对检查点比一遍，不过就退出。</li>
   </ul>
   <details class="foldfig"><summary><b>张量个数怎么数</b>：两种命名下的计数对得上</summary>
-  <p>这里按开源权重的命名数，一个矩阵一个张量：3 个 MoE 层 × 192 个专家 × 3 个矩阵（gate、up、down）＝ 1,728，加其余 53 个（norm、投影、路由、共享专家、词嵌入、输出层）。<a href="#s7-5">§7.5</a> 状态互换的文件按 GPU 框架的布局存，q/k/v 合成一个、gate/up 合成一个，每个专家只剩 2 个矩阵：1,152 加其余 41 个，同样的元素数出 1193 个。</p></details>
+  <p>这里按开源权重的命名数，一个矩阵一个张量：3 个 MoE 层 × 192 个专家 × 3 个矩阵（gate、up、down；Megatron 里 fc1 ＝ gate 和 up 拼在一起，fc2 ＝ down）＝ 1,728，加其余 53 个（norm、投影、路由、共享专家、词嵌入、输出层）。<a href="#s7-5">§7.5</a> 状态互换的文件按 GPU 框架的布局存，q/k/v 合成一个、gate/up 合成一个，每个专家只剩 2 个矩阵：1,152 加其余 41 个，同样的元素数出 1193 个。</p></details>
   <details class="foldfig"><summary><b>加载以后比了哪些张量</b>：参数全部比，FP32 主权重只比了一部分</summary>
   <p>参数全部比；FP32 主权重比的是 GPU 那边抓下来的 50 个张量。</p></details>
 
@@ -7271,97 +7274,271 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>开关为什么这么乱</b>：PyTorch 各版本的默认值和一个压过一切的环境变量</summary>
   <p>PyTorch 里矩阵乘的 TF32 开关 1.7–1.11 版默认开、1.12 起默认关，cuDNN 那个开关一直默认开；另有一个环境变量 <code>NVIDIA_TF32_OVERRIDE=0</code>，压过所有框架和 NVIDIA 库的设置、全局关掉 TF32（NVIDIA cuBLAS 文档）—— 所以它连 Transformer Engine 那条路也能关掉（TE 对纯 FP32 矩阵乘在源码里写死用 TF32，不看 torch 开关）。PyTorch 2.9 起又改用 <code>fp32_precision</code> 这一套新开关，旧的 <code>allow_tf32</code> 将弃用。</p></details>
 
-  <h3 id="s5-4">5.4　TPU：MXU，和 FSDP 下多舍的那几次</h3>
+  <h3 id="s5-4">5.4　TPU：MXU，和设备一多就多舍的那几次</h3>
   <p>TPU 的矩阵单元 MXU 同样吃 BF16、乘积精确、在 FP32 里累加。同一份输入算路由打分，TPU 对 FP64 的相对误差是 4.8e-8，GPU 是 3.8e-6；长求和上 TPU 也会偏，但小得多。</p>
   <details class="foldfig"><summary><b>口径</b>：MXU 的累加怎么舍是推断；「BF16 乘、FP32 累加」的公开出处</summary>
   <p>MXU 累加是不是就近舍入，没有直接证据，是推断。「BF16 乘、FP32 累加」有公开出处：Google Cloud TPU 的 bfloat16 文档（同页还写明 TPU 上转 BF16 是就近舍入、平局取偶，BF16 不支持非正规数），以及 ST-MoE 的脚注（arXiv:<a href="https://arxiv.org/abs/2202.08906" target="_blank" rel="noopener">2202.08906</a>）。JAX 里要 FP32 累加的写法是 <code>preferred_element_type=float32</code>；矩阵乘精度档 HIGH、HIGHEST 是用 3 遍、6 遍 BF16 去模拟 FP32，不是 IEEE FP32。</p></details>
-  <p>TPU 自己多舍的地方在别处：FSDP 下，编译器把矩阵乘做成「边收权重边算」的 collective matmul。权重切在收缩维（矩阵乘里被加起来、消掉的那一维）上时，每一轮只算出部分和，要一轮轮加起来。</p>
-<figure class="fbox fwide" id="fig-windowed"><svg viewBox="0 0 1400 544" width="100%" role="img" aria-label="上一行：TPU 上 FSDP 把权重切开分到各个设备上（示意画 4 片），编译器把这个矩阵乘做成窗口化的 collective matmul：一边轮流收下一片权重，一边算当前这片的部分积。默认每一轮的部分积以 BF16 输出、在 BF16 累加器里相加，4 轮舍 4 次；打开 FP32 累加的开关后，累加器是 FP32，最后只舍一次，跟 GPU 一样。右边：qkv 投影输出对 GPU 的相对差从 2.36e-3 降到 1.8e-4。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 上 FSDP 的矩阵乘：分片部分积在 BF16 里累加　——　<tspan font-weight="700">比 GPU 多舍了几次</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一格 ＝ 一轮：收下一片权重的同时，算当前这片的部分积（这种「边收边算」就叫 collective matmul）；红色小块 ＝ 一次舍到 BF16</text>
+  <p>TPU 自己多舍的地方在别处，而且带一个怪条件：<b>4 个设备上没有，8 个设备上才有</b>。混元 3 那次就量到、也修好了（下文），可一直没弄清它舍在哪一步、为什么有的投影中招有的不中招。第三次迁移从生产代码原样起步，把它从头到尾查清了。</p>
+  <p><b>现象：同样是投影，一批多舍，一批不多舍。</b>第三次迁移的单算子回放（8 个设备）里，q、kv 的四个低秩投影、注意力的输出门、MLP 的 gate 和 up，TPU 离 FP64 都是 GPU 的 1.41 倍，约 √2，像多舍了一次（<a href="#s4-2">§4.2</a>）；同样是投影的注意力输出投影 o_proj 和 MLP 的 down，却是 1.00。</p>
+<figure class="fbox fwide" id="fig-inout"><svg viewBox="0 0 1400 682" width="100%" role="img" aria-label="左：往里投的矩阵（例如 q 的低秩下投影、MLP 的 gate 和 up），模型宽度是输入维，也就是矩阵乘里被加起来的求和维。FSDP 把它切成 8 片，每片权重只能算出整个输出的一份部分和，8 份必须加起来。右：往外投的矩阵（注意力输出投影 o_proj、MLP 的 down），模型宽度是输出维，每片权重算出输出里完整的几列，8 段只是拼起来，没有加法。下：第三次迁移单算子回放（8 个设备），往里投的 7 种投影 TPU 离 FP64 是 GPU 的 1.41 倍，往外投的 3 种是 1.00 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一刀，落在求和维上要加，落在输出维上只拼</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">y ＝ x·W。FSDP 把 W 沿模型宽度切成 8 片、每个设备存一片；模型宽度在左边是求和维，在右边是输出维</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">一片权重</text>
+<rect x="109.72" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="130" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">要加起来</text>
+<rect x="219.44" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="240" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">只拼起来</text>
+<rect x="0" y="102" width="690" height="312" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="690" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="104" width="690" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="690" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">往里投：模型宽度是求和维（q_a、gate、up……）</tspan></text>
+<text class="svgsm" x="24" y="182" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">激活 x（每个设备上完整）</tspan></text>
+<rect x="24" y="194" width="250" height="40" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<line x1="55.25" y1="196" x2="55.25" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="86.5" y1="196" x2="86.5" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="117.75" y1="196" x2="117.75" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="149.0" y1="196" x2="149.0" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="180.25" y1="196" x2="180.25" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="211.5" y1="196" x2="211.5" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<line x1="242.75" y1="196" x2="242.75" y2="232" stroke="#1a73e8" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3,3"/>
+<text class="svgsm" x="149" y="254" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">模型宽度：按片对上权重</tspan></text>
+<text class="svgsm" x="296" y="222" fill="#202124" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="318" y="176.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="198.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="220.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="242.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="264.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="286.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="308.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="318" y="330.0" width="70" height="19.0" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="353" y="168" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重：按行切 8 片</tspan></text>
+<line x1="396" y1="254" x2="422" y2="254" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="428" y="204" width="150" height="52" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="438" y="218" width="150" height="52" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="448" y="232" width="150" height="52" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="523" y="266" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 份部分和</tspan></text>
+<text class="svgsm" x="523" y="304" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">形状都是整个 y</text>
+<text class="svgsm" x="24" y="356" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">y ＝ x₁W₁ ＋ x₂W₂ ＋ … ＋ x₈W₈</tspan></text>
+<text class="svgsm" x="24" y="388" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 份必须加起来：在什么精度里加，决定多出多少误差</tspan></text>
+<rect x="710" y="102" width="690" height="312" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="710" y="102" width="690" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="710" y="104" width="690" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="710" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="724" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">往外投：模型宽度是输出维（o_proj、down）</tspan></text>
+<text class="svgsm" x="734" y="182" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">激活 x（每个设备上完整）</tspan></text>
+<rect x="734" y="194" width="170" height="40" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="819" y="254" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">另一维，不切</tspan></text>
+<text class="svgsm" x="926" y="222" fill="#202124" text-anchor="middle" style="font-size:22.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">×</tspan></text>
+<rect x="948.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="973.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="998.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1023.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1048.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1073.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1098.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="1123.0" y="176" width="22.0" height="96" rx="2" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1048" y="168" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">权重：按列切 8 片</tspan></text>
+<line x1="1154" y1="224" x2="1174" y2="224" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1178" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1195" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1212" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1229" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1246" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1263" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1280" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="1297" y="198" width="15" height="52" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1246" y="274" fill="#0d652d" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 段拼起来</tspan></text>
+<text class="svgsm" x="734" y="356" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">y ＝ [ x·W₁ ｜ x·W₂ ｜ … ｜ x·W₈ ]</tspan></text>
+<text class="svgsm" x="734" y="388" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每个输出元素仍是一次完整的求和、只舍一次，跟 GPU 一样</tspan></text>
+<rect x="0" y="432" width="1400" height="108" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="432" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="434" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="462" x2="1400" y2="462" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="452" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第三次迁移，单算子回放（8 个设备）：TPU 离 FP64 ÷ GPU 离 FP64（R）</tspan></text>
+<text class="svgsm" x="1386" y="452" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">实测</text>
+<rect x="20" y="478" width="46.64" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="43" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">q_a</tspan></text>
+<rect x="74.64" y="478" width="47.760000000000005" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="98" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">q_b</tspan></text>
+<rect x="130.4" y="478" width="53.36" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="157" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">kv_a</tspan></text>
+<rect x="191.76" y="478" width="54.480000000000004" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="219" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">kv_b</tspan></text>
+<rect x="254.24" y="478" width="65.68" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="287" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出门</tspan></text>
+<rect x="327.92" y="478" width="179.92000000000002" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="417" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密 MLP 的 gate、up</tspan></text>
+<rect x="515.84" y="478" width="164.24" height="30" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="597" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">共享专家的 gate、up</tspan></text>
+<text class="svgsm" x="20" y="530" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">往里投的 7 种：R 1.41（≈ √2，像多舍了一次）</tspan></text>
+<rect x="980" y="478" width="65.68" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1012" y="498" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">o_proj</tspan></text>
+<rect x="1053.68" y="478" width="156.4" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1131" y="498" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">稠密 MLP 的 down</tspan></text>
+<rect x="1218.0800000000002" y="478" width="140.72000000000003" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1288" y="498" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">共享专家的 down</tspan></text>
+<text class="svgsm" x="980" y="530" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">往外投的 3 种：R 1.00</tspan></text>
+<rect x="0" y="560" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="560" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="560" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="587" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">判据：FSDP 切的那一维，是不是这次矩阵乘的求和维</tspan></text>
+<text class="svgsm" x="20" y="618" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">是：每片只给出一份部分和，要加；不是：每片给出完整的几列，只拼。中招的正好是前一种。</text>
+<text class="svgsm" x="20" y="642" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">求和本来就要做；不拆开时它在一次矩阵乘里用 FP32 加完，只舍一次。问题出在编译器把这一次拆成了几次（下一张图）。</text>
+</svg><figcaption><b>左边每片给出整个 y 的一份，要加；右边每片给出 y 的几列，只拼。</b><span class="capmore"><br><em>形状只画关系，不按比例；底下一行是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：对齐记录里第三次迁移的单算子回放（8 个设备）：往里投的那批投影 TPU 对 FP64 2.35e-03、GPU 1.66e-03，R 1.41（结果文件原值 1.41–1.42）；o_proj、down 是 1.00。</p>
+<p>📌 每个设备拿到哪一维的哪一片，取自 8 个设备编译产物里的权重片形状：往里投的一片是模型宽度的 1/8（2816 ÷ 8 ＝ 352）乘整个输出维；o_proj 的一片是整个输入维乘模型宽度的 1/8。</p>
+<p>📌 q_b、kv_b 的输入不是模型宽度，是 MLA 的低秩中间维，这一维也被 FSDP 切了，同样是切在求和维上。路由打分那次矩阵乘也切在求和维上，但生产本来就让它输出 FP32，不中招。路由专家走另一条路（权重收齐后在本卡做分组矩阵乘），不受影响。</p>
+<p>注：左右两边的激活、权重、输出画的是形状关系，不按比例。</p></details></figure>
+  <p><b>规律：看 FSDP 切的那一维是不是求和维。</b>FSDP 把权重沿模型宽度切成 8 片。往里投的矩阵，模型宽度是输入维，正好是矩阵乘里要加掉的那一维（收缩维）：每片权重只算得出一份部分和，8 份要加起来。往外投的矩阵，模型宽度是输出维：每片算出完整的几列，拼起来就行，没有加法。中招的全是前一种。</p>
+  <p><b>机制：编译器把一次矩阵乘拆成了几段。</b>每个设备上激活是完整的，权重只有八分之一。编译器可以先把 8 片收齐、做一次完整的矩阵乘，FP32 累加到底、舍一次，跟 GPU 一样；也可以<b>边传边乘</b>（collective matmul，编译产物里叫窗口化矩阵乘）：权重片沿环一片片传过来，到一片乘一段、加进累加器，下一片同时在路上，通信藏在计算后面。边传边乘时，每段结果按程序声明的类型（BF16）写出，累加器也是 BF16。编译产物显示，一次 2816 宽的求和，GPU 舍 1 次，这里舍 6 次：</p>
+<figure class="fbox fwide" id="fig-windowed"><svg viewBox="0 0 1400 674" width="100%" role="img" aria-label="左边三行是同一个往里投的投影（第三次迁移的 q 低秩下投影，求和维 2816）在三种情况下怎么算完。第一行，4 个设备：编译器先把 8 片权重收齐，再做一次 2816 宽的矩阵乘，FP32 累加到底，最后舍一次，跟 GPU 一样。第二行，8 个设备、生产原样：编译器改成边传边乘，8 片排成 2 轮，每轮两次 704 宽的矩阵乘，每次输出舍成 BF16，再加进 BF16 累加器又舍一次，一共舍 6 次。第三行，8 个设备、打开投影 FP32 累加：结构不变，中间全部留在 FP32，只在最后舍一次。右边：离线编译训练步，数部分和累加器是 BF16 的窗口化循环：4 个设备 0 个，8 个、16 个设备各 20 个（v7x 16 个设备也是 20 个），打开开关后全部变成 FP32。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">设备一到 8 个，编译器把一次矩阵乘拆成几段　——　<tspan font-weight="700">一次求和舍 6 次</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">同一个投影、同一种 FSDP 切法；变的只是编译器选「先收齐再乘」还是「边传边乘」。红块 ＝ 一次舍到 BF16</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">部分积</text>
-<rect x="94.04" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="115" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">舍到 BF16</text>
-<rect x="217.20000000000002" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="238" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FP32 累加器，只在最后舍一次</text>
-<rect x="0" y="102" width="920" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="920" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="0" y="104" width="920" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="920" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">示意：权重切成 4 片、4 轮（实际 FSDP 是 8 路）</tspan></text>
-<text class="svgsm" x="24" y="198" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认：BF16 累加器</tspan></text>
-<rect x="210" y="172" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="265" y="200" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 1</tspan></text>
-<text class="svgsm" x="334" y="202" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="348" y="178" width="14" height="34" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="355" y="236" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍</tspan></text>
-<rect x="376" y="172" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="431" y="200" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 2</tspan></text>
-<text class="svgsm" x="500" y="202" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="514" y="178" width="14" height="34" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="521" y="236" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍</tspan></text>
-<rect x="542" y="172" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="597" y="200" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 3</tspan></text>
-<text class="svgsm" x="666" y="202" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="680" y="178" width="14" height="34" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="687" y="236" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍</tspan></text>
-<rect x="708" y="172" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="763" y="200" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 4</tspan></text>
-<text class="svgsm" x="832" y="202" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="846" y="178" width="14" height="34" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="853" y="236" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍</tspan></text>
-<rect x="864" y="172" width="70" height="46" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="899" y="200" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结果</tspan></text>
-<text class="svgsm" x="899" y="238" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍了 4 次</tspan></text>
-<text class="svgsm" x="24" y="318" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">打开 FP32 累加</tspan></text>
-<rect x="210" y="292" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="265" y="320" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 1</tspan></text>
-<text class="svgsm" x="334" y="322" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="376" y="292" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="431" y="320" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 2</tspan></text>
-<text class="svgsm" x="500" y="322" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="542" y="292" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="597" y="320" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 3</tspan></text>
-<text class="svgsm" x="666" y="322" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="708" y="292" width="110" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="763" y="320" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分积 4</tspan></text>
-<text class="svgsm" x="832" y="322" fill="#202124" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋</tspan></text>
-<rect x="864" y="292" width="70" height="46" rx="6" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="899" y="320" fill="#fff" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">结果</tspan></text>
-<text class="svgsm" x="899" y="358" fill="#0d652d" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只舍 1 次</tspan></text>
-<rect x="940" y="102" width="460" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="940" y="102" width="460" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="940" y="104" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="940" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="954" y="122" fill="#0d652d" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">qkv 投影输出对 GPU（实测）</tspan></text>
-<text class="svgsm" x="960" y="176" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认</tspan></text>
-<rect x="960" y="188" width="380.0" height="30" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="970" y="210" fill="#fff" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">rel_L2 2.36e-03</tspan></text>
-<text class="svgsm" x="960" y="272" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">打开 FP32 累加</tspan></text>
-<rect x="960" y="284" width="28.98305084745763" height="30" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="996" y="306" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">rel_L2 1.80e-04</tspan></text>
-<text class="svgsm" x="960" y="372" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP64 的 R：1.235 → 1.000</tspan></text>
-<rect x="0" y="422" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="422" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="422" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="449" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一处是 TPU 自己多舍的：打开开关，前向就跟 GPU 一样只舍一次</tspan></text>
-<text class="svgsm" x="20" y="480" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">收缩维被 FSDP 切开的投影（注意力的 q／k／v、稠密 MLP 的输入投影）都走这条路，一份 v5p 配置里有 41 个这样的循环。</text>
-<text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">每一轮里面照样是 FP32 累加；舍到 BF16 的是轮与轮之间传下去的部分和（推断）。</text>
-</svg><figcaption><b>上一行每个加号后面都舍一次，下一行只在最后舍。</b><span class="capmore"><br><em>4 片 4 轮是示意；只有权重切在收缩维上时才会每轮多舍一次（推断）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：v5p 配置优化后的 HLO 里有 41 个窗口化的点积循环，q 投影的循环累加器是 BF16。打开 FP32 累加（矩阵乘的输出类型设成 FP32，最后舍一次）后，qkv 输出对 GPU 的 rel_L2 2.36e-3 → 1.8e-4。</p>
-<p>📌 另一条路是用编译参数整个关掉窗口化：那样连 GPU 本来就有的一次舍入也省掉了，MLP 前归一化的 R 到了 1.64，反而对不齐 —— 多舍少舍都不行，所以用开关不用参数。</p>
-<p>⚠️ 推断：一手材料只写到「每一轮的分片部分积以 BF16 输出、在 BF16 累加器里相加」（q 投影的循环累加器是 BF16）；一轮之内那次点积照常在 FP32 里累加、出口舍成 BF16，是按 TPU 矩阵单元的通常做法推的，没有单独看过那一轮的 HLO。所以左图「舍」画在轮与轮之间。</p>
-<p>注：左图画的是 4 片 4 轮的示意，实际片数等于 FSDP 的路数。</p></details></figure>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">矩阵乘</text>
+<rect x="94.04" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="115" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">累加器</text>
+<rect x="188.08" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="209" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">舍到 BF16</text>
+<rect x="311.24" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="332" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FP32，最后只舍一次</text>
+<rect x="0" y="102" width="930" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="930" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="930" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="930" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">q 低秩下投影的一次前向（编译产物显示）</tspan></text>
+<text class="svgsm" x="20" y="210" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 个设备</tspan></text>
+<text class="svgsm" x="20" y="232" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先收齐，再乘</tspan></text>
+<rect x="196" y="188" width="150" height="50" rx="5" fill="#fdecdc" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="271" y="210" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">收齐 8 片权重</tspan></text>
+<text class="svgsm" x="271" y="228" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">（整块 all-gather）</text>
+<line x1="350" y1="213" x2="378" y2="213" stroke="#80868b" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="382" y="188" width="428" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="596" y="210" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一次矩阵乘，2816 宽</tspan></text>
+<text class="svgsm" x="596" y="228" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">FP32 累加到底</text>
+<rect x="816" y="194" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="824" y="254" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="910" y="218" fill="#0d652d" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍 1 次</tspan></text>
+<text class="svgsm" x="20" y="334" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 个设备</tspan></text>
+<text class="svgsm" x="20" y="356" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">生产原样：边传边乘</tspan></text>
+<text class="svgsm" x="344" y="302" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 轮（片 1–4）</tspan></text>
+<rect x="196" y="312" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="234" y="334" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 1＋2</tspan></text>
+<text class="svgsm" x="234" y="352" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="274" y="318" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="282" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
+<rect x="298" y="312" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="336" y="334" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 3＋4</tspan></text>
+<text class="svgsm" x="336" y="352" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="376" y="318" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="384" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">②</tspan></text>
+<rect x="400" y="312" width="76" height="50" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="438" y="334" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加器</tspan></text>
+<text class="svgsm" x="438" y="352" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">＋＝ 两份</text>
+<rect x="478" y="318" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="486" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="650" y="302" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 轮（片 5–8）</tspan></text>
+<rect x="502" y="312" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="540" y="334" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 5＋6</tspan></text>
+<text class="svgsm" x="540" y="352" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="580" y="318" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="588" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">④</tspan></text>
+<rect x="604" y="312" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="642" y="334" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 7＋8</tspan></text>
+<text class="svgsm" x="642" y="352" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="682" y="318" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="690" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑤</tspan></text>
+<rect x="706" y="312" width="76" height="50" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="744" y="334" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加器</tspan></text>
+<text class="svgsm" x="744" y="352" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">＋＝ 两份</text>
+<rect x="784" y="318" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="792" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">⑥</tspan></text>
+<text class="svgsm" x="910" y="342" fill="#a50e0e" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍 6 次</tspan></text>
+<text class="svgsm" x="20" y="458" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8 个设备</tspan></text>
+<text class="svgsm" x="20" y="480" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">打开投影 FP32 累加</tspan></text>
+<text class="svgsm" x="344" y="426" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 轮（片 1–4）</tspan></text>
+<rect x="196" y="436" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="234" y="458" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 1＋2</tspan></text>
+<text class="svgsm" x="234" y="476" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="274" y="442" width="16" height="38" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="298" y="436" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="336" y="458" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 3＋4</tspan></text>
+<text class="svgsm" x="336" y="476" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="376" y="442" width="16" height="38" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="400" y="436" width="76" height="50" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="438" y="458" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加器</tspan></text>
+<text class="svgsm" x="438" y="476" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">＋＝ 两份</text>
+<rect x="478" y="442" width="16" height="38" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="650" y="426" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 2 轮（片 5–8）</tspan></text>
+<rect x="502" y="436" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="540" y="458" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 5＋6</tspan></text>
+<text class="svgsm" x="540" y="476" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="580" y="442" width="16" height="38" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="604" y="436" width="76" height="50" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="642" y="458" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">片 7＋8</tspan></text>
+<text class="svgsm" x="642" y="476" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">704 宽</text>
+<rect x="682" y="442" width="16" height="38" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="706" y="436" width="76" height="50" rx="5" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.0"/>
+<text class="svgsm" x="744" y="458" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">累加器</tspan></text>
+<text class="svgsm" x="744" y="476" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">＋＝ 两份</text>
+<rect x="784" y="442" width="16" height="38" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="792" y="502" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="910" y="466" fill="#0d652d" text-anchor="end" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">舍 1 次</tspan></text>
+<rect x="950" y="102" width="450" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="950" y="102" width="450" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="950" y="104" width="450" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="950" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="964" y="122" fill="#681da8" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">离线编译训练步：累加器是 BF16 的循环</tspan></text>
+<text class="svgsm" x="1386" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-variant-numeric:tabular-nums">实测</text>
+<text class="svgsm" x="968" y="190" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v5p · 4 个设备</tspan></text>
+<text class="svgsm" x="1100" y="193" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0　（不拆）</tspan></text>
+<text class="svgsm" x="968" y="252" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v5p · 8 个设备</tspan></text>
+<rect x="1100" y="236" width="230.0" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1338" y="255" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20</tspan></text>
+<text class="svgsm" x="968" y="314" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v5p · 16 个设备</tspan></text>
+<rect x="1100" y="298" width="230.0" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1338" y="317" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20</tspan></text>
+<text class="svgsm" x="968" y="376" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7x · 16 个设备</tspan></text>
+<rect x="1100" y="360" width="230.0" height="26" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1338" y="379" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20</tspan></text>
+<text class="svgsm" x="968" y="438" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">打开开关后</tspan></text>
+<text class="svgsm" x="1100" y="441" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0　（全部变 FP32）</tspan></text>
+<text class="svgsm" x="968" y="482" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">单算子 R：1.41 → 1.00</tspan></text>
+<text class="svgsm" x="968" y="510" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">混元 3 的 qkv：1.235 → 1.000</tspan></text>
+<rect x="0" y="552" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="552" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="552" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">在 4 个设备的小切片上验精度，这件事完全看不到</tspan></text>
+<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">切法没变：4 个、8 个设备上权重都按 FSDP 切满。变的只是编译器拆不拆；拆了，每个往里投的投影都多舍几次。</text>
+<text class="svgsm" x="20" y="634" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">矩阵单元里的 FP32 累加只管一次矩阵乘之内；拆成几段，每段的结果都按程序声明的 BF16 写出来，累加器也是 BF16。</text>
+</svg><figcaption><b>数每一行的红块：1 个、6 个、1 个。再看右边，4 个设备那一行是空的。</b><span class="capmore"><br><em>左边三行的结构取自编译产物；右边是离线编译训练步数出来的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 编译产物显示（第三次迁移，8 个设备，运行库 0.0.46）：q 低秩下投影的循环体里，8 片权重沿两个方向的环传过来，排成 2 轮；每轮两次 704（＝ 2 × 352）宽的矩阵乘，输出是 BF16；和 BF16 累加器在一颗融合里转成 FP32 相加，再舍回 BF16。v7x 上这一步直接在 BF16 里加，舍入次数相同。</p>
+<p>📌 实验确认：同一份生产配置在 CPU 上为不同拓扑离线编译训练步。v5p 4 个设备没有窗口化循环，权重整块收齐；8 个、16 个设备各 64 个窗口化循环，其中带部分和相加、累加器 BF16 的 20 个（正好是上一张图里中招的那几种投影的前向和重算），其余是按输出维写各自的列，或权重梯度一侧（本来就是 FP32）。打开投影 FP32 累加后，这 20 个全部变成 FP32。</p>
+<p>📌 大小不是门槛：8 个设备上，连最小的路由打分矩阵也拆了；4 个设备上，连最大的 gate、up 也整块收。拆不拆看的是切法和设备数。为什么设备少不拆是推断：编译器按快慢选，设备少时环上首尾那几次传递的固定开销占比大，拆了省不下时间。更大的规模没有编过，按「会拆」准备。</p>
+<p>📌 混元 3（v5p 8 个设备）是同一个机制：qkv 投影 R 1.235 → 1.000，配置里有 41 个这样的循环。</p>
+<p>⚠️ 推断：舍了 6 次 R 却只有约 √2，是因为前几次舍的是小的部分和（量级约为最终结果的一半），误差也小；再加上两边共有的误差（输入本来就是 BF16）。</p></details></figure>
 <figure class="fbox fwide" id="anim-windowed">
-<video src="media/topic08-windowed.mp4?v=07c5b62f" autoplay loop muted playsinline data-pauses="5.70,12.40,16.00,19.40"
-       aria-label="FSDP 下的 collective matmul：部分和在轮与轮之间舍到 BF16。FSDP：权重按收缩维切成 4 片，每个设备存一片。第 1 步　默认：一轮收一片、算一片的部分积；部分和传给下一轮前先舍到 BF16，舍了 4 次，累计舍入误差（示意）涨满。第 2 步　打开 FP32 累加：部分和一路用 FP32 传，只在最后舍一次，误差条约为上一行的一半。第 3 步　qkv 投影对 GPU：rel_L2 2.36e-3 → 1.80e-4，R 1.235 → 1.000（实测）。单层这一处修好了；1000 步的参数范数漂移几乎没动：参数范数漂移的 r（对精确轨迹）开关前 3.52，开关后 3.45。一轮之内照样 FP32 累加，舍的是轮与轮之间的部分和（推断）；示意：4 片 4 轮，实际片数等于 FSDP 的路数。"></video>
-<figcaption><b>默认每收一片、算一轮，部分和就舍一次 BF16；打开 FP32 累加后只在最后舍一次。</b>
-  <span class="sub">（24 秒，Manim 渲染，可一步一步看。4 片 4 轮、误差条长度都是示意；第 3 步的数是实测。）</span></figcaption></figure>
+<video src="media/topic08-windowed.mp4?v=9d65f155" autoplay loop muted playsinline data-pauses="3.42,11.42,19.63,23.23"
+       aria-label="设备一到 8 个，一次矩阵乘被拆成几段。同一个往里投的投影，一次求和 2816 个乘积；红块是一次舍到 BF16。顶上一排是 8 片权重。第 1 步　4 个设备：8 片先收齐，一次乘完，最后舍 1 次，跟 GPU 一样。第 2 步　8 个设备：边传边乘，分两轮，每轮两段 704 宽的矩阵乘（片 1＋2、片 3＋4……），每段输出舍一次，加进 BF16 累加器再舍一次；右边的计数涨到舍 6 次。第 3 步　打开投影 FP32 累加：结构不变，中间全留 FP32，只在最后舍 1 次。第 4 步　同一种切法，只是设备数变了。单算子 R：1.41 → 1.00（实测）；离线编译：4 个设备 0 个这种循环，8、16 个设备各 20 个。在 4 个设备上验精度，看不到这件事。"></video>
+<figcaption><b>同一个往里投的投影：4 个设备先收齐、一次乘完，舍 1 次；8 个设备边传边乘，红块一格格冒出来，舍 6 次；打开投影 FP32 累加，又只舍 1 次。</b>
+  <span class="sub">（28 秒，Manim 渲染，可一步一步看。循环体结构取自编译产物；片从顶上落下只表示这一段用到哪几片，不画环上谁传给谁。）</span></figcaption></figure>
+  <p><b>为什么 8 个设备才出现：拆不拆，是编译器按快慢定的。</b>实验确认：同一份生产配置，在 CPU 上为不同的拓扑离线编译训练步，4 个设备一个窗口化循环都没有；8 个、16 个设备各有 20 个累加器是 BF16 的（v7x 的 16 个设备也一样，加法本身就在 BF16 里做）。切法没变，权重在 4 个、8 个设备上都按 FSDP 切满；也不看矩阵大小：8 个设备上连最小的路由打分矩阵也拆，4 个设备上连最大的 gate、up 也整块收。设备少为什么不拆是推断：环上首尾那几次传递的固定开销占比大，拆了省不下时间。</p>
+  <p><b>修法：让这批矩阵乘声明 FP32 输出。</b>累加器跟着变成 FP32，循环结束只舍一次；编译产物里那 20 个累加器全部变成 FP32。它不改编译器，只改交给编译器的输出类型。第三次迁移是一个开关一个开关往上加的，打开它的前后两级（1000 步，单份运行）：</p>
+  <table class="t9"><thead><tr><th>看哪一级</th><th>打开前</th><th>打开后</th></tr></thead><tbody>
+  <tr><td>单算子：那批投影的 R</td><td>1.41</td><td>1.00</td></tr>
+  <tr><td>整网第 1 步：超出 GPU 两倍噪声的梯度张量</td><td>91 个</td><td>63 个</td></tr>
+  <tr><td>1000 步：主 loss ／ 梯度范数 ／ 参数范数的 r</td><td>1.14 ／ 0.93 ／ 0.97</td><td>0.96 ／ 0.98 ／ 1.00，三项第一次同时过</td></tr>
+  <tr><td>步时</td><td colspan="2">＋0.4%</td></tr>
+  </tbody></table>
+  <p>混元 3 用的是同一个开关：单层那一处修好了（qkv 投影 R 1.235 → 1.000），可对 1000 步的参数范数漂移几乎没用：参数范数那一项的 r（<a href="#s3-3">§3.3</a> 的例子，对定案前的基线 ④ 精确轨迹）开关前 3.52、开关后 3.45。第三次迁移里曲线跟着动了，可两级都只有一份运行，不按小数点排先后。</p>
+  <p>它<b>不是 MLA 特有的</b>：稠密 MLP、共享专家的 gate 和 up 一样中招，凡是 FSDP 切的那一维正好是求和维的投影都会。MLA 只是让中招的矩阵变多：每层注意力 q、kv 各有两个往里投的矩阵（第二个的输入是低秩中间维，也被切）；标准的多头注意力只有 q、k、v 三个，还常融合成一个。</p>
+  <div class="note"><span class="t">这件事留下的两条规矩</span>
+  <b>精度验证要在生产的设备数上编。</b>在 4 个设备的小切片上验，这件事完全看不到；8 个、16 个设备都拆，更大的规模没编过，按「会拆」准备。小切片上验也行，先离线编译一份生产设备数的训练步，数一数窗口化循环和它们的累加器类型。<br>
+  <b>裁判工具要跟生产编得一样。</b>单算子回放把多 token 预测层的几个投影也编成了窗口化，R 同样 1.41；可训练步的编译产物里，这几个矩阵乘是先收齐权重再整段乘的，回放这几格不代表生产。更早一版回放没把输入按 batch 切，投影 R 到了 2.12，也是工具和生产切法不一样。用回放之前，先拿编译产物对一遍：工具里的程序和训练步里的，是不是同一种写法。</div>
   <details class="foldfig"><summary><b>这个开关在代码里怎么开</b>：JAX、PyTorch 各叫什么；反向那几处要不要一起改</summary>
-  <p>落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里给 <code>jax.lax.dot</code> 写 <code>preferred_element_type=jnp.float32</code>，出口再转回 BF16），不是加一个编译参数。别的框架要找的是「BF16 矩阵乘的部分和用什么精度相加」这一项；例如 PyTorch 在 GPU 上有 <code>torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction</code>，设成 False 就关掉（PyTorch 的 CUDA 语义文档）。collective matmul 也只在超过一个大小阈值时才出现。本例改的是前向那几处；反向里的要不要一起改，本课没有量过 —— 看编译后的程序里还剩哪几处，排查时列进候选。</p></details>
+  <p>落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里给 <code>jax.lax.dot</code> 写 <code>preferred_element_type=jnp.float32</code>，出口再转回 BF16），不是加一个编译参数。别的框架要找的是「BF16 矩阵乘的部分和用什么精度相加」这一项；例如 PyTorch 在 GPU 上有 <code>torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction</code>，设成 False 就关掉（PyTorch 的 CUDA 语义文档）。反向那一侧，第三次迁移的编译产物里不用改：权重梯度一侧的累加器本来就是 FP32；往外投的矩阵求输入梯度时，要么权重先收齐再在本卡乘，要么只是按列写各自的一段，没有部分和相加。</p>
+  <p>另一条路是用编译参数把窗口化整个关掉。混元 3 试过：那样连 GPU 本来就有的一次舍入也省掉了（投影输出不舍就直接进了残差加），MLP 前归一化的 R 到了 1.64，反而对不齐 —— 多舍少舍都不行，所以用开关不用参数。</p></details>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/fb4c449621c2f3f3a0941f176903911da4cfb69c/src/maxtext/configs/base.yml#L148">MaxText（混元 3 公开分支）：开关 dense_fp32_accumulation</a>　<a class="codelink" href="https://github.com/yangwhale/maxtext/blob/fb4c449621c2f3f3a0941f176903911da4cfb69c/src/maxtext/layers/linears.py#L215-L227">MaxText（混元 3 公开分支）：矩阵乘里 FP32 累加、只舍一次</a></p>
-  <p>这个开关修好了单层上的那一处多舍（qkv 投影 R 1.235 → 1.000），可对 1000 步的参数范数漂移几乎没用：参数范数那一项的 r（<a href="#s3-3">§3.3</a> 的例子，对定案前的基线 ④ 精确轨迹）开关前 3.52、开关后 3.45。</p>
-
   <h3 id="s5-5">5.5　excess precision：融合里省掉的舍入</h3>
 <figure class="fbox fwide" id="fig-excess"><svg viewBox="0 0 1400 700" width="100%" role="img" aria-label="四行，每行同样四个算子从左往右串起来，红色小块是一次「舍到 BF16」。第一行 GPU：一个算子一个 kernel，每个算子出口舍一次，共 4 次。第二行 TPU 默认：XLA 把相邻算子融成块（示意：前两个一块、后两个一块），块里一路用 FP32，只在块出口舍，共 2 次，舍在哪由融合怎么切决定。第三行关掉 excess precision：块还在，但块里每个算子出口照样舍，共 4 次，位置跟第一行一样。第四行开关不动，只在一处显式写「舍到 BF16」：那一处一定舍，编译器不会删。关掉只是让舍入位置确定，不是更准。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">excess precision 改的是「舍在哪儿」　——　<tspan font-weight="700">关掉它，位置定了，不等于更准</tspan></text>
@@ -10369,6 +10546,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </tbody></table>
   <p>base2 在小模型上显不出来，是因为效果跟 logits 的大小成正比：随机初始化时最大 logit 只有约 0.13，真实权重截层上到 14.5。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/configs/base.yml#L1405">MaxText（混元 4 公开分支）：开关 sa_use_base2_exp（默认开）</a></p>
+  <p>第三次迁移换了一个起点：不从对齐好的代码出发，从生产代码原样出发，一个开关一个开关地打开，每一级跑一遍全套。这样每个开关修了什么、代价多少、上不上生产（<a href="#s9-5">§9.5</a> 的三类），一级一级都记得清。走到打开投影 FP32 累加那一级，主 loss、梯度范数、参数范数第一次同时过线 —— 就是 <a href="#s5-4">§5.4</a> 那件只在 8 个以上设备才有的事。它也提醒一句：规模要一级级上，可验精度用的切片不能比生产小，有的差只在生产规模上才长出来。</p>
 <details class="foldfig"><summary><b>考考自己</b>：中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？</summary><p>不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开。而且「过了」只是 300 步那一级：第二级第 1 步两边各自对 FP64，GPU 已经偏高 1.42e-5（比 GPU 8 份之间的极差还大）、TPU 只有 2.4e-7 —— 宽度一换成真的，GPU 那边就有一截偏差（还在查），只是 300 步的判定没把它显出来。要定，就再补一级只换其中一样，比如真实结构配随机权重。（TPU 那一半后来定到了「权重」那一行：真实权重的 logits 大，把 base2 常数舍入的误差放大了，<a href="#s9-6">§9.6</a>。）</p></details>
   <h3 id="s9-7">9.7　一条主 loss 的尾巴：一路排除，最后先编译、再扫描</h3>
   <p>上一代配置下，主 loss 判了待定（1.55 倍）：八份 TPU 全部比 GPU 高，第 50–100 步有个小鼓包，中间贴着零，第 550 步以后一路往上爬。八份同一个方向，不像噪声；同一份权重上两边前向几乎没差，所以是训练里一步步攒出来的。这是第二次迁移里查得最久的一件；最后给出候选清单的，不是又一次上卡，是一次离线编译。</p>
@@ -12341,6 +12519,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <tr><td>测量工具自己错了</td><td>单算子回放 R 1.56 → 0.95：注入漏了按关键字传的输入（<a href="#s6-2">§6.2</a>）</td><td>回放先自检：同一输入单独喂一次对 FP64；注入换不了就报错</td></tr>
   <tr><td>算法的前提被新结构打破</td><td>一种按注意力最大 logit 缩放 q、k 权重的稳定化办法（QK-Clip），缩放 η ＝ min(1, τ ÷ 最大 logit)。有一个头把注意力全放在一个额外的空位上，q·k 全为负，最大 logit 为负（GPU 记下 −0.4956，TPU 同样为负）：τ ＝ 100 时 η ＝ −201.8，再开根号就是 NaN（第二次迁移；参照框架的写法也有同样的隐患，只是还没碰上）</td><td>每个公式先问前提（这里是「最大 logit 为正」）；不满足时取安全值（η ＝ 1），并加单测</td></tr>
   <tr><td>更精确，不等于更一致</td><td>编译器省掉一次 GPU 必做的舍入，loss 同号偏高（<a href="#s5-5">§5.5</a>）；sigmoid 单算子跟 GPU 一样准了，整网反而偏得多（<a href="#s5-8">§5.8</a>）</td><td>舍入点照 GPU 写死；「更准」的改动也要整网再验，没查清前不下结论</td></tr>
+  <tr><td>在小切片上验精度</td><td>4 个设备上编译器不拆矩阵乘，8 个设备上拆，往里投的投影一次求和多舍 5 次（<a href="#s5-4">§5.4</a>，第三次迁移）</td><td>在生产的设备数上编；至少离线编一份数窗口化循环</td></tr>
+  <tr><td>裁判工具和生产编得不一样</td><td>单算子回放把训练步里不拆的几个投影也拆了，量到的多舍在生产里不存在（<a href="#s5-4">§5.4</a>）</td><td>用工具前先拿编译产物对一遍写法</td></tr>
   <tr><td>只信配置文件</td><td>权重衰减写 0.1，实际 0.033</td><td>对照表写运行时读出的实际值</td></tr>
   <tr><td>把工具和结论混在一起</td><td>通用文档里夹着某个模型的数字，换模型时没人敢删</td><td>工具目录只放方法</td></tr>
   </tbody></table></details>
@@ -12487,6 +12667,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>定案前第一关验收 r（对 ④ 精确轨迹）：参数范数 3.45、loss 1.92 ／ 1.29、梯度范数 1.14；v7x（开关打开前的配置）参数范数 3.53</td><td>v5p 当前配置 1000 步对精确轨迹一份；N 取 ③ 那组 GPU 重跑 5 份两两 10 对</td></tr>
   <tr><td>参照 3 ／ 15 ／ 28 对：待定 8／46、3／9、1／46</td><td>第一阶段 100 步的 GPU 对 GPU 演练（46 条检查），被测和参照都是默认设置；15 对时只重判了那 8 条外加梯度范数一条</td></tr>
   <tr><td>qkv 投影 R 1.235 → 1.000；对 GPU rel_L2 2.36e-3 → 1.8e-4</td><td>v5p 单算子对 FP64、逐层回放；打开 FP32 累加的开关前后</td></tr>
+  <tr><td>第三次迁移：往里投的投影 R 1.41 → 1.00；BF16 累加的窗口化循环 4 ／ 8 ／ 16 个设备 0 ／ 20 ／ 20；第 1 步超 2N 91 → 63；1000 步主 loss 1.14 → 0.96，步时 ＋0.4%</td><td>第三次迁移：单算子回放（8 个设备，对 FP64）；同一份生产配置在 CPU 上为各拓扑离线编译训练步（运行库 0.0.46）；整网第 1 步与 1000 步各一份运行，阶梯上相邻两级</td></tr>
   <tr><td>GPU 自比第 1 步梯度：差 1 格 1.3%，≥17 格 67%</td><td>第一阶段，两次默认设置 GPU 运行，按 BF16 数格</td></tr>
   <tr><td>张量核模型：16 个一组、25 位、向零截断</td><td>B200 上逐位复现路由打分三层全部元素；试过的三种改法（8 个一组、24 位、就近舍入）命中率都 ＜1%</td></tr>
   <tr><td>合成输入朝零偏差 2.2e-5 ／ 7.0e-5 ／ 3.1e-4（K ＝ 256 ／ 4096 ／ 65536）</td><td>B200 BF16 张量核，正数输入；负数输入同样朝零（K ＝ 256 时幅度约为正数的一半）；FP32 非张量核 ≤ 5e-8</td></tr>

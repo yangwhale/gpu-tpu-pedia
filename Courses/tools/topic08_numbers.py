@@ -1522,3 +1522,34 @@ assert ["%.1e" % TV_MEAN[k] for k in ("C", "attn", "all")] == ["6.9e-06", "6.1e-
 TV_T = {k: ("%+.1e" % v).replace("e-0", "e-").replace("+", "＋") for k, v in TV_MEAN.items()}
 TV_ATTN_T, TV_ALL_T = TV_T["attn"], TV_T["all"]
 TV_ATTN_P, TV_ALL_P = "%.2f" % TV_P["attn"], "%.2f" % TV_P["all"]
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# ── 2026-11-13 · 第三次迁移（混元 4 的另一个尺寸，从生产代码原样起步）：设备一到 8 个，投影的部分和在 BF16 里累加 ──
+#   出处：对齐记录里这次迁移的端到端说明（「设备数到 8 以上」那一节）、现象记录两条（窗口化累加、回放与训练写法不同）、
+#   窗口化循环扫描的结果文件与扫描脚本（CPU 上离线编译训练步，运行库 0.0.46）。全部实测，标「推断」的除外。
+# ══════════════════════════════════════════════════════════════════════════════════════
+# 单算子回放（8 个设备）：中招的那批投影 TPU 对 FP64 2.35e-3、GPU 1.66e-3，R 1.41（结果文件原值 1.41–1.42）；o_proj、down 1.00。
+M3_PROJ_TPU, M3_PROJ_GPU = 2.35e-3, 1.66e-3
+M3_PROJ_R, M3_PROJ_R_AFTER, M3_OUTPROJ_R = 1.41, 1.00, 1.00
+assert abs(M3_PROJ_TPU / M3_PROJ_GPU - M3_PROJ_R) < 0.01            # 2.35 / 1.66 ＝ 1.416，结果文件报 1.41–1.42
+assert abs(M3_PROJ_R - math.sqrt(2)) < 0.01                           # ≈ √2：像多舍了一次同量级的数（§4.2 的读法）
+M3_PROJ_R_T, M3_PROJ_R_AFTER_T = "%.2f" % M3_PROJ_R, "%.2f" % M3_PROJ_R_AFTER
+# 中招 ／ 不中招（规律：FSDP 切的那一维是不是求和维）
+M3_HIT = ["q_a", "q_b", "kv_a", "kv_b", "输出门", "稠密 MLP 的 gate、up", "共享专家的 gate、up"]
+M3_MISS = ["o_proj", "稠密 MLP 的 down", "共享专家的 down"]
+# 8 个设备上 q_a 的循环体（编译产物显示）：8 片排 2 轮，每轮两次 704 宽的矩阵乘（输出 BF16），累加器 BF16
+M3_WIDTH, M3_SHARDS, M3_ROUNDS, M3_MM_PER_ROUND = 2816, 8, 2, 2
+M3_MM_K = M3_WIDTH // M3_SHARDS * (M3_SHARDS // M3_ROUNDS // M3_MM_PER_ROUND)
+assert M3_WIDTH // M3_SHARDS == 352 and M3_MM_K == 704 and M3_MM_K * M3_ROUNDS * M3_MM_PER_ROUND == M3_WIDTH
+M3_TPU_ROUNDINGS = M3_ROUNDS * (M3_MM_PER_ROUND + 1)                # 每次矩阵乘输出舍 1 次 ＋ 每轮加进累加器再舍 1 次
+assert M3_TPU_ROUNDINGS == 6                                          # GPU（和 4 个设备）只舍 1 次
+# 离线编译扫描：窗口化循环总数 ／ 其中带部分和相加、累加器 BF16 的（开关打开后这些全部变 FP32）
+M3_SCAN = [("v5p", 4, 0, 0), ("v5p", 8, 64, 20), ("v5p", 16, 64, 20), ("v7x", 16, 64, 20)]
+assert [r[3] for r in M3_SCAN] == [0, 20, 20, 20]
+# 修法：投影声明 FP32 输出（打开投影 FP32 累加）。阶梯上一级 → 这一级，1000 步、单份运行
+M3_OVER2N = (91, 63)                     # 第 1 步超出 GPU 两倍噪声的梯度张量
+M3_LOSS_R, M3_GN_R, M3_PN_R = (1.14, 0.96), (0.93, 0.98), (0.97, 1.00)
+assert M3_LOSS_R[0] > 1 >= M3_LOSS_R[1] and M3_GN_R[1] <= 1 and M3_PN_R[1] <= 1   # 三项第一次同时 ≤ 1
+M3_COST = 0.004                          # 步时 ＋0.007 s（单份运行）
+M3_COST_T = "%.1f%%" % (M3_COST * 100); _lock("M3_COST_T", M3_COST_T, "0.4%")
+M3_REPLAY_NOBATCH_R = 2.12               # 回放工具没把输入按 batch 切时的投影 R（工具缺陷，已修）

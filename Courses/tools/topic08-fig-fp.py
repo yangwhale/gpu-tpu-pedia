@@ -7,7 +7,10 @@ fig8-truncate  回答：GPU 张量核在长求和里为什么系统地偏小？�
                数字：实测的 B200 张量核模型（16 个一组、保留 25 位、向零截断）；合成正数输入的偏差随求和长度 K 变化（实测）。
                ⛔ 刻意没画：K ＝ 120,832 时合成输入的偏差反而降到 6.4e-5（推断是 cuBLAS 换了算法），写在出处里。
 fig8-tf32      回答：「我关了 TF32」为什么不算数？—— 开关读回来的值和实际跑的不一样。
-fig8-windowed  回答：TPU 上 FSDP 的矩阵乘为什么多舍了几次？—— 窗口化的 collective matmul 把每一轮的分片部分积在 BF16 里累加。
+fig8-inout     回答：FSDP 切同一维，为什么有的投影多舍、有的不多舍？—— 切在求和维上每片只给一份部分和、要加；切在输出维上只拼。
+               数字：第三次迁移单算子回放 R 1.41 ／ 1.00（实测）；切哪一维取自编译产物里的权重片形状。
+fig8-windowed  回答：为什么 8 个设备才多舍、多舍几次？—— 编译器把一次矩阵乘拆成边传边乘，部分和在 BF16 累加器里加，一次求和舍 6 次；4 个设备不拆。
+               数字：循环体结构是编译产物显示；4／8／16 个设备的循环个数是离线编译实测。2026-11-13 起替代原来「4 片 4 轮、舍在轮与轮之间（推断）」的示意。
 fig8-excess    回答：excess precision 改的是什么？—— 舍在哪儿：融合块里中间那几次「舍到 BF16」被删掉，只在块出口舍；关掉它，舍入回到每个算子出口。
                示意图：算子个数、融合怎么切都是示意，不带实测数；实测（关掉以后单层更远、1000 步 loss 偏移小一半）只进 📌。
                ⛔ 刻意没画「哪一行更准」：这张图只讲舍入位置。关掉不是更准，画个准确度刻度就讲反了。
@@ -231,55 +234,177 @@ def fig_tf32():
     f.save("fig8-tf32.svg", yb + 14)
 
 
-def fig_windowed():
-    f = Fig(W, "上一行：TPU 上 FSDP 把权重切开分到各个设备上（示意画 4 片），编译器把这个矩阵乘做成窗口化的 collective matmul：一边轮流收下一片权重，一边算当前这片的部分积。"
-               "默认每一轮的部分积以 BF16 输出、在 BF16 累加器里相加，4 轮舍 4 次；打开 FP32 累加的开关后，累加器是 FP32，最后只舍一次，跟 GPU 一样。"
-               "右边：qkv 投影输出对 GPU 的相对差从 2.36e-3 降到 1.8e-4。")
-    y0 = f.header("TPU 上 FSDP 的矩阵乘：分片部分积在 BF16 里累加　——　<tspan font-weight=\"700\">比 GPU 多舍了几次</tspan>",
-                  "一格 ＝ 一轮：收下一片权重的同时，算当前这片的部分积（这种「边收边算」就叫 collective matmul）；红色小块 ＝ 一次舍到 BF16",
-                  [(BL, "部分积"), (RD, "舍到 BF16"), (GR, "FP32 累加器，只在最后舍一次")])
-    PH = 300
-    py = f.panel(0, y0, 920, PH, "示意：权重切成 4 片、4 轮（实际 FSDP 是 8 路）", BL)
-    for r, (lab, fp32) in enumerate([("默认：BF16 累加器", False), ("打开 FP32 累加", True)]):
-        y = py + 40 + r * 120
-        f.t(24, y + 26, lab, GR if fp32 else RD, True, 15)
-        x = 210
-        for k in range(4):
-            f.box(x, y, 110, 46, "#e8f0fe", BL, 6)
-            f.t(x + 55, y + 28, "部分积 %d" % (k + 1), BL, True, 14, "middle")
-            x += 110
-            f.t(x + 14, y + 30, "＋", INK, True, 18, "middle", big=True)
-            if not fp32:
-                f.box(x + 28, y + 6, 14, 34, "#fce8e6", RD, 3)
-                f.t(x + 35, y + 64, "舍", RD, True, 12, "middle")
-            x += 56
-        f.box(x - 10, y, 70, 46, GR if fp32 else "#fce8e6", GR if fp32 else RD, 6)
-        f.t(x + 25, y + 28, "结果", "#fff" if fp32 else RD, True, 14, "middle")
-        if fp32:
-            f.t(x + 25, y + 66, "只舍 1 次", GR, True, 12, "middle")
+def fig_inout():
+    f = Fig(W, "左：往里投的矩阵（例如 q 的低秩下投影、MLP 的 gate 和 up），模型宽度是输入维，也就是矩阵乘里被加起来的求和维。"
+               "FSDP 把它切成 8 片，每片权重只能算出整个输出的一份部分和，8 份必须加起来。"
+               "右：往外投的矩阵（注意力输出投影 o_proj、MLP 的 down），模型宽度是输出维，每片权重算出输出里完整的几列，8 段只是拼起来，没有加法。"
+               "下：第三次迁移单算子回放（8 个设备），往里投的 7 种投影 TPU 离 FP64 是 GPU 的 %.2f 倍，往外投的 3 种是 %.2f 倍。" % (N.M3_PROJ_R, N.M3_OUTPROJ_R))
+    y0 = f.header("同一刀，落在求和维上要加，落在输出维上只拼",
+                  "y ＝ x·W。FSDP 把 W 沿模型宽度切成 8 片、每个设备存一片；模型宽度在左边是求和维，在右边是输出维",
+                  [(OR, "一片权重"), (RD, "要加起来"), (GR, "只拼起来")])
+    PH, PW = 312, 690
+    for side in (0, 1):
+        px = side * (W - PW)
+        py = f.panel(px, y0, PW, PH, ("往里投：模型宽度是求和维（q_a、gate、up……）" if side == 0 else
+                                      "往外投：模型宽度是输出维（o_proj、down）"), RD if side == 0 else GR)
+        # 激活 x：每个设备上是完整的
+        xx, xy = px + 24, py + 62
+        xw = 250 if side == 0 else 170
+        f.t(xx, xy - 12, "激活 x（每个设备上完整）", INK, True, 13)
+        f.box(xx, xy, xw, 40, "#e8f0fe", BL, 4)
+        if side == 0:
+            for k in range(1, 8):
+                f.line(xx + xw * k / 8.0, xy + 2, xx + xw * k / 8.0, xy + 38, BL, 1, dash="3,3", arrow=False)
+            f.t(xx + xw / 2.0, xy + 60, "模型宽度：按片对上权重", BL, True, 13, "middle")
         else:
-            f.t(x + 25, y + 66, "舍了 4 次", RD, True, 12, "middle")
+            f.t(xx + xw / 2.0, xy + 60, "另一维，不切", BL, True, 13, "middle")
+        f.t(xx + xw + 22, xy + 28, "×", INK, True, 22, "middle", big=True)
+        wx = xx + xw + 44
+        if side == 0:                                   # 按行切 8 片（行 ＝ 求和维）
+            ww, wh = 70, 176
+            for k in range(8):
+                f.box(wx, xy - 18 + k * wh / 8.0, ww, wh / 8.0 - 3, "#fdecdc", OR, 2)
+            f.t(wx + ww / 2.0, xy - 26, "权重：按行切 8 片", OR, True, 13, "middle")
+            ox = wx + ww + 40
+            f.line(wx + ww + 8, xy + 60, ox - 6, xy + 60, GY2, 1.4)
+            for k in range(3):                          # 8 份同样大小的部分和，叠着画
+                f.box(ox + k * 10, xy + 10 + k * 14, 150, 52, "#fff", RD, 4)
+            f.t(ox + 95, xy + 72, "8 份部分和", RD, True, 14, "middle")
+            f.t(ox + 95, xy + 110, "形状都是整个 y", GY, size=12, anchor="middle")
+            f.t(px + 24, py + PH - 88, "y ＝ x₁W₁ ＋ x₂W₂ ＋ … ＋ x₈W₈", INK, True, 15, mono=True)
+            f.t(px + 24, py + PH - 56, "8 份必须加起来：在什么精度里加，决定多出多少误差", RD, True, 14)
+        else:                                           # 按列切 8 片（列 ＝ 输出维）
+            ww, wh = 200, 96
+            for k in range(8):
+                f.box(wx + k * ww / 8.0, xy - 18, ww / 8.0 - 3, wh, "#fdecdc", OR, 2)
+            f.t(wx + ww / 2.0, xy - 26, "权重：按列切 8 片", OR, True, 13, "middle")
+            ox = wx + ww + 30
+            f.line(wx + ww + 6, xy + 30, ox - 4, xy + 30, GY2, 1.4)
+            for k in range(8):
+                f.box(ox + k * 17, xy + 4, 15, 52, "#e6f4ea", GR, 2)
+            f.t(ox + 68, xy + 80, "8 段拼起来", GR, True, 14, "middle")
+            f.t(px + 24, py + PH - 88, "y ＝ [ x·W₁ ｜ x·W₂ ｜ … ｜ x·W₈ ]", INK, True, 15, mono=True)
+            f.t(px + 24, py + PH - 56, "每个输出元素仍是一次完整的求和、只舍一次，跟 GPU 一样", GR, True, 14)
+        f._pan = None
+    # 下：哪些投影中招（实测）
+    sy = y0 + PH + 18
+    SH = 108
+    py = f.panel(0, sy, W, SH, "第三次迁移，单算子回放（8 个设备）：TPU 离 FP64 ÷ GPU 离 FP64（R）", INK, tag="实测")
+    x = 20
+    for name in N.M3_HIT:
+        w = wpx(name, 13) * MONO_K + 22
+        f.box(x, py + 16, w, 30, "#fce8e6", RD, 5)
+        f.t(x + w / 2.0, py + 36, name, RD, True, 13, "middle")
+        x += w + 8
+    f.t(20, py + 68, "往里投的 7 种：R %s（≈ √2，像多舍了一次）" % N.M3_PROJ_R_T, RD, True, 14)
+    x2 = 980
+    for name in N.M3_MISS:
+        w = wpx(name, 13) * MONO_K + 22
+        f.box(x2, py + 16, w, 30, "#e6f4ea", GR, 5)
+        f.t(x2 + w / 2.0, py + 36, name, GR, True, 13, "middle")
+        x2 += w + 8
+    assert x < 980 - 10 and x2 < W - 6, (x, x2)
+    f.t(980, py + 68, "往外投的 3 种：R %.2f" % N.M3_OUTPROJ_R, GR, True, 14)
     f._pan = None
-    px = 940
-    py2 = f.panel(px, y0, W - px, PH, "qkv 投影输出对 GPU（实测）", GR)
-    for i, (lab, v, c) in enumerate([("默认", N.QKV_VS_GPU_BEFORE, RD), ("打开 FP32 累加", N.QKV_VS_GPU_AFTER, GR)]):
-        y = py2 + 44 + i * 96
-        f.t(px + 20, y, lab, INK, True, 14)
-        L = v / N.QKV_VS_GPU_BEFORE * 380
-        f.box(px + 20, y + 12, L, 30, c, c, 4)
-        f.t(px + 20 + L + 8 if L < 300 else px + 30, y + 34, "rel_L2 %.2e" % v, c if L < 300 else "#fff", True, 14)
-    f.t(px + 20, py2 + 240, "FP64 的 R：%.3f → %.3f" % (N.R_QKV_BEFORE, N.R_QKV_AFTER), INK, True, 15)
-    f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "这一处是 TPU 自己多舍的：打开开关，前向就跟 GPU 一样只舍一次", [
-        "收缩维被 FSDP 切开的投影（注意力的 q／k／v、稠密 MLP 的输入投影）都走这条路，一份 v5p 配置里有 41 个这样的循环。",
-        "每一轮里面照样是 FP32 累加；舍到 BF16 的是轮与轮之间传下去的部分和（推断）。",
-        "代价：这个开关只管前向那几处投影；反向和输出层不受它影响。",
+    yb = f.band(sy + SH + 20, "ok", "判据：FSDP 切的那一维，是不是这次矩阵乘的求和维", [
+        "是：每片只给出一份部分和，要加；不是：每片给出完整的几列，只拼。中招的正好是前一种。",
+        "求和本来就要做；不拆开时它在一次矩阵乘里用 FP32 加完，只舍一次。问题出在编译器把这一次拆成了几次（下一张图）。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：v5p 配置优化后的 HLO 里有 41 个窗口化的点积循环，q 投影的循环累加器是 BF16。打开 FP32 累加（矩阵乘的输出类型设成 FP32，最后舍一次）后，qkv 输出对 GPU 的 rel_L2 2.36e-3 → 1.8e-4。",
-               "📌 另一条路是用编译参数整个关掉窗口化：那样连 GPU 本来就有的一次舍入也省掉了，MLP 前归一化的 R 到了 1.64，反而对不齐 —— 多舍少舍都不行，所以用开关不用参数。",
-               "⚠️ 推断：一手材料只写到「每一轮的分片部分积以 BF16 输出、在 BF16 累加器里相加」（q 投影的循环累加器是 BF16）；一轮之内那次点积照常在 FP32 里累加、出口舍成 BF16，是按 TPU 矩阵单元的通常做法推的，没有单独看过那一轮的 HLO。所以左图「舍」画在轮与轮之间。",
-               "注：左图画的是 4 片 4 轮的示意，实际片数等于 FSDP 的路数。")
+               "📌 实测：对齐记录里第三次迁移的单算子回放（8 个设备）：往里投的那批投影 TPU 对 FP64 %.2e、GPU %.2e，R %s（结果文件原值 1.41–1.42）；o_proj、down 是 %.2f。"
+               % (N.M3_PROJ_TPU, N.M3_PROJ_GPU, N.M3_PROJ_R_T, N.M3_OUTPROJ_R),
+               "📌 每个设备拿到哪一维的哪一片，取自 8 个设备编译产物里的权重片形状：往里投的一片是模型宽度的 1/8（2816 ÷ 8 ＝ 352）乘整个输出维；o_proj 的一片是整个输入维乘模型宽度的 1/8。",
+               "📌 q_b、kv_b 的输入不是模型宽度，是 MLA 的低秩中间维，这一维也被 FSDP 切了，同样是切在求和维上。路由打分那次矩阵乘也切在求和维上，但生产本来就让它输出 FP32，不中招。路由专家走另一条路（权重收齐后在本卡做分组矩阵乘），不受影响。",
+               "注：左右两边的激活、权重、输出画的是形状关系，不按比例。")
+    f.save("fig8-inout.svg", yb + 14)
+
+
+def fig_windowed():
+    f = Fig(W, "左边三行是同一个往里投的投影（第三次迁移的 q 低秩下投影，求和维 2816）在三种情况下怎么算完。"
+               "第一行，4 个设备：编译器先把 8 片权重收齐，再做一次 2816 宽的矩阵乘，FP32 累加到底，最后舍一次，跟 GPU 一样。"
+               "第二行，8 个设备、生产原样：编译器改成边传边乘，8 片排成 2 轮，每轮两次 704 宽的矩阵乘，每次输出舍成 BF16，再加进 BF16 累加器又舍一次，一共舍 6 次。"
+               "第三行，8 个设备、打开投影 FP32 累加：结构不变，中间全部留在 FP32，只在最后舍一次。"
+               "右边：离线编译训练步，数部分和累加器是 BF16 的窗口化循环：4 个设备 0 个，8 个、16 个设备各 20 个（v7x 16 个设备也是 20 个），打开开关后全部变成 FP32。")
+    y0 = f.header("设备一到 8 个，编译器把一次矩阵乘拆成几段　——　<tspan font-weight=\"700\">一次求和舍 6 次</tspan>",
+                  "同一个投影、同一种 FSDP 切法；变的只是编译器选「先收齐再乘」还是「边传边乘」。红块 ＝ 一次舍到 BF16",
+                  [(BL, "矩阵乘"), (PU, "累加器"), (RD, "舍到 BF16"), (GR, "FP32，最后只舍一次")])
+    PH, LW = 430, 930
+    py = f.panel(0, y0, LW, PH, "q 低秩下投影的一次前向（编译产物显示）", BL)
+    X0, BW, RW, GAP = 196, 76, 16, 10
+    STEP = BW + RW + GAP
+    rows = [("4 个设备", "先收齐，再乘", "a"), ("8 个设备", "生产原样：边传边乘", "b"), ("8 个设备", "打开投影 FP32 累加", "c")]
+    for r, (lab, sub, kind) in enumerate(rows):
+        y = py + 56 + r * 124
+        f.t(20, y + 22, lab, INK, True, 16)
+        f.t(20, y + 44, sub, {"a": GY, "b": RD, "c": GR}[kind], True, 13)
+        if kind == "a":
+            f.box(X0, y, 150, 50, "#fdecdc", OR, 5)
+            f.t(X0 + 75, y + 22, "收齐 8 片权重", OR, True, 13, "middle")
+            f.t(X0 + 75, y + 40, "（整块 all-gather）", GY, size=11, anchor="middle")
+            f.line(X0 + 154, y + 25, X0 + 182, y + 25, GY2, 1.3)
+            f.box(X0 + 186, y, 4 * STEP + 20, 50, "#e8f0fe", BL, 5)
+            f.t(X0 + 186 + (4 * STEP + 20) / 2.0, y + 22, "一次矩阵乘，2816 宽", BL, True, 14, "middle")
+            f.t(X0 + 186 + (4 * STEP + 20) / 2.0, y + 40, "FP32 累加到底", GY, size=11, anchor="middle")
+            xr = X0 + 186 + 4 * STEP + 26
+            f.box(xr, y + 6, RW, 38, "#fce8e6", RD, 3)
+            f.t(xr + RW / 2.0, y + 66, "①", RD, True, 13, "middle")
+            nr = 1
+        else:
+            n = 0
+            x = X0
+            for rnd in range(N.M3_ROUNDS):
+                f.t(x + (3 * STEP - GAP) / 2.0, y - 10, "第 %d 轮（片 %d–%d）" % (rnd + 1, 4 * rnd + 1, 4 * rnd + 4), GY, True, 12, "middle")
+                for j in range(N.M3_MM_PER_ROUND + 1):
+                    acc = (j == N.M3_MM_PER_ROUND)
+                    if acc:
+                        f.box(x, y, BW, 50, "#f3e8fd", PU, 5)
+                        f.t(x + BW / 2.0, y + 22, "累加器", PU, True, 13, "middle")
+                        f.t(x + BW / 2.0, y + 40, "＋＝ 两份", GY, size=11, anchor="middle")
+                    else:
+                        a = 4 * rnd + 2 * j + 1
+                        f.box(x, y, BW, 50, "#e8f0fe", BL, 5)
+                        f.t(x + BW / 2.0, y + 22, "片 %d＋%d" % (a, a + 1), BL, True, 13, "middle")
+                        f.t(x + BW / 2.0, y + 40, "704 宽", GY, size=11, anchor="middle")
+                    last = (rnd == N.M3_ROUNDS - 1 and acc)
+                    if kind == "b" or last:
+                        n += 1
+                        f.box(x + BW + 2, y + 6, RW, 38, "#fce8e6", RD, 3)
+                        f.t(x + BW + 2 + RW / 2.0, y + 66, "①②③④⑤⑥"[n - 1] if kind == "b" else "①", RD, True, 13, "middle")
+                    elif kind == "c":
+                        f.box(x + BW + 2, y + 6, RW, 38, "#e6f4ea", GR, 3)
+                    x += STEP
+            nr = n
+            xr = x - GAP - RW
+        f.t(LW - 20, y + 30, "舍 %d 次" % nr, RD if nr > 1 else GR, True, 16, "end")
+    assert X0 + 6 * STEP < LW - 90
+    f._pan = None
+    px = LW + 20
+    py2 = f.panel(px, y0, W - px, PH, "离线编译训练步：累加器是 BF16 的循环", PU, tag="实测")
+    BX0, BMAX = px + 150, 230
+    for i, (chip, dev, loops, bf) in enumerate(N.M3_SCAN):
+        y = py2 + 40 + i * 62
+        f.t(px + 18, y + 18, "%s · %d 个设备" % (chip, dev), INK, True, 14)
+        L = BMAX * bf / 20.0
+        if bf:
+            f.box(BX0, y + 2, L, 26, RD, RD, 3)
+        f.t(BX0 + L + 8 if bf else BX0, y + 21, str(bf) + ("" if bf else "　（不拆）"), RD if bf else GY, True, 15)
+    y = py2 + 40 + 4 * 62
+    f.t(px + 18, y + 18, "打开开关后", INK, True, 14)
+    f.t(BX0, y + 21, "0　（全部变 FP32）", GR, True, 15)
+    f.t(px + 18, py2 + PH - 80, "单算子 R：%s → %s" % (N.M3_PROJ_R_T, N.M3_PROJ_R_AFTER_T), INK, True, 15)
+    f.t(px + 18, py2 + PH - 52, "混元 3 的 qkv：%.3f → %.3f" % (N.R_QKV_BEFORE, N.R_QKV_AFTER), GY, True, 13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "在 4 个设备的小切片上验精度，这件事完全看不到", [
+        "切法没变：4 个、8 个设备上权重都按 FSDP 切满。变的只是编译器拆不拆；拆了，每个往里投的投影都多舍几次。",
+        "矩阵单元里的 FP32 累加只管一次矩阵乘之内；拆成几段，每段的结果都按程序声明的 BF16 写出来，累加器也是 BF16。",
+        "修法是让这批矩阵乘声明 FP32 输出：累加器跟着变成 FP32，循环结束只舍一次。它不改编译器，只改交给编译器的输出类型。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 编译产物显示（第三次迁移，8 个设备，运行库 0.0.46）：q 低秩下投影的循环体里，8 片权重沿两个方向的环传过来，排成 2 轮；每轮两次 704（＝ 2 × 352）宽的矩阵乘，输出是 BF16；和 BF16 累加器在一颗融合里转成 FP32 相加，再舍回 BF16。v7x 上这一步直接在 BF16 里加，舍入次数相同。",
+               "📌 实验确认：同一份生产配置在 CPU 上为不同拓扑离线编译训练步。v5p 4 个设备没有窗口化循环，权重整块收齐；8 个、16 个设备各 64 个窗口化循环，其中带部分和相加、累加器 BF16 的 20 个（正好是上一张图里中招的那几种投影的前向和重算），其余是按输出维写各自的列，或权重梯度一侧（本来就是 FP32）。打开投影 FP32 累加后，这 20 个全部变成 FP32。",
+               "📌 大小不是门槛：8 个设备上，连最小的路由打分矩阵也拆了；4 个设备上，连最大的 gate、up 也整块收。拆不拆看的是切法和设备数。为什么设备少不拆是推断：编译器按快慢选，设备少时环上首尾那几次传递的固定开销占比大，拆了省不下时间。更大的规模没有编过，按「会拆」准备。",
+               "📌 混元 3（v5p 8 个设备）是同一个机制：qkv 投影 R %.3f → %.3f，配置里有 41 个这样的循环。" % (N.R_QKV_BEFORE, N.R_QKV_AFTER),
+               "⚠️ 推断：舍了 6 次 R 却只有约 √2，是因为前几次舍的是小的部分和（量级约为最终结果的一半），误差也小；再加上两边共有的误差（输入本来就是 BF16）。")
     f.save("fig8-windowed.svg", yb + 14)
 
 
@@ -614,6 +739,7 @@ def fig_trans():
 fig_formats()
 fig_truncate()
 fig_tf32()
+fig_inout()
 fig_windowed()
 fig_excess()
 fig_boundary()
