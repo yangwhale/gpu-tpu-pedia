@@ -797,7 +797,7 @@ ELIDE_GPU_MAX_T = tx(ELIDE_GPU_MAX, "%.1e")
 # 超越函数（§5.8）：TPU v5p 默认 FP32 实现对正确舍入的最大误差（格＝ulp），对照 GPU 文档上限与 TPU 高精度写法
 TRANS = {   # 函数: (TPU 默认 ulp_max, TPU 高精度写法 ulp_max, GPU 上限)
     "exp": (105, 1, 2), "log": (62, 3, 1), "sigmoid": (83, 3, 3.4), "silu": (86, 4, 3.4)}
-TRANS_GPU_NOTE = "B200 实测 exp 2、log 1、sigmoid 和 silu 最大 3.4（根源一览第 11 行）"
+TRANS_GPU_NOTE = "exp ≤ 2、log ≤ 1 是 CUDA 文档给的上限；B200 实测 log 1、sigmoid 和 silu 最大 3.4（根源一览第 11 行）"
 assert all(d > 20 * g for d, h, g in TRANS.values())               # 默认比 GPU 差一个数量级以上
 assert all(h <= 4 for d, h, g in TRANS.values())
 EXP_CR_FRAC, EXP_SIGNED_ULP = "6%", -2.49   # 实际蒸馏损失 softmax 的输入上：exp 只有 6% 正好舍对，平均偏 −2.5 格（系统偏低）
