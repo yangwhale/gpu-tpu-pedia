@@ -989,11 +989,14 @@ __FIG_SWEEP__
   <p>加的顺序照样跟 FSDP 不同，但每次加法的舍入从 2⁻⁸ 量级降到 2⁻²⁴ 量级，小了 2¹⁶ ＝ 65536 倍。最高频的词在一张卡上加 «C2_HOT_CNT_MAX» 次，按 FP32 每次 2⁻²⁴ 线性累加也只有约 2.7e-5，仍远小于一次 BF16 舍入的 3.9e-3（本课推导）。单算子里 FP32 scatter 离 FP64 只有 «C2_FP32_CELL_T»。</p></details>
 
   <h3>8.8　两个旁证：GPU 为什么没这个问题；关掉 excess precision 反而更差</h3>
+  <p>两个旁证，课上不讲：GPU 的词嵌入反向下标多了就先排序（推断），所以没这个问题；关掉省舍入让两边「更像」，反而让 FSDP 那次排好序的 scatter 多舍，更差 —— 让两边一样，不等于让两边都对。</p>
+  <details class="foldfig"><summary><b>两个旁证的细节</b>：PyTorch 的两条路；关掉省舍入为什么走不通</summary>
   <p><b>GPU（推断）</b>：GPU 同设置的词嵌入梯度离 FP64 «C2_EMB_GPU_T»，跟 TPU FSDP 的 «C2_EMB_G_T» 接近。PyTorch 在 CUDA 上的词嵌入反向，下标超过 «C2_TORCH_GATE» 个时先排序、按段在 float 里累加，最后才转回 BF16；GPU 每卡每个微批 4096 个 token，推断走的是这条：切法跟纯数据并行一样，本卡累加却跟 TPU FSDP 排序后是同一种舍入结构。</p>
   <details class="foldfig"><summary><b>PyTorch 的两条路</b>：在哪段代码、哪里没核</summary>
   <p><a href="https://github.com/pytorch/pytorch/blob/8b7ee4d69c74e7a1a140f6ea218928b9b8de1779/aten/src/ATen/native/cuda/Embedding.cu#L268-L282">Embedding.cu</a> 的 <code>embedding_dense_backward_cuda</code> 按下标数分两条路：不超过 «C2_TORCH_GATE» 个时，每批 32 个下标在共享内存里用 float 合并，批与批之间舍一次；超过时走排序、分段累加。读的是 2026-11-11 的 PyTorch 主分支（链接钉在那个提交）；GPU 镜像里那个版本没有逐行核过，实际走了哪条也没有单独确认。</p></details>
   <p><b>关掉 excess precision</b>：§5.5 末尾那个「远 «EMB_NOEXC_X» 倍」就出在这里。有人建议关掉它让 FSDP 和 DDP 更像（另一个 6 层测试模型上差确实回到 0 附近，但那次主要是把一条梯度累积路径改成了 FP32）。</p>
   <p>放到这里看，这条路走不通：纯数据并行那次 scatter 本来就每次舍，开关管不着；FSDP 那次排好序的 scatter 却从只舍一次退回每次舍，而且一次要顺序加 «C2_FSDP_N» 个更新。结果 FSDP 比纯数据并行还差得多：第 1 步词嵌入梯度离 FP64 «C2_NOEXC_EMB_T»，300 步 r «C2_NOEXC_R_T»。<b>让两边一样，不等于让两边都对</b>：修法要看离精确值近不近，不能只看两边的差。</p>
+  </details>
 ''' + quiz("你的模型词表 25 万行，8 张卡纯数据并行、每卡每个微批 8192 个 token，没开 FP32 修法。按这一节，会不会中招？换成每卡 40000 个呢？",
            "按运行库 0.0.46 的规则，门槛是 V／8 ＝ 31250。8192 不过线，不排序，高频词每加一次舍一次，会中招。首选只切词嵌入表：8 张卡合起来 65536 个，过线，会走排序、只舍一次。40000 本来就过线，后端会自己排序（前提是 excess precision 开着）。换到 0.0.52，门槛跟列宽、芯片走，不能再用 V／8 估。所以这些都只是初判：用对齐记录脚本的 check 子命令在自己的形状、自己的运行库上判一次，再看整步编译产物里那次 scatter 有没有 sort 和「下标已排序」的标记（§8.10）；拿不准就开修法①。") + '''
 
