@@ -567,7 +567,7 @@ footer a{color:var(--blue);text-decoration:none}
     <div class="head"><span class="num">08</span><span class="name"><a href="topic-08.html">GPU→TPU 训练精度对齐</a></span><span class="pre">前置 02 · 04</span><span class="rdy">✅ 课件 ＋ 讲义 · 讲约 90′（三次课）· 74 张图 ＋ 10 支动画</span></div>
     <div class="quote">TPU 和 GPU 不可能一位不差。能要求的是：TPU 跟 GPU 的差，不比 GPU 自己跟自己的差大。</div>
     <dl><dt>讲什么</dt><dd>一把噪声尺子、L0–L4 五级检查、两类指标（逐步曲线和第 1 步逐张量），再看清浮点和硬件在哪儿舍入、在 TPU 上怎么拿证据；第二次迁移补上纯噪声也会超线、换了顺序还是丢了精度、16 位与 32 位的交界，以及 TPU 自己改一样东西会不会变；第三次迁移从生产代码起步，查清设备一到 8 个、投影的部分和就在 BF16 里多舍几次。</dd>
-      <dt>转折</dt><dd>两个案例。混元 3 搬到 TPU 后 loss 一直低万分之一点五，一路查下去，<b>偏的不是 TPU</b>：GPU 在一次 12 万长的 BF16 求和里，每一步都朝零截掉了一点。混元 4 缩小版上 DDP 和 FSDP 数学等价却对不上，查到最后是<b>高频词 × 不排序</b>：编译器只在一次 scatter-add 的下标数过线时才插排序。</dd>
+      <dt>转折</dt><dd>两个案例。混元 3 搬到 TPU 后 loss 一直低 1.5e-4，一路查下去，<b>偏的不是 TPU</b>：GPU 在一次 12 万长的 BF16 求和里，每一步都朝零截掉了一点。混元 4 缩小版上 DDP 和 FSDP 数学等价却对不上，查到最后是<b>高频词 × 不排序</b>：编译器只在一次 scatter-add 的下标数过线时才插排序。</dd>
       <dt>带走</dt><dd>golden 自己有偏差时怎么分两关验收；TPU 的脾气：重跑与等价重构逐位、换切分换版本只换顺序、真出事集中在词嵌入梯度，精度会随批大小变；改完代码先比程序指纹；换了设备数、切法、步数、芯片，验过的结论都要重验。</dd></dl>
     <div class="docs">
       <a class="pri" href="topic-08.html">课件 →</a>

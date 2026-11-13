@@ -781,7 +781,7 @@ def fig_captain():
                "换成高精度的 exp、log 以后，lse 的偏差 %s，300 步那一项的 r %s（同一代还开了另一个开关，没拆开）。"
                % (N.SHIP_T, N.CAPTAIN_KG, N.TICK_KG_T, N.TICK_PCT_T, N.KD_LSE, N.sci(N.KD_KL), N.KD_LSE, N.KD_ULP_T, N.KD_ULP_OF_KL_T,
                   N.KD_IN_R, N.KD_GRAD_R, N.KD_LSE_TPU_ULP_T, N.KD_LSE_TPU_ULP_T, N.KD_FIX_LSE_T, N.KD_FIX_R300_T))
-    y0 = f.header("小数是两个大数相减时，f32 差一格就是千分之几　——　<tspan font-weight=\"700\">病态是放大器，不是根因</tspan>",
+    y0 = f.header("小数是两个大数相减时，f32 差一格就是几个 1e-3　——　<tspan font-weight=\"700\">病态是放大器，不是根因</tspan>",
                   "左边：在一杆称船的秤上称船长；右边：前三问认出放大器，第四问找被放大的那一格是谁的",
                   [(GY, "大数（船、lse）"), (OR, "小数（船长、KL）"), (RD, "秤的一格")])
     PH = 470
@@ -856,7 +856,7 @@ def fig_captain():
     f.t(px + 30, py2 + 384, "换高精度写法：lse %s；300 步 r %s" % (N.KD_FIX_LSE_T, N.KD_FIX_R300_T), GR, True, 13)
     f.t(px + 18, py2 + 434, "①② 有一条不是 → 回到五格表找边界", GY, size=13)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "病态把一格以内的差放大成千分之一；放大器认出来以后，还要问被放大的那一格是谁的", [
+    yb = f.band(y0 + PH + 20, "ok", "病态把一格以内的差放大成 1e-3 量级；放大器认出来以后，还要问被放大的那一格是谁的", [
         "这一次那一格是 TPU 默认的 exp、log（偏低、只有几十格的精度）；换成高精度写法，偏差就没了。",
         "代价：要是那一格是两边都躲不开的末位（CPU 上也偏），才写「不过，已定责」，并附上这几问的证据。",
     ])
