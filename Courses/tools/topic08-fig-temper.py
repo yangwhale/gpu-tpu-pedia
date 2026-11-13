@@ -169,7 +169,7 @@ def fig_libtpu():
     f.line(X(N.LOO8_300_MAX), ytop, X(N.LOO8_300_MAX), ybot, INK, 1.4, dash="4 3", arrow=False)
     f.t(X(N.LOO8_300_MAX) + 6, ytop + 14, "纯噪声最高 %s" % N.LOO8_300_MAX_T, INK, True, 12.5)
     rows = [("基准运行自己", N.LIB_GOLDEN_R[0], N.LIB_GOLDEN_R[0], "", "")] + list(N.LIB_SIX)
-    note = {"RMSNorm 多舍一次": "主 loss 系统偏高；1000 步 %s；最后一层真舍了两次（下一张图）" % N.LIB_RMS_R1K_T,
+    note = {"RMSNorm 多舍一次": "主 loss 系统偏高；1000 步 %s；最后一层真舍了两次" % N.LIB_RMS_R1K_T,
             "上下文并行（不开 FP32 logits）": "两次都在线内；那个张量随顺序跳一倍，降了不说明变好",
             "基准运行自己": "0.0.52 对 0.0.46，在噪声内"}
     for i, (name, a, b, va, vb) in enumerate(rows):
@@ -243,7 +243,7 @@ def fig_libtpu():
                "📌 Ⓑ 单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。"
                "整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上部分形状走另一条执行路径（HLO 可见），另算；表里 v7x 只列 1024 以上的列宽。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。",
                "📌 Ⓒ v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：%s。" % N.LIB_V7X_GA1_T,
-               "⚠️ RMSNorm 那件为什么变强，见下一张图（对齐记录已查清）。上下文并行那件降到 0.95，只能说这次没超。")
+               "⚠️ RMSNorm 那件为什么变强，对齐记录已查清，机理在本节折叠里。上下文并行那件降到 0.95，只能说这次没超。")
     f.save("fig8-libtpu.svg", yb + 14)
 
 
