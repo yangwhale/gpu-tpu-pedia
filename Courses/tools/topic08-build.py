@@ -613,7 +613,7 @@ __ANIM_WINDOWED__
   <p>它不是 MLA 特有的：稠密 MLP、共享专家的 gate 和 up 一样中招，凡是 FSDP 切的那一维正好是求和维的投影都会。MLA 只是让中招的矩阵变多：每层注意力 q、kv 各有两个往里投的矩阵（第二个的输入是低秩中间维，也被切）；标准的多头注意力只有 q、k、v 三个，还常融合成一个。</p>
   </details>
   <p><b>精度验证要在生产的设备数上编。</b>在 4 个设备的小切片上验，这件事完全看不到；8 个、16 个设备都拆，更大的规模没编过，按「会拆」准备。小切片上验也行，先离线编译一份生产设备数的训练步，数一数边传边乘的循环（编译产物里叫窗口化循环）和它们的累加器类型。</p>
-  <details class="foldfig"><summary><b>裁判工具要跟生产编得一样</b>：回放把训练里不拆的投影也拆了</summary><!--要跟生产编得一样</summary>
+  <details class="foldfig"><summary><b>裁判工具要跟生产编得一样</b>：回放把训练里（推断）不拆的投影也拆了</summary>
   <p><b>裁判工具要跟生产编得一样。</b>单算子回放把多 token 预测层的几个投影也编成了边传边乘，R 同样 «M3_PROJ_R_T»；可训练步的编译产物里没有给多 token 预测层的那组边传边乘循环，推断这几个矩阵乘在训练里是先收齐权重再整段乘的，回放这几格不代表生产。更早一版回放没把输入按 batch 切，投影 R 到了 «M3_REPLAY_NOBATCH_R»，也是工具和生产切法不一样。用回放之前，先拿编译产物对一遍：工具里的程序和训练步里的，是不是同一种写法。</p></details>
   <details class="foldfig"><summary><b>这个开关在代码里怎么开</b>：JAX、PyTorch 各叫什么；反向那几处要不要一起改</summary>
   <p>落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里给 <code>jax.lax.dot</code> 写 <code>preferred_element_type=jnp.float32</code>，出口再转回 BF16），不是加一个编译参数。别的框架要找的是「BF16 矩阵乘的部分和用什么精度相加」这一项；例如 PyTorch 在 GPU 上有 <code>torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction</code>，设成 False 就关掉（PyTorch 的 CUDA 语义文档）。反向那一侧，第三次迁移的编译产物里不用改：权重梯度一侧的累加器本来就是 FP32；求输入梯度时，o_proj、down、q_b、kv_b 是权重先收齐再在本卡乘；gate、up 和路由打分只是按列写各自的一段；都没有部分和相加。</p>
@@ -1862,6 +1862,7 @@ _html = P.place_figs(_html, {_k: _v[:3] + (_numsub(_v[3]),) for _k, _v in FIGS.i
 assert "«" not in _html and "»" not in _html, "还有 «名字» 占位符没落地"
 _leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
 assert not _leak, "占位符没落地：%s" % "、".join(_leak)
+assert _html.count("<!--") == _html.count("-->"), "HTML 注释没闭合：<!-- %d 个、--> %d 个（没闭合的注释会把后面整页吞掉）" % (_html.count("<!--"), _html.count("-->"))
 for _tag in ("h2", "h3", "section", "div", "details", "table"):
     _o = len(re.findall(r"<%s[ >]" % _tag, _html))
     _c = _html.count("</%s>" % _tag)
