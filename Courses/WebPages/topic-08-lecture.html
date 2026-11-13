@@ -256,7 +256,7 @@ h2.part{margin:48px 0 8px;padding-top:18px;border-top:2px solid #dadce0;font-siz
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,330</td><td>5</td><td>7.9′</td><td>8′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>1,021</td><td>3</td><td>5.9′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,684</td><td>11</td><td>16.4′</td><td>16′</td></tr><tr><td>第四节　指标（二）：张量</td><td>2,082</td><td>8</td><td>12.6′</td><td>12′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>2,200</td><td>12</td><td>14.4′</td><td>13′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>632</td><td>3</td><td>3.9′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,185</td><td>9</td><td>8.4′</td><td>9′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,328</td><td>7</td><td>8.6′</td><td>9′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,158</td><td>10</td><td>8.3′</td><td>8′</td></tr><tr><td>第十节　工程化与教训</td><td>1,026</td><td>4</td><td>6.1′</td><td>6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>92′</b></td><td><b>90′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,330</td><td>5</td><td>7.9′</td><td>8′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>1,021</td><td>3</td><td>5.9′</td><td>5′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,684</td><td>11</td><td>16.4′</td><td>16′</td></tr><tr><td>第四节　指标（二）：张量</td><td>2,082</td><td>8</td><td>12.6′</td><td>12′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>2,200</td><td>12</td><td>14.4′</td><td>13′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>632</td><td>3</td><td>3.9′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,185</td><td>9</td><td>8.4′</td><td>9′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,335</td><td>7</td><td>8.6′</td><td>9′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,158</td><td>10</td><td>8.3′</td><td>8′</td></tr><tr><td>第十节　工程化与教训</td><td>1,026</td><td>4</td><td>6.1′</td><td>6′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>92′</b></td><td><b>90′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把三条暗线记在心里</h3>
@@ -970,7 +970,7 @@ TPU 上的程序由 XLA 整图编译，第五节那张省舍入的图：TPU 默�
 
 <p class="board"><b>🖥 屏幕</b>：回到本节开头的 <code>fig-ddp2x2</code>，指右下那一格。</p>
 
-<p class="say">「所以这回的差在 TPU 纯数据并行那一侧：没有谁算错，是那次加法的组织方式，让高频词多舍了几十次。两个条件同时成立：高频词，加不排序，缺一个都不丢精度。修法是让这次累加落在 FP32：整次都用 FP32，或者本卡 FP32、跨卡 BF16，三百步回到噪声内，一千步跟 GPU 重跑分不开，步时多零点六到零点八个百分点。」</p>
+<p class="say">「所以这回的差在 TPU 纯数据并行那一侧：没有谁算错，是那次加法的组织方式，让高频词多舍了几十次。两个条件同时成立：高频词，加不排序，缺一个都不丢精度。前两种修法，是让这次累加落在 FP32：一，整次都用 FP32；二，本卡 FP32、跨卡 BF16。两种都是三百步回到噪声内，一千步跟 GPU 重跑分不开，步时多零点六到零点八个百分点。」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-shard</code>，先上面前向那条，再下面每卡存什么。</p>
 
