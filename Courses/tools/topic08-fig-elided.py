@@ -253,8 +253,8 @@ def fig_verify():
     R, T = N.GV_RUNS, N.TV_RUNS
     f = Fig(W, "上卡两头验证。左块 GPU 一头：在 GPU 上把候选照 TPU 改，看 GPU 自己长不长出尾巴。注意力输入那处单开 ＋3.0e-6，p 0.021；"
                "跟 MoE 输入那处一起开只剩 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73。右块 TPU 一头：在对齐配置之上补上，看尾巴下不下去。"
-               "对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。两头都排除了清单前三类，残余还在查。")
-    y0 = f.header("两头验证：清单前三类都排除了，残余还在查",
+               "对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。两头都排除了 A、B 两类；C 前向几处还没验。注意力输入那处单开 p 0.021 不算：两处合开就没了，TPU 一头补上也不动。")
+    y0 = f.header("两头验证：A、B 两类两头都排除，C 前向几处还没验",
                   "第二次迁移，小尺寸，第 551–1000 步主 loss 偏差，每点一份运行，横线是均值",
                   [(GY2, "参照格"), (GR, "改了一处，结论：排除")])
     PH, GAP = 420, 22
@@ -290,7 +290,7 @@ def fig_verify():
                 f.t(cx, YT - 10, ptxt, GY, True, 12, "middle")
         f._pan = None
         return py
-    gcells = [("loo", "GPU 自己", GY2, "16 份", ""), ("attn", "注意力输入", GR, "均值 %s" % N.GV_T["attn"][0], "p %s" % N.GV_ATTN_P),
+    gcells = [("loo", "GPU 自己", GY2, "16 份", ""), ("attn", "注意力输入", GR, "均值 %s" % N.GV_T["attn"][0], "p %s，合开就没了" % N.GV_ATTN_P),
               ("moe", "MoE 输入", GR, "均值 %s" % N.GV_T["moe"][0], "p %s" % N.GV_T["moe"][1]),
               ("both", "两处一起", GR, "均值 %s" % N.GV_BOTH_T, "p %s" % N.GV_BOTH_P),
               ("wgrad", "每微批 dW", GR, "均值 %s" % N.GV_WGRAD_T, "p %s" % N.GV_WGRAD_P)]
@@ -298,7 +298,7 @@ def fig_verify():
     tcells = [("C", "对齐配置", GY2, "6 份 %s" % N.TV_T["C"], ""), ("attn", "＋补注意力输入", GR, "均值 %s" % N.TV_ATTN_T, "p %s" % N.TV_ATTN_P),
               ("all", "＋注意力和 MoE 输入", GR, "均值 %s" % N.TV_ALL_T, "p %s" % N.TV_ALL_P)]
     panel(LW + GAP, W - LW - GAP, "TPU 一头：补上，尾巴下不下去", BL, tcells, T, "tpu")
-    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：前三类两头都排除，残余还在查", [
+    yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：A、B 两类两头都排除，C 前向几处还没验", [
         "注意力输入那处 GPU 单开像有一点，可合开就没了，按格数校正 p 0.084，对齐记录推断是偶然；TPU 补上也跟对齐配置分不开。下一批：前向几处，和扫描看不到的差。",
     ])
     yb = f.src(yb + 10,

@@ -51,7 +51,7 @@ def fig_drift():
         f.t(X(st), YB + 24, "第 %d 步" % st, GY, size=12, anchor="middle")
     f.path([(X(k + 1), Y(v)) for k, v in enumerate(PG)], GY2, 1.4, arrow=False)
     f.path([(X(k + 1), Y(v)) for k, v in enumerate(PT)], BL, 2.4, arrow=False)
-    f.t(X(1000) - 6, Y(PT[999]) - 12, "第 1000 步 ＋%.3f" % PT[999], BL, True, 15, "end")
+    f.t(X(1000) - 6, Y(PT[999]) - 12, "第 1000 步 ＋%.3f（GPU 自己涨 %.3f，多涨约 %d%%）" % (PT[999], N.PN_GPU_GROWTH, round(PT[999] / N.PN_GPU_GROWTH * 100)), BL, True, 15, "end")
     f.t(X(560), Y(0) + 22, "GPU 自己：最多差 %.1e，贴着零" % max(abs(x) for x in PG), GY, True, 13, "middle")
     f.line(X(100), py + 20, X(100), YB, OR, 1.4, dash="5 5", arrow=False)
     f.t(X(100) + 8, py + 34, "约第 100 步：loss 偏移也是这时拉开的", OR, True, 13)

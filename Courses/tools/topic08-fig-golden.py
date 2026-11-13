@@ -22,7 +22,7 @@ STEPS = [("① 起点", "框架默认配置", ["BF16，不重算", "TF32 开着"
          ("② 生产近似", "＋ 整层重算 ＋ 路由回放", ["模仿生产开重算", "跟①比：各项都在 GPU 噪声内"], 2.93e-6, GY, "生产 golden：差要写清来由"),
          ("③ 只修一处", "＋ 输出头 dgrad 换成 FP32", ["解释 loss 偏移的 73%", "参数范数 ＋0.0124", "定案前的尺子取自这组"], 1.25e-6, OR, "归因证据"),
          ("④ 精确轨迹", "＋ BF16 权重、全程 FP32", ["真关 TF32；可输出头", "长求和一次累加，有偏"], 4.36e-7, PU, "定案前的基线"),
-         ("⑤ 最终 golden", "② ＋ dgrad 分段累加", ["只改这一处", "GPU 步时多六成", "尺子：自己 10 份 45 对"], None, GR, "第一关的基线（定案）")]
+         ("⑤ 最终 golden", "② ＋ dgrad 升 FP32 分段累加", ["只改这一处；步时多六成", "只分段不升 FP32 也够，＋6%", "尺子：自己 10 份 45 对"], None, GR, "第一关的基线（定案）")]
 R = [None if st[3] is None else st[3] / NOISE for st in STEPS]
 R[4] = N.FINAL_PN_SM_R                     # ⑤ 用它自己的 45 对尺子，v5p 当前配置；带符号均值，跟 ②–④ 同口径
 assert abs(R[1] - 23.6) < 0.1 and abs(R[2] - 10.1) < 0.1 and abs(R[3] - 3.52) < 0.01, R
@@ -82,9 +82,9 @@ def fig_decomp():
                "下面是 TPU 生产对精确轨迹那 ＋0.00235 的三笔：精确轨迹自己少漂 ＋0.0087，TPU 的 dlogits 舍入 −0.0068，其余 ＋0.0005。")
     y0 = f.header("新的账：两个生产程序只差 GPU 那一次长累加",
                   "上：各条运行第 1000 步落在哪（实测）；下：TPU 对精确轨迹那一小截的三笔（实测，按定义加起来正好闭合）",
-                  [(GY, "GPU 生产"), (PU, "精确轨迹 ／ 真精确"), (OR, "GPU 生产＋分段累加"), (BL, "TPU 生产"), (RD, "GPU 长累加偏差"), (LINE2, "两边共有")])
+                  [(GY, "GPU 生产"), (PU, "精确轨迹 ／ 真精确"), (OR, "GPU 生产＋升 FP32 分段"), (BL, "TPU 生产"), (RD, "GPU 长累加偏差"), (LINE2, "两个生产程序都有")])
     PH = 300
-    py = f.panel(0, y0, W, PH, "第 1000 步参数范数，对 GPU 生产 golden 5 份均值的差（生产近似配置）", BL)
+    py = f.panel(0, y0, W, PH, "第 1000 步参数范数，对 GPU 生产 golden 5 份均值的差（生产近似配置，跟上一张图的不重算配置不同）", BL)
     X0, BW, VMAX = 60, 1260, 0.029
     X = lambda v: X0 + v / VMAX * BW
     ya = py + 120
@@ -93,7 +93,7 @@ def fig_decomp():
         f.line(X(v), ya - 5, X(v), ya + 5, INK, 1.2, arrow=False)
         f.t(X(v), ya + 22, "0" if v == 0 else "＋%.2f" % v, GY, size=12, anchor="middle")
     pts = [(0.0, "GPU 生产", GY, -1), (N.PN_FIX1, "④ 精确轨迹 ＋%.4f" % N.PN_FIX1, PU, -1),
-           (N.PN_PRODCHUNK, "⑤ 生产＋分段累加 ＋%.4f" % N.PN_PRODCHUNK, OR, -2), (N.PN_TPU_PROD, "TPU 生产 ＋%.4f" % N.PN_TPU_PROD, BL, -3),
+           (N.PN_PRODCHUNK, "⑤ 生产＋升 FP32 分段 ＋%.4f" % N.PN_PRODCHUNK, OR, -2), (N.PN_TPU_PROD, "TPU 生产 ＋%.4f" % N.PN_TPU_PROD, BL, -3),
            (N.PN_TRUE, "⑥ 真精确 ＋%.4f" % N.PN_TRUE, PU, -1)]
     for v, lab, c, row in pts:
         x = X(v)
@@ -108,7 +108,7 @@ def fig_decomp():
     f.box(X(0), yb1, X(N.PN_PRODCHUNK) - X(0), 22, RD, RD, 3)
     f.t(X(0) + 8, yb1 + 16, "GPU 输出头 dgrad 的长累加偏差 ＋%.4f（BF16 张量核 ＋ cuBLAS FP32 一次累加）" % N.LADDER_DGRAD, "#fff", True, 13)
     f.box(X(N.PN_PRODCHUNK), yb1, X(N.PN_TRUE) - X(N.PN_PRODCHUNK), 22, LINE2, GY2, 3)
-    f.t(X(N.PN_TRUE), yb1 + 46, "两边共有：输出头反向的 dlogits 舍成 BF16 ＋%.4f" % N.LADDER_SHARED, GY, True, 13, anchor="end")
+    f.t(X(N.PN_TRUE), yb1 + 46, "两个生产程序都有（对真精确比）：输出头反向的 dlogits 舍成 BF16 ＋%.4f" % N.LADDER_SHARED, GY, True, 13, anchor="end")
     f.t(X0, py + PH - 40, "TPU 生产和 ⑤ 几乎落在同一点；⑥ 真精确 ＝ ④ 再把那次长求和分段（只当参照），TPU 自己的精确轨迹也落在这里", GY, size=13)
     f._pan = None
     PH2 = 250
@@ -117,7 +117,7 @@ def fig_decomp():
     xs = X0 + 120
     ytop = py2 + 50
     steps = [(N.B_GPUEXACT, RD, "第一笔 →　④ 自己少漂：cuBLAS FP32 一次累加整个词表（GPU 一侧）", "%.2e"),
-             (N.B_DLOGITS, BL, "← 第二笔　TPU 输出头反向的 dlogits 舍成 BF16（TPU 一侧）", "%.2e"),
+             (N.B_DLOGITS, BL, "← 第二笔　TPU 的 dlogits 舍成 BF16（④ 没有这一舍）", "%.2e"),
              (N.B_REST, LINE2, "第三笔　其余 BF16 存储与逐元素", "%.1e")]
     f.line(xs, ytop - 14, xs, ytop + 128, INK, 1.4, arrow=False)
     f.t(xs - 6, ytop - 18, "0", INK, True, 13, "end")
@@ -169,7 +169,7 @@ def fig_twolayer():
         if sub:
             f.t(x + w / 2, y + 54, sub, GY, size=13, anchor="middle")
     node(560, py + 150, 280, 76, "TPU 被测", "当前对齐配置，1000 步", BL)
-    node(60, py + 30, 400, 76, "⑤ 最终 golden（一份当基线）", "GPU 生产 ＋ 输出头 dgrad 分段累加", OR)
+    node(60, py + 30, 400, 76, "⑤ 最终 golden（一份当基线）", "GPU 生产 ＋ 输出头 dgrad 升 FP32 分段累加", OR)
     node(960, py + 30, 380, 76, "尺子：⑤ 自己重跑", "%d 份两两 %d 对" % (N.FINAL_RUNS, N.FINAL_PAIRS), OR)
     f.box(922, py + 140, 456, 54, "#fff", GY2, 10, sw=1.6, dash="5 4")
     f.t(1150, py + 162, "只报：TPU 扰动组 %d 份（只改执行参数）" % N.ENSEMBLE_RUNS, GY, True, 14, "middle")
