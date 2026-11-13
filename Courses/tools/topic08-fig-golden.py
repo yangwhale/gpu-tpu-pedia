@@ -109,16 +109,18 @@ def fig_decomp():
     f.t(X(0) + 8, yb1 + 16, "GPU 输出头 dgrad 的长累加偏差 ＋%.4f（BF16 张量核 ＋ cuBLAS FP32 一次累加）" % N.LADDER_DGRAD, "#fff", True, 13)
     f.box(X(N.PN_PRODCHUNK), yb1, X(N.PN_TRUE) - X(N.PN_PRODCHUNK), 22, LINE2, GY2, 3)
     f.t(X(N.PN_TRUE), yb1 + 46, "两边共有：输出头反向的 dlogits 舍成 BF16 ＋%.4f" % N.LADDER_SHARED, GY, True, 13, anchor="end")
-    f.t(X0, py + PH - 40, "TPU 生产和 ⑤ 几乎落在同一点；真精确 ＝ ⑥，TPU 自己的精确轨迹也落在这里", GY, size=12)
+    f.t(X0, py + PH - 40, "TPU 生产和 ⑤ 几乎落在同一点；⑥ 真精确 ＝ ④ 再把那次长求和分段（只当参照），TPU 自己的精确轨迹也落在这里", GY, size=13)
     f._pan = None
-    PH2 = 232
+    PH2 = 250
     py2 = f.panel(0, py + PH + 16, W, PH2, "TPU 生产对 ④ 的 ＋%.5f 是三笔相加（第 1000 步，v7x 那组补跑；v5p 那组见出处）" % N.TPU_VS_FIX1, BL)
     K = 760 / 0.0095
     xs = X0 + 120
     ytop = py2 + 50
-    steps = [(N.B_GPUEXACT, RD, "第一笔　④ 自己少漂：cuBLAS FP32 一次累加整个词表（GPU 一侧）", "%.2e"),
-             (N.B_DLOGITS, BL, "第二笔　TPU 输出头反向的 dlogits 舍成 BF16（TPU 一侧）", "%.2e"),
+    steps = [(N.B_GPUEXACT, RD, "第一笔 →　④ 自己少漂：cuBLAS FP32 一次累加整个词表（GPU 一侧）", "%.2e"),
+             (N.B_DLOGITS, BL, "← 第二笔　TPU 输出头反向的 dlogits 舍成 BF16（TPU 一侧）", "%.2e"),
              (N.B_REST, LINE2, "第三笔　其余 BF16 存储与逐元素", "%.1e")]
+    f.line(xs, ytop - 14, xs, ytop + 128, INK, 1.4, arrow=False)
+    f.t(xs - 6, ytop - 18, "0", INK, True, 13, "end")
     cur = 0.0
     for k, (v, c, lab, sp) in enumerate(steps):
         a, b = cur, cur + v
@@ -129,6 +131,8 @@ def fig_decomp():
             f.t(x1 + 10, yy + 17, "%s　%s" % (lab, tx(v, sp, plus=True)), "#fff", True, 13)
         else:
             f.t(x2 + 10, yy + 17, "%s　%s" % (lab, tx(v, sp, plus=True)), GY, True, 13)
+        ac = GY2 if c == LINE2 else c
+        f.line(xs + a * K, yy + 31, xs + b * K, yy + 31, ac, 2, arrow=True)     # 方向：这一笔把读数往哪推
         cur = b
     f.line(xs + cur * K, ytop + 84, xs + cur * K, ytop + 128, INK, 1.5, dash="4,3", arrow=False)
     f.t(xs + cur * K + 8, ytop + 140, "合计 ％s，正好等于实测" .replace("％s", tx(N.TPU_VS_FIX1)), INK, True, 13)
