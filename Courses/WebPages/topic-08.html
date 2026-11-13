@@ -1094,7 +1094,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>分布式优化器</b>：把优化器状态切开分到各张卡上存；梯度规约也从 all-reduce 改成 reduce-scatter。本讲的 GPU 默认组把它关掉：有一批老运行（推断当时开着）持续偏低一点，原因没查清。</li>
     <li><b>Megatron-Bridge、Transformer Engine</b>：GPU 这一侧用的训练框架，以及 NVIDIA 给它提供低精度矩阵乘等算子的库。</li>
     <li><b>FSDP</b>：把权重切开分到各张卡、用的时候再拼起来的数据并行（专题五 §2.3）。</li>
-    <li><b>collective matmul</b>：一边在设备之间收下一片数据、一边算矩阵乘，把通信藏在计算后面（<a href="#s5-4">§5.4</a>）。</li>
+    <li><b>collective matmul</b>：本课叫「边传边乘」，编译产物里叫窗口化矩阵乘；一边在设备之间收下一片数据、一边算矩阵乘，把通信藏在计算后面（<a href="#s5-4">§5.4</a>）。</li>
     <li><b>微批（microbatch）</b>：一步要算的一批数据再切成几份，一份一份地过，梯度加起来。</li>
     <li><b>dgrad</b>：反向里「对输入的梯度」，这一讲专指输出层把梯度传回隐状态的那一次矩阵乘（dh ＝ dlogits · W）。</li>
     <li><b>Adam 的 ε</b>：Adam 更新公式分母上加的一个小常数（这里是 1e-8），防止除以零。</li>
@@ -7526,7 +7526,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>裁判工具要跟生产编得一样。</b>单算子回放把多 token 预测层的几个投影也编成了边传边乘，R 同样 1.41；可训练步的编译产物里没有给多 token 预测层的那组边传边乘循环，推断这几个矩阵乘在训练里是先收齐权重再整段乘的，回放这几格不代表生产。更早一版回放没把输入按 batch 切，投影 R 到了 2.12，也是工具和生产切法不一样。用回放之前，先拿编译产物对一遍：工具里的程序和训练步里的，是不是同一种写法。</p></details>
   <details class="foldfig"><summary><b>这个开关在代码里怎么开</b>：JAX、PyTorch 各叫什么；反向那几处要不要一起改</summary>
   <p>落到代码上，是给那处矩阵乘指定 FP32 累加（JAX 里给 <code>jax.lax.dot</code> 写 <code>preferred_element_type=jnp.float32</code>，出口再转回 BF16），不是加一个编译参数。别的框架要找的是「BF16 矩阵乘的部分和用什么精度相加」这一项；例如 PyTorch 在 GPU 上有 <code>torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction</code>，设成 False 就关掉（PyTorch 的 CUDA 语义文档）。反向那一侧，第三次迁移的编译产物里不用改：权重梯度一侧的累加器本来就是 FP32；求输入梯度时，o_proj、down、q_b、kv_b 是权重先收齐再在本卡乘；gate、up 和路由打分只是按列写各自的一段；都没有部分和相加。</p>
-  <p>另一条路是用编译参数把窗口化整个关掉。混元 3 试过：那样连 GPU 本来就有的一次舍入也省掉了（投影输出不舍就直接进了残差加），MLP 前归一化的 R 到了 1.64，反而对不齐 —— 多舍少舍都不行，所以用开关不用参数。</p></details>
+  <p>另一条路是用编译参数把边传边乘整个关掉。混元 3 试过：那样连 GPU 本来就有的一次舍入也省掉了（投影输出不舍就直接进了残差加），MLP 前归一化的 R 到了 1.64，反而对不齐 —— 多舍少舍都不行，所以用开关不用参数。</p></details>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/fb4c449621c2f3f3a0941f176903911da4cfb69c/src/maxtext/configs/base.yml#L148">MaxText（混元 3 公开分支）：开关 dense_fp32_accumulation</a>　<a class="codelink" href="https://github.com/yangwhale/maxtext/blob/fb4c449621c2f3f3a0941f176903911da4cfb69c/src/maxtext/layers/linears.py#L215-L227">MaxText（混元 3 公开分支）：矩阵乘里 FP32 累加、只舍一次</a></p>
   <h3 id="s5-5">5.5　excess precision：融合里省掉的舍入</h3>
 <figure class="fbox fwide" id="fig-excess"><svg viewBox="0 0 1400 652" width="100%" role="img" aria-label="四行，每行同样四个算子从左往右串起来，红色小块是一次「舍到 BF16」。第一行 GPU：一个算子一个 kernel，每个算子出口舍一次，共 4 次。第二行 TPU 默认：XLA 把相邻算子融成块（示意：前两个一块、后两个一块），块里一路用 FP32，只在块出口舍，共 2 次，舍在哪由融合怎么切决定。第三行关掉 excess precision：块还在，但块里每个算子出口照样舍，共 4 次，位置跟第一行一样。第四行开关不动，只在一处显式写「舍到 BF16」：那一处一定舍，编译器不会删。关掉只是让舍入位置确定，不是更准。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -8559,7 +8559,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s6-3">6.3　固定探针、状态互换</h3>
   <ul>
     <li><b>固定探针</b>：每隔 25 步，在一条固定的序列上单独跑一次前向，记每一层输出的均值、lse（log-sum-exp，所有 logits 的整体水平）。</li>
-    <li><b>读数算不算数</b>：见下面工具表；精度开关在生产程序里生没生效，日常回归直接数生产训练步编译后的程序（舍到低精度的算子、all-reduce、自定义 kernel 调用各几个），窗口化矩阵乘只靠整份程序的指纹兜底。</li>
+    <li><b>读数算不算数</b>：见下面工具表；精度开关在生产程序里生没生效，日常回归直接数生产训练步编译后的程序（舍到低精度的算子、all-reduce、自定义 kernel 调用各几个），边传边乘（编译产物里叫窗口化矩阵乘）只靠整份程序的指纹兜底。</li>
     <li><b>状态互换</b>：把一侧某一步的整套 FP32 状态搬到另一侧，用同一批数据各算一步（连 Adam 的步数计数和学习率调度的步号一起搬，不然偏置校正对不上）。它能把「这一步算得不一样」和「状态已经不一样」分开（<a href="#s7-5">§7.5</a>）。</li>
   </ul>
   <details class="foldfig"><summary><b>工具表</b>：哪些读数能当生产程序的证据</summary>
@@ -9907,9 +9907,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>每卡 4096 个下标、全局 32768 个（更新量是随机数，跟训练里的数不直接比，只看相对大小）：FSDP 1.58e-3；纯数据并行 7.17e-3；纯数据并行只加上排序 2.86e-3。从纯数据并行到 FSDP 的差距，排序一项走了约八成（77%）（本课按这三个数复算）；剩下的在本卡部分和先舍一次 BF16、再做 BF16 跨卡求和 —— 跟修法②是同一种舍入结构。</p></details>
 
   <h3 id="s8-6">8.6　谁来排序：下标数过门槛；门槛跟着运行库走</h3>
-  <p>把编译器每道工序之后的程序都存下来看，排序是 TPU 后端（libtpu）自己插的（工序名在下面折叠里）。把一次 scatter 的下标数往上扫：</p>
-  <details class="foldfig"><summary><b>是哪道工序</b></summary>
-  <p>插排序的是后端的一道工序 <code>tpu_scatter_gather_optimizer</code>，公开的 XLA 代码里按名字搜不到。</p></details>
+  <p>把编译器每道工序之后的程序都存下来看，排序是 TPU 后端（libtpu）里的一道工序自己插的，公开的 XLA 代码里找不到它。把一次 scatter 的下标数往上扫：</p>
+
 <figure class="fbox fwide" id="fig-sweep"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="两块。左块横轴是一次 scatter 的下标数，从 2048 到 32768，对数刻度；纵轴离 FP64 的距离。红线是训练里那种不带标记的写法：2048、4096、8192 时 4.6e-3、6.7e-3、9.1e-3，一路涨；到 16384 突然掉到 1.55e-3，因为编译器自己插了排序。绿线是排好序带标记的写法，一直在 1.4e-3 到 1.6e-3。灰线是关掉 excess precision，一路涨到 1.76e-2。竖线是门槛 15104，等于词表行数的八分之一（运行库 0.0.46）。纯数据并行每卡 4096 和不累积时 8192 都在门槛左边，FSDP 每卡 32768 在右边。右块换不同的表形状二分门槛，插排序的点都落在「下标数 ＝ 行数 ÷ 8」那条线上；表的总元素太少时不插。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">谁来排序：一次 scatter 的下标数过了门槛，后端自己插（运行库 0.0.46 上是表行数的 1/8）</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：同一个 scatter，下标数从 2048 扫到 32768（单算子，实测，横轴每格翻倍）；右：换表形状二分出的门槛（交叉编译，实测）</text>
@@ -9993,7 +9992,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="579" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛只认下标数，不认并行方式：FSDP 一次加得多，恰好跨过了线</tspan></text>
 </svg><figcaption><b>红线过了竖线就掉下来。</b><span class="capmore"><br><em>右块的点都落在虚线上；空心点是表太小、不插排序。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 左块实测（单算子，v5p，表 bf16[120832,1024]，下标取 golden 第 1 步真实 token 的前 N 个，更新量随机 BF16）：不带标记 4.59e-3 ／ 6.75e-3 ／ 9.14e-3 ／ 1.55e-3 ／ 1.58e-3；排好序带标记 1.37e-3 ／ 1.48e-3 ／ 1.51e-3 ／ 1.55e-3 ／ 1.58e-3；关 excess precision 4.59e-3 ／ 6.75e-3 ／ 9.14e-3 ／ 1.29e-2 ／ 1.76e-2；FP32 累加 1.6e-9 到 1.1e-8。每格都逐位等于对应的 CPU 仿真。</p>
 <p>📌 右块实测（CPU 上用同一个 TPU 运行库为 v5p 交叉编译，看优化后 HLO 里有没有 sort）：1,000 × 1024 到 65536 都不插；30,000 × 128 到 65536 都不插；30,000 × 1024 最小 3,751；60,000 × 128 最小 7,501；120,832 × 128 最小 15,105；120,832 × 1024 最小 15,105；480,000 × 128 最小 60,001。插排序的，最小下标数都等于 行数 ÷ 8 ＋ 1，门槛位置和列数无关；整张表按 FP32 放得进片上内存时不插（30000 行：128 列不插、1024 列插）。同一个运行库为 v7x、v6e 编译，120832 × 1024 的门槛也是 15104／15105（有的表形状在 v7x 上交给 SparseCore，另算）。</p>
-<p>📌 插排序的是 TPU 后端（libtpu）里的一道工序 tpu_scatter_gather_optimizer：对（下标, 序号）稳定排序 → 按排序后的次序取更新量 → scatter 标上「下标已排序」。公开的 XLA 代码里按名字搜不到，触发条件只能从实验反推。</p>
+<p>📌 插排序的是 TPU 后端（libtpu）里的一道工序：对（下标, 序号）稳定排序 → 按排序后的次序取更新量 → scatter 标上「下标已排序」。公开的 XLA 代码里找不到它，触发条件只能从实验反推。</p>
 <p>⚠️ 门槛为什么定在这里（推断）：看上去是为速度定的启发式，精度更好是附带效果；单算子耗时只部分支持（快慢交叉在 4096 到 8192 之间，和 15104 对不上）。</p></details></figure>
   <p>落回训练：每张卡那次 scatter 一次加几个下标，决定了排不排序。<a href="#s8-1">§8.1</a> 那张表就是这么来的：</p>
   <table class="t9"><thead><tr><th>跑法</th><th>每卡一次的下标数</th><th>运行库 0.0.46</th><th>运行库 0.0.52</th><th>曲线最差 <span style="text-transform:none">r</span></th></tr></thead><tbody>
@@ -10540,7 +10539,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul></details>
   <details class="foldfig"><summary><b>想两边对得更紧，要动哪些开关</b>：TPU 一侧必需两项、推荐两项，GPU 一侧一处，各有代价</summary>
   <ul>
-    <li>TPU 必需：窗口化 collective matmul 的部分和留在 FP32（<a href="#s5-4">§5.4</a>），步时 v7x ＋1.9%、v5p ＋0.66%。它是单算子、单层这两级要的；1000 步这一级不靠它，开关打开前的配置对 ⑤ 也全过（最差 v5p 0.79、v7x 0.78）。梯度累积的分组跟 GPU 一样。</li>
+    <li>TPU 必需：边传边乘（collective matmul）的部分和留在 FP32（<a href="#s5-4">§5.4</a>），步时 v7x ＋1.9%、v5p ＋0.66%。它是单算子、单层这两级要的；1000 步这一级不靠它，开关打开前的配置对 ⑤ 也全过（最差 v5p 0.79、v7x 0.78）。梯度累积的分组跟 GPU 一样。</li>
     <li>TPU 推荐：RMSNorm 在 FP32 里算完只舍一次（第二次迁移在 v5p、运行库 0.0.52 上，不开就超，<a href="#s10-2">§10.2</a>）；门控激活逐个算子舍入（不开时这个算子只有约四分之三元素跟 GPU 逐位）。可选：按专家切，步时反而少 28%（v7x）。</li>
     <li>GPU（只影响 golden 的制作）：输出头 dgrad 分段累加，最终 golden 唯一的数值改动。⑤ 升 FP32 再分段，步时多 61%（大头在升 FP32，按单次乘法耗时推断）；乘法留在 BF16 张量核、只分段，1000 步跟 ⑤ 分不开，步时只多 6%（<a href="#s7-5">§7.5</a>）。</li>
     <li>想朝真精确再近一步：两边都让 dlogits 留在 FP32（TPU 步时多 9.7%，v7x），对齐本身不需要。</li>
@@ -12832,7 +12831,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>跑满步数</b>：两个窗口（全程；尾段 ＝ 两条轨迹分开、偏移稳定以后，本例从第 301 步起；窗口事先写进协议；学习率有调度时，尾段要避开预热）各算带符号均值、MARE、最大单步，除以 N 得 r；≤ 1 过、1–2 待定、＞ 2 不过。待定先补参照重判。检查项多时，纯噪声也会预期出「条数 × 1/(n+1)」条待定。</li>
     <li><b>不过就往下排查</b>：从上往下一级级缩小（见下面的排查表）；TPU 上拿证据走程序外面（步间读状态、隔离回放、固定探针、状态互换）。</li>
     <li><b>golden 自己可疑时</b>：在 GPU 上跑一条精确轨迹（FP32 主权重照常更新、每步舍成 BF16 再用；前向反向的算术全部 FP32、真关 TF32；像输出头 dgrad 那样的长求和要分段累加，FP32 一次累加也会偏；核长求和要拿训练中途的状态、按实际长度、看关键方向上带符号的偏差，第 1 步对 FP64 核一遍抓不到它；<a href="#s7-5">§7.5</a>），分两关：第一关对它判过不过；第二关对生产 golden 写成「已解释差异」。什么时候算可疑：排查表里「TPU 更低、更近 FP64」那一行。参照先对 FP64 核一遍再用（例如真 FP32 的矩阵乘对 FP64 应在 1e-5 以内，<a href="#s5-3">§5.3</a>）。尺子怎么选没有通用规则（本例定案前借 ③ 那组重跑，定案时重新写了协议，换成 ⑤（最终 golden）自己 10 份两两 45 对，旧判定留着并写明作废原因），关键是写进协议、不在判定中途悄悄换。代价：全程 FP32 的矩阵乘比 BF16 慢一到两个数量级（看硬件，以自己卡上实测为准），精确轨迹还得换成不融合的注意力。</li>
-    <li><b>投产后</b>：日常回归先要求逐位；不逐位按 PR 的数值声明分流；TPU 执行噪声用只改执行方式的扰动臂标定，配置一换就重标。扰动臂的常见候选：编译器片上内存上限、注意力分块大小、重算策略（路由结果已存下时）、层是否用 scan；两条筛选：臂对基线必须不逐位（逐位的臂贡献 0、却虚增对数），会系统性增减 BF16 舍入次数的改动（关窗口化、关 excess precision、改累加精度）不能当臂 —— 它们带来的是偏差，不是噪声。选进来的臂还要过三项检查：臂自己重跑一位不差；配置、版本、编译出的程序除了改的那一处都不变；第三项分两半，第 1 步梯度那一半比 FP64：臂离 FP64 不比基线远（按能量 R ≤ 1.2）， 只改执行方式的臂也会翻近平局的路由，GPU 噪声那把尺子看不见；1000 步 loss 那一半对基线不超过 GPU 自己的噪声（本例当前配置补做了 6 个臂，R v5p 1.001–1.008、v7x 1.003–1.039，全过；参照里另两个改片上内存上限的臂没有单独补）。这样标出来的 TPU 噪声带里含着路由翻转。本例旧配置试了 14 个臂，过了 7 个。</li>
+    <li><b>投产后</b>：日常回归先要求逐位；不逐位按 PR 的数值声明分流；TPU 执行噪声用只改执行方式的扰动臂标定，配置一换就重标。扰动臂的常见候选：编译器片上内存上限、注意力分块大小、重算策略（路由结果已存下时）、层是否用 scan；两条筛选：臂对基线必须不逐位（逐位的臂贡献 0、却虚增对数），会系统性增减 BF16 舍入次数的改动（关掉边传边乘、关 excess precision、改累加精度）不能当臂 —— 它们带来的是偏差，不是噪声。选进来的臂还要过三项检查：臂自己重跑一位不差；配置、版本、编译出的程序除了改的那一处都不变；第三项分两半，第 1 步梯度那一半比 FP64：臂离 FP64 不比基线远（按能量 R ≤ 1.2）， 只改执行方式的臂也会翻近平局的路由，GPU 噪声那把尺子看不见；1000 步 loss 那一半对基线不超过 GPU 自己的噪声（本例当前配置补做了 6 个臂，R v5p 1.001–1.008、v7x 1.003–1.039，全过；参照里另两个改片上内存上限的臂没有单独补）。这样标出来的 TPU 噪声带里含着路由翻转。本例旧配置试了 14 个臂，过了 7 个。</li>
     <li><b>记下来</b>：一个问题一份案例文件，事实带出处、推断标出来、排除的也写；坑写进通用文档。</li>
   </ol>
   <p>判定那一步的骨架（伪代码，本课推导）：</p>

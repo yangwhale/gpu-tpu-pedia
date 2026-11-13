@@ -1036,7 +1036,7 @@ C2_THRESH = [(t["V"], t["D"], t["最小插排序N"]) for t in _C2["threshold"]]
 for _v, _d, _n in C2_THRESH:
     if _n is not None:
         assert _n == _v // 8 + 1, (_v, _d, _n)   # 最小的插排序 N ＝ V/8 ＋ 1，即「N > V/8」，和列数 D 无关
-C2_PASS = "tpu_scatter_gather_optimizer"     # 插排序的那道后端工序（libtpu 里，公开 XLA 代码里按名字搜不到）
+# 插排序的是 TPU 后端（libtpu）里的一道工序；工序名是内部名字，公开课程不写（2026-11-14 定）
 C2_VPACK = 12288                            # 排序那颗 kernel 关掉省舍入后多出的舍到 BF16 的指令（静态条数，对齐记录）
 C2_V7X_EMB_T = "1.50e-2 对 4.25e-3"           # v7x 纯数据并行：第 1 步词嵌入梯度对 v7x golden（机理没在 v7x 上单独测）
 assert "%.2e" % _C2R["v7x纯数据并行8"]["emb_test"] == "1.50e-02" and "%.2e" % _C2R["v7x纯数据并行8"]["emb_golden"] == "4.25e-03"
