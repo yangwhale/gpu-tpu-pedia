@@ -143,11 +143,10 @@ def fig_libtpu():
     """fig8-libtpu 回答：换 TPU 运行库版本，是不是只换了求和顺序？
     Ⓐ 基准运行本身 ＋ 六件，0.0.46 → 0.0.52 各一个 r（哑铃）；Ⓑ 词嵌入 scatter 的排序门槛，芯片 × 版本四格；
     Ⓒ 一条离线预测、上卡核对（v7x 纯数据并行不累积）。数据：topic08_numbers 的 LIB_*（实测）。"""
-    f = Fig(W, "三块。左：换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，"
+    f = Fig(W, "两块。左：换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，"
                "纯数据并行 2.62 到 2.82、关省舍入 13.3 到 12.6 仍超，关小矩阵乘改写、多路残差两件仍在 1 附近；"
                "RMSNorm 多舍一次从 1.06 跳到 5.50（1000 步 3.68），由能忍变成不能忍；上下文并行从 1.27 降到 0.95。"
-               "右上：词嵌入 scatter 插排序的门槛，0.0.46 上是表行数的八分之一，0.0.52 上随列宽和芯片变，v7x 列数 1024 的表降到 7181，生产宽度 6144 列反而涨到 43648。"
-               "右下：据此预测 v7x 纯数据并行不累积（每卡 8192 个下标）在 0.0.52 上会排序、不再丢精度；上卡核对成立，r 4.06 降到 0.89。")
+               "右：两根数轴。v7x 纯数据并行不累积，每卡 8192 个下标；0.0.46 的门槛 15105 在它右边，不排序；0.0.52 的门槛 7181 在它左边，排序。据此预测 0.0.52 上不再丢精度，上卡核对成立，r 4.06 降到 0.89。")
     y0 = f.header("换运行库，不一定只换了求和顺序",
                   "第二次迁移，TPU 运行库 0.0.46 → 0.0.52：基准运行重建，六件逐件重测，各对同版本的基准比",
                   [(GY2, "空心 ＝ 0.0.46"), (RD, "0.0.52，超出纯噪声最高分"), (BL, "0.0.52，在线内")])
@@ -193,42 +192,32 @@ def fig_libtpu():
     f._pan = None
     RX = LW + 20
     RW = W - RX
-    PH1 = 270
-    py2 = f.panel(RX, y0, RW, PH1, "Ⓑ 词嵌入那次 scatter：几个下标起插排序", OR)
-    cols = [("v5p_046", "v5p 0.0.46"), ("v5p_052", "v5p 0.0.52"), ("v7x_046", "v7x 0.0.46"), ("v7x_052", "v7x 0.0.52")]
-    shapes = [(120832, 1024), (120832, 128), (480000, 128), (120832, 6144)]
-    cx0, cw, rh = RX + 150, 102, 38
-    for j, (_k, lab) in enumerate(cols):
-        f.t(cx0 + j * cw + cw / 2, py2 + 26, lab, INK, True, 12.5, "middle")
-    for i, (v, d) in enumerate(shapes):
-        yy = py2 + 42 + i * rh
-        f.t(RX + 14, yy + 24, "%s × %d" % (format(v, ","), d) , INK, True, 12.5)
-        for j, (k, _lab) in enumerate(cols):
-            n = N.PROD_TH[k] if d == 6144 else N.LIB_THRESH[k].get((v, d))
-            if d == 128 and k.startswith("v7x"):
-                txt, fill, c = "—", "#f1f3f4", GY
-            elif n is None and d == 6144:
-                txt, fill, c = "＞65,536", "#fef7e0", OR
-            elif n is None:
-                txt, fill, c = "不插", "#f1f3f4", GY
-            elif n == v // 8 + 1:
-                txt, fill, c = format(n, ","), "#fff", INK
-            else:
-                txt, fill, c = format(n, ","), "#fef7e0", OR
-            f.box(cx0 + j * cw + 3, yy + 4, cw - 6, rh - 8, fill, LINE, 4)
-            f.t(cx0 + j * cw + cw / 2, yy + 24, txt, c, c != INK, 12, "middle", w=cw - 10)
-    f.t(RX + 14, py2 + 42 + 4 * rh + 22, "最后一行是生产宽度。白：行数 ÷ 8 ＋ 1　黄：不再是 1/8　—：v7x 只列 1024 以上的列宽", GY, size=11.5)
-    f._pan = None
-    y3 = y0 + PH1 + 16
-    PH2 = PH - PH1 - 16
-    py3 = f.panel(RX, y3, RW, PH2, "Ⓒ 先离线预测，再上卡核对", BL)
+    py2 = f.panel(RX, y0, RW, PH, "Ⓑ 一次离线预测：v7x 纯数据并行、不累积", BL)
     t = N.LIB_V7X_GA1
-    f.t(RX + 14, py3 + 26, "v7x 纯数据并行、不累积：每卡 8,192 个下标", INK, True, 14.5)
-    f.t(RX + 14, py3 + 50, "0.0.46：门槛 15,105，不过线 → 不排序", GY, size=14)
-    f.t(RX + 14, py3 + 72, "0.0.52：门槛 %s，过线 → 排序（离线编译看到）" % format(N.LIB_THRESH["v7x_052"][(120832, 1024)], ","), BL, True, 14)
-    f.t(RX + 14, py3 + 100, "上卡：r %.2f → %.2f　词嵌入梯度 R %.2f → %.2f" % (t["r"] + t["R"]), BL, True, 14.5)
-    f.t(RX + 14, py3 + 124, "预测成立：词嵌入这一处随版本消失，机理不变", INK, True, 14)
-    f.t(RX + 14, py3 + 148, "（另有三个多路残差小参数离 FP64 远，靠豁免单列，在查）", GY, size=11.5)
+    th46, th52 = N.LIB_THRESH["v7x_046"][(120832, 1024)], N.LIB_THRESH["v7x_052"][(120832, 1024)]
+    NIDX = 8192
+    f.t(RX + 16, py2 + 30, "每卡一次 scatter 加 8,192 个下标；", INK, True, 14)
+    f.t(RX + 16, py2 + 52, "下标数过了门槛（蓝色阴影），后端才自己插排序", INK, True, 14)
+    LX0, LX1 = RX + 40, RX + RW - 40
+    VMAXL = 18000.0
+
+    def XL(v):
+        return LX0 + v / VMAXL * (LX1 - LX0)
+    for row, (lab, th, col, verdict) in enumerate([("运行库 0.0.46", th46, GY, "8,192 在门槛左边 → 不排序"),
+                                                  ("运行库 0.0.52", th52, BL, "8,192 过了门槛 → 排序")]):
+        yy = py2 + 120 + row * 120
+        f.t(RX + 16, yy - 32, lab, col, True, 14)
+        f.box(XL(th), yy - 10, XL(VMAXL) - XL(th), 20, "#d2e3fc", "none", 0)    # 阴影 ＝ 过了门槛、会排序的范围
+        f.line(LX0, yy, LX1, yy, INK, 1.4, arrow=False)
+        for v in (0, 5000, 10000, 15000):
+            f.line(XL(v), yy - 4, XL(v), yy + 4, INK, 1, arrow=False)
+            f.t(XL(v), yy + 20, format(v, ","), GY, size=12, anchor="middle")
+        f.line(XL(th), yy - 18, XL(th), yy + 18, col, 2.4, arrow=False)
+        f.t(XL(th), yy - 24, "门槛 %s" % format(th, ","), col, True, 13, "middle")
+        f.box(XL(NIDX) - 7, yy - 7, 14, 14, RD, RD, 7)
+        f.t(XL(NIDX), yy + 42, verdict, RD if col == GY else BL, True, 13, "middle")
+    f.t(RX + 16, py2 + PH - 70, "上卡核对：r %.2f → %.2f，词嵌入梯度 R %.2f → %.2f" % (t["r"] + t["R"]), BL, True, 14)
+    f.t(RX + 16, py2 + PH - 46, "预测成立：先离线编译看排没排序，再上卡", INK, True, 14)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "换运行库：先建新基准，再把六件重测；结论只对测过的版本对和配置成立", [
         "优化后的程序和后端生成的 kernel 都跟着变：RMSNorm 那件改动带来的程序差别两个版本是同一类，结果却从能忍变成不能忍。离线筛判不了换版本。",
@@ -241,9 +230,12 @@ def fig_libtpu():
                "📌 第 1 步：纯数据并行词嵌入梯度 R %s → %s，关省舍入 %s → %s，两个版本几乎一样；RMSNorm 多舍一次第 0 层归一化权重的 R %s → %s（第 1 步看不出，偏差是跑起来以后攒的），"
                "前 300 步主 loss 对基准的带符号均值 %s → %s，换一组机器重跑逐位相同。三种修法 0.0.52 上（300 ／ 1000 步）：%s，都跟 GPU 重跑分不开。"
                % (N.LIB_SIX_R["纯数据并行"] + N.LIB_SIX_R["关省舍入"] + N.LIB_RMS_R_STEP1 + N.LIB_RMS_SM_T + (N.LIB_FIX_T,)),
-               "📌 Ⓑ 单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。"
+               "📌 门槛表（单算子离线编译二分出的最小插排序下标数）：表 120,832 × 1024 —— v5p 0.0.46 %s、0.0.52 %s，v7x 0.0.46 %s、0.0.52 %s；120,832 × 128 —— v5p %s → %s；480,000 × 128 —— v5p %s → %s；生产宽度 120,832 × 6144 —— v7x 0.0.52 %s，v5p 0.0.52 查到 65,536 都不插。0.0.46 上都是行数 ÷ 8 ＋ 1，0.0.52 上随列宽和芯片变。"
+               % tuple(format(x, ",") for x in (N.LIB_THRESH["v5p_046"][(120832, 1024)], N.LIB_THRESH["v5p_052"][(120832, 1024)], N.LIB_THRESH["v7x_046"][(120832, 1024)], N.LIB_THRESH["v7x_052"][(120832, 1024)],
+                                                N.LIB_THRESH["v5p_046"][(120832, 128)], N.LIB_THRESH["v5p_052"][(120832, 128)], N.LIB_THRESH["v5p_046"][(480000, 128)], N.LIB_THRESH["v5p_052"][(480000, 128)], N.PROD_TH["v7x_052"])),
+               "📌 门槛的测法：单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。"
                "整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上部分形状走另一条执行路径（HLO 可见），另算；表里 v7x 只列 1024 以上的列宽。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。",
-               "📌 Ⓒ v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：%s。" % N.LIB_V7X_GA1_T,
+               "📌 Ⓑ 上卡：v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：%s。" % N.LIB_V7X_GA1_T,
                "⚠️ RMSNorm 那件为什么变强，对齐记录已查清，机理在本节折叠里。上下文并行那件降到 0.95，只能说这次没超。")
     f.save("fig8-libtpu.svg", yb + 14)
 
