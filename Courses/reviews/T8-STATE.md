@@ -728,27 +728,12 @@
 - §5.4 负责人点名的三样（4 不拆 8 拆、右栏 0/20/20/20、小切片验不出来的规矩）都在正文，没动。
 - 扫描 agent 另提的候选（§1.4 两段、§2.3 对照表、§3.2 窗口表与盲区表、§3.3 anim-ceiling、§4.3–4.4 几段、§6.3 fig-diverge、§7.5–7.6 几处、§8.2 r 611、§8.7–8.8、§10.3 PR 声明表与 fig-bug、§10.5 收尾那串）这轮没做：等讲师按节发请求，或下一轮逐条判断（讲义里有用到的不折）。
 
-## 下一步（按优先级）
-1. 镜像同步后给 §5.4–§5.8 的折叠补对齐记录链接（knowledge/fsdp-bf16-partial-sums、elided-rounding、rmsnorm-32k、lmhead-precision、transcendental、remat-reroute、pitfalls；病态那个例子链第二次迁移的案例）（钉完整 sha），重核全部 18＋ 条链接。11-13 晚查过：公开镜像最新仍是 124b2a7，没有 08 目录；开发仓库已重构（GUIDE.md ＋ knowledge/，部分和那页是 knowledge/fsdp-bf16-partial-sums.md，数字跟课件逐项对过一致）。
-   分工（协调者 11-13）：课件、图、动画、numbers 归我；讲义归讲师 topic08-lecturer，要改讲义发修改请求给它；T8-STATE 各写各的小节，写前先 pull；只 add 自己的文件。
-   待写、等负责人拍板：全局关 excess precision（32K「第 1 级 ＋ 全局关」三项全过、步时几乎不变、第 1 步比 GPU 多舍 12–13%），材料看 knowledge/elided-rounding.md 和 DETAILS D60。
-2. 回填第三次迁移的新发现（材料以 08 目录 GUIDE.md、knowledge/ 为准，每条讲来龙去脉、多图）：
-   ① 输出头精度三档（默认档把离格的 FP32 主权重截成 BF16、high 档就够、代价约一半）—— 放 §5.6 交界或单列；
-   ② 编译器删 astype 舍入、切法一变删不删也变（RMSNorm scale 4K 保住、32K 被删，逐段读数）；生产显式二选一与写法规则 —— 接 §5.5；
-   ③ ✅ H4；④ ✅ H4；① ✅ H2；② ✅ H3；
-   ⑤ ✅ H5；
-   ⑥ 之后 a5b-align2 的新结论（关 excess precision、32K 基座、ViT 阶梯）。
-（讲师第一批请求 1、3、4 已落地，提交 fe81b887；第 2 条「fig-rpipe 上块挪到 §3.2」先不做，第三节试讲后再定。）
-2b. ⑥ 第三次迁移其余新结论：32K 基座（knowledge/ladder-32k.md）、视觉塔阶梯（knowledge/vit.md）先读，挑对讲课有价值的；全局关 excess precision 等负责人拍板后再写（材料 knowledge/elided-rounding.md 末节、DETAILS D60）。
-2c. 第五节变长了（§5.4 ＋ fig-inout／windowed／anim，§5.5 ＋ fig-normscale，§5.6 ＋ fig-lmhead，§5.8 ＋ fig-ulp2）：下一轮派一次麻瓜／讲师通读第五节（muggle-review），看三处第三次迁移的段落衔接、「第三次迁移」是否每次都先报名字、术语（收缩维／求和维、格点）是否统一。
-2d. 讲义第五节要跟的：fig-normscale、fig-ulp2、fig-lmhead（已转讲师，等它回）。
-3. 全篇开讲前打磨：字多处折叠、课件与讲义分工、每节小节数；讲义第五节新 ▍四台词再顺一遍。
-
----
-
-# 试讲（讲师，2026-11-13 起，11-16 开讲前一轮接一轮）
-
-> 做法：按讲义一节一节写讲师逐字稿（本地草稿 `Courses/reviews/T8-rehearsal/round<N>/§x.y.md`，x 是讲义第几节、y 是第几个 ▍，不入库）→ 讲完回头看 → 改讲义、每节一提交 → 课件的修改写成请求发给总编辑。讲义归讲师、课件归总编辑。
+## 下一步（按优先级）（11-13 深夜更新，覆盖本阶段前面的版本）
+1. 公开镜像同步后：给 §5.4–§5.8 的折叠补对齐记录链接（第三次迁移 knowledge/ 下 fsdp-bf16-partial-sums、elided-rounding、rmsnorm-32k、lmhead-precision、transcendental、remat-reroute、pitfalls），钉新 sha，重核全部链接。镜像现在仍是 124b2a7。
+2. 锤炼续：扫描 agent 提的其余折叠候选（见 H9 第三条）逐条判断，讲义用到的不折；等讲师按节发的请求优先。
+3. 等协调者转结论再写：32K 基座、视觉塔阶梯、全局关 excess precision（后者要负责人拍板）。
+4. 全篇通读一遍（锤炼后）：折叠以后正文是否还连得上、桥句是否够、图注是否指到已折叠的东西；首页卡片「讲什么」一栏按锤炼后的主线改。
+5. 旧待办：六张旧写字板图、英文版。
 
 ## 试讲 R1（11-13）
 - 讲义改了这些：
