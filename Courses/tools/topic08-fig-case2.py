@@ -104,7 +104,7 @@ def fig_head():
     rows = [("GPU 交叉熵反向", "求 dlogits 那一段", N.CE_BWD_S1, GY2),
             ("GPU 输出层 dgrad，BF16", "dh ＝ dlogits · W，沿词表求和", abs(N.HEAD_BF16_S1), RD),
             ("TPU 整个输出头反向", "MXU：BF16 乘、FP32 累加", abs(N.HEAD_TPU_S1), BL),
-            ("GPU dgrad 名义 FP32", "没关 TF32 —— 一度被当成「精确」", abs(N.HEAD_TF32_S1), RD),
+            ("GPU dgrad 名义 FP32（先不看，见第十节）", "没关 TF32 —— 一度被当成「精确」", abs(N.HEAD_TF32_S1), GY),
             ("GPU dgrad FP32，真关 TF32", "第 1 步几乎不偏；训练中途会长大", abs(N.HEAD_EXACT_S1), GR)]
     bx, bw, emin, emax = 330, 380, 1e-6, 1e-3
     # ⭐ R3：对数柱的原点藏着（1e-6），柱长看着差 2 倍其实差 27 倍 → 每个十倍一根竖格线、顶上标数
