@@ -242,47 +242,74 @@ def fig_regress():
 
 
 def fig_journey():
-    rows = [
-        (True,  "地基铺平", "数据原样回放、权重逐张量逐位、按实际生效的权重衰减", "第 1 步 loss 只差 %s" % N.D1_T),
-        (True,  "换成噪声尺子", "同设置 GPU 跑 10 份，看 TPU 落在哪", "偏移在参考档里，却离 GPU 均值 %s 个标准差：真偏差" % N.SIGMA_RANGE),
-        (True,  "按参数分组定位", "参数范数多涨的那截拆到组、拆到行", "%s 在输出层，集中在没出现过的词" % N.GROUP_HEAD_SHARE_T),
-        (True,  "双向干预", "两边都去掉「所有 logits 一起升降」那股力", "lse 的差 %s → %s" % (N.ORIG_LSE_T, tx(N.REMOVE_LSE, "%.3f"))),
-        (False, "走错：「FP32 dgrad」其实是 TF32", "偏 %s，比 BF16 的 %s 还大，一度判成换 dgrad 也不动" % (tx(abs(N.HEAD_TF32_S1)), tx(abs(N.HEAD_BF16_S1))), "教训：开关以实测为准，读回值不作数"),
-        (True,  "找到源头", "拿训练里的真张量，对 FP64 拆输出头反向", "GPU dgrad 朝零 %s，TPU %s（第 1 步）" % (tx(N.HEAD_BF16_S1), N.HEAD_TPU_S1_T)),
-        (False, "走错：全程 FP32 下路由也翻，当成两边实现不同", "撤回：TPU 那份 FP32 参照里路由专家其实按 BF16 算，翻转是它的下游", "教训：参照本身先对 FP64 验一遍"),
-        (True,  "golden 一步步改", "② 生产近似 → ③ dgrad 换 FP32 → ④ 精确轨迹", "TPU 对它 %s → %s → %s 倍噪声" % (N.GOLDEN_R2_T, N.GOLDEN_R3_T, N.GOLDEN_R4_1_T)),
-        (True,  "TPU 开关：部分和留 FP32", "窗口化 collective matmul 不再在 BF16 里累加", "qkv 投影 R %.3f → %s；对 ④ %s → %s 倍" % (N.R_QKV_BEFORE, N.R_QKV_AFTER_T, N.GOLDEN_R4_T, "3.45")),
-        (False, "走错：精确轨迹的噪声只看了一对", "像是比借来的尺子窄 %d 倍；五份 10 对一量，同一量级" % N.EXACT_PAIR1_X, "教训：一对样本量不出散布"),
-        (False, "走错：把 ④ 当成精确值", "FP32 一次累加 12 万也偏，④ 自己少漂 %s；分段累加后两边精确轨迹重合" % N.B_GPUEXACT_T, "教训：裁判也要被核对"),
-        (True,  "定案 ⑤：只修那一次长求和", "10 对时几项 %s 倍待定 → 两处测量口径 → 补到 45 对" % N.PEND10_T, "v5p、v7x 全部在噪声内，最差 %s 倍" % N.FINAL_WORST_T),
-    ]
-    f = Fig(W, "从上往下是这一次排查大致的先后：绿色是留下来的一步，写着改了什么、前后的数；红色虚框是走错的四步，写着错在哪、留下什么教训。"
-               "最后一步定案：GPU 生产只修输出头 dgrad 那一次长求和，当第一关的基线，TPU 在 v5p、v7x 上全部落进噪声，最差 0.85 倍。")
-    y0 = f.header("一路走来：十二步，其中四步走错",
-                  "大致按时间从上往下；绿 ＝ 留下来的一步（改了什么 → 前后的数），红虚框 ＝ 走错的一步（错在哪 → 教训）",
-                  [(GR, "留下来的一步"), (RD, "走错的一步")])
-    RH, GAP = 50, 8
-    PH = len(rows) * (RH + GAP) + 44
-    py = f.panel(0, y0, W, PH, "混元 3 截 4 层，GPU → TPU（实测）", BL)
-    k = 0
-    for i, (ok, title, what, res) in enumerate(rows):
-        y = py + 18 + i * (RH + GAP)
-        col = GR if ok else RD
-        f.box(30, y, W - 60, RH, "#fff" if ok else "#fce8e6", col, 8, sw=1.6, dash=None if ok else "6 4")
-        if ok:
-            k += 1
-            f.t(52, y + 31, str(k), col, True, 18, "middle")
+    G = [("地基铺平", "第 1 步 loss 只差 %s" % N.D1_T),
+         ("换成噪声尺子", "离 GPU 均值 %s 个标准差" % N.SIGMA_RANGE),
+         ("按参数分组定位", "%s 在输出层的冷门词" % N.GROUP_HEAD_SHARE_T),
+         ("双向干预", "lse 的差 %s → %s" % (N.ORIG_LSE_T, tx(N.REMOVE_LSE, "%.3f"))),
+         ("找到源头", "GPU dgrad 朝零 %s" % tx(N.HEAD_BF16_S1)),
+         ("golden 一步步改", "%s → %s → %s 倍噪声" % (N.GOLDEN_R2_T, N.GOLDEN_R3_T, N.GOLDEN_R4_1_T)),
+         ("部分和留 FP32", "qkv R %.3f → %s" % (N.R_QKV_BEFORE, N.R_QKV_AFTER_T)),
+         ("定案 ⑤", "最差 %s 倍，全过" % N.FINAL_WORST_T)]
+    X = [("「FP32 dgrad」其实是 TF32", "教训：开关以实测为准"),
+         ("路由翻转当成两边实现不同", "教训：参照先对 FP64 验"),
+         ("精确轨迹的噪声只看一对", "教训：一对量不出散布"),
+         ("把 ④ 当成了精确值", "教训：裁判也要被核对")]
+    f = Fig(W, "一条路：八个绿色站点是留下来的八步，按先后排成两行，每站写一个数；四个红色虚框是走错的四步，从主线岔出去、又折回来，各写一条教训。"
+               "第 4 步后岔出去一次：以为 FP32 dgrad，其实是 TF32；第 5 步后一次：路由翻转当成两边实现不同；第 7 步后两次：精确轨迹的噪声只看一对、把 ④ 当成了精确值。"
+               "最后一站定案 ⑤，v5p、v7x 全部在噪声内，最差 %s 倍。" % N.FINAL_WORST_T)
+    y0 = f.header("一路走来：八步留下，四步走错又折回",
+                  "混元 3 截 4 层；绿站 ＝ 留下来的一步（只写一个数），红虚框 ＝ 走错的一步（只写教训），细节在图下",
+                  [(GR, "留下来的一步"), (RD, "走错、折回")])
+    PH = 560
+    py = f.panel(0, y0, W, PH, "这一次排查的路线（实测）", BL)
+    y1, y2 = py + 100, py + 340
+    xs1 = [140, 440, 740, 1040]
+    xs2 = [1040, 740, 440, 140]
+    pos = [(x, y1) for x in xs1] + [(x, y2) for x in xs2]
+    # 主线
+    f.line(xs1[0], y1, xs1[-1], y1, GR, 4, arrow=False)
+    f.path("M%d %d L1250 %d L1250 %d L%d %d" % (xs1[-1], y1, y1, y2, xs2[0], y2), GR, 4, arrow=False)
+    f.line(xs2[0], y2, xs2[-1], y2, GR, 4, arrow=False)
+    for k, ((x, y), (t1, t2)) in enumerate(zip(pos, G)):
+        f.box(x - 18, y - 18, 36, 36, GR, GR, 18)
+        f.t(x, y + 6, str(k + 1), "#fff", True, 16, "middle", big=True)
+        if k < 4:                              # 第一行字在线上方，第二行字在线下方：两行之间留给岔路
+            f.t(x, y - 50, t1, GR, True, 15, "middle")
+            f.t(x, y - 28, t2, INK, True, 13, "middle")
         else:
-            f.t(52, y + 31, "✗", col, True, 18, "middle")
-        f.t(78, y + 22, title, col, True, 15)
-        f.t(78, y + 42, what, GY, size=12.5)
-        f.t(W - 50, y + 31, res, INK if ok else RD, True, 13.5, "end")
+            f.t(x, y + 42, t1, GR, True, 15, "middle")
+            f.t(x, y + 64, t2, INK, True, 13, "middle")
+
+    BWd, BHd = 290, 62
+
+    def detour(bx, by, side, t1, t2, out_x=None, back_x=None):
+        """第二行从右往左走：岔出去的那根在右（离上一站近），折回的那根在左、带箭头。"""
+        L, R = bx - BWd / 2.0, bx + BWd / 2.0
+        f.box(L, by, BWd, BHd, "#fce8e6", RD, 8, sw=1.6, dash="6 4")
+        f.t(bx, by + 24, "✗ " + t1, RD, True, 14, "middle")
+        f.t(bx, by + 47, t2, RD, size=13, anchor="middle")
+        if side == "above":                   # 从第二行往上岔
+            ox, bk = out_x or R - 40, back_x or L + 40
+            f.line(ox, y2 - 4, ox, by + BHd, RD, 1.6, dash="5,4", arrow=False)
+            f.line(bk, by + BHd, bk, y2 - 8, RD, 1.6, dash="5,4")
+        elif side == "below":                 # 从第二行往下岔（从两站的字之间穿过）
+            ox, bk = out_x, back_x
+            f.line(ox, y2 + 4, ox, by, RD, 1.6, dash="5,4", arrow=False)
+            f.line(bk, by, bk, y2 + 8, RD, 1.6, dash="5,4")
+        else:                                 # 从右侧竖线往左岔
+            f.line(1250, by + 14, R, by + 14, RD, 1.6, dash="5,4", arrow=False)
+            f.line(R, by + BHd - 14, 1246, by + BHd - 14, RD, 1.6, dash="5,4")
+    detour(1080, py + 120, "left", *X[0])
+    detour(890, py + 222, "above", *X[1])
+    detour(290, py + 222, "above", *X[2])
+    detour(290, y2 + 110, "below", *X[3], out_x=305, back_x=275)
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "四步走错，三步错在「参照」：开关、FP32 参照、精确轨迹都被当成了它名字说的那样", [
-        "最终方案里改数值的主要是两处：TPU 的部分和留 FP32、GPU golden 的分段累加（另有几个只做显式保证的 TPU 开关）；其余几步都是把量法和参照弄对。",
-        "代价：每一步都要一条只改一处的运行做证据；走错的几步也写进记录，不悄悄删掉。",
-    ])
-    yb = f.src(yb + 10, "📌 实测：各行的数都在出处台账里；「走错」那几步的原结论和更正都留在排查记录里。")
+    yb = f.band(py + PH + 20, "ok", "四步走错，三步错在「参照」：开关、FP32 参照、精确轨迹都被当成了它名字说的那样", [])
+    yb = f.src(yb + 10,
+               "📌 每站的细节：① 数据原样回放、权重逐张量逐位、按实际生效的权重衰减；② 同设置 GPU 跑 10 份，偏移在参考档里，却是真偏差；③ 参数范数多涨的那截拆到组、拆到行；④ 两边都去掉「所有 logits 一起升降」那股力；⑤ 拿训练里的真张量对 FP64 拆输出头反向，TPU 第 1 步 %s；⑥ ② 生产近似 → ③ dgrad 换 FP32 → ④ 精确轨迹；⑦ 边传边乘的部分和不再在 BF16 里累加，对 ④ %s → 3.45 倍；⑧ 只修那一次长求和，10 对时几项 %s 倍待定，补到 45 对。" % (N.HEAD_TPU_S1_T, N.GOLDEN_R4_T, N.PEND10_T),
+               "📌 走错的四步：「FP32 dgrad」偏 %s，比 BF16 的 %s 还大，一度判成换 dgrad 也不动；TPU 那份 FP32 参照里路由专家其实按 BF16 算，翻转是它的下游，撤回；精确轨迹只看一对扰动，像是比借来的尺子窄 %d 倍，五份 10 对一量同一量级；FP32 一次累加 12 万也偏，④ 自己少漂 %s，分段累加后两边精确轨迹重合。"
+               % (tx(abs(N.HEAD_TF32_S1)), tx(abs(N.HEAD_BF16_S1)), N.EXACT_PAIR1_X, N.B_GPUEXACT_T),
+               "📌 最终方案里改数值的主要是两处：TPU 的部分和留 FP32、GPU golden 的分段累加；其余几步都是把量法和参照弄对。各数都在出处台账里。")
     f.save("fig8-journey.svg", yb + 14)
 
 def fig_switch():

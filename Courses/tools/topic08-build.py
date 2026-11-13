@@ -1716,7 +1716,7 @@ FIGS = {
     "__FIG_DECOMP__": ("fig-decomp", "fig8-decomp.svg", "topic08-fig-golden.py",
         '<b>先看上面的数轴：蓝点和橙点几乎叠在一起。</b><br><em>都是第 1000 步、生产近似配置、TPU 当前配置；下面三笔里红色是 GPU 一侧，蓝色是 TPU 一侧。</em>'),
     "__FIG_JOURNEY__": ("fig-journey", "fig8-journey.svg", "topic08-fig-golden.py",
-        '<b>先看红虚框：四步走错，各留一条教训。</b><br><em>绿色八步是留下来的；每一行的数都在出处台账里。</em>'),
+        '<b>先看红虚框：四步走错，各留一条教训。</b><br><em>绿色八站是留下来的，每站一个数；细节在图下出处里。</em>'),
     "__FIG_TWOLAYER__": ("fig-twolayer", "fig8-twolayer.svg", "topic08-fig-golden.py",
         '<b>橙色那一关要判过不过，灰色那一关只写清楚。</b><br><em>虚线框是只报不判的交叉核对（TPU 扰动组）。</em>'),
     "__FIG_REGRESS__": ("fig-regress", "fig8-regress.svg", "topic08-fig-golden.py",

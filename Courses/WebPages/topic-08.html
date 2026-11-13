@@ -10441,7 +10441,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 实测（v7x）：第一笔 ＋8.697e-3（GPU 精确改分段累加 ＋8.55e-3）；第二笔 −6.836e-3（TPU 只把 dlogits 舍成 BF16、其余全精确）；第三笔由差额得出，约两个 FP32 记录刻度。v5p 那组：＋7.97e-3、−6.10e-3、＋4.9e-4，同样合到 ＋2.35e-3。GPU 真精确只多舍这一次 dlogits 少漂 6.74e-3。</p></details></figure>
   <p>早先有一版拆账把 ④ 当成了精确值，而 ④ 自己也偏，那一版作废。</p>
   <p>为什么验收要分两关？像打靶：噪声尺子是同一把枪连打几发，看弹孔散得多开；它看不出整团弹孔偏离了靶心。golden 自己偏，就是靶心画歪了。所以第一关对着重画的靶心（⑤）判过不过，第二关写清旧靶心（生产 golden ②）歪在哪、歪多少。</p>
-<figure class="fbox fwide" id="fig-twolayer"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="定案后的验收协议。上一层：第一关，必须过。TPU 被测对最终 golden ⑤ 的一份比，⑤ 是 GPU 生产程序只把输出头 dgrad 改成分段累加；尺子是 ⑤ 自己同设置重跑 10 份、两两 45 对。v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 9 份扰动运行，8 份不超过 0.85 倍，1 份梯度范数待定，落在 TPU 自己的执行噪声里。下一层：第二关，已解释差异。TPU 对 GPU 生产 golden ② 仍差参数范数 +0.0209、loss −1.37e-4，全部是 GPU 输出头 dgrad 长求和的偏差。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-twolayer"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="定案后的验收协议。上一层：第一关，必须过。TPU 被测对最终 golden ⑤ 的一份比，⑤ 是 GPU 生产程序只把输出头 dgrad 改成分段累加；尺子是 ⑤ 自己同设置重跑 10 份、两两 45 对。v5p 和 v7x 当前配置每一项都在噪声内，最差 0.85 倍。旁边只报不判：TPU 只改执行参数的 9 份扰动运行，8 份不超过 0.85 倍，1 份梯度范数待定，落在 TPU 自己的执行噪声里。下一层：第二关，已解释差异。TPU 对 GPU 生产 golden ② 仍差参数范数 +0.0209、loss −1.37e-4，全部是 GPU 输出头 dgrad 长求和的偏差。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">golden 自己有偏差时：分两关验收（定案版）</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上 ＝ 必须过的那一关；下 ＝ 只写清楚、不判过不过的那一关；箭头 ＝ 谁对谁比</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
@@ -12715,83 +12715,80 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   ⑦ 换设备数、换切法：先离线编译一份生产规模的训练步，数边传边乘的循环和它们的累加器类型、数被删掉的「转 BF16 再转回」（<a href="#s5-4">§5.4</a>、<a href="#s5-5">§5.5</a>）；要真舍，写强制舍入。</div>
 
   <h3 id="s10-4">10.4　踩过的坑，和怎么记</h3>
-<figure class="fbox fwide" id="fig-journey"><svg viewBox="0 0 1400 966" width="100%" role="img" aria-label="从上往下是这一次排查大致的先后：绿色是留下来的一步，写着改了什么、前后的数；红色虚框是走错的四步，写着错在哪、留下什么教训。最后一步定案：GPU 生产只修输出头 dgrad 那一次长求和，当第一关的基线，TPU 在 v5p、v7x 上全部落进噪声，最差 0.85 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一路走来：十二步，其中四步走错</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">大致按时间从上往下；绿 ＝ 留下来的一步（改了什么 → 前后的数），红虚框 ＝ 走错的一步（错在哪 → 教训）</text>
+<figure class="fbox fwide" id="fig-journey"><svg viewBox="0 0 1400 786" width="100%" role="img" aria-label="一条路：八个绿色站点是留下来的八步，按先后排成两行，每站写一个数；四个红色虚框是走错的四步，从主线岔出去、又折回来，各写一条教训。第 4 步后岔出去一次：以为 FP32 dgrad，其实是 TF32；第 5 步后一次：路由翻转当成两边实现不同；第 7 步后两次：精确轨迹的噪声只看一对、把 ④ 当成了精确值。最后一站定案 ⑤，v5p、v7x 全部在噪声内，最差 0.85 倍。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">一路走来：八步留下，四步走错又折回</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">混元 3 截 4 层；绿站 ＝ 留下来的一步（只写一个数），红虚框 ＝ 走错的一步（只写教训），细节在图下</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">留下来的一步</text>
 <rect x="141.08" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="162" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">走错的一步</text>
-<rect x="0" y="102" width="1400" height="740" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<text class="svgsm" x="162" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">走错、折回</text>
+<rect x="0" y="102" width="1400" height="560" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">混元 3 截 4 层，GPU → TPU（实测）</tspan></text>
-<rect x="30" y="150" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="181" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
-<text class="svgsm" x="78" y="172" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">地基铺平</tspan></text>
-<text class="svgsm" x="78" y="192" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">数据原样回放、权重逐张量逐位、按实际生效的权重衰减</text>
-<text class="svgsm" x="1350" y="181" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步 loss 只差 2.5e-6</tspan></text>
-<rect x="30" y="208" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="239" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<text class="svgsm" x="78" y="230" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换成噪声尺子</tspan></text>
-<text class="svgsm" x="78" y="250" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">同设置 GPU 跑 10 份，看 TPU 落在哪</text>
-<text class="svgsm" x="1350" y="239" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">偏移在参考档里，却离 GPU 均值 2.9 到 5.3 个标准差：真偏差</tspan></text>
-<rect x="30" y="266" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="297" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
-<text class="svgsm" x="78" y="288" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按参数分组定位</tspan></text>
-<text class="svgsm" x="78" y="308" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">参数范数多涨的那截拆到组、拆到行</text>
-<text class="svgsm" x="1350" y="297" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">87% 在输出层，集中在没出现过的词</tspan></text>
-<rect x="30" y="324" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="355" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
-<text class="svgsm" x="78" y="346" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">双向干预</tspan></text>
-<text class="svgsm" x="78" y="366" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">两边都去掉「所有 logits 一起升降」那股力</text>
-<text class="svgsm" x="1350" y="355" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">lse 的差 −0.33 → −0.007</tspan></text>
-<rect x="30" y="382" width="1340" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
-<text class="svgsm" x="52" y="413" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗</tspan></text>
-<text class="svgsm" x="78" y="404" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">走错：「FP32 dgrad」其实是 TF32</tspan></text>
-<text class="svgsm" x="78" y="424" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">偏 8.08e-4，比 BF16 的 6.51e-4 还大，一度判成换 dgrad 也不动</text>
-<text class="svgsm" x="1350" y="413" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">教训：开关以实测为准，读回值不作数</tspan></text>
-<rect x="30" y="440" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="471" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
-<text class="svgsm" x="78" y="462" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">找到源头</tspan></text>
-<text class="svgsm" x="78" y="482" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">拿训练里的真张量，对 FP64 拆输出头反向</text>
-<text class="svgsm" x="1350" y="471" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU dgrad 朝零 −6.51e-4，TPU −2.4e-5（第 1 步）</tspan></text>
-<rect x="30" y="498" width="1340" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
-<text class="svgsm" x="52" y="529" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗</tspan></text>
-<text class="svgsm" x="78" y="520" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">走错：全程 FP32 下路由也翻，当成两边实现不同</tspan></text>
-<text class="svgsm" x="78" y="540" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">撤回：TPU 那份 FP32 参照里路由专家其实按 BF16 算，翻转是它的下游</text>
-<text class="svgsm" x="1350" y="529" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">教训：参照本身先对 FP64 验一遍</tspan></text>
-<rect x="30" y="556" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="587" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
-<text class="svgsm" x="78" y="578" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">golden 一步步改</tspan></text>
-<text class="svgsm" x="78" y="598" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">② 生产近似 → ③ dgrad 换 FP32 → ④ 精确轨迹</text>
-<text class="svgsm" x="1350" y="587" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 对它 23.6 → 10.1 → 3.5 倍噪声</tspan></text>
-<rect x="30" y="614" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="645" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
-<text class="svgsm" x="78" y="636" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 开关：部分和留 FP32</tspan></text>
-<text class="svgsm" x="78" y="656" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">窗口化 collective matmul 不再在 BF16 里累加</text>
-<text class="svgsm" x="1350" y="645" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">qkv 投影 R 1.235 → 1.000；对 ④ 3.52 → 3.45 倍</tspan></text>
-<rect x="30" y="672" width="1340" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
-<text class="svgsm" x="52" y="703" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗</tspan></text>
-<text class="svgsm" x="78" y="694" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">走错：精确轨迹的噪声只看了一对</tspan></text>
-<text class="svgsm" x="78" y="714" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">像是比借来的尺子窄 18 倍；五份 10 对一量，同一量级</text>
-<text class="svgsm" x="1350" y="703" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">教训：一对样本量不出散布</tspan></text>
-<rect x="30" y="730" width="1340" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
-<text class="svgsm" x="52" y="761" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗</tspan></text>
-<text class="svgsm" x="78" y="752" fill="#a50e0e" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">走错：把 ④ 当成精确值</tspan></text>
-<text class="svgsm" x="78" y="772" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">FP32 一次累加 12 万也偏，④ 自己少漂 ＋8.70e-3；分段累加后两边精确轨迹重合</text>
-<text class="svgsm" x="1350" y="761" fill="#a50e0e" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">教训：裁判也要被核对</tspan></text>
-<rect x="30" y="788" width="1340" height="50" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="52" y="819" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
-<text class="svgsm" x="78" y="810" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">定案 ⑤：只修那一次长求和</tspan></text>
-<text class="svgsm" x="78" y="830" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums">10 对时几项 1.02–1.24 倍待定 → 两处测量口径 → 补到 45 对</text>
-<text class="svgsm" x="1350" y="819" fill="#202124" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v5p、v7x 全部在噪声内，最差 0.85 倍</tspan></text>
-<rect x="0" y="892" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="892" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="892" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="919" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四步走错，三步错在「参照」：开关、FP32 参照、精确轨迹都被当成了它名字说的那样</tspan></text>
-</svg><figcaption><b>先看红虚框：四步走错，各留一条教训。</b><span class="capmore"><br><em>绿色八步是留下来的；每一行的数都在出处台账里。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：各行的数都在出处台账里；「走错」那几步的原结论和更正都留在排查记录里。</p></details></figure>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这一次排查的路线（实测）</tspan></text>
+<line x1="140" y1="232" x2="1040" y2="232" stroke="#1e8e3e" stroke-width="4" stroke-linecap="round"/>
+<path d="M1040 232 L1250 232 L1250 472 L1040 472" fill="none" stroke="#1e8e3e" stroke-width="4" stroke-linecap="round"/>
+<line x1="1040" y1="472" x2="140" y2="472" stroke="#1e8e3e" stroke-width="4" stroke-linecap="round"/>
+<rect x="122" y="214" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="140" y="238" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="140" y="182" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">地基铺平</tspan></text>
+<text class="svgsm" x="140" y="204" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 1 步 loss 只差 2.5e-6</tspan></text>
+<rect x="422" y="214" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="440" y="238" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="440" y="182" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换成噪声尺子</tspan></text>
+<text class="svgsm" x="440" y="204" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">离 GPU 均值 2.9 到 5.3 个标准差</tspan></text>
+<rect x="722" y="214" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="740" y="238" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="740" y="182" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按参数分组定位</tspan></text>
+<text class="svgsm" x="740" y="204" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">87% 在输出层的冷门词</tspan></text>
+<rect x="1022" y="214" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1040" y="238" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="1040" y="182" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">双向干预</tspan></text>
+<text class="svgsm" x="1040" y="204" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">lse 的差 −0.33 → −0.007</tspan></text>
+<rect x="1022" y="454" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1040" y="478" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="1040" y="514" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">找到源头</tspan></text>
+<text class="svgsm" x="1040" y="536" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU dgrad 朝零 −6.51e-4</tspan></text>
+<rect x="722" y="454" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="740" y="478" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">6</tspan></text>
+<text class="svgsm" x="740" y="514" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">golden 一步步改</tspan></text>
+<text class="svgsm" x="740" y="536" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">23.6 → 10.1 → 3.5 倍噪声</tspan></text>
+<rect x="422" y="454" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="440" y="478" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="440" y="514" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">部分和留 FP32</tspan></text>
+<text class="svgsm" x="440" y="536" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">qkv R 1.235 → 1.000</tspan></text>
+<rect x="122" y="454" width="36" height="36" rx="18" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="140" y="478" fill="#fff" text-anchor="middle" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8</tspan></text>
+<text class="svgsm" x="140" y="514" fill="#0d652d" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">定案 ⑤</tspan></text>
+<text class="svgsm" x="140" y="536" fill="#202124" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">最差 0.85 倍，全过</tspan></text>
+<rect x="935.0" y="252" width="290" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text class="svgsm" x="1080" y="276" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗ 「FP32 dgrad」其实是 TF32</tspan></text>
+<text class="svgsm" x="1080" y="299" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">教训：开关以实测为准</text>
+<line x1="1250" y1="266" x2="1225.0" y2="266" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4"/>
+<line x1="1225.0" y1="300" x2="1246" y2="300" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4" marker-end="url(#ah-d93025)"/>
+<rect x="745.0" y="354" width="290" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text class="svgsm" x="890" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗ 路由翻转当成两边实现不同</tspan></text>
+<text class="svgsm" x="890" y="401" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">教训：参照先对 FP64 验</text>
+<line x1="995.0" y1="468" x2="995.0" y2="416" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4"/>
+<line x1="785.0" y1="416" x2="785.0" y2="464" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4" marker-end="url(#ah-d93025)"/>
+<rect x="145.0" y="354" width="290" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text class="svgsm" x="290" y="378" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗ 精确轨迹的噪声只看一对</tspan></text>
+<text class="svgsm" x="290" y="401" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">教训：一对量不出散布</text>
+<line x1="395.0" y1="468" x2="395.0" y2="416" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4"/>
+<line x1="185.0" y1="416" x2="185.0" y2="464" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4" marker-end="url(#ah-d93025)"/>
+<rect x="145.0" y="582" width="290" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text class="svgsm" x="290" y="606" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">✗ 把 ④ 当成了精确值</tspan></text>
+<text class="svgsm" x="290" y="629" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">教训：裁判也要被核对</text>
+<line x1="305" y1="476" x2="305" y2="582" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4"/>
+<line x1="275" y1="582" x2="275" y2="480" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="5,4" marker-end="url(#ah-d93025)"/>
+<rect x="0" y="712" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="712" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="712" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="739" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四步走错，三步错在「参照」：开关、FP32 参照、精确轨迹都被当成了它名字说的那样</tspan></text>
+</svg><figcaption><b>先看红虚框：四步走错，各留一条教训。</b><span class="capmore"><br><em>绿色八站是留下来的，每站一个数；细节在图下出处里。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 每站的细节：① 数据原样回放、权重逐张量逐位、按实际生效的权重衰减；② 同设置 GPU 跑 10 份，偏移在参考档里，却是真偏差；③ 参数范数多涨的那截拆到组、拆到行；④ 两边都去掉「所有 logits 一起升降」那股力；⑤ 拿训练里的真张量对 FP64 拆输出头反向，TPU 第 1 步 −2.4e-5；⑥ ② 生产近似 → ③ dgrad 换 FP32 → ④ 精确轨迹；⑦ 边传边乘的部分和不再在 BF16 里累加，对 ④ 3.52 → 3.45 倍；⑧ 只修那一次长求和，10 对时几项 1.02–1.24 倍待定，补到 45 对。</p>
+<p>📌 走错的四步：「FP32 dgrad」偏 8.08e-4，比 BF16 的 6.51e-4 还大，一度判成换 dgrad 也不动；TPU 那份 FP32 参照里路由专家其实按 BF16 算，翻转是它的下游，撤回；精确轨迹只看一对扰动，像是比借来的尺子窄 18 倍，五份 10 对一量同一量级；FP32 一次累加 12 万也偏，④ 自己少漂 ＋8.70e-3，分段累加后两边精确轨迹重合。</p>
+<p>📌 最终方案里改数值的主要是两处：TPU 的部分和留 FP32、GPU golden 的分段累加；其余几步都是把量法和参照弄对。各数都在出处台账里。</p></details></figure>
   <p>归成三条规矩：每个结论先问拿什么比；先排除自己，再怀疑硬件；读回值、工具输出都要实测核对。第二次迁移的坑也都落在这三条里（下方坑表里标了出处的几行）。</p>
   <details class="foldfig"><summary><b>坑表</b>：十几行，每行一个坑、一条规矩（讲课只挑三行，见讲义）</summary>
   <table class="t9"><thead><tr><th>坑</th><th>长什么样</th><th>判据</th></tr></thead><tbody>
