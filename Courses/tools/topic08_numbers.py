@@ -1573,3 +1573,16 @@ M3_VOCAB = 120832
 M3_LMH_DEF300, M3_LMH_HIGH300 = "%.2f" % M3_LMH_LOSS4K["default"][1], "%.2f" % M3_LMH_LOSS4K["high"][1]
 M3_LMH_COST_HIGH_T, M3_LMH_COST_HIGHEST_T = "%.1f%%" % (M3_LMH_COST["high"] * 100), "%.1f%%" % (M3_LMH_COST["highest"] * 100)
 M3_VOCAB_T = format(M3_VOCAB, ",")
+# ── 第三次迁移 · 切法一变，编译器删不删舍入也跟着变（RMSNorm scale；出处：知识库「编译器删舍入」「RMSNorm 在 32K 被删」两页、现象记录一条）──
+#   4K 程序：8 个设备、FSDP 8，这次舍入保住；32K 程序：16 个设备、CP 8 × FSDP 2，8 个 norm 全部被删、保住 0 个（离线编译扫描）。
+M3_NORM_ELIDED = {"4K": 0, "32K": 8}
+# 二分（32K，第 2 级之上加开关，主 loss 偏差的平均，单位 σ ＝ GPU 8 份份间标准差）
+M3_BISECT_300 = [("不加（对照）", -24.3), ("投影 FP32 累加", -24.6), ("精确超越函数", -24.6), ("精确 Adam ＋ Newton–Schulz 舍入", -24.1),
+                 ("四处舍入一起", -0.6)]                 # 窗口第 51–300 步
+M3_BISECT_120 = [("不加（对照）", -30.0), ("另外三处之一", -30.8), ("只加 RMSNorm scale", -0.2)]   # 窗口第 51–120 步；对照「约 −30σ」，另三处「都还在 −30.8σ 以下」
+M3_DRIFT_PEAK = -27                      # 第 100 步约 −27σ；第 500 步前后翻正
+M3_SCALE_TRACK = [(50, 3.2e-4), (100, 6.5e-4), (150, 9.5e-4)]   # FP32 scale 偏离 1.0 的中位数（16 个 norm scale）
+M3_SCALE_SLOPE = 6.4e-6
+assert all(abs(d / s - M3_SCALE_SLOPE) < 0.2e-6 for s, d in M3_SCALE_TRACK)   # 约每步 6.4e-6，线性
+M3_SCALE_CROSS = {200: (0.029, 0.30), 250: (0.07, 0.55)}   # 舍成 BF16 后不等于 1.0 的元素比例：中位数 ／ 最大
+M3_NORM_STEP = (1.804, 1.802)            # 32K 步时，开关前后（各一份）
