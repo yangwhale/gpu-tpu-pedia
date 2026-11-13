@@ -139,7 +139,7 @@ class WindowedAcc(Scene):
 
         # ── 静态件 ──
         title = tx("设备一到 8 个，一次矩阵乘被拆成几段", 30).to_edge(UP)
-        sh_lab = tx("8 片权重", 18, GREY_B).move_to([LAB_X, SH_Y, 0])
+        sh_lab = VGroup(tx("权重", 18, GREY_B), tx("8 设备切 8 片", 13, GREY_B)).arrange(DOWN, buff=0.04).move_to([LAB_X, SH_Y, 0])
         shards = VGroup(*[RoundedRectangle(corner_radius=0.05, width=0.5, height=0.32, fill_color=ORANGE, fill_opacity=0.25,
                                            stroke_color=ORANGE, stroke_width=2).move_to([x, SH_Y, 0]) for x in SH_X])
         sh_txt = VGroup(*[tx(str(k + 1), 16, ORANGE).move_to([x, SH_Y, 0]) for k, x in enumerate(SH_X)])
@@ -209,8 +209,8 @@ class WindowedAcc(Scene):
                             g.add(Rectangle(width=0.18, height=0.52, fill_color=RED, fill_opacity=0.35 * vr, stroke_color=RED,
                                             stroke_width=3, stroke_opacity=vr).move_to([XS[e] + RND_DX, y, 0]))
                         else:
-                            g.add(Rectangle(width=0.18, height=0.52, fill_color=GREEN, fill_opacity=0.12 * vr, stroke_color=GREEN,
-                                            stroke_width=2, stroke_opacity=0.7 * vr).move_to([XS[e] + RND_DX, y, 0]))
+                            g.add(Rectangle(width=0.18, height=0.52, fill_color=GREEN, fill_opacity=0.45 * vr, stroke_color=GREEN,
+                                            stroke_width=3, stroke_opacity=vr).move_to([XS[e] + RND_DX, y, 0]))
             return g
         dyn = always_redraw(draw)
         self.add(dyn)
@@ -263,7 +263,7 @@ class WindowedAcc(Scene):
         assert note.width < 13.8
 
         caps = [
-            (S1, "第 1 步　4 个设备：权重先整块收齐（切成 4 片），一次乘完，舍 1 次", GREY_B),
+            (S1, "第 1 步　4 个设备：权重先整块收齐，一次乘完，舍 1 次（跟 GPU 一样）", GREY_B),
             (S2, "第 2 步　8 个设备：边传边乘，每段输出舍一次，加进 BF16 累加器再舍一次", GREY_B),
             (S3, "第 3 步　打开投影 FP32 累加：结构不变，中间全留 FP32，只在最后舍 1 次", GREY_B),
             (S4, "第 4 步　同一种切法，只是设备数变了", YELLOW),

@@ -32,6 +32,7 @@ fig8-captain   回答：一个小标量对不上，怎么分清是病态还是 b
 import math
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU, wpx, MONO_K
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400
@@ -209,7 +210,7 @@ def fig_tf32():
     py = f.panel(0, y0, W, PH, "GPU 训练容器里的 FP32 矩阵乘（实测）", BL)
     bx, bw = 420, 800
     emin, emax = 1e-7, 1e-3
-    rows = [("只关 torch 的两个开关", "读回 allow_tf32 ＝ False；Transformer Engine 那条路", N.TF32_TE_ON, RD),
+    rows = [("只关 torch 的两个开关", "读回 allow_tf32 ＝ False；Transformer Engine 那条路照样走 TF32", N.TF32_TE_ON, RD),
             ("设 NVIDIA_TF32_OVERRIDE=0", "读回 allow_tf32 ＝ True（！）；两条路都关了", N.TF32_ALL_OFF, GR)]
 
     def LX(v):
@@ -301,7 +302,7 @@ def fig_inout():
         f.box(x, py + 16, w, 30, "#fce8e6", RD, 5)
         f.t(x + w / 2.0, py + 36, name, RD, True, 13, "middle")
         x += w + 8
-    f.t(20, py + 68, "往里投的 7 种：R %s（≈ √2，像多舍了一次）" % N.M3_PROJ_R_T, RD, True, 14)
+    f.t(20, py + 68, "往里投的 7 种：R %s（≈ √2）" % N.M3_PROJ_R_T, RD, True, 14)
     x2 = 980
     for name in N.M3_MISS:
         w = wpx(name, 13) * MONO_K + 22
@@ -327,13 +328,13 @@ def fig_inout():
 
 def fig_windowed():
     f = Fig(W, "左边三行是同一个往里投的投影（第三次迁移的 q 低秩下投影，求和维 2816）在三种情况下怎么算完。"
-               "第一行，4 个设备：编译器先把 4 片权重收齐，再做一次 2816 宽的矩阵乘，FP32 累加到底，最后舍一次，跟 GPU 一样。"
+               "第一行，4 个设备：编译器先把权重整块收齐，再做一次 2816 宽的矩阵乘，FP32 累加到底，最后舍一次，跟 GPU 一样。"
                "第二行，8 个设备、生产原样：编译器改成边传边乘，8 片排成 2 轮，每轮两次 704 宽的矩阵乘，每次输出舍成 BF16，再加进 BF16 累加器又舍一次，一共舍 6 次。"
                "第三行，8 个设备、打开投影 FP32 累加：结构不变，中间全部留在 FP32，只在最后舍一次。"
                "右边：离线编译训练步，数部分和累加器是 BF16 的窗口化循环：4 个设备 0 个，8 个、16 个设备各 20 个（v7x 16 个设备也是 20 个），打开开关后全部变成 FP32。")
     y0 = f.header("设备一到 8 个，编译器把一次矩阵乘拆成几段　——　<tspan font-weight=\"700\">一次求和舍 6 次</tspan>",
                   "同一个投影、同一种 FSDP 切法；变的只是编译器选「先收齐再乘」还是「边传边乘」。红块 ＝ 一次舍到 BF16",
-                  [(BL, "矩阵乘"), (PU, "累加器"), (RD, "舍到 BF16"), (GR, "FP32，最后只舍一次")])
+                  [(BL, "矩阵乘"), (PU, "累加器"), (RD, "舍到 BF16"), (GR, "留在 FP32（不舍）")])
     PH, LW = 430, 930
     py = f.panel(0, y0, LW, PH, "q 低秩下投影的一次前向（编译产物显示）", BL)
     X0, BW, RW, GAP = 196, 76, 16, 10
@@ -345,7 +346,7 @@ def fig_windowed():
         f.t(20, y + 44, sub, {"a": GY, "b": RD, "c": GR}[kind], True, 13)
         if kind == "a":
             f.box(X0, y, 150, 50, "#fdecdc", OR, 5)
-            f.t(X0 + 75, y + 22, "收齐 4 片权重", OR, True, 13, "middle")
+            f.t(X0 + 75, y + 22, "整块收齐权重", OR, True, 13, "middle")
             f.t(X0 + 75, y + 40, "（整块 all-gather）", GY, size=11, anchor="middle")
             f.line(X0 + 154, y + 25, X0 + 182, y + 25, GY2, 1.3)
             f.box(X0 + 186, y, 4 * STEP + 20, 50, "#e8f0fe", BL, 5)
@@ -393,12 +394,13 @@ def fig_windowed():
         L = BMAX * bf / 20.0
         if bf:
             f.box(BX0, y + 2, L, 26, RD, RD, 3)
-        f.t(BX0 + L + 8 if bf else BX0, y + 21, str(bf) + ("" if bf else "　（不拆）"), RD if bf else GY, True, 15)
+        f.t(BX0 + L + 8 if bf else BX0, y + 21, (str(bf) + " 个循环") if bf else "0　（不拆）", RD if bf else GY, True, 15)
     y = py2 + 40 + 4 * 62
     f.t(px + 18, y + 18, "打开开关后", INK, True, 14)
     f.t(BX0, y + 21, "0　（全部变 FP32）", GR, True, 15)
     f.t(px + 18, py2 + PH - 80, "单算子 R：%s → %s" % (N.M3_PROJ_R_T, N.M3_PROJ_R_AFTER_T), INK, True, 15)
-    f.t(px + 18, py2 + PH - 52, "混元 3 的 qkv：%.3f → %.3f" % (N.R_QKV_BEFORE, N.R_QKV_AFTER), GY, True, 13)
+    f.t(px + 18, py2 + PH - 60, "6 次里前几次舍的是部分和，量级小，合起来约 √2（推断）", GY, size=12)
+    f.t(px + 18, py2 + PH - 36, "混元 3 的 qkv：%.3f → %.3f" % (N.R_QKV_BEFORE, N.R_QKV_AFTER), GY, True, 13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "在 4 个设备的小切片上验精度，这件事完全看不到", [
         "切法没变：4 个、8 个设备上权重都按 FSDP 切满。变的只是编译器拆不拆；拆了，每个往里投的投影都多舍几次。",
@@ -568,7 +570,7 @@ def fig_normscale():
     y0 = f.header("同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight=\"700\">编译器删不删，跟着切法变</tspan>",
                   "第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。离线编译：4K 程序里这次舍入在，32K 程序 8 个 norm 全删",
                   [(GY, "GPU：乘 BF16 的 scale"), (BL, "TPU 32K：乘 FP32 的 scale"), (RD, "主 loss 偏差")])
-    PH, LW = 360, 640
+    PH, LW = 384, 640
     py = f.panel(0, y0, LW, PH, "为什么到几十步以后才显出来：scale 离 1.0 多远", INK, tag="实测 ＋ 外推虚线")
     X0, X1, Y0, Y1 = 90, LW - 30, py + PH - 70, py + 40
 
@@ -612,11 +614,11 @@ def fig_normscale():
 
     def X(v):
         return BX0 + (v - lo) / (hi - lo) * (BX1 - BX0)
-    f.box(X(-3), py2 + 10, X(3) - X(-3), PH - 76, "#e6f4ea", "none", 0)
-    f.t(X(0), py2 + PH - 52, "±3σ", GR, True, 12, "middle")
+    f.box(X(-3), py2 + 10, X(3) - X(-3), PH - 98, "#e6f4ea", "none", 0)
+    f.t(X(0), py2 + PH - 74, "±3σ", GR, True, 12, "middle")
     for v in (-30, -20, -10, 0):
-        f.line(X(v), py2 + 10, X(v), py2 + PH - 66, LINE2, 1, arrow=False)
-        f.t(X(v), py2 + PH - 36, "%d" % v if v else "0", GY, size=12, anchor="middle")
+        f.line(X(v), py2 + 10, X(v), py2 + PH - 88, LINE2, 1, arrow=False)
+        f.t(X(v), py2 + PH - 58, "%d" % v if v else "0", GY, size=12, anchor="middle")
     rows = [("第 51–300 步", None)] + N.M3_BISECT_300 + [("第 51–120 步（120 步运行）", None)] + N.M3_BISECT_120
     y = py2 + 14
     for lab, v in rows:
@@ -628,12 +630,13 @@ def fig_normscale():
         c = RD if v < -3 else GR
         f.box(min(X(v), X(0)), y + 2, abs(X(v) - X(0)) or 3, 16, c, c, 2)
         vt = ("%.1f" % v).replace("-", "−")
-        vt = {"另外三处之一": "≤ " + vt}.get(lab, vt)
+        vt = {"只加其余三处里任一处": "≤ " + vt}.get(lab, vt)
         if (lab, v) == N.M3_BISECT_120[0]:
             vt = "约 −30"
         f.t(X(v) + 8 if v < -3 else X(0) + 8, y + 15, vt, "#fff" if v < -3 else GR, True, 12)
         y += 26
-    assert y < py2 + PH - 60, y
+    assert y < py2 + PH - 88, y
+    f.t(px + 16, py2 + PH - 38, "四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入", GY, size=12)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "在一种切法上验过「这个开关不用开」，换了切法要重验", [
         "删不删看这对转换落不落在同一颗融合里，而那取决于切法：FSDP 8 时 scale 要先在 8 个设备间收齐，BF16 值真被写出来；FSDP 2 时整个往返落在本卡一颗融合里（推断）。",
@@ -673,7 +676,7 @@ def fig_boundary():
          ["BF16", "BF16 × BF16", ("每段输出、累加器都舍 BF16", "FP32 里加完"), "BF16", "随累加那格"]),
         ("注意力打分 q·k", "第二次迁移", 3, [16, 16, 32, 32, 32], [16, 16, 32, 16, 32],
          ["BF16", "BF16 × BF16", "FP32", ("留 FP32", "先存 BF16"), "softmax 在 FP32"]),
-        ("RMSNorm", "混元 3", 4, [16, 32, 32, 16, 16], [16, 32, 32, 16, 32],
+        ("RMSNorm 输出", "混元 3", 4, [16, 32, 32, 16, 16], [16, 32, 32, 16, 32],
          ["BF16", "FP32 里算", "FP32", "BF16", ("TPU 舍 2 次", "GPU 舍 1 次")]),
     ]
     PH = 70 + len(rows) * RH

@@ -10,6 +10,7 @@ fig8-funnel  回答：从哪儿查起？—— L0 到 L4 五级，验收从下�
              刻意没画：每级的具体检查项（在正文表里）。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400

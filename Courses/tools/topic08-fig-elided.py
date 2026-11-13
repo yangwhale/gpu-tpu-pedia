@@ -13,6 +13,7 @@ fig8-elided  回答：「该舍 BF16 没舍」的地方，整个训练步里到�
              LLO 条数没法单独归给它们；它们的证据是 HLO 规则加最小复现确立的机制。别把右块的 41 个方块按三类重新上色。
 """
 from topic03_draw import Fig, BL, OR, GR, GY, INK, GY2, LINE
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400
@@ -268,7 +269,7 @@ def fig_verify():
             return YT + (vmax - v) / (vmax - vmin) * (YB - YT)
         for v in (-4e-6, 4e-6, 8e-6, 1.2e-5):
             f.line(X0, Y(v), X1, Y(v), LINE, 0.6, arrow=False)
-            f.t(X0 - 6, Y(v) + 4, ("%+.0e" % v).replace("e-0", "e-").replace("e-05", "e-5"), GY, size=11.5, anchor="end")
+            f.t(X0 - 6, Y(v) + 4, {-4e-6: "−4e-6", 4e-6: "＋4e-6", 8e-6: "＋8e-6", 1.2e-5: "＋1.2e-5"}[v], GY, size=11.5, anchor="end")
         f.line(X0, Y(0), X1, Y(0), GY, 1.2, arrow=False)
         f.t(X0 - 6, Y(0) + 4, "0", GY, size=11.5, anchor="end")
         cw = (X1 - X0) / float(len(cells))

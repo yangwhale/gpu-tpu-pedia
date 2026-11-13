@@ -10,6 +10,7 @@ fig8-mig2  回答：同一套方法换一个模型再走一遍，结果怎样？
                 GPU 扩展一节（各运行对单机的结果文件）、真实宽度一节（汇总页、第 1 步对 FP64、前 164 步中间判档），全部实测。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 MI_SD = N.MI_SD
 FC_SD_ = N.FC_SD
@@ -363,7 +364,7 @@ def fig_twoway():
         else:
             f.t(X0 + cw * 1.5, YT + 8, "4 份全为正，p %s" % N.TW_P_T["gpu"], OR, True, 13.5, "middle")
             f.t(X0 + cw * 2.5, YT + 8, "p %s，没变" % N.TW_P_T["head"], GY, True, 13, "middle")
-        f.t(x0 + 16, py + PH - 30, "灰带：GPU 留一法标准差 ± %s" % ("%.1e" % N.FC_SD).replace("e-0", "e-"), GY, size=12)
+        f.t(x0 + 16, py + PH - 40, "灰带：GPU 留一法标准差 ± %s" % ("%.1e" % N.FC_SD).replace("e-0", "e-"), GY, size=12)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "两头对上，才说得上主因是它：流的几份梯度怎么相加、在哪儿舍", [
         "只在 TPU 一边补，补好了也可能是两处差别凑巧抵消（上一轮就是这样撤回的）；GPU 一边反着改、长出同样方向的偏，两个方向对上，才说得上是它。",

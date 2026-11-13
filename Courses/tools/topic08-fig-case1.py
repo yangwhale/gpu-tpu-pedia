@@ -12,6 +12,7 @@ fig8-eps    回答：为什么偏偏是冷门词的行这么敏感？—— 它�
 import math
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, PU
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400

@@ -875,11 +875,14 @@ class Fig(object):
         #     第三行起就是展开说明，收进「出处与口径」。**
         #     实测命中 55 条（3 行 42、4 行 11、5 行 2），一条配对都没拆散。
         #   ⚠️ `keep=True` 是逃生舱：极少数三行都不能少的地方用它。
-        if not fold and not keep and len(lines) > 2:
+        # ⭐ 2026-11-14：每个专题可以按需把图上落点带收得更短（topic08 锤炼阶段设 0：图上只留一行粗体结论，
+        #   其余进图下折叠）。默认仍是 2，别的专题不受影响。
+        _keep_n = getattr(type(self), "BAND_KEEP_LINES", 2)
+        if not fold and not keep and len(lines) > _keep_n:
             self._src.append('<tspan font-weight="700">%s %s（接上图）</tspan>'
                              % (self.KIND[kind][2], title))
-            self._src.extend(ln for ln in lines[2:] if ln and ln.strip())
-            lines = lines[:2]
+            self._src.extend(ln for ln in lines[_keep_n:] if ln and ln.strip())
+            lines = lines[:_keep_n]
         if fold:
             # ⭐ 复用 src() 那条通道：`save()` 会把 `_src` 旁落成 .src.html，
             #   由 topic03_page 包成图下面那个默认收起的 <details>。

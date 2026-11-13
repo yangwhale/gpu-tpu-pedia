@@ -11,6 +11,7 @@ fig8-switch    回答：一个对齐开关，生产要不要开？—— 三问�
 fig8-ladder    回答：规模怎么一级级往上，才知道新冒出来的差是谁带来的？—— 属性 × 级的格子：差冒出来的那一级翻色的几行就是嫌疑。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 from topic08_numbers import tx
 
@@ -61,7 +62,8 @@ def fig_golden():
             if i == 4:
                 f.t(x + 18, py + 328, "被测：当前 TPU；尺子换成它自己的", GY, size=12)
         else:
-            f.t(x + 18, py + 270, "（不重算，跟生产不一样；1000 步验收不用它）", GY, size=13)
+            f.t(x + 18, py + 270, "（不重算；1000 步", GY, size=13)
+            f.t(x + 18, py + 290, "验收不用它）", GY, size=13)
     f.t(30, py + 350, "柱子：TPU 被测的参数范数带符号均值 ÷ N（②–④ 的 N ＝ ③ 那组 5 份两两 10 对的最大值；⑤ 用它自己 10 份 45 对）；竖线 ＝ 2×N", GY, size=13)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "每往精确值靠一步，TPU 的「偏差」就缩一截：24 倍 → 10 倍 → 3.5 倍；最终 golden 上 0.07 倍", [
@@ -176,7 +178,7 @@ def fig_twolayer():
     f.t(452, py + 148, "v5p 最差 %.2f×N · v7x 最差 %.2f×N，全过" % (max(FV5[1:5]), max(FV7[1:5])), GR, True, 13, "end")
     f.line(960, py + 68, 842, py + 165, OR, 1.6)
     f.t(850, py + 92, "量出 N", OR, True, 13)
-    f.t(1150, py + 238, "param_norm：v5p %.2f×N、v7x %.2f×N" % (FV5[4], FV7[4]), GY, size=13, anchor="middle")
+    f.t(452, py + 168, "其中参数范数：v5p %.2f×N、v7x %.2f×N" % (FV5[4], FV7[4]), GR, size=12, anchor="end")
     f.elbow(560, py + 205, 460, py + 308, GY, 2.2)
     f.t(470, py + 262, "第二关：不判", GY, True, 15)
     f.line(462, py + 308, 958, py + 308, GY, 1.6)

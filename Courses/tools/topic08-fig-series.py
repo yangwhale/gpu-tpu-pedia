@@ -14,6 +14,7 @@ fig8-baseline 回答：只对一份基线比，基线自己偏了怎么办？—
 import statistics
 
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, wpx, MONO_K
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400

@@ -15,6 +15,7 @@ fig8-ongrid   回答：从 BF16 检查点续训时，为什么只管权重一侧
               改画「同一份权重，开关开、关算出的输出差」，它就是开关能起作用的那部分，第 1 步恰好是 0。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE, LINE2, PU
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400

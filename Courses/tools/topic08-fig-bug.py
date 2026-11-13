@@ -8,6 +8,7 @@ fig8-bug  回答：改完代码怎么最快知道变没变？工具真能抓到 
           数据：对齐记录 TPU 自比一节的 实验矩阵里等价改写、已修 bug 两组（实测）；机制来自编译后程序里循环体的那条 select（实测）。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400

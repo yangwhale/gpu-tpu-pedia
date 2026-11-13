@@ -8,6 +8,7 @@ fig8-loo   回答：r 落在 1–2 之间，算不算出事？—— 先看纯�
            数据：topic08_tpuself.json（导出自第二次迁移的对齐记录：TPU 自比的 GPU 留一法、长跑灰区表），全部实测。
 """
 from topic03_draw import Fig, BL, OR, GR, RD, GY, INK, GY2, LINE
+Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
 W = 1400
