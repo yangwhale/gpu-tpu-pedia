@@ -1328,7 +1328,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>名字一样，写法不一样</b>：第二次迁移在配置和优化器里查出的四处，都不报错</summary>
   <ul>
     <li><b>优化器</b>：两边用的是同一个名字的优化器，可动量那一步做不做偏差修正、一部分参数走普通 Adam 还是 NAdam、一处归一化的 eps 怎么加，三处写法都不同。单测里拿参照框架的实现生成固定参照、逐步比每步更新：三处都不对上，相对差 0.13；三处都对上，1.3e-6。（另一个只测那部分参数的用例里，NAdam 对普通 Adam 差 0.56。）</li>
-    <li><b>重算</b>：「存下路由结果、反向不重选」这个设置，TPU 框架只在一种自定义重算策略下才读；配置写的是整层重算，它就被悄悄忽略，反向重新选路由。配置项名字对了，不等于生效了。（实测：被忽略时，反向会重选 0.117% 的路由槽位；修好后为 0。）</li>
+    <li><b>重算</b>：「存下路由结果、反向不重选」这个设置，TPU 框架只在一种自定义重算策略下才读；配置写的是整层重算，它就被悄悄忽略，反向重新选路由。配置项名字对了，不等于生效了。（实测：被忽略时，反向会重选 0.117% 的路由槽位；修好后为 0。）第三次迁移从生产代码原样起步，又踩了一次，而且看清了后果：生产默认整层重算，反向抓到的路由跟前向在 160 次两两比较里 96 次不同，平均 2.4% 的 token（最多 3.05%）的梯度是按另一套路由算的；参数范数 1000 步判 4.56 倍、前 300 步 11.87 倍。换成那种自定义重算策略、把前向选出的专家存下来，降到 2.27 ／ 1.19，步时不变。这是语义差，不是精度差：生产也该开。</li>
     <li><b>协议写了、参照做不到</b>：协议写「两边的路由偏置都做零均值更新」，可参照框架根本没有这个更新。TPU 开着它，偏置均值逐步漂开，带符号均值的 r 到了 19.1；TPU 关掉以后降到 0.17（这时最差的一项换成平均绝对差，r 0.31）。</li>
     <li><b>统计量怎么跨微批合</b>：梯度累积把各份微批的辅助量一律求和，连一个「取最大」的统计也被加成约累积份数倍，拿它当阈值去裁剪就裁多了。（这一次训练里那个裁剪从没触发过，修了，数值上没有前后对比。）</li>
   </ul>
@@ -8350,6 +8350,74 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 右格是教科书做法（区间缩减、多项式、牛顿迭代），只讲思路；各家库的系数、项数和缩减方式不同。sigmoid、silu 的高精度写法用高精度的 exp 搭：e ＝ exp(−|x|)，再算 1 ÷ (1 ＋ e)，倒数做一次牛顿修正。</p></details></figure>
   <p>exp、log、sigmoid 这类函数，硬件不会一步算出来，都是软件拼的。TPU 默认那一版图快，最大误差几十到上百格；GPU 的 FP32 版本只差个位数。更要紧的是方向：在真实的输入上，默认的 exp 绝大多数结果没舍对，而且平均往低处偏（数在图下）—— 上一节那一格就是这么来的。</p>
   <p>sigmoid、silu 没这么顺，图下落点带说了经过；教训是：改完一个函数，整网要再验一遍。</p>
+  <p><b>第三次迁移把这一项在两代芯片上量全了。</b>v5p 上默认几十到上百格；只给 JAX 设精度档 highest，exp、log 降下来，sigmoid、silu 不动；要靠框架里那个精确超越函数的开关才全部降到个位数，步时 ＋0.8%。编译产物显示，开了以后整段从硬件的超越函数单元挪到向量单元上用多项式算，每个向量寄存器的指令从 3 条变成 43–45 条。v7x 配运行库 0.0.46 时，这个开关开不开结果一样，编出的指令也一样：v7x 默认就比 v5p 准，可 exp 最大仍差 64 格，目前对不到 GPU 的水平。</p>
+<figure class="fbox fwide" id="fig-ulp2"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="四个超越函数，各四根柱子：v5p 默认、v5p 开精确超越函数、v7x 默认、v7x 开精确超越函数，柱高是逐元素对 FP64 正确舍入值的最大误差（格），对数刻度。exp 105、1、64、64；log 62、3、2、2；sigmoid 83、3、30、30；silu 86、4、29、30。v5p 开了以后降到个位数；v7x 开不开一样。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">精确超越函数的开关：v5p 上管用，v7x（运行库 0.0.46）上不起作用</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第三次迁移，同一份输入、同一种算法；柱高 ＝ 最大误差（格），对数刻度</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v5p 默认</text>
+<rect x="113.08000000000001" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="134" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v5p 开</text>
+<rect x="210.48000000000002" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="231" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7x 默认</text>
+<rect x="321.32000000000005" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="342" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7x 开</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">逐元素最大误差（实测）</tspan></text>
+<line x1="80" y1="402.0" x2="1370" y2="402.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="70" y="406" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="80" y1="297.6988824777375" x2="1370" y2="297.6988824777375" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="70" y="301" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">10</text>
+<line x1="80" y1="193.39776495547505" x2="1370" y2="193.39776495547505" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="70" y="197" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">100</text>
+<rect x="110.0" y="191.1876973829671" width="46" height="210.8123026170329" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="183" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">105</tspan></text>
+<rect x="172.0" y="399" width="46" height="3" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="195" y="391" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="234.0" y="213.61341026714965" width="46" height="188.38658973285035" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="257" y="205" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64</tspan></text>
+<rect x="296.0" y="213.61341026714965" width="46" height="188.38658973285035" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="319" y="205" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64</tspan></text>
+<text class="svgsm" x="226" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">exp</tspan></text>
+<rect x="425.0" y="215.05154374771604" width="46" height="186.94845625228396" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="448" y="207" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">62</tspan></text>
+<rect x="487.0" y="352.23571993911514" width="46" height="49.76428006088486" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="510" y="344" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="549.0" y="370.60223504452495" width="46" height="31.397764955475054" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="572" y="362" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="611.0" y="370.60223504452495" width="46" height="31.397764955475054" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="634" y="362" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="541" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">log</tspan></text>
+<rect x="740.0" y="201.83801035268385" width="46" height="200.16198964731615" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="763" y="193" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">83</tspan></text>
+<rect x="802.0" y="352.23571993911514" width="46" height="49.76428006088486" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="825" y="344" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="864.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="887" y="239" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
+<rect x="926.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="949" y="239" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
+<text class="svgsm" x="856" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">sigmoid</tspan></text>
+<rect x="1055.0" y="200.22964969020992" width="46" height="201.77035030979008" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1078" y="192" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">86</tspan></text>
+<rect x="1117.0" y="339.2044700890499" width="46" height="62.79552991095011" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1140" y="331" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="1179.0" y="249.47025455681964" width="46" height="152.52974544318036" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1202" y="241" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">29</tspan></text>
+<rect x="1241.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1264" y="239" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
+<text class="svgsm" x="1171" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">silu</tspan></text>
+<rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换芯片要重验开关：同一个开关，在一代芯片上管用，在另一代上可能是空操作</tspan></text>
+<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">v5p 上开了以后，整段挪到向量单元用多项式算（编译产物显示），步时 ＋0.8%。只给 JAX 设 highest 不够：sigmoid、silu 不动。</text>
+<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">v7x 默认就比 v5p 准（log 2 格），但 exp 最大仍差 64 格；开关开不开，编出的指令一样。</text>
+</svg><figcaption><b>v5p 两根柱子从几十格掉到个位数；v7x 两根一样高。</b><span class="capmore"><br><em>对数刻度；同一份输入、同一种算法，逐元素对 FP64 正确舍入值的最大误差。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：对齐记录第三次迁移，逐元素对 FP64 正确舍入值。v5p 只给 JAX 设 precision=highest：exp 1、log 3、sigmoid 83、silu 86。v7x 默认的平均误差：exp 11.8、log 0.65、sigmoid 2.4、silu 2.3 格。</p>
+<p>📌 单算子回放（第三次迁移 v5p，生产原样）：post 门 8.68 倍、路由权重 4.36、主交叉熵 2.97、MTP 交叉熵 3.97；开了以后 0.96、1.15、1.14、1.25。曲线上只有 MTP 一项看得出（1.06 → 0.99）。</p>
+<p>📌 编译产物显示：v5p 默认的 exp、log 交给硬件的超越函数单元；精确档改到向量单元上用多项式，每个向量寄存器的指令 3 条 → 43–45 条。v7x 开不开编出的指令相同。</p></details></figure>
   <details class="foldfig"><summary><b>细账</b>：高精度开关读回是开、实际没变；改解析式前后的读数</summary>
   <p>高精度开关读回是开，实际逐算子回放 99 个算子逐位没变（又一个「开关说的不算」）；改用高精度的 exp 自己搭，单算子降到 3、4 格，跟 GPU 实测的 3.4 格一样准，整网 loss 反而偏得更多（判定 r 0.65 → 1.79）。精确写法的反向由自动微分推出来，跟 GPU 的解析式不同；改成同一个解析式以后，1000 步路由偏置均值 r 2.54 → 0.89。主 loss 那次偏大，下一代配置里就回到了噪声内，没有单独归因。</p></details>
   <details class="foldfig"><summary><b>优化器里的除法和开方也一样</b>：几格的差，在小张量上就是几倍</summary>

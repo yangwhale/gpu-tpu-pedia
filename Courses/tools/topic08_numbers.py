@@ -1586,3 +1586,16 @@ M3_SCALE_SLOPE = 6.4e-6
 assert all(abs(d / s - M3_SCALE_SLOPE) < 0.2e-6 for s, d in M3_SCALE_TRACK)   # 约每步 6.4e-6，线性
 M3_SCALE_CROSS = {200: (0.029, 0.30), 250: (0.07, 0.55)}   # 舍成 BF16 后不等于 1.0 的元素比例：中位数 ／ 最大
 M3_NORM_STEP = (1.804, 1.802)            # 32K 步时，开关前后（各一份）
+# ── 第三次迁移 · 重算重选路由（知识库「重算重选路由」页）：生产默认整层重算，反向把路由重选一遍 ──
+M3_REROUTE_PCT, M3_REROUTE_MAX = 2.4, 3.05     # 不同的 token 平均 ／ 最多（%），160 次两两比较里 96 次不同
+M3_REROUTE_PN = (4.56, 2.27)                   # 参数范数 1000 步 r：重选 → 不重选（前 300 步 11.87 → 1.19）
+M3_REROUTE_PN300 = (11.87, 1.19)
+# ── 第三次迁移 · 超越函数（知识库「超越函数」页；逐元素对 FP64 正确舍入值的最大误差，ULP）──
+M3_ULP = {"exp": (105, 1, 64, 64), "log": (62, 3, 2, 2), "sigmoid": (83, 3, 30, 30), "silu": (86, 4, 29, 30)}   # v5p 默认、v5p 开、v7x 默认、v7x 开
+M3_ULP_JAXONLY = {"exp": 1, "log": 3, "sigmoid": 83, "silu": 86}   # v5p 只给 JAX 设 precision=highest
+M3_TRANS_COST = 0.008
+M3_TRANS_INSN = (3, (43, 45))                  # 每个向量寄存器的指令数：默认 → 精确档（改到向量单元上用多项式）
+M3_TRANS_L1 = {"post 门": (8.68, 0.96), "路由权重": (4.36, 1.15), "主交叉熵": (2.97, 1.14), "MTP 交叉熵": (3.97, 1.25)}
+assert all(v[2] == v[3] or abs(v[2] - v[3]) <= 1 for v in M3_ULP.values())   # v7x 开不开几乎一样
+M3_REROUTE_PN0, M3_REROUTE_PN300_0 = "%.2f" % M3_REROUTE_PN[0], "%.2f" % M3_REROUTE_PN300[0]
+M3_TRANS_COST_T = "%.1f%%" % (M3_TRANS_COST * 100)

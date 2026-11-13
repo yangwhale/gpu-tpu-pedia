@@ -25,6 +25,7 @@ fig8-elide     回答：编译器「更精确」为什么也会对不齐？—�
                数字全是实测（五次运行、GPU 噪声上限、强制舍入后）；「后端只省一半」在最小复现里看到，长跑偏高归到它是推断。
 fig8-trans     回答：TPU 默认的 exp、log 有多粗？高精度的软件实现怎么算？—— 默认几十到上百格，GPU 个位数；区间缩减 ＋ 多项式 ＋ 牛顿修正。
                右格的算法是教科书做法（示意），不是哪一家库的源码。
+fig8-ulp2      回答：精确超越函数的开关在两代芯片上管不管用？—— v5p 管用（几十格 → 个位数），v7x 配 0.0.46 不起作用。数字全是实测。
 fig8-captain   回答：一个小标量对不上，怎么分清是病态还是 bug？—— 船上称船长：船 7100 吨、船长 110 公斤，秤的一格 0.47 公斤 ＝ 船长的 0.43%。
                比方的数按 lse 1 单位 ↔ 1000 吨换算（本课推导），比例与实测一致：f32 一格 ＝ KL 的 4.3e-3。
 """
@@ -721,6 +722,44 @@ def fig_boundary():
     f.save("fig8-boundary.svg", yb + 14)
 
 
+def fig_ulp2():
+    f = Fig(W, "四个超越函数，各四根柱子：v5p 默认、v5p 开精确超越函数、v7x 默认、v7x 开精确超越函数，柱高是逐元素对 FP64 正确舍入值的最大误差（格），对数刻度。"
+               "exp 105、1、64、64；log 62、3、2、2；sigmoid 83、3、30、30；silu 86、4、29、30。v5p 开了以后降到个位数；v7x 开不开一样。")
+    y0 = f.header("精确超越函数的开关：v5p 上管用，v7x（运行库 0.0.46）上不起作用",
+                  "第三次迁移，同一份输入、同一种算法；柱高 ＝ 最大误差（格），对数刻度",
+                  [(RD, "v5p 默认"), (GR, "v5p 开"), (OR, "v7x 默认"), (BL, "v7x 开")])
+    PH = 330
+    py = f.panel(0, y0, W, PH, "逐元素最大误差（实测）", INK)
+    Y0, Y1 = py + PH - 60, py + 30
+
+    def Y(u):
+        return Y0 - math.log10(max(u, 1)) / math.log10(200) * (Y0 - Y1)
+    for u in (1, 10, 100):
+        f.line(80, Y(u), W - 30, Y(u), LINE2, 1, arrow=False)
+        f.t(70, Y(u) + 4, str(u), GY, size=12, anchor="end")
+    cols = [RD, GR, OR, BL]
+    gw = (W - 140) / 4.0
+    for i, (fn, vals) in enumerate(N.M3_ULP.items()):
+        gx = 110 + i * gw
+        for k, v in enumerate(vals):
+            x = gx + k * 62
+            h = max(3, Y0 - Y(v))
+            f.box(x, Y0 - h, 46, h, cols[k], cols[k], 3)
+            f.t(x + 23, Y0 - h - 8, str(v), cols[k], True, 13, "middle")
+        f.t(gx + 2 * 62 - 8, Y0 + 30, fn, INK, True, 15, "middle")
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "换芯片要重验开关：同一个开关，在一代芯片上管用，在另一代上可能是空操作", [
+        "v5p 上开了以后，整段挪到向量单元用多项式算（编译产物显示），步时 ＋0.8%。只给 JAX 设 highest 不够：sigmoid、silu 不动。",
+        "v7x 默认就比 v5p 准（log 2 格），但 exp 最大仍差 64 格；开关开不开，编出的指令一样。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测：对齐记录第三次迁移，逐元素对 FP64 正确舍入值。v5p 只给 JAX 设 precision=highest：exp %d、log %d、sigmoid %d、silu %d。v7x 默认的平均误差：exp 11.8、log 0.65、sigmoid 2.4、silu 2.3 格。"
+               % tuple(N.M3_ULP_JAXONLY[k] for k in ("exp", "log", "sigmoid", "silu")),
+               "📌 单算子回放（第三次迁移 v5p，生产原样）：post 门 8.68 倍、路由权重 4.36、主交叉熵 2.97、MTP 交叉熵 3.97；开了以后 0.96、1.15、1.14、1.25。曲线上只有 MTP 一项看得出（1.06 → 0.99）。",
+               "📌 编译产物显示：v5p 默认的 exp、log 交给硬件的超越函数单元；精确档改到向量单元上用多项式，每个向量寄存器的指令 3 条 → 43–45 条。v7x 开不开编出的指令相同。")
+    f.save("fig8-ulp2.svg", yb + 14)
+
+
 def fig_captain():
     f = Fig(W, "左格：船上称船长。先称船加船长，再称空船，两次相减得船长的体重。船 %d 吨，船长 %d 公斤，秤能读到 %s 公斤一格，约七位有效数字，已经很准；"
                "可这一格落到船长身上，就是他体重的 %s。下面一行对回模型：船是 log-sum-exp，约 %.1f；船长是蒸馏损失 KL，每行约 %s；秤的一格是 f32 在 %.1f 处的一格，约 %s，等于 KL 的 %s。"
@@ -921,3 +960,4 @@ fig_boundary()
 fig_captain()
 fig_elide()
 fig_trans()
+fig_ulp2()
