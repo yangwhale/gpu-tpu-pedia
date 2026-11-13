@@ -8029,7 +8029,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>要更接近 FP32，得给那一处单独设 HIGHEST（多遍 BF16 拼出来的近似）。可一处写着 HIGHEST，不等于它真上了矩阵单元：编译器可能把小的加权和改写成 FP32 逐元素乘加，那时它跟 GPU 只差加法顺序。是不是多遍 BF16，看编译后它还是不是矩阵乘。另一格是<b>该留 32 位的中间值存成了 16 位</b>：这是写错了，不是噪声，哪怕它小到 GPU 重跑都盖得住。参照的写法跟生产对不上时，以生产为准，改参照 —— 第 4 行改的就是 GPU。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/layers/mhc.py#L547-L562">MaxText（混元 4 公开分支）：多路残差四路相加的两种写法（开关 ihc_stream_sum_unrolled；注释说 HIGHEST 是多遍 BF16，那是旧说法，以编译产物为准）</a>　<a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/configs/base.yml#L229-L233">MaxText（混元 4 公开分支）：输出头单独设精度（logits_matmul_precision）</a></p>
   <p><b>第三次迁移把图第 2 行那一格看清了：默认档舍的是离开格点的主权重。</b>生产的输出头写 logits ＝ x · W，两边升成 FP32 再乘，精度档没单独设。x 是末层归一化的输出，本来就是 BF16，舍了不变；W 是 FP32 主权重。第 0 步 W 还在 BF16 的格点上，默认档舍了也不变，所以第 1 步三档前向一样；训练一步以后主权重离开格点，默认档把它舍回去，logits 的误差一下子成了真 FP32 的三千到五千倍（离格 1 步到 10 步）。第 1 步看不见，跟 <a href="#s5-5">§5.5</a> 的 RMSNorm scale 是同一个盲区。前 300 步主 loss 的 r 是 7.32，判不过。</p>
-<figure class="fbox fwide" id="fig-lmhead"><svg viewBox="0 0 1400 712" width="100%" role="img" aria-label="左：输出头那次矩阵乘的输入里，激活本来就是 BF16，权重是 FP32 主权重。TPU 默认精度档把 FP32 输入舍成 BF16、只算一遍。第 0 步主权重就在 BF16 的格点上，舍了不变；训练一步以后主权重离开格点，默认档把它舍回最近的格点，差出一截。右：单独回放这一次矩阵乘，logits 对 FP64 的相对误差：权重在格点上默认档 1.1e-07；离格以后默认档 1.3e-03 到 1.9e-03，high（3 遍）5.9e-06，highest（6 遍）1.4e-07，主机上真 FP32 3.7e-07。下：前 300 步主 loss 的 r，默认 7.32、high 1.03、highest 1.31；步时 high ＋5.7%，highest ＋12.3%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-lmhead"><svg viewBox="0 0 1400 728" width="100%" role="img" aria-label="左：输出头那次矩阵乘的输入里，激活本来就是 BF16，权重是 FP32 主权重。TPU 默认精度档把 FP32 输入舍成 BF16、只算一遍。第 0 步主权重就在 BF16 的格点上，舍了不变；训练一步以后主权重离开格点，默认档把它舍回最近的格点，差出一截。右：单独回放这一次矩阵乘，logits 对 FP64 的相对误差：权重在格点上默认档 1.1e-07；离格以后默认档 1.3e-03 到 1.9e-03，high（3 遍）5.9e-06，highest（6 遍）1.4e-07，主机上真 FP32 3.7e-07。下：前 300 步主 loss 的 r，默认 7.32、high 1.03、highest 1.31；步时 high ＋5.7%，highest ＋12.3%。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">默认精度档舍的不是激活，是离开格点的主权重　——　<tspan font-weight="700">第 1 步看不见，第 2 步起差几千倍</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第三次迁移的输出头：logits ＝ x · W，x 是 BF16，W 是 FP32 主权重；两边升成 FP32 交给矩阵单元，精度档没单独设</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -8109,26 +8109,30 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="638" y="363" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主机真 FP32 · 离格</tspan></text>
 <rect x="870" y="350" width="79.87455861416356" height="18" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="957" y="364" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.7e-07</tspan></text>
-<rect x="0" y="450" width="1400" height="120" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="450" width="1400" height="136" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="450" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
 <rect x="0" y="452" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="480" x2="1400" y2="480" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="470" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三档怎么选（单份运行；前 300 步主 loss 的 r ／ 步时）</tspan></text>
-<rect x="20.0" y="494" width="446.6666666666667" height="70" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="36" y="518" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认（1 遍，生产原样）</tspan></text>
-<text class="svgsm" x="36" y="548" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前 300 步 7.32　不过　·　步时基准</tspan></text>
-<rect x="476.6666666666667" y="494" width="446.6666666666667" height="70" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="492" y="518" fill="#0d652d" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">high（3 遍）</tspan></text>
-<text class="svgsm" x="492" y="548" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前 300 步 1.03　·　＋5.7%</tspan></text>
-<rect x="933.3333333333334" y="494" width="446.6666666666667" height="70" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="949" y="518" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">highest（6 遍）</tspan></text>
-<text class="svgsm" x="949" y="548" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">前 300 步 1.31　·　＋12.3%</tspan></text>
-<rect x="0" y="590" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="590" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="590" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="617" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">推荐 high：曲线效果跟 highest 一样，代价约一半</tspan></text>
-<text class="svgsm" x="20" y="648" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第 1 步主权重还在格点上，三档前向一样；第 2 步起才差开，所以第 1 步逐张量看不出它（超 2N 的张量 91 → 91）。</text>
-<text class="svgsm" x="20" y="672" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一次矩阵乘的输出是整个词表，是整网最宽的一次，多算几遍就贵：high 多 2 遍，highest 多 5 遍。</text>
+<text class="svglbl" x="14" y="470" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">三档怎么选：前 300 步主 loss 的 r，条尾是步时（单份运行）</tspan></text>
+<line x1="412.5" y1="502" x2="412.5" y2="580" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4,3"/>
+<text class="svgsm" x="412" y="496" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">1：过</text>
+<line x1="525.0" y1="502" x2="525.0" y2="580" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4,3"/>
+<text class="svgsm" x="525" y="496" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-variant-numeric:tabular-nums">2：不过</text>
+<text class="svgsm" x="24" y="520" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">默认（1 遍，生产原样）</tspan></text>
+<rect x="300" y="508" width="823.5" height="16" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1131" y="521" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.32　步时基准</tspan></text>
+<text class="svgsm" x="24" y="544" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">high（3 遍）</tspan></text>
+<rect x="300" y="532" width="115.875" height="16" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="423" y="545" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.03　步时 ＋5.7%</tspan></text>
+<text class="svgsm" x="24" y="568" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">highest（6 遍）</tspan></text>
+<rect x="300" y="556" width="147.375" height="16" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="455" y="569" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.31　步时 ＋12.3%</tspan></text>
+<rect x="0" y="606" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="606" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="606" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="633" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">推荐 high：曲线效果跟 highest 一样，代价约一半</tspan></text>
+<text class="svgsm" x="20" y="664" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">第 1 步主权重还在格点上，三档前向一样；第 2 步起才差开，所以第 1 步逐张量看不出它（超 2N 的张量 91 → 91）。</text>
+<text class="svgsm" x="20" y="688" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">这一次矩阵乘的输出是整个词表，是整网最宽的一次，多算几遍就贵：high 多 2 遍，highest 多 5 遍。</text>
 </svg><figcaption><b>左边第二行那一截红线，就是右边红条比灰条长出来的那三个数量级。</b><span class="capmore"><br><em>左格是示意；右格和下面三张卡是实测，单份运行。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：对齐记录第三次迁移，单独回放输出头这一次矩阵乘，输入取 GPU 第 1 步，对 CPU FP64。离格 1 步、10 步是把权重换成训练 1 步、10 步后的值。对 x 的梯度跟前向一样大（默认档离格 1.9e-03），乘的是同一个 W；对 W 的梯度只有一处小误差（默认档把 FP32 的 logits 梯度舍成 BF16，8.3e-06）。</p>
 <p>📌 「约 5000 倍」：默认档离格 10 步 1.9e-03 ÷ 主机真 FP32 离格 3.7e-07 ≈ 5100（本课复算，对齐记录同口径）。</p>
 <p>📌 曲线（4K，单份运行）：1000 步主 loss 默认 1.82（待定）、high 0.99、highest 1.02；32K 上 high 0.94、highest 0.99。前 300 步 high 1.03、highest 1.31 只差在单份运行的噪声里，不按小数点排先后。步时 1.640 ／ 1.734 ／ 1.842 s。</p>

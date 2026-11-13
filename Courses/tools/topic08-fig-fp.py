@@ -469,17 +469,22 @@ def fig_lmhead():
         f.t(X(v) + 8, y + 18, "%.1e" % v, c, True, 13)
     f._pan = None
     sy = y0 + PH + 18
-    SH = 120
-    py3 = f.panel(0, sy, W, SH, "三档怎么选（单份运行；前 300 步主 loss 的 r ／ 步时）", INK)
-    cards = [("默认（1 遍，生产原样）", "%.2f　不过" % N.M3_LMH_LOSS4K["default"][1], "步时基准", RD),
-             ("high（3 遍）", "%.2f" % N.M3_LMH_LOSS4K["high"][1], "＋%.1f%%" % (N.M3_LMH_COST["high"] * 100), GR),
-             ("highest（6 遍）", "%.2f" % N.M3_LMH_LOSS4K["highest"][1], "＋%.1f%%" % (N.M3_LMH_COST["highest"] * 100), BL)]
-    cw = (W - 60) / 3.0
-    for i, (a, b, c, col) in enumerate(cards):
-        x = 20 + i * (cw + 10)
-        f.box(x, py3 + 14, cw, 70, "#fff", col, 6)
-        f.t(x + 16, py3 + 38, a, col, True, 14)
-        f.t(x + 16, py3 + 68, "前 300 步 " + b + "　·　" + c, INK, True, 14)
+    SH = 136
+    py3 = f.panel(0, sy, W, SH, "三档怎么选：前 300 步主 loss 的 r，条尾是步时（单份运行）", INK)
+    BX0, BX1 = 300, W - 200
+    def XR(v):
+        return BX0 + v / 8.0 * (BX1 - BX0)
+    for v, lab in ((1, "1：过"), (2, "2：不过")):
+        f.line(XR(v), py3 + 22, XR(v), py3 + 100, GY, 1.2, dash="4,3", arrow=False)
+        f.t(XR(v), py3 + 16, lab, GY, size=11, anchor="middle")
+    rows = [("默认（1 遍，生产原样）", N.M3_LMH_LOSS4K["default"][1], "步时基准", RD),
+            ("high（3 遍）", N.M3_LMH_LOSS4K["high"][1], "步时 ＋%.1f%%" % (N.M3_LMH_COST["high"] * 100), GR),
+            ("highest（6 遍）", N.M3_LMH_LOSS4K["highest"][1], "步时 ＋%.1f%%" % (N.M3_LMH_COST["highest"] * 100), BL)]
+    for i, (lab, v, c, col) in enumerate(rows):
+        y = py3 + 26 + i * 24
+        f.t(24, y + 14, lab, col, True, 13)
+        f.box(BX0, y + 2, XR(v) - BX0, 16, col, col, 3)
+        f.t(XR(v) + 8, y + 15, "%.2f　%s" % (v, c), col, True, 13)
     f._pan = None
     yb = f.band(sy + SH + 20, "ok", "推荐 high：曲线效果跟 highest 一样，代价约一半", [
         "第 1 步主权重还在格点上，三档前向一样；第 2 步起才差开，所以第 1 步逐张量看不出它（超 2N 的张量 91 → 91）。",
