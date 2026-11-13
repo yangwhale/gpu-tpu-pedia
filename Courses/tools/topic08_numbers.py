@@ -1599,3 +1599,7 @@ M3_TRANS_L1 = {"post 门": (8.68, 0.96), "路由权重": (4.36, 1.15), "主交�
 assert all(v[2] == v[3] or abs(v[2] - v[3]) <= 1 for v in M3_ULP.values())   # v7x 开不开几乎一样
 M3_REROUTE_PN0, M3_REROUTE_PN300_0 = "%.2f" % M3_REROUTE_PN[0], "%.2f" % M3_REROUTE_PN300[0]
 M3_TRANS_COST_T = "%.1f%%" % (M3_TRANS_COST * 100)
+# 2026-11-14：小数一律 e 记法（正文用）
+STEP1_ALL_E = "%.2e" % STEP1_ALL; STEP1_ALL_E = STEP1_ALL_E.replace("e-0", "e-")
+REF_LAYER0_FWD_E, REF_LAYER0_BWD_E = ("%.1e" % REF_LAYER0_FWD).replace("e-0", "e-"), ("%.1e" % REF_LAYER0_BWD).replace("e-0", "e-")
+assert (STEP1_ALL_E, REF_LAYER0_FWD_E, REF_LAYER0_BWD_E) == ("1.28e-3", "4.0e-3", "2.1e-3")
