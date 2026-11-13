@@ -718,8 +718,13 @@
 - 讲师请求：§9.3「两笔相反」写清各往哪边推。
 - 未做：fig-lmhead 三张卡改条形图；讲义第五节时长（讲师管）。
 
+## H8（11-13）· 锤炼阶段（课程负责人 22:24：对故事线没帮助、难讲、意义不大的折叠，课上不讲）：病态、超越函数
+- §5.7 改名「病态（选读）」：正文只留两句原理，船长图、四问、两层后续全部收进折叠「例子」。节号不变（讲义已按 §5.7／§5.8 引用）。
+- §5.8 只留主结论一段 ＋ fig-ulp2；fig-trans、第二次迁移的经过、第三次迁移的编译产物收进折叠「细节」。
+- 折叠块要给对齐记录知识库／案例链接：公开镜像还没同步第三次迁移目录，先记待办（见下一步第 1 条）。
+
 ## 下一步（按优先级）
-1. 镜像同步后给 §5.4 补对齐记录链接（钉完整 sha），重核全部 18＋ 条链接。11-13 晚查过：公开镜像最新仍是 124b2a7，没有 08 目录；开发仓库已重构（GUIDE.md ＋ knowledge/，部分和那页是 knowledge/fsdp-bf16-partial-sums.md，数字跟课件逐项对过一致）。
+1. 镜像同步后给 §5.4–§5.8 的折叠补对齐记录链接（knowledge/fsdp-bf16-partial-sums、elided-rounding、rmsnorm-32k、lmhead-precision、transcendental、remat-reroute、pitfalls；病态那个例子链第二次迁移的案例）（钉完整 sha），重核全部 18＋ 条链接。11-13 晚查过：公开镜像最新仍是 124b2a7，没有 08 目录；开发仓库已重构（GUIDE.md ＋ knowledge/，部分和那页是 knowledge/fsdp-bf16-partial-sums.md，数字跟课件逐项对过一致）。
    分工（协调者 11-13）：课件、图、动画、numbers 归我；讲义归讲师 topic08-lecturer，要改讲义发修改请求给它；T8-STATE 各写各的小节，写前先 pull；只 add 自己的文件。
    待写、等负责人拍板：全局关 excess precision（32K「第 1 级 ＋ 全局关」三项全过、步时几乎不变、第 1 步比 GPU 多舍 12–13%），材料看 knowledge/elided-rounding.md 和 DETAILS D60。
 2. 回填第三次迁移的新发现（材料以 08 目录 GUIDE.md、knowledge/ 为准，每条讲来龙去脉、多图）：

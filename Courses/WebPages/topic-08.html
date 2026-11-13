@@ -8160,7 +8160,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>上一代配置（关 base2、多路残差一带还没照 GPU 写法舍）第 1 步，GPU 参照补到六份（15 对）后：205 个梯度里 169 个超出 GPU 的波动，拿去对 CPU 上的 FP64 整网重算定责：167 个离 FP64 不超过 GPU 的 1.2 倍，2 个比 GPU 远（1 个是多路残差混合的小参数，超出波动 1.05 倍、判待定；1 个是 MTP 的归一化权重，已接受）；另 10 个 GPU 各份逐位相同、26 个在波动内。只有三份时是 177 个超出、5 个小参数没定责：份数补够，尺子量准了，大半「没定责」自己就消失了。对齐配置 2026-11-11 换成新口径以后重判：163 个超出，没定责的只剩第 3 层 FFN 前一个多路残差小参数（超出波动 1.14 倍，R 1.43），原来那个进了噪声。定责一律对 FP64，不对 TPU 自己跑的 FP32 参照（裁判不能是选手，<a href="#s4-2">§4.2</a>）。</p></details>
 <details class="foldfig"><summary><b>考考自己</b>：TPU 上把一处矩阵乘的两个操作数都转成 FP32，别的没改。为什么离 GPU 的真 FP32 还差末位？</summary><p>默认精度下它只算一遍 BF16；设成 HIGHEST 是多遍 BF16 拼出来的近似。但写着 HIGHEST 不算数，要看编译后的样子：编译器若把它改写成逐元素 FP32 乘加，差的就只剩加法顺序，归到「顺序」那一格。</p></details>
 
-  <h3 id="s5-7">5.7　小数是两个大数相减：病态会放大一格</h3>
+  <h3 id="s5-7">5.7　小数是两个大数相减：病态（选读）</h3>
+  <p>一个小量若是两个大数相减得来的，大数上差一格，小量上就差一大截。查到一个小标量对不上，先问它是不是这样算出来的、被放大的那一格是谁的。课上不讲，例子收在折叠里。</p>
+  <details class="foldfig"><summary><b>例子</b>：第二次迁移里一项 KL 辅助损失，船上称船长；四问认出病态，再找被放大的那一格</summary>
 <figure class="fbox fwide" id="fig-captain"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="左格：船上称船长。先称船加船长，再称空船，两次相减得船长的体重。船 7100 吨，船长 110 公斤，秤能读到 0.47 公斤一格，约七位有效数字，已经很准；可这一格落到船长身上，就是他体重的 0.43%。下面一行对回模型：船是 log-sum-exp，约 7.1；船长是蒸馏损失 KL，每行约 1.1e-4；秤的一格是 f32 在 7.1 处的一格，约 4.73e-7，等于 KL 的 4.3e-3。右格：病态还是 bug，问三件事。它的输入两边离参照一样近吗？R 0.94–0.99，一样近。由它出发的梯度一样近吗？R 0.78–1.03，一样近。它是不是两个大数相减剩下的小数、差折成大数的格在一两格以内？TPU 的 lse 平均差 −0.95 格。三条都是，就是病态在放大。第四问：被放大的那一格是谁的？同样的 f32 计算换到 CPU（PyTorch）上只差 −0.004 格，TPU 差 −0.95 格，所以那一格来自 TPU 默认的 exp 和 log。换成高精度的 exp、log 以后，lse 的偏差 −0.953 → ＋0.025 格，300 步那一项的 r 3.67 → 0.01（同一代还开了另一个开关，没拆开）。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">小数是两个大数相减时，f32 差一格就是千分之几　——　<tspan font-weight="700">病态是放大器，不是根因</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左边：在一杆称船的秤上称船长；右边：前三问认出放大器，第四问找被放大的那一格是谁的</text>
@@ -8264,8 +8266,88 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>这项 KL 的记录写法本身在 FP32 里病态（CPU 上调同一个函数也偏高），改记一种等价的广义 KL 以后，1000 步带符号均值的 r 1.06 → 0.69，三个统计里最差的 0.85，由待定变过；梯度一位不变。真实宽度上 GPU 自己记下的这一项也偏高，约六成来自 GPU 把索引器的旋转位置编码放在 BF16 里算。所以「更准就是更像 GPU」只在 lse 那一格成立（同一代还开了另一个开关，没拆开）。</p></details>
   <details class="foldfig"><summary><b>FP64 怎么把它拆出来</b>：逐项重算同一行，差只剩最后那一步</summary>
   <p>把一行的原始输入存下来，在 FP64 里逐项重算：目标分布、对数概率，误差都在 1e-7 量级，比 1e-3 小四个数量级，差只能落在最后的 log-sum-exp 上。偏低的大小有两个口径：单行对 FP64 重算 −1.2e-3；TPU 全部运行对 GPU 全部运行 −9.2e-4。换成高精度的 exp、log 以后，同一行对 FP64 −1.2e-3 → ＋9.7e-5，lse −0.953 → ＋0.025 格（前后两端的其余设置不同）。由它出发的梯度对 FP64 的 R 中位数 0.97–0.99（实测）。要是同样的 f32 计算换到 CPU（PyTorch）上也偏同样多，那一格就是两边都躲不开的末位，才写「不过，已定责」。</p></details>
+  </details>
 
   <h3 id="s5-8">5.8　超越函数：TPU 默认的 exp、log 差几十格</h3>
+  <p><b>主结论：TPU 默认的 exp、log、sigmoid、silu 最大差几十到上百格，GPU 只差个位数，而且默认的 exp 系统偏低。</b>v5p 上打开框架里的「精确超越函数」开关，全部降到个位数，步时 ＋0.8%；v7x（运行库 0.0.46）上这个开关不起作用，exp 仍差 64 格。只设 JAX 的精度档 highest 不够，sigmoid、silu 降不下来。</p>
+<figure class="fbox fwide" id="fig-ulp2"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="四个超越函数，各四根柱子：v5p 默认、v5p 开精确超越函数、v7x 默认、v7x 开精确超越函数，柱高是逐元素对 FP64 正确舍入值的最大误差（格），对数刻度。exp 105、1、64、64；log 62、3、2、2；sigmoid 83、3、30、30；silu 86、4、29、30。v5p 开了以后降到个位数；v7x 开不开一样。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">精确超越函数的开关：v5p 上管用，v7x（运行库 0.0.46）上不起作用</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第三次迁移，同一份输入、同一种算法；柱高 ＝ 最大误差（格），对数刻度</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v5p 默认</text>
+<rect x="113.08000000000001" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="134" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v5p 开</text>
+<rect x="210.48000000000002" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="231" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7x 默认</text>
+<rect x="321.32000000000005" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="342" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7x 开</text>
+<rect x="416.48" y="63" width="14" height="14" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="437" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">虚线：GPU（B200 实测）</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">逐元素最大误差（实测）</tspan></text>
+<line x1="80" y1="402.0" x2="1370" y2="402.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="70" y="406" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="80" y1="297.6988824777375" x2="1370" y2="297.6988824777375" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="70" y="301" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">10</text>
+<line x1="80" y1="193.39776495547505" x2="1370" y2="193.39776495547505" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="70" y="197" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">100</text>
+<rect x="110.0" y="191.1876973829671" width="46" height="210.8123026170329" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="133" y="183" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">105</tspan></text>
+<rect x="172.0" y="399" width="46" height="3" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="195" y="391" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
+<rect x="234.0" y="213.61341026714965" width="46" height="188.38658973285035" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="257" y="205" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64</tspan></text>
+<rect x="296.0" y="213.61341026714965" width="46" height="188.38658973285035" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="319" y="205" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64</tspan></text>
+<text class="svgsm" x="226" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">exp</tspan></text>
+<line x1="102.0" y1="370.60223504452495" x2="348.0" y2="370.60223504452495" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text class="svgsm" x="352" y="374" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 2</tspan></text>
+<rect x="425.0" y="215.05154374771604" width="46" height="186.94845625228396" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="448" y="207" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">62</tspan></text>
+<rect x="487.0" y="352.23571993911514" width="46" height="49.76428006088486" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="510" y="344" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="549.0" y="370.60223504452495" width="46" height="31.397764955475054" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="572" y="362" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<rect x="611.0" y="370.60223504452495" width="46" height="31.397764955475054" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="634" y="362" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="541" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">log</tspan></text>
+<line x1="417.0" y1="402.0" x2="663.0" y2="402.0" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text class="svgsm" x="667" y="406" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 1</tspan></text>
+<rect x="740.0" y="201.83801035268385" width="46" height="200.16198964731615" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="763" y="193" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">83</tspan></text>
+<rect x="802.0" y="352.23571993911514" width="46" height="49.76428006088486" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="825" y="344" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
+<rect x="864.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="887" y="239" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
+<rect x="926.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="949" y="239" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
+<text class="svgsm" x="856" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">sigmoid</tspan></text>
+<line x1="732.0" y1="346.56615501297097" x2="978.0" y2="346.56615501297097" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text class="svgsm" x="982" y="350" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 3.4</tspan></text>
+<rect x="1055.0" y="200.22964969020992" width="46" height="201.77035030979008" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1078" y="192" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">86</tspan></text>
+<rect x="1117.0" y="339.2044700890499" width="46" height="62.79552991095011" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1140" y="331" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
+<rect x="1179.0" y="249.47025455681964" width="46" height="152.52974544318036" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1202" y="241" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">29</tspan></text>
+<rect x="1241.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="1264" y="239" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
+<text class="svgsm" x="1171" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">silu</tspan></text>
+<line x1="1047.0" y1="346.56615501297097" x2="1293.0" y2="346.56615501297097" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text class="svgsm" x="1297" y="350" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 3.4</tspan></text>
+<rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换芯片要重验开关：同一个开关，在一代芯片上管用，在另一代上可能是空操作</tspan></text>
+<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">v5p 上开了以后，整段挪到向量单元用多项式算（编译产物显示），步时 ＋0.8%。只给 JAX 设 highest 不够：sigmoid、silu 不动。</text>
+<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">v7x 默认就比 v5p 准（log 2 格），但 exp 最大仍差 64 格；开关开不开，编出的指令一样。</text>
+</svg><figcaption><b>v5p 两根柱子从几十格掉到 GPU 虚线附近；v7x 两根一样高，exp 还在虚线上面一大截。</b><span class="capmore"><br><em>对数刻度；v5p 两根就是上一张图左格的数，这张多了 v7x。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：对齐记录第三次迁移，逐元素对 FP64 正确舍入值。v5p 只给 JAX 设 precision=highest：exp 1、log 3、sigmoid 83、silu 86。v7x 默认的平均误差：exp 11.8、log 0.65、sigmoid 2.4、silu 2.3 格。</p>
+<p>📌 单算子回放（第三次迁移 v5p，生产原样）：post 门 8.68 倍、路由权重 4.36、主交叉熵 2.97、MTP 交叉熵 3.97；开了以后 0.96、1.15、1.14、1.25。曲线上只有 MTP 一项看得出（1.06 → 0.99）。</p>
+<p>📌 编译产物显示：v5p 默认的 exp、log 交给硬件的超越函数单元；精确档改到向量单元上用多项式，每个向量寄存器的指令 3 条 → 43–45 条。v7x 开不开编出的指令相同。</p></details></figure>
+  <details class="foldfig"><summary><b>细节</b>：软件怎么把 exp 算准；第二次迁移里 sigmoid 改准了整网反而更偏；第三次迁移的编译产物</summary>
 <figure class="fbox fwide" id="fig-trans"><svg viewBox="0 0 1400 664" width="100%" role="img" aria-label="左格：四个超越函数，横条长度是对正确舍入的最大误差，按格（ulp）计，对数刻度。TPU 默认：exp 105、log 62、sigmoid 83、silu 86。TPU 高精度写法：exp 1、log 3、sigmoid 3、silu 4。GPU：exp 2、log 1、sigmoid 和 silu 最大 3.4（实测）。右格：高精度的 exp 怎么用软件算：先把 x 拆成 k 个 ln2 加一个小余数 s，余数上用多项式算 e 的 s 次方，再乘 2 的 k 次方，只改指数位、精确；求倒数用牛顿修正，每修一次误差平方一次。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">TPU 默认的 exp、log 差几十格，GPU 只差个位数</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：条长 ＝ 对正确舍入的最大误差（格，对数刻度）；右：高精度的软件 exp 和倒数，分几步算</text>
@@ -8354,83 +8436,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>exp、log、sigmoid 这类函数，硬件不会一步算出来，都是软件拼的。TPU 默认那一版图快，最大误差几十到上百格；GPU 的 FP32 版本只差个位数。更要紧的是方向：在真实的输入上，默认的 exp 绝大多数结果没舍对，而且平均往低处偏（数在图下）—— 上一节那一格就是这么来的。</p>
   <p>sigmoid、silu 没这么顺，图下落点带说了经过；教训是：改完一个函数，整网要再验一遍。</p>
   <p><b>第三次迁移把这一项在两代芯片上量全了。</b>先分清三样东西：JAX 的精度档 highest；框架里的「精确超越函数」开关；上面图里自己搭的高精度写法。v5p 上默认几十到上百格；只设 JAX 的 highest，exp、log 降下来，sigmoid、silu 不动；打开框架的精确超越函数开关才全部降到个位数（下面折叠里第二次迁移那个「读回是开、实际没变」的开关，说明开关要实测；这一次是逐元素量过的），步时 ＋0.8%。编译产物显示，开了以后整段从硬件的超越函数单元挪到向量单元上用多项式算，每个向量寄存器的指令从 3 条变成 43–45 条。v7x 配运行库 0.0.46 时，这个开关开不开结果一样，编出的指令也一样：v7x 默认就比 v5p 准，可 exp 最大仍差 64 格，目前对不到 GPU 的水平。</p>
-<figure class="fbox fwide" id="fig-ulp2"><svg viewBox="0 0 1400 574" width="100%" role="img" aria-label="四个超越函数，各四根柱子：v5p 默认、v5p 开精确超越函数、v7x 默认、v7x 开精确超越函数，柱高是逐元素对 FP64 正确舍入值的最大误差（格），对数刻度。exp 105、1、64、64；log 62、3、2、2；sigmoid 83、3、30、30；silu 86、4、29、30。v5p 开了以后降到个位数；v7x 开不开一样。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">精确超越函数的开关：v5p 上管用，v7x（运行库 0.0.46）上不起作用</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第三次迁移，同一份输入、同一种算法；柱高 ＝ 最大误差（格），对数刻度</text>
-<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v5p 默认</text>
-<rect x="113.08000000000001" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="134" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v5p 开</text>
-<rect x="210.48000000000002" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="231" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7x 默认</text>
-<rect x="321.32000000000005" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="342" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">v7x 开</text>
-<rect x="416.48" y="63" width="14" height="14" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="437" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">虚线：GPU（B200 实测）</text>
-<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
-<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">逐元素最大误差（实测）</tspan></text>
-<line x1="80" y1="402.0" x2="1370" y2="402.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="70" y="406" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1</text>
-<line x1="80" y1="297.6988824777375" x2="1370" y2="297.6988824777375" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="70" y="301" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">10</text>
-<line x1="80" y1="193.39776495547505" x2="1370" y2="193.39776495547505" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="70" y="197" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">100</text>
-<rect x="110.0" y="191.1876973829671" width="46" height="210.8123026170329" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="133" y="183" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">105</tspan></text>
-<rect x="172.0" y="399" width="46" height="3" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="195" y="391" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1</tspan></text>
-<rect x="234.0" y="213.61341026714965" width="46" height="188.38658973285035" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="257" y="205" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64</tspan></text>
-<rect x="296.0" y="213.61341026714965" width="46" height="188.38658973285035" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="319" y="205" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">64</tspan></text>
-<text class="svgsm" x="226" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">exp</tspan></text>
-<line x1="102.0" y1="370.60223504452495" x2="348.0" y2="370.60223504452495" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
-<text class="svgsm" x="352" y="374" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 2</tspan></text>
-<rect x="425.0" y="215.05154374771604" width="46" height="186.94845625228396" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="448" y="207" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">62</tspan></text>
-<rect x="487.0" y="352.23571993911514" width="46" height="49.76428006088486" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="510" y="344" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
-<rect x="549.0" y="370.60223504452495" width="46" height="31.397764955475054" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="572" y="362" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<rect x="611.0" y="370.60223504452495" width="46" height="31.397764955475054" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="634" y="362" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2</tspan></text>
-<text class="svgsm" x="541" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">log</tspan></text>
-<line x1="417.0" y1="402.0" x2="663.0" y2="402.0" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
-<text class="svgsm" x="667" y="406" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 1</tspan></text>
-<rect x="740.0" y="201.83801035268385" width="46" height="200.16198964731615" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="763" y="193" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">83</tspan></text>
-<rect x="802.0" y="352.23571993911514" width="46" height="49.76428006088486" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="825" y="344" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3</tspan></text>
-<rect x="864.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="887" y="239" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
-<rect x="926.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="949" y="239" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
-<text class="svgsm" x="856" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">sigmoid</tspan></text>
-<line x1="732.0" y1="346.56615501297097" x2="978.0" y2="346.56615501297097" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
-<text class="svgsm" x="982" y="350" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 3.4</tspan></text>
-<rect x="1055.0" y="200.22964969020992" width="46" height="201.77035030979008" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1078" y="192" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">86</tspan></text>
-<rect x="1117.0" y="339.2044700890499" width="46" height="62.79552991095011" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1140" y="331" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4</tspan></text>
-<rect x="1179.0" y="249.47025455681964" width="46" height="152.52974544318036" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1202" y="241" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">29</tspan></text>
-<rect x="1241.0" y="247.9346024168527" width="46" height="154.0653975831473" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1264" y="239" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">30</tspan></text>
-<text class="svgsm" x="1171" y="432" fill="#202124" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">silu</tspan></text>
-<line x1="1047.0" y1="346.56615501297097" x2="1293.0" y2="346.56615501297097" stroke="#202124" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="6,4"/>
-<text class="svgsm" x="1297" y="350" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 3.4</tspan></text>
-<rect x="0" y="452" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="452" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<rect x="2" y="452" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="479" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换芯片要重验开关：同一个开关，在一代芯片上管用，在另一代上可能是空操作</tspan></text>
-<text class="svgsm" x="20" y="510" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">v5p 上开了以后，整段挪到向量单元用多项式算（编译产物显示），步时 ＋0.8%。只给 JAX 设 highest 不够：sigmoid、silu 不动。</text>
-<text class="svgsm" x="20" y="534" fill="#0d652d" style="font-size:15.0px;font-variant-numeric:tabular-nums">v7x 默认就比 v5p 准（log 2 格），但 exp 最大仍差 64 格；开关开不开，编出的指令一样。</text>
-</svg><figcaption><b>v5p 两根柱子从几十格掉到 GPU 虚线附近；v7x 两根一样高，exp 还在虚线上面一大截。</b><span class="capmore"><br><em>对数刻度；v5p 两根就是上一张图左格的数，这张多了 v7x。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：对齐记录第三次迁移，逐元素对 FP64 正确舍入值。v5p 只给 JAX 设 precision=highest：exp 1、log 3、sigmoid 83、silu 86。v7x 默认的平均误差：exp 11.8、log 0.65、sigmoid 2.4、silu 2.3 格。</p>
-<p>📌 单算子回放（第三次迁移 v5p，生产原样）：post 门 8.68 倍、路由权重 4.36、主交叉熵 2.97、MTP 交叉熵 3.97；开了以后 0.96、1.15、1.14、1.25。曲线上只有 MTP 一项看得出（1.06 → 0.99）。</p>
-<p>📌 编译产物显示：v5p 默认的 exp、log 交给硬件的超越函数单元；精确档改到向量单元上用多项式，每个向量寄存器的指令 3 条 → 43–45 条。v7x 开不开编出的指令相同。</p></details></figure>
+  </details>
   <details class="foldfig"><summary><b>细账</b>：高精度开关读回是开、实际没变；改解析式前后的读数</summary>
   <p>高精度开关读回是开，实际逐算子回放 99 个算子逐位没变（又一个「开关说的不算」）；改用高精度的 exp 自己搭，单算子降到 3、4 格，跟 GPU 实测的 3.4 格一样准，整网 loss 反而偏得更多（判定 r 0.65 → 1.79）。精确写法的反向由自动微分推出来，跟 GPU 的解析式不同；改成同一个解析式以后，1000 步路由偏置均值 r 2.54 → 0.89。主 loss 那次偏大，下一代配置里就回到了噪声内，没有单独归因。</p></details>
   <details class="foldfig"><summary><b>优化器里的除法和开方也一样</b>：几格的差，在小张量上就是几倍</summary>
