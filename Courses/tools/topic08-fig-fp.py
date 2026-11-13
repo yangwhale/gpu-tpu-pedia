@@ -186,7 +186,7 @@ def fig_truncate():
     f.line(GX0, GYf(N.FP32_BIAS_MAX), GX0 + GW, GYf(N.FP32_BIAS_MAX), GR, 2.5, dash="7 5", arrow=False)
     f.t(GX0 + GW, GYf(N.FP32_BIAS_MAX) - 10, "FP32 不走张量核：≤ 5e-8", GR, True, 13, "end")
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "四舍五入有多有少，长了能抵消；抹零每次都少，长了就积成一个朝零的系统偏差", [
+    yb = f.band(y0 + PH + 20, "ok", "抹零每一项都亏，长了就积成朝零的系统偏差；四舍五入只有每项都不到半格时才亏，每项比一格大得多时有多有少、能抵消", [
         "正数、负数输入都一样朝零偏，随 K 增大：加到六万多个，就偏到万分之三。",
         "口径：这条实测含输出舍成 BF16；短求和那几点主要是输出舍入（推断），长求和才是截断主导。",
     ])
@@ -567,7 +567,7 @@ def fig_normscale():
                "每步偏开约 6.4e-6，第 50、100、150 步偏离中位数 3.2e-4、6.5e-4、9.5e-4；第 200 步起才开始有元素跨过 BF16 的舍入边界。"
                "右：32K 上在第 2 级之上逐个加开关，主 loss 偏差的平均（单位是 GPU 8 份的份间标准差 σ）：对照约 −24σ，加投影 FP32 累加、精确超越函数、精确 Adam 都不动，"
                "四处舍入一起回到 −0.6σ；再拆，只加 RMSNorm scale 舍入就回到 −0.2σ。")
-    y0 = f.header("同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight=\"700\">编译器删不删，跟着切法变</tspan>",
+    y0 = f.header("同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight=\"700\">删不删看起来跟着切法变（推断）</tspan>",
                   "第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。离线编译：4K 程序里这次舍入在，32K 程序 8 个 norm 全删",
                   [(GY, "GPU：乘 BF16 的 scale"), (BL, "TPU 32K：乘 FP32 的 scale"), (RD, "主 loss 偏差")])
     PH, LW = 384, 640
@@ -619,14 +619,16 @@ def fig_normscale():
     for v in (-30, -20, -10, 0):
         f.line(X(v), py2 + 10, X(v), py2 + PH - 88, LINE2, 1, arrow=False)
         f.t(X(v), py2 + PH - 58, "%d" % v if v else "0", GY, size=13, anchor="middle")
-    rows = [("第 51–300 步", None)] + N.M3_BISECT_300 + [("第 51–120 步（120 步运行）", None)] + N.M3_BISECT_120
+    rows = [("上组：300 步运行，看第 51–300 步", None)] + N.M3_BISECT_300 + [("下组：120 步短跑，看第 51–120 步（四处拆开）", None)] + N.M3_BISECT_120
     y = py2 + 14
     for lab, v in rows:
         if v is None:
             f.t(px + 16, y + 14, lab, GY, True, 13)
             y += 22
             continue
-        f.t(px + 26, y + 14, lab, INK, True, 13)
+        if lab.startswith("只加 RMSNorm"):
+            f.box(px + 12, y - 2, W - px - 24, 24, "#fff3e0", OR, 4, sw=1.6)
+        f.t(px + 26, y + 14, lab, OR if lab.startswith("只加 RMSNorm") else INK, True, 13)
         c = RD if v < -3 else GR
         f.box(min(X(v), X(0)), y + 2, abs(X(v) - X(0)) or 3, 16, c, c, 2)
         vt = ("%.1f" % v).replace("-", "−")
@@ -670,7 +672,7 @@ def fig_boundary():
     rows = [
         ("路由打分：乘哪份权重", "第二次迁移", 0, [32, 32, 32, 32, 32], [16, 32, 32, 32, 32],
          [("FP32 主权重", "BF16 权重"), "FP32 里乘", "FP32", "FP32 打分", "—"]),
-        ("名义 FP32 的输出头", "第二次迁移", 1, [32, 16, 32, 32, 32], [32, 32, 32, 32, 32],
+        ("名义 FP32 的输出头", "第二次迁移；第三次迁移又遇到", 1, [32, 16, 32, 32, 32], [32, 32, 32, 32, 32],
          ["FP32", ("默认：单遍 BF16", "真 FP32（TF32 关）"), "FP32", "FP32", "—"]),
         ("FSDP 切开求和维的投影", "混元 3 量到、第三次迁移查清", 2, [16, 16, 16, 16, 16], [16, 16, 32, 16, 16],
          ["BF16", "BF16 × BF16", ("每段输出、累加器都舍 BF16", "FP32 里加完"), "BF16", "随累加那格"]),

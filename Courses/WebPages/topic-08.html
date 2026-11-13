@@ -6391,7 +6391,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 示意：左格名次条的长度和第 1–10 名的分数是示意，只有「第 8、9 名对调」和分差中位数是实测；右格点阵的个数是实测，哪几个点被换出是随手标的位置。</p></details></figure>
   </details>
 <figure class="fbox fwide" id="anim-flip">
-<video src="media/topic08-flip.mp4?v=51c01b81" autoplay loop muted playsinline data-pauses="2.70,8.10,12.72,17.32,21.72,25.92"
+<video src="media/topic08-flip.mp4?v=213de253" autoplay loop muted playsinline data-pauses="2.70,8.10,12.72,17.32,21.72,25.92"
        aria-label="MoE 路由的近平局翻转：差一丝，就换一个专家。① 一个 token 给 192 个专家打分，取前 8 名：第 8、9 名几乎一样高。排名用分数加偏置；选中后加权用不带偏置的分数，偏置只管选谁。② 上游注意力两边差一点点，分数挪一丝，第 8、9 名对调。路由的输入（注意力之后）两边差 rel_L2 3.4e-3 到 3.9e-3，约是 BF16 舍入量级。放大看两根条的顶端（约 2000 倍）：B 只比 A 低 3e-5；挪动以后 A 反比 B 低 1.5e-5，A 落选，B 入选。翻转 token 的第 8、9 名分差中位数 2.7e-5 到 6.3e-5；全部 token 的中位数 3.1e-4 到 8.0e-4。③ 这个 token 的那一份输出，整块换了一个专家来算：GPU 由专家 A 算，TPU 换成专家 B，不是差一丝，是换了一个人。分到 token 少的专家，进出一个 token 就是它梯度的一大块：第 3 层专家 0 在这一批 4096 个 token 里只分到 139 个，TPU 上换出 3 个、换进 1 个。第 1 步梯度对 GPU 的 rel_L2：这个专家的权重梯度 0.102，比到的 50 个张量合起来 1.28e-3，约差 80 倍；估算 根号（换掉的除以分到的）＝ 根号（4/139）约 0.17，同量级。GPU 自己重跑，这些张量的差几乎是 0。④ 对照：两边喂完全相同的路由输入，3 层乘 4096 个 token，翻转 0（logits 两边仍差 4e-6，但一个都没翻）；路由器的输入换成 TPU 自己算出来的（差 3.4e-3），每层翻 3.5%–5.4% 的 token，翻的多是近平局。根子在输入差，不在路由器自己的精度。⑤ GPU 自己重跑第 1 步：前向确定，路由一个不变；拿 GPU 重跑当噪声尺，路由翻转在这把尺上是 0 宽度。0.102 要按专家拆开看，不是 TPU 算错了梯度。近平局加一丝输入差，等于选了另一个专家。"></video>
 <figcaption><b>输入只差一丝，近平局的 token 就换了专家；分到 token 少的专家，第 1 步梯度差被放大到 0.102。</b>
   <span class="sub">（29 秒，Manim 渲染，可一步一步看。条的高度、每个分数挪动的量和放大框里的分差是示意（取在实测中位数范围内）；其余数字是实测。）</span></figcaption></figure>
@@ -6415,7 +6415,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s4-4">4.4　两档门槛：严格档和参考档</h3>
   <table class="t9"><thead><tr><th>档</th><th>线从哪来</th><th>用途</th></tr></thead><tbody>
   <tr><td><b>严格档</b></td><td>这一讲的规矩：噪声尺子（≤ N 过、＞ 2N 不过）、L0 必须逐位、R 比 ≤ 1.2</td><td><b>验收只看这一档</b></td></tr>
-  <tr><td>参考档</td><td>另一个已经上线的 GPU→TPU 迁移项目用过的固定线：首步 loss 和窗口带符号均值都 ≤ 2e-4（2e-4）、逐层 rel_L2 ＜ 0.01（只用于没有路由的层）</td><td>并排报告：离别人上线的线还有多远</td></tr>
+  <tr><td>参考档</td><td>另一个已经上线的 GPU→TPU 迁移项目用过的固定线：首步 loss 和窗口带符号均值都 ≤ 2e-4、逐层 rel_L2 ＜ 0.01（只用于没有路由的层）</td><td>并排报告：离别人上线的线还有多远</td></tr>
   </tbody></table>
   <p>参考档是一个固定数，不随本次的噪声变，在 loss 这一条上常比严格档宽，所以常见「严格档不过、参考档过」：差已经超出噪声能解释的范围、要定责，但还在别人认为能上线的范围里。两档各有各的盲点，所以只并排报。</p>
   <p>别的项目借来的逐层 rel_L2 线只适用于没有路由的层；MoE 层按 R 比判。</p>
@@ -6430,7 +6430,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">两边对不上，差只有三种。语义（公式写得不一样）第二节对过了；只换了加法顺序的是噪声，尺子兜住。这一节看剩下的大头：精度 —— 一次矩阵乘把数两两相乘、再把乘积加起来，舍入落在哪一步，两边各自怎么舍。</p>
   <div class="note"><span class="t">这一节最该记住的两件事（第三次迁移）</span>
   <b>4 个设备上验过的程序，换到 8 个设备，几个投影静默多舍</b>：一次求和从舍 1 次变成舍 6 次，误差变成 GPU 的 1.41 倍，代码一行没改（<a href="#s5-4">§5.4</a>）。<br>
-  <b>同一个舍入开关，4K 序列上「没效果」，32K 上主 loss 偏约 −24σ</b>：编译器在 32K 的程序里把那次舍入删了，只补这一处就回到噪声里（短跑读数 −0.2σ，<a href="#s5-5">§5.5</a>）。<br>
+  <b>同一个舍入开关，4K 序列上「没效果」，32K 上主 loss 偏约 −24σ</b>：编译器在 32K 的程序里把那次舍入删了，只补这一处就回到噪声里（120 步短跑、第 51–120 步窗口的读数 −0.2σ，同窗口不补约 −30σ；<a href="#s5-5">§5.5</a>）。<br>
   两件说的是一句话：换了条件，之前的验证就不作数。机制往下一节节讲，节末收在这句上。</div>
 <figure class="fbox fwide" id="fig-kinds"><svg viewBox="0 0 1400 640" width="100%" role="img" aria-label="三张卡片。第一张：只换了加法顺序，两边精度一样，差是噪声，不修，用噪声尺子兜住；认法是离 64 位真值没有变远。第二张：丢了精度，一个值在 16 位和 32 位之间换挡时一侧多舍了一次，或者长求和越加越偏；认法是离真值变远，或者五格表里有一格不同；要修。第三张：语义不同，两边的公式或定义不一样；认法是读代码对公式；必须对齐。底下一条横条：第二次迁移查清的 30 条根因，本课归类后精度 22 条、语义 6 条、两样都有 1 条、顺序 1 条。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两边对不上，差只有三种</text>
@@ -7190,7 +7190,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="522" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="522" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="522" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四舍五入有多有少，长了能抵消；抹零每次都少，长了就积成一个朝零的系统偏差</tspan></text>
+<text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">抹零每一项都亏，长了就积成朝零的系统偏差；四舍五入只有每项都不到半格时才亏，每项比一格大得多时有多有少、能抵消</tspan></text>
 </svg><figcaption><b>左边虚线右侧的红格全被丢掉，右边那条线一路往上。</b><span class="capmore"><br><em>右图画的是偏差的大小（对数刻度），符号是负的、朝零；合成数据，不是模型里的数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测的 B200 张量核模型（一个经验模型，不是厂商规格）：每 16 个乘积连同累加器对齐到最大指数，低于 2^(emax−25) 的位向零截掉，写回 FP32 也向零舍入。「25 位」是拟合出来的窗口宽度，跟 FP32 的 24 位有效数字不是一回事。它在路由打分（K ＝ 4096）上逐位复现了三层全部 4096 × 192 个元素；把参数改成 8 个一组、24 位或就近舍入，命中率都掉到 1% 以下。</p>
 <p>📌 实测：合成负数输入 −9.5e-6 / −6.9e-5 / −3.4e-4，同样朝零；TF32 小约一个量级；FP32 不走张量核 ≤ 5e-8。K ＝ 120,832 时合成输入的偏差反而降到 6.4e-5（推断：cuBLAS 对这个形状换了算法），所以图上没有画这一点。</p>
 <p>⚠️ 推断：量这条曲线时输出写回的是 BF16。只算截断模型，K ＝ 256 约 3e-7、K ＝ 4096 约 1.1e-5；加上输出舍成 BF16，才回到实测的量级 —— 所以短求和那几点主要是输出舍入，长求和才是截断主导。</p>
@@ -7737,7 +7737,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
   <p><b>第三次迁移碰上了这个副作用，还多了一层：删不删，跟着切法变。</b>RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），代码写的是「转 BF16 再转回」。4K 序列的程序里这次舍入在；32K 的程序里，离线编译一扫，8 个 norm 全被删了，主 loss 一路偏低。逐个加开关二分，只补这一处就回到噪声里（读数见图；σ 是 GPU 8 份的份间标准差）。为什么换了切法就删，是推断。</p>
 <figure class="fbox fwide" id="fig-normscale"><svg viewBox="0 0 1400 580" width="100%" role="img" aria-label="左：RMSNorm 乘的那组缩放系数 scale，初值 1.0。GPU 乘的是舍成 BF16 的副本，头一两百步一直是 1.0；TPU 在 32K 的程序里这次舍入被编译器删了，乘的是 FP32 原值，每步偏开约 6.4e-6，第 50、100、150 步偏离中位数 3.2e-4、6.5e-4、9.5e-4；第 200 步起才开始有元素跨过 BF16 的舍入边界。右：32K 上在第 2 级之上逐个加开关，主 loss 偏差的平均（单位是 GPU 8 份的份间标准差 σ）：对照约 −24σ，加投影 FP32 累加、精确超越函数、精确 Adam 都不动，四处舍入一起回到 −0.6σ；再拆，只加 RMSNorm scale 舍入就回到 −0.2σ。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight="700">编译器删不删，跟着切法变</tspan></text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight="700">删不删看起来跟着切法变（推断）</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。离线编译：4K 程序里这次舍入在，32K 程序 8 个 norm 全删</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU：乘 BF16 的 scale</text>
@@ -7804,7 +7804,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1194" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">-10</text>
 <line x1="1312.6315789473683" y1="142" x2="1312.6315789473683" y2="428" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svgsm" x="1312" y="458" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">0</text>
-<text class="svgsm" x="676" y="160" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 51–300 步</tspan></text>
+<text class="svgsm" x="676" y="160" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上组：300 步运行，看第 51–300 步</tspan></text>
 <text class="svgsm" x="686" y="182" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不加（对照）</tspan></text>
 <rect x="1024.8684210526317" y="170" width="287.76315789473665" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="1032" y="183" fill="#fff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−24.3</tspan></text>
@@ -7820,14 +7820,15 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="686" y="286" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">四处一起（见底注）</tspan></text>
 <rect x="1305.5263157894738" y="274" width="7.105263157894569" height="16" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1320" y="287" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−0.6</tspan></text>
-<text class="svgsm" x="676" y="312" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">第 51–120 步（120 步运行）</tspan></text>
+<text class="svgsm" x="676" y="312" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下组：120 步短跑，看第 51–120 步（四处拆开）</tspan></text>
 <text class="svgsm" x="686" y="334" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不加（对照）</tspan></text>
 <rect x="957.3684210526316" y="322" width="355.26315789473676" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="965" y="335" fill="#fff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">约 −30</tspan></text>
 <text class="svgsm" x="686" y="360" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加其余三处里任一处</tspan></text>
 <rect x="947.8947368421052" y="348" width="364.7368421052631" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
 <text class="svgsm" x="955" y="361" fill="#fff" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">≤ −30.8</tspan></text>
-<text class="svgsm" x="686" y="386" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加 RMSNorm scale</tspan></text>
+<rect x="672" y="370" width="716" height="24" rx="4" fill="#fff3e0" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="686" y="386" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只加 RMSNorm scale</tspan></text>
 <rect x="1310.2631578947367" y="374" width="2.3684210526316747" height="16" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="1320" y="387" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">−0.2</tspan></text>
 <text class="svgsm" x="676" y="478" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入</text>
@@ -7900,7 +7901,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="892" y1="203" x2="1058" y2="203" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
 <text class="svgsm" x="1276" y="214" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改 TPU</tspan></text>
 <text class="svgsm" x="20" y="300" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">名义 FP32 的输出头</tspan></text>
-<text class="svgsm" x="20" y="322" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">第二次迁移</text>
+<text class="svgsm" x="20" y="322" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">第二次迁移；第三次迁移又遇到</text>
 <rect x="300" y="268" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
 <text class="svgsm" x="393" y="344" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">FP32</text>
 <rect x="494" y="268" width="186" height="82" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
