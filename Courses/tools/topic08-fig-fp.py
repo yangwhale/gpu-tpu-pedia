@@ -276,7 +276,7 @@ def fig_inout():
             for k in range(3):                          # 8 份同样大小的部分和，叠着画
                 f.box(ox + k * 10, xy + 10 + k * 14, 150, 52, "#fff", RD, 4)
             f.t(ox + 95, xy + 72, "8 份部分和", RD, True, 14, "middle")
-            f.t(ox + 95, xy + 110, "形状都是整个 y", GY, size=12, anchor="middle")
+            f.t(ox + 95, xy + 110, "形状都是整个 y", GY, size=13, anchor="middle")
             f.t(px + 24, py + PH - 88, "y ＝ x₁W₁ ＋ x₂W₂ ＋ … ＋ x₈W₈", INK, True, 15, mono=True)
             f.t(px + 24, py + PH - 56, "8 份必须加起来：在什么精度里加，决定多出多少误差", RD, True, 14)
         else:                                           # 按列切 8 片（列 ＝ 输出维）
@@ -347,11 +347,11 @@ def fig_windowed():
         if kind == "a":
             f.box(X0, y, 150, 50, "#fdecdc", OR, 5)
             f.t(X0 + 75, y + 22, "整块收齐权重", OR, True, 13, "middle")
-            f.t(X0 + 75, y + 40, "（整块 all-gather）", GY, size=11, anchor="middle")
+            f.t(X0 + 75, y + 40, "（整块 all-gather）", GY, size=13, anchor="middle")
             f.line(X0 + 154, y + 25, X0 + 182, y + 25, GY2, 1.3)
             f.box(X0 + 186, y, 4 * STEP + 20, 50, "#e8f0fe", BL, 5)
             f.t(X0 + 186 + (4 * STEP + 20) / 2.0, y + 22, "一次矩阵乘，2816 宽", BL, True, 14, "middle")
-            f.t(X0 + 186 + (4 * STEP + 20) / 2.0, y + 40, "FP32 累加到底", GY, size=11, anchor="middle")
+            f.t(X0 + 186 + (4 * STEP + 20) / 2.0, y + 40, "FP32 累加到底", GY, size=13, anchor="middle")
             xr = X0 + 186 + 4 * STEP + 26
             f.box(xr, y + 6, RW, 38, "#fce8e6", RD, 3)
             f.t(xr + RW / 2.0, y + 66, "①", RD, True, 13, "middle")
@@ -360,18 +360,18 @@ def fig_windowed():
             n = 0
             x = X0
             for rnd in range(N.M3_ROUNDS):
-                f.t(x + (3 * STEP - GAP) / 2.0, y - 10, "第 %d 轮（片 %d–%d）" % (rnd + 1, 4 * rnd + 1, 4 * rnd + 4), GY, True, 12, "middle")
+                f.t(x + (3 * STEP - GAP) / 2.0, y - 10, "第 %d 轮（片 %d–%d）" % (rnd + 1, 4 * rnd + 1, 4 * rnd + 4), GY, True, 13, "middle")
                 for j in range(N.M3_MM_PER_ROUND + 1):
                     acc = (j == N.M3_MM_PER_ROUND)
                     if acc:
                         f.box(x, y, BW, 50, "#f3e8fd", PU, 5)
                         f.t(x + BW / 2.0, y + 22, "累加器", PU, True, 13, "middle")
-                        f.t(x + BW / 2.0, y + 40, "＋＝ 两份", GY, size=11, anchor="middle")
+                        f.t(x + BW / 2.0, y + 40, "＋＝ 两份", GY, size=13, anchor="middle")
                     else:
                         a = 4 * rnd + 2 * j + 1
                         f.box(x, y, BW, 50, "#e8f0fe", BL, 5)
                         f.t(x + BW / 2.0, y + 22, "片 %d＋%d" % (a, a + 1), BL, True, 13, "middle")
-                        f.t(x + BW / 2.0, y + 40, "704 宽", GY, size=11, anchor="middle")
+                        f.t(x + BW / 2.0, y + 40, "704 宽", GY, size=13, anchor="middle")
                     last = (rnd == N.M3_ROUNDS - 1 and acc)
                     if kind == "b" or last:
                         n += 1
@@ -387,7 +387,7 @@ def fig_windowed():
     f._pan = None
     px = LW + 20
     py2 = f.panel(px, y0, W - px, PH, "离线编译训练步：累加器是 BF16 的循环", PU, tag="实测")
-    BX0, BMAX = px + 150, 230
+    BX0, BMAX = px + 150, 170
     for i, (chip, dev, loops, bf) in enumerate(N.M3_SCAN):
         y = py2 + 40 + i * 62
         f.t(px + 18, y + 18, "%s · %d 个设备" % (chip, dev), INK, True, 14)
@@ -399,7 +399,7 @@ def fig_windowed():
     f.t(px + 18, y + 18, "打开开关后", INK, True, 14)
     f.t(BX0, y + 21, "0　（全部变 FP32）", GR, True, 15)
     f.t(px + 18, py2 + PH - 80, "单算子 R：%s → %s" % (N.M3_PROJ_R_T, N.M3_PROJ_R_AFTER_T), INK, True, 15)
-    f.t(px + 18, py2 + PH - 60, "6 次里前几次舍的是部分和，量级小，合起来约 √2（推断）", GY, size=12)
+    f.t(px + 18, py2 + PH - 60, "6 次里前几次舍的是部分和，量级小，合起来约 √2（推断）", GY, size=13)
     f.t(px + 18, py2 + PH - 36, "混元 3 的 qkv：%.3f → %.3f" % (N.R_QKV_BEFORE, N.R_QKV_AFTER), GY, True, 13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "在 4 个设备的小切片上验精度，这件事完全看不到", [
@@ -437,19 +437,19 @@ def fig_lmhead():
     for i, (a, b, xw, note) in enumerate(rows):
         y = py + 56 + i * 90
         f.t(20, y + 4, a, INK, True, 15)
-        f.t(20, y + 26, b, GY, size=12)
+        f.t(20, y + 26, b, GY, size=13)
         f.line(X0 - 10, y, X1 + 10, y, LINE2, 1.2, arrow=False)
         for x in ticks:
             f.line(x, y - 9, x, y + 9, GY, 1.4, arrow=False)
         f.box(xw - 7, y - 7, 14, 14, GR, GR, 7)
         if i == 1:
             f.line(xw - 9, y + 20, ticks[2] + 4, y + 20, RD, 2.2)
-            f.t((xw + ticks[2]) / 2.0, y + 44, note, RD, True, 12, "middle")
+            f.t((xw + ticks[2]) / 2.0, y + 44, note, RD, True, 13, "middle")
         elif i == 2:
             f.box(xw - 22, y + 14, 14, 6, RD, RD, 2)
-            f.t(xw + 4, y + 44, note, GR, True, 12, "middle")
+            f.t(xw + 4, y + 44, note, GR, True, 13, "middle")
         else:
-            f.t(xw, y + 40, note, GY, True, 12, "middle")
+            f.t(xw, y + 40, note, GY, True, 13, "middle")
     f._pan = None
     px = LW + 20
     py2 = f.panel(px, y0, W - px, PH, "logits 对 FP64 的相对误差（单独回放这一次矩阵乘，实测）", RD, tag="对数刻度")
@@ -460,7 +460,7 @@ def fig_lmhead():
         return BX0 + (math.log10(v) - lo) / (hi - lo) * (BX1 - BX0)
     for e in range(-7, -2):
         f.line(X(10 ** e), py2 + 16, X(10 ** e), py2 + PH - 56, LINE2, 1, arrow=False)
-        f.t(X(10 ** e), py2 + PH - 38, "1e%d" % e, GY, size=12, anchor="middle")
+        f.t(X(10 ** e), py2 + PH - 38, "1e%d" % e, GY, size=13, anchor="middle")
     bars = [("默认 · 格点上", L[("on", "default")][0], GY), ("默认 · 离格 1 步", L[("off1", "default")][0], RD),
             ("默认 · 离格 10 步", L[("off10", "default")][0], RD), ("high · 离格 10 步", L[("off10", "high")][0], OR),
             ("highest · 离格 10 步", L[("off10", "highest")][0], GR), ("主机真 FP32 · 离格", N.M3_LMH_HOSTFP32[1], GY)]
@@ -478,7 +478,7 @@ def fig_lmhead():
         return BX0 + v / 8.0 * (BX1 - BX0)
     for v, lab in ((1, "1：过"), (2, "2：不过")):
         f.line(XR(v), py3 + 22, XR(v), py3 + 100, GY, 1.2, dash="4,3", arrow=False)
-        f.t(XR(v), py3 + 16, lab, GY, size=11, anchor="middle")
+        f.t(XR(v), py3 + 16, lab, GY, size=13, anchor="middle")
     rows = [("默认（1 遍，生产原样）", N.M3_LMH_LOSS4K["default"][1], "步时基准", RD),
             ("high（3 遍）", N.M3_LMH_LOSS4K["high"][1], "步时 ＋%.1f%%" % (N.M3_LMH_COST["high"] * 100), GR),
             ("highest（6 遍）", N.M3_LMH_LOSS4K["highest"][1], "步时 ＋%.1f%%" % (N.M3_LMH_COST["highest"] * 100), BL)]
@@ -579,12 +579,12 @@ def fig_normscale():
     for st in (0, 50, 100, 150, 200, 250):
         x, _ = XY(st, 0)
         f.line(x, Y0, x, Y0 + 6, GY, 1, arrow=False)
-        f.t(x, Y0 + 22, str(st), GY, size=12, anchor="middle")
-    f.t((X0 + X1) / 2.0, Y0 + 42, "训练步", GY, size=12, anchor="middle")
+        f.t(x, Y0 + 22, str(st), GY, size=13, anchor="middle")
+    f.t((X0 + X1) / 2.0, Y0 + 42, "训练步", GY, size=13, anchor="middle")
     for d in (0, 5e-4, 1e-3, 1.5e-3):
         _, y = XY(0, d)
         f.line(X0, y, X1, y, LINE2, 1, arrow=False)
-        f.t(X0 - 8, y + 4, "0" if d == 0 else "%.1e" % d, GY, size=11, anchor="end")
+        f.t(X0 - 8, y + 4, "0" if d == 0 else "%.1e" % d, GY, size=13, anchor="end")
     xa, ya = XY(0, 0)
     xb, yb_ = XY(250, 0)
     f.line(xa, ya - 2, xb, yb_ - 2, GY, 3.2, arrow=False)
@@ -597,15 +597,15 @@ def fig_normscale():
     for st, d in N.M3_SCALE_TRACK:
         x, y = XY(st, d)
         f.box(x - 5, y - 5, 10, 10, BL, BL, 5)
-        f.t(x - 8, y - 10, "%.1e" % d, BL, True, 12, "end")
+        f.t(x - 8, y - 10, "%.1e" % d, BL, True, 13, "end")
     x1, y1 = XY(150, N.M3_SCALE_TRACK[-1][1])
     x2, y2 = XY(250, N.M3_SCALE_TRACK[-1][1] + 100 * N.M3_SCALE_SLOPE)
     f.line(x1, y1, x2, y2, BL, 1.6, dash="5,4", arrow=False)
     f.t(XY(4, 0)[0], XY(0, 1.45e-3)[1], "TPU：乘 FP32 原值，每步偏开约 6.4e-6", BL, True, 13)
     xc, _ = XY(200, 0)
     f.line(xc, Y1 + 30, xc, Y0, OR, 1.4, dash="3,3", arrow=False)
-    f.t(xc + 6, XY(0, 3.5e-4)[1], "第 200 步起", OR, True, 12)
-    f.t(xc + 6, XY(0, 3.5e-4)[1] + 18, "GPU 才有元素跳格", OR, True, 12)
+    f.t(xc + 6, XY(0, 3.5e-4)[1], "第 200 步起", OR, True, 13)
+    f.t(xc + 6, XY(0, 3.5e-4)[1] + 18, "GPU 才有元素跳格", OR, True, 13)
     f._pan = None
     px = LW + 20
     py2 = f.panel(px, y0, W - px, PH, "二分：32K，在已开的基础开关之上逐个加（主 loss 偏差，σ）", RD, tag="实测")
@@ -615,28 +615,28 @@ def fig_normscale():
     def X(v):
         return BX0 + (v - lo) / (hi - lo) * (BX1 - BX0)
     f.box(X(-3), py2 + 10, X(3) - X(-3), PH - 98, "#e6f4ea", "none", 0)
-    f.t(X(0), py2 + PH - 74, "±3σ", GR, True, 12, "middle")
+    f.t(X(0), py2 + PH - 74, "±3σ", GR, True, 13, "middle")
     for v in (-30, -20, -10, 0):
         f.line(X(v), py2 + 10, X(v), py2 + PH - 88, LINE2, 1, arrow=False)
-        f.t(X(v), py2 + PH - 58, "%d" % v if v else "0", GY, size=12, anchor="middle")
+        f.t(X(v), py2 + PH - 58, "%d" % v if v else "0", GY, size=13, anchor="middle")
     rows = [("第 51–300 步", None)] + N.M3_BISECT_300 + [("第 51–120 步（120 步运行）", None)] + N.M3_BISECT_120
     y = py2 + 14
     for lab, v in rows:
         if v is None:
-            f.t(px + 16, y + 14, lab, GY, True, 12)
+            f.t(px + 16, y + 14, lab, GY, True, 13)
             y += 22
             continue
-        f.t(px + 26, y + 14, lab, INK, True, 12.5)
+        f.t(px + 26, y + 14, lab, INK, True, 13)
         c = RD if v < -3 else GR
         f.box(min(X(v), X(0)), y + 2, abs(X(v) - X(0)) or 3, 16, c, c, 2)
         vt = ("%.1f" % v).replace("-", "−")
         vt = {"只加其余三处里任一处": "≤ " + vt}.get(lab, vt)
         if (lab, v) == N.M3_BISECT_120[0]:
             vt = "约 −30"
-        f.t(X(v) + 8 if v < -3 else X(0) + 8, y + 15, vt, "#fff" if v < -3 else GR, True, 12)
+        f.t(X(v) + 8 if v < -3 else X(0) + 8, y + 15, vt, "#fff" if v < -3 else GR, True, 13)
         y += 26
     assert y < py2 + PH - 88, y
-    f.t(px + 16, py2 + PH - 38, "四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入", GY, size=12)
+    f.t(px + 16, py2 + PH - 38, "四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入", GY, size=13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "在一种切法上验过「这个开关不用开」，换了切法要重验", [
         "删不删看这对转换落不落在同一颗融合里，而那取决于切法：FSDP 8 时 scale 要先在 8 个设备间收齐，BF16 值真被写出来；FSDP 2 时整个往返落在本卡一颗融合里（推断）。",
@@ -745,7 +745,7 @@ def fig_ulp2():
         return Y0 - math.log10(max(u, 1)) / math.log10(200) * (Y0 - Y1)
     for u in (1, 10, 100):
         f.line(80, Y(u), W - 30, Y(u), LINE2, 1, arrow=False)
-        f.t(70, Y(u) + 4, str(u), GY, size=12, anchor="end")
+        f.t(70, Y(u) + 4, str(u), GY, size=13, anchor="end")
     cols = [RD, GR, OR, BL]
     gw = (W - 140) / 4.0
     for i, (fn, vals) in enumerate(N.M3_ULP.items()):
@@ -758,7 +758,7 @@ def fig_ulp2():
         f.t(gx + 2 * 62 - 8, Y0 + 30, fn, INK, True, 15, "middle")
         gpu = N.TRANS[fn][2]
         f.line(gx - 8, Y(gpu), gx + 4 * 62 - 10, Y(gpu), INK, 1.6, dash="6,4", arrow=False)
-        f.t(gx + 4 * 62 - 6, Y(gpu) + 4, "GPU %s" % ("%g" % gpu), INK, True, 12)
+        f.t(gx + 4 * 62 - 6, Y(gpu) + 4, "GPU %s" % ("%g" % gpu), INK, True, 13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "换芯片要重验开关：同一个开关，在一代芯片上管用，在另一代上可能是空操作", [
         "v5p 上开了以后，整段挪到向量单元用多项式算（编译产物显示），步时 ＋0.8%。只给 JAX 设 highest 不够：sigmoid、silu 不动。",
