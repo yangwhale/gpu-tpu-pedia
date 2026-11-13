@@ -11,6 +11,8 @@ fig8-inout     回答：FSDP 切同一维，为什么有的投影多舍、有的
                数字：第三次迁移单算子回放 R 1.41 ／ 1.00（实测）；切哪一维取自编译产物里的权重片形状。
 fig8-windowed  回答：为什么 8 个设备才多舍、多舍几次？—— 编译器把一次矩阵乘拆成边传边乘，部分和在 BF16 累加器里加，一次求和舍 6 次；4 个设备不拆。
                数字：循环体结构是编译产物显示；4／8／16 个设备的循环个数是离线编译实测。2026-11-13 起替代原来「4 片 4 轮、舍在轮与轮之间（推断）」的示意。
+fig8-lmhead    回答：输出头默认精度档为什么前 300 步差出 7 倍、第 1 步却看不见？—— 默认档把 FP32 输入舍成 BF16，舍的是训练后离开格点的主权重。
+               数字：单独回放一次矩阵乘的误差、曲线与步时（实测，单份）；左格格点是示意。
 fig8-excess    回答：excess precision 改的是什么？—— 舍在哪儿：融合块里中间那几次「舍到 BF16」被删掉，只在块出口舍；关掉它，舍入回到每个算子出口。
                示意图：算子个数、融合怎么切都是示意，不带实测数；实测（关掉以后单层更远、1000 步 loss 偏移小一半）只进 📌。
                ⛔ 刻意没画「哪一行更准」：这张图只讲舍入位置。关掉不是更准，画个准确度刻度就讲反了。
@@ -408,6 +410,88 @@ def fig_windowed():
     f.save("fig8-windowed.svg", yb + 14)
 
 
+def fig_lmhead():
+    L = N.M3_LMH
+    f = Fig(W, "左：输出头那次矩阵乘的输入里，激活本来就是 BF16，权重是 FP32 主权重。TPU 默认精度档把 FP32 输入舍成 BF16、只算一遍。"
+               "第 0 步主权重就在 BF16 的格点上，舍了不变；训练一步以后主权重离开格点，默认档把它舍回最近的格点，差出一截。"
+               "右：单独回放这一次矩阵乘，logits 对 FP64 的相对误差：权重在格点上默认档 %.1e；离格以后默认档 %.1e 到 %.1e，"
+               "high（3 遍）%.1e，highest（6 遍）%.1e，主机上真 FP32 %.1e。下：前 300 步主 loss 的 r，默认 %.2f、high %.2f、highest %.2f；步时 high ＋5.7%%，highest ＋12.3%%。"
+               % (L[("on", "default")][0], L[("off1", "default")][0], L[("off10", "default")][0], L[("off10", "high")][0],
+                  L[("off10", "highest")][0], N.M3_LMH_HOSTFP32[1], N.M3_LMH_LOSS4K["default"][1], N.M3_LMH_LOSS4K["high"][1], N.M3_LMH_LOSS4K["highest"][1]))
+    y0 = f.header("默认精度档舍的不是激活，是离开格点的主权重　——　<tspan font-weight=\"700\">第 1 步看不见，第 2 步起差几千倍</tspan>",
+                  "第三次迁移的输出头：logits ＝ x · W，x 是 BF16，W 是 FP32 主权重；两边升成 FP32 交给矩阵单元，精度档没单独设",
+                  [(GR, "主权重（FP32）"), (RD, "默认档舍回格点"), (GY, "BF16 格点")])
+    PH, LW = 330, 600
+    py = f.panel(0, y0, LW, PH, "为什么第 1 步看不出来（示意）", INK)
+    X0, X1 = 150, LW - 40
+    ticks = [X0 + (X1 - X0) * k / 4.0 for k in range(5)]
+    rows = [("第 0 步", "主权重在格点上", ticks[2], "舍了不变"),
+            ("训练 1 步后", "主权重离开格点", ticks[2] + 0.42 * (ticks[3] - ticks[2]), "默认档舍回格点，差出这一截"),
+            ("用 high", "拆成两段 BF16 算 3 遍", ticks[2] + 0.42 * (ticks[3] - ticks[2]), "剩一点点")]
+    for i, (a, b, xw, note) in enumerate(rows):
+        y = py + 56 + i * 90
+        f.t(20, y + 4, a, INK, True, 15)
+        f.t(20, y + 26, b, GY, size=12)
+        f.line(X0 - 10, y, X1 + 10, y, LINE2, 1.2, arrow=False)
+        for x in ticks:
+            f.line(x, y - 9, x, y + 9, GY, 1.4, arrow=False)
+        f.box(xw - 7, y - 7, 14, 14, GR, GR, 7)
+        if i == 1:
+            f.line(xw - 9, y + 20, ticks[2] + 4, y + 20, RD, 2.2)
+            f.t((xw + ticks[2]) / 2.0, y + 44, note, RD, True, 12, "middle")
+        elif i == 2:
+            f.box(xw - 22, y + 14, 14, 6, RD, RD, 2)
+            f.t(xw + 4, y + 44, note, GR, True, 12, "middle")
+        else:
+            f.t(xw, y + 40, note, GY, True, 12, "middle")
+    f._pan = None
+    px = LW + 20
+    py2 = f.panel(px, y0, W - px, PH, "logits 对 FP64 的相对误差（单独回放这一次矩阵乘，实测）", RD, tag="对数刻度")
+    BX0, BX1 = px + 250, W - 70
+    lo, hi = -7.3, -2.3
+
+    def X(v):
+        return BX0 + (math.log10(v) - lo) / (hi - lo) * (BX1 - BX0)
+    for e in range(-7, -2):
+        f.line(X(10 ** e), py2 + 16, X(10 ** e), py2 + PH - 56, LINE2, 1, arrow=False)
+        f.t(X(10 ** e), py2 + PH - 38, "1e%d" % e, GY, size=12, anchor="middle")
+    bars = [("默认 · 格点上", L[("on", "default")][0], GY), ("默认 · 离格 1 步", L[("off1", "default")][0], RD),
+            ("默认 · 离格 10 步", L[("off10", "default")][0], RD), ("high · 离格 10 步", L[("off10", "high")][0], OR),
+            ("highest · 离格 10 步", L[("off10", "highest")][0], GR), ("主机真 FP32 · 离格", N.M3_LMH_HOSTFP32[1], GY)]
+    for i, (lab, v, c) in enumerate(bars):
+        y = py2 + 24 + i * 38
+        f.t(px + 18, y + 17, lab, INK, True, 13)
+        f.box(BX0, y + 4, max(3, X(v) - BX0), 18, c, c, 3)
+        f.t(X(v) + 8, y + 18, "%.1e" % v, c, True, 13)
+    f._pan = None
+    sy = y0 + PH + 18
+    SH = 120
+    py3 = f.panel(0, sy, W, SH, "三档怎么选（单份运行；前 300 步主 loss 的 r ／ 步时）", INK)
+    cards = [("默认（1 遍，生产原样）", "%.2f　不过" % N.M3_LMH_LOSS4K["default"][1], "步时基准", RD),
+             ("high（3 遍）", "%.2f" % N.M3_LMH_LOSS4K["high"][1], "＋%.1f%%" % (N.M3_LMH_COST["high"] * 100), GR),
+             ("highest（6 遍）", "%.2f" % N.M3_LMH_LOSS4K["highest"][1], "＋%.1f%%" % (N.M3_LMH_COST["highest"] * 100), BL)]
+    cw = (W - 60) / 3.0
+    for i, (a, b, c, col) in enumerate(cards):
+        x = 20 + i * (cw + 10)
+        f.box(x, py3 + 14, cw, 70, "#fff", col, 6)
+        f.t(x + 16, py3 + 38, a, col, True, 14)
+        f.t(x + 16, py3 + 68, "前 300 步 " + b + "　·　" + c, INK, True, 14)
+    f._pan = None
+    yb = f.band(sy + SH + 20, "ok", "推荐 high：曲线效果跟 highest 一样，代价约一半", [
+        "第 1 步主权重还在格点上，三档前向一样；第 2 步起才差开，所以第 1 步逐张量看不出它（超 2N 的张量 91 → 91）。",
+        "这一次矩阵乘的输出是整个词表，是整网最宽的一次，多算几遍就贵：high 多 2 遍，highest 多 5 遍。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测：对齐记录第三次迁移，单独回放输出头这一次矩阵乘，输入取 GPU 第 1 步，对 CPU FP64。离格 1 步、10 步是把权重换成训练 1 步、10 步后的值。对 x 的梯度跟前向一样大（默认档离格 %.1e），乘的是同一个 W；对 W 的梯度只有一处小误差（默认档把 FP32 的 logits 梯度舍成 BF16，%.1e）。" % (L[("off10", "default")][1], L[("off10", "default")][2]),
+               "📌 「约 5000 倍」：默认档离格 10 步 %.1e ÷ 主机真 FP32 离格 %.1e ≈ 5100（本课复算，对齐记录同口径）。" % (L[("off10", "default")][0], N.M3_LMH_HOSTFP32[1]),
+               "📌 曲线（4K，单份运行）：1000 步主 loss 默认 %.2f（待定）、high %.2f、highest %.2f；32K 上 high %.2f、highest %.2f。前 300 步 high %.2f、highest %.2f 只差在单份运行的噪声里，不按小数点排先后。步时 %.3f ／ %.3f ／ %.3f s。"
+               % (N.M3_LMH_LOSS4K["default"][0], N.M3_LMH_LOSS4K["high"][0], N.M3_LMH_LOSS4K["highest"][0], N.M3_LMH_LOSS32K["high"][0], N.M3_LMH_LOSS32K["highest"][0],
+                  N.M3_LMH_LOSS4K["high"][1], N.M3_LMH_LOSS4K["highest"][1], N.M3_LMH_STEP4K["default"], N.M3_LMH_STEP4K["high"], N.M3_LMH_STEP4K["highest"]),
+               "📌 第 1 步的梯度其实变了：默认档对 highest，116 个张量相对差中位数 %.1e，比各张量对 FP64 的误差（约 1e-2）小两个量级，所以超 2N 的个数不动。" % N.M3_LMH_STEP1_MED,
+               "注：左格的格点间距和权重离格多远是示意。")
+    f.save("fig8-lmhead.svg", yb + 14)
+
+
 def fig_excess():
     f = Fig(W, "四行，每行同样四个算子从左往右串起来，红色小块是一次「舍到 BF16」。"
                "第一行 GPU：一个算子一个 kernel，每个算子出口舍一次，共 4 次。"
@@ -741,6 +825,7 @@ fig_truncate()
 fig_tf32()
 fig_inout()
 fig_windowed()
+fig_lmhead()
 fig_excess()
 fig_boundary()
 fig_captain()

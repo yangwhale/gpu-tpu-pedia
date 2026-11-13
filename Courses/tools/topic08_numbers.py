@@ -1553,3 +1553,23 @@ assert M3_LOSS_R[0] > 1 >= M3_LOSS_R[1] and M3_GN_R[1] <= 1 and M3_PN_R[1] <= 1 
 M3_COST = 0.004                          # 步时 ＋0.007 s（单份运行）
 M3_COST_T = "%.1f%%" % (M3_COST * 100); _lock("M3_COST_T", M3_COST_T, "0.4%")
 M3_REPLAY_NOBATCH_R = 2.12               # 回放工具没把输入按 batch 切时的投影 R（工具缺陷，已修）
+# ── 第三次迁移 · 输出头精度三档（出处：对齐记录第三次迁移知识库「输出头精度」页、现象记录两条；单独回放输出头这一次矩阵乘，输入取 GPU 第 1 步，对 CPU FP64）──
+#   精度档对 FP32 输入：默认 1 遍 BF16（把 FP32 输入舍成 BF16）、high 3 遍、highest 6 遍。
+M3_LMH = {   # (权重状态, 档) : (logits 前向, 对 x 的梯度, 对 W 的梯度)
+    ("on", "default"): (1.1e-7, 1.0e-5, 8.3e-6), ("on", "highest"): (1.1e-7, 1.1e-6, 1.2e-7),
+    ("off1", "default"): (1.3e-3, 1.3e-3, 8.3e-6), ("off10", "default"): (1.9e-3, 1.9e-3, 8.3e-6),
+    ("off10", "high"): (5.9e-6, 1.7e-5, 2.7e-6), ("off10", "highest"): (1.4e-7, 1.3e-6, 1.2e-7)}
+M3_LMH_HOSTFP32 = (1.5e-7, 3.7e-7)          # 主机上真 FP32 矩阵乘的 logits：权重在格点上 ／ 离格
+assert round(M3_LMH[("off10", "default")][0] / M3_LMH_HOSTFP32[1], -2) == 5100   # 「约 5000 倍」（知识库推断，本课复算）
+assert 250 < M3_LMH[("off10", "default")][0] / M3_LMH[("off10", "high")][0] < 400  # high 比默认好约 300 倍
+# 曲线与步时（单份运行）：4K 主 loss 1000 步 ／ 前 300 步；步时
+M3_LMH_LOSS4K = {"default": (1.82, 7.32), "high": (0.99, 1.03), "highest": (1.02, 1.31)}
+M3_LMH_STEP4K = {"default": 1.640, "high": 1.734, "highest": 1.842}
+M3_LMH_COST = {k: M3_LMH_STEP4K[k] / M3_LMH_STEP4K["default"] - 1 for k in ("high", "highest")}
+assert ("%.1f%%" % (M3_LMH_COST["high"] * 100), "%.1f%%" % (M3_LMH_COST["highest"] * 100)) == ("5.7%", "12.3%")
+M3_LMH_LOSS32K = {"high": (0.94, 0.97), "highest": (0.99, 1.08)}
+M3_LMH_STEP1_MED, M3_LMH_STEP1_OVER = 6.4e-4, (91, 91)   # 第 1 步默认档对 highest：116 个张量相对差中位数；超 2N 个数不动
+M3_VOCAB = 120832
+M3_LMH_DEF300, M3_LMH_HIGH300 = "%.2f" % M3_LMH_LOSS4K["default"][1], "%.2f" % M3_LMH_LOSS4K["high"][1]
+M3_LMH_COST_HIGH_T, M3_LMH_COST_HIGHEST_T = "%.1f%%" % (M3_LMH_COST["high"] * 100), "%.1f%%" % (M3_LMH_COST["highest"] * 100)
+M3_VOCAB_T = format(M3_VOCAB, ",")

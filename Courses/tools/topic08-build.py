@@ -604,6 +604,9 @@ __FIG_BOUNDARY__
   <p>第二次迁移把数值上的对不齐一处处查下来，几乎每一处都是一个精度换挡的地方：一个值从 16 位进 32 位、从 32 位落回 16 位，或者 GPU 上悄悄打开的 TF32；剩下一类是 32 位对 32 位，同样是 FP32 的 exp、log，两边的实现精度差几十倍（§5.8）。连「操作数转成 FP32」都不等于 FP32 矩阵乘：TPU 默认对 FP32 操作数也只算一遍 BF16（图第 2 行）。</p>
   <p>要更接近 FP32，得给那一处单独设 HIGHEST（多遍 BF16 拼出来的近似）。可一处写着 HIGHEST，不等于它真上了矩阵单元：编译器可能把小的加权和改写成 FP32 逐元素乘加，那时它跟 GPU 只差加法顺序。是不是多遍 BF16，看编译后它还是不是矩阵乘。另一格是<b>该留 32 位的中间值存成了 16 位</b>：这是写错了，不是噪声，哪怕它小到 GPU 重跑都盖得住。参照的写法跟生产对不上时，以生产为准，改参照 —— 第 4 行改的就是 GPU。</p>
   <p class="codeline">''' + mt(4, "src/maxtext/layers/mhc.py", "L547-L562", "多路残差四路相加的两种写法（开关 ihc_stream_sum_unrolled；注释说 HIGHEST 是多遍 BF16，那是旧说法，以编译产物为准）") + "　" + mt(4, "src/maxtext/configs/base.yml", "L229-L233", "输出头单独设精度（logits_matmul_precision）") + '''</p>
+  <p><b>第三次迁移把图第 2 行那一格看清了：默认档舍的是离开格点的主权重。</b>生产的输出头写 logits ＝ x · W，两边升成 FP32 再乘，精度档没单独设。x 是末层归一化的输出，本来就是 BF16，舍了不变；W 是 FP32 主权重。第 0 步 W 还在 BF16 的格点上，默认档舍了也不变，所以第 1 步三档前向一样；训练一步以后主权重离开格点，默认档把它舍回去，logits 的误差一下子成了真 FP32 的约 5000 倍。前 300 步主 loss 的 r 是 «M3_LMH_DEF300»，判不过。</p>
+__FIG_LMHEAD__
+  <p>改成 high（拆成两段 BF16，算 3 遍）就够了：前 300 步 «M3_LMH_HIGH300»，1000 步 4K、32K 都过，步时 ＋«M3_LMH_COST_HIGH_T»；highest（6 遍）曲线一样好，步时 ＋«M3_LMH_COST_HIGHEST_T»。词表有 «M3_VOCAB_T» 个词，多算一遍就贵一截。带走一句：<b>BF16 检查点起训时，权重侧的精度开关第 1 步测不出来</b>，主权重得先走出格点；判这类开关要看曲线，或者拿训练几步后的权重单独回放。</p>
   <details class="foldfig"><summary><b>边界清单</b>：两次迁移碰到的十三类（本课整理，单列了「Python 常数」一类），各举一例</summary>
   <table class="t9"><thead><tr><th>边界</th><th>例子</th><th>怎么对上</th></tr></thead><tbody>
   <tr><td>矩阵乘 FP32 累加，结果先存 BF16 再给下一个算子</td><td>注意力打分 q·k，参照自己写的不融合实现（图第 4 行）</td><td>让它留 FP32，照生产的融合内核</td></tr>
@@ -1478,6 +1481,8 @@ FIGS = {
         '<b>数每一行的红块：1 个、6 个、1 个。再看右边，4 个设备那一行是空的。</b><br><em>左边三行的结构取自编译产物；右边是离线编译训练步数出来的。</em>'),
     "__FIG_INOUT__": ("fig-inout", "fig8-inout.svg", "topic08-fig-fp.py",
         '<b>左边每片给出整个 y 的一份，要加；右边每片给出 y 的几列，只拼。</b><br><em>q_a、q_b 和 kv_a、kv_b 是 MLA 里 q、kv 各两个低秩投影，o_proj 是注意力输出投影。形状只画关系，不按比例；底下一行是实测。</em>'),
+    "__FIG_LMHEAD__": ("fig-lmhead", "fig8-lmhead.svg", "topic08-fig-fp.py",
+        '<b>左边第二行那一截红线，就是右边红条比灰条长出来的那三个数量级。</b><br><em>左格是示意；右格和下面三张卡是实测，单份运行。</em>'),
     "__FIG_EXCESS__": ("fig-excess", "fig8-excess.svg", "topic08-fig-fp.py",
         '<b>数每一行的红块：第二行少了，第三行又回到第一行的位置。</b><br><em>四个算子、融合怎么切都是示意。</em>'),
     "__FIG_BOUNDARY__": ("fig-boundary", "fig8-boundary.svg", "topic08-fig-fp.py",
