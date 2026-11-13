@@ -103,7 +103,7 @@ def fig_ruler():
     for k, v in enumerate(N.TPU_ARMS):
         f.box(X(v) - 8, yl - 8, 16, 16, BL, BL, 8)
         z = (v - N.GPU_RUNS10_TAIL_MEAN) / N._sd10
-        f.t(X(v), yl - 26 - (k % 2) * 22, "偏 %.1f 个标准差" % abs(z), BL, size=13, anchor="middle")
+        f.t(X(v), yl - 26 - (k % 2) * 22, "%s · 偏 %.1f 个标准差" % ({0: "原样", 1: "不开重算", 2: "改片上内存上限"}.get(k, ""), abs(z)), BL, size=13, anchor="middle")
     f.t(X(-1.35e-4), py + 44, "TPU：三种跑法都落在尺子外，方向一致", BL, True, 15, "middle")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "尺子一立，「1e-4 出头」就有了大小", [

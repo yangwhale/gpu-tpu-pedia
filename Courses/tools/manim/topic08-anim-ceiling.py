@@ -181,14 +181,14 @@ def pair_window(k):
 
 CAPS = [
     (0.0, "第 1 步　定案前第一关的尺子：GPU 重跑 5 份（一个点 ＝ 一份）",
-     "③ 那组设置：生产近似＋输出头 dgrad 换成 FP32（一次累加）"),
+     "5 份设置完全相同，只差运行间的随机性"),
     (T2A, "第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱",
      "带符号均值 ＝ 第 2–1000 步逐步相对差 dₜ 的平均；两个点隔多远，柱就多高"),
     (T3A, "第 3 步　取最大的那一根当噪声上限 N",
      "为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里"),
-    (T4A, "第 4 步　被测（TPU 对精确轨迹）出场：r ＝ 被测 ÷ N",
+    (T4A, "第 4 步　被测（TPU 对一份 GPU 基线）出场：r ＝ 被测 ÷ N",
      "柱子比尺子高出一大截，纵轴得缩一半才装得下"),
-    (T5A, "第 5 步　样本越多，尺子越可信：纯噪声超过 n 个样本最大值的概率是 1/(n+1)", ""),
+    (T5A, "第 5 步　样本越多，尺子越可信：纯噪声超过 n 对最大值的概率至少 1/(n+1)（带符号均值约翻倍）", ""),
 ]
 
 
@@ -367,7 +367,7 @@ class NoiseCeiling(Scene):
         rf = tx("r ＝ %s ÷ %s ＝ %.2f" % (sci(X_TEST), sci(N_PUB), R_PUB), 22, WHITE)
         rf.move_to([BAND_R + 0.25 + rf.width / 2, 0.15, 0])
         put(rf, lambda t: prog(t, T4A + 2.2, T4A + 2.6) * fade_out_all(t))
-        rn = tx("尺子借自 ③ 那组 GPU 重跑（§9.3）", 18, GREY_B)
+        rn = tx("尺子：同一设置的 GPU 重跑", 18, GREY_B)
         rn.move_to([BAND_R + 0.25 + rn.width / 2, -0.3, 0])
         put(rn, lambda t: prog(t, T4A + 0.2, T4A + 0.6) * fade_out_all(t))
 
@@ -375,7 +375,7 @@ class NoiseCeiling(Scene):
             a0 = T5A + r * 0.4
             put(tx("%d 对" % n, 20, YELLOW if n == 10 else GREY_B).move_to([P_LBL_X, P_ROW_Y[r], 0]),
                 lambda t, a0=a0: prog(t, a0, a0 + 0.4) * fade_out_all(t))
-            fm = tx(frac + ("（这一次）" if n == 10 else ""), 20, YELLOW if n == 10 else GREY_B)
+            fm = tx("≥ " + frac + ("（这一次）" if n == 10 else ""), 20, YELLOW if n == 10 else GREY_B)
             fm.move_to([P_BAR_X0 + T.p_exceed(n) * P_K + 0.15 + fm.width / 2, P_ROW_Y[r], 0])
             put(fm, lambda t, a0=a0: prog(t, a0 + 0.4, a0 + 0.8) * fade_out_all(t))
 
