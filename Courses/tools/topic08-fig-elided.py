@@ -89,13 +89,14 @@ def fig_elided():
 
     def BXv(v):
         return B0 + v / vmax * (B1 - B0)
+    _bar_notes = []
     for i, (lab, v, col, note) in enumerate(bars):
         yy = py2 + 22 + i * 44
         f.t(LB, yy + 19, lab, col if col in (OR, GR) else GY, True, 13)
         f.box(B0, yy + 4, BXv(v) - B0, 22, col, col, 4)
         f.t(BXv(v) + 8, yy + 20, "%d" % v, col if col in (OR, GR) else GY, True, 13)
         if note:
-            f.t(B0, yy + 40, note, GY, size=11.5)
+            _bar_notes.append("%s：%s" % (lab, note))
     # 剩下的范围：三根橙条括起来
     f.path("M %d %d h -6 v %d h 6" % (LB - 4, py2 + 24, 3 * 44 - 6), OR, 2, arrow=False)
     f.t(W - 24, py2 + 22 + 44 + 20, "先查的范围：%d 处" % N.EL_LEFT, OR, True, 13.5, "end")
@@ -119,14 +120,14 @@ def fig_elided():
             f.box(sx + j * 14, yk + 28, 10, 10, col, col, 2)
         f.t(sx, yk + 58, "%s %d" % (lab, n), col if col in (OR, GR) else GY, True, 12)
         sx += max(n * 14, 13 * len(lab) + 34) + 16
-    f.t(LB, yk + 86, "负对照：关掉省舍入再编，同类 kernel %d 颗，打包 0 条的 %d 颗" % (N.EL_K_NOEXC, N.EL_K_NOEXC_ZERO), GY, size=12)
-    f.t(LB, y0 + PH - 14, "三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断", GY, size=11.5)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "不用一处处猜：编一次、扫一遍，同类位置全列出来，就有了先查哪儿的清单", [
         "先查三根橙条 A、B、C，共 %d 处；灰条优先级低，没排除。" % N.EL_LEFT,
         "只找得到「写了往返却被省掉」这一类；GPU 那边舍不舍要对照 GPU 代码。",
     ])
     yb = f.src(yb + 10,
+               "📌 各条细分：" + "；".join(_bar_notes) + "。",
+               "📌 负对照：关掉省舍入再编，同类 kernel %d 颗，打包 0 条的 %d 颗。三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断。" % (N.EL_K_NOEXC, N.EL_K_NOEXC_ZERO),
                "📌 左块实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。"
                "打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。",
                "📌 右块实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。"

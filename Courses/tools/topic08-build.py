@@ -1634,7 +1634,7 @@ FIGS = {
     "__FIG_ULP2__": ("fig-ulp2", "fig8-ulp2.svg", "topic08-fig-fp.py",
         '<b>v5p 两根柱子从几十格掉到 GPU 虚线附近；v7x 两根一样高，exp 还在虚线上面一大截。</b><br><em>对数刻度；v5p 两根就是上一张图左格的数，这张多了 v7x。</em>'),
     "__FIG_BOUNDARY__": ("fig-boundary", "fig8-boundary.svg", "topic08-fig-fp.py",
-        '<b>每一行先找两条线分开的那一格：五个例子，五列各一个。</b><br><em>例子取自两次迁移；只讲在哪不一样，不讲差多大。</em>'),
+        '<b>每一行先找两条线分开的那一格：五个例子，五列各一个。</b><br><em>例子取自三次迁移；只讲在哪不一样，不讲差多大。</em>'),
     "__FIG_CAPTAIN__": ("fig-captain", "fig8-captain.svg", "topic08-fig-fp.py",
         '<b>红色那一小截就是秤的一格。</b><br><em>船和船长是比方，比例跟实测一样；右边四问是实测。</em>'),
     "__FIG_RR__": ("fig-rR", "fig8-rR.svg", "topic08-fig-tensor.py",

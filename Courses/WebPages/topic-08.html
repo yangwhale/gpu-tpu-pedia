@@ -7915,7 +7915,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="892" y1="299" x2="1058" y2="299" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="6 4"/>
 <text class="svgsm" x="1276" y="310" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">改 TPU</tspan></text>
 <text class="svgsm" x="20" y="396" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FSDP 切开求和维的投影</tspan></text>
-<text class="svgsm" x="20" y="418" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">混元 3</text>
+<text class="svgsm" x="20" y="418" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">混元 3 量到、第三次迁移查清</text>
 <rect x="300" y="364" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
 <text class="svgsm" x="393" y="440" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">BF16</text>
 <rect x="494" y="364" width="186" height="82" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1.0"/>
@@ -8005,7 +8005,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="672" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="672" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="699" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两条线重合、格里的字也一样，才只剩加法顺序的差（噪声）；分开一格，就是一个要对上的边界</tspan></text>
-</svg><figcaption><b>每一行先找两条线分开的那一格：五个例子，五列各一个。</b><span class="capmore"><br><em>例子取自两次迁移；只讲在哪不一样，不讲差多大。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：第 2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3。第 1 行是混元 3 时期就有的开关，第二次迁移才需要打开：TPU 把路由打分设成最高精度以后才出现这个差；混元 3 有同一个开关，但那时默认精度本来就先舍 BF16，开不开逐位相同。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。</p>
+</svg><figcaption><b>每一行先找两条线分开的那一格：五个例子，五列各一个。</b><span class="capmore"><br><em>例子取自三次迁移；只讲在哪不一样，不讲差多大。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 出处：第 2、4 行是第二次迁移（一个更新的、带稀疏注意力的 MoE 模型）读代码查出的；第 3、5 行是混元 3。第 1 行是混元 3 时期就有的开关，第二次迁移才需要打开：TPU 把路由打分设成最高精度以后才出现这个差；混元 3 有同一个开关，但那时默认精度本来就先舍 BF16，开不开逐位相同。第 4 行是参照一侧自己写的不融合实现，生产的融合内核和 TPU 内核都留 FP32，所以改的是 GPU。</p>
 <p>📌 第 4 行只改这一处，第 1 步 loss ＋8.1e-7、梯度范数 −3.0e-5，比 GPU 自己的噪声（4.5e-5 ／ 2.2e-3）小几十倍 —— 它是按写法定的 bug，不是按大小抓到的。</p>
 <p>📌 乘法那一格要看编译后的样子：一处 HIGHEST 写的多路残差四路加权和，编译器已改写成 FP32 逐元素乘加、不上矩阵单元，跟 GPU 只差加法顺序（TPU 配对相加、GPU 依次相加），归顺序那一格；改成依次相加后第 1 步该处梯度对 CPU FP64 R ＞ 1.2 的张量 11 → 8，后一代配置没复现。</p>
 <p>注：线高只分 16 位、32 位两档，HIGHEST 这类「多遍 BF16 拼近似 FP32」也画在 32 位，所以乘法那一格要比字、不只比高度；HIGHEST 是不是多遍 BF16，看编译后它还是不是矩阵乘；「舍在哪」一列不画线，红色刻痕一道 ＝ 舍一次到 16 位，只在它本身是根子时画（第 5 行：TPU 默认归一化结果、缩放各舍一次，GPU 算完只舍一次）。第 3 行累加那一格：边传边乘时每段矩阵乘的输出和累加器都是 BF16，一次求和舍 6 次（编译产物显示，<a href="#s5-4">§5.4</a>）。</p></details></figure>
@@ -11611,23 +11611,18 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="596" y="173" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 分支输入的梯度合流</tspan></text>
 <rect x="880" y="158" width="286.3636363636365" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1174" y="174" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70</tspan></text>
-<text class="svgsm" x="880" y="194" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">反向 · 几份梯度在 FP32 里相加，典型是注意力的输入</text>
 <text class="svgsm" x="596" y="217" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 每个微批的权重梯度 dW</tspan></text>
 <rect x="880" y="202" width="306.81818181818176" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1194" y="218" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">75</tspan></text>
-<text class="svgsm" x="880" y="238" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">反向</text>
 <text class="svgsm" x="596" y="261" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 前向几处</tspan></text>
 <rect x="880" y="246" width="400.909090909091" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1288" y="262" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">98</tspan></text>
-<text class="svgsm" x="880" y="282" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">线性层输出 51 · 输出门 34 · 专家 13</text>
 <text class="svgsm" x="596" y="305" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余（专家反向、norm）</tspan></text>
 <rect x="880" y="290" width="81.81818181818187" height="22" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="969" y="306" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20</tspan></text>
-<text class="svgsm" x="880" y="326" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">专家反向 7 · norm 输入梯度 7 · norm 输出 6</text>
 <text class="svgsm" x="596" y="349" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">索引器掩码（0 和 −∞，转了也精确）</tspan></text>
 <rect x="880" y="334" width="36.81818181818187" height="22" rx="4" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="924" y="350" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9</tspan></text>
-<text class="svgsm" x="880" y="370" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">无害</text>
 <path d="M 592 156 h -6 v 126 h 6" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round"/>
 <text class="svgsm" x="1376" y="218" fill="#b06000" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先查的范围：243 处</tspan></text>
 <text class="svgsm" x="596" y="396" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补上 55 处，不计入：</tspan></text>
@@ -11681,13 +11676,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="1218" y="452" width="10" height="10" rx="2" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <rect x="1232" y="452" width="10" height="10" rx="2" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
 <text class="svgsm" x="1190" y="482" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">掩码 4</tspan></text>
-<text class="svgsm" x="596" y="510" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">负对照：关掉省舍入再编，同类 kernel 35 颗，打包 0 条的 0 颗</text>
-<text class="svgsm" x="596" y="558" fill="#5f6368" style="font-size:11.5px;font-variant-numeric:tabular-nums">三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断</text>
 <rect x="0" y="592" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="592" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="592" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="619" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不用一处处猜：编一次、扫一遍，同类位置全列出来，就有了先查哪儿的清单</tspan></text>
-</svg><figcaption><b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：整步扫一遍，三根橙条是先查的范围。</b><span class="capmore"><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 左块实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
+</svg><figcaption><b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：整步扫一遍，三根橙条是先查的范围。</b><span class="capmore"><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 各条细分：A 分支输入的梯度合流：反向 · 几份梯度在 FP32 里相加，典型是注意力的输入；B 每个微批的权重梯度 dW：反向；C 前向几处：线性层输出 51 · 输出门 34 · 专家 13；其余（专家反向、norm）：专家反向 7 · norm 输入梯度 7 · norm 输出 6；索引器掩码（0 和 −∞，转了也精确）：无害。</p>
+<p>📌 负对照：关掉省舍入再编，同类 kernel 35 颗，打包 0 条的 0 颗。三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断。</p>
+<p>📌 左块实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
 <p>📌 右块实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。272 是 convert(f32→bf16) 在同一计算里又被转回 f32 的使用次数（同一行代码在 scan 外的层、MTP 块、前向、重算、反向里各记一次），按源码行与形状归类（经验规则）；用 reduce_precision 补上、或输入本来就在 BF16 网格上的往返不计。「只含往返」＝ 这颗 kernel 有往返、没有真舍、没有 reduce_precision。</p>
 <p>⚠️ 省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。小尺寸、单一配置；别的模型要重编重扫。</p></details></figure>
   <details class="foldfig"><summary><b>扫描过程的动画</b></summary>
