@@ -176,7 +176,7 @@ __FIG_ASSOC__
   <p>开场第二问的答案：<b>GPU 自己跑两遍也不一位不差</b>。反向里有些算子（注意力的反向、MoE 把 token 合回原位的那一步、融合的交叉熵都可能是；这次没拆到底是哪一个）要很多线程往同一个格子里加数（原子加），谁先算完谁先加进去，每次的先后都不一样。
     前向通常是确定的，所以两次运行第 1 步的 loss 一样；从反向开始才分叉。</p>
   <details class="foldfig"><summary><b>外面的人怎么说</b>：换个顺序求和能差出多少种结果</summary>
-  <p>有人把 8 个大小悬殊的数（±1e-10、±1e-5、±1e-2、±1）随机打乱求和 1 万次，得到 102 种不同的结果；同一篇文章也指出，大模型的前向在同一台机器上重跑是逐位一样的，大模型里常用、又要原子加的，基本只有 FlashAttention 的反向（Thinking Machines，<em>Defeating Nondeterminism in LLM Inference</em>，2025）。</p></details>
+  <p>有人把 8 个大小悬殊的数（±1e-10、±1e-5、±1e-2、±1，正负成对，精确和是 0）用 Python 的 64 位浮点随机打乱求和 1 万次，得到 102 种不同的结果；同一篇文章也指出，大模型的前向在同一台机器上重跑是逐位一样的，大模型里常用、又要原子加的，基本只有 FlashAttention 的反向（Thinking Machines，<em>Defeating Nondeterminism in LLM Inference</em>，2025）。</p></details>
 
   <h3>1.2　那拿什么当尺子：GPU 自己跟自己的差</h3>
   <p>GPU 上跑出来的标准答案叫 <b>golden</b>。同样设置的 GPU 再多跑几次，两两之间的差有多大，就是<b>噪声</b>。拿它当尺子：</p>
@@ -1477,7 +1477,7 @@ FIGS = {
     "__FIG_WINDOWED__": ("fig-windowed", "fig8-windowed.svg", "topic08-fig-fp.py",
         '<b>数每一行的红块：1 个、6 个、1 个。再看右边，4 个设备那一行是空的。</b><br><em>左边三行的结构取自编译产物；右边是离线编译训练步数出来的。</em>'),
     "__FIG_INOUT__": ("fig-inout", "fig8-inout.svg", "topic08-fig-fp.py",
-        '<b>左边每片给出整个 y 的一份，要加；右边每片给出 y 的几列，只拼。</b><br><em>形状只画关系，不按比例；底下一行是实测。</em>'),
+        '<b>左边每片给出整个 y 的一份，要加；右边每片给出 y 的几列，只拼。</b><br><em>q_a、q_b 和 kv_a、kv_b 是 MLA 里 q、kv 各两个低秩投影，o_proj 是注意力输出投影。形状只画关系，不按比例；底下一行是实测。</em>'),
     "__FIG_EXCESS__": ("fig-excess", "fig8-excess.svg", "topic08-fig-fp.py",
         '<b>数每一行的红块：第二行少了，第三行又回到第一行的位置。</b><br><em>四个算子、融合怎么切都是示意。</em>'),
     "__FIG_BOUNDARY__": ("fig-boundary", "fig8-boundary.svg", "topic08-fig-fp.py",

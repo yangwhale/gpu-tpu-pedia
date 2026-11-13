@@ -674,7 +674,7 @@ def fig_elide():
             f.p.append('<circle cx="%.1f" cy="%d" r="8" fill="%s" stroke="%s" stroke-width="2"/>' % (X(v), y, col if filled else "#fff", col))
     f.t(X(N.ELIDE_GPU_MAX) + 8, yt + 18, "GPU 自己最大 ±%s" % N.ELIDE_GPU_MAX_T, GY, size=12)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "GPU 每次都把中间值存成 BF16，TPU 上这次往返只做了一半：值更精确，跟 GPU 反而对不上", [
+    yb = f.band(y0 + PH + 20, "ok", "GPU 每次都把中间值存成 BF16；TPU 上这个值后面两处用，归一化输出那处舍了，算均方那处没舍：值更精确，跟 GPU 反而对不上", [
         "要和 GPU 舍在同一处，就在那一处显式写「舍到 BF16」（JAX 的 lax.reduce_precision），编译器不会删。",
         "代价：显式舍入是为了对齐，生产里关掉同样准（推断）；剩下约 ＋3.5e-6 还没查清。",
     ])
