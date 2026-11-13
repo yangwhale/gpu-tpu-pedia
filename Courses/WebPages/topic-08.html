@@ -4908,7 +4908,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul></details>
 
   <h3 id="s3-5">3.5　一次看几十个数：r 在 1–2 之间，先别急着判错</h3>
+  <p>尺子只用 GPU 重跑：TPU 同一个程序重跑逐位相同，量不出宽度（理由在折叠里）。</p>
+  <details class="foldfig"><summary><b>为什么尺子只用 GPU 重跑</b></summary>
   <p>尺子为什么只用 GPU 重跑？第二次迁移里，TPU 同一个程序重跑，换一组机器、换一个集群，结果都<b>逐位相同</b>：拿它当尺子，宽度是 0，什么都判不过。硬给 TPU 造点波动来撑宽，又成了被测给自己定门槛（<a href="#s4-3">§4.3</a>）。</p>
+  </details>
   <p>第二次迁移一次比较要看 8 项检查（7 条曲线，主 loss 开两个窗口），每项 3 个统计，一共 24 个 r，最差的那个说了算。每个数超过自己尺子的机会不大，24 个里总有一个超的机会就大了。纯噪声按同一套判法能拿几分？把 GPU 的重跑轮流拿一份当被测，试一遍：</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/124b2a797c2f3961bcadf72cbe2d7156cb0caab9/models/hunyuan4/analysis/gpu_loo_r.py">代码：留一法</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/124b2a797c2f3961bcadf72cbe2d7156cb0caab9/docs/guide/ruler.md">代码：尺子的入门（文档）</a></p>
 <figure class="fbox fwide" id="fig-loo"><svg viewBox="0 0 1400 910" width="100%" role="img" aria-label="一根横轴是 r，0 到 1 绿色判过，1 到 2 黄色判待定，大于 2 红色判不过。第一行：GPU 同设置 8 份、300 步，轮流一份当被测、一份当基线、其余当尺子，一共 56 种，一个点一种；59% 超过 1，其中 11% 超过 2，最大 2.47。第二行：1000 步、16 份，240 种，22% 在黄区，没有进红区的，最大 1.82。第三行：六个 TPU 改动跑 1000 步，用 8 份的尺子时 r 在 2.00 到 2.75，压线或越过当时纯噪声的最大值 2.00；尺子补到 16 份后落到 1.19 到 1.64，都在纯噪声最大值 1.82 以内。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -12215,7 +12218,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <ul>
     <li><b>逐位相同</b>：重跑、换机器、换集群，以及起名字、拆函数这类不改程序的重构。</li>
     <li><b>不逐位，但跟重跑分不开</b>：只换顺序的改动 —— 换切分、专家并行、重算策略、升运行库。换到 v7x 原先也放在这堆，后来查出它动了精度，只是被小参数单列不判的豁免盖住了。</li>
-    <li><b>真有影响的归成六件</b>：在运行库 0.0.46 上，不能忍的是纯数据并行（第八节）和关掉省舍入。另外四件（关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行）曲线分不开，只在第 1 步对 FP64 抓到，能忍，各有开关。其中 RMSNorm 那件只靠一个压线张量判出来：第 0 层归一化权重 R 1.2025，GPU 参照换成六份是 1.1955，就落回线下 —— 贴着线的判定，份数一变就翻。换到 0.0.52，v5p 上 RMSNorm 多舍一次也不能忍了（<a href="#s10-2">§10.2</a>）。</li>
+    <li><b>真有影响的归成六件</b>：在运行库 0.0.46 上，不能忍的是纯数据并行（第八节）和关掉省舍入。另外四件（关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行）曲线分不开，只在第 1 步对 FP64 抓到，能忍，各有开关。<details class="foldfig"><summary><b>六件里的细节</b></summary><p>其中 RMSNorm 那件只靠一个压线张量判出来：第 0 层归一化权重 R 1.2025，GPU 参照换成六份是 1.1955，就落回线下 —— 贴着线的判定，份数一变就翻。换到 0.0.52，v5p 上 RMSNorm 多舍一次也不能忍了（<a href="#s10-2">§10.2</a>）。</p></details></li>
   </ul>
   <p>其中 33 个改动又跑满 1000 步、用 GPU 16 份当尺子（运行库 0.0.46），只有 1 个分得开，也是第 1 步对 FP64 抓到的。</p>
   <details class="foldfig"><summary><b>几个值得记住的脾气</b>：换 v7x、换运行库、重算、「第 1 步一样、后面分开」</summary>
