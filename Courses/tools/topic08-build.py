@@ -1074,7 +1074,7 @@ __ANIM_CHAIN__
   <tr><td>v7x，8 个设备，不做梯度累积</td><td>«LIB_V7X_R46_T»</td></tr>
   </tbody></table>
   <p class="codeline">以上都在 TPU 运行库 0.0.46 上。换到 0.0.52，最后一行变了（§8.6）。「不做梯度累积」＝两个微批合成一次 scatter，一次加 8192 个下标，所以反而更差（§8.6 讲为什么）。</p>
-  <p>换卡数都一样不过，方向也固定：主 loss 一直偏高（带符号均值 «C2_LOSS_SM_T»，r «C2_LOSS_R_T»），梯度范数一直偏低（«C2_GN_SM_T»，r «C2_R_DP8_T»），§3.3「从 K 份运行到一个 r」那张图下块的算例就是它。换张量并行、专家并行、混合切分都跟 GPU 重跑分不开，所以问题出在纯数据并行特有的某处。v7x 的 «C2_R_V7X_T» 单看曲线不算铁证（纯 GPU 噪声用留一法也能到 2.47，§3.5），是第 1 步对 FP64 抓到的。</p>
+  <p>换卡数都一样不过：前 300 步主 loss 平均偏高（带符号均值 «C2_LOSS_SM_T»，r «C2_LOSS_R_T»），梯度范数平均偏低（«C2_GN_SM_T»，r «C2_R_DP8_T»；前 200 步最明显，下图），§3.3「从 K 份运行到一个 r」那张图下块的算例就是它。换张量并行、专家并行、混合切分都跟 GPU 重跑分不开，所以问题出在纯数据并行特有的某处。v7x 的 «C2_R_V7X_T» 单看曲线不算铁证（纯 GPU 噪声用留一法也能到 2.47，§3.5），是第 1 步对 FP64 抓到的。</p>
 
 __FIG_DDPCURVE__
   <p>曲线只能说有系统偏差，说不出偏在谁身上。照 §4.2 的定责流程，拿第 1 步的 «C2_NT» 个参数梯度各自对 CPU 上的 FP64 比：<b>只有词嵌入梯度丢了精度</b>，其余 204 个里，除照例单列的多路残差小参数，都在噪声内或只差加法顺序。</p>
@@ -1217,7 +1217,7 @@ __FIG_COMM__
 </div></section>
 
 ''' + sec("s九", "九", "验收与 golden 设计") + '''
-  <p class="lead">当基线的那份 golden 不是一开始就有的：先往精确方向改了三次（② → ③ → ④），查清以后发现只要在生产那份 ② 上改一处，这就是最终 golden ⑤。</p>
+  <p class="lead">当基线的那份 golden 不是一开始就有的：先往精确方向改了三次（GPU 生产 golden → 只换 FP32 → 精确轨迹），查清以后发现只要在 GPU 生产 golden 上改一处，这就是修好的 golden（下文图上标 ⑤）。</p>
 
   <h3>9.1　五份 golden，一步一步来</h3>
 __FIG_GOLDEN__
@@ -1245,7 +1245,7 @@ __ANIM_LINEAGE__
   <p>定案前那 3.45 倍又是什么？是两笔相反的偏差相抵后剩下的差额：当参照的精确轨迹 ④ 自己少漂一截，让 TPU 对它显得多漂；TPU 把流进输出头反向的梯度存成 BF16，自己也少漂一截，往回抵掉大半；剩下的差额就是 3.45 倍。</p>
   </details>
   <details class="foldfig"><summary><b>账的数</b>：每一截多少、共有误差从哪来</summary>
-  <p>从 GPU 生产到 ⑤ 涨了 «LADDER_DGRAD_T»（BF16 张量核那段和 cuBLAS 一次累加那段加起来）；从 ⑤ 到 ⑥ 再涨 «LADDER_SHARED_T»，原因是流进输出头反向的梯度在生产程序里存成了 BF16 —— GPU 生产和 TPU 生产都舍了这一次（GPU 真精确只多舍这一次，参数范数就小了 «SHARED_DLOGITS_GPU_T»）。TPU 生产落在 «PN_TPU_PROD_T»，⑤ 在 «PN_PRODCHUNK_T»。③ 到 ④ 缩掉的那截（§9.1 折叠里那支动画的橙块）大小跟这份共有误差差不多，很可能是同一类，TPU 生产也带着它（推断）。</p></details>
+  <p>从 GPU 生产到 ⑤ 涨了 «LADDER_DGRAD_T»：只换 FP32 先挪 ＋«PN_RCX5_R»（去掉截断那条路），再分块又挪 ＋«PN_CHUNK_STEP_R»（去掉吞小项，推断）；从 ⑤ 到 ⑥ 再涨 «LADDER_SHARED_T»，原因是流进输出头反向的梯度在生产程序里存成了 BF16 —— GPU 生产和 TPU 生产都舍了这一次（GPU 真精确只多舍这一次，参数范数就小了 «SHARED_DLOGITS_GPU_T»）。TPU 生产落在 «PN_TPU_PROD_T»，⑤ 在 «PN_PRODCHUNK_T»。③ 到 ④ 缩掉的那截（§9.1 折叠里那支动画的橙块）大小跟这份共有误差差不多，很可能是同一类，TPU 生产也带着它（推断）。</p></details>
 __FIG_DECOMP__
   <p>早先有一版拆账把 ④ 当成了精确值，而 ④ 自己也偏，那一版作废。</p>
   <p>为什么验收要分两关？像打靶：噪声尺子是同一把枪连打几发，看弹孔散得多开；它看不出整团弹孔偏离了靶心。golden 自己偏，就是靶心画歪了。所以第一关对着重画的靶心（⑤）判过不过，第二关写清旧靶心（生产 golden ②）歪在哪、歪多少。</p>
@@ -1253,15 +1253,15 @@ __FIG_TWOLAYER__
   <p>两档门槛（§4.4）照旧并排报：第一关每一格既写严格档的判定，也写离参考档那条线还差多少。定案后，参考档在 1000 步那一级两个平台也全过。</p>
 
   <h3>9.4　今天的结论</h3>
-  <div class="note"><span class="t">结论：对齐了，1000 步这一级最差 «FINAL_WORST_T»×N</span>
-  第一关的基线定为 ⑤：GPU 生产程序只把输出头 dgrad 改成分段累加，这就是最终 golden；基线取它的一份，尺子是它自己 «FINAL_RUNS» 份同设置重跑、两两 «FINAL_PAIRS» 对。</div>
+  <div class="note"><span class="t">结论：对齐了，1000 步这一级最差是噪声上限的 «FINAL_WORST_T» 倍</span>
+  第一关的基线定为修好的 golden（⑤）：GPU 生产程序只把输出头那次求和改成升 FP32 再分块；基线取它的一份，尺子是它自己 «FINAL_RUNS» 份同设置重跑、两两 «FINAL_PAIRS» 对。</div>
   <table class="t9"><thead><tr><th>平台 · 配置</th><th>loss 全程</th><th>loss 尾段</th><th>梯度范数</th><th>参数范数</th><th>学习率</th></tr></thead><tbody>
   <tr><td>v5p 当前对齐配置</td><td>0.80 ✅</td><td>0.80 ✅</td><td>0.85 ✅</td><td>0.50 ✅</td><td>逐位 ✅</td></tr>
   <tr><td>v7x 当前对齐配置</td><td>0.82 ✅</td><td>0.83 ✅</td><td>0.85 ✅</td><td>0.53 ✅</td><td>逐位 ✅</td></tr>
   <tr><td>v5p EP＝8</td><td>0.76 ✅</td><td>0.78 ✅</td><td>0.74 ✅</td><td>0.48 ✅</td><td>逐位 ✅</td></tr>
   <tr><td>v7x EP＝8</td><td>0.77 ✅</td><td>0.81 ✅</td><td>0.68 ✅</td><td>0.35 ✅</td><td>逐位 ✅</td></tr>
   </tbody></table>
-  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 «FINAL_WORST_T» 倍</b>；按专家切（EP＝8）也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden ② 的差（参数范数 ＋«VS_RC_PN»，loss «VS_RC_LOSS_V5P_T»（v5p）），在第二关写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
+  <p>每格是三个统计里最差的 r。<b>v5p 和 v7x 当前对齐配置，1000 步的每一项都在 GPU 自己重跑的噪声内，最差 «FINAL_WORST_T» 倍</b>；按专家切（EP＝8）也过。换掉的只是一处查清了的 GPU 偏差；对原来那份生产 golden ② 的差（参数范数 ＋«VS_RC_PN»，loss «VS_RC_LOSS_V5P_T»（v5p；这里是验收用的整层重算配置、对 GPU 生产 5 份均值，所以跟第七节对一份基线的 −1.66e-4 不一样；§9.1 折叠的 −1.34e-4 是开关打开前那一版 TPU）），在第二关写成已解释差异：全部来自 GPU 输出头 dgrad 的长求和。</p>
   <details class="foldfig"><summary><b>换一份当基线会怎样</b>：「全过」是对事先定下的那一份说的</summary>
   <p>基线事先定为 ⑤ 的第一份。事后把十份逐份都当一次基线、尺子不变重判：单条检查的 r 在十份基线之间最多差 «REBASE_SHIFT_MAX»，四条取最差以后最多差 «REBASE_COMB_SHIFT»；v5p 两个配置、v7x 按专家切十份基线全过，v7x 当前配置有 «REBASE_V7X_PEND» 份基线落进待定（最差 «REBASE_WORST_T»），没有不过。这正是 §3.4 说的代价：基线自己也是一个样本，能挪一个 N 以内。所以报结论时写清「对哪一份基线」。</p></details>
   <details class="foldfig"><summary><b>TPU 不是挑出来的好样本</b>：«ENSEMBLE_RUNS» 份只改执行参数的扰动运行</summary>
@@ -1844,7 +1844,7 @@ FIGS = {
     "__FIG_DDPCURVE__": ("fig-ddpcurve", "fig8-ddpcurve.svg", "topic08-fig-ddp.py",
         '<b>上格蓝线的平均前 200 步明显在零下面，下格绿线回到灰线中间。</b><br><em>灰线是 GPU 同设置另 7 份对其中一份，就是尺子用的那 8 份；被测对的是 TPU 自己的 FSDP 基线。</em>'),
     "__FIG_DDP2X2__": ("fig-ddp2x2", "fig8-ddp2x2.svg", "topic08-fig-ddp.py",
-        '<b>只有右下那一格红：高频又不排序。</b><br><em>圆点个数是示意；格子里的数是第 1 步实测。低频那两格写两个数：前一个是在 ≥ 2 张卡上出现的 3,234 行，后一个是只在 1 张卡上出现的 7,638 行；它们的误差加进词表之前就有（推断：上游的 BF16 计算），所以跟排不排序无关。</em>'),
+        '<b>只有右下那一格红：高频又不排序。</b><br><em>圆点个数是示意；格子里的数是第 1 步实测。低频那两格写两个数：「1 张卡」是只在 1 张卡上出现的 7,638 行，「多张卡」是在 ≥ 2 张卡上出现的 3,234 行；它们的误差加进词表之前就有（推断：上游的 BF16 计算），所以跟排不排序无关。</em>'),
     "__FIG_DDPROWS__": ("fig-ddprows", "fig8-ddprows.svg", "topic08-fig-ddp.py",
         '<b>看右边一组：紫柱接近红柱的两倍，橙柱跟红柱一样高。</b><br><em>绿柱是 FSDP。</em>'),
     "__FIG_DDPFLOW__": ("fig-ddpflow", "fig8-ddpflow.svg", "topic08-fig-ddp.py",

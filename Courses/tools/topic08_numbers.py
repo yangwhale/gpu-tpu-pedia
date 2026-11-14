@@ -1725,3 +1725,4 @@ GPU_B_TAIL_T, GPU_C_TAIL_T = tx(GPU_RUNS10_TAIL[1], "%.1e"), tx(GPU_RUNS10_TAIL[
 assert (TPU_LOSS_TAIL_T, GPU_B_TAIL_T, GPU_C_TAIL_T) == ("−1.66e-4", "−3.8e-5", "＋2.5e-7"), (TPU_LOSS_TAIL_T, GPU_B_TAIL_T, GPU_C_TAIL_T)
 assert abs((TPU_LOSS_TAIL - sum(GPU_RUNS10_TAIL) / 10) - (-1.4e-4)) < 0.05e-4
 HEAD_S100_E = tx(abs(HEAD_BF16_S100), "%.1e"); assert HEAD_S100_E == "6.1e-4"
+PN_CHUNK_STEP_R = "%.4f" % (PN_PRODCHUNK - PN_RCX5); assert PN_CHUNK_STEP_R == "0.0083"

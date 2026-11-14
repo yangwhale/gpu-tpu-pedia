@@ -87,7 +87,7 @@ def fig_2x2():
                 txt = "收%s次更新，舍%s次" % (many, many)
             f.t(x + 30, y + 92, txt, GY, size=13.5)
             if c == 0:
-                v = "%s ／ %s" % (_e(LOW2[3]), _e(LOW1[3])) if sort else "%s ／ %s" % (_e(LOW2[4]), _e(LOW1[4]))
+                v = "1 张卡 %s ／ 多张卡 %s" % (_e(LOW1[3]), _e(LOW2[3])) if sort else "1 张卡 %s ／ 多张卡 %s" % (_e(LOW1[4]), _e(LOW2[4]))
             else:
                 v = _e(HOT[3]) if sort else _e(HOT[4])
             f.t(x + 30, y + 150, "离 FP64  " + v, RD if bad else INK, True, 22 if bad else 18, big=True)
