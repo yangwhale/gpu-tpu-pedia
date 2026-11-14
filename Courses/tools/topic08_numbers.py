@@ -1661,7 +1661,31 @@ def mtp32k():
     return dt, env
 
 
+def mtp32k_gpu7():
+    """GPU 另外 7 份各自对同一份基线的逐步相对差（下标 0 ＝ 第 1 步），只为画出「跟同一份基线比」的方向；尺子不用它们算。"""
+    import json as _j
+    import os as _o
+    d = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_mtp32k.json"), encoding="utf-8"))
+    return d["GPU 另外 7 份对基线"]
+
+
+def _roll50(x):
+    return [sum(x[k - 49:k + 1]) / 50.0 for k in range(49, len(x))]
+
+
 _dt32, _env32 = mtp32k()
+_g7 = mtp32k_gpu7()
+M3_MTP32K_G7_POS = [round(100.0 * sum(1 for x in g[1:1000] if x > 0) / 999) for g in _g7]          # 各份在零上面的步数比例（%）
+M3_MTP32K_G7_SM = [sum(g[1:1000]) / 999 for g in _g7]                                                # 各份带符号均值（第 2–1000 步）
+M3_MTP32K_G7_ROLLPOS = [round(100.0 * sum(1 for v in _roll50(g[1:1000]) if v > 0) / 950) for g in _g7]   # 50 步平均线在零上面的比例（%）
+M3_MTP32K_ROLLPOS = round(100.0 * sum(1 for v in _roll50(_dt32[1:1000]) if v > 0) / 950)
+assert M3_MTP32K_G7_POS == [54, 58, 52, 60, 58, 53, 58], M3_MTP32K_G7_POS
+assert M3_MTP32K_G7_ROLLPOS == [62, 55, 57, 84, 79, 64, 76] and M3_MTP32K_ROLLPOS == 100, (M3_MTP32K_G7_ROLLPOS, M3_MTP32K_ROLLPOS)
+assert abs(max(M3_MTP32K_G7_SM) - M3_MTP32K_SM_N) < 0.01e-6        # 7 份里最大的那份，正好就是 28 对尺子的那一对（基线对它）
+M3_MTP32K_G7_POS_T = "%d%%–%d%%" % (min(M3_MTP32K_G7_POS), max(M3_MTP32K_G7_POS))
+M3_MTP32K_G7_ROLLPOS_T = "%d%%–%d%%" % (min(M3_MTP32K_G7_ROLLPOS), max(M3_MTP32K_G7_ROLLPOS))
+M3_MTP32K_G7_SM_T = "%s 到 %s" % (tx(min(M3_MTP32K_G7_SM), "%.1e", plus=True), tx(max(M3_MTP32K_G7_SM), "%.1e", plus=True))
+assert (M3_MTP32K_G7_POS_T, M3_MTP32K_G7_ROLLPOS_T, M3_MTP32K_G7_SM_T) == ("52%–60%", "55%–84%", "＋1.5e-6 到 ＋6.9e-6"), (M3_MTP32K_G7_POS_T, M3_MTP32K_G7_ROLLPOS_T, M3_MTP32K_G7_SM_T)
 M3_MTP32K_POS_PCT = "%d%%" % round(100.0 * sum(1 for x in _dt32[1:1000] if x > 0) / 999)
 M3_MTP32K_IN_PCT = "%d%%" % round(100.0 * sum(1 for x, e in zip(_dt32[1:1000], _env32[1:1000]) if abs(x) <= e) / 999)
 assert (M3_MTP32K_POS_PCT, M3_MTP32K_IN_PCT) == ("75%", "87%"), (M3_MTP32K_POS_PCT, M3_MTP32K_IN_PCT)
