@@ -11,7 +11,7 @@ r"""专题八「GPU→TPU 训练精度对齐」§8.6 串起来：五环一条链
   · ① HEAD_BF16_S1 / HEAD_BF16_S100：GPU 输出层 dgrad 沿 w̄ 的相对误差，第 1 / 100 步 −6.51e-4 / −6.10e-4（实测）。
   · ② SWAP 第三行：同一状态（GPU 第 99 步）、同一批数据，GPU 生产配置这一整步（全体参数一起）沿漂移方向少走 0.36%（实测）。
     ⚠️ 0.36% 是「整步、全体参数」的量，不是「主干权重」本身、也不是第 0 层输出投影那一份
-       （那一份另有测量，本脚本不引用）。它仍挂在 ② 下面而不是 ① 下面：① 是输出层 dgrad 自己的相对误差（0.065%），
+       （那一份另有测量，本脚本不引用）。它仍挂在 ② 下面而不是 ① 下面：① 是输出层 dgrad 自己的相对误差（6.5e-4），
        0.36% 是这个误差（连同 GPU 其余 BF16 误差）传到「每一步怎么更新参数」以后的结果 —— 正是 ② 这一环说的事；
        挪到 ① 下面反而会被读成 dgrad 的误差就是 0.36%。所以只改标签：「整步沿漂移方向少走 / 全体参数，同一状态实测」。
     「主干里大头在第 0 层注意力输出投影」出自 fig8-chain 的出处栏（实测，换权重重算）。
@@ -64,8 +64,9 @@ import topic08_numbers as N  # noqa: E402
 STEPS_DIR = os.path.join(HERE, "steps")
 
 # ── 数据（当场取、当场断言）──────────────────────────────────────────
-HEAD1, HEAD100 = abs(N.HEAD_BF16_S1) * 100, abs(N.HEAD_BF16_S100) * 100     # → 百分数
-assert "%.3f" % HEAD1 == "0.065" and "%.3f" % HEAD100 == "0.061"
+HEAD1, HEAD100 = abs(N.HEAD_BF16_S1), abs(N.HEAD_BF16_S100)     # 相对量；2026-11-14 夜起小数一律 e 记法（原写 0.065%）
+HEAD1_E, HEAD100_E = ("%.1e" % HEAD1).replace("e-0", "e-"), ("%.1e" % HEAD100).replace("e-0", "e-")
+assert (HEAD1_E, HEAD100_E) == ("6.5e-4", "6.1e-4")
 assert N.HEAD_BF16_S1 < 0 and N.HEAD_BF16_S100 < 0                           # 少推，不是多推
 SWAP_GPU = [v for lab, v, _ in N.SWAP if lab == "GPU 生产程序"][0]
 assert SWAP_GPU < 0 and "%.2f" % abs(SWAP_GPU) == "0.36"
@@ -196,11 +197,11 @@ def poly(pts, color, width=4):
 
 CAPS = [
     "五环一条链：每一环是下一环的原因；底下的时钟是训练步数",
-    "① GPU 输出层 dgrad：12 万长的求和朝零截掉一点，每一步少推 0.065%",
+    "① GPU 输出层 dgrad：12 万长的求和朝零少了一点（截断＋吞小项），每一步少推约 6.5e-4",
     "② 主干权重沿这个方向每一步少走一点",
     "③ 所有 logits 一起偏一截（lse 差）；softmax 看不见它",
     "④ 冷门词那几行在 Adam 的 ε 区（%d%% 的元素 √v < ε），压多压少跟着 logit 水平走" % round(RARE_SUBEPS_SHARE * 100),
-    "⑤ 参数范数多涨、loss 偏低（去掉那股力后各还剩一截；loss 的机制未验证）",   # R18：原「一起出现、一起消失」与 fig-intervene 不符
+    "⑤ 参数范数多涨、loss 偏低（去掉那股力后参数范数还剩三成；loss 的机制未验证）",   # R18：原「一起出现、一起消失」与 fig-intervene 不符
     "时钟走起来：①② 每一步都一样，③④⑤ 一步步积起来",
     "第 300 步：每步只差一点、同一个方向，积成看得见的漂移",
 ]
@@ -240,9 +241,9 @@ class DriftChain(Scene):
                 g.add(tx(s, size, c, b).move_to([XC[i], y0 - k * gap if not isinstance(y0, list) else y0[k], 0]))
             return g
 
-        panels.append(col(0, [("每一步少推", 17, GREY_B, False), ("%.3f%%" % HEAD1, 32, RED, True),
-                              ("沿 w̄（第 1 步实测）", 15, GREY_B, False), ("第 100 步：%.3f%%" % HEAD100, 15, GREY_B, False),
-                              ("→ 每一步都差这么多", 15, WHITE, False)], y0=[1.2, 0.7, 0.2, -0.15, -0.55]))
+        panels.append(col(0, [("每一步少推", 17, GREY_B, False), (HEAD1_E, 32, RED, True),
+                              ("沿 w̄（第 1 步实测）", 15, GREY_B, False), ("第 100 步：" + HEAD100_E, 15, GREY_B, False),
+                              ("→ 每一步都少推，量级一样", 15, WHITE, False)], y0=[1.2, 0.7, 0.2, -0.15, -0.55]))
         panels.append(col(1, [("整步沿漂移方向少走", 17, GREY_B, False), ("%.2f%%" % abs(SWAP_GPU), 32, ORANGE, True),
                               ("全体参数，同一状态实测", 15, GREY_B, False), ("主干里大头：第 0 层", 15, GREY_B, False),
                               ("注意力的输出投影", 15, GREY_B, False)], y0=[1.2, 0.7, 0.2, -0.15, -0.5]))

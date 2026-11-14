@@ -1712,3 +1712,16 @@ ABL_TRUNC_S100_T, ABL_TRUNC_S300_T = tx(ABL_BF16_ONESHOT[1] - ABL_FP32_ONESHOT[1
 SWAP_TRUNC_SHARE = "%d%%" % round((0.36 - 0.10) / 0.36 * 100)
 PN_FIX1_R, PN_TPU_PROD_R = "%.4f" % PN_FIX1, "%.4f" % PN_TPU_PROD
 assert (ABL_BF16_S1_T, ABL_S1_RATIO, ABL_TRUNC_S100_T, ABL_TRUNC_S300_T, SWAP_TRUNC_SHARE) == ("−6.51e-4", "380", "−3.5e-4", "−2.0e-4", "72%"), (ABL_BF16_S1_T, ABL_S1_RATIO, ABL_TRUNC_S100_T, ABL_TRUNC_S300_T, SWAP_TRUNC_SHARE)
+# ── 2026-11-14 夜 · §7.5 修法（夜间试讲意见落地）：一律用生产近似配置、对 GPU 生产 5 份均值的第 1000 步参数范数 ──
+PN_RCX5 = 1.2424e-2                     # GPU 生产只把输出头 dgrad 换 FP32 一次加到底，5 份均值（topic08_series.json 的 pnorm_rc_gpu_dgrad_fp32_mean5）
+PN_RCX5_R, PN_PRODCHUNK_R, PN_TRUE_R = "%.4f" % PN_RCX5, "%.4f" % PN_PRODCHUNK, "%.4f" % PN_TRUE
+PN_RCX5_SHARE = "%d%%" % round(PN_RCX5 / PN_TPU_PROD * 100)
+assert PN_RCX5_SHARE == "59%"
+HEAD_S1_E = tx(abs(HEAD_BF16_S1), "%.1e")                       # 第 1 步 GPU 输出头 dgrad 沿 w̄ 少推的相对量（原写 0.065%，小数改 e 记法）
+assert HEAD_S1_E == "6.5e-4"
+EXACT_SELF_PN_T = tx(EXACT_SELF_PN, "%.2e")
+TPU_LOSS_TAIL_T = tx(TPU_LOSS_TAIL, "%.2e")
+GPU_B_TAIL_T, GPU_C_TAIL_T = tx(GPU_RUNS10_TAIL[1], "%.1e"), tx(GPU_RUNS10_TAIL[2], "%.1e", plus=True)
+assert (TPU_LOSS_TAIL_T, GPU_B_TAIL_T, GPU_C_TAIL_T) == ("−1.66e-4", "−3.8e-5", "＋2.5e-7"), (TPU_LOSS_TAIL_T, GPU_B_TAIL_T, GPU_C_TAIL_T)
+assert abs((TPU_LOSS_TAIL - sum(GPU_RUNS10_TAIL) / 10) - (-1.4e-4)) < 0.05e-4
+HEAD_S100_E = tx(abs(HEAD_BF16_S100), "%.1e"); assert HEAD_S100_E == "6.1e-4"
