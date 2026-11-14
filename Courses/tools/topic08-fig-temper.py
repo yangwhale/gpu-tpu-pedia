@@ -342,6 +342,76 @@ def fig_rms2r():
     f.save("fig8-rms2r.svg", yb + 14)
 
 
+def fig_rms52():
+    """fig8-rms52 回答：RMSNorm 多舍一次在 0.0.52 上「主 loss 一直偏高」，逐步看是不是真的一直？
+    数据：topic08_rms52.json（私有导出脚本从运行目录算，只有数字）。实测。"""
+    import json as _j, os as _o
+    D = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_rms52.json"), encoding="utf-8"))
+    R46, R52, F52, ENV = D["rms46"], D["rms52"], D["final52"], D["gpu_env"]
+    assert len(R46) == 300 and len(R52) == 1000 and len(F52) == 300 and len(ENV) == 1000
+
+    def mean(a):
+        return sum(a) / len(a)
+
+    def roll(a, k=50):
+        out = []
+        for i in range(len(a)):
+            lo = max(0, i - k + 1)
+            out.append(mean(a[lo:i + 1]))
+        return out
+    m52_300, m52_1k, m46, mf = mean(R52[1:300]), mean(R52[1:]), mean(R46[1:]), mean(F52[1:])
+    pos52 = sum(1 for v in R52[1:] if v > 0) / 999.0
+    assert abs(m52_300 - 1.66e-5) < 0.05e-5 and m46 < 0.2e-5 and pos52 > 0.9, (m52_300, m46, pos52)
+    E = lambda v: N.tx(v, "%.1e", plus=True)
+    f = Fig(W, "横轴是训练步，第 1 到 1000 步；纵轴是主 loss 对同一运行库版本的基准的逐步相对差。灰带是 GPU 同设置 16 份两两在每一步的最大差。"
+               "红线是运行库 0.0.52 上的 RMSNorm 多舍一次，细线逐步、粗线 50 步平均：粗线从第 50 步前后起一直在零上面，第 2–1000 步平均 %s，95%% 的步为正。"
+               "蓝线是同一个改动在 0.0.46 上（只跑了 300 步），平均 %s，贴着零。橙线是 0.0.52 上只让最后一层真舍两次，300 步平均 %s，跟红线几乎重合。"
+               % (E(m52_1k), E(m46), E(mf)))
+    y0 = f.header("RMSNorm 多舍一次：0.0.46 上贴着零，0.0.52 上一直在零上面",
+                  "纵轴 ＝ 主 loss 逐步相对差（被测 − 同版本基准）÷ 基准；灰带 ＝ GPU 16 份两两每步最大差；粗线 ＝ 50 步平均",
+                  [(RD, "0.0.52 多舍一次（1000 步）"), (BL, "0.0.46 多舍一次（300 步）"), (OR, "0.0.52 只让最后一层舍两次（300 步）"), ("#dadce0", "GPU 重跑每步最大差")])
+    PH = 380
+    py = f.panel(0, y0, W, PH, "第二次迁移小尺寸，TPU v5p FSDP 8，主 loss 逐步（实测）", RD)
+    X0, X1 = 150, W - 60
+    LO, HI = -8e-5, 8e-5
+    Y0, Y1 = py + PH - 60, py + 30
+    def X(st):
+        return X0 + (st - 1) / 999.0 * (X1 - X0)
+    def Y(v):
+        v = max(min(v, HI), LO)
+        return Y0 - (v - LO) / (HI - LO) * (Y0 - Y1)
+    band_up = " ".join("%.1f,%.1f" % (X(i + 1), Y(e)) for i, e in enumerate(roll(ENV, 5)))
+    band_dn = " ".join("%.1f,%.1f" % (X(i + 1), Y(-e)) for i, e in reversed(list(enumerate(roll(ENV, 5)))))
+    f.p.append('<polygon points="%s %s" fill="#e8eaed" stroke="none"/>' % (band_up, band_dn))
+    for v in (-5e-5, 0, 5e-5):
+        f.line(X0, Y(v), X1, Y(v), GY2 if v == 0 else LINE, 1.2 if v == 0 else 0.8, arrow=False)
+        f.t(X0 - 8, Y(v) + 4, N.tx(v, "%.0e", plus=True) if v else "0", GY, size=12, anchor="end")
+    for st in (1, 250, 500, 750, 1000):
+        f.t(X(st), Y0 + 24, "第 %d 步" % st, GY, size=12, anchor="middle")
+    def line(a, col, w, op=1.0, step=1):
+        f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="%s" stroke-opacity="%s"/>'
+                   % (" ".join("%.1f,%.1f" % (X(i + 1), Y(v)) for i, v in enumerate(a) if i % step == 0), col, w, op))
+    line(R52, RD, 0.7, 0.35, 2)
+    line(R46, BL, 0.7, 0.35)
+    line(roll(R46), BL, 3)
+    line(roll(F52), OR, 2.4)
+    line(roll(R52), RD, 3.2)
+    f.t(X(1000) - 6, Y(roll(R52)[-1]) - 14, "0.0.52：平均 %s" % E(m52_1k), RD, True, 13, "end")
+    f.t(X(300) + 8, Y(roll(R46)[-1]) + 18, "0.0.46：平均 %s" % E(m46), BL, True, 13)
+    f.t(X(300) + 8, Y(roll(F52)[-1]) - 12, "只动最后一层：%s" % E(mf), OR, True, 13)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "warn", "同一个改动，换运行库从「贴着零」变成「一直偏高」：0.0.52 上第 2–1000 步 95% 的步在零上面", [
+        "每一步都在 GPU 重跑的灰带里，单步看不出；偏在方向一致，所以带符号均值是尺子的好几倍（300 步 r %s，1000 步 %s）。" % (N.LIB_RMS_R_T, N.LIB_RMS_R1K_T),
+        "只让最后一层真舍两次，橙线跟红线几乎重合：要紧的就是输出头前那一层。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8，每个改动对同版本的基准运行）：0.0.52 第 2–300 步平均 %s、第 2–1000 步 %s；0.0.46 第 2–300 步 %s；0.0.52 只让最后一层舍两次第 2–300 步 %s。灰带：GPU 同设置 16 份两两 120 对，每一步取最大 |dₜ|，再 5 步平滑。"
+               % (E(m52_300), E(m52_1k), E(m46), E(mf)),
+               "⚠️ 每条线都是单份运行；灰带只用来看单步幅度，判档仍按窗口统计量对尺子。")
+    f.save("fig8-rms52.svg", yb + 14)
+
+
 fig_temper()
 fig_libtpu()
 fig_rms2r()
+fig_rms52()

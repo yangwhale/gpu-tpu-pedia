@@ -257,7 +257,7 @@ code{white-space:normal !important;overflow-wrap:anywhere;word-break:break-all}
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动；放动画那一步按片长算。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,691</td><td>5</td><td>9.7′</td><td>10′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>1,169</td><td>3</td><td>6.6′</td><td>7′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,629</td><td>12</td><td>16.3′</td><td>17′</td></tr><tr><td>第四节　指标（二）：张量</td><td>1,961</td><td>9</td><td>12.3′</td><td>12′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>2,345</td><td>12</td><td>15.1′</td><td>15′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>678</td><td>3</td><td>4.1′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,914</td><td>10</td><td>12.3′</td><td>12′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,451</td><td>7</td><td>9.2′</td><td>9′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,107</td><td>8</td><td>7.5′</td><td>7′</td></tr><tr><td>第十节　工程化与教训</td><td>1,227</td><td>5</td><td>7.4′</td><td>7′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>101′</b></td><td><b>100′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,691</td><td>5</td><td>9.7′</td><td>10′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>1,169</td><td>3</td><td>6.6′</td><td>7′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,646</td><td>12</td><td>16.4′</td><td>17′</td></tr><tr><td>第四节　指标（二）：张量</td><td>1,961</td><td>9</td><td>12.3′</td><td>12′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>2,345</td><td>12</td><td>15.1′</td><td>15′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>678</td><td>3</td><td>4.1′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,919</td><td>10</td><td>12.3′</td><td>12′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,451</td><td>7</td><td>9.2′</td><td>9′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,107</td><td>8</td><td>7.5′</td><td>7′</td></tr><tr><td>第十节　工程化与教训</td><td>1,227</td><td>5</td><td>7.4′</td><td>7′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>101′</b></td><td><b>100′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把四条暗线记在心里</h3>
@@ -494,7 +494,7 @@ TPU 要是照抄配置文件，每一步多衰减三倍，而且不报任何错�
 
 <p class="say">「盲区也在这里，三条。一，范数只看长度，方向变了看不见。二，一组参数多涨、另一组少涨，平方和不变，相反的偏差会抵消。三，全模型的范数被大张量主导，归一化权重、偏置这些小张量上的错几乎看不见。」</p>
 
-<p class="say">「loss 也有盲区。它是结果，只影响一部分梯度的小错要很大才显：MTP，就是多 token 预测，顺带预测后面几个词的那项辅助 loss。它的权重多乘 1.01，也就是相对偏 1e-2，主 loss 上才刚看得出来。」</p>
+<p class="say">「loss 也有盲区。它是结果，只影响一部分梯度的小错要很大才显：MTP，就是多 token 预测，顺带预测后面几个词的那项辅助 loss。它的权重只偏 1e-3，记下的 MTP loss 自己就是噪声的五十倍，主 loss 上还看不出来，r 零点八八；偏到 1e-2 主 loss 才看得出。」</p>
 
 
 <p><b>▍五　N 怎么造、怎么判</b></p>
@@ -575,7 +575,7 @@ TPU 要是照抄配置文件，每一步多衰减三倍，而且不报任何错�
 </div>
 <p class="board sub">🖥 本节主屏：课件 <a href="topic-08.html#s三">第三节　指标（一）：逐步序列</a>　·　主图 <code>fig-dt</code></p>
 </div>
-<h2 class="part" id="part2">第二次课：定责与硬件（第四到六节，约 31′）</h2>
+<h2 class="part" id="part2">第二次课：定责与硬件（第四到六节，计划 31′）</h2>
 <p class="board"><b>🖥 屏幕</b>：投屏前按 T 收起正文，滚到第四节。</p>
 <h3 class="sec" id="c3">第四节　指标（二）：张量（12′）</h3>
 <div class="say">
@@ -879,7 +879,7 @@ TPU 上的程序由 XLA，也就是 TPU 用的编译器，整张图一起编译�
 </div>
 <p class="board sub">🖥 本节主屏：课件 <a href="topic-08.html#s六">第六节　观测：在 TPU 上怎么看</a>　·　主图 <code>fig-hooks</code></p>
 </div>
-<h2 class="part" id="part3">第三次课：两个案例与守住（第七到十节，约 35′）</h2>
+<h2 class="part" id="part3">第三次课：两个案例与守住（第七到十节，计划 35′）</h2>
 <p class="board"><b>🖥 屏幕</b>：投屏前按 T 收起正文，滚到第七节。</p>
 <h3 class="sec" id="c6">第七节　案例一：loss 偏低，查到是谁的差（12′）</h3>
 <div class="say">
@@ -917,7 +917,7 @@ TPU 上的程序由 XLA，也就是 TPU 用的编译器，整张图一起编译�
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-gauge</code>，左边粗箭头，右边那条线。</p>
 
-<p class="say">「输出层每行有一个共同的平均方向。隐状态沿它挪一点，所有词的 logits 一起升降。softmax 看不见整体平移，可冷门行被压多少，看的正是这个整体水平。右边是 TPU 的 lse 减 GPU 的，一步步往下：TPU 的 logits 整体水平越来越低，第三百步低零点二一八，这是 lse 的绝对差。」</p>
+<p class="say">「输出层每行有一个共同的平均方向。隐状态沿它挪一点，所有词的 logits 一起升降。softmax 看不见整体平移，可冷门行被压多少，看的正是这个整体水平。右边是 TPU 的 lse 减 GPU 的，锯齿着总体一路往下：TPU 的 logits 整体水平越来越低，第三百步低零点二一八，这是 lse 的绝对差。」</p>
 
 <p><b>▍四　是这股力；谁推歪了</b></p>
 
@@ -955,7 +955,7 @@ TPU 上的程序由 XLA，也就是 TPU 用的编译器，整张图一起编译�
 
 <p class="board"><b>🖥 屏幕</b>：静态链图先滚过，直接到 <code>anim-chain</code>，取消「连续播放」，一步一步点到最后一步再讲。</p>
 
-<p class="say">「从源头串回来：GPU 那次求和每步少推一点，主干沿那个方向少走一点，GPU 的 logits 整体偏高，冷门行压得更狠，参数范数小、loss 高。看底下的时钟：前两环每步一样，后三环一步步积起来。」</p>
+<p class="say">「从源头串回来：GPU 那次求和每步少推一点，主干沿那个方向少走一点，GPU 的 logits 整体偏高，冷门行压得更狠，参数范数小、loss 高。看底下的时钟：前两环每步一样，后面几环随步数积起来。」</p>
 
 <p class="say">「这个案例偏的是 GPU。下一个案例两边都在 TPU 上：同一份代码只换并行方式，数学上等价，曲线却对不上。这回又是谁的差？」</p>
 

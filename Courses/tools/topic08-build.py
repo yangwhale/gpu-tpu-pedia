@@ -571,7 +571,7 @@ __FIG_INTEGRATOR__
   <details class="foldfig"><summary><b>盲区表</b>：范数、loss、路由偏置各抓什么、看不见什么</summary>
   <table class="t9"><thead><tr><th>被比的量</th><th>抓什么</th><th>盲区</th></tr></thead><tbody>
   <tr><td>参数范数、梯度范数</td><td>攒出来的固定方向的偏，最先有反应</td><td>只是一个长度：方向变了、一组多涨一组少涨看不出；被大张量主导，归一化权重、偏置上的错几乎看不见</td></tr>
-  <tr><td>loss（各项分开）</td><td>训练效果变没变</td><td>只对很大的局部错才显（MTP 那一项权重多乘 1.01，才在主 loss 上看得出）</td></tr>
+  <tr><td>loss（各项分开）</td><td>训练效果变没变</td><td>只对很大的局部错才显（MTP 那一项权重偏 1e-3 时，MTP loss 本身 r 50，主 loss 只有 0.88；偏到 1e-2 主 loss 才 6.2）</td></tr>
   <tr><td>路由偏置均值、标准差</td><td>路由负载的漂移</td><td>均值在 0 附近来回穿，过零时 dₜ 和 N 一起放大，只抓得到大的语义差</td></tr>
   </tbody></table>
   </details>
@@ -1512,6 +1512,8 @@ __FIG_LIBTPU__
   </ul>
   <p><b>所以换版本不能当成「只换了加法顺序」</b>：JAX 交出的是同一份程序，编译器优化后的程序（v5p、v7x 各种并行一共 113 项、去重后 103 份配置，编出的程序在两个版本下全部不同）和后端的代码生成都一起换了。</p>
   <p class="codeline">''' + code("models/hunyuan4/alignments/04-tpu-self/libtpu-052.md", "升运行库 0.0.52 的三步与全部结果") + '''</p>
+  <p>逐步看，RMSNorm 那件在 0.0.52 上是真的「一直偏高」，不是一两步的尖峰：</p>
+__FIG_RMS52__
   <p>RMSNorm 那件变强，是因为 0.0.52 挡住了一次融合，两次舍入都真舍了，而第二次的输入已经在格点上，结果系统偏小。</p>
   <details class="foldfig"><summary><b>RMSNorm 那件为什么变强</b>：两次舍入为什么系统偏小（图、机理）</summary>
   <p><b>RMSNorm 那件为什么变强</b>（v5p、FSDP 8 上查清）：默认写法是先把归一化值舍成 BF16、乘 γ 再舍一次。运行库 0.0.46 上，最后一层的这一段融在一颗 kernel 里，中间那次被省掉，实际只舍一次；0.0.52 在定内存布局时给归一化值插了一次布局转换，挡住了融合，两次舍入都真发生了：</p>
@@ -1927,6 +1929,8 @@ FIGS = {
         '<b>上一条先加后传，下一条先传后加；下面那次加法收了 32768 个下标。</b><br><em>形状读自编译后的程序。</em>'),
     "__FIG_RMW__": ("fig-rmw", "fig8-rmw.svg", "topic08-fig-ddp.py",
         '<b>左边数红框：不排序每次都舍，排序只舍一次；中间只有一格绿。</b><br><em>右块红柱随次数涨，绿柱不动。</em>'),
+    "__FIG_RMS52__": ("fig-rms52", "fig8-rms52.svg", "topic08-fig-temper.py",
+        '<b>红粗线一直在零上面，蓝粗线贴着零；橙线跟红线重合。</b><br><em>每一步都在灰带里，偏在方向一致；单份运行，实测。</em>'),
     "__FIG_RMS2R__": ("fig-rms2r", "fig8-rms2r.svg", "topic08-fig-temper.py",
         '<b>左上两排只差一个虚线框：0.0.52 把归一化值单独写回了内存。右上 γ 贴近 1 时偏得最多；下面只动最后一层就开关这件事。</b><br><em>Ⓐ Ⓒ 实测；Ⓑ 是推导配 FP64 实测。</em>'),
     "__FIG_IHCROOT__": ("fig-ihcroot", "fig8-ihcroot.svg", "topic08-fig-mig2.py",
