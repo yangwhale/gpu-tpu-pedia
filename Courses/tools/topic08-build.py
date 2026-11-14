@@ -84,7 +84,10 @@ table.ftab tr.fgrp span{color:var(--gray);font-size:13px}
 </style>"""
 head += """<style>
 .adamcard{border:2px solid var(--line);border-radius:12px;padding:14px 18px;margin:16px 0;background:#fff}
-.adamcard .af{font-size:34px;font-weight:700;text-align:center;letter-spacing:1px;margin:6px 0 4px}
+.adamcard .af{font-size:30px;font-weight:700;text-align:center;letter-spacing:1px;margin:6px 0 4px}
+.adamcard .aw{font-size:17px;margin:4px 0;font-family:inherit}
+.adamcard .aw .k{display:inline-block;width:7.5em;color:var(--gray);font-size:14px;font-weight:600}
+.adamcard .aw em{color:var(--gray);font-size:13px;font-style:normal}
 .adamcard .asub{text-align:center;color:var(--gray);font-size:14px;margin:0 0 10px}
 .adamcard .acases{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
 .adamcard .acases div{border-left:4px solid var(--line);padding:6px 10px;font-size:15px}
@@ -242,8 +245,14 @@ def _vrow(name, rows, v):
 
 
 ADAM_CARD = (
-    '\n  <div class="adamcard">\n  <div class="af">u ＝ m̂ ÷ (√v̂ ＋ ε)</div>\n'
-    '  <p class="asub">m̂：梯度的滑动平均　√v̂：梯度平方的滑动平均开根号，大致就是「梯度有多大」　ε ＝ ' + N.sci(N.EPS) + '：分母上防除零的小常数</p>\n'
+    '\n  <div class="adamcard">\n'
+    '  <div class="aw"><span class="k">0　裁剪</span>g ← g × min(1, ' + N.CLIP_GRAD_T + ' ÷ ‖g‖)　<em>（全部梯度按全局范数先裁剪，再进 Adam）</em></div>\n'
+    '  <div class="aw"><span class="k">1　两个本子</span>m<sub>t</sub> ＝ β₁·m<sub>t−1</sub> ＋ (1 − β₁)·g<sub>t</sub>　　v<sub>t</sub> ＝ β₂·v<sub>t−1</sub> ＋ (1 − β₂)·g<sub>t</sub>²　<em>（逐元素平方）</em></div>\n'
+    '  <div class="aw"><span class="k">2　偏差修正</span>m̂ ＝ m<sub>t</sub> ÷ (1 − β₁<sup>t</sup>)　　v̂ ＝ v<sub>t</sub> ÷ (1 − β₂<sup>t</sup>)</div>\n'
+    '  <div class="af">θ ← θ − lr · [ m̂ ÷ (√v̂ ＋ ε) ＋ λ·θ ]</div>\n'
+    '  <p class="asub">本例：β₁ ＝ ' + str(N.BETA1) + '，β₂ ＝ ' + str(N.BETA2) + '，ε ＝ ' + N.sci(N.EPS) + '（加在开根号之后），lr ＝ ' + N.sci(N.LR) + ' 常数，λ ＝ ' + str(N.WD_EFFECTIVE)
+    + '（解耦的权重衰减；一维参数如 norm 权重、偏置不衰减）。下文 u ＝ m̂ ÷ (√v̂ ＋ ε)：√v̂ 大致就是「梯度有多大」，ε 是分母上防除零的小常数。'
+    '旁注：梯度长期稳定时 m̂ ≈ g、√v̂ ≈ |g|，u ≈ g ÷ (|g| ＋ ε)，只看形状（下面那张图就是它）。</p>\n'
     '  <div class="acases">\n'
     '    <div><b>梯度够大，ε 等于没有</b><br>√v̂ ＝ 1e-6 时，ε 只占分母的 1%；u 几乎就是 m̂ ÷ √v̂，梯度大小约掉，步子都差不多大</div>\n'
     '    <div><b>梯度很小，ε 变成一个把更新压小的开关</b><br>压小倍数 ＝ (√v̂ ＋ ε) ÷ √v̂；√v̂ 比 ε 小，就压小 2 倍以上，u ≈ m̂ ÷ ε，更新跟梯度成正比</div>\n'
