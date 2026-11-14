@@ -307,7 +307,7 @@ def fig_inout():
         f.box(x, py + 16, w, 30, "#fce8e6", RD, 5)
         f.t(x + w / 2.0, py + 36, name, RD, True, 13, "middle")
         x += w + 8
-    f.t(20, py + 68, "往里投的 7 种：R %s（≈ √2）" % N.M3_PROJ_R_T, RD, True, 14)
+    f.t(20, py + 68, ("往里投的 7 种：TPU 离 FP64 %.2e、GPU %.2e → R %s（≈ √2）" % (N.M3_PROJ_TPU, N.M3_PROJ_GPU, N.M3_PROJ_R_T)).replace("e-0", "e-"), RD, True, 14)
     x2 = 980
     for name in N.M3_MISS:
         w = wpx(name, 13) * MONO_K + 22
@@ -825,7 +825,7 @@ def fig_captain():
     px = LW + 20
     py2 = f.panel(px, y0, W - px, PH, "病态还是 bug：问四件事（实测）", GR)
     qs = [("① 它的输入，两边离参照一样近？", "三组输入：R %s" % N.KD_IN_R),
-          ("② 由它出发的梯度，两边一样近？", "20 个张量：R %s" % N.KD_GRAD_R),
+          ("② 由它出发的梯度，两边一样近？", "20 个张量：R %s（最大那个 GPU 6.81e-3、TPU 7.14e-3）" % N.KD_GRAD_R),
           ("③ 大数相减剩小数、差在一两格内？", "lse 对 FP64：平均 %s 格" % N.KD_LSE_TPU_ULP_T),
           ("④ 那一格是谁的？同样的计算换 CPU 算", "CPU（PyTorch）−0.004 格，TPU %s 格" % N.KD_LSE_TPU_ULP_T)]
     for i, (q, a) in enumerate(qs):

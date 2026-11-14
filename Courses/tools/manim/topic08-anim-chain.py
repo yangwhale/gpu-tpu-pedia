@@ -15,7 +15,8 @@ r"""专题八「GPU→TPU 训练精度对齐」§8.6 串起来：五环一条链
        0.36% 是这个误差（连同 GPU 其余 BF16 误差）传到「每一步怎么更新参数」以后的结果 —— 正是 ② 这一环说的事；
        挪到 ① 下面反而会被读成 dgrad 的误差就是 0.36%。所以只改标签：「整步沿漂移方向少走 / 全体参数，同一状态实测」。
     「主干里大头在第 0 层注意力输出投影」出自 fig8-chain 的出处栏（实测，换权重重算）。
-  · ③ LSE_PROBE：固定探针 lse 差（TPU − GPU），第 25/50/100/300 步四个实测点；灰点 ＝ 第三列 GPU 两次之间。
+  · ③ topic08_lse_probe.json：固定探针 lse 差（TPU − GPU），每 25 步一个实测点（第 25–300 步共 12 个）；灰点 ＝ GPU 两次之间。
+    数字标签只在第 25/50/100/300 步出现（LSE_PROBE，跟 fig-gauge 同一组数）。
     第 0 步两边是同一份权重，差记为 0（本课推导，不是测出来的点）。
   · ④ ROWS_300 第一行：没出现过的词，第 300 步输出层平方和 TPU − GPU ＋17.1（实测）。
     这一环原先（fig8-chain 初版）标「推断」，2026-11-05 改为实测：第 300 步同一步测量，没出现过的词那几行
@@ -27,9 +28,9 @@ r"""专题八「GPU→TPU 训练精度对齐」§8.6 串起来：五环一条链
        （对另一份同设置的 GPU 运行，合计 4.39e-3）。画面上两行都留，第二行注明「另测一对，合计 4.4e-3」。
     loss 偏低「一起出现、一起消失」是干预实测；它为什么跟着变，机制未验证。
 
-⚠️ 中间帧是插值示意：
-  · ③ 只有 4 个实测点，点与点之间连直线（时钟走到哪，线就画到哪）；数字只在走过实测点时更新，不显示插出来的数。
-  · ④ 只有第 300 步一个实测值，柱子从 0 线性长到 ＋17.1 是示意；数字只在第 300 步出现。
+⚠️ 画法（2026-11-15 第二轮：随步数的量不画插值示意）：
+  · ③ 每 25 步一个实测点，点与点之间连直线；领头的白点在两个实测点之间走，只是时钟位置，数字只在走过实测点时更新。
+  · ④ 只有第 300 步一个实测值，所以不画逐步长高的柱：时钟走到第 300 步，柱子和数字一起出现。
   · ⑤ 是逐步实测，不插值。
   · ①② 是「每一步」的量，不随步数累积，所以不画增长。
 
@@ -71,9 +72,12 @@ assert N.HEAD_BF16_S1 < 0 and N.HEAD_BF16_S100 < 0                           # �
 SWAP_GPU = [v for lab, v, _ in N.SWAP if lab == "GPU 生产程序"][0]
 assert SWAP_GPU < 0 and "%.2f" % abs(SWAP_GPU) == "0.36"
 S_END = 300
-LSE_PTS = [(0, 0.0, 0.0)] + list(N.LSE_PROBE)                                # (步, TPU−GPU, GPU 两次之间)
-assert [p[0] for p in LSE_PTS] == [0, 25, 50, 100, 300]
-assert all(LSE_PTS[i][1] > LSE_PTS[i + 1][1] for i in range(4))             # 单调往下长：论点是「积起来」
+import json as _json, os as _os
+_LP = _json.load(open(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "topic08_lse_probe.json"), encoding="utf-8"))
+LSE_PTS = [(0, 0.0, 0.0)] + [(st, v, g) for st, v, g in zip(_LP["步"], _LP["TPU减GPU"], _LP["GPU两次之间"]) if 25 <= st <= 300]   # (步, TPU−GPU, GPU 两次之间)
+assert [p[0] for p in LSE_PTS] == [0] + list(range(25, 301, 25))
+assert LSE_PTS[-1][1] < LSE_PTS[4][1] < LSE_PTS[1][1]                       # 总体往下长：论点是「积起来」
+assert all(abs(dict((a, b) for a, b, _ in LSE_PTS)[st] - v) < 6e-4 for st, v, _ in N.LSE_PROBE)   # 跟标签那 4 个数同一组
 assert all(abs(g) < abs(v) for _, v, g in N.LSE_PROBE[1:])                   # 第 50 步起 GPU 自己小得多
 RARE_LAB, RARE_300 = N.ROWS_300[0]
 # ④ 改实测的依据（第 300 步，没出现过的词那几行；实测；待并入 topic08_numbers.py）
@@ -244,7 +248,7 @@ class DriftChain(Scene):
         panels.append(col(0, [("每一步少推", 17, GREY_B, False), (HEAD1_E, 32, RED, True),
                               ("沿 w̄（第 1 步实测）", 15, GREY_B, False), ("第 100 步：" + HEAD100_E, 15, GREY_B, False),
                               ("→ 每一步都少推，量级一样", 15, WHITE, False)], y0=[1.2, 0.7, 0.2, -0.15, -0.55]))
-        panels.append(col(1, [("整步沿漂移方向少走", 17, GREY_B, False), ("%.2f%%" % abs(SWAP_GPU), 32, ORANGE, True),
+        panels.append(col(1, [("整步沿漂移方向少走", 17, GREY_B, False), (("%.1fe-3" % (abs(SWAP_GPU) * 10)), 32, ORANGE, True),
                               ("全体参数，同一状态实测", 15, GREY_B, False), ("主干里大头：第 0 层", 15, GREY_B, False),
                               ("注意力的输出投影", 15, GREY_B, False)], y0=[1.2, 0.7, 0.2, -0.15, -0.5]))
         # ③ 小图框架
@@ -304,13 +308,13 @@ class DriftChain(Scene):
             pts = [(sx(2, p[0]), self_y3(p[1])) for p in LSE_PTS if p[0] <= s]
             pts.append((sx(2, s), self_y3(lse_at(s))))
             g.add(poly(pts, COL_DIFF, 4).set_stroke(opacity=lit[2]))
-            for ps, v, gg in N.LSE_PROBE:
+            for ps, v, gg in LSE_PTS[1:]:
                 if ps <= s + 1e-6:
                     g.add(Dot([sx(2, ps), self_y3(v), 0], radius=0.05, color=COL_DIFF).set_opacity(lit[2]))
                     g.add(Dot([sx(2, ps), self_y3(gg), 0], radius=0.04, color=GREY).set_opacity(lit[2]))
             g.add(Dot([sx(2, s), self_y3(lse_at(s)), 0], radius=0.06, color=WHITE).set_opacity(lit[2]))
-            # ④ 柱子：线性插值示意
-            h = max((CH_TOP - 0.1 - CH_BOT) * clamp(s / S_END), 0.001)
+            # ④ 柱子：只有第 300 步一个实测值，走到才出现
+            h = (CH_TOP - 0.1 - CH_BOT) if s >= S_END - 1e-6 else 0.001
             g.add(Rectangle(width=bar_w, height=h, stroke_width=0, fill_color=COL_DIFF, fill_opacity=0.75 * lit[3])
                   .move_to([bar_x, CH_BOT + h / 2, 0]))
             # ⑤ 逐步实测
@@ -338,7 +342,7 @@ class DriftChain(Scene):
         step_lab = always_redraw(lambda: tx("第 %d 步" % int(st()[1] + 1e-6), 17, YELLOW, True)
                                  .move_to([CLK_X0 + (CLK_X1 - CLK_X0) * st()[1] / S_END, CLK_Y + 0.45, 0]))
         self.add(step_lab)
-        foot = tx("灰色 ＝ GPU 两次之间；刻度上白色 ＝ 探针实测的那几步；③ 实测点之间连直线，④ 柱子中间是插值示意，⑤ 是逐步实测", 14, GREY).move_to([0, -3.62, 0])
+        foot = tx("灰色 ＝ GPU 两次之间；刻度上白色 ＝ ③ 标出数字的那几步；③ 每 25 步一个实测点，④ 只有第 300 步一个实测值，⑤ 是逐步实测", 14, GREY).move_to([0, -3.62, 0])
         self.add(foot)
 
         # ── 字幕：建一次，按区间切透明度 ─────────────────────────────
