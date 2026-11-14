@@ -9217,7 +9217,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="24" y="326" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合计减输出层</tspan></text>
 <rect x="150" y="302" width="42.09567198177675" height="40" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="202" y="328" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.60e-4</tspan></text>
-<text class="svgsm" x="24" y="422" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">合计 4.39e-03；下面那一截大半是按组线性拆分的残差，不是别的参数组的贡献；GPU 两次之间输出层只差 6e-6</text>
+<text class="svgsm" x="24" y="444" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">合计 4.39e-3；GPU 两次之间输出层只差 6e-6</text>
 <text class="svgsm" x="290" y="344" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出层贡献随步数（3 个实测点）</tspan></text>
 <path d="M 300.00 386.31 L 400.00 373.35 L 500.00 355.53" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
 <rect x="296.0" y="382.31" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -9253,7 +9253,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="466" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="466" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="493" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 上冷门词的行被压得少：从初值算起 GPU 缩了 66.3，TPU 只缩了 49.2</tspan></text>
-</svg><figcaption><b>左边一根独大，右边第一根独大。</b><span class="capmore"><br><em>灰色细条是噪声，短到几乎看不见。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：分组参数平方和、逐行平方和都按 FP32 主权重算，两边组名一致；第 100 / 200 / 300 步输出层贡献 ＋4.10e-4 / ＋1.85e-3 / ＋3.83e-3，逐步变大。</p>
+</svg><figcaption><b>左边一根独大，右边第一根独大。</b><span class="capmore"><br><em>灰色细条是噪声，短到几乎看不见。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：分组参数平方和、逐行平方和都按 FP32 主权重算，两边组名一致；「合计减输出层」那一截大半是按组线性拆分的残差，不是别的参数组的贡献；第 100 / 200 / 300 步输出层贡献 ＋4.10e-4 / ＋1.85e-3 / ＋3.83e-3，逐步变大。</p>
 <p>📌 换算（本课推导）：参数范数 ＝ √S（S ＝ 全部参数平方和），S 多出 ΔS 时参数范数多出约 ΔS ÷ (2 × 参数范数)。输出层平方和差合计 ＋23.2 ÷（2 × 3042）≈ 3.81e-3，跟左边输出层的 3.83e-3 差约 0.4%。</p>
 <p>📌 实测：没出现过的词那些行，√v̂ 均值两边只差 0–4%，Adam 更新的大小只差 1%–3%；Σ w·u（更新在这一行权重方向上的分量，加起来）从第 25 步起就分开。</p></details></figure>
   <p>这里只说两边不一样，不说谁对；哪一边偏，<a href="#s7-5">§7.5</a> 才知道。为什么偏偏是冷门词，先看 Adam 怎么算一步：</p>
