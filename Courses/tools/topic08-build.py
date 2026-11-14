@@ -301,7 +301,7 @@ R4_CARD = (
     '  <div class="aw"><span class="k">2　拿到梯度</span>g ＝ m₁ ÷ (1 − β₁) ÷ 裁剪系数　<em>（第 1 步从一阶动量倒推，β₁ ＝ 0.9）</em></div>\n'
     '  <div class="aw"><span class="k">3　对基线</span>d ＝ rel_L2(被测, 基线) ÷ 尺子　<em>（尺子 ＝ GPU 第 1 步重跑几份两两的最大差，下限 2⁻²⁰）</em></div>\n'
     '  <div class="af long">R ＝ rel_L2(被测, FP64) ÷ max(rel_L2(基线, FP64), GPU 几份离 FP64 的中位数)</div>\n'
-    '  <p class="asub">多出一份同量级、互相独立的舍入误差，误差平方相加：R ≈ √2 ≈ 1.41，所以线画在两者之间的 1.2</p>\n'
+    '  <p class="asub">这是 TPU 自比的写法。GPU 搬 TPU 时没有基线那一项：R ＝ TPU 离 FP64 ÷ GPU 六份离 FP64 的中位数。多出一份同量级、互相独立的舍入误差，误差平方相加：R ≈ √2 ≈ 1.41，所以线画在两者之间的 1.2</p>\n'
     '  <div class="aw"><span class="k">4　路由翻转</span>R_flip ＝ rel_L2(被测, FP64 用<b>被测自己选的</b>专家) ÷ 同一个分母　<em>（R_flip ≤ 1.2 且比不灌时更近 → 记「路由翻转」，不算丢精度；分母不换，换了就等于给翻转放宽尺子）</em></div>\n'
     '  <div class="acases">\n'
     '    <div><b>超出尺子、R ≤ 1.2：只是换了加法顺序</b><br>平台固有，记在刻度内，不修</div>\n'
@@ -399,7 +399,7 @@ __FIG_FUNNEL__
   <tr><td>TPU</td><td>3 种跑法；扰动臂 «ARMS_KEPT» 个＋基线，«CAL_PAIRS» 对</td><td>第一节的三个点；TPU 自己的执行噪声（§10.3 的回归）</td></tr>
   <tr><td>TPU 扰动组（定案后）</td><td>«ENSEMBLE_RUNS» 份（v5p «ENSEMBLE_V5P»、v7x «ENSEMBLE_V7X»），只改执行参数</td><td>§9.4 只报：TPU 不是挑出来的好样本</td></tr>
   </tbody></table></details>
-  <p>编号先不用记，只记最后定下来的标准答案叫「修好的 golden」（表里标 ⑤，第九节讲它怎么来的）；用到别的那几份时会说名字。</p>
+  <p>编号先不用记，只记最后定下来的标准答案叫「修好的 golden」（表里标 ⑤，第九节讲它怎么来的）；用到别的那几份时会说名字。下文的「第一关」＝对修好的 golden 判过不过；「第二关」＝对 GPU 生产 golden 写清差在哪、差多少，记「已解释差异」（§9.3）。</p>
   <p>开头说的「第二次迁移」（混元 4 的缩小版）和「第三次迁移」（混元 4 的另一个尺寸），用到时再介绍。</p>
 
   <div class="note"><span class="t">后面常出现的三个词，先认个脸</span>
