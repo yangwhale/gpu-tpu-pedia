@@ -1950,7 +1950,7 @@ FIGS = {
     "__FIG_MTPGRID__": ("fig-mtpgrid", "fig8-mtpgrid.svg", "topic08-fig-fp.py",
         '<b>红点过了中点往右舍，蓝点没到中点往左舍；灰点跟红点在同一个位置。</b><br><em>本课复算，p_y ＝ 1e-5。</em>'),
     "__FIG_RMS52__": ("fig-rms52", "fig8-rms52.svg", "topic08-fig-temper.py",
-        '<b>红粗线一直在零上面，蓝粗线贴着零；橙线跟红线重合。</b><br><em>单步约七成在灰带里，看得出的是方向一致；单份运行，实测。</em>'),
+        '<b>红粗线一直在零上面，蓝粗线 300 步在噪声里（末尾略往上翘，更长没有数据）；橙线跟红线重合。</b><br><em>单步约七成在灰带里，看得出的是方向一致；单份运行，实测。</em>'),
     "__FIG_RMS2R__": ("fig-rms2r", "fig8-rms2r.svg", "topic08-fig-temper.py",
         '<b>左上两排只差一个虚线框：0.0.52 把归一化值单独写回了内存。右上 γ 贴近 1 时偏得最多；下面只动最后一层就开关这件事。</b><br><em>Ⓐ Ⓒ 实测；Ⓑ 是推导配 FP64 实测。</em>'),
     "__FIG_IHCROOT__": ("fig-ihcroot", "fig8-ihcroot.svg", "topic08-fig-mig2.py",
