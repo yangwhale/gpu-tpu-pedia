@@ -1737,3 +1737,22 @@ assert ["%.2f" % (abs(a) / b) for _q, _s, a, b in CARD_R_ROWS] == ["1.85", "1.31
 # ── 2026-11-15 · fig-rratio 补两边离 FP64 的绝对值（对齐记录混元 3 v5p 单算子回放结果文件，qkv 那一条：TPU rel_l2 对自己输入的 FP64、GPU 同口径最大值；实测）──
 QKV_ABS_BEFORE, QKV_ABS_AFTER, QKV_ABS_GPU = 2.335e-3, 1.890e-3, 1.890e-3
 assert abs(QKV_ABS_BEFORE / QKV_ABS_GPU - R_QKV_BEFORE) < 0.002 and abs(QKV_ABS_AFTER / QKV_ABS_GPU - R_QKV_AFTER) < 0.002
+
+# ── 2026-11-15 · 图文 32K 的 MTP 偏差：MTP 头梯度舍 BF16 之前乘的系数不同（对齐记录第三次迁移知识库「MTP 偏差」页；实测）──
+M3_MH_TPU_RANGE, M3_MH_GPU_RANGE = (2.07e-5, 3.23e-5), (0.15e-5, 0.69e-5)   # 12 份 TPU ／ 7 份 GPU 对基线，MTP 1000 步带符号均值
+M3_MH_N = 60915                                  # 那一步主 loss 的 token 数
+M3_MH_GRID = (0.099609375, 0.10009765625)        # 0.1 附近两个 BF16 格点
+assert bf16(0.1) == M3_MH_GRID[1] and M3_MH_GRID[1] - M3_MH_GRID[0] == 2 ** -11
+M3_MH_PY_CUT = 1 - (M3_MH_GRID[0] + M3_MH_GRID[1]) / 2 / 0.1               # p_y 小于它时 0.1·(1−p_y) 都舍到上面那个格点
+assert abs(M3_MH_PY_CUT - 1.46e-3) < 0.01e-3
+M3_MH_TERM = (9.8e-4, -1.53e-3)                  # 正确词那一项舍后：GPU（×0.1）偏大 ／ TPU（×0.1／N）偏小
+M3_MH_DY = (6.1e-4, -7.1e-4)                     # 传到输出头反向输入的比例差：GPU ／ TPU
+M3_MH_STEP1_SHIFT = (5e-5, 4e-4)                 # 同一状态一步，改在 GPU 尺度上舍，MTP 参数梯度沿 FP64 方向挪动的范围
+M3_MH_NOISE = 6.866e-6                           # 尺子：GPU 8 份两两最大
+M3_MH_OFF = (2.077e-5, 2.937e-5, 2.788e-5)       # 1000 步，不改（3 份）
+M3_MH_ON = (-1.058e-6, -3.803e-6, -4.656e-6)     # 1000 步，TPU 改在 GPU 的尺度上舍（3 份）
+assert ["%.2f" % (abs(v) / M3_MH_NOISE) for v in M3_MH_OFF] == ["3.03", "4.28", "4.06"]      # 对齐记录写 3.02（原始值四舍五入）
+assert ["%.2f" % (abs(v) / M3_MH_NOISE) for v in M3_MH_ON] == ["0.15", "0.55", "0.68"]
+assert max(abs(v) for v in M3_MH_ON) < min(M3_MH_OFF)                                  # 两组不重叠
+M3_MTPIN_1K = {"off": (3.02, 4.28, 4.06), "on": (4.50, 3.31, 5.16)}                     # MTP 输入那处开关 1000 步 3 对 3（倍尺子）：范围重叠
+assert min(M3_MTPIN_1K["on"]) < max(M3_MTPIN_1K["off"])
