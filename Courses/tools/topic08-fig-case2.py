@@ -159,7 +159,7 @@ def fig_intervene():
                "第一根：原样，TPU 对 GPU，loss −1.66e-4、参数范数 +0.021。"
                "第二根：两边都把那个方向的梯度去掉，再比：loss 尾段平均 −3.4e-5，接近噪声 —— 但这是前半 +4.9e-5、后半 −9.6e-5 正负抵消出来的，后半仍剩约六成；参数范数 +0.0061，还剩约三成。"
                "第三根：GPU 人为往这个方向多推一把，对不加的 GPU 比：loss −1.26e-4、参数范数 +0.0205，几乎复现了 TPU。"
-               "第三组：第 1000 步训练批上的 lse 差，原样约 −0.33，两边都去掉之后 −0.007，同设置 GPU 两次之间 −0.012；加力那组只跑过 300 步的 lse（−0.168，TPU 原样同步 −0.218），1000 步没有这一项。")
+               "第三组：第 1000 步训练批上的 lse 差，原样约 −0.33，两边都去掉之后 −0.007，同设置 GPU 两次之间 −0.012；加力那组只跑过 300 步，那时的 lse 是固定探针读数（−0.168，TPU 原样同一探针 −0.218），1000 步训练批上没有这一项。")
     y0 = f.header("去掉它：logits 水平差归零，loss 接近噪声，参数范数剩三成；加上它：差就回来了",
                   "柱长 ＝ 差有多大（零点 ＝ GPU 第一次运行）；灰色带 ＝ GPU 自己重跑的差（噪声），带边标了数",
                   [(BL, "原样：TPU 对 GPU"), (GR, "两边都去掉那个方向"), (OR, "GPU 人为多推一把，对 GPU 默认")])
@@ -175,14 +175,39 @@ def fig_intervene():
         for i, (v, c) in enumerate(bars):
             y = py + 40 + i * 78
             if v is None:
-                f.t(bx + 6, y + 26, "1000 步没有这一项（300 步时 −0.168）", GY, size=13)
+                f.t(bx + 6, y + 26, "1000 步没有这一项（300 步探针 −0.168）", GY, size=13)
                 continue
             L = max(abs(v) / vmax * bw, 3)
             f.box(bx, y, L, 40, c, c, 4)
             f.t(bx + L + 8, y + 26, fmt % v, c, True, 14)
         f.t(bx, py + 30 + 3 * 78 + 26, "灰色带 ＝ GPU 重跑的差 %s" % nlab, GY, size=12.5)
         f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "loss 偏移、参数范数漂移、logits 整体偏低，是同一股力的三个后果", [
+    # 第二轮：参数范数逐步差（三条线 ＋ 两条 GPU 重跑），撑住「去掉以后差没长出来、加上就回来」
+    import json as _j, os as _o
+    IV = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_intervene.json"), encoding="utf-8"))
+    assert abs(IV["orig"][-1] - N.TPU_PN_1000) < 0.05e-2 and abs(IV["remove"][-1] - N.REMOVE_PN) < 0.05e-3 and abs(IV["force"][-1] - N.FORCE_PN) < 0.05e-2
+    yP = y0 + PH + 14
+    PH2 = 266
+    pp = f.panel(0, yP, W, PH2, "参数范数差逐步（第 1–1000 步，绝对差，实测）", BL)
+    GX0, GX1, GY0, GY1 = 120, W - 260, pp + PH2 - 60, pp + 26
+    VMAX = 0.024
+    def GX(st):
+        return GX0 + (st - 1) / 999.0 * (GX1 - GX0)
+    def GYv(v):
+        return GY0 - max(min(v, VMAX), -0.002) / VMAX * (GY0 - GY1)
+    for v in (0, 0.01, 0.02):
+        f.line(GX0, GYv(v), GX1, GYv(v), GY2 if v == 0 else LINE, 1.1 if v == 0 else 0.8, arrow=False)
+        f.t(GX0 - 8, GYv(v) + 4, "%g" % v if v else "0", GY, size=12, anchor="end")
+    for st in (1, 250, 500, 750, 1000):
+        f.t(GX(st), GY0 + 22, "第 %d 步" % st, GY, size=12, anchor="middle")
+    for key, col, w in (("gpu_orig", "#bdc1c6", 1.6), ("gpu_remove", "#bdc1c6", 1.6), ("force", OR, 2.4), ("orig", BL, 2.6), ("remove", GR, 2.6)):
+        f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="%s"/>' % (" ".join("%.1f,%.1f" % (GX(i + 1), GYv(v)) for i, v in enumerate(IV[key]) if i % 2 == 0), col, w))
+    for key, col, lab in (("orig", BL, "原样：TPU 对 GPU"), ("force", OR, "GPU 人为多推一把"), ("remove", GR, "两边都去掉那个方向"), ("gpu_orig", GY, "GPU 重跑两份之间")):
+        v = IV[key][-1]
+        dy = {"orig": -8, "force": 12, "remove": 4, "gpu_orig": 4}[key]
+        f.t(GX1 + 10, GYv(v) + dy, "%s %s" % (lab, N.tx(v, "%.2e" if key != "gpu_orig" else "%.1e", plus=True)), col, True, 12.5)
+    f._pan = None
+    yb = f.band(yP + PH2 + 20, "ok", "loss 偏移、参数范数漂移、logits 整体偏低，是同一股力的三个后果；去掉它，参数范数的差一路长得慢得多", [
         "两边都去掉之后，loss 尾段平均几乎为零是正负抵消：前半（第 301–600 步）＋%s、后半（第 601–1000 步）%s，后半仍剩约六成。" % (N.sci(N.REMOVE_LOSS_H1), N.sci(N.REMOVE_LOSS_H2).replace("-", "−")),
         "代价：这两个开关改的是数学本身，只能拿来证明「是这股力」，不能放进 golden。参数范数还剩约三成没去掉：去掉的只是沿这个方向的那一份，剩下这截第九节的新账没有单独对上。",
     ])
