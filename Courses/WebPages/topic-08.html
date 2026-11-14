@@ -9586,7 +9586,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="732" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="732" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="759" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss 偏移、参数范数漂移、logits 整体偏低，是同一股力的三个后果；去掉它，参数范数的差一路长得慢得多</tspan></text>
-</svg><figcaption><b>绿柱缩回去（参数范数还剩三成），橙柱长回来；下格逐步看，蓝橙两条一路同涨，绿线长得慢得多。</b><span class="capmore"><br><em>每组一份 1000 步的运行，实测；灰线呈台阶状是参数范数日志只记到 FP32 精度。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（1000 步）：两边都去掉 dh 沿 w̄ 的全部分量后，TPU 对 GPU：loss −3.4e-5，param_norm ＋6.1e-3；同设置 GPU 两次之间 loss −2.5e-5、param_norm ＋4.9e-4。</p>
+</svg><figcaption><b>绿柱缩回去（参数范数还剩三成），橙柱长回来；下格逐步看，蓝橙两条一路同涨，绿线长得慢得多。</b><span class="capmore"><br><em>每组一份 1000 步的运行，实测；灰线呈台阶状，是 GPU 一侧参数范数的记录精度有限（台阶约 1.6e-4）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（1000 步）：两边都去掉 dh 沿 w̄ 的全部分量后，TPU 对 GPU：loss −3.4e-5，param_norm ＋6.1e-3；同设置 GPU 两次之间 loss −2.5e-5、param_norm ＋4.9e-4。</p>
 <p>📌 实测（1000 步，lse）：两边都去掉以后第 1000 步 lse 差 −0.007（原样约 −0.33），同设置 GPU 两次之间 −0.012。这里的 lse 是在第 1000 步的训练批上量的；上一张图右格终点 −0.299 是固定序列探针在第 975 步的读数，两种测法，数不一样。</p>
 <p>📌 实测：人为沿这个方向加一股力 —— 把 GPU 自己一份本来接近零的小分量（每个 token 的 dlogits 加起来，再乘 w̄）变成原来的 −8 倍，跑 1000 步，对默认 GPU：loss −1.26e-4，param_norm ＋2.05e-2；再跑一份 −1.27e-4、＋2.01e-2。TPU 原样对 GPU：−1.66e-4、＋2.1e-2。GPU 人为多推一把，连 logits 下移、冷门行范数偏大一起复现。这股力的大小没有跟 6.5e-4 那个缺口对过，只看结果能复现。</p></details></figure>
   <p>只知道「是这股力」，还不知道是谁算错了：TPU 多推了，还是 GPU 少推了？拿训练里实际用到的张量，在 FP64 里重算一遍，把输出头的误差拆到每一段：</p>
