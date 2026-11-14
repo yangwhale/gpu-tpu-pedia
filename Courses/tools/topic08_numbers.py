@@ -1704,3 +1704,11 @@ def vhat_row(v):
 
 
 assert abs(vhat_row(2.6e-9)[1] - 4.85) < 0.05 and abs(vhat_row(1e-6)[0] - 0.0099) < 0.0001
+# ── 2026-11-14 · §7.5 修法故事线用的派生数（ABL_* 是离线消融实测；相减粗分是本课推断，假设截断与吞小项两部分可加）──
+ABL_BF16_S1_T, ABL_BF16_S100_T, ABL_BF16_S300_T = (tx(v) for v in ABL_BF16_ONESHOT)
+ABL_FP32_S100_T = tx(ABL_FP32_ONESHOT[1])
+ABL_S1_RATIO = "%d" % round(abs(ABL_BF16_ONESHOT[0] / ABL_FP32_ONESHOT[0]), -1)
+ABL_TRUNC_S100_T, ABL_TRUNC_S300_T = tx(ABL_BF16_ONESHOT[1] - ABL_FP32_ONESHOT[1], "%.1e"), tx(ABL_BF16_ONESHOT[2] - ABL_FP32_ONESHOT[2], "%.1e")
+SWAP_TRUNC_SHARE = "%d%%" % round((0.36 - 0.10) / 0.36 * 100)
+PN_FIX1_R, PN_TPU_PROD_R = "%.4f" % PN_FIX1, "%.4f" % PN_TPU_PROD
+assert (ABL_BF16_S1_T, ABL_S1_RATIO, ABL_TRUNC_S100_T, ABL_TRUNC_S300_T, SWAP_TRUNC_SHARE) == ("−6.51e-4", "380", "−3.5e-4", "−2.0e-4", "72%"), (ABL_BF16_S1_T, ABL_S1_RATIO, ABL_TRUNC_S100_T, ABL_TRUNC_S300_T, SWAP_TRUNC_SHARE)

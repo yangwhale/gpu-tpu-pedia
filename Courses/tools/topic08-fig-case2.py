@@ -435,7 +435,90 @@ def fig_layer0():
     f.save("fig8-layer0.svg", yb + 14)
 
 
+def fig_onepass():
+    """fig8-onepass 回答：改成 FP32 一次加到底，为什么先好、后来又偏？—— 左：逐步参数范数（生产近似配置）；右：同一次矩阵乘离线换写法，三个时间点的偏差。
+    数据：topic08_series.json 的 pnorm_rc_*（实测逐步值，对 GPU 生产近似 5 份均值）；右格 ABL_*（离线消融，实测）；第 1000 步的真精确与 TPU 精确只有单点（PN_TRUE、PN_TPU_EXACT）。"""
+    S = N.series()
+    T, E, X, SP = S["pnorm_rc_tpu_prod"], S["pnorm_rc_gpu_exact_onepass"], S["pnorm_rc_gpu_dgrad_fp32"], S["pnorm_rc_gpu_spread"]
+    assert abs(E[999] - N.PN_FIX1) < 1e-5 and abs(T[999] - N.PN_TPU_PROD) < 1e-5
+    ratio = [E[k] / T[k] for k in (149, 199)]
+    assert all(0.95 < r < 1.15 for r in ratio), ratio                         # 第 150、200 步：精确轨迹贴着 TPU
+    late = [E[k] / T[k] for k in (399, 699, 999)]
+    assert all(0.8 < r < 0.9 for r in late), late                             # 之后落后一到两成
+    f = Fig(W, "左：参数范数对 GPU 生产近似 5 份均值的差，第 1 到 1000 步。蓝线 TPU 生产；紫线 GPU 精确轨迹（全程 FP32，输出头那次求和一次加到底）；绿线 GPU 生产只把那次求和换成 FP32 一次加到底。"
+               "前 200 步紫线贴着蓝线，之后慢慢落后，第 1000 步 +0.0186 对 +0.0209。第 1000 步右端两个点：把紫线那次求和改成分块的真精确 +0.0274，TPU 精确轨迹 +0.0273，两点重合。"
+               "右：同一次矩阵乘离线换写法，第 1、100、300 步沿那个方向的偏差：张量核一次加到底一直在 1e-4 量级；FP32 一次加到底第 1 步只有 1.7e-6，第 100 步起就到 2.6e-4；分块一直在 1e-7 到 1e-6。")
+    y0 = f.header("改成 FP32 一次加到底：先好，后来又偏　——　<tspan font-weight=\"700\">分块才两样都治</tspan>",
+                  "左 ＝ 训练轨迹（生产近似配置，参数范数对 GPU 生产 5 份均值）；右 ＝ 同一次矩阵乘离线换写法，沿「所有 logits 一起升降」方向对 FP64 的相对偏差",
+                  [(BL, "TPU 生产"), (PU, "GPU 精确轨迹：FP32 一次加到底"), (GR, "GPU 生产：只换 FP32 一次加到底"), (GY2, "GPU 生产 5 份的散布")])
+    PH = 400
+    LW = 860
+    py = f.panel(0, y0, LW, PH, "训练轨迹：参数范数的差（实测逐步）", BL)
+    X0, XW = 86, LW - 130
+    hi = 0.03
+
+    def Xs(st):
+        return X0 + (st - 1) / 999.0 * XW
+    YB, YH = py + PH - 64, PH - 110
+
+    def Y(v):
+        return YB - v / hi * YH
+    up = " ".join("%.1f,%.1f" % (Xs(k + 1), Y(e)) for k, e in enumerate(SP))
+    dn = " ".join("%.1f,%.1f" % (Xs(k + 1), Y(-e)) for k, e in reversed(list(enumerate(SP))))
+    f.p.append('<polygon points="%s %s" fill="#e8eaed" stroke="none"/>' % (up, dn))
+    f.line(X0, Y(0), X0 + XW, Y(0), INK, 1.2, arrow=False)
+    for v in (0.01, 0.02, 0.03):
+        f.t(X0 - 8, Y(v) + 4, "%+.2f" % v, GY, size=12, anchor="end")
+    f.t(X0 - 8, Y(0) + 4, "0", INK, True, 12, "end")
+    for data, col, w in ((X, GR, 2.0), (E, PU, 2.6), (T, BL, 2.6)):
+        f.path([(Xs(k + 1), Y(v)) for k, v in enumerate(data)], col, w, arrow=False)
+    f.box(X0, py + 34, Xs(200) - X0, 20, "none", "none", 0)
+    f.line(Xs(200), py + 40, Xs(200), YB, OR, 1.4, dash="5 5", arrow=False)
+    f.t(Xs(200) + 8, Y(0.022), "← 前 200 步：紫线贴着蓝线，之后落后", OR, True, 13)
+    f.t(Xs(1000) - 8, Y(E[999]) + 22, "＋%.4f" % E[999], PU, True, 13, "end")
+    f.t(Xs(1000) - 8, Y(T[999]) - 10, "＋%.4f" % T[999], BL, True, 13, "end")
+    f.t(Xs(1000) - 8, Y(X[999]) + 20, "＋%.4f" % X[999], GR, True, 13, "end")
+    # 第 1000 步的单点：真精确（GPU 精确 ＋ 分块）与 TPU 精确
+    xe = Xs(1000) + 18
+    f.p.append('<rect x="%.1f" y="%.1f" width="12" height="12" transform="rotate(45 %.1f %.1f)" fill="%s"/>' % (xe - 6, Y(N.PN_TRUE) - 6, xe, Y(N.PN_TRUE), PU))
+    f.p.append('<circle cx="%.1f" cy="%.1f" r="5" fill="none" stroke="%s" stroke-width="2.4"/>' % (xe, Y(N.PN_TPU_EXACT), BL))
+    f.t(xe - 14, Y(N.PN_TRUE) - 12, "第 1000 步：改分块 ＋%.4f ◆，TPU 精确 ＋%.4f ○（单点）" % (N.PN_TRUE, N.PN_TPU_EXACT), PU, True, 13, "end")
+    for st in (1, 200, 500, 1000):
+        f.t(Xs(st), YB + 22, "第 %d 步" % st, GY, size=12, anchor={1: "start", 1000: "end"}.get(st, "middle"))
+    f._pan = None
+    # 右：离线三个时间点
+    RX, RW = LW + 20, W - LW - 20
+    ry = f.panel(RX, y0, RW, PH, "同一次矩阵乘，离线换写法（实测）", INK)
+    rows = [("张量核一次加到底", N.ABL_BF16_ONESHOT, RD), ("FP32 一次加到底", N.ABL_FP32_ONESHOT, PU), ("张量核分块", N.ABL_BF16_CHUNK, GR)]
+    bx0, bw = RX + 84, RW - 170
+
+    def BX(v):
+        return bx0 + (math.log10(max(abs(v), 1e-9)) + 9) / 6.5 * bw
+    for e in (-9, -7, -5, -3):
+        f.t(BX(10 ** e), ry + PH - 44, "1e%d" % e, GY, size=11, anchor="middle")
+        f.line(BX(10 ** e), ry + 40, BX(10 ** e), ry + PH - 58, LINE, 1, arrow=False)
+    for i, (nm, vals, col) in enumerate(rows):
+        yy = ry + 40 + i * 106
+        f.t(RX + 12, yy + 14, nm, col, True, 13.5)
+        for j, (st, v) in enumerate(zip((1, 100, 300), vals)):
+            yb_ = yy + 20 + j * 26
+            f.box(bx0, yb_ + 4, BX(v) - bx0, 18, col, col, 3)
+            f.t(bx0 - 6, yb_ + 18, "第 %d 步" % st, GY, size=11, anchor="end")
+            f.t(BX(v) + 6, yb_ + 18, N.tx(v, "%.1e"), col, True, 12)
+    f._pan = None
+    yb = f.band(y0 + PH + 14, "ok", "FP32 一次加到底治好了截断（第 1 步 1.7e-6），治不了后来冒出的吞小项；分块两样都治", [
+        "精确轨迹前 200 步贴着 TPU、之后落后，跟右格离线的「第 1 步好、第 100 步起又偏」对得上；TPU 生产自己也比真精确少漂一截（第九节拆账），所以左格只看先贴后分，不按差值算吞小项。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（左）：混元 3 截前 4 层，生产近似配置（整层重算＋路由回放）；逐步参数范数对 GPU 生产 5 份均值。TPU 生产是当前对齐配置；GPU 精确轨迹 ＝ BF16 权重、全程 FP32、真关 TF32，输出头那次求和交给 cuBLAS 一次加到底；绿线 ＝ GPU 生产只把那次求和换成 FP32。精确轨迹 ÷ TPU：第 150 ／ 200 步 %.2f ／ %.2f，第 400 ／ 700 ／ 1000 步 %.2f ／ %.2f ／ %.2f。"
+               % (tuple(ratio) + tuple(late)),
+               "📌 实测（第 1000 步单点）：GPU 精确轨迹把那次求和改成分块的「真精确」＋%.4f，TPU 精确轨迹 ＋%.4f；这两条没有存逐步记录，只有这一个点。" % (N.PN_TRUE, N.PN_TPU_EXACT),
+               "📌 实测（右）：训练里实际用到的那几个张量（第 1、100、300 步），一张 B200 上换写法重算这次矩阵乘，沿 w̄ 对 FP64 的相对偏差。")
+    f.save("fig8-onepass.svg", yb + 14)
+
+
 fig_gauge()
+fig_onepass()
 fig_chain()
 fig_head()
 fig_intervene()
