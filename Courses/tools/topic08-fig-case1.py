@@ -140,8 +140,18 @@ def fig_rows():
         f.t(24, y + 24, lab, INK, True, 16)
         L = v / N.GROUP_TOTAL_300 * 330
         f.box(150, y, L, 40, BL, BL, 4)
-        f.t(150 + L + 10, y + 26, "%.2e" % v, BL, True, 14)
+        f.t(150 + L + 10, y + 26, ("%.2e" % v).replace("e-0", "e-"), BL, True, 14)
     f.t(24, py + 290, "合计 %.2e；下面那一截大半是按组线性拆分的残差，不是别的参数组的贡献；GPU 两次之间输出层只差 6e-6" % N.GROUP_TOTAL_300, GY, size=13)
+    # 第二轮：输出层贡献随步数（只有第 100／200／300 步三个实测点）
+    _pts = [(100, 4.1e-4), (200, 1.85e-3), (300, 3.83e-3)]
+    _sx = lambda st: 300 + (st - 100) / 200.0 * 200
+    _sy = lambda v: py + 258 - v / 4e-3 * 36
+    f.t(290, py + 212, "输出层贡献随步数（3 个实测点）", GY, True, 12.5)
+    f.path([(_sx(a_), _sy(b_)) for a_, b_ in _pts], BL, 2, arrow=False)
+    for a_, b_ in _pts:
+        f.box(_sx(a_) - 4, _sy(b_) - 4, 8, 8, BL, BL, 4)
+        f.t(_sx(a_), py + 272, "第 %d 步" % a_, GY, size=11.5, anchor="middle")
+    f.t(_sx(300) + 8, _sy(3.83e-3) + 18, "3.83e-3", BL, True, 11.5, "end")
     f._pan = None
     px = 580
     py2 = f.panel(px, y0, W - px, PH, "输出层按词频分桶，第 300 步平方和差（实测）", BL)

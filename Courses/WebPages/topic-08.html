@@ -9146,11 +9146,20 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按参数分组，第 300 步（实测）</tspan></text>
 <text class="svgsm" x="24" y="216" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出层</tspan></text>
 <rect x="150" y="192" width="287.9043280182232" height="40" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="447" y="218" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.83e-03</tspan></text>
+<text class="svgsm" x="447" y="218" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.83e-3</tspan></text>
 <text class="svgsm" x="24" y="326" fill="#202124" style="font-size:16.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">合计减输出层</tspan></text>
 <rect x="150" y="302" width="42.09567198177675" height="40" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="202" y="328" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.60e-04</tspan></text>
+<text class="svgsm" x="202" y="328" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.60e-4</tspan></text>
 <text class="svgsm" x="24" y="422" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">合计 4.39e-03；下面那一截大半是按组线性拆分的残差，不是别的参数组的贡献；GPU 两次之间输出层只差 6e-6</text>
+<text class="svgsm" x="290" y="344" fill="#5f6368" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">输出层贡献随步数（3 个实测点）</tspan></text>
+<path d="M 300.00 386.31 L 400.00 373.35 L 500.00 355.53" fill="none" stroke="#1a73e8" stroke-width="2" stroke-linecap="round"/>
+<rect x="296.0" y="382.31" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="300" y="404" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">第 100 步</text>
+<rect x="396.0" y="369.35" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="400" y="404" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">第 200 步</text>
+<rect x="496.0" y="351.53" width="8" height="8" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="500" y="404" fill="#5f6368" text-anchor="middle" style="font-size:11.5px;font-variant-numeric:tabular-nums">第 300 步</text>
+<text class="svgsm" x="508" y="373" fill="#174ea6" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.83e-3</tspan></text>
 <rect x="580" y="102" width="820" height="344" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="580" y="102" width="820" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="580" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -12893,7 +12902,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="502" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="502" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="529" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">同一个改动，换运行库从「贴着零」变成「一直偏高」：0.0.52 上第 2–1000 步 95% 的步在零上面</tspan></text>
-</svg><figcaption><b>红粗线一直在零上面，蓝粗线贴着零；橙线跟红线重合。</b><span class="capmore"><br><em>每一步都在灰带里，偏在方向一致；单份运行，实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8，每个改动对同版本的基准运行）：0.0.52 第 2–300 步平均 ＋1.7e-5、第 2–1000 步 ＋1.7e-5；0.0.46 第 2–300 步 ＋1.3e-6；0.0.52 只让最后一层舍两次第 2–300 步 ＋2.1e-5。灰带：GPU 同设置 16 份两两 120 对，每一步取最大 |dₜ|，再 5 步平滑。</p>
+</svg><figcaption><b>红粗线一直在零上面，蓝粗线贴着零；橙线跟红线重合。</b><span class="capmore"><br><em>单步约七成在灰带里，看得出的是方向一致；单份运行，实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8，每个改动对同版本的基准运行）：0.0.52 第 2–300 步平均 ＋1.7e-5、第 2–1000 步 ＋1.7e-5；0.0.46 第 2–300 步 ＋1.3e-6；0.0.52 只让最后一层舍两次第 2–300 步 ＋2.1e-5。灰带：GPU 同设置 16 份两两 120 对，每一步取最大 |dₜ|，再 5 步平滑。</p>
 <p>⚠️ 每条线都是单份运行；灰带只用来看单步幅度，判档仍按窗口统计量对尺子。</p></details></figure>
   <p>RMSNorm 那件变强，是因为 0.0.52 挡住了一次融合，两次舍入都真舍了，而第二次的输入已经在格点上，结果系统偏小。</p>
   <details class="foldfig"><summary><b>RMSNorm 那件为什么变强</b>：两次舍入为什么系统偏小（图、机理）</summary>

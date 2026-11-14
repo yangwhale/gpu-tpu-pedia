@@ -1930,7 +1930,7 @@ FIGS = {
     "__FIG_RMW__": ("fig-rmw", "fig8-rmw.svg", "topic08-fig-ddp.py",
         '<b>左边数红框：不排序每次都舍，排序只舍一次；中间只有一格绿。</b><br><em>右块红柱随次数涨，绿柱不动。</em>'),
     "__FIG_RMS52__": ("fig-rms52", "fig8-rms52.svg", "topic08-fig-temper.py",
-        '<b>红粗线一直在零上面，蓝粗线贴着零；橙线跟红线重合。</b><br><em>每一步都在灰带里，偏在方向一致；单份运行，实测。</em>'),
+        '<b>红粗线一直在零上面，蓝粗线贴着零；橙线跟红线重合。</b><br><em>单步约七成在灰带里，看得出的是方向一致；单份运行，实测。</em>'),
     "__FIG_RMS2R__": ("fig-rms2r", "fig8-rms2r.svg", "topic08-fig-temper.py",
         '<b>左上两排只差一个虚线框：0.0.52 把归一化值单独写回了内存。右上 γ 贴近 1 时偏得最多；下面只动最后一层就开关这件事。</b><br><em>Ⓐ Ⓒ 实测；Ⓑ 是推导配 FP64 实测。</em>'),
     "__FIG_IHCROOT__": ("fig-ihcroot", "fig8-ihcroot.svg", "topic08-fig-mig2.py",
