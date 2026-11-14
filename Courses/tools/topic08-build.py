@@ -1003,25 +1003,34 @@ __FIG_SWAP__
   <p>开场那一问「TPU 算错了吗？」的答案在这里：<b>偏移的大头不是 TPU 算错</b>，是 GPU 当标准答案的那份 BF16 golden 自己离精确值远。</p>
   <p>先把 GPU 输出头这一次矩阵乘换成 FP32（真关 TF32），1000 步下来 GPU 自己朝 TPU 走过去约六成；剩下的，在 GPU 上跑一条<b>精确轨迹</b>来看：权重的用法跟生产一样（FP32 主权重，每步舍成 BF16 再用），前向反向的算术全部 FP32、真关 TF32。它自己重跑一位不差；图里 loss 那一行的第二个紫点，是给第 0 层一处权重乘 (1 ＋ «PERTURB») 的扰动版。</p>
 __FIG_EXACT__
-  <p><b>修法从这里来，先是一个反转。</b>精确轨迹里，输出头 dgrad 那次沿 12 万词表的求和，是交给 cuBLAS 用 FP32 一次累加到底的。B200 上它也偏：第 1 步只有 «HEAD_EXACT_S1_T»，训练到第 299 步的状态已经 «CUBLAS_299_T»，跟 BF16 张量核同一个数量级 —— 冷门词的概率变小以后，小项在长累加里被系统地吃掉（推断，cuBLAS 怎么累加没有源码可看）。道理一样：冷门词的概率越训越小，这些小项相对整个和越来越小，小到不到 FP32 一格的一半时，就近舍入也把它们整项舍掉，方向都一样。所以精确轨迹前期挨着 TPU（第 1 步只差 «HEAD_EXACT_S1_T»），后期才长大。</p>
-  <p>把这一处改成<b>分段累加</b>（12 万长的求和切成几段，各段 FP32 求和以后再相加），GPU 的精确轨迹就跟 TPU 上的精确轨迹重合（同样的设置在 TPU 上也跑一条：权重照样每步舍 BF16、算术全程 FP32；TPU 的矩阵单元不抹零，长求和也偏得小）：参数范数带符号均值只差 «CHUNK_VS_TPUEXACT_T»，在噪声上限以内。两边在真精确的算术下，是同一条轨迹。</p>
+  <p><b>修法。</b>先纠正一个常见的误解：两边那次 «VOCAB» 项的求和，都是 BF16 输入、FP32 累加，不是 BF16 累加。差在 FP32 累加器怎么舍：GPU 张量核每 «TC_GROUP» 个乘积一组，按其中最大的指数对齐，约 «TC_KEEP» 位以下的低位朝零截掉（§5.2）；TPU 的矩阵单元推断是就近舍入（没有直接证据；旁证是同一份输入算路由打分，TPU 对 FP64 «ROUTER_TPU_FP64»、GPU «ROUTER_GPU_FP64»，§5.4）。</p>
+  <p><b>同一个病根，两种症状。</b>一个很长的累加，和越加越大，后来的小项低位放不下，误差都朝绝对值变小的方向。<b>① 末位截断</b>：每一组都扔低位，第 1 步就有。<b>② 吞小项</b>：就近舍入有进有舍，只有一项小到不到累加值最小一格的一半时，才被整项舍掉；要等冷门词的概率训小了才显出来。</p>
+  <details class="foldfig"><summary><b>怎么确定是截断</b>：三样证据，哪些是实测、哪些是推断</summary>
+  <ul>
+    <li><b>硬件建模</b>（实测）：按 B200 张量核模型逐位重算路由打分，三层全部元素逐位对上；跟公开论文对 H100／B200 的比特级建模一致（Khattak、Mikaitis，arXiv:2512.07004，§5.2）。</li>
+    <li><b>合成测试</b>（实测）：同一个模型在合成正数输入上，求和长 «TC_K1» 朝零偏 «TC_BIAS1»，长 «TC_K3_T» 偏 «TC_BIAS3»；不走张量核的真 FP32 几乎为零（≤ 5e-8）。</li>
+    <li><b>案例里的真张量</b>（实测）：把训练里实际用到的输出头张量的词表行打乱、取前 K 行在 FP64 里重算，行越多误差越大、都朝零缩：K ＝ «HEAD_K1» 时 «HEAD_BIAS1»，K ＝ 65536 时 2.0e-4，整张词表 «HEAD_K3» 行时 «HEAD_BIAS3»。</li>
+    <li><b>推断</b>：「案例里的偏差就是这个抹零模型在起作用」—— 那个模型在这么长的求和上没有单独逐位验证过。</li>
+  </ul></details>
+  <p><b>升 FP32 修的是什么。</b>输入本来就是 BF16 的值，升成 FP32 数值一位不变，所以修的不是 BF16 精度，而是把张量核那条截断的累加路径，换成就近舍入的 FP32 累加：第 1 步沿 w̄ 的误差降到 «HEAD_EXACT_S1_T»，状态互换里 GPU 少走的从 «SWAP_GPU_ABS_T» 降到 0.10%。它对吞小项没有帮助，因为本来就在 FP32 里累加：第 299 步的状态照样偏 «CUBLAS_299_T»（cuBLAS 怎么累加没有源码可看，吞小项是推断）。这也是为什么精确轨迹前期挨着 TPU、后期才长大。两个注意：升 FP32 同时换了内核和求和顺序，所以严格说它证明的是「张量核那条累加路径」是主因，截断是最可能的机制；而且必须真关 TF32，否则 FP32 矩阵乘会走回张量核、按 10 位尾数算 —— 早期就因此一度判反（§7.4 折叠）。</p>
+  <p><b>分块为什么两样都治。</b>把 «VOCAB» 项切成每 «CHUNK_SEG» 项一块：每块的和不大，小项不会被挤出去，截断也只发生在短段里；块结果留 FP32 再相加，一共一百多块，这一步也不吞。改成分块后，GPU 的精确轨迹跟 TPU 上的精确轨迹重合，参数范数带符号均值只差 «CHUNK_VS_TPUEXACT_T»。</p>
+  <table class="t9"><caption style="caption-side:bottom;text-align:left;color:var(--gray);font-size:13px">偏差：训练里实际用到的张量，第 1 ／ 100 ／ 300 步沿 w̄ 对 FP64 的相对偏差；单次：一张 B200 上这一次矩阵乘的耗时（分块是逐段调库、没做融合）；步时：一千步训练，对生产</caption>
+  <thead><tr><th>写法</th><th>截断</th><th>吞小项</th><th>偏差</th><th>单次</th><th>一千步步时</th></tr></thead><tbody>
+  <tr><td>张量核，一次加到底（生产）</td><td>有</td><td>有</td><td>«ABL_BF16_ONESHOT_T»</td><td>«ABL_MS_PROD_T»</td><td>基线</td></tr>
+  <tr><td>真 FP32，一次加到底（关 TF32）</td><td>没有</td><td>有</td><td>«ABL_FP32_ONESHOT_T»</td><td>«ABL_MS_FP32_ONESHOT» ms</td><td>—</td></tr>
+  <tr><td>张量核分块（每 «CHUNK_SEG» 项，块结果留 FP32）</td><td>只在短段里</td><td>没有</td><td>«ABL_BF16_CHUNK_T»</td><td>«ABL_MS_BF16_CHUNK» ms</td><td>＋«CB_COST_T»</td></tr>
+  <tr><td>FP32 分块（⑤ 的写法）</td><td>没有</td><td>没有</td><td>«ABL_FP32_CHUNK_T»</td><td>«ABL_MS_FP32_CHUNK» ms</td><td>＋«CHUNK_COST_T»</td></tr>
+  </tbody></table>
+  <p><b>结论：不用升 FP32，BF16 张量核加分块就够。</b>一千步只分块（乘法留在 BF16 张量核）跟「升 FP32 再分块」分不开，步时 ＋«CB_COST_T» 对 ＋«CHUNK_COST_T»。这处只影响 GPU 标准答案的制作，TPU 生产程序不动。</p>
   <div class="note"><span class="t">参数范数漂移从少到多：GPU 生产 golden ＜ 精确轨迹 ＜ TPU 生产 ＜ 真精确</span>
     第 1000 步，真精确是上图精确轨迹的 «DRIFT_RATIO_TRUE_T» 倍，TPU 生产是 «DRIFT_RATIO_TPU_T» 倍。这里漂得多，是离真值近：真精确漂得最多，离它最远的，是当标准答案的那份 GPU BF16 golden。TPU 生产也差真精确两成多：它把流进输出头反向的梯度存成 BF16，自己也少漂一截（第九节拆账）。</div>
   <details class="foldfig"><summary><b>给第九节的伏笔</b>：换到验收配置后 TPU 少漂多少</summary>
   <p>换到第九节验收用的配置（整层重算＋路由回放），第 1000 步 TPU 生产比 TPU 自己的精确轨迹少漂 «TPU_VS_TRUE_T»；这一截是谁的，第九节拆账。</p>
   </details>
-  <details class="foldfig"><summary><b>分段两样都治，FP32 只治一半</b>：同一批张量换四种写法重算一遍</summary>
-  <p>分段 FP32 同时做了两件事：升 FP32、把词表切段。拿训练里实际用到的那几个张量（第 1、100、300 步），在一张 B200 上换写法重算这次矩阵乘，对 FP64 比沿 w̄ 的偏差：</p>
-  <table class="t9"><thead><tr><th>写法</th><th>第 1 ／ 100 ／ 300 步</th><th>单次耗时</th></tr></thead><tbody>
-  <tr><td>BF16 张量核，一次乘完（生产）</td><td>«ABL_BF16_ONESHOT_T»</td><td>«ABL_MS_PROD_T»</td></tr>
-  <tr><td>升 FP32，一次乘完</td><td>«ABL_FP32_ONESHOT_T»</td><td>—</td></tr>
-  <tr><td>BF16 张量核，每 «CHUNK_SEG» 一段，段结果留 FP32、段间 FP32 相加</td><td>«ABL_BF16_CHUNK_T»</td><td>«ABL_MS_BF16_CHUNK» ms</td></tr>
-  <tr><td>升 FP32，每 «CHUNK_SEG» 一段（⑤ 的写法）</td><td>«ABL_FP32_CHUNK_T»</td><td>«ABL_MS_FP32_CHUNK» ms</td></tr>
-  </tbody></table>
+  <details class="foldfig"><summary><b>分块的两个条件，和一千步的确认</b></summary>
   <ul>
-    <li>不分段，FP32 也偏：第 300 步还是 «ABL_FP32_ONESHOT_300_T»。升 FP32 能去掉张量核截断那部分，去不掉吞小项那部分；分段让每段的和保持小，两样都治。分段以后，BF16 张量核也降到 1e-7 到 1e-6 的量级，跟升 FP32 分段一样准，单次耗时只有它的十分之一（«ABL_MS_T»；两种分段都是逐段调库、没做融合）。</li>
-    <li>两个条件：段结果必须留 FP32 —— 每段先舍 BF16 再相加就不行；段长不超过 «CHUNK_SEG» —— 到 4096 已剩 «ABL_CHUNK4096_T»，再长剩得更多，跟 §5.2「越长越偏」一致。</li>
-    <li>训练上也确认了：⑤ 的设置原样、只把这一处换成 BF16 张量核分段，跑满 1000 步 «CB_RUNS» 份，拿 ⑤ 的 45 对尺子对 ⑤ 的基线判，全过，最差 «CB_WORST» 倍，跟同一台机器原样重跑 ⑤ 的对照一样（«CB_CHK_WORST»）；步时 «CB_STEP_T»，比生产只多 «CB_COST_T»（⑤ 多 «CHUNK_COST_T»）。TPU 当前配置拿它当基线交叉核对：v5p 全过；v7x 梯度范数 «CB_TPU_V7X_GN» 倍待定，可同一个 TPU 运行改对 ⑤ 的各份逐一当基线，也在 «CB_TPU_V7X_GN_SINGLE_T» 之间起伏，是单份基线自己的涨落。它是同样准、便宜得多的等价修法；正式基线仍是 ⑤。</li>
+    <li>两个条件：块结果必须留 FP32 —— 每块先舍 BF16 再相加就不行；块长不超过 «CHUNK_SEG» —— 到 4096 已剩 «ABL_CHUNK4096_T»，再长剩得更多，跟 §5.2「越长越偏」一致。</li>
+    <li>训练上的确认：⑤ 的设置原样、只把这一处换成 BF16 张量核分块，跑满 1000 步 «CB_RUNS» 份，拿 ⑤ 的 45 对尺子对 ⑤ 的基线判，全过，最差 «CB_WORST» 倍，跟同一台机器原样重跑 ⑤ 的对照一样（«CB_CHK_WORST»）；步时 «CB_STEP_T»。TPU 当前配置拿它当基线交叉核对：v5p 全过；v7x 梯度范数 «CB_TPU_V7X_GN» 倍待定，可同一个 TPU 运行改对 ⑤ 的各份逐一当基线，也在 «CB_TPU_V7X_GN_SINGLE_T» 之间起伏，是单份基线自己的涨落。正式基线仍是 ⑤。</li>
   </ul></details>
   <details class="foldfig"><summary><b>为什么不直接用全程 FP32 训练当参照</b>：那是另一条轨迹；精确轨迹和定案前那条的配置区别</summary>
   <p>生产里矩阵乘用的是主权重舍到 BF16 的那一份，权重本身每个元素就差半个 BF16 格。纯 FP32 训练（权重不舍）前 100 步 loss 就比 BF16 低 «FP32_TRAIN_LOSS_GAP_T»，走的是另一条路，跟哪边都差得远。
