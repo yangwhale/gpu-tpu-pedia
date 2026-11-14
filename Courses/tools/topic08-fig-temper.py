@@ -51,7 +51,7 @@ def fig_temper():
                "RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。")
     y0 = f.header("TPU 的脾气：改一样东西，结果变不变、要不要管",
                   "第二次迁移（混元 4 缩小版），绝大多数在运行库 0.0.46 上；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑",
-                  [(c, "%s %d" % (n, k)) for n, k, c in PILES[:4]] + [(PU, "故意改坏 %d" % N_BROKEN), (GY2, "没出结果 %d" % N_PEND)])
+                  [(c, "%s %d" % (n, k)) for n, k, c in PILES[:4]] + [(PU, "故意改坏 %d" % N_BROKEN), (LINE, "没出结果 %d" % N_PEND)])
     # Ⓐ 六堆
     PH1 = 150
     py = f.panel(0, y0, W, PH1, "Ⓐ %d 种改动，一格一种" % TOTAL, GY)
@@ -101,7 +101,7 @@ def fig_temper():
         yy = ytop + 160 + i * 34
         bad = _tol(iss) == "不能忍"
         f.t(20, yy + 5, _short(iss["name"]), RD, bad, 14)
-        f.t(X0 - 12, yy + 5, "不能忍" if bad else "能忍", RD, bad, 12.5, "end")
+        f.t(X0 - 12, yy + 5, "不能忍" if bad else "能忍", RD if bad else GY, bad, 12.5, "end")
         NX = X1 + 16                       # 右侧说明列
         if _tol(iss) != iss["tolerable"]:
             f.t(NX, yy + 5, "运行库 0.0.52 上不能忍（下一张图）", RD, True, 12.5)
@@ -216,7 +216,7 @@ def fig_libtpu():
         f.t(XL(th), yy - 24, "门槛 %s" % format(th, ","), col, True, 13, "middle")
         f.box(XL(NIDX) - 7, yy - 7, 14, 14, RD, RD, 7)
         f.t(XL(NIDX), yy + 42, verdict, RD if col == GY else BL, True, 13, "middle")
-    f.t(RX + 16, py2 + PH - 70, "上卡核对：r %.2f → %.2f，词嵌入梯度 R %.2f → %.2f" % (t["r"] + t["R"]), BL, True, 14)
+    f.t(RX + 16, py2 + PH - 70, "上卡核对：曲线是噪声的 %.2f → %.2f 倍；词嵌入梯度离 FP64 是 GPU 的 %.2f → %.2f 倍" % (t["r"] + t["R"]), BL, True, 14)
     f.t(RX + 16, py2 + PH - 46, "预测成立：先离线编译看排没排序，再上卡", INK, True, 14)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "换运行库：先建新基准，再把六件重测；结论只对测过的版本对和配置成立", [
