@@ -389,8 +389,9 @@ ARMS_SPREAD_T = tx(ARMS_SPREAD, "%.0e"); _lock("ARMS_SPREAD_T", ARMS_SPREAD_T, "
 MISALIGN_OK_T, MISALIGN_OFF_T = tx(MISALIGN[0]), tx(MISALIGN[1])
 _lock("MISALIGN_OK_T", MISALIGN_OK_T, "1.53e-4"); _lock("MISALIGN_OFF_T", MISALIGN_OFF_T, "1.41e-2")
 MISALIGN_X_FLOOR = 90; assert MISALIGN_X_FLOOR < MISALIGN[1] / MISALIGN[0] < MISALIGN_X_FLOOR + 10   # 「大 90 多倍」
-LOSS_TAIL_ROUGH_T = "−1.5e-4"                        # 「300 步以后稳定在 −1.5e-4 左右」。出处：案例记录 §3.1 原话（只断言落在三种跑法范围内）
-assert min(TPU_ARMS) <= -1.5e-4 <= max(TPU_ARMS)
+LOSS_TAIL_ROUGH_T = "−1.7e-4"   # 2026-11-15 全课统一：第 301–1000 步带符号均值 −1.66e-4 取两位（原写案例记录原话「稳定在 −1.5e-4 左右」，对不上任何算出来的统计量）
+_LOSS_TAIL_ROUGH_OLD = "−1.5e-4"                        # 「300 步以后稳定在 −1.5e-4 左右」。出处：案例记录 §3.1 原话（只断言落在三种跑法范围内）
+assert abs(-1.7e-4 - TPU_ARMS[0]) < 0.05e-4
 # 排除清单
 WD_MASK_X = 13                                       # 权重衰减掩码反过来，残差大 13 倍以上。出处：案例记录排除表第 1 行
 UPD1_RATIO_LO_T, UPD1_RATIO_HI_T = "0.997", "1.003"  # 第 1 步逐张量更新量之比。出处：案例记录排除表第 3 行（50 个张量）
