@@ -32,7 +32,7 @@ def fig_assoc():
                "右边先把两个小数加起来得到 0.0078，正好是一格，1 加它落在格点上，结果是 1.0078。"
                "两种顺序差了一整格。")
     y0 = f.header("加法换个顺序，末位就不一样　——　<tspan font-weight=\"700\">所以「一位不差」做不到</tspan>",
-                  "竖线 ＝ BF16 在 1 附近能表示的数（一格 ＝ 2⁻⁷ ≈ 0.0078）；圆点 ＝ 精确结果，落在两格之间就要舍到最近的那一格",
+                  "竖线 ＝ BF16 在 1 及以上能表示的数（一格 ＝ 2⁻⁷ ≈ 0.0078；1 以下格距减半）；圆点 ＝ 精确结果，落在两格之间就要舍到最近的那一格",
                   [(PU, "精确值"), (INK, "舍入后实际存下的数")])
     PH = 300
     for k, (title, col, xs, res) in enumerate([
@@ -40,15 +40,15 @@ def fig_assoc():
             ("先算 (0.0039 ＋ 0.0039)，再 ＋ 1", GY, [(A + BC, RIGHT)], RIGHT)]):
         px = k * 710
         py = f.panel(px, y0, 690, PH, title, col)
-        # 数轴：1 − 1 格 到 1 + 2 格
+        # 数轴：1 到 1 + 3 格（1 以下格距减半成 2⁻⁸，不画，免得画错）
         X0, SC = px + 70, 540 / (3 * ULP1)
         yl = py + 130
 
         def X(v):
-            return X0 + (v - (1.0 - ULP1)) * SC
+            return X0 + (v - 1.0) * SC
         f.line(X0 - 20, yl, X0 + 560, yl, GY2, 1.2, arrow=False)
         for i in range(4):
-            v = 1.0 - ULP1 + i * ULP1
+            v = 1.0 + i * ULP1
             f.line(X(v), yl - 16, X(v), yl + 16, INK, 1.6, arrow=False)
             f.t(X(v), yl + 40, "%.4f" % v, GY, size=13, anchor="middle")
         for j, (exact, stored) in enumerate(xs):

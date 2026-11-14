@@ -6,7 +6,7 @@ fig8-hooks  回答：为什么 GPU 上随手加个钩子抓数没事，TPU 上�
             TPU：整张图一起编译，多一个输出就改了融合，舍入位置跟着变（实测：v5p 上加钩子的程序和生产程序不逐位）。
             三条干净的路：步与步之间读状态 ＋ 从 Adam 一阶动量反推梯度；单独编译的隔离回放；单独编译的固定探针。
             反推公式 g ＝ (m_k − β₁·m_{k−1}) ÷ (1 − β₁) ÷ 裁剪系数 是本课推导（由 Adam 一阶动量的定义倒过来写）。
-fig8-diverge  回答：两边分叉以后为什么只比标量曲线？—— 连 FP32 轨迹从第 2 步起也离两条 BF16 轨迹 30–100 倍远，只有第 1 步（同一份权重）能当裁判。
+fig8-diverge  回答：两边分叉以后为什么只比标量曲线？—— 连 FP32 轨迹从第 2 步起也离两条 BF16 轨迹多数步 2e-3 到 9e-3，是两边之差的上百倍，只有第 1 步（同一份权重）能当裁判。
               数字是第二次迁移真实权重截层的实测（主 loss 的相对差）。
 fig8-ongrid   回答：从 BF16 检查点续训时，为什么只管权重一侧精度的开关，第 1 步前后逐位相同？—— 主权重的初值全在 BF16 格点上、激活也是 BF16，
               单遍 BF16 乘 ＋ FP32 累加已经精确；第一次更新以后主权重离开格点，开关才开始起作用。随机 FP32 初始化起训时不成立。
@@ -123,42 +123,55 @@ def fig_hooks():
 
 
 def fig_diverge():
-    import math as _m
-    f = Fig(W, "纵轴是相对差的大小，对数刻度；横轴是三个时段：第 1 步、第 2 到 10 步、第 11 到 100 步。"
-               "红点是 TPU 对 GPU 的差，都偏同一边：第 1 步 −8.5e-5，之后 −6.8e-5、−4.8e-5。紫色一带是一条 FP32 轨迹离两条 BF16 轨迹的距离：从第 2 步起就是 2e-3 到 1e-2，是两边之差的 30 到 100 倍；这条轨迹只跑了 30 步。"
-               "第 1 步两边用同一份权重，两个小圈是各离 FP32 多远，还能比；第 2 步起就比不了了。")
+    import math as _m, json as _j, os as _o
+    D = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_diverge.json"), encoding="utf-8"))
+    S, GM, TP = D["step"], D["gpu_mean"], D["tpu"]
+    DIFF = [t - g for t, g in zip(TP, GM)]
+    n = len(S)
+    big = [abs(v) for v in GM[1:]]
+    nbig = sum(1 for v in big if 2e-3 <= v <= 9e-3)
+    assert n == N.DIV_FP32_STEPS and nbig >= 20 and abs(GM[7]) < 1e-4 and GM[19] < 0, (n, nbig, GM[7], GM[19])
+    assert max(abs(v) for v in DIFF) < 1e-4 and min(abs(v) for v in DIFF) > 3e-5
+    f = Fig(W, "纵轴是主 loss 离一条 FP32 轨迹的相对差的大小，对数刻度；横轴是训练步，第 1 到 30 步。"
+               "灰线是 GPU 8 份（8 份几乎重合），蓝线是 TPU：两条从第 2 步起就在 2e-3 到 9e-3 之间锯齿，两条贴在一起。"
+               "红线是同一步上 TPU 减 GPU 均值，30 步都在 3e-5 到 1e-4 之间、都是负的，比离 FP32 的距离小两个数量级。"
+               "第 8 步和第 20 步两边恰好穿过 FP32 那条线，距离掉到 1e-4 附近。第 1 步两边吃同一份权重，各离 FP32 −2.0e-5 和 ＋6.5e-5，还能比。")
     y0 = f.header("连权重都不舍的 FP32 轨迹，第 2 步起就走开了：分叉以后只比标量曲线",
-                  "纵轴 ＝ 主 loss 相对差的大小（对数）；红 ＝ TPU 对 GPU；紫带 ＝ FP32 轨迹离两条 BF16 轨迹；第 1 步两个小圈 ＝ 各离 FP32 多远",
-                  [(RD, "TPU 对 GPU"), (PU, "FP32 轨迹离 BF16 轨迹"), (BL, "TPU 离 FP32"), (GY, "GPU 离 FP32")])
-    PH = 340
-    py = f.panel(0, y0, W, PH, "真实权重截层，主 loss（实测）", PU)
-    X = [320, 720, 1120]
-    Y0, Y1 = py + PH - 60, py + 30
+                  "纵轴 ＝ 主 loss 相对差的大小（对数）；灰 ＝ GPU 8 份离 FP32；蓝 ＝ TPU 离 FP32；红 ＝ TPU 减 GPU 8 份均值；空心点 ＝ 该步是负的",
+                  [(GY, "GPU 离 FP32"), (BL, "TPU 离 FP32"), (RD, "TPU − GPU")])
+    PH = 400
+    py = f.panel(0, y0, W, PH, "真实权重截层，主 loss，逐步（实测，FP32 轨迹只跑了 %d 步）" % n, PU)
+    X0, X1 = 170, W - 60
+    Y0, Y1 = py + PH - 60, py + 40
+    def X(st):
+        return X0 + (st - 1) / (n - 1) * (X1 - X0)
     def Y(v):
-        return Y0 - (_m.log10(v) - _m.log10(1e-5)) / (_m.log10(3e-2) - _m.log10(1e-5)) * (Y0 - Y1)
+        v = max(abs(v), 1e-5)
+        return Y0 - (_m.log10(v) - _m.log10(1e-5)) / (_m.log10(2e-2) - _m.log10(1e-5)) * (Y0 - Y1)
     for e in (1e-5, 1e-4, 1e-3, 1e-2):
-        f.line(160, Y(e), W - 60, Y(e), LINE2, 1, arrow=False)
-        f.t(150, Y(e) + 4, "%.0e" % e, GY, size=12, anchor="end")
-    for x, lab in zip(X, ["第 1 步（同一份权重）", "第 2–10 步", "第 11–100 步"]):
-        f.t(x, Y0 + 30, lab, INK, True, 14, "middle")
-    f.box(X[1] - 150, Y(1e-2), (X[1] + X[2]) / 2 - (X[1] - 150), Y(2e-3) - Y(1e-2), "#f3e8fd", PU, 4)
-    f.t(X[1] - 140, Y(1e-2) + 18, "FP32 轨迹离两条 BF16 轨迹 %s" % N.DIV_FP32_AWAY, PU, True, 13)
-    f.t(X[1] - 140, Y(1e-2) + 38, "（只跑到第 %d 步）" % N.DIV_FP32_STEPS, PU, size=12)
-    for x, v in zip(X, [N.LADDER_REAL_STEP1, -N.DIV_STEP2_10, -N.DIV_STEP11_100]):
-        f.p.append('<circle cx="%d" cy="%.1f" r="8" fill="%s"/>' % (x, Y(abs(v)), RD))
-        f.t(x + 14, Y(abs(v)) + 5, N.tx(v, "%.1e"), RD, True, 13)
-    for dx, v, col, lab in [(-60, abs(N.DIV_STEP1[0]), BL, "TPU"), (-100, N.DIV_STEP1[1], GY, "GPU")]:
-        f.p.append('<circle cx="%d" cy="%.1f" r="6" fill="none" stroke="%s" stroke-width="2"/>' % (X[0] + dx, Y(v), col))
-        f.t(X[0] + dx - 10, Y(v) + 5, lab, col, True, 12, "end")
+        f.line(X0, Y(e), X1, Y(e), LINE2, 1, arrow=False)
+        f.t(X0 - 10, Y(e) + 4, "%.0e" % e, GY, size=12, anchor="end")
+    for st in (1, 5, 10, 15, 20, 25, 30):
+        f.t(X(st), Y0 + 26, "第 %d 步" % st, GY, size=12, anchor="middle")
+    for vals, col, w in ((GM, "#9aa0a6", 3.2), (TP, BL, 2), (DIFF, RD, 2.4)):
+        f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="%s"/>' % (" ".join("%.1f,%.1f" % (X(st), Y(v)) for st, v in zip(S, vals)), col, w))
+        for st, v in zip(S, vals):
+            fill = col if v > 0 else "#fff"
+            f.p.append('<circle cx="%.1f" cy="%.1f" r="3.6" fill="%s" stroke="%s" stroke-width="1.6"/>' % (X(st), Y(v), fill, col))
+    f.t(X(8) + 12, Y(3e-4), "第 8 步：两边恰好穿过 FP32（GPU %s、TPU %s）" % (N.tx(GM[7], "%.1e"), N.tx(TP[7], "%.1e")), PU, True, 12)
+    f.t(X(20), Y(GM[19]) + 26, "第 20 步：穿到另一侧（GPU %s）" % N.tx(GM[19], "%.1e"), PU, True, 12, "middle")
+    f.t(X(1) + 10, Y(TP[0]) - 12, "第 1 步：TPU %s、GPU %s" % (N.tx(TP[0], "%.1e"), N.tx(GM[0], "%.1e", plus=True)), INK, True, 12)
+    f.t(X1 - 6, Y(5e-5) + 22, "TPU − GPU：30 步全是负的，3e-5 到 1e-4", RD, True, 13, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "逐元素、逐张量只在第 0、1 步比；第 2 步起两边各走各的，只比 loss、范数这类标量曲线", [
-        "第 1 步两边吃同一份权重，还能拿 FP32 比谁更近；第 2 步起这条 FP32 轨迹离两边几十倍，比不出谁更精确。",
+        "第 1 步两边吃同一份权重，还能拿 FP32 比谁更近；第 2 步起两边离这条 FP32 轨迹都是几千分之一，两边之差只有它的百分之一上下，拿它比不出谁更精确。",
+        "一个容易读反的数：30 步里有 %d 步 TPU 比每一份 GPU 都离 FP32 近。这不说明 TPU 更准：两边的 loss 都比 FP32 轨迹高，TPU 本来就系统地比 GPU 低一点，自然显得「近」；第 20 步两边穿到 FP32 下面，就反过来了（本课推导）。" % D["tpu_closer_steps"],
         "代价：它连权重都不舍成 BF16，第 1 步以后练的就是另一个模型；第 1 步两边用的是同一份检查点，所以只有第 1 步能拿它比。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移，真实权重截层，同一批数据上的 TPU FP32 轨迹 %d 步）：TPU 对 GPU 8 份均值的带符号相对差，第 1 步 %s、第 2–10 步约 −6.8e-5、第 11–100 步约 −4.8e-5，同号、逐步衰减；第 1 步各离 FP32：TPU −2.0e-5、GPU ＋6.5e-5。"
-               % (N.DIV_FP32_STEPS, N.LADDER_REAL_STEP1_T),
-               "⚠️ FP32 参照自己离 FP64 多远没有测，第 1 步的比较只当诊断。纵轴画的是大小，红点三个差都是负的。")
+               "📌 实测（第二次迁移，真实权重截层，同一批数据上的 TPU FP32 轨迹 %d 步；GPU 8 份、TPU 1 份）：逐步相对差 ＝（被测 − FP32）÷ FP32；GPU 8 份最大最小差不到 1e-5，画成一条。TPU 对 GPU 8 份均值的分段带符号均值（100 步运行）：第 1 步 %s、第 2–10 步 %s、第 11–100 步 %s，同号、逐步衰减。"
+               % (n, N.tx(D["tpu_minus_gpu"]["1:1"], "%.1e"), N.tx(D["tpu_minus_gpu"]["2:10"], "%.1e"), N.tx(D["tpu_minus_gpu"]["11:100"], "%.1e")),
+               "⚠️ FP32 参照自己离 FP64 多远没有测，第 1 步的比较只当诊断。红线是两条相对差相减，跟直接算 TPU 对 GPU 的相对差只差二阶小量。")
     f.save("fig8-diverge.svg", yb + 14)
 
 

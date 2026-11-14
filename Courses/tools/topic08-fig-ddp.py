@@ -214,8 +214,8 @@ def fig_flow():
     f.box(330, py2 + 70, 190, 100, "#fef7e0", OR, 8, sw=1.4)
     f.t(425, py2 + 100, "all-to-all", OR, True, 15, "middle")
     f.t(425, py2 + 122, "每段 [4096, 128]", GY, size=12.5, anchor="middle", mono=True)
-    f.t(425, py2 + 142, "token 号 all-gather", GY, size=12.5, anchor="middle")
-    f.t(425, py2 + 160, "每卡 ≈ %s 字节" % ("%.1e" % N.C2_A2A_BYTES).replace("e+0", "e"), GY, size=12.5, anchor="middle")
+    f.t(425, py2 + 140, "收到 ≈ %s 字节／卡" % ("%.1e" % N.C2_A2A_BYTES).replace("e+0", "e"), GY, size=12.5, anchor="middle")
+    f.t(425, py2 + 160, "另：token 号 all-gather", GY, size=12.5, anchor="middle")
     f.line(270, py2 + 120, 326, py2 + 120, OR, 1.8)
     f.line(522, py2 + 120, 580, py2 + 120, OR, 1.8)
     # 卡 0 收到 8 段（画 4 段，全是同一种颜色＝同一列段，来自不同卡）

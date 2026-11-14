@@ -104,7 +104,7 @@ def fig_elided():
     yc = py2 + 22 + 5 * 44 + 4
     f.t(LB, yc + 18, "已补上 %d 处，不计入：" % N.EL_COVERED, GR, True, 13)
     cx = LB + 170
-    for lab in ("多路残差、流梯度、收拢处 %d" % N.EL_COVERED_MHC, "norm、线性层 %d" % (N.EL_COVERED - N.EL_COVERED_MHC)):
+    for lab in ("多路残差、流梯度、收拢处 %d" % N.EL_COVERED_MHC, "其余 %d（相减得出）" % (N.EL_COVERED - N.EL_COVERED_MHC)):
         w = 26 + 13.0 * len(lab)
         f.box(cx, yc + 2, w, 24, "#fff", GR, 12, sw=1.4)
         f.t(cx + w / 2, yc + 19, lab, GR, True, 12.5, "middle")

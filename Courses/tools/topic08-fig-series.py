@@ -314,9 +314,13 @@ def fig_mtp32k():
         f.t(RX + 14, yy + 14, nm, INK, True, 14)
         f.t(RX + 14, yy + 34, what, GY, size=12)
         f.box(bx0, yy + 2, BX(r) - bx0, 26, col, col, 3)
-        f.t(BX(r) + 8, yy + 21, "%.2f" % r, col if col == RD else INK, True, 15)
+        _vt = "%.2f %s" % (r, "过" if r <= 1 else ("不过" if r > 2 else "待定"))
+        if r > 2.5:
+            f.t(BX(r) - 8, yy + 21, _vt, "#fff", True, 15, "end")
+        else:
+            f.t(BX(r) + 8, yy + 21, _vt, col if col == RD else INK, True, 15)
         f.t(bx0, yy + 50, frac, GY, size=12)
-    for r, lab in ((1, "1 过"), (2, "2 不过")):
+    for r, lab in ((1, "1：以内过"), (2, "2：以上不过")):
         for i in range(3):
             f.line(BX(r), ry + 38 + i * 84, BX(r), ry + 72 + i * 84, GY2, 1.2, dash="4 3", arrow=False)
         f.t(BX(r), ry + 40 + 3 * 84 - 14, lab, GY, size=12, anchor="middle")

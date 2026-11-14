@@ -134,14 +134,14 @@ def fig_rows():
                   [(BL, "TPU − GPU"), (GY2, "GPU 两次之间（噪声）")])
     PH = 344      # R3：右格底注原来贴着面板下框
     py = f.panel(0, y0, 560, PH, "按参数分组，第 300 步（实测）", BL)
-    rows = [("输出层", N.GROUP_HEAD_300), ("其余全部", N.GROUP_TOTAL_300 - N.GROUP_HEAD_300)]
+    rows = [("输出层", N.GROUP_HEAD_300), ("合计减输出层", N.GROUP_TOTAL_300 - N.GROUP_HEAD_300)]
     for i, (lab, v) in enumerate(rows):
         y = py + 60 + i * 110
         f.t(24, y + 24, lab, INK, True, 16)
         L = v / N.GROUP_TOTAL_300 * 330
         f.box(150, y, L, 40, BL, BL, 4)
         f.t(150 + L + 10, y + 26, "%.2e" % v, BL, True, 14)
-    f.t(24, py + 290, "合计 %.2e，其余全部 ＝ 合计 − 输出层；GPU 两次之间输出层只差 6e-6" % N.GROUP_TOTAL_300, GY, size=13)
+    f.t(24, py + 290, "合计 %.2e；下面那一截大半是按组线性拆分的残差，不是别的参数组的贡献；GPU 两次之间输出层只差 6e-6" % N.GROUP_TOTAL_300, GY, size=13)
     f._pan = None
     px = 580
     py2 = f.panel(px, y0, W - px, PH, "输出层按词频分桶，第 300 步平方和差（实测）", BL)

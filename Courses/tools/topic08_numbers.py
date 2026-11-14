@@ -270,7 +270,7 @@ assert max(abs(x) for x in L0_PROBE["embedding"]) < 2.3e-4                      
 L0_SWAP_100 = (-1.94e-3, 7.5e-6, -2.4e-4)       # 第 100 步，换成 TPU ／ 第二份 GPU ／ 第三份 GPU 的第 0 层权重
 L0_SWAP_50 = (-2.1e-4, 1.8e-5, 5.5e-5)          # 第 50 步，同上
 L0_SWAP_ONE_100 = (("注意力输出投影", -1.33e-3), ("qkv 投影", -2.6e-4), ("MLP 输出投影", -2.2e-4))   # 第 100 步，只换一组（换成 TPU 的）
-L0_SWAP_SMALL = 6e-5                             # 两个归一化的 scale、q／k 归一化：都在这以下
+L0_SWAP_SMALL = 6e-5                             # 两个归一化的 scale、q／k 归一化：都在这以下（MLP gate／up −6.6e-5 单列）
 assert abs(L0_SWAP_100[0] / L0_PROBE["第 0 层"][_i100] - 1) < 0.15                       # 换权重重算 ≈ 探针实测：差全在权重上
 assert abs(L0_SWAP_50[0] / L0_PROBE["第 0 层"][_i50] - 1) < 0.5
 assert max(abs(x) for x in L0_SWAP_100[1:]) < abs(L0_SWAP_100[0]) / 5
@@ -491,7 +491,7 @@ DRIFT_RATIO_TRUE, DRIFT_RATIO_TPU = 1.45, 1.10                    # 不重算配
 NOISE_PN = 1.24e-7                                                # ③ 那组 10 对的参数范数带符号均值上限
 PRODCHUNK_PN_V5P, PRODCHUNK_LOSS_TAIL_V5P, NOISE_LOSS_TAIL = 5.2e-8, 3.3e-5, 5.62e-5
 TRUEEXACT_PN_V5P, TRUEEXACT_PN_V7X = -7.70e-7, -8.77e-7
-HEADFP32_COST = 0.097
+HEADFP32_COST = 0.096                     # 0.98016 → 1.07457 s（案例 01 第 188、610 行）
 # 落进正文的写法
 PN_FIX1_T, PN_PRODCHUNK_T, PN_TRUE_T, PN_TPU_PROD_T = (tx(v, "%.2e", plus=True) for v in (PN_FIX1, PN_PRODCHUNK, PN_TRUE, PN_TPU_PROD))
 _lock("PN_FIX1_T", PN_FIX1_T, "＋1.86e-2"); _lock("PN_PRODCHUNK_T", PN_PRODCHUNK_T, "＋2.07e-2"); _lock("PN_TRUE_T", PN_TRUE_T, "＋2.74e-2"); _lock("PN_TPU_PROD_T", PN_TPU_PROD_T, "＋2.09e-2")
@@ -505,7 +505,7 @@ CUBLAS_S1_T, CUBLAS_299_T = tx(CUBLAS_S1, "%.1e"), tx(CUBLAS_299, "%.1e"); _lock
 PRODCHUNK_PN_R = PRODCHUNK_PN_V5P / NOISE_PN; PRODCHUNK_LOSS_R = PRODCHUNK_LOSS_TAIL_V5P / NOISE_LOSS_TAIL
 PRODCHUNK_PN_R_T, PRODCHUNK_LOSS_R_T = "%.2f" % PRODCHUNK_PN_R, "%.2f" % PRODCHUNK_LOSS_R; _lock("PRODCHUNK_PN_R_T", PRODCHUNK_PN_R_T, "0.42"); _lock("PRODCHUNK_LOSS_R_T", PRODCHUNK_LOSS_R_T, "0.59")
 TRUEEXACT_R_T = "%.1f 到 %.1f" % (abs(TRUEEXACT_PN_V5P) / NOISE_PN, abs(TRUEEXACT_PN_V7X) / NOISE_PN); _lock("TRUEEXACT_R_T", TRUEEXACT_R_T, "6.2 到 7.1")
-HEADFP32_COST_T = "%.1f%%" % (HEADFP32_COST * 100); _lock("HEADFP32_COST_T", HEADFP32_COST_T, "9.7%")
+HEADFP32_COST_T = "%.1f%%" % (HEADFP32_COST * 100); _lock("HEADFP32_COST_T", HEADFP32_COST_T, "9.6%")
 DRIFT_RATIO_TRUE_T, DRIFT_RATIO_TPU_T = "%.2f" % DRIFT_RATIO_TRUE, "%.2f" % DRIFT_RATIO_TPU
 CHUNK_VS_TPUEXACT_T = tx(CHUNK_VS_TPUEXACT, "%.1e"); _lock("CHUNK_VS_TPUEXACT_T", CHUNK_VS_TPUEXACT_T, "7.9e-8")
 TPU_SHARE_OF_TRUE_T = "%.0f%%" % (PN_TPU_PROD / PN_TRUE * 100); _lock("TPU_SHARE_OF_TRUE_T", TPU_SHARE_OF_TRUE_T, "76%")
@@ -696,11 +696,11 @@ B2_RATIO_MED_T = "%.2f → %.2f" % B2_RATIO_MED[:2]; _lock("B2_RATIO_MED_T", B2_
 B2_OVER2_T = "%d → %d" % B2_OVER2[:2]
 # 「存成 16 位的中间值」：参照一侧自己写的 eager 注意力把 q·k 先舍 BF16 再进 FP32 softmax；只改这一处的第 1 步变化 vs GPU 自己的噪声
 ATTN_FIX_LOSS, ATTN_FIX_GN = 8.1e-7, -3.0e-5          # 第 1 步 loss ／ 梯度范数的相对变化
-ATTN_NOISE_LOSS, ATTN_NOISE_GN = 4.5e-5, 2.2e-3       # GPU 8 份两两 28 对最大相对差（改后那一代）
-assert ATTN_FIX_LOSS < ATTN_NOISE_LOSS / 10 and abs(ATTN_FIX_GN) < ATTN_NOISE_GN / 10   # 远小于噪声：靠数值大小抓不到它
+ATTN_NOISE_LOSS, ATTN_NOISE_GN = 1.7e-6, 9.3e-5       # GPU 同设置 8 份第 1 步相对极差（改后那一代 g2；对齐记录 11-11 换的口径，旧的 28 对最大差 4.5e-5／2.2e-3 已撤）
+assert ATTN_FIX_LOSS < ATTN_NOISE_LOSS and abs(ATTN_FIX_GN) < ATTN_NOISE_GN   # 跟散布同一量级、略小：单看第 1 步分不清
 ATTN_FIX_LOSS_T, ATTN_FIX_GN_T = tx(ATTN_FIX_LOSS, "%.1e", plus=True), tx(ATTN_FIX_GN, "%.1e")
 ATTN_NOISE_LOSS_T, ATTN_NOISE_GN_T = tx(ATTN_NOISE_LOSS, "%.1e"), tx(ATTN_NOISE_GN, "%.1e")
-_lock("ATTN_FIX_LOSS_T", ATTN_FIX_LOSS_T, "＋8.1e-7"); _lock("ATTN_NOISE_GN_T", ATTN_NOISE_GN_T, "2.2e-3")
+_lock("ATTN_FIX_LOSS_T", ATTN_FIX_LOSS_T, "＋8.1e-7"); _lock("ATTN_NOISE_GN_T", ATTN_NOISE_GN_T, "9.3e-5")
 # 「HIGHEST 是不是多遍 BF16，看编译后还是不是矩阵乘」：多路残差四路加权和，TPU 默认写成 HIGHEST einsum，
 # 编译器把它改写成 FP32 逐元素乘 ＋ FP32 求和（不上矩阵单元），跟 GPU 只差加法顺序（TPU 配对、GPU 依次）。
 # 改成依次相加以后，第 1 步该处梯度对 CPU FP64 R ＞ 1.2 的张量 11 → 8；后一代配置没复现，机制待查。
@@ -715,7 +715,7 @@ assert abs(KD_ULP / KD_KL - KD_ULP_OF_KL) / KD_ULP_OF_KL < 0.01
 KD_LSE_TPU_ULP, KD_LSE_CPU_ULP = -0.953, -0.004    # TPU 图内 ／ CPU torch f32 的 lse 对 FP64，按格计的平均
 KD_POS_ROWS = "8.6%"                     # TPU 偏正的行只占这么多：方向一致
 KD_DIFF = -1.155e-3                      # 同一行 KD：TPU 图内对同一输入的 FP64 重算（相对）
-KD_IN_R, KD_GRAD_R = "0.94–0.99", "0.78–1.03"     # 它的三组输入对 FP32 参照的 R ／ 由它出发的梯度（20 个张量）的 R
+KD_IN_R, KD_GRAD_R = "0.94–0.99", "0.81–1.05"     # 它的三组输入对 CPU FP64 的 R ／ 由它出发的梯度（20 个张量）对 CPU FP64 的 R（最大第 5 层 weights_proj：GPU 6.81e-3、TPU 7.14e-3；旧的 0.78–1.03 是对 TPU 自己 FP32 参照算的，已撤）
 KD_RATIO = KD_LSE / KD_KL
 assert 6e4 < KD_RATIO < 7e4              # 大数是小数的约 6.5 万倍
 KD_ULP_OF_KL_T = tx(KD_ULP_OF_KL, "%.1e"); _lock("KD_ULP_OF_KL_T", KD_ULP_OF_KL_T, "4.3e-3")
@@ -760,8 +760,8 @@ SPARSE_Q_FLIP_FRAC = 0.945                # 第 1 步 GPU 对 FP64：至少翻�
 SPARSE_SLOT_FLIP = "0.147%"
 assert SPARSE_Q_FLIP_FRAC > 0.9
 SPARSE_Q_FLIP_T = "九成以上"   # 只写比例：个数会让人反推出选多少个 token
-# R 在误差不到一个 BF16 格时会摆：随上游一处写法在 0.7–1.6 之间（研究线读数 0.72 和 1.60）
-R_SWING = "0.7–1.6"
+# R 在误差不到一个 BF16 格时会摆：随上游一处写法摆（对齐记录结果文件最接近的读数 0.62–1.59；旧注释的 0.72／1.60 找不到出处，已换）
+R_SWING = "0.6–1.6"
 # 门控激活 silu·up：GPU 舍两次、TPU 默认舍一次时逐位相同的元素比例（混元 3）
 GLU_BITWISE = "73.7%"
 # 正文直接引用的单值（«名字» 只认名字，不认下标）
@@ -842,7 +842,7 @@ SW_MIX_COST = "0.2%"                      # 四路相加改依次（照 GPU 的�
 SW_ELIDE_COST = "0.06%"                   # 强制舍入：跨代对比 ＋0.06%
 # 规模一级级往上（§9.6 开头）
 LADDER_MID_PASS = (5, 0, 4)               # 中等尺寸（随机初始化，宽度和注意力形状同真实模型）300 步：过 ／ 不过 ／ 待定
-LADDER_MID_WORST = 1.04                   # 四个待定都只略超 N：最差 1.04 N
+LADDER_MID_WORST = 1.04                   # 四个待定都只略超 N：最差 1.04 N（最老一代读数；现行 C 口径最差 1.25，是 MTP loss，结论不变）
 LADDER_REAL_STEP1 = -8.5e-5               # 真实权重截层：第 1 步前向主 loss 就差（GPU 8 份第 1 步逐位相同）
 LADDER_MINI_STEP1 = (1.1e-6, 3.6e-6)      # 小模型各代第 1 步的差（范围），在 GPU 份间散布以内
 assert abs(LADDER_REAL_STEP1) / max(LADDER_MINI_STEP1) > 20
@@ -857,7 +857,7 @@ DIV_STEP1_R = abs(DIV_STEP1[0]) / abs(DIV_STEP1[1])
 assert abs(DIV_STEP1_R - 0.31) < 0.01
 # 混元 3 第 1 步按「尺子只来自参照」重判（§9.4）
 HY3_REJUDGE = (11, 10, 1)                 # 变严项数：合计 ／ 待定→不过 ／ 过→待定；没有一项变松
-HY3_REJUDGE_R = "1.23–2.70"               # 不过的里，一部分张量对 FP64 的 R 在这个范围（字面上不算已定责）
+HY3_REJUDGE_R = "梯度最差 2.20／2.70、优化器状态最差 7.95／7.86（v5p／v7x）"   # 不过的里 R ＞ 1.2 的最差张量（出处：混元 3 judging.md、对齐报告；旧写的下限 1.23 无出处，已撤）
 assert HY3_REJUDGE[0] == HY3_REJUDGE[1] + HY3_REJUDGE[2]
 NSB_GPU = "1.2%–13%"                      # 参照（GPU）那段迭代的更新离 FP64（同一 8 步回放）
 HY3_REJ_N, HY3_REJ_A, HY3_REJ_B = HY3_REJUDGE
@@ -866,7 +866,7 @@ LADDER_MID_T = "%d ／ %d ／ %d" % LADDER_MID_PASS
 DIV_STEP1_R_T = "%.2f" % DIV_STEP1_R
 DIV_STEP11_100 = 4.8e-5                   # 第 11–100 步 TPU 对 GPU 8 份均值的带符号相对差 |.|（同号，负）
 DIV_FP32_STEPS = 30                       # FP32 轨迹只跑了 30 步
-SW_ADAM_COST = "0.02%"                    # 精确的除法、开方、偏差修正：跨代对比 ＋0.02%
+SW_ADAM_COST = "0.1%"                     # 精确的除法、开方、偏差修正：小尺寸实测 ＋0.1%（对齐记录差异清单 C5、对齐报告；旧写的 ＋0.02% 找不到出处）
 
 # ── 2026-11-10 · 第二次迁移的新材料（TPU 自比、GPU 尺子扩到 16 份）──────────────────────────
 # 出处：第二次迁移的对齐记录（小尺寸模型，随机初始化，约 4.3 亿参数；TPU v5p 8 设备 ↔ B200×8）。
@@ -1111,7 +1111,7 @@ BIAS_ZM_SM_AFTER = 0.17                   # 路由偏置零均值更新：TPU �
 assert BIAS_ZM_R[0] == 19.1 and BIAS_ZM_R[1] == 0.31 and BIAS_ZM_SM_AFTER < BIAS_ZM_R[1]
 B2_NOW = {"total": 205, "over": 177, "attr": 171, "far": 6, "far_mix": 5, "far_new": 3, "same3": 10, "within": 18}   # 现行配置（关 base2）第 1 步对 FP64（小尺寸报告「第一步整网」）
 assert B2_NOW["attr"] + B2_NOW["far"] == B2_NOW["over"] and B2_NOW["over"] + B2_NOW["same3"] + B2_NOW["within"] == B2_NOW["total"]
-OUTGATE_R_T = "0.96–0.98"                 # 注意力输出门 sigmoid：TPU 对 GPU 离 FP64 之比（定责，不处理）
+OUTGATE_R_T = "0.90–1.00"                 # 注意力输出门 sigmoid：TPU 对 GPU 离 FP64 之比（定责，不处理；现行配置读数，旧的 0.96–0.98 是上一代）
 import struct as _st
 def _bf16(x):                             # 就近舍入到 BF16（本课推导用）
     b = _st.unpack(">I", _st.pack(">f", x))[0]
@@ -1345,7 +1345,7 @@ assert "%.2f" % PR_WORST == "1.00"                                              
 PR_LOSS_X = PR["L4.loss"]["ratio"]["signed_mean"]
 assert "%.1f" % PR_LOSS_X == "4.8"                                                # 主 loss 带符号均值：同配方尺子比现行宽几倍
 assert ["%.2f" % PR[k]["r_borrowed"] for k in ("L4.loss", "L4.grad_norm")] == ["2.97", "2.45"]   # 借现行尺子时这两项判超
-PR_N_T, PR_WORST_T, PR_LOSS_X_T = "8", "%.2f" % PR_WORST, "%.1f" % PR_LOSS_X
+PR_N_T, PR_WORST_T, PR_LOSS_X_T = "16", "%.3f" % PR_WORST, "%.1f" % PR_LOSS_X   # 11-12 事先登记补到 16 份（两两 120 对）：九项全过、最差 0.996 不变，主 loss 带符号均值的上限由同一对决定、16 份与 8 份相同（对齐记录生产配方臂 8 份、16 份两个结果文件）
 # F14：生产形状 0.0.46 的门槛（两代都是 V/8 往上取整）——每卡 16384 个下标在 0.0.46 上会排序，0.0.52 上不排序
 assert PROD_TH["v5p_046"] == PROD_TH["v7x_046"] == 120832 // 8 + 1 and 16384 > PROD_TH["v5p_046"]
 PROD_TH_046_T = str(PROD_TH["v5p_046"])
@@ -1463,9 +1463,9 @@ EL_WGRAD, EL_BRANCHIN = EL_USES["wgrad"], EL_USES["branchin"]
 # 讲义备答用：小尺寸关掉省舍入（上一代配置）1000 步主 loss 比 GPU 高 4.1e-5（对齐记录 小尺寸知识库「精度本身对轨迹影响很大」；实测）；TPU 自比 35 个 1000 步长跑主 loss 全为正
 EL_NOEXC_LOSS, EL_SELF_RUNS = 4.1e-5, 35
 assert EL_NOEXC_LOSS > 4 * 9.4e-6
-# 已用 reduce_precision 补上的往返（不计入 272）：全图 55 处，其中多路残差与收拢处 30 处、其余 25 处（norm 15、线性层 10）
+# 已用 reduce_precision 补上的往返（不计入 272）：全图 55 处，其中多路残差与收拢处 30 处、其余 25 处（相减得出；扫描结果里能分清的 norm 15 处，其余没有逐个归类）
 EL_COVERED, EL_COVERED_MHC = 55, 30
-assert EL_COVERED == 30 + 15 + 10
+assert EL_COVERED - EL_COVERED_MHC == 25
 # 先查的三类的优先级（对齐记录案例：GPU 那边会舍、TPU 省掉、在反向梯度路径上，三条都满足的为高）：dW 高、分支输入梯度合流高、前向几处中
 EL_LEFT = EL_USES["wgrad"] + EL_USES["branchin"] + EL_FWD
 assert EL_LEFT == 243
@@ -1580,7 +1580,7 @@ M3_NORM_ELIDED = {"4K": 0, "32K": 8}
 # 二分（32K，第 2 级之上加开关，主 loss 偏差的平均，单位 σ ＝ GPU 8 份份间标准差）
 M3_BISECT_300 = [("不加（对照）", -24.3), ("投影 FP32 累加", -24.6), ("精确超越函数", -24.6), ("精确 Adam ＋ 正交化迭代的舍入", -24.1),
                  ("四处一起（见底注）", -0.6)]                 # 窗口第 51–300 步
-M3_BISECT_120 = [("不加（对照）", -30.0), ("只加其余三处里任一处", -30.8), ("只加 RMSNorm scale", -0.2)]   # 窗口第 51–120 步；对照「约 −30σ」，另三处「都还在 −30.8σ 以下」
+M3_BISECT_120 = [("只加其余三处之一（三条运行）", -30.8), ("只加 RMSNorm scale", -0.2)]   # 窗口第 51–120 步；四条「各只加一处」：−30.84／−30.88／−0.22／−30.88σ；这一轮没有不加开关的对照
 M3_DRIFT_PEAK = -27                      # 第 100 步约 −27σ；第 500 步前后翻正
 M3_SCALE_TRACK = [(50, 3.2e-4), (100, 6.5e-4), (150, 9.5e-4)]   # FP32 scale 偏离 1.0 的中位数（16 个 norm scale）
 M3_SCALE_SLOPE = 6.4e-6
@@ -1730,8 +1730,8 @@ PN_CHUNK_STEP_R = "%.4f" % (PN_PRODCHUNK - PN_RCX5); assert PN_CHUNK_STEP_R == "
 # ── 2026-11-15 · §3.3「从一条序列到一个 r」公式卡的实测小表（第二次迁移 TPU 自比，FSDP→纯数据并行，前 300 步；
 #    被测与尺子都由逐步记录现算核过：主 loss 三个统计的被测值和 GPU 8 份两两 28 对的最大值；实测）──
 CARD_R_ROWS = [("主 loss", "带符号均值", 5.5819e-6, 3.00915e-6), ("主 loss", "MARE", 8.835e-6, 6.721e-6), ("主 loss", "最大单步（第 273 步）", 3.704e-5, 4.531e-5),
-               ("梯度范数", "带符号均值", -2.599e-4, 9.924e-5)]
-assert ["%.2f" % (abs(a) / b) for _q, _s, a, b in CARD_R_ROWS] == ["1.85", "1.31", "0.82", "2.62"]
+               ("主 loss 后段（第 101–300 步）", "带符号均值", 9.22e-6, 4.54e-6), ("梯度范数", "带符号均值", -2.599e-4, 9.924e-5)]
+assert ["%.2f" % (abs(a) / b) for _q, _s, a, b in CARD_R_ROWS] == ["1.85", "1.31", "0.82", "2.03", "2.62"]   # 后段一行出处：对齐记录尺子说明页的逐项表
 # ── 2026-11-15 · fig-rratio 补两边离 FP64 的绝对值（对齐记录混元 3 v5p 单算子回放结果文件，qkv 那一条：TPU rel_l2 对自己输入的 FP64、GPU 同口径最大值；实测）──
 QKV_ABS_BEFORE, QKV_ABS_AFTER, QKV_ABS_GPU = 2.335e-3, 1.890e-3, 1.890e-3
 assert abs(QKV_ABS_BEFORE / QKV_ABS_GPU - R_QKV_BEFORE) < 0.002 and abs(QKV_ABS_AFTER / QKV_ABS_GPU - R_QKV_AFTER) < 0.002
