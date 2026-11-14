@@ -493,7 +493,7 @@ def fig_lmhead():
         f.box(BX0, y + 2, XR(v) - BX0, 16, col, col, 3)
         f.t(XR(v) + 8, y + 15, "%.2f　%s" % (v, c), col, True, 13)
     f._pan = None
-    yb = f.band(sy + SH + 20, "ok", "推荐 high：曲线效果跟 highest 一样，代价约一半", [
+    yb = f.band(sy + SH + 20, "ok", "推荐 high：high 和 highest 都回到噪声附近（单份运行，分不开），high 代价约一半", [
         "第 1 步主权重还在格点上，三档前向一样；第 2 步起才差开，所以第 1 步逐张量看不出它（超 2N 的张量 91 → 91）。",
         "这一次矩阵乘的输出是整个词表，是整网最宽的一次，多算几遍就贵：high 多 2 遍，highest 多 5 遍。",
     ])

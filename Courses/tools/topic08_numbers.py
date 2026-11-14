@@ -1727,3 +1727,11 @@ assert (TPU_LOSS_TAIL_T, GPU_B_TAIL_T, GPU_C_TAIL_T) == ("−1.66e-4", "−3.8e-
 assert abs((TPU_LOSS_TAIL - sum(GPU_RUNS10_TAIL) / 10) - (-1.4e-4)) < 0.05e-4
 HEAD_S100_E = tx(abs(HEAD_BF16_S100), "%.1e"); assert HEAD_S100_E == "6.1e-4"
 PN_CHUNK_STEP_R = "%.4f" % (PN_PRODCHUNK - PN_RCX5); assert PN_CHUNK_STEP_R == "0.0083"
+# ── 2026-11-15 · §3.3「从一条序列到一个 r」公式卡的实测小表（第二次迁移 TPU 自比，FSDP→纯数据并行，前 300 步；
+#    被测与尺子都由逐步记录现算核过：主 loss 三个统计的被测值和 GPU 8 份两两 28 对的最大值；实测）──
+CARD_R_ROWS = [("主 loss", "带符号均值", 5.5819e-6, 3.00915e-6), ("主 loss", "MARE", 8.835e-6, 6.721e-6), ("主 loss", "最大单步（第 273 步）", 3.704e-5, 4.531e-5),
+               ("梯度范数", "带符号均值", -2.599e-4, 9.924e-5)]
+assert ["%.2f" % (abs(a) / b) for _q, _s, a, b in CARD_R_ROWS] == ["1.85", "1.31", "0.82", "2.62"]
+# ── 2026-11-15 · fig-rratio 补两边离 FP64 的绝对值（对齐记录混元 3 v5p 单算子回放结果文件，qkv 那一条：TPU rel_l2 对自己输入的 FP64、GPU 同口径最大值；实测）──
+QKV_ABS_BEFORE, QKV_ABS_AFTER, QKV_ABS_GPU = 2.335e-3, 1.890e-3, 1.890e-3
+assert abs(QKV_ABS_BEFORE / QKV_ABS_GPU - R_QKV_BEFORE) < 0.002 and abs(QKV_ABS_AFTER / QKV_ABS_GPU - R_QKV_AFTER) < 0.002

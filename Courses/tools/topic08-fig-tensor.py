@@ -114,8 +114,8 @@ def fig_rratio():
         f.line(x0, ly - 6, tx, ty, col, 1.0, arrow=False)
         f.box(tx - 3, ty - 3, 6, 6, col, col, 3)
     # 两个实测点：标签放在靶子外面，用短引线连回点
-    for r, ang, col, lab, ldx, ldy in [(N.R_QKV_BEFORE, 62, RD, "改之前 R ＝ %.3f" % N.R_QKV_BEFORE, 70, -48),
-                                       (N.R_QKV_AFTER, 235, GR, "改之后 R ＝ %.3f" % N.R_QKV_AFTER, -40, 70)]:
+    for r, ang, col, lab, ldx, ldy in [(N.R_QKV_BEFORE, 62, RD, "改之前 R ＝ %.3f（TPU %s ／ GPU %s）" % (N.R_QKV_BEFORE, N.sci(N.QKV_ABS_BEFORE), N.sci(N.QKV_ABS_GPU)), 70, -48),
+                                       (N.R_QKV_AFTER, 235, GR, "改之后 R ＝ %.3f（TPU %s ／ GPU %s）" % (N.R_QKV_AFTER, N.sci(N.QKV_ABS_AFTER), N.sci(N.QKV_ABS_GPU)), -40, 70)]:
         x, y = cx + r * U * math.cos(math.radians(ang)), cy - r * U * math.sin(math.radians(ang))
         f.line(x, y, x + ldx, y + ldy, col, 1.0, arrow=False)
         f.box(x - 9, y - 9, 18, 18, col, INK, 9)
@@ -127,7 +127,7 @@ def fig_rratio():
         "代价：要在 CPU 上用同一份真实输入重算一遍 FP64；适合单个算子、单层和第 1 步的定责，整网多步靠噪声尺子。",
     ])
     yb = f.src(yb + 10,
-               "📌 距离都用 rel_L2 量；靶子上两个点画在不同角度只为分开，只有离圆心多远有意义。",
+               "📌 距离都用 rel_L2 量（离 FP64 的相对误差，两边各用自己抓到的算子输入算真值）；靶子上两个点画在不同角度只为分开，只有离圆心多远有意义。",
                "⚠️ 推断（门槛）：只差舍入顺序时 R ≈ 1；多一次同量级的独立舍入，误差按平方相加，R ≈ √2 ≈ 1.41；取 1.2 当线。",
                "📌 实测：v5p 上单算子 FP64 对比，qkv 投影 R 1.235 → 1.000，第 0 层稠密 MLP 的输入投影 1.294 → 1.117（打开 FP32 累加的开关后，9 条单算子检查全过）。")
     f.save("fig8-rratio.svg", yb + 14)
@@ -240,9 +240,9 @@ def fig_flip():
 def fig_rR():
     f = Fig(W, "左格，小写 r：两个点是 GPU 和 TPU 的结果，中间的距离是两边的差，灰段是 GPU 自己重跑的噪声；r 等于差除以噪声。把两个点换个位置，r 不变，它说不出谁错。"
                "例子：优化器里一段迭代，TPU 对 GPU 的更新差最多 12.8%%；可这是单次回放，没有重跑的噪声，r 量不出来。"
-               "右格，大写 R：一个靶心是 FP64 真值，两边各离靶心多远。同一个例子，GPU 那段迭代在 BF16 里算，离真值 %s；TPU 原来在 FP32 里算，中位数 %s，九成七的张量步 R 小于 1。"
+               "右格，大写 R：一个靶心是 FP64 真值，两边各离靶心多远。同一个例子，照 GPU 写法在 BF16 里迭代，更新离真值的中位数 %s；TPU 原来在 FP32 里迭代，中位数 %s，九成七的张量步 R 小于 1。"
                "所以两边差得多，R 却说 TPU 更准；照 GPU 改是为了对齐，不是修错。下面一行：报一个比值，带三样东西。"
-               % (N.NSB_GPU, N.sci(N.NSB_ABS[0])))
+               % (N.sci(N.NSB_ABS[1]), N.sci(N.NSB_ABS[0])))
     y0 = f.header("小写 r 只说差多少，大写 R 才说谁错",
                   "左：r ＝ 两边的差 ÷ GPU 自己的噪声（对称）；右：R ＝ TPU 离真值 ÷ GPU 离真值（能定责）；同一个例子，两种读法",
                   [(GY, "GPU"), (BL, "TPU"), (RD, "两边的差"), (INK, "FP64 真值")])
@@ -268,11 +268,11 @@ def fig_rR():
         f.p.append('<circle cx="%d" cy="%d" r="%d" fill="none" stroke="%s" stroke-width="2"/>' % (cx, cyy, r_, col))
     f.box(cx - 5, cyy - 5, 10, 10, INK, INK, 5)
     f.t(cx, cyy + 24, "FP64", INK, True, 12, "middle")
-    f.t(cx + 128, cyy - 80, "GPU（BF16 里迭代）", GY, True, 13)
-    f.t(cx + 128, cyy - 60, "离真值 %s" % N.NSB_GPU, GY, size=13)
+    f.t(cx + 128, cyy - 80, "照 GPU 写法（BF16 里迭代）", GY, True, 13)
+    f.t(cx + 128, cyy - 60, "离真值中位数 %s" % N.sci(N.NSB_ABS[1]), GY, size=13)
     f.t(cx + 128, cyy - 10, "TPU（FP32 里迭代）", BL, True, 13)
     f.t(cx + 128, cyy + 10, "离真值中位数 %s" % N.sci(N.NSB_ABS[0]), BL, size=13)
-    f.t(cx + 128, cyy + 46, "%s 的张量步 R ＜ 1" % N.NSB_TPU_CLOSER, BL, True, 13)
+    f.t(cx + 128, cyy + 46, "同口径约 %d 倍；%s 的张量步 R ＜ 1" % (round(N.NSB_ABS[1] / N.NSB_ABS[0]), N.NSB_TPU_CLOSER), BL, True, 13)
     f.t(px + 24, py2 + PH - 66, "→ R ＜ 1：TPU 不错；照 GPU 改只为对齐", GR, True, 14)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "报一个比值，带三样：比什么、基线的绝对值、被测的绝对值", [
@@ -280,7 +280,7 @@ def fig_rR():
         "代价：r 要有 GPU 重跑的噪声才量得出；R 要有一个比两边都准的参照（FP64），整网多步跑不动它。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移，优化器 8 步回放）：照 GPU 把那段迭代改到 BF16 之前，TPU 对 GPU 的更新差最多 %s%%、之后 %s%%；改之前 %s 的张量步 TPU 比 GPU 更接近 FP64，更新对 FP64 的相对误差中位数 %s。GPU 那段迭代离 FP64 %s（同一 8 步回放）。"
+               "📌 实测（第二次迁移，优化器 8 步回放）：照 GPU 把那段迭代改到 BF16 之前，TPU 对 GPU 的更新差最多 %s%%、之后 %s%%；改之前 %s 的张量步 TPU 比 GPU 更接近 FP64，更新对 FP64 的相对误差中位数 %s。GPU 那段迭代离 FP64 %s（同一 8 步回放，范围）；图上两个中位数同一口径：TPU 原来 3.0e-3，TPU 照 GPU 写法改成 BF16 迭代后 3.95e-2。"
                % ("%.1f" % N.NSB_DIFF[0], "%.1f" % N.NSB_DIFF[1], N.NSB_TPU_CLOSER, N.NSB_ABS_T, N.NSB_GPU),
                "⚠️ 存疑：GPU 那段迭代「离 FP64」的 FP64 参照是不是同系数、同迭代次数的 Newton–Schulz（而不是 SVD 的精确极分解）还没核；Muon 的系数本来就不收敛到精确极分解，若参照是后者，1.2%–13% 里大半是算法本身的差。",
                "📌 落点带里那个例子是另一处：Adam 管的一个小张量，TPU 的除法、开方、偏差修正不够精确，R %s（§5.7 折叠）。⚠️ 两边都小于一个 BF16 格时，R 只是两种舍入之比，会来回摆；这时看绝对值。注：左图两点的距离、右图圆的半径只表示大小关系。" % N.ADAM_R_T)
