@@ -164,8 +164,10 @@ def fig_intervene():
                   "柱长 ＝ 差有多大（零点 ＝ GPU 第一次运行）；灰色带 ＝ GPU 自己重跑的差（噪声），带边标了数",
                   [(BL, "原样：TPU 对 GPU"), (GR, "两边都去掉那个方向"), (OR, "GPU 人为多推一把，对 GPU 默认")])
     PH = 330
+    import json as _j0, os as _o0
+    _IV = _j0.load(open(_o0.path.join(_o0.path.dirname(_o0.path.abspath(__file__)), "topic08_intervene.json"), encoding="utf-8"))
     groups = [("loss 平均偏移（第 301–1000 步，相对）", [(N.TPU_LOSS_TAIL, BL), (N.REMOVE_LOSS, GR), (N.FORCE_LOSS, OR)], 1.9e-4, 2.5e-5, "%.2e", "−2.5e-5"),
-              ("参数范数差（第 1000 步，绝对）", [(N.TPU_PN_1000, BL), (N.REMOVE_PN, GR), (N.FORCE_PN, OR)], 0.025, 4.9e-4, "%+.4f", "＋4.9e-4"),
+              ("参数范数差（第 1000 步，绝对）", [(_IV["orig"][-1], BL), (_IV["remove"][-1], GR), (_IV["force"][-1], OR)], 0.025, 4.9e-4, "%+.2e", "＋4.9e-4"),
               ("lse 差（第 1000 步训练批）", [(N.ORIG_LSE, BL), (N.REMOVE_LSE, GR), (None, OR)], 0.37, 0.012, "%+.3f", "−0.012")]
     for gi, (title, bars, vmax, noise, fmt, nlab) in enumerate(groups):
         px = gi * 472
@@ -179,7 +181,7 @@ def fig_intervene():
                 continue
             L = max(abs(v) / vmax * bw, 3)
             f.box(bx, y, L, 40, c, c, 4)
-            f.t(bx + L + 8, y + 26, fmt % v, c, True, 14)
+            f.t(bx + L + 8, y + 26, (fmt % v).replace("e-0", "e-").replace("+", "＋").replace("-", "−").replace("e−", "e-"), c, True, 14)
         f.t(bx, py + 30 + 3 * 78 + 26, "灰色带 ＝ GPU 重跑的差 %s" % nlab, GY, size=12.5)
         f._pan = None
     # 第二轮：参数范数逐步差（三条线 ＋ 两条 GPU 重跑），撑住「去掉以后差没长出来、加上就回来」
