@@ -9186,7 +9186,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="466" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="466" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="493" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU 上冷门词的行被压得少：从初值算起 GPU 缩了 66.3，TPU 只缩了 49.2</tspan></text>
-</svg><figcaption><b>左边一根独大，右边第一根独大。</b><span class="capmore"><br><em>灰色细条是噪声，短到几乎看不见。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：分组参数平方和、逐行平方和都按 FP32 主权重算，两边组名一致；第 100 / 200 / 300 步输出层贡献 ＋4.1e-4 / ＋1.85e-3 / ＋3.83e-3，逐步变大。</p>
+</svg><figcaption><b>左边一根独大，右边第一根独大。</b><span class="capmore"><br><em>灰色细条是噪声，短到几乎看不见。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：分组参数平方和、逐行平方和都按 FP32 主权重算，两边组名一致；第 100 / 200 / 300 步输出层贡献 ＋4.10e-4 / ＋1.85e-3 / ＋3.83e-3，逐步变大。</p>
 <p>📌 换算（本课推导）：参数范数 ＝ √S（S ＝ 全部参数平方和），S 多出 ΔS 时参数范数多出约 ΔS ÷ (2 × 参数范数)。输出层平方和差合计 ＋23.2 ÷（2 × 3042）≈ 3.81e-3，跟左边输出层的 3.83e-3 差约 0.4%。</p>
 <p>📌 实测：没出现过的词那些行，√v̂ 均值两边只差 0–4%，Adam 更新的大小只差 1%–3%；Σ w·u（更新在这一行权重方向上的分量，加起来）从第 25 步起就分开。</p></details></figure>
   <p>这里只说两边不一样，不说谁对；哪一边偏，<a href="#s7-5">§7.5</a> 才知道。为什么偏偏是冷门词，先看 Adam 怎么算一步：</p>
@@ -9586,7 +9586,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="732" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="732" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="759" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">loss 偏移、参数范数漂移、logits 整体偏低，是同一股力的三个后果；去掉它，参数范数的差一路长得慢得多</tspan></text>
-</svg><figcaption><b>绿柱缩回去（参数范数还剩三成），橙柱长回来；下格逐步看，蓝橙两条一路同涨，绿线长得慢得多。</b><span class="capmore"><br><em>每组一份 1000 步的运行，实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（1000 步）：两边都去掉 dh 沿 w̄ 的全部分量后，TPU 对 GPU：loss −3.4e-5，param_norm ＋6.1e-3；同设置 GPU 两次之间 loss −2.5e-5、param_norm ＋4.9e-4。</p>
+</svg><figcaption><b>绿柱缩回去（参数范数还剩三成），橙柱长回来；下格逐步看，蓝橙两条一路同涨，绿线长得慢得多。</b><span class="capmore"><br><em>每组一份 1000 步的运行，实测；灰线呈台阶状是参数范数日志只记到 FP32 精度。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（1000 步）：两边都去掉 dh 沿 w̄ 的全部分量后，TPU 对 GPU：loss −3.4e-5，param_norm ＋6.1e-3；同设置 GPU 两次之间 loss −2.5e-5、param_norm ＋4.9e-4。</p>
 <p>📌 实测（1000 步，lse）：两边都去掉以后第 1000 步 lse 差 −0.007（原样约 −0.33），同设置 GPU 两次之间 −0.012。这里的 lse 是在第 1000 步的训练批上量的；上一张图右格终点 −0.299 是固定序列探针在第 975 步的读数，两种测法，数不一样。</p>
 <p>📌 实测：人为沿这个方向加一股力 —— 把 GPU 自己一份本来接近零的小分量（每个 token 的 dlogits 加起来，再乘 w̄）变成原来的 −8 倍，跑 1000 步，对默认 GPU：loss −1.26e-4，param_norm ＋2.05e-2；再跑一份 −1.27e-4、＋2.01e-2。TPU 原样对 GPU：−1.66e-4、＋2.1e-2。GPU 人为多推一把，连 logits 下移、冷门行范数偏大一起复现。这股力的大小没有跟 6.5e-4 那个缺口对过，只看结果能复现。</p></details></figure>
   <p>只知道「是这股力」，还不知道是谁算错了：TPU 多推了，还是 GPU 少推了？拿训练里实际用到的张量，在 FP64 里重算一遍，把输出头的误差拆到每一段：</p>
