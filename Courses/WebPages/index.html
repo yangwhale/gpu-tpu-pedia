@@ -564,7 +564,7 @@ footer a{color:var(--blue);text-decoration:none}
   <!-- 2026-11-05：原「最新开源模型对比」只有大纲、从没成页，按现场原话替换（旧大纲在 git 历史里）。
        2026-11-11：跟「精度与量化」对调编号，由 09 改为 08（正好轮到第八讲）；编号标蓝（class now），卡片其余仍按「深入」样式。 -->
   <div class="topic opt now" id="t8">
-    <div class="head"><span class="num">08</span><span class="name"><a href="topic-08.html">GPU→TPU 训练精度对齐</a></span><span class="pre">前置 02 · 04</span><span class="rdy">✅ 课件 ＋ 讲义 · 讲约 100′（三次课）· 77 张图 ＋ 10 支动画</span></div>
+    <div class="head"><span class="num">08</span><span class="name"><a href="topic-08.html">GPU→TPU 训练精度对齐</a></span><span class="pre">前置 02 · 04</span><span class="rdy">✅ 课件 ＋ 讲义 · 讲约 100′（三次课）· 78 张图 ＋ 10 支动画</span></div>
     <div class="quote">TPU 和 GPU 不可能一位不差。能要求的是：TPU 跟 GPU 的差，不比 GPU 自己跟自己的差大。</div>
     <dl><dt>讲什么</dt><dd>一把噪声尺子、L0–L4 五级检查、两类指标（逐步曲线和第 1 步逐张量），再看清浮点和硬件在哪儿舍入、在 TPU 上怎么拿证据；第二次迁移补上纯噪声也会超线、换了顺序还是丢了精度、16 位与 32 位的交界，以及 TPU 自己改一样东西会不会变；第三次迁移从生产代码起步，查清设备一到 8 个、投影的部分和就在 BF16 里多舍几次。</dd>
       <dt>转折</dt><dd>两个案例。混元 3 搬到 TPU 后 loss 一直低 1.5e-4，一路查下去，<b>偏的不是 TPU</b>：GPU 在一次 12 万长的 BF16 求和里，每一步都朝零截掉了一点。混元 4 缩小版上 DDP 和 FSDP 数学等价却对不上，查到最后是<b>高频词 × 不排序</b>：编译器只在一次 scatter-add 的下标数过线时才插排序。</dd>

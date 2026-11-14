@@ -87,7 +87,7 @@ def fig_2x2():
                 txt = "收%s次更新，舍%s次" % (many, many)
             f.t(x + 30, y + 92, txt, GY, size=13.5)
             if c == 0:
-                v = "%s–%s" % (_e(LOW2[3]), _e(LOW1[3])) if sort else "%s–%s" % (_e(LOW2[4]), _e(LOW1[4]))
+                v = "%s ／ %s" % (_e(LOW2[3]), _e(LOW1[3])) if sort else "%s ／ %s" % (_e(LOW2[4]), _e(LOW1[4]))
             else:
                 v = _e(HOT[3]) if sort else _e(HOT[4])
             f.t(x + 30, y + 150, "离 FP64  " + v, RD if bad else INK, True, 22 if bad else 18, big=True)
@@ -155,7 +155,7 @@ def fig_rows():
     f.elbow(hx + 2 * (BW + 10) + BW, Y(HOT[6]) + 10, ax - 6, Y(HOT[6]) + 60, OR, 1.4, arrow=False)
     f.t(ax, Y(HOT[6]) + 56, "卡数翻倍、跨卡多一倍路", OR, True, 14.5)
     f.t(ax, Y(HOT[6]) + 78, "误差不变", OR, True, 14.5)
-    f.t(gx[0], Y(1.0e-2) - 14, "低频行：四种跑法几乎一样高", GY, True, 14.5)
+    f.t(gx[0], Y(1.0e-2) - 14, "低频行：四种跑法几乎一样高（误差在加进词表之前就有，推断）", GY, True, 14.5)
     f._pan = None
     yb = f.band(py + PH + 20, "warn", "主因在每张卡自己那次 BF16 累加；8 路 BF16 跨卡求和只是次要的", [
         "后来拆开量过：高频行里跨卡那份只让误差大 %.2f 倍，本卡那份大 %.1f 倍；低频多卡那组跨卡约 %.2f 倍、本卡约 %.2f 倍。" % (N.C2_SPLIT_C[0], N.C2_SPLIT_C[1], N.C2_SPLIT_B[0], N.C2_SPLIT_B[1]),
@@ -576,7 +576,66 @@ def fig_comm():
     f.save("fig8-comm.svg", yb + 14)
 
 
+def fig_curve():
+    """fig8-ddpcurve 回答：「曲线超出噪声、方向固定」长什么样？修好以后呢？—— 梯度范数逐步相对差，上：纯数据并行；下：只切词嵌入表。
+    数据：topic08_case2_curves.json（私有导出，TPU 自比前 300 步逐步实测）；判定数（带符号均值、r）用曲线反算并跟课件已有数对上。"""
+    import json as _j, os as _o
+    D = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_case2_curves.json"), encoding="utf-8"))
+    DP, ES, G7, ENV = D["纯数据并行"], D["只切词嵌入表"], D["GPU 另 7 份"], D["GPU 28 对包络"]
+    sm = lambda x: sum(x[1:300]) / 299.0
+    N_GN = 9.92e-5                                         # GPU 28 对里带符号均值的最大（就是 r 的分母）
+    assert abs(sm(DP) - (-2.60e-4)) < 0.01e-4 and abs(abs(sm(DP)) / N_GN - float(N.C2_R_DP8_T)) < 0.02
+    assert abs(sm(ES) - (-3.82e-5)) < 0.05e-5
+    r_es = abs(sm(ES)) / N_GN
+    f = Fig(W, "上下两格，横轴第 1 到 300 步，纵轴是梯度范数的逐步相对差。灰色细线是 GPU 同设置另 7 份对其中一份，粗灰线是它们的 50 步平均，浅灰带是 28 对每一步的最大差。"
+               "上格蓝线：TPU 纯数据并行对 TPU 的 FSDP 基线，50 步平均前 200 步明显在零下面、之后靠回零附近，前 300 步带符号均值 −2.60e-4，是 GPU 尺子 9.92e-5 的 2.62 倍。"
+               "下格绿线：只把词嵌入表切开的那一份，平均线回到灰线中间，带符号均值 −3.8e-5，0.39 倍。")
+    y0 = f.header("纯数据并行：梯度范数前 200 步明显偏低　——　<tspan font-weight=\"700\">只切词嵌入表以后回到灰线中间</tspan>",
+                  "梯度范数逐步相对差 dₜ（前 300 步）；被测对 TPU 自己的 FSDP 基线；灰 ＝ GPU 同设置另 7 份对其中一份（尺子用的就是这 8 份）",
+                  [(GY2, "GPU 另 7 份（细：逐步；粗：50 步平均）"), (BL, "纯数据并行"), (GR, "只切词嵌入表")])
+    X0, XW = 110, 1240
+
+    def X(st):
+        return X0 + (st - 1) / 299.0 * XW
+    w = 50
+    roll = lambda x: [sum(x[k - w + 1:k + 1]) / w for k in range(w - 1, len(x))]
+    PH = 250
+    for gi, (title, data, col, lab) in enumerate([("纯数据并行（不修）", DP, BL, "前 300 步带符号均值 %s，尺子 9.92e-5 的 %s 倍" % (N.tx(sm(DP)), N.C2_R_DP8_T)),
+                                                  ("只切词嵌入表（第三种修法）", ES, GR, "前 300 步带符号均值 %s，尺子的 %.2f 倍" % (N.tx(sm(ES), "%.1e"), r_es))]):
+        py = f.panel(0, y0 + gi * (PH + 12), W, PH, title, col)
+        lo, hi = -2.0e-3, 2.0e-3
+        YT, YH = py + 14, PH - 60
+
+        def Y(v):
+            return YT + (hi - max(lo, min(hi, v))) / (hi - lo) * YH
+        up = " ".join("%.1f,%.1f" % (X(k + 1), Y(e)) for k, e in enumerate(ENV))
+        dn = " ".join("%.1f,%.1f" % (X(k + 1), Y(-e)) for k, e in reversed(list(enumerate(ENV))))
+        f.p.append('<polygon points="%s %s" fill="#eceef1" stroke="none"/>' % (up, dn))
+        f.line(X0, Y(0), X0 + XW, Y(0), INK, 1.2, arrow=False)
+        for v in (-1e-3, 1e-3):
+            f.t(X0 - 8, Y(v) + 4, "%+.0f×10⁻³" % (v * 1e3), GY, size=12, anchor="end")
+        f.t(X0 - 8, Y(0) + 4, "0", INK, True, 12, "end")
+        for g in G7:
+            f.p.append('<polyline points="%s" fill="none" stroke="#9aa0a6" stroke-width="0.6" stroke-opacity="0.4"/>' % " ".join("%.1f,%.1f" % (X(k + 1), Y(v)) for k, v in enumerate(g)))
+        f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="0.9" stroke-opacity="0.55"/>' % (" ".join("%.1f,%.1f" % (X(k + 1), Y(v)) for k, v in enumerate(data)), col))
+        for g in G7:
+            f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="1.6"/>' % (" ".join("%.1f,%.1f" % (X(k + w), Y(v)) for k, v in enumerate(roll(g))), GY))
+        f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="3.4"/>' % (" ".join("%.1f,%.1f" % (X(k + w), Y(v)) for k, v in enumerate(roll(data))), col))
+        f.t(X0 + XW, py + 22, lab, col, True, 14, "end")
+        for st in (1, 100, 200, 300):
+            f.t(X(st), py + PH - 28, "第 %d 步" % st, GY, size=12, anchor={1: "start", 300: "middle"}.get(st, "middle")) if st != 300 else None
+        f._pan = None
+    yb = f.band(y0 + 2 * (PH + 12) + 8, "ok", "不修时蓝线的平均前 200 步明显在零下面；只切词嵌入表以后，绿线的平均回到灰线中间", [
+        "灰线是 GPU 自己重跑对同一份基线，当噪声；判定照第三节：每一对先压成三个数，再取 28 对里的最大当尺子。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测：第二次迁移小尺寸，TPU v5p 自比（运行库 0.0.46），基线 FSDP 8、微批 1 × 累积 2；被测只改并行方式。GPU 同设置 8 份（尺子就是它们两两 28 对）。窗口第 2–300 步；梯度范数带符号均值的尺子 9.92e-5。",
+               "⚠️ 粗线是 50 步滑动平均，只为看方向；纵轴超出 ±2e-3 的个别点截在边上。")
+    f.save("fig8-ddpcurve.svg", yb + 14)
+
+
 fig_2x2()
+fig_curve()
 fig_rows()
 fig_flow()
 fig_rmw()

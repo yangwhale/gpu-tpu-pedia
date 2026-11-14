@@ -1038,7 +1038,7 @@ __FIG_EXACT__
   <details class="foldfig"><summary><b>分块的两个条件，和一千步的确认</b></summary>
   <ul>
     <li>两个条件：块结果必须留 FP32 —— 每块先舍 BF16 再相加就不行；块长不超过 «CHUNK_SEG» —— 到 4096 已剩 «ABL_CHUNK4096_T»，再长剩得更多，跟 §5.2「越长越偏」一致。</li>
-    <li>训练上的确认：最终 golden（第九节）的设置原样、只把这一处换成 BF16 张量核分块，跑满 1000 步 «CB_RUNS» 份，拿最终 golden 的 45 对尺子对它的基线判，全过，最差 «CB_WORST» 倍，跟同一台机器原样重跑最终 golden 的对照一样（«CB_CHK_WORST»）；步时 «CB_STEP_T»。TPU 当前配置拿它当基线交叉核对：v5p 全过；v7x 梯度范数 «CB_TPU_V7X_GN» 倍待定，可同一个 TPU 运行改对最终 golden 的各份逐一当基线，也在 «CB_TPU_V7X_GN_SINGLE_T» 之间起伏，是单份基线自己的涨落。正式基线仍是 ⑤。</li>
+    <li>训练上的确认：最终 golden（第九节）的设置原样、只把这一处换成 BF16 张量核分块，跑满 1000 步 «CB_RUNS» 份，拿最终 golden 的 45 对尺子对它的基线判，全过，最差 «CB_WORST» 倍，跟同一台机器原样重跑最终 golden 的对照一样（«CB_CHK_WORST»）；步时 «CB_STEP_T»。TPU 当前配置拿它当基线交叉核对：v5p 全过；v7x 梯度范数 «CB_TPU_V7X_GN» 倍待定，可同一个 TPU 运行改对最终 golden 的各份逐一当基线，也在 «CB_TPU_V7X_GN_SINGLE_T» 之间起伏，是单份基线自己的涨落。正式基线仍是最终 golden。</li>
   </ul></details>
   <details class="foldfig"><summary><b>为什么不直接用全程 FP32 训练当参照</b>：那是另一条轨迹；精确轨迹和定案前那条的配置区别</summary>
   <p>生产里矩阵乘用的是主权重舍到 BF16 的那一份，权重本身每个元素就差半个 BF16 格。纯 FP32 训练（权重不舍）前 100 步 loss 就比 BF16 低 «FP32_TRAIN_LOSS_GAP_T»，走的是另一条路，跟哪边都差得远。
@@ -1062,12 +1062,11 @@ __ANIM_CHAIN__
   <p class="bridge">这一节留下的问题：同一份代码只换并行方式，数学上等价，曲线却对不上 —— 这回又是谁的差？</p>
 </div></section>
 ''' + sec("s八", "八", "案例二：DDP 和 FSDP 对不上") + '''
-  <p class="lead">第二个案例在第二次迁移上，模型是混元 4 的缩小版（约 «C2_PARAMS_T» 参数，词表 «C2_V» 行、隐藏维 «C2_D»）。纯数据并行（DDP）和 FSDP 数学上等价，TPU 上一比，曲线超出了噪声。问题收窄到一个张量，前后换了三种解释，最后落在编译器对一次 scatter-add 插不插排序上；修法也找到三种，最好的一种连通信都省了。先看终点，看个大概就行，下面一步步拆：</p>
-__FIG_DDP2X2__
+  <p class="lead">第二个案例在第二次迁移上，模型是混元 4 的缩小版（约 «C2_PARAMS_T» 参数，词表 «C2_V» 行、隐藏维 «C2_D»）。纯数据并行（DDP）和 FSDP 数学上等价，TPU 上一比，曲线超出了噪声。这回是谁的差？还是按调查的顺序讲。</p>
 
   <h3>8.1　数学等价，曲线却超出噪声；第 1 步只剩一个张量</h3>
   <p>TPU 自比（§10.1）：同一个模型、同一份权重和数据，基线是 FSDP 8 卡，只改成纯数据并行，尺子是 GPU 同设置重跑的噪声上限 N。r ＝ 差 ÷ N，超过 2 判不过（对齐记录里这一档叫「超」，1 到 2 叫「略超」）。</p>
-  <table class="t9"><thead><tr><th>条件</th><th>曲线最差 <span style="text-transform:none">r</span>（300 步）</th></tr></thead><tbody>
+  <table class="t9"><thead><tr><th>条件</th><th>曲线最差 <span style="text-transform:none">r</span>（300 步；第一行最差那项是梯度范数）</th></tr></thead><tbody>
   <tr><td>8 卡，每步两个微批（跟基线一样）</td><td><b>«C2_R_DP8_T»</b></td></tr>
   <tr><td>8 卡，不做梯度累积</td><td>«C2_R_GA1_T»</td></tr>
   <tr><td>16 卡（每卡一个微批，不累积）</td><td>«C2_R_DP16_T»</td></tr>
@@ -1077,6 +1076,7 @@ __FIG_DDP2X2__
   <p class="codeline">以上都在 TPU 运行库 0.0.46 上。换到 0.0.52，最后一行变了（§8.6）。「不做梯度累积」＝两个微批合成一次 scatter，一次加 8192 个下标，所以反而更差（§8.6 讲为什么）。</p>
   <p>换卡数都一样不过，方向也固定：主 loss 一直偏高（带符号均值 «C2_LOSS_SM_T»，r «C2_LOSS_R_T»），梯度范数一直偏低（«C2_GN_SM_T»，r «C2_R_DP8_T»），§3.3「从 K 份运行到一个 r」那张图下块的算例就是它。换张量并行、专家并行、混合切分都跟 GPU 重跑分不开，所以问题出在纯数据并行特有的某处。v7x 的 «C2_R_V7X_T» 单看曲线不算铁证（纯 GPU 噪声用留一法也能到 2.47，§3.5），是第 1 步对 FP64 抓到的。</p>
 
+__FIG_DDPCURVE__
   <p>曲线只能说有系统偏差，说不出偏在谁身上。照 §4.2 的定责流程，拿第 1 步的 «C2_NT» 个参数梯度各自对 CPU 上的 FP64 比：<b>只有词嵌入梯度丢了精度</b>，其余 204 个里，除照例单列的多路残差小参数，都在噪声内或只差加法顺序。</p>
   <table class="t9"><thead><tr><th>第 1 步离 FP64</th><th>词嵌入梯度</th><th>其余 204 个</th></tr></thead><tbody>
   <tr><td>纯数据并行</td><td><b>«C2_EMB_DP_T»</b>（R «C2_EMB_R_T»）</td><td>比值中位数 «C2_OTHER_MED_T»，R ≤ 1.2</td></tr>
@@ -1126,11 +1126,11 @@ __ANIM_SCATTER__
 
 __FIG_SWEEP__
   <p>落回训练：每张卡那次 scatter 一次加几个下标，决定了排不排序。§8.1 那张表就是这么来的：</p>
-  <table class="t9"><thead><tr><th>跑法</th><th>每卡一次的下标数</th><th>运行库 0.0.46</th><th>运行库 0.0.52</th><th>曲线最差 <span style="text-transform:none">r</span></th></tr></thead><tbody>
+  <table class="t9"><thead><tr><th>跑法</th><th>每卡一次的下标数</th><th>运行库 0.0.46</th><th>运行库 0.0.52</th><th>曲线最差 <span style="text-transform:none">r</span>（0.0.46 ／ 0.0.52）</th></tr></thead><tbody>
   <tr><td>FSDP 8（基线，收齐 8 卡的 token）</td><td>«C2_FSDP_N»</td><td>排序</td><td>排序</td><td>—</td></tr>
   <tr><td>纯数据并行 8，累积 2</td><td>«C2_TOK»</td><td>不排序</td><td>不排序</td><td>«C2_R_DP8_T» ／ «LIB_DP8_52_T»</td></tr>
-  <tr><td>纯数据并行 8，不累积</td><td>8192</td><td>不排序</td><td>不排序</td><td>«C2_R_GA1_T»（0.0.46）</td></tr>
-  <tr><td>纯数据并行 16</td><td>«C2_TOK»</td><td>不排序</td><td>不排序</td><td>«C2_R_DP16_T»（0.0.46）</td></tr>
+  <tr><td>纯数据并行 8，不累积</td><td>8192</td><td>不排序</td><td>不排序</td><td>«C2_R_GA1_T» ／ 没跑</td></tr>
+  <tr><td>纯数据并行 16</td><td>«C2_TOK»</td><td>不排序</td><td>不排序</td><td>«C2_R_DP16_T» ／ 没跑</td></tr>
   <tr><td>v7x 纯数据并行 8，不累积</td><td>8192</td><td>不排序</td><td><b>排序</b></td><td>«LIB_V7X_R46_T» ／ <b>«LIB_V7X_R52_T»</b></td></tr>
   </tbody></table>
   <p>门槛的具体数跟着运行库版本变，会过期；要带走的只有一条：<b>看编译产物里这次 scatter 排没排序</b>。</p>
@@ -1142,7 +1142,8 @@ __FIG_SWEEP__
   </details>
 
   <h3>8.7　结论：高频词 × 不排序；修法和代价</h3>
-  <p><b>两个条件缺一个都不丢精度</b>（本节开头那张 2×2）：一行加的次数多，而且后端没排序、每加一次舍一次。第一版的两种修法，是让这次累加落在 FP32：</p>
+__FIG_DDP2X2__
+  <p><b>两个条件缺一个都不丢精度</b>（上面这张 2×2）：一行加的次数多，而且后端没排序、每加一次舍一次。第一版的两种修法，是让这次累加落在 FP32：</p>
   <table class="t9"><thead><tr><th>修法</th><th>第 1 步词嵌入梯度离 FP64</th><th>曲线最差 <span style="text-transform:none">r</span>（300 步 ／ 1000 步）</th><th>步时（对基线）</th></tr></thead><tbody>
   <tr><td>不修</td><td>«C2_EMB_DP_T»</td><td>«C2_R_DP8_T»</td><td>«C2_ST_DP_T»</td></tr>
   <tr><td>① 整次 scatter 和跨卡求和都在 FP32（修好 bug 以后的代码）</td><td>«C2_FIX1_EMB_T»</td><td>«C2_FIX1_R300_T» ／ «C2_FIX1_R1K_T»</td><td>«C2_ST_F1_T»</td></tr>
@@ -1174,7 +1175,7 @@ __FIG_SWEEP__
            "按运行库 0.0.46 的规则，门槛是 V／8 ＝ 31250。8192 不过线，不排序，高频词每加一次舍一次，会中招。首选只切词嵌入表：8 张卡合起来 65536 个，过线，会走排序、只舍一次。40000 本来就过线，后端会自己排序（前提是 excess precision 开着）。换到 0.0.52，门槛跟列宽、芯片走，不能再用 V／8 估。所以这些都只是初判：用对齐记录脚本的 check 子命令在自己的形状、自己的运行库上判一次，再看整步编译产物里那次 scatter 有没有 sort 和「下标已排序」的标记（§8.10）；拿不准就开修法①。") + '''
 
   <h3>8.9　第三种修法：换切分，不换精度</h3>
-  <p>前两种修法都没动纯数据并行处理这份梯度的结构：每张卡一个微批只有 4096 个 token，跨卡求和传的却是整张表，占纯数据并行全部通信的 «C3_EMB_SHARE_T»；8 张卡各存一整份表和它的优化器状态。换个思路：FSDP 那条「先传后加」不是谁手写的，是编译器在「表按隐藏维切开」这个前提下自动切出来的。那就其余参数照旧纯数据并行，只给词嵌入表加一个开关，让它沿数据并行轴、按隐藏维切开：</p>
+  <p>前两种修法都没动纯数据并行处理这份梯度的结构：每张卡一个微批只有 4096 个 token，跨卡求和传的却是整张表，占纯数据并行全部通信的 «C3_EMB_SHARE_T»（本课按 §8.10 的字节复算）；8 张卡各存一整份表和它的优化器状态。换个思路：FSDP 那条「先传后加」不是谁手写的，是编译器在「表按隐藏维切开」这个前提下自动切出来的。那就其余参数照旧纯数据并行，只给词嵌入表加一个开关，让它沿数据并行轴、按隐藏维切开：</p>
 __FIG_SHARD__
   <p>结果跟预期一样：编译器对这一个参数生成了跟 FSDP 一条不差的通信，每张卡那次加法收 «C2_FSDP_N» 个下标、排序、带标记，按单算子实验就是只舍一次，病根「高频词 × 不排序」不再成立。205 个张量没有丢精度的；曲线跟 GPU 重跑分不开；词嵌入那份通信每步每设备从 9.90e8 降到 6.82e7 字节，步时 «C3_ST_T»（对基线）。</p>
   <p class="codeline">''' + mt(4, "src/maxtext/configs/base.yml", "L150-L152", "三种修法的开关") + "　" + mt(4, "src/maxtext/layers/embeddings.py", "L136-L187", "词嵌入层：表怎么切、在什么精度里加") + "　" + mt(4, "HUNYUAN.md", "", "全部开关一览") + '''</p>
@@ -1840,8 +1841,10 @@ FIGS = {
         '<b>三行里，紫点都挨着蓝点。</b><br><em>零点是 GPU 默认运行的平均。</em>'),
     "__FIG_CHAIN__": ("fig-chain", "fig8-chain.svg", "topic08-fig-case2.py",
         '<b>从左往右读，每一格是下一格的原因。</b><br><em>五格的现象都是量到的；第一格的原因是推断，②③ 两格的定量衔接没测过（§7.3），loss 为什么跟着变也没有验证；积起来以后还有反馈放大（推断）。</em>'),
+    "__FIG_DDPCURVE__": ("fig-ddpcurve", "fig8-ddpcurve.svg", "topic08-fig-ddp.py",
+        '<b>上格蓝线的平均前 200 步明显在零下面，下格绿线回到灰线中间。</b><br><em>灰线是 GPU 同设置另 7 份对其中一份，就是尺子用的那 8 份；被测对的是 TPU 自己的 FSDP 基线。</em>'),
     "__FIG_DDP2X2__": ("fig-ddp2x2", "fig8-ddp2x2.svg", "topic08-fig-ddp.py",
-        '<b>只有右下那一格红：高频又不排序。</b><br><em>圆点个数是示意；格子里的数是第 1 步实测。</em>'),
+        '<b>只有右下那一格红：高频又不排序。</b><br><em>圆点个数是示意；格子里的数是第 1 步实测。低频那两格写两个数：前一个是在 ≥ 2 张卡上出现的 3,234 行，后一个是只在 1 张卡上出现的 7,638 行；它们的误差加进词表之前就有（推断：上游的 BF16 计算），所以跟排不排序无关。</em>'),
     "__FIG_DDPROWS__": ("fig-ddprows", "fig8-ddprows.svg", "topic08-fig-ddp.py",
         '<b>看右边一组：紫柱接近红柱的两倍，橙柱跟红柱一样高。</b><br><em>绿柱是 FSDP。</em>'),
     "__FIG_DDPFLOW__": ("fig-ddpflow", "fig8-ddpflow.svg", "topic08-fig-ddp.py",
