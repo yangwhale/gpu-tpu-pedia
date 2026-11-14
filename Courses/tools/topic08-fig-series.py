@@ -246,7 +246,84 @@ def fig_baseline():
     f.save("fig8-baseline.svg", yb + 14)
 
 
+def fig_mtp32k():
+    """fig8-mtp32k 回答：红线一直在灰带里，为什么还判不过？—— 看图分两步：出没出带（最大单步）、围不围着零（带符号均值）。
+    数据：topic08_numbers.mtp32k()（第三次迁移图文 32K、一种候选配置 1000 步的 MTP loss，实测）；三个判定数取结果文件原值。"""
+    dt, env = N.mtp32k()
+    f = Fig(W, "一张逐步曲线图，横轴是第 1 到 1000 步。灰带是 GPU 8 份两两 28 对在每一步的相对差绝对值最大值，上下对称画。"
+               "红线是 TPU 每一步对 GPU 基线的相对差，绝大多数步落在灰带里，可它一直在零线上面，深红的 50 步滑动平均从第 150 步起一直高于零。"
+               "右边三根条：带符号均值是尺子的 3.02 倍，平均绝对差 1.15 倍，最大单步 0.94 倍。")
+    y0 = f.header("红线没出灰带，可它一直在零上面",
+                  "第三次迁移，图文 32K，1000 步的 MTP loss；dₜ ＝（TPU − GPU 基线）÷ GPU 基线",
+                  [("#dadce0", "GPU 两两 28 对：每步最大 |dₜ|"), (RD, "TPU 对 GPU 基线"), ("#a50e0e", "红线 50 步滑动平均")])
+    PH = 340
+    LW = 930
+    py = f.panel(0, y0, LW, PH, "看这张图分两步", RD)
+    X0, XW = 96, LW - 120
+    hi = 1.6e-4
+
+    def X(step):
+        return X0 + (step - 1) / 999.0 * XW
+    YM = py + (PH - 60) / 2.0 + 6
+
+    def Y(v):
+        return YM - v / hi * (PH - 90) / 2.0
+    up = " ".join("%.1f,%.1f" % (X(k + 1), Y(e)) for k, e in enumerate(env))
+    dn = " ".join("%.1f,%.1f" % (X(k + 1), Y(-e)) for k, e in reversed(list(enumerate(env))))
+    f.p.append('<polygon points="%s %s" fill="#dadce0" fill-opacity="0.9" stroke="none"/>' % (up, dn))
+    for v in (-1.5e-4, -0.75e-4, 0.75e-4, 1.5e-4):
+        f.t(X0 - 8, Y(v) + 4, "%+.2g×10⁻⁴" % (v * 1e4), GY, size=12, anchor="end")
+    pts = " ".join("%.1f,%.1f" % (X(k + 1), Y(v)) for k, v in enumerate(dt))
+    f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="1" stroke-opacity="0.75"/>' % (pts, RD))
+    w = 50
+    roll = [sum(dt[k - w + 1:k + 1]) / w for k in range(w - 1, len(dt))]
+    assert min(roll[100:]) > 0                                   # 第 150 步以后滑动平均一直在零上面
+    rp = " ".join("%.1f,%.1f" % (X(k + w), Y(v)) for k, v in enumerate(roll))
+    f.p.append('<polyline points="%s" fill="none" stroke="#a50e0e" stroke-width="3.2"/>' % rp)
+    f.line(X0, Y(0), X0 + XW, Y(0), INK, 1.4, arrow=False)
+    f.t(X0 - 8, Y(0) + 5, "0", INK, True, 13, "end")
+    k = N.M3_MTP32K_MAX_AT - 1
+    f.box(X(k + 1) - 8, Y(dt[k]) - 8, 16, 16, "none", OR, 8, sw=2)
+    f.t(X(k + 1) - 14, Y(dt[k]) + 4, "最大单步 第 %d 步" % N.M3_MTP32K_MAX_AT, OR, True, 13, "end")
+    f.t(X0 + 8, py + 24, "① 出没出带？几乎没有（%s 的步在带里）：单步不乱跳" % N.M3_MTP32K_IN_PCT, GY, True, 13.5)
+    f.t(X0 + 8, py + 44, "② 围不围着零？不：%s 的步在零上面，第 150 步以后深红线一直高于零" % N.M3_MTP32K_POS_PCT, RD, True, 13.5)
+    for st in (1, 500, 1000):
+        f.t(X(st), py + PH - 40, "第 %d 步" % st, GY, size=12, anchor={1: "start", 500: "middle", 1000: "end"}[st])
+    f._pan = None
+    # 右：三个数各除以尺子
+    RX, RW = LW + 20, W - LW - 20
+    ry = f.panel(RX, y0, RW, PH, "三个数 ÷ 尺子", INK)
+    bx0, bw = RX + 150, RW - 190
+
+    def BX(r):
+        return bx0 + r / 3.4 * bw
+    rows = [("带符号均值", "② 偏不偏", float(N.M3_MTP32K_R_SM), "%s ÷ %s" % (N.M3_MTP32K_SM_T, N.M3_MTP32K_SM_N_T), RD),
+            ("平均绝对差", "抖多大", float(N.M3_MTP32K_R_MARE), "%s ÷ %s" % (N.M3_MTP32K_MARE_T, N.M3_MTP32K_MARE_N_T), GY2),
+            ("最大单步", "① 出不出带", float(N.M3_MTP32K_R_MAX), "%s ÷ %s" % (N.M3_MTP32K_MAX_T, N.M3_MTP32K_MAX_N_T), GY2)]
+    for i, (nm, what, r, frac, col) in enumerate(rows):
+        yy = ry + 40 + i * 84 - 2
+        f.t(RX + 14, yy + 14, nm, INK, True, 14)
+        f.t(RX + 14, yy + 34, what, GY, size=12)
+        f.box(bx0, yy + 2, BX(r) - bx0, 26, col, col, 3)
+        f.t(BX(r) + 8, yy + 21, "%.2f" % r, col if col == RD else INK, True, 15)
+        f.t(bx0, yy + 50, frac, GY, size=12)
+    for r, lab in ((1, "1 过"), (2, "2 不过")):
+        for i in range(3):
+            f.line(BX(r), ry + 38 + i * 84, BX(r), ry + 72 + i * 84, GY2, 1.2, dash="4 3", arrow=False)
+        f.t(BX(r), ry + 40 + 3 * 84 - 14, lab, GY, size=12, anchor="middle")
+    f._pan = None
+    yb = f.band(y0 + PH + 14, "warn", "抖动和尖峰都在 GPU 自己的范围里，只有方向不对：一直往一边偏，带符号均值是尺子的 3 倍", [
+        "灰带只用来看，不参与判定：它是逐步从不同的对里拼出来的最大值；判定用的尺子是每一对先把整段压成三个数，每种数再取 28 对里的最大。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测：第三次迁移图文 32K、一种候选配置，TPU v5p 1000 步对 GPU 8 份里的基线那份；判定窗口第 2–1000 步。带符号均值 %s，GPU 两两 28 对里最大 %s；平均绝对差 %s 对 %s；最大单步第 %d 步 %s 对 %s。判定数取对齐记录这次运行的结果文件原值。"
+               % (N.M3_MTP32K_SM_T, N.M3_MTP32K_SM_N_T, N.M3_MTP32K_MARE_T, N.M3_MTP32K_MARE_N_T, N.M3_MTP32K_MAX_AT, N.M3_MTP32K_MAX_T, N.M3_MTP32K_MAX_N_T),
+               "📌 灰带：每一步取 28 对在这一步的 |dₜ| 最大值，正负各画一边（对齐记录逐步曲线工具的 pairdiff 包络同一口径）。深红线是红线的 50 步滑动平均，只为看趋势。")
+    f.save("fig8-mtp32k.svg", yb + 14)
+
+
 fig_dt()
+fig_mtp32k()
 fig_judge()
 fig_pairs()
 fig_baseline()

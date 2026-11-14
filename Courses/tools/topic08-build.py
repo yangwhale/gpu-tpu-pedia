@@ -150,7 +150,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>讲约 99 分钟</b>（三次课，每次 32–34 分钟）</span>
+    <span class="chip">⏱ <b>讲约 99 分钟</b>（三次课，每次 31–34 分钟）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -432,6 +432,13 @@ __FIG_DT__
   <tr><td>MARE（平均绝对相对差）</td><td>|dₜ| 的平均</td><td>整体抖多大，不管方向</td></tr>
   <tr><td>最大单步</td><td>最大的 |dₜ| 和它在第几步</td><td>拦住某一步突然跳一下</td></tr>
   </tbody></table>
+  <div class="note"><span class="t">看逐步曲线，分两步</span>
+    <b>第一步，看红线出没出灰带</b>：单步有没有乱跳，对应最大单步。<br>
+    <b>第二步，看红线是不是围着零转</b>：有没有一直往一边偏，对应带符号均值。只做第一步，会漏掉最常出事的那一种。</div>
+  <p>灰带是这样画的：每一步取所有 GPU 对在这一步的 |dₜ| 最大值，正负各画一边。所以这条带是逐步从不同的对里拼出来的，只用来看，不参与判定。判定用的尺子是另一套算法：每一对先把整段压成三个数，每种数再取所有对里的最大值（§3.3）。对齐记录的曲线工具还画一张累计带符号均值（第 1 步到第 t 步的平均）的图，同样只用来看趋势。</p>
+  <p>一个真实的例子，第三次迁移图文 32K 一千步的 MTP loss：</p>
+__FIG_MTP32K__
+  <p>«M3_MTP32K_IN_PCT» 的步落在灰带里，最大单步是尺子的 «M3_MTP32K_R_MAX» 倍，平均绝对差 «M3_MTP32K_R_MARE» 倍：抖动和尖峰都正常。可 «M3_MTP32K_POS_PCT» 的步在零上面，带符号均值 «M3_MTP32K_SM_T»，是尺子 «M3_MTP32K_SM_N_T»（GPU 8 份两两 «M3_MTP32K_PAIRS» 对的最大值）的 «M3_MTP32K_R_SM» 倍，判不过。只有方向不对。这一截偏后来定位到一处被编译器省掉的舍入（<a href="#mtp-input">§5.5 折叠</a>），补上以后的一千步验证还在跑。</p>
   <details class="foldfig"><summary><b>窗口表</b>：全程、尾段、第 1 步各取哪几步</summary>
   <table class="t9"><thead><tr><th>窗口</th><th>混元 3</th><th>第二次迁移</th><th>为什么</th></tr></thead><tbody>
   <tr><td>全程</td><td>第 2–1000 步</td><td>第 2–300 步／第 2–1000 步</td><td>看整段</td></tr>
@@ -1673,6 +1680,8 @@ FIGS = {
         '<b>虚线是写的，实线是用的。</b><br><em>证据是运行时读出的元数据，不是配置文件。</em>'),
     "__FIG_DT__": ("fig-dt", "fig8-dt.svg", "topic08-fig-series.py",
         '<b>两团点一样宽，下面那团蓝点整体沉下去了。</b><br><em>点都是真实的逐步值。</em>'),
+    "__FIG_MTP32K__": ("fig-mtp32k", "fig8-mtp32k.svg", "topic08-fig-series.py",
+        '<b>红线几乎没出灰带，可它一直在零上面。</b><br><em>出没出带看单步乱不乱跳；围不围着零看有没有系统偏差。灰带只用来看，判定按右边三个数各除以尺子。</em>'),
     "__FIG_JUDGE__": ("fig-judge", "fig8-judge.svg", "topic08-fig-series.py",
         '<b>落在哪个颜色里，就是什么判定。</b><br><em>红黄点是定案前那次判定，基线是另一份 GPU 记录（不是开场对的第一份），尺子也换了，所以 loss 的数跟开场「偏 5.3 个标准差」对不上；绿点是定案后。</em>'),
     "__FIG_PAIRS__": ("fig-pairs", "fig8-pairs.svg", "topic08-fig-series.py",

@@ -1630,3 +1630,38 @@ M3_VIT_FLIP_PCT = "8%–26%"               # 这一状态下各 MoE 层（第 1�
 M3_VIT_N_1, M3_VIT_N_2 = M3_VIT_N
 M3_VIT_R_1, M3_VIT_R_2 = M3_VIT_R_T
 M3_VIT_RFLIP_1, M3_VIT_RFLIP_2 = M3_VIT_RFLIP_T
+# ── 2026-11-14 · 第三节「看逐步曲线分两步」的真实例子：第三次迁移图文 32K、一种候选配置 1000 步的 MTP loss
+#    （判定数以对齐记录第三次迁移目录里这次运行的 L4 结果文件为准：MTP loss 那一条，窗口第 2–1000 步，GPU 8 份两两 28 对；
+#     逐步曲线由私有导出脚本写进 topic08_mtp32k.json，口径照对齐记录 analysis/curves.py 的 pairdiff 包络）──
+M3_MTP32K_SM, M3_MTP32K_SM_N = 2.0766690776494447e-05, 6.8663489452395695e-06
+M3_MTP32K_MARE, M3_MTP32K_MARE_N = 2.9689957858373493e-05, 2.578596288692888e-05
+M3_MTP32K_MAX, M3_MTP32K_MAX_N, M3_MTP32K_MAX_AT = 0.0001354143238917009, 0.0001433842601956052, 941
+M3_MTP32K_PAIRS = 28
+M3_MTP32K_R = tuple("%.2f" % (a / b) for a, b in [(M3_MTP32K_SM, M3_MTP32K_SM_N), (M3_MTP32K_MARE, M3_MTP32K_MARE_N), (M3_MTP32K_MAX, M3_MTP32K_MAX_N)])
+assert M3_MTP32K_R == ("3.02", "1.15", "0.94"), M3_MTP32K_R
+M3_MTP32K_SM_T, M3_MTP32K_SM_N_T = tx(M3_MTP32K_SM, plus=True), tx(M3_MTP32K_SM_N)
+M3_MTP32K_MARE_T, M3_MTP32K_MARE_N_T = tx(M3_MTP32K_MARE), tx(M3_MTP32K_MARE_N)
+M3_MTP32K_MAX_T, M3_MTP32K_MAX_N_T = tx(M3_MTP32K_MAX), tx(M3_MTP32K_MAX_N)
+assert (M3_MTP32K_SM_T, M3_MTP32K_SM_N_T, M3_MTP32K_MARE_T, M3_MTP32K_MARE_N_T, M3_MTP32K_MAX_T, M3_MTP32K_MAX_N_T) == \
+       ("＋2.08e-5", "6.87e-6", "2.97e-5", "2.58e-5", "1.35e-4", "1.43e-4")
+M3_MTP32K_R_SM, M3_MTP32K_R_MARE, M3_MTP32K_R_MAX = M3_MTP32K_R
+
+
+def mtp32k():
+    """逐步曲线（下标 0 ＝ 第 1 步）；跟结果文件的三个判定数互相钉住。"""
+    import json as _j
+    import os as _o
+    d = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_mtp32k.json"), encoding="utf-8"))
+    dt, env = d["逐步相对差"], d["噪声包络"]
+    w = dt[1:1000]
+    assert abs(sum(w) / len(w) - M3_MTP32K_SM) < 0.01e-5
+    assert abs(sum(abs(x) for x in w) / len(w) - M3_MTP32K_MARE) < 0.01e-5
+    k = max(range(1, 1000), key=lambda i: abs(dt[i]))
+    assert k + 1 == M3_MTP32K_MAX_AT and abs(abs(dt[k]) - M3_MTP32K_MAX) < 0.01e-5
+    return dt, env
+
+
+_dt32, _env32 = mtp32k()
+M3_MTP32K_POS_PCT = "%d%%" % round(100.0 * sum(1 for x in _dt32[1:1000] if x > 0) / 999)
+M3_MTP32K_IN_PCT = "%d%%" % round(100.0 * sum(1 for x, e in zip(_dt32[1:1000], _env32[1:1000]) if abs(x) <= e) / 999)
+assert (M3_MTP32K_POS_PCT, M3_MTP32K_IN_PCT) == ("75%", "87%"), (M3_MTP32K_POS_PCT, M3_MTP32K_IN_PCT)
