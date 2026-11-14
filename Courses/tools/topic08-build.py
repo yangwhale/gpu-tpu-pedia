@@ -82,6 +82,16 @@ table.ftab tr.fgrp span{color:var(--gray);font-size:13px}
 .foundbox .fnote{font-size:13px;color:var(--gray)}
 .foundbox .fbridge{font-weight:600;margin-top:4px}
 </style>"""
+head += """<style>
+.adamcard{border:2px solid var(--line);border-radius:12px;padding:14px 18px;margin:16px 0;background:#fff}
+.adamcard .af{font-size:34px;font-weight:700;text-align:center;letter-spacing:1px;margin:6px 0 4px}
+.adamcard .asub{text-align:center;color:var(--gray);font-size:14px;margin:0 0 10px}
+.adamcard .acases{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px}
+.adamcard .acases div{border-left:4px solid var(--line);padding:6px 10px;font-size:15px}
+.adamcard .acases div:last-child{border-left-color:#d93025}
+.adamcard tr.epsrow td{color:#a50e0e;font-weight:600}
+.adamcard .anote{font-size:14px}
+</style>"""
 from course_narrow_css import CSS as _NARROW_CSS   # noqa: E402
 head += "<style>" + _NARROW_CSS + "</style>\n"
 head += "<style>.foldfig ol { padding-left: 2.4em }\np.codeline{font-size:13.5px;color:var(--gray)} a.codelink{display:inline-block;margin-right:14px;padding:1px 8px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--blue)} a.codelink:hover{background:var(--blue-l)}</style>\n"
@@ -150,7 +160,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>讲约 99 分钟</b>（三次课，每次 31–34 分钟）</span>
+    <span class="chip">⏱ <b>讲约 100 分钟</b>（三次课，每次 31–35 分钟）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -219,6 +229,34 @@ FOUND = ('''
 </div>
 </div>
 ''')
+
+
+# ── §7.2 Adam 公式卡（课程负责人 2026-11-14：做成大号公式卡，讲两种情况；表里的 √v̂ 是第 300 步各词频桶的实测中位数）──
+def _vrow(name, rows, v):
+    share, shrink = N.vhat_row(v)
+    zone = "ε 区" if v < N.EPS else "常见区"
+    return ('<tr%s><td>%s（%s 行）</td><td>%s</td><td>%s</td><td>%s 倍</td><td>%s</td></tr>'
+            % (' class="epsrow"' if v < N.EPS else "", name, format(rows, ","), N.sci(v),
+               ("%.1f%%" % (share * 100)) if share >= 0.01 else ("%.2f%%" % (share * 100)),
+               ("%.1f" % shrink) if shrink >= 1.1 else ("%.3f" % shrink), zone))
+
+
+ADAM_CARD = (
+    '\n  <div class="adamcard">\n  <div class="af">u ＝ m̂ ÷ (√v̂ ＋ ε)</div>\n'
+    '  <p class="asub">m̂：梯度的滑动平均　√v̂：梯度平方的滑动平均开根号，大致就是「梯度有多大」　ε ＝ ' + N.sci(N.EPS) + '：分母上防除零的小常数</p>\n'
+    '  <div class="acases">\n'
+    '    <div><b>梯度够大，ε 等于没有</b><br>√v̂ ＝ 1e-6 时，ε 只占分母的 1%；u 几乎就是 m̂ ÷ √v̂，梯度大小约掉，步子都差不多大</div>\n'
+    '    <div><b>梯度很小，ε 变成一个把更新压小的开关</b><br>压小倍数 ＝ (√v̂ ＋ ε) ÷ √v̂；√v̂ 比 ε 小，就压小 2 倍以上，u ≈ m̂ ÷ ε，更新跟梯度成正比</div>\n'
+    '  </div>\n'
+    '  <table class="t9"><thead><tr><th>第 300 步，输出层按词频分桶（实测中位数）</th><th>√v̂</th><th>ε 在分母里占</th><th>更新被压小</th><th>在哪个区</th></tr></thead><tbody>\n'
+    + "\n".join(_vrow(*b) for b in N.VHAT_BUCKETS) +
+    '\n  </tbody></table>\n'
+    '  <p class="anote">没出现过的词那 ' + format(N.RARE_ROWS, ",") + ' 行，第 300 步有 ' + ("%.0f%%" % (N.VHAT_RARE_BELOW_EPS * 100))
+    + ' 的元素 √v̂ ＜ ε，也就是被压小 2 倍以上；中位数那一档压小 ' + ("%.1f" % N.vhat_row(N.VHAT_BUCKETS[3][2])[1])
+    + ' 倍。压小 10 倍、20 倍以上的各占多少，结果文件里只有中位数和 ε 以下的比例，算不出来，不写。'
+    '<b>被压小本身两边一样，危险在于这时更新跟梯度成正比</b>：「ε 在分母里占」那一列，正好就是梯度差 1% 时更新差几成（弹性 ε ÷ (√v̂ ＋ ε)）。'
+    '梯度 4e-9 时 0.71，1e-6 时 0.0099：梯度方向上一点差，在 ε 区原样漏过去。</p>\n'
+    '  </div>\n')
 
 QUIZ = '''
 <details class="foldfig" id="qz9box"><summary><b>🎯 开场热身：三道题</b>
@@ -879,7 +917,8 @@ __FIG_DRIFT__
 
   <h3>7.2　漂在输出层冷门词的行，那些行在 Adam 的 ε 区</h3>
 __FIG_ROWS__
-  <p>这里只说两边不一样，不说谁对；哪一边偏，§7.5 才知道。为什么偏偏是冷门词：</p>
+  <p>这里只说两边不一样，不说谁对；哪一边偏，§7.5 才知道。为什么偏偏是冷门词，先看 Adam 怎么算一步：</p>
+''' + ADAM_CARD + '''
 __FIG_EPS__
   <p>没出现过的词，每一步收到的梯度只有一种：softmax 把它的概率往下压一点，大小跟它的概率成正比，所以很小。</p>
   <p>ε 是 Adam 分母上防除零的小常数。打个比方，Adam 像收音机的自动音量，把每个参数的步子拉成差不多大。可声音小到比 ε 还小时，它就不再自动调音量，进来多大、出去就按比例多大 —— 梯度大小差一点，更新就照比例差一点。</p>
@@ -888,7 +927,7 @@ __FIG_EPS__
     <li><b>公式</b>：更新量 u ＝ m̂ ÷ (√v̂ ＋ ε)，m̂、v̂ 是梯度和梯度平方的滑动平均（带偏差修正）。ε（这里 «EPS»）本来只为防止除以零。</li>
     <li><b>常见区（√v̂ ≫ ε）</b>：u ≈ m̂ ÷ √v̂，梯度整体放大缩小都约掉了，每个元素的步子都在 1 附近；梯度上一点相对误差，分子分母一起变，大部分抵消。</li>
     <li><b>ε 区（√v̂ ≪ ε）</b>：u ≈ m̂ ÷ ε，更新跟梯度成正比，梯度错多少、更新就原样错多少，而且每一步都错在同一边。</li>
-    <li><b>本例长什么样</b>：第 300 步，没出现过的词那些行，«RARE_EPS_FRAC_T» 的元素 √v̂ ＜ ε，√v̂ 的中位数 «RARE_VHAT_MED»，比 ε 小一个数量级；两边这些行梯度大小几乎一样（均方根之比 «RARE_RMS_RATIO»），差在方向。</li>
+    <li><b>本例长什么样</b>：第 300 步，没出现过的词那些行，«RARE_EPS_FRAC_T» 的元素 √v̂ ＜ ε，√v̂ 的中位数 «RARE_VHAT_MED»，约为 ε 的四分之一；两边这些行梯度大小几乎一样（均方根之比 «RARE_RMS_RATIO»），差在方向。</li>
     <li><b>对齐怎么处理</b>：两边用同一个 ε（配置对照表里核对），不靠调 ε 把差藏起来；要做的是让这些小梯度本身算准 —— 本例就是去修推歪它们的那次长求和（§7.4）。</li>
     <li><b>外面的人怎么说</b>：梯度的均方根小到跟 ε 同一量级时，Adam 的步子就会跟着变小（Wortsman 等，<em>Small-scale proxies for large-scale Transformer training instabilities</em>，arXiv:2309.14322）；PaLM 的报告也提过，冷门词的嵌入二阶矩估得不准（arXiv:2204.02311）。</li>
   </ul></details>
@@ -1754,7 +1793,7 @@ FIGS = {
     "__FIG_HOOKS__": ("fig-hooks", "fig8-hooks.svg", "topic08-fig-observe.py",
         '<b>中间那格：虚框被切成两块，就是舍入位置变了。</b>'),
     "__FIG_DRIFT__": ("fig-drift", "fig8-drift.svg", "topic08-fig-case1.py",
-        '<b>蓝线从第 100 步起一路斜着往上，灰线贴着零。</b><br><em>真实的逐步值。</em>'),
+        '<b>上格蓝粗线往下、下格蓝线往上，都从第 100 步前后离开灰线。</b><br><em>真实的逐步值；灰线是另两份 GPU 重跑对同一基线，粗线是 50 步平均。</em>'),
     "__FIG_ROWS__": ("fig-rows", "fig8-rows.svg", "topic08-fig-case1.py",
         '<b>左边一根独大，右边第一根独大。</b><br><em>灰色细条是噪声，短到几乎看不见。</em>'),
     "__FIG_EPS__": ("fig-eps", "fig8-eps.svg", "topic08-fig-case1.py",

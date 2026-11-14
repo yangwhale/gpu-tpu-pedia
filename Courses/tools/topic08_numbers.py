@@ -1689,3 +1689,18 @@ assert (M3_MTP32K_G7_POS_T, M3_MTP32K_G7_ROLLPOS_T, M3_MTP32K_G7_SM_T) == ("52%�
 M3_MTP32K_POS_PCT = "%d%%" % round(100.0 * sum(1 for x in _dt32[1:1000] if x > 0) / 999)
 M3_MTP32K_IN_PCT = "%d%%" % round(100.0 * sum(1 for x, e in zip(_dt32[1:1000], _env32[1:1000]) if abs(x) <= e) / 999)
 assert (M3_MTP32K_POS_PCT, M3_MTP32K_IN_PCT) == ("75%", "87%"), (M3_MTP32K_POS_PCT, M3_MTP32K_IN_PCT)
+# ── 2026-11-14 · §7.2 Adam 公式卡：第 300 步各词频桶 √v̂ 的中位数（GPU 一侧；出处：对齐记录混元 3 v5p 验收目录的冷门行链条结果文件，
+#    同一文件里 TPU 一侧几乎一样：没出现过的词 2.77e-9、ε 以下 91.4%）；压小倍数 ＝ (√v̂ ＋ ε) ÷ √v̂，ε 在分母里的占比 ＝ ε ÷ (√v̂ ＋ ε)（本课推导）──
+VHAT_BUCKETS = [("100 次以上", 16326, 1.1657499171211293e-05), ("11–100 次", 31999, 3.2864090247453103e-06),
+                ("1–10 次", 13869, 2.638073892879559e-07), ("没出现过", 58638, 2.6164874668502303e-09)]
+VHAT_RARE_BELOW_EPS = 0.9191437085046706          # 没出现过的词：√v̂ ＜ ε 的比例（GPU）；√v̂ ＜ ε ⇔ 压小 2 倍以上
+assert abs(VHAT_BUCKETS[3][2] - RARE_VHAT_MED) < 0.05e-9 and abs(VHAT_RARE_BELOW_EPS - RARE_EPS_FRAC) < 0.005
+assert VHAT_BUCKETS[3][1] == RARE_ROWS
+
+
+def vhat_row(v):
+    """(ε 在分母里的占比, 压小倍数)。"""
+    return EPS / (v + EPS), (v + EPS) / v
+
+
+assert abs(vhat_row(2.6e-9)[1] - 4.85) < 0.05 and abs(vhat_row(1e-6)[0] - 0.0099) < 0.0001

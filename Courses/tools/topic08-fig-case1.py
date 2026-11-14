@@ -27,42 +27,91 @@ EXTRA_SHARE = PT[999] / (P1 - P0)
 assert abs(EXTRA_SHARE - 0.17) < 0.01
 
 
+LT = S["loss_rel_tpu_vs_gpu_a"]
+LG = [S["loss_rel_gpu_b_vs_gpu_a"], S["loss_rel_gpu_c_vs_gpu_a"]]
+PGS = [S["pnorm_diff_gpu_b_minus_gpu_a"], S["pnorm_diff_gpu_c_minus_gpu_a"]]
+LT_TAIL = sum(LT[300:1000]) / 700.0
+LG_TAIL = [sum(g[300:1000]) / 700.0 for g in LG]
+assert abs(LT_TAIL - (-1.66e-4)) < 0.01e-4, LT_TAIL                 # 第 301–1000 步，同 fig-dt
+assert abs(LG_TAIL[0] - (-3.78e-5)) < 0.02e-5 and abs(LG_TAIL[1] - 2.5e-7) < 0.2e-7, LG_TAIL   # 同 GPU_RUNS10_TAIL 第 2、3 份
+assert abs(PT[99] - 3.9e-4) < 0.1e-4 and abs(PT[299] - 4.6e-3) < 0.1e-3                       # 第 100 ／ 300 步
+PG_MAX = max(abs(x) for g in PGS for x in g)
+assert abs(PG_MAX - 9.9e-4) < 0.1e-4, PG_MAX                                                # 两份 GPU 里最大 9.9e-4（记录分辨率 6 格）
+
+
+def _roll(x, w=50):
+    return [sum(x[k - w + 1:k + 1]) / w for k in range(w - 1, len(x))]
+
+
 def fig_drift():
-    f = Fig(W, "横轴第 1 到 1000 步，纵轴是参数范数的差。灰色是第二次 GPU 减第一次，一直贴着零，最多差万分之几。"
-               "蓝色是 TPU 减 GPU：前 100 步看不出，之后近似一条斜线往上走，到第 1000 步多出 0.021。"
-               "GPU 自己 1000 步一共涨了 0.127，TPU 多涨了约 17%。")
-    y0 = f.header("跟 loss 一起漂起来的，还有参数范数　——　<tspan font-weight=\"700\">从第 100 步起，TPU 一直比 GPU 涨得快一点</tspan>",
-                  "一个点 ＝ 一步的参数范数之差（全部参数平方和开根号，约 3042）；灰 ＝ GPU 自己重跑的差，当噪声",
-                  [(GY2, "GPU 第二次 − 第一次（噪声）"), (BL, "TPU − GPU 第一次")])
-    PH = 330
-    py = f.panel(0, y0, W, PH, "参数范数，1000 步（实测）", BL)
-    X0, XW, YB, YH = 110, 1240, py + 270, 230
-    lo, hi = -0.002, 0.022
+    f = Fig(W, "上下两格共用横轴第 1 到 1000 步。上格：主 loss 的逐步相对差，TPU 对 GPU 基线（蓝），另两份 GPU 重跑对同一基线（灰），细线是逐步值，粗线是 50 步滑动平均。"
+               "灰色粗线围着零转；蓝色粗线从第 100 步前后往下离开，第 300 步以后稳定在负万分之一点五上下。"
+               "下格：参数范数的逐步绝对差，同样两条灰线贴着零；蓝线从第 100 步前后往上，一路涨到第 1000 步的 ＋0.021。")
+    y0 = f.header("loss 往下、参数范数往上：两条线都从第 100 步前后离开噪声",
+                  "同一条时间轴；对照都是同一份 GPU 基线；灰 ＝ 另两份 GPU 重跑对同一基线，当噪声",
+                  [(GY2, "GPU 重跑 − 基线（细：逐步；粗：50 步平均）"), (BL, "TPU − 基线")])
+    X0, XW = 120, 1230
 
     def X(st):
         return X0 + (st - 1) / 999.0 * XW
+    # 上格：loss
+    PH1 = 300
+    py = f.panel(0, y0, W, PH1, "主 loss 的逐步相对差 dₜ ＝（被测 − 基线）÷ 基线", BL)
+    lo, hi = -6e-4, 4e-4
+    YT, YH = py + 18, PH1 - 70
 
-    def Y(v):
-        return YB - (v - lo) / (hi - lo) * YH
-    f.line(X0, Y(0), X0 + XW, Y(0), GY2, 1.0, arrow=False)
-    for v in (0.0, 0.01, 0.02):
-        f.t(X0 - 10, Y(v) + 4, "%+.2f" % v if v else "0", GY, size=12, anchor="end")
-    for st in (1, 100, 500, 1000):
-        f.t(X(st), YB + 24, "第 %d 步" % st, GY, size=12, anchor="middle")
-    f.path([(X(k + 1), Y(v)) for k, v in enumerate(PG)], GY2, 1.4, arrow=False)
-    f.path([(X(k + 1), Y(v)) for k, v in enumerate(PT)], BL, 2.4, arrow=False)
-    f.t(X(1000) - 6, Y(PT[999]) - 12, "第 1000 步 ＋%.3f（GPU 自己涨 %.3f，多涨约 %d%%）" % (PT[999], N.PN_GPU_GROWTH, round(PT[999] / N.PN_GPU_GROWTH * 100)), BL, True, 15, "end")
-    f.t(X(560), Y(0) + 22, "GPU 自己：最多差 %.1e，贴着零" % max(abs(x) for x in PG), GY, True, 13, "middle")
-    f.line(X(100), py + 20, X(100), YB, OR, 1.4, dash="5 5", arrow=False)
-    f.t(X(100) + 8, py + 34, "约第 100 步：loss 偏移也是这时拉开的", OR, True, 13)
+    def Y1(v):
+        return YT + (hi - v) / (hi - lo) * YH
+    f.line(X0, Y1(0), X0 + XW, Y1(0), INK, 1.2, arrow=False)
+    for v in (-4e-4, -2e-4, 2e-4):
+        f.t(X0 - 10, Y1(v) + 4, "%+.0f×10⁻⁴" % (v * 1e4), GY, size=12, anchor="end")
+    f.t(X0 - 10, Y1(0) + 4, "0", INK, True, 12, "end")
+    for g in LG:
+        f.p.append('<polyline points="%s" fill="none" stroke="#9aa0a6" stroke-width="0.7" stroke-opacity="0.45"/>'
+                   % " ".join("%.1f,%.1f" % (X(k + 1), Y1(max(lo, min(hi, v)))) for k, v in enumerate(g)))
+    f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="0.8" stroke-opacity="0.45"/>'
+               % (" ".join("%.1f,%.1f" % (X(k + 1), Y1(max(lo, min(hi, v)))) for k, v in enumerate(LT)), BL))
+    for g in LG:
+        f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="2"/>'
+                   % (" ".join("%.1f,%.1f" % (X(k + 50), Y1(v)) for k, v in enumerate(_roll(g))), GY))
+    f.p.append('<polyline points="%s" fill="none" stroke="#0b57d0" stroke-width="3.4"/>'
+               % " ".join("%.1f,%.1f" % (X(k + 50), Y1(v)) for k, v in enumerate(_roll(LT))))
+    f.line(X(301), Y1(LT_TAIL), X(1000), Y1(LT_TAIL), INK, 1.4, dash="6 4", arrow=False)
+    _lab = "第 301–1000 步平均 %s（两份 GPU：%s、%s）" % (N.tx(LT_TAIL), N.tx(LG_TAIL[0]), N.tx(LG_TAIL[1]))
+    f.box(X(1000) - 470, Y1(-5.2e-4) - 17, 470, 24, "#fff", INK, 5)
+    f.line(X(1000) - 235, Y1(-5.2e-4) - 17, X(1000) - 235, Y1(LT_TAIL), INK, 1.0, arrow=False)
+    f.t(X(1000) - 8, Y1(-5.2e-4), _lab, INK, True, 13.5, "end")
     f._pan = None
-    yb = f.band(py + PH + 20, "ok", "偏移是慢慢长出来的 → 嫌疑从「某个前向算子」收窄到「每一步的更新」", [
-        "GPU 自己 1000 步一共涨 0.127，TPU 多涨了 0.021（约 17%）；第 1 步的那点差只是记录分辨率。",
-        "代价：这只是线索，不是结论 —— 「更新规则有差别」还要一项项验，先验最便宜的。",
+    # 下格：参数范数
+    PH2 = 300
+    py2 = f.panel(0, y0 + PH1 + 14, W, PH2, "参数范数的逐步差（全部 FP32 主权重平方和开根号，约 %d；绝对差）" % round(P0), BL)
+    lo2, hi2 = -0.003, 0.023
+    YT2, YH2 = py2 + 18, PH2 - 76
+
+    def Y2(v):
+        return YT2 + (hi2 - v) / (hi2 - lo2) * YH2
+    f.line(X0, Y2(0), X0 + XW, Y2(0), INK, 1.2, arrow=False)
+    for v in (0.01, 0.02):
+        f.t(X0 - 10, Y2(v) + 4, "%+.2f" % v, GY, size=12, anchor="end")
+    f.t(X0 - 10, Y2(0) + 4, "0", INK, True, 12, "end")
+    for g in PGS:
+        f.path([(X(k + 1), Y2(v)) for k, v in enumerate(g)], GY, 1.6, arrow=False)
+    f.path([(X(k + 1), Y2(v)) for k, v in enumerate(PT)], BL, 3.0, arrow=False)
+    f.t(X(1000) - 6, Y2(PT[999]) - 12, "第 1000 步 ＋%.3f（GPU 自己一千步涨 %.3f）" % (PT[999], N.PN_GPU_GROWTH), BL, True, 15, "end")
+    f.t(X(620), Y2(0) + 24, "两份 GPU 重跑：最多差 %.1e，贴着零" % PG_MAX, GY, True, 13, "middle")
+    for st in (1, 100, 300, 500, 1000):
+        f.t(X(st), py2 + PH2 - 32, "第 %d 步" % st, GY, size=12, anchor={1: "start", 1000: "end"}.get(st, "middle"))
+    f._pan = None
+    f.line(X(100), y0 + 34, X(100), py2 + PH2 - 44, OR, 1.6, dash="5 5", arrow=False)
+    f.t(X(100) + 8, y0 + 50, "约第 100 步：两条一起离开噪声", OR, True, 13)
+    yb = f.band(py2 + PH2 + 20, "ok", "偏移是一步步攒出来的：loss 往下、参数范数往上，同一时间离开噪声", [
+        "第 1 步两边的更新量没有差别；loss 三百步以后走平，参数范数一路还在涨。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：GPU 第一份运行参数范数从 3042.377 涨到 3042.503；TPU − GPU 第 100 / 300 / 1000 步 ＋3.9e-4 / ＋4.6e-3 / ＋2.1e-2；GPU 两次之间最多差 6.6e-4（记录分辨率的 4 格）。",
-               "📌 两边记录的格距不同：GPU 侧是 FP32 平方和开根号，平方和（约 925 万）一格是 1，折成参数范数约 1 ÷ (2 × 3042) ≈ 1.6e-4，GPU 之间的差都是它的整数倍；TPU 侧记的就是 FP32 的参数范数，3042 附近一格 2.4e-4。第 1 步的 ＋1.7e-4 不到 TPU 一格，不是差异。")
+               "📌 实测：混元 3 截前 4 层，三份默认设置的 GPU 运行（一份当基线）和 TPU 第一次 1000 步运行；逐步原值来自对齐记录的逐步曲线文件。主 loss 第 301–1000 步带符号均值：TPU %s，另两份 GPU %s、%s。参数范数：GPU 基线从 %.3f 涨到 %.3f；TPU − 基线第 100 ／ 300 ／ 1000 步 ＋%.1e ／ ＋%.1e ／ ＋%.1e。"
+               % (N.tx(LT_TAIL), N.tx(LG_TAIL[0]), N.tx(LG_TAIL[1]), P0, P1, PT[99], PT[299], PT[999]),
+               "📌 两边记录的格距不同：GPU 侧是 FP32 平方和开根号，平方和（约 925 万）一格是 1，折成参数范数约 1 ÷ (2 × 3042) ≈ 1.6e-4，GPU 之间的差都是它的整数倍；TPU 侧记的就是 FP32 的参数范数，3042 附近一格 2.4e-4。",
+               "⚠️ 粗线是 50 步滑动平均，只为看方向；判定见第三节。")
     f.save("fig8-drift.svg", yb + 14)
 
 
@@ -132,8 +181,8 @@ def fig_eps():
     y0 = f.header("Adam 的 ε 区：梯度太小，Adam 就不再「拉平」　——　<tspan font-weight=\"700\">一点偏差原样漏过去</tspan>",
                   "横轴 ＝ 一个参数的梯度大小（对数）；纵轴 ＝ Adam 这一步的更新量（÷ 学习率）；稳态下更新 ≈ g ÷ (|g| ＋ ε)，ε ＝ 1e-8",
                   [(INK, "Adam 的更新"), (RD, "冷门词的行"), (GR, "常见词的行")])
-    PH = 380
-    py = f.panel(0, y0, W, PH, "更新量 ≈ g ÷ (|g| ＋ ε)（本课推导，稳态近似）", GY)
+    PH = 450
+    py = f.panel(0, y0, W, PH, "更新量 ≈ g ÷ (|g| ＋ ε)（本课推导，稳态近似）；下面那条是本例冷门行的实测", GY)
     X0, XW, YB, YH = 120, 1150, py + 300, 250
 
     def X(g):
@@ -156,6 +205,16 @@ def fig_eps():
     f.t(X(N.RARE_G_LO) - 10, Y(0.9) + 22, "梯度差 1%% → 更新差 %.1f%%" % ELAST[N.RARE_G_LO], RD, size=13, anchor="end")
     f.t(X(3e-6) + 10, Y(0.6), "常见词的行", GR, True, 15)
     f.t(X(3e-6) + 10, Y(0.6) + 22, "梯度差 1%% → 更新差 %.2f%%" % ELAST[1e-6], GR, size=13)
+    # 实测层：第 300 步没出现过的词那些行的 √v̂（只有两个统计量：中位数、ε 以下的比例；不是完整分布）
+    sy = YB + 44
+    lft = N.RARE_EPS_FRAC
+    f.box(X0, sy, X(N.EPS) - X0, 22, RD, RD, 3)
+    f.box(X(N.EPS), sy, (X(N.EPS) - X0) * (1 - lft) / lft * 0.35, 22, "#f6aea9", "#f6aea9", 3)
+    f.t(X0 + 10, sy + 16, "第 300 步，冷门行 √v̂：%.0f%% 的元素在 ε 左边（实测）" % (lft * 100), "#fff", True, 13)
+    mx = X(N.RARE_VHAT_MED)
+    f.line(mx, sy - 6, mx, sy + 30, INK, 2.2, arrow=False)
+    f.t(mx, sy + 46, "中位数 %s，约为 ε 的四分之一" % ("%.1e" % N.RARE_VHAT_MED).replace("e-0", "e-"), INK, True, 13, "middle")
+    f.t(X(N.EPS) + (X(N.EPS) - X0) * (1 - lft) / lft * 0.35 + 8, sy + 16, "其余 %.0f%%" % ((1 - lft) * 100), GY, size=12)
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "常见词的行，Adam 把每一步拉成差不多大，梯度里的小偏差被拉平；冷门词的行不会", [
         "这些行每一步只收到 softmax 一点点「往下压」的梯度，比 ε 还小：在这里更新几乎跟梯度成正比，梯度的方向一变，更新就跟着变，Adam 不会把它拉平。",
@@ -164,7 +223,7 @@ def fig_eps():
     yb = f.src(yb + 10,
                "⚠️ 本课推导：Adam 更新 u ＝ m̂ ÷ (√v̂ ＋ ε)。梯度稳定时 m̂ ≈ g、√v̂ ≈ |g|，u ≈ g ÷ (|g| ＋ ε)；弹性 (du/u) ÷ (dg/g) ＝ ε ÷ (|g| ＋ ε)：g ＝ 4e-9 时 0.71，g ＝ 1e-6 时 0.0099。",
                "📌 实测：没出现过的词那些行，第 200–300 步 √v̂ 的均值在 4e-9 到 1e-8（第 1 步梯度中位数 5.2e-8，12%% 小于 ε）；第 300 步有 %.0f%% 的元素 √v̂ ＜ ε，中位数 %s；" % (N.RARE_EPS_FRAC * 100, ("%.1e" % N.RARE_VHAT_MED).replace("e-0", "e-")) + "β₁ ＝ 0.9、β₂ ＝ 0.95、ε ＝ 1e-8；没有出现 FP32 下溢或非正规数。",
-               "注：绿色那一段「常见词的行」只是示意它们的梯度远大于 ε，具体位置没有画实测值。")
+               "注：绿色那一段「常见词的行」只是示意它们的梯度远大于 ε，具体位置没有画实测值。最下面那条实测只有三样是量到的：ε 分界、ε 以下的比例 92%、中位数；条的两端长度是示意，不是分布。")
     f.save("fig8-eps.svg", yb + 14)
 
 
