@@ -5063,7 +5063,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>口径与旁证</b>：这把尺子只含执行噪声；A/A 测试；逐步的绝对差不是判定量</summary>
   <ul>
     <li>本课的噪声只含执行噪声：随机种子和数据顺序两边都固定。</li>
-    <li><b>尺子只能借同设置的重跑</b>：第二次迁移换成生产配方（学习率调度、YaRN、路由偏置零均值三样一起改）跑 1000 步时，同配方的 GPU 两份拿旧配置的尺子一量，自己就 r 4.12 —— 借来的尺子不适用；补同配方 GPU 当尺子重判：先补到 8 份（这把尺子是看过借尺判档才定的），后来事先登记再补到 16 份，两回都是 TPU 九项全过（只跑了 1 份，最差 0.996）。主 loss 的带符号均值那一项，这把尺子比旧配置宽 4.8 倍：配方一换，GPU 自己的波动就变了，尺子得跟着重量。</li>
+    <li><b>尺子只能借同设置的重跑</b>：第二次迁移换成生产配方（学习率调度、YaRN（长上下文位置编码的扩展）、路由偏置零均值三样一起改）跑 1000 步时，同配方的 GPU 两份拿旧配置的尺子一量，自己就 r 4.12 —— 借来的尺子不适用；补同配方 GPU 当尺子重判：先补到 8 份（这把尺子是看过借尺判档才定的），后来事先登记再补到 16 份，两回都是 TPU 九项全过（只跑了 1 份，最差 0.996）。主 loss 的带符号均值那一项，这把尺子比旧配置宽 4.8 倍：配方一换，GPU 自己的波动就变了，尺子得跟着重量。</li>
     <li>做线上实验的人有个老问法 ——「要是两边其实一模一样，这个差有多稀奇？」两组都吃安慰剂，叫 A/A 测试（Microsoft ExP 团队的 A/A 测试博客）。样本少时它会骗人：同一套超参只换随机种子跑 10 次，分成两组各 5 次，两组曲线就能「统计上显著不同」（Henderson 等，<em>Deep Reinforcement Learning that Matters</em>，arXiv:<a href="https://arxiv.org/abs/1709.06560" target="_blank" rel="noopener">1709.06560</a>）。</li>
     <li>另一种读法是看某一步的绝对差（例：「第 975 步参数范数多 ＋1.99e-2」），那是看漂移的形状用的，不是判定量。</li>
   </ul></details>
@@ -8059,14 +8059,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 推断：为什么切法一变就删（没有查到具体的融合决定）；虚线是按每步 6.4e-6 外推。</p></details></figure>
   <p>为什么第 1 步看不见：scale 初值 1.0 正好在 BF16 格点上（这个盲区 <a href="#s6-4">§6.4</a> 专门讲），要等 FP32 原值偏开才显（跟 <a href="#s5-6">§5.6</a> 输出头那件同一个盲区）。4K 上验过「这个开关没效果」，是因为那里舍入本来就在 —— <b>换了切法，要重验</b>。</p>
   <p>所以生产代码里这一类「转 BF16 再转回」，别交给编译器，显式选一种：要跟 GPU 一致（从 GPU 迁移、接着 GPU 的检查点续训、拿 GPU 当参照排查），就用强制舍入（<code>lax.reduce_precision</code>）钉死，多数地方步时几乎不变（多 token 预测的 logits 那一处 ＋8.1%，单份）；要精度，就删掉往返、明确用 FP32。开强制舍入为的是一致，不是更准：怕的是它随切法和编译器版本悄悄变。</p>
-  <details class="foldfig"><summary><b>写法规则</b>：四种想要的效果，各怎么写；第三次迁移上会被删的五处（另有 MTP 输入一处）</summary>
+  <details class="foldfig"><summary><b>写法规则</b>：四种想要的效果，各怎么写；第三次迁移上会被删的六处（含 MTP 输入、MTP 输出头 logits 各一处）</summary>
   <table class="t9"><thead><tr><th>想要的效果</th><th>写法</th><th>编译器会不会改</th></tr></thead><tbody>
   <tr><td>舍成 BF16，再继续用 FP32 算（照 GPU 的舍入）</td><td><code>jax.lax.reduce_precision(x, exponent_bits=8, mantissa_bits=7)</code></td><td>不会删</td></tr>
   <tr><td>同上，写成 <code>x.astype(bf16).astype(f32)</code></td><td>不要这样写</td><td>往返落在同一颗融合里就会被删</td></tr>
   <tr><td>真的用 BF16 存或传（省显存、带宽）</td><td>只写 <code>x.astype(bf16)</code>，后面不转回</td><td>不会删：下游拿到的类型就是 BF16</td></tr>
   <tr><td>要 FP32</td><td>不写任何往返</td><td>—</td></tr>
   </tbody></table>
-  <p>第三次迁移上会被删的五处，2026-11-14 又查出 MTP 输入一处（见下一个折叠）（RMSNorm scale 只在 32K 被删；正交化迭代一部分删、一部分保住）：多路残差的分支输入、流更新、收拢处（不补时第 1 步那几个小参数 R 超 1.2，参数范数 1.65 倍）；RMSNorm 的 scale（就是上面这处）；一处 FP32 sigmoid 的输出（没有可测影响）；Muon 正交化每步迭代的结果（参数范数第 300 步后一路往下漂，补上不漂）；多 token 预测输出头的 logits（交叉熵吃的是 FP32 logits）。查法都是 <a href="#s9-7">§9.7</a> 那一招：离线编译，扫「FP32 → BF16 → FP32 落在同一颗融合里」的位置。</p></details>
+  <p>第三次迁移上会被删的六处，最后一处 2026-11-14 才查出（RMSNorm scale 只在 32K 被删；正交化迭代一部分删、一部分保住）：多路残差的分支输入、流更新、收拢处（不补时第 1 步那几个小参数 R 超 1.2，参数范数 1.65 倍）；RMSNorm 的 scale（就是上面这处）；一处 FP32 sigmoid 的输出（没有可测影响）；Muon 正交化每步迭代的结果（参数范数第 300 步后一路往下漂，补上不漂）；多 token 预测输出头的 logits（交叉熵吃的是 FP32 logits）；多 token 预测层的输入（下一个折叠）。查法都是 <a href="#s9-7">§9.7</a> 那一招：离线编译，扫「FP32 → BF16 → FP32 落在同一颗融合里」的位置。</p></details>
   <details class="foldfig" id="mtp-input"><summary><b>图文 32K 又查到一处</b>：多 token 预测层的输入少舍一次，MTP 层梯度一齐差几乘十的负三次方</summary>
   <p>多 token 预测（MTP）层的输入，是主干末层归一化的输出：代码先把它存成 BF16，进 MTP 自己的归一化再转回 FP32，又是一对「转 BF16 再转回」。GPU 两次都舍；TPU 开着省舍入，把中间那次省了。</p>
   <p>少舍一次本来只差半格、有正有负，可这里紧跟一个乘法：输入已经归一化过，MTP 的归一化再乘一个约 0.997 的系数，离 1 很近。输入在 BF16 格点上、乘完再舍回 BF16，结果常被吸回原来那个格点。两次都舍的一边（GPU）因此整体偏大约 4.4e-4；只舍其中一次，都没有这个偏差（FP64 仿真逐项核过）。这一截占 MTP 残差流的大头，经过 MTP 的末层归一化和输出头，成了整个 MTP 层梯度的同一个比例差：19 个张量两边差 1.8e-3 到 4.9e-3，全部同号，GPU 6 份之间只差约 1e-4。</p>
@@ -8496,6 +8496,56 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>现象。</b>第三次迁移的图文模型 32K，12 份 TPU 运行 MTP loss 的 1000 步带符号均值都在 ＋2.07e-5 到 ＋3.23e-5，GPU 7 份对基线只有 ＋0.15e-5 到 ＋0.69e-5；形状都一样：第 1–50 步约 0，第 100–200 步升到 ＋2e-5 到 ＋5e-5，之后停在 ＋2e-5 到 ＋4e-5。加开关、换执行设置都去不掉。第 1 步 MTP 层 21 个张量加输出头、词嵌入，R 都 ≤ 1.10：权重还在格点上，看不见（<a href="#s6-4">§6.4</a>）。</p>
   <p><b>第一个嫌疑。</b>同一状态各算一步，把两边的梯度差拆成「沿 FP64 方向的比例项」，整个 MTP 层是同一个比例差，追到 MTP 输入那次被省掉的舍入（<a href="#s5-5">§5.5</a> 折叠）。补上以后同状态一步修好了，1000 步分不出作用。</p>
   <p><b>主因。</b>两边 MTP 头都在反向把 logits 的梯度舍成 BF16，只是舍之前乘的系数不同：GPU 乘 0.1（MTP loss 的权重）以后舍，TPU 是目标先除以 token 数再反向，等于乘 0.1 ÷ N 以后舍（那一步 N ＝ 60,915）。正确词那一项 ＝ 系数 × (p<sub>y</sub> − 1)，p<sub>y</sub> 很小时几乎都挤在同一个格距里。系数 0.1 时最近的两个格点是 0.099609 和 0.100098，p<sub>y</sub> ＜ 1.46e-3 时全往 0.100098 舍：GPU 这一项舍后偏大 9.8e-4（相对），传到输出头反向的输入偏大 6.1e-4；TPU 这一项偏小 1.53e-3，输入偏小 7.1e-4。<b>方向相反。</b></p>
+<figure class="fbox fwide" id="fig-mtpgrid"><svg viewBox="0 0 1400 526" width="100%" role="img" aria-label="三行，每行只画一个 BF16 格距：左右两个格点，中间虚线是中点，圆点是舍之前的值，箭头指向它被舍到的格点。GPU 乘 0.1 以后，值落在格距的 0.80 处，过了中点，舍到右边，偏大 ＋9.9e-4。TPU 乘 0.1 ÷ N 以后，值落在 0.33 处，不到中点，舍到左边，偏小 −1.5e-3。N 换成 2 的幂 65,536，值落在跟 GPU 一样的 0.80 处，乘回 N 以后跟 GPU 逐位相同。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一次舍成 BF16，往哪边舍，看值落在格距里的什么位置</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">正确词那一项 ＝ 系数 ×（p_y − 1），p_y ＝ 1e-5；一行 ＝ 一个格距，0 ＝ 左格点，1 ＝ 右格点</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">GPU</text>
+<rect x="78.36" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="99" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">TPU</text>
+<rect x="155.60000000000002" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="176" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">N 取 2 的幂</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">本课复算：FP32 里乘好，再按 BF16 就近舍入</tspan></text>
+<text class="svgsm" x="24" y="207" fill="#a50e0e" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU：乘 0.1 以后舍</tspan></text>
+<text class="svgsm" x="24" y="230" fill="#a50e0e" style="font-size:13.0px;font-variant-numeric:tabular-nums">舍后 ＋9.9e-4（相对）</text>
+<line x1="520" y1="202" x2="1280" y2="202" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<line x1="520" y1="188" x2="520" y2="216" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
+<line x1="1280" y1="188" x2="1280" y2="216" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
+<line x1="900.0" y1="190" x2="900.0" y2="214" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<rect x="1119.4483642578125" y="195" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="1126" y="186" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.80</tspan></text>
+<path d="M 1126.45 212.00 L 1203.22 230.00 L 1280.00 214.00" fill="none" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="520" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">左格点</text>
+<text class="svgsm" x="1280" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">右格点</text>
+<text class="svgsm" x="900" y="236" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">中点</text>
+<text class="svgsm" x="24" y="299" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">TPU：乘 0.1 ÷ N 以后舍（N ＝ 60,915）</tspan></text>
+<text class="svgsm" x="24" y="322" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums">舍后 −1.5e-3（相对）</text>
+<line x1="520" y1="294" x2="1280" y2="294" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<line x1="520" y1="280" x2="520" y2="308" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
+<line x1="1280" y1="280" x2="1280" y2="308" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
+<line x1="900.0" y1="282" x2="900.0" y2="306" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<rect x="766.7469482421875" y="287" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="773" y="278" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.33</tspan></text>
+<path d="M 773.75 304.00 L 646.87 322.00 L 520.00 306.00" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="24" y="391" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对照：N 取 2 的幂（65,536）</tspan></text>
+<text class="svgsm" x="24" y="414" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">舍后 ＋9.9e-4（相对）</text>
+<line x1="520" y1="386" x2="1280" y2="386" stroke="#80868b" stroke-width="2" stroke-linecap="round"/>
+<line x1="520" y1="372" x2="520" y2="400" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
+<line x1="1280" y1="372" x2="1280" y2="400" stroke="#202124" stroke-width="2" stroke-linecap="round"/>
+<line x1="900.0" y1="374" x2="900.0" y2="398" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<rect x="1119.4483642578125" y="379" width="14" height="14" rx="7" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
+<text class="svgsm" x="1126" y="370" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.80</tspan></text>
+<path d="M 1126.45 396.00 L 1203.22 414.00 L 1280.00 398.00" fill="none" stroke="#5f6368" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="0" y="452" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="479" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">就近舍入只在值随机落在格距里时才无偏；这一项挤在同一个格距里，往哪边舍由舍之前乘的系数决定</tspan></text>
+</svg><figcaption><b>红点过了中点往右舍，蓝点没到中点往左舍；灰点跟红点在同一个位置。</b><span class="capmore"><br><em>本课复算，p_y ＝ 1e-5。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 本课复算：p_y ＝ 1e-5，系数 × (1 − p_y) 先在 FP32 里算好，再按 BF16 就近舍入（平局取偶）。p_y 取 1e-4、1e-3 时位置是 0.78／0.31、0.60／0.12，方向不变；p_y 趋于 0 的极限就是对齐记录的 ＋9.8e-4／−1.53e-3。</p>
+<p>📌 对齐记录用 numpy 实测过 N 取 2 的幂时两种写法逐位相同；本图第三行是同一件事的复算。</p></details></figure>
   <p>N 取 2 的幂时，两种写法逐位相同（对齐记录 numpy 实测）：问题在尾数落在格距里的什么位置，跟数大不大无关。也不是下溢：0.1 ÷ 60,915 约 1.6e-6，离 BF16 最小的正规数还差约 107 个二进制量级。</p>
   <p><b>一度把它排除了。</b>同一状态一步上，让 TPU 改在 GPU 的尺度上舍，MTP 参数梯度沿 FP64 方向只挪 5e-5 到 4e-4（相对）；定位时据此把它排除在外。</p>
   <p><b>1000 步推翻了这个排除。</b>3 份对 3 份，尺子是 GPU 同设置重跑两两的最大差 6.866e-6：</p>
@@ -13301,7 +13351,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   ② 指纹变了，跑 300 步对 TPU 的 golden：曲线最差 r 不超过纯噪声的最高分、第 1 步没有离 FP64 更远的张量，就是换了顺序。<br>
   ③ 动到精度或数值路径的，再跑 1000 步、用 GPU 16 份当尺子；记下的每一项 loss 都逐项比。<br>
   ④ 四个已知会动精度的坑：纯数据并行时只切词嵌入表（或词嵌入梯度用 FP32 累加，第八节）；别关 excess precision；RMSNorm 开单次舍入（最后一层输出舍两次那件；v5p、运行库 0.0.52 上不开就超；跟第五节那个 norm scale 舍入不是一回事）；上下文并行目前只能配普通注意力，要让 softmax 真走 FP32（新版代码起，旧代码写了也不生效）。<br>
-  ⑤ 本身对加法顺序很敏感的小张量（比如注意力的 sink 参数），1.2 倍的门槛对它太紧，先看只换顺序的几次运行会跳多大；被小参数豁免单列的，要看豁免清单里的倍数。<br>
+  ⑤ 本身对加法顺序很敏感的小张量（比如注意力的 sink 参数：每个头一个可学习的标量，给 softmax 多一个「哪都不看」的去处），1.2 倍的门槛对它太紧，先看只换顺序的几次运行会跳多大；被小参数豁免单列的，要看豁免清单里的倍数。<br>
   ⑥ 换运行库版本：离线筛判不了；先建新的基准运行，跟旧的比，再把上面几件重测一遍（<a href="#s10-2">§10.2</a>）。<br>
   ⑦ 换设备数、换切法：先离线编译一份生产规模的训练步，数边传边乘的循环和它们的累加器类型、数被删掉的「转 BF16 再转回」（<a href="#s5-4">§5.4</a>、<a href="#s5-5">§5.5</a>）；要真舍，写强制舍入。</div>
 

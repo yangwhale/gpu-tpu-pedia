@@ -964,6 +964,61 @@ def fig_trans():
                "⚠️ 右格是教科书做法（区间缩减、多项式、牛顿迭代），只讲思路；各家库的系数、项数和缩减方式不同。sigmoid、silu 的高精度写法用高精度的 exp 搭：e ＝ exp(−|x|)，再算 1 ÷ (1 ＋ e)，倒数做一次牛顿修正。")
     f.save("fig8-trans.svg", yb + 14)
 
+def fig_mtpgrid():
+    """fig8-mtpgrid 回答：同一次「舍成 BF16」，为什么 GPU 往上、TPU 往下？—— 看值落在格距里的位置。
+    本课复算（p_y ＝ 1e-5，FP32 里算好再按 BF16 就近舍入），极限跟对齐记录的 ＋9.8e-4／−1.53e-3 对得上。"""
+    import numpy as _np
+    PY = 1e-5
+
+    def cell(c):
+        v = float(_np.float32(c * (1 - PY)))
+        e = math.floor(math.log2(v))
+        ulp = 2.0 ** (e - 7)
+        lo = math.floor(v / ulp) * ulp
+        r = N.bf16(v)
+        return v, lo, lo + ulp, (v - lo) / ulp, r, r / v - 1
+    rows = [("GPU：乘 0.1 以后舍", 0.1, RD), ("TPU：乘 0.1 ÷ N 以后舍（N ＝ 60,915）", 0.1 / N.M3_MH_N, BL), ("对照：N 取 2 的幂（65,536）", 0.1 / 65536, GY)]
+    C = [cell(c) for _l, c, _c in rows]
+    assert abs(C[0][3] - 0.80) < 0.01 and abs(C[1][3] - 0.33) < 0.01 and abs(C[2][3] - C[0][3]) < 1e-6
+    assert C[0][5] > 0 > C[1][5] and abs(C[0][5] - N.M3_MH_TERM[0]) < 0.1e-3 and abs(C[1][5] - N.M3_MH_TERM[1]) < 0.05e-3
+    assert N.bf16(float(_np.float32(0.1 / 65536 * (1 - PY)))) * 65536 == N.bf16(float(_np.float32(0.1 * (1 - PY))))
+    f = Fig(W, "三行，每行只画一个 BF16 格距：左右两个格点，中间虚线是中点，圆点是舍之前的值，箭头指向它被舍到的格点。"
+               "GPU 乘 0.1 以后，值落在格距的 0.80 处，过了中点，舍到右边，偏大 %s。TPU 乘 0.1 ÷ N 以后，值落在 0.33 处，不到中点，舍到左边，偏小 %s。"
+               "N 换成 2 的幂 65,536，值落在跟 GPU 一样的 0.80 处，乘回 N 以后跟 GPU 逐位相同。" % (N.tx(C[0][5], "%.1e", plus=True), N.tx(C[1][5], "%.1e")))
+    y0 = f.header("同一次舍成 BF16，往哪边舍，看值落在格距里的什么位置",
+                  "正确词那一项 ＝ 系数 ×（p_y − 1），p_y ＝ 1e-5；一行 ＝ 一个格距，0 ＝ 左格点，1 ＝ 右格点",
+                  [(RD, "GPU"), (BL, "TPU"), (GY, "N 取 2 的幂")])
+    PH = 330
+    py = f.panel(0, y0, W, PH, "本课复算：FP32 里乘好，再按 BF16 就近舍入", INK)
+    X0, X1 = 520, W - 120
+    for i, ((lab, _c, col), (v, lo, hi, pos, r, rel)) in enumerate(zip(rows, C)):
+        y = py + 70 + i * 92
+        f.t(24, y + 5, lab, col, True, 14)
+        f.t(24, y + 28, "舍后 %s（相对）" % N.tx(rel, "%.1e", plus=True), col, size=13)
+        f.line(X0, y, X1, y, GY2, 2, arrow=False)
+        for xx in (X0, X1):
+            f.line(xx, y - 14, xx, y + 14, INK, 2, arrow=False)
+        xm = (X0 + X1) / 2
+        f.line(xm, y - 12, xm, y + 12, GY, 1.2, dash="4 3", arrow=False)
+        xv = X0 + pos * (X1 - X0)
+        f.box(xv - 7, y - 7, 14, 14, col, col, 7)
+        f.t(xv, y - 16, "%.2f" % pos, col, True, 13, "middle")
+        tgt = X1 if r > v else X0
+        f.path([(xv, y + 10), ((xv + tgt) / 2, y + 28), (tgt, y + 12)], col, 1.8)
+        if i == 0:
+            f.t(X0, y + 34, "左格点", GY, size=12, anchor="middle")
+            f.t(X1, y + 34, "右格点", GY, size=12, anchor="middle")
+            f.t(xm, y + 34, "中点", GY, size=12, anchor="middle")
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "warn", "就近舍入只在值随机落在格距里时才无偏；这一项挤在同一个格距里，往哪边舍由舍之前乘的系数决定", [
+        "N 取 2 的幂时两边逐位相同：问题在尾数落在格距里的位置，跟数大不大无关。",
+    ])
+    yb = f.src(yb + 10,
+               "⚠️ 本课复算：p_y ＝ 1e-5，系数 × (1 − p_y) 先在 FP32 里算好，再按 BF16 就近舍入（平局取偶）。p_y 取 1e-4、1e-3 时位置是 0.78／0.31、0.60／0.12，方向不变；p_y 趋于 0 的极限就是对齐记录的 ＋9.8e-4／−1.53e-3。",
+               "📌 对齐记录用 numpy 实测过 N 取 2 的幂时两种写法逐位相同；本图第三行是同一件事的复算。")
+    f.save("fig8-mtpgrid.svg", yb + 14)
+
+
 
 fig_formats()
 fig_truncate()
@@ -978,3 +1033,4 @@ fig_captain()
 fig_elide()
 fig_trans()
 fig_ulp2()
+fig_mtpgrid()
