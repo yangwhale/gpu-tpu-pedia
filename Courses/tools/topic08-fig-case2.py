@@ -28,7 +28,7 @@ def fig_gauge():
                "隐状态 h 沿这个平均方向挪一点，所有词的 logits 就一起升高或降低一点；反向时，梯度沿这个方向的那一份，就是把所有 logits 一起往下压的力。"
                "右：TPU 对 GPU 的 lse 差随步数往下走：第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218；GPU 两次之间小得多。")
     y0 = f.header("有一个方向，能让所有词的 logits 一起升降　——　<tspan font-weight=\"700\">那股力每步少一点，几百步就积出来了</tspan>",
-                  "左：细箭头 ＝ 每个词那一行权重，粗箭头 ＝ 平均方向 w̄，红箭头 ＝ h 沿 w̄ 的一小步；右：横轴 ＝ 训练步（对数），往下 ＝ TPU 的 lse 更低",
+                  "左：细箭头 ＝ 每个词那一行权重，粗箭头 ＝ 平均方向 w̄，红箭头 ＝ h 沿 w̄ 的一小步；右：横轴 ＝ 训练步（每 25 步一个探针点），往下 ＝ TPU 的 lse 更低",
                   [(INK, "平均方向 w̄"), (GY, "隐状态 h"), (RD, "h 沿 w̄ 的一小步"), (BL, "TPU − GPU"), (GY2, "GPU 两次之间")])
     PH = 360
     py = f.panel(0, y0, 600, PH, "输出头：logit ＝ h · 这个词的那一行", GY)
@@ -52,41 +52,43 @@ def fig_gauge():
     f._pan = None
     px = 620
     py2 = f.panel(px, y0, W - px, PH, "lse（logits 整体水平）差随步数往下走（实测，固定一条序列的探针）", BL)
-    GX0, GW, GY0, GH = px + 110, 600, py2 + 270, 220
+    import json as _j, os as _o
+    LP = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_lse_probe.json"), encoding="utf-8"))
+    ST, TD, GD = LP["步"], LP["TPU减GPU"], LP["GPU两次之间"]
+    for s_, v_, g_ in LSE:                                   # 跟正文那四个点对上
+        k_ = ST.index(s_)
+        assert abs(TD[k_] - v_) < 0.0006 and abs(GD[k_] - g_) < 0.0006, (s_, TD[k_], v_)
+    assert len(ST) == 40 and ST[-1] == 975
+    GX0, GW, GY0, GH = px + 90, W - px - 150, py2 + 290, 240
 
     def X(st):
-        return GX0 + (math.log10(st) - math.log10(20)) / (math.log10(400) - math.log10(20)) * GW
+        return GX0 + (st - 1) / 999.0 * GW
 
     YT = GY0 - GH                      # 顶部是 0，往下是负：logits 水平「往下走」
 
     def Y(v):
-        return YT + (-v) / 0.24 * GH
+        return YT + (-v) / 0.32 * GH
     f.line(GX0, YT, GX0 + GW, YT, GY2, 1.2, arrow=False)
     f.line(GX0, YT, GX0, GY0, GY2, 1.2, arrow=False)
-    for v in (0, -0.1, -0.2):
+    for v in (0, -0.1, -0.2, -0.3):
         f.t(GX0 - 10, Y(v) + 4, "%g" % v, GY, size=12, anchor="end")
-    for st in (25, 50, 100, 300):
-        f.t(X(st), YT - 10, "第 %d 步" % st, GY, size=12, anchor="middle")
-    f.path([(X(s), Y(v)) for s, v, _ in LSE], BL, 2.6, arrow=False)
-    # R18：灰点（GPU 两次之间）先画，TPU 蓝点最后画 —— 第 25 步两点几乎重合，蓝点不能被盖住
-    for s, v, g in LSE:
-        if g is not None:
-            f.box(X(s) - 5, Y(-abs(g)) - 5, 10, 10, GY2, GY2, 5)
-    for i, (s, v, g) in enumerate(LSE):
-        f.box(X(s) - 6, Y(v) - 6, 12, 12, BL, BL, 6)
-        # R3：「−0.078」原来写在点的右下，被下一段线穿过 → 一律写在左下（第一个点贴着纵轴，写右下）
-        if i == 0:
-            f.t(X(s) + 10, Y(v) + 20, "%g" % v, BL, True, 13)
-        else:
-            f.t(X(s) - 10, Y(v) + 20, "%g" % v, BL, True, 13, "end")
-    f.t(X(300) - 10, Y(-0.021) + 20, "GPU 两次之间", GY, True, 13, "end")
+    for st in (1, 250, 500, 750, 1000):
+        f.t(X(st), GY0 + 22, "第 %d 步" % st, GY, size=12, anchor={1: "start", 1000: "end"}.get(st, "middle"))
+    f.path([(X(s_), Y(v_)) for s_, v_ in zip(ST, GD)], GY2, 1.8, arrow=False)
+    f.path([(X(s_), Y(v_)) for s_, v_ in zip(ST, TD)], BL, 2.6, arrow=False)
+    for s_, v_ in zip(ST, TD):
+        f.box(X(s_) - 3, Y(v_) - 3, 6, 6, BL, BL, 3)
+    for s_ in (100, 300, 975):
+        k_ = ST.index(s_)
+        f.t(X(s_) - 6, Y(TD[k_]) + 20, "%+.3f" % TD[k_], BL, True, 13, "end" if s_ > 500 else "middle")
+    f.t(X(975), Y(-0.05), "灰线：GPU 两次之间，第 975 步 %+.3f" % GD[-1], GY, True, 13, "end")
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "这股力每一步只差 6.5e-4（相对；哪一边少推，后面揭晓），同一个方向、每一步都差，几百步积成 logits 整体水平的差", [
         "所有 logits 一起升降，softmax 的概率不变；可冷门词那几行压多压少，跟的正是原始 logit 的整体水平 —— 整体水平低一点，那几行就少压一点。",
         "代价：第 1 步只差 1e-4 量级，单看一步、对 GPU 噪声比，完全看不出来。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：两边在同一条固定序列上每 25 步跑一次前向（单独编译，不扰动训练）；TPU 对第一份 GPU 的 lse 均值差第 25 / 50 / 100 / 300 步 −0.0016 / −0.016 / −0.078 / −0.218，GPU 两次之间 −0.0001 / ＋0.0013 / −0.0062 / −0.021。",
+               "📌 实测：两边在同一条固定序列上每 25 步跑一次前向（单独编译，不扰动训练），共 40 个点；TPU 对第一份 GPU 的 lse 均值差第 25 / 50 / 100 / 300 / 975 步 −0.0016 / −0.016 / −0.078 / −0.218 / −0.299，GPU 两次之间 −0.0001 / ＋0.0013 / −0.0062 / −0.021 / −0.013。",
                "📌 实测：第 1000 步的训练批上，TPU 的 logits 在整个词表上整体低 0.27、lse 低约 0.33，GPU 两次之间 0.0001。",
                "⚠️ 本课推导：dlogits 各项加起来是 0，可各行在 w̄ 上的投影长短不一，乘上各行以后沿 w̄ 并不抵消 —— 所以 dh 沿 w̄ 那一份不为零。",
                "注：左图的箭头是示意：真实的输出层有 120,832 行、4096 维。")

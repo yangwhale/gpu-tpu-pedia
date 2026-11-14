@@ -912,7 +912,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <tr><td>「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略</td><td>平均 2.4% 的 token（最多 3.05%）按另一套路由算梯度；参数范数 r 4.56，存下路由后 2.27</td><td><a href="#s2-3">§2.3 折叠</a></td></tr>
 <tr><td>TF32 开关读回来是关，矩阵乘照样走 TF32</td><td>FP32 矩阵乘离 FP64 仍有 2.94e-4，真关掉 1.15e-6</td><td><a href="#s5-3">§5.3</a></td></tr>
 <tr class="fgrp"><td colspan="3"><b>硬件在哪儿舍</b>　<span>5 处</span></td></tr>
-<tr><td>GPU 张量核每 16 个乘积抹一次零</td><td>同一次求和越长越偏：长 256 偏 2.2e-5，长 65536 偏 3.1e-4（合成输入）</td><td><a href="#s5-2">§5.2</a></td></tr>
+<tr><td>GPU 张量核每 16 个乘积抹一次零</td><td>同一次求和越长越偏：合成输入长 65536 朝零偏 3.1e-4；真实输出头 16,384／120,832 行偏 6.9e-5／6.5e-4</td><td><a href="#s5-2">§5.2</a></td></tr>
 <tr><td>4 个设备上验过的程序，换到 8 个设备，一次求和从舍 1 次变成舍 6 次</td><td>那批投影离 FP64：TPU 2.35e-3，GPU 1.66e-3，R 1.41；代码一行没改</td><td><a href="#s5-4">§5.4</a></td></tr>
 <tr><td>名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出</td><td>训练几步后 logits 误差是真 FP32 的约 5000 倍（1.9e-3 对 3.7e-7）；前 300 步主 loss r 7.32，换 high 档 1.03</td><td><a href="#s5-6">§5.6</a></td></tr>
 <tr><td>TPU 默认的 exp、log 图快不图准</td><td>v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍</td><td><a href="#s5-7">§5.7</a></td></tr>
@@ -7338,6 +7338,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1013" y="224" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">7.0e-05</tspan></text>
 <rect x="1227.5454545454545" y="193.4837451452807" width="14" height="14" rx="7" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
 <text class="svgsm" x="1224" y="188" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">3.1e-04</tspan></text>
+<path d="M 812.73 369.28 L 1023.64 281.68" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" stroke-dasharray="5 4"/>
+<text class="svgsm" x="822" y="389" fill="#b06000" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">只算截断（推断）</tspan></text>
+<text class="svgsm" x="824" y="304" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">这一点主要是输出写回 BF16 的舍入</text>
 <line x1="760" y1="412.85767975718295" x2="1340" y2="412.85767975718295" stroke="#1e8e3e" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="7 5"/>
 <text class="svgsm" x="1340" y="402" fill="#0d652d" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">FP32 不走张量核：≤ 5e-8</tspan></text>
 <rect x="0" y="522" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
@@ -9224,7 +9227,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
 <figure class="fbox fwide" id="fig-gauge"><svg viewBox="0 0 1400 556" width="100%" role="img" aria-label="左：输出层每个词有一行权重，画成一束箭头，它们有一个共同的平均方向，粗箭头。隐状态 h 沿这个平均方向挪一点，所有词的 logits 就一起升高或降低一点；反向时，梯度沿这个方向的那一份，就是把所有 logits 一起往下压的力。右：TPU 对 GPU 的 lse 差随步数往下走：第 25 步 −0.0016，第 50 步 −0.016，第 100 步 −0.078，第 300 步 −0.218；GPU 两次之间小得多。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">有一个方向，能让所有词的 logits 一起升降　——　<tspan font-weight="700">那股力每步少一点，几百步就积出来了</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：细箭头 ＝ 每个词那一行权重，粗箭头 ＝ 平均方向 w̄，红箭头 ＝ h 沿 w̄ 的一小步；右：横轴 ＝ 训练步（对数），往下 ＝ TPU 的 lse 更低</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：细箭头 ＝ 每个词那一行权重，粗箭头 ＝ 平均方向 w̄，红箭头 ＝ h 沿 w̄ 的一小步；右：横轴 ＝ 训练步（每 25 步一个探针点），往下 ＝ TPU 的 lse 更低</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#202124" stroke="#202124" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">平均方向 w̄</text>
 <rect x="138.84" y="63" width="14" height="14" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1.0"/>
@@ -9274,34 +9277,68 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="620" y="104" width="780" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="620" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
 <text class="svglbl" x="634" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">lse（logits 整体水平）差随步数往下走（实测，固定一条序列的探针）</tspan></text>
-<line x1="730" y1="182" x2="1330" y2="182" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="730" y1="182" x2="730" y2="402" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="720" y="186" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
-<text class="svgsm" x="720" y="277" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">-0.1</text>
-<text class="svgsm" x="720" y="369" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">-0.2</text>
-<text class="svgsm" x="774" y="172" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 25 步</text>
-<text class="svgsm" x="913" y="172" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 50 步</text>
-<text class="svgsm" x="1052" y="172" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 100 步</text>
-<text class="svgsm" x="1272" y="172" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 300 步</text>
-<path d="M 774.69 183.47 L 913.52 196.67 L 1052.35 253.50 L 1272.38 381.83" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
-<rect x="769.692288416578" y="177.09166666666667" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="908.5192163124334" y="178.19166666666666" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="1047.346144208289" y="182.68333333333334" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="1267.3816190135399" y="196.25" width="10" height="10" rx="5" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="768.692288416578" y="177.46666666666667" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="784" y="203" fill="#174ea6" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.0016</tspan></text>
-<rect x="907.5192163124334" y="190.66666666666666" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="903" y="216" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.016</tspan></text>
-<rect x="1046.346144208289" y="247.5" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1042" y="273" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.078</tspan></text>
-<rect x="1266.3816190135399" y="375.83333333333337" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="1262" y="401" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.218</tspan></text>
-<text class="svgsm" x="1262" y="221" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 两次之间</tspan></text>
+<line x1="710" y1="182" x2="1340" y2="182" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="710" y1="182" x2="710" y2="422" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="700" y="186" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
+<text class="svgsm" x="700" y="261" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">-0.1</text>
+<text class="svgsm" x="700" y="336" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">-0.2</text>
+<text class="svgsm" x="700" y="411" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">-0.3</text>
+<text class="svgsm" x="710" y="444" fill="#5f6368" text-anchor="start" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 1 步</text>
+<text class="svgsm" x="867" y="444" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 250 步</text>
+<text class="svgsm" x="1024" y="444" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 500 步</text>
+<text class="svgsm" x="1182" y="444" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 750 步</text>
+<text class="svgsm" x="1340" y="444" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">第 1000 步</text>
+<path d="M 710.00 181.99 L 725.14 182.10 L 740.90 181.06 L 756.67 175.98 L 772.43 186.68 L 788.20 170.84 L 803.96 186.08 L 819.73 163.65 L 835.50 214.82 L 851.26 185.54 L 867.03 170.69 L 882.79 180.66 L 898.56 197.70 L 914.32 171.62 L 930.09 171.65 L 945.86 178.49 L 961.62 196.16 L 977.39 179.61 L 993.15 168.91 L 1008.92 197.56 L 1024.68 175.81 L 1040.45 168.46 L 1056.22 179.11 L 1071.98 206.13 L 1087.75 166.04 L 1103.51 181.00 L 1119.28 196.51 L 1135.05 179.12 L 1150.81 176.45 L 1166.58 182.15 L 1182.34 174.00 L 1198.11 173.82 L 1213.87 180.97 L 1229.64 176.99 L 1245.41 183.34 L 1261.17 190.59 L 1276.94 199.85 L 1292.70 184.15 L 1308.47 193.94 L 1324.23 191.54" fill="none" stroke="#80868b" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M 710.00 181.98 L 725.14 183.17 L 740.90 194.14 L 756.67 208.66 L 772.43 240.48 L 788.20 236.37 L 803.96 287.28 L 819.73 246.98 L 835.50 320.57 L 851.26 299.52 L 867.03 322.65 L 882.79 327.13 L 898.56 345.27 L 914.32 332.35 L 930.09 345.22 L 945.86 345.19 L 961.62 361.60 L 977.39 356.29 L 993.15 370.19 L 1008.92 359.58 L 1024.68 368.25 L 1040.45 398.19 L 1056.22 351.68 L 1071.98 375.24 L 1087.75 368.69 L 1103.51 389.16 L 1119.28 371.67 L 1135.05 388.46 L 1150.81 373.84 L 1166.58 368.79 L 1182.34 406.48 L 1198.11 401.43 L 1213.87 385.64 L 1229.64 405.15 L 1245.41 397.85 L 1261.17 406.35 L 1276.94 420.73 L 1292.70 400.52 L 1308.47 410.20 L 1324.23 406.17" fill="none" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<rect x="707.0" y="178.9775" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="722.1351351351351" y="180.17" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="737.9009009009009" y="191.1425" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="753.6666666666666" y="205.655" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="769.4324324324324" y="237.48499999999999" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="785.1981981981982" y="233.3675" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="800.9639639639639" y="284.28499999999997" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="816.7297297297297" y="243.98000000000002" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="832.4954954954956" y="317.57" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="848.2612612612613" y="296.525" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="864.0270270270271" y="319.655" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="879.7927927927927" y="324.1325" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="895.5585585585586" y="342.275" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="911.3243243243244" y="329.345" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="927.0900900900901" y="342.21500000000003" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="942.8558558558559" y="342.185" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="958.6216216216217" y="358.60249999999996" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="974.3873873873874" y="353.2925" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="990.1531531531532" y="367.19" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1005.918918918919" y="356.585" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1021.6846846846847" y="365.2475" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1037.4504504504505" y="395.1875" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1053.2162162162163" y="348.67999999999995" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1068.981981981982" y="372.23749999999995" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1084.7477477477478" y="365.69" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1100.5135135135135" y="386.1575" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1116.2792792792793" y="368.6675" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1132.045045045045" y="385.46000000000004" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1147.8108108108108" y="370.83500000000004" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1163.5765765765766" y="365.7875" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1179.3423423423424" y="403.475" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1195.1081081081081" y="398.4275" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1210.873873873874" y="382.64" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1226.6396396396397" y="402.14750000000004" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1242.4054054054054" y="394.85" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1258.1711711711712" y="403.34749999999997" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1273.936936936937" y="417.73249999999996" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1289.7027027027027" y="397.52" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1305.4684684684685" y="407.2025" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="1321.2342342342342" y="403.1675" width="6" height="6" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="766" y="260" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.078</tspan></text>
+<text class="svgsm" x="892" y="365" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.218</tspan></text>
+<text class="svgsm" x="1318" y="426" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">-0.299</tspan></text>
+<text class="svgsm" x="1324" y="219" fill="#5f6368" text-anchor="end" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">灰线：GPU 两次之间，第 975 步 -0.013</tspan></text>
 <rect x="0" y="482" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="482" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="482" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="509" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">这股力每一步只差 6.5e-4（相对；哪一边少推，后面揭晓），同一个方向、每一步都差，几百步积成 logits 整体水平的差</tspan></text>
-</svg><figcaption><b>左边是那个方向，右边是它每步少一点积出来的结果。</b><span class="capmore"><br><em>左图的箭头是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：两边在同一条固定序列上每 25 步跑一次前向（单独编译，不扰动训练）；TPU 对第一份 GPU 的 lse 均值差第 25 / 50 / 100 / 300 步 −0.0016 / −0.016 / −0.078 / −0.218，GPU 两次之间 −0.0001 / ＋0.0013 / −0.0062 / −0.021。</p>
+</svg><figcaption><b>左边是那个方向，右边是它每步少一点积出来的结果。</b><span class="capmore"><br><em>左图的箭头是示意。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：两边在同一条固定序列上每 25 步跑一次前向（单独编译，不扰动训练），共 40 个点；TPU 对第一份 GPU 的 lse 均值差第 25 / 50 / 100 / 300 / 975 步 −0.0016 / −0.016 / −0.078 / −0.218 / −0.299，GPU 两次之间 −0.0001 / ＋0.0013 / −0.0062 / −0.021 / −0.013。</p>
 <p>📌 实测：第 1000 步的训练批上，TPU 的 logits 在整个词表上整体低 0.27、lse 低约 0.33，GPU 两次之间 0.0001。</p>
 <p>⚠️ 本课推导：dlogits 各项加起来是 0，可各行在 w̄ 上的投影长短不一，乘上各行以后沿 w̄ 并不抵消 —— 所以 dh 沿 w̄ 那一份不为零。</p>
 <p>注：左图的箭头是示意：真实的输出层有 120,832 行、4096 维。</p></details></figure>
@@ -9510,7 +9547,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>怎么确定是截断</b>：三样证据，哪些是实测、哪些是推断</summary>
   <ul>
     <li><b>硬件建模</b>（实测）：按 B200 张量核模型逐位重算路由打分，三层全部元素逐位对上；跟公开论文对 H100／B200 的比特级建模一致（Khattak、Mikaitis，arXiv:<a href="https://arxiv.org/abs/2512.07004" target="_blank" rel="noopener">2512.07004</a>，§5.2）。</li>
-    <li><b>合成测试</b>（实测）：同一个模型在合成正数输入上，求和长 256 朝零偏 2.2e-5，长 65536 偏 3.1e-4；不走张量核的真 FP32 几乎为零（≤ 5e-8）。</li>
+    <li><b>合成测试</b>（实测）：同一个模型在合成正数输入上，求和长 65536 朝零偏 3.1e-4（短求和那几点主要是输出写回 BF16 的舍入，推断，所以不拿来作截断的证据）；不走张量核的真 FP32 几乎为零（≤ 5e-8）。</li>
     <li><b>案例里的真张量</b>（实测）：把训练里实际用到的输出头张量的词表行打乱、取前 K 行在 FP64 里重算，行越多误差越大、都朝零缩：K ＝ 16,384 时 6.9e-5，K ＝ 65536 时 2.0e-4，整张词表 120,832 行时 6.5e-4。</li>
     <li><b>推断</b>：「案例里的偏差就是这个抹零模型在起作用」—— 那个模型在这么长的求和上没有单独逐位验证过。</li>
   </ul></details>

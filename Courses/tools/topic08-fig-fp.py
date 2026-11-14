@@ -183,6 +183,11 @@ def fig_truncate():
         else:
             f.t(x - 10, y - 12, "%.1e" % e, GY, True, 13, "end")
         # 原先压在 K ＝ 65,536 点下面的三行「动画 3.5e-4 口径不同」挪进 📌（图里只留 highlight）
+    # 2026-11-15：短求和那点主要是输出写回 BF16 的舍入（出处里的推断）；叠一条「只算截断模型」的虚线，看截断从哪里开始主导
+    TRUNC_ONLY = [(256, 3e-7), (4096, 1.1e-5)]
+    f.path([(GXf(k), GYf(e)) for k, e in TRUNC_ONLY], OR, 2, arrow=False, dash="5 4")
+    f.t(GXf(256) + 10, GYf(3e-7) + 20, "只算截断（推断）", OR, True, 12.5)
+    f.t(pts[0][0] + 12, pts[0][1] + 40, "这一点主要是输出写回 BF16 的舍入", GY, size=12)
     f.line(GX0, GYf(N.FP32_BIAS_MAX), GX0 + GW, GYf(N.FP32_BIAS_MAX), GR, 2.5, dash="7 5", arrow=False)
     f.t(GX0 + GW, GYf(N.FP32_BIAS_MAX) - 10, "FP32 不走张量核：≤ 5e-8", GR, True, 13, "end")
     f._pan = None
