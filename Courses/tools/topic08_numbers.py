@@ -1603,3 +1603,30 @@ M3_TRANS_COST_T = "%.1f%%" % (M3_TRANS_COST * 100)
 STEP1_ALL_E = "%.2e" % STEP1_ALL; STEP1_ALL_E = STEP1_ALL_E.replace("e-0", "e-")
 REF_LAYER0_FWD_E, REF_LAYER0_BWD_E = ("%.1e" % REF_LAYER0_FWD).replace("e-0", "e-"), ("%.1e" % REF_LAYER0_BWD).replace("e-0", "e-")
 assert (STEP1_ALL_E, REF_LAYER0_FWD_E, REF_LAYER0_BWD_E) == ("1.28e-3", "4.0e-3", "2.1e-3")
+# ── 2026-11-14 · 第三次迁移 · 图文 32K 的两个新发现（出处：对齐记录第三次迁移那一目录的说明页「MTP 偏差的定位」「MTP 输入舍入的验证格」及后续、
+#    「路由翻转定责」两段，和 mtp-l1 汇总结果文件；同一状态各算一步；实测，除标推断）──
+# ① MTP 输入：主干末层归一化的输出先存 BF16、进 MTP 的归一化再转回 FP32，GPU 两次都舍，TPU（省舍入开着）省掉中间那次
+M3_MTPIN_COEF = "0.997"                  # MTP 归一化乘的系数（1/rms × 缩放），输入已归一化（rms 约 1.004）
+M3_MTPIN_HNORM = 1.000456                # GPU ÷ TPU：MTP 归一化输出的逐 token 范数比（中位）
+M3_MTPIN_BIAS = 4.4e-4                   # FP64 仿真：两次都舍时输出整体偏大的比例项（0.00044）；只舍一次的两种写法都 < 5e-6
+assert abs((M3_MTPIN_HNORM - 1) - M3_MTPIN_BIAS) < 0.3e-4
+M3_MTPIN_C = (1.8e-3, 4.9e-3)            # MTP 层 19 个非路由张量梯度的比例项 |c|（GPU − TPU，全部同号，为负）
+M3_MTPIN_C_GPU = "1e-4"                  # 6 份 GPU 之间的比例项只差约 ±1e-4
+M3_MTPIN_LOSS = (0.7515084147453308, 0.751466691493988, 0.7514692898908204)   # MTP loss：TPU 修前、TPU 补强制舍入后、GPU
+M3_MTPIN_LOSS_BEFORE_T = "%.1e" % abs(M3_MTPIN_LOSS[0] - M3_MTPIN_LOSS[2])
+M3_MTPIN_LOSS_AFTER_T = "%.1e" % abs(M3_MTPIN_LOSS[1] - M3_MTPIN_LOSS[2])
+M3_MTPIN_LOSS_BEFORE_T, M3_MTPIN_LOSS_AFTER_T = (M3_MTPIN_LOSS_BEFORE_T.replace("e-0", "e-"), M3_MTPIN_LOSS_AFTER_T.replace("e-0", "e-"))
+assert (M3_MTPIN_LOSS_BEFORE_T, M3_MTPIN_LOSS_AFTER_T) == ("3.9e-5", "2.6e-6")
+M3_MTPIN_FIXED, M3_MTPIN_OF = 15, 18     # 补上以后 MTP 层 18 个张量里 15 个比例项在 ±4e-4 以内（原来 1.8e-3 到 4.9e-3）
+M3_MTPIN_QPATH = (1.1e-3, 1.4e-3)        # 还超线的 q 路三个（q_a_proj ＋0.142%、q_b_proj ＋0.128%、q_a_layernorm ＋0.112%）；推断 q 一侧反向还有一处
+M3_MTPIN_C_T = "%s 到 %s" % (sci(M3_MTPIN_C[0]), sci(M3_MTPIN_C[1]))
+M3_MTPIN_QPATH_T = "%s 到 %s" % (sci(M3_MTPIN_QPATH[0]), sci(M3_MTPIN_QPATH[1]))
+assert (M3_MTPIN_C_T, M3_MTPIN_QPATH_T) == ("1.8e-3 到 4.9e-3", "1.1e-3 到 1.4e-3")
+# ② 视觉塔 q/k：视觉塔不选专家，可梯度要穿过后面的 MoE 层传回来；两种候选配置越线的只有视觉塔 q/k 投影，灌 TPU 自选路由的 FP64 重判
+M3_VIT_N = (10, 5)                        # 越线张量数：配置乙、配置甲（两种配置越线的层不重合）
+M3_VIT_R_T = ("1.21–1.53", "1.22–1.38")  # 越线时的 R
+M3_VIT_RFLIP_T = ("0.43–0.83", "0.44–0.62")   # 按 TPU 自己选的路由重算 FP64 以后的 R
+M3_VIT_FLIP_PCT = "8%–26%"               # 这一状态下各 MoE 层（第 1、2、3 层与 MTP 层）翻转的 token 比例：约 8% ／ 16% ／ 22% ／ 26%
+M3_VIT_N_1, M3_VIT_N_2 = M3_VIT_N
+M3_VIT_R_1, M3_VIT_R_2 = M3_VIT_R_T
+M3_VIT_RFLIP_1, M3_VIT_RFLIP_2 = M3_VIT_RFLIP_T

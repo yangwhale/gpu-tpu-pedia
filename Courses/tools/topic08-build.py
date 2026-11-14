@@ -69,6 +69,19 @@ table.t9 td, table.t9 th { padding:6px 12px; border-bottom:1px solid #e8eaed; te
 table.t9 th { color:var(--gray); font-weight:600 }
 p.bridge { color:var(--gray); border-left:3px solid var(--line); padding-left:12px }
 </style>"""
+head += """<style>
+.foundbox{border:2px solid var(--blue);border-radius:12px;padding:14px 18px 8px;margin:18px 0 6px;background:#fff}
+.foundbox .ft{font-size:21px;font-weight:700;color:var(--blue)}
+.foundbox .fsub{color:var(--gray);margin:4px 0 6px}
+table.ftab{width:100%;font-size:14.5px}
+table.ftab td:first-child{width:38%}
+table.ftab td:last-child{white-space:nowrap}
+table.ftab tr.fgrp td{background:var(--blue-l);padding:5px 12px;border-bottom:none}
+table.ftab tr.fgrp span{color:var(--gray);font-size:13px}
+.newtag{margin-right:4px}
+.foundbox .fnote{font-size:13px;color:var(--gray)}
+.foundbox .fbridge{font-weight:600;margin-top:4px}
+</style>"""
 from course_narrow_css import CSS as _NARROW_CSS   # noqa: E402
 head += "<style>" + _NARROW_CSS + "</style>\n"
 head += "<style>.foldfig ol { padding-left: 2.4em }\np.codeline{font-size:13.5px;color:var(--gray)} a.codelink{display:inline-block;margin-right:14px;padding:1px 8px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--blue)} a.codelink:hover{background:var(--blue-l)}</style>\n"
@@ -137,7 +150,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>讲约 97 分钟</b>（三次课，每次 30–34 分钟）</span>
+    <span class="chip">⏱ <b>讲约 99 分钟</b>（三次课，每次 32–34 分钟）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -150,6 +163,62 @@ HERO = '''
     后来又做了一次迁移（混元 4 的缩小版，一个更新的、带稀疏注意力的 MoE 模型，下文叫「第二次迁移」），同一套方法又走了一遍，后面借它当旁证和第二个案例（第八节），用到时都先报名字。第三次迁移是混元 4 的另一个尺寸，这次从生产代码原样起步，查清了几件「换了条件就不作数」的事（第五节）。</p>
 </div>
 '''
+
+
+# ── 开场「我们发现了什么」大列表（课程负责人 2026-11-14：「课程一开始先展示一下我们都发现了哪些有影响的点，有一个大列表，然后再开始展开讲正文」）──
+#   每条一行：现象（大白话）＋ 影响（带数，e 记法）＋ 在哪一节展开。只列不解释；案例一、案例二只报现象，不点破答案（第五节、第八节的防剧透规矩照旧）。
+#   条目只取正文已经讲到的；🆕 两条是 2026-11-14 图文 32K 的新发现，正文放在 §4.3、§5.5 的折叠里（课上不讲）。数字都是正文里已有的（新两条走 topic08_numbers）。
+def _frow(what, effect, where, href, new=False):
+    return ('<tr><td>%s%s</td><td>%s</td><td><a href="#%s">%s</a></td></tr>\n'
+            % ('<span class="newtag">🆕</span>' if new else "", what, effect, href, where))
+
+
+def _fgrp(title, n):
+    return '<tr class="fgrp"><td colspan="3"><b>%s</b>　<span>%d 处</span></td></tr>\n' % (title, n)
+
+
+_FOUND_ROWS = [
+    ("写的，不是生效的", [
+        ("权重衰减：GPU 配置里写 0.1，被调度器悄悄覆盖", "实际生效 0.033，差 3 倍", "§2.3", "s2-3"),
+        ("「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略", "平均 «M3_REROUTE_PCT»% 的 token（最多 «M3_REROUTE_MAX»%）按另一套路由算梯度；参数范数 r «M3_REROUTE_PN0»，存下路由后 2.27", "§2.3 折叠", "s2-3"),
+        ("TF32 开关读回来是关，矩阵乘照样走 TF32", "FP32 矩阵乘离 FP64 仍有 2.94e-4，真关掉 1.15e-6", "§5.3", "s5-3"),
+    ]),
+    ("硬件在哪儿舍", [
+        ("GPU 张量核每 16 个乘积抹一次零", "同一次求和越长越偏：长 256 偏 2.2e-5，长 65536 偏 3.1e-4（合成输入）", "§5.2", "s5-2"),
+        ("4 个设备上验过的程序，换到 8 个设备，一次求和从舍 1 次变成舍 6 次", "那批投影离 FP64：TPU 2.35e-3，GPU 1.66e-3，R 1.41；代码一行没改", "§5.4", "s5-4"),
+        ("名义 FP32 的输出头，在 TPU 默认精度下只算一遍 BF16；第 1 步看不出", "训练几步后 logits 误差是真 FP32 的约 5000 倍（1.9e-3 对 3.7e-7）；前 300 步主 loss r 7.32，换 high 档 1.03", "§5.6", "s5-6"),
+        ("TPU 默认的 exp、log 图快不图准", "v5p 上 exp 最多差 105 格、log 62 格（GPU ≤ 2 格）；单算子离 FP64 最多是 GPU 的 8.68 倍", "§5.7", "s5-7"),
+        ("一个 Python 常数（log₂e）跟着 BF16 的 q 一起被舍", "注意力 logits 整体放大 1.8e-3", "§5.6 折叠", "s5-6"),
+    ]),
+    ("编译器替你省掉的舍入", [
+        ("RMSNorm scale 那次「舍成 BF16」：4K 程序里在，32K 程序里 8 个全被删", "主 loss 偏约 −24σ（σ＝GPU 8 份的份间标准差），只补这一处就回到噪声里", "§5.5", "s5-5"),
+        ("MTP 输入那次「存成 BF16」被省掉，后面紧跟一个约 «M3_MTPIN_COEF» 的乘法", "GPU 一侧整体偏大 «M3_MTPIN_BIAS»，MTP 层 19 个张量的梯度一齐差 «M3_MTPIN_C_T»；补上后 MTP loss 差 «M3_MTPIN_LOSS_BEFORE_T» → «M3_MTPIN_LOSS_AFTER_T»", "§5.5 折叠", "mtp-input", True),
+        ("三份梯度相加，两边舍的次数不一样", "主 loss 第 551–1000 步偏 ＋9.4e-6，照 GPU 写法补上 ＋1.9e-6", "§9.7", "s9-7"),
+    ]),
+    ("路由一翻，梯度就换了一份", [
+        ("输入只差一丝，近平局的 token 就换了专家", "一个专家的梯度差 «STEP1_EXPERT»，全部张量合起来才 «STEP1_ALL_E»，约 80 倍", "§4.3", "s4-3"),
+        ("视觉塔自己不选专家，q、k 的梯度照样越线", "R «M3_VIT_R_1»；照 TPU 的路由重算 FP64，降到 «M3_VIT_RFLIP_1»：全是路由翻转", "§4.3 折叠", "vit-flip", True),
+    ]),
+    ("两个案例，一个编译器 bug", [
+        ("TPU 的 loss 一千步一直比 GPU 低 1.5e-4，参数范数多涨 2.1e-2", "TPU 算错了吗？答案在一个谁都没怀疑的地方", "第七节", "s七"),
+        ("DDP 和 FSDP 数学等价，曲线却超出噪声", "词嵌入梯度离 FP64：纯数据并行 1.51e-2，GPU 4.17e-3，R 3.62；全出在 39 个词上", "第八节", "s八"),
+        ("一个 FP32 开关打开，一块梯度凭空没了", "r 冲到 611", "§8.2", "s8-2"),
+    ]),
+]
+_FOUND_N = sum(len(g[1]) for g in _FOUND_ROWS)
+assert _FOUND_N == 16, _FOUND_N
+FOUND = ('''
+<div class="wrap" id="found">
+<div class="foundbox">
+  <div class="ft">开场：三次迁移，我们查出来的 ''' + str(_FOUND_N) + ''' 处差</div>
+  <p class="fsub">每一处都真的改变了结果。这里只列现象和量级，<b>为什么、怎么查出来的，正文一节一节讲</b>（点右栏跳过去）。</p>
+  <table class="t9 ftab"><thead><tr><th>查出来的现象</th><th>影响多大</th><th>在哪讲</th></tr></thead><tbody>
+''' + "".join(_fgrp(t, len(rows)) + "".join(_frow(*r) for r in rows) for t, rows in _FOUND_ROWS) + '''  </tbody></table>
+  <p class="fnote">R：离 FP64 的距离之比，1 是跟 GPU 一样准（§4.2）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（§3.3）；格：末位差几格（§5.7）。🆕 是 2026-11-14 刚查到的，正文在折叠里。</p>
+  <p class="fbridge">有的比 GPU 自己的噪声大几十倍，有的小到 GPU 重跑都盖得住。它们是怎么一处一处查出来的，就是这一讲。从最开头那件讲起 ↓</p>
+</div>
+</div>
+''')
 
 QUIZ = '''
 <details class="foldfig" id="qz9box"><summary><b>🎯 开场热身：三道题</b>
@@ -513,6 +582,9 @@ __ANIM_FLIP__
   <details class="foldfig"><summary><b>会翻的不只是两种硬件</b>：TPU 只改片上内存上限，路由也会翻</summary>
   <p>会翻的不只是两种硬件：同一个 TPU 程序只改编译器的片上内存上限，这两个专家梯度就差 «STEP1_EXEC_T»（TPU 对 GPU 是 «STEP1_TVG_T»）。我们一度以为只改执行方式路由不翻，其实这只在逐层隔离回放（每层输入取同一份，§6.2）里成立。</p>
   </details>
+  <details class="foldfig" id="vit-flip"><summary><b>不选专家的层也会被带偏</b>：第三次迁移的图文模型里，视觉塔的 q、k 梯度越线</summary>
+  <p>第三次迁移的图文模型（32K），从同一个状态各算一步（§6.3），越线的只有视觉塔的 q、k 投影：一种候选配置 «M3_VIT_N_1» 个（R «M3_VIT_R_1»），另一种 «M3_VIT_N_2» 个（R «M3_VIT_R_2»），两种配置越线的层不重合。视觉塔自己不选专家，可它的梯度要穿过后面的 MoE 层才传得回来；这一状态下各 MoE 层有 «M3_VIT_FLIP_PCT» 的 token 换了专家，传回来的已经不是同一份梯度。</p>
+  <p>照上面的办法定责：把 TPU 自己选的路由灌给 FP64 重算，这些张量的 R 降到 «M3_VIT_RFLIP_1»（另一种配置 «M3_VIT_RFLIP_2»），全部记「路由翻转」，两格都由不过改判为过。R 小于 1 别读成 TPU 更准：同一状态下 FP64 用的是 FP32 主权重，两边实际乘的是舍成 BF16 的那份，取值点本来就不同（对齐记录，2026-11-14）。</p></details>
   <p>这种差 GPU 重跑的尺子看不见（宽度是 0）。规矩是：<b>每一级的尺子都只来自参照一侧的重跑</b>，被测自己的波动只作诊断 —— 让 TPU 给自己定门槛，等于自证。尺子看不见的差，超出的部分对 FP64 定责（§4.2）。</p>
   <details class="foldfig"><summary><b>这条规矩怎么来的</b>：两次迁移都把 TPU 的波动并进过尺子，又撤回</summary>
   <p>混元 3 当时在第 1 步这一级把 TPU 只改执行参数的重跑也并进尺子（并集，§9.4），后来撤掉，按只用 GPU 的尺子重判：第 1 步整步改判「不过 · 已解释」，多步那一级的结论不变。第二次迁移在多步那一级也并过一次，随后撤回。（正文的 «STEP1_TVG_T» 是 TPU 对 GPU、并集那组运行当前配置的读数，前面的 «STEP1_EXPERT» 是更早那次。）</p></details>
@@ -659,6 +731,10 @@ __FIG_NORMSCALE__
   <tr><td>要 FP32</td><td>不写任何往返</td><td>—</td></tr>
   </tbody></table>
   <p>第三次迁移上会被删的五处（RMSNorm scale 只在 32K 被删；正交化迭代一部分删、一部分保住）：多路残差的分支输入、流更新、收拢处（不补时第 1 步那几个小参数 R 超 1.2，参数范数 1.65 倍）；RMSNorm 的 scale（就是上面这处）；一处 FP32 sigmoid 的输出（没有可测影响）；Muon 正交化每步迭代的结果（参数范数第 300 步后一路往下漂，补上不漂）；多 token 预测输出头的 logits（交叉熵吃的是 FP32 logits）。查法都是 §9.7 那一招：离线编译，扫「FP32 → BF16 → FP32 落在同一颗融合里」的位置。</p></details>
+  <details class="foldfig" id="mtp-input"><summary><b>图文 32K 又查到一处</b>：多 token 预测层的输入少舍一次，MTP 层梯度一齐差几乘十的负三次方</summary>
+  <p>多 token 预测（MTP）层的输入，是主干末层归一化的输出：代码先把它存成 BF16，进 MTP 自己的归一化再转回 FP32，又是一对「转 BF16 再转回」。GPU 两次都舍；TPU 开着省舍入，把中间那次省了。</p>
+  <p>少舍一次本来只差半格、有正有负，可这里紧跟一个乘法：输入已经归一化过，MTP 的归一化再乘一个约 «M3_MTPIN_COEF» 的系数，离 1 很近。输入在 BF16 格点上、乘完再舍回 BF16，结果常被吸回原来那个格点。两次都舍的一边（GPU）因此整体偏大约 «M3_MTPIN_BIAS»；只舍其中一次，都没有这个偏差（FP64 仿真逐项核过）。这一截占 MTP 残差流的大头，经过 MTP 的末层归一化和输出头，成了整个 MTP 层梯度的同一个比例差：19 个张量两边差 «M3_MTPIN_C_T»，全部同号，GPU 6 份之间只差约 «M3_MTPIN_C_GPU»。</p>
+  <p>只在 MTP 输入上补一个强制舍入：同一状态算一步，MTP loss 跟 GPU 的差 «M3_MTPIN_LOSS_BEFORE_T» → «M3_MTPIN_LOSS_AFTER_T»，主 loss 逐位不变；MTP 层 18 个张量里 «M3_MTPIN_FIXED» 个的比例差回到 ±4e-4 以内。按事先定的判法这一格仍记「不过」：q 路三个还差 «M3_MTPIN_QPATH_T»，推断 q 一侧的反向还有一处被省掉的舍入，原来被整体那个比例差盖住了；1000 步上的效果还没有读数（对齐记录，2026-11-14）。</p></details>
 
   <h3>5.6　差几乎都出在 16 位和 32 位的交界</h3>
 __FIG_BOUNDARY__
@@ -1845,7 +1921,7 @@ def _anim_html(aid, mp4, scene, cap, sub, aria, first=False):
                else "，可一步一步看。", sub))
 
 
-_html = head + HERO + BODY + FOOT
+_html = head + HERO + FOUND + BODY + FOOT
 # «名字» ＝ topic08_numbers 里的常数，按 N.show 的写法落进正文（数字只有一个来源）
 def _numsub(s):
     return re.sub(r"«([A-Z0-9_]+)»", lambda m: N.show(getattr(N, m.group(1))), s)
