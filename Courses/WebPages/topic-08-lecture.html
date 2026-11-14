@@ -257,7 +257,7 @@ code{white-space:normal !important;overflow-wrap:anywhere;word-break:break-all}
 </tbody></table>
   <p style="margin-top:10px">⛔ <b>上面那张表是计划，下面这张是地板。</b>
   <em>「地板」＝ 把讲稿一字不落念完、再加切图的时间，一句现场发挥都没有，也不含互动；放动画那一步按片长算。每次 build 现数。</em></p>
-<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,691</td><td>5</td><td>9.7′</td><td>10′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>1,169</td><td>3</td><td>6.6′</td><td>7′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,646</td><td>12</td><td>16.4′</td><td>17′</td></tr><tr><td>第四节　指标（二）：张量</td><td>1,961</td><td>9</td><td>12.3′</td><td>12′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>2,345</td><td>12</td><td>15.1′</td><td>15′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>678</td><td>3</td><td>4.1′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,919</td><td>10</td><td>12.3′</td><td>12′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,428</td><td>7</td><td>9.1′</td><td>9′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,043</td><td>8</td><td>7.2′</td><td>7′</td></tr><tr><td>第十节　工程化与教训</td><td>1,107</td><td>5</td><td>6.8′</td><td>7′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>100′</b></td><td><b>100′</b></td></tr></tbody></table>
+<table><thead><tr><th>节</th><th>台词汉字</th><th>切图</th><th>地板</th><th>计划给的</th></tr></thead><tbody><tr><td>第一节　什么叫对齐</td><td>1,691</td><td>5</td><td>9.7′</td><td>10′</td></tr><tr><td>第二节　地基 L0：输入必须一位不差</td><td>1,169</td><td>3</td><td>6.6′</td><td>7′</td></tr><tr><td>第三节　指标（一）：逐步序列</td><td>2,646</td><td>12</td><td>16.4′</td><td>17′</td></tr><tr><td>第四节　指标（二）：张量</td><td>1,961</td><td>9</td><td>12.3′</td><td>12′</td></tr><tr><td>第五节　浮点与硬件：差从哪来</td><td>2,345</td><td>12</td><td>15.1′</td><td>15′</td></tr><tr><td>第六节　观测：在 TPU 上怎么看</td><td>678</td><td>3</td><td>4.1′</td><td>4′</td></tr><tr><td>第七节　案例一：loss 偏低，查到是谁的差</td><td>1,919</td><td>10</td><td>12.3′</td><td>12′</td></tr><tr><td>第八节　案例二：DDP 和 FSDP 对不上</td><td>1,428</td><td>7</td><td>9.1′</td><td>9′</td></tr><tr><td>第九节　验收与 golden 设计</td><td>1,060</td><td>8</td><td>7.3′</td><td>7′</td></tr><tr><td>第十节　工程化与教训</td><td>1,107</td><td>5</td><td>6.8′</td><td>7′</td></tr><tr><td><b>合计</b></td><td colspan="2"></td><td><b>100′</b></td><td><b>100′</b></td></tr></tbody></table>
 </div>
 
 <h3 class="sec">🧵 上台之前：把四条暗线记在心里</h3>
@@ -1132,7 +1132,7 @@ TPU 上的程序由 XLA，也就是 TPU 用的编译器，整张图一起编译�
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-twoway</code>，先左块红点降到绿点，再右块灰点升到橙点。</p>
 
-<p class="say">「嫌疑人是残差流反向回来那几份梯度的加法，叫流梯度：GPU 三份梯度每加一次舍一次 BF16；TPU 推断是在 FP32 里加完才舍一次。两头验证：TPU 照 GPU 补上，后段从加九点四降到加一点九乘十的负六次方；GPU 改成 TPU 的写法，GPU 自己长到加三点九乘十的负六次方。两头方向一致，主因定在这里；每格只有四五份，这是推断。」</p>
+<p class="say">「嫌疑人是残差流反向回来那几份梯度的加法，叫流梯度：GPU 三份梯度每加一次舍一次 BF16；TPU 推断是在 FP32 里加完才舍一次。两头验证：TPU 照 GPU 补上，后段从加九点四降到加一点九乘十的负六次方；GPU 改成 TPU 的写法，GPU 自己长到加三点九乘十的负六次方。两头方向一致，主因定在这里；每格只有四五份，这是推断。可补上以后后段还剩一截，剩下的去哪找？」</p>
 
 <p class="board"><b>🖥 屏幕</b>：<code>fig-elided</code>，先左块（那个橙色的 0 和 256），再右块（272 处按位置分）。</p>
 
