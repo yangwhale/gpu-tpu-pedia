@@ -69,7 +69,7 @@ def fig_sens():
     f.t(X(1e-5) - 10, Y(1.21) - 22, "3e-5 以下：分不开", GY, True, 13)
     f.t(X(1e-3) - 12, Y(50.12) - 14, "记下的 MTP loss：跟蓝线几乎重合", "#c26401", True, 13, "end")
     f.t(X(1e-3) + 10, Y(0.88) + 20, "训练效果要到 1e-2 才显", OR, True, 13)
-    f.t(X(2e-2) + 6, Y(SLOPE * 2e-2) + 40, "r ≈ 4.1e4 × ε", BL, size=13)
+    f.t(X(2e-2) + 6, Y(SLOPE * 2e-2) + 40, "r ≈ (4.1–4.6)e4 × ε", BL, size=13)
     f._pan = None
     RX = LW + 24
     py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 动了精度，尺子却量不出来（1000 步）", RD)

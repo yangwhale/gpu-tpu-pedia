@@ -18,21 +18,22 @@ import topic08_numbers as N
 
 W = 1400
 P = N.tpuself()["piles"]
-OV = P["overview"]                      # [120, 33, 34, 46, 14, 5, 15, 6]（运行库 0.0.46 上的改动；0.0.52 上的重测另算，见 fig8-libtpu）
+OV = P["overview"]                      # [121, 33, 34, 44, 17, 5, 15, 6]（对齐记录 2026-11-12 起：iHC 单列加上限后，输出头反向那处成了第 7 件）（运行库 0.0.46 上的改动；0.0.52 上的重测另算，见 fig8-libtpu）
 TOTAL, LONG, N_SAME, N_NOISE, N_ISSUE, N_BLIND, N_BROKEN, N_PEND = OV
-assert TOTAL == N_SAME + N_NOISE + N_ISSUE + N_BLIND + N_BROKEN + N_PEND == 120
+assert TOTAL == N_SAME + N_NOISE + N_ISSUE + N_BLIND + N_BROKEN + N_PEND == 121
 V52 = "TPU 运行库 0.0.52 上重测"
 NOISE46 = [a for a in P["noise"] if a["cat"] != V52]
 BLIND46 = [b for b in P["blind"] if "0.0.52" not in b["change"]]
 assert (len(NOISE46), len(BLIND46), len(P["broken"])) == (N_NOISE, N_BLIND, N_BROKEN)
 ISSUES = [dict(i, exps=[e for e in i["exps"] if "0.0.52" not in e[0] and "只让最后一层" not in e[0]]) for i in P["issues"]]   # 这张图只画 0.0.46；「只让最后一层真舍两次」是查机理用的诊断臂，画在 fig8-rms2r
-assert len(ISSUES) == 6 and sum(len(i["exps"]) for i in ISSUES) >= N_ISSUE - 1
+assert len(ISSUES) == 7 and sum(len(i["exps"]) for i in ISSUES) >= N_ISSUE - 1
 NOT_OK = [i for i in ISSUES if i["tolerable"] == "不能忍"]   # 0.0.46 上
 assert len(NOT_OK) == 2
-PILES = [("逐位相同", N_SAME, GY2), ("变了，跟 GPU 重跑一样大", N_NOISE, BL), ("真有影响（归成 6 件）", N_ISSUE, RD),
+PILES = [("逐位相同", N_SAME, GY2), ("变了，跟 GPU 重跑一样大", N_NOISE, BL), ("真有影响（归成 %d 件）" % len(ISSUES), N_ISSUE, RD),
          ("动了精度、量不出来", N_BLIND, OR), ("故意改坏（另一张图）", N_BROKEN, PU), ("没出结果", N_PEND, LINE)]
 NAME = {"纯数据并行": "纯数据并行", "关掉编译器的省舍入（excess precision）": "关省舍入", "关小矩阵乘改写": "关小矩阵乘改写",
-        "RMSNorm 多舍一次": "RMSNorm 多舍一次", "上下文并行": "上下文并行"}
+        "RMSNorm 多舍一次": "RMSNorm 多舍一次", "上下文并行": "上下文并行",
+        "输出头反向省掉一次舍入（hc_head 梯度偏）": "输出头反向少舍一次"}
 
 
 def _short(n):
@@ -40,14 +41,16 @@ def _short(n):
 
 
 def _tol(i):
+    if i["tolerable"].startswith("待拍板"):
+        return "待拍板"
     return "能忍" if i["tolerable"].startswith("TPU 运行库 0.0.46 上能忍") else i["tolerable"]
 
 
 def fig_temper():
-    f = Fig(W, "两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：120 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 46、真有影响 14（归成 6 件，其中一个是查机理的诊断臂）、"
+    f = Fig(W, "两块，绝大多数是运行库 0.0.46 上的结果（含几次换版本本身）。上：121 种改动一格一种，分六堆：逐位相同 34、变了但跟 GPU 重跑一样大 44、真有影响 17（归成 7 件，其中一个是查机理的诊断臂）、"
                "动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；"
-               "蓝点挤在 1 附近。真有影响的 6 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；"
-               "另外四件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行，都能忍。"
+               "蓝点挤在 1 附近。真有影响的 7 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；"
+               "另外五件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行四件能忍；输出头反向少舍一次（换 v7x、改一处写法、跨切片数据并行都会碰上）待拍板。"
                "RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。")
     y0 = f.header("TPU 的脾气：改一样东西，结果变不变、要不要管",
                   "第二次迁移（混元 4 缩小版），绝大多数在运行库 0.0.46 上；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑",
@@ -68,7 +71,7 @@ def fig_temper():
     f._pan = None
     # Ⓑ 曲线 r
     y1 = py + PH1 + 16
-    PH2 = 460
+    PH2 = 500
     py2 = f.panel(0, y1, W, PH2, "Ⓑ 300 步曲线最差 r（对数）：蓝 ＝ 跟重跑一样大，红 ＝ 真有影响", RD)
     X0, X1 = 230, W - 330
     RL, RHI = 0.7, 20.0
@@ -101,9 +104,10 @@ def fig_temper():
         yy = ytop + 160 + i * 34
         bad = _tol(iss) == "不能忍"
         f.t(20, yy + 5, _short(iss["name"]), RD, bad, 14)
-        f.t(X0 - 12, yy + 5, "不能忍" if bad else "能忍", RD if bad else GY, bad, 12.5, "end")
+        _lab = _tol(iss) if _tol(iss) in ("不能忍", "待拍板") else "能忍"
+        f.t(X0 - 12, yy + 5, _lab, RD if bad else (OR if _lab == "待拍板" else GY), bad or _lab == "待拍板", 12.5, "end")
         NX = X1 + 16                       # 右侧说明列
-        if _tol(iss) != iss["tolerable"]:
+        if _tol(iss) != iss["tolerable"] and _tol(iss) != "待拍板":
             f.t(NX, yy + 5, "运行库 0.0.52 上不能忍（下一张图）", RD, True, 12.5)
         elif all(r <= N.LOO8_300_MAX for _l, r in iss["exps"]):
             f.t(NX, yy + 5, "曲线分不开，第 1 步对 FP64 抓到", GY, size=12.5)
@@ -124,16 +128,16 @@ def fig_temper():
             f.t(X1 - 4, yy - 9, "→ %.0f（FP32 开关撞上编译器 bug）" % max(big), RD, True, 11.5, "end")
     f.t(X(RHI), ybot + 34, "300 步曲线最差 r（对数）", GY, size=13, anchor="end")
     f._pan = None
-    yb = f.band(py2 + PH2 + 20, "ok", "不逐位不等于有 bug：%d 种逐位、%d 种跟重跑一样大；真有影响的 6 件里，不能忍的只有两件（运行库 0.0.46）" % (N_SAME, N_NOISE), [
-        "不能忍：纯数据并行（词嵌入梯度在 BF16 里累加，第八节）和关掉省舍入；能忍的四件曲线都在 1 附近，靠第 1 步对 FP64 才抓到，各有开关。",
+    yb = f.band(py2 + PH2 + 20, "ok", "不逐位不等于有 bug：%d 种逐位、%d 种跟重跑一样大；真有影响的 %d 件里，不能忍的只有两件（运行库 0.0.46）" % (N_SAME, N_NOISE, len(ISSUES)), [
+        "不能忍：纯数据并行（词嵌入梯度在 BF16 里累加，第八节）和关掉省舍入；另外五件曲线都在 1 附近，靠第 1 步对 FP64 才抓到：四件能忍、各有开关，输出头反向少舍一次是真实的数值缺陷，忍不忍待拍板。",
         "代价：还有 %d 种动了精度、跑到 1000 步也分不开，第 1 步对 FP64 也没抓到 —— 分不开不等于没影响，只是这两把尺子都量不出来。" % N_BLIND,
     ])
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，小尺寸模型，TPU v5p 8 设备，FSDP 8、每设备微批 1 × 累积 2）：每个改动从 golden 的命令出发只改一样，跑 300 步，对 golden 比 8 项检查（7 条曲线，主 loss 两个窗口）的三个统计；"
                "尺子是 GPU 同设置重跑的噪声上限（300 步 8 份两两 28 对，留一法最大 %s）；第 1 步 205 个梯度张量另对 CPU FP64 定责（离 FP64 比 golden 与 GPU 里远的那个还远 1.2 倍以上，记丢了精度）。"
                % N.LOO8_300_MAX_T,
-               "📌 分堆由对齐记录的生成器按每次实验的结果文件自动归类（共 %d 种，其中 %d 种另外跑到 1000 步，尺子 GPU 16 份两两 120 对、留一法最大 %s）。真有影响的 6 件：%s。"
-               % (TOTAL, LONG, N.LOO16_1K_MAX_T, "；".join("%s（%s）" % (_short(i["name"]), i["tolerable"].replace("TPU 运行库 ", "运行库 ")) for i in ISSUES)),
+               "📌 分堆由对齐记录的生成器按每次实验的结果文件自动归类（共 %d 种，其中 %d 种另外跑到 1000 步，尺子 GPU 16 份两两 120 对、留一法最大 %s）。真有影响的 %d 件：%s。"
+               % (TOTAL, LONG, N.LOO16_1K_MAX_T, len(ISSUES), "；".join("%s（%s）" % (_short(i["name"]), i["tolerable"].replace("TPU 运行库 ", "运行库 ")) for i in ISSUES)),
                "📌 量不出来的 %d 种：%s。" % (N_BLIND, "、".join("%s（300 步 %.2f，1000 步 %.2f）" % (b["change"], b["r300"], b["r1000"]) for b in BLIND46)),
                "⚠️ 蓝点竖着错开只为不重叠；红点一行一件，同一件的几次实验画在一行。")
     f.save("fig8-temper.svg", yb + 14)
@@ -146,7 +150,7 @@ def fig_libtpu():
     f = Fig(W, "两块。左：换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，"
                "纯数据并行 2.62 到 2.82、关省舍入 13.3 到 12.6 仍超，关小矩阵乘改写、多路残差两件仍在 1 附近；"
                "RMSNorm 多舍一次从 1.06 跳到 5.50（1000 步 3.68），由能忍变成不能忍；上下文并行从 1.27 降到 0.95。"
-               "右：两根数轴。v7x 纯数据并行不累积，每卡 8192 个下标；0.0.46 上要到 15105 个（超过行数的八分之一 15104）才排序，在它右边，不排序；0.0.52 上到 7181 个就排序，在它左边，排序。据此预测 0.0.52 上不再丢精度，上卡核对成立，r 4.06 降到 0.89。")
+               "右：两根数轴。v7x 纯数据并行不累积，每卡 8192 个下标；0.0.46 上要到 15105 个（超过行数的八分之一 15104）才排序，在它右边，不排序；0.0.52 上到 7181 个就排序，在它左边，排序。据此预测 0.0.52 上词嵌入梯度不再丢精度，上卡核对成立，r 4.06 降到 0.89（这次运行整体另因输出头 3 个小参数判超，是另一件）。")
     y0 = f.header("换运行库，不一定只换了求和顺序",
                   "第二次迁移，TPU 运行库 0.0.46 → 0.0.52：基准运行重建，六件逐件重测，各对同版本的基准比",
                   [(GY2, "空心 ＝ 0.0.46"), (RD, "0.0.52，超出纯噪声最高分"), (BL, "0.0.52，在线内")])
@@ -217,7 +221,7 @@ def fig_libtpu():
         f.box(XL(NIDX) - 7, yy - 7, 14, 14, RD, RD, 7)
         f.t(XL(NIDX), yy + 42, verdict, RD if col == GY else BL, True, 13, "middle")
     f.t(RX + 16, py2 + PH - 70, "上卡核对：曲线是噪声的 %.2f → %.2f 倍；词嵌入梯度离 FP64 是 GPU 的 %.2f → %.2f 倍" % (t["r"] + t["R"]), BL, True, 14)
-    f.t(RX + 16, py2 + PH - 46, "预测成立：先离线编译看排没排序，再上卡", INK, True, 14)
+    f.t(RX + 16, py2 + PH - 46, "词嵌入这一处预测成立：先离线编译看排没排序，再上卡", INK, True, 14)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "换运行库：先建新基准，再把六件重测；结论只对测过的版本对和配置成立", [
         "优化后的程序和后端生成的 kernel 都跟着变：RMSNorm 那件改动带来的程序差别两个版本是同一类，结果却从能忍变成不能忍。离线筛判不了换版本。",
