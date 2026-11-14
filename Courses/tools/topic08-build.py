@@ -1437,7 +1437,7 @@ __FIG_FIXCMP__
 __FIG_TWOWAY__
   <p>TPU 改成 GPU 的写法，偏高降下来；GPU 改成 TPU 的写法，GPU 自己长出同样的尾巴。两个方向对上，主因定在这里（推断：两头方向一致，每格只有 4–5 份）。（图里的 p 是检验值：把这些运行随机重新分组，分出这么大差别的概率；4 份对 5 份一共只有 126 种分组，完全分开时 p 最小就是 0.016。这一节做了十几次这样的检验，没做多重比较校正，单个 p 0.02 上下只当方向性的证据。）</p>
   <p>可把收拢处（最后四路收成一路那处）也照 GPU 补上（现行对齐配置），后段还剩 «FC_C_MEAN_T»，还在查。剩下的不靠猜：<b>先编译，再扫描</b>。</p>
-  <details class="foldfig"><summary><b>反转、一台秤三个毛病、丙在哪、在一处上看清楚</b>（推断多；动画 anim-cancel、anim-declared 在这里）</summary>
+  <details class="foldfig"><summary><b>反转、一台秤三个毛病、丙在哪、在一处上看清楚</b>（推断多；两段动画在这里）</summary>
   <p><b>反转。</b>把 ① 和 ② 都照 GPU 补上，就是现行的对齐配置；可后段还剩 «FC_C_MEAN_T»，比只补流梯度大，跟修之前分不开（p «TW_P_CCTL_T»）。收拢处一开，再补流梯度就测不出作用了（逐份读数收在下面的折叠里）。</p>
 <details class="foldfig"><summary><b>逐份读数</b>：收拢处开着时，补不补流梯度分不开</summary>
 __FIG_GATECMP__
@@ -1782,7 +1782,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>TPU 自己剩下的（旧口径，对精确轨迹；第一个数对 ④′，后两个对 ④）：«TPU_OWN_NOREMAT_975_T» ／ «TPU_OWN_OLDCFG_1000_T» ／ «TPU_OWN_CURCFG_1000_T»</td><td>分别是：不重算配置第 975 步；生产近似配置、开关打开前第 1000 步；当前配置第 1000 步</td></tr>
   <tr><td>回归：«T0_STEPS» 步那档约 «T0_MIN» 分钟、«STEPS» 步那档约 «T1_MIN» 分钟；扰动臂旧配置 «ARMS_TRIED» 试 «ARMS_KEPT» 过、«CAL_PAIRS» 对；新配置 7 个重跑全过、重标 28 对</td><td>v5p（8 颗芯片），提交到取回</td></tr>
     <tr><td>第 1 步路由翻转：翻了的 token 第 8、9 名分差中位数 «FLIP_MARGIN_DASH_T»；某专家梯度 «STEP1_EXPERT»、«STEP1_TENSORS» 个张量合起来 «STEP1_ALL_E»</td><td>第 1 步隔离回放；被测梯度由 Adam 一阶动量反推</td></tr>
-    <tr><td>路由翻转对照（动画 anim-flip）：全部 token 第 8、9 名分差中位数 «ALL_MARGIN_LO» – «ALL_MARGIN_HI_T»；喂相同路由输入，两边路由打分（logits）的 rel_L2 仍约 «ROUTE_SAME_IN_DIFF»、翻转 0；输入换成 TPU 自己算的，每层翻 «FLIP_L2_T»；全程 FP32 下第 1 层翻的那个 token 分差 «FP32_FLIP_MARGIN»（据此得出的「两边实现不同」已撤回）</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 «BATCH_TOKENS» 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
+    <tr><td>路由翻转对照（动画）：全部 token 第 8、9 名分差中位数 «ALL_MARGIN_LO» – «ALL_MARGIN_HI_T»；喂相同路由输入，两边路由打分（logits）的 rel_L2 仍约 «ROUTE_SAME_IN_DIFF»、翻转 0；输入换成 TPU 自己算的，每层翻 «FLIP_L2_T»；全程 FP32 下第 1 层翻的那个 token 分差 «FP32_FLIP_MARGIN»（据此得出的「两边实现不同」已撤回）</td><td>前两项：第 1 层起逐层隔离回放（路由输入用 TPU 自己算的，或换成 GPU 那份），3 层各 «BATCH_TOKENS» 个 token；第三项：GPU 第 99 步状态，两侧全程 FP32 前向逐点比</td></tr>
   <tr><td>逐层 rel_L2：MoE 三层 «L_RELL2_1_T» ／ «L_RELL2_2_T» ／ «L_RELL2_3_T»（参考档在这几层不适用，严格档 R 比过）；第 0 层前向 «REF_LAYER0_FWD_E»、反向 «REF_LAYER0_BWD_E»（参考档过）；参考线来历：同类项目注意力层逐层前向实测 «REF_LAYER_MEAS_T»</td><td>v5p，第 1 步逐层回放；第 0 层两平台相同</td></tr>
   <tr><td>去掉 w̄ 方向后 loss：前半 «REMOVE_LOSS_H1_T»、后半 «REMOVE_LOSS_H2_T»（尾段平均 «REMOVE_LOSS_T»）</td><td>两侧都去掉 dh 沿 w̄ 的分量，1000 步，对 GPU 第一份</td></tr>
   <tr><td>第 1 步换尺子：最差张量 TPU 只改片上内存上限 «STEP1_EXEC_T»、TPU 对 GPU «STEP1_TVG_T»；并集 «UNION_PAIRS» 对；隔离回放反向 R v5p «ISO_BWD_V5P_T»、v7x «ISO_BWD_V7X_T»；整步按能量 R «STEP_R_T»；逐处改掉 «ARM_R_T»；三个开关步时 v5p ＋«GRAD_FP32_COST_T»、v7x ＋«GF32_COST_V7X_T»，打开后 1000 步对 ⑤：v5p «GF32_V5P_T»，v7x 梯度范数«GF32_V7X_GN_T»、其余过；路由偏置 FP64 选中 «BIAS_TOKENS_FP64»（均值 «BIAS_MEAN_T»）</td><td>第 1 步；前两个数是最差张量的相对差；诊断改动的 R 只在 v5p 上测；FP64 真值是同一全局批在 FP64 里求的梯度；开关步时为 100 步对比</td></tr>
@@ -2115,6 +2115,16 @@ for _ph, _a in ANIMS.items():
 if ANIMS:
     _html = _html.replace("</body>", _STEP_JS + _RM_JS + "</body>")
 _html = P.place_figs(_html, {_k: _v[:3] + (_numsub(_v[3]),) for _k, _v in FIGS.items()})   # 图注里的 «名字» 也落地
+# 2026-11-15 版面检查：几处字贴参考线或被曲线穿过，给这几行字加一圈白边（paint-order 描边），不挪位置。
+_HALO = ["这一点主要是输出写回 BF16 的舍入", "纯噪声最大", "16 份尺子", "10 份均值", "步时 ＋", "以上入选",
+         "分支输入", "修之前就照 GPU 舍了", "噪声：∝", "纯噪声最高", "GPU 3.4", "只算截断（推断）"]
+def _halo(m):
+    t = m.group(0)
+    body = re.sub(r"<[^>]+>", "", t)
+    if (any(k in body for k in _HALO) or body.strip() == "词嵌入梯度") and "paint-order" not in t:
+        t = t.replace("<text ", '<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" ', 1)
+    return t
+_html = re.sub(r"<text [^>]*>.*?</text>", _halo, _html, flags=re.S)
 assert "«" not in _html and "»" not in _html, "还有 «名字» 占位符没落地"
 _leak = sorted(set(re.findall(r"__[A-Z][A-Z_0-9]*__", _html)))
 assert not _leak, "占位符没落地：%s" % "、".join(_leak)
