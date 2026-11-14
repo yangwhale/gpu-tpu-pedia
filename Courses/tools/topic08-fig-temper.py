@@ -25,7 +25,7 @@ V52 = "TPU 运行库 0.0.52 上重测"
 NOISE46 = [a for a in P["noise"] if a["cat"] != V52]
 BLIND46 = [b for b in P["blind"] if "0.0.52" not in b["change"]]
 assert (len(NOISE46), len(BLIND46), len(P["broken"])) == (N_NOISE, N_BLIND, N_BROKEN)
-ISSUES = [dict(i, exps=[e for e in i["exps"] if "0.0.52" not in e[0] and "只让最后一层" not in e[0]]) for i in P["issues"]]   # 这张图只画 0.0.46；「只让最后一层真舍两次」是查机理用的诊断臂，画在 fig8-rms2r
+ISSUES = [dict(i, tolerable=i["tolerable"].replace("，V21", ""), exps=[e for e in i["exps"] if "0.0.52" not in e[0] and "只让最后一层" not in e[0]]) for i in P["issues"]]   # 这张图只画 0.0.46；「只让最后一层真舍两次」是查机理用的诊断臂，画在 fig8-rms2r
 assert len(ISSUES) == 7 and sum(len(i["exps"]) for i in ISSUES) >= N_ISSUE - 1
 NOT_OK = [i for i in ISSUES if i["tolerable"] == "不能忍"]   # 0.0.46 上
 assert len(NOT_OK) == 2
