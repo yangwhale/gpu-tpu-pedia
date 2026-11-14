@@ -132,16 +132,23 @@ def fig_minidrift():
     上：主 loss，TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块（柱）；灰带 ＝ ± GPU 留一法标准差。
     下：同一批运行的 MTP loss，同样画法（反着走）。数据：topic08_numbers 的 MD（实测）。"""
     MD = N.MD
-    f = Fig(W, "上下两条。上：小尺寸 1000 步，TPU 8 份主 loss 对 GPU 16 份逐步均值的相对差，每 25 步一根柱，灰带是 GPU 自己的散布。"
+    f = Fig(W, "上下两条。上：小尺寸 1000 步，TPU 8 份主 loss 对 GPU 16 份逐步均值的相对差，每份一条 50 步平均的细线，粗线是 8 份平均；灰线是 GPU 16 份各自对其余 15 份。"
                "第 1 步 −2.0e-6；第 51 到 100 步一个小鼓包；第 100 到 550 步在 0 附近；第 550 步起一路往上，到最后一块 ＋1.8e-5。"
                "下：同一批运行的 MTP loss，第 100 步起反着往下，最后 −3.2e-5。前段鼓包定到多路残差收拢那次少舍的 BF16；后段主因后来定到流梯度的舍法。")
     y0 = f.header("小尺寸主 loss 那截偏高：几乎全在第 550 步以后，越往后越大",
-                  "TPU 8 份对 GPU 16 份逐步均值的相对差，25 步一块；灰带 ＝ ± GPU 留一法标准差（实测）",
-                  [(OR, "8 份同号偏高的块"), (BL, "8 份同号偏低的块"), (GY2, "其余块"), (LINE, "± GPU 散布")])
+                  "TPU 8 份对 GPU 16 份逐步均值的相对差，都是 50 步滑动平均；灰线 ＝ GPU 16 份各自对其余 15 份均值，浅灰带 ＝ 它们的最大偏离（实测）",
+                  [(RD, "TPU 8 份（细）与均值（粗），主 loss"), (BL, "同上，MTP loss"), (GY2, "GPU 16 份留一法（细）"), (LINE, "GPU 最大偏离")])
     X0, XW = 120, W - 170
 
     def X(step):
         return X0 + (step - 1) / 999.0 * XW
+
+    import json as _j, os as _o
+    MDC = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_minidrift.json"), encoding="utf-8"))
+    W50 = 50
+
+    def _roll(x):
+        return [sum(x[k - W50 + 1:k + 1]) / W50 for k in range(W50 - 1, len(x))]
 
     def strip(y, h, key, vmax, title, col):
         py = f.panel(0, y, W, h, title, col)
@@ -149,28 +156,31 @@ def fig_minidrift():
         k = (h - 30) / 2.0 - 16
 
         def Y(v):
-            return mid - v / vmax * k
-        for b in MD[key]["blocks"]:
-            a, c = (int(x) for x in b[0].split("-"))
-            sd = b[2]
-            f.box(X(a), Y(sd), X(c) - X(a), Y(-sd) - Y(sd), "#eceff1", "#eceff1", 0)
-        f.line(X0, mid, X0 + XW, mid, GY2, 1, arrow=False)
+            return mid - max(-vmax, min(vmax, v)) / vmax * k
+        tp, gl = MDC[key]["TPU"], MDC[key]["GPU留一"]
+        assert abs(sum(sum(r[1:]) for r in tp) / (len(tp) * 999) - MD[key]["windows"][0][1]) < 0.02e-5 if MD[key]["windows"][0][0] == "2-1000" else True
+        groll = [_roll(r) for r in gl]
+        env = [max(abs(r[i]) for r in groll) for i in range(len(groll[0]))]
+        up = " ".join("%.1f,%.1f" % (X(i + W50), Y(e)) for i, e in enumerate(env))
+        dn = " ".join("%.1f,%.1f" % (X(i + W50), Y(-e)) for i, e in reversed(list(enumerate(env))))
+        f.p.append('<polygon points="%s %s" fill="#eceef1" stroke="none"/>' % (up, dn))
+        f.line(X0, mid, X0 + XW, mid, INK, 1, arrow=False)
         tk = 1e-5 if vmax < 3e-5 else 2e-5
         for v in (tk, -tk):
             f.t(X0 - 8, Y(v) + 4, ("%+.0e" % v).replace("e-0", "e-"), GY, size=11.5, anchor="end")
         f.t(X0 - 8, mid + 4, "0", GY, size=11.5, anchor="end")
-        for b in MD[key]["blocks"]:
-            a, c = (int(x) for x in b[0].split("-"))
-            v, n = b[1], b[3]
-            fill = OR if n == 8 and v > 0 else (BL if n == 0 and v < 0 else "#bdc1c6")
-            yv = Y(v)
-            f.box(X(a) + 2, min(yv, mid), X(c) - X(a) - 4, abs(yv - mid), fill, fill, 1)
+        for r in groll:
+            f.p.append('<polyline points="%s" fill="none" stroke="#9aa0a6" stroke-width="0.8" stroke-opacity="0.7"/>' % " ".join("%.1f,%.1f" % (X(i + W50), Y(v)) for i, v in enumerate(r) if i % 3 == 0))
+        troll = [_roll(r) for r in tp]
+        for r in troll:
+            f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="1" stroke-opacity="0.55"/>' % (" ".join("%.1f,%.1f" % (X(i + W50), Y(v)) for i, v in enumerate(r) if i % 2 == 0), col))
+        mean = [sum(r[i] for r in troll) / len(troll) for i in range(len(troll[0]))]
+        f.p.append('<polyline points="%s" fill="none" stroke="%s" stroke-width="3.2"/>' % (" ".join("%.1f,%.1f" % (X(i + W50), Y(v)) for i, v in enumerate(mean)), col))
         return py, Y, mid
     PH = 250
     py, Y, mid = strip(y0, PH, "主loss", 2.0e-5, "主 loss：TPU 减 GPU（相对差）", RD)
     for st in (1, 250, 500, 750, 1000):
         f.t(X(st), py + PH - 36, "第 %d 步" % st, GY, size=12, anchor="middle")
-    f.t(X(1) + 6, Y(N.MD_STEP1) + 22, "第 1 步 %s" % N.MD_STEP1_T, INK, True, 12.5)
     f.t(X(60), Y(5.2e-6) - 10, "小鼓包：已定位（见正文）", GY, True, 12.5)
     f.t(X(260), Y(-6e-6), "第 100–550 步在 0 附近，正负相抵", GY, True, 12.5)
     f.t(X(560), Y(1.75e-5) - 4, "第 550 步起一路往上，最后 25 步平均 %s" % N.MD_LAST_T, OR, True, 13)
@@ -184,12 +194,12 @@ def fig_minidrift():
         "同一份权重上两边前向几乎没差（不到后段的一成）；下面一处处排除。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步，现行对齐配置之前那一代）：TPU 8 份 ＝ 开、关 base2 各 4 份（其中 6 份只改执行方式）；每一步取 8 份对 GPU 16 份逐步均值的相对差再平均，25 步一块；灰带是 GPU 16 份轮流当被测、对其余 15 份均值的标准差。"
+               "📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备 ↔ B200×8，1000 步，现行对齐配置之前那一代）：TPU 8 份 ＝ 开、关 base2 各 4 份（其中 6 份只改执行方式）；每一份对 GPU 16 份逐步均值算相对差，画 50 步滑动平均；粗线是 8 份的平均；灰线是 GPU 16 份轮流当被测、对其余 15 份均值的相对差（同样平滑），浅灰带是它们的逐步最大绝对值。"
                "窗口值：第 2–1000 步 ＋4.3e-6，第 751–1000 步 %s，MTP 同窗口 %s。隔离实验（第 551–1000 步，TPU 对同配置 GPU 4 份均值，每种 TPU 2 份）：%s。" % (N.MD_LATE_T, N.MD_MTP_LATE_T, N.MD_ISO_T),
                "📌 前段鼓包：多路残差收拢成一路的地方，GPU 前向舍一次 BF16、反向传回的梯度也舍一次；TPU 省掉了梯度那次（最小复现的后端指令里核过，打包 0 条）。加一个强制舍入的开关（前向、梯度都舍），第 51–100 步回到 GPU 附近，第 751–1000 步不变；只在前向舍、梯度原样传回，鼓包又回来。",
                "📌 同一份权重上的前向：6 个状态、19 批，TPU 减 GPU 写法 %s；偏差跟步数、参数范数同步（第 501 步起相关 %.2f），跟梯度范数无关。关掉 MTP、KD 后幅度约为对照的六成，是它们放大了还是样本少，在查。" % (N.MD_SAME_STATE_T, N.MD_CORR[0]),
                "📌 后段（第 551–1000 步，对 GPU 16 份均值）：修之前 4 份均值 %s，补流梯度舍法（流的梯度逐个舍、分支输出也舍）5 份均值 ＋1.9e-6；" % N.FC_MEAN_T["修之前"].replace("+", "＋") + "把它拆成两半各跑 1 份：只补梯度累加 ＋0.6e-6、只补分支输出 ＋3.0e-6；两边都去掉多路残差，TPU 2 份 ＋1.9e-6、＋0.7e-6。延长到 2000 步：尾部在第 1000–1250 步到顶（＋2.9e-5）后回落到 GPU 两份的散布里。",
-               "⚠️ 柱的颜色只看 8 份的符号是否一致，不是判档；那一代判档按第三节的三个统计和 GPU 16 份的尺子是主 loss 1.55、1.52 待定，现行对齐配置下主 loss 过。")
+               "⚠️ 曲线是 50 步滑动平均，只为看方向，不是判档；那一代判档按第三节的三个统计和 GPU 16 份的尺子是主 loss 1.55、1.52 待定，现行对齐配置下主 loss 过。")
     f.save("fig8-minidrift.svg", yb + 14)
 
 

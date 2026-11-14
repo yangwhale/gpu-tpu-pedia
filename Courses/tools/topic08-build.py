@@ -1035,6 +1035,8 @@ __FIG_EXACT__
   <details class="foldfig"><summary><b>给第九节的伏笔</b>：换到验收配置后 TPU 少漂多少</summary>
   <p>换到第九节验收用的配置（整层重算＋路由回放），第 1000 步 TPU 生产比 TPU 自己的精确轨迹少漂 «TPU_VS_TRUE_T»；这一截是谁的，第九节拆账。</p>
   </details>
+  <details class="foldfig"><summary><b>分块修好的 GPU golden 对 TPU 生产</b>：两条一千步轨迹逐步比</summary>
+  <p>GPU 生产只改分块的那一份，对 TPU 生产，参数范数逐步相对差的带符号均值：v5p ＋5.2e-8、v7x −5.5e-8，两个平台方向相反，量级都在 1e-7 以下（对齐记录案例 01 证据链）。判档按第九节的第一关：TPU 对它全过，参数范数那一项 r ＝ «FINAL_PN_V5P_T»（v5p）、«FINAL_PN_V7X_T»（v7x）。对齐记录里这一组数配的噪声上限有两种写法（2.27e-7 和 1.24e-7），口径没对齐，所以这里不按它单独判。</p></details>
   <details class="foldfig"><summary><b>分块的两个条件，和一千步的确认</b></summary>
   <ul>
     <li>两个条件：块结果必须留 FP32 —— 每块先舍 BF16 再相加就不行；块长不超过 «CHUNK_SEG» —— 到 4096 已剩 «ABL_CHUNK4096_T»，再长剩得更多，跟 §5.2「越长越偏」一致。</li>
