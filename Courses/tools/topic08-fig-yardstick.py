@@ -73,8 +73,11 @@ def fig_loo():
                 f.box(X(v) - DOT, yc + off - DOT, 2 * DOT, 2 * DOT, GY2, GY2, DOT)
         mx = d["max"]
         f.line(X(mx), yc - h / 2.0 + 6, X(mx), yc + h / 2.0 - 6, INK, 1.4, dash="4 3", arrow=False)
+        f.box(X(mx) + 4, yc - h / 2.0 + 7, 140, 20, "#fff", "#fff", 3)
         f.t(X(mx) + 8, yc - h / 2.0 + 22, "纯噪声最大 %.2f" % mx, INK, True, 14)
-        f.t(X(mx) + 8, yc - h / 2.0 + 42, ("%d%% 过 1，%d%% 过 2" % (round(d["frac_gt_1"] * 100), round(d["frac_gt_2"] * 100))) if d["frac_gt_2"] else ("%d%% 过 1，没有过 2 的" % round(d["frac_gt_1"] * 100)), GY, size=13)
+        _lab = ("%d%% 过 1，%d%% 过 2" % (round(d["frac_gt_1"] * 100), round(d["frac_gt_2"] * 100))) if d["frac_gt_2"] else ("%d%% 过 1，没有过 2 的" % round(d["frac_gt_1"] * 100))
+        f.box(X(mx) + 4, yc - h / 2.0 + 28, len(_lab) * 11 + 8, 19, "#fff", "#fff", 3)   # 白底：别让 r＝2 那条竖线穿过字
+        f.t(X(mx) + 8, yc - h / 2.0 + 42, _lab, GY, size=13)
         y += h
 
     # 第三行：六个 TPU 改动，8 份尺子 → 16 份尺子
@@ -83,7 +86,7 @@ def fig_loo():
     f.t(24, y + h3 / 2.0 + 18, "8 份时压线或越过 2 的", GY, size=13)
     f.t(24, y + h3 / 2.0 + 38, "TPU 没重跑，只换了尺子", BL, size=13)
     f.line(X(LOO8_1000_MAX), y + 6, X(LOO8_1000_MAX), y + h3 - 6, GY, 1.2, dash="2 3", arrow=False)
-    f.t(X(LOO8_1000_MAX) + 6, y + h3 - 10, "1000 步、8 份时纯噪声最大 2.00", GY, size=13)
+    f.t(X(LOO8_1000_MAX) + 6, y + h3 + 8, "1000 步、8 份时纯噪声最大 2.00", GY, size=13)
     f.line(X(L1K["max"]), y + 6, X(L1K["max"]), y + h3 - 6, INK, 1.4, dash="4 3", arrow=False)
     for i, g in enumerate(sorted(GZ, key=lambda g: -g["r1000_n8"])):
         yy = y + 18 + i * 20
@@ -92,6 +95,7 @@ def fig_loo():
         f.line(x8 - 8, yy, x16 + 9, yy, BL, 1.4)
         f.box(x16 - 5, yy - 5, 10, 10, BL, BL, 5)
     f.t(X(3.0) - 4, y + h3 - 10, "8 份尺子：2.00–2.75", BL, size=13, anchor="end")
+    f.box(X(1.18) - 10 - 150, y + h3 - 25, 150, 20, "#fff", "#fff", 3)               # 白底：别让 r＝1 那条竖线穿过字
     f.t(X(1.18) - 10, y + h3 - 10, "16 份尺子：1.19–1.64", BL, True, 13, "end")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "r 在 1–2 之间，先别急着判错：纯噪声自己就常常到这里", [
