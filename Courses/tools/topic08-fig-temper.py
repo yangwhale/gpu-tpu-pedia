@@ -312,7 +312,7 @@ def fig_rms2r():
     f.t(X0, YB + 40, "最后一层的 γ：均值 %.3f，范围 %.2f–%.2f → 输出头的输入整体缩小 %s" % (N.RMS_GAMMA + (N.RMS_SHRINK_T,)), INK, True, 12.5)
     f._pan = None
     y2 = y0 + PH1 + 16
-    PH2 = 270
+    PH2 = 282
     py3 = f.panel(0, y2, W, PH2, "Ⓒ 只动最后一层，就能打开、关掉这件事（300 步曲线最差 r）", RD)
     BX0, BX1 = 520, W - 180
     rmax = 8.0

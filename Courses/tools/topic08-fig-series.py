@@ -34,6 +34,13 @@ assert abs(LOW_SHARE - 0.90) < 0.01
 assert IMAX + 1 == 380
 
 
+
+def _tbg(f, x, y, s, size, anchor=None):
+    """字底下垫一块半透明白底，免得被曲线、参考线穿过（2026-11-15 版面检查）。"""
+    w = sum(size if ord(ch) > 0x2000 else size * 0.6 for ch in s) + 8
+    x0 = x - w if anchor == "end" else (x - w / 2 if anchor == "middle" else x - 4)
+    f.p.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#fff" fill-opacity="0.85" rx="3"/>' % (x0, y - size - 1, w, size + 6))
+
 def fig_dt():
     f = Fig(W, "两排散点，横轴是第 1 到 1000 步，纵轴是这一步 loss 的相对差。"
                "上排是第二次 GPU 运行对第一次：点围着零上下抖，第 301 到 1000 步平均只偏 −3.8e-5。"
@@ -293,7 +300,10 @@ def fig_mtp32k():
     f.t(X0 - 8, Y(0) + 5, "0", INK, True, 13, "end")
     k = N.M3_MTP32K_MAX_AT - 1
     f.box(X(k + 1) - 8, Y(dt[k]) - 8, 16, 16, "none", OR, 8, sw=2)
+    _tbg(f, X(k + 1) - 14, Y(dt[k]) + 4, "最大单步 第 %d 步" % N.M3_MTP32K_MAX_AT, 13, "end")
     f.t(X(k + 1) - 14, Y(dt[k]) + 4, "最大单步 第 %d 步" % N.M3_MTP32K_MAX_AT, OR, True, 13, "end")
+    _tbg(f, X0 + 8, py + 24, "① 出没出带？几乎没有（%s 的步在带里）：单步不乱跳" % N.M3_MTP32K_IN_PCT, 13.5)
+    _tbg(f, X0 + 8, py + 44, "② 围不围着零？GPU 7 条灰色平均线来回穿过零；TPU 深红线一直在零上面", 13.5)
     f.t(X0 + 8, py + 24, "① 出没出带？几乎没有（%s 的步在带里）：单步不乱跳" % N.M3_MTP32K_IN_PCT, GY, True, 13.5)
     f.t(X0 + 8, py + 44, "② 围不围着零？GPU 7 条灰色平均线来回穿过零；TPU 深红线一直在零上面" , RD, True, 13.5)
     for st in (1, 500, 1000):

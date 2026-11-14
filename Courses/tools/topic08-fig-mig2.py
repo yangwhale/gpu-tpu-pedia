@@ -424,7 +424,7 @@ def fig_gatecmp():
         f.t(cx, YB + 46, "4 份，均值 %s" % N.MG_MEAN_T[key], INK, False, 12.5, "middle")
         if key != "M52":
             f.t(cx, YT - 8, "p %s" % N.MG_P_T[key], GY, True, 13, "middle")
-    f.t(16, py + PH - 30, "p 是对「只开收拢处」那一格的置换检验；灰带：GPU 留一法标准差 ± %s" % ("%.1e" % N.FC_SD).replace("e-0", "e-"), GY, size=12)
+    f.t(16, py + PH - 40, "p 是对「只开收拢处」那一格的置换检验；灰带：GPU 留一法标准差 ± %s" % ("%.1e" % N.FC_SD).replace("e-0", "e-"), GY, size=12)
     f._pan = None
     RX = LW + GAP
     py2 = f.panel(RX, y0, W - RX, PH, "Ⓑ 主 loss 判档倍数：对齐配置 6 份 vs GPU 自己 15 份", PU)
@@ -448,7 +448,7 @@ def fig_gatecmp():
     for m, r in enumerate(sorted(R6["c"])):
         f.box(BX(r) - 6, yc - 6 + (m % 2) * 10, 12, 12, PU, "#fff", 6, sw=1)
     f.t(RX + 16, py2 + PH - 56, "6 份里 %d 份高过 GPU 的全部 15 份：" % N.R6_ABOVE, INK, True, 13)
-    f.t(RX + 16, py2 + PH - 32, "过线是过了，可后段那截偏还在。", INK, False, 13)
+    f.t(RX + 16, py2 + PH - 42, "过线是过了，可后段那截偏还在。", INK, False, 13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "warn", "收拢处那次舍入开着时，再补流梯度舍法测不出作用", [
         "唯一明显变好的是只补流梯度、不开收拢处；三处都照 GPU 写法的对齐配置，后段跟不修分不开。为什么，下一张图。",

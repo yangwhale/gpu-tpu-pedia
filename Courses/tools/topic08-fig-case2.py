@@ -275,7 +275,7 @@ def fig_exact():
     y0 = f.header("精确轨迹站在 TPU 一边　——　<tspan font-weight=\"700\">可它自己也还差一步才到真精确</tspan>",
                   "零点 ＝ 4 次默认 GPU 运行的平均（不重算配置）；往右 ＝ 离 GPU 越远；精确轨迹 ＝ BF16 权重、全程 FP32（真关 TF32），可它的输出头长求和是 FP32 一次累加，中后期自己会偏，改成分段才到真精确",
                   [(GR, "GPU 只换FP32 dgrad"), (PU, "精确轨迹"), (BL, "TPU"), (GY2, "GPU 自己的散布（灰底）")])
-    PH = 110
+    PH = 122
     y = y0
     for title, pts, vmax, ref, fmt in EXACT_ROWS:
         # R3：限定语「对 4 份默认 GPU 运行的均值；这个配置不重算」原来三个面板各写一遍 → 挪进副标题，只写一次

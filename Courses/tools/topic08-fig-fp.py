@@ -403,9 +403,9 @@ def fig_windowed():
     y = py2 + 40 + 4 * 62
     f.t(px + 18, y + 18, "打开开关后", INK, True, 14)
     f.t(BX0, y + 21, "0　（全部变 FP32）", GR, True, 15)
-    f.t(px + 18, py2 + PH - 80, "单算子 R：%s → %s" % (N.M3_PROJ_R_T, N.M3_PROJ_R_AFTER_T), INK, True, 15)
-    f.t(px + 18, py2 + PH - 60, "按 6 次各自独立粗算约 1.6 倍，实测更低，原因没查清", GY, size=13)
-    f.t(px + 18, py2 + PH - 36, "混元 3 的 qkv：%.3f → %.3f" % (N.R_QKV_BEFORE, N.R_QKV_AFTER), GY, True, 13)
+    f.t(px + 18, py2 + PH - 90, "单算子 R：%s → %s" % (N.M3_PROJ_R_T, N.M3_PROJ_R_AFTER_T), INK, True, 15)
+    f.t(px + 18, py2 + PH - 70, "按 6 次各自独立粗算约 1.6 倍，实测更低，原因没查清", GY, size=13)
+    f.t(px + 18, py2 + PH - 46, "混元 3 的 qkv：%.3f → %.3f" % (N.R_QKV_BEFORE, N.R_QKV_AFTER), GY, True, 13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "在 4 个设备的小切片上验精度，这件事完全看不到", [
         "切法没变：4 个、8 个设备上权重都按 FSDP 切满。变的只是编译器拆不拆；拆了，每个往里投的投影都多舍几次。",
@@ -585,7 +585,7 @@ def fig_normscale():
         x, _ = XY(st, 0)
         f.line(x, Y0, x, Y0 + 6, GY, 1, arrow=False)
         f.t(x, Y0 + 22, str(st), GY, size=13, anchor="middle")
-    f.t((X0 + X1) / 2.0, Y0 + 42, "训练步", GY, size=13, anchor="middle")
+    f.t((X0 + X1) / 2.0, Y0 + 34, "训练步", GY, size=13, anchor="middle")
     for d in (0, 5e-4, 1e-3, 1.5e-3):
         _, y = XY(0, d)
         f.line(X0, y, X1, y, LINE2, 1, arrow=False)

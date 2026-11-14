@@ -30,6 +30,13 @@ LOW_ROWS = LOW1[1] + LOW2[1]
 assert LOW_ROWS == 10872 and HOT[1] == 39
 
 
+
+def _tbg(f, x, y, s, size, anchor=None):
+    """字底下垫一块半透明白底，免得被曲线、参考线穿过（2026-11-15 版面检查）。"""
+    w = sum(size if ord(ch) > 0x2000 else size * 0.6 for ch in s) + 8
+    x0 = x - w if anchor == "end" else (x - w / 2 if anchor == "middle" else x - 4)
+    f.p.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" fill="#fff" fill-opacity="0.85" rx="3"/>' % (x0, y - size - 1, w, size + 6))
+
 def _b(x):
     return ("%.2e" % x).replace("e+0", "e").replace("e+", "e")
 
@@ -373,7 +380,7 @@ def fig_sweep():
         f.t(X(n), YB + 22, format(n, ","), GY, size=12.5, anchor="middle")
     xg = X(N.C2_GATE)
     f.line(xg, py + 40, xg, YB, INK, 1.4, dash="6 4", arrow=False)
-    f.t(xg - 8, py + 110, "门槛 %s ＝ 行数 ÷ 8" % format(N.C2_GATE, ","), INK, True, 14, "end")
+    f.t(xg - 8, py + 110, "门槛：超过 %s（＝ 行数 ÷ 8）才插排序" % format(N.C2_GATE, ","), INK, True, 14, "end")
     for key, c, sw in (("bf16_unsorted_excess_off", GY2, 2.0), ("bf16_presorted_excess_on", GR, 2.4), ("bf16_unsorted_excess_on", RD, 3.0)):
         pts = [(X(n), Y(v)) for n, v in zip(N.C2_SWEEP_N, N.C2_SWEEP[key])]
         f.path(pts, c, sw, arrow=False)
@@ -382,7 +389,8 @@ def fig_sweep():
     u = N.C2_SWEEP["bf16_unsorted_excess_on"]
     f.t(X(8192) - 6, Y(u[2]) - 12, _e(u[2]), RD, True, 13.5, "end")
     f.t(X(16384) + 8, Y(u[3]) - 30, "编译器插了排序 → %s" % _e(u[3]), RD, True, 13.5)
-    f.t(X(2048) + 10, Y(u[0]) - 12, "门槛以下，灰线和红线重合", GY, size=12)
+    _tbg(f, X(2048) + 10, Y(u[0]) - 30, "门槛以下，灰线和红线重合", 12)
+    f.t(X(2048) + 10, Y(u[0]) - 30, "门槛以下，灰线和红线重合", GY, size=12)
     f.t(X(32768) + 4, Y(N.C2_SWEEP["bf16_unsorted_excess_off"][4]) - 12, _e(N.C2_SWEEP["bf16_unsorted_excess_off"][4]), GY, True, 13, "end")
     # 训练里的三种跑法落在哪
     for n, lab in ((4096, "纯数据并行每卡"), (8192, "不累积"), (32768, "FSDP 每卡")):
@@ -402,6 +410,7 @@ def fig_sweep():
     f.line(X1 - 6, YB1, X1 + XW1 + 10, YB1, GY2, 1.2, arrow=False)
     f.line(X1, YB1, X1, YB1 - YH1 - 6, GY2, 1.2, arrow=False)
     f.path([(XV(0), YN(0)), (XV(vmx), YN(vmx / 8.0))], OR, 1.6, dash="6 4", arrow=False)
+    _tbg(f, XV(330000), YN(330000 / 8.0) - 30, "下标数 ＝ 行数 ÷ 8", 13.5, "middle")
     f.t(XV(330000), YN(330000 / 8.0) - 30, "下标数 ＝ 行数 ÷ 8", OR, True, 13.5, "middle")
     for v in (0, 120832, 480000):
         f.t(XV(v), YB1 + 20, format(v, ","), GY, size=12, anchor="middle")
