@@ -225,8 +225,8 @@ assert _FOUND_N == 16, _FOUND_N
 FOUND = ('''
 <div class="wrap" id="found">
 <div class="foundbox">
-  <div class="ft">开场：三次迁移，我们查出来的 ''' + str(_FOUND_N) + ''' 处差</div>
-  <p class="fsub">每一处都真的改变了结果。这里只列现象和量级，<b>为什么、怎么查出来的，正文一节一节讲</b>（点右栏跳过去）。</p>
+  <div class="ft">开场：三次迁移，真改变结果的 ''' + str(_FOUND_N) + ''' 处差</div>
+  <p class="fsub">两边不一样的地方远不止这些：光后两次迁移，两边为对上而改的就有一百一十九处（TPU 一侧 69、GPU 一侧 50），编译器悄悄省掉的舍入，一份程序里就数出 272 处。绝大多数单独看影响很小，盖不过 GPU 自己的噪声；下面这 16 处，是真改变了结果的。这里只列现象和量级，<b>为什么、怎么查出来的，正文一节一节讲</b>（点右栏跳过去）。</p>
   <table class="t9 ftab"><thead><tr><th>查出来的现象</th><th>影响多大</th><th>在哪讲</th></tr></thead><tbody>
 ''' + "".join(_fgrp(t, len(rows)) + "".join(_frow(*r) for r in rows) for t, rows in _FOUND_ROWS) + '''  </tbody></table>
   <p class="fnote">R：离 FP64 的距离之比，1 是跟 GPU 一样准（§4.2）；r：曲线上的差 ÷ GPU 自己的噪声上限，过 2 判不过（§3.3）；格：末位差几格（§5.7）。🆕 是这两天刚查清的，正文在折叠里。</p>
