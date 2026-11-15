@@ -165,7 +165,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>照稿约 71 分钟</b>（一次课）</span>
+    <span class="chip">⏱ <b>照稿约 67 分钟</b>（一次课）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
