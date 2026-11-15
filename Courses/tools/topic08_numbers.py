@@ -1793,3 +1793,6 @@ _loo_w = [sum(r[550:1000]) / 450.0 for r in _MDJ["主loss"]["GPU留一"]]
 FC_GPU_LO, FC_GPU_HI = min(_loo_w), max(_loo_w)
 assert abs(FC_GPU_LO - (-4.52e-6)) < 0.01e-6 and abs(FC_GPU_HI - 3.16e-6) < 0.01e-6
 FC_GPU_RANGE_T = "%s 到 %s" % (tx(FC_GPU_LO, "%.1e"), tx(FC_GPU_HI, "%.1e", plus=True))
+# 32K 第 2 级 1000 步主 loss，三个窗口（同一私有重算）：第 2–1000 步 −4.38e-5 ÷ N 5.62e-6 ＝ 7.8；第 51–300 步 53.6；第 301–1000 步 ＋1.08e-5 ÷ 7.20e-6 ＝ 1.5
+M3_L2_WIN = {"2:1000": (-4.38e-5, 5.62e-6), "51:300": (-1.983e-4, 3.70e-6), "301:1000": (1.08e-5, 7.20e-6)}
+assert ["%.1f" % (abs(v) / n) for v, n in M3_L2_WIN.values()] == ["7.8", "53.6", "1.5"]
