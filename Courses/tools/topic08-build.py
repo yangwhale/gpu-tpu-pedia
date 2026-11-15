@@ -83,6 +83,16 @@ table.ftab tr.fgrp span{color:var(--gray);font-size:13px}
 .foundbox .fbridge{font-weight:600;margin-top:4px}
 </style>"""
 head += """<style>
+.trail{display:flex;align-items:stretch;margin:14px 0 22px}
+.trail .st{flex:1 1 0;min-width:0;border:1px solid var(--line);border-radius:10px;padding:7px 9px 8px;background:#fff}
+.trail .st.end{border:2px solid #188038}
+.trail .ar{flex:0 0 16px;display:flex;align-items:center;justify-content:center;color:var(--gray);font-size:13px}
+.trail .tq{font-size:12.5px;color:var(--gray);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trail .tk{font-size:20px;font-weight:700;color:#c5221f;line-height:1.25;margin:3px 0 2px;white-space:nowrap}
+.trail .st.end .tk{color:#188038}
+.trail .tw{font-size:12.5px;line-height:1.45}
+.trail-t{font-size:14px;color:var(--gray);margin:16px 0 0}
+b.kn{background:#fef7e0;padding:0 3px;border-radius:3px}
 .adamcard{border:2px solid var(--line);border-radius:12px;padding:14px 18px;margin:16px 0;background:#fff}
 .adamcard .af{font-size:30px;font-weight:700;text-align:center;letter-spacing:1px;margin:6px 0 4px}
 .adamcard .af.long{font-size:21px;letter-spacing:0}
@@ -270,6 +280,27 @@ ADAM_CARD = (
     '  </div>\n')
 
 
+# ── 案例节开头的「调查线」（11-15 夜：课件主线跟讲义一条线对齐，每一步只亮一个数；细数在各小节和折叠里）──
+def trail(title, steps):
+    out = ['\n  <p class="trail-t">%s</p>\n  <div class="trail">' % title]
+    for i, (q, k, w) in enumerate(steps):
+        if i:
+            out.append('<div class="ar">→</div>')
+        cls = "st end" if i == len(steps) - 1 else "st"
+        out.append('<div class="%s"><div class="tq">%s</div><div class="tk">%s</div><div class="tw">%s</div></div>' % (cls, q, k, w))
+    out.append('</div>\n')
+    return "".join(out)
+
+
+TRAIL7 = trail("这一节的调查线（每一步只看一个数；细数在各小节和折叠里）", [
+    ("① 现象（7.1）", "«LOSS_TAIL_ROUGH_T»", "三百步以后 TPU 的 loss 平均偏低，尺子的两倍多"),
+    ("② 拆（7.2）", "少压 ¼", "没出现过的词那些行，TPU 每步被压得少"),
+    ("③ 为什么（7.3）", "«LSE300_T»", "所有 logits 的整体水平（lse），第 300 步 TPU 低"),
+    ("④ 是这股力（7.3）", "差归零", "去掉这个方向，lse 差 «ORIG_LSE_T» → −0.007"),
+    ("⑤ 谁推歪的（7.4）", "«HEAD_S1_E»", "GPU 那次十二万项求和，每步少推"),
+    ("⑥ 怎么修（7.5）", "分块", "GPU 分块后参数范数跟 TPU 重合，步时 ＋«CB_COST_T»"),
+])
+
 # ── §7 开头「输出头的形状与三个公式」卡（11-15 试讲：十二万项求和是哪一步、两个矩阵共不共用，之前没讲明白）──
 HEAD_CARD = (
     '\n  <div class="adamcard">\n'
@@ -366,7 +397,7 @@ QUIZ = '''
 <p><b>预习</b>（先想一想，这一讲里揭晓）：</p>
 <ol start="2">
 <li><b>第二问</b>：同一个 GPU 程序、同样的数据，跑两遍，结果会一位不差吗？（§1.1）</li>
-<li><b>第三问</b>：搬到 TPU 后，loss 三百步以后平均比 GPU 低约 1.7e-4。TPU 算错了吗？（§7.5）</li>
+<li><b>第三问</b>：搬到 TPU 后，loss 三百步以后平均比 GPU 低约 1.7e-4。TPU 算错了吗？（§7.4）</li>
 </ol>
 </div>
 </details>
@@ -502,7 +533,7 @@ __FIG_REPLAY__
     <li><b>参照那一侧也要自检</b>：转换往返逐位，不等于训练时真载入了。训练入口在第 1 步之前逐参数对检查点比一遍，不过就退出。</li>
   </ul>
   <details class="foldfig"><summary><b>张量个数怎么数</b>：两种命名下的计数对得上</summary>
-  <p>这里按开源权重的命名数，一个矩阵一个张量：3 个 MoE 层 × «EXPERTS» 个专家 × 3 个矩阵（gate、up、down；Megatron 里 fc1 ＝ gate 和 up 拼在一起，fc2 ＝ down）＝ «HF_EXPERT_TENSORS_T»，加其余 «HF_OTHER_TENSORS» 个（norm、投影、路由、共享专家、词嵌入、输出层）。§7.5 状态互换的文件按 GPU 框架的布局存，q/k/v 合成一个、gate/up 合成一个，每个专家只剩 2 个矩阵：«MG_EXPERT_TENSORS_T» 加其余 «MG_OTHER_TENSORS» 个，同样的元素数出 «SWAP_STATE_TENSORS» 个。</p></details>
+  <p>这里按开源权重的命名数，一个矩阵一个张量：3 个 MoE 层 × «EXPERTS» 个专家 × 3 个矩阵（gate、up、down；Megatron 里 fc1 ＝ gate 和 up 拼在一起，fc2 ＝ down）＝ «HF_EXPERT_TENSORS_T»，加其余 «HF_OTHER_TENSORS» 个（norm、投影、路由、共享专家、词嵌入、输出层）。§7.4 状态互换的文件按 GPU 框架的布局存，q/k/v 合成一个、gate/up 合成一个，每个专家只剩 2 个矩阵：«MG_EXPERT_TENSORS_T» 加其余 «MG_OTHER_TENSORS» 个，同样的元素数出 «SWAP_STATE_TENSORS» 个。</p></details>
   <details class="foldfig"><summary><b>加载以后比了哪些张量</b>：参数全部比，FP32 主权重只比了一部分</summary>
   <p>参数全部比；FP32 主权重比的是 GPU 那边抓下来的 «MASTER_CMP_TENSORS» 个张量。</p></details>
 
@@ -1053,7 +1084,7 @@ __FIG_DIVERGE__
   </details>
 
   <details class="foldfig"><summary><b>状态互换</b>（课上不讲，第七节用一次时当场交代）：分开「这一步算得不一样」和「状态早就不一样」</summary>
-  <p>把一侧某一步的整套 FP32 状态搬到另一侧，用同一批数据各算一步（连 Adam 的步数计数和学习率调度的步号一起搬，不然偏置校正对不上）。它能把「这一步算得不一样」和「状态已经不一样」分开（§7.5）。</p>
+  <p>把一侧某一步的整套 FP32 状态搬到另一侧，用同一批数据各算一步（连 Adam 的步数计数和学习率调度的步号一起搬，不然偏置校正对不上）。它能把「这一步算得不一样」和「状态已经不一样」分开（§7.4）。</p>
   </details>
   <details class="foldfig"><summary><b>第 1 步逐位相同，不等于开关没用</b>（课上不讲，图）：从 BF16 检查点续训时，权重全压在格点上</summary>
   <p>从 BF16 检查点续训或微调时，有一类开关第 1 步开和不开逐位相同，要过几步才看得出差。</p>
@@ -1066,25 +1097,27 @@ __FIG_ONGRID__
 </div></section>
 
 ''' + sec("s七", "七", "案例一：loss 偏低，查到是谁的差") + '''
-  <p class="lead">混元 3 搬上 TPU，主 loss 一直比 GPU 低：第 301–1000 步逐步相对差的带符号均值 «TPU_LOSS_TAIL_T»（对一份 GPU 基线；另两份 GPU 重跑对同一基线是 «GPU_B_TAIL_T» 和 «GPU_C_TAIL_T»；开场说的「约 1.7e-4」就是它）。按参考档里 loss 那条 2e-4 的线（§4.4，只看够不够近），这已经能交差；按严格档（每一处差都要说得出是谁的），得查清它是谁的差。这一节从现象一路查到一次沿 12 万行词表的求和：按调查的顺序讲，只走查对的那条线；排除过的岔路都收在折叠里，课上不讲。</p>
-
-''' + HEAD_CARD + '''
-  <h3>7.1　偏移是慢慢长出来的，参数范数也在长</h3>
-  <p>§1.2 那把尺子已经量过：TPU 三种跑法（原样、不重算、改片上内存上限）都在尺子外面，而且方向一致。先别读成「TPU 训得更好」：loss 系统性地低，只说明两条轨迹有系统差别。</p>
-  <p>逐步看，前 100 步看不出，100–300 步拉开，300 步以后稳定在 «LOSS_TAIL_ROUGH_T» 左右；第 1 步的更新量两边没有差别。前向算子的差第 1 步就该看得到；第 1 步没有、几百步才长出来，说明是每一步一点点攒起来的。那就去看别的每步都记的量，谁也在慢慢长：</p>
+  <p class="lead">混元 3 搬上 TPU，主 loss 三百步以后平均比 GPU 低约 «LOSS_TAIL_ROUGH_T»，是 GPU 噪声尺子的两倍多（§1.2）。TPU 算错了吗？这一节按调查的顺序，一条线从现象查到源头，每一步只看一个数；细数和排除过的岔路都收在折叠里，课上不讲。</p>
+''' + TRAIL7 + HEAD_CARD + '''
+  <h3>7.1　现象：loss 往下、参数范数往上，第 100 步前后一起离开噪声</h3>
+  <p>前 100 步看不出，100–300 步拉开，300 步以后稳定在 <b class="kn">«LOSS_TAIL_ROUGH_T»</b> 左右。第 1 步没有、几百步才长出来：是每一步一点点攒起来的。那就看别的每步都记的量，谁也在慢慢长：</p>
 __FIG_DRIFT__
-  <p>参数范数是全部 FP32 主权重平方和开根号，这里约 «PN_LEVEL_T»。第 1000 步 TPU 比 GPU 多 «PN_TPU_EXTRA»（绝对差）；GPU 自己一千步才涨了 «PN_GPU_GROWTH»。</p>
+  <p>参数范数是全部 FP32 主权重平方和开根号，这里约 «PN_LEVEL_T»。第 1000 步 TPU 比 GPU 多 <b class="kn">«PN_TPU_EXTRA»</b>（绝对差）；GPU 自己一千步才涨了 «PN_GPU_GROWTH»。</p>
+  <details class="foldfig"><summary><b>细数</b>：loss 偏多少、跟谁比、为什么要查</summary>
+  <p>第 301–1000 步逐步相对差的带符号均值 «TPU_LOSS_TAIL_T»（对一份 GPU 基线；另两份 GPU 重跑对同一基线是 «GPU_B_TAIL_T» 和 «GPU_C_TAIL_T»；开场说的「约 1.7e-4」就是它）。§1.2 那把尺子已经量过：TPU 三种跑法（原样、不重算、改片上内存上限）都在尺子外面，而且方向一致。按参考档里 loss 那条 2e-4 的线（§4.4，只看够不够近），这已经能交差；按严格档（每一处差都要说得出是谁的），得查清它是谁的差。</p>
+  <p>先别读成「TPU 训得更好」：loss 系统性地低，只说明两条轨迹有系统差别。第 1 步的更新量两边没有差别；前向算子的差第 1 步就该看得到。</p>
+  </details>
   <details class="foldfig"><summary><b>先排除两个假警报</b>：步号错位、常数口径</summary>
   <ul>
     <li><b>步号错位</b>：被测第 k 步错对 golden 第 k−1 步，也会有稳定的差。故意错开一步再比，MARE（全程）从 «MISALIGN_OK_T» 涨到 «MISALIGN_OFF_T»，大 «MISALIGN_X_FLOOR» 多倍 —— 步号是对的。</li>
     <li><b>常数口径</b>（比如 loss 的分母不同）：那种差第 1 步就该在；这里第 1 步只差 «D1_T»，偏移是后来长出来的。</li>
   </ul></details>
 
-  <h3>7.2　往下拆：没出现过的词那些行，TPU 压得少</h3>
+  <h3>7.2　往下拆：近九成在输出层，四分之三在没出现过的词；这些行 TPU 压得少</h3>
 __FIG_ROWS__
-  <p>没出现过的词从来不是正确答案，每一步收到的梯度只有一种：softmax 按它那点极小的概率把它往下压。所以这些行一直在缩；到第 300 步，GPU 缩得多、TPU 缩得少（图右）。这里只说两边不一样，不说谁对；哪一边偏，§7.4 才知道。</p>
-  <p>这些行的梯度很小，Adam 平时那层按每个元素的梯度大小归一化的保护在这里失效，所以梯度上一点系统偏差每步落在同一边，原样累积（Adam 公式卡和 ε 在下面折叠里，课上不讲）。</p>
+  <p>没出现过的词（«RARE_ROWS» 行）从来不是正确答案，每一步只收到一种梯度：softmax 按它那点极小的概率把它往下压，所以一直在缩。到第 300 步，这些行的平方和从初值算起 GPU 减了 «SHRINK_GPU»、TPU 只减了 «SHRINK_TPU»，<b class="kn">少压约四分之一</b>。这里只说两边不一样，不说谁对；哪一边偏，§7.4 才知道。</p>
   <details class="foldfig"><summary><b>Adam 公式卡与 ε</b>（课上不讲）：为什么这些行失去了归一化的保护；ε 不制造、也不放大偏差</summary>
+  <p>这些行的梯度很小，Adam 平时那层按每个元素的梯度大小归一化的保护在这里失效，所以梯度上一点系统偏差每步落在同一边，原样累积。</p>
 ''' + ADAM_CARD + '''
 __FIG_EPS__
   <p><b>口径</b>：ε 不制造偏差，也不放大偏差。常见行里，Adam 按每个元素自己的梯度大小归一化，梯度整体偏大一点、偏小一点都被约掉；冷门行分母被 ε 托住，这层保护失效，梯度上的系统偏差原样进了更新。更新被压小（中位数那一档 4.8 倍）对两边一样，不影响两边之比。</p>
@@ -1111,33 +1144,33 @@ __FIG_EPS__
   <tr><td>只是执行方式不同</td><td>TPU 只改编译器的片上内存上限</td><td>参数范数漂得一模一样（loss 偏移的大小变了）：是 TPU 系统性的</td></tr>
   <tr><td>GPU 的十几处写法</td><td>GPU 一项项换成 TPU 那边的写法（交叉熵、Adam、裁剪、最后的归一化、注意力缩放、残差精度、专家加权求和、关 TF32……），各 300–400 步</td><td>全部复现不出来</td></tr>
   </tbody></table></details>
-''' + quiz("冷门词那些行的梯度大小两边几乎一样（√v̂ 只差 «RARE_VHAT_DIFF_T»），为什么 TPU 上它们被压得少？（从初值算起 GPU 缩了 66.3、TPU 缩了 49.2；扣掉两边一样的权重衰减那一份 31.8，GPU 多缩 34.5、TPU 只多缩约 17，少一半。）",
-           "Adam 的更新量大小两边差不多，差在方向：更新和这一行权重之间的夹角两边不一样，从第 25 步起就分开了。这些行梯度很小，Adam 按大小归一化的保护失效，更新几乎跟梯度成正比，方向上一点系统差原样进了更新，一步步积成范数差。") + '''
 
-  <h3>7.3　为什么压得少：logits 的整体水平</h3>
-  <p>这些行每步收到多少「往下压」，由 logits 的整体水平决定。输出层各行权重有一个共同的平均方向 w̄：隐状态沿 w̄ 偏一点，打到每一行上，所有词的 logits 就一起偏；反向时，梯度里沿 w̄ 的那一份，就是把所有 logits 一起往下压的力（下面叫「这股力」）。固定探针（§6.3）量的 lse 就是这个整体水平：</p>
+  <h3>7.3　为什么压得少：一股让所有 logits 一起升降的力，两边不一样大</h3>
+  <p>冷门行每步挨多少压，看所有 logits 的整体水平：水平越高，冷门词概率越小，挨的压也越小。固定探针（§6.3）量的 lse 就是这个整体水平：</p>
+__FIG_GAUGE__
+  <p>TPU 的整体水平一路比 GPU 低，第 300 步差 <b class="kn">«LSE300_T»</b>：有一股让所有 logits 一起升降的力，两边不一样大。冷门行梯度很小，Adam 按大小归一化的保护失效（§7.2 折叠），这点差每步落在同一边，就积起来了。</p>
+  <details class="foldfig"><summary><b>这股力是什么</b>：输出层的平均方向 w̄，和一个恒等式</summary>
+  <p>输出层各行权重有一个共同的平均方向 w̄：隐状态沿 w̄ 偏一点，打到每一行上，所有词的 logits 就一起偏；反向时，梯度里沿 w̄ 的那一份，就是把所有 logits 一起往下压的力（下面叫「这股力」）。</p>
+  <p>softmax 看不见整体平移，概率不变；可冷门行不一样：冷门行每步收到的那份「往下压」，沿这一行自己方向的分量，正好等于这个词的原始 logit 按概率加权的和。所有 logits 整体一低，这个分量就小，这一行就缩得慢。</p>
+  <div class="note"><span class="t">w·g ＝ Σ pᵢ·(w·hᵢ) ＝ Σ pᵢ·logitᵢ</span>
+    对没出现过的词，一行权重 w 跟它的梯度 g（＝ Σ pᵢhᵢ）的内积，恒等于这个词的<em>原始</em> logit 按概率加权求和（输出层没有偏置、不跟词嵌入共享时的精确恒等式；出现过的词还多一项）。</div>
+  </details>
   <details class="foldfig"><summary><b>主干那一侧</b>（课上不讲，图）：第 0 层最先分开，是第 0 层权重的方向长歪了；跟 w̄ 怎么接上</summary>
   <p>输出层一行的梯度，等于各个 token 的隐状态按这个词的概率加权求和；所以冷门行往哪偏，取决于隐状态。顺着往回查主干，最先分开的是第 0 层：两边第 0 层权重拿出来，用同一份输入各算一遍，换上 TPU 的权重输出就偏，换成另两份 GPU 重跑的权重偏得小得多 —— 是第 0 层权重长歪了。</p>
 __FIG_LAYER0__
   <p>第 0 层权重的范数几乎没变，所以 §7.2 按组拆的账里看不出它；变的是方向。这张图看的是隐状态这一侧的平均方向；正文看的是输出层这一侧的 w̄。两者相关，可这两环之间怎么定量接上，没有单独量过。推第 0 层的，是输出头流回来的梯度。</p>
   </details>
-__FIG_GAUGE__
-  <p>TPU 的整体水平一路比 GPU 低（第 300 步 lse 差 «LSE300_T»）：有一股让所有 logits 一起升降的力，两边不一样。softmax 看不见整体平移，概率不变；可冷门行不一样：</p>
-  <p>原因在一个恒等式（折叠里推）：冷门行每步收到的那份「往下压」，沿这一行自己方向的分量，正好等于这个词的原始 logit 按概率加权的和。所有 logits 整体一低，这个分量就小，这一行就缩得慢。</p>
-  <details class="foldfig"><summary><b>为什么</b>：一行权重和它梯度的内积，恒等于原始 logit 的概率加权和</summary>
-  <div class="note"><span class="t">w·g ＝ Σ pᵢ·(w·hᵢ) ＝ Σ pᵢ·logitᵢ</span>
-    对没出现过的词，一行权重 w 跟它的梯度 g（＝ Σ pᵢhᵢ）的内积，恒等于这个词的<em>原始</em> logit 按概率加权求和（输出层没有偏置、不跟词嵌入共享时的精确恒等式；出现过的词还多一项）。</div>
-  </details>
   <details class="foldfig"><summary><b>外面的人怎么说</b>：z-loss 管的就是这个方向</summary>
   <p>PaLM 训练时专门加了一项 z-loss，把 softmax 的归一化项 log Z 往 0 拉（arXiv:2204.02311）；也有人发现输出 logits 整体漂得越来越负，训练会发散，z-loss 能管住（Wortsman 等，arXiv:2309.14322）。</p></details>
-
-  <h3>7.4　是这股力；谁推歪了</h3>
-  <p>先证明就是这股力：两边都把这个方向的梯度去掉、再让 GPU 往这个方向多推一把。</p>
+  <p>先证明就是这股力：两边都把这个方向的梯度去掉，再让 GPU 往这个方向多推一把。</p>
   <p class="codeline">''' + mt(3, "src/maxtext/configs/base.yml", "L144-L145", "诊断开关 lm_head_dh_wbar_remove") + "　" + mt(3, "src/maxtext/layers/nnx_decoders.py", "L1825-L1827", "去掉沿 w̄ 那一份梯度") + '''</p>
 __FIG_INTERVENE__
-  <p>只知道「是这股力」，还不知道是谁算错了：TPU 多推了，还是 GPU 少推了？拿训练里实际用到的张量，在 FP64 里重算一遍，把输出头的误差拆到每一段：</p>
+  <p>去掉这个方向，第 1000 步 lse 差从 «ORIG_LSE_T» <b class="kn">降到 −0.007</b>；GPU 多推一把，就复现了 TPU。是这股力。</p>
+
+  <h3>7.4　谁推歪的：GPU 那次十二万项求和，每步少推一点</h3>
+  <p>💬 先押一下：TPU 多推了，还是 GPU 少推了？拿训练里实际用到的张量，在 FP64 里重算一遍，把输出头的误差拆到每一段：</p>
 __FIG_HEAD__
-  <p>GPU 在反向里沿 12 万的词表做一次很长的 BF16 矩阵乘求和，张量核把结果系统地朝零截了一点（§5.2 的抹零）；落在「所有 logits 一起升降」这个方向上，每一步都少推约 «HEAD_S1_E»。TPU 这一步对 FP64 的误差小得多（第 1 步约 «HEAD_RATIO_S1» 倍）。这还只是一次矩阵乘、一步的离线证据；一千步下来谁偏，§7.5 见分晓。</p>
+  <p>红柱就是开头那张卡里的 dH：GPU 在张量核上沿 12 万的词表做这次求和，结果系统地朝零截了一点（§5.2 的抹零），落在「所有 logits 一起升降」这个方向上，第 1 步少推 <b class="kn">«HEAD_S1_E»</b>（相对）。TPU 这一步对 FP64 的误差小得多（约 «HEAD_RATIO_S1» 分之一）。</p>
   <details class="foldfig"><summary><b>这一环哪部分是实测、哪部分是推断；一度判反的那一版</b></summary>
   <p>朝零、随求和长度增大，是实测；说它就是 §5.2 那个抹零模型在起作用，是推断 —— 那个模型在这么长的求和上没有单独验证过。第 100 步那个指标连真 FP32 都偏得不小，只作旁证。
     最早那一版「FP32 dgrad」没关 TF32，偏得比 BF16 还多，于是一度得出「换成FP32 dgrad 训练也不动」的错误结论。第 1 步几乎全是截断（FP32 一次累加只偏 −1.7e-6）；训练中后期冷门词概率变小，FP32 一次累加也吞同号小项（到 −2.6e-4），和截断同量级；两样都在小项相对整个和越来越小时加重（冷门词概率越训越小），分段让每段的和保持小，所以一起治。</p></details>
@@ -1148,16 +1181,21 @@ __FIG_HEAD__
     <li><b>后面有地方原样累积</b>：w̄ 方向推的是所有 logits 的整体水平，水平一变，冷门行被压多少跟着变；冷门行梯度很小，Adam 的归一化保护失效（§7.2），每步的小差落在同一边、原样积起来。</li>
   </ul>
   <p>别的矩阵乘也偏一点：合成的全正输入、求和长 «TC_K2» 时朝零 «TC_BIAS2_T»（§5.2 右图）。可真实的激活和梯度有正有负，抹零的方向跟着每一项的符号走，大半互相抵消；后面也没有这样一个原样累积的地方（推断：其余矩阵乘沿各自方向的偏差没有逐个量）。</p></details>
-
-  <h3>7.5　单步确认；是哪种误差：截断和吞小项，分块两样都治</h3>
-  <p>是每一步都算得不一样，还是状态早就不一样、反馈放大出来的？单步确认一下，怎么量：把 GPU 第 99 步的整套状态（主权重、两个动量、步数计数）搬到 TPU，同一批数据两边各算一步，再跟 GPU 上全程 FP32 算的那一步比，看沿 TPU − GPU 权重差的方向各少走多少（这个做法叫状态互换，§6 折叠）。</p>
+  <p>这还只是离线的一次矩阵乘，再在训练里确认一步：把 GPU 第 99 步的整套状态（主权重、两个动量、步数计数）搬到 TPU，同一批数据两边各算一步，再跟 GPU 上全程 FP32 算的那一步比，看沿 TPU − GPU 权重差的方向各少走多少（这个做法叫状态互换，§6 折叠）。</p>
 __FIG_SWAP__
-  <p>同一状态下 TPU 每步几乎正好（±«SWAP_RES_T» 以内）。（这里的百分数量的是「TPU − GPU 权重差」方向上少走多少；§7.4 的 «HEAD_S1_E» 量的是「所有 logits 一起升降」方向，方向不同，数不一样）</p>
+  <p>GPU 一步少走 <b class="kn">«SWAP_GPU_ABS_T»</b>，只把那次求和换成 FP32 就只剩 0.10%；同一状态下 TPU 几乎正好（±«SWAP_RES_T» 以内）。</p>
   <details class="foldfig"><summary><b>状态互换图的口径</b>：这张图的「精确值」是谁算的；两个百分比别混</summary>
-  <p>这里的「精确值」和「FP32 dgrad」都是 GPU 算的，那次长求和交给 cuBLAS 一次累加到底，下面会看到它积上千步以后也偏，所以这张图只看谁少走得多、谁少走得少。别把两个百分比混了：§7.4 的 «HEAD_S1_E» 量的是那一次矩阵乘沿 w̄ 少了多少；这里的 «SWAP_GPU_ABS_T» 量的是整个梯度经过 Adam 之后，权重沿漂移方向少走了多少。</p>
+  <p>这里的百分数量的是「TPU − GPU 权重差」方向上少走多少，跟 «HEAD_S1_E» 量的「所有 logits 一起升降」方向不同，数不一样。这里的「精确值」和「FP32 dgrad」都是 GPU 算的，那次长求和交给 cuBLAS 一次累加到底，下面会看到它积上千步以后也偏，所以这张图只看谁少走得多、谁少走得少。别把两个百分比混了：§7.4 的 «HEAD_S1_E» 量的是那一次矩阵乘沿 w̄ 少了多少；这里的 «SWAP_GPU_ABS_T» 量的是整个梯度经过 Adam 之后，权重沿漂移方向少走了多少。</p>
   </details>
-  <p>开场那一问「TPU 算错了吗？」的答案在这里：<b>偏移的大头不是 TPU 算错</b>，是 GPU 当标准答案的那份 BF16 golden 自己离精确值远。</p>
+  <div class="note"><span class="t">开场那一问「TPU 算错了吗？」的答案</span>偏移的大头不是 TPU 算错，是 GPU 当标准答案的那份 BF16 golden 自己离精确值远。先排除自己这一侧，包括当参照的那一份。</div>
 
+  <h3>7.5　怎么修：只换 FP32 只追回六成，分块才跟 TPU 重合</h3>
+  <p>最直接的修法：那次求和换成 FP32（真关 TF32）。第 1 步的偏差降到 «HEAD_EXACT_S1_T»，可跑满一千步：</p>
+__FIG_ONEPASS__
+  <p>橙线：GPU 生产只换这一处，第 1000 步参数范数比 GPU 生产多 ＋«PN_RCX5_R»，TPU 是 ＋«PN_TPU_PROD_R»，<b class="kn">只追回六成</b>（«PN_RCX5_SHARE»）。右格是同一次矩阵乘的离线测量：FP32 一次加到底，第 1 步几乎不偏，到第 100 步的状态已经偏到 «ABL_FP32_S100_T»，跟张量核同一个量级。</p>
+  <p><b>为什么：吞小项。</b>训练以后冷门词概率越压越小，沿 w̄ 每个冷门词贡献一个同号的小项；一项不到累加值最小一格的一半，就被整项舍掉，舍掉的都在同一边。FP32 一次加到底躲得开截断，躲不开这个（cuBLAS 怎么累加没有源码可看，这是推断）。</p>
+  <p><b>分块两样都治。</b>每 «CHUNK_SEG» 项先加成一块、块结果留 FP32，再把一百多块加起来：块里的和不大，小项丢不掉，截断也只在短段里。GPU 生产只改这一处，第 1000 步 ＋«PN_PRODCHUNK_R»，跟 TPU 的 ＋«PN_TPU_PROD_R» <b class="kn">重合</b>（图上绿线和蓝线）；乘法留在 BF16 张量核、只分块，步时只多 «CB_COST_T»。只改 GPU 的标准答案，TPU 一行不动。</p>
+  <details class="foldfig"><summary><b>两种误差怎么分</b>（课上不讲）：截断和吞小项各占多少；四种写法一张表；整个修法排成一排</summary>
   <p><b>两种误差，得分开。</b>先纠正一个常见的误解：两边那次 «VOCAB» 项的求和，都是 BF16 输入、FP32 累加，不是 BF16 累加。差在 FP32 累加器怎么舍：GPU 张量核每 «TC_GROUP» 个乘积一组，按其中最大的指数对齐，约 «TC_KEEP» 位以下的低位朝零截掉（§5.2）；TPU 的矩阵单元推断是就近舍入（没有直接证据；旁证是同一份输入算路由打分，TPU 对 FP64 «ROUTER_TPU_FP64»、GPU «ROUTER_GPU_FP64»，§5.4）。</p>
   <p><b>误差一：截断。刚开始几乎全是它。</b>训练刚开始，各个词的概率都差不多，冷门词还没被压到很小，这次求和里没有「特别小的项」。所以第 1 步的误差几乎全来自张量核的截断：沿 w̄ 的相对偏差，张量核一次加到底 «ABL_BF16_S1_T»，换成真 FP32 一次加到底只有 «HEAD_EXACT_S1_T»，差了约 «ABL_S1_RATIO» 倍。</p>
   <details class="foldfig"><summary><b>怎么确定是截断</b>：三样证据，哪些是实测、哪些是推断</summary>
@@ -1168,14 +1206,6 @@ __FIG_SWAP__
     <li><b>推断</b>：「案例里的偏差就是这个抹零模型在起作用」—— 那个模型在这么长的求和上没有单独逐位验证过。</li>
   </ul></details>
   <p><b>换 FP32，去掉的是截断。</b>输入本来就是 BF16 的值，升成 FP32 数值一位不变，所以它修的不是 BF16 精度，而是把张量核那条截断的累加路径，换成就近舍入的 FP32 累加：第 1 步的偏差降到 «HEAD_EXACT_S1_T»；状态互换里 GPU 一步少走的从 «SWAP_GPU_ABS_T» 降到 0.10%。要注意两点：升 FP32 同时换了内核和求和顺序，严格说它证明的是「张量核那条累加路径」是主因，截断是最可能的机制；而且必须真关 TF32，否则 FP32 矩阵乘会走回张量核、按 10 位尾数算（§7.4 折叠）。</p>
-__FIG_ONEPASS__
-  <p><b>可跑满一千步，只走到六成。</b>下图橙线：GPU 生产只换这一处，第 1000 步参数范数比 GPU 生产多 ＋«PN_RCX5_R»（5 份均值），TPU 生产是 ＋«PN_TPU_PROD_R»，只有 «PN_RCX5_SHARE»；下格看得更清楚，橙线减去 TPU 一路往下离开。同一次矩阵乘离线一量：FP32 一次加到底，第 1 步 «HEAD_EXACT_S1_T»，到第 100 步的状态已经 «ABL_FP32_S100_T»，第 300 步 «ABL_FP32_ONESHOT_300_T»，跟张量核同一个量级。截断已经没有了，为什么又偏？</p>
-  <p><b>误差二：吞小项。</b>训练以后 logits 拉开了，冷门词的概率越压越小。沿 w̄ 这个方向，每个冷门词贡献一个同号的小项，它们相对整个和越来越小。就近舍入有进有舍，平时互相抵消；可一项小到不到累加值最小一格的一半时，就被整项舍掉，而且这些项同号，舍掉的都在同一边。FP32 一次加到底躲得开截断，躲不开这个（cuBLAS 怎么累加没有源码可看，吞小项是推断）。</p>
-  <p><b>两样一起治：分块累加。</b>把 «VOCAB» 项切成每 «CHUNK_SEG» 项一块，块内留 FP32：每块的和不大，小项不会被挤出去，截断也只发生在短段里；块结果再相加，一共一百多块，这一步也不吞。两样都治：GPU 生产只把这一处改成分块（第九节最终那份 golden 的写法，升 FP32 再分块），第 1000 步 ＋«PN_PRODCHUNK_R»，TPU 生产 ＋«PN_TPU_PROD_R»，图上绿线和蓝线重合；第九节第一关 TPU 对它判，全过，参数范数那一项 r ＝ «FINAL_PN_V5P_T»（v5p）、«FINAL_PN_V7X_T»（v7x）。乘法留在 BF16 张量核、只分块的写法，一千步跟它分不开，步时只多 «CB_COST_T»。</p>
-  <details class="foldfig"><summary><b>旁证：GPU 全程 FP32 的精确轨迹</b>：GPU 别处全换 FP32 也只到九成，剩下的差就在这次求和</summary>
-  <p>先把 GPU 输出头这一次矩阵乘换成 FP32（真关 TF32），1000 步下来 GPU 自己朝 TPU 走过去约六成；剩下的，在 GPU 上跑一条<b>精确轨迹</b>来看：权重的用法跟生产一样（FP32 主权重，每步舍成 BF16 再用），前向反向的算术全部 FP32、真关 TF32。它自己重跑一位不差；图里 loss 那一行的第二个紫点，是给第 0 层一处权重乘 (1 ＋ «PERTURB») 的扰动版。</p>
-__FIG_EXACT__
-  <p>上图是不重算配置、对 4 份默认 GPU 均值；换到生产近似配置、对 GPU 生产 5 份均值，第 1000 步精确轨迹 ＋«PN_FIX1_R»、TPU 生产 ＋«PN_TPU_PROD_R»，也是九成。把精确轨迹那次求和也改成分块，GPU 精确轨迹就跟 TPU 上的精确轨迹重合：参数范数逐步相对差的带符号均值 «CHUNK_VS_TPUEXACT_T»，GPU 精确自己重跑几份两两之间最大 «EXACT_SELF_PN_T»，在尺子内。</p></details>
   <p><b>别误读成「截断是小问题」。</b>不分块的长求和里，张量核的总偏差在每个阶段都比 FP32 一次加到底大：第 100 步 «ABL_BF16_S100_T» 对 «ABL_FP32_S100_T»，第 300 步 «ABL_BF16_S300_T» 对 «ABL_FP32_ONESHOT_300_T»；按相减粗分（假设两部分可以相加，推断），截断那一份第 100 步约 «ABL_TRUNC_S100_T»、第 300 步约 «ABL_TRUNC_S300_T»，跟吞小项同一个量级。状态互换里，只换掉截断这一条路就去掉了约 «SWAP_TRUNC_SHARE» 的少走。生产 GPU 不显式分块，这次求和怎么切由 cuBLAS 自己定，生产程序里实测就是上面那个偏差：截断实实在在发生了。</p>
   <p>总结成一张表：</p>
   <table class="t9"><caption style="caption-side:bottom;text-align:left;color:var(--gray);font-size:13px">偏差：训练里实际用到的张量，第 1 ／ 100 ／ 300 步沿 w̄ 对 FP64 的相对偏差；单次：一张 B200 上这一次矩阵乘的耗时（分块是逐段调库、没做融合）；步时：一千步训练，对生产</caption>
@@ -1188,6 +1218,11 @@ __FIG_EXACT__
   <p><b>结论：不用升 FP32，BF16 张量核加分块就够。</b>一千步只分块（乘法留在 BF16 张量核）跟「升 FP32 再分块」分不开，步时 ＋«CB_COST_T» 对 ＋«CHUNK_COST_T»。这处只影响 GPU 标准答案的制作，TPU 生产程序不动。</p>
   <div class="note"><span class="t">整个修法排成一排（第 1000 步参数范数，对 GPU 生产 5 份均值，生产近似配置）</span>
     GPU 生产 0 ＜ 只换 FP32 ＋«PN_RCX5_R» ＜ 精确轨迹 ＋«PN_FIX1_R» ＜ 分块后的 golden ＋«PN_PRODCHUNK_R» ≈ TPU 生产 ＋«PN_TPU_PROD_R» ＜ 真精确 ＋«PN_TRUE_R»。这里漂得多，是离真值近。真精确比 TPU 生产还高一截：两边生产程序都把流进输出头反向的梯度存成 BF16，这一截两边一样，不算谁的差（第九节拆账）。</div>
+  </details>
+  <details class="foldfig"><summary><b>旁证：GPU 全程 FP32 的精确轨迹</b>：GPU 别处全换 FP32 也只到九成，剩下的差就在这次求和</summary>
+  <p>先把 GPU 输出头这一次矩阵乘换成 FP32（真关 TF32），1000 步下来 GPU 自己朝 TPU 走过去约六成；剩下的，在 GPU 上跑一条<b>精确轨迹</b>来看：权重的用法跟生产一样（FP32 主权重，每步舍成 BF16 再用），前向反向的算术全部 FP32、真关 TF32。它自己重跑一位不差；图里 loss 那一行的第二个紫点，是给第 0 层一处权重乘 (1 ＋ «PERTURB») 的扰动版。</p>
+__FIG_EXACT__
+  <p>上图是不重算配置、对 4 份默认 GPU 均值；换到生产近似配置、对 GPU 生产 5 份均值，第 1000 步精确轨迹 ＋«PN_FIX1_R»、TPU 生产 ＋«PN_TPU_PROD_R»，也是九成。把精确轨迹那次求和也改成分块，GPU 精确轨迹就跟 TPU 上的精确轨迹重合：参数范数逐步相对差的带符号均值 «CHUNK_VS_TPUEXACT_T»，GPU 精确自己重跑几份两两之间最大 «EXACT_SELF_PN_T»，在尺子内。</p></details>
   <details class="foldfig"><summary><b>给第九节的伏笔</b>：换到验收配置后 TPU 少漂多少</summary>
   <p>换到第九节验收用的配置（整层重算＋路由回放），第 1000 步 TPU 生产比 TPU 自己的精确轨迹少漂 «TPU_VS_TRUE_T»；这一截是谁的，第九节拆账。</p>
   </details>
@@ -1215,6 +1250,8 @@ __FIG_EXACT__
 __FIG_CHAIN__
   </details>
 __ANIM_CHAIN__
+''' + quiz("冷门词那些行的梯度大小两边几乎一样（√v̂ 只差 «RARE_VHAT_DIFF_T»），为什么 TPU 上它们被压得少？（从初值算起 GPU 缩了 66.3、TPU 缩了 49.2；扣掉两边一样的权重衰减那一份 31.8，GPU 多缩 34.5、TPU 只多缩约 17，少一半。）",
+           "Adam 的更新量大小两边差不多，差在方向：更新和这一行权重之间的夹角两边不一样，从第 25 步起就分开了。这些行梯度很小，Adam 按大小归一化的保护失效，更新几乎跟梯度成正比，方向上一点系统差原样进了更新，一步步积成范数差。") + '''
 ''' + quiz("为什么「GPU 把 dgrad 换成 FP32」和「精确轨迹」都要跑满 1000 步，不能只看第 1 步？",
            "第 1 步那股力只差约 6.5e-4（相对），单看一步、对 GPU 噪声比根本看不出；它是每一步同向地少一点，要累积几百步才显出 loss、lse 和参数范数的差。比的是轨迹，所以要跑满。") + '''
   <p class="bridge">这一节留下的问题：同一份代码只换并行方式，数学上等价，曲线却对不上 —— 这回又是谁的差？</p>
