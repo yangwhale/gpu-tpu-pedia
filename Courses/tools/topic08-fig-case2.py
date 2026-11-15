@@ -177,6 +177,7 @@ def fig_intervene():
         f.box(bx, py + 30, max(noise / vmax * bw, 3), 3 * 78, "#dadce0", "#dadce0", 0)
         for i, (v, c) in enumerate(bars):
             y = py + 40 + i * 78
+            f.t(bx + (max(noise / vmax * bw, 3) + 6 if v is not None else 6), y - 6, ("原样", "两边都去掉", "GPU 多推一把")[i], c, True, 12.5)
             if v is None:
                 f.t(bx + 6, y + 26, "1000 步没有这一项（300 步探针 −0.168）", GY, size=13)
                 continue
@@ -185,11 +186,29 @@ def fig_intervene():
             f.t(bx + L + 8, y + 26, (fmt % v).replace("e-0", "e-").replace("+", "＋").replace("-", "−").replace("e−", "e-"), c, True, 14)
         f.t(bx, py + 30 + 3 * 78 + 26, "灰色带 ＝ GPU 重跑的差 %s" % nlab, GY, size=12.5)
         f._pan = None
+    yb = f.band(y0 + PH + 20, "ok", "loss 偏移、参数范数漂移、logits 整体偏低，是同一股力的三个后果", [
+        "两边都去掉之后，loss 尾段平均几乎为零是正负抵消：前半（第 301–600 步）＋%s、后半（第 601–1000 步）%s，后半仍剩约六成。" % (N.sci(N.REMOVE_LOSS_H1), N.sci(N.REMOVE_LOSS_H2).replace("-", "−")),
+        "代价：这两个开关改的是数学本身，只能拿来证明「是这股力」，不能放进 golden。参数范数还剩约三成没去掉：去掉的只是沿这个方向的那一份，剩下这截第九节的新账没有单独对上。",
+    ])
+    yb = f.src(yb + 10,
+               "📌 实测（1000 步）：两边都去掉 dh 沿 w̄ 的全部分量后，TPU 对 GPU：loss −3.4e-5，param_norm ＋6.1e-3；同设置 GPU 两次之间 loss −2.5e-5、param_norm ＋4.9e-4。",
+               "📌 实测（1000 步，lse）：两边都去掉以后第 1000 步 lse 差 −0.007（原样约 −0.33），同设置 GPU 两次之间 −0.012。这里的 lse 是在第 1000 步的训练批上量的；上一张图右格终点 −0.299 是固定序列探针在第 975 步的读数，两种测法，数不一样。",
+               "📌 实测：人为沿这个方向加一股力 —— 把 GPU 自己一份本来接近零的小分量（每个 token 的 dlogits 加起来，再乘 w̄）变成原来的 −8 倍，跑 1000 步，对默认 GPU：loss −1.26e-4，param_norm ＋2.05e-2；再跑一份 −1.27e-4、＋2.01e-2。TPU 原样对 GPU：−1.66e-4、＋2.1e-2。GPU 人为多推一把，连 logits 下移、冷门行范数偏大一起复现。这股力的大小没有跟 6.5e-4 那个缺口对过，只看结果能复现。")
+    f.save("fig8-intervene.svg", yb + 14)
+
+
+def fig_intdrift():
+    """fig8-intdrift（2026-11-16 从 fig8-intervene 下格拆出，放 §7.3 折叠）回答：去掉那股力以后，参数范数的差是一路长得慢，还是只在终点碰巧小？
+    讲义只指 fig8-intervene 的绿柱、橙柱，逐步曲线课上不讲。数据：topic08_intervene.json（实测）。"""
+    f = Fig(W, "参数范数差逐步，第 1 到 1000 步。原样 TPU 对 GPU 和 GPU 人为多推一把两条一路同涨，到第 1000 步约 0.021；两边都去掉那个方向的那条长得慢得多，终点约 0.0061；GPU 重跑两份之间贴着零。")
+    y0 = f.header("逐步看：去掉它，参数范数的差一路长得慢得多",
+                  "参数范数差（绝对差），第 1–1000 步，实测；颜色同上一张图",
+                  [(BL, "原样：TPU 对 GPU"), (GR, "两边都去掉那个方向"), (OR, "GPU 人为多推一把"), ("#bdc1c6", "GPU 重跑两份之间")])
     # 第二轮：参数范数逐步差（三条线 ＋ 两条 GPU 重跑），撑住「去掉以后差没长出来、加上就回来」
     import json as _j, os as _o
     IV = _j.load(open(_o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "topic08_intervene.json"), encoding="utf-8"))
     assert abs(IV["orig"][-1] - N.TPU_PN_1000) < 0.05e-2 and abs(IV["remove"][-1] - N.REMOVE_PN) < 0.05e-3 and abs(IV["force"][-1] - N.FORCE_PN) < 0.05e-2
-    yP = y0 + PH + 14
+    yP = y0
     PH2 = 266
     pp = f.panel(0, yP, W, PH2, "参数范数差逐步（第 1–1000 步，绝对差，实测）", BL)
     GX0, GX1, GY0, GY1 = 120, W - 260, pp + PH2 - 60, pp + 26
@@ -210,15 +229,9 @@ def fig_intervene():
         dy = {"orig": -8, "force": 12, "remove": 4, "gpu_orig": 4}[key]
         f.t(GX1 + 10, GYv(v) + dy, "%s %s" % (lab, N.tx(v, "%.2e" if key != "gpu_orig" else "%.1e", plus=True)), col, True, 12.5)
     f._pan = None
-    yb = f.band(yP + PH2 + 20, "ok", "loss 偏移、参数范数漂移、logits 整体偏低，是同一股力的三个后果；去掉它，参数范数的差一路长得慢得多", [
-        "两边都去掉之后，loss 尾段平均几乎为零是正负抵消：前半（第 301–600 步）＋%s、后半（第 601–1000 步）%s，后半仍剩约六成。" % (N.sci(N.REMOVE_LOSS_H1), N.sci(N.REMOVE_LOSS_H2).replace("-", "−")),
-        "代价：这两个开关改的是数学本身，只能拿来证明「是这股力」，不能放进 golden。参数范数还剩约三成没去掉：去掉的只是沿这个方向的那一份，剩下这截第九节的新账没有单独对上。",
-    ])
-    yb = f.src(yb + 10,
-               "📌 实测（1000 步）：两边都去掉 dh 沿 w̄ 的全部分量后，TPU 对 GPU：loss −3.4e-5，param_norm ＋6.1e-3；同设置 GPU 两次之间 loss −2.5e-5、param_norm ＋4.9e-4。",
-               "📌 实测（1000 步，lse）：两边都去掉以后第 1000 步 lse 差 −0.007（原样约 −0.33），同设置 GPU 两次之间 −0.012。这里的 lse 是在第 1000 步的训练批上量的；上一张图右格终点 −0.299 是固定序列探针在第 975 步的读数，两种测法，数不一样。",
-               "📌 实测：人为沿这个方向加一股力 —— 把 GPU 自己一份本来接近零的小分量（每个 token 的 dlogits 加起来，再乘 w̄）变成原来的 −8 倍，跑 1000 步，对默认 GPU：loss −1.26e-4，param_norm ＋2.05e-2；再跑一份 −1.27e-4、＋2.01e-2。TPU 原样对 GPU：−1.66e-4、＋2.1e-2。GPU 人为多推一把，连 logits 下移、冷门行范数偏大一起复现。这股力的大小没有跟 6.5e-4 那个缺口对过，只看结果能复现。")
-    f.save("fig8-intervene.svg", yb + 14)
+    yb = f.band(yP + PH2 + 20, "ok", "去掉它，参数范数的差一路长得慢得多；加上它，跟原样一路同涨", [])
+    yb = f.src(yb + 10, "📌 实测：每组一份 1000 步的运行；灰线呈台阶状，是 GPU 一侧参数范数的记录精度有限（台阶约 1.6e-4）。")
+    f.save("fig8-intdrift.svg", yb + 14)
 
 
 def fig_swap():
@@ -554,16 +567,17 @@ def fig_onepass():
     def BX(v):
         return bx0 + (math.log10(max(abs(v), 1e-9)) + 9) / 6.5 * bw
     for e in (-9, -7, -5, -3):
-        f.t(BX(10 ** e), ry + PHR - 44, "1e%d" % e, GY, size=11, anchor="middle")
+        f.t(BX(10 ** e), ry + PHR - 44, "1e%d" % e, GY, size=13, anchor="middle")
         f.line(BX(10 ** e), ry + 40, BX(10 ** e), ry + PHR - 58, LINE, 1, arrow=False)
+    f.t(RX + RW - 12, ry + 22, "对数轴：相邻两格差 100 倍", GY, size=12.5, anchor="end")
     for i, (nm, vals, col) in enumerate(rows):
         yy = ry + 50 + i * 150
         f.t(RX + 12, yy + 14, nm, col, True, 13.5)
         for j, (st, v) in enumerate(zip((1, 100, 300), vals)):
             yb_ = yy + 24 + j * 30
             f.box(bx0, yb_ + 4, BX(v) - bx0, 20, col, col, 3)
-            f.t(bx0 - 6, yb_ + 19, "第 %d 步" % st, GY, size=11, anchor="end")
-            f.t(BX(v) + 6, yb_ + 19, N.tx(v, "%.1e"), col, True, 12)
+            f.t(bx0 - 6, yb_ + 19, "第 %d 步" % st, GY, size=12.5, anchor="end")
+            f.t(BX(v) + 6, yb_ + 19, N.tx(v, "%.1e"), col, True, 13)
     f._pan = None
     yb = f.band(y0 + PHR + 14, "ok", "只换 FP32 治好了截断（第 1 步 1.7e-6），一千步却只走到 TPU 的六成；改成分块两样都治，跟 TPU 重合", [
         "真精确比 TPU 还高一截：两边生产程序都把流进输出头反向的梯度存成 BF16，这一截两边一样，不算谁的差（第九节拆账）。",
@@ -579,6 +593,7 @@ fig_onepass()
 fig_chain()
 fig_head()
 fig_intervene()
+fig_intdrift()
 fig_swap()
 fig_exact()
 fig_layer0()

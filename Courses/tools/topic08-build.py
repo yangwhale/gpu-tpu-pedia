@@ -97,6 +97,7 @@ b.kn{background:#fef7e0;padding:0 3px;border-radius:3px}
 .adamcard .af{font-size:30px;font-weight:700;text-align:center;letter-spacing:1px;margin:6px 0 4px}
 .adamcard .af.long{font-size:21px;letter-spacing:0}
 .adamcard th{text-transform:none}
+.adamcard td:last-child{white-space:nowrap}
 .adamcard .aw{font-size:17px;margin:4px 0;font-family:inherit}
 .adamcard .aw .k{display:inline-block;width:7.5em;color:var(--gray);font-size:14px;font-weight:600}
 .adamcard .aw em{color:var(--gray);font-size:13px;font-style:normal}
@@ -366,21 +367,27 @@ R4_CARD = (
     '  <div class="aw"><span class="k">3　对基线</span>d ＝ rel_L2(被测, 基线) ÷ 尺子　<em>（尺子 ＝ GPU 第 1 步重跑几份两两的最大差，下限 2⁻²⁰）</em></div>\n'
     '  <div class="af long">R ＝ rel_L2(被测, FP64) ÷ max(rel_L2(基线, FP64), GPU 几份离 FP64 的中位数)</div>\n'
     '  <p class="asub">这是 TPU 自比的写法。GPU 搬 TPU 时没有基线那一项：R ＝ TPU 离 FP64 ÷ GPU 六份离 FP64 的中位数。多出一份同量级、互相独立的舍入误差，误差平方相加：R ≈ √2 ≈ 1.41，所以线画在两者之间的 1.2</p>\n'
-    '  <div class="aw"><span class="k">4　路由翻转</span>R_flip ＝ rel_L2(被测, FP64 用<b>被测自己选的</b>专家) ÷ 同一个分母　<em>（R_flip ≤ 1.2 且比不灌时更近 → 记「路由翻转」，不算丢精度；分母不换，换了就等于给翻转放宽尺子）</em></div>\n'
     '  <div class="acases">\n'
     '    <div><b>超出尺子、R ≤ 1.2：只是换了加法顺序</b><br>平台固有，记在刻度内，不修</div>\n'
     '    <div><b>R ＞ 1.2：这一步多舍了</b><br>丢了精度，去查被测那一边，找到多舍的那一步</div>\n'
     '  </div>\n'
+    '  <table class="t9"><thead><tr><th>例子（实测）</th><th>被测离 FP64</th><th>参照离 FP64</th><th>R</th><th>记作</th></tr></thead><tbody>\n'
+    '  <tr class="epsrow"><td>qkv 投影，打开 FP32 累加之前（混元 3）</td><td>' + N.sci(N.QKV_ABS_BEFORE) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>«R_QKV_BEFORE»</td><td>丢了精度</td></tr>\n'
+    '  <tr><td>同上，打开以后</td><td>' + N.sci(N.QKV_ABS_AFTER) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>1.000</td><td>换了顺序</td></tr>\n'
+    '  </tbody></table>\n'
+    '  </div>\n'
+    '  <details class="foldfig"><summary><b>表里另外几行</b>：词嵌入（修好了却照样超尺子）、8 个设备、视觉塔；路由翻转怎么记</summary>\n'
     '  <table class="t9"><thead><tr><th>例子（实测）</th><th>被测离 FP64</th><th>参照离 FP64</th><th>d（超尺子几倍）</th><th>R</th><th>记作</th></tr></thead><tbody>\n'
     '  <tr class="epsrow"><td>词嵌入梯度，纯数据并行（第二次迁移）</td><td>«C2_EMB_DP_T»</td><td>«C2_EMB_GPU_T»（GPU 中位数）</td><td>5.89</td><td>«C2_EMB_R_T»</td><td>丢了精度</td></tr>\n'
     '  <tr><td>同上，修好以后</td><td>«C2_FIX1_EMB_T»</td><td>«C2_EMB_GPU_T»</td><td>1.36</td><td>0.91</td><td>换了顺序</td></tr>\n'
-    '  <tr class="epsrow"><td>qkv 投影，打开 FP32 累加之前（混元 3）</td><td>' + N.sci(N.QKV_ABS_BEFORE) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>—</td><td>«R_QKV_BEFORE»</td><td>丢了精度</td></tr>\n'
-    '  <tr><td>同上，打开以后</td><td>' + N.sci(N.QKV_ABS_AFTER) + '</td><td>' + N.sci(N.QKV_ABS_GPU) + '</td><td>—</td><td>1.000</td><td>换了顺序</td></tr>\n'
     '  <tr class="epsrow"><td>8 个设备，往里投的那批投影（第三次迁移）</td><td>2.35e-3</td><td>1.66e-3</td><td>—</td><td>1.41</td><td>多舍一次</td></tr>\n'
     '  <tr><td>视觉塔 q、k 的梯度（第三次迁移，§4.3 折叠）</td><td>—</td><td>—</td><td>—</td><td>«M3_VIT_R_1» → R_flip «M3_VIT_RFLIP_1»</td><td>路由翻转</td></tr>\n'
     '  </tbody></table>\n'
+    '  <p><b>路由翻转</b>：R_flip ＝ rel_L2(被测, FP64 用<b>被测自己选的</b>专家) ÷ 同一个分母　<em>（R_flip ≤ 1.2 且比不灌时更近 → 记「路由翻转」，不算丢精度；分母不换，换了就等于给翻转放宽尺子）</em></p>\n'
+
     '  <p class="anote">「修好以后」那一行照样超尺子 1.36 倍，看似没修好；R 0.91，比基线和 GPU 都近，其实修好了：超尺子只说两边不一样，R 才说谁丢了精度。路由翻转按第 4 行判；量级上，一个专家 n 个 token 里换掉 k 个，梯度相对差约 √(k ÷ n)（估量级，推断，§4.3）。</p>\n'
-    '  </div>\n')
+    '  </details>\n'
+)
 
 
 # ── §5.2「张量核抹零模型」公式卡（夜间第二轮：模型只在 fig-truncate 左格示意和折叠里；数都是课件已有的实测或标了推断）──
@@ -1209,6 +1216,9 @@ __FIG_LAYER0__
   <p class="codeline">''' + mt(3, "src/maxtext/configs/base.yml", "L144-L145", "诊断开关 lm_head_dh_wbar_remove") + "　" + mt(3, "src/maxtext/layers/nnx_decoders.py", "L1825-L1827", "去掉沿 w̄ 那一份梯度") + '''</p>
 __FIG_INTERVENE__
   <p>去掉这个方向，第 1000 步 lse 差从 «ORIG_LSE_T» <b class="kn">降到 −0.007</b>；GPU 多推一把，就复现了 TPU。是这股力。</p>
+  <details class="foldfig"><summary><b>逐步看</b>：去掉它，参数范数的差一路长得慢得多（图）</summary>
+__FIG_INTDRIFT__
+  </details>
 
   <h3>7.4　谁推歪的：TPU 多推了，还是 GPU 少推了？</h3>
   <p>💬 先押一下，再往下看。拿训练里实际用到的张量，在 FP64 里重算一遍，把输出头的误差拆到每一段：</p>
@@ -2118,7 +2128,9 @@ FIGS = {
     "__FIG_GAUGE__": ("fig-gauge", "fig8-gauge.svg", "topic08-fig-case2.py",
         '<b>左边是那个方向，右边是它每步少一点积出来的结果。</b><br><em>左图的箭头是示意。</em>'),
     "__FIG_INTERVENE__": ("fig-intervene", "fig8-intervene.svg", "topic08-fig-case2.py",
-        '<b>绿柱缩回去（参数范数还剩三成），橙柱长回来；下格逐步看，蓝橙两条一路同涨，绿线长得慢得多。</b><br><em>每组一份 1000 步的运行，实测；灰线呈台阶状，是 GPU 一侧参数范数的记录精度有限（台阶约 1.6e-4）。</em>'),
+        '<b>先看绿柱缩回去（参数范数还剩三成），再看橙柱长回来。</b><br><em>每组一份 1000 步的运行，实测；柱上方写了是哪一组。</em>'),
+    "__FIG_INTDRIFT__": ("fig-intdrift", "fig8-intdrift.svg", "topic08-fig-case2.py",
+        '<b>蓝橙两条一路同涨，绿线长得慢得多。</b><br><em>灰线呈台阶状，是 GPU 一侧参数范数的记录精度有限（台阶约 1.6e-4）。</em>'),
     "__FIG_HEAD__": ("fig-head", "fig8-head.svg", "topic08-fig-case2.py",
         '<b>红柱是 GPU 的张量核，误差是 TPU 那根的约 «HEAD_RATIO_S1» 倍（对数刻度，看着只长一截）。</b><br><em>参照是同一份输入在 FP64 里的结果。GPU 那根只算输出层 dgrad 一段，TPU 那根是整个输出头反向；GPU 交叉熵反向那段只有 «CE_BWD_S1_T»，所以两根可以直接比。</em>'),
     "__FIG_SWAP__": ("fig-swap", "fig8-swap.svg", "topic08-fig-case2.py",
