@@ -692,7 +692,7 @@ CB_TPU_V7X_GN_SINGLE_T = "%.2f–%.2f" % CB_TPU_V7X_GN_SINGLE; _lock("CB_TPU_V7X
 # ══════════════════════════════════════════════════════════════════════════════════════
 # ── 11-07 · 第二次迁移（一个更新的、带稀疏注意力的 MoE 模型，小尺寸随机初始化，300 ／ 1000 步）────────
 # 出处：同一位作者的第二次对齐实践的案例记录、改动台账与结果文件（实测）；公开课只写机制和数，不写模型与项目名。
-# 课件 §2.2、§2.3、§4.2、§4.3、§5.6、§5.7、§6.2、§10.3 用。
+# 课件 §2.2、§2.3、§4.2、§4.3、§5.5、§5.5、§6.2、§10.3 用。
 # ══════════════════════════════════════════════════════════════════════════════════════
 # 第 1 步逐张量梯度：TPU 对 GPU 的 rel_L2 ÷ GPU 三份两两的最大 rel_L2（195 个张量）
 B2_TENSORS = 195
@@ -779,7 +779,7 @@ INJ_R_BEFORE, INJ_R_AFTER = INJ_R
 INJ_R_AFTER_T = "%.2f" % INJ_R_AFTER; _lock("INJ_R_AFTER_T", INJ_R_AFTER_T, "0.95")
 KD_VS_GPU = -9.2e-4                      # 第 1 步 KD：TPU 全部运行对 GPU 全部运行（相对），区别于单行对 FP64 的 KD_DIFF
 KD_VS_GPU_T = tx(KD_VS_GPU, "%.1e"); _lock("KD_VS_GPU_T", KD_VS_GPU_T, "−9.2e-4")
-# §5.6 折叠的收尾：现行五个开关下第 1 步逐张量（205 个张量的那份逐张量表）
+# §5.5 折叠的收尾：现行五个开关下第 1 步逐张量（205 个张量的那份逐张量表）
 B2_ALL_TENSORS, B2_FINAL_OVER, B2_FINAL_RMED, B2_FINAL_OVER_ATTR = 205, 58, 0.95, 56
 assert B2_FINAL_OVER_ATTR <= B2_FINAL_OVER < B2_ALL_TENSORS
 B2_GN_NOW = 1.34                         # 现行比较（参照改后、TPU 补齐几处边界）梯度范数 r，MARE，待定
@@ -787,7 +787,7 @@ B2_GN_NOW = 1.34                         # 现行比较（参照改后、TPU 补
 # ══════════════════════════════════════════════════════════════════════════════════════
 # ── 11-08 · 第二次迁移的后续（出处：同一实践的根源一览、改动台账、结果文件；实测，除标推断／本课推导）──────
 # ══════════════════════════════════════════════════════════════════════════════════════
-# 编译器省掉的舍入（§5.5）：改成逐项 FP32 乘加之后，GPU 一定会做的 FP32→BF16→FP32 往返在 TPU 上被省掉（HLO 里 convert 都还在；最小复现的后端指令里一半被省掉，见根源一览第 16 行）
+# 编译器省掉的舍入（§5.4）：改成逐项 FP32 乘加之后，GPU 一定会做的 FP32→BF16→FP32 往返在 TPU 上被省掉（HLO 里 convert 都还在；最小复现的后端指令里一半被省掉，见根源一览第 16 行）
 ELIDE_GPU_MAX = 3.77e-6                   # GPU 8 份两两 28 对，1000 步主 loss 带符号均值的最大 |.|
 ELIDE_BEFORE = 1.07e-6                    # 改逐项乘加之前那一代 TPU：对 GPU 8 份均值的带符号均值
 ELIDE_RUNS = (7.68e-6, 6.59e-6, 6.35e-6, 3.71e-6, 8.58e-6)   # 改之后 5 次 TPU 运行（含只改执行参数的 3 次），同号偏高
@@ -813,7 +813,7 @@ EXP_CR_FRAC, EXP_SIGNED_ULP = "6%", -2.49   # 实际蒸馏损失 softmax 的输�
 TRANS_T = "、".join("%s %d" % (k, v[0]) for k, v in TRANS.items()); _lock("TRANS_T", TRANS_T, "exp 105、log 62、sigmoid 83、silu 86")
 TRANS_HI_T = "、".join("%s %d" % (k, v[1]) for k, v in TRANS.items()); _lock("TRANS_HI_T", TRANS_HI_T, "exp 1、log 3、sigmoid 3、silu 4")
 EXP_SIGNED_ULP_T = tx(EXP_SIGNED_ULP, "%.1f")
-# 打开高精度 exp／log 以后，病态那一项（§5.7）
+# 打开高精度 exp／log 以后，病态那一项（§5.5）
 KD_FIX_LSE = (-0.953, 0.025)              # lse 对 FP64，按格计的平均
 KD_FIX_ROW = (-1.155e-3, 9.7e-5)          # 同一行 KD 对 FP64（相对）
 KD_FIX_R300 = (3.67, 0.01)                # 300 步 KD loss 带符号均值的 r
@@ -844,11 +844,11 @@ QKC_ETA = min(1.0, QKC_TAU / QKC_SMAX)
 assert QKC_ETA < 0
 QKC_ETA_T = tx(QKC_ETA, "%.1f"); _lock("QKC_ETA_T", QKC_ETA_T, "−201.8")
 QKC_SMAX_T = tx(QKC_SMAX, "%.4f")
-# 开关三类（§9.5）：用途分类以 1% 步时为界（本课取同一口径）
+# 开关三类（§9.6）：用途分类以 1% 步时为界（本课取同一口径）
 SW_COST_GATE = "1%"
 SW_MIX_COST = "0.2%"                      # 四路相加改依次（照 GPU 的顺序）：步时 ＋0.2%；对 FP64 更准未证实，归「看情况」
 SW_ELIDE_COST = "0.06%"                   # 强制舍入：跨代对比 ＋0.06%
-# 规模一级级往上（§9.6 开头）
+# 规模一级级往上（§9.7 开头）
 LADDER_MID_PASS = (5, 0, 4)               # 中等尺寸（随机初始化，宽度和注意力形状同真实模型）300 步：过 ／ 不过 ／ 待定
 LADDER_MID_WORST = 1.04                   # 四个待定都只略超 N：最差 1.04 N（最老一代读数；现行 C 口径最差 1.25，是 MTP loss，结论不变）
 LADDER_REAL_STEP1 = -8.5e-5               # 真实权重截层：第 1 步前向主 loss 就差（GPU 8 份第 1 步逐位相同）
@@ -863,7 +863,7 @@ DIV_STEP2_10 = 6.8e-5                     # 第 2–10 步 TPU 对 GPU 8 份均�
 assert 2e-3 / DIV_STEP2_10 > 25
 DIV_STEP1_R = abs(DIV_STEP1[0]) / abs(DIV_STEP1[1])
 assert abs(DIV_STEP1_R - 0.31) < 0.01
-# 混元 3 第 1 步按「尺子只来自参照」重判（§9.4）
+# 混元 3 第 1 步按「尺子只来自参照」重判（§9.5）
 HY3_REJUDGE = (11, 10, 1)                 # 变严项数：合计 ／ 待定→不过 ／ 过→待定；没有一项变松
 HY3_REJUDGE_R = "梯度最差 2.20／2.70、优化器状态最差 7.95／7.86（v5p／v7x）"   # 不过的里 R ＞ 1.2 的最差张量（出处：混元 3 judging.md、对齐报告；旧写的下限 1.23 无出处，已撤）
 assert HY3_REJUDGE[0] == HY3_REJUDGE[1] + HY3_REJUDGE[2]
