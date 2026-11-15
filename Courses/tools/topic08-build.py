@@ -1968,7 +1968,7 @@ FIGS = {
     "__FIG_GATECMP__": ("fig-gatecmp", "fig8-gatecmp.svg", "topic08-fig-mig2.py",
         '<b>左边：在橙点那格上再补，三格紫点都没明显往下；右边：紫点有三个落在所有灰点的右边。</b><br><em>每点一份运行；实测；机制在查。</em>'),
     "__FIG_ELIDED__": ("fig-elided", "fig8-elided.svg", "topic08-fig-elided.py",
-        '<b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：整步扫一遍，三根橙条是先查的范围。</b><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em>'),
+        '<b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：同类的地方一共 272 处，三根橙条是先查的范围。</b><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em>'),
     "__FIG_CANCEL__": ("fig-cancel", "fig8-cancel.svg", "topic08-fig-elided.py",
         '<b>只补收拢处那一行读数最大；只补流梯度那一行最小，可往下拉的那股还在。</b><br><em>读数是实测；「往下拉的那份」是推断，箭头只表示方向。</em>'),
     "__FIG_SITES__": ("fig-sites", "fig8-sites.svg", "topic08-fig-elided.py",

@@ -121,7 +121,7 @@ def fig_elided():
         f.t(sx, yk + 58, "%s %d" % (lab, n), col if col in (OR, GR) else GY, True, 12)
         sx += max(n * 14, 13 * len(lab) + 34) + 16
     f._pan = None
-    yb = f.band(y0 + PH + 20, "warn", "声明了却被省掉的往返，能一次全列出来：这就是先查哪儿的清单", [
+    yb = f.band(y0 + PH + 20, "warn", "声明了，被省掉：HLO 里在，芯片指令里没有", [
         "先查三根橙条 A、B、C，共 %d 处；灰条优先级低，没排除。" % N.EL_LEFT,
         "只找得到「写了往返却被省掉」这一类；GPU 那边舍不舍要对照 GPU 代码。",
     ])
