@@ -866,7 +866,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </head>
 <body>
 <div class="progress"><i></i></div>
-<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s一" title="第 一 节 · 什么叫对齐">什么叫对齐</a><a href="#s二" title="第 二 节 · 地基 L0">地基 L0</a><a href="#s三" title="第 三 节 · 指标（一）">指标（一）</a><a href="#s四" title="第 四 节 · 指标（二）">指标（二）</a><a href="#s五" title="第 五 节 · 浮点与硬件">浮点与硬件</a><a href="#s六" title="第 六 节 · 观测">观测</a><a href="#s七" title="第 七 节 · 案例一">案例一</a><a href="#s八" title="第 八 节 · 案例二">案例二</a><a href="#s九" title="第 九 节 · 编一次、扫一遍">编一次、扫一遍</a><a href="#s十" title="第 十 节 · 工程化与教训">工程化与教训</a></div></nav>
+<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s一" title="第 一 节 · 什么叫对齐">什么叫对齐</a><a href="#s二" title="第 二 节 · 地基 L0">地基 L0</a><a href="#s三" title="第 三 节 · 指标（一）">指标（一）</a><a href="#s四" title="第 四 节 · 指标（二）">指标（二）</a><a href="#s五" title="第 五 节 · 浮点与硬件">浮点与硬件</a><a href="#s六" title="第 六 节 · 观测">观测</a><a href="#s七" title="第 七 节 · 案例一">案例一</a><a href="#s八" title="第 八 节 · 案例二">案例二</a><a href="#s九" title="第 九 节 · 一条查不完的尾巴">一条查不完的尾巴</a><a href="#s十" title="第 十 节 · 工程化与教训">工程化与教训</a></div></nav>
 
 
 <div class="hero"><div class="wrap">
@@ -10969,11 +10969,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>看不到快慢</b>：通信能不能藏在计算后面，要看实测步时或 profile。③ 就是例子：通信少了一大截，步时跟不修的纯数据并行几乎一样（对基线 −3.4% 和 −3.3%）。</li>
   </ul>
   </details>
-  <p class="bridge">这一节留下的问题：两个案例都是一处一处碰出来的 —— 有没有办法一次把同类问题全列出来？</p>
+  <p class="bridge">这一节留下的问题：两个案例查完了。第二次迁移还有一条主 loss 的尾巴，查得比这两个都久 —— 它最后是怎么查出来的？</p>
 </div></section>
 
-<section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>编一次、扫一遍：把同类问题一次列全</h2></div>
-  <p class="lead">两个案例都是一处一处碰出来的。这一节讲怎么一次把同类问题全列出来：代码里写了「转 BF16 再转回」，写它只有一个意思 —— 这里要舍；把整个训练步离线编一次，查编译器在哪些地方没舍。先交代验收：基线换成了修好的 golden，全部过，细节在下面的折叠里。</p>
+<section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>一条查不完的尾巴</h2></div>
+  <p class="lead">先交代验收：基线换成了修好的 golden，全部过，细节在下面的折叠里。这一节讲第二次迁移里查得最久的一件：一条主 loss 的尾巴，排除了一圈、找到了主因、补上以后还剩一截。剩下那截最后是怎么找的？</p>
   <details class="foldfig" id="s9-accept"><summary><b>验收与 golden 设计</b>（课上不讲）：五份 golden、出处总表与拆账、两关验收与定案、开关上不上生产</summary>
   <p><b>两关验收。</b>噪声尺子量不出 golden 自己的偏差，所以验收分两关：第一关必须过，TPU 对修好的 golden（⑤）的一份比，尺子是 ⑤ 自己重跑 10 份、两两 45 对；第二关不判过不过，TPU 对 GPU 生产 golden 的差，写清量级、由哪个查清了的 GPU 偏差造成、证据在哪，记「已解释差异」。当基线的那份 golden 不是一开始就有的：先往精确方向改了三次（GPU 生产 golden → 只换 FP32 → 精确轨迹），查清以后发现只要在 GPU 生产 golden 上改一处，这就是修好的 golden（下文图上标 ⑤）。</p>
 
@@ -11575,7 +11575,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <details class="foldfig"><summary><b>考考自己</b>：中等尺寸那一级过了、真实权重截层出了差，能说就是「真实权重」的问题吗？</summary><p>不能。第三级同时换了专家个数、专家宽度、层数和权重，四样拆不开。而且「过了」只是 300 步那一级：第二级第 1 步两边各自对 FP64，GPU 已经偏高 1.42e-5（比 GPU 8 份之间的极差还大）、TPU 只有 2.4e-7（最老一代配置的读数；现行配置 TPU −2.67e-6，两边的差仍在 GPU 一侧）—— 宽度一换成真的，GPU 那边就有一截偏差（还在查），只是 300 步的判定没把它显出来。要定，就再补一级只换其中一样，比如真实结构配随机权重。（TPU 那一半后来定到了「权重」那一行：真实权重的 logits 大，把 base2 常数舍入的误差放大了，<a href="#s9-6">§9.6</a>。）</p></details>
   </details>
 
-  <h3 id="s9-7">9.7　一条主 loss 的尾巴：一路排除，最后先编译、再扫描</h3>
+  <h3 id="s9-7">9.7　一条主 loss 的尾巴</h3>
   <p>第二次迁移，2026-11-11 换对齐配置之前，小尺寸的主 loss 判了待定（1.55 倍）：八份 TPU 全部比 GPU 高，第 50–100 步有个小鼓包，中间贴着零，第 550 步以后一路往上爬。八份同一个方向，不像噪声；同一份权重上两边前向几乎没差，所以是训练里一步步攒出来的。这是第二次迁移里查得最久的一件；最后给出候选清单的，不是又一次上卡，是一次离线编译。</p>
   <p>还要记一句：延长到 2000 步时，修之前的尾巴在第 1000–1250 步到顶（只跑了 1 份），之后回落到 GPU 的散布里 —— 它更像一段暂时的轨迹差，不是一直在长的系统偏差。</p>
 <figure class="fbox fwide" id="fig-minidrift"><svg viewBox="0 0 1400 670" width="100%" role="img" aria-label="上下两条。上：小尺寸 1000 步，TPU 8 份主 loss 对 GPU 16 份逐步均值的相对差，每份一条 50 步平均的细线，粗线是 8 份平均；灰线是 GPU 16 份各自对其余 15 份。第 1 步 −2.0e-6；第 51 到 100 步一个小鼓包；第 100 到 550 步在 0 附近；第 550 步起一路往上，到最后一块 ＋1.8e-5。下：同一批运行的 MTP loss，第 100 步起反着往下，最后 −3.2e-5。前段鼓包定到多路残差收拢那次少舍的 BF16；后段主因后来定到流梯度的舍法。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -12173,8 +12173,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <figcaption><b>同一个值走同一串盒子：代码的本意是舍，在一颗融合里没舍，写回内存才舍；写成强制舍入才真舍。</b>
   <span class="sub">（31 秒，Manim 渲染，可一步一步看。值是随手取的 FP32 数，BF16 当场算；打包条数是最小复现的实测。）</span></figcaption></figure>
   </details>
-  <div class="note ok" style="border-left:6px solid #e8710a"><span class="t">这一节最想让你带走的一招：先编译，再扫描</span>
-  <p>代码里的 convert 往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思：<b>这里要舍一次</b>。编译器觉得这个值马上还要接着算，就没舍。不用一张张猜：把整个训练步离线编译一次（不用上卡），把同类位置全列出来（下图）。</p></div>
+  <p><b>那就让编译器自己交代。</b>代码里的往返不改数学，写它只有一个意思：这里要舍。把整个训练步离线编译一次（不用上卡），把同类位置全列出来（下图右块）。</p>
 <figure class="fbox fwide" id="fig-elided"><svg viewBox="0 0 1400 666" width="100%" role="img" aria-label="两块。左：多路残差分支输入那一处的三层。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。右：把现行对齐配置的整个训练步离线编译一次，扫所有这样的往返，一共 272 处：每个微批的权重梯度 75，分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。已经补上的 55 处不算在里面。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">先编译、再扫描：代码里的往返 convert，就是「这里该舍」的声明</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：整个训练步扫一遍</text>
@@ -12300,7 +12299,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="592" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="592" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="592" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="619" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">不用一处处猜：编一次、扫一遍，同类位置全列出来，就有了先查哪儿的清单</tspan></text>
+<text class="svglbl" x="20" y="619" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">声明了却被省掉的往返，能一次全列出来：这就是先查哪儿的清单</tspan></text>
 </svg><figcaption><b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：整步扫一遍，三根橙条是先查的范围。</b><span class="capmore"><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 各条细分：A 分支输入的梯度合流：反向 · 几份梯度在 FP32 里相加，典型是注意力的输入；B 每个微批的权重梯度 dW：反向；C 前向几处：线性层输出 51 · 输出门 34 · 专家 13；其余（专家反向、norm）：专家反向 7 · norm 输入梯度 7 · norm 输出 6；索引器掩码（0 和 −∞，转了也精确）：无害。</p>
 <p>📌 负对照：关掉省舍入再编，同类 kernel 35 颗，打包 0 条的 0 颗。三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断。</p>
 <p>📌 左块实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
@@ -12442,6 +12441,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>左边改了一处的格子都没稳稳长出尾巴；右边补上的两格跟对齐配置一样高。</b><span class="capmore"><br><em>每点一份运行；实测；判读来自对齐记录。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，1000 步，每格 4 份）：第 551–1000 步主 loss 的带符号均值。左块 B200×8，改了一处的格子对 GPU 16 份均值，GPU 自己那格是每份对其余 15 份，p 对 GPU 自己；右块 TPU v5p 8 设备，对 GPU 16 份均值，p 对对齐配置 6 份。「注意力输入」：q、kv 下投影和输出门三份梯度合流；「MoE 输入」：路由、共享专家、路由专家三份梯度合流；「每微批 dW」：每个微批的权重梯度。</p>
 <p>⚠️ 判读来自对齐记录。还没验：前向几处，以及扫描找不到的差（代码没写舍入、GPU 却舍了的地方；累加顺序）。</p></details></figure>
   <p>两头都没对上，A、B 两类排除，C 前向几处还没验，残余还在查（GPU 那头注意力输入单开 p 0.021 也不算：两处合开就没了，TPU 一头补上也不动）；下一批是 C 类前向几处，和扫描看不到的差。这就是<b>清单是候选，不是结论</b>：扫描告诉你先查哪儿，判它的只有上卡。</p>
+  <div class="note ok" style="border-left:6px solid #e8710a"><span class="t">这一节最想让你带走的一招：编一次、扫一遍</span>
+  <p>以后碰到这类差，别一处处猜：代码里的往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思 —— <b>这里要舍</b>；把整个训练步离线编译一次（不用上卡），列出写了往返、芯片指令里却没舍的地方。<b>清单是候选，不是结论</b>：每一类还要两头验证（GPU 照 TPU 改看长不长出差，TPU 照 GPU 补看差下不下去）才算数；它也只找得到「写了舍、被省掉」这一类。</p>
+  </div>
   <details class="foldfig"><summary><b>两种候选配置并排</b>（待拍板）：三处都照 GPU 写法，还是不开收拢处</summary>
   <table class="t9"><thead><tr><th></th><th>对齐配置（三处都照 GPU 写法，现行）</th><th>不开收拢处（只补到流梯度）</th></tr></thead><tbody>
   <tr><td>1000 步，第一份</td><td>过 8、待定 1（路由偏置均值 1.31）</td><td>九项全过</td></tr>
