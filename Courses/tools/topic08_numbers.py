@@ -22,6 +22,12 @@ RANKS = 8                    # GPU 8 卡数据并行；TPU 8 个 JAX device
 MICRO = 2                    # 每卡每步 2 个 microbatch（全局批 16）
 DATA_UNITS = STEPS * RANKS * MICRO
 assert DATA_UNITS == 16000
+# ⚠️ 11-16 事实核查：TPU 对 GPU 的逐单元指纹只比了前 30 步（对齐记录 L0.data.fingerprint：
+#    30 步 × 8 卡 × 2 微批 × 4 个字段 ＋ 每步一个非 padding 总数 ＝ 1,950 项，0 不同）。
+#    1000 步 × 16 单元的全程指纹只在 GPU 对 GPU、TPU 对 TPU（日常回归）之间比过；别说成「16,000 个对 GPU 全部相同」。
+FP_STEPS = 30
+FP_UNITS = FP_STEPS * RANKS * MICRO * 4 + FP_STEPS
+assert FP_UNITS == 1950
 NATIVE_SAME_RANK = 2000      # 不重排时，MaxText 原生加载器只有 2000 个单元落到同号设备
 N_TENSORS = 1781             # 权重转换后逐张量逐位比的张量数
 N_FP32_TENSORS, N_BF16_TENSORS = 3, 1778
@@ -340,6 +346,7 @@ _lock("N_TENSORS_T", N_TENSORS_T, "1,781"); _lock("N_BF16_TENSORS_T", N_BF16_TEN
 QUIZ_SAMPLED = 100                                   # §2 考考自己：假设只抽 100 个张量比（题设）
 QUIZ_UNSAMPLED_T = format(N_TENSORS - QUIZ_SAMPLED, ","); _lock("QUIZ_UNSAMPLED_T", QUIZ_UNSAMPLED_T, "1,681")
 MASTER_CMP_TENSORS = 50                              # 加载后比 FP32 主权重：GPU 那边抓下来的张量数。出处：对齐实践 v5p 验收的 L0「载入后的 FP32 主权重」检查，50 个张量全部一致
+FP_UNITS_T = format(FP_UNITS, ","); _lock("FP_UNITS_T", FP_UNITS_T, "1,950")
 NATIVE_SAME_RANK_T = format(NATIVE_SAME_RANK, ","); _lock("NATIVE_SAME_RANK_T", NATIVE_SAME_RANK_T, "2,000")
 MICRO_SPLIT_EMB_X = 31                               # 只换梯度累积切分，embedding 梯度差 ÷ GPU 重跑差。出处：对齐报告偏差台账「梯度累积的分组」行
 # 参数范数、梯度范数的量级

@@ -1232,11 +1232,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">L0 只有一条要求：两边的输入一位不差。这一级不过，后面量到的任何差，都说不清是算出来的还是喂出来的。喂进去的有三样：数据、权重、配置；验法只有一个：不信过程，只比结果，把两边真正吃进去的东西拿出来逐位比。</p>
 
   <p class="trail-t">三样输入，一个验法（只比结果、逐位比），第 1 步 loss 收口</p>
-  <div class="trail"><div class="st"><div class="tq">① 数据（2.1）</div><div class="tk">16,000</div><div class="tw">个单元（步 × 卡 × 微批）各比指纹，全部相同</div></div><div class="ar">→</div><div class="st"><div class="tq">② 权重（2.2）</div><div class="tk">1,781</div><div class="tw">个张量转过去再转回来，逐字节全部相同</div></div><div class="ar">→</div><div class="st"><div class="tq">③ 配置（2.3）</div><div class="tk">0.033</div><div class="tw">实际生效的权重衰减（配置文件写 0.1）</div></div><div class="ar">→</div><div class="st end"><div class="tq">④ 收口（2.4）</div><div class="tk">2.5e-6</div><div class="tw">第 1 步 loss 两边的相对差：地基平了</div></div></div>
+  <div class="trail"><div class="st"><div class="tq">① 数据（2.1）</div><div class="tk">1,950</div><div class="tw">项指纹对 GPU 逐个比（前 30 步），全部相同</div></div><div class="ar">→</div><div class="st"><div class="tq">② 权重（2.2）</div><div class="tk">1,781</div><div class="tw">个张量转过去再转回来，逐字节全部相同</div></div><div class="ar">→</div><div class="st"><div class="tq">③ 配置（2.3）</div><div class="tk">0.033</div><div class="tw">实际生效的权重衰减（配置文件写 0.1）</div></div><div class="ar">→</div><div class="st end"><div class="tq">④ 收口（2.4）</div><div class="tk">2.5e-6</div><div class="tw">第 1 步 loss 两边的相对差：地基平了</div></div></div>
 
 
   <h3 id="s2-1">2.1　数据：原样回放，不重读</h3>
-<figure class="fbox fwide" id="fig-replay"><svg viewBox="0 0 1400 476" width="100%" role="img" aria-label="上面一排是 GPU 的 8 张卡，每张卡这一步吃两小份数据 m0 和 m1，一共 16 个单元，每个单元记一个指纹。下面一排是 TPU 的 8 个设备按同样顺序回放：设备 d 的第 m 份就是 GPU 第 d 张卡的第 m 份，16 个单元逐个比指纹，1000 步共 16,000 个全部相同。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-replay"><svg viewBox="0 0 1400 476" width="100%" role="img" aria-label="上面一排是 GPU 的 8 张卡，每张卡这一步吃两小份数据 m0 和 m1，一共 16 个单元，每个单元记一个指纹。下面一排是 TPU 的 8 个设备按同样顺序回放：设备 d 的第 m 份就是 GPU 第 d 张卡的第 m 份，16 个单元逐个比指纹；对 GPU 比了前 30 步，1,950 项全部相同。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">数据不重读，原样回放　——　<tspan font-weight="700">每一步、每张卡、每一小份都对指纹</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一格 ＝ 一张卡这一步吃的一小份数据（microbatch）；灰度深浅 ＝ 它在 GPU 上属于哪张卡</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -1245,7 +1245,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">画的是一步：16 个单元（8 张卡 × 2 小份）；1000 步一共 16,000 个，全部相同</tspan></text>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">画的是一步：16 个单元（8 张卡 × 2 小份）；对 GPU 逐个比了前 30 步，全部相同</tspan></text>
 <text class="svgsm" x="24" y="178" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 训练时</tspan></text>
 <text class="svgsm" x="24" y="200" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">存下每一格 ＋ 指纹</text>
 <rect x="200" y="162" width="54" height="40" rx="5" fill="#202124" stroke="#202124" stroke-width="1.0"/>
@@ -1333,8 +1333,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="402" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="402" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="402" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="429" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数据这一级必须一位不差：1000 步 × 8 卡 × 2 小份 ＝ 16,000 个单元，逐个比</tspan></text>
-</svg><figcaption><b>每一格都要对上指纹。</b><span class="capmore"><br><em>画的是一步；1000 步一共 16,000 格。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：每个单元记 tokens、labels、loss_mask、position_ids 各一个 sha256，另比每步非 padding 的 token 总数。</p>
+<text class="svglbl" x="20" y="429" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数据这一级必须一位不差：每步 8 卡 × 2 小份 ＝ 16 个单元，逐个比</tspan></text>
+</svg><figcaption><b>每一格都要对上指纹。</b><span class="capmore"><br><em>画的是一步；对 GPU 逐格比了前 30 步（1,950 项），全部相同。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：每个单元记 tokens、labels、loss_mask、position_ids 各一个 sha256，另比每步非 padding 的 token 总数；对 GPU 比了前 30 步共 1,950 项，0 不同，之后按步号回放同一份批文件。</p>
 <p>📌 实测：TPU 原生加载器读同一份数据，索引表逐字节相同、样本流逐位相同；按原样布局只有 2,000 / 16,000 个单元落到同号设备（两边梯度累积切分的方式不同），重排后全部逐位。</p></details></figure>
   <p>两边各读各的数据集，顺序、切分、分到哪张卡，任何一处不同，比的就不是同一个训练。所以 TPU 不读数据集，只回放 GPU 存下来的那一份。</p>
   <details class="foldfig"><summary><b>「设备 d」怎么对上「GPU 第 d 张卡」</b>：在 TPU 上照做时的定义和核对办法</summary>
@@ -8087,7 +8087,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>1000 步下来五次 TPU 运行的 loss 都偏高（＋3.7e-6 到 ＋8.6e-6），其中 4 次超出 GPU 自己的 ±3.8e-6。在那两处显式写一次「舍到 BF16」，回到 ＋3.5e-6，判定 r 2.12 → 0.76，回到线以内。</p>
   <details class="foldfig"><summary><b>「长跑偏高归到这一处」为什么只算推断</b></summary>
   <p>修了就回来，这是唯一的直接证据。整网 HLO 看不出这一层，后端指令只在最小复现里数过；第 1 步定责时还发现，单这一处解释不了：要连同第 0 层分支输入、层内的流三处一起，才对上第 0、1 层的读数（第 5 层仍对不上）。</p></details>
-  <p>上一代配置下 TPU 主 loss 有一截共同偏高（8 份平均约 4.3e-6，GPU 每份对其余各份在 ±2.6e-6 以内），几乎全在第 550 步以后才显出来。主因后来定到多路残差流梯度的舍法；可现行对齐配置下后段跟不修分不开，主 loss 0.98 倍只是刚好过线，为什么还在查（<a href="#s9-1">§9.1</a>）。</p>
+  <p>上一代配置下 TPU 主 loss 有一截共同偏高（8 份平均约 4.3e-6，GPU 每份对其余各份在 ±2.6e-6 以内），几乎全在第 550 步以后才显出来。主因后来定到多路残差流梯度的舍法；可现行对齐配置下后段跟不修分不开，主 loss 0.98 倍只是刚好过线，剩下那截没定责（<a href="#s9-1">§9.1</a>）。</p>
   <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/configs/base.yml#L1630">MaxText（混元 4 公开分支）：多路残差强制舍 BF16 的开关（ihc_force_bf16_rounding）</a>　<a class="codelink" href="https://github.com/yangwhale/maxtext/blob/319afd46a676654e33c09a553b3d4266b82716cc/src/maxtext/layers/mhc.py#L567-L573">MaxText（混元 4 公开分支）：用 reduce_precision 舍，编译器不会删</a></p>
   </details>
   <details class="foldfig"><summary><b>写法规则</b>：四种想要的效果，各怎么写；第三次迁移上会被删的六处（含 MTP 输入、MTP 输出头 logits 各一处）</summary>
@@ -9101,7 +9101,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
 
   <details class="foldfig"><summary><b>状态互换</b>（课上不讲，第七节用一次时当场交代）：分开「这一步算得不一样」和「状态早就不一样」</summary>
-  <p>把一侧某一步的整套 FP32 状态搬到另一侧，用同一批数据各算一步（连 Adam 的步数计数和学习率调度的步号一起搬，不然偏置校正对不上）。它能把「这一步算得不一样」和「状态已经不一样」分开（<a href="#s7-4">§7.4</a>）。</p>
+  <p>把一侧某一步的 FP32 主权重搬到另一侧，用同一批数据各算一次梯度；Adam 缩放（二阶动量、裁剪系数）取原侧同一步的值，两边按同一把尺子折成这一步的更新（<a href="#s7-4">§7.4</a> 就这么做：只搬权重，不搬优化器状态）。它能把「这一步算得不一样」和「状态已经不一样」分开（<a href="#s7-4">§7.4</a>）。</p>
   </details>
   <details class="foldfig"><summary><b>第 1 步逐位相同，不等于开关没用</b>（课上不讲，图）：从 BF16 检查点续训时，权重全压在格点上</summary>
   <p>从 BF16 检查点续训或微调时，有一类开关第 1 步开和不开逐位相同，要过几步才看得出差。</p>
@@ -9236,7 +9236,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="lead">混元 3 搬上 TPU，主 loss 三百步以后平均比 GPU 低约 1.7e-4，是 GPU 噪声尺子的两倍多（<a href="#s1-2">§1.2</a>）。TPU 算错了吗？这一节按调查的顺序，一条线从现象查到源头，每一步只看一个数；细数和排除过的岔路都收在折叠里，课上不讲。</p>
 
   <p class="trail-t">这一节的调查线（每一步只看一个数；细数在各小节和折叠里）</p>
-  <div class="trail"><div class="st"><div class="tq">① 现象（7.1）</div><div class="tk">−1.7e-4</div><div class="tw">三百步以后 TPU 的 loss 平均偏低，尺子的两倍多</div></div><div class="ar">→</div><div class="st"><div class="tq">② 拆（7.2）</div><div class="tk">少压 ¼</div><div class="tw">没出现过的词那些行，TPU 每步被压得少</div></div><div class="ar">→</div><div class="st"><div class="tq">③ 为什么（7.3）</div><div class="tk">−0.218</div><div class="tw">所有 logits 的整体水平（lse），第 300 步 TPU 低</div></div><div class="ar">→</div><div class="st"><div class="tq">④ 是这股力（7.3）</div><div class="tk">差归零</div><div class="tw">去掉这个方向，lse 差 −0.33 → −0.007</div></div><div class="ar">→</div><div class="st"><div class="tq">⑤ 谁推歪的（7.4）</div><div class="tk">6.5e-4</div><div class="tw">输出头反向那次十二万项求和，沿这个方向每步差这么多</div></div><div class="ar">→</div><div class="st end"><div class="tq">⑥ 怎么修（7.5）</div><div class="tk">分块</div><div class="tw">那次求和改成分块累加，两条参数范数重合，步时 ＋6%</div></div></div>
+  <div class="trail"><div class="st"><div class="tq">① 现象（7.1）</div><div class="tk">−1.7e-4</div><div class="tw">三百步以后 TPU 的 loss 平均偏低，尺子的两倍多</div></div><div class="ar">→</div><div class="st"><div class="tq">② 拆（7.2）</div><div class="tk">少压 ¼</div><div class="tw">没出现过的词那些行，TPU 每步被压得少</div></div><div class="ar">→</div><div class="st"><div class="tq">③ 为什么（7.3）</div><div class="tk">−0.218</div><div class="tw">所有 logits 的整体水平（lse），第 300 步 TPU 低</div></div><div class="ar">→</div><div class="st"><div class="tq">④ 是这股力（7.3）</div><div class="tk">差归零</div><div class="tw">去掉这个方向，lse 差 −0.33 → −0.007</div></div><div class="ar">→</div><div class="st"><div class="tq">⑤ 谁推歪的（7.4）</div><div class="tk">6.5e-4</div><div class="tw">输出头反向那次十二万项求和，第 1 步沿这个方向就差这么多，之后每步同向</div></div><div class="ar">→</div><div class="st end"><div class="tq">⑥ 怎么修（7.5）</div><div class="tk">分块</div><div class="tw">那次求和改成分块累加，两条参数范数重合，步时 ＋6%</div></div></div>
 
   <div class="adamcard">
   <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列。输入词嵌入和输出矩阵<b>不共用</b>（配置写明不共享，输出层是单独一份权重）。</p>
@@ -9465,7 +9465,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>排除清单</b>：按成本从低到高验过、不是原因的一串（数据、切法、优化器、注意力、重算、规约精度、TF32、十几处 GPU 写法……）</summary>
   <p>先查配置和名单（几分钟），再跑几十步的短运行，最后才跑 1000 步。</p>
   <table class="t9"><thead><tr><th>怀疑</th><th>怎么验</th><th>结果</th></tr></thead><tbody>
-  <tr><td>两边数据不同</td><td>L0 指纹</td><td>16,000 个单元逐位相同</td></tr>
+  <tr><td>两边数据不同</td><td>L0 指纹</td><td>前 30 步 1,950 项对 GPU 逐位相同；1000 步按步号回放同一份批文件</td></tr>
   <tr><td>权重衰减作用的参数集合</td><td>用 TPU 第 1 步读出的状态，按 GPU 的公式重算更新量</td><td>逐参数吻合；把掩码反过来，残差大 13 倍以上</td></tr>
   <tr><td>Adam 公式、状态精度</td><td>同上，另查编译结果里状态的类型</td><td>ε 位置、偏差修正都吻合；两个动量都是 FP32</td></tr>
   <tr><td>第 1 步更新量</td><td>逐张量比两边第 1 步的更新</td><td>比值 0.997–1.003：第 1 步没有差别</td></tr>
@@ -9853,10 +9853,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="522" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="522" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">交叉熵没问题，TPU 这一步准得多；偏的是 GPU 那一次 12 万长的 BF16 矩阵乘 —— 朝零截掉了一点</tspan></text>
-</svg><figcaption><b>红柱是 GPU 的张量核，误差是 TPU 那根的约 27 倍（对数刻度，看着只长一截）。</b><span class="capmore"><br><em>参照是同一份输入在 FP64 里的结果。GPU 那根只算输出层 dgrad 一段，TPU 那根是整个输出头反向；GPU 交叉熵反向那段只有 ＋2.7e-6，所以两根可以直接比。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：GPU 在线性层的前向、反向里记下输出层实际用到的 h、logits、权重和交给反向的 dlogits，与 dump 逐位相同；离线拆成「交叉熵反向」「矩阵乘」两段各对 FP64。第 100 步 GPU −6.10e-4，TPU −7.4e-5。</p>
+</svg><figcaption><b>红柱是 GPU 的张量核，误差比 TPU 那根大一个数量级以上（对数刻度，看着只长一截）。</b><span class="capmore"><br><em>参照是同一份输入在 FP64 里的结果。GPU 那根只算输出层 dgrad 一段，TPU 那根是整个输出头反向；GPU 交叉熵反向那段只有 ＋2.7e-6，所以两根量级可比。两根来自两次测量，图上两个数相除约 27 倍（本课推导）；同一批数据上直接比是约 17 倍。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：GPU 在线性层的前向、反向里记下输出层实际用到的 h、logits、权重和交给反向的 dlogits，与 dump 逐位相同；离线拆成「交叉熵反向」「矩阵乘」两段各对 FP64。第 100 步 GPU −6.10e-4，TPU −7.4e-5。</p>
 <p>📌 实测：GPU 的 dgrad 名义 FP32、实际没关 TF32 的那一版第 1 步 8.08e-4，比 BF16 还差 —— 一度被当成「精确」参照（第十节坑表）；图上只画真关 TF32 的那一版。</p>
 <p>📌 求和越长偏得越多（K 从 16,384 到整张词表）另成一张图，在本节折叠里。</p></details></figure>
-  <p>红柱就是开头那张卡里的 dH：GPU 在张量核上沿 12 万的词表做这次求和，结果系统地朝零截了一点（<a href="#s5-2">§5.2</a> 的抹零），落在「所有 logits 一起升降」这个方向上，第 1 步少推 <b class="kn">6.5e-4</b>（相对）。TPU 这一步对 FP64 的误差小得多（约 27 分之一）。</p>
+  <p>红柱就是开头那张卡里的 dH：GPU 在张量核上沿 12 万的词表做这次求和，结果系统地朝零截了一点（<a href="#s5-2">§5.2</a> 的抹零），落在「所有 logits 一起升降」这个方向上，第 1 步少推 <b class="kn">6.5e-4</b>（相对）。TPU 这一步对 FP64 的误差小一个数量级以上（同一批数据上比，约十七分之一）。</p>
   <details class="foldfig"><summary><b>这一环哪部分是实测、哪部分是推断；一度判反的那一版</b>（图：求和越长偏得越多）</summary>
 <figure class="fbox fwide" id="fig-headk"><svg viewBox="0 0 1400 576" width="100%" role="img" aria-label="拿真实的输出头张量，把词表行随机打乱后取 K 行，K 从 16,384 到 120,832（整张词表），沿「所有 logits 一起动」方向的误差从 6.9e-5 涨到 6.5e-4；横纵都是对数刻度。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">求和越长，偏得越多：K 从 16,384 起</text>
@@ -9897,8 +9897,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li><b>后面有地方原样累积</b>：w̄ 方向推的是所有 logits 的整体水平，水平一变，冷门行被压多少跟着变；冷门行梯度很小，Adam 的归一化保护失效（<a href="#s7-2">§7.2</a>），每步的小差落在同一边、原样积起来。</li>
   </ul>
   <p>别的矩阵乘也偏一点：合成的全正输入、求和长 4096 时朝零 7.0e-5（<a href="#s5-2">§5.2</a> 右图）。可真实的激活和梯度有正有负，抹零的方向跟着每一项的符号走，大半互相抵消；后面也没有这样一个原样累积的地方（推断：其余矩阵乘沿各自方向的偏差没有逐个量）。</p></details>
-  <p>这还只是离线的一次矩阵乘，再在训练里确认一步：把 GPU 第 99 步的整套状态（主权重、两个动量、步数计数）搬到 TPU，同一批数据两边各算一步，再跟 GPU 上全程 FP32 算的那一步比，看沿 TPU − GPU 权重差的方向各少走多少（这个做法叫状态互换，§6 折叠）。</p>
-<figure class="fbox fwide" id="fig-swap"><svg viewBox="0 0 1400 496" width="100%" role="img" aria-label="把 GPU 第 99 步的整套状态原样搬到 TPU 上，两边用同一批数据各算一步梯度，跟同一个精确参照（GPU 上全程 FP32 算的那一份）比，看沿漂移方向比精确值多走还是少走了多少。TPU 生产程序 0.00%，几乎正好；GPU 只把输出头 dgrad 换成 FP32 的，少走 0.10%；GPU 生产程序少走 0.36%。细线是 4 个状态、12 个 batch 的范围，结论都一样。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p>这还只是离线的一次矩阵乘，再在训练里确认一步：把 GPU 第 99 步的 FP32 主权重（1193 个张量，逐个核过）搬到 TPU，同一批数据两边各算一次梯度，按 GPU 同一步的 Adam 缩放折成这一步的更新，再跟 GPU 上全程 FP32 算的那一步比，看沿 TPU − GPU 权重差的方向各少走多少（这个做法叫状态互换，§6 折叠）。</p>
+<figure class="fbox fwide" id="fig-swap"><svg viewBox="0 0 1400 496" width="100%" role="img" aria-label="把 GPU 第 99 步的 FP32 主权重原样搬到 TPU 上，两边用同一批数据各算一步梯度，跟同一个精确参照（GPU 上全程 FP32 算的那一份）比，看沿漂移方向比精确值多走还是少走了多少。TPU 生产程序 0.00%，几乎正好；GPU 只把输出头 dgrad 换成 FP32 的，少走 0.10%；GPU 生产程序少走 0.36%。细线是 4 个状态、12 个 batch 的范围，结论都一样。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一个起点，各算一步：GPU 每一步都少走一点　——　<tspan font-weight="700">TPU 几乎正好</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">柱长 ＝ 这一步沿「TPU − GPU 权重差」方向，比精确值少走了漂移本身的百分之几（往左 ＝ 少走）；细线 ＝ 12 个 batch 的范围</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
@@ -10174,13 +10174,13 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <h3 id="s7-6">7.6　串起来：五环一条链</h3>
   <ol>
     <li>GPU 输出层 dgrad 那次 12 万长的累加偏向一边（张量核截断＋吞小项），每一步沿「所有 logits 一起升降」的方向少推 6.5e-4；</li>
-    <li>主干权重（大头在第 0 层）沿这个方向每步少走一点；</li>
+    <li>主干权重沿这个方向每步少走一点，从第 0 层开始（第 0 层里大头在注意力输出投影）；</li>
     <li>所有 logits 整体偏开一截（lse 差），softmax 看不见；</li>
     <li>冷门词那几行压多压少跟着 logit 整体水平走；它们梯度很小，Adam 的归一化保护失效，偏差原样累积；</li>
     <li>参数范数多涨、loss 偏低，几百步积成看得见的漂移。</li>
   </ol>
   <details class="foldfig"><summary><b>五环一条链的静态图</b>：（下面动画讲的是同一件事）</summary>
-<figure class="fbox fwide" id="fig-chain"><svg viewBox="0 0 1400 376" width="100%" role="img" aria-label="一条五环的链。第一环：GPU 输出层 dgrad 沿整张词表做长求和，沿 w̄ 每步少推约 6.5e-4，这个量是实测；归因成张量核长求和朝零截掉，是推断。第二环：主干权重沿这个方向每步少走一点，第 0 层注意力的输出投影最先长歪。第三环：隐状态在 w̄ 上的分量不同，所有 logits 一起偏一截，softmax 看不见。第四环：冷门词那几行被压多少跟着 logit 整体水平走，水平越高压得越多；它们梯度很小，Adam 的归一化保护失效，偏差原样累积。第五环：GPU 的冷门行缩得多，TPU 的参数范数显得大，loss 偏低也一起出现。五环的量都有直接测量。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-chain"><svg viewBox="0 0 1400 376" width="100%" role="img" aria-label="一条五环的链。第一环：GPU 输出层 dgrad 沿整张词表做长求和，沿 w̄ 每步少推一点（第 1 步 6.5e-4、第 100 步 6.1e-4），这个量是实测；归因成张量核长求和朝零截掉，是推断。第二环：主干权重沿这个方向每步少走一点，第 0 层注意力的输出投影最先长歪。第三环：隐状态在 w̄ 上的分量不同，所有 logits 一起偏一截，softmax 看不见。第四环：冷门词那几行被压多少跟着 logit 整体水平走，水平越高压得越多；它们梯度很小，Adam 的归一化保护失效，偏差原样累积。第五环：GPU 的冷门行缩得多，TPU 的参数范数显得大，loss 偏低也一起出现。五环的量都有直接测量。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">从一次求和到参数范数：五环一条链</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">一格 ＝ 一环，从左往右一环推一环；右上角的小标签 ＝ 这一环有直接测量；① 的原因另标</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -10196,7 +10196,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="22" y="192" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① GPU 输出层 dgrad</tspan></text>
 <rect x="206" y="172" width="44" height="22" rx="11" fill="none" stroke="#1e8e3e" stroke-width="1.0"/>
 <text class="svgsm" x="228" y="188" fill="#0d652d" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">实测</tspan></text>
-<text class="svgsm" x="22" y="222" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">量：每步少推约 6.5e-4</text>
+<text class="svgsm" x="22" y="222" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">量：每步少推（第 1 步 6.5e-4）</text>
 <text class="svgsm" x="246" y="222" fill="#0d652d" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">实测</tspan></text>
 <text class="svgsm" x="22" y="244" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">因：截断＋吞小项</text>
 <text class="svgsm" x="246" y="244" fill="#b06000" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">推断</tspan></text>
@@ -10228,7 +10228,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="302" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
 <rect x="2" y="302" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="329" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">证据：两边都去掉第一环那个方向的力，logit 水平的差归零、loss 接近噪声、参数范数剩三成；GPU 人为加上它，整套现象一起出现</tspan></text>
-</svg><figcaption><b>从左往右读，每一格是下一格的原因。</b><span class="capmore"><br><em>五格的现象都是量到的；第一格的原因是推断，②③ 两格的定量衔接没测过（<a href="#s7-3">§7.3</a>），loss 为什么跟着变也没有验证；积起来以后还有反馈放大（推断）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推断：① 的量（沿 w̄ 每步少推约 6.5e-4）是实测；把它归因成「长求和偏向一边（张量核截断＋吞小项）」是推断。</p>
+</svg><figcaption><b>从左往右读，每一格是下一格的原因。</b><span class="capmore"><br><em>五格的现象都是量到的；第一格的原因是推断，②③ 两格的定量衔接没测过（<a href="#s7-3">§7.3</a>），loss 为什么跟着变也没有验证；积起来以后还有反馈放大（推断）。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 推断：① 的量（沿 w̄ 第 1 步少推 6.5e-4）是实测；把它归因成「长求和偏向一边（张量核截断＋吞小项）」是推断。</p>
 <p>📌 实测：GPU dgrad 沿 w̄ 第 1 / 100 步 −6.5e-4 / −6.1e-4；第 0 层输出在各层里最先分开、往后逐层放大（第 50 步起转为偏低），换权重重算确认是权重长歪、大头在注意力输出投影；第 1000 步训练批上 TPU 的 logits 整体低 0.27。</p>
 <p>📌 实测（第四环，第 300 步同一步，没出现过的词那些行）：两边 |g| 的均方根之比 0.990；Σ w·g GPU 8.1e-5、TPU 1.2e-6；92% 的元素 √v̂ ＜ ε（中位数 2.6e-9），这些元素的更新 ≈ m̂ ÷ ε；Σ w·u 两边差 −4994，其中 m̂ 那一份 −5450。</p></details></figure>
   </details>
@@ -11938,8 +11938,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </ul>
   </details>
   <p><b>收尾：上卡验证。</b>还是两头验证那一招：GPU 上把 A、B 拆成三处照 TPU 改，看 GPU 自己长不长出尾巴；TPU 上在对齐配置之上补上，看尾巴下不下去。</p>
-<figure class="fbox fwide" id="fig-verify"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="上卡两头验证。左块 GPU 一头：在 GPU 上把候选照 TPU 改，看 GPU 自己长不长出尾巴。注意力输入那处单开 ＋3.0e-6，p 0.021；跟 MoE 输入那处一起开只剩 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73。右块 TPU 一头：在对齐配置之上补上，看尾巴下不下去。对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。两头都排除了 A、B 两类；C 前向几处还没验。注意力输入那处单开 p 0.021 不算：两处合开就没了，TPU 一头补上也不动。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两头验证：A、B 两类两头都排除，C 前向几处还没验</text>
+<figure class="fbox fwide" id="fig-verify"><svg viewBox="0 0 1400 616" width="100%" role="img" aria-label="上卡两头验证。左块 GPU 一头：在 GPU 上把候选照 TPU 改，看 GPU 自己长不长出尾巴。注意力输入那处单开 ＋3.0e-6，p 0.021；跟 MoE 输入那处一起开只剩 ＋1.9e-7，p 0.87；每个微批的 dW −3.8e-7，p 0.73。右块 TPU 一头：在对齐配置之上补上，看尾巴下不下去。对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。A 两头都排除，B 在 GPU 一头排除；C 前向几处后来在 TPU 上补了，也不是。注意力输入那处单开 p 0.021 不算：两处合开就没了，TPU 一头补上也不动。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">两头验证：A、B 两类都没坐实</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，第 551–1000 步主 loss 偏差，每点一份运行，横线是均值</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">参照格</text>
@@ -12048,11 +12048,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="0" y="542" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="542" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="542" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="569" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单是候选，不是结论：A、B 两类两头都排除，C 前向几处还没验</tspan></text>
+<text class="svglbl" x="20" y="569" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单是候选，不是结论：A 两头都排除，B 在 GPU 一头排除</tspan></text>
 </svg><figcaption><b>左边改了一处的格子都没稳稳长出尾巴；右边补上的两格跟对齐配置一样高。</b><span class="capmore"><br><em>每点一份运行；实测；判读来自对齐记录。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，1000 步，每格 4 份）：第 551–1000 步主 loss 的带符号均值。左块 B200×8，改了一处的格子对 GPU 16 份均值，GPU 自己那格是每份对其余 15 份，p 对 GPU 自己；右块 TPU v5p 8 设备，对 GPU 16 份均值，p 对对齐配置 6 份。「注意力输入」：q、kv 下投影和输出门三份梯度合流；「MoE 输入」：路由、共享专家、路由专家三份梯度合流；「每微批 dW」：每个微批的权重梯度。</p>
 <p>📌 p 值（只当方向性证据，课上不讲）：A · 注意力输入 p 0.021，合开就没了；A · MoE 输入 p 0.47；A · 两处一起 p 0.87；B · 每微批 dW p 0.73；＋补 A · 注意力输入 p 0.67；＋补 A · 两处 p 0.37。</p>
-<p>⚠️ 判读来自对齐记录。还没验：前向几处，以及扫描找不到的差（代码没写舍入、GPU 却舍了的地方；累加顺序）。</p></details></figure>
-  <p>两头都没对上，A、B 两类排除，C 前向几处还没验，残余还在查；下一批是 C 类前向几处，和扫描看不到的差（GPU 那头注意力输入单开 p 0.021 也不算：两处合开就没了，TPU 一头补上也不动）。这就是<b>清单是候选，不是结论</b>：扫描告诉你先查哪儿，判它的只有上卡。</p>
+<p>⚠️ 判读来自对齐记录。之后又验了两批：C 前向几处在 TPU 上补（4 份，＋5.5e-6，对对齐配置 p 0.42）；扫描看不到的注意力内核四处在 GPU 上照 TPU 改（四处全开 ＋2.0e-6，复现不出 TPU 的 ＋6.95e-6）。都不是。剩累加顺序没查；这条线暂停，残余约 ＋7e-6 未定责。</p></details></figure>
+  <p>都没坐实：A 两头都没对上，B 在 GPU 一头就排除了（GPU 那头注意力输入单开 p 0.021 也不算：两处合开就没了，TPU 一头补上也不动）。后来 C 类前向几处在 TPU 上补了，扫描看不到的注意力内核四处在 GPU 上照 TPU 改了，也都不是；只剩累加顺序没查，这条线暂停，残余约 ＋7e-6 没定责。这就是<b>清单是候选，不是结论</b>：扫描告诉你先查哪儿，判它的只有上卡。</p>
   <div class="note ok" style="border-left:6px solid #e8710a"><span class="t">这一节最想让你带走的一招：编一次、扫一遍</span>
   <p>以后碰到这类差，别一处处猜：代码里的往返（FP32 → BF16 → FP32）不改数学，写它只有一个意思 —— <b>这里要舍</b>；把整个训练步离线编译一次（不用上卡），列出写了往返、芯片指令里却没舍的地方。<b>清单是候选，不是结论</b>：每一类还要两头验证（GPU 照 TPU 改看长不长出差，TPU 照 GPU 补看差下不下去）才算数；它也只找得到「写了舍、被省掉」这一类。</p>
   </div>
@@ -13727,7 +13727,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>动手清单</b>：在自己的模型上做一次 GPU→TPU 对齐，一步一步来</summary>
   <ol>
     <li><b>定目标和预算</b>：写下要对齐的配置（层数、步数、批大小、学习率、精度），和「对谁比」—— 默认对 GPU 那份 golden。参照的优化器、loss 写法逐项对到生产，查不到写「未知」。协议开跑前写死这几项：基线是哪一份；检查项和各自的窗口；三个统计；用哪组运行当尺子、几对；门槛 1 和 2；参考档并排报；例外怎么处理。开跑前埋好记录点：每步的实际学习率、实际权重衰减、裁剪前梯度范数、裁剪系数；主权重和两个动量的快照节奏；探针序列；数据单元的指纹字段。设备数要跟 GPU 卡数对上（本例 v5p 8 颗芯片、v7x 4 颗芯片，都是 8 个设备）；对不上时，切法差会算进 TPU 一侧，留一次切法消融（本例改成按专家切，变化在 TPU 执行噪声以内）。截短模型（本例 4 层）能让每次对比便宜很多；签字前 GPU 侧要跑三四十次 1000 步（本例：默认 10 份、② 5 份、③ 5 份、两条精确轨迹连扰动版 7 份，最后修好的 golden ⑤ 又 10 份）。</li>
-    <li><b>先量 GPU 自己的噪声</b>：同一设置的 GPU 至少跑 6–8 份（两两 15 对以上）；只用同一种设置的运行配对（确定性开关、分布式优化器开不开，都算设置）。算出每个检查项的 N。默认检查项：loss（两个窗口）、梯度范数、参数范数、学习率；训练时顺手记这几个便宜的量，出事时它们就是线索。</li>
+    <li><b>先量 GPU 自己的噪声</b>：同一设置的 GPU 至少跑 6 份（15 对），这是几百步短窗口的下限；1000 步要更多（第二次迁移用 16 份 120 对），够不够用拿留一法看；只用同一种设置的运行配对（确定性开关、分布式优化器开不开，都算设置）。算出每个检查项的 N。默认检查项：loss（两个窗口）、梯度范数、参数范数、学习率；训练时顺手记这几个便宜的量，出事时它们就是线索。</li>
     <li><b>铺地板 L0</b>：数据原样回放、逐单元比指纹；权重转过去再转回来、逐张量比字节；加载后从设备上再读一遍，参照一侧的训练入口也在第 1 步前对检查点自检；配置对照表写<em>实际生效</em>的值（每步从运行时读出的值，不是配置文件），优化器、重算、统计量的聚合逐行对写法；续训逐位。</li>
     <li><b>第 1 步自检</b>：看第 1 步 loss 的相对差。本例是 2.5e-6；超过参考档的 2e-4，先回清单第 3 步查地基，别查数值；低于它，直接做下一步的张量比较、用 FP64 的 R 比定责（本课经验）。本例的 2.5e-6 只当量级参考，不是下限。</li>
     <li><b>第 1 步张量</b>：先给每个算子两边写五格 dtype 路径（<a href="#s5-5">§5.5</a>），有差的格子先对上；再逐个大张量算 rel_L2、cos、范数比；超线（GPU 重跑的差不是 0 就比它；GPU 重跑一位不差，前向常见，就直接挑差最大的几处；参考档只并排报）的那一处请 FP64 来算 R 比定责（≤ 1.2 算两边一样远）。MoE 先看路由槽位翻了没有，翻了就按「两边选中同一批 token」重比。</li>
@@ -13836,7 +13836,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <table class="t9"><thead><tr><th>结论</th><th>材料与测量条件</th></tr></thead><tbody>
   <tr><td>BF16 里 1 ＋ 2⁻⁸ ＋ 2⁻⁸ 换个顺序差一格</td><td>本课推导，图脚本里按就近舍入、平局取偶真算</td></tr>
   <tr><td>10 次 GPU 重跑：尾段 loss 带符号均值 −2.5e-5 ± 2.7e-5；TPU −1.03e-4 到 −1.66e-4</td><td>B200×8 默认设置、关分布式优化器，10 份；TPU v5p（8 颗芯片） 三种跑法，各 1000 步，对第一份 GPU</td></tr>
-  <tr><td>数据 16,000 个单元逐位；原生加载器 2,000／16,000 同号</td><td>每个单元四个字段各一个 sha256，另比每步非 padding token 数</td></tr>
+  <tr><td>数据：前 30 步 1,950 项指纹对 GPU 逐位（30 步 × 8 卡 × 2 微批 × 4 个字段，另加每步一个非 padding 总数）；原生加载器 2,000／16,000 同号</td><td>每个单元四个字段各一个 sha256，另比每步非 padding token 数</td></tr>
   <tr><td>1,781 个张量逐位、参数 12,386,079,744</td><td>开源权重 → TPU 格式 → 转回，按原始字节比</td></tr>
   <tr><td>权重衰减 0.1 → 0.033</td><td>GPU 运行每一步从优化器参数组读出的权重衰减（1000 步全是 0.033）；框架预训练模板与调度器源码</td></tr>
   <tr><td>第 1 步 loss ＋2.5e-6</td><td>11.465785 对 11.465756</td></tr>
