@@ -2397,4 +2397,10 @@ for _n in sorted({n for _h, n in _BANNED}):
             _hits.add(_SRC[_k:_k + _n])
 assert not _hits, "源码里出现了禁词（%d 处）%s" % (len(_hits), os.environ.get("T8_SHOWBAN") and _hits or "")
 _html = P.add_figonly_toggle(_html)
+# ⭐ 2026-11-16 负责人：专题八课件默认折叠（投屏用）。共用基元默认展开不动，只在这一页改；
+#   存储键换个名字，之前在浏览器里点出来的「展开」不再沿用。
+_a = 'set(saved === null ? false : saved === "1");'
+_b = 'var KEY = "figonly:" + location.pathname.split("/").pop();'
+assert _html.count(_a) == 1 and _html.count(_b) == 1, "折叠开关的 JS 变了，默认折叠没装上"
+_html = _html.replace(_a, 'set(saved === null ? true : saved === "1");').replace(_b, 'var KEY = "figonly-v2:" + location.pathname.split("/").pop();')
 P.finish(_html, OUT, SECTIONS, "topic-08.html")
