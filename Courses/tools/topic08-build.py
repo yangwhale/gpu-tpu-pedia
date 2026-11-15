@@ -98,6 +98,7 @@ b.kn{background:#fef7e0;padding:0 3px;border-radius:3px}
 .adamcard .af.long{font-size:21px;letter-spacing:0}
 .adamcard th{text-transform:none}
 .adamcard td:last-child{white-space:nowrap}
+table.t9 td:first-child{min-width:5.5em}
 .adamcard .aw{font-size:17px;margin:4px 0;font-family:inherit}
 .adamcard .aw .k{display:inline-block;width:7.5em;color:var(--gray);font-size:14px;font-weight:600}
 .adamcard .aw em{color:var(--gray);font-size:13px;font-style:normal}
@@ -2188,7 +2189,7 @@ FIGS = {
     "__FIG_SWEEP__": ("fig-sweep", "fig8-sweep.svg", "topic08-fig-ddp.py",
         '<b>红线过了竖线就掉下来。</b><br><em>右块的点都落在虚线上；空心点是表太小、不插排序。</em>'),
     "__FIG_SHARD__": ("fig-shard", "fig8-shard.svg", "topic08-fig-ddp.py",
-        '<b>上面前向只换取到的行；下面每卡只存八分之一，显存跟着降。</b><br><em>路径读自编译后的程序；显存是实测。</em>'),
+        '<b>看右下：词嵌入那份通信，绿条只剩灰条的零头。</b><br><em>上面是前向只换取到的行（备答用）；通信按形状算，显存是实测；两对条各按自己的「不修」画长短。</em>'),
     "__FIG_COMM__": ("fig-comm", "fig8-comm.svg", "topic08-fig-ddp.py",
         '<b>左边四步把一行读成字节；右边橙条最短的两行是 FSDP 和只切词嵌入表。</b><br><em>对数刻度；字节按形状算，不是线上实测。</em>'),
     "__FIG_GOLDEN__": ("fig-golden", "fig8-golden.svg", "topic08-fig-golden.py",

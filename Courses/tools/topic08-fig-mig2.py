@@ -181,7 +181,7 @@ def fig_minidrift():
     py, Y, mid = strip(y0, PH, "主loss", 2.0e-5, "主 loss：TPU 减 GPU（相对差）", RD)
     for st in (1, 250, 500, 750, 1000):
         f.t(X(st), py + PH - 36, "第 %d 步" % st, GY, size=12, anchor="middle")
-    f.t(X(60), Y(5.2e-6) - 10, "小鼓包：已定位（见正文）", GY, True, 12.5)
+    f.t(X(60), Y(5.2e-6) - 10, "小鼓包", GY, True, 12.5)
     f.t(X(260), Y(-6e-6), "第 100–550 步在 0 附近，正负相抵", GY, True, 12.5)
     f.t(X(560), Y(1.75e-5) - 4, "第 550 步起一路往上，最后 25 步平均 %s" % N.MD_LAST_T, OR, True, 13)
     f._pan = None

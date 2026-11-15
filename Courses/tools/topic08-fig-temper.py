@@ -51,12 +51,12 @@ def fig_temper():
                "动了精度但量不出来 5、故意改坏 15、没出结果 6。下：有曲线的那些按 300 步曲线最差 r 画点，对数轴；"
                "蓝点挤在 1 附近。真有影响的 7 件里，不能忍的两件是纯数据并行（8 卡 2.62、16 卡 2.65、不累积 3.69、v7x 不累积 4.06、FP32 开关撞上编译器 bug 那次 611；v7x 2.21 没超过纯噪声最高分，画空心）和关省舍入（13，v7x 上 3.4）；"
                "另外五件曲线都在 1 附近，是第 1 步对 FP64 抓到的：关小矩阵乘改写、RMSNorm 多舍一次、多路残差不强制舍 BF16、上下文并行四件能忍；输出头反向少舍一次（换 v7x、改一处写法、跨切片数据并行都会碰上）待定。"
-               "RMSNorm 那一行旁注：换到运行库 0.0.52 上不能忍，见下一张图。")
+               "右侧一句旁注：空心是曲线分不开、第 1 步对 FP64 才抓到的。")
     y0 = f.header("TPU 的脾气：改一样东西，结果变不变、要不要管",
                   "第二次迁移（混元 4 缩小版），绝大多数在运行库 0.0.46 上；每次只改一样，对 TPU 自己的 golden；r 的分母取 GPU 同设置重跑",
                   [(c, "%s %d" % (n, k)) for n, k, c in PILES[:4]] + [(PU, "故意改坏 %d" % N_BROKEN), (LINE, "没出结果 %d" % N_PEND)])
     # Ⓐ 六堆
-    PH1 = 150
+    PH1 = 118
     py = f.panel(0, y0, W, PH1, "Ⓐ %d 种改动，一格一种" % TOTAL, GY)
     y, cs = py + 22, 22
     k = 0
@@ -65,9 +65,7 @@ def fig_temper():
             fill = col if col != LINE else "#f1f3f4"
             f.box(24 + (k % 50) * (cs + 3), y + (k // 50) * (cs + 3), cs, cs, fill, col if col != LINE else GY2, 3)
             k += 1
-    lab_y = y + 3 * (cs + 3) + 18
-    f.t(24, lab_y, "灰 逐位 %d ｜ 蓝 跟重跑一样大 %d ｜ 红 真有影响 %d ｜ 橙 量不出来 %d ｜ 紫 故意改坏 %d ｜ 空 没出结果 %d"
-        % (N_SAME, N_NOISE, N_ISSUE, N_BLIND, N_BROKEN, N_PEND), INK, True, 14)
+    # 2026-11-16：原来这里一行「灰 逐位 34 ｜ 蓝 …」跟图例逐字重复，删掉，面板压矮
     f._pan = None
     # Ⓑ 曲线 r
     y1 = py + PH1 + 16
@@ -106,11 +104,7 @@ def fig_temper():
         f.t(20, yy + 5, _short(iss["name"]), RD, bad, 14)
         _lab = _tol(iss) if _tol(iss) in ("不能忍", "待定") else "能忍"
         f.t(X0 - 12, yy + 5, _lab, RD if bad else (OR if _lab == "待定" else GY), bad or _lab == "待定", 12.5, "end")
-        NX = X1 + 16                       # 右侧说明列
-        if _tol(iss) != iss["tolerable"] and _tol(iss) != "待定":
-            f.t(NX, yy + 5, "运行库 0.0.52 上不能忍（下一张图）", RD, True, 12.5)
-        elif all(r <= N.LOO8_300_MAX for _l, r in iss["exps"]):
-            f.t(NX, yy + 5, "曲线分不开，第 1 步对 FP64 抓到", GY, size=12.5)
+        # 2026-11-16：右侧说明列原来四行重复「曲线分不开，第 1 步对 FP64 抓到」，并成面板下方一句；「0.0.52 上不能忍」讲义不讲，留在出处
         solid = [r for _l, r in iss["exps"] if r > N.LOO8_300_MAX]
         for (lab, r) in sorted(iss["exps"], key=lambda e: e[1]):
             xx = X(r)
@@ -125,8 +119,10 @@ def fig_temper():
             f.t(X(max(inside)) + 9, yy + 5, "%.1f" % max(inside) if max(inside) < 10 else "%.0f" % max(inside), RD, True, 12.5)
         big = [r for r in solid if r > RHI]
         if big:
-            f.t(X1 - 4, yy - 9, "→ %.0f（FP32 开关撞上编译器 bug）" % max(big), RD, True, 11.5, "end")
+            f.t(X1 - 4, yy - 9, "→ %.0f（FP32 开关撞上编译器 bug）" % max(big), RD, True, 13, "end")
     f.t(X(RHI), ybot + 34, "300 步曲线最差 r（对数）", GY, size=13, anchor="end")
+    f.t(X1 + 24, ytop + 160 + 2 * 34 + 5, "空心：曲线分不开，", GY, True, 13)
+    f.t(X1 + 24, ytop + 160 + 2 * 34 + 25, "第 1 步对 FP64 才抓到", GY, True, 13)
     f._pan = None
     yb = f.band(py2 + PH2 + 20, "ok", "不逐位不等于有 bug：%d 种逐位、%d 种跟重跑一样大；真有影响的 %d 件里，不能忍的只有两件（运行库 0.0.46）" % (N_SAME, N_NOISE, len(ISSUES)), [
         "不能忍：纯数据并行（词嵌入梯度在 BF16 里累加，第八节）和关掉省舍入；另外五件曲线都在 1 附近，靠第 1 步对 FP64 才抓到：四件能忍、各有开关，输出头反向少舍一次是真实的数值缺陷，忍不忍待定。",

@@ -448,7 +448,7 @@ def fig_shard():
     y0 = f.header("第三种修法：只把词嵌入表沿数据并行轴切开　——　<tspan font-weight=\"700\">编译器自己生成 FSDP 那条路</tspan>",
                   "其余参数仍是纯数据并行（每卡一整份）；只有词嵌入表 [%s, %d] 按隐藏维切 8 段，每卡 [%s, %d]；卡画 4 张是示意，实际 8 张" %
                   (format(N.C2_V, ","), N.C2_D, format(N.C2_V, ","), N.C2_D_SHARD),
-                  [(BL, "本卡的数据"), (OR, "跨卡"), (GR, "排序：只舍一次")])
+                  [(BL, "本卡的数据"), (OR, "跨卡"), (GR, "只切表以后")])
     CARD = [BL, "#4285f4", "#669df6", "#8ab4f8"]
     PH = 250
     py = f.panel(0, y0, W, PH, "前向：不取整表，只换取到的行", BL)
@@ -484,15 +484,17 @@ def fig_shard():
         f.box(330 + k * 70, py2 + 46, 60, 150, "#fff", LINE, 3, dash="4 3")
         f.box(330 + k * 70, py2 + 46, 60, 150 / 8.0, CARD[k], CARD[k], 3)
         f.t(360 + k * 70, py2 + 214, "卡%d" % k, GY, size=12, anchor="middle")
+    # 2026-11-16：讲义这里要说「通信少九成」，图上原来没有通信的图形；第二对条从「参数与优化器状态」（进出处）换成词嵌入每步通信字节（C3_COMM，按形状算，同 fig8-comm）
     BX, BW = 720, 480
-    for i, (lab, before, after) in enumerate((("实测显存峰值，每设备", N.C3_HBM[0], N.C3_HBM[1]),
-                                              ("参数与优化器状态，每设备", N.C3_STATE[0], N.C3_STATE[1]))):
+    C3E0, C3E1 = (N.C3_COMM["纯数据并行8"][0], N.C3_COMM["只切词嵌入表"][0])
+    for i, (lab, before, after, tail) in enumerate((("词嵌入那份跨卡通信，每步每设备（按形状算）", C3E0, C3E1, "　少 %s" % N.C3_EMB_CUT_T),
+                                                    ("实测显存峰值，每设备", N.C3_HBM[0], N.C3_HBM[1], ""))):
         y = py2 + 52 + i * 92
         f.t(BX, y, lab, INK, True, 13.5)
-        f.box(BX, y + 10, BW * before / N.C3_HBM[0], 18, GY2, GY2, 3)
-        f.t(BX + BW * before / N.C3_HBM[0] + 8, y + 24, "不修 %s" % _b(before), GY, size=12.5)
-        f.box(BX, y + 34, BW * after / N.C3_HBM[0], 18, GR, GR, 3)
-        f.t(BX + BW * after / N.C3_HBM[0] + 8, y + 48, "只切表 %s" % _b(after), GR, True, 12.5)
+        f.box(BX, y + 10, BW, 18, GY2, GY2, 3)   # 每对各按自己的「不修」归一，只比同一对里的长短
+        f.t(BX + BW + 8, y + 24, "不修 %s" % _b(before), GY, size=13)
+        f.box(BX, y + 34, max(BW * after / before, 4), 18, GR, GR, 3)
+        f.t(BX + max(BW * after / before, 4) + 8, y + 48, "只切表 %s%s" % (_b(after), tail), GR, True, 13)
     f._pan = None
     yb = f.band(py2 + PH + 20, "ok", "精度跟前两种修法一样，通信反而少了：词嵌入那份每步少 %s，步时跟不修一样快" % N.C3_EMB_CUT_T, [
         "第 1 步词嵌入梯度离 FP64 %s（R %s，换了顺序）；300 步 r %s、1000 步 %s，都在 GPU 重跑的纯噪声分数以内。" % (N.C3_EMB_T, N.C3_EMB_R_T, N.C3_R300_T, N.C3_R1K_T),
