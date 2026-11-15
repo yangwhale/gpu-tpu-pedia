@@ -884,7 +884,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>照稿约 69 分钟</b>（一次课）</span>
+    <span class="chip">⏱ <b>照稿约 71 分钟</b>（一次课）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -9190,6 +9190,21 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>案例一：loss 偏低，查到是谁的差</h2></div>
   <p class="lead">混元 3 搬上 TPU，主 loss 一直比 GPU 低：第 301–1000 步逐步相对差的带符号均值 −1.66e-4（对一份 GPU 基线；另两份 GPU 重跑对同一基线是 −3.8e-5 和 ＋2.5e-7；开场说的「约 1.7e-4」就是它）。按参考档里 loss 那条 2e-4 的线（<a href="#s4-4">§4.4</a>，只看够不够近），这已经能交差；按严格档（每一处差都要说得出是谁的），得查清它是谁的差。这一节从现象一路查到一次沿 12 万行词表的求和：按调查的顺序讲，只走查对的那条线；排除过的岔路都收在折叠里，课上不讲。</p>
+
+
+  <div class="adamcard">
+  <p class="asub"><b>先把输出头摆清楚</b>：混元 3，隐藏维 4096，词表 120,832，一个微批是一条 4096 个 token 的序列。输入词嵌入和输出矩阵<b>不共用</b>（配置写明不共享，输出层是单独一份权重）。</p>
+  <div class="aw"><span class="k">形状</span>隐状态 H：4096 token × 4096 维　　输出矩阵 W：120,832 词 × 4096 维（每个词一行）</div>
+  <div class="aw"><span class="k">① 前向</span>logits Z ＝ H · Wᵀ　→　4096 token × 120,832 词　<em>（每个分数是 token 向量和一个词那一行的点积，沿 4096 维求和）</em></div>
+  <div class="aw"><span class="k">② loss</span>p ＝ softmax(Z) 逐 token；loss ＝ 对所有 token 平均的 −log p<sub>正确词</sub></div>
+  <div class="aw"><span class="k">③ 对 logits 求导</span>dZ<sub>t,v</sub> ＝ (p<sub>t,v</sub> − [v 是正确词]) ÷ token 数　<em>（正确词一项接近 −1，其余十二万多项是很小的正数，整行加起来精确为 0）</em></div>
+  <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>
+  <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>
+  <div class="acases">
+    <div><b>为什么这次求和最容易出事</b><br>一项接近 −1，十二万项小正数，要加出一个很小的结果：大量抵消。每项截掉一点、小项整个被舍掉，相对结果都不小；五万八千多个从没出现过的词，概率越压越小，正是最容易被吞的那批。</div>
+    <div><b>另外两处没有十二万项</b><br>输出矩阵自己的梯度 dW ＝ dZᵀ · H，收缩的是 token 那一维（4096 项）。输入词嵌入是查表，反向按 token 编号把梯度加回对应行（第八节），不沿词表求和。</div>
+  </div>
+  </div>
 
   <h3 id="s7-1">7.1　偏移是慢慢长出来的，参数范数也在长</h3>
   <p><a href="#s1-2">§1.2</a> 那把尺子已经量过：TPU 三种跑法（原样、不重算、改片上内存上限）都在尺子外面，而且方向一致。先别读成「TPU 训得更好」：loss 系统性地低，只说明两条轨迹有系统差别。</p>
