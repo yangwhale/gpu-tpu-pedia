@@ -12,7 +12,7 @@ fig8-elided  回答：「该舍 BF16 没舍」的地方，整个训练步里到�
           ⛔ 刻意没画：41 颗 kernel「分三类」—— 注意力输入梯度合流、前向几处都落在同时含真舍入的混合 kernel 里，
              LLO 条数没法单独归给它们；它们的证据是 HLO 规则加最小复现确立的机制。别把右块的 41 个方块按三类重新上色。
 """
-from topic03_draw import Fig, BL, OR, GR, GY, INK, GY2, LINE
+from topic03_draw import Fig, BL, OR, GR, GY, INK, GY2, LINE, PU
 Fig.BAND_KEEP_LINES = 0   # 锤炼阶段（2026-11-14）：图上落点带只留一行粗体结论，其余进图下折叠
 import topic08_numbers as N
 
@@ -23,68 +23,87 @@ assert N.EL_TOTAL == 272 and N.EL_K_TOTAL == 41 and P["packs_base"] == 0
 
 
 def fig_elided():
-    f = Fig(W, "两块。左：多路残差分支输入那一处的三层。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；"
+    """2026-11-16 拆图：原左右两块拆成两张。讲义 ▍四 只讲这一处（0 ／ 256），▍五 才揭晓「整步离线编一次」；
+    原来右块（272 处）在 ▍四 时已在屏上，等于提前露了第九节的方法。右块挪到 fig8-elsweep。左块改成从左到右三层。"""
+    f = Fig(W, "从左到右三层，多路残差分支输入那一处。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；"
                "编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。"
-               "同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。"
-               "右：把现行对齐配置的整个训练步离线编译一次，扫所有这样的往返，一共 272 处：每个微批的权重梯度 75，"
+               "同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。")
+    y0 = f.header("代码里写了往返 convert，就是「这里该舍」的声明　——　<tspan font-weight=\"700\">可编译器没舍</tspan>",
+                  "第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；一处往返（多路残差分支输入，退回没补时的写法），从代码一层层看下去",
+                  [(OR, "写了舍、被省掉"), (GR, "补上以后真舍"), (BL, "FP32")])
+    PH = 300
+    py = f.panel(0, y0, W, PH, "一处往返：声明了，但被省掉", OR)
+    CW = 440
+    cols = [20, 20 + CW + 20, 20 + 2 * (CW + 20)]
+    heads = [("① 代码", "写了往返"), ("② 优化后 HLO", "两条 convert 都在"), ("③ LLO 芯片指令", "打包成 BF16 的有几条")]
+    for (a, b), x in zip(heads, cols):
+        f.t(x, py + 30, a, INK, True, 15)
+        f.t(x + 13 * len(a) + 40, py + 30, b, GY, size=13)
+    for x in cols[1:]:
+        f.line(x - 26, py + 120, x - 6, py + 120, GY, 1.6)
+    # ① 代码
+    x = cols[0]
+    for i, (lab, col) in enumerate([("4 路加权和", BL), ("转 BF16", OR), ("转回 FP32", BL)]):
+        f.box(x + i * 148, py + 100, 120, 40, "#fff", col, 8, sw=1.6)
+        f.t(x + i * 148 + 60, py + 125, lab, col, True, 14, "middle")
+        if i < 2:
+            f.line(x + i * 148 + 120, py + 120, x + i * 148 + 146, py + 120, GY, 1.4)
+    f.t(x, py + 180, "往返不改数学，写它只有一个意思：", INK, size=13)
+    f.t(x, py + 202, "「这里要舍」", OR, True, 14)
+    # ② HLO
+    x = cols[1]
+    f.box(x, py + 76, CW - 10, 86, "none", GY2, 8, sw=1.2, dash="5 4")
+    f.t(x + CW - 22, py + 94, "算均方那颗融合", GY, size=12.5, anchor="end")
+    f.box(x + 20, py + 104, 180, 38, "#fff", OR, 6, sw=1.4)
+    f.t(x + 110, py + 128, "convert → bf16", OR, True, 13.5, "middle", mono=True)
+    f.line(x + 200, py + 123, x + 226, py + 123, GY, 1.4)
+    f.box(x + 228, py + 104, 180, 38, "#fff", BL, 6, sw=1.4)
+    f.t(x + 318, py + 128, "convert → f32", BL, True, 13.5, "middle", mono=True)
+    f.t(x, py + 190, "这一层看不出毛病：两条都在，读着是舍了", INK, size=13)
+    # ③ LLO
+    x = cols[2]
+    f.box(x, py + 64, 200, 110, "#fff", OR, 8, sw=1.8)
+    f.t(x + 100, py + 88, "照原样", OR, True, 14, "middle")
+    f.t(x + 100, py + 138, "%d" % N.EL_IHC_PACKS[0], OR, True, 44, "middle", big=True)
+    f.t(x + 100, py + 162, "条打包", GY, size=13, anchor="middle")
+    f.box(x + 220, py + 64, 200, 110, "#fff", GR, 8, sw=1.4)
+    f.t(x + 320, py + 88, "补上 reduce_precision", GR, True, 13, "middle")
+    f.t(x + 320, py + 138, "%d" % N.EL_IHC_FIXED, GR, True, 44, "middle", big=True)
+    f.t(x + 320, py + 162, "条打包", GY, size=13, anchor="middle")
+    f.t(x, py + 200, "同一个值：均方那颗用没舍的，归一化那颗读舍过的", INK, size=13)
+    f.t(20, py + 248, "规律：往返留在一颗融合里就不舍；写回内存、喂给矩阵乘的才真舍。", GY, size=13.5)
+    f._pan = None
+    yb = f.band(y0 + PH + 20, "warn", "声明了，被省掉：HLO 里在，芯片指令里没有", [])
+    yb = f.src(yb + 10,
+               "📌 实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。"
+               "打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。",
+               "⚠️ 省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。")
+    f.save("fig8-elided.svg", yb + 14)
+
+
+def fig_elsweep():
+    """fig8-elsweep（原 fig8-elided 右块）回答：整个训练步里，这样「写了舍却被省掉」的往返有几处、在哪？
+    放在讲义 ▍五「能不能让编译器自己交代」之后。"""
+    f = Fig(W, "把现行对齐配置的整个训练步离线编译一次，扫所有「写了往返、芯片指令里没舍」的地方，一共 272 处：每个微批的权重梯度 75，"
                "分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。"
                "整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。"
                "已经补上的 55 处不算在里面。")
-    y0 = f.header("代码里写了往返 convert，就是「这里该舍」的声明　——　<tspan font-weight=\"700\">可编译器没舍</tspan>",
-                  "第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：这样的地方一共有几处",
-                  [(OR, "写了舍、被省掉"), (GR, "已补上 / 真舍"), (GY2, "优先级低"), ("#bdc1c6", "无害")])
-    PH = 470
-    LW = 560
-    # ── Ⓐ ───────────────────────────────────────────────
-    py = f.panel(0, y0, LW, PH, "左：一处往返（多路残差分支输入，退回没补时的写法）：声明了，但被省掉", OR)
-    LX = 20
-    BX = 128
-    rows_y = [py + 26, py + 140, py + 262]
-    labs = [("代码", "写了往返"), ("优化后 HLO", "convert 都在"), ("LLO 指令", "打包 0 条")]
-    for (a, b), y in zip(labs, rows_y):
-        f.t(LX, y + 26, a, INK, True, 14)
-        f.t(LX, y + 48, b, GY, size=12)
-    y = rows_y[0]
-    xs = [BX, BX + 140, BX + 280]
-    for i, (lab, col) in enumerate([("4 路加权和", BL), ("转 BF16", OR), ("转回 FP32", BL)]):
-        f.box(xs[i], y + 10, 110, 38, "#fff", col, 8, sw=1.6)
-        f.t(xs[i] + 55, y + 34, lab, col, True, 13.5, "middle")
-        if i < 2:
-            f.line(xs[i] + 110, y + 29, xs[i] + 138, y + 29, GY, 1.4)
-    f.t(BX, y + 74, "多路残差的分支输入。往返不改数学，写它就是说「这里要舍」", INK, size=12)
-    y = rows_y[1]
-    f.box(BX - 10, y + 2, 400, 70, "none", GY2, 8, sw=1.2, dash="5 4")
-    f.t(BX + 384, y + 18, "算均方那颗融合", GY, size=11.5, anchor="end")
-    f.box(BX + 10, y + 26, 160, 34, "#fff", OR, 6, sw=1.4)
-    f.t(BX + 90, y + 48, "convert → bf16", OR, True, 12.5, "middle", mono=True)
-    f.line(BX + 170, y + 43, BX + 200, y + 43, GY, 1.4)
-    f.box(BX + 202, y + 26, 160, 34, "#fff", BL, 6, sw=1.4)
-    f.t(BX + 282, y + 48, "convert → f32", BL, True, 12.5, "middle", mono=True)
-    f.t(BX, y + 96, "这一层看不出毛病：两条都在，HLO 读着是舍了", INK, size=12.5)
-    y = rows_y[2]
-    f.box(BX, y + 8, 190, 92, "#fff", OR, 8, sw=1.8)
-    f.t(BX + 95, y + 30, "照原样", OR, True, 13, "middle")
-    f.t(BX + 95, y + 74, "%d" % N.EL_IHC_PACKS[0], OR, True, 38, "middle", big=True)
-    f.t(BX + 95, y + 94, "条打包", GY, size=12, anchor="middle")
-    f.box(BX + 210, y + 8, 190, 92, "#fff", GR, 8, sw=1.4)
-    f.t(BX + 305, y + 30, "补上 reduce_precision", GR, True, 12.5, "middle")
-    f.t(BX + 305, y + 74, "%d" % N.EL_IHC_FIXED, GR, True, 38, "middle", big=True)
-    f.t(BX + 305, y + 94, "条打包", GY, size=12, anchor="middle")
-    f.t(LX, y0 + PH - 40, "同一个值：均方那颗用没舍的，归一化那颗从内存读舍过的。", INK, size=12.5)
-    f.t(LX, y0 + PH - 16, "规律：往返留在一颗融合里就不舍；写回内存、喂给矩阵乘的才真舍。", GY, size=12)
-    f._pan = None
-    # ── Ⓑ ───────────────────────────────────────────────
-    RX = LW + 20
-    RW = W - RX
-    py2 = f.panel(RX, y0, RW, PH, "右：同类往返一共 %d 处，按位置分" % N.EL_TOTAL, OR)
+    y0 = f.header("整个训练步离线编一次：写了往返却被省掉的，一共 %d 处" % N.EL_TOTAL,
+                  "第二次迁移，小尺寸，现行对齐配置，TPU v5p 离线编译；按位置归类，条长是使用次数（不是 kernel 数）",
+                  [(OR, "先查的范围"), (GY2, "优先级低"), ("#bdc1c6", "无害")])
+    PH = 330
+    LW = 0
+    RX = 0
+    RW = W
+    py2 = f.panel(RX, y0, RW, PH, "按位置分：先查三根橙条", OR)
     bars = [("A 分支输入的梯度合流", U["branchin"], OR, "反向 · 几份梯度在 FP32 里相加，典型是注意力的输入"),
             ("B 每个微批的权重梯度 dW", U["wgrad"], OR, "反向"),
             ("C 前向几处", N.EL_FWD, OR, "线性层输出 %d · 输出门 %d · 专家 %d" % (U["fwd_linear"], U["fwd_attn_gate"], U["fwd_expert"])),
             ("其余（专家反向、norm）", N.EL_MINOR, GY2, "专家反向 %d · norm 输入梯度 %d · norm 输出 %d" % (U["expert_bwd"], U["norm_dgrad"], U["fwd_norm"])),
             ("索引器掩码（0 和 −∞，转了也精确）", U["idx_mask"], "#bdc1c6", "无害")]
     LB = RX + 16
-    B0 = RX + 300
-    B1 = W - 70
+    B0 = RX + 380
+    B1 = W - 330
     vmax = 110.0
 
     def BXv(v):
@@ -99,7 +118,7 @@ def fig_elided():
             _bar_notes.append("%s：%s" % (lab, note))
     # 剩下的范围：三根橙条括起来
     f.path("M %d %d h -6 v %d h 6" % (LB - 4, py2 + 24, 3 * 44 - 6), OR, 2, arrow=False)
-    f.t(W - 24, py2 + 22 + 44 + 20, "先查的范围：%d 处" % N.EL_LEFT, OR, True, 13.5, "end")
+    f.t(B1 + 70, py2 + 22 + 44 + 20, "先查的范围：%d 处" % N.EL_LEFT, OR, True, 14)
     # 已补上的 chips
     yc = py2 + 22 + 5 * 44 + 4
     f.t(LB, yc + 18, "已补上 %d 处，不计入：" % N.EL_COVERED, GR, True, 13)
@@ -109,32 +128,17 @@ def fig_elided():
         f.box(cx, yc + 2, w, 24, "#fff", GR, 12, sw=1.4)
         f.t(cx + w / 2, yc + 19, lab, GR, True, 12.5, "middle")
         cx += w + 10
-    # 41 颗只含往返的 kernel
-    yk = yc + 46
-    f.line(RX + 12, yk - 6, W - 12, yk - 6, LINE, 1, arrow=False)
-    f.t(LB, yk + 16, "整颗只含往返的 kernel %d 颗，LLO 打包指令：全是 0" % N.EL_K_TOTAL, INK, True, 13.5)
-    sx = LB
-    for key, col, lab in (("wgrad", OR, "dW"), ("norm", GY2, "norm"), ("idx_mask", "#bdc1c6", "掩码")):
-        n = N.EL_K[key]
-        for j in range(n):
-            f.box(sx + j * 14, yk + 28, 10, 10, col, col, 2)
-        f.t(sx, yk + 58, "%s %d" % (lab, n), col if col in (OR, GR) else GY, True, 12)
-        sx += max(n * 14, 13 * len(lab) + 34) + 16
     f._pan = None
-    yb = f.band(y0 + PH + 20, "warn", "声明了，被省掉：HLO 里在，芯片指令里没有", [
-        "先查三根橙条 A、B、C，共 %d 处；灰条优先级低，没排除。" % N.EL_LEFT,
-        "只找得到「写了往返却被省掉」这一类；GPU 那边舍不舍要对照 GPU 代码。",
-    ])
+    yb = f.band(y0 + PH + 20, "warn", "清单告诉你先查哪儿：A、B、C 三类，共 %d 处" % N.EL_LEFT, [])
     yb = f.src(yb + 10,
                "📌 各条细分：" + "；".join(_bar_notes) + "。",
                "📌 负对照：关掉省舍入再编，同类 kernel %d 颗，打包 0 条的 %d 颗。三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断。" % (N.EL_K_NOEXC, N.EL_K_NOEXC_ZERO),
-               "📌 左块实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。"
-               "打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。",
-               "📌 右块实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。"
+               "📌 整颗只含往返的 kernel %d 颗（dW %d、norm %d、掩码 %d），LLO 打包指令全是 0。" % (N.EL_K_TOTAL, N.EL_K["wgrad"], N.EL_K["norm"], N.EL_K["idx_mask"]),
+               "📌 实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。"
                "272 是 convert(f32→bf16) 在同一计算里又被转回 f32 的使用次数（同一行代码在 scan 外的层、MTP 块、前向、重算、反向里各记一次），按源码行与形状归类（经验规则）；用 reduce_precision 补上、或输入本来就在 BF16 网格上的往返不计。"
                "「只含往返」＝ 这颗 kernel 有往返、没有真舍、没有 reduce_precision。",
                "⚠️ 省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。小尺寸、单一配置；别的模型要重编重扫。")
-    f.save("fig8-elided.svg", yb + 14)
+    f.save("fig8-elsweep.svg", yb + 14)
 
 
 def fig_cancel():
@@ -256,10 +260,12 @@ def fig_verify():
                "对齐配置 6 份 ＋6.9e-6；补注意力输入那处 ＋6.1e-6，p 0.67；注意力加 MoE 输入 ＋5.3e-6，p 0.37，都分不开。两头都排除了 A、B 两类；C 前向几处还没验。注意力输入那处单开 p 0.021 不算：两处合开就没了，TPU 一头补上也不动。")
     y0 = f.header("两头验证：A、B 两类两头都排除，C 前向几处还没验",
                   "第二次迁移，小尺寸，第 551–1000 步主 loss 偏差，每点一份运行，横线是均值",
-                  [(GY2, "参照格"), (GR, "改了一处，结论：排除")])
+                  [(GY2, "参照格"), (PU, "改了一处（A ＝ 分支输入的梯度合流，B ＝ 每微批 dW）")])
     PH, GAP = 420, 22
     LW = 820
     vmin, vmax = -5e-6, 1.2e-5
+
+    _p = []   # p 值不上图（讲义：p 只当方向性证据，课上不讲），收进出处
 
     def panel(x0, w, title, col, cells, data, side):
         py = f.panel(x0, y0, w, PH, title, col)
@@ -287,16 +293,16 @@ def fig_verify():
             if mean_t:
                 f.t(cx, YB + 44, mean_t, INK, False, 12, "middle")
             if ptxt:
-                f.t(cx, YT - 10, ptxt, GY, True, 12, "middle")
+                _p.append("%s %s" % (lab, ptxt))
         f._pan = None
         return py
-    gcells = [("loo", "GPU 自己", GY2, "16 份", ""), ("attn", "注意力输入", GR, "均值 %s" % N.GV_T["attn"][0], "p %s，合开就没了" % N.GV_ATTN_P),
-              ("moe", "MoE 输入", GR, "均值 %s" % N.GV_T["moe"][0], "p %s" % N.GV_T["moe"][1]),
-              ("both", "两处一起", GR, "均值 %s" % N.GV_BOTH_T, "p %s" % N.GV_BOTH_P),
-              ("wgrad", "每微批 dW", GR, "均值 %s" % N.GV_WGRAD_T, "p %s" % N.GV_WGRAD_P)]
+    gcells = [("loo", "GPU 自己", GY2, "16 份", ""), ("attn", "A · 注意力输入", PU, "均值 %s" % N.GV_T["attn"][0], "p %s，合开就没了" % N.GV_ATTN_P),
+              ("moe", "A · MoE 输入", PU, "均值 %s" % N.GV_T["moe"][0], "p %s" % N.GV_T["moe"][1]),
+              ("both", "A · 两处一起", PU, "均值 %s" % N.GV_BOTH_T, "p %s" % N.GV_BOTH_P),
+              ("wgrad", "B · 每微批 dW", PU, "均值 %s" % N.GV_WGRAD_T, "p %s" % N.GV_WGRAD_P)]
     panel(0, LW, "GPU 一头：照 TPU 改，长不长出尾巴（对 GPU 16 份均值）", OR, gcells, R, "gpu")
-    tcells = [("C", "对齐配置", GY2, "6 份 %s" % N.TV_T["C"], ""), ("attn", "＋补注意力输入", GR, "均值 %s" % N.TV_ATTN_T, "p %s" % N.TV_ATTN_P),
-              ("all", "＋注意力和 MoE 输入", GR, "均值 %s" % N.TV_ALL_T, "p %s" % N.TV_ALL_P)]
+    tcells = [("C", "对齐配置", GY2, "6 份 %s" % N.TV_T["C"], ""), ("attn", "＋补 A · 注意力输入", PU, "均值 %s" % N.TV_ATTN_T, "p %s" % N.TV_ATTN_P),
+              ("all", "＋补 A · 两处", PU, "均值 %s" % N.TV_ALL_T, "p %s" % N.TV_ALL_P)]
     panel(LW + GAP, W - LW - GAP, "TPU 一头：补上，尾巴下不下去", BL, tcells, T, "tpu")
     yb = f.band(y0 + PH + 20, "warn", "清单是候选，不是结论：A、B 两类两头都排除，C 前向几处还没验", [
         "注意力输入那处 GPU 单开像有一点，可合开就没了，按格数校正 p 0.084，对齐记录推断是偶然；TPU 补上也跟对齐配置分不开。下一批：前向几处，和扫描看不到的差。",
@@ -304,10 +310,12 @@ def fig_verify():
     yb = f.src(yb + 10,
                "📌 实测（第二次迁移，小尺寸，1000 步，每格 4 份）：第 551–1000 步主 loss 的带符号均值。左块 B200×8，改了一处的格子对 GPU 16 份均值，GPU 自己那格是每份对其余 15 份，p 对 GPU 自己；"
                "右块 TPU v5p 8 设备，对 GPU 16 份均值，p 对对齐配置 6 份。「注意力输入」：q、kv 下投影和输出门三份梯度合流；「MoE 输入」：路由、共享专家、路由专家三份梯度合流；「每微批 dW」：每个微批的权重梯度。",
+               "📌 p 值（只当方向性证据，课上不讲）：" + "；".join(_p) + "。",
                "⚠️ 判读来自对齐记录。还没验：前向几处，以及扫描找不到的差（代码没写舍入、GPU 却舍了的地方；累加顺序）。")
     f.save("fig8-verify.svg", yb + 14)
 
 fig_elided()
+fig_elsweep()
 fig_cancel()
 fig_sites()
 fig_verify()

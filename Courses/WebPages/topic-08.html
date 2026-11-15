@@ -776,7 +776,7 @@ b.kn{background:#fef7e0;padding:0 3px;border-radius:3px}
 </style>
 <style>.foldfig ol { padding-left: 2.4em }
 p.codeline{font-size:13.5px;color:var(--gray)} a.codelink{display:inline-block;margin-right:14px;padding:1px 8px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--blue)} a.codelink:hover{background:var(--blue-l)}</style>
-<style>figure.fwide > video { display:block; width:100%; max-width:1240px; margin:0 auto; border-radius:8px }
+<style>figure.fwide > video { display:block; width:auto; max-width:min(100%, 1240px); max-height:calc(100vh - 150px); margin:0 auto; border-radius:8px }
 figure.fwide:has(> video) > figcaption { max-width:1240px; margin-left:auto; margin-right:auto }</style>
 
 
@@ -11755,138 +11755,108 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <figcaption><b>同一个值走同一串盒子：代码的本意是舍，在一颗融合里没舍，写回内存才舍；写成强制舍入才真舍。</b>
   <span class="sub">（31 秒，Manim 渲染，可一步一步看。值是随手取的 FP32 数，BF16 当场算；打包条数是最小复现的实测。）</span></figcaption></figure>
   </details>
-  <p><b>先在一处上看：声明了，却被省掉。</b>代码里写一对「转 BF16 再转回」，不改数学，写它只有一个意思：这里要舍。拿已补上的一处退回旧写法，离线编一遍：优化后的程序（HLO）里两条转换都在；芯片指令里真把 FP32 打包成 BF16 的，<b class="kn">0 条</b>；写成强制舍入，256 条（下图左块）。编译器看这个值马上还要接着算，往返留在一颗 kernel 里就不舍；写回内存交给下一颗，才真舍。第五节那个 32K 上的 RMSNorm scale（<a href="#s5-norm32k">§5.4</a>），就是这样被省掉的。</p>
-  <p><b>再让编译器自己交代。</b>把整个训练步离线编译一次（不用上卡），把写了往返、芯片指令里没舍的地方全列出来：272 处，按位置归几类（下图右块）。</p>
-<figure class="fbox fwide" id="fig-elided"><svg viewBox="0 0 1400 666" width="100%" role="img" aria-label="两块。左：多路残差分支输入那一处的三层。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。右：把现行对齐配置的整个训练步离线编译一次，扫所有这样的往返，一共 272 处：每个微批的权重梯度 75，分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。已经补上的 55 处不算在里面。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+  <p><b>先在一处上看：声明了，却被省掉。</b>代码里写一对「转 BF16 再转回」，不改数学，写它只有一个意思：这里要舍。拿已补上的一处退回旧写法，离线编一遍：优化后的程序（HLO）里两条转换都在；芯片指令里真把 FP32 打包成 BF16 的，<b class="kn">0 条</b>；写成强制舍入，256 条（下图）。编译器看这个值马上还要接着算，往返留在一颗 kernel 里就不舍；写回内存交给下一颗，才真舍。第五节那个 32K 上的 RMSNorm scale（<a href="#s5-norm32k">§5.4</a>），就是这样被省掉的。</p>
+<figure class="fbox fwide" id="fig-elided"><svg viewBox="0 0 1400 496" width="100%" role="img" aria-label="从左到右三层，多路残差分支输入那一处。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">代码里写了往返 convert，就是「这里该舍」的声明　——　<tspan font-weight="700">可编译器没舍</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：这样的地方一共有几处</text>
+<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；一处往返（多路残差分支输入，退回没补时的写法），从代码一层层看下去</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">写了舍、被省掉</text>
 <rect x="156.76" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="177" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">已补上 / 真舍</text>
-<rect x="304.56" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="325" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">优先级低</text>
-<rect x="414.28" y="63" width="14" height="14" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
-<text class="svgsm" x="435" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">无害</text>
-<rect x="0" y="102" width="560" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="560" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="0" y="104" width="560" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="560" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">左：一处往返（多路残差分支输入，退回没补时的写法）：声明了，但被省掉</tspan></text>
-<text class="svgsm" x="20" y="184" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">代码</tspan></text>
-<text class="svgsm" x="20" y="206" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">写了往返</text>
-<text class="svgsm" x="20" y="298" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">优化后 HLO</tspan></text>
-<text class="svgsm" x="20" y="320" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">convert 都在</text>
-<text class="svgsm" x="20" y="420" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">LLO 指令</tspan></text>
-<text class="svgsm" x="20" y="442" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">打包 0 条</text>
-<rect x="128" y="168" width="110" height="38" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
-<text class="svgsm" x="183" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 路加权和</tspan></text>
-<line x1="238" y1="187" x2="266" y2="187" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
-<rect x="268" y="168" width="110" height="38" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
-<text class="svgsm" x="323" y="192" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">转 BF16</tspan></text>
-<line x1="378" y1="187" x2="406" y2="187" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
-<rect x="408" y="168" width="110" height="38" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
-<text class="svgsm" x="463" y="192" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">转回 FP32</tspan></text>
-<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="128" y="232" fill="#202124" style="font-size:12.0px;font-variant-numeric:tabular-nums">多路残差的分支输入。往返不改数学，写它就是说「这里要舍」</text>
-<rect x="118" y="274" width="400" height="70" rx="8" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="5 4"/>
-<text class="svgsm" x="512" y="290" fill="#5f6368" text-anchor="end" style="font-size:11.5px;font-variant-numeric:tabular-nums">算均方那颗融合</text>
-<rect x="138" y="298" width="160" height="34" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="218" y="320" fill="#b06000" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">convert → bf16</tspan></text>
-<line x1="298" y1="315" x2="328" y2="315" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
-<rect x="330" y="298" width="160" height="34" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
-<text class="svgsm" x="410" y="320" fill="#174ea6" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">convert → f32</tspan></text>
-<text class="svgsm" x="128" y="368" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums">这一层看不出毛病：两条都在，HLO 读着是舍了</text>
-<rect x="128" y="402" width="190" height="92" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.8"/>
-<text class="svgsm" x="223" y="424" fill="#b06000" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">照原样</tspan></text>
-<text class="svgsm" x="223" y="468" fill="#b06000" text-anchor="middle" style="font-size:38.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
-<text class="svgsm" x="223" y="488" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">条打包</text>
-<rect x="338" y="402" width="190" height="92" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="433" y="424" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">补上 reduce_precision</tspan></text>
-<text class="svgsm" x="433" y="468" fill="#0d652d" text-anchor="middle" style="font-size:38.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256</tspan></text>
-<text class="svgsm" x="433" y="488" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">条打包</text>
-<text class="svgsm" x="20" y="532" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums">同一个值：均方那颗用没舍的，归一化那颗从内存读舍过的。</text>
-<text class="svgsm" x="20" y="556" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">规律：往返留在一颗融合里就不舍；写回内存、喂给矩阵乘的才真舍。</text>
-<rect x="580" y="102" width="820" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="580" y="102" width="820" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="580" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="580" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="594" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">右：同类往返一共 272 处，按位置分</tspan></text>
-<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="596" y="173" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 分支输入的梯度合流</tspan></text>
-<rect x="880" y="158" width="286.3636363636365" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1174" y="174" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70</tspan></text>
-<text class="svgsm" x="596" y="217" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 每个微批的权重梯度 dW</tspan></text>
-<rect x="880" y="202" width="306.81818181818176" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1194" y="218" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">75</tspan></text>
-<text class="svgsm" x="596" y="261" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 前向几处</tspan></text>
-<rect x="880" y="246" width="400.909090909091" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="1288" y="262" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">98</tspan></text>
-<text class="svgsm" x="596" y="305" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余（专家反向、norm）</tspan></text>
-<rect x="880" y="290" width="81.81818181818187" height="22" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="969" y="306" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20</tspan></text>
-<text class="svgsm" x="596" y="349" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">索引器掩码（0 和 −∞，转了也精确）</tspan></text>
-<rect x="880" y="334" width="36.81818181818187" height="22" rx="4" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
-<text class="svgsm" x="924" y="350" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9</tspan></text>
-<path d="M 592 156 h -6 v 126 h 6" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round"/>
-<text class="svgsm" x="1376" y="218" fill="#b06000" text-anchor="end" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先查的范围：243 处</tspan></text>
-<text class="svgsm" x="596" y="396" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补上 55 处，不计入：</tspan></text>
-<rect x="766" y="380" width="221.0" height="24" rx="12" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="876" y="397" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">多路残差、流梯度、收拢处 30</tspan></text>
-<rect x="997.0" y="380" width="169.0" height="24" rx="12" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="1081" y="397" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余 25（相减得出）</tspan></text>
-<line x1="592" y1="418" x2="1388" y2="418" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="596" y="440" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">整颗只含往返的 kernel 41 颗，LLO 打包指令：全是 0</tspan></text>
-<rect x="596" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="610" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="624" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="638" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="652" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="666" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="680" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="694" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="708" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="722" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="736" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="750" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="764" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="778" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="792" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="806" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="820" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="834" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="848" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="862" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="876" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="890" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="904" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="918" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="932" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="946" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="960" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="974" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="988" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1002" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1016" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1030" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1044" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="1058" y="452" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<text class="svgsm" x="596" y="482" fill="#b06000" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">dW 34</tspan></text>
-<rect x="1088" y="452" width="10" height="10" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="1102" y="452" width="10" height="10" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<rect x="1116" y="452" width="10" height="10" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
-<text class="svgsm" x="1088" y="482" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">norm 3</tspan></text>
-<rect x="1190" y="452" width="10" height="10" rx="2" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
-<rect x="1204" y="452" width="10" height="10" rx="2" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
-<rect x="1218" y="452" width="10" height="10" rx="2" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
-<rect x="1232" y="452" width="10" height="10" rx="2" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
-<text class="svgsm" x="1190" y="482" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">掩码 4</tspan></text>
-<rect x="0" y="592" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="592" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
-<rect x="2" y="592" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<text class="svglbl" x="20" y="619" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">声明了，被省掉：HLO 里在，芯片指令里没有</tspan></text>
-</svg><figcaption><b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：同类的地方一共 272 处，三根橙条是先查的范围。</b><span class="capmore"><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 各条细分：A 分支输入的梯度合流：反向 · 几份梯度在 FP32 里相加，典型是注意力的输入；B 每个微批的权重梯度 dW：反向；C 前向几处：线性层输出 51 · 输出门 34 · 专家 13；其余（专家反向、norm）：专家反向 7 · norm 输入梯度 7 · norm 输出 6；索引器掩码（0 和 −∞，转了也精确）：无害。</p>
+<text class="svgsm" x="177" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">补上以后真舍</text>
+<rect x="297.84000000000003" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="318" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">FP32</text>
+<rect x="0" y="102" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">一处往返：声明了，但被省掉</tspan></text>
+<text class="svgsm" x="20" y="162" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">① 代码</tspan></text>
+<text class="svgsm" x="112" y="162" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">写了往返</text>
+<text class="svgsm" x="480" y="162" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">② 优化后 HLO</tspan></text>
+<text class="svgsm" x="637" y="162" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">两条 convert 都在</text>
+<text class="svgsm" x="940" y="162" fill="#202124" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">③ LLO 芯片指令</tspan></text>
+<text class="svgsm" x="1110" y="162" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums">打包成 BF16 的有几条</text>
+<line x1="454" y1="252" x2="474" y2="252" stroke="#5f6368" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<line x1="914" y1="252" x2="934" y2="252" stroke="#5f6368" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="20" y="232" width="120" height="40" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="80" y="257" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">4 路加权和</tspan></text>
+<line x1="140" y1="252" x2="166" y2="252" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="168" y="232" width="120" height="40" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svgsm" x="228" y="257" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">转 BF16</tspan></text>
+<line x1="288" y1="252" x2="314" y2="252" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="316" y="232" width="120" height="40" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="376" y="257" fill="#174ea6" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">转回 FP32</tspan></text>
+<text class="svgsm" x="20" y="312" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">往返不改数学，写它只有一个意思：</text>
+<text class="svgsm" x="20" y="334" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">「这里要舍」</tspan></text>
+<rect x="480" y="208" width="430" height="86" rx="8" fill="none" stroke="#80868b" stroke-width="1.0" stroke-dasharray="5 4"/>
+<text class="svgsm" x="898" y="226" fill="#5f6368" text-anchor="end" style="font-size:12.5px;font-variant-numeric:tabular-nums">算均方那颗融合</text>
+<rect x="500" y="236" width="180" height="38" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="590" y="260" fill="#b06000" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">convert → bf16</tspan></text>
+<line x1="680" y1="255" x2="706" y2="255" stroke="#5f6368" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-5f6368)"/>
+<rect x="708" y="236" width="180" height="38" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="798" y="260" fill="#174ea6" text-anchor="middle" style="font-size:13.5px;font-variant-numeric:tabular-nums;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">convert → f32</tspan></text>
+<text class="svgsm" x="480" y="322" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">这一层看不出毛病：两条都在，读着是舍了</text>
+<rect x="940" y="196" width="200" height="110" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.8"/>
+<text class="svgsm" x="1040" y="220" fill="#b06000" text-anchor="middle" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">照原样</tspan></text>
+<text class="svgsm" x="1040" y="270" fill="#b06000" text-anchor="middle" style="font-size:44.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0</tspan></text>
+<text class="svgsm" x="1040" y="294" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">条打包</text>
+<rect x="1160" y="196" width="200" height="110" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="1260" y="220" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">补上 reduce_precision</tspan></text>
+<text class="svgsm" x="1260" y="270" fill="#0d652d" text-anchor="middle" style="font-size:44.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">256</tspan></text>
+<text class="svgsm" x="1260" y="294" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">条打包</text>
+<text class="svgsm" x="940" y="332" fill="#202124" style="font-size:13.0px;font-variant-numeric:tabular-nums">同一个值：均方那颗用没舍的，归一化那颗读舍过的</text>
+<text class="svgsm" x="20" y="380" fill="#5f6368" style="font-size:13.5px;font-variant-numeric:tabular-nums">规律：往返留在一颗融合里就不舍；写回内存、喂给矩阵乘的才真舍。</text>
+<rect x="0" y="422" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="422" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="422" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="449" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">声明了，被省掉：HLO 里在，芯片指令里没有</tspan></text>
+</svg><figcaption><b>从左往右：代码写了往返，HLO 里两条 convert 都在，芯片指令里打包却是 0。</b><span class="capmore"><br><em>最小复现离线编译，实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
+<p>⚠️ 省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。</p></details></figure>
+  <p><b>再让编译器自己交代。</b>把整个训练步离线编译一次（不用上卡），把写了往返、芯片指令里没舍的地方全列出来：272 处，按位置归几类（下图）。</p>
+<figure class="fbox fwide" id="fig-elsweep"><svg viewBox="0 0 1400 526" width="100%" role="img" aria-label="把现行对齐配置的整个训练步离线编译一次，扫所有「写了往返、芯片指令里没舍」的地方，一共 272 处：每个微批的权重梯度 75，分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。已经补上的 55 处不算在里面。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">整个训练步离线编一次：写了往返却被省掉的，一共 272 处</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，现行对齐配置，TPU v5p 离线编译；按位置归类，条长是使用次数（不是 kernel 数）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">先查的范围</text>
+<rect x="125.4" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="146" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">优先级低</text>
+<rect x="235.12" y="63" width="14" height="14" rx="3" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<text class="svgsm" x="256" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">无害</text>
+<rect x="0" y="102" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">按位置分：先查三根橙条</tspan></text>
+<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="16" y="173" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 分支输入的梯度合流</tspan></text>
+<rect x="380" y="158" width="439.090909090909" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="827" y="174" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70</tspan></text>
+<text class="svgsm" x="16" y="217" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B 每个微批的权重梯度 dW</tspan></text>
+<rect x="380" y="202" width="470.4545454545455" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="858" y="218" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">75</tspan></text>
+<text class="svgsm" x="16" y="261" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">C 前向几处</tspan></text>
+<rect x="380" y="246" width="614.7272727272727" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text class="svgsm" x="1002" y="262" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">98</tspan></text>
+<text class="svgsm" x="16" y="305" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余（专家反向、norm）</tspan></text>
+<rect x="380" y="290" width="125.45454545454544" height="22" rx="4" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
+<text class="svgsm" x="513" y="306" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">20</tspan></text>
+<text class="svgsm" x="16" y="349" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">索引器掩码（0 和 −∞，转了也精确）</tspan></text>
+<rect x="380" y="334" width="56.45454545454544" height="22" rx="4" fill="#bdc1c6" stroke="#bdc1c6" stroke-width="1.0"/>
+<text class="svgsm" x="444" y="350" fill="#5f6368" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">9</tspan></text>
+<path d="M 12 156 h -6 v 126 h 6" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round"/>
+<text class="svgsm" x="1140" y="218" fill="#b06000" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">先查的范围：243 处</tspan></text>
+<text class="svgsm" x="16" y="396" fill="#0d652d" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">已补上 55 处，不计入：</tspan></text>
+<rect x="186" y="380" width="221.0" height="24" rx="12" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="296" y="397" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">多路残差、流梯度、收拢处 30</tspan></text>
+<rect x="417.0" y="380" width="169.0" height="24" rx="12" fill="#fff" stroke="#1e8e3e" stroke-width="1.0"/>
+<text class="svgsm" x="501" y="397" fill="#0d652d" text-anchor="middle" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">其余 25（相减得出）</tspan></text>
+<rect x="0" y="452" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="452" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="2" y="452" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="479" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单告诉你先查哪儿：A、B、C 三类，共 243 处</tspan></text>
+</svg><figcaption><b>三根橙条 A、B、C 是先查的范围。</b><span class="capmore"><br><em>条长按使用次数算，不是 kernel 数；实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 各条细分：A 分支输入的梯度合流：反向 · 几份梯度在 FP32 里相加，典型是注意力的输入；B 每个微批的权重梯度 dW：反向；C 前向几处：线性层输出 51 · 输出门 34 · 专家 13；其余（专家反向、norm）：专家反向 7 · norm 输入梯度 7 · norm 输出 6；索引器掩码（0 和 −∞，转了也精确）：无害。</p>
 <p>📌 负对照：关掉省舍入再编，同类 kernel 35 颗，打包 0 条的 0 颗。三类里 LLO 能逐颗核的只有 dW；合流、前向几处跟真舍混在一颗 kernel 里，按同一规则推断。</p>
-<p>📌 左块实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
-<p>📌 右块实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。272 是 convert(f32→bf16) 在同一计算里又被转回 f32 的使用次数（同一行代码在 scan 外的层、MTP 块、前向、重算、反向里各记一次），按源码行与形状归类（经验规则）；用 reduce_precision 补上、或输入本来就在 BF16 网格上的往返不计。「只含往返」＝ 这颗 kernel 有往返、没有真舍、没有 reduce_precision。</p>
+<p>📌 整颗只含往返的 kernel 41 颗（dW 34、norm 3、掩码 4），LLO 打包指令全是 0。</p>
+<p>📌 实测：现行对齐配置（多路残差分支输入与流、流梯度、收拢处都照 GPU 舍）的训练步，v5p-16 离线编译。272 是 convert(f32→bf16) 在同一计算里又被转回 f32 的使用次数（同一行代码在 scan 外的层、MTP 块、前向、重算、反向里各记一次），按源码行与形状归类（经验规则）；用 reduce_precision 补上、或输入本来就在 BF16 网格上的往返不计。「只含往返」＝ 这颗 kernel 有往返、没有真舍、没有 reduce_precision。</p>
 <p>⚠️ 省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。小尺寸、单一配置；别的模型要重编重扫。</p></details></figure>
   <details class="foldfig"><summary><b>扫描过程的动画</b></summary>
 <figure class="fbox fwide" id="anim-scan">
@@ -11909,8 +11879,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，第 551–1000 步主 loss 偏差，每点一份运行，横线是均值</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">参照格</text>
-<rect x="94.04" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
-<text class="svgsm" x="115" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">改了一处，结论：排除</text>
+<rect x="94.04" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="115" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">改了一处（A ＝ 分支输入的梯度合流，B ＝ 每微批 dW）</text>
 <rect x="0" y="102" width="820" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="102" width="820" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="0" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -11945,38 +11915,34 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="112.4" y1="369.6469558823529" x2="192.4" y2="369.6469558823529" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
 <text class="svgsm" x="152" y="476" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">GPU 自己</tspan></text>
 <text class="svgsm" x="152" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">16 份</text>
-<rect x="275.70000000000005" y="326.73176470588237" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="286.70000000000005" y="331.7404705882353" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="297.70000000000005" y="337.21858823529413" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="308.70000000000005" y="264.9489411764706" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="275.70000000000005" y="326.73176470588237" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="286.70000000000005" y="331.7404705882353" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="297.70000000000005" y="337.21858823529413" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="308.70000000000005" y="264.9489411764706" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
 <line x1="257.20000000000005" y1="320.1599411764706" x2="337.20000000000005" y2="320.1599411764706" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="297" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">注意力输入</tspan></text>
+<text class="svgsm" x="297" y="476" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A · 注意力输入</tspan></text>
 <text class="svgsm" x="297" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋3.0e-6</text>
-<text class="svgsm" x="297" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.021，合开就没了</tspan></text>
-<rect x="420.5" y="409.3218823529412" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="431.5" y="345.84423529411765" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="442.5" y="284.35458823529416" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="453.5" y="356.1498823529412" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="420.5" y="409.3218823529412" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="431.5" y="345.84423529411765" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="442.5" y="284.35458823529416" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="453.5" y="356.1498823529412" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
 <line x1="402.0" y1="353.91764705882355" x2="482.0" y2="353.91764705882355" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="442" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">MoE 输入</tspan></text>
+<text class="svgsm" x="442" y="476" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A · MoE 输入</tspan></text>
 <text class="svgsm" x="442" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋9.6e-7</text>
-<text class="svgsm" x="442" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.47</tspan></text>
-<rect x="565.3000000000001" y="363.6242352941176" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="576.3000000000001" y="375.21788235294116" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="587.3000000000001" y="355.9489411764706" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="598.3000000000001" y="351.2564705882353" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="565.3000000000001" y="363.6242352941176" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="576.3000000000001" y="375.21788235294116" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="587.3000000000001" y="355.9489411764706" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="598.3000000000001" y="351.2564705882353" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
 <line x1="546.8000000000001" y1="366.51188235294114" x2="626.8000000000001" y2="366.51188235294114" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="586" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">两处一起</tspan></text>
+<text class="svgsm" x="586" y="476" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A · 两处一起</tspan></text>
 <text class="svgsm" x="586" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋1.9e-7</text>
-<text class="svgsm" x="586" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.87</tspan></text>
-<rect x="710.1" y="378.04588235294113" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="721.1" y="368.97223529411764" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="732.1" y="373.6235294117647" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="743.1" y="363.1712941176471" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="710.1" y="378.04588235294113" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="721.1" y="368.97223529411764" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="732.1" y="373.6235294117647" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="743.1" y="363.1712941176471" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
 <line x1="691.6" y1="375.95323529411763" x2="771.6" y2="375.95323529411763" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="731" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每微批 dW</tspan></text>
+<text class="svgsm" x="731" y="476" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">B · 每微批 dW</tspan></text>
 <text class="svgsm" x="731" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 −3.8e-7</text>
-<text class="svgsm" x="731" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.73</tspan></text>
 <rect x="842" y="102" width="558" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="842" y="102" width="558" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <rect x="842" y="104" width="558" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
@@ -12001,27 +11967,26 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <line x1="959.0" y1="255.21023529411767" x2="1039.0" y2="255.21023529411767" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
 <text class="svgsm" x="999" y="476" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">对齐配置</tspan></text>
 <text class="svgsm" x="999" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">6 份 ＋6.9e-6</text>
-<rect x="1131.5" y="298.01529411764704" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1142.5" y="289.4588235294118" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1153.5" y="266.1595294117647" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1164.5" y="201.76117647058823" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1131.5" y="298.01529411764704" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="1142.5" y="289.4588235294118" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="1153.5" y="266.1595294117647" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="1164.5" y="201.76117647058823" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
 <line x1="1113.0" y1="268.84870588235293" x2="1193.0" y2="268.84870588235293" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="1153" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋补注意力输入</tspan></text>
+<text class="svgsm" x="1153" y="476" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋补 A · 注意力输入</tspan></text>
 <text class="svgsm" x="1153" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋6.1e-6</text>
-<text class="svgsm" x="1153" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.67</tspan></text>
-<rect x="1285.5" y="318.280705882353" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1296.5" y="236.01670588235294" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1307.5" y="262.9625882352941" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
-<rect x="1318.5" y="294.6651764705882" width="10" height="10" rx="5" fill="#1e8e3e" stroke="#fff" stroke-width="1.0"/>
+<rect x="1285.5" y="318.280705882353" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="1296.5" y="236.01670588235294" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="1307.5" y="262.9625882352941" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
+<rect x="1318.5" y="294.6651764705882" width="10" height="10" rx="5" fill="#9334e6" stroke="#fff" stroke-width="1.0"/>
 <line x1="1267.0" y1="282.98129411764705" x2="1347.0" y2="282.98129411764705" stroke="#202124" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="1307" y="476" fill="#0d652d" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋注意力和 MoE 输入</tspan></text>
+<text class="svgsm" x="1307" y="476" fill="#681da8" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">＋补 A · 两处</tspan></text>
 <text class="svgsm" x="1307" y="496" fill="#202124" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">均值 ＋5.3e-6</text>
-<text class="svgsm" x="1307" y="162" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">p 0.37</tspan></text>
 <rect x="0" y="542" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="542" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="542" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="569" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">清单是候选，不是结论：A、B 两类两头都排除，C 前向几处还没验</tspan></text>
 </svg><figcaption><b>左边改了一处的格子都没稳稳长出尾巴；右边补上的两格跟对齐配置一样高。</b><span class="capmore"><br><em>每点一份运行；实测；判读来自对齐记录。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，1000 步，每格 4 份）：第 551–1000 步主 loss 的带符号均值。左块 B200×8，改了一处的格子对 GPU 16 份均值，GPU 自己那格是每份对其余 15 份，p 对 GPU 自己；右块 TPU v5p 8 设备，对 GPU 16 份均值，p 对对齐配置 6 份。「注意力输入」：q、kv 下投影和输出门三份梯度合流；「MoE 输入」：路由、共享专家、路由专家三份梯度合流；「每微批 dW」：每个微批的权重梯度。</p>
+<p>📌 p 值（只当方向性证据，课上不讲）：A · 注意力输入 p 0.021，合开就没了；A · MoE 输入 p 0.47；A · 两处一起 p 0.87；B · 每微批 dW p 0.73；＋补 A · 注意力输入 p 0.67；＋补 A · 两处 p 0.37。</p>
 <p>⚠️ 判读来自对齐记录。还没验：前向几处，以及扫描找不到的差（代码没写舍入、GPU 却舍了的地方；累加顺序）。</p></details></figure>
   <p>两头都没对上，A、B 两类排除，C 前向几处还没验，残余还在查；下一批是 C 类前向几处，和扫描看不到的差（GPU 那头注意力输入单开 p 0.021 也不算：两处合开就没了，TPU 一头补上也不动）。这就是<b>清单是候选，不是结论</b>：扫描告诉你先查哪儿，判它的只有上卡。</p>
   <div class="note ok" style="border-left:6px solid #e8710a"><span class="t">这一节最想让你带走的一招：编一次、扫一遍</span>
@@ -13022,7 +12987,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 
   <h3 id="s10-2">10.2　换运行库：不一定只换了加法顺序</h3>
   <p>上面那张图都在 TPU 运行库 0.0.46 上量的。升到 0.0.52，对齐记录把同一条路又走了一遍：先离线编译看哪些程序变了，再上卡重建基准运行、把当时的六件逐件重测（第七件 11-12 才显出，没在这批里），每件对同版本的基准比：</p>
-<figure class="fbox fwide" id="fig-libtpu"><svg viewBox="0 0 1400 666" width="100%" role="img" aria-label="两块。左：换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，纯数据并行 2.62 到 2.82、关省舍入 13.3 到 12.6 仍超，关小矩阵乘改写、多路残差两件仍在 1 附近；RMSNorm 多舍一次从 1.06 跳到 5.50（1000 步 3.68），由能忍变成不能忍；上下文并行从 1.27 降到 0.95。右：两根数轴。v7x 纯数据并行不累积，每卡 8192 个下标；0.0.46 上要到 15105 个（超过行数的八分之一 15104）才排序，在它右边，不排序；0.0.52 上到 7181 个就排序，在它左边，排序。据此预测 0.0.52 上词嵌入梯度不再丢精度，上卡核对成立，r 4.06 降到 0.89（这次运行整体另因输出头 3 个小参数判超，是另一件）。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-libtpu"><svg viewBox="0 0 1400 666" width="100%" role="img" aria-label="换 TPU 运行库 0.0.46 到 0.0.52，基准运行自己在噪声内（0.99）；六件每件各对同版本的基准重测，纯数据并行 2.62 到 2.82、关省舍入 13.3 到 12.6 仍超，关小矩阵乘改写、多路残差两件仍在 1 附近；RMSNorm 多舍一次从 1.06 跳到 5.50（1000 步 3.68），由能忍变成不能忍；上下文并行从 1.27 降到 0.95。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">换运行库，不一定只换了求和顺序</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，TPU 运行库 0.0.46 → 0.0.52：基准运行重建，当时的六件逐件重测，各对同版本的基准比</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1.0"/>
@@ -13031,115 +12996,74 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="175" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">0.0.52，超出纯噪声最高分</text>
 <rect x="385.20000000000005" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
 <text class="svgsm" x="406" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">0.0.52，在线内</text>
-<rect x="0" y="102" width="800" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="0" y="102" width="800" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<rect x="0" y="104" width="800" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="0" y1="132" x2="800" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓐ 300 步曲线最差 r（对数）：结论变了的只有 RMSNorm 一件</tspan></text>
-<rect x="250.0" y="150" width="51.06896685977057" height="390" rx="0" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1.0"/>
-<rect x="301.06896685977057" y="150" width="129.6577508755534" height="390" rx="0" fill="#fef7e0" stroke="#fef7e0" stroke-width="1.0"/>
-<rect x="430.726717735324" y="150" width="299.273282264676" height="390" rx="0" fill="#fce8e6" stroke="#fce8e6" stroke-width="1.0"/>
-<line x1="301.06896685977057" y1="150" x2="301.06896685977057" y2="540" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="301" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
-<line x1="400.3142628765263" y1="150" x2="400.3142628765263" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="400" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">2</text>
-<line x1="531.5094079664885" y1="150" x2="531.5094079664885" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="531" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">5</text>
-<line x1="630.7547039832443" y1="150" x2="630.7547039832443" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="630" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
-<line x1="730.0" y1="150" x2="730.0" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
-<text class="svgsm" x="730" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">20</text>
-<line x1="430.726717735324" y1="150" x2="430.726717735324" y2="540" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
-<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="436" y="164" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯噪声最高 2.47</tspan></text>
+<rect x="0" y="102" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">300 步曲线最差 r（对数）：结论变了的只有 RMSNorm 一件</tspan></text>
+<rect x="330.0" y="150" width="104.26580733869827" height="390" rx="0" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1.0"/>
+<rect x="434.26580733869827" y="150" width="264.7179080375882" height="390" rx="0" fill="#fef7e0" stroke="#fef7e0" stroke-width="1.0"/>
+<rect x="698.9837153762865" y="150" width="611.0162846237135" height="390" rx="0" fill="#fce8e6" stroke="#fce8e6" stroke-width="1.0"/>
+<line x1="434.26580733869827" y1="150" x2="434.26580733869827" y2="540" stroke="#80868b" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="434" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">1</text>
+<line x1="636.8916200395745" y1="150" x2="636.8916200395745" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="636" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">2</text>
+<line x1="904.7483745982474" y1="150" x2="904.7483745982474" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="904" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">5</text>
+<line x1="1107.3741872991236" y1="150" x2="1107.3741872991236" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="1107" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">10</text>
+<line x1="1310.0" y1="150" x2="1310.0" y2="540" stroke="#dadce0" stroke-width="0.75" stroke-linecap="round"/>
+<text class="svgsm" x="1310" y="560" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums">20</text>
+<line x1="698.9837153762865" y1="150" x2="698.9837153762865" y2="540" stroke="#202124" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="4 3"/>
+<text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="704" y="164" fill="#202124" style="font-size:12.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">纯噪声最高 2.47</tspan></text>
 <text class="svgsm" x="20" y="189" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">基准运行自己</tspan></text>
-<rect x="293.7022480014566" y="178" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="305" y="208" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">0.0.52 对 0.0.46，在噪声内</text>
+<rect x="425.4754230029739" y="178" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="438" y="208" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">0.0.52 对 0.0.46，在噪声内</text>
 <text class="svgsm" x="20" y="241" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">纯数据并行（不修）</text>
-<line x1="438.93321045555183" y1="236" x2="449.2606704746014" y2="236" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
-<rect x="432.93321045555183" y="230" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
-<rect x="443.2606704746014" y="230" width="12" height="12" rx="6" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="428" y="241" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">2.62</text>
-<text class="svgsm" x="459" y="241" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.82</tspan></text>
+<line x1="715.7386380134184" y1="236" x2="736.8238688856445" y2="236" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="709.7386380134184" y="230" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
+<rect x="730.8238688856445" y="230" width="12" height="12" rx="6" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="705" y="241" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">2.62</text>
+<text class="svgsm" x="746" y="241" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">2.82</tspan></text>
 <text class="svgsm" x="20" y="293" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">关省舍入</text>
-<line x1="671.3713521623617" y1="288" x2="663.4163932114807" y2="288" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
-<rect x="665.3713521623617" y="282" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
-<rect x="657.4163932114807" y="282" width="12" height="12" rx="6" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="653" y="293" fill="#a50e0e" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">12.56</tspan></text>
-<text class="svgsm" x="681" y="293" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">13.28</text>
+<line x1="1190.2998439981552" y1="288" x2="1174.0584694734398" y2="288" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="1184.2998439981552" y="282" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
+<rect x="1168.0584694734398" y="282" width="12" height="12" rx="6" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="1164" y="293" fill="#a50e0e" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">12.56</tspan></text>
+<text class="svgsm" x="1200" y="293" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">13.28</text>
 <text class="svgsm" x="20" y="345" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">关小矩阵乘改写</text>
-<line x1="292.20960346569734" y1="340" x2="301.06896685977057" y2="340" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
-<rect x="286.20960346569734" y="334" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
-<rect x="295.06896685977057" y="334" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="282" y="345" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">0.94</text>
-<text class="svgsm" x="311" y="345" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.00</tspan></text>
+<line x1="416.177940409132" y1="340" x2="434.26580733869827" y2="340" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="410.177940409132" y="334" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
+<rect x="428.26580733869827" y="334" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="406" y="345" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">0.94</text>
+<text class="svgsm" x="444" y="345" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.00</tspan></text>
 <text class="svgsm" x="20" y="397" fill="#a50e0e" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">RMSNorm 多舍一次</tspan></text>
-<line x1="309.2903295488196" y1="392" x2="545.1611923605133" y2="392" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="303.2903295488196" y="386" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
-<rect x="539.1611923605133" y="386" width="12" height="12" rx="6" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="299" y="397" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.06</text>
-<text class="svgsm" x="555" y="397" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.50</tspan></text>
-<text class="svgsm" x="254" y="416" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主 loss 系统偏高；1000 步 3.68；最后一层真舍了两次</tspan></text>
+<line x1="451.05108949550674" y1="392" x2="932.6207677360478" y2="392" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="445.05108949550674" y="386" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
+<rect x="926.6207677360478" y="386" width="12" height="12" rx="6" fill="#d93025" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="441" y="397" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.06</text>
+<text class="svgsm" x="942" y="397" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">5.50</tspan></text>
+<text class="svgsm" x="338" y="416" fill="#a50e0e" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">主 loss 系统偏高；1000 步 3.68；最后一层真舍了两次</tspan></text>
 <text class="svgsm" x="20" y="449" fill="#202124" style="font-size:13.5px;font-variant-numeric:tabular-nums">多路残差不强制舍 BF16</text>
-<line x1="313.40794942127525" y1="444" x2="324.76743942440544" y2="444" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
-<rect x="307.40794942127525" y="438" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
-<rect x="318.76743942440544" y="438" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="303" y="449" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.09</text>
-<text class="svgsm" x="334" y="449" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.18</tspan></text>
+<line x1="459.45789673510365" y1="444" x2="482.65018882482775" y2="444" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="453.45789673510365" y="438" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
+<rect x="476.65018882482775" y="438" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="449" y="449" fill="#5f6368" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.09</text>
+<text class="svgsm" x="492" y="449" fill="#174ea6" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">1.18</tspan></text>
 <text class="svgsm" x="20" y="501" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上下文并行（不开 FP32 logits）</tspan></text>
-<line x1="335.2915731192946" y1="496" x2="293.7247572489709" y2="496" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<rect x="329.2915731192946" y="490" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
-<rect x="287.7247572489709" y="490" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
-<text class="svgsm" x="283" y="501" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.95</tspan></text>
-<text class="svgsm" x="345" y="501" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.27</text>
-<text class="svgsm" x="305" y="520" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">两次都在线内；那个张量随顺序跳一倍，降了不说明变好</text>
-<rect x="820" y="102" width="580" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
-<rect x="820" y="102" width="580" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
-<rect x="820" y="104" width="580" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
-<line x1="820" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="834" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">Ⓑ 一次离线预测：v7x 纯数据并行、不累积</tspan></text>
-<text class="svgsm" x="836" y="162" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每卡一次 scatter 加 8,192 个下标；</tspan></text>
-<text class="svgsm" x="836" y="184" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下标数过了门槛（蓝色阴影），后端才自己插排序</tspan></text>
-<text class="svgsm" x="836" y="220" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库 0.0.46</tspan></text>
-<rect x="1279.5833333333333" y="242" width="80.41666666666674" height="20" rx="0" fill="#d2e3fc" stroke="none" stroke-width="1.0"/>
-<line x1="860" y1="252" x2="1360" y2="252" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="860.0" y1="248" x2="860.0" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="860" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
-<line x1="998.8888888888889" y1="248" x2="998.8888888888889" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="998" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">5,000</text>
-<line x1="1137.7777777777778" y1="248" x2="1137.7777777777778" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1137" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">10,000</text>
-<line x1="1276.6666666666667" y1="248" x2="1276.6666666666667" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1276" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">15,000</text>
-<line x1="1279.5833333333333" y1="234" x2="1279.5833333333333" y2="270" stroke="#5f6368" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="1279" y="228" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛 15,105</tspan></text>
-<rect x="1080.5555555555557" y="245" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1087" y="294" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8,192 在门槛左边 → 不排序</tspan></text>
-<text class="svgsm" x="836" y="340" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库 0.0.52</tspan></text>
-<rect x="1059.4722222222222" y="362" width="300.5277777777778" height="20" rx="0" fill="#d2e3fc" stroke="none" stroke-width="1.0"/>
-<line x1="860" y1="372" x2="1360" y2="372" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<line x1="860.0" y1="368" x2="860.0" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="860" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
-<line x1="998.8888888888889" y1="368" x2="998.8888888888889" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="998" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">5,000</text>
-<line x1="1137.7777777777778" y1="368" x2="1137.7777777777778" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1137" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">10,000</text>
-<line x1="1276.6666666666667" y1="368" x2="1276.6666666666667" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svgsm" x="1276" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">15,000</text>
-<line x1="1059.4722222222222" y1="354" x2="1059.4722222222222" y2="390" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
-<text class="svgsm" x="1059" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛 7,181</tspan></text>
-<rect x="1080.5555555555557" y="365" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
-<text class="svgsm" x="1087" y="414" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8,192 过了门槛 → 排序</tspan></text>
-<text class="svgsm" x="836" y="532" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上卡核对：曲线是噪声的 4.06 → 0.89 倍；词嵌入梯度离 FP64 是 GPU 的 6.90 → 1.10 倍</tspan></text>
-<text class="svgsm" x="836" y="556" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">词嵌入这一处预测成立：先离线编译看排没排序，再上卡</tspan></text>
+<line x1="504.13696178522645" y1="496" x2="419.27137938331555" y2="496" stroke="#1a73e8" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="498.13696178522645" y="490" width="12" height="12" rx="6" fill="#fff" stroke="#80868b" stroke-width="2"/>
+<rect x="413.27137938331555" y="490" width="12" height="12" rx="6" fill="#1a73e8" stroke="#202124" stroke-width="1.0"/>
+<text class="svgsm" x="409" y="501" fill="#174ea6" text-anchor="end" style="font-size:12.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">0.95</tspan></text>
+<text class="svgsm" x="514" y="501" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">1.27</text>
+<text class="svgsm" x="438" y="520" fill="#5f6368" style="font-size:12.0px;font-variant-numeric:tabular-nums">两次都在线内；那个张量随顺序跳一倍，降了不说明变好</text>
 <rect x="0" y="592" width="1400" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
 <rect x="0" y="592" width="4" height="50" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="2" y="592" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <text class="svglbl" x="20" y="619" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">换运行库：先建新基准，再把当时的六件重测；结论只对测过的版本对和配置成立</tspan></text>
-</svg><figcaption><b>左边只有 RMSNorm 那一行往右蹿出了线；右边红点 8,192 在 0.0.46 门槛左边、0.0.52 门槛右边。</b><span class="capmore"><br><em>左块横轴对数；右块门槛全表在图下出处里；两块都是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8；JAX 0.11.1 不变、只换运行库，这不是官方配套的组合，换官方组合要重测）：新基准换一组机器重跑逐位相同；新基准对旧基准 300 ／ 1000 步 0.99 ／ 0.96，步时 -5.5%。当时的六件（第七件是 11-12 才显出的）各按基准的命令只改那一样，对同版本的基准比 8 项检查的三个统计（上下文并行对同版本的普通注意力底），尺子 GPU 同设置重跑 8 份（留一法最大 2.47）。</p>
+</svg><figcaption><b>先看最上面的基准点在线内，再看 RMSNorm 那一行往右蹿出了线。</b><span class="capmore"><br><em>横轴对数；空心是 0.0.46，实心是 0.0.52；都是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（第二次迁移，小尺寸，TPU v5p 8 设备，FSDP 8；JAX 0.11.1 不变、只换运行库，这不是官方配套的组合，换官方组合要重测）：新基准换一组机器重跑逐位相同；新基准对旧基准 300 ／ 1000 步 0.99 ／ 0.96，步时 -5.5%。当时的六件（第七件是 11-12 才显出的）各按基准的命令只改那一样，对同版本的基准比 8 项检查的三个统计（上下文并行对同版本的普通注意力底），尺子 GPU 同设置重跑 8 份（留一法最大 2.47）。</p>
 <p>📌 第 1 步：纯数据并行词嵌入梯度 R 3.62 → 3.60，关省舍入 26.13 → 26.11，两个版本几乎一样；RMSNorm 多舍一次第 0 层归一化权重的 R 1.20 → 1.17（第 1 步看不出，偏差是跑起来以后攒的），前 300 步主 loss 对基准的带符号均值 1.3e-6 → 1.65e-5，换一组机器重跑逐位相同。三种修法 0.0.52 上（300 ／ 1000 步）：① 1.55 ／ 0.92；② 1.20 ／ 1.28；③ 1.23 ／ 0.97，都跟 GPU 重跑分不开。</p>
-<p>📌 门槛表（单算子离线编译二分出的最小插排序下标数）：表 120,832 × 1024 —— v5p 0.0.46 15,105、0.0.52 14,420，v7x 0.0.46 15,105、0.0.52 7,181；120,832 × 128 —— v5p 15,105 → 1,783；480,000 × 128 —— v5p 60,001 → 7,132；生产宽度 120,832 × 6144 —— v7x 0.0.52 43,648，v5p 0.0.52 查到 65,536 都不插。0.0.46 上都是行数 ÷ 8 ＋ 1，0.0.52 上随列宽和芯片变。</p>
-<p>📌 门槛的测法：单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上部分形状走另一条执行路径（HLO 可见），另算；表里 v7x 只列 1024 以上的列宽。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。</p>
-<p>📌 Ⓑ 上卡：v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：r 4.06 → 0.89，词嵌入梯度离 FP64 2.93e-02 → 4.63e-03，R 6.90 → 1.10。</p>
+<p>整张表按 FP32 放得进片上内存的小表（1000 × 1024；v5p 上的 30000 × 128）两个版本都不插。v7x 上部分形状走另一条执行路径（HLO 可见），另算；表里 v7x 只列 1024 以上的列宽。最后一行是生产宽度（隐藏维 6144），0.0.52 上 v5p 查到 65536 都不插。</p>
 <p>⚠️ RMSNorm 那件为什么变强，对齐记录已查清，机理在本节折叠里。上下文并行那件降到 0.95，只能说这次没超。</p></details></figure>
   <ul>
     <li><b>基准运行自己</b>：同版本重跑逐位相同；新对旧 300 ／ 1000 步 <b class="kn">0.99 ／ 0.96</b>，在噪声内，步时少 5.5%。单看这一条，换版本跟重跑分不开。</li>
@@ -13151,10 +13075,64 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>另外几件在 0.0.52 上</b>：一件变弱、一个门槛变了、四件不变</summary>
   <ul>
     <li><b>一件变弱、一个门槛变了</b>：上下文并行降到 0.95（那个张量本来就随加法顺序跳一倍，只算这次没过线）；词嵌入排序门槛变了，v7x 上不累积的纯数据并行，词嵌入梯度不再丢精度（<a href="#s8-6">§8.6</a>；这次运行整体另因输出头 3 个小参数判「超」，是另一件）。纯数据并行、关省舍入、关小矩阵乘改写、多路残差这四件，在 v5p 上结论不变。</li>
-  </ul></details>
+  </ul>
+  <p>门槛那一处是先离线预测、再上卡核对的：</p>
+<figure class="fbox fwide" id="fig-libsort"><svg viewBox="0 0 1000 596" width="100%" role="img" aria-label="两根数轴。v7x 纯数据并行不累积，每卡 8192 个下标；0.0.46 上要到 15105 个（超过行数的八分之一 15104）才排序，在它右边，不排序；0.0.52 上到 7181 个就排序，在它左边，排序。据此预测 0.0.52 上词嵌入梯度不再丢精度，上卡核对成立，r 4.06 降到 0.89（这次运行整体另因输出头 3 个小参数判超，是另一件）。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">换运行库，排序门槛也挪了：先离线预测，再上卡</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，v7x 纯数据并行、不累积；门槛 ＝ 后端开始自己插排序的下标数（单算子离线编译二分）</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">每卡的下标数 8,192</text>
+<rect x="188.12" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text class="svgsm" x="209" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">蓝色阴影 ＝ 过了门槛、会排序</text>
+<rect x="0" y="102" width="1000" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="102" width="1000" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="0" y="104" width="1000" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<line x1="0" y1="132" x2="1000" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">v7x 纯数据并行、不累积：先离线预测，再上卡核对</tspan></text>
+<text class="svgsm" x="16" y="162" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">每卡一次 scatter 加 8,192 个下标；</tspan></text>
+<text class="svgsm" x="16" y="184" fill="#202124" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">下标数过了门槛（蓝色阴影），后端才自己插排序</tspan></text>
+<text class="svgsm" x="16" y="220" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库 0.0.46</tspan></text>
+<rect x="812.0333333333333" y="242" width="147.9666666666667" height="20" rx="0" fill="#d2e3fc" stroke="none" stroke-width="1.0"/>
+<line x1="40" y1="252" x2="960" y2="252" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="40.0" y1="248" x2="40.0" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="40" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="295.55555555555554" y1="248" x2="295.55555555555554" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="295" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">5,000</text>
+<line x1="551.1111111111111" y1="248" x2="551.1111111111111" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="551" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">10,000</text>
+<line x1="806.6666666666667" y1="248" x2="806.6666666666667" y2="256" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="806" y="272" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">15,000</text>
+<line x1="812.0333333333333" y1="234" x2="812.0333333333333" y2="270" stroke="#5f6368" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="812" y="228" fill="#5f6368" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛 15,105</tspan></text>
+<rect x="451.70222222222225" y="245" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="458" y="294" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8,192 在门槛左边 → 不排序</tspan></text>
+<text class="svgsm" x="16" y="340" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">运行库 0.0.52</tspan></text>
+<rect x="407.0288888888889" y="362" width="552.9711111111111" height="20" rx="0" fill="#d2e3fc" stroke="none" stroke-width="1.0"/>
+<line x1="40" y1="372" x2="960" y2="372" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="40.0" y1="368" x2="40.0" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="40" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">0</text>
+<line x1="295.55555555555554" y1="368" x2="295.55555555555554" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="295" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">5,000</text>
+<line x1="551.1111111111111" y1="368" x2="551.1111111111111" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="551" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">10,000</text>
+<line x1="806.6666666666667" y1="368" x2="806.6666666666667" y2="376" stroke="#202124" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="806" y="392" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">15,000</text>
+<line x1="407.0288888888889" y1="354" x2="407.0288888888889" y2="390" stroke="#1a73e8" stroke-width="2.4" stroke-linecap="round"/>
+<text class="svgsm" x="407" y="348" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">门槛 7,181</tspan></text>
+<rect x="451.70222222222225" y="365" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text class="svgsm" x="458" y="414" fill="#174ea6" text-anchor="middle" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">8,192 过了门槛 → 排序</tspan></text>
+<text class="svgsm" x="16" y="472" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">上卡核对：曲线是噪声的 4.06 → 0.89 倍；</tspan></text>
+<text class="svgsm" x="16" y="498" fill="#174ea6" style="font-size:14.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">词嵌入梯度离 FP64 是 GPU 的 6.90 → 1.10 倍</tspan></text>
+<rect x="0" y="522" width="1000" height="50" rx="9" fill="none" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="522" width="4" height="50" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="522" width="3" height="50" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text class="svglbl" x="20" y="549" fill="#0d652d" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">词嵌入这一处预测成立：先离线编译看排没排序，再上卡</tspan></text>
+</svg><figcaption><b>红点 8,192 在 0.0.46 门槛左边、0.0.52 门槛右边。</b><span class="capmore"><br><em>门槛全表在图下出处里；上卡核对是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 门槛表（单算子离线编译二分出的最小插排序下标数）：表 120,832 × 1024 —— v5p 0.0.46 15,105、0.0.52 14,420，v7x 0.0.46 15,105、0.0.52 7,181；120,832 × 128 —— v5p 15,105 → 1,783；480,000 × 128 —— v5p 60,001 → 7,132；生产宽度 120,832 × 6144 —— v7x 0.0.52 43,648，v5p 0.0.52 查到 65,536 都不插。0.0.46 上都是行数 ÷ 8 ＋ 1，0.0.52 上随列宽和芯片变。</p>
+<p>📌 门槛的测法：单算子离线编译（CPU 上为目标芯片编译，看优化后 HLO 里有没有 sort），单设备、BF16 表，二分最小插排序的下标数，查到 65536。📌 Ⓑ 上卡：v7x 4 颗芯片（8 个设备），各对同版本的 FSDP 8 比：r 4.06 → 0.89，词嵌入梯度离 FP64 2.93e-02 → 4.63e-03，R 6.90 → 1.10。</p></details></figure>
+  </details>
   <details class="foldfig"><summary><b>RMSNorm 那件为什么变强</b>：逐步曲线；两次舍入为什么系统偏小（图、机理）</summary>
   <p>逐步看，RMSNorm 那件在 0.0.52 上是真的「一直偏高」，不是一两步的尖峰：</p>
-<figure class="fbox fwide" id="fig-rms52"><svg viewBox="0 0 1400 576" width="100%" role="img" aria-label="横轴是训练步，第 1 到 1000 步；纵轴是主 loss 对同一运行库版本的基准的逐步相对差。灰带是 GPU 同设置 16 份两两在每一步的最大差。红线是运行库 0.0.52 上的 RMSNorm 多舍一次，细线逐步、粗线 50 步平均：粗线从第 50 步前后起一直在零上面，第 2–1000 步平均 ＋1.7e-5，95% 的步为正。蓝线是同一个改动在 0.0.46 上（只跑了 300 步），平均 ＋1.3e-6，在噪声里，末 100 步 ＋5.4e-6 略往上翘。橙线是 0.0.52 上只让最后一层真舍两次，300 步平均 ＋2.1e-5，跟红线几乎重合。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-rms52"><svg viewBox="0 0 1400 576" width="100%" role="img" aria-label="横轴是训练步，第 1 到 1000 步；纵轴是主 loss 对同一运行库版本的基准的逐步相对差。灰带是 GPU 同设置 16 份两两在每一步的最大差。红线是运行库 0.0.52 上的 RMSNorm 多舍一次，细线逐步、粗线 50 步平均：粗线从第 50 步前后起一直在零上面，第 2–1000 步平均 ＋1.7e-5，95% 的步为正。蓝线是同一个改动在 0.0.46 上（只跑了 300 步），平均 ＋1.3e-6，在噪声里，末 100 步 ＋5.4e-6 略往上翘。橙线是 0.0.52 上只让最后一层真舍两次，300 步平均 ＋2.1e-5，跟红线几乎重合。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">RMSNorm 多舍一次：0.0.46 上 300 步在噪声里，0.0.52 上一直在零上面</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">纵轴 ＝ 主 loss 逐步相对差（被测 − 同版本基准）÷ 基准；灰带 ＝ GPU 16 份两两每步最大差；粗线 ＝ 50 步平均</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
@@ -13198,7 +13176,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ 每条线都是单份运行；0.0.46 那条只跑了 300 步，末 100 步平均 ＋5.4e-6，更长没有数据。灰带只用来看单步幅度，判档仍按窗口统计量对尺子。</p></details></figure>
   <p>一句话：0.0.52 挡住了一次融合，两次舍入都真舍了，而第二次的输入已经在格点上，结果系统偏小。</p>
   <p><b>RMSNorm 那件为什么变强</b>（v5p、FSDP 8 上查清）：默认写法是先把归一化值舍成 BF16、乘 γ 再舍一次。运行库 0.0.46 上，最后一层的这一段融在一颗 kernel 里，中间那次被省掉，实际只舍一次；0.0.52 在定内存布局时给归一化值插了一次布局转换，挡住了融合，两次舍入都真发生了：</p>
-<figure class="fbox fwide" id="fig-rms2r"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="三块。左上：最后一层 RMSNorm 在两个运行库版本里的样子。0.0.46：归一化、乘 γ、舍到 BF16 在一颗 kernel 里，只舍一次；0.0.52：编译器给归一化值插了一次布局转换，挡住融合，归一化值先舍成 BF16 写回内存，下一颗 kernel 读回来乘 γ 再舍一次。右上：FP64 里扫 γ，两次舍入让输出的绝对值平均缩小多少；γ 等于 1 时为 0，γ 是 0.996 时缩小 1.7e-3，离 1 远了就小；混元 4 最后一层 γ 均值 1.001。下：只动最后一层的五个运行，300 步曲线最差 r：0.0.46 默认 1.06；0.0.46 最后一层强制两次 6.83；0.0.52 默认 5.50；0.0.52 只把最后一层改回一次 0.84；0.0.52 最后一层强制两次 6.97。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-rms2r"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="三块。左上：最后一层 RMSNorm 在两个运行库版本里的样子。0.0.46：归一化、乘 γ、舍到 BF16 在一颗 kernel 里，只舍一次；0.0.52：编译器给归一化值插了一次布局转换，挡住融合，归一化值先舍成 BF16 写回内存，下一颗 kernel 读回来乘 γ 再舍一次。右上：FP64 里扫 γ，两次舍入让输出的绝对值平均缩小多少；γ 等于 1 时为 0，γ 是 0.996 时缩小 1.7e-3，离 1 远了就小；混元 4 最后一层 γ 均值 1.001。下：只动最后一层的五个运行，300 步曲线最差 r：0.0.46 默认 1.06；0.0.46 最后一层强制两次 6.83；0.0.52 默认 5.50；0.0.52 只把最后一层改回一次 0.84；0.0.52 最后一层强制两次 6.97。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">RMSNorm 多舍一次：0.0.52 让最后一层真的舍了两次</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，v5p；默认写法 ＝ 归一化值先舍成 BF16、乘 γ 再舍一次</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -13517,8 +13495,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svgsm" x="1230" y="314" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">容差门：TPU 执行噪声（TPU 28 对）</text>
 <rect x="1080" y="352" width="300" height="76" rx="10" fill="#fff" stroke="#9334e6" stroke-width="2"/>
 <text class="svgsm" x="1230" y="380" fill="#681da8" text-anchor="middle" style="font-size:15.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">数学级</tspan></text>
-<text class="svgsm" x="1230" y="404" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">对齐门：对修好的 golden ⑤ 不变差</text>
-<text class="svgsm" x="1230" y="422" fill="#681da8" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">（历史门，建议换成修好的 golden ⑤）</text>
+<text class="svgsm" x="1230" y="404" fill="#5f6368" text-anchor="middle" style="font-size:12.0px;font-variant-numeric:tabular-nums">对齐门：对修好的 golden 不变差</text>
 <line x1="230" y1="300" x2="268" y2="300" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <line x1="490" y1="300" x2="558" y2="300" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <path d="M 640.0 252.0 H 768.0 Q 778.0 252.0 778.0 242.0 V 192.0" fill="none" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
@@ -13548,11 +13525,14 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="note ok"><span class="t">搬上 TPU 以后改代码，照这几步做</span>
   ① 改完先只编译，比训练步程序的指纹：一样就逐位相同，不用跑（本节上面）。<br>
   ② 指纹变了，跑 300 步对 TPU 的 golden：曲线最差 r 不超过纯噪声的最高分、第 1 步没有离 FP64 更远的张量，就是换了顺序。<br>
-  ③ 动到精度或数值路径的，再跑 1000 步、用 GPU 16 份当尺子；记下的每一项 loss 都逐项比。<br>
-  ④ 四个已知会动精度的坑：纯数据并行时只切词嵌入表（或词嵌入梯度用 FP32 累加，第八节）；别关 excess precision；RMSNorm 开单次舍入（最后一层输出舍两次那件；v5p、运行库 0.0.52 上不开就超；跟第五节那个 norm scale 舍入不是一回事）；上下文并行目前只能配普通注意力，要让 softmax 真走 FP32（新版代码起，旧代码写了也不生效）。<br>
-  ⑤ 本身对加法顺序很敏感的小张量（比如注意力的 sink 参数：每个头一个可学习的标量，给 softmax 多一个「哪都不看」的去处），1.2 倍的门槛对它太紧，先看只换顺序的几次运行会跳多大；被小参数豁免单列的，要看豁免清单里的倍数。<br>
-  ⑥ 换运行库版本：离线筛判不了；先建新的基准运行，跟旧的比，再把上面几件重测一遍（<a href="#s10-2">§10.2</a>）。<br>
-  ⑦ 换设备数、换梯度累积、换切法：先离线编译一份生产规模的训练步，数边传边乘的循环和它们的累加器类型、数被删掉的「转 BF16 再转回」（<a href="#s5-3">§5.3</a>、<a href="#s5-4">§5.4</a>）；要真舍，写强制舍入。</div>
+  ③ 动到精度或数值路径的，再跑 1000 步、用 GPU 16 份当尺子；记下的每一项 loss 都逐项比。</div>
+  <details class="foldfig"><summary><b>还有四条</b>：四个已知会动精度的坑、对顺序敏感的小张量、换运行库、换设备数／梯度累积／切法</summary>
+  <ol start="4">
+  <li>四个已知会动精度的坑：纯数据并行时只切词嵌入表（或词嵌入梯度用 FP32 累加，第八节）；别关 excess precision；RMSNorm 开单次舍入（最后一层输出舍两次那件；v5p、运行库 0.0.52 上不开就超；跟第五节那个 norm scale 舍入不是一回事）；上下文并行目前只能配普通注意力，要让 softmax 真走 FP32（新版代码起，旧代码写了也不生效）。<br></li>
+  <li>本身对加法顺序很敏感的小张量（比如注意力的 sink 参数：每个头一个可学习的标量，给 softmax 多一个「哪都不看」的去处），1.2 倍的门槛对它太紧，先看只换顺序的几次运行会跳多大；被小参数豁免单列的，要看豁免清单里的倍数。<br></li>
+  <li>换运行库版本：离线筛判不了；先建新的基准运行，跟旧的比，再把上面几件重测一遍（<a href="#s10-2">§10.2</a>）。<br></li>
+  <li>换设备数、换梯度累积、换切法：先离线编译一份生产规模的训练步，数边传边乘的循环和它们的累加器类型、数被删掉的「转 BF16 再转回」（<a href="#s5-3">§5.3</a>、<a href="#s5-4">§5.4</a>）；要真舍，写强制舍入。</li>
+  </ol></details>
 
   <h3 id="s10-4">10.4　踩过的坑，和怎么记</h3>
 <figure class="fbox fwide" id="fig-journey"><svg viewBox="0 0 1400 786" width="100%" role="img" aria-label="一条路：八个绿色站点是留下来的八步，按先后排成两行，每站写一个数；四个红色虚框是走错的四步，从主线岔出去、又折回来，各写一条教训。第 4 步后岔出去一次：以为 FP32 dgrad，其实是 TF32；第 5 步后一次：路由翻转当成两边实现不同；第 7 步后两次：精确轨迹的噪声只看一对、把 ④ 当成了精确值。最后一站定案 ⑤，v5p、v7x 全部在噪声内，最差 0.85 倍。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>

@@ -110,7 +110,7 @@ b.kn{background:#fef7e0;padding:0 3px;border-radius:3px}
 from course_narrow_css import CSS as _NARROW_CSS   # noqa: E402
 head += "<style>" + _NARROW_CSS + "</style>\n"
 head += "<style>.foldfig ol { padding-left: 2.4em }\np.codeline{font-size:13.5px;color:var(--gray)} a.codelink{display:inline-block;margin-right:14px;padding:1px 8px;border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--blue)} a.codelink:hover{background:var(--blue-l)}</style>\n"
-head += "<style>figure.fwide > video { display:block; width:100%; max-width:1240px; margin:0 auto; border-radius:8px }\nfigure.fwide:has(> video) > figcaption { max-width:1240px; margin-left:auto; margin-right:auto }</style>\n"
+head += "<style>figure.fwide > video { display:block; width:auto; max-width:min(100%, 1240px); max-height:calc(100vh - 150px); margin:0 auto; border-radius:8px }\nfigure.fwide:has(> video) > figcaption { max-width:1240px; margin-left:auto; margin-right:auto }</style>\n"
 
 SECTIONS = [
     ("s一", "一", "什么叫对齐"),
@@ -1518,9 +1518,10 @@ __ANIM_CANCEL__
   <p>先在一处上看清楚，就拿 ⓪ 来看：它在这次排查之前就补上了；把它退回没补时的写法，为 v5p 离线编译：HLO 里那对 convert 都在，可算均方那颗 kernel 的后端指令（LLO）里，把 FP32 打包成 BF16 的指令一条都没有（§8.5 也是这样数的）；同一处写成强制舍入，就有 «EL_IHC_FIXED» 条。往返留在一颗 kernel 里就不舍；值写回内存交给下一颗、或直接喂给矩阵乘，才真舍：</p>
 __ANIM_DECLARED__
   </details>
-  <p><b>先在一处上看：声明了，却被省掉。</b>代码里写一对「转 BF16 再转回」，不改数学，写它只有一个意思：这里要舍。拿已补上的一处退回旧写法，离线编一遍：优化后的程序（HLO）里两条转换都在；芯片指令里真把 FP32 打包成 BF16 的，<b class="kn">0 条</b>；写成强制舍入，«EL_IHC_FIXED» 条（下图左块）。编译器看这个值马上还要接着算，往返留在一颗 kernel 里就不舍；写回内存交给下一颗，才真舍。第五节那个 32K 上的 RMSNorm scale（<a href="#s5-norm32k">§5.4</a>），就是这样被省掉的。</p>
-  <p><b>再让编译器自己交代。</b>把整个训练步离线编译一次（不用上卡），把写了往返、芯片指令里没舍的地方全列出来：«EL_TOTAL» 处，按位置归几类（下图右块）。</p>
+  <p><b>先在一处上看：声明了，却被省掉。</b>代码里写一对「转 BF16 再转回」，不改数学，写它只有一个意思：这里要舍。拿已补上的一处退回旧写法，离线编一遍：优化后的程序（HLO）里两条转换都在；芯片指令里真把 FP32 打包成 BF16 的，<b class="kn">0 条</b>；写成强制舍入，«EL_IHC_FIXED» 条（下图）。编译器看这个值马上还要接着算，往返留在一颗 kernel 里就不舍；写回内存交给下一颗，才真舍。第五节那个 32K 上的 RMSNorm scale（<a href="#s5-norm32k">§5.4</a>），就是这样被省掉的。</p>
 __FIG_ELIDED__
+  <p><b>再让编译器自己交代。</b>把整个训练步离线编译一次（不用上卡），把写了往返、芯片指令里没舍的地方全列出来：«EL_TOTAL» 处，按位置归几类（下图）。</p>
+__FIG_ELSWEEP__
   <details class="foldfig"><summary><b>扫描过程的动画</b></summary>
 __ANIM_SCAN__
   </details>
@@ -1714,7 +1715,10 @@ __FIG_LIBTPU__
   <details class="foldfig"><summary><b>另外几件在 0.0.52 上</b>：一件变弱、一个门槛变了、四件不变</summary>
   <ul>
     <li><b>一件变弱、一个门槛变了</b>：上下文并行降到 0.95（那个张量本来就随加法顺序跳一倍，只算这次没过线）；词嵌入排序门槛变了，v7x 上不累积的纯数据并行，词嵌入梯度不再丢精度（§8.6；这次运行整体另因输出头 3 个小参数判「超」，是另一件）。纯数据并行、关省舍入、关小矩阵乘改写、多路残差这四件，在 v5p 上结论不变。</li>
-  </ul></details>
+  </ul>
+  <p>门槛那一处是先离线预测、再上卡核对的：</p>
+__FIG_LIBSORT__
+  </details>
   <details class="foldfig"><summary><b>RMSNorm 那件为什么变强</b>：逐步曲线；两次舍入为什么系统偏小（图、机理）</summary>
   <p>逐步看，RMSNorm 那件在 0.0.52 上是真的「一直偏高」，不是一两步的尖峰：</p>
 __FIG_RMS52__
@@ -1759,11 +1763,14 @@ __FIG_REGRESS__
   <div class="note ok"><span class="t">搬上 TPU 以后改代码，照这几步做</span>
   ① 改完先只编译，比训练步程序的指纹：一样就逐位相同，不用跑（本节上面）。<br>
   ② 指纹变了，跑 300 步对 TPU 的 golden：曲线最差 r 不超过纯噪声的最高分、第 1 步没有离 FP64 更远的张量，就是换了顺序。<br>
-  ③ 动到精度或数值路径的，再跑 1000 步、用 GPU 16 份当尺子；记下的每一项 loss 都逐项比。<br>
-  ④ 四个已知会动精度的坑：纯数据并行时只切词嵌入表（或词嵌入梯度用 FP32 累加，第八节）；别关 excess precision；RMSNorm 开单次舍入（最后一层输出舍两次那件；v5p、运行库 0.0.52 上不开就超；跟第五节那个 norm scale 舍入不是一回事）；上下文并行目前只能配普通注意力，要让 softmax 真走 FP32（新版代码起，旧代码写了也不生效）。<br>
-  ⑤ 本身对加法顺序很敏感的小张量（比如注意力的 sink 参数：每个头一个可学习的标量，给 softmax 多一个「哪都不看」的去处），1.2 倍的门槛对它太紧，先看只换顺序的几次运行会跳多大；被小参数豁免单列的，要看豁免清单里的倍数。<br>
-  ⑥ 换运行库版本：离线筛判不了；先建新的基准运行，跟旧的比，再把上面几件重测一遍（§10.2）。<br>
-  ⑦ 换设备数、换梯度累积、换切法：先离线编译一份生产规模的训练步，数边传边乘的循环和它们的累加器类型、数被删掉的「转 BF16 再转回」（§5.3、§5.4）；要真舍，写强制舍入。</div>
+  ③ 动到精度或数值路径的，再跑 1000 步、用 GPU 16 份当尺子；记下的每一项 loss 都逐项比。</div>
+  <details class="foldfig"><summary><b>还有四条</b>：四个已知会动精度的坑、对顺序敏感的小张量、换运行库、换设备数／梯度累积／切法</summary>
+  <ol start="4">
+  <li>四个已知会动精度的坑：纯数据并行时只切词嵌入表（或词嵌入梯度用 FP32 累加，第八节）；别关 excess precision；RMSNorm 开单次舍入（最后一层输出舍两次那件；v5p、运行库 0.0.52 上不开就超；跟第五节那个 norm scale 舍入不是一回事）；上下文并行目前只能配普通注意力，要让 softmax 真走 FP32（新版代码起，旧代码写了也不生效）。<br></li>
+  <li>本身对加法顺序很敏感的小张量（比如注意力的 sink 参数：每个头一个可学习的标量，给 softmax 多一个「哪都不看」的去处），1.2 倍的门槛对它太紧，先看只换顺序的几次运行会跳多大；被小参数豁免单列的，要看豁免清单里的倍数。<br></li>
+  <li>换运行库版本：离线筛判不了；先建新的基准运行，跟旧的比，再把上面几件重测一遍（§10.2）。<br></li>
+  <li>换设备数、换梯度累积、换切法：先离线编译一份生产规模的训练步，数边传边乘的循环和它们的累加器类型、数被删掉的「转 BF16 再转回」（§5.3、§5.4）；要真舍，写强制舍入。</li>
+  </ol></details>
 
   <h3>10.4　踩过的坑，和怎么记</h3>
 __FIG_JOURNEY__
@@ -2147,7 +2154,9 @@ FIGS = {
     "__FIG_GATECMP__": ("fig-gatecmp", "fig8-gatecmp.svg", "topic08-fig-mig2.py",
         '<b>左边：在橙点那格上再补，三格紫点都没明显往下；右边：紫点有三个落在所有灰点的右边。</b><br><em>每点一份运行；实测；机制在查。</em>'),
     "__FIG_ELIDED__": ("fig-elided", "fig8-elided.svg", "topic08-fig-elided.py",
-        '<b>左边：代码写了往返、HLO 里两条 convert 都在，LLO 打包却是 0。右边：同类的地方一共 272 处，三根橙条是先查的范围。</b><br><em>都是实测；右边的条按使用次数算，不是 kernel 数。</em>'),
+        '<b>从左往右：代码写了往返，HLO 里两条 convert 都在，芯片指令里打包却是 0。</b><br><em>最小复现离线编译，实测。</em>'),
+    "__FIG_ELSWEEP__": ("fig-elsweep", "fig8-elsweep.svg", "topic08-fig-elided.py",
+        '<b>三根橙条 A、B、C 是先查的范围。</b><br><em>条长按使用次数算，不是 kernel 数；实测。</em>'),
     "__FIG_CANCEL__": ("fig-cancel", "fig8-cancel.svg", "topic08-fig-elided.py",
         '<b>只补收拢处那一行读数最大；只补流梯度那一行最小，可往下拉的那股还在。</b><br><em>读数是实测；「往下拉的那份」是推断，箭头只表示方向。</em>'),
     "__FIG_SITES__": ("fig-sites", "fig8-sites.svg", "topic08-fig-elided.py",
@@ -2159,7 +2168,9 @@ FIGS = {
     "__FIG_SCREEN__": ("fig-screen", "fig8-screen.svg", "topic08-fig-bug.py",
         '<b>左边一次编译三个出口；右边能判的全部对上。</b><br><em>数都是对齐记录的回测实测。</em>'),
     "__FIG_LIBTPU__": ("fig-libtpu", "fig8-libtpu.svg", "topic08-fig-temper.py",
-        '<b>左边只有 RMSNorm 那一行往右蹿出了线；右边红点 8,192 在 0.0.46 门槛左边、0.0.52 门槛右边。</b><br><em>左块横轴对数；右块门槛全表在图下出处里；两块都是实测。</em>'),
+        '<b>先看最上面的基准点在线内，再看 RMSNorm 那一行往右蹿出了线。</b><br><em>横轴对数；空心是 0.0.46，实心是 0.0.52；都是实测。</em>'),
+    "__FIG_LIBSORT__": ("fig-libsort", "fig8-libsort.svg", "topic08-fig-temper.py",
+        '<b>红点 8,192 在 0.0.46 门槛左边、0.0.52 门槛右边。</b><br><em>门槛全表在图下出处里；上卡核对是实测。</em>'),
     "__FIG_MINIDRIFT__": ("fig-minidrift", "fig8-minidrift.svg", "topic08-fig-mig2.py",
         '<b>上面的红粗线第 550 步以后一路往上；下面 MTP 反着往下。</b><br><em>细线是 8 份各自，粗线是均值；灰带是 GPU 自己的散布。</em>'),
     "__FIG_SWEEP__": ("fig-sweep", "fig8-sweep.svg", "topic08-fig-ddp.py",
