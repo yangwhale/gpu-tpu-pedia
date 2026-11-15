@@ -9197,7 +9197,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="aw"><span class="k">形状</span>隐状态 H：4096 token × 4096 维　　输出矩阵 W：120,832 词 × 4096 维（每个词一行）</div>
   <div class="aw"><span class="k">① 前向</span>logits Z ＝ H · Wᵀ　→　4096 token × 120,832 词　<em>（每个分数是 token 向量和一个词那一行的点积，沿 4096 维求和）</em></div>
   <div class="aw"><span class="k">② loss</span>p ＝ softmax(Z) 逐 token；loss ＝ 对所有 token 平均的 −log p<sub>正确词</sub></div>
-  <div class="aw"><span class="k">③ 对 logits 求导</span>dZ<sub>t,v</sub> ＝ (p<sub>t,v</sub> − [v 是正确词]) ÷ token 数　<em>（正确词一项接近 −1，其余十二万多项是很小的正数，整行加起来精确为 0）</em></div>
+  <div class="aw"><span class="k">③ 求导</span>dZ<sub>t,v</sub> ＝ (p<sub>t,v</sub> − [v 是正确词]) ÷ token 数　<em>（正确词一项接近 −1，其余十二万多项是很小的正数，整行加起来精确为 0）</em></div>
   <div class="af long">dH ＝ dZ · W　　dH<sub>t,j</sub> ＝ Σ<sub>v＝1…120,832</sub> dZ<sub>t,v</sub> · W<sub>v,j</sub></div>
   <p class="asub">(4096 × 120,832) · (120,832 × 4096) → 4096 × 4096：中间收缩的那一维就是词表。<b>十二万项的求和只在这一步</b>：输出头反向，把梯度传回隐状态（dgrad）。</p>
   <div class="acases">
