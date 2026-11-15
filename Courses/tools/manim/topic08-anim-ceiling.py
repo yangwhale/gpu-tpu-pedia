@@ -179,7 +179,7 @@ def pair_window(k):
 
 
 CAPS = [
-    (0.0, "第 1 步　一次真实判定的尺子：GPU 重跑 5 份（一个点 ＝ 一份）",
+    (0.0, "第 1 步　一次真实判定（定案前）的尺子：GPU 重跑 5 份（一个点 ＝ 一份）",
      "5 份设置完全相同，只差运行间的随机性"),
     (T2A, "第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱",
      "带符号均值 ＝ 第 2–1000 步逐步相对差 dₜ 的平均；两个点隔多远，柱就多高"),
@@ -349,7 +349,7 @@ class NoiseCeiling(Scene):
         rf = tx("r ＝ %s ÷ %s ＝ %.2f" % (sci(X_TEST), sci(N_PUB), R_PUB), 22, WHITE)
         rf.move_to([BAND_R + 0.25 + rf.width / 2, 0.15, 0])
         put(rf, lambda t: prog(t, T4A + 2.2, T4A + 2.6) * fade_out_all(t))
-        rn = tx("尺子：同一设置的 GPU 重跑", 18, GREY_B)
+        rn = tx("尺子：借自另一组设置的 GPU 重跑（§9.2）", 18, GREY_B)
         rn.move_to([BAND_R + 0.25 + rn.width / 2, -0.3, 0])
         put(rn, lambda t: prog(t, T4A + 0.2, T4A + 0.6) * fade_out_all(t))
 

@@ -407,7 +407,7 @@ TC_CARD = (
     '  <tr><td>只算截断模型（推断，没写回 BF16）</td><td>约 3e-7</td><td>约 1.1e-5</td><td>—</td></tr>\n'
     '  <tr><td>FP32 不走张量核</td><td colspan="3">≤ 5e-8</td></tr>\n'
     '  </tbody></table>\n'
-    '  <p class="anote">短求和那一格主要是输出写回 BF16 的舍入，截断只占约 3e-7（推断）；截断要到长求和才主导。</p>\n'
+    '  <p class="anote">短求和那一格比只算截断大得多（截断只给约 3e-7），差在哪没拆；正负两组输入在这一格也不对称，像噪声多过偏差。截断要到长求和才主导。</p>\n'
     '  </div>\n')
 
 QUIZ = '''
@@ -1258,7 +1258,7 @@ __FIG_ONEPASS__
   <details class="foldfig"><summary><b>怎么确定是截断</b>：三样证据，哪些是实测、哪些是推断</summary>
   <ul>
     <li><b>硬件建模</b>（实测）：按 B200 张量核模型逐位重算路由打分，三层全部元素逐位对上；跟公开论文对 H100／B200 的比特级建模一致（Khattak、Mikaitis，arXiv:2512.07004，§5.2）。</li>
-    <li><b>合成测试</b>（实测）：同一个模型在合成正数输入上，求和长 «TC_K3_T» 朝零偏 «TC_BIAS3»（短求和那几点主要是输出写回 BF16 的舍入，推断，所以不拿来作截断的证据）；不走张量核的真 FP32 几乎为零（≤ 5e-8）。</li>
+    <li><b>合成测试</b>（实测）：同一个模型在合成正数输入上，求和长 «TC_K3_T» 朝零偏 «TC_BIAS3»（短求和那几点比截断模型大、来源没拆，所以不拿来作截断的证据）；不走张量核的真 FP32 几乎为零（≤ 5e-8）。</li>
     <li><b>案例里的真张量</b>（实测）：把训练里实际用到的输出头张量的词表行打乱、取前 K 行在 FP64 里重算，K 从 16,384 起行越多误差越大、都朝零缩（更短的 K 沿这个方向的读数被其余行的随机误差盖住，不单调）：K ＝ «HEAD_K1» 时 «HEAD_BIAS1»，K ＝ 65536 时 2.0e-4，整张词表 «HEAD_K3» 行时 «HEAD_BIAS3»。</li>
     <li><b>推断</b>：「案例里的偏差就是这个抹零模型在起作用」—— 那个模型在这么长的求和上没有单独逐位验证过。</li>
   </ul></details>
@@ -1962,7 +1962,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>«N_TENSORS_T» 个张量逐位、参数 «N_PARAMS»</td><td>开源权重 → TPU 格式 → 转回，按原始字节比</td></tr>
   <tr><td>权重衰减 «WD_CONFIG» → «WD_EFFECTIVE»</td><td>GPU 运行每一步从优化器参数组读出的权重衰减（1000 步全是 «WD_EFFECTIVE»）；框架预训练模板与调度器源码</td></tr>
   <tr><td>第 1 步 loss «D1_PLUS_T»</td><td>«LOSS1_TPU_T» 对 «LOSS1_GPU_T»</td></tr>
-  <tr><td>TPU 对 GPU 尾段带符号均值 «TPU_LOSS_TAIL_T»，逐步上下抖的幅度（均方根）«TPU_TAIL_STEP_STD»，九成的步更低</td><td>逐步原值，TPU 第一次 1000 步运行对 GPU 第一份</td></tr>
+  <tr><td>TPU 对 GPU 尾段带符号均值 «TPU_LOSS_TAIL_T»，扣掉均值后逐步上下抖的幅度（标准差）«TPU_TAIL_STEP_STD»，九成的步更低</td><td>逐步原值，TPU 第一次 1000 步运行对 GPU 第一份</td></tr>
   <tr><td>定案前第一关验收 r（对 ④ 精确轨迹）：参数范数 «ACC_PN_R»、loss «ACC_LOSS_ALL_R» ／ «ACC_LOSS_TAIL_R»、梯度范数 «ACC_GN_R»；v7x（开关打开前的配置）参数范数 «ACC_V7X_PN»</td><td>v5p 当前配置 1000 步对精确轨迹一份；N 取 ③ 那组 GPU 重跑 5 份两两 10 对</td></tr>
   <tr><td>参照 «INCONCL_PAIRS_T» 对：待定 «INCONCL_T»</td><td>第一阶段 100 步的 GPU 对 GPU 演练（46 条检查），被测和参照都是默认设置；15 对时只重判了那 8 条外加梯度范数一条</td></tr>
   <tr><td>qkv 投影 R «R_QKV_BEFORE» → «R_QKV_AFTER_T»；对 GPU rel_L2 «QKV_VS_GPU_BEFORE» → «QKV_VS_GPU_AFTER»</td><td>v5p 单算子对 FP64、逐层回放；打开 FP32 累加的开关前后</td></tr>
@@ -2100,7 +2100,7 @@ FIGS = {
     "__FIG_INOUT__": ("fig-inout", "fig8-inout.svg", "topic08-fig-fp.py",
         '<b>左边每片给出整个 y 的一份，要加；右边每片给出 y 的几列，只拼。</b><br><em>q_a、q_b 和 kv_a、kv_b 是 MLA 里 q、kv 各两个低秩投影，o_proj 是注意力输出投影。形状只画关系，不按比例；底下一行是实测。</em>'),
     "__FIG_LMHEAD__": ("fig-lmhead", "fig8-lmhead.svg", "topic08-fig-fp.py",
-        '<b>左边第二行那一截红线，就是右边红条比灰条长出来的那三个数量级。</b><br><em>左格是示意；右格和下面三张卡是实测，单份运行。</em>'),
+        '<b>左边第二行那一截红线，就是右边红条比灰条长出来的那三到四个数量级。</b><br><em>左格是示意；右格和下面三张卡是实测，单份运行。</em>'),
     "__FIG_EXCESS__": ("fig-excess", "fig8-excess.svg", "topic08-fig-fp.py",
         '<b>数每一行的红块：第二行少了，第三行又回到第一行的位置。</b><br><em>四个算子、融合怎么切都是示意。</em>'),
     "__FIG_NORMSCALE__": ("fig-normscale", "fig8-normscale.svg", "topic08-fig-fp.py",
@@ -2118,11 +2118,11 @@ FIGS = {
     "__FIG_TRANS__": ("fig-trans", "fig8-trans.svg", "topic08-fig-fp.py",
         '<b>左边看蓝条比灰条长多少。</b><br><em>对数刻度；右边是教科书做法的示意。</em>'),
     "__FIG_DIVERGE__": ("fig-diverge", "fig8-diverge.svg", "topic08-fig-observe.py",
-        '<b>蓝灰两条离 FP32 几乘十的负三次方，红线两边之差只有它的百分之一上下。</b><br><em>这条 FP32 轨迹连权重都不舍成 BF16；只有第 1 步能拿它比。</em>'),
+        '<b>蓝灰两条离 FP32 几乘十的负三次方，红线两边之差多数步只有它的几十分之一到百分之一。</b><br><em>这条 FP32 轨迹连权重都不舍成 BF16；只有第 1 步能拿它比。</em>'),
     "__FIG_ONGRID__": ("fig-ongrid", "fig8-ongrid.svg", "topic08-fig-observe.py",
         '<b>左边第一行的点都压在竖线上，右边蓝线第 1 步落在 0 上。</b><br><em>两格的数都是玩具实验现跑的，只看第 1 步是不是 0，差多大没有意义。</em>'),
     "__FIG_SWITCH__": ("fig-switch", "fig8-switch.svg", "topic08-fig-golden.py",
-        '<b>从左上那个问题开始往下走。</b><br><em>1% 是本课取的界。</em>'),
+        '<b>从左上那个问题开始往下走。</b><br><em>1% 是对齐记录台账的分类线。</em>'),
     "__FIG_LADDER__": ("fig-ladder", "fig8-ladder.svg", "topic08-fig-golden.py",
         '<b>右边每一级两根条：② 那一级灰条（GPU）先变长，③ 那一级紫条（TPU）才变长。</b><br><em>格子只写跟谁一样，不写尺寸；右边对数轴。</em>'),
     "__FIG_HOOKS__": ("fig-hooks", "fig8-hooks.svg", "topic08-fig-observe.py",
@@ -2226,10 +2226,10 @@ ANIMS = {}   # 占位符 -> (anim id, mp4, Scene, 图注一句, 图注补充, ar
 ANIMS["__ANIM_CEILING__"] = ("anim-ceiling", "topic08-ceiling.mp4", "NoiseCeiling",
     "N 是从 5 份重跑两两组成的 10 对里挑出来的最大值；被测一出场，纵轴得缩一半才装得下。",
     "只演参数范数的带符号均值；10 根柱子都是真值，横轴只表示相对位置。",
-    "噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　一次真实判定的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；5 份是同一设置的 GPU 重跑。"
+    "噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　一次真实判定（定案前）的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；5 份是同一组设置的 GPU 重跑，被测的基线是另一份精确轨迹，尺子借自这组（课件 §9.2）。"
     "第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。"
     "第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，«GPU_RERUN_PN»。"
-    "第 4 步　被测（TPU 对一份 GPU 基线）出场，r 等于被测除以 N；尺子就是这 5 份 GPU 重跑。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 «ACC_PN_X»，r 等于 «ACC_PN_X» 除以 «GPU_RERUN_PN»，等于 «ACC_PN_R»。"
+    "第 4 步　被测（TPU 对一份 GPU 基线）出场，r 等于被测除以 N；尺子借自这 5 份 GPU 重跑。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 «ACC_PN_X»，r 等于 «ACC_PN_X» 除以 «GPU_RERUN_PN»，等于 «ACC_PN_R»。"
     "背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。")
 ANIMS["__ANIM_SCATTER__"] = ("anim-scatter", "topic08-scatter.mp4", "ScatterRound",
     "不排序时同一个词每来一次就舍一次；排好序以后挨在一起，在片上 FP32 缓冲里加完才舍一次。",
@@ -2244,8 +2244,8 @@ ANIMS["__ANIM_CHAIN__"] = ("anim-chain", "topic08-chain.mp4", "DriftChain",
     "同一个小差每一步都一样，积到第 300 步就成了看得见的漂移。",
     "第 3 环每 25 步一个实测点（12 个），点间连直线；第 4 环只有第 300 步一个实测值，走到第 300 步才出现；⑤ 是逐步实测。",
     "五环一条链：每一步少推一点，几百步积出来。每一环是下一环的原因；底下的时钟是训练步数。"
-    "① GPU 输出层 dgrad：12 万长的求和朝零少了一点（截断＋吞小项），每一步少推约 «HEAD_S1_E»（沿所有 logits 一起动的方向，第 1 步实测；第 100 步 «HEAD_S100_E»），每一步都少推、量级一样。"
-    "② 主干权重沿这个方向每一步少走一点：整步沿漂移方向少走 «SWAP_GPU_ABS_T»（全体参数，同一状态实测），主干里大头在第 0 层注意力的输出投影。"
+    "① GPU 输出层 dgrad：12 万长的求和朝零少了一点（第 1 步以截断为主；中途另有吞小项，那部分是推断），每一步少推约 «HEAD_S1_E»（沿所有 logits 一起动的方向，第 1 步实测；第 100 步 «HEAD_S100_E»），每一步都少推、量级一样。"
+    "② 主干权重沿这个方向每一步少走一点：整步沿漂移方向少走 «SWAP_GPU_ABS_T»（全体参数，同一状态实测），第 0 层最先歪，第 0 层里大头在注意力的输出投影。"
     "③ 所有 logits 一起偏一截（lse 差，TPU 减 GPU）；softmax 看不见它。第 25 步 «LSE25_T»，第 50 步 «LSE50_T»，第 100 步 «LSE100_T»，第 300 步 «LSE300_T»。"
     "④ 冷门词那几行压多压少跟着 logit 整体水平走（梯度很小，Adam 的归一化保护失效：«RARE_EPS_FRAC_T» 的元素根号 v 小于 ε）；没出现过的词那几行平方和多涨 «ROWS300_NEVER»（第 300 步实测）。"
     "⑤ 参数范数多涨，第 300 步 «PN_DIFF_300_T»；按组拆输出层占 «GROUP_HEAD_SHARE_T»（另测一对，合计 «GROUP_TOTAL_300_T»）；loss 偏低（去掉那股力后参数范数还剩三成；loss 的机制未验证）。"
@@ -2307,7 +2307,7 @@ ANIMS["__ANIM_FLIP__"] = ("anim-flip", "topic08-flip.mp4", "RouteFlip",
     "① 一个 token 给 «EXPERTS» 个专家打分，取前 «TOPK» 名：第 8、9 名几乎一样高。排名用分数加偏置；选中后加权用不带偏置的分数，偏置只管选谁。"
     "② 上游注意力两边差一点点，分数挪一丝，第 8、9 名对调。路由的输入（注意力之后）两边差 rel_L2 «ROUTE_IN_RELL2_LO» 到 «ROUTE_IN_RELL2_HI»，约是 BF16 舍入量级。放大看两根条的顶端（约 2000 倍）：B 只比 A 低 3e-5；挪动以后 A 反比 B 低 1.5e-5，A 落选，B 入选。翻转 token 的第 8、9 名分差中位数 «FLIP_MARGIN»；全部 token 的中位数 «ALL_MARGIN_LO» 到 «ALL_MARGIN_HI_T»。"
     "③ 这个 token 的那一份输出，整块换了一个专家来算：GPU 由专家 A 算，TPU 换成专家 B，不是差一丝，是换了一个人。分到 token 少的专家，进出一个 token 就是它梯度的一大块：第 3 层专家 0 在这一批 «BATCH_TOKENS» 个 token 里只分到 «E0_TOKENS» 个，TPU 上换出 «E0_OUT» 个、换进 «E0_IN» 个。第 1 步梯度对 GPU 的 rel_L2：这个专家的权重梯度 «STEP1_EXPERT»，比到的 «STEP1_TENSORS» 个张量合起来 «STEP1_ALL_E»，约差 «STEP1_X» 倍；估算 根号（换掉的除以分到的）＝ 根号（«E0_SWAPPED»/«E0_TOKENS»）约 «E0_SQRT_T»，同量级。GPU 自己重跑，这些张量的差几乎是 0。"
-    "④ 对照：两边喂完全相同的路由输入，3 层乘 «BATCH_TOKENS» 个 token，翻转 0（logits 两边仍差 «ROUTE_SAME_IN_DIFF»，但一个都没翻）；路由器的输入换成 TPU 自己算出来的（差 «ROUTE_IN_RELL2_LO»），每层翻 «FLIP_L2_T» 的 token，翻的多是近平局。根子在输入差，不在路由器自己的精度。"
+    "④ 对照：两边喂完全相同的路由输入，3 层乘 «BATCH_TOKENS» 个 token，翻转 0（logits 两边仍差 «ROUTE_SAME_IN_DIFF»，但一个都没翻）；路由器的输入换成 TPU 自己算出来的（差 «ROUTE_IN_RELL2_LO»），每层翻 «FLIP_L2_T» 的 token，翻的多是近平局。根子在输入差，不在路由打分那次矩阵乘（TPU 近似 sigmoid 的贡献没测）。"
     "⑤ GPU 自己重跑第 1 步：前向确定，路由一个不变；拿 GPU 重跑当噪声尺，路由翻转在这把尺上是 0 宽度。翻了的专家按同一批 token 重比，不能直接判算错。近平局加一丝输入差，等于选了另一个专家。")
 
 
@@ -2339,7 +2339,7 @@ if ANIMS:
     _html = _html.replace("</body>", _STEP_JS + _RM_JS + "</body>")
 _html = P.place_figs(_html, {_k: _v[:3] + (_numsub(_v[3]),) for _k, _v in FIGS.items()})   # 图注里的 «名字» 也落地
 # 2026-11-15 版面检查：几处字贴参考线或被曲线穿过，给这几行字加一圈白边（paint-order 描边），不挪位置。
-_HALO = ["这一点主要是输出写回 BF16 的舍入", "纯噪声最大", "16 份尺子", "10 份均值", "步时 ＋", "以上入选",
+_HALO = ["这一点比只算截断大，差在哪没拆", "纯噪声最大", "16 份尺子", "10 份均值", "步时 ＋", "以上入选",
          "分支输入", "修之前就照 GPU 舍了", "噪声：∝", "纯噪声最高", "GPU 3.4", "只算截断（推断）"]
 def _halo(m):
     t = m.group(0)

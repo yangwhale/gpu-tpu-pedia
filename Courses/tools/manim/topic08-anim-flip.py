@@ -299,7 +299,7 @@ class RouteFlip(Scene):
         c4 = tx("输入换成 TPU 自己算出来的（差 3.4e-3）", 22, WHITE).move_to([RX, 0.05, 0])
         c5 = tx("每层翻 3.5%–5.4% 的 token", 24, RED).move_to([RX, -0.45, 0])
         c6 = tx("翻的多是分差很小的近平局", 18, GREY_B).move_to([RX, -0.85, 0])
-        c7 = tx("根子在输入差，不在路由器自己的精度", 22, YELLOW).move_to([RX, -1.75, 0])
+        c7 = tx("根子在输入差，不在路由打分那次矩阵乘", 22, YELLOW).move_to([RX, -1.75, 0])
 
         # ── ⑤ 收 ──
         f1 = tx("GPU 自己重跑第 1 步：前向确定，路由一个不变", 20, GREY_B).move_to([RX, 1.2, 0])

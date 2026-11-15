@@ -75,7 +75,7 @@ def p_exceed(n):
 # ── 第一层验收（v5p 当前配置对精确轨迹那一份，噪声取 ③ 那组 GPU 重跑 10 对）────────
 ACC = [  # (量, 被测值, N, r)
     ("param_norm 带符号均值", 4.27e-7, 1.24e-7, 3.45),
-    ("loss 带符号均值（第 2–1000 步）", 8.62e-5, 4.49e-5, 1.92),
+    ("loss 带符号均值（第 2–1000 步）", 8.62e-5, 4.48e-5, 1.92),   # N 原文 4.48e-5（第十棒改，原写 4.49e-5）
     ("loss 带符号均值（第 301–1000 步）", 7.23e-5, 5.62e-5, 1.29),
     ("grad_norm 带符号均值", 2.32e-3, 2.03e-3, 1.14),
 ]
@@ -459,7 +459,7 @@ TC_K3, TC_BIAS3 = TC_BIAS_K[2]
 TC_BIAS2_T, TC_K3_T = tx(TC_BIAS2, "%.1e"), str(TC_K3); _lock("TC_BIAS2_T", TC_BIAS2_T, "7.0e-5"); _lock("TC_K3_T", TC_K3_T, "65536")
 ROUTER_TPU_FP64_HI, ROUTER_GPU_FP64_HI = 5.7e-8, 4.0e-6   # 路由打分对 FP64 三层的上沿（下沿是 ROUTER_*_FP64）。出处：逐层回放报告 L1 注 2（TPU 4.8e-8–5.7e-8、GPU 3.8e-6–4.0e-6）
 ROUTER_GPU_FP64_HI_T = tx(ROUTER_GPU_FP64_HI, "%.1e"); _lock("ROUTER_GPU_FP64_HI_T", ROUTER_GPU_FP64_HI_T, "4.0e-6")
-MOMENTUM_INV_LO, MOMENTUM_INV_HI = 6e-8, 2e-7        # 11-16 事实核查改：反推梯度的独立核对 —— 混元 3 第 1 步，v₁ 对 (1−β₂)·(m₁/(1−β₁))² 的 rel_L2 6e-8、最大 2e-7（案例 01「第 1 步整网梯度」）。原注「GPU 上对直接抓的梯度 2e-7–4e-7」在对齐记录里找不到（2e-7–4e-7 是输出层更新计算那一行的二阶动量核对）
+MOMENTUM_INV_LO, MOMENTUM_INV_HI = 6e-8, 2e-7        # 11-16 事实核查改：反推梯度的独立核对 —— 混元 3 第 1 步，v₁ 对 (1−β₂)·(m₁/(1−β₁))² 的 rel_L2 6e-8、最大 2e-7（案例 01「第 1 步整网梯度」）。原注「GPU 上反推梯度对抓到的 main_grad 2e-7–4e-7」也对（案例 01「逐步拆分（GPU 侧）」结果 (a)；第十棒复核，第九棒判「找不到」是漏查）；两条都是实测，课件用第 1 步这条
 PN_GPU_PAIR_MAX = 6.6e-4                             # GPU 两次之间参数范数差的最大值（逐步序列现算，见下）
 assert abs(max(abs(x) for x in series()["pnorm_diff_gpu_b_minus_gpu_a"]) - PN_GPU_PAIR_MAX) < 0.05e-4
 PN_DIFF_300_T = tx(series()["pnorm_diff_tpu_minus_gpu_a"][299], "%.1e"); _lock("PN_DIFF_300_T", PN_DIFF_300_T, "4.6e-3")   # 第 300 步 TPU − GPU
@@ -813,7 +813,7 @@ ELIDE_GPU_MAX_T = tx(ELIDE_GPU_MAX, "%.1e")
 # 超越函数（§5.8）：TPU v5p 默认 FP32 实现对正确舍入的最大误差（格＝ulp），对照 GPU 文档上限与 TPU 高精度写法
 TRANS = {   # 函数: (TPU 默认 ulp_max, TPU 高精度写法 ulp_max, GPU 上限)
     "exp": (105, 1, 2), "log": (62, 3, 1), "sigmoid": (83, 3, 3.4), "silu": (86, 4, 3.4)}
-TRANS_GPU_NOTE = "exp ≤ 2、log ≤ 1 是 CUDA 文档给的上限；B200 实测 log 1、sigmoid 和 silu 最大 3.4（根源一览第 11 行）"
+TRANS_GPU_NOTE = "exp ≤ 2、log ≤ 1 是 CUDA 文档给的观测最大值（文档注明不作保证）；B200 实测 log 1、sigmoid 和 silu 最大 3.4（根源一览第 11 行）"
 assert all(d > 20 * g for d, h, g in TRANS.values())               # 默认比 GPU 差一个数量级以上
 assert all(h <= 4 for d, h, g in TRANS.values())
 EXP_CR_FRAC, EXP_SIGNED_ULP = "6%", -2.49   # 实际蒸馏损失 softmax 的输入上：exp 只有 6% 正好舍对，平均偏 −2.5 格（系统偏低）
@@ -854,7 +854,7 @@ QKC_SMAX_T = tx(QKC_SMAX, "%.4f")
 # 开关三类（§9.6）：用途分类以 1% 步时为界（本课取同一口径）
 SW_COST_GATE = "1%"
 SW_MIX_COST = "0.2%"                      # 四路相加改依次（照 GPU 的顺序）：步时 ＋0.2%；对 FP64 更准未证实，归「看情况」
-SW_ELIDE_COST = "0.06%"                   # 强制舍入：跨代对比 ＋0.06%
+SW_ELIDE_COST = "0.1%"                    # 强制舍入：小尺寸 300 步单开关 A/B ＋0.1%（根源一览 r16；第十棒：原「跨代对比 0.06%」对齐记录里找不到）
 # 规模一级级往上（§9.7 开头）
 LADDER_MID_PASS = (5, 0, 4)               # 中等尺寸（随机初始化，宽度和注意力形状同真实模型）300 步：过 ／ 不过 ／ 待定
 LADDER_MID_WORST = 1.04                   # 四个待定都只略超 N：最差 1.04 N（最老一代读数；现行 C 口径最差 1.25，是 MTP loss，结论不变）
