@@ -251,7 +251,7 @@ def fig_regress():
 def fig_journey():
     G = [("地基铺平", "第 1 步 loss 只差 %s" % N.D1_T),
          ("换成噪声尺子", "是 N 的 %s–%s 倍" % (N.TPU_ARMS_R_T[2], N.TPU_ARMS_R_T[0])),
-         ("按参数分组定位", "%s 在输出层的冷门词" % N.GROUP_HEAD_SHARE_T),
+         ("按参数分组定位", "%s 在输出层，大头是冷门词" % N.GROUP_HEAD_SHARE_T),
          ("双向干预", "lse 的差 %s → %s" % (N.ORIG_LSE_T, tx(N.REMOVE_LSE, "%.3f"))),
          ("找到源头", "GPU dgrad 朝零 %s" % tx(N.HEAD_BF16_S1)),
          ("golden 一步步改", "%s → %s → %s 倍噪声" % (N.GOLDEN_R2_T, N.GOLDEN_R3_T, N.GOLDEN_R4_1_T)),

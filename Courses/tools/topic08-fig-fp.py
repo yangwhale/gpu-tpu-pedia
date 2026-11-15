@@ -572,8 +572,8 @@ def fig_normscale():
                "每步偏开约 6.4e-6，第 50、100、150 步偏离中位数 3.2e-4、6.5e-4、9.5e-4；第 200 步起才开始有元素跨过 BF16 的舍入边界。"
                "右：32K 上在第 2 级之上逐个加开关，主 loss 窗口带符号均值是 GPU 噪声尺子 N 的几倍（对数横轴）：不加约 54 倍，加投影 FP32 累加、精确超越函数、精确 Adam 都还是 53–54 倍，"
                "四处舍入一起回到 1.97 倍；120 步短跑再拆，只加 RMSNorm scale 是 0.54 倍，加其余三处之一都约 28 倍。")
-    y0 = f.header("同一行代码，4K 的程序里舍，32K 的程序里被删　——　<tspan font-weight=\"700\">删不删看有没有梯度累积循环</tspan>",
-                  "第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。离线编译：4K 程序里这次舍入在，32K 程序 8 个 norm 全删",
+    y0 = f.header("4K 上「没用」的开关，32K 上<tspan font-weight=\"700\">只补它一处就回到尺子以内</tspan>",
+                  "第三次迁移：RMSNorm 先把 FP32 的 scale 舍成 BF16 再乘（照 GPU），用「转 BF16 再转回」写。右：32K 上逐个加开关二分；左：两边乘的 scale 离 1.0 多远",
                   [(GY, "GPU：乘 BF16 的 scale"), (BL, "TPU 32K：乘 FP32 的 scale"), (RD, "主 loss 偏差")])
     PH, LW = 384, 640
     py = f.panel(0, y0, LW, PH, "为什么到几十步以后才显出来：scale 离 1.0 多远", INK, tag="实测 ＋ 外推虚线")
@@ -593,7 +593,7 @@ def fig_normscale():
     xa, ya = XY(0, 0)
     xb, yb_ = XY(250, 0)
     f.line(xa, ya - 2, xb, yb_ - 2, GY, 3.2, arrow=False)
-    f.t(XY(120, 0)[0], ya - 10, "GPU：BF16 副本一直是 1.0", GY, True, 13, "middle")
+    f.t(XY(120, 0)[0], ya - 10, "GPU：BF16 副本头 150 多步都是 1.0", GY, True, 13, "middle")
     pts = [(0, 0.0)] + list(N.M3_SCALE_TRACK)
     for (s1, d1), (s2, d2) in zip(pts, pts[1:]):
         x1, y1 = XY(s1, d1)
@@ -645,7 +645,7 @@ def fig_normscale():
     assert y < py2 + PH - 88, y
     f.t(px + 16, py2 + PH - 38, "四处 ＝ 主输出头反向、路由权重前移、RMSNorm scale、sigmoid 输出的舍入", GY, size=13)
     f._pan = None
-    yb = f.band(y0 + PH + 20, "ok", "在一个配置上验过「这个开关不用开」，换了梯度累积要重验", [
+    yb = f.band(y0 + PH + 20, "ok", "在一个配置上验过「这个开关不用开」，换了配置要重验", [
         "4K 开着梯度累积（2）：编译器把转 BF16 那一下提到累积循环外面，BF16 值作为循环状态存进内存，再由另一颗内核转回，舍入真发生；32K 梯度累积 1，没有循环，这一对转换落在同一颗融合里，被删。当初切法和梯度累积是一起变的；只改梯度累积、切法不动，删不删就翻转。",
         "第 1 步看不见：scale 初值 1.0 在 BF16 格点上，两边相同；这个开关的反向是恒等，不碰梯度。要等 FP32 原值偏开、GPU 那边还停在 1.0 才显出来。",
     ])
