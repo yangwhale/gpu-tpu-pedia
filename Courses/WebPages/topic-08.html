@@ -11635,7 +11635,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>TPU 改成 GPU 的写法，偏高降下来；GPU 改成 TPU 的写法，GPU 自己长出同方向的尾巴。两个方向对上，主因定在这里（推断：两头方向一致，每格只有 4–5 份）。</p>
   <details class="foldfig"><summary><b>图里的 p 怎么读</b>：只当方向性的证据</summary>
   <p>图里的 p 是检验值：把这些运行随机重新分组，分出这么大差别的概率；4 份对 5 份一共只有 126 种分组，完全分开时 p 最小就是 0.016。这一节做了十几次这样的检验，没做多重比较校正，单个 p 0.02 上下只当方向性的证据。</p></details>
-  <p>可把前面那个补丁（收拢处，最后四路收成一路那处）也加上，就是现行对齐配置，后段还剩 <b class="kn">＋6.9e-6</b>，跟不修那组分不开。剩下那截一张张猜太慢。回头看抓到的两处：鼓包那处在芯片指令里核过，是代码写了舍、编译器省掉了；流梯度按同一规律推断也是。<b>两处是同一个毛病。</b>那能不能让编译器自己交代，它在哪些地方没舍？</p>
+  <p>可把前面那个补丁（收拢处，最后四路收成一路那处）也加上，就是现行对齐配置，后段还剩 <b class="kn">＋6.9e-6</b>，跟不修那组分不开。剩下那截一张张猜太慢。回头看抓到的两处：鼓包那处在芯片指令里核过，是代码写了舍、编译器省掉了；流梯度按同一规律推断也是。<b>两处是同一个毛病。</b>这个毛病到底是怎么回事？</p>
   <details class="foldfig"><summary><b>反转、一台秤三个毛病、丙在哪、在一处上看清楚</b>（推断多；两段动画在这里）</summary>
   <p><b>反转。</b>把 ① 和 ② 都照 GPU 补上，就是现行的对齐配置；可后段还剩 ＋6.9e-6，比只补流梯度大，跟修之前分不开（p 0.32）。收拢处一开，再补流梯度就测不出作用了（逐份读数收在下面的折叠里）。</p>
 <details class="foldfig"><summary><b>逐份读数</b>：收拢处开着时，补不补流梯度分不开</summary>
@@ -11880,7 +11880,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <text class="svglbl" x="20" y="449" fill="#b06000" style="font-size:17.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">声明了，被省掉：HLO 里在，芯片指令里没有</tspan></text>
 </svg><figcaption><b>从左往右：代码写了往返，HLO 里两条 convert 都在，芯片指令里打包却是 0。</b><span class="capmore"><br><em>最小复现离线编译，实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测：多路残差「4 路加权和 → 转 BF16 → 归一化」的最小复现（MaxText 真模块），CPU 上为 TPU v5p 离线编译（运行库 0.0.46，省舍入默认开），读优化后 HLO 与后端指令（LLO）；训练步的优化后 HLO 里同一对 convert 也都在。打包指令指后端指令里把 FP32 打包成 BF16 的那一类。关掉省舍入，两种写法都真舍。收拢处那一段（另一份最小复现）两路梯度各转 BF16 的两条 convert 也是 0 条打包。</p>
 <p>⚠️ 省不省取决于融合怎么切，同一个值可能这边舍了、那边没舍。</p></details></figure>
-  <p><b>再让编译器自己交代。</b>把整个训练步离线编译一次（不用上卡），把写了往返、芯片指令里没舍的地方全列出来：272 处，按位置归几类（下图）。</p>
+  <p><b>那整个模型里，还有多少处？</b>把整个训练步离线编译一次（不用上卡），把写了往返、芯片指令里没舍的地方全列出来：272 处，按位置归几类（下图）。</p>
 <figure class="fbox fwide" id="fig-elsweep"><svg viewBox="0 0 1400 526" width="100%" role="img" aria-label="把现行对齐配置的整个训练步离线编译一次，扫所有「写了往返、芯片指令里没舍」的地方，一共 272 处：每个微批的权重梯度 75，分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。已经补上的 55 处不算在里面。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">整个训练步离线编一次：写了往返却被省掉的，一共 272 处</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，现行对齐配置，TPU v5p 离线编译；按位置归类，条长是使用次数（不是 kernel 数）</text>
@@ -13675,7 +13675,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>先看红虚框：四步走错，各留一条教训。</b><span class="capmore"><br><em>绿色八站是留下来的，每站一个数；细节在图下出处里。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 每站的细节：① 数据原样回放、权重逐张量逐位、按实际生效的权重衰减；② 同设置 GPU 跑 10 份，偏移在参考档里，却是真偏差；③ 参数范数多涨的那截拆到组、拆到行；④ 两边都去掉「所有 logits 一起升降」那股力；⑤ 拿训练里的真张量对 FP64 拆输出头反向，TPU 第 1 步 −2.4e-5；⑥ ② 生产近似 → ③ dgrad 换 FP32 → ④ 精确轨迹；⑦ 边传边乘的部分和不再在 BF16 里累加，对 ④ 3.52 → 3.45 倍；⑧ 只修那一次长求和，10 对时几项 1.02–1.24 倍待定，补到 45 对。</p>
 <p>📌 走错的四步：「FP32 dgrad」偏 8.08e-4，比 BF16 的 6.51e-4 还大，一度判成换 dgrad 也不动；TPU 那份 FP32 参照里路由专家其实按 BF16 算，翻转是它的下游，撤回；精确轨迹只看一对扰动，像是比借来的尺子窄 18 倍，五份 10 对一量同一量级；FP32 一次累加 12 万也偏，④ 自己少漂 ＋8.70e-3，分段累加后两边精确轨迹重合。</p>
 <p>📌 最终方案里改数值的主要是两处：TPU 的部分和留 FP32、GPU golden 的分段累加；其余几步都是把量法和参照弄对。各数都在出处台账里。</p></details></figure>
-  <p>归成三条规矩：读回值、工具输出都要实测核对；先排除自己，再怀疑硬件；每个结论先问拿什么比。第二次迁移的坑也都落在这三条里（下方坑表里标了出处的几行）。</p>
+  <p>归成前面一路埋下的三条暗线：每个结论先问拿什么比；名字对了不等于生效，读回值、工具输出都要实测核对；先排除自己（包括当参照的那一份），再怀疑硬件。第二次迁移的坑也都落在这三条里（下方坑表里标了出处的几行）。</p>
   <details class="foldfig"><summary><b>坑表</b>：23 行，每行一个坑、一条规矩</summary>
   <table class="t9"><thead><tr><th>坑</th><th>长什么样</th><th>判据</th></tr></thead><tbody>
   <tr><td>TF32 没关干净</td><td>「FP32」参照比 BF16 还偏，一度判反了 dgrad 的结论</td><td>开关读回值不算数，启动实测</td></tr>
