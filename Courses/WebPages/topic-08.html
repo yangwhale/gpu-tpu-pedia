@@ -884,7 +884,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>讲约 99 分钟</b>（三次课，每次 31–35 分钟）</span>
+    <span class="chip">⏱ <b>讲约 93 分钟</b>（三次课，每次 28–34 分钟）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -3589,6 +3589,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
   <details class="foldfig"><summary><b>窗口的两条细则</b>：只有一份原始数据；每个统计量是整窗一个数</summary>
   <p>两个窗口读的是同一条 dₜ 序列，只是求平均的范围不同；每个统计量是整个窗口算出的<b>一个数</b>，不是逐步的滑动平均。窗口写哪段，事先写进协议。</p></details>
+  <details class="foldfig" id="s3-curves"><summary><b>三类曲线谁更灵、各自的盲区</b>（课上不讲）：loss、梯度范数、参数范数；第二次迁移故意埋错的证据</summary>
   <p>loss 是结果，范数是总量。混元 3 那次，三个被比的量里<b>参数范数最先冲出去</b>：它是个累加器，只换顺序的差这步正、下步负，按步数的平方根散开；丢了精度的差有固定方向，按步数长。跑得够久，再小的系统偏差也会冲出噪声带：</p>
 <figure class="fbox fwide" id="fig-integrator"><svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="两块。左块：横轴是训练步数 0 到 1000，纵轴是累加起来的差。十二条灰色细线是只有随机噪声的累加，像醉汉走路，散开的宽度按步数的平方根长，灰色阴影是正负两倍平方根的噪声带。虚线 400 步是平均意义上偏差追上带边的地方，单条蓝线早一点晚一点出带都正常。蓝线每步多一个只有噪声十分之一大的固定偏差，前几百步埋在带里，四五百步以后冲出去，越走越远。右块：两支一样长的箭头指向不同方向，长度就是参数范数，所以范数分不出它们；下面两根条，一组多涨一点、一组少涨一点，平方和加起来不变。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">参数范数是个累加器：噪声按根号长，偏差按步数长</text>
@@ -3668,6 +3669,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>第二次迁移的证据</b>：故意埋的错，领头的常是范数，不是 loss</summary>
   <p>第二次迁移里故意让 loss 多乘 1.01（相当于漏除一个常数），梯度范数的 r 是 94.5，主 loss 只有 5.2；把 FSDP 改成纯数据并行（第八节的案例），梯度范数 2.62，主 loss 全程 1.85、后段 2.03（运行库 0.0.46；换到 0.0.52 同一改动领头的换成主 loss 后段 2.82，梯度范数 1.45 —— 哪一条先报警会变，所以几条都要看）。loss 告诉你训练效果变没变，可对不少数值问题反应慢；两个范数把几亿个数各压成一个，对固定方向的偏差最先有反应。</p></details>
 
+  </details>
+
   <h3 id="s3-3">3.3　噪声上限 N，和怎么判</h3>
 
   <div class="adamcard">
@@ -3690,6 +3693,24 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p class="anote">五个 r 里最大的是梯度范数的 2.62，这次比较就记 2.62，判不过；主 loss 全程三个数里最差的是带符号均值 1.85（待定），后段单独再判一遍是 2.03（不过）。同一套算法让 GPU 自己跟自己比，纯噪声也能拿到 2.47（300 步、8 份）和 1.82（1000 步、16 份），见 <a href="#s3-5">§3.5</a>。</p>
   </div>
 
+  <p>判法一句话：<b>r ＝ |被测| ÷ N</b>，「被测」是 TPU 对基线那一条曲线算出的某个统计量（带符号均值、MARE 或最大单步），N 是 GPU 几份重跑两两成对、同一个统计量里取最大的那个。≤ 1：落在噪声样本的范围里，过；＞ 2：比最坏的噪声还大一倍，不过；中间待定，先补参照再判（2 是协议事先定的界，留出样本少时 N 偏窄的余量）。</p>
+  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/124b2a797c2f3961bcadf72cbe2d7156cb0caab9/janus/checks/base.py">代码：判档：r ＝ |被测| ÷ N，≤1 过、＞2 不过</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/124b2a797c2f3961bcadf72cbe2d7156cb0caab9/janus/checks/series.py">代码：逐步序列的三种统计</a></p>
+<figure class="fbox fwide" id="anim-ceiling">
+<video src="media/topic08-ceiling.mp4?v=afc3bd3d" autoplay loop muted playsinline data-pauses="2.95,11.40,14.90,19.60,23.30"
+       aria-label="噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　定案前第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；5 份是同一设置的 GPU 重跑。第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，1.24e-7。第 4 步　被测（TPU 对一份 GPU 基线）出场，r 等于被测除以 N；尺子就是这 5 份 GPU 重跑。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 4.27e-7，r 等于 4.27e-7 除以 1.24e-7，等于 3.45。背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。第 5 步　样本越多，尺子越可信：纯噪声超过 n 对最大值的概率至少 n 加 1 分之一（各对共用运行，模拟和留一法实测都显示带符号均值约翻倍）。3 对至少 1/4，10 对至少 1/11（这一次），28 对至少 1/29。"></video>
+<figcaption><b>N 是从 5 份重跑两两组成的 10 对里挑出来的最大值；被测一出场，纵轴得缩一半才装得下。</b>
+  <span class="sub">（26 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。只演参数范数的带符号均值；10 根柱子都是真值，横轴只表示相对位置。）</span></figcaption></figure>
+  <p>参照对按跟被测一模一样的窗口、分母算三个统计，每个统计取所有对里的<b>最大值</b>当 N：被测如果只是噪声，就是又一个同分布的样本，应当落在已有样本的范围里。照着算一遍：</p>
+  <details class="foldfig"><summary><b>N 和 r 的规则，一条不漏</b>：四步造 N、两条自动处理、两级取最差</summary>
+  <ol>
+    <li>同一设置的 GPU 重跑 K 份（混元 3 定案时 10 份；第二次迁移 300 步 8 份、1000 步 16 份）。</li>
+    <li>两两配对：C(K, 2) 对（8 份 28 对、10 份 45 对、16 份 120 对）。</li>
+    <li>每一对里一份当被测、一份当参照，用跟被测<b>完全相同</b>的窗口、分母、去掉第 1 步的规则，算出三个统计（带符号均值取绝对值）。</li>
+    <li>每个统计的 N ＝ 所有对里的最大值；三个统计各有各的 N。</li>
+  </ol>
+  <p>两条自动处理：窗口里逐位相同的参照对剔除，不让它把 N 拉低；剔除后不足 3 对，最多判待定。r ＝ 被测的统计 ÷ 对应的 N；一项检查取三个 r 里最大的，一次比较取所有检查里最大的。≤ 1 过，1–2 待定，＞ 2 不过；2 是约定的余量，不是统计推导出来的。</p></details>
+
+  <details class="foldfig" id="s3-judge"><summary><b>判定图和一条序列的完整算例</b>（课上不讲）：三种颜色的判定区、混元 3 定案前那次判定、一条序列两个窗口六个数</summary>
 <figure class="fbox fwide" id="fig-judge"><svg viewBox="0 0 1400 496" width="100%" role="img" aria-label="一根数轴，数轴上标的是被测值除以噪声上限 N 的倍数 r。0 到 1 是绿色，判通过；1 到 2 是黄色，判待定；大于 2 是红色，判不通过。四个红黄点是定案前的一次判定（旧基线：精确轨迹）：梯度范数 1.14 倍、loss 尾段 1.29 倍、loss 全程 1.92 倍都在黄色区，参数范数 3.45 倍落在红色区。绿区里那一簇是定案后对修好的 golden 的同四项：0.50 到 0.85 倍，全过。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">判过不过：被测值 ÷ 噪声上限 N</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">N ＝ 噪声参照里每一对运行算出来的同一个量，取最大的那个；r ≤ 1 就像多跑了一次噪声，r > 2 远超噪声能解释的范围</text>
@@ -3740,14 +3761,9 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>落在哪个颜色里，就是什么判定。</b><span class="capmore"><br><em>红黄点是定案前那次判定，基线是另一份 GPU 记录（不是开场对的第一份），尺子也换了，所以 loss 的倍数跟第一节那张图（N 的 2.45 倍）对不上；绿点是定案后。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 实测（定案前那次）：被测是 v5p 当前配置 1000 步，基线是精确轨迹的一份（它是什么，后面讲 golden 时细说），N 取 ③ 那组 GPU 重跑 5 份两两 10 对的最大值。</p>
 <p>📌 param_norm 带符号均值 4.27e-7、N 1.24e-7；loss 全程 8.62e-5 / 4.49e-5，尾段 7.23e-5 / 5.62e-5；grad_norm 2.32e-3 / 2.03e-3。</p>
 <p>📌 定案后：基线换成修好的 golden 的一份、N 取它自己 10 份两两 45 对，loss 全程 0.80、尾段 0.80、梯度范数 0.85、参数范数 0.50。N 取参照各对里绝对值最大的那个；r ＝ |被测| ÷ N。参数范数的相对差只有 4e-7 也判不过，因为 r 不跟「看上去大不大」比，跟这个量自己的噪声比。</p></details></figure>
-  <p>判法一句话：<b>r ＝ |被测| ÷ N</b>，「被测」是 TPU 对基线那一条曲线算出的某个统计量（带符号均值、MARE 或最大单步），N 是 GPU 几份重跑两两成对、同一个统计量里取最大的那个。≤ 1：落在噪声样本的范围里，过；＞ 2：比最坏的噪声还大一倍，不过；中间待定，先补参照再判（2 是协议事先定的界，留出样本少时 N 偏窄的余量）。</p>
-  <p class="codeline"><a class="codelink" href="https://github.com/yangwhale/janus/blob/124b2a797c2f3961bcadf72cbe2d7156cb0caab9/janus/checks/base.py">代码：判档：r ＝ |被测| ÷ N，≤1 过、＞2 不过</a>　<a class="codelink" href="https://github.com/yangwhale/janus/blob/124b2a797c2f3961bcadf72cbe2d7156cb0caab9/janus/checks/series.py">代码：逐步序列的三种统计</a></p>
-<figure class="fbox fwide" id="anim-ceiling">
-<video src="media/topic08-ceiling.mp4?v=afc3bd3d" autoplay loop muted playsinline data-pauses="2.95,11.40,14.90,19.60,23.30"
-       aria-label="噪声上限 N：拿 GPU 自己重跑当尺子。第 1 步　定案前第一关的尺子：GPU 重跑 5 份，一个点一份，编号按左右顺序；5 份是同一设置的 GPU 重跑。第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱；带符号均值是第 2 到 1000 步逐步相对差的平均，两个点隔多远，柱就多高。第 3 步　取最大的那一根当噪声上限 N。为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里。N 等于最大的那一对，1.24e-7。第 4 步　被测（TPU 对一份 GPU 基线）出场，r 等于被测除以 N；尺子就是这 5 份 GPU 重跑。柱子比尺子高出一大截，纵轴得缩一半才装得下。被测 4.27e-7，r 等于 4.27e-7 除以 1.24e-7，等于 3.45。背景三个区：过（r 不超过 1）、待定（1 到 2）、不过（r 大于 2）。第 5 步　样本越多，尺子越可信：纯噪声超过 n 对最大值的概率至少 n 加 1 分之一（各对共用运行，模拟和留一法实测都显示带符号均值约翻倍）。3 对至少 1/4，10 对至少 1/11（这一次），28 对至少 1/29。"></video>
-<figcaption><b>N 是从 5 份重跑两两组成的 10 对里挑出来的最大值；被测一出场，纵轴得缩一半才装得下。</b>
-  <span class="sub">（26 秒，Manim 渲染；默认连续播放；取消勾选「连续播放」、点「⟲ 重来」，再点「开始」一步一步看。只演参数范数的带符号均值；10 根柱子都是真值，横轴只表示相对位置。）</span></figcaption></figure>
-  <p>参照对按跟被测一模一样的窗口、分母算三个统计，每个统计取所有对里的<b>最大值</b>当 N：被测如果只是噪声，就是又一个同分布的样本，应当落在已有样本的范围里。照着算一遍：</p>
+  <details class="foldfig"><summary><b>图上红黄那四个点是什么</b>：定案前的一次判定</summary>
+  <p>图上红黄那四个点是定案前的一次判定：这次判定后来按修好的 golden 重判过（<a href="#s9-3">§9.3</a>），3.45 倍留在这里当判法的例子。绿色那一簇是换成修好的 golden 以后的同四项，全部过。</p>
+  </details>
 <figure class="fbox fwide" id="fig-rpipe"><svg viewBox="0 0 1400 846" width="100%" role="img" aria-label="两块。上块：一条逐步相对差的序列，第 1 步单独拿出来叫 d0，第 2 到 1000 步是全程窗口、第 301 到 1000 步是后段窗口；两个窗口读的是同一条序列，各自算出带符号均值、MARE、最大单步三个数：全程 −1.30e-4、1.53e-4、6.65e-4（第 380 步），后段 −1.66e-4、1.79e-4、同一步。下块：从 GPU 重跑 8 份两两配成 28 对，每对按同样的窗口和规则算三个统计、各取最大得到 N；被测的三个统计各除以 N 得三个 r，一项检查取最大，一次比较再取最大。算例是纯数据并行那一臂：主 loss 全程 1.85、后段 2.03、梯度范数 2.62，整次比较 2.62。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">照着算一遍：一条序列 → 三个数 → 除以 N → 取最差</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">上：窗口只决定拿哪一段求平均，原始数据只有一份；下：r 怎么算出来、在两级上怎么取最差（算例数字都是实测）</text>
@@ -4843,19 +4859,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 </svg><figcaption><b>上面一条序列配两个括号；下面一路除下来，最后取最大。</b><span class="capmore"><br><em>上块是混元 3、下块是第二次迁移的算例，数都是实测。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Ⓐ 实测：混元 3 截 4 层，TPU v5p 第一次 1000 步运行对 GPU 第一份，逐步 loss 相对差 dₜ ＝（TPU − GPU）÷ GPU；全程（第 2–1000 步）带符号均值 −1.30e-4、MARE 1.53e-4、最大单步 6.65e-4（第 380 步）；后段（第 301–1000 步）−1.66e-4、1.79e-4、同一步；第 1 步 ＋2.5e-6 单独报。</p>
 <p>📌 Ⓑ 实测：第二次迁移小尺寸模型，TPU 自比「FSDP 8 改纯数据并行 8」对 TPU golden，前 300 步；N 是 GPU 同设置 8 份两两 28 对的上限；分母一律用参照（梯度范数也是，对齐记录 2026-11-10 起统一）。主 loss 全程 ＋5.58e-6 ／ 3.01e-6、8.84e-6 ／ 6.72e-6、3.70e-5（第 273 步）／ 4.53e-5；后段 ＋9.22e-6 ／ 4.54e-6；梯度范数 −2.60e-4 ／ 9.92e-5、5.23e-4 ／ 3.85e-4、1.84e-3（第 28 步）／ 2.24e-3。带符号均值判定时取绝对值，正负号另看方向。</p>
 <p>⚠️ 两块数据来自两个模型：上块是混元 3（为了用一条完整的 1000 步序列），下块是第二次迁移（为了有一份完整公开的算例表）。</p></details></figure>
-  <details class="foldfig"><summary><b>N 和 r 的规则，一条不漏</b>：四步造 N、两条自动处理、两级取最差</summary>
-  <ol>
-    <li>同一设置的 GPU 重跑 K 份（混元 3 定案时 10 份；第二次迁移 300 步 8 份、1000 步 16 份）。</li>
-    <li>两两配对：C(K, 2) 对（8 份 28 对、10 份 45 对、16 份 120 对）。</li>
-    <li>每一对里一份当被测、一份当参照，用跟被测<b>完全相同</b>的窗口、分母、去掉第 1 步的规则，算出三个统计（带符号均值取绝对值）。</li>
-    <li>每个统计的 N ＝ 所有对里的最大值；三个统计各有各的 N。</li>
-  </ol>
-  <p>两条自动处理：窗口里逐位相同的参照对剔除，不让它把 N 拉低；剔除后不足 3 对，最多判待定。r ＝ 被测的统计 ÷ 对应的 N；一项检查取三个 r 里最大的，一次比较取所有检查里最大的。≤ 1 过，1–2 待定，＞ 2 不过；2 是约定的余量，不是统计推导出来的。</p></details>
-  <details class="foldfig"><summary><b>图上红黄那四个点是什么</b>：定案前的一次判定</summary>
-  <p>图上红黄那四个点是定案前的一次判定：这次判定后来按修好的 golden 重判过（<a href="#s9-3">§9.3</a>），3.45 倍留在这里当判法的例子。绿色那一簇是换成修好的 golden 以后的同四项，全部过。</p>
   </details>
 
   <h3 id="s3-4">3.4　参照要几对，比较只对一份</h3>
+  <details class="foldfig" id="s3-pairs"><summary><b>参照要几对、比较只对一份</b>（课上不讲）：几对参照纯噪声超线的概率、GPU 对 GPU 演练、换一份当基线读数挪多少、口径与旁证</summary>
 <figure class="fbox fwide" id="fig-pairs"><svg viewBox="0 0 1400 556" width="100%" role="img" aria-label="左边柱子：一个纯粹的噪声，超过 n 对参照里最大值的概率至少是 1 除以 n 加 1（配对共用运行，模拟和留一法实测都显示带符号均值约翻倍）。3 对时至少四分之一，10 对 9%，28 对 3.4%，45 对 2.2%。右边是第一阶段 100 步的 GPU 对 GPU 演练，本来应该全部通过：3 对参照时 46 条检查里 8 条判待定，扩到 GPU 对 GPU 28 对只剩 1 条。"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">参照对太少，尺子就太短　——　<tspan font-weight="700">3 对时，纯噪声至少四分之一会「超线」</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">左：柱高 ＝ 一个纯噪声的被测超过 n 对参照最大值的概率，1/(n+1)，是下限；右：第一阶段 100 步的 GPU 对 GPU 演练（本该全过），一格一条检查，橙色 ＝ 判成待定</text>
@@ -5079,6 +5086,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li>做线上实验的人有个老问法 ——「要是两边其实一模一样，这个差有多稀奇？」两组都吃安慰剂，叫 A/A 测试（Microsoft ExP 团队的 A/A 测试博客）。样本少时它会骗人：同一套超参只换随机种子跑 10 次，分成两组各 5 次，两组曲线就能「统计上显著不同」（Henderson 等，<em>Deep Reinforcement Learning that Matters</em>，arXiv:<a href="https://arxiv.org/abs/1709.06560" target="_blank" rel="noopener">1709.06560</a>）。</li>
     <li>另一种读法是看某一步的绝对差（例：「第 975 步参数范数多 ＋1.99e-2」），那是看漂移的形状用的，不是判定量。</li>
   </ul></details>
+
+  </details>
 
   <h3 id="s3-5">3.5　一次看几十个数：r 在 1–2 之间，先别急着判错</h3>
   <p>尺子只用 GPU 重跑：TPU 同一个程序重跑逐位相同，量不出宽度（理由在折叠里）。日常回归里判「只换了舍入位置」的改动，另有一把故意改执行参数造出来的 TPU 尺子（<a href="#s10-3">§10.3</a>），两件事别混。</p>

@@ -165,7 +165,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>讲约 99 分钟</b>（三次课，每次 31–35 分钟）</span>
+    <span class="chip">⏱ <b>讲约 93 分钟</b>（三次课，每次 28–34 分钟）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -566,6 +566,7 @@ __FIG_MTP32K__
   </details>
   <details class="foldfig"><summary><b>窗口的两条细则</b>：只有一份原始数据；每个统计量是整窗一个数</summary>
   <p>两个窗口读的是同一条 dₜ 序列，只是求平均的范围不同；每个统计量是整个窗口算出的<b>一个数</b>，不是逐步的滑动平均。窗口写哪段，事先写进协议。</p></details>
+  <details class="foldfig" id="s3-curves"><summary><b>三类曲线谁更灵、各自的盲区</b>（课上不讲）：loss、梯度范数、参数范数；第二次迁移故意埋错的证据</summary>
   <p>loss 是结果，范数是总量。混元 3 那次，三个被比的量里<b>参数范数最先冲出去</b>：它是个累加器，只换顺序的差这步正、下步负，按步数的平方根散开；丢了精度的差有固定方向，按步数长。跑得够久，再小的系统偏差也会冲出噪声带：</p>
 __FIG_INTEGRATOR__
   <details class="foldfig"><summary><b>盲区表</b>：范数、loss、路由偏置各抓什么、看不见什么</summary>
@@ -579,14 +580,14 @@ __FIG_INTEGRATOR__
   <details class="foldfig"><summary><b>第二次迁移的证据</b>：故意埋的错，领头的常是范数，不是 loss</summary>
   <p>第二次迁移里故意让 loss 多乘 1.01（相当于漏除一个常数），梯度范数的 r 是 94.5，主 loss 只有 5.2；把 FSDP 改成纯数据并行（第八节的案例），梯度范数 2.62，主 loss 全程 1.85、后段 2.03（运行库 0.0.46；换到 0.0.52 同一改动领头的换成主 loss 后段 2.82，梯度范数 1.45 —— 哪一条先报警会变，所以几条都要看）。loss 告诉你训练效果变没变，可对不少数值问题反应慢；两个范数把几亿个数各压成一个，对固定方向的偏差最先有反应。</p></details>
 
+  </details>
+
   <h3>3.3　噪声上限 N，和怎么判</h3>
 ''' + R_CARD + '''
-__FIG_JUDGE__
   <p>判法一句话：<b>r ＝ |被测| ÷ N</b>，「被测」是 TPU 对基线那一条曲线算出的某个统计量（带符号均值、MARE 或最大单步），N 是 GPU 几份重跑两两成对、同一个统计量里取最大的那个。≤ 1：落在噪声样本的范围里，过；＞ 2：比最坏的噪声还大一倍，不过；中间待定，先补参照再判（2 是协议事先定的界，留出样本少时 N 偏窄的余量）。</p>
   <p class="codeline">''' + code("PKG/checks/base.py", "判档：r ＝ |被测| ÷ N，≤1 过、＞2 不过") + "　" + code("PKG/checks/series.py", "逐步序列的三种统计") + '''</p>
 __ANIM_CEILING__
   <p>参照对按跟被测一模一样的窗口、分母算三个统计，每个统计取所有对里的<b>最大值</b>当 N：被测如果只是噪声，就是又一个同分布的样本，应当落在已有样本的范围里。照着算一遍：</p>
-__FIG_RPIPE__
   <details class="foldfig"><summary><b>N 和 r 的规则，一条不漏</b>：四步造 N、两条自动处理、两级取最差</summary>
   <ol>
     <li>同一设置的 GPU 重跑 K 份（混元 3 定案时 10 份；第二次迁移 300 步 8 份、1000 步 16 份）。</li>
@@ -595,11 +596,17 @@ __FIG_RPIPE__
     <li>每个统计的 N ＝ 所有对里的最大值；三个统计各有各的 N。</li>
   </ol>
   <p>两条自动处理：窗口里逐位相同的参照对剔除，不让它把 N 拉低；剔除后不足 3 对，最多判待定。r ＝ 被测的统计 ÷ 对应的 N；一项检查取三个 r 里最大的，一次比较取所有检查里最大的。≤ 1 过，1–2 待定，＞ 2 不过；2 是约定的余量，不是统计推导出来的。</p></details>
+
+  <details class="foldfig" id="s3-judge"><summary><b>判定图和一条序列的完整算例</b>（课上不讲）：三种颜色的判定区、混元 3 定案前那次判定、一条序列两个窗口六个数</summary>
+__FIG_JUDGE__
   <details class="foldfig"><summary><b>图上红黄那四个点是什么</b>：定案前的一次判定</summary>
   <p>图上红黄那四个点是定案前的一次判定：这次判定后来按修好的 golden 重判过（§9.3），«ACC_PN_R» 倍留在这里当判法的例子。绿色那一簇是换成修好的 golden 以后的同四项，全部过。</p>
   </details>
+__FIG_RPIPE__
+  </details>
 
   <h3>3.4　参照要几对，比较只对一份</h3>
+  <details class="foldfig" id="s3-pairs"><summary><b>参照要几对、比较只对一份</b>（课上不讲）：几对参照纯噪声超线的概率、GPU 对 GPU 演练、换一份当基线读数挪多少、口径与旁证</summary>
 __FIG_PAIRS__
   <p><b>只对一份事先指定的基线比</b>，不对几份 golden 取平均，也不取最差：N 量的是「两份运行之间差多少」，被测也该是跟一份运行比，两边口径才一样。对平均比太松，对最差比太严。代价是基线自己也是一个样本，换一份当基线，读数会挪一点（图在折叠里）。</p>
   <details class="foldfig"><summary><b>换一份当基线，读数挪多少</b>（图）：10 份 GPU 运行各自当基线时，偏移读数怎么挪</summary>
@@ -612,6 +619,8 @@ __FIG_BASELINE__
     <li>做线上实验的人有个老问法 ——「要是两边其实一模一样，这个差有多稀奇？」两组都吃安慰剂，叫 A/A 测试（Microsoft ExP 团队的 A/A 测试博客）。样本少时它会骗人：同一套超参只换随机种子跑 10 次，分成两组各 5 次，两组曲线就能「统计上显著不同」（Henderson 等，<em>Deep Reinforcement Learning that Matters</em>，arXiv:1709.06560）。</li>
     <li>另一种读法是看某一步的绝对差（例：「第 975 步参数范数多 «EXACT_TPU_PN975_T»」），那是看漂移的形状用的，不是判定量。</li>
   </ul></details>
+
+  </details>
 
   <h3>3.5　一次看几十个数：r 在 1–2 之间，先别急着判错</h3>
   <p>尺子只用 GPU 重跑：TPU 同一个程序重跑逐位相同，量不出宽度（理由在折叠里）。日常回归里判「只换了舍入位置」的改动，另有一把故意改执行参数造出来的 TPU 尺子（§10.3），两件事别混。</p>
