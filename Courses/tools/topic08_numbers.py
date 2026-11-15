@@ -100,6 +100,7 @@ HEAD_EXACT_S1 = -1.7e-6                               # 真关 TF32 的 FP32
 HEAD_TPU_S1, HEAD_TPU_S100 = -2.4e-5, -7.4e-5         # TPU 输出头反向对 FP64（输出头回放，第 1 / 100 步，跟 HEAD_BF16_S1/S100 同步号配对；另一次单 microbatch 回放读 −2.6e-5、同次 GPU −4.4e-4，别跟这里混配）
 CE_BWD_S1 = 2.7e-6                                    # 交叉熵反向自己的那份（第 1 步）
 TF32_TE_ON, TF32_ALL_OFF = 2.94e-4, 1.15e-6           # FP32 GEMM 对 FP64 的 rel_L2：只关 torch 开关 / 设 NVIDIA_TF32_OVERRIDE=0
+TF32_TE_ON_T, TF32_ALL_OFF_T = "2.94e-4", "1.15e-6"   # 讲义／课件开关矩阵用（11-15）
 TF32_PROBE_OK = 1e-5
 ROUTER_TPU_FP64, ROUTER_GPU_FP64 = 4.8e-8, 3.8e-6     # 路由 logits 对 FP64
 WINDOWED_LOOPS = 41
@@ -1113,7 +1114,7 @@ assert abs(_RG["纯数据并行8"]["all"] / C2_EMB_G - 3.77) < 0.01      # 对 g
 C2_EMB_VS_G_T = "3.77"
 
 # ── 2026-11-11 · 整体优化 E1：第一到五节跟上研究线的新结论（出处：对齐记录的根源一览、小尺寸对齐报告、TPU 自比影响逐件；实测，除标本课推导）──
-RESELECT_PCT_T = "0.117%"                 # 「存下路由结果」被忽略时，反向重选的路由槽位（根源一览第 5 行）
+RESELECT_PCT_T = "1.17e-3"                # 「存下路由结果」被忽略时，反向重选的路由槽位（根源一览第 5 行）；＝ 922 ÷ 786,432 个槽位（混元 4 缩小版＝第二次迁移，只差 remat_policy full 对 custom）
 BIAS_ZM_SM_AFTER = 0.17                   # 路由偏置零均值更新：TPU 关掉后带符号均值的 r（之前 19.1；最差项换成 MARE 时 0.31）
 assert BIAS_ZM_R[0] == 19.1 and BIAS_ZM_R[1] == 0.31 and BIAS_ZM_SM_AFTER < BIAS_ZM_R[1]
 B2_NOW = {"total": 205, "over": 177, "attr": 171, "far": 6, "far_mix": 5, "far_new": 3, "same3": 10, "within": 18}   # 现行配置（关 base2）第 1 步对 FP64（小尺寸报告「第一步整网」）

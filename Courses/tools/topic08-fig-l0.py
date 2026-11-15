@@ -69,7 +69,7 @@ def fig_replay():
 
 
 def fig_wd():
-    f = Fig(W, "权重衰减的配置文件里写 0.1，灰色虚线。可是训练框架的学习率调度器每一步都用自己的起止值把它覆盖掉，"
+    f = Fig(W, "权重衰减：GPU 训练框架的预训练模板里两个默认值分了家，优化器写 0.1，灰色虚线；学习率调度器另写起止值 0.033，第一次更新前就覆盖、之后每步覆盖，"
                "每一步真正用的是 0.033，绿色实线。TPU 那边要按 0.033 配；照抄 0.1，每一步就多衰减三倍。")
     y0 = f.header("配置文件写的，不一定是实际用的　——　<tspan font-weight=\"700\">权重衰减：写着 0.1，用的是 0.033</tspan>",
                   "横轴 ＝ 训练步；纵轴 ＝ 这一步优化器实际用的权重衰减系数",
@@ -85,20 +85,20 @@ def fig_wd():
     for v in (0.0, 0.033, 0.1):
         f.t(X0 - 12, Y(v) + 5, "%g" % v, GY, size=13, anchor="end")
     f.line(X0, Y(N.WD_CONFIG), X0 + XW, Y(N.WD_CONFIG), GY2, 1.6, dash="8 6", arrow=False)
-    f.t(X0 + 20, Y(N.WD_CONFIG) - 12, "配置文件：weight_decay = 0.1（只是摆设）", GY, True, 14)
+    f.t(X0 + 20, Y(N.WD_CONFIG) - 12, "优化器配置：weight_decay = 0.1（一步都没用上）", GY, True, 14)
     f.line(X0, Y(N.WD_EFFECTIVE), X0 + XW, Y(N.WD_EFFECTIVE), GR, 4, arrow=False)
-    f.t(X0 + 20, Y(N.WD_EFFECTIVE) + 28, "调度器每一步覆盖成 start = end = 0.033 → 实际生效", GR, True, 14)
+    f.t(X0 + 20, Y(N.WD_EFFECTIVE) + 28, "调度器配置 start = end = 0.033，每一步覆盖 → 实际生效", GR, True, 14)
     for k in range(1, 12):
         x = X0 + k * XW / 12.0
         f.line(x, Y(N.WD_CONFIG) + 6, x, Y(N.WD_EFFECTIVE) - 6, GR, 1.2)
     f.t(X0 + XW - 10, Y(N.WD_CONFIG) - 12, "TPU 要是照抄 0.1：每一步多衰减 %.0f 倍" % (N.WD_CONFIG / N.WD_EFFECTIVE), RD, True, 14, "end")
     f._pan = None
     yb = f.band(py + PH + 20, "ok", "对照表要写「实际生效的值」和证据，不写「配置里的值」", [
-        "每个影响数值的设置一行：GPU 怎么配、TPU 怎么配、是否等价、证据从哪来（运行时读出的元数据，不是 yaml）。",
+        "每个影响数值的设置一行：GPU 怎么配、TPU 怎么配、是否等价、证据从哪来（运行时从程序里读出的值，不是配置文件）。",
         "代价：要去读框架真正跑的那条代码路径；只读配置，一个超参能对错三倍还不报错。",
     ])
     yb = f.src(yb + 10,
-               "📌 实测：GPU 侧配置 weight_decay: 0.1；调度器 start_weight_decay = end_weight_decay = 0.033、constant、override_opt_param_scheduler=True，运行元数据记录的就是 0.033。TPU 侧配 adam_weight_decay: 0.033。",
+               "📌 实测：每一步从 GPU 优化器参数组读出的权重衰减，1000 步全是 0.033（一维参数和 bias 是 0）。两个默认值都来自框架预训练模板：优化器 weight_decay 0.1；调度器 start_weight_decay = end_weight_decay = 0.033、constant，构造时就覆盖一次、之后每步覆盖。TPU 侧配 adam_weight_decay: 0.033。0.033 的来历框架没写，没查到。",
                "⚠️ 本课推导：0.1 ÷ 0.033 ≈ 3。")
     f.save("fig8-wd.svg", yb + 14)
 

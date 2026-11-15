@@ -165,7 +165,7 @@ HERO = '''
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>照稿约 68 分钟</b>（一次课）</span>
+    <span class="chip">⏱ <b>照稿约 69 分钟</b>（一次课）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -194,7 +194,7 @@ def _fgrp(title, n):
 
 _FOUND_ROWS = [
     ("写的，不是生效的", [
-        ("权重衰减：GPU 配置里写 0.1，被调度器悄悄覆盖", "实际生效 0.033，差 3 倍", "§2.3", "s2-3"),
+        ("权重衰减：GPU 框架模板里两个默认值分了家，优化器写 0.1、调度器写 0.033，调度器每步覆盖", "0.1 一步都没用上，实际 0.033，差 3 倍", "§2.3", "s2-3"),
         ("「存下路由、反向不重选」，配错一种重算策略就被悄悄忽略", "平均 «M3_REROUTE_PCT»% 的 token（最多 «M3_REROUTE_MAX»%）按另一套路由算梯度；参数范数 r «M3_REROUTE_PN0»，存下路由后 2.27", "§2.3 折叠", "s2-3"),
         ("TF32 开关读回来是关，矩阵乘照样走 TF32", "FP32 矩阵乘离 FP64 仍有 2.94e-4，真关掉 1.15e-6", "§5.3", "s5-3"),
     ]),
@@ -491,6 +491,10 @@ __FIG_REPLAY__
 
   <h3>2.3　配置：对「实际生效的值」</h3>
 __FIG_WD__
+  <p><b>两个默认值分了家。</b>这不是谁写错了：我们用的 GPU 训练框架（Megatron-Bridge），预训练模板里优化器写 <code>weight_decay = 0.1</code>，学习率调度器里另写了一对 <code>start_weight_decay = end_weight_decay = 0.033</code>、constant。调度器在第一次参数更新之前就把优化器参数组的权重衰减改成自己的值，之后每一步都改，所以 0.1 一步都没用上（一维参数和 bias 是 0）。这是上游的默认行为，用这个模板、只改优化器那一项的人都会碰上；要改，得改调度器那两项。直接用 Megatron 自己的命令行入口不会碰上：那里调度器的起止值默认就取 <code>--weight-decay</code>。0.033 这个常数为什么是它，框架的提交记录里没写，我们没查到出处。</p>
+  <details class="foldfig"><summary><b>怎么发现的、证据是什么</b></summary>
+  <p>在 GPU 上用 FP64 重放优化器时对不上：不衰减的一维参数对到 FP32 舍入，二维参数的更新量差 1e-3 量级（rel_L2），最小二乘拟合出来正好是 0.033。再看每一步从优化器参数组里读出来的权重衰减，1000 步全是 0.033。改用每步读出的值以后，FP64 重放全部张量都在门槛内。TPU 那边从第一次起就配 0.033、一维参数按名字排除；配置检查和日常回归都钉死这个值。</p>
+  </details>
   <table class="t9"><caption style="caption-side:bottom;text-align:left;color:var(--gray);font-size:13px">摘自混元 3 几十行的对照表</caption><thead><tr><th>设置</th><th>两边对成什么</th></tr></thead><tbody>
   <tr><td>权重衰减</td><td>«WD_EFFECTIVE»（GPU 配置里写 «WD_CONFIG»，被调度器覆盖）</td></tr>
   <tr><td>学习率</td><td>常数 «LR»，逐步核对</td></tr>
@@ -508,7 +512,7 @@ __FIG_WD__
   <details class="foldfig"><summary><b>名字一样，写法不一样</b>：第二次迁移在配置和优化器里查出的四处，都不报错</summary>
   <ul>
     <li><b>优化器</b>：两边用的是同一个名字的优化器，可动量那一步做不做偏差修正、一部分参数走普通 Adam 还是 NAdam、一处归一化的 eps 怎么加，三处写法都不同。单测里拿参照框架的实现生成固定参照、逐步比每步更新：三处都不对上，相对差 «OPT_ALL_OFF»；三处都对上，«OPT_ALL_ON_T»。（另一个只测那部分参数的用例里，NAdam 对普通 Adam 差 «OPT_NADAM»。）</li>
-    <li><b>重算</b>：「存下路由结果、反向不重选」这个设置，TPU 框架只在一种自定义重算策略下才读；配置写的是整层重算，它就被悄悄忽略，反向重新选路由。配置项名字对了，不等于生效了。（实测：被忽略时，反向会重选 «RESELECT_PCT_T» 的路由槽位；修好后为 0。）第三次迁移从生产代码原样起步，又踩了一次，而且看清了后果：生产默认整层重算，反向抓到的路由跟前向在 160 次两两比较里 96 次不同，平均 «M3_REROUTE_PCT»% 的 token（最多 «M3_REROUTE_MAX»%）的梯度是按另一套路由算的；参数范数 1000 步判 «M3_REROUTE_PN0» 倍、前 300 步 «M3_REROUTE_PN300_0» 倍。换成那种自定义重算策略、把前向选出的专家存下来，降到 2.27 ／ 1.19，步时不变。这是语义差，不是精度差：生产也该开。</li>
+    <li><b>重算</b>：「存下路由结果、反向不重选」这个设置（MaxText 的 <code>moe_routing_maps: device</code>），在 TPU 框架里只是自定义重算策略的一个参数：只有 <code>remat_policy: custom</code> 时才收进「要存下来」的名单；配置写的是整层重算（<code>full</code>），什么都不存、反向把整层前向重跑一遍，top-k 也重跑，不报错也不告警。配置项名字对了，不等于生效了。（实测，第二次迁移只差这一个开关：被忽略时，反向重算那次和前向比了 786,432 个（token, 专家）槽位，922 个选得不一样，«RESELECT_PCT_T»；改成自定义重算、除层输入外全部重算、只存路由，重选为 0。）GPU 侧有对称的坑：Megatron 的「路由回放」开关单独打开也不起作用，训练循环从不去切换它的记录／回放动作，得自己写回调。第三次迁移从生产代码原样起步，又踩了一次，而且看清了后果：生产默认整层重算，反向抓到的路由跟前向在 160 次两两比较里 96 次不同，平均 «M3_REROUTE_PCT»% 的 token（最多 «M3_REROUTE_MAX»%）的梯度是按另一套路由算的；参数范数 1000 步判 «M3_REROUTE_PN0» 倍、前 300 步 «M3_REROUTE_PN300_0» 倍。换成那种自定义重算策略、把前向选出的专家存下来，降到 2.27 ／ 1.19，步时不变。这是语义差，不是精度差：生产也该开。</li>
     <li><b>协议写了、参照做不到</b>：协议写「两边的路由偏置都做零均值更新」，可参照框架根本没有这个更新。TPU 开着它，偏置均值逐步漂开，带符号均值的 r 到了 19.1；TPU 关掉以后降到 «BIAS_ZM_SM_AFTER»（这时最差的一项换成平均绝对差，r 0.31）。</li>
     <li><b>统计量怎么跨微批合</b>：梯度累积把各份微批的辅助量一律求和，连一个「取最大」的统计也被加成约累积份数倍，拿它当阈值去裁剪就裁多了。（这一次训练里那个裁剪从没触发过，修了，数值上没有前后对比。）</li>
   </ul>
@@ -796,6 +800,12 @@ __FIG_TF32__
   <p>BF16 训练里，TF32 只碰输入本来是 FP32 的矩阵乘（本例第 1 步只有路由反向那十来次），所以「BF16 设置下关不关 TF32 没影响」和「精确参照必须真关 TF32」两句并不打架。</p>
   </details>
   <details class="foldfig"><summary><b>开关为什么这么乱</b>：PyTorch 各版本的默认值和一个压过一切的环境变量</summary>
+  <p><b>三层开关，各管各的。</b>PyTorch 的开关只管 PyTorch 自己的 cuBLAS 句柄；Transformer Engine 绕开 PyTorch 自己调 cuBLASLt，对纯 FP32 的矩阵乘一律请求 TF32 快速模式，不看 PyTorch 的开关；<code>NVIDIA_TF32_OVERRIDE=0</code> 是 cuBLAS 库自己读的，压在所有调用者之上，PyTorch 不读它，所以这时 PyTorch 的开关读回来还是「开」。读回值是请求，不是库实际做了什么。训练里真正以 FP32 输入的矩阵乘只有路由的反向，恰好走 Transformer Engine。</p>
+  <table class="t9"><caption style="caption-side:bottom;text-align:left;color:var(--gray);font-size:13px">FP32 输入的矩阵乘（1024×4096 乘 4096×1024）对 FP64 的 rel_L2，实测</caption><thead><tr><th>设置</th><th>PyTorch 矩阵乘</th><th>Transformer Engine 矩阵乘</th></tr></thead><tbody>
+  <tr><td>默认（训练容器打开 TF32）</td><td>«TF32_TE_ON_T»</td><td>«TF32_TE_ON_T»</td></tr>
+  <tr><td>只关 PyTorch 的开关</td><td>«TF32_ALL_OFF_T»</td><td><b>«TF32_TE_ON_T»</b></td></tr>
+  <tr><td>设 <code>NVIDIA_TF32_OVERRIDE=0</code>（PyTorch 读回仍是开）</td><td>«TF32_ALL_OFF_T»</td><td>«TF32_ALL_OFF_T»</td></tr>
+  </tbody></table>
   <p>PyTorch 里矩阵乘的 TF32 开关 1.7–1.11 版默认开、1.12 起默认关，cuDNN 那个开关一直默认开；另有一个环境变量 <code>NVIDIA_TF32_OVERRIDE=0</code>，压过所有框架和 NVIDIA 库的设置、全局关掉 TF32（NVIDIA cuBLAS 文档）—— 所以它连 Transformer Engine 那条路也能关掉（TE 对纯 FP32 矩阵乘在源码里写死用 TF32，不看 torch 开关）。较新的 PyTorch 又加了 <code>fp32_precision</code> 这一套新开关，旧的 <code>allow_tf32</code> 将弃用。</p></details>
 
   </details>
@@ -1795,7 +1805,7 @@ for c, wins in CHECKS.items():                  # 每个检查项、每个窗口
   <tr><td>10 次 GPU 重跑：尾段 loss 带符号均值 «GPU_RUNS10_MEAN_T» ± «GPU_RUNS10_STD»；TPU «TPU_ARM_LO_T» 到 «TPU_ARM_HI_T»</td><td>B200×8 默认设置、关分布式优化器，10 份；TPU v5p（8 颗芯片） 三种跑法，各 1000 步，对第一份 GPU</td></tr>
   <tr><td>数据 «DATA_UNITS» 个单元逐位；原生加载器 «NATIVE_SAME_RANK_T»／«DATA_UNITS» 同号</td><td>每个单元四个字段各一个 sha256，另比每步非 padding token 数</td></tr>
   <tr><td>«N_TENSORS_T» 个张量逐位、参数 «N_PARAMS»</td><td>开源权重 → TPU 格式 → 转回，按原始字节比</td></tr>
-  <tr><td>权重衰减 «WD_CONFIG» → «WD_EFFECTIVE»</td><td>GPU 运行元数据里的调度器配置</td></tr>
+  <tr><td>权重衰减 «WD_CONFIG» → «WD_EFFECTIVE»</td><td>GPU 运行每一步从优化器参数组读出的权重衰减（1000 步全是 «WD_EFFECTIVE»）；框架预训练模板与调度器源码</td></tr>
   <tr><td>第 1 步 loss «D1_PLUS_T»</td><td>«LOSS1_TPU_T» 对 «LOSS1_GPU_T»</td></tr>
   <tr><td>TPU 对 GPU 尾段带符号均值 «TPU_LOSS_TAIL_T»，逐步上下抖的幅度（均方根）«TPU_TAIL_STEP_STD»，九成的步更低</td><td>逐步原值，TPU 第一次 1000 步运行对 GPU 第一份</td></tr>
   <tr><td>定案前第一关验收 r（对 ④ 精确轨迹）：参数范数 «ACC_PN_R»、loss «ACC_LOSS_ALL_R» ／ «ACC_LOSS_TAIL_R»、梯度范数 «ACC_GN_R»；v7x（开关打开前的配置）参数范数 «ACC_V7X_PN»</td><td>v5p 当前配置 1000 步对精确轨迹一份；N 取 ③ 那组 GPU 重跑 5 份两两 10 对</td></tr>
@@ -1885,7 +1895,7 @@ FIGS = {
     "__FIG_REPLAY__": ("fig-replay", "fig8-replay.svg", "topic08-fig-l0.py",
         '<b>每一格都要对上指纹。</b><br><em>画的是一步；1000 步一共 «DATA_UNITS» 格。</em>'),
     "__FIG_WD__": ("fig-wd", "fig8-wd.svg", "topic08-fig-l0.py",
-        '<b>虚线是写的，实线是用的。</b><br><em>证据是运行时读出的元数据，不是配置文件。</em>'),
+        '<b>虚线是写的，实线是用的。</b><br><em>证据是每一步从优化器参数组读出来的值，不是配置文件。</em>'),
     "__FIG_DT__": ("fig-dt", "fig8-dt.svg", "topic08-fig-series.py",
         '<b>两团点一样宽，下面那团蓝点整体沉下去了。</b><br><em>点都是真实的逐步值。</em>'),
     "__FIG_MTP32K__": ("fig-mtp32k", "fig8-mtp32k.svg", "topic08-fig-series.py",
