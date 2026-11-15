@@ -884,7 +884,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <div class="chips">
     <span class="chip">前置 <b>专题二</b>（硬件）、<b>专题四</b>（Adam）；浮点格式 §5.1 现讲</span>
     <span class="chip">口径 <b>截至 2026-11</b></span>
-    <span class="chip">⏱ <b>照稿约 80 分钟</b>（一次课）</span>
+    <span class="chip">⏱ <b>照稿约 71 分钟</b>（一次课）</span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -7896,7 +7896,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 二分取的是对齐爬梯第二级之上加开关的诊断运行；第 51–120 步那组是 120 步的短跑，四条运行各只加一处，没有不加开关的对照：N ＝ GPU 8 份两两 28 对、同一窗口主 loss 逐步相对差带符号均值的绝对值最大，被测和 GPU 都对第一份 GPU；两组窗口不同，N 不同，只在组内比（从原始运行重算）。scale 偏离每 50 步读一次（16 个 norm scale 的中位数）；舍成 BF16 后不等于 1.0 的元素比例第 200 步中位数 2.9%、最多 30%，第 250 步 7% ／ 55%。</p>
 <p>📌 4K 负对照：只开 RMSNorm scale 舍入，300 步除墙钟外 13800 个逐步量跟全关逐位相同，第 1 步梯度文件逐字节相同 —— 4K 程序里这次舍入本来就在。修法步时 32K 1.804 → 1.802 s（各一份）。</p>
 <p>⚠️ 推断：为什么切法一变就删（没有查到具体的融合决定）；虚线是按每步 6.4e-6 外推。</p></details></figure>
-  <p><b>揭晓。</b>代码写的是「转 BF16 再转回」。4K 程序里这次舍入在；32K 换了切法，离线编译一扫，8 个 norm 的这次舍入全被编译器删了（为什么换了切法就删，是推断）。4K 上「没用」，是因为那里舍入本来就在 —— <b>换了切法，之前的验证就不作数</b>。第 1 步看不见：scale 初值 1.0 正好在 BF16 格点上，两边相同；之后 FP32 原值每步偏开一点，GPU 那份 BF16 一直停在 1.0，差一步步长大（这个盲区 <a href="#s6-4">§6.4</a> 专门讲）。</p>
+  <p><b>揭晓。</b>代码写的是「转 BF16 再转回」。4K 程序里这次舍入在；32K 换了切法，离线编译一扫，8 个 norm 的这次舍入全被编译器删了（为什么换了切法就删，是推断）。4K 上「没用」，是因为那里舍入本来就在 —— <b>换了切法，之前的验证就不作数</b>。第 1 步看不见：scale 初值 1.0 正好在 BF16 格点上，两边相同；之后 FP32 原值每步偏开一点，GPU 那份 BF16 一直停在 1.0，差一步步长大（这个盲区 §6.4 专门讲）。</p>
   <p><b>修法。</b>写成强制舍入（<code>lax.reduce_precision</code>），编译器删不掉；32K 上步时 1.804 → 1.802 s（各一份）。</p>
   <details class="foldfig"><summary><b>省舍入是怎么回事、别的例子、写法规则</b>（课上不讲）：融合里省掉的舍入；关掉它会怎样；第二次迁移的一例；会被删的六处；MTP 输入</summary>
 <figure class="fbox fwide" id="fig-excess"><svg viewBox="0 0 1400 652" width="100%" role="img" aria-label="四行，每行同样四个算子从左往右串起来，红色小块是一次「舍到 BF16」。第一行 GPU：一个算子一个 kernel，每个算子出口舍一次，共 4 次。第二行 TPU 默认：XLA 把相邻算子融成块（示意：前两个一块、后两个一块），块里一路用 FP32，只在块出口舍，共 2 次，舍在哪由融合怎么切决定。第三行关掉 excess precision：块还在，但块里每个算子出口照样舍，共 4 次，位置跟第一行一样。第四行开关不动，只在一处显式写「舍到 BF16」：那一处一定舍，编译器不会删。关掉只是让舍入位置确定，不是更准。"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -8530,7 +8530,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
 
   <details class="foldfig" id="mtp-head"><summary><b>MTP 头：就近舍入也会一边倒</b>：舍之前乘的系数不同，正确词那一项两边往相反方向舍</summary>
-  <p><b>现象。</b>第三次迁移的图文模型 32K，12 份 TPU 运行 MTP loss 的 1000 步带符号均值都在 ＋2.07e-5 到 ＋3.23e-5，GPU 7 份对基线只有 ＋0.15e-5 到 ＋0.69e-5；形状都一样：第 1–50 步约 0，第 100–200 步升到 ＋2e-5 到 ＋5e-5，之后停在 ＋2e-5 到 ＋4e-5。加开关、换执行设置都去不掉。第 1 步 MTP 层 21 个张量加输出头、词嵌入，R 都 ≤ 1.10：权重还在格点上，看不见（<a href="#s6-4">§6.4</a>）。</p>
+  <p><b>现象。</b>第三次迁移的图文模型 32K，12 份 TPU 运行 MTP loss 的 1000 步带符号均值都在 ＋2.07e-5 到 ＋3.23e-5，GPU 7 份对基线只有 ＋0.15e-5 到 ＋0.69e-5；形状都一样：第 1–50 步约 0，第 100–200 步升到 ＋2e-5 到 ＋5e-5，之后停在 ＋2e-5 到 ＋4e-5。加开关、换执行设置都去不掉。第 1 步 MTP 层 21 个张量加输出头、词嵌入，R 都 ≤ 1.10：权重还在格点上，看不见（§6.4）。</p>
   <p><b>第一个嫌疑。</b>同一状态各算一步，把两边的梯度差拆成「沿 FP64 方向的比例项」，整个 MTP 层是同一个比例差，追到 MTP 输入那次被省掉的舍入（§5.5 折叠）。补上以后同状态一步修好了，1000 步分不出作用。</p>
   <p><b>主因。</b>两边 MTP 头都在反向把 logits 的梯度舍成 BF16，只是舍之前乘的系数不同：GPU 乘 0.1（MTP loss 的权重）以后舍，TPU 是目标先除以 token 数再反向，等于乘 0.1 ÷ N 以后舍（那一步 N ＝ 60,915）。正确词那一项 ＝ 系数 × (p<sub>y</sub> − 1)，p<sub>y</sub> 很小时几乎都挤在同一个格距里。系数 0.1 时最近的两个格点是 0.099609 和 0.100098，p<sub>y</sub> ＜ 1.46e-3 时全往 0.100098 舍：GPU 这一项舍后偏大 9.8e-4（相对），传到输出头反向的输入偏大 6.1e-4；TPU 这一项偏小 1.53e-3，输入偏小 7.1e-4。<b>方向相反。</b></p>
 <figure class="fbox fwide" id="fig-mtpgrid"><svg viewBox="0 0 1400 526" width="100%" role="img" aria-label="三行，每行只画一个 BF16 格距：左右两个格点，中间虚线是中点，圆点是舍之前的值，箭头指向它被舍到的格点。GPU 乘 0.1 以后，值落在格距的 0.80 处，过了中点，舍到右边，偏大 ＋9.9e-4。TPU 乘 0.1 ÷ N 以后，值落在 0.33 处，不到中点，舍到左边，偏小 −1.5e-3。N 换成 2 的幂 65,536，值落在跟 GPU 一样的 0.80 处，乘回 N 以后跟 GPU 逐位相同。"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -8874,8 +8874,10 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 实测：v5p 上加抓数输出的训练程序和生产程序不逐位；XLA 默认在融合内部跳过中间的 BF16 舍入（excess precision），融合一变，舍入位置就变。</p>
 <p>注：中格四个算子、融合切成几块、舍几次都是示意（跟 §5.5 第一张图同一种画法）；真实的融合怎么切由编译器决定。</p></details></figure>
 
+  <div class="box">这一节只留一句：<b>在 TPU 上，证据要从训练程序外面拿。</b>多要一个输出就多一次舍入；所以换三条不碰训练程序的路。</div>
+
   <h3 id="s6-1">6.1　步与步之间读状态，从动量里倒推梯度</h3>
-  <p>主权重、Adam 的两个动量、路由偏置，训练步和训练步之间从状态里读，不碰训练程序。梯度不用另抓：Adam 每一步都把梯度揉进一阶动量里，倒过来解一下就有了。</p>
+  <p>主权重、Adam 的两个动量、路由偏置，训练步和训练步之间从状态里读。梯度不用另抓：从相邻两步的一阶动量倒推。</p>
   <div class="note"><span class="t">gₖ ＝ (mₖ − β₁·mₖ₋₁) ÷ (1 − β₁) ÷ 裁剪系数</span>
     mₖ、mₖ₋₁ 是相邻两步读出来的一阶动量，β₁ ＝ 0.9。</div>
   <details class="foldfig"><summary><b>在 TPU 上照做的三个坑</b>：多主机、状态被复用、动量精度</summary>
@@ -8885,19 +8887,19 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
     <li>倒推梯度要相邻两步成对存；一阶动量要是被设成 BF16，公式就不准了。裁剪系数从记录裁剪前、后梯度范数的指标文件里取，别从控制台日志抄。整张量上相对差在 1e-7 量级，逐元素在梯度远小于动量的地方不准：两个几乎相等的数相减，有效位被抵消了。</li>
   </ul></details>
 
+
   <h3 id="s6-2">6.2　隔离回放：拿 GPU 的输入，单独跑一层</h3>
-  <p>第 k 层的输入直接用 GPU 那一层的输入，TPU 上只编译这一层。层与层的误差不串起来，第一个超线的那一层就是出错的那层；单个算子、输出头、整网前向都能这么回放。回放要用跟训练相同的设备网格、参数切分和编译参数：单卡回放看不到 FSDP 才有的 collective matmul，那几次多舍就量不出来，会判反。</p>
-  <p>回放工具自己也要验：注入要覆盖全部输入，换不了就报错。</p>
+  <p>第 k 层的输入直接用 GPU 那一层的输入，TPU 上只编译这一层；第一个超线的那一层就是出错的那层。设备网格、参数切分、编译参数要跟训练一样：单卡回放看不到 8 个设备才有的那几次多舍（<a href="#s5-4">§5.4</a>），会判反。</p>
   <details class="foldfig"><summary><b>回放工具自己也要验</b>：第二次迁移一次注入漏了输入</summary>
   <p>回放工具自己也要验。第二次迁移的单算子回放里，稠密 MLP 的 R 是 1.563：注入只换了按位置传的参数，那个分支按关键字传输入，算子吃的其实是 TPU 自己上游的输入。同一个 GPU 输入直接喂这个算子，R 0.999；修好注入以后 0.95。所以注入要覆盖全部输入，换不了就报错，别悄悄放过。</p>
   </details>
 
-  <h3 id="s6-3">6.3　固定探针、状态互换</h3>
-  <ul>
-    <li><b>固定探针</b>：每隔 25 步，在一条固定的序列上单独跑一次前向，记每一层输出的均值、lse（log-sum-exp，所有 logits 的整体水平）。</li>
-    <li><b>读数算不算数</b>：只有不改生产程序的读数（步间读状态、逐步序列）能当证据（工具表在下面折叠里）；精度开关在生产程序里生没生效，日常回归直接数生产训练步编译后的程序（舍到低精度的算子、all-reduce、自定义 kernel 调用各几个），边传边乘（编译产物里叫窗口化矩阵乘）只靠整份程序的指纹兜底。</li>
-    <li><b>状态互换</b>：把一侧某一步的整套 FP32 状态搬到另一侧，用同一批数据各算一步（连 Adam 的步数计数和学习率调度的步号一起搬，不然偏置校正对不上）。它能把「这一步算得不一样」和「状态已经不一样」分开（<a href="#s7-5">§7.5</a>）。</li>
-  </ul>
+
+  <h3 id="s6-3">6.3　固定探针</h3>
+  <p>每隔 25 步，在一条固定的序列上单独跑一次前向，记每一层输出的均值、lse（log-sum-exp，所有 logits 的整体水平）。</p>
+  <details class="foldfig"><summary><b>读数算不算数</b>（课上不讲）：只有不改生产程序的读数能当证据</summary>
+  <p>只有不改生产程序的读数（步间读状态、逐步序列）能当证据；隔离回放和探针是另编的程序，只用来定责、确认修法方向。精度开关在生产程序里生没生效，日常回归直接数生产训练步编译后的程序（舍到低精度的算子、all-reduce、自定义 kernel 调用各几个），边传边乘（编译产物里叫窗口化矩阵乘）只靠整份程序的指纹兜底。</p>
+  </details>
   <details class="foldfig"><summary><b>工具表</b>：哪些读数能当生产程序的证据</summary>
   <table class="t9"><thead><tr><th>工具</th><th>改不改生产程序</th><th>读数能当什么</th><th>能比到第几步</th></tr></thead><tbody>
   <tr><td>步间读状态、倒推梯度（<a href="#s6-1">§6.1</a>）</td><td>不改</td><td>生产程序的证据</td><td>逐张量只比第 0、1 步</td></tr>
@@ -9042,8 +9044,11 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>⚠️ FP32 参照自己离 FP64 多远没有测，第 1 步的比较只当诊断。红线是两条相对差相减，跟直接算 TPU 对 GPU 的相对差只差二阶小量。</p></details></figure>
   </details>
 
-  <h3 id="s6-4">6.4　第 1 步逐位相同，不等于开关没用</h3>
-  <p class="lead">从 BF16 检查点续训或微调时，有一类开关第 1 步开和不开逐位相同，要过几步才看得出差。</p>
+  <details class="foldfig"><summary><b>状态互换</b>（课上不讲，第七节用一次时当场交代）：分开「这一步算得不一样」和「状态早就不一样」</summary>
+  <p>把一侧某一步的整套 FP32 状态搬到另一侧，用同一批数据各算一步（连 Adam 的步数计数和学习率调度的步号一起搬，不然偏置校正对不上）。它能把「这一步算得不一样」和「状态已经不一样」分开（<a href="#s7-5">§7.5</a>）。</p>
+  </details>
+  <details class="foldfig"><summary><b>第 1 步逐位相同，不等于开关没用</b>（课上不讲，图）：从 BF16 检查点续训时，权重全压在格点上</summary>
+  <p>从 BF16 检查点续训或微调时，有一类开关第 1 步开和不开逐位相同，要过几步才看得出差。</p>
 <figure class="fbox fwide" id="fig-ongrid"><svg viewBox="0 0 1400 606" width="100%" role="img" aria-label="左格是一段数轴，竖线是 BF16 能精确表示的格点。从 BF16 检查点起训，第 0 步的 FP32 主权重全落在格点上；第 1 次更新以后全部离开格点，但离得很近，平均 0.17 格；第 30 次更新以后散到格点之间，平均 0.25 格。右格横轴是训练步，纵轴是同一份权重开关开、关算出的输出相对差，对数刻度。从检查点起训，第 1 步恰好是 0，逐位相同；第 2 步起是 4.7e-04，几十步后长到约 1.6e-03。随机 FP32 初始化起训，第 1 步就已经是 1.7e-03。数都是玩具实验现跑的。"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">第 1 步开关前后逐位相同，不等于开关没用　——　<tspan font-weight="700">权重还在 BF16 格点上</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">只管权重一侧精度的开关（例：权重按 FP32 乘，还是先舍成 BF16 再乘）；左：主权重在不在格点上；右：同一份权重开关开、关差多少</text>
@@ -9165,8 +9170,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 第 1 次更新后离开格点的元素占 100.0%；右格纵轴 ＝ 同一份权重、同一批 2048 条 BF16 输入，开关开、关两种输出之差的 L2 范数除以输出的 L2 范数。</p>
 <p>⚠️ 本课推导：BF16 有效位 8 位，两个相乘至多 16 位，FP32 有 24 位，乘积不舍入（脚本里对 10 万对随机数 assert 过）。高精度档把 FP32 拆成几份 BF16 分别乘再加，格点上的数拆出来只有第一份非零，其余几份乘出来全是 0；多遍和单遍逐位相同还要求那一份的累加顺序不变（推断）。</p>
 <p>注：前提是权重以 FP32 进矩阵乘、开关只改权重这一侧；要是框架在进矩阵乘之前就把权重转成了 BF16，这类开关从头到尾都不起作用。左格挑了 15 个第 0 步正好落在这 5 个格点上的元素，每个格点三个；数轴位置是真实值，第 30 次更新后走出这一段的不画。玩具的差是多大没有意义，只看第 1 步是不是 0。</p></details></figure>
-  
   <p>所以第 1 步「开关前后逐位相同」不能当「这个开关没用」的证据：要拿训练若干步以后的权重去测（状态互换，从那一步各算一步），或者看多步曲线。随机 FP32 初始化起训时没有这回事。</p>
+  </details>
 <details class="foldfig"><summary><b>考考自己</b>：为什么在 TPU 上「加一个输出」会改变别的张量的值，哪怕那个输出什么都不改？</summary><p>TPU 上的程序都由 XLA 整图编译（GPU 上用 JAX 或 torch.compile 也一样）。多一个输出，编译器就得把那个中间值落到内存里，原来融在一起的算子被切开，融合内部舍入的位置（excess precision）就跟着变了，下游的数也就变了。</p></details>
   <p class="bridge">这一节留下的问题：TPU 的 loss 三百步以后为什么平均比 GPU 低约 1.7e-4？</p>
 </div></section>
@@ -9783,7 +9788,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p>别的矩阵乘也偏一点：合成的全正输入、求和长 4096 时朝零 7.0e-5（<a href="#s5-2">§5.2</a> 右图）。可真实的激活和梯度有正有负，抹零的方向跟着每一项的符号走，大半互相抵消；后面也没有这样一个放大器（推断：其余矩阵乘沿各自方向的偏差没有逐个量）。</p></details>
 
   <h3 id="s7-5">7.5　同一个起点各算一步；修法：从只换 FP32 到分块</h3>
-  <p>是每一步都算得不一样，还是状态早就不一样、反馈放大出来的？用状态互换（<a href="#s6-3">§6.3</a>）：把 GPU 第 99 步的整套状态搬到 TPU，同一批数据各算一步。</p>
+  <p>是每一步都算得不一样，还是状态早就不一样、反馈放大出来的？单步确认一下，怎么量：把 GPU 第 99 步的整套状态（主权重、两个动量、步数计数）搬到 TPU，同一批数据两边各算一步，再跟 GPU 上全程 FP32 算的那一步比，看沿 TPU − GPU 权重差的方向各少走多少（这个做法叫状态互换，§6 折叠）。</p>
 <figure class="fbox fwide" id="fig-swap"><svg viewBox="0 0 1400 496" width="100%" role="img" aria-label="把 GPU 第 99 步的整套状态原样搬到 TPU 上，两边用同一批数据各算一步梯度，跟同一个精确参照（GPU 上全程 FP32 算的那一份）比，看沿漂移方向比精确值多走还是少走了多少。TPU 生产程序 0.00%，几乎正好；GPU 只把输出头 dgrad 换成 FP32 的，少走 0.10%；GPU 生产程序少走 0.36%。细线是 4 个状态、12 个 batch 的范围，结论都一样。"><defs><marker id="ah-202124" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#202124"/></marker><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">同一个起点，各算一步：GPU 每一步都少走一点　——　<tspan font-weight="700">TPU 几乎正好</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">柱长 ＝ 这一步沿「TPU − GPU 权重差」方向，比精确值少走了漂移本身的百分之几（往左 ＝ 少走）；细线 ＝ 12 个 batch 的范围</text>
@@ -13530,7 +13535,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <p><b>TPU 没算错。</b>TPU 的 loss 低约 1.7e-4，按噪声尺子是真偏差；查到最后，大头偏在 GPU 的 golden：<b>一次 12 万长的求和，每一步都朝零少算了一点</b>。改成分段累加、拿它当基线，v5p、v7x 每一项都在噪声内（最差 0.85 倍）。第二个案例里，两种数学等价的并行对不上，查到最后是一次加法的组织方式。</p>
   <div class="note"><span class="t">这门课带走的三句话</span>
   <b>一、拿 GPU 自己的重跑当尺子</b>：TPU 跟 GPU 的差，不能比 GPU 自己跟自己的差大；超了，就查到底是谁的差，当参照的那一份也要查。<br>
-  <b>二、差只有三种</b>：换了加法顺序是噪声，不修；丢了精度要对 FP64 定责，找到多舍的那一步；公式写得不一样必须对齐。<br>
+  <b>二、超了就对 FP64 定责</b>：离真值远了 1.2 倍以上才是丢了精度，找到多舍的那一步；没变远就只是换了加法顺序，不修。<br>
   <b>三、换了条件就要重验</b>：设备数、切法、步数、芯片、运行库，换一样，之前的验证就不作数；精度验证在生产的设备数上做，改完代码先离线编译看一眼。</div>
 
   <h3 id="s10-6">10.6　拿回去用：清单、速查卡、排查表、练习</h3>
