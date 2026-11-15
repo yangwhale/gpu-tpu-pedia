@@ -11985,7 +11985,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <p>📌 GPU 那边的写法在 CPU 上用 GPU 同一段代码逐位核过；GPU 的三个诊断开关都不开时，CPU 上 191 个梯度逐位不变。GPU 只换收拢处整段写法，后段不变，可第 51–100 步冒出 ＋3.7e-6（p 0.001）—— 正是 TPU 不补收拢处舍入时的前段鼓包，又一处两头对上。</p>
 <p>⚠️ 都是小尺寸、每格份数不多；这里的结论是「主因」。</p></details></figure>
   <p>TPU 改成 GPU 的写法，偏高降下来；GPU 改成 TPU 的写法，GPU 自己长出同样的尾巴。两个方向对上，主因定在这里（推断：两头方向一致，每格只有 4–5 份）。（图里的 p 是检验值：把这些运行随机重新分组，分出这么大差别的概率；4 份对 5 份一共只有 126 种分组，完全分开时 p 最小就是 0.016。这一节做了十几次这样的检验，没做多重比较校正，单个 p 0.02 上下只当方向性的证据。）</p>
-  <p>可把收拢处（最后四路收成一路那处）也照 GPU 补上（现行对齐配置），后段还剩 ＋6.9e-6，还在查。剩下的不靠猜：<b>先编译，再扫描</b>。</p>
+  <p>可把收拢处（最后四路收成一路那处）也照 GPU 补上（现行对齐配置），后段还剩 ＋6.9e-6，还在查。剩下的那截去哪找？</p>
   <details class="foldfig"><summary><b>反转、一台秤三个毛病、丙在哪、在一处上看清楚</b>（推断多；两段动画在这里）</summary>
   <p><b>反转。</b>把 ① 和 ② 都照 GPU 补上，就是现行的对齐配置；可后段还剩 ＋6.9e-6，比只补流梯度大，跟修之前分不开（p 0.32）。收拢处一开，再补流梯度就测不出作用了（逐份读数收在下面的折叠里）。</p>
 <details class="foldfig"><summary><b>逐份读数</b>：收拢处开着时，补不补流梯度分不开</summary>
@@ -12175,8 +12175,8 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   </details>
   <p><b>那就让编译器自己交代。</b>代码里的往返不改数学，写它只有一个意思：这里要舍。把整个训练步离线编译一次（不用上卡），把同类位置全列出来（下图右块）。</p>
 <figure class="fbox fwide" id="fig-elided"><svg viewBox="0 0 1400 666" width="100%" role="img" aria-label="两块。左：多路残差分支输入那一处的三层。代码把 4 路流的加权和从 FP32 转成 BF16、再按 FP32 进归一化，这是在声明这里该舍一次；编译器优化后的 HLO 里那对 convert 都还在；可到后端指令 LLO，算均方那颗 kernel 里打包成 BF16 的指令一条都没有，平方用的还是没舍的 FP32。同一处补上 reduce_precision 以后，这颗 kernel 有 256 条打包，真舍了。右：把现行对齐配置的整个训练步离线编译一次，扫所有这样的往返，一共 272 处：每个微批的权重梯度 75，分支输入的梯度合流 70，前向几处 98，其余 20 处优先级低，索引器掩码 9 处无害。整颗只含往返的 kernel 有 41 颗，后端打包指令全是 0；关掉省舍入再编，同类 kernel 35 颗，没有一颗是 0。已经补上的 55 处不算在里面。"><defs><marker id="ah-5f6368" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#5f6368"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.75"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">先编译、再扫描：代码里的往返 convert，就是「这里该舍」的声明</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：整个训练步扫一遍</text>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px;font-variant-numeric:tabular-nums">代码里写了往返 convert，就是「这里该舍」的声明　——　<tspan font-weight="700">可编译器没舍</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px;font-variant-numeric:tabular-nums">第二次迁移，小尺寸，TPU v5p 离线编译（省舍入默认开）；左：一处怎么认，右：这样的地方一共有几处</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px;font-variant-numeric:tabular-nums">写了舍、被省掉</text>
 <rect x="156.76" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
@@ -12227,7 +12227,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
 <rect x="580" y="102" width="820" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <rect x="580" y="104" width="820" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
 <line x1="580" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1.0" stroke-linecap="round"/>
-<text class="svglbl" x="594" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">右：整个训练步扫一遍，往返 272 处，按位置分</tspan></text>
+<text class="svglbl" x="594" y="122" fill="#b06000" style="font-size:13.5px;font-variant-numeric:tabular-nums"><tspan font-weight="700">右：同类往返一共 272 处，按位置分</tspan></text>
 <text paint-order="stroke" stroke="#fff" stroke-width="3.5" stroke-linejoin="round" class="svgsm" x="596" y="173" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">A 分支输入的梯度合流</tspan></text>
 <rect x="880" y="158" width="286.3636363636365" height="22" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
 <text class="svgsm" x="1174" y="174" fill="#b06000" style="font-size:13.0px;font-variant-numeric:tabular-nums"><tspan font-weight="700">70</tspan></text>
@@ -12308,7 +12308,7 @@ body.figonly .peekbtn:hover{color:#1a73e8;border-color:#1a73e8}
   <details class="foldfig"><summary><b>扫描过程的动画</b></summary>
 <figure class="fbox fwide" id="anim-scan">
 <video src="media/topic08-scan.mp4?v=c54418a7" autoplay loop muted playsinline data-pauses="9.00,15.20,18.60"
-       aria-label="先编译，再扫描：同一个模式，在哪儿出现就在哪儿亮。整个训练步编出来的程序（示意：60 格）。第 1 步　找「同一颗融合里转成 BF16、又转回 FP32」：一格一格扫，亮了就按位置归堆。A 分支输入梯度合流 70 处，B 每微批 dW 75 处，C 前向几处 98 处，其余（优先级低）20 处，索引器掩码（无害）9 处；已补上，跳过：55 处。一共 272 处往返（按使用次数）；三根橙色是先查的范围。第 2 步　整颗只含往返的 kernel 拿 LLO 一颗颗数：打包成 BF16 的指令都是 0 条。省舍入开：只含往返的 41 颗。第 3 步　负对照：关掉省舍入再编，同类 kernel 没有一颗是 0 条，「0 条」确实是省舍入造成的。省舍入关：同类 35 颗，0 条的 0 颗。"></video>
+       aria-label="同一个模式，在哪儿出现就在哪儿亮。整个训练步编出来的程序（示意：60 格）。第 1 步　找「同一颗融合里转成 BF16、又转回 FP32」：一格一格扫，亮了就按位置归堆。A 分支输入梯度合流 70 处，B 每微批 dW 75 处，C 前向几处 98 处，其余（优先级低）20 处，索引器掩码（无害）9 处；已补上，跳过：55 处。一共 272 处往返（按使用次数）；三根橙色是先查的范围。第 2 步　整颗只含往返的 kernel 拿 LLO 一颗颗数：打包成 BF16 的指令都是 0 条。省舍入开：只含往返的 41 颗。第 3 步　负对照：关掉省舍入再编，同类 kernel 没有一颗是 0 条，「0 条」确实是省舍入造成的。省舍入关：同类 35 颗，0 条的 0 颗。"></video>
 <figcaption><b>一格一格扫过整个程序，同一个模式亮起来就按位置归堆；只含往返的 kernel 拿 LLO 一颗颗数，全是 0 条；关掉省舍入，没有一颗是 0。</b>
   <span class="sub">（23 秒，Manim 渲染，可一步一步看。上面那条「程序」只画 60 格，哪几格亮是示意；各堆的终值、41 颗和 35 颗是实测。）</span></figcaption></figure>
   </details>
