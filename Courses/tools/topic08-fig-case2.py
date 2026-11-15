@@ -97,26 +97,26 @@ def fig_gauge():
 
 def fig_head():
     f = Fig(W, "左：输出头反向沿「所有 logits 一起动」方向的相对误差，对数刻度，第 1 步。GPU 的交叉熵反向只有 2.7e-6；GPU 输出层 dgrad 的 BF16 矩阵乘 6.51e-4，是大头；"
-               "TPU 整个头反向 2.4e-5；GPU 名义 FP32、实际 TF32 的那一版 8.08e-4，比 BF16 还差；真关 TF32 的 FP32 在第 1 步只有 1.7e-6，可它也是一次累加到底，训练到中途会长大。"
+               "TPU 整个头反向 2.4e-5；关掉 TF32 的真 FP32 在第 1 步只有 1.7e-6，可它也是一次累加到底，训练到中途会长大。"
                "右：拿真实的输出头张量，把词表行随机打乱后取 K 行，K 从 16,384 到 120,832（整张词表），误差从 6.9e-5 涨到 6.5e-4；横纵都是对数刻度。")
     y0 = f.header("少掉的那一点，在 GPU 输出层 dgrad 那一次长求和里",
                   "柱长 ＝ 沿「所有 logits 一起动」方向的相对误差（对数刻度，一格 ＝ 十倍，越短越准），参照 FP64；右：横轴 K ＝ 词表行随机打乱后取的行数，横纵都是对数刻度",
-                  [(RD, "GPU 张量核"), (GY, "名义 FP32（实为 TF32，先不看）"), (BL, "TPU"), (GR, "真 FP32"), (GY2, "交叉熵反向")])
+                  [(RD, "GPU 张量核"), (BL, "TPU"), (GR, "真 FP32"), (GY2, "交叉熵反向")])
     PH = 400
     py = f.panel(0, y0, 820, PH, "第 1 步，拿训练里实际用到的张量重算（实测）", OR)
     rows = [("GPU 交叉熵反向", "求 dlogits 那一段", N.CE_BWD_S1, GY2),
             ("GPU 输出层 dgrad，BF16", "dh ＝ dlogits · W，沿词表求和", abs(N.HEAD_BF16_S1), RD),
             ("TPU 整个输出头反向", "MXU：BF16 乘、FP32 累加", abs(N.HEAD_TPU_S1), BL),
-            ("GPU dgrad 名义 FP32（先不看，见第十节）", "没关 TF32 —— 一度被当成「精确」", abs(N.HEAD_TF32_S1), GY),
             ("GPU dgrad FP32，真关 TF32", "第 1 步几乎不偏；训练中途会长大", abs(N.HEAD_EXACT_S1), GR)]
     bx, bw, emin, emax = 330, 380, 1e-6, 1e-3
     # ⭐ R3：对数柱的原点藏着（1e-6），柱长看着差 2 倍其实差 27 倍 → 每个十倍一根竖格线、顶上标数
+    SP = 88
     for e in range(-6, -2):
         xg = bx + (e + 6) / 3.0 * bw
-        f.line(xg, py + 24, xg, py + 26 + 5 * 72 - 30, LINE, 1.0, arrow=False)
+        f.line(xg, py + 24, xg, py + 26 + len(rows) * SP - 30, LINE, 1.0, arrow=False)
         f.t(xg, py + 18, "1e%d" % e, GY, size=12, anchor="middle")
     for i, (lab, sub, v, c) in enumerate(rows):
-        y = py + 26 + i * 72
+        y = py + 30 + i * SP
         f.t(24, y + 18, lab, INK, True, 14)
         f.t(24, y + 40, sub, GY, size=12)
         L = max((math.log10(v) - math.log10(emin)) / (math.log10(emax) - math.log10(emin)) * bw, 4)
@@ -150,6 +150,7 @@ def fig_head():
     ])
     yb = f.src(yb + 10,
                "📌 实测：GPU 在线性层的前向、反向里记下输出层实际用到的 h、logits、权重和交给反向的 dlogits，与 dump 逐位相同；离线拆成「交叉熵反向」「矩阵乘」两段各对 FP64。第 100 步 GPU −6.10e-4，TPU −7.4e-5。",
+               "📌 实测：GPU 的 dgrad 名义 FP32、实际没关 TF32 的那一版第 1 步 %s，比 BF16 还差 —— 一度被当成「精确」参照（第十节坑表）；图上只画真关 TF32 的那一版。" % N.tx(abs(N.HEAD_TF32_S1), "%.2e"),
                "📌 实测：右图把真实输出头张量的词表行打乱后取前 K 行，沿该方向的误差 −6.9e-5 / −2.0e-4 / −6.5e-4；朝零的整体尺度偏差 1.9e-5 / 7.3e-5 / 2.3e-4。")
     f.save("fig8-head.svg", yb + 14)
 

@@ -141,6 +141,8 @@ def fig_rows():
         L = v / N.GROUP_TOTAL_300 * 330
         f.box(150, y, L, 40, BL, BL, 4)
         f.t(150 + L + 10, y + 26, ("%.2e" % v).replace("e-0", "e-"), BL, True, 14)
+        if i == 0:   # 11-15 夜第二棒：标题说「近九成在输出层」，图上补占比（3.83e-3 ÷ 4.39e-3）
+            f.t(162, y + 27, "占合计 %d%%" % round(v / N.GROUP_TOTAL_300 * 100), "#fff", True, 15)
     f.t(24, py + 312, ("合计 %.2e；GPU 两次之间输出层只差 6e-6" % N.GROUP_TOTAL_300).replace("e-0", "e-"), GY, size=13)
     # 第二轮：输出层贡献随步数（只有第 100／200／300 步三个实测点）
     _pts = N.GROUP_HEAD_STEPS
@@ -163,6 +165,8 @@ def fig_rows():
         f.box(px + 170, y + 4, L, 34, BL, BL, 4)
         f.box(px + 170, y + 40, N.ROWS_GPU_PAIR_MAX / 17.1 * 500, 6, GY2, GY2, 2)
         f.t(px + 170 + L + 10, y + 28, "＋%.1f" % v, BL, True, 14)
+        if i == 0:   # 「四分之三在没出现过的词」：17.1 ÷ 合计 23.2
+            f.t(px + 182, y + 27, "占合计 %d%%" % round(v / N.ROWS_300_TOTAL * 100), "#fff", True, 15)
     f.t(px + 24, py2 + 300, "没出现过的词一共 %s 行；灰色细条 ＝ GPU 两次之间每桶的差，都不超过 %.2f" % (format(N.RARE_ROWS, ","), N.ROWS_GPU_PAIR_MAX), GY, size=13)
     f._pan = None
     yb = f.band(y0 + PH + 20, "ok", "TPU 上冷门词的行被压得少：从初值算起 GPU 缩了 66.3，TPU 只缩了 49.2", [

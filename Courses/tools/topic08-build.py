@@ -2098,7 +2098,7 @@ FIGS = {
     "__FIG_INTERVENE__": ("fig-intervene", "fig8-intervene.svg", "topic08-fig-case2.py",
         '<b>绿柱缩回去（参数范数还剩三成），橙柱长回来；下格逐步看，蓝橙两条一路同涨，绿线长得慢得多。</b><br><em>每组一份 1000 步的运行，实测；灰线呈台阶状，是 GPU 一侧参数范数的记录精度有限（台阶约 1.6e-4）。</em>'),
     "__FIG_HEAD__": ("fig-head", "fig8-head.svg", "topic08-fig-case2.py",
-        '<b>左边那根红柱是 GPU 的张量核；深灰那根（名义 FP32、其实走了 TF32）先不看，第十节回来讲。</b><br><em>参照是同一份输入在 FP64 里的结果。GPU 那根只算输出层 dgrad 一段，TPU 那根是整个输出头反向；GPU 交叉熵反向那段只有 «CE_BWD_S1_T»，所以两根可以直接比。</em>'),
+        '<b>红柱是 GPU 的张量核，误差是 TPU 那根的约 «HEAD_RATIO_S1» 倍（对数刻度，看着只长一截）。</b><br><em>参照是同一份输入在 FP64 里的结果。GPU 那根只算输出层 dgrad 一段，TPU 那根是整个输出头反向；GPU 交叉熵反向那段只有 «CE_BWD_S1_T»，所以两根可以直接比。</em>'),
     "__FIG_SWAP__": ("fig-swap", "fig8-swap.svg", "topic08-fig-case2.py",
         '<b>蓝色几乎贴着精确值，红柱最长。</b><br><em>每根柱子是「这一步」的偏，不是累积。</em>'),
     "__FIG_ONEPASS__": ("fig-onepass", "fig8-onepass.svg", "topic08-fig-case2.py",
