@@ -305,7 +305,7 @@ class RouteFlip(Scene):
         f1 = tx("GPU 自己重跑第 1 步：前向确定，路由一个不变", 20, GREY_B).move_to([RX, 1.2, 0])
         f2 = tx("拿 GPU 重跑当噪声尺，", 22, WHITE).move_to([RX, 0.55, 0])
         f3 = tx("路由翻转在这把尺上是 0 宽度", 22, WHITE).move_to([RX, 0.1, 0])
-        f4 = tx("0.102 要按专家拆开看，不是 TPU 算错了梯度", 20, YELLOW).move_to([RX, -0.65, 0])
+        f4 = tx("翻了的专家按同一批 token 重比，不能直接判算错", 20, YELLOW).move_to([RX, -0.65, 0])
 
         # ── 字幕 ──
         caps = [

@@ -19,7 +19,8 @@ r"""专题八「GPU→TPU 训练精度对齐」：噪声上限 N 怎么来、被
     所以「两点隔多远，柱就多高」在这组数上是成立的。整条轴左右翻转同样成立，朝向是任取的。
   · 被测 4.27e-7、N 1.24e-7、r 3.45：topic08_numbers.ACC 第一行（课件已有的公开数）；脚本另用结果文件的未舍入值
     4.268544e-7 ÷ 1.237070e-7 ＝ 3.4505 交叉核对。
-  · 1/(n+1)：topic08_numbers.p_exceed（本课推导：对称性）。3 对 1/4、10 对 1/11、28 对 1/29。
+  · 原第 5 步「1/(n+1) 超线概率」三行条已拿掉（2026-11-16 通宵第八棒）：那是课件 §3.3「参照要几对」课上不讲折叠里的内容（fig-pairs），
+    讲义 ▍三 不讲，放在主线动画里台下会默读到一段没人讲的话。要恢复：git log 找这次提交的 diff。
 
 ⛔ 刻意没画
   · loss 和 grad_norm 两项、MARE 和最大单步两个统计：只演参数范数的带符号均值一项，其余同一个套路。
@@ -127,11 +128,9 @@ T3A = T2B + PAUSE
 T3B = T3A + 1.5
 T4A = T3B + PAUSE
 T4B = T4A + 2.7
-T5A = T4B + PAUSE
-T5B = T5A + 1.7
-T6A = T5B + PAUSE                              # 收尾：累积的东西淡出、第一句字幕淡回
+T6A = T4B + PAUSE                              # 收尾：累积的东西淡出、第一句字幕淡回
 T6B = T6A + 0.8
-LANDS = [T1B, T2B, T3B, T4B, T5B]
+LANDS = [T1B, T2B, T3B, T4B]
 
 
 def clamp01(x):
@@ -180,7 +179,7 @@ def pair_window(k):
 
 
 CAPS = [
-    (0.0, "第 1 步　定案前第一关的尺子：GPU 重跑 5 份（一个点 ＝ 一份）",
+    (0.0, "第 1 步　一次真实判定的尺子：GPU 重跑 5 份（一个点 ＝ 一份）",
      "5 份设置完全相同，只差运行间的随机性"),
     (T2A, "第 2 步　两两配对，一共 10 对：每对算参数范数的带符号均值，取绝对值，竖成一根柱",
      "带符号均值 ＝ 第 2–1000 步逐步相对差 dₜ 的平均；两个点隔多远，柱就多高"),
@@ -188,8 +187,6 @@ CAPS = [
      "为什么取最大不取平均：被测若只是噪声，应落在已有样本的范围里"),
     (T4A, "第 4 步　被测（TPU 对一份 GPU 基线）出场：r ＝ 被测 ÷ N",
      "柱子比尺子高出一大截，纵轴得缩一半才装得下"),
-    (T5A, "第 5 步　样本越多，尺子越可信：纯噪声超过 n 对最大值的概率至少 1/(n+1)",
-     "各对共用运行，模拟和留一法实测都显示：带符号均值约翻倍"),
 ]
 
 
@@ -302,23 +299,7 @@ class NoiseCeiling(Scene):
                              fill_opacity=(0.92 if u > 0 else 0.0) * fade_out_all(t)
                              ).move_to([TEST_X, BASE_Y + h / 2, 0])
 
-        # ── 第 5 步：三行概率条
-        P_ROW_Y = [1.95, 1.4, 0.85]
-        P_LBL_X, P_BAR_X0, P_K = 3.1, 3.65, 9.6
-
-        def pbars():
-            t = clock()
-            g = VGroup()
-            for r, (n, _) in enumerate(PROBS):
-                u = prog(t, T5A + r * 0.4, T5A + r * 0.4 + 0.7)
-                L = T.p_exceed(n) * P_K * u
-                col = YELLOW if n == 10 else GREY_B
-                g.add(Rectangle(width=max(L, 1e-3), height=0.3, stroke_width=0, fill_color=col,
-                                fill_opacity=(0.85 if u > 0 else 0.0) * fade_out_all(t))
-                      .move_to([P_BAR_X0 + L / 2, P_ROW_Y[r], 0]))
-            return g
-
-        for fn in (bars, testbar, nline, dots, pbars):
+        for fn in (bars, testbar, nline, dots):
             self.add(always_redraw(fn))
 
         # ── 文字：建一次，updater 只改不透明度 / 位置
@@ -371,14 +352,6 @@ class NoiseCeiling(Scene):
         rn = tx("尺子：同一设置的 GPU 重跑", 18, GREY_B)
         rn.move_to([BAND_R + 0.25 + rn.width / 2, -0.3, 0])
         put(rn, lambda t: prog(t, T4A + 0.2, T4A + 0.6) * fade_out_all(t))
-
-        for r, (n, frac) in enumerate(PROBS):
-            a0 = T5A + r * 0.4
-            put(tx("%d 对" % n, 20, YELLOW if n == 10 else GREY_B).move_to([P_LBL_X, P_ROW_Y[r], 0]),
-                lambda t, a0=a0: prog(t, a0, a0 + 0.4) * fade_out_all(t))
-            fm = tx("≥ " + frac + ("（这一次）" if n == 10 else ""), 20, YELLOW if n == 10 else GREY_B)
-            fm.move_to([P_BAR_X0 + T.p_exceed(n) * P_K + 0.15 + fm.width / 2, P_ROW_Y[r], 0])
-            put(fm, lambda t, a0=a0: prog(t, a0 + 0.4, a0 + 0.8) * fade_out_all(t))
 
         def apply(m, af, pf):
             t = clock()

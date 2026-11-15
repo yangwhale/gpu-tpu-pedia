@@ -254,21 +254,21 @@ class DriftChain(Scene):
         # ③ 小图框架
         p3 = VGroup(tx("lse 差（TPU − GPU）", 15, GREY_B).move_to([XC[2], 1.2, 0]),
                     Line([sx(2, 0), CH_TOP, 0], [sx(2, S_END), CH_TOP, 0], color=GREY, stroke_width=2),
-                    tx("0", 13, GREY).next_to([sx(2, 0), CH_TOP, 0], LEFT, buff=0.06),
-                    tx("−0.2", 13, GREY).next_to([sx(2, 0), self_y3(-0.2), 0], LEFT, buff=0.06),
+                    tx("0", 14, GREY).next_to([sx(2, 0), CH_TOP, 0], LEFT, buff=0.06),
+                    tx("−0.2", 14, GREY).next_to([sx(2, 0), self_y3(-0.2), 0], LEFT, buff=0.06),
                     Line([sx(2, 0), self_y3(-0.2), 0], [sx(2, S_END), self_y3(-0.2), 0], color=GREY, stroke_width=1).set_stroke(opacity=0.5))
         panels.append(p3)
         # ④ 柱子框架
         bar_x, bar_w = XC[3], 0.7
         p4 = VGroup(tx("没出现过的词那几行", 15, GREY_B).move_to([XC[3], 1.2, 0]),
-                    tx("平方和多涨（TPU − GPU）", 13, GREY_B).move_to([XC[3], 0.9, 0]),
+                    tx("平方和多涨（TPU − GPU）", 15, GREY_B).move_to([XC[3], 0.9, 0]),
                     Line([bar_x - 0.7, CH_BOT, 0], [bar_x + 0.7, CH_BOT, 0], color=GREY, stroke_width=2),
-                    tx("logit 越高，压得越多", 13, COL_DIFF).move_to([XC[3], -1.85, 0]))
+                    tx("logit 越高，压得越多", 16, COL_DIFF).move_to([XC[3], -1.85, 0]))
         panels.append(p4)
         # ⑤ 小图框架
         p5 = VGroup(tx("参数范数差（TPU − GPU）", 15, GREY_B).move_to([XC[4], 1.2, 0]),
                     Line([sx(4, 0), y5(0), 0], [sx(4, S_END), y5(0), 0], color=GREY, stroke_width=2),
-                    tx("0", 13, GREY).next_to([sx(4, 0), y5(0), 0], LEFT, buff=0.06))
+                    tx("0", 14, GREY).next_to([sx(4, 0), y5(0), 0], LEFT, buff=0.06))
         panels.append(p5)
         for p in panels:
             remember(p)
@@ -278,8 +278,8 @@ class DriftChain(Scene):
                              .move_to([XC[2], -1.5, 0])) for s, v, _ in N.LSE_PROBE]
         rare_lab = remember(tx("＋%.1f（第 300 步实测）" % RARE_300, 15, COL_DIFF, True).move_to([XC[3], -1.5, 0]))
         pn_lab = remember(VGroup(tx("＋%s（第 300 步）" % e1(PN_END), 15, COL_DIFF, True).move_to([XC[4], -1.45, 0]),
-                                 tx("按组拆：输出层占 %d%%" % round(HEAD_SHARE * 100), 13, GREY_B).move_to([XC[4], -1.75, 0]),
-                                 tx("（另测一对，合计 %s）" % e1(N.GROUP_TOTAL_300), 12, GREY_B).move_to([XC[4], -2.0, 0])))
+                                 tx("按组拆：输出层占 %d%%" % round(HEAD_SHARE * 100), 15, GREY_B).move_to([XC[4], -1.75, 0]),
+                                 tx("（另测一对，合计 %s）" % e1(N.GROUP_TOTAL_300), 14, GREY_B).move_to([XC[4], -2.0, 0])))
         for p in panels:
             remember(p)
 
@@ -342,7 +342,7 @@ class DriftChain(Scene):
         step_lab = always_redraw(lambda: tx("第 %d 步" % int(st()[1] + 1e-6), 17, YELLOW, True)
                                  .move_to([CLK_X0 + (CLK_X1 - CLK_X0) * st()[1] / S_END, CLK_Y + 0.45, 0]))
         self.add(step_lab)
-        foot = tx("灰色 ＝ GPU 两次之间；刻度上白色 ＝ ③ 标出数字的那几步；③ 每 25 步一个实测点，④ 只有第 300 步一个实测值，⑤ 是逐步实测", 14, GREY).move_to([0, -3.62, 0])
+        foot = tx("灰 ＝ GPU 两次之间；白刻度 ＝ ③ 标数的那几步；③ 每 25 步一个实测点，④ 只有第 300 步一个值，⑤ 逐步实测", 16, GREY).move_to([0, -3.62, 0])
         self.add(foot)
 
         # ── 字幕：建一次，按区间切透明度 ─────────────────────────────
